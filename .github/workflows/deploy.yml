@@ -1,0 +1,52 @@
+name: Deploy React App to GitHub Pages
+
+on:
+  push:
+    branches: ["main"] # 只要推送到 main 分支就觸發自動部署
+
+permissions:
+  contents: read
+  pages: write      # 給予發布到 GitHub Pages 的寫入權限
+  id-token: write   # 驗證權限
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'sources/package-lock.json' # 鎖定 sources 底下的依賴關係
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: sources # 指定在 sources 目錄下執行
+
+      - name: Build site
+        run: npm run build
+        working-directory: sources # 指定在 sources 目錄下打包
+        # 如果未來有 Supabase 環境變數，可以放在這裡注入：
+        # env:
+        #   VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        #   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'sources/dist' # Vite 預設打包輸出的資料夾位在 sources/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
