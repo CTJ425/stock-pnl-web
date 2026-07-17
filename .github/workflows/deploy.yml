@@ -37,10 +37,10 @@ jobs:
       - name: Build site
         run: npm run build
         working-directory: sources # 指定在 sources 目錄下打包
-        # 如果未來有 Supabase 環境變數，可以放在這裡注入：
-        # env:
-        #   VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-        #   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        # Supabase 連線資訊由 GitHub Secrets 注入，不進版本控制
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
