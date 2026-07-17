@@ -126,7 +126,56 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   return json({ prices })
 }
 
+interface SearchResult {
+  symbol: string
+  name: string
+  market: string
+}
+
+/** 代號型查詢（如 AAPL、2330）：曾解析過的名稱直接由 DB 快取回覆，不再請求 Yahoo */
+async function lookupCachedNames(query: string): Promise<SearchResult[]> {
+  if (!/^[A-Z0-9.\-]{1,10}$/.test(query)) return []
+  try {
+    const { data } = await db
+      .from('stock_names')
+      .select('key, name')
+      .in('key', [`US:${query}`, `TPE:${query}`])
+    return (data ?? []).flatMap((row) => {
+      const sep = String(row.key).indexOf(':')
+      if (sep < 0 || !row.name) return []
+      return [
+        {
+          market: String(row.key).slice(0, sep),
+          symbol: String(row.key).slice(sep + 1),
+          name: String(row.name),
+        },
+      ]
+    })
+  } catch {
+    return []
+  }
+}
+
+/** 解析成功的「代號 ↔ 名稱」回寫共用快取，之後所有使用者查詢免打 Yahoo */
+async function persistNames(results: SearchResult[]): Promise<void> {
+  if (results.length === 0) return
+  try {
+    await db.from('stock_names').upsert(
+      results.map((r) => ({
+        key: `${r.market}:${r.symbol}`,
+        name: r.name,
+        updated_at: new Date().toISOString(),
+      })),
+    )
+  } catch {
+    // 回寫失敗不影響本次回應
+  }
+}
+
 async function handleSearch(query: string): Promise<Response> {
+  const cached = await lookupCachedNames(query.toUpperCase())
+  if (cached.length > 0) return json({ results: cached })
+
   try {
     const res = await fetch(
       `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}`,
@@ -135,7 +184,7 @@ async function handleSearch(query: string): Promise<Response> {
     if (!res.ok) return json({ results: [] })
     const data = await res.json()
     const quotes: Array<Record<string, unknown>> = Array.isArray(data?.quotes) ? data.quotes : []
-    const results = quotes
+    const results: SearchResult[] = quotes
       .filter((q) => q.symbol && (q.quoteType === 'EQUITY' || q.quoteType === 'ETF'))
       .map((q) => {
         let symbol = String(q.symbol)
@@ -151,6 +200,8 @@ async function handleSearch(query: string): Promise<Response> {
         }
       })
       .slice(0, 10)
+    // 只回寫美股：Yahoo 的台股名稱是英文，台股中文名以 twlist（TWSE/TPEx）為準
+    await persistNames(results.filter((r) => r.market === 'US'))
     return json({ results })
   } catch {
     return json({ results: [] })

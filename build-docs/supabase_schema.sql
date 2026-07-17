@@ -79,6 +79,25 @@ USING (true);
 -- service role（Edge Function）不受 RLS 限制，是唯一的寫入途徑。
 
 
+-- 3.1 共用股票名稱快取資料表 (stock_names)
+--     搜尋 / 反查解析過的「代號 ↔ 名稱」由 Edge Function 回寫於此；
+--     之後任何使用者查同一代號直接命中 DB，不再請求 Yahoo。
+--     名稱幾乎不變動，不設 TTL。寫入權限同 price_cache（僅 service role）。
+CREATE TABLE IF NOT EXISTS stock_names (
+    key TEXT PRIMARY KEY,                         -- 'TPE:2330'、'US:AAPL'
+    name TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE stock_names ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read stock names" ON stock_names;
+CREATE POLICY "Authenticated users can read stock names"
+ON stock_names FOR SELECT
+TO authenticated
+USING (true);
+
+
 -- 4. 使用者設定資料表 (user_settings)
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
