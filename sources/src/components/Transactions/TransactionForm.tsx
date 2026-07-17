@@ -4,7 +4,8 @@
  * - 台股股數可依「張 / 零股」切換並自動換算（美股鎖定零股）
  * - 手續費自動估算：台股元以下捨去、賣出加計證交稅（ETF 00 開頭 0.1%）
  * - 寫入失敗保留所有輸入內容
- * - 傳入 initial 即為「編輯模式」：帶入既有交易內容，成功後不清空欄位
+ * - 傳入 initial 即為「編輯模式」：帶入既有交易內容，成功後不清空欄位；
+ *   手續費開啟時即依目前費率重新估算（舊資料可能登錄錯誤），可一鍵還原原紀錄
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -13,12 +14,20 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxType } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
 import { sellTaxRate } from '../../utils/pnlEngine'
-import { getFeeRate, setFeeRate as persistFeeRate } from '../../utils/settings'
+import {
+  getFeeRate,
+  getMinFee,
+  setFeeRate as persistFeeRate,
+  setMinFee as persistMinFee,
+} from '../../utils/settings'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
 import { isSupabaseConfigured } from '../../services/supabase'
 
 type Unit = '張' | '零股'
+
+/** 證交稅率快選值（一般 / ETF / 當沖減半 / 免稅） */
+const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0']
 
 function todayStr(): string {
   const d = new Date()
@@ -46,11 +55,16 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // 編輯模式以「零股」顯示原始股數，避免張/零股換算歧義
   const [unit, setUnit] = useState<Unit>(initial ? '零股' : '張')
   const [feeRate, setFeeRate] = useState(() => String(getFeeRate(workspaceId)))
+  const minFeeUnit = unit === '張' ? 'whole' : 'odd'
+  const [minFee, setMinFee] = useState(() => String(getMinFee(minFeeUnit, workspaceId)))
 
-  // 切換工作區時帶入該工作區記憶的費率
+  // 切換工作區 / 整股零股單位時帶入對應記憶的費率與最低手續費
   useEffect(() => {
     setFeeRate(String(getFeeRate(workspaceId)))
   }, [workspaceId])
+  useEffect(() => {
+    setMinFee(String(getMinFee(minFeeUnit, workspaceId)))
+  }, [workspaceId, minFeeUnit])
   const [taxRate, setTaxRate] = useState(() =>
     initial ? String(sellTaxRate(initial.ticker)) : '0.003',
   )
@@ -83,24 +97,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     [],
   )
 
-  // 首次渲染的輸入快照：與快照完全相同時不觸發自動換算，
-  // 讓編輯模式保留「原記錄的手續費」而不被估算值蓋掉
-  const autoFeeBaseline = useRef({ price, qty, unit, feeRate, taxRate, market, txType })
-
-  // 自動換算手續費（依賴變動時覆蓋；使用者仍可手動修改欄位值）
+  // 自動換算手續費（開啟與依賴變動時皆重算；使用者仍可手動修改欄位值）。
+  // 編輯模式也照算：舊資料的手續費可能登錄錯誤，開啟時即依目前費率重新估算，
+  // 欄位下方提供「還原原紀錄」可改回原值
   useEffect(() => {
-    const b = autoFeeBaseline.current
-    if (
-      b.price === price &&
-      b.qty === qty &&
-      b.unit === unit &&
-      b.feeRate === feeRate &&
-      b.taxRate === taxRate &&
-      b.market === market &&
-      b.txType === txType
-    ) {
-      return
-    }
     const p = parseFloat(price) || 0
     const shares = getActualShares()
     const rate = parseFloat(feeRate) || 0
@@ -112,10 +112,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         qty: shares,
         feeRate: rate,
         taxRate: parseFloat(taxRate) || 0,
+        minFee: market === 'TPE' ? parseFloat(minFee) || 0 : undefined,
       })
       setFee(String(calculated))
     }
-  }, [price, qty, unit, feeRate, taxRate, market, txType, getActualShares])
+  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, getActualShares])
 
   // 市場切換：美股強制「零股」單位
   const handleMarketChange = (next: Market) => {
@@ -397,24 +398,67 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             台股標準 0.001425；輸入後會記住為「{current?.name ?? '目前'}」工作區的預設費率
           </div>
         </div>
-        {showTax && (
+        {market === 'TPE' && (
           <div className="field">
-            <label htmlFor="tx-tax-rate">證交稅率</label>
+            <label htmlFor="tx-min-fee">最低手續費</label>
             <input
-              id="tx-tax-rate"
+              id="tx-min-fee"
               type="number"
               step="any"
               min="0"
-              value={taxRate}
+              value={minFee}
               onChange={(e) => {
-                taxRateManual.current = true
-                setTaxRate(e.target.value)
+                setMinFee(e.target.value)
+                const val = parseFloat(e.target.value)
+                if (Number.isFinite(val)) persistMinFee(minFeeUnit, val, workspaceId)
               }}
             />
-            <div className="field-hint">僅台股賣出計算；ETF（00 開頭）自動 0.1%</div>
+            <div className="field-hint">
+              單筆下限（{unit === '張' ? '整股常見 20 元' : '零股常見 1 元'}）；費率為 0 時不套用
+            </div>
           </div>
         )}
       </div>
+
+      {showTax && (
+        <div className="field-row">
+          <div className="field">
+            <label htmlFor="tx-tax-rate">證交稅率</label>
+            <div className="field-row">
+              <input
+                id="tx-tax-rate"
+                type="number"
+                step="any"
+                min="0"
+                value={taxRate}
+                onChange={(e) => {
+                  taxRateManual.current = true
+                  setTaxRate(e.target.value)
+                }}
+              />
+              <select
+                className="narrow-lg"
+                aria-label="證交稅率快選"
+                value={TAX_PRESET_VALUES.includes(taxRate) ? taxRate : 'custom'}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') return
+                  taxRateManual.current = true
+                  setTaxRate(e.target.value)
+                }}
+              >
+                <option value="0.003">一般 0.3%</option>
+                <option value="0.001">ETF 0.1%</option>
+                <option value="0.0015">當沖 0.15%</option>
+                <option value="0">免稅 0%</option>
+                {!TAX_PRESET_VALUES.includes(taxRate) && <option value="custom">自訂</option>}
+              </select>
+            </div>
+            <div className="field-hint">
+              僅台股賣出計算；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="tx-fee">手續費 / 稅金{showTax && '（賣出自動含證交稅）'}</label>
@@ -426,6 +470,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           value={fee}
           onChange={(e) => setFee(e.target.value)}
         />
+        {isEdit && initial && parseFloat(fee) !== initial.fee_tax && (
+          <div className="field-hint">
+            已依目前費率重新估算；原紀錄為 {initial.fee_tax}{' '}
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => setFee(String(initial.fee_tax))}
+            >
+              還原原紀錄
+            </button>
+          </div>
+        )}
       </div>
 
       <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>

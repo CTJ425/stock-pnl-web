@@ -20,8 +20,10 @@ export interface Position {
   currency: Currency
   /** 目前持有股數 */
   qty: number
-  /** 目前部位成本（移動平均） */
+  /** 目前部位成本（移動平均，含買入手續費） */
   cost: number
+  /** 目前部位成本（未含手續費，供「成交均價」使用） */
+  rawCost: number
   /** 歷史累計買入成本（報酬率分母） */
   buyCostTotal: number
   /** 累計已實現損益 */
@@ -29,8 +31,10 @@ export interface Position {
 }
 
 export interface Holding extends Position {
-  /** 平均買入成本（cost / qty） */
+  /** 平均買入成本（cost / qty，含手續費） */
   avgCost: number
+  /** 成交均價（rawCost / qty，未含手續費） */
+  rawAvgCost: number
 }
 
 export interface YearTickerDetail {
@@ -81,8 +85,12 @@ export interface Ledger {
   warnings: string[]
 }
 
-/** 台股賣出證交稅率：一般股票 0.3%，代號 00 開頭的 ETF 為 0.1% */
+/**
+ * 台股賣出證交稅率：一般股票 0.3%，代號 00 開頭的 ETF 為 0.1%，
+ * 債券 ETF（00 開頭、B 結尾，如 00679B）目前免徵為 0
+ */
 export function sellTaxRate(ticker: string): number {
+  if (/^00\d+B$/i.test(ticker)) return 0
   return ticker.startsWith('00') ? 0.001 : 0.003
 }
 
@@ -139,6 +147,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         currency,
         qty: 0,
         cost: 0,
+        rawCost: 0,
         buyCostTotal: 0,
         realized: 0,
       }
@@ -174,6 +183,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       y.buyAmt += totalCost
       yt.buyAmt += totalCost
       pos.cost += totalCost
+      pos.rawCost += tx.price * tx.qty
       pos.qty += tx.qty
       pos.buyCostTotal += totalCost
     } else {
@@ -182,6 +192,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       yt.sellAmt += revenue
 
       const avgCost = pos.qty > 0 ? pos.cost / pos.qty : 0
+      const avgRawCost = pos.qty > 0 ? pos.rawCost / pos.qty : 0
       const matchedQty = Math.min(tx.qty, pos.qty)
       if (matchedQty < tx.qty) {
         ledger.warnings.push(
@@ -191,6 +202,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       const costBasis = avgCost * matchedQty
       const realized = revenue - costBasis
       pos.cost -= costBasis
+      pos.rawCost -= avgRawCost * matchedQty
       pos.qty -= matchedQty
       pos.realized += realized
       yt.realized += realized
@@ -217,7 +229,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
   ledger.holdings = ledger.order
     .map((key) => ledger.positions[key])
     .filter((pos) => pos.qty > 0)
-    .map((pos) => ({ ...pos, avgCost: pos.cost / pos.qty }))
+    .map((pos) => ({ ...pos, avgCost: pos.cost / pos.qty, rawAvgCost: pos.rawCost / pos.qty }))
     .sort((a, b) => {
       if (a.currency !== b.currency) return a.currency === 'TWD' ? -1 : 1
       return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0
@@ -228,17 +240,22 @@ export function computeLedger(transactions: Transaction[]): Ledger {
 
 /**
  * 以現價估算單一持股的「淨未實現損益」（與 GAS 版 Dashboard 公式同構）：
- * - 台股：扣除預估賣出手續費與證交稅（分項 floor 捨去到元），最外層 round 收整浮點尾數
+ * - 台股：扣除預估賣出手續費與證交稅（分項 floor 捨去到元、手續費可套單筆下限），
+ *   最外層 round 收整浮點尾數
  * - 美股：市值 - 成本，不預扣
  */
-export function estimateUnrealized(holding: Holding, price: number, feeRate: number): number {
+export function estimateUnrealized(
+  holding: Holding,
+  price: number,
+  feeRate: number,
+  minFee?: number,
+): number {
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
+    let fee = floorSafe(mktVal * feeRate)
+    if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
     return Math.round(
-      mktVal -
-        holding.qty * holding.avgCost -
-        floorSafe(mktVal * feeRate) -
-        floorSafe(mktVal * sellTaxRate(holding.ticker)),
+      mktVal - holding.qty * holding.avgCost - fee - floorSafe(mktVal * sellTaxRate(holding.ticker)),
     )
   }
   return mktVal - holding.qty * holding.avgCost

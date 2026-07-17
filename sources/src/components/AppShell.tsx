@@ -25,6 +25,7 @@ import { DashboardPage } from './Dashboard/DashboardPage'
 import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
 import { TransactionForm } from './Transactions/TransactionForm'
+import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
 
 type Tab = 'dashboard' | 'yearly' | 'transactions'
@@ -155,6 +156,8 @@ function WorkspaceControls() {
   const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
   const [feeInput, setFeeInput] = useState('')
+  // 費率異動後開啟批次重算預覽，讓歷史紀錄可跟著新費率調整
+  const [showRecalc, setShowRecalc] = useState(false)
 
   const openCreate = () => {
     setNameInput('')
@@ -176,7 +179,12 @@ function WorkspaceControls() {
     if (modal === 'fee') {
       const rate = parseFloat(feeInput)
       if (!Number.isFinite(rate) || rate < 0 || rate >= 1) return
-      if (current) setFeeRate(rate, current.id)
+      if (current) {
+        const changed = rate !== getFeeRate(current.id)
+        setFeeRate(rate, current.id)
+        // 費率有變動時帶出批次重算，供歷史紀錄同步調整（可勾選、可取消）
+        if (changed) setShowRecalc(true)
+      }
       setModal(null)
       return
     }
@@ -264,6 +272,7 @@ function WorkspaceControls() {
                 <div className="field-hint">
                   台股法定標準 0.001425；券商有折扣可直接填折扣後費率（如 0.0004275）。
                   此費率只套用在「{current?.name ?? '目前'}」工作區，新增交易時會自動帶入。
+                  儲存後若費率有異動，會開啟「批次重算手續費」讓歷史紀錄一併調整。
                 </div>
               </div>
             ) : (
@@ -284,6 +293,8 @@ function WorkspaceControls() {
           </form>
         </Modal>
       )}
+
+      {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}
     </div>
   )
 }
@@ -375,7 +386,7 @@ export function AppShell() {
         </button>
       )}
       {showAddTx && (
-        <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)}>
+        <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)} disableBackdropClose>
           <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
         </Modal>
       )}

@@ -596,17 +596,44 @@ table.data-table {
   color: var(--ink-muted);
 }
 
+/* 提示文字內的連結式按鈕（如「還原原紀錄」） */
+.link-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .field-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 .field-row > * {
-  flex: 1;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+/* 巢狀列（股數＋單位、稅率＋快選）維持同行，由輸入框自行縮放 */
+.field .field-row {
+  flex-wrap: nowrap;
+}
+
+.field .field-row > * {
+  flex: 1 1 auto;
 }
 
 .field-row > .narrow {
   flex: 0 0 92px;
+}
+
+.field-row > .narrow-lg {
+  flex: 0 0 122px;
 }
 
 input[type='date']::-webkit-calendar-picker-indicator {
@@ -1019,16 +1046,16 @@ input[type='date']::-webkit-calendar-picker-indicator {
     padding: 10px 12px;
   }
 
-  .field-row {
-    flex-wrap: wrap;
-  }
-
   .field-row > * {
     flex: 1 1 45%;
   }
 
   .field-row > .narrow {
     flex: 0 0 92px;
+  }
+
+  .field-row > .narrow-lg {
+    flex: 0 0 122px;
   }
 
   .modal-overlay {

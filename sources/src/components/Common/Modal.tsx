@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface ModalProps {
@@ -7,9 +8,11 @@ interface ModalProps {
   onClose: () => void
   children: ReactNode
   wide?: boolean
+  /** 表單類彈窗防誤觸：點擊遮罩空白處不關閉（僅能按 X 或 Esc） */
+  disableBackdropClose?: boolean
 }
 
-export function Modal({ title, onClose, children, wide }: ModalProps) {
+export function Modal({ title, onClose, children, wide, disableBackdropClose }: ModalProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -18,11 +21,13 @@ export function Modal({ title, onClose, children, wide }: ModalProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  return (
+  // Portal 到 body：祖先若有 backdrop-filter（如 app-header）會攔截 fixed 定位，
+  // 導致遮罩被限制在祖先的框內
+  return createPortal(
     <div
       className="modal-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        if (!disableBackdropClose && e.target === e.currentTarget) onClose()
       }}
     >
       <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-label={title}>
@@ -34,6 +39,7 @@ export function Modal({ title, onClose, children, wide }: ModalProps) {
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

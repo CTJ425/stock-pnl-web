@@ -12,6 +12,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import type { Holding } from '../../utils/pnlEngine'
 import { estimateUnrealized } from '../../utils/pnlEngine'
+import { breakEvenPrice } from '../../utils/fees'
 import type { Currency } from '../../types/models'
 import {
   fmtMoney,
@@ -21,7 +22,7 @@ import {
   fmtSignedPercent,
   pnlClass,
 } from '../../utils/formatters'
-import { getFeeRate } from '../../utils/settings'
+import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { PriceMap } from '../../services/priceProxy'
 import { displayStockName } from '../../services/usStockNames'
 
@@ -33,17 +34,28 @@ interface HoldingRow {
   unrealized: number | null
   /** 未實現報酬率（未實現 ÷ 當前部位成本）；無現價時為 null */
   roi: number | null
+  /** 保本賣出價：以此價全數賣出（扣手續費 / 證交稅）恰好不虧 */
+  breakEven: number
 }
 
-function buildRows(holdings: Holding[], prices: PriceMap, feeRate: number): HoldingRow[] {
+function buildRows(
+  holdings: Holding[],
+  prices: PriceMap,
+  feeRate: number,
+  workspaceId?: string,
+): HoldingRow[] {
   return holdings.map((h) => {
     const quote = prices[h.key]
     const price = quote?.price ?? null
     const mktVal = price !== null ? price * h.qty : null
-    const unrealized = price !== null ? estimateUnrealized(h, price, feeRate) : null
+    // 台股依持股規模套用整股 / 零股最低手續費；美股無下限
+    const minFee =
+      h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
+    const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
     // 僅當前部位（與券商 APP 同口徑）：分母為現有持股的移動平均成本
     const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
-    return { holding: h, price, priceStale: quote?.stale ?? false, mktVal, unrealized, roi }
+    const breakEven = breakEvenPrice(h, feeRate, minFee)
+    return { holding: h, price, priceStale: quote?.stale ?? false, mktVal, unrealized, roi, breakEven }
   })
 }
 
@@ -63,13 +75,14 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
             <th className="num">現價</th>
             <th className="num">持有股數</th>
             <th className="num">平均買入成本</th>
+            <th className="num">保本賣出價</th>
             <th className="num">目前市值</th>
             <th className="num">未實現損益</th>
             <th className="num">未實現報酬率</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, roi }) => (
+          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, roi, breakEven }) => (
             <tr key={h.key}>
               <td>{h.ticker}</td>
               <td>{displayStockName(h.market, h.ticker, h.name)}</td>
@@ -88,7 +101,18 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                 )}
               </td>
               <td className="num">{fmtQty(h.qty)}</td>
-              <td className="num">{fmtPrice(h.avgCost, currency)}</td>
+              <td className="num">
+                <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
+                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含手續費的成交均價">
+                  未含費 {fmtPrice(h.rawAvgCost, currency)}
+                </div>
+              </td>
+              <td
+                className={`num ${price !== null ? pnlClass(price - breakEven) : ''}`}
+                title="以此價全數賣出（扣手續費與證交稅）恰好不虧"
+              >
+                {fmtPrice(breakEven, currency)}
+              </td>
               <td className="num">{mktVal === null ? '—' : fmtMoney(mktVal, currency)}</td>
               <td className={`num ${pnlClass(unrealized)}`}>
                 {unrealized === null ? '—' : fmtSignedMoney(unrealized, currency)}
@@ -108,8 +132,8 @@ export function DashboardPage() {
   const feeRate = getFeeRate(current?.id)
 
   const rows = useMemo(
-    () => buildRows(ledger.holdings, prices, feeRate),
-    [ledger.holdings, prices, feeRate],
+    () => buildRows(ledger.holdings, prices, feeRate, current?.id),
+    [ledger.holdings, prices, feeRate, current?.id],
   )
   const twRows = rows.filter((r) => r.holding.currency === 'TWD')
   const usRows = rows.filter((r) => r.holding.currency === 'USD')

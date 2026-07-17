@@ -4,7 +4,7 @@
  * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
  */
 import { useMemo, useState } from 'react'
-import { Download, NotebookPen, Pencil, Trash2, Upload } from 'lucide-react'
+import { Calculator, Download, NotebookPen, Pencil, Trash2, Upload } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -15,6 +15,7 @@ import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
 import { Modal } from '../Common/Modal'
 import { CsvImportModal } from './CsvImportModal'
+import { RecalcFeesModal } from './RecalcFeesModal'
 import { TransactionForm } from './TransactionForm'
 
 function cashFlow(tx: Transaction): number {
@@ -88,6 +89,7 @@ export function TransactionsPage() {
   const { transactions, addTransactions, updateTransaction, deleteTransactions, current } =
     useWorkspace()
   const [showImport, setShowImport] = useState(false)
+  const [showRecalc, setShowRecalc] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editTx, setEditTx] = useState<Transaction | null>(null)
@@ -175,6 +177,15 @@ export function TransactionsPage() {
           </button>
         )}
         <div className="spacer" />
+        <button
+          className="btn"
+          title="依目前費率設定重新估算所有台股交易的手續費"
+          onClick={() => setShowRecalc(true)}
+          disabled={transactions.length === 0}
+        >
+          <Calculator size={15} />
+          重算手續費
+        </button>
         <button className="btn" onClick={() => setShowImport(true)}>
           <Upload size={15} />
           匯入 CSV
@@ -284,8 +295,10 @@ export function TransactionsPage() {
         <CsvImportModal onClose={() => setShowImport(false)} onImport={handleImport} />
       )}
 
+      {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}
+
       {editTx && (
-        <Modal title="編輯交易紀錄" onClose={() => setEditTx(null)}>
+        <Modal title="編輯交易紀錄" onClose={() => setEditTx(null)} disableBackdropClose>
           <TransactionForm
             key={editTx.id}
             initial={editTx}
