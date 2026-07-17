@@ -17,10 +17,18 @@ export interface AuthState {
   user: AuthUser | null
   /** session 還原中（首屏 loading） */
   loading: boolean
+  /** 使用者由「重設密碼」信件連結進入，應提示設定新密碼 */
+  recovery: boolean
   /** 回傳錯誤訊息；成功為 null */
   signIn: (email: string, password: string) => Promise<string | null>
   /** 回傳錯誤訊息；成功為 null。若專案開啟信箱驗證，回傳提示訊息字串（非錯誤） */
   signUp: (email: string, password: string) => Promise<string | null>
+  /** 寄送重設密碼信件；回傳錯誤訊息，成功為 null */
+  resetPassword: (email: string) => Promise<string | null>
+  /** 設定新密碼（重設流程進站後）；回傳錯誤訊息，成功為 null */
+  updatePassword: (password: string) => Promise<string | null>
+  /** 略過本次設定新密碼提示 */
+  dismissRecovery: () => void
   signOut: () => Promise<void>
 }
 
@@ -31,6 +39,7 @@ const AuthContext = createContext<AuthState | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(isSupabaseConfigured ? null : LOCAL_USER)
   const [loading, setLoading] = useState(isSupabaseConfigured)
+  const [recovery, setRecovery] = useState(false)
 
   // 內容未變時沿用同一物件：token 刷新（如切回分頁）不應觸發下游 effect 重載
   const applyUser = useCallback((u: { id: string; email?: string | null } | null | undefined) => {
@@ -51,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // 由重設密碼信件連結進站：提示使用者設定新密碼
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
       applyUser(session?.user)
     })
     return () => {
@@ -75,6 +86,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [])
 
+  const resetPassword = useCallback(async (email: string) => {
+    if (!supabase) return null
+    // 信件連結導回目前站點（本地測試需將 localhost 加入 Supabase 的 Redirect URLs）
+    const redirectTo = window.location.origin + window.location.pathname
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    return error ? error.message : null
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    if (!supabase) return null
+    const { error } = await supabase.auth.updateUser({ password })
+    if (!error) setRecovery(false)
+    return error ? error.message : null
+  }, [])
+
+  const dismissRecovery = useCallback(() => setRecovery(false), [])
+
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
   }, [])
@@ -84,11 +112,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mode: isSupabaseConfigured ? 'supabase' : 'local',
       user,
       loading,
+      recovery,
       signIn,
       signUp,
+      resetPassword,
+      updatePassword,
+      dismissRecovery,
       signOut,
     }),
-    [user, loading, signIn, signUp, signOut],
+    [user, loading, recovery, signIn, signUp, resetPassword, updatePassword, dismissRecovery, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

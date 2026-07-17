@@ -42,6 +42,75 @@ const THEME_LABEL: Record<ThemePref, string> = {
   light: '淺色',
 }
 
+/** 使用者點擊「重設密碼」信件連結進站後，提示設定新密碼 */
+function RecoveryPasswordModal() {
+  const { updatePassword, dismissRecovery } = useAuth()
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    setError(null)
+    if (password.length < 6) {
+      setError('新密碼至少需要 6 個字元')
+      return
+    }
+    if (password !== confirm) {
+      setError('兩次輸入的密碼不一致')
+      return
+    }
+    setBusy(true)
+    try {
+      const err = await updatePassword(password)
+      if (err) setError(`設定失敗：${err}`)
+      // 成功時 updatePassword 會自動關閉此視窗（recovery = false）
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="設定新密碼" onClose={dismissRecovery}>
+      <div className="notice notice-warn">
+        你剛透過「重設密碼」信件連結登入，請立即設定新密碼。
+        （關閉此視窗則維持原密碼不變）
+      </div>
+      <form onSubmit={(e) => void submit(e)}>
+        {error && <div className="notice notice-error">{error}</div>}
+        <div className="field">
+          <label htmlFor="new-password">新密碼</label>
+          <input
+            id="new-password"
+            type="password"
+            autoComplete="new-password"
+            autoFocus
+            value={password}
+            placeholder="至少 6 個字元"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="confirm-password">確認新密碼</label>
+          <input
+            id="confirm-password"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            placeholder="再輸入一次新密碼"
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
+          {busy ? '儲存中…' : '儲存新密碼'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
 function ThemeToggle() {
   const [pref, setPref] = useState<ThemePref>(getThemePref)
 
@@ -220,7 +289,7 @@ function WorkspaceControls() {
 }
 
 export function AppShell() {
-  const { mode, user, signOut } = useAuth()
+  const { mode, user, recovery, signOut } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
@@ -310,6 +379,8 @@ export function AppShell() {
           <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
         </Modal>
       )}
+
+      {recovery && <RecoveryPasswordModal />}
     </>
   )
 }
