@@ -1,6 +1,8 @@
 /**
  * 庫存總覽 Dashboard：
- * - 台股 (TWD) / 美股 (USD) 分開統計，只顯示 active 持股（與 GAS 版同構）
+ * - 台股 (TWD) / 美股 (USD) 分開統計，只顯示 active 持股
+ * - 損益口徑對齊券商 APP：僅計算「當前持有部位」（未實現損益 ÷ 當前部位成本），
+ *   不混入歷史已結清週期；歷史績效請看「年度收益」頁
  * - 現價背景非同步載入：載入中顯示骨架屏；抓不到現價時市值 / 未實現損益留空
  * - 台股未實現損益為「淨」值：預扣賣出手續費與證交稅（estimateUnrealized）
  */
@@ -29,8 +31,8 @@ interface HoldingRow {
   priceStale: boolean
   mktVal: number | null
   unrealized: number | null
-  total: number
-  roi: number
+  /** 未實現報酬率（未實現 ÷ 當前部位成本）；無現價時為 null */
+  roi: number | null
 }
 
 function buildRows(holdings: Holding[], prices: PriceMap, feeRate: number): HoldingRow[] {
@@ -39,10 +41,9 @@ function buildRows(holdings: Holding[], prices: PriceMap, feeRate: number): Hold
     const price = quote?.price ?? null
     const mktVal = price !== null ? price * h.qty : null
     const unrealized = price !== null ? estimateUnrealized(h, price, feeRate) : null
-    // 與 GAS 版 SUM(G,H) 同構：抓不到現價時總損益僅含已實現部分
-    const total = (unrealized ?? 0) + h.realized
-    const roi = h.buyCostTotal !== 0 ? total / h.buyCostTotal : 0
-    return { holding: h, price, priceStale: quote?.stale ?? false, mktVal, unrealized, total, roi }
+    // 僅當前部位（與券商 APP 同口徑）：分母為現有持股的移動平均成本
+    const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
+    return { holding: h, price, priceStale: quote?.stale ?? false, mktVal, unrealized, roi }
   })
 }
 
@@ -64,13 +65,11 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
             <th className="num">平均買入成本</th>
             <th className="num">目前市值</th>
             <th className="num">未實現損益</th>
-            <th className="num">已實現損益</th>
-            <th className="num">累計總損益</th>
-            <th className="num">總報酬率</th>
+            <th className="num">未實現報酬率</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, total, roi }) => (
+          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, roi }) => (
             <tr key={h.key}>
               <td>{h.ticker}</td>
               <td>{displayStockName(h.market, h.ticker, h.name)}</td>
@@ -94,9 +93,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
               <td className={`num ${pnlClass(unrealized)}`}>
                 {unrealized === null ? '—' : fmtSignedMoney(unrealized, currency)}
               </td>
-              <td className={`num ${pnlClass(h.realized)}`}>{fmtSignedMoney(h.realized, currency)}</td>
-              <td className={`num ${pnlClass(total)}`}>{fmtSignedMoney(total, currency)}</td>
-              <td className={`num ${pnlClass(roi)}`}>{fmtSignedPercent(roi)}</td>
+              <td className={`num ${pnlClass(roi)}`}>{roi === null ? '—' : fmtSignedPercent(roi)}</td>
             </tr>
           ))}
         </tbody>
