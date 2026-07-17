@@ -9,7 +9,12 @@ import { CalendarRange, Minus, Plus } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { YearTickerDetail } from '../../utils/pnlEngine'
+import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
+import type { SortState } from '../Common/SortableTh'
+import { SortableTh, nextSort } from '../Common/SortableTh'
+
+type YearSortKey = 'year' | 'realized' | 'buyAmt' | 'sellAmt' | 'fees' | 'count'
 
 interface YearRow {
   year: number
@@ -49,6 +54,17 @@ function useSectionRows(currency: Currency): YearRow[] {
 function YearlySection({ title, currency }: { title: string; currency: Currency }) {
   const rows = useSectionRows(currency)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [sort, setSort] = useState<SortState<YearSortKey>>({ key: 'year', dir: 'asc' })
+
+  const sortedRows = useMemo(() => {
+    const sign = sort.dir === 'asc' ? 1 : -1
+    return rows
+      .slice()
+      .sort((a, b) => sign * (a[sort.key] - b[sort.key]) || a.year - b.year)
+  }, [rows, sort])
+
+  const handleSort = (key: YearSortKey) =>
+    setSort((prev) => nextSort(prev, key, key === 'year' ? 'asc' : 'desc'))
 
   const toggle = (year: number) => {
     setExpanded((prev) => {
@@ -73,16 +89,16 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
           <table className="data-table">
             <thead>
               <tr>
-                <th>年度</th>
-                <th className="num">已實現損益</th>
-                <th className="num">買入總額</th>
-                <th className="num">賣出總額</th>
-                <th className="num">手續費</th>
-                <th className="num">交易筆數</th>
+                <SortableTh label="年度" sortKey="year" sort={sort} onSort={handleSort} />
+                <SortableTh label="已實現損益" sortKey="realized" sort={sort} onSort={handleSort} numeric />
+                <SortableTh label="買入總額" sortKey="buyAmt" sort={sort} onSort={handleSort} numeric />
+                <SortableTh label="賣出總額" sortKey="sellAmt" sort={sort} onSort={handleSort} numeric />
+                <SortableTh label="手續費" sortKey="fees" sort={sort} onSort={handleSort} numeric />
+                <SortableTh label="交易筆數" sortKey="count" sort={sort} onSort={handleSort} numeric />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {sortedRows.map((row) => {
                 const isOpen = expanded.has(row.year)
                 return (
                   <YearRows
@@ -139,7 +155,7 @@ function YearRows({
         row.details.map((yt) => (
           <tr key={yt.key} className="detail-row">
             <td style={{ paddingLeft: 46 }}>
-              {yt.ticker}（{yt.name}）
+              {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
             </td>
             <td className={`num ${pnlClass(yt.realized)}`}>{fmtSignedMoney(yt.realized, currency)}</td>
             <td className="num">{fmtMoney(yt.buyAmt, currency)}</td>

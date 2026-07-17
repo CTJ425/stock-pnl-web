@@ -57,7 +57,29 @@ USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
 
--- 3. 使用者設定資料表 (user_settings)
+-- 3. 共用現價快取資料表 (price_cache)
+--     Edge Function stock-price 的 L2 快取：10 分鐘內全站共用同一份報價，
+--     避免每個使用者重複請求外部 API。
+--     僅 Edge Function（service role）可寫入；一般使用者只能讀取，
+--     避免有人直接竄改快取價格影響所有人。
+CREATE TABLE IF NOT EXISTS price_cache (
+    key TEXT PRIMARY KEY,                         -- 'TPE:2330'、'US:AAPL'
+    price NUMERIC NOT NULL CHECK (price > 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE price_cache ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read price cache" ON price_cache;
+CREATE POLICY "Authenticated users can read price cache"
+ON price_cache FOR SELECT
+TO authenticated
+USING (true);
+-- 注意：刻意不建立 INSERT / UPDATE / DELETE policy——
+-- service role（Edge Function）不受 RLS 限制，是唯一的寫入途徑。
+
+
+-- 4. 使用者設定資料表 (user_settings)
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),

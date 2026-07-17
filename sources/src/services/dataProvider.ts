@@ -16,7 +16,8 @@ export interface DataProvider {
   listTransactions(workspaceId: string): Promise<Transaction[]>
   /** 批次新增（單筆與 CSV 匯入共用） */
   addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]>
-  deleteTransaction(id: string): Promise<void>
+  /** 批次刪除（單筆刪除傳入單一元素陣列） */
+  deleteTransactions(ids: string[]): Promise<void>
 }
 
 /* =========================================================
@@ -105,9 +106,10 @@ export class LocalProvider implements DataProvider {
     return created
   }
 
-  async deleteTransaction(id: string): Promise<void> {
+  async deleteTransactions(ids: string[]): Promise<void> {
+    const removed = new Set(ids)
     const store = readStore()
-    store.transactions = store.transactions.filter((t) => t.id !== id)
+    store.transactions = store.transactions.filter((t) => !removed.has(t.id))
     writeStore(store)
   }
 }
@@ -180,8 +182,8 @@ export class SupabaseProvider implements DataProvider {
     return (data ?? []) as Transaction[]
   }
 
-  async deleteTransaction(id: string): Promise<void> {
-    const { error } = await client().from('transactions').delete().eq('id', id)
+  async deleteTransactions(ids: string[]): Promise<void> {
+    const { error } = await client().from('transactions').delete().in('id', ids)
     if (error) throw new Error(`刪除交易失敗：${error.message}`)
   }
 }

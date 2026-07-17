@@ -1,5 +1,7 @@
 /**
  * 股票現價取得：
+ * 0. TTL 快取：10 分鐘內取得過的價格直接採用、不打 API
+ *    （登入 / 重整 / 多人同時使用不會重複連線；手動重新整理可強制重抓）
  * 1. 主要策略：Supabase Edge Function `stock-price`（伺服器端代抓 Yahoo Finance，繞開 CORS）
  * 2. 台股備援：TWSE / TPEx OpenAPI 直連（支援 CORS 的官方端點）
  * 3. 降級機制：API 失敗時回傳 localStorage 的上次快取價（標記 stale），
@@ -28,6 +30,14 @@ export interface PriceRequestItem {
 export type PriceMap = Record<string, PriceQuote>
 
 const CACHE_KEY = 'stock-pnl-web/price-cache-v1'
+/** 快取有效期：報價本就有延遲，10 分鐘內視為新鮮、不重打 API */
+const CACHE_TTL_MS = 10 * 60 * 1000
+
+function isFresh(quote: PriceQuote | undefined, now: number): quote is PriceQuote {
+  if (!quote || quote.stale) return false
+  const at = Date.parse(quote.asOf)
+  return Number.isFinite(at) && now - at < CACHE_TTL_MS
+}
 
 function readPriceCache(): PriceMap {
   try {
@@ -90,15 +100,34 @@ async function fetchTwFallback(items: PriceRequestItem[]): Promise<Map<string, n
 /**
  * 批次取得現價。回傳的 PriceMap 內含新鮮價與（僅在無新鮮價時的）快取價；
  * 兩者皆無的代號不在 map 中，呼叫端應將市值 / 未實現損益留空。
+ * @param options.force 忽略 TTL 快取、強制重抓（手動重新整理用）
  */
-export async function fetchPrices(items: PriceRequestItem[]): Promise<PriceMap> {
+export async function fetchPrices(
+  items: PriceRequestItem[],
+  options?: { force?: boolean },
+): Promise<PriceMap> {
   const result: PriceMap = {}
   if (items.length === 0) return result
 
-  const now = new Date().toISOString()
-  const fromEdge = await fetchFromEdge(items)
+  const cache = readPriceCache()
+  const nowMs = Date.now()
 
-  const unresolved = items.filter((i) => !fromEdge.has(positionKey(i.market, i.ticker)))
+  // TTL 內的快取價直接使用（保留原取得時間），只重抓過期 / 缺少的代號
+  let toFetch = items
+  if (!options?.force) {
+    toFetch = []
+    for (const item of items) {
+      const key = positionKey(item.market, item.ticker)
+      const cached = cache[key]
+      if (isFresh(cached, nowMs)) result[key] = cached
+      else toFetch.push(item)
+    }
+  }
+
+  const now = new Date().toISOString()
+  const fromEdge = await fetchFromEdge(toFetch)
+
+  const unresolved = toFetch.filter((i) => !fromEdge.has(positionKey(i.market, i.ticker)))
   const fromTw = await fetchTwFallback(unresolved)
 
   for (const [key, price] of fromEdge) {
@@ -109,7 +138,6 @@ export async function fetchPrices(items: PriceRequestItem[]): Promise<PriceMap> 
   }
 
   // 快取降級：仍無現價者採用上次成功取得的價格（標記 stale）
-  const cache = readPriceCache()
   for (const item of items) {
     const key = positionKey(item.market, item.ticker)
     if (!result[key] && cache[key]) {

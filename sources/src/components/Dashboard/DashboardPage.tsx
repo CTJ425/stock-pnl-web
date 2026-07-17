@@ -21,6 +21,7 @@ import {
 } from '../../utils/formatters'
 import { getFeeRate } from '../../utils/settings'
 import type { PriceMap } from '../../services/priceProxy'
+import { displayStockName } from '../../services/usStockNames'
 
 interface HoldingRow {
   holding: Holding
@@ -72,7 +73,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
           {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, total, roi }) => (
             <tr key={h.key}>
               <td>{h.ticker}</td>
-              <td>{h.name}</td>
+              <td>{displayStockName(h.market, h.ticker, h.name)}</td>
               <td className="num">
                 {price === null ? (
                   <span className="skeleton" aria-label="現價載入中" />
@@ -105,9 +106,9 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
 }
 
 export function DashboardPage() {
-  const { ledger } = useWorkspace()
+  const { ledger, current } = useWorkspace()
   const { prices, loading, refreshedAt, refresh } = useStockPrices(ledger.holdings)
-  const feeRate = getFeeRate()
+  const feeRate = getFeeRate(current?.id)
 
   const rows = useMemo(
     () => buildRows(ledger.holdings, prices, feeRate),

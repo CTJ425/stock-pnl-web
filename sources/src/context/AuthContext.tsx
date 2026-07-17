@@ -32,26 +32,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(isSupabaseConfigured ? null : LOCAL_USER)
   const [loading, setLoading] = useState(isSupabaseConfigured)
 
+  // 內容未變時沿用同一物件：token 刷新（如切回分頁）不應觸發下游 effect 重載
+  const applyUser = useCallback((u: { id: string; email?: string | null } | null | undefined) => {
+    setUser((prev) => {
+      if (!u) return null
+      const email = u.email ?? ''
+      return prev && prev.id === u.id && prev.email === email ? prev : { id: u.id, email }
+    })
+  }, [])
+
   useEffect(() => {
     if (!supabase) return
     let cancelled = false
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return
-      const u = data.session?.user
-      setUser(u ? { id: u.id, email: u.email ?? '' } : null)
+      applyUser(data.session?.user)
       setLoading(false)
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user
-      setUser(u ? { id: u.id, email: u.email ?? '' } : null)
+      applyUser(session?.user)
     })
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [applyUser])
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return null

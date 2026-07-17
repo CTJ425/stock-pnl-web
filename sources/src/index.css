@@ -1,5 +1,6 @@
 /* =========================================================
- * 設計系統：暗黑玻璃擬物風 (Glassmorphism & Neon Dark Mode)
+ * 設計系統：玻璃擬物風 (Glassmorphism)
+ * 預設為暗色主題；<html data-theme="light"> 時套用亮色變數
  * 損益配色為台灣看盤習慣：紅漲 / 綠跌
  * ========================================================= */
 :root {
@@ -24,6 +25,61 @@
   --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
   --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+  --panel: #131a2b;
+  --modal-bg: rgba(19, 26, 43, 0.96);
+  --header-bg: rgba(11, 15, 25, 0.72);
+  --overlay: rgba(4, 7, 14, 0.66);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --thead-bg: rgba(255, 255, 255, 0.03);
+  --row-hover: rgba(255, 255, 255, 0.035);
+  --row-alt: rgba(255, 255, 255, 0.02);
+  --btn-hover-bg: rgba(255, 255, 255, 0.12);
+  --btn-hover-border: rgba(255, 255, 255, 0.28);
+  --scroll-thumb: rgba(255, 255, 255, 0.14);
+  --skeleton-a: rgba(255, 255, 255, 0.06);
+  --skeleton-b: rgba(255, 255, 255, 0.14);
+  --notice-ok-ink: #6ee7b7;
+  --notice-err-ink: #fca5a5;
+  --notice-warn-ink: #fcd34d;
+  --badge-warn-ink: #fbbf24;
+  --date-invert: 0.7;
+}
+
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --bg-glow-a: rgba(99, 102, 241, 0.12);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.66);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --accent-strong: #4f46e5;
+  --up: #dc2f3f;
+  --down: #059654;
+  --danger: #dc2626;
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.08);
+  --panel: #ffffff;
+  --modal-bg: rgba(255, 255, 255, 0.97);
+  --header-bg: rgba(240, 244, 250, 0.8);
+  --overlay: rgba(15, 23, 42, 0.35);
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --thead-bg: rgba(15, 23, 42, 0.03);
+  --row-hover: rgba(15, 23, 42, 0.04);
+  --row-alt: rgba(15, 23, 42, 0.02);
+  --btn-hover-bg: rgba(15, 23, 42, 0.06);
+  --btn-hover-border: rgba(15, 23, 42, 0.28);
+  --scroll-thumb: rgba(15, 23, 42, 0.22);
+  --skeleton-a: rgba(15, 23, 42, 0.06);
+  --skeleton-b: rgba(15, 23, 42, 0.13);
+  --notice-ok-ink: #047857;
+  --notice-err-ink: #b91c1c;
+  --notice-warn-ink: #a16207;
+  --badge-warn-ink: #92400e;
+  --date-invert: 0.35;
 }
 
 * {
@@ -69,7 +125,9 @@ h3 {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 20px 56px;
+  /* 撐滿高度讓頁尾貼底；底部預留浮動按鈕空間 */
+  flex: 1;
+  padding: 0 20px 96px;
 }
 
 .app-header {
@@ -78,7 +136,7 @@ h3 {
   z-index: 50;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  background: rgba(11, 15, 25, 0.72);
+  background: var(--header-bg);
   border-bottom: 1px solid var(--border);
 }
 
@@ -258,6 +316,7 @@ h3 {
 /* ---------- 表格 ---------- */
 .table-scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
 }
 
@@ -277,7 +336,7 @@ table.data-table {
   padding: 11px 14px;
   border-bottom: 1px solid var(--border-strong);
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--thead-bg);
 }
 
 .data-table td {
@@ -292,7 +351,15 @@ table.data-table {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--row-hover);
+}
+
+.data-table input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent-strong);
+  vertical-align: middle;
 }
 
 .data-table tbody tr:last-child td {
@@ -304,13 +371,53 @@ table.data-table {
   text-align: right;
 }
 
+/* 可排序表頭 */
+.th-sort {
+  padding: 0;
+}
+
+.th-sort-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  padding: 11px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.th-sort.num .th-sort-btn {
+  justify-content: flex-end;
+}
+
+.th-sort-btn:hover {
+  color: var(--ink);
+}
+
+.th-sort .sort-ind {
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.th-sort .sort-ind.active {
+  opacity: 1;
+  color: var(--accent);
+}
+
 .data-table .cell-muted {
   color: var(--ink-muted);
 }
 
 /* 年度收益：明細列 */
 .detail-row td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--row-alt);
   color: var(--ink-secondary);
   font-size: 12.5px;
 }
@@ -355,8 +462,8 @@ table.data-table {
 }
 
 .btn:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
 }
 
 .btn:active {
@@ -399,6 +506,18 @@ table.data-table {
   border-radius: 8px;
 }
 
+/* 全域「新增交易」浮動按鈕 */
+.fab {
+  position: fixed;
+  right: 22px;
+  bottom: 24px;
+  z-index: 90;
+  border-radius: 999px;
+  padding: 13px 22px;
+  font-size: 14.5px;
+  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.45);
+}
+
 /* ---------- 表單 ---------- */
 .field {
   margin-bottom: 13px;
@@ -420,7 +539,7 @@ table.data-table {
   padding: 9px 12px;
   font: inherit;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--input-bg);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   outline: none;
@@ -441,7 +560,7 @@ table.data-table {
 }
 
 .field select option {
-  background: #131a2b;
+  background: var(--panel);
   color: var(--ink);
 }
 
@@ -465,7 +584,7 @@ table.data-table {
 }
 
 input[type='date']::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
+  filter: invert(var(--date-invert));
   cursor: pointer;
 }
 
@@ -476,7 +595,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #131a2b;
+  background: var(--panel);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   max-height: 220px;
@@ -524,7 +643,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(4, 7, 14, 0.66);
+  background: var(--overlay);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -538,7 +657,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .modal {
   width: 100%;
   max-width: 460px;
-  background: rgba(19, 26, 43, 0.96);
+  background: var(--modal-bg);
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   box-shadow: 0 24px 64px rgba(2, 6, 18, 0.7);
@@ -589,9 +708,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border-radius: 6px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.06) 25%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.06) 75%
+    var(--skeleton-a) 25%,
+    var(--skeleton-b) 50%,
+    var(--skeleton-a) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
@@ -612,7 +731,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .badge.badge-warn {
-  color: #fbbf24;
+  color: var(--badge-warn-ink);
   border-color: rgba(251, 191, 36, 0.4);
   background: rgba(251, 191, 36, 0.09);
 }
@@ -626,19 +745,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .notice-error {
-  color: #fca5a5;
+  color: var(--notice-err-ink);
   border-color: rgba(248, 113, 113, 0.4);
   background: rgba(248, 113, 113, 0.08);
 }
 
 .notice-ok {
-  color: #6ee7b7;
+  color: var(--notice-ok-ink);
   border-color: rgba(52, 211, 153, 0.4);
   background: rgba(52, 211, 153, 0.08);
 }
 
 .notice-warn {
-  color: #fcd34d;
+  color: var(--notice-warn-ink);
   border-color: rgba(251, 191, 36, 0.4);
   background: rgba(251, 191, 36, 0.08);
 }
@@ -724,7 +843,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .ws-select select option {
-  background: #131a2b;
+  background: var(--panel);
 }
 
 /* ---------- 工具列 ---------- */
@@ -737,6 +856,20 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .toolbar .spacer {
   flex: 1;
+}
+
+/* ---------- 頁尾 ---------- */
+.app-footer {
+  margin-top: auto;
+  max-width: 1180px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 18px 20px 26px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  text-align: center;
+  line-height: 1.7;
 }
 
 /* ---------- 動畫 ---------- */
@@ -801,7 +934,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--scroll-thumb);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -811,12 +944,86 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: transparent;
 }
 
-@media (max-width: 640px) {
+/* ---------- 行動裝置 (RWD) ---------- */
+@media (max-width: 700px) {
+  .container {
+    padding: 0 14px 104px;
+  }
+
+  .app-header-inner {
+    padding: 10px 14px;
+    gap: 8px 10px;
+  }
+
+  /* 分頁列移到第二行、平均分寬 */
+  .tabs {
+    order: 10;
+    width: 100%;
+  }
+
+  .tab {
+    flex: 1;
+    justify-content: center;
+    padding: 7px 8px;
+  }
+
+  .header-spacer {
+    display: none;
+  }
+
+  .ws-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ws-select select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 手機空間有限：email 以登出鈕的 title 呈現即可 */
+  .user-email {
+    display: none;
+  }
+
+  /* 輸入字級 ≥16px，避免 iOS Safari 聚焦時自動放大頁面 */
+  .field input,
+  .field select {
+    font-size: 16px;
+    padding: 10px 12px;
+  }
+
+  .field-row {
+    flex-wrap: wrap;
+  }
+
+  .field-row > * {
+    flex: 1 1 45%;
+  }
+
+  .field-row > .narrow {
+    flex: 0 0 92px;
+  }
+
+  .modal-overlay {
+    padding: 3vh 10px 12px;
+  }
+
+  .modal-body {
+    padding: 14px 16px 18px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
   .kpi .kpi-value {
     font-size: 21px;
   }
 
-  .app-header-inner {
-    gap: 10px;
+  .fab {
+    right: 14px;
+    bottom: 16px;
   }
 }

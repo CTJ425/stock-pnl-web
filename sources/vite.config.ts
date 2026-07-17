@@ -8,6 +8,12 @@ export default defineConfig({
   base: './',
   test: {
     setupFiles: ['./src/test/setup.ts'],
+    // 煙霧測試以「本機模式」為前提；清空 Supabase 環境變數，
+    // 避免開發者的 .env.local 讓測試跑進 Supabase 模式
+    env: {
+      VITE_SUPABASE_URL: '',
+      VITE_SUPABASE_ANON_KEY: '',
+    },
   },
   server: {
     // TWSE / TPEx OpenAPI 未開放 CORS，開發模式經 dev server 代理取得台股清單與現價；

@@ -4,7 +4,7 @@
  * - 美股：保留兩位小數
  */
 import type { Market, TxType } from '../types/models'
-import { sellTaxRate } from './pnlEngine'
+import { floorSafe, sellTaxRate } from './pnlEngine'
 
 /** 台股法定標準手續費率 0.1425% */
 export const DEFAULT_FEE_RATE = 0.001425
@@ -26,10 +26,10 @@ export function calculateFee(input: FeeInput): number {
   const amount = price * qty
 
   if (market === 'TPE') {
-    let fee = Math.floor(amount * feeRate)
+    let fee = floorSafe(amount * feeRate)
     if (txType === 'SELL') {
       const taxRate = input.taxRate ?? sellTaxRate(input.ticker ?? '')
-      fee += Math.floor(amount * taxRate)
+      fee += floorSafe(amount * taxRate)
     }
     return fee
   }

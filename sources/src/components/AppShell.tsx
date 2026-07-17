@@ -1,22 +1,29 @@
-/** 應用外殼：頁首（品牌、工作區切換、登出）、分頁導覽與內容區 */
-import { useState } from 'react'
+/** 應用外殼：頁首（品牌、工作區切換、主題切換、登出）、分頁導覽、全域新增交易與內容區 */
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   CalendarRange,
   HardDrive,
   LayoutDashboard,
+  ListPlus,
   LogOut,
+  Monitor,
+  Moon,
   NotebookPen,
   Pencil,
   Plus,
+  Sun,
   Trash2,
   TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
+import type { ThemePref } from '../utils/settings'
+import { applyTheme, getThemePref, setThemePref } from '../utils/settings'
 import { DashboardPage } from './Dashboard/DashboardPage'
 import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
+import { TransactionForm } from './Transactions/TransactionForm'
 import { Modal } from './Common/Modal'
 
 type Tab = 'dashboard' | 'yearly' | 'transactions'
@@ -26,6 +33,45 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'yearly', label: '年度收益', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', icon: NotebookPen },
 ]
+
+const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
+const THEME_LABEL: Record<ThemePref, string> = {
+  system: '跟隨系統',
+  dark: '深色',
+  light: '淺色',
+}
+
+function ThemeToggle() {
+  const [pref, setPref] = useState<ThemePref>(getThemePref)
+
+  useEffect(() => {
+    applyTheme(pref)
+    // 跟隨系統時，作業系統切換深/淺色要即時反映
+    if (pref !== 'system' || typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [pref])
+
+  const cycle = () => {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length]
+    setPref(next)
+    setThemePref(next)
+  }
+
+  const Icon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun
+  return (
+    <button
+      className="btn btn-sm btn-icon"
+      title={`外觀：${THEME_LABEL[pref]}（點擊切換）`}
+      aria-label={`外觀：${THEME_LABEL[pref]}，點擊切換`}
+      onClick={cycle}
+    >
+      <Icon size={14} />
+    </button>
+  )
+}
 
 function WorkspaceControls() {
   const {
@@ -126,8 +172,9 @@ function WorkspaceControls() {
 
 export function AppShell() {
   const { mode, user, signOut } = useAuth()
-  const { loading, error } = useWorkspace()
+  const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
+  const [showAddTx, setShowAddTx] = useState(false)
 
   return (
     <>
@@ -158,6 +205,7 @@ export function AppShell() {
           <WorkspaceControls />
 
           <div className="header-meta">
+            <ThemeToggle />
             {mode === 'local' ? (
               <span className="badge" title="未設定 Supabase，資料儲存於此瀏覽器的 localStorage">
                 <HardDrive size={12} />
@@ -165,8 +213,13 @@ export function AppShell() {
               </span>
             ) : (
               <>
-                <span title={user?.email}>{user?.email}</span>
-                <button className="btn btn-sm btn-icon" title="登出" aria-label="登出" onClick={() => void signOut()}>
+                <span className="user-email" title={user?.email}>{user?.email}</span>
+                <button
+                  className="btn btn-sm btn-icon"
+                  title={`登出（${user?.email ?? ''}）`}
+                  aria-label="登出"
+                  onClick={() => void signOut()}
+                >
                   <LogOut size={14} />
                 </button>
               </>
@@ -191,6 +244,23 @@ export function AppShell() {
           </>
         )}
       </main>
+
+      <footer className="app-footer">
+        提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
+      </footer>
+
+      {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
+      {!loading && (
+        <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
+          <ListPlus size={17} />
+          新增交易
+        </button>
+      )}
+      {showAddTx && (
+        <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)}>
+          <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
+        </Modal>
+      )}
     </>
   )
 }

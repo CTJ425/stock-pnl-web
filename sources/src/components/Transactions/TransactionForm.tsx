@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, TxType } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
 import { sellTaxRate } from '../../utils/pnlEngine'
@@ -29,6 +30,8 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
+  const { current } = useWorkspace()
+  const workspaceId = current?.id
   const [date, setDate] = useState(todayStr)
   const [market, setMarket] = useState<Market>('TPE')
   const [txType, setTxType] = useState<TxType>('BUY')
@@ -37,7 +40,12 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
   const [price, setPrice] = useState('')
   const [qty, setQty] = useState('')
   const [unit, setUnit] = useState<Unit>('張')
-  const [feeRate, setFeeRate] = useState(() => String(getFeeRate()))
+  const [feeRate, setFeeRate] = useState(() => String(getFeeRate(workspaceId)))
+
+  // 切換工作區時帶入該工作區記憶的費率
+  useEffect(() => {
+    setFeeRate(String(getFeeRate(workspaceId)))
+  }, [workspaceId])
   const [taxRate, setTaxRate] = useState('0.003')
   const [fee, setFee] = useState('0')
   const [busy, setBusy] = useState(false)
@@ -347,16 +355,18 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
           <input
             id="tx-fee-rate"
             type="number"
-            step="0.000001"
+            step="any"
             min="0"
             value={feeRate}
             onChange={(e) => {
               setFeeRate(e.target.value)
               const rate = parseFloat(e.target.value)
-              if (Number.isFinite(rate)) persistFeeRate(rate)
+              if (Number.isFinite(rate)) persistFeeRate(rate, workspaceId)
             }}
           />
-          <div className="field-hint">台股標準 0.001425；券商折扣請自行換算</div>
+          <div className="field-hint">
+            台股標準 0.001425；輸入後會記住為「{current?.name ?? '目前'}」工作區的預設費率
+          </div>
         </div>
         {showTax && (
           <div className="field">
@@ -364,7 +374,7 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
             <input
               id="tx-tax-rate"
               type="number"
-              step="0.0001"
+              step="any"
               min="0"
               value={taxRate}
               onChange={(e) => {
@@ -382,7 +392,7 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
         <input
           id="tx-fee"
           type="number"
-          step="0.01"
+          step="any"
           min="0"
           value={fee}
           onChange={(e) => setFee(e.target.value)}

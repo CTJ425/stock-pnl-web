@@ -38,7 +38,8 @@ export interface WorkspaceState {
   renameWorkspace: (id: string, name: string) => Promise<void>
   deleteWorkspace: (id: string) => Promise<void>
   addTransactions: (txs: NewTransaction[]) => Promise<void>
-  deleteTransaction: (id: string) => Promise<void>
+  /** 批次刪除（單筆刪除傳入單一元素陣列） */
+  deleteTransactions: (ids: string[]) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -73,8 +74,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // 登入後載入工作區；無任何工作區時自動建立預設工作區
+  // 依賴 user.id 而非 user 物件：token 刷新不應重載（否則開啟中的 Modal 會被 unmount）
+  const userId = user?.id
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
     let cancelled = false
     setLoading(true)
     runSafely(async () => {
@@ -94,7 +97,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [user, provider, runSafely])
+  }, [userId, provider, runSafely])
 
   // 切換工作區時載入交易
   useEffect(() => {
@@ -156,11 +159,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider, currentId],
   )
 
-  const deleteTransaction = useCallback(
-    async (id: string) => {
+  const deleteTransactions = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return
       await runSafely(async () => {
-        await provider.deleteTransaction(id)
-        setTransactions((prev) => prev.filter((t) => t.id !== id))
+        await provider.deleteTransactions(ids)
+        const removed = new Set(ids)
+        setTransactions((prev) => prev.filter((t) => !removed.has(t.id)))
       })
     },
     [provider, runSafely],
@@ -179,7 +184,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       renameWorkspace,
       deleteWorkspace,
       addTransactions,
-      deleteTransaction,
+      deleteTransactions,
     }),
     [
       workspaces,
@@ -193,7 +198,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       renameWorkspace,
       deleteWorkspace,
       addTransactions,
-      deleteTransaction,
+      deleteTransactions,
     ],
   )
 

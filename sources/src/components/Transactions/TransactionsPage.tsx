@@ -1,39 +1,67 @@
 /**
- * 交易紀錄頁：交易列表（日期新到舊）、新增交易、刪除、CSV 匯入 / 匯出。
+ * 交易紀錄頁：交易列表（日期新到舊）、刪除（單筆 / 勾選批次）、CSV 匯入 / 匯出。
+ * 新增交易改由外殼層的全域浮動按鈕開啟（任何分頁皆可用）。
  * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
  */
 import { useMemo, useState } from 'react'
-import { Download, ListPlus, NotebookPen, Trash2, Upload } from 'lucide-react'
+import { Download, NotebookPen, Trash2, Upload } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
+import { displayStockName } from '../../services/usStockNames'
 import { transactionsToCsv } from '../../utils/csv'
 import { fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
-import { Modal } from '../Common/Modal'
+import type { SortState } from '../Common/SortableTh'
+import { SortableTh, nextSort } from '../Common/SortableTh'
 import { CsvImportModal } from './CsvImportModal'
-import { TransactionForm } from './TransactionForm'
 
 function cashFlow(tx: Transaction): number {
   const gross = tx.price * tx.qty
   return tx.tx_type === 'BUY' ? -(gross + tx.fee_tax) : gross - tx.fee_tax
 }
 
+type TxSortKey = 'tx_date' | 'ticker'
+
+function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
+  if (key === 'ticker') {
+    // 代號排序：先市場（台股在前）再代號；同代號依日期新到舊
+    return (
+      a.market.localeCompare(b.market) ||
+      a.ticker.localeCompare(b.ticker) ||
+      b.tx_date.localeCompare(a.tx_date)
+    )
+  }
+  return a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at)
+}
+
 export function TransactionsPage() {
-  const { transactions, addTransactions, deleteTransaction, current } = useWorkspace()
-  const [showForm, setShowForm] = useState(false)
+  const { transactions, addTransactions, deleteTransactions, current } = useWorkspace()
   const [showImport, setShowImport] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [sort, setSort] = useState<SortState<TxSortKey>>({ key: 'tx_date', dir: 'desc' })
 
-  const sorted = useMemo(
-    () =>
-      transactions
-        .slice()
-        .sort(
-          (a, b) =>
-            b.tx_date.localeCompare(a.tx_date) || b.created_at.localeCompare(a.created_at),
-        ),
-    [transactions],
-  )
+  const sorted = useMemo(() => {
+    const sign = sort.dir === 'asc' ? 1 : -1
+    return transactions.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
+  }, [transactions, sort])
+
+  const handleSort = (key: TxSortKey) => setSort((prev) => nextSort(prev, key, 'desc'))
+
+  const allSelected = sorted.length > 0 && sorted.every((tx) => selected.has(tx.id))
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(sorted.map((tx) => tx.id)))
+  }
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const handleImport = async (rows: NewTransaction[]) => {
     await addTransactions(rows)
@@ -60,18 +88,39 @@ export function TransactionsPage() {
 
   const handleDelete = async (tx: Transaction) => {
     const ok = window.confirm(
-      `確定刪除這筆交易嗎？\n\n${tx.tx_date}　${tx.ticker} ${tx.name}　${TX_TYPE_LABEL[tx.tx_type]} ${fmtQty(tx.qty)} 股\n\n刪除後 Dashboard 與年度收益會立即重算。`,
+      `確定刪除這筆交易嗎？\n\n${tx.tx_date}　${tx.ticker} ${displayStockName(tx.market, tx.ticker, tx.name)}　${TX_TYPE_LABEL[tx.tx_type]} ${fmtQty(tx.qty)} 股\n\n刪除後 Dashboard 與年度收益會立即重算。`,
     )
-    if (ok) await deleteTransaction(tx.id)
+    if (!ok) return
+    await deleteTransactions([tx.id])
+    setSelected((prev) => {
+      if (!prev.has(tx.id)) return prev
+      const next = new Set(prev)
+      next.delete(tx.id)
+      return next
+    })
+  }
+
+  const handleDeleteSelected = async () => {
+    const ids = sorted.filter((tx) => selected.has(tx.id)).map((tx) => tx.id)
+    if (ids.length === 0) return
+    const ok = window.confirm(
+      `確定刪除選取的 ${ids.length} 筆交易嗎？\n\n刪除後 Dashboard 與年度收益會立即重算，此動作無法復原。`,
+    )
+    if (!ok) return
+    await deleteTransactions(ids)
+    setSelected(new Set())
+    setNotice(`🗑️ 已刪除 ${ids.length} 筆交易。`)
   }
 
   return (
     <>
       <div className="section toolbar">
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
-          <ListPlus size={16} />
-          新增交易
-        </button>
+        {selected.size > 0 && (
+          <button className="btn btn-danger" onClick={() => void handleDeleteSelected()}>
+            <Trash2 size={15} />
+            刪除選取（{selected.size}）
+          </button>
+        )}
         <div className="spacer" />
         <button className="btn" onClick={() => setShowImport(true)}>
           <Upload size={15} />
@@ -94,7 +143,7 @@ export function TransactionsPage() {
               <NotebookPen size={36} />
             </div>
             <div>
-              尚無交易紀錄。點「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
+              尚無交易紀錄。點右下角「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
             </div>
           </div>
         ) : (
@@ -102,9 +151,17 @@ export function TransactionsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>交易日期</th>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      aria-label="全選 / 取消全選"
+                      onChange={toggleAll}
+                    />
+                  </th>
+                  <SortableTh label="交易日期" sortKey="tx_date" sort={sort} onSort={handleSort} />
                   <th>市場</th>
-                  <th>代號</th>
+                  <SortableTh label="代號" sortKey="ticker" sort={sort} onSort={handleSort} />
                   <th>名稱</th>
                   <th>類型</th>
                   <th className="num">單價</th>
@@ -120,10 +177,18 @@ export function TransactionsPage() {
                   const flow = cashFlow(tx)
                   return (
                     <tr key={tx.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(tx.id)}
+                          aria-label={`選取 ${tx.tx_date} ${tx.ticker} 這筆交易`}
+                          onChange={() => toggleOne(tx.id)}
+                        />
+                      </td>
                       <td>{tx.tx_date}</td>
                       <td className="cell-muted">{MARKET_LABEL[tx.market]}</td>
                       <td>{tx.ticker}</td>
-                      <td>{tx.name}</td>
+                      <td>{displayStockName(tx.market, tx.ticker, tx.name)}</td>
                       <td>{TX_TYPE_LABEL[tx.tx_type]}</td>
                       <td className="num">{fmtPrice(tx.price, currency)}</td>
                       <td className="num">{fmtQty(tx.qty)}</td>
@@ -151,12 +216,6 @@ export function TransactionsPage() {
           </div>
         )}
       </div>
-
-      {showForm && (
-        <Modal title="新增交易紀錄" onClose={() => setShowForm(false)}>
-          <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
-        </Modal>
-      )}
 
       {showImport && (
         <CsvImportModal onClose={() => setShowImport(false)} onImport={handleImport} />

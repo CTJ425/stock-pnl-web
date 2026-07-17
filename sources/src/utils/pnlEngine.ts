@@ -86,6 +86,11 @@ export function sellTaxRate(ticker: string): number {
   return ticker.startsWith('00') ? 0.001 : 0.003
 }
 
+/** 先修掉二進位浮點誤差（如 114 誤存成 113.99999999999999）再捨去到元 */
+export function floorSafe(value: number): number {
+  return Math.floor(Math.round(value * 1e6) / 1e6)
+}
+
 export function computeLedger(transactions: Transaction[]): Ledger {
   const ledger: Ledger = {
     positions: {},
@@ -232,8 +237,8 @@ export function estimateUnrealized(holding: Holding, price: number, feeRate: num
     return Math.round(
       mktVal -
         holding.qty * holding.avgCost -
-        Math.floor(mktVal * feeRate) -
-        Math.floor(mktVal * sellTaxRate(holding.ticker)),
+        floorSafe(mktVal * feeRate) -
+        floorSafe(mktVal * sellTaxRate(holding.ticker)),
     )
   }
   return mktVal - holding.qty * holding.avgCost

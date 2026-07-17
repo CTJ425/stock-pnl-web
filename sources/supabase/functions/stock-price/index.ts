@@ -2,6 +2,8 @@
  * Supabase Edge Function：stock-price（現價 / 搜尋代理）
  *
  * 由伺服器端代為請求 Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
+ * 現價帶 DB 共用快取（price_cache 資料表，見 build-docs/supabase_schema.sql）：
+ * 10 分鐘內全站共用同一份報價，同一支股票不重複請求 Yahoo。
  * 部署方式（需安裝 Supabase CLI 並登入）：
  *   supabase functions deploy stock-price --no-verify-jwt
  *
@@ -11,11 +13,22 @@
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
  */
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 interface SymbolItem {
   market: 'TPE' | 'US'
   ticker: string
 }
+
+/** DB 快取有效期：與前端 localStorage 快取一致（10 分鐘） */
+const CACHE_TTL_MS = 10 * 60 * 1000
+
+// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
+// service role 不受 RLS 限制，是 price_cache 唯一的寫入途徑
+const db = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+)
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -56,20 +69,57 @@ async function fetchYahooPrice(symbol: string): Promise<number | null> {
 }
 
 async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
+  const items = symbols.slice(0, 50)
+  const prices: Record<string, { price: number }> = {}
+
+  // 1) 先查 DB 共用快取：TTL 內的報價直接回傳
+  const freshAfter = new Date(Date.now() - CACHE_TTL_MS).toISOString()
+  try {
+    const { data } = await db
+      .from('price_cache')
+      .select('key, price')
+      .in('key', items.map((i) => `${i.market}:${i.ticker}`))
+      .gte('updated_at', freshAfter)
+    for (const row of data ?? []) {
+      const price = Number(row.price)
+      if (Number.isFinite(price) && price > 0) prices[row.key] = { price }
+    }
+  } catch {
+    // 快取表不可用（例如尚未建表）時，直接全部走 Yahoo
+  }
+
+  // 2) 快取沒有的才請求 Yahoo
+  const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const entries = await Promise.all(
-    symbols.slice(0, 50).map(async (item) => {
+    missing.map(async (item) => {
       const key = `${item.market}:${item.ticker}`
       for (const symbol of yahooSymbols(item)) {
         const price = await fetchYahooPrice(symbol)
-        if (price !== null) return [key, { price }] as const
+        if (price !== null) return [key, price] as const
       }
       return null
     }),
   )
-  const prices: Record<string, { price: number }> = {}
-  for (const entry of entries) {
-    if (entry) prices[entry[0]] = entry[1]
+
+  // 3) 新抓到的價格回寫快取，供全站共用
+  const fetched = entries.filter((e): e is readonly [string, number] => e !== null)
+  for (const [key, price] of fetched) {
+    prices[key] = { price }
   }
+  if (fetched.length > 0) {
+    try {
+      await db.from('price_cache').upsert(
+        fetched.map(([key, price]) => ({
+          key,
+          price,
+          updated_at: new Date().toISOString(),
+        })),
+      )
+    } catch {
+      // 回寫失敗不影響本次回應
+    }
+  }
+
   return json({ prices })
 }
 

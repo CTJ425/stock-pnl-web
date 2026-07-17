@@ -29,7 +29,7 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
   const itemsRef = useRef(holdings)
   itemsRef.current = holdings
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     const items = itemsRef.current.map((h) => ({ market: h.market, ticker: h.ticker }))
     if (items.length === 0) {
       setPrices({})
@@ -38,7 +38,7 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
     const seq = ++requestSeq.current
     setLoading(true)
     try {
-      const map = await fetchPrices(items)
+      const map = await fetchPrices(items, { force })
       if (seq !== requestSeq.current) return // 過期回應直接丟棄
       setPrices(map)
       setRefreshedAt(new Date())
@@ -52,5 +52,8 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdingsKey, load])
 
-  return { prices, loading, refreshedAt, refresh: load }
+  // 手動重新整理：略過 TTL 快取強制重抓
+  const refresh = useCallback(() => void load(true), [load])
+
+  return { prices, loading, refreshedAt, refresh }
 }
