@@ -6,12 +6,13 @@
  * - 上櫃：TPEx openapi tpex_mainboard_quotes（與原 GAS 版 getOtcList_ 相同來源）
  *
  * 開發模式：經 Vite dev server 代理（vite.config.ts 的 /api/twse、/api/tpex）。
- * 正式環境：嘗試直連（多半因 CORS 失敗並靜默降級），主要依賴
- * Supabase Edge Function 代理（priceProxy / stockSearch 的優先路徑）。
+ * 正式環境：優先經 Supabase Edge Function `stock-price` 的 twlist 動作代理
+ * （官方端點不開放 CORS，直連必失敗），Edge 不可用時才嘗試直連。
  *
  * 清單快取於 localStorage（TTL 30 分鐘），同時供「名稱模糊搜尋 / 代號反查」
  * 與「台股現價備援」使用。
  */
+import { isSupabaseConfigured, supabase } from './supabase'
 
 const DEV = import.meta.env.DEV
 const TWSE_URL = DEV
@@ -91,28 +92,62 @@ async function fetchTpex(): Promise<TwStockRow[]> {
     .filter((r) => r.symbol && r.name)
 }
 
+/** 直連（開發模式經 dev proxy；正式環境多半因 CORS 失敗） */
+async function fetchDirect(): Promise<TwStockRow[]> {
+  const results = await Promise.allSettled([fetchTwse(), fetchTpex()])
+  const rows: TwStockRow[] = []
+  const seen = new Set<string>()
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue
+    for (const row of r.value) {
+      if (seen.has(row.symbol)) continue
+      seen.add(row.symbol)
+      rows.push(row)
+    }
+  }
+  return rows
+}
+
+interface EdgeTwListResponse {
+  rows?: Array<{ symbol?: unknown; name?: unknown; close?: unknown }>
+}
+
+/** 經 Supabase Edge Function 代理（正式環境的主要路徑） */
+async function fetchViaEdge(): Promise<TwStockRow[]> {
+  if (!isSupabaseConfigured || !supabase) return []
+  try {
+    const { data, error } = await supabase.functions.invoke<EdgeTwListResponse>('stock-price', {
+      body: { action: 'twlist' },
+    })
+    if (error || !Array.isArray(data?.rows)) return []
+    return data.rows
+      .map((r) => ({
+        symbol: String(r.symbol ?? '').trim(),
+        name: String(r.name ?? '').trim(),
+        close: typeof r.close === 'number' && r.close > 0 ? r.close : null,
+      }))
+      .filter((r) => r.symbol && r.name)
+  } catch {
+    return []
+  }
+}
+
 let inflight: Promise<TwStockRow[]> | null = null
 
-/** 取得台股全清單（記憶體去重 + localStorage 快取；兩來源其一失敗仍回傳另一來源） */
+/** 取得台股全清單（記憶體去重 + localStorage 快取；多來源依序嘗試） */
 export async function getTwStockList(): Promise<TwStockRow[]> {
   const cached = readCache()
   if (cached) return cached
   if (inflight) return inflight
 
   inflight = (async () => {
-    const results = await Promise.allSettled([fetchTwse(), fetchTpex()])
-    const rows: TwStockRow[] = []
-    const seen = new Set<string>()
-    for (const r of results) {
-      if (r.status !== 'fulfilled') continue
-      for (const row of r.value) {
-        if (seen.has(row.symbol)) continue
-        seen.add(row.symbol)
-        rows.push(row)
-      }
+    // 開發模式走 dev proxy 直連；正式環境優先走 Edge Function，失敗才試直連
+    let rows = DEV ? await fetchDirect() : await fetchViaEdge()
+    if (rows.length === 0) {
+      rows = DEV ? await fetchViaEdge() : await fetchDirect()
     }
     if (rows.length === 0) {
-      throw new Error('台股清單載入失敗（TWSE 與 TPEx 皆無回應）')
+      throw new Error('台股清單載入失敗（Edge Function 與官方端點皆無回應）')
     }
     writeCache(rows)
     return rows

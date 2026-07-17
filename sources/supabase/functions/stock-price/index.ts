@@ -12,6 +12,9 @@
  *     → { prices: { 'TPE:2330': { price: number }, ... } }
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
+ *   POST { action: 'twlist' }
+ *     → { rows: [{ symbol, name, close }] }（台股全清單；TWSE/TPEx 不開放 CORS，
+ *       正式環境由此代理供前端中文搜尋 / 代號反查 / 現價備援使用）
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -154,6 +157,44 @@ async function handleSearch(query: string): Promise<Response> {
   }
 }
 
+function listNumber(value: unknown): number | null {
+  const n = Number(String(value ?? '').replace(/,/g, ''))
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 台股全清單（上市 TWSE + 上櫃 TPEx），欄位精簡為 symbol/name/close 以縮小回應 */
+async function handleTwList(): Promise<Response> {
+  const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
+    const res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA } })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return (await res.json()) as Array<Record<string, unknown>>
+  }
+
+  const [twse, tpex] = await Promise.allSettled([
+    fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'),
+    fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'),
+  ])
+
+  const rows: Array<{ symbol: string; name: string; close: number | null }> = []
+  const seen = new Set<string>()
+  const push = (symbol: unknown, name: unknown, close: unknown) => {
+    const s = String(symbol ?? '').trim()
+    const n = String(name ?? '').trim()
+    if (!s || !n || seen.has(s)) return
+    seen.add(s)
+    rows.push({ symbol: s, name: n, close: listNumber(close) })
+  }
+  if (twse.status === 'fulfilled') {
+    for (const r of twse.value) push(r.Code, r.Name, r.ClosingPrice)
+  }
+  if (tpex.status === 'fulfilled') {
+    for (const r of tpex.value) push(r.SecuritiesCompanyCode ?? r.Code, r.CompanyName ?? r.Name, r.Close ?? r.ClosingPrice ?? r.LatestPrice)
+  }
+
+  if (rows.length === 0) return json({ error: '台股清單來源皆無回應' }, 502)
+  return json({ rows })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -174,6 +215,9 @@ Deno.serve(async (req) => {
   }
   if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
     return handleSearch(body.query.trim())
+  }
+  if (body.action === 'twlist') {
+    return handleTwList()
   }
   return json({ error: 'Unknown action' }, 400)
 })
