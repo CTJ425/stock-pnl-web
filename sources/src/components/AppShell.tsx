@@ -11,6 +11,7 @@ import {
   Moon,
   NotebookPen,
   Pencil,
+  Percent,
   Plus,
   Sun,
   Trash2,
@@ -19,7 +20,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { ThemePref } from '../utils/settings'
-import { applyTheme, getThemePref, setThemePref } from '../utils/settings'
+import { applyTheme, getFeeRate, getThemePref, setFeeRate, setThemePref } from '../utils/settings'
 import { DashboardPage } from './Dashboard/DashboardPage'
 import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
@@ -82,8 +83,9 @@ function WorkspaceControls() {
     renameWorkspace,
     deleteWorkspace,
   } = useWorkspace()
-  const [modal, setModal] = useState<'create' | 'rename' | null>(null)
+  const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
+  const [feeInput, setFeeInput] = useState('')
 
   const openCreate = () => {
     setNameInput('')
@@ -94,9 +96,21 @@ function WorkspaceControls() {
     setNameInput(current.name)
     setModal('rename')
   }
+  const openFee = () => {
+    if (!current) return
+    setFeeInput(String(getFeeRate(current.id)))
+    setModal('fee')
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (modal === 'fee') {
+      const rate = parseFloat(feeInput)
+      if (!Number.isFinite(rate) || rate < 0 || rate >= 1) return
+      if (current) setFeeRate(rate, current.id)
+      setModal(null)
+      return
+    }
     const name = nameInput.trim()
     if (!name) return
     if (modal === 'create') await createWorkspace(name)
@@ -136,6 +150,14 @@ function WorkspaceControls() {
         <Pencil size={14} />
       </button>
       <button
+        className="btn btn-sm btn-icon"
+        title="設定此工作區的預設手續費率"
+        aria-label="設定此工作區的預設手續費率"
+        onClick={openFee}
+      >
+        <Percent size={14} />
+      </button>
+      <button
         className="btn btn-sm btn-icon btn-danger"
         title="刪除工作區"
         aria-label="刪除工作區"
@@ -146,20 +168,47 @@ function WorkspaceControls() {
 
       {modal && (
         <Modal
-          title={modal === 'create' ? '新增工作區' : '重新命名工作區'}
+          title={
+            modal === 'create'
+              ? '新增工作區'
+              : modal === 'rename'
+                ? '重新命名工作區'
+                : `工作區設定 — ${current?.name ?? ''}`
+          }
           onClose={() => setModal(null)}
         >
           <form onSubmit={(e) => void submit(e)}>
-            <div className="field">
-              <label htmlFor="ws-name">工作區名稱</label>
-              <input
-                id="ws-name"
-                value={nameInput}
-                autoFocus
-                placeholder="例如：長期投資、退休帳戶"
-                onChange={(e) => setNameInput(e.target.value)}
-              />
-            </div>
+            {modal === 'fee' ? (
+              <div className="field">
+                <label htmlFor="ws-fee-rate">預設手續費率</label>
+                <input
+                  id="ws-fee-rate"
+                  type="number"
+                  step="any"
+                  min="0"
+                  max="0.99"
+                  value={feeInput}
+                  autoFocus
+                  placeholder="例如 0.001425"
+                  onChange={(e) => setFeeInput(e.target.value)}
+                />
+                <div className="field-hint">
+                  台股法定標準 0.001425；券商有折扣可直接填折扣後費率（如 0.0004275）。
+                  此費率只套用在「{current?.name ?? '目前'}」工作區，新增交易時會自動帶入。
+                </div>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="ws-name">工作區名稱</label>
+                <input
+                  id="ws-name"
+                  value={nameInput}
+                  autoFocus
+                  placeholder="例如：長期投資、退休帳戶"
+                  onChange={(e) => setNameInput(e.target.value)}
+                />
+              </div>
+            )}
             <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
               {modal === 'create' ? '建立' : '儲存'}
             </button>
