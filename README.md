@@ -2,8 +2,6 @@
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
-🔗 **線上展示**：<https://ctj425.github.io/stock-pnl-web/>（push 到 `main` 由 GitHub Actions 自動部署）
-
 ## 📖 目錄
 - [專案目的](#-專案目的)
 - [功能特色](#-功能特色)
