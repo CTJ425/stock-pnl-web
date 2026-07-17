@@ -4,7 +4,7 @@
  * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
  */
 import { useMemo, useState } from 'react'
-import { Download, NotebookPen, Trash2, Upload } from 'lucide-react'
+import { Download, NotebookPen, Pencil, Trash2, Upload } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -13,32 +13,84 @@ import { transactionsToCsv } from '../../utils/csv'
 import { fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
 import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
+import { Modal } from '../Common/Modal'
 import { CsvImportModal } from './CsvImportModal'
+import { TransactionForm } from './TransactionForm'
 
 function cashFlow(tx: Transaction): number {
   const gross = tx.price * tx.qty
   return tx.tx_type === 'BUY' ? -(gross + tx.fee_tax) : gross - tx.fee_tax
 }
 
-type TxSortKey = 'tx_date' | 'ticker'
+type TxSortKey =
+  | 'tx_date'
+  | 'market'
+  | 'ticker'
+  | 'name'
+  | 'tx_type'
+  | 'price'
+  | 'qty'
+  | 'fee_tax'
+  | 'flow'
+
+/** 文字欄位預設升冪、日期與數值欄位預設降冪 */
+const TX_SORT_DEFAULT_DIR: Record<TxSortKey, 'asc' | 'desc'> = {
+  tx_date: 'desc',
+  market: 'asc',
+  ticker: 'asc',
+  name: 'asc',
+  tx_type: 'asc',
+  price: 'desc',
+  qty: 'desc',
+  fee_tax: 'desc',
+  flow: 'desc',
+}
 
 function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
-  if (key === 'ticker') {
-    // 代號排序：先市場（台股在前）再代號；同代號依日期新到舊
-    return (
-      a.market.localeCompare(b.market) ||
-      a.ticker.localeCompare(b.ticker) ||
-      b.tx_date.localeCompare(a.tx_date)
-    )
+  let d = 0
+  switch (key) {
+    case 'tx_date':
+      return a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at)
+    case 'market':
+      d = a.market.localeCompare(b.market)
+      break
+    case 'ticker':
+      // 代號排序：先市場（台股在前）再代號
+      d = a.market.localeCompare(b.market) || a.ticker.localeCompare(b.ticker)
+      break
+    case 'name':
+      d = displayStockName(a.market, a.ticker, a.name).localeCompare(
+        displayStockName(b.market, b.ticker, b.name),
+        'zh-Hant',
+      )
+      break
+    case 'tx_type':
+      d = a.tx_type.localeCompare(b.tx_type)
+      break
+    case 'price':
+      d = a.price - b.price
+      break
+    case 'qty':
+      d = a.qty - b.qty
+      break
+    case 'fee_tax':
+      d = a.fee_tax - b.fee_tax
+      break
+    case 'flow':
+      d = cashFlow(a) - cashFlow(b)
+      break
   }
-  return a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at)
+  // 同值時以日期新到舊、再以建立時間為次序
+  return d || b.tx_date.localeCompare(a.tx_date) || b.created_at.localeCompare(a.created_at)
 }
 
 export function TransactionsPage() {
-  const { transactions, addTransactions, deleteTransactions, current } = useWorkspace()
+  const { transactions, addTransactions, updateTransaction, deleteTransactions, current } =
+    useWorkspace()
   const [showImport, setShowImport] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [sort, setSort] = useState<SortState<TxSortKey>>({ key: 'tx_date', dir: 'desc' })
 
   const sorted = useMemo(() => {
@@ -46,7 +98,8 @@ export function TransactionsPage() {
     return transactions.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
   }, [transactions, sort])
 
-  const handleSort = (key: TxSortKey) => setSort((prev) => nextSort(prev, key, 'desc'))
+  const handleSort = (key: TxSortKey) =>
+    setSort((prev) => nextSort(prev, key, TX_SORT_DEFAULT_DIR[key]))
 
   const allSelected = sorted.length > 0 && sorted.every((tx) => selected.has(tx.id))
 
@@ -160,14 +213,14 @@ export function TransactionsPage() {
                     />
                   </th>
                   <SortableTh label="交易日期" sortKey="tx_date" sort={sort} onSort={handleSort} />
-                  <th>市場</th>
+                  <SortableTh label="市場" sortKey="market" sort={sort} onSort={handleSort} />
                   <SortableTh label="代號" sortKey="ticker" sort={sort} onSort={handleSort} />
-                  <th>名稱</th>
-                  <th>類型</th>
-                  <th className="num">單價</th>
-                  <th className="num">股數</th>
-                  <th className="num">手續費 / 稅金</th>
-                  <th className="num">損益 / 收支</th>
+                  <SortableTh label="名稱" sortKey="name" sort={sort} onSort={handleSort} />
+                  <SortableTh label="類型" sortKey="tx_type" sort={sort} onSort={handleSort} />
+                  <SortableTh label="單價" sortKey="price" sort={sort} onSort={handleSort} numeric />
+                  <SortableTh label="股數" sortKey="qty" sort={sort} onSort={handleSort} numeric />
+                  <SortableTh label="手續費 / 稅金" sortKey="fee_tax" sort={sort} onSort={handleSort} numeric />
+                  <SortableTh label="損益 / 收支" sortKey="flow" sort={sort} onSort={handleSort} numeric />
                   <th aria-label="操作" />
                 </tr>
               </thead>
@@ -199,14 +252,24 @@ export function TransactionsPage() {
                         {fmtSignedMoney(flow, currency, currency === 'TWD' ? 0 : 2)}
                       </td>
                       <td className="num">
-                        <button
-                          className="btn btn-sm btn-danger btn-icon"
-                          title="刪除這筆交易"
-                          aria-label="刪除這筆交易"
-                          onClick={() => void handleDelete(tx)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="row-actions">
+                          <button
+                            className="btn btn-sm btn-icon"
+                            title="編輯這筆交易"
+                            aria-label="編輯這筆交易"
+                            onClick={() => setEditTx(tx)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-danger btn-icon"
+                            title="刪除這筆交易"
+                            aria-label="刪除這筆交易"
+                            onClick={() => void handleDelete(tx)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -219,6 +282,17 @@ export function TransactionsPage() {
 
       {showImport && (
         <CsvImportModal onClose={() => setShowImport(false)} onImport={handleImport} />
+      )}
+
+      {editTx && (
+        <Modal title="編輯交易紀錄" onClose={() => setEditTx(null)}>
+          <TransactionForm
+            key={editTx.id}
+            initial={editTx}
+            onSubmit={(tx) => updateTransaction(editTx.id, tx)}
+            onDone={() => setEditTx(null)}
+          />
+        </Modal>
       )}
     </>
   )

@@ -16,6 +16,8 @@ export interface DataProvider {
   listTransactions(workspaceId: string): Promise<Transaction[]>
   /** 批次新增（單筆與 CSV 匯入共用） */
   addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]>
+  /** 更新單筆交易內容 */
+  updateTransaction(id: string, patch: NewTransaction): Promise<void>
   /** 批次刪除（單筆刪除傳入單一元素陣列） */
   deleteTransactions(ids: string[]): Promise<void>
 }
@@ -106,6 +108,14 @@ export class LocalProvider implements DataProvider {
     return created
   }
 
+  async updateTransaction(id: string, patch: NewTransaction): Promise<void> {
+    const store = readStore()
+    const idx = store.transactions.findIndex((t) => t.id === id)
+    if (idx < 0) throw new Error('找不到要更新的交易')
+    store.transactions[idx] = { ...store.transactions[idx], ...patch }
+    writeStore(store)
+  }
+
   async deleteTransactions(ids: string[]): Promise<void> {
     const removed = new Set(ids)
     const store = readStore()
@@ -180,6 +190,11 @@ export class SupabaseProvider implements DataProvider {
       .select('id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at')
     if (error) throw new Error(`寫入交易失敗：${error.message}`)
     return (data ?? []) as Transaction[]
+  }
+
+  async updateTransaction(id: string, patch: NewTransaction): Promise<void> {
+    const { error } = await client().from('transactions').update(patch).eq('id', id)
+    if (error) throw new Error(`更新交易失敗：${error.message}`)
   }
 
   async deleteTransactions(ids: string[]): Promise<void> {

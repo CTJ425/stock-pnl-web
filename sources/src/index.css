@@ -362,6 +362,11 @@ table.data-table {
   vertical-align: middle;
 }
 
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -415,11 +420,32 @@ table.data-table {
   color: var(--ink-muted);
 }
 
-/* 年度收益：明細列 */
+/* 年度收益：明細列（固定高度可捲動，個股多時不拉長年度表格） */
 .detail-row td {
   background: var(--row-alt);
   color: var(--ink-secondary);
   font-size: 12.5px;
+}
+
+.detail-row td.detail-cell {
+  padding: 0;
+}
+
+.detail-scroll {
+  max-height: 242px;
+  overflow-y: auto;
+}
+
+.detail-scroll .detail-table {
+  min-width: 0;
+}
+
+.detail-scroll .detail-table td {
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-scroll .detail-table tr:last-child td {
+  border-bottom: none;
 }
 
 .year-toggle {

@@ -4,12 +4,13 @@
  * - 台股股數可依「張 / 零股」切換並自動換算（美股鎖定零股）
  * - 手續費自動估算：台股元以下捨去、賣出加計證交稅（ETF 00 開頭 0.1%）
  * - 寫入失敗保留所有輸入內容
+ * - 傳入 initial 即為「編輯模式」：帶入既有交易內容，成功後不清空欄位
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
-import type { Market, NewTransaction, TxType } from '../../types/models'
+import type { Market, NewTransaction, Transaction, TxType } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRate, setFeeRate as persistFeeRate } from '../../utils/settings'
@@ -27,34 +28,41 @@ function todayStr(): string {
 interface TransactionFormProps {
   onSubmit: (tx: NewTransaction) => Promise<void>
   onDone?: () => void
+  /** 編輯模式：帶入既有交易內容 */
+  initial?: Transaction
 }
 
-export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
+export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormProps) {
   const { current } = useWorkspace()
   const workspaceId = current?.id
-  const [date, setDate] = useState(todayStr)
-  const [market, setMarket] = useState<Market>('TPE')
-  const [txType, setTxType] = useState<TxType>('BUY')
-  const [ticker, setTicker] = useState('')
-  const [name, setName] = useState('')
-  const [price, setPrice] = useState('')
-  const [qty, setQty] = useState('')
-  const [unit, setUnit] = useState<Unit>('張')
+  const isEdit = Boolean(initial)
+  const [date, setDate] = useState(initial?.tx_date ?? todayStr)
+  const [market, setMarket] = useState<Market>(initial?.market ?? 'TPE')
+  const [txType, setTxType] = useState<TxType>(initial?.tx_type ?? 'BUY')
+  const [ticker, setTicker] = useState(initial?.ticker ?? '')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [price, setPrice] = useState(initial ? String(initial.price) : '')
+  const [qty, setQty] = useState(initial ? String(initial.qty) : '')
+  // 編輯模式以「零股」顯示原始股數，避免張/零股換算歧義
+  const [unit, setUnit] = useState<Unit>(initial ? '零股' : '張')
   const [feeRate, setFeeRate] = useState(() => String(getFeeRate(workspaceId)))
 
   // 切換工作區時帶入該工作區記憶的費率
   useEffect(() => {
     setFeeRate(String(getFeeRate(workspaceId)))
   }, [workspaceId])
-  const [taxRate, setTaxRate] = useState('0.003')
-  const [fee, setFee] = useState('0')
+  const [taxRate, setTaxRate] = useState(() =>
+    initial ? String(sellTaxRate(initial.ticker)) : '0.003',
+  )
+  const [fee, setFee] = useState(initial ? String(initial.fee_tax) : '0')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
-  const lastSearchedTicker = useRef('')
+  // 編輯模式下原代號視為已反查過，避免失焦時覆寫使用者自訂的名稱
+  const lastSearchedTicker = useRef(initial?.ticker ?? '')
   const searchSeq = useRef(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suggestionsRef = useRef<HTMLDivElement | null>(null)
@@ -75,8 +83,24 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
     [],
   )
 
+  // 首次渲染的輸入快照：與快照完全相同時不觸發自動換算，
+  // 讓編輯模式保留「原記錄的手續費」而不被估算值蓋掉
+  const autoFeeBaseline = useRef({ price, qty, unit, feeRate, taxRate, market, txType })
+
   // 自動換算手續費（依賴變動時覆蓋；使用者仍可手動修改欄位值）
   useEffect(() => {
+    const b = autoFeeBaseline.current
+    if (
+      b.price === price &&
+      b.qty === qty &&
+      b.unit === unit &&
+      b.feeRate === feeRate &&
+      b.taxRate === taxRate &&
+      b.market === market &&
+      b.txType === txType
+    ) {
+      return
+    }
     const p = parseFloat(price) || 0
     const shares = getActualShares()
     const rate = parseFloat(feeRate) || 0
@@ -201,6 +225,11 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
         qty: shares,
         fee_tax: feeVal,
       })
+      if (isEdit) {
+        // 編輯模式：保留內容、直接交由呼叫端關閉視窗
+        onDone?.()
+        return
+      }
       // 成功：保留日期 / 市場 / 類型，清空個股相關欄位（與 GAS 版同構）
       setTicker('')
       setName('')
@@ -400,7 +429,7 @@ export function TransactionForm({ onSubmit, onDone }: TransactionFormProps) {
       </div>
 
       <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>
-        {busy ? '寫入中…' : '確認送出'}
+        {busy ? '寫入中…' : isEdit ? '儲存變更' : '確認送出'}
       </button>
     </form>
   )

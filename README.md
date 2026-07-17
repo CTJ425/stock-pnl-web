@@ -62,7 +62,48 @@
      - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings，以及共用快取 `price_cache`（現價）與 `stock_names`（代號↔名稱）。
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀。
-     - **Edge Functions (Deno)**：`stock-price` 函數提供三個動作——`prices`（批次現價，帶 DB 快取）、`search`（模糊搜尋，帶名稱快取）、`twlist`（台股全清單代理，繞過 TWSE/TPEx 的 CORS 限制）。
+     - **Edge Functions (Deno)**：伺服器端部署 `stock-price` 函數，批次調用 Yahoo Finance 查詢台美股現價與提供模糊搜尋 API，繞過瀏覽器 CORS 限制。
+
+### 系統架構圖 (System Architecture)
+
+```mermaid
+graph TD
+    User([使用者瀏覽器]) <-->|操作與查看| FE[React 前端 SPA]
+    
+    subgraph Frontend [React SPA (Vite + TS)]
+        FE <--> Components[UI 組件 / 頁面]
+        Components <--> Context[React Context 狀態管理]
+        Context <--> DP[DataProvider 雙模式資料層]
+    end
+    
+    subgraph LocalStorage [本機儲存 (本機模式)]
+        DP <-->|讀寫交易與設定| LS[(瀏覽器 LocalStorage)]
+    end
+
+    subgraph Supabase [Supabase 雲端服務 (Supabase 模式)]
+        DP <-->|身份驗證| Auth[Supabase Auth]
+        DP <-->|PostgreSQL API| DB[(PostgreSQL Database)]
+        DP <-->|呼叫函式| EF[Edge Functions: stock-price]
+        
+        subgraph Database_Tables [資料庫資料表]
+            DB --- Workspaces[(workspaces)]
+            DB --- Transactions[(transactions)]
+            DB --- Settings[(user_settings)]
+        end
+    end
+
+    subgraph External [外部服務]
+        EF <-->|代理現價/搜尋| Yahoo[Yahoo Finance API]
+    end
+
+    classDef local fill:#ffe0b2,stroke:#fb8c00,stroke-width:2px;
+    classDef cloud fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px;
+    classDef ext fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px;
+    
+    class LS local;
+    class Auth,DB,EF,Workspaces,Transactions,Settings cloud;
+    class Yahoo ext;
+```
 
 專案目錄結構：
 ```

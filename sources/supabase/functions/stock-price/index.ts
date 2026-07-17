@@ -134,7 +134,7 @@ interface SearchResult {
 
 /** 代號型查詢（如 AAPL、2330）：曾解析過的名稱直接由 DB 快取回覆，不再請求 Yahoo */
 async function lookupCachedNames(query: string): Promise<SearchResult[]> {
-  if (!/^[A-Z0-9.\-]{1,10}$/.test(query)) return []
+  if (!/^[A-Z0-9.-]{1,10}$/.test(query)) return []
   try {
     const { data } = await db
       .from('stock_names')

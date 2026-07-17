@@ -67,6 +67,48 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
   })
 
+  it('編輯交易 → 修改單價後自動重算手續費並更新列表', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    // 以全域浮動按鈕新增一筆交易
+    await user.click(screen.getByRole('button', { name: /新增交易/ }))
+    const addDialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    const addForm = within(addDialog)
+    await user.type(addForm.getByLabelText(/股票代號/), '2330')
+    await user.type(addForm.getByLabelText('股票名稱'), '台積電')
+    await user.type(addForm.getByLabelText('交易單價'), '500')
+    await user.type(addForm.getByLabelText('交易股數'), '1')
+    await user.click(addForm.getByRole('button', { name: '確認送出' }))
+    await addForm.findByText(/成功新增交易紀錄/)
+    await user.click(addForm.getByRole('button', { name: '關閉' }))
+
+    // 開啟編輯：帶入原內容（股數以零股 1000 呈現、手續費保留原記錄 712 不被重算）
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    const editDialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    const editForm = within(editDialog)
+    expect((editForm.getByLabelText('交易單價') as HTMLInputElement).value).toBe('500')
+    expect((editForm.getByLabelText('交易股數') as HTMLInputElement).value).toBe('1000')
+    expect((editForm.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('712')
+
+    // 改單價 → 手續費自動重算：floor(600 * 1000 * 0.001425) = 855
+    const priceInput = editForm.getByLabelText('交易單價')
+    await user.clear(priceInput)
+    await user.type(priceInput, '600')
+    await waitFor(() => {
+      expect((editForm.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('855')
+    })
+
+    await user.click(editForm.getByRole('button', { name: '儲存變更' }))
+    // 儲存後視窗關閉，列表呈現新單價
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '編輯交易紀錄' })).toBeNull()
+    })
+    expect(await screen.findByText('NT$600.00')).toBeTruthy()
+  })
+
   it('CSV 匯入舊試算表格式 → 正確拆解 TPE: 前綴並重算損益', async () => {
     const user = userEvent.setup()
     render(<App />)

@@ -151,19 +151,33 @@ function YearRows({
         <td className="num">{fmtMoney(row.fees, currency, 2)}</td>
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
-      {isOpen &&
-        row.details.map((yt) => (
-          <tr key={yt.key} className="detail-row">
-            <td style={{ paddingLeft: 46 }}>
-              {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
-            </td>
-            <td className={`num ${pnlClass(yt.realized)}`}>{fmtSignedMoney(yt.realized, currency)}</td>
-            <td className="num">{fmtMoney(yt.buyAmt, currency)}</td>
-            <td className="num">{fmtMoney(yt.sellAmt, currency)}</td>
-            <td className="num">{fmtMoney(yt.fees, currency, 2)}</td>
-            <td className="num">{fmtQty(yt.count)}</td>
-          </tr>
-        ))}
+      {isOpen && (
+        <tr className="detail-row">
+          <td colSpan={6} className="detail-cell">
+            {/* 固定高度可捲動：個股多時不拉長年度表格 */}
+            <div className="detail-scroll">
+              <table className="data-table detail-table">
+                <tbody>
+                  {row.details.map((yt) => (
+                    <tr key={yt.key}>
+                      <td style={{ paddingLeft: 46 }}>
+                        {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
+                      </td>
+                      <td className={`num ${pnlClass(yt.realized)}`}>
+                        {fmtSignedMoney(yt.realized, currency)}
+                      </td>
+                      <td className="num">{fmtMoney(yt.buyAmt, currency)}</td>
+                      <td className="num">{fmtMoney(yt.sellAmt, currency)}</td>
+                      <td className="num">{fmtMoney(yt.fees, currency, 2)}</td>
+                      <td className="num">{fmtQty(yt.count)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   )
 }

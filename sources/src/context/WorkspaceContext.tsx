@@ -38,6 +38,8 @@ export interface WorkspaceState {
   renameWorkspace: (id: string, name: string) => Promise<void>
   deleteWorkspace: (id: string) => Promise<void>
   addTransactions: (txs: NewTransaction[]) => Promise<void>
+  /** 更新單筆交易內容 */
+  updateTransaction: (id: string, patch: NewTransaction) => Promise<void>
   /** 批次刪除（單筆刪除傳入單一元素陣列） */
   deleteTransactions: (ids: string[]) => Promise<void>
 }
@@ -159,6 +161,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider, currentId],
   )
 
+  const updateTransaction = useCallback(
+    async (id: string, patch: NewTransaction) => {
+      // 不經 runSafely：失敗時拋給表單顯示錯誤並保留輸入
+      await provider.updateTransaction(id, patch)
+      setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    },
+    [provider],
+  )
+
   const deleteTransactions = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return
@@ -184,6 +195,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       renameWorkspace,
       deleteWorkspace,
       addTransactions,
+      updateTransaction,
       deleteTransactions,
     }),
     [
@@ -198,6 +210,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       renameWorkspace,
       deleteWorkspace,
       addTransactions,
+      updateTransaction,
       deleteTransactions,
     ],
   )
