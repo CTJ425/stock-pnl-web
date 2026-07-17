@@ -1,0 +1,207 @@
+/**
+ * 工作區與交易資料管理：
+ * - 依模式選用 SupabaseProvider 或 LocalProvider
+ * - 首次使用自動建立預設工作區
+ * - ledger 以 useMemo 即時重算（交易異動時 Dashboard / 年報同步更新）
+ */
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { ReactNode } from 'react'
+import type { NewTransaction, Transaction, Workspace } from '../types/models'
+import type { Ledger } from '../utils/pnlEngine'
+import { computeLedger } from '../utils/pnlEngine'
+import type { DataProvider } from '../services/dataProvider'
+import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
+import { isSupabaseConfigured } from '../services/supabase'
+import { useAuth } from './AuthContext'
+
+const CURRENT_WS_KEY = 'stock-pnl-web/current-workspace'
+const DEFAULT_WS_NAME = '我的投資組合'
+
+export interface WorkspaceState {
+  workspaces: Workspace[]
+  current: Workspace | null
+  transactions: Transaction[]
+  ledger: Ledger
+  /** 首次載入中 */
+  loading: boolean
+  error: string | null
+  selectWorkspace: (id: string) => void
+  createWorkspace: (name: string) => Promise<void>
+  renameWorkspace: (id: string, name: string) => Promise<void>
+  deleteWorkspace: (id: string) => Promise<void>
+  addTransactions: (txs: NewTransaction[]) => Promise<void>
+  deleteTransaction: (id: string) => Promise<void>
+}
+
+const WorkspaceContext = createContext<WorkspaceState | null>(null)
+
+const EMPTY_LEDGER = computeLedger([])
+
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  const provider = useRef<DataProvider>(
+    isSupabaseConfigured ? new SupabaseProvider() : new LocalProvider(),
+  ).current
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [currentId, setCurrentId] = useState<string | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const current = workspaces.find((w) => w.id === currentId) ?? null
+  const ledger = useMemo(
+    () => (transactions.length > 0 ? computeLedger(transactions) : EMPTY_LEDGER),
+    [transactions],
+  )
+
+  const runSafely = useCallback(async (action: () => Promise<void>) => {
+    try {
+      setError(null)
+      await action()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  // 登入後載入工作區；無任何工作區時自動建立預設工作區
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    setLoading(true)
+    runSafely(async () => {
+      let list = await provider.listWorkspaces()
+      if (list.length === 0) {
+        const ws = await provider.createWorkspace(DEFAULT_WS_NAME)
+        list = [ws]
+      }
+      if (cancelled) return
+      setWorkspaces(list)
+      const saved = localStorage.getItem(CURRENT_WS_KEY)
+      const initial = list.find((w) => w.id === saved) ?? list[0]
+      setCurrentId(initial.id)
+    }).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user, provider, runSafely])
+
+  // 切換工作區時載入交易
+  useEffect(() => {
+    if (!currentId) return
+    let cancelled = false
+    localStorage.setItem(CURRENT_WS_KEY, currentId)
+    runSafely(async () => {
+      const txs = await provider.listTransactions(currentId)
+      if (!cancelled) setTransactions(txs)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentId, provider, runSafely])
+
+  const selectWorkspace = useCallback((id: string) => setCurrentId(id), [])
+
+  const createWorkspace = useCallback(
+    async (name: string) => {
+      await runSafely(async () => {
+        const ws = await provider.createWorkspace(name)
+        setWorkspaces((prev) => [...prev, ws])
+        setCurrentId(ws.id)
+      })
+    },
+    [provider, runSafely],
+  )
+
+  const renameWorkspace = useCallback(
+    async (id: string, name: string) => {
+      await runSafely(async () => {
+        await provider.renameWorkspace(id, name)
+        setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, name } : w)))
+      })
+    },
+    [provider, runSafely],
+  )
+
+  const deleteWorkspace = useCallback(
+    async (id: string) => {
+      await runSafely(async () => {
+        await provider.deleteWorkspace(id)
+        setWorkspaces((prev) => {
+          const next = prev.filter((w) => w.id !== id)
+          if (currentId === id) setCurrentId(next[0]?.id ?? null)
+          return next
+        })
+      })
+    },
+    [provider, runSafely, currentId],
+  )
+
+  const addTransactions = useCallback(
+    async (txs: NewTransaction[]) => {
+      if (!currentId) throw new Error('尚未選擇工作區')
+      const created = await provider.addTransactions(currentId, txs)
+      setTransactions((prev) => [...prev, ...created])
+    },
+    [provider, currentId],
+  )
+
+  const deleteTransaction = useCallback(
+    async (id: string) => {
+      await runSafely(async () => {
+        await provider.deleteTransaction(id)
+        setTransactions((prev) => prev.filter((t) => t.id !== id))
+      })
+    },
+    [provider, runSafely],
+  )
+
+  const value = useMemo<WorkspaceState>(
+    () => ({
+      workspaces,
+      current,
+      transactions,
+      ledger,
+      loading,
+      error,
+      selectWorkspace,
+      createWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
+      addTransactions,
+      deleteTransaction,
+    }),
+    [
+      workspaces,
+      current,
+      transactions,
+      ledger,
+      loading,
+      error,
+      selectWorkspace,
+      createWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
+      addTransactions,
+      deleteTransaction,
+    ],
+  )
+
+  return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
+}
+
+export function useWorkspace(): WorkspaceState {
+  const ctx = useContext(WorkspaceContext)
+  if (!ctx) throw new Error('useWorkspace 必須在 WorkspaceProvider 內使用')
+  return ctx
+}
