@@ -544,6 +544,24 @@ table.data-table {
   box-shadow: 0 10px 30px rgba(79, 70, 229, 0.45);
 }
 
+/* 左下角固定版本標記 */
+.version-badge {
+  position: fixed;
+  left: 14px;
+  bottom: 12px;
+  z-index: 90;
+  font-size: 11px;
+  color: var(--ink-muted);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ---------- 表單 ---------- */
 .field {
   margin-bottom: 13px;
