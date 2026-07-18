@@ -14,8 +14,6 @@ export interface DataProvider {
   /** 刪除工作區（其下交易一併刪除） */
   deleteWorkspace(id: string): Promise<void>
   listTransactions(workspaceId: string): Promise<Transaction[]>
-  /** 全部工作區的交易（「總覽」模式用） */
-  listAllTransactions(): Promise<Transaction[]>
   /** 批次新增（單筆與 CSV 匯入共用） */
   addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]>
   /** 更新單筆交易內容 */
@@ -93,13 +91,6 @@ export class LocalProvider implements DataProvider {
         (a, b) =>
           a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
       )
-  }
-
-  async listAllTransactions(): Promise<Transaction[]> {
-    return readStore().transactions.sort(
-      (a, b) =>
-        a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
-    )
   }
 
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
@@ -184,17 +175,6 @@ export class SupabaseProvider implements DataProvider {
       .from('transactions')
       .select('id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at')
       .eq('workspace_id', workspaceId)
-      .order('tx_date', { ascending: true })
-      .order('created_at', { ascending: true })
-    if (error) throw new Error(`載入交易紀錄失敗：${error.message}`)
-    return (data ?? []) as Transaction[]
-  }
-
-  async listAllTransactions(): Promise<Transaction[]> {
-    // RLS 以使用者為界，不加 workspace 過濾即為該使用者的全部交易
-    const { data, error } = await client()
-      .from('transactions')
-      .select('id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at')
       .order('tx_date', { ascending: true })
       .order('created_at', { ascending: true })
     if (error) throw new Error(`載入交易紀錄失敗：${error.message}`)

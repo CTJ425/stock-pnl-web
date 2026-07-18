@@ -129,69 +129,25 @@ describe('transactionsToCsv → parseTransactionsCsv 往返', () => {
     }
   })
 
-  it('總覽匯出附「工作區」欄；單一工作區的備份檔可正常再匯入', () => {
-    const txs: Transaction[] = [
-      {
-        id: '1',
-        workspace_id: 'w1',
-        tx_date: '2024-01-10',
-        market: 'TPE',
-        ticker: '2330',
-        name: '台積電',
-        tx_type: 'BUY',
-        price: 500,
-        qty: 1000,
-        fee_tax: 712,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-    ]
-    const csv = transactionsToCsv(txs, new Map([['w1', '券商A']]))
-    expect(csv).toContain('工作區')
-    expect(csv).toContain('券商A')
-    const result = parseTransactionsCsv(csv)
-    expect(result.errors).toHaveLength(0)
-    expect(result.rows).toHaveLength(1)
-  })
-
-  it('總覽匯出含多個工作區時，整批拒絕匯入（防跨券商成本污染）', () => {
-    const txs: Transaction[] = [
-      {
-        id: '1',
-        workspace_id: 'w1',
-        tx_date: '2024-01-10',
-        market: 'TPE',
-        ticker: '2330',
-        name: '台積電',
-        tx_type: 'BUY',
-        price: 500,
-        qty: 1000,
-        fee_tax: 712,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-      {
-        id: '2',
-        workspace_id: 'w2',
-        tx_date: '2024-02-10',
-        market: 'TPE',
-        ticker: '2330',
-        name: '台積電',
-        tx_type: 'BUY',
-        price: 600,
-        qty: 1000,
-        fee_tax: 854,
-        created_at: '2026-01-01T00:00:01Z',
-      },
-    ]
-    const csv = transactionsToCsv(
-      txs,
-      new Map([
-        ['w1', '券商A'],
-        ['w2', '券商B'],
-      ]),
-    )
+  it('含多個工作區的備份檔（舊版總覽匯出）整批拒絕匯入，防跨券商成本污染', () => {
+    const csv = [
+      '工作區,交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金',
+      '券商A,2024-01-10,TPE,2330,台積電,買入,500,1000,712',
+      '券商B,2024-02-10,TPE,2330,台積電,買入,600,1000,854',
+    ].join('\r\n')
     const result = parseTransactionsCsv(csv)
     expect(result.rows).toHaveLength(0)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0].message).toContain('工作區')
+  })
+
+  it('含單一工作區欄值的備份檔可正常匯入', () => {
+    const csv = [
+      '工作區,交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金',
+      '券商A,2024-01-10,TPE,2330,台積電,買入,500,1000,712',
+    ].join('\r\n')
+    const result = parseTransactionsCsv(csv)
+    expect(result.errors).toHaveLength(0)
+    expect(result.rows).toHaveLength(1)
   })
 })

@@ -18,7 +18,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { ALL_WORKSPACES_ID, useWorkspace } from '../context/WorkspaceContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import type { ThemePref } from '../utils/settings'
 import { applyTheme, getFeeRate, getThemePref, setFeeRate, setThemePref } from '../utils/settings'
 import { DashboardPage } from './Dashboard/DashboardPage'
@@ -148,7 +148,6 @@ function WorkspaceControls() {
   const {
     workspaces,
     current,
-    isAllView,
     selectWorkspace,
     createWorkspace,
     renameWorkspace,
@@ -211,7 +210,7 @@ function WorkspaceControls() {
   return (
     <div className="ws-select">
       <select
-        value={isAllView ? ALL_WORKSPACES_ID : (current?.id ?? '')}
+        value={current?.id ?? ''}
         onChange={(e) => selectWorkspace(e.target.value)}
         aria-label="切換工作區"
       >
@@ -220,9 +219,6 @@ function WorkspaceControls() {
             {w.name}
           </option>
         ))}
-        {workspaces.length > 1 && (
-          <option value={ALL_WORKSPACES_ID}>📊 全部工作區（總覽）</option>
-        )}
       </select>
       <button className="btn btn-sm btn-icon" title="新增工作區" aria-label="新增工作區" onClick={openCreate}>
         <Plus size={14} />
@@ -232,7 +228,6 @@ function WorkspaceControls() {
         title="重新命名工作區"
         aria-label="重新命名工作區"
         onClick={openRename}
-        disabled={isAllView}
       >
         <Pencil size={14} />
       </button>
@@ -241,7 +236,6 @@ function WorkspaceControls() {
         title="設定此工作區的預設手續費率"
         aria-label="設定此工作區的預設手續費率"
         onClick={openFee}
-        disabled={isAllView}
       >
         <Percent size={14} />
       </button>
@@ -250,7 +244,6 @@ function WorkspaceControls() {
         title="刪除工作區"
         aria-label="刪除工作區"
         onClick={() => void handleDelete()}
-        disabled={isAllView}
       >
         <Trash2 size={14} />
       </button>
@@ -313,7 +306,7 @@ function WorkspaceControls() {
 
 export function AppShell() {
   const { mode, user, recovery, signOut } = useAuth()
-  const { loading, error, addTransactions, isAllView } = useWorkspace()
+  const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
 
@@ -390,9 +383,8 @@ export function AppShell() {
         提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
       </footer>
 
-      {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失。
-          總覽模式為唯讀（交易須歸屬單一工作區），隱藏入口 */}
-      {!loading && !isAllView && (
+      {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
+      {!loading && (
         <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
           <ListPlus size={17} />
           新增交易
