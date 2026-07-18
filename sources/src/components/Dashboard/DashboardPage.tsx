@@ -25,6 +25,24 @@ import {
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { PriceMap } from '../../services/priceProxy'
 import { displayStockName } from '../../services/usStockNames'
+import { HelpTip } from '../Common/HelpTip'
+
+/** 各欄位說明（表頭「?」圖示顯示） */
+const HELP = {
+  ticker: '股票代號。台股不含「TPE:」前綴（如 2330），美股為交易所代號（如 AAPL）。',
+  name: '股票名稱。台股取自證交所 / 櫃買中心官方清單，常見美股顯示中文譯名。',
+  price:
+    '報價本身最長延遲 20 分鐘，系統另有 10 分鐘快取避免重複請求外部服務，因此畫面上的價格最舊可能是約 30 分鐘前的成交價。按右上角「重新整理現價」可略過快取強制重抓（但無法消除來源本身的 20 分鐘延遲）。標示「快取」代表目前抓不到新報價，顯示的是上次成功取得的價格。',
+  qty: '目前仍持有的股數（累計買進 − 累計賣出）。已全部賣光的股票不會出現在這裡。',
+  avgCost:
+    '移動平均成本法。主數字含買進手續費，也就是每股實際付出的錢；下方「未含費」是單純的成交均價。賣出時依當時均價扣減，不影響剩餘部位的每股成本。',
+  breakEven:
+    '以此價格把手上持股全部賣出，扣掉賣出手續費與證交稅後恰好不賺不賠的最低價格。高於此價賣出才真正獲利。',
+  mktVal: '現價 × 持有股數。尚未取得現價時顯示「—」。',
+  unrealized:
+    '若以現價全部賣出的預估損益。台股已預先扣除賣出手續費與證交稅，美股不預扣（各券商收費結構差異大）。實際成交價與此估算會有落差。',
+  roi: '未實現損益 ÷ 目前部位成本。只計算手上還持有的部位，與券商 APP 同口徑；已經賣掉結清的歷史績效請看「年度收益」頁。',
+} as const
 
 interface HoldingRow {
   holding: Holding
@@ -72,21 +90,33 @@ function sumOrNull(values: Array<number | null>): number | null {
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
 }
 
+/** 不可排序但附欄位說明的表頭 */
+function HelpTh({ label, help, numeric }: { label: string; help: string; numeric?: boolean }) {
+  return (
+    <th className={numeric ? 'num th-sort' : 'th-sort'}>
+      <div className="th-head">
+        <span className="th-plain">{label}</span>
+        <HelpTip label={label} text={help} />
+      </div>
+    </th>
+  )
+}
+
 function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {
   return (
     <div className="glass table-scroll">
       <table className="data-table">
         <thead>
           <tr>
-            <th>代號</th>
-            <th>名稱</th>
-            <th className="num">現價</th>
-            <th className="num">持有股數</th>
-            <th className="num">平均買入成本</th>
-            <th className="num">保本賣出價</th>
-            <th className="num">目前市值</th>
-            <th className="num">未實現損益</th>
-            <th className="num">未實現報酬率</th>
+            <HelpTh label="代號" help={HELP.ticker} />
+            <HelpTh label="名稱" help={HELP.name} />
+            <HelpTh label="現價" help={HELP.price} numeric />
+            <HelpTh label="持有股數" help={HELP.qty} numeric />
+            <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
+            <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
+            <HelpTh label="目前市值" help={HELP.mktVal} numeric />
+            <HelpTh label="未實現損益" help={HELP.unrealized} numeric />
+            <HelpTh label="未實現報酬率" help={HELP.roi} numeric />
           </tr>
         </thead>
         <tbody>

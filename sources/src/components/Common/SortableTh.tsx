@@ -1,5 +1,6 @@
-/** 可點擊排序的表頭：顯示目前排序方向，點擊切換升冪/降冪 */
+/** 可點擊排序的表頭：顯示目前排序方向，點擊切換升冪/降冪；可另附欄位說明 */
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { HelpTip } from './HelpTip'
 
 export interface SortState<K extends string> {
   key: K
@@ -22,6 +23,8 @@ interface SortableThProps<K extends string> {
   sort: SortState<K>
   onSort: (key: K) => void
   numeric?: boolean
+  /** 欄位說明；提供時表頭會多一個「?」圖示 */
+  help?: string
 }
 
 export function SortableTh<K extends string>({
@@ -30,18 +33,29 @@ export function SortableTh<K extends string>({
   sort,
   onSort,
   numeric,
+  help,
 }: SortableThProps<K>) {
   const active = sort.key === sortKey
   const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
+  const btn = (
+    <button type="button" className="th-sort-btn" onClick={() => onSort(sortKey)}>
+      {label}
+      <Icon size={12} className={active ? 'sort-ind active' : 'sort-ind'} />
+    </button>
+  )
   return (
     <th
       className={numeric ? 'num th-sort' : 'th-sort'}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <button type="button" className="th-sort-btn" onClick={() => onSort(sortKey)}>
-        {label}
-        <Icon size={12} className={active ? 'sort-ind active' : 'sort-ind'} />
-      </button>
+      {help ? (
+        <div className="th-head">
+          {btn}
+          <HelpTip label={label} text={help} />
+        </div>
+      ) : (
+        btn
+      )}
     </th>
   )
 }

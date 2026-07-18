@@ -37,14 +37,30 @@ export interface Holding extends Position {
   rawAvgCost: number
 }
 
+/**
+ * 年度內某一檔股票的進出彙整。金額欄位皆有「含費」與「未含費」兩種口徑：
+ * - 含費（buyAmt / sellAmt / costBasis）：實際付出與收到的錢，已計入手續費與證交稅
+ * - 未含費（buyGross / sellGross / rawCostBasis）：單純的成交價金，供對照券商成交回報
+ * 恆等式：realized = sellAmt − costBasis（未含費版本同理）
+ */
 export interface YearTickerDetail {
   key: string
   ticker: string
   name: string
   market: Market
   currency: Currency
+  /** 買進現金流出（成交價金 + 手續費） */
   buyAmt: number
+  /** 買進成交價金（未含手續費） */
+  buyGross: number
+  /** 賣出實收（成交價金 − 手續費 − 證交稅） */
   sellAmt: number
+  /** 賣出成交價金（未扣費稅） */
+  sellGross: number
+  /** 賣出部位的取得成本（移動平均成本 × 配對股數，含當初買入手續費） */
+  costBasis: number
+  /** 同上，但採未含手續費的成交均價 */
+  rawCostBasis: number
   realized: number
   fees: number
   count: number
@@ -55,7 +71,11 @@ export interface YearSummary {
   realizedTw: number
   realizedUs: number
   buyAmt: number
+  buyGross: number
   sellAmt: number
+  sellGross: number
+  costBasis: number
+  rawCostBasis: number
   fees: number
   count: number
   tickers: Record<string, YearTickerDetail>
@@ -130,7 +150,11 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         realizedTw: 0,
         realizedUs: 0,
         buyAmt: 0,
+        buyGross: 0,
         sellAmt: 0,
+        sellGross: 0,
+        costBasis: 0,
+        rawCostBasis: 0,
         fees: 0,
         count: 0,
         tickers: {},
@@ -164,7 +188,11 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         market: tx.market,
         currency,
         buyAmt: 0,
+        buyGross: 0,
         sellAmt: 0,
+        sellGross: 0,
+        costBasis: 0,
+        rawCostBasis: 0,
         realized: 0,
         fees: 0,
         count: 0,
@@ -179,17 +207,23 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     yt.fees += tx.fee_tax
 
     if (tx.tx_type === 'BUY') {
-      const totalCost = tx.price * tx.qty + tx.fee_tax // 手續費計入成本
+      const gross = tx.price * tx.qty
+      const totalCost = gross + tx.fee_tax // 手續費計入成本
       y.buyAmt += totalCost
+      y.buyGross += gross
       yt.buyAmt += totalCost
+      yt.buyGross += gross
       pos.cost += totalCost
-      pos.rawCost += tx.price * tx.qty
+      pos.rawCost += gross
       pos.qty += tx.qty
       pos.buyCostTotal += totalCost
     } else {
-      const revenue = tx.price * tx.qty - tx.fee_tax
+      const gross = tx.price * tx.qty
+      const revenue = gross - tx.fee_tax
       y.sellAmt += revenue
+      y.sellGross += gross
       yt.sellAmt += revenue
+      yt.sellGross += gross
 
       const avgCost = pos.qty > 0 ? pos.cost / pos.qty : 0
       const avgRawCost = pos.qty > 0 ? pos.rawCost / pos.qty : 0
@@ -200,9 +234,14 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         )
       }
       const costBasis = avgCost * matchedQty
+      const rawCostBasis = avgRawCost * matchedQty
       const realized = revenue - costBasis
+      y.costBasis += costBasis
+      y.rawCostBasis += rawCostBasis
+      yt.costBasis += costBasis
+      yt.rawCostBasis += rawCostBasis
       pos.cost -= costBasis
-      pos.rawCost -= avgRawCost * matchedQty
+      pos.rawCost -= rawCostBasis
       pos.qty -= matchedQty
       pos.realized += realized
       yt.realized += realized
