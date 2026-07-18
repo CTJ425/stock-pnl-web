@@ -86,8 +86,20 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
 }
 
 export function TransactionsPage() {
-  const { transactions, addTransactions, updateTransaction, deleteTransactions, current } =
-    useWorkspace()
+  const {
+    transactions,
+    addTransactions,
+    updateTransaction,
+    deleteTransactions,
+    current,
+    isAllView,
+    workspaces,
+  } = useWorkspace()
+  // 總覽模式：顯示工作區欄；唯讀（編輯 / 刪除 / 匯入 / 重算須在單一工作區進行）
+  const wsNameById = useMemo(
+    () => new Map(workspaces.map((w) => [w.id, w.name])),
+    [workspaces],
+  )
   const [showImport, setShowImport] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -136,7 +148,7 @@ export function TransactionsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `交易紀錄-${current?.name ?? 'export'}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `交易紀錄-${current?.name ?? (isAllView ? '全部工作區' : 'export')}-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -177,19 +189,23 @@ export function TransactionsPage() {
           </button>
         )}
         <div className="spacer" />
-        <button
-          className="btn"
-          title="依目前費率設定重新估算所有台股交易的手續費"
-          onClick={() => setShowRecalc(true)}
-          disabled={transactions.length === 0}
-        >
-          <Calculator size={15} />
-          重算手續費
-        </button>
-        <button className="btn" onClick={() => setShowImport(true)}>
-          <Upload size={15} />
-          匯入 CSV
-        </button>
+        {!isAllView && (
+          <>
+            <button
+              className="btn"
+              title="依目前費率設定重新估算所有台股交易的手續費"
+              onClick={() => setShowRecalc(true)}
+              disabled={transactions.length === 0}
+            >
+              <Calculator size={15} />
+              重算手續費
+            </button>
+            <button className="btn" onClick={() => setShowImport(true)}>
+              <Upload size={15} />
+              匯入 CSV
+            </button>
+          </>
+        )}
         <button className="btn" onClick={handleExport} disabled={transactions.length === 0}>
           <Download size={15} />
           匯出 CSV
@@ -215,14 +231,17 @@ export function TransactionsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      aria-label="全選 / 取消全選"
-                      onChange={toggleAll}
-                    />
-                  </th>
+                  {!isAllView && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        aria-label="全選 / 取消全選"
+                        onChange={toggleAll}
+                      />
+                    </th>
+                  )}
+                  {isAllView && <th>工作區</th>}
                   <SortableTh label="交易日期" sortKey="tx_date" sort={sort} onSort={handleSort} />
                   <SortableTh label="市場" sortKey="market" sort={sort} onSort={handleSort} />
                   <SortableTh label="代號" sortKey="ticker" sort={sort} onSort={handleSort} />
@@ -232,7 +251,7 @@ export function TransactionsPage() {
                   <SortableTh label="股數" sortKey="qty" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="手續費 / 稅金" sortKey="fee_tax" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="損益 / 收支" sortKey="flow" sort={sort} onSort={handleSort} numeric />
-                  <th aria-label="操作" />
+                  {!isAllView && <th aria-label="操作" />}
                 </tr>
               </thead>
               <tbody>
@@ -241,14 +260,19 @@ export function TransactionsPage() {
                   const flow = cashFlow(tx)
                   return (
                     <tr key={tx.id}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(tx.id)}
-                          aria-label={`選取 ${tx.tx_date} ${tx.ticker} 這筆交易`}
-                          onChange={() => toggleOne(tx.id)}
-                        />
-                      </td>
+                      {!isAllView && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(tx.id)}
+                            aria-label={`選取 ${tx.tx_date} ${tx.ticker} 這筆交易`}
+                            onChange={() => toggleOne(tx.id)}
+                          />
+                        </td>
+                      )}
+                      {isAllView && (
+                        <td className="cell-muted">{wsNameById.get(tx.workspace_id) ?? '—'}</td>
+                      )}
                       <td>{tx.tx_date}</td>
                       <td className="cell-muted">{MARKET_LABEL[tx.market]}</td>
                       <td>{tx.ticker}</td>
@@ -262,26 +286,28 @@ export function TransactionsPage() {
                       <td className={`num ${pnlClass(flow)}`}>
                         {fmtSignedMoney(flow, currency, currency === 'TWD' ? 0 : 2)}
                       </td>
-                      <td className="num">
-                        <div className="row-actions">
-                          <button
-                            className="btn btn-sm btn-icon"
-                            title="編輯這筆交易"
-                            aria-label="編輯這筆交易"
-                            onClick={() => setEditTx(tx)}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            className="btn btn-sm btn-danger btn-icon"
-                            title="刪除這筆交易"
-                            aria-label="刪除這筆交易"
-                            onClick={() => void handleDelete(tx)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
+                      {!isAllView && (
+                        <td className="num">
+                          <div className="row-actions">
+                            <button
+                              className="btn btn-sm btn-icon"
+                              title="編輯這筆交易"
+                              aria-label="編輯這筆交易"
+                              onClick={() => setEditTx(tx)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger btn-icon"
+                              title="刪除這筆交易"
+                              aria-label="刪除這筆交易"
+                              onClick={() => void handleDelete(tx)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}

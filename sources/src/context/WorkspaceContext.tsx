@@ -17,6 +17,8 @@ import type { ReactNode } from 'react'
 import type { NewTransaction, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
+import type { WorkspaceHolding } from '../utils/aggregate'
+import { aggregateWorkspaces } from '../utils/aggregate'
 import type { DataProvider } from '../services/dataProvider'
 import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
 import { isSupabaseConfigured } from '../services/supabase'
@@ -25,9 +27,16 @@ import { useAuth } from './AuthContext'
 const CURRENT_WS_KEY = 'stock-pnl-web/current-workspace'
 const DEFAULT_WS_NAME = '我的投資組合'
 
+/** 「全部工作區」總覽模式的虛擬工作區 id（唯讀） */
+export const ALL_WORKSPACES_ID = '__all__'
+
 export interface WorkspaceState {
   workspaces: Workspace[]
   current: Workspace | null
+  /** 是否為「全部工作區」總覽模式（唯讀：不可新增 / 編輯 / 刪除交易） */
+  isAllView: boolean
+  /** 總覽模式下各工作區持股並列（含所屬工作區資訊）；單一工作區模式為空陣列 */
+  allHoldings: WorkspaceHolding[]
   transactions: Transaction[]
   ledger: Ledger
   /** 首次載入中 */
@@ -47,6 +56,7 @@ export interface WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
 
 const EMPTY_LEDGER = computeLedger([])
+const EMPTY_HOLDINGS: WorkspaceHolding[] = []
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -60,11 +70,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const isAllView = currentId === ALL_WORKSPACES_ID
   const current = workspaces.find((w) => w.id === currentId) ?? null
-  const ledger = useMemo(
-    () => (transactions.length > 0 ? computeLedger(transactions) : EMPTY_LEDGER),
-    [transactions],
+  // 總覽模式：各工作區「各自」計算後彙總（混算會讓跨券商的移動平均成本互相污染）
+  const aggregated = useMemo(
+    () => (isAllView ? aggregateWorkspaces(workspaces, transactions) : null),
+    [isAllView, workspaces, transactions],
   )
+  const ledger = useMemo(() => {
+    if (aggregated) return aggregated.ledger
+    return transactions.length > 0 ? computeLedger(transactions) : EMPTY_LEDGER
+  }, [aggregated, transactions])
+  const allHoldings = aggregated?.holdings ?? EMPTY_HOLDINGS
 
   const runSafely = useCallback(async (action: () => Promise<void>) => {
     try {
@@ -91,8 +108,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       setWorkspaces(list)
       const saved = localStorage.getItem(CURRENT_WS_KEY)
-      const initial = list.find((w) => w.id === saved) ?? list[0]
-      setCurrentId(initial.id)
+      if (saved === ALL_WORKSPACES_ID) {
+        setCurrentId(ALL_WORKSPACES_ID)
+      } else {
+        const initial = list.find((w) => w.id === saved) ?? list[0]
+        setCurrentId(initial.id)
+      }
     }).finally(() => {
       if (!cancelled) setLoading(false)
     })
@@ -101,13 +122,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, provider, runSafely])
 
-  // 切換工作區時載入交易
+  // 切換工作區時載入交易（總覽模式載入全部）
   useEffect(() => {
     if (!currentId) return
     let cancelled = false
     localStorage.setItem(CURRENT_WS_KEY, currentId)
     runSafely(async () => {
-      const txs = await provider.listTransactions(currentId)
+      const txs =
+        currentId === ALL_WORKSPACES_ID
+          ? await provider.listAllTransactions()
+          : await provider.listTransactions(currentId)
       if (!cancelled) setTransactions(txs)
     })
     return () => {
@@ -155,6 +179,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const addTransactions = useCallback(
     async (txs: NewTransaction[]) => {
       if (!currentId) throw new Error('尚未選擇工作區')
+      if (currentId === ALL_WORKSPACES_ID) throw new Error('總覽模式為唯讀，請先切換到單一工作區')
       const created = await provider.addTransactions(currentId, txs)
       setTransactions((prev) => [...prev, ...created])
     },
@@ -163,29 +188,36 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const updateTransaction = useCallback(
     async (id: string, patch: NewTransaction) => {
+      if (isAllView) throw new Error('總覽模式為唯讀，請先切換到單一工作區')
       // 不經 runSafely：失敗時拋給表單顯示錯誤並保留輸入
       await provider.updateTransaction(id, patch)
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
     },
-    [provider],
+    [provider, isAllView],
   )
 
   const deleteTransactions = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return
+      if (isAllView) {
+        setError('總覽模式為唯讀，請先切換到單一工作區')
+        return
+      }
       await runSafely(async () => {
         await provider.deleteTransactions(ids)
         const removed = new Set(ids)
         setTransactions((prev) => prev.filter((t) => !removed.has(t.id)))
       })
     },
-    [provider, runSafely],
+    [provider, runSafely, isAllView],
   )
 
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
       current,
+      isAllView,
+      allHoldings,
       transactions,
       ledger,
       loading,
@@ -201,6 +233,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       workspaces,
       current,
+      isAllView,
+      allHoldings,
       transactions,
       ledger,
       loading,

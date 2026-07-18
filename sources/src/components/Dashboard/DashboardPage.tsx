@@ -12,6 +12,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import type { Holding } from '../../utils/pnlEngine'
 import { estimateUnrealized } from '../../utils/pnlEngine'
+import type { WorkspaceHolding } from '../../utils/aggregate'
 import { breakEvenPrice } from '../../utils/fees'
 import type { Currency } from '../../types/models'
 import {
@@ -28,6 +29,10 @@ import { displayStockName } from '../../services/usStockNames'
 
 interface HoldingRow {
   holding: Holding
+  /** React 列 key：總覽模式下同代號可能跨工作區出現多列，須含工作區 id */
+  rowKey: string
+  /** 所屬工作區名稱（僅總覽模式） */
+  workspaceName?: string
   price: number | null
   priceStale: boolean
   mktVal: number | null
@@ -39,23 +44,37 @@ interface HoldingRow {
 }
 
 function buildRows(
-  holdings: Holding[],
+  holdings: Array<Holding | WorkspaceHolding>,
   prices: PriceMap,
-  feeRate: number,
+  defaultFeeRate: number,
   workspaceId?: string,
 ): HoldingRow[] {
   return holdings.map((h) => {
+    // 總覽模式逐列採「該持股所屬工作區」的費率與低消設定（各券商不同）；
+    // 單一工作區模式用外部傳入的費率（費率異動重新渲染即更新）
+    const wsId = 'workspaceId' in h ? h.workspaceId : workspaceId
+    const feeRate = 'workspaceId' in h ? getFeeRate(h.workspaceId) : defaultFeeRate
     const quote = prices[h.key]
     const price = quote?.price ?? null
     const mktVal = price !== null ? price * h.qty : null
     // 台股依持股規模套用整股 / 零股最低手續費；美股無下限
     const minFee =
-      h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
+      h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', wsId) : undefined
     const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
     // 僅當前部位（與券商 APP 同口徑）：分母為現有持股的移動平均成本
     const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
     const breakEven = breakEvenPrice(h, feeRate, minFee)
-    return { holding: h, price, priceStale: quote?.stale ?? false, mktVal, unrealized, roi, breakEven }
+    return {
+      holding: h,
+      rowKey: `${wsId ?? ''}|${h.key}`,
+      workspaceName: 'workspaceName' in h ? h.workspaceName : undefined,
+      price,
+      priceStale: quote?.stale ?? false,
+      mktVal,
+      unrealized,
+      roi,
+      breakEven,
+    }
   })
 }
 
@@ -64,12 +83,21 @@ function sumOrNull(values: Array<number | null>): number | null {
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
 }
 
-function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {
+function HoldingsTable({
+  rows,
+  currency,
+  showWorkspace,
+}: {
+  rows: HoldingRow[]
+  currency: Currency
+  showWorkspace?: boolean
+}) {
   return (
     <div className="glass table-scroll">
       <table className="data-table">
         <thead>
           <tr>
+            {showWorkspace && <th>工作區</th>}
             <th>代號</th>
             <th>名稱</th>
             <th className="num">現價</th>
@@ -82,8 +110,9 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, roi, breakEven }) => (
-            <tr key={h.key}>
+          {rows.map(({ holding: h, rowKey, workspaceName, price, priceStale, mktVal, unrealized, roi, breakEven }) => (
+            <tr key={rowKey}>
+              {showWorkspace && <td>{workspaceName ?? '—'}</td>}
               <td>{h.ticker}</td>
               <td>{displayStockName(h.market, h.ticker, h.name)}</td>
               <td className="num">
@@ -127,13 +156,15 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
 }
 
 export function DashboardPage() {
-  const { ledger, current } = useWorkspace()
-  const { prices, loading, refreshedAt, refresh } = useStockPrices(ledger.holdings)
+  const { ledger, current, isAllView, allHoldings } = useWorkspace()
+  // 總覽模式：各工作區持股並列（同代號跨券商為多列，成本各自獨立）
+  const holdings = isAllView ? allHoldings : ledger.holdings
+  const { prices, loading, refreshedAt, refresh } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
 
   const rows = useMemo(
-    () => buildRows(ledger.holdings, prices, feeRate, current?.id),
-    [ledger.holdings, prices, feeRate, current?.id],
+    () => buildRows(holdings, prices, feeRate, current?.id),
+    [holdings, prices, feeRate, current?.id],
   )
   const twRows = rows.filter((r) => r.holding.currency === 'TWD')
   const usRows = rows.filter((r) => r.holding.currency === 'USD')
@@ -200,7 +231,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {ledger.holdings.length === 0 ? (
+        {holdings.length === 0 ? (
           <div className="glass empty-state">
             <div className="empty-icon">
               <Inbox size={36} />
@@ -214,7 +245,7 @@ export function DashboardPage() {
                 <div className="section-title">
                   <h2 style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h2>
                 </div>
-                <HoldingsTable rows={twRows} currency="TWD" />
+                <HoldingsTable rows={twRows} currency="TWD" showWorkspace={isAllView} />
               </div>
             )}
             {usRows.length > 0 && (
@@ -222,7 +253,7 @@ export function DashboardPage() {
                 <div className="section-title">
                   <h2 style={{ fontSize: 14 }}>🇺🇸 美股 (USD)</h2>
                 </div>
-                <HoldingsTable rows={usRows} currency="USD" />
+                <HoldingsTable rows={usRows} currency="USD" showWorkspace={isAllView} />
               </div>
             )}
           </>
