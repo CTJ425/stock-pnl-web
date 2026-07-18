@@ -291,7 +291,12 @@ export function TransactionsPage() {
                       <td>{tx.tx_date}</td>
                       <td className="cell-muted">{MARKET_LABEL[tx.market]}</td>
                       <td>{tx.ticker}</td>
-                      <td>{displayStockName(tx.market, tx.ticker, tx.name)}</td>
+                      <td
+                        className="cell-ellipsis"
+                        title={displayStockName(tx.market, tx.ticker, tx.name)}
+                      >
+                        {displayStockName(tx.market, tx.ticker, tx.name)}
+                      </td>
                       <td>{TX_TYPE_LABEL[tx.tx_type]}</td>
                       <td className="num">{fmtPrice(tx.price, currency)}</td>
                       <td className="num">{fmtQty(tx.qty)}</td>
