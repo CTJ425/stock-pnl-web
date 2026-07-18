@@ -108,7 +108,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       setWorkspaces(list)
       const saved = localStorage.getItem(CURRENT_WS_KEY)
-      if (saved === ALL_WORKSPACES_ID) {
+      // 總覽選項僅在多工作區時存在；只剩一個工作區時退回該工作區，避免卡在唯讀模式
+      if (saved === ALL_WORKSPACES_ID && list.length > 1) {
         setCurrentId(ALL_WORKSPACES_ID)
       } else {
         const initial = list.find((w) => w.id === saved) ?? list[0]
@@ -199,17 +200,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const deleteTransactions = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return
+      // 不經 runSafely：失敗時拋給呼叫端，否則呼叫端無從得知而顯示假的「已刪除」成功通知
       if (isAllView) {
-        setError('總覽模式為唯讀，請先切換到單一工作區')
-        return
+        const msg = '總覽模式為唯讀，請先切換到單一工作區'
+        setError(msg)
+        throw new Error(msg)
       }
-      await runSafely(async () => {
+      setError(null)
+      try {
         await provider.deleteTransactions(ids)
-        const removed = new Set(ids)
-        setTransactions((prev) => prev.filter((t) => !removed.has(t.id)))
-      })
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        throw e
+      }
+      const removed = new Set(ids)
+      setTransactions((prev) => prev.filter((t) => !removed.has(t.id)))
     },
-    [provider, runSafely, isAllView],
+    [provider, isAllView],
   )
 
   const value = useMemo<WorkspaceState>(

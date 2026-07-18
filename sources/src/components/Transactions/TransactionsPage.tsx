@@ -3,7 +3,7 @@
  * 新增交易改由外殼層的全域浮動按鈕開啟（任何分頁皆可用）。
  * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Calculator, Download, NotebookPen, Pencil, Trash2, Upload } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
@@ -107,6 +107,11 @@ export function TransactionsPage() {
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [sort, setSort] = useState<SortState<TxSortKey>>({ key: 'tx_date', dir: 'desc' })
 
+  // 切換工作區（含進出總覽）時清空勾選：勾選的是前一個工作區的交易，不可帶到新的檢視
+  useEffect(() => {
+    setSelected(new Set())
+  }, [current?.id, isAllView])
+
   const sorted = useMemo(() => {
     const sign = sort.dir === 'asc' ? 1 : -1
     return transactions.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
@@ -136,6 +141,7 @@ export function TransactionsPage() {
   }
 
   const handleExport = () => {
+    // 總覽匯出附「工作區」欄：標示每筆交易的來源券商，並讓匯入端能擋下跨工作區混匯
     const csv = transactionsToCsv(
       transactions
         .slice()
@@ -143,6 +149,7 @@ export function TransactionsPage() {
           (a, b) =>
             a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
         ),
+      isAllView ? wsNameById : undefined,
     )
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -158,7 +165,11 @@ export function TransactionsPage() {
       `確定刪除這筆交易嗎？\n\n${tx.tx_date}　${tx.ticker} ${displayStockName(tx.market, tx.ticker, tx.name)}　${TX_TYPE_LABEL[tx.tx_type]} ${fmtQty(tx.qty)} 股\n\n刪除後 Dashboard 與年度收益會立即重算。`,
     )
     if (!ok) return
-    await deleteTransactions([tx.id])
+    try {
+      await deleteTransactions([tx.id])
+    } catch {
+      return // 錯誤已顯示於全域錯誤列
+    }
     setSelected((prev) => {
       if (!prev.has(tx.id)) return prev
       const next = new Set(prev)
@@ -174,7 +185,11 @@ export function TransactionsPage() {
       `確定刪除選取的 ${ids.length} 筆交易嗎？\n\n刪除後 Dashboard 與年度收益會立即重算，此動作無法復原。`,
     )
     if (!ok) return
-    await deleteTransactions(ids)
+    try {
+      await deleteTransactions(ids)
+    } catch {
+      return // 錯誤已顯示於全域錯誤列
+    }
     setSelected(new Set())
     setNotice(`🗑️ 已刪除 ${ids.length} 筆交易。`)
   }
@@ -182,7 +197,7 @@ export function TransactionsPage() {
   return (
     <>
       <div className="section toolbar">
-        {selected.size > 0 && (
+        {!isAllView && selected.size > 0 && (
           <button className="btn btn-danger" onClick={() => void handleDeleteSelected()}>
             <Trash2 size={15} />
             刪除選取（{selected.size}）

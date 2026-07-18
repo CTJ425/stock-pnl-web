@@ -133,6 +133,28 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
   }
 
   const header = table[0].map(normalizeHeader)
+
+  // 「全部工作區」總覽匯出的備份檔含「工作區」欄；若其中有多個工作區，
+  // 擋下整批匯入——不同券商的交易混進同一工作區會污染移動平均成本
+  const wsCol = header.indexOf('工作區')
+  if (wsCol >= 0) {
+    const wsNames = new Set<string>()
+    for (let i = 1; i < table.length; i++) {
+      const cells = table[i]
+      if (cells.every((c) => c.trim() === '')) continue
+      const name = (cells[wsCol] ?? '').trim()
+      if (name) wsNames.add(name)
+    }
+    if (wsNames.size > 1) {
+      result.errors.push({
+        line: 1,
+        message:
+          '此檔案為「全部工作區」總覽匯出，含多個工作區的交易。為避免不同券商的成本互相污染，請先依「工作區」欄拆分後，分別匯入對應的工作區。',
+      })
+      return result
+    }
+  }
+
   const col = {
     date: header.indexOf('交易日期'),
     market: header.indexOf('市場'),
@@ -220,23 +242,30 @@ function csvField(value: string): string {
   return value
 }
 
-/** 匯出為 CSV（含 BOM 供 Excel 正確辨識 UTF-8；交易類型以中文輸出、可再匯入） */
-export function transactionsToCsv(txs: Transaction[]): string {
+/**
+ * 匯出為 CSV（含 BOM 供 Excel 正確辨識 UTF-8；交易類型以中文輸出、可再匯入）。
+ * 傳入 workspaceNames（總覽模式）時附「工作區」首欄，標示各筆交易的來源工作區。
+ */
+export function transactionsToCsv(
+  txs: Transaction[],
+  workspaceNames?: Map<string, string>,
+): string {
   const header = ['交易日期', '市場', '股票代號', '股票名稱', '交易類型', '交易單價', '交易股數', '手續費 / 稅金']
+  if (workspaceNames) header.unshift('工作區')
   const lines = [header.join(',')]
   for (const tx of txs) {
-    lines.push(
-      [
-        tx.tx_date,
-        tx.market,
-        tx.ticker,
-        csvField(tx.name),
-        TX_TYPE_LABEL[tx.tx_type],
-        String(tx.price),
-        String(tx.qty),
-        String(tx.fee_tax),
-      ].join(','),
-    )
+    const cells = [
+      tx.tx_date,
+      tx.market,
+      tx.ticker,
+      csvField(tx.name),
+      TX_TYPE_LABEL[tx.tx_type],
+      String(tx.price),
+      String(tx.qty),
+      String(tx.fee_tax),
+    ]
+    if (workspaceNames) cells.unshift(csvField(workspaceNames.get(tx.workspace_id) ?? ''))
+    lines.push(cells.join(','))
   }
   return `\uFEFF${lines.join('\r\n')}\r\n`
 }

@@ -30,7 +30,9 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
   itemsRef.current = holdings
 
   const load = useCallback(async (force = false) => {
-    const items = itemsRef.current.map((h) => ({ market: h.market, ticker: h.ticker }))
+    // 總覽模式同代號可能跨工作區出現多列，先以 key 去重再查價
+    const byKey = new Map(itemsRef.current.map((h) => [h.key, h]))
+    const items = [...byKey.values()].map((h) => ({ market: h.market, ticker: h.ticker }))
     if (items.length === 0) {
       setPrices({})
       return
