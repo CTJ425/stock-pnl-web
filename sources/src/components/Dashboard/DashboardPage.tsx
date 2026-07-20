@@ -36,6 +36,8 @@ const HELP = {
   qty: '目前仍持有的股數（累計買進 − 累計賣出）。已全部賣光的股票不會出現在這裡。',
   avgCost:
     '移動平均成本法。主數字含買進手續費，也就是每股實際付出的錢；下方「未含費」是單純的成交均價。賣出時依當時均價扣減，不影響剩餘部位的每股成本。',
+  cost:
+    '目前這些持股當初買進投入的錢（平均買入成本 × 持有股數，含買進手續費）。已經賣掉的部分不算在內，因此這是「現在還壓在裡面」的金額。下方「未含費」為未計手續費的版本。',
   breakEven:
     '以此價格把手上持股全部賣出，扣掉賣出手續費與證交稅後恰好不賺不賠的最低價格。高於此價賣出才真正獲利。',
   mktVal: '現價 × 持有股數。尚未取得現價時顯示「—」。',
@@ -113,6 +115,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
             <HelpTh label="現價" help={HELP.price} numeric />
             <HelpTh label="持有股數" help={HELP.qty} numeric />
             <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
+            <HelpTh label="投入成本" help={HELP.cost} numeric />
             <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
             <HelpTh label="目前市值" help={HELP.mktVal} numeric />
             <HelpTh label="未實現損益" help={HELP.unrealized} numeric />
@@ -143,6 +146,12 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                 <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
                 <div style={{ fontSize: 11, opacity: 0.65 }} title="未含手續費的成交均價">
                   未含費 {fmtPrice(h.rawAvgCost, currency)}
+                </div>
+              </td>
+              <td className="num">
+                <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
+                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含買進手續費的成交價金">
+                  未含費 {fmtMoney(h.rawCost, currency)}
                 </div>
               </td>
               <td
