@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：v0.2.2**（版本號固定顯示於應用畫面左下角，如 `v0.2.2 | Ivan Chen`）
+> **目前版本：v0.2.3**（版本號固定顯示於應用畫面左下角，如 `v0.2.3 | Ivan Chen`）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -41,9 +41,11 @@
 - **搜尋排名**：正股優先，權證 / 牛熊證自動排除。
 
 ### 現價與快取（三層架構）
-1. **L1 – 瀏覽器 localStorage**：10 分鐘 TTL，重整 / 重新登入不重打 API。
-2. **L2 – Supabase `price_cache` 資料表**：全站共用，同一支股票 10 分鐘內全體使用者只向外部 API 請求一次；`stock_names` 資料表快取查詢過的代號↔名稱（不設過期）。
-3. **L3 – Yahoo Finance**：僅在 L2 過期時由 Edge Function 伺服器端請求。
+1. **L1 – 瀏覽器 localStorage**：台股 60 秒 / 美股 10 分鐘 TTL，重整 / 重新登入不重打 API。
+2. **L2 – Supabase `price_cache` 資料表**：全站共用，同一支股票在 TTL 內全體使用者只向外部 API 請求一次；`stock_names` 資料表快取查詢過的代號↔名稱（不設過期）。
+3. **L3 – 外部行情源**：僅在 L2 過期時由 Edge Function 伺服器端請求。台股走**證交所 MIS 即時行情**（秒級延遲），失敗時退 Yahoo Finance；美股走 Yahoo Finance。
+
+`price_cache.updated_at` 記錄的是「報價實際取得時間」並回傳給前端，因此 L1 與 L2 的 TTL 不會疊加（同一份報價最舊即為取得時間 + 該市場 TTL）。前端另有每 60 秒背景輪詢與分頁切回前景補抓，TTL 內的代號直接命中 L1、不會真的發出請求。
 
 共用快取表僅能由 Edge Function（service role）寫入，一般使用者唯讀，防止資料污染。
 
@@ -67,7 +69,7 @@
      - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings，以及共用快取 `price_cache`（現價）與 `stock_names`（代號↔名稱）。
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀。
-     - **Edge Functions (Deno)**：伺服器端部署 `stock-price` 函數，批次調用 Yahoo Finance 查詢台美股現價與提供模糊搜尋 API，繞過瀏覽器 CORS 限制。
+     - **Edge Functions (Deno)**：伺服器端部署 `stock-price` 函數，批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）與提供模糊搜尋 API，繞過瀏覽器 CORS 限制。
 
 ### 系統架構圖 (System Architecture)
 
@@ -98,7 +100,8 @@ graph TD
     end
 
     subgraph External [外部服務]
-        EF <-->|代理現價/搜尋| Yahoo[Yahoo Finance API]
+        EF <-->|台股即時現價| MIS[TWSE MIS 即時行情]
+        EF <-->|美股現價/搜尋（台股備援）| Yahoo[Yahoo Finance API]
     end
 
     classDef local fill:#ffe0b2,stroke:#fb8c00,stroke-width:2px;
@@ -107,7 +110,7 @@ graph TD
     
     class LS local;
     class Auth,DB,EF,Workspaces,Transactions,Settings cloud;
-    class Yahoo ext;
+    class Yahoo,MIS ext;
 ```
 
 專案目錄結構：
@@ -243,6 +246,15 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 ## 🗒️ 版本紀錄
 
+### v0.2.3（2026-07-20）
+- **台股現價改用證交所 MIS 即時行情**：原本台股報價來自 Yahoo Finance（本身延遲 15–20 分鐘），改為直接取用證交所 MIS 即時行情，Yahoo 降為失敗時的備援；美股維持 Yahoo。
+- **修正快取 TTL 疊加**：Edge Function 的資料庫快取回傳的報價可能已存在近 10 分鐘，但前端收到後一律當成「剛取得」再快取 10 分鐘，兩層疊加後畫面上的價格最舊可達約 30 分鐘。現在 Edge Function 會回傳報價的**實際取得時間**，前端據此判斷新鮮度，兩層 TTL 不再疊加。
+- **現價自動更新**：以往頁面開著不動就不會再更新現價（需手動按重新整理）。現在每 60 秒背景輪詢一次，分頁從背景切回前景時也會補抓；TTL 內的代號直接命中本機快取，不會真的發出請求。
+- 快取 TTL 依市場區分：台股 60 秒、美股 10 分鐘。綜合以上，台股現價延遲由最壞約 30 分鐘壓縮至約 1 分鐘。
+- **年度收益移除「買進總支出」欄**：該欄包含當年買進但尚未賣出的部位，與同一列的賣出成本 / 賣出收入 / 已實現損益不是同一批股票，並列容易讓人誤以為可以互相加減。移除後每一列自洽：`已實現損益 = 賣出收入 − 賣出成本`。「僅買進」個股的賣出三欄改顯示「—」而非整排 0（該列仍保留，其手續費與筆數需計入年度合計）。
+- 計算引擎完全未變動，既有損益公式與數字不受影響（`buyAmt` / `buyGross` 仍保留於引擎，僅停止顯示）。
+- ⚠️ 本次含 Edge Function 變更，需重新部署才會生效：`supabase functions deploy stock-price --no-verify-jwt`（資料庫 schema 無需異動）。
+
 ### v0.2.2（2026-07-18）
 - **年度收益新增「賣出成本」欄**：顯示當年賣出部位的取得成本（賣出當下的移動平均成本 × 賣出股數），讓每一列成立 `已實現損益 = 賣出收入 − 賣出成本`，數字可自行驗算。
 - **金額改「含費 / 未含費」雙行顯示**（與庫存總覽的平均成本同構）：主數字為實際付出與收到的錢（含手續費與證交稅），副行為單純成交價金。以台股常見情境為例，未含費的帳面價差會明顯高於實際落袋金額——證交稅 0.3%（ETF 0.1%）通常才是吃掉獲利的大宗。
@@ -266,10 +278,10 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 1. **CORS 跨來源限制**：
    台灣證交所（TWSE/TPEx）與 Yahoo Finance 皆不支援瀏覽器直接跨網域請求。正式環境**必須**部署 Supabase Edge Function：`prices` 代理現價、`search` 代理模糊搜尋、`twlist` 代理台股全清單（中文名反查的資料來源）。本地開發則由 Vite dev proxy 代勞，因此「本地正常、線上失效」的問題多半出在 Edge Function 未部署或版本過舊。
 2. **本機模式限制**：
-   若使用本機模式，美股現價與美股模糊搜尋會無法使用（因無後端 Edge Function 代理），需手動輸入股票代號與名稱，且現價不會自動更新。
+   若使用本機模式，美股現價與美股模糊搜尋會無法使用（因無後端 Edge Function 代理），需手動輸入股票代號與名稱。台股現價則退回 TWSE / TPEx OpenAPI 的**每日收盤均價清單**——不是即時價，MIS 即時行情僅在部署 Edge Function 的 Supabase 模式下生效。
 3. **資安守則**：
    請勿將 `.env.local` 或任何含有 Supabase 金鑰/密碼的檔案提交到 Git 庫中（已加入 `.gitignore`）。共用快取表（`price_cache`、`stock_names`）刻意不開放一般使用者寫入。
 4. **精算同構原則**：
    台股在計算手續費/證交稅時有特定的整數向下取整限制 (`Math.floor`)。若使用 CSV 匯入舊資料，請確保金額與原試算表核對一致。
 5. **報價延遲**：
-   提供的報價並非來自所有市場的即時報價（最長可能延遲 20 分鐘），加上快取 TTL（10 分鐘）僅供參考，不宜做為買賣依據或諮詢之用。
+   提供的報價並非來自所有市場的即時報價（美股來源最長可能延遲 20 分鐘），加上快取 TTL（台股 60 秒 / 美股 10 分鐘）僅供參考，不宜做為買賣依據或諮詢之用。台股即時行情在成交清淡時可能無最新成交價，此時顯示的是買一價。
