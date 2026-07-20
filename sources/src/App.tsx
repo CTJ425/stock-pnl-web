@@ -4,7 +4,7 @@ import { AuthPage } from './components/Auth/AuthPage'
 import { AppShell } from './components/AppShell'
 
 /** 畫面左下角固定顯示的版本標記 */
-const APP_VERSION = 'v0.2.3.1'
+const APP_VERSION = 'v0.2.4'
 const APP_AUTHOR = 'Ivan Chen'
 
 function AppInner() {

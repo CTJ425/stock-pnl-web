@@ -114,8 +114,8 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
             <HelpTh label="名稱" help={HELP.name} />
             <HelpTh label="現價" help={HELP.price} numeric />
             <HelpTh label="持有股數" help={HELP.qty} numeric />
-            <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
             <HelpTh label="投入成本" help={HELP.cost} numeric />
+            <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
             <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
             <HelpTh label="目前市值" help={HELP.mktVal} numeric />
             <HelpTh label="未實現損益" help={HELP.unrealized} numeric />
@@ -143,15 +143,15 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
               </td>
               <td className="num">{fmtQty(h.qty)}</td>
               <td className="num">
-                <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
-                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含手續費的成交均價">
-                  未含費 {fmtPrice(h.rawAvgCost, currency)}
-                </div>
-              </td>
-              <td className="num">
                 <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
                 <div style={{ fontSize: 11, opacity: 0.65 }} title="未含買進手續費的成交價金">
                   未含費 {fmtMoney(h.rawCost, currency)}
+                </div>
+              </td>
+              <td className="num">
+                <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
+                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含手續費的成交均價">
+                  未含費 {fmtPrice(h.rawAvgCost, currency)}
                 </div>
               </td>
               <td
