@@ -5,6 +5,10 @@
  * - 金額欄位採「含費 / 未含費」雙行（與庫存總覽的平均成本同構）：
  *   主數字為實際付出與收到的錢，副行為單純成交價金
  * - 年度列可展開個股明細（含當年只買進、尚未賣出者）
+ *
+ * 只呈現賣出側（賣出成本 / 賣出收入 / 已實現損益），刻意不顯示當年買進金額：
+ * 買進含當年尚未賣出的部位，與同一列的賣出三欄不是同一批股票，並列會讓人
+ * 誤以為可以互相加減。engine 仍保有 buyAmt / buyGross，需要時可再接回。
  */
 import { useMemo, useState } from 'react'
 import { CalendarRange, Minus, Plus } from 'lucide-react'
@@ -17,20 +21,11 @@ import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
 import { YEAR_HELP } from './columnHelp'
 
-type YearSortKey =
-  | 'year'
-  | 'realized'
-  | 'buyAmt'
-  | 'costBasis'
-  | 'sellAmt'
-  | 'fees'
-  | 'count'
+type YearSortKey = 'year' | 'realized' | 'costBasis' | 'sellAmt' | 'fees' | 'count'
 
 interface YearRow {
   year: number
   realized: number
-  buyAmt: number
-  buyGross: number
   costBasis: number
   rawCostBasis: number
   sellAmt: number
@@ -54,8 +49,6 @@ function useSectionRows(currency: Currency): YearRow[] {
       const agg: YearRow = {
         year,
         realized: 0,
-        buyAmt: 0,
-        buyGross: 0,
         costBasis: 0,
         rawCostBasis: 0,
         sellAmt: 0,
@@ -67,8 +60,6 @@ function useSectionRows(currency: Currency): YearRow[] {
       for (const yt of Object.values(y.tickers)) {
         if (yt.currency !== currency) continue
         agg.realized += yt.realized
-        agg.buyAmt += yt.buyAmt
-        agg.buyGross += yt.buyGross
         agg.costBasis += yt.costBasis
         agg.rawCostBasis += yt.rawCostBasis
         agg.sellAmt += yt.sellAmt
@@ -104,18 +95,20 @@ function AmountCell({
   signed?: boolean
   rawLabel?: string
 }) {
-  // 該年沒有對應進出時（如只買沒賣的年度賣出欄）不顯示副行，避免整排 0 的雜訊
-  const showRaw = value !== 0 || raw !== 0
+  // 該年沒有對應進出（如「僅買進」個股的賣出三欄）時整格顯示「—」：
+  // 含費與未含費同時為 0 才成立，真正打平的賣出因費用差仍會有未含費金額，不會誤判
+  const hasActivity = value !== 0 || raw !== 0
+  if (!hasActivity) {
+    return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
+  }
   return (
     <td className={signed ? `num ${pnlClass(value)}` : 'num'}>
       <div style={{ fontWeight: signed ? 600 : undefined }}>
         {signed ? fmtSignedMoney(value, currency) : fmtMoney(value, currency)}
       </div>
-      {showRaw && (
-        <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
-          {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
-        </div>
-      )}
+      <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+        {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
+      </div>
     </td>
   )
 }
@@ -159,7 +152,6 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
             <thead>
               <tr>
                 <SortableTh label="年度" sortKey="year" sort={sort} onSort={handleSort} help={YEAR_HELP.year} />
-                <SortableTh label="買進總支出" sortKey="buyAmt" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.buyAmt} />
                 <SortableTh label="賣出成本" sortKey="costBasis" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.costBasis} />
                 <SortableTh label="賣出收入" sortKey="sellAmt" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.sellAmt} />
                 <SortableTh label="已實現損益" sortKey="realized" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.realized} />
@@ -215,7 +207,6 @@ function YearRows({
           )}
           {row.year}
         </td>
-        <AmountCell value={row.buyAmt} raw={row.buyGross} currency={currency} />
         <AmountCell value={row.costBasis} raw={row.rawCostBasis} currency={currency} />
         <AmountCell value={row.sellAmt} raw={row.sellGross} currency={currency} />
         <AmountCell value={row.realized} raw={rawRealized(row)} currency={currency} signed />
@@ -238,7 +229,6 @@ function YearRows({
                 </span>
               )}
             </td>
-            <AmountCell value={yt.buyAmt} raw={yt.buyGross} currency={currency} />
             <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
             <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
             <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
