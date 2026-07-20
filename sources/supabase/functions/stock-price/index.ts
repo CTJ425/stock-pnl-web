@@ -1,15 +1,17 @@
 /**
  * Supabase Edge Function：stock-price（現價 / 搜尋代理）
  *
- * 由伺服器端代為請求 Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
+ * 由伺服器端代為請求 TWSE MIS / Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
+ * 現價來源：台股先走證交所 MIS 即時行情（秒級延遲），失敗退 Yahoo；美股走 Yahoo。
  * 現價帶 DB 共用快取（price_cache 資料表，見 build-docs/supabase_schema.sql）：
- * 10 分鐘內全站共用同一份報價，同一支股票不重複請求 Yahoo。
+ * TTL 內全站共用同一份報價（台股 60 秒、美股 10 分鐘），同一支股票不重複請求外部 API。
  * 部署方式（需安裝 Supabase CLI 並登入）：
  *   supabase functions deploy stock-price --no-verify-jwt
  *
  * 介面：
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
- *     → { prices: { 'TPE:2330': { price: number }, ... } }
+ *     → { prices: { 'TPE:2330': { price: number, asOf: string }, ... } }
+ *       asOf 為報價的實際取得時間（ISO），供前端 TTL 判斷，避免與 DB 快取 TTL 疊加
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
  *   POST { action: 'twlist' }
@@ -17,14 +19,19 @@
  *       正式環境由此代理供前端中文搜尋 / 代號反查 / 現價備援使用）
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { buildMisChannels, parseMisResponse } from './misParse.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US'
   ticker: string
 }
 
-/** DB 快取有效期：與前端 localStorage 快取一致（10 分鐘） */
-const CACHE_TTL_MS = 10 * 60 * 1000
+/** DB 快取有效期（與前端 localStorage 快取一致）：台股走 MIS 即時源用短 TTL，美股維持 10 分鐘 */
+const CACHE_TTL_MS: Record<SymbolItem['market'], number> = {
+  TPE: 60 * 1000,
+  US: 10 * 60 * 1000,
+}
+const MAX_CACHE_TTL_MS = Math.max(...Object.values(CACHE_TTL_MS))
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 price_cache 唯一的寫入途徑
@@ -71,51 +78,99 @@ async function fetchYahooPrice(symbol: string): Promise<number | null> {
   }
 }
 
+/** 台股即時報價（TWSE MIS）：回傳 ticker → 價格；整批失敗時回空 Map，交由 Yahoo fallback */
+async function fetchMisPrices(tickers: string[]): Promise<Map<string, number>> {
+  const resolved = new Map<string, number>()
+  for (const channels of buildMisChannels(tickers)) {
+    try {
+      const res = await fetch(
+        `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${channels.join('|')}&json=1&delay=0&_=${Date.now()}`,
+        {
+          headers: {
+            'User-Agent': UA,
+            Accept: 'application/json',
+            Referer: 'https://mis.twse.com.tw/stock/index.jsp',
+          },
+        },
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      for (const quote of parseMisResponse(data)) {
+        if (!resolved.has(quote.ticker)) resolved.set(quote.ticker, quote.price)
+      }
+    } catch {
+      // MIS 為非官方文件化端點，失敗時靜默交由 Yahoo fallback
+    }
+  }
+  return resolved
+}
+
 async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const items = symbols.slice(0, 50)
-  const prices: Record<string, { price: number }> = {}
+  const prices: Record<string, { price: number; asOf: string }> = {}
+  const nowMs = Date.now()
 
-  // 1) 先查 DB 共用快取：TTL 內的報價直接回傳
-  const freshAfter = new Date(Date.now() - CACHE_TTL_MS).toISOString()
+  // 1) 先查 DB 共用快取：分市場 TTL 內的報價直接回傳（asOf = 實際抓價時間）
+  const freshAfter = new Date(nowMs - MAX_CACHE_TTL_MS).toISOString()
   try {
     const { data } = await db
       .from('price_cache')
-      .select('key, price')
+      .select('key, price, updated_at')
       .in('key', items.map((i) => `${i.market}:${i.ticker}`))
       .gte('updated_at', freshAfter)
     for (const row of data ?? []) {
+      const key = String(row.key)
       const price = Number(row.price)
-      if (Number.isFinite(price) && price > 0) prices[row.key] = { price }
+      const at = Date.parse(String(row.updated_at))
+      const ttl = key.startsWith('TPE:') ? CACHE_TTL_MS.TPE : CACHE_TTL_MS.US
+      if (!Number.isFinite(price) || price <= 0) continue
+      if (!Number.isFinite(at) || nowMs - at >= ttl) continue
+      prices[key] = { price, asOf: new Date(at).toISOString() }
     }
   } catch {
-    // 快取表不可用（例如尚未建表）時，直接全部走 Yahoo
+    // 快取表不可用（例如尚未建表）時，直接全部走外部 API
   }
 
-  // 2) 快取沒有的才請求 Yahoo
+  // 2) 台股缺漏者先走 MIS 即時行情（asOf = 向來源確認的時間，非最後成交時間，
+  //    避免盤後把快取一律視為過期而重複請求）
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
+  const fromMis = await fetchMisPrices(
+    missing.filter((i) => i.market === 'TPE').map((i) => i.ticker),
+  )
+  for (const [ticker, price] of fromMis) {
+    prices[`TPE:${ticker}`] = { price, asOf: new Date().toISOString() }
+  }
+
+  // 3) 仍缺者（含全部美股、MIS 失敗的台股）走 Yahoo
+  const unresolved = missing.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const entries = await Promise.all(
-    missing.map(async (item) => {
+    unresolved.map(async (item) => {
       const key = `${item.market}:${item.ticker}`
       for (const symbol of yahooSymbols(item)) {
         const price = await fetchYahooPrice(symbol)
-        if (price !== null) return [key, price] as const
+        if (price !== null) {
+          return [key, { price, asOf: new Date().toISOString() }] as const
+        }
       }
       return null
     }),
   )
-
-  // 3) 新抓到的價格回寫快取，供全站共用
-  const fetched = entries.filter((e): e is readonly [string, number] => e !== null)
-  for (const [key, price] of fetched) {
-    prices[key] = { price }
+  for (const entry of entries) {
+    if (entry) prices[entry[0]] = entry[1]
   }
-  if (fetched.length > 0) {
+
+  // 4) 新抓到的價格回寫快取，供全站共用（updated_at 記實際報價時間，TTL 由此起算）
+  const fetchedKeys = [
+    ...[...fromMis.keys()].map((t) => `TPE:${t}`),
+    ...entries.flatMap((e) => (e ? [e[0]] : [])),
+  ]
+  if (fetchedKeys.length > 0) {
     try {
       await db.from('price_cache').upsert(
-        fetched.map(([key, price]) => ({
+        fetchedKeys.map((key) => ({
           key,
-          price,
-          updated_at: new Date().toISOString(),
+          price: prices[key].price,
+          updated_at: prices[key].asOf,
         })),
       )
     } catch {

@@ -1,8 +1,10 @@
 /**
  * 股票現價取得：
- * 0. TTL 快取：10 分鐘內取得過的價格直接採用、不打 API
- *    （登入 / 重整 / 多人同時使用不會重複連線；手動重新整理可強制重抓）
- * 1. 主要策略：Supabase Edge Function `stock-price`（伺服器端代抓 Yahoo Finance，繞開 CORS）
+ * 0. TTL 快取：TTL 內（台股 60 秒、美股 10 分鐘）取得過的價格直接採用、不打 API
+ *    （登入 / 重整 / 多人同時使用不會重複連線；手動重新整理可強制重抓）。
+ *    asOf 採 Edge Function 回傳的實際抓價時間，前端 TTL 不與伺服器端快取 TTL 疊加。
+ * 1. 主要策略：Supabase Edge Function `stock-price`（伺服器端代抓：台股 TWSE MIS 即時行情、
+ *    美股 Yahoo Finance，繞開 CORS）
  * 2. 台股備援：TWSE / TPEx OpenAPI 直連（支援 CORS 的官方端點）
  * 3. 降級機制：API 失敗時回傳 localStorage 的上次快取價（標記 stale），
  *    完全無資料則為 null——UI 留空、不誤顯示為全額虧損（與 GAS 版同構）
@@ -30,13 +32,19 @@ export interface PriceRequestItem {
 export type PriceMap = Record<string, PriceQuote>
 
 const CACHE_KEY = 'stock-pnl-web/price-cache-v1'
-/** 快取有效期：報價本就有延遲，10 分鐘內視為新鮮、不重打 API */
-const CACHE_TTL_MS = 10 * 60 * 1000
+/** 快取有效期（與 Edge Function DB 快取一致）：台股走 MIS 即時源用短 TTL，美股 10 分鐘 */
+const CACHE_TTL_TW_MS = 60 * 1000
+const CACHE_TTL_US_MS = 10 * 60 * 1000
 
-function isFresh(quote: PriceQuote | undefined, now: number): quote is PriceQuote {
+/** 依 positionKey 取得該市場的快取 TTL */
+export function cacheTtlMs(key: string): number {
+  return key.startsWith('TPE:') ? CACHE_TTL_TW_MS : CACHE_TTL_US_MS
+}
+
+export function isFresh(key: string, quote: PriceQuote | undefined, now: number): quote is PriceQuote {
   if (!quote || quote.stale) return false
   const at = Date.parse(quote.asOf)
-  return Number.isFinite(at) && now - at < CACHE_TTL_MS
+  return Number.isFinite(at) && now - at < cacheTtlMs(key)
 }
 
 function readPriceCache(): PriceMap {
@@ -58,11 +66,13 @@ function writePriceCache(map: PriceMap): void {
 }
 
 interface EdgePriceResponse {
-  prices?: Record<string, { price: number }>
+  prices?: Record<string, { price: number; asOf?: string }>
 }
 
-async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, number>> {
-  const resolved = new Map<string, number>()
+async function fetchFromEdge(
+  items: PriceRequestItem[],
+): Promise<Map<string, { price: number; asOf: string | null }>> {
+  const resolved = new Map<string, { price: number; asOf: string | null }>()
   if (!isSupabaseConfigured || !supabase || items.length === 0) return resolved
   try {
     const { data, error } = await supabase.functions.invoke<EdgePriceResponse>('stock-price', {
@@ -71,7 +81,11 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, num
     if (error || !data?.prices) return resolved
     for (const [key, quote] of Object.entries(data.prices)) {
       if (Number.isFinite(quote?.price) && quote.price > 0) {
-        resolved.set(key, quote.price)
+        // asOf 為實際抓價時間（DB 快取命中時早於現在）；舊版 Edge 無此欄位，交由呼叫端補 now
+        const asOf = typeof quote.asOf === 'string' && Number.isFinite(Date.parse(quote.asOf))
+          ? quote.asOf
+          : null
+        resolved.set(key, { price: quote.price, asOf })
       }
     }
   } catch {
@@ -119,7 +133,7 @@ export async function fetchPrices(
     for (const item of items) {
       const key = positionKey(item.market, item.ticker)
       const cached = cache[key]
-      if (isFresh(cached, nowMs)) result[key] = cached
+      if (isFresh(key, cached, nowMs)) result[key] = cached
       else toFetch.push(item)
     }
   }
@@ -130,8 +144,8 @@ export async function fetchPrices(
   const unresolved = toFetch.filter((i) => !fromEdge.has(positionKey(i.market, i.ticker)))
   const fromTw = await fetchTwFallback(unresolved)
 
-  for (const [key, price] of fromEdge) {
-    result[key] = { price, asOf: now, source: 'edge', stale: false }
+  for (const [key, quote] of fromEdge) {
+    result[key] = { price: quote.price, asOf: quote.asOf ?? now, source: 'edge', stale: false }
   }
   for (const [key, price] of fromTw) {
     result[key] = { price, asOf: now, source: 'twse', stale: false }

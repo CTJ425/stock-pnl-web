@@ -58,8 +58,12 @@ WITH CHECK (auth.uid() = user_id);
 
 
 -- 3. 共用現價快取資料表 (price_cache)
---     Edge Function stock-price 的 L2 快取：10 分鐘內全站共用同一份報價，
+--     Edge Function stock-price 的 L2 快取：TTL 內全站共用同一份報價，
 --     避免每個使用者重複請求外部 API。
+--     TTL 由 Edge Function 判斷（非 DB 層）：台股 60 秒、美股 10 分鐘——
+--     台股走證交所 MIS 即時行情，短 TTL 才能反映即時價；美股走 Yahoo，維持 10 分鐘。
+--     updated_at 記的是「報價實際取得時間」，前端據此判斷新鮮度，
+--     避免前端 localStorage 快取與本表 TTL 疊加（見 src/services/priceProxy.ts）。
 --     僅 Edge Function（service role）可寫入；一般使用者只能讀取，
 --     避免有人直接竄改快取價格影響所有人。
 CREATE TABLE IF NOT EXISTS price_cache (
