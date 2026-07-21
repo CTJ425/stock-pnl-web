@@ -11,7 +11,7 @@
  * 誤以為可以互相加減。engine 仍保有 buyAmt / buyGross，需要時可再接回。
  */
 import { useMemo, useState, Fragment } from 'react'
-import { CalendarRange, Minus, Plus } from 'lucide-react'
+import { CalendarRange, ChevronsDownUp, ChevronsUpDown, Minus, Plus } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { YearTickerDetail } from '../../utils/pnlEngine'
@@ -115,6 +115,24 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set())
 
+  const allTickerKeys = rows.flatMap((r) =>
+    r.details.filter((yt) => yt.sells.length > 0).map((yt) => `${r.year}|${yt.key}`),
+  )
+  const allOpen =
+    rows.length > 0 &&
+    rows.every((r) => expanded.has(r.year)) &&
+    allTickerKeys.every((k) => expandedTickers.has(k))
+
+  const toggleAll = () => {
+    if (allOpen) {
+      setExpanded(new Set())
+      setExpandedTickers(new Set())
+    } else {
+      setExpanded(new Set(rows.map((r) => r.year)))
+      setExpandedTickers(new Set(allTickerKeys))
+    }
+  }
+
   const toggle = (year: number) => {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -137,6 +155,12 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
     <div className="section">
       <div className="section-title">
         <h2 style={{ fontSize: 14 }}>{title}</h2>
+        {rows.length > 0 && (
+          <button className="btn btn-sm" onClick={toggleAll}>
+            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {allOpen ? '全部收起' : '全部展開'}
+          </button>
+        )}
       </div>
       {rows.length === 0 ? (
         <div className="glass empty-state" style={{ padding: '26px 20px' }}>

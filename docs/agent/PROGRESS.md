@@ -122,6 +122,19 @@
 
 ---
 
+## 📅 Log: 2026-07-21 13:40:00 Asia/Taipei
+
+- **Agent**: agy (delegated)，Claude 規劃/review/驗證
+- **Action**: 年度收益展開圖示置中修正 + 分區「全部展開/全部收起」按鈕
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `index.css`: `.year-toggle` 補 `padding: 0`（根因：全域 border-box 下瀏覽器預設按鈕 padding 擠壓 22px 盒，圖示偏移；修後 svg 與按鈕中心偏差 0px）。
+- [x] `YearlyPage.tsx`: 各分區標題右側新增 `.btn btn-sm`「全部展開/全部收起」，一鍵開合該分區所有年度與逐筆賣出明細。
+- [x] Playwright 驗證置中與開合行為，build 與 85/85 測試通過。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。
