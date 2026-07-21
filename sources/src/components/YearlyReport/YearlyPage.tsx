@@ -28,6 +28,7 @@ interface YearRow {
   sellAmt: number
   sellGross: number
   fees: number
+  feesTax: number
   count: number
   details: YearTickerDetail[]
 }
@@ -51,6 +52,7 @@ function useSectionRows(currency: Currency): YearRow[] {
         sellAmt: 0,
         sellGross: 0,
         fees: 0,
+        feesTax: 0,
         count: 0,
         details: [],
       }
@@ -62,6 +64,7 @@ function useSectionRows(currency: Currency): YearRow[] {
         agg.sellAmt += yt.sellAmt
         agg.sellGross += yt.sellGross
         agg.fees += yt.fees
+        agg.feesTax += yt.feesTax
         agg.count += yt.count
         agg.details.push(yt)
       }
@@ -106,6 +109,20 @@ function AmountCell({
       <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
         {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
       </div>
+    </td>
+  )
+}
+
+/** 手續費儲存格：主數字為費稅合計，副行拆「手續費｜交易稅」；無稅（美股/僅買進）時不顯示副行 */
+function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
+  return (
+    <td className="num">
+      <div>{fmtMoney(fees, currency, 2)}</div>
+      {feesTax > 0 && (
+        <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+          手續費 {fmtMoney(fees - feesTax, currency, 2)} ｜ 交易稅 {fmtMoney(feesTax, currency, 2)}
+        </div>
+      )}
     </td>
   )
 }
@@ -240,7 +257,7 @@ function YearRows({
         <AmountCell value={row.costBasis} raw={row.rawCostBasis} currency={currency} />
         <AmountCell value={row.sellAmt} raw={row.sellGross} currency={currency} />
         <AmountCell value={row.realized} raw={rawRealized(row)} currency={currency} signed />
-        <td className="num">{fmtMoney(row.fees, currency, 2)}</td>
+        <FeeCell fees={row.fees} feesTax={row.feesTax} currency={currency} />
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
       {/* 明細列直接放在同一個表格內：巢狀表格的欄寬各自計算，數字會對不到上方欄位 */}
@@ -281,7 +298,7 @@ function YearRows({
                 <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
                 <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
                 <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
-                <td className="num">{fmtMoney(yt.fees, currency, 2)}</td>
+                <FeeCell fees={yt.fees} feesTax={yt.feesTax} currency={currency} />
                 <td className="num">{fmtQty(yt.count)}</td>
               </tr>
               {isTickerOpen &&
@@ -301,7 +318,7 @@ function YearRows({
                     <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} />
                     <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} />
                     <AmountCell value={sell.realized} raw={rawRealized(sell)} currency={currency} signed />
-                    <td className="num">{fmtMoney(sell.fees, currency, 2)}</td>
+                    <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} />
                     <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
                   </tr>
                 ))}
@@ -343,15 +360,14 @@ export function YearlyPage() {
           </div>
         </div>
         <div className="glass kpi">
-          <div className="kpi-label">歷史累計手續費</div>
+          <div className="kpi-label">歷史累計手續費 (台美股合計)</div>
           <div className="kpi-value">{summary.fees.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
           <div className="kpi-sub" title="交易稅為依證交稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）反推的估算值">
             手續費 {summary.feesBrokerage.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 交易稅 {summary.feesTax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
           </div>
-          <div className="kpi-sub">台美股合計（各依原幣別金額加總）</div>
         </div>
         <div className="glass kpi">
-          <div className="kpi-label">歷史累計交易筆數</div>
+          <div className="kpi-label">歷史累計交易筆數 (台美股合計)</div>
           <div className="kpi-value">{fmtQty(summary.count)}</div>
           <div className="kpi-sub">買入 {fmtQty(summary.buyCount)} ｜ 賣出 {fmtQty(summary.sellCount)}</div>
         </div>

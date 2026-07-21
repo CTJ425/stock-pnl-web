@@ -162,6 +162,24 @@
 
 ---
 
+## 📅 Log: 2026-07-21 15:30:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Planner**: Claude
+- **Action**: 年度明細下放手續費/交易稅拆分 (v0.2.8)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `pnlEngine.ts`: 於 `YearSummary`, `YearTickerDetail`, `SellDetail` 實作 `feesTax` 屬性與累加機制。
+- [x] `YearlyPage.tsx`: 將年度、個股、逐筆賣出明細層級的手續費欄位，改用新增的 `FeeCell` 元件，顯示費稅拆分副行。
+- [x] `YearlyPage.tsx`: 修正歷史累計手續費 KPI 與交易筆數 KPI 標籤（新增標註台美股合計）。
+- [x] `pnlEngine.test.ts`: 擴展手續費測試，加入 invariants（年度總和 = 各個股總和）與各層級欄位斷言。
+- [x] `package.json` 與 `App.tsx`: 版號更新至 0.2.8。
+- [x] 更新文件 `SPEC.md`, `PROGRESS.md`, `TASK.md`。
+- [x] 通過 `npm test` 與 `npx tsc --noEmit` 驗證。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

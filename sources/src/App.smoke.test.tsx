@@ -63,7 +63,7 @@ describe('App（本機模式煙霧測試）', () => {
 
     // 年度收益：KPI 與年度列
     await user.click(screen.getByRole('button', { name: /年度收益/ }))
-    expect(await screen.findByText('歷史累計交易筆數')).toBeTruthy()
+    expect(await screen.findByText('歷史累計交易筆數 (台美股合計)')).toBeTruthy()
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
   })
 

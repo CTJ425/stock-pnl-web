@@ -48,6 +48,7 @@ export interface SellDetail {
   rawCostBasis: number
   realized: number    // sellAmt − costBasis
   fees: number        // 該筆 fee_tax
+  feesTax: number     // 該筆證交稅估算
   avgCost: number     // 賣出當下的平均成本（含費）
   oversold: boolean   // 超賣：超賣部分成本以 0 計
 }
@@ -78,6 +79,8 @@ export interface YearTickerDetail {
   rawCostBasis: number
   realized: number
   fees: number
+  /** 證交稅估算，同 summary 口徑 */
+  feesTax: number
   count: number
   sells: SellDetail[]
 }
@@ -93,6 +96,8 @@ export interface YearSummary {
   costBasis: number
   rawCostBasis: number
   fees: number
+  /** 證交稅估算，同 summary 口徑 */
+  feesTax: number
   count: number
   tickers: Record<string, YearTickerDetail>
 }
@@ -180,6 +185,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         costBasis: 0,
         rawCostBasis: 0,
         fees: 0,
+        feesTax: 0,
         count: 0,
         tickers: {},
       }
@@ -219,6 +225,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         rawCostBasis: 0,
         realized: 0,
         fees: 0,
+        feesTax: 0,
         count: 0,
         sells: [],
       }
@@ -238,6 +245,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         : 0
     ledger.summary.feesTax += estTax
     ledger.summary.feesBrokerage += tx.fee_tax - estTax
+    y.feesTax += estTax
+    yt.feesTax += estTax
 
     if (tx.tx_type === 'BUY') {
       ledger.summary.buyCount++
@@ -292,6 +301,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         rawCostBasis,
         realized,
         fees: tx.fee_tax,
+        feesTax: estTax,
         avgCost,
         oversold: matchedQty < tx.qty,
       })

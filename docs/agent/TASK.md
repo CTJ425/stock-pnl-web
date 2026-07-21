@@ -2,11 +2,28 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-21 09:52:39 Asia/Taipei
+- Timestamp: 2026-07-21 15:30:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 7: 年度明細下放手續費/交易稅拆分 (v0.2.8)
+- **Status**: DONE
+- **Planner**: Claude
+- **Implementer**: agy (delegated)
+- **Timestamp**: 2026-07-21 15:30:00 Asia/Taipei
+- **Target Version**: v0.2.8
+
+#### Objective
+將 v0.2.7 新增的 summary 層級交易稅估算下放到年度表格的各個層級（年度、個股、逐筆明細），並調整相關 KPI 標籤。
+
+#### Scope / Allowed Changes
+- `sources/src/utils/pnlEngine.ts`
+- `sources/src/utils/pnlEngine.test.ts`
+- `sources/src/components/YearlyReport/YearlyPage.tsx`
+- `sources/package.json`
+- `sources/src/App.tsx`
 
 ### Task 6: 歷史累計手續費拆分 (v0.2.7)
 - **Status**: DONE

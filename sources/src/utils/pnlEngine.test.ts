@@ -220,6 +220,20 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
     expect(summary.feesTax).toBe(0 + 360 + 100 + 0 + 0 + 1)
     expect(summary.feesBrokerage).toBe(142 + (531 - 360) + (142 - 100) + 142 + 2 + 0)
     expect(summary.feesBrokerage + summary.feesTax).toBe(summary.fees)
+
+    const y2024 = ledger.yearly[2024]
+    expect(y2024.feesTax).toBe(461)
+
+    let ytSumFeesTax = 0
+    for (const key of Object.keys(y2024.tickers)) {
+      ytSumFeesTax += y2024.tickers[key].feesTax
+    }
+    expect(ytSumFeesTax).toBe(y2024.feesTax)
+
+    const yt2330 = y2024.tickers['TPE:2330']
+    expect(yt2330.feesTax).toBe(361)
+    expect(yt2330.sells[0].feesTax).toBe(360)
+    expect(yt2330.sells[1].feesTax).toBe(1)
   })
 })
 
