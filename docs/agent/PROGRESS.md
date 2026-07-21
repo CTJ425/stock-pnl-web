@@ -135,6 +135,18 @@
 
 ---
 
+## 📅 Log: 2026-07-21 14:00:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 移除年度收益表格垂直捲動（使用者回饋：不要上下拉 bar）
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `YearlyPage.tsx` / `index.css`: 移除 `.table-scroll-y`（480px 高度上限、sticky 表頭），表格恢復完整展開。
+- [x] build 與 85/85 測試通過。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

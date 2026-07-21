@@ -167,7 +167,7 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
           （尚無交易紀錄）
         </div>
       ) : (
-        <div className="glass table-scroll table-scroll-y">
+        <div className="glass table-scroll">
           <table className="data-table">
             <thead>
               <tr>

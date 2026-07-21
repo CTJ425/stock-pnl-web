@@ -559,19 +559,6 @@ table.data-table {
   margin-right: 10px;
 }
 
-/* 年度收益表格：限制高度改為垂直捲動，表頭釘選（用不透明 --panel 蓋住捲過的列） */
-.table-scroll-y {
-  max-height: 480px;
-  overflow-y: auto;
-}
-
-.table-scroll-y .data-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--panel);
-}
-
 .year-toggle {
   appearance: none;
   padding: 0;
