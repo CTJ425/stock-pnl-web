@@ -291,6 +291,35 @@
 
 ---
 
+## 2026-07-21 15:58:00 Asia/Taipei — 版本徽章回歸左下角、未實現損益改稱「淨」(v0.3.3)
+
+- **Agent**: Claude（小幅 UI 調整，未達委派 agy 的損益平衡點）
+- **Action**: Relocate version stamp; rename unrealized P&L to 「淨損益」
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] 新增 `src/version.ts` 作為版本資訊**單一來源**（`APP_VERSION` / `APP_AUTHOR`）。
+      先前 v0.3.0 把版號硬編在 `ServiceStatusPage.tsx`，與 `package.json` 各走各的，已漂移成 `v0.3` vs `0.3.2`。
+- [x] `App.tsx` + `index.css`：還原 v0.2.8 的 `.version-badge`（fixed、左下 14/12px、`pointer-events: none` 不擋點擊）。
+- [x] `ServiceStatusPage.tsx`：移除「版本戳記」區塊；`runHealthCheck(APP_VERSION)` 改用共用常數，
+      「應用程式」元件的檢測註記仍帶版號，功能不受影響。
+- [x] `DashboardPage.tsx`：表格欄位與兩張 KPI 一律改名為「未實現淨損益」；
+      欄位 `?` 說明改以「『淨』代表把交易成本都算進去」開頭，明列買入手續費 / 台股賣出手續費 + 證交稅。
+- [x] `DashboardPage.tsx`：台股 KPI 的「主數字已預扣賣出手續費與證交稅」那行改收進卡片標題 `title` tooltip；
+      美股 KPI 標題同步補 tooltip 說明「不預扣賣出費用」，避免「淨」字被誤讀為兩市場口徑相同。
+- [x] `App.smoke.test.tsx`：新增 2 個測試鎖住上述行為（徽章存在且含版號、狀態頁無「版本戳記」、
+      KPI 名稱與 tooltip、預扣說明不再單獨成行），並在既有流程補驗表頭為「未實現淨損益」。
+- [x] `package.json` 版本 bump 至 `0.3.3`。
+- [x] 驗證：`npm run build` 通過；`npm test -- --run` 92/92 通過（原 90 + 新增 2）。
+
+### 教訓
+- `/verify` skill 記載的 Playwright 走法**此環境已失效**（`~/.npm/_npx` 快取與 `~/.cache/ms-playwright` 皆已無 playwright，
+  npx 快取本來就會被清）。這次改以既有的 `App.smoke.test.tsx`（jsdom + Testing Library）驗證 UI 文案與 DOM，
+  比一次性的瀏覽器腳本更耐久，且變成回歸測試。往後 UI 文案 / 結構類驗證優先走 smoke test，
+  真正需要像素或版面掃描（例如頁首換行）時才補裝 Playwright。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

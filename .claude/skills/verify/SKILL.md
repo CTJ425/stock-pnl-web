@@ -13,7 +13,11 @@ cd sources && npm run dev   # http://localhost:5173，未設 Supabase env 時自
 
 ## 以 Playwright 驅動
 
-- 專案未安裝 playwright，但 npx 快取有：以
+> ⚠️ 2026-07-21 實測：`~/.npm/_npx` 與 `~/.cache/ms-playwright` 已無 playwright（npx 快取會被清）。
+> 純文案 / DOM 結構的驗證請優先加進 `src/App.smoke.test.tsx`（jsdom + Testing Library）——
+> 比一次性瀏覽器腳本耐久，還順便變成回歸測試。真正需要像素或版面掃描時，才 `npm i -D playwright && npx playwright install chromium`。
+
+- 專案未安裝 playwright，若 npx 快取仍在：以
   `NODE_PATH=$(find ~/.npm/_npx -maxdepth 4 -name playwright -type d | head -1 | xargs dirname) node <script>.js`
   執行 `require('playwright')` 腳本；chromium 已裝於 `~/.cache/ms-playwright`。
 - 免登入注入測試資料（localStorage）後 `page.reload()`：

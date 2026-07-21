@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { APP_AUTHOR, APP_VERSION } from './version'
 
 describe('App（本機模式煙霧測試）', () => {
   beforeEach(() => {
@@ -24,6 +25,36 @@ describe('App（本機模式煙霧測試）', () => {
     const wsSelect = screen.getByLabelText('切換工作區') as HTMLSelectElement
     await waitFor(() => expect(wsSelect.options.length).toBe(1))
     expect(wsSelect.options[0].text).toBe('我的投資組合')
+  })
+
+  it('版本標記固定於左下角徽章，不再出現在服務狀態頁', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<App />)
+    await screen.findByText('本機模式')
+
+    const badge = container.querySelector('.version-badge')
+    expect(badge).toBeTruthy()
+    expect(badge!.textContent).toContain(APP_VERSION)
+    expect(badge!.textContent).toContain(APP_AUTHOR)
+
+    await user.click(screen.getByRole('button', { name: /服務狀態/ }))
+    expect(await screen.findByText('關於本專案')).toBeTruthy()
+    expect(screen.queryByText('版本戳記')).toBeNull()
+  })
+
+  it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
+    expect(await screen.findByText('台股未實現淨損益')).toBeTruthy()
+    expect(screen.getByText('美股未實現淨損益')).toBeTruthy()
+    // 說明改為卡片標題的 tooltip，不再佔一行
+    expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
+    expect(screen.getByText('台股未實現淨損益').getAttribute('title')).toContain(
+      '已預扣賣出手續費與證交稅',
+    )
   })
 
   it('新增台股買入交易 → 三個頁面同步呈現', async () => {
@@ -60,6 +91,7 @@ describe('App（本機模式煙霧測試）', () => {
     // Dashboard：持股與均價 (500712 / 1000 = 500.712 → NT$500.71)
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
     expect(await screen.findByText('NT$500.71')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: /未實現淨損益/ })).toBeTruthy()
 
     // 年度收益：KPI 與年度列
     await user.click(screen.getByRole('button', { name: /年度收益/ }))

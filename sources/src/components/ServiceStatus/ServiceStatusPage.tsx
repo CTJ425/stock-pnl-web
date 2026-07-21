@@ -14,9 +14,7 @@ import {
   runHealthCheck,
 } from '../../services/serviceHealth'
 import { readPriceCache } from '../../services/priceProxy'
-
-const APP_VERSION = 'v0.3'
-const APP_AUTHOR = 'Ivan Chen'
+import { APP_VERSION } from '../../version'
 
 /** 與 Dashboard 的「現價更新於」同格式：24 小時制、在地時區 */
 function fmtTime(iso: string): string {
@@ -153,15 +151,6 @@ export function ServiceStatusPage() {
   
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', paddingBottom: 40 }}>
-      <div className="section glass" style={{ padding: '24px' }}>
-        <div className="section-title">
-          <h2>版本戳記</h2>
-        </div>
-        <div style={{ fontWeight: 700, fontSize: '26px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {APP_VERSION} <span style={{ color: 'var(--ink-muted)', fontSize: '20px', fontWeight: 400 }}>|</span> {APP_AUTHOR}
-        </div>
-      </div>
-      
       <div className="section glass" style={{ padding: '24px' }}>
         <div className="section-title">
           <h2>關於本專案</h2>
