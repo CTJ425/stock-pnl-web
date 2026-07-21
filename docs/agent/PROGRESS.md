@@ -109,6 +109,19 @@
 
 ---
 
+## 📅 Log: 2026-07-21 13:05:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 年度收益縮排再調整（使用者回饋：圖示排一直線、逐筆明細貼齊父層）
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `YearlyPage.tsx`: 展開圖示改為全層級同一直欄（拿掉個股列的 32px 縮排），層級由列底色與字重呈現。
+- [x] `YearlyPage.tsx`: 逐筆賣出文字縮排 96px → 32px，貼齊父層個股文字起點。
+- [x] Playwright 驗證各層圖示/文字座標對齊，build 與 85/85 測試通過。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

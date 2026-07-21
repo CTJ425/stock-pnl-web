@@ -228,8 +228,8 @@ function YearRows({
             <Fragment key={yt.key}>
               <tr className="detail-row">
                 <td>
-                  {/* 縮排一層（32 = 圖示 22 + 間距 10），無展開鈕時以空槽補位，文字才會逐層對齊 */}
-                  <div className="cell-tree" style={{ paddingLeft: 32 }}>
+                  {/* 圖示與年度列同一直欄（無鈕以空槽補位），層級由列底色與字重呈現 */}
+                  <div className="cell-tree">
                     {yt.sells.length > 0 ? (
                       <button
                         className="year-toggle"
@@ -264,8 +264,8 @@ function YearRows({
                 yt.sells.map((sell) => (
                   <tr key={sell.txId} className="detail-row sell-row">
                     <td title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
-                      {/* 縮排三層（96 = 32 × 3）：比上一層的個股文字再深一層，層級才明顯 */}
-                      <div className="cell-tree" style={{ paddingLeft: 96 }}>
+                      {/* 貼齊父層個股文字起點（32 = 圖示 22 + 間距 10） */}
+                      <div className="cell-tree" style={{ paddingLeft: 32 }}>
                         {sell.date}　賣出 {fmtQty(sell.qty)} 股 ｜ {sell.price}
                         {sell.oversold && (
                           <span className="badge" style={{ marginLeft: 6 }} title="超賣：超賣部分成本以 0 計算">
