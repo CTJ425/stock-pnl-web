@@ -42,7 +42,7 @@ const HELP = {
     '以此價格把手上持股全部賣出，扣掉賣出手續費與證交稅後恰好不賺不賠的最低價格。高於此價賣出才真正獲利。',
   mktVal: '現價 × 持有股數。尚未取得現價時顯示「—」。',
   unrealized:
-    '若以現價全部賣出的預估損益。台股已預先扣除賣出手續費與證交稅，美股不預扣（各券商收費結構差異大）。實際成交價與此估算會有落差。下方「未含費」為不計任何費用的純價差（市值 − 未含費成本），與年度收益頁的口徑一致。',
+    '若以現價全部賣出的預估損益。台股已預先扣除賣出手續費與證交稅，美股不預扣（各券商收費結構差異大）。實際成交價與此估算會有落差。下方「未含費」為不計任何費用的純價差（市值 − 未含費成本），與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅（美股僅含買入手續費）。與年度收益頁的口徑一致。',
   roi: '未實現損益 ÷ 目前部位成本。只計算手上還持有的部位，與券商 APP 同口徑；已經賣掉結清的歷史績效請看「年度收益」頁。',
 } as const
 
@@ -162,7 +162,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                     {rawUnrealized !== null && (
                       <div
                         style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
-                        title="不計任何手續費的純價差：市值 − 未含費成本"
+                        title={currency === 'USD' ? '不計任何手續費的純價差：市值 − 未含費成本。美股不預扣賣出費用，與主數字的差額 = 當初買入手續費' : '不計任何手續費的純價差：市值 − 未含費成本。與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅'}
                       >
                         未含費 {fmtSignedMoney(rawUnrealized, currency)}
                       </div>
@@ -224,7 +224,7 @@ export function DashboardPage() {
           <div className={`kpi-value ${pnlClass(twUnreal)}`}>
             {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(twUnreal, 'TWD')}
           </div>
-          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本">
+          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本。與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅">
             未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnrealRaw === null ? '—' : fmtSignedMoney(twUnrealRaw, 'TWD')}
           </div>
           <div className="kpi-sub">主數字已預扣賣出手續費與證交稅</div>
@@ -240,7 +240,7 @@ export function DashboardPage() {
           <div className={`kpi-value ${pnlClass(usUnreal)}`}>
             {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(usUnreal, 'USD')}
           </div>
-          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本">
+          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本。美股不預扣賣出費用，與主數字的差額 = 當初買入手續費">
             未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnrealRaw === null ? '—' : fmtSignedMoney(usUnrealRaw, 'USD')}
           </div>
         </div>

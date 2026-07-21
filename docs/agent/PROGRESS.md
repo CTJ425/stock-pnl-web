@@ -262,6 +262,35 @@
 
 ---
 
+## 📅 Log: 2026-07-21 16:30:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Planner**: Claude
+- **Action**: Fix header wrapping & clarify unrealized P&L gap in UI (v0.3.2)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `index.css`: Fixed header wrapping in Supabase mode by moving `.app-header-inner`, `.tab`, and `.user-email` rules out of `@media (max-width: 1180px)` into unconditional rules. Root cause: fixed 1180px container makes viewport media queries ineffective above that width; local mode masked it because its meta area is much narrower than Supabase mode's email+logout.
+- [x] `index.css`: Bounded `.ws-select select` with `max-width: 180px` unconditionally to prevent long workspace names from pushing the row over.
+- [x] `DashboardPage.tsx`: Clarified the unrealized P&L fee gap tooltip text in table cells, KPIs, and help icon, detailing the gap composition (buy fee + estimated sell fee/tax, and buy fee only for US stocks).
+- [x] `package.json`: Bumped version to `0.3.2`.
+- [x] Verified with `npm run build` and `npm test -- --run`.
+
+### Claude review 補正
+- [x] agy 的修正解決了寬螢幕（≥1220px）的換行，但 review 時實測發現
+      **窄寬度 + Supabase 模式仍換行**（1024 / 800 / 730px）：email 截斷後仍佔 132px，
+      而窄寬度斷點當初是照本機模式調的。補一條 `@media (max-width: 1220px) { .user-email { display: none } }`
+      ——完整信箱本來就在登出鈕的 title，收起不會遺失資訊。
+- [x] 註解修正：原本寫「先收間距」與「手機版 ≤700px」，與實際的無條件套用及 720px 斷點不符；
+      並補記「調整斷點務必以 Supabase 模式驗證」的教訓。
+- [x] 驗證：**兩種模式**各自 730–1920px 每 10px 掃描，全部單行；`npm run build` 與 90/90 測試通過。
+
+### 教訓
+- 本機模式的「本機模式」標籤比 Supabase 模式的 email + 登出鈕窄約 140px，
+  只測本機模式會漏掉正式環境的版面問題。往後頁首相關變更一律以 Supabase 模式為準。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

@@ -1239,25 +1239,44 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- 頁首單行保障 ----------
- * 分頁增加到四個後，中等寬度的桌面會把右側工作區與狀態擠到第二行。
- * 改為逐級讓步：先收間距，再收品牌文字，最後分頁只留圖示（名稱移到 title / aria-label）。
- * 手機版 (≤700px) 仍維持分頁獨占一列的既有設計——該寬度強壓單行會小到無法點擊。
+ * 分頁增加到四個後，右側的工作區與帳號狀態會被擠到第二行。
+ *
+ * 關鍵：容器 max-width 1180px 使頁首可用寬度恆為 1140px，與視窗寬度無關，
+ * 因此間距與信箱截斷必須無條件套用——只綁 media query 的話，1180px 以上
+ * 反而完全不生效（1920px 與 1220px 面對的是同一個 1140px）。
+ *
+ * 逐級讓步：無條件收間距與信箱寬度 → 1220px 收起信箱（完整值仍在登出鈕 title）
+ * → 1120px 收起品牌文字 → 1020px 分頁只留圖示（名稱移到 title / aria-label）。
+ * 手機版 (≤720px) 仍維持分頁獨占一列——該寬度強壓單行會小到無法點擊。
+ *
+ * 註：Supabase 模式的 email + 登出鈕比本機模式的「本機模式」標籤寬約 140px，
+ * 調整斷點時務必以 Supabase 模式驗證。
  */
-@media (max-width: 1180px) {
-  .app-header-inner {
-    gap: 10px 12px;
-  }
+.app-header-inner {
+  gap: 10px 12px;
+}
 
-  .tab {
-    padding: 7px 12px;
-  }
+.tab {
+  padding: 7px 12px;
+}
 
-  /* 信箱過長時截斷，完整內容仍在登出鈕的 title */
+.ws-select select {
+  max-width: 180px;
+}
+
+/* 信箱過長時截斷，完整內容仍在登出鈕的 title */
+.user-email {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Supabase 模式的 email + 登出鈕比本機模式的「本機模式」標籤寬約 140px，
+   容器寬度吃緊時先收信箱——完整信箱仍在登出鈕的 title */
+@media (max-width: 1220px) {
   .user-email {
-    max-width: 132px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: none;
   }
 }
 
