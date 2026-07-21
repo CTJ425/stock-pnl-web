@@ -44,3 +44,7 @@
 
 - 架構與系統設計文件：[system_design.md](file:///home/ivan/stock-pnl-web/docs/architecture/system_design.md)
 - 資料庫 Schema：[supabase_schema.sql](file:///home/ivan/stock-pnl-web/docs/database/supabase_schema.sql)
+
+## 新增模組：服務狀態 (v0.3.0)
+- 新增 `serviceHealth.ts` 提供 `runHealthCheck` 執行各項服務健康檢測（含 API 連線及延遲量測），與 `ServiceStatusPage.tsx` 以 GitHub Status 風格展示檢測結果及快取狀態。
+- 本機模式下，Supabase 相關檢測自動降級標記為「未啟用 (idle)」。

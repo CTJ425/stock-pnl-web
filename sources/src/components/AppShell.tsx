@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  Activity,
   CalendarRange,
   HardDrive,
   LayoutDashboard,
@@ -27,13 +28,15 @@ import { TransactionsPage } from './Transactions/TransactionsPage'
 import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
+import { ServiceStatusPage } from './ServiceStatus/ServiceStatusPage'
 
-type Tab = 'dashboard' | 'yearly' | 'transactions'
+type Tab = 'dashboard' | 'yearly' | 'transactions' | 'status'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'dashboard', label: '庫存總覽', icon: LayoutDashboard },
   { id: 'yearly', label: '年度收益', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', icon: NotebookPen },
+  { id: 'status', label: '服務狀態', icon: Activity },
 ]
 
 const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
@@ -375,6 +378,7 @@ export function AppShell() {
             {tab === 'dashboard' && <DashboardPage />}
             {tab === 'yearly' && <YearlyPage />}
             {tab === 'transactions' && <TransactionsPage />}
+            {tab === 'status' && <ServiceStatusPage />}
           </>
         )}
       </main>

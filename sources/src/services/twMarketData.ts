@@ -49,6 +49,19 @@ function readCache(): TwStockRow[] | null {
   }
 }
 
+/** 供服務狀態頁讀取台股清單快取狀態；不觸發抓取、不套用 TTL */
+export function readTwListCacheMeta(): { at: number; count: number } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CacheShape
+    if (!Array.isArray(parsed.rows)) return null
+    return { at: parsed.at, count: parsed.rows.length }
+  } catch {
+    return null
+  }
+}
+
 function writeCache(rows: TwStockRow[]): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows } satisfies CacheShape))

@@ -656,23 +656,7 @@ table.data-table {
   box-shadow: 0 10px 30px rgba(79, 70, 229, 0.45);
 }
 
-/* 左下角固定版本標記 */
-.version-badge {
-  position: fixed;
-  left: 14px;
-  bottom: 12px;
-  z-index: 90;
-  font-size: 11px;
-  color: var(--ink-muted);
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  pointer-events: none;
-  user-select: none;
-}
+
 
 /* ---------- 表單 ---------- */
 .field {
@@ -1177,6 +1161,81 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ---------- 服務狀態 ---------- */
+.status-banner {
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--border);
+}
+.status-banner.ok {
+  background: color-mix(in srgb, var(--notice-ok-ink) 12%, transparent);
+  border-color: color-mix(in srgb, var(--notice-ok-ink) 25%, transparent);
+}
+.status-banner.degraded {
+  background: color-mix(in srgb, var(--notice-warn-ink) 12%, transparent);
+  border-color: color-mix(in srgb, var(--notice-warn-ink) 25%, transparent);
+}
+.status-banner.down {
+  background: color-mix(in srgb, var(--notice-err-ink) 12%, transparent);
+  border-color: color-mix(in srgb, var(--notice-err-ink) 25%, transparent);
+}
+.status-group {
+  margin-bottom: 24px;
+}
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.status-row:last-child {
+  border-bottom: none;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+.status-dot.ok { background-color: var(--notice-ok-ink); }
+.status-dot.degraded { background-color: var(--notice-warn-ink); }
+.status-dot.down { background-color: var(--notice-err-ink); }
+.status-dot.idle { background-color: var(--ink-muted); }
+
+.uptime-bar {
+  display: flex;
+  gap: 2px;
+  margin: 8px 14px 0;
+}
+.uptime-cell {
+  flex: 1;
+  height: 22px;
+  border-radius: 2px;
+  min-width: 3px;
+}
+.uptime-cell.ok { background-color: var(--notice-ok-ink); }
+.uptime-cell.degraded { background-color: var(--notice-warn-ink); }
+.uptime-cell.down { background-color: var(--notice-err-ink); }
+.uptime-cell.idle { background-color: var(--ink-muted); }
+/* 尚無紀錄的格子：要看得出「這裡有格子但沒資料」，太淡會讓條狀圖看起來只有半截 */
+.uptime-cell.empty {
+  background-color: var(--border-strong);
+  opacity: 0.35;
+}
+
+.uptime-hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin-bottom: 16px;
 }
 
 /* ---------- 行動裝置 (RWD) ---------- */

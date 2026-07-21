@@ -3,10 +3,6 @@ import { WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthPage } from './components/Auth/AuthPage'
 import { AppShell } from './components/AppShell'
 
-/** 畫面左下角固定顯示的版本標記 */
-const APP_VERSION = 'v0.2.8'
-const APP_AUTHOR = 'Ivan Chen'
-
 function AppInner() {
   const { user, loading } = useAuth()
 
@@ -33,9 +29,6 @@ export default function App() {
   return (
     <AuthProvider>
       <AppInner />
-      <div className="version-badge">
-        {APP_VERSION} | {APP_AUTHOR}
-      </div>
     </AuthProvider>
   )
 }

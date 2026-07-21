@@ -47,7 +47,8 @@ export function isFresh(key: string, quote: PriceQuote | undefined, now: number)
   return Number.isFinite(at) && now - at < cacheTtlMs(key)
 }
 
-function readPriceCache(): PriceMap {
+/** 供服務狀態頁讀取報價快取狀態 */
+export function readPriceCache(): PriceMap {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return {}

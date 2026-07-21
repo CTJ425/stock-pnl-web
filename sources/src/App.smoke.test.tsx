@@ -65,6 +65,12 @@ describe('App（本機模式煙霧測試）', () => {
     await user.click(screen.getByRole('button', { name: /年度收益/ }))
     expect(await screen.findByText('歷史累計交易筆數 (台美股合計)')).toBeTruthy()
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
+
+    // 服務狀態：本機模式下後端元件應為「未啟用」而非故障，且整體仍為正常
+    await user.click(screen.getByRole('button', { name: /服務狀態/ }))
+    expect(await screen.findByText('所有系統運作正常')).toBeTruthy()
+    expect(screen.getByText('Edge Function (stock-price)')).toBeTruthy()
+    expect(screen.getAllByText('未啟用').length).toBeGreaterThan(0)
   })
 
   it('編輯交易 → 修改單價後自動重算手續費並更新列表', async () => {

@@ -8,6 +8,16 @@
 
 ## 📋 Active Tasks
 
+### Task 8: Add a GitHub-Status-style 服務狀態 page and retire the floating version badge (v0.3.0)
+- **Status**: DONE
+- **Planner**: Claude
+- **Implementer**: agy (delegated)
+- **Timestamp**: 2026-07-21 14:45:00 Asia/Taipei
+- **Target Version**: v0.3.0
+
+#### Objective
+加入 ServiceStatusPage 以顯示系統運作狀態、API 健康檢測與快取資訊。同時移除過時的畫面浮動版本標章。
+
 ### Task 7: 年度明細下放手續費/交易稅拆分 (v0.2.8)
 - **Status**: DONE
 - **Planner**: Claude

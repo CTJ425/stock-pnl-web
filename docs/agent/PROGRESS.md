@@ -7,6 +7,47 @@
 
 ---
 
+## 📅 Log: 2026-07-21 14:45:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Planner**: Claude
+- **Action**: Implementation
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] 新增服務狀態頁面 (`ServiceStatusPage.tsx`) 與檢測邏輯 (`serviceHealth.ts`)。
+- [x] 移除畫面左下角固定版本標籤。
+- [x] 更新 `AppShell.tsx` 分頁選項加入服務狀態。
+- [x] 升級版本至 v0.3.0。
+
+---
+
+## 📅 Log: 2026-07-21 15:05:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 服務狀態頁 review 修復與視覺收尾 (v0.3.0)
+- **Status**: COMPLETED
+
+### 修復的缺陷（agy 交付版本無法執行）
+- [x] **白屏（阻斷級）**：`ServiceStatusPage.tsx` 將純型別以一般 import 匯入，`verbatimModuleSyntax`
+      下 Vite 執行期報 `does not provide an export named 'ComponentId'`，整個應用無法啟動。改用 `import type`。
+- [x] **白屏（阻斷級）**：lucide-react 1.24 已移除品牌圖示 `Github`，改用 `Code2`。
+- [x] **型別錯誤**：`serviceHealth.ts` 閉包內 `supabase` 的 non-null narrowing 失效，收斂至區域常數 `sb`。
+- [x] `serviceHealth.test.ts` 同樣的 type-only import 問題（TS1484）。
+
+### 驗收流程修正
+- `npx tsc --noEmit` 與 `npm test` **均無法**攔截上述白屏：前者走的 tsconfig 不含 `verbatimModuleSyntax`，
+  後者的 esbuild transform 會 tree-shake 未使用的 type import。實測反證確認唯有 **`npm run build`（`tsc -b`）** 會報 TS1484。
+  往後驗收一律以 `npm run build` 為準。
+
+### 視覺與一致性收尾
+- [x] 版本字串 `v0.3.0` → `v0.3`（依需求），README 同步。
+- [x] uptime 條說明由每個元件重複 8 次改為整頁一次；空格子改用 `--border-strong` 以免條狀圖看似只有半截。
+- [x] 檢測時間改用 `zh-TW` 24 小時制，與 Dashboard「現價更新於」一致。
+- [x] `lastSample?.results?.x` 防禦，避免歷史資料損毀時整頁崩潰。
+- [x] `App.smoke.test.tsx` 新增服務狀態分頁斷言（本機模式後端為「未啟用」且整體仍為正常）。
+- [x] 驗證：`npm run build` 通過、`npm test` 10 檔 90/90、Playwright 深淺兩主題與四個分頁零 pageerror。
+
 ## 📅 Log: 2026-07-21 09:32:30 Asia/Taipei
 
 - **Agent**: Gemini
