@@ -1261,7 +1261,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   }
 }
 
-@media (max-width: 1060px) {
+@media (max-width: 1120px) {
   .brand-text {
     display: none;
   }
@@ -1272,7 +1272,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   display: none;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1020px) {
   .tab-label {
     display: none;
   }
@@ -1288,7 +1288,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- 行動裝置 (RWD) ---------- */
-@media (max-width: 700px) {
+@media (max-width: 720px) {
   /* 分頁獨占一列：改用短標籤，四字標籤在小螢幕會折行 */
   .tab-label-short {
     display: inline;
