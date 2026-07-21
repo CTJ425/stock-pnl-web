@@ -145,6 +145,21 @@
 - [x] `YearlyPage.tsx` / `index.css`: 移除 `.table-scroll-y`（480px 高度上限、sticky 表頭），表格恢復完整展開。
 - [x] build 與 85/85 測試通過。
 
+## 📅 Log: 2026-07-21 14:05:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Planner**: Claude
+- **Action**: 歷史累計手續費拆分 (v0.2.7)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `pnlEngine.ts`: 於 `LedgerSummary` 新增 `feesBrokerage` 與 `feesTax`，並透過稅率反推估算手續費與交易稅。
+- [x] `YearlyPage.tsx`: 將年度收益頁面的歷史累計手續費 KPI 拆分為手續費與交易稅雙行顯示。
+- [x] `pnlEngine.test.ts`: 新增手續費與交易稅估算之測試案例驗證，確保拆分邏輯與總和不變。
+- [x] `package.json` 與 `App.tsx`: 版號更新至 0.2.7。
+- [x] 更新文件 `SPEC.md`, `PROGRESS.md`, `TASK.md`。
+- [x] 通過 `npm test` 與 `npx tsc --noEmit` 驗證。
+
 ---
 
 ## 🚧 Next Steps

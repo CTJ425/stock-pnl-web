@@ -8,6 +8,23 @@
 
 ## 📋 Active Tasks
 
+### Task 6: 歷史累計手續費拆分 (v0.2.7)
+- **Status**: DONE
+- **Planner**: Claude
+- **Implementer**: agy (delegated)
+- **Timestamp**: 2026-07-21 14:05:00 Asia/Taipei
+- **Target Version**: v0.2.7
+
+#### Objective
+將年度收益頁面的歷史累計手續費 KPI，透過稅率預估反推，拆分為「手續費」與「交易稅」。
+
+#### Scope / Allowed Changes
+- `sources/src/utils/pnlEngine.ts`
+- `sources/src/utils/pnlEngine.test.ts`
+- `sources/src/components/YearlyReport/YearlyPage.tsx`
+- `sources/package.json`
+- `sources/src/App.tsx`
+
 ### Task 1: 專案目錄結構與 GEMINI.md 記憶體調整
 - **Status**: DONE
 - **Allowed Changes**: `docs/`

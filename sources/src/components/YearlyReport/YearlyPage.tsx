@@ -345,6 +345,9 @@ export function YearlyPage() {
         <div className="glass kpi">
           <div className="kpi-label">歷史累計手續費</div>
           <div className="kpi-value">{summary.fees.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
+          <div className="kpi-sub" title="交易稅為依證交稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）反推的估算值">
+            手續費 {summary.feesBrokerage.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 交易稅 {summary.feesTax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          </div>
           <div className="kpi-sub">台美股合計（各依原幣別金額加總）</div>
         </div>
         <div className="glass kpi">

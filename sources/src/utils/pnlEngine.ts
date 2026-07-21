@@ -104,6 +104,10 @@ export interface LedgerSummary {
   realizedUs: number
   /** 歷史累計手續費（幣別混計，與 GAS 版 KPI 同構） */
   fees: number
+  /** 歷史累計「純手續費」估算（fees − feesTax） */
+  feesBrokerage: number
+  /** 歷史累計證交稅估算：台股賣出以 sellTaxRate 反推（floorSafe(成交價金 × 稅率)，上限為該筆 fee_tax）；買進與美股為 0 */
+  feesTax: number
   /** 歷史累計交易筆數 */
   count: number
   /** 歷史累計買入筆數 */
@@ -146,7 +150,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     holdings: [],
     yearly: {},
     years: [],
-    summary: { realizedTw: 0, realizedUs: 0, fees: 0, count: 0, buyCount: 0, sellCount: 0 },
+    summary: { realizedTw: 0, realizedUs: 0, fees: 0, feesBrokerage: 0, feesTax: 0, count: 0, buyCount: 0, sellCount: 0 },
     warnings: [],
   }
 
@@ -226,6 +230,14 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     y.fees += tx.fee_tax
     yt.count++
     yt.fees += tx.fee_tax
+
+    // 根據稅率反推估算，手動調整或當沖退稅的誤差會落在手續費上
+    const estTax =
+      tx.tx_type === 'SELL' && tx.market === 'TPE'
+        ? Math.min(floorSafe(tx.price * tx.qty * sellTaxRate(tx.ticker)), tx.fee_tax)
+        : 0
+    ledger.summary.feesTax += estTax
+    ledger.summary.feesBrokerage += tx.fee_tax - estTax
 
     if (tx.tx_type === 'BUY') {
       ledger.summary.buyCount++
