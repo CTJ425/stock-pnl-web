@@ -1238,8 +1238,62 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin-bottom: 16px;
 }
 
+/* ---------- 頁首單行保障 ----------
+ * 分頁增加到四個後，中等寬度的桌面會把右側工作區與狀態擠到第二行。
+ * 改為逐級讓步：先收間距，再收品牌文字，最後分頁只留圖示（名稱移到 title / aria-label）。
+ * 手機版 (≤700px) 仍維持分頁獨占一列的既有設計——該寬度強壓單行會小到無法點擊。
+ */
+@media (max-width: 1180px) {
+  .app-header-inner {
+    gap: 10px 12px;
+  }
+
+  .tab {
+    padding: 7px 12px;
+  }
+
+  /* 信箱過長時截斷，完整內容仍在登出鈕的 title */
+  .user-email {
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1060px) {
+  .brand-text {
+    display: none;
+  }
+}
+
+/* 短標籤預設不出現，僅手機版取代完整標籤 */
+.tab-label-short {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .tab-label {
+    display: none;
+  }
+
+  .tab {
+    padding: 7px 10px;
+  }
+
+  .ws-select select {
+    max-width: 132px;
+    padding: 7px 26px 7px 10px;
+  }
+}
+
 /* ---------- 行動裝置 (RWD) ---------- */
 @media (max-width: 700px) {
+  /* 分頁獨占一列：改用短標籤，四字標籤在小螢幕會折行 */
+  .tab-label-short {
+    display: inline;
+  }
+
   .container {
     padding: 0 14px 104px;
   }

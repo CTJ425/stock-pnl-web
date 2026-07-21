@@ -32,11 +32,12 @@ import { ServiceStatusPage } from './ServiceStatus/ServiceStatusPage'
 
 type Tab = 'dashboard' | 'yearly' | 'transactions' | 'status'
 
-const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'dashboard', label: '庫存總覽', icon: LayoutDashboard },
-  { id: 'yearly', label: '年度收益', icon: CalendarRange },
-  { id: 'transactions', label: '交易紀錄', icon: NotebookPen },
-  { id: 'status', label: '服務狀態', icon: Activity },
+/** short 供手機使用：四個分頁平分螢幕寬時，四字標籤會折行 */
+const TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
+  { id: 'dashboard', label: '庫存總覽', short: '總覽', icon: LayoutDashboard },
+  { id: 'yearly', label: '年度收益', short: '年度', icon: CalendarRange },
+  { id: 'transactions', label: '交易紀錄', short: '紀錄', icon: NotebookPen },
+  { id: 'status', label: '服務狀態', short: '狀態', icon: Activity },
 ]
 
 const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
@@ -321,18 +322,22 @@ export function AppShell() {
             <span className="brand-mark">
               <TrendingUp size={17} />
             </span>
-            股票小幫手
+            <span className="brand-text">股票小幫手</span>
           </div>
 
           <nav className="tabs" aria-label="主要頁面">
-            {TABS.map(({ id, label, icon: Icon }) => (
+            {TABS.map(({ id, label, short, icon: Icon }) => (
               <button
                 key={id}
                 className={tab === id ? 'tab active' : 'tab'}
                 onClick={() => setTab(id)}
+                /* 視窗窄時只剩圖示，名稱改由 title / aria-label 呈現 */
+                title={label}
+                aria-label={label}
               >
                 <Icon size={15} />
-                {label}
+                <span className="tab-label">{label}</span>
+                <span className="tab-label-short">{short}</span>
               </button>
             ))}
           </nav>

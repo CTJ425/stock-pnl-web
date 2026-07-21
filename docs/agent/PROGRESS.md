@@ -48,6 +48,23 @@
 - [x] `App.smoke.test.tsx` 新增服務狀態分頁斷言（本機模式後端為「未啟用」且整體仍為正常）。
 - [x] 驗證：`npm run build` 通過、`npm test` 10 檔 90/90、Playwright 深淺兩主題與四個分頁零 pageerror。
 
+## 📅 Log: 2026-07-21 15:35:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 頁首維持單行（使用者回饋：新增分頁後右側控制項被擠到第二行）
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] 量測確認換行門檻：1100px 時子元素合計 1143px 超出可用 1060px 約 83px。
+- [x] `AppShell.tsx` / `index.css`: 頁首改為逐級讓步——1180px 起縮間距與 tab padding、
+      1060px 起收起品牌文字、960px 起分頁只留圖示（名稱移至 title / aria-label）。
+- [x] 手機版 (≤700px) 分頁改用短標籤（總覽／年度／紀錄／狀態）：四個分頁平分 390px 時
+      四字標籤會折行成兩列。
+- [x] 驗證：1280/1100/1000/820px 頁首皆為單行（高 63–70px，原本 112px），
+      390px 分頁不再折行；`npm run build` 與 90/90 測試通過。
+
+---
+
 ## 📅 Log: 2026-07-21 09:32:30 Asia/Taipei
 
 - **Agent**: Gemini
