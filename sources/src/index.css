@@ -1014,6 +1014,58 @@ input[type='date']::-webkit-calendar-picker-indicator {
   flex-wrap: wrap;
 }
 
+.search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-box .search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.search-box .search-input {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 7px 28px 7px 32px;
+  outline: none;
+  width: 190px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, width 0.18s ease;
+}
+
+.search-box .search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 140, 248, 0.18);
+  width: 230px;
+}
+
+.search-box .search-clear-btn {
+  position: absolute;
+  right: 6px;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-box .search-clear-btn:hover {
+  color: var(--ink);
+}
+
 .toolbar .spacer {
   flex: 1;
 }

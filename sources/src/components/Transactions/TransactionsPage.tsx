@@ -4,7 +4,7 @@
  * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Download, NotebookPen, Pencil, Trash2, Upload } from 'lucide-react'
+import { Calculator, Download, NotebookPen, Pencil, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -17,6 +17,7 @@ import { Modal } from '../Common/Modal'
 import { CsvImportModal } from './CsvImportModal'
 import { RecalcFeesModal } from './RecalcFeesModal'
 import { TransactionForm } from './TransactionForm'
+import { filterTransactions } from './txSearch'
 
 function cashFlow(tx: Transaction): number {
   const gross = tx.price * tx.qty
@@ -97,18 +98,30 @@ export function TransactionsPage() {
   const [showRecalc, setShowRecalc] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [sort, setSort] = useState<SortState<TxSortKey>>({ key: 'tx_date', dir: 'desc' })
 
-  // 切換工作區時清空勾選：勾選的是前一個工作區的交易，不可帶到新的檢視
+  // 切換工作區時清空勾選與搜尋：勾選的是前一個工作區的交易，不可帶到新的檢視
   useEffect(() => {
     setSelected(new Set())
+    setSearchQuery('')
   }, [current?.id])
+
+  const filtered = useMemo(() => {
+    return filterTransactions(transactions, searchQuery)
+  }, [transactions, searchQuery])
 
   const sorted = useMemo(() => {
     const sign = sort.dir === 'asc' ? 1 : -1
-    return transactions.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
-  }, [transactions, sort])
+    return filtered.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
+  }, [filtered, sort])
+
+  // 可見且被勾選的交易筆數
+  const visibleSelectedCount = useMemo(
+    () => sorted.filter((tx) => selected.has(tx.id)).length,
+    [sorted, selected],
+  )
 
   const handleSort = (key: TxSortKey) =>
     setSort((prev) => nextSort(prev, key, TX_SORT_DEFAULT_DIR[key]))
@@ -170,7 +183,8 @@ export function TransactionsPage() {
   }
 
   const handleDeleteSelected = async () => {
-    const ids = sorted.filter((tx) => selected.has(tx.id)).map((tx) => tx.id)
+    const visibleSelected = sorted.filter((tx) => selected.has(tx.id))
+    const ids = visibleSelected.map((tx) => tx.id)
     if (ids.length === 0) return
     const ok = window.confirm(
       `確定刪除選取的 ${ids.length} 筆交易嗎？\n\n刪除後 Dashboard 與年度收益會立即重算，此動作無法復原。`,
@@ -181,18 +195,52 @@ export function TransactionsPage() {
     } catch {
       return // 錯誤已顯示於全域錯誤列
     }
-    setSelected(new Set())
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        next.delete(id)
+      }
+      return next
+    })
     setNotice(`🗑️ 已刪除 ${ids.length} 筆交易。`)
   }
+
+  const isFiltering = searchQuery.trim() !== ''
 
   return (
     <>
       <div className="section toolbar">
-        {selected.size > 0 && (
+        {visibleSelectedCount > 0 && (
           <button className="btn btn-danger" onClick={() => void handleDeleteSelected()}>
             <Trash2 size={15} />
-            刪除選取（{selected.size}）
+            刪除選取（{visibleSelectedCount}）
           </button>
+        )}
+        <div className="search-box">
+          <Search size={15} className="search-icon" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋代號或名稱"
+            aria-label="搜尋交易"
+            className="search-input"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="search-clear-btn"
+              aria-label="清除搜尋"
+              onClick={() => setSearchQuery('')}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {isFiltering && (
+          <span className="badge">
+            顯示 {sorted.length} / {transactions.length} 筆
+          </span>
         )}
         <div className="spacer" />
         <button
@@ -219,13 +267,25 @@ export function TransactionsPage() {
       )}
 
       <div className="section">
-        {sorted.length === 0 ? (
+        {transactions.length === 0 ? (
           <div className="glass empty-state">
             <div className="empty-icon">
               <NotebookPen size={36} />
             </div>
             <div>
               尚無交易紀錄。點右下角「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
+            </div>
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="glass empty-state">
+            <div className="empty-icon">
+              <Search size={36} />
+            </div>
+            <div>找不到符合「{searchQuery.trim()}」的交易。</div>
+            <div style={{ marginTop: 12 }}>
+              <button className="btn btn-sm" onClick={() => setSearchQuery('')}>
+                清除搜尋
+              </button>
             </div>
           </div>
         ) : (

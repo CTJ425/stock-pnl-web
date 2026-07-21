@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Gemini
-- Action: Document & Architecture Alignment
-- Status: IN_PROGRESS
-- Timestamp: 2026-07-21 09:32:30 Asia/Taipei
+- Agent: Claude
+- Action: Task 4 Code Review (v0.2.5)
+- Status: APPROVED
+- Timestamp: 2026-07-21 10:00:30 Asia/Taipei
 
 ---
 
@@ -21,6 +21,60 @@
 
 ---
 
+## 📅 Log: 2026-07-21 09:52:39 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 規劃交易紀錄搜尋欄位功能（Task 4），含完整功能規格與測試項目
+- **Status**: COMPLETED（規劃）；實作待 agy 執行，Claude 負責 review
+
+### Notes
+- 規格與測試項目詳見 `TASK.md` Task 4。
+- 關鍵設計決策：純函式過濾（`txSearch.ts`）、名稱比對需含 `displayStockName` 中文譯名、
+  「刪除選取」計數需改為「勾選且可見」、CSV 匯出不受過濾影響。
+
+---
+
+## 📅 Log: 2026-07-21 09:58:00 Asia/Taipei
+
+- **Agent**: Gemini
+- **Action**: 實作交易紀錄搜尋欄位與過濾功能 (v0.2.5)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] 建立純函式過濾模組 `txSearch.ts`，支援代號子字串、原始名稱與美股中文譯名 (`displayStockName`) 即時過濾。
+- [x] 撰寫單元測試 `txSearch.test.ts`（涵蓋 U1–U8 全部測試案例，全數通過）。
+- [x] 整合 `TransactionsPage.tsx` 工具列：新增搜尋輸入框、清除按鈕、筆數提示（「顯示 X / Y 筆」）與無結果提示畫面。
+- [x] 修正勾選與刪除選取邏輯：「全選」與「刪除選取（n）」僅作用於當前過濾可見之列，過濾條件改變時保留既有勾選狀態。
+- [x] 撰寫 UI 整合測試 `TransactionsPage.test.tsx`（涵蓋 I1–I7 全部測試案例，全數通過）。
+- [x] 更新版號與文件：Bump package.json 至 `0.2.5`、`App.tsx` 的 `APP_VERSION` 至 `v0.2.5`、更新 `README.md`。
+- [x] 驗證：`npm run lint`（0 error）、`npm test`（9/9 檔案、83/83 測試全數通過）、`npm run build`（打包成功）。
+
+---
+
+## 📅 Log: 2026-07-21 10:00:30 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: Task 4 Code Review（交易紀錄搜尋欄位 v0.2.5）
+- **Status**: APPROVED（可 commit）
+
+### Review 結果
+- 規格 1–8 全數符合：純函式 `txSearch.ts`、displayStockName 中文譯名比對、filter→sort、
+  筆數提示、勾選保留、無結果狀態區分、CSV 匯出未受影響、切換工作區清空搜尋。
+- 「刪除選取」計數與刪除範圍已統一為「勾選且可見」（`visibleSelectedCount`），
+  且批次刪除後只移除已刪 id、保留隱藏勾選——優於原規格的清空做法。
+- 驗證：`npm test` 9 檔 83/83 通過、`npm run lint` 僅既有 3 個 fast-refresh 警告、
+  `npm run build` 成功。
+- 輕微議題（不擋驗收，留待後續順手處理）：
+  1. `TransactionsPage.test.tsx` I5 直接覆寫 `window.confirm` 未還原，建議改用
+     `vi.spyOn(window, 'confirm')` + afterEach 還原，避免測試順序耦合。
+  2. 無結果狀態存在兩個「清除搜尋」同名按鈕（輸入框 X 與空狀態按鈕），
+     螢幕閱讀器辨識略有重複；可改為不同 aria-label。
+  3. 空狀態按鈕使用 inline style `marginTop`，可移入 CSS class。
+- Scope 備註：`App.tsx`（APP_VERSION）與 `README.md` 版本紀錄不在原 Allowed Changes 清單，
+  但屬既有版本 bump 慣例，予以接受；未來規劃時應將此二檔納入清單。
+
+---
+
 ## 🚧 Next Steps
-1. 設定 GitHub Actions 自動部署流程。
-2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署。
+1. 設定 GitHub Actions 自動部署流程 (Task 2)。
+2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。
