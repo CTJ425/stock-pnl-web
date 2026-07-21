@@ -143,7 +143,7 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
           （尚無交易紀錄）
         </div>
       ) : (
-        <div className="glass table-scroll">
+        <div className="glass table-scroll table-scroll-y">
           <table className="data-table">
             <thead>
               <tr>
@@ -197,17 +197,21 @@ function YearRows({
     <>
       <tr style={{ fontWeight: 600 }}>
         <td>
-          {row.details.length > 0 && (
-            <button
-              className="year-toggle"
-              onClick={onToggle}
-              aria-expanded={isOpen}
-              aria-label={`${isOpen ? '收合' : '展開'} ${row.year} 年度個股明細`}
-            >
-              {isOpen ? <Minus size={13} /> : <Plus size={13} />}
-            </button>
-          )}
-          {row.year}
+          <div className="cell-tree">
+            {row.details.length > 0 ? (
+              <button
+                className="year-toggle"
+                onClick={onToggle}
+                aria-expanded={isOpen}
+                aria-label={`${isOpen ? '收合' : '展開'} ${row.year} 年度個股明細`}
+              >
+                {isOpen ? <Minus size={13} /> : <Plus size={13} />}
+              </button>
+            ) : (
+              <span className="toggle-slot" />
+            )}
+            {row.year}
+          </div>
         </td>
         <AmountCell value={row.costBasis} raw={row.rawCostBasis} currency={currency} />
         <AmountCell value={row.sellAmt} raw={row.sellGross} currency={currency} />
@@ -223,27 +227,32 @@ function YearRows({
           return (
             <Fragment key={yt.key}>
               <tr className="detail-row">
-                <td style={{ paddingLeft: 46 }}>
-                  {yt.sells.length > 0 && (
-                    <button
-                      className="year-toggle"
-                      onClick={() => onToggleTicker(tickerKey)}
-                      aria-expanded={isTickerOpen}
-                      aria-label={`${isTickerOpen ? '收合' : '展開'} ${yt.ticker} 逐筆賣出明細`}
-                    >
-                      {isTickerOpen ? <Minus size={13} /> : <Plus size={13} />}
-                    </button>
-                  )}
-                  {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
-                  {yt.sellAmt === 0 && (
-                    <span
-                      className="badge"
-                      style={{ marginLeft: 6 }}
-                      title="這一年只有買進、沒有賣出，因此不產生已實現損益"
-                    >
-                      僅買進
-                    </span>
-                  )}
+                <td>
+                  {/* 縮排一層（32 = 圖示 22 + 間距 10），無展開鈕時以空槽補位，文字才會逐層對齊 */}
+                  <div className="cell-tree" style={{ paddingLeft: 32 }}>
+                    {yt.sells.length > 0 ? (
+                      <button
+                        className="year-toggle"
+                        onClick={() => onToggleTicker(tickerKey)}
+                        aria-expanded={isTickerOpen}
+                        aria-label={`${isTickerOpen ? '收合' : '展開'} ${yt.ticker} 逐筆賣出明細`}
+                      >
+                        {isTickerOpen ? <Minus size={13} /> : <Plus size={13} />}
+                      </button>
+                    ) : (
+                      <span className="toggle-slot" />
+                    )}
+                    {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
+                    {yt.sellAmt === 0 && (
+                      <span
+                        className="badge"
+                        style={{ marginLeft: 6 }}
+                        title="這一年只有買進、沒有賣出，因此不產生已實現損益"
+                      >
+                        僅買進
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
                 <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
@@ -254,13 +263,16 @@ function YearRows({
               {isTickerOpen &&
                 yt.sells.map((sell) => (
                   <tr key={sell.txId} className="detail-row sell-row">
-                    <td style={{ paddingLeft: 70 }} title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
-                      {sell.date}　賣出 {fmtQty(sell.qty)} 股 @ {sell.price}
-                      {sell.oversold && (
-                        <span className="badge" style={{ marginLeft: 6 }} title="超賣：超賣部分成本以 0 計算">
-                          超賣
-                        </span>
-                      )}
+                    <td title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
+                      {/* 縮排三層（96 = 32 × 3）：比上一層的個股文字再深一層，層級才明顯 */}
+                      <div className="cell-tree" style={{ paddingLeft: 96 }}>
+                        {sell.date}　賣出 {fmtQty(sell.qty)} 股 ｜ {sell.price}
+                        {sell.oversold && (
+                          <span className="badge" style={{ marginLeft: 6 }} title="超賣：超賣部分成本以 0 計算">
+                            超賣
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} />
                     <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} />

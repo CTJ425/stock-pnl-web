@@ -542,6 +542,36 @@ table.data-table {
   color: var(--ink-muted);
 }
 
+/* 年度收益三層縮排：圖示欄固定 22px + 10px 間距（合計 32px 一層），
+   無展開鈕的列以 .toggle-slot 空槽補位，各層文字才會垂直對齊 */
+.cell-tree {
+  display: flex;
+  align-items: center;
+}
+
+.cell-tree .year-toggle {
+  flex: none;
+}
+
+.toggle-slot {
+  flex: none;
+  width: 22px;
+  margin-right: 10px;
+}
+
+/* 年度收益表格：限制高度改為垂直捲動，表頭釘選（用不透明 --panel 蓋住捲過的列） */
+.table-scroll-y {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.table-scroll-y .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+}
+
 .year-toggle {
   appearance: none;
   border: 1px solid var(--border-strong);
