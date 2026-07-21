@@ -95,6 +95,20 @@
 
 ---
 
+## 📅 Log: 2026-07-21 12:35:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 年度收益視覺調整（使用者回饋，隨 v0.2.6 後續，commit 06b7be7）
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `YearlyPage.tsx` + `index.css`: 三層縮排改固定 32px 一層（`.cell-tree` flex 排版），無展開鈕的列以 `.toggle-slot` 空槽補位，圖示/文字垂直對齊。
+- [x] `index.css`: 年度表格加 `.table-scroll-y`（max-height 480px 垂直捲動 + sticky 表頭，底色 `--panel`）。
+- [x] 逐筆賣出明細分隔符「@」改為「｜」。
+- [x] Playwright 目測驗證對齊/捲動/釘選表頭，`npm run build` 與 85/85 測試通過，Pages 部署成功。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。
