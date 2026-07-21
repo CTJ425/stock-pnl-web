@@ -537,6 +537,11 @@ table.data-table {
   font-weight: 400;
 }
 
+.detail-row.sell-row td {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
 .year-toggle {
   appearance: none;
   border: 1px solid var(--border-strong);

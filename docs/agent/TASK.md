@@ -23,6 +23,26 @@
 - **Allowed Changes**: `sources/supabase/`
 - **Acceptance Criteria**: 提供標準指令說明或輔助執行 Supabase 部署與 `.env.local` 綁定。
 
+### Task 5: 年度收益頁面改版與明細展開 (v0.2.6)
+- **Status**: DONE
+- **Planner**: Claude
+- **Implementer**: agy (delegated)
+- **Timestamp**: 2026-07-21 12:03:00 Asia/Taipei
+- **Target Version**: v0.2.6
+
+#### Objective
+移除年度收益頁面的排序功能，加入第三層的逐筆賣出明細（移動平均成本口徑），並在 KPI 區塊顯示買/賣筆數拆分。
+
+#### Scope / Allowed Changes
+- `sources/src/components/YearlyReport/YearlyPage.tsx`
+- `sources/src/components/Dashboard/DashboardPage.tsx`
+- `sources/src/components/Common/HelpTh.tsx`
+- `sources/src/utils/pnlEngine.ts`
+- `sources/src/utils/pnlEngine.test.ts`
+- `sources/src/index.css`
+- `sources/package.json`
+- `docs/agent/SPEC.md`, `docs/agent/PROGRESS.md`, `docs/agent/TASK.md`
+
 ### Task 4: 交易紀錄搜尋欄位（代號 / 名稱快速過濾）
 - **Status**: DONE
 - **Planner**: Claude

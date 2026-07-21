@@ -10,18 +10,15 @@
  * 買進含當年尚未賣出的部位，與同一列的賣出三欄不是同一批股票，並列會讓人
  * 誤以為可以互相加減。engine 仍保有 buyAmt / buyGross，需要時可再接回。
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, Fragment } from 'react'
 import { CalendarRange, Minus, Plus } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { YearTickerDetail } from '../../utils/pnlEngine'
 import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
-import type { SortState } from '../Common/SortableTh'
-import { SortableTh, nextSort } from '../Common/SortableTh'
+import { HelpTh } from '../Common/HelpTh'
 import { YEAR_HELP } from './columnHelp'
-
-type YearSortKey = 'year' | 'realized' | 'costBasis' | 'sellAmt' | 'fees' | 'count'
 
 interface YearRow {
   year: number
@@ -116,23 +113,22 @@ function AmountCell({
 function YearlySection({ title, currency }: { title: string; currency: Currency }) {
   const rows = useSectionRows(currency)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
-  const [sort, setSort] = useState<SortState<YearSortKey>>({ key: 'year', dir: 'asc' })
-
-  const sortedRows = useMemo(() => {
-    const sign = sort.dir === 'asc' ? 1 : -1
-    return rows
-      .slice()
-      .sort((a, b) => sign * (a[sort.key] - b[sort.key]) || a.year - b.year)
-  }, [rows, sort])
-
-  const handleSort = (key: YearSortKey) =>
-    setSort((prev) => nextSort(prev, key, key === 'year' ? 'asc' : 'desc'))
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set())
 
   const toggle = (year: number) => {
     setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(year)) next.delete(year)
       else next.add(year)
+      return next
+    })
+  }
+
+  const toggleTicker = (key: string) => {
+    setExpandedTickers((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -151,16 +147,16 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
           <table className="data-table">
             <thead>
               <tr>
-                <SortableTh label="年度" sortKey="year" sort={sort} onSort={handleSort} help={YEAR_HELP.year} />
-                <SortableTh label="賣出成本" sortKey="costBasis" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.costBasis} />
-                <SortableTh label="賣出收入" sortKey="sellAmt" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.sellAmt} />
-                <SortableTh label="已實現損益" sortKey="realized" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.realized} />
-                <SortableTh label="手續費 / 稅金" sortKey="fees" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.fees} />
-                <SortableTh label="交易筆數" sortKey="count" sort={sort} onSort={handleSort} numeric help={YEAR_HELP.count} />
+                <HelpTh label="年度" help={YEAR_HELP.year} />
+                <HelpTh label="賣出成本" help={YEAR_HELP.costBasis} numeric />
+                <HelpTh label="賣出收入" help={YEAR_HELP.sellAmt} numeric />
+                <HelpTh label="已實現損益" help={YEAR_HELP.realized} numeric />
+                <HelpTh label="手續費 / 稅金" help={YEAR_HELP.fees} numeric />
+                <HelpTh label="交易筆數" help={YEAR_HELP.count} numeric />
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((row) => {
+              {rows.map((row) => {
                 const isOpen = expanded.has(row.year)
                 return (
                   <YearRows
@@ -169,6 +165,8 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
                     currency={currency}
                     isOpen={isOpen}
                     onToggle={() => toggle(row.year)}
+                    expandedTickers={expandedTickers}
+                    onToggleTicker={toggleTicker}
                   />
                 )
               })}
@@ -185,11 +183,15 @@ function YearRows({
   currency,
   isOpen,
   onToggle,
+  expandedTickers,
+  onToggleTicker,
 }: {
   row: YearRow
   currency: Currency
   isOpen: boolean
   onToggle: () => void
+  expandedTickers: Set<string>
+  onToggleTicker: (key: string) => void
 }) {
   return (
     <>
@@ -215,27 +217,61 @@ function YearRows({
       </tr>
       {/* 明細列直接放在同一個表格內：巢狀表格的欄寬各自計算，數字會對不到上方欄位 */}
       {isOpen &&
-        row.details.map((yt) => (
-          <tr key={yt.key} className="detail-row">
-            <td style={{ paddingLeft: 46 }}>
-              {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
-              {yt.sellAmt === 0 && (
-                <span
-                  className="badge"
-                  style={{ marginLeft: 6 }}
-                  title="這一年只有買進、沒有賣出，因此不產生已實現損益"
-                >
-                  僅買進
-                </span>
-              )}
-            </td>
-            <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
-            <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
-            <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
-            <td className="num">{fmtMoney(yt.fees, currency, 2)}</td>
-            <td className="num">{fmtQty(yt.count)}</td>
-          </tr>
-        ))}
+        row.details.map((yt) => {
+          const tickerKey = `${row.year}|${yt.key}`
+          const isTickerOpen = expandedTickers.has(tickerKey)
+          return (
+            <Fragment key={yt.key}>
+              <tr className="detail-row">
+                <td style={{ paddingLeft: 46 }}>
+                  {yt.sells.length > 0 && (
+                    <button
+                      className="year-toggle"
+                      onClick={() => onToggleTicker(tickerKey)}
+                      aria-expanded={isTickerOpen}
+                      aria-label={`${isTickerOpen ? '收合' : '展開'} ${yt.ticker} 逐筆賣出明細`}
+                    >
+                      {isTickerOpen ? <Minus size={13} /> : <Plus size={13} />}
+                    </button>
+                  )}
+                  {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
+                  {yt.sellAmt === 0 && (
+                    <span
+                      className="badge"
+                      style={{ marginLeft: 6 }}
+                      title="這一年只有買進、沒有賣出，因此不產生已實現損益"
+                    >
+                      僅買進
+                    </span>
+                  )}
+                </td>
+                <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
+                <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
+                <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
+                <td className="num">{fmtMoney(yt.fees, currency, 2)}</td>
+                <td className="num">{fmtQty(yt.count)}</td>
+              </tr>
+              {isTickerOpen &&
+                yt.sells.map((sell) => (
+                  <tr key={sell.txId} className="detail-row sell-row">
+                    <td style={{ paddingLeft: 70 }} title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
+                      {sell.date}　賣出 {fmtQty(sell.qty)} 股 @ {sell.price}
+                      {sell.oversold && (
+                        <span className="badge" style={{ marginLeft: 6 }} title="超賣：超賣部分成本以 0 計算">
+                          超賣
+                        </span>
+                      )}
+                    </td>
+                    <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} />
+                    <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} />
+                    <AmountCell value={sell.realized} raw={rawRealized(sell)} currency={currency} signed />
+                    <td className="num">{fmtMoney(sell.fees, currency, 2)}</td>
+                    <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
+                  </tr>
+                ))}
+            </Fragment>
+          )
+        })}
     </>
   )
 }
@@ -278,6 +314,7 @@ export function YearlyPage() {
         <div className="glass kpi">
           <div className="kpi-label">歷史累計交易筆數</div>
           <div className="kpi-value">{fmtQty(summary.count)}</div>
+          <div className="kpi-sub">買入 {fmtQty(summary.buyCount)} ｜ 賣出 {fmtQty(summary.sellCount)}</div>
         </div>
       </div>
 

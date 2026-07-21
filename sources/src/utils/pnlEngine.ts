@@ -37,6 +37,21 @@ export interface Holding extends Position {
   rawAvgCost: number
 }
 
+export interface SellDetail {
+  txId: string
+  date: string        // tx_date YYYY-MM-DD
+  qty: number
+  price: number       // 成交單價
+  sellAmt: number     // 實收 = 成交價金 − fee_tax
+  sellGross: number   // 成交價金
+  costBasis: number   // 賣出當下移動平均成本 × 配對股數（含買入手續費）
+  rawCostBasis: number
+  realized: number    // sellAmt − costBasis
+  fees: number        // 該筆 fee_tax
+  avgCost: number     // 賣出當下的平均成本（含費）
+  oversold: boolean   // 超賣：超賣部分成本以 0 計
+}
+
 /**
  * 年度內某一檔股票的進出彙整。金額欄位皆有「含費」與「未含費」兩種口徑：
  * - 含費（buyAmt / sellAmt / costBasis）：實際付出與收到的錢，已計入手續費與證交稅
@@ -64,6 +79,7 @@ export interface YearTickerDetail {
   realized: number
   fees: number
   count: number
+  sells: SellDetail[]
 }
 
 export interface YearSummary {
@@ -90,6 +106,10 @@ export interface LedgerSummary {
   fees: number
   /** 歷史累計交易筆數 */
   count: number
+  /** 歷史累計買入筆數 */
+  buyCount: number
+  /** 歷史累計賣出筆數 */
+  sellCount: number
 }
 
 export interface Ledger {
@@ -126,7 +146,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     holdings: [],
     yearly: {},
     years: [],
-    summary: { realizedTw: 0, realizedUs: 0, fees: 0, count: 0 },
+    summary: { realizedTw: 0, realizedUs: 0, fees: 0, count: 0, buyCount: 0, sellCount: 0 },
     warnings: [],
   }
 
@@ -196,6 +216,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         realized: 0,
         fees: 0,
         count: 0,
+        sells: [],
       }
     }
     const yt = y.tickers[key]
@@ -207,6 +228,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     yt.fees += tx.fee_tax
 
     if (tx.tx_type === 'BUY') {
+      ledger.summary.buyCount++
       const gross = tx.price * tx.qty
       const totalCost = gross + tx.fee_tax // 手續費計入成本
       y.buyAmt += totalCost
@@ -218,6 +240,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       pos.qty += tx.qty
       pos.buyCostTotal += totalCost
     } else {
+      ledger.summary.sellCount++
       const gross = tx.price * tx.qty
       const revenue = gross - tx.fee_tax
       y.sellAmt += revenue
@@ -245,6 +268,21 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       pos.qty -= matchedQty
       pos.realized += realized
       yt.realized += realized
+
+      yt.sells.push({
+        txId: tx.id,
+        date: tx.tx_date,
+        qty: tx.qty,
+        price: tx.price,
+        sellAmt: revenue,
+        sellGross: gross,
+        costBasis,
+        rawCostBasis,
+        realized,
+        fees: tx.fee_tax,
+        avgCost,
+        oversold: matchedQty < tx.qty,
+      })
 
       if (currency === 'TWD') y.realizedTw += realized
       else y.realizedUs += realized

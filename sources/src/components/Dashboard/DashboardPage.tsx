@@ -25,7 +25,7 @@ import {
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { PriceMap } from '../../services/priceProxy'
 import { displayStockName } from '../../services/usStockNames'
-import { HelpTip } from '../Common/HelpTip'
+import { HelpTh } from '../Common/HelpTh'
 
 /** 各欄位說明（表頭「?」圖示顯示） */
 const HELP = {
@@ -90,18 +90,6 @@ function buildRows(
 function sumOrNull(values: Array<number | null>): number | null {
   const known = values.filter((v): v is number => v !== null)
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
-}
-
-/** 不可排序但附欄位說明的表頭 */
-function HelpTh({ label, help, numeric }: { label: string; help: string; numeric?: boolean }) {
-  return (
-    <th className={numeric ? 'num th-sort' : 'th-sort'}>
-      <div className="th-head">
-        <span className="th-plain">{label}</span>
-        <HelpTip label={label} text={help} />
-      </div>
-    </th>
-  )
 }
 
 function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {

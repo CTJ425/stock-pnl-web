@@ -144,6 +144,67 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
     ])
     expect(ledger.holdings.map((h) => h.ticker)).toEqual(['0050', '2603', 'AAPL'])
   })
+
+  it('SellDetail 明細與 summary buyCount/sellCount 驗證', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-01', market: 'US', ticker: 'TSLA', type: 'BUY', price: 100, qty: 10, fee: 1 }), // cost: 1001, rawCost: 1000
+      tx({ date: '2024-02-01', market: 'US', ticker: 'TSLA', type: 'BUY', price: 200, qty: 10, fee: 1 }), // cost: 2001, rawCost: 2000. Total cost: 3002. avgCost: 150.1
+      tx({ date: '2024-03-01', market: 'US', ticker: 'TSLA', type: 'SELL', price: 300, qty: 5, fee: 2 }), // costBasis: 750.5. revenue: 1498. realized: 747.5
+      tx({ date: '2024-04-01', market: 'US', ticker: 'TSLA', type: 'SELL', price: 150, qty: 5, fee: 2 }), // avgCost still 150.1. costBasis: 750.5. revenue: 748. realized: -2.5
+    ])
+
+    const yt = ledger.yearly[2024].tickers['US:TSLA']
+    expect(yt.sells).toHaveLength(2)
+
+    const s1 = yt.sells[0]
+    expect(s1.date).toBe('2024-03-01')
+    expect(s1.qty).toBe(5)
+    expect(s1.price).toBe(300)
+    expect(s1.sellAmt).toBe(1498)
+    expect(s1.sellGross).toBe(1500)
+    expect(s1.costBasis).toBeCloseTo(750.5, 6)
+    expect(s1.rawCostBasis).toBeCloseTo(750, 6)
+    expect(s1.realized).toBeCloseTo(747.5, 6)
+    expect(s1.fees).toBe(2)
+    expect(s1.avgCost).toBeCloseTo(150.1, 6)
+    expect(s1.oversold).toBe(false)
+
+    const s2 = yt.sells[1]
+    expect(s2.date).toBe('2024-04-01')
+    expect(s2.qty).toBe(5)
+    expect(s2.price).toBe(150)
+    expect(s2.sellAmt).toBe(748)
+    expect(s2.sellGross).toBe(750)
+    expect(s2.costBasis).toBeCloseTo(750.5, 6)
+    expect(s2.rawCostBasis).toBeCloseTo(750, 6)
+    expect(s2.realized).toBeCloseTo(-2.5, 6)
+    expect(s2.fees).toBe(2)
+    expect(s2.avgCost).toBeCloseTo(150.1, 6)
+    expect(s2.oversold).toBe(false)
+
+    // Identity check
+    expect(yt.sells.reduce((sum, s) => sum + s.realized, 0)).toBeCloseTo(yt.realized, 6)
+    expect(yt.sells.reduce((sum, s) => sum + s.costBasis, 0)).toBeCloseTo(yt.costBasis, 6)
+    expect(yt.sells.reduce((sum, s) => sum + s.sellAmt, 0)).toBeCloseTo(yt.sellAmt, 6)
+
+    // Summary counts
+    expect(ledger.summary.buyCount).toBe(2)
+    expect(ledger.summary.sellCount).toBe(2)
+    expect(ledger.summary.buyCount + ledger.summary.sellCount).toBe(ledger.summary.count)
+  })
+
+  it('SellDetail 超賣標記', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-01', market: 'US', ticker: 'TSLA', type: 'BUY', price: 100, qty: 5, fee: 0 }),
+      tx({ date: '2024-02-01', market: 'US', ticker: 'TSLA', type: 'SELL', price: 200, qty: 10, fee: 0 }),
+    ])
+    const yt = ledger.yearly[2024].tickers['US:TSLA']
+    expect(yt.sells).toHaveLength(1)
+    const s1 = yt.sells[0]
+    expect(s1.oversold).toBe(true)
+    expect(s1.costBasis).toBeCloseTo(500, 6) // Only 5 shares matched at cost 100
+    expect(s1.sellAmt).toBeCloseTo(2000, 6)
+  })
 })
 
 describe('estimateUnrealized（與 GAS Dashboard 未實現損益公式同構）', () => {

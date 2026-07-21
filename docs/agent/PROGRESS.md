@@ -75,6 +75,26 @@
 
 ---
 
+## 📅 Log: 2026-07-21 12:03:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Action**: 實作年度收益頁面三項功能 (v0.2.6)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `YearlyPage.tsx`: 移除表格排序，替換為純 HelpTh 表頭。
+- [x] `DashboardPage.tsx`: 將 HelpTh 抽離至 `Common/HelpTh.tsx` 供共用。
+- [x] `pnlEngine.ts`: 新增 `SellDetail` 介面，於 `YearTickerDetail` 紀錄逐筆賣出明細與超賣狀態。
+- [x] `YearlyPage.tsx`: 實作第三層明細展開 (`expandedTickers`)，顯示逐筆賣出明細 (`.sell-row`)。
+- [x] `pnlEngine.ts`: 於 `LedgerSummary` 新增 `buyCount` 與 `sellCount` 歷史累計買賣筆數。
+- [x] `YearlyPage.tsx`: 於交易筆數 KPI 下方顯示買入/賣出拆分。
+- [x] `pnlEngine.test.ts`: 新增 SellDetail 運算邏輯與買賣筆數測試驗證。
+- [x] `package.json`: 版號更新至 0.2.6。
+- [x] 更新文件 `SPEC.md`, `PROGRESS.md`, `TASK.md`。
+- [x] 通過 `npm test` 與 `npx tsc --noEmit` 驗證。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。
