@@ -73,8 +73,8 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
     <Modal title="批次重算手續費" onClose={onClose} wide disableBackdropClose>
       <div className="field-hint" style={{ marginBottom: 12 }}>
         依目前設定（費率 {feeRate}、最低手續費整股 {minFeeWhole} 元 / 零股 {minFeeOdd} 元）
-        重新估算台股交易的手續費（賣出含證交稅，稅率依代號自動判斷）。
-        美股與當沖等特殊稅率交易請用「交易紀錄 → 編輯」個別調整。
+        重算台股手續費，賣出會一併算證交稅。
+        美股和當沖請到「交易紀錄 → 編輯」個別調整。
       </div>
 
       {error && <div className="notice notice-error">{error}</div>}
@@ -82,7 +82,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
       {proposals.length === 0 ? (
         <div className="empty-state" style={{ padding: '28px 0' }}>
           <CheckCircle2 size={28} style={{ marginBottom: 8 }} />
-          <div>所有台股交易的手續費都與目前費率設定一致，不需更新。</div>
+          <div>所有台股手續費都和目前設定一致，不用更新。</div>
         </div>
       ) : (
         <>

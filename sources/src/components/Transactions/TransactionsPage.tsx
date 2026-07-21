@@ -245,7 +245,7 @@ export function TransactionsPage() {
         <div className="spacer" />
         <button
           className="btn"
-          title="依目前費率設定重新估算所有台股交易的手續費"
+          title="依目前費率重算所有台股交易的手續費"
           onClick={() => setShowRecalc(true)}
           disabled={transactions.length === 0}
         >

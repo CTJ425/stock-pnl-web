@@ -290,7 +290,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           id="tx-ticker"
           value={ticker}
           autoComplete="off"
-          placeholder="輸入代號後自動反查名稱"
+          placeholder="輸入代號會自動帶出名稱"
           onChange={(e) => {
             setTicker(e.target.value)
             updateTaxRateAuto(e.target.value)
@@ -395,7 +395,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             }}
           />
           <div className="field-hint">
-            台股標準 0.001425；輸入後會記住為「{current?.name ?? '目前'}」工作區的預設費率
+            台股標準是 0.001425；填了會記成「{current?.name ?? '目前'}」工作區的預設值
           </div>
         </div>
         {market === 'TPE' && (
@@ -414,7 +414,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               }}
             />
             <div className="field-hint">
-              單筆下限（{unit === '張' ? '整股常見 20 元' : '零股常見 1 元'}）；費率為 0 時不套用
+              手續費最低收這麼多（{unit === '張' ? '整股常見 20 元' : '零股常見 1 元'}）；費率填 0 就不套用
             </div>
           </div>
         )}
@@ -454,7 +454,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               </select>
             </div>
             <div className="field-hint">
-              僅台股賣出計算；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅
+              只有台股賣出才收；ETF（00 開頭）自動 0.1%、債券 ETF（B 結尾）免稅
             </div>
           </div>
         </div>
@@ -472,7 +472,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         />
         {isEdit && initial && parseFloat(fee) !== initial.fee_tax && (
           <div className="field-hint">
-            已依目前費率重新估算；原紀錄為 {initial.fee_tax}{' '}
+            已依目前費率重算；原本是 {initial.fee_tax}{' '}
             <button
               type="button"
               className="link-btn"

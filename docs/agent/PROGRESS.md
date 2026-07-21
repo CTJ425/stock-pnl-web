@@ -320,6 +320,46 @@
 
 ---
 
+## 2026-07-21 16:05:00 Asia/Taipei — 全站說明文案改寫為白話短句 (v0.3.4)
+
+- **Agent**: Claude（文案判斷密集，不適合委派）
+- **Action**: Rewrite all user-facing help text for stock novices
+- **Status**: COMPLETED
+
+### 背景
+使用者回報既有說明「太長太攏統」，且**目標讀者是不熟股票的人**。
+原文案的問題不是資訊錯誤，而是把公式（`市值 − 未含費成本`）、
+交叉引用（「與年度收益頁的口徑一致」）、次要但書（「各券商收費結構差異大」）
+全塞進同一段 tooltip，novice 讀不完也讀不懂。
+
+### 改寫原則（後續新增文案請沿用）
+1. **短句白話**，一則說明以 1–2 句為限。
+2. **不放公式**：講「這些股票現在值多少錢」，不講「現價 × 持有股數」。
+3. **去除內行黑話**：拿掉「移動平均成本法」「同口徑」「純價差」「反推」等詞。
+4. **砍掉次要但書與交叉引用**，只保留使用者當下做決定需要知道的事。
+5. 保留關鍵事實：費用是否計入、資料是否延遲、數字涵蓋範圍。
+
+### Completed Tasks
+- [x] `DashboardPage.tsx`：10 條欄位說明 + 8 個 inline tooltip 全面改寫。
+      最長的 `unrealized` 由 5 句/約 130 字縮到 2 句。
+- [x] `YearlyReport/columnHelp.ts`：6 條年度欄位說明改寫。
+- [x] `YearlyPage.tsx`：超賣 badge、只買未賣、交易稅估算 3 個 tooltip 與空狀態文案。
+- [x] `ServiceStatusPage.tsx`：「關於本專案」由技術規格（Edge Function、localStorage 降級）
+      改為使用者視角的一句話；uptime 條說明白話化。
+- [x] `AppShell.tsx` / `RecalcFeesModal.tsx` / `TransactionForm.tsx` / `TransactionsPage.tsx`：
+      費率、最低手續費、證交稅、批次重算等 field-hint 與按鈕 tooltip 白話化。
+- [x] `utils/csv.ts`：多工作區匯出檔的拒絕訊息改寫（原文用「成本互相污染」）。
+- [x] `App.smoke.test.tsx`：同步更新被鎖住的 tooltip 斷言。
+- [x] `package.json` + `src/version.ts` bump 至 `0.3.4`。
+- [x] 驗證：`npm run build` 通過；`npm test -- --run` 92/92 通過。
+
+### 未更動（刻意）
+- 程式碼註解（`/** */`、`//`）維持技術寫法——那是寫給後續 Agent 與開發者看的，
+  與畫面上的說明文字是兩個不同的讀者群，不可一起「簡化」。
+- 欄位名稱本身未動，只動說明。
+
+---
+
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。

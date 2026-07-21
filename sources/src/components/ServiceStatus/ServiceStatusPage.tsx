@@ -52,7 +52,7 @@ function UptimeBar({ history, compId }: { history: HealthSample[]; compId: Compo
   const emptyCount = Math.max(0, HISTORY_LIMIT - history.length)
 
   for (let i = 0; i < emptyCount; i++) {
-    cells.push(<div key={`empty-${i}`} className="uptime-cell empty" title="尚無檢測紀錄" />)
+    cells.push(<div key={`empty-${i}`} className="uptime-cell empty" title="還沒有檢測紀錄" />)
   }
 
   for (const sample of history.slice(-HISTORY_LIMIT)) {
@@ -156,9 +156,8 @@ export function ServiceStatusPage() {
           <h2>關於本專案</h2>
         </div>
         <p style={{ color: 'var(--ink-secondary)', lineHeight: 1.6, marginBottom: '16px' }}>
-          個人股票交易紀錄與損益管理工具，移植自原 Google Apps Script「試算表股票小幫手」。
-          採移動平均成本法計算已實現損益，提供庫存總覽、年度收益與交易紀錄；台股/美股分幣別統計，現價經 Supabase Edge Function 代抓。
-          未設定 Supabase 時自動降級為本機模式（資料存瀏覽器）。
+          記錄台股與美股的買賣，自動算出你現在賺賠多少、每年實際入袋多少，手續費和稅都會一起算進去。
+          由原本的 Google 試算表「股票小幫手」改寫而成。
         </p>
         <a 
           href="https://github.com/CTJ425/stock-pnl-web" 
@@ -200,8 +199,8 @@ export function ServiceStatusPage() {
         
         {/* 條狀圖的說明只放一次：每個元件都放會蓋過狀態本身 */}
         <div className="uptime-hint">
-          每個元件下方的條狀圖為最近 {HISTORY_LIMIT} 次檢測，左側較舊、右側最新；
-          檢測僅在開啟本頁或按下重新檢測時執行，紀錄存於此瀏覽器。
+          條狀圖是最近 {HISTORY_LIMIT} 次檢測，左邊較舊、右邊最新。
+          只有開啟本頁或按「重新檢測」時才會檢測，紀錄存在你的瀏覽器裡。
         </div>
 
         <div className="status-group">

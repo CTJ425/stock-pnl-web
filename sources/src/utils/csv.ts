@@ -149,7 +149,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
       result.errors.push({
         line: 1,
         message:
-          '此檔案為「全部工作區」總覽匯出，含多個工作區的交易。為避免不同券商的成本互相污染，請先依「工作區」欄拆分後，分別匯入對應的工作區。',
+          '這個檔案含有多個工作區的交易。請先依「工作區」欄拆開，再分別匯入各自的工作區，成本才不會混在一起。',
       })
       return result
     }

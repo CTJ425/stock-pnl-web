@@ -288,7 +288,7 @@ function YearRows({
                       <span
                         className="badge"
                         style={{ marginLeft: 6 }}
-                        title="這一年只有買進、沒有賣出，因此不產生已實現損益"
+                        title="這一年只有買進、沒有賣出，所以還沒有賺賠"
                       >
                         僅買進
                       </span>
@@ -309,7 +309,7 @@ function YearRows({
                       <div className="cell-tree" style={{ paddingLeft: 32 }}>
                         {sell.date}　賣出 {fmtQty(sell.qty)} 股 ｜ {sell.price}
                         {sell.oversold && (
-                          <span className="badge" style={{ marginLeft: 6 }} title="超賣：超賣部分成本以 0 計算">
+                          <span className="badge" style={{ marginLeft: 6 }} title="賣出股數超過持有股數，超出的部分成本以 0 計算">
                             超賣
                           </span>
                         )}
@@ -339,7 +339,7 @@ export function YearlyPage() {
         <div className="empty-icon">
           <CalendarRange size={36} />
         </div>
-        <div>還沒有任何交易紀錄，年度收益總覽會在你新增交易後自動生成。</div>
+        <div>還沒有任何交易紀錄，新增交易後這裡就會自動出現。</div>
       </div>
     )
   }
@@ -362,7 +362,7 @@ export function YearlyPage() {
         <div className="glass kpi">
           <div className="kpi-label">歷史累計手續費 (台美股合計)</div>
           <div className="kpi-value">{summary.fees.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
-          <div className="kpi-sub" title="交易稅為依證交稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）反推的估算值">
+          <div className="kpi-sub" title="交易稅是依稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）回推的估計值">
             手續費 {summary.feesBrokerage.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 交易稅 {summary.feesTax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
           </div>
         </div>

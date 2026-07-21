@@ -27,23 +27,21 @@ import type { PriceMap } from '../../services/priceProxy'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
 
-/** 各欄位說明（表頭「?」圖示顯示） */
+/** 各欄位說明（表頭「?」圖示顯示）。寫給不熟股票的人看：短句、白話、不放公式。 */
 const HELP = {
-  ticker: '股票代號。台股不含「TPE:」前綴（如 2330），美股為交易所代號（如 AAPL）。',
-  name: '股票名稱。台股取自證交所 / 櫃買中心官方清單，常見美股顯示中文譯名。',
+  ticker: '股票的編號。台股是數字（如 2330），美股是英文代號（如 AAPL）。',
+  name: '股票名稱。台股來自證交所官方清單，常見的美股會顯示中文名。',
   price:
-    '台股取自證交所即時行情（近即時），畫面每分鐘自動更新；美股報價來源最長延遲 20 分鐘、每 10 分鐘更新一次。按右上角「重新整理現價」可略過快取強制重抓（但無法消除來源本身的延遲）。標示「快取」代表目前抓不到新報價，顯示的是上次成功取得的價格。',
-  qty: '目前仍持有的股數（累計買進 − 累計賣出）。已全部賣光的股票不會出現在這裡。',
+    '最新股價。台股接近即時、每分鐘更新；美股最多延遲 20 分鐘。標示「快取」代表暫時抓不到新價格，顯示的是上一次抓到的。',
+  qty: '你現在還持有的股數。已經全部賣光的股票不會出現在這裡。',
   avgCost:
-    '移動平均成本法。主數字含買進手續費，也就是每股實際付出的錢；下方「未含費」是單純的成交均價。賣出時依當時均價扣減，不影響剩餘部位的每股成本。',
-  cost:
-    '目前這些持股當初買進投入的錢（平均買入成本 × 持有股數，含買進手續費）。已經賣掉的部分不算在內，因此這是「現在還壓在裡面」的金額。下方「未含費」為未計手續費的版本。',
-  breakEven:
-    '以此價格把手上持股全部賣出，扣掉賣出手續費與證交稅後恰好不賺不賠的最低價格。高於此價賣出才真正獲利。',
-  mktVal: '現價 × 持有股數。尚未取得現價時顯示「—」。',
+    '每股平均買進的價格，含買進手續費，也就是每股實際付出的錢。下方「未含費」是不含手續費的價格。',
+  cost: '你現在還投在這檔股票上的錢，含買進手續費。已經賣掉的部分不算在內。',
+  breakEven: '賣在這個價格剛好不賺不賠（手續費和稅已經算進去）。賣得比它高才真的有賺。',
+  mktVal: '這些股票現在值多少錢。抓不到股價時顯示「—」。',
   unrealized:
-    '「淨」代表把交易成本都算進去：主數字已含當初買入手續費，台股再預先扣除賣出手續費與證交稅（美股不預扣賣出費用，各券商收費結構差異大）。若以現價全部賣出的預估損益，實際成交價與此估算會有落差。下方「未含費」為不計任何費用的純價差（市值 − 未含費成本），與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅（美股僅含買入手續費）。與年度收益頁的口徑一致。',
-  roi: '未實現淨損益 ÷ 目前部位成本。只計算手上還持有的部位，與券商 APP 同口徑；已經賣掉結清的歷史績效請看「年度收益」頁。',
+    '如果現在全部賣掉，大概會賺或賠多少。「淨」代表手續費和稅都已經算進去（美股不含賣出費用）。下方「未含費」是不扣任何費用的價差，會比實際好看一點。',
+  roi: '這些持股目前賺賠的百分比。只看手上還有的部分；已經賣掉的請看「年度收益」頁。',
 } as const
 
 interface HoldingRow {
@@ -126,7 +124,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                   <>
                     {fmtPrice(price, currency)}
                     {priceStale && (
-                      <span className="badge badge-warn" style={{ marginLeft: 6 }} title="外部報價暫時無法取得，顯示上次快取價">
+                      <span className="badge badge-warn" style={{ marginLeft: 6 }} title="暫時抓不到新價格，顯示上一次抓到的">
                         快取
                       </span>
                     )}
@@ -136,19 +134,19 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
               <td className="num">{fmtQty(h.qty)}</td>
               <td className="num">
                 <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
-                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含買進手續費的成交價金">
+                <div style={{ fontSize: 11, opacity: 0.65 }} title="不含買進手續費的金額">
                   未含費 {fmtMoney(h.rawCost, currency)}
                 </div>
               </td>
               <td className="num">
                 <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
-                <div style={{ fontSize: 11, opacity: 0.65 }} title="未含手續費的成交均價">
+                <div style={{ fontSize: 11, opacity: 0.65 }} title="不含手續費的價格">
                   未含費 {fmtPrice(h.rawAvgCost, currency)}
                 </div>
               </td>
               <td
                 className={`num ${price !== null ? pnlClass(price - breakEven) : ''}`}
-                title="以此價全數賣出（扣手續費與證交稅）恰好不虧"
+                title="賣在這個價格剛好不賺不賠"
               >
                 {fmtPrice(breakEven, currency)}
               </td>
@@ -162,7 +160,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                     {rawUnrealized !== null && (
                       <div
                         style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
-                        title={currency === 'USD' ? '不計任何手續費的純價差：市值 − 未含費成本。美股不預扣賣出費用，與主數字的差額 = 當初買入手續費' : '不計任何手續費的純價差：市值 − 未含費成本。與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅'}
+                        title="不扣任何手續費和稅的價差"
                       >
                         未含費 {fmtSignedMoney(rawUnrealized, currency)}
                       </div>
@@ -220,13 +218,13 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="glass kpi">
-          <div className="kpi-label" title="主數字已預扣賣出手續費與證交稅">
+          <div className="kpi-label" title="手續費和證交稅都已經扣掉了">
             台股未實現淨損益
           </div>
           <div className={`kpi-value ${pnlClass(twUnreal)}`}>
             {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(twUnreal, 'TWD')}
           </div>
-          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本。與主數字的差額 = 當初買入手續費 + 預估賣出手續費與證交稅">
+          <div className="kpi-sub" title="不扣任何手續費和稅的價差">
             未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnrealRaw === null ? '—' : fmtSignedMoney(twUnrealRaw, 'TWD')}
           </div>
         </div>
@@ -237,13 +235,13 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="glass kpi">
-          <div className="kpi-label" title="主數字已含買入手續費；美股不預扣賣出費用（各券商收費結構差異大）">
+          <div className="kpi-label" title="已扣買入手續費；美股沒有預扣賣出費用">
             美股未實現淨損益
           </div>
           <div className={`kpi-value ${pnlClass(usUnreal)}`}>
             {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(usUnreal, 'USD')}
           </div>
-          <div className="kpi-sub" title="不計任何手續費的純價差：市值 − 未含費成本。美股不預扣賣出費用，與主數字的差額 = 當初買入手續費">
+          <div className="kpi-sub" title="不扣任何手續費的價差">
             未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnrealRaw === null ? '—' : fmtSignedMoney(usUnrealRaw, 'USD')}
           </div>
         </div>

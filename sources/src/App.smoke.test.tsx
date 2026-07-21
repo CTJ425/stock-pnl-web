@@ -53,7 +53,7 @@ describe('App（本機模式煙霧測試）', () => {
     // 說明改為卡片標題的 tooltip，不再佔一行
     expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
     expect(screen.getByText('台股未實現淨損益').getAttribute('title')).toContain(
-      '已預扣賣出手續費與證交稅',
+      '手續費和證交稅都已經扣掉了',
     )
   })
 
