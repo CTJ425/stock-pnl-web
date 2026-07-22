@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: Task 4 Code Review (v0.2.5)
-- Status: APPROVED
-- Timestamp: 2026-07-21 10:00:30 Asia/Taipei
+- Agent: Gemini
+- Action: Task 9 Dashboard 庫存總攬改版 (v0.3.5)
+- Status: COMPLETED
+- Timestamp: 2026-07-22 15:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-22 15:20:00 Asia/Taipei
+
+- **Agent**: Gemini
+- **Action**: Dashboard 庫存總攬改版為台美股雙面板 (v0.3.5)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `DashboardPage.tsx`: 新增 `twCost` / `twRawCost` / `usCost` / `usRawCost` 4 個成本聚合運算。
+- [x] `DashboardPage.tsx`: 將 4 張卡片改版為 `.market-grid` 下的 2 張 `.market-panel`（🇹🇼 台股 TWD / 🇺🇸 美股 USD）。
+- [x] `DashboardPage.tsx`: 調整指標順序為：1. 持倉市值 2. 投入總成本 3. 未實現淨損益。
+- [x] `index.css`: 新增 `.market-grid` / `.market-panel` 相關樣式與小螢幕 media query 覆寫，維持 `.kpi-grid` / `.kpi` 既有樣式不動。
+- [x] `package.json` 與 `version.ts`: 版本號同步升級至 0.3.5 / v0.3.5。
+- [x] 執行 `npm run build` 通過驗證。
 
 ---
 

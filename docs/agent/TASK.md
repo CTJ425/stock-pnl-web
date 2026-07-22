@@ -8,6 +8,22 @@
 
 ## 📋 Active Tasks
 
+### Task 9: Dashboard 庫存總攬改版為台美股雙面板 (v0.3.5)
+- **Status**: DONE
+- **Planner**: User
+- **Implementer**: Gemini
+- **Timestamp**: 2026-07-22 15:20:00 Asia/Taipei
+- **Target Version**: v0.3.5
+
+#### Objective
+將 Dashboard 庫存總覽的 4 張單一 KPI 卡片改版為「台股/美股」兩張並排玻璃面板，面板內部採直向堆疊指標：持倉市值、投入總成本（含未含費）、未實現淨損益（含未含費）。
+
+#### Scope / Allowed Changes
+- `sources/src/components/Dashboard/DashboardPage.tsx`
+- `sources/src/index.css`
+- `sources/package.json`
+- `sources/src/version.ts`
+
 ### Task 8: Add a GitHub-Status-style 服務狀態 page and retire the floating version badge (v0.3.0)
 - **Status**: DONE
 - **Planner**: Claude

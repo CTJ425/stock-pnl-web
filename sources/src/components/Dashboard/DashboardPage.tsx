@@ -191,9 +191,14 @@ export function DashboardPage() {
   const usRows = rows.filter((r) => r.holding.currency === 'USD')
 
   const twMkt = sumOrNull(twRows.map((r) => r.mktVal))
+  const twCost = sumOrNull(twRows.map((r) => r.holding.cost))
+  const twRawCost = sumOrNull(twRows.map((r) => r.holding.rawCost))
   const twUnreal = sumOrNull(twRows.map((r) => r.unrealized))
   const twUnrealRaw = sumOrNull(twRows.map((r) => r.rawUnrealized))
+
   const usMkt = sumOrNull(usRows.map((r) => r.mktVal))
+  const usCost = sumOrNull(usRows.map((r) => r.holding.cost))
+  const usRawCost = sumOrNull(usRows.map((r) => r.holding.rawCost))
   const usUnreal = sumOrNull(usRows.map((r) => r.unrealized))
   const usUnrealRaw = sumOrNull(usRows.map((r) => r.rawUnrealized))
 
@@ -210,39 +215,98 @@ export function DashboardPage() {
         </div>
       )}
 
-      <div className="section kpi-grid">
-        <div className="glass kpi">
-          <div className="kpi-label">🇹🇼 台股持倉市值 (TWD)</div>
-          <div className="kpi-value">
-            {twRows.length === 0 ? fmtMoney(0, 'TWD') : twMkt === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtMoney(twMkt, 'TWD')}
+      <div className="section market-grid">
+        <div className="glass market-panel">
+          <div className="panel-head">
+            <h3>🇹🇼 台股</h3>
+            <span className="ccy">TWD</span>
+          </div>
+          <div className="metric">
+            <div className="kpi-label">持倉市值</div>
+            <div className="kpi-value">
+              {twRows.length === 0
+                ? fmtMoney(0, 'TWD')
+                : twMkt === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtMoney(twMkt, 'TWD')}
+            </div>
+          </div>
+          <div className="metric">
+            <div className="kpi-label" title="包含買入時的手續費">
+              投入總成本
+            </div>
+            <div className="kpi-value">
+              {twRows.length === 0
+                ? fmtMoney(0, 'TWD')
+                : twCost === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtMoney(twCost, 'TWD')}
+            </div>
+            <div className="kpi-sub" title="只算股價，不含買入手續費">
+              未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twRawCost === null ? '—' : fmtMoney(twRawCost, 'TWD')}
+            </div>
+          </div>
+          <div className="metric">
+            <div className="kpi-label" title="手續費和證交稅都已經扣掉了">
+              未實現淨損益
+            </div>
+            <div className={`kpi-value ${pnlClass(twUnreal)}`}>
+              {twRows.length === 0
+                ? fmtMoney(0, 'TWD')
+                : twUnreal === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtSignedMoney(twUnreal, 'TWD')}
+            </div>
+            <div className="kpi-sub" title="不扣任何手續費和稅的價差">
+              未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnrealRaw === null ? '—' : fmtSignedMoney(twUnrealRaw, 'TWD')}
+            </div>
           </div>
         </div>
-        <div className="glass kpi">
-          <div className="kpi-label" title="手續費和證交稅都已經扣掉了">
-            台股未實現淨損益
+
+        <div className="glass market-panel">
+          <div className="panel-head">
+            <h3>🇺🇸 美股</h3>
+            <span className="ccy">USD</span>
           </div>
-          <div className={`kpi-value ${pnlClass(twUnreal)}`}>
-            {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(twUnreal, 'TWD')}
+          <div className="metric">
+            <div className="kpi-label">持倉市值</div>
+            <div className="kpi-value">
+              {usRows.length === 0
+                ? fmtMoney(0, 'USD')
+                : usMkt === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtMoney(usMkt, 'USD', 2)}
+            </div>
           </div>
-          <div className="kpi-sub" title="不扣任何手續費和稅的價差">
-            未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnrealRaw === null ? '—' : fmtSignedMoney(twUnrealRaw, 'TWD')}
+          <div className="metric">
+            <div className="kpi-label" title="包含買入時的手續費">
+              投入總成本
+            </div>
+            <div className="kpi-value">
+              {usRows.length === 0
+                ? fmtMoney(0, 'USD')
+                : usCost === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtMoney(usCost, 'USD', 2)}
+            </div>
+            <div className="kpi-sub" title="只算股價，不含買入手續費">
+              未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usRawCost === null ? '—' : fmtMoney(usRawCost, 'USD', 2)}
+            </div>
           </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">🇺🇸 美股持倉市值 (USD)</div>
-          <div className="kpi-value">
-            {usRows.length === 0 ? fmtMoney(0, 'USD') : usMkt === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtMoney(usMkt, 'USD', 2)}
-          </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label" title="已扣買入手續費；美股沒有預扣賣出費用">
-            美股未實現淨損益
-          </div>
-          <div className={`kpi-value ${pnlClass(usUnreal)}`}>
-            {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnreal === null ? <span className="skeleton" style={{ width: 120, height: 22 }} /> : fmtSignedMoney(usUnreal, 'USD')}
-          </div>
-          <div className="kpi-sub" title="不扣任何手續費的價差">
-            未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnrealRaw === null ? '—' : fmtSignedMoney(usUnrealRaw, 'USD')}
+          <div className="metric">
+            <div className="kpi-label" title="已扣買入手續費；美股沒有預扣賣出費用">
+              未實現淨損益
+            </div>
+            <div className={`kpi-value ${pnlClass(usUnreal)}`}>
+              {usRows.length === 0
+                ? fmtMoney(0, 'USD')
+                : usUnreal === null
+                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
+                  : fmtSignedMoney(usUnreal, 'USD')}
+            </div>
+            <div className="kpi-sub" title="不扣任何手續費的價差">
+              未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnrealRaw === null ? '—' : fmtSignedMoney(usUnrealRaw, 'USD')}
+            </div>
           </div>
         </div>
       </div>
