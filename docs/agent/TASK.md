@@ -8,6 +8,22 @@
 
 ## 📋 Active Tasks
 
+### Task 10: 庫存總攬面板縮小為主副層級式 (v0.3.6)
+- **Status**: DONE
+- **Planner**: Claude（縮小方式經使用者選定「主副層級式」）
+- **Implementer**: agy (delegated)
+- **Timestamp**: 2026-07-22 15:40:00 Asia/Taipei
+- **Target Version**: v0.3.6
+
+#### Objective
+v0.3.5 的台股/美股雙面板過大（三個 24px 大數字直向堆疊）。改為主副層級：持倉市值當主角（22px），投入總成本與未實現淨損益縮小（16px）並排成 `.metric-row` 左右兩欄，面板高度約砍至 190px。
+
+#### Scope / Allowed Changes
+- `sources/src/components/Dashboard/DashboardPage.tsx`（`.metric-hero` + `.metric-row` 容器結構，三態邏輯與文案不變）
+- `sources/src/index.css`（`.market-panel` 系列；`.kpi` 系列不動）
+- `sources/package.json`
+- `sources/src/version.ts`
+
 ### Task 9: Dashboard 庫存總攬改版為台美股雙面板 (v0.3.5)
 - **Status**: DONE
 - **Planner**: User

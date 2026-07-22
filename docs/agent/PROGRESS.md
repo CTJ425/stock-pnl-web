@@ -1,9 +1,24 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Gemini
-- Action: Task 9 Dashboard 庫存總攬改版 (v0.3.5)
+- Agent: Claude
+- Action: Task 10 庫存總攬面板縮小為主副層級式 (v0.3.6)
 - Status: COMPLETED
-- Timestamp: 2026-07-22 15:20:00 Asia/Taipei
+- Timestamp: 2026-07-22 15:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-22 15:40:00 Asia/Taipei
+
+- **Agent**: agy (delegated)
+- **Planner / Reviewer**: Claude
+- **Action**: 庫存總攬面板縮小為主副層級式 (v0.3.6)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `DashboardPage.tsx`: 每張面板改為 `.metric.metric-hero`（持倉市值）+ `.metric-row` 兩欄（投入總成本、未實現淨損益）；縮小欄位 skeleton 寬度 120 → 90。三態顯示、格式化參數、tooltip 文案不變。
+- [x] `index.css`: `.market-panel` padding 縮小；`.kpi-value` 24px → 16px、新增 `.metric-hero .kpi-value` 22px（小螢幕 20px）；新增 `.metric-row` 兩欄網格（上邊線 + 欄間左分隔線）；刪除舊的直向 `.metric + .metric` 分隔規則；`.kpi-sub` 11.5px → 11px。
+- [x] 版本號升至 0.3.6 / v0.3.6。
+- [x] Claude 親自 review diff 並重跑 `npm run build` 通過。
 
 ---
 
