@@ -28,3 +28,7 @@ yarn-error.log*
 raw/
 *.csv
 
+
+# Supabase CLI local artifacts (repo-root supabase/ is CLI-generated; real code is in sources/supabase/)
+/supabase/.temp/
+/supabase/.branches/
