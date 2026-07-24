@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：v0.3.8**（版本號顯示於畫面左下角徽章與「服務狀態」頁，如 `v0.3.8 | Ivan Chen`）
+> **目前版本：v0.3.7-dev-2**（dev 分支開發中；併入 main 後為 v0.3.7。版本號顯示於畫面左下角徽章與「服務狀態」頁）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -249,13 +249,15 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 ## 🗒️ 版本紀錄
 
-### v0.3.8（2026-07-24）
+### v0.3.7（開發中 · dev：`0.3.7-dev-2`；併入 main 後定為 v0.3.7）
+
+**dev-2 — 盤後自動產生 + Storage 快取**
 - **盤後籌碼報告自動產生 + 快取（Storage）**：新增 `stock-report` 的 `generate-all` 批次動作，由 Supabase `pg_cron` 每交易日 20:30（台北）觸發，一次產出全體持有台股的**共用**盤後報告（三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。
 - **前端改 Storage-first**：開啟報告時先讀預產好的共用報告（快、免每次打 TWSE），查無再 fallback 即點即產；個人「持股概況」由前端即時疊加。
 - **只保留 7 天**：同批次順便清掉超過 7 天的舊報告與 `chip_raw_cache`，免費方案空間穩定（每份 ~5KB HTML，150 檔 × 7 天 ≈ 5MB）。PDF 不存伺服器（Edge Function 無瀏覽器），維持前端即點即下載。
 - ⚠️ 需重跑 `schema.sql`（建 `reports` bucket、`pg_cron`/`pg_net`、排程）並設 `CRON_SECRET`；步驟見 `sources/supabase/README.md`。
 
-### v0.3.7（2026-07-24）
+**dev-1 — 盤後籌碼報告**
 - **庫存總覽新增「盤後籌碼報告」**：台股每列新增「報告」按鈕，透過 Supabase Edge Function `stock-report` 抓取 TWSE 官方盤後籌碼（三大法人買賣超、融資融券、借券），結合持股成本 / 損益組成報告，可於彈窗檢視並下載 PDF（`jspdf` / `html2canvas` 動態載入，不進主 bundle）。
 - 僅台股提供；未設定 Supabase 時整個入口隱藏。報告以 `chip_raw_cache` 資料表依交易日共用快取，避免重複抓取 TWSE 大檔。
 - **Supabase 檔案集中**：資料庫綱要由 `docs/database/supabase_schema.sql` 移至 `sources/supabase/schema.sql`，與 Edge Functions（`functions/stock-price`、`functions/stock-report`）同置於 `sources/supabase/`；新增 `sources/supabase/README.md` 部署指南。
