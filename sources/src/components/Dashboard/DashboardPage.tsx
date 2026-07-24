@@ -6,8 +6,8 @@
  * - 現價背景非同步載入：載入中顯示骨架屏；抓不到現價時市值 / 未實現損益留空
  * - 台股未實現損益為「淨」值：預扣賣出手續費與證交稅（estimateUnrealized）
  */
-import { useMemo } from 'react'
-import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, FileText, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import type { Holding } from '../../utils/pnlEngine'
@@ -26,6 +26,8 @@ import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { PriceMap } from '../../services/priceProxy'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
+import { ReportModal } from './ReportModal'
+import { isReportConfigured } from '../../services/reportProxy'
 
 /** 各欄位說明（表頭「?」圖示顯示）。寫給不熟股票的人看：短句、白話、不放公式。 */
 const HELP = {
@@ -94,7 +96,16 @@ function sumOrNull(values: Array<number | null>): number | null {
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
 }
 
-function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {
+function HoldingsTable({
+  rows,
+  currency,
+  onReport,
+}: {
+  rows: HoldingRow[]
+  currency: Currency
+  /** 提供時（僅台股）於每列渲染「盤後報告」按鈕 */
+  onReport?: (row: HoldingRow) => void
+}) {
   return (
     <div className="glass table-scroll">
       <table className="data-table">
@@ -110,10 +121,17 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
             <HelpTh label="目前市值" help={HELP.mktVal} numeric />
             <HelpTh label="未實現淨損益" help={HELP.unrealized} numeric />
             <HelpTh label="未實現報酬率" help={HELP.roi} numeric />
+            {onReport && (
+              <th className="th-sort">
+                <span className="th-plain">盤後籌碼</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ holding: h, price, priceStale, mktVal, unrealized, rawUnrealized, roi, breakEven }) => (
+          {rows.map((row) => {
+            const { holding: h, price, priceStale, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
+            return (
             <tr key={h.key}>
               <td>{h.ticker}</td>
               <td>{displayStockName(h.market, h.ticker, h.name)}</td>
@@ -169,8 +187,21 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                 )}
               </td>
               <td className={`num ${pnlClass(roi)}`}>{roi === null ? '—' : fmtSignedPercent(roi)}</td>
+              {onReport && (
+                <td>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => onReport(row)}
+                    title="產生盤後籌碼報告（三大法人、融資融券、借券）"
+                  >
+                    <FileText size={14} />
+                    報告
+                  </button>
+                </td>
+              )}
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -182,6 +213,7 @@ export function DashboardPage() {
   const holdings = ledger.holdings
   const { prices, loading, refreshedAt, refresh } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
+  const [reportRow, setReportRow] = useState<HoldingRow | null>(null)
 
   const rows = useMemo(
     () => buildRows(holdings, prices, feeRate, current?.id),
@@ -345,7 +377,11 @@ export function DashboardPage() {
                 <div className="section-title">
                   <h2 style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h2>
                 </div>
-                <HoldingsTable rows={twRows} currency="TWD" />
+                <HoldingsTable
+                  rows={twRows}
+                  currency="TWD"
+                  onReport={isReportConfigured ? setReportRow : undefined}
+                />
               </div>
             )}
             {usRows.length > 0 && (
@@ -359,6 +395,25 @@ export function DashboardPage() {
           </>
         )}
       </div>
+
+      {reportRow && (
+        <ReportModal
+          ticker={reportRow.holding.ticker}
+          name={displayStockName(
+            reportRow.holding.market,
+            reportRow.holding.ticker,
+            reportRow.holding.name,
+          )}
+          holding={{
+            qty: reportRow.holding.qty,
+            avgCost: reportRow.holding.avgCost,
+            price: reportRow.price,
+            unrealized: reportRow.unrealized,
+            roi: reportRow.roi,
+          }}
+          onClose={() => setReportRow(null)}
+        />
+      )}
     </>
   )
 }

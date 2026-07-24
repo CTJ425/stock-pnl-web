@@ -1,4 +1,4 @@
-/** 共用資料模型：與 Supabase schema (build-docs/supabase_schema.sql) 對齊 */
+/** 共用資料模型：與 Supabase schema (sources/supabase/schema.sql) 對齊 */
 
 export type Market = 'TPE' | 'US'
 export type TxType = 'BUY' | 'SELL'

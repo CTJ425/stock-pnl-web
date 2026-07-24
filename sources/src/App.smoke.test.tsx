@@ -48,13 +48,13 @@ describe('App（本機模式煙霧測試）', () => {
     await screen.findByText('本機模式')
 
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
-    expect(await screen.findByText('台股未實現淨損益')).toBeTruthy()
-    expect(screen.getByText('美股未實現淨損益')).toBeTruthy()
+    // 台股、美股兩張卡片的未實現損益皆以「淨」命名（v0.3 起卡片標題不再帶市場前綴）
+    const netLabels = await screen.findAllByText('未實現淨損益')
+    expect(netLabels.length).toBe(2)
     // 說明改為卡片標題的 tooltip，不再佔一行
     expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
-    expect(screen.getByText('台股未實現淨損益').getAttribute('title')).toContain(
-      '手續費和證交稅都已經扣掉了',
-    )
+    // 台股卡片（DOM 先出現）的 tooltip 說明已預扣手續費與證交稅
+    expect(netLabels[0].getAttribute('title')).toContain('手續費和證交稅都已經扣掉了')
   })
 
   it('新增台股買入交易 → 三個頁面同步呈現', async () => {

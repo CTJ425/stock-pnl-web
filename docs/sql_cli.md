@@ -3,7 +3,7 @@
 使用方式：到 [Supabase Dashboard](https://supabase.com/dashboard) → 你的專案 → **SQL Editor**，貼上要執行的段落後按 Run。
 
 > 注意：SQL Editor 是以專案擁有者身分執行，**不受 RLS 限制**，看得到所有使用者的資料。
-> 資料表結構定義見 `build-docs/supabase_schema.sql`。
+> 資料表結構定義見 `sources/supabase/schema.sql`。
 
 ---
 

@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：v0.3**（版本號顯示於「服務狀態」頁，如 `v0.3 | Ivan Chen`）
+> **目前版本：v0.3.7**（版本號顯示於畫面左下角徽章與「服務狀態」頁，如 `v0.3.7 | Ivan Chen`）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -118,7 +118,7 @@ graph TD
 ```
 stock-pnl-web/
 ├── .github/workflows/    # GitHub Actions 自動部署（deploy.yml）
-├── build-docs/           # 系統設計、專案進度與資料庫 SQL 綱要（supabase_schema.sql）
+├── build-docs/           # 系統設計、專案進度文件
 ├── docs/                 # 維運文件（Supabase SQL 常用查詢 sql_cli.md）
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
@@ -130,7 +130,7 @@ stock-pnl-web/
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）
 │   │   ├── types/        # models.ts
 │   │   └── utils/        # pnlEngine.ts, csv.ts, fees.ts, formatters.ts, settings.ts
-│   ├── supabase/         # Supabase Edge Functions 程式碼（stock-price）
+│   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要）+ functions/（stock-price, stock-report）
 │   └── package.json
 └── README.md             # 本說明文件 (專案根目錄)
 ```
@@ -193,13 +193,15 @@ stock-pnl-web/
 
 ### 2. 後端部署 (Supabase)
 1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
-2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `build-docs/supabase_schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names` 共用快取）與 RLS 行級安全策略。
-3. **部署 Edge Functions**（二擇一）：
-   - **Dashboard**：Edge Functions → 建立 / 開啟 `stock-price` → 貼上 `sources/supabase/functions/stock-price/index.ts` 完整內容 → Deploy，並於設定中**關閉 Verify JWT**。
+2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取）與 RLS 行級安全策略。
+3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後籌碼報告；二擇一）：
+   - **Dashboard**：Edge Functions → Create a function。`stock-price` 為單一檔案，貼上 `index.ts` 全文即可；`stock-report` 為多檔函數，需逐一新增 `sources/supabase/functions/stock-report/` 下的 `index.ts`、`report.ts`、`twChips.ts`、`reportHtml.ts`（`*.test.ts` 不用上傳）。兩者皆於設定中**關閉 Verify JWT**後 Deploy。
    - **CLI**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
      ```bash
-     supabase functions deploy stock-price --no-verify-jwt
+     supabase functions deploy stock-price  --no-verify-jwt
+     supabase functions deploy stock-report --no-verify-jwt
      ```
+   - 詳細步驟、驗證方式與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 4. **設定身份驗證 Redirect URL**：
    在 Supabase 控制台的 Auth -> URL Configuration 中，將 Site URL 和 Redirect URLs 設定為您 GitHub Pages 的部署網址，確保登入/註冊重導正常運作。
 5. **（建議）關閉信箱驗證或設定自訂 SMTP**：
@@ -246,6 +248,12 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 ---
 
 ## 🗒️ 版本紀錄
+
+### v0.3.7（2026-07-24）
+- **庫存總覽新增「盤後籌碼報告」**：台股每列新增「報告」按鈕，透過 Supabase Edge Function `stock-report` 抓取 TWSE 官方盤後籌碼（三大法人買賣超、融資融券、借券），結合持股成本 / 損益組成報告，可於彈窗檢視並下載 PDF（`jspdf` / `html2canvas` 動態載入，不進主 bundle）。
+- 僅台股提供；未設定 Supabase 時整個入口隱藏。報告以 `chip_raw_cache` 資料表依交易日共用快取，避免重複抓取 TWSE 大檔。
+- **Supabase 檔案集中**：資料庫綱要由 `docs/database/supabase_schema.sql` 移至 `sources/supabase/schema.sql`，與 Edge Functions（`functions/stock-price`、`functions/stock-report`）同置於 `sources/supabase/`；新增 `sources/supabase/README.md` 部署指南。
+- ⚠️ 本次含新資料表與新 Edge Function，需重新部署才會生效：SQL Editor 執行更新後的 `sources/supabase/schema.sql`（新增 `chip_raw_cache`），並部署 `stock-report`：`supabase functions deploy stock-report --no-verify-jwt`。
 
 ### v0.2.5（2026-07-21）
 - **交易紀錄搜尋欄位（代號 / 名稱快速過濾）**：工具列新增搜尋輸入框，輸入代號（如 `2330` / `AAPL`）或名稱（如 `台積` / `蘋果`）即時過濾交易列表。

@@ -118,3 +118,20 @@ ON user_settings FOR ALL
 TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
+
+
+-- 5. 盤後籌碼原始檔快取資料表 (chip_raw_cache)
+--     Edge Function stock-report 的共用快取：依交易日與資料集快取 TWSE 大檔，
+--     避免每次產報告都重抓整份盤後籌碼。僅 Edge Function（service role）讀寫，前端不存取。
+CREATE TABLE IF NOT EXISTS chip_raw_cache (
+    ymd TEXT NOT NULL,
+    dataset TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (ymd, dataset)
+);
+
+ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
+
+-- 注意：刻意不建立任何 policy——
+-- service role（Edge Function）不受 RLS 限制，是唯一的讀寫途徑，前端不會存取。

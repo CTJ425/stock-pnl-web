@@ -3,7 +3,7 @@
  *
  * 由伺服器端代為請求 TWSE MIS / Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
  * 現價來源：台股先走證交所 MIS 即時行情（秒級延遲），失敗退 Yahoo；美股走 Yahoo。
- * 現價帶 DB 共用快取（price_cache 資料表，見 build-docs/supabase_schema.sql）：
+ * 現價帶 DB 共用快取（price_cache 資料表，見 sources/supabase/schema.sql）：
  * TTL 內全站共用同一份報價（台股 60 秒、美股 10 分鐘），同一支股票不重複請求外部 API。
  * 部署方式（需安裝 Supabase CLI 並登入）：
  *   supabase functions deploy stock-price --no-verify-jwt
