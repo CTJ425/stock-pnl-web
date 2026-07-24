@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Download, RefreshCw } from 'lucide-react'
 import { Modal } from '../Common/Modal'
 import {
+  applyHoldingOverlay,
+  fetchStoredReport,
   generateReport,
   type ReportHolding,
   type ReportResponse,
@@ -30,19 +32,36 @@ export function ReportModal({ ticker, name, holding, onClose }: ReportModalProps
   useEffect(() => {
     let alive = true
     setStatus('loading')
-    generateReport({ market: 'TPE', ticker, name, holding })
-      .then((r) => {
+    ;(async () => {
+      try {
+        // Storage-first：盤後排程預產的共用報告（快、免打 TWSE），持股概況由前端疊加
+        const stored = await fetchStoredReport(ticker)
+        if (stored) {
+          if (alive) {
+            setReport({
+              reportId: '',
+              generatedAt: stored.generatedAt,
+              dataDate: stored.dataDate,
+              data: stored.data,
+              html: applyHoldingOverlay(stored.html, holding),
+            })
+            setStatus('ready')
+          }
+          return
+        }
+        // fallback：未預產（不在清單 / 當日尚未產）時即點即產，此路徑已含持股概況
+        const r = await generateReport({ market: 'TPE', ticker, name, holding })
         if (alive) {
           setReport(r)
           setStatus('ready')
         }
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (alive) {
           setErrMsg(e instanceof Error ? e.message : '產生報告失敗')
           setStatus('error')
         }
-      })
+      }
+    })()
     return () => {
       alive = false
     }

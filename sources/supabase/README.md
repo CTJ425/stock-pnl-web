@@ -25,7 +25,7 @@ supabase/
 | `stock-price` | `index.ts` | 伺服器端代抓 Yahoo Finance 現價 / 搜尋，繞開瀏覽器 CORS |
 | `stock-report` | `index.ts` + `report.ts` + `twChips.ts` + `reportHtml.ts` | 代抓 TWSE 盤後籌碼、產生報告 HTML |
 
-> **環境變數不用設**：函數只用到 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`，這兩個是 Supabase 為 Edge Functions 內建自動注入的 secret。
+> **環境變數**：即點即產只用到 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Supabase 內建自動注入，不用設）。若要啟用「盤後自動產報」，需**額外**設一個 `CRON_SECRET`（見下方章節）。
 
 ---
 
@@ -76,6 +76,30 @@ supabase functions deploy stock-report --no-verify-jwt
 
 ---
 
+## 盤後自動產報（選用）：排程產生 + Storage 保留 7 天
+
+除了「即點即產」，`stock-report` 另有 `action: 'generate-all'`：盤後由 pg_cron 觸發，一次產出全體使用者持有台股的**共用**報告（三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。前端改為 **Storage-first** 讀取（快、免每次打 TWSE），查無再 fallback 即點即產；個人「持股概況」由前端疊加。只保留最近 **7 天**，同批次順便清掉更舊的報告與 `chip_raw_cache`。
+
+**啟用步驟：**
+
+1. **設定批次密鑰**（防止公開端點被任意觸發寫入 Storage）：
+   ```bash
+   supabase secrets set CRON_SECRET=<自訂一長串隨機字串>
+   ```
+   （或 Dashboard → Edge Functions → stock-report → Secrets）
+2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 20:30（台北）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+3. **手動驗證一次**（不必等排程）：
+   ```bash
+   curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
+     -H 'Content-Type: application/json' -H 'x-cron-secret: <CRON_SECRET>' \
+     -d '{"action":"generate-all"}'
+   ```
+   → 回 `{ ok:true, ymd, generated, total }`；`reports` bucket 內應出現 `manifest.json` 與 `{ymd}/2330.json` 等物件。
+
+> **空間**：每份報告是 ~5KB 的 HTML+JSON；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
+
+---
+
 ## 部署後驗證
 
 1. **列表**：Edge Functions 頁應出現兩支函數，狀態 Deployed、JWT 顯示為關閉。
@@ -92,3 +116,5 @@ supabase functions deploy stock-report --no-verify-jwt
 | 部署/執行 import `./report.ts` 失敗 | `stock-report` 只貼了 `index.ts`，漏了其餘 3 檔 |
 | 報告功能點了沒反應 / 找不到函數 | 函數被改名，前端 `invoke('stock-report')` 對不上 |
 | `relation ... does not exist` | 尚未執行 `schema.sql`，快取表不存在 |
+| `generate-all` 回 **401** | `CRON_SECRET` 未設，或呼叫帶的 `x-cron-secret` 與環境變數不符 |
+| 排程沒跑 / `reports` bucket 是空的 | `schema.sql` 第 6 段未執行，或 `<PROJECT_REF>` / `<CRON_SECRET>` 佔位符沒換掉 |

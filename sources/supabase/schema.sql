@@ -135,3 +135,51 @@ ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
 
 -- 注意：刻意不建立任何 policy——
 -- service role（Edge Function）不受 RLS 限制，是唯一的讀寫途徑，前端不會存取。
+
+
+-- 6. 盤後報告 Storage bucket + 每日自動產生排程 (pg_cron + pg_net)
+--
+--    reports bucket 存放「每檔台股 × 每個交易日」的共用盤後報告（JSON 內含 html+data，
+--    每份約 5KB），公開讀取；僅 Edge Function(service role) 寫入。前端 Storage-first 讀取，
+--    查無再 fallback 到即點即產。批次由 stock-report 的 action='generate-all' 產生，
+--    只保留最近 7 天（同批次順便清掉更舊的報告與 chip_raw_cache）。
+--
+--    ⚠️ 執行前，請把下方兩個 <...> 佔位符換成你的專案值：
+--      <PROJECT_REF>：Supabase 專案 ref（Project Settings → General → Reference ID）
+--      <CRON_SECRET>：自訂密鑰，需與 `supabase secrets set CRON_SECRET=...` 設定的值相同
+
+-- 6a. 建立公開讀取的 reports bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('reports', 'reports', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+-- 寫入權限：service role 本就繞過 RLS，是唯一寫入途徑；公開 bucket 讀取免 policy。
+
+-- 6b. 啟用排程與伺服器端 HTTP 擴充（Supabase Free 亦支援）
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- 6c. 每交易日 20:30 台北（= 12:30 UTC，週一~週五）觸發盤後批次產報
+--     T86 / 融資融券 / 借券通常傍晚才發佈，20:30 已足夠；resolveT86 會往前找最近有資料日。
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'stock-report-nightly') THEN
+    PERFORM cron.unschedule('stock-report-nightly');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'stock-report-nightly',
+  '30 12 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"generate-all"}'::jsonb
+  );
+  $$
+);
+-- 註：函數以 --no-verify-jwt 部署，故毋需 Authorization；批次的授權改由 x-cron-secret 把關。
+-- 若你的 API Gateway 仍要求 apikey，於 headers 內加 'apikey', '<ANON_KEY>' 即可。
