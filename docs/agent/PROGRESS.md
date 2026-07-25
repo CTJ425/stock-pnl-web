@@ -1,9 +1,56 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.3.8 定版並併入 main
-- Status: COMPLETED（main 已合併；兩區後端皆就緒）
-- Timestamp: 2026-07-26 09:35:00 Asia/Taipei
+- Action: 盤後報告端點濫用防護 + 修正快取被過度清除，0.3.9 定版並併入 main
+- Status: COMPLETED（兩區皆已部署並實測）
+- Timestamp: 2026-07-26 10:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 10:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: `generate` 端點加代號白名單、修正 `prune` 過度清除快取 (0.3.9)
+- **Status**: COMPLETED
+
+### 1. `generate` 端點的濫用防護
+**問題**（實測確認）：函數以 `--no-verify-jwt` 部署（夜間 cron 只帶 `x-cron-secret`），
+不帶任何 key 也回 200；而專案網址就在 GitHub Pages 的公開 bundle 裡
+（實測線上站台的 `assets/index-*.js` 含 `https://kxnxadaghidwumqsqneu.supabase.co`，repo 為 PUBLIC）。
+
+**這不是資料安全問題**，而是額度問題：
+- 回傳的是純公開的 TWSE 資料；`holding` 是請求方自己傳進來、原樣回傳的，讀不到別人的持股
+- 唯一可寫的 `chip_raw_cache` 內容來自 TWSE，攻擊者無法注入
+- 不碰 `transactions` / `workspaces`；會寫 Storage 的 `generate-all` 有 `CRON_SECRET` 保護
+- 真正的風險：每次呼叫 = 1 次 Edge Function invocation（免費約 500K/月），
+  實測快取暖時每次約 2.3–2.6 秒。額度燒光會**連帶讓 `stock-price` 一起停擺**
+
+**修正**：`handleGenerate` 加上 `heldTwTickers()` 白名單，非持股回 403（不透露清單內容或長度）。
+攻擊者最多只能打持有的那幾檔，而它們早已被夜間批次快取 → **TWSE 放大效應歸零**。
+前端不受影響：下拉選單本來就只列使用者自己的持股。
+
+實測（兩區）：持有的代號 200；未持有、以及**曾持有但已賣光**（`net > 0` 過濾）的代號皆 403；
+`generate-all` 走自己的清單、不受白名單影響。
+
+### 2. `prune` 保留期的單位錯配
+`RETAIN_DAYS = 7` 砍的是**日曆日**，但 `HISTORY_DAYS = 7` 數的是**交易日** ——
+7 個交易日要跨 9–11 個日曆日，於是每晚都把隔天還要用的 2–3 天一起砍掉，隔天再重抓。
+
+實證：正式區 prune 後 `chip_raw_cache` 只剩 6 個交易日（20260717 起），
+我幾次匿名 `generate` 呼叫又把它補到 9 天（20260714 起）—— 也就是每天都在做白工，
+這正是 `generate-all` 每天第一次要 10–13 秒的原因之一。
+
+**修正**：拆成兩個常數。`REPORT_RETAIN_DAYS = 7`（Storage，前端只讀最新一份）、
+`CACHE_RETAIN_DAYS = LOOKBACK_DAYS`（原始檔快取，必須涵蓋 `loadSeries` 會回頭找的整個範圍）。
+
+### 未處理（需使用者自行操作）
+**Supabase 用量警示**：CLI 與 Management API 都沒有對應指令，只能在 Dashboard 設定
+（Organization → Billing → Usage / Spend cap）。這是唯一能在額度燒光前得到通知的方式。
+
+### 踩到的坑
+`functions deploy` 第一次失敗：`entrypoint path does not exist (/home/ivan/supabase/...)`
+—— shell cwd 被重置，deploy 必須在 `sources/` 下執行。所幸當下的驗證如實反映
+「正式區仍是舊版（未持有代號仍回 200）」，沒有誤判成功。**部署指令一律與 `cd` 寫在同一行。**
 
 ---
 

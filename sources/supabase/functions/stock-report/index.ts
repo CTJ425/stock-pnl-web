@@ -59,7 +59,7 @@ function json(body: unknown, status = 200): Response {
 
 const TICKER_RE = /^[0-9A-Za-z]{2,8}$/
 
-/** 報告內嵌的歷史交易日數（與 RETAIN_DAYS 一致） */
+/** 報告內嵌的歷史交易日數（**交易日**，不是日曆日） */
 const HISTORY_DAYS = 7
 /** 往回推的日曆天數，需足夠涵蓋 HISTORY_DAYS 個交易日（含週末與連假） */
 const LOOKBACK_DAYS = 14
@@ -359,6 +359,20 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   const name = String(body.name ?? '').trim().slice(0, 40)
   const holding = body.holding ?? null
 
+  /*
+   * 這個端點以 --no-verify-jwt 部署（夜間 cron 只帶 x-cron-secret 進來），
+   * 也就是任何人拿到專案網址就能呼叫 —— 而網址就在 GitHub Pages 的公開 bundle 裡。
+   *
+   * 限制只接受「確實有人持有」的代號，把濫用的上限壓到最低：
+   * 攻擊者最多只能打這幾檔，而它們的當日資料早已被夜間批次快取，
+   * 因此無法逼這個專案去大量抓 TWSE（放大效應歸零），只剩單純的 DB 讀取。
+   * 回應刻意不透露清單內容或長度。
+   */
+  const held = await heldTwTickers()
+  if (!held.some((h) => h.ticker === ticker)) {
+    return json({ error: '此代號不在持股清單內，無法產生報告' }, 403)
+  }
+
   const series = await loadSeries([ticker], new Date())
   const { marginFallbackRows, sblRows } = await loadLatestOnlySources(
     series.dataYmd,
@@ -373,7 +387,19 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
 // ---- 盤後批次：產生全體持有台股的共用報告存入 Storage(reports bucket)，保留最近 7 天 ----
 
 const REPORTS_BUCKET = 'reports'
-const RETAIN_DAYS = 7
+
+/** 報告在 Storage 保留幾個**日曆日**。前端只讀 manifest 指到的最新一份，舊的純粹留著備查 */
+const REPORT_RETAIN_DAYS = 7
+/**
+ * 原始檔快取保留幾個**日曆日**，必須涵蓋整個 LOOKBACK_DAYS 視窗。
+ *
+ * 為什麼不是 7：`HISTORY_DAYS` 數的是**交易日**，而 prune 砍的是**日曆日** ——
+ * 7 個交易日要跨 9–11 個日曆日。用 7 天會把隔天還要用的 2–3 天一起砍掉，
+ * 於是每晚的批次都得重抓那幾天（實測正式區 prune 後只剩 6 個交易日可用，
+ * 每次 generate 都還在補抓）。設成與 LOOKBACK_DAYS 相同最不容易再錯：
+ * 那正是 loadSeries 會回頭找的範圍，更舊的資料本來就永遠不會被讀到。
+ */
+const CACHE_RETAIN_DAYS = LOOKBACK_DAYS
 
 /** generate-all 會寫 Storage，端點為公開(--no-verify-jwt)，故要求 x-cron-secret 與環境變數相符 */
 function assertCronSecret(req: Request): Response | null {
@@ -477,10 +503,9 @@ async function handleGenerateAll(): Promise<Response> {
     generatedAt: new Date().toISOString(),
   })
 
-  // 只保留最近 RETAIN_DAYS 天：清掉更舊的報告與原始檔快取
-  const cutoff = ymdMinusDays(series.dataYmd, RETAIN_DAYS)
-  await pruneStorage(cutoff)
-  await pruneChipCache(cutoff)
+  // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處
+  await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
+  await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
 
   return json({
     ok: true,
