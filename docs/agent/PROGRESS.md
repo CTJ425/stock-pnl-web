@@ -1,9 +1,54 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 個股分析獨立成頁（下拉切換）、移除服務狀態 (0.3.8-dev.1)
-- Status: COMPLETED（dev 分支；不需要動 Supabase）
-- Timestamp: 2026-07-26 00:30:00 Asia/Taipei
+- Action: 修正夜間排程的 pg_net 逾時 (0.3.8-dev.2)
+- Status: COMPLETED（兩區 cron 皆已修正並實測）
+- Timestamp: 2026-07-26 09:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 09:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修正夜間排程的 pg_net 逾時 (0.3.8-dev.2)
+- **Status**: COMPLETED
+- **起因**: 使用者要求分析「免費 Supabase + GitHub Pages 的隱藏問題」，盤點時實測發現此問題
+
+### 問題
+`schema.sql` §6c 的 `net.http_post` 沒指定 `timeout_milliseconds`，而 pg_net 的**預設值是 5000ms**
+（實測 `pg_get_function_arguments`：`timeout_milliseconds integer DEFAULT 5000`）。
+但 `generate-all` **每天第一次執行要 10–13 秒**（抓當天的 T86 與融資融券大檔），
+第二次因快取全命中只要約 2 秒 —— 也就是說**每天唯一有意義的那一次必定逾時**。
+
+### 實測（dev，以 `timeout_milliseconds := 1000` 強制重現）
+| 觀察點 | 結果 |
+| --- | --- |
+| `net._http_response` | `error_msg = "Timeout of 1000 ms reached"`、`status_code = null` |
+| Storage `manifest.generatedAt` | 16:02:25 → **16:03:37（前進）** |
+
+**結論：批次本身沒壞** —— 客戶端逾時後 Edge Function 仍在伺服器端跑完、報告正常寫入。
+真正的損失是**可觀測性**：每晚都記成失敗，導致「逾時但成功」與「真的失敗」無法區分，
+而這是唯一的伺服器端訊號（服務狀態頁已於 dev.1 移除）。
+
+### 修正
+`schema.sql` 的 cron 補上 `timeout_milliseconds := 60000` 並加註原因，
+兩區的 `cron.job` 皆以相同 SQL 重新排定（保留原有的 `CRON_SECRET`，從既有 command 取出）。
+
+驗證：dev 直接執行修正後的 cron 指令 → `net._http_response` 記錄
+`status_code = 200`、`error_msg = null`、含完整回應內容 `{"ok":true,...,"historyDays":7}`。
+兩區皆確認 `command like '%timeout_milliseconds := 60000%'` 且 `active = true`。
+
+### 同時盤點到、但**未**在本輪處理的免費方案議題
+- **`stock-report` 的 `generate` 是完全公開端點**：實測不帶任何 key 也回 200
+  （函數以 `--no-verify-jwt` 部署，且專案 URL 就在 GitHub Pages 的公開 bundle 裡）。
+  `generate-all` 有 `CRON_SECRET` 保護，只有 `generate` 是開的。
+- **可觀測性**：dev.1 移除服務狀態後，排程失敗不會有任何地方顯示（症狀只是開頁變慢）。
+- **免費方案**：每組織 2 個 active 專案（**已用滿**）、7 天無活動自動暫停、無 PITR/備份保障
+  （`transactions` 是唯一不可重建的資料，建議定期 CSV 匯出）。
+- **實測後確認不是問題**：dev 全庫 13MB、`chip_raw_cache` 含 TOAST 僅 1.68MB
+  （22 筆、原始 JSON 3.99MB 壓到 1.45MB，遠低於 PLAN 當初估的 15–25MB）；
+  前端 bundle 508KB + 動態載入的 PDF 函式庫，對 Pages 頻寬無感；
+  Storage bucket 匿名無法列舉（400），但直接猜路徑可探測「全體持有哪些代號」（無股數、無個資）。
 
 ---
 
