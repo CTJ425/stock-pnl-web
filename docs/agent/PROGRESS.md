@@ -1,9 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修正夜間排程的 pg_net 逾時 (0.3.8-dev.2)
-- Status: COMPLETED（兩區 cron 皆已修正並實測）
-- Timestamp: 2026-07-26 09:20:00 Asia/Taipei
+- Action: 0.3.8 定版並併入 main
+- Status: COMPLETED（main 已合併；兩區後端皆就緒）
+- Timestamp: 2026-07-26 09:35:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 09:35:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.3.8 定版、併入 `main`
+- **Status**: COMPLETED
+
+### 版號定稿（CLAUDE.md §17.3）
+`0.3.8-dev.2` → **`0.3.8`**（三處同步）。README 把 dev.1 / dev.2 併成一則 0.3.8 正式紀錄。
+
+### 本次不需要動 Supabase 的部署
+0.3.8 的前端改動（分析頁獨立、移除服務狀態）**不涉及 Edge Function 或報告 JSON 結構**，
+兩區的 `stock-report` 維持既有部署即可。唯一的後端異動是 cron 的 `timeout_milliseconds`，
+已於 dev.2 當下同步套用到兩區並驗證。因此本次**先合併再部署前端**沒有空窗風險
+（不像 0.3.7 當時正式區根本沒有 `stock-report`，必須先補後端）。
 
 ---
 
