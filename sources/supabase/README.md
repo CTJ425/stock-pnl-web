@@ -88,7 +88,7 @@ supabase functions deploy stock-report --no-verify-jwt
    supabase secrets set CRON_SECRET=<自訂一長串隨機字串>
    ```
    （或 Dashboard → Edge Functions → stock-report → Secrets）
-2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 20:30（台北）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 **23:30（台北）** 呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
 3. **手動驗證一次**（不必等排程）：
    ```bash
    curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
@@ -97,6 +97,10 @@ supabase functions deploy stock-report --no-verify-jwt
    ```
    → 回 `{ ok:true, ymd, generated, total, historyDays }`；`reports` bucket 內應出現 `manifest.json` 與 `{ymd}/2330.json` 等物件。
    `historyDays` 是這次組到幾個交易日（滿載為 7）；**第一次執行通常只有 5**，見下方「歷史回補」。
+
+> **為什麼是 23:30**：各資料源公布時間差很多 —— T86 約 15:00–15:30（可能延至 16:30）、
+> 融資融券約 21:00–22:00（偶爾延至 23:00）、借券約 21:00–22:30。排太早不會報錯，
+> 但當天的融資融券會是空的、借券還會把前一天的數字當成今天的。詳見 `schema.sql` §6c 的註解。
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
 
