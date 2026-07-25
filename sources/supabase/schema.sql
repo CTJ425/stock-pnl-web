@@ -161,8 +161,20 @@ ON CONFLICT (id) DO UPDATE SET public = true;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 6c. 每交易日 20:30 台北（= 12:30 UTC，週一~週五）觸發盤後批次產報
---     T86 / 融資融券 / 借券通常傍晚才發佈，20:30 已足夠；resolveT86 會往前找最近有資料日。
+-- 6c. 每交易日 23:30 台北（= 15:30 UTC，週一~週五）觸發盤後批次產報
+--
+--     ⚠️ 這個時間是查證後定的，別再往前挪。各資料源的實際公布時間差很多：
+--       三大法人個股買賣超 (T86)：約 15:00–15:30，大行情或系統結算可能延至 16:30
+--       融資融券餘額：            約 21:00–22:00，視全台券商回傳速度，偶爾延至 22:30–23:00
+--       借券賣出餘額：            約 21:00–22:30，每日晚間執行二次更新
+--     原本設 20:30，對 T86 夠、但對融資融券與借券**都太早**（早了至少半小時到兩小時）。
+--     後果不是報錯而是無聲的錯：T86 有資料 → 當天算得上交易日 → 被收進 history，
+--     但該日 margin 為 null（且因舊日快取有值，marginDatedFailed 判定為 false，備援不會啟動），
+--     於是前端的融資融券區塊每天都顯示「查無此股當日資料」；
+--     借券更糟 —— 端點無 date 參數，會把前一天的數字快取成今天的，看不出異狀。
+--
+--     23:30 仍在台北當日內，不影響 taipeiYmd 的判斷。真遇到更誇張的延遲也不會壞：
+--     隔天的批次會把前一天缺的補回來，只是那一晚的報告不完整。
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'stock-report-nightly') THEN
@@ -172,7 +184,7 @@ END $$;
 
 SELECT cron.schedule(
   'stock-report-nightly',
-  '30 12 * * 1-5',
+  '30 15 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',

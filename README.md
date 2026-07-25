@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.3.9**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.3.10**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -248,6 +248,17 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 ## 🗒️ 版本紀錄
 
+### 0.3.10（2026-07-26）
+
+**夜間排程時間由 20:30 改為 23:30**
+- 查證後發現原本的 20:30 對兩個資料源都太早：**融資融券**約 21:00–22:00 才公布
+  （偶爾延至 23:00）、**借券**約 21:00–22:30。只有三大法人（約 15:00–15:30）來得及。
+- 排太早不會報錯，而是**無聲的錯**：當天算得上交易日（T86 有資料），但融資融券為空，
+  前端會顯示「查無此股當日資料」；借券的端點沒有 date 參數，更會把**前一天的數字快取成今天的**，
+  完全看不出異狀。
+- 改為 23:30（仍在台北當日內，不影響交易日判斷）。真遇到更誇張的延遲也不會壞 ——
+  隔天的批次會把前一天缺的補回來。理由與各資料源的公布時間都寫進 `schema.sql` §6c 註解。
+
 ### 0.3.9（2026-07-26）
 
 **盤後報告端點的濫用防護**
@@ -309,7 +320,7 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 - **單位標示清楚**：三大法人是「股」、融資融券是「張」，兩者不可混算，UI 各自標示。
 
 **盤後自動產生 + Storage-first（快 10 倍）**
-- Supabase `pg_cron` 每交易日 20:30（台北）觸發 `generate-all`，一次產出全體持有台股的**共用**報告
+- Supabase `pg_cron` 每交易日 23:30（台北）觸發 `generate-all`，一次產出全體持有台股的**共用**報告
   （三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。
 - 前端改為先讀預產好的報告、查無再 fallback 即點即產。實測 **0.8 秒 vs 8 秒**。
   個人「持股概況」不進共用報告，由前端自行渲染（共用報告不含任何個資）。
@@ -325,7 +336,7 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 1. SQL Editor 執行 `sources/supabase/schema.sql` 的第 5 段（建 `chip_raw_cache`）。
 2. `supabase functions deploy stock-report --no-verify-jwt`。
 3. （啟用盤後自動產報）`supabase secrets set CRON_SECRET=<隨機字串>`，
-   再執行 schema 第 6 段（建 `reports` bucket、啟用 `pg_cron`/`pg_net`、排定每交易日 20:30）。
+   再執行 schema 第 6 段（建 `reports` bucket、啟用 `pg_cron`/`pg_net`、排定每交易日 23:30）。
    詳細步驟與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 
 ### v0.2.5（2026-07-21）
