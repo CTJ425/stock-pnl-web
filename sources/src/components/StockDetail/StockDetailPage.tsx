@@ -15,7 +15,6 @@ import {
 } from '../../services/reportProxy'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { ChipsTab } from './ChipsTab'
-import { FundamentalsTab } from './FundamentalsTab'
 import { HoldingTab } from './HoldingTab'
 import { TechnicalTab } from './TechnicalTab'
 
@@ -29,12 +28,11 @@ interface StockDetailPageProps extends StockDetailTarget {
   onBack: () => void
 }
 
-type DetailTab = 'chips' | 'technical' | 'fundamental' | 'holding'
+type DetailTab = 'chips' | 'technical' | 'holding'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'chips', label: '籌碼' },
   { id: 'technical', label: '技術面' },
-  { id: 'fundamental', label: '基本面' },
   { id: 'holding', label: '我的持股' },
 ]
 
@@ -150,26 +148,6 @@ export function StockDetailPage({ ticker, name, holding, onBack }: StockDetailPa
           </>
         )}
         {tab === 'technical' && <TechnicalTab />}
-        {/* 基本面與籌碼來自同一份報告，故共用同一組載入 / 錯誤狀態 */}
-        {tab === 'fundamental' && (
-          <>
-            {status === 'loading' && (
-              <div className="empty-state" style={{ padding: 32 }}>
-                <RefreshCw size={28} className="spin" />
-                <div style={{ marginTop: 10 }}>正在讀取基本面資料…</div>
-              </div>
-            )}
-            {status === 'error' && (
-              <div className="notice notice-warn" role="alert">
-                <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                {errMsg}
-              </div>
-            )}
-            {status === 'ready' && report && (
-              <FundamentalsTab fundamentals={report.fundamentals} ticker={ticker} />
-            )}
-          </>
-        )}
         {tab === 'holding' && <HoldingTab holding={holding} />}
       </div>
     </div>

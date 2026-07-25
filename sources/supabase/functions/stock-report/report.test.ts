@@ -127,33 +127,11 @@ describe('buildReport', () => {
     now: new Date('2026-07-22T12:00:00Z'),
   })
 
-  it('標記 schema 3 並帶入 history', () => {
-    expect(data.schema).toBe(3)
+  it('標記 schema 2 並帶入 history', () => {
+    expect(data.schema).toBe(2)
     expect(data.history).toHaveLength(3)
     expect(data.dataDate).toBe('2026-07-22')
     expect(data.market).toBe('TPE')
-  })
-
-  it('未帶基本面時 fundamentals 為 null（選填欄位，不影響籌碼）', () => {
-    expect(data.fundamentals).toBeNull()
-  })
-
-  it('帶入基本面時原樣放進報告', () => {
-    const withFund = buildReport({
-      ticker: '2330', name: '台積電', dataDateYmd: '20260724',
-      holding: null, history: [], borrow: null, notes: [],
-      fundamentals: {
-        valuation: {
-          peRatio: 31.59, dividendYield: 0.94, pbRatio: 10.34,
-          closePrice: 2350, ttmEps: 74.39, date: '2026-07-24',
-        },
-        quarters: [{ year: 2026, quarter: 1, eps: 22.08, revenue: 1134103440, netIncome: 572479752 }],
-        isEtf: false,
-      },
-    })
-    expect(withFund.fundamentals?.quarters[0].eps).toBe(22.08)
-    expect(withFund.fundamentals?.valuation?.peRatio).toBe(31.59)
-    expect(withFund.fundamentals?.isEtf).toBe(false)
   })
 
   it('institutional / margin 取 history 最後一筆（最新交易日）', () => {

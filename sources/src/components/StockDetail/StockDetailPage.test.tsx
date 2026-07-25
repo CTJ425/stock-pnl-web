@@ -54,14 +54,6 @@ const report: ReportData = {
   borrow: { availableVolume: 100267 },
   history,
   streaks: { foreign: 2, foreignDealer: 0, trust: 0, dealer: 2, total: 2, margin: 2, short: 1 },
-  fundamentals: {
-    valuation: {
-      peRatio: 31.59, dividendYield: 0.94, pbRatio: 10.34,
-      closePrice: 2350, ttmEps: 74.39, date: '2026-07-24',
-    },
-    quarters: [{ year: 2026, quarter: 1, eps: 22.08, revenue: 1_134_103_440, netIncome: 572_479_752 }],
-    isEtf: false,
-  },
   notes: [],
 }
 
@@ -199,7 +191,7 @@ describe('StockDetailPage', () => {
     expect(after).not.toBe(before)
   })
 
-  it('分頁籤切換：技術面為佔位、基本面讀 fundamentals、我的持股由前端資料渲染', async () => {
+  it('分頁籤切換：技術面為佔位、我的持股由前端資料渲染', async () => {
     const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} onBack={() => {}} />)
     await screen.findByText('三大法人買賣超')
@@ -207,12 +199,6 @@ describe('StockDetailPage', () => {
     await user.click(screen.getByRole('button', { name: '技術面' }))
     expect(screen.getByText(/日線、週線、季線還在開發中/)).toBeTruthy()
     expect(screen.queryByText('三大法人買賣超')).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: '基本面' }))
-    expect(screen.getByText('每股盈餘（EPS）')).toBeTruthy()
-    expect(screen.getByText('31.59 倍')).toBeTruthy() // 本益比
-    // EPS 同時出現在卡片與表格，故限定卡片內查
-    expect(screen.getByText(/最新一季（2026 Q1）/).parentElement!.textContent).toContain('22.08 元')
 
     await user.click(screen.getByRole('button', { name: '我的持股' }))
     expect(screen.getByText('持股概況')).toBeTruthy()

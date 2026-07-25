@@ -34,23 +34,8 @@ import {
   isWeekendYmd,
   tradingDateCandidates,
   type ChipDay,
-  type Fundamentals,
   type HoldingContext,
 } from './report.ts'
-import {
-  BWIBBU_URL,
-  STOCK_DAY_AVG_URL,
-  INCOME_SUFFIXES,
-  incomeStatementUrl,
-  incomeRowsOk,
-  extractClosePrice,
-  extractIncome,
-  extractValuation,
-  expectedLatestQuarter,
-  isEtfTicker,
-  type FundamentalQuarter,
-  type IncomeSuffix,
-} from './twFundamentals.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 chip_raw_cache 唯一的讀寫途徑
@@ -295,27 +280,6 @@ interface GenerateReportRequestBody {
 type MarginRows = Record<string, string>[] | null
 type SblRows = Parameters<typeof extractBorrow>[0] | null
 
-/** 基本面的當日估值來源（每日更新）＋各代號的歷史季別（由 DB 累積） */
-interface FundamentalSources {
-  bwibbuRows: Record<string, string>[] | null
-  avgRows: Record<string, string>[] | null
-  /** ticker → 由舊到新的季別 */
-  quartersByTicker: Map<string, FundamentalQuarter[]>
-}
-
-/** 組出單一代號的基本面。ETF 一律回帶 isEtf 的空殼，讓前端能用專屬文案。 */
-function assembleFundamentals(ticker: string, src: FundamentalSources): Fundamentals | null {
-  const quarters = src.quartersByTicker.get(ticker) ?? []
-  const closePrice = src.avgRows ? extractClosePrice(src.avgRows, ticker) : null
-  const valuation = src.bwibbuRows ? extractValuation(src.bwibbuRows, ticker, closePrice) : null
-  if (isEtfTicker(ticker)) {
-    // ETF 沒有 EPS 也沒有本益比，但仍回傳物件（而非 null），前端才分得出「ETF 不適用」與「查無」
-    return { valuation, quarters: [], isEtf: true }
-  }
-  if (valuation === null && quarters.length === 0) return null
-  return { valuation, quarters, isEtf: false }
-}
-
 /** 由已抓好的序列組出單一代號的報告資料。holding 為 null 時前端不顯示持股概況。 */
 function assembleOne(opts: {
   ticker: string
@@ -324,9 +288,8 @@ function assembleOne(opts: {
   series: SeriesResult
   marginFallbackRows: MarginRows
   sblRows: SblRows
-  fundamentalSources: FundamentalSources
 }): ReturnType<typeof buildReport> {
-  const { ticker, name, holding, series, marginFallbackRows, sblRows, fundamentalSources } = opts
+  const { ticker, name, holding, series, marginFallbackRows, sblRows } = opts
   const notes: string[] = []
 
   // 複製一份再組：series 的切片可能被多個代號共用讀取，下面的 fallback 會就地補值
@@ -362,11 +325,6 @@ function assembleOne(opts: {
     notes.push('此代號查無上市籌碼資料（可能為上櫃 / 興櫃，暫不支援上櫃）。')
   }
 
-  const fundamentals = assembleFundamentals(ticker, fundamentalSources)
-  if (fundamentals && !fundamentals.isEtf && fundamentals.quarters.length === 1) {
-    notes.push('財報只有最新一季：官方端點不提供歷史季別，逐季趨勢會隨每季公布自然累積。')
-  }
-
   return buildReport({
     ticker,
     name,
@@ -374,7 +332,6 @@ function assembleOne(opts: {
     holding,
     history,
     borrow,
-    fundamentals,
     notes,
   })
 }
@@ -391,115 +348,6 @@ async function loadLatestOnlySources(
   return { marginFallbackRows, sblRows }
 }
 
-// ---- 基本面：財報 EPS（每季）與估值指標（每日） ----
-
-/** 讀已累積的財報季別（由舊到新）。前端不直讀此表，一律由此併入報告 JSON */
-async function readStoredQuarters(
-  tickers: string[],
-): Promise<Map<string, FundamentalQuarter[]>> {
-  const out = new Map<string, FundamentalQuarter[]>()
-  if (tickers.length === 0) return out
-  try {
-    const { data, error } = await db
-      .from('stock_fundamentals')
-      .select('ticker, year, quarter, eps, revenue, net_income')
-      .in('ticker', tickers)
-      .order('year', { ascending: true })
-      .order('quarter', { ascending: true })
-    if (error || !data) return out
-    for (const r of data) {
-      const t = String(r.ticker)
-      const list = out.get(t) ?? []
-      list.push({
-        year: Number(r.year),
-        quarter: Number(r.quarter),
-        eps: r.eps === null ? null : Number(r.eps),
-        revenue: r.revenue === null ? null : Number(r.revenue),
-        netIncome: r.net_income === null ? null : Number(r.net_income),
-      })
-      out.set(t, list)
-    }
-  } catch {
-    // 讀失敗就當沒有基本面歷史，不影響籌碼主流程
-  }
-  return out
-}
-
-/**
- * 若「此刻應已公布的最新一季」尚未入庫，才去抓那五個產業表並寫入。
- * 這是每季一次、不是每天一次 —— 五表合計約 1.5MB×5，天天抓純屬浪費。
- */
-async function syncFundamentals(now: Date): Promise<{ fetched: boolean; rows: number }> {
-  const { year, quarter } = expectedLatestQuarter(now)
-  try {
-    const { count, error } = await db
-      .from('stock_fundamentals')
-      .select('ticker', { count: 'exact', head: true })
-      .eq('year', year)
-      .eq('quarter', quarter)
-    // 已有該季資料 → 完全不發外部請求
-    if (!error && (count ?? 0) > 0) return { fetched: false, rows: count ?? 0 }
-  } catch {
-    // 查詢失敗就照下面流程抓一次，寧可多抓也不要缺資料
-  }
-
-  let rows = 0
-  for (const suffix of INCOME_SUFFIXES) {
-    let payload: unknown
-    try {
-      payload = await fetchJson<unknown>(incomeStatementUrl(suffix))
-    } catch {
-      continue // 單一產業表失敗不影響其他表
-    }
-    if (!incomeRowsOk(payload)) continue
-    const upserts: Array<Record<string, unknown>> = []
-    for (const raw of payload) {
-      const ticker = String(raw['公司代號'] ?? '').trim()
-      if (!TICKER_RE.test(ticker)) continue
-      const q = extractIncome([raw], ticker)
-      if (!q) continue
-      upserts.push({
-        ticker,
-        year: q.year,
-        quarter: q.quarter,
-        eps: q.eps,
-        revenue: q.revenue,
-        net_income: q.netIncome,
-        source: suffix satisfies IncomeSuffix,
-        updated_at: new Date().toISOString(),
-      })
-    }
-    // 分批 upsert，避免單一請求過大
-    for (let i = 0; i < upserts.length; i += 500) {
-      try {
-        await db.from('stock_fundamentals').upsert(upserts.slice(i, i + 500))
-        rows += Math.min(500, upserts.length - i)
-      } catch {
-        // 寫入失敗不影響主流程，隔日再試
-      }
-    }
-  }
-  return { fetched: true, rows }
-}
-
-/** 組出基本面所需的所有來源：估值（每日快取）+ 財報（每季同步後由 DB 讀） */
-async function loadFundamentalSources(
-  dataYmd: string,
-  tickers: string[],
-  now: Date,
-  opts: { sync: boolean },
-): Promise<FundamentalSources> {
-  if (opts.sync) await syncFundamentals(now)
-  const bwibbuRows = await readLatest<Record<string, string>[]>(dataYmd, 'BWIBBU', BWIBBU_URL)
-  const avgRows = await readLatest<Record<string, string>[]>(
-    dataYmd,
-    'STOCK_DAY_AVG',
-    STOCK_DAY_AVG_URL,
-  )
-  const quartersByTicker = await readStoredQuarters(tickers)
-  return { bwibbuRows, avgRows, quartersByTicker }
-}
-
 async function handleGenerate(body: GenerateReportRequestBody): Promise<Response> {
   if (body.market !== 'TPE') {
     return json({ error: '盤後籌碼報告僅支援台股（TPE）' }, 400)
@@ -511,25 +359,12 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   const name = String(body.name ?? '').trim().slice(0, 40)
   const holding = body.holding ?? null
 
-  const now = new Date()
-  const series = await loadSeries([ticker], now)
+  const series = await loadSeries([ticker], new Date())
   const { marginFallbackRows, sblRows } = await loadLatestOnlySources(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
-  // 即點即產不做財報同步（那是 5 個大檔，會讓單次請求逾時）；只讀已累積的季別 + 當日估值
-  const fundamentalSources = await loadFundamentalSources(series.dataYmd, [ticker], now, {
-    sync: false,
-  })
-  const data = assembleOne({
-    ticker,
-    name,
-    holding,
-    series,
-    marginFallbackRows,
-    sblRows,
-    fundamentalSources,
-  })
+  const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, sblRows })
 
   const reportId = makeReportId(series.dataYmd, ticker)
   return json({ reportId, generatedAt: data.generatedAt, dataDate: data.dataDate, data })
@@ -613,35 +448,19 @@ async function pruneChipCache(cutoffYmd: string): Promise<void> {
 }
 
 async function handleGenerateAll(): Promise<Response> {
-  const now = new Date()
   const tickers = await heldTwTickers()
   const series = await loadSeries(
     tickers.map((t) => t.ticker),
-    now,
+    new Date(),
   )
   const { marginFallbackRows, sblRows } = await loadLatestOnlySources(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
-  // 盤後批次是唯一會同步財報的路徑（每季實際只抓一次，見 syncFundamentals）
-  const fundamentalSources = await loadFundamentalSources(
-    series.dataYmd,
-    tickers.map((t) => t.ticker),
-    now,
-    { sync: true },
-  )
 
   let generated = 0
   for (const { ticker, name } of tickers) {
-    const data = assembleOne({
-      ticker,
-      name,
-      holding: null,
-      series,
-      marginFallbackRows,
-      sblRows,
-      fundamentalSources,
-    })
+    const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, sblRows })
     const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
       ticker,
       dataDate: data.dataDate,
@@ -669,11 +488,6 @@ async function handleGenerateAll(): Promise<Response> {
     generated,
     total: tickers.length,
     historyDays: series.days.length,
-    // 便於驗證「每季只抓一次」：同一季重跑時 quartersStored 不變、且不會再發外部請求
-    quartersStored: [...fundamentalSources.quartersByTicker.values()].reduce(
-      (n, q) => n + q.length,
-      0,
-    ),
   })
 }
 
