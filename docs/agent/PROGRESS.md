@@ -1,9 +1,59 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 夜間排程由 20:30 改為 23:30（查證各資料源公布時間後）
-- Status: COMPLETED（兩區皆已重新排定並驗證）
-- Timestamp: 2026-07-26 11:10:00 Asia/Taipei
+- Action: 盤後批次改分段執行 + 逐區塊資料時間 + 借券改用自帶日期端點 (0.4.0)
+- Status: COMPLETED（兩區皆已部署並實測）
+- Timestamp: 2026-07-26 02:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 02:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 盤後批次分段執行、逐區塊標示資料時間、借券改用自帶日期的端點 (0.4.0)
+- **Status**: COMPLETED
+- **起因**: 使用者提議「不能分段執行嗎？能更新的就先更新，並且標註更新時間」
+
+### 為什麼這個提議成立
+1. **`generate-all` 本來就冪等且會自我補完** —— 每次重讀快取、只抓缺的、覆寫整份報告。
+   「跑三次、能更新的先更新」不需要新機制，加 cron 條目就會發生。
+2. **逐項更新時間的資料早就存在** —— `chip_raw_cache.updated_at` 就是「這份 dataset 何時抓到的」，
+   逐日逐 dataset 都有，只是沒放進報告。
+
+### 但分段執行會放大一個既有的坑（實測確認）
+借券與備援融資融券的回應**完全沒有日期欄位**（實測：`['TWSECode','TWSEAvailableVolume',
+'GRETAICode','GRETAIAvailableVolume']`，裸陣列）。而 `readLatest` 是「有快取就直接用」：
+早班（17:30）抓到的其實是前一天的借券、卻存成今天，後面幾班因快取已存在而**永遠沿用那份錯的**。
+從偶發變成必然。
+
+**解法**：找到帶日期的 rwd 端點 `rwd/zh/marginTrading/TWT96U`。
+`date` 參數實測**無效**（三個不同日期回同一份），但 **`title` 自帶日期**
+（`115年07月27日 當日可借券賣出股數`），足以判斷拿到的是哪一天 —— 以此為快取鍵（新 dataset `SBL_D`）。
+
+**順帶修正語意錯位**：「可借券賣出股數」是**下一個交易日**的額度，不是收盤那天的數字
+（實測最後交易日 07/24 時 title 為 07/27）。原本混在收盤日底下顯示，現在各自標日期。
+
+### 實作
+- `twChips.ts`：`BORROW_DATED_URL` / `parseRocTitleDate` / `extractBorrowDated` /
+  `borrowDatedOk` / `borrowDatedDate`。rwd 的儲存格把代號包在 `<a>` 裡、每列是兩欄配對（4 格），都已處理。
+- `report.ts`：新增 `SourceStamp` / `ReportSources`，`REPORT_SCHEMA` 2 → **3**。
+- `index.ts`：`fetchedAtByDataset` 在讀/寫快取時記下時間；`loadLatestOnlySources` 拆成
+  `loadBorrow`（以資料自己的日期為鍵）與 `loadMarginFallback`；`assembleOne` 組出 `sources`。
+- 前端：`SourceTag` 元件逐區塊顯示「資料日 X · 更新於 Y」；融資融券未到的文案改為
+  「今日尚未公布（約 21:00–22:00），稍晚會自動補上」並點明三大法人不受影響。
+- cron：`'30 15 * * 1-5'` → **`'30 9,14,15 * * 1-5'`**（17:30 / 22:30 / 23:30 台北）。
+
+### 驗證（兩區皆已部署）
+- `chip_raw_cache` 出現 `SBL_D` 且 **ymd = 20260727**（借券自己的日期），
+  而非籌碼的 20260724 —— 早晚班不會互相污染。
+- 報告 `schema: 3`，`sources` 三項的 `fetchedAt` **各不相同**
+  （institutional 04:02、margin 07:32、borrow 17:57 UTC），逐項新鮮度確實生效。
+- `npm run test` 170 → **182 passed**；`build` 通過；`lint` 維持 3 個既有 warning。
+- Edge Function 檔案先以 esbuild parse 過再部署（Deno 檔不在 tsc 的 include 範圍內）。
+
+### Outstanding
+第一次三段式自動執行是 **2026-07-27（週一）** 的 17:30 / 22:30 / 23:30。
+預期 17:30 那班只有三大法人、`sources.margin` 為 null，22:30 或 23:30 補齊 —— 這正是要驗的行為。
 
 ---
 

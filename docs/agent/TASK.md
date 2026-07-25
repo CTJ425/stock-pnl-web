@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-26 00:30:00 Asia/Taipei
+- Timestamp: 2026-07-26 02:10:00 Asia/Taipei
 
 ---
 
@@ -38,6 +38,34 @@
 
 #### 不需要動 Supabase
 純前端呈現層改動，報告 JSON 結構與 Edge Function 完全不變。
+
+---
+
+### Task 16: 盤後批次分段執行 + 逐區塊資料時間 (0.4.0)
+- **Status**: DONE
+- **Planner**: User（提議「能更新的先更新，並標註更新時間」）
+- **Implementer**: Claude
+- **Timestamp**: 2026-07-26 02:10:00 Asia/Taipei
+
+#### Objective
+各資料源公布時間差 6 小時以上，改為分段執行讓早就緒的先上；並讓使用者看得出每塊資料各自多新。
+
+#### 關鍵發現
+- 「跑多次逐步補齊」**不需要新機制** —— `generate-all` 本來就冪等且自我補完。
+- 「逐項更新時間」**資料早就存在** —— `chip_raw_cache.updated_at`。
+- 但分段執行會把借券的既有坑從偶發變必然（端點無日期欄位、早班的錯資料會被後續班次沿用）。
+  解法是改用自帶 `title` 日期的 rwd 端點，以資料自己宣告的日期為快取鍵。
+
+#### Acceptance Criteria
+- [x] cron 分三段（17:30 / 22:30 / 23:30 台北）
+- [x] 報告 `sources` 逐項記錄資料日與抓取時間（schema 3）
+- [x] 前端逐區塊顯示；融資融券未到的文案改為「尚未公布」而非「無回應」
+- [x] 借券以自己宣告的日期為快取鍵（實測 `SBL_D` 存在 20260727 而非 20260724）
+- [x] 舊格式（schema 2、無 sources）不會炸
+- [x] test 170 → 182 passed / build / lint 無新增 warning
+
+#### Outstanding
+第一次三段式自動執行為 2026-07-27（週一）。預期 17:30 那班 `sources.margin` 為 null、稍晚補齊。
 
 ---
 

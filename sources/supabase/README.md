@@ -88,7 +88,7 @@ supabase functions deploy stock-report --no-verify-jwt
    supabase secrets set CRON_SECRET=<自訂一長串隨機字串>
    ```
    （或 Dashboard → Edge Functions → stock-report → Secrets）
-2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 **23:30（台北）** 呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日**分三段**（17:30 / 22:30 / 23:30 台北）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
 3. **手動驗證一次**（不必等排程）：
    ```bash
    curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
@@ -98,9 +98,12 @@ supabase functions deploy stock-report --no-verify-jwt
    → 回 `{ ok:true, ymd, generated, total, historyDays }`；`reports` bucket 內應出現 `manifest.json` 與 `{ymd}/2330.json` 等物件。
    `historyDays` 是這次組到幾個交易日（滿載為 7）；**第一次執行通常只有 5**，見下方「歷史回補」。
 
-> **為什麼是 23:30**：各資料源公布時間差很多 —— T86 約 15:00–15:30（可能延至 16:30）、
-> 融資融券約 21:00–22:00（偶爾延至 23:00）、借券約 21:00–22:30。排太早不會報錯，
-> 但當天的融資融券會是空的、借券還會把前一天的數字當成今天的。詳見 `schema.sql` §6c 的註解。
+> **為什麼分三段**：各資料源公布時間差很多 —— T86 約 15:00–15:30（可能延至 16:30）、
+> 融資融券約 21:00–22:00（偶爾延至 23:00）、借券約 21:00–22:30。
+> 等最晚的才產報，會讓最早就緒的三大法人白白晚 6 小時。批次冪等且自我補完，
+> 多跑幾次自然逐步補齊；第二、三班幾乎全快取命中，實測約 2 秒。
+> 17:30 那班只有三大法人是**預期行為不是故障** —— `sources` 欄位會逐項標明各自的時間。
+> 詳見 `schema.sql` §6c 的註解。
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
 
@@ -121,6 +124,11 @@ supabase functions deploy stock-report --no-verify-jwt
     "borrow": { "availableVolume": 100267 },
     "history": [ /* ChipDay[]，由舊到新，最多 7 筆 */ ],
     "streaks": { "foreign": 4, "margin": 2, "short": 0 /* … */ },
+    "sources": {                // schema 3 起：各資料源各自的資料日與抓取時間
+      "institutional": { "date": "2026-07-24", "fetchedAt": "2026-07-25T04:02:50.800Z" },
+      "margin":        { "date": "2026-07-24", "fetchedAt": "2026-07-25T07:32:20.445Z" },
+      "borrow":        { "date": "2026-07-27", "fetchedAt": "2026-07-25T17:57:58.880Z" }
+    },
     "notes": ["歷史資料回補中：…"]
   }
 }
@@ -136,7 +144,8 @@ supabase functions deploy stock-report --no-verify-jwt
 | `T86` | `rwd/zh/fund/T86` | ✅ | 三大法人逐股買進 / 賣出 / 買賣超；也是「這天是不是交易日」的判定依據 |
 | `MI_MARGN_D` | `rwd/zh/marginTrading/MI_MARGN` | ✅ | 融資融券逐股（含買進 / 賣出 / 償還），走勢圖靠它 |
 | `MI_MARGN` | `openapi .../exchangeReport/MI_MARGN` | ❌ | 備援：只有最新交易日餘額 |
-| `SBL` | `openapi .../SBL/TWT96U` | ❌ | 借券賣出可用股數（僅最新交易日） |
+| `SBL_D` | `rwd/zh/marginTrading/TWT96U` | ❌（但 `title` 自帶日期） | 借券賣出可用股數。**以資料自己宣告的日期為快取鍵**，分段執行才不會用到前一天的 |
+| `SBL` | `openapi .../SBL/TWT96U` | ❌ | 舊的借券來源，無任何日期欄位，已不再使用 |
 
 > `MI_MARGN_D` 的欄位名稱**有重複**（「買進」「賣出」各出現兩次），解析一律用位置索引，不可用名稱比對。
 > 欄序若被 TWSE 改動，`marginDatedOk()` 的防護會判定不可用並自動回退備援來源。

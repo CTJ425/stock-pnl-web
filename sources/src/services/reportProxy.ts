@@ -65,6 +65,24 @@ export interface BorrowChip {
 }
 
 /** 單一交易日的籌碼快照 */
+/**
+ * 單一資料源的新鮮度（schema 3 起）。
+ * 三個資料源公布時間差很多、批次又是分段執行，同一份報告裡各區塊的新舊本來就不同 ——
+ * 只看整份報告的 generatedAt 會誤以為每塊都一樣新。
+ */
+export interface SourceStamp {
+  /** 資料本身所屬日期 YYYY-MM-DD（借券是「下一個交易日」，會與籌碼的資料日期不同） */
+  date: string | null
+  /** 我們實際抓到它的時間 ISO */
+  fetchedAt: string | null
+}
+
+export interface ReportSources {
+  institutional: SourceStamp | null
+  margin: SourceStamp | null
+  borrow: SourceStamp | null
+}
+
 export interface ChipDay {
   date: string
   institutional: InstitutionalChip | null
@@ -96,6 +114,8 @@ export interface ReportData {
   /** 由舊到新，最多 7 個交易日 */
   history: ChipDay[]
   streaks: ChipStreaks
+  /** schema 3 起才有；schema 2 的報告為 undefined，UI 須容忍 */
+  sources?: ReportSources
   notes: string[]
 }
 

@@ -115,6 +115,46 @@ describe('computeStreaks', () => {
   })
 })
 
+describe('buildReport 的 sources（各資料源新鮮度）', () => {
+  const base = {
+    ticker: '2330', name: '台積電', dataDateYmd: '20260724',
+    holding: null, history: [], borrow: null, notes: [],
+  }
+
+  it('未帶 sources 時三項皆為 null（而非缺欄位）', () => {
+    expect(buildReport(base).sources).toEqual({
+      institutional: null, margin: null, borrow: null,
+    })
+  })
+
+  it('各資料源可以有各自的日期與抓取時間 —— 借券本來就會比籌碼晚一天', () => {
+    const r = buildReport({
+      ...base,
+      sources: {
+        institutional: { date: '2026-07-24', fetchedAt: '2026-07-24T09:40:00.000Z' },
+        margin: { date: '2026-07-24', fetchedAt: '2026-07-24T14:10:00.000Z' },
+        borrow: { date: '2026-07-27', fetchedAt: '2026-07-24T15:30:00.000Z' },
+      },
+    })
+    expect(r.sources.institutional?.date).toBe('2026-07-24')
+    expect(r.sources.borrow?.date).toBe('2026-07-27') // 下一個交易日，不是錯誤
+    expect(r.sources.margin?.fetchedAt).not.toBe(r.sources.institutional?.fetchedAt)
+  })
+
+  it('某一項尚未取得時只有那一項為 null，不影響其他項', () => {
+    const r = buildReport({
+      ...base,
+      sources: {
+        institutional: { date: '2026-07-24', fetchedAt: '2026-07-24T09:40:00.000Z' },
+        margin: null,
+        borrow: null,
+      },
+    })
+    expect(r.sources.institutional).not.toBeNull()
+    expect(r.sources.margin).toBeNull()
+  })
+})
+
 describe('buildReport', () => {
   const data = buildReport({
     ticker: '2303',
@@ -127,8 +167,8 @@ describe('buildReport', () => {
     now: new Date('2026-07-22T12:00:00Z'),
   })
 
-  it('標記 schema 2 並帶入 history', () => {
-    expect(data.schema).toBe(2)
+  it('標記 schema 3 並帶入 history', () => {
+    expect(data.schema).toBe(3)
     expect(data.history).toHaveLength(3)
     expect(data.dataDate).toBe('2026-07-22')
     expect(data.market).toBe('TPE')

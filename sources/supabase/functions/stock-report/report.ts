@@ -3,12 +3,14 @@
  * 純資料層，不觸網、不碰 DB，便於單元測試。
  *
  * schema 2（v0.3.7-dev.3 起）：伺服器只回結構化資料，不再產生 HTML；
- * 內嵌最多 7 個交易日的 history 供前端自繪走勢圖。前端讀到 schema !== 2 視為快取未命中。
+ * 內嵌最多 7 個交易日的 history 供前端自繪走勢圖。
+ * schema 3（v0.4.0 起）：新增 `sources` —— 各資料源各自的資料日期與抓取時間。
+ * 前端接受 schema >= 2，`sources` 視為選填。
  */
 import type { ChipLeg, InstitutionalChip, MarginChip, BorrowChip } from './twChips.ts'
 
-/** 報告結構版本。前端與此值不符時回退即點即產 */
-export const REPORT_SCHEMA = 2
+/** 報告結構版本 */
+export const REPORT_SCHEMA = 3
 
 /** 前端帶入的持股脈絡（皆為前端已算好的值，Worker 不重算） */
 export interface HoldingContext {
@@ -40,6 +42,27 @@ export interface ChipStreaks {
   short: number
 }
 
+/**
+ * 單一資料源的新鮮度。
+ *
+ * 存在的理由：三個資料源的公布時間差很多（三大法人約 15:00–15:30、融資融券約 21:00–22:00、
+ * 借券約 21:00–22:30），批次是分段執行的，所以同一份報告裡各區塊的新舊程度本來就不一樣。
+ * 只給整份報告一個 generatedAt 會讓使用者誤以為每塊都一樣新。
+ */
+export interface SourceStamp {
+  /** 這份資料本身所屬的日期 YYYY-MM-DD（借券是「下一個交易日」，故可能與籌碼的資料日期不同） */
+  date: string | null
+  /** 我們實際抓到它的時間 ISO；null 代表當下還沒有這份資料 */
+  fetchedAt: string | null
+}
+
+/** 各資料源的新鮮度。缺某一項代表該項今日尚未取得 */
+export interface ReportSources {
+  institutional: SourceStamp | null
+  margin: SourceStamp | null
+  borrow: SourceStamp | null
+}
+
 export interface ReportData {
   schema: typeof REPORT_SCHEMA
   ticker: string
@@ -59,6 +82,8 @@ export interface ReportData {
   /** 由舊到新，最多 7 個交易日 */
   history: ChipDay[]
   streaks: ChipStreaks
+  /** 各資料源各自的資料日期與抓取時間（schema 3 起） */
+  sources: ReportSources
   /** 缺漏 / 降級說明（如上櫃暫不支援、歷史資料回補中） */
   notes: string[]
 }
@@ -145,6 +170,7 @@ export interface BuildReportParams {
   /** 由舊到新的交易日序列（最後一筆＝最新交易日） */
   history: ChipDay[]
   borrow: BorrowChip | null
+  sources?: ReportSources
   notes: string[]
   now?: Date
 }
@@ -164,6 +190,7 @@ export function buildReport(p: BuildReportParams): ReportData {
     borrow: p.borrow,
     history: p.history,
     streaks: computeStreaks(p.history),
+    sources: p.sources ?? { institutional: null, margin: null, borrow: null },
     notes: p.notes,
   }
 }

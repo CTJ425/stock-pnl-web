@@ -7,6 +7,10 @@ import {
   marginDatedOk,
   marginDatedUrl,
   extractBorrow,
+  extractBorrowDated,
+  borrowDatedOk,
+  borrowDatedDate,
+  parseRocTitleDate,
 } from './twChips.ts'
 
 describe('normNum', () => {
@@ -176,6 +180,64 @@ describe('extractMargin（OpenAPI fallback）', () => {
 
   it('查無代號回 null', () => {
     expect(extractMargin([], '2303')).toBeNull()
+  })
+})
+
+// rwd 借券實測回應（2026-07-26 抓取）：代號包在 <a> 裡、每列兩欄配對、日期只在 title
+const BORROW_RWD = {
+  stat: 'OK',
+  title: '115年07月27日 當日可借券賣出股數',
+  fields: ['證券代號', '可借券賣出股數', '證券代號', '可借券賣出股數'],
+  data: [
+    [
+      '<a href=https://mis.twse.com.tw/stock/fibest.jsp?stock=00400A target=_blank>00400A</a>',
+      '17,284,535',
+      '<a href=https://mis.twse.com.tw/stock/fibest.jsp?stock=006201 target=_blank>006201</a>',
+      '78,603',
+    ],
+    [
+      '<a href=https://mis.twse.com.tw/stock/fibest.jsp?stock=2330 target=_blank>2330</a>',
+      '11,853,736',
+      '<a href=https://mis.twse.com.tw/stock/fibest.jsp?stock= target=_blank>_</a>',
+      '',
+    ],
+  ],
+}
+
+describe('parseRocTitleDate', () => {
+  it('民國標題 → 西元日期', () => {
+    expect(parseRocTitleDate('115年07月27日 當日可借券賣出股數')).toBe('2026-07-27')
+    expect(parseRocTitleDate('99年1月5日 當日可借券賣出股數')).toBe('2010-01-05')
+  })
+
+  it('解析不出回 null（不要猜）', () => {
+    expect(parseRocTitleDate('當日可借券賣出股數')).toBeNull()
+    expect(parseRocTitleDate('')).toBeNull()
+    expect(parseRocTitleDate(null)).toBeNull()
+  })
+})
+
+describe('extractBorrowDated（rwd 版，自帶日期）', () => {
+  it('去掉 <a> 標籤取代號，兩欄配對都要找得到', () => {
+    expect(extractBorrowDated(BORROW_RWD, '00400A')?.availableVolume).toBe(17284535)
+    expect(extractBorrowDated(BORROW_RWD, '006201')?.availableVolume).toBe(78603) // 第二欄
+    expect(extractBorrowDated(BORROW_RWD, '2330')?.availableVolume).toBe(11853736)
+  })
+
+  it('查無代號回 null；末列的空配對不會誤判', () => {
+    expect(extractBorrowDated(BORROW_RWD, '9999')).toBeNull()
+    expect(extractBorrowDated(BORROW_RWD, '_')?.availableVolume).toBeNull()
+  })
+
+  it('資料日期取自 title —— 這是 OpenAPI 版做不到的事', () => {
+    expect(borrowDatedDate(BORROW_RWD)).toBe('2026-07-27')
+    expect(borrowDatedOk(BORROW_RWD)).toBe(true)
+  })
+
+  it('沒有可解析的日期就視為不可用（寧可不快取，也不要存成錯的日子）', () => {
+    expect(borrowDatedOk({ stat: 'OK', title: '當日可借券賣出股數', data: [['2330', '1']] })).toBe(false)
+    expect(borrowDatedOk({ stat: 'OK', title: '115年07月27日', data: [] })).toBe(false)
+    expect(borrowDatedOk({})).toBe(false)
   })
 })
 

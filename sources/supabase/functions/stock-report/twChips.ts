@@ -309,10 +309,78 @@ interface SblRow {
   GRETAIAvailableVolume?: string
 }
 
+/**
+ * OpenAPI 版借券（fallback）。**回應沒有任何日期欄位**，無從得知是哪一天的資料 ——
+ * 這正是改用下方 rwd 版的原因。
+ *
+ * 註：欄位名稱的 TWSECode / GRETAICode 有誤導性。實測兩者都是上市股票，
+ * 只是官方原始報表是「兩欄並排」的版面，OpenAPI 照著切成兩組欄位而已，
+ * 所以兩欄都要找。
+ */
 export function extractBorrow(rows: SblRow[], ticker: string): BorrowChip | null {
   for (const r of rows) {
     if (String(r.TWSECode).trim() === ticker) return { availableVolume: normNum(r.TWSEAvailableVolume) }
     if (String(r.GRETAICode).trim() === ticker) return { availableVolume: normNum(r.GRETAIAvailableVolume) }
+  }
+  return null
+}
+
+// ---- 借券（rwd 版，自帶日期）----
+
+/**
+ * 借券的 rwd 端點。`date` 參數**實測無效**（帶任何日期都回同一份最新資料），
+ * 但 `title` 自帶日期（「115年07月27日 當日可借券賣出股數」），
+ * 這就足以判斷拿到的是哪一天的資料 —— OpenAPI 版做不到這件事。
+ *
+ * ⚠️ 語意提醒：「當日可借券賣出股數」是**下一個交易日的額度**，不是已收盤那天的數字。
+ * 實測最後交易日為 07/24（週五）時，title 顯示的是 07/27（週一）。
+ * 因此它的日期本來就會與籌碼的資料日期不同，必須各自標示。
+ */
+export const BORROW_DATED_URL = 'https://www.twse.com.tw/rwd/zh/marginTrading/TWT96U?response=json'
+
+export interface BorrowDatedResponse {
+  stat?: string
+  title?: string
+  fields?: string[]
+  data?: string[][]
+}
+
+/** 「115年07月27日 當日可借券賣出股數」→ `2026-07-27`；解析不出回 null */
+export function parseRocTitleDate(title: string | null | undefined): string | null {
+  const m = /(\d{2,3})年(\d{1,2})月(\d{1,2})日/.exec(String(title ?? ''))
+  if (!m) return null
+  const year = Number(m[1]) + 1911
+  const p = (v: string) => v.padStart(2, '0')
+  return `${year}-${p(m[2])}-${p(m[3])}`
+}
+
+/** rwd 的儲存格把代號包在 <a> 標籤裡，取純文字 */
+function cellText(v: unknown): string {
+  return String(v ?? '').replace(/<[^>]*>/g, '').trim()
+}
+
+export function borrowDatedOk(resp: BorrowDatedResponse): boolean {
+  return (
+    Array.isArray(resp?.data) &&
+    resp.data.length > 0 &&
+    parseRocTitleDate(resp.title) !== null
+  )
+}
+
+/** rwd 借券的資料日期（＝下一個交易日）；解析不出回 null */
+export function borrowDatedDate(resp: BorrowDatedResponse): string | null {
+  return parseRocTitleDate(resp?.title)
+}
+
+/**
+ * 由 rwd 借券表取單一代號。原始報表是「兩欄並排」的版面：
+ * 每一列有 4 個儲存格 = 兩組（代號, 股數），故兩組都要找。
+ */
+export function extractBorrowDated(resp: BorrowDatedResponse, ticker: string): BorrowChip | null {
+  for (const row of resp?.data ?? []) {
+    for (let i = 0; i + 1 < row.length; i += 2) {
+      if (cellText(row[i]) === ticker) return { availableVolume: normNum(row[i + 1]) }
+    }
   }
   return null
 }

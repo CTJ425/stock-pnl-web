@@ -54,6 +54,11 @@ const report: ReportData = {
   borrow: { availableVolume: 100267 },
   history,
   streaks: { foreign: 2, foreignDealer: 0, trust: 0, dealer: 2, total: 2, margin: 2, short: 1 },
+  sources: {
+    institutional: { date: '2026-07-23', fetchedAt: '2026-07-23T09:40:00.000Z' },
+    margin: { date: '2026-07-23', fetchedAt: '2026-07-23T14:10:00.000Z' },
+    borrow: { date: '2026-07-24', fetchedAt: '2026-07-23T15:30:00.000Z' },
+  },
   notes: [],
 }
 
@@ -204,6 +209,44 @@ describe('StockDetailPage', () => {
     expect(screen.getByText('持股概況')).toBeTruthy()
     expect(screen.getByText('3,000')).toBeTruthy() // 持有股數
     expect(screen.getByText('+NT$58,500')).toBeTruthy() // 未實現淨損益
+  })
+
+  it('各區塊各自標示資料日與更新時間（三個來源公布時間不同）', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    const tags = [...container.querySelectorAll('.source-tag')].map((el) => el.textContent)
+    expect(tags).toHaveLength(3)
+    // 三個抓取時間不同 —— 這正是逐區塊標示的理由
+    expect(new Set(tags).size).toBe(3)
+    expect(tags[0]).toContain('資料日 2026-07-23') // 三大法人
+    expect(tags[2]).toContain('資料日 2026-07-24') // 借券是下一個交易日，比籌碼晚一天
+  })
+
+  it('融資融券尚未公布時說明是「還沒到」而非故障，並點出三大法人不受影響', async () => {
+    fetchStoredReport.mockResolvedValue({
+      ...report,
+      margin: null,
+      history: report.history.map((d) => ({ ...d, margin: null })),
+      sources: { ...report.sources!, margin: null },
+    })
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
+    expect(screen.getByText(/今日融資融券尚未公布（約 21:00–22:00 才會有）/)).toBeTruthy()
+    expect(screen.getByText(/上方的三大法人不受影響/)).toBeTruthy()
+    // 不該再出現會被誤解成故障的舊文案
+    expect(screen.queryByText(/來源暫時無回應/)).toBeNull()
+  })
+
+  it('舊格式報告（schema 2、無 sources）不會炸，只是沒有時間標記', async () => {
+    const { sources: _omit, ...legacy } = report
+    fetchStoredReport.mockResolvedValue({ ...legacy, schema: 2 })
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    expect(container.querySelectorAll('.source-tag')).toHaveLength(0)
   })
 
   it('「下載 PDF」只在籌碼分頁出現（其他分頁沒有報告可擷取）', async () => {

@@ -20,7 +20,11 @@ import {
   marginDatedUrl,
   marginDatedOk,
   MI_MARGN_URL,
-  SBL_URL,
+  BORROW_DATED_URL,
+  borrowDatedOk,
+  borrowDatedDate,
+  extractBorrowDated,
+  type BorrowDatedResponse,
   extractInstitutional,
   extractMargin,
   extractMarginDated,
@@ -35,6 +39,8 @@ import {
   tradingDateCandidates,
   type ChipDay,
   type HoldingContext,
+  type ReportSources,
+  type SourceStamp,
 } from './report.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
@@ -77,15 +83,22 @@ export function makeReportId(dateYmd: string, ticker: string): string {
   return `${dateYmd}_${ticker}_${crypto.randomUUID().slice(0, 8)}`
 }
 
+/**
+ * 各 dataset 最近一次寫入快取的時間。這就是「這份資料我們是什麼時候抓到的」——
+ * 不必另建欄位，`chip_raw_cache.updated_at` 本來就記著。
+ */
+const fetchedAtByDataset = new Map<string, string>()
+
 async function readCache<T>(ymd: string, dataset: string): Promise<T | null> {
   try {
     const { data, error } = await db
       .from('chip_raw_cache')
-      .select('payload')
+      .select('payload, updated_at')
       .eq('ymd', ymd)
       .eq('dataset', dataset)
       .maybeSingle()
     if (error || !data?.payload) return null
+    if (data.updated_at) fetchedAtByDataset.set(`${ymd}:${dataset}`, String(data.updated_at))
     return data.payload as T
   } catch {
     return null
@@ -94,11 +107,13 @@ async function readCache<T>(ymd: string, dataset: string): Promise<T | null> {
 
 async function writeCache(ymd: string, dataset: string, payload: unknown): Promise<void> {
   try {
+    const now = new Date().toISOString()
+    fetchedAtByDataset.set(`${ymd}:${dataset}`, now)
     await db.from('chip_raw_cache').upsert({
       ymd,
       dataset,
       payload,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
   } catch {
     // 快取寫入失敗不影響主流程
@@ -287,9 +302,9 @@ function assembleOne(opts: {
   holding: HoldingContext | null
   series: SeriesResult
   marginFallbackRows: MarginRows
-  sblRows: SblRows
+  borrow: BorrowSource
 }): ReturnType<typeof buildReport> {
-  const { ticker, name, holding, series, marginFallbackRows, sblRows } = opts
+  const { ticker, name, holding, series, marginFallbackRows, borrow: borrowSrc } = opts
   const notes: string[] = []
 
   // 複製一份再組：series 的切片可能被多個代號共用讀取，下面的 fallback 會就地補值
@@ -316,13 +331,34 @@ function assembleOne(opts: {
     }
   }
   if (latest && latest.margin === null) {
-    notes.push('融資融券來源暫時無回應。')
+    // 分段執行下這是常態而非故障：早班跑的時候融資融券根本還沒公布
+    notes.push('今日融資融券尚未公布（約 21:00–22:00），稍晚會自動補上。')
   }
 
-  const borrow = sblRows ? extractBorrow(sblRows, ticker) : null
+  const borrow = borrowSrc.resp
+    ? extractBorrowDated(borrowSrc.resp, ticker)
+    : borrowSrc.fallbackRows
+      ? extractBorrow(borrowSrc.fallbackRows, ticker)
+      : null
 
   if (latest && latest.institutional === null && latest.margin === null) {
     notes.push('此代號查無上市籌碼資料（可能為上櫃 / 興櫃，暫不支援上櫃）。')
+  }
+
+  const stamp = (ymd: string, dataset: string, date: string | null): SourceStamp | null => {
+    const fetchedAt = fetchedAtByDataset.get(`${ymd}:${dataset}`) ?? null
+    return date === null && fetchedAt === null ? null : { date, fetchedAt }
+  }
+  const latestYmd = series.dataYmd
+  const sources: ReportSources = {
+    institutional:
+      latest?.institutional !== null && latest !== null
+        ? stamp(latestYmd, 'T86', latest.date)
+        : null,
+    margin: latest?.margin ? stamp(latestYmd, 'MI_MARGN_D', latest.date) : null,
+    borrow: borrowSrc.date
+      ? stamp(borrowSrc.date.replace(/-/g, ''), 'SBL_D', borrowSrc.date)
+      : null,
   }
 
   return buildReport({
@@ -332,20 +368,50 @@ function assembleOne(opts: {
     holding,
     history,
     borrow,
+    sources,
     notes,
   })
 }
 
-/** 借券與 OpenAPI 融資融券都沒有 date 參數，只對最新交易日有意義 */
-async function loadLatestOnlySources(
-  dataYmd: string,
-  needMarginFallback: boolean,
-): Promise<{ marginFallbackRows: MarginRows; sblRows: SblRows }> {
-  const sblRows = await readLatest<Parameters<typeof extractBorrow>[0]>(dataYmd, 'SBL', SBL_URL)
-  const marginFallbackRows = needMarginFallback
+interface BorrowSource {
+  resp: BorrowDatedResponse | null
+  /** rwd 版回應 title 裡的日期（＝下一個交易日）；用 OpenAPI fallback 時為 null */
+  date: string | null
+  fallbackRows: SblRows
+}
+
+/**
+ * 借券：優先用自帶日期的 rwd 版。
+ *
+ * **為什麼要先看日期再快取**：借券端點沒有 date 參數，回的永遠是「目前最新」。
+ * 批次改成一天分段跑好幾次之後，早班（17:30）拿到的其實是前一天的資料 ——
+ * 若照舊直接存成今天，後面幾班會因為「快取已存在」而永遠沿用那份錯的。
+ * 改成解析 title 的日期後就變成可驗證的：拿到什麼日期就存成什麼日期，
+ * 早班存前一天（本來就對），晚班拿到新的自然會寫進新的鍵，不會互相污染。
+ */
+async function loadBorrow(): Promise<BorrowSource> {
+  let resp: BorrowDatedResponse | null = null
+  try {
+    resp = await fetchJson<BorrowDatedResponse>(BORROW_DATED_URL)
+  } catch {
+    resp = null
+  }
+  if (resp && borrowDatedOk(resp)) {
+    const date = borrowDatedDate(resp)!
+    const ymd = date.replace(/-/g, '')
+    // 以「資料自己宣告的日期」為鍵，而不是我們正在處理的交易日
+    const cached = await readCache<BorrowDatedResponse>(ymd, 'SBL_D')
+    if (!cached) await writeCache(ymd, 'SBL_D', resp)
+    return { resp, date, fallbackRows: null }
+  }
+  return { resp: null, date: null, fallbackRows: null }
+}
+
+/** OpenAPI 融資融券沒有 date 參數，只在 rwd 整批失敗時當備援 */
+async function loadMarginFallback(dataYmd: string, needed: boolean): Promise<MarginRows> {
+  return needed
     ? await readLatest<Record<string, string>[]>(dataYmd, 'MI_MARGN', MI_MARGN_URL)
     : null
-  return { marginFallbackRows, sblRows }
 }
 
 async function handleGenerate(body: GenerateReportRequestBody): Promise<Response> {
@@ -374,11 +440,12 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   }
 
   const series = await loadSeries([ticker], new Date())
-  const { marginFallbackRows, sblRows } = await loadLatestOnlySources(
+  const marginFallbackRows = await loadMarginFallback(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
-  const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, sblRows })
+  const borrow = await loadBorrow()
+  const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, borrow })
 
   const reportId = makeReportId(series.dataYmd, ticker)
   return json({ reportId, generatedAt: data.generatedAt, dataDate: data.dataDate, data })
@@ -479,14 +546,15 @@ async function handleGenerateAll(): Promise<Response> {
     tickers.map((t) => t.ticker),
     new Date(),
   )
-  const { marginFallbackRows, sblRows } = await loadLatestOnlySources(
+  const marginFallbackRows = await loadMarginFallback(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
+  const borrow = await loadBorrow()
 
   let generated = 0
   for (const { ticker, name } of tickers) {
-    const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, sblRows })
+    const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
     const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
       ticker,
       dataDate: data.dataDate,

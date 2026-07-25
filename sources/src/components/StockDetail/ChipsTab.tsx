@@ -4,7 +4,12 @@
  * 資料全部來自 Edge Function 回傳的結構化報告，此元件只負責呈現。
  */
 import { useState } from 'react'
-import type { ChipLeg, InstitutionalChip, ReportData } from '../../services/reportProxy'
+import type {
+  ChipLeg,
+  InstitutionalChip,
+  ReportData,
+  SourceStamp,
+} from '../../services/reportProxy'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { ChartLegend } from '../Charts/ChartLegend'
@@ -49,6 +54,24 @@ const SERIES_OPTIONS: Array<{ key: SeriesKey; label: string }> = [
 ]
 
 const EMPTY_LEG: ChipLeg = { buy: null, sell: null, net: null }
+
+/**
+ * 區塊層級的資料時間標記。
+ *
+ * 為什麼每個區塊各標一個：三個資料源的公布時間差很多（三大法人約 15:00–15:30、
+ * 融資融券約 21:00–22:00、借券約 21:00–22:30），而批次是分段執行的 ——
+ * 同一份報告裡各區塊的新舊程度本來就不一樣，只給整份一個時間會誤導。
+ */
+function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
+  if (!stamp || (!stamp.date && !stamp.fetchedAt)) return null
+  return (
+    <span className="source-tag">
+      {stamp.date && `資料日 ${stamp.date}`}
+      {stamp.date && stamp.fetchedAt && ' · '}
+      {stamp.fetchedAt && `更新於 ${fmtUpdatedAt(stamp.fetchedAt)}`}
+    </span>
+  )
+}
 
 export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
@@ -110,7 +133,10 @@ export function ChipsTab({ report }: { report: ReportData }) {
 
       <section className="rpt-section">
         <div className="rpt-section-head">
-          <h3>三大法人買賣超</h3>
+          <h3>
+            三大法人買賣超
+            <SourceTag stamp={report.sources?.institutional} />
+          </h3>
           {history.length > 1 && (
             <div className="chip-toggle" role="group" aria-label="選擇要看哪一個交易日">
               {history.map((d, i) => (
@@ -224,9 +250,15 @@ export function ChipsTab({ report }: { report: ReportData }) {
       </section>
 
       <section className="rpt-section">
-        <h3>融資融券</h3>
+        <h3>
+          融資融券
+          <SourceTag stamp={report.sources?.margin} />
+        </h3>
         {margin === null ? (
-          <p className="hint">查無此股當日資料。</p>
+          <p className="hint">
+            今日融資融券尚未公布（約 21:00–22:00 才會有），稍晚的排程會自動補上。
+            上方的三大法人不受影響 —— 它約 15:00–15:30 就公布了。
+          </p>
         ) : (
           <>
             <div className="table-scroll">
@@ -313,9 +345,13 @@ export function ChipsTab({ report }: { report: ReportData }) {
 
       {borrow && (
         <section className="rpt-section">
-          <h3>借券</h3>
+          <h3>
+            借券
+            <SourceTag stamp={report.sources?.borrow} />
+          </h3>
           <p className="hint">
-            借券賣出可用股數：{fmtInt(borrow.availableVolume)} 股。這是還能借出去賣的額度，不是已經被賣掉的量。
+            借券賣出可用股數：{fmtInt(borrow.availableVolume)} 股。這是<strong>下一個交易日</strong>
+            還能借出去賣的額度，不是已經被賣掉的量 —— 所以它的資料日會比上面的籌碼晚一天，不是錯誤。
           </p>
         </section>
       )}
