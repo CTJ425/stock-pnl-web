@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  Activity,
   CalendarRange,
+  Code2,
+  ExternalLink,
   HardDrive,
   LayoutDashboard,
+  LineChart,
   ListPlus,
   LogOut,
   Monitor,
@@ -28,18 +30,26 @@ import { TransactionsPage } from './Transactions/TransactionsPage'
 import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
-import { ServiceStatusPage } from './ServiceStatus/ServiceStatusPage'
-import { StockDetailPage, type StockDetailTarget } from './StockDetail/StockDetailPage'
+import { AnalysisPage } from './StockDetail/AnalysisPage'
+import { isReportConfigured } from '../services/reportProxy'
 
-type Tab = 'dashboard' | 'yearly' | 'transactions' | 'status'
+type Tab = 'dashboard' | 'analysis' | 'yearly' | 'transactions'
 
 /** short 供手機使用：四個分頁平分螢幕寬時，四字標籤會折行 */
-const TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
+const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
   { id: 'dashboard', label: '庫存總覽', short: '總覽', icon: LayoutDashboard },
+  { id: 'analysis', label: '個股分析', short: '分析', icon: LineChart },
   { id: 'yearly', label: '年度收益', short: '年度', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', short: '紀錄', icon: NotebookPen },
-  { id: 'status', label: '服務狀態', short: '狀態', icon: Activity },
 ]
+
+/**
+ * 個股分析的資料來自 Supabase Edge Function，本機模式沒有來源可讀，
+ * 故未設定 Supabase 時整個分頁隱藏（與盤後報告一路以來的入口規則一致）。
+ */
+const TABS = isReportConfigured ? ALL_TABS : ALL_TABS.filter((t) => t.id !== 'analysis')
+
+const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
 const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
 const THEME_LABEL: Record<ThemePref, string> = {
@@ -314,13 +324,6 @@ export function AppShell() {
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
-  // 下鑽檢視：專案無 router，個股分析頁以 state 疊在分頁內容之上；點任何導覽分頁即清空
-  const [detail, setDetail] = useState<StockDetailTarget | null>(null)
-
-  const goTab = (id: Tab) => {
-    setDetail(null)
-    setTab(id)
-  }
 
   return (
     <>
@@ -338,7 +341,7 @@ export function AppShell() {
               <button
                 key={id}
                 className={tab === id ? 'tab active' : 'tab'}
-                onClick={() => goTab(id)}
+                onClick={() => setTab(id)}
                 /* 視窗窄時只剩圖示，名稱改由 title / aria-label 呈現 */
                 title={label}
                 aria-label={label}
@@ -386,20 +389,25 @@ export function AppShell() {
         )}
         {loading ? (
           <div className="glass empty-state section">載入中…</div>
-        ) : detail ? (
-          <StockDetailPage {...detail} onBack={() => setDetail(null)} />
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardPage onOpenDetail={setDetail} />}
+            {tab === 'dashboard' && <DashboardPage />}
+            {tab === 'analysis' && <AnalysisPage />}
             {tab === 'yearly' && <YearlyPage />}
             {tab === 'transactions' && <TransactionsPage />}
-            {tab === 'status' && <ServiceStatusPage />}
           </>
         )}
       </main>
 
       <footer className="app-footer">
-        提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
+        <p>
+          提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
+        </p>
+        <a className="footer-link" href={GITHUB_URL} target="_blank" rel="noreferrer">
+          <Code2 size={13} />
+          GitHub Repository
+          <ExternalLink size={11} />
+        </a>
       </footer>
 
       {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}

@@ -1,12 +1,15 @@
 /**
- * 個股分析頁：由庫存總覽下鑽而來，內含「籌碼 / 技術面 / 我的持股」分頁籤。
+ * 個股分析的內容區：「籌碼 / 技術面 / 我的持股」分頁籤。
  * 取代 v1 的彈窗 —— 字串模板做不出可互動圖表（見 docs/agent/PLAN.md §B）。
  *
- * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback；
- * 個人持股由呼叫端以 props 帶入，共用報告本身不含個資。
+ * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定，
+ * 共用報告本身不含個資。頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
+ *
+ * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
  */
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Download, RefreshCw } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { AlertTriangle, Download, RefreshCw } from 'lucide-react'
 import {
   fetchStoredReport,
   generateReport,
@@ -25,7 +28,8 @@ export interface StockDetailTarget {
 }
 
 interface StockDetailPageProps extends StockDetailTarget {
-  onBack: () => void
+  /** 頁首左側的控制項（AnalysisPage 傳入切換個股的下拉選單） */
+  selector?: ReactNode
 }
 
 type DetailTab = 'chips' | 'technical' | 'holding'
@@ -36,7 +40,7 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'holding', label: '我的持股' },
 ]
 
-export function StockDetailPage({ ticker, name, holding, onBack }: StockDetailPageProps) {
+export function StockDetailPage({ ticker, name, holding, selector }: StockDetailPageProps) {
   const [tab, setTab] = useState<DetailTab>('chips')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
@@ -95,10 +99,7 @@ export function StockDetailPage({ ticker, name, holding, onBack }: StockDetailPa
   return (
     <div className="section">
       <div className="detail-head">
-        <button className="btn btn-sm" onClick={onBack}>
-          <ArrowLeft size={14} />
-          返回總覽
-        </button>
+        {selector}
         <div className="detail-title">
           <h2>
             {ticker} {name}

@@ -1191,6 +1191,22 @@ input[type='date']::-webkit-calendar-picker-indicator {
   line-height: 1.7;
 }
 
+/* GitHub 連結：置於免責聲明下方，比正文再低一階，不與內容爭注意力 */
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.footer-link:hover {
+  color: var(--ink-secondary);
+  text-decoration: underline;
+}
+
 /* ---------- 動畫 ---------- */
 @keyframes shimmer {
   0% {
@@ -1261,81 +1277,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 ::-webkit-scrollbar-track {
   background: transparent;
-}
-
-/* ---------- 服務狀態 ---------- */
-.status-banner {
-  padding: 14px 18px;
-  border-radius: var(--radius);
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid var(--border);
-}
-.status-banner.ok {
-  background: color-mix(in srgb, var(--notice-ok-ink) 12%, transparent);
-  border-color: color-mix(in srgb, var(--notice-ok-ink) 25%, transparent);
-}
-.status-banner.degraded {
-  background: color-mix(in srgb, var(--notice-warn-ink) 12%, transparent);
-  border-color: color-mix(in srgb, var(--notice-warn-ink) 25%, transparent);
-}
-.status-banner.down {
-  background: color-mix(in srgb, var(--notice-err-ink) 12%, transparent);
-  border-color: color-mix(in srgb, var(--notice-err-ink) 25%, transparent);
-}
-.status-group {
-  margin-bottom: 24px;
-}
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.status-row:last-child {
-  border-bottom: none;
-}
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 8px;
-}
-.status-dot.ok { background-color: var(--notice-ok-ink); }
-.status-dot.degraded { background-color: var(--notice-warn-ink); }
-.status-dot.down { background-color: var(--notice-err-ink); }
-.status-dot.idle { background-color: var(--ink-muted); }
-
-.uptime-bar {
-  display: flex;
-  gap: 2px;
-  margin: 8px 14px 0;
-}
-.uptime-cell {
-  flex: 1;
-  height: 22px;
-  border-radius: 2px;
-  min-width: 3px;
-}
-.uptime-cell.ok { background-color: var(--notice-ok-ink); }
-.uptime-cell.degraded { background-color: var(--notice-warn-ink); }
-.uptime-cell.down { background-color: var(--notice-err-ink); }
-.uptime-cell.idle { background-color: var(--ink-muted); }
-/* 尚無紀錄的格子：要看得出「這裡有格子但沒資料」，太淡會讓條狀圖看起來只有半截 */
-.uptime-cell.empty {
-  background-color: var(--border-strong);
-  opacity: 0.35;
-}
-
-.uptime-hint {
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--ink-muted);
-  margin-bottom: 16px;
 }
 
 /* ---------- 頁首單行保障 ----------

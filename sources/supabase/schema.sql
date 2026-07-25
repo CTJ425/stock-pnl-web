@@ -180,9 +180,18 @@ SELECT cron.schedule(
                  'Content-Type',  'application/json',
                  'x-cron-secret', '<CRON_SECRET>'
                ),
-    body    := '{"action":"generate-all"}'::jsonb
+    body    := '{"action":"generate-all"}'::jsonb,
+    -- ⚠️ 必須指定：pg_net 的 timeout_milliseconds 預設只有 5000ms，
+    --    但每天第一次執行要抓當天的 T86 與融資融券大檔，實測需 10–13 秒
+    --    （之後快取全命中只要約 2 秒）。用預設值的話 net._http_response 每晚都會記成
+    --    status_code = null 的逾時失敗，導致「逾時但其實成功」與「真的失敗」無法區分
+    --    —— 批次本身仍會在伺服器端跑完，但你就此失去唯一的伺服器端訊號。
+    timeout_milliseconds := 60000
   );
   $$
 );
 -- 註：函數以 --no-verify-jwt 部署，故毋需 Authorization；批次的授權改由 x-cron-secret 把關。
 -- 若你的 API Gateway 仍要求 apikey，於 headers 內加 'apikey', '<ANON_KEY>' 即可。
+--
+-- 執行結果查詢（pg_net 的回應保留 6 小時，見 pg_net.ttl）：
+--   select id, status_code, error_msg, left(content, 200) from net._http_response order by id desc limit 5;

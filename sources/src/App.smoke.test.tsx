@@ -27,8 +27,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(wsSelect.options[0].text).toBe('我的投資組合')
   })
 
-  it('版本標記固定於左下角徽章，不再出現在服務狀態頁', async () => {
-    const user = userEvent.setup()
+  it('版本標記固定於左下角徽章，只顯示版號本身', async () => {
     const { container } = render(<App />)
     await screen.findByText('本機模式')
 
@@ -38,10 +37,30 @@ describe('App（本機模式煙霧測試）', () => {
     expect(badge!.textContent).toBe(APP_VERSION)
     expect(badge!.textContent).not.toMatch(/^v/)
     expect(badge!.textContent).not.toContain('Ivan')
+  })
 
-    await user.click(screen.getByRole('button', { name: /服務狀態/ }))
-    expect(await screen.findByText('關於本專案')).toBeTruthy()
-    expect(screen.queryByText('版本戳記')).toBeNull()
+  it('服務狀態功能已移除；GitHub 連結改置於頁尾免責聲明下方', async () => {
+    const { container } = render(<App />)
+    await screen.findByText('本機模式')
+
+    expect(screen.queryByRole('button', { name: /服務狀態/ })).toBeNull()
+    expect(screen.queryByText('關於本專案')).toBeNull()
+
+    const footer = container.querySelector('.app-footer')!
+    expect(footer.textContent).toContain('僅供參考，不宜做為買賣依據')
+    const link = footer.querySelector('a.footer-link') as HTMLAnchorElement
+    expect(link).toBeTruthy()
+    expect(link.href).toContain('github.com/CTJ425/stock-pnl-web')
+    // 連結在免責聲明「下方」：DOM 順序上 <p> 在 <a> 之前
+    expect(footer.querySelector('p')!.compareDocumentPosition(link)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+  })
+
+  it('本機模式沒有個股分析分頁（資料源需要 Supabase）', async () => {
+    render(<App />)
+    await screen.findByText('本機模式')
+    expect(screen.queryByRole('button', { name: /個股分析/ })).toBeNull()
   })
 
   it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {
@@ -59,7 +78,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(netLabels[0].getAttribute('title')).toContain('手續費和證交稅都已經扣掉了')
   })
 
-  it('新增台股買入交易 → 三個頁面同步呈現', async () => {
+  it('新增台股買入交易 → 庫存總覽與年度收益同步呈現', async () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByText('本機模式')
@@ -100,11 +119,6 @@ describe('App（本機模式煙霧測試）', () => {
     expect(await screen.findByText('歷史累計交易筆數 (台美股合計)')).toBeTruthy()
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
 
-    // 服務狀態：本機模式下後端元件應為「未啟用」而非故障，且整體仍為正常
-    await user.click(screen.getByRole('button', { name: /服務狀態/ }))
-    expect(await screen.findByText('所有系統運作正常')).toBeTruthy()
-    expect(screen.getByText('Edge Function (stock-price)')).toBeTruthy()
-    expect(screen.getAllByText('未啟用').length).toBeGreaterThan(0)
   })
 
   it('編輯交易 → 修改單價後自動重算手續費並更新列表', async () => {

@@ -1,9 +1,123 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.3.7 定版並併入 main；正式區 Supabase 完成後端部署
-- Status: COMPLETED（main 已合併；正式區與測試區後端皆就緒）
-- Timestamp: 2026-07-25 23:45:00 Asia/Taipei
+- Action: 0.3.8 定版並併入 main
+- Status: COMPLETED（main 已合併；兩區後端皆就緒）
+- Timestamp: 2026-07-26 09:35:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 09:35:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.3.8 定版、併入 `main`
+- **Status**: COMPLETED
+
+### 版號定稿（CLAUDE.md §17.3）
+`0.3.8-dev.2` → **`0.3.8`**（三處同步）。README 把 dev.1 / dev.2 併成一則 0.3.8 正式紀錄。
+
+### 本次不需要動 Supabase 的部署
+0.3.8 的前端改動（分析頁獨立、移除服務狀態）**不涉及 Edge Function 或報告 JSON 結構**，
+兩區的 `stock-report` 維持既有部署即可。唯一的後端異動是 cron 的 `timeout_milliseconds`，
+已於 dev.2 當下同步套用到兩區並驗證。因此本次**先合併再部署前端**沒有空窗風險
+（不像 0.3.7 當時正式區根本沒有 `stock-report`，必須先補後端）。
+
+---
+
+## 📅 Log: 2026-07-26 09:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修正夜間排程的 pg_net 逾時 (0.3.8-dev.2)
+- **Status**: COMPLETED
+- **起因**: 使用者要求分析「免費 Supabase + GitHub Pages 的隱藏問題」，盤點時實測發現此問題
+
+### 問題
+`schema.sql` §6c 的 `net.http_post` 沒指定 `timeout_milliseconds`，而 pg_net 的**預設值是 5000ms**
+（實測 `pg_get_function_arguments`：`timeout_milliseconds integer DEFAULT 5000`）。
+但 `generate-all` **每天第一次執行要 10–13 秒**（抓當天的 T86 與融資融券大檔），
+第二次因快取全命中只要約 2 秒 —— 也就是說**每天唯一有意義的那一次必定逾時**。
+
+### 實測（dev，以 `timeout_milliseconds := 1000` 強制重現）
+| 觀察點 | 結果 |
+| --- | --- |
+| `net._http_response` | `error_msg = "Timeout of 1000 ms reached"`、`status_code = null` |
+| Storage `manifest.generatedAt` | 16:02:25 → **16:03:37（前進）** |
+
+**結論：批次本身沒壞** —— 客戶端逾時後 Edge Function 仍在伺服器端跑完、報告正常寫入。
+真正的損失是**可觀測性**：每晚都記成失敗，導致「逾時但成功」與「真的失敗」無法區分，
+而這是唯一的伺服器端訊號（服務狀態頁已於 dev.1 移除）。
+
+### 修正
+`schema.sql` 的 cron 補上 `timeout_milliseconds := 60000` 並加註原因，
+兩區的 `cron.job` 皆以相同 SQL 重新排定（保留原有的 `CRON_SECRET`，從既有 command 取出）。
+
+驗證：dev 直接執行修正後的 cron 指令 → `net._http_response` 記錄
+`status_code = 200`、`error_msg = null`、含完整回應內容 `{"ok":true,...,"historyDays":7}`。
+兩區皆確認 `command like '%timeout_milliseconds := 60000%'` 且 `active = true`。
+
+### 同時盤點到、但**未**在本輪處理的免費方案議題
+- **`stock-report` 的 `generate` 是完全公開端點**：實測不帶任何 key 也回 200
+  （函數以 `--no-verify-jwt` 部署，且專案 URL 就在 GitHub Pages 的公開 bundle 裡）。
+  `generate-all` 有 `CRON_SECRET` 保護，只有 `generate` 是開的。
+- **可觀測性**：dev.1 移除服務狀態後，排程失敗不會有任何地方顯示（症狀只是開頁變慢）。
+- **免費方案**：每組織 2 個 active 專案（**已用滿**）、7 天無活動自動暫停、無 PITR/備份保障
+  （`transactions` 是唯一不可重建的資料，建議定期 CSV 匯出）。
+- **實測後確認不是問題**：dev 全庫 13MB、`chip_raw_cache` 含 TOAST 僅 1.68MB
+  （22 筆、原始 JSON 3.99MB 壓到 1.45MB，遠低於 PLAN 當初估的 15–25MB）；
+  前端 bundle 508KB + 動態載入的 PDF 函式庫，對 Pages 頻寬無感；
+  Storage bucket 匿名無法列舉（400），但直接猜路徑可探測「全體持有哪些代號」（無股數、無個資）。
+
+---
+
+## 📅 Log: 2026-07-26 00:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 個股分析改為獨立導覽分頁（下拉切換持股）、服務狀態功能整個移除 (0.3.8-dev.1)
+- **Status**: COMPLETED
+- **Task**: `TASK.md` Task 15；計畫檔 `~/.claude/plans/nested-sauteeing-boole.md`
+
+### 1. 移除服務狀態
+- 刪除 `components/ServiceStatus/`（整個目錄）、`services/serviceHealth.ts`、`serviceHealth.test.ts`
+- `AppShell`：移除 `Activity` import、`ServiceStatusPage` import、`Tab` 的 `'status'`、TABS 項、渲染條件
+- `index.css`：刪除服務狀態專用的 75 行（20 個 `.status-*` / `.uptime-*` class，全庫僅該頁使用）。
+  刪除前以程式斷言確認未含 `.spin` / `.section-title` 等共用樣式
+- 連帶清掉 dead code：`twMarketData.ts` 的 `readTwListCacheMeta`（唯一呼叫者是 serviceHealth）；
+  `priceProxy.ts` 的 `readPriceCache` 保留（內部仍在用），只修註解
+- **GitHub 連結改置於頁尾**免責聲明下方（依使用者指示）；專案簡介文案不保留（README 仍有）
+
+### 2. 個股分析獨立成頁
+- 新增 `components/StockDetail/AnalysisPage.tsx`（容器）：`useWorkspace` + `useStockPrices` + `getFeeRate`，
+  過濾台股後作為下拉選單來源；`selectedKey` state，選中的代號因交易異動而消失時自動回退第一檔
+- 下拉沿用既有 `.ws-select` 樣式（後代選擇器，無需新 class）
+- `StockDetailPage` 的 `onBack` 改為 **`selector?: ReactNode`** —— 已無下鑽，頁首左側改放下拉選單。
+  以 `key={holding.key}` 強制換股時重置整組 state，避免看到上一檔的殘留
+- `AppShell`：移除 `detail` state 與 `goTab`，新增 `analysis` 分頁；
+  **未設定 Supabase 時該分頁隱藏**（`isReportConfigured` 閘門，與盤後報告入口規則一致）
+- `DashboardPage`：移除「個股分析」欄、`onOpenDetail` / `openDetail` 與相關 import
+
+### 3. 共用計算：`utils/holdingRows.ts`
+`buildRows` / `HoldingRow` 原本是 `DashboardPage` 的 module-local。分析頁需要同一份
+「每檔的 price / unrealized / roi」（含台股零股最低手續費、預扣賣出費稅），**抽成共用模組**而非複製。
+`DashboardPage` 改 import，行為不變。
+
+### Verification
+- `npm run test` 159 → **170 passed**（刪 serviceHealth 4 筆、改 smoke 2 筆並新增 2 筆、
+  新增 holdingRows 6 筆 + AnalysisPage 7 筆）
+- `npm run build` 通過；`npm run lint` warning 由 4 降到 **3**（ServiceStatusPage 那筆隨檔案消失）
+- 瀏覽器實測（Playwright，本機模式）：
+  - 導覽列 `庫存總覽 / 年度收益 / 交易紀錄`（服務狀態已無、個股分析在本機模式正確隱藏）
+  - 庫存總覽表頭已無「個股分析」欄
+  - 頁尾：免責聲明 + 其下的 GitHub 連結，`href` 正確
+  - 分析頁（臨時 harness 掛 AuthProvider + WorkspaceProvider）：下拉只列 `1802 / 2330 / 2609`
+    （美股 AAPL 不在內）、切換後標題與內容同步更換、「我的持股」數字由 ledger 正確帶入、
+    390px 無水平溢出、無 console error
+- **不需要動 Supabase**：純前端呈現層改動，報告 JSON 結構與 Edge Function 完全不變
+
+### 踩到的小坑
+- `tsc` 抓到我新寫的 `holdingRows.test.ts` fixture 少了 `PriceQuote` 的 `asOf` / `source`
+  —— vitest 不做型別檢查所以測試先過了，`npm run build` 才擋下來。這正是 PLAN 一直寫
+  「`build` 不可略過」的理由。
+- 臨時 harness 這次**一律用絕對路徑刪除**，未再發生前兩輪 cwd 被重置導致 `rm -f` 靜默失敗的情況。
 
 ---
 

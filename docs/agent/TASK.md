@@ -2,11 +2,44 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-25 23:10:00 Asia/Taipei
+- Timestamp: 2026-07-26 00:30:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 15: 個股分析獨立成頁（下拉切換）、移除服務狀態 (0.3.8-dev.1)
+- **Status**: DONE
+- **Planner**: User（指定兩項異動與版號）
+- **Implementer**: Claude
+- **Timestamp**: 2026-07-26 00:30:00 Asia/Taipei
+
+#### Objective
+(1) 服務狀態功能全部取消。(2) 個股分析從庫存總覽的下鑽檢視改為獨立導覽分頁，頁內以下拉選單切換持股。
+
+#### 使用者定案的決定
+- 庫存總覽的「分析」按鈕**完全移除**（不保留捷徑）
+- 下拉選單**只列台股持股**
+- 服務狀態頁的 **GitHub 連結搬到頁尾免責聲明下方**；專案簡介文案不保留
+
+#### Scope / Allowed Changes
+- 刪除：`components/ServiceStatus/`、`services/serviceHealth.ts(+test)`、`index.css` 的服務狀態區塊
+- 新增：`components/StockDetail/AnalysisPage.tsx(+test)`、`utils/holdingRows.ts(+test)`
+- 修改：`AppShell.tsx`、`DashboardPage.tsx`、`StockDetailPage.tsx(+test)`、`App.smoke.test.tsx`、
+  `twMarketData.ts`、`priceProxy.ts`、`version.ts`、版號三處、`README.md`、`docs/agent/*`
+
+#### Acceptance Criteria
+- [x] `src/` 對服務狀態相關關鍵字零命中；`.status-*` / `.uptime-*` 樣式全數移除且未誤刪共用樣式
+- [x] 頁尾含 GitHub 連結且位於免責聲明**下方**（smoke test 以 DOM 順序斷言）
+- [x] 個股分析為獨立分頁；下拉只列台股；切換即換內容；無台股持股時有空狀態
+- [x] 本機模式隱藏該分頁
+- [x] 庫存總覽已無「個股分析」欄
+- [x] `npm run test` 170 passed / build / lint（warning 由 4 降到 3）
+
+#### 不需要動 Supabase
+純前端呈現層改動，報告 JSON 結構與 Edge Function 完全不變。
+
+---
 
 ### Task 14: 移除基本面（EPS）、版號格式與徽章精簡 (0.3.7-dev.6)
 - **Status**: DONE
