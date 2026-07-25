@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { APP_AUTHOR, APP_VERSION } from './version'
+import { APP_VERSION } from './version'
 
 describe('App（本機模式煙霧測試）', () => {
   beforeEach(() => {
@@ -34,8 +34,10 @@ describe('App（本機模式煙霧測試）', () => {
 
     const badge = container.querySelector('.version-badge')
     expect(badge).toBeTruthy()
-    expect(badge!.textContent).toContain(APP_VERSION)
-    expect(badge!.textContent).toContain(APP_AUTHOR)
+    // 徽章只顯示版號本身：不帶 v 前綴、不顯示作者
+    expect(badge!.textContent).toBe(APP_VERSION)
+    expect(badge!.textContent).not.toMatch(/^v/)
+    expect(badge!.textContent).not.toContain('Ivan')
 
     await user.click(screen.getByRole('button', { name: /服務狀態/ }))
     expect(await screen.findByText('關於本專案')).toBeTruthy()
@@ -48,13 +50,13 @@ describe('App（本機模式煙霧測試）', () => {
     await screen.findByText('本機模式')
 
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
-    expect(await screen.findByText('台股未實現淨損益')).toBeTruthy()
-    expect(screen.getByText('美股未實現淨損益')).toBeTruthy()
+    // 台股、美股兩張卡片的未實現損益皆以「淨」命名（v0.3 起卡片標題不再帶市場前綴）
+    const netLabels = await screen.findAllByText('未實現淨損益')
+    expect(netLabels.length).toBe(2)
     // 說明改為卡片標題的 tooltip，不再佔一行
     expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
-    expect(screen.getByText('台股未實現淨損益').getAttribute('title')).toContain(
-      '手續費和證交稅都已經扣掉了',
-    )
+    // 台股卡片（DOM 先出現）的 tooltip 說明已預扣手續費與證交稅
+    expect(netLabels[0].getAttribute('title')).toContain('手續費和證交稅都已經扣掉了')
   })
 
   it('新增台股買入交易 → 三個頁面同步呈現', async () => {

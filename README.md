@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：v0.3**（版本號顯示於「服務狀態」頁，如 `v0.3 | Ivan Chen`）
+> **目前版本：0.3.7**（版本號顯示於畫面左下角徽章與「服務狀態」頁）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -118,7 +118,7 @@ graph TD
 ```
 stock-pnl-web/
 ├── .github/workflows/    # GitHub Actions 自動部署（deploy.yml）
-├── build-docs/           # 系統設計、專案進度與資料庫 SQL 綱要（supabase_schema.sql）
+├── build-docs/           # 系統設計、專案進度文件
 ├── docs/                 # 維運文件（Supabase SQL 常用查詢 sql_cli.md）
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
@@ -130,7 +130,7 @@ stock-pnl-web/
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）
 │   │   ├── types/        # models.ts
 │   │   └── utils/        # pnlEngine.ts, csv.ts, fees.ts, formatters.ts, settings.ts
-│   ├── supabase/         # Supabase Edge Functions 程式碼（stock-price）
+│   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要）+ functions/（stock-price, stock-report）
 │   └── package.json
 └── README.md             # 本說明文件 (專案根目錄)
 ```
@@ -193,13 +193,15 @@ stock-pnl-web/
 
 ### 2. 後端部署 (Supabase)
 1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
-2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `build-docs/supabase_schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names` 共用快取）與 RLS 行級安全策略。
-3. **部署 Edge Functions**（二擇一）：
-   - **Dashboard**：Edge Functions → 建立 / 開啟 `stock-price` → 貼上 `sources/supabase/functions/stock-price/index.ts` 完整內容 → Deploy，並於設定中**關閉 Verify JWT**。
+2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取）與 RLS 行級安全策略。
+3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後籌碼報告；二擇一）：
+   - **Dashboard**：Edge Functions → Create a function。`stock-price` 為單一檔案，貼上 `index.ts` 全文即可；`stock-report` 為多檔函數，需逐一新增 `sources/supabase/functions/stock-report/` 下的 `index.ts`、`report.ts`、`twChips.ts`（`*.test.ts` 不用上傳）。兩者皆於設定中**關閉 Verify JWT**後 Deploy。
    - **CLI**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
      ```bash
-     supabase functions deploy stock-price --no-verify-jwt
+     supabase functions deploy stock-price  --no-verify-jwt
+     supabase functions deploy stock-report --no-verify-jwt
      ```
+   - 詳細步驟、驗證方式與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 4. **設定身份驗證 Redirect URL**：
    在 Supabase 控制台的 Auth -> URL Configuration 中，將 Site URL 和 Redirect URLs 設定為您 GitHub Pages 的部署網址，確保登入/註冊重導正常運作。
 5. **（建議）關閉信箱驗證或設定自訂 SMTP**：
@@ -246,6 +248,42 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 ---
 
 ## 🗒️ 版本紀錄
+
+### 0.3.7（2026-07-25）
+
+**個股分析頁與盤後籌碼報告**
+- **庫存總覽台股每列新增「分析」按鈕**，下鑽至獨立的個股分析頁，內含 `籌碼 / 技術面 / 我的持股`
+  三個分頁籤（技術面為佔位頁，日線 / 週線 / 季線待歷史股價儲存就緒後接上）。
+- **三大法人**：買進 / 賣出 / 買賣超 / 約當張數 / **連買連賣**，列出 外資 / 外資自營商 / 投信 /
+  自營商 / 三大法人合計。表格可回看 7 個交易日中任一天，連買連賣隨所看日期重算。
+- **融資融券**：買進 / 賣出 / 償還 / 今日餘額 / 較前日 / **連增連減**。改用帶 `date` 參數的 TWSE
+  rwd 端點（舊的 OpenAPI 端點沒有 date、只能取當天，這是先前做不出走勢圖的原因），舊端點保留為當日備援。
+- **近 7 日走勢圖（自繪 SVG，不引入圖表函式庫）**：買賣超長條圖可切單一法人或四個法人並排比較
+  （並排時附圖例標明顏色對應）＋ 融資、融券餘額折線圖（兩者量級差距大，各自獨立縱軸）。
+  支援 hover 看數值，缺資料的日子斷線不內插。
+- **可下載 PDF**：深色主題也輸出淺色文件（擷取前動態套上淺色容器）。報告表頭標明代號、
+  資料日期與報告更新時間，PDF 自己看得出是哪支股票、哪一天、什麼時候產的。
+- **單位標示清楚**：三大法人是「股」、融資融券是「張」，兩者不可混算，UI 各自標示。
+
+**盤後自動產生 + Storage-first（快 10 倍）**
+- Supabase `pg_cron` 每交易日 20:30（台北）觸發 `generate-all`，一次產出全體持有台股的**共用**報告
+  （三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。
+- 前端改為先讀預產好的報告、查無再 fallback 即點即產。實測 **0.8 秒 vs 8 秒**。
+  個人「持股概況」不進共用報告，由前端自行渲染（共用報告不含任何個資）。
+- 報告內嵌最近 7 個交易日 history；單次呼叫最多回補 5 個缺漏日，不足時照常出圖並標示
+  「歷史資料回補中」，隔日排程自然補齊。只保留 7 天，同批次清掉更舊的報告與原始檔快取。
+- 伺服器只回結構化 JSON、不再產生 HTML，畫面全部由 React 繪製。
+
+**版本標記**
+- 版號**一律不帶 `v` 前綴**，只有 `x.x.x`（正式）或 `x.x.x-dev.x`（測試）兩種形式。
+- 左下角版本徽章只顯示版號本身，不再顯示作者。
+
+**⚠️ 升級需要的後端動作**（正式區與測試區皆已完成）
+1. SQL Editor 執行 `sources/supabase/schema.sql` 的第 5 段（建 `chip_raw_cache`）。
+2. `supabase functions deploy stock-report --no-verify-jwt`。
+3. （啟用盤後自動產報）`supabase secrets set CRON_SECRET=<隨機字串>`，
+   再執行 schema 第 6 段（建 `reports` bucket、啟用 `pg_cron`/`pg_net`、排定每交易日 20:30）。
+   詳細步驟與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 
 ### v0.2.5（2026-07-21）
 - **交易紀錄搜尋欄位（代號 / 名稱快速過濾）**：工具列新增搜尋輸入框，輸入代號（如 `2330` / `AAPL`）或名稱（如 `台積` / `蘋果`）即時過濾交易列表。

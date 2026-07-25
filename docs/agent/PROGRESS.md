@@ -1,9 +1,286 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 10 庫存總攬面板縮小為主副層級式 (v0.3.6)
-- Status: COMPLETED
-- Timestamp: 2026-07-22 15:40:00 Asia/Taipei
+- Action: 0.3.7 定版並併入 main；正式區 Supabase 完成後端部署
+- Status: COMPLETED（main 已合併；正式區與測試區後端皆就緒）
+- Timestamp: 2026-07-25 23:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-25 23:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.3.7 定版、併入 `main`、正式區（`kxnxadaghidwumqsqneu`）後端部署
+- **Status**: COMPLETED
+
+### 版號定稿（CLAUDE.md §17.3）
+`0.3.7-dev.6` → **`0.3.7`**（三處同步）。README 版本紀錄把 dev.1–dev.6 **併成一則 0.3.7 正式紀錄**：
+從 `main` 的角度 EPS 從未存在（dev.5 已回退），故不列入；dev.6 只留「版號格式與徽章」這兩項淨效果。
+
+### ⚠️ 正式區原本停在 v0.3.6 的狀態
+盤點結果：只有 `stock-price`(v6)、**沒有 `stock-report`**、**沒有 `chip_raw_cache`**、
+沒有 `reports` bucket、沒有 `pg_cron`/`pg_net`、沒有 `CRON_SECRET`。有 126 筆真實交易。
+
+與 v0.3.6 的 schema 差異只有第 5、6 段（第 1–4 段未變動），故**只套這兩段**，不在有真實資料的庫上重跑既有表。
+
+### 部署順序刻意先後端、後 git
+`.github/workflows/deploy.yml` 是 **push 到 `main` 就觸發 Pages 部署**。若先合併，
+線上會有一段「分析」按鈕點了就失敗的空窗（前端已上線但正式區沒有 `stock-report`）。
+故順序為：正式區後端就緒 → 驗證 → 才合併推 main。
+
+### 正式區執行內容
+1. schema 第 5 段 → 建 `chip_raw_cache`
+2. `functions deploy stock-report --no-verify-jwt`
+3. `secrets set CRON_SECRET=<token_urlsafe(32)>`
+4. schema 第 6 段（代入實際 project ref 與 secret）→ `reports` bucket(public)、`pg_cron`/`pg_net`、
+   cron job `stock-report-nightly | 30 12 * * 1-5 | active=true`
+5. 手動觸發 `generate-all` 兩次：首次 5 檔 / 5 天（回補上限，13.3 秒），第二次補滿 **7 天**（12.3 秒）
+6. 驗證 5 份報告（0050、00685L、009816、1802、2609）皆 `schema 2`、`history` 7 天且
+   融資融券 7 天齊全、`holding: null`（共用報告不含個資）、`notes` 空
+
+### ⚠️ 踩到的陷阱：Supabase CLI 的 link 是**依 cwd 解析**
+從 repo 根目錄執行 `--linked` 指向 **dev**，從 `sources/` 執行才指向**正式區**
+（link 檔在 `sources/supabase/.temp/project-ref`）。一開始從根目錄查，`projects list` 回報
+正式區 `linked=False`，與使用者所述不符 —— 換到 `sources/` 才對得上。
+**對策**：函數部署一律明確帶 `--project-ref`；每次寫入 DB 前先斷言 linked 專案是預期的那個。
+
+### Verification
+- `npm run test` 159 passed / `build` / `lint` 全過（版號改動不影響邏輯）
+- 正式區與測試區後端狀態一致（皆有 `chip_raw_cache`、`stock-report`(no-verify-jwt)、
+  `reports` bucket、每交易日 20:30 排程）
+
+### Outstanding
+- 兩區的夜間排程都尚未經歷一次自動觸發（每週一~五 12:30 UTC / 台北 20:30，最快下週一）。
+- `TechnicalTab` 仍為佔位頁（需 `price_daily` 與約 400 天保留期，見 PLAN §G / §L）。
+
+---
+
+## 📅 Log: 2026-07-25 23:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 依使用者指示移除基本面（EPS）全部實作；版號格式改為不帶 `v`；徽章不再顯示作者 (0.3.7-dev.6)
+- **Status**: COMPLETED
+
+### 1. 移除 EPS（dev.5 全數回退）
+- `git revert ec12206`（乾淨套用，無衝突）→ 刪除 `twFundamentals.ts(+test)`、`FundamentalsTab.tsx(+test)`、
+  `fundamentalFormat.ts(+test)`；`report.ts` 回到 `REPORT_SCHEMA = 2`；`index.ts` 移除
+  `syncFundamentals` / `BWIBBU` / `STOCK_DAY_AVG`；`StockDetailPage` 回到三個分頁籤；
+  `reportProxy.ts` schema 守門回到 `=== 2`。實測 `grep -rl "EPS|fundamental|每股盈餘|本益比|BWIBBU"` 於
+  `src/` 與 `supabase/` **零命中**。
+- **Supabase 端必須跟著回退，不是選項**：部署中的函數回 schema 3，而回退後的前端只接受 `=== 2`，
+  Storage-first 與即點即產兩條路都會被判為不支援 → 籌碼頁會整個壞掉。故：
+  - 重新部署 `stock-report`（回 schema 2）
+  - 重跑 `generate-all` 把 Storage 內 3 份 schema 3 JSON 覆寫回 schema 2（實測 1802/2609/0050 皆已無 `fundamentals` 欄位）
+  - `DROP TABLE stock_fundamentals`（1070 列，全為公開 TWSE 資料、無使用者資料、可一道指令重抓）
+  - 刪除 `chip_raw_cache` 的 `BWIBBU` / `STOCK_DAY_AVG` 兩筆（否則會閒置 7 天才被 prune）
+  - 驗證後 `chip_raw_cache` 只剩 `MI_MARGN, MI_MARGN_D, SBL, T86` 四個 dataset
+- `schema.sql` 的第 7 段（`stock_fundamentals`）已隨 revert 移除，檔案回到 6 段。
+
+### 2. 版號格式（CLAUDE.md §17 已更新）
+- **一律不帶 `v` 前綴**，只有 `x.x.x`（正式）或 `x.x.x-dev.x`（測試）兩種形式。
+- `version.ts` 的 `APP_VERSION` 由 `'v0.3.7-dev.4'` 改為 `'0.3.7-dev.6'`；
+  README 第 3 行與「開發中」標題同步去掉 `v`。
+- README **歷史版本標題保留原樣**（`### v0.2.5` 等）—— 使用者說的是「以後」，那些是既成紀錄，
+  改了只是製造 diff 噪音。
+
+### 3. 徽章不再顯示作者
+- `APP_AUTHOR` 常數與其 export **整個移除**（不只是不顯示）；`App.tsx` 的徽章由
+  `{APP_VERSION} | {APP_AUTHOR}` 改為 `{APP_VERSION}`。
+- `App.smoke.test.tsx` 的斷言改為 `toBe(APP_VERSION)` 並加驗「不以 v 開頭」「不含 Ivan」，
+  讓格式規則有測試把關而非只寫在文件。
+
+### 版號選擇說明
+本輪進到 **dev.6 而非重用 dev.5**：dev.5 已被 EPS 用掉並推上 remote，重用會讓同一版號指向兩份不同內容。
+
+### Verification
+- `npm run test` **159 passed**（回到 dev.4 的基準；EPS 的 40 筆測試隨功能一併移除）
+- `npm run build` 通過；`npm run lint` 無新增 warning（維持既有 4 筆）
+- dev Supabase：2330 / 0050 實測皆回 `schema 2`、無 `fundamentals` 欄位、`history` 7 天完好
+- 籌碼功能未受影響（history、走勢圖、逐日檢視、法人並排全部保留）
+
+---
+
+## 📅 Log: 2026-07-25 16:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
+- **Status**: COMPLETED
+- **使用者需求**: (1) 三大法人表格能 review 1~7 天的資料 (2) 買賣超圖在右側空白處顯示圖例
+
+### Completed Tasks
+- [x] **三大法人表格可切換 7 天中任一天**：日期鈕列於區塊標題旁，預設最新交易日。
+- [x] **連買連賣改為前端計算**（`chipStreak.ts` 的 `streakAt`）：伺服器的 `report.streaks` 只有最新日，
+      表格能回看任一天就必須算「到那一天為止」的連續天數。UI 一律走前端這條路（含融資融券），
+      不混用兩種來源。行為必須與 Edge Function 的 `computeStreak` 一致，兩邊各有測試。
+- [x] **`BarSeriesChart` 支援多序列並排**（grouped bars），同組內留 2px 間隙。
+- [x] **新增「全部（並排）」模式**：四個法人同時比較，各一類別色 + 右側 `ChartLegend`。
+      hover 一次列出當日四個法人的數字。
+- [x] **新增 `chartColors.ts` 的 `CATEGORICAL_COLORS`**（見下方配色決策）。
+- [x] **報告表頭加上「報告更新時間」**（`fmtUpdatedAt`），且表頭移進 PDF 擷取範圍內。
+
+### 配色決策（依 dataviz 指引，非憑感覺挑色）
+- **顏色一次只能做一件事**：單一序列時顏色表達極性（紅正綠負）；多序列並排時顏色表達身分，
+  正負改由長條在零軸上下的方向表達。兩者不可疊在同一組標記上。
+- 類別色取自參考配色的固定順序 slot 1–4，**依序指派不循環**。
+- **選 dark steps 而非 light steps**：本專案圖表色必須是單一組字面值（html2canvas 限制），
+  需同時服務深色主題、淺色主題與淺底 PDF。以 `validate_palette.js` 實測：
+  light steps 在深底 **FAIL 亮度帶**；dark steps `#3987e5,#d95926,#199e70,#c98500`
+  在淺底 `#fcfcfb` 與深底 `#131a2b` **全部 PASS**（淺底 contrast 2.99 為 WARN，
+  需「可見標籤或表格檢視」作緩解 —— 本頁同時有圖例文字與完整數字表格，成立）。
+- **合計不與其組成並排**：三大法人合計＝四項之和，一起畫等於同一筆量重複計算。
+
+### Verification
+- `npm run test` 150 → **159 passed**（新增 `chipStreak` 6、`StockDetailPage` 3）
+- `npm run build` 通過；`npm run lint` 無新增 warning（維持既有 4 筆）
+- 瀏覽器實測（Playwright + 臨時 harness，驗完刪除）：7 個日期鈕、圖例 4 項、
+  並排長條 7×4=28 根、切單一法人後 7 根且圖例改為買超/賣超、切日期後表格與連買連賣同步重算、
+  多序列 tooltip 一次列出四個法人、PDF 實跑成功（453KB）、390px 無水平溢出（日期鈕換行、圖例移至圖下）
+
+### 已知限制（資料本質，非缺陷）
+- 並排模式下若某法人量級遠大於其他（例如外資 990 萬 vs 外資自營商 2.2 萬），
+  小的那幾根會接近看不見。這是共用同一縱軸的必然結果；要細看請切到單一法人（各自獨立縱軸），
+  或看上方表格的數字。**刻意不做雙縱軸** —— 那會讓兩個量級的高低變得無法比較。
+
+---
+
+## 📅 Log: 2026-07-25 15:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 盤後籌碼報告 v2 —— 個股分析頁 + 籌碼走勢圖 (v0.3.7-dev.3)
+- **Status**: COMPLETED
+- **Task**: `docs/agent/TASK.md` Task 11；架構決策見 `docs/agent/PLAN.md` §A–J
+
+### Completed Tasks
+- [x] **版號規範改版**：CLAUDE.md §17 改為 main `x.x.x`（依序遞增，除非大版本異動）／dev `x.x.x-dev.x`（點號）。
+      全庫由 `0.3.7-dev-2` 遷移為 `0.3.7-dev.2`，本次進版至 `0.3.7-dev.3`。
+- [x] **`twChips.ts`**：新增 `ChipLeg`（buy/sell/net）；`InstitutionalChip` 五項全部改為 leg
+      （自營商買進/賣出由「自行買賣」+「避險」相加，買賣超取官方欄位；三大法人買進/賣出由五個 leg 加總）；
+      `MarginChip` 擴充買進/賣出/償還並加 `source` 欄；新增 `marginDatedUrl` / `extractMarginDated`（**位置索引**）
+      / `marginDatedOk`（欄序防護）。
+- [x] **`report.ts`**：新增 `ChipDay`、`REPORT_SCHEMA = 2`、`history`、`ChipStreaks`；
+      純函式 `computeStreak` / `computeStreaks` / `isWeekendYmd`。`buildReport` 改吃 history。
+- [x] **`index.ts`**：`loadDaySources` → `loadSeries`（回推 14 日曆日、跳過週六日、快取優先、
+      併發上限 3、單次回補上限 5 天、滿 7 個交易日即停）；每日大檔抽成 per-ticker 切片後即釋放，
+      避免同時持有數十 MB；移除 html 產生與上傳。**刪除 `reportHtml.ts`**。
+- [x] **`reportProxy.ts`**：以結構化型別取代 `data: unknown`；`isSupportedReport` 守門，
+      `schema !== 2` 視為未命中；刪除 `applyHoldingOverlay` / `renderHoldingSection`（與 `reportHtml.ts` 重複的手抄複本）。
+- [x] **`components/Charts/`（新增）**：`chartScale.ts`（`niceDomain` / `domainTicks` / `tickStep` / `scaleY` /
+      `fmtAxisNumber`，純函式有測試）、`chartColors.ts`、`chartFrame.tsx`（軸線、命中區、tooltip）、
+      `BarSeriesChart.tsx`、`LineSeriesChart.tsx`。
+- [x] **`components/StockDetail/`（新增）**：`StockDetailPage.tsx`（三分頁籤 + PDF）、`ChipsTab.tsx`、
+      `HoldingTab.tsx`、`TechnicalTab.tsx`（佔位）、`chipFormat.ts`。
+- [x] **`AppShell.tsx`**：新增 `detail` state 作為下鑽檢視，`goTab()` 點導覽分頁即清空；
+      `DashboardPage` 改吃 `onOpenDetail`，**刪除 `ReportModal.tsx`**。
+- [x] **`reportPdf.ts`**：擷取前後動態掛上／移除 `.report-surface`，深色主題也輸出淺色文件 PDF。
+- [x] **`index.css`**：新增個股分析頁、二級分頁籤、圖表、持股卡片與 `.report-surface` 樣式。
+- [x] 文件：`README.md`（dev.3 版本紀錄）、`sources/supabase/README.md`（schema 2 結構、
+      `MI_MARGN_D` dataset、回補行為、新增症狀對照）、`TASK.md`（補 v1 摘要 + Task 11）、`SPEC.md`（新增章節）。
+
+### Verification
+- `npm run test`：**148 passed**（基準 113；新增 twChips 6、report 12、chartScale 12、reportProxy 4、StockDetailPage 9）
+- `npm run build`（`tsc -b && vite build`）通過；`npm run lint` 無新增 warning（維持既有 4 筆）
+- 瀏覽器（Playwright + 臨時 preview harness，驗完刪除）：
+  1280px / 390px 皆無水平溢出（寬表格在自身 `.table-scroll` 內滾動）、hover tooltip 內容與定位正確、
+  `.report-surface` 淺色容器正確、`generatePdfBlob` 實跑成功（388KB PDF）、
+  本機模式回歸（分析入口正確隱藏、四個導覽分頁切換無 console error）。
+- **圖表兩個實測修正**：軸標籤原本隨 viewBox 等比縮放（寬螢幕變兩倍大 / 手機太小），改為量測容器寬度以 1:1 繪製；
+  `fmtAxisNumber` 加入 step 參數，修正融資餘額 31,100–31,928 這種序列相鄰刻度全標成「3.1 萬」的問題。
+
+### Supabase 部署（使用者於同一 session 明確授權後執行）
+
+- **只動 dev 專案** `wqetxuhncvfidqnklyew`（Stock-Pnl-Web-Dev）；正式區 `kxnxadaghidwumqsqneu` 未觸碰、CLI 亦未 link。
+- `supabase functions deploy stock-report --no-verify-jwt` → **version 1 → 2、`verify_jwt` true → false**。
+  `stock-price` 未動（本次無變更），仍為 version 1 / `verify_jwt: true`。
+  順帶修掉一個既有問題：舊部署是 `verify_jwt: true`，但 schema.sql §6c 的 cron 只帶 `x-cron-secret`
+  不帶 Authorization，代表夜間批次本來就會被 gateway 擋 401。
+- **無需 schema migration**（實證）：`chip_raw_cache.dataset` 無 CHECK 約束，
+  新的 `MI_MARGN_D` 已正常寫入 9 筆（20260714–20260724），與既有 `T86` / `MI_MARGN` / `SBL` 並存。
+
+### 線上實測（真實 TWSE 資料，2330）
+
+| 項目 | 結果 |
+| --- | --- |
+| HTTP / 耗時 | 200、約 8 秒（Edge Function wall-clock 內） |
+| `schema` / `html` | `2`；回應已無 `html` 欄位 |
+| 第一次呼叫 | `history` **5 天**（= `MAX_BACKFILL_DAYS`），`notes` 正確說明「歷史資料回補中」 |
+| 第二次呼叫 | `history` **7 天**（07/16、17、20、21、22、23、24 —— 正確跳過 07/18–19 週末），`notes` 清空 |
+| 三大法人 | 五項 buy/sell/net 皆有值（外資 buy 8,879,341 / sell 18,515,947 / net −9,636,606） |
+| 融資融券 | `source: 'rwd'`（新端點成功），買進 797 / 賣出 454 / 償還 360 / 今日餘額 31,915 張 |
+| 交叉驗證 | 2026-07-22 融資餘額 **31,928 張**，與 PLAN.md §C 當初手動實測的 2330 fixture 完全一致 |
+| 借券 | `availableVolume: 11,853,736` |
+| history 完整性 | 7 天皆 `institutional` 與 `margin` 有值 → 走勢圖資料齊全 |
+
+**回補機制實證有效**：第二次呼叫命中前次快取，額度得以用在剩下 2 天，如 README 所述。
+
+### schema.sql §6 套用（dev.2 遺留缺口，本次一併補上）
+
+dev 專案原本沒有 `reports` bucket、沒有 `CRON_SECRET`，代表 dev.2 的「盤後自動產報」從來沒真的啟用過。
+使用者授權後補齊（**只套 §6，前 5 段既有表未重跑**）：
+
+- `supabase secrets set CRON_SECRET=<token_urlsafe(32)>` → 已確認出現在 secrets 清單。
+  值同時存在 Edge Function secrets 與 `cron.job.command`；需要取回時查
+  `select command from cron.job where jobname='stock-report-nightly'`。
+- `supabase db query -f`（§6 代入實際 `<PROJECT_REF>` / `<CRON_SECRET>`）→ 驗證結果：
+  `reports` bucket 存在且 public、`pg_cron` / `pg_net` 已啟用、
+  cron job `stock-report-nightly | 30 12 * * 1-5 | active=true`。
+
+### 批次與 Storage-first 線上實測
+
+- 手動觸發 `generate-all`（**只帶 `x-cron-secret`、不帶 Authorization**）→
+  `{"ok":true,"ymd":"20260724","generated":3,"total":3,"historyDays":7}`，4 秒完成（raw 檔已在快取內）。
+  這同時證明 `--no-verify-jwt` 生效 —— 修好前，夜間 cron 會被 gateway 擋 401。
+- Bucket 內容：`manifest.json`（0.1KB）+ `20260724/{0050,1802,2609}.json`（各約 5KB，與估算一致）。
+- 報告 JSON 檢查（0050）：`schema: 2`、**上下層都無 `html` 欄位**、`history` 7 天且每日 `institutional`
+  與 `margin` 皆有值、`holding: null`（共用報告不含個資）、`notes` 空、`margin.source: 'rwd'`。
+- Anon 讀取權限：`manifest.json` / 存在的代號 → 200；不存在的代號 → 400（前端據此 fallback 即點即產）。
+- **效能**：Storage-first 兩次下載共 **0.8 秒**，對比即點即產 **8 秒** —— 約 10 倍差距，
+  這就是套用 §6 的實際價值。
+
+### Outstanding
+
+- **未在瀏覽器走完整登入流程驗證**：dev 為 Supabase 模式需帳密登入，改以 curl 打真實端點 +
+  jsdom 元件測試涵蓋。UI 版面另以 fixture 在瀏覽器實測（見上）。
+- 夜間排程的首次自動執行時間：**每週一~五 12:30 UTC（台北 20:30）**，尚未經歷一次自動觸發。
+
+---
+
+## 📅 Log: 2026-07-25 12:27:06 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 盤後籌碼報告 v2 架構規劃與資料源實測（PLAN.md）
+- **Status**: COMPLETED（規劃）
+
+### Completed Tasks
+- [x] 實測確認帶 `date` 的 rwd 融資融券端點欄位（16 欄、名稱重複需位置索引），記下 2330 實測列當 fixture。
+- [x] 確認 T86 同一份回應已含各法人買進 / 賣出（19 欄），拆項無需新資料源。
+- [x] 決定移除 HTML 產生路線、改由 React 繪製；`PLAN.md` 寫入架構決策 A–J 與風險。
+
+---
+
+## 📅 Log: 2026-07-25 (dev.2) Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 盤後籌碼報告自動產生 + Storage 快取 (v0.3.7-dev.2，commit 9d62546)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] `stock-report` 新增 `generate-all` 批次動作，由 `pg_cron` 每交易日 20:30（台北）觸發，
+      產出全體持有台股的共用報告存入公開 `reports` bucket；新增 `CRON_SECRET` 驗證。
+- [x] 前端改 Storage-first（先讀預產報告，查無再即點即產），個人持股概況由前端疊加。
+- [x] 只保留 7 天：同批次清理舊報告與 `chip_raw_cache`。
+
+---
+
+## 📅 Log: 2026-07-24 (dev.1) Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 盤後籌碼報告 v1 (v0.3.7-dev.1，commit 038cdd8)
+- **Status**: COMPLETED
+
+### Completed Tasks
+- [x] 新增 Edge Function `stock-report`：抓 TWSE 三大法人買賣超、融資融券、借券，產生報告 HTML。
+- [x] 庫存總覽台股列新增「報告」按鈕與彈窗，可下載 PDF（`jspdf` / `html2canvas` 動態載入）。
+- [x] 新增 `chip_raw_cache` 依交易日共用快取；Supabase 檔案集中至 `sources/supabase/`。
 
 ---
 

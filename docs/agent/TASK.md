@@ -2,11 +2,152 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-21 15:30:00 Asia/Taipei
+- Timestamp: 2026-07-25 23:10:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 14: 移除基本面（EPS）、版號格式與徽章精簡 (0.3.7-dev.6)
+- **Status**: DONE
+- **Planner**: User（明確指示取消 EPS）
+- **Implementer**: Claude
+- **Timestamp**: 2026-07-25 23:10:00 Asia/Taipei
+
+#### Objective
+(1) 移除 EPS / 基本面全部實作。(2) 版號一律不帶 `v` 前綴。(3) 版本徽章不再顯示作者。
+
+#### 執行摘要
+- `git revert ec12206` 回退 Task 13（基本面）全部程式碼與文件，含 `schema.sql` 的第 7 段。
+- **Supabase 端回退是必要而非選項**：部署中的函數回 schema 3，而回退後的前端只接受 `=== 2`，
+  Storage-first 與即點即產兩條路都會被判為不支援 → 籌碼頁會整個壞掉。故一併：
+  重新部署 `stock-report`、重跑 `generate-all` 覆寫 Storage 回 schema 2、
+  `DROP TABLE stock_fundamentals`（1070 列公開資料）、清掉 `chip_raw_cache` 的
+  `BWIBBU` / `STOCK_DAY_AVG` 兩筆。
+- `CLAUDE.md §17` 改為「一律不帶 `v` 前綴」；`APP_AUTHOR` 常數整個移除；
+  smoke test 加上「不以 v 開頭、不含作者」的斷言，讓規則有測試把關而非只寫在文件。
+
+#### Acceptance Criteria
+- [x] `src/` 與 `supabase/` 對 `EPS|fundamental|每股盈餘|本益比|BWIBBU` 零命中
+- [x] dev 專案實測 2330 / 0050 皆回 `schema 2`、無 `fundamentals` 欄位；`stock_fundamentals` 已不存在
+- [x] `chip_raw_cache` 只剩 `MI_MARGN, MI_MARGN_D, SBL, T86` 四個 dataset
+- [x] 徽章只顯示 `0.3.7-dev.6`（不帶 `v`、不含作者）
+- [x] `npm run test` 159 passed / build / lint 全過
+- [x] 籌碼功能（7 日 history、走勢圖、逐日檢視、法人並排）未受影響
+
+#### 備註：Task 13（基本面）已作廢
+實作與文件全數回退，`PLAN.md` 的 §M–§Q（資料源實測結果）也隨之移除。
+若日後要重做，端點清單、五張產業表的差異、2330 fixture 等實測資料都留在
+**commit `ec12206`** 裡，`git show ec12206` 即可取回，不必重新推導。
+
+---
+
+### Task 12: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
+- **Status**: DONE
+- **Planner / Implementer**: Claude（需求由使用者提出）
+- **Timestamp**: 2026-07-25 16:45:00 Asia/Taipei
+- **Target Version**: v0.3.7-dev.4
+
+#### Objective
+(1) 三大法人表格能回看 7 天中任一天的資料。(2) 買賣超圖能同時比較各法人，並在右側空白處以圖例標明顏色對應。
+
+#### Scope / Allowed Changes
+- `Charts/`：`BarSeriesChart.tsx`（多序列並排）、`ChartLegend.tsx`（新增）、`chartColors.ts`（類別色）
+- `StockDetail/`：`ChipsTab.tsx`（日期鈕 + 並排模式 + 圖例）、`chipStreak.ts`（新增）、`chipFormat.ts`（`fmtUpdatedAt`）
+- `StockDetailPage.tsx`（頁首不重複資料日期）、`index.css`、版號三處、`README.md`、`docs/agent/*`
+
+#### Acceptance Criteria
+- [x] 三大法人表格可切換 7 天中任一天，「連買連賣」隨所看日期重算
+- [x] 「全部（並排）」模式：四個法人各一類別色，右側圖例標明對應並顯示最近交易日約當張數
+- [x] 單一法人模式維持紅正綠負，圖例改為說明買超 / 賣超
+- [x] 合計不與其組成並排（避免重複計算）
+- [x] 配色以 `validate_palette.js` 實測通過淺底與深底（非憑感覺挑色）
+- [x] `npm run test` 150 → 159 passed；build 通過；lint 無新增 warning
+
+#### Verification
+瀏覽器實測（Playwright，臨時 harness 驗完刪除）：7 個日期鈕、圖例 4 項、並排 7×4=28 根長條、
+切單一法人後 7 根且圖例改語意、切日期後表格與連買連賣同步重算、多序列 tooltip 一次列出四個法人、
+PDF 實跑成功（453KB）、390px 無水平溢出。
+
+---
+
+### Task 11: 盤後籌碼報告 v2 —— 個股分析頁 + 籌碼走勢圖 (v0.3.7-dev.3)
+- **Status**: DONE
+- **Planner / Implementer / Reviewer**: Claude
+- **Timestamp**: 2026-07-25 15:20:00 Asia/Taipei
+- **Target Version**: v0.3.7-dev.3
+- **Plan**: `docs/agent/PLAN.md` §「盤後籌碼報告 v2」（架構決策 A–J）
+
+#### Objective
+三大法人與融資融券各自拆成 買進 / 賣出 / 買賣超 / 連買連賣，保留 7 天並附走勢圖；
+版面由彈窗改為獨立「個股分析頁」（籌碼 / 技術面 / 我的持股 分頁籤）。
+
+#### Scope / Allowed Changes
+- `sources/supabase/functions/stock-report/`：`twChips.ts`（ChipLeg、`extractMarginDated`）、
+  `report.ts`（ChipDay、schema 2、`computeStreak(s)`、`isWeekendYmd`）、`index.ts`（`loadSeries` 回補）、
+  **刪除** `reportHtml.ts`
+- `sources/src/services/reportProxy.ts`（結構化型別、schema 守門）、`reportPdf.ts`（`.report-surface` 切換）
+- `sources/src/components/Charts/`（新增）、`sources/src/components/StockDetail/`（新增）
+- `sources/src/components/AppShell.tsx`（detail 下鑽 state）、`Dashboard/DashboardPage.tsx`（`onOpenDetail`）、
+  **刪除** `Dashboard/ReportModal.tsx`
+- `sources/src/index.css`、版號三處、`README.md`、`sources/supabase/README.md`、`docs/agent/*`
+
+#### Constraints
+- 不引入圖表函式庫（自繪 SVG）；不新增任何 npm 依賴。
+- 不主動部署或異動任何 Supabase 環境（CLAUDE.md §18）。
+- 無 schema migration：新的 `MI_MARGN_D` dataset 沿用現有 `chip_raw_cache`，`RETAIN_DAYS = 7` 不變。
+
+#### Acceptance Criteria
+- [x] 三大法人 5 列 × 買進 / 賣出 / 買賣超 / 約當張數 / 連買連賣
+- [x] 融資融券含 買進 / 賣出 / 償還 / 今日餘額 / 較前日 / 連增連減，並標示「賣出＝放空、買進＝回補」
+- [x] 近 7 日買賣超長條圖（可切換法人）＋ 融資 / 融券餘額折線圖（不共用 Y 軸）
+- [x] 伺服器不再回 HTML；前端遇 `schema !== 2` 走即點即產 fallback
+- [x] 單次回補上限 5 天，不足時 `notes[]` 說明且圖照常出
+- [x] 深色主題下載的 PDF 仍為淺色文件
+- [x] `npm run test`（113 → 148 筆）/ `npm run build` / `npm run lint` 全過，無新增 lint warning
+
+#### Verification
+- 單元測試：T86 買進/賣出與自營商加總、`extractMarginDated` 位置索引（2330 實測列 fixture）、
+  `computeStreak` 邊界（遇 0 / null 中斷）、`niceDomain` 跨零與全零、`fetchStoredReport` 舊格式視為未命中。
+- 元件測試 `StockDetailPage.test.tsx`：分頁切換、圖表數量、法人切換重繪、PDF 按鈕僅籌碼頁、兩條資料路徑。
+- 瀏覽器（Playwright，臨時 preview harness 驗完即刪）：1280px / 390px 無水平溢出、
+  hover tooltip 內容與定位、`.report-surface` 淺色容器、實際跑一次 `generatePdfBlob` 成功（388KB）、
+  本機模式回歸（分析入口隱藏、導覽切換無錯）。
+
+#### Supabase 部署（已完成，使用者明確授權）
+- [x] `supabase functions deploy stock-report --no-verify-jwt` → dev 專案 `wqetxuhncvfidqnklyew`
+      version 1 → 2、`verify_jwt` true → false。正式區未觸碰。
+- [x] 線上實測 2330 真實資料：schema 2、無 `html`、第一次 5 天 / 第二次 7 天（回補機制有效）、
+      融資融券走新 `rwd` 端點、與 PLAN.md §C 的 fixture 交叉驗證一致。詳見 `PROGRESS.md`。
+- [x] 實證無需 schema migration：`MI_MARGN_D` 正常寫入 `chip_raw_cache`。
+
+- [x] **補上 dev.2 遺留缺口**：dev 專案原本沒有 `reports` bucket / `CRON_SECRET`（盤後自動產報從未啟用）。
+      已設 `CRON_SECRET`、套用 schema.sql §6（只套 §6），驗證 bucket public、`pg_cron`/`pg_net` 已啟用、
+      cron job `30 12 * * 1-5` active。
+- [x] 手動觸發 `generate-all` → `generated 3/3`、`historyDays 7`；bucket 內 `manifest.json` +
+      3 份約 5KB 的 schema 2 JSON（無 `html`、`holding: null`、7 天 history 齊全）。
+- [x] **Storage-first 效能實測**：0.8 秒 vs 即點即產 8 秒（約 10 倍）。
+
+#### Outstanding
+- 夜間排程尚未經歷一次自動觸發（每週一~五 12:30 UTC / 台北 20:30）。
+- 未在瀏覽器走完整 Supabase 登入流程（需帳密），改以 curl 打真實端點 + jsdom 元件測試涵蓋。
+
+---
+
+### 補記（無 Task 編號）: 盤後籌碼報告 v1 (v0.3.7-dev.1 / dev.2)
+- **Status**: DONE（實作於 038cdd8 / 9d62546，當時未建 TASK 條目，此處補記）
+- **Implementer**: Claude
+- **Timestamp**: 2026-07-24（dev.1）、2026-07-25（dev.2）
+
+#### 摘要
+- **dev.1**：新增 Edge Function `stock-report`，抓 TWSE 盤後籌碼（三大法人買賣超、融資融券、借券），
+  於庫存總覽台股列以彈窗（`ReportModal`）顯示 Edge Function 產生的 HTML，可下載 PDF。
+  新增 `chip_raw_cache` 依交易日共用快取；Supabase 檔案集中至 `sources/supabase/`。
+- **dev.2**：新增 `generate-all` 批次 + `pg_cron` 每交易日 20:30 產出共用報告存入 `reports` bucket，
+  前端改 Storage-first，保留 7 天並清理舊檔。
+- **已被 Task 11 取代的部分**：HTML 產生路線（`reportHtml.ts`）、`ReportModal`、前端 `applyHoldingOverlay` 疊加。
+
+---
 
 ### Task 10: 庫存總攬面板縮小為主副層級式 (v0.3.6)
 - **Status**: DONE

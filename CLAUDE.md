@@ -675,3 +675,56 @@ Explicit enough for deployment and testing
 Do not create directories because a template contains them.
 
 Create directories because the project has a real responsibility that needs to be represented.
+
+---
+
+# 17. 版本號規範 (Versioning)
+
+版本號**一律不帶 `v` 前綴**，只有 `x.x.x` 或 `x.x.x-dev.x` 兩種形式。三處保持同步：
+
+- `sources/src/version.ts` → `APP_VERSION`（前端顯示）
+- `sources/package.json` → `version`（連同 `package-lock.json`）
+- `README.md` → 版本徽章（第 3 行）與「版本紀錄」
+
+畫面左下角的版本徽章**只顯示版號本身**，不顯示作者、不加前綴。
+（`APP_AUTHOR` 已於 0.3.7-dev.6 移除。）
+
+## 17.1 正式版本（`main` 分支）
+
+格式為 **`x.x.x`**（標準 semver，不帶任何尾綴）。
+
+- 依照前一個正式版號**依序遞增 patch**（例：`0.3.6` → `0.3.7`）。
+- **除非是大版本異動**（破壞性變更、架構重構、功能里程碼），才進 minor 或 major（例：`0.3.7` → `0.4.0` → `1.0.0`）。
+- `README.md` 的「版本紀錄」以正式版號為標題並定稿。
+
+## 17.2 測試版本（`dev` 及其他開發分支）
+
+格式為 **`x.x.x-dev.x`**（注意：`dev` 與序號之間是**點號** `.`，不是連字號）：
+
+- `x.x.x` = 這批 dev 工作併入 `main` 後會成為的正式版號（依 §17.1 決定）。
+- 最後的 `.x` = 該正式版號在 dev 期間的**異動次數**，從 `1` 起、每次有意義的異動 +1。
+- 範例：目標 `0.3.7`、第 2 次異動 → `0.3.7-dev.2`。
+
+`README.md` 版本紀錄在 dev 期間以「未來正式版號（開發中）」為標題，底下用 `dev.1 / dev.2 …` 分段列出各次異動。
+
+## 17.3 併入 main
+
+把 `-dev.<N>` 尾綴去掉即為正式版號（`0.3.7-dev.2` → `0.3.7`），並把該版的版本紀錄定稿。目的：讓正式與測試版號永遠對得起來，不再出現正式停在 `0.3.6`、測試卻跳到 `0.3.8` 的落差。
+
+---
+
+# 18. 部署與環境 (Deployment Environments)
+
+兩個獨立的 Supabase 專案，與 git 分支對應：
+
+| 環境 | Supabase 專案 | project-ref | 對應分支 |
+| ---- | ---- | ---- | ---- |
+| 正式區 | Stock-Pnl-Web | `kxnxadaghidwumqsqneu` | `main` |
+| 測試區 | Stock-Pnl-Web-Dev | `wqetxuhncvfidqnklyew` | `dev` |
+
+規則：
+
+- **預設不主動部署 / 異動任何 Supabase 環境。** 日常工作都是分支上的程式碼變更（`dev` 或其他分支）。
+- **部署 / 異動環境只在使用者明確要求時才做**（`supabase functions deploy`、`secrets set`、在 SQL Editor 跑 schema、建 bucket / cron 等皆屬對外操作，需先確認）。
+- **正式區只在 `main` 分支且經明確指示才動。**
+- **唯讀查詢不算異動、可自由執行**：`supabase projects/functions list`、透過 service key 打 REST / Storage 檢查表與 bucket 是否存在等。
