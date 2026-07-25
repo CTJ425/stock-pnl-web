@@ -11,8 +11,15 @@ import { isSupabaseConfigured, supabase } from './supabase'
 /** 是否已設定 Supabase 網址與金鑰（未設定則整個盤後報告功能隱藏） */
 export const isReportConfigured = isSupabaseConfigured
 
-/** 前端認得的報告結構版本；伺服器回傳其他版本一律視為未命中 */
-export const REPORT_SCHEMA = 2
+/**
+ * 前端認得的**最低**報告結構版本。
+ *
+ * 必須是「>=」而不是「===」：伺服器每次為報告加欄位就會升 schema（2 → 3 加了 sources），
+ * 而新增欄位對舊前端是無害的加法。用等號的話，後端一升版就會讓**所有**報告被判為不支援 ——
+ * Storage-first 回 null、即點即產丟「格式不符」，整個籌碼分頁當場全掛。
+ * 這正是 0.4.0 實際發生的事（後端升到 3、前端還鎖 2），故此處以測試釘住。
+ */
+export const MIN_REPORT_SCHEMA = 2
 
 /** 前端帶入的持股脈絡（Edge Function 不重算，直接放進報告） */
 export interface ReportHolding {
@@ -133,11 +140,11 @@ interface GenerateReportResponse {
   data: ReportData
 }
 
-/** 結構是否為前端認得的 schema 2 報告（舊格式 JSON 一律當未命中） */
+/** 結構是否為前端認得的報告（schema 1 的舊 HTML 格式一律當未命中） */
 function isSupportedReport(d: unknown): d is ReportData {
   if (!d || typeof d !== 'object') return false
   const r = d as Partial<ReportData>
-  return r.schema === REPORT_SCHEMA && Array.isArray(r.history)
+  return typeof r.schema === 'number' && r.schema >= MIN_REPORT_SCHEMA && Array.isArray(r.history)
 }
 
 /** 即點即產：未預產（不在持股清單 / 當日尚未產）時的 fallback，較慢但可用 */

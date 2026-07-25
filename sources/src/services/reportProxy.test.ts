@@ -61,6 +61,30 @@ describe('fetchStoredReport（Storage-first）', () => {
     expect(await fetchStoredReport('9999')).toBeNull()
   })
 
+  it('接受比前端已知版本更新的 schema（後端加欄位不該讓整份報告失效）', async () => {
+    // 這是 0.4.0 真實發生過的線上事故：後端升到 schema 3、前端還鎖 === 2，
+    // 導致 Storage-first 全數回 null、即點即產丟「格式不符」，籌碼分頁整個掛掉。
+    storageDownload.mockImplementation((path: string) => {
+      if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))
+      return Promise.resolve(
+        blobOf({ data: { ...reportData, schema: 3, sources: { institutional: null } } }),
+      )
+    })
+    const r = await fetchStoredReport('2330')
+    expect(r).not.toBeNull()
+    expect(r!.schema).toBe(3)
+
+    // 未來再升版也一樣要收
+    storageDownload.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === 'manifest.json'
+          ? blobOf({ ymd: '20260724' })
+          : blobOf({ data: { ...reportData, schema: 99 } }),
+      ),
+    )
+    expect((await fetchStoredReport('2330'))?.schema).toBe(99)
+  })
+
   it('舊格式（schema 1 / 只有 html）視為未命中 → null', async () => {
     storageDownload.mockImplementation((path: string) => {
       if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))

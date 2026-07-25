@@ -1,9 +1,47 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 盤後批次改分段執行 + 逐區塊資料時間 + 借券改用自帶日期端點 (0.4.0)
-- Status: COMPLETED（兩區皆已部署並實測）
-- Timestamp: 2026-07-26 02:10:00 Asia/Taipei
+- Action: 修正 0.4.0 的線上故障（schema 守門用等號，後端升版即全掛）(0.4.1)
+- Status: COMPLETED
+- Timestamp: 2026-07-26 02:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 02:40:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修正 0.4.0 造成的線上故障 (0.4.1)
+- **Status**: COMPLETED
+- **回報者**: 使用者（「伺服器回傳的報告格式不符，請稍後再試 這是怎麼回事?」）
+
+### 故障
+0.4.0 上線後，個股分析的籌碼分頁**一律**顯示「伺服器回傳的報告格式不符」。
+Storage-first 全數判為未命中、即點即產也被擋，整個分頁不可用。
+
+### 原因（我造成的）
+0.4.0 把 `REPORT_SCHEMA` 升到 3（新增 `sources`），但前端 `reportProxy.ts` 的守門是
+`r.schema === REPORT_SCHEMA` 且 `REPORT_SCHEMA = 2` —— **等號比對**，於是 schema 3 全被拒。
+
+更該檢討的是：我在 0.4.0 的 PLAN、README、commit message 都寫「前端接受 `schema >= 2`」，
+**但那個改動從未進到這一版**。`>= 2` 是 0.3.7-dev.5（EPS）時做的，隨著 EPS 被回退（688d9ec）
+一起消失了，我卻把那個說法沿用下來、沒有回頭確認程式碼實際長什麼樣。
+**文件寫了什麼不等於程式碼做了什麼。**
+
+### 為什麼測試沒抓到
+- `reportProxy.test.ts` 的 fixture 是 schema 2 → 等號比對照樣通過
+- `StockDetailPage.test.tsx` 把整個 `reportProxy` 模組 mock 掉 → 根本沒執行到守門
+- 兩者都沒有「後端回新版、前端要收」這個案例
+
+### 修正
+`MIN_REPORT_SCHEMA = 2` + `>=` 比對，並在常數註解寫明「為什麼必須是 >=」。
+補上回歸測試：schema 3 與 schema 99 都必須被接受。
+**已反向驗證**：該測試在修正前會失敗、修正後通過 —— 確認它真的擋得住這個錯。
+
+### 教訓（寫給後續 Agent）
+1. 伺服器的結構版本升級對舊前端是**加法**，守門一律用 `>=`，不要用 `===`。
+2. 元件測試把資料層整個 mock 掉時，資料層自己的邊界必須另有測試涵蓋 ——
+   否則「兩邊各自通過、串起來壞掉」不會被發現。
+3. 跨版本的相容性宣稱要當成**行為**來測，不能只寫在文件裡。
 
 ---
 
