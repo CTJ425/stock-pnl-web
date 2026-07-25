@@ -680,11 +680,14 @@ Create directories because the project has a real responsibility that needs to b
 
 # 17. 版本號規範 (Versioning)
 
-版本號在三處保持同步：
+版本號**一律不帶 `v` 前綴**，只有 `x.x.x` 或 `x.x.x-dev.x` 兩種形式。三處保持同步：
 
-- `sources/src/version.ts` → `APP_VERSION`（前端顯示，帶 `v` 前綴）
-- `sources/package.json` → `version`（不帶 `v`）
+- `sources/src/version.ts` → `APP_VERSION`（前端顯示）
+- `sources/package.json` → `version`（連同 `package-lock.json`）
 - `README.md` → 版本徽章（第 3 行）與「版本紀錄」
+
+畫面左下角的版本徽章**只顯示版號本身**，不顯示作者、不加前綴。
+（`APP_AUTHOR` 已於 0.3.7-dev.6 移除。）
 
 ## 17.1 正式版本（`main` 分支）
 

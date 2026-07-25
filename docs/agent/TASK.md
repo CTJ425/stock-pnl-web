@@ -2,11 +2,45 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
+- Timestamp: 2026-07-25 23:10:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 14: 移除基本面（EPS）、版號格式與徽章精簡 (0.3.7-dev.6)
+- **Status**: DONE
+- **Planner**: User（明確指示取消 EPS）
+- **Implementer**: Claude
+- **Timestamp**: 2026-07-25 23:10:00 Asia/Taipei
+
+#### Objective
+(1) 移除 EPS / 基本面全部實作。(2) 版號一律不帶 `v` 前綴。(3) 版本徽章不再顯示作者。
+
+#### 執行摘要
+- `git revert ec12206` 回退 Task 13（基本面）全部程式碼與文件，含 `schema.sql` 的第 7 段。
+- **Supabase 端回退是必要而非選項**：部署中的函數回 schema 3，而回退後的前端只接受 `=== 2`，
+  Storage-first 與即點即產兩條路都會被判為不支援 → 籌碼頁會整個壞掉。故一併：
+  重新部署 `stock-report`、重跑 `generate-all` 覆寫 Storage 回 schema 2、
+  `DROP TABLE stock_fundamentals`（1070 列公開資料）、清掉 `chip_raw_cache` 的
+  `BWIBBU` / `STOCK_DAY_AVG` 兩筆。
+- `CLAUDE.md §17` 改為「一律不帶 `v` 前綴」；`APP_AUTHOR` 常數整個移除；
+  smoke test 加上「不以 v 開頭、不含作者」的斷言，讓規則有測試把關而非只寫在文件。
+
+#### Acceptance Criteria
+- [x] `src/` 與 `supabase/` 對 `EPS|fundamental|每股盈餘|本益比|BWIBBU` 零命中
+- [x] dev 專案實測 2330 / 0050 皆回 `schema 2`、無 `fundamentals` 欄位；`stock_fundamentals` 已不存在
+- [x] `chip_raw_cache` 只剩 `MI_MARGN, MI_MARGN_D, SBL, T86` 四個 dataset
+- [x] 徽章只顯示 `0.3.7-dev.6`（不帶 `v`、不含作者）
+- [x] `npm run test` 159 passed / build / lint 全過
+- [x] 籌碼功能（7 日 history、走勢圖、逐日檢視、法人並排）未受影響
+
+#### 備註：Task 13（基本面）已作廢
+實作與文件全數回退，`PLAN.md` 的 §M–§Q（資料源實測結果）也隨之移除。
+若日後要重做，端點清單、五張產業表的差異、2330 fixture 等實測資料都留在
+**commit `ec12206`** 裡，`git show ec12206` 即可取回，不必重新推導。
+
+---
 
 ### Task 12: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
 - **Status**: DONE

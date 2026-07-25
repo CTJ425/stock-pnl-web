@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { APP_AUTHOR, APP_VERSION } from './version'
+import { APP_VERSION } from './version'
 
 describe('App（本機模式煙霧測試）', () => {
   beforeEach(() => {
@@ -34,8 +34,10 @@ describe('App（本機模式煙霧測試）', () => {
 
     const badge = container.querySelector('.version-badge')
     expect(badge).toBeTruthy()
-    expect(badge!.textContent).toContain(APP_VERSION)
-    expect(badge!.textContent).toContain(APP_AUTHOR)
+    // 徽章只顯示版號本身：不帶 v 前綴、不顯示作者
+    expect(badge!.textContent).toBe(APP_VERSION)
+    expect(badge!.textContent).not.toMatch(/^v/)
+    expect(badge!.textContent).not.toContain('Ivan')
 
     await user.click(screen.getByRole('button', { name: /服務狀態/ }))
     expect(await screen.findByText('關於本專案')).toBeTruthy()

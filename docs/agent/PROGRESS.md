@@ -1,9 +1,54 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
-- Status: COMPLETED（dev 分支；dev 專案 Supabase 已部署並實測）
-- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
+- Action: 移除基本面（EPS）、版號格式與徽章精簡 (0.3.7-dev.6)
+- Status: COMPLETED（dev 分支；dev 專案 Supabase 已回退部署並清除 EPS 資料表）
+- Timestamp: 2026-07-25 23:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-25 23:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 依使用者指示移除基本面（EPS）全部實作；版號格式改為不帶 `v`；徽章不再顯示作者 (0.3.7-dev.6)
+- **Status**: COMPLETED
+
+### 1. 移除 EPS（dev.5 全數回退）
+- `git revert ec12206`（乾淨套用，無衝突）→ 刪除 `twFundamentals.ts(+test)`、`FundamentalsTab.tsx(+test)`、
+  `fundamentalFormat.ts(+test)`；`report.ts` 回到 `REPORT_SCHEMA = 2`；`index.ts` 移除
+  `syncFundamentals` / `BWIBBU` / `STOCK_DAY_AVG`；`StockDetailPage` 回到三個分頁籤；
+  `reportProxy.ts` schema 守門回到 `=== 2`。實測 `grep -rl "EPS|fundamental|每股盈餘|本益比|BWIBBU"` 於
+  `src/` 與 `supabase/` **零命中**。
+- **Supabase 端必須跟著回退，不是選項**：部署中的函數回 schema 3，而回退後的前端只接受 `=== 2`，
+  Storage-first 與即點即產兩條路都會被判為不支援 → 籌碼頁會整個壞掉。故：
+  - 重新部署 `stock-report`（回 schema 2）
+  - 重跑 `generate-all` 把 Storage 內 3 份 schema 3 JSON 覆寫回 schema 2（實測 1802/2609/0050 皆已無 `fundamentals` 欄位）
+  - `DROP TABLE stock_fundamentals`（1070 列，全為公開 TWSE 資料、無使用者資料、可一道指令重抓）
+  - 刪除 `chip_raw_cache` 的 `BWIBBU` / `STOCK_DAY_AVG` 兩筆（否則會閒置 7 天才被 prune）
+  - 驗證後 `chip_raw_cache` 只剩 `MI_MARGN, MI_MARGN_D, SBL, T86` 四個 dataset
+- `schema.sql` 的第 7 段（`stock_fundamentals`）已隨 revert 移除，檔案回到 6 段。
+
+### 2. 版號格式（CLAUDE.md §17 已更新）
+- **一律不帶 `v` 前綴**，只有 `x.x.x`（正式）或 `x.x.x-dev.x`（測試）兩種形式。
+- `version.ts` 的 `APP_VERSION` 由 `'v0.3.7-dev.4'` 改為 `'0.3.7-dev.6'`；
+  README 第 3 行與「開發中」標題同步去掉 `v`。
+- README **歷史版本標題保留原樣**（`### v0.2.5` 等）—— 使用者說的是「以後」，那些是既成紀錄，
+  改了只是製造 diff 噪音。
+
+### 3. 徽章不再顯示作者
+- `APP_AUTHOR` 常數與其 export **整個移除**（不只是不顯示）；`App.tsx` 的徽章由
+  `{APP_VERSION} | {APP_AUTHOR}` 改為 `{APP_VERSION}`。
+- `App.smoke.test.tsx` 的斷言改為 `toBe(APP_VERSION)` 並加驗「不以 v 開頭」「不含 Ivan」，
+  讓格式規則有測試把關而非只寫在文件。
+
+### 版號選擇說明
+本輪進到 **dev.6 而非重用 dev.5**：dev.5 已被 EPS 用掉並推上 remote，重用會讓同一版號指向兩份不同內容。
+
+### Verification
+- `npm run test` **159 passed**（回到 dev.4 的基準；EPS 的 40 筆測試隨功能一併移除）
+- `npm run build` 通過；`npm run lint` 無新增 warning（維持既有 4 筆）
+- dev Supabase：2330 / 0050 實測皆回 `schema 2`、無 `fundamentals` 欄位、`history` 7 天完好
+- 籌碼功能未受影響（history、走勢圖、逐日檢視、法人並排全部保留）
 
 ---
 
