@@ -1,9 +1,52 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 11 盤後籌碼報告 v2（個股分析頁 + 籌碼走勢圖）(v0.3.7-dev.3)
-- Status: COMPLETED（dev 分支；Supabase 部署待使用者授權）
-- Timestamp: 2026-07-25 15:20:00 Asia/Taipei
+- Action: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
+- Status: COMPLETED（dev 分支；dev 專案 Supabase 已部署並實測）
+- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-25 16:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
+- **Status**: COMPLETED
+- **使用者需求**: (1) 三大法人表格能 review 1~7 天的資料 (2) 買賣超圖在右側空白處顯示圖例
+
+### Completed Tasks
+- [x] **三大法人表格可切換 7 天中任一天**：日期鈕列於區塊標題旁，預設最新交易日。
+- [x] **連買連賣改為前端計算**（`chipStreak.ts` 的 `streakAt`）：伺服器的 `report.streaks` 只有最新日，
+      表格能回看任一天就必須算「到那一天為止」的連續天數。UI 一律走前端這條路（含融資融券），
+      不混用兩種來源。行為必須與 Edge Function 的 `computeStreak` 一致，兩邊各有測試。
+- [x] **`BarSeriesChart` 支援多序列並排**（grouped bars），同組內留 2px 間隙。
+- [x] **新增「全部（並排）」模式**：四個法人同時比較，各一類別色 + 右側 `ChartLegend`。
+      hover 一次列出當日四個法人的數字。
+- [x] **新增 `chartColors.ts` 的 `CATEGORICAL_COLORS`**（見下方配色決策）。
+- [x] **報告表頭加上「報告更新時間」**（`fmtUpdatedAt`），且表頭移進 PDF 擷取範圍內。
+
+### 配色決策（依 dataviz 指引，非憑感覺挑色）
+- **顏色一次只能做一件事**：單一序列時顏色表達極性（紅正綠負）；多序列並排時顏色表達身分，
+  正負改由長條在零軸上下的方向表達。兩者不可疊在同一組標記上。
+- 類別色取自參考配色的固定順序 slot 1–4，**依序指派不循環**。
+- **選 dark steps 而非 light steps**：本專案圖表色必須是單一組字面值（html2canvas 限制），
+  需同時服務深色主題、淺色主題與淺底 PDF。以 `validate_palette.js` 實測：
+  light steps 在深底 **FAIL 亮度帶**；dark steps `#3987e5,#d95926,#199e70,#c98500`
+  在淺底 `#fcfcfb` 與深底 `#131a2b` **全部 PASS**（淺底 contrast 2.99 為 WARN，
+  需「可見標籤或表格檢視」作緩解 —— 本頁同時有圖例文字與完整數字表格，成立）。
+- **合計不與其組成並排**：三大法人合計＝四項之和，一起畫等於同一筆量重複計算。
+
+### Verification
+- `npm run test` 150 → **159 passed**（新增 `chipStreak` 6、`StockDetailPage` 3）
+- `npm run build` 通過；`npm run lint` 無新增 warning（維持既有 4 筆）
+- 瀏覽器實測（Playwright + 臨時 harness，驗完刪除）：7 個日期鈕、圖例 4 項、
+  並排長條 7×4=28 根、切單一法人後 7 根且圖例改為買超/賣超、切日期後表格與連買連賣同步重算、
+  多序列 tooltip 一次列出四個法人、PDF 實跑成功（453KB）、390px 無水平溢出（日期鈕換行、圖例移至圖下）
+
+### 已知限制（資料本質，非缺陷）
+- 並排模式下若某法人量級遠大於其他（例如外資 990 萬 vs 外資自營商 2.2 萬），
+  小的那幾根會接近看不見。這是共用同一縱軸的必然結果；要細看請切到單一法人（各自獨立縱軸），
+  或看上方表格的數字。**刻意不做雙縱軸** —— 那會讓兩個量級的高低變得無法比較。
 
 ---
 

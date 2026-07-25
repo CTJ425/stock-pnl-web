@@ -110,8 +110,63 @@ describe('StockDetailPage', () => {
     expect(foreignRow.getByText('+5,000')).toBeTruthy()
     expect(foreignRow.getByText('+5')).toBeTruthy()
     expect(foreignRow.getByText('連 2 買')).toBeTruthy()
-    // 融資融券的「連增連減」
-    expect(screen.getByText('連 2 增')).toBeTruthy()
+    // 融資融券的「連增連減」由前端依 history 計算：fixture 兩天都 +105 / +1，故皆為連 2 增
+    const marginTable = within(screen.getAllByRole('table')[1])
+    expect(within(marginTable.getByText('融資').closest('tr')!).getByText('連 2 增')).toBeTruthy()
+    expect(within(marginTable.getByText('融券').closest('tr')!).getByText('連 2 增')).toBeTruthy()
+  })
+
+  it('三大法人表格可切換檢視 7 天中任一天，連買連賣隨之重算', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} onBack={() => {}} />,
+    )
+    await screen.findByText('三大法人買賣超')
+
+    const rowOf = (label: string) =>
+      within(within(screen.getAllByRole('table')[0]).getByText(label).closest('tr')!)
+    // 三大法人區塊的說明句（第一個 .rpt-section 內的 .hint）
+    const caption = () => container.querySelector('.rpt-section .hint')!.textContent
+
+    // 預設看最新交易日（07/23）：外資 net +5,000、連 2 買
+    expect(caption()).toContain('2026-07-23')
+    expect(rowOf('外資（不含自營）').getByText('+5,000')).toBeTruthy()
+    expect(rowOf('外資（不含自營）').getByText('連 2 買')).toBeTruthy()
+
+    // 切到前一天（07/22）：net 變 +3,000，連買天數降為 1
+    await user.click(screen.getByRole('button', { name: /07\/22/ }))
+    expect(caption()).toContain('2026-07-22')
+    expect(rowOf('外資（不含自營）').getByText('+3,000')).toBeTruthy()
+    expect(rowOf('外資（不含自營）').getByText('連 1 買')).toBeTruthy()
+  })
+
+  it('圖表預設並排四個法人，並附色塊圖例（身分不只靠顏色）', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} onBack={() => {}} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    const legend = within(container.querySelector('.chart-legend-side')! as HTMLElement)
+    for (const label of ['外資（不含自營）', '外資自營商', '投信', '自營商']) {
+      expect(legend.getByText(label)).toBeTruthy()
+    }
+    // 合計不入圖（它就是四項相加，畫進去等於重複計算）
+    expect(legend.queryByText('三大法人合計')).toBeNull()
+    expect(container.querySelectorAll('.chart-legend-swatch').length).toBe(4)
+    // 2 天 × 4 個法人 = 8 根長條
+    expect(container.querySelectorAll('svg.chart-svg')[0].querySelectorAll('rect[rx]').length).toBe(8)
+  })
+
+  it('切成單一法人時圖例改講紅正綠負（顏色改為表達極性）', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} onBack={() => {}} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('button', { name: '投信' }))
+    const labels = [...container.querySelectorAll('.chart-legend-label')].map((el) => el.textContent)
+    expect(labels).toEqual(['買超（買比賣多）', '賣超（賣比買多）'])
+    // 單一序列 2 天 = 2 根長條
+    expect(container.querySelectorAll('svg.chart-svg')[0].querySelectorAll('rect[rx]').length).toBe(2)
   })
 
   it('畫出走勢圖（inline SVG，非圖表函式庫）', async () => {

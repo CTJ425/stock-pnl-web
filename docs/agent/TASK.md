@@ -2,11 +2,40 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-25 15:20:00 Asia/Taipei
+- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 12: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
+- **Status**: DONE
+- **Planner / Implementer**: Claude（需求由使用者提出）
+- **Timestamp**: 2026-07-25 16:45:00 Asia/Taipei
+- **Target Version**: v0.3.7-dev.4
+
+#### Objective
+(1) 三大法人表格能回看 7 天中任一天的資料。(2) 買賣超圖能同時比較各法人，並在右側空白處以圖例標明顏色對應。
+
+#### Scope / Allowed Changes
+- `Charts/`：`BarSeriesChart.tsx`（多序列並排）、`ChartLegend.tsx`（新增）、`chartColors.ts`（類別色）
+- `StockDetail/`：`ChipsTab.tsx`（日期鈕 + 並排模式 + 圖例）、`chipStreak.ts`（新增）、`chipFormat.ts`（`fmtUpdatedAt`）
+- `StockDetailPage.tsx`（頁首不重複資料日期）、`index.css`、版號三處、`README.md`、`docs/agent/*`
+
+#### Acceptance Criteria
+- [x] 三大法人表格可切換 7 天中任一天，「連買連賣」隨所看日期重算
+- [x] 「全部（並排）」模式：四個法人各一類別色，右側圖例標明對應並顯示最近交易日約當張數
+- [x] 單一法人模式維持紅正綠負，圖例改為說明買超 / 賣超
+- [x] 合計不與其組成並排（避免重複計算）
+- [x] 配色以 `validate_palette.js` 實測通過淺底與深底（非憑感覺挑色）
+- [x] `npm run test` 150 → 159 passed；build 通過；lint 無新增 warning
+
+#### Verification
+瀏覽器實測（Playwright，臨時 harness 驗完刪除）：7 個日期鈕、圖例 4 項、並排 7×4=28 根長條、
+切單一法人後 7 根且圖例改語意、切日期後表格與連買連賣同步重算、多序列 tooltip 一次列出四個法人、
+PDF 實跑成功（453KB）、390px 無水平溢出。
+
+---
 
 ### Task 11: 盤後籌碼報告 v2 —— 個股分析頁 + 籌碼走勢圖 (v0.3.7-dev.3)
 - **Status**: DONE
