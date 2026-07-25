@@ -7,12 +7,10 @@
  * - 台股未實現損益為「淨」值：預扣賣出手續費與證交稅（estimateUnrealized）
  */
 import { useMemo } from 'react'
-import { AlertTriangle, FileText, Inbox, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
-import type { Holding } from '../../utils/pnlEngine'
-import { estimateUnrealized } from '../../utils/pnlEngine'
-import { breakEvenPrice } from '../../utils/fees'
+import { buildHoldingRows, type HoldingRow } from '../../utils/holdingRows'
 import type { Currency } from '../../types/models'
 import {
   fmtMoney,
@@ -22,12 +20,9 @@ import {
   fmtSignedPercent,
   pnlClass,
 } from '../../utils/formatters'
-import { getFeeRate, getMinFee } from '../../utils/settings'
-import type { PriceMap } from '../../services/priceProxy'
+import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
-import { isReportConfigured } from '../../services/reportProxy'
-import type { StockDetailTarget } from '../StockDetail/StockDetailPage'
 
 /** 各欄位說明（表頭「?」圖示顯示）。寫給不熟股票的人看：短句、白話、不放公式。 */
 const HELP = {
@@ -46,66 +41,12 @@ const HELP = {
   roi: '這些持股目前賺賠的百分比。只看手上還有的部分；已經賣掉的請看「年度收益」頁。',
 } as const
 
-interface HoldingRow {
-  holding: Holding
-  price: number | null
-  priceStale: boolean
-  mktVal: number | null
-  unrealized: number | null
-  /** 未含任何費用的純價差：市值 − 未含費成本，與年度收益的 rawRealized 同構 */
-  rawUnrealized: number | null
-  /** 未實現報酬率（未實現 ÷ 當前部位成本）；無現價時為 null */
-  roi: number | null
-  /** 保本賣出價：以此價全數賣出（扣手續費 / 證交稅）恰好不虧 */
-  breakEven: number
-}
-
-function buildRows(
-  holdings: Holding[],
-  prices: PriceMap,
-  feeRate: number,
-  workspaceId?: string,
-): HoldingRow[] {
-  return holdings.map((h) => {
-    const quote = prices[h.key]
-    const price = quote?.price ?? null
-    const mktVal = price !== null ? price * h.qty : null
-    // 台股依持股規模套用整股 / 零股最低手續費；美股無下限
-    const minFee =
-      h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
-    const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
-    const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
-    // 僅當前部位（與券商 APP 同口徑）：分母為現有持股的移動平均成本
-    const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
-    const breakEven = breakEvenPrice(h, feeRate, minFee)
-    return {
-      holding: h,
-      price,
-      priceStale: quote?.stale ?? false,
-      mktVal,
-      unrealized,
-      rawUnrealized,
-      roi,
-      breakEven,
-    }
-  })
-}
-
 function sumOrNull(values: Array<number | null>): number | null {
   const known = values.filter((v): v is number => v !== null)
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
 }
 
-function HoldingsTable({
-  rows,
-  currency,
-  onOpenDetail,
-}: {
-  rows: HoldingRow[]
-  currency: Currency
-  /** 提供時（僅台股）於每列渲染「個股分析」按鈕 */
-  onOpenDetail?: (row: HoldingRow) => void
-}) {
+function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {
   return (
     <div className="glass table-scroll">
       <table className="data-table">
@@ -121,11 +62,6 @@ function HoldingsTable({
             <HelpTh label="目前市值" help={HELP.mktVal} numeric />
             <HelpTh label="未實現淨損益" help={HELP.unrealized} numeric />
             <HelpTh label="未實現報酬率" help={HELP.roi} numeric />
-            {onOpenDetail && (
-              <th className="th-sort">
-                <span className="th-plain">個股分析</span>
-              </th>
-            )}
           </tr>
         </thead>
         <tbody>
@@ -187,18 +123,6 @@ function HoldingsTable({
                 )}
               </td>
               <td className={`num ${pnlClass(roi)}`}>{roi === null ? '—' : fmtSignedPercent(roi)}</td>
-              {onOpenDetail && (
-                <td>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => onOpenDetail(row)}
-                    title="開啟個股分析（盤後籌碼、技術面、我的持股）"
-                  >
-                    <FileText size={14} />
-                    分析
-                  </button>
-                </td>
-              )}
             </tr>
             )
           })}
@@ -208,34 +132,14 @@ function HoldingsTable({
   )
 }
 
-interface DashboardPageProps {
-  /** 提供時（僅台股）每列出現「分析」按鈕，下鑽到個股分析頁；外殼層負責切換檢視 */
-  onOpenDetail?: (target: StockDetailTarget) => void
-}
-
-export function DashboardPage({ onOpenDetail }: DashboardPageProps) {
+export function DashboardPage() {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
   const { prices, loading, refreshedAt, refresh } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
 
-  // 點擊當下的持股脈絡快照，交給分析頁顯示（分析頁不重算，也不隨現價刷新重載）
-  const openDetail = (row: HoldingRow) => {
-    onOpenDetail?.({
-      ticker: row.holding.ticker,
-      name: displayStockName(row.holding.market, row.holding.ticker, row.holding.name),
-      holding: {
-        qty: row.holding.qty,
-        avgCost: row.holding.avgCost,
-        price: row.price,
-        unrealized: row.unrealized,
-        roi: row.roi,
-      },
-    })
-  }
-
   const rows = useMemo(
-    () => buildRows(holdings, prices, feeRate, current?.id),
+    () => buildHoldingRows(holdings, prices, feeRate, current?.id),
     [holdings, prices, feeRate, current?.id],
   )
   const twRows = rows.filter((r) => r.holding.currency === 'TWD')
@@ -396,11 +300,7 @@ export function DashboardPage({ onOpenDetail }: DashboardPageProps) {
                 <div className="section-title">
                   <h2 style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h2>
                 </div>
-                <HoldingsTable
-                  rows={twRows}
-                  currency="TWD"
-                  onOpenDetail={isReportConfigured && onOpenDetail ? openDetail : undefined}
-                />
+                <HoldingsTable rows={twRows} currency="TWD" />
               </div>
             )}
             {usRows.length > 0 && (

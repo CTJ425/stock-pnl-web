@@ -47,7 +47,7 @@ export function isFresh(key: string, quote: PriceQuote | undefined, now: number)
   return Number.isFinite(at) && now - at < cacheTtlMs(key)
 }
 
-/** 供服務狀態頁讀取報價快取狀態 */
+/** 讀取 localStorage 的報價快取（L1）；同檔內的 fetchPrices 用它判斷 TTL 命中 */
 export function readPriceCache(): PriceMap {
   try {
     const raw = localStorage.getItem(CACHE_KEY)

@@ -1,9 +1,61 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.3.7 定版並併入 main；正式區 Supabase 完成後端部署
-- Status: COMPLETED（main 已合併；正式區與測試區後端皆就緒）
-- Timestamp: 2026-07-25 23:45:00 Asia/Taipei
+- Action: 個股分析獨立成頁（下拉切換）、移除服務狀態 (0.3.8-dev.1)
+- Status: COMPLETED（dev 分支；不需要動 Supabase）
+- Timestamp: 2026-07-26 00:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 00:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 個股分析改為獨立導覽分頁（下拉切換持股）、服務狀態功能整個移除 (0.3.8-dev.1)
+- **Status**: COMPLETED
+- **Task**: `TASK.md` Task 15；計畫檔 `~/.claude/plans/nested-sauteeing-boole.md`
+
+### 1. 移除服務狀態
+- 刪除 `components/ServiceStatus/`（整個目錄）、`services/serviceHealth.ts`、`serviceHealth.test.ts`
+- `AppShell`：移除 `Activity` import、`ServiceStatusPage` import、`Tab` 的 `'status'`、TABS 項、渲染條件
+- `index.css`：刪除服務狀態專用的 75 行（20 個 `.status-*` / `.uptime-*` class，全庫僅該頁使用）。
+  刪除前以程式斷言確認未含 `.spin` / `.section-title` 等共用樣式
+- 連帶清掉 dead code：`twMarketData.ts` 的 `readTwListCacheMeta`（唯一呼叫者是 serviceHealth）；
+  `priceProxy.ts` 的 `readPriceCache` 保留（內部仍在用），只修註解
+- **GitHub 連結改置於頁尾**免責聲明下方（依使用者指示）；專案簡介文案不保留（README 仍有）
+
+### 2. 個股分析獨立成頁
+- 新增 `components/StockDetail/AnalysisPage.tsx`（容器）：`useWorkspace` + `useStockPrices` + `getFeeRate`，
+  過濾台股後作為下拉選單來源；`selectedKey` state，選中的代號因交易異動而消失時自動回退第一檔
+- 下拉沿用既有 `.ws-select` 樣式（後代選擇器，無需新 class）
+- `StockDetailPage` 的 `onBack` 改為 **`selector?: ReactNode`** —— 已無下鑽，頁首左側改放下拉選單。
+  以 `key={holding.key}` 強制換股時重置整組 state，避免看到上一檔的殘留
+- `AppShell`：移除 `detail` state 與 `goTab`，新增 `analysis` 分頁；
+  **未設定 Supabase 時該分頁隱藏**（`isReportConfigured` 閘門，與盤後報告入口規則一致）
+- `DashboardPage`：移除「個股分析」欄、`onOpenDetail` / `openDetail` 與相關 import
+
+### 3. 共用計算：`utils/holdingRows.ts`
+`buildRows` / `HoldingRow` 原本是 `DashboardPage` 的 module-local。分析頁需要同一份
+「每檔的 price / unrealized / roi」（含台股零股最低手續費、預扣賣出費稅），**抽成共用模組**而非複製。
+`DashboardPage` 改 import，行為不變。
+
+### Verification
+- `npm run test` 159 → **170 passed**（刪 serviceHealth 4 筆、改 smoke 2 筆並新增 2 筆、
+  新增 holdingRows 6 筆 + AnalysisPage 7 筆）
+- `npm run build` 通過；`npm run lint` warning 由 4 降到 **3**（ServiceStatusPage 那筆隨檔案消失）
+- 瀏覽器實測（Playwright，本機模式）：
+  - 導覽列 `庫存總覽 / 年度收益 / 交易紀錄`（服務狀態已無、個股分析在本機模式正確隱藏）
+  - 庫存總覽表頭已無「個股分析」欄
+  - 頁尾：免責聲明 + 其下的 GitHub 連結，`href` 正確
+  - 分析頁（臨時 harness 掛 AuthProvider + WorkspaceProvider）：下拉只列 `1802 / 2330 / 2609`
+    （美股 AAPL 不在內）、切換後標題與內容同步更換、「我的持股」數字由 ledger 正確帶入、
+    390px 無水平溢出、無 console error
+- **不需要動 Supabase**：純前端呈現層改動，報告 JSON 結構與 Edge Function 完全不變
+
+### 踩到的小坑
+- `tsc` 抓到我新寫的 `holdingRows.test.ts` fixture 少了 `PriceQuote` 的 `asOf` / `source`
+  —— vitest 不做型別檢查所以測試先過了，`npm run build` 才擋下來。這正是 PLAN 一直寫
+  「`build` 不可略過」的理由。
+- 臨時 harness 這次**一律用絕對路徑刪除**，未再發生前兩輪 cwd 被重置導致 `rm -f` 靜默失敗的情況。
 
 ---
 
