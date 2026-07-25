@@ -186,3 +186,34 @@ SELECT cron.schedule(
 );
 -- 註：函數以 --no-verify-jwt 部署，故毋需 Authorization；批次的授權改由 x-cron-secret 把關。
 -- 若你的 API Gateway 仍要求 apikey，於 headers 內加 'apikey', '<ANON_KEY>' 即可。
+
+
+-- 7. 基本面（財報 EPS）資料表 (stock_fundamentals)
+--
+--    Edge Function stock-report 於盤後批次時，把 TWSE 綜合損益表的單季數字寫入此表。
+--    前端不直讀本表——資料由 Edge Function 併入報告 JSON（與 chip_raw_cache 相同做法），
+--    故 ENABLE RLS 但刻意不建任何 policy，service role 是唯一讀寫途徑。
+--
+--    ⚠️ 本表刻意「不設保留期」，與 chip_raw_cache 的 7 天 prune 是相反的取捨：
+--       - chip_raw_cache 存的是每天數 MB 的原始大檔快取，留久了純粹佔空間。
+--       - 本表存的是「一檔一季一列」的極小長期事實（1000 檔 × 4 季 ≈ 4000 列/年）。
+--       而且**保留歷史正是「EPS 逐季趨勢」的唯一來源** ——
+--       TWSE 的財報端點沒有季別參數、只回最新一期，歷史只能靠本表自然累積。
+--       PK 衝突時 upsert 覆寫，容許官方事後更正數字。
+--
+--    不涵蓋：ETF（沒有 EPS，其價值來自持有的一籃子股票）、上櫃（端點是「上市公司」）、美股。
+CREATE TABLE IF NOT EXISTS stock_fundamentals (
+    ticker TEXT NOT NULL,
+    year SMALLINT NOT NULL,                       -- 西元年（來源為民國，由 Edge Function 換算後存入）
+    quarter SMALLINT NOT NULL CHECK (quarter BETWEEN 1 AND 4),
+    eps NUMERIC,                                  -- 基本每股盈餘（元）
+    revenue NUMERIC,                              -- 營業收入（千元）
+    net_income NUMERIC,                           -- 淨利（淨損）歸屬於母公司業主（千元）
+    source TEXT NOT NULL,                         -- 產業表來源：'ci' | 'fh' | 'ins' | 'bd' | 'mim'
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (ticker, year, quarter)
+);
+
+ALTER TABLE stock_fundamentals ENABLE ROW LEVEL SECURITY;
+
+-- 注意：刻意不建立任何 policy——理由同 chip_raw_cache（僅 service role 存取，前端不直讀）。

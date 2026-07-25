@@ -3,12 +3,16 @@
  * 純資料層，不觸網、不碰 DB，便於單元測試。
  *
  * schema 2（v0.3.7-dev.3 起）：伺服器只回結構化資料，不再產生 HTML；
- * 內嵌最多 7 個交易日的 history 供前端自繪走勢圖。前端讀到 schema !== 2 視為快取未命中。
+ * 內嵌最多 7 個交易日的 history 供前端自繪走勢圖。
+ * schema 3（v0.3.7-dev.5 起）：新增 fundamentals（財報 EPS 與估值指標）。
+ * 前端接受 schema >= 2，fundamentals 視為選填 —— 基本面是加法，
+ * 不該讓一份仍然有效的籌碼報告因為缺它而被判為未命中。
  */
 import type { ChipLeg, InstitutionalChip, MarginChip, BorrowChip } from './twChips.ts'
+import type { FundamentalQuarter, ValuationChip } from './twFundamentals.ts'
 
-/** 報告結構版本。前端與此值不符時回退即點即產 */
-export const REPORT_SCHEMA = 2
+/** 報告結構版本 */
+export const REPORT_SCHEMA = 3
 
 /** 前端帶入的持股脈絡（皆為前端已算好的值，Worker 不重算） */
 export interface HoldingContext {
@@ -40,6 +44,19 @@ export interface ChipStreaks {
   short: number
 }
 
+/**
+ * 基本面。與籌碼的更新頻率不同（財報每季、估值每日），故兩個日期各自標明，不可共用。
+ * ETF 與上櫃查無資料時整個 fundamentals 為 null，由前端區分文案。
+ */
+export interface Fundamentals {
+  /** 每日估值指標（本益比 / 殖利率 / 股價淨值比 / 反推年化 EPS） */
+  valuation: ValuationChip | null
+  /** 單季財報，由舊到新。官方端點只回最新一期，歷史靠 stock_fundamentals 累積 */
+  quarters: FundamentalQuarter[]
+  /** true 表示此代號是 ETF，本質上沒有 EPS，UI 須用專屬文案而非籠統的「查無」 */
+  isEtf: boolean
+}
+
 export interface ReportData {
   schema: typeof REPORT_SCHEMA
   ticker: string
@@ -59,6 +76,8 @@ export interface ReportData {
   /** 由舊到新，最多 7 個交易日 */
   history: ChipDay[]
   streaks: ChipStreaks
+  /** 基本面（schema 3 起）。查無時為 null */
+  fundamentals: Fundamentals | null
   /** 缺漏 / 降級說明（如上櫃暫不支援、歷史資料回補中） */
   notes: string[]
 }
@@ -145,6 +164,7 @@ export interface BuildReportParams {
   /** 由舊到新的交易日序列（最後一筆＝最新交易日） */
   history: ChipDay[]
   borrow: BorrowChip | null
+  fundamentals?: Fundamentals | null
   notes: string[]
   now?: Date
 }
@@ -164,6 +184,7 @@ export function buildReport(p: BuildReportParams): ReportData {
     borrow: p.borrow,
     history: p.history,
     streaks: computeStreaks(p.history),
+    fundamentals: p.fundamentals ?? null,
     notes: p.notes,
   }
 }

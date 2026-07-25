@@ -1,9 +1,76 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
-- Status: COMPLETED（dev 分支；dev 專案 Supabase 已部署並實測）
-- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
+- Action: 新增「基本面」分頁（EPS 與估值指標）(v0.3.7-dev.5)
+- Status: COMPLETED（dev 分支；dev 專案 Supabase 已建表、部署並實測）
+- Timestamp: 2026-07-25 22:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-25 22:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 個股分析頁新增「基本面」分頁（EPS 與估值指標）(v0.3.7-dev.5)
+- **Status**: COMPLETED
+- **使用者問題**: 「想加上 EPS，這個有現成的還是要用法人的去算」
+- **回答**: **不能用法人算**（法人是交易流量、EPS 是獲利÷股數，兩者無關）；官方有現成來源。
+- **Task**: `TASK.md` Task 13；計畫檔 `~/.claude/plans/nested-sauteeing-boole.md`
+
+### 資料源（實測驗證，勿再重新推導）
+| 來源 | 內容 | 限制 |
+| --- | --- | --- |
+| `opendata/t187ap06_L_{ci,fh,ins,bd,mim}` | **基本每股盈餘（元）** + 營收 + 淨利 | 按產業分 5 表，**必須全抓合併**（2891/2882 在 `_fh` 不在 `_ci`）；無季別參數只回最新一期 |
+| `exchangeReport/BWIBBU_ALL` | 本益比 / 殖利率 / 股價淨值比 | **沒有 EPS 欄位**；無 date 參數 |
+| `exchangeReport/STOCK_DAY_AVG_ALL` | 收盤價 | 用於反推年化 EPS = 收盤價 ÷ 本益比 |
+
+實測筆數 `ci` 1044 / `fh` 13 / `ins` 6 / `bd` 3 / `mim` 4 = **1070 檔**，與入庫列數完全吻合。
+2330 fixture：民國 115 年第 1 季、EPS 22.08、營收 1,134,103,440 千元、淨利 572,479,752 千元。
+
+### Completed Tasks
+- [x] 新增 `twFundamentals.ts`（純函式）：`extractIncome` / `extractValuation` / `extractClosePrice` /
+      `rocYearToAd` / `rocDateToDash` / `expectedLatestQuarter` / `isEtfTicker` / `incomeRowsOk`
+- [x] 新增 `stock_fundamentals` 表：PK `(ticker, year, quarter)`、ENABLE RLS 不建 policy、
+      **刻意不設保留期**（與 `chip_raw_cache` 的 7 天 prune 相反，理由寫在 schema 註解）
+- [x] `report.ts`：新增 `Fundamentals` 型別，`REPORT_SCHEMA` 2 → **3**
+- [x] `index.ts`：新增 `BWIBBU` / `STOCK_DAY_AVG` dataset、`syncFundamentals`（每季只抓一次）、
+      `readStoredQuarters`、`assembleFundamentals`（ETF 回 `isEtf: true` 而非 null）
+- [x] 前端：新增 `FundamentalsTab.tsx` + `fundamentalFormat.ts`；`StockDetailPage` 加第四個分頁籤；
+      `reportProxy.ts` 補型別並把 schema 守門由 `=== 2` 放寬為 **`>= 2`**
+- [x] EPS 逐季走勢圖**重用既有 `BarSeriesChart`**（單一序列，紅正綠負剛好表達盈虧），未新增圖表元件
+
+### 三個刻意的設計決定
+1. **獨立分頁而非併進籌碼**：EPS 每季、籌碼每日，混在一起會讓「盤後籌碼」報告與 PDF 失焦、
+   資料日期語意混亂。PDF 維持只含籌碼。
+2. **schema 守門放寬為 `>= 2`**：基本面是加法。若因一份 schema 2 報告缺 fundamentals 就判為未命中，
+   會讓所有人白走一天的慢路徑（即點即產約 8 秒）。
+3. **每季只抓一次**：依申報期限推算應公布的最新一季，已在庫就完全不發外部請求。
+   五表合計約 7.5MB，天天抓純屬浪費。
+
+### Verification
+- `npm run test` 159 → **199 passed**（新增 twFundamentals 20、fundamentalFormat 9、FundamentalsTab 9、
+  report 2）；`build` 通過；`lint` 無新增 warning（維持既有 4 筆）
+- 瀏覽器實測（Playwright + 臨時 harness，驗完刪除）：5 季走勢圖含虧損季（綠、零軸下）、
+  1 季時不畫圖只顯示數字、ETF / 上櫃 / 舊格式三種文案各自正確、深淺主題、390px 無水平溢出
+- **dev Supabase 實測**（使用者授權）：
+  - 建 `stock_fundamentals`（8 欄、RLS on、0 policy），只跑第 7 段不重跑既有 6 段
+  - deploy `stock-report`；`generate-all` 首次 10.1 秒 → **1070 檔入庫**
+  - **2330**：`schema 3`、PE 31.59、殖利率 0.94%、PB 10.34、收盤 2350、反推 TTM EPS 74.39、
+    `quarters [(2026,1,22.08)]` —— **與實測 fixture 的 22.08 完全一致**
+  - **0050**：`isEtf: true`、`valuation: null`、`quarters: []` —— ETF 路徑正確
+  - 第二次 `generate-all`：**10.1 秒 → 1.9 秒**，證明每季只抓一次的守門有效
+
+### 發現的驗證陷阱（記錄以免下次再踩）
+- Storage 的 **public URL 走 Cloudflare、`max-age=3600`**：批次跑完後用 public URL 檢查
+  可能拿到最多 1 小時前的舊檔（header 有 `cf-cache-status: HIT`）。實測 0050 的 public 路徑回舊的
+  schema 2，而**前端實際使用的 authenticated 路徑**（`supabase.storage.download()`）回正確的 schema 3。
+  **前端不受影響**；驗證請改用帶 anon key 的 `/object/reports/...`。
+- 臨時 harness 的清理**必須用絕對路徑** —— 本輪兩次 `rm -f` 在 repo root 執行（cwd 被重置），
+  `-f` 讓它靜默成功、`ls` 也在同一目錄回報找不到，誤以為刪掉了，實際殘檔還在 `sources/`。
+
+### Outstanding
+- 逐季趨勢目前只有 1 季（官方端點給不出歷史）。下一季公布（2026-08-14 起 Q2）後會自動累積出走勢圖。
+- 夜間排程仍未經歷自動觸發（每週一~五 12:30 UTC / 台北 20:30）。
+- 未在瀏覽器走完整 Supabase 登入流程（需帳密）。
 
 ---
 

@@ -2,11 +2,56 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-25 16:45:00 Asia/Taipei
+- Timestamp: 2026-07-25 22:30:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 13: 個股分析頁新增「基本面」分頁（EPS 與估值指標）(v0.3.7-dev.5)
+- **Status**: DONE
+- **Planner / Implementer**: Claude（需求由使用者提出：「想加上 EPS，有現成的還是要用法人算」）
+- **Timestamp**: 2026-07-25 22:30:00 Asia/Taipei
+- **Target Version**: v0.3.7-dev.5
+- **Plan**: `~/.claude/plans/nested-sauteeing-boole.md`；資料源實測結果見 `PROGRESS.md` 同日紀錄
+
+#### Objective
+新增第四個分頁籤「基本面」，顯示財報單季 EPS 與估值指標（本益比 / 殖利率 / 股價淨值比），
+並建立可累積逐季歷史的儲存，讓 EPS 走勢圖之後不必重做。
+
+#### Scope / Allowed Changes
+- `sources/supabase/functions/stock-report/twFundamentals.ts`（新增）、`report.ts`（schema 3）、`index.ts`
+- `sources/supabase/schema.sql`（新增第 7 段 `stock_fundamentals`）
+- `sources/src/components/StockDetail/`：`FundamentalsTab.tsx` / `fundamentalFormat.ts`（新增）、`StockDetailPage.tsx`
+- `sources/src/services/reportProxy.ts`（型別 + schema 守門放寬）
+- 版號三處、`README.md`、`sources/supabase/README.md`、`docs/agent/*`
+
+#### Constraints
+- **不接 AI 解讀**（使用者既有決策：先看純數據）。
+- **不做技術面**（日線/週線/季線需 `price_daily` 與約 400 天保留期，見 PLAN §G / §L）。
+- **不爬 MOPS 補歷史財報**（form-POST HTML 極易碎）；歷史靠 `stock_fundamentals` 累積。
+- 不新增任何 npm 依賴；EPS 走勢圖重用既有 `BarSeriesChart`。
+
+#### Acceptance Criteria
+- [x] 財報 EPS 取自五張產業表合併（金控股不在一般業表內）
+- [x] 估值指標與反推年化 EPS，且 UI 標明後者是推算值
+- [x] `stock_fundamentals` 以 (代號, 年度, 季別) 累積、不設保留期
+- [x] 每季只抓一次（已在庫就不發外部請求）
+- [x] ETF / 上櫃 / 舊格式三種空狀態文案各自不同，不寫籠統的「查無」
+- [x] schema 守門放寬為 `>= 2`，舊報告不因缺基本面而失效
+- [x] `npm run test` 159 → 199 passed；build 通過；lint 無新增 warning
+
+#### Supabase 部署（已完成，使用者明確授權）
+- [x] 只跑 schema 第 7 段建 `stock_fundamentals`（8 欄、RLS on、0 policy）
+- [x] deploy `stock-report`；`generate-all` 首次 10.1 秒、1070 檔入庫
+- [x] 2330 實測 `schema 3` 且 `eps 22.08`（與 fixture 一致）；0050 實測 `isEtf: true`
+- [x] 第二次 `generate-all` 10.1 → **1.9 秒**，證明每季只抓一次
+
+#### Outstanding
+- 逐季趨勢目前只有 1 季；2026-08-14 起 Q2 公布後會自動累積出走勢圖。
+- 夜間排程仍未經歷自動觸發。
+
+---
 
 ### Task 12: 籌碼逐日檢視 + 法人並排比較 (v0.3.7-dev.4)
 - **Status**: DONE

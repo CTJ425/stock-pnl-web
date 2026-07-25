@@ -23,7 +23,7 @@ supabase/
 | 函數 | 檔案 | 作用 |
 |---|---|---|
 | `stock-price` | `index.ts` | 伺服器端代抓 Yahoo Finance 現價 / 搜尋，繞開瀏覽器 CORS |
-| `stock-report` | `index.ts` + `report.ts` + `twChips.ts` | 代抓 TWSE 盤後籌碼，產生**結構化報告資料**（含近 7 個交易日 history） |
+| `stock-report` | `index.ts` + `report.ts` + `twChips.ts` + `twFundamentals.ts` | 代抓 TWSE 盤後籌碼與基本面，產生**結構化報告資料**（含近 7 個交易日 history 與財報 EPS） |
 
 > **環境變數**：即點即產只用到 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Supabase 內建自動注入，不用設）。若要啟用「盤後自動產報」，需**額外**設一個 `CRON_SECRET`（見下方章節）。
 
@@ -42,10 +42,11 @@ supabase/
 ### 建立 `stock-report`（多檔，重點）
 
 1. 一樣 Create a function，名稱 `stock-report`。
-2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的 3 個檔（檔名一字不差）：
+2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的 4 個檔（檔名一字不差）：
    - `index.ts`
    - `report.ts`
    - `twChips.ts`
+   - `twFundamentals.ts`
    - ⚠️ `report.test.ts`、`twChips.test.ts` 是單元測試，**不要上傳**。
    - ℹ️ v0.3.7-dev.3 起已無 `reportHtml.ts`（畫面改由前端 React 繪製）。若函數是舊版部署上去的，
      請把該檔**刪除**，否則會留下沒人引用的死碼。
@@ -108,7 +109,7 @@ supabase functions deploy stock-report --no-verify-jwt
   "dataDate": "2026-07-22",
   "generatedAt": "2026-07-22T12:30:00.000Z",
   "data": {
-    "schema": 2,              // 前端讀到非 2 一律當未命中，改走即點即產
+    "schema": 3,              // 前端接受 >= 2（基本面是加法，缺它不該讓整份報告失效）
     "ticker": "2330", "name": "台積電", "market": "TPE",
     "dataDate": "2026-07-22",
     "holding": null,          // 共用報告不含個資，持股概況由前端渲染
@@ -117,10 +118,23 @@ supabase functions deploy stock-report --no-verify-jwt
     "borrow": { "availableVolume": 100267 },
     "history": [ /* ChipDay[]，由舊到新，最多 7 筆 */ ],
     "streaks": { "foreign": 4, "margin": 2, "short": 0 /* … */ },
+    "fundamentals": {         // schema 3 起。查無回 null
+      "valuation": {          // 每日更新；ttmEps 是「收盤價 ÷ 本益比」的推算值
+        "peRatio": 31.59, "dividendYield": 0.94, "pbRatio": 10.34,
+        "closePrice": 2350, "ttmEps": 74.39, "date": "2026-07-24"
+      },
+      "quarters": [           // 每季更新，由舊到新，靠 stock_fundamentals 累積
+        { "year": 2026, "quarter": 1, "eps": 22.08, "revenue": 1134103440, "netIncome": 572479752 }
+      ],
+      "isEtf": false          // true 時 quarters 必為空：ETF 沒有 EPS
+    },
     "notes": ["歷史資料回補中：…"]
   }
 }
 ```
+
+`fundamentals` 的單位與籌碼不同：EPS 是**元/股**、營收與淨利是**千元**、殖利率是**百分比數值**
+（`0.94` 就是 0.94%，不要再乘 100）。
 
 三大法人各項都是 `{ buy, sell, net }`（單位：**股**）；融資融券含買進 / 賣出 / 償還 / 餘額（單位：**張**）。
 `source: 'openapi'` 代表當日 rwd 端點失敗、改用備援來源，此時只有餘額、無買賣拆項。
@@ -133,6 +147,8 @@ supabase functions deploy stock-report --no-verify-jwt
 | `MI_MARGN_D` | `rwd/zh/marginTrading/MI_MARGN` | ✅ | 融資融券逐股（含買進 / 賣出 / 償還），走勢圖靠它 |
 | `MI_MARGN` | `openapi .../exchangeReport/MI_MARGN` | ❌ | 備援：只有最新交易日餘額 |
 | `SBL` | `openapi .../SBL/TWT96U` | ❌ | 借券賣出可用股數（僅最新交易日） |
+| `BWIBBU` | `openapi .../exchangeReport/BWIBBU_ALL` | ❌ | 本益比 / 殖利率 / 股價淨值比（每日；**無 EPS 欄位**） |
+| `STOCK_DAY_AVG` | `openapi .../exchangeReport/STOCK_DAY_AVG_ALL` | ❌ | 收盤價，用於反推年化 EPS（收盤價 ÷ 本益比） |
 
 > `MI_MARGN_D` 的欄位名稱**有重複**（「買進」「賣出」各出現兩次），解析一律用位置索引，不可用名稱比對。
 > 欄序若被 TWSE 改動，`marginDatedOk()` 的防護會判定不可用並自動回退備援來源。
@@ -145,6 +161,38 @@ supabase functions deploy stock-report --no-verify-jwt
 - **第一次**執行只會補到 5 天，`notes[]` 會寫「歷史資料回補中」，圖照樣出得來。
 - 之後每天只有 1 天未命中，隔日排程自然補齊到 7 天。
 - 想一次補滿，隔幾分鐘重跑 `generate-all` 即可（第二次會命中前次的快取）。
+
+### 基本面（`stock_fundamentals` 資料表）
+
+EPS 來自 TWSE 綜合損益表 `opendata/t187ap06_L_{ci|fh|ins|bd|mim}`。
+**必須五張產業表全抓合併** —— 實測金控股（2891、2882）不在一般業表 `_ci` 內。
+實測筆數：`ci` 1044、`fh` 13、`ins` 6、`bd` 3、`mim` 4，合計 **1070 檔全數入庫**（不只持股清單）。
+
+該端點**沒有季別參數、只回最新一期**，所以歷史只能累積：`stock_fundamentals` 以
+`(ticker, year, quarter)` 為主鍵、**刻意不設保留期**（一檔一季一列，1000 檔 × 4 季 ≈ 4000 列/年）。
+保留歷史正是 EPS 逐季趨勢的唯一來源。
+
+**每季只抓一次**：依台灣財報申報期限（Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31）推算應公布的最新一季，
+已在庫就完全不發外部請求。實測第二次 `generate-all` 由 **10.1 秒降到 1.9 秒**。
+只有盤後批次會同步財報；即點即產不同步（5 個大檔會讓單次請求逾時），只讀已累積的季別。
+
+回應中的 `quartersStored` 是持股清單累積到的季別總數，可用來確認上述行為。
+
+> **不涵蓋**：ETF（沒有 EPS，其價值來自持有的一籃子股票，回傳 `isEtf: true` 讓前端用專屬文案）、
+> 上櫃 / 興櫃（端點只收上市公司）、美股。
+
+### ⚠️ 驗證時的陷阱：public URL 有 CDN 快取
+
+`/storage/v1/object/**public**/reports/...` 走 Cloudflare，`cache-control: max-age=3600`。
+批次跑完後用 public URL 檢查，**可能拿到最多 1 小時前的舊檔**（回應 header 會有 `cf-cache-status: HIT`）。
+
+前端不受影響 —— `supabase.storage.download()` 走的是 `/storage/v1/object/reports/...`（帶 anon key），
+會拿到即時內容。要驗證剛產好的報告，請用那條路徑：
+
+```bash
+curl -s "$URL/storage/v1/object/reports/20260724/2330.json" \
+  -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+```
 
 ---
 

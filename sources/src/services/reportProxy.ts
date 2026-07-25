@@ -11,8 +11,12 @@ import { isSupabaseConfigured, supabase } from './supabase'
 /** 是否已設定 Supabase 網址與金鑰（未設定則整個盤後報告功能隱藏） */
 export const isReportConfigured = isSupabaseConfigured
 
-/** 前端認得的報告結構版本；伺服器回傳其他版本一律視為未命中 */
-export const REPORT_SCHEMA = 2
+/**
+ * 前端認得的最低報告結構版本。
+ * 刻意用「>=」而非「===」：schema 3 的基本面是加法，
+ * 若因為一份 schema 2 報告沒有基本面就判為未命中，會讓所有人白走一天的慢路徑（即點即產約 8 秒）。
+ */
+export const MIN_REPORT_SCHEMA = 2
 
 /** 前端帶入的持股脈絡（Edge Function 不重算，直接放進報告） */
 export interface ReportHolding {
@@ -64,6 +68,41 @@ export interface BorrowChip {
   availableVolume: number | null
 }
 
+/** 每日估值指標。本益比與股價淨值比為倍數，殖利率為百分比數值（0.94 即 0.94%） */
+export interface ValuationChip {
+  peRatio: number | null
+  dividendYield: number | null
+  pbRatio: number | null
+  closePrice: number | null
+  /** 反推的最近四季每股盈餘（元）＝ 收盤價 ÷ 本益比。本益比極高時此值極不精確 */
+  ttmEps: number | null
+  /** 估值資料日期 YYYY-MM-DD */
+  date: string | null
+}
+
+/** 單季財報。金額單位為千元 */
+export interface FundamentalQuarter {
+  /** 西元年 */
+  year: number
+  /** 1–4 */
+  quarter: number
+  /** 基本每股盈餘（元） */
+  eps: number | null
+  revenue: number | null
+  netIncome: number | null
+}
+
+/**
+ * 基本面（schema 3 起）。財報每季更新、估值每日更新，故兩個日期各自標明。
+ * `isEtf` 為 true 時 quarters 必為空 —— ETF 沒有 EPS，UI 須用專屬文案而非「查無」。
+ */
+export interface Fundamentals {
+  valuation: ValuationChip | null
+  /** 由舊到新 */
+  quarters: FundamentalQuarter[]
+  isEtf: boolean
+}
+
 /** 單一交易日的籌碼快照 */
 export interface ChipDay {
   date: string
@@ -96,6 +135,8 @@ export interface ReportData {
   /** 由舊到新，最多 7 個交易日 */
   history: ChipDay[]
   streaks: ChipStreaks
+  /** schema 3 起才有；schema 2 的報告為 undefined，UI 須容忍 */
+  fundamentals?: Fundamentals | null
   notes: string[]
 }
 
@@ -113,11 +154,11 @@ interface GenerateReportResponse {
   data: ReportData
 }
 
-/** 結構是否為前端認得的 schema 2 報告（舊格式 JSON 一律當未命中） */
+/** 結構是否為前端認得的報告（schema 1 的舊 HTML 格式一律當未命中） */
 function isSupportedReport(d: unknown): d is ReportData {
   if (!d || typeof d !== 'object') return false
   const r = d as Partial<ReportData>
-  return r.schema === REPORT_SCHEMA && Array.isArray(r.history)
+  return typeof r.schema === 'number' && r.schema >= MIN_REPORT_SCHEMA && Array.isArray(r.history)
 }
 
 /** 即點即產：未預產（不在持股清單 / 當日尚未產）時的 fallback，較慢但可用 */
