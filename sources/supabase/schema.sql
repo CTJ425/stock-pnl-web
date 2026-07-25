@@ -139,10 +139,13 @@ ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
 
 -- 6. 盤後報告 Storage bucket + 每日自動產生排程 (pg_cron + pg_net)
 --
---    reports bucket 存放「每檔台股 × 每個交易日」的共用盤後報告（JSON 內含 html+data，
---    每份約 5KB），公開讀取；僅 Edge Function(service role) 寫入。前端 Storage-first 讀取，
---    查無再 fallback 到即點即產。批次由 stock-report 的 action='generate-all' 產生，
---    只保留最近 7 天（同批次順便清掉更舊的報告與 chip_raw_cache）。
+--    reports bucket 存放「每檔台股 × 每個交易日」的共用盤後報告（純結構化 JSON，schema 2 起
+--    已無 html 欄位，每份約 5KB），公開讀取；僅 Edge Function(service role) 寫入。
+--    前端 Storage-first 讀取，查無再 fallback 到即點即產。批次由 stock-report 的
+--    action='generate-all' 產生，只保留最近 7 天（同批次順便清掉更舊的報告與 chip_raw_cache）。
+--
+--    ⚠️ 本段是**選用**的：不套用時功能仍可用，但每次開啟個股分析頁都會即點即產
+--       （實測約 8 秒、直接打 TWSE），而非讀預產好的報告（近乎即時）。
 --
 --    ⚠️ 執行前，請把下方兩個 <...> 佔位符換成你的專案值：
 --      <PROJECT_REF>：Supabase 專案 ref（Project Settings → General → Reference ID）

@@ -3,11 +3,15 @@
  *
  * 資料來源（實測確認，皆為 whole-market 大檔，依 ticker 篩單股）：
  * - 三大法人個股買賣超：TWSE rwd `fund/T86`（需 date 參數，回 { fields, data, date }）
- * - 融資融券餘額：TWSE OpenAPI `exchangeReport/MI_MARGN`（最新交易日，物件陣列）
- * - 借券賣出可用股數：TWSE OpenAPI `SBL/TWT96U`（TWSE/GRETAI 兩組平行欄位）
+ * - 融資融券（主）：TWSE rwd `marginTrading/MI_MARGN`（需 date 參數，含買進 / 賣出 / 償還）
+ * - 融資融券（fallback）：TWSE OpenAPI `exchangeReport/MI_MARGN`（無 date，只有最新交易日餘額）
+ * - 借券賣出可用股數：TWSE OpenAPI `SBL/TWT96U`（無 date，TWSE/GRETAI 兩組平行欄位）
+ *
+ * 單位陷阱：T86 的數字是「股數」，MI_MARGN 的數字是「交易單位（張）」。兩者不可混算，
+ * UI 必須各自標示（見 docs/agent/SPEC.md 的 UI 文案準則）。
  *
  * 解析函式皆為純函式、不觸網，便於單元測試；HTTP 抓取與 DB 快取在 index.ts 組合。
- * 上櫃(TPEx) 逐股端點 v1 暫不支援，查無資料時對應區塊標記缺漏。
+ * 上櫃(TPEx) 逐股端點暫不支援，查無資料時對應區塊標記缺漏。
  */
 
 const UA =
@@ -20,6 +24,11 @@ export function t86Url(dateYYYYMMDD: string): string {
   return `https://www.twse.com.tw/rwd/zh/fund/T86?date=${dateYYYYMMDD}&selectType=ALLBUT0999&response=json`
 }
 
+/** 帶 date 的融資融券逐股彙總（OpenAPI 版沒有 date 參數，做不出走勢圖） */
+export function marginDatedUrl(dateYYYYMMDD: string): string {
+  return `https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=${dateYYYYMMDD}&selectType=ALL&response=json`
+}
+
 /** 千分位字串轉數字；空字串 / 非數字回 null。保留正負號（買賣超可為負） */
 export function normNum(v: unknown): number | null {
   if (v === null || v === undefined) return null
@@ -29,32 +38,73 @@ export function normNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-export interface InstitutionalChip {
-  /** 外陸資買賣超（不含外資自營商） */
-  foreign: number | null
-  /** 外資自營商買賣超 */
-  foreignDealer: number | null
-  /** 投信買賣超 */
-  trust: number | null
-  /** 自營商買賣超（自行 + 避險合計） */
-  dealer: number | null
-  /** 三大法人買賣超合計 */
-  total: number | null
+/** 買進 / 賣出 / 買賣超三件組。任一來源缺該拆項時以 null 表示（不以 0 冒充） */
+export interface ChipLeg {
+  buy: number | null
+  sell: number | null
+  /** 買賣超（買進 − 賣出）；優先採用官方揭露值 */
+  net: number | null
 }
 
+const NULL_LEG: ChipLeg = { buy: null, sell: null, net: null }
+
+/** a + b，兩者皆 null 時回 null（單邊有值時視為另一邊 0） */
+function addNullable(a: number | null, b: number | null): number | null {
+  if (a === null && b === null) return null
+  return (a ?? 0) + (b ?? 0)
+}
+
+function addLegs(a: ChipLeg, b: ChipLeg): ChipLeg {
+  return {
+    buy: addNullable(a.buy, b.buy),
+    sell: addNullable(a.sell, b.sell),
+    net: addNullable(a.net, b.net),
+  }
+}
+
+/** 三大法人（單位：股）。各項含買進 / 賣出 / 買賣超 */
+export interface InstitutionalChip {
+  /** 外陸資（不含外資自營商） */
+  foreign: ChipLeg
+  /** 外資自營商 */
+  foreignDealer: ChipLeg
+  /** 投信 */
+  trust: ChipLeg
+  /** 自營商（自行買賣 + 避險，T86 未直接揭露買進 / 賣出，由兩組拆項相加） */
+  dealer: ChipLeg
+  /** 三大法人合計（T86 只揭露買賣超，買進 / 賣出由五個 leg 加總） */
+  total: ChipLeg
+}
+
+/**
+ * 融資融券（單位：交易單位＝張）。
+ * 融券的 buy 是「回補」、sell 是「放空」，方向與融資相反。
+ * `source` 為 'openapi' 時只有餘額，buy / sell / redeem 為 null。
+ */
 export interface MarginChip {
-  marginToday: number | null
+  marginBuy: number | null
+  marginSell: number | null
+  /** 融資現金償還 */
+  marginRedeem: number | null
   marginPrev: number | null
+  marginToday: number | null
   /** 融資餘額變化 = 今日 − 前日 */
   marginChange: number | null
   marginLimit: number | null
-  shortToday: number | null
+  /** 融券買進＝回補 */
+  shortBuy: number | null
+  /** 融券賣出＝放空 */
+  shortSell: number | null
+  /** 融券現券償還 */
+  shortRedeem: number | null
   shortPrev: number | null
+  shortToday: number | null
   /** 融券餘額變化 = 今日 − 前日 */
   shortChange: number | null
   shortLimit: number | null
-  /** 資券互抵 */
+  /** 資券互抵（張） */
   offset: number | null
+  source: 'rwd' | 'openapi'
 }
 
 export interface BorrowChip {
@@ -87,6 +137,10 @@ function cleanHeader(s: string): string {
   return s.replace(/\s+/g, '')
 }
 
+/**
+ * T86 逐股三大法人。T86 欄位名稱不重複，故以名稱比對（比位置索引耐得住欄序調動）。
+ * 官方只揭露自營商 / 三大法人的「買賣超」，其買進 / 賣出由拆項加總補齊。
+ */
 export function extractInstitutional(resp: T86Response, ticker: string): InstitutionalChip | null {
   const { fields, data } = t86Table(resp)
   if (fields.length === 0 || data.length === 0) return null
@@ -99,17 +153,52 @@ export function extractInstitutional(resp: T86Response, ticker: string): Institu
     const i = idx(name)
     return i >= 0 ? normNum(row[i]) : null
   }
-  return {
-    foreign: at('外陸資買賣超股數(不含外資自營商)'),
-    foreignDealer: at('外資自營商買賣超股數'),
-    trust: at('投信買賣超股數'),
-    dealer: at('自營商買賣超股數'),
-    total: at('三大法人買賣超股數'),
+  const leg = (buy: string, sell: string, net: string): ChipLeg => ({
+    buy: at(buy),
+    sell: at(sell),
+    net: at(net),
+  })
+
+  const foreign = leg(
+    '外陸資買進股數(不含外資自營商)',
+    '外陸資賣出股數(不含外資自營商)',
+    '外陸資買賣超股數(不含外資自營商)',
+  )
+  const foreignDealer = leg('外資自營商買進股數', '外資自營商賣出股數', '外資自營商買賣超股數')
+  const trust = leg('投信買進股數', '投信賣出股數', '投信買賣超股數')
+  const dealerSelf = leg(
+    '自營商買進股數(自行買賣)',
+    '自營商賣出股數(自行買賣)',
+    '自營商買賣超股數(自行買賣)',
+  )
+  const dealerHedge = leg('自營商買進股數(避險)', '自營商賣出股數(避險)', '自營商買賣超股數(避險)')
+  const dealerSum = addLegs(dealerSelf, dealerHedge)
+  // 自營商合計的買賣超以官方欄位為準，買進 / 賣出才用拆項加總
+  const dealer: ChipLeg = {
+    buy: dealerSum.buy,
+    sell: dealerSum.sell,
+    net: at('自營商買賣超股數') ?? dealerSum.net,
   }
+
+  const legsSum = [foreign, foreignDealer, trust, dealerSelf, dealerHedge].reduce(addLegs, NULL_LEG)
+  const total: ChipLeg = {
+    buy: legsSum.buy,
+    sell: legsSum.sell,
+    net: at('三大法人買賣超股數') ?? legsSum.net,
+  }
+
+  return { foreign, foreignDealer, trust, dealer, total }
 }
 
 type MarginRow = Record<string, string>
 
+const diff = (a: number | null, b: number | null): number | null =>
+  a === null || b === null ? null : a - b
+
+/**
+ * OpenAPI 版融資融券（fallback）：只有餘額，沒有買進 / 賣出 / 償還。
+ * 僅適用「最新交易日」，做不出走勢圖，故只在 rwd 端點失敗時使用。
+ */
 export function extractMargin(rows: MarginRow[], ticker: string): MarginChip | null {
   const row = rows.find((r) => String(r['股票代號']).trim() === ticker)
   if (!row) return null
@@ -117,19 +206,100 @@ export function extractMargin(rows: MarginRow[], ticker: string): MarginChip | n
   const marginPrev = normNum(row['融資前日餘額'])
   const shortToday = normNum(row['融券今日餘額'])
   const shortPrev = normNum(row['融券前日餘額'])
-  const diff = (a: number | null, b: number | null): number | null =>
-    a === null || b === null ? null : a - b
   return {
-    marginToday,
+    marginBuy: null,
+    marginSell: null,
+    marginRedeem: null,
     marginPrev,
+    marginToday,
     marginChange: diff(marginToday, marginPrev),
     marginLimit: normNum(row['融資限額']),
-    shortToday,
+    shortBuy: null,
+    shortSell: null,
+    shortRedeem: null,
     shortPrev,
+    shortToday,
     shortChange: diff(shortToday, shortPrev),
     shortLimit: normNum(row['融券限額']),
     offset: normNum(row['資券互抵']),
+    source: 'openapi',
   }
+}
+
+export interface MarginDatedResponse {
+  stat?: string
+  date?: string
+  tables?: Array<{ fields?: string[]; data?: string[][] }>
+}
+
+/**
+ * rwd 版逐股融資融券表的欄位位置（實測 2026-07-22，共 16 欄）。
+ * 「買進」「賣出」在同一列 fields 中各出現兩次（融資、融券各一組），
+ * **必須以位置索引取值，用名稱比對會取到錯的那一組**。
+ */
+const MARGIN_IDX = {
+  code: 0,
+  marginBuy: 2,
+  marginSell: 3,
+  marginRedeem: 4,
+  marginPrev: 5,
+  marginToday: 6,
+  marginLimit: 7,
+  shortBuy: 8,
+  shortSell: 9,
+  shortRedeem: 10,
+  shortPrev: 11,
+  shortToday: 12,
+  shortLimit: 13,
+  offset: 14,
+} as const
+
+/** rwd 回應可能含多張表（大盤合計 / 逐股彙總）；逐股表的第一欄是「代號」 */
+function marginTable(resp: MarginDatedResponse): { fields: string[]; data: string[][] } | null {
+  for (const t of resp.tables ?? []) {
+    const fields = t.fields ?? []
+    const data = t.data ?? []
+    // 欄序防護：不符即視為端點格式變動，呼叫端回退 OpenAPI fallback
+    if (cleanHeader(fields[0] ?? '') === '代號' && fields.length >= 15 && data.length > 0) {
+      return { fields, data }
+    }
+  }
+  return null
+}
+
+export function extractMarginDated(resp: MarginDatedResponse, ticker: string): MarginChip | null {
+  const table = marginTable(resp)
+  if (!table) return null
+  const row = table.data.find((r) => String(r[MARGIN_IDX.code]).trim() === ticker)
+  if (!row) return null
+  const at = (i: number): number | null => normNum(row[i])
+  const marginToday = at(MARGIN_IDX.marginToday)
+  const marginPrev = at(MARGIN_IDX.marginPrev)
+  const shortToday = at(MARGIN_IDX.shortToday)
+  const shortPrev = at(MARGIN_IDX.shortPrev)
+  return {
+    marginBuy: at(MARGIN_IDX.marginBuy),
+    marginSell: at(MARGIN_IDX.marginSell),
+    marginRedeem: at(MARGIN_IDX.marginRedeem),
+    marginPrev,
+    marginToday,
+    marginChange: diff(marginToday, marginPrev),
+    marginLimit: at(MARGIN_IDX.marginLimit),
+    shortBuy: at(MARGIN_IDX.shortBuy),
+    shortSell: at(MARGIN_IDX.shortSell),
+    shortRedeem: at(MARGIN_IDX.shortRedeem),
+    shortPrev,
+    shortToday,
+    shortChange: diff(shortToday, shortPrev),
+    shortLimit: at(MARGIN_IDX.shortLimit),
+    offset: at(MARGIN_IDX.offset),
+    source: 'rwd',
+  }
+}
+
+/** rwd 融資融券回應是否可用（供 index.ts 決定要不要快取 / 回退 fallback） */
+export function marginDatedOk(resp: MarginDatedResponse): boolean {
+  return marginTable(resp) !== null
 }
 
 interface SblRow {

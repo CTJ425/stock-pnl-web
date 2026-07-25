@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: IN_PROGRESS
-- Timestamp: 2026-07-25 12:27:06 Asia/Taipei
+- Timestamp: 2026-07-25 15:20:00 Asia/Taipei
 
 ---
 
@@ -16,9 +16,8 @@
    - 配置 Auth 重導向與 `.env.local` 密鑰。
 3. **線上環境整合驗證**
    - 端到端測試註冊、登入、交易紀錄 CRUD、CSV 匯入匯出與年度損益統計。
-4. **盤後籌碼報告 v2**（規劃完成、尚未實作）
-   - 三大法人與融資融券拆成 買進 / 賣出 / 買賣超 / 連買連賣，保留 7 天並附走勢圖。
-   - 詳見下方「🚧 進行中：盤後籌碼報告 v2」。
+4. ~~**盤後籌碼報告 v2**~~ → **已於 v0.3.7-dev.3 實作完成**（TASK.md Task 11）。
+   - 剩下的唯一步驟：部署 `stock-report` 到 Supabase（需使用者授權，見下方 §K）。
 
 ---
 
@@ -33,14 +32,17 @@
 
 ---
 
-## 🚧 進行中：盤後籌碼報告 v2
+## ✅ 已完成：盤後籌碼報告 v2
 
 - Agent: Claude
-- Action: 架構規劃與資料源實測驗證（**尚未實作任何程式碼**）
-- Status: PLANNED — 待使用者指示後開始實作
-- Timestamp: 2026-07-25 12:27:06 Asia/Taipei
+- Action: 架構規劃 → **實作完成**（v0.3.7-dev.3）
+- Status: IMPLEMENTED — 程式碼與測試皆已完成；**Supabase 尚未部署**（需使用者授權，見 §K）
+- Timestamp: 2026-07-25 15:20:00 Asia/Taipei（規劃於 12:27:06）
 
-基準版本：`v0.3.7-dev-2`（功能 v1 實作於 038cdd8 / 9d62546）。
+基準版本：`v0.3.7-dev.2`（功能 v1 實作於 038cdd8 / 9d62546）；本輪產出為 `v0.3.7-dev.3`。
+
+> 以下 §A–§J 保留為**架構決策紀錄**（決策理由與實測資料仍有效，勿刪）。
+> 實作過程中與計畫不同或額外發現之處，記於 §K。
 
 ### A. 需求與已確認方向
 
@@ -189,7 +191,75 @@ T86 端點（`https://www.twse.com.tw/rwd/zh/fund/T86?date=YYYYMMDD&selectType=A
 ### J. 文件債（實作時一併補）
 
 - `TASK.md` 停在 Task 10 (v0.3.6)，**盤後籌碼報告 v1 根本沒有 TASK 條目** —— 需補 v1 摘要 ＋ 本次 Task 11。
-- `PROGRESS.md` 停在 v0.3.6，缺 v0.3.7-dev-1 / dev-2 兩筆。
+- `PROGRESS.md` 停在 v0.3.6，缺 v0.3.7-dev.1 / dev.2 兩筆。
 - `SPEC.md` 無盤後籌碼報告章節，且仍引用已搬移的 `docs/database/supabase_schema.sql`（現為 `sources/supabase/schema.sql`）。
-- 版號依 CLAUDE.md §17.2 由 `0.3.7-dev-2` 進到 `0.3.7-dev-3`，三處同步（`sources/src/version.ts` / `sources/package.json` / `README.md`）。
+- 版號依 CLAUDE.md §17.2 由 `0.3.7-dev.2` 進到 `0.3.7-dev.3`，三處同步（`sources/src/version.ts` / `sources/package.json` / `README.md`）。
 - `sources/supabase/README.md` 需更新報告 JSON 結構（已無 `html`）、新的 `MI_MARGN_D` dataset、回補行為說明。
+
+### K. 實作結果與計畫差異（2026-07-25 15:20:00 Asia/Taipei）
+
+§A–§J 的決策全數照做，以下是實作時的補充與偏離：
+
+**與計畫不同之處**
+
+1. **`.report-surface` 改為「擷取時才套用」**，而非常駐容器。
+   計畫的寫法會讓深色主題下的分析頁出現一整片白底面板；改由 `reportPdf.ts` 在 `html2canvas` 前後
+   動態掛上／移除，UI 維持主題色、PDF 仍是淺色文件，兩者兼得。
+2. **圖表顏色與字級一律寫成 SVG 屬性，不用 CSS 變數。**
+   html2canvas 會把 inline SVG 序列化成圖片，祖先層的 CSS 變數與外部樣式表規則都解析不到
+   （會變成黑色巨大文字）。因此另立 `chartColors.ts` 存字面值配色，維持紅正綠負但不隨主題變動。
+3. **圖表以「實測容器寬度」1:1 繪製**（`ResizeObserver`），而非固定 viewBox 等比縮放。
+   實測發現等比縮放會讓軸標籤在寬螢幕變成兩倍大、在 390px 手機縮到約 6px；1:1 繪製後字級恆定。
+4. **`fmtAxisNumber` 需要 step 參數**。融資餘額 31,100–31,928 這種「級距遠小於單位」的序列，
+   原本相鄰刻度會全部標成「3.1 萬」而分不出高低；改為依刻度級距決定小數位。
+5. **候選日先剔除週六日**（`isWeekendYmd`）。計畫只說回推 14 個日曆日，實作加上這層可省下
+   每次執行 2–4 個必定落空的外部請求（假日仍需實抓才知道）。
+6. **每日大檔抽成 per-ticker 切片後即釋放**。計畫估 7 天 × 2 dataset ≈ 15–25MB；若同時持有所有原始
+   payload，記憶體壓力偏高。改為載入一天 → 抽出所有目標代號的籌碼 → 丟棄 raw，峰值只有併發數（3）份。
+7. **`extractInstitutional` 維持以「欄位名稱」比對**（計畫未指定）。T86 的 19 個欄位名稱不重複，
+   用名稱比位置索引更耐欄序調動；只有 rwd 融資融券因欄名重複才必須用位置索引。
+8. **「下載 PDF」只在籌碼分頁顯示**。其他分頁沒有報告內容可擷取，按鈕常駐反而誤導。
+9. **§A 的「待確認」已定案：不保留摘要彈窗。** 分析頁讀的是同一份 Storage JSON，開啟速度相同，
+   多一層摘要只是多一份要同步維護的 markup。
+
+**驗證結果**：`npm run test` 148 passed（基準 113）、`npm run build` 通過、`npm run lint` 無新增 warning。
+瀏覽器實測（Playwright + 臨時 preview harness，驗完刪除）：1280px / 390px 無水平溢出、tooltip 正常、
+`.report-surface` 正確、`generatePdfBlob` 實跑產出 388KB PDF、本機模式回歸無誤。
+
+**§J 文件債**：全部補齊（TASK.md 補 v1 摘要 + Task 11、PROGRESS.md 補 dev.1/dev.2/dev.3、
+SPEC.md 新增「個股分析頁與盤後籌碼」章節並修正 schema 路徑、`sources/supabase/README.md` 更新 schema 2
+結構與 `MI_MARGN_D` dataset 與回補行為、版號三處同步 `0.3.7-dev.3`）。
+
+**Supabase 部署（已完成，使用者於同一 session 明確授權）**
+
+- `stock-report` 已部署到 dev 專案 `wqetxuhncvfidqnklyew`（version 1 → 2、`verify_jwt` true → false）；
+  正式區未觸碰。線上實測與交叉驗證結果見 `PROGRESS.md`。
+- **§E 的回補設計經線上實證**：第一次呼叫 5 天（額度上限）、第二次 7 天並正確跳過週末；
+  第二次命中前次快取，額度用在剩下 2 天。單次約 8 秒，在 Edge Function wall-clock 內，
+  §I 預留的「降到 3 天」備案**不需要動用**。
+- **§C 的 rwd 端點在線上有效**：`source: 'rwd'`，且 2026-07-22 融資餘額 31,928 張與 §C 手動實測 fixture 一致。
+- **§E「無需 schema migration」經實證**：`MI_MARGN_D` 正常寫入 `chip_raw_cache`（無 dataset CHECK 約束）。
+
+**schema.sql §6（Storage bucket + pg_cron 夜間批次）—— 已補上（dev.2 遺留缺口）**
+
+這段從 dev.2 起就沒套用到 dev，也就是「盤後自動產報」從來沒真的啟用過（非本輪造成）。
+已設 `CRON_SECRET` 並套用 §6（只套 §6，前 5 段既有表未重跑），驗證 bucket public、
+`pg_cron` / `pg_net` 已啟用、cron job `stock-report-nightly | 30 12 * * 1-5 | active=true`。
+
+手動觸發 `generate-all` → `generated 3/3`、`historyDays 7`；bucket 內 `manifest.json` +
+3 份約 5KB 的 schema 2 JSON（**§B 的「體積減半」與 §E 的估算都成立**）。
+
+**Storage-first 的價值有了數字**：讀預產報告 0.8 秒 vs 即點即產 8 秒，約 10 倍。
+
+順帶修掉的既有問題：舊部署是 `verify_jwt: true`，但 §6c 的 cron 只帶 `x-cron-secret` 不帶 Authorization，
+代表夜間批次本來就會被 gateway 擋 401；本次以 `--no-verify-jwt` 部署已一併解決
+（手動觸發時刻意不帶 Authorization，就是為了驗這條路徑）。
+
+**取回 `CRON_SECRET`**：值存在 Edge Function secrets 與 `cron.job.command` 兩處，需要時查
+`select command from cron.job where jobname='stock-report-nightly'`。
+
+### L. 下一步（技術面）
+
+`TechnicalTab` 目前是佔位頁。接上日線 / 週線 / 季線前需先解 §G 的儲存問題：
+新增 `price_daily(ticker, date, open, high, low, close, volume)` 與獨立保留期（約 400 天），
+資料源可放寬現有 `stock-price` 的 Yahoo `chart` 呼叫參數取得完整 OHLC。版面已留好，接上時不必再動。

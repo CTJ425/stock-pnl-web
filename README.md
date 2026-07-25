@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：v0.3.7-dev-2**（dev 分支開發中；併入 main 後為 v0.3.7。版本號顯示於畫面左下角徽章與「服務狀態」頁）
+> **目前版本：v0.3.7-dev.3**（dev 分支開發中；併入 main 後為 v0.3.7。版本號顯示於畫面左下角徽章與「服務狀態」頁）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -195,7 +195,7 @@ stock-pnl-web/
 1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
 2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取）與 RLS 行級安全策略。
 3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後籌碼報告；二擇一）：
-   - **Dashboard**：Edge Functions → Create a function。`stock-price` 為單一檔案，貼上 `index.ts` 全文即可；`stock-report` 為多檔函數，需逐一新增 `sources/supabase/functions/stock-report/` 下的 `index.ts`、`report.ts`、`twChips.ts`、`reportHtml.ts`（`*.test.ts` 不用上傳）。兩者皆於設定中**關閉 Verify JWT**後 Deploy。
+   - **Dashboard**：Edge Functions → Create a function。`stock-price` 為單一檔案，貼上 `index.ts` 全文即可；`stock-report` 為多檔函數，需逐一新增 `sources/supabase/functions/stock-report/` 下的 `index.ts`、`report.ts`、`twChips.ts`（`*.test.ts` 不用上傳）。兩者皆於設定中**關閉 Verify JWT**後 Deploy。
    - **CLI**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
      ```bash
      supabase functions deploy stock-price  --no-verify-jwt
@@ -249,15 +249,27 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 ## 🗒️ 版本紀錄
 
-### v0.3.7（開發中 · dev：`0.3.7-dev-2`；併入 main 後定為 v0.3.7）
+### v0.3.7（開發中 · dev：`0.3.7-dev.3`；併入 main 後定為 v0.3.7）
 
-**dev-2 — 盤後自動產生 + Storage 快取**
+**dev.3 — 個股分析頁 + 籌碼走勢圖（盤後籌碼報告 v2）**
+- **改為獨立「個股分析頁」**：庫存總覽台股每列的按鈕改為「分析」，點擊下鑽到專屬頁面（不再用彈出視窗），內含 `籌碼 / 技術面 / 我的持股` 三個分頁籤。技術面（日線 / 週線 / 季線）為佔位頁，需另存歷史股價後才會接上。
+- **三大法人拆出買進 / 賣出**：不再只顯示買賣超。表格改為 買進 / 賣出 / 買賣超 / 約當張數 / **連買連賣**，列出 外資 / 外資自營商 / 投信 / 自營商 / 三大法人合計。資料源不變（T86 同一份回應本就含這些欄位，先前被丟棄）。
+- **融資融券拆出買進 / 賣出 / 償還並可看走勢**：改用帶 `date` 參數的 TWSE rwd 端點（舊的 OpenAPI 端點沒有 date，只能取當天，這是先前做不出走勢圖的原因），新增 買進 / 賣出 / 償還 / 較前日 / **連增連減**；舊端點保留為當日備援。
+- **近 7 日走勢圖（自繪 SVG，不引入圖表函式庫）**：買賣超長條圖（可切換法人）＋ 融資、融券餘額折線圖（兩者量級差距大，各自獨立縱軸）。支援 hover 看數值，缺資料的日子斷線不內插。
+- **伺服器只回結構化資料**：`stock-report` 不再產生 HTML（刪除 `reportHtml.ts`），畫面全部由 React 繪製，Storage 報告體積約砍半。報告內嵌最近 7 個交易日 `history`；單次呼叫最多回補 5 個缺漏日，不足時照常出圖並在說明中標示「歷史資料回補中」。
+- **標明資料出處**：籌碼報告表頭顯示「資料日期 2026-07-24（最近交易日盤後）· 報告更新時間 2026-07-25 16:13」——
+  前者是資料涵蓋到哪個交易日，後者是這份報告實際產生的時間（兩者常差一天）。表頭位於 PDF 擷取範圍內，
+  下載的 PDF 自己看得出是哪支股票、哪一天、什麼時候產的。
+- **PDF 仍輸出淺色文件**：擷取前動態套上 `.report-surface` 淺色容器，深色主題下載的 PDF 一樣像一份文件。
+- ⚠️ **需重新部署 `stock-report`**：舊版函數回的是 schema 1（HTML），新前端會顯示「伺服器回傳的報告格式不符」。無需 schema migration（新的 `MI_MARGN_D` dataset 沿用現有 `chip_raw_cache`）。
+
+**dev.2 — 盤後自動產生 + Storage 快取**
 - **盤後籌碼報告自動產生 + 快取（Storage）**：新增 `stock-report` 的 `generate-all` 批次動作，由 Supabase `pg_cron` 每交易日 20:30（台北）觸發，一次產出全體持有台股的**共用**盤後報告（三大法人 / 融資融券 / 借券本就全市場共用），存進公開的 `reports` Storage bucket。
 - **前端改 Storage-first**：開啟報告時先讀預產好的共用報告（快、免每次打 TWSE），查無再 fallback 即點即產；個人「持股概況」由前端即時疊加。
 - **只保留 7 天**：同批次順便清掉超過 7 天的舊報告與 `chip_raw_cache`，免費方案空間穩定（每份 ~5KB HTML，150 檔 × 7 天 ≈ 5MB）。PDF 不存伺服器（Edge Function 無瀏覽器），維持前端即點即下載。
 - ⚠️ 需重跑 `schema.sql`（建 `reports` bucket、`pg_cron`/`pg_net`、排程）並設 `CRON_SECRET`；步驟見 `sources/supabase/README.md`。
 
-**dev-1 — 盤後籌碼報告**
+**dev.1 — 盤後籌碼報告**
 - **庫存總覽新增「盤後籌碼報告」**：台股每列新增「報告」按鈕，透過 Supabase Edge Function `stock-report` 抓取 TWSE 官方盤後籌碼（三大法人買賣超、融資融券、借券），結合持股成本 / 損益組成報告，可於彈窗檢視並下載 PDF（`jspdf` / `html2canvas` 動態載入，不進主 bundle）。
 - 僅台股提供；未設定 Supabase 時整個入口隱藏。報告以 `chip_raw_cache` 資料表依交易日共用快取，避免重複抓取 TWSE 大檔。
 - **Supabase 檔案集中**：資料庫綱要由 `docs/database/supabase_schema.sql` 移至 `sources/supabase/schema.sql`，與 Edge Functions（`functions/stock-price`、`functions/stock-report`）同置於 `sources/supabase/`；新增 `sources/supabase/README.md` 部署指南。

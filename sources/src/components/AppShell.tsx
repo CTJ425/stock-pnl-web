@@ -29,6 +29,7 @@ import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
 import { ServiceStatusPage } from './ServiceStatus/ServiceStatusPage'
+import { StockDetailPage, type StockDetailTarget } from './StockDetail/StockDetailPage'
 
 type Tab = 'dashboard' | 'yearly' | 'transactions' | 'status'
 
@@ -313,6 +314,13 @@ export function AppShell() {
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
+  // 下鑽檢視：專案無 router，個股分析頁以 state 疊在分頁內容之上；點任何導覽分頁即清空
+  const [detail, setDetail] = useState<StockDetailTarget | null>(null)
+
+  const goTab = (id: Tab) => {
+    setDetail(null)
+    setTab(id)
+  }
 
   return (
     <>
@@ -330,7 +338,7 @@ export function AppShell() {
               <button
                 key={id}
                 className={tab === id ? 'tab active' : 'tab'}
-                onClick={() => setTab(id)}
+                onClick={() => goTab(id)}
                 /* 視窗窄時只剩圖示，名稱改由 title / aria-label 呈現 */
                 title={label}
                 aria-label={label}
@@ -378,9 +386,11 @@ export function AppShell() {
         )}
         {loading ? (
           <div className="glass empty-state section">載入中…</div>
+        ) : detail ? (
+          <StockDetailPage {...detail} onBack={() => setDetail(null)} />
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardPage />}
+            {tab === 'dashboard' && <DashboardPage onOpenDetail={setDetail} />}
             {tab === 'yearly' && <YearlyPage />}
             {tab === 'transactions' && <TransactionsPage />}
             {tab === 'status' && <ServiceStatusPage />}

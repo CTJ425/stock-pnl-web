@@ -1503,3 +1503,299 @@ input[type='date']::-webkit-calendar-picker-indicator {
     bottom: 16px;
   }
 }
+
+/* =========================================================
+ * 個股分析頁（下鑽檢視）：頁首、分頁籤、報告版面與自繪 SVG 圖表
+ * ========================================================= */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.detail-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detail-title h2 {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.detail-title .hint {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.detail-note {
+  font-size: 12px;
+  color: var(--notice-warn-ink);
+  margin-bottom: 8px;
+}
+
+/* 二級分頁籤：比頁首 .tabs 輕，用底線標示而非填色 */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.subtab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.subtab:hover {
+  color: var(--ink);
+}
+
+.subtab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.detail-body {
+  padding: 18px 20px;
+}
+
+/* 報告表頭：在 PDF 擷取範圍內，標明代號、資料日期與產生時間 */
+.rpt-head {
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid var(--border);
+}
+
+.rpt-head h2 {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.rpt-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 3px;
+}
+
+.rpt-meta-sep {
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
+.rpt-section {
+  margin-bottom: 24px;
+}
+
+.rpt-section:last-child {
+  margin-bottom: 0;
+}
+
+.rpt-section h3 {
+  font-size: 14px;
+  color: var(--ink);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.rpt-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rpt-section-head h3 {
+  flex: 1 1 auto;
+}
+
+.detail-body .hint {
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.detail-body .data-table tbody tr.row-total td {
+  font-weight: 600;
+}
+
+/* 法人切換鈕 */
+.chip-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 6px;
+}
+
+.chip-btn {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.chip-btn:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+
+.chip-btn.active {
+  color: #fff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+/* ---------- 自繪 SVG 圖表 ---------- */
+/* 圖表以實測容器寬度 1:1 繪製（見 chartFrame.tsx）；上限避免超寬螢幕上長條過胖 */
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+}
+
+.chart-svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.chart-svg rect[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.chart-tip {
+  position: absolute;
+  transform: translate(-50%, -115%);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 5px 9px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.chart-title {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin-bottom: 2px;
+}
+
+/* ---------- 持股概況卡片 ---------- */
+.rpt-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rpt-card {
+  flex: 1 1 140px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.rpt-card .k {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.rpt-card .v {
+  font-size: 17px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.rpt-notes {
+  font-size: 12px;
+  color: var(--ink-muted);
+  padding-left: 18px;
+  margin-bottom: 12px;
+}
+
+.rpt-notes li {
+  margin: 2px 0;
+}
+
+.rpt-disclaimer {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  background: var(--row-alt);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+/**
+ * PDF 擷取容器：擷取期間由 reportPdf.ts 動態掛上此 class，把設計 token 覆寫為淺色，
+ * 深色主題也能輸出像一份文件的 PDF。html2canvas 不處理 backdrop-filter，一併關掉。
+ */
+.report-surface {
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --panel: #ffffff;
+  --border: #e3e7ee;
+  --border-strong: #ccd3df;
+  --ink: #1a1d24;
+  --ink-secondary: #5b6472;
+  --ink-muted: #8a94a3;
+  --up: #d21f3c;
+  --down: #12864e;
+  --thead-bg: #f6f7f9;
+  --row-hover: transparent;
+  --row-alt: #f6f7f9;
+  --accent: #4f46e5;
+  background: #ffffff;
+  color: #1a1d24;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .detail-body {
+    padding: 14px;
+  }
+
+  .subtab {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

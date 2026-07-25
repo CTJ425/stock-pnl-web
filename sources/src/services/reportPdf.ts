@@ -5,12 +5,25 @@
  * html2canvas / jsPDF 較大，改為動態載入：只在使用者按「下載 PDF」時才載入，
  * 不進主 bundle。
  */
+
+/**
+ * 擷取期間套在容器上的 class（見 index.css）：把 --surface / --ink / --border 等 token
+ * 覆寫成淺色，深色主題也能輸出像文件的淺色 PDF。擷取完立刻移除，畫面不受影響。
+ */
+const SURFACE_CLASS = 'report-surface'
+
 export async function generatePdfBlob(el: HTMLElement): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
   ])
-  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+  let canvas: HTMLCanvasElement
+  el.classList.add(SURFACE_CLASS)
+  try {
+    canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+  } finally {
+    el.classList.remove(SURFACE_CLASS)
+  }
   const img = canvas.toDataURL('image/jpeg', 0.92)
 
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' })

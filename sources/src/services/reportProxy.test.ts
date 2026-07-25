@@ -1,57 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // 以可控 mock 取代 Supabase 客戶端：storageDownload 決定每個 path 的回應
-const { storageDownload } = vi.hoisted(() => ({ storageDownload: vi.fn() }))
+const { storageDownload, functionsInvoke } = vi.hoisted(() => ({
+  storageDownload: vi.fn(),
+  functionsInvoke: vi.fn(),
+}))
 vi.mock('./supabase', () => ({
   isSupabaseConfigured: true,
-  supabase: { storage: { from: () => ({ download: storageDownload }) } },
+  supabase: {
+    storage: { from: () => ({ download: storageDownload }) },
+    functions: { invoke: functionsInvoke },
+  },
 }))
 
-import {
-  applyHoldingOverlay,
-  fetchStoredReport,
-  renderHoldingSection,
-  type ReportHolding,
-} from './reportProxy'
+import { fetchStoredReport, generateReport, type ReportData } from './reportProxy'
 
 const blobOf = (obj: unknown) => ({ data: new Blob([JSON.stringify(obj)]), error: null })
 const notFound = { data: null, error: { message: 'Not found' } }
 
-const holding: ReportHolding = {
-  qty: 3000,
-  avgCost: 100.5,
-  price: 120,
-  unrealized: 58500,
-  roi: 0.194,
-}
-
-describe('renderHoldingSection / applyHoldingOverlay', () => {
-  it('渲染持股概況：數字格式與紅漲色 class', () => {
-    const s = renderHoldingSection(holding)
-    expect(s).toContain('持股概況')
-    expect(s).toContain('3,000') // 持有股數
-    expect(s).toContain('100.50') // 平均成本 2 位小數
-    expect(s).toContain('+NT$58,500') // 未實現損益（正值帶 +）
-    expect(s).toContain('+19.40%') // 未實現報酬率
-    expect(s).toContain('class="v up"') // 正值套用紅漲 class
-  })
-
-  it('負值套用綠跌 class、null 顯示 —', () => {
-    const s = renderHoldingSection({ qty: 1000, avgCost: 50, price: null, unrealized: -1234, roi: -0.05 })
-    expect(s).toContain('class="v down"')
-    expect(s).toContain('-NT$1,234')
-    expect(s).toMatch(/現價<\/div><div class="v">—/)
-  })
-
-  it('疊加到第一個 <h2>（三大法人）之前；holding=null 時不變', () => {
-    const html =
-      '<style>.x{}</style><div class="rpt"><h1>t</h1><div class="sub">d</div><h2>三大法人買賣超（當日）</h2></div>'
-    const out = applyHoldingOverlay(html, holding)
-    expect(out.indexOf('持股概況')).toBeGreaterThan(-1)
-    expect(out.indexOf('持股概況')).toBeLessThan(out.indexOf('三大法人'))
-    expect(applyHoldingOverlay(html, null)).toBe(html)
-  })
-})
+const reportData = {
+  schema: 2,
+  ticker: '2330',
+  name: '台積電',
+  market: 'TPE',
+  dataDate: '2026-07-24',
+  generatedAt: '2026-07-24T12:30:00.000Z',
+  holding: null,
+  institutional: null,
+  margin: null,
+  borrow: null,
+  history: [{ date: '2026-07-24', institutional: null, margin: null }],
+  streaks: { foreign: 0, foreignDealer: 0, trust: 0, dealer: 0, total: 0, margin: 0, short: 0 },
+  notes: [],
+} as unknown as ReportData
 
 describe('fetchStoredReport（Storage-first）', () => {
   beforeEach(() => storageDownload.mockReset())
@@ -60,14 +41,12 @@ describe('fetchStoredReport（Storage-first）', () => {
     storageDownload.mockImplementation((path: string) => {
       if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))
       if (path === '20260724/2330.json')
-        return Promise.resolve(
-          blobOf({ dataDate: '2026-07-24', generatedAt: 't', data: {}, html: '<div class="rpt"><h2>三大法人</h2></div>' }),
-        )
+        return Promise.resolve(blobOf({ ticker: '2330', dataDate: '2026-07-24', data: reportData }))
       return Promise.resolve(notFound)
     })
     const r = await fetchStoredReport('2330')
     expect(r?.dataDate).toBe('2026-07-24')
-    expect(r?.html).toContain('三大法人')
+    expect(r?.history).toHaveLength(1)
   })
 
   it('無 manifest → null（呼叫端會 fallback 即點即產）', async () => {
@@ -80,5 +59,42 @@ describe('fetchStoredReport（Storage-first）', () => {
       Promise.resolve(path === 'manifest.json' ? blobOf({ ymd: '20260724' }) : notFound),
     )
     expect(await fetchStoredReport('9999')).toBeNull()
+  })
+
+  it('舊格式（schema 1 / 只有 html）視為未命中 → null', async () => {
+    storageDownload.mockImplementation((path: string) => {
+      if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))
+      return Promise.resolve(
+        blobOf({ ticker: '2330', html: '<div class="rpt">舊格式</div>', data: { ticker: '2330' } }),
+      )
+    })
+    expect(await fetchStoredReport('2330')).toBeNull()
+  })
+})
+
+describe('generateReport（即點即產 fallback）', () => {
+  beforeEach(() => functionsInvoke.mockReset())
+
+  it('回傳結構化 data', async () => {
+    functionsInvoke.mockResolvedValue({
+      data: { reportId: 'r1', generatedAt: 't', dataDate: '2026-07-24', data: reportData },
+      error: null,
+    })
+    const d = await generateReport({ market: 'TPE', ticker: '2330', name: '台積電' })
+    expect(d.ticker).toBe('2330')
+    expect(d.schema).toBe(2)
+  })
+
+  it('Edge Function 回錯誤時丟出訊息', async () => {
+    functionsInvoke.mockResolvedValue({ data: null, error: { message: '爆了' } })
+    await expect(generateReport({ market: 'TPE', ticker: '2330', name: '台積電' })).rejects.toThrow('爆了')
+  })
+
+  it('格式不符（舊版 Edge Function 尚未部署）時丟出可讀訊息', async () => {
+    functionsInvoke.mockResolvedValue({
+      data: { reportId: 'r1', generatedAt: 't', dataDate: '2026-07-24', data: { ticker: '2330' }, html: '<div/>' },
+      error: null,
+    })
+    await expect(generateReport({ market: 'TPE', ticker: '2330', name: '台積電' })).rejects.toThrow('格式不符')
   })
 })
