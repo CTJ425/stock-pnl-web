@@ -1,9 +1,57 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 移除基本面（EPS）、版號格式與徽章精簡 (0.3.7-dev.6)
-- Status: COMPLETED（dev 分支；dev 專案 Supabase 已回退部署並清除 EPS 資料表）
-- Timestamp: 2026-07-25 23:10:00 Asia/Taipei
+- Action: 0.3.7 定版並併入 main；正式區 Supabase 完成後端部署
+- Status: COMPLETED（main 已合併；正式區與測試區後端皆就緒）
+- Timestamp: 2026-07-25 23:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-25 23:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.3.7 定版、併入 `main`、正式區（`kxnxadaghidwumqsqneu`）後端部署
+- **Status**: COMPLETED
+
+### 版號定稿（CLAUDE.md §17.3）
+`0.3.7-dev.6` → **`0.3.7`**（三處同步）。README 版本紀錄把 dev.1–dev.6 **併成一則 0.3.7 正式紀錄**：
+從 `main` 的角度 EPS 從未存在（dev.5 已回退），故不列入；dev.6 只留「版號格式與徽章」這兩項淨效果。
+
+### ⚠️ 正式區原本停在 v0.3.6 的狀態
+盤點結果：只有 `stock-price`(v6)、**沒有 `stock-report`**、**沒有 `chip_raw_cache`**、
+沒有 `reports` bucket、沒有 `pg_cron`/`pg_net`、沒有 `CRON_SECRET`。有 126 筆真實交易。
+
+與 v0.3.6 的 schema 差異只有第 5、6 段（第 1–4 段未變動），故**只套這兩段**，不在有真實資料的庫上重跑既有表。
+
+### 部署順序刻意先後端、後 git
+`.github/workflows/deploy.yml` 是 **push 到 `main` 就觸發 Pages 部署**。若先合併，
+線上會有一段「分析」按鈕點了就失敗的空窗（前端已上線但正式區沒有 `stock-report`）。
+故順序為：正式區後端就緒 → 驗證 → 才合併推 main。
+
+### 正式區執行內容
+1. schema 第 5 段 → 建 `chip_raw_cache`
+2. `functions deploy stock-report --no-verify-jwt`
+3. `secrets set CRON_SECRET=<token_urlsafe(32)>`
+4. schema 第 6 段（代入實際 project ref 與 secret）→ `reports` bucket(public)、`pg_cron`/`pg_net`、
+   cron job `stock-report-nightly | 30 12 * * 1-5 | active=true`
+5. 手動觸發 `generate-all` 兩次：首次 5 檔 / 5 天（回補上限，13.3 秒），第二次補滿 **7 天**（12.3 秒）
+6. 驗證 5 份報告（0050、00685L、009816、1802、2609）皆 `schema 2`、`history` 7 天且
+   融資融券 7 天齊全、`holding: null`（共用報告不含個資）、`notes` 空
+
+### ⚠️ 踩到的陷阱：Supabase CLI 的 link 是**依 cwd 解析**
+從 repo 根目錄執行 `--linked` 指向 **dev**，從 `sources/` 執行才指向**正式區**
+（link 檔在 `sources/supabase/.temp/project-ref`）。一開始從根目錄查，`projects list` 回報
+正式區 `linked=False`，與使用者所述不符 —— 換到 `sources/` 才對得上。
+**對策**：函數部署一律明確帶 `--project-ref`；每次寫入 DB 前先斷言 linked 專案是預期的那個。
+
+### Verification
+- `npm run test` 159 passed / `build` / `lint` 全過（版號改動不影響邏輯）
+- 正式區與測試區後端狀態一致（皆有 `chip_raw_cache`、`stock-report`(no-verify-jwt)、
+  `reports` bucket、每交易日 20:30 排程）
+
+### Outstanding
+- 兩區的夜間排程都尚未經歷一次自動觸發（每週一~五 12:30 UTC / 台北 20:30，最快下週一）。
+- `TechnicalTab` 仍為佔位頁（需 `price_daily` 與約 400 天保留期，見 PLAN §G / §L）。
 
 ---
 
