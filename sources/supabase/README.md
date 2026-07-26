@@ -109,6 +109,26 @@ supabase functions deploy stock-report --no-verify-jwt
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
 
+## AI 助理設定（0.6.0 起）：`user_settings` 的 `ai_*` 欄位
+
+`schema.sql` **§4.1** 在既有的 `user_settings` 加了五個欄位，供「AI 解讀」分頁存放
+使用者自己的 AI 供應商設定：
+
+| 欄位 | 內容 |
+| ---- | ---- |
+| `ai_provider` | `'google'` 或 `'openai-compatible'` |
+| `ai_base_url` | OpenAI 相容端點（Ollama / vLLM）；`google` 留空 |
+| `ai_model` | 模型名稱，例如 `gemini-2.5-flash` / `llama3` |
+| `ai_api_key` | 明文，靠既有 RLS（`auth.uid() = user_id`）隔離；Ollama 本機可空 |
+| `ai_updated_at` | 最後更新時間 |
+
+**要在既有環境套用**：整份 `schema.sql` 可重跑，或只執行 §4.1 那五行 `ALTER TABLE`。
+注意**不能**改上面的 `CREATE TABLE user_settings` 來加欄位 —— `CREATE TABLE IF NOT EXISTS`
+對「表已存在」的環境完全不作用，欄位不會被補上。
+
+沒套用的後果：AI 設定按下儲存會回 `column "ai_provider" does not exist`，
+其餘功能不受影響（報告、K 線都不讀這張表）。
+
 ### 報告 JSON 結構（schema 2）
 
 ```jsonc

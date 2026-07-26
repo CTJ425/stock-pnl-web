@@ -363,4 +363,16 @@ describe('StockDetailPage', () => {
     expect(await screen.findByText('近 2 日買賣超')).toBeTruthy()
     expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
   })
+
+  it('應包含「AI 解讀」分頁籤並可點擊切換', async () => {
+    const user = userEvent.setup()
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
+
+    const aiTabButton = screen.getByRole('button', { name: 'AI 解讀' })
+    expect(aiTabButton).toBeTruthy()
+
+    await user.click(aiTabButton)
+    expect(screen.getByText('AI 個股綜合解讀')).toBeTruthy()
+  })
 })

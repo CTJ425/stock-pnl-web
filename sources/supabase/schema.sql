@@ -119,6 +119,19 @@ TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
+-- 4.1 AI 助理設定（0.6.0）
+--     使用者自帶 AI 供應商，故端點與金鑰都存在使用者自己的設定列。
+--     用 ALTER ... IF NOT EXISTS 而非改上面的 CREATE TABLE：本檔可重跑，
+--     而 CREATE TABLE IF NOT EXISTS 對「表已存在」的既有環境不會補欄位。
+--     金鑰以明文存放，靠上方 RLS（auth.uid() = user_id）隔離；
+--     因為 0.6.0 是前端直連 AI 供應商，金鑰終究得回到瀏覽器才能發請求，
+--     存 DB 換到的是跨裝置同步，不是「金鑰不進瀏覽器」。要後者得等 0.6.1 的 Edge Function 代理。
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_provider   TEXT;  -- 'google' | 'openai-compatible'
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_base_url   TEXT;  -- openai-compatible 用（ollama / vLLM）；google 留空
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_model      TEXT;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_api_key    TEXT;  -- ollama 本機通常不需要，允許空字串
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_updated_at TIMESTAMPTZ;
+
 
 -- 5. 盤後籌碼原始檔快取資料表 (chip_raw_cache)
 --     Edge Function stock-report 的共用快取：依交易日與資料集快取 TWSE 大檔，

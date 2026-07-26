@@ -17,6 +17,7 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
+import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
 import { HoldingTab } from './HoldingTab'
 import { TechnicalTab } from './TechnicalTab'
@@ -32,12 +33,13 @@ interface StockDetailPageProps extends StockDetailTarget {
   selector?: ReactNode
 }
 
-type DetailTab = 'chips' | 'technical' | 'holding'
+type DetailTab = 'chips' | 'technical' | 'holding' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'chips', label: '籌碼' },
   { id: 'technical', label: '技術面' },
   { id: 'holding', label: '我的持股' },
+  { id: 'ai', label: 'AI 解讀' },
 ]
 
 export function StockDetailPage({ ticker, name, holding, selector }: StockDetailPageProps) {
@@ -150,6 +152,7 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
         )}
         {tab === 'technical' && <TechnicalTab ticker={ticker} />}
         {tab === 'holding' && <HoldingTab holding={holding} />}
+        {tab === 'ai' && <AiTab ticker={ticker} name={name} report={report} />}
       </div>
     </div>
   )

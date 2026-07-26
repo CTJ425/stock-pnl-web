@@ -25,11 +25,8 @@
 6. **AI 助理（0.6.0，尚未實作）**
    - 使用者自帶 AI 供應商（Google AI / ollama / vLLM），故介面必須 provider-agnostic、
      不綁任何單一廠商 SDK。
-   - ⚠️ **原規劃檔 `~/.claude/plans/k-ai-toasty-pearl.md` 已遺失**（2026-07-26 查核）。
-     現存的 0.6.0 資訊只有本節三條約束 ＋ TASK.md Task 16 的三點使用者定案。
-     動工前必須先重建規格，待使用者定案的項目：UI 位置、API key 存放處
-     （localStorage vs Supabase）、第一版支援的 provider、餵給模型的 payload 規格、
-     失敗與逾時行為。
+   - ⚠️ 原規劃檔 `~/.claude/plans/k-ai-toasty-pearl.md` 已遺失（2026-07-26 查核）。
+     **規格已於 2026-07-26 23:40 重建，見下方 §M**（使用者五項定案齊備，可動工）。
    - 關鍵設計：**指標由程式算好再餵給模型**，模型不碰原始序列 ——
      語言模型從 243 筆收盤價心算 MA60 必定出錯，而錯的數字包在流暢的中文裡最難察覺。
      0.5.0 的 `indicators.ts` / `technicalView.ts` 就是為此先做的地基。
@@ -320,3 +317,119 @@ SPEC.md 新增「個股分析頁與盤後籌碼」章節並修正 schema 路徑�
 - **Yahoo 的日期換算必須加 `meta.gmtoffset`**。直接對原始 timestamp 取 UTC 日期在台股時區
   碰巧會對，但那是巧合；測試以 UTC+9 的反例釘住。
 - **回應會包含五欄全 null 的假日格**（實測 2025-08-01），一律丟棄而非補 0。
+
+---
+
+## 📐 §M. 0.6.0 AI 助理 —— 設計決策
+
+- Agent: Claude
+- Action: 規格重建（原計畫檔遺失）＋ 使用者定案
+- Status: SPEC_READY — 實作委派 agy（TASK.md Task 17）
+- Timestamp: 2026-07-26 23:40:00 Asia/Taipei
+
+### M0. 使用者定案（2026-07-26）
+
+| 項目 | 定案 |
+| ---- | ---- |
+| UI 位置 | 個股分析頁新增「**AI 解讀**」分頁籤，與 籌碼 / 技術面 / 我的持股 並列 |
+| 金鑰存放 | **Supabase `user_settings` 新欄位**（非 localStorage） |
+| 連線方式 | **第一版只做前端直連**；Edge Function 代理留 0.6.1 |
+| payload 範圍 | 技術面 `latest` 摘要 ＋ 籌碼 7 日摘要；**不含持股與成本** |
+| 失敗與逾時 | Claude 決定（見 §M5）：30 秒逾時、錯誤分類、手動重試、不自動重試、第一版不串流 |
+
+### M1. 核心約束（沿用短期目標 §6，不得違反）
+
+1. **指標由程式算好再餵給模型，模型不碰原始序列。**
+   0.5.0 的 `technicalView.ts` 的 `latest` 已備妥 MA5/20/60、多空排列、K/D、RSI14、
+   MACD 柱、量能比、漲跌幅 —— 這就是 payload 的技術面來源，模型不需要看 243 筆收盤價。
+   理由：語言模型從 243 筆收盤價心算 MA60 必定出錯，而錯的數字包在流暢的中文裡最難察覺。
+2. **provider-agnostic，不綁任何單一廠商 SDK。** 只用 `fetch`，adapter 各自組 request / 解 response。
+3. **產品紅線：不主動顯示 AI 解讀。** 未按下按鈕就不產生任何 AI 文字；
+   未設定 provider 時分頁只顯示設定引導。
+
+### M2. 兩支 adapter 覆蓋三家供應商
+
+`AiProviderKind` 只有兩個值，因為 ollama 與 vLLM 都是 OpenAI 相容端點：
+
+| kind | 對象 | 端點 | 認證 |
+| ---- | ---- | ---- | ---- |
+| `google` | Google AI (Gemini) | `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` | header `x-goog-api-key` |
+| `openai-compatible` | ollama / vLLM / 任何相容端點 | `{baseUrl}/chat/completions` | header `Authorization: Bearer`（金鑰為空則省略，ollama 本機不需要） |
+
+`baseUrl` 正規化規則必須是**純函式 + 測試**（`normalizeBaseUrl`）：去尾斜線；
+已含 `/v1` 則不重複附加；未含則補 `/v1`。使用者填 `http://localhost:11434`
+或 `http://localhost:11434/v1` 都要能用。
+
+### M3. 金鑰存放的連帶影響（選 `user_settings` 的代價，已與使用者確認）
+
+- schema 需擴充 `user_settings`（`ai_provider` / `ai_base_url` / `ai_model` / `ai_api_key` /
+  `ai_updated_at`），寫法見 `sources/supabase/schema.sql` §4.1 —— 用
+  `ALTER ... ADD COLUMN IF NOT EXISTS`，因為 `CREATE TABLE IF NOT EXISTS` 對既有環境不補欄位。
+- **兩區需跑 migration**（需使用者明確授權，CLAUDE.md §14.2）。
+- **本機模式沒有 AI 分頁** —— 本機模式無 Supabase，設定無處可存。與盤後報告一路以來的入口規則一致。
+- **金鑰仍會回到瀏覽器**：0.6.0 是前端直連，存 DB 換到的是跨裝置同步，不是「金鑰不進瀏覽器」。
+- `user_settings` 表雖然從一開始就存在，但前端從未讀寫過（偏好都在 localStorage）。
+  **0.6.0 是這張表的第一個使用者**，故 upsert 需自行建列（其餘欄位都有 DEFAULT，只帶 `user_id` + `ai_*` 即可）。
+
+### M4. payload 規格
+
+`buildAiPayload()` 是純函式，輸出結構化物件（只有數字與標籤，不含任何句子），
+再由 `renderAiPrompt()` 轉成 system / user 兩段文字。兩者都要有測試。
+
+內容：
+
+- **識別**：代號、名稱、資料日期。
+- **技術面**：`TechnicalView.latest` 全欄 ＋ 顯示區間的最高 / 最低收盤。
+- **籌碼**（來自報告 JSON，`report.history` 最多 7 筆）：
+  各法人最近一日 buy / sell / net、7 日 net 序列、`ChipStreaks` 連買連賣；
+  融資與融券的今日餘額 / 較前日 / 7 日序列 / streak；`notes[]`。
+- **單位必須寫進 payload**：T86 三大法人是**股數**、融資融券是**張**。
+  §C 記錄過的既有 bug 就是把「張」標成「股」—— 換成模型讀更危險，它會照著錯誤單位推論。
+- **不含持股、成本、未實現損益**（使用者定案）。
+
+prompt 準則（沿用 PROGRESS.md 2026-07-21 16:05 那則的文案原則）：
+繁體中文、白話短句、不放公式、3–5 段；**只能引用提供的數字，不得自行計算或臆測未提供的指標**；
+**不得給出買賣建議或目標價**；結尾固定聲明這是資料摘要而非投資建議。
+
+### M5. 失敗與逾時（Claude 決定）
+
+- `AbortController` 逾時 **30 秒**。
+- 錯誤分類為 `auth`(401/403) / `rate-limit`(429) / `server`(5xx) / `timeout` / `network` / `bad-response`，
+  各給對應的白話中文訊息。`network` 的訊息要提到 **CORS**：ollama 需設
+  `OLLAMA_ORIGINS`，否則從 GitHub Pages 的網域打本機端點會被瀏覽器擋掉。
+- **不自動重試**（AI 呼叫要花錢，靜默重試會讓使用者付兩次），只給「重試」按鈕。
+- **第一版不做串流**，一次回傳；按鈕在跑的時候顯示「解讀中…（最長 30 秒）」。
+  串流留待使用者要求 —— 兩家都支援 SSE，但兩套解析格式不同，值不值得看實際等待感受再說。
+
+### M6. 檔案異動範圍
+
+| 檔案 | 動作 |
+| ---- | ---- |
+| `sources/supabase/schema.sql` | ✅ 已改：§4.1 五個 `ai_*` 欄位 |
+| `src/services/aiSettings.ts`(+test) | 新增：型別、`normalizeAiSettings` / `validateAiSettings`（純函式）、`loadAiSettings` / `saveAiSettings`（Supabase upsert） |
+| `src/services/aiClient.ts`(+test) | 新增：`AiProvider` 介面、`createAiProvider`、兩支 adapter、`AiError`、`normalizeBaseUrl` / `mapHttpError` / `extractGoogleText` / `extractOpenAiText`（皆純函式） |
+| `src/components/StockDetail/aiPayload.ts`(+test) | 新增：`buildAiPayload` / `renderAiPrompt`（純函式） |
+| `src/components/StockDetail/AiTab.tsx`(+test) | 新增：設定表單、產生按鈕、結果、錯誤與重試、免責聲明 |
+| `src/components/StockDetail/StockDetailPage.tsx`(+test) | 修改：`DetailTab` 加 `'ai'`、`TABS` 加「AI 解讀」、render `<AiTab>` |
+| `src/index.css` | 新增 `.ai-*` 樣式 |
+| 版號三處 ＋ `README.md` | `0.6.0-dev.1` |
+| `docs/agent/*`、`sources/supabase/README.md` | 紀錄與 schema 說明 |
+
+**`AiTab` 自己載 daily series**（`fetchDailySeries` + `buildTechnicalView(rows, '1y')`），
+不把狀態上提到 `StockDetailPage` —— 多一次 10–20KB 下載（且有瀏覽器快取），
+換到的是不動 `TechnicalTab`、改動面積最小。
+
+### M7. 風險
+
+1. **瀏覽器擋本機端點**：從 `https://` 的 Pages 網域打 `http://localhost:11434`，
+   除了 ollama 自身的 CORS（`OLLAMA_ORIGINS`）外，還可能遇到瀏覽器對私有網路請求的限制。
+   實測不通的退路：本機 `npm run dev` 使用，或等 0.6.1 的代理（但代理連不到你家的 localhost，
+   代理只解得了雲端供應商的 CORS 與金鑰問題）。這條**必須實機驗證後才寫進 README**。
+2. **模型仍可能把提供的數字講錯**（張／股、正負號）。對策是 payload 明寫單位，
+   並在測試中鎖住 payload 的單位標籤；解讀文字本身無法用測試保證，故 UI 必須有免責聲明。
+3. **金鑰明文存 DB**：靠 RLS 隔離。若日後要更嚴格，0.6.1 代理才是正解（金鑰只留 Supabase secrets）。
+
+### M8. 明確不做（0.6.0 範圍外）
+
+Edge Function 代理（0.6.1）、串流輸出、多輪對話、把持股成本餵給模型、本機模式支援、
+在籌碼 / 技術面分頁自動顯示解讀（違反 §M1.3 紅線）。

@@ -1,9 +1,62 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.5.0 收尾完成 —— 兩區日線資料到位並通過驗證
-- Status: COMPLETED — 下一步是 0.6.0，但需先重建規格（原規劃檔已遺失，見 PLAN.md §6）
-- Timestamp: 2026-07-26 23:15:00 Asia/Taipei
+- Action: 0.6.0-dev.1 AI 助理實作完成（agy 產出、Claude 審查修正、閘門全綠）
+- Status: IMPLEMENTED — **未 commit 前的狀態已結束，程式碼在 dev**；
+  待兩區套用 `schema.sql` §4.1 與線上實測（需使用者授權）
+- Timestamp: 2026-07-27 00:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 00:05:00 Asia/Taipei
+
+- **Agent**: agy（實作）／Claude（規格、審查、修正、驗證）
+- **Action**: 0.6.0-dev.1 —— 個股分析新增「AI 解讀」分頁
+- **Status**: IMPLEMENTED
+- **規格**: `PLAN.md §M`；**委派單**: `TASK.md` Task 17
+
+### 使用者五項定案
+
+UI 放個股分析頁的第四個分頁籤／金鑰存 Supabase `user_settings`（非 localStorage）／
+第一版只做前端直連（代理留 0.6.1）／payload 含技術面＋籌碼 7 日但**不含持股**／
+失敗與逾時行為由 Claude 決定。
+
+### 產出
+
+新增 `aiSettings.ts`、`aiClient.ts`（兩支 adapter：`google` 與 `openai-compatible`）、
+`aiPayload.ts`（純函式）、`AiTab.tsx` 與四份測試；`StockDetailPage` 加第四個分頁籤；
+`schema.sql` §4.1 五個 `ai_*` 欄位（Claude 自己寫，未委派）。
+
+**閘門（Claude 親跑）**：lint 3 個既有 warning（未增加）、**test 258 passed**（基準 221）、build 通過。
+**未動禁區**：`supabase/functions/`、`TechnicalTab` / `ChipsTab` / `HoldingTab`、無新增 npm 依賴。
+
+### 審查抓到的 5 個問題（詳情見 TASK.md Task 17）
+
+最嚴重的是**漲跌幅小 100 倍**：`technicalView.ts:140` 的 `changePct` 是小數比例，
+UI 在顯示時會乘 100（`TechnicalTab.tsx:240`），但 agy 把原始值直接接 `%` 送進 prompt。
+其餘四項：連續天數正負號未說明、三大法人漏了買進 / 賣出拆項、逾時沒包住讀 body、CSS 用了
+不存在的 `var(--shadow)` 與硬寫深色疊層。全部已修正並補測試。
+
+### 寫給後續 Agent 的三條教訓
+
+1. **委派 AI 相關功能時，要把「數字的單位與正負號語意」當成硬性驗收項。**
+   模型不會質疑你給的數字，錯誤會被包在流暢的中文裡送到使用者眼前 —— 這正是
+   PLAN.md §M1.1「指標由程式算好再餵給模型」要防的事，而 0.6.0 證明**光是算好還不夠，
+   標示也得對**。`changePct` 這個坑之所以存在，是因為它在 UI 端是「顯示時才乘 100」。
+2. **逾時要包住讀取回應主體。** `fetch` 收到 headers 就 resolve，在那之後 clearTimeout
+   等於對「headers 來了但 body 卡住」完全沒有保護。
+3. **加測試時要順手驗證錯誤分類，不只驗成功路徑。** 這輪就是在補逾時測試時，
+   抓到自己第一版修正把 body 階段的 `AbortError` 誤分類成 `bad-response`。
+
+### 待辦（需使用者授權 / 執行）
+
+- [ ] 兩區套用 `sources/supabase/schema.sql` **§4.1**（五行 `ALTER TABLE`）。
+      未套用時 AI 設定按儲存會回 `column "ai_provider" does not exist`，其餘功能不受影響。
+- [ ] 登入測試區實測：設定 Google AI 金鑰 → 產生解讀 → 對照技術面分頁確認漲跌幅、
+      買賣超單位、連續天數方向是否一致；1280 / 390px 無水平溢出。
+- [ ] **Ollama / vLLM 本機端點尚未實機驗證**（PLAN.md §M7 風險 1）：
+      從 `https://` 網域打 `http://localhost` 除了 `OLLAMA_ORIGINS`，
+      還可能被瀏覽器私有網路限制擋下。README 目前刻意標為「尚未實機驗證」，實測後再改寫。
 
 ---
 

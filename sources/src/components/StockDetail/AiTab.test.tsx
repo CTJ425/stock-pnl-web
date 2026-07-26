@@ -1,0 +1,132 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { AiTab } from './AiTab'
+
+const { loadAiSettings, saveAiSettings, clearAiSettings, fetchDailySeries, createAiProvider } = vi.hoisted(() => ({
+  loadAiSettings: vi.fn(),
+  saveAiSettings: vi.fn(),
+  clearAiSettings: vi.fn(),
+  fetchDailySeries: vi.fn(),
+  createAiProvider: vi.fn(),
+}))
+
+vi.mock('../../services/aiSettings', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/aiSettings')>()
+  return {
+    ...actual,
+    loadAiSettings,
+    saveAiSettings,
+    clearAiSettings,
+  }
+})
+
+vi.mock('../../services/dailyProxy', () => ({
+  fetchDailySeries,
+}))
+
+vi.mock('../../services/aiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/aiClient')>()
+  return {
+    ...actual,
+    createAiProvider,
+  }
+})
+
+import { AiError } from '../../services/aiClient'
+import type { ReportData } from '../../services/reportProxy'
+
+const dummyReport: ReportData = {
+  schema: 3,
+  ticker: '2330',
+  name: '台積電',
+  market: 'TPE',
+  dataDate: '2026-07-22',
+  generatedAt: '2026-07-22T20:30:00Z',
+  holding: null,
+  institutional: null,
+  margin: null,
+  borrow: null,
+  history: [],
+  streaks: { foreign: 0, foreignDealer: 0, trust: 0, dealer: 0, total: 0, margin: 0, short: 0 },
+  notes: [],
+}
+
+const dummyDaily = {
+  ticker: '2330',
+  rows: [
+    ['2026-07-20', 980, 1000, 970, 990, 10000] as const,
+    ['2026-07-21', 990, 1020, 985, 1010, 12000] as const,
+    ['2026-07-22', 1010, 1030, 1000, 1025, 15000] as const,
+  ],
+}
+
+describe('AiTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchDailySeries.mockResolvedValue(dummyDaily)
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('未設定 AI 服務時應顯示設定表單，且畫面不出現任何 AI 生成文字', async () => {
+    loadAiSettings.mockResolvedValue(null)
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+
+    await screen.findByText('未設定 AI 服務供應商')
+
+    expect(screen.getByLabelText(/AI 服務供應商/)).toBeTruthy()
+    expect(screen.queryByText(/免責聲明/)).toBeNull()
+  })
+
+  it('已設定 AI 服務時，點擊「產生解讀」應觸發 AI 完成並顯示結果與免責聲明', async () => {
+    loadAiSettings.mockResolvedValue({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: 'test-key',
+    })
+
+    const mockComplete = vi.fn().mockResolvedValue('這是 Mock 的 AI 數據解讀結果。')
+    createAiProvider.mockReturnValue({
+      kind: 'google',
+      complete: mockComplete,
+    })
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+
+    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    fireEvent.click(btn)
+
+    await screen.findByText('這是 Mock 的 AI 數據解讀結果。')
+
+    expect(screen.getByText(/免責聲明/)).toBeTruthy()
+    expect(mockComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('當產生過程失敗時應顯示錯誤訊息與「重試」按鈕', async () => {
+    loadAiSettings.mockResolvedValue({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: 'test-key',
+    })
+
+    const mockComplete = vi.fn().mockRejectedValue(new AiError('auth', 'API Key 無效'))
+    createAiProvider.mockReturnValue({
+      kind: 'google',
+      complete: mockComplete,
+    })
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+
+    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    fireEvent.click(btn)
+
+    await screen.findByText('API Key 無效')
+    expect(screen.getByRole('button', { name: '重試' })).toBeTruthy()
+  })
+})

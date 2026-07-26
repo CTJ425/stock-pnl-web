@@ -8,6 +8,78 @@
 
 ## 📋 Active Tasks
 
+### Task 17: AI 助理 —— 個股分析「AI 解讀」分頁 (0.6.0-dev.1)
+- **Status**: IMPLEMENTED — 程式碼完成、Claude 審查與修正完畢、閘門全綠
+  （lint 3 個既有 warning / test **258 passed** / build 通過）；
+  **待兩區套用 `schema.sql` §4.1 與線上實測**（需使用者授權）。規格見 `PLAN.md §M`
+- **Planner / Reviewer**: Claude
+- **Implementer**: agy (`gemini-3.6-flash-high`)
+- **Timestamp**: 2026-07-26 23:40:00 Asia/Taipei
+
+#### 使用者定案的決定
+- UI：個股分析頁新增「AI 解讀」分頁籤（與 籌碼 / 技術面 / 我的持股 並列）
+- 金鑰：存 Supabase `user_settings` 新欄位（**非** localStorage）
+- 連線：**第一版只做前端直連**，Edge Function 代理留 0.6.1
+- payload：技術面摘要 ＋ 籌碼 7 日摘要，**不含持股與成本**
+
+#### Objective 目標
+把「模型不碰原始序列、指標由程式算好」的設計落成可用功能：使用者自帶 AI 供應商，
+在個股分析頁按一下取得該檔的技術面＋籌碼白話摘要。
+
+#### Scope 範圍 / 允許異動的檔案
+- 新增：`src/services/aiSettings.ts(+test)`、`src/services/aiClient.ts(+test)`、
+  `src/components/StockDetail/aiPayload.ts(+test)`、`src/components/StockDetail/AiTab.tsx(+test)`
+- 修改：`src/components/StockDetail/StockDetailPage.tsx(+test)`、`src/index.css`、
+  版號三處（`src/version.ts`、`package.json`、`package-lock.json`）、`README.md`
+- **已由 Claude 完成、不得再動**：`sources/supabase/schema.sql` §4.1
+
+#### Constraints 限制
+1. **不引入任何新的 npm 依賴**（只用 `fetch`；不得裝 `@google/generative-ai`、`openai` 等 SDK）。
+2. **不動 `TechnicalTab.tsx` / `ChipsTab.tsx` / `HoldingTab.tsx` / 任何 Edge Function / `schema.sql`。**
+3. 未設定 provider 時**不得產生任何 AI 文字**（產品紅線，PLAN.md §M1.3）。
+4. 不做串流、不做多輪對話、不把持股成本放進 payload、不支援本機模式。
+5. 所有可測邏輯抽成純函式（`normalizeBaseUrl` / `mapHttpError` / `extractGoogleText` /
+   `extractOpenAiText` / `buildAiPayload` / `renderAiPrompt`），網路呼叫用 `vi.stubGlobal` 測，
+   **不得在測試中真的打外部端點**。
+6. 文案依 PROGRESS.md 2026-07-21 16:05 的準則：白話短句、不放公式、不用內行黑話。
+
+#### Acceptance criteria 驗收條件
+- [ ] 兩支 adapter 各自可用：`google`（`x-goog-api-key`）、`openai-compatible`（`Bearer`，金鑰空則省略 header）
+- [ ] `normalizeBaseUrl` 對 `http://h:11434`、`http://h:11434/`、`http://h:11434/v1`、`http://h:11434/v1/` 四種輸入都產出同一個 `/v1/chat/completions`
+- [ ] payload **明寫單位**（三大法人＝股數、融資融券＝張），並有測試鎖住單位標籤
+- [ ] payload **不含** `holding` / `avgCost` / `unrealized`，有測試斷言
+- [ ] 逾時 30 秒（`AbortController`）；錯誤分類 auth / rate-limit / server / timeout / network / bad-response 各有白話訊息；`network` 訊息提到 CORS 與 `OLLAMA_ORIGINS`
+- [ ] 不自動重試，只有「重試」按鈕
+- [ ] 未設定 provider → 分頁顯示設定表單，且畫面無任何 AI 生成文字
+- [ ] 結果區有免責聲明（非投資建議）
+- [ ] `npm run test` 全綠（基準 221 passed，新增測試後應 > 240）、`npm run build` 通過、`npm run lint` warning 不超過既有 3 個
+- [ ] 1280px / 390px 無水平溢出
+
+#### Verification method 驗證方式
+`cd sources && npm run lint && npm run test && npm run build`（由 **Claude 親自跑**，不採信自述）；
+Claude 另審 diff（§9）。線上驗證需先在兩區跑 `schema.sql` §4.1（需使用者授權）。
+
+#### 驗收結果（Claude，2026-07-27 00:05）
+- [x] 兩支 adapter、`normalizeBaseUrl` 四種輸入、payload 單位標籤、payload 不含持股、
+      逾時與六類錯誤、不自動重試、未設定無 AI 文字、免責聲明 —— 全部達標
+- [x] 閘門親跑：lint 3 warning（未增加）、test **258 passed**（基準 221）、build 通過
+- [x] 未動禁區：`supabase/functions/`、`TechnicalTab` / `ChipsTab` / `HoldingTab`、無新增 npm 依賴
+- [ ] 瀏覽器實測（1280 / 390px 與實際呼叫 AI）—— **需登入測試區帳號且已套用 §4.1**，待使用者
+
+#### Claude 審查抓到並修正的問題（5 項）
+1. **漲跌幅小 100 倍**（正確性，最嚴重）：`latest.changePct` 是小數比例（0.0148），
+   agy 直接接 `%` 印進 prompt。已改為 `changePctPercent`（×100）並以測試釘住。
+2. **連續天數的正負號沒說明**：`ChipStreaks` 正＝連買、負＝連賣，只給數字會讓模型把
+   `-3` 讀成「增加 -3 天」。已加 `streakNote` 並寫進 prompt。
+3. **三大法人只給了買賣超**，漏掉委派單要求的買進 / 賣出拆項與外資自營商。已補齊。
+4. **逾時沒包住讀 body**：`fetch` 收到 headers 就 resolve，原本在那之後就 `clearTimeout`，
+   「headers 來了但 body 卡住」等於無逾時保護。已改為 `requestJson` 在同一計時器內讀完 body
+   （補這條測試時又抓到自己第一版把 body 階段的 `AbortError` 誤分類成 `bad-response`，一併修正）。
+5. **CSS 兩處**：`var(--shadow)` 這個 token 不存在（專案用 `--shadow-card`）；
+   `.ai-result` 硬寫 `rgba(0,0,0,0.12)` 在淺色主題會變濁灰塊，改用 `var(--surface)`。
+
+修正由 Claude 親自進行（§2.5：集中在 2 個檔案約 60 行、判斷密集，往返成本高於自己動手）。
+
 ### Task 16: 技術面 K 線與指標 (0.5.0-dev.1)
 - **Status**: DONE（程式碼、驗證、兩區部署皆完成；**線上日線資料待觸發一次批次**）
 - **Planner / Implementer**: Claude
