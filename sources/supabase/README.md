@@ -95,8 +95,10 @@ supabase functions deploy stock-report --no-verify-jwt
      -H 'Content-Type: application/json' -H 'x-cron-secret: <CRON_SECRET>' \
      -d '{"action":"generate-all"}'
    ```
-   → 回 `{ ok:true, ymd, generated, total, historyDays }`；`reports` bucket 內應出現 `manifest.json` 與 `{ymd}/2330.json` 等物件。
+   → 回 `{ ok:true, ymd, generated, total, historyDays, dailySynced }`；`reports` bucket 內應出現
+   `manifest.json`、`{ymd}/2330.json` 與 `daily/2330.json` 等物件。
    `historyDays` 是這次組到幾個交易日（滿載為 7）；**第一次執行通常只有 5**，見下方「歷史回補」。
+   `dailySynced` 是這次更新了幾檔日線；**第二次執行應為 0**（已是最新就跳過，見下方「日線」）。
 
 > **為什麼分三段**：各資料源公布時間差很多 —— T86 約 15:00–15:30（可能延至 16:30）、
 > 融資融券約 21:00–22:00（偶爾延至 23:00）、借券約 21:00–22:30。
@@ -149,6 +151,37 @@ supabase functions deploy stock-report --no-verify-jwt
 
 > `MI_MARGN_D` 的欄位名稱**有重複**（「買進」「賣出」各出現兩次），解析一律用位置索引，不可用名稱比對。
 > 欄序若被 TWSE 改動，`marginDatedOk()` 的防護會判定不可用並自動回退備援來源。
+
+### 日線 OHLCV（技術面用，0.5.0 起）
+
+同一個 `generate-all` 批次順帶抓每檔的**一年日線**，存成 `daily/{ticker}.json`（整份覆寫）。
+
+| 項目 | 說明 |
+|---|---|
+| 來源 | Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
+| 體積 | 實測 **10.8KB / 檔**（243 個交易日） |
+| 跳過條件 | 既有檔案的 `lastDate >= 本次資料日` 就不重抓 —— 三段式 cron 只有第一班真的去抓 |
+| 失敗處理 | 單檔失敗跳過，不影響其他檔，也不影響籌碼報告 |
+| 保留期 | **不需要**。覆寫制不累積，`pruneStorage` 只認 `^\d{8}$` 的目錄名，不會碰到 `daily/` |
+
+檔案結構：
+
+```jsonc
+{
+  "schema": 1,
+  "ticker": "2330",
+  "asOf": "2026-07-27T09:31:00.000Z",  // 我們抓到它的時間
+  "lastDate": "2026-07-24",            // 最新一根的交易日
+  "rows": [                            // 由舊到新；[日期, 開, 高, 低, 收, 量]
+    ["2026-07-24", 2355, 2365, 2345, 2350, 21646770]
+  ]
+}
+```
+
+> **兩個實測過的陷阱**（改這段程式前先讀）：
+> 1. 回應會包含**五欄全 null 的假日格**（實測 2025-08-01），必須丟棄而非補 0。
+> 2. `timestamp` 是 UTC 秒數、指向當地開盤時刻。**一律先加 `meta.gmtoffset` 再取 UTC 日期** ——
+>    直接 `toISOString()` 在台股時區碰巧會對，但那是巧合。
 
 ### 歷史回補行為
 

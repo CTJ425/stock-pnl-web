@@ -42,6 +42,14 @@ import {
   type ReportSources,
   type SourceStamp,
 } from './report.ts'
+import {
+  DAILY_SCHEMA,
+  dailyUrl,
+  extractDaily,
+  yahooDailySymbols,
+  type ChartResponse,
+  type DailyFile,
+} from './twDaily.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 chip_raw_cache 唯一的讀寫途徑
@@ -517,6 +525,64 @@ async function uploadJson(path: string, payload: unknown): Promise<boolean> {
   }
 }
 
+async function downloadJson<T>(path: string): Promise<T | null> {
+  try {
+    const { data, error } = await db.storage.from(REPORTS_BUCKET).download(path)
+    if (error || !data) return null
+    return JSON.parse(await data.text()) as T
+  } catch {
+    return null
+  }
+}
+
+// ---- 日線 OHLCV（技術面用）----
+
+/**
+ * 每檔台股抓一年日線存成 daily/{ticker}.json（整份覆寫）。
+ *
+ * 為什麼是 Storage 單檔覆寫、而不是 PLAN §G 原本設想的 price_daily 資料表：
+ * 1. **沒有保留期問題**。覆寫不累積，不需要 prune —— 而 prune 的保留期單位錯配
+ *    正是 0.3.9 修過的坑（砍日曆日 vs 數交易日），不要再製造第二個。
+ * 2. **前端直接下載，不耗 Edge Function 額度**（0.3.9 的教訓：額度燒光會連帶讓 stock-price 停擺）。
+ * 代價是每晚重抓整年而非增量，但 5 檔持股 = 5 個請求，可忽略。
+ *
+ * 跳過條件：既有檔案的 lastDate 已達本次的資料日就不重抓。三段式 cron 一天跑三次，
+ * 17:30 那班抓到後，22:30 / 23:30 兩班會直接跳過。
+ */
+async function syncDaily(
+  tickers: Array<{ ticker: string; name: string }>,
+  dataYmd: string,
+): Promise<number> {
+  const targetDate = dashDate(dataYmd)
+  let synced = 0
+  for (const { ticker } of tickers) {
+    try {
+      const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
+      if (existing && existing.schema === DAILY_SCHEMA && existing.lastDate >= targetDate) continue
+
+      let rows: ReturnType<typeof extractDaily> = []
+      for (const symbol of yahooDailySymbols(ticker)) {
+        const resp = await fetchJson<ChartResponse>(dailyUrl(symbol))
+        rows = extractDaily(resp)
+        if (rows.length > 0) break
+      }
+      if (rows.length === 0) continue
+
+      const file: DailyFile = {
+        schema: DAILY_SCHEMA,
+        ticker,
+        asOf: new Date().toISOString(),
+        lastDate: rows[rows.length - 1][0],
+        rows,
+      }
+      if (await uploadJson(`daily/${ticker}.json`, file)) synced++
+    } catch {
+      // 單檔失敗不影響其他檔，也不影響籌碼報告（與 borrow / margin 的容錯一致）
+    }
+  }
+  return synced
+}
+
 /** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
@@ -571,7 +637,11 @@ async function handleGenerateAll(): Promise<Response> {
     generatedAt: new Date().toISOString(),
   })
 
-  // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處
+  // 技術面的日線；與籌碼報告各自獨立，抓不到也不影響上面已寫好的報告
+  const dailySynced = await syncDaily(tickers, series.dataYmd)
+
+  // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
+  // daily/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，而日線是覆寫制、本來就沒有舊檔要清。
   await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
   await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
 
@@ -581,6 +651,7 @@ async function handleGenerateAll(): Promise<Response> {
     generated,
     total: tickers.length,
     historyDays: series.days.length,
+    dailySynced,
   })
 }
 

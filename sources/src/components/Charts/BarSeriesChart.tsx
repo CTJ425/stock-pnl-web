@@ -21,6 +21,8 @@ export interface BarSeries {
 interface BarSeriesChartProps {
   labels: string[]
   series: BarSeries[]
+  /** 只標示這些索引的 X 軸標籤（未指定時每個都標）；日線一年 244 根時必要 */
+  labelIndices?: number[]
   height?: number
   /** tooltip 的數值格式化（含單位） */
   formatValue: (v: number) => string
@@ -33,6 +35,7 @@ const BAR_GAP = 2
 export function BarSeriesChart({
   labels,
   series,
+  labelIndices,
   height = 170,
   formatValue,
   ariaLabel,
@@ -45,6 +48,7 @@ export function BarSeriesChart({
       height={height}
       domain={domain}
       labels={labels}
+      labelIndices={labelIndices}
       ariaLabel={ariaLabel}
       tooltipFor={(i) => {
         if (!labels[i]) return null

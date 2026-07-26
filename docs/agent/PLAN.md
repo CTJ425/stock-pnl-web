@@ -18,6 +18,15 @@
    - 端到端測試註冊、登入、交易紀錄 CRUD、CSV 匯入匯出與年度損益統計。
 4. ~~**盤後籌碼報告 v2**~~ → **已於 v0.3.7-dev.3 實作完成**（TASK.md Task 11）。
    - 剩下的唯一步驟：部署 `stock-report` 到 Supabase（需使用者授權，見下方 §K）。
+5. ~~**技術面 K 線**~~ → **已於 0.5.0-dev.1 實作完成**（TASK.md Task 16，詳見 §L）。
+   - 剩下的唯一步驟：重新部署 `stock-report`（含 `syncDaily`）並觸發一次 `generate-all`，
+     否則線上的技術面分頁會一直是「這檔還沒有歷史股價」空狀態。
+6. **AI 助理（0.6.0，尚未實作）**
+   - 使用者自帶 AI 供應商（Google AI / ollama / vLLM），故介面必須 provider-agnostic、
+     不綁任何單一廠商 SDK。規劃見 `~/.claude/plans/k-ai-toasty-pearl.md`。
+   - 關鍵設計：**指標由程式算好再餵給模型**，模型不碰原始序列 ——
+     語言模型從 243 筆收盤價心算 MA60 必定出錯，而錯的數字包在流暢的中文裡最難察覺。
+     0.5.0 的 `indicators.ts` / `technicalView.ts` 就是為此先做的地基。
 
 ---
 
@@ -258,8 +267,30 @@ SPEC.md 新增「個股分析頁與盤後籌碼」章節並修正 schema 路徑�
 **取回 `CRON_SECRET`**：值存在 Edge Function secrets 與 `cron.job.command` 兩處，需要時查
 `select command from cron.job where jobname='stock-report-nightly'`。
 
-### L. 下一步（技術面）
+### L. 下一步（技術面）→ **已於 0.5.0-dev.1 實作完成**
 
-`TechnicalTab` 目前是佔位頁。接上日線 / 週線 / 季線前需先解 §G 的儲存問題：
+原文（保留備查）：`TechnicalTab` 目前是佔位頁。接上日線 / 週線 / 季線前需先解 §G 的儲存問題：
 新增 `price_daily(ticker, date, open, high, low, close, volume)` 與獨立保留期（約 400 天），
 資料源可放寬現有 `stock-price` 的 Yahoo `chart` 呼叫參數取得完整 OHLC。版面已留好，接上時不必再動。
+
+**實作結果與 §G/§L 的差異（2026-07-26 10:40:00 Asia/Taipei）**
+
+1. **儲存改用 Storage，沒有新增 `price_daily` 資料表。**
+   `reports` bucket 內每檔一份 `daily/{ticker}.json`、每晚由既有的 `generate-all` 批次整份覆寫。
+   理由：覆寫制沒有保留期問題（不必 prune，也就不會重演 0.3.9 那種「砍日曆日 vs 數交易日」的
+   單位錯配）；前端直接下載、不耗 Edge Function 額度。實測每檔 10.8KB / 243 個交易日。
+2. **§G 說「資料源已在專案內」經實測成立**：Yahoo chart 端點放寬成 `range=1y&interval=1d`
+   即回 244 個交易日的完整 OHLCV，不需要 TWSE `STOCK_DAY` 那種逐股逐月的備案。
+3. **§L 說的「版面已留好，接上時不必再動」大致成立**，但 `ChartFrame` 仍加了一個選用的
+   `labelIndices`：籌碼圖只有 7 個點可以全標，日 K 一年 244 根全標會糊成一團。
+4. **台股術語對照**：§L 的「日線 / 週線 / 季線」在 UI 上落實為 MA5（週線）/ MA20（月線）/
+   MA60（季線），圖例兩種說法並陳。
+
+**新增的實作約束（寫給後續 Agent）**
+
+- **指標一律以完整序列計算後才裁切顯示區間**。反過來寫的話，切到「近 3 月」（60 根）時
+  MA60 只會在最後一根有值、KD 的遞迴還會從初值 50 重新起跑，整條線都是錯的。
+  這條規則獨立成 `technicalView.ts` 的純函式並有測試把關。
+- **Yahoo 的日期換算必須加 `meta.gmtoffset`**。直接對原始 timestamp 取 UTC 日期在台股時區
+  碰巧會對，但那是巧合；測試以 UTC+9 的反例釘住。
+- **回應會包含五欄全 null 的假日格**（實測 2025-08-01），一律丟棄而非補 0。

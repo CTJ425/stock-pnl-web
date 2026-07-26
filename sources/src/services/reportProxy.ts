@@ -6,6 +6,7 @@
  * 的 ReportData（schema 2）對齊；伺服器只回結構化資料，畫面全部由 React 繪製。
  */
 import type { Market } from '../types/models'
+import { downloadReportsJson } from './reportsBucket'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 /** 是否已設定 Supabase 網址與金鑰（未設定則整個盤後報告功能隱藏） */
@@ -166,20 +167,6 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
 
 // ---- Storage-first：讀取盤後排程預先產好的共用報告（reports bucket）----
 
-const REPORTS_BUCKET = 'reports'
-
-/** 從 reports bucket 讀一個 JSON 檔（公開 bucket，anon 可讀）；查無 / 失敗回 null */
-async function downloadJson<T>(path: string): Promise<T | null> {
-  if (!supabase) return null
-  try {
-    const { data, error } = await supabase.storage.from(REPORTS_BUCKET).download(path)
-    if (error || !data) return null
-    return JSON.parse(await data.text()) as T
-  } catch {
-    return null
-  }
-}
-
 /**
  * 讀取盤後排程預產的共用報告（不含個人持股，持股概況由前端自行渲染）。
  * 先讀 manifest 取得最近交易日，再讀 {ymd}/{ticker}.json。
@@ -187,8 +174,8 @@ async function downloadJson<T>(path: string): Promise<T | null> {
  */
 export async function fetchStoredReport(ticker: string): Promise<ReportData | null> {
   if (!isSupabaseConfigured || !supabase) return null
-  const manifest = await downloadJson<{ ymd: string }>('manifest.json')
+  const manifest = await downloadReportsJson<{ ymd: string }>('manifest.json')
   if (!manifest?.ymd) return null
-  const stored = await downloadJson<{ data?: unknown }>(`${manifest.ymd}/${ticker}.json`)
+  const stored = await downloadReportsJson<{ data?: unknown }>(`${manifest.ymd}/${ticker}.json`)
   return isSupportedReport(stored?.data) ? stored.data : null
 }

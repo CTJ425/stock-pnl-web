@@ -1710,6 +1710,57 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin-bottom: 2px;
 }
 
+/* ---------- 技術面指標摘要 ---------- */
+/* 用 grid 而非 data-table：那張表最小寬 720px，為了 7 個數值強迫手機橫向捲動不划算 */
+.tech-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/*
+ * 分隔線畫在格子上、不用「容器底色 + 1px gap」那招：
+ * 指標數量（7）與每列格數不一定整除，最後一列會空出格子，
+ * 而那招會把空出來的區域整塊塗成邊框色，看起來像壞掉的空面板。
+ */
+.tech-cell {
+  padding: 10px 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.tech-cell dt {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  margin-bottom: 3px;
+}
+
+.tech-cell dd {
+  margin: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 副標若同時帶漲跌色，漲跌色要贏過 muted（.tech-sub 定義在後面，光靠順序會蓋掉 .pnl-*） */
+.tech-sub.pnl-up {
+  color: var(--up);
+}
+
+.tech-sub.pnl-down {
+  color: var(--down);
+}
+
 /* ---------- 持股概況卡片 ---------- */
 .rpt-cards {
   display: flex;

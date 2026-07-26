@@ -1,9 +1,99 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修正 0.4.0 的線上故障（schema 守門用等號，後端升版即全掛）(0.4.1)
+- Action: 技術面 K 線與指標（PLAN §G/§L 的實作）(0.5.0-dev.1)
 - Status: COMPLETED
-- Timestamp: 2026-07-26 02:40:00 Asia/Taipei
+- Timestamp: 2026-07-26 10:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 10:40:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 技術面分頁上線：日 K + 均線、成交量、KD、指標摘要 (0.5.0-dev.1)
+- **Status**: COMPLETED
+- **起因**: 使用者「如果我現在想要把 K 線補上，可以怎麼做？」
+- **計畫檔**: `~/.claude/plans/k-ai-toasty-pearl.md`（含 0.6.0 AI 助理的規劃，本輪未實作）
+
+### 與 PLAN §G 的偏離：日線存 Storage，不新增 `price_daily` 資料表
+
+§G 原本設想 `price_daily(ticker,date,ohlcv)` + 約 400 天保留期。改為
+**`reports` bucket 內每檔一份 `daily/{ticker}.json`、每晚整份覆寫**：
+
+1. **沒有保留期問題**。覆寫不累積、不需要 prune —— 而 prune 的保留期單位錯配
+   （砍日曆日 vs 數交易日）正是 0.3.9 修過的坑，不要再造第二個。
+2. **前端直接下載、不耗 Edge Function 額度**（0.3.9 的教訓：額度燒光會連帶讓 `stock-price` 停擺）。
+3. **體積實測 10.8KB / 檔**（243 個交易日），與規劃時估的約 10KB 一致。
+
+代價是每晚重抓整年而非增量，5 檔持股 = 5 個請求，可忽略。
+
+### 資料源實測（先驗證再寫程式）
+
+`query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1d&range=1y`：
+
+| 項目 | 結果 |
+| --- | --- |
+| HTTP / 大小 | 200、16.8KB |
+| 交易日數 | **244**（季線只需 60，餘裕充足） |
+| `indicators.quote[0]` | open / high / low / close / volume 五欄齊全 |
+| `meta.gmtoffset` | 28800 |
+| 最後一根 | `2026-07-24`，與籌碼報告的最新交易日一致 |
+
+**兩個實測發現的坑（不是防禦性臆測）**：
+1. 回應包含**沒有資料的交易日**：2025-08-01 那格五欄全 null。這種列直接丟棄
+   （244 → 243 根），留著只會讓每一條均線都要處處防 null。
+2. `timestamp` 是 UTC 秒數、指向當地開盤時刻（台股 09:00 → 01:00Z）。直接
+   `toISOString().slice(0,10)` 在台股時區**碰巧**會對，但那是巧合 ——
+   一律先加 `gmtoffset` 再取 UTC 日期。測試以 UTC+9 的反例把這件事釘住。
+
+### 實作
+
+- **`twDaily.ts`（新增）**：`dailyUrl` / `yahooDailySymbols`（.TW → .TWO）/ `tradingDateOf` / `extractDaily`。純函式、可測。
+- **`index.ts`**：`syncDaily()` 掛進 `handleGenerateAll`。既有檔案的 `lastDate >= 本次資料日`就跳過，
+  所以三段式 cron 只有第一班真的去抓。單檔失敗不影響其他檔與籌碼報告。回應新增 `dailySynced`。
+  **cron 排程完全不動** —— 日線收盤後就有，17:30 那班必定抓得到。
+- **`indicators.ts`（新增）**：`sma` / `ema` / `macd` / `kd` / `rsi` / `maAlignment` / `lastValue`。
+  三條共同規則寫在檔頭：輸出與輸入等長、**null 不當成 0**、遞迴狀態遇 null 不更新。
+- **`technicalView.ts`（新增）**：把「先算指標、後裁切」這個順序獨立成純函式並加測試 ——
+  反過來寫的話，切到「近 3 月」時 MA60 會整條變成 null。
+- **`dailyProxy.ts` / `reportsBucket.ts`（新增）**：`downloadJson` 原本是 `reportProxy.ts` 的私有函式，
+  日線也要用，**抽成共用模組而非複製**（比照 `holdingRows.ts` 的前例）。
+- **圖表**：`CandleChart`（蠟燭 + 均線疊圖）、`MultiLineChart`（KD 雙線 + 20/80 參考線）、
+  `chartPath.ts`（`lineSegments` 三處共用）。`ChartFrame` 只加一個選用的 `labelIndices`
+  （未傳時行為完全不變）—— 一年 244 根不可能每根標日期。
+
+### Verification
+
+- `npm run test` 182 → **221 passed**（twDaily 9、indicators 14、dailyProxy 6、technicalView 7、StockDetailPage +3）
+- `npm run build` 通過；`npm run lint` **維持既有 3 個 warning**
+  （中途一度變 4：從 `chartFrame.tsx` 匯出非元件會觸發 `only-export-components`，
+  故把 `lineSegments` 移到獨立的 `chartPath.ts`）
+- Edge Function 以 esbuild bundle 過（Deno 檔不在 tsc 的 include 範圍內）
+- **瀏覽器實測（Playwright，1280 / 390px）**：以本次實抓的 2330 真實資料（243 根）餵進
+  臨時 mock storage server，跑的是 `dailyProxy` → supabase-js storage client → 圖表的**完整真實路徑**，
+  沒有把服務層 mock 掉。結果：3 張圖、3 條均線、X 軸 6 個等距標籤、
+  兩種寬度皆 `scrollWidth == clientWidth`（無水平溢出）、tooltip 含 OHLC + 三條均線 + 量、
+  切到「近 3 月」後**均線仍是 3 條**（先算後裁切確實生效）、無 console error。
+- **數字交叉驗證（不接受「圖看起來對」）**：以另一份獨立實作重算，
+  全部與畫面逐項相符 —— MA5 2377.00 / MA20 2416.75 / MA60 2345.83、漲跌 −55.00（−2.29%）、
+  量能比 0.71、KD 44.8 / 43.9、RSI14 46.2。
+
+### 實測抓到並修掉的視覺缺陷
+
+指標摘要用「容器底色 + 1px gap」畫分隔線，但指標有 7 個、每列格數不一定整除，
+最後一列空出來的格子被整塊塗成邊框色，在 390px 下看起來像壞掉的空面板。
+改成把分隔線畫在格子上（`border-right` / `border-bottom`）。
+
+### Outstanding
+
+1. **尚未部署到任何 Supabase 環境**（CLAUDE.md §18：需使用者明確要求）。
+   部署後要驗：`daily/2330.json` 存在、`rows.length` 合理、
+   第二次觸發 `generate-all` 時 `dailySynced` 為 0（跳過邏輯生效）。
+   在那之前，線上的技術面分頁會顯示「這檔還沒有歷史股價」空狀態。
+2. **PDF 不含技術面**。「下載 PDF」按鈕只在籌碼分頁出現（既有行為，本輪未動），
+   所以 K 線不會進到 PDF。原計畫寫著「驗 K 線在 `.report-surface` 下的呈現」，
+   實測才發現那個前提不成立 —— 要不要把 PDF 擴到技術面是另一個決定，本輪刻意不擴張範圍。
+3. 上櫃（.TWO）路徑未經實測，只有單元測試涵蓋 —— 目前持股清單裡沒有上櫃股可驗。
 
 ---
 

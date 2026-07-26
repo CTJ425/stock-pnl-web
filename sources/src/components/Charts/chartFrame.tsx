@@ -53,6 +53,12 @@ interface ChartFrameProps {
   domain: Domain
   /** X 軸標籤，長度即資料點數 */
   labels: string[]
+  /**
+   * 只標示這些索引的標籤（未指定時每個都標）。
+   * 籌碼圖只有 7 個點可以全標，但日 K 一年有 244 根 —— 全標會糊成一團黑條。
+   * 命中區仍然逐點建立，hover 精度不受影響。
+   */
+  labelIndices?: number[]
   ariaLabel: string
   /** 回傳該點的 tooltip 文字；回 null 表示該點不顯示 */
   tooltipFor?: (index: number) => string | null
@@ -63,6 +69,7 @@ export function ChartFrame({
   height,
   domain,
   labels,
+  labelIndices,
   ariaLabel,
   tooltipFor,
   children,
@@ -87,6 +94,7 @@ export function ChartFrame({
 
   const ticks = domainTicks(domain)
   const step = tickStep(domain)
+  const shownLabels = labelIndices ?? labels.map((_, i) => i)
   const tipText = hover === null ? null : (tooltipFor?.(hover) ?? null)
   // 以百分比定位 tooltip，免在 React state 裡再存一份像素座標
   const tipLeft = hover === null ? 0 : ((PAD.left + geo.bandCenter(hover)) / viewW) * 100
@@ -129,16 +137,16 @@ export function ChartFrame({
 
           {children(geo)}
 
-          {labels.map((label, i) => (
+          {shownLabels.map((i) => (
             <text
-              key={`${label}-${i}`}
+              key={`${labels[i]}-${i}`}
               x={geo.bandCenter(i)}
               y={innerH + FONT_SIZE + 4}
               textAnchor="middle"
               fontSize={FONT_SIZE}
               fill={CHART_COLORS.axis}
             >
-              {label}
+              {labels[i]}
             </text>
           ))}
 

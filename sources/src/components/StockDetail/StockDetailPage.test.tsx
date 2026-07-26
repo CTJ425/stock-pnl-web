@@ -4,15 +4,17 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 
 // 以 mock 取代網路層：這裡驗的是版面與分頁切換，不是抓取邏輯
-const { fetchStoredReport, generateReport } = vi.hoisted(() => ({
+const { fetchStoredReport, generateReport, fetchDailySeries } = vi.hoisted(() => ({
   fetchStoredReport: vi.fn(),
   generateReport: vi.fn(),
+  fetchDailySeries: vi.fn(),
 }))
 vi.mock('../../services/reportProxy', () => ({
   isReportConfigured: true,
   fetchStoredReport,
   generateReport,
 }))
+vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { ChipDay, ChipLeg, ReportData } from '../../services/reportProxy'
@@ -69,7 +71,10 @@ describe('StockDetailPage', () => {
     cleanup()
     fetchStoredReport.mockReset()
     generateReport.mockReset()
+    fetchDailySeries.mockReset()
     fetchStoredReport.mockResolvedValue(report)
+    // 預設無日線（批次尚未跑過）；需要圖表的個案自行覆寫
+    fetchDailySeries.mockResolvedValue(null)
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
@@ -196,19 +201,94 @@ describe('StockDetailPage', () => {
     expect(after).not.toBe(before)
   })
 
-  it('分頁籤切換：技術面為佔位、我的持股由前端資料渲染', async () => {
+  it('分頁籤切換：技術面尚無日線時顯示空狀態、我的持股由前端資料渲染', async () => {
     const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     await screen.findByText('三大法人買賣超')
 
     await user.click(screen.getByRole('button', { name: '技術面' }))
-    expect(screen.getByText(/日線、週線、季線還在開發中/)).toBeTruthy()
+    expect(await screen.findByText(/這檔還沒有歷史股價/)).toBeTruthy()
     expect(screen.queryByText('三大法人買賣超')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: '我的持股' }))
     expect(screen.getByText('持股概況')).toBeTruthy()
     expect(screen.getByText('3,000')).toBeTruthy() // 持有股數
     expect(screen.getByText('+NT$58,500')).toBeTruthy() // 未實現淨損益
+  })
+
+  it('技術面：有日線時畫出 K 線與均線，並標出指標摘要', async () => {
+    // 造 80 根遞增日線，讓 MA60 也有值（少於 60 根就驗不到季線）
+    const rows = Array.from({ length: 80 }, (_, i) => {
+      const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
+      const close = 100 + i
+      return [date, close - 1, close + 1, close - 2, close, 1_000_000 + i] as [
+        string,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ]
+    })
+    fetchDailySeries.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      lastDate: rows[rows.length - 1][0],
+      rows,
+    })
+
+    const user = userEvent.setup()
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('button', { name: '技術面' }))
+
+    await screen.findByText('日 K 與均線')
+    // 三張圖：日K、成交量、KD
+    expect(container.querySelectorAll('svg.chart-svg')).toHaveLength(3)
+    // 均線圖例（週/月/季線的台股說法要出現，否則只認得其中一種的人看不懂）
+    expect(screen.getByText('週線')).toBeTruthy()
+    expect(screen.getByText('季線')).toBeTruthy()
+    // 摘要取最新一根：收盤 179、一路上漲 → 多頭排列
+    expect(screen.getByText('179')).toBeTruthy()
+    expect(screen.getByText(/多頭排列/)).toBeTruthy()
+  })
+
+  it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {
+    // 200 根資料、顯示 60 根。若實作先裁切再算指標，MA60 會整條消失、
+    // 圖上就只剩兩條均線 —— 這正是 PLAN 標記為「最容易寫錯」的地方。
+    const rows = Array.from({ length: 200 }, (_, i) => {
+      const date = new Date(Date.UTC(2025, 9, 1) + i * 86400000).toISOString().slice(0, 10)
+      const close = 100 + i
+      return [date, close - 1, close + 1, close - 2, close, 1_000_000] as [
+        string,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ]
+    })
+    fetchDailySeries.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      lastDate: rows[rows.length - 1][0],
+      rows,
+    })
+
+    const user = userEvent.setup()
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('button', { name: '技術面' }))
+    await screen.findByText('日 K 與均線')
+
+    await user.click(screen.getByRole('button', { name: '近 3 月' }))
+    const kChart = container.querySelectorAll('svg.chart-svg')[0]
+    // 三條均線都必須有折線（polyline）；少一條就是 MA60 被裁沒了
+    expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(3)
   })
 
   it('各區塊各自標示資料日與更新時間（三個來源公布時間不同）', async () => {
