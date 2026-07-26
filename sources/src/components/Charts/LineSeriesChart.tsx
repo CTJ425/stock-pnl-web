@@ -4,9 +4,9 @@
  * 缺資料的日子斷線（不內插），避免看起來像真有那天的數字。
  */
 import { ChartFrame } from './chartFrame'
+import { lineSegments } from './chartPath'
 import { CHART_COLORS } from './chartColors'
 import { niceDomain } from './chartScale'
-import type { PlotGeometry } from './chartFrame'
 
 export interface LinePoint {
   label: string
@@ -19,22 +19,6 @@ interface LineSeriesChartProps {
   color?: string
   formatValue: (v: number) => string
   ariaLabel: string
-}
-
-/** 把連續有值的區段切成多條折線（遇 null 斷開） */
-function segments(points: LinePoint[], geo: PlotGeometry): string[] {
-  const out: string[] = []
-  let current: string[] = []
-  points.forEach((p, i) => {
-    if (p.value === null) {
-      if (current.length > 1) out.push(current.join(' '))
-      current = []
-      return
-    }
-    current.push(`${geo.bandCenter(i).toFixed(2)},${geo.y(p.value).toFixed(2)}`)
-  })
-  if (current.length > 1) out.push(current.join(' '))
-  return out
 }
 
 export function LineSeriesChart({
@@ -60,7 +44,10 @@ export function LineSeriesChart({
     >
       {(geo) => (
         <>
-          {segments(points, geo).map((d, i) => (
+          {lineSegments(
+            points.map((p) => p.value),
+            geo,
+          ).map((d, i) => (
             <polyline
               key={i}
               points={d}

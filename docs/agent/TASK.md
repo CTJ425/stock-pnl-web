@@ -2,11 +2,43 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-26 02:10:00 Asia/Taipei
+- Timestamp: 2026-07-26 10:40:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 16: 技術面 K 線與指標 (0.5.0-dev.1)
+- **Status**: DONE（程式碼與驗證完成；**Supabase 尚未部署**）
+- **Planner / Implementer**: Claude
+- **Timestamp**: 2026-07-26 10:40:00 Asia/Taipei
+- **計畫檔**: `~/.claude/plans/k-ai-toasty-pearl.md`
+
+#### Objective
+把 `TechnicalTab` 從佔位頁換成真實內容：日 K + 均線、成交量、KD、指標摘要。
+這同時是 0.6.0 AI 助理的資料地基 —— 指標必須由程式算好，模型只負責解讀。
+
+#### 使用者定案的決定
+- 歷史股價存 **Storage 每檔一份 JSON**（非 `price_daily` 資料表）
+- 分兩版交付：**0.5.0 先 K 線、0.6.0 再 AI**
+- （0.6.0 用）AI 供應商自帶，介面須 provider-agnostic；直連與 Edge Function 代理**兩者都支援**
+
+#### Scope / Allowed Changes
+- 新增：`twDaily.ts(+test)`、`indicators.ts(+test)`、`technicalView.ts(+test)`、
+  `dailyProxy.ts(+test)`、`reportsBucket.ts`、`CandleChart.tsx`、`MultiLineChart.tsx`、`chartPath.ts`
+- 修改：`stock-report/index.ts`（`syncDaily`）、`TechnicalTab.tsx`、`StockDetailPage.tsx(+test)`、
+  `chartFrame.tsx`（僅加選用的 `labelIndices`）、`BarSeriesChart.tsx`、`LineSeriesChart.tsx`、
+  `reportProxy.ts`、`index.css`、版號三處、`docs/agent/*`、`README.md`、`supabase/README.md`
+
+#### Acceptance Criteria
+- [x] 指標以完整序列計算後才裁切（切「近 3 月」時 MA60 仍畫得出來）—— 純函式 + 測試 + 瀏覽器三重驗證
+- [x] Yahoo 日期換算加 `gmtoffset`，並以 UTC+9 反例測試釘住
+- [x] 五欄全 null 的假日格丟棄而非補 0
+- [x] `schema >= MIN` 守門並以測試釘住（0.4.1 教訓）
+- [x] `npm run test` 182 → 221 passed、`build` 通過、`lint` 維持 3 warning
+- [x] 數字以獨立實作交叉驗證（MA/KD/RSI/量能比全部相符）
+- [x] 1280 / 390px 無水平溢出
+- [ ] **Supabase 部署與線上驗證**（需使用者明確授權，CLAUDE.md §18）
 
 ### Task 15: 個股分析獨立成頁（下拉切換）、移除服務狀態 (0.3.8-dev.1)
 - **Status**: DONE

@@ -148,7 +148,7 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
             {status === 'ready' && report && <ChipsTab report={report} />}
           </>
         )}
-        {tab === 'technical' && <TechnicalTab />}
+        {tab === 'technical' && <TechnicalTab ticker={ticker} />}
         {tab === 'holding' && <HoldingTab holding={holding} />}
       </div>
     </div>
