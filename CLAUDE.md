@@ -462,6 +462,39 @@ GitHub Pages 立刻上線，沒有反悔餘地。dev 先行等於多一道實際
 - **正式區只在 `main` 分支且經明確指示才動。**
 - **唯讀查詢不算異動、可自由執行**：`supabase projects/functions list`、透過 service key 打 REST / Storage 檢查表與 bucket 是否存在等。
 
+## 14.3 Supabase 實務陷阱（都是實際踩過的）
+
+**指令要在 `sources/` 底下執行。** Edge Functions 在 `sources/supabase/functions/`，
+不是 repo root。在 root 執行會出現 `entrypoint path does not exist`。
+
+**部署 `stock-report` 一定要帶 `--no-verify-jwt`。**
+兩區的 `stock-report` 都是 `verify_jwt=false`，因為 pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT。
+被重設成 `true` 的話盤後批次會全數 401。
+（`stock-price` 是 `verify_jwt=true`，用預設即可。）
+
+**稽核要用 `functions download` 逐檔比對，不要看版本號推論。**
+
+```bash
+supabase functions download <slug> --project-ref <ref>   # 抓線上實際跑的程式碼
+diff <下載的檔> sources/supabase/functions/<slug>/<檔>
+```
+
+曾遇到版本號較新的那支反而是舊程式碼（測試區 `stock-price` v2 落後 137 行、
+`misParse.ts` 根本沒部署上去）。
+
+**比對基準要對應分支**（§14 對照表）：正式區比 `main`、測試區比 `dev`。
+拿錯基準會誤判「已同步」—— 這個錯犯過一次。
+
+**`supabase link` 有全域副作用，不是 per-directory。** 在別的目錄重新 link 會把前一份清掉。
+要查另一個專案時優先用支援 `--project-ref` 的指令（`functions list/deploy/download`、`secrets list`）；
+只有 `db query --linked` 沒有 `--project-ref`，非用不可時才 link。
+
+**Agent 拿不到 `CRON_SECRET` 明文**（`secrets list` 只回雜湊），
+所以手動觸發 `generate-all` 一定要請使用者自己執行。
+
+**`manifest.json` 日期落後時先確認星期。** cron 是 `1-5`，週末本來就不跑，
+週末看到日期停在週五是正確的，不是故障。
+
 ---
 
 # 15. Core Principle
