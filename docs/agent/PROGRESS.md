@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.5.0 併入 main + 測試區部署 K 線後端（正式區待部署）
-- Status: PARTIAL — 正式區 `stock-report` 尚未部署
-- Timestamp: 2026-07-26 11:58:00 Asia/Taipei
+- Action: 0.5.0 併入 main + 兩區皆已部署 K 線後端（`git push` 未執行）
+- Status: COMPLETED — 後端兩區到位；前端待 `git push origin main`
+- Timestamp: 2026-07-26 12:10:00 Asia/Taipei
 
 ---
 
@@ -28,15 +28,37 @@
       重新 download 驗證 `index.ts`/`report.ts`/`twChips.ts`/`twDaily.ts` 四檔逐位元相同，
       `verify_jwt=false` 維持不變。
 
+- [x] **正式區** `stock-report` v4 → **v5**（使用者授權後執行），
+      同樣四檔逐位元驗證通過、`verify_jwt=false` 維持不變。
+- [x] 兩區 cron 皆確認為 0.4.0 的三段式 `30 9,14,15 * * 1-5`（正式區這次才補查）。
+
+**部署後兩區最終狀態：**
+
+| | `stock-price` | `stock-report` | cron |
+| ---- | ---- | ---- | ---- |
+| 正式區 | v7 `verify_jwt=true` | **v5** `verify_jwt=false` | `30 9,14,15 * * 1-5` |
+| 測試區 | v3 `verify_jwt=true` | **v8** `verify_jwt=false` | `30 9,14,15 * * 1-5` |
+
 ### 待辦（下一個 Agent 接手）
 
-- [ ] **正式區 `stock-report` 尚未部署**（目前 v4，缺 K 線後端）。指令：
-      `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt`
-      **`--no-verify-jwt` 不可省** —— 兩區的 `stock-report` 都是 `verify_jwt=false`，
-      pg_cron 帶 `CRON_SECRET` 呼叫、不帶 JWT，若被重設為 true 盤後批次會全數 401。
 - [ ] `git push origin main` 尚未執行。**推上去會觸發 GitHub Pages 自動部署**
       （`deploy.yml` 的 trigger 是 `push: branches: [main]`），前端 K 線 UI 即上線。
-      **建議先完成正式區後端部署再推**，順序反了雖不會壞（見下），但沒有必要。
+      後端已就緒，可以直接推。
+
+### ⚠️ 我造成的副作用：使用者原本的 link 被清掉
+
+使用者原先在 `/home/ivan/`（家目錄）執行過 `supabase link`，link 狀態存於
+`/home/ivan/supabase/.temp/`。我為了查正式區 cron，在暫存目錄另跑了一次
+`supabase link --project-ref <prod>`，**原本那個目錄整個消失**——
+推測 CLI 的 link 狀態是全域單一份，重新 link 會清掉前一個，而非各目錄獨立。
+
+已重建到**正確位置**：`sources/supabase/.temp/`（指向測試區），
+`sources/supabase/.gitignore` 已忽略 `.temp`，不會弄髒 repo。
+現在在 `sources/` 下可直接用 `supabase db query --linked`，已實測可用。
+
+**教訓**：`supabase link` 有全域副作用，不是 per-directory。要查另一個專案時，
+優先用支援 `--project-ref` 的指令（`functions list/deploy/download`、`secrets list`），
+不要為了查詢而重新 link。只有 `db query --linked` 沒有 `--project-ref` 可用。
 
 ### 為什麼「前端先上、後端沒跟上」這次不會重演 0.4.0 故障
 
