@@ -1,9 +1,44 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.5.0 線上收尾稽核 —— 兩區皆缺 `daily/*.json`，待使用者手動觸發 `generate-all`
-- Status: BLOCKED_ON_USER — 程式碼與部署皆到位，只差一次批次觸發（需 `CRON_SECRET`）
-- Timestamp: 2026-07-26 23:04:00 Asia/Taipei
+- Action: 0.5.0 收尾完成 —— 兩區日線資料到位並通過驗證
+- Status: COMPLETED — 下一步是 0.6.0，但需先重建規格（原規劃檔已遺失，見 PLAN.md §6）
+- Timestamp: 2026-07-26 23:15:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 23:15:00 Asia/Taipei
+
+- **Agent**: Claude（驗證）／使用者（執行觸發）
+- **Action**: 0.5.0 線上收尾 —— `generate-all` 觸發後的資料驗證
+- **Status**: COMPLETED
+
+### 執行與結果
+
+使用者在兩區 SQL Editor 各跑一次前一則紀錄的 `DO` 區塊（重放 `cron.job.command`）。
+批次於 `2026-07-26T15:09Z` 完成，兩區 `manifest.json` 的 `generatedAt` 同步更新。
+
+| | `daily/*.json` | 報告本體 |
+| ---- | ---- | ---- |
+| 正式區 | 2609(243) / 0050(244) / 009816(119) / 1802(243) 皆 200 | `history` 7 筆，7/16–7/24 |
+| 測試區 | 2609(243) / 0050(244) / 1802(243) 皆 200 | `history` 7 筆，7/16–7/24 |
+
+兩區代號數不同是**正確的**：`heldTwTickers()` 依各環境自己的持股算，測試區沒有 009816。
+009816 只有 119 筆（首日 2026-01-23）是該 ETF 上市較晚，非資料缺漏 —— 仍 > 60，MA60 畫得出來。
+
+### 資料完整性檢查（全部通過）
+
+- `schema = 1`，與前端 `dailyProxy.ts` 的 `MIN_DAILY_SCHEMA = 1`（`>=` 比對）相符。
+- `lastDate = 2026-07-24`，等於 `dataDate`。
+- 日期嚴格遞增、無重複、**無週末列**（`extractDaily` 的假日格丟棄有生效）。
+- 每列 `low <= open/close <= high`、量非負、**零筆 null**（§L 的「五欄全 null 假日格丟棄」成立）。
+- 兩區同代號的 `rows` 逐值相同（`asOf` 各自獨立，符合預期）。
+
+### 結論
+
+**0.5.0 至此完全落地**：程式碼、兩區部署、線上資料三者到位，技術面分頁不再是空狀態。
+下一次排程 `30 9,14,15 * * 1-5`（台北 17:30 / 22:30 / 23:30）會以 `lastDate >= targetDate`
+判斷跳過重抓，只在有新交易日時更新。
 
 ---
 

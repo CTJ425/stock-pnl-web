@@ -19,10 +19,8 @@
 4. ~~**盤後籌碼報告 v2**~~ → **已於 v0.3.7-dev.3 實作完成**（TASK.md Task 11）。
    - 剩下的唯一步驟：部署 `stock-report` 到 Supabase（需使用者授權，見下方 §K）。
 5. ~~**技術面 K 線**~~ → **已於 0.5.0-dev.1 實作完成**（TASK.md Task 16，詳見 §L）。
-   - 重新部署 `stock-report`（含 `syncDaily`）**已完成**：正式區 v5、測試區 v8。
-   - 剩下的唯一步驟：**觸發一次 `generate-all`**。截至 2026-07-26 23:04 兩區的
-     `daily/*.json` 皆不存在（上一次批次跑在 `syncDaily` 部署之前），
-     在觸發前線上技術面分頁會一直是「這檔還沒有歷史股價」空狀態。
+   - **0.5.0 已於 2026-07-26 23:15 完全收尾**：`stock-report` 兩區部署（正式 v5 / 測試 v8）＋
+     使用者觸發一次 `generate-all`，兩區 `daily/*.json` 皆已產生並通過資料完整性驗證。
      觸發方式見 `PROGRESS.md` 同日紀錄（用 SQL 重放 `cron.job.command`，不需取出 `CRON_SECRET`）。
 6. **AI 助理（0.6.0，尚未實作）**
    - 使用者自帶 AI 供應商（Google AI / ollama / vLLM），故介面必須 provider-agnostic、
