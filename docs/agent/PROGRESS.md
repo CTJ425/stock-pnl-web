@@ -1,9 +1,59 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 測試區環境稽核 + 補部署 `stock-price`（dev v2 → v3）
-- Status: COMPLETED
-- Timestamp: 2026-07-26 11:40:00 Asia/Taipei
+- Action: 0.5.0 併入 main + 測試區部署 K 線後端（正式區待部署）
+- Status: PARTIAL — 正式區 `stock-report` 尚未部署
+- Timestamp: 2026-07-26 11:58:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 11:58:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: `dev` 併入 `main` 定版 0.5.0，並部署 K 線後端
+- **Status**: PARTIAL
+- **起因**: 使用者「直接幫我先把 0.5-dev 合併到 main 去，不然現在好像有點混亂」
+
+### 已完成
+
+- [x] 先提交 main 上未提交的文件異動（`9c80241`、`63084e2`），避免與 merge 衝突糾纏。
+- [x] `git merge origin/dev --no-ff` → `4189ab0`。
+      衝突僅 `PROGRESS.md` 一處（兩側都在檔首新增紀錄），保留雙方條目、依時間新到舊排列。
+- [x] 依 §17.3 去掉 `-dev.1` 定版 **0.5.0**，四處同步：
+      `version.ts`、`package.json`、`package-lock.json`(×2 處)、`README.md` 第 3 行；
+      README 版本紀錄由「0.5.0（開發中）/ dev.1」改寫為「0.5.0（2026-07-26）」定稿。
+- [x] 驗證：oxlint 通過（3 個既有 fast-refresh warning）；vitest **221/221**（併入前 183）；
+      `npm run build` 通過。
+- [x] **測試區** `stock-report` v7 → **v8**，`--no-verify-jwt`；
+      重新 download 驗證 `index.ts`/`report.ts`/`twChips.ts`/`twDaily.ts` 四檔逐位元相同，
+      `verify_jwt=false` 維持不變。
+
+### 待辦（下一個 Agent 接手）
+
+- [ ] **正式區 `stock-report` 尚未部署**（目前 v4，缺 K 線後端）。指令：
+      `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt`
+      **`--no-verify-jwt` 不可省** —— 兩區的 `stock-report` 都是 `verify_jwt=false`，
+      pg_cron 帶 `CRON_SECRET` 呼叫、不帶 JWT，若被重設為 true 盤後批次會全數 401。
+- [ ] `git push origin main` 尚未執行。**推上去會觸發 GitHub Pages 自動部署**
+      （`deploy.yml` 的 trigger 是 `push: branches: [main]`），前端 K 線 UI 即上線。
+      **建議先完成正式區後端部署再推**，順序反了雖不會壞（見下），但沒有必要。
+
+### 為什麼「前端先上、後端沒跟上」這次不會重演 0.4.0 故障
+
+0.4.0 的坑是前端用 `===` 比對 schema，後端一升版就全掛。這輪不同：
+
+1. `dailyProxy.ts` 的 `MIN_DAILY_SCHEMA` 用 **`>=`**，且在註解裡明寫這是 0.4.0 的教訓。
+2. `fetchDailySeries` 查無檔案 / 格式不符 / 無有效列一律回 `null`，
+   `TechnicalTab` 有獨立的 `'empty'` 狀態，顯示「這檔還沒有歷史股價」而非崩潰。
+
+所以正式區在後端補上前，技術面分頁只會是空狀態，不是故障。
+
+### 資料何時才會出現
+
+`syncDaily` 掛在盤後批次裡，下次觸發是**週一 17:30**（三段式排程第一段）。
+在那之前 `daily/*.json` 不會存在。若要提前驗證需手動打 `generate-all`，
+但那需要 `CRON_SECRET` 明文 —— `supabase secrets list` 只回雜湊，Agent 取不到值，
+必須由使用者執行。
 
 ---
 
@@ -48,8 +98,8 @@
 
 - **正式區一律未異動。** 依 CLAUDE.md §14，正式區需另外明確指示；且該處只有一行註解漂移，
   功能等價，不值得為此重新部署。
-- **測試區的 `stock-report` 尚未補上 0.5.0-dev.1 的 K 線後端**（需切到 `dev` 分支才有原始碼，
-  且當時 `main` 上有未提交異動，未擅自切換），待使用者指示。
+- ~~測試區的 `stock-report` 尚未補上 K 線後端~~ → 已於 11:55 隨 0.5.0 併入 main 後補上，
+  見下一則紀錄。
 
 ### 0.5 K 線後端的重點（接手前先讀）
 
