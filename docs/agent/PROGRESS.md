@@ -1,10 +1,55 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.1 AI 助理實作完成（agy 產出、Claude 審查修正、閘門全綠）
-- Status: IMPLEMENTED — **未 commit 前的狀態已結束，程式碼在 dev**；
-  待兩區套用 `schema.sql` §4.1 與線上實測（需使用者授權）
-- Timestamp: 2026-07-27 00:05:00 Asia/Taipei
+- Action: 0.6.0-dev.1 AI 助理實作完成；**測試區已套用 schema §4.1**
+- Status: IMPLEMENTED — 測試區 schema 就緒；**正式區 schema 未套用**、瀏覽器實測待使用者
+- Timestamp: 2026-07-27 00:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 00:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 測試區套用 `schema.sql` §4.1（AI 設定欄位）並驗證
+- **Status**: COMPLETED
+- **授權範圍**: 使用者「先幫我測試一下 SQL 的部分」→ 僅動**測試區**（`wqetxuhncvfidqnklyew`）；
+  **正式區完全未觸碰**，依 §14.2 需另外明確指示。
+
+### 執行方式（可重複）
+
+`supabase db query --linked` **不能直接把 SQL 當引數傳**：§4.1 開頭是 `--` 註解，
+CLI 會把它當成旗標而噴 `UnrecognizedOption`。改用 `-f <檔>` 餵檔即可，
+順便驗證了 `schema.sql` 的原文可直接執行、不必手改。
+
+```bash
+sed -n '/^-- 4.1 AI 助理設定/,/ai_updated_at TIMESTAMPTZ;/p' supabase/schema.sql > /tmp/ai_columns.sql
+supabase db query --linked -f /tmp/ai_columns.sql      # 在 sources/ 底下執行
+```
+
+### 六項驗證（全通過）
+
+| # | 檢查 | 結果 |
+| --- | --- | --- |
+| 1 | 套用前的失敗模式 | PostgREST 回 `42703 column user_settings.ai_provider does not exist`（與文件記載一致） |
+| 2 | 欄位形狀 | `ai_provider/base_url/model/api_key` = TEXT nullable、`ai_updated_at` = TIMESTAMPTZ nullable，皆無預設值 |
+| 3 | 冪等性 | 同一份 SQL 再跑一次，無錯誤（`ADD COLUMN IF NOT EXISTS` 生效） |
+| 4 | RLS | `rls_enabled = true`、policy `Users can manage their own settings` 的 `polcmd = *`（ALL）—— 新欄位自動被既有 policy 覆蓋，不需新增 policy |
+| 5 | PostgREST schema cache | 套用後 `select=ai_provider,…` 回 `[] / HTTP 200`（不再 42703）→ **cache 自動重載，不需手動 `NOTIFY pgrst`** |
+| 6 | 匿名寫入防護 | 未登入的 upsert 被擋：`42501 new row violates row-level security policy` / HTTP 401 → 金鑰欄位不會被未登入者寫入 |
+
+### 為什麼沒做「真的 insert 一列」的測試
+
+`saveAiSettings` 的 upsert 只帶 `user_id` + `ai_*`，能否成功取決於其餘 NOT NULL 欄位有沒有預設值。
+實際 insert 會寫進**使用者本人的資料列**，所以改用靜態證明：
+`default_fee_rate` 預設 `0.001425`、`theme` 預設 `'dark'::text`、`created_at` 預設 `now()`
+—— 三者都有預設，故只帶 `user_id` + `ai_*` 的 upsert 建列不會違反 NOT NULL。結論相同，且不動使用者資料。
+
+### 待辦
+
+- [ ] **正式區套用 §4.1**（需明確指示）。指令與上面相同，只是把 link 換成正式區
+      —— 或直接在正式區 SQL Editor 貼那五行 `ALTER TABLE`（**不必重跑整份 schema.sql**）。
+      提醒：`supabase link` 有全域副作用，為此重新 link 會清掉目前指向測試區的 link。
+- [ ] 登入測試區實測 AI 解讀（測試區 schema 已就緒，現在可以測了）。
 
 ---
 
