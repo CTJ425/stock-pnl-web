@@ -436,7 +436,26 @@ Before finishing work:
 | 正式區 | Stock-Pnl-Web | `kxnxadaghidwumqsqneu` | `main` |
 | 測試區 | Stock-Pnl-Web-Dev | `wqetxuhncvfidqnklyew` | `dev` |
 
-規則：
+## 14.1 分支流程：一律 dev 先行
+
+**所有異動先進 `dev`，在測試區確認無誤，才合併到 `main`。**
+不要直接在 `main` 上開發或提交，即使只是文件異動。
+
+```text
+異動 → commit 到 dev → push origin dev → 測試區驗證
+                                            ↓ 確認無誤
+                                    合併到 main → push → 正式區 / Pages
+```
+
+理由：`push` 到 `main` 會觸發 `.github/workflows/deploy.yml`，
+GitHub Pages 立刻上線，沒有反悔餘地。dev 先行等於多一道實際環境的驗證。
+
+合併到 `main` 時，依 §13.3 把 `-dev.<N>` 尾綴去掉定版，並將 README 版本紀錄定稿。
+
+**合併後讓兩個分支保持一致**（`git push origin main:dev` 快轉），
+避免 dev 落後 main 造成下一輪比對基準混亂 —— 稽核測試區時是拿 `dev` 當基準的。
+
+## 14.2 Supabase 操作規則
 
 - **預設不主動部署 / 異動任何 Supabase 環境。** 日常工作都是分支上的程式碼變更（`dev` 或其他分支）。
 - **部署 / 異動環境只在使用者明確要求時才做**（`supabase functions deploy`、`secrets set`、在 SQL Editor 跑 schema、建 bucket / cron 等皆屬對外操作，需先確認）。
