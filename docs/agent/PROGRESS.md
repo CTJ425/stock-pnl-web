@@ -1,9 +1,74 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修正 0.4.0 的線上故障（schema 守門用等號，後端升版即全掛）(0.4.1)
+- Action: 測試區環境稽核 + 補部署 `stock-price`（dev v2 → v3）
 - Status: COMPLETED
-- Timestamp: 2026-07-26 02:40:00 Asia/Taipei
+- Timestamp: 2026-07-26 11:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-26 11:40:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 以 supabase CLI 稽核兩區環境，補部署測試區 `stock-price`
+- **Status**: COMPLETED
+- **授權範圍**: 使用者明確授權 supabase CLI 操作**測試區**（`wqetxuhncvfidqnklyew`）
+
+### 稽核方法（可重複）
+
+用 `supabase functions download` 把線上實際跑的程式碼抓下來，跟 repo 逐檔 `diff`。
+**不要只看 `functions list` 的 version / updated_at 去推論**——本次就是靠逐檔比對才發現，
+版本號較新的那支反而是舊程式碼。
+
+### ⚠️ 稽核基準錯誤（已修正，留作教訓）
+
+第一次稽核時我人在 `main`，就拿 `main` 的程式碼去比對**測試區** —— 基準錯了。
+依 CLAUDE.md §18，測試區對應的是 **`dev` 分支**，不是 main。
+因此我一度得出「`stock-report` 兩區都已最新」的錯誤結論，實際上測試區缺了整個
+0.5.0-dev.1 的 K 線後端。**比對環境前先確認該環境對應哪個分支。**
+
+### 稽核結果（已用正確基準重測）
+
+| 項目 | 測試區 (dev) — 基準 `origin/dev` | 正式區 (prod) — 基準 `main` |
+| ---- | ---- | ---- |
+| `stock-report` | **落後 187 行**：缺 `twDaily.ts`(115) 與 `index.ts` 的 `syncDaily`(+73)，即 0.5.0-dev.1 的 K 線後端 | 與 `main` 逐位元相同 |
+| `stock-price` | **落後 137 行**，缺整個 TWSE MIS 即時報價、`misParse.ts` 根本不存在（兩分支此檔相同，故補 main 版即正確） | 僅 1 行註解路徑過時，功能等價 |
+| cron 排程 | 已是 0.4.0 的三段式 `30 9,14,15 * * 1-5` | 未查（link 指向 dev） |
+| `reports` bucket | 公開可讀正常 | 公開可讀正常 |
+| `CRON_SECRET` | 已設定 | 未查 |
+
+### 已執行
+
+- [x] `supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew`
+      → v2 → v3，`verify_jwt=true` 維持不變（config.toml 無 per-function 覆寫，預設即 true）。
+- [x] 驗證：重新 download 後與 repo 逐位元相同（`index.ts`、`misParse.ts` 皆是）。
+- [x] 煙霧測試：`action:'prices'` 打 2330 回 `HTTP 200 {"price":2350}`。
+
+### 刻意未動
+
+- **正式區一律未異動。** 依 CLAUDE.md §14，正式區需另外明確指示；且該處只有一行註解漂移，
+  功能等價，不值得為此重新部署。
+- **測試區的 `stock-report` 尚未補上 0.5.0-dev.1 的 K 線後端**（需切到 `dev` 分支才有原始碼，
+  且當時 `main` 上有未提交異動，未擅自切換），待使用者指示。
+
+### 0.5 K 線後端的重點（接手前先讀）
+
+- 版本 `0.5.0-dev.1`（commit `7c90742`，只在 `dev` 分支）。
+- **不需要 schema migration。** PLAN.md §G 原本設想建 `price_daily` 資料表，實作時改為
+  存進既有 `reports` bucket 的 `daily/{ticker}.json`（整份覆寫），故 `schema.sql` 未動。
+  理由寫在 `stock-report/index.ts` 的 `syncDaily` 註解裡。
+- 資料源是 Yahoo chart 端點（`range=1y&interval=1d`，2330 實測回 244 個交易日 / 16.8KB），
+  `stock-price` 本來就在用同一個端點取現價，只是丟掉了 `timestamp` 與 `indicators`。
+
+### 順帶記錄
+
+- `manifest.json` 停在 `20260724` 是**正確的**：7/24 是週五，7/25、7/26 為週末，
+  排程 `1-5` 本就不跑。查到日期落後時先確認星期，別誤判為故障。
+- 0.4.1 只改前端（`reportProxy.ts`），**不含任何 Edge Function 異動**，
+  故該版無需部署後端，走 GitHub Pages 即可。
+- 使用者的 `supabase link` 執行在 `/home/ivan/`（家目錄）而非 `sources/`，
+  link 狀態落在 `/home/ivan/supabase/.temp/`。因此 `supabase db query --linked`
+  必須在 `/home/ivan/` 下執行；其餘指令改帶 `--project-ref` 明確指定，較不易出錯。
 
 ---
 
