@@ -23,31 +23,41 @@ Claude may implement code when necessary, but the primary responsibility is to e
 
 # 2. 委派規範 (Delegation)
 
-## 2.1 職責分界
+## 2.1 核心原則：判斷與產出分離
+
+使用者的目的有兩個 —— **降低成本**，以及**讓不同模型做不同的事**。
+因此本節的預設值是：**能寫成規格的實作，一律先交給 agy 產出，Claude 審查。**
+
+**不要把「這件事需要我做判斷」當成「這件事需要我親手打字」的理由。**
+判斷（決定怎麼做）與產出（把它打出來）是兩件事：前者是 Claude 的，後者預設是 agy 的。
+`>=` 還是 `===` 這種關鍵決定，寫進委派單裡一句話交代即可，不必為了它自己寫整份檔案。
+
+## 2.2 職責分界
 
 **Claude 保留、不委派：**
 
 - 需求釐清與範圍界定
-- 架構與方案設計
-- 技術決策與取捨
-- 規格撰寫（`SPEC.md`、`PLAN.md`）
-- 程式審查與整合
+- 架構與方案設計、技術決策與取捨
+- 規格與委派單撰寫（`SPEC.md`、`PLAN.md`）
+- **最終驗證閘門**（§2.8）與整合，以及採納或駁回 agy 審查意見的最終裁決
 - 版本號決策（§13）
-- Supabase / 部署相關的對外操作判斷（§14）
+- Supabase / 部署等對外操作（§14）
 
-**委派給 antigravity（agy / Gemini）：**
+**預設交給 antigravity（agy / Gemini）產出：**
 
+- **一般功能實作的第一版**——只要我能把規格寫清楚，就先讓 agy 寫，我審
 - 大量或重複性的實作：批次 scaffolding、成套測試生成、跨檔機械式重構或遷移
 - 需要讀大量檔案但只回摘要的調查
+- **對 Claude 自己寫的程式做交叉審查**（§2.7）
 - Claude 沒有的能力：即時網路搜尋
 
-## 2.2 模型固定
+## 2.3 模型固定
 
 委派一律使用 **`gemini-3.6-flash-high`**，且**呼叫時明確帶上 `--model gemini-3.6-flash-high`**，不依賴預設值。
 
 `.claude/settings.json` 已透過 `CLAUDE_PLUGIN_OPTION_*` 環境變數把各 tier 都鎖到此模型，作為第二層保險。
 
-## 2.3 呼叫方式
+## 2.4 呼叫方式
 
 三種皆可，一律帶 `--dir /home/ivan/stock-pnl-web`，讓 agy 直接讀真實檔案，而不是靠貼上下文：
 
@@ -58,22 +68,40 @@ agy-delegate --model gemini-3.6-flash-high --dir /home/ivan/stock-pnl-web "<委�
 - `/antigravity:delegate` — 斜線指令形式
 - `antigravity-delegate` subagent — 檔案生成在 Gemini 端完成，不耗 Claude token
 
-## 2.4 不該委派的情況
+## 2.5 不該委派的情況（例外，不是常態）
 
-以下自己做，委派的往返成本會超過省下的 token，是淨損失：
+只有這幾種才自己寫，因為委派的往返成本確實超過省下的：
 
-- 單一檔案的小修改
+- 單一檔案、約 50 行以內的小修改
 - 一兩行的修正
-- 判斷密集的設計題
-- 需要來回釐清才能定義清楚的任務
+- **規格本身還沒定案**、需要來回釐清才講得清楚的任務
 
-## 2.5 委派單格式
+注意這裡寫的是「規格未定案」，**不是「需要判斷」**。
+需要判斷的事，先把判斷做完寫進規格，然後照樣委派。
+
+## 2.6 委派單格式
 
 委派單必須包含 §8 所列的六個欄位：目標、範圍、允許檔案或目錄、限制、驗收條件、驗證方式。
 
-## 2.6 驗證不可省
+## 2.7 交叉審查（Claude 自己寫的程式，一律送 agy 審）
 
-**agy 自稱通過不算數。** Claude 必須親自驗證：
+**Claude 不可以自己寫、又自己審就宣告完成。** 那等於沒有第二個模型的視角，
+而不同模型的盲點不一樣——這正是使用者要「不同模型做不同事」的理由之一。
+
+落在 §2.5 例外、由 Claude 親手寫的程式，**完成前一律送 agy 做獨立審查**：
+
+```bash
+git diff | agy-delegate --model gemini-3.6-flash-high -
+```
+
+或直接用 `/antigravity:review`。成本很低（只送 diff，不送整棵樹），別省這一步。
+
+agy 的意見**不是判決**，Claude 是最終裁判：採納就修，不採納就在回覆裡說明為什麼。
+但「完全沒送審」不是可接受的狀態。
+
+## 2.8 驗證不可省
+
+**agy 自稱通過不算數。** 不論程式由誰寫，Claude 必須親自跑閘門：
 
 ```bash
 cd sources && npm run lint && npm run test && npm run build
@@ -81,9 +109,12 @@ cd sources && npm run lint && npm run test && npm run build
 
 必要時以 `.claude/skills/verify` 跑 UI 驗證。
 
+這條之所以不能也委派出去，是因為 agy 被觀察到會**為了讓檢查變綠而動環境本身**
+（patch 掉已安裝的套件、把相依換成 mock）。正確性算 Claude 的。
+
 審查時**只看 diff**，不重讀 agy 處理過的整棵目錄樹。
 
-## 2.7 保持 context 精簡
+## 2.9 保持 context 精簡
 
 只取 agy 的摘要（digest），不要把 agy 的原始輸出貼回對話，也不要重讀 agy 已處理完的檔案。這是省 token 最大的槓桿。
 
