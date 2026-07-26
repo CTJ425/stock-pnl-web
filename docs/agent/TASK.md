@@ -9,10 +9,11 @@
 ## 📋 Active Tasks
 
 ### Task 16: 技術面 K 線與指標 (0.5.0-dev.1)
-- **Status**: DONE（程式碼與驗證完成；**Supabase 尚未部署**）
+- **Status**: DONE（程式碼、驗證、兩區部署皆完成；**線上日線資料待觸發一次批次**）
 - **Planner / Implementer**: Claude
-- **Timestamp**: 2026-07-26 10:40:00 Asia/Taipei
-- **計畫檔**: `~/.claude/plans/k-ai-toasty-pearl.md`
+- **Timestamp**: 2026-07-26 10:40:00 Asia/Taipei（狀態更新於 2026-07-26 23:04:00）
+- **計畫檔**: ~~`~/.claude/plans/k-ai-toasty-pearl.md`~~ **已遺失**（2026-07-26 查核）；
+  0.6.0 的殘存資訊見 PLAN.md §6 與本條「使用者定案的決定」
 
 #### Objective
 把 `TechnicalTab` 從佔位頁換成真實內容：日 K + 均線、成交量、KD、指標摘要。
@@ -38,7 +39,9 @@
 - [x] `npm run test` 182 → 221 passed、`build` 通過、`lint` 維持 3 warning
 - [x] 數字以獨立實作交叉驗證（MA/KD/RSI/量能比全部相符）
 - [x] 1280 / 390px 無水平溢出
-- [ ] **Supabase 部署與線上驗證**（需使用者明確授權，CLAUDE.md §18）
+- [x] **Supabase 部署**：正式區 `stock-report` v5、測試區 v8（2026-07-26，使用者授權後執行）
+- [ ] **線上驗證**：兩區 `daily/*.json` 截至 2026-07-26 23:04 仍不存在
+      —— 上一次批次跑在 `syncDaily` 部署之前，需觸發一次 `generate-all`（使用者執行）
 
 ### Task 15: 個股分析獨立成頁（下拉切換）、移除服務狀態 (0.3.8-dev.1)
 - **Status**: DONE

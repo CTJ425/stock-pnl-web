@@ -1,11 +1,78 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.5.0 併入 main + 兩區皆已部署 K 線後端（`git push` 未執行）
-- Status: COMPLETED — 後端兩區到位；前端待 `git push origin main`
-- Timestamp: 2026-07-26 12:10:00 Asia/Taipei
+- Action: 0.5.0 線上收尾稽核 —— 兩區皆缺 `daily/*.json`，待使用者手動觸發 `generate-all`
+- Status: BLOCKED_ON_USER — 程式碼與部署皆到位，只差一次批次觸發（需 `CRON_SECRET`）
+- Timestamp: 2026-07-26 23:04:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-07-26 23:04:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.5.0 線上收尾稽核（唯讀），本機 `main` ref 快轉
+- **Status**: PARTIAL — 稽核完成；觸發批次由使用者執行
+- **起因**: 使用者要求「依 PLAN.md 部署 0.6.0」。實際查核發現 **0.6.0 尚未實作**（見下方「0.6.0 現況」），
+  改為先收尾 0.5.0（使用者定案）。
+
+### 稽核結果（公開 URL 探測，未異動任何環境）
+
+`git push origin main` 已完成 —— `origin/main` = `origin/dev` = `dbf662d`（0.5.0），前端已上 Pages。
+
+| | `manifest.json` | 20260724 報告 | `daily/*.json` |
+| ---- | ---- | ---- | ---- |
+| 正式區 | `ymd 20260724`，`generatedAt 2026-07-25T18:01:44Z` | 2609 / 0050 / 009816 / 1802 皆 200 | **全數 400（不存在）** |
+| 測試區 | `ymd 20260724`，`generatedAt 2026-07-25T17:57:59Z` | 2609 / 0050 / 1802 皆 200 | **全數 400（不存在）** |
+
+**為什麼日線是空的**：最後一次批次跑在 `2026-07-25T18:01Z`，而含 `syncDaily` 的
+`stock-report` v5（正式）/ v8（測試）是 `2026-07-26T04:10Z` 才部署 —— 批次跑在部署之前，
+`syncDaily` 一次都沒執行過。這不是故障，`TechnicalTab` 的 `'empty'` 狀態正常運作中。
+
+`manifest.json` 的 `ymd` 停在 20260724 是**正確的**（7/24 為週五，7/25 起為週末，cron `1-5` 不跑）。
+但兩區的 `generatedAt` 都落在 7/25 18:01Z 前後 4 分鐘、不對應排程三段（UTC 09:30 / 14:30 / 15:30），
+研判是當時的**手動觸發**，非排程產物。
+
+測試區 cron 完好：`stock-report-nightly | 30 9,14,15 * * 1-5 | active=true`（唯讀查詢，未動）。
+
+### 觸發批次可以完全不碰密鑰明文（新發現，寫給後續 Agent）
+
+`cron.job.command` 就是單一句 `net.http_post(... body '{"action":"generate-all"}' ... timeout 60000)`。
+因此不需要（也不該）把 `CRON_SECRET` 取出來貼進 curl，直接讓資料庫重放那句即可：
+
+```sql
+do $$
+declare c text;
+begin
+  select command into c from cron.job where jobname = 'stock-report-nightly';
+  if c is null then raise exception 'cron job stock-report-nightly 不存在'; end if;
+  execute c;
+end $$;
+```
+
+在該環境的 SQL Editor 執行即可（每區各自帶自己的 URL 與密鑰，同一段 SQL 兩區通用）。
+`pg_net` 是非同步，回應要等約 20–40 秒後查 `net._http_response`。
+**此法取代舊紀錄裡「請使用者自己 curl」的做法** —— 密鑰始終不離開資料庫。
+
+### 本機整理
+
+- 本機 `main` ref 停在 `558f0c2`（0.3.6），`origin/main` 早已是 `dbf662d`。
+  以 `git branch -f main origin/main` 快轉（已先確認是 fast-forward，無 rebase / 無 push）。
+  這正是 7/26 11:40 那次「拿 main 當測試區基準」誤判的溫床，一併清掉。
+
+### 0.6.0 現況（接手前必讀）
+
+- **0.6.0 AI 助理尚未實作**：`sources/src` 內零 AI 相關程式碼，版號仍 0.5.0。
+- **PLAN.md §6 指向的 `~/.claude/plans/k-ai-toasty-pearl.md` 已不存在**（該目錄現存最新者為
+  籌碼 v2 的 `groovy-plotting-parnas.md`）。0.6.0 目前只剩 PLAN.md §6 三條約束
+  ＋ TASK.md Task 16 的三點使用者定案，**不足以直接出委派單**。
+  仍待使用者定案：UI 位置、API key 存放處（localStorage vs Supabase）、
+  第一版支援哪些 provider、餵給模型的 payload 規格、失敗與逾時行為。
+
+### 待辦（使用者執行）
+
+- [ ] 兩區各跑一次上述 `DO` 區塊 → 查 `net._http_response` 應為 `status_code 200`、
+      body 含 `dailySynced` 大於 0；之後 `daily/{ticker}.json` 公開 URL 應回 200。
+      使用者已表明兩區皆自行執行。
 
 ## 📅 Log: 2026-07-26 11:58:00 Asia/Taipei
 

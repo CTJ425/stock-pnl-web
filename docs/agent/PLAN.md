@@ -19,11 +19,19 @@
 4. ~~**盤後籌碼報告 v2**~~ → **已於 v0.3.7-dev.3 實作完成**（TASK.md Task 11）。
    - 剩下的唯一步驟：部署 `stock-report` 到 Supabase（需使用者授權，見下方 §K）。
 5. ~~**技術面 K 線**~~ → **已於 0.5.0-dev.1 實作完成**（TASK.md Task 16，詳見 §L）。
-   - 剩下的唯一步驟：重新部署 `stock-report`（含 `syncDaily`）並觸發一次 `generate-all`，
-     否則線上的技術面分頁會一直是「這檔還沒有歷史股價」空狀態。
+   - 重新部署 `stock-report`（含 `syncDaily`）**已完成**：正式區 v5、測試區 v8。
+   - 剩下的唯一步驟：**觸發一次 `generate-all`**。截至 2026-07-26 23:04 兩區的
+     `daily/*.json` 皆不存在（上一次批次跑在 `syncDaily` 部署之前），
+     在觸發前線上技術面分頁會一直是「這檔還沒有歷史股價」空狀態。
+     觸發方式見 `PROGRESS.md` 同日紀錄（用 SQL 重放 `cron.job.command`，不需取出 `CRON_SECRET`）。
 6. **AI 助理（0.6.0，尚未實作）**
    - 使用者自帶 AI 供應商（Google AI / ollama / vLLM），故介面必須 provider-agnostic、
-     不綁任何單一廠商 SDK。規劃見 `~/.claude/plans/k-ai-toasty-pearl.md`。
+     不綁任何單一廠商 SDK。
+   - ⚠️ **原規劃檔 `~/.claude/plans/k-ai-toasty-pearl.md` 已遺失**（2026-07-26 查核）。
+     現存的 0.6.0 資訊只有本節三條約束 ＋ TASK.md Task 16 的三點使用者定案。
+     動工前必須先重建規格，待使用者定案的項目：UI 位置、API key 存放處
+     （localStorage vs Supabase）、第一版支援的 provider、餵給模型的 payload 規格、
+     失敗與逾時行為。
    - 關鍵設計：**指標由程式算好再餵給模型**，模型不碰原始序列 ——
      語言模型從 243 筆收盤價心算 MA60 必定出錯，而錯的數字包在流暢的中文裡最難察覺。
      0.5.0 的 `indicators.ts` / `technicalView.ts` 就是為此先做的地基。
