@@ -8,6 +8,18 @@
 
 ## 📋 Active Tasks
 
+### Task 25: 修 T86 指紋不穩定＋前端切回前景自動重抓 (0.6.2)
+- **Status**: 兩分支（`dev` / `main` 同為 `ef9937f`）與兩區 Edge Function 皆已上線
+  （測試區 v17 / 正式區 v11，`verify_jwt=false`）。閘門 **352 tests** 全綠。
+  **線上驗證進行中**：等正式區 `batch_run_log` 出現 `skipped=true / skip_reason=complete`
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 22:20:00 Asia/Taipei
+- BUG-004：T86 端點回的 1334 列內容相同但**列順序每次都不同**，位元組指紋因此永不穩定，
+  `t86_frozen` 永遠 false、永遠不短路。修法是先排序再算指紋（看語意不看位元組）。
+- 前端：個股分析頁只在開頁抓一次，輪詢改版後會停在開頁那一刻的快照。
+  改為 `visibilitychange` 時比對 `generatedAt`，變了才換。
+- 詳見 PROGRESS.md 2026-07-27 20:30 與 FIXED_BUG.md BUG-004。
+
 ### Task 24: 盤後批次改為 15 分鐘輪詢 (0.6.1)
 - **Status**: 見 PROGRESS 最新一則。本地閘門全綠（lint / test **342 passed** / build）
 - **Agent**: Claude

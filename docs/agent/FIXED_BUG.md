@@ -1,12 +1,64 @@
 # Fixed Bugs History (FIXED_BUG.md)
 
-- Agent: Gemini
+- Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-21 09:32:30 Asia/Taipei
+- Timestamp: 2026-07-27 22:20:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-004 — T86 的列順序每次都不同，害輪詢永遠等不到定稿、永遠不收工
+- **Date**: 2026-07-27（0.6.1 上線當晚發現並修復，0.6.2）
+- **Discovered by**: Claude，看正式區 `batch_run_log` 的第一批實測資料
+- **Symptom**: `t86_unchanged` 在 0/1 之間跳、**到不了 `T86_STABLE_POLLS = 2`**，
+  於是 `t86_frozen` 永遠 false、`decideSkip` 永遠不短路。一天 32 輪全部真的去抓，
+  0.6.1 的三道閘門等於全廢，`generatedAt` 也每輪都跳。
+
+  ```
+  20:30 u=0 regen=true   21:15 u=1 regen=false   21:45 u=0 regen=true
+  20:45 u=0 regen=true   21:30 u=0 regen=true    22:00 u=1 regen=false
+  21:00 u=0 regen=true
+  ```
+
+- **Root Cause**: 直接抓兩次 `rwd/zh/fund/T86`（間隔 3 秒），
+  長度同為 194,959 位元組但**位元組不同**。逐列比對後：
+  **1334 列的內容與集合完全相同，只有 7 列的順序換了** ——
+  末欄相同的那幾列之間，端點的排序不穩定。
+  `fingerprint()` 是對 `JSON.stringify` 算的，順序一變指紋就變，
+  於是每輪都被 `nextT86State` 判定成「又被改寫了」。
+- **Fix**: 新增 `pollPlan.ts` 的 `t86Fingerprint()`：把 `data` 各列 join 後**排序**，
+  只取 `date` / `total` / 排序後的列來算。`index.ts` 的四處 T86 指紋呼叫全部改用它。
+  其餘欄位（title / fields / notes / hints）刻意排除 —— 那是固定樣板，
+  而且快取走 Postgres jsonb，**jsonb 會重排物件的鍵**，是第二個獨立的不穩定來源。
+- **Verification**: 以實際抓下來的兩份檔案覆驗 —— 修正前位元組不同、修正後語意指紋相同。
+  另加 6 個測試，含「真正的改寫仍測得出來」與「少一列」兩個反向案例
+  （避免修過頭變成什麼都測不出來）。線上驗證看 `batch_run_log` 是否出現
+  `skipped=true / skip_reason=complete` 且 `duration_ms` 掉到幾十毫秒。
+- **教訓**: **內容指紋要當「東西有沒有變」的判準，必須先正規化到語意層。**
+  外部端點沒有義務保證序列化穩定 —— 這裡是列順序、jsonb 那邊是鍵順序，
+  兩個獨立來源，都會讓位元組比對失效。
+
+### Bug ID: BUG-003 — 測試區的 cron 打的是正式區的端點，而且被 401 擋下
+- **Date**: 2026-07-27（發現並修復）
+- **Discovered by**: Claude，驗收 BUG-002 時發現測試區 `manifest.json` 沒推進
+- **Root Cause**（兩個錯疊在一起）:
+  1. **URL 指向正式區**：測試區 `cron.job` 的 command 內是
+     `https://kxnxadaghidwumqsqneu.supabase.co/...`。測試區的排程從來不是在呼叫自己的函式。
+  2. **密鑰對不上**：帶的是一組 43 碼字串，`net._http_response` 顯示
+     09:30:00Z（台北 17:30）那次回 **401**。
+- **這是 BUG-002 的變種**：同樣是「§6c 需人工替換的佔位符」，
+  但不是忘了換，而是**換成了另一個環境的值**（推測 14:04 修復時複製了正式區的 SQL）。
+  BUG-002 的偵測 SQL 只檢查「密鑰長度是不是 13」，抓不到這種。
+- **值得警惕**: 同一組 URL＋密鑰在 08:04:43Z（台北 16:04）**還回 200**，
+  是正式區後來重設 `CRON_SECRET` 才變成 401。
+  也就是說在那之前，**測試區的資料庫有能力觸發正式區的批次**。
+- **Fix**: 重建測試區 cron job（url 改回自己的 ref、填入測試區自己的 `CRON_SECRET`、
+  排程改 `*/15 8-15 * * 1-5`）。`schema.sql` §6d 的覆驗清單補上
+  「**url 的 project ref 必須是自己**」這條判準。
+- **Verification**: ✅ 2026-07-27 20:15 那輪跑通 —— `manifest.json` 由
+  `06:03:54Z` / `ymd=20260724` 推進到 `12:15:05Z` / `ymd=20260727`，
+  `batch_run_log` 寫入第一列（`t86_today=true`、`generated=5`、`duration_ms=15361`）。
 
 ### Bug ID: BUG-002 - 正式區 cron 的 `<CRON_SECRET>` 佔位符從未替換，盤後批次從來沒自動跑過
 - **Date**: 2026-07-27（發現並修復）
