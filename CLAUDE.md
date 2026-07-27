@@ -359,6 +359,24 @@ diff <下載的檔> sources/supabase/functions/<slug>/<檔>
 **比對基準要對應分支**（§13 對照表）：正式區比 `main`、測試區比 `dev`。
 拿錯基準會誤判「已同步」—— 這個錯犯過一次。
 
+**`db query --linked` 認的是「當下的工作目錄」，不是你以為的那個專案。**
+2026-07-27 實際踩到：`functions download` 把 cwd 留在 scratchpad，
+之後一次「改測試區 cron」的 `db query --linked` 在那個沒有 link 設定的目錄下執行，
+CLI 退回全域設定，**寫進了正式區**。`cron.schedule` 照樣回傳成功，
+緊接著的覆驗查詢也在同一個（錯的）資料庫，所以驗起來完全正確 —— 錯得無聲無息。
+
+**對策：任何會寫入的 `db query`，把「專案身分欄位」放進同一次查詢裡。**
+挑一個兩區必然不同的值，例如：
+
+```sql
+SELECT (SELECT count(*) FROM batch_run_log) AS 身分檢查,  -- 正式區 2 / 測試區 0
+       jobid, schedule, (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url
+FROM cron.job;
+```
+
+分兩次查（先驗身分、再寫入）擋不住這種錯 —— cwd 可能在兩次之間被別的指令改掉。
+另外每次執行 `db query` 前先 `cd` 到 `sources/`，不要依賴上一個指令留下的 cwd。
+
 **`supabase link` 有全域副作用，不是 per-directory。** 在別的目錄重新 link 會把前一份清掉。
 要查另一個專案時優先用支援 `--project-ref` 的指令（`functions list/deploy/download`、`secrets list`）；
 只有 `db query --linked` 沒有 `--project-ref`，非用不可時才 link。

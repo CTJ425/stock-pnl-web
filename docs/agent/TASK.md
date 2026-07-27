@@ -8,11 +8,10 @@
 
 ## 📋 Active Tasks
 
-### Task 24: 盤後批次改為 15 分鐘輪詢 (0.6.1-dev.1)
-- **Status**: IMPLEMENTED —— 本地閘門全綠（lint / test **342 passed** / build）；
-  **兩區皆待「先 ALTER 再部署再改 cron」三步（需使用者執行）**
+### Task 24: 盤後批次改為 15 分鐘輪詢 (0.6.1)
+- **Status**: 見 PROGRESS 最新一則。本地閘門全綠（lint / test **342 passed** / build）
 - **Agent**: Claude
-- **Timestamp**: 2026-07-27 19:30:47 Asia/Taipei
+- **Timestamp**: 2026-07-27 20:10:00 Asia/Taipei
 - 三班制的時間點是照「各源幾點公布」訂的，而那個認知在 2026-07-27 一天內被實測推翻三處。
   改為 16:00–23:45 每 15 分鐘輪詢＋看內容判斷，判斷邏輯抽到 `pollPlan.ts` 並以 17 個測試釘住。
 - 三道閘門讓 32 輪不等於 32 倍成本：短路 / T86 改寫偵測（連續 2 次相同才定稿）/ 當日上限 40。

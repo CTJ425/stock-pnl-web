@@ -307,6 +307,12 @@ SELECT cron.schedule(
 --     跑過一輪後再驗這個（**只保留 6 小時**，要看要趁早）：
 --   SELECT id, status_code, left(content, 120), created
 --   FROM net._http_response ORDER BY id DESC LIMIT 5;
+--
+--     ⚠️ 第三顆地雷（2026-07-27 當天踩到）：**`CRON_SECRET` 與這段 command 不連動**。
+--     前者是 Edge Function 的環境變數，後者是資料庫裡的字串明文。
+--     `supabase secrets set CRON_SECRET=...` 之後，這個 job 仍帶著舊值，下一班直接 401。
+--     **輪換密鑰是兩步驟操作**：set secret ＋ 重寫這段 command，缺一不可。
+--     （正式區 16:55 才修好，19:45 輪換密鑰時又斷了一次，就是漏掉第二步。）
 
 
 -- 7. 批次執行紀錄 (batch_run_log)
