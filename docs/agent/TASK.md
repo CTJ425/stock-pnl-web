@@ -2,16 +2,32 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-26 10:40:00 Asia/Taipei
+- Timestamp: 2026-07-27 19:30:47 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
 
-### Task 23: 0.6.0 定版後的兩區部署稽核
-- **Status**: IN PROGRESS —— 部署缺口已補齊並驗證；**正式區 `batch_run_log` 建表待使用者執行**
+### Task 24: 盤後批次改為 15 分鐘輪詢 (0.6.1-dev.1)
+- **Status**: IMPLEMENTED —— 本地閘門全綠（lint / test **342 passed** / build）；
+  **兩區皆待「先 ALTER 再部署再改 cron」三步（需使用者執行）**
 - **Agent**: Claude
-- **Timestamp**: 2026-07-27 16:38:10 Asia/Taipei
+- **Timestamp**: 2026-07-27 19:30:47 Asia/Taipei
+- 三班制的時間點是照「各源幾點公布」訂的，而那個認知在 2026-07-27 一天內被實測推翻三處。
+  改為 16:00–23:45 每 15 分鐘輪詢＋看內容判斷，判斷邏輯抽到 `pollPlan.ts` 並以 17 個測試釘住。
+- 三道閘門讓 32 輪不等於 32 倍成本：短路 / T86 改寫偵測（連續 2 次相同才定稿）/ 當日上限 40。
+- **部署順序不可顛倒**：①兩區跑 `schema.sql` §7 的 `ALTER`（12 個新欄位）→ ②部署
+  `stock-report`（`--no-verify-jwt`）→ ③`cron.alter_job` 改排程。
+  先部署後 ALTER 的話 `logBatchRun` 會**無聲**整列寫入失敗，三道閘門全部失效。
+  ③ 用 `alter_job` 而非重跑 §6c 的 `schedule`，後者會重寫 command、再踩一次 BUG-002。
+- 詳見 PROGRESS.md 2026-07-27 19:30。
+
+### Task 23: 0.6.0 定版後的兩區部署稽核
+- **Status**: DONE（2026-07-27 19:20 收尾）—— 正式區建表與 cron 修復皆已完成並**驗證通過**
+  （`manifest.json` 推進、`batch_run_log` 兩列、`cron.job active`，見 FIXED_BUG.md BUG-002）。
+  稽核另外揪出測試區 cron 未觸發 → 轉為 **BUG-003** 追蹤。
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 16:38:10 Asia/Taipei（驗收 19:20）
 - 定版後的正式區套用做到一半中斷，留下交叉錯配：**正式區有 `batch_run_log` 寫入程式碼但沒有表，
   測試區有表但程式碼落後**。兩邊都不報錯（觀測寫入刻意靜默），只能靠主動稽核發現。
 - 已完成：測試區 `stock-report` → v13、正式區 `stock-price` → v9，皆逐檔 diff 驗證、

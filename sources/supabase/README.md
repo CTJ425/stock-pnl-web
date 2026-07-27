@@ -88,7 +88,10 @@ supabase functions deploy stock-report --no-verify-jwt
    supabase secrets set CRON_SECRET=<自訂一長串隨機字串>
    ```
    （或 Dashboard → Edge Functions → stock-report → Secrets）
-2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日**分三段**（17:30 / 22:30 / 23:30 台北）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 **16:00–23:45 每 15 分鐘**（台北，＝ UTC 8:00–15:45）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
+   **套用完一定要跑 §6d 的覆驗查詢**：`cron.schedule` 對沒替換的佔位符照收不誤，
+   「SQL 執行成功」不等於「值填對了」——正式區就曾因此整段時間批次從沒靠 cron 跑起來過（BUG-002）。
+   **只是要改時間**的話用 `cron.alter_job`，它保留原本的 command，密鑰碰都不用碰。
 3. **手動驗證一次**（不必等排程）：
    ```bash
    curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
@@ -100,12 +103,19 @@ supabase functions deploy stock-report --no-verify-jwt
    `historyDays` 是這次組到幾個交易日（滿載為 7）；**第一次執行通常只有 5**，見下方「歷史回補」。
    `dailySynced` 是這次更新了幾檔日線；**第二次執行應為 0**（已是最新就跳過，見下方「日線」）。
 
-> **為什麼分三段**：各資料源公布時間差很多 —— T86 約 15:00–15:30（可能延至 16:30）、
-> 融資融券約 21:00–22:00（偶爾延至 23:00）、借券約 21:00–22:30。
-> 等最晚的才產報，會讓最早就緒的三大法人白白晚 6 小時。批次冪等且自我補完，
-> 多跑幾次自然逐步補齊；第二、三班幾乎全快取命中，實測約 2 秒。
-> 17:30 那班只有三大法人是**預期行為不是故障** —— `sources` 欄位會逐項標明各自的時間。
-> 詳見 `schema.sql` §6c 的註解。
+> **為什麼是輪詢而不是排幾班**（0.6.1 改）：原本排三班（17:30 / 22:30 / 23:30），
+> 時間點是照「各源大約幾點公布」的認知訂的，而那個認知在 2026-07-27 一天內被實測推翻三處
+> （T86 的時間窗被與 BFI82U 混為一談、借券 17:07 就有了、借券那份資料的語意也記錯）。
+> 結論是**別再用時鐘猜發布時間**，改成密集輪詢＋看內容判斷，讓資料自己說話。
+>
+> 一天 32 次不會爆額度，靠的是三道閘門（實作在 `pollPlan.ts`，每條判斷都有測試釘住）：
+> 1. **短路**：今天該有的都到齊且 T86 已定稿，該輪一個對外請求都不發。
+> 2. **改寫偵測**：T86 自 16:00 起每 15 分鐘更新，當天第一次抓到的不一定是定稿；
+>    定稿前每輪重抓比對，連續兩次相同才凍結。少了這道，早抓會把初版鎖成當天的答案。
+> 3. **當日上限 40 次**：防的是我們自己的判斷邏輯出錯，以及 `CRON_SECRET` 外流。
+>
+> 資料尚未到齊的那幾輪只有部分區塊有內容，是**預期行為不是故障** ——
+> `sources` 欄位會逐項標明各自的資料日與抓取時間。詳見 `schema.sql` §6c 的註解。
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
 
@@ -180,7 +190,7 @@ supabase functions deploy stock-report --no-verify-jwt
 |---|---|
 | 來源 | Yahoo `query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y`，上市 `.TW` 先試、查無再試 `.TWO` |
 | 體積 | 實測 **10.8KB / 檔**（243 個交易日） |
-| 跳過條件 | 既有檔案的 `lastDate >= 本次資料日` 就不重抓 —— 三段式 cron 只有第一班真的去抓 |
+| 跳過條件 | 既有檔案的 `lastDate >= 本次資料日` 就不重抓 —— 一天 32 輪只有第一次真的去抓 |
 | 失敗處理 | 單檔失敗跳過，不影響其他檔，也不影響籌碼報告 |
 | 保留期 | **不需要**。覆寫制不累積，`pruneStorage` 只認 `^\d{8}$` 的目錄名，不會碰到 `daily/` |
 
@@ -214,7 +224,7 @@ supabase functions deploy stock-report --no-verify-jwt
 | `news/{ticker}.json` | Google News RSS `news.google.com/rss/search?q={股票名稱}` | 既有檔的 `asOf` 是同一個台北日曆日 | fetch 失敗 / 逾時 10 秒 / 解析 0 則時**不覆寫**既有檔（留舊新聞勝過空檔） |
 
 三份 OpenAPI 大檔一樣走 `chip_raw_cache`（dataset key：`BWIBBU_ALL` / `T187AP05_L` / `T187AP03_L`），
-所以三段式 cron 只有第一班真的去抓。
+所以一天 32 輪只有第一次真的去抓 —— 這正是輪詢改版沒有把流量乘上 10 倍的原因。
 
 > **三個實測過的陷阱**（改這段程式前先讀）：
 > 1. `BWIBBU_ALL` 是**英文鍵**（`Code` / `PEratio`），另外兩支是**中文鍵**（`公司代號`）。

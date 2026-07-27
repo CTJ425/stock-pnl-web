@@ -33,9 +33,12 @@
         FROM cron.job WHERE jobname = 'stock-report-nightly') t;
   ```
   **長度 13 = `<CRON_SECRET>` 沒換掉。**
-- **Verification**: 2026-07-27 17:30 那班為第一次真實驗證 —— 看 `reports/manifest.json`
-  的 `generatedAt` 有沒有從基準 `2026-07-27T08:04:50.805Z` 往前推進，
-  以及 `batch_run_log` 有沒有寫入第一列。
+- **Verification**: ✅ **通過**（2026-07-27 19:20 查證，Claude）。
+  `manifest.json` 的 `generatedAt` 由基準 `08:04:50Z` 推進到 `09:46:47Z`；
+  `batch_run_log` 寫入兩列（`17:30` cron ＋ `17:46`），皆 `t86_today=true`、`generated=5`；
+  `cron.job` `active=true`。**cron 通了，正式區的盤後批次第一次真的自動跑起來。**
+  順帶推翻舊註解：**17:30 就拿得到當天的 T86**（`data_ymd=20260727`）。
+  ⚠️ 同日測試區 `manifest.json` 仍停在 `06:03:54Z`，其 cron 未見動靜 —— 另立 BUG-003。
 - **教訓**: 需要人工替換佔位符的 schema 段落，**套用完必須有一次獨立的覆驗查詢**。
   「SQL 執行成功」不等於「值填對了」—— `cron.schedule` 對佔位符字串照收不誤。
 

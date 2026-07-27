@@ -70,6 +70,13 @@ import {
   type FundamentalFile,
 } from './twFundamental.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
+import {
+  decideSkip,
+  fingerprint,
+  nextT86State,
+  runSignature,
+  type T86State,
+} from './pollPlan.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 chip_raw_cache 唯一的讀寫途徑
@@ -195,18 +202,51 @@ interface DaySlice {
   chips: Map<string, ChipDay>
 }
 
-/** 讀某日 T86（快取優先）；非交易日 / 尚未收盤回 null。fetch=false 時只讀快取 */
-async function loadT86(ymd: string, fetchAllowed: boolean): Promise<T86ResponseShape | null> {
+/**
+ * 這一輪抓到的 T86 內容指紋，以 ymd 為鍵。
+ * 每次 `handleGenerateAll` 開頭清空，避免同一個 isolate 跨請求殘留。
+ */
+const t86FingerprintByYmd = new Map<string, string>()
+
+/**
+ * 讀某日 T86（快取優先）；非交易日 / 尚未收盤回 null。fetch=false 時只讀快取。
+ *
+ * `refresh=true` 時**即使已有快取也重抓一次並比對** —— 這是 0.6.1 輪詢的核心。
+ * T86 自 16:00 起每 15 分鐘更新一次，當天第一次抓到的不一定是定稿；
+ * 原本「第一次抓到就快取、之後永不更新」的作法會把初版鎖成當天的答案，
+ * 比晚抓一次還糟。只有今天、且尚未定稿的那一天會走這條路（見 pollPlan.nextT86State）。
+ */
+async function loadT86(
+  ymd: string,
+  fetchAllowed: boolean,
+  refresh = false,
+): Promise<T86ResponseShape | null> {
   const cached = await readCache<T86ResponseShape>(ymd, 'T86')
-  if (cached && t86Ok(cached)) return cached
-  if (!fetchAllowed) return null
+  if (cached && t86Ok(cached) && !refresh) {
+    t86FingerprintByYmd.set(ymd, fingerprint(cached))
+    return cached
+  }
+  if (!fetchAllowed && !refresh) return null
   try {
     const resp = await fetchJson<T86ResponseShape>(t86Url(ymd))
-    if (!t86Ok(resp)) return null // 非交易日 / 尚未收盤：不快取空回應
-    await writeCache(ymd, 'T86', resp)
+    if (!t86Ok(resp)) {
+      // 非交易日 / 尚未發布：不快取空回應。重抓模式下已有的快取仍然有效，
+      // 不能因為這次拿到空的就把好資料丟掉。
+      if (cached && t86Ok(cached)) {
+        t86FingerprintByYmd.set(ymd, fingerprint(cached))
+        return cached
+      }
+      return null
+    }
+    const fp = fingerprint(resp)
+    t86FingerprintByYmd.set(ymd, fp)
+    // 內容沒變就別重寫，省下 194KB 的 UPSERT 與隨之而來的 dead tuple
+    if (!cached || !t86Ok(cached) || fingerprint(cached) !== fp) {
+      await writeCache(ymd, 'T86', resp)
+    }
     return resp
   } catch {
-    return null
+    return cached && t86Ok(cached) ? cached : null
   }
 }
 
@@ -227,9 +267,9 @@ async function loadMarginDated(ymd: string, fetchAllowed: boolean): Promise<Marg
 
 async function loadDayRaw(
   ymd: string,
-  allow: { t86: boolean; margin: boolean },
+  allow: { t86: boolean; margin: boolean; refreshT86?: boolean },
 ): Promise<DayRaw | null> {
-  const t86 = await loadT86(ymd, allow.t86)
+  const t86 = await loadT86(ymd, allow.t86, allow.refreshT86 ?? false)
   if (!t86) return null // T86 是交易日的判定依據，沒有就當這天沒資料
   const margin = await loadMarginDated(ymd, allow.margin)
   return { ymd, t86, margin }
@@ -268,7 +308,11 @@ export interface SeriesResult {
  * - 已有快取的日子不佔抓取額度；其餘以 FETCH_CONCURRENCY 併發抓取。
  * - 單次呼叫最多實抓 MAX_BACKFILL_DAYS 個缺漏日，收集滿 HISTORY_DAYS 天即停。
  */
-async function loadSeries(tickers: string[], now: Date): Promise<SeriesResult> {
+async function loadSeries(
+  tickers: string[],
+  now: Date,
+  opts?: { refreshT86Ymd?: string },
+): Promise<SeriesResult> {
   const candidates = tradingDateCandidates(now, LOOKBACK_DAYS - 1).filter((d) => !isWeekendYmd(d))
   const cached = await cachedDayDatasets(candidates)
   let fetchBudget = MAX_BACKFILL_DAYS
@@ -280,6 +324,13 @@ async function loadSeries(tickers: string[], now: Date): Promise<SeriesResult> {
     const batch = candidates.slice(i, i + FETCH_CONCURRENCY)
     const jobs: Array<Promise<DayRaw | null>> = []
     for (const ymd of batch) {
+      // 今天且尚未定稿時強制重抓比對；不佔 fetchBudget（那是給回補缺漏日用的額度，
+      // 今天這一份是輪詢的主角，不能被回補排擠掉）
+      const refreshT86 = opts?.refreshT86Ymd === ymd
+      if (refreshT86) {
+        jobs.push(loadDayRaw(ymd, { t86: true, margin: !cached.has(`${ymd}:MI_MARGN_D`), refreshT86: true }))
+        continue
+      }
       const needT86 = !cached.has(`${ymd}:T86`)
       const needMargin = !cached.has(`${ymd}:MI_MARGN_D`)
       if (fetchBudget <= 0) {
@@ -401,6 +452,28 @@ function assembleOne(opts: {
   })
 }
 
+/** 取「日期 >= minYmd」中最新的一份借券快取；查無回 null（見 loadBorrow 的說明） */
+async function readBorrowCacheFrom(
+  minYmd: string,
+): Promise<{ resp: BorrowDatedResponse; date: string } | null> {
+  try {
+    const { data, error } = await db
+      .from('chip_raw_cache')
+      .select('ymd, payload')
+      .eq('dataset', 'SBL_D')
+      .gte('ymd', minYmd)
+      .order('ymd', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error || !data?.payload) return null
+    const resp = data.payload as BorrowDatedResponse
+    if (!borrowDatedOk(resp)) return null
+    return { resp, date: borrowDatedDate(resp) ?? dashDate(String(data.ymd)) }
+  } catch {
+    return null
+  }
+}
+
 interface BorrowSource {
   resp: BorrowDatedResponse | null
   /** rwd 版回應 title 裡的日期（＝下一個交易日）；用 OpenAPI fallback 時為 null */
@@ -417,7 +490,14 @@ interface BorrowSource {
  * 改成解析 title 的日期後就變成可驗證的：拿到什麼日期就存成什麼日期，
  * 早班存前一天（本來就對），晚班拿到新的自然會寫進新的鍵，不會互相污染。
  */
-async function loadBorrow(): Promise<BorrowSource> {
+async function loadBorrow(minYmd?: string): Promise<BorrowSource> {
+  // 0.6.1：借券端點沒有 date 參數，原本每次執行都無條件重抓一次（244KB）。
+  // 三班時代那是一天 3 次，改成 32 次輪詢後就是一天 7.8MB 的純浪費。
+  // 已經有「日期 >= 今天」的快取就直接用 —— 那份就是我們要的最新額度。
+  if (minYmd) {
+    const cached = await readBorrowCacheFrom(minYmd)
+    if (cached) return { resp: cached.resp, date: cached.date, fallbackRows: null }
+  }
   let resp: BorrowDatedResponse | null = null
   try {
     resp = await fetchJson<BorrowDatedResponse>(BORROW_DATED_URL)
@@ -634,12 +714,15 @@ async function syncDaily(
 async function syncFundamental(
   tickers: Array<{ ticker: string; name: string }>,
   dataYmd: string,
-): Promise<number> {
+): Promise<{ synced: number; bwibbuDate: string | null }> {
   const targetDate = dashDate(dataYmd)
   const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
   const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
-  if (!bwibbu && !revenue && !company) return 0 // 三份全失敗就別把既有檔覆寫成空殼
+  // 估值檔自帶民國日期（例：'1150724'）。記進 batch_run_log 才回答得出
+  // 「基本面什麼時候更新」—— 原本只記 synced 計數，而那個數字會被「新增股票」干擾。
+  const bwibbuDate = bwibbu?.[0]?.Date ?? null
+  if (!bwibbu && !revenue && !company) return { synced: 0, bwibbuDate } // 三份全失敗就別把既有檔覆寫成空殼
 
   let synced = 0
   for (const { ticker, name } of tickers) {
@@ -677,7 +760,7 @@ async function syncFundamental(
       // 單檔失敗不影響其他檔，也不影響已寫好的籌碼報告
     }
   }
-  return synced
+  return { synced, bwibbuDate }
 }
 
 // ---- 新聞（AI 解讀的消息面）----
@@ -793,9 +876,15 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
 
   const one = [{ ticker, name: entry.name }]
   const dailySynced = await syncDaily(one, dataYmd, { onDemand: true })
-  const fundamentalSynced = await syncFundamental(one, dataYmd)
+  const fundamental = await syncFundamental(one, dataYmd)
 
-  return json({ ok: true, ticker, ymd: dataYmd, dailySynced, fundamentalSynced })
+  return json({
+    ok: true,
+    ticker,
+    ymd: dataYmd,
+    dailySynced,
+    fundamentalSynced: fundamental.synced,
+  })
 }
 
 /**
@@ -822,66 +911,195 @@ async function logBatchRun(row: Record<string, unknown>): Promise<void> {
   }
 }
 
+/** 今天最後一次執行留下的狀態；查無（第一次跑、或表不存在）回 null */
+interface LastRun {
+  runsToday: number
+  t86: T86State | null
+  runSig: string | null
+}
+
+/**
+ * 從 `batch_run_log` today 的最後一列取回跨輪次狀態。
+ *
+ * **為什麼把狀態放在觀測表**：這些欄位本來就是我們想觀測的東西（改寫幾次、什麼時候定稿），
+ * 沒必要為同一份資料再建一張表。代價是它變成半承載狀態的 —— 寫入失敗時
+ * （`logBatchRun` 刻意吞例外）下一輪會當成當天第一次跑，於是重抓一次 T86 並重新計數。
+ * 那是**多做事**而不是做錯事，可以接受；但別把這個特性忘了。
+ */
+async function readLastRun(todayYmd: string): Promise<LastRun | null> {
+  try {
+    const { data, error } = await db
+      .from('batch_run_log')
+      .select('runs_today, t86_fingerprint, t86_revisions, t86_unchanged, t86_frozen, run_sig')
+      .eq('taipei_ymd', todayYmd)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error || !data) return null
+    const fp = data.t86_fingerprint
+    return {
+      runsToday: Number(data.runs_today ?? 0),
+      t86:
+        typeof fp === 'string' && fp
+          ? {
+              fingerprint: fp,
+              revisions: Number(data.t86_revisions ?? 0),
+              unchanged: Number(data.t86_unchanged ?? 0),
+              frozen: Boolean(data.t86_frozen),
+            }
+          : null,
+      runSig: typeof data.run_sig === 'string' ? data.run_sig : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 盤後批次（0.6.1 起改為 16:00–23:45 每 15 分鐘輪詢，取代原本的三班制）。
+ *
+ * 三件事讓「一天跑 32 次」不會變成一天做 32 次白工：
+ * 1. **短路**：今天該有的都有了就直接回，一個對外請求都不發（`decideSkip`）。
+ * 2. **改寫偵測**：T86 定稿前每輪重抓比對，定稿後才凍結（`nextT86State`）。
+ *    這是必要的 —— T86 自 16:00 起每 15 分鐘更新，早抓到的不一定是定稿。
+ * 3. **重產閘門**：輸入沒變就不重寫報告，讓 `generatedAt` 只在真有變動時才跳。
+ *
+ * 判斷邏輯全部抽在 `pollPlan.ts` 並有測試釘住 —— 這裡只負責接線。
+ * 理由見該檔開頭：判斷寫錯的代價從三班時代的 3 倍變成 32 倍。
+ */
 async function handleGenerateAll(): Promise<Response> {
   const startedAt = Date.now()
   const now = new Date()
+  const todayYmd = taipeiYmd(now)
+  t86FingerprintByYmd.clear()
+
+  // ---- 短路判定：必須在任何對外請求之前 ----
+  const last = await readLastRun(todayYmd)
+  const cachedToday = await cachedDayDatasets([todayYmd])
+  const skip = decideSkip({
+    t86Today: cachedToday.has(`${todayYmd}:T86`),
+    t86Frozen: last?.t86?.frozen ?? false,
+    marginToday: cachedToday.has(`${todayYmd}:MI_MARGN_D`),
+    runsToday: last?.runsToday ?? 0,
+  })
+  if (skip.skip) {
+    await logBatchRun({
+      taipei_ymd: todayYmd,
+      taipei_time: taipeiHhmm(now),
+      runs_today: (last?.runsToday ?? 0) + 1,
+      skipped: true,
+      skip_reason: skip.reason,
+      t86_today: cachedToday.has(`${todayYmd}:T86`),
+      t86_fingerprint: last?.t86?.fingerprint ?? null,
+      t86_revisions: last?.t86?.revisions ?? 0,
+      t86_unchanged: last?.t86?.unchanged ?? 0,
+      t86_frozen: last?.t86?.frozen ?? false,
+      run_sig: last?.runSig ?? null,
+      duration_ms: Date.now() - startedAt,
+    })
+    return json({ ok: true, skipped: true, reason: skip.reason, ymd: todayYmd })
+  }
+
   const tickers = await heldTwTickers()
+  // 今天的 T86 已有快取但尚未定稿 → 重抓比對；還沒有的話走原本的抓取路徑即可
+  const refreshT86Ymd =
+    cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
   const series = await loadSeries(
     tickers.map((t) => t.ticker),
-    new Date(),
+    now,
+    { refreshT86Ymd },
   )
   const marginFallbackRows = await loadMarginFallback(
     series.dataYmd,
     series.marginDatedFailed || series.days.length === 0,
   )
-  const borrow = await loadBorrow()
+  const borrow = await loadBorrow(todayYmd)
+
+  // 這一輪跑完之後，今天的融資融券到了沒。必須重讀 —— `cachedToday` 是短路判定用的
+  // 「執行前」快照，若今天的融資融券正好是這一輪抓到的，用它會晚一輪才記到。
+  // 也不能用 `margin_ok`（＝ `!marginDatedFailed`）代替：那個旗標問的是「有沒有任何一天
+  // 抓成功」，不是「今天的到了沒」。2026-07-27 17:46 正式區實測就是這個形狀 ——
+  // `margin_ok=true` 但今天的 MI_MARGN_D 根本還沒發布（那時只有 20260724 那份）。
+  const cachedAfter = await cachedDayDatasets([todayYmd])
+
+  // T86 改寫狀態：只有抓到「今天」的資料時才推進 ——
+  // 資料日還停在前一個交易日時，今天的那份根本還沒發布，沒有定稿可言。
+  const t86Today = series.dataYmd === todayYmd
+  const t86Fp = t86FingerprintByYmd.get(todayYmd) ?? ''
+  const t86State = t86Today && t86Fp ? nextT86State(last?.t86 ?? null, t86Fp) : null
+
+  const sig = runSignature({
+    dataYmd: series.dataYmd,
+    t86: t86Fp,
+    margin: series.marginDatedFailed ? '' : series.dataYmd,
+    borrow: borrow.date ?? '',
+    tickers: tickers.map((t) => t.ticker),
+  })
+  const regenerate = sig !== last?.runSig
 
   let generated = 0
-  for (const { ticker, name } of tickers) {
-    const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
-    const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
-      ticker,
-      dataDate: data.dataDate,
-      generatedAt: data.generatedAt,
-      data,
-    })
-    if (okUp) generated++
-  }
+  if (regenerate) {
+    for (const { ticker, name } of tickers) {
+      const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
+      const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
+        ticker,
+        dataDate: data.dataDate,
+        generatedAt: data.generatedAt,
+        data,
+      })
+      if (okUp) generated++
+    }
 
-  // 讓前端知道「最近一份」是哪個交易日，免在前端重算交易日
-  await uploadJson('manifest.json', {
-    ymd: series.dataYmd,
-    dataDate: dashDate(series.dataYmd),
-    generatedAt: new Date().toISOString(),
-  })
+    // 讓前端知道「最近一份」是哪個交易日，免在前端重算交易日
+    await uploadJson('manifest.json', {
+      ymd: series.dataYmd,
+      dataDate: dashDate(series.dataYmd),
+      generatedAt: new Date().toISOString(),
+    })
+  }
 
   // 技術面的日線；與籌碼報告各自獨立，抓不到也不影響上面已寫好的報告
   const dailySynced = await syncDaily(tickers, series.dataYmd)
 
   // 基本面與新聞（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
-  const fundamentalSynced = await syncFundamental(tickers, series.dataYmd)
+  const fundamental = await syncFundamental(tickers, series.dataYmd)
   const newsSynced = await syncNews(tickers)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
   // daily/ fundamental/ news/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
   // 而這三類都是覆寫制、本來就沒有舊檔要清。
-  await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
-  await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
+  // 只在有重產時才清 —— 沒重產就沒有新東西進來，沒有要清的。
+  if (regenerate) {
+    await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
+    await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
+  }
 
-  // 觀測紀錄：t86_today 是微調 cron 時段唯一要看的欄位 ——
-  // 它回答「這一班跑的時候，當天的個股三大法人到了沒」。
-  const todayYmd = taipeiYmd(now)
+  // 觀測紀錄：t86_today 回答「這一輪跑的時候，當天的個股三大法人到了沒」；
+  // 各源的 *_data_* 欄位回答「它自己宣告是哪一天的」—— 端點都不給 Last-Modified，
+  // 這是唯一能記下來的時間事實（2026-07-27 實測，見 PROGRESS.md）。
   await logBatchRun({
     taipei_ymd: todayYmd,
     taipei_time: taipeiHhmm(now),
+    runs_today: (last?.runsToday ?? 0) + 1,
+    skipped: false,
+    skip_reason: null,
     data_ymd: series.dataYmd,
-    t86_today: series.dataYmd === todayYmd,
+    t86_today: t86Today,
+    t86_fingerprint: t86State?.fingerprint ?? null,
+    t86_revisions: t86State?.revisions ?? 0,
+    t86_unchanged: t86State?.unchanged ?? 0,
+    t86_frozen: t86State?.frozen ?? false,
     margin_ok: !series.marginDatedFailed,
+    margin_today: cachedAfter.has(`${todayYmd}:MI_MARGN_D`),
     borrow_ok: borrow.resp !== null,
+    borrow_data_date: borrow.date,
+    bwibbu_date: fundamental.bwibbuDate,
+    run_sig: sig,
+    regenerated: regenerate,
     history_days: series.days.length,
     generated,
     daily_synced: dailySynced,
-    fundamental_synced: fundamentalSynced,
+    fundamental_synced: fundamental.synced,
     news_synced: newsSynced,
     duration_ms: Date.now() - startedAt,
   })
@@ -890,12 +1108,15 @@ async function handleGenerateAll(): Promise<Response> {
     ok: true,
     ymd: series.dataYmd,
     generated,
+    regenerated: regenerate,
     total: tickers.length,
     historyDays: series.days.length,
     dailySynced,
-    fundamentalSynced,
+    fundamentalSynced: fundamental.synced,
     newsSynced,
-    t86Today: series.dataYmd === todayYmd,
+    t86Today,
+    t86Revisions: t86State?.revisions ?? 0,
+    t86Frozen: t86State?.frozen ?? false,
   })
 }
 

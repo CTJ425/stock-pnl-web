@@ -211,27 +211,38 @@ ON CONFLICT (id) DO UPDATE SET public = true;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 6c. 每交易日分三段觸發盤後批次產報（17:30 / 22:30 / 23:30 台北 = 9:30 / 14:30 / 15:30 UTC）
+-- 6c. 每交易日 16:00–23:45 每 15 分鐘輪詢一次（台北）＝ UTC 8:00–15:45
 --
---     為什麼分段：各資料源的公布時間差很多，等最晚的那個才產報，等於讓最早就緒的
---     三大法人白白晚 6 小時才看得到。批次本身是冪等且會自我補完的（每次重讀快取、
---     只抓缺的、覆寫整份報告），所以多跑幾次自然就會逐步補齊，不需要額外機制。
---     第二、三班幾乎全快取命中，實測約 2 秒，成本可忽略。
+--     ⚠️ 0.6.1 改版：原本是固定三班（17:30 / 22:30 / 23:30）。改的理由是
+--     **那三個時間點是照「各資料源大約幾點公布」的認知訂的，而那個認知被實測推翻了**。
+--     2026-07-27 一天之內就推翻三處：
+--       1. 註解說 T86 約 15:00–15:30 → 實測 15:42 仍未發布、17:02 已有。
+--          （15:00–15:30 是 BFI82U 大盤買賣金額統計表的時間窗，兩份報表被混為一談。）
+--       2. 註解說借券約 21:00–22:30 → 實測 17:07 就有當天的了。
+--       3. 註解說的是「借券賣出餘額」，但我們實際抓的 TWT96U 是「當日可借券賣出股數」，
+--          語意根本不同（見 twChips.ts 的說明）。
+--     結論：**別再用時鐘猜發布時間**。改成密集輪詢＋內容判斷，讓資料自己說話。
 --
---     ⚠️ 各資料源的實際公布時間（查證後，別憑印象往前挪）：
---       三大法人個股買賣超 (T86)：約 15:00–15:30，大行情或系統結算可能延至 16:30
---       融資融券餘額：            約 21:00–22:00，視全台券商回傳速度，偶爾延至 22:30–23:00
---       借券賣出餘額：            約 21:00–22:30，每日晚間執行二次更新
---     17:30 那班只會拿到三大法人，融資融券與借券要等 22:30 / 23:30 兩班補。
---     這是預期行為，不是故障 —— 報告的 sources 欄位會逐項標明各自的資料日與抓取時間，
---     前端也逐區塊顯示，使用者看得出哪塊是新的、哪塊還沒到。
+--     為什麼一天 32 次不會爆掉（實測位元組，2026-07-27）：
+--       T86 194KB／融資融券 128KB／借券 244KB／估值 116KB／月營收 603KB／公司資料 1.32MB
+--       每天實際對外抓取約 8.7MB；Function 呼叫 704 次/月，免費額度 500,000，佔 0.14%。
+--     真正的防線不是額度而是這三道，全部實作在 index.ts / pollPlan.ts：
+--       1. **短路**：今天該有的都有了就直接回，一個對外請求都不發。
+--       2. **改寫偵測**：T86 自 16:00 起每 15 分鐘更新，定稿前每輪重抓比對，
+--          連續兩次內容相同才凍結。沒有這道，早抓會把初版鎖成當天的答案，比晚抓更糟。
+--       3. **當日執行上限 MAX_RUNS_PER_DAY = 40**：防的是我們自己的判斷邏輯出錯
+--          （0.3.9 燒光額度正是這個形狀），以及 x-cron-secret 外流時的最後一道剎車。
 --
---     借券的坑：端點沒有 date 參數、回的永遠是「目前最新」。早班抓到的其實是前一天的，
---     若照舊直接存成「今天」，後面幾班會因快取已存在而永遠沿用那份錯的。
---     故改用 rwd 版（自帶 title 日期），以「資料自己宣告的日期」為快取鍵，早晚班不會互相污染。
+--     借券的坑（仍然成立）：端點沒有 date 參數、回的永遠是「目前最新」。
+--     故用 rwd 版（自帶 title 日期），以「資料自己宣告的日期」為快取鍵，早晚不會互相污染。
 --
---     三班都在台北當日內，不影響 taipeiYmd 的判斷。真遇到更誇張的延遲也不會壞：
+--     全部落在台北當日內，不影響 taipeiYmd 的判斷。真遇到更誇張的延遲也不會壞：
 --     隔天的批次會把前一天缺的補回來，只是那一晚的報告不完整。
+-- ⚠️ 下面是**全新安裝**的作法（unschedule + schedule），會重寫整段 command，
+--    所以必須重填兩個佔位符 —— 那正是 BUG-002 的成因。
+--    **只是要改時間的話，改用 cron.alter_job，它保留原本的 command，密鑰碰都不用碰：**
+--      SELECT cron.alter_job(jobid, schedule := '*/15 8-15 * * 1-5')
+--      FROM cron.job WHERE jobname = 'stock-report-nightly';
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'stock-report-nightly') THEN
@@ -241,7 +252,7 @@ END $$;
 
 SELECT cron.schedule(
   'stock-report-nightly',
-  '30 9,14,15 * * 1-5',
+  '*/15 8-15 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -264,6 +275,24 @@ SELECT cron.schedule(
 --
 -- 執行結果查詢（pg_net 的回應保留 6 小時，見 pg_net.ttl）：
 --   select id, status_code, error_msg, left(content, 200) from net._http_response order by id desc limit 5;
+
+-- 6d. ⚠️ 套用完**一定要跑這段覆驗**（BUG-002 的教訓，見 docs/agent/FIXED_BUG.md）
+--
+--     正式區曾經整整一段時間盤後批次從來沒靠 cron 跑起來過，因為上面兩個佔位符
+--     沒被替換，job 就以字面值 '<CRON_SECRET>' 去呼叫函式、每次都 401。
+--     `cron.schedule` 對佔位符字串照收不誤，**「SQL 執行成功」不等於「值填對了」**。
+--     而且失敗是無聲的：函式以 --no-verify-jwt 部署，401 只留在 net._http_response
+--     （保留 6 小時），Storage 裡又一直有手動產的報告，從前端完全看不出異常。
+--
+--     判斷標準：url 不得含 '<'；密鑰長度不得是 13（那正是 '<CRON_SECRET>' 的長度）。
+--     只回頭尾 4 碼，貼給別人看也不會外洩密鑰。
+--
+--   SELECT jobname, schedule, active,
+--          (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url,
+--          left(s,4) || '…' || right(s,4) || ' 長度=' || length(s) AS 密鑰片段
+--   FROM (SELECT jobname, schedule, active, command,
+--                (regexp_match(command, $q$'x-cron-secret',\s*'([^']*)'$q$))[1] AS s
+--         FROM cron.job WHERE jobname = 'stock-report-nightly') t;
 
 
 -- 7. 批次執行紀錄 (batch_run_log)
@@ -299,11 +328,44 @@ CREATE TABLE IF NOT EXISTS batch_run_log (
     duration_ms   INT
 );
 
+-- 0.6.1 新增欄位。用 ADD COLUMN IF NOT EXISTS 而非改上面的 CREATE，
+-- 是為了讓已經建過表的環境（正式區 2026-07-27 已建）重跑本檔就能升級。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS runs_today   INT;      -- 今天第幾次執行（含短路），MAX_RUNS_PER_DAY 靠它把關
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS skipped      BOOLEAN;  -- 這輪短路，沒有任何對外請求
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS skip_reason  TEXT;     -- 'complete' | 'run-cap'
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS regenerated  BOOLEAN;  -- 這輪有沒有重產報告（輸入沒變就不重產）
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS run_sig      TEXT;     -- 報告輸入的指紋，用來判斷要不要重產
+-- T86 改寫追蹤：這幾欄同時是觀測資料**與**跨輪次狀態（見 index.ts readLastRun 的說明）
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS t86_fingerprint TEXT;
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS t86_revisions   INT;   -- 今天被改寫過幾次
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS t86_unchanged   INT;   -- 連續幾次抓到相同內容
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS t86_frozen      BOOLEAN; -- 已定稿，不再重抓
+-- 各源「自己宣告的資料日」。2026-07-27 實測：TWSE 的 openapi 與 rwd 端點
+-- 都不提供 Last-Modified / ETag / Age，一律 Cache-Control: no-cache ——
+-- 所以「它幾點上架」記不到，能記的只有「我們去看的時候，它說自己是哪一天的」。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS margin_today     BOOLEAN; -- 融資融券是否為當天
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS borrow_data_date TEXT;    -- 借券 title 自帶的日期
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS bwibbu_date      TEXT;    -- 估值檔的民國日期，例 '1150724'
+
 ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS batch_run_log_ran_at_idx ON batch_run_log (ran_at DESC);
+-- readLastRun 每輪都會查「今天最後一列」，這個索引讓它是 index scan 而不是全表掃
+CREATE INDEX IF NOT EXISTS batch_run_log_today_idx ON batch_run_log (taipei_ymd, id DESC);
 
--- 常用查詢：看各班次抓到當天 T86 的比率，用來決定要不要挪時間或加班次
+-- 常用查詢 1：各時刻抓到當天 T86 的比率，用來驗證輪詢窗口夠不夠早 / 夠不夠晚
 --   SELECT taipei_time, count(*) AS 跑了幾次,
 --          count(*) FILTER (WHERE t86_today) AS 拿到當天T86
 --   FROM batch_run_log GROUP BY taipei_time ORDER BY taipei_time;
+--
+-- 常用查詢 2：每天各源實際到齊的時間（這才是「幾點更新」的真實答案）
+--   SELECT taipei_ymd,
+--          min(taipei_time) FILTER (WHERE t86_today)   AS T86最早,
+--          min(taipei_time) FILTER (WHERE margin_today) AS 融資融券最早,
+--          max(t86_revisions)                           AS T86改寫次數,
+--          min(taipei_time) FILTER (WHERE t86_frozen)   AS T86定稿時刻
+--   FROM batch_run_log GROUP BY taipei_ymd ORDER BY taipei_ymd DESC;
+--
+-- 常用查詢 3：確認短路真的有在省事（skipped 的那幾輪 duration_ms 應該只有幾十毫秒）
+--   SELECT skipped, skip_reason, count(*), round(avg(duration_ms)) AS 平均毫秒
+--   FROM batch_run_log GROUP BY 1, 2 ORDER BY 3 DESC;
