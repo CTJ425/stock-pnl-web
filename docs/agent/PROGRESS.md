@@ -1,9 +1,60 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.5 —— 測試區完成部署與線上實測；修好新聞查詢撞名與測試區 cron 佔位符故障
-- Status: VERIFIED（測試區）—— 閘門全綠（308 tests）、線上資料已產出並核對正確；**正式區未動**
-- Timestamp: 2026-07-27 14:04:27 Asia/Taipei
+- Action: 0.6.0-dev.6 —— 修 Gemini Flash 輸出被截斷（思考 token 吃掉 maxOutputTokens）
+- Status: IMPLEMENTED — 閘門全綠（317 tests）；**待使用者以 Gemini Flash 實測確認**
+- Timestamp: 2026-07-27 14:32:04 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 14:32:04 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修正 Gemini Flash 解讀被截斷；截斷不再靜默
+- **Status**: IMPLEMENTED — lint / test 317 passed（+9）/ build 全綠
+
+### 症狀與根因
+
+使用者回報切到 Gemini Flash 後輸出被截斷，實例只有一句：
+「元大台灣50（0050）於 2026 年 7 月 24 日收盤價為 101.7 元，下跌 2.2 元，跌幅」
+
+根因有兩層，第二層是關鍵：
+
+1. `aiClient.ts` 的 Google 請求把 `maxOutputTokens` 寫死 **1200**。0.6.0-dev.3/4 之後
+   輸出要求變長（多了建議操作、注意事項兩小節，以及基本面與消息面的內容），1200 本來就偏緊。
+2. **Gemini 2.5 起的「思考」（thinking）token 也計入 `maxOutputTokens`**
+   （查證來源見下）。1200 額度幾乎被思考吃光，正文只剩幾十個字就被切斷 ——
+   這解釋了為什麼斷點遠早於 1200 token 該有的長度。
+
+### 修法
+
+- `GOOGLE_MAX_OUTPUT_TOKENS = 8192`（上限不是預約量，調高不增加實際用量與費用）。
+- `generationConfig.thinkingConfig = { thinkingBudget: 0 }` 關閉思考 ——
+  這份工作的數字全由程式算好、prompt 又明令不得自行計算，模型只負責寫成白話，不需要推理。
+- **模型不接受該參數（HTTP 400）時自動去掉重送一次。** 刻意不用模型名稱判斷支援度：
+  各世代的控制欄位不同（2.5 用 thinkingBudget、3 改 thinkingLevel）且還會再變，
+  寫死清單一定會過時。只退回一次，不會無限重試。
+- **截斷不再靜默**：`extractGoogleText` 先前完全沒看 `finishReason`，半截文字會被當成
+  完整結果回傳（就是使用者遇到的情況）。現在：有內容但 `MAX_TOKENS` → 保留文字並附上
+  `TRUNCATION_NOTICE`（使用者已為它付費，丟掉更浪費）；完全沒有正文 → 拋錯並點明是
+  思考吃光額度；`SAFETY` / `RECITATION` 各有專屬訊息。
+- 同一類問題也存在於 OpenAI 相容路徑（`finish_reason: 'length'`，ollama 的 `num_predict`
+  截斷會長一樣），一併補上。**未**替該路徑加 `max_tokens` —— 目前不設上限沒有問題，
+  加了反而可能製造新的截斷。
+
+### 查證
+
+Google 官方文件頁當下抓不到（工具受限），改以社群與 SDK issue 佐證，多來源一致：
+`thinking tokens are counted against maxOutputTokens`，額度不足時會出現
+「`finishReason: MAX_TOKENS` 但 `content` 整個缺席」。相關討論：
+googleapis/python-genai #2062、#782、google-gemini/gemini-cli #2104、
+Google AI Developers Forum「Thinking ate all the tokens and hit MAX_TOKENS」。
+
+### 待辦
+
+- [ ] 使用者以 Gemini Flash 實測，確認解讀能完整寫到免責聲明那段。
+- [ ] 若仍截斷（例如模型忽略 thinkingBudget），下一步是把 8192 再往上調，
+      或在 UI 開放讓使用者自訂上限。
 
 ---
 

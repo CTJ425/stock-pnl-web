@@ -240,6 +240,22 @@ prompt 明令不得給出明確買賣/加碼/出清指令、目標價、進出�
    否則 `-3` 會被讀成「增加了 -3 天」。
 3. **兩種單位並存**：三大法人是股數、融資融券是張。prompt 明令模型不得自行換算。
 
+### 輸出長度與截斷（0.6.0-dev.6）
+
+Google 的 `maxOutputTokens` 為 `GOOGLE_MAX_OUTPUT_TOKENS = 8192`，並以
+`thinkingConfig.thinkingBudget: 0` 關閉思考。**原因：Gemini 2.5 起的思考 token 計入
+`maxOutputTokens`**，原本的 1200 幾乎被思考吃光，正文只寫一句就被截斷（實測踩到）。
+模型若不接受 `thinkingConfig`（HTTP 400），自動去掉該欄位重送一次——
+不以模型名稱猜測支援度，因為各世代的控制欄位不同且會再變。
+（這不違反「不自動重試」：那條是禁止替使用者重跑失敗的解讀以免重複計費，
+此處是同一次請求的參數協商，且只試一次。）
+
+**截斷一律要讓使用者看得出來。** `finishReason`（Google）與 `finish_reason`
+（OpenAI 相容，含 ollama 的 `num_predict`）都要檢查：
+有內容但被截斷 → 保留文字並附上 `TRUNCATION_NOTICE`；
+完全沒有正文（思考吃光額度）→ 拋 `bad-response` 並在訊息中點明原因。
+絕不可把半截文字當成完整結果回傳。
+
 ### 失敗行為
 
 180 秒逾時（0.6.0-dev.2 起，自 30 秒放寬以支援本機 local model；**含讀取回應主體**，

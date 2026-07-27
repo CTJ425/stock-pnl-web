@@ -8,6 +8,16 @@
 
 ## 📋 Active Tasks
 
+### Task 21: 修 Gemini Flash 輸出被截斷 (0.6.0-dev.6)
+- **Status**: IMPLEMENTED — 閘門全綠（317 tests）；待使用者以 Gemini Flash 實測
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 14:32:04 Asia/Taipei
+- 根因：`maxOutputTokens` 寫死 1200，而 **Gemini 2.5 起的思考 token 也計入該上限**，
+  正文只寫一句就被切掉。修法：上限提到 8192 ＋ `thinkingBudget: 0` 關閉思考，
+  模型不支援該參數（400）時自動去掉重送一次。
+- 另修：`finishReason` / `finish_reason` 先前完全沒檢查，截斷會被當成完整結果顯示。
+  詳見 PROGRESS.md 2026-07-27 14:32 與 SPEC.md「輸出長度與截斷」。
+
 ### Task 20: 基本面分頁＋產業別＋新聞入 AI (0.6.0-dev.4)
 - **Status**: IMPLEMENTED — 閘門全綠（lint / test **307 passed** / build）；
   **待重新部署 `stock-report` 與線上實測**（需使用者執行）

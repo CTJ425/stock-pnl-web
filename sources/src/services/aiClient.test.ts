@@ -6,6 +6,8 @@ import {
   extractOpenAiText,
   mapHttpError,
   normalizeBaseUrl,
+  GOOGLE_MAX_OUTPUT_TOKENS,
+  TRUNCATION_NOTICE,
 } from './aiClient'
 
 describe('aiClient', () => {
@@ -74,6 +76,48 @@ describe('aiClient', () => {
         expect(e.kind).toBe('bad-response')
       }
     })
+
+    it('finishReason=MAX_TOKENS 且有內容時，保留文字但附上「未完成」標記', () => {
+      // 釘住 0.6.0-dev.5 的實際災情：Gemini Flash 只寫了半句就被切斷，
+      // 舊版把半截文字當成完整結果回傳，使用者無從得知它不完整。
+      const out = extractGoogleText({
+        candidates: [
+          {
+            finishReason: 'MAX_TOKENS',
+            content: { parts: [{ text: '元大台灣50（0050）於 2026 年 7 月 24 日收盤價為 101.7 元，跌幅' }] },
+          },
+        ],
+      })
+      expect(out).toContain('101.7 元')
+      expect(out).toContain(TRUNCATION_NOTICE.trim())
+    })
+
+    it('finishReason=MAX_TOKENS 但完全沒有內容時，錯誤訊息要點出思考 token 吃掉額度', () => {
+      // 思考 token 計入 maxOutputTokens，額度不足時 parts 會整個消失
+      try {
+        extractGoogleText({ candidates: [{ finishReason: 'MAX_TOKENS' }] })
+        throw new Error('should have thrown')
+      } catch (e: any) {
+        expect(e.kind).toBe('bad-response')
+        expect(e.message).toContain('思考 token')
+      }
+    })
+
+    it('finishReason=SAFETY 時給出政策中止的專屬訊息', () => {
+      try {
+        extractGoogleText({ candidates: [{ finishReason: 'SAFETY' }] })
+        throw new Error('should have thrown')
+      } catch (e: any) {
+        expect(e.message).toContain('SAFETY')
+      }
+    })
+
+    it('正常結束時不附加任何標記', () => {
+      const out = extractGoogleText({
+        candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '完整解讀。' }] } }],
+      })
+      expect(out).toBe('完整解讀。')
+    })
   })
 
   describe('extractOpenAiText', () => {
@@ -96,6 +140,20 @@ describe('aiClient', () => {
       } catch (e: any) {
         expect(e.kind).toBe('bad-response')
       }
+    })
+
+    it('finish_reason=length 時附上「未完成」標記（ollama num_predict 截斷同理）', () => {
+      const out = extractOpenAiText({
+        choices: [{ finish_reason: 'length', message: { content: '寫到一半就' } }],
+      })
+      expect(out).toContain('寫到一半就')
+      expect(out).toContain(TRUNCATION_NOTICE.trim())
+    })
+
+    it('finish_reason=stop 時不附加標記', () => {
+      expect(
+        extractOpenAiText({ choices: [{ finish_reason: 'stop', message: { content: '完整結果。' } }] }),
+      ).toBe('完整結果。')
     })
   })
 
@@ -133,6 +191,71 @@ describe('aiClient', () => {
       const body = JSON.parse(opts.body)
       expect(body.systemInstruction.parts[0].text).toBe('sys')
       expect(body.contents[0].parts[0].text).toBe('usr')
+      // 額度要夠寫完整篇（思考 token 也算在這個上限裡），且預設關閉思考
+      expect(body.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
+      expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+    })
+
+    it('模型不接受 thinkingConfig（400）時，去掉該欄位重送一次並成功', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ candidates: [{ content: { parts: [{ text: '退回後的結果' }] } }] }),
+        })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const provider = createAiProvider({
+        provider: 'google',
+        baseUrl: '',
+        model: 'some-model-without-thinking',
+        apiKey: 'k',
+      })
+
+      expect(await provider.complete({ system: 's', user: 'u' })).toBe('退回後的結果')
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+
+      const first = JSON.parse(mockFetch.mock.calls[0][1].body)
+      const second = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(first.generationConfig.thinkingConfig).toBeDefined()
+      expect(second.generationConfig.thinkingConfig).toBeUndefined()
+      expect(second.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
+    })
+
+    it('退回後仍是 400 時只再試一次就放棄（不無限重試）', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const provider = createAiProvider({
+        provider: 'google',
+        baseUrl: '',
+        model: 'nonexistent-model',
+        apiKey: 'k',
+      })
+
+      await expect(provider.complete({ system: 's', user: 'u' })).rejects.toThrow(AiError)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('401 不觸發退回重送（那是金鑰問題，不是參數問題）', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const provider = createAiProvider({
+        provider: 'google',
+        baseUrl: '',
+        model: 'gemini-2.5-flash',
+        apiKey: 'bad',
+      })
+
+      try {
+        await provider.complete({ system: 's', user: 'u' })
+        expect.fail('應丟出錯誤')
+      } catch (e: any) {
+        expect(e.kind).toBe('auth')
+      }
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
 
     it('OpenAI-compatible Provider 有 API Key 時應帶上 Authorization Bearer', async () => {
