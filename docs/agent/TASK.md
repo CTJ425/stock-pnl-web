@@ -8,6 +8,17 @@
 
 ## 📋 Active Tasks
 
+### Task 23: 0.6.0 定版後的兩區部署稽核
+- **Status**: IN PROGRESS —— 部署缺口已補齊並驗證；**正式區 `batch_run_log` 建表待使用者執行**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 16:38:10 Asia/Taipei
+- 定版後的正式區套用做到一半中斷，留下交叉錯配：**正式區有 `batch_run_log` 寫入程式碼但沒有表，
+  測試區有表但程式碼落後**。兩邊都不報錯（觀測寫入刻意靜默），只能靠主動稽核發現。
+- 已完成：測試區 `stock-report` → v13、正式區 `stock-price` → v9，皆逐檔 diff 驗證、
+  `verify_jwt` 未被改動；本地閘門全綠（325 tests）。
+- 待辦：正式區 SQL Editor 執行 §7 建表；確認 cron job 寫死的密鑰與 16:03 新設的
+  `CRON_SECRET` 一致（否則今晚三班全 401）。SQL 見 PROGRESS.md 2026-07-27 16:38。
+
 ### Task 22: 技術面／基本面即點即產 warm (0.6.0-dev.7)
 - **Status**: VERIFIED（測試區）—— 閘門全綠（325 tests）、線上實測含額度防護
 - **Agent**: Claude
@@ -58,7 +69,9 @@
 - [x] dev.5 修 2 個實測發現的問題：新聞查詢撞名（加代號）、ETF 註記誤稱上櫃
 - [x] 順手修好測試區 cron 的佔位符故障（詳見 PROGRESS.md 2026-07-27 14:04）
 - [ ] 使用者需**登出再登入**取得 admin claim，並重填 AI 設定後做 UI 實測
-- [ ] **正式區**尚未套用 dev.2–dev.5 的任何異動（schema §4.1、新版函式），併 main 時處理
+- [x] **正式區已套用**（2026-07-27 16:02–16:04，Task 23 稽核確認）：schema §4.1 `app_settings` 存在、
+      `stock-report` 與 main 逐檔一致、`CRON_SECRET` 已設、批次產出四類檔案齊全。
+      **唯一還缺 §7 `batch_run_log`**，見 Task 23。
 
 ### Task 19: AI 提示詞加「建議操作」與「注意事項」 (0.6.0-dev.3)
 - **Status**: IMPLEMENTED — 閘門全綠（test 260 passed / build 通過）

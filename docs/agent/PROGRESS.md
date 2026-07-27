@@ -1,9 +1,65 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0 定版並合併 main；新增 batch_run_log 觀測表；正式區全套套用
+- Action: 兩區部署稽核與補齊；正式區 batch_run_log 待建表
 - Status: IN PROGRESS — 見下方最新一則
-- Timestamp: 2026-07-27 15:57:19 Asia/Taipei
+- Timestamp: 2026-07-27 16:38:10 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 16:38:10 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 稽核 0.6.0 定版後的兩區實際狀態，補上中斷處的缺口
+- **Status**: 部署已補齊並驗證；**正式區 `batch_run_log` 建表待使用者在 SQL Editor 執行**
+- **授權範圍**: 使用者明確授權三項對外操作（測試區 `stock-report` 重部署、正式區
+  `stock-price` 重部署、正式區建表）
+
+### 稽核發現：一組會互相掩蓋的交叉錯配
+
+0.6.0 定版後的部署在正式區做到一半中斷，留下的狀態是**兩區各缺對方有的那一半**：
+
+| 項目 | 正式區 `kxnxadaghidwumqsqneu` | 測試區 `wqetxuhncvfidqnklyew` |
+| --- | --- | --- |
+| `stock-report` 程式碼 | ✅ v7（16:02 部署）與 main 逐檔一致 | ❌ v12 落後，缺 `logBatchRun` / `taipeiHhmm` |
+| `batch_run_log`（§7） | ❌ **不存在**（REST 回 PGRST205） | ✅ 存在 |
+| `app_settings`（§4.1） | ✅ | ✅ |
+| `CRON_SECRET` | ✅ 16:03:55 設定 | ✅ |
+| 批次產出 | ✅ 16:04 完成，0050 / 2609 / 1802 的籌碼＋日線＋基本面＋新聞皆 200 | ✅ |
+
+**兩邊都不會報錯**，所以不主動查就看不出來：正式區有寫入程式碼但沒有表，
+而 `logBatchRun` 刻意吞掉例外（觀測失敗不能拖垮批次）；測試區有表但沒有寫入程式碼。
+這正是「觀測資料寫入失敗要靜默」這個正確設計的副作用 —— 它同時也讓漏套 schema 變得無聲。
+**教訓：凡是刻意靜默的寫入路徑，上線後要有一次獨立的存在性檢查，不能等它自己喊。**
+
+另外 `stock-price` 在正式區落後一行過時註解（`build-docs/supabase_schema.sql`），
+是 2026-07-20 舊部署的殘留，功能無異，順手一併重部署。
+
+### 稽核方法（可重複）
+
+- 程式碼：`supabase functions download <slug> --project-ref <ref>` 後 `diff -r`，
+  **不看版本號推論**（§13.3）。正式區比 `main`、測試區比 `dev`（本次兩者同 commit）。
+- 資料表存在性：用**公開 anon key** 打 REST。缺表回 `PGRST205 / 404`，
+  有表但被 RLS 擋回 `200 []` —— 兩者可區分，足以判斷 schema 有沒有套。
+  正式區的 anon key 直接取自 GitHub Pages 的 bundle（本來就是公開資訊）。
+- 產出檔：公開 bucket 逐個 HTTP 探測 `20260724/<t>.json`、`daily|fundamental|news/<t>.json`。
+  （`object/list` 需要 policy，anon 一律回 `[]`，不能拿來判斷「沒有檔案」。）
+
+### 已完成
+
+- [x] 測試區 `stock-report` 重部署 → v13，`--no-verify-jwt`（`verify_jwt` 仍為 false）
+- [x] 正式區 `stock-price` 重部署 → v9，用預設（`verify_jwt` 仍為 true）
+- [x] 兩支重新下載逐檔 diff，皆與分支程式碼一致
+- [x] 本地閘門：lint 3 個既有 warning / test **325 passed** / build 通過
+
+### 待辦（需使用者在正式區 SQL Editor 執行）
+
+- [ ] **建 `batch_run_log`**（schema §7 原文）。未建之前，正式區三班的觀測資料全部丟失。
+- [ ] **確認 cron 密鑰對得上**：`CRON_SECRET` 是今天 16:03 才設的，而 cron job 的
+      SQL body 裡是**寫死**密鑰字串的。若 job 是用舊密鑰排的，今晚 17:30 / 22:30 / 23:30
+      三班會全數 401 —— 而且因為 `--no-verify-jwt`，失敗只會留在 `net._http_response`
+      （保留 6 小時），隔天就查不到了。診斷 SQL 只回傳密鑰頭尾 4 碼與長度，可安全貼回。
+- [ ] 測試區今晚 17:30 那班會寫下第一列 `batch_run_log`，屆時可驗證寫入路徑真的通。
 
 ---
 
@@ -114,7 +170,8 @@ FROM batch_run_log GROUP BY taipei_time ORDER BY taipei_time;
 ### 待辦
 
 - [ ] UI 實測：加一檔新股票後開技術面／基本面，應該當場就有資料。
-- [ ] 正式區仍未套用 dev.2–dev.7 的任何異動，併 main 時要一併處理。
+- [x] 正式區已於 16:02–16:04 套用（函式、§4.1、CRON_SECRET、批次產出），
+      2026-07-27 16:38 稽核確認；唯一缺口是 §7 `batch_run_log`，見該則紀錄。
 
 ---
 
