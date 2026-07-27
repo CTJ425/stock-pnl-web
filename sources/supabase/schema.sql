@@ -389,3 +389,86 @@ CREATE INDEX IF NOT EXISTS batch_run_log_today_idx ON batch_run_log (taipei_ymd,
 -- 常用查詢 3：確認短路真的有在省事（skipped 的那幾輪 duration_ms 應該只有幾十毫秒）
 --   SELECT skipped, skip_reason, count(*), round(avg(duration_ms)) AS 平均毫秒
 --   FROM batch_run_log GROUP BY 1, 2 ORDER BY 3 DESC;
+
+
+-- 8. 資料源探針紀錄 (source_probe_log) —— 0.6.3
+--
+--     這張表回答的問題只有一個：**「這個來源，實際上是幾點更新的？」**
+--
+--     為什麼 batch_run_log 答不了：`batch_run_log.bwibbu_date` 看起來像在記這件事，
+--     其實記的是**快取值**。`readLatest` 用「我們去抓的那天」當快取鍵，
+--     當天第一輪抓完就整天吃快取 —— 2026-07-27 那 12 輪全記成同一個 '1150724'，
+--     **那不是 12 次觀測，是同一次被讀了 12 遍**；批次一短路更是完全不記。
+--     拿它來判斷發布時間會得到假答案，而「用假答案猜發布時間」正是 0.6.1 重做的起因。
+--
+--     探針刻意**不寫快取、不寫 Storage、不碰批次的任何狀態**，
+--     所以 0.6.1 那三道閘門（含「短路＝零對外請求」）完全不受影響，仍然可證。
+--
+--     只探這兩個 —— 它們是目前唯二「有快取就整天不再看」的來源：
+--       BWIBBU_ALL（估值，116KB，每日）／借券 TWT96U（244KB）
+--     T86 與融資融券已由 batch_run_log 的 t86_revisions / margin_today 如實記錄；
+--     月營收與公司資料是月更新，15 分鐘探一次沒有意義。
+--
+--     成本：(116+244)KB × 32 輪 ≈ 11.5MB/日。答案拿到後隨時可停，不必重新部署：
+--       SELECT cron.unschedule('source-probe');
+
+CREATE TABLE IF NOT EXISTS source_probe_log (
+    id            BIGSERIAL PRIMARY KEY,
+    probed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    taipei_ymd    TEXT NOT NULL,
+    taipei_time   TEXT NOT NULL,   -- 'HH:mm'
+    bwibbu_ok     BOOLEAN,
+    bwibbu_date   TEXT,            -- 估值檔自報的民國日期，例 '1150724'
+    bwibbu_fp     TEXT,            -- 內容指紋（列排序後才算，見 pollPlan.rowsFingerprint）
+    bwibbu_rows   INT,
+    borrow_ok     BOOLEAN,
+    borrow_date   TEXT,            -- 借券 title 自帶的日期（＝下一個交易日）
+    borrow_fp     TEXT,
+    borrow_rows   INT,
+    duration_ms   INT
+);
+
+ALTER TABLE source_probe_log ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS source_probe_log_ymd_idx ON source_probe_log (taipei_ymd, id DESC);
+
+-- 與盤後批次同節奏。⚠️ 同樣有兩個佔位符要換，套用完務必跑 §6d 的覆驗（含「url 的 ref 是不是自己」）
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'source-probe') THEN
+    PERFORM cron.unschedule('source-probe');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'source-probe',
+  '*/15 8-15 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"probe"}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+-- 常用查詢 1：**只看變化點** —— 這就是「幾點更新」的直接答案
+--   SELECT taipei_time, bwibbu_date, borrow_date FROM (
+--     SELECT taipei_time, bwibbu_date, borrow_date, id,
+--            lag(bwibbu_fp) OVER (ORDER BY id) AS pb,  bwibbu_fp,
+--            lag(borrow_fp) OVER (ORDER BY id) AS pr,  borrow_fp
+--     FROM source_probe_log WHERE taipei_ymd = '20260728') t
+--   WHERE pb IS DISTINCT FROM bwibbu_fp OR pr IS DISTINCT FROM borrow_fp
+--   ORDER BY id;
+--
+-- 常用查詢 2：每天各來源第一次宣告「新日期」的時刻（累積幾天後才有意義）
+--   SELECT taipei_ymd, min(taipei_time) FILTER (WHERE bwibbu_date IS NOT NULL) AS 估值最早,
+--          max(bwibbu_date) AS 估值最終日, max(borrow_date) AS 借券最終日
+--   FROM source_probe_log GROUP BY taipei_ymd ORDER BY taipei_ymd DESC;
+--
+-- 常用查詢 3：內容變了但自報日期沒變 —— 代表當天被改寫（跟 T86 一樣的形態）
+--   SELECT taipei_time, bwibbu_date, bwibbu_fp FROM source_probe_log
+--   WHERE taipei_ymd = '20260728' ORDER BY id;

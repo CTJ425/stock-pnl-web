@@ -3,6 +3,7 @@ import {
   decideSkip,
   fingerprint,
   nextT86State,
+  rowsFingerprint,
   runSignature,
   MAX_RUNS_PER_DAY,
   t86Fingerprint,
@@ -69,6 +70,30 @@ describe('t86Fingerprint', () => {
     expect(() => t86Fingerprint(null)).not.toThrow()
     expect(() => t86Fingerprint(undefined)).not.toThrow()
     expect(t86Fingerprint({ a: 1 })).toBe(fingerprint({ a: 1 }))
+  })
+})
+
+describe('rowsFingerprint（裸陣列，探針用）', () => {
+  const a = { Code: '2330', PEratio: '31.59', Date: '1150724' }
+  const b = { Code: '2609', PEratio: '16.72', Date: '1150724' }
+
+  it('列順序不同但內容相同 → 相同指紋', () => {
+    expect(rowsFingerprint([a, b])).toBe(rowsFingerprint([b, a]))
+  })
+
+  it('任何一格改了 → 不同指紋（探針要測得出「當天被改寫」）', () => {
+    expect(rowsFingerprint([a, b])).not.toBe(
+      rowsFingerprint([a, { ...b, PEratio: '16.73' }]),
+    )
+  })
+
+  it('資料日換了 → 不同指紋', () => {
+    expect(rowsFingerprint([a])).not.toBe(rowsFingerprint([{ ...a, Date: '1150727' }]))
+  })
+
+  it('非陣列不會炸', () => {
+    expect(() => rowsFingerprint(null)).not.toThrow()
+    expect(() => rowsFingerprint(undefined)).not.toThrow()
   })
 })
 

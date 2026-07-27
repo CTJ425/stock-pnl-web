@@ -53,10 +53,26 @@ export function fingerprint(value: unknown): string {
 export function t86Fingerprint(resp: unknown): string {
   const r = resp as { data?: unknown; date?: unknown; total?: unknown } | null
   if (!r || typeof r !== 'object' || !Array.isArray(r.data)) return fingerprint(resp)
-  const rows = (r.data as unknown[])
-    .map((row) => (Array.isArray(row) ? row.join('') : String(row)))
-    .sort()
-  return fingerprint({ date: r.date ?? null, total: r.total ?? null, rows })
+  return fingerprint({
+    date: r.date ?? null,
+    total: r.total ?? null,
+    rows: sortedRows(r.data as unknown[]),
+  })
+}
+
+/**
+ * 陣列型回應的語意指紋（`BWIBBU_ALL` 之類的裸陣列用）。
+ * 與 `t86Fingerprint` 同一個理由：**TWSE 的端點不保證列順序穩定**，
+ * 直接對整包算指紋會把「順序換了」誤判成「內容變了」。
+ */
+export function rowsFingerprint(rows: unknown): string {
+  if (!Array.isArray(rows)) return fingerprint(rows)
+  return fingerprint(sortedRows(rows))
+}
+
+/** 每列各自序列化後排序 —— 把「列順序」這個不穩定來源消掉 */
+function sortedRows(rows: unknown[]): string[] {
+  return rows.map((row) => (Array.isArray(row) ? row.join('') : JSON.stringify(row) ?? '')).sort()
 }
 
 /** 今天這份 T86 的改寫狀態；跨輪次由 `batch_run_log` 的最後一列帶回 */

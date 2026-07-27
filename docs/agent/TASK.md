@@ -8,6 +8,21 @@
 
 ## 📋 Active Tasks
 
+### Task 26: 資料源探針 (0.6.3) ＋ 基本面日期標示待修
+- **Status**: 探針已實作，閘門全綠（**356 tests**）；**待部署兩區**（表＋函式＋cron job）
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 23:55:00 Asia/Taipei
+- 起因：使用者回報基本面時間不對。查證 `fundamental/*.json` 的 `dataDate` 寫的是
+  「我們去抓的那天」而非資料自報的日期（檔案說 07-27、數字是 07-24）。
+- **但先修儀器不修行為**：`batch_run_log.bwibbu_date` 記的是快取值，
+  一整晚 12 輪同一個數，短路後空白 —— 拿它決定怎麼修等於用假資料猜。
+- 新增 `source_probe_log` ＋ `action: 'probe'` ＋ cron job `source-probe`，
+  每 15 分鐘記錄各來源自報日期與內容指紋。**刻意不碰批次**。
+- **待辦（明天 16:00 前部署，才趕得上完整的一天）**：
+  ①兩區建表（`schema.sql` §8）→ ②部署 `stock-report`（`--no-verify-jwt`）→
+  ③建 cron job `source-probe`（url 與密鑰用各區自己的，**別對調**）。
+- **明天收工後**再依 `source_probe_log` 決定基本面的修法。
+
 ### Task 25: 修 T86 指紋不穩定＋前端切回前景自動重抓 (0.6.2)
 - **Status**: 兩分支（`dev` / `main` 同為 `ef9937f`）與兩區 Edge Function 皆已上線
   （測試區 v17 / 正式區 v11，`verify_jwt=false`）。閘門 **352 tests** 全綠。

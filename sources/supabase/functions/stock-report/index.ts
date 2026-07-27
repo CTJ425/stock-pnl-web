@@ -73,6 +73,7 @@ import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from
 import {
   decideSkip,
   nextT86State,
+  rowsFingerprint,
   runSignature,
   t86Fingerprint,
   type T86State,
@@ -911,6 +912,90 @@ async function logBatchRun(row: Record<string, unknown>): Promise<void> {
   }
 }
 
+// ---- 資料源探針（0.6.3）----
+
+/**
+ * 每輪對外看一眼「各來源現在自己宣告是哪一天的」，寫進 `source_probe_log`。
+ *
+ * **為什麼要獨立一條路徑，而不是在批次裡順便記**：
+ * `batch_run_log.bwibbu_date` 看起來像在記這件事，其實記的是**快取值** ——
+ * `readLatest` 用「我們去抓的那天」當快取鍵，當天第一輪抓完就整天吃快取。
+ * 2026-07-27 那 12 輪全記成同一個 `1150724`，**那不是 12 次觀測，是同一次被讀了 12 遍**；
+ * 而且批次一短路就完全不記（當晚 23:00 起三輪空白）。用它來判斷「幾點更新」會得到假答案。
+ *
+ * 探針刻意**不寫快取、不寫 Storage、不碰批次的任何狀態**：它只回答
+ * 「這個時刻，這個來源說自己是哪一天的、內容有沒有變」。
+ * 批次那三道閘門（含「短路＝零對外請求」）因此完全不受影響，仍然可證。
+ *
+ * 只探 `BWIBBU_ALL`（116KB，每日）與借券 `TWT96U`（244KB）—— 這兩個是目前唯二
+ * 「有快取就整天不再看」的來源。T86 與融資融券已由 `batch_run_log` 的
+ * `t86_revisions` / `margin_today` 如實記錄，不必重複探。
+ * 月營收與公司資料是月更新，15 分鐘探一次沒有意義。
+ *
+ * 要停掉：`SELECT cron.unschedule('source-probe');` —— 不必重新部署。
+ */
+async function probeOne<T>(
+  url: string,
+  ok: (v: T) => boolean,
+  dateOf: (v: T) => string | null,
+  rowsOf: (v: T) => unknown,
+): Promise<{ ok: boolean; date: string | null; fp: string | null; rows: number | null }> {
+  try {
+    const resp = await fetchJson<T>(url)
+    if (!ok(resp)) return { ok: false, date: null, fp: null, rows: null }
+    const rows = rowsOf(resp)
+    return {
+      ok: true,
+      date: dateOf(resp),
+      fp: rowsFingerprint(rows),
+      rows: Array.isArray(rows) ? rows.length : null,
+    }
+  } catch {
+    return { ok: false, date: null, fp: null, rows: null }
+  }
+}
+
+async function handleProbe(): Promise<Response> {
+  const startedAt = Date.now()
+  const now = new Date()
+
+  // 兩個來源互不相干，併發探；任一失敗只讓自己那組欄位為 null
+  const [bwibbu, borrow] = await Promise.all([
+    probeOne<Array<Record<string, string>>>(
+      BWIBBU_ALL_URL,
+      (v) => Array.isArray(v) && v.length > 0,
+      (v) => v[0]?.Date ?? null, // 民國 7 碼，例 '1150724'
+      (v) => v,
+    ),
+    probeOne<BorrowDatedResponse>(
+      BORROW_DATED_URL,
+      borrowDatedOk,
+      borrowDatedDate, // rwd 版 title 自帶的日期（＝下一個交易日）
+      (v) => v.data ?? [],
+    ),
+  ])
+
+  const row = {
+    taipei_ymd: taipeiYmd(now),
+    taipei_time: taipeiHhmm(now),
+    bwibbu_ok: bwibbu.ok,
+    bwibbu_date: bwibbu.date,
+    bwibbu_fp: bwibbu.fp,
+    bwibbu_rows: bwibbu.rows,
+    borrow_ok: borrow.ok,
+    borrow_date: borrow.date,
+    borrow_fp: borrow.fp,
+    borrow_rows: borrow.rows,
+    duration_ms: Date.now() - startedAt,
+  }
+  try {
+    await db.from('source_probe_log').insert(row)
+  } catch {
+    // 觀測失敗不能拖垮任何東西；探針本來就只是儀器
+  }
+  return json({ ok: true, ...row })
+}
+
 /** 今天最後一次執行留下的狀態；查無（第一次跑、或表不存在）回 null */
 interface LastRun {
   runsToday: number
@@ -1147,6 +1232,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleGenerateAll()
+  }
+
+  // 資料源探針：只讀不寫（除了自己的觀測表），但仍走 CRON_SECRET ——
+  // 它會對 TWSE 發請求，公開端點不設防等於送人一個代打工具
+  if (body.action === 'probe') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleProbe()
   }
 
   return json({ error: 'Unknown action' }, 400)
