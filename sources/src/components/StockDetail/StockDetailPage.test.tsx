@@ -470,4 +470,65 @@ describe('StockDetailPage', () => {
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     expect(screen.queryByText('半導體業')).toBeNull()
   })
+
+  // 0.6.1 起盤後批次每 15 分鐘輪詢一次，報告會在使用者看著的當下更新。
+  // 沒有這組行為的話，開著不動的分頁會一直停在開頁那一刻的快照。
+  describe('切回前景時比對報告是否已更新（0.6.2）', () => {
+    const fireVisible = async (state: 'visible' | 'hidden' = 'visible') => {
+      Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    it('報告換過一份 → 自動換上新的，不必重新整理', async () => {
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      await screen.findByText('三大法人買賣超')
+      expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
+
+      const next: ReportData = {
+        ...report,
+        dataDate: '2026-07-24',
+        generatedAt: '2026-07-24T09:15:00.000Z',
+      }
+      fetchStoredReport.mockResolvedValue(next)
+      await fireVisible()
+
+      await waitFor(() => expect(screen.getByText(/資料日期 2026-07-24/)).toBeTruthy())
+    })
+
+    it('generatedAt 沒變 → 不動 state（否則每次切回都重繪，捲動與展開狀態會被洗掉）', async () => {
+      const { container } = render(
+        <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      )
+      await screen.findByText('三大法人買賣超')
+      const before = container.querySelector('.detail-body .rpt-head')!.textContent
+
+      // 回同一份（不同物件實體，但 generatedAt 相同）
+      fetchStoredReport.mockResolvedValue({ ...report })
+      await fireVisible()
+      await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(2))
+
+      expect(container.querySelector('.detail-body .rpt-head')!.textContent).toBe(before)
+    })
+
+    it('切到背景時不抓（只在使用者真的要看的時候才打 Storage）', async () => {
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      await screen.findByText('三大法人買賣超')
+      expect(fetchStoredReport).toHaveBeenCalledTimes(1)
+
+      await fireVisible('hidden')
+      expect(fetchStoredReport).toHaveBeenCalledTimes(1)
+    })
+
+    it('切回前景時查無 Storage 報告 → 保留畫面上這份，不清空', async () => {
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      await screen.findByText('三大法人買賣超')
+
+      fetchStoredReport.mockResolvedValue(null)
+      await fireVisible()
+      await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(2))
+
+      expect(screen.getByText('三大法人買賣超')).toBeTruthy()
+      expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
+    })
+  })
 })

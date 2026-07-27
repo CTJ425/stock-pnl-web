@@ -92,6 +92,30 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name])
 
+  // 分頁切回前景時比對報告有沒有換過一份（0.6.2）。
+  //
+  // 上面那個 effect 只在開頁時抓一次。三班制時代一天才更新 3 次，還算堪用；
+  // 0.6.1 起盤後批次改成 16:00–23:45 每 15 分鐘輪詢，**報告會在使用者看著的當下更新**，
+  // 開著不動就會一直停在開頁那一刻的快照 —— 實際發生過：20:15 的批次已寫出當天的報告，
+  // 而 20:15 之前開的分頁仍顯示前一個交易日的籌碼。
+  //
+  // 作法沿用 useStockPrices 的 visibilitychange，不另開 timer：
+  // 背景分頁的 timer 會被瀏覽器節流，而切回前景本來就是使用者要看資料的時刻。
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void (async () => {
+        const stored = await fetchStoredReport(ticker)
+        if (!stored) return // 查無（或走即點即產路線）時保留畫面上這份，不清空
+        // 只在 generatedAt 真的變了才換：沒變就別動 state，
+        // 否則每次切回前景都重繪一次，捲動位置與展開狀態會被洗掉。
+        setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
+      })()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [ticker])
+
   // 基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
   // 查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），成功再讀一次。
   // warmStock 自帶「同代號每個 session 只試一次」的節流，這裡不需要再防重。

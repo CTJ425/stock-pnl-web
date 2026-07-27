@@ -5,6 +5,7 @@ import {
   nextT86State,
   runSignature,
   MAX_RUNS_PER_DAY,
+  t86Fingerprint,
   T86_STABLE_POLLS,
   type T86State,
 } from './pollPlan.ts'
@@ -25,6 +26,49 @@ describe('fingerprint', () => {
 
   it('undefined 不會炸', () => {
     expect(() => fingerprint(undefined)).not.toThrow()
+  })
+})
+
+describe('t86Fingerprint', () => {
+  // 2026-07-27 正式區實測：同一份資料連抓兩次，1334 列內容與集合相同，
+  // 但末欄相同的幾列之間順序會換。以下用實際觀察到的三列還原那個形狀。
+  const rowA = ['6606', '建德工業', '17,000', '13,000', '4,000', '5,000']
+  const rowB = ['1614', '三洋電', '18,000', '15,000', '3,000', '5,000']
+  const rowC = ['1516', '川飛', '4,000', '0', '4,000', '5,000']
+  const resp = (rows: string[][]) => ({
+    stat: 'OK', date: '20260727', title: 'T86', fields: ['代號'], total: rows.length, data: rows,
+  })
+
+  it('列順序不同但內容相同 → 相同指紋（沒有這條就永遠不會定稿）', () => {
+    expect(t86Fingerprint(resp([rowA, rowB, rowC]))).toBe(
+      t86Fingerprint(resp([rowC, rowA, rowB])),
+    )
+  })
+
+  it('任何一列的數字改了 → 不同指紋（真正的改寫仍測得出來）', () => {
+    const changed = [rowA, rowB, ['1516', '川飛', '4,000', '0', '4,001', '5,000']]
+    expect(t86Fingerprint(resp([rowA, rowB, rowC]))).not.toBe(t86Fingerprint(resp(changed)))
+  })
+
+  it('少一列 → 不同指紋', () => {
+    expect(t86Fingerprint(resp([rowA, rowB, rowC]))).not.toBe(t86Fingerprint(resp([rowA, rowB])))
+  })
+
+  it('樣板欄位（title / fields）變動不影響指紋 —— jsonb 會重排鍵，算進去等於自找不穩定', () => {
+    const a = { ...resp([rowA, rowB]), title: '甲', fields: ['x'], notes: ['n'] }
+    const b = { ...resp([rowA, rowB]), title: '乙', fields: ['y'], hints: 'h' }
+    expect(t86Fingerprint(a)).toBe(t86Fingerprint(b))
+  })
+
+  it('資料日不同 → 不同指紋（別把昨天的當成今天的）', () => {
+    const a = resp([rowA]); const b = { ...resp([rowA]), date: '20260724' }
+    expect(t86Fingerprint(a)).not.toBe(t86Fingerprint(b))
+  })
+
+  it('非 T86 形狀 / null / undefined 不會炸，退回一般指紋', () => {
+    expect(() => t86Fingerprint(null)).not.toThrow()
+    expect(() => t86Fingerprint(undefined)).not.toThrow()
+    expect(t86Fingerprint({ a: 1 })).toBe(fingerprint({ a: 1 }))
   })
 })
 

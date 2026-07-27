@@ -38,6 +38,27 @@ export function fingerprint(value: unknown): string {
   return `${s.length}:${h.toString(36)}`
 }
 
+/**
+ * T86 專用的內容指紋。**必須先把 data 列排序**，不能直接對整包 JSON 算。
+ *
+ * 2026-07-27 正式區實測踩到：同一份資料連抓兩次，1334 列的內容與集合完全相同，
+ * 但**其中幾列的順序會換**（末欄相同的列之間，端點的排序不穩定）。
+ * 直接 `JSON.stringify` 的話每輪都算出不同指紋，於是 `nextT86State` 永遠判定「被改寫」、
+ * `t86_frozen` 永遠是 false、`decideSkip` 永遠不短路 —— 一天 32 輪全跑，三道閘門全廢。
+ * 當晚 20:30–22:00 的 `batch_run_log` 就是這個形狀：`t86_unchanged` 在 0/1 之間跳，到不了 2。
+ *
+ * 只取 `date` / `total` / 排序後的列：其餘欄位（title / fields / notes / hints）是固定樣板，
+ * 而且快取走 Postgres jsonb，**jsonb 會重排物件的鍵**，把它們算進去等於自找不穩定。
+ */
+export function t86Fingerprint(resp: unknown): string {
+  const r = resp as { data?: unknown; date?: unknown; total?: unknown } | null
+  if (!r || typeof r !== 'object' || !Array.isArray(r.data)) return fingerprint(resp)
+  const rows = (r.data as unknown[])
+    .map((row) => (Array.isArray(row) ? row.join('') : String(row)))
+    .sort()
+  return fingerprint({ date: r.date ?? null, total: r.total ?? null, rows })
+}
+
 /** 今天這份 T86 的改寫狀態；跨輪次由 `batch_run_log` 的最後一列帶回 */
 export interface T86State {
   fingerprint: string

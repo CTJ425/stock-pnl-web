@@ -8,6 +8,105 @@
 
 ---
 
+## 📅 Log: 2026-07-27 20:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.1 兩區上線並驗證；個股分析頁切回前景自動換新報告 (0.6.2)
+- **Status**: 0.6.1 兩區皆已上線；0.6.2 閘門全綠（**346 tests**）並上 dev 與 main
+
+### 0.6.1 上線結果
+
+| | 正式區 `kxnxadaghidwumqsqneu` | 測試區 `wqetxuhncvfidqnklyew` |
+| --- | --- | --- |
+| `stock-report` | v10 | v14 |
+| `verify_jwt` | false ✅ | false ✅ |
+| `batch_run_log` | 26 欄 | 26 欄 |
+| cron | jobid 11 / `*/15 8-15 * * 1-5` / url 自己 / `a7a6` | jobid 8 / 同左 / url 自己 / `54cc` |
+
+測試區 20:15 第一輪的實測資料，形狀完全符合設計：
+
+```
+taipei_time=20:15  data_ymd=20260727  t86_today=true
+t86_unchanged=0  t86_frozen=false   ← 第一次抓到，還沒定稿（要再兩輪相同）
+margin_today=false                  ← 融資融券約 21:00 才到 → 不會短路，正確
+borrow_data_date=2026-07-27  bwibbu_date=1150724  ← 估值檔還是上週五的
+runs_today=1  skipped=false  regenerated=true  generated=5  duration_ms=15361
+```
+
+`bwibbu_date` 這欄第一天就發揮作用：它說明**基本面的資料日與籌碼的資料日不同步**，
+而這件事原本只能靠猜。
+
+### 我犯的錯：`db query` 打進了另一個專案
+
+19:52 那次「重建測試區 cron」實際寫進了**正式區** —— `functions download` 把 cwd 留在
+scratchpad，之後的 `db query --linked` 在那個沒有 link 設定的目錄下執行，CLI 退回全域設定。
+
+**最惡劣的是它驗得過**：緊接著的覆驗查詢也在同一個錯的資料庫，
+所以「url 是 wqetx、排程 `*/15`」看起來全部正確，其實是正式區被改成指向測試區。
+19:53 改正式區時覆蓋掉了，期間無 cron 觸發，**無實害**，但這是運氣不是設計。
+
+對策已寫進 `CLAUDE.md §13.3`：**任何會寫入的 `db query`，把「專案身分欄位」放進同一次查詢**
+（例：`(SELECT count(*) FROM batch_run_log)`，正式區 2 / 測試區 0）。
+分兩次查（先驗身分、再寫入）擋不住 —— cwd 可能在兩次之間被別的指令改掉。
+
+### 0.6.2：切回前景時自動換上最新報告
+
+使用者回報測試區籌碼仍顯示 `2026-07-24 · 更新於 2026-07-25 12:02`。
+對檔後確認**那正是舊檔 `20260724/2609.json` 的內容**，而今天的檔是好的
+（`institutional.date=2026-07-27`、20:15 抓的）—— 問題在前端只在開頁抓一次。
+
+三班制時代一天才更新 3 次，這個缺口還藏得住；改成 32 輪之後，
+**報告會在使用者看著的當下更新**，缺口就浮出來了。這是輪詢改版的連帶影響，不是舊 bug。
+
+作法與取捨見 `SPEC.md`「前端的重抓時機」。四個測試釘住：換過一份才替換、
+`generatedAt` 沒變不動 state、切到背景不抓、查無時保留現有那份。
+
+### 0.6.1 上線當晚就抓到的真 bug：T86 指紋永遠不穩定
+
+「待觀察」的預期形狀當場被推翻。正式區 20:30–22:00 七輪的實測：
+
+```
+20:30 unchanged=0 regenerated=true   21:15 unchanged=1 regenerated=false
+20:45 unchanged=0 regenerated=true   21:30 unchanged=0 regenerated=true
+21:00 unchanged=0 regenerated=true   21:45 unchanged=0 regenerated=true
+                                     22:00 unchanged=1 regenerated=false
+```
+
+`t86_unchanged` 在 0/1 之間跳、**到不了 2**，所以 `t86_frozen` 永遠 false、
+`decideSkip` 永遠不短路。一天 32 輪全跑，三道閘門等於全廢。
+
+**根因**：直接抓兩次 T86 端點比對（間隔 3 秒），檔案長度同為 194,959 位元組但**位元組不同**。
+逐列比對後真相是：1334 列的**內容與集合完全相同，只有 7 列的順序換了** ——
+末欄相同的那幾列之間，端點的排序不穩定。
+
+`fingerprint` 是對 `JSON.stringify` 算的，順序一變指紋就變。
+
+**修法**：新增 `t86Fingerprint()`，先把 `data` 各列 join 後排序，
+只取 `date` / `total` / 排序後的列來算 —— 看語意，不看端點今天高興怎麼排。
+其餘欄位（title / fields / notes / hints）刻意排除：它們是固定樣板，
+而且快取走 Postgres jsonb，**jsonb 會重排物件的鍵**，算進去等於自找另一個不穩定來源。
+
+以實際抓下來的兩份檔案覆驗：修正前位元組不同、修正後語意指紋相同。
+另加 6 個測試釘住（含「真正的改寫仍測得出來」與「少一列」兩個反向案例）。
+
+**教訓**：內容指紋若要拿來當「東西有沒有變」的判準，
+**必須先正規化到語意層**。外部端點沒有義務保證序列化穩定 ——
+這裡是列順序，jsonb 那邊是鍵順序，兩個獨立的來源，都會讓位元組比對失效。
+
+### 待觀察（今晚）
+
+```sql
+SELECT taipei_time, t86_today, t86_unchanged, t86_frozen,
+       margin_today, skipped, skip_reason, regenerated, duration_ms
+FROM batch_run_log WHERE taipei_ymd = '20260727' ORDER BY id;
+```
+
+預期：T86 連兩輪相同後 `t86_frozen` 轉 true；約 21:00 後 `margin_today` 轉 true；
+兩者都滿足的下一輪起 `skipped=true / skip_reason=complete`，`duration_ms` 掉到幾十毫秒。
+**若到 23:45 收工都沒出現 `skipped`，就是短路判斷有問題，要回頭查。**
+
+---
+
 ## 📅 Log: 2026-07-27 19:52:00 Asia/Taipei
 
 - **Agent**: Claude

@@ -72,9 +72,9 @@ import {
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
   decideSkip,
-  fingerprint,
   nextT86State,
   runSignature,
+  t86Fingerprint,
   type T86State,
 } from './pollPlan.ts'
 
@@ -223,7 +223,7 @@ async function loadT86(
 ): Promise<T86ResponseShape | null> {
   const cached = await readCache<T86ResponseShape>(ymd, 'T86')
   if (cached && t86Ok(cached) && !refresh) {
-    t86FingerprintByYmd.set(ymd, fingerprint(cached))
+    t86FingerprintByYmd.set(ymd, t86Fingerprint(cached))
     return cached
   }
   if (!fetchAllowed && !refresh) return null
@@ -233,15 +233,15 @@ async function loadT86(
       // 非交易日 / 尚未發布：不快取空回應。重抓模式下已有的快取仍然有效，
       // 不能因為這次拿到空的就把好資料丟掉。
       if (cached && t86Ok(cached)) {
-        t86FingerprintByYmd.set(ymd, fingerprint(cached))
+        t86FingerprintByYmd.set(ymd, t86Fingerprint(cached))
         return cached
       }
       return null
     }
-    const fp = fingerprint(resp)
+    const fp = t86Fingerprint(resp)
     t86FingerprintByYmd.set(ymd, fp)
     // 內容沒變就別重寫，省下 194KB 的 UPSERT 與隨之而來的 dead tuple
-    if (!cached || !t86Ok(cached) || fingerprint(cached) !== fp) {
+    if (!cached || !t86Ok(cached) || t86Fingerprint(cached) !== fp) {
       await writeCache(ymd, 'T86', resp)
     }
     return resp
