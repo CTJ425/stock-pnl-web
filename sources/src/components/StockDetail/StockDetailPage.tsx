@@ -19,6 +19,7 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
+import { warmStock } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
@@ -91,13 +92,19 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name])
 
-  // 基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）
+  // 基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
+  // 查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），成功再讀一次。
+  // warmStock 自帶「同代號每個 session 只試一次」的節流，這裡不需要再防重。
   useEffect(() => {
     let alive = true
     setFundLoading(true)
     setFundamental(null)
     ;(async () => {
-      const f = await fetchFundamental(ticker)
+      let f = await fetchFundamental(ticker)
+      if (!f) {
+        const warmed = await warmStock(ticker)
+        if (warmed.fundamentalSynced > 0) f = await fetchFundamental(ticker)
+      }
       if (alive) {
         setFundamental(f)
         setFundLoading(false)

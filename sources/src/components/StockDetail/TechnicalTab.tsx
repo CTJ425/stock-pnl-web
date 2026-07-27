@@ -2,7 +2,8 @@
  * 技術面分頁：日 K + 均線、成交量、KD，以及最新一日的指標摘要。
  *
  * 資料來自盤後排程預產、存於公開 reports bucket 的 daily/{ticker}.json（見 services/dailyProxy.ts），
- * 前端直接下載、不經 Edge Function。沒有「即點即產」的 fallback —— 理由見 dailyProxy 的檔頭。
+ * 前端直接下載、不經 Edge Function。查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），
+ * 節流規則見 services/warmStock.ts —— 同代號每個 session 只試一次。
  *
  * 台股術語對照（PLAN.md §L 所稱的「日線 / 週線 / 季線」）：
  * 週線＝MA5、月線＝MA20、季線＝MA60。UI 兩種說法並陳，免得只認得其中一種的人看不懂。
@@ -10,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, LineChart, RefreshCw } from 'lucide-react'
 import { fetchDailySeries, type DailySeries } from '../../services/dailyProxy'
+import { warmStock } from '../../services/warmStock'
 import { CandleChart } from '../Charts/CandleChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
@@ -64,7 +66,11 @@ export function TechnicalTab({ ticker }: { ticker: string }) {
     setSeries(null)
     ;(async () => {
       try {
-        const s = await fetchDailySeries(ticker)
+        let s = await fetchDailySeries(ticker)
+        if (!s) {
+          const warmed = await warmStock(ticker)
+          if (warmed.dailySynced > 0) s = await fetchDailySeries(ticker)
+        }
         if (!alive) return
         setSeries(s)
         setStatus(s ? 'ready' : 'empty')

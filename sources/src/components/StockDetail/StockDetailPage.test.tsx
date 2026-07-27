@@ -4,12 +4,14 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 
 // 以 mock 取代網路層：這裡驗的是版面與分頁切換，不是抓取邏輯
-const { fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental } = vi.hoisted(() => ({
-  fetchStoredReport: vi.fn(),
-  generateReport: vi.fn(),
-  fetchDailySeries: vi.fn(),
-  fetchFundamental: vi.fn(),
-}))
+const { fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental, warmStock } =
+  vi.hoisted(() => ({
+    fetchStoredReport: vi.fn(),
+    generateReport: vi.fn(),
+    fetchDailySeries: vi.fn(),
+    fetchFundamental: vi.fn(),
+    warmStock: vi.fn(),
+  }))
 vi.mock('../../services/reportProxy', () => ({
   isReportConfigured: true,
   fetchStoredReport,
@@ -17,6 +19,7 @@ vi.mock('../../services/reportProxy', () => ({
 }))
 vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
+vi.mock('../../services/warmStock', () => ({ warmStock }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { ChipDay, ChipLeg, ReportData } from '../../services/reportProxy'
@@ -75,10 +78,13 @@ describe('StockDetailPage', () => {
     generateReport.mockReset()
     fetchDailySeries.mockReset()
     fetchFundamental.mockReset()
+    warmStock.mockReset()
     fetchStoredReport.mockResolvedValue(report)
     // 預設無日線 / 無基本面（批次尚未跑過）；需要的個案自行覆寫
     fetchDailySeries.mockResolvedValue(null)
     fetchFundamental.mockResolvedValue(null)
+    // 預設 warm 也產不出東西（例如 ETF），避免測試意外進入重讀分支
+    warmStock.mockResolvedValue({ ok: true, dailySynced: 0, fundamentalSynced: 0 })
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
@@ -419,6 +425,40 @@ describe('StockDetailPage', () => {
     })
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     expect(await screen.findByText('半導體業')).toBeTruthy()
+  })
+
+  it('基本面查無時補叫 warm；成功產出後重讀並顯示（新加入的股票不必等夜間批次）', async () => {
+    const fresh = {
+      ticker: '2609',
+      asOf: '2026-07-27T09:31:00.000Z',
+      dataDate: '2026-07-25',
+      industry: '航運業',
+      valuation: { peRatio: 16.72, dividendYieldPercent: 3.88, pbRatio: 0.55, dataDate: '2026-07-24' },
+      revenueUnit: '千元' as const,
+      revenueMonths: [],
+      notes: [],
+    }
+    fetchFundamental.mockResolvedValueOnce(null).mockResolvedValueOnce(fresh)
+    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 1 })
+
+    render(<StockDetailPage ticker="2609" name="陽明" holding={holding} />)
+
+    expect(await screen.findByText('航運業')).toBeTruthy()
+    expect(warmStock).toHaveBeenCalledWith('2609')
+    expect(fetchFundamental).toHaveBeenCalledTimes(2)
+  })
+
+  it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
+    const user = userEvent.setup()
+    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 0 })
+
+    render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
+
+    await user.click(screen.getByRole('button', { name: '基本面' }))
+    expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
+    // 只讀過一次：warm 回報沒產出就不該再打一次 Storage
+    expect(fetchFundamental).toHaveBeenCalledTimes(1)
   })
 
   it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {

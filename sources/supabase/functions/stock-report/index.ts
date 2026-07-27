@@ -9,9 +9,15 @@
  *
  * 介面：
  *   POST { action: 'generate', market: 'TPE', ticker: string, name: string, holding?: HoldingContext }
- *     → { reportId, generatedAt, dataDate, data }（即點即產，前端 fallback 用）
+ *     → { reportId, generatedAt, dataDate, data }（籌碼即點即產，前端 fallback 用）
+ *   POST { action: 'warm', ticker: string }
+ *     → { ok, ticker, ymd, dailySynced, fundamentalSynced }
+ *       單檔補上日線與基本面並寫入 Storage，供新加入的股票不必等夜間批次（0.6.0-dev.7）
  *   POST { action: 'generate-all' }  header: x-cron-secret（盤後 pg_cron 觸發）
  *     → 產生全體持有台股的共用報告存入 Storage(reports bucket)，並清理超過 7 天的舊資料
+ *
+ * `generate` 與 `warm` 都以 heldTwTickers() 白名單把關：本函式以 --no-verify-jwt 部署，
+ * 網址就在公開的前端 bundle 裡，白名單是把濫用上限壓到最低的那道防線（見 0.3.9 紀錄）。
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
@@ -565,13 +571,19 @@ async function downloadJson<T>(path: string): Promise<T | null> {
 async function syncDaily(
   tickers: Array<{ ticker: string; name: string }>,
   dataYmd: string,
+  opts?: { onDemand?: boolean },
 ): Promise<number> {
   const targetDate = dashDate(dataYmd)
   let synced = 0
   for (const { ticker } of tickers) {
     try {
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
-      if (existing && existing.schema === DAILY_SCHEMA && existing.lastDate >= targetDate) continue
+      if (existing && existing.schema === DAILY_SCHEMA) {
+        if (existing.lastDate >= targetDate) continue
+        // 即點即產專用：今天已經查過、確認查無資料，就別再對外打一次。
+        // 夜間批次刻意不看這個條件——三班要留給剛上市、Yahoo 還沒補資料的代號重試的機會。
+        if (opts?.onDemand && (existing.emptyCheckedDate ?? '') >= targetDate) continue
+      }
 
       let rows: ReturnType<typeof extractDaily> = []
       for (const symbol of yahooDailySymbols(ticker)) {
@@ -579,15 +591,26 @@ async function syncDaily(
         rows = extractDaily(resp)
         if (rows.length > 0) break
       }
-      if (rows.length === 0) continue
 
-      const file: DailyFile = {
-        schema: DAILY_SCHEMA,
-        ticker,
-        asOf: new Date().toISOString(),
-        lastDate: rows[rows.length - 1][0],
-        rows,
-      }
+      // 查無資料也要寫檔（空殼＋查詢日）：即點即產靠它才不會每次開頁重抓。
+      // 理由與批次仍會重試的原因見 twDaily.ts 的 emptyCheckedDate 註解。
+      const file: DailyFile =
+        rows.length === 0
+          ? {
+              schema: DAILY_SCHEMA,
+              ticker,
+              asOf: new Date().toISOString(),
+              lastDate: '',
+              rows: [],
+              emptyCheckedDate: targetDate,
+            }
+          : {
+              schema: DAILY_SCHEMA,
+              ticker,
+              asOf: new Date().toISOString(),
+              lastDate: rows[rows.length - 1][0],
+              rows,
+            }
       if (await uploadJson(`daily/${ticker}.json`, file)) synced++
     } catch {
       // 單檔失敗不影響其他檔，也不影響籌碼報告（與 borrow / margin 的容錯一致）
@@ -726,6 +749,54 @@ async function pruneChipCache(cutoffYmd: string): Promise<void> {
   }
 }
 
+/**
+ * 即點即產要用的交易日：以 `manifest.json` 的 ymd 為準，跟夜間批次同一個基準。
+ * 沒有 manifest（批次從未跑過）時退而取最近的非週末日。
+ */
+async function warmDataYmd(): Promise<string> {
+  const m = await downloadJson<{ ymd?: unknown }>('manifest.json')
+  if (m && typeof m.ymd === 'string' && /^\d{8}$/.test(m.ymd)) return m.ymd
+  const candidates = tradingDateCandidates(new Date())
+  return candidates.find((y) => !isWeekendYmd(y)) ?? candidates[0] ?? ''
+}
+
+/**
+ * 單一代號的即點即產：補上日線與基本面（0.6.0-dev.7）。
+ *
+ * 為什麼需要它：新加入的股票要等下一班夜間批次才有日線與基本面，
+ * 在那之前技術面與基本面分頁是空的，AI 解讀甚至會因為拿不到日線而整個失敗。
+ *
+ * 為什麼安全（0.3.9 燒掉額度的教訓）：
+ * 1. 沿用 `heldTwTickers()` 白名單，非持股一律 403 —— 與 `generate` 同一道防線。
+ * 2. 兩者都與批次共用「已是最新就跳過」的條件，且**查無資料也會寫檔**，
+ *    所以同一檔每天最多只會真的做一次事，之後前端直接讀 Storage。
+ * 3. 基本面那三份是全市場大檔且走 `chip_raw_cache`，對外放大效應趨近於零。
+ *
+ * 刻意**不**含新聞：它只服務 AI 解讀，而 AI 在缺新聞時本來就能正常降級
+ * （prompt 有缺料文案），沒必要為它在開頁路徑上多付一次 10 秒逾時的 RSS 請求。
+ */
+async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
+  const ticker = String(body.ticker ?? '').trim()
+  if (!TICKER_RE.test(ticker)) {
+    return json({ error: 'ticker 格式不正確' }, 400)
+  }
+
+  const held = await heldTwTickers()
+  const entry = held.find((h) => h.ticker === ticker)
+  if (!entry) {
+    return json({ error: '此代號不在持股清單內，無法產生資料' }, 403)
+  }
+
+  const dataYmd = await warmDataYmd()
+  if (!dataYmd) return json({ error: '無法判斷交易日' }, 503)
+
+  const one = [{ ticker, name: entry.name }]
+  const dailySynced = await syncDaily(one, dataYmd, { onDemand: true })
+  const fundamentalSynced = await syncFundamental(one, dataYmd)
+
+  return json({ ok: true, ticker, ymd: dataYmd, dailySynced, fundamentalSynced })
+}
+
 async function handleGenerateAll(): Promise<Response> {
   const tickers = await heldTwTickers()
   const series = await loadSeries(
@@ -799,6 +870,10 @@ Deno.serve(async (req) => {
 
   if (body.action === 'generate') {
     return handleGenerate(body)
+  }
+
+  if (body.action === 'warm') {
+    return handleWarm(body)
   }
 
   if (body.action === 'generate-all') {

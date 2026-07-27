@@ -8,6 +8,16 @@
 
 ## 📋 Active Tasks
 
+### Task 22: 技術面／基本面即點即產 warm (0.6.0-dev.7)
+- **Status**: VERIFIED（測試區）—— 閘門全綠（325 tests）、線上實測含額度防護
+- **Agent**: Claude
+- **Timestamp**: 2026-07-27 15:30:18 Asia/Taipei
+- 新股票原本要等夜間批次才有日線與基本面（AI 解讀甚至直接失敗）。新增 `action: 'warm'`
+  單檔即點即產，前端在 Storage 查無時補叫一次。
+- **額度防護四道**：heldTwTickers 白名單、與批次共用跳過條件、**日線查無也寫空殼檔**
+  （`emptyCheckedDate`，否則會變成每次開頁重打的無限迴圈）、前端同代號 session 只試一次。
+- 詳見 PROGRESS.md 2026-07-27 15:30。
+
 ### Task 21: 修 Gemini Flash 輸出被截斷 (0.6.0-dev.6)
 - **Status**: IMPLEMENTED — 閘門全綠（317 tests）；待使用者以 Gemini Flash 實測
 - **Agent**: Claude
