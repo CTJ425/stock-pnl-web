@@ -1,10 +1,88 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.4 —— 基本面分頁、產業別 badge、新聞納入 AI 解讀
-- Status: IMPLEMENTED — 閘門全綠（307 tests）；**待重新部署 stock-report 並實測**，
-  另 dev.2 的 schema §4.1 + admin tag 仍待使用者執行
-- Timestamp: 2026-07-27 11:25:16 Asia/Taipei
+- Action: 0.6.0-dev.5 —— 測試區完成部署與線上實測；修好新聞查詢撞名與測試區 cron 佔位符故障
+- Status: VERIFIED（測試區）—— 閘門全綠（308 tests）、線上資料已產出並核對正確；**正式區未動**
+- Timestamp: 2026-07-27 14:04:27 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 14:04:27 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 測試區部署 0.6.0-dev.4/5 並線上驗證；修 2 個實測才發現的問題 + 1 個既有故障
+- **Status**: VERIFIED — 測試區三檔持股（0050 / 1802 / 2609）的基本面與新聞皆已產出並核對正確
+- **授權範圍**: 使用者明確授權「對 dev 都新增上去」→ **只動測試區**（`wqetxuhncvfidqnklyew`），正式區完全未觸碰
+
+### 🔴 既有故障：測試區的夜間 cron 從來沒有真正跑起來過
+
+觸發批次時噴 `invalid URL "https://<PROJECT_REF>.supabase.co/..."` ——
+`cron.job.command` 裡是**字面的 `<PROJECT_REF>` 與 `<CRON_SECRET>` 佔位符**，當初建排程時沒代入真值。
+
+佐證：`cron.job_run_details` **0 筆**；`net._http_response` 只有 7/26 15:09 一筆成功
+（時間不對應排程三段，是手動觸發）；bucket 最新資料停在 `20260724/`。
+
+**為什麼之前沒發現**：7/26 的稽核只查了 `active=true` 與 schedule 字串，沒看 command 內容。
+**教訓**：查 cron 健康度必須看 command 本身（至少驗 `command NOT LIKE '%<PROJECT_REF>%'`），
+`active=true` 完全不代表它跑得起來。
+
+**修法**：`secrets list` 只回雜湊、拿不到舊密鑰明文，故由使用者執行一行指令產新 `CRON_SECRET`、
+`secrets set` 後以真值重建排程（舊密鑰無任何東西在用，因為排程本來就是壞的）。
+現況：`has_ref_placeholder=false / has_secret_placeholder=false / has_real_url=true / timeout=60000 / active=true`。
+
+### 🔴 實測才發現的問題 1：新聞查詢撞名（已修，dev.5）
+
+只用股票名稱查 Google News 會抓到完全無關的東西：**「陽明」回的 10 則全是陽明交通大學的校園新聞**
+（教評會、國安疑慮…），與陽明海運（2609）毫無關係。這種內容餵進 AI 會產出離題的「消息面分析」。
+
+改成 `{名稱} {代號}` 後實測三檔全部命中：`陽明 2609` / `台玻 1802` / `元大台灣50 0050` 各回 100 則正確結果。
+台股名稱與機構、地名撞名太常見，**代號是唯一可靠的消歧依據**。
+
+### 🟡 實測才發現的問題 2：ETF 被誤稱為上櫃股（已修，dev.5）
+
+0050 三份 API 都查無 → 觸發缺料註記，但原文寫「可能為上櫃股票」。0050 是 **ETF** 不是上櫃股。
+改為「查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中」。
+
+### 線上驗證結果（測試區）
+
+部署以 `functions download` 逐檔 diff 確認（§14.3 準則，不看版本號推論）：
+`index.ts / twChips.ts / twDaily.ts / report.ts / twFundamental.ts / twNews.ts` 六檔與本機一致；
+`stock-report` 的 `verify_jwt=false` 維持正確。
+
+schema §4.1：`app_settings` 六欄位齊全、RLS 已啟用、單列 CHECK 在、三條 policy 正確
+（SELECT 開放 authenticated、INSERT/UPDATE 限 `app_metadata.role='admin'`）、
+`user_settings` 舊 `ai_*` 欄位剩 0 個。
+
+批次產出（`fundamentalSynced: 3 / newsSynced: 3`，跳過條件二次觸發時正確生效）：
+
+| 代號 | 產業別 | 本益比 / 殖利率 / 淨值比 | 6 月營收（千元） | 新聞 |
+| --- | --- | --- | --- | --- |
+| 1802 台玻 | 玻璃陶瓷 | 392.31 / — / 2.99 | 4,207,055（月增 +7.34% / 年增 +27.00%） | 10 則，皆命中 |
+| 2609 陽明 | 航運業 | 16.72 / 3.88% / 0.55 | 16,591,195（月增 +9.85% / 年增 +20.18%） | 6 則，皆命中 |
+| 0050 元大台灣50 | —（ETF） | — | — | 10 則 |
+
+**交叉驗證**：台玻的新聞標題「6月營收42.07億元年增率高達27％」與我們解析出的
+`4,207,055 千元 / +27.00%` 完全吻合，確認欄位對應與單位換算正確。
+
+**Google News RSS 沒有被 Supabase 機房 IP 擋**（原本列為最大風險，實測三檔皆正常）。
+
+### 操作備忘（下次會用到）
+
+- `supabase db query --linked` 的輸出前面有一行 `Initialising login role...`，
+  直接餵給 JSON parser 會炸，要先 `sed -n '/^{/,$p'`。
+- `supabase storage ls/rm` 需要 `--experimental`；且 **`storage rm` 實測刪不掉**
+  （回 `deleted: []` 且無錯誤）。要刪檔改用 Storage REST：
+  `curl -X DELETE -H "Authorization: Bearer <service_role>" .../storage/v1/object/reports/<path>`，
+  service key 可由 `supabase projects api-keys --reveal` 取得。
+- 強制重產某類檔案時，刪掉 Storage 上的檔即可繞過跳過條件（fundamental 看 `dataDate`、news 看 `asOf` 的台北日曆日）。
+
+### 待辦
+
+- [ ] **使用者需登出再登入**：admin tag 是台北 11:31 貼的、最後登入是 10:32，
+      目前手上的 JWT 還沒有 admin claim，AI 設定表單不會出現。
+- [ ] 重新填一次 AI 設定（dev.2 的 schema 改版把舊的個人設定清掉了）。
+- [ ] UI 實測：基本面分頁、產業別 badge、AI 解讀是否引用到基本面與消息面。
+- [ ] 正式區未套用任何 dev.2–dev.5 的異動（schema §4.1、新版函式），併 main 時要一起處理。
 
 ---
 

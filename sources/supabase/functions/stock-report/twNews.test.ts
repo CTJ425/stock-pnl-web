@@ -30,11 +30,15 @@ const RSS = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><
 )}</channel></rss>`
 
 describe('twNews', () => {
-  it('googleNewsRssUrl 對股票名稱做 URL 編碼並帶台灣繁中參數', () => {
-    const url = googleNewsRssUrl('台積電')
-    expect(url).toContain('q=%E5%8F%B0%E7%A9%8D%E9%9B%BB')
+  it('googleNewsRssUrl 帶台灣繁中參數，並以「名稱 代號」查詢', () => {
+    const url = googleNewsRssUrl('台積電', '2330')
+    expect(url).toContain('q=%E5%8F%B0%E7%A9%8D%E9%9B%BB%202330')
     expect(url).toContain('hl=zh-TW')
     expect(url).toContain('ceid=TW:zh-Hant')
+  })
+
+  it('查詢必須含代號——只用名稱會抓到撞名的東西（實測「陽明」回陽明交大新聞）', () => {
+    expect(googleNewsRssUrl('陽明', '2609')).toContain('2609')
   })
 
   it('解析標題、來源與發布時間（entity 需還原）', () => {

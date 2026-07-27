@@ -47,8 +47,16 @@ export const NEWS_MAX_ITEMS = 10
 /** 只保留近 14 天：太舊的標題對盤後解讀沒有資訊量 */
 export const NEWS_SINCE_DAYS = 14
 
-export function googleNewsRssUrl(name: string): string {
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(name)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
+/**
+ * 查詢字串一律是「名稱 代號」兩個詞。
+ *
+ * **只用名稱會抓到別的東西**（實測 2026-07-27）：`陽明` 回的全是陽明交通大學的校園新聞，
+ * 與陽明海運（2609）無關；加上代號後 100 則全部命中該檔股票。
+ * 台股名稱與機構 / 地名撞名的情況太常見，代號是唯一可靠的消歧依據。
+ */
+export function googleNewsRssUrl(name: string, ticker: string): string {
+  const q = `${name} ${ticker}`.trim()
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
 }
 
 /** 還原常見 XML entity（含十進位/十六進位數字型）。RSS 標題實測會出現 &amp; 與 &#39; */

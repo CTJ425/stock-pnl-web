@@ -33,7 +33,12 @@
 - [x] schema 閘門一律 `>=`（0.4.0 事故防線），新增測試釘住
 - [x] 上櫃股缺料仍寫檔＋notes，UI 與 prompt 各有明確文案，不臆測
 - [x] 缺料時 AI 解讀不阻斷（news 為 null 照樣可產生）
-- [ ] **線上**：部署 `stock-report --no-verify-jwt`、觸發 generate-all、確認兩個新前綴與 UI
+- [x] **測試區線上完成**（2026-07-27 14:04）：部署（逐檔 diff 驗證）、schema §4.1、
+      觸發 generate-all、`fundamental/` 與 `news/` 皆產出並核對數字正確
+- [x] dev.5 修 2 個實測發現的問題：新聞查詢撞名（加代號）、ETF 註記誤稱上櫃
+- [x] 順手修好測試區 cron 的佔位符故障（詳見 PROGRESS.md 2026-07-27 14:04）
+- [ ] 使用者需**登出再登入**取得 admin claim，並重填 AI 設定後做 UI 實測
+- [ ] **正式區**尚未套用 dev.2–dev.5 的任何異動（schema §4.1、新版函式），併 main 時處理
 
 ### Task 19: AI 提示詞加「建議操作」與「注意事項」 (0.6.0-dev.3)
 - **Status**: IMPLEMENTED — 閘門全綠（test 260 passed / build 通過）

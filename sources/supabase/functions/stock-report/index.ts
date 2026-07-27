@@ -631,7 +631,9 @@ async function syncFundamental(
 
       const notes: string[] = []
       if (!valuation && !latestRevenue && !industry) {
-        notes.push('此代號查無上市基本面資料（可能為上櫃股票，暫不支援）')
+        // ETF 與上櫃股都不在這三份 TWSE 檔內（實測 0050 三份皆查無）。
+        // 兩者成因不同但對使用者是同一件事：這裡沒有公司基本面可看。
+        notes.push('查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中')
       }
 
       const file: FundamentalFile = {
@@ -676,7 +678,8 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
         continue
       }
 
-      const res = await fetch(googleNewsRssUrl(name), {
+      const url = googleNewsRssUrl(name, ticker)
+      const res = await fetch(url, {
         headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/xml' },
         signal: AbortSignal.timeout(10_000),
       })
@@ -689,7 +692,7 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
         ticker,
         name,
         asOf: new Date().toISOString(),
-        query: name,
+        query: `${name} ${ticker}`,
         items,
       }
       if (await uploadJson(`news/${ticker}.json`, file)) synced++
