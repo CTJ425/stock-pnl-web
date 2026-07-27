@@ -4,10 +4,11 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 
 // 以 mock 取代網路層：這裡驗的是版面與分頁切換，不是抓取邏輯
-const { fetchStoredReport, generateReport, fetchDailySeries } = vi.hoisted(() => ({
+const { fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental } = vi.hoisted(() => ({
   fetchStoredReport: vi.fn(),
   generateReport: vi.fn(),
   fetchDailySeries: vi.fn(),
+  fetchFundamental: vi.fn(),
 }))
 vi.mock('../../services/reportProxy', () => ({
   isReportConfigured: true,
@@ -15,6 +16,7 @@ vi.mock('../../services/reportProxy', () => ({
   generateReport,
 }))
 vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
+vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { ChipDay, ChipLeg, ReportData } from '../../services/reportProxy'
@@ -72,9 +74,11 @@ describe('StockDetailPage', () => {
     fetchStoredReport.mockReset()
     generateReport.mockReset()
     fetchDailySeries.mockReset()
+    fetchFundamental.mockReset()
     fetchStoredReport.mockResolvedValue(report)
-    // 預設無日線（批次尚未跑過）；需要圖表的個案自行覆寫
+    // 預設無日線 / 無基本面（批次尚未跑過）；需要的個案自行覆寫
     fetchDailySeries.mockResolvedValue(null)
+    fetchFundamental.mockResolvedValue(null)
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
@@ -374,5 +378,56 @@ describe('StockDetailPage', () => {
 
     await user.click(aiTabButton)
     expect(screen.getByText('AI 個股綜合解讀')).toBeTruthy()
+  })
+
+  it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
+    const user = userEvent.setup()
+    fetchFundamental.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      dataDate: '2026-07-25',
+      industry: '半導體業',
+      valuation: {
+        peRatio: 31.59,
+        dividendYieldPercent: 0.94,
+        pbRatio: 10.34,
+        dataDate: '2026-07-24',
+      },
+      revenueUnit: '千元',
+      revenueMonths: [],
+      notes: [],
+    })
+
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
+
+    await user.click(screen.getByRole('button', { name: '基本面' }))
+    expect(screen.getByText('31.59')).toBeTruthy()
+    expect(screen.getByText('估值指標')).toBeTruthy()
+  })
+
+  it('產業別 badge：有資料才出現在標題旁', async () => {
+    fetchFundamental.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      dataDate: '2026-07-25',
+      industry: '半導體業',
+      valuation: null,
+      revenueUnit: '千元',
+      revenueMonths: [],
+      notes: [],
+    })
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    expect(await screen.findByText('半導體業')).toBeTruthy()
+  })
+
+  it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {
+    const user = userEvent.setup()
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
+
+    await user.click(screen.getByRole('button', { name: '基本面' }))
+    expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
+    expect(screen.queryByText('半導體業')).toBeNull()
   })
 })

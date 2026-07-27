@@ -6,6 +6,8 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Bot, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Settings, Trash2 } from 'lucide-react'
 import { fetchDailySeries } from '../../services/dailyProxy'
+import type { FundamentalData } from '../../services/fundamentalProxy'
+import { fetchNews } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import {
   AiError,
@@ -28,11 +30,13 @@ interface AiTabProps {
   ticker: string
   name: string
   report: ReportData | null
+  /** 由 StockDetailPage 載入分發（標題 badge / 基本面分頁 / 此處共用同一份） */
+  fundamental: FundamentalData | null
 }
 
 const AI_TIMEOUT_SECONDS = Math.round(AI_TIMEOUT_MS / 1000)
 
-export function AiTab({ ticker, name, report }: AiTabProps) {
+export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   // 設定狀態
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -165,7 +169,9 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
       if (!view) {
         throw new AiError('bad-response', '無法計算個股之技術面指標 (歷史股價資料不存在或為空)')
       }
-      const payload = buildAiPayload({ ticker, name, view, report, range })
+      // 新聞缺料不阻斷解讀（prompt 有缺料文案），與 report 為 null 的處理一致
+      const news = await fetchNews(ticker)
+      const payload = buildAiPayload({ ticker, name, view, report, range, fundamental, news })
       const { system, user } = renderAiPrompt(payload)
 
       const provider = createAiProvider(settings)

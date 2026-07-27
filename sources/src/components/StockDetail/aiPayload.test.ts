@@ -198,6 +198,8 @@ describe('aiPayload', () => {
       expect(system).toContain('建議操作')
       expect(system).toContain('注意事項')
       expect(system).toContain('不得給出明確的買進')
+      expect(system).toContain('不得臆測、擴寫或引用標題以外的新聞內容')
+      expect(system).toContain('月營收為千元')
       expect(system).toContain('本解讀為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
 
       // User Prompt 斷言
@@ -206,6 +208,102 @@ describe('aiPayload', () => {
       expect(user).toContain('單位：股數')
       expect(user).toContain('單位：張')
       expect(user).toContain('建議操作')
+    })
+
+    it('基本面與新聞有資料時應帶單位、產業別與逐則標題', () => {
+      const payload = buildAiPayload({
+        ticker: '2330',
+        name: '台積電',
+        view: dummyView,
+        report: dummyReport,
+        range: '1y',
+        fundamental: {
+          ticker: '2330',
+          asOf: '2026-07-27T09:31:00.000Z',
+          dataDate: '2026-07-25',
+          industry: '半導體業',
+          valuation: {
+            peRatio: 31.59,
+            dividendYieldPercent: 0.94,
+            pbRatio: 10.34,
+            dataDate: '2026-07-24',
+          },
+          revenueUnit: '千元',
+          revenueMonths: [
+            {
+              yearMonth: '2026-05',
+              revenueThousandTwd: 416975163,
+              momPercent: 1.2,
+              yoyPercent: 40.1,
+              cumulativeYoyPercent: 30,
+            },
+            {
+              yearMonth: '2026-06',
+              revenueThousandTwd: 442679969,
+              momPercent: 6.16,
+              yoyPercent: 67.87,
+              cumulativeYoyPercent: 35.61,
+            },
+          ],
+          notes: [],
+        },
+        news: {
+          ticker: '2330',
+          asOf: '2026-07-27T09:35:00.000Z',
+          items: [
+            {
+              title: '台積電先進製程需求強勁',
+              source: '自由財經',
+              publishedAt: '2026-07-27T02:08:08.000Z',
+            },
+            { title: '法說會前夕觀望', source: null, publishedAt: null },
+          ],
+        },
+      })
+
+      expect(payload.fundamental.hasData).toBe(true)
+      expect(payload.news.hasData).toBe(true)
+      // 月營收在 payload 內轉為由新到舊
+      expect(payload.fundamental.revenueMonths?.[0].yearMonth).toBe('2026-06')
+
+      const { user } = renderAiPrompt(payload)
+      expect(user).toContain('產業別：半導體業')
+      expect(user).toContain('本益比 31.59')
+      expect(user).toContain('殖利率 0.94%')
+      expect(user).toContain('單位：千元')
+      expect(user).toContain('2026-06：營收 442679969 千元（月增 +6.16% / 年增 +67.87%）')
+      expect(user).toContain('2026-07-27（自由財經）：台積電先進製程需求強勁')
+      expect(user).toContain('日期不明（來源不明）：法說會前夕觀望')
+    })
+
+    it('基本面與新聞缺料時應印替代文案，且不得出現數字欄位', () => {
+      const payload = buildAiPayload({
+        ticker: '5274',
+        name: '上櫃股',
+        view: dummyView,
+        report: dummyReport,
+        range: '1y',
+        // 上櫃股的缺料檔：有檔案但三項全空，等同沒資料
+        fundamental: {
+          ticker: '5274',
+          asOf: '2026-07-27T09:31:00.000Z',
+          dataDate: '2026-07-25',
+          industry: null,
+          valuation: null,
+          revenueUnit: '千元',
+          revenueMonths: [],
+          notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
+        },
+        news: null,
+      })
+
+      expect(payload.fundamental.hasData).toBe(false)
+      expect(payload.news.hasData).toBe(false)
+
+      const { user } = renderAiPrompt(payload)
+      expect(user).toContain('請勿臆測任何基本面數據')
+      expect(user).toContain('請勿臆測消息面')
+      expect(user).not.toContain('本益比')
     })
 
     it('當 report 為 null 時，user prompt 應標示籌碼資料暫時無法取得', () => {

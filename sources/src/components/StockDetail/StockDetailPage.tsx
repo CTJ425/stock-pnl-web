@@ -1,11 +1,13 @@
 /**
- * 個股分析的內容區：「籌碼 / 技術面 / 我的持股」分頁籤。
+ * 個股分析的內容區：「籌碼 / 技術面 / 基本面 / 我的持股 / AI 解讀」分頁籤。
  * 取代 v1 的彈窗 —— 字串模板做不出可互動圖表（見 docs/agent/PLAN.md §B）。
  *
  * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定，
  * 共用報告本身不含個資。頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
  *
  * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
+ * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面分頁、AI 解讀），
+ * 與籌碼報告各自獨立，任一失敗不影響另一個。
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -16,9 +18,11 @@ import {
   type ReportData,
   type ReportHolding,
 } from '../../services/reportProxy'
+import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
+import { FundamentalTab } from './FundamentalTab'
 import { HoldingTab } from './HoldingTab'
 import { TechnicalTab } from './TechnicalTab'
 
@@ -33,11 +37,12 @@ interface StockDetailPageProps extends StockDetailTarget {
   selector?: ReactNode
 }
 
-type DetailTab = 'chips' | 'technical' | 'holding' | 'ai'
+type DetailTab = 'chips' | 'technical' | 'fundamental' | 'holding' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'chips', label: '籌碼' },
   { id: 'technical', label: '技術面' },
+  { id: 'fundamental', label: '基本面' },
   { id: 'holding', label: '我的持股' },
   { id: 'ai', label: 'AI 解讀' },
 ]
@@ -47,6 +52,8 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
+  const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
+  const [fundLoading, setFundLoading] = useState(true)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfNote, setPdfNote] = useState('')
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -84,6 +91,23 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name])
 
+  // 基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）
+  useEffect(() => {
+    let alive = true
+    setFundLoading(true)
+    setFundamental(null)
+    ;(async () => {
+      const f = await fetchFundamental(ticker)
+      if (alive) {
+        setFundamental(f)
+        setFundLoading(false)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [ticker])
+
   async function handleDownload() {
     if (!surfaceRef.current) return
     setPdfBusy(true)
@@ -105,6 +129,11 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
         <div className="detail-title">
           <h2>
             {ticker} {name}
+            {fundamental?.industry && (
+              <span className="badge" style={{ marginLeft: 8, verticalAlign: 'middle' }}>
+                {fundamental.industry}
+              </span>
+            )}
           </h2>
           {/* 資料日期與更新時間屬於「籌碼」報告本身，故顯示於報告表頭（也在 PDF 擷取範圍內），此處不重複 */}
           <span className="hint">個股分析</span>
@@ -151,8 +180,13 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
           </>
         )}
         {tab === 'technical' && <TechnicalTab ticker={ticker} />}
+        {tab === 'fundamental' && (
+          <FundamentalTab fundamental={fundamental} loading={fundLoading} />
+        )}
         {tab === 'holding' && <HoldingTab holding={holding} />}
-        {tab === 'ai' && <AiTab ticker={ticker} name={name} report={report} />}
+        {tab === 'ai' && (
+          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
+        )}
       </div>
     </div>
   )

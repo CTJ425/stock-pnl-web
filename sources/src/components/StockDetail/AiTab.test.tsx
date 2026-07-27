@@ -3,12 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { AiTab } from './AiTab'
 
-const { loadAiSettings, saveAiSettings, clearAiSettings, isAiAdmin, fetchDailySeries, createAiProvider } = vi.hoisted(() => ({
+const {
+  loadAiSettings,
+  saveAiSettings,
+  clearAiSettings,
+  isAiAdmin,
+  fetchDailySeries,
+  fetchNews,
+  createAiProvider,
+} = vi.hoisted(() => ({
   loadAiSettings: vi.fn(),
   saveAiSettings: vi.fn(),
   clearAiSettings: vi.fn(),
   isAiAdmin: vi.fn(),
   fetchDailySeries: vi.fn(),
+  fetchNews: vi.fn(),
   createAiProvider: vi.fn(),
 }))
 
@@ -25,6 +34,10 @@ vi.mock('../../services/aiSettings', async (importOriginal) => {
 
 vi.mock('../../services/dailyProxy', () => ({
   fetchDailySeries,
+}))
+
+vi.mock('../../services/newsProxy', () => ({
+  fetchNews,
 }))
 
 vi.mock('../../services/aiClient', async (importOriginal) => {
@@ -67,6 +80,7 @@ describe('AiTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fetchDailySeries.mockResolvedValue(dummyDaily)
+    fetchNews.mockResolvedValue(null)
     isAiAdmin.mockResolvedValue(true)
   })
 
@@ -77,7 +91,7 @@ describe('AiTab', () => {
   it('未設定 AI 服務時應顯示設定表單，且畫面不出現任何 AI 生成文字', async () => {
     loadAiSettings.mockResolvedValue(null)
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     await screen.findByText('未設定 AI 服務供應商')
 
@@ -99,7 +113,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生解讀' })
     fireEvent.click(btn)
@@ -108,6 +122,90 @@ describe('AiTab', () => {
 
     expect(screen.getByText(/免責聲明/)).toBeTruthy()
     expect(mockComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('基本面與新聞有資料時應一併餵進 prompt；新聞為 null 時仍可完成解讀', async () => {
+    loadAiSettings.mockResolvedValue({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: 'test-key',
+    })
+    fetchNews.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:35:00.000Z',
+      items: [
+        {
+          title: '台積電先進製程需求強勁',
+          source: '自由財經',
+          publishedAt: '2026-07-27T02:08:08.000Z',
+        },
+      ],
+    })
+
+    const mockComplete = vi.fn().mockResolvedValue('含基本面與消息面的解讀。')
+    createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
+
+    render(
+      <AiTab
+        ticker="2330"
+        name="台積電"
+        report={dummyReport}
+        fundamental={{
+          ticker: '2330',
+          asOf: '2026-07-27T09:31:00.000Z',
+          dataDate: '2026-07-25',
+          industry: '半導體業',
+          valuation: {
+            peRatio: 31.59,
+            dividendYieldPercent: 0.94,
+            pbRatio: 10.34,
+            dataDate: '2026-07-24',
+          },
+          revenueUnit: '千元',
+          revenueMonths: [
+            {
+              yearMonth: '2026-06',
+              revenueThousandTwd: 442679969,
+              momPercent: 6.16,
+              yoyPercent: 67.87,
+              cumulativeYoyPercent: 35.61,
+            },
+          ],
+          notes: [],
+        }}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '產生解讀' }))
+    await screen.findByText('含基本面與消息面的解讀。')
+
+    const { user } = mockComplete.mock.calls[0][0] as { user: string }
+    expect(user).toContain('半導體業')
+    expect(user).toContain('本益比 31.59')
+    expect(user).toContain('台積電先進製程需求強勁')
+  })
+
+  it('新聞查無資料時不阻斷解讀，prompt 帶缺料文案', async () => {
+    loadAiSettings.mockResolvedValue({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: 'test-key',
+    })
+    fetchNews.mockResolvedValue(null)
+
+    const mockComplete = vi.fn().mockResolvedValue('沒有新聞也能解讀。')
+    createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '產生解讀' }))
+    await screen.findByText('沒有新聞也能解讀。')
+
+    const { user } = mockComplete.mock.calls[0][0] as { user: string }
+    expect(user).toContain('請勿臆測消息面')
+    expect(user).toContain('請勿臆測任何基本面數據')
   })
 
   it('非管理員不應看到設定表單與「AI 設定」按鈕，但仍可產生解讀', async () => {
@@ -125,7 +223,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生解讀' })
     expect(screen.queryByRole('button', { name: /AI 設定/ })).toBeNull()
@@ -139,7 +237,7 @@ describe('AiTab', () => {
     isAiAdmin.mockResolvedValue(false)
     loadAiSettings.mockResolvedValue(null)
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     await screen.findByText(/請聯絡管理員完成設定/)
     expect(screen.queryByLabelText(/AI 服務供應商/)).toBeNull()
@@ -160,7 +258,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生解讀' })
     fireEvent.click(btn)

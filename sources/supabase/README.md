@@ -203,6 +203,31 @@ supabase functions deploy stock-report --no-verify-jwt
 > 2. `timestamp` 是 UTC 秒數、指向當地開盤時刻。**一律先加 `meta.gmtoffset` 再取 UTC 日期** ——
 >    直接 `toISOString()` 在台股時區碰巧會對，但那是巧合。
 
+### 基本面與新聞（0.6.0-dev.4 起）
+
+同一個 `generate-all` 批次另外產出兩類覆寫制檔案，佈局與 `daily/` 同款
+（不符 `^\d{8}$`，`pruneStorage` 不會碰、也不需要保留期）。
+
+| 檔案 | 來源 | 跳過條件 | 失敗處理 |
+|---|---|---|---|
+| `fundamental/{ticker}.json` | OpenAPI `exchangeReport/BWIBBU_ALL`（估值）、`opendata/t187ap05_L`（月營收）、`opendata/t187ap03_L`（產業別） | 既有檔的 `dataDate >= 本次資料日` | 三份大檔全失敗就整段跳過（不把既有檔覆寫成空殼）；單檔失敗跳過 |
+| `news/{ticker}.json` | Google News RSS `news.google.com/rss/search?q={股票名稱}` | 既有檔的 `asOf` 是同一個台北日曆日 | fetch 失敗 / 逾時 10 秒 / 解析 0 則時**不覆寫**既有檔（留舊新聞勝過空檔） |
+
+三份 OpenAPI 大檔一樣走 `chip_raw_cache`（dataset key：`BWIBBU_ALL` / `T187AP05_L` / `T187AP03_L`），
+所以三段式 cron 只有第一班真的去抓。
+
+> **三個實測過的陷阱**（改這段程式前先讀）：
+> 1. `BWIBBU_ALL` 是**英文鍵**（`Code` / `PEratio`），另外兩支是**中文鍵**（`公司代號`）。
+> 2. 日期是民國制：`BWIBBU_ALL` 的 `Date` 為 7 碼（`1150724`）、`t187ap05_L` 的「資料年月」為 5 碼（`11506`）。
+> 3. **產業別在兩支 API 的形態不同**：`t187ap05_L` 直接給中文（`半導體業`），
+>    `t187ap03_L` 給兩位數代碼（`24`）需查 `INDUSTRY_NAMES` 對照表。故優先採用前者。
+>
+> 上櫃股不在這三份檔內：`fundamental/` **仍會寫檔**（欄位為 null＋`notes` 註記），
+> 讓前端區分得出「批次跑過但無資料」與「批次還沒跑」。
+
+月營收採**檔內自累積**：每次批次把最新月份併進既有的 `revenueMonths`（依年月去重、上限 12 個月），
+所以首次執行只有 1 筆，逐月長到 12 筆。
+
 ### 歷史回補行為
 
 報告內嵌最近 7 個交易日。單次呼叫最多實抓 **5 個**缺漏日（Edge Function 有 wall-clock 上限，T86 單檔 1–2MB），

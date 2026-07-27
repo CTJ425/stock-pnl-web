@@ -14,7 +14,7 @@
  * 上櫃(TPEx) 逐股端點暫不支援，查無資料時對應區塊標記缺漏。
  */
 
-const UA =
+export const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 export const MI_MARGN_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN'

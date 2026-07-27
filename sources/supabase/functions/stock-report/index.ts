@@ -15,6 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
+  UA,
   fetchJson,
   t86Url,
   marginDatedUrl,
@@ -50,6 +51,18 @@ import {
   type ChartResponse,
   type DailyFile,
 } from './twDaily.ts'
+import {
+  BWIBBU_ALL_URL,
+  FUNDAMENTAL_SCHEMA,
+  T187AP03_URL,
+  T187AP05_URL,
+  extractIndustry,
+  extractRevenue,
+  extractValuation,
+  mergeRevenueMonths,
+  type FundamentalFile,
+} from './twFundamental.ts'
+import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 chip_raw_cache 唯一的讀寫途徑
@@ -583,6 +596,110 @@ async function syncDaily(
   return synced
 }
 
+// ---- 基本面（估值 + 月營收 + 產業別）----
+
+/**
+ * 每檔台股產出 fundamental/{ticker}.json（整份覆寫，佈局同 daily/：
+ * 不符 pruneStorage 的 ^\d{8}$ 目錄名，不會被清、也不需要清）。
+ *
+ * 三份 whole-market 大檔在迴圈外各載一次（chip_raw_cache 以本次交易日快取，
+ * 頭班實抓、後兩班吃快取），迴圈內只做逐代號抽取。
+ * revenueMonths 讀回既有檔合併：覆寫制檔案靠這個自累積月營收史（首月 1 筆→12 筆）。
+ * 上櫃股三份都查無：仍寫檔（nulls + notes），讓前端能區分「跑過但無料」與「還沒跑」。
+ */
+async function syncFundamental(
+  tickers: Array<{ ticker: string; name: string }>,
+  dataYmd: string,
+): Promise<number> {
+  const targetDate = dashDate(dataYmd)
+  const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
+  const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
+  const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
+  if (!bwibbu && !revenue && !company) return 0 // 三份全失敗就別把既有檔覆寫成空殼
+
+  let synced = 0
+  for (const { ticker, name } of tickers) {
+    try {
+      const existing = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+      if (existing && existing.schema === FUNDAMENTAL_SCHEMA && existing.dataDate >= targetDate) {
+        continue
+      }
+
+      const valuation = extractValuation(bwibbu, ticker)
+      const latestRevenue = extractRevenue(revenue, ticker)
+      const industry = extractIndustry(revenue, company, ticker)
+
+      const notes: string[] = []
+      if (!valuation && !latestRevenue && !industry) {
+        notes.push('此代號查無上市基本面資料（可能為上櫃股票，暫不支援）')
+      }
+
+      const file: FundamentalFile = {
+        schema: FUNDAMENTAL_SCHEMA,
+        ticker,
+        name,
+        asOf: new Date().toISOString(),
+        dataDate: targetDate,
+        industry,
+        valuation,
+        revenueUnit: '千元',
+        revenueMonths: mergeRevenueMonths(existing?.revenueMonths, latestRevenue),
+        notes,
+      }
+      if (await uploadJson(`fundamental/${ticker}.json`, file)) synced++
+    } catch {
+      // 單檔失敗不影響其他檔，也不影響已寫好的籌碼報告
+    }
+  }
+  return synced
+}
+
+// ---- 新聞（AI 解讀的消息面）----
+
+/** ISO 時刻對應的台北日曆日 YYYY-MM-DD（UTC+8 固定偏移，台灣無日光節約） */
+function taipeiDateOf(iso: string): string {
+  return new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+/**
+ * 每檔台股以股票名稱查 Google News RSS，產出 news/{ticker}.json（整份覆寫）。
+ * 同一台北日曆日已抓過就跳過（新聞一天一抓即可；cron 一天三班，頭班抓、後兩班跳過）。
+ * fetch 失敗或解析出 0 則時**不覆寫既有檔**——留舊新聞比空檔有用。
+ */
+async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promise<number> {
+  const today = taipeiDateOf(new Date().toISOString())
+  let synced = 0
+  for (const { ticker, name } of tickers) {
+    try {
+      const existing = await downloadJson<NewsFile>(`news/${ticker}.json`)
+      if (existing && existing.schema === NEWS_SCHEMA && taipeiDateOf(existing.asOf) === today) {
+        continue
+      }
+
+      const res = await fetch(googleNewsRssUrl(name), {
+        headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/xml' },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!res.ok) continue
+      const items = parseGoogleNewsRss(await res.text())
+      if (items.length === 0) continue
+
+      const file: NewsFile = {
+        schema: NEWS_SCHEMA,
+        ticker,
+        name,
+        asOf: new Date().toISOString(),
+        query: name,
+        items,
+      }
+      if (await uploadJson(`news/${ticker}.json`, file)) synced++
+    } catch {
+      // 單檔失敗（含 10 秒逾時）不影響其他檔與主流程
+    }
+  }
+  return synced
+}
+
 /** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
@@ -640,8 +757,13 @@ async function handleGenerateAll(): Promise<Response> {
   // 技術面的日線；與籌碼報告各自獨立，抓不到也不影響上面已寫好的報告
   const dailySynced = await syncDaily(tickers, series.dataYmd)
 
+  // 基本面與新聞（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
+  const fundamentalSynced = await syncFundamental(tickers, series.dataYmd)
+  const newsSynced = await syncNews(tickers)
+
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
-  // daily/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，而日線是覆寫制、本來就沒有舊檔要清。
+  // daily/ fundamental/ news/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
+  // 而這三類都是覆寫制、本來就沒有舊檔要清。
   await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
   await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
 
@@ -652,6 +774,8 @@ async function handleGenerateAll(): Promise<Response> {
     total: tickers.length,
     historyDays: series.days.length,
     dailySynced,
+    fundamentalSynced,
+    newsSynced,
   })
 }
 

@@ -8,6 +8,33 @@
 
 ## 📋 Active Tasks
 
+### Task 20: 基本面分頁＋產業別＋新聞入 AI (0.6.0-dev.4)
+- **Status**: IMPLEMENTED — 閘門全綠（lint / test **307 passed** / build）；
+  **待重新部署 `stock-report` 與線上實測**（需使用者執行）
+- **Planner / Implementer / Reviewer**: Claude
+- **Timestamp**: 2026-07-27 11:25:16 Asia/Taipei
+
+#### 使用者定案的決定
+- 基本面範圍：估值三指標（BWIBBU_ALL，每日）＋月營收與年增率（t187ap05_L，每月）
+- 呈現：新增「基本面」分頁**並且**餵進 AI payload
+- 產業別：顯示在個股分析頁標題旁 badge ＋ 寫進 AI 提示詞（來源 t187ap03_L / t187ap05_L）
+- 新聞：Google News RSS（盤後批次抓，AI 依標題判斷利多利空）
+
+#### 異動範圍
+- 新增：`stock-report/twFundamental.ts(+test)`、`stock-report/twNews.ts(+test)`、
+  `src/services/fundamentalProxy.ts(+test)`、`src/services/newsProxy.ts(+test)`、
+  `StockDetail/FundamentalTab.tsx(+test)`
+- 修改：`stock-report/index.ts`（syncFundamental / syncNews）、`twChips.ts`（export UA）、
+  `StockDetailPage.tsx(+test)`、`AiTab.tsx(+test)`、`aiPayload.ts(+test)`、版號三處、
+  `README.md`、`supabase/README.md`、`SPEC.md`、`PLAN.md §N`
+
+#### 驗收條件
+- [x] 三個 TWSE 端點與 RSS 皆 curl 實測，欄位形態寫進註解與文件（非臆測）
+- [x] schema 閘門一律 `>=`（0.4.0 事故防線），新增測試釘住
+- [x] 上櫃股缺料仍寫檔＋notes，UI 與 prompt 各有明確文案，不臆測
+- [x] 缺料時 AI 解讀不阻斷（news 為 null 照樣可產生）
+- [ ] **線上**：部署 `stock-report --no-verify-jwt`、觸發 generate-all、確認兩個新前綴與 UI
+
 ### Task 19: AI 提示詞加「建議操作」與「注意事項」 (0.6.0-dev.3)
 - **Status**: IMPLEMENTED — 閘門全綠（test 260 passed / build 通過）
 - **Planner / Reviewer / Verifier**: Claude；**Implementer**: agy flash（使用者明確指定委派）

@@ -1,9 +1,55 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.3 —— AI 提示詞新增「建議操作」與「注意事項」小節
-- Status: IMPLEMENTED — 閘門全綠；線上套用事項同 dev.2（schema §4.1 新版 + admin tag，待使用者執行）
-- Timestamp: 2026-07-27 10:30:22 Asia/Taipei
+- Action: 0.6.0-dev.4 —— 基本面分頁、產業別 badge、新聞納入 AI 解讀
+- Status: IMPLEMENTED — 閘門全綠（307 tests）；**待重新部署 stock-report 並實測**，
+  另 dev.2 的 schema §4.1 + admin tag 仍待使用者執行
+- Timestamp: 2026-07-27 11:25:16 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 11:25:16 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.0-dev.4 —— 基本面（估值＋月營收）、產業別、新聞入 AI
+- **Status**: IMPLEMENTED — lint / test 307 passed（+13）/ build 全綠；線上部署待使用者
+
+### 做了什麼
+
+三項需求都沿用既有的「盤後批次 → Storage JSON → 前端直讀」管線，**無 DB schema 變更**
+（`chip_raw_cache` 的 PK `(ymd, dataset)` 直接容納新 dataset key）。設計理由見 PLAN.md §N。
+
+- **Edge Function**：新增純函式模組 `twFundamental.ts`（估值 / 月營收 / 產業別解析）與
+  `twNews.ts`（Google News RSS regex 解析）；`index.ts` 加 `syncFundamental()` / `syncNews()`
+  掛在 `handleGenerateAll` 的籌碼與 manifest 之後、prune 之前。
+- **前端**：`fundamentalProxy.ts` / `newsProxy.ts`（照 dailyProxy 模板，schema 閘門一律 `>=`）；
+  新增 `FundamentalTab.tsx`；`StockDetailPage` 加第三個分頁籤「基本面」、標題旁產業別 badge，
+  並在該層載入 fundamental 一次分發給三處（badge / 分頁 / AiTab）。
+- **AI**：`AiPayload` 加 `fundamental` / `news` 兩區塊（沿用 chip 的 hasData 缺料模式、單位寫進欄位名）；
+  user prompt 加【基本面摘要】【近期新聞標題】兩段與缺料替代文案；
+  system prompt 新增準則 7（新聞只能依標題字面判斷、不得臆測擴寫），準則 4 補上千元 / 百分比單位。
+
+### 實測記錄（curl，2026-07-27，寫進程式註解與 supabase/README.md）
+
+| 端點 | 筆數 | 關鍵欄位形態 |
+| --- | --- | --- |
+| `BWIBBU_ALL` | 1080 | **英文鍵** `Code/PEratio/DividendYield/PBratio`，`Date` 民國 7 碼 `1150724` |
+| `t187ap05_L` | 1082 | 中文鍵，「資料年月」民國 5 碼 `11506`，「產業別」**直接給中文**「半導體業」 |
+| `t187ap03_L` | 1092 | 中文鍵，「產業別」是**兩位數代碼** `24` → 需 `INDUSTRY_NAMES` 對照表 |
+| Google News RSS | 105 則 | 單行 XML；`<title>標題 - 來源</title>` 純文字＋entity（未見 CDATA）、`<source url=...>` |
+
+三個因此而生的實作決定：產業別**優先取 t187ap05_L 的中文名**（免維護對照表）；
+民國日期分 7 碼 / 5 碼兩個轉換函式各自測試釘住；RSS 解析同時支援 CDATA 與純文字兩形態
+（Google 端格式可能變動）。
+
+### 待辦（線上操作，需使用者執行）
+
+- [ ] **重新部署**：`cd sources && supabase functions deploy stock-report --no-verify-jwt`
+      （`--no-verify-jwt` 不可省，見 CLAUDE.md §13.3）。
+- [ ] （選）手動觸發一次 `generate-all` 立即回填，確認 bucket 出現 `fundamental/`、`news/` 兩個前綴。
+      CRON_SECRET 明文 Agent 拿不到，需使用者自己執行。
+- [ ] 實測：基本面分頁的估值數字對得上 TWSE 網站、產業別正確、AI 解讀有提到基本面與消息面且無臆測數字。
+- [ ] 月營收首次只會有 1 筆（檔內自累積設計），逐月長到 12 筆——這是預期行為不是 bug。
 
 ---
 
