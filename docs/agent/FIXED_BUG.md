@@ -8,6 +8,37 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-002 - 正式區 cron 的 `<CRON_SECRET>` 佔位符從未替換，盤後批次從來沒自動跑過
+- **Date**: 2026-07-27（發現並修復）
+- **Discovered by**: Claude，0.6.0 定版後的兩區部署稽核
+- **Root Cause**: `schema.sql` §6c 的 `cron.schedule` body 內有兩個佔位符
+  （`<PROJECT_REF>` 與 `<CRON_SECRET>`），需人工替換。正式區當初套用時未替換，
+  cron job 因此以字面值 `'<CRON_SECRET>'`（長度 13）呼叫函式。
+- **Impact**: 正式區 `stock-report` 以 `--no-verify-jwt` 部署、授權完全靠 `x-cron-secret`，
+  故三班全數 401。**正式區的盤後批次從未靠 cron 產出過報告**，過去所有報告都是手動觸發的。
+  更麻煩的是它**無聲**：失敗只留在 `net._http_response`（保留 6 小時），隔天就查無痕跡，
+  而 Storage 裡又一直有（手動產的）報告，從前端完全看不出異常。
+- **同源前例**: 測試區同一個佔位符故障已於 2026-07-27 14:04 修復。同一顆地雷踩了兩次，
+  因為兩區是各自獨立套用 schema 的，修好一邊不會連帶修好另一邊。
+- **Fix**: 重新 `cron.unschedule` + `cron.schedule`，填入真實 project ref 與 CRON_SECRET 明文。
+  修復後覆驗：`active=true`、URL 為 `https://kxnxadaghidwumqsqneu.supabase.co/functions/v1/stock-report`、
+  密鑰長度不再是 13。
+- **偵測方法**（往後可直接重用，只回頭尾 4 碼故可安全外流）:
+  ```sql
+  SELECT jobname, schedule, active,
+         (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url,
+         left(s,4) || '…' || right(s,4) || ' 長度=' || length(s) AS 密鑰片段
+  FROM (SELECT jobname, schedule, active, command,
+               (regexp_match(command, $$'x-cron-secret',\s*'([^']*)'$$))[1] AS s
+        FROM cron.job WHERE jobname = 'stock-report-nightly') t;
+  ```
+  **長度 13 = `<CRON_SECRET>` 沒換掉。**
+- **Verification**: 2026-07-27 17:30 那班為第一次真實驗證 —— 看 `reports/manifest.json`
+  的 `generatedAt` 有沒有從基準 `2026-07-27T08:04:50.805Z` 往前推進，
+  以及 `batch_run_log` 有沒有寫入第一列。
+- **教訓**: 需要人工替換佔位符的 schema 段落，**套用完必須有一次獨立的覆驗查詢**。
+  「SQL 執行成功」不等於「值填對了」—— `cron.schedule` 對佔位符字串照收不誤。
+
 ### Bug ID: BUG-001 - 庫存總覽與券商 APP 均價與損益率口徑不一致
 - **Date**: 2026-07-17
 - **Root Cause**:
