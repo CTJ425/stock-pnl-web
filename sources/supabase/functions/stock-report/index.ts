@@ -43,6 +43,7 @@ import {
   buildReport,
   dashDate,
   isWeekendYmd,
+  taipeiYmd,
   tradingDateCandidates,
   type ChipDay,
   type HoldingContext,
@@ -797,7 +798,33 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
   return json({ ok: true, ticker, ymd: dataYmd, dailySynced, fundamentalSynced })
 }
 
+/**
+ * 台北時間 HH:MM。存進 batch_run_log 是為了「一眼看得出這是哪一班」，
+ * 免得每次查都要自己把 UTC 轉時區。
+ */
+function taipeiHhmm(d: Date): string {
+  const t = new Date(d.getTime() + 8 * 60 * 60 * 1000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`
+}
+
+/**
+ * 記錄一次批次執行。寫入失敗完全不影響主流程 —— 這是觀測資料，不是產出。
+ *
+ * 存在的理由見 schema.sql §7：pg_net 的回應只留 6 小時、chip_raw_cache 只記成功時間，
+ * 兩者都答不出「那一班跑的時候當天資料到了沒」，而那正是微調 cron 時段唯一需要的事實。
+ */
+async function logBatchRun(row: Record<string, unknown>): Promise<void> {
+  try {
+    await db.from('batch_run_log').insert(row)
+  } catch {
+    // 觀測失敗不能拖垮批次
+  }
+}
+
 async function handleGenerateAll(): Promise<Response> {
+  const startedAt = Date.now()
+  const now = new Date()
   const tickers = await heldTwTickers()
   const series = await loadSeries(
     tickers.map((t) => t.ticker),
@@ -841,6 +868,24 @@ async function handleGenerateAll(): Promise<Response> {
   await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
   await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
 
+  // 觀測紀錄：t86_today 是微調 cron 時段唯一要看的欄位 ——
+  // 它回答「這一班跑的時候，當天的個股三大法人到了沒」。
+  const todayYmd = taipeiYmd(now)
+  await logBatchRun({
+    taipei_ymd: todayYmd,
+    taipei_time: taipeiHhmm(now),
+    data_ymd: series.dataYmd,
+    t86_today: series.dataYmd === todayYmd,
+    margin_ok: !series.marginDatedFailed,
+    borrow_ok: borrow.resp !== null,
+    history_days: series.days.length,
+    generated,
+    daily_synced: dailySynced,
+    fundamental_synced: fundamentalSynced,
+    news_synced: newsSynced,
+    duration_ms: Date.now() - startedAt,
+  })
+
   return json({
     ok: true,
     ymd: series.dataYmd,
@@ -850,6 +895,7 @@ async function handleGenerateAll(): Promise<Response> {
     dailySynced,
     fundamentalSynced,
     newsSynced,
+    t86Today: series.dataYmd === todayYmd,
   })
 }
 

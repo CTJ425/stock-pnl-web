@@ -89,7 +89,7 @@ export interface ReportData {
 }
 
 /** 台北時區（UTC+8）的 YYYYMMDD */
-function taipeiYmd(d: Date): string {
+export function taipeiYmd(d: Date): string {
   const t = new Date(d.getTime() + 8 * 60 * 60 * 1000)
   const y = t.getUTCFullYear()
   const m = String(t.getUTCMonth() + 1).padStart(2, '0')

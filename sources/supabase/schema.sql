@@ -264,3 +264,46 @@ SELECT cron.schedule(
 --
 -- 執行結果查詢（pg_net 的回應保留 6 小時，見 pg_net.ttl）：
 --   select id, status_code, error_msg, left(content, 200) from net._http_response order by id desc limit 5;
+
+
+-- 7. 批次執行紀錄 (batch_run_log)
+--     每次 generate-all 跑完寫一列，用來回答「這個時間點，當天的資料到了沒？」
+--
+--     為什麼需要它：cron 的三段時間是依「各資料源大約幾點公布」訂的，但那個認知
+--     一度是錯的 —— 註解寫 T86（個股三大法人）約 15:00–15:30，實測 2026-07-27 15:42
+--     T86 仍未發布，而同一時間 BFI82U（大盤買賣金額統計表）已經有資料。
+--     兩份報表被混為一談，導致第一班的餘裕被高估。
+--
+--     pg_net 的 net._http_response 只保留 6 小時，chip_raw_cache.updated_at 也只記
+--     「成功抓到的時間」，兩者都無法回答「那一班跑的時候資料到了沒」。
+--     沒有這張表就只能靠人剛好在線上手動 curl 才知道，無從微調排程。
+--
+--     只由 Edge Function（service role）寫入，故不建 RLS policy —— 與 chip_raw_cache 同款。
+CREATE TABLE IF NOT EXISTS batch_run_log (
+    id            BIGSERIAL PRIMARY KEY,
+    ran_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- 執行當下的台北日期與時刻（HH:MM）。存字串是為了直接看得懂是哪一班，免每次轉時區
+    taipei_ymd    TEXT,
+    taipei_time   TEXT,
+    -- 這次批次解析出來的資料日；若當天資料尚未發布，它會是前一個交易日
+    data_ymd      TEXT,
+    -- data_ymd 是否等於執行當天 → 當天的 T86 這時候到了沒。微調排程時看的就是這一欄
+    t86_today     BOOLEAN,
+    margin_ok     BOOLEAN,
+    borrow_ok     BOOLEAN,
+    history_days  INT,
+    generated     INT,
+    daily_synced  INT,
+    fundamental_synced INT,
+    news_synced   INT,
+    duration_ms   INT
+);
+
+ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS batch_run_log_ran_at_idx ON batch_run_log (ran_at DESC);
+
+-- 常用查詢：看各班次抓到當天 T86 的比率，用來決定要不要挪時間或加班次
+--   SELECT taipei_time, count(*) AS 跑了幾次,
+--          count(*) FILTER (WHERE t86_today) AS 拿到當天T86
+--   FROM batch_run_log GROUP BY taipei_time ORDER BY taipei_time;
