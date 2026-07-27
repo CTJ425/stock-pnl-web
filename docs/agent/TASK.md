@@ -11,7 +11,7 @@
 ### Task 25: 修 T86 指紋不穩定＋前端切回前景自動重抓 (0.6.2)
 - **Status**: 兩分支（`dev` / `main` 同為 `ef9937f`）與兩區 Edge Function 皆已上線
   （測試區 v17 / 正式區 v11，`verify_jwt=false`）。閘門 **352 tests** 全綠。
-  **線上驗證進行中**：等正式區 `batch_run_log` 出現 `skipped=true / skip_reason=complete`
+  **線上驗證 ✅ 通過**（23:00 出現 `skip_reason=complete`、753ms、零對外抓取）
 - **Agent**: Claude
 - **Timestamp**: 2026-07-27 22:20:00 Asia/Taipei
 - BUG-004：T86 端點回的 1334 列內容相同但**列順序每次都不同**，位元組指紋因此永不穩定，

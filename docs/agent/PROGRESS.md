@@ -12,7 +12,7 @@
 
 - **Agent**: Claude
 - **Action**: 0.6.1 兩區上線並驗證；個股分析頁切回前景自動換新報告 (0.6.2)
-- **Status**: 0.6.1 兩區皆已上線；0.6.2 閘門全綠（**346 tests**）並上 dev 與 main
+- **Status**: 0.6.1/0.6.2 兩區皆已上線並線上驗證通過（**352 tests**）
 
 ### 0.6.1 上線結果
 
@@ -93,7 +93,28 @@ scratchpad，之後的 `db query --linked` 在那個沒有 link 設定的目錄�
 **必須先正規化到語意層**。外部端點沒有義務保證序列化穩定 ——
 這裡是列順序，jsonb 那邊是鍵順序，兩個獨立的來源，都會讓位元組比對失效。
 
-### 待觀察（今晚）
+### 線上驗證通過（23:00，正式區）
+
+修復部署後四輪一路走完預期路徑，與修復前的 0/1 震盪形成對照：
+
+```
+22:15 u=0 frozen=false regen=true  8509ms  ← 換演算法，重新起算
+22:30 u=1 frozen=false regen=false 8467ms
+22:45 u=2 frozen=true  regen=false 7749ms  ← 定稿
+23:00 u=2 frozen=true  skip=true/complete   753ms  ← 短路，零對外抓取
+```
+
+當日彙總：13 輪 / 1 次短路 / 6 次重產；短路平均 **753ms**、實跑平均 **10,025ms**。
+T86 定稿 22:45、融資融券最早 21:00。
+
+兩個要誠實記下來的偏差：
+
+1. **我先前預估短路是「幾十毫秒」，實際 753ms。** 短路路徑仍有 3 次 Postgres 來回
+   （`readLastRun` / `cachedDayDatasets` / `logBatchRun`）。省下的是對外抓取，不是 DB 往返。
+2. **`t86_revisions=5` 今天不可信** —— 含修復前位元組雜訊灌進去的假改寫。
+   第一個乾淨的數字要等明天。
+
+### 待觀察（明天 2026-07-28，第一個完整的 32 輪日）
 
 ```sql
 SELECT taipei_time, t86_today, t86_unchanged, t86_frozen,
@@ -101,9 +122,14 @@ SELECT taipei_time, t86_today, t86_unchanged, t86_frozen,
 FROM batch_run_log WHERE taipei_ymd = '20260727' ORDER BY id;
 ```
 
-預期：T86 連兩輪相同後 `t86_frozen` 轉 true；約 21:00 後 `margin_today` 轉 true；
-兩者都滿足的下一輪起 `skipped=true / skip_reason=complete`，`duration_ms` 掉到幾十毫秒。
-**若到 23:45 收工都沒出現 `skipped`，就是短路判斷有問題，要回頭查。**
+今天只從 20:30 起在新排程下跑了 13 輪，明天才是第一個 16:00–23:45 的完整 32 輪日。要看：
+
+1. **16:00–17:00 那幾輪**（T86 尚未發布）的行為。今天沒有涵蓋到這段 ——
+   `t86Today=false` 時 `nextT86State` 回 null、狀態不推進，理論上正確但沒有實測過。
+2. **一整天的短路比率**。定稿後到 23:45 之間應該全是 `skipped`，
+   若不是，代表定稿又被解凍（`t86_revisions` 會顯示）。
+3. **第一個乾淨的 `t86_revisions`** —— T86 一天到底真的被改寫幾次，
+   這是整個輪詢改版最初想回答的問題。
 
 ---
 
