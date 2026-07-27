@@ -284,7 +284,17 @@ SELECT cron.schedule(
 --     而且失敗是無聲的：函式以 --no-verify-jwt 部署，401 只留在 net._http_response
 --     （保留 6 小時），Storage 裡又一直有手動產的報告，從前端完全看不出異常。
 --
---     判斷標準：url 不得含 '<'；密鑰長度不得是 13（那正是 '<CRON_SECRET>' 的長度）。
+--     ⚠️ 光檢查佔位符不夠 —— BUG-003 是同一顆地雷的變種：測試區的 job 不是「沒換」，
+--     而是**換成了正式區的 ref 與密鑰**（推測是複製另一區的 SQL 來修）。
+--     結果測試區的排程一直在呼叫正式區的函式，被 401 擋下才沒釀成跨環境誤觸發。
+--     所以覆驗必須包含「**url 裡的 project ref 等於本專案自己的 ref**」這一條。
+--
+--     三條判斷標準：
+--       1. url 不得含 '<'，且其 project ref 必須等於 current_setting('request.jwt.claim.ref')
+--          拿不到時就用肉眼比對 —— 下面的查詢直接把 url 印出來，看得出是哪一區。
+--       2. 密鑰長度不得是 13（那正是 '<CRON_SECRET>' 的長度）。
+--       3. 密鑰要與**本專案**的 CRON_SECRET 相同。這條 SQL 驗不了（secrets 不在 DB 內），
+--          唯一的實證是排程跑過之後 net._http_response 回 200 而不是 401。
 --     只回頭尾 4 碼，貼給別人看也不會外洩密鑰。
 --
 --   SELECT jobname, schedule, active,
@@ -293,6 +303,10 @@ SELECT cron.schedule(
 --   FROM (SELECT jobname, schedule, active, command,
 --                (regexp_match(command, $q$'x-cron-secret',\s*'([^']*)'$q$))[1] AS s
 --         FROM cron.job WHERE jobname = 'stock-report-nightly') t;
+--
+--     跑過一輪後再驗這個（**只保留 6 小時**，要看要趁早）：
+--   SELECT id, status_code, left(content, 120), created
+--   FROM net._http_response ORDER BY id DESC LIMIT 5;
 
 
 -- 7. 批次執行紀錄 (batch_run_log)

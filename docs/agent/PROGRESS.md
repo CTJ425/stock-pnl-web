@@ -1,9 +1,56 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 盤後批次改為輪詢（0.6.1-dev.1）；BUG-002 修復驗證通過
-- Status: IN PROGRESS — 程式碼與文件完成、閘門全綠；**兩區皆待部署與改排程**
-- Timestamp: 2026-07-27 19:30:47 Asia/Taipei
+- Action: 盤後批次改為輪詢（0.6.1-dev.1）；測試區已部署；BUG-003 根因查明
+- Status: IN PROGRESS — 測試區 schema＋函式已上（v14），**cron 待重建（缺密鑰明文）**；
+  正式區依 §13.1 按兵不動，等 dev 驗證過再併 main
+- Timestamp: 2026-07-27 19:52:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 19:52:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 測試區套用 0.6.1；BUG-003 根因查明
+- **Status**: 測試區 2/3 完成；正式區未動
+- **授權範圍**: 使用者明確授權操作正式區與測試區的 Supabase
+
+### BUG-003 根因：測試區的 cron 打的是正式區的端點
+
+查測試區 `cron.job`：
+
+| 欄位 | 值 |
+| --- | --- |
+| url | `https://kxnxadaghidwumqsqneu.supabase.co/...` ← **正式區的 ref** |
+| 密鑰 | 43 碼（`Qea5…wvro`），非佔位符 |
+| `net._http_response` | 09:30:00Z（台北 17:30）→ **401 Unauthorized** |
+
+**測試區的排程從來不是在呼叫自己的函式。** 這是 BUG-002 的變種：
+同一顆「§6c 需人工替換的佔位符」地雷，只是這次不是忘了換，
+而是**換成了另一個環境的值**（推測 14:04 修復時複製了正式區的 SQL）。
+
+值得警惕的是：同一組 URL＋密鑰在 08:04:43Z（台北 16:04）**還回 200**，
+是正式區後來重設 `CRON_SECRET` 才變成 401。也就是說在那之前，
+**測試區的資料庫有能力觸發正式區的批次** —— 這比「測試區沒資料」嚴重。
+BUG-002 的偵測 SQL 只看「密鑰長度是不是 13」，抓不到這種，已在 §6d 補上
+「url 的 project ref 必須是自己」這條。
+
+### 測試區已完成
+
+- [x] `batch_run_log` 補 12 個新欄位＋`(taipei_ymd, id DESC)` 索引 → 共 26 欄
+      （原本 14 欄、0 列資料，因為從來沒跑成功過）
+- [x] `stock-report` 部署 **v14**、`--no-verify-jwt`（`verify_jwt=false` 確認未被改動）
+- [x] `functions download` 逐檔 diff：僅 `*.test.ts` 不在線上（本來就不上傳），
+      `pollPlan.ts` 等原始碼全部一致
+- [ ] **cron job 重建** —— 卡在沒有測試區 `CRON_SECRET` 明文（`secrets list` 只回雜湊，
+      §13.3）。`supabase secrets set` 也被權限規則擋下。需使用者提供或重設。
+
+### 正式區：刻意不動
+
+依 §13.1 dev 先行。0.6.1 只在 `dev`，正式區的基準是 `main`。
+**特別危險的是排程**：若只把正式區 cron 改成 `*/15` 而程式碼仍是 0.6.0，
+等於一天 32 次**沒有任何閘門**的全跑 —— 三道閘門全在 0.6.1 的程式碼裡。
+正確順序是 dev 驗證一晚 → 併 main → 正式區照「ALTER → deploy → alter_job」三步走。
 
 ---
 

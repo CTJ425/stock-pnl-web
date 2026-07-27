@@ -8,29 +8,32 @@
 
 ## 🐛 Currently Active / Open Bugs
 
-### Bug ID: BUG-003 — 測試區的盤後 cron 沒跑（正式區同日已修好並驗證通過）
-- **Status**: OPEN（已定位範圍，未進入診斷 —— 需 link 測試區，見下方）
+### Bug ID: BUG-003 — 測試區的 cron 打的是**正式區**的端點，而且被 401 擋下
+- **Status**: ROOT CAUSE IDENTIFIED；schema 與函式已修，**cron job 待重建（缺密鑰明文）**
 - **Discovered**: 2026-07-27 19:20 Asia/Taipei，Claude（驗收 BUG-002 時順帶發現）
-- **Description**: 測試區 `wqetxuhncvfidqnklyew` 的 `reports/manifest.json` 仍停在
-  `generatedAt = 2026-07-27T06:03:54.938Z`、`ymd = 20260724`（上週五），
-  17:30 那班沒有推進。同一時間正式區已由 `08:04:50Z` 推進到 `09:46:47Z`。
-- **已知條件**:
-  - 測試區的 `<CRON_SECRET>` 佔位符故障已於同日 14:04 修復（與 BUG-002 同源）。
-  - 測試區 `stock-report` 已於 16:38 重部署為 v13（含 `logBatchRun`），逐檔 diff 一致。
-  - 測試區 `batch_run_log` 表存在。
-  - 部署的 v13 無論如何都會覆寫 `manifest.json`，所以「有跑但沒寫」不成立 ——
-    要嘛 cron 沒觸發、要嘛函式在寫 manifest 之前就整個失敗。
-- **待查（優先序）**:
-  1. `select jobname, schedule, active from cron.job;` —— job 是否存在且 `active`。
-  2. `select id, status_code, error_msg from net._http_response order by id desc limit 5;`
-     —— **只保留 6 小時**，17:30 那班的紀錄約 23:30 就會消失，要查要趁早。
-  3. `select * from batch_run_log order by id desc limit 5;` —— 有列＝有跑進函式。
-  4. 14:04 那次修復是否只改了密鑰而 `<PROJECT_REF>` 仍是佔位符（用 FIXED_BUG.md
-     BUG-002 的偵測 SQL，它同時檢查 url 與密鑰長度）。
-- **阻塞**: 上述皆需 `supabase db query --linked` 對測試區執行，而 `supabase link`
-  有全域副作用（§13.3），會把使用者目前 link 著的正式區清掉。**需使用者同意後再進行。**
-- **Impact**: 僅測試區。測試區報告停留在上週五的資料，dev 分支的線上驗證會拿到過期資料
-  —— 不是應用程式故障，但會讓「測試區驗證過了」這句話失去意義。
+- **Description**: 測試區 `wqetxuhncvfidqnklyew` 的 `manifest.json` 停在
+  `2026-07-27T06:03:54.938Z` / `ymd=20260724`（上週五），17:30 那班沒有推進。
+- **Root Cause**（2026-07-27 19:45 查證，兩個錯疊在一起）:
+  1. **URL 指向正式區**。測試區 `cron.job` 的 command 內是
+     `https://kxnxadaghidwumqsqneu.supabase.co/...` —— 那是**正式區**的 ref。
+     測試區的排程從來不是在呼叫自己的函式。
+  2. **密鑰對不上**。job 帶的是一組 43 碼字串（`Qea5…wvro`），
+     `net._http_response` 顯示 09:30:00Z（台北 17:30）那次回 **401 `{"error":"Unauthorized"}`**。
+  值得注意的是同一組 URL＋密鑰在 08:04:43Z（台北 16:04）還回 200 ——
+  中間正式區重設過 `CRON_SECRET`（PROGRESS 記載 16:03:55 與 16:40–16:55 兩次動作）。
+  **也就是說在被 401 擋下之前，測試區的排程確實有能力觸發正式區的批次。**
+- **這是 BUG-002 的變種，不是新品種**: 同樣是「§6c 需人工替換的佔位符」，
+  只是這次不是忘了換，而是**換成了另一個環境的值**（推測為 14:04 修復時從正式區複製 SQL）。
+  BUG-002 的偵測 SQL 只檢查「密鑰長度是不是 13」，抓不到這種。
+  **偵測條件要補上「url 的 project ref 必須等於本專案的 ref」** —— 已補進 `schema.sql` §6d。
+- **Fix（進行中）**:
+  - [x] `batch_run_log` 補 12 個欄位＋`(taipei_ymd, id DESC)` 索引（26 欄）
+  - [x] `stock-report` 部署為 **v14**，`verify_jwt=false`；`functions download` 逐檔 diff 一致
+  - [ ] **重建 cron job**：URL 改為測試區自己的 ref、填入測試區的 `CRON_SECRET`、
+        排程改 `*/15 8-15 * * 1-5`。卡在**沒有測試區 `CRON_SECRET` 明文**
+        （`secrets list` 只回雜湊），需使用者提供或重設。
+- **Impact**: 僅測試區資料過期。但它同時是一個**跨環境誤觸發**的通道 ——
+  測試區的資料庫有能力對正式區發批次請求，這比「測試區沒資料」嚴重。
 
 ---
 
