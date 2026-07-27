@@ -1,8 +1,0 @@
-{
-  "env": {
-    "CLAUDE_PLUGIN_OPTION_DEFAULT_MODEL": "gemini-3.6-flash-high",
-    "CLAUDE_PLUGIN_OPTION_TIER_FLASH": "gemini-3.6-flash-high",
-    "CLAUDE_PLUGIN_OPTION_TIER_FLASH_LO": "gemini-3.6-flash-high",
-    "CLAUDE_PLUGIN_OPTION_TIER_PRO": "gemini-3.6-flash-high"
-  }
-}
