@@ -8,6 +8,14 @@
 
 ## 📋 Active Tasks
 
+### Task 19: AI 提示詞加「建議操作」與「注意事項」 (0.6.0-dev.3)
+- **Status**: IMPLEMENTED — 閘門全綠（test 260 passed / build 通過）
+- **Planner / Reviewer / Verifier**: Claude；**Implementer**: agy flash（使用者明確指定委派）
+- **Timestamp**: 2026-07-27 10:30:22 Asia/Taipei
+- 原「不得提供任何買賣建議」紅線經使用者指示放寬為**條件式觀察性參考**；
+  明確買賣指令 / 目標價 / 進出場價位 / 報酬預期仍然禁止，免責聲明不變。
+  詳見 PROGRESS.md 2026-07-27 10:30 與 SPEC.md「輸出結構與建議的邊界」。
+
 ### Task 18: AI 逾時 180 秒 + AI 設定全站共用 (0.6.0-dev.2)
 - **Status**: IMPLEMENTED — 閘門全綠（lint 3 個既有 warning / test 260 passed / build 通過）；
   **待測試區重新套用 schema §4.1（已改版）＋貼 admin tag ＋實測**（需使用者執行）

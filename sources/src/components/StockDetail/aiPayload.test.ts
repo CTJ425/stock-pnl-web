@@ -195,6 +195,9 @@ describe('aiPayload', () => {
       // System Prompt 斷言
       expect(system).toContain('繁體中文')
       expect(system).toContain('白話')
+      expect(system).toContain('建議操作')
+      expect(system).toContain('注意事項')
+      expect(system).toContain('不得給出明確的買進')
       expect(system).toContain('本解讀為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
 
       // User Prompt 斷言
@@ -202,6 +205,7 @@ describe('aiPayload', () => {
       expect(user).toContain('台積電')
       expect(user).toContain('單位：股數')
       expect(user).toContain('單位：張')
+      expect(user).toContain('建議操作')
     })
 
     it('當 report 為 null 時，user prompt 應標示籌碼資料暫時無法取得', () => {

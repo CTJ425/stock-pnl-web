@@ -1,9 +1,30 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.2 —— AI 逾時放寬 180 秒；AI 設定改為全站共用（app_settings + admin tag）
-- Status: IMPLEMENTED — 閘門全綠；**兩區皆需重新套用 schema §4.1（改版了）並貼 admin tag**，待使用者執行
-- Timestamp: 2026-07-27 09:52:26 Asia/Taipei
+- Action: 0.6.0-dev.3 —— AI 提示詞新增「建議操作」與「注意事項」小節
+- Status: IMPLEMENTED — 閘門全綠；線上套用事項同 dev.2（schema §4.1 新版 + admin tag，待使用者執行）
+- Timestamp: 2026-07-27 10:30:22 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 10:30:22 Asia/Taipei
+
+- **Agent**: Claude（規格 / 審查 / 驗證）＋ agy `flash`（實作，使用者以 /antigravity:delegate 明確指定）
+- **Action**: 0.6.0-dev.3 —— AI 提示詞加上「建議操作」與「注意事項」
+- **Status**: IMPLEMENTED — lint / test 260 passed / build 全綠
+
+### 內容與關鍵決策
+
+使用者要求在既有解讀之外加「建議操作與注意事項」。這與原 system prompt 準則 5
+「絕對不得提供任何買賣建議、操作訊號」直接衝突——**經使用者指示放寬**：
+「建議操作」僅限中性、條件式的觀察性參考，仍禁止明確買賣/加碼/出清指令、
+目標價、進出場價位、報酬預期；免責聲明字句不變（測試鎖定）。
+
+- `aiPayload.ts` `renderAiPrompt()`：準則 1 加輸出結構要求；準則 5 改寫；新增準則 6
+  （注意事項＝風險訊號＋資料侷限）；免責聲明移為準則 7。user prompt 結尾加請求句。
+- `aiPayload.test.ts`：補 5 條斷言（建議操作/注意事項/不得給出明確的買進），既有斷言未動。
+- SPEC.md 新增「輸出結構與建議的邊界」段落；README dev.3 段落；版號三處 bump。
+- 委派驗收：diff 僅涉 2 個允許檔案，Claude 逐行審過並親自重跑完整閘門（不採信 agy 自述）。
 
 ---
 
