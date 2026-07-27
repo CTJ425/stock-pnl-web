@@ -1,9 +1,49 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.0-dev.1 AI 助理實作完成；**測試區已套用 schema §4.1**
-- Status: IMPLEMENTED — 測試區 schema 就緒；**正式區 schema 未套用**、瀏覽器實測待使用者
-- Timestamp: 2026-07-27 00:30:00 Asia/Taipei
+- Action: 0.6.0-dev.2 —— AI 逾時放寬 180 秒；AI 設定改為全站共用（app_settings + admin tag）
+- Status: IMPLEMENTED — 閘門全綠；**兩區皆需重新套用 schema §4.1（改版了）並貼 admin tag**，待使用者執行
+- Timestamp: 2026-07-27 09:52:26 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-27 09:52:26 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.0-dev.2 —— AI 逾時 30s→180s；AI 設定由每帳號一份改為全站共用
+- **Status**: IMPLEMENTED — lint / test（260 passed，+3 新測試）/ build 全綠；線上套用待使用者
+
+### 變更一：AI 逾時放寬為 180 秒
+
+使用者的 local model 30 秒跑不完。`aiClient.ts` 新增 `export const AI_TIMEOUT_MS = 180_000`
+作為 `requestJson` 預設值；`AiTab.tsx` 兩處「30 秒」字樣改由 `AI_TIMEOUT_MS` 推導，
+不再硬編碼（先前 UI 字串與程式值是兩份，會不同步）。逾時錯誤訊息本來就是動態組字，未動。
+
+### 變更二：AI 設定全域化（app_settings 單列 + admin tag）
+
+使用者要求「不分帳號、不分工作區」。評估過四案（共用 DB 表 / VITE_ 環境變數 /
+Edge Function 代理 / localStorage），使用者選定共用 DB 表；寫入權限要「可指定、不綁死 email」，
+採 `app_metadata.role = 'admin'` tag（只能由 Dashboard / SQL 設定，使用者無法自改）。
+
+- `schema.sql` §4.1 **整段改版**：DROP 掉 `user_settings.ai_*` 五欄位（dev.1 的設計，僅測試區套過），
+  新建 `app_settings`（`id SMALLINT PK DEFAULT 1 CHECK (id=1)` 恆為單列 + 同名五個 ai_* 欄位）。
+  RLS：SELECT 開放 authenticated 全員（前端直連，金鑰必須能進瀏覽器）；
+  INSERT / UPDATE 僅 `(auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'`。
+- `aiSettings.ts`：load / save / clear 改打 `app_settings`（`id = 1` / `onConflict: 'id'`），
+  移除 getUser + user_id 邏輯；新增 `isAiAdmin()`。
+- `AiTab.tsx`：非管理員隱藏「AI 設定」按鈕與表單，header 顯示「全站共用，僅管理員可修改」；
+  未設定時顯示「請聯絡管理員完成設定」。管理員體驗不變。
+- 測試：`AiTab.test.tsx` 補 `isAiAdmin` mock 與 2 個非管理員案例（共 260 passed）。
+- 文件：SPEC.md（儲存範圍、權限、180 秒）、README（dev.2 段落）、版號三處 bump `0.6.0-dev.2`。
+
+### 待辦（線上套用，需使用者執行）
+
+- [ ] **測試區重新套用 schema §4.1**：上一輪（00:30）套的是舊版 §4.1（user_settings.ai_* 欄位），
+      新版會 DROP 舊欄位並建 `app_settings`。SQL Editor 貼新版 §4.1 段落即可（冪等、可重跑）。
+      注意：舊欄位裡已存的個人 AI 設定會一併清掉，需在新表單重填一次。
+- [ ] **貼 admin tag**（SQL Editor，語法見 schema.sql §4.1 註解），貼完該帳號**重新登入**才生效。
+- [ ] 測試區實測：admin 可存設定；非 admin 帳號看到唯讀並可產生解讀；local model 在 180 秒內完成。
+- [ ] 正式區照舊**不動**（0.6.0 併 main 時一次套用新版 §4.1）。
 
 ---
 

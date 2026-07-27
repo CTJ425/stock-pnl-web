@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.6.0-dev.1**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.6.0-dev.2**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
 
@@ -252,12 +252,21 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 個股分析新增「**AI 解讀**」分頁，支援使用者自帶 AI 服務供應商 (Google AI / Ollama / vLLM / OpenAI 相容端點)：
 
+#### 0.6.0-dev.2（2026-07-27）
+- **AI 逾時放寬為 180 秒**（原 30 秒）：本機 local model 推論較慢，30 秒常跑不完。
+  數值集中於 `aiClient.ts` 的 `AI_TIMEOUT_MS`，UI 字樣由它推導不再硬編碼。
+- **AI 設定改為全站共用**：由 `user_settings.ai_*`（每帳號一份）改為 `app_settings` 全域單列，
+  不分帳號、不分工作區。所有登入帳號可讀；**寫入僅限帶 `app_metadata.role = 'admin'` tag 的帳號**
+  （RLS 檢查 JWT，tag 設定方式見 schema.sql §4.1 註解，貼完要重新登入才生效）。
+  非管理員看到唯讀摘要與「僅管理員可修改」提示。
+- 需重新套用 `sources/supabase/schema.sql` §4.1（建 `app_settings`、清掉舊 `ai_*` 欄位）並為管理員帳號貼 tag。
+
 #### 0.6.0-dev.1（2026-07-26）
 - **個股分析「AI 解讀」分頁**：新增獨立分頁籤與 `AiTab` 元件；要按下「產生解讀」才會呼叫 AI，不會自動產生。
 - **純前端直連 AI 供應商**：`google`（Gemini，已通過單元測試層驗證）與 `openai-compatible`
   （Ollama / vLLM 等相容端點）。
 - **結構化指標 Payload**：由程式算好 MA5/20/60、KD、RSI、量能比與 7 日籌碼摘要後餵給模型，模型不碰到 243 筆原始收盤價。
-- **金鑰儲存**：AI 設定儲存於 Supabase `user_settings` 資料表。
+- **金鑰儲存**：AI 設定儲存於 Supabase `user_settings` 資料表（dev.2 起改為 `app_settings` 全域單列）。
 - **錯誤處理與防護**：30 秒連線逾時（含讀取回應主體）、錯誤分類與白話訊息；手動重試、不自動重試；未設定時不出現任何 AI 文字。
 
 使用前提與已知限制：

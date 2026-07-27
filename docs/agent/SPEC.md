@@ -165,9 +165,18 @@
 
 個股分析頁的第四個分頁籤「**AI 解讀**」。三個前提：
 
-1. **只在 Supabase 模式出現**（整個個股分析頁本來就是）—— 設定存在 `user_settings`，本機模式無處可存。
-2. **需先套用 `sources/supabase/schema.sql` §4.1** 的五個 `ai_*` 欄位。
+1. **只在 Supabase 模式出現**（整個個股分析頁本來就是）—— 設定存在 `app_settings`，本機模式無處可存。
+2. **需先套用 `sources/supabase/schema.sql` §4.1** 的 `app_settings` 全域單列表（0.6.0-dev.2 起；
+   dev.1 曾放在 `user_settings.ai_*` 五欄位，重跑 schema 會順手清掉）。
 3. **使用者自帶 AI 供應商**：專案不內建任何金鑰、不代付任何費用。
+
+### 設定的範圍與權限（0.6.0-dev.2）
+
+AI 設定為**全站共用**：不分帳號、不分工作區，所有登入帳號讀同一份（前端直連供應商，
+金鑰本來就得進瀏覽器，故全員可讀是架構必然）。**寫入僅限管理員**——RLS 檢查 JWT 的
+`app_metadata.role = 'admin'`；tag 由 Dashboard / SQL 設定（語法見 schema.sql §4.1 註解），
+貼完 tag 該帳號要重新登入才生效。非管理員的 UI 沒有設定表單，只看到唯讀摘要
+（provider / model，不顯示金鑰）與「僅管理員可修改」提示；未設定時顯示「請聯絡管理員」。
 
 ### 產品紅線
 
@@ -202,7 +211,8 @@
 
 ### 失敗行為
 
-30 秒逾時（**含讀取回應主體**，不只連線階段）；錯誤分為
+180 秒逾時（0.6.0-dev.2 起，自 30 秒放寬以支援本機 local model；**含讀取回應主體**，
+不只連線階段；數值集中在 `aiClient.ts` 的 `AI_TIMEOUT_MS`，UI 字樣由它推導）；錯誤分為
 auth / rate-limit / server / timeout / network / bad-response 六類並各給白話訊息；
 **不自動重試**，只提供「重試」按鈕（AI 呼叫要付費，靜默重試等於讓使用者付兩次）。
 

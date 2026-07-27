@@ -8,6 +8,23 @@
 
 ## 📋 Active Tasks
 
+### Task 18: AI 逾時 180 秒 + AI 設定全站共用 (0.6.0-dev.2)
+- **Status**: IMPLEMENTED — 閘門全綠（lint 3 個既有 warning / test 260 passed / build 通過）；
+  **待測試區重新套用 schema §4.1（已改版）＋貼 admin tag ＋實測**（需使用者執行）
+- **Planner / Implementer / Reviewer**: Claude
+- **Timestamp**: 2026-07-27 09:52:26 Asia/Taipei
+
+#### 內容
+1. **逾時 30s→180s**：`aiClient.ts` 新增 `AI_TIMEOUT_MS = 180_000`，UI 字樣由它推導。
+2. **AI 設定全域化**：`user_settings.ai_*`（每帳號）→ `app_settings` 全域單列（不分帳號/工作區）。
+   全員可讀（前端直連需金鑰），寫入僅限 `app_metadata.role = 'admin'`（tag 可隨時指定任何帳號，
+   不綁死 email；貼完要重新登入）。非管理員 UI 為唯讀。
+3. 詳細記錄與線上套用步驟見 PROGRESS.md 2026-07-27 09:52。
+
+#### 對 Task 17 的影響
+Task 17 的待辦「正式區套用（舊版）§4.1」**作廢**：schema §4.1 已改版為 app_settings 方案，
+兩區日後一律套新版；測試區也要重套（會 DROP 舊欄位，已存的個人設定作廢重填）。
+
 ### Task 17: AI 助理 —— 個股分析「AI 解讀」分頁 (0.6.0-dev.1)
 - **Status**: IMPLEMENTED — 程式碼完成、Claude 審查與修正完畢、閘門全綠
   （lint 3 個既有 warning / test **258 passed** / build 通過）；

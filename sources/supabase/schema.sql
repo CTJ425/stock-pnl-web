@@ -119,18 +119,55 @@ TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
--- 4.1 AI 助理設定（0.6.0）
---     使用者自帶 AI 供應商，故端點與金鑰都存在使用者自己的設定列。
---     用 ALTER ... IF NOT EXISTS 而非改上面的 CREATE TABLE：本檔可重跑，
---     而 CREATE TABLE IF NOT EXISTS 對「表已存在」的既有環境不會補欄位。
---     金鑰以明文存放，靠上方 RLS（auth.uid() = user_id）隔離；
---     因為 0.6.0 是前端直連 AI 供應商，金鑰終究得回到瀏覽器才能發請求，
---     存 DB 換到的是跨裝置同步，不是「金鑰不進瀏覽器」。要後者得等 0.6.1 的 Edge Function 代理。
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_provider   TEXT;  -- 'google' | 'openai-compatible'
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_base_url   TEXT;  -- openai-compatible 用（ollama / vLLM）；google 留空
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_model      TEXT;
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_api_key    TEXT;  -- ollama 本機通常不需要，允許空字串
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_updated_at TIMESTAMPTZ;
+-- 4.1 AI 助理全域設定（0.6.0）
+--     AI 設定為全站共用：不分帳號、不分工作區，存於 app_settings 單列表（id 恆為 1）。
+--     0.6.0-dev.1 曾以 user_settings.ai_* 欄位按帳號各存一份，0.6.0-dev.2 起改為全域；
+--     以下 DROP 讓套過舊版的環境（僅測試區）重跑本檔時順手清掉死欄位。
+ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_provider;
+ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_base_url;
+ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_model;
+ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_api_key;
+ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_updated_at;
+
+--     金鑰以明文存放：0.6.0 是前端直連 AI 供應商，金鑰終究得回到瀏覽器才能發請求，
+--     所以「所有登入帳號可讀」是這個架構的必然，不是疏忽。
+--     要「金鑰不進瀏覽器」得等 0.6.1 的 Edge Function 代理。
+CREATE TABLE IF NOT EXISTS app_settings (
+    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),  -- 恆為單列
+    ai_provider   TEXT,         -- 'google' | 'openai-compatible'
+    ai_base_url   TEXT,         -- openai-compatible 用（ollama / vLLM）；google 留空
+    ai_model      TEXT,
+    ai_api_key    TEXT,         -- ollama 本機通常不需要，允許空字串
+    ai_updated_at TIMESTAMPTZ
+);
+
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
+-- 全員（登入後）可讀：非管理員也要拿得到端點與金鑰，瀏覽器才能直接發 AI 請求
+DROP POLICY IF EXISTS "Authenticated users can read app settings" ON app_settings;
+CREATE POLICY "Authenticated users can read app settings"
+ON app_settings FOR SELECT
+TO authenticated
+USING (true);
+
+-- 僅帶 app_metadata.role = 'admin' 的帳號可寫。
+-- app_metadata 只能由 Dashboard / SQL 設定，使用者無法自改（user_metadata 才是使用者可改的，不能拿來做權限）。
+-- 授權方式（SQL Editor 執行；貼完 tag 該帳號要重新登入讓 JWT 刷新才生效）：
+--   UPDATE auth.users
+--   SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+--   WHERE email = '<要授權的帳號 email>';
+DROP POLICY IF EXISTS "Admins can insert app settings" ON app_settings;
+CREATE POLICY "Admins can insert app settings"
+ON app_settings FOR INSERT
+TO authenticated
+WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Admins can update app settings" ON app_settings;
+CREATE POLICY "Admins can update app settings"
+ON app_settings FOR UPDATE
+TO authenticated
+USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 
 -- 5. 盤後籌碼原始檔快取資料表 (chip_raw_cache)

@@ -3,10 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { AiTab } from './AiTab'
 
-const { loadAiSettings, saveAiSettings, clearAiSettings, fetchDailySeries, createAiProvider } = vi.hoisted(() => ({
+const { loadAiSettings, saveAiSettings, clearAiSettings, isAiAdmin, fetchDailySeries, createAiProvider } = vi.hoisted(() => ({
   loadAiSettings: vi.fn(),
   saveAiSettings: vi.fn(),
   clearAiSettings: vi.fn(),
+  isAiAdmin: vi.fn(),
   fetchDailySeries: vi.fn(),
   createAiProvider: vi.fn(),
 }))
@@ -18,6 +19,7 @@ vi.mock('../../services/aiSettings', async (importOriginal) => {
     loadAiSettings,
     saveAiSettings,
     clearAiSettings,
+    isAiAdmin,
   }
 })
 
@@ -65,6 +67,7 @@ describe('AiTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fetchDailySeries.mockResolvedValue(dummyDaily)
+    isAiAdmin.mockResolvedValue(true)
   })
 
   afterEach(() => {
@@ -105,6 +108,42 @@ describe('AiTab', () => {
 
     expect(screen.getByText(/免責聲明/)).toBeTruthy()
     expect(mockComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('非管理員不應看到設定表單與「AI 設定」按鈕，但仍可產生解讀', async () => {
+    isAiAdmin.mockResolvedValue(false)
+    loadAiSettings.mockResolvedValue({
+      provider: 'openai-compatible',
+      baseUrl: 'http://localhost:11434/v1',
+      model: 'llama3',
+      apiKey: '',
+    })
+
+    const mockComplete = vi.fn().mockResolvedValue('非管理員也拿得到解讀。')
+    createAiProvider.mockReturnValue({
+      kind: 'openai-compatible',
+      complete: mockComplete,
+    })
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+
+    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    expect(screen.queryByRole('button', { name: /AI 設定/ })).toBeNull()
+    expect(screen.getByText(/僅管理員可修改/)).toBeTruthy()
+
+    fireEvent.click(btn)
+    await screen.findByText('非管理員也拿得到解讀。')
+  })
+
+  it('非管理員且全站未設定時，應顯示聯絡管理員的提示而非設定表單', async () => {
+    isAiAdmin.mockResolvedValue(false)
+    loadAiSettings.mockResolvedValue(null)
+
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} />)
+
+    await screen.findByText(/請聯絡管理員完成設定/)
+    expect(screen.queryByLabelText(/AI 服務供應商/)).toBeNull()
+    expect(screen.queryByRole('button', { name: '前往設定' })).toBeNull()
   })
 
   it('當產生過程失敗時應顯示錯誤訊息與「重試」按鈕', async () => {

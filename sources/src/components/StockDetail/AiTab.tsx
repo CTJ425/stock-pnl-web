@@ -9,10 +9,12 @@ import { fetchDailySeries } from '../../services/dailyProxy'
 import type { ReportData } from '../../services/reportProxy'
 import {
   AiError,
+  AI_TIMEOUT_MS,
   createAiProvider,
 } from '../../services/aiClient'
 import {
   clearAiSettings,
+  isAiAdmin,
   loadAiSettings,
   saveAiSettings,
   validateAiSettings,
@@ -28,11 +30,15 @@ interface AiTabProps {
   report: ReportData | null
 }
 
+const AI_TIMEOUT_SECONDS = Math.round(AI_TIMEOUT_MS / 1000)
+
 export function AiTab({ ticker, name, report }: AiTabProps) {
   // 設定狀態
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [showSettingsForm, setShowSettingsForm] = useState(false)
+  // AI 設定為全站共用，只有 app_metadata.role = 'admin' 的帳號可修改
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // 設定表單狀態
   const [formProvider, setFormProvider] = useState<AiProviderKind>('google')
@@ -53,16 +59,17 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
     let alive = true
     setSettingsLoading(true)
     ;(async () => {
-      const s = await loadAiSettings()
+      const [s, admin] = await Promise.all([loadAiSettings(), isAiAdmin()])
       if (alive) {
         setSettings(s)
+        setIsAdmin(admin)
         if (s) {
           setFormProvider(s.provider)
           setFormBaseUrl(s.baseUrl)
           setFormModel(s.model)
           setFormApiKey(s.apiKey)
-        } else {
-          // 未設定時預設展開設定表單
+        } else if (admin) {
+          // 未設定時預設展開設定表單（非管理員無表單可填，不展開）
           setShowSettingsForm(true)
         }
         setSettingsLoading(false)
@@ -201,6 +208,7 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
               {settings
                 ? `使用 ${settings.provider === 'google' ? 'Google AI' : 'OpenAI 相容端點'} (${settings.model})`
                 : '未設定 AI 服務供應商'}
+              {!isAdmin && '｜全站共用，僅管理員可修改'}
             </span>
           </div>
 
@@ -214,7 +222,7 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
                 {status === 'generating' ? (
                   <>
                     <RefreshCw size={14} className="spin" />
-                    解讀中…（最長 30 秒）
+                    解讀中…（最長 {AI_TIMEOUT_SECONDS} 秒）
                   </>
                 ) : (
                   <>
@@ -225,15 +233,17 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
               </button>
             )}
 
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => setShowSettingsForm(!showSettingsForm)}
-              aria-expanded={showSettingsForm}
-            >
-              <Settings size={14} />
-              AI 設定
-              {showSettingsForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
+            {isAdmin && (
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => setShowSettingsForm(!showSettingsForm)}
+                aria-expanded={showSettingsForm}
+              >
+                <Settings size={14} />
+                AI 設定
+                {showSettingsForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            )}
           </div>
         </div>
 
@@ -244,8 +254,8 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
           </div>
         )}
 
-        {/* 設定表單 (未設定時顯示或手動展開) */}
-        {showSettingsForm && (
+        {/* 設定表單 (僅管理員；未設定時顯示或手動展開) */}
+        {isAdmin && showSettingsForm && (
           <form className="ai-form" onSubmit={(e) => void handleSaveSettings(e)} style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <div className="ai-form-group">
               <label htmlFor="ai-provider-select">AI 服務供應商 (Provider)</label>
@@ -337,12 +347,16 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
           <Bot size={36} style={{ opacity: 0.5, marginBottom: 12 }} />
           <div style={{ fontSize: 15, fontWeight: 600 }}>尚未設定 AI 服務供應商</div>
           <div className="hint" style={{ marginTop: 6, marginBottom: 16 }}>
-            請點擊「AI 設定」輸入您的 Google API Key 或本機 Ollama / OpenAI 相容端點資訊。
+            {isAdmin
+              ? '請點擊「AI 設定」輸入您的 Google API Key 或本機 Ollama / OpenAI 相容端點資訊。'
+              : 'AI 設定為全站共用，僅管理員帳號可修改，請聯絡管理員完成設定。'}
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowSettingsForm(true)}>
-            <Settings size={14} />
-            前往設定
-          </button>
+          {isAdmin && (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowSettingsForm(true)}>
+              <Settings size={14} />
+              前往設定
+            </button>
+          )}
         </div>
       )}
 
@@ -351,7 +365,7 @@ export function AiTab({ ticker, name, report }: AiTabProps) {
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <RefreshCw size={28} className="spin" style={{ marginBottom: 12, color: 'var(--primary)' }} />
           <div style={{ fontSize: 15, fontWeight: 500 }}>AI 正在分析技術面與籌碼數據解讀中…</div>
-          <div className="hint" style={{ marginTop: 6 }}>最長可能需要 30 秒，請稍候。</div>
+          <div className="hint" style={{ marginTop: 6 }}>最長可能需要 {AI_TIMEOUT_SECONDS} 秒，請稍候。</div>
         </div>
       )}
 

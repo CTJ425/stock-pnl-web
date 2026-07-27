@@ -6,6 +6,9 @@ import type { AiProviderKind, AiSettings } from './aiSettings'
 
 export type AiErrorKind = 'auth' | 'rate-limit' | 'server' | 'timeout' | 'network' | 'bad-response'
 
+/** 預設逾時。local model 推論慢，30 秒常常跑不完，放寬到 180 秒。UI 字樣一律由此推導。 */
+export const AI_TIMEOUT_MS = 180_000
+
 export class AiError extends Error {
   public kind: AiErrorKind
 
@@ -108,7 +111,7 @@ export function extractOpenAiText(json: unknown): string {
 async function requestJson(
   url: string,
   options: RequestInit,
-  timeoutMs: number = 30000,
+  timeoutMs: number = AI_TIMEOUT_MS,
 ): Promise<{ ok: boolean; status: number; json: unknown }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
