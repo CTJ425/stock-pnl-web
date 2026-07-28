@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: 0.6.5-dev.2 總經獨立為頂層頁面 ＋ 自己的 cron
-- Status: IN PROGRESS — 程式碼與閘門完成（**465 tests**）；待部署與建 cron job
+- Status: IN PROGRESS — **測試區已部署驗證**（465 tests，cron job 已建並覆驗）；正式區未動
 - Timestamp: 2026-07-28 17:10:00 Asia/Taipei
 
 ---
@@ -81,9 +81,26 @@ tab 高度全部一致、五格等寬差距 0、單列、無橫向溢出。
 - `App.smoke.test.tsx` 補「本機模式沒有總體經濟分頁」，並斷言其餘三頁不受影響。
 - Playwright 六寬度導覽列掃描（見上）。
 
+### 測試區驗證（2026-07-28 17:2x）
+
+- `{"action":"sync-macro"}` 第一次 324ms、第二次 110ms，皆回
+  `synced:false, count:5` —— 今天已抓過，**同台北日短路生效、零對外請求**。
+- `{"action":"generate-all"}` 的回傳**已無 `macroSynced` 欄位**，其餘正常。
+- `macro-daily` cron job 已建立並覆驗：`ref=wqetxuhncvfidqnklyew`（自己）、
+  密鑰長度 48（非佔位符的 13）、`schedule=0 13,15 * * *`、`action=sync-macro`。
+  另兩個既有 job（`stock-report-nightly` / `source-probe`）未受影響。
+  建立時把身分檢查包進同一個 `DO` 區塊（`8033` 只有測試區有），
+  身分不符就 `RAISE EXCEPTION` —— §13.3 那顆「寫錯區」地雷的防呆。
+- `functions download` 逐檔比對：線上 **9/9 檔與 `dev` 位元組一致**。
+- **真瀏覽器**渲染 `MacroPage`（讀測試區實際資料）：1280 / 375px 都是
+  五格 KPI、12 期走勢、`.section.glass` padding `18px 20px` 正確、
+  **補救文案已消失**、無橫向溢出、無 page error。
+
 ### 待辦
 
-見 `TASK.md` Task 31。**建 cron job 時要填兩個佔位符，且只跑 `schema.sql` §9 那一段。**
+正式區未動。見 `TASK.md` Task 31 —— 併 `main` 時要一併部署 0.6.5 的全部內容
+（0.6.5-dev.1 的獲利能力與總經、dev.2 的拆分），並**建立 `macro-daily` cron job**。
+**只跑 `schema.sql` §9 那一段，不要整份重跑。**
 
 ---
 

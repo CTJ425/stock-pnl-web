@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 31: 總經獨立為頂層頁面 ＋ 自己的 cron (0.6.5-dev.2)
-- **Status**: 程式碼完成，閘門全綠（lint / build / **465 tests**）；**待部署與建 cron job**
+- **Status**: **測試區已部署驗證**（cron job 已建並覆驗、線上 9/9 檔一致）；正式區未動
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 17:10:00 Asia/Taipei
 - dev.1 把總經做成個股分析的分頁、並掛在盤後批次裡，兩者都與「它是全市場共用的一份」
