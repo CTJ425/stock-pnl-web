@@ -1,9 +1,61 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.5-dev.3 頁首右側 8 個控制項收斂成 2 個選單
-- Status: IN PROGRESS — 閘門全綠（**469 tests**）；待合併 main
-- Timestamp: 2026-07-28 19:40:00 Asia/Taipei
+- Action: 0.6.5 定版、併入 `main`、兩區部署完成
+- Status: **COMPLETED —— 兩區皆已上線並驗證**
+- Timestamp: 2026-07-28 19:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 19:55:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.5 定版並上線兩區
+- **Status**: COMPLETED
+
+### 合併 main 帶上的是整個 0.6.5
+
+不只 dev.3 的頁首異動 —— `main` 從 0.6.4 直接跳到 0.6.5，一次帶上
+獲利能力、總體經濟頁、AI 追問對話、總經獨立排程、頁首收斂。
+**所以正式區的後端也必須一起補**，否則線上的「總體經濟」會是空的、
+基本面看不到獲利能力。
+
+### 正式區部署（`kxnxadaghidwumqsqneu`）
+
+1. `functions deploy stock-report --no-verify-jwt`
+2. 建 `macro-daily` cron job（`0 13,15 * * *`）。身分檢查包進同一個 `DO` 區塊
+   （`009816` 只有正式區有），不符就 `RAISE EXCEPTION`。
+3. `sync-macro` → `synced: true, count: 5, 3750ms`
+4. `generate-all` → `fundamentalSynced: 5`，回傳**已無 `macroSynced`**
+
+> `batch_run_log.macro_synced` 正式區從未加過，dev.2 起已成廢欄位，**確認不必補**。
+
+### 覆驗結果
+
+**總經**（`macro/us.json`，schema 1，五項）：
+
+| 指標 | 期別 | 值 |
+| --- | --- | --- |
+| 核心 CPI | 2026-06 | 2.57 % |
+| 核心 PPI | 2026-06 | 4.68 % |
+| 核心 PCE | 2026-05 | 3.41 % |
+| 非農就業 | 2026-06 | +57 千人 |
+| 消費者信心 | 2026-05 | 44.8 |
+
+**獲利能力**（`fundamental/*.json` 升到 schema 2）：
+台玻 2026-Q1 毛利率 19.23%、陽明 7.3%；0050 為 ETF 無季度資料（預期內）。
+
+**cron**：三個 job 的 ref 都是 `kxnxadaghidwumqsqneu`、密鑰長度 48、active。
+
+**程式碼稽核**：`functions download` 逐檔比對，正式區線上 **9/9 檔與 `main` 一致**。
+
+**GitHub Pages**：run 30347350372 **success**（40s）。
+
+### 仍未做
+
+- **AI 追問框限的人工驗證**（無法自動化）：問「幫我寫首詩」應一字不差回固定拒答句。
+  清單見 `TASK.md` Task 30。
+- 獲利能力目前只有 1 季（來源只回最新一季），要兩年才長滿 8 季。
 
 ---
 
