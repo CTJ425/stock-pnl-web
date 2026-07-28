@@ -95,7 +95,18 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
 
       <section className="rpt-section">
         <div className="rpt-section-head">
-          <h3>月營收</h3>
+          {/*
+            時間戳緊貼標題，因為它要回答的是「我現在看的這張表是不是最新的」——
+            擺在表格下方時使用者不會注意到（0.6.4-dev.4 實際發生：畫面少了 11 個月，
+            而答案就在同一頁的下面兩行，仍然沒被看見）。
+            這是「我們寫檔的時刻」，與估值那邊的「資料日」是兩件事，別合併。
+          */}
+          <h3 className="head-tight">月營收</h3>
+          {fundamental.asOf && (
+            <span className="source-tag section-stamp">
+              資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
+            </span>
+          )}
           <span className="source-tag">單位：千元</span>
         </div>
 
@@ -132,17 +143,6 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         <p className="hint" style={{ marginTop: 8 }}>
           月營收由公司每月 10 日前自結公布，與季報的認列基礎不同，僅供趨勢參考。
         </p>
-        {/*
-          這份檔案是我們什麼時候產出的。與上面估值的「資料日」是兩件事：
-          那個是資料自己宣告的日期，這個是我們去抓到並寫檔的時刻。
-          沒有它的話，畫面上少了幾個月時無從分辨是「資料就這樣」還是「你看到的是舊的一份」
-          —— 這正是 0.6.4 回補上線後實際發生過的困惑。
-        */}
-        {fundamental.asOf && (
-          <p className="hint" style={{ marginTop: 4 }}>
-            資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
-          </p>
-        )}
       </section>
 
       {notes.length > 0 && (

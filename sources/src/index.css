@@ -1565,6 +1565,17 @@ input[type='date']::-webkit-calendar-picker-indicator {
   flex: 1 1 auto;
 }
 
+/* 標題後面要緊跟一段說明時（例：月營收的「資料更新於…」）：
+   h3 預設 flex:1 會把後面的元素全推到最右邊，故改由 stamp 接手伸縮，
+   靠右的標籤（單位：千元）仍會被推到最右。窄螢幕由既有的 flex-wrap 換行。 */
+.rpt-section-head h3.head-tight {
+  flex: 0 0 auto;
+}
+
+.rpt-section-head .section-stamp {
+  flex: 1 1 auto;
+}
+
 .detail-body .hint {
   font-size: 12px;
   color: var(--ink-muted);

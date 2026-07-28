@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 月營收歷史回補（0.6.4-dev.5）＋ 修 Storage 讀取被瀏覽器快取一小時
-- Status: **測試區已驗證通過**；正式區依 §13.1 按兵不動，等使用者決定是否併 `main`
-- Timestamp: 2026-07-28 11:30:00 Asia/Taipei
+- Action: 0.6.4 定版並併入 `main`（月營收補滿 12 個月）
+- Status: IN PROGRESS — 見本檔最新一則 Log
+- Timestamp: 2026-07-28 11:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 11:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 時間戳移到月營收標題旁；0.6.4 定版並併入 `main`、部署正式區
+- **Status**: IN PROGRESS
+
+### 版面調整
+
+「資料更新於 …（共 N 個月）」由表格下方移到**月營收標題右側**（使用者要求）。
+理由站得住腳：擺在下方時使用者不會注意到 —— 0.6.4-dev.4 實際發生過，
+畫面少了 11 個月，而答案就在同一頁的下面兩行，仍然沒被看見。
+
+新增 CSS `.rpt-section-head h3.head-tight` / `.section-stamp`：
+`h3` 預設 `flex: 1 1 auto` 會把後面的元素全推到最右，改由 stamp 接手伸縮，
+「單位：千元」仍靠右。Playwright 於 1440 / 1024 / 760px 實測版面正確、12 列。
+
+### 定版
+
+依 §12.3 去掉 `-dev.N` 尾綴：`0.6.4`（`package.json` / `package-lock.json` /
+`version.ts` / README 徽章）。README 版本紀錄把 dev.1–dev.5 五個分段**整併定稿**
+為一則 0.6.4 條目，不留開發期的流水帳。
 
 ---
 
