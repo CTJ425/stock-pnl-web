@@ -1373,6 +1373,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
     flex: 1;
     justify-content: center;
     padding: 7px 8px;
+    /* 五個分頁平均分寬時，圖示＋兩字標籤剛好逼近格寬。
+       允許折行只會讓分頁列變兩倍高，寧可讓標籤被截斷（完整名稱在 title / aria-label）。 */
+    white-space: nowrap;
   }
 
   .header-spacer {
@@ -1442,6 +1445,25 @@ input[type='date']::-webkit-calendar-picker-indicator {
   .fab {
     right: 14px;
     bottom: 16px;
+  }
+}
+
+/*
+ * 五個分頁 × 窄螢幕：375px 實測會折行（tab 高度 57px vs 正常 36px）。
+ *
+ * 算式：容器 375 − container padding 14×2 − tabs padding 4×2 ≈ 339px，
+ * 五等分每格 63px；而每格內容 ＝ 圖示 15 ＋ gap 7 ＋ 兩字 26 ＋ padding 8×2 ＝ 64px。
+ * 差 1px 就折行 —— 0.6.5-dev.2 由四個分頁加到五個時實測到的。
+ *
+ * 收 gap 與左右 padding 把內容壓到 56px。**新增第六個分頁前務必重量一次。**
+ *
+ * ⚠️ 這一段**必須排在 720px 那段之後** —— 兩者對 .tab 的權重相同，
+ *    先寫的會被後寫的覆蓋掉，順序錯了等於沒寫。
+ */
+@media (max-width: 400px) {
+  .tab {
+    gap: 4px;
+    padding: 7px 4px;
   }
 }
 

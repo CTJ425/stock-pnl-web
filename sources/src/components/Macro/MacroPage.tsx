@@ -1,23 +1,21 @@
 /**
- * 總經分頁：美國五項總體經濟指標。
+ * 「總體經濟」頂層頁面：美國五項總體經濟指標。
  *
- * 資料來自盤後批次預產的 macro/us.json（全域單檔），此元件只負責呈現、不自己載入
- * —— 同一份資料還要餵給 AI 分析，故由 StockDetailPage 載一次分發（同 fundamental 的作法）。
+ * 0.6.5-dev.1 時這是個股分析底下的一個分頁，dev.2 提為頂層頁 ——
+ * **這份資料與個股無關**，全市場共用一份。掛在個股分析底下會逼使用者
+ * 先選一檔股票，才看得到一份跟那檔股票無關的資料，還得特地印一行
+ * 「與您正在查看的個股無關」來補救。提到頂層之後那句話就不必了。
  *
- * **這一頁與個股無關**，每檔股票看到的完全一樣。畫面上要講明白，
- * 否則使用者會以為這些數字是這檔股票的。
+ * 資料來自 `macro/us.json`（全域單檔，非 per-ticker），本元件**自己載入** ——
+ * 它不再有父元件可以分發（`AiTab` 需要同一份資料時自己去抓，見該檔說明）。
  *
  * 單位陷阱：三個物價指標是 **%**（年增率）、非農是**千人**（較上月增減）、
  * 消費者信心是**指數值**。一律讀資料自帶的 `unit`，不要在這裡寫死。
  */
-import { RefreshCw } from 'lucide-react'
-import type { MacroData, MacroIndicator, MacroPoint } from '../../services/macroProxy'
-import { chipClass, fmtUpdatedAt } from './chipFormat'
-
-interface MacroTabProps {
-  macro: MacroData | null
-  loading: boolean
-}
+import { useCallback, useEffect, useState } from 'react'
+import { Globe, RefreshCw } from 'lucide-react'
+import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
+import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
 /** 'YYYY-MM' → 'YYYY 年 MM 月' */
 function fmtPeriod(period: string | undefined): string {
@@ -64,10 +62,24 @@ function IndicatorCard({ ind }: { ind: MacroIndicator }) {
   )
 }
 
-export function MacroTab({ macro, loading }: MacroTabProps) {
+export function MacroPage() {
+  const [macro, setMacro] = useState<MacroData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const m = await fetchMacro()
+    setMacro(m)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
   if (loading) {
     return (
-      <div className="empty-state" style={{ padding: 32 }}>
+      <div className="glass empty-state section">
         <RefreshCw size={28} className="spin" />
         <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
       </div>
@@ -76,10 +88,13 @@ export function MacroTab({ macro, loading }: MacroTabProps) {
 
   if (!macro) {
     return (
-      <div className="empty-state" style={{ padding: 32 }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>總體經濟資料尚未產生</div>
+      <div className="glass empty-state section">
+        <div className="empty-icon">
+          <Globe size={36} />
+        </div>
+        <div>總體經濟資料尚未產生。</div>
         <div className="hint" style={{ marginTop: 6 }}>
-          盤後批次完成後會自動補上，稍後再回來看看。
+          每日排程完成後會自動補上，稍後再回來看看。
         </div>
       </div>
     )
@@ -87,43 +102,43 @@ export function MacroTab({ macro, loading }: MacroTabProps) {
 
   // 走勢表的欄位＝所有指標出現過的期別聯集，由新到舊。
   // 各指標的發布時程不同（PCE 通常比 CPI 晚一個月），不能假設它們對齊。
-  const periods = [
-    ...new Set(macro.indicators.flatMap((i) => i.points.map((p) => p.period))),
-  ]
+  const periods = [...new Set(macro.indicators.flatMap((i) => i.points.map((p) => p.period)))]
     .sort()
     .reverse()
     .slice(0, 12)
 
   return (
-    <div>
-      <section className="rpt-section">
+    <>
+      {/*
+        頂層頁沒有 .detail-body 包著（那是個股分析的容器，padding 在 index.css），
+        故自己包 .section + .glass，否則內容會貼齊視窗邊緣。
+      */}
+      <div className="section glass" style={{ padding: '18px 20px' }}>
         <div className="rpt-section-head">
           <h3 className="head-tight">{macro.region}總體經濟</h3>
           {macro.asOf && (
             <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(macro.asOf)}</span>
           )}
+          <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'spin' : undefined} />
+            重新整理
+          </button>
         </div>
 
-        {/* 使用者會在個股分析頁看到這一頁，必須先講清楚它不是這檔股票的數字 */}
-        <p className="hint" style={{ marginBottom: 12 }}>
-          以下是全市場共用的總體經濟背景，<strong>與您正在查看的個股無關</strong>
-          ，每檔股票看到的都一樣。
-        </p>
-
-        <div className="kpi-grid">
+        <div className="kpi-grid" style={{ marginTop: 14 }}>
           {macro.indicators.map((ind) => (
             <IndicatorCard key={ind.id} ind={ind} />
           ))}
         </div>
-      </section>
+      </div>
 
-      <section className="rpt-section">
+      <div className="section glass" style={{ padding: '18px 20px' }}>
         <div className="rpt-section-head">
           <h3>近期走勢</h3>
           <span className="source-tag">單位見各欄標題</span>
         </div>
 
-        <div className="table-scroll">
+        <div className="table-scroll" style={{ marginTop: 12 }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -157,7 +172,7 @@ export function MacroTab({ macro, loading }: MacroTabProps) {
           資料來源：美國聖路易聯準銀行 FRED。物價指標為排除食品與能源後的年增率，
           非農就業為較上月增減人數，消費者信心為密西根大學指數。空格代表該期尚未發布。
         </p>
-      </section>
-    </div>
+      </div>
+    </>
   )
 }

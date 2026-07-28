@@ -1,9 +1,89 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.5-dev.1 AI 分析改版 ＋ 總經與獲利能力
-- Status: IN PROGRESS — **測試區已部署驗證**（458 tests）；正式區未動
-- Timestamp: 2026-07-28 15:20:00 Asia/Taipei
+- Action: 0.6.5-dev.2 總經獨立為頂層頁面 ＋ 自己的 cron
+- Status: IN PROGRESS — 程式碼與閘門完成（**465 tests**）；待部署與建 cron job
+- Timestamp: 2026-07-28 17:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 17:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.5-dev.2 —— 總經從個股分析與盤後批次雙雙拆出
+- **Status**: 實作完成、閘門全綠；待部署
+
+### 起因
+
+使用者問「如果我們把總經的部分獨立開來呢？」。dev.1 把總經做成
+**個股分析的一個分頁**、並掛在 `handleGenerateAll` 裡 —— 兩件事都與
+`PLAN.md §Q3` 第 1 點（「它是全市場共用的一份」）自相矛盾。
+
+**dev.1 甚至得在畫面上印一行「與您正在查看的個股無關」來補救**。
+那句補救文案本身就是「設計放錯位置」的訊號。
+
+使用者定案：拆①畫面改頂層頁面、②觸發改自己的 cron。
+**不拆**成獨立的 Edge Function —— 要解耦的是觸發時機不是程式碼位置，
+而 `source-probe` 已有「同一支函式、不同 action、不同排程」的先例。
+
+### 先把耦合的嚴重度講清楚（不誇大）
+
+`decideSkip` 的短路 `return` 排在 `syncMacro` 之前，**短路時總經整段不跑**
+（實測 2026-07-27：15 輪有 4 輪短路）。但當天第一輪必然不短路，
+所以交易日的總經都抓得到；**真正的缺口是週末**（cron 是 `1-5`）。
+美國數據多在美東上午發布 ＝ 台北傍晚，落在現有窗口內 ——
+**這次是修架構，不是修線上故障。**
+
+### 做了什麼
+
+- **`MacroPage`**（頂層頁）取代 `MacroTab`。零 props、自持載入 state 與重新整理鈕。
+  自己包 `.section`＋`.glass`（`.detail-body` 的 padding 不會跟著走）。
+- **本機模式一併隱藏**：`fetchMacro()` 在本機模式永遠回 `null`，
+  而空狀態寫「排程完成後會自動補上」在本機模式是假的。
+  抽出 `SUPABASE_ONLY_TABS`，與「個股分析」同一條規則。
+- **`AiTab` 改成自己 `fetchMacro()`**，與它既有的 daily / news 同構；
+  `StockDetailPage` 的 macro state / effect / prop 與 `macroLoading` 耦合整段刪除。
+  附帶好處：變成 lazy，按下「產生分析」才抓。
+- **新 action `sync-macro` ＋ 新 cron job `macro-daily`**（`0 13,15 * * *`）。
+  兩班 ＝ 台北 21:00 與 23:00，分別在美國夏令 / 冬令的 8:30 ET 發布之後，
+  且**都落在同一個台北日內**，所以第一班成功時第二班會被「同日已抓過」擋掉
+  （零對外請求），第一班失敗時第二班才真的重抓。
+- `batch_run_log.macro_synced` 標為**廢欄位**。不寫進 `batch_run_log` 是刻意的：
+  那張表的一列 ＝ 一輪盤後批次，`readLastRun` 會讀最後一列取 T86 指紋與 `runs_today`，
+  插進總經的列會**汙染 `decideSkip` 的跨輪狀態**。
+
+### 實測到的版面問題（本次的重點風險）
+
+頂層分頁由四個變五個，**375px 螢幕上折行** —— Playwright 量到 tab 高度
+由 36px 變 **57px**（其他寬度都是 36px）。
+
+算式對得起來：容器 375 − container padding 14×2 − tabs padding 4×2 ≈ 339px，
+五等分每格 **63px**；而每格內容 ＝ 圖示 15 ＋ gap 7 ＋ 兩字 26 ＋ padding 8×2 ＝ **64px**。
+**差 1px。**
+
+修法：新增 `@media (max-width: 400px)` 收 gap 與左右 padding（內容壓到 56px），
+並加 `white-space: nowrap`。⚠️ 該區塊**必須排在 720px 那段之後** ——
+兩者對 `.tab` 的權重相同，順序錯了等於沒寫（第一次就寫錯了，量完才發現）。
+
+重量六種寬度（375 / 414 / 768 / 1024 / 1220 / 1440）：
+tab 高度全部一致、五格等寬差距 0、單列、無橫向溢出。
+
+### 另一個小坑：`*/15` 把區塊註解關掉
+
+在 JSDoc 裡寫 cron 表達式 `` `*/15 8-15 * * 1-5` `` —— 其中的 `*/`
+**直接終止了區塊註解**，lint 報 `Expected a semicolon`。改寫成中文敘述。
+
+### 驗證
+
+- 閘門：lint / build / **465 tests** 全綠（原 458 ＋ 新增 7）。
+- `MacroPage.test.tsx` 7 筆，含「走勢表以期別聯集為列、某指標缺該期時填『—』而非錯位」
+  （各指標發布時程不同，PCE 通常比 CPI 晚一個月）。
+- `App.smoke.test.tsx` 補「本機模式沒有總體經濟分頁」，並斷言其餘三頁不受影響。
+- Playwright 六寬度導覽列掃描（見上）。
+
+### 待辦
+
+見 `TASK.md` Task 31。**建 cron job 時要填兩個佔位符，且只跑 `schema.sql` §9 那一段。**
 
 ---
 

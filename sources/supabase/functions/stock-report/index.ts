@@ -15,6 +15,8 @@
  *       單檔補上日線與基本面並寫入 Storage，供新加入的股票不必等夜間批次（0.6.0-dev.7）
  *   POST { action: 'generate-all' }  header: x-cron-secret（盤後 pg_cron 觸發）
  *     → 產生全體持有台股的共用報告存入 Storage(reports bucket)，並清理超過 7 天的舊資料
+ *   POST { action: 'sync-macro' }  header: x-cron-secret（由 macro-daily 排程觸發）
+ *     → 抓 FRED 五個序列寫入 macro/us.json（全域單檔）。與台股交易日無關，故獨立排程。
  *   POST { action: 'backfill-revenue' }  header: x-cron-secret
  *     → 由 MOPS 分月報表把 fundamental/{ticker}.json 的月營收補到 12 個月（0.6.4）。
  *       generate-all 每輪也會順手跑一次，這個入口是給「不想等排程」用的。
@@ -1371,8 +1373,6 @@ async function handleGenerateAll(): Promise<Response> {
   // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
   const revenue = await backfillRevenue(tickers, now)
   const newsSynced = await syncNews(tickers)
-  // 總經與個股無關，故獨立一行、不進 tickers 迴圈。一天只抓一次（台北日曆日）
-  const macro = await syncMacro(now)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
   // daily/ fundamental/ news/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
@@ -1411,9 +1411,6 @@ async function handleGenerateAll(): Promise<Response> {
     fundamental_synced: fundamental.synced,
     revenue_backfilled: revenue.filled,
     news_synced: newsSynced,
-    // 記指標數而不是 boolean：0 代表一個序列都沒抓到（FRED 擋了或格式變了），
-    // 5 代表正常。boolean 分不出「今天已抓過」與「整批失敗」
-    macro_synced: macro.count,
     duration_ms: Date.now() - startedAt,
   })
 
@@ -1429,8 +1426,6 @@ async function handleGenerateAll(): Promise<Response> {
     revenueBackfilled: revenue.filled,
     revenueMonths: revenue.months,
     newsSynced,
-    macroSynced: macro.synced,
-    macroIndicators: macro.count,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? false,
@@ -1453,6 +1448,30 @@ async function handleBackfillRevenue(): Promise<Response> {
     filled: revenue.filled,
     months: revenue.months,
     monthsPerRun: MAX_BACKFILL_MONTHS,
+    durationMs: Date.now() - startedAt,
+  })
+}
+
+/**
+ * 手動或排程觸發總經同步。
+ *
+ * 0.6.5-dev.2 從 `generate-all` 拆出來，理由是**觸發時機**而不是程式碼位置：
+ * 盤後批次的 cron 是台股作息（每 15 分鐘、UTC 8-15 時、週一至週五），
+ * 而美國數據跟台股交易日無關 —— 週末完全不跑。
+ * 更直接的是 `handleGenerateAll` 的 `decideSkip` 短路會在資料到齊後直接 return，
+ * 排在它後面的東西整段不會執行。
+ *
+ * 拆的是 cron job 不是函式：`source-probe` 已有「同一支函式、不同 action、
+ * 不同排程」的先例，多開一支 Edge Function 只是多一個要部署與稽核的對象。
+ */
+async function handleSyncMacro(): Promise<Response> {
+  const startedAt = Date.now()
+  const macro = await syncMacro(new Date())
+  return json({
+    ok: true,
+    synced: macro.synced,
+    count: macro.count,
+    asOf: macro.asOf,
     durationMs: Date.now() - startedAt,
   })
 }
@@ -1492,6 +1511,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleBackfillRevenue()
+  }
+
+  // 總經同步：會寫 Storage 且對 FRED 發請求，把關同 generate-all。
+  // 由獨立的 cron job `macro-daily` 觸發（每天兩班，見 schema.sql）
+  if (body.action === 'sync-macro') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleSyncMacro()
   }
 
   // 資料源探針：只讀不寫（除了自己的觀測表），但仍走 CRON_SECRET ——

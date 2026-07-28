@@ -57,10 +57,17 @@ describe('App（本機模式煙霧測試）', () => {
     )
   })
 
-  it('本機模式沒有個股分析分頁（資料源需要 Supabase）', async () => {
+  it('本機模式沒有個股分析與總體經濟分頁（資料源需要 Supabase）', async () => {
     render(<App />)
     await screen.findByText('本機模式')
     expect(screen.queryByRole('button', { name: /個股分析/ })).toBeNull()
+    // 總經同理：fetchMacro 在本機模式永遠回 null，而空狀態寫「排程完成後會補上」
+    // ——那在本機模式是假的，留著只會讓使用者等一個不會來的東西
+    expect(screen.queryByRole('button', { name: /總體經濟/ })).toBeNull()
+    // 其餘三個分頁不受影響
+    expect(screen.getByRole('button', { name: /庫存總覽/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /年度收益/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /交易紀錄/ })).toBeTruthy()
   })
 
   it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {

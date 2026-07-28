@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Bot, CheckCircle, ChevronDown, ChevronUp, MessageSquare, RefreshCw, Settings, Trash2 } from 'lucide-react'
 import { fetchDailySeries } from '../../services/dailyProxy'
 import type { FundamentalData } from '../../services/fundamentalProxy'
-import type { MacroData } from '../../services/macroProxy'
+import { fetchMacro } from '../../services/macroProxy'
 import { fetchNews } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import {
@@ -43,13 +43,11 @@ interface AiTabProps {
   report: ReportData | null
   /** 由 StockDetailPage 載入分發（標題 badge / 基本面分頁 / 此處共用同一份） */
   fundamental: FundamentalData | null
-  /** 總經背景（0.6.5）。全市場共用一份，同樣由 StockDetailPage 載入分發 */
-  macro: MacroData | null
 }
 
 const AI_TIMEOUT_SECONDS = Math.round(AI_TIMEOUT_MS / 1000)
 
-export function AiTab({ ticker, name, report, fundamental, macro }: AiTabProps) {
+export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   // 設定狀態
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -210,6 +208,10 @@ export function AiTab({ ticker, name, report, fundamental, macro }: AiTabProps) 
       }
       // 新聞缺料不阻斷分析（prompt 有缺料文案），與 report 為 null 的處理一致
       const news = await fetchNews(ticker)
+      // 總經背景。0.6.5-dev.2 起自己抓 —— 它已不在個股分析的分頁裡，父元件沒理由替它載。
+      // 與 daily / news 同款：按下「產生分析」才抓，不必為了可能永遠不看的東西
+      // 在每次開啟個股頁時都下載一次。缺料同樣不阻斷（buildMacroBlock 回 hasData: false）。
+      const macro = await fetchMacro()
       const built = buildAiPayload({ ticker, name, view, report, range, fundamental, news, macro })
       const { system, user } = renderAiPrompt(built)
 

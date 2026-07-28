@@ -95,7 +95,7 @@ describe('AiTab', () => {
   it('未設定 AI 服務時應顯示設定表單，且畫面不出現任何 AI 生成文字', async () => {
     loadAiSettings.mockResolvedValue(null)
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     await screen.findByText('未設定 AI 服務供應商')
 
@@ -117,7 +117,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生分析' })
     fireEvent.click(btn)
@@ -178,7 +178,7 @@ describe('AiTab', () => {
           ],
           profitQuarters: [],
           notes: [],
-        }} macro={null}
+        }}
       />,
     )
 
@@ -204,7 +204,7 @@ describe('AiTab', () => {
     const mockComplete = vi.fn().mockResolvedValue('沒有新聞也能解讀。')
     createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
     await screen.findByText('沒有新聞也能解讀。')
@@ -230,7 +230,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生分析' })
     expect(screen.queryByRole('button', { name: /AI 設定/ })).toBeNull()
@@ -244,7 +244,7 @@ describe('AiTab', () => {
     isAiAdmin.mockResolvedValue(false)
     loadAiSettings.mockResolvedValue(null)
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     await screen.findByText(/請聯絡管理員完成設定/)
     expect(screen.queryByLabelText(/AI 服務供應商/)).toBeNull()
@@ -265,7 +265,7 @@ describe('AiTab', () => {
       complete: mockComplete,
     })
 
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     const btn = await screen.findByRole('button', { name: '產生分析' })
     fireEvent.click(btn)
@@ -286,7 +286,7 @@ describe('AiTab', () => {
   async function generateThen(mockComplete: ReturnType<typeof vi.fn>) {
     loadAiSettings.mockResolvedValue(settings)
     createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
     fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
     await screen.findByText('初次分析結果')
   }
@@ -364,7 +364,7 @@ describe('AiTab', () => {
     await screen.findByText('第一個回答')
 
     cleanup()
-    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} macro={null} />)
+    render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     expect(await screen.findByText('初次分析結果')).toBeTruthy()
     expect(screen.getByText('第一個回答')).toBeTruthy()

@@ -377,8 +377,12 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS bwibbu_date      TEXT;    -- 
 -- fundamental/*.json 是覆寫制，從 Storage 只看得到「現在幾筆」，看不到哪一輪補的。
 -- 補滿之後這欄會長期是 0（缺口為空就短路），那是正常的，不是壞掉。
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;  -- 這輪補寫了幾檔的月營收
--- 0.6.5 美國總經指標。一天只抓一次，所以整天只有第一輪是 1、其餘是 0，那是正常的。
-ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS macro_synced INT;        -- 這輪有沒有重寫 macro/us.json
+-- ⚠️ 0.6.5-dev.1 加的 macro_synced 在 dev.2 已成**廢欄位**：總經拆到自己的
+--    cron job（見 §9），不再由 generate-all 寫入，所以永遠是 NULL。
+--    不 DROP 是因為刪欄位的風險大於留一個沒用的欄位；正式區從未加過，也不必補。
+--    總經的觀測改看兩處：macro/us.json 自帶的 asOf（就是「什麼時候寫的」），
+--    以及 net._http_response（保留 6 小時，看 cron 有沒有打成功）。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS macro_synced INT;        -- 已廢棄，見上
 
 ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
 
@@ -485,3 +489,49 @@ SELECT cron.schedule(
 -- 常用查詢 3：內容變了但自報日期沒變 —— 代表當天被改寫（跟 T86 一樣的形態）
 --   SELECT taipei_time, bwibbu_date, bwibbu_fp FROM source_probe_log
 --   WHERE taipei_ymd = '20260728' ORDER BY id;
+
+
+-- 9. 美國總經指標的獨立排程 (0.6.5-dev.2)
+--
+--    **為什麼不掛在 §6c 的盤後批次裡**（dev.1 原本是那樣做的）：
+--      1. 那個 cron 是**台股作息**（*/15 8-15 * * 1-5，週一至週五 16:00–23:45 台北）。
+--         美國數據跟台股交易日無關，週末完全不跑。
+--      2. `handleGenerateAll` 的 `decideSkip` 短路會在當天籌碼資料到齊後直接 return，
+--         排在它後面的東西整段不執行（實測 2026-07-27：15 輪有 4 輪短路）。
+--
+--    拆的是**排程**不是函式 —— §8 的 source-probe 已有「同一支函式、不同 action、
+--    不同排程」的先例，多開一支 Edge Function 只是多一個要部署與稽核的對象。
+--
+--    **排程為什麼是 13:00 與 15:00 UTC（台北 21:00 與 23:00）**：
+--      - 每天跑，不限週一到五。
+--      - 美國 CPI / PCE / 非農在美東上午 8:30 發布 ＝ 夏令 12:30 UTC、冬令 13:30 UTC。
+--        兩班分別落在夏令與冬令之後，一年四季都接得到。
+--      - **兩班都在同一個台北日內**（台北日界線是 16:00 UTC）。函式端以
+--        「同一台北日已抓過就跳過」把關，所以第一班成功時第二班只花一次 Storage 讀取、
+--        不發任何對外請求；第一班失敗時第二班才真的重抓。近乎免費的保險。
+--
+--    ⚠️ 與 §6c 同樣的兩個佔位符地雷，套用前務必替換，套用後務必跑 §6d 的覆驗查詢。
+--    ⚠️ **只跑這一段，不要整份重跑 schema.sql**（見本檔開頭的警告）。
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'macro-daily') THEN
+    PERFORM cron.unschedule('macro-daily');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'macro-daily',
+  '0 13,15 * * *',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"sync-macro"}'::jsonb,
+    -- 五個小請求，實測 3–6 秒。給 60 秒與其他 job 一致，免得偶發慢一次就記成逾時
+    timeout_milliseconds := 60000
+  );
+  $$
+);

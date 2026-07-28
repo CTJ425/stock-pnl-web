@@ -2,11 +2,30 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-28 15:20:00 Asia/Taipei
+- Timestamp: 2026-07-28 17:10:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 31: 總經獨立為頂層頁面 ＋ 自己的 cron (0.6.5-dev.2)
+- **Status**: 程式碼完成，閘門全綠（lint / build / **465 tests**）；**待部署與建 cron job**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-28 17:10:00 Asia/Taipei
+- dev.1 把總經做成個股分析的分頁、並掛在盤後批次裡，兩者都與「它是全市場共用的一份」
+  自相矛盾（`PLAN.md §Q5`）。dev.2 兩邊都拆開。
+- **UI**：提為頂層頁面 `MacroPage`，本機模式一併隱藏（沿用個股分析的 `isReportConfigured` 規則）；
+  `AiTab` 改成自己 `fetchMacro()`（順便變 lazy）。
+- **觸發**：新 action `sync-macro` ＋ 新 cron job `macro-daily`（`0 13,15 * * *`，每天兩班）。
+- **實測到的版面問題**：分頁由四個變五個，375px 會折行（tab 高 36→57px）。
+  已收窄 `max-width: 400px` 的分頁間距，六種寬度重量過全部 36px 單列。
+- **待辦**：
+  ① 部署 `stock-report`（`--no-verify-jwt` 不可省）
+  → ② **建立 `macro-daily` cron job**（`schema.sql` §9，**只跑那一段**，
+     要填 `<PROJECT_REF>` / `<CRON_SECRET>` 兩個佔位符）
+  → ③ 打一次 `{"action":"sync-macro"}` 確認 `count: 5`
+  → ④ 跑 §6d 的覆驗查詢確認 ref 與密鑰長度。
+- ⚠️ `batch_run_log.macro_synced` 成為廢欄位（正式區從未加過，不必補）。
 
 ### Task 30: AI 分析改版 ＋ 總經與獲利能力 (0.6.5-dev.1)
 - **Status**: **測試區已部署驗證**（macro 5 項、fundamental schema 2）；閘門 **458 tests** 全綠；正式區未動

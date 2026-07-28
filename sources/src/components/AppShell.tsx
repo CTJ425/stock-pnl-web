@@ -5,6 +5,7 @@ import {
   CalendarRange,
   Code2,
   ExternalLink,
+  Globe,
   HardDrive,
   LayoutDashboard,
   LineChart,
@@ -31,23 +32,38 @@ import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
+import { MacroPage } from './Macro/MacroPage'
 import { isReportConfigured } from '../services/reportProxy'
 
-type Tab = 'dashboard' | 'analysis' | 'yearly' | 'transactions'
+type Tab = 'dashboard' | 'analysis' | 'macro' | 'yearly' | 'transactions'
 
-/** short 供手機使用：四個分頁平分螢幕寬時，四字標籤會折行 */
+/**
+ * `short` 供手機使用：分頁平分螢幕寬時，四字標籤會折行。
+ * ⚠️ **`short` 必須是兩個字。** 0.6.5-dev.2 加到五個分頁後，375px 螢幕上每格
+ * 只剩約 65px，而「圖示 15px ＋ gap 7px ＋ 兩字 26px ＋ padding 16px」已經約 64px。
+ * 三字以上必折行 —— 新增分頁前先看 index.css 的 `@media (max-width: 720px)`。
+ */
 const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
   { id: 'dashboard', label: '庫存總覽', short: '總覽', icon: LayoutDashboard },
   { id: 'analysis', label: '個股分析', short: '分析', icon: LineChart },
+  { id: 'macro', label: '總體經濟', short: '總經', icon: Globe },
   { id: 'yearly', label: '年度收益', short: '年度', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', short: '紀錄', icon: NotebookPen },
 ]
 
 /**
- * 個股分析的資料來自 Supabase Edge Function，本機模式沒有來源可讀，
- * 故未設定 Supabase 時整個分頁隱藏（與盤後報告一路以來的入口規則一致）。
+ * 個股分析與總體經濟的資料都來自 Supabase Storage / Edge Function，
+ * 本機模式沒有來源可讀，故未設定 Supabase 時整個分頁隱藏
+ * （與盤後報告一路以來的入口規則一致）。
+ *
+ * 總經**必須**跟著隱藏：`fetchMacro()` 在本機模式永遠回 null，
+ * 而空狀態寫的是「每日排程完成後會自動補上」—— 在本機模式那是假的，
+ * 永遠不會補上，留著只會讓使用者一直等一個不會來的東西。
  */
-const TABS = isReportConfigured ? ALL_TABS : ALL_TABS.filter((t) => t.id !== 'analysis')
+const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro']
+const TABS = isReportConfigured
+  ? ALL_TABS
+  : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
@@ -393,6 +409,7 @@ export function AppShell() {
           <>
             {tab === 'dashboard' && <DashboardPage />}
             {tab === 'analysis' && <AnalysisPage />}
+        {tab === 'macro' && <MacroPage />}
             {tab === 'yearly' && <YearlyPage />}
             {tab === 'transactions' && <TransactionsPage />}
           </>
