@@ -45,10 +45,9 @@ import { isReportConfigured } from '../services/reportProxy'
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'yearly' | 'transactions'
 
 /**
- * `short` 供手機使用：分頁平分螢幕寬時，四字標籤會折行。
- * ⚠️ **`short` 必須是兩個字。** 0.6.5-dev.2 加到五個分頁後，375px 螢幕上每格
- * 只剩約 65px，而「圖示 15px ＋ gap 7px ＋ 兩字 26px ＋ padding 16px」已經約 64px。
- * 三字以上必折行 —— 新增分頁前先看 index.css 的 `@media (max-width: 720px)`。
+ * `short` 供手機底部導覽列使用：底部列每格是直式（圖示在上、標籤在下），
+ * 375px 螢幕上五格每格約 73px，兩字（26px）綽綽有餘，四字則會折行。
+ * 新增分頁時 `short` 一律給兩個字。
  */
 const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
   { id: 'dashboard', label: '庫存總覽', short: '總覽', icon: LayoutDashboard },
@@ -73,6 +72,73 @@ const TABS = isReportConfigured
   : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
+
+/** 需與 index.css 的 `@media (max-width: 720px)` 一致 */
+const NARROW_QUERY = '(max-width: 720px)'
+
+/**
+ * 手機（≤720px）把主導覽從頁首搬到固定底部列，桌機維持頁首橫列。
+ *
+ * **為什麼要用 JS 判斷、不能純靠 CSS：**`.app-header` 有 `backdrop-filter`，
+ * 它會成為所有 fixed 子孫的 containing block —— 頁首裡的 `<nav>` 即使設
+ * `position: fixed; bottom: 0` 也只會貼在頁首那一塊的底部，不是視窗底部。
+ * 底部列因此必須是頁首以外的節點，而「同一份導覽渲染在哪」只能由 JS 決定
+ * （渲染兩份會有兩組同名按鈕，對輔助技術與測試都是雜訊）。
+ */
+function useNarrowScreen(): boolean {
+  const [narrow, setNarrow] = useState(
+    // matchMedia 的存在檢查不可省：jsdom 沒有實作它（與 UserMenu 同一個理由），
+    // 測試環境一律走桌機版
+    () => typeof window.matchMedia === 'function' && window.matchMedia(NARROW_QUERY).matches,
+  )
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia(NARROW_QUERY)
+    const onChange = () => setNarrow(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  return narrow
+}
+
+/**
+ * 主導覽。同一份分頁定義渲染成兩種型態：
+ * - `header`：桌機頁首的藥丸橫列（≤1020px 只剩圖示，名稱在 title / aria-label）
+ * - `bottom`：手機固定底部列，直式圖示＋兩字短標籤
+ */
+function TabNav({
+  variant,
+  current,
+  onSelect,
+}: {
+  variant: 'header' | 'bottom'
+  current: Tab
+  onSelect: (tab: Tab) => void
+}) {
+  const isBottom = variant === 'bottom'
+  return (
+    <nav className={isBottom ? 'bottom-nav' : 'tabs'} aria-label="主要頁面">
+      {TABS.map(({ id, label, short, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          className={current === id ? 'tab active' : 'tab'}
+          onClick={() => onSelect(id)}
+          /* 頁首在窄視窗只剩圖示，名稱改由 title / aria-label 呈現 */
+          title={label}
+          aria-label={label}
+          aria-current={current === id ? 'page' : undefined}
+        >
+          <Icon size={isBottom ? 18 : 15} />
+          <span className="tab-label">{isBottom ? short : label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
 
 const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
 const THEME_LABEL: Record<ThemePref, string> = {
@@ -518,6 +584,7 @@ export function AppShell() {
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
+  const narrow = useNarrowScreen()
 
   return (
     <>
@@ -530,22 +597,7 @@ export function AppShell() {
             <span className="brand-text">股票小幫手</span>
           </div>
 
-          <nav className="tabs" aria-label="主要頁面">
-            {TABS.map(({ id, label, short, icon: Icon }) => (
-              <button
-                key={id}
-                className={tab === id ? 'tab active' : 'tab'}
-                onClick={() => setTab(id)}
-                /* 視窗窄時只剩圖示，名稱改由 title / aria-label 呈現 */
-                title={label}
-                aria-label={label}
-              >
-                <Icon size={15} />
-                <span className="tab-label">{label}</span>
-                <span className="tab-label-short">{short}</span>
-              </button>
-            ))}
-          </nav>
+          {!narrow && <TabNav variant="header" current={tab} onSelect={setTab} />}
 
           <div className="header-spacer" />
 
@@ -586,6 +638,9 @@ export function AppShell() {
           <ExternalLink size={11} />
         </a>
       </footer>
+
+      {/* 手機底部導覽：必須掛在 .app-header 之外，理由見 useNarrowScreen 的註解 */}
+      {narrow && <TabNav variant="bottom" current={tab} onSelect={setTab} />}
 
       {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
       {!loading && (

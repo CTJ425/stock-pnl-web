@@ -4,16 +4,43 @@
  * 走過「啟動 → 新增交易 → Dashboard / 年度收益 / 交易紀錄呈現」的完整使用流程，
  * 驗證 Context、資料層（LocalProvider）與各頁面的實際接線。
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { APP_VERSION } from './version'
 
+/**
+ * jsdom 沒有實作 matchMedia，AppShell 與 UserMenu 都靠它判斷環境。
+ * 掛一份最小實作，讓測試能指定哪些 media query 成立（其餘測試維持「沒有
+ * matchMedia」的原狀，也就是桌機版）。
+ */
+function stubMatchMedia(matches: (query: string) => boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: matches(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+}
+
 describe('App（本機模式煙霧測試）', () => {
   beforeEach(() => {
     cleanup()
     window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    // 不還原的話，模擬手機的那個測試會讓後面所有測試都跑在手機版
+    Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('啟動後自動建立預設工作區並顯示空狀態', async () => {
@@ -67,6 +94,43 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.getByRole('button', { name: /庫存總覽/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /年度收益/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /交易紀錄/ })).toBeTruthy()
+  })
+
+  it('手機（≤720px）主導覽改成固定底部列，頁首不再有分頁', async () => {
+    const user = userEvent.setup()
+    // jsdom 沒有 matchMedia，AppShell 因此預設走桌機版；這裡補一份只讓
+    // 「≤720px」成立的實作，模擬手機視窗
+    stubMatchMedia((query) => query.includes('max-width: 720px'))
+
+    const { container } = render(<App />)
+    await screen.findByText('本機模式')
+
+    const bottomNav = container.querySelector('nav.bottom-nav')
+    expect(bottomNav).toBeTruthy()
+    // 底部列必須在 .app-header 之外：頁首的 backdrop-filter 會成為 fixed 子孫的
+    // containing block，掛在裡面只會貼在頁首底部而不是視窗底部
+    expect(container.querySelector('.app-header nav.bottom-nav')).toBeNull()
+    expect(container.querySelector('.app-header nav.tabs')).toBeNull()
+
+    // 同一份導覽只渲染一次：底部列出現時不該還有第二組同名按鈕
+    expect(screen.getAllByRole('button', { name: '交易紀錄' }).length).toBe(1)
+    // 底部列用兩字短標籤（完整名稱仍在 aria-label / title）
+    expect(bottomNav!.textContent).toContain('紀錄')
+    expect(bottomNav!.textContent).not.toContain('交易紀錄')
+
+    // 仍可切換分頁
+    await user.click(screen.getByRole('button', { name: '年度收益' }))
+    expect(screen.getByRole('button', { name: '年度收益' }).getAttribute('aria-current')).toBe(
+      'page',
+    )
+  })
+
+  it('桌機頁首維持分頁橫列，不出現底部導覽列', async () => {
+    const { container } = render(<App />)
+    await screen.findByText('本機模式')
+
+    expect(container.querySelector('.app-header nav.tabs')).toBeTruthy()
+    expect(container.querySelector('nav.bottom-nav')).toBeNull()
   })
 
   it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {

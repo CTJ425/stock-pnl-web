@@ -22,6 +22,8 @@
   --danger: #f87171;
   --radius: 14px;
   --radius-sm: 9px;
+  /* 手機底部導覽列高度（不含安全區）；浮動鈕、版本徽章、頁尾留白都由它推算 */
+  --bottom-nav-h: 54px;
   --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
   --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
@@ -217,6 +219,63 @@ h3 {
   color: #fff;
   background: linear-gradient(135deg, var(--accent-strong), #4f46e5);
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+/* ---------- 手機底部導覽 (≤720px) ----------
+ * 由 AppShell 在 ≤720px 時改渲染這一份（同一份分頁定義，不是複製一份 DOM）。
+ * 它**必須**掛在 .app-header 之外：頁首有 backdrop-filter，會成為 fixed 子孫的
+ * containing block，放在頁首裡的話只會貼在頁首底部而不是視窗底部。
+ *
+ * 高度以 --bottom-nav-h 為單一來源：浮動鈕、版本徽章、頁尾留白都從它算，
+ * 改了這個數字三者會一起跟上。安全區（iPhone home indicator）另外加在下方 padding。
+ */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  gap: 2px;
+  height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: var(--header-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border);
+}
+
+.bottom-nav .tab {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  font-size: 11px;
+  line-height: 1.25;
+  border-radius: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 底部列的標籤永遠要看得見：.tab-label 在 ≤1020px 是隱藏的（頁首只留圖示） */
+.bottom-nav .tab-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/*
+ * 選中態不沿用頁首的漸層藥丸：整片實心色塊佔滿整格會太重，
+ * 而且底部列本來就常駐畫面。改成強調色＋加粗，是行動裝置的通用寫法。
+ */
+.bottom-nav .tab.active {
+  color: var(--accent);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 600;
 }
 
 /* ---------- 玻璃卡片 ---------- */
@@ -1250,24 +1309,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--danger);
 }
 
-.ws-select select {
-  appearance: none;
-  font: inherit;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 7px 30px 7px 12px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa6bd' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
-
-.ws-select select option {
-  background: var(--panel);
-}
-
 /* ---------- 工具列 ---------- */
 .toolbar {
   display: flex;
@@ -1442,8 +1483,12 @@ input[type='date']::-webkit-calendar-picker-indicator {
  * 反而完全不生效（1920px 與 1220px 面對的是同一個 1140px）。
  *
  * 逐級讓步：無條件收間距與信箱寬度 → 1220px 收起信箱（完整值仍在登出鈕 title）
- * → 1120px 收起品牌文字 → 1020px 分頁只留圖示（名稱移到 title / aria-label）。
- * 手機版 (≤720px) 仍維持分頁獨占一列——該寬度強壓單行會小到無法點擊。
+ * → 1120px 收起品牌文字 → 1020px 分頁只留圖示（名稱移到 title / aria-label）
+ * → 720px 分頁整個離開頁首，改成固定底部列（見 .bottom-nav）。
+ *
+ * 720px 以下不再需要壓縮分頁：頁首只剩品牌 ＋ 工作區 ＋ 帳號，橫向壓力歸零。
+ * 這也是 0.6.5 那個「五個分頁在 375px 差 1px 就折行」的算式消失的原因 ——
+ * 底部列每格是直式的，375px 五格每格 73px，加到第六個仍有 61px。
  *
  * 註：Supabase 模式的 email + 登出鈕比本機模式的「本機模式」標籤寬約 140px，
  * 調整斷點時務必以 Supabase 模式驗證。
@@ -1456,35 +1501,10 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 7px 12px;
 }
 
-.ws-select select {
-  max-width: 180px;
-}
-
-/* 信箱過長時截斷，完整內容仍在登出鈕的 title */
-.user-email {
-  max-width: 132px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Supabase 模式的 email + 登出鈕比本機模式的「本機模式」標籤寬約 140px，
-   容器寬度吃緊時先收信箱——完整信箱仍在登出鈕的 title */
-@media (max-width: 1220px) {
-  .user-email {
-    display: none;
-  }
-}
-
 @media (max-width: 1120px) {
   .brand-text {
     display: none;
   }
-}
-
-/* 短標籤預設不出現，僅手機版取代完整標籤 */
-.tab-label-short {
-  display: none;
 }
 
 @media (max-width: 1020px) {
@@ -1495,22 +1515,14 @@ input[type='date']::-webkit-calendar-picker-indicator {
   .tab {
     padding: 7px 10px;
   }
-
-  .ws-select select {
-    max-width: 132px;
-    padding: 7px 26px 7px 10px;
-  }
 }
 
 /* ---------- 行動裝置 (RWD) ---------- */
 @media (max-width: 720px) {
-  /* 分頁獨占一列：改用短標籤，四字標籤在小螢幕會折行 */
-  .tab-label-short {
-    display: inline;
-  }
-
+  /* 分頁改由固定底部列呈現（見 .bottom-nav），頁首因此收斂成單列：
+     品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
   .container {
-    padding: 0 14px 104px;
+    padding: 0 14px 24px;
   }
 
   .app-header-inner {
@@ -1518,38 +1530,18 @@ input[type='date']::-webkit-calendar-picker-indicator {
     gap: 8px 10px;
   }
 
-  /* 分頁列移到第二行、平均分寬 */
-  .tabs {
-    order: 10;
-    width: 100%;
-  }
-
-  .tab {
-    flex: 1;
-    justify-content: center;
-    padding: 7px 8px;
-    /* 五個分頁平均分寬時，圖示＋兩字標籤剛好逼近格寬。
-       允許折行只會讓分頁列變兩倍高，寧可讓標籤被截斷（完整名稱在 title / aria-label）。 */
-    white-space: nowrap;
-  }
-
   .header-spacer {
     display: none;
   }
 
+  .app-footer {
+    padding-bottom: 12px;
+  }
+
+  /* 工作區選單吃掉頁首剩下的橫向空間（名稱過長由 .hmenu-ws-name 截斷） */
   .ws-select {
     flex: 1;
     min-width: 0;
-  }
-
-  .ws-select select {
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* 手機空間有限：email 以登出鈕的 title 呈現即可 */
-  .user-email {
-    display: none;
   }
 
   /* 輸入字級 ≥16px，避免 iOS Safari 聚焦時自動放大頁面 */
@@ -1597,28 +1589,23 @@ input[type='date']::-webkit-calendar-picker-indicator {
     font-size: 20px;
   }
 
+  /* 浮動鈕讓開底部導覽列 —— 這塊地本來就不是空的 */
   .fab {
     right: 14px;
-    bottom: 16px;
+    bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
+    padding: 11px 18px;
+    font-size: 14px;
   }
-}
 
-/*
- * 五個分頁 × 窄螢幕：375px 實測會折行（tab 高度 57px vs 正常 36px）。
- *
- * 算式：容器 375 − container padding 14×2 − tabs padding 4×2 ≈ 339px，
- * 五等分每格 63px；而每格內容 ＝ 圖示 15 ＋ gap 7 ＋ 兩字 26 ＋ padding 8×2 ＝ 64px。
- * 差 1px 就折行 —— 0.6.5-dev.2 由四個分頁加到五個時實測到的。
- *
- * 收 gap 與左右 padding 把內容壓到 56px。**新增第六個分頁前務必重量一次。**
- *
- * ⚠️ 這一段**必須排在 720px 那段之後** —— 兩者對 .tab 的權重相同，
- *    先寫的會被後寫的覆蓋掉，順序錯了等於沒寫。
- */
-@media (max-width: 400px) {
-  .tab {
-    gap: 4px;
-    padding: 7px 4px;
+  /*
+   * 版本徽章改回文件流、跟在頁尾後面（#root 是 flex column，它是最後一個子元素）。
+   * 手機沒有「左下角」可用：固定在那裡不是被導覽列蓋住，就是浮在卡片文字上。
+   * 底部留白由它的 margin 一併負責，故上面的 .app-footer 不再自己留。
+   */
+  .version-badge {
+    position: static;
+    align-self: center;
+    margin-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
   }
 }
 

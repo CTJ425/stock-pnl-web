@@ -1,9 +1,76 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.5 定版、併入 `main`、兩區部署完成
-- Status: **COMPLETED —— 兩區皆已上線並驗證**
-- Timestamp: 2026-07-28 19:55:00 Asia/Taipei
+- Action: 0.6.6-dev.1 手機底部導覽列
+- Status: **程式碼完成並實測通過；尚未 commit、尚未部署**
+- Timestamp: 2026-07-28 21:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 21:55:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 手機主導覽改為固定底部列（方案 08）
+- **Status**: COMPLETED（程式碼）／PENDING（commit 與部署）
+
+### 背景
+
+使用者提供「頂層頁籤 — 10 個設計提案」文件並指定**方案 08：手機底部導覽**。
+要解的是 0.6.5-dev.2 留下的帳：分頁從 4 個變 5 個後，375px 只差 1px 就折行，
+當時靠 `@media (max-width: 400px)` 收窄間距硬擠，第六個分頁就再也塞不下。
+選擇理由與其餘九案的淘汰理由寫在 `PLAN.md §S`。
+
+### 最關鍵的一件事：純 CSS 做不到
+
+`.app-header` 有 `backdrop-filter: blur(18px)`，**它會成為所有 fixed 子孫的
+containing block**。頁首裡的 `<nav>` 就算設 `position: fixed; bottom: 0`，
+也只會貼在頁首那一塊的底部，不是視窗底部。
+
+所以底部列必須是頁首以外的節點，改由 `AppShell` 的 `useNarrowScreen()`
+（`matchMedia('(max-width: 720px)')`）決定同一份導覽渲染在哪。
+**刻意不渲染兩份用 CSS 藏一份** —— 那會有兩組同名按鈕。
+
+### Completed Tasks
+
+- [x] `AppShell.tsx`：抽出 `TabNav`（`variant: 'header' | 'bottom'`）與 `useNarrowScreen()`；
+      移除 `.tab-label-short` 這個「同一顆按鈕塞兩份標籤」的舊寫法。
+- [x] `index.css`：新增 `.bottom-nav`（高度單一來源 `--bottom-nav-h: 54px`，
+      安全區另加 `env(safe-area-inset-bottom)`）；浮動鈕上移讓開；
+      版本徽章手機改回文件流跟在頁尾後面；刪掉 `@media (max-width: 400px)` 的分頁擠壓。
+- [x] 清掉 dev.3 之後就選不到元素的死 CSS：`.ws-select select`（4 處）、`.user-email`（3 處）。
+      其中 `≤720px` 那條正是「375px 工作區下拉塌成 39px」的肇因。
+- [x] `App.smoke.test.tsx`：新增 `stubMatchMedia()` 與 2 支測試（手機走底部列且頁首無分頁、
+      桌機維持頁首橫列）。**`afterEach` 一定要還原 matchMedia**，否則後面所有測試都會跑在手機版。
+- [x] 版本 bump 至 `0.6.6-dev.1`（`version.ts` / `package.json` / `package-lock.json` / README）。
+- [x] 驗證：`npm run lint` 無新增警告、`npm run build` 通過、`npm test` **471/471**（原 469 + 2）。
+
+### Playwright 實測（`375 / 414 / 768 / 1024 / 1220 / 1440px`）
+
+| 項目 | 結果 |
+| ---- | ---- |
+| 導覽位置 | ≤720px 底部列、≥721px 頁首橫列，不會同時存在 |
+| 底部列 | 54px；每格 45px，三格皆通過 `elementFromPoint` 命中測試 |
+| 5 / 6 格（複製節點實測） | 375px：71px / 59px；414px：79px / 65px，**皆單列不折行** |
+| 頁首高度（375px） | 106px → **58px** |
+| 捲到底 | GitHub 連結可點；徽章在導覽列上方，與浮動鈕不重疊（320px 亦然） |
+| 縮放 1280 → 375 → 1280 | 導覽列正確換位，**目前分頁不被重設** |
+
+亮色 / 暗色兩種主題都看過截圖。
+
+### 教訓
+
+- **`--no-save` 裝 Playwright 不會污染 `package.json` / `package-lock.json`**（實測 git status 乾淨），
+  記憶裡那三道安裝指令（含 `sudo -n env "PATH=$PATH"`）2026-07-28 仍然可用。
+- 量測腳本放在 scratchpad 時，**ESM 的 `import 'playwright'` 會從腳本所在目錄找 node_modules**，
+  不是 cwd。改成 import 絕對路徑 `sources/node_modules/playwright/index.mjs` 即可。
+- 本機模式只有 3 個分頁，要驗 5 / 6 格時**用 `cloneNode` 複製既有按鈕**再量 ——
+  同樣的 CSS 與節點形狀，比推算算式可信。
+
+### 🚧 Next Steps
+
+1. commit 到 `dev` 分支並 push（§13.1：不要直接在 `main` 上提交）。
+2. 測試區驗證，**用真手機或 DevTools 實機模式看安全區**（桌機瀏覽器的 inset 恆為 0）。
+3. 確認無誤後併入 `main`，依 §12.3 定版為 `0.6.6`。純前端異動，Supabase 兩區都不必動。
 
 ---
 
