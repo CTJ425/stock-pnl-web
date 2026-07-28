@@ -2,11 +2,22 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-28 17:10:00 Asia/Taipei
+- Timestamp: 2026-07-28 19:40:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 32: 頁首右側收斂成兩個選單 (0.6.5-dev.3)
+- **Status**: 程式碼與閘門完成（**469 tests**）；**待合併 main 與正式區部署**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-28 19:40:00 Asia/Taipei
+- 使用者於頁首設計 review 後選定 R4。右側 8 個控制項 → 2 個選單。
+- **修好兩個量出來的 bug**：≥1221px 的頁首兩列（106→70px）、
+  375px 工作區下拉塌成 39px（→108px）。詳見 `PLAN.md §R`。
+- ⚠️ **合併 main 會一次帶上整個 0.6.5**（獲利能力、總經頁、AI 追問、總經獨立）。
+  正式區的後端還停在 0.6.4，需一併補：部署 `stock-report`、建 `macro-daily` cron job。
+  否則線上的「總體經濟」會是空的、基本面看不到獲利能力。
 
 ### Task 31: 總經獨立為頂層頁面 ＋ 自己的 cron (0.6.5-dev.2)
 - **Status**: **測試區已部署驗證**（cron job 已建並覆驗、線上 9/9 檔一致）；正式區未動

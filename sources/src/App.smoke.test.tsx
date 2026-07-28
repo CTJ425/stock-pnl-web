@@ -21,10 +21,9 @@ describe('App（本機模式煙霧測試）', () => {
     // 本機模式免登入，直接進入主畫面
     expect(await screen.findByText('本機模式')).toBeTruthy()
     expect(await screen.findByText(/目前沒有持股/)).toBeTruthy()
-    // 預設工作區
-    const wsSelect = screen.getByLabelText('切換工作區') as HTMLSelectElement
-    await waitFor(() => expect(wsSelect.options.length).toBe(1))
-    expect(wsSelect.options[0].text).toBe('我的投資組合')
+    // 預設工作區：0.6.5-dev.3 起由選單觸發鈕直接顯示目前工作區名稱
+    const wsTrigger = await screen.findByRole('button', { name: '工作區：我的投資組合' })
+    expect(wsTrigger.textContent).toContain('我的投資組合')
   })
 
   it('版本標記固定於左下角徽章，只顯示版號本身', async () => {
@@ -200,4 +199,67 @@ describe('App（本機模式煙霧測試）', () => {
     const hits = await screen.findAllByText('+NT$98,096')
     expect(hits.length).toBeGreaterThan(0)
   })
+
+  it('工作區選單：切換在上、管理動作在下，刪除隔開且為危險樣式', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    await user.click(await screen.findByRole('button', { name: /^工作區：/ }))
+    const menu = await screen.findByRole('menu', { name: '工作區選單' })
+    const items = within(menu).getAllByRole('menuitem')
+    expect(items.map((b) => b.textContent)).toEqual([
+      '新增工作區',
+      '重新命名',
+      '預設手續費率',
+      '刪除工作區',
+    ])
+    // 目前工作區以 menuitemradio 呈現並打勾
+    const current = within(menu).getByRole('menuitemradio', { name: '我的投資組合' })
+    expect(current.getAttribute('aria-checked')).toBe('true')
+    // 刪除要看得出是危險動作，不能與「重新命名」長得一樣
+    expect(items[3].className).toContain('is-danger')
+  })
+
+  it('選單按 Esc 關閉並把焦點還給觸發鈕', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    const trigger = await screen.findByRole('button', { name: /^工作區：/ })
+    await user.click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '工作區選單' })).toBeNull())
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('本機模式的「本機模式」徽章本身就是帳號選單的觸發鈕（不藏進選單）', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    // 「資料只存在這個瀏覽器」要隨時看得到，不該降級成選單裡的一行
+    const badge = await screen.findByRole('button', { name: '本機模式選單' })
+    expect(badge.textContent).toContain('本機模式')
+
+    await user.click(badge)
+    const menu = await screen.findByRole('menu', { name: '帳號與外觀' })
+    expect(within(menu).getByText(/資料儲存於此瀏覽器/)).toBeTruthy()
+    // 本機模式沒有登出
+    expect(within(menu).queryByRole('menuitem', { name: /登出/ })).toBeNull()
+    expect(within(menu).getByRole('menuitem', { name: /外觀：/ })).toBeTruthy()
+  })
+
+  it('頁首右側只剩兩個控制項（0.6.5-dev.3 由 8 個收斂）', async () => {
+    render(<App />)
+    await screen.findByText('本機模式')
+    // 工作區選單 + 帳號選單。原本是：下拉 + 新增 + 重新命名 + 費率 + 刪除 + 主題 + email + 登出
+    const wsTrigger = screen.getByRole('button', { name: /^工作區：/ })
+    const userTrigger = screen.getByRole('button', { name: '本機模式選單' })
+    const header = wsTrigger.closest('.app-header-inner')!
+    const rightButtons = [...header.querySelectorAll('.ws-select button, .header-meta button')]
+    expect(rightButtons).toEqual([wsTrigger, userTrigger])
+  })
+
 })

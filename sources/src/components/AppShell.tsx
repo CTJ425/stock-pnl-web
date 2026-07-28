@@ -1,12 +1,19 @@
-/** 應用外殼：頁首（品牌、工作區切換、主題切換、登出）、分頁導覽、全域新增交易與內容區 */
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+/**
+ * 應用外殼：頁首（品牌、工作區選單、使用者選單）、分頁導覽、全域新增交易與內容區。
+ *
+ * 頁首右側在 0.6.5-dev.3 由 8 個控制項收斂成 2 個選單，理由見 docs/agent/PLAN.md §R。
+ */
+import { useEffect, useRef, useState } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import {
   CalendarRange,
+  Check,
+  ChevronDown,
   Code2,
   ExternalLink,
   Globe,
   HardDrive,
+  Layers,
   LayoutDashboard,
   LineChart,
   ListPlus,
@@ -143,12 +150,92 @@ function RecoveryPasswordModal() {
   )
 }
 
-function ThemeToggle() {
-  const [pref, setPref] = useState<ThemePref>(getThemePref)
+
+/**
+ * 頁首下拉選單的共用外殼。
+ *
+ * 抽出來是因為工作區與使用者兩個選單需要一模一樣的行為：點外面關閉、Esc 關閉並把
+ * 焦點還給觸發鈕、正確的 aria。各寫一份遲早只會修好其中一邊，而這種不一致
+ * 從呼叫端完全看不出來（與 mergePeriodSeries 同一個理由）。
+ */
+function HeaderMenu({
+  triggerLabel,
+  triggerContent,
+  triggerClass,
+  menuLabel,
+  children,
+}: {
+  triggerLabel: string
+  triggerContent: ReactNode
+  triggerClass: string
+  menuLabel: string
+  /** 收到的 close 用來讓選項點完自己關閉 */
+  children: (close: () => void) => ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      // 焦點要還回觸發鈕，否則鍵盤使用者按 Esc 之後會掉到 document
+      triggerRef.current?.focus()
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div className="hmenu" ref={wrapRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={triggerClass}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={triggerLabel}
+        title={triggerLabel}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {triggerContent}
+      </button>
+      {open && (
+        <div className="hmenu-pop" role="menu" aria-label={menuLabel}>
+          {children(() => setOpen(false))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 使用者選單：外觀切換、身分、登出。
+ *
+ * 本機模式**刻意保留「本機模式」徽章當作觸發鈕**，而不是換成頭像 ——
+ * 「資料只存在這個瀏覽器」是使用者需要隨時看得到的事實，藏進選單等於把它降級。
+ */
+function UserMenu() {
+  const { mode, user, signOut } = useAuth()
+  const [pref, setPref] = useState<ThemePref>(() => getThemePref())
 
   useEffect(() => {
     applyTheme(pref)
-    // 跟隨系統時，作業系統切換深/淺色要即時反映
+  }, [pref])
+
+  useEffect(() => {
+    // matchMedia 的存在檢查不可省：jsdom 沒有實作它，少了這道測試會整批炸掉
     if (pref !== 'system' || typeof window.matchMedia !== 'function') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => applyTheme('system')
@@ -156,22 +243,63 @@ function ThemeToggle() {
     return () => mq.removeEventListener('change', onChange)
   }, [pref])
 
-  const cycle = () => {
+  const cycleTheme = () => {
     const next = THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length]
     setPref(next)
     setThemePref(next)
   }
 
-  const Icon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun
+  const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun
+  const email = user?.email ?? ''
+  const initials = email.slice(0, 2).toUpperCase() || 'ME'
+  const isLocal = mode === 'local'
+
   return (
-    <button
-      className="btn btn-sm btn-icon"
-      title={`外觀：${THEME_LABEL[pref]}（點擊切換）`}
-      aria-label={`外觀：${THEME_LABEL[pref]}，點擊切換`}
-      onClick={cycle}
+    <HeaderMenu
+      triggerLabel={isLocal ? '本機模式選單' : `帳號選單（${email}）`}
+      triggerClass={isLocal ? 'badge hmenu-badge' : 'hmenu-avatar'}
+      triggerContent={
+        isLocal ? (
+          <>
+            <HardDrive size={12} />
+            本機模式
+          </>
+        ) : (
+          initials
+        )
+      }
+      menuLabel="帳號與外觀"
     >
-      <Icon size={14} />
-    </button>
+      {(close) => (
+        <>
+          <div className="hmenu-head">
+            {isLocal ? '資料儲存於此瀏覽器，未連線 Supabase' : email}
+          </div>
+          <div className="hmenu-sep" />
+          <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
+            <ThemeIcon size={14} />
+            <span>外觀：{THEME_LABEL[pref]}</span>
+          </button>
+          {!isLocal && (
+            <>
+              <div className="hmenu-sep" />
+              <button
+                type="button"
+                role="menuitem"
+                className="hmenu-item"
+                onClick={() => {
+                  close()
+                  void signOut()
+                }}
+              >
+                <LogOut size={14} />
+                <span>登出</span>
+              </button>
+            </>
+          )}
+        </>
+      )}
+    </HeaderMenu>
   )
 }
 
@@ -240,44 +368,94 @@ function WorkspaceControls() {
 
   return (
     <div className="ws-select">
-      <select
-        value={current?.id ?? ''}
-        onChange={(e) => selectWorkspace(e.target.value)}
-        aria-label="切換工作區"
+      {/*
+        切換與管理放在同一個選單裡：管理動作本來就只作用在「目前這個工作區」，
+        把它們跟工作區清單擺在一起，作用對象不必用猜的。
+        刪除隔一條分隔線並用紅色 —— 它原本與「重新命名」並排，都是 14px 無標籤圖示。
+      */}
+      <HeaderMenu
+        triggerLabel={`工作區：${current?.name ?? '未選擇'}`}
+        triggerClass="hmenu-ws"
+        triggerContent={
+          <>
+            <Layers size={14} />
+            <span className="hmenu-ws-name">{current?.name ?? '未選擇'}</span>
+            <ChevronDown size={12} className="hmenu-caret" />
+          </>
+        }
+        menuLabel="工作區選單"
       >
-        {workspaces.map((w) => (
-          <option key={w.id} value={w.id}>
-            {w.name}
-          </option>
-        ))}
-      </select>
-      <button className="btn btn-sm btn-icon" title="新增工作區" aria-label="新增工作區" onClick={openCreate}>
-        <Plus size={14} />
-      </button>
-      <button
-        className="btn btn-sm btn-icon"
-        title="重新命名工作區"
-        aria-label="重新命名工作區"
-        onClick={openRename}
-      >
-        <Pencil size={14} />
-      </button>
-      <button
-        className="btn btn-sm btn-icon"
-        title="設定此工作區的預設手續費率"
-        aria-label="設定此工作區的預設手續費率"
-        onClick={openFee}
-      >
-        <Percent size={14} />
-      </button>
-      <button
-        className="btn btn-sm btn-icon btn-danger"
-        title="刪除工作區"
-        aria-label="刪除工作區"
-        onClick={() => void handleDelete()}
-      >
-        <Trash2 size={14} />
-      </button>
+        {(close) => (
+          <>
+            {workspaces.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={w.id === current?.id}
+                className={w.id === current?.id ? 'hmenu-item is-current' : 'hmenu-item'}
+                onClick={() => {
+                  selectWorkspace(w.id)
+                  close()
+                }}
+              >
+                <Check size={14} className="hmenu-check" aria-hidden="true" />
+                <span>{w.name}</span>
+              </button>
+            ))}
+            <div className="hmenu-sep" />
+            <button
+              type="button"
+              role="menuitem"
+              className="hmenu-item"
+              onClick={() => {
+                close()
+                openCreate()
+              }}
+            >
+              <Plus size={14} />
+              <span>新增工作區</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="hmenu-item"
+              onClick={() => {
+                close()
+                openRename()
+              }}
+            >
+              <Pencil size={14} />
+              <span>重新命名</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="hmenu-item"
+              onClick={() => {
+                close()
+                openFee()
+              }}
+            >
+              <Percent size={14} />
+              <span>預設手續費率</span>
+            </button>
+            <div className="hmenu-sep" />
+            <button
+              type="button"
+              role="menuitem"
+              className="hmenu-item is-danger"
+              onClick={() => {
+                close()
+                void handleDelete()
+              }}
+            >
+              <Trash2 size={14} />
+              <span>刪除工作區</span>
+            </button>
+          </>
+        )}
+      </HeaderMenu>
 
       {modal && (
         <Modal
@@ -336,7 +514,7 @@ function WorkspaceControls() {
 }
 
 export function AppShell() {
-  const { mode, user, recovery, signOut } = useAuth()
+  const { recovery } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
@@ -374,25 +552,7 @@ export function AppShell() {
           <WorkspaceControls />
 
           <div className="header-meta">
-            <ThemeToggle />
-            {mode === 'local' ? (
-              <span className="badge" title="未設定 Supabase，資料儲存於此瀏覽器的 localStorage">
-                <HardDrive size={12} />
-                本機模式
-              </span>
-            ) : (
-              <>
-                <span className="user-email" title={user?.email}>{user?.email}</span>
-                <button
-                  className="btn btn-sm btn-icon"
-                  title={`登出（${user?.email ?? ''}）`}
-                  aria-label="登出"
-                  onClick={() => void signOut()}
-                >
-                  <LogOut size={14} />
-                </button>
-              </>
-            )}
+            <UserMenu />
           </div>
         </div>
       </header>

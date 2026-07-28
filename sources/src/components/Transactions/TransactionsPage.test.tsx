@@ -148,8 +148,9 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
     await user.type(searchInput, '台積')
     expect(searchInput.value).toBe('台積')
 
-    // 新增並切換至新工作區
-    await user.click(screen.getByRole('button', { name: '新增工作區' }))
+    // 新增並切換至新工作區（0.6.5-dev.3 起管理動作收在工作區選單裡，要先開選單）
+    await user.click(screen.getByRole('button', { name: /^工作區：/ }))
+    await user.click(await screen.findByRole('menuitem', { name: '新增工作區' }))
     const dialog = await screen.findByRole('dialog', { name: '新增工作區' })
     const form = within(dialog)
     await user.type(form.getByLabelText('工作區名稱'), '美股長線')

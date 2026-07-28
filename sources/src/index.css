@@ -1093,6 +1093,161 @@ input[type='date']::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* 0.6.5-dev.3 起裡面只剩一個選單觸發鈕，min-width 0 讓它能在窄螢幕縮而不塌 */
+  min-width: 0;
+}
+
+/* ---------- 頁首下拉選單（工作區 / 帳號共用） ---------- */
+.hmenu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.hmenu-ws {
+  appearance: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 7px 10px 7px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 200px;
+}
+
+/* 名稱可截斷，但左邊的圖示與右邊的箭頭永遠留著 ——
+   0.6.5-dev.2 的 bug 就是整顆被擠到只剩箭頭，看不出目前在哪個工作區 */
+.hmenu-ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 2.5em;
+}
+
+.hmenu-ws svg,
+.hmenu-caret {
+  flex: 0 0 auto;
+  color: var(--ink-secondary);
+}
+
+.hmenu-ws:hover {
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
+}
+
+.hmenu-avatar {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent-2));
+  color: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 本機模式沿用既有的 badge 外觀，只是變成可點的觸發鈕 ——
+   「資料只存在這個瀏覽器」要隨時看得到，不該藏進選單 */
+.hmenu-badge {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hmenu-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 190px;
+  max-width: min(280px, calc(100vw - 28px));
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.hmenu-head {
+  padding: 7px 11px 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.hmenu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 4px;
+}
+
+.hmenu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.hmenu-item:hover {
+  background: var(--row-hover);
+  color: var(--ink);
+}
+
+.hmenu-item svg {
+  flex: 0 0 auto;
+}
+
+.hmenu-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 未選中的工作區也要留出打勾的位置，否則清單會左右跳動 */
+.hmenu-check {
+  visibility: hidden;
+  color: var(--accent);
+}
+
+.hmenu-item.is-current {
+  color: var(--ink);
+}
+
+.hmenu-item.is-current .hmenu-check {
+  visibility: visible;
+}
+
+.hmenu-item.is-danger {
+  color: var(--danger);
+}
+
+.hmenu-item.is-danger:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--danger);
 }
 
 .ws-select select {
