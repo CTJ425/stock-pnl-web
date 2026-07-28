@@ -8,10 +8,19 @@
 
 ## 📋 Active Tasks
 
-### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.1)
-- **Status**: 已實作，閘門全綠（lint / build / **376 tests**）；**待部署測試區驗證**
+### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.2)
+- **Status**: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、第 4 輪起短路 369ms）；
+  閘門全綠（lint / build / **382 tests**）。正式區未動，等使用者決定是否併 `main`
 - **Agent**: Claude
-- **Timestamp**: 2026-07-28 10:05:00 Asia/Taipei
+- **Timestamp**: 2026-07-28 10:30:00 Asia/Taipei
+- **dev.2 修的死結**：ETF 不在 `t21sc03` 內、缺口永遠填不滿，把最新那幾個月
+  永久釘在待抓清單上，真正的公司拿不到更舊資料。新增
+  `FundamentalFile.revenueBackfilledThrough` 區分「還沒找」與「找過了沒有」。
+  **單元測試看不出來，是部署到真實環境才浮出來的**（詳見 PROGRESS.md）。
+- **順手修好的另一件事**：測試區兩個 cron job 的 url/密鑰被整份重跑 `schema.sql`
+  打回佔位符（§6c 是 unschedule+schedule，會重寫整段 command）。
+  已用 `cron.alter_job` + `replace` 修正並覆驗。
+  **往後套用新 `ALTER TABLE` 只跑那幾行，不要整份重跑 `schema.sql`。**
 - 起因：使用者問「把今年度的月營收補齊會不會爆掉」。
   **容量完全不是問題**（正式區實測：全庫 15MB、`chip_raw_cache` 2.6MB / 29 列、
   `fundamental/` 5 檔共 1745 bytes、淨持有 5 檔）。真正的阻礙是資料源 ——

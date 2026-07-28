@@ -350,6 +350,13 @@ CREATE TABLE IF NOT EXISTS batch_run_log (
 
 -- 0.6.1 新增欄位。用 ADD COLUMN IF NOT EXISTS 而非改上面的 CREATE，
 -- 是為了讓已經建過表的環境（正式區 2026-07-27 已建）重跑本檔就能升級。
+--
+-- ⚠️ 但「重跑本檔」指的是**只跑這幾行 ALTER**，不是整份貼進 SQL Editor。
+--    §6c 的 cron 是 unschedule + schedule，整份重跑會把填好的 <PROJECT_REF>
+--    與 <CRON_SECRET> 打回字面值 —— 2026-07-28 測試區實際踩到：為了套用
+--    revenue_backfilled 而整份重跑，兩個 job 當場失效，且因為 DNS 根本解不出來，
+--    net._http_response 連失敗紀錄都沒有，要到當晚 16:00 才會發現整晚全空。
+--    **本檔不是冪等的。**
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS runs_today   INT;      -- 今天第幾次執行（含短路），MAX_RUNS_PER_DAY 靠它把關
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS skipped      BOOLEAN;  -- 這輪短路，沒有任何對外請求
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS skip_reason  TEXT;     -- 'complete' | 'run-cap'

@@ -77,9 +77,11 @@ import {
 import {
   MOPS_MARKETS,
   mopsRevenueUrl,
+  nextBackfilledThrough,
   parseMopsRevenue,
   planRevenueBackfill,
   publishedMonths,
+  type RevenueProgress,
 } from './twRevenueHistory.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
@@ -840,13 +842,16 @@ async function backfillRevenue(
 
   // 先讀一輪算出缺口。順便把檔案留著，省得補完再下載一次。
   const files = new Map<string, FundamentalFile>()
-  const have = new Map<string, Set<string>>()
+  const have = new Map<string, RevenueProgress>()
   for (const { ticker } of tickers) {
     const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
     // 檔案還沒產生就先跳過：syncFundamental 會在同一輪稍早建立它，下一輪再補
     if (!file) continue
     files.set(ticker, file)
-    have.set(ticker, new Set((file.revenueMonths ?? []).map((m) => m.yearMonth)))
+    have.set(ticker, {
+      months: new Set((file.revenueMonths ?? []).map((m) => m.yearMonth)),
+      through: file.revenueBackfilledThrough ?? null,
+    })
   }
 
   const targets = planRevenueBackfill(have, wantMonths, MAX_BACKFILL_MONTHS)
@@ -855,18 +860,25 @@ async function backfillRevenue(
 
   // month → (ticker → RevenueMonth)
   const fetched = new Map<string, Map<string, RevenueMonth>>()
+  // 「這個月份我們確實去看過了」。判準是**抓取成功**，不是「有找到我們要的代號」——
+  // 全是 ETF 時 merged 必然是空的，用有無資料判斷會讓 through 永遠推不動、回補卡死。
+  const attempted: string[] = []
   for (const ym of targets) {
     const merged = new Map<string, RevenueMonth>()
+    let ok = false
     for (const market of MOPS_MARKETS) {
       const url = mopsRevenueUrl(market, ym)
       if (!url) continue
       const html = await fetchBig5Text(url)
       if (!html) continue
+      ok = true
       for (const [ticker, row] of parseMopsRevenue(html, ym, wanted)) merged.set(ticker, row)
     }
+    if (ok) attempted.push(ym)
     if (merged.size > 0) fetched.set(ym, merged)
   }
-  if (fetched.size === 0) return { filled: 0, months: [] }
+  // 一個月都沒抓成功（對方掛了 / 網路不通）就什麼都別改，下一輪重試
+  if (attempted.length === 0) return { filled: 0, months: [] }
 
   let filled = 0
   for (const [ticker, file] of files) {
@@ -875,7 +887,6 @@ async function backfillRevenue(
       const row = byTicker.get(ticker)
       if (row) incoming.push(row)
     }
-    if (incoming.length === 0) continue
 
     // fillGapsOnly：既有值一律保留。t187ap05_L 抓到的是更正後的數字，
     // 不能被一份較舊的 MOPS 爬取蓋掉（見 mergeRevenueMonths 的說明）。
@@ -883,9 +894,19 @@ async function backfillRevenue(
     // ⚠️ 比月份清單而不是比長度：已有 12 筆的檔補進一個新月份時，cap 會砍掉最舊的一筆，
     // 長度仍是 12 但內容變了 —— 用長度判斷會把這次真正的更新當成沒事發生而不寫檔。
     const before = (file.revenueMonths ?? []).map((m) => m.yearMonth).join(',')
-    if (merged.map((m) => m.yearMonth).join(',') === before) continue
+    const monthsChanged = merged.map((m) => m.yearMonth).join(',') !== before
 
-    const next: FundamentalFile = { ...file, revenueMonths: merged, asOf: new Date().toISOString() }
+    // 進度也要寫回去，**即使一筆資料都沒找到** —— ETF 正是靠這個收斂，
+    // 否則它每輪都會把同樣的月份重新列為缺口。
+    const through = nextBackfilledThrough(file.revenueBackfilledThrough, attempted)
+    if (!monthsChanged && through === (file.revenueBackfilledThrough ?? null)) continue
+
+    const next: FundamentalFile = {
+      ...file,
+      revenueMonths: merged,
+      revenueBackfilledThrough: through,
+      asOf: new Date().toISOString(),
+    }
     if (await uploadJson(`fundamental/${ticker}.json`, next)) filled++
   }
   return { filled, months: [...fetched.keys()].sort() }

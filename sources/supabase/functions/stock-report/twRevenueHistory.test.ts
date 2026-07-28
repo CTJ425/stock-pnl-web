@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   MOPS_HOST,
   mopsRevenueUrl,
+  nextBackfilledThrough,
   parseMopsRevenue,
   planRevenueBackfill,
   publishedMonths,
@@ -91,25 +92,29 @@ describe('parseMopsRevenue', () => {
 
 describe('planRevenueBackfill', () => {
   const WANT = ['2026-06', '2026-05', '2026-04', '2026-03']
+  const p = (months: string[], through: string | null = null) => ({
+    months: new Set(months),
+    through,
+  })
 
   it('全部補滿時回空陣列——呼叫端據此短路，一個對外請求都不發', () => {
     const have = new Map([
-      ['2330', new Set(WANT)],
-      ['6488', new Set(WANT)],
+      ['2330', p(WANT)],
+      ['6488', p(WANT)],
     ])
     expect(planRevenueBackfill(have, WANT, 4)).toEqual([])
   })
 
   it('只要有一檔缺該月份就要抓（大檔是全市場共用的）', () => {
     const have = new Map([
-      ['2330', new Set(WANT)],
-      ['6488', new Set(['2026-06'])],
+      ['2330', p(WANT)],
+      ['6488', p(['2026-06'])],
     ])
     expect(planRevenueBackfill(have, WANT, 4)).toEqual(['2026-05', '2026-04', '2026-03'])
   })
 
   it('超過單次預算時由新到舊取，剩下的缺口是最舊的那幾個月', () => {
-    const have = new Map([['2330', new Set<string>()]])
+    const have = new Map([['2330', p([])]])
     expect(planRevenueBackfill(have, WANT, 2)).toEqual(['2026-06', '2026-05'])
   })
 
@@ -118,8 +123,48 @@ describe('planRevenueBackfill', () => {
   })
 
   it('預算為 0 時不抓', () => {
-    const have = new Map([['2330', new Set<string>()]])
+    const have = new Map([['2330', p([])]])
     expect(planRevenueBackfill(have, WANT, 0)).toEqual([])
+  })
+
+  it('through 以上的月份不再重問——找過了就是沒有', () => {
+    // ETF 的形狀：一筆營收都沒有，但 2026-04 以上都已經找過
+    const have = new Map([['0050', p([], '2026-04')]])
+    expect(planRevenueBackfill(have, WANT, 4)).toEqual(['2026-03'])
+  })
+
+  it('ETF 不會把整批回補卡死（0.6.4-dev.1 實測到的死結）', () => {
+    // 0050 永遠填不滿。若用「檔案裡沒有的月份」當缺口，每輪都會回同樣的最新 4 個月，
+    // 2330 就永遠拿不到更舊的資料。through 推進後，缺口必須真的往舊的方向走。
+    const have = new Map([
+      ['0050', p([], '2026-03')],
+      ['2330', p(['2026-06', '2026-05', '2026-04', '2026-03'], '2026-03')],
+    ])
+    expect(planRevenueBackfill(have, WANT, 4)).toEqual([])
+
+    const older = ['2026-06', '2026-05', '2026-04', '2026-03', '2026-02', '2026-01']
+    expect(planRevenueBackfill(have, older, 4)).toEqual(['2026-02', '2026-01'])
+  })
+
+  it('沒有 through 的舊檔視同全部未嘗試（向後相容）', () => {
+    const have = new Map([['2330', p(['2026-06'], null)]])
+    expect(planRevenueBackfill(have, WANT, 4)).toEqual(['2026-05', '2026-04', '2026-03'])
+  })
+})
+
+describe('nextBackfilledThrough', () => {
+  it('取舊值與本輪嘗試月份中最舊的那個', () => {
+    expect(nextBackfilledThrough(null, ['2026-06', '2026-04', '2026-05'])).toBe('2026-04')
+    expect(nextBackfilledThrough('2026-04', ['2026-03', '2026-02'])).toBe('2026-02')
+  })
+
+  it('進度只會往舊走，不會被較新的一輪往回推', () => {
+    expect(nextBackfilledThrough('2025-07', ['2026-06', '2026-05'])).toBe('2025-07')
+  })
+
+  it('本輪什麼都沒嘗試時保留舊值', () => {
+    expect(nextBackfilledThrough('2026-03', [])).toBe('2026-03')
+    expect(nextBackfilledThrough(null, [])).toBeNull()
   })
 })
 

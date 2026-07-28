@@ -111,29 +111,57 @@ export function parseMopsRevenue(
   return found
 }
 
+/** 單一標的的回補進度 */
+export interface RevenueProgress {
+  /** 這檔已有的月份 */
+  months: Set<string>
+  /** 最舊的**已嘗試**月份；null 代表從未回補過。見 FundamentalFile.revenueBackfilledThrough */
+  through: string | null
+}
+
 /**
  * 這一輪要去抓哪幾個月。
  *
  * 抽成純函式是因為它是整條回補路徑上唯一有判斷的地方（其餘都是 fetch / upload 的膠水），
  * 而 index.ts 綁死 Deno 與 Supabase client、在本專案的測試環境裡跑不起來。
  *
- * @param have      每檔已有的月份集合（key 是代號，值是該檔的 yearMonth 集合）
+ * **關鍵：缺口不是「檔案裡沒有的月份」，是「還沒去找過的月份」。**
+ * 兩者的差別在 ETF 身上會要命 —— 它不在 t21sc03 內，`months` 永遠是空的，
+ * 若用前者判斷，它會把最新那幾個月永遠釘在待抓清單上，整批回補就此卡住、
+ * 每輪重抓同樣的月份卻一筆也填不進去（0.6.4-dev.1 部署測試區後實測到的死結）。
+ * 所以只有**比 `through` 更舊**的月份才算缺口 —— `through` 以上都找過了，
+ * 沒有就是沒有，不必再問一次。
+ *
  * @param wantMonths 目標月份（publishedMonths 的輸出）
  * @param maxMonths 單次上限，見 index.ts MAX_BACKFILL_MONTHS
- * @returns 由新到舊；空陣列代表已補滿，呼叫端應直接短路、不發任何對外請求
+ * @returns 由新到舊；空陣列代表沒有要找的了，呼叫端應直接短路、不發任何對外請求
  */
 export function planRevenueBackfill(
-  have: Map<string, Set<string>>,
+  have: Map<string, RevenueProgress>,
   wantMonths: string[],
   maxMonths: number,
 ): string[] {
   if (have.size === 0 || maxMonths <= 0) return []
   const missing = new Set<string>()
-  for (const months of have.values()) {
-    for (const ym of wantMonths) if (!months.has(ym)) missing.add(ym)
+  for (const { months, through } of have.values()) {
+    for (const ym of wantMonths) {
+      if (months.has(ym)) continue
+      // through 以上（含）都已經找過，沒找到就是這個月份沒有這檔的資料
+      if (through && ym >= through) continue
+      missing.add(ym)
+    }
   }
   // 由新到舊補：預算用完時，留下的缺口是最舊的那幾個月，對使用者的價值最低
   return [...missing].sort().reverse().slice(0, maxMonths)
+}
+
+/** 這一輪跑完之後的 `through`：舊值與本輪實際嘗試過的月份取最舊 */
+export function nextBackfilledThrough(
+  prev: string | null | undefined,
+  attempted: string[],
+): string | null {
+  const all = [...attempted, ...(prev ? [prev] : [])].filter(Boolean).sort()
+  return all[0] ?? prev ?? null
 }
 
 /**

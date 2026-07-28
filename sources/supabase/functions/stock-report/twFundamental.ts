@@ -99,6 +99,17 @@ export interface FundamentalFile {
   revenueUnit: '千元'
   /** 由舊到新，最多 12 個月（覆寫制檔案內自累積） */
   revenueMonths: RevenueMonth[]
+  /**
+   * 歷史回補「已經找到哪個月份為止」（最舊的**已嘗試**月份 'YYYY-MM'）。
+   *
+   * 存在的理由是要分辨兩種 `revenueMonths` 缺月：**還沒去找** vs **找過了就是沒有**。
+   * 沒有這一欄的話，ETF（不在 t21sc03 內，永遠填不滿）會把缺口清單
+   * 永遠釘在最新那幾個月，真正的公司就再也拿不到更舊的資料 —— 0.6.4-dev.1
+   * 部署到測試區後實測到的死結，見 PROGRESS.md。
+   *
+   * 舊檔沒有這一欄（undefined）代表從未回補過，視同全部未嘗試。
+   */
+  revenueBackfilledThrough?: string | null
   notes: string[]
 }
 
