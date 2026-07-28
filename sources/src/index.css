@@ -1868,7 +1868,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   white-space: nowrap;
 }
 
-/* AI 解讀分頁樣式 */
+/* AI 分析分頁樣式 */
 .ai-container {
   display: flex;
   flex-direction: column;

@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
   extractIndustry,
+  extractProfit,
   extractRevenue,
   extractValuation,
   buildFundamentalFile,
+  mergeProfitQuarters,
   mergeRevenueMonths,
+  rocYearQuarter,
   rocDate,
   rocYearMonth,
+  type ProfitQuarter,
   type RevenueMonth,
 } from './twFundamental.ts'
 
@@ -32,6 +36,22 @@ const REVENUE_ROWS = [
     '營業收入-上月比較增減(%)': '6.164589232380731',
     '營業收入-去年同月增減(%)': '67.86685548491262',
     '累計營業收入-前期比較增減(%)': '35.613194655616326',
+  },
+]
+
+/** 逐字取自 2026-07-28 對 openapi.twse.com.tw/v1/opendata/t187ap17_L 的實際回應（節錄 2330） */
+const PROFIT_ROWS = [
+  {
+    出表日期: '1150728',
+    年度: '115',
+    季別: '1',
+    公司代號: '2330',
+    公司名稱: '台積電',
+    '營業收入(百萬元)': '1134103.44',
+    '毛利率(%)(營業毛利)/(營業收入)': '66.25',
+    '營業利益率(%)(營業利益)/(營業收入)': '58.10',
+    '稅前純益率(%)(稅前純益)/(營業收入)': '60.65',
+    '稅後純益率(%)(稅後純益)/(營業收入)': '50.51',
   },
 ]
 
@@ -117,6 +137,90 @@ describe('twFundamental', () => {
     })
   })
 
+  describe('rocYearQuarter', () => {
+    it('民國年 + 季別轉西元年季', () => {
+      expect(rocYearQuarter('115', '1')).toBe('2026-Q1')
+      expect(rocYearQuarter('114', '4')).toBe('2025-Q4')
+      expect(rocYearQuarter('99', '2')).toBe('2010-Q2')
+    })
+
+    it('季別只接受 1–4，格式不符回 null', () => {
+      expect(rocYearQuarter('115', '0')).toBeNull()
+      expect(rocYearQuarter('115', '5')).toBeNull()
+      expect(rocYearQuarter('115', '')).toBeNull()
+      expect(rocYearQuarter('2026', '1')).toBeNull()
+      expect(rocYearQuarter(null, null)).toBeNull()
+    })
+  })
+
+  describe('extractProfit', () => {
+    it('取出四個比率與營收（欄位名帶括號說明，是端點原樣）', () => {
+      expect(extractProfit(PROFIT_ROWS, '2330')).toEqual({
+        yearQuarter: '2026-Q1',
+        revenueMillionTwd: 1134103.44,
+        grossMarginPercent: 66.25,
+        operatingMarginPercent: 58.1,
+        pretaxMarginPercent: 60.65,
+        netMarginPercent: 50.51,
+      })
+    })
+
+    it('查無代號（上櫃 / ETF）回 null', () => {
+      expect(extractProfit(PROFIT_ROWS, '5274')).toBeNull()
+      expect(extractProfit(null, '2330')).toBeNull()
+    })
+
+    it('年季解析失敗回 null，不吐出半殘的一季', () => {
+      const bad = [{ ...PROFIT_ROWS[0], 季別: '9' }]
+      expect(extractProfit(bad, '2330')).toBeNull()
+    })
+  })
+
+  describe('mergeProfitQuarters', () => {
+    const q = (yearQuarter: string, gross: number): ProfitQuarter => ({
+      yearQuarter,
+      revenueMillionTwd: 1,
+      grossMarginPercent: gross,
+      operatingMarginPercent: null,
+      pretaxMarginPercent: null,
+      netMarginPercent: null,
+    })
+
+    it('新季度併入並由舊到新排序', () => {
+      const merged = mergeProfitQuarters([q('2025-Q4', 4), q('2025-Q3', 3)], [q('2026-Q1', 1)])
+      expect(merged.map((x) => x.yearQuarter)).toEqual(['2025-Q3', '2025-Q4', '2026-Q1'])
+    })
+
+    it('同季度以新值覆蓋（財報會更正重編）', () => {
+      const merged = mergeProfitQuarters([q('2026-Q1', 60)], [q('2026-Q1', 66.25)])
+      expect(merged).toHaveLength(1)
+      expect(merged[0].grossMarginPercent).toBe(66.25)
+    })
+
+    it('超過 8 季時砍最舊的', () => {
+      const prev = Array.from({ length: 8 }, (_, i) =>
+        q(`202${Math.floor(i / 4) + 4}-Q${(i % 4) + 1}`, i),
+      )
+      const merged = mergeProfitQuarters(prev, [q('2026-Q1', 99)])
+      expect(merged).toHaveLength(8)
+      expect(merged[0].yearQuarter).toBe('2024-Q2')
+      expect(merged[7].yearQuarter).toBe('2026-Q1')
+    })
+
+    it('fillGapsOnly 不覆蓋既有值', () => {
+      const merged = mergeProfitQuarters([q('2026-Q1', 66)], [q('2026-Q1', 1), q('2025-Q4', 55)], {
+        fillGapsOnly: true,
+      })
+      expect(merged.find((x) => x.yearQuarter === '2026-Q1')?.grossMarginPercent).toBe(66)
+      expect(merged.map((x) => x.yearQuarter)).toEqual(['2025-Q4', '2026-Q1'])
+    })
+
+    it('壞掉的項目（缺 yearQuarter）不會混進結果', () => {
+      const bad = { grossMarginPercent: 1 } as unknown as ProfitQuarter
+      expect(mergeProfitQuarters([q('2026-Q1', 1)], [bad])).toHaveLength(1)
+    })
+  })
+
   describe('buildFundamentalFile', () => {
     const m = (yearMonth: string): RevenueMonth => ({
       yearMonth,
@@ -132,6 +236,7 @@ describe('twFundamental', () => {
       asOf: '2026-07-28T02:00:00.000Z',
       valuation: { peRatio: 31.59, dividendYieldPercent: 0.94, pbRatio: 10.34, dataDate: '2026-07-24' },
       latestRevenue: m('2026-06'),
+      latestProfit: null,
       industry: '半導體業',
       bwibbuLoaded: true,
     }
@@ -147,6 +252,61 @@ describe('twFundamental', () => {
       }
       const file = buildFundamentalFile({ ...base, existing })
       expect(file.revenueBackfilledThrough).toBe('2025-07')
+    })
+
+    it('獲利能力也必須帶過去——整份重建時漏欄位就是無聲的資料遺失', () => {
+      const q: ProfitQuarter = {
+        yearQuarter: '2026-Q1',
+        revenueMillionTwd: 1134103.44,
+        grossMarginPercent: 66.25,
+        operatingMarginPercent: 58.1,
+        pretaxMarginPercent: 60.65,
+        netMarginPercent: 50.51,
+      }
+      const existing = {
+        ...base,
+        schema: 2,
+        revenueUnit: '千元' as const,
+        revenueMonths: [m('2026-06')],
+        revenueBackfilledThrough: '2025-07',
+        profitUnit: '%' as const,
+        profitQuarters: [q],
+        notes: [],
+      }
+      // 這輪沒抓到獲利能力（latestProfit: null）時，既有的那一季不可以被抹掉
+      const file = buildFundamentalFile({ ...base, existing })
+      expect(file.profitQuarters).toEqual([q])
+      expect(file.profitUnit).toBe('%')
+      expect(file.schema).toBe(2)
+    })
+
+    it('有既有月營收或既有季度時，不再寫「查無公司基本面資料」', () => {
+      const withQuarters = {
+        ...base,
+        schema: 2,
+        revenueUnit: '千元' as const,
+        revenueMonths: [],
+        profitQuarters: [
+          {
+            yearQuarter: '2026-Q1',
+            revenueMillionTwd: 1,
+            grossMarginPercent: 1,
+            operatingMarginPercent: null,
+            pretaxMarginPercent: null,
+            netMarginPercent: null,
+          },
+        ],
+        notes: [],
+      }
+      const file = buildFundamentalFile({
+        ...base,
+        existing: withQuarters,
+        valuation: null,
+        latestRevenue: null,
+        latestProfit: null,
+        industry: null,
+      })
+      expect(file.notes.join()).not.toContain('查無公司基本面資料')
     })
 
     it('沒有既有檔時進度為 null（尚未回補過）', () => {

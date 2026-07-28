@@ -54,7 +54,7 @@ describe('fetchNews', () => {
     expect(n?.items[1].publishedAt).toBeNull()
   })
 
-  it('查無檔案 → null（批次尚未跑過；AI 解讀不阻斷）', async () => {
+  it('查無檔案 → null（批次尚未跑過；AI 分析不阻斷）', async () => {
     storageDownload.mockResolvedValue(notFound)
     expect(await fetchNews('2330')).toBeNull()
   })

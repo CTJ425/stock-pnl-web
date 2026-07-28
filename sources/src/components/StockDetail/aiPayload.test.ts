@@ -200,7 +200,7 @@ describe('aiPayload', () => {
       expect(system).toContain('不得給出明確的買進')
       expect(system).toContain('不得臆測、擴寫或引用標題以外的新聞內容')
       expect(system).toContain('月營收為千元')
-      expect(system).toContain('本解讀為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
+      expect(system).toContain('本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
 
       // User Prompt 斷言
       expect(user).toContain('2330')
@@ -245,6 +245,7 @@ describe('aiPayload', () => {
               cumulativeYoyPercent: 35.61,
             },
           ],
+          profitQuarters: [],
           notes: [],
         },
         news: {
@@ -292,6 +293,7 @@ describe('aiPayload', () => {
           valuation: null,
           revenueUnit: '千元',
           revenueMonths: [],
+          profitQuarters: [],
           notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
         },
         news: null,

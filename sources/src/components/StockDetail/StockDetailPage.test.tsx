@@ -374,16 +374,16 @@ describe('StockDetailPage', () => {
     expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
   })
 
-  it('應包含「AI 解讀」分頁籤並可點擊切換', async () => {
+  it('應包含「AI 分析」分頁籤並可點擊切換', async () => {
     const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     await screen.findByText('三大法人買賣超')
 
-    const aiTabButton = screen.getByRole('button', { name: 'AI 解讀' })
+    const aiTabButton = screen.getByRole('button', { name: 'AI 分析' })
     expect(aiTabButton).toBeTruthy()
 
     await user.click(aiTabButton)
-    expect(screen.getByText('AI 個股綜合解讀')).toBeTruthy()
+    expect(screen.getByText('AI 個股綜合分析')).toBeTruthy()
   })
 
   it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
@@ -401,6 +401,7 @@ describe('StockDetailPage', () => {
       },
       revenueUnit: '千元',
       revenueMonths: [],
+      profitQuarters: [],
       notes: [],
     })
 
@@ -421,6 +422,7 @@ describe('StockDetailPage', () => {
       valuation: null,
       revenueUnit: '千元',
       revenueMonths: [],
+      profitQuarters: [],
       notes: [],
     })
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
@@ -436,6 +438,7 @@ describe('StockDetailPage', () => {
       valuation: { peRatio: 16.72, dividendYieldPercent: 3.88, pbRatio: 0.55, dataDate: '2026-07-24' },
       revenueUnit: '千元' as const,
       revenueMonths: [],
+      profitQuarters: [],
       notes: [],
     }
     fetchFundamental.mockResolvedValueOnce(null).mockResolvedValueOnce(fresh)

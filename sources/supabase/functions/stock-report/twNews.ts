@@ -1,5 +1,5 @@
 /**
- * Google News RSS 抓取與解析（AI 解讀的消息面來源）。
+ * Google News RSS 抓取與解析（AI 分析的消息面來源）。
  *
  * 實測確認（2026-07-27，q=台積電）：整份 XML 為單行；每個 <item> 內有
  * `<title>標題 - 來源名</title>`（純文字＋XML entity，未見 CDATA，但 Google 端格式

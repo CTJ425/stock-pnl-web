@@ -115,7 +115,7 @@ describe('AiTab', () => {
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
-    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    const btn = await screen.findByRole('button', { name: '產生分析' })
     fireEvent.click(btn)
 
     await screen.findByText('這是 Mock 的 AI 數據解讀結果。')
@@ -172,12 +172,13 @@ describe('AiTab', () => {
               cumulativeYoyPercent: 35.61,
             },
           ],
+          profitQuarters: [],
           notes: [],
         }}
       />,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: '產生解讀' }))
+    fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
     await screen.findByText('含基本面與消息面的解讀。')
 
     const { user } = mockComplete.mock.calls[0][0] as { user: string }
@@ -200,7 +201,7 @@ describe('AiTab', () => {
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '產生解讀' }))
+    fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
     await screen.findByText('沒有新聞也能解讀。')
 
     const { user } = mockComplete.mock.calls[0][0] as { user: string }
@@ -225,7 +226,7 @@ describe('AiTab', () => {
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
-    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    const btn = await screen.findByRole('button', { name: '產生分析' })
     expect(screen.queryByRole('button', { name: /AI 設定/ })).toBeNull()
     expect(screen.getByText(/僅管理員可修改/)).toBeTruthy()
 
@@ -260,7 +261,7 @@ describe('AiTab', () => {
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
-    const btn = await screen.findByRole('button', { name: '產生解讀' })
+    const btn = await screen.findByRole('button', { name: '產生分析' })
     fireEvent.click(btn)
 
     await screen.findByText('API Key 無效')

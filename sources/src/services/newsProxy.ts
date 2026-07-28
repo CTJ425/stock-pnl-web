@@ -1,6 +1,6 @@
 /**
- * 個股新聞標題（AI 解讀的消息面）：讀取盤後排程預產、存於公開 `reports` bucket 的
- * `news/{ticker}.json`。只服務 AI 解讀分頁，v1 不做新聞列表 UI。
+ * 個股新聞標題（AI 分析的消息面）：讀取盤後排程預產、存於公開 `reports` bucket 的
+ * `news/{ticker}.json`。只服務 AI 分析分頁，v1 不做新聞列表 UI。
  *
  * 沒有 fallback，理由同 dailyProxy；查無檔案時 AI prompt 會帶「消息面缺料」文案，
  * 解讀功能照常運作、不阻斷。

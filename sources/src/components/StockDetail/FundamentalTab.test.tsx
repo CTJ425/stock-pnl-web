@@ -27,11 +27,71 @@ const full: FundamentalData = {
       cumulativeYoyPercent: 35.61,
     },
   ],
+  profitQuarters: [],
   notes: [],
 }
 
 describe('FundamentalTab', () => {
   afterEach(() => cleanup())
+
+  const withProfit: FundamentalData = {
+    ...full,
+    profitQuarters: [
+      {
+        yearQuarter: '2025-Q4',
+        revenueMillionTwd: 868459,
+        grossMarginPercent: 59.01,
+        operatingMarginPercent: 49.03,
+        pretaxMarginPercent: 51.2,
+        netMarginPercent: 43.11,
+      },
+      {
+        yearQuarter: '2026-Q1',
+        revenueMillionTwd: 1134103.44,
+        grossMarginPercent: 66.25,
+        operatingMarginPercent: 58.1,
+        pretaxMarginPercent: 60.65,
+        netMarginPercent: 50.51,
+      },
+    ],
+  }
+
+  it('獲利能力四格 KPI 取最新一季', () => {
+    render(<FundamentalTab fundamental={withProfit} loading={false} />)
+    // 「毛利率」同時是 KPI 標籤與表頭，故限定在 KPI 區塊內比對
+    const labels = [...document.querySelectorAll('.kpi-label')].map((e) => e.textContent)
+    expect(labels).toEqual(
+      expect.arrayContaining(['毛利率', '營益率', '稅前純益率', '稅後純益率']),
+    )
+    // 值同樣同時出現在 KPI 與表格，故也限定在 KPI 區塊
+    const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
+    expect(values).toEqual(
+      expect.arrayContaining(['+66.25%', '+58.10%', '+60.65%', '+50.51%']),
+    )
+    expect(screen.getByText(/2026 年第 1 季（已累積 2 季）/)).toBeTruthy()
+  })
+
+  it('季度趨勢表由新到舊，且只有一季時不出現表格', () => {
+    const { unmount } = render(<FundamentalTab fundamental={withProfit} loading={false} />)
+    const rows = document.querySelectorAll('.data-table')
+    // 兩張表：獲利能力季度表 + 月營收表
+    expect(rows).toHaveLength(2)
+    const firstBodyRow = rows[0].querySelectorAll('tbody tr')[0]
+    expect(firstBodyRow.textContent).toContain('2026 年第 1 季')
+    unmount()
+
+    const oneQuarter = { ...withProfit, profitQuarters: [withProfit.profitQuarters[1]] }
+    render(<FundamentalTab fundamental={oneQuarter} loading={false} />)
+    // 只剩月營收那張表；KPI 仍在
+    expect(document.querySelectorAll('.data-table')).toHaveLength(1)
+    expect(screen.getByText('+66.25%')).toBeTruthy()
+  })
+
+  it('沒有獲利能力資料時顯示空狀態，不影響其他區塊', () => {
+    render(<FundamentalTab fundamental={full} loading={false} />)
+    expect(screen.getByText('查無獲利能力資料。')).toBeTruthy()
+    expect(screen.getByText('31.59')).toBeTruthy()
+  })
 
   it('顯示估值三指標與資料日期', () => {
     render(<FundamentalTab fundamental={full} loading={false} />)
@@ -77,6 +137,7 @@ describe('FundamentalTab', () => {
             dataDate: '2026-07-24',
           },
           revenueMonths: [],
+          profitQuarters: [],
         }}
         loading={false}
       />,
@@ -104,6 +165,7 @@ describe('FundamentalTab', () => {
           industry: null,
           valuation: null,
           revenueMonths: [],
+          profitQuarters: [],
           notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
         }}
         loading={false}

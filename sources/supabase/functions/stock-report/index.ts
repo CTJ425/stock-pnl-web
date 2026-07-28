@@ -66,8 +66,10 @@ import {
   FUNDAMENTAL_SCHEMA,
   T187AP03_URL,
   T187AP05_URL,
+  T187AP17_URL,
   buildFundamentalFile,
   extractIndustry,
+  extractProfit,
   extractRevenue,
   extractValuation,
   mergeRevenueMonths,
@@ -85,6 +87,17 @@ import {
   type RevenueProgress,
 } from './twRevenueHistory.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
+import {
+  FRED_SERIES,
+  MACRO_LOOKBACK_MONTHS,
+  MACRO_SCHEMA,
+  deriveIndicator,
+  fredCsvUrl,
+  fredSinceDate,
+  parseFredCsv,
+  type MacroFile,
+  type MacroIndicator,
+} from './usMacro.ts'
 import {
   decideSkip,
   nextT86State,
@@ -747,10 +760,15 @@ async function syncFundamental(
   const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
   const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
+  // 獲利能力（0.6.5）。同樣是 whole-market 大檔、走 chip_raw_cache，
+  // 所以一天 32 輪只有第一輪真的去抓。季更資料，多數輪次抽出來的值與昨天相同。
+  const profit = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP17_L', T187AP17_URL)
   // 估值檔自帶民國日期（例：'1150724'）。記進 batch_run_log 才回答得出
   // 「基本面什麼時候更新」—— 原本只記 synced 計數，而那個數字會被「新增股票」干擾。
   const bwibbuDate = bwibbu?.[0]?.Date ?? null
-  if (!bwibbu && !revenue && !company) return { synced: 0, bwibbuDate } // 三份全失敗就別把既有檔覆寫成空殼
+  // 全部失敗才整段跳過。只要有一份抓到就照常寫檔 ——
+  // buildFundamentalFile 會保留既有欄位，不會把沒抓到的部分覆寫成空殼。
+  if (!bwibbu && !revenue && !company && !profit) return { synced: 0, bwibbuDate }
 
   let synced = 0
   for (const { ticker, name } of tickers) {
@@ -762,6 +780,7 @@ async function syncFundamental(
 
       const valuation = extractValuation(bwibbu, ticker)
       const latestRevenue = extractRevenue(revenue, ticker)
+      const latestProfit = extractProfit(profit, ticker)
       const industry = extractIndustry(revenue, company, ticker)
 
       // 欄位組裝與註記判斷都在 twFundamental.ts 的純函式裡（那裡測得到）
@@ -773,6 +792,7 @@ async function syncFundamental(
         existing,
         valuation,
         latestRevenue,
+        latestProfit,
         industry,
         bwibbuLoaded: bwibbu !== null,
       })
@@ -898,7 +918,7 @@ async function backfillRevenue(
   return { filled, months: [...fetched.keys()].sort() }
 }
 
-// ---- 新聞（AI 解讀的消息面）----
+// ---- 新聞（AI 分析的消息面）----
 
 /** ISO 時刻對應的台北日曆日 YYYY-MM-DD（UTC+8 固定偏移，台灣無日光節約） */
 function taipeiDateOf(iso: string): string {
@@ -945,6 +965,59 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
   return synced
 }
 
+// ---- 美國總經指標（0.6.5）----
+
+/**
+ * 產出 `macro/us.json`：五個 FRED 序列的最新值與近 12 期走勢。
+ *
+ * **這是本專案第一份非個股資料**，幾個刻意的決定：
+ *
+ * 1. **單一全域檔，不是 per-ticker**。全市場共用，每檔股票看到的完全一樣；
+ *    寫成 per-ticker 只是把同一份資料抄 N 遍。形狀最接近 `manifest.json`。
+ * 2. **不進 `tickers` 迴圈、不進 `warmStock`**。它與個股無關，
+ *    掛進去只會讓「新增一檔股票」誤觸五次對外請求。
+ * 3. **跳過條件用台北日曆日，不用 `dataYmd`**（比照 `syncNews`）。
+ *    美國數據按自己的發布日走，與台股交易日無關；用交易日當鍵會在連假期間停更。
+ * 4. **不寫 `chip_raw_cache`**。那張表的 prune 是 `ymd < cutoff` 的 8 碼日期字典序，
+ *    月份鍵每輪都會被刪掉（`backfillRevenue` 就是為此不用它）。
+ *    `macro/us.json` 自己就是快取 —— 一天只抓一次。
+ * 5. **全部失敗就不覆寫既有檔**，沿用 `syncNews` 的準則：留舊資料勝過空檔。
+ */
+async function syncMacro(now: Date): Promise<{ synced: boolean; asOf: string | null }> {
+  const today = taipeiDateOf(now.toISOString())
+  const existing = await downloadJson<MacroFile>('macro/us.json')
+  if (existing && existing.schema === MACRO_SCHEMA && taipeiDateOf(existing.asOf) === today) {
+    return { synced: false, asOf: existing.asOf }
+  }
+
+  const since = fredSinceDate(now, MACRO_LOOKBACK_MONTHS)
+  const indicators: MacroIndicator[] = []
+  for (const spec of FRED_SERIES) {
+    try {
+      const res = await fetch(fredCsvUrl(spec.id, since), {
+        headers: { 'User-Agent': UA, Accept: 'text/csv' },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!res.ok) continue
+      const ind = deriveIndicator(spec, parseFredCsv(await res.text()))
+      // 一期都算不出來（序列停更或格式改了）就別放進檔案，讓前端顯示缺料
+      if (ind.latest) indicators.push(ind)
+    } catch {
+      // 單一序列失敗不影響其他四個
+    }
+  }
+  if (indicators.length === 0) return { synced: false, asOf: existing?.asOf ?? null }
+
+  const file: MacroFile = {
+    schema: MACRO_SCHEMA,
+    asOf: now.toISOString(),
+    region: '美國',
+    indicators,
+  }
+  const ok = await uploadJson('macro/us.json', file)
+  return { synced: ok, asOf: ok ? file.asOf : (existing?.asOf ?? null) }
+}
+
 /** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
@@ -983,7 +1056,7 @@ async function warmDataYmd(): Promise<string> {
  * 單一代號的即點即產：補上日線與基本面（0.6.0-dev.7）。
  *
  * 為什麼需要它：新加入的股票要等下一班夜間批次才有日線與基本面，
- * 在那之前技術面與基本面分頁是空的，AI 解讀甚至會因為拿不到日線而整個失敗。
+ * 在那之前技術面與基本面分頁是空的，AI 分析甚至會因為拿不到日線而整個失敗。
  *
  * 為什麼安全（0.3.9 燒掉額度的教訓）：
  * 1. 沿用 `heldTwTickers()` 白名單，非持股一律 403 —— 與 `generate` 同一道防線。
@@ -991,7 +1064,7 @@ async function warmDataYmd(): Promise<string> {
  *    所以同一檔每天最多只會真的做一次事，之後前端直接讀 Storage。
  * 3. 基本面那三份是全市場大檔且走 `chip_raw_cache`，對外放大效應趨近於零。
  *
- * 刻意**不**含新聞：它只服務 AI 解讀，而 AI 在缺新聞時本來就能正常降級
+ * 刻意**不**含新聞：它只服務 AI 分析，而 AI 在缺新聞時本來就能正常降級
  * （prompt 有缺料文案），沒必要為它在開頁路徑上多付一次 10 秒逾時的 RSS 請求。
  */
 async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
@@ -1286,6 +1359,8 @@ async function handleGenerateAll(): Promise<Response> {
   // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
   const revenue = await backfillRevenue(tickers, now)
   const newsSynced = await syncNews(tickers)
+  // 總經與個股無關，故獨立一行、不進 tickers 迴圈。一天只抓一次（台北日曆日）
+  const macro = await syncMacro(now)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
   // daily/ fundamental/ news/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
@@ -1324,6 +1399,7 @@ async function handleGenerateAll(): Promise<Response> {
     fundamental_synced: fundamental.synced,
     revenue_backfilled: revenue.filled,
     news_synced: newsSynced,
+    macro_synced: macro.synced ? 1 : 0,
     duration_ms: Date.now() - startedAt,
   })
 
@@ -1339,6 +1415,7 @@ async function handleGenerateAll(): Promise<Response> {
     revenueBackfilled: revenue.filled,
     revenueMonths: revenue.months,
     newsSynced,
+    macroSynced: macro.synced,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? false,

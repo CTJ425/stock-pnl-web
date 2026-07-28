@@ -1,5 +1,5 @@
 /**
- * 個股分析「AI 解讀」分頁。
+ * 個股分析「AI 分析」分頁。
  * 獨立進行 daily series 載入與技術面計算，不將狀態上提到父元件或修改 TechnicalTab。
  * 不會自動重試，未設定時畫面不得出現任何 AI 生成文字。
  */
@@ -169,7 +169,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       if (!view) {
         throw new AiError('bad-response', '無法計算個股之技術面指標 (歷史股價資料不存在或為空)')
       }
-      // 新聞缺料不阻斷解讀（prompt 有缺料文案），與 report 為 null 的處理一致
+      // 新聞缺料不阻斷分析（prompt 有缺料文案），與 report 為 null 的處理一致
       const news = await fetchNews(ticker)
       const payload = buildAiPayload({ ticker, name, view, report, range, fundamental, news })
       const { system, user } = renderAiPrompt(payload)
@@ -185,7 +185,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       } else if (e instanceof Error) {
         setErrMsg(e.message)
       } else {
-        setErrMsg('產生 AI 解讀時發生未知錯誤')
+        setErrMsg('產生 AI 分析時發生未知錯誤')
       }
       setStatus('error')
     }
@@ -208,7 +208,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           <div>
             <h3 style={{ margin: 0, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Bot size={18} />
-              AI 個股綜合解讀
+              AI 個股綜合分析
             </h3>
             <span className="hint" style={{ fontSize: 12 }}>
               {settings
@@ -228,12 +228,12 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
                 {status === 'generating' ? (
                   <>
                     <RefreshCw size={14} className="spin" />
-                    解讀中…（最長 {AI_TIMEOUT_SECONDS} 秒）
+                    分析中…（最長 {AI_TIMEOUT_SECONDS} 秒）
                   </>
                 ) : (
                   <>
                     <Bot size={14} />
-                    {status === 'success' || status === 'error' ? '重新產生解讀' : '產生解讀'}
+                    {status === 'success' || status === 'error' ? '重新產生分析' : '產生分析'}
                   </>
                 )}
               </button>
@@ -370,7 +370,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       {status === 'generating' && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <RefreshCw size={28} className="spin" style={{ marginBottom: 12, color: 'var(--primary)' }} />
-          <div style={{ fontSize: 15, fontWeight: 500 }}>AI 正在分析技術面與籌碼數據解讀中…</div>
+          <div style={{ fontSize: 15, fontWeight: 500 }}>AI 正在解讀技術面與籌碼數據…</div>
           <div className="hint" style={{ marginTop: 6 }}>最長可能需要 {AI_TIMEOUT_SECONDS} 秒，請稍候。</div>
         </div>
       )}
@@ -381,7 +381,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <div style={{ fontWeight: 600 }}>解讀失敗</div>
+              <div style={{ fontWeight: 600 }}>分析失敗</div>
               <div style={{ fontSize: 13, marginTop: 4 }}>{errMsg}</div>
             </div>
           </div>
@@ -394,16 +394,16 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         </div>
       )}
 
-      {/* 解讀結果顯示區 + 免責聲明 */}
+      {/* 分析結果顯示區 + 免責聲明 */}
       {status === 'success' && aiText && (
         <div className="ai-card">
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Bot size={16} />
-            {ticker} {name} AI 數據綜合解讀
+            {ticker} {name} AI 數據綜合分析
           </div>
           <div className="ai-result">{aiText}</div>
           <div className="ai-disclaimer">
-            免責聲明：本解讀由 AI 模型依據上方的技術面與籌碼數據自動生成，僅供參考，不構成任何投資建議、買賣推薦或價格預測。AI 仍有可能講錯數字，重要數字請回頭對照「技術面」與「籌碼」分頁。
+            免責聲明：本分析由 AI 模型依據上方的技術面與籌碼數據自動生成，僅供參考，不構成任何投資建議、買賣推薦或價格預測。AI 仍有可能講錯數字，重要數字請回頭對照「技術面」與「籌碼」分頁。
           </div>
         </div>
       )}

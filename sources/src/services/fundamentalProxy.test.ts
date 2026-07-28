@@ -43,6 +43,7 @@ const file = {
       cumulativeYoyPercent: 35.61,
     },
   ],
+  profitQuarters: [],
   notes: [],
 }
 
@@ -89,6 +90,7 @@ describe('fetchFundamental', () => {
         valuation: null,
         revenueUnit: '千元',
         revenueMonths: [],
+        profitQuarters: [],
         notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
       }),
     )
@@ -108,6 +110,7 @@ describe('fetchFundamental', () => {
           { notYearMonth: true },
           null,
         ],
+        profitQuarters: [],
       }),
     )
     const f = await fetchFundamental('2330')

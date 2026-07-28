@@ -377,6 +377,8 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS bwibbu_date      TEXT;    -- 
 -- fundamental/*.json 是覆寫制，從 Storage 只看得到「現在幾筆」，看不到哪一輪補的。
 -- 補滿之後這欄會長期是 0（缺口為空就短路），那是正常的，不是壞掉。
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;  -- 這輪補寫了幾檔的月營收
+-- 0.6.5 美國總經指標。一天只抓一次，所以整天只有第一輪是 1、其餘是 0，那是正常的。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS macro_synced INT;        -- 這輪有沒有重寫 macro/us.json
 
 ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
 

@@ -1,12 +1,12 @@
 /**
- * 個股分析的內容區：「籌碼 / 技術面 / 基本面 / 我的持股 / AI 解讀」分頁籤。
+ * 個股分析的內容區：「籌碼 / 技術面 / 基本面 / 總經 / 我的持股 / AI 分析」分頁籤。
  * 取代 v1 的彈窗 —— 字串模板做不出可互動圖表（見 docs/agent/PLAN.md §B）。
  *
  * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定，
  * 共用報告本身不含個資。頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
  *
  * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
- * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面分頁、AI 解讀），
+ * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面分頁、AI 分析），
  * 與籌碼報告各自獨立，任一失敗不影響另一個。
  */
 import { useEffect, useRef, useState } from 'react'
@@ -19,11 +19,13 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
+import { fetchMacro, type MacroData } from '../../services/macroProxy'
 import { warmStock } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
+import { MacroTab } from './MacroTab'
 import { HoldingTab } from './HoldingTab'
 import { TechnicalTab } from './TechnicalTab'
 
@@ -38,14 +40,15 @@ interface StockDetailPageProps extends StockDetailTarget {
   selector?: ReactNode
 }
 
-type DetailTab = 'chips' | 'technical' | 'fundamental' | 'holding' | 'ai'
+type DetailTab = 'chips' | 'technical' | 'fundamental' | 'macro' | 'holding' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'chips', label: '籌碼' },
   { id: 'technical', label: '技術面' },
   { id: 'fundamental', label: '基本面' },
+  { id: 'macro', label: '總經' },
   { id: 'holding', label: '我的持股' },
-  { id: 'ai', label: 'AI 解讀' },
+  { id: 'ai', label: 'AI 分析' },
 ]
 
 export function StockDetailPage({ ticker, name, holding, selector }: StockDetailPageProps) {
@@ -55,6 +58,8 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
   const [report, setReport] = useState<ReportData | null>(null)
   const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
   const [fundLoading, setFundLoading] = useState(true)
+  const [macro, setMacro] = useState<MacroData | null>(null)
+  const [macroLoading, setMacroLoading] = useState(true)
   // 使用者按「重新整理」時 +1，串進各載入 effect 的依賴強制重抓。
   // 需要它是因為：報告與基本面只在開頁（ticker 變更）時抓一次，而盤後批次
   // 會在使用者看著的當下更新資料 —— 沒有這個鈕就只能整頁重載才看得到新的。
@@ -143,6 +148,23 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     }
   }, [ticker, reloadKey])
 
+  // 總經：**依賴刻意不含 ticker** —— 它是全市場共用的一份，換股票不必重抓。
+  // 只有「重新整理」才會重讀。同樣由父層載，因為 AI 分析也要用同一份。
+  useEffect(() => {
+    let alive = true
+    setMacroLoading(true)
+    ;(async () => {
+      const m = await fetchMacro()
+      if (alive) {
+        setMacro(m)
+        setMacroLoading(false)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [reloadKey])
+
   async function handleDownload() {
     if (!surfaceRef.current) return
     setPdfBusy(true)
@@ -176,10 +198,10 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
         <button
           className="btn btn-sm"
           onClick={() => setReloadKey((k) => k + 1)}
-          disabled={status === 'loading' || fundLoading}
+          disabled={status === 'loading' || fundLoading || macroLoading}
           title="重新抓取籌碼、技術面與基本面"
         >
-          <RefreshCw size={14} className={status === 'loading' || fundLoading ? 'spin' : undefined} />
+          <RefreshCw size={14} className={status === 'loading' || fundLoading || macroLoading ? 'spin' : undefined} />
           重新整理
         </button>
         {status === 'ready' && tab === 'chips' && (
@@ -224,6 +246,8 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
           </>
         )}
         {tab === 'technical' && <TechnicalTab ticker={ticker} reloadKey={reloadKey} />}
+        {tab === 'macro' && <MacroTab macro={macro} loading={macroLoading} />}
+
         {tab === 'fundamental' && (
           <FundamentalTab fundamental={fundamental} loading={fundLoading} />
         )}

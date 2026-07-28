@@ -27,6 +27,24 @@ export interface RevenueMonth {
   cumulativeYoyPercent: number | null
 }
 
+/**
+ * 一季的獲利能力比率（0.6.5 起）。單位一律 %，欄位名寫死稅前 / 稅後：
+ * 「淨利率」在台灣的口語同時指兩者，用它當欄位名一定會被誤讀。
+ */
+export interface ProfitQuarter {
+  /** 'YYYY-Qn' */
+  yearQuarter: string
+  revenueMillionTwd: number | null
+  /** 毛利率 */
+  grossMarginPercent: number | null
+  /** 營益率 */
+  operatingMarginPercent: number | null
+  /** 稅前純益率 */
+  pretaxMarginPercent: number | null
+  /** 稅後純益率 */
+  netMarginPercent: number | null
+}
+
 export interface FundamentalData {
   ticker: string
   /** 批次產出時間 ISO */
@@ -38,6 +56,8 @@ export interface FundamentalData {
   revenueUnit: '千元'
   /** 由舊到新，最多 12 個月 */
   revenueMonths: RevenueMonth[]
+  /** 由舊到新，最多 8 季。schema 1 的舊檔沒有這一欄，正規化後為空陣列 */
+  profitQuarters: ProfitQuarter[]
   notes: string[]
 }
 
@@ -56,6 +76,7 @@ interface StoredFundamental {
   industry?: unknown
   valuation?: unknown
   revenueMonths?: unknown
+  profitQuarters?: unknown
   notes?: unknown
 }
 
@@ -87,6 +108,20 @@ function normalizeRevenueMonth(v: unknown): RevenueMonth | null {
   }
 }
 
+function normalizeProfitQuarter(v: unknown): ProfitQuarter | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  if (typeof o.yearQuarter !== 'string' || !o.yearQuarter) return null
+  return {
+    yearQuarter: o.yearQuarter,
+    revenueMillionTwd: numOrNull(o.revenueMillionTwd),
+    grossMarginPercent: numOrNull(o.grossMarginPercent),
+    operatingMarginPercent: numOrNull(o.operatingMarginPercent),
+    pretaxMarginPercent: numOrNull(o.pretaxMarginPercent),
+    netMarginPercent: numOrNull(o.netMarginPercent),
+  }
+}
+
 function isSupported(d: unknown): d is StoredFundamental {
   if (!d || typeof d !== 'object') return false
   const f = d as StoredFundamental
@@ -102,6 +137,11 @@ export async function fetchFundamental(ticker: string): Promise<FundamentalData 
     ? stored.revenueMonths.map(normalizeRevenueMonth).filter((m): m is RevenueMonth => m !== null)
     : []
 
+  // schema 1 的舊檔沒有這一欄；缺欄與空陣列在畫面上是同一件事（沒有獲利能力可看）
+  const quarters = Array.isArray(stored.profitQuarters)
+    ? stored.profitQuarters.map(normalizeProfitQuarter).filter((q): q is ProfitQuarter => q !== null)
+    : []
+
   return {
     ticker: typeof stored.ticker === 'string' ? stored.ticker : ticker,
     asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
@@ -110,6 +150,7 @@ export async function fetchFundamental(ticker: string): Promise<FundamentalData 
     valuation: normalizeValuation(stored.valuation),
     revenueUnit: '千元',
     revenueMonths: months,
+    profitQuarters: quarters,
     notes: Array.isArray(stored.notes)
       ? stored.notes.filter((n): n is string => typeof n === 'string')
       : [],
