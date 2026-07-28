@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 30: AI 分析改版 ＋ 總經與獲利能力 (0.6.5-dev.1)
-- **Status**: 程式碼完成，閘門全綠（lint / build / **456 tests**）；**兩區皆未部署**
+- **Status**: **測試區已部署驗證**（macro 5 項、fundamental schema 2）；閘門 **458 tests** 全綠；正式區未動
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 15:20:00 Asia/Taipei
 - 三件事：①「AI 解讀」更名「AI 分析」②產生分析後可追問，嚴格框限主題

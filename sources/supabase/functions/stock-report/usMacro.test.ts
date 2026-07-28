@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   FRED_SERIES,
+  MACRO_UA,
   MACRO_POINTS,
   deriveIndicator,
   fredCsvUrl,
@@ -132,5 +133,20 @@ describe('FRED_SERIES', () => {
       'PAYEMS:momThousands',
       'UMCSENT:index',
     ])
+  })
+})
+
+describe('MACRO_UA', () => {
+  it('不得宣稱自己是瀏覽器——FRED 會直接重置連線', () => {
+    // 0.6.5-dev.1 第一次部署就是沿用 twChips 的瀏覽器 UA，整批抓不到，
+    // 而錯誤被 catch 吃掉，只剩 macroSynced: false 一個線索。
+    expect(MACRO_UA).not.toContain('Mozilla')
+    expect(MACRO_UA).not.toContain('Chrome')
+    expect(MACRO_UA).not.toContain('Safari')
+  })
+
+  it('誠實表明身分並附聯絡處（對公開資料源該有的禮貌）', () => {
+    expect(MACRO_UA).toContain('stock-pnl-web')
+    expect(MACRO_UA).toContain('https://')
   })
 })

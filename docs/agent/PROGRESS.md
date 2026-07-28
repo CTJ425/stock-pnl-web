@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: 0.6.5-dev.1 AI 分析改版 ＋ 總經與獲利能力
-- Status: IN PROGRESS — 程式碼與閘門完成（**456 tests**），**兩區皆未部署**
+- Status: IN PROGRESS — **測試區已部署驗證**（458 tests）；正式區未動
 - Timestamp: 2026-07-28 15:20:00 Asia/Taipei
 
 ---
@@ -89,10 +89,49 @@
   1440 / 760px 版面正確、無橫向溢出、無 page error。
 - FRED 五序列的計算值都合理，非農 `+57 千人` 與手算 `158984−158927` 相符。
 
+### 測試區部署後撞到的事：FRED 擋瀏覽器 UA
+
+第一次部署，`generate-all` 回 `macroSynced: false`、`macro/us.json` 根本沒產生。
+獲利能力那半完全正常（`schema: 2`、2330 的 Q1 為 66.25 / 58.10 / 60.65 / 50.51）。
+
+根因：`syncMacro` 沿用了 `twChips.ts` 的 `UA` 常數 —— 那是給 TWSE 用的**瀏覽器字串**。
+FRED 的防護對「宣稱是瀏覽器卻不是瀏覽器」的請求**直接重置 HTTP/2 連線**
+（`INTERNAL_ERROR`），連 HTTP 狀態碼都拿不到，所以 `catch` 直接吃掉。
+
+逐一實測（各兩次，確認是確定性而非偶發）：
+
+| User-Agent | 結果 |
+| --- | --- |
+| `Mozilla/5.0 (…Chrome/120…)` | ❌ 連線重置 |
+| `stock-pnl-web/0.6.5` / `Deno` / 空 UA | ❌ 同上 |
+| `Deno/1.45.5` / `curl/8.5.0` / `python-requests/2.31.0` | ✅ 200 |
+| `stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)` | ✅ 200 |
+
+選最後這個並抽成 `MACRO_UA`：誠實表明自己是誰、附聯絡處，是對公開資料源該有的禮貌，
+也不必賭 Deno 預設 UA 的格式哪天會不會變。加了回歸樁鎖住「不得含 Mozilla / Chrome」。
+
+**順手修掉可觀測性**：原本整批失敗時只留一個 `macroSynced: false`，
+與「今天已經抓過所以跳過」長得一模一樣。改成 `batch_run_log.macro_synced`
+記**指標數**：5 是正常、0 是一個都沒抓到。
+
+> **教訓**：跨資料源複製貼上請求標頭是有代價的。`UA` 那個常數的名字太泛，
+> 讀起來像「本專案的 UA」，實際上是「給 TWSE 看的偽裝」。
+
+### 測試區驗證（2026-07-28 15:35）
+
+- `generate-all` → `macroSynced: true`、`macroIndicators: 5`、`fundamentalSynced: 5`。
+- `macro/us.json` 五項齊全，數值與本機由原始 CSV 算出的完全一致
+  （核心 CPI 2.57% / 核心 PPI 4.68% / 核心 PCE 3.41% / 非農 +57 千人 / 信心 44.8）。
+- `fundamental/2330.json` 升到 `schema: 2`，`profitQuarters` 有 2026-Q1。
+- **真瀏覽器**（Playwright，讀測試區實際資料）：`fetchMacro` 拿到 5 項、
+  `MacroTab` 五格 KPI ＋ 12 期走勢表、`FundamentalTab` 七格 KPI
+  （估值三格 ＋ 獲利能力四格 66.25 / 58.10 / 60.65 / 50.51）、無橫向溢出、無 page error。
+
 ### 待辦
 
-見 `TASK.md` Task 30。**兩區都要只跑那一行 `ALTER TABLE`，不要整份重跑
-`schema.sql`** —— 0.6.4 那次整份重跑把兩個 cron job 打回佔位符。
+- **人工驗證追問框限**（無法自動化，清單見 `TASK.md` Task 30）。
+- 正式區未動。併 `main` 時**只跑那一行 `ALTER TABLE`，不要整份重跑 `schema.sql`**
+  —— 0.6.4 那次整份重跑把兩個 cron job 打回佔位符。
 
 ---
 

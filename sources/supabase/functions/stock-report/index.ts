@@ -94,6 +94,7 @@ import {
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
+  MACRO_UA,
   parseFredCsv,
   type MacroFile,
   type MacroIndicator,
@@ -983,11 +984,14 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
  *    `macro/us.json` 自己就是快取 —— 一天只抓一次。
  * 5. **全部失敗就不覆寫既有檔**，沿用 `syncNews` 的準則：留舊資料勝過空檔。
  */
-async function syncMacro(now: Date): Promise<{ synced: boolean; asOf: string | null }> {
+async function syncMacro(
+  now: Date,
+): Promise<{ synced: boolean; count: number; asOf: string | null }> {
   const today = taipeiDateOf(now.toISOString())
   const existing = await downloadJson<MacroFile>('macro/us.json')
   if (existing && existing.schema === MACRO_SCHEMA && taipeiDateOf(existing.asOf) === today) {
-    return { synced: false, asOf: existing.asOf }
+    // 今天已經抓過。count 用既有的指標數，才分得出「跳過」與「抓不到」
+    return { synced: false, count: existing.indicators?.length ?? 0, asOf: existing.asOf }
   }
 
   const since = fredSinceDate(now, MACRO_LOOKBACK_MONTHS)
@@ -995,7 +999,8 @@ async function syncMacro(now: Date): Promise<{ synced: boolean; asOf: string | n
   for (const spec of FRED_SERIES) {
     try {
       const res = await fetch(fredCsvUrl(spec.id, since), {
-        headers: { 'User-Agent': UA, Accept: 'text/csv' },
+        // ⚠️ 不是 twChips 的 UA。送瀏覽器字串會被 FRED 直接重置連線，見 MACRO_UA
+        headers: { 'User-Agent': MACRO_UA, Accept: 'text/csv' },
         signal: AbortSignal.timeout(10_000),
       })
       if (!res.ok) continue
@@ -1006,7 +1011,10 @@ async function syncMacro(now: Date): Promise<{ synced: boolean; asOf: string | n
       // 單一序列失敗不影響其他四個
     }
   }
-  if (indicators.length === 0) return { synced: false, asOf: existing?.asOf ?? null }
+  // 全滅時不覆寫既有檔（沿用 syncNews 的準則：留舊資料勝過空檔）。
+  // 回傳 count = 0 讓 batch_run_log 記得下來 —— 這裡曾經整批失敗而只剩
+  // 一個 boolean false 可看，查不出是「跳過」還是「抓不到」。
+  if (indicators.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
 
   const file: MacroFile = {
     schema: MACRO_SCHEMA,
@@ -1015,7 +1023,11 @@ async function syncMacro(now: Date): Promise<{ synced: boolean; asOf: string | n
     indicators,
   }
   const ok = await uploadJson('macro/us.json', file)
-  return { synced: ok, asOf: ok ? file.asOf : (existing?.asOf ?? null) }
+  return {
+    synced: ok,
+    count: indicators.length,
+    asOf: ok ? file.asOf : (existing?.asOf ?? null),
+  }
 }
 
 /** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
@@ -1399,7 +1411,9 @@ async function handleGenerateAll(): Promise<Response> {
     fundamental_synced: fundamental.synced,
     revenue_backfilled: revenue.filled,
     news_synced: newsSynced,
-    macro_synced: macro.synced ? 1 : 0,
+    // 記指標數而不是 boolean：0 代表一個序列都沒抓到（FRED 擋了或格式變了），
+    // 5 代表正常。boolean 分不出「今天已抓過」與「整批失敗」
+    macro_synced: macro.count,
     duration_ms: Date.now() - startedAt,
   })
 
@@ -1416,6 +1430,7 @@ async function handleGenerateAll(): Promise<Response> {
     revenueMonths: revenue.months,
     newsSynced,
     macroSynced: macro.synced,
+    macroIndicators: macro.count,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? false,

@@ -14,7 +14,7 @@
  * 資料源（實測確認 2026-07-28）：
  *   https://fred.stlouisfed.org/graph/fredgraph.csv?id={序列}&cosd={起始日}
  *
- * 三個實測要點：
+ * 四個實測要點：
  *  1. **不需要 API key**。FRED 的 REST API 要金鑰，但 fredgraph 的 CSV 匯出不用。
  *     這也是選它而不是官方 API 的原因：少一組要保管的密鑰。
  *  2. **抓原始值，不用 `transformation=pc1`**。端點確實支援直接回年增率，
@@ -22,6 +22,7 @@
  *     交給對方轉換就得為每種口徑各抓一次，也失去驗算的能力。
  *  3. **會有空值列**（例：`1952-12,`）。早年月份不是每月都有觀測值，
  *     解析時必須保留「這一期沒有值」而不是跳過或補 0。
+ *  4. **不能送 twChips 那個瀏覽器 UA**（見 `MACRO_UA`）。
  *
  * 由 Edge Function 伺服器端抓取，故不受瀏覽器 CORS 限制。
  * 解析為純函式、不觸網，比照 twChips.ts / twFundamental.ts 的分工。
@@ -125,6 +126,25 @@ export const MACRO_POINTS = 12
  * 再加一個月的緩衝（月度資料的發布落差）。
  */
 export const MACRO_LOOKBACK_MONTHS = 26
+
+/**
+ * 打 FRED 專用的 User-Agent。
+ *
+ * ⚠️ **不可以沿用 twChips.ts 的 `UA`**（那是瀏覽器字串，給 TWSE 用的）。
+ * FRED 的防護會對「宣稱是瀏覽器卻不是瀏覽器」的請求**直接重置 HTTP/2 連線**
+ * （`INTERNAL_ERROR`，連 HTTP 狀態碼都拿不到），0.6.5-dev.1 第一次部署就是這樣
+ * 整批抓不到、而錯誤被 catch 吃掉，只剩 `macroSynced: false` 一個線索。
+ *
+ * 實測（2026-07-28，各試兩次）：
+ *   ❌ `Mozilla/5.0 (Windows NT 10.0…Chrome/120…)`  連線被重置
+ *   ❌ `stock-pnl-web/0.6.5`、`Deno`、空的 UA        同上
+ *   ✅ `Deno/1.45.5`、`curl/8.5.0`、`python-requests/2.31.0`
+ *   ✅ `stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)`
+ *
+ * 選最後這個：誠實表明自己是誰、附上聯絡處，是對公開資料源該有的禮貌，
+ * 也不必賭 Deno 預設 UA 的格式哪天會不會變。
+ */
+export const MACRO_UA = 'stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)'
 
 export function fredCsvUrl(id: string, since: string): string {
   return `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}&cosd=${since}`
