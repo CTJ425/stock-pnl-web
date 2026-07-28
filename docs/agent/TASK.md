@@ -8,6 +8,18 @@
 
 ## 📋 Active Tasks
 
+### Task 29: 修 Storage 讀取被瀏覽器快取一小時 (0.6.4-dev.5)
+- **Status**: 前端已以真瀏覽器驗證、後端已部署測試區；閘門全綠（**395 tests**）
+- **Agent**: Claude
+- **Timestamp**: 2026-07-28 11:30:00 Asia/Taipei
+- 根因：`uploadJson` 未指定 `cacheControl`，SDK 預設 3600 →
+  `cache-control: public, max-age=3600`。而 `Ctrl+Shift+R` **不涵蓋 JS 發出的 `fetch()`**，
+  所以使用者硬重整也救不了，只有無痕視窗才對。
+- 修法：前端 `reportsBucket.ts` 一律 `cache: 'no-store'`；後端 `uploadJson` 寫 `cacheControl: '0'`。
+  **前端那道不能省**，既有檔案要等下次寫入才換 metadata。
+- ⚠️ **診斷陷阱（我踩過）**：`curl -I`（HEAD）回 `no-cache`，GET 才回 `max-age=3600`。
+  **驗快取一律用 GET**：`curl -s -o /dev/null -D - <url>`。
+
 ### Task 28: 基本面標示資料產出時間 ＋ 個股分析「重新整理」鈕 (0.6.4-dev.4)
 - **Status**: 已實作並以真瀏覽器驗證；閘門全綠（**391 tests**）
 - **Agent**: Claude

@@ -641,6 +641,11 @@ async function uploadJson(path: string, payload: unknown): Promise<boolean> {
     const { error } = await db.storage.from(REPORTS_BUCKET).upload(path, blob, {
       upsert: true,
       contentType: 'application/json; charset=utf-8',
+      // ⚠️ 一定要明寫。不給的話 supabase-js 預設 3600，Storage 就回
+      // `cache-control: public, max-age=3600`，前端拿到的資料會整整舊一小時，
+      // 而且 Ctrl+Shift+R 救不了（硬重整不涵蓋 JS 發出的 fetch）——0.6.4-dev.5 的線上事故。
+      // 這些檔一天最多更新 32 次，讓它每次重新驗證的成本遠低於顯示錯誤資料。
+      cacheControl: '0',
     })
     return !error
   } catch {

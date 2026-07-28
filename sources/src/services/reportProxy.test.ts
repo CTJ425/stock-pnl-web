@@ -8,10 +8,24 @@ const { storageDownload, functionsInvoke } = vi.hoisted(() => ({
 vi.mock('./supabase', () => ({
   isSupabaseConfigured: true,
   supabase: {
-    storage: { from: () => ({ download: storageDownload }) },
+    storage: {
+      from: () => ({
+        getPublicUrl: (p: string) => ({ data: { publicUrl: `https://stub/${p}` } }),
+      }),
+    },
     functions: { invoke: functionsInvoke },
   },
 }))
+
+// downloadReportsJson 改走 `fetch(publicUrl, { cache: 'no-store' })`（見 reportsBucket.ts
+// 的說明：max-age=3600 讓使用者看到舊資料且硬重整救不了）。這裡把 fetch 轉接回
+// storageDownload，既有案例的「以 path 決定回應」寫法不必改。
+vi.stubGlobal('fetch', async (url: string) => {
+  const path = String(url).replace('https://stub/', '')
+  const { data, error } = await storageDownload(path)
+  if (error || !data) return new Response(null, { status: 404 })
+  return new Response(await data.text(), { status: 200 })
+})
 
 import { fetchStoredReport, generateReport, type ReportData } from './reportProxy'
 

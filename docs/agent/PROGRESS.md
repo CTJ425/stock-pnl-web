@@ -1,9 +1,77 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 月營收歷史回補（0.6.4-dev.4）＋ 資料新舊可判斷性
+- Action: 月營收歷史回補（0.6.4-dev.5）＋ 修 Storage 讀取被瀏覽器快取一小時
 - Status: **測試區已驗證通過**；正式區依 §13.1 按兵不動，等使用者決定是否併 `main`
-- Timestamp: 2026-07-28 11:05:00 Asia/Taipei
+- Timestamp: 2026-07-28 11:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 11:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.4-dev.5 —— Storage 讀取被瀏覽器快取一小時（線上事故根因）
+- **Status**: COMPLETED（前端已驗證；後端已部署測試區）
+
+### dev.4 加的時間戳立刻抓到真兇
+
+使用者並排截圖：同一頁、同一檔（2609 陽明）
+
+- **一般視窗**：「資料更新於 2026-07-27 20:15（**共 1 個月**）」
+- **無痕視窗**：12 個月
+
+也就是說瀏覽器拿到的是一份**舊了約 15 小時**的檔案。這在加上時間戳之前完全看不出來 ——
+畫面上只是「少了幾個月」，無從分辨是資料本來就這樣還是自己拿到舊的。
+
+### 根因
+
+1. `index.ts` 的 `uploadJson` **沒有指定 `cacheControl`**，supabase-js 預設 `'3600'`。
+   實查 `storage.objects.metadata` → `cacheControl = max-age=3600`。
+2. Storage 因此回 `cache-control: public, max-age=3600`。
+3. `supabase.storage.download()` 底層是 `fetch()`，這份回應被瀏覽器快取。
+4. **使用者救不了自己**：`Ctrl+Shift+R` 只跳過「文件與其子資源」的快取，
+   **不涵蓋 JS 之後才發出的 `fetch()`**。所以硬重整無效，只有無痕視窗才對。
+
+### ⚠️ 我自己製造的診斷錯誤（這條最該記住）
+
+先前我用 **`curl -I`（HEAD）** 量這個端點，得到 `cache-control: no-cache`，
+就據此下結論「不是快取問題」，並要使用者往瀏覽器 session 方向找。
+
+**Supabase Storage 對 HEAD 與 GET 回的 `cache-control` 不一樣**：
+
+```text
+HEAD → cache-control: no-cache
+GET  → cache-control: public, max-age=3600   ← 前端實際遇到的
+```
+
+這個錯誤結論讓整件事多繞了兩輪（先怪 HMR、再怪瀏覽器 session）。
+**驗證快取行為一律用 GET**：`curl -s -o /dev/null -D - <url>`。
+
+### 修法（兩邊都要）
+
+- **前端** `reportsBucket.ts`：改用 `fetch(getPublicUrl(path), { cache: 'no-store' })`。
+  這是單一讀取入口，籌碼 / 日線 / 基本面 / 新聞全部受惠。
+- **後端** `index.ts` `uploadJson`：明寫 `cacheControl: '0'`。
+
+**前端那道不能省** —— 既有檔案的 metadata 要等下次寫入才會更新，
+而 `syncFundamental` 有 `dataDate >= targetDate` 的跳過條件，今天不會重寫，
+要等明天的新交易日。前端 `no-store` 是立即生效的那一道。
+
+### 驗證
+
+- 閘門：lint / build / **395 tests**（新增 `reportsBucket.test.ts` 4 筆，
+  含「讀取必須帶 `cache: no-store`」）。
+- 四個既有 proxy 測試的 mock 由 `download` 轉接到 `fetch`，斷言不必改寫。
+- **真瀏覽器實測**（Playwright，持久 context 非無痕）：連續三次 `fetchFundamental('2609')`
+  → **發出 3 次網路請求**、三次都回 12 個月。修改前第二次以後會被瀏覽器快取吃掉。
+
+### 教訓
+
+- **快取問題要用 GET 驗，HEAD 會騙人。**
+- **「使用者能不能自救」是嚴重性的一部分**：同樣是顯示舊資料，
+  能靠重整解決 vs 硬重整也沒用（只有無痕才對），後者嚴重得多。
+- 這次能定位靠的是 dev.4 加的那行時間戳。**先讓問題可觀測，再談修**
+  —— 在那之前我查了六個層次全部「正常」，因為每一層都是拿新資料驗的。
 
 ---
 
