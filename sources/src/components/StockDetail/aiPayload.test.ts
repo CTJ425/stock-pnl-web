@@ -374,4 +374,121 @@ describe('aiPayload', () => {
       expect(noisy.technical.volRatioVs20DayAvg).toBe(1.23)
     })
   })
+
+  describe('獲利能力與總經（0.6.5）', () => {
+    const baseArgs = {
+      ticker: '2330',
+      name: '台積電',
+      view: dummyView,
+      report: dummyReport,
+      range: '1y' as const,
+    }
+    const dummyFundamental = {
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      dataDate: '2026-07-25',
+      industry: '半導體業',
+      valuation: null,
+      revenueUnit: '千元' as const,
+      revenueMonths: [],
+      profitQuarters: [],
+      notes: [],
+    }
+
+    const macro = {
+      asOf: '2026-07-28T02:00:00.000Z',
+      region: '美國',
+      indicators: [
+        {
+          id: 'CPILFESL',
+          label: '核心 CPI',
+          kind: 'yoy' as const,
+          unit: '%',
+          note: '',
+          latest: { period: '2026-06', value: 2.57 },
+          previous: { period: '2026-05', value: 2.82 },
+          points: [],
+        },
+        {
+          id: 'PAYEMS',
+          label: '非農就業',
+          kind: 'momThousands' as const,
+          unit: '千人',
+          note: '',
+          latest: { period: '2026-06', value: 57 },
+          previous: { period: '2026-05', value: 129 },
+          points: [],
+        },
+      ],
+    }
+
+    const withProfit = {
+      ...dummyFundamental,
+      profitQuarters: [
+        {
+          yearQuarter: '2025-Q4',
+          revenueMillionTwd: 868459,
+          grossMarginPercent: 59.01,
+          operatingMarginPercent: 49.03,
+          pretaxMarginPercent: 51.2,
+          netMarginPercent: 43.11,
+        },
+        {
+          yearQuarter: '2026-Q1',
+          revenueMillionTwd: 1134103.44,
+          grossMarginPercent: 66.25,
+          operatingMarginPercent: 58.1,
+          pretaxMarginPercent: 60.65,
+          netMarginPercent: 50.51,
+        },
+      ],
+    }
+
+    it('獲利能力由新到舊，單位寫進 payload', () => {
+      const p = buildAiPayload({ ...baseArgs, fundamental: withProfit })
+      expect(p.fundamental.profitUnit).toBe('%')
+      expect(p.fundamental.profitQuarters?.map((q) => q.yearQuarter)).toEqual([
+        '2026-Q1',
+        '2025-Q4',
+      ])
+      expect(p.fundamental.profitQuarters?.[0].grossMarginPercent).toBe(66.25)
+    })
+
+    it('總經只送最新與前期，且單位隨值走', () => {
+      const p = buildAiPayload({ ...baseArgs, macro })
+      expect(p.macro.hasData).toBe(true)
+      expect(p.macro.region).toBe('美國')
+      expect(p.macro.indicators).toEqual([
+        { label: '核心 CPI', unit: '%', period: '2026-06', value: 2.57, previousValue: 2.82 },
+        { label: '非農就業', unit: '千人', period: '2026-06', value: 57, previousValue: 129 },
+      ])
+    })
+
+    it('缺總經時印替代文案，不印一串「無」', () => {
+      const p = buildAiPayload({ ...baseArgs })
+      expect(p.macro).toEqual({ hasData: false })
+      const { user } = renderAiPrompt(p)
+      expect(user).toContain('總體經濟資料暫時無法取得，請勿臆測總經數據')
+    })
+
+    it('prompt 明講總經非本檔個股數據，system 有「背景不是因果」的準則', () => {
+      const p = buildAiPayload({ ...baseArgs, macro, fundamental: withProfit })
+      const { system, user } = renderAiPrompt(p)
+      expect(user).toContain('全市場共用，非本檔個股數據')
+      expect(user).toContain('核心 CPI（2026-06）：2.57 %')
+      expect(user).toContain('非農就業（2026-06）：57 千人')
+      expect(user).toContain('毛利率 66.25% / 營益率 58.1%')
+      expect(system).toContain('總體經濟是**背景**不是個股因果')
+      expect(system).toContain('不得用總經數據推導本檔股票的漲跌')
+    })
+
+    it('新欄位不得破壞「payload 不含持股成本」那道硬性防護', () => {
+      const p = buildAiPayload({ ...baseArgs, macro, fundamental: withProfit })
+      const json = JSON.stringify(p)
+      expect(json).not.toContain('holding')
+      expect(json).not.toContain('avgCost')
+      expect(json).not.toContain('unrealized')
+    })
+  })
+
 })

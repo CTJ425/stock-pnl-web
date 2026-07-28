@@ -6,8 +6,11 @@ import {
   extractOpenAiText,
   mapHttpError,
   normalizeBaseUrl,
+  toGoogleContents,
+  toOpenAiMessages,
   GOOGLE_MAX_OUTPUT_TOKENS,
   TRUNCATION_NOTICE,
+  type AiMessage,
 } from './aiClient'
 
 describe('aiClient', () => {
@@ -180,7 +183,7 @@ describe('aiClient', () => {
         apiKey: 'test-google-key',
       })
 
-      const res = await provider.complete({ system: 'sys', user: 'usr' })
+      const res = await provider.complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
       expect(res).toBe('Gemini 分析結果')
       expect(mockFetch).toHaveBeenCalledTimes(1)
 
@@ -213,7 +216,7 @@ describe('aiClient', () => {
         apiKey: 'k',
       })
 
-      expect(await provider.complete({ system: 's', user: 'u' })).toBe('退回後的結果')
+      expect(await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })).toBe('退回後的結果')
       expect(mockFetch).toHaveBeenCalledTimes(2)
 
       const first = JSON.parse(mockFetch.mock.calls[0][1].body)
@@ -234,7 +237,7 @@ describe('aiClient', () => {
         apiKey: 'k',
       })
 
-      await expect(provider.complete({ system: 's', user: 'u' })).rejects.toThrow(AiError)
+      await expect(provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })).rejects.toThrow(AiError)
       expect(mockFetch).toHaveBeenCalledTimes(2)
     })
 
@@ -250,7 +253,7 @@ describe('aiClient', () => {
       })
 
       try {
-        await provider.complete({ system: 's', user: 'u' })
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })
         expect.fail('應丟出錯誤')
       } catch (e: any) {
         expect(e.kind).toBe('auth')
@@ -274,7 +277,7 @@ describe('aiClient', () => {
         apiKey: 'secret-token',
       })
 
-      const res = await provider.complete({ system: 'sys', user: 'usr' })
+      const res = await provider.complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
       expect(res).toBe('LLM 分析結果')
 
       const [url, opts] = mockFetch.mock.calls[0]
@@ -298,7 +301,7 @@ describe('aiClient', () => {
         apiKey: '',
       })
 
-      const res = await provider.complete({ system: 'sys', user: 'usr' })
+      const res = await provider.complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
       expect(res).toBe('Ollama 本機結果')
 
       const [, opts] = mockFetch.mock.calls[0]
@@ -316,7 +319,7 @@ describe('aiClient', () => {
       })
 
       try {
-        await provider.complete({ system: 's', user: 'u' })
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })
         expect.fail('應丟出錯誤')
       } catch (e: any) {
         expect(e).toBeInstanceOf(AiError)
@@ -338,7 +341,7 @@ describe('aiClient', () => {
       })
 
       try {
-        await provider.complete({ system: 's', user: 'u', timeoutMs: 100 })
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }], timeoutMs: 100 })
         expect.fail('應丟出逾時錯誤')
       } catch (e: any) {
         expect(e).toBeInstanceOf(AiError)
@@ -374,7 +377,7 @@ describe('aiClient', () => {
       })
 
       try {
-        await provider.complete({ system: 's', user: 'u', timeoutMs: 30 })
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }], timeoutMs: 30 })
         expect.fail('應丟出逾時錯誤')
       } catch (e: any) {
         expect(e).toBeInstanceOf(AiError)
@@ -396,10 +399,63 @@ describe('aiClient', () => {
       })
 
       try {
-        await provider.complete({ system: 's', user: 'u' })
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })
       } catch (e: any) {
         expect(e.kind).toBe('auth')
       }
     })
+  })
+})
+
+describe('多輪對話的角色映射（0.6.5）', () => {
+  const convo: AiMessage[] = [
+    { role: 'user', content: '第一次的分析請求' },
+    { role: 'assistant', content: '這是分析結果' },
+    { role: 'user', content: '毛利率趨勢如何？' },
+  ]
+
+  it('Google：assistant 必須映射成 model', () => {
+    // ⚠️ Gemini 的助理角色叫 model。送成 assistant 會被當成使用者發言，
+    // 模型會以為自己上一輪講的話是使用者說的，整段對話的角色就錯位了。
+    expect(toGoogleContents(convo)).toEqual([
+      { role: 'user', parts: [{ text: '第一次的分析請求' }] },
+      { role: 'model', parts: [{ text: '這是分析結果' }] },
+      { role: 'user', parts: [{ text: '毛利率趨勢如何？' }] },
+    ])
+    expect(toGoogleContents(convo).some((c) => (c.role as string) === 'assistant')).toBe(false)
+  })
+
+  it('OpenAI 相容：system 排在最前面，其餘原樣展開', () => {
+    expect(toOpenAiMessages('規則', convo)).toEqual([
+      { role: 'system', content: '規則' },
+      ...convo,
+    ])
+  })
+
+  it('單輪與空對話都不出錯', () => {
+    expect(toGoogleContents([{ role: 'user', content: 'x' }])).toHaveLength(1)
+    expect(toGoogleContents([])).toEqual([])
+    expect(toOpenAiMessages('規則', [])).toEqual([{ role: 'system', content: '規則' }])
+  })
+
+  it('Google 實際送出的 body 帶著多輪 contents 與 systemInstruction', async () => {
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: '好' }] } }] }),
+    }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = createAiProvider({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: 'k',
+    })
+    await provider.complete({ system: '規則', messages: convo })
+
+    const body = JSON.parse((mockFetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body.systemInstruction.parts[0].text).toBe('規則')
+    expect(body.contents.map((c: { role: string }) => c.role)).toEqual(['user', 'model', 'user'])
   })
 })

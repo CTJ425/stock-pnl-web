@@ -1944,6 +1944,70 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border: 1px solid var(--border);
 }
 
+/* 追問對話（0.6.5）。沿用 .ai-card 的容器，只補內部版面 */
+.ai-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ai-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+  /* 對話長了不要把整頁撐開，讓它自己捲 */
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.ai-chat-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ai-chat-role {
+  flex: 0 0 auto;
+  min-width: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  padding-top: 2px;
+}
+
+.ai-chat-text {
+  flex: 1 1 auto;
+  /* 與 .ai-result 同款：純文字靠 pre-wrap 保留換行，不做 markdown 渲染 */
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  /* 長網址或無空白的長字串不得撐破版面 */
+  overflow-wrap: anywhere;
+}
+
+.ai-chat-msg.user .ai-chat-text {
+  background: var(--accent-soft, var(--surface-3, var(--surface-2)));
+}
+
+.ai-chat-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-chat-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* 16px 避免 iOS 聚焦時自動縮放（沿用專案既有準則） */
+  font-size: 16px;
+}
+
 .ai-disclaimer {
   font-size: 12px;
   color: var(--ink-muted);

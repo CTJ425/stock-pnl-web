@@ -4,16 +4,19 @@
  * 不會自動重試，未設定時畫面不得出現任何 AI 生成文字。
  */
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Bot, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Settings, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bot, CheckCircle, ChevronDown, ChevronUp, MessageSquare, RefreshCw, Settings, Trash2 } from 'lucide-react'
 import { fetchDailySeries } from '../../services/dailyProxy'
 import type { FundamentalData } from '../../services/fundamentalProxy'
+import type { MacroData } from '../../services/macroProxy'
 import { fetchNews } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import {
   AiError,
   AI_TIMEOUT_MS,
   createAiProvider,
+  type AiMessage,
 } from '../../services/aiClient'
+import { clearChat, loadChat, saveChat } from '../../services/aiChatStore'
 import {
   clearAiSettings,
   isAiAdmin,
@@ -23,7 +26,15 @@ import {
   type AiProviderKind,
   type AiSettings,
 } from '../../services/aiSettings'
-import { buildAiPayload, renderAiPrompt } from './aiPayload'
+import { buildAiPayload, renderAiPrompt, type AiPayload } from './aiPayload'
+import {
+  MAX_CHAT_TURNS,
+  MAX_INPUT_CHARS,
+  buildChatMessages,
+  buildChatSystem,
+  canAsk,
+  turnsUsed,
+} from './aiChat'
 import { buildTechnicalView, type RangeKey } from './technicalView'
 
 interface AiTabProps {
@@ -32,11 +43,13 @@ interface AiTabProps {
   report: ReportData | null
   /** 由 StockDetailPage 載入分發（標題 badge / 基本面分頁 / 此處共用同一份） */
   fundamental: FundamentalData | null
+  /** 總經背景（0.6.5）。全市場共用一份，同樣由 StockDetailPage 載入分發 */
+  macro: MacroData | null
 }
 
 const AI_TIMEOUT_SECONDS = Math.round(AI_TIMEOUT_MS / 1000)
 
-export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
+export function AiTab({ ticker, name, report, fundamental, macro }: AiTabProps) {
   // 設定狀態
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -57,6 +70,32 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   const [status, setStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
   const [aiText, setAiText] = useState('')
   const [errMsg, setErrMsg] = useState('')
+
+  // 追問對話（0.6.5）。payload 留著是因為每一輪都要重送完整資料與框限，
+  // 不能只靠第一輪 —— 見 aiChat.ts 的說明。
+  const [payload, setPayload] = useState<AiPayload | null>(null)
+  const [chat, setChat] = useState<AiMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
+  const [chatErr, setChatErr] = useState('')
+
+  // 從 sessionStorage 還原上次的分析與對話。
+  // 這順便修掉「切分頁 AI 結果就消失、要重按一次（重新計費）」那個痛點。
+  useEffect(() => {
+    const saved = loadChat(ticker)
+    if (saved) {
+      setAiText(saved.analysis)
+      setChat(saved.messages)
+      setStatus('success')
+    } else {
+      setAiText('')
+      setChat([])
+      setStatus('idle')
+    }
+    setPayload(null)
+    setChatInput('')
+    setChatErr('')
+  }, [ticker])
 
   // 初次載入設定
   useEffect(() => {
@@ -171,13 +210,23 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       }
       // 新聞缺料不阻斷分析（prompt 有缺料文案），與 report 為 null 的處理一致
       const news = await fetchNews(ticker)
-      const payload = buildAiPayload({ ticker, name, view, report, range, fundamental, news })
-      const { system, user } = renderAiPrompt(payload)
+      const built = buildAiPayload({ ticker, name, view, report, range, fundamental, news, macro })
+      const { system, user } = renderAiPrompt(built)
 
       const provider = createAiProvider(settings)
-      const result = await provider.complete({ system, user })
+      const result = await provider.complete({
+        system,
+        messages: [{ role: 'user', content: user }],
+      })
 
+      // 重新產生分析＝開一段新對話。舊的追問是針對舊分析問的，接著它會前後矛盾。
+      setPayload(built)
       setAiText(result)
+      setChat([])
+      setChatErr('')
+      setChatInput('')
+      clearChat(ticker)
+      saveChat(ticker, result, [])
       setStatus('success')
     } catch (e: unknown) {
       if (e instanceof AiError) {
@@ -188,6 +237,41 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         setErrMsg('產生 AI 分析時發生未知錯誤')
       }
       setStatus('error')
+    }
+  }
+
+  /**
+   * 送出一則追問。
+   *
+   * `payload` 只在「這次 session 有按過產生分析」時才有值；從 sessionStorage
+   * 還原回來的情況下是 null，因為 payload 沒有一起存（它很大，且可以重建）。
+   * 那時要求使用者重新產生一次分析 —— 沒有 payload 就沒有框限所依據的資料，
+   * 硬送等於讓模型在沒有數據的情況下憑空作答。
+   */
+  async function handleAsk() {
+    if (!settings || !payload) return
+    const next = buildChatMessages(chat, chatInput)
+    if (next.length === chat.length) return // 空白輸入
+
+    setChat(next)
+    setChatInput('')
+    setChatBusy(true)
+    setChatErr('')
+    try {
+      const provider = createAiProvider(settings)
+      // system 每一輪都重送，框限不會隨對話變長被稀釋（見 aiChat.ts）
+      const reply = await provider.complete({
+        system: buildChatSystem(payload, aiText),
+        messages: next,
+      })
+      const withReply: AiMessage[] = [...next, { role: 'assistant', content: reply }]
+      setChat(withReply)
+      saveChat(ticker, aiText, withReply)
+    } catch (e: unknown) {
+      // 失敗時把剛送出的那則留在畫面上，使用者才知道是哪一句沒送成功
+      setChatErr(e instanceof Error ? e.message : '追問時發生未知錯誤')
+    } finally {
+      setChatBusy(false)
     }
   }
 
@@ -405,6 +489,103 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           <div className="ai-disclaimer">
             免責聲明：本分析由 AI 模型依據上方的技術面與籌碼數據自動生成，僅供參考，不構成任何投資建議、買賣推薦或價格預測。AI 仍有可能講錯數字，重要數字請回頭對照「技術面」與「籌碼」分頁。
           </div>
+        </div>
+      )}
+
+      {/*
+        追問對話（0.6.5）。只在已有分析時出現 —— 沒有分析就沒有可討論的脈絡，
+        也沒有框限所依據的資料。
+      */}
+      {status === 'success' && aiText && (
+        <div className="ai-card">
+          <div className="ai-chat-head">
+            <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <MessageSquare size={16} />
+              繼續討論
+            </div>
+            <span className="hint">
+              {turnsUsed(chat)} / {MAX_CHAT_TURNS} 輪
+            </span>
+          </div>
+
+          {/*
+            對話紀錄**一律顯示**（含從 sessionStorage 還原的）。
+            能不能「繼續問」才取決於 payload —— 兩件事分開，
+            否則重新整理後看得到分析卻看不到自己剛才問過什麼。
+          */}
+          {chat.length === 0 && payload && (
+            <p className="hint">
+              可以針對上面的分析追問，例如「毛利率的趨勢說明一下」。
+              只能討論這檔股票的數據，範圍外的問題不會回答。
+            </p>
+          )}
+
+          {chat.length > 0 && (
+            <div className="ai-chat-log">
+              {chat.map((m, i) => (
+                <div
+                  key={`${m.role}-${i}`}
+                  className={m.role === 'user' ? 'ai-chat-msg user' : 'ai-chat-msg bot'}
+                >
+                  <div className="ai-chat-role">{m.role === 'user' ? '你' : 'AI'}</div>
+                  <div className="ai-chat-text">{m.content}</div>
+                </div>
+              ))}
+              {chatBusy && (
+                <div className="ai-chat-msg bot">
+                  <div className="ai-chat-role">AI</div>
+                  <div className="ai-chat-text hint">
+                    <RefreshCw size={13} className="spin" style={{ verticalAlign: -2 }} /> 思考中…（最長{' '}
+                    {AI_TIMEOUT_SECONDS} 秒）
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {chatErr && (
+            <div className="notice notice-warn" role="alert" style={{ marginTop: 8 }}>
+              <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+              {chatErr}
+            </div>
+          )}
+
+          {/*
+            payload 只在「這次 session 按過產生分析」時才有值。從 sessionStorage
+            還原的情況下是 null（payload 很大且可重建，故沒有一起存）。
+            沒有它就沒有框限所依據的資料，硬送等於讓模型憑空作答。
+          */}
+          {!payload ? (
+            <p className="hint">
+              這份分析是從先前的瀏覽還原的。請按上方「重新產生分析」後即可繼續討論。
+            </p>
+          ) : canAsk(chat) ? (
+            <form
+              className="ai-chat-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleAsk()
+              }}
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="針對這份分析提問…"
+                maxLength={MAX_INPUT_CHARS}
+                disabled={chatBusy}
+                aria-label="追問內容"
+              />
+              <button className="btn" type="submit" disabled={chatBusy || !chatInput.trim()}>
+                {chatBusy ? '傳送中…' : '送出'}
+              </button>
+            </form>
+          ) : (
+            <p className="hint">
+              已達 {MAX_CHAT_TURNS} 輪上限。每一輪都會重送完整資料，
+              再往上疊只會增加費用；需要繼續討論請重新產生一份分析。
+            </p>
+          )}
         </div>
       )}
     </div>

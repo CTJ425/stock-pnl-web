@@ -30,10 +30,47 @@ export class AiError extends Error {
   }
 }
 
+/** 一則對話訊息。`assistant` 是模型先前的回覆 */
+export interface AiMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface AiRequest {
   system: string
-  user: string
+  /**
+   * 由舊到新的對話。單輪就是只有一則 `user`。
+   *
+   * 0.6.5 之前這裡是單一個 `user: string`；改成陣列是為了支援「產生分析之後
+   * 繼續追問」。**system 每一輪都會重送**（見 aiChat.ts 的框限規則），
+   * 所以框限不會隨對話變長而被稀釋掉。
+   */
+  messages: AiMessage[]
   timeoutMs?: number
+}
+
+/**
+ * 純函式：把對話映射成 Google 的 `contents`。
+ *
+ * ⚠️ **Gemini 的助理角色叫 `model` 不是 `assistant`**，送錯會被當成使用者發言，
+ * 模型就會以為自己上一輪講的話是使用者說的 —— 最容易錯的一格，故抽出來測。
+ */
+export function toGoogleContents(messages: AiMessage[]): Array<{
+  role: 'user' | 'model'
+  parts: Array<{ text: string }>
+}> {
+  return messages.map((m) => ({
+    role: m.role === 'assistant' ? ('model' as const) : ('user' as const),
+    parts: [{ text: m.content }],
+  }))
+}
+
+/** 純函式：把 system 與對話映射成 OpenAI 相容的 `messages` */
+export function toOpenAiMessages(
+  system: string,
+  messages: AiMessage[],
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  return [{ role: 'system' as const, content: system }, ...messages]
 }
 
 export interface AiProvider {
@@ -203,7 +240,7 @@ class GoogleProviderImpl implements AiProvider {
   private buildBody(req: AiRequest, withThinkingConfig: boolean): string {
     return JSON.stringify({
       systemInstruction: { parts: [{ text: req.system }] },
-      contents: [{ role: 'user', parts: [{ text: req.user }] }],
+      contents: toGoogleContents(req.messages),
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: GOOGLE_MAX_OUTPUT_TOKENS,
@@ -260,10 +297,7 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
     const url = `${base}/chat/completions`
     const body = {
       model: this.settings.model,
-      messages: [
-        { role: 'system', content: req.system },
-        { role: 'user', content: req.user },
-      ],
+      messages: toOpenAiMessages(req.system, req.messages),
       temperature: 0.2,
       stream: false,
     }

@@ -14,6 +14,7 @@
  *   光給數字模型會把 -3 讀成「增加了 -3 天」。故 payload 附 `streakNote` 說明。
  */
 import type { FundamentalData } from '../../services/fundamentalProxy'
+import type { MacroData } from '../../services/macroProxy'
 import type { NewsData } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import type { RangeKey, TechnicalView } from './technicalView'
@@ -119,6 +120,32 @@ export interface AiPayload {
       momPercent: number | null
       yoyPercent: number | null
     }>
+    /** 獲利能力比率的單位（0.6.5）。同樣是「單位不離開 payload」 */
+    profitUnit?: '%'
+    /** 由新到舊，最多 8 季 */
+    profitQuarters?: Array<{
+      yearQuarter: string
+      grossMarginPercent: number | null
+      operatingMarginPercent: number | null
+      pretaxMarginPercent: number | null
+      netMarginPercent: number | null
+    }>
+  }
+  /**
+   * 總體經濟背景（0.6.5，美國）。**與個股無關**，是共用的背景資料。
+   * system prompt 有一條準則明令不得用它推導個股漲跌。
+   */
+  macro: {
+    hasData: boolean
+    region?: string
+    indicators?: Array<{
+      label: string
+      /** 單位隨值走：'%' / '千人' / '指數' */
+      unit: string
+      period: string | null
+      value: number | null
+      previousValue: number | null
+    }>
   }
   /** 消息面（0.6.0-dev.4）。只有標題，沒有內文——模型只能就標題字面判斷 */
   news: {
@@ -156,7 +183,12 @@ function isoDateOnly(iso: string | null): string | null {
 
 function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamental'] {
   // 有檔案但三項全空（上櫃股的缺料檔）等同沒資料，不要讓 prompt 印出一串「無」
-  const hasAny = !!f && (f.valuation !== null || f.revenueMonths.length > 0 || !!f.industry)
+  const hasAny =
+    !!f &&
+    (f.valuation !== null ||
+      f.revenueMonths.length > 0 ||
+      f.profitQuarters.length > 0 ||
+      !!f.industry)
   if (!f || !hasAny) return { hasData: false }
 
   return {
@@ -176,6 +208,33 @@ function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamenta
       revenueThousandTwd: m.revenueThousandTwd,
       momPercent: round(m.momPercent),
       yoyPercent: round(m.yoyPercent),
+    })),
+    profitUnit: '%',
+    profitQuarters: [...f.profitQuarters].reverse().map((q) => ({
+      yearQuarter: q.yearQuarter,
+      grossMarginPercent: round(q.grossMarginPercent),
+      operatingMarginPercent: round(q.operatingMarginPercent),
+      pretaxMarginPercent: round(q.pretaxMarginPercent),
+      netMarginPercent: round(q.netMarginPercent),
+    })),
+  }
+}
+
+/**
+ * 總經區塊。缺料時 hasData: false，prompt 會印替代文案而不是一串「無」。
+ * 只送最新與前一期的值 —— 12 期序列對模型的邊際價值低，卻會顯著拉長每一輪的 token。
+ */
+function buildMacroBlock(m: MacroData | null): AiPayload['macro'] {
+  if (!m || m.indicators.length === 0) return { hasData: false }
+  return {
+    hasData: true,
+    region: m.region,
+    indicators: m.indicators.map((i) => ({
+      label: i.label,
+      unit: i.unit,
+      period: i.latest?.period ?? null,
+      value: round(i.latest?.value ?? null),
+      previousValue: round(i.previous?.value ?? null),
     })),
   }
 }
@@ -200,6 +259,7 @@ export function buildAiPayload(args: {
   range: RangeKey
   fundamental?: FundamentalData | null
   news?: NewsData | null
+  macro?: MacroData | null
 }): AiPayload {
   const { ticker, name, view, report, range } = args
   const latest = view.latest
@@ -237,6 +297,7 @@ export function buildAiPayload(args: {
     technical,
     fundamental: buildFundamentalBlock(args.fundamental ?? null),
     news: buildNewsBlock(args.news ?? null),
+    macro: buildMacroBlock(args.macro ?? null),
   }
 
   if (!report) {
@@ -323,7 +384,8 @@ export function renderAiPrompt(p: AiPayload): { system: string; user: string } {
 5. 『建議操作』僅得提出中性、條件式的觀察性參考（例如：若跌破月線可留意支撐是否守住），絕對不得給出明確的買進 / 賣出 / 加碼 / 出清指令，不得提供目標價、進出場價位或報酬預期。
 6. 『注意事項』須指出資料中可見的風險訊號（例如量能異常、資券餘額變化、指標鈍化、均線糾結）與資料本身的侷限（例如籌碼資料缺漏時要說明）。
 7. 新聞只提供標題，不含內文。僅得依標題字面判斷可能偏向利多或利空，絕對不得臆測、擴寫或引用標題以外的新聞內容；消息面的判讀只能以條件式觀察的形式併入『建議操作』與『注意事項』，不得單獨據以給出買賣指令。
-8. 結尾必須單獨成段，附上固定聲明：「本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。」`
+8. 總體經濟是**背景**不是個股因果。可以描述當前的通膨與就業環境，但絕對不得用總經數據推導本檔股票的漲跌，也不得預測下一期的總經數據。
+9. 結尾必須單獨成段，附上固定聲明：「本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。」`
 
   const chipSection = p.chip.hasReport
     ? `- 資料日期：${p.chip.dataDate ?? '未知'}
@@ -369,8 +431,31 @@ ${p.chip.notes?.length ? `- 報告附註：${p.chip.notes.join('; ')}` : ''}`
               )
               .join('\n')}`
           : '- 月營收：無',
+        p.fundamental.profitQuarters && p.fundamental.profitQuarters.length > 0
+          ? `- 獲利能力（單位：%，由新到舊）：\n${p.fundamental.profitQuarters
+              .map(
+                (q) =>
+                  `  * ${q.yearQuarter}：毛利率 ${num(q.grossMarginPercent)}% / 營益率 ${num(
+                    q.operatingMarginPercent,
+                  )}% / 稅前純益率 ${num(q.pretaxMarginPercent)}% / 稅後純益率 ${num(
+                    q.netMarginPercent,
+                  )}%`,
+              )
+              .join('\n')}`
+          : '- 獲利能力：無',
       ].join('\n')
     : '（基本面資料暫時無法取得，可能為上櫃股票或批次尚未產生，請勿臆測任何基本面數據。）'
+
+  const macroSection = p.macro.hasData && p.macro.indicators
+    ? p.macro.indicators
+        .map(
+          (i) =>
+            `  * ${i.label}（${i.period ?? '期別不明'}）：${num(i.value)} ${i.unit}（前期 ${num(
+              i.previousValue,
+            )} ${i.unit}）`,
+        )
+        .join('\n')
+    : '（總體經濟資料暫時無法取得，請勿臆測總經數據。）'
 
   const newsSection =
     p.news.hasData && p.news.items
@@ -382,7 +467,7 @@ ${p.chip.notes?.length ? `- 報告附註：${p.chip.notes.join('; ')}` : ''}`
   const changePctText =
     p.technical.changePctPercent === null ? '無' : `${signed(p.technical.changePctPercent)}%`
 
-  const user = `請為以下股票進行技術面、籌碼面、基本面與消息面的數據分析：
+  const user = `請為以下股票進行技術面、籌碼面、基本面、總體經濟與消息面的數據分析：
 
 【股票基本資訊】
 代號：${p.ticker}
@@ -401,6 +486,9 @@ ${chipSection}
 
 【基本面摘要】
 ${fundamentalSection}
+
+【總體經濟背景】（${p.macro.region ?? '美國'}，全市場共用，非本檔個股數據）
+${macroSection}
 
 【近期新聞標題】（只有標題、沒有內文）
 ${newsSection}

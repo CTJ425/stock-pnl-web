@@ -253,7 +253,13 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
         )}
         {tab === 'holding' && <HoldingTab holding={holding} />}
         {tab === 'ai' && (
-          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
+          <AiTab
+            ticker={ticker}
+            name={name}
+            report={report}
+            fundamental={fundamental}
+            macro={macro}
+          />
         )}
       </div>
     </div>
