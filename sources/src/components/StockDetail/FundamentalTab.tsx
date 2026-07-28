@@ -8,7 +8,7 @@
  */
 import { RefreshCw } from 'lucide-react'
 import type { FundamentalData } from '../../services/fundamentalProxy'
-import { chipClass, fmtInt } from './chipFormat'
+import { chipClass, fmtInt, fmtUpdatedAt } from './chipFormat'
 
 interface FundamentalTabProps {
   fundamental: FundamentalData | null
@@ -132,6 +132,17 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         <p className="hint" style={{ marginTop: 8 }}>
           月營收由公司每月 10 日前自結公布，與季報的認列基礎不同，僅供趨勢參考。
         </p>
+        {/*
+          這份檔案是我們什麼時候產出的。與上面估值的「資料日」是兩件事：
+          那個是資料自己宣告的日期，這個是我們去抓到並寫檔的時刻。
+          沒有它的話，畫面上少了幾個月時無從分辨是「資料就這樣」還是「你看到的是舊的一份」
+          —— 這正是 0.6.4 回補上線後實際發生過的困惑。
+        */}
+        {fundamental.asOf && (
+          <p className="hint" style={{ marginTop: 4 }}>
+            資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
+          </p>
+        )}
       </section>
 
       {notes.length > 0 && (

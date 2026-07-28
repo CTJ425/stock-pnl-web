@@ -55,6 +55,10 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
   const [report, setReport] = useState<ReportData | null>(null)
   const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
   const [fundLoading, setFundLoading] = useState(true)
+  // 使用者按「重新整理」時 +1，串進各載入 effect 的依賴強制重抓。
+  // 需要它是因為：報告與基本面只在開頁（ticker 變更）時抓一次，而盤後批次
+  // 會在使用者看著的當下更新資料 —— 沒有這個鈕就只能整頁重載才看得到新的。
+  const [reloadKey, setReloadKey] = useState(0)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfNote, setPdfNote] = useState('')
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -90,7 +94,7 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     }
     // holding 不列入依賴：開頁當下的持股脈絡即可，避免現價刷新導致重複產生
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker, name])
+  }, [ticker, name, reloadKey])
 
   // 分頁切回前景時比對報告有沒有換過一份（0.6.2）。
   //
@@ -137,7 +141,7 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     return () => {
       alive = false
     }
-  }, [ticker])
+  }, [ticker, reloadKey])
 
   async function handleDownload() {
     if (!surfaceRef.current) return
@@ -169,6 +173,15 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
           {/* 資料日期與更新時間屬於「籌碼」報告本身，故顯示於報告表頭（也在 PDF 擷取範圍內），此處不重複 */}
           <span className="hint">個股分析</span>
         </div>
+        <button
+          className="btn btn-sm"
+          onClick={() => setReloadKey((k) => k + 1)}
+          disabled={status === 'loading' || fundLoading}
+          title="重新抓取籌碼、技術面與基本面"
+        >
+          <RefreshCw size={14} className={status === 'loading' || fundLoading ? 'spin' : undefined} />
+          重新整理
+        </button>
         {status === 'ready' && tab === 'chips' && (
           <button className="btn btn-sm" onClick={() => void handleDownload()} disabled={pdfBusy}>
             <Download size={14} className={pdfBusy ? 'spin' : undefined} />
@@ -210,7 +223,7 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
             {status === 'ready' && report && <ChipsTab report={report} />}
           </>
         )}
-        {tab === 'technical' && <TechnicalTab ticker={ticker} />}
+        {tab === 'technical' && <TechnicalTab ticker={ticker} reloadKey={reloadKey} />}
         {tab === 'fundamental' && (
           <FundamentalTab fundamental={fundamental} loading={fundLoading} />
         )}

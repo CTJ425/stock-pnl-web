@@ -55,7 +55,7 @@ function pnlClass(v: number | null | undefined): string {
   return v > 0 ? 'pnl-up' : 'pnl-down'
 }
 
-export function TechnicalTab({ ticker }: { ticker: string }) {
+export function TechnicalTab({ ticker, reloadKey = 0 }: { ticker: string; reloadKey?: number }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading')
   const [series, setSeries] = useState<DailySeries | null>(null)
   const [range, setRange] = useState<RangeKey>('3m')
@@ -81,7 +81,8 @@ export function TechnicalTab({ ticker }: { ticker: string }) {
     return () => {
       alive = false
     }
-  }, [ticker])
+    // reloadKey：使用者按「重新整理」時強制重抓（本層與 dailyProxy 都沒有快取，重跑即最新）
+  }, [ticker, reloadKey])
 
   const view = useMemo(
     () => (series ? buildTechnicalView(series.rows, range) : null),

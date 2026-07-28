@@ -1,10 +1,62 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 月營收歷史回補（0.6.4-dev.3）—— 接 MOPS 分月報表，一次補滿 12 個月
-- Status: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、短路 1910ms）；
-  正式區依 §13.1 按兵不動，等使用者決定是否併 `main`
-- Timestamp: 2026-07-28 10:45:00 Asia/Taipei
+- Action: 月營收歷史回補（0.6.4-dev.4）＋ 資料新舊可判斷性
+- Status: **測試區已驗證通過**；正式區依 §13.1 按兵不動，等使用者決定是否併 `main`
+- Timestamp: 2026-07-28 11:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 11:05:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.4-dev.4 —— 基本面標示資料產出時間；個股分析頁加「重新整理」鈕
+- **Status**: COMPLETED（前端變更，未動後端）
+
+### 起因：一個查不出來的回報
+
+使用者回報台玻（1802）的月營收畫面只有 2026/6，重整、重開 dev server 都一樣。
+我把每一層都驗過（見下），全部顯示 12 個月，**無法重現**。使用者判斷是瀏覽器端問題。
+
+驗證過的層次，之後遇到同類問題可直接跳過：
+
+| 層 | 方法 | 結果 |
+| --- | --- | --- |
+| Storage 物件 | service role 查 `storage.objects` | 12 個月，10:25:38 後無新寫入 |
+| HTTP 快取 | `curl -I` | `cache-control: no-cache`、`cf-cache-status: MISS` |
+| anon 讀取 | `.env.local` 金鑰打 `/object/reports/...` | 12 個月 |
+| **真瀏覽器 + 真前端** | Playwright 開 `localhost:5173` 後 `import('/src/services/fundamentalProxy.ts')` | 12 個月 |
+| 元件渲染 | 真實 JSON 餵進 `FundamentalTab`（jsdom 與真瀏覽器各一次） | 12 列 |
+| 頁面邏輯 | `StockDetailPage.tsx` | 無快取層，`[ticker]` 變更即重抓 |
+
+**一個關鍵事實**：使用者截圖的估值數字（PER 392.31 / PBR 2.99 / 資料日 2026-07-24）
+與該 JSON 完全一致 —— 也就是說瀏覽器確實讀到了那個檔案，而那個檔案有 12 個月。
+同一份 JSON 不可能只有月營收那段是舊的。根因未明。
+
+### 所以改的是「可判斷性」，不是猜一個修法
+
+根因查不出來時，能做的是讓下次一眼看得出來、並且使用者能自己救：
+
+- `FundamentalTab`：月營收區塊下方加「資料更新於 {asOf}（共 N 個月）」。
+  **與估值的「資料日」刻意並存且語意不同** —— 後者是資料自己宣告的日期，
+  前者是我們抓到並寫檔的時刻。這個區分本來就是 `source_probe_log`（0.6.3）
+  建立的準則，只是先前沒有帶到畫面上。
+- `StockDetailPage`：新增 `reloadKey` state 與「重新整理」鈕，
+  串進報告與基本面的 effect 依賴，並以 prop 傳給 `TechnicalTab`。
+  不必整頁重載也不必切換股票就能重抓。
+  （`AiTab` 刻意不接 —— 重掛會把使用者剛產生的 AI 解讀洗掉。）
+
+### 驗證
+
+- 閘門：lint / build / **391 tests**（新增 2 筆鎖住時間戳與「兩個日期不可混談」）。
+- **真瀏覽器實測**：Playwright 在 `localhost:5173` 內以真實測試區資料渲染 `FundamentalTab`，
+  得到 12 列與「資料更新於 2026-07-28 10:25（共 12 個月）」。
+
+### 未採用（使用者評估後排除）
+
+- 讀取改 `fetch(publicUrl, { cache: 'no-store' })`。
+- `warm` 也跑月營收回補 —— **這個缺口仍然存在**：新增股票第一次打開只有 1 個月，
+  要等當晚批次才補滿。`backfill-revenue` 目前只掛在 `generate-all` 上。
 
 ---
 

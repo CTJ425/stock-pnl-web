@@ -41,6 +41,19 @@ describe('FundamentalTab', () => {
     expect(screen.getByText(/資料日 2026-07-24/)).toBeTruthy()
   })
 
+  it('標示這份資料是我們何時產出的，以及一共幾個月', () => {
+    // 沒有這行的話，畫面上少了幾個月時分不出是「資料就這樣」還是「你看到的是舊的一份」
+    render(<FundamentalTab fundamental={full} loading={false} />)
+    expect(screen.getByText(/資料更新於 2026-07-27 \d{2}:\d{2}（共 2 個月）/)).toBeTruthy()
+  })
+
+  it('產出時間與估值的「資料日」是兩個不同的東西，不可混為一談', () => {
+    render(<FundamentalTab fundamental={full} loading={false} />)
+    // 資料日 = 資料自己宣告的日期；資料更新於 = 我們抓到並寫檔的時刻
+    expect(screen.getByText(/資料日 2026-07-24/)).toBeTruthy()
+    expect(screen.getByText(/資料更新於 2026-07-27/)).toBeTruthy()
+  })
+
   it('月營收表由新到舊列出並標示千元單位', () => {
     render(<FundamentalTab fundamental={full} loading={false} />)
     expect(screen.getByText('單位：千元')).toBeTruthy()
