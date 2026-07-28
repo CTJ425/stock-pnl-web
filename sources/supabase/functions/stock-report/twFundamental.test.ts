@@ -126,12 +126,12 @@ describe('twFundamental', () => {
     })
 
     it('新月份併入並由舊到新排序', () => {
-      const merged = mergeRevenueMonths([m('2026-05', 5), m('2026-04', 4)], m('2026-06', 6))
+      const merged = mergeRevenueMonths([m('2026-05', 5), m('2026-04', 4)], [m('2026-06', 6)])
       expect(merged.map((x) => x.yearMonth)).toEqual(['2026-04', '2026-05', '2026-06'])
     })
 
     it('同月份以新值覆蓋（月營收有時會更正重發）', () => {
-      const merged = mergeRevenueMonths([m('2026-06', 1)], m('2026-06', 2))
+      const merged = mergeRevenueMonths([m('2026-06', 1)], [m('2026-06', 2)])
       expect(merged).toHaveLength(1)
       expect(merged[0].revenueThousandTwd).toBe(2)
     })
@@ -140,15 +140,41 @@ describe('twFundamental', () => {
       const prev = Array.from({ length: 12 }, (_, i) =>
         m(`2025-${String(i + 1).padStart(2, '0')}`, i),
       )
-      const merged = mergeRevenueMonths(prev, m('2026-01', 99))
+      const merged = mergeRevenueMonths(prev, [m('2026-01', 99)])
       expect(merged).toHaveLength(12)
       expect(merged[0].yearMonth).toBe('2025-02')
       expect(merged[11].yearMonth).toBe('2026-01')
     })
 
-    it('prev 為空或 null 時只含最新一筆；latest 為 null 時保留 prev', () => {
-      expect(mergeRevenueMonths(null, m('2026-06', 6))).toHaveLength(1)
+    it('prev 為空或 null 時只含最新一筆；incoming 為空時保留 prev', () => {
+      expect(mergeRevenueMonths(null, [m('2026-06', 6)])).toHaveLength(1)
+      expect(mergeRevenueMonths([m('2026-05', 5)], []).map((x) => x.yearMonth)).toEqual(['2026-05'])
       expect(mergeRevenueMonths([m('2026-05', 5)], null).map((x) => x.yearMonth)).toEqual([
+        '2026-05',
+      ])
+    })
+
+    it('一次併入多個月份（歷史回補一次補好幾個月）', () => {
+      const merged = mergeRevenueMonths(
+        [m('2026-06', 6)],
+        [m('2026-03', 3), m('2026-05', 5), m('2026-04', 4)],
+      )
+      expect(merged.map((x) => x.yearMonth)).toEqual(['2026-03', '2026-04', '2026-05', '2026-06'])
+    })
+
+    it('fillGapsOnly：回補只填缺口，不覆蓋既有值', () => {
+      // 2026-06 既有值 6 是 t187ap05_L 抓到的更正後數字，
+      // MOPS 爬到的舊值 999 不可以蓋掉它；2026-05 是缺口，要補進去。
+      const merged = mergeRevenueMonths([m('2026-06', 6)], [m('2026-06', 999), m('2026-05', 5)], {
+        fillGapsOnly: true,
+      })
+      expect(merged.map((x) => x.yearMonth)).toEqual(['2026-05', '2026-06'])
+      expect(merged.find((x) => x.yearMonth === '2026-06')?.revenueThousandTwd).toBe(6)
+    })
+
+    it('壞掉的項目（缺 yearMonth）不會混進結果', () => {
+      const bad = { revenueThousandTwd: 1 } as unknown as RevenueMonth
+      expect(mergeRevenueMonths([m('2026-05', 5)], [bad]).map((x) => x.yearMonth)).toEqual([
         '2026-05',
       ])
     })

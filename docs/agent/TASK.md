@@ -2,11 +2,36 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-27 19:30:47 Asia/Taipei
+- Timestamp: 2026-07-28 10:05:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.1)
+- **Status**: 已實作，閘門全綠（lint / build / **376 tests**）；**待部署測試區驗證**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-28 10:05:00 Asia/Taipei
+- 起因：使用者問「把今年度的月營收補齊會不會爆掉」。
+  **容量完全不是問題**（正式區實測：全庫 15MB、`chip_raw_cache` 2.6MB / 29 列、
+  `fundamental/` 5 檔共 1745 bytes、淨持有 5 檔）。真正的阻礙是資料源 ——
+  `t187ap05_L` 只回最新一個月、端點不吃年月參數（原 `PLAN.md` N5 的取捨）。
+- 改接公開資訊觀測站分月報表 `t21sc03`（上市 `sii` ＋ 上櫃 `otc`），缺口驅動、補滿即短路。
+- 新增 `twRevenueHistory.ts`（純函式：`mopsRevenueUrl` / `parseMopsRevenue` /
+  `planRevenueBackfill` / `publishedMonths`）＋ `index.ts` 的 `backfillRevenue()`
+  與 `action: 'backfill-revenue'`；`mergeRevenueMonths` 改吃陣列並新增 `fillGapsOnly`。
+- **上櫃股從此有月營收**（估值仍只有上市），`notes` 因此由籠統一條改為分項。
+- **已驗證的事實**（2026-07-28 實抓）：
+  - 22 次實抓（11 個月 × 上市/上櫃）全部 200，big5 解碼正常。
+  - 交叉驗證：由 5 月報表解析出的 2330 當月營收 `416,975,163`
+    等於 6 月報表「上月營收」欄；6488 同法為 `4,842,007`。兩份獨立 HTML 對得起來。
+  - 模擬排程反覆呼叫：3 輪補滿 12 個月，既有值未被覆蓋。
+- **待辦**：
+  ① 兩區跑 `schema.sql` 的 `ALTER TABLE batch_run_log ADD COLUMN … revenue_backfilled`
+  → ② 部署 `stock-report`（**`--no-verify-jwt` 不可省**）→ ③ 手動打一次
+  `{"action":"backfill-revenue"}`（**需 `CRON_SECRET` 明文，Agent 拿不到，請使用者自行執行**）
+  → ④ 由公開 Storage URL 覆驗 `revenueMonths` 長度為 12。
+- **先 `dev` / 測試區，驗過再合併 `main`**（§13.1）。
 
 ### Task 26: 資料源探針 (0.6.3) ＋ 基本面日期標示待修
 - **Status**: 探針已實作，閘門全綠（**356 tests**）；**待部署兩區**（表＋函式＋cron job）

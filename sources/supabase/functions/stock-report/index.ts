@@ -15,6 +15,9 @@
  *       單檔補上日線與基本面並寫入 Storage，供新加入的股票不必等夜間批次（0.6.0-dev.7）
  *   POST { action: 'generate-all' }  header: x-cron-secret（盤後 pg_cron 觸發）
  *     → 產生全體持有台股的共用報告存入 Storage(reports bucket)，並清理超過 7 天的舊資料
+ *   POST { action: 'backfill-revenue' }  header: x-cron-secret
+ *     → 由 MOPS 分月報表把 fundamental/{ticker}.json 的月營收補到 12 個月（0.6.4）。
+ *       generate-all 每輪也會順手跑一次，這個入口是給「不想等排程」用的。
  *
  * `generate` 與 `warm` 都以 heldTwTickers() 白名單把關：本函式以 --no-verify-jwt 部署，
  * 網址就在公開的前端 bundle 裡，白名單是把濫用上限壓到最低的那道防線（見 0.3.9 紀錄）。
@@ -67,8 +70,17 @@ import {
   extractRevenue,
   extractValuation,
   mergeRevenueMonths,
+  REVENUE_MONTHS_CAP,
   type FundamentalFile,
+  type RevenueMonth,
 } from './twFundamental.ts'
+import {
+  MOPS_MARKETS,
+  mopsRevenueUrl,
+  parseMopsRevenue,
+  planRevenueBackfill,
+  publishedMonths,
+} from './twRevenueHistory.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
   decideSkip,
@@ -107,6 +119,13 @@ const HISTORY_DAYS = 7
 const LOOKBACK_DAYS = 14
 /** 單次呼叫最多實抓幾個缺漏日；Edge Function 有 wall-clock 上限，不足的隔日排程補齊 */
 const MAX_BACKFILL_DAYS = 5
+/**
+ * 月營收歷史回補：單次呼叫最多實抓幾個月。
+ * 一個月要抓上市＋上櫃兩份、各約 400KB，同 MAX_BACKFILL_DAYS 的理由 ——
+ * Edge Function 的 CPU / wall-clock 上限才是這條路徑最緊的一條線，不是資料量。
+ * 補滿 REVENUE_MONTHS_CAP（12）個月約需 3 輪，一個晚上的排程就跑得完。
+ */
+const MAX_BACKFILL_MONTHS = 4
 /** 同時進行的外部抓取數上限（T86 單檔約 1–2MB） */
 const FETCH_CONCURRENCY = 3
 
@@ -737,11 +756,21 @@ async function syncFundamental(
       const latestRevenue = extractRevenue(revenue, ticker)
       const industry = extractIndustry(revenue, company, ticker)
 
+      // 0.6.4 起註記改為**分項**。原本是「三者皆 null 才寫一條籠統的」，
+      // 但月營收歷史回補（backfillRevenue）讓上櫃股開始有營收、卻仍然沒有估值與產業別
+      // （BWIBBU_ALL 與 t187ap03_L 都只涵蓋上市），舊判斷會讓它一條註記都不寫，
+      // 使用者只看得到空白的估值欄位、不知道為什麼。
+      const existingMonths = existing?.revenueMonths?.length ?? 0
       const notes: string[] = []
-      if (!valuation && !latestRevenue && !industry) {
+      if (!valuation && !latestRevenue && !industry && existingMonths === 0) {
         // ETF 與上櫃股都不在這三份 TWSE 檔內（實測 0050 三份皆查無）。
         // 兩者成因不同但對使用者是同一件事：這裡沒有公司基本面可看。
         notes.push('查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中')
+      } else if (!valuation && bwibbu) {
+        // `bwibbu` 非 null 才寫這條 —— 有載到檔卻查無此代號，才真的能斷定「不涵蓋」。
+        // 只是這輪抓取失敗的話（bwibbu 為 null）valuation 同樣是 null，
+        // 但那是我們的問題不是它的，寫成「只涵蓋上市」會是假話。
+        notes.push('無估值資料：本益比等三項只涵蓋上市（TWSE）個股')
       }
 
       const file: FundamentalFile = {
@@ -753,7 +782,10 @@ async function syncFundamental(
         industry,
         valuation,
         revenueUnit: '千元',
-        revenueMonths: mergeRevenueMonths(existing?.revenueMonths, latestRevenue),
+        revenueMonths: mergeRevenueMonths(
+          existing?.revenueMonths,
+          latestRevenue ? [latestRevenue] : [],
+        ),
         notes,
       }
       if (await uploadJson(`fundamental/${ticker}.json`, file)) synced++
@@ -762,6 +794,101 @@ async function syncFundamental(
     }
   }
   return { synced, bwibbuDate }
+}
+
+// ---- 月營收歷史回補（MOPS t21sc03）----
+
+/**
+ * 抓 big5 網頁。MOPS 的 t21sc03 是 big5，直接當 UTF-8 讀會整份變亂碼。
+ * 失敗（含 10 秒逾時）回 null 不拋，比照 syncNews 的容錯準則。
+ */
+async function fetchBig5Text(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': UA, Accept: 'text/html' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    return new TextDecoder('big5').decode(await res.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 把 fundamental/{ticker}.json 的 revenueMonths 補到最近 REVENUE_MONTHS_CAP 個已公布月份。
+ *
+ * **為什麼需要它**：每晚的 syncFundamental 只拿得到最新一個月（t187ap05_L 端點不吃年月），
+ * 所以新標的第一個月只有 1 筆、要整整一年才長滿。這裡改由 MOPS 的分月報表把缺口一次補起來。
+ *
+ * 設計上的三個決定：
+ * 1. **缺口驅動**。先讀所有目標檔算出還缺哪些月份，全滿就直接回，一個對外請求都不發 ——
+ *    與 decideSkip 的短路同一個精神。補齊之後每晚都是零成本。
+ * 2. **不寫 chip_raw_cache**。pruneChipCache 是 `ymd < cutoff`（8 碼日期）的字典序比較，
+ *    任何月份鍵（'2026-06'）都比它小，**每輪都會被刪掉**，快取等於白寫。
+ *    fundamental/*.json 本身就是快取：某個月補進所有檔之後就再也不會被請求。
+ * 3. **每個月抓上市＋上櫃兩份**。代號在兩份之間不重疊（實測 991 / 860 家），
+ *    合成一張表就不必去判斷某檔是上市還是上櫃 —— 而我們的 transactions 裡本來就沒存這件事。
+ */
+async function backfillRevenue(
+  tickers: Array<{ ticker: string; name: string }>,
+  now: Date,
+): Promise<{ filled: number; months: string[] }> {
+  if (tickers.length === 0) return { filled: 0, months: [] }
+
+  const wantMonths = publishedMonths(now, REVENUE_MONTHS_CAP)
+
+  // 先讀一輪算出缺口。順便把檔案留著，省得補完再下載一次。
+  const files = new Map<string, FundamentalFile>()
+  const have = new Map<string, Set<string>>()
+  for (const { ticker } of tickers) {
+    const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+    // 檔案還沒產生就先跳過：syncFundamental 會在同一輪稍早建立它，下一輪再補
+    if (!file) continue
+    files.set(ticker, file)
+    have.set(ticker, new Set((file.revenueMonths ?? []).map((m) => m.yearMonth)))
+  }
+
+  const targets = planRevenueBackfill(have, wantMonths, MAX_BACKFILL_MONTHS)
+  if (targets.length === 0) return { filled: 0, months: [] }
+  const wanted = new Set(files.keys())
+
+  // month → (ticker → RevenueMonth)
+  const fetched = new Map<string, Map<string, RevenueMonth>>()
+  for (const ym of targets) {
+    const merged = new Map<string, RevenueMonth>()
+    for (const market of MOPS_MARKETS) {
+      const url = mopsRevenueUrl(market, ym)
+      if (!url) continue
+      const html = await fetchBig5Text(url)
+      if (!html) continue
+      for (const [ticker, row] of parseMopsRevenue(html, ym, wanted)) merged.set(ticker, row)
+    }
+    if (merged.size > 0) fetched.set(ym, merged)
+  }
+  if (fetched.size === 0) return { filled: 0, months: [] }
+
+  let filled = 0
+  for (const [ticker, file] of files) {
+    const incoming: RevenueMonth[] = []
+    for (const byTicker of fetched.values()) {
+      const row = byTicker.get(ticker)
+      if (row) incoming.push(row)
+    }
+    if (incoming.length === 0) continue
+
+    // fillGapsOnly：既有值一律保留。t187ap05_L 抓到的是更正後的數字，
+    // 不能被一份較舊的 MOPS 爬取蓋掉（見 mergeRevenueMonths 的說明）。
+    const merged = mergeRevenueMonths(file.revenueMonths, incoming, { fillGapsOnly: true })
+    // ⚠️ 比月份清單而不是比長度：已有 12 筆的檔補進一個新月份時，cap 會砍掉最舊的一筆，
+    // 長度仍是 12 但內容變了 —— 用長度判斷會把這次真正的更新當成沒事發生而不寫檔。
+    const before = (file.revenueMonths ?? []).map((m) => m.yearMonth).join(',')
+    if (merged.map((m) => m.yearMonth).join(',') === before) continue
+
+    const next: FundamentalFile = { ...file, revenueMonths: merged, asOf: new Date().toISOString() }
+    if (await uploadJson(`fundamental/${ticker}.json`, next)) filled++
+  }
+  return { filled, months: [...fetched.keys()].sort() }
 }
 
 // ---- 新聞（AI 解讀的消息面）----
@@ -1148,6 +1275,9 @@ async function handleGenerateAll(): Promise<Response> {
 
   // 基本面與新聞（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
   const fundamental = await syncFundamental(tickers, series.dataYmd)
+  // 月營收歷史回補（0.6.4）。必須排在 syncFundamental 之後 —— 它讀的是剛寫好的檔案。
+  // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
+  const revenue = await backfillRevenue(tickers, now)
   const newsSynced = await syncNews(tickers)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
@@ -1185,6 +1315,7 @@ async function handleGenerateAll(): Promise<Response> {
     generated,
     daily_synced: dailySynced,
     fundamental_synced: fundamental.synced,
+    revenue_backfilled: revenue.filled,
     news_synced: newsSynced,
     duration_ms: Date.now() - startedAt,
   })
@@ -1198,10 +1329,32 @@ async function handleGenerateAll(): Promise<Response> {
     historyDays: series.days.length,
     dailySynced,
     fundamentalSynced: fundamental.synced,
+    revenueBackfilled: revenue.filled,
+    revenueMonths: revenue.months,
     newsSynced,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? false,
+  })
+}
+
+/**
+ * 手動催一次月營收回補。不碰籌碼報告、不寫 batch_run_log ——
+ * 那張表的每一列代表「一輪盤後批次」，塞進手動操作會汙染「幾點資料到齊」的判讀。
+ * 單次上限是 MAX_BACKFILL_MONTHS 個月，`months` 回報這次實際補了哪幾個月；
+ * 回空陣列就代表已經補滿、不必再跑。
+ */
+async function handleBackfillRevenue(): Promise<Response> {
+  const startedAt = Date.now()
+  const tickers = await heldTwTickers()
+  const revenue = await backfillRevenue(tickers, new Date())
+  return json({
+    ok: true,
+    total: tickers.length,
+    filled: revenue.filled,
+    months: revenue.months,
+    monthsPerRun: MAX_BACKFILL_MONTHS,
+    durationMs: Date.now() - startedAt,
   })
 }
 
@@ -1232,6 +1385,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleGenerateAll()
+  }
+
+  // 月營收歷史回補：會寫 Storage 且會對 MOPS 發請求，把關同 generate-all。
+  // 夜間批次本來就會順手跑，這個入口是給「不想等排程、現在就要補滿」用的。
+  if (body.action === 'backfill-revenue') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleBackfillRevenue()
   }
 
   // 資料源探針：只讀不寫（除了自己的觀測表），但仍走 CRON_SECRET ——

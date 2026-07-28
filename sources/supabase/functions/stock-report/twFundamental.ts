@@ -174,18 +174,30 @@ export function extractIndustry(
 export const REVENUE_MONTHS_CAP = 12
 
 /**
- * 把最新月份併入既有序列：依 yearMonth 去重（新值蓋舊值）、由舊到新排序、cap 12。
+ * 把新的月份併入既有序列：依 yearMonth 去重、由舊到新排序、cap 12。
  * 覆寫制檔案靠這個在每晚重寫時自累積月營收史（首月 1 筆，逐月長到 12 筆）。
+ *
+ * `fillGapsOnly` 決定同月份撞在一起時誰贏，兩種呼叫端的需求剛好相反：
+ * - **每晚的最新月份**（t187ap05_L，index.ts syncFundamental）用預設的覆寫。
+ *   月營收會更正重發，後抓的才是對的。
+ * - **歷史回補**（MOPS t21sc03，index.ts backfillRevenue）要 `fillGapsOnly: true`。
+ *   回補是「補缺口」，若讓它覆寫，一份較舊的爬取結果就會把 t187ap05_L 抓到的
+ *   更正後數字蓋掉 —— 補歷史反而弄髒現況，是最不划算的交換。
  */
 export function mergeRevenueMonths(
   prev: RevenueMonth[] | null | undefined,
-  latest: RevenueMonth | null,
+  incoming: RevenueMonth[] | null | undefined,
+  opts: { fillGapsOnly?: boolean } = {},
 ): RevenueMonth[] {
   const byMonth = new Map<string, RevenueMonth>()
   for (const m of prev ?? []) {
     if (m && typeof m.yearMonth === 'string' && m.yearMonth) byMonth.set(m.yearMonth, m)
   }
-  if (latest) byMonth.set(latest.yearMonth, latest)
+  for (const m of incoming ?? []) {
+    if (!m || typeof m.yearMonth !== 'string' || !m.yearMonth) continue
+    if (opts.fillGapsOnly && byMonth.has(m.yearMonth)) continue
+    byMonth.set(m.yearMonth, m)
+  }
   return [...byMonth.values()]
     .sort((a, b) => (a.yearMonth < b.yearMonth ? -1 : 1))
     .slice(-REVENUE_MONTHS_CAP)

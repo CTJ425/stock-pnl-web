@@ -1,10 +1,103 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 盤後批次改為輪詢（0.6.1-dev.1）；測試區已部署；BUG-003 根因查明
-- Status: IN PROGRESS — 測試區 schema＋函式已上（v14），**cron 待重建（缺密鑰明文）**；
-  正式區依 §13.1 按兵不動，等 dev 驗證過再併 main
-- Timestamp: 2026-07-27 19:52:00 Asia/Taipei
+- Action: 月營收歷史回補（0.6.4-dev.1）—— 接 MOPS 分月報表，一次補滿 12 個月
+- Status: IN PROGRESS — 程式碼與閘門完成（**376 tests**），**兩區皆未部署**；
+  依 §13.1 先進 `dev`、測試區驗過再併 `main`
+- Timestamp: 2026-07-28 10:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 10:05:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 月營收歷史回補（0.6.4-dev.1）
+- **Status**: 實作完成、閘門全綠；待部署驗證
+
+### 起因與先查清楚的事
+
+使用者問「把今年度的月營收補齊，按照目前 DB 的資料會不會爆掉」。
+**先量再答** —— 正式區唯讀實測（2026-07-28）：
+
+| 項目 | 現況 |
+| --- | --- |
+| 全庫大小 | 15 MB |
+| `chip_raw_cache` | 29 列 / 2.6 MB（`T187AP05_L` 單月 TOAST 壓縮後 148 KB，原始 603 KB） |
+| Storage `reports/fundamental/` | 5 檔 / 1745 bytes |
+| 淨持有台股 | **5 檔**（曾持有 26 檔） |
+
+**容量差得很遠，不是問題。** 真正的阻礙是資料源：`t187ap05_L` 只回最新一個月、
+端點不吃年月參數，`index.ts` 的 request body 也沒有年月欄位
+（`MAX_BACKFILL_DAYS = 5` 那條回補是 T86 逐日籌碼，與月營收無關）。
+所以「補齊」等於要接一個新來源，不是調個參數。
+
+### 新來源與實測（2026-07-28）
+
+```text
+https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{民國年}_{月}_0.html   上市 ~450KB big5
+https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_{民國年}_{月}_0.html   上櫃 ~390KB big5
+```
+
+- **`mops.twse.com.tw` 的同一條路徑已 404**，必須用 `mopsov` 這台 host。
+- 115_1 / 115_6 / 114_7 × sii / otc 六種組合全部 200。
+- 版面兩者相同，欄位與現有 `RevenueMonth` 一一對應。代號實測全為 4 碼、兩份不重疊
+  （上市 991 家 / 上櫃 860 家），故**毋需判斷某檔是上市還是上櫃**，兩份都抓再合成一張表。
+
+### Completed Tasks
+
+- [x] 新增 `twRevenueHistory.ts`（純函式、不觸網）：`mopsRevenueUrl` / `parseMopsRevenue` /
+      `planRevenueBackfill` / `publishedMonths`。
+- [x] `twFundamental.ts`：`mergeRevenueMonths` 第二參數改吃陣列，新增 `fillGapsOnly` 選項。
+- [x] `index.ts`：`fetchBig5Text`、`backfillRevenue()`、`action: 'backfill-revenue'`，
+      並掛進 `handleGenerateAll`（缺口為空就短路，補滿後零成本）。
+- [x] `index.ts`：上櫃股 `notes` 由籠統一條改為**分項**。
+- [x] `schema.sql`：`batch_run_log` 加 `revenue_backfilled INT`。
+- [x] 文件：`PLAN.md` N5/N6 改寫、`SPEC.md`、`TASK.md` Task 27、
+      `sources/supabase/README.md` 新增「月營收歷史回補」段。
+- [x] 版號 `0.6.4-dev.1`（`package.json` / `package-lock.json` / `version.ts` / `README.md`）。
+- [x] 閘門：`npm run lint`（僅 3 個既有 warning）/ `npm run build` / **376 tests 全綠**。
+
+### 驗證方式與結果
+
+單元測試 17 筆（fixture 逐字取自真實回應，含大寫 `<Td>`、`&nbsp;`、不規則空白）。
+另以一支**用完即刪**的端到端測試真的打網路跑過整條路徑：
+
+- 22 次實抓（11 個月 × 上市/上櫃）全部 200，`new TextDecoder('big5')` 解碼正常。
+- **交叉驗證**：由 5 月報表解析出的 2330 當月營收 `416,975,163`，
+  等於 6 月報表「上月營收」欄的值；6488 同法為 `4,842,007`。
+  兩份獨立 HTML 對得起來 —— 這才證明抓到的是真資料，而不是空殼或快取。
+- 模擬排程反覆呼叫：**3 輪補滿 12 個月**；既有的 2026-06 值未被覆蓋（`fillGapsOnly` 生效）。
+
+### 三個設計決定與理由
+
+1. **不寫 `chip_raw_cache`**。`pruneChipCache` 是 `ymd < cutoff`（8 碼日期）的字典序比較，
+   任何月份鍵（`'2026-06'`）都比它小、**每輪都會被刪掉**，快取等於白寫。
+   `fundamental/*.json` 本身就是快取：某月補進所有檔之後就不會再被請求。
+2. **單次上限 4 個月**（`MAX_BACKFILL_MONTHS`）。理由同 `MAX_BACKFILL_DAYS = 5` ——
+   Edge Function 的執行時間上限才是這條路徑最緊的一條線，不是資料量。
+3. **只填缺口不覆蓋**。月營收會更正重發；讓一份較舊的爬取蓋掉 `t187ap05_L` 的更正後數字，
+   等於補歷史反而弄髒現況，是最不划算的交換。
+
+### 實作過程中自己抓到的一個 bug
+
+`backfillRevenue` 原本用「合併前後**長度**相同就跳過寫檔」判斷有沒有變化。
+這在「檔案已有 12 筆、補進一個更新的月份」時會出錯：cap 砍掉最舊一筆後長度仍是 12，
+內容卻變了，於是真正的更新被當成沒事發生而不寫檔。改為**比對月份清單**。
+
+### 教訓
+
+- **`index.ts` 不在任何型別檢查的涵蓋範圍內**：`npm run build` 的 `tsc -b` 只收 `src/`，
+  本機也沒有 deno 可以 `deno check`。所以有判斷的邏輯要**抽進 sibling 純函式模組**
+  才測得到（`planRevenueBackfill` 就是為此抽出來的），留在 `index.ts` 的只能靠人眼複查。
+- **註記不能寫成假話**：`valuation` 為 null 有兩種成因 —— 「這檔不在估值檔涵蓋範圍」
+  與「這輪抓取失敗」。只有前者才能說「只涵蓋上市」，所以那條註記加了 `bwibbu` 非 null 的前提。
+
+### 待辦（部署前請使用者確認，§13.2）
+
+1. 兩區跑 `schema.sql` 的 `ALTER TABLE batch_run_log ADD COLUMN … revenue_backfilled`。
+2. 部署 `stock-report`，**`--no-verify-jwt` 不可省**（§13.3）。
+3. 手動打一次 `{"action":"backfill-revenue"}` —— **需 `CRON_SECRET` 明文，Agent 拿不到**。
+4. 由公開 Storage URL 覆驗 `fundamental/{ticker}.json` 的 `revenueMonths` 長度為 12。
 
 ---
 

@@ -366,6 +366,10 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS t86_frozen      BOOLEAN; -- �
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS margin_today     BOOLEAN; -- 融資融券是否為當天
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS borrow_data_date TEXT;    -- 借券 title 自帶的日期
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS bwibbu_date      TEXT;    -- 估值檔的民國日期，例 '1150724'
+-- 0.6.4 月營收歷史回補。沒有這一欄就沒有伺服器端訊號能回答「它到底補了沒」——
+-- fundamental/*.json 是覆寫制，從 Storage 只看得到「現在幾筆」，看不到哪一輪補的。
+-- 補滿之後這欄會長期是 0（缺口為空就短路），那是正常的，不是壞掉。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;  -- 這輪補寫了幾檔的月營收
 
 ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
 
