@@ -3,6 +3,7 @@ import {
   extractIndustry,
   extractRevenue,
   extractValuation,
+  buildFundamentalFile,
   mergeRevenueMonths,
   rocDate,
   rocYearMonth,
@@ -113,6 +114,96 @@ describe('twFundamental', () => {
     it('兩份都查無（上櫃股）回 null', () => {
       expect(extractIndustry(REVENUE_ROWS, COMPANY_ROWS, '5274')).toBeNull()
       expect(extractIndustry(null, null, '2330')).toBeNull()
+    })
+  })
+
+  describe('buildFundamentalFile', () => {
+    const m = (yearMonth: string): RevenueMonth => ({
+      yearMonth,
+      revenueThousandTwd: 1,
+      momPercent: null,
+      yoyPercent: null,
+      cumulativeYoyPercent: null,
+    })
+    const base = {
+      ticker: '2330',
+      name: '台積電',
+      dataDate: '2026-07-28',
+      asOf: '2026-07-28T02:00:00.000Z',
+      valuation: { peRatio: 31.59, dividendYieldPercent: 0.94, pbRatio: 10.34, dataDate: '2026-07-24' },
+      latestRevenue: m('2026-06'),
+      industry: '半導體業',
+      bwibbuLoaded: true,
+    }
+
+    it('回補進度必須帶過去——漏掉等於每個交易日抹掉一次進度', () => {
+      const existing = {
+        ...base,
+        schema: 1,
+        revenueUnit: '千元' as const,
+        revenueMonths: [m('2025-07'), m('2026-06')],
+        revenueBackfilledThrough: '2025-07',
+        notes: [],
+      }
+      const file = buildFundamentalFile({ ...base, existing })
+      expect(file.revenueBackfilledThrough).toBe('2025-07')
+    })
+
+    it('沒有既有檔時進度為 null（尚未回補過）', () => {
+      expect(buildFundamentalFile({ ...base, existing: null }).revenueBackfilledThrough).toBeNull()
+    })
+
+    it('既有月份會被保留並併入最新月份', () => {
+      const existing = {
+        ...base,
+        schema: 1,
+        revenueUnit: '千元' as const,
+        revenueMonths: [m('2026-04'), m('2026-05')],
+        revenueBackfilledThrough: '2026-04',
+        notes: [],
+      }
+      const file = buildFundamentalFile({ ...base, existing })
+      expect(file.revenueMonths.map((x) => x.yearMonth)).toEqual(['2026-04', '2026-05', '2026-06'])
+    })
+
+    it('上市股一切正常時不寫任何註記', () => {
+      expect(buildFundamentalFile({ ...base, existing: null }).notes).toEqual([])
+    })
+
+    it('三者皆無且從未有過營收 → 查無基本面（ETF）', () => {
+      const file = buildFundamentalFile({
+        ...base,
+        existing: null,
+        valuation: null,
+        latestRevenue: null,
+        industry: null,
+      })
+      expect(file.notes).toHaveLength(1)
+      expect(file.notes[0]).toContain('查無公司基本面資料')
+    })
+
+    it('上櫃股回補後有營收但無估值 → 改寫「估值只涵蓋上市」', () => {
+      const existing = {
+        ...base,
+        schema: 1,
+        revenueUnit: '千元' as const,
+        revenueMonths: [m('2026-05'), m('2026-06')],
+        revenueBackfilledThrough: '2025-07',
+        notes: [],
+      }
+      const file = buildFundamentalFile({
+        ...base,
+        existing,
+        valuation: null,
+        latestRevenue: null,
+        industry: null,
+      })
+      expect(file.notes).toEqual(['無估值資料：本益比等三項只涵蓋上市（TWSE）個股'])
+    })
+
+    it('估值大檔這輪沒載到時不寫註記——那是我們的問題，說「只涵蓋上市」是假話', () => {
+      const file = buildFundamentalFile({ ...base, existing: null, valuation: null, bwibbuLoaded: false })
+      expect(file.notes).toEqual([])
     })
   })
 

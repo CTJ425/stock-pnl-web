@@ -66,6 +66,7 @@ import {
   FUNDAMENTAL_SCHEMA,
   T187AP03_URL,
   T187AP05_URL,
+  buildFundamentalFile,
   extractIndustry,
   extractRevenue,
   extractValuation,
@@ -758,38 +759,18 @@ async function syncFundamental(
       const latestRevenue = extractRevenue(revenue, ticker)
       const industry = extractIndustry(revenue, company, ticker)
 
-      // 0.6.4 起註記改為**分項**。原本是「三者皆 null 才寫一條籠統的」，
-      // 但月營收歷史回補（backfillRevenue）讓上櫃股開始有營收、卻仍然沒有估值與產業別
-      // （BWIBBU_ALL 與 t187ap03_L 都只涵蓋上市），舊判斷會讓它一條註記都不寫，
-      // 使用者只看得到空白的估值欄位、不知道為什麼。
-      const existingMonths = existing?.revenueMonths?.length ?? 0
-      const notes: string[] = []
-      if (!valuation && !latestRevenue && !industry && existingMonths === 0) {
-        // ETF 與上櫃股都不在這三份 TWSE 檔內（實測 0050 三份皆查無）。
-        // 兩者成因不同但對使用者是同一件事：這裡沒有公司基本面可看。
-        notes.push('查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中')
-      } else if (!valuation && bwibbu) {
-        // `bwibbu` 非 null 才寫這條 —— 有載到檔卻查無此代號，才真的能斷定「不涵蓋」。
-        // 只是這輪抓取失敗的話（bwibbu 為 null）valuation 同樣是 null，
-        // 但那是我們的問題不是它的，寫成「只涵蓋上市」會是假話。
-        notes.push('無估值資料：本益比等三項只涵蓋上市（TWSE）個股')
-      }
-
-      const file: FundamentalFile = {
-        schema: FUNDAMENTAL_SCHEMA,
+      // 欄位組裝與註記判斷都在 twFundamental.ts 的純函式裡（那裡測得到）
+      const file = buildFundamentalFile({
         ticker,
         name,
-        asOf: new Date().toISOString(),
         dataDate: targetDate,
-        industry,
+        asOf: new Date().toISOString(),
+        existing,
         valuation,
-        revenueUnit: '千元',
-        revenueMonths: mergeRevenueMonths(
-          existing?.revenueMonths,
-          latestRevenue ? [latestRevenue] : [],
-        ),
-        notes,
-      }
+        latestRevenue,
+        industry,
+        bwibbuLoaded: bwibbu !== null,
+      })
       if (await uploadJson(`fundamental/${ticker}.json`, file)) synced++
     } catch {
       // 單檔失敗不影響其他檔，也不影響已寫好的籌碼報告

@@ -8,11 +8,16 @@
 
 ## 📋 Active Tasks
 
-### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.2)
-- **Status**: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、第 4 輪起短路 369ms）；
-  閘門全綠（lint / build / **382 tests**）。正式區未動，等使用者決定是否併 `main`
+### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.3)
+- **Status**: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、短路 1910ms）；
+  閘門全綠（lint / build / **389 tests**）。正式區未動，等使用者決定是否併 `main`
 - **Agent**: Claude
-- **Timestamp**: 2026-07-28 10:30:00 Asia/Taipei
+- **Timestamp**: 2026-07-28 10:45:00 Asia/Taipei
+- **dev.3 修的漏洞**：`syncFundamental` 整份重建物件時漏帶
+  `revenueBackfilledThrough`，每個交易日第一輪都會抹掉回補進度。
+  已把建檔與 notes 判斷抽成 `buildFundamentalFile()` 純函式並補測試 ——
+  **`index.ts` 是本專案唯一沒有任何自動檢查的檔案**（`tsc -b` 只收 `src/`），
+  有判斷的程式碼一律別留在那裡。
 - **dev.2 修的死結**：ETF 不在 `t21sc03` 內、缺口永遠填不滿，把最新那幾個月
   永久釘在待抓清單上，真正的公司拿不到更舊資料。新增
   `FundamentalFile.revenueBackfilledThrough` 區分「還沒找」與「找過了沒有」。

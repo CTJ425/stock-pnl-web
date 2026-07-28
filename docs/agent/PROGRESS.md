@@ -1,10 +1,71 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 月營收歷史回補（0.6.4-dev.2）—— 接 MOPS 分月報表，一次補滿 12 個月
-- Status: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、第 4 輪起短路）；
+- Action: 月營收歷史回補（0.6.4-dev.3）—— 接 MOPS 分月報表，一次補滿 12 個月
+- Status: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、短路 1910ms）；
   正式區依 §13.1 按兵不動，等使用者決定是否併 `main`
-- Timestamp: 2026-07-28 10:30:00 Asia/Taipei
+- Timestamp: 2026-07-28 10:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 10:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.4-dev.3 —— 修「每晚批次抹掉回補進度」；建檔邏輯抽成純函式
+- **Status**: COMPLETED（測試區已部署驗證）
+
+### 起因：使用者回報畫面上還是只有六月
+
+先把「是不是前端問題」查到底，結論是**後端與前端都沒問題**：
+
+1. Storage 四檔（1802 / 2330 / 2609 / 8033）內容完全一致，各 12 個月。
+2. HTTP 標頭 `cache-control: no-cache`，CDN 不會提供舊版；
+   `cf-cache-status: MISS`、`last-modified` 都是寫入當下。
+3. 以 **anon 金鑰**照 `supabase-js` 的路徑實測，2330 一樣讀到 12 個月。
+4. 前端 `downloadReportsJson` **完全沒有任何快取層**，每次都真的下載。
+5. 把測試區的**真實 JSON** 餵進 `fetchFundamental` → `FundamentalTab` 用 jsdom 渲染，
+   四檔**各渲染出 12 列**（2026 年 06 月 → 2025 年 07 月）。
+
+所以畫面只顯示六月是瀏覽器端的舊狀態，重新整理即可。
+（使用者一度以為是正式區，實際上正式區確實還停在 1 個月 —— 那是刻意沒動。）
+
+### 但查這件事的時候撞到一個真的 bug
+
+`syncFundamental` 是**整份重建** `FundamentalFile` 物件，而 dev.2 新增的
+`revenueBackfilledThrough` **沒有被帶過去**。後果：
+
+- 每個交易日的第一輪批次會把回補進度抹掉（後續輪次因
+  `existing.dataDate >= targetDate` 而跳過，所以一天只掉一次）。
+- 隔天 `backfillRevenue` 看到 `through = null`，又把 12 個月重走一遍
+  —— 每天多 24 次對外抓取與 5 次 Storage 寫入。
+- **dev.2 宣稱的「補滿之後零成本」形同虛設。**
+
+還沒發作只是因為今天的批次還沒跑到（cron 16:00 才啟動）。
+
+### 修法：把建檔抽成純函式
+
+不只補上那一行，而是把整個 `FundamentalFile` 的組裝與 `notes` 判斷抽成
+`twFundamental.ts` 的 `buildFundamentalFile()`。理由是**同一類錯誤已經出現兩次**：
+
+- dev.1：`backfillRevenue` 用長度判斷有沒有變化（cap 砍掉最舊一筆時會漏寫）。
+- dev.3：整份重建時漏帶欄位。
+
+兩者都在 `index.ts`，而 `index.ts` **既不在 `tsc -b` 的涵蓋範圍**（`tsconfig.app.json`
+的 `include` 只有 `src`），本機也沒有 deno 可以 `deno check`，更沒有任何測試碰得到。
+抽出來之後這兩類錯誤都有測試鎖住（新增 7 筆，含「回補進度必須帶過去」）。
+
+### 驗證
+
+- 閘門：lint / build / **389 tests** 全綠。
+- 測試區重新部署後打 `backfill-revenue`：`filled: 0, months: []`，1910ms 短路。
+- 五檔資料完好：四家公司各 12 個月、`through = 2025-07`；0050 為 ETF 已收斂。
+
+### 教訓（與 dev.2 同一條，這次更明確）
+
+**`index.ts` 是這個專案唯一沒有任何自動檢查的檔案。**
+它綁死 Deno 與 Supabase client，`tsc` 收不到、vitest 也跑不動。
+往後只要是「有判斷」或「組裝有多個欄位的物件」的程式碼，
+一律放進 sibling 純函式模組；`index.ts` 只留 fetch / upload 的膠水。
 
 ---
 

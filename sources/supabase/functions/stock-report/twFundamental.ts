@@ -185,6 +185,62 @@ export function extractIndustry(
 export const REVENUE_MONTHS_CAP = 12
 
 /**
+ * 組出要寫進 Storage 的 fundamental/{ticker}.json。
+ *
+ * 抽成純函式的理由是實際踩到的：這裡是**整份重建**物件，
+ * 0.6.4-dev.2 新增 `revenueBackfilledThrough` 時漏了帶過去，
+ * 等於每個交易日的第一輪批次都把回補進度抹掉、隔天再重走 12 個月。
+ * 那個 bug 在 index.ts 裡看不出來 —— 它既不在 `tsc -b` 的涵蓋範圍
+ * （只收 src/），也沒有任何測試碰得到。所以有判斷、有欄位組裝的部分放這裡。
+ *
+ * @param bwibbuLoaded 估值大檔這輪**有沒有載到**（不是「這檔有沒有估值」）。
+ *   兩者都會讓 valuation 為 null，但只有前者為 true 時才能斷定「這檔不在涵蓋範圍」。
+ */
+export function buildFundamentalFile(args: {
+  ticker: string
+  name: string
+  dataDate: string
+  asOf: string
+  existing: FundamentalFile | null | undefined
+  valuation: ValuationChip | null
+  latestRevenue: RevenueMonth | null
+  industry: string | null
+  bwibbuLoaded: boolean
+}): FundamentalFile {
+  const { ticker, name, dataDate, asOf, existing, valuation, latestRevenue, industry } = args
+
+  // 註記分項，見 PLAN.md N6。既有月份數要算進來 ——
+  // 上櫃股回補後有營收但仍無估值，不能再套用「查無公司基本面資料」那條。
+  const existingMonths = existing?.revenueMonths?.length ?? 0
+  const notes: string[] = []
+  if (!valuation && !latestRevenue && !industry && existingMonths === 0) {
+    // ETF 與上櫃股都不在這三份 TWSE 檔內（實測 0050 三份皆查無）。
+    notes.push('查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中')
+  } else if (!valuation && args.bwibbuLoaded) {
+    notes.push('無估值資料：本益比等三項只涵蓋上市（TWSE）個股')
+  }
+
+  return {
+    schema: FUNDAMENTAL_SCHEMA,
+    ticker,
+    name,
+    asOf,
+    dataDate,
+    industry,
+    valuation,
+    revenueUnit: '千元',
+    revenueMonths: mergeRevenueMonths(
+      existing?.revenueMonths,
+      latestRevenue ? [latestRevenue] : [],
+    ),
+    // ⚠️ 整份重建時每個「不由本次輸入決定」的欄位都必須明確帶過去，
+    //    漏掉就是無聲的資料遺失。這一欄漏過一次，見上方說明。
+    revenueBackfilledThrough: existing?.revenueBackfilledThrough ?? null,
+    notes,
+  }
+}
+
+/**
  * 把新的月份併入既有序列：依 yearMonth 去重、由舊到新排序、cap 12。
  * 覆寫制檔案靠這個在每晚重寫時自累積月營收史（首月 1 筆，逐月長到 12 筆）。
  *
