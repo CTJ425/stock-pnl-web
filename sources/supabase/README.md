@@ -119,22 +119,29 @@ supabase functions deploy stock-report --no-verify-jwt
 
 > **空間**：每份報告是 ~5KB 純 JSON（v0.3.7-dev.3 起不再存 `html` 欄位，體積約砍半）；150 檔 × 7 天 ≈ 5MB，遠低於 Free 1GB Storage。PDF 不存於伺服器（Edge Function 無瀏覽器無法產），維持前端即點即下載。
 
-## AI 助理設定（0.6.0 起）：`user_settings` 的 `ai_*` 欄位
+## AI 助理設定：`app_settings` 的 `ai_*` 欄位
 
-`schema.sql` **§4.1** 在既有的 `user_settings` 加了五個欄位，供「AI 解讀」分頁存放
-使用者自己的 AI 供應商設定：
+> ⚠️ 這一節在 0.6.5 更正過。原文寫的是「`user_settings` 的 `ai_*` 欄位」，
+> 那是 0.6.0-dev.1 的作法，後來改成**全站共用單列**（`app_settings`）並由
+> `schema.sql` 把 `user_settings.ai_*` 五欄 DROP 掉，但這份文件沒跟著改。
+
+`schema.sql` **§4.1** 的 `app_settings` 是單列表（`id SMALLINT PK CHECK (id = 1)`），
+供「AI 分析」分頁存放**全站共用**的 AI 供應商設定：
 
 | 欄位 | 內容 |
 | ---- | ---- |
 | `ai_provider` | `'google'` 或 `'openai-compatible'` |
 | `ai_base_url` | OpenAI 相容端點（Ollama / vLLM）；`google` 留空 |
 | `ai_model` | 模型名稱，例如 `gemini-2.5-flash` / `llama3` |
-| `ai_api_key` | 明文，靠既有 RLS（`auth.uid() = user_id`）隔離；Ollama 本機可空 |
+| `ai_api_key` | 明文 |
 | `ai_updated_at` | 最後更新時間 |
 
-**要在既有環境套用**：整份 `schema.sql` 可重跑，或只執行 §4.1 那五行 `ALTER TABLE`。
-注意**不能**改上面的 `CREATE TABLE user_settings` 來加欄位 —— `CREATE TABLE IF NOT EXISTS`
-對「表已存在」的環境完全不作用，欄位不會被補上。
+**權限**：所有登入帳號可 SELECT；只有 `app_metadata.role = 'admin'` 可 INSERT / UPDATE。
+金鑰仍會回到瀏覽器（前端直連供應商），存 DB 換到的是**全站共用一組設定**，
+不是「金鑰不進瀏覽器」—— 後者要等 Edge Function 代理。
+
+**要在既有環境套用**：只執行 §4.1 那幾行 `ALTER TABLE` / `CREATE TABLE`。
+⚠️ **不要整份重跑 `schema.sql`**（見本檔開頭的警告）。
 
 沒套用的後果：AI 設定按下儲存會回 `column "ai_provider" does not exist`，
 其餘功能不受影響（報告、K 線都不讀這張表）。
@@ -221,6 +228,7 @@ supabase functions deploy stock-report --no-verify-jwt
 | 檔案 | 來源 | 跳過條件 | 失敗處理 |
 |---|---|---|---|
 | `fundamental/{ticker}.json` | OpenAPI `exchangeReport/BWIBBU_ALL`（估值）、`opendata/t187ap05_L`（月營收）、`opendata/t187ap03_L`（產業別） | 既有檔的 `dataDate >= 本次資料日` | 三份大檔全失敗就整段跳過（不把既有檔覆寫成空殼）；單檔失敗跳過 |
+| `macro/us.json` | FRED 五序列（**全域單檔，非 per-ticker**）| 同一台北日曆日已抓過 | 全部失敗不覆寫既有檔 |
 | `news/{ticker}.json` | Google News RSS `news.google.com/rss/search?q={股票名稱}` | 既有檔的 `asOf` 是同一個台北日曆日 | fetch 失敗 / 逾時 10 秒 / 解析 0 則時**不覆寫**既有檔（留舊新聞勝過空檔） |
 
 三份 OpenAPI 大檔一樣走 `chip_raw_cache`（dataset key：`BWIBBU_ALL` / `T187AP05_L` / `T187AP03_L`），
@@ -237,6 +245,43 @@ supabase functions deploy stock-report --no-verify-jwt
 
 月營收採**檔內自累積**：每次批次把最新月份併進既有的 `revenueMonths`（依年月去重、上限 12 個月），
 所以首次執行只有 1 筆，逐月長到 12 筆。
+
+#### 獲利能力比率（0.6.5 起）
+
+同樣併在 `fundamental/{ticker}.json` 內（`FUNDAMENTAL_SCHEMA` 2 起）。
+
+| 項目 | 內容 |
+|---|---|
+| 來源 | `https://openapi.twse.com.tw/v1/opendata/t187ap17_L`（上市公司營益分析查詢彙總表） |
+| 欄位 | 毛利率 / 營業利益率 / 稅前純益率 / 稅後純益率（**單位 %，證交所已算好**） |
+| 頻率 | 季更，**只回最新一季** |
+| 累積 | 檔內自累積，最多 8 季（`PROFIT_QUARTERS_CAP`），**不做歷史回補** |
+
+> 選它而不是綜合損益表 `t187ap06_L_ci`：比率是現成欄位，不必分五張產業別表
+> 自己抓分子分母做除法。`PLAN.md §N2` 當初以「欄位解析繁瑣」否決季報，
+> 那條理由在這個端點上不成立（見 §Q1）。
+>
+> 欄位名帶著括號說明（例：`毛利率(%)(營業毛利)/(營業收入)`），是端點原樣，
+> **不要「順手整理」** —— 那是查表的鍵，改了就查不到。
+
+#### 美國總經指標（0.6.5 起）
+
+**本專案第一份非個股資料**，寫成 `macro/us.json` **全域單檔**。
+
+| 項目 | 內容 |
+|---|---|
+| 來源 | `https://fred.stlouisfed.org/graph/fredgraph.csv?id={序列}&cosd={起始日}` |
+| 序列 | `CPILFESL` / `PPIFES` / `PCEPILFE` / `PAYEMS` / `UMCSENT` |
+| 金鑰 | **不需要**（FRED 的 REST API 要，fredgraph 的 CSV 匯出不用） |
+| 觸發 | `generate-all` 內獨立一行，**不進 tickers 迴圈、不進 warm** |
+| 跳過 | 同一台北日曆日已抓過就跳過（比照 `syncNews`） |
+| 快取 | **不寫 `chip_raw_cache`**（月份鍵會被 prune 依 8 碼日期字典序刪光） |
+
+> **抓原始值自己算年增 / 月增**，不用 `transformation=pc1`：同一份序列可算出多種口徑，
+> 算法是純函式測得到；交給對方轉換就得為每種口徑各抓一次，也失去驗算能力。
+>
+> **實測要點**：CSV 會有空值列（例 `1952-12,`），必須保留為 null ——
+> 跳過會讓「前一期」錯位，補 0 會讓年增率變天文數字。
 
 #### 月營收歷史回補（0.6.4 起）
 

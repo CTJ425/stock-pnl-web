@@ -1,9 +1,98 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.4 定版、併入 `main`、正式區部署完成
-- Status: **COMPLETED —— 兩區皆已上線並驗證**
-- Timestamp: 2026-07-28 11:55:00 Asia/Taipei
+- Action: 0.6.5-dev.1 AI 分析改版 ＋ 總經與獲利能力
+- Status: IN PROGRESS — 程式碼與閘門完成（**456 tests**），**兩區皆未部署**
+- Timestamp: 2026-07-28 15:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-28 15:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.5-dev.1 —— AI 分析更名與追問對話、總經分頁、獲利能力比率
+- **Status**: 實作完成、閘門全綠；待部署驗證
+
+### 使用者要求
+
+① 「AI 解讀」改叫「AI 分析」 ② 產生初次分析後可繼續與 AI 討論，
+但要**嚴格限制與框架提示詞，不允許有股票與分析外的部分**
+③ 個股分析新增核心 CPI / PPI / 非農 / PCE / CCI / 消費者信心，
+以及毛利率 / 營益率 / 淨利率 / 稅後淨利率。
+
+### 先把資料源實測完才設計
+
+| 需求 | 結論 |
+| --- | --- |
+| 獲利能力 | `opendata/t187ap17_L` 一次到位（1051 筆／383KB），**比率由證交所算好** |
+| 核心 CPI / PPI / PCE | FRED `CPILFESL` / `PPIFES` / `PCEPILFE`，**免 API key** |
+| 核心非農就業 | 不是既有概念 → 採 `PAYEMS` 的月增人數 |
+| 核心 CCI ＋ 核心消費者信心 | **實質同一件事**，合併為 `UMCSENT` |
+
+**CCI 拿不到的實證**：Conference Board 版為付費；FRED 上的 OECD 版
+`CSCICP03USM665S` 實測**最後一筆停在 2024-01**（已停更）。
+使用者據此定案合併為密大指數一項。
+
+**「核心」只有 CPI / PPI / PCE 有標準定義**（排除食品與能源），
+不硬造「核心非農」「核心消費者信心」這種不存在的口徑。
+
+### 推翻了兩條既有決策（依慣例寫進 PLAN.md，不默默改）
+
+1. **§M8「0.6.0 不做多輪對話」→ §P**。那是範圍控制不是紅線，單輪已穩定運行。
+2. **§N2「不用季報 EPS：欄位解析繁瑣」→ §Q**。那句是針對綜合損益表講的
+   （要分五張產業別表、自己做除法）。`t187ap17_L` 的比率是現成欄位，
+   理由在新端點上不成立。
+
+### 框限的設計重點
+
+- **固定拒答句要求一字不差**。它的價值不在阻擋而在**可觀測**：
+  模型若自由發揮地婉拒，「它拒絕了」與「它其實答了但講得客氣」就分不出來。
+- **刻意不做前端關鍵字過濾**。「這檔跟聯電比呢」是合理提問卻會被代號黑名單擋掉；
+  「用這檔資料寫首詩」每個詞都在白名單裡卻該擋。誤擋的代價比漏接高。
+- **system 每一輪都重送**，框限不隨對話變長被稀釋，也擠不出脈絡窗口。
+- **成本用輪數控制**（`MAX_CHAT_TURNS = 10`），不是用內容過濾控制。
+
+### 順便修掉的既有痛點
+
+`AiTab` 的結果原本純為 component state，而 `StockDetailPage` 是條件渲染 ——
+切分頁再切回來就消失、要重按一次**並重新計費**（`PROGRESS.md:181` 記過）。
+現在分析與對話一起存進 `sessionStorage`，回來直接還原。
+
+對話紀錄**一律顯示**（含還原的），能不能「繼續問」才取決於 `payload`：
+兩件事分開，否則會看得到分析卻看不到自己剛才問過什麼 —— 這是寫測試時抓到的。
+
+### 實作過程中抓到的兩件事
+
+1. **Gemini 的助理角色叫 `model` 不是 `assistant`**。`AiRequest` 改成
+   `messages` 陣列之後，兩支 adapter 的映射差異變成正式的風險點：送錯會讓模型
+   以為自己上一輪講的話是使用者說的。抽成純函式並測住。
+2. **`mergeRevenueMonths` 與新的 `mergeProfitQuarters` 抽出共用核心**
+   `mergePeriodSeries`。兩者的去重 / 排序 / cap 規則必須永遠一致，
+   各寫一份遲早只會修好其中一邊，而這種不一致從呼叫端完全看不出來。
+
+### 閘門的偽陽性（順手修掉）
+
+`App.smoke` 與 `TransactionsPage` I1–I7 那幾支「render 整個 App ＋ userEvent
+逐字輸入」的整合測試，在機器忙碌時整批逾時。**把所有異動 stash 掉、
+在乾淨的 main 上跑，同樣 7 支全紅** —— 與程式碼無關。
+`vite.config` 的 `testTimeout` 由預設 5 秒拉到 20 秒。閘門會無故變紅就沒人信它了。
+
+### 驗證
+
+- 閘門：lint / build / **456 tests** 全綠（原 422 ＋ 新增 34）。
+- 純函式測試涵蓋：`usMacro`（含 FRED 空值列、年增基期為 0 不硬算）、
+  `twFundamental`（`rocYearQuarter` / `extractProfit` / `mergeProfitQuarters`、
+  **`buildFundamentalFile` 必須帶上新欄位**的回歸樁）、
+  `aiChat`（固定拒答句、防注入、輪數）、`aiChatStore`（sessionStorage 停用時降級）、
+  `aiClient`（**`assistant` → `model`** 映射）。
+- **真瀏覽器**（Playwright）：以真實資料渲染 `MacroTab` 與 `FundamentalTab`，
+  1440 / 760px 版面正確、無橫向溢出、無 page error。
+- FRED 五序列的計算值都合理，非農 `+57 千人` 與手算 `158984−158927` 相符。
+
+### 待辦
+
+見 `TASK.md` Task 30。**兩區都要只跑那一行 `ALTER TABLE`，不要整份重跑
+`schema.sql`** —— 0.6.4 那次整份重跑把兩個 cron job 打回佔位符。
 
 ---
 
