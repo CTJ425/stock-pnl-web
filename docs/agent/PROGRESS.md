@@ -1,8 +1,8 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.6-dev.1 手機底部導覽列
-- Status: **程式碼完成並實測通過；尚未 commit、尚未部署**
+- Action: 0.6.6 定版 —— 手機底部導覽列
+- Status: **已 commit 於 `dev` 與 `main`；尚未 push、尚未部署**
 - Timestamp: 2026-07-28 21:55:00 Asia/Taipei
 
 ---
@@ -66,11 +66,19 @@ containing block**。頁首裡的 `<nav>` 就算設 `position: fixed; bottom: 0`
 - 本機模式只有 3 個分頁，要驗 5 / 6 格時**用 `cloneNode` 複製既有按鈕**再量 ——
   同樣的 CSS 與節點形狀，比推算算式可信。
 
+### 定版與分支
+
+依使用者指示**直接 commit 到 `dev` 與 `main`**（跳過測試區先行驗證這一關；
+本次為純前端版面異動，Supabase 兩區都不必動，風險僅止於畫面）。
+`dev` 為 `0.6.6-dev.1`，`main` 依 §12.3 去掉尾綴定版為 `0.6.6`，
+之後 `dev` 快轉對齊 `main`，兩分支一致。
+
 ### 🚧 Next Steps
 
-1. commit 到 `dev` 分支並 push（§13.1：不要直接在 `main` 上提交）。
-2. 測試區驗證，**用真手機或 DevTools 實機模式看安全區**（桌機瀏覽器的 inset 恆為 0）。
-3. 確認無誤後併入 `main`，依 §12.3 定版為 `0.6.6`。純前端異動，Supabase 兩區都不必動。
+1. **`git push origin main`** —— 會觸發 `deploy.yml`，GitHub Pages 立即上線（尚未執行）。
+   一併 `git push origin dev` 讓遠端兩分支同步。
+2. 上線後**用真手機看安全區**（桌機瀏覽器的 `env(safe-area-inset-bottom)` 恆為 0，
+   iPhone 的 home indicator 那條只有實機看得到）。
 
 ---
 

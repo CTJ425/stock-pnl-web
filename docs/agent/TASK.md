@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 33: 手機改用底部導覽列 (0.6.6-dev.1)
-- **Status**: ✅ 程式碼完成、閘門全綠、Playwright 六種寬度實測通過；**尚未 commit / 尚未部署**
+- **Status**: ✅ 已 commit（`dev` = 0.6.6-dev.1、`main` = 0.6.6 定版）；**尚未 push、尚未部署**
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 21:55:00 Asia/Taipei
 - 使用者於「頂層頁籤 — 10 個設計提案」review 後選定**方案 08（手機底部導覽）**。
@@ -20,8 +20,9 @@
 - **連帶搬家**：浮動鈕上移讓開導覽列；版本徽章手機改回文件流跟在頁尾後面。
 - **順手刪掉**：dev.3 之後就選不到任何元素的 `.ws-select select` / `.user-email` 死 CSS，
   以及不再需要的 `@media (max-width: 400px)` 分頁擠壓。
-- **待辦**：① commit 到 `dev` → ② 測試區驗證（**務必用真手機或 DevTools 實機模式看安全區**）
-  → ③ 併入 `main` 時依 §12.3 定版為 `0.6.6`。
+- **待辦**：① `git push origin main`（**會觸發 Pages 自動部署**）與 `git push origin dev`
+  → ② 上線後**用真手機看安全區**（桌機瀏覽器的 inset 恆為 0）。
+- 依使用者指示直接進 `main`，跳過測試區先行驗證這一關（純前端版面異動）。
 - 純前端異動，**Supabase 兩區都不必動**。
 
 ### Task 32: 頁首右側收斂成兩個選單 (0.6.5-dev.3)
