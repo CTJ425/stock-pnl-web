@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.4 定版並併入 `main`（月營收補滿 12 個月）
-- Status: IN PROGRESS — 見本檔最新一則 Log
-- Timestamp: 2026-07-28 11:45:00 Asia/Taipei
+- Action: 0.6.4 定版、併入 `main`、正式區部署完成
+- Status: **COMPLETED —— 兩區皆已上線並驗證**
+- Timestamp: 2026-07-28 11:55:00 Asia/Taipei
 
 ---
 
@@ -28,6 +28,48 @@
 依 §12.3 去掉 `-dev.N` 尾綴：`0.6.4`（`package.json` / `package-lock.json` /
 `version.ts` / README 徽章）。README 版本紀錄把 dev.1–dev.5 五個分段**整併定稿**
 為一則 0.6.4 條目，不留開發期的流水帳。
+
+### 正式區上線（`kxnxadaghidwumqsqneu`）
+
+**刻意只跑一行 SQL**，沒有整份重跑 `schema.sql` —— 測試區今天早上正是因為整份重跑
+而讓兩個 cron job 被打回佔位符（見 10:45 那則）：
+
+```sql
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;
+```
+
+身分檢查與寫入放同一次查詢（§13.3）：`fundamental/` 代號清單為
+`0050,00685L,009816,1802,2609`（含 `00685L` / `009816`，測試區沒有），確認是正式區。
+欄位數 26 → 27。
+
+部署 `stock-report --no-verify-jwt`，回補打 4 輪：
+
+| 輪 | months | filled | duration |
+| - | --- | - | --- |
+| 1 | 2026-03…06 | 5 | 6004ms |
+| 2 | 2025-11…2026-02 | 5 | 5452ms |
+| 3 | 2025-07…10 | 5 | 4710ms |
+| 4 | （空） | 0 | **2117ms** |
+
+覆驗結果：
+
+| 代號 | 名稱 | 月數 |
+| --- | --- | - |
+| 1802 | 台玻 | **12**（2025-07～2026-06） |
+| 2609 | 陽明 | **12** |
+| 0050 / 00685L / 009816 | ETF ×3 | 0，`through=2025-07` 已收斂 |
+
+**快取修正確認生效**：`GET .../fundamental/2609.json` 現在回
+`cache-control: public, max-age=0`（原為 `max-age=3600`）。
+—— 注意這是**檔案被重寫之後**才換掉的 metadata，再次印證前端那道 `no-store` 不能省。
+
+### 上線後稽核（全綠）
+
+- `functions download` 逐檔比對：正式區線上 **8/8 檔與 `main` 位元組一致**。
+- 正式區兩個 cron job：ref = `kxnxadaghidwumqsqneu`（自己）、密鑰長度 48、
+  schedule `*/15 8-15 * * 1-5`、active —— **未受本次異動影響**。
+- GitHub Pages：`Deploy React App to GitHub Pages` run 30325714234 **success**（40s）。
+- `main` 與 `dev` 同為 `770e574`，兩分支一致（§13.1）。
 
 ---
 

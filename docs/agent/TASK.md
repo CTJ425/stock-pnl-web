@@ -2,14 +2,14 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-28 10:05:00 Asia/Taipei
+- Timestamp: 2026-07-28 11:55:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
 
-### Task 29: 修 Storage 讀取被瀏覽器快取一小時 (0.6.4-dev.5)
-- **Status**: 前端已以真瀏覽器驗證、後端已部署測試區；閘門全綠（**395 tests**）
+### Task 29: 修 Storage 讀取被瀏覽器快取一小時 (0.6.4)
+- **Status**: ✅ **兩區皆已上線並驗證**（正式區 GET 標頭已變為 `max-age=0`）
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 11:30:00 Asia/Taipei
 - 根因：`uploadJson` 未指定 `cacheControl`，SDK 預設 3600 →
@@ -20,8 +20,9 @@
 - ⚠️ **診斷陷阱（我踩過）**：`curl -I`（HEAD）回 `no-cache`，GET 才回 `max-age=3600`。
   **驗快取一律用 GET**：`curl -s -o /dev/null -D - <url>`。
 
-### Task 28: 基本面標示資料產出時間 ＋ 個股分析「重新整理」鈕 (0.6.4-dev.4)
-- **Status**: 已實作並以真瀏覽器驗證；閘門全綠（**391 tests**）
+### Task 28: 基本面標示資料產出時間 ＋ 個股分析「重新整理」鈕 (0.6.4)
+- **Status**: ✅ **已上線**；時間戳依使用者要求移至月營收標題右側
+  （Playwright 於 1440 / 1024 / 760px 驗過版面）
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 11:05:00 Asia/Taipei
 - 起因：使用者回報月營收畫面只有六月，每一層都驗過都是 12 個月、**無法重現**。
@@ -31,9 +32,9 @@
 - **未做但仍待處理**：`warm` 沒有跑月營收回補，新增股票第一次打開只有 1 個月，
   要等當晚批次。`backfill-revenue` 目前只掛在 `generate-all`。
 
-### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4-dev.3)
-- **Status**: **測試區已驗證通過**（4 檔各 12 個月、ETF 收斂、短路 1910ms）；
-  閘門全綠（lint / build / **389 tests**）。正式區未動，等使用者決定是否併 `main`
+### Task 27: 月營收歷史回補 —— 一次補滿 12 個月 (0.6.4)
+- **Status**: ✅ **兩區皆已上線並驗證**（測試區 4 檔、正式區 2 檔各 12 個月；
+  ETF 收斂、第 4 輪短路）。閘門 **395 tests** 全綠
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 10:45:00 Asia/Taipei
 - **dev.3 修的漏洞**：`syncFundamental` 整份重建物件時漏帶
