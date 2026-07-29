@@ -14,6 +14,9 @@
  *       asOf 為報價的實際取得時間（ISO），供前端 TTL 判斷，避免與 DB 快取 TTL 疊加
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
+ *   POST { action: 'fx', codes: ['USD','JPY', …] }
+ *       → { quotes: { USD: { price, asOf }, … } }  台幣對外幣的即時中價（1 外幣 = N 台幣）
+ *         走勢圖的歷史由 stock-report 的 sync-fx 每日寫進 Storage，這裡只回「現在多少」
  *   POST { action: 'twlist' }
  *     → { rows: [{ symbol, name, close }] }（台股全清單；TWSE/TPEx 不開放 CORS，
  *       正式環境由此代理供前端中文搜尋 / 代號反查 / 現價備援使用）
@@ -301,6 +304,147 @@ async function handleTwList(): Promise<Response> {
   return json({ rows })
 }
 
+
+/**
+ * 匯率即時報價（0.6.7）。
+ *
+ * **為什麼要有這個 action**：走勢圖的歷史走每日排程寫進 Storage 的 `fx/twd.json`
+ * （stock-report 的 sync-fx），但那份檔案的最後一筆是「最近一根**完整**日線」——
+ * 今天的日線要等倫敦日過完才成立，所以整個交易日內畫面都停在昨天的收盤。
+ * 實測 2026-07-29 台北 11:00：檔案顯示 32.302，市場實際 32.435，差 0.42%。
+ *
+ * 兩種資料的更新節奏天生不同：259 天的歷史一天變一次，卡片上的報價要新。
+ * 故拆開 —— 歷史走 Storage 每日排程，報價走這裡，比照現價的三層快取
+ * （L1 前端 localStorage / L2 price_cache / L3 外部 API），使用者不開頁就不抓。
+ *
+ * **用逐檔 `chart?range=1d` 而不是 spark**：spark 一次就能拿全部（1.4KB / 0.11 秒）
+ * 看似划算，但它的 `close` 與 `regularMarketPrice` 一樣**四捨五入到 3 位有效數字** ——
+ * 韓元會變成 `0.0225`，而實際是 `0.022462`。那是 0.25% 的誤差，且尾數動一格就是 0.44%，
+ * 卡片卻顯示 5 位小數，等於在假裝精度。chart 的即時列給的是完整浮點數。
+ * 代價很小：8 檔並行實測合計 9.3KB、序列跑也只要 1.0 秒，何況外面還有 10 分鐘快取。
+ *
+ * **幣對一律用「外幣在前」的 `XXXTWD=X`**。反向（TWD 在前）那側流動性差，
+ * 即時報價與自己的日線對不起來 —— 實測人民幣 `TWDCNY=X` 的即時價換算後
+ * 比當日日線高 4.47%，而同日其他七個幣別都只動 0.4%。
+ * （歷史正好相反：`CNYTWD=X` 沒有歷史、`TWDCNY=X` 才有。兩邊各取所長，
+ * 見 stock-report/fxRates.ts 的 FxSpec.symbols。）
+ */
+const FX_CACHE_TTL_MS = 10 * 60 * 1000
+/** 一次最多幾個幣別。這是公開端點，上限用來擋人拿它當代打工具 */
+const FX_MAX_CODES = 12
+
+interface ChartQuoteResp {
+  chart?: {
+    result?: Array<{
+      meta?: { regularMarketTime?: number }
+      timestamp?: number[]
+      indicators?: { quote?: Array<{ close?: Array<number | null> }> }
+    }> | null
+  }
+}
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+/**
+ * 由 chart 回應取出「現在的報價」。
+ *
+ * 優先取 Yahoo 附加在尾端的即時列（`timestamp` 等於 `meta.regularMarketTime`）——
+ * 它是完整精度的浮點數。收盤後那一列可能不存在，退回最後一筆有值的日線。
+ */
+function extractLiveQuote(
+  resp: ChartQuoteResp,
+): { price: number; asOf: string } | null {
+  const r = resp?.chart?.result?.[0]
+  const ts = r?.timestamp
+  const cl = r?.indicators?.quote?.[0]?.close
+  if (!Array.isArray(ts) || !Array.isArray(cl)) return null
+
+  const live = num(r?.meta?.regularMarketTime)
+  if (live !== null) {
+    const i = ts.lastIndexOf(live)
+    const c = i >= 0 ? num(cl[i]) : null
+    if (c !== null && c > 0) return { price: c, asOf: new Date(live * 1000).toISOString() }
+  }
+  for (let i = cl.length - 1; i >= 0; i--) {
+    const c = num(cl[i])
+    if (c !== null && c > 0) return { price: c, asOf: new Date(ts[i] * 1000).toISOString() }
+  }
+  return null
+}
+
+async function handleFx(codes: unknown): Promise<Response> {
+  // 幣別代號由前端傳入（它從 fx/twd.json 讀得到清單），這裡只做格式與數量把關 ——
+  // 在兩支獨立部署的函式裡各維護一份幣別清單，遲早會有一邊漏改
+  const wanted = Array.isArray(codes)
+    ? [...new Set(codes.filter((c): c is string => typeof c === 'string' && /^[A-Z]{3}$/.test(c)))]
+        .slice(0, FX_MAX_CODES)
+    : []
+  if (wanted.length === 0) return json({ error: 'codes 需為 3 碼大寫幣別代號陣列' }, 400)
+
+  const nowMs = Date.now()
+  const quotes: Record<string, { price: number; asOf: string }> = {}
+
+  // 1) 先查 DB 共用快取
+  const freshAfter = new Date(nowMs - FX_CACHE_TTL_MS).toISOString()
+  try {
+    const { data } = await db
+      .from('price_cache')
+      .select('key, price, updated_at')
+      .in('key', wanted.map((c) => `FX:${c}`))
+      .gte('updated_at', freshAfter)
+    for (const row of data ?? []) {
+      const code = String(row.key).slice(3)
+      const price = num(Number(row.price))
+      if (price !== null && price > 0) quotes[code] = { price, asOf: row.updated_at }
+    }
+  } catch {
+    // 快取讀取失敗就當作全部未命中，照樣往下抓
+  }
+
+  const missing = wanted.filter((c) => !quotes[c])
+
+  // 2) 未命中的並行抓齊。單一幣別失敗不影響其他七個（沿用 syncMacro 的準則）
+  if (missing.length > 0) {
+    const got = await Promise.all(
+      missing.map(async (code) => {
+        try {
+          const res = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(`${code}TWD=X`)}?interval=1d&range=1d`,
+            {
+              headers: { Accept: 'application/json', 'User-Agent': UA },
+              signal: AbortSignal.timeout(10_000),
+            },
+          )
+          if (!res.ok) return null
+          const q = extractLiveQuote(await res.json())
+          return q ? ([code, q] as const) : null
+        } catch {
+          return null
+        }
+      }),
+    )
+    for (const entry of got) {
+      if (entry) quotes[entry[0]] = entry[1]
+    }
+  }
+
+  // 3) 新抓到的回寫共用快取
+  const fresh = missing.filter((c) => quotes[c])
+  if (fresh.length > 0) {
+    try {
+      await db.from('price_cache').upsert(
+        fresh.map((c) => ({ key: `FX:${c}`, price: quotes[c].price, updated_at: quotes[c].asOf })),
+      )
+    } catch {
+      // 回寫失敗不影響本次回應
+    }
+  }
+
+  return json({ quotes })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -309,7 +453,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Method not allowed' }, 405)
   }
 
-  let body: { action?: string; symbols?: SymbolItem[]; query?: string }
+  let body: { action?: string; symbols?: SymbolItem[]; query?: string; codes?: string[] }
   try {
     body = await req.json()
   } catch {
@@ -322,6 +466,11 @@ Deno.serve(async (req) => {
   if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
     return handleSearch(body.query.trim())
   }
+  // 匯率即時報價：走勢圖的歷史仍由 stock-report 的每日排程寫進 Storage，這裡只回「現在多少」
+  if (body.action === 'fx') {
+    return handleFx(body.codes)
+  }
+
   if (body.action === 'twlist') {
     return handleTwList()
   }

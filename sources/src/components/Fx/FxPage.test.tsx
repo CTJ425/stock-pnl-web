@@ -2,8 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 
-const { fetchFx } = vi.hoisted(() => ({ fetchFx: vi.fn() }))
+const { fetchFx, fetchFxQuotes } = vi.hoisted(() => ({
+  fetchFx: vi.fn(),
+  fetchFxQuotes: vi.fn(),
+}))
 vi.mock('../../services/fxProxy', () => ({ fetchFx }))
+vi.mock('../../services/fxQuoteProxy', () => ({ fetchFxQuotes }))
 
 import { FxPage } from './FxPage'
 import type { FxData, FxPoint } from '../../services/fxProxy'
@@ -53,11 +57,12 @@ const fx: FxData = {
   ],
 }
 
-const twdInput = () => screen.getByLabelText('新台幣 TWD') as HTMLInputElement
-
 describe('FxPage', () => {
   beforeEach(() => {
     fetchFx.mockReset()
+    fetchFxQuotes.mockReset()
+    // 預設「取不到即時報價」，個別案例再覆寫
+    fetchFxQuotes.mockResolvedValue({})
     localStorage.clear()
   })
   afterEach(cleanup)
@@ -83,72 +88,31 @@ describe('FxPage', () => {
     expect(screen.getByText('0.1956')).toBeTruthy()
   })
 
-  it('預設選第一個幣別，換算器帶入預設金額', async () => {
+  it('點卡片切換幣別，走勢圖跟著換', async () => {
     fetchFx.mockResolvedValue(fx)
     render(<FxPage />)
-    expect(await screen.findByText('台幣 ⇄ 美元')).toBeTruthy()
-    expect(twdInput().value).toBe('1000')
-    // 1000 / 32.387 = 30.8766…
-    expect((screen.getByLabelText('美元 USD') as HTMLInputElement).value).toBe('30.88')
-  })
-
-  it('改台幣金額，外幣即時換算', async () => {
-    fetchFx.mockResolvedValue(fx)
-    render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
-    fireEvent.change(twdInput(), { target: { value: '32387' } })
-    expect((screen.getByLabelText('美元 USD') as HTMLInputElement).value).toBe('1,000.00')
-  })
-
-  it('改外幣金額，台幣反向換算', async () => {
-    fetchFx.mockResolvedValue(fx)
-    render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
-    fireEvent.change(screen.getByLabelText('美元 USD'), { target: { value: '100' } })
-    expect(twdInput().value).toBe('3,238.70')
-  })
-
-  it('使用者輸入到一半的小數點不會被改寫（游標會跳掉）', async () => {
-    fetchFx.mockResolvedValue(fx)
-    render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
-    fireEvent.change(twdInput(), { target: { value: '12.' } })
-    expect(twdInput().value).toBe('12.')
-  })
-
-  it('清空輸入時另一邊也是空的，不填 0', async () => {
-    fetchFx.mockResolvedValue(fx)
-    render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
-    fireEvent.change(twdInput(), { target: { value: '' } })
-    expect((screen.getByLabelText('美元 USD') as HTMLInputElement).value).toBe('')
-  })
-
-  it('點卡片切換幣別，換算器與走勢圖跟著換', async () => {
-    fetchFx.mockResolvedValue(fx)
-    render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
+    await screen.findByText('美元走勢')
     fireEvent.click(screen.getByRole('button', { name: /日圓 JPY/ }))
-    expect(screen.getByText('台幣 ⇄ 日圓')).toBeTruthy()
     expect(screen.getByText('日圓走勢')).toBeTruthy()
+    expect(screen.queryByText('美元走勢')).toBeNull()
   })
 
   it('選中的幣別記進 localStorage，下次進來還原', async () => {
     fetchFx.mockResolvedValue(fx)
     const first = render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
+    await screen.findByText('美元走勢')
     fireEvent.click(screen.getByRole('button', { name: /日圓 JPY/ }))
     first.unmount()
 
     render(<FxPage />)
-    expect(await screen.findByText('台幣 ⇄ 日圓')).toBeTruthy()
+    expect(await screen.findByText('日圓走勢')).toBeTruthy()
   })
 
   it('記住的幣別已不存在時退回第一個，不是空白畫面', async () => {
     localStorage.setItem('fx.selectedCurrency', 'THB')
     fetchFx.mockResolvedValue(fx)
     render(<FxPage />)
-    expect(await screen.findByText('台幣 ⇄ 美元')).toBeTruthy()
+    expect(await screen.findByText('美元走勢')).toBeTruthy()
   })
 
   it('升貶值用文字說明，不套損益的紅漲綠跌', async () => {
@@ -248,15 +212,79 @@ describe('FxPage', () => {
     expect(screen.getByText(/不是銀行牌告匯率/)).toBeTruthy()
   })
 
-  it('匯率缺值時不顯示 Infinity', async () => {
-    fetchFx.mockResolvedValue({
-      ...fx,
-      currencies: [{ ...fx.currencies[0], latest: null, prevClose: null }],
+
+  it('有即時報價時卡片顯示即時價，不是每日檔的收盤價', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({
+      USD: { price: 32.478, asOf: new Date().toISOString() },
     })
     render(<FxPage />)
-    await screen.findByText('台幣 ⇄ 美元')
-    expect(document.body.textContent).not.toContain('Infinity')
-    expect(document.body.textContent).not.toContain('NaN')
-    expect((screen.getByLabelText('美元 USD') as HTMLInputElement).value).toBe('')
+    expect(await screen.findByText('32.478')).toBeTruthy()
+    // 收盤價 32.387 不該再出現在卡片上
+    expect(screen.queryByText('32.387')).toBeNull()
+  })
+
+  it('即時價的日變動以每日檔的最後收盤為基期', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({
+      USD: { price: 32.478, asOf: new Date().toISOString() },
+    })
+    render(<FxPage />)
+    await screen.findByText('32.478')
+    // (32.478 / 32.387 - 1) * 100 = 0.28%
+    expect(screen.getByText('▲ 0.28%')).toBeTruthy()
+  })
+
+  it('取不到即時報價時退回收盤價，並在畫面上說明', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({})
+    render(<FxPage />)
+    await screen.findByText('外幣匯率')
+    expect(screen.getByText('32.387')).toBeTruthy()
+    expect(screen.getByText(/取不到即時報價/)).toBeTruthy()
+  })
+
+  it('有即時報價時明白標示是即時價、走勢圖是每日收盤', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({
+      USD: { price: 32.478, asOf: new Date().toISOString() },
+    })
+    render(<FxPage />)
+    await screen.findByText('32.478')
+    expect(screen.getByText(/市場即時中價/)).toBeTruthy()
+    expect(screen.queryByText(/取不到即時報價/)).toBeNull()
+  })
+
+  it('只有部分幣別有即時報價時，其餘各自退回收盤價', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({
+      USD: { price: 32.478, asOf: new Date().toISOString() },
+    })
+    render(<FxPage />)
+    await screen.findByText('32.478')
+    // JPY 沒有即時報價，仍顯示每日檔的 0.1956
+    expect(screen.getByText('0.1956')).toBeTruthy()
+  })
+
+  it('走勢圖不受即時報價影響（歷史仍來自每日檔）', async () => {
+    fetchFx.mockResolvedValue(fx)
+    fetchFxQuotes.mockResolvedValue({
+      USD: { price: 99.999, asOf: new Date().toISOString() },
+    })
+    const { container } = render(<FxPage />)
+    await screen.findByText('99.999')
+    const stats = screen.getAllByText(/^高 /).map((el) => el.textContent ?? '')
+    expect(stats.join()).not.toContain('99.999')
+    expect(container.querySelectorAll('.fx-chart svg')).toHaveLength(2)
+  })
+
+  it('按重新整理會強制重抓即時報價（忽略 TTL）', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('外幣匯率')
+    fetchFxQuotes.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /重新整理/ }))
+    await screen.findByText('外幣匯率')
+    expect(fetchFxQuotes).toHaveBeenCalledWith(['USD', 'JPY'], true)
   })
 })

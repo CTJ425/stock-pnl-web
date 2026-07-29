@@ -5,94 +5,24 @@ import {
   changePct,
   fmtChartLabel,
   invertPoints,
-  formatAmount,
   formatRate,
-  foreignToTwd,
   isStale,
   labelIndicesFor,
-  parseAmount,
   rangeStats,
   sliceByRange,
-  twdToForeign,
 } from './fxConvert'
 import type { FxPoint } from '../../services/fxProxy'
 
-describe('twdToForeign / foreignToTwd', () => {
-  it('雙向換算互為逆運算', () => {
-    const rate = 32.387 // 1 USD = 32.387 TWD
-    const usd = twdToForeign(1000, rate)!
-    expect(usd).toBeCloseTo(30.8766, 4)
-    expect(foreignToTwd(usd, rate)).toBeCloseTo(1000, 6)
-  })
-
-  it('日圓這種小數匯率也對', () => {
-    // 1 JPY = 0.1956 TWD ⇒ 1000 TWD 換得約 5112 日圓
-    expect(twdToForeign(1000, 0.1956)).toBeCloseTo(5112.47, 2)
-    expect(foreignToTwd(10000, 0.1956)).toBeCloseTo(1956, 6)
-  })
-
-  it('rate 為 0 回 null，不回 Infinity', () => {
-    expect(twdToForeign(1000, 0)).toBeNull()
-    expect(Number.isFinite(1000 / 0)).toBe(false) // 對照：沒擋的話會是 Infinity
-  })
-
-  it('rate 或金額為 null / NaN 時回 null', () => {
-    expect(twdToForeign(1000, null)).toBeNull()
-    expect(twdToForeign(null, 32)).toBeNull()
-    expect(twdToForeign(NaN, 32)).toBeNull()
-    expect(foreignToTwd(100, null)).toBeNull()
-    expect(foreignToTwd(null, 32)).toBeNull()
-  })
-
-  it('0 元是合法輸入，換算結果是 0 而不是 null', () => {
-    expect(twdToForeign(0, 32.387)).toBe(0)
-    expect(foreignToTwd(0, 32.387)).toBe(0)
-  })
-
-  it('負數照算（使用者自己貼進來的，不特別攔）', () => {
-    expect(twdToForeign(-1000, 32.387)).toBeCloseTo(-30.8766, 4)
-  })
-})
-
-describe('parseAmount', () => {
-  it('接受千分位逗號與前後空白', () => {
-    expect(parseAmount('1,000')).toBe(1000)
-    expect(parseAmount(' 1,234,567.89 ')).toBe(1234567.89)
-  })
-
-  it('空字串回 null —— 「沒有輸入」不是 0', () => {
-    expect(parseAmount('')).toBeNull()
-    expect(parseAmount('   ')).toBeNull()
-  })
-
-  it('非數字回 null', () => {
-    expect(parseAmount('abc')).toBeNull()
-    expect(parseAmount('1.2.3')).toBeNull()
-    expect(parseAmount('1e5')).toBeNull()
-  })
-
-  it('輸入中的半成品不當成錯誤（打到一半的小數點）', () => {
-    expect(parseAmount('12.')).toBe(12)
-    expect(parseAmount('.5')).toBe(0.5)
-  })
-})
-
-describe('formatAmount / formatRate', () => {
-  it('金額帶千分位與兩位小數', () => {
-    expect(formatAmount(1234567.891)).toBe('1,234,567.89')
-    expect(formatAmount(0)).toBe('0.00')
-  })
-
-  it('null 回空字串，讓輸入框保持空的而不是填 0', () => {
-    expect(formatAmount(null)).toBe('')
-    expect(formatAmount(NaN)).toBe('')
-  })
-
+describe('formatRate', () => {
   it('匯率的小數位數由幣別決定 —— 韓元用 3 位會全變成 0.022', () => {
     expect(formatRate(0.022289, 5)).toBe('0.02229')
     expect(formatRate(0.022289, 3)).toBe('0.022')
     expect(formatRate(32.387001, 3)).toBe('32.387')
+  })
+
+  it('缺值回破折號，不顯示 NaN', () => {
     expect(formatRate(null, 3)).toBe('—')
+    expect(formatRate(NaN, 3)).toBe('—')
   })
 })
 

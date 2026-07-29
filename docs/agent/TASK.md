@@ -37,6 +37,15 @@
   代價：只有市場中價，沒有現金／即期買賣價，畫面已標示。
 - **新增**：`fxRates.ts`（+test）、`fxProxy.ts`（+test）、`Fx/fxConvert.ts`（+test）、
   `Fx/FxPage.tsx`（+test）；`index.ts` 新 action `sync-fx`；`schema.sql` §10 cron `fx-daily`。
+- **0.6.7 後續調整（依使用者指示）**：
+  - 走勢圖拆成兩個方向並排（新臺幣/外幣、外幣/新臺幣）。
+  - **移除換算器**整塊，連同只服務它的四個純函式與 CSS。
+  - **卡片改用即時報價**（`stock-price` 新 action `fx`，10 分鐘 TTL 三層快取），
+    走勢圖仍走每日檔。解決「整個交易日看不到今天匯率」。
+  - 央行統計資料庫 API **評估後不採用**：涵蓋 8 幣別、1993 年至今 8,324 筆、
+    官方免金鑰，但**日資料按月批次發布、落後 29 天**（其他三個匯率端點落後 61 天），
+    且欄位方向不一致（JPY/CNY/HKD/KRW 是 `XXX/USD`，EUR/GBP/AUD 是 `USD/XXX`）。
+    交叉驗證顯示與 Yahoo 誤差 ±0.3% 以內，資料本身正確 —— 純粹是太舊。
 - **順手修的兩個共用問題**：
   - `chartScale.fmtAxisNumber` 對小於 1 的值一律 `Math.round` → 匯率整條 Y 軸標成「0」（實測）。
   - `LineSeriesChart` 補上 `labelIndices`（一年 260 點不抽稀會糊成一團）。

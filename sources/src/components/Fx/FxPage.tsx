@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRightLeft, RefreshCw } from 'lucide-react'
 import { fetchFx, type FxCurrency, type FxData, type FxPoint } from '../../services/fxProxy'
+import { fetchFxQuotes, type FxQuote, type FxQuoteMap } from '../../services/fxQuoteProxy'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import {
@@ -33,20 +34,15 @@ import {
   changePct,
   fmtChartLabel,
   invertPoints,
-  formatAmount,
   formatRate,
-  foreignToTwd,
   isStale,
   labelIndicesFor,
-  parseAmount,
   rangeStats,
   sliceByRange,
-  twdToForeign,
   type FxRange,
 } from './fxConvert'
 
 const SELECTED_KEY = 'fx.selectedCurrency'
-const DEFAULT_TWD = '1000'
 
 function readSelected(): string | null {
   try {
@@ -76,108 +72,59 @@ function pctText(pct: number | null): string {
   return `${pct > 0 ? '▲' : pct < 0 ? '▼' : ''} ${Math.abs(pct).toFixed(2)}%`
 }
 
+/**
+ * 卡片要顯示哪個數字。
+ *
+ * 優先用即時報價；拿不到（Edge Function 掛了、額度用盡、本機模式）就退回
+ * 每日檔的最後收盤。**兩者一定要在畫面上分得出來** —— 差距不是小數點後幾位，
+ * 實測同一時刻可以差 0.42%，使用者若以為看到的是即時價會被誤導。
+ *
+ * 日變動的基期兩種情況不同：
+ * - 即時價：跟每日檔的**最後一根完整日線**比 → 「今天到目前為止的變化」
+ * - 收盤價：跟**前一根**日線比 → 「昨天相對前天的變化」
+ * 兩者都是「與前一個交易日相比」，口徑一致。
+ */
+function cardView(cur: FxCurrency, quote: FxQuote | undefined) {
+  if (quote) {
+    return {
+      price: quote.price,
+      pct: changePct(quote.price, cur.latest),
+      live: true,
+      asOf: quote.asOf,
+    }
+  }
+  return { price: cur.latest, pct: changePct(cur.latest, cur.prevClose), live: false, asOf: '' }
+}
+
 function CurrencyCard({
   cur,
+  quote,
   active,
   onSelect,
 }: {
   cur: FxCurrency
+  quote: FxQuote | undefined
   active: boolean
   onSelect: () => void
 }) {
-  const pct = changePct(cur.latest, cur.prevClose)
+  const v = cardView(cur, quote)
   return (
     <button
       type="button"
       className={`glass kpi fx-card${active ? ' is-active' : ''}`}
       onClick={onSelect}
       aria-pressed={active}
-      title={`1 ${cur.code} = ${formatRate(cur.latest, cur.decimals)} TWD`}
+      title={`1 ${cur.code} = ${formatRate(v.price, cur.decimals)} TWD${
+        v.live ? `（即時，${fmtUpdatedAt(v.asOf)}）` : '（前一交易日收盤）'
+      }`}
     >
       <div className="kpi-label">
         {cur.name} {cur.code}
       </div>
-      <div className="kpi-value">{formatRate(cur.latest, cur.decimals)}</div>
-      <div className="kpi-sub">{pctText(pct)}</div>
-      <div className="kpi-sub">{trendText(pct)}</div>
+      <div className="kpi-value">{formatRate(v.price, cur.decimals)}</div>
+      <div className="kpi-sub">{pctText(v.pct)}</div>
+      <div className="kpi-sub">{trendText(v.pct)}</div>
     </button>
-  )
-}
-
-/**
- * 雙向換算器。
- *
- * 兩邊都是受控輸入，但**只有被編輯的那一邊保留使用者的原字串**，另一邊顯示換算結果。
- * 兩邊都存成數字再各自格式化的話，使用者打「1.」會立刻被改寫成「1.00」，游標也跳掉。
- */
-function Converter({ cur }: { cur: FxCurrency }) {
-  const [twdRaw, setTwdRaw] = useState(DEFAULT_TWD)
-  const [foreignRaw, setForeignRaw] = useState('')
-  // 哪一邊是使用者正在輸入的來源；另一邊是算出來的
-  const [edge, setEdge] = useState<'twd' | 'foreign'>('twd')
-
-  const rate = cur.latest
-  const twdValue = edge === 'twd' ? parseAmount(twdRaw) : foreignToTwd(parseAmount(foreignRaw), rate)
-  const foreignValue =
-    edge === 'foreign' ? parseAmount(foreignRaw) : twdToForeign(parseAmount(twdRaw), rate)
-
-  const twdShown = edge === 'twd' ? twdRaw : formatAmount(twdValue)
-  const foreignShown = edge === 'foreign' ? foreignRaw : formatAmount(foreignValue)
-
-  const perForeign = formatRate(rate, cur.decimals)
-  const perTwd = formatRate(twdToForeign(1, rate), Math.max(cur.decimals, 4))
-
-  return (
-    <div className="section glass fx-panel">
-      <div className="rpt-section-head">
-        <h3 className="head-tight">
-          台幣 ⇄ {cur.name}
-        </h3>
-        <span className="source-tag">
-          1 {cur.code} = {perForeign} TWD ／ 1 TWD = {perTwd} {cur.code}
-        </span>
-      </div>
-
-      <div className="fx-convert">
-        <div className="field">
-          <label htmlFor="fx-twd">新台幣 TWD</label>
-          <input
-            id="fx-twd"
-            inputMode="decimal"
-            autoComplete="off"
-            value={twdShown}
-            onChange={(e) => {
-              setEdge('twd')
-              setTwdRaw(e.target.value)
-            }}
-          />
-        </div>
-
-        <div className="fx-swap" aria-hidden="true">
-          <ArrowRightLeft size={18} />
-        </div>
-
-        <div className="field">
-          <label htmlFor="fx-foreign">
-            {cur.name} {cur.code}
-          </label>
-          <input
-            id="fx-foreign"
-            inputMode="decimal"
-            autoComplete="off"
-            value={foreignShown}
-            onChange={(e) => {
-              setEdge('foreign')
-              setForeignRaw(e.target.value)
-            }}
-          />
-        </div>
-      </div>
-
-      <p className="hint" style={{ marginTop: 8 }}>
-        兩邊都可以輸入，另一邊會即時換算。
-      </p>
-    </div>
   )
 }
 
@@ -299,14 +246,21 @@ function TrendChart({ cur }: { cur: FxCurrency }) {
 
 export function FxPage() {
   const [fx, setFx] = useState<FxData | null>(null)
+  const [quotes, setQuotes] = useState<FxQuoteMap>({})
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(readSelected)
 
-  const load = useCallback(async () => {
+  /**
+   * 兩份資料一起載入，但**歷史檔決定畫面能不能顯示、報價只是加分**：
+   * 報價拿不到時卡片退回收盤價（見 cardView），歷史拿不到才是空狀態。
+   * 故報價的失敗不進 loading 判斷，也不擋畫面。
+   */
+  const load = useCallback(async (force = false) => {
     setLoading(true)
     const d = await fetchFx()
     setFx(d)
     setLoading(false)
+    if (d) setQuotes(await fetchFxQuotes(d.currencies.map((c) => c.code), force))
   }, [])
 
   useEffect(() => {
@@ -345,6 +299,8 @@ export function FxPage() {
   }
 
   const stale = isStale(fx.asOf, new Date())
+  // 任一幣別有即時報價就算取得成功（八個是同一次請求，不會只回一半）
+  const liveAt = fx.currencies.map((c) => quotes[c.code]?.asOf).find(Boolean) ?? ''
 
   return (
     <>
@@ -361,7 +317,7 @@ export function FxPage() {
           {fx.asOf && (
             <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(fx.asOf)}</span>
           )}
-          <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
+          <button className="btn btn-sm" onClick={() => void load(true)} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : undefined} />
             重新整理
           </button>
@@ -372,6 +328,7 @@ export function FxPage() {
             <CurrencyCard
               key={c.code}
               cur={c}
+              quote={quotes[c.code]}
               active={c.code === current.code}
               onSelect={() => select(c.code)}
             />
@@ -379,7 +336,10 @@ export function FxPage() {
         </div>
 
         <p className="hint" style={{ marginTop: 10 }}>
-          數字為 1 單位外幣可換得的台幣。漲跌為與前一交易日相比。
+          數字為 1 單位外幣可換得的台幣，漲跌為與前一交易日相比。
+          {liveAt
+            ? `卡片為市場即時中價（${fmtUpdatedAt(liveAt)}，最多延遲 10 分鐘）；下方走勢圖為每日收盤。`
+            : '目前取不到即時報價，卡片顯示的是前一交易日收盤價。'}
         </p>
       </div>
 
@@ -389,14 +349,13 @@ export function FxPage() {
         會撞成「同一層出現兩個相同 key」，React 會把兩者混在一起 ——
         實測結果是切到日圓後畫面上同時留著兩個美元換算器。
       */}
-      <Converter key={`conv-${current.code}`} cur={current} />
-
       <TrendChart key={`trend-${current.code}`} cur={current} />
 
       <div className="section glass fx-panel">
         <p className="hint" style={{ margin: 0 }}>
-          資料來源：Yahoo Finance 市場中價，每日更新兩次，<strong>非即時報價</strong>。
-          這不是銀行牌告匯率，實際結匯請以往來銀行的現金／即期買賣價為準
+          資料來源：Yahoo Finance 市場中價。幣別卡為即時報價（最多延遲 10 分鐘），
+          走勢圖為每日收盤、由排程每天更新。
+          <strong>這不是銀行牌告匯率</strong>，實際結匯請以往來銀行的現金／即期買賣價為準
           （兩者通常有 0.3%～1% 的價差）。
         </p>
       </div>

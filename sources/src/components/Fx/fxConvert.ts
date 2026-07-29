@@ -7,6 +7,9 @@
  *
  * **方向約定：`rate` 一律是「1 單位外幣可換多少台幣」**，與後端
  * supabase/functions/stock-report/fxRates.ts 的 FxPoint 一致。反向不另存一份。
+ *
+ * 0.6.7 移除換算器後，金額換算與輸入解析（twdToForeign / foreignToTwd /
+ * parseAmount / formatAmount）一併刪除 —— 沒有呼叫端的函式留著只會被誤以為還有人用。
  */
 import type { FxPoint } from '../../services/fxProxy'
 
@@ -17,50 +20,6 @@ export const FX_RANGES: readonly { id: FxRange; label: string; months: number }[
   { id: '6m', label: '6 個月', months: 6 },
   { id: '1y', label: '1 年', months: 12 },
 ]
-
-/**
- * 台幣 → 外幣。
- *
- * `rate` 為 0 / null / 非有限數時回 null 而不是 Infinity ——
- * Infinity 會一路流進 toFixed() 變成畫面上的「Infinity」，
- * 而使用者看到的是一個金額欄位，那比空白危險得多。
- */
-export function twdToForeign(twd: number | null, rate: number | null): number | null {
-  if (twd === null || !Number.isFinite(twd)) return null
-  if (rate === null || !Number.isFinite(rate) || rate === 0) return null
-  return twd / rate
-}
-
-/** 外幣 → 台幣 */
-export function foreignToTwd(foreign: number | null, rate: number | null): number | null {
-  if (foreign === null || !Number.isFinite(foreign)) return null
-  if (rate === null || !Number.isFinite(rate)) return null
-  return foreign * rate
-}
-
-/**
- * 使用者輸入的金額字串 → 數字。
- *
- * 允許千分位逗號與前後空白（使用者常直接從別處貼上「1,000」）。
- * 空字串回 null（代表「沒有輸入」，不是 0）—— 這個分別很重要：
- * 回 0 會讓另一邊的欄位跳出一個 0，看起來像換算結果。
- */
-export function parseAmount(raw: string): number | null {
-  const s = String(raw ?? '').trim().replace(/,/g, '')
-  if (s === '') return null
-  if (!/^-?\d*\.?\d*$/.test(s)) return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
-}
-
-/** 金額顯示：千分位 + 指定小數位。null 回空字串（讓輸入框保持空的，不填 0） */
-export function formatAmount(v: number | null, decimals = 2): string {
-  if (v === null || !Number.isFinite(v)) return ''
-  return v.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
-}
 
 /** 匯率顯示：各幣別量級差很大，小數位數由幣別自帶（KRW 需要 5 位） */
 export function formatRate(v: number | null, decimals: number): string {

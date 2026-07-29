@@ -2250,34 +2250,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
   outline-offset: 2px;
 }
 
-/* 換算器：兩個等寬輸入框中間夾一個交換圖示 */
-.fx-convert {
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-}
-
-.fx-convert .field {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 金額右對齊：兩邊數字的位數對得起來才看得出量級 */
-.fx-convert .field input {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 18px;
-}
-
-.fx-swap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-secondary);
-  /* 與輸入框底線對齊（label 高度 + 輸入框高度的一半） */
-  padding-bottom: 12px;
-}
-
 /*
  * 走勢圖：兩個方向並排（0.6.7）。
  * 桌機兩欄；≤900px 疊成一欄 —— 兩張圖擠在半個手機寬會完全看不出趨勢。
