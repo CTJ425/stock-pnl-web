@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 09:55:00 Asia/Taipei
+- Timestamp: 2026-07-29 13:40:00 Asia/Taipei
 
 ---
 
@@ -25,8 +25,8 @@
 - 依使用者指示直接進 `main`，跳過測試區先行驗證這一關（純前端版面異動）。
 - 純前端異動，**Supabase 兩區都不必動**。
 
-### Task 34: 新增「外幣匯率」頂層頁面 (0.6.7-dev.1)
-- **Status**: 🟡 **測試區已部署驗證；正式區與 `main` 未動**
+### Task 34: 新增「外幣匯率」頂層頁面 (0.6.7)
+- **Status**: ✅ **0.6.7 定版，兩區皆已上線並驗證**
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 09:55:00 Asia/Taipei
 - 以台幣為本位，8 種外幣（USD/JPY/EUR/CNY/HKD/GBP/AUD/KRW）：
@@ -54,12 +54,12 @@
   - [x] 建 cron job `fx-daily`（`0 3,9 * * *`），身分檢查與寫入同一個 `DO $$` 區塊
   - [x] 觸發 `sync-fx` → `synced:true, count:8`；冪等第二次回 `synced:false`
   - [x] `functions download` 逐檔 diff 10/10 一致；前端讀真實 Storage 實測通過
-- **正式區待辦（需使用者決定是否上線）**：
-  - [ ] 依 §12.3 去尾綴定版 `0.6.7`、README 版本紀錄定稿
-  - [ ] 併入 `main` 並 push（**會立刻觸發 GitHub Pages，沒有反悔餘地**）
-  - [ ] 部署正式區 `stock-report --no-verify-jwt --project-ref kxnxadaghidwumqsqneu`
-  - [ ] 正式區建 cron `fx-daily` ＋ 觸發一次 `sync-fx` ＋ `functions download` 覆驗
-  - [ ] 合併後 `git push origin main:dev` 讓兩分支一致
+- **正式區（2026-07-29 完成）**：
+  - [x] 依 §12.3 去尾綴定版 `0.6.7`、README 版本紀錄定稿
+  - [x] 併入 `main` 並 push（GitHub Pages 已部署）
+  - [x] 部署正式區 `stock-report --no-verify-jwt` 與 `stock-price`
+  - [x] 正式區建 cron `fx-daily` ＋ 觸發 `sync-fx` ＋ `functions download` 覆驗
+  - [x] 合併後 `git push origin main:dev` 讓兩分支一致
 - **版號**：原訂 0.6.6，但 Task 33 已用掉並定版上線，故改為 **0.6.7**；
   本功能已 rebase 到底部導覽列（Task 33）之上。
 - **手機版型未做**：使用者決定等桌機功能驗證無誤後再處理。
