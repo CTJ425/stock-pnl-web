@@ -7,6 +7,55 @@
 
 ---
 
+## 📅 Log: 2026-07-29 14:20:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.7 定版、併入 `main`、正式區部署完成
+- **Status**: COMPLETED（**兩區皆已上線並驗證**）
+
+### 上線順序（刻意的）
+
+**先部署正式區後端，再 push `main`。** 反過來的話 Pages 一上線就會有使用者
+看到空的匯率頁 —— 前端已經在呼叫、後端還沒有資料。
+
+### 正式區（`kxnxadaghidwumqsqneu`）
+
+| 項目 | 結果 |
+| ---- | ---- |
+| `stock-report` | v15，覆驗 `verify_jwt=false` ✅ |
+| `stock-price` | v12，覆驗 `verify_jwt=true` ✅ |
+| `sync-fx` | `{ok:true, synced:true, count:8, durationMs:2015}` |
+| 未帶 secret | HTTP 401 ✅ |
+| cron `fx-daily` | `0 3,9 * * *` 已建；直接 EXECUTE 其 command 經 pg_net 得 **200** |
+| `fx/twd.json` | 8 幣別 × 259 點，2025-07-29 ~ 2026-07-28 |
+| 稽核 | `functions download` 逐檔 diff **12/12 與 `main` 一致** |
+
+### 建 cron 時身分檢查實際攔下了一次寫入
+
+第一次送出時 `RAISE EXCEPTION 身分檢查失敗（實際看到 <NULL>）` —— 原因是
+Python f-string 的跳脫寫成 `\\.`，進到 SQL 變成 `\\.`（比對「反斜線」而非小數點），
+regex 匹配不到、`seen` 為 NULL。**那道防呆正確地拒絕在無法確認身分時寫入。**
+修正跳脫為 `\.` 後才成功。這正是 §13.3 那條規則存在的價值 ——
+若當初只寫「先查一次再寫一次」，這種情況會直接寫進去。
+
+### GitHub Pages
+
+`git push origin main` → workflow `30427677872` **success（36 秒）**。
+線上 bundle 覆驗：版本字串 `0.6.7`、含「外幣匯率」分頁、含
+`action:\`fx\`` 的即時報價呼叫（**注意 minifier 把字串轉成反引號**，
+用 `action:"fx"` 去 grep 會誤判成沒有）。
+
+合併後 `git push origin main:dev` 快轉，兩分支同為 `2fe8c73`。
+
+### 這一版實際包含
+
+- 外幣匯率頁（8 幣別、即時卡片 + 雙向走勢圖、3 天過期警示）
+- BUG-005：個股切換下拉的樣式退化（0.6.6 誤刪 CSS）
+- `fmtAxisNumber` 對小於 1 的值標成「0」
+- 依使用者指示移除換算器、放棄央行 API 校驗
+
+---
+
 ## 📅 Log: 2026-07-29 10:15:00 Asia/Taipei
 
 - **Agent**: Claude
