@@ -69,6 +69,37 @@ export function formatRate(v: number | null, decimals: number): string {
 }
 
 /**
+ * 依數值量級決定小數位（取約 5 位有效數字），夾在 2～6 位之間。
+ *
+ * 用在**反向**那張圖：幣別自帶的 `decimals` 是為正向量級挑的，倒過來就不合用了。
+ * 1 TWD 可換的外幣量級跨了四個數量級：
+ *   美元 0.030958（要 6 位）／日圓 5.0710（4 位）／韓元 45.366（3 位）
+ * 一律沿用正向的位數，不是全變 0.031 就是變 5.0710000。
+ */
+export function autoDecimals(v: number | null): number {
+  if (v === null || !Number.isFinite(v) || v === 0) return 2
+  const mag = Math.floor(Math.log10(Math.abs(v)))
+  return Math.min(Math.max(4 - mag, 2), 6)
+}
+
+/**
+ * 取倒數序列：「1 外幣 = N 台幣」→「1 台幣 = N 外幣」。
+ *
+ * 注意這**不是把圖上下翻轉**：1/x 是非線性的，兩張圖的形狀不會互為鏡像，
+ * 高低點的日期會對調（正向的最高點就是反向的最低點）。這是數學事實，不是 bug。
+ *
+ * 0 一律跳過（不可能，但除以 0 會產生 Infinity 汙染整個值域計算）。
+ */
+export function invertPoints(points: FxPoint[]): FxPoint[] {
+  const out: FxPoint[] = []
+  for (const [date, rate] of points) {
+    if (!Number.isFinite(rate) || rate === 0) continue
+    out.push([date, 1 / rate])
+  }
+  return out
+}
+
+/**
  * 取最近 N 個月的資料。
  *
  * **基準點是序列的最後一天，不是今天。** 資料若停在幾天前（排程掛掉、假日），

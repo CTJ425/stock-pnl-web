@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   FX_RANGES,
+  autoDecimals,
   changePct,
   fmtChartLabel,
+  invertPoints,
   formatAmount,
   formatRate,
   foreignToTwd,
@@ -91,6 +93,77 @@ describe('formatAmount / formatRate', () => {
     expect(formatRate(0.022289, 3)).toBe('0.022')
     expect(formatRate(32.387001, 3)).toBe('32.387')
     expect(formatRate(null, 3)).toBe('—')
+  })
+})
+
+describe('autoDecimals', () => {
+  it('依量級給約 5 位有效數字', () => {
+    expect(autoDecimals(0.030958)).toBe(6) // 1 TWD 換得的美元
+    expect(autoDecimals(5.071)).toBe(4) // 1 TWD 換得的日圓
+    expect(autoDecimals(45.366)).toBe(3) // 1 TWD 換得的韓元
+    expect(autoDecimals(0.20936)).toBe(5) // 1 TWD 換得的人民幣
+  })
+
+  it('夾在 2～6 位之間，不讓 toFixed 拋 RangeError', () => {
+    expect(autoDecimals(1e9)).toBe(2)
+    expect(autoDecimals(1e-9)).toBe(6)
+  })
+
+  it('缺值或 0 回預設 2 位', () => {
+    expect(autoDecimals(null)).toBe(2)
+    expect(autoDecimals(0)).toBe(2)
+    expect(autoDecimals(NaN)).toBe(2)
+  })
+})
+
+describe('invertPoints', () => {
+  const points: FxPoint[] = [
+    ['2026-07-27', 0.197462],
+    ['2026-07-28', 0.197229],
+  ]
+
+  it('把「1 外幣 = N 台幣」轉成「1 台幣 = N 外幣」', () => {
+    const inv = invertPoints(points)
+    expect(inv[0][0]).toBe('2026-07-27')
+    expect(inv[0][1]).toBeCloseTo(5.064266, 5)
+    expect(inv[1][1]).toBeCloseTo(5.070248, 5)
+  })
+
+  it('日期原封不動、順序不變', () => {
+    expect(invertPoints(points).map((p) => p[0])).toEqual(points.map((p) => p[0]))
+  })
+
+  it('高低點日期會對調 —— 正向的最高就是反向的最低', () => {
+    const src: FxPoint[] = [
+      ['2026-05-01', 0.2],
+      ['2026-06-01', 0.2137], // 正向最高
+      ['2026-07-01', 0.1953], // 正向最低
+    ]
+    const fwd = rangeStats(src)!
+    const inv = rangeStats(invertPoints(src))!
+    expect(fwd.highDate).toBe('2026-06-01')
+    expect(inv.lowDate).toBe('2026-06-01')
+    expect(fwd.lowDate).toBe('2026-07-01')
+    expect(inv.highDate).toBe('2026-07-01')
+  })
+
+  it('跳過 0 與非有限數，不讓 Infinity 進入序列', () => {
+    const bad: FxPoint[] = [
+      ['2026-07-27', 0],
+      ['2026-07-28', 0.197229],
+    ]
+    const inv = invertPoints(bad)
+    expect(inv).toHaveLength(1)
+    expect(inv.every((p) => Number.isFinite(p[1]))).toBe(true)
+  })
+
+  it('倒兩次回到原值', () => {
+    const twice = invertPoints(invertPoints(points))
+    expect(twice[0][1]).toBeCloseTo(points[0][1], 10)
+  })
+
+  it('空序列回空陣列', () => {
+    expect(invertPoints([])).toEqual([])
   })
 })
 

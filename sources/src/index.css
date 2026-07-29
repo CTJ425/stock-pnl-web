@@ -2261,3 +2261,35 @@ input[type='date']::-webkit-calendar-picker-indicator {
   /* 與輸入框底線對齊（label 高度 + 輸入框高度的一半） */
   padding-bottom: 12px;
 }
+
+/*
+ * 走勢圖：兩個方向並排（0.6.7）。
+ * 桌機兩欄；≤900px 疊成一欄 —— 兩張圖擠在半個手機寬會完全看不出趨勢。
+ */
+.fx-chart-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .fx-chart-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fx-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.fx-chart-head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}

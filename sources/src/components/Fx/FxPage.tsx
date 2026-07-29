@@ -24,13 +24,15 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRightLeft, RefreshCw } from 'lucide-react'
-import { fetchFx, type FxCurrency, type FxData } from '../../services/fxProxy'
+import { fetchFx, type FxCurrency, type FxData, type FxPoint } from '../../services/fxProxy'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import {
   FX_RANGES,
+  autoDecimals,
   changePct,
   fmtChartLabel,
+  invertPoints,
   formatAmount,
   formatRate,
   foreignToTwd,
@@ -179,23 +181,79 @@ function Converter({ cur }: { cur: FxCurrency }) {
   )
 }
 
+/**
+ * 單一方向的走勢圖。兩張圖共用同一組時間範圍，故 range 由父元件持有。
+ *
+ * `decimals` 由呼叫端決定：正向用幣別自帶的位數，反向用 `autoDecimals()`
+ * 依量級現算（1 台幣可換的外幣從 0.03 到 45 都有）。
+ */
+function DirectionChart({
+  title,
+  caption,
+  points,
+  decimals,
+  withYear,
+  ariaLabel,
+}: {
+  title: string
+  caption: string
+  points: FxPoint[]
+  decimals: number
+  withYear: boolean
+  ariaLabel: string
+}) {
+  const stats = useMemo(() => rangeStats(points), [points])
+  const linePoints = points.map((p) => ({ label: fmtChartLabel(p[0], withYear), value: p[1] }))
+
+  return (
+    <div className="fx-chart">
+      <div className="fx-chart-head">
+        <h4>{title}</h4>
+        <span className="source-tag">{caption}</span>
+      </div>
+      <LineSeriesChart
+        points={linePoints}
+        labelIndices={labelIndicesFor(points.length)}
+        formatValue={(v) => formatRate(v, decimals)}
+        ariaLabel={ariaLabel}
+      />
+      {stats && (
+        <p className="hint" style={{ marginTop: 6 }}>
+          高 {formatRate(stats.high, decimals)}（{stats.highDate}）　低{' '}
+          {formatRate(stats.low, decimals)}（{stats.lowDate}）　區間 {pctText(stats.changePct)}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 走勢圖：同一段期間、兩個方向並排。
+ *
+ * **為什麼要兩張而不是一張**：使用者的問題有兩種問法 ——
+ * 「我這 1000 台幣能換多少日圓」看的是台幣→日圓；
+ * 「這件日本商品 3000 日圓等於多少台幣」看的是日圓→台幣。
+ * 兩者互為倒數，但腦內換算很麻煩，尤其日圓那種 0.1972 的量級。
+ *
+ * ⚠️ 兩張圖**不是彼此的鏡像**：1/x 是非線性的，曲線形狀不同，
+ * 而且高低點的日期會對調（正向的最高點＝反向的最低點）。這是對的，不是 bug。
+ */
 function TrendChart({ cur }: { cur: FxCurrency }) {
   const [range, setRange] = useState<FxRange>('3m')
 
   const points = useMemo(() => sliceByRange(cur.points, range), [cur.points, range])
-  const stats = useMemo(() => rangeStats(points), [points])
-
-  const linePoints = points.map((p) => ({
-    label: fmtChartLabel(p[0], range === '1y'),
-    value: p[1],
-  }))
-  const labelIndices = labelIndicesFor(points.length)
+  const inverted = useMemo(() => invertPoints(points), [points])
+  // 反向的量級與正向差很多，位數依中位量級現算一次就好（同一張圖內要一致，不可逐點算）
+  const invDecimals = useMemo(
+    () => autoDecimals(inverted.length ? inverted[inverted.length - 1][1] : null),
+    [inverted],
+  )
 
   return (
     <div className="section glass fx-panel">
       <div className="rpt-section-head">
         <h3 className="head-tight">{cur.name}走勢</h3>
-        <span className="source-tag">1 {cur.code} 可換的台幣</span>
+        <span className="source-tag">兩個方向互為倒數，高低點日期會對調</span>
       </div>
 
       <div className="subtabs" role="tablist" aria-label="時間範圍">
@@ -216,21 +274,24 @@ function TrendChart({ cur }: { cur: FxCurrency }) {
       {points.length === 0 ? (
         <p className="hint">這個區間沒有資料。</p>
       ) : (
-        <>
-          <LineSeriesChart
-            points={linePoints}
-            labelIndices={labelIndices}
-            formatValue={(v) => formatRate(v, cur.decimals)}
-            ariaLabel={`${cur.name}對台幣匯率走勢`}
+        <div className="fx-chart-pair">
+          <DirectionChart
+            title={`新臺幣 / ${cur.name}`}
+            caption={`1 TWD 可換的${cur.name}`}
+            points={inverted}
+            decimals={invDecimals}
+            withYear={range === '1y'}
+            ariaLabel={`新臺幣對${cur.name}匯率走勢，數值為 1 新臺幣可換得的${cur.name}`}
           />
-          {stats && (
-            <p className="hint" style={{ marginTop: 8 }}>
-              區間高 {formatRate(stats.high, cur.decimals)}（{stats.highDate}）　 區間低{' '}
-              {formatRate(stats.low, cur.decimals)}（{stats.lowDate}）　 區間{' '}
-              {pctText(stats.changePct)}
-            </p>
-          )}
-        </>
+          <DirectionChart
+            title={`${cur.name} / 新臺幣`}
+            caption={`1 ${cur.code} 可換的台幣`}
+            points={points}
+            decimals={cur.decimals}
+            withYear={range === '1y'}
+            ariaLabel={`${cur.name}對新臺幣匯率走勢，數值為 1 ${cur.code} 可換得的新臺幣`}
+          />
+        </div>
       )}
     </div>
   )

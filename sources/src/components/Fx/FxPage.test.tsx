@@ -172,8 +172,58 @@ describe('FxPage', () => {
     expect(count()).toBeGreaterThan(threeMonths)
 
     fireEvent.click(screen.getByRole('tab', { name: '6 個月' }))
-    expect(count()).toBeLessThan(300)
+    expect(count()).toBeLessThan(700)
     expect(count()).toBeGreaterThan(threeMonths)
+  })
+
+  it('走勢圖有兩個方向，標題各自標明是哪一邊', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('美元走勢')
+    fireEvent.click(screen.getByRole('button', { name: /日圓 JPY/ }))
+
+    expect(screen.getByText('新臺幣 / 日圓')).toBeTruthy()
+    expect(screen.getByText('日圓 / 新臺幣')).toBeTruthy()
+    expect(screen.getByText('1 TWD 可換的日圓')).toBeTruthy()
+    expect(screen.getByText('1 JPY 可換的台幣')).toBeTruthy()
+  })
+
+  it('兩個方向各畫一張圖（同區間點數相同）', async () => {
+    fetchFx.mockResolvedValue(fx)
+    const { container } = render(<FxPage />)
+    await screen.findByText('美元走勢')
+    // 走勢區塊內兩張 SVG
+    const charts = container.querySelectorAll('.fx-chart svg')
+    expect(charts).toHaveLength(2)
+  })
+
+  it('反向的數值是正向的倒數，且用適合自己量級的小數位', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('美元走勢')
+    fireEvent.click(screen.getByRole('button', { name: /日圓 JPY/ }))
+
+    const texts = screen.getAllByText(/^高 /).map((el) => el.textContent ?? '')
+    expect(texts).toHaveLength(2)
+    // 反向（新臺幣/日圓）量級約 5，正向（日圓/新臺幣）量級約 0.2
+    const inv = texts.find((t) => /高 [45]\./.test(t))
+    const fwd = texts.find((t) => /高 0\./.test(t))
+    expect(inv).toBeTruthy()
+    expect(fwd).toBeTruthy()
+    // 兩邊都不該出現 Infinity 或一整排 0
+    expect(texts.join()).not.toContain('Infinity')
+    expect(texts.join()).not.toMatch(/高 0（/)
+  })
+
+  it('高低點日期在兩張圖上對調（1/x 的必然結果，不是 bug）', async () => {
+    fetchFx.mockResolvedValue(fx)
+    render(<FxPage />)
+    await screen.findByText('美元走勢')
+    const [invText, fwdText] = screen.getAllByText(/^高 /).map((el) => el.textContent ?? '')
+    const dateOf = (s: string, kind: '高' | '低') =>
+      new RegExp(`${kind} [\\d.]+（(\\d{4}-\\d{2}-\\d{2})）`).exec(s)?.[1]
+    expect(dateOf(invText, '高')).toBe(dateOf(fwdText, '低'))
+    expect(dateOf(invText, '低')).toBe(dateOf(fwdText, '高'))
   })
 
   it('資料在 3 天內不顯示過期警示', async () => {
