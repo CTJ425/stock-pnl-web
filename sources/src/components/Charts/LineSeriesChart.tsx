@@ -19,7 +19,7 @@ interface LineSeriesChartProps {
   color?: string
   /**
    * 只標這幾格的 X 軸標籤。融資餘額走勢只有 7 天、全部標得下，
-   * 但匯率一年有 260 個點，不抽稀會糊成一團（0.6.6 新增，沿用 MultiLineChart 的同名 prop）。
+   * 但匯率一年有 260 個點，不抽稀會糊成一團（0.6.7 新增，沿用 MultiLineChart 的同名 prop）。
    */
   labelIndices?: number[]
   formatValue: (v: number) => string

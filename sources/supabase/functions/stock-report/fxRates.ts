@@ -1,7 +1,7 @@
 /**
  * 台幣對主要外幣的匯率抓取與解析（Yahoo Finance chart 端點）。
  *
- * **為什麼不是台灣銀行牌告匯率**（0.6.6 規劃時實測，2026-07-29）：
+ * **為什麼不是台灣銀行牌告匯率**（0.6.7 規劃時實測，2026-07-29）：
  * `https://rate.bot.com.tw/xrt/flcsv/0/day` 與
  * `https://rate.bot.com.tw/xrt/flcsv/0/{YYYY-MM}/{幣別}` 兩個 CSV 端點
  * 都回 `<title>Challenge Validation</title>` 的 JS proof-of-work 人機驗證頁，

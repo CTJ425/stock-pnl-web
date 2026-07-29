@@ -90,7 +90,7 @@ describe('App（本機模式煙霧測試）', () => {
     // 總經同理：fetchMacro 在本機模式永遠回 null，而空狀態寫「排程完成後會補上」
     // ——那在本機模式是假的，留著只會讓使用者等一個不會來的東西
     expect(screen.queryByRole('button', { name: /總體經濟/ })).toBeNull()
-    // 匯率同理（0.6.6）：fetchFx 走同一個 reports bucket
+    // 匯率同理（0.6.7）：fetchFx 走同一個 reports bucket
     expect(screen.queryByRole('button', { name: /外幣匯率/ })).toBeNull()
     // 其餘三個分頁不受影響
     expect(screen.getByRole('button', { name: /庫存總覽/ })).toBeTruthy()

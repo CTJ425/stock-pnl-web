@@ -20,7 +20,7 @@
  *
  * 方向陷阱：`rate` 一律是「1 單位外幣 = N 台幣」。反向一律現算，不另存。
  *
- * 手機版型不在 0.6.6 範圍（使用者決定等桌機功能驗證後再做）。
+ * 手機版型不在 0.6.7 範圍（使用者決定等桌機功能驗證後再做）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRightLeft, RefreshCw } from 'lucide-react'

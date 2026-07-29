@@ -10,7 +10,7 @@
 ## 📅 Log: 2026-07-29 10:15:00 Asia/Taipei
 
 - **Agent**: Claude
-- **Action**: 0.6.6-dev.1 測試區部署與驗證
+- **Action**: 0.6.7-dev.1 測試區部署與驗證
 - **Status**: COMPLETED（**測試區已上線並驗證；正式區未動**）
 
 使用者授權處理 Supabase 設定並提供兩區的 `CRON_SECRET`。依 §13.1 只做測試區。
@@ -44,6 +44,34 @@ CLI 原本 `linked` 在**正式區**（`supabase projects list` 顯示 `kxnxadag
 - **前端實測**：Playwright 讀測試區真實 Storage（不再用 fixture），
   8 張卡、雙向換算、3/6/12 個月 = 67/131/260 點、六個分頁在 320～1280px 高度全 36px、無 JS 錯誤。
 
+### 重整到底部導覽列之上（rebase，2026-07-29 10:40）
+
+推 `dev` 時才發現遠端已經有另一批 0.6.6 工作（Task 33 手機底部導覽列），
+而且**已經定版並 push 到 `main`**（GitHub Pages 已上線）。兩件事撞在一起：
+
+1. **版號撞號**：雙方都用了 0.6.6-dev.1。0.6.6 已被 Task 33 定版佔用，
+   本功能改為 **0.6.7-dev.1**。
+2. **改到同一塊**：Task 33 把主導覽改寫成 `TabNav`（≤720px 渲染成固定底部列）、
+   `index.css` 動了 183 行。已 rebase 到 `origin/dev` 之上並解完衝突。
+
+**刪掉了自己原本加的 `@media (max-width: 360px) { .tab svg { display:none } }`。**
+那是為橫式分頁列算的（圖示＋標籤擠在一行）；底部列改成直式之後算式完全不適用，
+留著反而會把底部列的圖示弄不見。實測六格在底部列的表現：
+
+| 螢幕 | 每格寬 | 格高 | 標籤截斷 |
+| ---- | ---- | ---- | ---- |
+| 720px | 116.3px | 45px | 0 |
+| 393px | 61.8px | 45px | 0 |
+| 375px | 58.8px | 45px | 0 |
+| 320px | 49.7px | 45px | 0 |
+
+到 320px 都寬鬆，不需要任何補救。桌機頁首橫列六格在 1280／1020／800px
+高度分別為 36／29／29px，皆未折行。版本徽章與頁尾捲到底後都沒被底部列蓋住
+（不捲就量會得到假的重疊警告 —— 徽章在視窗外）。
+
+rebase 後重跑：553 tests 全綠、`npm run build` 綠、lint 無新增警告；
+測試區重新部署並再次 `functions download` 逐檔 diff，10/10 一致。
+
 ### 下一步
 
 正式區與 `main` 尚未動，等使用者決定是否上線（push `main` 會立刻觸發 GitHub Pages）。
@@ -53,7 +81,7 @@ CLI 原本 `linked` 在**正式區**（`supabase projects list` 顯示 `kxnxadag
 ## 📅 Log: 2026-07-29 09:55:00 Asia/Taipei
 
 - **Agent**: Claude
-- **Action**: 新增「外幣匯率」頂層頁面 (0.6.6-dev.1)
+- **Action**: 新增「外幣匯率」頂層頁面 (0.6.7-dev.1)
 - **Status**: IN PROGRESS（程式碼完成、`dev` 分支已提交；**兩區皆未部署**）
 
 ### 做了什麼

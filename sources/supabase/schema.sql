@@ -536,7 +536,7 @@ SELECT cron.schedule(
   $$
 );
 
--- 10. 台幣匯率的獨立排程 (0.6.6)
+-- 10. 台幣匯率的獨立排程 (0.6.7)
 --
 --    **為什麼又是一支獨立 cron 而不是掛進 §6c 的盤後批次**：理由與 §9 完全相同 ——
 --    §6c 是台股作息（*/15 8-15 * * 1-5），而匯率是 24 小時的全球市場、週末也在動；
@@ -550,7 +550,7 @@ SELECT cron.schedule(
 --        一次 Storage 讀取、不發任何對外請求。與 §9 同一套設計。
 --      - 刻意避開 §9 macro-daily 的 13/15 時，兩支排程不搶同一個時段。
 --
---    **資料來源是 Yahoo Finance，不是台灣銀行牌告匯率**（0.6.6 規劃時實測）：
+--    **資料來源是 Yahoo Finance，不是台灣銀行牌告匯率**（0.6.7 規劃時實測）：
 --    台銀的 flcsv 端點已被 JS proof-of-work 人機驗證擋住（回 Challenge Validation
 --    而非 CSV），換 UA 無效、Edge Function 過不了。代價是只有市場中價、
 --    沒有現金/即期買賣價，畫面上必須標示清楚。詳見 functions/stock-report/fxRates.ts。
