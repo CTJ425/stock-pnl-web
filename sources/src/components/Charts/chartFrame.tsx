@@ -11,6 +11,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CHART_COLORS } from './chartColors'
+import { clampTipCenter } from './chartPath'
 import { domainTicks, fmtAxisNumber, scaleY, tickStep, type Domain } from './chartScale'
 
 const PAD = { left: 58, right: 12, top: 10, bottom: 24 }
@@ -62,6 +63,20 @@ interface ChartFrameProps {
   ariaLabel: string
   /** 回傳該點的 tooltip 文字；回 null 表示該點不顯示 */
   tooltipFor?: (index: number) => string | null
+  /**
+   * hover 時畫一條垂直虛線貫穿繪圖區。
+   *
+   * **只有折線圖啟用**（0.6.8）。K 線與長條圖的標記本身就佔滿整欄、hover 已用減淡表示，
+   * 再加一條線只是噪音；而且它們有既有的 DOM 斷言，多一個元素就會踩到。
+   */
+  crosshair?: boolean
+  /**
+   * 回傳該點的**數值**，讓 tooltip 貼著資料點上下移動（Google Finance 那種）。
+   *
+   * 未給時 tooltip 維持釘在繪圖區頂端 —— 長條圖與 K 線沒有單一個「該點的 y」
+   * （長條有高低兩端、K 線有四個價），硬挑一個只會讓提示框停在沒有意義的位置。
+   */
+  tooltipAnchor?: (index: number) => number | null
   children: (geo: PlotGeometry) => ReactNode
 }
 
@@ -72,6 +87,8 @@ export function ChartFrame({
   labelIndices,
   ariaLabel,
   tooltipFor,
+  crosshair = false,
+  tooltipAnchor,
   children,
 }: ChartFrameProps) {
   const [hover, setHover] = useState<number | null>(null)
@@ -96,9 +113,19 @@ export function ChartFrame({
   const step = tickStep(domain)
   const shownLabels = labelIndices ?? labels.map((_, i) => i)
   const tipText = hover === null ? null : (tooltipFor?.(hover) ?? null)
-  // 以百分比定位 tooltip，免在 React state 裡再存一份像素座標
-  const tipLeft = hover === null ? 0 : ((PAD.left + geo.bandCenter(hover)) / viewW) * 100
-  const tipTop = (PAD.top / height) * 100
+  // 以百分比定位 tooltip，免在 React state 裡再存一份像素座標。
+  // 寬度由字元數估：中英數混排約 8px/字，加上左右 padding —— 只用來 clamp，不求精確
+  const tipCenter =
+    hover === null
+      ? 0
+      : clampTipCenter(PAD.left + geo.bandCenter(hover), (tipText?.length ?? 0) * 8 + 18, viewW)
+  const tipLeft = (tipCenter / viewW) * 100
+  // 有 tooltipAnchor 且該點有值時貼著資料點，否則沿用「釘在繪圖區頂端」
+  const anchorValue = hover === null ? null : (tooltipAnchor?.(hover) ?? null)
+  const tipTop =
+    anchorValue === null
+      ? (PAD.top / height) * 100
+      : ((PAD.top + geo.y(anchorValue)) / height) * 100
 
   return (
     <div className="chart-wrap" ref={wrapRef}>
@@ -134,6 +161,19 @@ export function ChartFrame({
               </text>
             </g>
           ))}
+
+          {/* crosshair 畫在標記之前，才會被折線與面積蓋在下面（同 Google Finance） */}
+          {crosshair && hover !== null && (
+            <line
+              x1={geo.bandCenter(hover)}
+              x2={geo.bandCenter(hover)}
+              y1={0}
+              y2={innerH}
+              stroke={CHART_COLORS.axis}
+              strokeWidth={1}
+              strokeDasharray="3 3"
+            />
+          )}
 
           {children(geo)}
 

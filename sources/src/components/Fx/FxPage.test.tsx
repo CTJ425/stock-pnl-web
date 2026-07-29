@@ -129,7 +129,16 @@ describe('FxPage', () => {
     fetchFx.mockResolvedValue(fx)
     const { container } = render(<FxPage />)
     await screen.findByText('美元走勢')
-    const count = () => container.querySelectorAll('svg circle').length
+    /*
+      數折線本身的座標數，不要數圓點。
+      0.6.8 起超過 20 點就只畫 hover 那一顆圓點（260 顆會把線糊成毛毛蟲），
+      圓點數量已經不再等於資料點數 —— 而 polyline 的 points 屬性本來就是更直接的斷言。
+      取第一張圖（新臺幣/外幣）即可，兩張同區間點數必然相同。
+    */
+    const count = () =>
+      (container.querySelector('.fx-chart polyline')?.getAttribute('points') ?? '')
+        .split(' ')
+        .filter(Boolean).length
 
     const threeMonths = count()
     fireEvent.click(screen.getByRole('tab', { name: '1 年' }))

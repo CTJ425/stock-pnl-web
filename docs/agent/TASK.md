@@ -8,6 +8,24 @@
 
 ## 📋 Active Tasks
 
+### Task 35: 折線圖改成 Google Finance 風格 (0.6.8-dev.1)
+- **Status**: 🟡 **程式碼完成、本機驗證通過；兩區皆未部署、未併入 `main`**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 14:45:00 Asia/Taipei
+- 使用者提供 Google Finance 匯率圖截圖要求比照。四項差異：漸層面積、垂直虛線、
+  提示框貼著資料點、只有 hover 那點有圓。
+- **範圍（使用者選定）**：所有折線圖（匯率 2 張 + 籌碼頁 2 張）；
+  K 線／長條／KD 不動；時間區間維持 3/6/12 個月。
+- **改動**：`chartPath.ts`（抽出共用 `segments()`、新增 `areaSegments` 與 `clampTipCenter`）、
+  `chartFrame.tsx`（`crosshair` / `tooltipAnchor` 兩個可選 prop，預設關閉）、
+  `LineSeriesChart.tsx`（面積、自動圓點）。新增 `chartPath.test.ts`。
+- **PDF 硬性關卡已通過**：實測 html2canvas 正確渲染 `<linearGradient>`，
+  同一次擷取多個實例 id 不衝突、文字未變巨大黑字。**不需退回平塗填充**。
+- **跟著改的既有測試**：`FxPage.test.tsx` 原本數 `svg circle` 驗點數，
+  改成解析 polyline 的 `points` 屬性（圓點已不再等於資料點數）。
+- 584 tests 綠、build 綠、lint 無新增警告。
+- **待辦**：測試區驗證 → 併入 `main` 定版 0.6.8。純前端異動，**Supabase 兩區都不必動**。
+
 ### Task 33: 手機改用底部導覽列 (0.6.6-dev.1)
 - **Status**: ✅ 已 commit（`dev` = 0.6.6-dev.1、`main` = 0.6.6 定版）；**尚未 push、尚未部署**
 - **Agent**: Claude
