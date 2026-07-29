@@ -2,16 +2,20 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 16:40:00 Asia/Taipei
+- Timestamp: 2026-07-29 17:30:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
 
-### Task 39: AI 失敗訊息補上診斷 ＋ 支援推理型模型 (0.6.9-dev.3 / dev.4)
-- **Status**: 🟡 **程式碼完成；未併入 `main`**
-- **成因已確認**：使用者重試後新訊息指出是**推理型模型把答案放在 `reasoning_content`**。
-  dev.4 據此處理：先嘗試關閉思考 → 剝 `<think>` → 最後才退到思考內容並加警語。
+### Task 39: AI 在本地模型上的三個問題 (0.6.9)
+- **Status**: ✅ **隨 0.6.9 上線（純前端，Supabase 兩區未動）**
+- 三個問題其實同源：**Google 那條路徑一路踩坑一路補，OpenAI 相容那條的對應處理從來沒跟上**。
+  1. `content` 空時不論成因都拋同一句（Google 早就分了 MAX_TOKENS / SAFETY / 結構不符）→ dev.3 補診斷
+  2. 沒有關閉思考的設定（Google 有 `thinkingBudget: 0`）→ dev.4 補上，並加剝 `<think>` 與加警語的退路
+  3. 沒送輸出上限（Google 有 `maxOutputTokens: 8192`）→ dev.5 補 `OPENAI_MAX_TOKENS`
+- ⚠️ **dev.5 的截斷修法尚未在使用者的端點上實測確認**（前兩個已由使用者回報確認生效）。
+  若仍截斷，代表是端點自身的硬上限（例如 Ollama 的 `num_ctx`），需在端點側調整。
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 17:15:00 Asia/Taipei
 - 使用者回報「分析失敗：OpenAI 相容 API 回傳結構未包含有效的 choices[0].message.content」。
@@ -24,7 +28,7 @@
   （deepseek-r1 / qwq / gpt-oss），其次是輸出額度。
   也不排除 0.6.9-dev.2 加長的 system prompt 讓思考變長、把額度用完 —— 新訊息會分得出來。
 
-### Task 38: AI 提示詞加入使用者的分批進出框架 (0.6.9-dev.2)
+### Task 38: AI 提示詞加入使用者的分批進出框架 (0.6.9)
 - **Status**: 🟡 **程式碼完成；未併入 `main`**
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 17:35:00 Asia/Taipei
@@ -36,7 +40,7 @@
   連續下跌所需資金指數成長），不與其他三項並列成等價選項 —— 有測試鎖死。
 - 599 tests 綠、build 綠、lint 無新增警告。純前端，Supabase 兩區不必動。
 
-### Task 37: 修手機上個股切換選單被擠壓 (0.6.9-dev.1)
+### Task 37: 修手機上個股切換選單被擠壓 (0.6.9)
 - **Status**: 🟡 **程式碼完成、實測通過；未併入 `main`**
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 17:10:00 Asia/Taipei
