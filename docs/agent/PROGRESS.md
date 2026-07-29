@@ -1,9 +1,52 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.6-dev.1 新增外幣匯率頁（程式碼完成，兩區未部署）
-- Status: **IN PROGRESS —— 本機驗證通過，待部署測試區**
-- Timestamp: 2026-07-29 09:55:00 Asia/Taipei
+- Action: 0.6.6-dev.1 外幣匯率頁：測試區已部署驗證
+- Status: **測試區完成；正式區與 `main` 未動**
+- Timestamp: 2026-07-29 10:15:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-29 10:15:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 0.6.6-dev.1 測試區部署與驗證
+- **Status**: COMPLETED（**測試區已上線並驗證；正式區未動**）
+
+使用者授權處理 Supabase 設定並提供兩區的 `CRON_SECRET`。依 §13.1 只做測試區。
+
+### 測試區（`wqetxuhncvfidqnklyew`）做了什麼
+
+1. `supabase functions deploy stock-report --no-verify-jwt --project-ref wqetxuhncvfidqnklyew`
+   → v26，`functions list` 覆驗 `verify_jwt=false`（漏掉這個旗標會讓盤後批次全數 401）。
+2. 手動觸發 `sync-fx` → `{ok:true, synced:true, count:8, durationMs:1985}`。
+3. `schema.sql` §10 的 cron job `fx-daily`（`0 3,9 * * *`）已建立。
+
+### cron 的寫入怎麼防呆（CLAUDE.md §13.3 記載過的事故）
+
+CLI 原本 `linked` 在**正式區**（`supabase projects list` 顯示 `kxnxadaghidwumqsqneu: linked=true`），
+若直接下 `db query --linked` 就會重演 2026-07-27「測試區 cron 寫進正式區」那次。
+作法：先 `supabase link --project-ref wqetxuhncvfidqnklyew`，再把**身分檢查與寫入包進同一個
+`DO $$` 區塊** —— 從既有 `macro-daily` 的 command 取出 project ref，
+不等於預期值就 `RAISE EXCEPTION` 中止。分兩次查擋不住 cwd 在中間被改掉。
+
+### 驗證結果
+
+- **冪等守門**：同一台北日第二次呼叫回 `synced:false`、208ms（首次 1985ms），不發對外請求。
+- **把關**：未帶 `x-cron-secret` → HTTP 401。
+- **cron 內嵌的 secret 正確**：直接 EXECUTE `fx-daily` 的 command，
+  `net._http_response` 得 `status_code=200` —— secret 錯的話會每天靜默 401，必須驗這一條。
+- **Storage**：`fx/twd.json` 51,208 bytes、`cache-control: public, max-age=0`（GET 量測，
+  HEAD 會誤報 no-cache）。8 幣別 × 259 點、2025-07-29～2026-07-28，
+  日變動落在 −0.48%～+0.03%（即時報價列已正確剔除，人民幣沒有再出現 +4.47%）。
+  人民幣如預期採用 `TWDCNY=X`，其餘七個採外幣在前的幣對。
+- **稽核**：`functions download` 逐檔 diff，**10/10 檔與 `dev` 分支一致**。
+- **前端實測**：Playwright 讀測試區真實 Storage（不再用 fixture），
+  8 張卡、雙向換算、3/6/12 個月 = 67/131/260 點、六個分頁在 320～1280px 高度全 36px、無 JS 錯誤。
+
+### 下一步
+
+正式區與 `main` 尚未動，等使用者決定是否上線（push `main` 會立刻觸發 GitHub Pages）。
 
 ---
 
