@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-design="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock PnL Web - 既有架構 12 大真實 UI 設計體系展示 (Design Options Showcase)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* =========================================================
+     * REAL UI DESIGN SYSTEMS & AESTHETICS ENGINE
+     * 100% 忠實對齊 stock-pnl-web 既有 HTML 結構與元件定義
+     * ========================================================= */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* 1. 深色極致水晶玻璃 (Ultra Glassmorphism - 現代高科技感) */
+    :root[data-design="1"] {
+      --name: "選項 1：深色極致水晶玻璃 (Ultra Glassmorphism)";
+      --desc: "流暢藍青發光背景、高透明度微光玻璃卡片 (backdrop-filter 20px)、微霓虹邊框與漸層藥丸分頁。";
+      --bg: #0b0f19;
+      --bg-image: radial-gradient(1000px 520px at 85% -10%, rgba(99, 102, 241, 0.16), transparent 60%), radial-gradient(900px 480px at -10% 30%, rgba(34, 211, 238, 0.1), transparent 55%);
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --ink: #e7ecf5; --ink-sub: #9aa6bd; --ink-muted: #64748b;
+      --accent: #6366f1; --accent-grad: linear-gradient(135deg, #6366f1, #22d3ee); --accent-ink: #ffffff;
+      --up: #ff4a5a; --down: #00e676; --radius: 14px; --radius-sm: 9px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 8px 32px rgba(2, 6, 18, 0.45); --header-bg: rgba(11, 15, 25, 0.75); --backdrop: blur(18px);
+    }
+
+    /* 2. Shadcn UI / Vercel Slate (極簡真實 SaaS 風格) */
+    :root[data-design="2"] {
+      --name: "選項 2：Shadcn UI / Vercel 風格 (當代極簡黑白 SaaS)";
+      --desc: "Vercel / Linear 代表性的中性灰階 (#09090b)、極致清爽 1px 細線 (#27272a)、無發光、高度專注於數據與字體。";
+      --bg: #09090b; --bg-image: none;
+      --surface: #18181b; --surface-strong: #27272a; --border: #27272a; --border-strong: #3f3f46;
+      --ink: #fafafa; --ink-sub: #a1a1aa; --ink-muted: #71717a;
+      --accent: #fafafa; --accent-grad: #fafafa; --accent-ink: #09090b;
+      --up: #ef4444; --down: #10b981; --radius: 8px; --radius-sm: 6px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 3px rgba(0,0,0,0.2); --header-bg: rgba(9, 9, 11, 0.9); --backdrop: blur(8px);
+    }
+
+    /* 3. MUI - Material UI / Google Material Design 3 */
+    :root[data-design="3"] {
+      --name: "選項 3：MUI (Google Material Design 3 規範)";
+      --desc: "Google 經典規範。柔和卡片陰影 Elevation、標準 Material 藍 (#1976d2)、紙張感清爽卡片與填滿型按鈕。";
+      --bg: #f8fafc; --bg-image: none;
+      --surface: #ffffff; --surface-strong: #f1f5f9; --border: #e2e8f0; --border-strong: #cbd5e1;
+      --ink: #0f172a; --ink-sub: #475569; --ink-muted: #94a3b8;
+      --accent: #1976d2; --accent-grad: #1976d2; --accent-ink: #ffffff;
+      --up: #d32f2f; --down: #2e7d32; --radius: 12px; --radius-sm: 8px;
+      --font-display: 'Roboto', 'Noto Sans TC', sans-serif; --font-body: 'Roboto', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0px 2px 6px rgba(15,23,42,0.08); --header-bg: #ffffff; --backdrop: none;
+    }
+
+    /* 4. Ant Design (阿里巴巴 AntD 金融企業級) */
+    :root[data-design="4"] {
+      --name: "選項 4：Ant Design (阿里巴巴 AntD 金融企業級)";
+      --desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格、灰色標頭 (#fafafa) 與標準方圓角。";
+      --bg: #f5f5f5; --bg-image: none;
+      --surface: #ffffff; --surface-strong: #fafafa; --border: #d9d9d9; --border-strong: #bfbfbf;
+      --ink: rgba(0, 0, 0, 0.88); --ink-sub: rgba(0, 0, 0, 0.65); --ink-muted: rgba(0, 0, 0, 0.45);
+      --accent: #1677ff; --accent-grad: #1677ff; --accent-ink: #ffffff;
+      --up: #ff4d4f; --down: #52c41a; --radius: 6px; --radius-sm: 4px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.03); --header-bg: #ffffff; --backdrop: none;
+    }
+
+    /* 5. Stripe FinTech (白金高質感金融美學) */
+    :root[data-design="5"] {
+      --name: "選項 5：Stripe FinTech (白金高質感金融美學)";
+      --desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練多層次陰影與頂級字體微調。";
+      --bg: #f6f9fc; --bg-image: none;
+      --surface: #ffffff; --surface-strong: #f8fafc; --border: #e6ebf1; --border-strong: #d8e2ec;
+      --ink: #0a2540; --ink-sub: #425466; --ink-muted: #a3acb9;
+      --accent: #635bff; --accent-grad: linear-gradient(135deg, #635bff, #00d4b6); --accent-ink: #ffffff;
+      --up: #df1b41; --down: #00d4b6; --radius: 10px; --radius-sm: 6px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 13px 27px -5px rgba(50,50,93,0.08), 0 8px 16px -8px rgba(0,0,0,0.08); --header-bg: #ffffff; --backdrop: none;
+    }
+
+    /* 6. IBM Carbon Design System (IBM 碳素硬派風) */
+    :root[data-design="6"] {
+      --name: "選項 6：IBM Carbon Design System (IBM 碳素硬派風)";
+      --desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與專業藍色 (#0f62fe)。";
+      --bg: #161616; --bg-image: none;
+      --surface: #262626; --surface-strong: #393939; --border: #393939; --border-strong: #525252;
+      --ink: #f4f4f4; --ink-sub: #c6c6c6; --ink-muted: #8d8d8d;
+      --accent: #0f62fe; --accent-grad: #0f62fe; --accent-ink: #ffffff;
+      --up: #da1e28; --down: #24a148; --radius: 0px; --radius-sm: 0px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: none; --header-bg: #161616; --backdrop: none;
+    }
+
+    /* 7. Apple macOS Sonoma / iOS HIG Light (蘋果純白質感) */
+    :root[data-design="7"] {
+      --name: "選項 7：Apple macOS / iOS HIG (蘋果白金質感)";
+      --desc: "蘋果官方 HIG 人機介面風格。純潔雪白背景、系統天藍 Accent (#007aff)、經典 14px 圓角與超細微邊框。";
+      --bg: #f5f5f7; --bg-image: none;
+      --surface: #ffffff; --surface-strong: #e8e8ed; --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.16);
+      --ink: #1d1d1f; --ink-sub: #86868b; --ink-muted: #a1a1a6;
+      --accent: #007aff; --accent-grad: #007aff; --accent-ink: #ffffff;
+      --up: #ff3b30; --down: #34c759; --radius: 14px; --radius-sm: 8px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 4px 20px rgba(0,0,0,0.04); --header-bg: rgba(245,245,247,0.85); --backdrop: blur(20px);
+    }
+
+    /* 8. 金融時報報業黑金 (Financial Times Gold Editorial) */
+    :root[data-design="8"] {
+      --name: "選項 8：金融時報報業黑金 (Financial Times Gold Editorial)";
+      --desc: "奢華香檳金 (#d4af37) 與深邃墨黑對比、Playfair 經典襯線標題與細緻分隔線。展現頂級權威質感。";
+      --bg: #121214; --bg-image: none;
+      --surface: #1a1a1e; --surface-strong: #242429; --border: rgba(212, 175, 55, 0.25); --border-strong: rgba(212, 175, 55, 0.45);
+      --ink: #f4f4f6; --ink-sub: #d4af37; --ink-muted: #8e8e93;
+      --accent: #d4af37; --accent-grad: linear-gradient(135deg, #d4af37, #aa820a); --accent-ink: #121214;
+      --up: #e63946; --down: #2a9d8f; --radius: 4px; --radius-sm: 2px;
+      --font-display: 'Playfair Display', 'Noto Sans TC', serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 6px 20px rgba(0,0,0,0.5); --header-bg: #121214; --backdrop: none;
+    }
+
+    /* 9. 賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix) */
+    :root[data-design="9"] {
+      --name: "選項 9：賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix)";
+      --desc: "曜黑底色搭配發光洋紅與電光青藍線條、未來科技感 HUD 標頭與高彩度數據標籤。視覺力強烈。";
+      --bg: #05070d; --bg-image: radial-gradient(600px 300px at 100% 100%, rgba(255,0,128,0.08), transparent 50%);
+      --surface: rgba(12, 16, 28, 0.85); --surface-strong: rgba(20, 28, 48, 0.9); --border: rgba(0, 243, 255, 0.25); --border-strong: rgba(255, 0, 128, 0.4);
+      --ink: #ffffff; --ink-sub: #00f3ff; --ink-muted: #627299;
+      --accent: #00f3ff; --accent-grad: linear-gradient(135deg, #00f3ff, #ff0077); --accent-ink: #05070d;
+      --up: #ff0055; --down: #00ffaa; --radius: 6px; --radius-sm: 4px;
+      --font-display: 'JetBrains Mono', monospace; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 0 25px rgba(0, 243, 255, 0.15); --header-bg: rgba(5, 7, 13, 0.95); --backdrop: blur(12px);
+    }
+
+    /* 10. 便當盒非對稱模組 (Bento Grid Modular) */
+    :root[data-design="10"] {
+      --name: "選項 10：極簡日系便當盒 (Bento Grid Modular)";
+      --desc: "非對稱便當盒 (Bento) 模組化卡片、暖色暗夜石墨、圓潤邊角與舒適留白。資訊清晰分塊。";
+      --bg: #11141c; --bg-image: radial-gradient(800px 400px at 50% 0%, rgba(255, 255, 255, 0.03), transparent 70%);
+      --surface: #181c28; --surface-strong: #212636; --border: rgba(255, 255, 255, 0.06); --border-strong: rgba(255, 255, 255, 0.12);
+      --ink: #f1f5f9; --ink-sub: #94a3b8; --ink-muted: #64748b;
+      --accent: #818cf8; --accent-grad: linear-gradient(135deg, #818cf8, #c084fc); --accent-ink: #ffffff;
+      --up: #f43f5e; --down: #10b981; --radius: 18px; --radius-sm: 10px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 12px 36px rgba(0, 0, 0, 0.3); --header-bg: rgba(17, 20, 28, 0.85); --backdrop: blur(20px);
+    }
+
+    /* 11. 北歐極簡冷調石墨 (Minimalist Nordic Slate) */
+    :root[data-design="11"] {
+      --name: "選項 11：北歐極簡冷調石墨 (Minimalist Nordic Slate)";
+      --desc: "冷冽石墨藍灰色調 (#0f172a)、純粹平滑矩陣線條、無過度裝飾。強調最高的數據可讀性。";
+      --bg: #0f172a; --bg-image: none;
+      --surface: #1e293b; --surface-strong: #334155; --border: #334155; --border-strong: #475569;
+      --ink: #f8fafc; --ink-sub: #94a3b8; --ink-muted: #64748b;
+      --accent: #38bdf8; --accent-grad: #0284c7; --accent-ink: #ffffff;
+      --up: #ef4444; --down: #10b981; --radius: 8px; --radius-sm: 5px;
+      --font-display: 'Inter', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.2); --header-bg: #0f172a; --backdrop: none;
+    }
+
+    /* 12. 柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0) */
+    :root[data-design="12"] {
+      --name: "選項 12：柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0)";
+      --desc: "浮雕凸起雙重光影立體卡片、沉陷式輸入框與實體觸感按鈕。給予實體裝置互動沉浸感。";
+      --bg: #1a1d24; --bg-image: none;
+      --surface: #1a1d24; --surface-strong: #222630; --border: transparent; --border-strong: rgba(255, 255, 255, 0.08);
+      --ink: #e2e8f0; --ink-sub: #94a3b8; --ink-muted: #64748b;
+      --accent: #6366f1; --accent-grad: linear-gradient(135deg, #6366f1, #4f46e5); --accent-ink: #ffffff;
+      --up: #f43f5e; --down: #10b981; --radius: 18px; --radius-sm: 10px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif; --font-body: 'Inter', 'Noto Sans TC', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 6px 6px 14px #121419, -6px -6px 14px #22262f; --header-bg: #1a1d24; --backdrop: none;
+    }
+
+    /* =========================================================
+     * EXACT CODEBASE COMPONENT LAYOUT STYLES
+     * ========================================================= */
+    body {
+      background-color: var(--bg);
+      background-image: var(--bg-image);
+      background-attachment: fixed;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.55;
+      min-height: 100vh;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; }
+    button, input, select { font-family: inherit; }
+
+    /* Top Showcase Controller Banner */
+    .showcase-banner {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0f172a;
+      color: #fff;
+      padding: 14px 24px;
+      border-bottom: 2px solid var(--accent);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .showcase-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .showcase-title {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .showcase-badge {
+      background: var(--accent-grad);
+      color: var(--accent-ink);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+    }
+    .showcase-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+      background: rgba(255,255,255,0.06);
+      padding: 8px 14px;
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .design-grid-selector {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+    }
+    .design-opt-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .design-opt-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .design-opt-btn.active { background: var(--accent-grad); color: var(--accent-ink); font-weight: 700; border-color: transparent; }
+
+    /* App Viewport Container */
+    .app-container {
+      max-width: 1180px;
+      margin: 20px auto;
+      padding: 0 20px 96px;
+      transition: all 0.25s ease;
+    }
+    .app-container.mobile-frame {
+      max-width: 375px;
+      border: 12px solid #334155;
+      border-radius: 36px;
+      padding: 0;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+      background: var(--bg);
+    }
+
+    /* App Shell Header (.app-header) */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--header-bg);
+      backdrop-filter: var(--backdrop);
+      border-bottom: 1px solid var(--border);
+    }
+    .app-header-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .brand-mark {
+      width: 30px; height: 30px; border-radius: var(--radius-sm);
+      display: grid; place-items: center; background: var(--accent-grad); color: var(--accent-ink); font-weight: 800;
+    }
+    .tabs-nav {
+      display: flex; gap: 4px; padding: 4px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .tab-btn {
+      appearance: none; border: none; background: transparent; color: var(--ink-sub);
+      font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm);
+      cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.18s ease;
+    }
+    .tab-btn:hover { color: var(--ink); }
+    .tab-btn.active { color: var(--accent-ink); background: var(--accent-grad); box-shadow: var(--shadow); font-weight: 600; }
+
+    .header-meta { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .ws-select { background: var(--surface-strong); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12.5px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+    /* Card Component (.glass) */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: var(--backdrop);
+    }
+    .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+    /* Market Grid & KPI Boxes */
+    .market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .kpi-card { background: var(--surface-strong); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
+    .kpi-label { font-size: 12px; color: var(--ink-muted); margin-bottom: 4px; }
+    .kpi-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--ink); }
+    .kpi-sub { font-size: 11px; color: var(--ink-sub); margin-top: 4px; }
+
+    /* Data Tables */
+    .table-scroll { overflow-x: auto; border-radius: var(--radius-sm); }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    .data-table th { background: var(--surface-strong); color: var(--ink-sub); font-weight: 600; padding: 11px 14px; border-bottom: 1px solid var(--border-strong); }
+    .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--ink); }
+    .num { text-align: right; font-family: var(--font-mono); }
+    .pnl-up { color: var(--up); font-weight: 600; }
+    .pnl-down { color: var(--down); font-weight: 600; }
+
+    /* Form Controls & Buttons */
+    .btn {
+      appearance: none; background: var(--surface-strong); border: 1px solid var(--border);
+      color: var(--ink); padding: 7px 14px; border-radius: var(--radius-sm); font-size: 13px;
+      font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--accent-grad); color: var(--accent-ink); border: none; font-weight: 600; box-shadow: var(--shadow); }
+    .fab { position: fixed; right: 24px; bottom: 24px; z-index: 90; padding: 12px 20px; border-radius: 30px; }
+
+    .notice { padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 20px; }
+    .notice-warn { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); display: grid; place-items: center; z-index: 200; padding: 20px; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); width: 100%; max-width: 480px; padding: 24px; box-shadow: var(--shadow); }
+
+    /* Mobile Bottom Nav Bar (<=720px) */
+    .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; display: flex; gap: 2px; height: 54px; padding: 4px 6px; background: var(--header-bg); border-top: 1px solid var(--border); }
+    .bottom-nav .tab-btn { flex: 1; flex-direction: column; justify-content: center; font-size: 11px; padding: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+   * TOP SHOWCASE HEADER (12 REAL DESIGN OPTIONS)
+   * ========================================================= -->
+  <header class="showcase-banner">
+    <div class="showcase-header">
+      <div class="showcase-title">
+        <span>📈 Stock PnL Web - 既有架構 12 大真實 UI 設計體系展示</span>
+        <span class="showcase-badge" id="designBadge">Option 1</span>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" onclick="toggleViewport('desktop')">🖥️ 桌機版 Layout</button>
+        <button class="btn" onclick="toggleViewport('mobile')">📱 手機版 Frame (375px)</button>
+      </div>
+    </div>
+
+    <div class="showcase-desc" id="designDesc">載入中...</div>
+
+    <div class="design-grid-selector" style="margin-top:10px;">
+      <button class="design-opt-btn active" onclick="switchDesign(1)">1. 深色極致水晶玻璃 (Glassmorphism)</button>
+      <button class="design-opt-btn" onclick="switchDesign(2)">2. Shadcn UI / Vercel (極簡 SaaS)</button>
+      <button class="design-opt-btn" onclick="switchDesign(3)">3. MUI (Google Material Design 3)</button>
+      <button class="design-opt-btn" onclick="switchDesign(4)">4. Ant Design (阿里巴巴金融級)</button>
+      <button class="design-opt-btn" onclick="switchDesign(5)">5. Stripe FinTech (白金高質感金融)</button>
+      <button class="design-opt-btn" onclick="switchDesign(6)">6. IBM Carbon (IBM 碳素硬派風)</button>
+      <button class="design-opt-btn" onclick="switchDesign(7)">7. Apple macOS (蘋果純白 HIG)</button>
+      <button class="design-opt-btn" onclick="switchDesign(8)">8. 金融時報報業黑金 (Financial Times)</button>
+      <button class="design-opt-btn" onclick="switchDesign(9)">9. 賽博朋克霓虹矩陣 (Cyberpunk HUD)</button>
+      <button class="design-opt-btn" onclick="switchDesign(10)">10. 日式極簡便當盒 (Bento Grid)</button>
+      <button class="design-opt-btn" onclick="switchDesign(11)">11. 北歐極簡石墨 (Nordic Slate)</button>
+      <button class="design-opt-btn" onclick="switchDesign(12)">12. 柔和新擬物態 (Neumorphic Soft)</button>
+    </div>
+  </header>
+
+  <!-- =========================================================
+   * MAIN APPLICATION VIEWPORT (MATCHES CODEBASE APP.TSX / APPSHELL.TSX)
+   * ========================================================= -->
+  <div class="app-container" id="appViewport">
+    
+    <!-- App Shell Header -->
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="brand">
+          <span class="brand-mark">📈</span>
+          <span>股票小幫手</span>
+        </div>
+
+        <nav class="tabs-nav">
+          <button class="tab-btn active" onclick="switchTab('dashboard')">📊 庫存總覽</button>
+          <button class="tab-btn" onclick="switchTab('analysis')">🔍 個股分析</button>
+          <button class="tab-btn" onclick="switchTab('macro')">🌐 總體經濟</button>
+          <button class="tab-btn" onclick="switchTab('fx')">💱 外幣匯率</button>
+          <button class="tab-btn" onclick="switchTab('yearly')">📅 年度收益</button>
+          <button class="tab-btn" onclick="switchTab('transactions')">📝 交易紀錄</button>
+        </nav>
+
+        <div class="header-meta">
+          <div class="ws-select" onclick="openModal('modalWs')">
+            <span>💼 工作區：主帳戶</span>
+            <small>▼</small>
+          </div>
+          <div class="ws-select" title="本機模式">💾 本機模式</div>
+        </div>
+      </div>
+    </header>
+
+    <div style="padding-top: 20px;">
+
+      <!-- =========================================================
+       * PAGE 1: 庫存總覽 (DASHBOARDPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-dashboard" class="page-section active">
+        <div class="notice notice-warn">
+          ⚠️ 發現 1 筆資料異動提醒：2330 台積電現價來自證交所最新盤後快取。
+        </div>
+
+        <div class="market-grid">
+          <!-- 台股 Market Panel -->
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-head">
+              <span class="card-title">🇹🇼 台股持倉總覽</span>
+              <span class="badge">TWD</span>
+            </div>
+            <div class="kpi-label">持倉總市值</div>
+            <div class="kpi-value" style="font-size: 28px; margin-bottom: 12px;">$1,854,000</div>
+            <div style="display: flex; gap: 20px;">
+              <div>
+                <div class="kpi-label">投入總成本 (含費)</div>
+                <div style="font-weight: 600;">$1,420,000</div>
+                <div class="kpi-sub">未含費 $1,417,976</div>
+              </div>
+              <div>
+                <div class="kpi-label">未實現淨損益</div>
+                <div class="pnl-up" style="font-size: 17px;">+$434,000 (+30.56%)</div>
+                <div class="kpi-sub">未含費 +$436,024</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 美股 Market Panel -->
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-head">
+              <span class="card-title">🇺🇸 美股持倉總覽</span>
+              <span class="badge">USD</span>
+            </div>
+            <div class="kpi-label">持倉總市值</div>
+            <div class="kpi-value" style="font-size: 28px; margin-bottom: 12px;">$24,850.00</div>
+            <div style="display: flex; gap: 20px;">
+              <div>
+                <div class="kpi-label">投入總成本 (含費)</div>
+                <div style="font-weight: 600;">$18,200.00</div>
+                <div class="kpi-sub">未含費 $18,180.00</div>
+              </div>
+              <div>
+                <div class="kpi-label">未實現淨損益</div>
+                <div class="pnl-up" style="font-size: 17px;">+$6,650.00 (+36.54%)</div>
+                <div class="kpi-sub">未含費 +$6,670.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Holdings Table -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">當前活躍持股明細 (Holdings)</span>
+            <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ 新增交易</button>
+          </div>
+
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>代號</th>
+                  <th>股票名稱</th>
+                  <th class="num">現價</th>
+                  <th class="num">持有股數</th>
+                  <th class="num">投入成本 (含費/未含費)</th>
+                  <th class="num">平均買入成本</th>
+                  <th class="num">保本賣出價</th>
+                  <th class="num">目前市值</th>
+                  <th class="num">未實現淨損益</th>
+                  <th class="num">未實現報酬率</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>2330</b></td>
+                  <td>台積電</td>
+                  <td class="num">$985.00 <span class="badge">快取</span></td>
+                  <td class="num">1,000</td>
+                  <td class="num">
+                    <div style="font-weight:600;">$750,000</div>
+                    <div class="kpi-sub">未含費 $748,932</div>
+                  </td>
+                  <td class="num">$750.00</td>
+                  <td class="num">$753.20</td>
+                  <td class="num">$985,000</td>
+                  <td class="num pnl-up">
+                    <div>+$235,000</div>
+                    <div class="kpi-sub">未含費 +$236,068</div>
+                  </td>
+                  <td class="num pnl-up">+31.33%</td>
+                </tr>
+                <tr>
+                  <td><b>2454</b></td>
+                  <td>聯發科</td>
+                  <td class="num">$1,220.00</td>
+                  <td class="num">500</td>
+                  <td class="num">
+                    <div style="font-weight:600;">$670,000</div>
+                    <div class="kpi-sub">未含費 $669,044</div>
+                  </td>
+                  <td class="num">$1,340.00</td>
+                  <td class="num">$1,345.50</td>
+                  <td class="num">$610,000</td>
+                  <td class="num pnl-down">
+                    <div>-$60,000</div>
+                    <div class="kpi-sub">未含費 -$59,044</div>
+                  </td>
+                  <td class="num pnl-down">-8.95%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+       * PAGE 2: 個股分析 (ANALYSISPAGE.TSX / STOCKDETAILPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-analysis" class="page-section">
+        <div class="card">
+          <div class="card-head">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <select class="btn" style="font-weight: 700;">
+                <option>2330 台積電 (TSMC)</option>
+                <option>2454 聯發科 (MediaTek)</option>
+              </select>
+              <span class="badge">半導體業</span>
+            </div>
+            <div>
+              <button class="btn">📄 匯出 PDF 報告</button>
+              <button class="btn">🔄 重新整理</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:8px;">
+            <button class="btn btn-primary" onclick="switchSubTab('analysis-content')">📊 分析內容 (個股長頁)</button>
+            <button class="btn" onclick="switchSubTab('ai-content')">🤖 AI 智慧問答與評估</button>
+          </div>
+
+          <div id="subtab-analysis-content">
+            <div class="kpi-grid">
+              <div class="kpi-card"><div class="kpi-label">持有股數</div><div class="kpi-value">1,000 股</div></div>
+              <div class="kpi-card"><div class="kpi-label">平均成本</div><div class="kpi-value">$750.00</div></div>
+              <div class="kpi-card"><div class="kpi-label">最新現價</div><div class="kpi-value">$985.00</div></div>
+              <div class="kpi-card"><div class="kpi-label">未實現損益</div><div class="kpi-value pnl-up">+$235,000 (+31.3%)</div></div>
+            </div>
+
+            <h4 style="margin: 20px 0 10px;">🏛️ 三大法人籌碼明細</h4>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>日期</th><th class="num">外資 (張)</th><th class="num">投信 (張)</th><th class="num">自營商 (張)</th><th class="num">三大法人合計</th></tr></thead>
+                <tbody>
+                  <tr><td>2026-07-29</td><td class="num pnl-up">+12,450</td><td class="num pnl-up">+1,200</td><td class="num pnl-down">-320</td><td class="num pnl-up">+13,330</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="subtab-ai-content" style="display:none;">
+            <div class="card" style="background:var(--surface-strong);">
+              🤖 <b>AI 智慧分析對話</b>：根據籌碼與基本面資料，分析台積電未來佈局策略。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+       * PAGE 3: 總體經濟 (MACROPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-macro" class="page-section">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">🌐 美國 5 大總體經濟指標</span>
+            <span class="kpi-sub">資料來源：FRED 聖路易聯準銀行</span>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-label">核心 PCE 年增率</div><div class="kpi-value">+2.60%</div><div class="kpi-sub">較上期減少 0.10%</div></div>
+            <div class="kpi-card"><div class="kpi-label">CPI 物價指數</div><div class="kpi-value">+3.00%</div><div class="kpi-sub">與上期持平</div></div>
+            <div class="kpi-card"><div class="kpi-label">非農就業人數</div><div class="kpi-value pnl-up">+206 千人</div><div class="kpi-sub">較上期增加 52 千人</div></div>
+            <div class="kpi-card"><div class="kpi-label">消費者信心指數</div><div class="kpi-value">68.20</div><div class="kpi-sub">較上期增加 2.60</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+       * PAGE 4: 外幣匯率 (FXPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-fx" class="page-section">
+        <div class="card">
+          <div class="card-head"><span class="card-title">💱 台幣對主要外幣匯率</span><span class="badge">即時報價</span></div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-label">美金 USD / TWD</div><div class="kpi-value">32.650</div><div class="kpi-sub pnl-up">▲ 0.15% (台幣貶值)</div></div>
+            <div class="kpi-card"><div class="kpi-label">日圓 JPY / TWD</div><div class="kpi-value">0.2125</div><div class="kpi-sub pnl-down">▼ 0.32% (台幣升值)</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+       * PAGE 5: 年度收益 (YEARLYPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-yearly" class="page-section">
+        <div class="card">
+          <div class="card-head"><span class="card-title">📅 歷史已實現收益總覽</span></div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-label">台股已實現淨損益</div><div class="kpi-value pnl-up">+$682,500 TWD</div></div>
+            <div class="kpi-card"><div class="kpi-label">美股已實現淨損益</div><div class="kpi-value pnl-up">+$14,200.00 USD</div></div>
+            <div class="kpi-card"><div class="kpi-label">累計手續費與稅</div><div class="kpi-value">$28,450 TWD</div></div>
+            <div class="kpi-card"><div class="kpi-label">總交易筆數</div><div class="kpi-value">48 筆</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+       * PAGE 6: 交易紀錄 (TRANSACTIONSPAGE.TSX)
+       * ========================================================= -->
+      <section id="page-transactions" class="page-section">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">📝 完整買賣交易歷史清單</span>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ 新增紀錄</button>
+              <button class="btn">📥 匯入 CSV</button>
+              <button class="btn">📤 匯出 CSV</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th><input type="checkbox"></th><th>日期</th><th>市場</th><th>代號</th><th>名稱</th><th>類別</th><th class="num">成交單價</th><th class="num">股數</th><th class="num">手續費+稅</th><th class="num">現金流金額</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="checkbox"></td>
+                  <td>2026-06-15</td><td>🇹🇼 台股</td><td><b>2330</b></td><td>台積電</td>
+                  <td><span class="badge" style="color:var(--up);">買入</span></td>
+                  <td class="num">$750.00</td><td class="num">1,000</td><td class="num">$1,068</td><td class="num pnl-down">-$751,068</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Floating Global Add Transaction Button -->
+    <button class="btn btn-primary fab" onclick="openModal('modalAddTx')">📝 新增交易</button>
+
+  </div>
+
+  <!-- MODALS -->
+  <div class="modal-overlay" id="modalAddTx" style="display:none;">
+    <div class="modal-box">
+      <div class="card-head"><span class="card-title">➕ 新增交易紀錄</span><button class="btn" onclick="closeModal('modalAddTx')">✕</button></div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+        <input type="text" value="2330" placeholder="股票代號" style="background:var(--surface-strong); border:1px solid var(--border); color:var(--ink); padding:8px; border-radius:var(--radius-sm);">
+        <button class="btn btn-primary" style="justify-content:center;" onclick="closeModal('modalAddTx')">儲存交易</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalWs" style="display:none;">
+    <div class="modal-box">
+      <div class="card-head"><span class="card-title">💼 工作區管理</span><button class="btn" onclick="closeModal('modalWs')">✕</button></div>
+      <p style="margin:10px 0; color:var(--ink-sub);">當前選取：主帳戶 (Default Workspace)</p>
+      <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="closeModal('modalWs')">確定關閉</button>
+    </div>
+  </div>
+
+  <script>
+    const DESIGNS = {
+      1: { name: "選項 1：深色極致水晶玻璃 (Ultra Glassmorphism)", desc: "流暢藍青發光背景、高透明度微光玻璃卡片 (backdrop-filter 20px)、微霓虹邊框與漸層藥丸分頁。" },
+      2: { name: "選項 2：Shadcn UI / Vercel 風格 (當代極簡黑白 SaaS)", desc: "Vercel / Linear 代表性的中性灰階 (#09090b)、極致清爽 1px 細線 (#27272a)、無發光、高度專注於數據與字體。" },
+      3: { name: "選項 3：MUI (Google Material Design 3 規範)", desc: "Google 經典規範。柔和卡片陰影 Elevation、標準 Material 藍 (#1976d2)、紙張感清爽卡片與填滿型按鈕。" },
+      4: { name: "選項 4：Ant Design (阿里巴巴 AntD 金融企業級)", desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格、灰色標頭 (#fafafa) 與標準方圓角。" },
+      5: { name: "選項 5：Stripe FinTech (白金高質感金融美學)", desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練多層次陰影與頂級字體微調。" },
+      6: { name: "選項 6：IBM Carbon Design System (IBM 碳素硬派風)", desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與專業藍色 (#0f62fe)。" },
+      7: { name: "選項 7：Apple macOS / iOS HIG (蘋果白金質感)", desc: "蘋果官方 HIG 人機介面風格。純潔雪白背景、系統天藍 Accent (#007aff)、經典 14px 圓角與超細微邊框。" },
+      8: { name: "選項 8：金融時報報業黑金 (Financial Times Gold Editorial)", desc: "奢華香檳金 (#d4af37) 與深邃墨黑對比、Playfair 經典襯線標題與細緻分隔線。展現頂級權威質感。" },
+      9: { name: "選項 9：賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix)", desc: "曜黑底色搭配發光洋紅與電光青藍線條、未來科技感 HUD 標頭與高彩度數據標籤。視覺力強烈。" },
+      10: { name: "選項 10：極簡日系便當盒 (Bento Grid Modular)", desc: "非對稱便當盒 (Bento) 模組化卡片、暖色暗夜石墨、圓潤邊角與舒適留白。資訊清晰分塊。" },
+      11: { name: "選項 11：北歐極簡石墨 (Nordic Slate)", desc: "冷冽石墨藍灰色調 (#0f172a)、純粹平滑矩陣線條、無過度裝飾。強調最高的數據可讀性。" },
+      12: { name: "選項 12：柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0)", desc: "浮雕凸起雙重光影立體卡片、沉陷式輸入框與實體觸感按鈕。給予實體裝置互動沉浸感。" }
+    };
+
+    function switchDesign(opt) {
+      document.documentElement.setAttribute('data-design', opt);
+      document.getElementById('designBadge').innerText = 'Option ' + opt;
+      document.getElementById('designDesc').innerText = DESIGNS[opt].desc;
+
+      const btns = document.querySelectorAll('.design-opt-btn');
+      btns.forEach((b, idx) => {
+        if (idx + 1 === opt) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+      document.getElementById('page-' + tabId).classList.add('active');
+
+      document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+
+    function switchSubTab(subId) {
+      document.getElementById('subtab-analysis-content').style.display = subId === 'analysis-content' ? 'block' : 'none';
+      document.getElementById('subtab-ai-content').style.display = subId === 'ai-content' ? 'block' : 'none';
+    }
+
+    function toggleViewport(m) {
+      const vp = document.getElementById('appViewport');
+      if (m === 'mobile') vp.classList.add('mobile-frame');
+      else vp.classList.remove('mobile-frame');
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'grid'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // Init
+    switchDesign(1);
+  </script>
+</body>
+</html>

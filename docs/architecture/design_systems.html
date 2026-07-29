@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-system="shadcn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock PnL Web - 16 大主流實用 UI 設計系統展示 (Real-World Design Systems)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* =========================================================
+     * 16 REAL-WORLD UI DESIGN SYSTEMS CSS ENGINE
+     * ========================================================= */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* 1. Shadcn UI / Vercel Slate */
+    :root[data-system="shadcn"] {
+      --sys-name: "1. Shadcn UI / Vercel 風格";
+      --sys-desc: "當今 Vercel / Linear 最流行的純粹設計系統。中性灰階、極致清爽 1px 細線、專注於數據與字體排版。";
+      --bg: #09090b; --surface: #18181b; --surface-sub: #27272a; --border: #27272a; --border-strong: #3f3f46;
+      --ink: #fafafa; --ink-sub: #a1a1aa; --ink-muted: #71717a; --primary: #fafafa; --primary-ink: #09090b;
+      --up: #ef4444; --down: #10b981; --radius: 8px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); --header-bg: rgba(9, 9, 11, 0.8);
+    }
+
+    /* 2. MUI (Google Material Design 3) */
+    :root[data-system="mui"] {
+      --sys-name: "2. MUI (Google Material Design 3)";
+      --sys-desc: "Google 經典 Material Design 規範。兼具柔和的卡片陰影 (Elevation)、經典藍色 Accent (#1976d2) 與紙張感卡片。";
+      --bg: #f8fafc; --surface: #ffffff; --surface-sub: #f1f5f9; --border: #e2e8f0; --border-strong: #cbd5e1;
+      --ink: #0f172a; --ink-sub: #475569; --ink-muted: #94a3b8; --primary: #1976d2; --primary-ink: #ffffff;
+      --up: #d32f2f; --down: #2e7d32; --radius: 12px; --font-main: 'Roboto', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0px 2px 4px -1px rgba(0,0,0,0.1), 0px 4px 5px 0px rgba(0,0,0,0.07); --header-bg: #ffffff;
+    }
+
+    /* 3. Ant Design (Alibaba AntD 金融企業級) */
+    :root[data-system="antd"] {
+      --sys-name: "3. Ant Design (阿里巴巴 AntD 金融級)";
+      --sys-desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格與灰色標頭 (#fafafa)。";
+      --bg: #f5f5f5; --surface: #ffffff; --surface-sub: #fafafa; --border: #d9d9d9; --border-strong: #bfbfbf;
+      --ink: rgba(0, 0, 0, 0.88); --ink-sub: rgba(0, 0, 0, 0.65); --ink-muted: rgba(0, 0, 0, 0.45); --primary: #1677ff; --primary-ink: #ffffff;
+      --up: #ff4d4f; --down: #52c41a; --radius: 6px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03); --header-bg: #ffffff;
+    }
+
+    /* 4. Stripe FinTech */
+    :root[data-system="stripe"] {
+      --sys-name: "4. Stripe FinTech (白金高質感金融)";
+      --sys-desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練漸層與頂級字體微調。";
+      --bg: #f6f9fc; --surface: #ffffff; --surface-sub: #f8fafc; --border: #e6ebf1; --border-strong: #d8e2ec;
+      --ink: #0a2540; --ink-sub: #425466; --ink-muted: #a3acb9; --primary: #635bff; --primary-ink: #ffffff;
+      --up: #df1b41; --down: #00d4b6; --radius: 10px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 13px 27px -5px rgba(50,50,93,0.1); --header-bg: #ffffff;
+    }
+
+    /* 5. IBM Carbon */
+    :root[data-system="carbon"] {
+      --sys-name: "5. IBM Carbon Design System";
+      --sys-desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與藍色 (#0f62fe)。";
+      --bg: #161616; --surface: #262626; --surface-sub: #393939; --border: #393939; --border-strong: #525252;
+      --ink: #f4f4f4; --ink-sub: #c6c6c6; --ink-muted: #8d8d8d; --primary: #0f62fe; --primary-ink: #ffffff;
+      --up: #da1e28; --down: #24a148; --radius: 0px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: none; --header-bg: #161616;
+    }
+
+    /* 6. Mantine / Chakra UI */
+    :root[data-system="mantine"] {
+      --sys-name: "6. Mantine / Chakra UI (歐美簡潔實用)";
+      --sys-desc: "當代歐美 React 應用的標準體驗。柔軟適中的圓角 (10px)、親切粉彩 Badge、極佳的適應力。";
+      --bg: #1a1b1e; --surface: #25262b; --surface-sub: #2c2e33; --border: #373a40; --border-strong: #4a4d55;
+      --ink: #c1c2c5; --ink-sub: #909296; --ink-muted: #5c5f66; --primary: #339af0; --primary-ink: #ffffff;
+      --up: #ff6b6b; --down: #51cf66; --radius: 10px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 4px 12px rgba(0,0,0,0.15); --header-bg: #1a1b1e;
+    }
+
+    /* 7. GitHub Primer System */
+    :root[data-system="github"] {
+      --sys-name: "7. GitHub Primer Design System";
+      --sys-desc: "GitHub 官方設計語言。經典綠色按鈕 (#238636)、灰黑邊框 (#30363d) 與工程師極高認同感的代碼卡片。";
+      --bg: #0d1117; --surface: #161b22; --surface-sub: #21262d; --border: #30363d; --border-strong: #8b949e;
+      --ink: #c9d1d9; --ink-sub: #8b949e; --ink-muted: #484f58; --primary: #238636; --primary-ink: #ffffff;
+      --up: #f85149; --down: #3fb950; --radius: 6px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 3px rgba(0,0,0,0.12); --header-bg: #161b22;
+    }
+
+    /* 8. Tailwind UI Classic */
+    :root[data-system="tailwind"] {
+      --sys-name: "8. Tailwind UI Official Style";
+      --sys-desc: "Tailwind Labs 官方組件風格。洗練靛藍 (#4f46e5)、柔和淺灰卡片、極具彈性的圓角與細緻微陰影。";
+      --bg: #f9fafb; --surface: #ffffff; --surface-sub: #f3f4f6; --border: #e5e7eb; --border-strong: #d1d5db;
+      --ink: #111827; --ink-sub: #4b5563; --ink-muted: #9ca3af; --primary: #4f46e5; --primary-ink: #ffffff;
+      --up: #ef4444; --down: #10b981; --radius: 8px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); --header-bg: #ffffff;
+    }
+
+    /* 9. Microsoft Fluent 2.0 */
+    :root[data-system="fluent"] {
+      --sys-name: "9. Microsoft Fluent Design 2.0";
+      --sys-desc: "微軟 Windows 11 / Office 365 現代設計語言。雲藍 Accent (#0078d4)、柔和多層次質感與極度圓潤視覺。";
+      --bg: #f3f3f3; --surface: #ffffff; --surface-sub: #f9f9f9; --border: #e5e5e5; --border-strong: #d1d1d1;
+      --ink: #242424; --ink-sub: #616161; --ink-muted: #8d8d8d; --primary: #0078d4; --primary-ink: #ffffff;
+      --up: #d13438; --down: #107c41; --radius: 8px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 2px 4px rgba(0,0,0,0.04); --header-bg: #ffffff;
+    }
+
+    /* 10. Atlassian Design System (Jira / Confluence) */
+    :root[data-system="atlassian"] {
+      --sys-name: "10. Atlassian Design System (Jira/Confluence)";
+      --sys-desc: "全球團隊協作標竿。經典 B200 藍色 (#0052cc)、明亮高對比 Tag、適合多專案工作區切換與分析。";
+      --bg: #f4f5f7; --surface: #ffffff; --surface-sub: #ebecf0; --border: #dfe1e6; --border-strong: #c1c7d0;
+      --ink: #172b4d; --ink-sub: #42526e; --ink-muted: #6b778c; --primary: #0052cc; --primary-ink: #ffffff;
+      --up: #de350b; --down: #00875a; --radius: 3px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 1px rgba(9, 30, 66, 0.25); --header-bg: #0052cc;
+    }
+
+    /* 11. Apple macOS Sonoma / iOS Human Interface */
+    :root[data-system="apple"] {
+      --sys-name: "11. Apple macOS / iOS Human Interface";
+      --sys-desc: "蘋果官方人機介面指南 (HIG)。極簡雪白背景、系統天藍 Accent (#007aff)、經典圓角 (14px) 與極致通透感。";
+      --bg: #f5f5f7; --surface: #ffffff; --surface-sub: #e8e8ed; --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.16);
+      --ink: #1d1d1f; --ink-sub: #86868b; --ink-muted: #a1a1a6; --primary: #007aff; --primary-ink: #ffffff;
+      --up: #ff3b30; --down: #34c759; --radius: 14px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 4px 20px rgba(0,0,0,0.04); --header-bg: rgba(245,245,247,0.8);
+    }
+
+    /* 12. Notion Warm Minimal */
+    :root[data-system="notion"] {
+      --sys-name: "12. Notion Warm Minimal Style";
+      --sys-desc: "Notion 書寫風質感。暖白背景 (#fbfbfa)、單色黑灰線條、極度乾淨且毫無干擾的資訊呈顯。";
+      --bg: #fbfbfa; --surface: #ffffff; --surface-sub: #f1f1ef; --border: #e9e9e7; --border-strong: #d3d3d0;
+      --ink: #37352f; --ink-sub: #787774; --ink-muted: #9b9a97; --primary: #37352f; --primary-ink: #ffffff;
+      --up: #eb5757; --down: #27ae60; --radius: 4px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: none; --header-bg: #fbfbfa;
+    }
+
+    /* 13. Shopify Polaris System */
+    :root[data-system="shopify"] {
+      --sys-name: "13. Shopify Polaris System";
+      --sys-desc: "Shopify 全球電商與財報管理系統。獨特墨綠 Accent (#008060)、極高對比的報表數字與清爽白色卡片。";
+      --bg: #f6f6f7; --surface: #ffffff; --surface-sub: #f1f2f3; --border: #e1e3e5; --border-strong: #c9cccf;
+      --ink: #202223; --ink-sub: #6d7175; --ink-muted: #8c9196; --primary: #008060; --primary-ink: #ffffff;
+      --up: #d82c0d; --down: #008060; --radius: 8px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 0 rgba(22, 29, 37, 0.05); --header-bg: #ffffff;
+    }
+
+    /* 14. ByteDance Semi Design */
+    :root[data-system="semi"] {
+      --sys-name: "14. ByteDance Semi Design";
+      --sys-desc: "字節跳動企業級設計語言。高飽和藍色 (#0064fa)、極佳的圓角弧度與高效率數據表格。";
+      --bg: #f4f5f7; --surface: #ffffff; --surface-sub: #eaf0fb; --border: #e1e4e8; --border-strong: #c2c7d0;
+      --ink: #1c1d21; --ink-sub: #55575d; --ink-muted: #8f939c; --primary: #0064fa; --primary-ink: #ffffff;
+      --up: #f93920; --down: #00b365; --radius: 6px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 2px 8px rgba(0,0,0,0.06); --header-bg: #ffffff;
+    }
+
+    /* 15. Salesforce Lightning (SLDS) */
+    :root[data-system="salesforce"] {
+      --sys-name: "15. Salesforce Lightning (SLDS)";
+      --sys-desc: "Salesforce 經典 CRM 與金融資產平台。專屬 Lightning 藍 (#0176d3)、穩重的頂部 Header 與結構化清單。";
+      --bg: #b0c4df; --surface: #ffffff; --surface-sub: #f3f5f8; --border: #c9c7c5; --border-strong: #969492;
+      --ink: #181818; --ink-sub: #444444; --ink-muted: #706e6b; --primary: #0176d3; --primary-ink: #ffffff;
+      --up: #ea001e; --down: #2e844a; --radius: 4px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.1); --header-bg: #ffffff;
+    }
+
+    /* 16. Linear.app Obsidian Dark */
+    :root[data-system="linear"] {
+      --sys-name: "16. Linear.app Obsidian Dark";
+      --sys-desc: "Linear 極致曜黑與紫光質感。`#08090a` 深黑、紫羅蘭 Accent (#5e6ad2)、1px 鋼骨線與極速 ⌘K 設計。";
+      --bg: #08090a; --surface: #121316; --surface-sub: #1c1e22; --border: #22252b; --border-strong: #333742;
+      --ink: #f7f8f8; --ink-sub: #8a8f98; --ink-muted: #575c66; --primary: #5e6ad2; --primary-ink: #ffffff;
+      --up: #f87171; --down: #4ade80; --radius: 6px; --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 4px 20px rgba(0,0,0,0.5); --header-bg: #08090a;
+    }
+
+    /* =========================================================
+     * BASE ENGINE & COMPONENTS
+     * ========================================================= */
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-main);
+      font-size: 13.5px;
+      line-height: 1.5;
+      min-height: 100vh;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    h1, h2, h3, h4 { font-weight: 600; }
+    button, input, select { font-family: inherit; }
+
+    /* Top Controls Banner */
+    .top-banner {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0f172a;
+      color: #fff;
+      padding: 12px 20px;
+      border-bottom: 2px solid #334155;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .banner-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .banner-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .banner-desc {
+      font-size: 12.5px;
+      color: #cbd5e1;
+      background: rgba(255,255,255,0.06);
+      padding: 7px 12px;
+      border-radius: 6px;
+      border-left: 3px solid #38bdf8;
+      margin-bottom: 10px;
+    }
+    .sys-selector {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+    }
+    .sys-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .sys-btn:hover { background: #334155; color: #fff; }
+    .sys-btn.active { background: #38bdf8; color: #0f172a; font-weight: 700; border-color: #38bdf8; }
+
+    /* App Container */
+    .app-viewport {
+      max-width: 1180px;
+      margin: 16px auto;
+      padding: 0 16px;
+      transition: all 0.25s ease;
+    }
+    .app-viewport.mobile-view {
+      max-width: 390px;
+      border: 10px solid #334155;
+      border-radius: 32px;
+      padding: 0;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+
+    /* App Header */
+    .app-header {
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+    }
+    .nav-tabs {
+      display: flex;
+      gap: 3px;
+      background: var(--surface-sub);
+      border: 1px solid var(--border);
+      padding: 3px;
+      border-radius: var(--radius);
+    }
+    .nav-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--ink-sub);
+      padding: 5px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      border-radius: calc(var(--radius) - 2px);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .nav-btn:hover { color: var(--ink); }
+    .nav-btn.active {
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+
+    /* Card Component */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .card-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      background: var(--surface-sub);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .kpi-lbl { font-size: 11.5px; color: var(--ink-muted); margin-bottom: 4px; }
+    .kpi-val { font-size: 20px; font-weight: 700; color: var(--ink); }
+    .kpi-sub { font-size: 11px; color: var(--ink-sub); margin-top: 4px; }
+
+    /* Data Tables */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius); }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      text-align: left;
+    }
+    .data-table th {
+      background: var(--surface-sub);
+      color: var(--ink-sub);
+      font-weight: 600;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--ink);
+    }
+    .num { text-align: right; font-family: var(--font-mono); }
+    .up { color: var(--up); font-weight: 600; }
+    .down { color: var(--down); font-weight: 600; }
+
+    /* Badges & Buttons */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--surface-sub);
+      border: 1px solid var(--border);
+      color: var(--ink-sub);
+    }
+    .btn {
+      appearance: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: var(--radius);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-ink);
+      border: 1px solid var(--primary);
+      font-weight: 600;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Modal Backdrop */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: grid; place-items: center; z-index: 200; padding: 20px;
+    }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border-strong);
+      border-radius: var(--radius); width: 100%; max-width: 440px; padding: 20px;
+      box-shadow: var(--shadow);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+   * TOP CONTROL BANNER (DESIGN SYSTEM SELECTOR)
+   * ========================================================= -->
+  <header class="top-banner">
+    <div class="banner-header">
+      <div class="banner-title">
+        <span>🏛️ Stock PnL Web - 16 大主流實戰 UI 設計系統展示</span>
+        <span id="sysBadge" style="background:#38bdf8; color:#0f172a; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:700;">Shadcn UI</span>
+      </div>
+
+      <div>
+        <button class="sys-btn" onclick="setFrame('desktop')">🖥️ 桌機版視圖</button>
+        <button class="sys-btn" onclick="setFrame('mobile')">📱 手機版視圖 (390px)</button>
+      </div>
+    </div>
+
+    <div class="banner-desc" id="sysDesc">
+      載入中...
+    </div>
+
+    <div class="sys-selector">
+      <button class="sys-btn active" onclick="pickSystem('shadcn')">1. Shadcn UI / Vercel</button>
+      <button class="sys-btn" onclick="pickSystem('mui')">2. MUI (Google Design 3)</button>
+      <button class="sys-btn" onclick="pickSystem('antd')">3. Ant Design (阿里金融)</button>
+      <button class="sys-btn" onclick="pickSystem('stripe')">4. Stripe FinTech</button>
+      <button class="sys-btn" onclick="pickSystem('carbon')">5. IBM Carbon System</button>
+      <button class="sys-btn" onclick="pickSystem('mantine')">6. Mantine / Chakra UI</button>
+      <button class="sys-btn" onclick="pickSystem('github')">7. GitHub Primer System</button>
+      <button class="sys-btn" onclick="pickSystem('tailwind')">8. Tailwind UI Official</button>
+      <button class="sys-btn" onclick="pickSystem('fluent')">9. Microsoft Fluent 2.0</button>
+      <button class="sys-btn" onclick="pickSystem('atlassian')">10. Atlassian System</button>
+      <button class="sys-btn" onclick="pickSystem('apple')">11. Apple HIG System</button>
+      <button class="sys-btn" onclick="pickSystem('notion')">12. Notion Warm Minimal</button>
+      <button class="sys-btn" onclick="pickSystem('shopify')">13. Shopify Polaris</button>
+      <button class="sys-btn" onclick="pickSystem('semi')">14. ByteDance Semi</button>
+      <button class="sys-btn" onclick="pickSystem('salesforce')">15. Salesforce SLDS</button>
+      <button class="sys-btn" onclick="pickSystem('linear')">16. Linear Obsidian Dark</button>
+    </div>
+  </header>
+
+  <!-- =========================================================
+   * MAIN APPLICATION VIEWPORT
+   * ========================================================= -->
+  <div class="app-viewport" id="appViewport">
+    
+    <!-- Application Sticky Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span>📈 股票小幫手</span>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-btn active" onclick="goPage('dashboard')">庫存總覽</button>
+        <button class="nav-btn" onclick="goPage('analysis')">個股分析</button>
+        <button class="nav-btn" onclick="goPage('macro')">總體經濟</button>
+        <button class="nav-btn" onclick="goPage('fx')">外幣匯率</button>
+        <button class="nav-btn" onclick="goPage('yearly')">年度收益</button>
+        <button class="nav-btn" onclick="goPage('tx')">交易紀錄</button>
+      </nav>
+
+      <div>
+        <button class="btn" onclick="openModal('modWs')">💼 工作區：主帳戶</button>
+      </div>
+    </header>
+
+    <div style="padding: 20px 0;">
+
+      <!-- PAGE 1: 庫存總覽 (DASHBOARD) -->
+      <section id="page-dashboard" class="page active">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px;">
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-head">
+              <span class="card-title">🇹🇼 台股持倉總覽</span>
+              <span class="badge">TWD</span>
+            </div>
+            <div class="kpi-lbl">持倉總市值</div>
+            <div class="kpi-val" style="font-size: 24px; margin-bottom: 6px;">$1,854,000</div>
+            <div style="display: flex; gap: 20px;">
+              <div>
+                <div class="kpi-lbl">投入總成本</div>
+                <div style="font-weight: 600;">$1,420,000</div>
+              </div>
+              <div>
+                <div class="kpi-lbl">未實現淨損益</div>
+                <div class="up" style="font-size: 15px;">+$434,000 (+30.56%)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-head">
+              <span class="card-title">🇺🇸 美股持倉總覽</span>
+              <span class="badge">USD</span>
+            </div>
+            <div class="kpi-lbl">持倉總市值</div>
+            <div class="kpi-val" style="font-size: 24px; margin-bottom: 6px;">$24,850.00</div>
+            <div style="display: flex; gap: 20px;">
+              <div>
+                <div class="kpi-lbl">投入總成本</div>
+                <div style="font-weight: 600;">$18,200.00</div>
+              </div>
+              <div>
+                <div class="kpi-lbl">未實現淨損益</div>
+                <div class="up" style="font-size: 15px;">+$6,650.00 (+36.54%)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">當前活躍持股明細</span>
+            <button class="btn btn-primary" onclick="openModal('modAddTx')">+ 新增交易</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>代號</th>
+                  <th>股票名稱</th>
+                  <th class="num">現價</th>
+                  <th class="num">持有股數</th>
+                  <th class="num">投入成本</th>
+                  <th class="num">目前市值</th>
+                  <th class="num">未實現淨損益</th>
+                  <th class="num">報酬率</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>2330</b></td>
+                  <td>台積電</td>
+                  <td class="num">$985.00</td>
+                  <td class="num">1,000</td>
+                  <td class="num">$750,000</td>
+                  <td class="num">$985,000</td>
+                  <td class="num up">+$235,000</td>
+                  <td class="num up">+31.33%</td>
+                </tr>
+                <tr>
+                  <td><b>2454</b></td>
+                  <td>聯發科</td>
+                  <td class="num">$1,220.00</td>
+                  <td class="num">500</td>
+                  <td class="num">$670,000</td>
+                  <td class="num">$610,000</td>
+                  <td class="num down">-$60,000</td>
+                  <td class="num down">-8.95%</td>
+                </tr>
+                <tr>
+                  <td><b>NVDA</b></td>
+                  <td>NVIDIA Corp</td>
+                  <td class="num">$124.50</td>
+                  <td class="num">150</td>
+                  <td class="num">$12,000.00</td>
+                  <td class="num">$18,675.00</td>
+                  <td class="num up">+$6,675.00</td>
+                  <td class="num up">+55.62%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 2: 個股分析 (ANALYSIS) -->
+      <section id="page-analysis" class="page">
+        <div class="card">
+          <div class="card-head">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="card-title">2330 台積電</span>
+              <span class="badge">半導體業</span>
+            </div>
+            <button class="btn">📄 匯出 PDF 報告</button>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-lbl">單月營收年增率 (YoY)</div>
+              <div class="kpi-val up">+32.4%</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">近四季 EPS</div>
+              <div class="kpi-val">$42.80</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">本益比 (PE)</div>
+              <div class="kpi-val">23.01 倍</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3: 總體經濟 (MACRO) -->
+      <section id="page-macro" class="page">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">🌐 美國 5 大總體經濟指標</span>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-lbl">核心 PCE 年增率</div>
+              <div class="kpi-val">+2.60%</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">非農就業人口變動</div>
+              <div class="kpi-val up">+206 千人</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 4: 外幣匯率 (FX) -->
+      <section id="page-fx" class="page">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">💱 台幣對主要外幣匯率</span>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-lbl">USD / TWD</div>
+              <div class="kpi-val">32.650</div>
+              <div class="kpi-sub up">▲ 0.15% (台幣貶值)</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">JPY / TWD</div>
+              <div class="kpi-val">0.2125</div>
+              <div class="kpi-sub down">▼ 0.32% (台幣升值)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 5: 年度收益 (YEARLY) -->
+      <section id="page-yearly" class="page">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">📅 歷史已實現收益總覽</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>年份</th>
+                  <th class="num">賣出成本</th>
+                  <th class="num">賣出收入</th>
+                  <th class="num">已實現淨損益</th>
+                  <th class="num">交易筆數</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>2026 年</b></td>
+                  <td class="num">$1,200,000</td>
+                  <td class="num">$1,540,000</td>
+                  <td class="num up">+$340,000</td>
+                  <td class="num">12 筆</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 6: 交易紀錄 (TRANSACTIONS) -->
+      <section id="page-tx" class="page">
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">📝 買賣交易歷史清單</span>
+            <button class="btn btn-primary" onclick="openModal('modAddTx')">+ 新增紀錄</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>市場</th>
+                  <th>代號</th>
+                  <th>名稱</th>
+                  <th>類別</th>
+                  <th class="num">單價</th>
+                  <th class="num">股數</th>
+                  <th class="num">金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-06-15</td>
+                  <td>🇹🇼 台股</td>
+                  <td><b>2330</b></td>
+                  <td>台積電</td>
+                  <td><span class="badge" style="color:var(--up);">買入</span></td>
+                  <td class="num">$750.00</td>
+                  <td class="num">1,000</td>
+                  <td class="num down">-$751,068</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- MODALS -->
+  <div class="modal-overlay" id="modAddTx" style="display:none;">
+    <div class="modal-box">
+      <div class="card-head">
+        <span class="card-title">➕ 新增交易紀錄</span>
+        <button class="btn" onclick="closeModal('modAddTx')">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <input type="text" placeholder="股票代號 (如 2330)" style="background:var(--surface-sub); border:1px solid var(--border); color:var(--ink); padding:8px; border-radius:var(--radius);">
+        <button class="btn btn-primary" style="justify-content:center;" onclick="closeModal('modAddTx')">儲存交易</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modWs" style="display:none;">
+    <div class="modal-box">
+      <div class="card-head">
+        <span class="card-title">💼 工作區管理</span>
+        <button class="btn" onclick="closeModal('modWs')">✕</button>
+      </div>
+      <p style="margin: 10px 0; color:var(--ink-sub);">目前工作區：主帳戶 (Default)</p>
+      <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="closeModal('modWs')">確定關閉</button>
+    </div>
+  </div>
+
+  <script>
+    const SYSTEMS = {
+      shadcn: { name: "1. Shadcn UI / Vercel 風格", desc: "當今 Vercel / Linear 最流行的純粹設計系統。中性灰階、極致清爽 1px 細線、專注於數據與字體排版。" },
+      mui: { name: "2. MUI (Google Material Design 3)", desc: "Google 經典 Material Design 規範。兼具柔和的卡片陰影 (Elevation)、經典藍色 Accent (#1976d2) 與紙張感卡片。" },
+      antd: { name: "3. Ant Design (阿里巴巴 AntD 金融級)", desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格與灰色標頭 (#fafafa)。" },
+      stripe: { name: "4. Stripe FinTech (白金高質感金融)", desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練漸層與頂級字體微調。" },
+      carbon: { name: "5. IBM Carbon Design System", desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與藍色 (#0f62fe)。" },
+      mantine: { name: "6. Mantine / Chakra UI (歐美簡潔實用)", desc: "當代歐美 React 應用的標準體驗。柔軟適中的圓角 (10px)、親切粉彩 Badge、極佳的適應力。" },
+      github: { name: "7. GitHub Primer Design System", desc: "GitHub 官方設計語言。經典綠色按鈕 (#238636)、灰黑邊框 (#30363d) 與工程師極高認同感的代碼卡片。" },
+      tailwind: { name: "8. Tailwind UI Official Style", desc: "Tailwind Labs 官方組件風格。洗練靛藍 (#4f46e5)、柔和淺灰卡片、極具彈性的圓角與細緻微陰影。" },
+      fluent: { name: "9. Microsoft Fluent Design 2.0", desc: "微軟 Windows 11 / Office 365 現代設計語言。雲藍 Accent (#0078d4)、柔和多層次質感與極度圓潤視覺。" },
+      atlassian: { name: "10. Atlassian Design System (Jira/Confluence)", desc: "全球團隊協作標竿。經典 B200 藍色 (#0052cc)、明亮高對比 Tag、適合多專案工作區切換與分析。" },
+      apple: { name: "11. Apple macOS / iOS Human Interface", desc: "蘋果官方人機介面指南 (HIG)。極簡雪白背景、系統天藍 Accent (#007aff)、經典圓角 (14px) 與極致通透感。" },
+      notion: { name: "12. Notion Warm Minimal Style", desc: "Notion 書寫風質感。暖白背景 (#fbfbfa)、單色黑灰線條、極度乾淨且毫無干擾的資訊呈顯。" },
+      shopify: { name: "13. Shopify Polaris System", desc: "Shopify 全球電商與財報管理系統。獨特墨綠 Accent (#008060)、極高對比的報表數字與清爽白色卡片。" },
+      semi: { name: "14. ByteDance Semi Design", desc: "字節跳動企業級設計語言。高飽和藍色 (#0064fa)、極佳的圓角弧度與高效率數據表格。" },
+      salesforce: { name: "15. Salesforce Lightning (SLDS)", desc: "Salesforce 經典 CRM 與金融資產平台。專屬 Lightning 藍 (#0176d3)、穩重的頂部 Header 與結構化清單。" },
+      linear: { name: "16. Linear.app Obsidian Dark", desc: "Linear 極致曜黑與紫光質感。`#08090a` 深黑、紫羅蘭 Accent (#5e6ad2)、1px 鋼骨線與極速 ⌘K 設計。" }
+    };
+
+    function pickSystem(sys) {
+      document.documentElement.setAttribute('data-system', sys);
+      document.getElementById('sysBadge').innerText = sys.toUpperCase();
+      document.getElementById('sysDesc').innerText = SYSTEMS[sys].desc;
+
+      const btns = document.querySelectorAll('.sys-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+
+    function goPage(id) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page-' + id).classList.add('active');
+
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+
+    function setFrame(m) {
+      const vp = document.getElementById('appViewport');
+      if (m === 'mobile') vp.classList.add('mobile-view');
+      else vp.classList.remove('mobile-view');
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'grid'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // Init
+    document.getElementById('sysDesc').innerText = SYSTEMS['shadcn'].desc;
+  </script>
+</body>
+</html>

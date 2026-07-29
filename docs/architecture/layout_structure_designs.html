@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock PnL Web - 6 款完全不同 HTML DOM 結構 Layout 設計展示</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* =========================================================
+     * CORE RESET & CONTROL SUITE
+     * ========================================================= */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #090d16;
+      color: #e2e8f0;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* Top Control Suite Bar */
+    .control-suite {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: #0d1322;
+      border-bottom: 2px solid #38bdf8;
+      padding: 12px 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .suite-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .suite-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .suite-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      background: rgba(255,255,255,0.05);
+      padding: 8px 14px;
+      border-radius: 6px;
+      border-left: 3px solid #38bdf8;
+      margin-bottom: 12px;
+    }
+    .layout-selector {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .layout-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .layout-btn:hover { background: #334155; color: #fff; }
+    .layout-btn.active { background: #38bdf8; color: #0f172a; font-weight: 700; border-color: #38bdf8; }
+
+    /* Common Utility Helpers */
+    .num { text-align: right; font-family: 'JetBrains Mono', monospace; }
+    .up { color: #f87171; font-weight: 600; }
+    .down { color: #4ade80; font-weight: 600; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
+    .btn { background: #1e293b; border: 1px solid #334155; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: #38bdf8; color: #0f172a; border: none; font-weight: 700; }
+
+    /* Layout View Containers */
+    .layout-container { display: none; padding: 20px 0; }
+    .layout-container.active { display: block; }
+
+    /* =========================================================
+     * LAYOUT 1: CLASSIC LEFT-SIDEBAR DASHBOARD (左側邊欄 + 頂部搜尋)
+     * ========================================================= */
+    .l1-wrapper { display: flex; min-height: 85vh; background: #0f172a; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b; }
+    .l1-sidebar { width: 240px; background: #0b0f19; border-right: 1px solid #1e293b; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+    .l1-brand { font-size: 18px; font-weight: 700; color: #38bdf8; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
+    .l1-nav { display: flex; flex-direction: column; gap: 6px; }
+    .l1-nav-item { padding: 10px 14px; border-radius: 8px; color: #94a3b8; text-decoration: none; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+    .l1-nav-item.active, .l1-nav-item:hover { background: #1e293b; color: #fff; }
+    .l1-main { flex: 1; padding: 24px; overflow-y: auto; }
+    .l1-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; background: #1e293b; padding: 12px 20px; border-radius: 12px; }
+    .l1-search { background: #0f172a; border: 1px solid #334155; color: #fff; padding: 8px 16px; border-radius: 8px; width: 300px; }
+    .l1-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .l1-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+
+    /* =========================================================
+     * LAYOUT 2: 3-PANE TRADING WORKSTATION (三窗格緊湊操盤台)
+     * ========================================================= */
+    .l2-ticker-tape { background: #020617; border-bottom: 1px solid #1e293b; padding: 8px 16px; font-family: monospace; font-size: 12px; color: #38bdf8; white-space: nowrap; overflow-x: auto; }
+    .l2-grid { display: grid; grid-template-columns: 260px 1fr 320px; gap: 12px; padding: 12px; background: #0b0f19; min-height: 80vh; border-radius: 12px; border: 1px solid #1e293b; }
+    .l2-pane { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 14px; overflow-y: auto; }
+    .l2-stock-item { padding: 10px; border-bottom: 1px solid #334155; cursor: pointer; display: flex; justify-content: space-between; }
+    .l2-stock-item:hover { background: #334155; }
+
+    /* =========================================================
+     * LAYOUT 3: BENTO GRID CANVAS (便當盒非對稱模組網格)
+     * ========================================================= */
+    .l3-bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .l3-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 20px; }
+    .l3-col-span-2 { grid-column: span 2; }
+    .l3-col-span-4 { grid-column: span 4; }
+    .l3-row-span-2 { grid-row: span 2; }
+
+    /* =========================================================
+     * LAYOUT 4: SPLIT MASTER-DETAIL (主從雙欄分割畫布)
+     * ========================================================= */
+    .l4-split-wrapper { display: grid; grid-template-columns: 380px 1fr; gap: 20px; min-height: 80vh; }
+    .l4-master { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; overflow-y: auto; }
+    .l4-detail { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    .l4-item-card { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; margin-bottom: 12px; cursor: pointer; }
+    .l4-item-card.active { border-color: #38bdf8; background: #1e293b; }
+
+    /* =========================================================
+     * LAYOUT 5: COMMAND CENTER STREAM (Command 搜尋 + 藥丸導覽 + 資訊流)
+     * ========================================================= */
+    .l5-wrap { max-width: 920px; margin: 0 auto; }
+    .l5-cmd-bar { background: #1e293b; border: 2px solid #38bdf8; border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(56,189,248,0.15); }
+    .l5-pill-nav { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 20px; }
+    .l5-pill { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 8px 18px; border-radius: 20px; cursor: pointer; font-weight: 500; }
+    .l5-pill.active { background: #38bdf8; color: #0f172a; font-weight: 700; border-color: #38bdf8; }
+    .l5-stream-card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+
+    /* =========================================================
+     * LAYOUT 6: EXECUTIVE BOARDROOM DECK (高階主管簡報卡片巨集)
+     * ========================================================= */
+    .l6-hero-deck { background: linear-gradient(135deg, #0f172a, #1e293b); border: 1px solid #38bdf8; border-radius: 20px; padding: 30px; margin-bottom: 24px; }
+    .l6-carousel { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 24px; }
+    .l6-mini-card { min-width: 260px; background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; flex-shrink: 0; }
+    .l6-table-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; }
+
+    /* Common Table Styling */
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    .data-table th { background: #0f172a; color: #94a3b8; padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+    .data-table td { padding: 11px 10px; border-bottom: 1px solid #1e293b; }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+   * TOP CONTROL SUITE (SWITCH BETWEEN 6 REAL LAYOUT STRUCTURES)
+   * ========================================================= -->
+  <div class="control-suite">
+    <div class="suite-header">
+      <div class="suite-title">
+        <span>📐 Stock PnL Web - 6 款完全不同 HTML DOM 結構 Layout 展示</span>
+        <span style="background:#38bdf8; color:#0f172a; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:700;" id="layoutBadge">Layout 1</span>
+      </div>
+    </div>
+
+    <div class="suite-desc" id="layoutDesc">
+      載入中...
+    </div>
+
+    <div class="layout-selector">
+      <button class="layout-btn active" onclick="switchLayout(1)">Layout 1：經典左側邊欄儀表板 (Sidebar Dashboard)</button>
+      <button class="layout-btn" onclick="switchLayout(2)">Layout 2：三窗格緊湊操盤台 (3-Pane Workstation)</button>
+      <button class="layout-btn" onclick="switchLayout(3)">Layout 3：便當盒非對稱模組網格 (Bento Grid Canvas)</button>
+      <button class="layout-btn" onclick="switchLayout(4)">Layout 4：主從雙欄分割畫布 (Split Master-Detail)</button>
+      <button class="layout-btn" onclick="switchLayout(5)">Layout 5：Command 搜尋 + 藥丸導覽串流 (Command Stream)</button>
+      <button class="layout-btn" onclick="switchLayout(6)">Layout 6：高階主管簡報卡片巨集 (Executive Boardroom Deck)</button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 1: CLASSIC LEFT-SIDEBAR DASHBOARD
+   * DOM 結構: Fixed 左側導覽列 + 頂部搜尋 Bar + 右側 2 欄資訊流 (65%/35%)
+   * ========================================================= -->
+  <div class="layout-container active" id="layout1">
+    <div class="l1-wrapper">
+      <aside class="l1-sidebar">
+        <div>
+          <div class="l1-brand">📈 股票小幫手</div>
+          <nav class="l1-nav">
+            <a class="l1-nav-item active">📊 庫存總覽</a>
+            <a class="l1-nav-item">🔍 個股分析</a>
+            <a class="l1-nav-item">🌐 總體經濟</a>
+            <a class="l1-nav-item">💱 外幣匯率</a>
+            <a class="l1-nav-item">📅 年度收益</a>
+            <a class="l1-nav-item">📝 交易紀錄</a>
+          </nav>
+        </div>
+        <div style="background:#1e293b; padding:12px; border-radius:8px; font-size:12px;">
+          💼 工作區：<b>主帳戶</b>
+        </div>
+      </aside>
+
+      <main class="l1-main">
+        <div class="l1-topbar">
+          <input type="text" class="l1-search" placeholder="🔍 全域搜尋股票代號 (如 2330)...">
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary">+ 新增交易</button>
+            <button class="btn">👤 ME (本機)</button>
+          </div>
+        </div>
+
+        <div class="l1-grid">
+          <div>
+            <div class="l1-card">
+              <h3>🇹🇼 台股持倉明細 (Holdings)</h3>
+              <table class="data-table">
+                <thead>
+                  <tr><th>代號</th><th>股票名稱</th><th class="num">現價</th><th class="num">持有股數</th><th class="num">未實現淨損益</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><b>2330</b></td><td>台積電</td><td class="num">$985.00</td><td class="num">1,000</td><td class="num up">+$235,000 (+31.3%)</td></tr>
+                  <tr><td><b>2454</b></td><td>聯發科</td><td class="num">$1,220.00</td><td class="num">500</td><td class="num down">-$60,000 (-8.9%)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <div class="l1-card">
+              <h3>📊 持倉資產速報</h3>
+              <div style="margin-top:12px;">
+                <div style="font-size:12px; color:#94a3b8;">台股總市值</div>
+                <div style="font-size:24px; font-weight:700; color:#38bdf8;">$1,854,000</div>
+              </div>
+              <div style="margin-top:12px;">
+                <div style="font-size:12px; color:#94a3b8;">美股總市值</div>
+                <div style="font-size:24px; font-weight:700; color:#38bdf8;">$24,850.00</div>
+              </div>
+            </div>
+
+            <div class="l1-card">
+              <h3>💱 匯率行情快訊</h3>
+              <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                <span>USD / TWD</span>
+                <span class="num up">32.650 (▲0.15%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 2: 3-PANE TRADING WORKSTATION
+   * DOM 結構: 跑馬燈 Header + 3 窗格 Grid (左:股票清單, 中:分析主視窗, 右:快速下單/交易紀錄)
+   * ========================================================= -->
+  <div class="layout-container" id="layout2">
+    <div style="border-radius:12px; overflow:hidden;">
+      <div class="l2-ticker-tape">
+        🔥 [即時行情] 2330 台積電 $985.00 (+1.5%) │ 2454 聯發科 $1220.00 (-0.8%) │ NVDA $124.50 (+3.2%) │ USD/TWD 32.650 (▲0.15%)
+      </div>
+      <div class="l2-grid">
+        <!-- Pane 1: Stock List -->
+        <div class="l2-pane">
+          <h4 style="margin-bottom:10px;">📋 持倉股票 Drawer</h4>
+          <div class="l2-stock-item">
+            <div><b>2330 台積電</b><br><small style="color:#94a3b8;">1,000 股</small></div>
+            <div class="num up">$985.00<br><small>+31.3%</small></div>
+          </div>
+          <div class="l2-stock-item">
+            <div><b>2454 聯發科</b><br><small style="color:#94a3b8;">500 股</small></div>
+            <div class="num down">$1,220.00<br><small>-8.9%</small></div>
+          </div>
+          <div class="l2-stock-item">
+            <div><b>NVDA 美股</b><br><small style="color:#94a3b8;">150 股</small></div>
+            <div class="num up">$124.50<br><small>+55.6%</small></div>
+          </div>
+        </div>
+
+        <!-- Pane 2: Main Active View -->
+        <div class="l2-pane">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3>🔍 2330 台積電 (TSMC) 專業分析視窗</h3>
+            <button class="btn btn-primary">📄 匯出報告</button>
+          </div>
+          <div style="background:#0f172a; padding:16px; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; gap:20px;">
+              <div><small style="color:#94a3b8;">營收 YoY</small><div class="up" style="font-size:18px;">+32.4%</div></div>
+              <div><small style="color:#94a3b8;">近4季 EPS</small><div style="font-size:18px;">$42.80</div></div>
+              <div><small style="color:#94a3b8;">本益比 PE</small><div style="font-size:18px;">23.01 倍</div></div>
+            </div>
+          </div>
+          <h4>三大法人籌碼明細</h4>
+          <table class="data-table">
+            <thead><tr><th>日期</th><th class="num">外資 (張)</th><th class="num">投信 (張)</th><th class="num">合計</th></tr></thead>
+            <tbody>
+              <tr><td>2026-07-29</td><td class="num up">+12,450</td><td class="num up">+1,200</td><td class="num up">+13,650</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pane 3: Transaction Entry Sidebar -->
+        <div class="l2-pane">
+          <h4 style="margin-bottom:12px;">⚡ 快速新增交易面板</h4>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <input type="text" value="2330" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:8px; border-radius:6px;">
+            <select style="background:#0f172a; border:1px solid #334155; color:#fff; padding:8px; border-radius:6px;">
+              <option>買入 (BUY)</option><option>賣出 (SELL)</option>
+            </select>
+            <input type="number" value="985" placeholder="成交價" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:8px; border-radius:6px;">
+            <input type="number" value="1000" placeholder="股數" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:8px; border-radius:6px;">
+            <button class="btn btn-primary" style="justify-content:center; padding:10px;">確認儲存交易</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 3: BENTO GRID CANVAS
+   * DOM 結構: 4x4 非對稱便當盒矩陣 (Hero Card 2x2, Table 4x2, Widgets 2x1)
+   * ========================================================= -->
+  <div class="layout-container" id="layout3">
+    <div class="l3-bento-grid">
+      <!-- Card 1: Big Hero Card -->
+      <div class="l3-card l3-col-span-2 l3-row-span-2" style="background:linear-gradient(135deg, #1e293b, #0f172a); border-color:#38bdf8;">
+        <span class="badge">Hero Portfolio</span>
+        <h2 style="font-size:36px; margin: 16px 0; color:#38bdf8;">$1,854,000 <small style="font-size:14px; color:#cbd5e1;">TWD</small></h2>
+        <div style="font-size:16px;" class="up">未實現淨損益 +$434,000 (+30.56%)</div>
+        <p style="margin-top:20px; color:#94a3b8;">包含 2 檔活躍台股持股。手續費與證交稅均已精確預扣完成。</p>
+      </div>
+
+      <!-- Card 2: US Stock Quick Summary -->
+      <div class="l3-card l3-col-span-2">
+        <h3>🇺🇸 美股資產總覽</h3>
+        <div style="font-size:24px; font-weight:700; margin-top:6px;" class="up">$24,850.00 USD (+36.54%)</div>
+      </div>
+
+      <!-- Card 3: Macro & FX Bento Tiles -->
+      <div class="l3-card">
+        <h4>🌐 美國核心 PCE</h4>
+        <div style="font-size:20px; font-weight:700; margin-top:6px;">+2.60%</div>
+      </div>
+      <div class="l3-card">
+        <h4>💱 美金 USD/TWD</h4>
+        <div style="font-size:20px; font-weight:700; margin-top:6px;" class="up">32.650</div>
+      </div>
+
+      <!-- Card 4: Full Table Bento Tile -->
+      <div class="l3-card l3-col-span-4">
+        <h3>📊 持股明細與年度已實現總覽</h3>
+        <table class="data-table">
+          <thead><tr><th>代號</th><th>股票名稱</th><th class="num">持有股數</th><th class="num">投入成本</th><th class="num">目前市值</th><th class="num">未實現淨損益</th></tr></thead>
+          <tbody>
+            <tr><td><b>2330</b></td><td>台積電</td><td class="num">1,000</td><td class="num">$750,000</td><td class="num">$985,000</td><td class="num up">+$235,000</td></tr>
+            <tr><td><b>2454</b></td><td>聯發科</td><td class="num">500</td><td class="num">$670,000</td><td class="num">$610,000</td><td class="num down">-$60,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 4: SPLIT MASTER-DETAIL
+   * DOM 結構: 40% Master 清單欄 + 60% Detail 畫布欄
+   * ========================================================= -->
+  <div class="layout-container" id="layout4">
+    <div class="l4-split-wrapper">
+      <!-- Master Left Column -->
+      <div class="l4-master">
+        <h3 style="margin-bottom:16px;">💼 持倉與觀察清單 (Master)</h3>
+        <div class="l4-item-card active">
+          <div style="display:flex; justify-content:space-between;">
+            <b>2330 台積電</b>
+            <span class="up">+$235,000</span>
+          </div>
+          <small style="color:#94a3b8;">1,000 股・現價 $985.00</small>
+        </div>
+        <div class="l4-item-card">
+          <div style="display:flex; justify-content:space-between;">
+            <b>2454 聯發科</b>
+            <span class="down">-$60,000</span>
+          </div>
+          <small style="color:#94a3b8;">500 股・現價 $1,220.00</small>
+        </div>
+        <div class="l4-item-card">
+          <div style="display:flex; justify-content:space-between;">
+            <b>NVDA NVIDIA Corp</b>
+            <span class="up">+$6,675 USD</span>
+          </div>
+          <small style="color:#94a3b8;">150 股・現價 $124.50</small>
+        </div>
+      </div>
+
+      <!-- Detail Right Canvas -->
+      <div class="l4-detail">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <div>
+            <h2>2330 台積電 (TSMC) 詳情畫布</h2>
+            <p style="color:#94a3b8;">點擊左側項目可切換查看右側詳細數據與歷史交易紀錄。</p>
+          </div>
+          <button class="btn btn-primary">+ 新增交易紀錄</button>
+        </div>
+
+        <div style="background:#0f172a; padding:16px; border-radius:10px; margin-bottom:20px;">
+          <h4>持股概況</h4>
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:10px;">
+            <div><small style="color:#94a3b8;">總投入成本</small><div style="font-size:16px; font-weight:700;">$750,000</div></div>
+            <div><small style="color:#94a3b8;">平均買入價</small><div style="font-size:16px; font-weight:700;">$750.00</div></div>
+            <div><small style="color:#94a3b8;">保本賣出價</small><div style="font-size:16px; font-weight:700;">$753.20</div></div>
+          </div>
+        </div>
+
+        <h4>交易歷史串流</h4>
+        <table class="data-table">
+          <thead><tr><th>日期</th><th>類別</th><th class="num">成交價</th><th class="num">股數</th><th class="num">現金流</th></tr></thead>
+          <tbody>
+            <tr><td>2026-06-15</td><td><span class="badge" style="color:#f87171;">買入</span></td><td class="num">$750.00</td><td class="num">1,000</td><td class="num down">-$751,068</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 5: COMMAND CENTER STREAM
+   * DOM 結構: 頂部 Command 搜尋列 + 藥丸分頁 + 中央置中垂直 Stream 串流卡片
+   * ========================================================= -->
+  <div class="layout-container" id="layout5">
+    <div class="l5-wrap">
+      <div class="l5-cmd-bar">
+        <span>🔍 <b>Spotlight 搜尋</b> (輸入 2330 / 總經 / 匯率...)</span>
+        <span class="badge">⌘ K Command</span>
+      </div>
+
+      <div class="l5-pill-nav">
+        <div class="l5-pill active">📊 庫存總覽</div>
+        <div class="l5-pill">🔍 個股分析</div>
+        <div class="l5-pill">🌐 總體經濟</div>
+        <div class="l5-pill">💱 外幣匯率</div>
+        <div class="l5-pill">📅 年度收益</div>
+        <div class="l5-pill">📝 交易紀錄</div>
+      </div>
+
+      <div class="l5-stream-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>🇹🇼 台股持倉 Summary</h3>
+          <span class="up" style="font-size:18px;">+$434,000 (+30.56%)</span>
+        </div>
+        <p style="color:#94a3b8; margin:8px 0 16px;">台股持倉總市值：$1,854,000 TWD</p>
+        <table class="data-table">
+          <thead><tr><th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">損益</th></tr></thead>
+          <tbody>
+            <tr><td><b>2330</b></td><td>台積電</td><td class="num">$985.00</td><td class="num up">+$235,000</td></tr>
+            <tr><td><b>2454</b></td><td>聯發科</td><td class="num">$1,220.00</td><td class="num down">-$60,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="l5-stream-card">
+        <h3>🌐 總體經濟最新數據 Stream</h3>
+        <p style="color:#94a3b8; margin-top:4px;">美國核心 PCE：+2.60% │ 非農就業：+206 千人</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+   * LAYOUT 6: EXECUTIVE BOARDROOM DECK
+   * DOM 結構: 大型 Hero 簡報 Banner + 橫向卡片 Carousel 滾動列 + 下方高階數據 Data Sheet
+   * ========================================================= -->
+  <div class="layout-container" id="layout6">
+    <div class="l6-hero-deck">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span class="badge">EXECUTIVE SUMMARY</span>
+          <h1 style="font-size:32px; margin-top:8px; color:#fff;">股票資產總體組合簡報</h1>
+          <p style="color:#cbd5e1;">台美股雙市場累積投資回報與歷史已實現收益總結。</p>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:12px; color:#94a3b8;">總估算資產 (TWD 換算)</div>
+          <div style="font-size:32px; font-weight:700; color:#38bdf8;">$2,665,292</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Horizontal Card Carousel -->
+    <h3 style="margin-bottom:12px;">持股卡片橫向滾動列 (Carousel)</h3>
+    <div class="l6-carousel">
+      <div class="l6-mini-card" style="border-color:#38bdf8;">
+        <span class="badge">2330 台積電</span>
+        <div style="font-size:22px; font-weight:700; margin:10px 0;">$985.00</div>
+        <div class="up">未實現 +$235,000 (+31.3%)</div>
+      </div>
+      <div class="l6-mini-card">
+        <span class="badge">2454 聯發科</span>
+        <div style="font-size:22px; font-weight:700; margin:10px 0;">$1,220.00</div>
+        <div class="down">未實現 -$60,000 (-8.9%)</div>
+      </div>
+      <div class="l6-mini-card">
+        <span class="badge">NVDA 美股</span>
+        <div style="font-size:22px; font-weight:700; margin:10px 0;">$124.50 USD</div>
+        <div class="up">未實現 +$6,675 (+55.6%)</div>
+      </div>
+    </div>
+
+    <!-- Executive Data Sheet -->
+    <div class="l6-table-card">
+      <h3>📊 高階主管資產 Data Sheet</h3>
+      <table class="data-table">
+        <thead>
+          <tr><th>市場</th><th>標的名稱</th><th class="num">投入總成本</th><th class="num">當前市值</th><th class="num">未實現損益</th><th class="num">報酬率</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>🇹🇼 台股</td><td>2330 台積電</td><td class="num">$750,000</td><td class="num">$985,000</td><td class="num up">+$235,000</td><td class="num up">+31.33%</td></tr>
+          <tr><td>🇹🇼 台股</td><td>2454 聯發科</td><td class="num">$670,000</td><td class="num">$610,000</td><td class="num down">-$60,000</td><td class="num down">-8.95%</td></tr>
+          <tr><td>🇺🇸 美股</td><td>NVDA NVIDIA Corp</td><td class="num">$12,000 USD</td><td class="num">$18,675 USD</td><td class="num up">+$6,675 USD</td><td class="num up">+55.62%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE CONTROLLER SCRIPT -->
+  <script>
+    const LAYOUT_DESCS = {
+      1: "Layout 1：經典左側邊欄儀表板 (Sidebar Dashboard) — DOM 結構：Fixed 左側導覽列 (帶 Logo 與工作區) + 頂部全域搜尋列 + 主區域 2 欄對分 (65% 持股表格 / 35% 資產速報卡)。",
+      2: "Layout 2：三窗格緊湊操盤台 (3-Pane Workstation) — DOM 結構：頂部跑馬燈行情條 + 3 窗格獨立 Grid (左: 股票選單 Drawer、中: 主分析內容與表格、右: 交易下單表單面板)。",
+      3: "Layout 3：便當盒非對稱模組網格 (Bento Grid Canvas) — DOM 結構：4x4 網格卡片佈局 (Hero 大卡片佔 2x2、全寬表格佔 4x2、指標小卡片佔 1x1)。資訊區塊感極強。",
+      4: "Layout 4：主從雙欄分割畫布 (Split Master-Detail) — DOM 結構：40% 60% 主從分割畫布 (左欄: 股票與年度卡片清單、右欄: 點擊後展開之對應詳細畫布與交易歷史串流)。",
+      5: "Layout 5：Command 搜尋 + 藥丸導覽串流 (Command Stream) — DOM 結構：頂部 ⌘K Command 搜尋列 + 置中藥丸導覽列 + 920px 單欄垂直動態串流卡片集。",
+      6: "Layout 6：高階主管簡報卡片巨集 (Executive Boardroom Deck) — DOM 結構：頂部 Hero 大數字簡報 Banner + 中間股票橫向滾動列 (Carousel) + 下方 Data Sheet 表格。"
+    };
+
+    function switchLayout(num) {
+      document.querySelectorAll('.layout-container').forEach(el => el.classList.remove('active'));
+      document.getElementById('layout' + num).classList.add('active');
+
+      document.getElementById('layoutBadge').innerText = 'Layout ' + num;
+      document.getElementById('layoutDesc').innerText = LAYOUT_DESCS[num];
+
+      const btns = document.querySelectorAll('.layout-btn');
+      btns.forEach((b, idx) => {
+        if (idx + 1 === num) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+
+    // Init
+    switchLayout(1);
+  </script>
+</body>
+</html>
