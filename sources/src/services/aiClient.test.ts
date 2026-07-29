@@ -10,6 +10,8 @@ import {
   toOpenAiMessages,
   GOOGLE_MAX_OUTPUT_TOKENS,
   TRUNCATION_NOTICE,
+  REASONING_FALLBACK_NOTICE,
+  stripThinkTags,
   type AiMessage,
 } from './aiClient'
 
@@ -123,6 +125,24 @@ describe('aiClient', () => {
     })
   })
 
+  describe('stripThinkTags', () => {
+    it('剝掉成對的 <think> 區塊', () => {
+      expect(stripThinkTags('<think>草稿</think>結論')).toBe('結論')
+    })
+
+    it('未閉合的 <think> 也要處理（輸出被截斷時很常見）', () => {
+      expect(stripThinkTags('<think>想到一半就沒額度了')).toBe('想到一半就沒額度了')
+    })
+
+    it('沒有 think 標籤時原樣回傳（去頭尾空白）', () => {
+      expect(stripThinkTags('  正常內容  ')).toBe('正常內容')
+    })
+
+    it('大小寫與多個區塊都認得', () => {
+      expect(stripThinkTags('<THINK>a</THINK>甲<think>b</think>乙')).toBe('甲乙')
+    })
+  })
+
   describe('extractOpenAiText', () => {
     it('應成功從 OpenAI 回覆中提取 choices[0].message.content', () => {
       const sample = {
@@ -160,19 +180,44 @@ describe('aiClient', () => {
       }
     }
 
-    it('推理型模型把答案放在 reasoning_content 時，明講是選錯模型', () => {
-      const e = kindOf({
+    /*
+     * 推理型模型：0.6.9-dev.4 起不再直接失敗。
+     * 請求端會先嘗試關掉思考；關不掉時改成「拿思考內容來用，但標示清楚」——
+     * 使用者不必為了這件事一直換模型，而思考會誤導人的問題由警語處理。
+     */
+    it('關不掉思考時改用思考內容，但前面必須加警語', () => {
+      const out = extractOpenAiText({
         choices: [{ finish_reason: 'stop', message: { content: '', reasoning_content: '我先想一下…' } }],
-      })!
-      expect(e.kind).toBe('bad-response')
-      expect(e.message).toContain('思考欄位')
-      expect(e.message).toContain('deepseek-r1')
+      })
+      expect(out).toContain('以下是模型的思考過程，不是正式結論')
+      expect(out).toContain('我先想一下…')
+    })
+
+    it('警語要明講數字可能是模型後來否定掉的（這是使用者踩過的坑）', () => {
+      expect(REASONING_FALLBACK_NOTICE).toContain('不是正式結論')
+      expect(REASONING_FALLBACK_NOTICE).toContain('數字與判斷都可能是它後來否定掉的')
+      expect(REASONING_FALLBACK_NOTICE).toContain('請勿直接採信')
     })
 
     it('reasoning 這個欄位名也認得（各家命名不同）', () => {
-      expect(kindOf({ choices: [{ message: { content: null, reasoning: '思考中' } }] })!.message).toContain(
-        '思考欄位',
+      expect(extractOpenAiText({ choices: [{ message: { content: null, reasoning: '思考中' } }] })).toContain(
+        '思考中',
       )
+    })
+
+    it('content 裡夾著 <think> 時剝掉思考、只留正文（有些端點不拆欄位）', () => {
+      const out = extractOpenAiText({
+        choices: [{ finish_reason: 'stop', message: { content: '<think>嗯…也許不對</think>這是正式結論。' } }],
+      })
+      expect(out).toBe('這是正式結論。')
+      expect(out).not.toContain('也許不對')
+    })
+
+    it('content 裡只有 <think>、沒有正文時，退到思考內容並加警語', () => {
+      const out = extractOpenAiText({
+        choices: [{ message: { content: '<think>只有思考</think>', reasoning_content: '只有思考' } }],
+      })
+      expect(out).toContain('不是正式結論')
     })
 
     it('還沒寫正文就用完輸出額度時，指出是輸出上限而不是結構壞掉', () => {
@@ -224,6 +269,68 @@ describe('aiClient', () => {
   })
 
   describe('createAiProvider complete 網路整合 (Mocked Fetch)', () => {
+    const okBody = (content: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ finish_reason: 'stop', message: { content } }] }),
+    })
+    const mkProvider = () =>
+      createAiProvider({
+        provider: 'openai-compatible',
+        baseUrl: 'http://localhost:11434',
+        model: 'llama3',
+        apiKey: '',
+      })
+
+    it('OpenAI 相容請求會附上關閉思考的欄位（這份工作不需要推理）', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(okBody('結果'))
+      vi.stubGlobal('fetch', mockFetch)
+
+      await mkProvider().complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+      // 沒有跨家通用的開關，三個都送、由端點各取所需
+      expect(body.reasoning_effort).toBe('none')
+      expect(body.think).toBe(false)
+      expect(body.chat_template_kwargs).toEqual({ enable_thinking: false })
+    })
+
+    it('端點不認得那些欄位而回 400 時，去掉重送一次並成功', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({}) })
+        .mockResolvedValueOnce(okBody('第二次就好了'))
+      vi.stubGlobal('fetch', mockFetch)
+
+      const res = await mkProvider().complete({
+        system: 'sys',
+        messages: [{ role: 'user', content: 'usr' }],
+      })
+
+      expect(res).toBe('第二次就好了')
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      const first = JSON.parse(mockFetch.mock.calls[0][1].body)
+      const second = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(first.reasoning_effort).toBe('none')
+      // 第二次必須乾淨，否則會一直 400
+      expect(second.reasoning_effort).toBeUndefined()
+      expect(second.think).toBeUndefined()
+      expect(second.chat_template_kwargs).toBeUndefined()
+      // 但正事不能掉：model 與 messages 要還在
+      expect(second.model).toBe('llama3')
+      expect(second.messages).toHaveLength(2)
+    })
+
+    it('只重送一次 —— 第二次仍 400 就照常報錯，不無限重試', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) })
+      vi.stubGlobal('fetch', mockFetch)
+
+      await expect(
+        mkProvider().complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] }),
+      ).rejects.toThrow()
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
     it('Google Provider 應帶上 x-goog-api-key 並正確傳送及解析', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

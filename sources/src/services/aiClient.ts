@@ -106,6 +106,30 @@ export function mapHttpError(status: number): AiErrorKind {
 export const TRUNCATION_NOTICE = '\n\n（⚠️ 本次輸出達到長度上限而未寫完，以上內容並不完整。）'
 
 /**
+ * 只拿得到思考內容時，貼在最前面的警語。
+ *
+ * **不可省略也不可淡化。** 思考是模型的推導草稿：會有自我懷疑、中途推翻、
+ * 算到一半的數字。把它當成正式分析讀會被誤導 —— 這是使用者實際踩過的坑，
+ * 也是當初要處理 `<think>` 的原因。
+ */
+export const REASONING_FALLBACK_NOTICE =
+  '⚠️ **以下是模型的思考過程，不是正式結論。**\n\n' +
+  '這個模型沒有寫出正文（推理型模型常見），且本端點不接受關閉思考的設定。' +
+  '思考內容包含推導草稿與中途自我修正，**數字與判斷都可能是它後來否定掉的**，請勿直接採信。' +
+  '若要正式的分析，請改用一般對話模型。\n\n---\n\n'
+
+/**
+ * 去掉 `<think>…</think>` 包裹（有些端點不拆欄位，直接把思考塞在文字裡）。
+ * 未閉合的 `<think>` 也要處理 —— 輸出被截斷時很常見。
+ */
+export function stripThinkTags(text: string): string {
+  return String(text ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<\/?think>/gi, '')
+    .trim()
+}
+
+/**
  * 純函式：解析 Google Gemini API 回傳 JSON。取不到內容時拋出 AiError('bad-response', …)
  *
  * `finishReason` 必須看：Gemini 2.5 起的思考（thinking）token 會計入 maxOutputTokens，
@@ -199,8 +223,19 @@ export function extractOpenAiText(json: unknown): string {
   const content = choice?.message?.content
   const finish = choice?.finish_reason
 
-  if (typeof content === 'string' && content.trim()) {
-    return finish === 'length' ? content.trim() + TRUNCATION_NOTICE : content.trim()
+  /*
+    正文有內容就用它，但要先剝掉 `<think>…</think>`：
+    有些端點不把思考拆成獨立欄位，而是連同正文一起塞進 content。
+    不剝的話畫面上會先出現一大段模型的自言自語，正式結論被埋在下面。
+
+    剝完若整段變空（content 裡其實只有思考），就往下走到 reasoning 那條 ——
+    那裡會加上警語再呈現，而不是當作正常結果。
+  */
+  if (typeof content === 'string') {
+    const clean = stripThinkTags(content)
+    if (clean) {
+      return finish === 'length' ? clean + TRUNCATION_NOTICE : clean
+    }
   }
 
   /*
@@ -210,15 +245,19 @@ export function extractOpenAiText(json: unknown): string {
   */
   const msg = choice?.message ?? {}
 
-  // 1) 推理型模型：答案全進了思考欄位，content 是空的。這是「選錯模型」而不是壞掉
+  /*
+    1) 推理型模型：答案全進了思考欄位，content 是空的。
+
+    請求端已經盡量關掉思考（見 OpenAiCompatibleProviderImpl.buildBody），
+    但不是每個端點都吃那些欄位。走到這裡代表關不掉 ——
+    **與其整個失敗，不如把思考內容拿來用，但一定要標示它是什麼。**
+
+    標示不能省：思考是模型的推導草稿，會包含自我懷疑、中途否定、算到一半的數字。
+    當成正式分析讀會被誤導，這是使用者實際踩過的坑。
+  */
   const reasoning = msg.reasoning_content ?? msg.reasoning
-  if (typeof reasoning === 'string' && reasoning.trim()) {
-    throw new AiError(
-      'bad-response',
-      '這個模型把輸出全放在思考欄位（reasoning_content）、正文是空的，' +
-        '常見於 deepseek-r1 / qwq / gpt-oss 等推理型模型。' +
-        '請改用一般對話模型，或改用會把結論寫進 content 的版本。',
-    )
+  if (typeof reasoning === 'string' && stripThinkTags(reasoning).trim()) {
+    return REASONING_FALLBACK_NOTICE + stripThinkTags(reasoning).trim()
   }
 
   // 2) 思考／前言把輸出額度用光，還沒寫到正文就被切斷（等同 Google 的 MAX_TOKENS）
@@ -353,15 +392,38 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
     this.settings = settings
   }
 
-  async complete(req: AiRequest): Promise<string> {
-    const base = normalizeBaseUrl(this.settings.baseUrl)
-    const url = `${base}/chat/completions`
-    const body = {
+  /**
+   * `noThinking` 為 true 時附上「不要思考」的欄位。
+   *
+   * **這份工作不需要推理**（理由同 Google 那條路徑：數字全由程式算好，
+   * 模型只負責照著寫成白話），而推理型模型會把整個輸出額度花在思考上，
+   * 正文一個字都沒寫 —— 使用者實際遇到的就是這個。
+   *
+   * 沒有跨家通用的開關，故三個都送、由端點各取所需；不認得的欄位大多會被忽略，
+   * 真的 400 的話呼叫端會去掉重送一次：
+   * - `reasoning_effort`：OpenAI o 系列與多數相容端點
+   * - `think`：Ollama
+   * - `chat_template_kwargs.enable_thinking`：vLLM / SGLang 上的 Qwen3 等
+   */
+  private buildBody(req: AiRequest, noThinking: boolean): string {
+    return JSON.stringify({
       model: this.settings.model,
       messages: toOpenAiMessages(req.system, req.messages),
       temperature: 0.2,
       stream: false,
-    }
+      ...(noThinking
+        ? {
+            reasoning_effort: 'none',
+            think: false,
+            chat_template_kwargs: { enable_thinking: false },
+          }
+        : {}),
+    })
+  }
+
+  async complete(req: AiRequest): Promise<string> {
+    const base = normalizeBaseUrl(this.settings.baseUrl)
+    const url = `${base}/chat/completions`
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -371,7 +433,20 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
       headers['Authorization'] = `Bearer ${this.settings.apiKey.trim()}`
     }
 
-    const res = await requestJson(url, { method: 'POST', headers, body: JSON.stringify(body) }, req.timeoutMs)
+    const post = (body: string) =>
+      requestJson(url, { method: 'POST', headers, body }, req.timeoutMs)
+
+    let res = await post(this.buildBody(req, true))
+
+    /*
+      400 可能是端點不認得關閉思考的欄位（各家名稱不同，見 buildBody）。
+      去掉那些欄位重送一次；仍失敗就照原本的錯誤處理往下走。
+      與 Google 那條路徑同一個模式，也同樣不違反「不自動重試」——
+      那條是講不要替使用者重跑失敗的解讀（會重複計費），這裡是同一次請求的參數協商，只試一次。
+    */
+    if (!res.ok && res.status === 400) {
+      res = await post(this.buildBody(req, false))
+    }
 
     if (!res.ok) {
       const kind = mapHttpError(res.status)

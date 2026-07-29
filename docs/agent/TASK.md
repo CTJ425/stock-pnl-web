@@ -8,8 +8,10 @@
 
 ## 📋 Active Tasks
 
-### Task 39: AI 失敗訊息補上診斷 (0.6.9-dev.3)
-- **Status**: 🟡 **程式碼完成；等使用者回報新訊息以確認實際成因**
+### Task 39: AI 失敗訊息補上診斷 ＋ 支援推理型模型 (0.6.9-dev.3 / dev.4)
+- **Status**: 🟡 **程式碼完成；未併入 `main`**
+- **成因已確認**：使用者重試後新訊息指出是**推理型模型把答案放在 `reasoning_content`**。
+  dev.4 據此處理：先嘗試關閉思考 → 剝 `<think>` → 最後才退到思考內容並加警語。
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 17:15:00 Asia/Taipei
 - 使用者回報「分析失敗：OpenAI 相容 API 回傳結構未包含有效的 choices[0].message.content」。
