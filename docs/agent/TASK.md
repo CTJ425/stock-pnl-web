@@ -2,16 +2,16 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 13:40:00 Asia/Taipei
+- Timestamp: 2026-07-29 16:40:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
 
-### Task 36: 個股分析合併成單一長頁 (0.6.8-dev.1)
-- **Status**: 🟡 **程式碼完成、本機驗證通過；未部署、未併入 `main`**
+### Task 36: 個股分析合併成單一長頁 (0.6.8)
+- **Status**: ✅ **0.6.8 定版並上線（純前端，Supabase 兩區未動）**
 - **Agent**: Claude
-- **Timestamp**: 2026-07-29 16:20:00 Asia/Taipei
+- **Timestamp**: 2026-07-29 16:40:00 Asia/Taipei
 - 使用者要求把籌碼／技術面／基本面／我的持股併成一頁，順序
   **我的持股 → 籌碼 → 基本面 → 技術面**；AI 分析保留為獨立分頁。
 - 先產出 6 個 HTML 版型比稿讓使用者挑，選定 **版型 D（卡片分組）**。
@@ -21,10 +21,10 @@
   倍率改為 `pdfScaleFor` 依面積自動調，避開 iOS Safari 的 canvas 上限。
 - **a11y**：圖表改 roving tabindex，整頁 Tab 次數 213～765 → **24**。
 - 596 tests 綠、build 綠、lint 無新增警告。純前端異動，**Supabase 兩區都不必動**。
-- **待辦**：測試區驗證 → 併入 `main` 定版 0.6.8。
+- 已併入 `main` 並 push，GitHub Pages 已部署；`main` 與 `dev` 對齊。
 
-### Task 35: 折線圖改成 Google Finance 風格 (0.6.8-dev.1)
-- **Status**: 🟡 **程式碼完成、本機驗證通過；兩區皆未部署、未併入 `main`**
+### Task 35: 折線圖改成 Google Finance 風格 (0.6.8)
+- **Status**: ✅ **隨 0.6.8 上線**
 - **Agent**: Claude
 - **Timestamp**: 2026-07-29 14:45:00 Asia/Taipei
 - 使用者提供 Google Finance 匯率圖截圖要求比照。四項差異：漸層面積、垂直虛線、
@@ -42,7 +42,7 @@
 - **追加**：基本面的月營收加一張走勢圖（使用者以為在技術面，實際在基本面）。
   圖用由舊到新的 `revenueMonths`、表格用 reverse 後的 —— 拿錯會讓趨勢完全反過來
   而且看起來像真的，已用 y 座標測試釘住。
-- **待辦**：測試區驗證 → 併入 `main` 定版 0.6.8。純前端異動，**Supabase 兩區都不必動**。
+- 隨 0.6.8 併入 `main`。純前端異動，Supabase 兩區未動。
 
 ### Task 33: 手機改用底部導覽列 (0.6.6-dev.1)
 - **Status**: ✅ 已 commit（`dev` = 0.6.6-dev.1、`main` = 0.6.6 定版）；**尚未 push、尚未部署**
