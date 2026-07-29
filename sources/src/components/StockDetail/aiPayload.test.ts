@@ -210,6 +210,61 @@ describe('aiPayload', () => {
       expect(user).toContain('建議操作')
     })
 
+    it('system 帶入使用者的分批進出框架，但不放寬「不得下買賣指令」那條', () => {
+      const payload = buildAiPayload({
+        ticker: '2330',
+        name: '台積電',
+        view: dummyView,
+        report: dummyReport,
+        range: '1y',
+      })
+      const { system } = renderAiPrompt(payload)
+
+      // 四種框架的名稱都要在，模型才有共同語彙可用
+      expect(system).toContain('金字塔建倉')
+      expect(system).toContain('倒金字塔停利')
+      expect(system).toContain('非等距網格')
+      expect(system).toContain('馬丁格爾')
+      // 舉例用的分批比例
+      expect(system).toContain('10% → 20% → 30% → 50%')
+      expect(system).toContain('10% → 20% → 30% → 40% → 100%')
+
+      /*
+        關鍵：加了操作框架**不等於**放行買賣指令。
+        準則 5 那條必須原封不動地還在，而且新準則要明講它不放寬 5。
+      */
+      expect(system).toContain('不得給出明確的買進')
+      expect(system).toContain('這不放寬準則 5')
+      expect(system).toContain('絕對不得指定加碼或減碼的比例')
+      expect(system).toContain('不得當成對本檔股票的具體指示')
+    })
+
+    it('馬丁格爾必須帶著「標的不歸零且資金無限」的前提，不可與其他三項並列成等價選項', () => {
+      const { system } = renderAiPrompt(
+        buildAiPayload({ ticker: '2330', name: '台積電', view: dummyView, report: dummyReport, range: '1y' }),
+      )
+
+      /*
+        這一條是刻意鎖死的。馬丁格爾與另外三個框架性質不同：
+        金字塔／倒金字塔／網格都是有上限的部位管理，而它照定義是無上限的
+        （虧損後加倍）。「只要一次反彈就解套」在「資金無限」時才成立，
+        真實帳戶不成立 —— 少了這個前提，它讀起來就會像一個穩賺的方法。
+      */
+      expect(system).toContain('標的不會歸零、而且資金無限')
+      expect(system).toContain('真實帳戶兩者都不成立')
+      expect(system).toContain('所需投入資金呈指數成長')
+      expect(system).toContain('每次提到它，都必須同時說明這個前提')
+      expect(system).toContain('不得把它描述成與前三項等價的選項')
+    })
+
+    it('提到攤平時必須在「注意事項」講風險（攤平不等於降低風險）', () => {
+      const { system } = renderAiPrompt(
+        buildAiPayload({ ticker: '2330', name: '台積電', view: dummyView, report: dummyReport, range: '1y' }),
+      )
+      expect(system).toContain('攤平會放大部位，並不等於降低風險')
+      expect(system).toContain('越攤平虧損越大')
+    })
+
     it('基本面與新聞有資料時應帶單位、產業別與逐則標題', () => {
       const payload = buildAiPayload({
         ticker: '2330',
