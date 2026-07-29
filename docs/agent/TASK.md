@@ -2,11 +2,39 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 17:30:00 Asia/Taipei
+- Timestamp: 2026-07-29 22:10:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 41: README 的部署指令與線上 verify_jwt 不一致
+- **Status**: 🔴 **未修（文件錯誤，不影響現行運作）**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 22:45:00 Asia/Taipei
+- `sources/supabase/README.md:71-73` 與根目錄 `README.md:200-201` 對**兩支** Edge Function
+  都寫了 `--no-verify-jwt`，但線上實況是 `stock-price` 為 **`verify_jwt = true`**
+  （正式區 v12、測試區 v8 都查過）。`CLAUDE.md` §13.3 的說法才對。
+- **風險**：照 README 抄指令重新部署，會把 `stock-price` 從「要登入」變成公開端點。
+- **建議修法**：兩份 README 的部署段落改成
+  `supabase functions deploy stock-price`（不帶旗標）
+  ＋ `supabase functions deploy stock-report --no-verify-jwt`，並補一句說明為什麼只有後者要帶。
+- 尚未動手 —— 不在使用者當次要求範圍內，等指示。
+
+### Task 40: UI 設計方向比較 + 0.6.9 架構流程 HTML
+- **Status**: ✅ **完成（純文件，未進版，維持 0.6.9）**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 22:10:00 Asia/Taipei
+- 產出兩份 HTML 於 `docs/architecture/`，並發布成 Artifact：
+  - `ui_redesign_shadcn_carbon_stripe.html` —— shadcn/ui · IBM Carbon · Stripe FinTech
+    三個方向，各含「庫存總覽」「個股分析」兩大畫面 + 元件表 + token 表。
+    **三個系統的版面骨架各自不同**（不是換色），這是與既有 `design_systems.html` 的差別。
+  - `architecture_workflow_0.6.9.html` —— 十章的 0.6.9 運作參考。
+- **待使用者決定**：要不要真的換設計系統、換哪一個。三者的改動成本已寫在頁尾：
+  - shadcn 最低（現有 `index.css` 已 token 化，主要是換 `:root` 變數）
+  - Carbon 最高（導覽要從水平 tab 改成左側欄，`AppShell.tsx` 的 `TabNav` 與 `.bottom-nav` 都得重寫）
+  - Stripe 中等，但要重挑 `chartColors.ts` 的六個寫死 hex，並可移除 `.report-surface` 覆寫
+- **未做**：尚未 commit 到 `dev`（等使用者指示）。
 
 ### Task 39: AI 在本地模型上的三個問題 (0.6.9)
 - **Status**: ✅ **隨 0.6.9 上線（純前端，Supabase 兩區未動）**

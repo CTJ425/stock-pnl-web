@@ -1,0 +1,1491 @@
+<title>stock-pnl-web 0.6.9 — 系統架構與運作流程</title>
+
+<style>
+/* =========================================================================
+   stock-pnl-web 0.6.9 · 架構與運作流程參考
+   顏色規則：頁面本身是單色（墨與線），所有彩色都有語意 —— 一個顏色代表一種
+   元件類型。見「圖例」。無外部資源，字體用系統堆疊。
+   ========================================================================= */
+
+:root {
+  --bg:        #f6f7f8;
+  --panel:     #ffffff;
+  --panel-2:   #eef0f2;
+  --line:      #dcdfe3;
+  --line-soft: #e8eaed;
+  --ink:       #12171d;
+  --ink-2:     #525c68;
+  --ink-3:     #7d8794;
+
+  /* 語意色：元件類型 */
+  --c-client:  #2f6d92;
+  --c-edge:    #5348cf;
+  --c-db:      #9c3f7c;
+  --c-store:   #0e7267;
+  --c-ext:     #98570f;
+  --c-cron:    #ab2f42;
+
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+          'Liberation Mono', 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1216; --panel: #161b21; --panel-2: #1d232b;
+    --line: #2a323b; --line-soft: #212831;
+    --ink: #e4e9ef; --ink-2: #9aa5b1; --ink-3: #6d7885;
+    --c-client: #6cb4dc; --c-edge: #9d95ff; --c-db: #e28ac0;
+    --c-store: #4ec9b6; --c-ext: #e0a44f; --c-cron: #ff8993;
+  }
+}
+:root[data-theme='light'] {
+  --bg: #f6f7f8; --panel: #ffffff; --panel-2: #eef0f2;
+  --line: #dcdfe3; --line-soft: #e8eaed;
+  --ink: #12171d; --ink-2: #525c68; --ink-3: #7d8794;
+  --c-client: #2f6d92; --c-edge: #5348cf; --c-db: #9c3f7c;
+  --c-store: #0e7267; --c-ext: #98570f; --c-cron: #ab2f42;
+}
+:root[data-theme='dark'] {
+  --bg: #0e1216; --panel: #161b21; --panel-2: #1d232b;
+  --line: #2a323b; --line-soft: #212831;
+  --ink: #e4e9ef; --ink-2: #9aa5b1; --ink-3: #6d7885;
+  --c-client: #6cb4dc; --c-edge: #9d95ff; --c-db: #e28ac0;
+  --c-store: #4ec9b6; --c-ext: #e0a44f; --c-cron: #ff8993;
+}
+
+* { box-sizing: border-box; }
+
+.doc {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15px; line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 100px; overflow-x: hidden;
+}
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
+
+/* ---------- 標頭 ---------- */
+.hd { padding: 66px 0 30px; border-bottom: 1px solid var(--line); }
+.kicker {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+}
+.hd h1 {
+  margin: 0 0 16px; font-size: clamp(30px, 4.6vw, 46px); line-height: 1.14;
+  font-weight: 680; letter-spacing: -.025em; text-wrap: balance;
+}
+.hd .sub { font-size: 17px; color: var(--ink-2); max-width: 64ch; margin: 0; }
+.hd .sub code { font-family: var(--mono); font-size: 14.5px; }
+
+.facts {
+  display: grid; gap: 1px; background: var(--line);
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  border: 1px solid var(--line); margin: 30px 0 0;
+}
+.facts div { background: var(--panel); padding: 13px 15px; }
+.facts dt { font-size: 11px; color: var(--ink-3); margin: 0; letter-spacing: .04em; }
+.facts dd { margin: 3px 0 0; font-size: 21px; font-weight: 650; letter-spacing: -.02em; }
+.facts dd small { font-size: 12px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+
+/* ---------- 版面：目錄 + 內文 ---------- */
+.layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 44px; margin-top: 44px; }
+@media (max-width: 940px) { .layout { grid-template-columns: 1fr; gap: 0; } }
+
+.toc { position: sticky; top: 22px; align-self: start; font-size: 13px; }
+@media (max-width: 940px) {
+  .toc { position: static; margin-bottom: 40px; border: 1px solid var(--line); padding: 14px 16px; background: var(--panel); }
+}
+.toc h2 {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 10px; font-weight: 600;
+}
+.toc a {
+  display: flex; gap: 9px; padding: 4px 0; color: var(--ink-2);
+  text-decoration: none; border-left: 2px solid transparent; padding-left: 10px; margin-left: -12px;
+}
+.toc a:hover { color: var(--ink); }
+.toc a.on { color: var(--ink); border-left-color: var(--ink); font-weight: 600; }
+.toc a b { font-family: var(--mono); font-size: 11px; color: var(--ink-3); font-weight: 400; flex: none; }
+.toc a.on b { color: var(--ink); }
+.toc a:focus-visible { outline: 2px solid var(--c-edge); outline-offset: 2px; }
+
+/* ---------- 章節 ---------- */
+.sec { scroll-margin-top: 20px; padding-bottom: 52px; }
+.sec > h2 {
+  display: flex; align-items: baseline; gap: 14px;
+  font-size: 25px; font-weight: 660; letter-spacing: -.02em;
+  margin: 0 0 6px; padding-bottom: 12px; border-bottom: 2px solid var(--ink);
+  text-wrap: balance;
+}
+.sec > h2 span { font-family: var(--mono); font-size: 13px; color: var(--ink-3); font-weight: 400; flex: none; }
+.sec > h3 {
+  font-size: 15px; font-weight: 650; margin: 32px 0 10px;
+  letter-spacing: -.005em;
+}
+.sec p { margin: 0 0 14px; max-width: 72ch; color: var(--ink-2); }
+.sec p strong { color: var(--ink); font-weight: 640; }
+.sec ul { margin: 0 0 14px; padding-left: 20px; color: var(--ink-2); max-width: 72ch; }
+.sec li { margin-bottom: 5px; }
+.sec li strong { color: var(--ink); font-weight: 640; }
+
+code, .m {
+  font-family: var(--mono); font-size: .88em;
+  background: var(--panel-2); padding: 1px 5px; border-radius: 3px;
+  color: var(--ink); white-space: nowrap;
+}
+.sec > h2 code, td code, th code { background: none; padding: 0; }
+
+/* ---------- 表格 ---------- */
+.tw { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); margin: 0 0 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+th {
+  text-align: left; padding: 9px 13px; font-size: 10.5px; font-weight: 660;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line); background: var(--panel-2); white-space: nowrap;
+}
+td { padding: 9px 13px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.k { color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+td.nowrap { white-space: nowrap; }
+.url { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--ink-2); }
+
+/* ---------- 元件類型標記 ---------- */
+.tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  padding: 1px 7px; border: 1px solid currentColor; border-radius: 2px;
+  white-space: nowrap;
+}
+.t-client { color: var(--c-client); }
+.t-edge   { color: var(--c-edge); }
+.t-db     { color: var(--c-db); }
+.t-store  { color: var(--c-store); }
+.t-ext    { color: var(--c-ext); }
+.t-cron   { color: var(--c-cron); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 22px; font-size: 12px; color: var(--ink-3); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 10px; height: 10px; display: block; flex: none; }
+
+/* ---------- 分層圖 ---------- */
+.band {
+  border: 1px solid var(--line); background: var(--panel);
+  border-left: 3px solid var(--bc, var(--line));
+  padding: 14px 16px; margin: 0;
+}
+.band-h {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; font-weight: 660; color: var(--bc, var(--ink)); margin-bottom: 11px;
+  letter-spacing: .02em;
+}
+.band-h em { font-style: normal; font-weight: 400; color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.nodes { display: flex; flex-wrap: wrap; gap: 8px; }
+.node {
+  border: 1px solid var(--line); background: var(--bg);
+  padding: 8px 11px; min-width: 132px; flex: 1 1 auto; max-width: 260px;
+}
+.node b { display: block; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+.node small { display: block; font-size: 11px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; }
+
+.flowarrow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 0 7px 22px; font-size: 11.5px; color: var(--ink-3);
+  font-family: var(--mono); position: relative;
+}
+.flowarrow::before {
+  content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+  width: 1px; background: var(--line);
+}
+.flowarrow::after {
+  content: '▼'; position: absolute; left: 6.5px; bottom: 1px; font-size: 8px; color: var(--ink-3);
+}
+.flowarrow span { background: var(--bg); padding-right: 8px; }
+
+/* ---------- 資料時序：情境播放器 ---------- */
+.scn { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.scn-btn {
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 8px 13px; cursor: pointer; line-height: 1.3;
+  background: var(--panel); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 4px;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.scn-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+.scn-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.scn-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .35; flex: none; }
+.scn-btn[aria-pressed='true'] { color: var(--kc); border-color: currentColor; background: color-mix(in srgb, var(--kc) 10%, transparent); font-weight: 650; }
+.scn-btn[aria-pressed='true'] .dot { opacity: 1; }
+.scn-btn[data-kind='live']   { --kc: var(--c-client); }
+.scn-btn[data-kind='store']  { --kc: var(--c-store); }
+.scn-btn[data-kind='batch']  { --kc: var(--c-cron); }
+.scn-btn[data-kind='direct'] { --kc: var(--c-ext); }
+
+.player { border: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.player-scroll { overflow-x: auto; }
+svg.flow { display: block; width: 1180px; height: auto; }
+@media (min-width: 1180px) { svg.flow { width: 100%; } }
+
+.zone { fill: var(--panel-2); stroke: var(--line-soft); }
+.collab { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; fill: var(--ink-3); }
+.fnode rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; transition: stroke .3s, fill .3s, opacity .3s; }
+.fnode .t { fill: var(--ink); font-size: 12.5px; font-weight: 600; font-family: var(--sans); }
+.fnode .st { fill: var(--ink-3); font-size: 9.5px; font-family: var(--mono); }
+.fnode.dim rect { opacity: .38; }
+.fnode.dim .t, .fnode.dim .st { opacity: .3; }
+.fnode.on rect { stroke-width: 2; stroke: var(--kc); fill: color-mix(in srgb, var(--kc) 11%, transparent); }
+/* 序號徽章：資料時序的關鍵 —— 直接標在節點上 */
+.seqbadge { opacity: 0; transition: opacity .3s; }
+.seqbadge circle { fill: var(--kc); }
+.seqbadge text { fill: var(--panel); font-size: 10px; font-weight: 700; font-family: var(--mono); text-anchor: middle; }
+.fnode.on .seqbadge { opacity: 1; }
+
+.flink { fill: none; stroke: var(--line); stroke-width: 1.4; opacity: .4; transition: opacity .3s, stroke .3s; }
+.flink.dim { opacity: .09; }
+.flink.on { opacity: 1; stroke-width: 2.2; stroke: var(--kc); stroke-dasharray: 7 7; animation: dash 1.05s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -28; } }
+.fhop { font-family: var(--mono); font-size: 9.5px; fill: var(--ink-3); transition: opacity .3s; }
+.fhop.dim { opacity: .1; }
+.fhop.on { fill: var(--ink); font-weight: 600; }
+
+.steps { border-top: 1px solid var(--line); background: var(--panel-2); padding: 18px 20px 20px; }
+.steps-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
+.steps-h h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.kindpill {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; font-weight: 650;
+  padding: 2px 8px; border-radius: 3px;
+  color: var(--kc); background: color-mix(in srgb, var(--kc) 13%, transparent);
+}
+.steps-why { margin: 0 0 15px; font-size: 13.5px; color: var(--ink-2); max-width: 80ch; }
+ol.seq { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+ol.seq li {
+  display: grid; grid-template-columns: 26px 116px minmax(0, 1fr);
+  gap: 12px; align-items: baseline; font-size: 13.5px; color: var(--ink-2);
+  padding: 8px 0; border-top: 1px solid var(--line-soft);
+}
+ol.seq li:first-child { border-top: none; }
+ol.seq .n {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  color: var(--panel); background: var(--kc);
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; align-self: start;
+}
+ol.seq .when {
+  font-family: var(--mono); font-size: 11px; color: var(--kc);
+  font-variant-numeric: tabular-nums; align-self: start; padding-top: 2px;
+}
+ol.seq .when.idle { color: var(--ink-3); }
+ol.seq li strong { color: var(--ink); font-weight: 640; }
+@media (max-width: 640px) {
+  ol.seq li { grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+  ol.seq .when { grid-column: 2; padding-top: 0; margin-bottom: 2px; }
+  ol.seq .what { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flink.on { animation: none; }
+  .fnode rect, .flink, .fhop, .seqbadge { transition: none; }
+}
+
+/* ---------- 排程時間軸 ---------- */
+.tl { border: 1px solid var(--line); background: var(--panel); padding: 18px 16px 12px; overflow-x: auto; }
+.tl-inner { min-width: 660px; }
+.tl-hours { display: grid; grid-template-columns: 152px 1fr; align-items: end; gap: 12px; margin-bottom: 4px; }
+.tl-ticks { position: relative; height: 16px; }
+.tl-ticks i {
+  position: absolute; bottom: 0; width: 1px; height: 5px; background: var(--line);
+  transform: translateX(-.5px);
+}
+.tl-ticks b {
+  position: absolute; bottom: 7px; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3); font-weight: 400;
+}
+.tl-row { display: grid; grid-template-columns: 152px 1fr; align-items: center; gap: 12px; margin-bottom: 7px; }
+.tl-name { font-family: var(--mono); font-size: 11.5px; color: var(--rc, var(--ink)); text-align: right; white-space: nowrap; }
+.tl-track {
+  position: relative; height: 22px; background: var(--panel-2);
+  border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+}
+.tl-track::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / 24 - 1px), var(--line) calc(100% / 24 - 1px), var(--line) calc(100% / 24));
+  opacity: .55;
+}
+.tl-span {
+  position: absolute; top: 3px; bottom: 3px; background: var(--rc);
+  opacity: .82;
+}
+.tl-tick {
+  position: absolute; top: 2px; bottom: 2px; width: 3px; background: var(--rc);
+  transform: translateX(-1.5px);
+}
+.tl-note { display: grid; grid-template-columns: 152px 1fr; gap: 12px; font-size: 11px; color: var(--ink-3); margin: -3px 0 10px; }
+.tl-note span:first-child { text-align: right; font-family: var(--mono); }
+
+/* ---------- 閘門流程 ---------- */
+.gates { display: grid; gap: 10px; }
+.gate {
+  border: 1px solid var(--line); background: var(--panel);
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) minmax(0, 210px);
+  align-items: stretch;
+}
+@media (max-width: 700px) { .gate { grid-template-columns: 30px minmax(0, 1fr); } .gate .gate-out { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); } }
+.gate-n {
+  background: var(--panel-2); display: grid; place-items: center;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+}
+.gate-b { padding: 11px 14px; }
+.gate-b b { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--ink); margin-bottom: 3px; }
+.gate-b small { font-size: 12px; color: var(--ink-2); line-height: 1.55; display: block; }
+.gate-out {
+  border-left: 1px solid var(--line); padding: 11px 14px;
+  font-size: 11.5px; color: var(--c-cron); font-family: var(--mono); line-height: 1.5;
+  display: flex; align-items: center;
+}
+
+/* ---------- 檔案樹 ---------- */
+.tree {
+  border: 1px solid var(--line); background: var(--panel);
+  padding: 15px 17px; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.9; overflow-x: auto; color: var(--ink-2); margin-bottom: 16px;
+  white-space: pre; /* 樹狀縮排靠空白對齊，不能讓它重排 */
+}
+.tree b { color: var(--ink); font-weight: 600; }
+.tree i { color: var(--ink-3); font-style: normal; }
+.tree .g { color: var(--c-store); }
+
+/* ---------- 提示框 ---------- */
+.note {
+  border: 1px solid var(--line); border-left: 3px solid var(--nc, var(--ink-3));
+  background: var(--panel); padding: 13px 16px; margin: 0 0 16px;
+}
+.note b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 4px; font-weight: 650; }
+.note p { margin: 0; font-size: 13.5px; color: var(--ink-2); max-width: none; }
+.note p + p { margin-top: 8px; }
+.note--trap { --nc: var(--c-cron); }
+.note--fact { --nc: var(--c-edge); }
+
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+
+hr.rule { border: none; border-top: 1px solid var(--line); margin: 0 0 26px; }
+</style>
+
+<div class="doc">
+<div class="shell">
+
+  <header class="hd">
+    <p class="kicker">stock-pnl-web · 架構參考 · 對應 commit 63b140b</p>
+    <h1>0.6.9 是怎麼運作的</h1>
+    <p class="sub">
+      從瀏覽器按下「重新整理現價」，到台北時間半夜還在跑的盤後批次，
+      這份文件把 <code>sources/</code> 底下每一條實際存在的路徑攤開：
+      兩支 Edge Function、四個 pg_cron 排程、九張表、一個 Storage bucket，
+      以及一條完全繞過後端的 AI 呼叫路徑。
+    </p>
+    <dl class="facts">
+      <div><dt>Edge Functions</dt><dd>2 <small>支</small></dd></div>
+      <div><dt>pg_cron 排程</dt><dd>4 <small>個</small></dd></div>
+      <div><dt>盤後批次頻率</dt><dd>32 <small>次 / 平日</small></dd></div>
+      <div><dt>資料表</dt><dd>9 <small>張</small></dd></div>
+      <div><dt>Storage bucket</dt><dd>1 <small>個（公開讀）</small></dd></div>
+      <div><dt>外部資料源</dt><dd>13 <small>個端點</small></dd></div>
+    </dl>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc" aria-label="目錄">
+      <h2>目錄</h2>
+      <a href="#s1" class="on"><b>01</b>系統全景與資料時序</a>
+      <a href="#s2"><b>02</b>兩支 Edge Function</a>
+      <a href="#s3"><b>03</b>排程</a>
+      <a href="#s4"><b>04</b>四道閘門</a>
+      <a href="#s5"><b>05</b>外部資料源</a>
+      <a href="#s6"><b>06</b>資料庫</a>
+      <a href="#s7"><b>07</b>Storage</a>
+      <a href="#s8"><b>08</b>前端資料流</a>
+      <a href="#s9"><b>09</b>AI 分析</a>
+      <a href="#s10"><b>10</b>部署與陷阱</a>
+    </nav>
+
+    <main>
+
+    <!-- ============ 01 ============ -->
+    <section class="sec" id="s1">
+      <h2><span>01</span>系統全景與資料時序</h2>
+      <p>
+        整份系統由四層構成。每一層之間只有一種通道，沒有例外 ——
+        除了 §09 的 AI 呼叫，那條路徑刻意直接從瀏覽器打到外部供應商。
+      </p>
+
+      <div class="legend">
+        <span><i style="background:var(--c-client)"></i>前端 / 瀏覽器</span>
+        <span><i style="background:var(--c-edge)"></i>Edge Function</span>
+        <span><i style="background:var(--c-db)"></i>Postgres</span>
+        <span><i style="background:var(--c-store)"></i>Storage</span>
+        <span><i style="background:var(--c-ext)"></i>外部資料源</span>
+        <span><i style="background:var(--c-cron)"></i>排程 / 陷阱</span>
+      </div>
+
+      <div class="band" style="--bc:var(--c-client)">
+        <div class="band-h">前端 <em>React 19 · Vite 8 · GitHub Pages</em></div>
+        <div class="nodes">
+          <div class="node"><b>AppShell</b><small>六個分頁；本機模式時隱藏分析／總經／匯率</small></div>
+          <div class="node"><b>dataProvider.ts</b><small>LocalProvider（localStorage）／ SupabaseProvider 雙實作</small></div>
+          <div class="node"><b>services/*Proxy.ts</b><small>價格、報告、基本面、日線、新聞、總經、匯率</small></div>
+          <div class="node"><b>aiClient.ts</b><small>不經後端，直接打 AI 供應商</small></div>
+        </div>
+      </div>
+      <div class="flowarrow"><span>supabase.functions.invoke() · anon key</span></div>
+
+      <div class="band" style="--bc:var(--c-edge)">
+        <div class="band-h">Edge Functions <em>Deno · stock-price 要 JWT，stock-report 不要</em></div>
+        <div class="nodes">
+          <div class="node"><b>stock-price</b><small>即時報價 / 搜尋 / 台股清單 / 匯率即期，公開</small></div>
+          <div class="node"><b>stock-report</b><small>盤後批次、探測、總經、匯率、營收回補</small></div>
+        </div>
+      </div>
+      <div class="flowarrow"><span>SERVICE_ROLE_KEY（繞過 RLS）</span></div>
+
+      <div class="band" style="--bc:var(--c-db)">
+        <div class="band-h">Postgres <em>RLS 以 auth.uid() 隔離使用者資料</em></div>
+        <div class="nodes">
+          <div class="node"><b>使用者資料</b><small>workspaces · transactions · user_settings</small></div>
+          <div class="node"><b>共用快取</b><small>price_cache · stock_names（前端唯讀）</small></div>
+          <div class="node"><b>批次狀態</b><small>chip_raw_cache · batch_run_log · source_probe_log</small></div>
+          <div class="node"><b>全站設定</b><small>app_settings（單列，只有 admin 能寫）</small></div>
+        </div>
+      </div>
+      <div class="flowarrow"><span>uploadJson() · cacheControl: '0'</span></div>
+
+      <div class="band" style="--bc:var(--c-store)">
+        <div class="band-h">Storage <em>bucket「reports」，public = true</em></div>
+        <div class="nodes">
+          <div class="node"><b>manifest.json</b><small>指出今天要讀哪個日期資料夾</small></div>
+          <div class="node"><b>{YYYYMMDD}/{ticker}.json</b><small>盤後籌碼報告，保留 7 天</small></div>
+          <div class="node"><b>daily / fundamental / news</b><small>逐檔覆寫，不清除</small></div>
+          <div class="node"><b>macro/us.json · fx/twd.json</b><small>全站共用單檔</small></div>
+        </div>
+      </div>
+      <div class="flowarrow"><span>getPublicUrl() + fetch(cache: 'no-store') — 前端讀 Storage 不經過 Edge Function</span></div>
+
+      <div class="band" style="--bc:var(--c-ext)">
+        <div class="band-h">外部資料源 <em>全部由 Edge Function 出面，前端不直接接觸</em></div>
+        <div class="nodes">
+          <div class="node"><b>TWSE</b><small>三大法人、融資融券、借券、估值、月營收、產業別</small></div>
+          <div class="node"><b>TPEx</b><small>上櫃報價清單</small></div>
+          <div class="node"><b>MOPS</b><small>月營收歷史（big5 HTML）</small></div>
+          <div class="node"><b>Yahoo Finance</b><small>報價、日線、匯率</small></div>
+          <div class="node"><b>Google News RSS</b><small>個股新聞標題</small></div>
+          <div class="node"><b>FRED</b><small>美國總體經濟五項指標</small></div>
+        </div>
+      </div>
+
+      <h3>資料時序：點一個情境，看它怎麼走</h3>
+      <p>
+        上面那張分層圖說的是「東西擺在哪」，這一張說的是「一次請求依什麼順序經過它們」。
+        選一個情境，圖上會亮起該次呼叫實際走的路徑（節點上的圈號就是先後順序），
+        下方列出每一步發生的時間點。
+      </p>
+
+      <div class="scn" role="group" aria-label="選擇資料流情境">
+        <button class="scn-btn" data-sc="price"  data-kind="live"   aria-pressed="true"><span class="dot"></span>庫存總覽：查現價</button>
+        <button class="scn-btn" data-sc="detail" data-kind="store"  aria-pressed="false"><span class="dot"></span>個股分析：讀報告</button>
+        <button class="scn-btn" data-sc="batch"  data-kind="batch"  aria-pressed="false"><span class="dot"></span>盤後批次：產報告</button>
+        <button class="scn-btn" data-sc="daily"  data-kind="batch"  aria-pressed="false"><span class="dot"></span>總經／匯率：每日同步</button>
+        <button class="scn-btn" data-sc="ai"     data-kind="direct" aria-pressed="false"><span class="dot"></span>AI 分析：直連模型</button>
+      </div>
+
+      <div class="player">
+        <div class="player-scroll">
+          <svg class="flow" viewBox="0 0 1180 620" role="img"
+               aria-label="系統元件與呼叫關係圖：瀏覽器、前端服務層、Supabase、外部資料源四欄，可依情境高亮路徑">
+
+            <rect class="zone" x="14"  y="40" width="212" height="560" rx="4"/>
+            <rect class="zone" x="242" y="40" width="248" height="560" rx="4"/>
+            <rect class="zone" x="494" y="40" width="330" height="560" rx="4"/>
+            <rect class="zone" x="840" y="40" width="326" height="560" rx="4"/>
+
+            <text class="collab" x="24"  y="28">瀏覽器 / REACT SPA</text>
+            <text class="collab" x="252" y="28">前端服務層</text>
+            <text class="collab" x="504" y="28">SUPABASE</text>
+            <text class="collab" x="850" y="28">外部資料源</text>
+
+            <g id="flinks">
+              <!-- price -->
+              <path class="flink" data-f="price" data-i="0" d="M214,86 H254"/>
+              <path class="flink" data-f="price" data-i="1" d="M478,86 H506"/>
+              <path class="flink" data-f="price" data-i="2" d="M600,110 V122"/>
+              <path class="flink" data-f="price" data-i="3" d="M812,86 H852"/>
+              <!-- detail -->
+              <path class="flink" data-f="detail" data-i="0" d="M214,170 H254"/>
+              <path class="flink" data-f="detail" data-i="1" d="M478,164 C492,164 492,192 506,192"/>
+              <path class="flink" data-f="detail" data-i="2" d="M478,182 C498,182 498,362 506,362"/>
+              <!-- batch -->
+              <path class="flink" data-f="batch" data-i="0" d="M600,398 V386"/>
+              <path class="flink" data-f="batch" data-i="1" d="M700,338 V326"/>
+              <path class="flink" data-f="batch" data-i="2" d="M812,352 C832,352 832,170 852,170"/>
+              <path class="flink" data-f="batch" data-i="3" d="M812,362 C832,362 832,254 852,254"/>
+              <path class="flink" data-f="batch" data-i="4" d="M812,374 C832,374 832,422 852,422"/>
+              <path class="flink" data-f="batch" data-i="5" d="M560,338 V222"/>
+              <!-- daily（總經／匯率） -->
+              <path class="flink" data-f="daily" data-i="0" d="M660,398 V386"/>
+              <path class="flink" data-f="daily" data-i="1" d="M812,368 C836,368 836,338 852,338"/>
+              <path class="flink" data-f="daily" data-i="2" d="M540,338 V222"/>
+              <path class="flink" data-f="daily" data-i="3" d="M214,254 C232,254 232,176 254,176"/>
+              <!-- ai -->
+              <path class="flink" data-f="ai" data-i="0" d="M214,338 H254"/>
+              <path class="flink" data-f="ai" data-i="1" d="M478,332 C492,332 492,254 506,254"/>
+              <path class="flink" data-f="ai" data-i="2" d="M478,350 C496,350 496,556 560,556 L790,556 C826,556 830,540 852,524"/>
+            </g>
+
+            <g id="fhops">
+              <text class="fhop" data-f="price"  data-i="1" x="258" y="128">L1 命中就不對外，60 秒內只讀本機</text>
+              <text class="fhop" data-f="price"  data-i="3" x="700" y="56">L2 也過期，才真的對外</text>
+              <text class="fhop" data-f="detail" data-i="1" x="258" y="216">公開讀取，不耗函式額度</text>
+              <text class="fhop" data-f="batch"  data-i="0" x="612" y="472">pg_net · timeout 60 秒</text>
+              <text class="fhop" data-f="daily"  data-i="3" x="258" y="284">下次開頁才看到，沒有推播</text>
+              <text class="fhop" data-f="ai"     data-i="2" x="600" y="574">瀏覽器直連，完全不經 Supabase</text>
+            </g>
+
+            <g id="fnodes">
+              <!-- 瀏覽器 -->
+              <g class="fnode" data-n="dash">
+                <rect x="26" y="62" width="188" height="48" rx="3"/>
+                <text class="t" x="40" y="84">庫存總覽</text>
+                <text class="st" x="40" y="100">useStockPrices · 60s 輪詢</text>
+                <g class="seqbadge" data-n="dash"><circle cx="200" cy="76" r="9"/><text x="200" y="79.5">1</text></g>
+              </g>
+              <g class="fnode" data-n="analysis">
+                <rect x="26" y="146" width="188" height="48" rx="3"/>
+                <text class="t" x="40" y="168">個股分析</text>
+                <text class="st" x="40" y="184">分析內容 / AI 分析</text>
+                <g class="seqbadge" data-n="analysis"><circle cx="200" cy="160" r="9"/><text x="200" y="163.5">1</text></g>
+              </g>
+              <g class="fnode" data-n="macrofx">
+                <rect x="26" y="230" width="188" height="48" rx="3"/>
+                <text class="t" x="40" y="252">總體經濟 / 外幣匯率</text>
+                <text class="st" x="40" y="268">只讀 Storage，不觸發批次</text>
+                <g class="seqbadge" data-n="macrofx"><circle cx="200" cy="244" r="9"/><text x="200" y="247.5">5</text></g>
+              </g>
+              <g class="fnode" data-n="aitab">
+                <rect x="26" y="314" width="188" height="48" rx="3"/>
+                <text class="t" x="40" y="336">AI 分析分頁</text>
+                <text class="st" x="40" y="352">按下按鈕才呼叫</text>
+                <g class="seqbadge" data-n="aitab"><circle cx="200" cy="328" r="9"/><text x="200" y="331.5">1</text></g>
+              </g>
+              <g class="fnode" data-n="txn">
+                <rect x="26" y="398" width="188" height="48" rx="3"/>
+                <text class="t" x="40" y="420">交易紀錄 / 年度收益</text>
+                <text class="st" x="40" y="436">pnlEngine 本地計算</text>
+              </g>
+
+              <!-- 前端服務層 -->
+              <g class="fnode" data-n="priceproxy">
+                <rect x="254" y="62" width="224" height="48" rx="3"/>
+                <text class="t" x="268" y="84">priceProxy</text>
+                <text class="st" x="268" y="100">L1 localStorage · 60s / 600s</text>
+                <g class="seqbadge" data-n="priceproxy"><circle cx="464" cy="76" r="9"/><text x="464" y="79.5">2</text></g>
+              </g>
+              <g class="fnode" data-n="bucketsvc">
+                <rect x="254" y="146" width="224" height="48" rx="3"/>
+                <text class="t" x="268" y="168">reportsBucket</text>
+                <text class="st" x="268" y="184">getPublicUrl + cache:'no-store'</text>
+                <g class="seqbadge" data-n="bucketsvc"><circle cx="464" cy="160" r="9"/><text x="464" y="163.5">2</text></g>
+              </g>
+              <g class="fnode" data-n="aisvc">
+                <rect x="254" y="314" width="224" height="48" rx="3"/>
+                <text class="t" x="268" y="336">aiClient · aiSettings</text>
+                <text class="st" x="268" y="352">buildAiPayload · 不含持股成本</text>
+                <g class="seqbadge" data-n="aisvc"><circle cx="464" cy="328" r="9"/><text x="464" y="331.5">2</text></g>
+              </g>
+              <g class="fnode" data-n="dp">
+                <rect x="254" y="398" width="224" height="48" rx="3"/>
+                <text class="t" x="268" y="420">dataProvider</text>
+                <text class="st" x="268" y="436">Supabase ↔ localStorage 雙實作</text>
+              </g>
+
+              <!-- Supabase -->
+              <g class="fnode" data-n="efprice">
+                <rect x="506" y="62" width="306" height="48" rx="3"/>
+                <text class="t" x="520" y="84">Edge Function · stock-price</text>
+                <text class="st" x="520" y="100">verify_jwt = true（要登入）</text>
+                <g class="seqbadge" data-n="efprice"><circle cx="798" cy="76" r="9"/><text x="798" y="79.5">3</text></g>
+              </g>
+              <g class="fnode" data-n="pcache">
+                <rect x="506" y="122" width="306" height="40" rx="3"/>
+                <text class="t" x="520" y="141">price_cache</text>
+                <text class="st" x="520" y="155">L2 全站共用 · 前端唯讀</text>
+                <g class="seqbadge" data-n="pcache"><circle cx="798" cy="136" r="9"/><text x="798" y="139.5">4</text></g>
+              </g>
+              <g class="fnode" data-n="bucket">
+                <rect x="506" y="174" width="306" height="48" rx="3"/>
+                <text class="t" x="520" y="196">Storage · reports bucket</text>
+                <text class="st" x="520" y="212">public read · 前端直接下載</text>
+                <g class="seqbadge" data-n="bucket"><circle cx="798" cy="188" r="9"/><text x="798" y="191.5">3</text></g>
+              </g>
+              <g class="fnode" data-n="appsettings">
+                <rect x="506" y="234" width="306" height="40" rx="3"/>
+                <text class="t" x="520" y="253">app_settings</text>
+                <text class="st" x="520" y="267">AI 設定單列 · 僅 admin 可寫</text>
+                <g class="seqbadge" data-n="appsettings"><circle cx="798" cy="248" r="9"/><text x="798" y="251.5">3</text></g>
+              </g>
+              <g class="fnode" data-n="chipcache">
+                <rect x="506" y="286" width="306" height="40" rx="3"/>
+                <text class="t" x="520" y="305">chip_raw_cache</text>
+                <text class="st" x="520" y="319">原始回應 · 保留 14 天 · 僅伺服器端</text>
+                <g class="seqbadge" data-n="chipcache"><circle cx="798" cy="300" r="9"/><text x="798" y="303.5">4</text></g>
+              </g>
+              <g class="fnode" data-n="efreport">
+                <rect x="506" y="338" width="306" height="48" rx="3"/>
+                <text class="t" x="520" y="360">Edge Function · stock-report</text>
+                <text class="st" x="520" y="376">verify_jwt = false · x-cron-secret 把關</text>
+                <g class="seqbadge" data-n="efreport"><circle cx="798" cy="352" r="9"/><text x="798" y="355.5">2</text></g>
+              </g>
+              <g class="fnode" data-n="pgcron">
+                <rect x="506" y="398" width="306" height="56" rx="3"/>
+                <text class="t" x="520" y="420">pg_cron · 四個 job</text>
+                <text class="st" x="520" y="436">nightly · probe · macro-daily · fx-daily</text>
+                <g class="seqbadge" data-n="pgcron"><circle cx="798" cy="416" r="9"/><text x="798" y="419.5">1</text></g>
+              </g>
+
+              <!-- 外部 -->
+              <g class="fnode" data-n="mis">
+                <rect x="852" y="62" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="84">TWSE MIS 即時行情</text>
+                <text class="st" x="866" y="100">失敗退 Yahoo · 美股走 Yahoo</text>
+                <g class="seqbadge" data-n="mis"><circle cx="1138" cy="76" r="9"/><text x="1138" y="79.5">5</text></g>
+              </g>
+              <g class="fnode" data-n="openapi">
+                <rect x="852" y="146" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="168">TWSE OpenAPI · 基本面</text>
+                <text class="st" x="866" y="184">BWIBBU_ALL · t187ap05_L · t187ap17_L</text>
+                <g class="seqbadge" data-n="openapi"><circle cx="1138" cy="160" r="9"/><text x="1138" y="163.5">5</text></g>
+              </g>
+              <g class="fnode" data-n="chips">
+                <rect x="852" y="230" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="252">TWSE 盤後籌碼 ＋ Yahoo 日線</text>
+                <text class="st" x="866" y="268">T86 · MI_MARGN · TWT96U · chart 1y</text>
+                <g class="seqbadge" data-n="chips"><circle cx="1138" cy="244" r="9"/><text x="1138" y="247.5">5</text></g>
+              </g>
+              <g class="fnode" data-n="fredfx">
+                <rect x="852" y="314" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="336">FRED CSV ＋ Yahoo 匯率</text>
+                <text class="st" x="866" y="352">FRED 要用 MACRO_UA，否則連線被 reset</text>
+                <g class="seqbadge" data-n="fredfx"><circle cx="1138" cy="328" r="9"/><text x="1138" y="331.5">3</text></g>
+              </g>
+              <g class="fnode" data-n="news">
+                <rect x="852" y="398" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="420">Google News RSS</text>
+                <text class="st" x="866" y="436">名稱＋代號查詢 · 最多 10 則標題</text>
+                <g class="seqbadge" data-n="news"><circle cx="1138" cy="412" r="9"/><text x="1138" y="415.5">5</text></g>
+              </g>
+              <g class="fnode" data-n="llm">
+                <rect x="852" y="500" width="300" height="48" rx="3"/>
+                <text class="t" x="866" y="522">Gemini / Ollama / vLLM</text>
+                <text class="st" x="866" y="538">使用者自帶端點與金鑰 · 逾時 180 秒</text>
+                <g class="seqbadge" data-n="llm"><circle cx="1138" cy="514" r="9"/><text x="1138" y="517.5">4</text></g>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="steps">
+          <div class="steps-h"><h3 id="scTitle"></h3><span class="kindpill" id="scKind"></span></div>
+          <p class="steps-why" id="scWhy"></p>
+          <ol class="seq" id="scSeq"></ol>
+        </div>
+      </div>
+
+      <h3>環境變數怎麼流動</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>變數</th><th>放在哪</th><th>誰用</th><th>備註</th></tr></thead>
+          <tbody>
+            <tr><td class="k">VITE_SUPABASE_URL</td><td>GitHub Secrets → build 時注入</td><td><span class="tag t-client">前端</span></td><td>沒設或以 <code>YOUR_</code> 開頭 → 進入本機模式</td></tr>
+            <tr><td class="k">VITE_SUPABASE_ANON_KEY</td><td>同上</td><td><span class="tag t-client">前端</span></td><td>會出現在 bundle 裡，靠 RLS 保護資料</td></tr>
+            <tr><td class="k">SUPABASE_URL</td><td>Supabase 自動注入</td><td><span class="tag t-edge">Edge</span></td><td>不需手動設定</td></tr>
+            <tr><td class="k">SUPABASE_SERVICE_ROLE_KEY</td><td>Supabase 自動注入</td><td><span class="tag t-edge">Edge</span></td><td>繞過 RLS，絕不可外流到前端</td></tr>
+            <tr><td class="k">CRON_SECRET</td><td><code>supabase secrets set</code> <b>與</b> <code>cron.job.command</code> 字面值</td><td><span class="tag t-cron">排程</span> <span class="tag t-edge">Edge</span></td><td><strong>兩處，輪替時要同時改</strong>（見 §10）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 02 ============ -->
+    <section class="sec" id="s2">
+      <h2><span>02</span>兩支 Edge Function</h2>
+      <p>
+        <code>sources/supabase/functions/</code> 底下只有這兩支，而且
+        <strong>兩支的 JWT 設定不一樣</strong>：
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>函式</th><th>線上 verify_jwt</th><th>誰進得來</th><th>版本（正式 / 測試）</th></tr></thead>
+          <tbody>
+            <tr><td class="k">stock-price</td><td><strong>true</strong></td><td>已登入的前端（帶 anon key + JWT）</td><td class="k">v12 / v8</td></tr>
+            <tr><td class="k">stock-report</td><td><strong>false</strong></td><td>pg_cron（帶 <code>x-cron-secret</code>，不帶 JWT）＋ 前端的白名單呼叫</td><td class="k">v15 / v27</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--trap">
+        <b>repo 裡的部署指令與線上實況不一致</b>
+        <p>
+          <code>sources/supabase/README.md</code> 與根目錄 <code>README.md</code> 的部署段落，
+          對<strong>兩支</strong>都寫了 <code>--no-verify-jwt</code>；但實際線上（兩區都查過）
+          <code>stock-price</code> 是 <code>verify_jwt = true</code>。
+          以 <code>CLAUDE.md</code> §13.3 的說法為準：<strong>stock-price 用預設即可，
+          只有 stock-report 一定要帶 <code>--no-verify-jwt</code></strong>。
+          照 README 抄指令會把 stock-price 開成公開端點。
+        </p>
+        <p>
+          反過來，<code>stock-report</code> 被重設成 <code>true</code> 的話盤後批次會全數 401 ——
+          而且不會有人發現，因為前端讀的是 Storage，畫面照樣有（舊）資料。
+        </p>
+      </div>
+
+      <h3><span class="tag t-edge">stock-price</span> 即時資料代理</h3>
+      <p>需要登入才呼叫得到（<code>verify_jwt = true</code>），節流靠函式內的 TTL 與請求數上限。存在的理由是繞過瀏覽器的 CORS 限制。</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>action</th><th>輸入</th><th>打哪裡</th><th>寫回</th><th>TTL</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="k">prices</td>
+              <td class="nowrap">最多 50 檔<br><span class="url">{market:'TPE'|'US', ticker}</span></td>
+              <td><span class="url">mis.twse.com.tw/stock/api/getStockInfo.jsp</span><br><span class="url">↳ 失敗改打 query1.finance.yahoo.com/v8/finance/chart（.TW → .TWO）</span></td>
+              <td><span class="tag t-db">price_cache</span><br><code>TPE:2330</code> / <code>US:AAPL</code></td>
+              <td class="nowrap">台股 60 秒<br>美股 600 秒</td>
+            </tr>
+            <tr>
+              <td class="k">search</td>
+              <td>query 字串</td>
+              <td><span class="url">query2.finance.yahoo.com/v1/finance/search</span></td>
+              <td><span class="tag t-db">stock_names</span><br><small>只寫美股</small></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td class="k">twlist</td>
+              <td>無</td>
+              <td><span class="url">openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL</span><br><span class="url">tpex.org.tw/openapi/v1/tpex_mainboard_quotes</span><br><small>兩邊 Promise.allSettled，一邊掛掉不影響另一邊</small></td>
+              <td>不寫，直接回傳</td>
+              <td>前端快取 30 分</td>
+            </tr>
+            <tr>
+              <td class="k">fx</td>
+              <td class="nowrap">最多 12 個幣別<br><code>/^[A-Z]{3}$/</code></td>
+              <td><span class="url">query1.finance.yahoo.com/v8/finance/chart/{code}TWD=X</span></td>
+              <td><span class="tag t-db">price_cache</span><br><code>FX:USD</code></td>
+              <td>600 秒</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3><span class="tag t-edge">stock-report</span> 批次與報告</h3>
+      <p>
+        1,622 行的主檔加上九個輔助模組（<code>twChips</code> / <code>twDaily</code> /
+        <code>twFundamental</code> / <code>twRevenueHistory</code> / <code>twNews</code> /
+        <code>usMacro</code> / <code>fxRates</code> / <code>report</code> / <code>pollPlan</code>），
+        每一個都有對應的 <code>.test.ts</code>。七個 action 分成兩種授權模式：
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>action</th><th>誰能呼叫</th><th>做什麼</th><th>產出</th></tr></thead>
+          <tbody>
+            <tr><td class="k">generate</td><td>任何人，但擋在 <code>heldTwTickers()</code> 白名單後（非持股 → 403）</td><td>單檔即時產生籌碼報告</td><td><span class="tag t-store">{ymd}/{ticker}.json</span></td></tr>
+            <tr><td class="k">warm</td><td>同上白名單</td><td>新增個股後補齊日線與基本面</td><td><span class="tag t-store">daily/ · fundamental/</span></td></tr>
+            <tr><td class="k">generate-all</td><td><span class="tag t-cron">x-cron-secret</span></td><td>盤後全量批次，內含營收回補</td><td><span class="tag t-store">全部</span> + <span class="tag t-db">batch_run_log</span></td></tr>
+            <tr><td class="k">probe</td><td><span class="tag t-cron">x-cron-secret</span></td><td>獨立觀測資料源新鮮度，不改任何報告</td><td><span class="tag t-db">source_probe_log</span></td></tr>
+            <tr><td class="k">sync-macro</td><td><span class="tag t-cron">x-cron-secret</span></td><td>FRED 五項指標</td><td><span class="tag t-store">macro/us.json</span></td></tr>
+            <tr><td class="k">sync-fx</td><td><span class="tag t-cron">x-cron-secret</span></td><td>八個幣別對台幣的一年日線</td><td><span class="tag t-store">fx/twd.json</span></td></tr>
+            <tr><td class="k">backfill-revenue</td><td><span class="tag t-cron">x-cron-secret</span></td><td>MOPS 月營收歷史回補</td><td><span class="tag t-store">fundamental/*.json</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--fact">
+        <b>backfill-revenue 沒有自己的排程</b>
+        <p>它掛在 <code>generate-all</code> 裡面跑，同時保留成獨立 action 是為了能手動觸發。所以 §03 的排程表只有四個 job，不是七個。</p>
+      </div>
+
+      <h3>關鍵常數</h3>
+      <div class="pill-row">
+        <span class="m">HISTORY_DAYS = 7</span>
+        <span class="m">LOOKBACK_DAYS = 14</span>
+        <span class="m">MAX_BACKFILL_DAYS = 5</span>
+        <span class="m">MAX_BACKFILL_MONTHS = 4</span>
+        <span class="m">FETCH_CONCURRENCY = 3</span>
+        <span class="m">REPORT_RETAIN_DAYS = 7</span>
+        <span class="m">CACHE_RETAIN_DAYS = 14</span>
+        <span class="m">MAX_RUNS_PER_DAY = 40</span>
+      </div>
+    </section>
+
+    <!-- ============ 03 ============ -->
+    <section class="sec" id="s3">
+      <h2><span>03</span>排程</h2>
+      <p>
+        四個 pg_cron job 全部寫在 <code>sources/supabase/schema.sql</code>，
+        全部用 <code>pg_net</code> 打<strong>同一支</strong> <code>stock-report</code>，
+        差別只在 body 的 action 與 <code>timeout_milliseconds := 60000</code>。
+        <strong>這個 repo 沒有 <code>migrations/</code> 目錄</strong> —— schema.sql 是手動套用的，而且明確標示不具冪等性。
+      </p>
+
+      <div class="tl">
+        <div class="tl-inner">
+          <div class="tl-hours">
+            <span></span>
+            <div class="tl-ticks">
+              <b style="left:0%">00</b><i style="left:0%"></i>
+              <b style="left:12.5%">03</b><i style="left:12.5%"></i>
+              <b style="left:25%">06</b><i style="left:25%"></i>
+              <b style="left:37.5%">09</b><i style="left:37.5%"></i>
+              <b style="left:50%">12</b><i style="left:50%"></i>
+              <b style="left:62.5%">15</b><i style="left:62.5%"></i>
+              <b style="left:75%">18</b><i style="left:75%"></i>
+              <b style="left:87.5%">21</b><i style="left:87.5%"></i>
+              <b style="left:100%">24</b><i style="left:100%"></i>
+            </div>
+          </div>
+
+          <div class="tl-row" style="--rc:var(--c-cron)">
+            <span class="tl-name">stock-report-nightly</span>
+            <div class="tl-track"><span class="tl-span" style="left:66.67%;width:32.3%"></span></div>
+          </div>
+          <div class="tl-note"><span>*/15 8-15 * * 1-5</span><span>台北 16:00–23:45，每 15 分鐘一次 · 平日 · 32 次／日 → <code>generate-all</code></span></div>
+
+          <div class="tl-row" style="--rc:var(--c-cron)">
+            <span class="tl-name">source-probe</span>
+            <div class="tl-track"><span class="tl-span" style="left:66.67%;width:32.3%"></span></div>
+          </div>
+          <div class="tl-note"><span>*/15 8-15 * * 1-5</span><span>與上者同拍，但走獨立觀測路徑，不會改到報告 → <code>probe</code></span></div>
+
+          <div class="tl-row" style="--rc:var(--c-edge)">
+            <span class="tl-name">macro-daily</span>
+            <div class="tl-track"><span class="tl-tick" style="left:87.5%"></span><span class="tl-tick" style="left:95.83%"></span></div>
+          </div>
+          <div class="tl-note"><span>0 13,15 * * *</span><span>台北 21:00 / 23:00 · <b>每天</b>（美國數據不看台股交易日）→ <code>sync-macro</code></span></div>
+
+          <div class="tl-row" style="--rc:var(--c-store)">
+            <span class="tl-name">fx-daily</span>
+            <div class="tl-track"><span class="tl-tick" style="left:45.83%"></span><span class="tl-tick" style="left:70.83%"></span></div>
+          </div>
+          <div class="tl-note"><span>0 3,9 * * *</span><span>台北 11:00 / 17:00 · 每天 · 刻意避開 macro-daily 的時段 → <code>sync-fx</code></span></div>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--ink-3);margin-top:10px">
+        時間軸為台北時間（UTC+8）。cron 表達式本身是 UTC。
+      </p>
+
+      <div class="note note--trap">
+        <b>改排程不要重跑 §6c</b>
+        <p>
+          <code>schema.sql</code> 不具冪等性，重跑會多建一個同名 job。只改時間請用
+          <code>cron.alter_job(jobid, schedule := '*/15 8-15 * * 1-5')</code>。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 04 ============ -->
+    <section class="sec" id="s4">
+      <h2><span>04</span>一天 32 次為什麼不貴</h2>
+      <p>
+        每 15 分鐘叫醒一次，但真正對外抓資料的次數遠少於 32。四道閘門依序把不必要的工作擋掉，
+        判斷邏輯全部是 <code>pollPlan.ts</code> 裡的純函式，並由測試釘住。
+        跨批次的狀態不另外開表，直接讀 <span class="tag t-db">batch_run_log</span>
+        今天的最後一列（<code>readLastRun()</code>）。
+      </p>
+
+      <div class="gates">
+        <div class="gate">
+          <div class="gate-n">1</div>
+          <div class="gate-b">
+            <b>decideSkip()</b>
+            <small>今天的 T86 已凍結 <b>而且</b> 今天的融資融券已到齊 → 這一輪什麼都不做。</small>
+          </div>
+          <div class="gate-out">零次對外請求<br>skip_reason = 'complete'</div>
+        </div>
+        <div class="gate">
+          <div class="gate-n">2</div>
+          <div class="gate-b">
+            <b>nextT86State()</b>
+            <small>TWSE 從 16:00 起每 15 分鐘會改寫 T86。連續兩次指紋相同才判定為凍結 —— 只比對一次會把中途的暫時值當成定稿。</small>
+          </div>
+          <div class="gate-out">t86_frozen 才允許收工</div>
+        </div>
+        <div class="gate">
+          <div class="gate-n">3</div>
+          <div class="gate-b">
+            <b>MAX_RUNS_PER_DAY = 40</b>
+            <small>硬上限。排程本身一天只會觸發 32 次，這 8 次的餘裕是留給手動觸發與重試的。</small>
+          </div>
+          <div class="gate-out">超過即停<br>skip_reason = 'run-cap'</div>
+        </div>
+        <div class="gate">
+          <div class="gate-n">4</div>
+          <div class="gate-b">
+            <b>runSignature()</b>
+            <small>把 <code>{dataYmd, t86, margin, borrow, tickers}</code> 壓成一個簽章。與上一輪相同就不重寫報告、也不清理舊檔。</small>
+          </div>
+          <div class="gate-out">regenerated = false<br>Storage 完全不動</div>
+        </div>
+      </div>
+
+      <p style="margin-top:16px">
+        結果是：真正產生報告的通常只有盤後資料落地的那兩三輪，其餘二十幾輪在第一或第四道閘門就結束了。
+      </p>
+    </section>
+
+    <!-- ============ 05 ============ -->
+    <section class="sec" id="s5">
+      <h2><span>05</span>外部資料源</h2>
+      <p>全部由 <code>stock-report</code> 或 <code>stock-price</code> 出面抓取，前端一次都不直接碰。</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>來源</th><th>端點</th><th>落到哪</th></tr></thead>
+          <tbody>
+            <tr><td class="k">TWSE T86</td><td class="url">www.twse.com.tw/rwd/zh/fund/T86?date={YYYYMMDD}&amp;selectType=ALLBUT0999</td><td><span class="tag t-db">chip_raw_cache</span> <code>T86</code></td></tr>
+            <tr><td class="k">TWSE 融資融券</td><td class="url">www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={YYYYMMDD}&amp;selectType=ALL</td><td><code>MI_MARGN_D</code></td></tr>
+            <tr><td class="k">↳ 備援</td><td class="url">openapi.twse.com.tw/v1/exchangeReport/MI_MARGN</td><td><code>MI_MARGN</code></td></tr>
+            <tr><td class="k">TWSE 借券</td><td class="url">www.twse.com.tw/rwd/zh/marginTrading/TWT96U</td><td><code>SBL_D</code>（日期由回傳標題自帶）</td></tr>
+            <tr><td class="k">TWSE 估值</td><td class="url">openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL</td><td>本益比 / 殖利率 / 股價淨值比</td></tr>
+            <tr><td class="k">TWSE 月營收</td><td class="url">openapi.twse.com.tw/v1/opendata/t187ap05_L</td><td><span class="tag t-store">fundamental/</span></td></tr>
+            <tr><td class="k">TWSE 公司基本資料</td><td class="url">openapi.twse.com.tw/v1/opendata/t187ap03_L</td><td>產業別</td></tr>
+            <tr><td class="k">TWSE 獲利能力</td><td class="url">openapi.twse.com.tw/v1/opendata/t187ap17_L</td><td>毛利率 / 營益率 / 純益率</td></tr>
+            <tr><td class="k">MOPS 月營收歷史</td><td class="url">mopsov.twse.com.tw/nas/t21/{sii|otc}/t21sc03_{民國年}_{月}_0.html</td><td>big5 HTML，直接寫 <span class="tag t-store">fundamental/</span>，不進快取表</td></tr>
+            <tr><td class="k">Yahoo 日線</td><td class="url">query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&amp;range=1y</td><td><span class="tag t-store">daily/{ticker}.json</span></td></tr>
+            <tr><td class="k">Yahoo 匯率</td><td class="url">同上，symbol 為 USDTWD=X 等</td><td><span class="tag t-store">fx/twd.json</span></td></tr>
+            <tr><td class="k">Google News RSS</td><td class="url">news.google.com/rss/search?q={名稱 代號}&amp;hl=zh-TW&amp;gl=TW&amp;ceid=TW:zh-Hant</td><td><span class="tag t-store">news/{ticker}.json</span>，最多 10 則標題</td></tr>
+            <tr><td class="k">FRED</td><td class="url">fred.stlouisfed.org/graph/fredgraph.csv?id={series}&amp;cosd={since}</td><td><span class="tag t-store">macro/us.json</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note note--trap">
+        <b>兩個 User-Agent，不能混用</b>
+        <p>
+          TWSE / Yahoo / MOPS 走 <code>UA</code>（Chrome 120 瀏覽器字串）；
+          FRED 走 <code>MACRO_UA = 'stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)'</code>。
+          <strong>FRED 收到瀏覽器 UA 會直接 reset connection</strong>，症狀是網路錯誤而不是 4xx，很容易誤判成暫時性失敗。
+        </p>
+      </div>
+
+      <h3>FRED 抓哪五項</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>series</th><th>指標</th><th>呈現方式</th></tr></thead>
+          <tbody>
+            <tr><td class="k">CPILFESL</td><td>核心 CPI</td><td>年增率</td></tr>
+            <tr><td class="k">PPIFES</td><td>核心 PPI</td><td>年增率</td></tr>
+            <tr><td class="k">PCEPILFE</td><td>核心 PCE</td><td>年增率</td></tr>
+            <tr><td class="k">PAYEMS</td><td>非農就業</td><td>月增（千人）</td></tr>
+            <tr><td class="k">UMCSENT</td><td>消費者信心</td><td>指數</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px">
+        回看 26 個月、輸出最近 12 個點。匯率則固定八個幣別：
+        <span class="m">USD JPY EUR CNY HKD GBP AUD KRW</span>，
+        以 <code>FX_MIN_POINTS = 60</code> 判定哪個方向的貨幣對有足夠資料。
+      </p>
+    </section>
+
+    <!-- ============ 06 ============ -->
+    <section class="sec" id="s6">
+      <h2><span>06</span>資料庫</h2>
+      <p>
+        九張表，全部在 <code>sources/supabase/schema.sql</code>。
+        RLS 的設計有三種模式，看懂這三種就懂整個權限模型：
+      </p>
+      <ul>
+        <li><strong>使用者隔離</strong> —— <code>auth.uid() = user_id</code>，讀寫都限自己的列。</li>
+        <li><strong>前端唯讀</strong> —— 只給 SELECT policy，沒有寫入 policy，所以只有 service role 寫得進去。</li>
+        <li><strong>RLS 開但零 policy</strong> —— 任何一般使用者都碰不到，等於後端專用。</li>
+      </ul>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>表</th><th>主要欄位</th><th>RLS</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td class="k">workspaces</td><td><code>id</code> · <code>user_id</code> · <code>name</code><br><small>UNIQUE (id, user_id)</small></td><td>使用者隔離</td><td>一個帳號可有多個工作區</td></tr>
+            <tr><td class="k">transactions</td><td><code>tx_date</code> · <code>market</code> · <code>ticker</code> · <code>tx_type</code> · <code>price</code> · <code>qty</code> · <code>fee_tax</code></td><td>使用者隔離</td><td><strong>複合外鍵 <code>(workspace_id, user_id)</code></strong> 指向 workspaces，防止把交易掛到別人的工作區</td></tr>
+            <tr><td class="k">price_cache</td><td><code>key</code> PK：<code>TPE:2330</code> / <code>US:AAPL</code> / <code>FX:USD</code></td><td>前端唯讀</td><td>三層價格快取的第二層</td></tr>
+            <tr><td class="k">stock_names</td><td><code>key</code> PK · <code>name</code></td><td>前端唯讀</td><td>美股中英文名；台股中文名走 <code>twlist</code></td></tr>
+            <tr><td class="k">user_settings</td><td><code>default_fee_rate</code> 預設 0.001425 · <code>theme</code></td><td>使用者隔離</td><td>舊的 <code>ai_*</code> 欄位已 DROP，改放 app_settings</td></tr>
+            <tr><td class="k">app_settings</td><td><code>id</code> CHECK (id = 1) 單列<br><code>ai_provider</code> · <code>ai_base_url</code> · <code>ai_model</code> · <code>ai_api_key</code></td><td>全體可讀<br><strong>只有 admin 可寫</strong></td><td>AI 設定全站共用。API key 是明文，而且會傳到瀏覽器（見 §09）</td></tr>
+            <tr><td class="k">chip_raw_cache</td><td>PK <code>(ymd, dataset)</code> · <code>payload JSONB</code></td><td>零 policy</td><td>原始回應快取，保留 14 天</td></tr>
+            <tr><td class="k">batch_run_log</td><td><code>taipei_ymd</code> · <code>runs_today</code> · <code>skipped</code> · <code>skip_reason</code> · <code>run_sig</code> · <code>t86_fingerprint</code> · <code>t86_frozen</code> …</td><td>零 policy</td><td><strong>同時是批次的跨輪狀態儲存</strong>，不只是日誌</td></tr>
+            <tr><td class="k">source_probe_log</td><td><code>bwibbu_ok/date/fp/rows</code> · <code>borrow_ok/date/fp/rows</code></td><td>零 policy</td><td>與批次分離的資料源觀測</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--fact">
+        <b>batch_run_log.macro_synced 已停用</b>
+        <p>自 0.6.5-dev.2 起永遠是 NULL —— 總經同步被拆成獨立的 <code>macro-daily</code> 排程後，這個欄位就沒人寫了。看到 NULL 不是故障。</p>
+      </div>
+    </section>
+
+    <!-- ============ 07 ============ -->
+    <section class="sec" id="s7">
+      <h2><span>07</span>Storage</h2>
+      <p>
+        只有一個 bucket <span class="tag t-store">reports</span>，<code>public = true</code>：
+        <strong>任何人拿到 URL 都讀得到，只有 service role 寫得進去</strong>。
+        前端因此可以完全不經過 Edge Function 取得報告 —— 這是整個讀取路徑最便宜的部分。
+      </p>
+
+      <div class="tree">
+reports/
+├── <b>manifest.json</b>                  <i>{ymd, dataDate, generatedAt} — 先讀它才知道要去哪個資料夾</i>
+├── <b class="g">20260728/</b>
+│   ├── 2330.json                  <i>盤後籌碼報告 schema 2，約 5KB</i>
+│   ├── 2454.json
+│   └── …                          <i>只留 7 天，pruneStorage() 用 /^\d{8}$/ 比對後刪除</i>
+├── <b class="g">daily/</b>2330.json            <i>schema 1 · rows:[[date,o,h,l,c,v]] 一年份 · 約 10.8KB · 覆寫不刪</i>
+├── <b class="g">fundamental/</b>2330.json      <i>schema 2 · 估值 + revenueMonths(12) + profitQuarters(8) + 產業別</i>
+├── <b class="g">news/</b>2330.json             <i>schema 1 · 最多 10 則標題</i>
+├── <b class="g">macro/</b>us.json             <i>schema 1 · 五項指標 × 12 個月 · <b>全站一份</b></i>
+└── <b class="g">fx/</b>twd.json               <i>schema 1 · 八個幣別一年日線 · <b>全站一份</b></i>
+      </div>
+
+      <div class="note note--trap">
+        <b>uploadJson() 明確設定 cacheControl: '0'</b>
+        <p>
+          supabase-js 的預設是 3600 秒。0.6.4-dev.5 因此發生過線上事故：
+          瀏覽器拿到一小時前的舊資料，<strong>連 Ctrl+Shift+R 都救不回來</strong>，
+          因為過期的是 CDN 那一層。這個 <code>'0'</code> 不能拿掉。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 08 ============ -->
+    <section class="sec" id="s8">
+      <h2><span>08</span>前端資料流</h2>
+
+      <h3>兩種執行模式</h3>
+      <p>
+        <code>services/supabase.ts</code> 匯出 <code>isSupabaseConfigured</code>；
+        <code>services/dataProvider.ts</code> 據此在兩個實作之間切換，介面相同：
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th>本機模式</th><th>Supabase 模式</th></tr></thead>
+          <tbody>
+            <tr><td class="k">觸發條件</td><td>環境變數未設，或以 <code>YOUR_</code> 開頭</td><td>兩個 <code>VITE_*</code> 都有值</td></tr>
+            <tr><td class="k">資料放哪</td><td>localStorage <code>stock-pnl-web/local-store-v1</code></td><td><span class="tag t-db">workspaces</span> <span class="tag t-db">transactions</span></td></tr>
+            <tr><td class="k">要登入嗎</td><td>不用</td><td>要</td></tr>
+            <tr><td class="k">可用分頁</td><td>總覽 / 年度 / 紀錄<br><small>分析、總經、匯率<strong>會被隱藏</strong></small></td><td>六個分頁全開</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>價格：三層快取</h3>
+      <div class="band" style="--bc:var(--c-client)">
+        <div class="band-h">L1 <em>瀏覽器 localStorage</em></div>
+        <div class="nodes"><div class="node" style="max-width:none"><b>stock-pnl-web/price-cache-v1</b><small>台股 60 秒 / 美股 600 秒。<code>useStockPrices.ts</code> 每 60 秒輪詢一次，並在 <code>visibilitychange</code> 時重抓。</small></div></div>
+      </div>
+      <div class="flowarrow"><span>過期才往下</span></div>
+      <div class="band" style="--bc:var(--c-db)">
+        <div class="band-h">L2 <em>Postgres</em></div>
+        <div class="nodes"><div class="node" style="max-width:none"><b>price_cache</b><small>所有使用者共用。同一檔股票，第二個人查就不必再打外部 API。</small></div></div>
+      </div>
+      <div class="flowarrow"><span>再過期才往下</span></div>
+      <div class="band" style="--bc:var(--c-ext)">
+        <div class="band-h">L3 <em>外部 API</em></div>
+        <div class="nodes"><div class="node" style="max-width:none"><b>TWSE MIS → Yahoo</b><small>台股先打證交所 MIS，失敗才退到 Yahoo（先試 <code>.TW</code>、再試 <code>.TWO</code>）。</small></div></div>
+      </div>
+
+      <p style="margin-top:16px">
+        其他前端快取：<span class="m">tw-list-v1</span>（30 分）、
+        <span class="m">fx-quotes-v1</span>（10 分）、
+        <span class="m">current-workspace</span>、
+        <span class="m">fx.selectedCurrency</span>，
+        以及放在 sessionStorage 的 <span class="m">ai-chat:{ticker}</span>。
+      </p>
+
+      <h3>報告：Storage 優先</h3>
+      <p>
+        所有報告類資料都走 <code>services/reportsBucket.ts</code> 的
+        <code>downloadReportsJson()</code>：先 <code>getPublicUrl(path)</code>，
+        再用原生 <code>fetch(url, { cache: 'no-store' })</code> ——
+        <strong>刻意不用 <code>.download()</code></strong>。
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>前端模組</th><th>讀什麼</th><th>找不到時</th></tr></thead>
+          <tbody>
+            <tr><td class="k">reportProxy</td><td><code>manifest.json</code> → <code>{ymd}/{ticker}.json</code></td><td>呼叫 <code>stock-report / generate</code> 即時產生</td></tr>
+            <tr><td class="k">dailyProxy</td><td><code>daily/{ticker}.json</code></td><td rowspan="2">呼叫 <code>warm</code> 一次（同一 session 以 <code>inflight</code> + <code>attempted</code> 去重），再重讀 Storage</td></tr>
+            <tr><td class="k">fundamentalProxy</td><td><code>fundamental/{ticker}.json</code></td></tr>
+            <tr><td class="k">newsProxy</td><td><code>news/{ticker}.json</code></td><td>直接視為無新聞</td></tr>
+            <tr><td class="k">macroProxy</td><td><code>macro/us.json</code></td><td>顯示「資料尚未產生」</td></tr>
+            <tr><td class="k">fxProxy</td><td><code>fx/twd.json</code></td><td>顯示「資料尚未產生」</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note note--trap">
+        <b>schema 一律用 &gt;= 比對，不用 ===</b>
+        <p>
+          <code>MIN_REPORT_SCHEMA = 2</code>，其餘皆為 1。
+          當年用 <code>===</code> 造成過 0.4.0 的全面停機：後端 schema 一升版，
+          所有還沒重新整理的前端立刻判定資料不合法。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 09 ============ -->
+    <section class="sec" id="s9">
+      <h2><span>09</span>AI 分析</h2>
+      <p>
+        位置在「個股分析 → AI 分析」分頁。這是整個系統唯一一條
+        <strong>不經過 Supabase 的對外路徑</strong>：瀏覽器直接打 AI 供應商，沒有 Edge Function 代理。
+      </p>
+
+      <div class="band" style="--bc:var(--c-client)">
+        <div class="band-h">瀏覽器 <em>AiTab.tsx · aiClient.ts</em></div>
+        <div class="nodes">
+          <div class="node"><b>buildAiPayload()</b><small>把技術指標、籌碼、基本面、新聞標題、總經組成一份 payload</small></div>
+          <div class="node"><b>renderAiPrompt()</b><small>輸出 {system, user} 兩段提示詞</small></div>
+        </div>
+      </div>
+      <div class="flowarrow"><span>從 app_settings 讀 provider / base_url / model / api_key</span></div>
+      <div class="band" style="--bc:var(--c-ext)">
+        <div class="band-h">AI 供應商 <em>兩條實作路徑</em></div>
+        <div class="nodes">
+          <div class="node" style="max-width:none">
+            <b>google</b>
+            <small>
+              POST <span class="url">generativelanguage.googleapis.com/v1beta/models/{model}:generateContent</span><br>
+              header <code>x-goog-api-key</code> · role 是 <code>model</code> 不是 <code>assistant</code> ·
+              <code>maxOutputTokens 8192</code> · <code>thinkingConfig.thinkingBudget = 0</code><br>
+              收到 400 時，脫掉 <code>thinkingConfig</code> 重試一次
+            </small>
+          </div>
+          <div class="node" style="max-width:none">
+            <b>openai-compatible</b>
+            <small>
+              POST <code>{baseUrl}/chat/completions</code>（Ollama / vLLM / 其它）·
+              選擇性 <code>Authorization: Bearer</code><br>
+              帶相容欄位 <code>max_tokens 8192</code> · <code>reasoning_effort:'none'</code> ·
+              <code>think:false</code> · <code>chat_template_kwargs</code><br>
+              收到 400 時，<strong>整組</strong>相容欄位撤掉重試一次
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <h3>推理型模型的三段處理（0.6.9-dev.4）</h3>
+      <div class="gates">
+        <div class="gate">
+          <div class="gate-n">1</div>
+          <div class="gate-b"><b>請端點關掉思考</b><small>送出 thinkingBudget / reasoning_effort / think 等欄位。有些端點會直接照做。</small></div>
+          <div class="gate-out">最理想的情況</div>
+        </div>
+        <div class="gate">
+          <div class="gate-n">2</div>
+          <div class="gate-b"><b>stripThinkTags()</b><small>端點不理會、把思考塞進 content 時，把 <code>&lt;think&gt;…&lt;/think&gt;</code> 剝掉。</small></div>
+          <div class="gate-out">使用者看不到思考過程</div>
+        </div>
+        <div class="gate">
+          <div class="gate-n">3</div>
+          <div class="gate-b"><b>改用 reasoning_content</b><small>只有推理欄位、content 是空的時候，退而用它，但<strong>強制前置 <code>REASONING_FALLBACK_NOTICE</code> 警語</strong>。</small></div>
+          <div class="gate-out">明示這是推理過程<br>不是正式結論</div>
+        </div>
+      </div>
+      <p style="margin-top:14px">
+        另外，回應被截斷時（<code>finishReason: MAX_TOKENS</code> 或 <code>finish_reason: 'length'</code>）
+        會附上 <code>TRUNCATION_NOTICE</code>。逾時 <code>AI_TIMEOUT_MS = 180000</code>，
+        涵蓋整個 body 讀取而不只是 headers。錯誤分成六類（auth / rate-limit / server / timeout / network / bad-response），
+        <strong>不做任何自動重試</strong> —— 每一次呼叫都是使用者在付錢。
+      </p>
+
+      <h3>送出去的內容邊界</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>會送</th><th>不會送</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>
+                技術指標 <code>TechnicalView.latest</code>（MA5/20/60、K/D、RSI14、MACD 柱、量比、一年高低）<br>
+                籌碼（法人以股為單位、融資融券以張為單位，附 <code>streakNote</code> 說明正負號語意）<br>
+                基本面（營收千元）、獲利能力、總經、最多 10 則新聞<strong>標題</strong>
+              </td>
+              <td>
+                <strong>持股數量</strong><br>
+                <strong>平均成本</strong><br>
+                <strong>未實現損益</strong><br>
+                <small>原始 243 天收盤序列（只送算好的指標）</small>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px">
+        追問功能（0.6.5）每一輪都重送完整 system prompt，上限
+        <code>MAX_CHAT_TURNS = 10</code>、單則 <code>MAX_INPUT_CHARS = 500</code>；
+        離題時回固定的 <code>OFF_TOPIC_REPLY</code> —— 範圍限制是用提示詞做的，刻意不用關鍵字黑名單。
+        0.6.9-dev.2 另外把使用者自己的四套分批進出框架（金字塔建倉 / 倒金字塔停利 / 非等距網格 / 馬丁格爾變體）
+        寫進提示詞當作<strong>詞彙</strong>，並明示這不放寬「不給買賣指令、不給目標價」的規則。
+      </p>
+
+      <div class="note note--trap">
+        <b>API key 會到瀏覽器</b>
+        <p>
+          設定放在全站單列的 <code>app_settings</code>，前端讀出來直接用。
+          這是已知且被記錄下來的取捨，未來要改成 Edge Function 代理。
+          目前的緩解只有「只有 admin 能寫入該列」。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section class="sec" id="s10">
+      <h2><span>10</span>部署與陷阱</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>環境</th><th>Supabase 專案</th><th>project-ref</th><th>分支</th><th>前端</th></tr></thead>
+          <tbody>
+            <tr><td class="k">正式區</td><td>Stock-Pnl-Web</td><td class="k">kxnxadaghidwumqsqneu</td><td class="k">main</td><td>GitHub Pages（push 即上線）</td></tr>
+            <tr><td class="k">測試區</td><td>Stock-Pnl-Web-Dev</td><td class="k">wqetxuhncvfidqnklyew</td><td class="k">dev</td><td>本機 <code>npm run dev</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <code>.github/workflows/deploy.yml</code>：push 到 <code>main</code> → Node 24 →
+        在 <code>sources/</code> 執行 <code>npm ci</code> 與 <code>npm run build</code> →
+        發佈 <code>sources/dist</code>。<strong>沒有反悔餘地，所以一律 dev 先行。</strong>
+      </p>
+
+      <h3>踩過的坑</h3>
+
+      <div class="note note--trap">
+        <b>部署 stock-report 一定要帶 --no-verify-jwt</b>
+        <p>
+          兩區的 <code>stock-report</code> 都是 <code>verify_jwt = false</code>。被重設成 true，
+          盤後批次會全數 401 而且不會有人發現 —— 因為前端讀的是 Storage，畫面照樣有（舊）資料。
+          <code>stock-price</code> 則用預設即可。
+        </p>
+      </div>
+
+      <div class="note note--trap">
+        <b>db query --linked 認的是「當下的工作目錄」</b>
+        <p>
+          2026-07-27 實際發生：<code>functions download</code> 把 cwd 留在暫存目錄，
+          之後一次「改測試區 cron」的 <code>db query --linked</code> 在那個沒有 link 設定的目錄下執行，
+          CLI 退回全域設定，<strong>寫進了正式區</strong>。<code>cron.schedule</code> 照樣回傳成功，
+          緊接著的覆驗查詢也在同一個（錯的）資料庫裡，所以驗起來完全正確。
+        </p>
+        <p>
+          對策：任何會寫入的查詢，把「專案身分欄位」放進<strong>同一次</strong>查詢裡 ——
+          例如 <code>SELECT count(*) FROM batch_run_log</code>（正式區 2、測試區 0）。
+          分兩次查擋不住這種錯，因為 cwd 可能在兩次之間被改掉。
+        </p>
+      </div>
+
+      <div class="note note--trap">
+        <b>supabase link 有全域副作用</b>
+        <p>
+          不是 per-directory。在別的目錄重新 link 會把前一份清掉。
+          要查另一個專案時優先用支援 <code>--project-ref</code> 的指令
+          （<code>functions list/deploy/download</code>、<code>secrets list</code>）；
+          只有 <code>db query --linked</code> 沒有這個選項。
+        </p>
+      </div>
+
+      <div class="note note--trap">
+        <b>稽核要用 functions download 逐檔比對</b>
+        <p>
+          不要看版本號推論。曾遇到版本號較新的那支反而是舊程式碼
+          （測試區 <code>stock-price</code> v2 落後 137 行、<code>misParse.ts</code> 根本沒部署上去）。
+          比對基準要對應分支：正式區比 <code>main</code>、測試區比 <code>dev</code> —— 拿錯基準會誤判「已同步」。
+        </p>
+      </div>
+
+      <div class="note note--fact">
+        <b>manifest.json 日期落後時先確認星期</b>
+        <p>
+          cron 是 <code>1-5</code>，週末本來就不跑。週末看到日期停在週五是正確的，不是故障。
+        </p>
+      </div>
+
+      <div class="note note--fact">
+        <b>0.6.8 與 0.6.9 都是純前端</b>
+        <p>
+          這兩版完全沒有動到 <code>sources/supabase/</code>。所以線上的 Edge Function
+          與 0.6.7 時期是同一份程式碼，稽核時可以直接跳過。
+        </p>
+      </div>
+    </section>
+
+    </main>
+  </div>
+</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= 資料時序：情境播放器 ================= */
+  var SC = {
+    price: {
+      title: '庫存總覽：查現價', kind: 'live', kindLabel: '即時請求',
+      why: '三層快取逐層往外，只有全部落空才真的對外請求。前端雖然每 60 秒輪詢一次，但 TTL 內的代號直接命中 L1，不會發出任何請求。',
+      nodes: { dash: 1, priceproxy: 2, efprice: 3, pcache: 4, mis: 5 },
+      links: [0, 1, 2, 3], hops: [1, 3],
+      steps: [
+        ['T+0', '<code>useStockPrices</code> 掛載後首次抓，之後每 60 秒背景輪詢；分頁切回前景（<code>visibilitychange</code>）也補抓一次。'],
+        ['T+0', '<code>priceProxy</code> 先查 L1 <code>localStorage</code>（<code>price-cache-v1</code>）—— 台股 <strong>60 秒</strong>、美股 <strong>600 秒</strong>內直接回。'],
+        ['L1 過期', '呼叫 Edge Function <code>stock-price</code>，action <code>prices</code>，單次最多 50 檔。<strong>需要登入</strong>（<code>verify_jwt = true</code>）。'],
+        ['+ ~50ms', '函式查 L2 <code>price_cache</code>：同一支股票在 TTL 內，<strong>全體使用者只會對外抓一次</strong>。'],
+        ['L2 也過期', '真的對外：台股打 TWSE MIS，失敗才退 Yahoo（先 <code>.TW</code> 再 <code>.TWO</code>）；美股直接走 Yahoo。寫回 L2 後回傳。'],
+        ['每 60 秒', '回圈重來。回傳帶 <code>updated_at</code>（報價實際取得時間），所以 L1 與 L2 的 TTL <strong>不會疊加</strong>。']
+      ]
+    },
+    detail: {
+      title: '個股分析：讀報告', kind: 'store', kindLabel: 'Storage 直讀',
+      why: '前端直接下載公開 bucket 的 JSON，不經 Edge Function —— 這是整條讀取路徑最便宜的部分，也是 invocation 額度被燒光後換來的教訓。',
+      nodes: { analysis: 1, bucketsvc: 2, bucket: 3, efreport: 4 },
+      links: [0, 1, 2], hops: [1],
+      steps: [
+        ['T+0', '開啟個股分析頁，<code>StockDetailPage</code> 同時發動數條獨立載入（籌碼 / 日線 / 基本面 / 新聞），彼此不阻塞。'],
+        ['T+0', '<code>reportsBucket.downloadReportsJson()</code> 先讀 <code>manifest.json</code>，取得最近交易日的 <code>ymd</code>。'],
+        ['+1 個 RTT', '再讀 <code>{ymd}/{ticker}.json</code>。走 <code>getPublicUrl()</code> + <code>fetch(cache:\'no-store\')</code>，<strong>刻意不用 <code>.download()</code></strong>。'],
+        ['並行', '技術面讀 <code>daily/{ticker}.json</code>、基本面讀 <code>fundamental/{ticker}.json</code>、AI 分頁另讀 <code>news/{ticker}.json</code>。'],
+        ['查無時', '日線與基本面呼叫 <code>warm</code> 一次補齊（同一 session 以 <code>inflight</code> + <code>attempted</code> 去重），再重讀 Storage；籌碼報告則 fallback 到 <code>generate</code> 即時產生。'],
+        ['回到前景', '<code>visibilitychange</code> 重新抓一次，<strong>只有 <code>generatedAt</code> 不同才 <code>setReport</code></strong>，避免無謂重繪。'],
+        ['每次讀取', 'schema 版本閘一律用 <code>&gt;=</code> 比對（報告 2、其餘 1）。用 <code>===</code> 會在後端升版當下讓整頁全掛 —— 0.4.0 的真實事故。']
+      ]
+    },
+    batch: {
+      title: '盤後批次：產報告', kind: 'batch', kindLabel: '排程批次',
+      why: '由資料庫的 pg_cron 觸發，完全不經瀏覽器。一天叫醒 32 次，但真正對外抓資料的只有盤後資料落地的那兩三輪 —— 其餘都被閘門擋掉。',
+      nodes: { pgcron: 1, efreport: 2, chipcache: 4, bucket: 6, chips: 5, openapi: 5, news: 5 },
+      links: [0, 1, 2, 3, 4, 5], hops: [0],
+      steps: [
+        ['16:00 起<br>每 15 分', 'pg_cron 的 <code>stock-report-nightly</code>（<code>*/15 8-15 * * 1-5</code> UTC）觸發，台北 16:00–23:45、平日、<strong>32 次／日</strong>。'],
+        ['+0s', '以 <code>pg_net</code> 帶 <code>x-cron-secret</code> 打 <code>stock-report</code>，<code>timeout_milliseconds := 60000</code>。密鑰不符直接 401。'],
+        ['+0s', '讀 <code>batch_run_log</code> <strong>今天的最後一列</strong>（<code>readLastRun()</code>）取回跨輪狀態：跑了幾次、T86 指紋、上一輪簽章。'],
+        ['閘門', '<code>decideSkip()</code>：T86 已凍結且融資融券已到齊 → <strong>零次對外請求</strong>直接結束。多數輪次停在這裡。'],
+        ['+1～30s', '沒被擋下才抓：T86 / 融資融券 / 借券 / OpenAPI 三份基本面 / Yahoo 日線 / Google News，<code>FETCH_CONCURRENCY = 3</code>，已快取的日子讀 <code>chip_raw_cache</code> 不重抓。'],
+        ['閘門', '<code>runSignature({dataYmd, t86, margin, borrow, tickers})</code> 與上一輪相同 → <strong>不重寫報告、不清理舊檔</strong>。'],
+        ['+~40s', '寫出報告、<code>daily/</code>、<code>fundamental/</code>、<code>news/</code> 與 <code>manifest.json</code>，最後 prune 掉 7 天前的日期資料夾與 14 天前的快取。'],
+        ['收尾', '整輪結果寫回 <code>batch_run_log</code>，成為下一輪的輸入。T86 <strong>連續兩次指紋相同</strong>才判定凍結 —— 只比一次會把中途值當定稿。']
+      ]
+    },
+    daily: {
+      title: '總經／匯率：每日同步', kind: 'batch', kindLabel: '排程批次',
+      why: '這兩份是全站共用的單一檔案，與個股完全無關，所以拆成自己的排程、也不看台股交易日。前端只是讀檔，不會觸發同步。',
+      nodes: { pgcron: 1, efreport: 2, fredfx: 3, bucket: 4, macrofx: 5 },
+      links: [0, 1, 2, 3], hops: [3],
+      steps: [
+        ['11:00 / 17:00', '<code>fx-daily</code>（<code>0 3,9 * * *</code> UTC）觸發 <code>sync-fx</code>。時段刻意避開 macro-daily。'],
+        ['21:00 / 23:00', '<code>macro-daily</code>（<code>0 13,15 * * *</code> UTC）觸發 <code>sync-macro</code>。<strong>每天都跑</strong> —— 美國數據不看台股交易日。'],
+        ['+0s', '同樣帶 <code>x-cron-secret</code> 打 <code>stock-report</code>，與盤後批次是同一支函式、不同 action。'],
+        ['+2～10s', '匯率抓 8 個幣別對台幣的一年日線（Yahoo）；總經抓 FRED 五個 series，回看 26 個月、輸出 12 個點。<strong>FRED 必須用 <code>MACRO_UA</code></strong>，送瀏覽器 UA 會被 reset connection。'],
+        ['+~10s', '各寫成一個檔：<code>fx/twd.json</code>、<code>macro/us.json</code>，都是<strong>全站一份</strong>，覆寫制。'],
+        ['使用者下次開頁', '前端才讀到新值 —— 沒有推播機制。所以匯率頁會自己判斷「已超過 3 天未更新」並顯示警示。']
+      ]
+    },
+    ai: {
+      title: 'AI 分析：直連模型', kind: 'direct', kindLabel: '瀏覽器直連',
+      why: '整個系統唯一一條不經 Supabase 的對外路徑。金鑰必然會回到瀏覽器才發得出請求 —— 這是已記錄的取捨，不是疏漏。',
+      nodes: { aitab: 1, aisvc: 2, appsettings: 3, llm: 4 },
+      links: [0, 1, 2], hops: [2],
+      steps: [
+        ['進入分頁', '讀 <code>app_settings</code>（全站單列，所有登入帳號可讀、僅 admin 可寫）取得 provider、base URL、model 與金鑰。'],
+        ['使用者按下按鈕', '<strong>絕不自動產生</strong>。每一次呼叫都是使用者在付錢，所以也不做任何自動重試。'],
+        ['+0s', '<code>buildAiPayload()</code> 組出 payload：只送算好的技術指標（<strong>不送 243 天原始收盤序列</strong>）、籌碼、基本面、總經、最多 10 則新聞標題。<strong>持股數量、平均成本、未實現損益一律不送。</strong>'],
+        ['≤ 180s', '瀏覽器直接打 provider：Google 走 <code>:generateContent</code>，OpenAI 相容走 <code>{baseUrl}/chat/completions</code>。<code>AI_TIMEOUT_MS</code> 涵蓋 body 讀取，不只 headers。'],
+        ['若回 400', '各退一次：Google 脫掉 <code>thinkingConfig</code> 重送；OpenAI 相容把<strong>整組</strong>相容欄位（<code>reasoning_effort</code> / <code>think</code> / <code>chat_template_kwargs</code>）撤掉重送。'],
+        ['收到回應', '三段處理推理型模型：剝 <code>&lt;think&gt;</code> → 只剩 <code>reasoning_content</code> 就用它但前置警語 → <code>finish_reason: length</code> 附截斷提示。'],
+        ['之後每一輪追問', '重送完整 system prompt，上限 10 輪、單則 500 字。對話存在 sessionStorage <code>ai-chat:{ticker}</code>，關掉分頁就沒了。']
+      ]
+    }
+  };
+
+  var svg = document.querySelector('svg.flow');
+  if (svg) {
+    var flinks = [].slice.call(svg.querySelectorAll('.flink'));
+    var fhops = [].slice.call(svg.querySelectorAll('.fhop'));
+    var fnodes = [].slice.call(svg.querySelectorAll('.fnode'));
+    var scBtns = [].slice.call(document.querySelectorAll('.scn-btn'));
+    var elTitle = document.getElementById('scTitle');
+    var elKind = document.getElementById('scKind');
+    var elWhy = document.getElementById('scWhy');
+    var elSeq = document.getElementById('scSeq');
+    var KC = { live: 'var(--c-client)', store: 'var(--c-store)', batch: 'var(--c-cron)', direct: 'var(--c-ext)' };
+
+    var apply = function (key) {
+      var s = SC[key];
+      if (!s) return;
+
+      fnodes.forEach(function (n) {
+        var order = s.nodes[n.getAttribute('data-n')];
+        var active = order !== undefined;
+        n.classList.toggle('dim', !active);
+        n.classList.toggle('on', active);
+        n.style.setProperty('--kc', KC[s.kind]);
+        var badge = n.querySelector('.seqbadge text');
+        if (badge && active) badge.textContent = String(order);
+      });
+
+      flinks.forEach(function (l) {
+        var active = l.getAttribute('data-f') === key &&
+          s.links.indexOf(Number(l.getAttribute('data-i'))) !== -1;
+        l.classList.toggle('on', active);
+        l.classList.toggle('dim', !active);
+        l.style.setProperty('--kc', KC[s.kind]);
+      });
+
+      fhops.forEach(function (h) {
+        var active = h.getAttribute('data-f') === key &&
+          s.hops.indexOf(Number(h.getAttribute('data-i'))) !== -1;
+        h.classList.toggle('on', active);
+        h.classList.toggle('dim', !active);
+      });
+
+      elTitle.textContent = s.title;
+      elKind.textContent = s.kindLabel;
+      elKind.style.setProperty('--kc', KC[s.kind]);
+      elWhy.innerHTML = s.why;
+      elSeq.style.setProperty('--kc', KC[s.kind]);
+      elSeq.innerHTML = s.steps.map(function (st, i) {
+        return '<li><span class="n">' + (i + 1) + '</span>' +
+          '<span class="when">' + st[0] + '</span>' +
+          '<span class="what">' + st[1] + '</span></li>';
+      }).join('');
+
+      scBtns.forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-sc') === key));
+      });
+    };
+
+    scBtns.forEach(function (b) {
+      b.addEventListener('click', function () { apply(b.getAttribute('data-sc')); });
+    });
+    apply('price');
+  }
+
+  /* ================= 目錄高亮 ================= */
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+
+  function sync() {
+    var best = 0;
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i] && secs[i].getBoundingClientRect().top <= 90) best = i;
+    }
+    links.forEach(function (a, i) { a.classList.toggle('on', i === best); });
+  }
+  var pending = false;
+  window.addEventListener('scroll', function () {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { sync(); pending = false; });
+  }, { passive: true });
+  sync();
+})();
+</script>

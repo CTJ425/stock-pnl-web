@@ -7,6 +7,104 @@
 
 ---
 
+## 📅 Log: 2026-07-29 22:45:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 架構頁加入可點選的資料時序；**修正 `verify_jwt` 的事實錯誤**
+- **Status**: COMPLETED（純文件）
+
+### ⚠️ 修正：`stock-price` 的 verify_jwt 是 true，不是 false
+
+22:10 那版的架構頁寫「兩支 Edge Function 都是 `verify_jwt = false`」，**這是錯的**。
+以 `supabase functions list --project-ref`（唯讀，兩區都查）為準：
+
+| 函式 | 正式區 kxnx… | 測試區 wqet… |
+| ---- | ---- | ---- |
+| `stock-price` | v12 · **verify_jwt = true** | v8 · **verify_jwt = true** |
+| `stock-report` | v15 · verify_jwt = false | v27 · verify_jwt = false |
+
+錯誤來源：`sources/supabase/README.md:71-73` 與根目錄 `README.md:200-201` 的部署段落
+**對兩支都寫了 `--no-verify-jwt`**，但線上實況並非如此。
+`CLAUDE.md` §13.3 的說法才對：「`stock-price` 是 `verify_jwt=true`，用預設即可。」
+
+**待辦**：那兩份 README 的部署指令應該修掉，否則照抄會把 `stock-price` 開成公開端點。
+本次未動（不在使用者的要求範圍內），已記在 TASK.md。
+
+### 資料時序（使用者要求）
+
+使用者指到 2026-07-27 那份舊 artifact（`7f867367`，0.6.0-dev.6 時期，
+標題就叫「系統架構與資料時序」），要把那個互動搬到 0.6.9 這版上。
+舊版的作法是：點情境按鈕 → SVG 高亮該路徑的節點與連線（跑動虛線）→ 下方列編號步驟。
+
+移植時做了三件不一樣的事：
+1. **節點上直接標圈號** —— 舊版只有下方列表有順序，圖上看不出先後。現在每個亮起的節點右上角有序號。
+2. **步驟列多一欄「時間」** —— 這才是「資料時序」的重點：`T+0` / `L1 過期` / `16:00 起每 15 分` / `≤ 180s` / `閘門`。
+3. **情境改為五個**，補上 0.6.9 才有的「總經／匯率：每日同步」，並依 0.6.9 更新每一步的事實
+   （舊版寫的是三班制 `30 9,14,15 * * 1-5`、5 分頁個股分析、`stock-price verify_jwt = true` 也還在但當時是對的）。
+
+放在 §01 之內（標題改為「系統全景與資料時序」），不另開章節，避免十個章節全部重新編號。
+
+### 驗證
+
+Playwright 跑過 1440px / 375px × 明暗兩主題 × 五個情境全部點過一輪：
+零 console error、零外部請求、無橫向溢出，每個情境的高亮節點數／連線數／步驟數與序號皆符合預期。
+
+---
+
+## 📅 Log: 2026-07-29 22:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 產出兩份 HTML 文件 —— UI 設計方向比較、0.6.9 架構與運作流程
+- **Status**: COMPLETED（**純文件，`sources/` 與 Supabase 兩區都沒有動；未進版，維持 0.6.9**）
+
+### 產出
+
+| 檔案 | 內容 |
+| ---- | ---- |
+| `docs/architecture/ui_redesign_shadcn_carbon_stripe.html` | shadcn/ui · IBM Carbon · Stripe FinTech 三個方向，各含「庫存總覽」「個股分析」兩大畫面 + 元件表 + token 表 |
+| `docs/architecture/architecture_workflow_0.6.9.html` | 0.6.9 完整運作參考，十個章節（全景／Edge Functions／排程／閘門／資料源／資料庫／Storage／前端資料流／AI／部署陷阱） |
+
+兩份都已發布成 Artifact：
+- UI 設計 <https://claude.ai/code/artifact/89c7558a-6909-4b65-8935-7b4398ec51aa>
+- 架構流程 <https://claude.ai/code/artifact/70738ccf-e0b5-4376-9158-b2a24c3619fb>
+
+### 與既有四份 design HTML 的關係
+
+`docs/architecture/` 原本已有 `design.html`（12 系統）、`design_systems.html`（16 系統）、
+`layout_structure_designs.html`、`minimalist_designs.html`。那些是**廣度**展示 ——
+一頁切換 `data-system`、三套骨架共用、只換色。
+這次要的是**深度**，所以開新檔、不改舊檔：三個系統的
+**版面骨架各自不同**（shadcn 水平 tab／Carbon 左側 UI Shell 側欄／Stripe 頂列 + 麵包屑 + 漸層 hero），
+表格密度、按鈕形狀（Carbon 的文字靠左、圖示釘右）也照該系統的規範走。
+
+### 兩個必須記住的寫法限制
+
+1. **Artifact 的 CSP 會擋掉所有外部請求**，且發布時檔案會被包進 `<!doctype>…<body>` 骨架。
+   所以這兩份檔案**不寫 `<!DOCTYPE>` / `<html>` / `<head>` / `<body>`**，
+   也**不能用 Google Fonts `<link>`** —— 既有的 `design_systems.html` 用的那種在 Artifact 裡會靜默失效，
+   改用系統字體堆疊。日後要再發布 HTML 到 Artifact，同樣的規則適用。
+2. **不用 mermaid。** Artifact 原生支援 `<pre class="mermaid">`，但那樣的檔案直接在 repo 裡開只會看到原始文字。
+   改為手刻 CSS box + inline SVG，兩種開啟方式一致。
+
+### 驗證
+
+以 Playwright（`sources/node_modules` 底下那份，1.62.0）實際渲染：
+1440px 與 375px 兩種寬度、明暗兩種主題，**零 console error、零外部請求、無橫向溢出**，
+圖表由頁面內 JS 產生（28 根 K 棒 × 3 系統 = 168 個 rect，指標摘要的 MA/KD 由同一份資料算出，不會對不上）。
+
+過程中抓到兩個實際的破版並修掉：
+- 架構頁的檔案樹少了 `white-space: pre`，縮排整個塌掉變成一段流動文字
+- Carbon 的展示外框仍是 10px 圓角，等於展示框本身在破壞它「0 圓角」的規則
+
+### 內容的事實基準
+
+架構頁的每個數字都對過 `sources/supabase/`，不是從記憶寫的。特別記下三件容易寫錯的：
+- **這個 repo 沒有 `migrations/` 目錄** —— 所有 DDL 與 cron 都在單一手動套用的 `sources/supabase/schema.sql`（不具冪等性）
+- **只有兩支 Edge Function**（`stock-price` / `stock-report`），七個 action 集中在後者
+- **`backfill-revenue` 沒有自己的 cron job**，掛在 `generate-all` 裡跑；所以排程表是四個，不是七個
+
+---
+
 ## 📅 Log: 2026-07-29 17:30:00 Asia/Taipei
 
 - **Agent**: Claude

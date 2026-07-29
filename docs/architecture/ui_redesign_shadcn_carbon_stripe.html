@@ -1,0 +1,1745 @@
+<title>UI 設計方向：shadcn / Carbon / Stripe — 股票小幫手</title>
+
+<style>
+/* =========================================================================
+   股票小幫手 — UI 設計方向比較
+   三個設計系統的完整實作稿：shadcn/ui · IBM Carbon · Stripe FinTech
+   每個系統都有自己的版面骨架，不是換色而已。
+   無外部資源：字體用系統堆疊，圖表用 inline SVG（由頁面內 JS 產生）。
+   ========================================================================= */
+
+/* ---------- 展示頁外殼（跟隨讀者的明暗偏好） ---------- */
+:root {
+  --pg-bg:        #f4f6f5;
+  --pg-panel:     #ffffff;
+  --pg-line:      #dfe4e3;
+  --pg-line-soft: #e9edec;
+  --pg-ink:       #14201f;
+  --pg-ink-2:     #4d5c5a;
+  --pg-ink-3:     #7d8b89;
+  --pg-accent:    #12605b;
+  --pg-accent-2:  #0d4b47;
+
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua',
+           Georgia, 'Songti TC', 'Noto Serif TC', 'PMingLiU', serif;
+  --sans:  ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+           'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+           'Liberation Mono', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pg-bg:        #0e1514;
+    --pg-panel:     #151d1c;
+    --pg-line:      #263130;
+    --pg-line-soft: #1d2726;
+    --pg-ink:       #e6edec;
+    --pg-ink-2:     #9db0ad;
+    --pg-ink-3:     #6f827f;
+    --pg-accent:    #57b8b0;
+    --pg-accent-2:  #7fd3cb;
+  }
+}
+:root[data-theme='light'] {
+  --pg-bg: #f4f6f5; --pg-panel: #ffffff; --pg-line: #dfe4e3; --pg-line-soft: #e9edec;
+  --pg-ink: #14201f; --pg-ink-2: #4d5c5a; --pg-ink-3: #7d8b89;
+  --pg-accent: #12605b; --pg-accent-2: #0d4b47;
+}
+:root[data-theme='dark'] {
+  --pg-bg: #0e1514; --pg-panel: #151d1c; --pg-line: #263130; --pg-line-soft: #1d2726;
+  --pg-ink: #e6edec; --pg-ink-2: #9db0ad; --pg-ink-3: #6f827f;
+  --pg-accent: #57b8b0; --pg-accent-2: #7fd3cb;
+}
+
+* { box-sizing: border-box; }
+
+.page {
+  background: var(--pg-bg);
+  color: var(--pg-ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 96px;
+  overflow-x: hidden;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+.wrap--text { max-width: 700px; }
+
+/* ---------- 標頭 ---------- */
+.masthead { padding: 72px 0 40px; }
+.eyebrow {
+  font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--pg-accent); font-weight: 600; margin: 0 0 18px;
+}
+.masthead h1 {
+  font-family: var(--serif);
+  font-size: clamp(34px, 5.4vw, 54px);
+  line-height: 1.12; font-weight: 600; letter-spacing: -.015em;
+  margin: 0 0 20px; text-wrap: balance;
+}
+.masthead h1 em { font-style: italic; color: var(--pg-accent); }
+.lede { font-size: 17px; line-height: 1.7; color: var(--pg-ink-2); margin: 0 0 14px; max-width: 66ch; }
+.lede strong { color: var(--pg-ink); font-weight: 600; }
+
+.meta-row {
+  display: flex; flex-wrap: wrap; gap: 10px 28px;
+  margin-top: 30px; padding-top: 22px;
+  border-top: 1px solid var(--pg-line);
+  font-family: var(--mono); font-size: 12px; color: var(--pg-ink-3);
+}
+.meta-row b { color: var(--pg-ink-2); font-weight: 500; }
+
+/* ---------- 系統切換 ---------- */
+.switcher {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--pg-bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--pg-line);
+  border-bottom: 1px solid var(--pg-line);
+  margin-bottom: 44px;
+}
+.switcher-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 9px 24px; max-width: 1240px; margin: 0 auto; }
+.switcher-label {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--pg-ink-3); margin-right: 14px; font-weight: 600;
+}
+.sw-btn {
+  appearance: none; border: 1px solid transparent; background: transparent;
+  color: var(--pg-ink-2); font-family: inherit; font-size: 13.5px; font-weight: 500;
+  padding: 7px 15px; border-radius: 7px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sw-btn:hover { background: var(--pg-line-soft); color: var(--pg-ink); }
+.sw-btn:focus-visible { outline: 2px solid var(--pg-accent); outline-offset: 2px; }
+.sw-btn[aria-selected='true'] {
+  background: var(--pg-accent); border-color: var(--pg-accent);
+  color: var(--pg-bg); font-weight: 600;
+}
+@media (prefers-color-scheme: dark) { .sw-btn[aria-selected='true'] { color: #0b1211; } }
+:root[data-theme='dark'] .sw-btn[aria-selected='true'] { color: #0b1211; }
+:root[data-theme='light'] .sw-btn[aria-selected='true'] { color: #ffffff; }
+
+/* ---------- 圖版 ---------- */
+.plate { display: none; }
+.plate.is-on { display: block; animation: plate-in .28s ease both; }
+@keyframes plate-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .plate.is-on { animation: none; } }
+
+.plate-head { margin-bottom: 26px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); align-items: start; }
+@media (max-width: 900px) { .plate-head { grid-template-columns: 1fr; } }
+.plate-head h2 {
+  font-family: var(--serif); font-size: 30px; line-height: 1.2;
+  font-weight: 600; margin: 0 0 8px; letter-spacing: -.01em;
+}
+.plate-head p { margin: 0; color: var(--pg-ink-2); font-size: 15px; max-width: 62ch; }
+.origin {
+  font-family: var(--mono); font-size: 11.5px; color: var(--pg-ink-3);
+  border-left: 2px solid var(--pg-accent); padding: 2px 0 2px 12px; margin-bottom: 12px;
+}
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--pg-ink-3);
+  border: 1px solid var(--pg-line); border-radius: 6px; padding: 4px 8px 4px 5px;
+  background: var(--pg-panel);
+}
+.sw i { width: 14px; height: 14px; border-radius: 3px; display: block; border: 1px solid rgba(128,128,128,.28); }
+
+.caption {
+  font-size: 12.5px; color: var(--pg-ink-3); margin: 12px 0 40px;
+  display: flex; gap: 10px; align-items: baseline;
+}
+.caption b { color: var(--pg-ink-2); font-weight: 600; white-space: nowrap; }
+
+.sec-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--pg-ink-3); margin: 0 0 10px;
+  display: flex; align-items: center; gap: 12px;
+}
+.sec-label::after { content: ''; flex: 1; height: 1px; background: var(--pg-line); }
+
+/* =========================================================================
+   規格稿容器 —— 每個設計系統的 token 定義在這裡
+   ========================================================================= */
+.spec {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--pg-line);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+.spec * { box-sizing: border-box; }
+.spec button { font-family: inherit; cursor: default; }
+
+/* ---- shadcn/ui ---- */
+.spec--shadcn {
+  --bg: #09090b; --surface: #0f0f12; --surface-2: #18181b; --surface-3: #27272a;
+  --border: #27272a; --border-2: #3f3f46;
+  --ink: #fafafa; --ink-2: #a1a1aa; --ink-3: #71717a;
+  --pri: #fafafa; --pri-ink: #09090b;
+  --up: #ef4444; --down: #10b981; --warn: #f59e0b;
+  --r: 8px; --r-sm: 6px; --r-pill: 999px;
+  --shadow: none;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --cell-y: 11px; --cell-x: 14px; --tbl-fs: 13px;
+}
+/* ---- IBM Carbon ---- */
+.spec--carbon {
+  --bg: #161616; --surface: #262626; --surface-2: #393939; --surface-3: #4c4c4c;
+  --border: #393939; --border-2: #6f6f6f;
+  --ink: #f4f4f4; --ink-2: #c6c6c6; --ink-3: #8d8d8d;
+  --pri: #0f62fe; --pri-ink: #ffffff;
+  --up: #fa4d56; --down: #42be65; --warn: #f1c21b;
+  --r: 0px; --r-sm: 0px; --r-pill: 0px;
+  --shadow: none;
+  --font: 'IBM Plex Sans', ui-sans-serif, -apple-system, 'Segoe UI',
+          'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --cell-y: 7px; --cell-x: 12px; --tbl-fs: 12px;
+}
+/* Carbon 的 0 圓角連外框也一起遵守，否則展示框本身就在破壞它的規則 */
+.spec--carbon { border-radius: 0; }
+/* ---- Stripe FinTech ---- */
+.spec--stripe {
+  --bg: #f6f9fc; --surface: #ffffff; --surface-2: #f0f5fa; --surface-3: #e3ecf4;
+  --border: #e6ebf1; --border-2: #d8e2ec;
+  --ink: #0a2540; --ink-2: #425466; --ink-3: #8a94a6;
+  --pri: #635bff; --pri-ink: #ffffff;
+  --up: #cd1f43; --down: #0a7d5b; --warn: #b45309;
+  --r: 10px; --r-sm: 7px; --r-pill: 999px;
+  --shadow: 0 13px 27px -5px rgba(50,50,93,.10), 0 6px 14px -8px rgba(10,37,64,.14);
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --cell-y: 12px; --cell-x: 16px; --tbl-fs: 13px;
+}
+
+/* ---------- 共用元件（全部走 token） ---------- */
+.spec .body { padding: 24px; position: relative; min-height: 200px; }
+.spec--carbon .body { padding: 0; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: var(--shadow);
+}
+.spec--stripe .card { border-color: transparent; }
+.spec--carbon .card { border: none; }
+
+.card-h {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.card-h h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.spec--carbon .card-h { padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.spec--stripe .card-h { border-bottom: 1px solid var(--border); }
+.card-meta { font-size: 11.5px; color: var(--ink-3); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border-2); background: transparent; color: var(--ink);
+  font-size: 13px; font-weight: 500; padding: 7px 13px;
+  border-radius: var(--r-sm); line-height: 1.3;
+}
+.btn-pri { background: var(--pri); border-color: var(--pri); color: var(--pri-ink); font-weight: 600; }
+.btn-sm { font-size: 12px; padding: 5px 10px; }
+.btn-danger { color: var(--up); border-color: color-mix(in srgb, var(--up) 45%, transparent); }
+.btn-ghost { border-color: transparent; color: var(--ink-2); }
+.spec--carbon .btn { border-radius: 0; padding: 9px 48px 9px 14px; position: relative; min-width: 128px; justify-content: flex-start; }
+.spec--carbon .btn .ico { position: absolute; right: 13px; }
+.spec--carbon .btn-sm { padding: 6px 34px 6px 12px; min-width: 0; }
+.spec--carbon .btn-sm .ico { right: 10px; }
+.spec--stripe .btn-pri { box-shadow: 0 2px 5px rgba(99,91,255,.28); }
+
+.ico { width: 14px; height: 14px; flex: none; display: inline-block; vertical-align: -2px; }
+.ico svg { width: 100%; height: 100%; display: block; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 500; padding: 2px 8px;
+  border-radius: var(--r-pill); border: 1px solid var(--border-2); color: var(--ink-2);
+}
+.spec--carbon .badge { border-radius: 0; padding: 1px 8px; }
+.badge-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.badge-pri { color: var(--pri); border-color: color-mix(in srgb, var(--pri) 45%, transparent); background: color-mix(in srgb, var(--pri) 10%, transparent); }
+.spec--shadcn .badge-pri { color: var(--ink); background: var(--surface-3); border-color: var(--border-2); }
+
+.up { color: var(--up); }
+.down { color: var(--down); }
+.muted { color: var(--ink-3); }
+.sub { display: block; font-size: 11px; color: var(--ink-3); font-weight: 400; margin-top: 1px; }
+
+/* 表格 */
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.tbl { width: 100%; border-collapse: collapse; font-size: var(--tbl-fs); min-width: 860px; }
+table.tbl th, table.tbl td { padding: var(--cell-y) var(--cell-x); text-align: left; white-space: nowrap; }
+table.tbl th {
+  font-size: 11px; font-weight: 600; color: var(--ink-3);
+  letter-spacing: .04em; border-bottom: 1px solid var(--border);
+}
+table.tbl td { border-bottom: 1px solid var(--border); }
+table.tbl .num { text-align: right; }
+table.tbl tbody tr:last-child td { border-bottom: none; }
+/* Carbon：更明確的網格與 zebra */
+.spec--carbon table.tbl th { background: var(--surface-2); color: var(--ink); border-bottom: none; text-transform: none; }
+.spec--carbon table.tbl tbody tr:nth-child(odd) td { background: color-mix(in srgb, var(--surface-2) 34%, transparent); }
+.spec--carbon table.tbl td { border-bottom: 1px solid #333; }
+.spec--carbon table.tbl th + th, .spec--carbon table.tbl td + td { border-left: 1px solid #333; }
+/* Stripe：只留下橫向髮絲線 */
+.spec--stripe table.tbl th { text-transform: uppercase; letter-spacing: .07em; font-size: 10.5px; }
+.spec--stripe table.tbl tr:hover td { background: var(--surface-2); }
+.spec--shadcn table.tbl tr:hover td { background: var(--surface-2); }
+
+.tick { font-weight: 600; }
+.tick .sub { font-weight: 400; }
+
+/* KPI */
+.kpi-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.spec--carbon .kpi-grid { gap: 1px; background: var(--border); }
+.kpi { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
+.spec--carbon .kpi { border: none; border-radius: 0; }
+.spec--stripe .kpi { border-color: transparent; }
+.kpi-l { font-size: 11.5px; color: var(--ink-3); }
+.kpi-v { font-size: 22px; font-weight: 650; letter-spacing: -.01em; margin-top: 3px; }
+.spec--carbon .kpi-v { font-weight: 400; font-size: 26px; }
+.kpi-s { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+
+/* 市場卡 */
+.mkt-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.spec--carbon .mkt-grid { gap: 1px; background: var(--border); }
+.mkt { padding: 18px 20px; }
+.mkt-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.mkt-h h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.mkt-cur { font-family: var(--mono, monospace); font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+.mkt-hero-l { font-size: 11.5px; color: var(--ink-3); }
+.mkt-hero-v { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; }
+.spec--carbon .mkt-hero-v { font-weight: 300; }
+.mkt-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.mkt-split > div + div { border-left: 1px solid var(--border); padding-left: 14px; }
+.mkt-cell-l { font-size: 11.5px; color: var(--ink-3); }
+.mkt-cell-v { font-size: 16px; font-weight: 600; margin-top: 2px; }
+
+/* 工具列 */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.toolbar .spacer { flex: 1; }
+.hint { font-size: 11.5px; color: var(--ink-3); }
+
+.stack { display: grid; gap: 20px; }
+.h-sec { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 26px 0 12px; }
+.h-sec h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.spec--carbon .h-sec { margin: 0; padding: 16px 24px 12px; }
+
+/* 分頁 */
+.tabs { display: flex; gap: 2px; align-items: center; }
+.spec--shadcn .tabs { background: var(--surface-2); padding: 3px; border-radius: var(--r); }
+.tab { font-size: 13px; padding: 6px 12px; border-radius: var(--r-sm); color: var(--ink-2); border: 1px solid transparent; background: transparent; }
+.spec--shadcn .tab.on { background: var(--surface-3); color: var(--ink); font-weight: 500; }
+.spec--stripe .tab { border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 2px; margin-right: 20px; }
+.spec--stripe .tab.on { color: var(--pri); border-bottom-color: var(--pri); font-weight: 600; }
+.subtabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.subtab { font-size: 13.5px; padding: 9px 1px; border: none; border-bottom: 2px solid transparent; background: transparent; color: var(--ink-3); }
+.subtab.on { color: var(--pri); border-bottom-color: var(--pri); font-weight: 600; }
+.spec--shadcn .subtab.on { color: var(--ink); border-bottom-color: var(--ink); }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 11.5px; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--border-2); color: var(--ink-2); background: transparent; }
+.chip.on { background: var(--pri); border-color: var(--pri); color: var(--pri-ink); }
+.spec--shadcn .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.spec--carbon .chip { border-radius: 0; }
+
+/* 通知 */
+.notice { display: flex; gap: 9px; padding: 10px 13px; border-radius: var(--r-sm); font-size: 12.5px; border: 1px solid; align-items: flex-start; }
+.n-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.n-ok { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); background: color-mix(in srgb, var(--down) 10%, transparent); }
+.n-err { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); background: color-mix(in srgb, var(--up) 10%, transparent); }
+.spec--carbon .notice { border-radius: 0; border-width: 1px 1px 1px 3px; }
+
+/* 輸入 */
+.field { display: grid; gap: 5px; }
+.field label { font-size: 11.5px; color: var(--ink-3); }
+.inp {
+  background: var(--surface-2); border: 1px solid var(--border-2); color: var(--ink);
+  border-radius: var(--r-sm); padding: 8px 11px; font-size: 13px; font-family: inherit; width: 100%;
+}
+.spec--carbon .inp { border-radius: 0; border-width: 0 0 1px 0; background: var(--surface-2); padding: 10px 12px; }
+.spec--stripe .inp { background: #fff; box-shadow: 0 1px 2px rgba(10,37,64,.06); }
+
+/* 骨架 */
+.skel { height: 12px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shim 1.4s linear infinite; }
+@keyframes shim { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* FAB */
+.fab {
+  position: absolute; right: 20px; bottom: 20px; z-index: 5;
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--pri); color: var(--pri-ink); border: 1px solid var(--pri);
+  border-radius: var(--r-pill); padding: 11px 18px; font-size: 13px; font-weight: 600;
+  box-shadow: 0 8px 22px rgba(0,0,0,.35);
+}
+.spec--stripe .fab { box-shadow: 0 8px 22px rgba(99,91,255,.35); }
+
+/* =========================================================================
+   各系統的 app shell（骨架差異的所在）
+   ========================================================================= */
+
+/* --- shadcn：水平 tab、置中容器 --- */
+.sh-head { display: flex; align-items: center; gap: 16px; padding: 11px 24px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.sh-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14.5px; letter-spacing: -.01em; }
+.sh-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: var(--bg); display: grid; place-items: center; }
+.sh-mark svg { width: 15px; height: 15px; }
+.sh-head .spacer { flex: 1; }
+.sh-ws { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 10px; }
+.sh-avatar { width: 27px; height: 27px; border-radius: 999px; background: var(--surface-3); color: var(--ink); display: grid; place-items: center; font-size: 10.5px; font-weight: 600; }
+
+/* --- Carbon：UI Shell 頂列 + 左側固定導覽 --- */
+.cb-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 620px; }
+.cb-top { grid-column: 1 / -1; height: 48px; display: flex; align-items: center; gap: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.cb-top .cb-menu { width: 48px; height: 48px; display: grid; place-items: center; border-right: 1px solid var(--border); color: var(--ink-2); }
+.cb-top .cb-name { padding: 0 16px; font-size: 14px; }
+.cb-top .cb-name b { font-weight: 600; }
+.cb-top .spacer { flex: 1; }
+.cb-act { width: 48px; height: 48px; display: grid; place-items: center; color: var(--ink-2); border-left: 1px solid var(--border); }
+.cb-nav { background: var(--bg); border-right: 1px solid var(--border); padding-top: 8px; }
+.cb-nav a { display: flex; align-items: center; gap: 11px; padding: 12px 16px; font-size: 13px; color: var(--ink-2); border-left: 3px solid transparent; text-decoration: none; }
+.cb-nav a.on { background: var(--surface-2); color: var(--ink); border-left-color: var(--pri); font-weight: 600; }
+.cb-main { background: var(--bg); min-width: 0; }
+.cb-crumb { padding: 14px 24px 0; font-size: 12px; color: var(--ink-3); }
+.cb-grid { padding: 0 24px 24px; display: grid; gap: 1px; background: var(--border); }
+@media (max-width: 860px) {
+  .cb-shell { grid-template-columns: 1fr; }
+  .cb-nav { display: flex; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 0; }
+  .cb-nav a { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+  .cb-nav a.on { border-left-color: transparent; border-bottom-color: var(--pri); }
+}
+
+/* --- Stripe：頂列 + 麵包屑 + 漸層 hero --- */
+.st-head { background: #fff; border-bottom: 1px solid var(--border); padding: 0 24px; }
+.st-head-row { display: flex; align-items: center; gap: 16px; height: 56px; }
+.st-brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 15px; color: var(--ink); letter-spacing: -.01em; }
+.st-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(140deg, #7a73ff, #635bff 60%, #4f46e5); display: grid; place-items: center; color: #fff; }
+.st-mark svg { width: 15px; height: 15px; }
+.st-head-row .spacer { flex: 1; }
+.st-tabs { display: flex; padding-left: 4px; }
+.st-hero { background: linear-gradient(180deg, #eef2fb 0%, var(--bg) 100%); padding: 20px 24px 4px; }
+.st-crumb { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+.st-crumb b { color: var(--ink-2); font-weight: 500; }
+.st-hero h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
+
+/* 圖表 */
+.chart { width: 100%; display: block; }
+.chart-box { padding: 14px 16px 8px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-3); padding: 0 16px 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 2px; display: block; border-radius: 2px; }
+.c-grid { stroke: color-mix(in srgb, var(--ink-3) 26%, transparent); stroke-width: 1; }
+.c-zero { stroke: color-mix(in srgb, var(--ink-3) 60%, transparent); stroke-width: 1; }
+.c-axis { fill: var(--ink-3); font-size: 9.5px; font-family: var(--font); }
+.c-up { fill: var(--up); stroke: var(--up); }
+.c-down { fill: var(--down); stroke: var(--down); }
+.c-ma5 { stroke: #3987e5; fill: none; stroke-width: 1.4; }
+.c-ma20 { stroke: #d95926; fill: none; stroke-width: 1.4; }
+.c-ma60 { stroke: #199e70; fill: none; stroke-width: 1.4; }
+.c-k { stroke: #3987e5; fill: none; stroke-width: 1.5; }
+.c-d { stroke: #c98500; fill: none; stroke-width: 1.5; }
+.c-vol { fill: color-mix(in srgb, var(--ink-3) 55%, transparent); }
+.c-dash { stroke: color-mix(in srgb, var(--ink-3) 45%, transparent); stroke-dasharray: 3 3; stroke-width: 1; }
+.spec--carbon .c-ma5, .spec--carbon .c-k { stroke: #4589ff; }
+.spec--carbon .c-ma20, .spec--carbon .c-d { stroke: #ff832b; }
+.spec--carbon .c-ma60 { stroke: #08bdba; }
+.spec--carbon .c-grid { stroke: #525252; }
+.spec--stripe .c-ma5 { stroke: #635bff; }
+.spec--stripe .c-ma20 { stroke: #e2761f; }
+.spec--stripe .c-ma60 { stroke: #0a7d5b; }
+.spec--stripe .c-k { stroke: #635bff; }
+.spec--stripe .c-d { stroke: #b45309; }
+
+/* 技術面摘要格 */
+.tech { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 1px; background: var(--border); border-top: 1px solid var(--border); }
+.tech div { background: var(--surface); padding: 10px 12px; }
+.tech dt { font-size: 11px; color: var(--ink-3); margin: 0; }
+.tech dd { margin: 2px 0 0; font-size: 15px; font-weight: 600; }
+
+/* 元件展示 */
+.comp-grid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.comp { background: var(--surface); padding: 16px 18px; }
+.comp h4 { margin: 0 0 11px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.comp-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+.comp-cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+/* Token 表 */
+.tok-scroll { overflow-x: auto; }
+table.tok { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; font-family: var(--mono); }
+table.tok th { text-align: left; padding: 8px 12px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--pg-ink-3); border-bottom: 1px solid var(--pg-line); font-family: var(--sans); }
+table.tok td { padding: 8px 12px; border-bottom: 1px solid var(--pg-line-soft); color: var(--pg-ink-2); vertical-align: middle; }
+table.tok td:first-child { color: var(--pg-ink); }
+table.tok .chipc { display: inline-flex; align-items: center; gap: 7px; }
+table.tok .chipc i { width: 15px; height: 15px; border-radius: 3px; border: 1px solid rgba(128,128,128,.3); display: block; flex: none; }
+
+/* 頁尾取捨 */
+.verdict { margin-top: 64px; padding-top: 40px; border-top: 2px solid var(--pg-ink); }
+.verdict h2 { font-family: var(--serif); font-size: 28px; margin: 0 0 8px; font-weight: 600; }
+.v-grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); margin-top: 28px; }
+.v-card { border-top: 3px solid var(--vc); padding-top: 14px; }
+.v-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 650; }
+.v-card p { margin: 0 0 10px; font-size: 14px; color: var(--pg-ink-2); line-height: 1.65; }
+.v-cost { font-family: var(--mono); font-size: 11.5px; color: var(--pg-ink-3); border-top: 1px solid var(--pg-line); padding-top: 8px; }
+.v-cost b { color: var(--pg-accent); font-weight: 600; }
+
+.callout {
+  border-left: 3px solid var(--pg-accent);
+  background: var(--pg-panel);
+  padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 28px 0;
+}
+.callout h3 { margin: 0 0 6px; font-size: 14px; font-weight: 650; }
+.callout p { margin: 0; font-size: 14px; color: var(--pg-ink-2); }
+.callout code { font-family: var(--mono); font-size: 12.5px; background: var(--pg-line-soft); padding: 1px 5px; border-radius: 4px; color: var(--pg-ink); }
+</style>
+
+<div class="page">
+
+  <header class="masthead wrap">
+    <p class="eyebrow">股票小幫手 · UI 設計方向評估</p>
+    <h1>三種可能的樣子，<br><em>畫到能做決定的程度</em></h1>
+    <p class="lede">
+      現在的介面是自製的玻璃擬物風（暗色優先、<code>backdrop-filter</code> 毛玻璃、靛藍漸層強調色），
+      全部寫在單一 2,380 行的 <code>sources/src/index.css</code>。好處是 token 化程度已經很高，
+      換設計系統多半是換 <code>:root</code> 變數；壞處是它沒有可以對照的規範，每加一個元件都在重新發明。
+    </p>
+    <p class="lede">
+      下面三個方向不是配色替換 —— <strong>版面骨架、導覽位置、表格密度、按鈕形狀都不一樣</strong>，
+      因為那才是這三個設計系統真正的差別。內容用的是真實畫面、真實欄位、真實數字。
+    </p>
+    <div class="meta-row">
+      <span><b>版本</b> 0.6.9</span>
+      <span><b>畫面</b> 庫存總覽 · 個股分析</span>
+      <span><b>主題</b> 各系統原生預設</span>
+      <span><b>紅漲綠跌</b> 三個系統一律保留</span>
+    </div>
+  </header>
+
+  <nav class="switcher" aria-label="設計系統切換">
+    <div class="switcher-inner" role="tablist">
+      <span class="switcher-label">設計系統</span>
+      <button class="sw-btn" role="tab" aria-selected="true" data-target="shadcn">shadcn/ui</button>
+      <button class="sw-btn" role="tab" aria-selected="false" data-target="carbon">IBM Carbon</button>
+      <button class="sw-btn" role="tab" aria-selected="false" data-target="stripe">Stripe FinTech</button>
+      <button class="sw-btn" role="tab" aria-selected="false" data-target="all">三者並列</button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+
+  <!-- ================================================================= -->
+  <!-- SHADCN                                                             -->
+  <!-- ================================================================= -->
+  <section class="plate is-on" id="plate-shadcn">
+    <div class="plate-head">
+      <div>
+        <p class="origin">Radix Primitives + Tailwind · Vercel / Linear 一脈</p>
+        <h2>shadcn/ui</h2>
+        <p>
+          中性 zinc 灰階、1px 細線、幾乎不用陰影。設計的重量全部壓在字體排版與留白上，
+          顏色只在「真的有語意」的地方出現。主要按鈕是反白的 —— 純白底、黑字，
+          這是它最好認的特徵。
+        </p>
+      </div>
+      <div class="swatches">
+        <span class="sw"><i style="background:#09090b"></i>#09090b bg</span>
+        <span class="sw"><i style="background:#18181b"></i>#18181b card</span>
+        <span class="sw"><i style="background:#27272a"></i>#27272a border</span>
+        <span class="sw"><i style="background:#fafafa"></i>#fafafa primary</span>
+        <span class="sw"><i style="background:#ef4444"></i>#ef4444 漲</span>
+        <span class="sw"><i style="background:#10b981"></i>#10b981 跌</span>
+      </div>
+    </div>
+
+    <p class="sec-label">畫面一 · 庫存總覽</p>
+    <div class="spec spec--shadcn">
+      <div class="sh-head">
+        <div class="sh-brand">
+          <span class="sh-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+          股票小幫手
+        </div>
+        <div class="tabs">
+          <button class="tab on">庫存總覽</button>
+          <button class="tab">個股分析</button>
+          <button class="tab">總體經濟</button>
+          <button class="tab">外幣匯率</button>
+          <button class="tab">年度收益</button>
+          <button class="tab">交易紀錄</button>
+        </div>
+        <span class="spacer"></span>
+        <span class="sh-ws">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+          長期投資
+        </span>
+        <span class="sh-avatar">ZR</span>
+      </div>
+
+      <div class="body">
+        <div class="mkt-grid">
+          <div class="card mkt">
+            <div class="mkt-h"><h3>🇹🇼 台股</h3><span class="mkt-cur">TWD</span></div>
+            <div class="mkt-hero-l">持倉市值</div>
+            <div class="mkt-hero-v">NT$1,286,450</div>
+            <div class="mkt-split">
+              <div>
+                <div class="mkt-cell-l">投入總成本</div>
+                <div class="mkt-cell-v">NT$1,154,900<span class="sub">未含費 NT$1,153,255</span></div>
+              </div>
+              <div>
+                <div class="mkt-cell-l">未實現淨損益</div>
+                <div class="mkt-cell-v up">+NT$131,550<span class="sub">未含費 +NT$133,195</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card mkt">
+            <div class="mkt-h"><h3>🇺🇸 美股</h3><span class="mkt-cur">USD</span></div>
+            <div class="mkt-hero-l">持倉市值</div>
+            <div class="mkt-hero-v">US$42,868.00</div>
+            <div class="mkt-split">
+              <div>
+                <div class="mkt-cell-l">投入總成本</div>
+                <div class="mkt-cell-v">US$39,500.00<span class="sub">未含費 US$39,462.00</span></div>
+              </div>
+              <div>
+                <div class="mkt-cell-l">未實現淨損益</div>
+                <div class="mkt-cell-v up">+US$3,368.00<span class="sub">未含費 +US$3,406.00</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-sec">
+          <h2>Active 持股</h2>
+          <div class="toolbar" style="margin:0">
+            <span class="hint">現價更新於 16:24:03</span>
+            <button class="btn btn-sm"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>重新整理現價</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>🇹🇼 台股 (TWD)</h3><span class="card-meta">3 檔</span></div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr>
+                <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="tick">2330</td><td>台積電</td>
+                  <td class="num">1,085.00</td><td class="num">1,000</td>
+                  <td class="num">950,000<span class="sub">未含費 948,647</span></td>
+                  <td class="num">950.00</td><td class="num">955.58</td>
+                  <td class="num">1,085,000</td>
+                  <td class="num up">+135,000<span class="sub">未含費 +136,353</span></td>
+                  <td class="num up">+14.21%</td>
+                </tr>
+                <tr>
+                  <td class="tick">2454</td><td>聯發科</td>
+                  <td class="num">1,320.00</td><td class="num">100</td>
+                  <td class="num">138,000<span class="sub">未含費 137,803</span></td>
+                  <td class="num">1,380.00</td><td class="num">1,388.11</td>
+                  <td class="num">132,000</td>
+                  <td class="num down">−6,000<span class="sub">未含費 −5,803</span></td>
+                  <td class="num down">−4.35%</td>
+                </tr>
+                <tr>
+                  <td class="tick">00878</td><td>國泰永續高股息</td>
+                  <td class="num">23.15 <span class="badge badge-warn">快取</span></td><td class="num">3,000</td>
+                  <td class="num">66,900<span class="sub">未含費 66,805</span></td>
+                  <td class="num">22.30</td><td class="num">22.43</td>
+                  <td class="num">69,450</td>
+                  <td class="num up">+2,550<span class="sub">未含費 +2,645</span></td>
+                  <td class="num up">+3.81%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card">
+          <div class="card-h"><h3>🇺🇸 美股 (USD)</h3><span class="card-meta">2 檔</span></div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr>
+                <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="tick">AAPL</td><td>Apple Inc.</td>
+                  <td class="num">258.40</td><td class="num">100</td>
+                  <td class="num">24,500.00</td><td class="num">245.00</td><td class="num">245.35</td>
+                  <td class="num">25,840.00</td>
+                  <td class="num up">+1,340.00</td><td class="num up">+5.47%</td>
+                </tr>
+                <tr>
+                  <td class="tick">NVDA</td><td>NVIDIA Corp.</td>
+                  <td class="num">189.20</td><td class="num">90</td>
+                  <td class="num">15,000.00</td><td class="num">166.67</td><td class="num">166.90</td>
+                  <td class="num">17,028.00</td>
+                  <td class="num up">+2,028.00</td><td class="num up">+13.52%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <button class="fab"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>新增交易</button>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>導覽是水平 tab pill 收在 header 裡；容器置中 1180px；卡片只靠 1px 邊界分層，沒有陰影；FAB 是右下角的白色藥丸鈕。</p>
+
+    <p class="sec-label">畫面二 · 個股分析</p>
+    <div class="spec spec--shadcn">
+      <div class="sh-head">
+        <div class="sh-brand"><span class="sh-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>股票小幫手</div>
+        <div class="tabs">
+          <button class="tab">庫存總覽</button><button class="tab on">個股分析</button>
+          <button class="tab">總體經濟</button><button class="tab">外幣匯率</button>
+          <button class="tab">年度收益</button><button class="tab">交易紀錄</button>
+        </div>
+        <span class="spacer"></span>
+        <span class="sh-ws">長期投資</span><span class="sh-avatar">ZR</span>
+      </div>
+      <div class="body">
+        <div class="toolbar">
+          <span class="sh-ws">2330 台積電</span>
+          <strong style="font-size:18px;letter-spacing:-.01em">2330 台積電</strong>
+          <span class="badge">半導體業</span>
+          <span class="spacer"></span>
+          <button class="btn btn-sm">重新整理</button>
+          <button class="btn btn-sm btn-pri">下載 PDF</button>
+        </div>
+        <div class="subtabs">
+          <button class="subtab on">分析內容</button>
+          <button class="subtab">AI 分析</button>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card-h"><h3>我的持股</h3><span class="card-meta">你的部位</span></div>
+            <div style="padding:14px 16px">
+              <div class="kpi-grid" style="gap:1px;background:var(--border)">
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">持有股數</div><div class="kpi-v">1,000</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">平均成本</div><div class="kpi-v">950.00</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">現價</div><div class="kpi-v">1,085.00</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">未實現淨損益</div><div class="kpi-v up">+135,000</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">未實現報酬率</div><div class="kpi-v up">+14.21%</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>籌碼</h3><span class="card-meta">三大法人 · 融資融券</span></div>
+            <div style="padding:14px 16px 0">
+              <div style="font-size:12px;color:var(--ink-3);margin-bottom:10px">資料日期 2026-07-28（最近交易日盤後）· 報告更新時間 2026-07-28 17:45</div>
+              <div class="chips" style="margin-bottom:12px">
+                <button class="chip on">全部（並排）</button>
+                <button class="chip">買超（買比賣多）</button>
+                <button class="chip">賣超（賣比買多）</button>
+              </div>
+            </div>
+            <div class="tbl-scroll">
+              <table class="tbl" style="min-width:700px">
+                <thead><tr><th>法人</th><th class="num">買進（股）</th><th class="num">賣出（股）</th><th class="num">買賣超（股）</th><th class="num">約當張數</th><th>連買連賣</th></tr></thead>
+                <tbody>
+                  <tr><td>外資（不含自營）</td><td class="num">32,458,000</td><td class="num">21,004,000</td><td class="num up">+11,454,000</td><td class="num up">+11,454</td><td class="up">連買 3 日</td></tr>
+                  <tr><td>外資自營商</td><td class="num">128,000</td><td class="num">96,000</td><td class="num up">+32,000</td><td class="num up">+32</td><td class="up">連買 1 日</td></tr>
+                  <tr><td>投信</td><td class="num">4,210,000</td><td class="num">1,880,000</td><td class="num up">+2,330,000</td><td class="num up">+2,330</td><td class="up">連買 5 日</td></tr>
+                  <tr><td>自營商</td><td class="num">3,905,000</td><td class="num">4,660,000</td><td class="num down">−755,000</td><td class="num down">−755</td><td class="down">連賣 2 日</td></tr>
+                  <tr><td style="font-weight:600">三大法人合計</td><td class="num">40,701,000</td><td class="num">27,640,000</td><td class="num up" style="font-weight:600">+13,061,000</td><td class="num up" style="font-weight:600">+13,061</td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-h" style="border-top:1px solid var(--border);border-bottom:none"><h3 style="font-size:12.5px;font-weight:500;color:var(--ink-2)">近 7 日買賣超（張）</h3></div>
+            <div class="chart-box"><svg class="chart js-bars" viewBox="0 0 640 160" preserveAspectRatio="none" role="img" aria-label="近 7 日三大法人買賣超長條圖"></svg></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>基本面</h3><span class="card-meta">估值 · 獲利能力 · 月營收</span></div>
+            <div style="padding:14px 16px">
+              <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px">估值指標</div>
+              <div class="kpi-grid" style="gap:1px;background:var(--border);margin-bottom:16px">
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">本益比 (PER)</div><div class="kpi-v">26.4</div><div class="kpi-s">倍</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">殖利率</div><div class="kpi-v">1.42%</div><div class="kpi-s">近四季現金股利</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">股價淨值比 (PBR)</div><div class="kpi-v">6.85</div><div class="kpi-s">倍</div></div>
+              </div>
+              <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px">獲利能力</div>
+              <div class="kpi-grid" style="gap:1px;background:var(--border)">
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">毛利率</div><div class="kpi-v">59.6%</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">營益率</div><div class="kpi-v">49.8%</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">稅前純益率</div><div class="kpi-v">51.2%</div></div>
+                <div class="kpi" style="border:none;border-radius:0"><div class="kpi-l">稅後純益率</div><div class="kpi-v">45.7%</div></div>
+              </div>
+            </div>
+            <div class="card-h" style="border-top:1px solid var(--border);border-bottom:none"><h3 style="font-size:12.5px;font-weight:500;color:var(--ink-2)">月營收</h3><span class="card-meta">單位：千元</span></div>
+            <div class="chart-box"><svg class="chart js-rev" viewBox="0 0 640 140" preserveAspectRatio="none" role="img" aria-label="近六個月月營收長條圖"></svg></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>技術面</h3><span class="card-meta">日 K · 成交量 · KD</span></div>
+            <div style="padding:12px 16px 0"><div class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button><button class="chip">近 1 年</button></div></div>
+            <div class="chart-box"><svg class="chart js-candle" viewBox="0 0 640 250" preserveAspectRatio="none" role="img" aria-label="日 K 線與均線圖"></svg></div>
+            <div class="legend">
+              <span><i style="background:#3987e5"></i>MA5 週線</span>
+              <span><i style="background:#d95926"></i>MA20 月線</span>
+              <span><i style="background:#199e70"></i>MA60 季線</span>
+              <span class="muted">紅漲綠跌，以當日收盤與開盤相比</span>
+            </div>
+            <div class="chart-box" style="padding-top:0"><svg class="chart js-kd" viewBox="0 0 640 130" preserveAspectRatio="none" role="img" aria-label="KD 指標圖"></svg></div>
+            <div class="legend"><span><i style="background:#3987e5"></i>K</span><span><i style="background:#c98500"></i>D</span><span class="muted">虛線為 20 / 80</span></div>
+            <dl class="tech">
+              <div><dt>收盤</dt><dd class="js-close">—</dd></div>
+              <div><dt>MA5</dt><dd class="js-ma5">—</dd></div>
+              <div><dt>MA20</dt><dd class="js-ma20">—</dd></div>
+              <div><dt>MA60</dt><dd class="js-ma60">—</dd></div>
+              <div><dt>K</dt><dd class="js-k">—</dd></div>
+              <div><dt>D</dt><dd class="js-d">—</dd></div>
+              <div><dt>一年高</dt><dd>1,120.00</dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>四段內容縱向堆疊，每段一張卡；卡片標題列左右對齊，右側是灰階 meta；圖表軸線細、網格淡，資訊靠留白分群。</p>
+
+    <p class="sec-label">元件</p>
+    <div class="spec spec--shadcn" style="border:none;background:transparent">
+      <div class="comp-grid">
+        <div class="comp">
+          <h4>按鈕</h4>
+          <div class="comp-row">
+            <button class="btn btn-pri">新增交易</button>
+            <button class="btn">重新整理</button>
+            <button class="btn btn-ghost">取消</button>
+            <button class="btn btn-danger">刪除選取（3）</button>
+            <button class="btn" style="opacity:.45">處理中…</button>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>標籤與狀態</h4>
+          <div class="comp-row">
+            <span class="badge">半導體業</span>
+            <span class="badge badge-warn">快取</span>
+            <span class="badge badge-pri">顯示 12 / 40 筆</span>
+            <span class="badge">僅買進</span>
+            <span class="up" style="font-weight:600">+NT$131,550</span>
+            <span class="down" style="font-weight:600">−4.35%</span>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>表單</h4>
+          <div class="comp-cols">
+            <div class="field"><label>股票代號（台股 2330 / 美股 AAPL）</label><input class="inp" value="2330" readonly></div>
+            <div class="field"><label>證交稅率</label><select class="inp"><option>一般 0.3%</option><option>當沖 0.15%</option><option>免稅 0%</option></select></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>通知</h4>
+          <div style="display:grid;gap:8px">
+            <div class="notice n-ok">已匯入 12 筆交易，Dashboard 與年度收益已同步更新。</div>
+            <div class="notice n-warn">匯率資料停留在 2026-07-25，已超過 3 天未更新。</div>
+            <div class="notice n-err">分析失敗：AI 服務回應逾時（180 秒）。</div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>分頁與篩選</h4>
+          <div class="comp-row" style="gap:18px">
+            <div class="tabs"><button class="tab on">庫存總覽</button><button class="tab">個股分析</button></div>
+            <div class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button><button class="chip">近 1 年</button></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>載入骨架</h4>
+          <div style="display:grid;gap:7px;max-width:280px">
+            <div class="skel" style="width:60%"></div><div class="skel"></div><div class="skel" style="width:80%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sec-label" style="margin-top:34px">Token</p>
+    <div class="tok-scroll">
+      <table class="tok">
+        <thead><tr><th>Token</th><th>值</th><th>用在哪</th></tr></thead>
+        <tbody>
+          <tr><td>--bg</td><td><span class="chipc"><i style="background:#09090b"></i>#09090b</span></td><td>頁面底色（zinc-950）</td></tr>
+          <tr><td>--surface</td><td><span class="chipc"><i style="background:#18181b"></i>#18181b</span></td><td>卡片、彈窗（zinc-900）</td></tr>
+          <tr><td>--border</td><td><span class="chipc"><i style="background:#27272a"></i>#27272a</span></td><td>唯一的分層手段（zinc-800）</td></tr>
+          <tr><td>--ink / --ink-2 / --ink-3</td><td><span class="chipc"><i style="background:#fafafa"></i>#fafafa</span> <span class="chipc"><i style="background:#a1a1aa"></i>#a1a1aa</span> <span class="chipc"><i style="background:#71717a"></i>#71717a</span></td><td>主文 / 次要 / 說明</td></tr>
+          <tr><td>--primary</td><td><span class="chipc"><i style="background:#fafafa"></i>#fafafa</span> 底 + <span class="chipc"><i style="background:#09090b"></i>#09090b</span> 字</td><td>反白主按鈕（最好認的特徵）</td></tr>
+          <tr><td>--up / --down</td><td><span class="chipc"><i style="background:#ef4444"></i>#ef4444</span> <span class="chipc"><i style="background:#10b981"></i>#10b981</span></td><td>red-500 / emerald-500，紅漲綠跌</td></tr>
+          <tr><td>radius</td><td>8px / 6px / 999px</td><td>卡片 / 按鈕 / 藥丸</td></tr>
+          <tr><td>shadow</td><td>none</td><td>刻意不用，靠邊線分層</td></tr>
+          <tr><td>table density</td><td>11px × 14px · 13px</td><td>疏，可讀性優先</td></tr>
+          <tr><td>font</td><td>Inter → 系統 sans</td><td>字重差異做階層，不靠大小</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!-- CARBON                                                             -->
+  <!-- ================================================================= -->
+  <section class="plate" id="plate-carbon">
+    <div class="plate-head">
+      <div>
+        <p class="origin">IBM Design Language · 為彭博式終端而生</p>
+        <h2>IBM Carbon</h2>
+        <p>
+          <strong>0 圓角</strong>、明確的網格線、2× / 4× 對齊、高資訊密度。
+          導覽走 UI Shell：48px 頂列 + 左側固定側欄。按鈕是方角矩形、文字靠左、圖示釘在右邊 ——
+          這在別的系統看起來很怪，但那正是 Carbon。籌碼表這種欄位多的畫面它最吃香。
+        </p>
+      </div>
+      <div class="swatches">
+        <span class="sw"><i style="background:#161616"></i>#161616 Gray 100</span>
+        <span class="sw"><i style="background:#262626"></i>#262626 layer-01</span>
+        <span class="sw"><i style="background:#393939"></i>#393939 layer-02</span>
+        <span class="sw"><i style="background:#0f62fe"></i>#0f62fe interactive</span>
+        <span class="sw"><i style="background:#fa4d56"></i>#fa4d56 漲</span>
+        <span class="sw"><i style="background:#42be65"></i>#42be65 跌</span>
+      </div>
+    </div>
+
+    <p class="sec-label">畫面一 · 庫存總覽</p>
+    <div class="spec spec--carbon">
+      <div class="cb-shell">
+        <div class="cb-top">
+          <span class="cb-menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+          <span class="cb-name">股票小幫手 <b>／ 長期投資</b></span>
+          <span class="spacer"></span>
+          <span class="cb-act"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+          <span class="cb-act"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+        </div>
+        <nav class="cb-nav">
+          <a href="#" class="on">庫存總覽</a>
+          <a href="#">個股分析</a>
+          <a href="#">總體經濟</a>
+          <a href="#">外幣匯率</a>
+          <a href="#">年度收益</a>
+          <a href="#">交易紀錄</a>
+        </nav>
+        <div class="cb-main">
+          <div class="cb-crumb">工作區 / 長期投資 / 庫存總覽</div>
+          <div class="h-sec">
+            <h2 style="font-size:20px;font-weight:400">庫存總覽</h2>
+            <button class="btn btn-pri">新增交易<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span></button>
+          </div>
+          <div class="cb-grid">
+            <div class="mkt-grid">
+              <div class="card mkt">
+                <div class="mkt-h"><h3>🇹🇼 台股</h3><span class="mkt-cur">TWD</span></div>
+                <div class="mkt-hero-l">持倉市值</div>
+                <div class="mkt-hero-v">NT$1,286,450</div>
+                <div class="mkt-split">
+                  <div><div class="mkt-cell-l">投入總成本</div><div class="mkt-cell-v">NT$1,154,900<span class="sub">未含費 NT$1,153,255</span></div></div>
+                  <div><div class="mkt-cell-l">未實現淨損益</div><div class="mkt-cell-v up">+NT$131,550<span class="sub">未含費 +NT$133,195</span></div></div>
+                </div>
+              </div>
+              <div class="card mkt">
+                <div class="mkt-h"><h3>🇺🇸 美股</h3><span class="mkt-cur">USD</span></div>
+                <div class="mkt-hero-l">持倉市值</div>
+                <div class="mkt-hero-v">US$42,868.00</div>
+                <div class="mkt-split">
+                  <div><div class="mkt-cell-l">投入總成本</div><div class="mkt-cell-v">US$39,500.00<span class="sub">未含費 US$39,462.00</span></div></div>
+                  <div><div class="mkt-cell-l">未實現淨損益</div><div class="mkt-cell-v up">+US$3,368.00<span class="sub">未含費 +US$3,406.00</span></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <h3>Active 持股 — 🇹🇼 台股 (TWD)</h3>
+                <span style="display:flex;gap:12px;align-items:center">
+                  <span class="card-meta">現價更新於 16:24:03</span>
+                  <button class="btn btn-sm">重新整理<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span></button>
+                </span>
+              </div>
+              <div class="tbl-scroll">
+                <table class="tbl">
+                  <thead><tr>
+                    <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                    <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                    <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td class="tick">2330</td><td>台積電</td><td class="num">1,085.00</td><td class="num">1,000</td><td class="num">950,000</td><td class="num">950.00</td><td class="num">955.58</td><td class="num">1,085,000</td><td class="num up">+135,000</td><td class="num up">+14.21%</td></tr>
+                    <tr><td class="tick">2454</td><td>聯發科</td><td class="num">1,320.00</td><td class="num">100</td><td class="num">138,000</td><td class="num">1,380.00</td><td class="num">1,388.11</td><td class="num">132,000</td><td class="num down">−6,000</td><td class="num down">−4.35%</td></tr>
+                    <tr><td class="tick">00878</td><td>國泰永續高股息</td><td class="num">23.15 <span class="badge badge-warn">快取</span></td><td class="num">3,000</td><td class="num">66,900</td><td class="num">22.30</td><td class="num">22.43</td><td class="num">69,450</td><td class="num up">+2,550</td><td class="num up">+3.81%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>Active 持股 — 🇺🇸 美股 (USD)</h3><span class="card-meta">2 檔</span></div>
+              <div class="tbl-scroll">
+                <table class="tbl">
+                  <thead><tr>
+                    <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                    <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                    <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td class="tick">AAPL</td><td>Apple Inc.</td><td class="num">258.40</td><td class="num">100</td><td class="num">24,500.00</td><td class="num">245.00</td><td class="num">245.35</td><td class="num">25,840.00</td><td class="num up">+1,340.00</td><td class="num up">+5.47%</td></tr>
+                    <tr><td class="tick">NVDA</td><td>NVIDIA Corp.</td><td class="num">189.20</td><td class="num">90</td><td class="num">15,000.00</td><td class="num">166.67</td><td class="num">166.90</td><td class="num">17,028.00</td><td class="num up">+2,028.00</td><td class="num up">+13.52%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>左側 224px 固定側欄取代水平 tab；FAB 被取消，主要動作回到頁首右上；卡片之間用 1px 網格縫隙相連而不是留白分開；表格 zebra + 直欄線，密度最高。</p>
+
+    <p class="sec-label">畫面二 · 個股分析</p>
+    <div class="spec spec--carbon">
+      <div class="cb-shell">
+        <div class="cb-top">
+          <span class="cb-menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+          <span class="cb-name">股票小幫手 <b>／ 長期投資</b></span>
+          <span class="spacer"></span>
+          <span class="cb-act"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+        </div>
+        <nav class="cb-nav">
+          <a href="#">庫存總覽</a><a href="#" class="on">個股分析</a><a href="#">總體經濟</a>
+          <a href="#">外幣匯率</a><a href="#">年度收益</a><a href="#">交易紀錄</a>
+        </nav>
+        <div class="cb-main">
+          <div class="cb-crumb">個股分析 / 2330 台積電</div>
+          <div class="h-sec">
+            <div>
+              <h2 style="font-size:20px;font-weight:400">2330 台積電 <span class="badge" style="vertical-align:3px">半導體業</span></h2>
+              <div class="card-meta">資料日期 2026-07-28（最近交易日盤後）</div>
+            </div>
+            <span style="display:flex;gap:1px">
+              <button class="btn btn-sm">重新整理</button>
+              <button class="btn btn-sm btn-pri">下載 PDF<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span></button>
+            </span>
+          </div>
+          <div style="padding:0 24px"><div class="subtabs"><button class="subtab on">分析內容</button><button class="subtab">AI 分析</button></div></div>
+          <div class="cb-grid">
+            <div class="card">
+              <div class="card-h"><h3>我的持股</h3><span class="card-meta">你的部位</span></div>
+              <div class="kpi-grid">
+                <div class="kpi"><div class="kpi-l">持有股數</div><div class="kpi-v">1,000</div></div>
+                <div class="kpi"><div class="kpi-l">平均成本</div><div class="kpi-v">950.00</div></div>
+                <div class="kpi"><div class="kpi-l">現價</div><div class="kpi-v">1,085.00</div></div>
+                <div class="kpi"><div class="kpi-l">未實現淨損益</div><div class="kpi-v up">+135,000</div></div>
+                <div class="kpi"><div class="kpi-l">未實現報酬率</div><div class="kpi-v up">+14.21%</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>籌碼 · 三大法人買賣超</h3><span class="card-meta">2026-07-28 盤後</span></div>
+              <div class="tbl-scroll">
+                <table class="tbl" style="min-width:700px">
+                  <thead><tr><th>法人</th><th class="num">買進（股）</th><th class="num">賣出（股）</th><th class="num">買賣超（股）</th><th class="num">約當張數</th><th>連買連賣</th></tr></thead>
+                  <tbody>
+                    <tr><td>外資（不含自營）</td><td class="num">32,458,000</td><td class="num">21,004,000</td><td class="num up">+11,454,000</td><td class="num up">+11,454</td><td class="up">連買 3 日</td></tr>
+                    <tr><td>外資自營商</td><td class="num">128,000</td><td class="num">96,000</td><td class="num up">+32,000</td><td class="num up">+32</td><td class="up">連買 1 日</td></tr>
+                    <tr><td>投信</td><td class="num">4,210,000</td><td class="num">1,880,000</td><td class="num up">+2,330,000</td><td class="num up">+2,330</td><td class="up">連買 5 日</td></tr>
+                    <tr><td>自營商</td><td class="num">3,905,000</td><td class="num">4,660,000</td><td class="num down">−755,000</td><td class="num down">−755</td><td class="down">連賣 2 日</td></tr>
+                    <tr><td style="font-weight:600">三大法人合計</td><td class="num">40,701,000</td><td class="num">27,640,000</td><td class="num up" style="font-weight:600">+13,061,000</td><td class="num up" style="font-weight:600">+13,061</td><td>—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>融資融券</h3><span class="card-meta">單位：張</span></div>
+              <div class="tbl-scroll">
+                <table class="tbl" style="min-width:620px">
+                  <thead><tr><th>項目</th><th class="num">買進</th><th class="num">賣出</th><th class="num">償還</th><th class="num">今日餘額</th><th class="num">較前日</th><th>連增連減</th></tr></thead>
+                  <tbody>
+                    <tr><td>融資</td><td class="num">1,204</td><td class="num">986</td><td class="num">132</td><td class="num">18,455</td><td class="num up">+86</td><td class="up">連增 2 日</td></tr>
+                    <tr><td>融券</td><td class="num">318</td><td class="num">402</td><td class="num">96</td><td class="num">2,140</td><td class="num down">−180</td><td class="down">連減 3 日</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="card-h" style="border-top:1px solid var(--border)"><h3 style="font-weight:400;color:var(--ink-2);font-size:12.5px">近 7 日買賣超（張）</h3></div>
+              <div class="chart-box"><svg class="chart js-bars" viewBox="0 0 640 160" preserveAspectRatio="none" role="img" aria-label="近 7 日三大法人買賣超長條圖"></svg></div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>基本面 · 估值指標</h3><span class="card-meta">TWSE BWIBBU_ALL</span></div>
+              <div class="kpi-grid">
+                <div class="kpi"><div class="kpi-l">本益比 (PER)</div><div class="kpi-v">26.4</div><div class="kpi-s">倍</div></div>
+                <div class="kpi"><div class="kpi-l">殖利率</div><div class="kpi-v">1.42%</div></div>
+                <div class="kpi"><div class="kpi-l">股價淨值比 (PBR)</div><div class="kpi-v">6.85</div><div class="kpi-s">倍</div></div>
+                <div class="kpi"><div class="kpi-l">毛利率</div><div class="kpi-v">59.6%</div></div>
+                <div class="kpi"><div class="kpi-l">營益率</div><div class="kpi-v">49.8%</div></div>
+                <div class="kpi"><div class="kpi-l">稅後純益率</div><div class="kpi-v">45.7%</div></div>
+              </div>
+              <div class="card-h" style="border-top:1px solid var(--border)"><h3 style="font-weight:400;color:var(--ink-2);font-size:12.5px">月營收</h3><span class="card-meta">單位：千元</span></div>
+              <div class="chart-box"><svg class="chart js-rev" viewBox="0 0 640 140" preserveAspectRatio="none" role="img" aria-label="近六個月月營收長條圖"></svg></div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>技術面 · 日 K 與均線</h3>
+                <span class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button><button class="chip">近 1 年</button></span>
+              </div>
+              <div class="chart-box"><svg class="chart js-candle" viewBox="0 0 640 250" preserveAspectRatio="none" role="img" aria-label="日 K 線與均線圖"></svg></div>
+              <div class="legend">
+                <span><i style="background:#4589ff"></i>MA5 週線</span>
+                <span><i style="background:#ff832b"></i>MA20 月線</span>
+                <span><i style="background:#08bdba"></i>MA60 季線</span>
+                <span class="muted">紅漲綠跌</span>
+              </div>
+              <div class="chart-box" style="padding-top:0"><svg class="chart js-kd" viewBox="0 0 640 130" preserveAspectRatio="none" role="img" aria-label="KD 指標圖"></svg></div>
+              <dl class="tech">
+                <div><dt>收盤</dt><dd class="js-close">—</dd></div>
+                <div><dt>MA5</dt><dd class="js-ma5">—</dd></div>
+                <div><dt>MA20</dt><dd class="js-ma20">—</dd></div>
+                <div><dt>MA60</dt><dd class="js-ma60">—</dd></div>
+                <div><dt>K</dt><dd class="js-k">—</dd></div>
+                <div><dt>D</dt><dd class="js-d">—</dd></div>
+                <div><dt>RSI14</dt><dd>63.5</dd></div>
+                <div><dt>一年高</dt><dd>1,120.00</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>同樣是縱向堆疊，但每張卡都是方角、彼此以 1px 縫隙貼齊成一整塊；融資融券獨立成卡（現在的版本是塞在籌碼卡裡）；KPI 也走網格縫隙而不是留白。</p>
+
+    <p class="sec-label">元件</p>
+    <div class="spec spec--carbon" style="border:none;background:transparent">
+      <div class="comp-grid">
+        <div class="comp">
+          <h4>按鈕（文字靠左、圖示釘右）</h4>
+          <div class="comp-row">
+            <button class="btn btn-pri">新增交易<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span></button>
+            <button class="btn">重新整理<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span></button>
+            <button class="btn btn-danger">刪除選取<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></span></button>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>標籤與狀態</h4>
+          <div class="comp-row">
+            <span class="badge">半導體業</span><span class="badge badge-warn">快取</span>
+            <span class="badge badge-pri">顯示 12 / 40 筆</span>
+            <span class="up" style="font-weight:600">+NT$131,550</span>
+            <span class="down" style="font-weight:600">−4.35%</span>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>表單（底線式輸入框）</h4>
+          <div class="comp-cols">
+            <div class="field"><label>股票代號（台股 2330 / 美股 AAPL）</label><input class="inp" value="2330" readonly></div>
+            <div class="field"><label>證交稅率</label><select class="inp"><option>一般 0.3%</option><option>當沖 0.15%</option></select></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>通知（左側 3px 狀態條）</h4>
+          <div style="display:grid;gap:8px">
+            <div class="notice n-ok">已匯入 12 筆交易，Dashboard 與年度收益已同步更新。</div>
+            <div class="notice n-warn">匯率資料停留在 2026-07-25，已超過 3 天未更新。</div>
+            <div class="notice n-err">分析失敗：AI 服務回應逾時（180 秒）。</div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>分頁與篩選</h4>
+          <div class="comp-row" style="gap:18px">
+            <div class="subtabs" style="margin:0;border:none"><button class="subtab on">分析內容</button><button class="subtab">AI 分析</button></div>
+            <div class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>載入骨架</h4>
+          <div style="display:grid;gap:7px;max-width:280px">
+            <div class="skel" style="width:60%"></div><div class="skel"></div><div class="skel" style="width:80%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sec-label" style="margin-top:34px">Token</p>
+    <div class="tok-scroll">
+      <table class="tok">
+        <thead><tr><th>Token</th><th>值</th><th>用在哪</th></tr></thead>
+        <tbody>
+          <tr><td>$background</td><td><span class="chipc"><i style="background:#161616"></i>#161616</span></td><td>Gray 100 主題底色</td></tr>
+          <tr><td>$layer-01 / $layer-02</td><td><span class="chipc"><i style="background:#262626"></i>#262626</span> <span class="chipc"><i style="background:#393939"></i>#393939</span></td><td>卡片 / 表頭、輸入框</td></tr>
+          <tr><td>$border-subtle</td><td><span class="chipc"><i style="background:#393939"></i>#393939</span></td><td>網格線，Carbon 的分層語言</td></tr>
+          <tr><td>$text-primary / secondary / helper</td><td><span class="chipc"><i style="background:#f4f4f4"></i>#f4f4f4</span> <span class="chipc"><i style="background:#c6c6c6"></i>#c6c6c6</span> <span class="chipc"><i style="background:#8d8d8d"></i>#8d8d8d</span></td><td>三階文字</td></tr>
+          <tr><td>$interactive</td><td><span class="chipc"><i style="background:#0f62fe"></i>#0f62fe</span></td><td>Blue 60，主按鈕與側欄 active</td></tr>
+          <tr><td>--up / --down</td><td><span class="chipc"><i style="background:#fa4d56"></i>#fa4d56</span> <span class="chipc"><i style="background:#42be65"></i>#42be65</span></td><td>Red 50 / Green 40，紅漲綠跌</td></tr>
+          <tr><td>radius</td><td>0px（全部）</td><td>Carbon 最好認的規則</td></tr>
+          <tr><td>spacing</td><td>2 / 4 / 8 / 12 / 16 / 24 / 32</td><td>嚴格 2× 網格</td></tr>
+          <tr><td>table density</td><td>7px × 12px · 12px</td><td>密，一頁塞得下整張籌碼表</td></tr>
+          <tr><td>font</td><td>IBM Plex Sans → 系統 sans</td><td>沒裝 Plex 會退回系統字</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!-- STRIPE                                                             -->
+  <!-- ================================================================= -->
+  <section class="plate" id="plate-stripe">
+    <div class="plate-head">
+      <div>
+        <p class="origin">Stripe Dashboard · 金融產品的視覺標竿</p>
+        <h2>Stripe FinTech</h2>
+        <p>
+          唯一的亮底方向。白卡片浮在 <code>#f6f9fc</code> 上，靠柔和陰影分層而不是邊框；
+          靛藍 <code>#635bff</code> 只出現在互動元素上；頁首有一條淡藍漸層帶承接麵包屑與標題。
+          文字用深藍墨 <code>#0a2540</code> 而不是純黑 —— 這是它看起來比較「貴」的原因。
+        </p>
+      </div>
+      <div class="swatches">
+        <span class="sw"><i style="background:#f6f9fc"></i>#f6f9fc bg</span>
+        <span class="sw"><i style="background:#ffffff"></i>#ffffff card</span>
+        <span class="sw"><i style="background:#0a2540"></i>#0a2540 ink</span>
+        <span class="sw"><i style="background:#635bff"></i>#635bff primary</span>
+        <span class="sw"><i style="background:#cd1f43"></i>#cd1f43 漲</span>
+        <span class="sw"><i style="background:#0a7d5b"></i>#0a7d5b 跌</span>
+      </div>
+    </div>
+
+    <p class="sec-label">畫面一 · 庫存總覽</p>
+    <div class="spec spec--stripe">
+      <div class="st-head">
+        <div class="st-head-row">
+          <div class="st-brand">
+            <span class="st-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+            股票小幫手
+          </div>
+          <span class="spacer"></span>
+          <span class="badge">長期投資</span>
+          <span class="sh-avatar" style="background:#e3ecf4;color:#0a2540">ZR</span>
+        </div>
+        <div class="st-tabs tabs">
+          <button class="tab on">庫存總覽</button><button class="tab">個股分析</button>
+          <button class="tab">總體經濟</button><button class="tab">外幣匯率</button>
+          <button class="tab">年度收益</button><button class="tab">交易紀錄</button>
+        </div>
+      </div>
+      <div class="st-hero">
+        <div class="st-crumb">工作區 <b>長期投資</b> ／ 庫存總覽</div>
+        <h1>庫存總覽</h1>
+      </div>
+
+      <div class="body" style="padding-top:18px">
+        <div class="mkt-grid">
+          <div class="card mkt">
+            <div class="mkt-h"><h3>🇹🇼 台股</h3><span class="mkt-cur">TWD</span></div>
+            <div class="mkt-hero-l">持倉市值</div>
+            <div class="mkt-hero-v">NT$1,286,450</div>
+            <div class="mkt-split">
+              <div><div class="mkt-cell-l">投入總成本</div><div class="mkt-cell-v">NT$1,154,900<span class="sub">未含費 NT$1,153,255</span></div></div>
+              <div><div class="mkt-cell-l">未實現淨損益</div><div class="mkt-cell-v up">+NT$131,550<span class="sub">未含費 +NT$133,195</span></div></div>
+            </div>
+          </div>
+          <div class="card mkt">
+            <div class="mkt-h"><h3>🇺🇸 美股</h3><span class="mkt-cur">USD</span></div>
+            <div class="mkt-hero-l">持倉市值</div>
+            <div class="mkt-hero-v">US$42,868.00</div>
+            <div class="mkt-split">
+              <div><div class="mkt-cell-l">投入總成本</div><div class="mkt-cell-v">US$39,500.00<span class="sub">未含費 US$39,462.00</span></div></div>
+              <div><div class="mkt-cell-l">未實現淨損益</div><div class="mkt-cell-v up">+US$3,368.00<span class="sub">未含費 +US$3,406.00</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-sec">
+          <h2>Active 持股</h2>
+          <div class="toolbar" style="margin:0">
+            <span class="hint">現價更新於 16:24:03</span>
+            <button class="btn btn-sm"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>重新整理現價</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>🇹🇼 台股 (TWD)</h3><span class="card-meta">3 檔</span></div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr>
+                <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="tick">2330</td><td>台積電</td><td class="num">1,085.00</td><td class="num">1,000</td><td class="num">950,000<span class="sub">未含費 948,647</span></td><td class="num">950.00</td><td class="num">955.58</td><td class="num">1,085,000</td><td class="num up">+135,000<span class="sub">未含費 +136,353</span></td><td class="num up">+14.21%</td></tr>
+                <tr><td class="tick">2454</td><td>聯發科</td><td class="num">1,320.00</td><td class="num">100</td><td class="num">138,000<span class="sub">未含費 137,803</span></td><td class="num">1,380.00</td><td class="num">1,388.11</td><td class="num">132,000</td><td class="num down">−6,000<span class="sub">未含費 −5,803</span></td><td class="num down">−4.35%</td></tr>
+                <tr><td class="tick">00878</td><td>國泰永續高股息</td><td class="num">23.15 <span class="badge badge-warn">快取</span></td><td class="num">3,000</td><td class="num">66,900<span class="sub">未含費 66,805</span></td><td class="num">22.30</td><td class="num">22.43</td><td class="num">69,450</td><td class="num up">+2,550<span class="sub">未含費 +2,645</span></td><td class="num up">+3.81%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card">
+          <div class="card-h"><h3>🇺🇸 美股 (USD)</h3><span class="card-meta">2 檔</span></div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr>
+                <th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有股數</th>
+                <th class="num">投入成本</th><th class="num">平均買入成本</th><th class="num">保本賣出價</th>
+                <th class="num">目前市值</th><th class="num">未實現淨損益</th><th class="num">未實現報酬率</th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="tick">AAPL</td><td>Apple Inc.</td><td class="num">258.40</td><td class="num">100</td><td class="num">24,500.00</td><td class="num">245.00</td><td class="num">245.35</td><td class="num">25,840.00</td><td class="num up">+1,340.00</td><td class="num up">+5.47%</td></tr>
+                <tr><td class="tick">NVDA</td><td>NVIDIA Corp.</td><td class="num">189.20</td><td class="num">90</td><td class="num">15,000.00</td><td class="num">166.67</td><td class="num">166.90</td><td class="num">17,028.00</td><td class="num up">+2,028.00</td><td class="num up">+13.52%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <button class="fab"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>新增交易</button>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>頂列分兩排：品牌與帳號在上、分頁在下並以底線標示 active；下方接一條漸層 hero 帶放麵包屑與頁面標題；卡片沒有可見邊框，只有陰影。</p>
+
+    <p class="sec-label">畫面二 · 個股分析</p>
+    <div class="spec spec--stripe">
+      <div class="st-head">
+        <div class="st-head-row">
+          <div class="st-brand"><span class="st-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>股票小幫手</div>
+          <span class="spacer"></span>
+          <span class="badge">長期投資</span><span class="sh-avatar" style="background:#e3ecf4;color:#0a2540">ZR</span>
+        </div>
+        <div class="st-tabs tabs">
+          <button class="tab">庫存總覽</button><button class="tab on">個股分析</button>
+          <button class="tab">總體經濟</button><button class="tab">外幣匯率</button>
+          <button class="tab">年度收益</button><button class="tab">交易紀錄</button>
+        </div>
+      </div>
+      <div class="st-hero">
+        <div class="st-crumb">個股分析 ／ <b>2330 台積電</b></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <h1>2330 台積電</h1>
+          <span class="badge badge-pri">半導體業</span>
+          <span class="spacer"></span>
+          <button class="btn btn-sm">重新整理</button>
+          <button class="btn btn-sm btn-pri">下載 PDF</button>
+        </div>
+        <div class="hint" style="margin-top:4px">資料日期 2026-07-28（最近交易日盤後）· 報告更新時間 2026-07-28 17:45</div>
+      </div>
+
+      <div class="body" style="padding-top:14px">
+        <div class="subtabs"><button class="subtab on">分析內容</button><button class="subtab">AI 分析</button></div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card-h"><h3>我的持股</h3><span class="card-meta">你的部位</span></div>
+            <div style="padding:16px 18px">
+              <div class="kpi-grid">
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">持有股數</div><div class="kpi-v">1,000</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">平均成本</div><div class="kpi-v">950.00</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">現價</div><div class="kpi-v">1,085.00</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">未實現淨損益</div><div class="kpi-v up">+135,000</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">未實現報酬率</div><div class="kpi-v up">+14.21%</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>籌碼</h3><span class="card-meta">三大法人 · 融資融券</span></div>
+            <div style="padding:14px 18px 0">
+              <div class="chips"><button class="chip on">全部（並排）</button><button class="chip">買超（買比賣多）</button><button class="chip">賣超（賣比買多）</button></div>
+            </div>
+            <div class="tbl-scroll">
+              <table class="tbl" style="min-width:700px">
+                <thead><tr><th>法人</th><th class="num">買進（股）</th><th class="num">賣出（股）</th><th class="num">買賣超（股）</th><th class="num">約當張數</th><th>連買連賣</th></tr></thead>
+                <tbody>
+                  <tr><td>外資（不含自營）</td><td class="num">32,458,000</td><td class="num">21,004,000</td><td class="num up">+11,454,000</td><td class="num up">+11,454</td><td class="up">連買 3 日</td></tr>
+                  <tr><td>外資自營商</td><td class="num">128,000</td><td class="num">96,000</td><td class="num up">+32,000</td><td class="num up">+32</td><td class="up">連買 1 日</td></tr>
+                  <tr><td>投信</td><td class="num">4,210,000</td><td class="num">1,880,000</td><td class="num up">+2,330,000</td><td class="num up">+2,330</td><td class="up">連買 5 日</td></tr>
+                  <tr><td>自營商</td><td class="num">3,905,000</td><td class="num">4,660,000</td><td class="num down">−755,000</td><td class="num down">−755</td><td class="down">連賣 2 日</td></tr>
+                  <tr><td style="font-weight:600">三大法人合計</td><td class="num">40,701,000</td><td class="num">27,640,000</td><td class="num up" style="font-weight:600">+13,061,000</td><td class="num up" style="font-weight:600">+13,061</td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-h" style="border-top:1px solid var(--border);border-bottom:none"><h3 style="font-size:12.5px;font-weight:500;color:var(--ink-2)">近 7 日買賣超（張）</h3></div>
+            <div class="chart-box"><svg class="chart js-bars" viewBox="0 0 640 160" preserveAspectRatio="none" role="img" aria-label="近 7 日三大法人買賣超長條圖"></svg></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>基本面</h3><span class="card-meta">估值 · 獲利能力 · 月營收</span></div>
+            <div style="padding:16px 18px">
+              <div class="kpi-grid" style="margin-bottom:14px">
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">本益比 (PER)</div><div class="kpi-v">26.4</div><div class="kpi-s">倍</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">殖利率</div><div class="kpi-v">1.42%</div><div class="kpi-s">近四季現金股利</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">股價淨值比 (PBR)</div><div class="kpi-v">6.85</div><div class="kpi-s">倍</div></div>
+              </div>
+              <div class="kpi-grid">
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">毛利率</div><div class="kpi-v">59.6%</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">營益率</div><div class="kpi-v">49.8%</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">稅前純益率</div><div class="kpi-v">51.2%</div></div>
+                <div class="kpi" style="background:var(--surface-2);box-shadow:none"><div class="kpi-l">稅後純益率</div><div class="kpi-v">45.7%</div></div>
+              </div>
+            </div>
+            <div class="card-h" style="border-top:1px solid var(--border);border-bottom:none"><h3 style="font-size:12.5px;font-weight:500;color:var(--ink-2)">月營收</h3><span class="card-meta">單位：千元</span></div>
+            <div class="chart-box"><svg class="chart js-rev" viewBox="0 0 640 140" preserveAspectRatio="none" role="img" aria-label="近六個月月營收長條圖"></svg></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3>技術面</h3><span class="card-meta">日 K · 成交量 · KD</span></div>
+            <div style="padding:12px 18px 0"><div class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button><button class="chip">近 1 年</button></div></div>
+            <div class="chart-box"><svg class="chart js-candle" viewBox="0 0 640 250" preserveAspectRatio="none" role="img" aria-label="日 K 線與均線圖"></svg></div>
+            <div class="legend">
+              <span><i style="background:#635bff"></i>MA5 週線</span>
+              <span><i style="background:#e2761f"></i>MA20 月線</span>
+              <span><i style="background:#0a7d5b"></i>MA60 季線</span>
+              <span class="muted">紅漲綠跌，以當日收盤與開盤相比</span>
+            </div>
+            <div class="chart-box" style="padding-top:0"><svg class="chart js-kd" viewBox="0 0 640 130" preserveAspectRatio="none" role="img" aria-label="KD 指標圖"></svg></div>
+            <div class="legend"><span><i style="background:#635bff"></i>K</span><span><i style="background:#b45309"></i>D</span><span class="muted">虛線為 20 / 80</span></div>
+            <dl class="tech">
+              <div><dt>收盤</dt><dd class="js-close">—</dd></div>
+              <div><dt>MA5</dt><dd class="js-ma5">—</dd></div>
+              <div><dt>MA20</dt><dd class="js-ma20">—</dd></div>
+              <div><dt>MA60</dt><dd class="js-ma60">—</dd></div>
+              <div><dt>K</dt><dd class="js-k">—</dd></div>
+              <div><dt>D</dt><dd class="js-d">—</dd></div>
+              <div><dt>一年高</dt><dd>1,120.00</dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption"><b>骨架</b>頁面標題與主要動作全部收進 hero 帶；卡片之間留 20px 白，靠陰影浮起；表格標頭改小寫大寫字母 + 字距，密度介於前兩者之間。</p>
+
+    <p class="sec-label">元件</p>
+    <div class="spec spec--stripe" style="border:none;background:transparent">
+      <div class="comp-grid">
+        <div class="comp">
+          <h4>按鈕</h4>
+          <div class="comp-row">
+            <button class="btn btn-pri">新增交易</button>
+            <button class="btn">重新整理</button>
+            <button class="btn btn-ghost">取消</button>
+            <button class="btn btn-danger">刪除選取（3）</button>
+            <button class="btn" style="opacity:.45">處理中…</button>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>標籤與狀態</h4>
+          <div class="comp-row">
+            <span class="badge">半導體業</span><span class="badge badge-warn">快取</span>
+            <span class="badge badge-pri">顯示 12 / 40 筆</span>
+            <span class="up" style="font-weight:600">+NT$131,550</span>
+            <span class="down" style="font-weight:600">−4.35%</span>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>表單</h4>
+          <div class="comp-cols">
+            <div class="field"><label>股票代號（台股 2330 / 美股 AAPL）</label><input class="inp" value="2330" readonly></div>
+            <div class="field"><label>證交稅率</label><select class="inp"><option>一般 0.3%</option><option>當沖 0.15%</option></select></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>通知</h4>
+          <div style="display:grid;gap:8px">
+            <div class="notice n-ok">已匯入 12 筆交易，Dashboard 與年度收益已同步更新。</div>
+            <div class="notice n-warn">匯率資料停留在 2026-07-25，已超過 3 天未更新。</div>
+            <div class="notice n-err">分析失敗：AI 服務回應逾時（180 秒）。</div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>分頁與篩選</h4>
+          <div class="comp-row" style="gap:22px">
+            <div class="tabs"><button class="tab on">庫存總覽</button><button class="tab">個股分析</button></div>
+            <div class="chips"><button class="chip on">近 3 月</button><button class="chip">近 6 月</button></div>
+          </div>
+        </div>
+        <div class="comp">
+          <h4>載入骨架</h4>
+          <div style="display:grid;gap:7px;max-width:280px">
+            <div class="skel" style="width:60%"></div><div class="skel"></div><div class="skel" style="width:80%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sec-label" style="margin-top:34px">Token</p>
+    <div class="tok-scroll">
+      <table class="tok">
+        <thead><tr><th>Token</th><th>值</th><th>用在哪</th></tr></thead>
+        <tbody>
+          <tr><td>--bg</td><td><span class="chipc"><i style="background:#f6f9fc"></i>#f6f9fc</span></td><td>帶藍調的頁面底，不是純灰</td></tr>
+          <tr><td>--surface</td><td><span class="chipc"><i style="background:#ffffff"></i>#ffffff</span></td><td>卡片，靠陰影浮起</td></tr>
+          <tr><td>--border</td><td><span class="chipc"><i style="background:#e6ebf1"></i>#e6ebf1</span></td><td>只用在表格橫線，卡片不描邊</td></tr>
+          <tr><td>--ink / --ink-2 / --ink-3</td><td><span class="chipc"><i style="background:#0a2540"></i>#0a2540</span> <span class="chipc"><i style="background:#425466"></i>#425466</span> <span class="chipc"><i style="background:#8a94a6"></i>#8a94a6</span></td><td>深藍墨，不是黑</td></tr>
+          <tr><td>--primary</td><td><span class="chipc"><i style="background:#635bff"></i>#635bff</span></td><td>Stripe 靛藍，只給互動元素</td></tr>
+          <tr><td>--up / --down</td><td><span class="chipc"><i style="background:#cd1f43"></i>#cd1f43</span> <span class="chipc"><i style="background:#0a7d5b"></i>#0a7d5b</span></td><td>亮底要壓深才有對比（見下方說明）</td></tr>
+          <tr><td>radius</td><td>10px / 7px / 999px</td><td>比 shadcn 圓一點</td></tr>
+          <tr><td>shadow</td><td>0 13px 27px -5px rgba(50,50,93,.10)</td><td>大範圍、低透明度，是分層主力</td></tr>
+          <tr><td>table density</td><td>12px × 16px · 13px</td><td>中等</td></tr>
+          <tr><td>font</td><td>系統 sans（Stripe 用自訂 Söhne）</td><td>字重 650 做標題，不用 700</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <div class="callout">
+    <h3>關於紅漲綠跌</h3>
+    <p>
+      三個系統的原生語意色都是「綠 = 正向、紅 = 負向」，跟台灣看盤習慣相反。
+      三份稿子一律把它反過來用，並各自挑該系統色階裡的紅綠。
+      要注意的是 Stripe 是亮底：綠色從 <code>#10b981</code> 壓到 <code>#0a7d5b</code>、
+      紅色從 <code>#ef4444</code> 壓到 <code>#cd1f43</code>，才能在白底上維持 4.5:1 的文字對比。
+      現有的 <code>formatters.ts</code> 已經在正負值前面固定加 <code>+</code> / <code>−</code>，
+      所以就算色盲讀者分不出紅綠，數字本身仍讀得懂 —— 這個習慣三個方向都要保留。
+    </p>
+  </div>
+
+  <section class="verdict">
+    <h2>怎麼選</h2>
+    <p class="lede" style="max-width:70ch">
+      三個方向沒有絕對高下，差別在於「這個 app 最痛的是什麼」。
+      如果最痛的是籌碼表塞不下，選 Carbon；如果最痛的是想要一套能長期依賴的規範但不想大改，選 shadcn；
+      如果想要一個和目前暗色玻璃風徹底不同的形象，選 Stripe。
+    </p>
+
+    <div class="v-grid">
+      <div class="v-card" style="--vc:#a1a1aa">
+        <h3>shadcn/ui</h3>
+        <p>
+          改動成本最低。現有 <code>index.css</code> 已經是完整 token 化（<code>--surface</code> /
+          <code>--border</code> / <code>--ink</code> 那一整套），換掉 <code>:root</code> 的顏色、
+          把 <code>backdrop-filter</code> 與漸層拿掉、圓角從 14px 收到 8px，就有八成像。
+          代價是它相當低調 —— 少了現在那層玻璃質感，畫面會變得很安靜。
+        </p>
+        <p class="v-cost">改動範圍 <b>只動 index.css 的變數區與少數幾條規則</b></p>
+      </div>
+      <div class="v-card" style="--vc:#0f62fe">
+        <h3>IBM Carbon</h3>
+        <p>
+          資訊密度最高，籌碼表、融資融券、月營收這些欄位多的表格它最適合，
+          同一個螢幕高度能多塞 4–5 列。但 0 圓角會讓整體變硬，
+          而且導覽要從水平 tab 改成左側欄 —— <code>AppShell.tsx</code> 的
+          <code>TabNav</code> 與 720px 以下的 <code>.bottom-nav</code> 都得重寫，是三者中工程量最大的。
+        </p>
+        <p class="v-cost">改動範圍 <b>index.css + AppShell 導覽結構重做</b></p>
+      </div>
+      <div class="v-card" style="--vc:#635bff">
+        <h3>Stripe FinTech</h3>
+        <p>
+          形象轉變最大，也最像「一個賣錢的金融產品」。但它是亮底：
+          目前的圖表色（<code>chartColors.ts</code> 裡寫死的六個 hex，為了 html2canvas 刻意不吃 CSS 變數）
+          全部要重挑，PDF 匯出的 <code>.report-surface</code> 覆寫規則反而可以拿掉 ——
+          因為整個 app 本來就是亮的了。
+        </p>
+        <p class="v-cost">改動範圍 <b>index.css + chartColors.ts + 移除 report-surface</b></p>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:34px">
+      <h3>共通的一件事</h3>
+      <p>
+        三個方向都不需要動 <code>sources/src</code> 的元件結構 —— 這份 app 的 CSS 是 class 導向、
+        不是 inline style，所以換設計系統本質上是換一份 <code>index.css</code>。
+        Carbon 是唯一的例外（導覽結構要改）。真正要先決定的其實是：
+        <strong>要不要放棄暗色優先</strong>。Stripe 方向等於答「要」，另外兩個等於答「不要」。
+      </p>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------- 圖版切換 ---------------- */
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.sw-btn'));
+  var plates = { shadcn: 'plate-shadcn', carbon: 'plate-carbon', stripe: 'plate-stripe' };
+
+  function show(target) {
+    btns.forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.target === target)); });
+    Object.keys(plates).forEach(function (k) {
+      var el = document.getElementById(plates[k]);
+      if (el) el.classList.toggle('is-on', target === 'all' || target === k);
+    });
+    window.scrollTo({ top: document.querySelector('.switcher').offsetTop - 1, behavior: 'smooth' });
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.target); }); });
+
+  /* ---------------- 資料（2330 台積電，28 個交易日） ---------------- */
+  var closes = [980, 972, 985, 991, 1002, 996, 1008, 1015, 1010, 1024, 1032, 1028, 1041, 1035,
+                1048, 1055, 1049, 1062, 1058, 1070, 1066, 1078, 1072, 1085, 1079, 1092, 1080, 1085];
+  var vols = [22400, 19800, 25600, 21200, 31400, 24800, 27600, 33200, 20400, 29800, 35600, 23400,
+              31200, 26800, 34400, 38200, 25600, 32800, 24200, 36400, 28600, 39800, 27200, 42600,
+              30400, 45200, 33800, 37600];
+
+  // 由收盤價推出 OHLC：開盤 = 前一日收盤，最高/最低各外擴 6 元
+  var bars = closes.map(function (c, i) {
+    var o = i === 0 ? 975 : closes[i - 1];
+    return { o: o, c: c, h: Math.max(o, c) + 6, l: Math.min(o, c) - 6, v: vols[i] };
+  });
+
+  function sma(arr, n, i) {
+    if (i + 1 < n) return null;
+    var s = 0;
+    for (var j = i - n + 1; j <= i; j++) s += arr[j];
+    return s / n;
+  }
+  var ma5 = closes.map(function (_, i) { return sma(closes, 5, i); });
+  var ma20 = closes.map(function (_, i) { return sma(closes, 20, i); });
+  // 只有 28 天資料，MA60 用同期間的長期均線走勢代表
+  var ma60 = closes.map(function (_, i) { return 958 + i * 1.6; });
+
+  // KD：9 日 RSV，K/D 各取 1/3 平滑，起始 50
+  var K = [], D = [], k = 50, d = 50;
+  for (var i = 0; i < bars.length; i++) {
+    var lo = Infinity, hi = -Infinity;
+    for (var j = Math.max(0, i - 8); j <= i; j++) { lo = Math.min(lo, bars[j].l); hi = Math.max(hi, bars[j].h); }
+    var rsv = hi === lo ? 50 : ((closes[i] - lo) / (hi - lo)) * 100;
+    k = (2 / 3) * k + (1 / 3) * rsv;
+    d = (2 / 3) * d + (1 / 3) * k;
+    K.push(k); D.push(d);
+  }
+
+  var netBuy = [3120, -1845, 5410, 8260, -2930, 6780, 13061];
+  var netDays = ['07-18', '07-21', '07-22', '07-23', '07-24', '07-25', '07-28'];
+  var revenue = [265430120, 248910400, 289340500, 271220800, 286410300, 298450120];
+  var revMonths = ['2026/01', '2026/02', '2026/03', '2026/04', '2026/05', '2026/06'];
+
+  /* ---------------- SVG 小工具 ---------------- */
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(name, attrs, cls) {
+    var n = document.createElementNS(NS, name);
+    for (var a in attrs) n.setAttribute(a, attrs[a]);
+    if (cls) n.setAttribute('class', cls);
+    return n;
+  }
+  function txt(x, y, s, anchor) {
+    var t = el('text', { x: x, y: y, 'text-anchor': anchor || 'end' }, 'c-axis');
+    t.textContent = s;
+    return t;
+  }
+  function nf(n, dp) { return n.toLocaleString('en-US', { minimumFractionDigits: dp || 0, maximumFractionDigits: dp || 0 }); }
+
+  /* ---------------- 日 K + 均線 + 成交量 ---------------- */
+  function renderCandle(svg) {
+    var W = 640, H = 250, L = 52, R = 10, T = 8, volH = 46, gap = 10;
+    var priceH = H - T - volH - gap - 18;
+    var lows = bars.map(function (b) { return b.l; }).concat(ma60);
+    var highs = bars.map(function (b) { return b.h; });
+    var min = Math.min.apply(null, lows) - 8, max = Math.max.apply(null, highs) + 8;
+    var x = function (i) { return L + (i + 0.5) * ((W - L - R) / bars.length); };
+    var y = function (v) { return T + priceH - ((v - min) / (max - min)) * priceH; };
+    var bw = Math.max(3, ((W - L - R) / bars.length) * 0.58);
+
+    // 網格與刻度
+    for (var g = 0; g <= 4; g++) {
+      var val = min + ((max - min) / 4) * g, yy = y(val);
+      svg.appendChild(el('line', { x1: L, y1: yy, x2: W - R, y2: yy }, 'c-grid'));
+      svg.appendChild(txt(L - 6, yy + 3, nf(val)));
+    }
+    // K 棒
+    bars.forEach(function (b, i) {
+      var cls = b.c >= b.o ? 'c-up' : 'c-down';
+      svg.appendChild(el('line', { x1: x(i), y1: y(b.h), x2: x(i), y2: y(b.l), 'stroke-width': 1 }, cls));
+      var top = y(Math.max(b.o, b.c)), bot = y(Math.min(b.o, b.c));
+      svg.appendChild(el('rect', { x: x(i) - bw / 2, y: top, width: bw, height: Math.max(1.5, bot - top) }, cls));
+    });
+    // 均線
+    function line(series, cls) {
+      var d = series.map(function (v, i) { return v == null ? null : (i && series[i - 1] != null ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); })
+                    .filter(Boolean).join(' ');
+      if (d) svg.appendChild(el('path', { d: d }, cls));
+    }
+    line(ma60, 'c-ma60'); line(ma20, 'c-ma20'); line(ma5, 'c-ma5');
+
+    // 成交量
+    var vTop = T + priceH + gap, vMax = Math.max.apply(null, vols);
+    bars.forEach(function (b, i) {
+      var h = (b.v / vMax) * volH;
+      svg.appendChild(el('rect', { x: x(i) - bw / 2, y: vTop + volH - h, width: bw, height: h }, 'c-vol'));
+    });
+    svg.appendChild(txt(L - 6, vTop + 9, '成交量'));
+    svg.appendChild(txt(x(0), H - 4, '05-08', 'middle'));
+    svg.appendChild(txt(x(bars.length - 1), H - 4, '07-28', 'middle'));
+  }
+
+  /* ---------------- KD ---------------- */
+  function renderKd(svg) {
+    var W = 640, H = 130, L = 52, R = 10, T = 10, B = 18;
+    var y = function (v) { return T + (H - T - B) - (v / 100) * (H - T - B); };
+    var x = function (i) { return L + (i + 0.5) * ((W - L - R) / K.length); };
+    [0, 20, 50, 80, 100].forEach(function (v) {
+      svg.appendChild(el('line', { x1: L, y1: y(v), x2: W - R, y2: y(v) }, (v === 20 || v === 80) ? 'c-dash' : 'c-grid'));
+      svg.appendChild(txt(L - 6, y(v) + 3, String(v)));
+    });
+    function line(series, cls) {
+      svg.appendChild(el('path', { d: series.map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ') }, cls));
+    }
+    line(K, 'c-k'); line(D, 'c-d');
+  }
+
+  /* ---------------- 近 7 日買賣超（有正有負） ---------------- */
+  function renderBars(svg) {
+    var W = 640, H = 160, L = 56, R = 10, T = 12, B = 22;
+    var max = Math.max.apply(null, netBuy.map(Math.abs)) * 1.15;
+    var y = function (v) { return T + (H - T - B) / 2 - (v / max) * ((H - T - B) / 2); };
+    var step = (W - L - R) / netBuy.length, bw = step * 0.5;
+    [max, max / 2, 0, -max / 2, -max].forEach(function (v) {
+      svg.appendChild(el('line', { x1: L, y1: y(v), x2: W - R, y2: y(v) }, v === 0 ? 'c-zero' : 'c-grid'));
+      svg.appendChild(txt(L - 6, y(v) + 3, nf(Math.round(v / 100) * 100)));
+    });
+    netBuy.forEach(function (v, i) {
+      var cx = L + step * (i + 0.5), y0 = y(0), y1 = y(v);
+      svg.appendChild(el('rect', { x: cx - bw / 2, y: Math.min(y0, y1), width: bw, height: Math.max(1.5, Math.abs(y1 - y0)) }, v >= 0 ? 'c-up' : 'c-down'));
+      svg.appendChild(txt(cx, H - 6, netDays[i], 'middle'));
+    });
+  }
+
+  /* ---------------- 月營收 ---------------- */
+  function renderRev(svg) {
+    var W = 640, H = 140, L = 66, R = 10, T = 12, B = 22;
+    var max = Math.max.apply(null, revenue) * 1.12;
+    var y = function (v) { return T + (H - T - B) - (v / max) * (H - T - B); };
+    var step = (W - L - R) / revenue.length, bw = step * 0.46;
+    for (var g = 0; g <= 3; g++) {
+      var val = (max / 3) * g, yy = y(val);
+      svg.appendChild(el('line', { x1: L, y1: yy, x2: W - R, y2: yy }, 'c-grid'));
+      svg.appendChild(txt(L - 6, yy + 3, nf(Math.round(val / 1000)) + 'K'));
+    }
+    revenue.forEach(function (v, i) {
+      var cx = L + step * (i + 0.5), y1 = y(v), y0 = y(0);
+      svg.appendChild(el('rect', { x: cx - bw / 2, y: y1, width: bw, height: y0 - y1 }, 'c-vol'));
+      svg.appendChild(txt(cx, H - 6, revMonths[i].slice(5), 'middle'));
+    });
+  }
+
+  document.querySelectorAll('.js-candle').forEach(renderCandle);
+  document.querySelectorAll('.js-kd').forEach(renderKd);
+  document.querySelectorAll('.js-bars').forEach(renderBars);
+  document.querySelectorAll('.js-rev').forEach(renderRev);
+
+  /* ---------------- 指標摘要用同一份資料填 ---------------- */
+  var last = closes.length - 1;
+  function fill(sel, val) {
+    document.querySelectorAll(sel).forEach(function (n) { n.textContent = val; });
+  }
+  fill('.js-close', nf(closes[last], 2));
+  fill('.js-ma5', nf(ma5[last], 2));
+  fill('.js-ma20', nf(ma20[last], 2));
+  fill('.js-ma60', nf(ma60[last], 2));
+  fill('.js-k', K[last].toFixed(1));
+  fill('.js-d', D[last].toFixed(1));
+})();
+</script>
