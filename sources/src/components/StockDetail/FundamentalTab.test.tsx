@@ -174,4 +174,51 @@ describe('FundamentalTab', () => {
     expect(screen.getByText(/可能為上櫃股票/)).toBeTruthy()
     expect(screen.getByText('查無估值資料。')).toBeTruthy()
   })
+
+  it('月營收有走勢圖，且方向與表格相反（圖由舊到新、表由新到舊）', () => {
+    const { container } = render(<FundamentalTab fundamental={full} loading={false} />)
+    const poly = container.querySelector('.chart-wrap polyline')
+    expect(poly).toBeTruthy()
+
+    /*
+      圖必須由舊到新。resource: revenueMonths 是 05 月 → 06 月（舊→新），
+      而表格刻意 reverse 成新→舊 —— 圖若拿錯那份，整條線會反過來而且看起來像真的
+      （趨勢完全相反），是最不容易被發現的錯，故用 y 座標直接釘住方向。
+    */
+    const [p1, p2] = (poly!.getAttribute('points') ?? '').split(' ')
+    const y = (pt: string) => Number(pt.split(',')[1])
+    // 05 月營收較低 → y 較大（SVG 的 y 往下增加）
+    expect(y(p1)).toBeGreaterThan(y(p2))
+  })
+
+  it('走勢圖的 X 軸標籤帶年份（跨年時才分得出是哪一年）', () => {
+    const { container } = render(<FundamentalTab fundamental={full} loading={false} />)
+    const labels = [...container.querySelectorAll('.chart-wrap svg text')]
+      .map((t) => t.textContent ?? '')
+      .filter((t) => t.includes('/'))
+    expect(labels).toEqual(['2026/05', '2026/06'])
+  })
+
+  it('營收缺值的月份把線斷開，不內插假資料', () => {
+    const gap: FundamentalData = {
+      ...full,
+      revenueMonths: [
+        { ...full.revenueMonths[0], yearMonth: '2026-03' },
+        { ...full.revenueMonths[0], yearMonth: '2026-04', revenueThousandTwd: null },
+        { ...full.revenueMonths[0], yearMonth: '2026-05' },
+        { ...full.revenueMonths[1], yearMonth: '2026-06' },
+      ],
+    }
+    const { container } = render(<FundamentalTab fundamental={gap} loading={false} />)
+    // 前段只剩一個點（畫不出線）被丟棄，只留 05→06 那一段
+    expect(container.querySelectorAll('.chart-wrap polyline')).toHaveLength(1)
+  })
+
+  it('查無月營收時不畫圖，只顯示空狀態', () => {
+    const { container } = render(
+      <FundamentalTab fundamental={{ ...full, revenueMonths: [] }} loading={false} />,
+    )
+    expect(screen.getByText('查無月營收資料。')).toBeTruthy()
+    expect(container.querySelector('.chart-wrap')).toBeNull()
+  })
 })

@@ -8,6 +8,7 @@
  */
 import { RefreshCw } from 'lucide-react'
 import type { FundamentalData } from '../../services/fundamentalProxy'
+import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { chipClass, fmtInt, fmtUpdatedAt } from './chipFormat'
 
 interface FundamentalTabProps {
@@ -31,6 +32,18 @@ function fmtPercent(n: number | null | undefined): string {
 function fmtYearMonth(ym: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]} 年 ${m[2]} 月` : ym
+}
+
+/**
+ * 走勢圖用的短月份標籤。
+ *
+ * 不能用 `fmtYearMonth`：「2026 年 06 月」在 11px 字級約 100px 寬，
+ * 而 12 個月的圖每格只有約 39px —— 標籤會整排疊在一起。
+ * **年份不能省**（只留「06月」的話跨年那兩格會分不出是哪一年），故用 `2026/06`。
+ */
+function fmtChartMonth(ym: string): string {
+  const m = ym.match(/^(\d{4})-(\d{2})$/)
+  return m ? `${m[1]}/${m[2]}` : ym
 }
 
 export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
@@ -57,6 +70,14 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
   const { valuation, revenueMonths, profitQuarters, notes } = fundamental
   // 由新到舊呈現（檔案內是由舊到新，方便批次合併）
   const months = [...revenueMonths].reverse()
+
+  /*
+    12 個月每格約 39px，而「2026/06」約 48px —— 全標會互相重疊。
+    隔一個標一個（12 → 6 個標籤，間距約 78px）；資料少於 8 個月時格子夠寬，全標。
+  */
+  const revenueLabelIndices = revenueMonths
+    .map((_, i) => i)
+    .filter((i) => revenueMonths.length <= 8 || i % 2 === 0)
   const quarters = [...profitQuarters].reverse()
   const latestQuarter = quarters[0] ?? null
 
@@ -193,7 +214,26 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         {months.length === 0 ? (
           <p className="hint">查無月營收資料。</p>
         ) : (
-          <div className="table-scroll">
+          <>
+            {/*
+              圖用 revenueMonths（由舊到新）而不是上面那個 months —— 後者是為了表格
+              才 reverse 成由新到舊的。走勢圖左邊必須是比較早的月份，拿錯會整條反過來
+              而且看起來像真的（趨勢完全相反），是最不容易被發現的那種錯。
+            */}
+            <div className="chart-title" style={{ marginTop: 4 }}>
+              當月營收（千元）
+            </div>
+            <LineSeriesChart
+              points={revenueMonths.map((m) => ({
+                label: fmtChartMonth(m.yearMonth),
+                value: m.revenueThousandTwd,
+              }))}
+              labelIndices={revenueLabelIndices}
+              formatValue={(v) => `${fmtInt(v)} 千元`}
+              ariaLabel="近 12 個月月營收走勢"
+            />
+
+            <div className="table-scroll" style={{ marginTop: 12 }}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -218,10 +258,13 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
         <p className="hint" style={{ marginTop: 8 }}>
           月營收由公司每月 10 日前自結公布，與季報的認列基礎不同，僅供趨勢參考。
+          月營收有明顯的季節性（例如年底旺季），單看絕對金額的高低起伏未必代表營運轉折，
+          表格的年增率比較適合判斷方向。
         </p>
       </section>
 
