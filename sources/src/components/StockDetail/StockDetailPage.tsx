@@ -1,12 +1,21 @@
 /**
- * 個股分析的內容區：「籌碼 / 技術面 / 基本面 / 我的持股 / AI 分析」分頁籤。
- * 取代 v1 的彈窗 —— 字串模板做不出可互動圖表（見 docs/agent/PLAN.md §B）。
+ * 個股分析的內容區。
  *
- * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定，
- * 共用報告本身不含個資。頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
+ * 0.6.8 起「我的持股 / 籌碼 / 基本面 / 技術面」四段**併成單一長頁**（版型 D：卡片分組），
+ * 只留「分析內容 / AI 分析」兩個分頁籤。AI 沒有一起併是刻意的 ——
+ * 它有 API Key 輸入框與對話狀態，而且內容是按鈕觸發、不是一直在那。
+ *
+ * 每段各自一張 `.glass` 卡（`.detail-card`），靠卡與卡之間的留白分邊界。
+ * 選這個版型是因為它零互動、沒有「東西被收起來找不到」的問題。
+ *
+ * **持股那段刻意排在 PDF 擷取範圍之外**（`surfaceRef` 只包後三段）：
+ * 共用報告一路以來就不含個資，持股數字是前端算的，不該因為版面合併而流進匯出檔。
+ *
+ * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定。
+ * 頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
  *
  * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
- * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面分頁、AI 分析），
+ * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面那段、AI 分析），
  * 與籌碼報告各自獨立，任一失敗不影響另一個。
  */
 import { useEffect, useRef, useState } from 'react'
@@ -38,18 +47,26 @@ interface StockDetailPageProps extends StockDetailTarget {
   selector?: ReactNode
 }
 
-type DetailTab = 'chips' | 'technical' | 'fundamental' | 'holding' | 'ai'
+type DetailTab = 'analysis' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
-  { id: 'chips', label: '籌碼' },
-  { id: 'technical', label: '技術面' },
-  { id: 'fundamental', label: '基本面' },
-  { id: 'holding', label: '我的持股' },
+  { id: 'analysis', label: '分析內容' },
   { id: 'ai', label: 'AI 分析' },
 ]
 
+/** 長頁的分組標題。四段共用，讓層級明顯高過各段內部的 `.rpt-section h3` */
+function CardHead({ title, meta }: { title: string; meta?: string }) {
+  return (
+    <div className="card-head">
+      <span className="card-dot" aria-hidden="true" />
+      <h3>{title}</h3>
+      {meta && <span className="card-meta">{meta}</span>}
+    </div>
+  )
+}
+
 export function StockDetailPage({ ticker, name, holding, selector }: StockDetailPageProps) {
-  const [tab, setTab] = useState<DetailTab>('chips')
+  const [tab, setTab] = useState<DetailTab>('analysis')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
@@ -105,15 +122,23 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
   //
   // 作法沿用 useStockPrices 的 visibilitychange，不另開 timer：
   // 背景分頁的 timer 會被瀏覽器節流，而切回前景本來就是使用者要看資料的時刻。
+  //
+  // 0.6.8 起基本面也一起比對。四段併成一頁之後，「只有籌碼會自己更新」這件事
+  // 從看不見變成肉眼可見的不對稱 —— 同一張畫面上籌碼跳到今天、月營收還停在昨天。
+  // 技術面不在這裡處理：它由自己的 effect 管，且日線一天只換一次。
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void (async () => {
         const stored = await fetchStoredReport(ticker)
-        if (!stored) return // 查無（或走即點即產路線）時保留畫面上這份，不清空
-        // 只在 generatedAt 真的變了才換：沒變就別動 state，
-        // 否則每次切回前景都重繪一次，捲動位置與展開狀態會被洗掉。
-        setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
+        if (stored) {
+          // 只在 generatedAt 真的變了才換：沒變就別動 state，
+          // 否則每次切回前景都重繪一次，捲動位置與展開狀態會被洗掉。
+          setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
+        }
+        const f = await fetchFundamental(ticker)
+        // 同樣只在真的換過一份時才 setState（比 asOf，那是我們寫檔的時刻）
+        if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
       })()
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -149,7 +174,8 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     setPdfNote('')
     try {
       const blob = await generatePdfBlob(surfaceRef.current)
-      downloadBlob(blob, `盤後籌碼-${ticker}-${report?.dataDate ?? ''}.pdf`)
+      // 檔名不再叫「盤後籌碼」：0.6.8 起擷取範圍是籌碼＋基本面＋技術面三段
+      downloadBlob(blob, `個股分析-${ticker}-${report?.dataDate ?? ''}.pdf`)
     } catch {
       setPdfNote('PDF 產生失敗，請再試一次。')
     } finally {
@@ -182,7 +208,11 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
           <RefreshCw size={14} className={status === 'loading' || fundLoading ? 'spin' : undefined} />
           重新整理
         </button>
-        {status === 'ready' && tab === 'chips' && (
+        {/*
+          0.6.8 起不再限定「籌碼分頁」（那個分頁已經不存在），改成籌碼報告載好就能匯出。
+          擷取範圍是籌碼＋基本面＋技術面，**不含持股**（見 surfaceRef 掛載處）。
+        */}
+        {status === 'ready' && tab === 'analysis' && (
           <button className="btn btn-sm" onClick={() => void handleDownload()} disabled={pdfBusy}>
             <Download size={14} className={pdfBusy ? 'spin' : undefined} />
             {pdfBusy ? '產生 PDF 中…' : '下載 PDF'}
@@ -205,38 +235,61 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
 
       {pdfNote && <div className="detail-note">{pdfNote}</div>}
 
-      <div className="glass detail-body" ref={surfaceRef}>
-        {tab === 'chips' && (
-          <>
-            {status === 'loading' && (
-              <div className="empty-state" style={{ padding: 32 }}>
-                <RefreshCw size={28} className="spin" />
-                <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+      {tab === 'analysis' ? (
+        <div className="detail-stack">
+          {/*
+            持股在 surfaceRef **外面**，所以不會進 PDF。
+            這是刻意的：共用報告一路以來就不含個資，持股數字是前端依交易紀錄算的。
+            順序是使用者定的（持股 → 籌碼 → 基本面 → 技術面），別自行調換。
+          */}
+          <section className="glass detail-card" aria-labelledby="sec-holding">
+            <CardHead title="我的持股" meta="你的部位" />
+            <div id="sec-holding">
+              <HoldingTab holding={holding} />
+            </div>
+          </section>
+
+          <div className="detail-stack" ref={surfaceRef}>
+            <section className="glass detail-card" aria-labelledby="sec-chips">
+              <CardHead title="籌碼" meta="三大法人 · 融資融券" />
+              <div id="sec-chips">
+                {/* 籌碼的載入 / 錯誤只影響自己這張卡，其他三段照常顯示 */}
+                {status === 'loading' && (
+                  <div className="empty-state" style={{ padding: 32 }}>
+                    <RefreshCw size={28} className="spin" />
+                    <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+                  </div>
+                )}
+                {status === 'error' && (
+                  <div className="notice notice-warn" role="alert">
+                    <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                    {errMsg}
+                  </div>
+                )}
+                {status === 'ready' && report && <ChipsTab report={report} />}
               </div>
-            )}
-            {status === 'error' && (
-              <div className="notice notice-warn" role="alert">
-                <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                {errMsg}
+            </section>
+
+            <section className="glass detail-card" aria-labelledby="sec-fundamental">
+              <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
+              <div id="sec-fundamental">
+                <FundamentalTab fundamental={fundamental} loading={fundLoading} />
               </div>
-            )}
-            {status === 'ready' && report && <ChipsTab report={report} />}
-          </>
-        )}
-        {tab === 'technical' && <TechnicalTab ticker={ticker} reloadKey={reloadKey} />}
-        {tab === 'fundamental' && (
-          <FundamentalTab fundamental={fundamental} loading={fundLoading} />
-        )}
-        {tab === 'holding' && <HoldingTab holding={holding} />}
-        {tab === 'ai' && (
-          <AiTab
-            ticker={ticker}
-            name={name}
-            report={report}
-            fundamental={fundamental}
-          />
-        )}
-      </div>
+            </section>
+
+            <section className="glass detail-card" aria-labelledby="sec-technical">
+              <CardHead title="技術面" meta="日 K · 成交量 · KD" />
+              <div id="sec-technical">
+                <TechnicalTab ticker={ticker} reloadKey={reloadKey} />
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div className="glass detail-body">
+          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
+        </div>
+      )}
     </div>
   )
 }

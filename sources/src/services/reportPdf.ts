@@ -12,15 +12,38 @@
  */
 const SURFACE_CLASS = 'report-surface'
 
+/**
+ * canvas 面積上限（px²）。
+ *
+ * **iOS Safari 對單一 canvas 的面積有硬性上限（約 16.7M px²），超過就靜默失敗** ——
+ * `toDataURL()` 回空白，使用者只會看到「PDF 產生失敗」。這裡取 16M 留一點餘裕。
+ *
+ * 0.6.8 把四段併成一頁之後這條線就踩到了：實測擷取範圍 1140×3885 CSS px，
+ * 在 scale 2 下是 2280×7772 ＝ **17.7M px²**，剛好越過去。
+ */
+const MAX_CANVAS_AREA = 16_000_000
+
+/**
+ * 依內容面積決定擷取倍率。
+ *
+ * 內容短時維持 scale 2（既有畫質不變）；長到會撐爆 canvas 時逐步降，
+ * **寧可略降解析度也不要產出一份空白 PDF**。下限 1 是為了讓文字仍然讀得出來。
+ */
+export function pdfScaleFor(cssWidth: number, cssHeight: number): number {
+  const area = Math.max(cssWidth * cssHeight, 1)
+  return Math.max(1, Math.min(2, Math.sqrt(MAX_CANVAS_AREA / area)))
+}
+
 export async function generatePdfBlob(el: HTMLElement): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
   ])
   let canvas: HTMLCanvasElement
+  const scale = pdfScaleFor(el.scrollWidth, el.scrollHeight)
   el.classList.add(SURFACE_CLASS)
   try {
-    canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+    canvas = await html2canvas(el, { scale, backgroundColor: '#ffffff', useCORS: true })
   } finally {
     el.classList.remove(SURFACE_CLASS)
   }

@@ -5,6 +5,13 @@
  * 前端直接下載、不經 Edge Function。查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），
  * 節流規則見 services/warmStock.ts —— 同代號每個 session 只試一次。
  *
+ * **試過用 IntersectionObserver 延後到「捲到才載」，量過之後拿掉了**（0.6.8）：
+ * 四段併成一頁時，掛載當下籌碼與基本面都還在載、各自只有一個 spinner，
+ * 整頁不到 500px 高 —— 技術面本來就在視窗內，observer 立刻判定可見而照樣載。
+ * 要讓它真的延後就得在上面兩段預留一兩千像素的假高度，那是用猜的。
+ * 而實際省下的只有一個約 17KB 的 Storage 請求（warmStock 的 session 名額
+ * 早就被基本面那條路徑用掉了），不值得換一個「宣稱延後、實際每次都載」的機制。
+ *
  * 台股術語對照（PLAN.md §L 所稱的「日線 / 週線 / 季線」）：
  * 週線＝MA5、月線＝MA20、季線＝MA60。UI 兩種說法並陳，免得只認得其中一種的人看不懂。
  */
@@ -59,7 +66,6 @@ export function TechnicalTab({ ticker, reloadKey = 0 }: { ticker: string; reload
   const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading')
   const [series, setSeries] = useState<DailySeries | null>(null)
   const [range, setRange] = useState<RangeKey>('3m')
-
   useEffect(() => {
     let alive = true
     setStatus('loading')

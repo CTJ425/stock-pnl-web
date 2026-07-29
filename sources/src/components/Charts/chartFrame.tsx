@@ -129,14 +129,33 @@ export function ChartFrame({
 
   return (
     <div className="chart-wrap" ref={wrapRef}>
+      {/*
+        整張圖一個 tab stop：聚焦後用左右方向鍵逐點移動、Home / End 跳頭尾、Esc 取消。
+        role 由 img 改為 group —— 可聚焦、可操作的東西不該宣告成一張圖片。
+      */}
       <svg
         className="chart-svg"
         viewBox={`0 0 ${viewW} ${height}`}
         width={viewW}
         height={height}
-        role="img"
+        role="group"
         aria-labelledby={titleId}
+        tabIndex={0}
         onMouseLeave={() => setHover(null)}
+        onBlur={() => setHover(null)}
+        onKeyDown={(e) => {
+          const last = labels.length - 1
+          if (last < 0) return
+          const move = (next: number) => {
+            e.preventDefault()
+            setHover(Math.min(Math.max(next, 0), last))
+          }
+          if (e.key === 'ArrowRight') move(hover === null ? 0 : hover + 1)
+          else if (e.key === 'ArrowLeft') move(hover === null ? last : hover - 1)
+          else if (e.key === 'Home') move(0)
+          else if (e.key === 'End') move(last)
+          else if (e.key === 'Escape') setHover(null)
+        }}
       >
         <title id={titleId}>{ariaLabel}</title>
         <g transform={`translate(${PAD.left}, ${PAD.top})`}>
@@ -190,7 +209,15 @@ export function ChartFrame({
             </text>
           ))}
 
-          {/* 透明命中區：整欄可 hover，比細長條好點；tabIndex 讓鍵盤也能讀到數值 */}
+          {/*
+            透明命中區：整欄可 hover，比細長條好點。
+
+            **這些 rect 刻意不可聚焦**（0.6.8）。它們原本每個都是 `tabIndex={0}`，
+            一年份的日 K 就是 244 個看不見的 tab stop；0.6.8 把四段併成一頁之後，
+            同一頁最多會有 765 個 —— 鍵盤使用者要按七百多次才離得開這一頁。
+            改成整張圖一個 tab stop（見 <svg> 的 tabIndex 與 onKeyDown），
+            進到圖上後用左右方向鍵逐點移動。
+          */}
           {labels.map((label, i) => (
             <rect
               key={`hit-${label}-${i}`}
@@ -199,10 +226,7 @@ export function ChartFrame({
               width={bandWidth}
               height={innerH}
               fill="transparent"
-              tabIndex={0}
               onMouseEnter={() => setHover(i)}
-              onFocus={() => setHover(i)}
-              onBlur={() => setHover(null)}
             />
           ))}
         </g>

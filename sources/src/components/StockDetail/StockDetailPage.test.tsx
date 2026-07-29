@@ -71,6 +71,14 @@ const report: ReportData = {
 
 const holding = { qty: 3000, avgCost: 100.5, price: 120, unrealized: 58500, roi: 0.194 }
 
+/*
+ * 0.6.8 起四段併成一頁，全頁的「第 N 個 svg」「第一個 .rpt-section」這種順序假設
+ * 全部失效，而且是那種「今天剛好會過、明天加一段就爆」的脆弱寫法。
+ * 一律改成以區塊 id 定位（#sec-chips / #sec-fundamental / #sec-technical / #sec-holding）。
+ */
+const sec = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`#sec-${id}`)!
+const charts = (c: HTMLElement, id: string) => sec(c, id).querySelectorAll('svg.chart-svg')
+
 describe('StockDetailPage', () => {
   beforeEach(() => {
     cleanup()
@@ -98,7 +106,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    const head = container.querySelector('.detail-body .rpt-head')
+    const head = container.querySelector('.detail-card .rpt-head')
     expect(head).toBeTruthy()
     expect(head!.textContent).toContain('2330 台積電｜盤後籌碼')
     expect(head!.textContent).toContain('資料日期 2026-07-23（最近交易日盤後）')
@@ -145,8 +153,8 @@ describe('StockDetailPage', () => {
 
     const rowOf = (label: string) =>
       within(within(screen.getAllByRole('table')[0]).getByText(label).closest('tr')!)
-    // 三大法人區塊的說明句（第一個 .rpt-section 內的 .hint）
-    const caption = () => container.querySelector('.rpt-section .hint')!.textContent
+    // 三大法人區塊的說明句（籌碼段內第一個 .rpt-section 的 .hint）
+    const caption = () => sec(container, 'chips').querySelector('.rpt-section .hint')!.textContent
 
     // 預設看最新交易日（07/23）：外資 net +5,000、連 2 買
     expect(caption()).toContain('2026-07-23')
@@ -173,7 +181,7 @@ describe('StockDetailPage', () => {
     expect(legend.queryByText('三大法人合計')).toBeNull()
     expect(container.querySelectorAll('.chart-legend-swatch').length).toBe(4)
     // 2 天 × 4 個法人 = 8 根長條
-    expect(container.querySelectorAll('svg.chart-svg')[0].querySelectorAll('rect[rx]').length).toBe(8)
+    expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(8)
   })
 
   it('切成單一法人時圖例改講紅正綠負（顏色改為表達極性）', async () => {
@@ -186,7 +194,7 @@ describe('StockDetailPage', () => {
     const labels = [...container.querySelectorAll('.chart-legend-label')].map((el) => el.textContent)
     expect(labels).toEqual(['買超（買比賣多）', '賣超（賣比買多）'])
     // 單一序列 2 天 = 2 根長條
-    expect(container.querySelectorAll('svg.chart-svg')[0].querySelectorAll('rect[rx]').length).toBe(2)
+    expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(2)
   })
 
   it('畫出走勢圖（inline SVG，非圖表函式庫）', async () => {
@@ -194,8 +202,8 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    // 買賣超長條圖 + 融資 / 融券兩張折線圖
-    expect(container.querySelectorAll('svg.chart-svg').length).toBe(3)
+    // 籌碼段：買賣超長條圖 + 融資 / 融券兩張折線圖
+    expect(charts(container, 'chips').length).toBe(3)
     expect(container.querySelectorAll('polyline').length).toBeGreaterThan(0)
   })
 
@@ -205,25 +213,48 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    const before = container.querySelectorAll('svg.chart-svg')[0]?.innerHTML
+    const before = charts(container, 'chips')[0]?.innerHTML
     await user.click(screen.getByRole('button', { name: '投信' }))
-    const after = container.querySelectorAll('svg.chart-svg')[0]?.innerHTML
+    const after = charts(container, 'chips')[0]?.innerHTML
     expect(after).not.toBe(before)
   })
 
-  it('分頁籤切換：技術面尚無日線時顯示空狀態、我的持股由前端資料渲染', async () => {
-    const user = userEvent.setup()
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+  it('四段同時在一頁上，順序為 持股 → 籌碼 → 基本面 → 技術面', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
     await screen.findByText('三大法人買賣超')
 
-    await user.click(screen.getByRole('button', { name: '技術面' }))
-    expect(await screen.findByText(/這檔還沒有歷史股價/)).toBeTruthy()
-    expect(screen.queryByText('三大法人買賣超')).toBeNull()
+    const ids = [...container.querySelectorAll('[id^="sec-"]')].map((el) => el.id)
+    expect(ids).toEqual(['sec-holding', 'sec-chips', 'sec-fundamental', 'sec-technical'])
+    // 卡片標題也照同一個順序
+    const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
+    expect(titles).toEqual(['我的持股', '籌碼', '基本面', '技術面'])
+  })
 
-    await user.click(screen.getByRole('button', { name: '我的持股' }))
-    expect(screen.getByText('持股概況')).toBeTruthy()
-    expect(screen.getByText('3,000')).toBeTruthy() // 持有股數
-    expect(screen.getByText('+NT$58,500')).toBeTruthy() // 未實現淨損益
+  it('持股與技術面各自渲染，不必再切分頁', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+
+    const hold = within(sec(container, 'holding'))
+    expect(hold.getByText('持股概況')).toBeTruthy()
+    expect(hold.getByText('3,000')).toBeTruthy() // 持有股數
+    expect(hold.getByText('+NT$58,500')).toBeTruthy() // 未實現淨損益
+
+    // 技術面（fixture 無日線）顯示自己的空狀態，且不影響其他三段
+    expect(await within(sec(container, 'technical')).findByText(/這檔還沒有歷史股價/)).toBeTruthy()
+    expect(screen.getByText('三大法人買賣超')).toBeTruthy()
+  })
+
+  it('只有「分析內容」與「AI 分析」兩個分頁籤', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
+    expect(tabs).toEqual(['分析內容', 'AI 分析'])
   })
 
   it('技術面：有日線時畫出 K 線與均線，並標出指標摘要', async () => {
@@ -247,22 +278,21 @@ describe('StockDetailPage', () => {
       rows,
     })
 
-    const user = userEvent.setup()
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    await user.click(screen.getByRole('button', { name: '技術面' }))
 
     await screen.findByText('日 K 與均線')
-    // 三張圖：日K、成交量、KD
-    expect(container.querySelectorAll('svg.chart-svg')).toHaveLength(3)
+    // 技術面段：日K、成交量、KD 三張（籌碼段另有 3 張，故必須限定範圍）
+    expect(charts(container, 'technical')).toHaveLength(3)
     // 均線圖例（週/月/季線的台股說法要出現，否則只認得其中一種的人看不懂）
     expect(screen.getByText('週線')).toBeTruthy()
     expect(screen.getByText('季線')).toBeTruthy()
     // 摘要取最新一根：收盤 179、一路上漲 → 多頭排列
-    expect(screen.getByText('179')).toBeTruthy()
-    expect(screen.getByText(/多頭排列/)).toBeTruthy()
+    const tech = within(sec(container, 'technical'))
+    expect(tech.getByText('179')).toBeTruthy()
+    expect(tech.getByText(/多頭排列/)).toBeTruthy()
   })
 
   it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {
@@ -292,11 +322,10 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    await user.click(screen.getByRole('button', { name: '技術面' }))
     await screen.findByText('日 K 與均線')
 
     await user.click(screen.getByRole('button', { name: '近 3 月' }))
-    const kChart = container.querySelectorAll('svg.chart-svg')[0]
+    const kChart = charts(container, 'technical')[0]
     // 三條均線都必須有折線（polyline）；少一條就是 MA60 被裁沒了
     expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(3)
   })
@@ -306,7 +335,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    const tags = [...container.querySelectorAll('.source-tag')].map((el) => el.textContent)
+    const tags = [...sec(container, 'chips').querySelectorAll('.source-tag')].map((el) => el.textContent)
     expect(tags).toHaveLength(3)
     // 三個抓取時間不同 —— 這正是逐區塊標示的理由
     expect(new Set(tags).size).toBe(3)
@@ -336,15 +365,40 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
     )
     await screen.findByText('三大法人買賣超')
-    expect(container.querySelectorAll('.source-tag')).toHaveLength(0)
+    expect(sec(container, 'chips').querySelectorAll('.source-tag')).toHaveLength(0)
   })
 
-  it('「下載 PDF」只在籌碼分頁出現（其他分頁沒有報告可擷取）', async () => {
+  it('PDF 擷取範圍含籌碼／基本面／技術面，但不含持股（個資不進匯出檔）', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+    )
+    await screen.findByText('三大法人買賣超')
+    expect(screen.getByRole('button', { name: /下載 PDF/ })).toBeTruthy()
+
+    /*
+      共用報告一路以來就不含個資，持股數字是前端依交易紀錄算的。
+      四段併成一頁之後，唯一擋住它流進匯出檔的就是「持股排在 surfaceRef 之外」——
+      這條測試就是釘住那件事，否則哪天有人把持股搬進去也不會有人發現。
+      辨識方式：持股段必須不是任何 .detail-stack[ref] 的後代 ——
+      實作上 surfaceRef 那層是第二個 .detail-stack。
+    */
+    const stacks = container.querySelectorAll('.detail-stack')
+    const captured = stacks[stacks.length - 1]
+    expect(captured.querySelector('#sec-chips')).toBeTruthy()
+    expect(captured.querySelector('#sec-fundamental')).toBeTruthy()
+    expect(captured.querySelector('#sec-technical')).toBeTruthy()
+    expect(captured.querySelector('#sec-holding')).toBeNull()
+    expect(captured.textContent).not.toContain('+NT$58,500') // 未實現損益
+  })
+
+  it('AI 分析仍是獨立分頁，切過去後長頁四段都不在畫面上', async () => {
     const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     await screen.findByText('三大法人買賣超')
-    expect(screen.getByRole('button', { name: /下載 PDF/ })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '我的持股' }))
+    await user.click(screen.getByRole('button', { name: 'AI 分析' }))
+    expect(screen.queryByText('三大法人買賣超')).toBeNull()
+    expect(screen.queryByText('持股概況')).toBeNull()
+    // AI 分頁沒有報告可擷取，下載 PDF 不出現
     expect(screen.queryByRole('button', { name: /下載 PDF/ })).toBeNull()
   })
 
@@ -387,7 +441,6 @@ describe('StockDetailPage', () => {
   })
 
   it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
-    const user = userEvent.setup()
     fetchFundamental.mockResolvedValue({
       ticker: '2330',
       asOf: '2026-07-27T09:31:00.000Z',
@@ -408,7 +461,6 @@ describe('StockDetailPage', () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     await screen.findByText('三大法人買賣超')
 
-    await user.click(screen.getByRole('button', { name: '基本面' }))
     expect(screen.getByText('31.59')).toBeTruthy()
     expect(screen.getByText('估值指標')).toBeTruthy()
   })
@@ -452,24 +504,20 @@ describe('StockDetailPage', () => {
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
-    const user = userEvent.setup()
     warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 0 })
 
     render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} />)
     await screen.findByText('三大法人買賣超')
 
-    await user.click(screen.getByRole('button', { name: '基本面' }))
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     // 只讀過一次：warm 回報沒產出就不該再打一次 Storage
     expect(fetchFundamental).toHaveBeenCalledTimes(1)
   })
 
   it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {
-    const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
     await screen.findByText('三大法人買賣超')
 
-    await user.click(screen.getByRole('button', { name: '基本面' }))
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     expect(screen.queryByText('半導體業')).toBeNull()
   })
@@ -503,14 +551,14 @@ describe('StockDetailPage', () => {
         <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
       )
       await screen.findByText('三大法人買賣超')
-      const before = container.querySelector('.detail-body .rpt-head')!.textContent
+      const before = container.querySelector('.detail-card .rpt-head')!.textContent
 
       // 回同一份（不同物件實體，但 generatedAt 相同）
       fetchStoredReport.mockResolvedValue({ ...report })
       await fireVisible()
       await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(2))
 
-      expect(container.querySelector('.detail-body .rpt-head')!.textContent).toBe(before)
+      expect(container.querySelector('.detail-card .rpt-head')!.textContent).toBe(before)
     })
 
     it('切到背景時不抓（只在使用者真的要看的時候才打 Storage）', async () => {

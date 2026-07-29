@@ -1694,6 +1694,55 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 18px 20px;
 }
 
+/* ---------- 個股分析單頁（0.6.8，版型 D：卡片分組）----------
+ *
+ * 四段（我的持股 / 籌碼 / 基本面 / 技術面）併成一頁後，原本的 .rpt-section
+ * 全部同一級、間距一律 24px，看不出哪幾段屬於誰。每段給一張自己的卡，
+ * 靠卡與卡之間的留白分邊界 —— 不需要任何互動，也不會有「東西被收起來找不到」。
+ */
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 巢狀的 .detail-stack（PDF 擷取範圍那層）不要再疊一次外距 */
+.detail-stack .detail-stack {
+  gap: 20px;
+}
+
+.detail-card {
+  padding: 18px 20px;
+}
+
+/* 分組標題：刻意比段內的 .rpt-section h3（14px + 1px 底線）高一級，
+   否則同一頁 14 個標題全部長一樣，層級等於沒有 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.card-head h3 {
+  font-size: 16px;
+  letter-spacing: 0.2px;
+}
+
+.card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  flex: none;
+}
+
+.card-meta {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
 /* 報告表頭：在 PDF 擷取範圍內，標明代號、資料日期與產生時間 */
 .rpt-head {
   padding-bottom: 12px;
@@ -1813,9 +1862,14 @@ input[type='date']::-webkit-calendar-picker-indicator {
   overflow: visible;
 }
 
-.chart-svg rect[tabindex]:focus-visible {
+/*
+ * 0.6.8 起焦點落在整張圖上（原本是每個資料點一個 tab stop，一年份日 K 就 244 個，
+ * 四段併成一頁後最多 765 個）。聚焦後用方向鍵逐點移動。
+ */
+.chart-svg:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .chart-tip {
@@ -2027,6 +2081,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
 @media (max-width: 720px) {
   .detail-body {
     padding: 14px;
+  }
+
+  .detail-card {
+    padding: 14px;
+  }
+
+  /* 手機上卡片間距收一點，否則整頁更長 */
+  .detail-stack {
+    gap: 14px;
+  }
+
+  .card-head h3 {
+    font-size: 15px;
   }
 
   .subtab {
