@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-28 19:55:00 Asia/Taipei
+- Timestamp: 2026-07-29 09:55:00 Asia/Taipei
 
 ---
 
@@ -24,6 +24,29 @@
   → ② 上線後**用真手機看安全區**（桌機瀏覽器的 inset 恆為 0）。
 - 依使用者指示直接進 `main`，跳過測試區先行驗證這一關（純前端版面異動）。
 - 純前端異動，**Supabase 兩區都不必動**。
+
+### Task 34: 新增「外幣匯率」頂層頁面 (0.6.7-dev.1)
+- **Status**: 🟡 **程式碼完成、本機驗證通過；兩區皆未部署**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 09:55:00 Asia/Taipei
+- 以台幣為本位，8 種外幣（USD/JPY/EUR/CNY/HKD/GBP/AUD/KRW）：
+  幣別卡、台幣⇄外幣雙向換算器、3 個月／6 個月／1 年走勢圖。
+- **資料源改用 Yahoo Finance，不是原訂的台灣銀行牌告匯率** —— 台銀的
+  `rate.bot.com.tw/xrt/flcsv/...` 已被 JS proof-of-work 人機驗證擋住
+  （回 `Challenge Validation` 而非 CSV，換 UA 無效，Edge Function 過不了）。
+  代價：只有市場中價，沒有現金／即期買賣價，畫面已標示。
+- **新增**：`fxRates.ts`（+test）、`fxProxy.ts`（+test）、`Fx/fxConvert.ts`（+test）、
+  `Fx/FxPage.tsx`（+test）；`index.ts` 新 action `sync-fx`；`schema.sql` §10 cron `fx-daily`。
+- **順手修的兩個共用問題**：
+  - `chartScale.fmtAxisNumber` 對小於 1 的值一律 `Math.round` → 匯率整條 Y 軸標成「0」（實測）。
+  - `LineSeriesChart` 補上 `labelIndices`（一年 260 點不抽稀會糊成一團）。
+- **待辦（需使用者指示才動環境）**：
+  - [ ] 部署測試區 `supabase functions deploy stock-report --no-verify-jwt --project-ref wqetxuhncvfidqnklyew`
+  - [ ] 測試區 SQL Editor **只跑 schema.sql §10**（替換 `<PROJECT_REF>` / `<CRON_SECRET>`）
+  - [ ] 請使用者手動觸發一次 `sync-fx`（Agent 拿不到 `CRON_SECRET` 明文）
+  - [ ] 測試區實機驗證後才併入 `main`，並依 §12.3 去掉 `-dev.1` 定版
+- **手機版型未做**：使用者決定等桌機功能驗證無誤後再處理（本次只補上
+  `index.css` 的「≤360px 隱藏分頁圖示」，避免第 6 個分頁讓既有手機版折行）。
 
 ### Task 32: 頁首右側收斂成兩個選單 (0.6.5-dev.3)
 - **Status**: ✅ **兩區皆已上線並驗證**（0.6.5 定版，Pages 已部署）

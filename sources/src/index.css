@@ -2191,3 +2191,73 @@ input[type='date']::-webkit-calendar-picker-indicator {
   gap: 12px;
 }
 
+
+/* =========================================================
+ * 外幣匯率頁 (0.6.6)
+ *
+ * 手機版型不在 0.6.6 範圍（等桌機功能驗證後再做），這裡只寫桌機版。
+ * ========================================================= */
+.fx-panel {
+  padding: 18px 20px;
+}
+
+/*
+ * 幣別卡是 <button>：整張卡可點才有足夠的點擊面積，而 button 預設會帶
+ * 自己的字型、置中與邊框，全部要清掉才能長得跟 .kpi 一樣。
+ */
+.fx-card {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.fx-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* 選中態：外框而非填色，才不會蓋掉卡片裡本來就有的數字層次 */
+.fx-card.is-active {
+  border-color: var(--accent);
+  border-width: 2px;
+  /* .kpi 是 16px 18px；邊框加粗 1px 會讓卡片長高、整排跟著跳，故各減 1px 補回來 */
+  padding: 15px 17px;
+}
+
+.fx-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 換算器：兩個等寬輸入框中間夾一個交換圖示 */
+.fx-convert {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.fx-convert .field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 金額右對齊：兩邊數字的位數對得起來才看得出量級 */
+.fx-convert .field input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+}
+
+.fx-swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-secondary);
+  /* 與輸入框底線對齊（label 高度 + 輸入框高度的一半） */
+  padding-bottom: 12px;
+}

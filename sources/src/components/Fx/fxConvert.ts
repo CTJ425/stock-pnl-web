@@ -1,0 +1,155 @@
+/**
+ * 匯率換算與走勢區間的純函式。
+ *
+ * 抽出來的理由與 technicalView.ts / chipStreak.ts 相同：這些是這個 feature
+ * 唯一真正會算錯的地方（除以 0、區間切錯、千分位解析），把它們留在元件裡就只能靠
+ * render 出來的字串反推，測不乾淨。
+ *
+ * **方向約定：`rate` 一律是「1 單位外幣可換多少台幣」**，與後端
+ * supabase/functions/stock-report/fxRates.ts 的 FxPoint 一致。反向不另存一份。
+ */
+import type { FxPoint } from '../../services/fxProxy'
+
+export type FxRange = '3m' | '6m' | '1y'
+
+export const FX_RANGES: readonly { id: FxRange; label: string; months: number }[] = [
+  { id: '3m', label: '3 個月', months: 3 },
+  { id: '6m', label: '6 個月', months: 6 },
+  { id: '1y', label: '1 年', months: 12 },
+]
+
+/**
+ * 台幣 → 外幣。
+ *
+ * `rate` 為 0 / null / 非有限數時回 null 而不是 Infinity ——
+ * Infinity 會一路流進 toFixed() 變成畫面上的「Infinity」，
+ * 而使用者看到的是一個金額欄位，那比空白危險得多。
+ */
+export function twdToForeign(twd: number | null, rate: number | null): number | null {
+  if (twd === null || !Number.isFinite(twd)) return null
+  if (rate === null || !Number.isFinite(rate) || rate === 0) return null
+  return twd / rate
+}
+
+/** 外幣 → 台幣 */
+export function foreignToTwd(foreign: number | null, rate: number | null): number | null {
+  if (foreign === null || !Number.isFinite(foreign)) return null
+  if (rate === null || !Number.isFinite(rate)) return null
+  return foreign * rate
+}
+
+/**
+ * 使用者輸入的金額字串 → 數字。
+ *
+ * 允許千分位逗號與前後空白（使用者常直接從別處貼上「1,000」）。
+ * 空字串回 null（代表「沒有輸入」，不是 0）—— 這個分別很重要：
+ * 回 0 會讓另一邊的欄位跳出一個 0，看起來像換算結果。
+ */
+export function parseAmount(raw: string): number | null {
+  const s = String(raw ?? '').trim().replace(/,/g, '')
+  if (s === '') return null
+  if (!/^-?\d*\.?\d*$/.test(s)) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 金額顯示：千分位 + 指定小數位。null 回空字串（讓輸入框保持空的，不填 0） */
+export function formatAmount(v: number | null, decimals = 2): string {
+  if (v === null || !Number.isFinite(v)) return ''
+  return v.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+/** 匯率顯示：各幣別量級差很大，小數位數由幣別自帶（KRW 需要 5 位） */
+export function formatRate(v: number | null, decimals: number): string {
+  if (v === null || !Number.isFinite(v)) return '—'
+  return v.toFixed(decimals)
+}
+
+/**
+ * 取最近 N 個月的資料。
+ *
+ * **基準點是序列的最後一天，不是今天。** 資料若停在幾天前（排程掛掉、假日），
+ * 用今天當基準會讓「3 個月」實際上只剩兩個多月，圖會莫名其妙變短；
+ * 以資料本身的最後一天回推，看到的永遠是「這份資料最近三個月」。
+ */
+export function sliceByRange(points: FxPoint[], range: FxRange): FxPoint[] {
+  if (points.length === 0) return []
+  const months = FX_RANGES.find((r) => r.id === range)?.months ?? 12
+  const last = points[points.length - 1][0]
+  const d = new Date(`${last}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return points
+  d.setUTCMonth(d.getUTCMonth() - months)
+  const cutoff = d.toISOString().slice(0, 10)
+  return points.filter((p) => p[0] >= cutoff)
+}
+
+/** 變動百分比。基期為 0 時回 null（不硬算） */
+export function changePct(latest: number | null, base: number | null): number | null {
+  if (latest === null || base === null) return null
+  if (!Number.isFinite(latest) || !Number.isFinite(base) || base === 0) return null
+  return (latest / base - 1) * 100
+}
+
+export interface RangeStats {
+  high: number
+  highDate: string
+  low: number
+  lowDate: string
+  /** 區間首尾的漲跌幅（%），只有一筆時為 null */
+  changePct: number | null
+}
+
+/** 區間高低與首尾漲跌幅。空序列回 null */
+export function rangeStats(points: FxPoint[]): RangeStats | null {
+  if (points.length === 0) return null
+  let hi = points[0]
+  let lo = points[0]
+  for (const p of points) {
+    if (p[1] > hi[1]) hi = p
+    if (p[1] < lo[1]) lo = p
+  }
+  return {
+    high: hi[1],
+    highDate: hi[0],
+    low: lo[1],
+    lowDate: lo[0],
+    changePct: points.length > 1 ? changePct(points[points.length - 1][1], points[0][1]) : null,
+  }
+}
+
+/**
+ * X 軸要標哪幾格。一年份有 260 個點，全部標會糊成一團黑。
+ *
+ * 平均取 `want` 個（含頭尾），交給 ChartFrame 的 labelIndices。
+ */
+export function labelIndicesFor(n: number, want = 6): number[] {
+  if (n <= 0) return []
+  if (n <= want) return Array.from({ length: n }, (_, i) => i)
+  const step = (n - 1) / (want - 1)
+  return Array.from({ length: want }, (_, i) => Math.round(i * step))
+}
+
+/**
+ * 資料是否過期。
+ *
+ * 為什麼要有這個判斷：Storage 上的舊檔在畫面上與新檔長得**一模一樣**，
+ * 而這頁的數字會被拿去做金錢決策。0.6.4-dev.5 那次的教訓正是這種
+ * 「顯示的資料是錯的、而且使用者看不出來」（見 services/reportsBucket.ts 的說明）。
+ */
+export const FX_STALE_DAYS = 3
+
+export function isStale(asOf: string, now: Date, days = FX_STALE_DAYS): boolean {
+  const t = Date.parse(asOf)
+  if (!Number.isFinite(t)) return false
+  return now.getTime() - t > days * 86_400_000
+}
+
+/** 'YYYY-MM-DD' → 'MM/DD'；跨年的序列要看得出年份，故 1 年區間帶年份 */
+export function fmtChartLabel(date: string, withYear: boolean): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (!m) return date
+  return withYear ? `${m[1]}/${m[2]}` : `${m[2]}/${m[3]}`
+}

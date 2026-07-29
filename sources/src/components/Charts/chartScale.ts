@@ -93,12 +93,26 @@ export function scaleY(value: number, domain: Domain, height: number): number {
  * 大數字軸標籤：12,345,678 → 1235 萬、250,000,000 → 2.5 億。
  * 傳入 step（刻度級距）時會依級距決定小數位 —— 否則像融資餘額 31,100～31,928 這種
  * 級距遠小於單位的序列，相鄰刻度會全部標成「3.1 萬」而分不出高低。
+ *
+ * **小於 1 的值也要靠 step 決定小數位**（0.6.6 修）：原本一律 `Math.round`，
+ * 對餘額、股價、成交量都沒問題（都 ≥ 1），但匯率的日圓是 0.1957～0.2015、
+ * 韓元是 0.022 —— 整條 Y 軸會標成一排「0」，實測畫面上就是這樣。
  */
 export function fmtAxisNumber(v: number, step?: number): string {
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
   const unit = abs >= 1e8 ? 1e8 : abs >= 1e4 ? 1e4 : 1
-  if (unit === 1) return `${sign}${Math.round(abs).toLocaleString('en-US')}`
+  if (unit === 1) {
+    // step 夠大（≥1）時維持原本的整數呈現，既有圖表一個字都不會變
+    const decimals =
+      step !== undefined && step > 0 && step < 1
+        ? Math.min(Math.max(Math.ceil(-Math.log10(step)), 0), 6)
+        : 0
+    return `${sign}${abs.toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}`
+  }
   const decimals =
     step === undefined || step <= 0
       ? abs >= unit * 10

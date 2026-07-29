@@ -1,12 +1,75 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.6 定版 —— 手機底部導覽列
-- Status: **已 commit 於 `dev` 與 `main`；尚未 push、尚未部署**
-- Timestamp: 2026-07-28 21:55:00 Asia/Taipei
+- Action: 0.6.6-dev.1 新增外幣匯率頁（程式碼完成，兩區未部署）
+- Status: **IN PROGRESS —— 本機驗證通過，待部署測試區**
+- Timestamp: 2026-07-29 09:55:00 Asia/Taipei
 
 ---
 
+## 📅 Log: 2026-07-29 09:55:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 新增「外幣匯率」頂層頁面 (0.6.6-dev.1)
+- **Status**: IN PROGRESS（程式碼完成、`dev` 分支已提交；**兩區皆未部署**）
+
+### 做了什麼
+
+以 0.6.5「總經」為樣板做第六個頂層頁：全域單檔走 Storage、獨立每日 cron、
+`stock-report` 加一個 action，不新開 Edge Function。
+
+- 後端：`fxRates.ts`（純函式 + 型別）、`index.ts` 的 `syncFx()` 與 action `sync-fx`、
+  `schema.sql` §10 的 cron job `fx-daily`（`0 3,9 * * *` UTC ＝ 台北 11:00／17:00）。
+- 前端：`services/fxProxy.ts`、`components/Fx/{fxConvert.ts,FxPage.tsx}`、
+  `AppShell` 註冊第 6 個分頁（`SUPABASE_ONLY_TABS` 一併加入）。
+- 測試：551 passed（新增 93 支），`npm run build` 與 `npm run lint` 皆綠。
+
+### 四個實測結論（都不是臆測，是打了才知道的）
+
+1. **台灣銀行牌告匯率抓不到。** `rate.bot.com.tw/xrt/flcsv/0/day` 與
+   `/xrt/flcsv/0/{YYYY-MM}/{幣別}` 都回 `<title>Challenge Validation</title>`
+   的 JS proof-of-work 頁，帶瀏覽器 UA 一樣。這比 FRED 的「UA 挑食」更硬，
+   要真的執行 JS，Deno Edge Function 做不到。**下一個 Agent 不必再試一次。**
+   改用 Yahoo（`twDaily.ts` 本來就在用同一支 API），代價是只有市場中價、
+   沒有現金／即期買賣價 —— 畫面上已明白標示。
+
+2. **沒有任何單一幣對方向對 8 個幣別都成立。** 兩側都各有幣別是死的，
+   死法一樣：回 200、結構完整、但 `timestamp` 只有 1 格。
+   實測 `CNYTWD=X` 只有 1 格而 `TWDCNY=X` 有 263 格；`TWDEUR=X` 只有 1 格
+   而 `EURTWD=X` 有 263 格 —— 方向還相反。故每個幣別備兩個候選，
+   以點數（`FX_MIN_POINTS = 60`）判定夠不夠，不夠就換下一個。
+
+3. **Yahoo 會在序列尾端附加一列「即時報價」，必須剔除。**
+   它的 timestamp **精確等於 `meta.regularMarketTime`**（兩個幣對各驗一次都成立）。
+   不剔除會出錯：反向幣對那側流動性差，人民幣當天日線 4.7766、
+   附加的即時列換算後 4.9900 —— 日變動 **+4.47%**，而同日其他七個幣別都只動 0.4%。
+   剔除後八個幣別的日變動落在 −0.5%～+0.03%。
+
+4. **`fmtAxisNumber` 對小於 1 的值會標成「0」。** 既有圖表（餘額、股價、成交量）
+   都 ≥ 1 所以從沒踩到；匯率的日圓是 0.1957～0.2015、韓元 0.022，
+   實測整條 Y 軸就是一排「0」。已改成 step < 1 時依級距補小數位，
+   step ≥ 1 的既有行為一個字都沒變。
+
+### 驗證方式
+
+Playwright ＋ Vite dev server，以 **Supabase 模式**（塞一份假 session 繞過登入頁，
+不觸及任何伺服器端授權），並攔截 `reports/fx/twd.json` 餵入**由真實 Yahoo 資料產出**
+的 fixture（8 幣別 × 259 點）。量到：
+
+- 六個分頁在 1280 / 720 / 400 / 375 / 360 / 320px 高度全為 36px（折行是 57px），
+  360px 以下圖示隱藏。既有手機版沒有退化。
+- 雙向換算：輸入台幣 32000 → 990.65 美元；輸入 100 美元 → 3,230.20 台幣。
+- 走勢圖 3 個月／6 個月／1 年 = 67／131／260 點，X 軸抽稀成 6 個標籤。
+- Console 無任何 JS 錯誤。
+
+過程中靠瀏覽器抓到一個 jsdom 測不出來的 bug：`Converter` 與 `TrendChart`
+是同層兄弟節點卻共用 `key={current.code}`，React 判定「同一層兩個相同 key」，
+實際結果是切到日圓後畫面上同時留著兩個美元換算器。已改成不同前綴。
+
+### 下一步
+
+**兩區都還沒部署，需使用者明確指示才動**（見 TASK.md Task 33 的待辦清單）。
+`CRON_SECRET` 明文 Agent 拿不到，手動觸發 `sync-fx` 要請使用者自己執行。
 ## 📅 Log: 2026-07-28 21:55:00 Asia/Taipei
 
 - **Agent**: Claude

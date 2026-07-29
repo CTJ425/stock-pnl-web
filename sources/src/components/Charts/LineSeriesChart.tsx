@@ -17,6 +17,11 @@ interface LineSeriesChartProps {
   points: LinePoint[]
   height?: number
   color?: string
+  /**
+   * 只標這幾格的 X 軸標籤。融資餘額走勢只有 7 天、全部標得下，
+   * 但匯率一年有 260 個點，不抽稀會糊成一團（0.6.6 新增，沿用 MultiLineChart 的同名 prop）。
+   */
+  labelIndices?: number[]
   formatValue: (v: number) => string
   ariaLabel: string
 }
@@ -25,6 +30,7 @@ export function LineSeriesChart({
   points,
   height = 170,
   color = CHART_COLORS.line,
+  labelIndices,
   formatValue,
   ariaLabel,
 }: LineSeriesChartProps) {
@@ -35,6 +41,7 @@ export function LineSeriesChart({
       height={height}
       domain={domain}
       labels={points.map((p) => p.label)}
+      labelIndices={labelIndices}
       ariaLabel={ariaLabel}
       tooltipFor={(i) => {
         const p = points[i]

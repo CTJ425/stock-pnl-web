@@ -17,6 +17,8 @@
  *     → 產生全體持有台股的共用報告存入 Storage(reports bucket)，並清理超過 7 天的舊資料
  *   POST { action: 'sync-macro' }  header: x-cron-secret（由 macro-daily 排程觸發）
  *     → 抓 FRED 五個序列寫入 macro/us.json（全域單檔）。與台股交易日無關，故獨立排程。
+ *   POST { action: 'sync-fx' }  header: x-cron-secret（由 fx-daily 排程觸發）
+ *     → 抓 Yahoo 八個幣對寫入 fx/twd.json（全域單檔）。與台股交易日無關，故獨立排程。
  *   POST { action: 'backfill-revenue' }  header: x-cron-secret
  *     → 由 MOPS 分月報表把 fundamental/{ticker}.json 的月營收補到 12 個月（0.6.4）。
  *       generate-all 每輪也會順手跑一次，這個入口是給「不想等排程」用的。
@@ -101,6 +103,16 @@ import {
   type MacroFile,
   type MacroIndicator,
 } from './usMacro.ts'
+import {
+  FX_CURRENCIES,
+  FX_MIN_POINTS,
+  FX_SCHEMA,
+  buildCurrency,
+  extractFxPoints,
+  fxUrl,
+  type FxCurrency,
+  type FxFile,
+} from './fxRates.ts'
 import {
   decideSkip,
   nextT86State,
@@ -1032,6 +1044,62 @@ async function syncMacro(
   }
 }
 
+/**
+ * 抓台幣對主要 8 種外幣的匯率，寫入 `fx/twd.json`（全域單檔）。
+ *
+ * 結構與 `syncMacro` 逐條對應（台北日冪等、單一失敗不影響其他、全滅不覆寫），
+ * 只有兩點是匯率獨有的：
+ *
+ * 1. **每個幣別要試兩個方向的幣對**。Yahoo 有一側是「回 200、結構完整、
+ *    但只有一格資料」，而且哪一側是死的因幣別而異（實測 CNYTWD=X 與 TWDEUR=X
+ *    都只回一格，方向還相反）。故以 `FX_MIN_POINTS` 判定夠不夠，不夠就換下一個候選。
+ *    詳見 fxRates.ts 的 FxSpec.symbols 註解。
+ * 2. **成功就跳出候選迴圈**，正常情況下每個幣別只發一次請求，八個幣別八次。
+ */
+async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf: string | null }> {
+  const today = taipeiDateOf(now.toISOString())
+  const existing = await downloadJson<FxFile>('fx/twd.json')
+  if (existing && existing.schema === FX_SCHEMA && taipeiDateOf(existing.asOf) === today) {
+    // 今天已經抓過。count 用既有的幣別數，才分得出「跳過」與「抓不到」
+    return { synced: false, count: existing.currencies?.length ?? 0, asOf: existing.asOf }
+  }
+
+  const currencies: FxCurrency[] = []
+  for (const spec of FX_CURRENCIES) {
+    for (const cand of spec.symbols) {
+      try {
+        // 沿用抓 Yahoo 日線的同一個 helper（帶 UA、非 200 拋錯）——
+        // Yahoo 吃瀏覽器 UA，與 FRED 那種「不能宣稱是瀏覽器」相反，別搞混
+        const resp = await fetchJson<ChartResponse>(fxUrl(cand.symbol))
+        const points = extractFxPoints(resp, cand.invert)
+        // 點數不足代表這一側是死的（只回當下報價），換下一個候選幣對
+        if (points.length < FX_MIN_POINTS) continue
+        currencies.push(buildCurrency(spec, cand.symbol, points))
+        break
+      } catch {
+        // 單一候選失敗就試下一個；八個幣別彼此獨立
+      }
+    }
+  }
+
+  // 全滅時不覆寫既有檔（沿用 syncMacro / syncNews 的準則：留舊資料勝過空檔）。
+  // 回傳 count = 0 讓 batch_run_log 分得出「跳過」與「抓不到」
+  if (currencies.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
+
+  const file: FxFile = {
+    schema: FX_SCHEMA,
+    asOf: now.toISOString(),
+    base: 'TWD',
+    currencies,
+  }
+  const ok = await uploadJson('fx/twd.json', file)
+  return {
+    synced: ok,
+    count: currencies.length,
+    asOf: ok ? file.asOf : (existing?.asOf ?? null),
+  }
+}
+
 /** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
@@ -1476,6 +1544,19 @@ async function handleSyncMacro(): Promise<Response> {
   })
 }
 
+/** 手動或排程觸發匯率同步。拆排程的理由同 handleSyncMacro（見上），由 `fx-daily` 觸發 */
+async function handleSyncFx(): Promise<Response> {
+  const startedAt = Date.now()
+  const fx = await syncFx(new Date())
+  return json({
+    ok: true,
+    synced: fx.synced,
+    count: fx.count,
+    asOf: fx.asOf,
+    durationMs: Date.now() - startedAt,
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -1519,6 +1600,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncMacro()
+  }
+
+  // 匯率同步：會寫 Storage 且對 Yahoo 發請求，把關同 generate-all。
+  // 由獨立的 cron job `fx-daily` 觸發（每天兩班，見 schema.sql §10）
+  if (body.action === 'sync-fx') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleSyncFx()
   }
 
   // 資料源探針：只讀不寫（除了自己的觀測表），但仍走 CRON_SECRET ——

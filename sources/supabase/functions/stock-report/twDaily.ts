@@ -81,7 +81,9 @@ interface ChartQuote {
 export interface ChartResponse {
   chart?: {
     result?: Array<{
-      meta?: { gmtoffset?: number; symbol?: string }
+      // regularMarketTime 是 Yahoo 附加的「即時報價列」的 timestamp。
+      // extractDaily 不用它（台股日線一天一根、沒踩過問題），fxRates 靠它剔除那一列
+      meta?: { gmtoffset?: number; symbol?: string; regularMarketTime?: number }
       timestamp?: number[]
       indicators?: { quote?: ChartQuote[] }
     }> | null

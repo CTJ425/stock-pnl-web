@@ -78,4 +78,17 @@ describe('fmtAxisNumber', () => {
     expect(fmtAxisNumber(850)).toBe('850')
     expect(fmtAxisNumber(0)).toBe('0')
   })
+
+  it('step 小於 1 時依級距補小數位 —— 匯率的日圓否則整條 Y 軸都是 0', () => {
+    expect(fmtAxisNumber(0.1957, 0.002)).toBe('0.196')
+    expect(fmtAxisNumber(0.2015, 0.002)).toBe('0.202')
+    // 韓元量級更小
+    expect(fmtAxisNumber(0.022043, 0.0002)).toBe('0.0220')
+  })
+
+  it('step ≥ 1 或未給時維持整數，既有圖表不受影響', () => {
+    expect(fmtAxisNumber(2350, 50)).toBe('2,350')
+    expect(fmtAxisNumber(850)).toBe('850')
+    expect(fmtAxisNumber(0.4)).toBe('0')
+  })
 })
