@@ -1554,10 +1554,40 @@ input[type='date']::-webkit-calendar-picker-indicator {
     padding-bottom: 12px;
   }
 
-  /* 工作區選單吃掉頁首剩下的橫向空間（名稱過長由 .hmenu-ws-name 截斷） */
-  .ws-select {
+  /*
+   * 工作區選單吃掉頁首剩下的橫向空間（名稱過長由 .hmenu-ws-name 截斷）。
+   *
+   * ⚠️ **限定 .app-header 之內**。`.ws-select` 從 0.6.7 起也給個股分析的個股切換用，
+   * 而那裡同一列還有標題與兩顆按鈕在搶空間 —— `flex: 1` 的 flex-basis 是 0，
+   * 跟 `flex: 1 1 auto` 的 .detail-title 競爭時幾乎拿不到寬度：
+   * 實測 390px 只剩 48px、360px 只剩 33px，代號被截成「18…」。
+   * 個股選單的手機版另外處理（見下方 .detail-head .ws-select）。
+   */
+  .app-header .ws-select {
     flex: 1;
     min-width: 0;
+  }
+
+  /*
+   * 個股切換在手機上獨占一列：它是這一頁的主要控制項，
+   * 被標題與按鈕擠掉之後只剩「18…」，等於看不出現在選的是哪一檔。
+   */
+  .detail-head .ws-select {
+    flex: 1 0 100%;
+  }
+
+  /*
+   * 標題也獨占一列，兩顆按鈕才會併在同一列。
+   * 不這樣做的話標題會吃掉中間的寬度，只擠得下一顆按鈕，
+   * 另一顆被推到第四列 —— 三列變四列，而且兩顆同性質的按鈕被拆開。
+   */
+  .detail-head .detail-title {
+    flex: 1 0 100%;
+  }
+
+  /* 按鈕不縮：縮到只剩圖示更難點，寧可讓它們自己佔一列 */
+  .detail-head .btn {
+    flex: none;
   }
 
   /* 輸入字級 ≥16px，避免 iOS Safari 聚焦時自動放大頁面 */

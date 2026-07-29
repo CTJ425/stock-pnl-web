@@ -8,6 +8,15 @@
 
 ## 📋 Active Tasks
 
+### Task 37: 修手機上個股切換選單被擠壓 (0.6.9-dev.1)
+- **Status**: 🟡 **程式碼完成、實測通過；未併入 `main`**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 17:10:00 Asia/Taipei
+- 見 `FIXED_BUG.md` BUG-006。根因是 0.6.7 讓個股選單沿用 `.ws-select`，
+  連帶繼承了一條**為頁首寫的** `@media (max-width: 720px) { flex: 1 }`。
+- 修法：規則收斂為 `.app-header .ws-select`；個股選單改為手機上獨占一列。
+- 純 CSS 異動，596 tests 綠、build 綠、lint 無新增警告。Supabase 兩區不必動。
+
 ### Task 36: 個股分析合併成單一長頁 (0.6.8)
 - **Status**: ✅ **0.6.8 定版並上線（純前端，Supabase 兩區未動）**
 - **Agent**: Claude
