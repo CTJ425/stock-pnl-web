@@ -10,6 +10,7 @@ import {
   toOpenAiMessages,
   GOOGLE_MAX_OUTPUT_TOKENS,
   TRUNCATION_NOTICE,
+  OPENAI_MAX_TOKENS,
   REASONING_FALLBACK_NOTICE,
   stripThinkTags,
   type AiMessage,
@@ -295,6 +296,18 @@ describe('aiClient', () => {
       expect(body.chat_template_kwargs).toEqual({ enable_thinking: false })
     })
 
+    it('OpenAI 相容請求會送出輸出上限 —— 不送的話端點預設值常常只有幾百 token', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(okBody('結果'))
+      vi.stubGlobal('fetch', mockFetch)
+
+      await mkProvider().complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+      expect(body.max_tokens).toBe(OPENAI_MAX_TOKENS)
+      // 輸出約需 1500~2500 token，上限要留足餘裕
+      expect(OPENAI_MAX_TOKENS).toBeGreaterThanOrEqual(4096)
+    })
+
     it('端點不認得那些欄位而回 400 時，去掉重送一次並成功', async () => {
       const mockFetch = vi
         .fn()
@@ -312,10 +325,15 @@ describe('aiClient', () => {
       const first = JSON.parse(mockFetch.mock.calls[0][1].body)
       const second = JSON.parse(mockFetch.mock.calls[1][1].body)
       expect(first.reasoning_effort).toBe('none')
-      // 第二次必須乾淨，否則會一直 400
+      expect(first.max_tokens).toBe(OPENAI_MAX_TOKENS)
+      /*
+        第二次退回最小集合。400 不會告訴你是哪個欄位不合，
+        逐一嘗試等於要打好幾輪，所以一次全部拿掉。
+      */
       expect(second.reasoning_effort).toBeUndefined()
       expect(second.think).toBeUndefined()
       expect(second.chat_template_kwargs).toBeUndefined()
+      expect(second.max_tokens).toBeUndefined()
       // 但正事不能掉：model 與 messages 要還在
       expect(second.model).toBe('llama3')
       expect(second.messages).toHaveLength(2)

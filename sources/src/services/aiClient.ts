@@ -20,6 +20,19 @@ export const AI_TIMEOUT_MS = 180_000
  */
 export const GOOGLE_MAX_OUTPUT_TOKENS = 8192
 
+/**
+ * OpenAI 相容端點的輸出上限。
+ *
+ * **原本完全沒送這個欄位**，用的是端點預設值 —— 而很多端點（含 Ollama 的部分設定）
+ * 預設只有幾百 token，於是輸出寫到一半就被 `finish_reason: length` 切斷，
+ * 畫面上只剩前一兩段加一行「未寫完」。這與 Google 那邊踩過的是同一個坑
+ * （見 GOOGLE_MAX_OUTPUT_TOKENS），只是這條路徑一直沒補。
+ *
+ * 用與 Google 相同的值：輸出約需 1500–2500 token，8192 留足餘裕。
+ * 這是上限不是預約量，調高不會增加實際用量與費用。
+ */
+export const OPENAI_MAX_TOKENS = 8192
+
 export class AiError extends Error {
   public kind: AiErrorKind
 
@@ -393,26 +406,31 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
   }
 
   /**
-   * `noThinking` 為 true 時附上「不要思考」的欄位。
+   * `full` 為 true 時附上相容性欄位；為 false 時只留所有端點都吃的最小集合。
    *
-   * **這份工作不需要推理**（理由同 Google 那條路徑：數字全由程式算好，
-   * 模型只負責照著寫成白話），而推理型模型會把整個輸出額度花在思考上，
-   * 正文一個字都沒寫 —— 使用者實際遇到的就是這個。
+   * **輸出上限**（`max_tokens`）：不送的話用端點預設，很多端點只有幾百 token，
+   * 輸出會被 `finish_reason: length` 從中間切斷。見 OPENAI_MAX_TOKENS。
    *
-   * 沒有跨家通用的開關，故三個都送、由端點各取所需；不認得的欄位大多會被忽略，
-   * 真的 400 的話呼叫端會去掉重送一次：
+   * **關閉思考**：這份工作不需要推理（數字全由程式算好，模型只負責照著寫成白話），
+   * 而推理型模型會把整個輸出額度花在思考上、正文一個字都沒寫。
+   * 沒有跨家通用的開關，故三個都送、由端點各取所需：
    * - `reasoning_effort`：OpenAI o 系列與多數相容端點
    * - `think`：Ollama
    * - `chat_template_kwargs.enable_thinking`：vLLM / SGLang 上的 Qwen3 等
+   *
+   * 不認得的欄位大多會被忽略；真的 400 的話呼叫端會用 `full = false` 重送一次，
+   * **退回最小集合而不是只拿掉其中一項** —— 400 不會告訴你是哪個欄位不合，
+   * 逐一嘗試等於要打好幾輪。
    */
-  private buildBody(req: AiRequest, noThinking: boolean): string {
+  private buildBody(req: AiRequest, full: boolean): string {
     return JSON.stringify({
       model: this.settings.model,
       messages: toOpenAiMessages(req.system, req.messages),
       temperature: 0.2,
       stream: false,
-      ...(noThinking
+      ...(full
         ? {
+            max_tokens: OPENAI_MAX_TOKENS,
             reasoning_effort: 'none',
             think: false,
             chat_template_kwargs: { enable_thinking: false },
@@ -439,8 +457,8 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
     let res = await post(this.buildBody(req, true))
 
     /*
-      400 可能是端點不認得關閉思考的欄位（各家名稱不同，見 buildBody）。
-      去掉那些欄位重送一次；仍失敗就照原本的錯誤處理往下走。
+      400 可能是端點不認得那些相容性欄位（`max_tokens` 與三個關閉思考的欄位，見 buildBody）。
+      退回最小集合重送一次；仍失敗就照原本的錯誤處理往下走。
       與 Google 那條路徑同一個模式，也同樣不違反「不自動重試」——
       那條是講不要替使用者重跑失敗的解讀（會重複計費），這裡是同一次請求的參數協商，只試一次。
     */
