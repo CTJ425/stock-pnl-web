@@ -74,12 +74,40 @@ describe('AnalysisPage', () => {
     useStockPrices.mockReset()
   })
 
-  it('下拉選單只列台股持股，美股不入選單', () => {
+  it('個股選單只列台股持股，美股不入選單', async () => {
+    const user = userEvent.setup()
     setup(TW_AND_US)
     render(<AnalysisPage />)
-    const options = within(screen.getByRole('combobox')).getAllByRole('option')
-    expect(options.map((o) => o.textContent)).toEqual(['1802 台玻', '2330 台積電'])
-    expect(options.some((o) => o.textContent?.includes('AAPL'))).toBe(false)
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    const items = within(screen.getByRole('menu', { name: '個股清單' })).getAllByRole(
+      'menuitemradio',
+    )
+    expect(items.map((o) => o.textContent)).toEqual(['1802 台玻', '2330 台積電'])
+    expect(items.some((o) => o.textContent?.includes('AAPL'))).toBe(false)
+  })
+
+  it('觸發鈕顯示目前這一檔，選單以 menuitemradio 標示選中項', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    render(<AnalysisPage />)
+    const trigger = screen.getByRole('button', { name: /切換個股/ })
+    expect(trigger.textContent).toContain('1802 台玻')
+    await user.click(trigger)
+    const checked = within(screen.getByRole('menu', { name: '個股清單' }))
+      .getAllByRole('menuitemradio')
+      .filter((b) => b.getAttribute('aria-checked') === 'true')
+    expect(checked).toHaveLength(1)
+    expect(checked[0].textContent).toBe('1802 台玻')
+  })
+
+  it('選完自己關閉選單', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    render(<AnalysisPage />)
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    expect(screen.queryByRole('menu', { name: '個股清單' })).toBeTruthy()
+    await user.click(screen.getByRole('menuitemradio', { name: '2330 台積電' }))
+    expect(screen.queryByRole('menu', { name: '個股清單' })).toBeNull()
   })
 
   it('預設選第一檔（ledger 已排序：台股在前、代號升序）', () => {
@@ -88,7 +116,7 @@ describe('AnalysisPage', () => {
     expect(screen.getByTestId('detail-ticker').textContent).toBe('1802')
   })
 
-  it('切換下拉會換掉分析內容與帶入的持股', async () => {
+  it('切換個股會換掉分析內容與帶入的持股', async () => {
     const user = userEvent.setup()
     setup(TW_AND_US, {
       'TPE:1802': { price: 51, stale: false },
@@ -97,7 +125,8 @@ describe('AnalysisPage', () => {
     render(<AnalysisPage />)
     expect(screen.getByTestId('detail-price').textContent).toBe('51')
 
-    await user.selectOptions(screen.getByRole('combobox'), 'TPE:2330')
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(screen.getByRole('menuitemradio', { name: '2330 台積電' }))
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
     expect(screen.getByTestId('detail-name').textContent).toBe('台積電')
     expect(screen.getByTestId('detail-price').textContent).toBe('2350')
@@ -113,7 +142,8 @@ describe('AnalysisPage', () => {
     const user = userEvent.setup()
     setup(TW_AND_US)
     const { rerender } = render(<AnalysisPage />)
-    await user.selectOptions(screen.getByRole('combobox'), 'TPE:2330')
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(screen.getByRole('menuitemradio', { name: '2330 台積電' }))
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
 
     // 2330 全數賣出 → 不再是持股
@@ -126,7 +156,7 @@ describe('AnalysisPage', () => {
     setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
     render(<AnalysisPage />)
     expect(screen.getByText(/目前沒有台股持股/)).toBeTruthy()
-    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('button', { name: /切換個股/ })).toBeNull()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 

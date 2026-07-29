@@ -2,11 +2,44 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-27 22:20:00 Asia/Taipei
+- Timestamp: 2026-07-29 13:10:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-005 — 個股分析的個股切換下拉退化成沒有樣式的原生 select
+- **Date**: 2026-07-29（0.6.6 引入，0.6.7-dev.1 修復）
+- **Discovered by**: 使用者回報「個股分析的下拉跟頁首那顆框長得不一樣」，附截圖
+- **Symptom**: 個股分析頁左上的個股切換，從 0.6.6 起變成瀏覽器預設的白底方框
+  （無深色底、無圓角、無邊框、chevron 也不見了），在玻璃擬物風的深色介面上非常突兀。
+  頁首的工作區選單則正常。
+- **Root Cause**: 0.6.6（commit `674fa75`，手機底部導覽列）刪掉了 `index.css` 的
+  `.ws-select select` 與 `.ws-select select option` 整段，commit 說明寫
+  「dev.3 之後就選不到任何元素的死 CSS」。
+
+  **那個判斷只對頁首成立。** 頁首的工作區選擇器確實在 0.6.5-dev.3 換成了
+  `HeaderMenu`（`<button>`），但 `AnalysisPage.tsx` 從頭到尾都還在用
+  `<div class="ws-select"><select>` —— 那段 CSS 一直有作用對象。
+
+  會誤判是因為「用 grep 找 `.ws-select select` 這個**選擇器字串**」找不到東西：
+  它是由 `<div className="ws-select">` 與其中的 `<select>` 兩處拼出來的，
+  沒有任何一行原始碼長得像那個選擇器。
+- **Fix**: 不是把 CSS 補回來，而是把兩處收斂到同一個元件 ——
+  `HeaderMenu` 從 `AppShell.tsx` 搬到 `components/Common/HeaderMenu.tsx`，
+  `AnalysisPage` 改用它（觸發鈕沿用 `.hmenu-ws`，依使用者選擇不放前置圖示、只留 chevron；
+  清單用 `menuitemradio` + Check，與工作區選單一致）。
+  各留一份樣式正是這次會走鐘的原因，補 CSS 只會讓下次再走一次。
+- **順帶修掉兩個原本就會出事的點**（新的呼叫端才會踩到）：
+  - `.hmenu-pop` 是 `right: 0`（為頁首右側選單設計）。個股選單在畫面**左側**，
+    沿用會往左展開而跑出畫面 → 新增 `.hmenu-pop-left`。
+  - 彈出層沒有限高。持股數十檔時清單會長到超出視窗 → 新增 `.hmenu-pop-scroll`。
+- **Verification**: `AnalysisPage.test.tsx` 由 `selectOptions(combobox)` 改為
+  點按鈕 → 點 `menuitemradio`，並新增三個案例（觸發鈕顯示目前這檔、
+  選中項的 `aria-checked` 唯一、選完自動關閉）。568 tests 全綠。
+- **教訓**: **刪 CSS 前要搜 class 名稱，不要搜完整選擇器。**
+  複合選擇器（`.a b`）在 JSX 裡永遠不會以字面形式出現。
+  這次該搜的是 `ws-select`（會命中兩個 .tsx），而不是 `.ws-select select`（零命中）。
 
 ### Bug ID: BUG-004 — T86 的列順序每次都不同，害輪詢永遠等不到定稿、永遠不收工
 - **Date**: 2026-07-27（0.6.1 上線當晚發現並修復，0.6.2）

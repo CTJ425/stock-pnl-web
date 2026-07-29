@@ -1147,7 +1147,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   text-decoration: underline;
 }
 
-/* ---------- 工作區選單 ---------- */
+/* ---------- 選單外框（頁首工作區、個股分析的個股切換共用）---------- */
 .ws-select {
   display: flex;
   align-items: center;
@@ -1156,7 +1156,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   min-width: 0;
 }
 
-/* ---------- 頁首下拉選單（工作區 / 帳號共用） ---------- */
+/* ---------- 下拉選單（工作區 / 帳號 / 個股切換共用，見 Common/HeaderMenu.tsx） ---------- */
 .hmenu {
   position: relative;
   display: inline-flex;
@@ -1239,6 +1239,22 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   box-shadow: var(--shadow-card);
+}
+
+/*
+ * 靠左展開。預設的 .hmenu-pop 是 `right: 0`（頁首右側選單），
+ * 從畫面左側叫出來時會往左長而跑出畫面 —— 個股切換就在左側。
+ */
+.hmenu-pop-left {
+  right: auto;
+  left: 0;
+}
+
+/* 清單可能很長（持股數十檔）時限高可捲，避免彈出層長到超出視窗 */
+.hmenu-pop-scroll {
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .hmenu-head {

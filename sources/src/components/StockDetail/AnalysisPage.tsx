@@ -5,12 +5,13 @@
  * 持股數字與庫存總覽共用 buildHoldingRows，避免兩頁各算一份而走鐘。
  */
 import { useMemo, useState } from 'react'
-import { Inbox } from 'lucide-react'
+import { Check, ChevronDown, Inbox } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
+import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
 
 export function AnalysisPage() {
@@ -53,20 +54,57 @@ export function AnalysisPage() {
     selected.holding.name,
   )
 
+  const label = (r: (typeof twRows)[number]) =>
+    `${r.holding.ticker} ${displayStockName(r.holding.market, r.holding.ticker, r.holding.name)}`
+
+  /*
+    0.6.7 由原生 `<select>` 換成與頁首工作區選單同一個 HeaderMenu。
+
+    起因是實際壞掉了：`.ws-select select` 的樣式（含內嵌的 chevron 圖示）在 0.6.6
+    被當成「dev.3 之後選不到任何元素的死 CSS」整段刪除 —— 但那只對頁首成立，
+    這裡一直還在用它，於是這顆下拉退化成毫無樣式的瀏覽器原生控制項。
+
+    修法不是把 CSS 補回來，而是收斂到同一個元件：兩處本來就該長一樣，
+    各留一份樣式正是這次會走鐘的原因。
+  */
   const selector = (
     <div className="ws-select">
-      <select
-        value={selected.holding.key}
-        onChange={(e) => setSelectedKey(e.target.value)}
-        aria-label="切換個股"
+      <HeaderMenu
+        triggerLabel={`切換個股：${label(selected)}`}
+        triggerClass="hmenu-ws"
+        triggerContent={
+          <>
+            <span className="hmenu-ws-name">{label(selected)}</span>
+            <ChevronDown size={12} className="hmenu-caret" />
+          </>
+        }
+        menuLabel="個股清單"
+        // 這顆在畫面左側，且持股可能有數十檔：靠左展開並限高可捲
+        popClass="hmenu-pop-left hmenu-pop-scroll"
       >
-        {twRows.map((r) => (
-          <option key={r.holding.key} value={r.holding.key}>
-            {r.holding.ticker}{' '}
-            {displayStockName(r.holding.market, r.holding.ticker, r.holding.name)}
-          </option>
-        ))}
-      </select>
+        {(close) => (
+          <>
+            {twRows.map((r) => (
+              <button
+                key={r.holding.key}
+                type="button"
+                role="menuitemradio"
+                aria-checked={r.holding.key === selected.holding.key}
+                className={
+                  r.holding.key === selected.holding.key ? 'hmenu-item is-current' : 'hmenu-item'
+                }
+                onClick={() => {
+                  setSelectedKey(r.holding.key)
+                  close()
+                }}
+              >
+                <Check size={14} className="hmenu-check" aria-hidden="true" />
+                <span>{label(r)}</span>
+              </button>
+            ))}
+          </>
+        )}
+      </HeaderMenu>
     </div>
   )
 

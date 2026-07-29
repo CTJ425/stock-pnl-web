@@ -3,8 +3,8 @@
  *
  * 頁首右側在 0.6.5-dev.3 由 8 個控制項收斂成 2 個選單，理由見 docs/agent/PLAN.md §R。
  */
-import { useEffect, useRef, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import {
   ArrowRightLeft,
   CalendarRange,
@@ -39,6 +39,7 @@ import { TransactionsPage } from './Transactions/TransactionsPage'
 import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
+import { HeaderMenu } from './Common/HeaderMenu'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
 import { MacroPage } from './Macro/MacroPage'
 import { FxPage } from './Fx/FxPage'
@@ -223,75 +224,6 @@ function RecoveryPasswordModal() {
   )
 }
 
-
-/**
- * 頁首下拉選單的共用外殼。
- *
- * 抽出來是因為工作區與使用者兩個選單需要一模一樣的行為：點外面關閉、Esc 關閉並把
- * 焦點還給觸發鈕、正確的 aria。各寫一份遲早只會修好其中一邊，而這種不一致
- * 從呼叫端完全看不出來（與 mergePeriodSeries 同一個理由）。
- */
-function HeaderMenu({
-  triggerLabel,
-  triggerContent,
-  triggerClass,
-  menuLabel,
-  children,
-}: {
-  triggerLabel: string
-  triggerContent: ReactNode
-  triggerClass: string
-  menuLabel: string
-  /** 收到的 close 用來讓選項點完自己關閉 */
-  children: (close: () => void) => ReactNode
-}) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      setOpen(false)
-      // 焦點要還回觸發鈕，否則鍵盤使用者按 Esc 之後會掉到 document
-      triggerRef.current?.focus()
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('touchstart', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('touchstart', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
-
-  return (
-    <div className="hmenu" ref={wrapRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={triggerClass}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={triggerLabel}
-        title={triggerLabel}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {triggerContent}
-      </button>
-      {open && (
-        <div className="hmenu-pop" role="menu" aria-label={menuLabel}>
-          {children(() => setOpen(false))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /**
  * 使用者選單：外觀切換、身分、登出。
