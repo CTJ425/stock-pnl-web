@@ -8,6 +8,20 @@
 
 ## 📋 Active Tasks
 
+### Task 39: AI 失敗訊息補上診斷 (0.6.9-dev.3)
+- **Status**: 🟡 **程式碼完成；等使用者回報新訊息以確認實際成因**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 17:15:00 Asia/Taipei
+- 使用者回報「分析失敗：OpenAI 相容 API 回傳結構未包含有效的 choices[0].message.content」。
+- HTTP 是 200，只是 `content` 空的 —— 但這條路徑原本**不論成因都拋同一句**，
+  而 Google 那條早就分了 MAX_TOKENS / SAFETY / 結構不符。
+- `extractOpenAiText` 補齊六種診斷：body 內夾帶 error、沒有 choices、
+  **推理型模型把答案放在 `reasoning_content`**、`finish_reason: length`（還沒寫正文就沒額度）、
+  模型拒答（`refusal`）、`content_filter`；其餘把 `finish_reason` 帶進訊息。
+- **待確認**：實際成因要等使用者重試後看新訊息。最可能是推理型模型
+  （deepseek-r1 / qwq / gpt-oss），其次是輸出額度。
+  也不排除 0.6.9-dev.2 加長的 system prompt 讓思考變長、把額度用完 —— 新訊息會分得出來。
+
 ### Task 38: AI 提示詞加入使用者的分批進出框架 (0.6.9-dev.2)
 - **Status**: 🟡 **程式碼完成；未併入 `main`**
 - **Agent**: Claude

@@ -145,6 +145,69 @@ describe('aiClient', () => {
       }
     })
 
+    /*
+     * 以下都是「HTTP 200 但沒有正文」的各種成因。
+     * 原本不論原因一律拋同一句「回傳結構未包含有效的 choices[0].message.content」，
+     * 使用者拿到那句完全看不出下一步該做什麼 —— 而 Google 那條路徑早就分了
+     * MAX_TOKENS / SAFETY / 結構不符。這組測試釘住補齊後的診斷。
+     */
+    const kindOf = (json: unknown) => {
+      try {
+        extractOpenAiText(json)
+        return null
+      } catch (e) {
+        return e as { kind: string; message: string }
+      }
+    }
+
+    it('推理型模型把答案放在 reasoning_content 時，明講是選錯模型', () => {
+      const e = kindOf({
+        choices: [{ finish_reason: 'stop', message: { content: '', reasoning_content: '我先想一下…' } }],
+      })!
+      expect(e.kind).toBe('bad-response')
+      expect(e.message).toContain('思考欄位')
+      expect(e.message).toContain('deepseek-r1')
+    })
+
+    it('reasoning 這個欄位名也認得（各家命名不同）', () => {
+      expect(kindOf({ choices: [{ message: { content: null, reasoning: '思考中' } }] })!.message).toContain(
+        '思考欄位',
+      )
+    })
+
+    it('還沒寫正文就用完輸出額度時，指出是輸出上限而不是結構壞掉', () => {
+      const e = kindOf({ choices: [{ finish_reason: 'length', message: { content: '' } }] })!
+      expect(e.message).toContain('用完了輸出額度')
+      expect(e.message).toContain('num_predict')
+    })
+
+    it('body 內夾帶 error 時把端點的原話帶出來', () => {
+      const e = kindOf({ error: { message: 'model "foo" not found' } })!
+      expect(e.message).toContain('model "foo" not found')
+    })
+
+    it('沒有任何 choices 時提示模型名稱 / 未載入', () => {
+      expect(kindOf({ choices: [] })!.message).toContain('模型名稱')
+    })
+
+    it('模型明確拒答時帶出拒答內容', () => {
+      expect(kindOf({ choices: [{ message: { content: '', refusal: '我不能回答' } }] })!.message).toContain(
+        '我不能回答',
+      )
+    })
+
+    it('被安全過濾擋下時講明是 content_filter', () => {
+      expect(
+        kindOf({ choices: [{ finish_reason: 'content_filter', message: { content: '' } }] })!.message,
+      ).toContain('content_filter')
+    })
+
+    it('其餘情況把 finish_reason 帶進訊息，至少讓人知道往哪查', () => {
+      expect(kindOf({ choices: [{ finish_reason: 'tool_calls', message: { content: '' } }] })!.message).toContain(
+        'tool_calls',
+      )
+    })
+
     it('finish_reason=length 時附上「未完成」標記（ollama num_predict 截斷同理）', () => {
       const out = extractOpenAiText({
         choices: [{ finish_reason: 'length', message: { content: '寫到一半就' } }],

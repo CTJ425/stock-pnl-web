@@ -169,21 +169,82 @@ export function extractOpenAiText(json: unknown): string {
     throw new AiError('bad-response', 'OpenAI 相容 API 回傳資料非有效 JSON 物件')
   }
   const data = json as {
+    error?: { message?: string }
     choices?: Array<{
       finish_reason?: string
       message?: {
         content?: string | null
+        /** 推理型模型（deepseek-r1 / qwq / gpt-oss…）把思考過程放這裡，命名各家不同 */
+        reasoning_content?: string | null
+        reasoning?: string | null
+        refusal?: string | null
       }
     }>
   }
-  const choice = data.choices?.[0]
-  const content = choice?.message?.content
-  if (typeof content !== 'string' || !content.trim()) {
-    throw new AiError('bad-response', 'OpenAI 相容 API 回傳結構未包含有效的 choices[0].message.content')
+
+  // 有些端點 HTTP 200 但在 body 裡回錯誤（Ollama 模型未載入、vLLM 佇列滿…）
+  const bodyError = data.error?.message
+  if (typeof bodyError === 'string' && bodyError.trim()) {
+    throw new AiError('bad-response', `AI 端點回報錯誤：${bodyError.trim()}`)
   }
-  return choice?.finish_reason === 'length'
-    ? content.trim() + TRUNCATION_NOTICE
-    : content.trim()
+
+  if (!Array.isArray(data.choices) || data.choices.length === 0) {
+    throw new AiError(
+      'bad-response',
+      'OpenAI 相容 API 沒有回傳任何 choices。請確認模型名稱在該端點存在、且已載入。',
+    )
+  }
+
+  const choice = data.choices[0]
+  const content = choice?.message?.content
+  const finish = choice?.finish_reason
+
+  if (typeof content === 'string' && content.trim()) {
+    return finish === 'length' ? content.trim() + TRUNCATION_NOTICE : content.trim()
+  }
+
+  /*
+    以下都是「HTTP 200 但沒有正文」。原本這裡不論原因一律拋同一句，
+    使用者拿到的訊息完全指不出下一步該做什麼 —— 而 Google 那條路徑早就分了
+    MAX_TOKENS / SAFETY / 結構不符 三種。這裡補齊對應的診斷。
+  */
+  const msg = choice?.message ?? {}
+
+  // 1) 推理型模型：答案全進了思考欄位，content 是空的。這是「選錯模型」而不是壞掉
+  const reasoning = msg.reasoning_content ?? msg.reasoning
+  if (typeof reasoning === 'string' && reasoning.trim()) {
+    throw new AiError(
+      'bad-response',
+      '這個模型把輸出全放在思考欄位（reasoning_content）、正文是空的，' +
+        '常見於 deepseek-r1 / qwq / gpt-oss 等推理型模型。' +
+        '請改用一般對話模型，或改用會把結論寫進 content 的版本。',
+    )
+  }
+
+  // 2) 思考／前言把輸出額度用光，還沒寫到正文就被切斷（等同 Google 的 MAX_TOKENS）
+  if (finish === 'length') {
+    throw new AiError(
+      'bad-response',
+      '模型還沒開始寫正文就用完了輸出額度（finish_reason: length）。' +
+        '請調高該端點的輸出上限（Ollama 是 num_predict），或改用較小的思考模型。',
+    )
+  }
+
+  // 3) 模型明確拒答
+  if (typeof msg.refusal === 'string' && msg.refusal.trim()) {
+    throw new AiError('bad-response', `模型拒絕回答：${msg.refusal.trim()}`)
+  }
+  if (finish === 'content_filter') {
+    throw new AiError('bad-response', '內容被端點的安全過濾擋下（finish_reason: content_filter）')
+  }
+
+  // 4) 其餘：把 finish_reason 帶出來，至少讓人知道往哪查
+  throw new AiError(
+    'bad-response',
+    `OpenAI 相容 API 回傳的 choices[0].message.content 是空的${
+      finish ? `（finish_reason: ${finish}）` : ''
+    }。請確認模型名稱正確，或改用其他模型再試一次。`,
+  )
 }
 
 /**
