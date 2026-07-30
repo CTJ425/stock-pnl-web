@@ -6,8 +6,8 @@
 supabase/
 ├── schema.sql                    # 資料庫綱要 DDL（含 RLS），貼到 SQL Editor 執行
 └── functions/
-    ├── stock-price/              # Edge Function：Yahoo Finance 現價 / 搜尋代理（單一檔）
-    └── stock-report/             # Edge Function：TWSE 盤後籌碼報告產生器（多檔）
+    ├── stock-price/              # Edge Function：現價 / 搜尋 / 匯率報價代理（2 檔）
+    └── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經（多檔）
 ```
 
 前端以**函數名稱**呼叫（`supabase.functions.invoke('stock-price')`），所以函數名必須**完全等於** `stock-price` / `stock-report`，不可改名。
@@ -22,8 +22,8 @@ supabase/
 
 | 函數 | 檔案 | 作用 |
 |---|---|---|
-| `stock-price` | `index.ts` | 伺服器端代抓 Yahoo Finance 現價 / 搜尋，繞開瀏覽器 CORS |
-| `stock-report` | `index.ts` + `report.ts` + `twChips.ts` | 代抓 TWSE 盤後籌碼，產生**結構化報告資料**（含近 7 個交易日 history） |
+| `stock-price` | `index.ts` + `misParse.ts` | 伺服器端代抓現價（台股 MIS、美股 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS |
+| `stock-report` | `index.ts` + `report.ts` + `twChips.ts` + `twDaily.ts` + `twFundamental.ts` + `twRevenueHistory.ts` + `twNews.ts` + `usMacro.ts` + `fxRates.ts` + `pollPlan.ts` | 代抓 TWSE 盤後籌碼、日線、基本面、月營收、新聞、FRED 總經與匯率，產生**結構化報告資料**（含近 7 個交易日 history） |
 
 > **環境變數**：即點即產只用到 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Supabase 內建自動注入，不用設）。若要啟用「盤後自動產報」，需**額外**設一個 `CRON_SECRET`（見下方章節）。
 
@@ -35,21 +35,23 @@ supabase/
 
 1. 左側選單 → **Edge Functions** → 右上 **Create a function**。
 2. 名稱填 `stock-price`（全小寫、連字號，與資料夾同名）。
-3. 進編輯器，把 `functions/stock-price/index.ts` **全文**貼上（覆蓋範本）。
-4. 於函數 **Settings** 關閉 **Enforce JWT Verification** —— 前端只帶 anon key、不帶登入 JWT，不關會被擋 401。
+3. 進編輯器，把 `functions/stock-price/` 下的 `index.ts` 與 `misParse.ts` **全文**貼上（覆蓋範本）。
+4. **JWT 驗證維持開啟**（預設值）—— Supabase 模式一定是登入後才用，前端 `functions.invoke` 會帶使用者 JWT。
+   關掉只會讓它變成誰都能打的公開端點，白送 Edge Function 額度。
 5. **Deploy**。
 
 ### 建立 `stock-report`（多檔，重點）
 
 1. 一樣 Create a function，名稱 `stock-report`。
-2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的 3 個檔（檔名一字不差）：
-   - `index.ts`
-   - `report.ts`
-   - `twChips.ts`
-   - ⚠️ `report.test.ts`、`twChips.test.ts` 是單元測試，**不要上傳**。
+2. 編輯器左側用 **＋ 新增檔案**，逐一建立並貼上 `functions/stock-report/` 下的**所有** `.ts` 檔（檔名一字不差）：
+   `index.ts`、`report.ts`、`twChips.ts`、`twDaily.ts`、`twFundamental.ts`、`twRevenueHistory.ts`、
+   `twNews.ts`、`usMacro.ts`、`fxRates.ts`、`pollPlan.ts`
+   - ⚠️ 所有 `*.test.ts` 是單元測試，**不要上傳**。
+   - ℹ️ 檔案已達 10 個，逐檔貼很容易漏；**建議直接用下方方式 B 的 CLI**。
    - ℹ️ v0.3.7-dev.3 起已無 `reportHtml.ts`（畫面改由前端 React 繪製）。若函數是舊版部署上去的，
      請把該檔**刪除**，否則會留下沒人引用的死碼。
-3. 同樣關閉 **Enforce JWT Verification** → **Deploy**。
+3. 這支**要**關閉 **Enforce JWT Verification** → **Deploy** —— pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT，
+   不關的話盤後批次會全數 401。
 
 ---
 
@@ -69,7 +71,11 @@ cd sources
 supabase link --project-ref <你的-project-ref>
 
 # 4. 部署（--no-verify-jwt 等同 GUI 關閉 JWT 驗證）
-supabase functions deploy stock-price  --no-verify-jwt
+#    stock-price 維持預設的 verify_jwt=true —— 前端是帶 anon JWT 呼叫的，
+#    關掉只會讓它變成誰都能打的公開端點（Edge Function 額度濫用風險）。
+supabase functions deploy stock-price
+#    stock-report 一定要關 —— pg_cron 帶 CRON_SECRET 呼叫、不帶 JWT，
+#    被重設成 true 的話盤後批次會全數 401。
 supabase functions deploy stock-report --no-verify-jwt
 ```
 
@@ -146,7 +152,7 @@ supabase functions deploy stock-report --no-verify-jwt
 沒套用的後果：AI 設定按下儲存會回 `column "ai_provider" does not exist`，
 其餘功能不受影響（報告、K 線都不讀這張表）。
 
-### 報告 JSON 結構（schema 2）
+### 報告 JSON 結構（目前 schema 3）
 
 ```jsonc
 {
@@ -154,7 +160,8 @@ supabase functions deploy stock-report --no-verify-jwt
   "dataDate": "2026-07-22",
   "generatedAt": "2026-07-22T12:30:00.000Z",
   "data": {
-    "schema": 2,              // 前端讀到非 2 一律當未命中，改走即點即產
+    "schema": 3,              // 前端以 MIN_REPORT_SCHEMA = 2 搭配 >= 比對（0.4.1 修）：
+                              // 小於 2 才當未命中改走即點即產，新增欄位對舊前端是無害的加法
     "ticker": "2330", "name": "台積電", "market": "TPE",
     "dataDate": "2026-07-22",
     "holding": null,          // 共用報告不含個資，持股概況由前端渲染
@@ -326,7 +333,7 @@ supabase functions deploy stock-report --no-verify-jwt
 
 ## 部署後驗證
 
-1. **列表**：Edge Functions 頁應出現兩支函數，狀態 Deployed、JWT 顯示為關閉。
+1. **列表**：Edge Functions 頁應出現兩支函數，狀態 Deployed；JWT 驗證 `stock-price` 為**開啟**、`stock-report` 為**關閉**。
 2. **實測**（前端 `.env.local` 填好 URL/anon key 後）：
    - Dashboard 持股能抓到現價 → `stock-price` 正常。
    - 台股個股按「分析」→ 個股分析頁的籌碼分頁有內容 → `stock-report` 正常。
@@ -336,8 +343,9 @@ supabase functions deploy stock-report --no-verify-jwt
 
 | 症狀 | 原因 |
 |---|---|
-| 前端呼叫回 **401** | 忘了關 Enforce JWT Verification（或 CLI 少了 `--no-verify-jwt`） |
-| 部署/執行 import `./report.ts` 失敗 | `stock-report` 只貼了 `index.ts`，漏了其餘 2 檔 |
+| 盤後批次全數 **401** | `stock-report` 忘了關 Enforce JWT Verification（或 CLI 少了 `--no-verify-jwt`） |
+| 前端呼叫 `stock-price` 回 **401** | 未登入就呼叫（Supabase 模式應登入後使用），或函數被改成不吃 JWT 又沒帶授權標頭 |
+| 部署/執行 import `./xxx.ts` 失敗 | `stock-report` 漏貼了某個檔（共 10 個 `.ts`，建議用 CLI 部署） |
 | 報告功能點了沒反應 / 找不到函數 | 函數被改名，前端 `invoke('stock-report')` 對不上 |
 | 前端顯示「伺服器回傳的報告格式不符」 | 函數還是舊版（產 HTML 的 schema 1）。重新部署 `stock-report` 即可 |
 | 走勢圖只有幾天 | 正常，歷史回補中（見上）。隔日排程會補齊，或重跑一次 `generate-all` |

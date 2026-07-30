@@ -8,10 +8,32 @@
 
 ## 📋 Active Tasks
 
-### Task 41: README 的部署指令與線上 verify_jwt 不一致
-- **Status**: 🔴 **未修（文件錯誤，不影響現行運作）**
+### Task 42: README 錯誤修正 + 架構圖改為 SVG
+- **Status**: ✅ **完成（純文件，未進版，維持 0.6.9；尚未 commit）**
 - **Agent**: Claude
-- **Timestamp**: 2026-07-29 22:45:00 Asia/Taipei
+- **Timestamp**: 2026-07-30 21:08:19 Asia/Taipei
+- **起因**：使用者回報 README 在 GitHub 上顯示錯誤訊息。根因是 Mermaid 語法 ——
+  `subgraph Frontend [React SPA (Vite + TS)]` 這類**標題含半形括號**的寫法會讓 Mermaid 解析失敗
+  （3 處：Frontend / LocalStorage / Supabase），整塊圖變成 "Unable to render rich display"。
+- **改法**：整塊 Mermaid 換成手繪 SVG `docs/architecture/system-architecture.svg`
+  （無外部依賴、`prefers-color-scheme` 深淺配色、自帶背景色所以主題不一致也讀得到），
+  README 以 Markdown 圖片語法引用。內容一併更新到 0.6.9 實況
+  （Storage / pg_cron / 匯率 / 總經 / AI 端點由瀏覽器直連）。
+- **順手修掉的其他事實錯誤**：目錄結構（`build-docs/` 早已不存在、`docs/agent` 與 `docs/architecture` 未列）、
+  §環境架構的資料表與函數清單、`stock-price` 的四個 action（原文寫成三支獨立函數）、
+  0.6.8 與 0.6.7 重複的 Y 軸 bullet、0.6.2 掉了子標題、`v0.2.x` 版號前綴（違反 §12）、
+  使用版本漏列 lucide-react / jsPDF / html2canvas / oxlint、功能特色漏了個股分析 / AI / 匯率 / 總經。
+- **驗證**：SVG 以 chromium headless 在淺色與深色各截圖確認版面無重疊、無字溢出；XML 可解析。
+- **未動**：0.2.3 版本紀錄裡的 `deploy stock-price --no-verify-jwt`（歷史紀錄，留存當時實際做法）。
+
+### Task 41: README 的部署指令與線上 verify_jwt 不一致
+- **Status**: ✅ **已修（2026-07-30，見 Task 42 同批）**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-29 22:45:00 Asia/Taipei（修正於 2026-07-30 21:08:19）
+- **修法**：兩份 README 都改成 `deploy stock-price`（不帶旗標）＋
+  `deploy stock-report --no-verify-jwt`，並註明只有後者要帶的理由（pg_cron 不帶 JWT）
+  與 stock-price 不可關的理由（會變成公開端點、燒 Edge Function 額度）。
+  `sources/supabase/README.md` 的 Dashboard 步驟、部署後驗證、常見問題 401 三處同步改掉。
 - `sources/supabase/README.md:71-73` 與根目錄 `README.md:200-201` 對**兩支** Edge Function
   都寫了 `--no-verify-jwt`，但線上實況是 `stock-price` 為 **`verify_jwt = true`**
   （正式區 v12、測試區 v8 都查過）。`CLAUDE.md` §13.3 的說法才對。

@@ -1,9 +1,74 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.6-dev.1 外幣匯率頁：測試區已部署驗證
-- Status: **測試區完成；正式區與 `main` 未動**
-- Timestamp: 2026-07-29 10:15:00 Asia/Taipei
+- Action: README 修錯 + 架構圖由 Mermaid 改為 SVG（純文件，未 commit）
+- Status: **完成，工作目錄未提交；依 §13.1 要先進 `dev`**
+- Timestamp: 2026-07-30 21:08:19 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-30 21:08:19 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修掉 README 在 GitHub 上的 Mermaid 解析錯誤，架構圖改為手繪 SVG，並清掉一批事實錯誤
+- **Status**: COMPLETED（純文件，版本維持 0.6.9；**尚未 commit，也未動任何 Supabase 環境**）
+
+### 根因：Mermaid 標題裡的半形括號
+
+使用者看到的「錯誤訊息」是 GitHub 的 Mermaid 渲染失敗訊息，不是應用程式的錯誤。
+原因是 3 個 `subgraph` 的標題含半形括號：
+
+```text
+subgraph Frontend    [React SPA (Vite + TS)]
+subgraph LocalStorage [本機儲存 (本機模式)]
+subgraph Supabase     [Supabase 雲端服務 (Supabase 模式)]
+```
+
+Mermaid 對 `[...]` 內的 `(` `)` 會解析失敗（要加引號才行），整塊圖因此渲染不出來。
+**這種錯只在 GitHub 上看得到** —— 本地看 Markdown 原始碼是不會發現的。
+
+### 改法：不修 Mermaid，直接換成 SVG
+
+使用者一併要求改 SVG，所以沒有回頭修語法。新檔 `docs/architecture/system-architecture.svg`：
+
+- **手繪、無外部依賴**（無 CDN、無字型下載），README 以 `![...](docs/architecture/system-architecture.svg)` 引用。
+- 深淺色以 `prefers-color-scheme` 切換；**同時自帶背景 rect**，
+  所以就算瀏覽器偏好與 GitHub 主題不一致，也不會出現「深色頁面上讀不到字」。
+  （不用 `<picture>` 雙檔，是為了避免兩份圖日後各改一半而失真。）
+- 內容更新到 0.6.9 實況：舊圖只有 Auth / DB / stock-price / Yahoo / MIS，
+  現在補上 Storage（`reports` bucket）、pg_cron 排程、stock-report、月營收 / 新聞 / FRED、
+  以及**由瀏覽器直連的 AI 端點**（使用者自備金鑰，這條路徑不經過 Supabase）。
+- 驗證方式：`~/.cache/ms-playwright/chromium-1228/.../chrome --headless --screenshot`
+  在淺色與 `--force-dark-mode` 各截一張，逐一確認節點不重疊、文字不溢出；XML 亦可解析。
+
+### 一併修掉的事實錯誤
+
+| 位置 | 錯誤 |
+| ---- | ---- |
+| 專案目錄結構 | 列了早已不存在的 `build-docs/`，也沒列 `docs/agent`、`docs/architecture`、`.claude/` |
+| §環境架構 | 資料表只提 `price_cache` / `stock_names`；函數只提 `stock-price`；沒有 Storage / cron / AI |
+| §注意事項 1 | 把 `prices` / `search` / `twlist` 寫成三支獨立 Edge Function，實為 `stock-price` 的 action（另有 `fx`） |
+| §部署方式 3 | `stock-report` 只列 3 個檔（實際 10 個）；`stock-price` 漏了 `misParse.ts` |
+| 版本紀錄 0.6.8 | 與 0.6.7 重複同一條「Y 軸小於 1 標成 0」bullet（0.6.7 才是原始出處） |
+| 版本紀錄 0.6.2 | 第二段掉了子標題，看起來像斷章 |
+| 版本紀錄 0.2.x | 標題帶 `v` 前綴，違反 `CLAUDE.md` §12「版號一律不帶 v」 |
+| §使用版本 | 漏列 lucide-react、jsPDF、html2canvas、oxlint |
+| §功能特色 | 完全沒有個股分析 / AI 分析 / 外幣匯率 / 總體經濟 —— 佔了 0.5.0 之後的大半功能 |
+
+### 一併關掉 Task 41（verify_jwt 文件錯誤）
+
+前一輪查出、當時刻意未動的那件事這次修了：兩份 README 都把 `--no-verify-jwt` 加在
+**兩支**函數上，而線上實況是 `stock-price` 為 `verify_jwt=true`。
+照抄會把它從「要登入」開成公開端點。改成只有 `stock-report` 帶旗標，並寫上各自的理由。
+`sources/supabase/README.md` 另修掉：Dashboard 步驟（stock-price 原寫「關閉 JWT」）、
+檔案清單 3 檔 → 10 檔、部署後驗證的「JWT 顯示為關閉」、常見問題的 401 列，
+以及報告 JSON 結構仍寫 `schema: 2` / 「非 2 一律當未命中」（0.4.1 起是 `>= MIN_REPORT_SCHEMA`，已核對程式碼）。
+
+### 刻意未動
+
+- **0.2.3 版本紀錄裡**的 `deploy stock-price --no-verify-jwt`：那是歷史紀錄，記的是當時實際做法，不改寫歷史。
+- **未 commit**：依 `CLAUDE.md` §13.1，異動要先進 `dev`；目前在 `main`，等使用者指示。
+- 沒有部署、沒有動任何 Supabase 環境（本次全是文件）。
 
 ---
 

@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 660" width="1160" height="660" role="img" aria-labelledby="svgTitle svgDesc">
+  <title id="svgTitle">stock-pnl-web 系統架構圖</title>
+  <desc id="svgDesc">瀏覽器端 React SPA（UI、Context、DataProvider、localStorage）連向 Supabase（Auth、PostgreSQL、Edge Functions、Storage、pg_cron），由 Edge Functions 在伺服器端請求外部資料源；AI 端點由瀏覽器直連。</desc>
+
+  <!--
+    維護說明：本檔為手繪 SVG，無外部依賴，可直接在 README 以 <img> / Markdown 圖片語法引用。
+    深淺色以 prefers-color-scheme 切換；若瀏覽器偏好與 GitHub 主題不一致，
+    仍會自帶背景色，不會出現「深色頁面上看不見文字」的情形。
+    版本：0.6.9
+  -->
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --group-fill: #ffffff;
+      --group-stroke: #cbd5e1;
+      --group-label: #475569;
+      --edge: #64748b;
+      --edge-label: #475569;
+      --note: #64748b;
+      --fe-fill: #eff6ff;  --fe-stroke: #3b82f6;  --fe-text: #1e3a8a;
+      --ls-fill: #fff7ed;  --ls-stroke: #f97316;  --ls-text: #7c2d12;
+      --sb-fill: #ecfdf5;  --sb-stroke: #10b981;  --sb-text: #064e3b;
+      --in-fill: #ffffff;  --in-stroke: #6ee7b7;
+      --ex-fill: #f1f5f9;  --ex-stroke: #94a3b8;  --ex-text: #334155;
+      --ai-fill: #f5f3ff;  --ai-stroke: #8b5cf6;  --ai-text: #4c1d95;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --group-fill: #161b22;
+        --group-stroke: #30363d;
+        --group-label: #8b949e;
+        --edge: #8b949e;
+        --edge-label: #b1bac4;
+        --note: #8b949e;
+        --fe-fill: #16273d;  --fe-stroke: #58a6ff;  --fe-text: #cfe4ff;
+        --ls-fill: #3a2408;  --ls-stroke: #f0883e;  --ls-text: #ffd8a8;
+        --sb-fill: #0f2b21;  --sb-stroke: #3fb950;  --sb-text: #b8f0cd;
+        --in-fill: #0b1f18;  --in-stroke: #2e8b57;
+        --ex-fill: #1c2128;  --ex-stroke: #6e7681;  --ex-text: #d0d7de;
+        --ai-fill: #241a3d;  --ai-stroke: #a371f7;  --ai-text: #e0d0ff;
+      }
+    }
+    text {
+      font-family: "PingFang TC", "Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei",
+                   -apple-system, "Segoe UI", Roboto, sans-serif;
+      dominant-baseline: alphabetic;
+    }
+    .group { fill: var(--group-fill); stroke: var(--group-stroke); stroke-width: 1.5; }
+    .group-label { fill: var(--group-label); font-size: 12.5px; font-weight: 600; }
+    .node { stroke-width: 1.5; }
+    .node.fe { fill: var(--fe-fill); stroke: var(--fe-stroke); }
+    .node.ls { fill: var(--ls-fill); stroke: var(--ls-stroke); }
+    .node.sb { fill: var(--sb-fill); stroke: var(--sb-stroke); }
+    .node.inner { fill: var(--in-fill); stroke: var(--in-stroke); stroke-dasharray: 3 2; }
+    .node.ex { fill: var(--ex-fill); stroke: var(--ex-stroke); }
+    .node.ai { fill: var(--ai-fill); stroke: var(--ai-stroke); stroke-dasharray: 5 3; }
+    .t { font-size: 12.5px; font-weight: 600; }
+    .d { font-size: 10.5px; }
+    .s { font-size: 9.5px; }
+    .fe-t { fill: var(--fe-text); }
+    .ls-t { fill: var(--ls-text); }
+    .sb-t { fill: var(--sb-text); }
+    .ex-t { fill: var(--ex-text); }
+    .ai-t { fill: var(--ai-text); }
+    .edge { stroke: var(--edge); stroke-width: 1.6; fill: none; }
+    .bus { stroke: var(--edge); stroke-width: 1.6; fill: none; }
+    .dot { fill: var(--edge); }
+    .arrowhead { fill: var(--edge); }
+    .el { fill: var(--edge-label); font-size: 10px; }
+    .note { fill: var(--note); font-size: 10.5px; }
+  </style>
+
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+      <path d="M0,0 L7.5,3 L0,6 Z" class="arrowhead"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1160" height="660" fill="var(--bg)"/>
+
+  <!-- ===== 群組框 ===== -->
+  <text class="group-label" x="24" y="38">瀏覽器（React 19 + Vite 8 + TypeScript SPA）</text>
+  <rect class="group" x="20" y="48" width="290" height="422" rx="10"/>
+
+  <text class="group-label" x="352" y="38">Supabase（雲端模式）</text>
+  <rect class="group" x="348" y="48" width="412" height="396" rx="10"/>
+
+  <text class="group-label" x="788" y="38">外部資料源（由 Edge Functions 伺服器端請求）</text>
+  <rect class="group" x="784" y="48" width="356" height="426" rx="10"/>
+
+  <!-- ===== 瀏覽器 ===== -->
+  <rect class="node fe" x="38" y="84" width="254" height="76" rx="7"/>
+  <text class="t fe-t" x="52" y="105">UI 頁面 / 元件</text>
+  <text class="d fe-t" x="52" y="123">庫存總覽・年度收益・交易紀錄</text>
+  <text class="d fe-t" x="52" y="139">個股分析・外幣匯率・總體經濟</text>
+
+  <rect class="node fe" x="38" y="182" width="254" height="64" rx="7"/>
+  <text class="t fe-t" x="52" y="203">React Context</text>
+  <text class="d fe-t" x="52" y="222">AuthContext / WorkspaceContext</text>
+
+  <rect class="node fe" x="38" y="268" width="254" height="76" rx="7"/>
+  <text class="t fe-t" x="52" y="289">DataProvider（雙模式資料層）</text>
+  <text class="d fe-t" x="52" y="307">本機 / Supabase 兩種實作同一介面</text>
+  <text class="d fe-t" x="52" y="323">pnlEngine 於前端計算損益</text>
+
+  <rect class="node ls" x="38" y="366" width="254" height="76" rx="7"/>
+  <text class="t ls-t" x="52" y="387">localStorage（本機模式）</text>
+  <text class="d ls-t" x="52" y="405">交易與設定資料</text>
+  <text class="d ls-t" x="52" y="421">L1 報價快取：台股 60 秒 / 美股 10 分</text>
+
+  <line class="edge" x1="165" y1="160" x2="165" y2="180" marker-end="url(#arrow)"/>
+  <line class="edge" x1="165" y1="246" x2="165" y2="266" marker-end="url(#arrow)"/>
+  <line class="edge" x1="165" y1="344" x2="165" y2="364" marker-end="url(#arrow)"/>
+  <text class="el" x="175" y="360">本機模式</text>
+
+  <!-- ===== Supabase：資料面 ===== -->
+  <rect class="node sb" x="364" y="88" width="180" height="52" rx="7"/>
+  <text class="t sb-t" x="376" y="108">Supabase Auth</text>
+  <text class="d sb-t" x="376" y="126">GoTrue：Email 註冊 / 登入</text>
+
+  <rect class="node sb" x="364" y="152" width="180" height="144" rx="7"/>
+  <text class="t sb-t" x="376" y="172">PostgreSQL</text>
+  <rect class="node inner" x="374" y="180" width="160" height="56" rx="5"/>
+  <text class="s sb-t" x="382" y="196">使用者資料（RLS 保護）</text>
+  <text class="s sb-t" x="382" y="211">workspaces · transactions</text>
+  <text class="s sb-t" x="382" y="226">user_settings · app_settings</text>
+  <rect class="node inner" x="374" y="240" width="160" height="56" rx="5"/>
+  <text class="s sb-t" x="382" y="256">共用快取（使用者唯讀）</text>
+  <text class="s sb-t" x="382" y="271">price_cache · stock_names</text>
+  <text class="s sb-t" x="382" y="286">chip_raw_cache（僅 EF 可寫）</text>
+
+  <!-- ===== Supabase：運算面 ===== -->
+  <rect class="node sb" x="566" y="88" width="178" height="72" rx="7"/>
+  <text class="t sb-t" x="578" y="108">pg_cron 排程</text>
+  <text class="d sb-t" x="578" y="126">盤後每 15 分鐘輪詢</text>
+  <text class="d sb-t" x="578" y="142">macro-daily · fx-daily · probe</text>
+
+  <rect class="node sb" x="566" y="182" width="178" height="130" rx="7"/>
+  <text class="t sb-t" x="578" y="208">Edge Functions</text>
+  <text class="d sb-t" x="578" y="231">stock-price：現價・搜尋・匯率</text>
+  <text class="d sb-t" x="578" y="248">stock-report：籌碼・技術面・</text>
+  <text class="d sb-t" x="578" y="265">基本面・月營收・新聞・總經</text>
+  <text class="d sb-t" x="578" y="282">（Deno，繞過瀏覽器 CORS）</text>
+
+  <rect class="node sb" x="566" y="334" width="178" height="80" rx="7"/>
+  <text class="t sb-t" x="578" y="356">Storage：reports</text>
+  <text class="d sb-t" x="578" y="375">預產 JSON，前端直接下載</text>
+  <text class="d sb-t" x="578" y="391">籌碼 / 日線 / 基本面 / fx / macro</text>
+
+  <!-- DataProvider → Supabase -->
+  <line class="edge" x1="292" y1="304" x2="564" y2="304" marker-end="url(#arrow)"/>
+  <line class="bus" x1="328" y1="114" x2="328" y2="380"/>
+  <line class="edge" x1="328" y1="114" x2="362" y2="114" marker-end="url(#arrow)"/>
+  <line class="edge" x1="328" y1="224" x2="362" y2="224" marker-end="url(#arrow)"/>
+  <line class="edge" x1="328" y1="380" x2="564" y2="380" marker-end="url(#arrow)"/>
+  <circle class="dot" cx="328" cy="114" r="2.6"/>
+  <circle class="dot" cx="328" cy="224" r="2.6"/>
+  <circle class="dot" cx="328" cy="304" r="2.6"/>
+  <circle class="dot" cx="328" cy="380" r="2.6"/>
+  <text class="el" x="400" y="320">呼叫函式</text>
+  <text class="el" x="400" y="372">下載預產報告</text>
+
+  <!-- Supabase 內部 -->
+  <line class="edge" x1="655" y1="160" x2="655" y2="180" marker-end="url(#arrow)"/>
+  <text class="el" x="663" y="176">觸發</text>
+  <line class="edge" x1="655" y1="312" x2="655" y2="332" marker-end="url(#arrow)"/>
+  <text class="el" x="663" y="328">寫入報告</text>
+  <line class="edge" x1="564" y1="268" x2="546" y2="268" marker-end="url(#arrow)"/>
+
+  <!-- ===== 外部資料源 ===== -->
+  <rect class="node ex" x="802" y="88" width="318" height="52" rx="7"/>
+  <text class="t ex-t" x="814" y="108">證交所 MIS 即時行情</text>
+  <text class="d ex-t" x="814" y="126">台股現價（秒級延遲）</text>
+
+  <rect class="node ex" x="802" y="156" width="318" height="68" rx="7"/>
+  <text class="t ex-t" x="814" y="176">TWSE / TPEx OpenAPI・rwd</text>
+  <text class="d ex-t" x="814" y="194">三大法人・融資融券・借券</text>
+  <text class="d ex-t" x="814" y="210">本益比・月營收・台股代號清單</text>
+
+  <rect class="node ex" x="802" y="240" width="318" height="68" rx="7"/>
+  <text class="t ex-t" x="814" y="260">Yahoo Finance</text>
+  <text class="d ex-t" x="814" y="278">美股現價・日 K 線・外幣匯率</text>
+  <text class="d ex-t" x="814" y="294">（台股現價備援）</text>
+
+  <rect class="node ex" x="802" y="324" width="318" height="52" rx="7"/>
+  <text class="t ex-t" x="814" y="344">Google News RSS</text>
+  <text class="d ex-t" x="814" y="362">近 14 天新聞標題（最多 10 則）</text>
+
+  <rect class="node ex" x="802" y="392" width="318" height="52" rx="7"/>
+  <text class="t ex-t" x="814" y="412">FRED（聖路易聯準銀行）</text>
+  <text class="d ex-t" x="814" y="430">CPI・PPI・PCE・非農・消費者信心</text>
+
+  <line class="edge" x1="744" y1="240" x2="762" y2="240"/>
+  <line class="bus" x1="764" y1="114" x2="764" y2="418"/>
+  <line class="edge" x1="764" y1="114" x2="800" y2="114" marker-end="url(#arrow)"/>
+  <line class="edge" x1="764" y1="190" x2="800" y2="190" marker-end="url(#arrow)"/>
+  <line class="edge" x1="764" y1="274" x2="800" y2="274" marker-end="url(#arrow)"/>
+  <line class="edge" x1="764" y1="350" x2="800" y2="350" marker-end="url(#arrow)"/>
+  <line class="edge" x1="764" y1="418" x2="800" y2="418" marker-end="url(#arrow)"/>
+  <circle class="dot" cx="764" cy="240" r="2.6"/>
+
+  <!-- ===== AI 端點（瀏覽器直連） ===== -->
+  <rect class="node ai" x="802" y="520" width="318" height="76" rx="7"/>
+  <text class="t ai-t" x="814" y="544">AI 端點（使用者自備）</text>
+  <text class="d ai-t" x="814" y="562">Google Gemini 或 OpenAI 相容端點</text>
+  <text class="d ai-t" x="814" y="578">（Ollama / vLLM 等自架服務）</text>
+
+  <polyline class="edge" points="165,470 165,558 800,558" marker-end="url(#arrow)"/>
+  <text class="el" x="180" y="548">AI 分析：瀏覽器直連，端點與金鑰由使用者自帶（專案不代付費用）</text>
+
+  <text class="note" x="24" y="640">本機模式免登入、資料僅存於瀏覽器；個股分析 / 外幣匯率 / 總體經濟需 Supabase 模式。</text>
+</svg>

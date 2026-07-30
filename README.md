@@ -49,6 +49,18 @@
 
 共用快取表僅能由 Edge Function（service role）寫入，一般使用者唯讀，防止資料污染。
 
+### 個股分析（僅 Supabase 模式）
+- **單頁到底**：我的持股 → 籌碼 → 基本面 → 技術面，各一張卡片；頁內以下拉選單切換台股持股。
+- **籌碼**：三大法人、融資融券、借券，可回看 7 個交易日並附近 7 日走勢圖（自繪 SVG，未引入圖表函式庫）。
+- **技術面**：日 K 線 + MA5 / MA20 / MA60、成交量、KD，另有 RSI(14)、MACD 柱等指標摘要。
+- **基本面**：本益比 / 殖利率 / 股價淨值比、近 12 個月月營收與走勢圖、按季獲利能力（毛利率、營益率、稅前 / 稅後純益率）。
+- **AI 分析**：需按下按鈕才會呼叫模型；資料為程式算好的指標與籌碼摘要（不含持股、成本與損益），產生後可繼續追問，對話嚴格框在該檔股票的數據內。
+- **下載 PDF**：匯出籌碼＋基本面＋技術面，不含持股數字。
+
+### 外幣匯率與總體經濟
+- **外幣匯率**：以台幣為本位的 8 種外幣即時中價（最多延遲 10 分鐘），走勢圖可切 3 個月 / 6 個月 / 1 年並同時顯示兩個方向。⚠️ 為市場中價，非銀行牌告匯率。
+- **總體經濟**：核心 CPI、核心 PPI、核心 PCE、非農就業、消費者信心，資料來自美國聖路易聯準銀行 FRED，每日排程更新。
+
 ### 其他
 - **每工作區手續費率**：工作區列的 `%` 按鈕可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
 - **主題切換**：跟隨系統 / 深色 / 淺色，選擇記憶於本機。
@@ -66,71 +78,51 @@
    - 計算引擎: `pnlEngine.ts`（移動平均成本法、精算同構對齊台股手續費/證交稅元以下無條件捨去、ETF 0.1% 優惠與 Dashboard 預扣賣出稅費、浮點誤差防護）。
 2. **後端與服務 (Back-end & BaaS)**:
    - `Supabase`:
-     - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings，以及共用快取 `price_cache`（現價）與 `stock_names`（代號↔名稱）。
+     - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings 與全站共用的 AI 設定 `app_settings`；共用快取 `price_cache`（現價）、`stock_names`（代號↔名稱）、`chip_raw_cache`（盤後原始檔）；批次可觀測性 `batch_run_log`、`source_probe_log`。
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
-     - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀。
-     - **Edge Functions (Deno)**：伺服器端部署 `stock-price` 函數，批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）與提供模糊搜尋 API，繞過瀏覽器 CORS 限制。
+     - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫），`app_settings` 僅 `app_metadata.role = 'admin'` 的帳號可寫。
+     - **Edge Functions (Deno)**：`stock-price` 批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價；`stock-report` 產出盤後籌碼、技術面、基本面、新聞、匯率與總經資料。兩者皆繞過瀏覽器 CORS 限制。
+     - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
+     - **pg_cron 排程**：盤後每 15 分鐘輪詢批次、資料源探針、`macro-daily`、`fx-daily`。
+   - **AI 端點（使用者自備）**：AI 分析由瀏覽器直連 Google Gemini 或 OpenAI 相容端點（Ollama / vLLM 等），專案不內建金鑰、不代付費用。
 
 ### 系統架構圖 (System Architecture)
 
-```mermaid
-graph TD
-    User([使用者瀏覽器]) <-->|操作與查看| FE[React 前端 SPA]
-    
-    subgraph Frontend [React SPA (Vite + TS)]
-        FE <--> Components[UI 組件 / 頁面]
-        Components <--> Context[React Context 狀態管理]
-        Context <--> DP[DataProvider 雙模式資料層]
-    end
-    
-    subgraph LocalStorage [本機儲存 (本機模式)]
-        DP <-->|讀寫交易與設定| LS[(瀏覽器 LocalStorage)]
-    end
+![stock-pnl-web 系統架構圖](docs/architecture/system-architecture.svg)
 
-    subgraph Supabase [Supabase 雲端服務 (Supabase 模式)]
-        DP <-->|身份驗證| Auth[Supabase Auth]
-        DP <-->|PostgreSQL API| DB[(PostgreSQL Database)]
-        DP <-->|呼叫函式| EF[Edge Functions: stock-price]
-        
-        subgraph Database_Tables [資料庫資料表]
-            DB --- Workspaces[(workspaces)]
-            DB --- Transactions[(transactions)]
-            DB --- Settings[(user_settings)]
-        end
-    end
-
-    subgraph External [外部服務]
-        EF <-->|台股即時現價| MIS[TWSE MIS 即時行情]
-        EF <-->|美股現價/搜尋（台股備援）| Yahoo[Yahoo Finance API]
-    end
-
-    classDef local fill:#ffe0b2,stroke:#fb8c00,stroke-width:2px;
-    classDef cloud fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px;
-    classDef ext fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px;
-    
-    class LS local;
-    class Auth,DB,EF,Workspaces,Transactions,Settings cloud;
-    class Yahoo,MIS ext;
-```
+> 圖檔為手繪 SVG（原始檔 [`docs/architecture/system-architecture.svg`](docs/architecture/system-architecture.svg)），
+> 無外部依賴，並依瀏覽器的深／淺色偏好自動切換配色。
 
 專案目錄結構：
 ```
 stock-pnl-web/
+├── CLAUDE.md             # Agent 操作規則（角色、流程、版本與部署規範）
 ├── .github/workflows/    # GitHub Actions 自動部署（deploy.yml）
-├── build-docs/           # 系統設計、專案進度文件
-├── docs/                 # 維運文件（Supabase SQL 常用查詢 sql_cli.md）
+├── .claude/skills/       # 本專案的 Claude Code skill（verify：UI 驗證流程）
+├── docs/
+│   ├── agent/            # Agent 持久化狀態：PLAN / SPEC / PROGRESS / TASK / BUG_FIX / FIXED_BUG
+│   ├── architecture/     # 系統設計、移轉計畫、UI 比稿與系統架構圖 (system-architecture.svg)
+│   └── sql_cli.md        # 維運用 Supabase SQL 常用查詢
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
-│   │   ├── components/   # Auth, Dashboard, YearlyReport, Transactions, Common UI
+│   │   ├── components/   # AppShell, Auth, Dashboard, YearlyReport, Transactions,
+│   │   │                 # StockDetail（個股分析／AI 分析）, Fx（匯率）, Macro（總經）,
+│   │   │                 # Charts（自繪 SVG 圖表）, Common（共用 UI）
 │   │   ├── context/      # AuthContext, WorkspaceContext
 │   │   ├── hooks/        # useStockPrices
-│   │   ├── services/     # supabase client, dataProvider (雙模式儲存實作),
+│   │   ├── services/     # supabase client, dataProvider（雙模式儲存實作）,
 │   │   │                 # priceProxy（現價＋TTL 快取）, stockSearch, twMarketData,
-│   │   │                 # usStockNames（美股 zh-TW 譯名對照）
+│   │   │                 # usStockNames（美股 zh-TW 譯名對照）,
+│   │   │                 # reportProxy / reportsBucket / warmStock（盤後報告）,
+│   │   │                 # dailyProxy, fundamentalProxy, newsProxy, macroProxy,
+│   │   │                 # fxProxy / fxQuoteProxy（匯率）,
+│   │   │                 # aiClient / aiSettings / aiChatStore（AI 分析）, reportPdf
 │   │   ├── types/        # models.ts
-│   │   └── utils/        # pnlEngine.ts, csv.ts, fees.ts, formatters.ts, settings.ts
-│   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要）+ functions/（stock-price, stock-report）
-│   └── package.json
+│   │   └── utils/        # pnlEngine.ts, holdingRows.ts, indicators.ts,
+│   │                     # csv.ts, fees.ts, formatters.ts, settings.ts
+│   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要、RLS、pg_cron 排程）
+│   │                     # + functions/（stock-price, stock-report）
+│   └── package.json      # 版本號來源
 └── README.md             # 本說明文件 (專案根目錄)
 ```
 
@@ -142,7 +134,10 @@ stock-pnl-web/
 - **Vite**: `^8.1.1`
 - **TypeScript**: `~6.0.2`
 - **Supabase JS Client**: `^2.110.7`
+- **lucide-react** (圖示): `^1.24.0`
+- **jsPDF** / **html2canvas** (報告匯出 PDF): `^3.0.4` / `^1.4.1`
 - **Vitest** (測試框架): `^4.1.10`
+- **oxlint** (Lint): `^1.71.0`
 - **Deno** (Edge Functions 執行環境): 最新 Supabase Edge Runtime
 
 ---
@@ -192,14 +187,15 @@ stock-pnl-web/
 
 ### 2. 後端部署 (Supabase)
 1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
-2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取）與 RLS 行級安全策略。
-3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後籌碼報告；二擇一）：
-   - **Dashboard**：Edge Functions → Create a function。`stock-price` 為單一檔案，貼上 `index.ts` 全文即可；`stock-report` 為多檔函數，需逐一新增 `sources/supabase/functions/stock-report/` 下的 `index.ts`、`report.ts`、`twChips.ts`（`*.test.ts` 不用上傳）。兩者皆於設定中**關閉 Verify JWT**後 Deploy。
+2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取，`app_settings`、`batch_run_log`、`source_probe_log`）、RLS 行級安全策略、`reports` bucket 與 pg_cron 排程。
+3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後報告；二擇一）：
+   - **Dashboard**：Edge Functions → Create a function。`stock-price` 需 `index.ts` 與 `misParse.ts`；`stock-report` 需逐一新增 `sources/supabase/functions/stock-report/` 下的所有 `.ts` 檔（`*.test.ts` 不用上傳）。檔案數量較多，建議改用下方 CLI。**只有 `stock-report` 要關閉 Verify JWT**（見下方說明）。
    - **CLI**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
      ```bash
-     supabase functions deploy stock-price  --no-verify-jwt
+     supabase functions deploy stock-price                # 保持 verify_jwt=true（前端帶 anon JWT 呼叫）
      supabase functions deploy stock-report --no-verify-jwt
      ```
+   - ⚠️ **`stock-report` 一定要帶 `--no-verify-jwt`**：pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT，被重設成 `true` 的話盤後批次會全數 401。`stock-price` 反之要維持預設的 `verify_jwt=true`，否則就成了誰都能呼叫的公開端點（Edge Function 額度濫用風險）。
    - 詳細步驟、驗證方式與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 4. **設定身份驗證 Redirect URL**：
    在 Supabase 控制台的 Auth -> URL Configuration 中，將 Site URL 和 Redirect URLs 設定為您 GitHub Pages 的部署網址，確保登入/註冊重導正常運作。
@@ -296,10 +292,6 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 - 資料點超過 20 個時不再逐點畫圓（一年 260 顆圓點會把線糊成一條毛毛蟲）。
 - **基本面的月營收新增走勢圖**，營收缺漏的月份斷線不內插。
 - K 線、成交量長條、KD 三張圖維持原樣。
-
-#### 其他修正
-
-- 修掉圖表 Y 軸對小於 1 的數字一律標成「0」的問題（既有圖表數值都 ≥ 1 所以沒踩到，匯率會）。
 
 ### 0.6.7（2026-07-29）— 新增外幣匯率頁
 
@@ -439,7 +431,7 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 改成先把列排序再算指紋，只看「哪幾檔、各是多少」這個語意，不看端點今天高興怎麼排。
 
-
+**個股分析頁自動換上最新報告**
 
 0.6.1 把盤後批次改成每 15 分鐘輪詢之後，**報告會在你看著的當下更新**，
 而個股分析頁只在開頁那一刻抓一次 —— 分頁開著不動就會一直停在開頁時的快照。
@@ -667,17 +659,17 @@ bucket，前端直接下載。**沒有新增資料表**，也不必管保留期 
    再執行 schema 第 6 段（建 `reports` bucket、啟用 `pg_cron`/`pg_net`、排定每交易日三段式批次）。
    詳細步驟與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 
-### v0.2.5（2026-07-21）
+### 0.2.5（2026-07-21）
 - **交易紀錄搜尋欄位（代號 / 名稱快速過濾）**：工具列新增搜尋輸入框，輸入代號（如 `2330` / `AAPL`）或名稱（如 `台積` / `蘋果`）即時過濾交易列表。
 - 支援美股中文譯名搜尋對照（如輸入 `蘋果` 可命中 `AAPL`），並顯示獨立的筆數提示（「顯示 X / Y 筆」）與無命中狀態。
 - 過濾時維持勾選狀態，全選與「刪除選取」按鈕僅作用於可見列，CSV 匯出維持匯出全部交易。
 
-### v0.2.4（2026-07-20）
+### 0.2.4（2026-07-20）
 - **庫存總覽新增「投入成本」欄**：目前持股當初投入的金額（平均買入成本 × 持有股數，含買進手續費），也就是「現在還壓在裡面」的錢；已賣出的部分不計入。欄位順序為「持有股數 → 投入成本 → 平均買入成本」，先看總額再看單價。金額同樣採「含費 / 未含費」雙行。
 - 計算引擎未變動：數字取自既有的持股部位成本（`cost` / `rawCost`）。
 - **CI**：GitHub Actions 的 Pages actions 升版（checkout / setup-node v7、upload-pages-artifact / deploy-pages v5），build 用的 Node 由 20 升至 24，解除 Node 20 runtime 淘汰警告。
 
-### v0.2.3（2026-07-20）
+### 0.2.3（2026-07-20）
 - **台股現價改用證交所 MIS 即時行情**：原本台股報價來自 Yahoo Finance（本身延遲 15–20 分鐘），改為直接取用證交所 MIS 即時行情，Yahoo 降為失敗時的備援；美股維持 Yahoo。
 - **修正快取 TTL 疊加**：Edge Function 的資料庫快取回傳的報價可能已存在近 10 分鐘，但前端收到後一律當成「剛取得」再快取 10 分鐘，兩層疊加後畫面上的價格最舊可達約 30 分鐘。現在 Edge Function 會回傳報價的**實際取得時間**，前端據此判斷新鮮度，兩層 TTL 不再疊加。
 - **現價自動更新**：以往頁面開著不動就不會再更新現價（需手動按重新整理）。現在每 60 秒背景輪詢一次，分頁從背景切回前景時也會補抓；TTL 內的代號直接命中本機快取，不會真的發出請求。
@@ -686,19 +678,19 @@ bucket，前端直接下載。**沒有新增資料表**，也不必管保留期 
 - 計算引擎完全未變動，既有損益公式與數字不受影響（`buyAmt` / `buyGross` 仍保留於引擎，僅停止顯示）。
 - ⚠️ 本次含 Edge Function 變更，需重新部署才會生效：`supabase functions deploy stock-price --no-verify-jwt`（資料庫 schema 無需異動）。
 
-### v0.2.2（2026-07-18）
+### 0.2.2（2026-07-18）
 - **年度收益新增「賣出成本」欄**：顯示當年賣出部位的取得成本（賣出當下的移動平均成本 × 賣出股數），讓每一列成立 `已實現損益 = 賣出收入 − 賣出成本`，數字可自行驗算。
 - **金額改「含費 / 未含費」雙行顯示**（與庫存總覽的平均成本同構）：主數字為實際付出與收到的錢（含手續費與證交稅），副行為單純成交價金。以台股常見情境為例，未含費的帳面價差會明顯高於實際落袋金額——證交稅 0.3%（ETF 0.1%）通常才是吃掉獲利的大宗。
 - **個股明細補齊只買未賣的股票**：當年只有買進、尚未賣出的個股以往不會出現在展開明細（但年度列的買進金額已包含它），現在會列出並標示「僅買進」。明細列也改為與年度列同表格，欄位確實對齊。
 - **欄位說明「?」提示**：庫存總覽與年度收益的每個欄位都可查看定義；其中「現價」明確說明時間差——報價來源最長延遲 20 分鐘，加上系統 10 分鐘快取，畫面上的價格最舊可能是約 30 分鐘前的成交價。
 - 計算引擎僅新增欄位，既有損益公式與數字完全不變。
 
-### v0.2.1（2026-07-18）
+### 0.2.1（2026-07-18）
 - **移除「全部工作區（總覽）」功能**：經評估後整個下架跨工作區彙總檢視（彙總模組、選單選項、唯讀模式與相關欄位全數移除），單一工作區的既有功能、邏輯與損益計算公式完全不受影響（45/45 單元測試 + 端到端驗證通過）。
-- **保留防護**：CSV 匯入時若偵測到含「工作區」欄且包含多個工作區的備份檔（v0.2 期間由總覽匯出），仍會整批拒絕，避免不同券商的交易混入同一工作區污染移動平均成本。
+- **保留防護**：CSV 匯入時若偵測到含「工作區」欄且包含多個工作區的備份檔（0.2 期間由總覽匯出），仍會整批拒絕，避免不同券商的交易混入同一工作區污染移動平均成本。
 - 舊版曾切到總覽的使用者，重新載入會自動回到第一個工作區。
 
-### v0.2（2026-07-18）
+### 0.2（2026-07-18）
 - 畫面左下角新增固定版本標籤（`版本 | 作者`），登入頁亦顯示。
 - 交易紀錄表格自適應寬度：一般桌面視窗（≥1024px）不再出現橫向捲軸；過長股票名稱以「…」截斷（滑鼠停留顯示完整名稱）。
 - 修復：刪除交易失敗時不再誤顯示成功通知；切換工作區時清空勾選狀態；同代號重複查價去重。
@@ -707,7 +699,7 @@ bucket，前端直接下載。**沒有新增資料表**，也不必管保留期 
 
 ## ⚠️ 注意事項
 1. **CORS 跨來源限制**：
-   台灣證交所（TWSE/TPEx）與 Yahoo Finance 皆不支援瀏覽器直接跨網域請求。正式環境**必須**部署 Supabase Edge Function：`prices` 代理現價、`search` 代理模糊搜尋、`twlist` 代理台股全清單（中文名反查的資料來源）。本地開發則由 Vite dev proxy 代勞，因此「本地正常、線上失效」的問題多半出在 Edge Function 未部署或版本過舊。
+   台灣證交所（TWSE/TPEx）與 Yahoo Finance 皆不支援瀏覽器直接跨網域請求。正式環境**必須**部署 Supabase Edge Function `stock-price`，它以單一端點提供四種 action：`prices`（現價）、`search`（模糊搜尋）、`twlist`（台股全清單，中文名反查的資料來源）、`fx`（外幣即時中價）。本地開發則由 Vite dev proxy 代勞，因此「本地正常、線上失效」的問題多半出在 Edge Function 未部署或版本過舊。
 2. **本機模式限制**：
    若使用本機模式，美股現價與美股模糊搜尋會無法使用（因無後端 Edge Function 代理），需手動輸入股票代號與名稱。台股現價則退回 TWSE / TPEx OpenAPI 的**每日收盤均價清單**——不是即時價，MIS 即時行情僅在部署 Edge Function 的 Supabase 模式下生效。
 3. **資安守則**：
