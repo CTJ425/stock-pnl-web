@@ -135,7 +135,7 @@ describe('AdminStatusPage', () => {
   it('總經落後一期的指標被標出來，其餘為最新', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
-    await screen.findByText('美國總體經濟')
+    await screen.findByText(/美國總體經濟/)
     expect(screen.getByText('落後一期')).toBeTruthy()
     expect(screen.getByText('最新')).toBeTruthy()
   })
@@ -143,7 +143,7 @@ describe('AdminStatusPage', () => {
   it('資料變動時間與最後檢查時間分開顯示（BUG-008 的兩個欄位）', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
-    await screen.findByText('美國總體經濟')
+    await screen.findByText(/美國總體經濟/)
     expect(screen.getByText(/資料變動於 .*最後檢查/)).toBeTruthy()
   })
 
@@ -152,6 +152,43 @@ describe('AdminStatusPage', () => {
     render(<AdminStatusPage />)
     // 借券延遲 + 消費者信心落後 = 2 項
     expect(await screen.findByText('有 2 項需要注意')).toBeTruthy()
+  })
+
+  it('不再出現任何個股新聞相關內容（0.6.13 移除）', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/台股盤後/)
+    expect(screen.queryByText('個股新聞')).toBeNull()
+    expect(screen.queryByText('新聞檔')).toBeNull()
+  })
+
+  it('總經班次軸標出兩班與各自是否已執行', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/今日班次/)
+    // macro-daily 是 0 13,15 UTC → 台北 21:00 / 23:00
+    expect(screen.getByText(/21:00・/)).toBeTruthy()
+    expect(screen.getByText(/23:00・/)).toBeTruthy()
+    expect(screen.getByText('美東發布')).toBeTruthy()
+  })
+
+  it('顯示下次抓取時間，並把推估的發布日標為推估', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/今日班次/)
+    expect(screen.getByText('下次抓取')).toBeTruthy()
+    // 下次抓取是 cron 算得出來的、100% 確定；發布日是推估的，兩者不可混為一談
+    expect(screen.getByText('（推估）')).toBeTruthy()
+    expect(screen.getByText('下一筆新數據')).toBeTruthy()
+  })
+
+  it('落後的指標下期預計顯示「待定」——它連上一期都還沒發', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/今日班次/)
+    const rows = [...document.querySelectorAll('.data-table tbody tr')]
+    const umc = rows.find((r) => r.textContent?.includes('UMCSENT'))!
+    expect(umc.textContent).toContain('待定')
   })
 
   it('檔案涵蓋以「幾檔 / 持股數」呈現', async () => {

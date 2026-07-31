@@ -89,13 +89,17 @@ const WIDTHS = [1440, 1024, 768, 390]
         const rows = [...document.querySelectorAll('.ast-row')]
         return rows.map((r) => ({
           track: !!r.querySelector('.ast-track')?.checkVisibility?.(),
+          // 每列右側必須有可見內容：狀態標籤或時刻文字擇一
+          // （總經軸的「美東發布」「資料最後變動」兩列放的是資訊而非狀態）
           pill: !!r.querySelector('.ast-pill')?.checkVisibility?.(),
           when: !!r.querySelector('.ast-when')?.checkVisibility?.(),
+          endText: (r.querySelector('.ast-end')?.textContent || '').trim().length > 0,
         }))
       })
       vis.forEach((v, i) => {
         if (v.track) problems.push(`${width}px: 列${i} 時間軸仍顯示（手機應隱藏）`)
-        if (!v.pill) problems.push(`${width}px: 列${i} 狀態標籤看不見`)
+        if (!v.pill && !v.when) problems.push(`${width}px: 列${i} 右側無可見內容`)
+        if (!v.endText) problems.push(`${width}px: 列${i} 右欄是空的`)
       })
       if (!vis.some((v) => v.when)) problems.push(`${width}px: 沒有任何一列顯示抓取時刻`)
     }
@@ -133,6 +137,23 @@ const WIDTHS = [1440, 1024, 768, 390]
       return bad
     })
     clash.forEach((s) => problems.push(`${width}px: ${s}`))
+
+    // ── 3b. 說明文字不得被擠成直排 ────────────────────────
+    // 特異性沒壓過 .ast-legend span 時，文字節點會各自變成 flex item，
+    // 「判定基準是」會被擠成一字一行。用「高度遠大於行高」來偵測。
+    const vertical = await page.evaluate(() => {
+      const bad = []
+      document.querySelectorAll('.ast-rule').forEach((el) => {
+        const r = el.getBoundingClientRect()
+        const lh = parseFloat(getComputedStyle(el).lineHeight) || 20
+        const cs = getComputedStyle(el)
+        if (cs.display.includes('flex')) bad.push('圖例說明是 flex，文字會被拆成欄')
+        // 一段兩三行的字塞成直排會變成十幾行高
+        if (r.height > lh * 8) bad.push(`圖例說明高 ${Math.round(r.height)}px（行高 ${Math.round(lh)}px），疑似直排`)
+      })
+      return bad
+    })
+    vertical.forEach((s) => problems.push(`${width}px: ${s}`))
 
     // ── 4. 主要區塊都在 ───────────────────────────────────
     for (const t of ['台股盤後', '排程', '美國總體經濟', '匯率與檔案涵蓋']) {

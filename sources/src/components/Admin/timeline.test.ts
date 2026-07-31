@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   TL_SPAN_HOURS,
   TW_CHAIN,
+  cronHoursTaipei,
+  dayPercent,
   describeCron,
+  durationLabel,
+  estimateNextRelease,
+  hourLabel,
+  nextRun,
   hoursFromBase,
   humanAgo,
   judgeCron,
@@ -163,20 +169,98 @@ describe('humanAgo', () => {
 describe('TW_CHAIN', () => {
   it('公布窗的起訖與寬限截止必須遞增，否則延遲線會反向', () => {
     for (const s of TW_CHAIN) {
-      if (!s.window) continue
       expect(s.window[0]).toBeLessThanOrEqual(s.window[1])
       expect(s.dueBy).toBeGreaterThanOrEqual(s.window[1])
     }
   })
 
-  it('個股新聞沒有公布窗——它隨時可能有，批次每輪都會試著抓', () => {
-    // 硬給一個窗只會畫出一條永遠抓不到東西的色塊，看起來像壞掉
-    expect(TW_CHAIN.find((s) => s.id === 'news')!.window).toBeNull()
+  it('不含個股新聞——0.6.13 起後台不再追蹤它', () => {
+    expect(TW_CHAIN.map((s) => s.id)).toEqual(['institutional', 'daily', 'margin', 'borrow'])
   })
 
   it('所有時點都落在軸的範圍內', () => {
     for (const s of TW_CHAIN) {
       expect(s.dueBy).toBeLessThanOrEqual(TL_SPAN_HOURS)
     }
+  })
+})
+
+describe('cronHoursTaipei / nextRun（總經班次軸）', () => {
+  it('UTC 13,15 換算成台北 21,23', () => {
+    expect(cronHoursTaipei('0 13,15 * * *')).toEqual([21, 23])
+  })
+
+  it('跨日換算：UTC 3,9 → 台北 11,17', () => {
+    expect(cronHoursTaipei('0 3,9 * * *')).toEqual([11, 17])
+  })
+
+  it('UTC 20 → 台北 4（跨日後要回到 0–23，不是 28）', () => {
+    expect(cronHoursTaipei('0 20 * * *')).toEqual([4])
+  })
+
+  it('不是每日固定時刻的形狀回空陣列（例如盤後批次的 */15）', () => {
+    expect(cronHoursTaipei('*/15 8-15 * * 1-5')).toEqual([])
+  })
+
+  it('下一班是今天的下一個時刻', () => {
+    expect(nextRun([21, 23], 14.5)).toEqual({ hour: 21, tomorrow: false, inHours: 6.5 })
+    expect(nextRun([21, 23], 21.5)).toEqual({ hour: 23, tomorrow: false, inHours: 1.5 })
+  })
+
+  it('今天班次都跑完了就指向明天第一班', () => {
+    const r = nextRun([21, 23], 23.5)!
+    expect(r.tomorrow).toBe(true)
+    expect(r.hour).toBe(21)
+    expect(r.inHours).toBeCloseTo(21.5, 5)
+  })
+
+  it('沒有班次時回 null，畫面顯示破折號', () => {
+    expect(nextRun([], 10)).toBeNull()
+  })
+})
+
+describe('dayPercent / hourLabel / durationLabel', () => {
+  it('24 小時軸的兩端與中點', () => {
+    expect(dayPercent(0)).toBe(0)
+    expect(dayPercent(12)).toBe(50)
+    expect(dayPercent(24)).toBe(100)
+  })
+
+  it('超出一天的值夾在邊界', () => {
+    expect(dayPercent(-3)).toBe(0)
+    expect(dayPercent(30)).toBe(100)
+  })
+
+  it('小時數轉時刻，含半小時', () => {
+    expect(hourLabel(20.5)).toBe('20:30')
+    expect(hourLabel(21)).toBe('21:00')
+    expect(hourLabel(0)).toBe('00:00')
+  })
+
+  it('時間長度用時分表示', () => {
+    expect(durationLabel(6.667)).toBe('6h 40m')
+    expect(durationLabel(0.5)).toBe('30m')
+  })
+})
+
+describe('estimateNextRelease', () => {
+  it('非農是發布月的第一個週五：2026-06 期 → 2026-08-07', () => {
+    // 已有 2026-06，下一期是 2026-07，於 2026-08 發布
+    expect(estimateNextRelease('PAYEMS', '2026-06')).toBe('2026-08-07')
+  })
+
+  it('CPI 月中、PCE 月底', () => {
+    expect(estimateNextRelease('CPILFESL', '2026-06')).toBe('2026-08-12')
+    expect(estimateNextRelease('PCEPILFE', '2026-06')).toBe('2026-08-28')
+  })
+
+  it('跨年推算不出錯', () => {
+    expect(estimateNextRelease('CPILFESL', '2026-11')).toBe('2027-01-12')
+  })
+
+  it('不認得的指標或壞掉的期別回 null，畫面顯示「待定」', () => {
+    expect(estimateNextRelease('UNKNOWN', '2026-06')).toBeNull()
+    expect(estimateNextRelease('CPILFESL', null)).toBeNull()
+    expect(estimateNextRelease('CPILFESL', '亂寫')).toBeNull()
   })
 })

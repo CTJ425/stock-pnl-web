@@ -20,15 +20,11 @@ export const TL_START_HOUR = 15
 export const TL_SPAN_HOURS = 19
 
 export interface ChainSpec {
-  id: 'institutional' | 'daily' | 'margin' | 'borrow' | 'news'
+  id: 'institutional' | 'daily' | 'margin' | 'borrow'
   label: string
   hint: string
-  /**
-   * 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」。
-   * **null 代表這個來源沒有公布窗的概念**（新聞隨時都可能有，批次每輪都會試著抓）——
-   * 硬畫一個窗只會得到一條永遠抓不到東西的色塊，看起來像壞掉。
-   */
-  window: [number, number] | null
+  /** 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」 */
+  window: [number, number]
   /** 寬限截止：這個時間點之前沒拿到就算延遲。對應的是批次班次而非公布時刻 */
   dueBy: number
 }
@@ -36,16 +32,15 @@ export interface ChainSpec {
 /**
  * 台股盤後鏈。順序即畫面順序（依公布時間先後）。
  *
- * `dueBy` 的取法：公布窗結束後、盤後批次仍在跑的下一個班次。
- * 批次是台北 16:00–23:45 每 15 分，所以沒有明確公布窗的（新聞），
- * 寬限給到隔天第一輪 09:15（＝ 18.25）。
+ * `dueBy` 的取法：公布窗結束後、盤後批次仍在跑的下一個班次
+ * （批次是台北 16:00–23:45 每 15 分）。三大法人實測要到 16:30 那輪才抓得到
+ * —— 15:00–15:30 雖已公布，但 16:00 / 16:15 兩輪都還讀不到，故 dueBy 給 1.5。
  */
 export const TW_CHAIN: readonly ChainSpec[] = [
   { id: 'institutional', label: '三大法人', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
   { id: 'margin', label: '融資融券', hint: 'MI_MARGN', window: [6, 7], dueBy: 7.5 },
   { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 8.75 },
-  { id: 'news', label: '個股新聞', hint: '每檔持股', window: null, dueBy: 18.25 },
 ]
 
 /** 時間軸刻度（小時數 → 標籤） */
@@ -134,6 +129,96 @@ export function humanAgo(ms: number): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h ${m % 60}m`
   return `${Math.floor(h / 24)}d ${h % 24}h`
+}
+
+/* ──────────────────────────────────────────────────────────────
+   總經班次軸（M1）。橫軸是一整天的台北時間 00:00 → 24:00。
+   ────────────────────────────────────────────────────────────── */
+
+/** 台北小時（0–24）→ 24 小時軸上的百分比 */
+export function dayPercent(hour: number): number {
+  return Math.round(Math.min(24, Math.max(0, hour)) / 24 * 10000) / 100
+}
+
+/**
+ * cron 表達式 → 當日的執行時刻（台北小時）。
+ * 只認 `0 H[,H...] * * *` 這種每日固定時刻的形狀，其餘回空陣列。
+ */
+export function cronHoursTaipei(expr: string): number[] {
+  const m = /^0\s+([\d,]+)\s+\*\s+\*\s+\*$/.exec(expr.trim())
+  if (!m) return []
+  return m[1]
+    .split(',')
+    .map((h) => (Number(h) + 8) % 24)
+    .sort((a, b) => a - b)
+}
+
+/**
+ * 下一次執行。`hours` 是當日的班次時刻，`nowHour` 是現在（台北小時）。
+ * 今天已無班次時回明天的第一班（`tomorrow: true`）。
+ */
+export function nextRun(
+  hours: readonly number[],
+  nowHour: number,
+): { hour: number; tomorrow: boolean; inHours: number } | null {
+  if (!hours.length) return null
+  const upcoming = hours.find((h) => h > nowHour)
+  if (upcoming !== undefined) {
+    return { hour: upcoming, tomorrow: false, inHours: upcoming - nowHour }
+  }
+  return { hour: hours[0], tomorrow: true, inHours: 24 - nowHour + hours[0] }
+}
+
+/** 小時數（可為小數）→ 'HH:mm' */
+export function hourLabel(hour: number): string {
+  const total = Math.round(((hour % 24) + 24) % 24 * 60)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+/** 時間長度 → '6h 40m' / '25m' */
+export function durationLabel(hours: number): string {
+  const m = Math.max(0, Math.round(hours * 60))
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+/**
+ * 各指標下一期的發布日**推估**。
+ *
+ * ⚠️ 這是依各機關的慣例推算，**不是官方行事曆** —— FRED 沒有提供發布日 API。
+ * 排程完全不依賴它（每天兩班照跑、比對內容指紋），它純粹是給人看的參考，
+ * 畫面上必須標示「推估」。誤差通常在一兩天內。
+ *
+ * 規則來源：非農＝次月第一個週五、CPI＝次月中旬、PPI＝CPI 隔一兩天、
+ * PCE＝次月底、密大消費者信心＝次月中旬發初值。
+ */
+const RELEASE_RULE: Record<string, { kind: 'firstFriday' } | { kind: 'dayOfMonth'; day: number }> = {
+  PAYEMS: { kind: 'firstFriday' },
+  CPILFESL: { kind: 'dayOfMonth', day: 12 },
+  PPIFES: { kind: 'dayOfMonth', day: 14 },
+  UMCSENT: { kind: 'dayOfMonth', day: 14 },
+  PCEPILFE: { kind: 'dayOfMonth', day: 28 },
+}
+
+/**
+ * 給定指標與它「已取得的最新期別」，推估下一期會在哪天發布。
+ * 回 null 代表沒有規則（不認得的指標）或期別格式怪異 —— 此時畫面顯示「待定」。
+ */
+export function estimateNextRelease(id: string, latestPeriod: string | null): string | null {
+  const rule = RELEASE_RULE[id]
+  if (!rule || !latestPeriod) return null
+  const m = /^(\d{4})-(\d{2})$/.exec(latestPeriod)
+  if (!m) return null
+  // 資料期別的次月才是發布月：2026-06 的數據在 2026-07 之後才發布，
+  // 而我們要問的是「下一期（2026-07）什麼時候發」→ 發布月是 2026-08
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + 2
+  const y = Math.floor(total / 12)
+  const mon = (total % 12) + 1
+  const p = (n: number) => String(n).padStart(2, '0')
+  if (rule.kind === 'dayOfMonth') return `${y}-${p(mon)}-${p(rule.day)}`
+  // 第一個週五
+  const first = new Date(Date.UTC(y, mon - 1, 1))
+  const day = 1 + ((5 - first.getUTCDay() + 7) % 7)
+  return `${y}-${p(mon)}-${p(day)}`
 }
 
 /** cron 排程的健康度：停用、今日有失敗、或從未跑過都要看得出來 */

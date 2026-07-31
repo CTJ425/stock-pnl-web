@@ -2421,11 +2421,12 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 .ast-lg-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ast-c); }
 /*
-  display: block 不可省。`.ast-legend span` 是 inline-flex，這一條繼承後
-  會把內部的文字節點與 <b> 各自變成 flex item —— 窄螢幕下「判定基準是」
-  會被擠成一字一行的直排。
+  ⚠️ 選擇器必須帶 `.ast-legend`，特異性才壓得過上面的 `.ast-legend span`
+  （0,1,1 vs 0,1,0）—— 只寫 `.ast-rule { display: block }` 會被蓋掉，
+  內部的文字節點與 <b> 仍會各自變成 flex item，窄螢幕下「判定基準是」
+  就被擠成一字一行的直排。這個坑踩過兩次。
 */
-.ast-rule { display: block; flex-basis: 100%; line-height: 1.55; }
+.ast-legend .ast-rule { display: block; flex-basis: 100%; line-height: 1.55; }
 .ast-rule b { color: var(--ink-secondary); font-weight: 600; }
 
 /* 時間軸本體。窄螢幕橫向捲動，頁面本身不得橫捲 */
@@ -2492,7 +2493,45 @@ input[type='date']::-webkit-calendar-picker-indicator {
 /* 桌機不需要重複時刻（軸上已經標了），只在手機顯示 */
 .ast-when { display: none; }
 
+/* ── 總經班次軸（M1）──────────────────────────────────────── */
+/* 24 小時軸的刻度較密，標籤要能貼齊兩端不被切掉 */
+.ast-ruler-day span:first-child { transform: none; }
+.ast-ruler-day span:last-child { transform: translateX(-100%); }
+
+/* 「現在」的位置。用 accent 而非狀態色——它不是狀態，是參考線 */
+.ast-now { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); opacity: .55; z-index: 1; }
+
+/*
+  尚未執行的班次：實線空心圈。
+  ⚠️ 不要用 dashed —— 13px 直徑只畫得出三四段虛線，看起來像個怪符號而不是圓圈。
+  空心 vs 實心已經足以與「已執行」區別。
+*/
+.ast-next-run {
+  position: absolute; top: 16px; transform: translateX(-50%); z-index: 2;
+  width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid var(--accent); background: var(--bg);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.ast-lg-next {
+  width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid var(--accent); background: transparent;
+}
+
+/* 下次抓取提示列 */
+.ast-next {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px 18px;
+  margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--ink-secondary);
+}
+.ast-next .k { color: var(--ink-muted); }
+.ast-next b { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.ast-next .sep { margin-left: auto; }
+.ast-in { color: var(--ink-muted); }
+/* 推估日必須看得出是推估的——它不是官方行事曆 */
+.ast-est { font-size: 11px; color: var(--ink-muted); }
+
 @media (max-width: 720px) {
+  .ast-next .sep { margin-left: 0; flex-basis: 100%; }
   .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }
 
   /*

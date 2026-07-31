@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3 ─ 多月期別軸｜資料抓取狀況</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --accent-strong: #6366f1;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --thead-bg: rgba(255, 255, 255, 0.03);
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+
+  --st-ok: #6ee7b7;
+  --st-warn: #fcd34d;
+  --st-late: #fca5a5;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(110, 231, 183, 0.12);
+  --st-warn-bg: rgba(252, 211, 77, 0.12);
+  --st-late-bg: rgba(252, 165, 165, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.14);
+  /* 預期公布窗：低調的 accent 底，不與狀態色搶 */
+  --win-bg: rgba(124, 140, 248, 0.16);
+  --win-line: rgba(124, 140, 248, 0.42);
+
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-strong: rgba(255, 255, 255, 0.92);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --accent-strong: #4f46e5;
+  --thead-bg: rgba(15, 23, 42, 0.035);
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --st-ok: #047857;
+  --st-warn: #b45309;
+  --st-late: #be123c;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(4, 120, 87, 0.12);
+  --st-warn-bg: rgba(180, 83, 9, 0.12);
+  --st-late-bg: rgba(190, 18, 60, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.14);
+  --win-bg: rgba(91, 108, 240, 0.13);
+  --win-line: rgba(91, 108, 240, 0.4);
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body {
+  margin: 0;
+  background: var(--bg);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at 96% 4%, var(--bg-glow-b), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 20px 64px; }
+
+.mock-note {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 26px;
+  color: var(--ink-muted); font-size: 12.5px;
+}
+.mock-note b { color: var(--ink-secondary); font-weight: 600; }
+
+.head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 22px; }
+.head h1 { font-family: var(--font-display); font-size: 25px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.admin-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 3px 11px; font-size: 11.5px; letter-spacing: 0.06em;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-transform: uppercase;
+}
+.head .spacer { flex: 1; }
+.stamp { font-size: 12.5px; color: var(--ink-muted); font-family: var(--font-data); }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-card); margin-bottom: 22px; overflow: hidden;
+}
+.panel-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.panel-head h2 { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0; }
+.panel-head .note { font-size: 12px; color: var(--ink-muted); }
+.panel-head .right { margin-left: auto; font-size: 12px; color: var(--ink-secondary); font-family: var(--font-data); }
+
+/* ── 圖例 ─────────────────────────────────────────────────── */
+.legend { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 11px 18px; font-size: 12px; color: var(--ink-muted); border-bottom: 1px solid var(--border); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lg-win { width: 22px; height: 9px; border-radius: 2px; background: var(--win-bg); border-left: 2px solid var(--win-line); }
+.lg-hit { width: 9px; height: 9px; border-radius: 50%; background: var(--st-ok); }
+.lg-warn { width: 9px; height: 9px; border-radius: 50%; background: var(--st-warn); }
+.lg-late { width: 9px; height: 9px; border-radius: 50%; background: var(--st-late); }
+/* 判定規則講清楚，否則「法人晚 45 分是綠點、借券晚了是紅點」看起來像雙標 */
+.legend .rule { flex-basis: 100%; color: var(--ink-muted); line-height: 1.5; }
+.legend .rule b { color: var(--ink-secondary); font-weight: 600; }
+
+/* ── 時間軸 ───────────────────────────────────────────────── */
+.tl { padding: 6px 18px 18px; overflow-x: auto; }
+.tl-inner { min-width: 760px; }
+
+/* 標尺 */
+.ruler { position: relative; height: 40px; margin-left: 148px; border-bottom: 1px solid var(--border); }
+.ruler i {
+  position: absolute; top: 20px; bottom: 0; width: 1px; background: var(--border);
+}
+.ruler b {
+  position: absolute; top: 2px; transform: translateX(-50%);
+  font-family: var(--font-data); font-size: 11px; font-weight: 400;
+  color: var(--ink-muted); white-space: nowrap;
+}
+.ruler .day {
+  position: absolute; top: 21px; transform: translateX(-50%);
+  font-size: 10.5px; color: var(--accent); letter-spacing: 0.04em; white-space: nowrap;
+}
+
+/* 每一列 */
+.row { display: grid; grid-template-columns: 148px 1fr; align-items: center; min-height: 46px; }
+.row + .row { border-top: 1px solid var(--border); }
+.row .lbl { padding-right: 12px; font-size: 13px; }
+.row .lbl b { font-weight: 600; display: block; }
+.row .lbl span { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); }
+
+.track { position: relative; height: 46px; }
+/* 網格線與標尺對齊 */
+.track i.grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: 0.55; }
+
+/* 軌道上緣 16px 處是「事件帶」，下緣留給時刻文字，兩者不互相重疊 */
+.win {
+  position: absolute; top: 16px; height: 13px; border-radius: 3px;
+  background: var(--win-bg); border-left: 2px solid var(--win-line);
+}
+/* 實際抓到的時刻。內圈用底色描一圈，讓點壓在公布窗上時仍分得出層次
+   （原本點落在窗的左端會被誤讀成「點在窗外」） */
+.hit {
+  position: absolute; top: 17px; transform: translateX(-50%); z-index: 2;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--st-ok); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-ok-bg);
+}
+.hit.late { background: var(--st-late); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-late-bg); }
+.hit.warn { background: var(--st-warn); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-warn-bg); }
+/* 從公布窗拉到實際點的落後區間 */
+.lag {
+  position: absolute; top: 21.5px; height: 2px; z-index: 1;
+  background: repeating-linear-gradient(90deg, var(--st-late) 0 4px, transparent 4px 8px);
+  opacity: 0.75;
+}
+.lag.warn { background: repeating-linear-gradient(90deg, var(--st-warn) 0 4px, transparent 4px 8px); }
+.hit-t {
+  position: absolute; bottom: 3px; transform: translateX(-50%);
+  font-family: var(--font-data); font-size: 10.5px;
+  color: var(--ink-muted); white-space: nowrap;
+}
+
+/* 批次心跳：每輪一格 */
+.beats { position: absolute; top: 16px; display: flex; gap: 1px; }
+.beats u { display: block; width: 4px; height: 14px; border-radius: 1px; background: var(--st-idle-bg); }
+.beats u.work { background: var(--st-ok); }
+.beats u.skip { background: var(--st-ok-bg); }
+
+/* ── 月頻期別網格 ─────────────────────────────────────────── */
+.grid-wrap { padding: 4px 18px 18px; overflow-x: auto; }
+.pgrid { border-collapse: collapse; font-size: 13px; min-width: 620px; width: 100%; }
+.pgrid th {
+  font-weight: 600; font-size: 11px; color: var(--ink-muted);
+  letter-spacing: 0.04em; padding: 8px 6px; text-align: center;
+  font-family: var(--font-data); white-space: nowrap;
+}
+.pgrid th.lead { text-align: left; padding-left: 0; width: 168px; letter-spacing: 0.05em; text-transform: uppercase; }
+.pgrid td { padding: 5px 6px; text-align: center; }
+.pgrid td.lead { text-align: left; padding-left: 0; font-size: 13px; }
+.pgrid td.lead b { font-weight: 600; }
+.pgrid td.lead span { display: block; font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); }
+.cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 100%; min-width: 44px; height: 26px; border-radius: 5px;
+  font-family: var(--font-data); font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+.cell.has { background: var(--st-ok-bg); color: var(--st-ok); }
+.cell.new { background: var(--st-ok); color: var(--bg); font-weight: 600; }
+.cell.miss { background: var(--st-idle-bg); color: var(--ink-muted); }
+.cell.wait { background: var(--st-warn-bg); color: var(--st-warn); }
+.pgrid td.tail { text-align: right; font-family: var(--font-data); font-size: 12px; color: var(--ink-secondary); white-space: nowrap; }
+
+/* ── 底部小卡 ─────────────────────────────────────────────── */
+.mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1px; background: var(--border); }
+.mini > div { background: var(--surface); padding: 13px 17px; }
+.mini dt { font-size: 11.5px; color: var(--ink-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
+.mini dd { margin: 0; font-family: var(--font-data); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
+.mini dd b { font-family: var(--font-display); font-size: 18px; color: var(--ink); font-weight: 600; margin-right: 6px; }
+
+@media (max-width: 640px) {
+  .wrap { padding: 20px 14px 52px; }
+  .head h1 { font-size: 21px; }
+}
+.theme-btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ── 總經圖表（三版共用）───────────────────────────────────── */
+.mc-ruler { position: relative; height: 34px; margin-left: 152px; margin-right: 104px; border-bottom: 1px solid var(--border); }
+.mc-ruler b { position: absolute; top: 2px; transform: translateX(-50%); font-family: var(--font-data); font-size: 11px; font-weight: 400; color: var(--ink-muted); white-space: nowrap; }
+.mc-ruler i { position: absolute; top: 18px; bottom: 0; width: 1px; background: var(--border); }
+.mc-row { display: grid; grid-template-columns: 152px 1fr 104px; align-items: center; min-height: 44px; }
+.mc-row + .mc-row { border-top: 1px solid var(--border); }
+.mc-lbl { padding-right: 12px; font-size: 13px; }
+.mc-lbl b { display: block; font-weight: 600; }
+.mc-lbl span { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); }
+.mc-track { position: relative; height: 44px; }
+.mc-track i.g { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .55; }
+/* 「現在」的位置 */
+.mc-now { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); opacity: .6; }
+.mc-now::after { content: '現在'; position: absolute; top: -30px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--accent); white-space: nowrap; }
+.mc-end { text-align: right; padding-left: 8px; font-family: var(--font-data); font-size: 12px; color: var(--ink-secondary); }
+.mc-end b { display: block; font-family: var(--font-display); font-size: 13px; color: var(--ink); font-weight: 600; }
+.mc-end span { display: block; font-size: 10.5px; color: var(--ink-muted); }
+
+/* 發布窗 / 班次 / 實際抓到 */
+.mc-win { position: absolute; top: 15px; height: 13px; border-radius: 3px; background: var(--win-bg); border-left: 2px solid var(--win-line); }
+.mc-run { position: absolute; top: 16px; transform: translateX(-50%); width: 11px; height: 11px; border-radius: 50%; background: var(--st-ok); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-ok-bg); z-index: 2; }
+.mc-run.idle { background: var(--st-idle); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-idle-bg); }
+.mc-run.next { background: transparent; border: 2px dashed var(--accent); box-shadow: none; width: 13px; height: 13px; top: 15px; }
+.mc-t { position: absolute; bottom: 2px; transform: translateX(-50%); font-family: var(--font-data); font-size: 10.5px; color: var(--ink-muted); white-space: nowrap; }
+
+/* 期別格（M2 / M3） */
+.mc-cell { position: absolute; top: 12px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: var(--font-data); font-size: 10.5px; }
+.mc-cell.has { background: var(--st-ok-bg); color: var(--st-ok); }
+.mc-cell.new { background: var(--st-ok); color: var(--bg); font-weight: 600; }
+:root[data-theme='light'] .mc-cell.new { color: #fff; }
+.mc-cell.wait { background: transparent; border: 1px dashed var(--st-warn); color: var(--st-warn); }
+.mc-cell.miss { background: var(--st-idle-bg); color: var(--ink-muted); }
+
+/* 下次抓取的提示條 */
+.mc-next {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  padding: 11px 18px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--ink-secondary);
+}
+.mc-next .k { color: var(--ink-muted); }
+.mc-next b { font-family: var(--font-data); color: var(--ink); font-weight: 600; }
+.mc-next .sep { margin-left: auto; }
+.est { font-size: 11px; color: var(--ink-muted); }
+
+.theme-btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-note">
+    <b>M3 ─ 多月期別軸</b>
+    <span>總經圖表版本三：橫軸是月份，每格一期。</span>
+    <span>核心問題：<b>誰落後了？</b></span>
+  </div>
+
+  <div class="head">
+    <h1>資料抓取狀況</h1>
+    <span class="admin-pill">僅限管理員</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" type="button" id="theme">切換淺色</button>
+    <span class="stamp">2026-07-31 14:20 台北</span>
+  </div>
+
+  <!-- ── 台股盤後鏈：時序才是重點 ───────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>台股盤後・2026-07-30 這一輪</h2>
+      <span class="note">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
+      <span class="right">15:00 → 次日 10:00</span>
+    </div>
+    <div class="legend">
+      <span><i class="lg-win"></i> 來源公布窗</span>
+      <span><i class="lg-hit"></i> 準時抓到</span>
+      <span><i class="lg-late"></i> 延遲・虛線為落後區間</span>
+      <span class="rule">判定基準是<b>公布窗結束後的第一個批次班次</b>，不是公布時刻 —— 批次 16:00 才起跑，法人 16:15 到手屬正常。</span>
+    </div>
+
+    <div class="tl">
+      <div class="tl-inner">
+
+        <!-- 標尺：15:00 = 0%，次日 10:00 = 100%，共 19 小時，每小時 5.263% -->
+        <div class="ruler">
+          <i style="left:0%"></i><b style="left:0%">15:00</b>
+          <i style="left:15.79%"></i><b style="left:15.79%">18:00</b>
+          <i style="left:31.58%"></i><b style="left:31.58%">21:00</b>
+          <i style="left:47.37%"></i><b style="left:47.37%">00:00</b>
+          <span class="day" style="left:47.37%">07-31</span>
+          <i style="left:63.16%"></i><b style="left:63.16%">03:00</b>
+          <i style="left:78.95%"></i><b style="left:78.95%">06:00</b>
+          <i style="left:94.74%"></i><b style="left:94.74%">09:00</b>
+        </div>
+
+        <div class="row">
+          <div class="lbl"><b>批次輪次</b><span>每 15 分・32 輪</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <!-- 16:00–23:45，實心=有產出，淡色=短路 -->
+            <div class="beats" style="left:5.26%">
+              <u class="work"></u><u class="work"></u><u class="skip"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
+              <u class="work"></u><u class="work"></u><u class="skip"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="work"></u><u class="skip"></u>
+              <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="lbl"><b>三大法人</b><span>T86</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <div class="win" style="left:0%; width:2.63%"></div>
+            <div class="hit" style="left:6.58%"></div>
+            <div class="hit-t" style="left:6.58%">16:15</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="lbl"><b>日 K 線・估值</b><span>18 檔</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <div class="win" style="left:5.26%; width:2.63%"></div>
+            <div class="hit" style="left:6.58%"></div>
+            <div class="hit-t" style="left:6.58%">16:15</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="lbl"><b>融資融券</b><span>MI_MARGN</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <div class="win" style="left:31.58%; width:5.26%"></div>
+            <div class="hit" style="left:31.58%"></div>
+            <div class="hit-t" style="left:31.58%">21:00</div>
+          </div>
+        </div>
+
+        <!-- 真實的延遲案例：借券前一晚沒抓到，隔天早上才補 -->
+        <div class="row">
+          <div class="lbl"><b>借券賣出</b><span>次一交易日</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <div class="win" style="left:31.58%; width:7.89%"></div>
+            <div class="lag" style="left:39.47%; width:56.13%"></div>
+            <div class="hit late" style="left:95.6%"></div>
+            <div class="hit-t" style="left:95.6%">次日 09:10</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="lbl"><b>總經班次</b><span>FRED・兩班</span></div>
+          <div class="track">
+            <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
+            <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
+            <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
+            <div class="hit" style="left:31.58%"></div>
+            <div class="hit-t" style="left:31.58%">21:00</div>
+            <div class="hit" style="left:42.11%"></div>
+            <div class="hit-t" style="left:42.11%">23:00</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <dl class="mini">
+      <div><dt>資料日</dt><dd><b>07-30</b>週四</dd></div>
+      <div><dt>首筆 → 末筆</dt><dd><b>16h 55m</b>16:15 → 次日 09:10</dd></div>
+      <div><dt>最慢一環</dt><dd><b>借券</b>晚於公布窗 10h 40m</dd></div>
+      <div><dt>批次短路率</dt><dd><b>88 %</b>28 / 32 輪</dd></div>
+    </dl>
+  </section>
+
+
+
+  <!-- ── 總經：多月期別軸 ─────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>美國總體經濟・期別涵蓋</h2>
+      <span class="note">每格一期。誰落後了，橫著看就知道</span>
+      <span class="right">2026-01 → 2026-07</span>
+    </div>
+    <div class="legend">
+      <span><i class="lg-hit"></i> 已取得</span>
+      <span><i class="lg-win"></i> 待發布</span>
+      <span class="rule">
+        落後與否是<b>拿同組其他指標的最新期別來比</b>，不查發布行事曆 ——
+        發布日每個指標都不一樣，維護一張行事曆等於維護一個必然會過期的常數表；
+        但「其他四個都到 2026-06 了、只有你還在 2026-05」這件事不必查行事曆也成立。
+      </span>
+    </div>
+
+    <div class="tl">
+      <div class="tl-inner">
+        <div class="mc-ruler">
+          <b style="left:0%">01</b><i style="left:0%"></i>
+          <b style="left:16.67%">02</b><i style="left:16.67%"></i>
+          <b style="left:33.33%">03</b><i style="left:33.33%"></i>
+          <b style="left:50.0%">04</b><i style="left:50.0%"></i>
+          <b style="left:66.67%">05</b><i style="left:66.67%"></i>
+          <b style="left:83.33%">06</b><i style="left:83.33%"></i>
+          <b style="left:100.0%">07</b>
+        </div>
+        <div class="mc-row">
+          <div class="mc-lbl"><b>核心 CPI</b><span>CPILFESL</span></div>
+          <div class="mc-track"><i class="g" style="left:16.67%"></i><i class="g" style="left:33.33%"></i><i class="g" style="left:50.0%"></i><i class="g" style="left:66.67%"></i><i class="g" style="left:83.33%"></i><i class="g" style="left:100.0%"></i>
+            <div class="mc-cell has" style="left:0.0%; width:44px; margin-left:-22px">2026-01</div><div class="mc-cell has" style="left:16.67%; width:44px; margin-left:-22px">02</div><div class="mc-cell has" style="left:33.33%; width:44px; margin-left:-22px">03</div><div class="mc-cell has" style="left:50.0%; width:44px; margin-left:-22px">04</div><div class="mc-cell has" style="left:66.67%; width:44px; margin-left:-22px">05</div><div class="mc-cell new" style="left:83.33%; width:44px; margin-left:-22px">06</div><div class="mc-cell wait" style="left:100.0%; width:44px; margin-left:-22px">07</div>
+          </div>
+          <div class="mc-end"><b>08-12</b><span>下期預計</span></div>
+        </div>
+
+        <div class="mc-row">
+          <div class="mc-lbl"><b>核心 PPI</b><span>PPIFES</span></div>
+          <div class="mc-track"><i class="g" style="left:16.67%"></i><i class="g" style="left:33.33%"></i><i class="g" style="left:50.0%"></i><i class="g" style="left:66.67%"></i><i class="g" style="left:83.33%"></i><i class="g" style="left:100.0%"></i>
+            <div class="mc-cell has" style="left:0.0%; width:44px; margin-left:-22px">2026-01</div><div class="mc-cell has" style="left:16.67%; width:44px; margin-left:-22px">02</div><div class="mc-cell has" style="left:33.33%; width:44px; margin-left:-22px">03</div><div class="mc-cell has" style="left:50.0%; width:44px; margin-left:-22px">04</div><div class="mc-cell has" style="left:66.67%; width:44px; margin-left:-22px">05</div><div class="mc-cell new" style="left:83.33%; width:44px; margin-left:-22px">06</div><div class="mc-cell wait" style="left:100.0%; width:44px; margin-left:-22px">07</div>
+          </div>
+          <div class="mc-end"><b>08-14</b><span>下期預計</span></div>
+        </div>
+
+        <div class="mc-row">
+          <div class="mc-lbl"><b>核心 PCE</b><span>PCEPILFE</span></div>
+          <div class="mc-track"><i class="g" style="left:16.67%"></i><i class="g" style="left:33.33%"></i><i class="g" style="left:50.0%"></i><i class="g" style="left:66.67%"></i><i class="g" style="left:83.33%"></i><i class="g" style="left:100.0%"></i>
+            <div class="mc-cell has" style="left:0.0%; width:44px; margin-left:-22px">2026-01</div><div class="mc-cell has" style="left:16.67%; width:44px; margin-left:-22px">02</div><div class="mc-cell has" style="left:33.33%; width:44px; margin-left:-22px">03</div><div class="mc-cell has" style="left:50.0%; width:44px; margin-left:-22px">04</div><div class="mc-cell has" style="left:66.67%; width:44px; margin-left:-22px">05</div><div class="mc-cell new" style="left:83.33%; width:44px; margin-left:-22px">06</div><div class="mc-cell wait" style="left:100.0%; width:44px; margin-left:-22px">07</div>
+          </div>
+          <div class="mc-end"><b>08-28</b><span>下期預計</span></div>
+        </div>
+
+        <div class="mc-row">
+          <div class="mc-lbl"><b>非農就業</b><span>PAYEMS</span></div>
+          <div class="mc-track"><i class="g" style="left:16.67%"></i><i class="g" style="left:33.33%"></i><i class="g" style="left:50.0%"></i><i class="g" style="left:66.67%"></i><i class="g" style="left:83.33%"></i><i class="g" style="left:100.0%"></i>
+            <div class="mc-cell has" style="left:0.0%; width:44px; margin-left:-22px">2026-01</div><div class="mc-cell has" style="left:16.67%; width:44px; margin-left:-22px">02</div><div class="mc-cell has" style="left:33.33%; width:44px; margin-left:-22px">03</div><div class="mc-cell has" style="left:50.0%; width:44px; margin-left:-22px">04</div><div class="mc-cell has" style="left:66.67%; width:44px; margin-left:-22px">05</div><div class="mc-cell new" style="left:83.33%; width:44px; margin-left:-22px">06</div><div class="mc-cell wait" style="left:100.0%; width:44px; margin-left:-22px">07</div>
+          </div>
+          <div class="mc-end"><b>08-07</b><span>下期預計</span></div>
+        </div>
+
+        <div class="mc-row">
+          <div class="mc-lbl"><b>消費者信心</b><span>UMCSENT</span></div>
+          <div class="mc-track"><i class="g" style="left:16.67%"></i><i class="g" style="left:33.33%"></i><i class="g" style="left:50.0%"></i><i class="g" style="left:66.67%"></i><i class="g" style="left:83.33%"></i><i class="g" style="left:100.0%"></i>
+            <div class="mc-cell has" style="left:0.0%; width:44px; margin-left:-22px">2026-01</div><div class="mc-cell has" style="left:16.67%; width:44px; margin-left:-22px">02</div><div class="mc-cell has" style="left:33.33%; width:44px; margin-left:-22px">03</div><div class="mc-cell has" style="left:50.0%; width:44px; margin-left:-22px">04</div><div class="mc-cell new" style="left:66.67%; width:44px; margin-left:-22px">05</div><div class="mc-cell miss" style="left:83.33%; width:44px; margin-left:-22px">06</div><div class="mc-cell miss" style="left:100.0%; width:44px; margin-left:-22px">07</div>
+          </div>
+          <div class="mc-end"><b>待定</b><span>FRED 未更新</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="mc-next">
+      <span><span class="k">下次抓取</span> <b>今日 21:00</b> · <b>23:00</b>（每日兩班）</span>
+      <span><span class="k">最後檢查</span> <b>今日 12:40</b></span>
+      <span class="sep"><span class="k">下一筆新數據</span> <b>08-07</b> 非農就業 <span class="est">（推估）</span></span>
+    </div>
+  </section>
+
+</div>
+<script>
+  var root = document.documentElement, btn = document.getElementById('theme');
+  btn.addEventListener('click', function () {
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    btn.textContent = light ? '切換淺色' : '切換深色';
+  });
+</script>
+</body>
+</html>
