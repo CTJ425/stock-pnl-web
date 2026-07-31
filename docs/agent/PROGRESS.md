@@ -1,8 +1,8 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修好「當天融資融券永遠進不了報告」的重產閘門（BUG-007，0.6.10-dev.1）
-- Status: **程式已改並通過 lint / build / test，已進 `dev` 與 `main`；Edge Function 尚未部署**
+- Action: 修好「當天融資融券永遠進不了報告」的重產閘門（BUG-007，0.6.10 定版）
+- Status: **程式已改並通過 lint / build / test，已進 `dev` 並合併 `main`（0.6.10 定版）；Edge Function 尚未部署**
 - Timestamp: 2026-07-31 09:10:00 Asia/Taipei
 
 ---
@@ -29,7 +29,7 @@
 - [x] `index.ts`：`SeriesResult` 新增 `marginYmds`（**視窗內**實際有融資融券的交易日，由舊到新）；
       `marginDatedFailed` 改由它推導；重產閘門改用 `marginSigPart(series.marginYmds)`。
 - [x] `pollPlan.test.ts`：新增 4 條，含「當天由無到有 → 指紋必須改變」與「歷史日回補也要重產」。
-- [x] 版本三處 bump 至 `0.6.10-dev.1`，README 版本紀錄新增 0.6.10（開發中）。
+- [x] 版本三處 bump 至 `0.6.10`（dev 期間為 `0.6.10-dev.1`），README 版本紀錄定稿。
 - [x] 驗證：`npm run lint`（僅既有 3 條 fast-refresh warning）、`npm run build` 通過；
       `npm test -- --run` **622/622**（原 618 + 新增 4）。
 
