@@ -40,8 +40,14 @@
 - **教訓**: `pollPlan.test.ts` 原本就有一條「融資融券由無到有 → 指紋不同」，測的是純函式
   （`margin: ''` vs `'b'`）而**呼叫端根本產不出 `''`** —— 測試的意圖沒被實作滿足。
   純函式測試必須連「呼叫端會餵什麼」一起釘住，否則測的是一個不存在的輸入。
-- **Verification**: `npm run lint` / `npm run build` 通過；`npm test` 622/622
-  （原 618 + 新增 4）。線上覆驗見 `PROGRESS.md`（需先部署 Edge Function）。
+- **Verification**: ✅ `npm run lint` / `npm run build` 通過；`npm test` 622/622（原 618 + 新增 4）。
+  線上（2026-07-31 09:15）：兩區皆已 `functions deploy stock-report --no-verify-jwt`
+  並以 `functions download` 逐檔比對與 `main` 相同；各觸發一次 `generate-all` 後，
+  正式區 `20260730/0050.json` 的 `margin` 補上（融資 33,974 張、`source: rwd`）、`notes` 清空、
+  history 7/7 天有資料，而 `sources.margin.fetchedAt = 2026-07-30T13:00:03Z` 證明
+  **資料昨晚 21:00 就抓到了、只是寫不進報告**。
+  ⏳ 今晚 21:00 那輪才是真正的迴歸驗證（T86 已凍結、只有融資融券由無到有 →
+  必須 `regenerated=true`）。
 
 ### Bug ID: BUG-006 — 手機上個股切換選單被擠成一小塊，只看得到「18…」
 - **Date**: 2026-07-29（0.6.7 引入，0.6.9-dev.1 修復）

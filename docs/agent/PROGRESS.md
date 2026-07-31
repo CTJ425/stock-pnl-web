@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: 修好「當天融資融券永遠進不了報告」的重產閘門（BUG-007，0.6.10 定版）
-- Status: **程式已改並通過 lint / build / test，已進 `dev` 並合併 `main`（0.6.10 定版）；Edge Function 尚未部署**
+- Status: **完成 —— 0.6.10 已進 `main`、兩區 Edge Function 已部署並覆驗；今晚 21:00 那輪待觀察**
 - Timestamp: 2026-07-31 09:10:00 Asia/Taipei
 
 ---
@@ -11,7 +11,7 @@
 
 - **Agent**: Claude
 - **Action**: 修 BUG-007 —— 21:00 抓到的融資融券因重產閘門而永遠寫不進報告
-- **Status**: COMPLETED（程式面）；**線上覆驗待部署後才能做**
+- **Status**: COMPLETED（程式 + 兩區部署 + 線上覆驗）
 
 ### 根因（完整證據鏈見 `FIXED_BUG.md` BUG-007）
 
@@ -41,19 +41,29 @@
 - 唯一的行為改變：**每天多一次重產**（約 21:00 融資融券到齊那輪）。
   代價是 N 檔 × 約 5KB 上傳 + manifest + 一次 prune，可忽略。
 
-### ⚠️ 尚未做（需使用者指示，§13.2）
-**Edge Function 未部署，線上還是舊行為。** 部署指令（必須在 `sources/` 底下）：
+### 線上部署與覆驗（2026-07-31 09:15，使用者明確授權兩區）
 
-```bash
-supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt
-```
+| 環境 | 動作 | 結果 |
+| ---- | ---- | ---- |
+| 測試區 `wqetxuhncvfidqnklyew` | `functions deploy stock-report --no-verify-jwt` | v28、`verify_jwt=false`、ACTIVE |
+| 正式區 `kxnxadaghidwumqsqneu` | 同上 | v16、`verify_jwt=false`、ACTIVE |
 
-（`--no-verify-jwt` 不可省，見 §13.3。測試區 ref 為 `wqetxuhncvfidqnklyew`。）
+依 §13.3 以 `functions download` 逐檔比對，兩區的 `index.ts` / `pollPlan.ts` / `twChips.ts` /
+`report.ts` 皆與 `main` **完全相同**（不是看版本號推論）。
 
-部署後的覆驗點（今晚 21:00 之後）：
-1. `batch_run_log` 當天 21:00 前後那輪 `margin_today=true` **且 `regenerated=true`**。
-2. `reports/{今日ymd}/{ticker}.json` 的 `margin` 非 null、`sources.margin.fetchedAt` 為當晚。
-3. 籌碼頁的融資融券表當晚就有數字，不再顯示「尚未公布」。
+接著各手動觸發一次 `generate-all`（兩區皆 `regenerated=true`、`generated=5`），
+正式區 `20260730/0050.json` 覆驗結果：
+
+- `margin`：融資今日 33,974 張、前日 29,290 張、變化 +4,684；融券今日 585 張；`source: rwd`。
+- `sources.margin.fetchedAt = 2026-07-30T13:00:03.949Z` —— **這是關鍵證據**：
+  資料昨晚 21:00 就抓到並躺在 `chip_raw_cache` 裡，只是寫不進報告。
+- `notes` 由「今日融資融券尚未公布」變成**空陣列**；`history` 7/7 天都有融資融券（原本 6/7）。
+
+### 仍待觀察（今晚）
+今天的觸發是「隔天第一輪」的形狀（`last=null` 本來就會重產）。
+**真正的迴歸驗證是今晚 21:00 那輪**：當天 T86 已凍結、只有融資融券由無到有，
+要看 `batch_run_log` 該輪 `margin_today=true` **且 `regenerated=true`**
+（修好前這一輪必定 `regenerated=false`）。
 
 ---
 
