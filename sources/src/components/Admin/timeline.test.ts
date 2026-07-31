@@ -163,9 +163,15 @@ describe('humanAgo', () => {
 describe('TW_CHAIN', () => {
   it('公布窗的起訖與寬限截止必須遞增，否則延遲線會反向', () => {
     for (const s of TW_CHAIN) {
+      if (!s.window) continue
       expect(s.window[0]).toBeLessThanOrEqual(s.window[1])
       expect(s.dueBy).toBeGreaterThanOrEqual(s.window[1])
     }
+  })
+
+  it('個股新聞沒有公布窗——它隨時可能有，批次每輪都會試著抓', () => {
+    // 硬給一個窗只會畫出一條永遠抓不到東西的色塊，看起來像壞掉
+    expect(TW_CHAIN.find((s) => s.id === 'news')!.window).toBeNull()
   })
 
   it('所有時點都落在軸的範圍內', () => {

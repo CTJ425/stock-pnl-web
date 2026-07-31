@@ -124,7 +124,10 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    expect(screen.getAllByText('16:15').length).toBe(2)
+    // 只數時間軸上的時刻標籤：.ast-when 是手機才顯示的複本，
+    // 但 jsdom 不套 CSS，用 getAllByText 會把它一起數進來
+    const onAxis = [...document.querySelectorAll('.ast-hit-t')].map((e) => e.textContent)
+    expect(onAxis.filter((t) => t === '16:15').length).toBe(2)
     // 圖例把這條規則寫在畫面上，否則看起來像雙標
     expect(screen.getByText(/公布窗結束後的第一個批次班次/)).toBeTruthy()
   })

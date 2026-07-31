@@ -2420,7 +2420,12 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .ast-lg-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ast-c); }
-.ast-rule { flex-basis: 100%; line-height: 1.55; }
+/*
+  display: block 不可省。`.ast-legend span` 是 inline-flex，這一條繼承後
+  會把內部的文字節點與 <b> 各自變成 flex item —— 窄螢幕下「判定基準是」
+  會被擠成一字一行的直排。
+*/
+.ast-rule { display: block; flex-basis: 100%; line-height: 1.55; }
 .ast-rule b { color: var(--ink-secondary); font-weight: 600; }
 
 /* 時間軸本體。窄螢幕橫向捲動，頁面本身不得橫捲 */
@@ -2484,6 +2489,27 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink-muted); font-variant-numeric: tabular-nums;
 }
 
+/* 桌機不需要重複時刻（軸上已經標了），只在手機顯示 */
+.ast-when { display: none; }
+
 @media (max-width: 720px) {
   .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }
+
+  /*
+    手機隱藏時間軸本體。它需要約 700px 才畫得完，塞進 390px 只能靠橫捲——
+    而預設停在左端，借券與新聞的「次日 09:10」落在右半，等於看不出誰延遲了。
+    改由標籤列直接列出狀態與時刻，資訊不減，只是換一種形式。
+  */
+  .ast-tl-scroll { overflow-x: visible; }
+  .ast-tl { min-width: 0; }
+  .ast-ruler { display: none; }
+  .ast-track { display: none; }
+  .ast-row { grid-template-columns: 1fr auto; min-height: 0; padding: 9px 0; }
+  .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .ast-when { display: inline; font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .ast-date { display: inline; margin-top: 0; }
+
+  /* 圖例在窄螢幕會把「判定基準是」擠成直排，故手機改為單欄堆疊 */
+  .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .ast-rule { line-height: 1.6; }
 }

@@ -46,6 +46,17 @@ function Pill({ state, text }: { state: SourceState; text?: string }) {
   return <span className={`ast-pill ast-${state}`}>{text ?? STATE_TEXT[state]}</span>
 }
 
+/**
+ * 探針列數的括號段落。整段一起組，不要拆成兩個條件式 ——
+ * 只有其中一項有值時會印出沒有右括號的「（估值 1081 列」。
+ */
+function probeRows(probe: AdminStatus['probe']): string {
+  const parts: string[] = []
+  if (probe?.bwibbu_rows != null) parts.push(`估值 ${probe.bwibbu_rows} 列`)
+  if (probe?.borrow_rows != null) parts.push(`借券 ${probe.borrow_rows} 列`)
+  return parts.length ? `（${parts.join('、')}）` : ''
+}
+
 /** 'YYYYMMDD' → 'YYYY-MM-DD'（manifest 用的是無分隔格式） */
 function dashYmd(ymd: string | undefined): string {
   if (!ymd || ymd.length !== 8) return ''
@@ -211,14 +222,16 @@ export function AdminStatusPage() {
                   {TL_TICKS.slice(1).map((t) => (
                     <i className="ast-grid" key={t.h} style={{ left: `${tlPercent(t.h)}%` }} />
                   ))}
-                  <div
-                    className="ast-win"
-                    style={{
-                      left: `${tlPercent(spec.window[0])}%`,
-                      width: `${tlPercent(spec.window[1]) - tlPercent(spec.window[0])}%`,
-                    }}
-                  />
-                  {hour !== null && hour > spec.dueBy && (
+                  {spec.window && (
+                    <div
+                      className="ast-win"
+                      style={{
+                        left: `${tlPercent(spec.window[0])}%`,
+                        width: `${tlPercent(spec.window[1]) - tlPercent(spec.window[0])}%`,
+                      }}
+                    />
+                  )}
+                  {spec.window && hour !== null && hour > spec.dueBy && (
                     <div
                       className={`ast-lag ast-${state}`}
                       style={{
@@ -240,6 +253,8 @@ export function AdminStatusPage() {
                 </div>
                 <div className="ast-end">
                   <Pill state={state} />
+                  {/* 手機隱藏時間軸（橫捲看不到右半，等於看不出延遲），時刻改列在這裡 */}
+                  {hour !== null && <span className="ast-when">{tlLabel(hour)}</span>}
                   {date && <span className="ast-date">{date}</span>}
                 </div>
               </div>
@@ -298,8 +313,8 @@ export function AdminStatusPage() {
           <p className="ast-note" style={{ marginTop: 10 }}>
             盤後批次今日第 {data.batch.runsToday ?? 0} 輪
             {data.probe?.taipei_time && `・探針最後探測 ${data.probe.taipei_time}`}
-            {data.probe?.bwibbu_rows != null && `（估值 ${data.probe.bwibbu_rows} 列`}
-            {data.probe?.borrow_rows != null && `、借券 ${data.probe.borrow_rows} 列）`}
+            {/* 括號整段一起組，分成兩個條件式會在只有其中一項時印出沒閉合的括號 */}
+            {probeRows(data.probe)}
           </p>
         )}
       </div>

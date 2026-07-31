@@ -23,8 +23,12 @@ export interface ChainSpec {
   id: 'institutional' | 'daily' | 'margin' | 'borrow' | 'news'
   label: string
   hint: string
-  /** 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」 */
-  window: [number, number]
+  /**
+   * 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」。
+   * **null 代表這個來源沒有公布窗的概念**（新聞隨時都可能有，批次每輪都會試著抓）——
+   * 硬畫一個窗只會得到一條永遠抓不到東西的色塊，看起來像壞掉。
+   */
+  window: [number, number] | null
   /** 寬限截止：這個時間點之前沒拿到就算延遲。對應的是批次班次而非公布時刻 */
   dueBy: number
 }
@@ -33,7 +37,7 @@ export interface ChainSpec {
  * 台股盤後鏈。順序即畫面順序（依公布時間先後）。
  *
  * `dueBy` 的取法：公布窗結束後、盤後批次仍在跑的下一個班次。
- * 批次是台北 16:00–23:45 每 15 分，所以窗結束於 23:45 之後的（新聞），
+ * 批次是台北 16:00–23:45 每 15 分，所以沒有明確公布窗的（新聞），
  * 寬限給到隔天第一輪 09:15（＝ 18.25）。
  */
 export const TW_CHAIN: readonly ChainSpec[] = [
@@ -41,7 +45,7 @@ export const TW_CHAIN: readonly ChainSpec[] = [
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
   { id: 'margin', label: '融資融券', hint: 'MI_MARGN', window: [6, 7], dueBy: 7.5 },
   { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 8.75 },
-  { id: 'news', label: '個股新聞', hint: '每檔持股', window: [6, 9], dueBy: 18.25 },
+  { id: 'news', label: '個股新聞', hint: '每檔持股', window: null, dueBy: 18.25 },
 ]
 
 /** 時間軸刻度（小時數 → 標籤） */

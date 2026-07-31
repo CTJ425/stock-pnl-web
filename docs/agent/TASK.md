@@ -25,7 +25,9 @@
   authenticated·anon 不可）、10 檔與 `main` 一致、授權矩陣與測試區完全相同（admin 200 /
   一般 403 / 無 token 401 / CRON_SECRET 401 / RPC 直呼 401·403）、回應不含密鑰。
   `zrchen0425@gmail.com` 在兩區本來就是 admin，未異動任何帳號。
-- **待辦**：**UI 版面人工確認**（專案未裝 playwright，時間軸定位只有單元測試覆蓋座標計算）。
+- **UI 版面**（2026-07-31 14:10）：已安裝 Playwright 並掃 1440/1024/768/390px，
+  抓到四個真問題（手機看不出延遲、狀態欄消失、圖例直排、新聞畫了永遠抓不到的公布窗），
+  全部修正後四種寬度、深淺兩色皆通過。腳本收在 `sources/scripts/verify-admin-status.cjs`。
 
 ### Task 44: 修好「總經數據永遠慢一天」（BUG-008）
 - **Status**: ✅ **完成** —— 0.6.11 已進 `main`，兩區皆已部署並以 `functions download` 逐檔覆驗

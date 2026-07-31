@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: 新增「抓取狀況」管理員後台（0.6.12-dev.1）
-- Status: **完成 —— 0.6.12 已進 `main`，兩區皆已部署並覆驗（授權矩陣一致、回應不含密鑰）**
-- Timestamp: 2026-07-31 14:00:00 Asia/Taipei
+- Status: **完成 —— 兩區已部署並覆驗；Playwright 版面掃描四種寬度通過（0.6.13-dev.1 修四個版面問題）**
+- Timestamp: 2026-07-31 14:15:00 Asia/Taipei
 
 ---
 
@@ -99,11 +99,33 @@
 （法人 07-30 16:15、融資融券 07-30 21:00、借券 07-31 09:10 ← 次日補抓）、
 總經 4 項到 2026-06 / 消費者信心 2026-05、匯率 8 幣別。回應實測不含任何密鑰。
 
-### ⏳ 待辦
+### ✅ Playwright 版面掃描（2026-07-31 14:10，使用者要求後安裝）
 
-1. **UI 版面仍未經瀏覽器實測** —— 專案未裝 playwright（`verify` skill 明說別為此安裝），
-   時間軸的絕對定位只有單元測試覆蓋座標計算（`timeline.test.ts` 29 條）。
-   建議人工開一次確認版面，特別是窄視窗下的橫向捲動。
+`npm i -D playwright` + `npx playwright install chromium`；WSL2 還需
+`sudo playwright install-deps chromium`（缺 `libglib-2.0.so.0` 會直接 exit 127）。
+腳本收進 **`sources/scripts/verify-admin-status.cjs`**，掃 1440 / 1024 / 768 / 390px。
+
+驗的是 jsdom 碰不到的東西：橫向溢出、絕對定位是否落在軌道內、時刻標籤是否溢出所屬列、
+手機上該隱藏的有沒有隱藏、console 錯誤。
+
+**登入方式**：Agent 沒有帳號密碼，改以 Admin API 產生 magic link → 換 access_token →
+注入 `localStorage` 的 `sb-<ref>-auth-token`（supabase-js v2 的 session 位置），與真登入等價。
+
+#### 掃描抓到四個真問題（都已修）
+
+1. **手機看不出誰延遲了**。時間軸需要約 700px，390px 只能橫捲，而預設停在左端 ——
+   借券與新聞的「次日 09:10」落在右半，等於白畫。
+   改為手機隱藏軌道，由標籤列直接列出狀態與時刻（`.ast-when`），資訊不減。
+2. **手機上狀態欄整個消失**（`.ast-end` 被三欄 grid 擠掉）。改為兩欄並讓狀態靠右。
+3. **圖例「判定基準是」被擠成一字一行的直排**。`.ast-legend span` 是 `inline-flex`，
+   `.ast-rule` 繼承後把文字節點與 `<b>` 各自變成 flex item。補 `display: block`。
+4. **個股新聞畫了一個永遠抓不到東西的公布窗**。它其實沒有公布窗的概念
+   （隨時可能有，批次每輪都會試著抓）。`ChainSpec.window` 改為可 null，新聞設 null。
+
+另外修掉一個**尚未觸發**的字串 bug：探針列數的括號原本拆成兩個條件式，
+只有其中一項有值時會印出沒有右括號的「（估值 1081 列」。改為整段一起組（`probeRows()`）。
+
+### ⏳ 待辦
 2. `sources/.env.local` 已建立並指向**測試區**（gitignored）。
    要改回本機模式把兩行註解掉即可；要看正式區資料則換成正式區的 URL 與 anon key。
 3. `supabase link` 目前停在**正式區**（全域副作用）。下次要對測試區下 `db query --linked`
