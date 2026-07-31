@@ -15,6 +15,7 @@ import {
   judgeCron,
   judgePeriod,
   judgeSource,
+  ROUND_GRACE_HOURS,
   latestPeriod,
   periodsBehind,
   tlLabel,
@@ -86,6 +87,18 @@ describe('judgeSource', () => {
 
   it('過了寬限截止仍沒拿到 → 延遲', () => {
     expect(judgeSource(borrow, null, 12)).toBe('late')
+  })
+
+  it('剛好卡在 dueBy 之後幾秒仍算準時——判定以「輪次」為單位而非精確秒數', () => {
+    // 實測：三大法人 dueBy=1.5（16:30 那輪），而該輪在 16:30:03 才寫入 →
+    // 1.5009 小時。沒有輪次緩衝的話會差三秒被判成延遲，
+    // 而同一刻抓到的日 K 線（dueBy=2）卻顯示正常，畫面一紅一綠像壞掉。
+    expect(judgeSource(inst, 1.5009, 3)).toBe('ok')
+    expect(judgeSource(inst, inst.dueBy + ROUND_GRACE_HOURS - 0.01, 3)).toBe('ok')
+  })
+
+  it('超過該輪的緩衝才算延遲', () => {
+    expect(judgeSource(inst, inst.dueBy + ROUND_GRACE_HOURS + 0.01, 3)).toBe('late')
   })
 
   it('拿到了但不完整一律是 warn，不論早晚', () => {

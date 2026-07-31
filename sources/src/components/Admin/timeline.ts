@@ -83,10 +83,23 @@ export function tlLabel(hour: number): string {
 }
 
 /**
+ * 判定的輪次緩衝（小時）。盤後批次是每 15 分一輪，`dueBy` 指的是「哪一輪」
+ * 而不是精確到秒的時刻。
+ *
+ * ⚠️ 少了它會出現這種畫面：三大法人 `dueBy` 是 1.5（＝16:30 那輪），
+ * 而 16:30 那輪實際在 **16:30:03** 才寫入 —— 1.5009 > 1.5，**差三秒被判成延遲**，
+ * 而同一時刻抓到的日 K 線卻因為 `dueBy` 是 2 而顯示正常。
+ * 同一刻抓到卻一紅一綠，看起來就是壞的。
+ */
+export const ROUND_GRACE_HOURS = 0.25
+
+/**
  * 判定單一資料源的狀態。
  *
  * 沒拿到時，**還沒到 `dueBy` 就是 idle（等待中）而不是 late** ——
  * 每天傍晚都有一段時間資料本來就還沒公布，那時亮紅燈只會讓人學會忽略它。
+ *
+ * 拿到了則以 `dueBy + ROUND_GRACE_HOURS` 為界：只要落在那一輪之內就算準時。
  */
 export function judgeSource(
   spec: ChainSpec,
@@ -94,9 +107,10 @@ export function judgeSource(
   nowHour: number,
   partial = false,
 ): SourceState {
-  if (fetchedHour === null) return nowHour > spec.dueBy ? 'late' : 'idle'
+  const deadline = spec.dueBy + ROUND_GRACE_HOURS
+  if (fetchedHour === null) return nowHour > deadline ? 'late' : 'idle'
   if (partial) return 'warn'
-  return fetchedHour > spec.dueBy ? 'late' : 'ok'
+  return fetchedHour > deadline ? 'late' : 'ok'
 }
 
 /**

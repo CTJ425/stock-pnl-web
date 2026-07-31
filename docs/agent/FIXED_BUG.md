@@ -2,11 +2,41 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-31 12:35:00 Asia/Taipei
+- Timestamp: 2026-07-31 18:20:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-009 — 三大法人準時到手卻被判成「延遲」，差三秒
+- **Date**: 2026-07-31（0.6.13 引入，0.6.16 修復）
+- **Discovered by**: 使用者看畫面回報「這邊的延遲是什麼意思？」
+- **Symptom**: 「抓取狀況」頁的台股盤後時間軸，三大法人顯示紅色「延遲」，
+  但同一時刻（16:30）抓到的日 K 線卻顯示綠色「正常」。同一刻抓到卻一紅一綠。
+- **證據**（2026-07-31 正式區實測）:
+  `20260731/0050.json` 的 `sources.institutional.fetchedAt = 2026-07-31T08:30:03.218Z`
+  ＝台北 **16:30:03**，距基準 15:00 為 **1.5009 小時**；
+  而 `TW_CHAIN.institutional.dueBy = 1.5`（＝16:30:00 整）。
+- **Root Cause**: `judgeSource()` 用 `fetchedHour > spec.dueBy` 判定，
+  而 `dueBy` 的語意本來是「**哪一輪**」（盤後批次每 15 分一輪，16:30 那輪），
+  卻被寫成精確到秒的時刻。16:30 那輪實際在 16:30:03 才寫完 Storage，
+  **差三秒就跨過門檻**。日 K 線的 `dueBy` 是 2（17:00）所以沒事 ——
+  兩者同一刻抓到卻不同色，正是因為門檻寬鬆度不同。
+- **Fix**: 新增 `ROUND_GRACE_HOURS = 0.25`（一輪的長度），判定改為
+  `fetchedHour > spec.dueBy + ROUND_GRACE_HOURS`。語意回歸「落在那一輪內就算準時」。
+- **Changed Files**: `sources/src/components/Admin/timeline.ts`、`timeline.test.ts`、
+  `AdminStatusPage.tsx`（圖例補充說明）
+- **教訓**: **常數的單位語意要跟判定式一致。** `dueBy` 想表達的是「第幾輪」，
+  卻拿去跟一個精確到毫秒的時間戳直接比大小 —— 這種「離散意圖、連續比較」
+  只要邊界對齊就必然出事，而且 off-by-seconds 在測試裡很容易漏掉
+  （原本的測試都用 1.25、18.167 這種離邊界很遠的值）。
+  新增的測試特意用 `dueBy + 0.0009` 這種貼邊值把它釘住。
+- **順帶修正的混淆**: 圖例只寫「來源公布窗」，使用者因此問
+  「三大法人不是本來就週一至週五 16:00–23:45 每 15 分嗎？」——
+  那是**我們的批次排程**，淡色區塊是**證交所公布資料的時間**，兩者不同。
+  圖例已補上這個區別。
+- **Verification**: ✅ `npm test` 721/721（新增 2 條貼邊測試）、build 通過、
+  lint 僅 3 個既有 warning、Playwright 四種寬度深淺兩色掃描全過。
 
 ### Bug ID: BUG-008 — 總經數據永遠慢一天，冬令期間每個月固定慢一天
 - **Date**: 2026-07-31（0.6.5-dev.2 引入，0.6.11-dev.1 修復）
