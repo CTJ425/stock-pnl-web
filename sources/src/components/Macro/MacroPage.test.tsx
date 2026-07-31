@@ -10,6 +10,8 @@ import type { MacroData } from '../../services/macroProxy'
 
 const macro: MacroData = {
   asOf: '2026-07-28T07:33:38.000Z',
+  // 同一天檢查過 —— 這種情況不該多印一段「最後檢查」（沒有資訊量）
+  checkedAt: '2026-07-28T07:33:38.000Z',
   region: '美國',
   indicators: [
     {
@@ -85,6 +87,29 @@ describe('MacroPage', () => {
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
     expect(await screen.findByText(/資料更新於 2026-07-28 \d{2}:\d{2}/)).toBeTruthy()
+  })
+
+  it('同日檢查過時不多印「最後檢查」——那只會重複 asOf，沒有資訊量', async () => {
+    fetchMacro.mockResolvedValue(macro)
+    render(<MacroPage />)
+    await screen.findByText(/資料更新於/)
+    expect(screen.queryByText(/最後檢查/)).toBeNull()
+  })
+
+  it('資料已數日未變時補上「最後檢查」，讓沒發布與排程掛掉分得開', async () => {
+    // 0.6.11 起 asOf 只在資料真的變動時才跳，月度數據一個月才動一次。
+    // 少了這行，畫面上會像是壞掉了。
+    fetchMacro.mockResolvedValue({ ...macro, checkedAt: '2026-07-31T13:00:01.000Z' })
+    render(<MacroPage />)
+    expect(await screen.findByText(/最後檢查 2026-07-31 \d{2}:\d{2}/)).toBeTruthy()
+    expect(screen.getByText(/資料更新於 2026-07-28 \d{2}:\d{2}/)).toBeTruthy()
+  })
+
+  it('舊檔沒有 checkedAt 時照常渲染，不印空括號', async () => {
+    fetchMacro.mockResolvedValue({ ...macro, checkedAt: '' })
+    render(<MacroPage />)
+    await screen.findByText(/資料更新於/)
+    expect(screen.queryByText(/最後檢查/)).toBeNull()
   })
 
   it('走勢表以期別聯集為列，某指標缺該期時填「—」而非錯位', async () => {

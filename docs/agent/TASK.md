@@ -2,11 +2,34 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 22:10:00 Asia/Taipei
+- Timestamp: 2026-07-31 12:40:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 44: 修好「總經數據永遠慢一天」（BUG-008）
+- **Status**: 🔧 **程式完成，待部署** —— 0.6.11-dev.1 在 `dev` 分支，尚未部署任何環境
+- **Agent**: Claude
+- **Timestamp**: 2026-07-31 12:40:00 Asia/Taipei
+- **起因**：使用者問「總經目前怎麼抓的？可以每月或每季抓嗎？」，
+  追問時補上「可是像 PCE 已經有更新了，卻沒抓到？」——
+  查下去發現真正的問題不是頻率，是抓了卻拿到舊資料。
+- **根因**：`syncMacro` 的冪等鍵是台北日曆日。`macro-daily` 排兩班的用意是
+  「第一班沒接到就讓第二班補」，但第一班**成功抓到一份還沒更新的資料**時會寫入
+  `asOf` = 今天，第二班便直接跳過、一個請求都不發。
+  夏令 FRED 匯入慢於 13:00 那班；冬令發布時間（13:30 UTC）根本晚於 13:00，
+  於是冬令每個月固定慢一天。完整證據鏈（含 ALFRED vintage 比對）見 `FIXED_BUG.md` BUG-008。
+- **改法**：冪等改用 `macroFingerprint`（涵蓋整段 points，因 FRED 會回頭修正歷史值），
+  每班都真的去問 FRED，內容變了才寫檔；新增 `checkedAt` 與 `asOf` 分離。
+  `syncFx` 刻意不跟進（理由見 PROGRESS）。**未改排程頻率**。
+- **驗證**：lint / build 通過；`npm test` 632/632（新增 10 條）。
+- **待辦**：
+  1. 兩區 `functions deploy stock-report --no-verify-jwt`（需使用者授權；**不必跑 SQL**）。
+  2. 手動連打兩次 `sync-macro`：第一次 `reason: 'updated'`、
+     **第二次必須 `reason: 'unchanged'` 且 `asOf` 不變**（核心迴歸點）。
+  3. 覆驗 `macro/us.json` 的 `PCEPILFE.latest.period === '2026-06'`。
+  4. 併入 `main` 定版 0.6.11。
 
 ### Task 43: 修好「當天融資融券永遠進不了報告」（BUG-007）
 - **Status**: ✅ **完成** —— 0.6.10 已進 `main`，兩區 Edge Function 已部署並以 `functions download` 逐檔覆驗

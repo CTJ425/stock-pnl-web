@@ -17,6 +17,14 @@ import { Globe, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
+/** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
+function isSameDay(a: string, b: string): boolean {
+  const da = new Date(a)
+  const db = new Date(b)
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false
+  return da.toDateString() === db.toDateString()
+}
+
 /** 'YYYY-MM' → 'YYYY 年 MM 月' */
 function fmtPeriod(period: string | undefined): string {
   if (!period) return '—'
@@ -117,7 +125,17 @@ export function MacroPage() {
         <div className="rpt-section-head">
           <h3 className="head-tight">{macro.region}總體經濟</h3>
           {macro.asOf && (
-            <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(macro.asOf)}</span>
+            <span className="source-tag section-stamp">
+              資料更新於 {fmtUpdatedAt(macro.asOf)}
+              {/*
+                0.6.11 起 asOf 只在資料真的變動時才跳，月度數據一個月才動一次 ——
+                單看它會像是壞掉了。同日的檢查時間沒有資訊量（就是 asOf 本身），
+                只在不同日時才補上，讓「這個月還沒發布」與「排程掛了」分得開。
+              */}
+              {macro.checkedAt && !isSameDay(macro.checkedAt, macro.asOf) && (
+                <>（最後檢查 {fmtUpdatedAt(macro.checkedAt)}）</>
+              )}
+            </span>
           )}
           <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : undefined} />

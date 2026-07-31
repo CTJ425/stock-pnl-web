@@ -1,9 +1,84 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修好「當天融資融券永遠進不了報告」的重產閘門（BUG-007，0.6.10 定版）
-- Status: **完成 —— 0.6.10 已進 `main`、兩區 Edge Function 已部署並覆驗；今晚 21:00 那輪待觀察**
-- Timestamp: 2026-07-31 09:10:00 Asia/Taipei
+- Action: 修好「總經數據永遠慢一天」——冪等鍵由台北日改為內容指紋（BUG-008，0.6.11-dev.1）
+- Status: **程式完成、測試全綠（632/632）—— ⏳ 兩區部署與線上覆驗待辦**
+- Timestamp: 2026-07-31 12:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-31 12:40:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修 BUG-008 —— 總經的日期冪等把「當天的重試班次」整個消音
+- **Status**: CODE COMPLETE（尚未部署任何環境）
+
+### 起因
+
+使用者原本問的是「總體經濟目前怎麼抓的？可以改成每月或每季抓嗎？」，
+追問時補了一句「可是像 PCE 已經有更新了，卻沒抓到？」——
+**真正的問題不是頻率，是抓了卻拿到舊資料。**
+
+### 根因（完整證據鏈見 `FIXED_BUG.md` BUG-008）
+
+`syncMacro()` 的冪等鍵是台北日曆日：`taipeiDateOf(existing.asOf) === today` 就直接 return。
+而 `macro-daily` 排兩班（13:00 / 15:00 UTC）的用意是「第一班沒接到就讓第二班補」——
+第一班「**成功**抓到一份還沒更新的資料」時會寫入 `asOf` = 今天，
+第二班一看同一台北日就跳過、**一個請求都不發**。重試班次形同虛設。
+
+BEA 美東 8:30 發布 ＝ 夏令 12:30 UTC，FRED 匯入更晚，13:00 那班接不到；
+**冬令發布是 13:30 UTC，13:00 那班甚至跑在發布之前** —— 冬令每個月都固定慢一天。
+`schema.sql` §9 的原註解寫「兩班分別落在夏令與冬令之後」，設計意圖是對的，
+只是沒察覺自己的冪等會讓第二班永遠不執行。
+
+決定性證據是 ALFRED 的 vintage 比對：`vintage_date=2026-07-30` 已有 2026-06 的 PCE，
+且同時把 2026-05 由 130.082 修正為 130.094 —— 而線上檔的 yoy 3.41% 正好對應
+**修正後**的值，證明 13:00 那班抓到的是當天已更新的序列，只是 2026-06 還沒進去。
+
+### Completed Tasks
+- [x] `usMacro.ts`：新增 `macroFingerprint(indicators)`（重用 `pollPlan.ts` 的 `fingerprint`），
+      `MacroFile` 新增 `checkedAt`。**不升 `MACRO_SCHEMA`**（前端 `>=` 守門，加欄位無害）。
+- [x] `index.ts`：`syncMacro` 改為先抓、後比指紋、變了才寫；回傳值新增
+      `reason: 'updated' | 'unchanged' | 'empty'`（原本單一 boolean 分不出「沒變」與「抓不到」）。
+- [x] `index.ts`：`syncFx` 的註解修正 —— 它原本寫「與 syncMacro 逐條對應（台北日冪等…）」，
+      已不成立；並記錄**匯率刻意不跟進**的理由。
+- [x] `schema.sql` §9 / §10：**只改註解，零可執行 SQL 變動**（`git diff` 已確認）。
+- [x] 前端：`macroProxy.ts` 加 `checkedAt` 正規化；`MacroPage.tsx` 在兩者不同日時
+      補顯示「（最後檢查 …）」—— 否則 `asOf` 一個月才跳一次，看起來像壞了。
+- [x] 測試：`usMacro.test.ts` +7（含「歷史值被修正也算變動」「null 與 0 不同」），
+      `MacroPage.test.tsx` +3（同日不印、不同日補印、舊檔無欄位）。
+- [x] `sources/supabase/README.md`：修掉「觸發＝`generate-all` 內獨立一行」的失準敘述
+      （那是 0.6.5-dev.1 的舊事實，dev.2 已拆成獨立 cron），並補上兩個時間欄位的語意差別。
+- [x] 版號 0.6.11-dev.1 三處同步。
+- [x] 驗證：`npm run lint`（僅 3 個既有 warning）、`npm run build` 通過，`npm test` 632/632。
+
+### 關鍵設計決定
+
+1. **指紋涵蓋整段 points，不只比最新一期。** FRED 會回頭修正歷史值
+   （本次 vintage 就同時改了 2026-04 與 2026-05，最新期別沒變）。
+   只比 `latest` 的話，這類修正會被判定為「沒變動」而永遠追不上。
+2. **`asOf` 與 `checkedAt` 分離。** 前者是資料最後變動時間（月度資料一個月才跳一次，
+   屬正常）、後者是最後一次問過 FRED 的時間。合而為一正是慢一天的成因：
+   「今天問過了」與「今天有新資料」分不開。查健康度看 `checkedAt`，查新舊看 `asOf`。
+3. **`syncFx` 刻意不跟進。** 匯率每個交易日都收出新價，03:00 那班（紐約收盤後）
+   拿到的必然已是完整的前一交易日日線，第二班補不到東西；
+   對每天都變的資料，內容指紋只會每次都判定「變了」，徒增一次無謂抓取。
+4. **沒有改排程頻率。** 使用者原本設想的「每月/每季抓一次」會讓問題更嚴重：
+   五個指標發布日各不相同（非農每月第一個週五、CPI 月中、PCE 月底），
+   一個月跑一次只能對準其中一個；且降頻後單次失敗的代價從「明天補上」變成「停一個月」。
+   維持每天兩班，代價只是每天多五個 CSV 請求。
+
+### ⏳ 待辦（下一位 Agent 從這裡接手）
+
+1. **兩區部署**（需使用者明確授權，CLAUDE.md §13.2）：
+   `supabase functions deploy stock-report --no-verify-jwt`，先測試區。
+   **不需要跑任何 SQL** —— schema.sql 這次只動註解。
+2. **線上覆驗的關鍵一步**：手動打兩次 `{"action":"sync-macro"}`（帶 `x-cron-secret`）。
+   第一次應回 `reason: 'updated'`（線上檔缺 2026-06 PCE），
+   **第二次必須回 `reason: 'unchanged'` 且 `asOf` 不變** —— 這是本修正的核心行為，
+   若第二次仍是 `updated`，代表指紋不穩定（比照 BUG-004 的排序陷阱）。
+3. 覆驗 `macro/us.json` 的 `PCEPILFE.latest.period === '2026-06'`。
+4. 確認無誤後依 §13.1 併入 `main` 定版 0.6.11，README 版本紀錄定稿。
 
 ---
 

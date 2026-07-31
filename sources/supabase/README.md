@@ -280,8 +280,8 @@ supabase functions deploy stock-report --no-verify-jwt
 | 來源 | `https://fred.stlouisfed.org/graph/fredgraph.csv?id={序列}&cosd={起始日}` |
 | 序列 | `CPILFESL` / `PPIFES` / `PCEPILFE` / `PAYEMS` / `UMCSENT` |
 | 金鑰 | **不需要**（FRED 的 REST API 要，fredgraph 的 CSV 匯出不用） |
-| 觸發 | `generate-all` 內獨立一行，**不進 tickers 迴圈、不進 warm** |
-| 跳過 | 同一台北日曆日已抓過就跳過（比照 `syncNews`） |
+| 觸發 | 獨立的 `macro-daily` cron（`0 13,15 * * *`）打 `{"action":"sync-macro"}`，**不進 tickers 迴圈、不進 warm**（0.6.5-dev.1 曾掛在 `generate-all` 內，dev.2 拆出來） |
+| 跳過 | **內容指紋一樣才跳過**，不看日期（0.6.11 起，見下方 BUG-008） |
 | 快取 | **不寫 `chip_raw_cache`**（月份鍵會被 prune 依 8 碼日期字典序刪光） |
 
 > **抓原始值自己算年增 / 月增**，不用 `transformation=pc1`：同一份序列可算出多種口徑，
@@ -289,6 +289,20 @@ supabase functions deploy stock-report --no-verify-jwt
 >
 > **實測要點**：CSV 會有空值列（例 `1952-12,`），必須保留為 null ——
 > 跳過會讓「前一期」錯位，補 0 會讓年增率變天文數字。
+>
+> **冪等為什麼不是日期（BUG-008，0.6.11 修）**：原本是「同一台北日抓過就跳過」，
+> 但 `macro-daily` 排兩班的用意就是「第一班沒接到就讓第二班補」——
+> 第一班「成功」抓到一份**還沒更新**的資料時，日期冪等會讓第二班一個請求都不發。
+> 2026-07-30 的核心 PCE 就是如此：BEA 美東 8:30 發布、FRED 匯入更晚，
+> 13:00 那班拿到的序列還沒有 2026-06；冬令時發布時間是 13:30 UTC，13:00 那班
+> 甚至跑在發布之前，每個月固定慢一天。改成 `macroFingerprint` 比對整段 points 後解決。
+>
+> 指紋**要涵蓋整段序列而非只比最新一期** —— FRED 會回頭修正歷史值
+> （2026-07-30 那次 vintage 同時改了 2026-04 與 2026-05，最新期別沒變）。
+>
+> 檔案有兩個時間欄位，別搞混：`asOf` 是**資料最後變動**的時間（沒新數據就不動，
+> 月度資料一個月才跳一次，那是正常的）、`checkedAt` 是**最後一次問過 FRED** 的時間
+> （每班都更新）。查健康度看 `checkedAt`，查資料新舊看 `asOf`。
 
 #### 月營收歷史回補（0.6.4 起）
 

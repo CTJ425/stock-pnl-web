@@ -2,11 +2,64 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-29 17:10:00 Asia/Taipei
+- Timestamp: 2026-07-31 12:35:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-008 — 總經數據永遠慢一天，冬令期間每個月固定慢一天
+- **Date**: 2026-07-31（0.6.5-dev.2 引入，0.6.11-dev.1 修復）
+- **Discovered by**: 使用者回報「可是像 PCE 已經有更新了，卻沒抓到？」
+- **Symptom**: 總體經濟頁的核心 PCE 停在 2026-05，而 FRED 上 2026-06 已經有了。
+  兩區（正式 / 測試）皆同。畫面的「資料更新於」顯示 2026-07-30 21:00，
+  看起來排程有跑、資料卻是舊的。
+- **證據鏈**（2026-07-31 12:03 台北實測）:
+  1. **線上檔**：兩區 `macro/us.json` 的 `asOf = 2026-07-30T13:00:01Z`（台北 7/30 21:00），
+     `PCEPILFE.latest.period = '2026-05'`。
+  2. **FRED 現況**：`PCEPILFE` 已有 `2026-06-01,130.266`。
+  3. **ALFRED vintage 比對**（關鍵）：`vintage_date=2026-07-29` 只到 2026-05（值 130.082）；
+     `vintage_date=2026-07-30` **已有 2026-06**，且同時把 2026-05 修正為 130.094。
+     ⇒ 2026-06 那一筆是 **7/30 當天**才上架的。
+  4. **交叉驗證抓取當下的狀態**：線上檔的 PCE yoy = 3.41%，回推基期對應的是
+     **修正後**的 130.094 —— 證明 13:00 UTC 那班確實抓到了當天已更新過的序列，
+     只是 2026-06 那一筆在那個時間點還沒進 FRED。
+- **Root Cause**: `syncMacro()` 的冪等鍵是**台北日曆日**
+  （`taipeiDateOf(existing.asOf) === today` 就 return）。
+  `macro-daily` 排兩班（13:00 / 15:00 UTC）的用意是「第一班沒接到就讓第二班補」，
+  但第一班「**成功**抓到一份還沒更新的資料」時會寫入 `asOf` = 今天，
+  第二班一看同一台北日就直接跳過、**一個請求都不發** —— 專為此設計的重試班次形同虛設。
+  BEA 美東 8:30 發布 ＝ 夏令 12:30 UTC，FRED 從 BEA 匯入還要更久，13:00 那班接不到；
+  冬令發布時間是 13:30 UTC，13:00 那班**甚至跑在發布之前**，
+  於是冬令期間每個月的數據都固定慢一天。`schema.sql` §9 原註解說
+  「兩班分別落在夏令與冬令之後」，但沒察覺第一班成功會讓第二班永遠不執行 ——
+  設計意圖與實作互相抵消。
+- **Fix**:
+  - `usMacro.ts` 新增 `macroFingerprint(indicators)` 純函式（重用 `pollPlan.ts` 的
+    `fingerprint`），`syncMacro` 改為**先抓、後比、變了才寫**，移除日期短路。
+  - 指紋**涵蓋整段 points 而非只比最新一期**：FRED 會回頭修正歷史值
+    （本次 vintage 就同時改了 2026-04 與 2026-05，最新期別沒變），
+    只比 latest 會讓這類修正永遠追不上。
+  - `MacroFile` 新增 `checkedAt`（最後一次問過 FRED 的時間），與 `asOf`
+    （資料最後變動時間）分離。內容沒變時只更新 `checkedAt`、不動 `asOf`。
+  - 前端在兩者不同日時補顯示「（最後檢查 …）」，否則使用者會看到一個
+    好幾天不動的日期而以為壞了。
+  - `syncFx` **刻意不跟進**：匯率每個交易日都收出新價，03:00 那班拿到的必然
+    已是完整的前一交易日日線，第二班補不到東西，改指紋只會每次都判定「變了」。
+- **Changed Files**: `sources/supabase/functions/stock-report/usMacro.ts`、
+  `usMacro.test.ts`、`index.ts`、`sources/supabase/schema.sql`（**僅註解**）、
+  `sources/supabase/README.md`、`sources/src/services/macroProxy.ts`、
+  `sources/src/components/Macro/MacroPage.tsx`、`MacroPage.test.tsx`、
+  `sources/src/components/StockDetail/aiPayload.test.ts`
+- **教訓**: **「今天執行過」不等於「今天拿到新資料」。** 用日期當冪等鍵，
+  等於假設「排程時間一到，來源就已經備妥」—— 對自己控制的資料成立，
+  對外部發布時程（尤其跨時區、跨日光節約時間）不成立。
+  凡是「排多班當重試」的設計，冪等鍵就必須是**內容**而不是時間，
+  否則第一班的成功會把後續班次全部消音，多排的班次只是心理安慰。
+  代價僅是每天多五個 HTTP 請求。
+- **Verification**: ✅ `npm run lint`（僅 3 個既有 warning）/ `npm run build` 通過；
+  `npm test` 632/632（原 622 + 新增 10）。
+  ⏳ 兩區部署與線上覆驗待辦（見 PROGRESS.md）。
 
 ### Bug ID: BUG-007 — 當天的融資融券永遠進不了報告，籌碼頁那一區恆為空
 - **Date**: 2026-07-31（0.6.1-dev.1 `7e27a58` 引入，0.6.10 修復）

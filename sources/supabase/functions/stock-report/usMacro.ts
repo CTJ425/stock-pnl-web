@@ -29,6 +29,7 @@
  */
 
 import { normNum } from './twChips.ts'
+import { fingerprint } from './pollPlan.ts'
 
 /**
  * macro/us.json 的結構版本。前端守門用 `>=`（見 src/services/macroProxy.ts）。
@@ -112,8 +113,17 @@ export interface MacroIndicator {
 /** Storage 內 macro/us.json 的結構。**全域單檔，不是 per-ticker** */
 export interface MacroFile {
   schema: number
-  /** 我們實際產出它的時間 ISO */
+  /**
+   * **資料最後一次真的變動**的時間 ISO（不是最後一次執行的時間）。
+   * 內容沒變時不會動它，所以它停著不代表排程壞了 —— 那要看 `checkedAt`。
+   */
   asOf: string
+  /**
+   * 最後一次真的去問過 FRED 的時間 ISO。與 `asOf` 分離是 0.6.11 的修正：
+   * 兩者合一時，「今天問過了」與「今天有新資料」分不開，正是慢一天的成因。
+   * 舊檔沒有這個欄位，故為選填。
+   */
+  checkedAt?: string
   region: '美國'
   indicators: MacroIndicator[]
 }
@@ -223,4 +233,30 @@ export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): Macro
 /** 小數兩位，避免浮點尾巴（沿用 aiPayload 的作法） */
 function round2(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+/**
+ * 一組指標的內容指紋。`syncMacro` 用它決定「這次抓到的跟檔案裡的是不是同一份」。
+ *
+ * **為什麼需要它**（0.6.11 修 BUG-008）：原本的冪等鍵是台北日曆日 ——
+ * 今天抓過就跳過。但 macro-daily 排兩班（13:00 / 15:00 UTC）的用意是
+ * 「第一班沒接到就讓第二班補」，而第一班「成功抓到一份還沒更新的資料」時，
+ * 台北日冪等會讓第二班一個請求都不發，於是要等到隔天。
+ * 2026-07-30 的核心 PCE 就是這樣慢一天：BEA 美東 8:30 發布、FRED 匯入更晚，
+ * 13:00 那班抓到的序列還沒有 2026-06 那一筆。
+ * 改用內容指紋後，「今天問過了」與「今天拿到新東西了」才分得開。
+ *
+ * **要涵蓋整段 points，不能只比最新一期**：FRED 會回頭修正歷史值
+ * （2026-07-30 那次 vintage 就同時把 2026-04 與 2026-05 改掉了）。
+ * 只比 latest 的話，「最新期沒變但前幾期被修正」會被判定為沒變動而永遠不更新。
+ *
+ * **要先排序**：沿用 `pollPlan.ts` 的教訓 —— 來源的順序不保證穩定，
+ * 直接對整包算指紋會把「順序換了」誤判成「內容變了」，讓比對永遠失效。
+ * 這裡的 `parts` 以 `id` 開頭，排序 `parts` 即等同依 `id` 排序。
+ */
+export function macroFingerprint(indicators: readonly MacroIndicator[]): string {
+  const parts = indicators
+    .map((i) => `${i.id}|${i.points.map((p) => `${p.period}=${p.value ?? ''}`).join(',')}`)
+    .sort()
+  return fingerprint(parts)
 }

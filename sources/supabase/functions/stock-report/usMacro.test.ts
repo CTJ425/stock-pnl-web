@@ -6,7 +6,9 @@ import {
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
+  macroFingerprint,
   parseFredCsv,
+  type MacroIndicator,
   type MacroSeriesSpec,
 } from './usMacro.ts'
 
@@ -133,6 +135,59 @@ describe('FRED_SERIES', () => {
       'PAYEMS:momThousands',
       'UMCSENT:index',
     ])
+  })
+})
+
+describe('macroFingerprint', () => {
+  /** 造一個指標，只有 points 是重點 */
+  const ind = (id: string, points: [string, number | null][]): MacroIndicator => ({
+    id,
+    label: id,
+    kind: 'yoy',
+    unit: '%',
+    note: '',
+    latest: points.length ? { period: points[points.length - 1][0], value: points[points.length - 1][1] } : null,
+    previous: null,
+    points: points.map(([period, value]) => ({ period, value })),
+  })
+
+  const base = [
+    ind('CPILFESL', [['2026-05', 2.82], ['2026-06', 2.57]]),
+    ind('PCEPILFE', [['2026-04', 3.32], ['2026-05', 3.41]]),
+  ]
+
+  it('同一份資料算出同一個指紋', () => {
+    expect(macroFingerprint(base)).toBe(macroFingerprint(base.map((i) => ({ ...i }))))
+  })
+
+  it('指標順序對調不影響指紋——來源的順序不保證穩定', () => {
+    expect(macroFingerprint([...base].reverse())).toBe(macroFingerprint(base))
+  })
+
+  it('多出一期就是不同指紋（這正是慢一天要偵測的變化）', () => {
+    const next = [base[0], ind('PCEPILFE', [['2026-04', 3.32], ['2026-05', 3.41], ['2026-06', 3.5]])]
+    expect(macroFingerprint(next)).not.toBe(macroFingerprint(base))
+  })
+
+  it('歷史值被修正也算變動——只比最新一期會漏掉 FRED 的回頭修正', () => {
+    // 2026-07-30 的 vintage 就同時把 2026-04 與 2026-05 改掉了，
+    // 最新一期的期別沒變。指紋只涵蓋 latest 的話，這種修正永遠追不上。
+    const revised = [base[0], ind('PCEPILFE', [['2026-04', 3.33], ['2026-05', 3.41]])]
+    expect(macroFingerprint(revised)).not.toBe(macroFingerprint(base))
+  })
+
+  it('少一個指標算不同指紋（某序列抓不到時不該被當成沒變動）', () => {
+    expect(macroFingerprint([base[0]])).not.toBe(macroFingerprint(base))
+  })
+
+  it('null 與 0 不得算成同一件事', () => {
+    const withNull = [ind('X', [['2026-06', null]])]
+    const withZero = [ind('X', [['2026-06', 0]])]
+    expect(macroFingerprint(withNull)).not.toBe(macroFingerprint(withZero))
+  })
+
+  it('空陣列不拋例外', () => {
+    expect(typeof macroFingerprint([])).toBe('string')
   })
 })
 

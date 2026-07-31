@@ -452,6 +452,7 @@ describe('aiPayload', () => {
 
     const macro = {
       asOf: '2026-07-28T02:00:00.000Z',
+      checkedAt: '2026-07-28T02:00:00.000Z',
       region: '美國',
       indicators: [
         {

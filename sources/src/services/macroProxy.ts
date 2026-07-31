@@ -32,8 +32,16 @@ export interface MacroIndicator {
 }
 
 export interface MacroData {
-  /** 批次產出時間 ISO */
+  /**
+   * **資料最後一次變動**的時間 ISO（不是最後一次執行排程的時間）。
+   * FRED 沒發布新數據時它會停著不動，那是正常的 —— 別把它當成健康度指標。
+   */
   asOf: string
+  /**
+   * 排程最後一次真的去問過 FRED 的時間 ISO。0.6.11 起才有，舊檔為空字串。
+   * 有了它，「這個月還沒發布」與「排程掛了」才分得開。
+   */
+  checkedAt: string
   region: string
   indicators: MacroIndicator[]
 }
@@ -47,6 +55,7 @@ export const MIN_MACRO_SCHEMA = 1
 interface StoredMacro {
   schema?: number
   asOf?: string
+  checkedAt?: string
   region?: unknown
   indicators?: unknown
 }
@@ -104,6 +113,8 @@ export async function fetchMacro(): Promise<MacroData | null> {
 
   return {
     asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
+    // 0.6.11 之前產出的檔案沒有這個欄位，回空字串讓畫面自行決定要不要顯示
+    checkedAt: typeof stored.checkedAt === 'string' ? stored.checkedAt : '',
     region: typeof stored.region === 'string' ? stored.region : '美國',
     indicators,
   }

@@ -99,6 +99,7 @@ import {
   fredCsvUrl,
   fredSinceDate,
   MACRO_UA,
+  macroFingerprint,
   parseFredCsv,
   type MacroFile,
   type MacroIndicator,
@@ -1001,22 +1002,32 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
  *    寫成 per-ticker 只是把同一份資料抄 N 遍。形狀最接近 `manifest.json`。
  * 2. **不進 `tickers` 迴圈、不進 `warmStock`**。它與個股無關，
  *    掛進去只會讓「新增一檔股票」誤觸五次對外請求。
- * 3. **跳過條件用台北日曆日，不用 `dataYmd`**（比照 `syncNews`）。
- *    美國數據按自己的發布日走，與台股交易日無關；用交易日當鍵會在連假期間停更。
+ * 3. **冪等鍵是內容指紋，不是日期**（0.6.11 起，修 BUG-008）。
+ *    原本是「同一台北日抓過就跳過」，但 `macro-daily` 排兩班（13:00 / 15:00 UTC）
+ *    的用意就是「第一班沒接到就讓第二班補」—— 而第一班「成功抓到一份還沒更新的
+ *    資料」時，日期冪等會讓第二班一個請求都不發，於是要等到隔天。
+ *    2026-07-30 的核心 PCE 正是如此：BEA 美東 8:30 發布（夏令 12:30 UTC）、
+ *    FRED 匯入更晚，13:00 那班拿到的序列還沒有 2026-06 那一筆；冬令時發布時間是
+ *    13:30 UTC，13:00 那班甚至跑在發布之前，每個月都會固定慢一天。
+ *    代價只是每天多五個 CSV 請求（兩班各抓一次），換掉一個必然發生的錯誤。
+ *    ⚠️ 不用 `dataYmd`（比照 `syncNews`）：美國數據按自己的發布日走，
+ *    與台股交易日無關，用交易日當鍵會在連假期間停更。
  * 4. **不寫 `chip_raw_cache`**。那張表的 prune 是 `ymd < cutoff` 的 8 碼日期字典序，
  *    月份鍵每輪都會被刪掉（`backfillRevenue` 就是為此不用它）。
- *    `macro/us.json` 自己就是快取 —— 一天只抓一次。
+ *    `macro/us.json` 自己就是快取。
  * 5. **全部失敗就不覆寫既有檔**，沿用 `syncNews` 的準則：留舊資料勝過空檔。
  */
-async function syncMacro(
-  now: Date,
-): Promise<{ synced: boolean; count: number; asOf: string | null }> {
-  const today = taipeiDateOf(now.toISOString())
+async function syncMacro(now: Date): Promise<{
+  /** 這次有沒有真的寫檔（＝內容變了且上傳成功） */
+  synced: boolean
+  /** 抓到的指標數；配合 `reason` 才分得出「沒變」與「抓不到」 */
+  count: number
+  /** 資料最後變動時間（沒變時是既有檔的舊值） */
+  asOf: string | null
+  /** updated：有新資料｜unchanged：問過了但內容一樣｜empty：五個序列全滅 */
+  reason: 'updated' | 'unchanged' | 'empty'
+}> {
   const existing = await downloadJson<MacroFile>('macro/us.json')
-  if (existing && existing.schema === MACRO_SCHEMA && taipeiDateOf(existing.asOf) === today) {
-    // 今天已經抓過。count 用既有的指標數，才分得出「跳過」與「抓不到」
-    return { synced: false, count: existing.indicators?.length ?? 0, asOf: existing.asOf }
-  }
 
   const since = fredSinceDate(now, MACRO_LOOKBACK_MONTHS)
   const indicators: MacroIndicator[] = []
@@ -1036,13 +1047,35 @@ async function syncMacro(
     }
   }
   // 全滅時不覆寫既有檔（沿用 syncNews 的準則：留舊資料勝過空檔）。
-  // 回傳 count = 0 讓 batch_run_log 記得下來 —— 這裡曾經整批失敗而只剩
-  // 一個 boolean false 可看，查不出是「跳過」還是「抓不到」。
-  if (indicators.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
+  // 回傳 count = 0 並標記 reason —— 這裡曾經整批失敗而只剩一個 boolean false
+  // 可看，查不出是「跳過」還是「抓不到」。
+  if (indicators.length === 0) {
+    return { synced: false, count: 0, asOf: existing?.asOf ?? null, reason: 'empty' }
+  }
+
+  // 內容沒變就不動 asOf，讓它保持「資料最後真的變動」而非「最後跑過」的時間
+  // （沿用 pollPlan 的 runSignature 準則：輸入指紋沒變就不該讓時間戳跳動）。
+  // 仍要寫一次檔以更新 checkedAt —— 那是「排程還活著」的唯一線索，
+  // 否則畫面上只會看到一個好幾天不動的日期，分不出是沒新資料還是排程掛了。
+  if (
+    existing?.schema === MACRO_SCHEMA &&
+    Array.isArray(existing.indicators) &&
+    macroFingerprint(existing.indicators) === macroFingerprint(indicators)
+  ) {
+    // 寫失敗也不是大事：下一班會再試，資料本身還在檔案裡
+    await uploadJson('macro/us.json', { ...existing, checkedAt: now.toISOString() })
+    return {
+      synced: false,
+      count: indicators.length,
+      asOf: existing.asOf,
+      reason: 'unchanged',
+    }
+  }
 
   const file: MacroFile = {
     schema: MACRO_SCHEMA,
     asOf: now.toISOString(),
+    checkedAt: now.toISOString(),
     region: '美國',
     indicators,
   }
@@ -1051,20 +1084,25 @@ async function syncMacro(
     synced: ok,
     count: indicators.length,
     asOf: ok ? file.asOf : (existing?.asOf ?? null),
+    reason: 'updated',
   }
 }
 
 /**
  * 抓台幣對主要 8 種外幣的匯率，寫入 `fx/twd.json`（全域單檔）。
  *
- * 結構與 `syncMacro` 逐條對應（台北日冪等、單一失敗不影響其他、全滅不覆寫），
- * 只有兩點是匯率獨有的：
+ * 結構大致與 `syncMacro` 對應（單一失敗不影響其他、全滅不覆寫），三點差異：
  *
  * 1. **每個幣別要試兩個方向的幣對**。Yahoo 有一側是「回 200、結構完整、
  *    但只有一格資料」，而且哪一側是死的因幣別而異（實測 CNYTWD=X 與 TWDEUR=X
  *    都只回一格，方向還相反）。故以 `FX_MIN_POINTS` 判定夠不夠，不夠就換下一個候選。
  *    詳見 fxRates.ts 的 FxSpec.symbols 註解。
  * 2. **成功就跳出候選迴圈**，正常情況下每個幣別只發一次請求，八個幣別八次。
+ * 3. **冪等仍是台北日曆日，刻意不跟進 `syncMacro` 的內容指紋**（0.6.11）。
+ *    總經改指紋是因為「月度數據當天稍晚才發布」，第一班抓到的可能是舊的一期；
+ *    匯率沒有這個問題 —— 它每個交易日都收出一個新價，03:00 UTC 那班（紐約收盤後）
+ *    拿到的必然已是完整的前一交易日日線，第二班補不到任何東西。
+ *    對每天都變的資料而言，內容指紋只會每次都判定「變了」，徒增一次無謂的抓取。
  */
 async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf: string | null }> {
   const today = taipeiDateOf(now.toISOString())
@@ -1550,6 +1588,9 @@ async function handleSyncMacro(): Promise<Response> {
   return json({
     ok: true,
     synced: macro.synced,
+    // 單一 boolean 分不出「內容沒變」與「一個序列都抓不到」，那正是 0.6.5 查 BUG 時
+    // 只剩 macroSynced: false 可看的窘境。reason 是唯一能事後判讀的線索
+    reason: macro.reason,
     count: macro.count,
     asOf: macro.asOf,
     durationMs: Date.now() - startedAt,
