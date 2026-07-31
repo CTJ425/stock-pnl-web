@@ -510,6 +510,18 @@ SELECT cron.schedule(
 --        13:00 抓到的仍可能是缺最新一期的序列。兩班合起來才蓋得住四季。
 --      - **兩班都在同一個台北日內**（台北日界線是 16:00 UTC）。
 --
+--    **0.6.15 起改為 `*/30 12-18 * * *`（台北 20:00–02:30 每 30 分，14 班）**，
+--    因為函式端已改為「發布行事曆驅動的自適應掃描」（見 functions/stock-report/
+--    macroCalendar.ts）：平常每天只在第一班真的去問 FRED，發布日才從發布時刻起
+--    密集掃到抓著為止，**抓到就完全不再打 FRED**。
+--    班次變多不等於請求變多 —— 實測第 2 班之後一律 `reason: 'skipped'`、
+--    75–650ms（只讀一次 Storage），整體對外請求反而比原本的兩班盲掃還少。
+--
+--    ⚠️ **改這一段的時間請用 `cron.alter_job`，不要重跑整個 `cron.schedule`**
+--    （見 §6d）：重跑會把 command 打回佔位符，那是 BUG-002/003 燒掉正式區的原因。
+--      SELECT cron.alter_job(jobid, schedule => '<新的>') FROM cron.job WHERE jobname='macro-daily';
+--    並把「目標 ref 是不是自己」放進同一次查詢當守門，不要分兩次查。
+--
 --    ⚠️ **函式端的冪等鍵是內容指紋，不是日期**（0.6.11 起，修 BUG-008）。
 --    原本是「同一台北日已抓過就跳過」，那讓上面第二班的設計完全失效：
 --    第一班「成功」抓到一份還沒更新的資料就會寫檔，第二班一看同一台北日
@@ -528,7 +540,7 @@ END $$;
 
 SELECT cron.schedule(
   'macro-daily',
-  '0 13,15 * * *',
+  '*/30 12-18 * * *',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
