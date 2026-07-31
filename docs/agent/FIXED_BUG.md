@@ -59,7 +59,13 @@
   代價僅是每天多五個 HTTP 請求。
 - **Verification**: ✅ `npm run lint`（僅 3 個既有 warning）/ `npm run build` 通過；
   `npm test` 632/632（原 622 + 新增 10）。
-  ⏳ 兩區部署與線上覆驗待辦（見 PROGRESS.md）。
+  ✅ **測試區線上覆驗（2026-07-31 12:37）**：部署後以 `functions download` 逐檔比對
+  10 個檔案全部與 `dev` 一致。連打兩次 `sync-macro`：
+  第 1 次 `reason: 'updated'`、`asOf=04:37:19.466Z`、3892ms；
+  第 2 次 `reason: 'unchanged'`、**`asOf` 完全不變**、1020ms（有真的抓 FRED，不是短路）。
+  ⇒ 指紋穩定，沒有踩到 BUG-004 的排序陷阱。
+  `macro/us.json` 的 `PCEPILFE.latest` 已由 2026-05 補上 **2026-06 = 3.29%**，
+  `checkedAt` 比 `asOf` 晚 4 秒（第二次呼叫只更新檢查時間），語意分離符合預期。
 
 ### Bug ID: BUG-007 — 當天的融資融券永遠進不了報告，籌碼頁那一區恆為空
 - **Date**: 2026-07-31（0.6.1-dev.1 `7e27a58` 引入，0.6.10 修復）
