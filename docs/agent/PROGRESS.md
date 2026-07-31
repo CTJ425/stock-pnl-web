@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: 新增「抓取狀況」管理員後台（0.6.12-dev.1）
-- Status: **程式完成、671 測試全綠、測試區已部署並驗過授權矩陣 —— ⏳ 正式區待部署**
-- Timestamp: 2026-07-31 13:55:00 Asia/Taipei
+- Status: **完成 —— 0.6.12 已進 `main`，兩區皆已部署並覆驗（授權矩陣一致、回應不含密鑰）**
+- Timestamp: 2026-07-31 14:00:00 Asia/Taipei
 
 ---
 
@@ -70,14 +70,44 @@
 
 回應內容已實測不含 `x-cron-secret`、service_role key 或任何密鑰。
 
+### ✅ 正式區部署與覆驗（2026-07-31 13:55）
+
+0.6.12 已 ff-merge 進 `main` 並 push（GitHub Pages 部署成功，33 秒）。
+
+1. **link 正式區時帶身分檢查**（`supabase-ops` skill 的對策）：
+   查詢同時撈 `cron.job` 的目標 ref，確認為 `kxnxadaghidwumqsqneu`（自己）才繼續 ——
+   BUG-002/003 就是在這一步出的事。
+2. **`schema.sql` §11 只跑那一段**（未整份重跑）。權限實測：
+   `service_role` 可執行、`authenticated` 與 `anon` 皆不可。
+3. `functions deploy --no-verify-jwt` 後 `functions download` 逐檔比對，
+   10 個 `.ts` 全部與 `main` 一致。
+
+**正式區授權矩陣**（與測試區完全一致）：
+
+| 呼叫者 | 結果 |
+| ---- | ---- |
+| admin 帳號 JWT | **200**（557ms） |
+| 一般使用者 JWT | **403** |
+| 無 token | **401** |
+| CRON_SECRET | **401** |
+| anon / admin 直呼 RPC | **401 / 403** |
+
+**帳號現況**：`zrchen0425@gmail.com` 在兩區皆已是 `app_metadata.role = 'admin'`
+（先前為 AI 設定設好的，本次未異動任何帳號）。正式區另兩個帳號 `role` 為 null。
+
+正式區實際資料：排程 4 個（目標 ref 全部指向自己）、籌碼三源時間戳齊全
+（法人 07-30 16:15、融資融券 07-30 21:00、借券 07-31 09:10 ← 次日補抓）、
+總經 4 項到 2026-06 / 消費者信心 2026-05、匯率 8 幣別。回應實測不含任何密鑰。
+
 ### ⏳ 待辦
 
-1. **UI 版面未經瀏覽器實測** —— 專案未裝 playwright（`verify` skill 明說別為此安裝），
-   時間軸的絕對定位只有單元測試覆蓋座標計算。合併前值得人工開一次確認。
-2. 正式區：跑 `schema.sql` §11 + 部署 Edge Function + 確認 admin 帳號的
-   `app_metadata.role`（測試區已是 admin，正式區尚未確認）。
-3. `sources/.env.local` 已建立並指向**測試區**（gitignored）。
-   要改回本機模式把兩行註解掉即可。
+1. **UI 版面仍未經瀏覽器實測** —— 專案未裝 playwright（`verify` skill 明說別為此安裝），
+   時間軸的絕對定位只有單元測試覆蓋座標計算（`timeline.test.ts` 29 條）。
+   建議人工開一次確認版面，特別是窄視窗下的橫向捲動。
+2. `sources/.env.local` 已建立並指向**測試區**（gitignored）。
+   要改回本機模式把兩行註解掉即可；要看正式區資料則換成正式區的 URL 與 anon key。
+3. `supabase link` 目前停在**正式區**（全域副作用）。下次要對測試區下 `db query --linked`
+   前務必重新 link，並照 skill 的做法把身分檢查放進同一次查詢。
 
 ---
 

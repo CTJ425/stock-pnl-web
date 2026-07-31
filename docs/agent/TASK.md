@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 45: 管理員後台「資料抓取狀況」
-- **Status**: 🔧 **程式完成，測試區已部署** —— 0.6.12-dev.1 在 `dev`；正式區未動
+- **Status**: ✅ **完成** —— 0.6.12 已進 `main`，兩區皆已部署並以 `functions download` 逐檔覆驗
 - **Agent**: Claude
 - **Timestamp**: 2026-07-31 13:55:00 Asia/Taipei
 - **需求**：使用者要一個只有 admin（zrchen0425@gmail.com）看得到的頁面，
@@ -21,9 +21,11 @@
   RPC 只 GRANT service_role。**刻意不用 CRON_SECRET 也不用 email 比對**（理由見 SPEC）。
 - **驗證**：`npm test` 671/671；測試區授權矩陣全數符合預期（admin 200 / 一般 403 /
   無 token 401 / CRON_SECRET 401 / RPC 直呼 401·403），回應不含任何密鑰。
-- **待辦**：
-  1. **UI 版面人工確認**（專案未裝 playwright，時間軸定位只有單元測試覆蓋）。
-  2. 正式區：跑 `schema.sql` §11、部署 Edge Function、確認該帳號在正式區也是 admin。
+- **正式區覆驗**（2026-07-31 13:55）：§11 只跑那一段、權限實測（service_role 可 /
+  authenticated·anon 不可）、10 檔與 `main` 一致、授權矩陣與測試區完全相同（admin 200 /
+  一般 403 / 無 token 401 / CRON_SECRET 401 / RPC 直呼 401·403）、回應不含密鑰。
+  `zrchen0425@gmail.com` 在兩區本來就是 admin，未異動任何帳號。
+- **待辦**：**UI 版面人工確認**（專案未裝 playwright，時間軸定位只有單元測試覆蓋座標計算）。
 
 ### Task 44: 修好「總經數據永遠慢一天」（BUG-008）
 - **Status**: ✅ **完成** —— 0.6.11 已進 `main`，兩區皆已部署並以 `functions download` 逐檔覆驗
