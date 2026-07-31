@@ -271,6 +271,24 @@ supabase functions deploy stock-report --no-verify-jwt
 > 欄位名帶著括號說明（例：`毛利率(%)(營業毛利)/(營業收入)`），是端點原樣，
 > **不要「順手整理」** —— 那是查表的鍵，改了就查不到。
 
+#### 管理員後台 `admin-status`（0.6.12 起）
+
+唯讀彙總，供前端「抓取狀況」頁使用。**授權是使用者 JWT + `app_metadata.role === 'admin'`，
+不是 CRON_SECRET** —— 那把密鑰不能進前端（進了等於公開，任何人都能觸發整批抓取）。
+
+| 項目 | 內容 |
+|---|---|
+| 授權 | `assertAdmin()`：驗 `Authorization: Bearer <使用者 JWT>` 且 `app_metadata.role === 'admin'` |
+| 排程 | RPC `public.admin_schedule_status()`（schema.sql §11，只 GRANT service_role） |
+| 其他 | manifest / macro / fx / 各目錄檔案數 / `batch_run_log` / `source_probe_log` |
+| 耗時 | 實測 0.9–1.2 秒 |
+
+> ⚠️ **`cron.job.command` 內含 `x-cron-secret` 明文。** §11 的函式只挑
+> jobname / schedule / active / action / 目標 ref 五個欄位，**擴充回傳內容前務必重讀那段註解**。
+>
+> 觀測表 `batch_run_log` / `source_probe_log` 維持「有 RLS、無 policy」——
+> **不要為了這個後台去加 policy**，service role 在 Edge Function 內讀完再吐出即可。
+
 #### 美國總經指標（0.6.5 起）
 
 **本專案第一份非個股資料**，寫成 `macro/us.json` **全域單檔**。

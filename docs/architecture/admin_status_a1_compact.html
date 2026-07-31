@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A1 ─ 緊湊列｜資料抓取狀況後台</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --row-hover: rgba(255, 255, 255, 0.045);
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+  --st-ok: #6ee7b7;
+  --st-warn: #fcd34d;
+  --st-late: #fca5a5;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(110, 231, 183, 0.12);
+  --st-warn-bg: rgba(252, 211, 77, 0.12);
+  --st-late-bg: rgba(252, 165, 165, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.12);
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-strong: rgba(255, 255, 255, 0.92);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --row-hover: rgba(15, 23, 42, 0.04);
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --st-ok: #047857;
+  --st-warn: #b45309;
+  --st-late: #be123c;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(4, 120, 87, 0.1);
+  --st-warn-bg: rgba(180, 83, 9, 0.1);
+  --st-late-bg: rgba(190, 18, 60, 0.1);
+  --st-idle-bg: rgba(100, 116, 139, 0.1);
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body {
+  margin: 0; background: var(--bg);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at 96% 4%, var(--bg-glow-b), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 26px 20px 60px; }
+.mock-note {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 24px; color: var(--ink-muted); font-size: 12.5px;
+}
+.mock-note b { color: var(--ink-secondary); font-weight: 600; }
+.head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 20px; }
+.head h1 { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.admin-pill {
+  display: inline-flex; align-items: center; border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 3px 11px; font-size: 11.5px; letter-spacing: 0.06em;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-transform: uppercase;
+}
+.head .spacer { flex: 1; }
+.theme-btn, .btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 總覽條：一句話結論 + 數字 */
+.summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px; margin-bottom: 22px;
+  backdrop-filter: blur(10px); box-shadow: var(--shadow-card);
+}
+.summary .verdict { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.summary .verdict em { font-style: normal; color: var(--st-late); }
+.summary .tally { display: flex; gap: 14px; margin-left: auto; font-size: 12.5px; }
+.summary .tally span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-secondary); }
+.summary .tally i { width: 8px; height: 8px; border-radius: 2px; }
+.i-ok { background: var(--st-ok); } .i-warn { background: var(--st-warn); } .i-late { background: var(--st-late); }
+.summary .tally b { font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* 分組標題：細，不佔版面 */
+.gh {
+  display: flex; align-items: baseline; gap: 10px;
+  margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.gh h2 { font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-secondary); }
+.gh .cadence { font-size: 11.5px; color: var(--ink-muted); }
+.gh .roll { margin-left: auto; font-size: 11.5px; color: var(--ink-muted); font-family: var(--font-data); }
+
+/* 緊湊列：一列一個資料源，一屏看完 */
+.list { display: flex; flex-direction: column; gap: 4px; }
+.item {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 3px 1fr 132px 104px 74px 96px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0 14px 0 0;
+  min-height: 46px; overflow: hidden;
+}
+.item:hover { background: var(--row-hover); }
+.item .bar { align-self: stretch; background: var(--st-idle); }
+.item.ok .bar { background: var(--st-ok); }
+.item.warn .bar { background: var(--st-warn); }
+.item.late .bar { background: var(--st-late); }
+
+.item .who { display: flex; align-items: baseline; gap: 9px; min-width: 0; padding-left: 13px; }
+.item .who b { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.item .who span {
+  font-size: 11.5px; color: var(--ink-muted); font-family: var(--font-data);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item .when, .item .ago, .item .cov { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink-secondary); }
+.item .when b { color: var(--ink); font-weight: 400; }
+.item .ago { text-align: right; color: var(--ink-muted); }
+.item .cov { text-align: right; }
+.item .st { justify-self: end; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.ok .st { background: var(--st-ok-bg); color: var(--st-ok); }
+.warn .st { background: var(--st-warn-bg); color: var(--st-warn); }
+.late .st { background: var(--st-late-bg); color: var(--st-late); }
+.idle .st { background: var(--st-idle-bg); color: var(--st-idle); }
+
+/* 欄標：只出現一次，讓緊湊列不必每列重複標籤 */
+.cols {
+  display: grid; gap: 12px; grid-template-columns: 3px 1fr 132px 104px 74px 96px;
+  padding: 0 14px 6px 0; font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-muted);
+}
+.cols span:nth-child(2) { padding-left: 13px; }
+.cols .r { text-align: right; }
+.cols .e { justify-self: end; }
+
+@media (max-width: 760px) {
+  .item, .cols { grid-template-columns: 3px 1fr 96px; }
+  .item .ago, .item .cov, .cols .h-ago, .cols .h-cov { display: none; }
+  .item .when { grid-column: 2; padding-left: 13px; font-size: 11.5px; }
+  .item .who { padding-bottom: 2px; }
+  .item { padding-top: 8px; padding-bottom: 8px; }
+}
+@media (max-width: 640px) { .wrap { padding: 18px 13px 48px; } .head h1 { font-size: 20px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-note">
+    <b>A1 ─ 緊湊列</b>
+    <span>方案 A 的變體：一列一個資料源，18 項一屏看完，不用捲。</span>
+    <span>取捨：<b>密度優先</b>，每項只留最關鍵的四個數字。</span>
+  </div>
+
+  <div class="head">
+    <h1>資料抓取狀況</h1>
+    <span class="admin-pill">僅限管理員</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" type="button" id="theme">切換淺色</button>
+    <button class="btn" type="button">重新整理</button>
+  </div>
+
+  <div class="summary">
+    <span class="verdict">今天有 <em>1 項延遲</em>、2 項等待公布</span>
+    <span class="tally">
+      <span><i class="i-ok"></i>正常 <b>15</b></span>
+      <span><i class="i-warn"></i>等待 <b>2</b></span>
+      <span><i class="i-late"></i>延遲 <b>1</b></span>
+    </span>
+  </div>
+
+  <div class="cols">
+    <span></span><span>資料源</span><span>資料日期 / 期別</span>
+    <span class="r h-ago">最後抓取</span><span class="r h-cov">距今</span><span class="e">狀態</span>
+  </div>
+
+  <div class="gh">
+    <h2>台股籌碼</h2><span class="cadence">交易日盤後・公布時間差 7 小時</span><span class="roll">3 / 3</span>
+  </div>
+  <div class="list">
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>三大法人</b><span>T86・已定稿</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-30 16:15</span>
+      <span class="cov">20h</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>融資融券</b><span>MI_MARGN・7/7 日</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-30 21:00</span>
+      <span class="cov">16h</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>借券賣出</b><span>次一交易日・1,042 列</span></span>
+      <span class="when"><b>2026-07-31</b></span>
+      <span class="ago">07-31 09:10</span>
+      <span class="cov">3h40m</span>
+      <span class="st">正常</span>
+    </div>
+  </div>
+
+  <div class="gh">
+    <h2>個股資料</h2><span class="cadence">18 檔持股</span><span class="roll">4 / 5</span>
+  </div>
+  <div class="list">
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>日 K 線</b><span>18 / 18 檔</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-30 16:15</span>
+      <span class="cov">20h</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>估值指標</b><span>本益比 / 殖利率 / 淨值比</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-30 16:15</span>
+      <span class="cov">20h</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item warn">
+      <i class="bar"></i>
+      <span class="who"><b>月營收</b><span>12 期・次月 10 日前公布</span></span>
+      <span class="when"><b>2026-06</b></span>
+      <span class="ago">07-11 16:20</span>
+      <span class="cov">19d</span>
+      <span class="st">等待 07 月</span>
+    </div>
+    <div class="item warn">
+      <i class="bar"></i>
+      <span class="who"><b>獲利能力</b><span>8 / 8 季</span></span>
+      <span class="when"><b>2026-Q1</b></span>
+      <span class="ago">05-16 16:18</span>
+      <span class="cov">76d</span>
+      <span class="st">等待 Q2</span>
+    </div>
+    <div class="item late">
+      <i class="bar"></i>
+      <span class="who"><b>個股新聞</b><span>缺 00929・2412</span></span>
+      <span class="when"><b>—</b></span>
+      <span class="ago">07-31 09:10</span>
+      <span class="cov">3h40m</span>
+      <span class="st">16 / 18 檔</span>
+    </div>
+  </div>
+
+  <div class="gh">
+    <h2>美國總體經濟</h2><span class="cadence">月頻・每日 21:00 / 23:00 兩班</span><span class="roll">4 / 5</span>
+  </div>
+  <div class="list">
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>核心 CPI</b><span>CPILFESL・+2.57 %</span></span>
+      <span class="when"><b>2026-06</b></span>
+      <span class="ago">07-31 12:40</span>
+      <span class="cov">10m</span>
+      <span class="st">最新</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>核心 PPI</b><span>PPIFES・+4.68 %</span></span>
+      <span class="when"><b>2026-06</b></span>
+      <span class="ago">07-31 12:40</span>
+      <span class="cov">10m</span>
+      <span class="st">最新</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>核心 PCE</b><span>PCEPILFE・+3.29 %</span></span>
+      <span class="when"><b>2026-06</b></span>
+      <span class="ago">07-31 12:40</span>
+      <span class="cov">10m</span>
+      <span class="st">最新</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>非農就業</b><span>PAYEMS・+57 千人</span></span>
+      <span class="when"><b>2026-06</b></span>
+      <span class="ago">07-31 12:40</span>
+      <span class="cov">10m</span>
+      <span class="st">最新</span>
+    </div>
+    <div class="item idle">
+      <i class="bar"></i>
+      <span class="who"><b>消費者信心</b><span>UMCSENT・44.8</span></span>
+      <span class="when"><b>2026-05</b></span>
+      <span class="ago">07-31 12:40</span>
+      <span class="cov">10m</span>
+      <span class="st">來源未更新</span>
+    </div>
+  </div>
+
+  <div class="gh">
+    <h2>匯率與基礎設施</h2><span class="cadence">每日・非台股作息</span><span class="roll">5 / 5</span>
+  </div>
+  <div class="list">
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>台幣匯率</b><span>8 / 8 幣・USD 32.3489</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-31 11:00</span>
+      <span class="cov">1h50m</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>盤後批次</b><span>32 / 40 輪・短路 88 %</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-31 09:10</span>
+      <span class="cov">3h40m</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>資料源探針</b><span>2 / 2 端點</span></span>
+      <span class="when"><b>1150731</b></span>
+      <span class="ago">07-31 09:10</span>
+      <span class="cov">3h40m</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>現價快取</b><span>26 筆・台股 60s TTL</span></span>
+      <span class="when"><b>—</b></span>
+      <span class="ago">07-31 12:49</span>
+      <span class="cov">38s</span>
+      <span class="st">正常</span>
+    </div>
+    <div class="item ok">
+      <i class="bar"></i>
+      <span class="who"><b>報告 manifest</b><span>18 檔</span></span>
+      <span class="when"><b>2026-07-30</b></span>
+      <span class="ago">07-31 09:10</span>
+      <span class="cov">3h40m</span>
+      <span class="st">正常</span>
+    </div>
+  </div>
+
+</div>
+<script>
+  var root = document.documentElement, btn = document.getElementById('theme');
+  btn.addEventListener('click', function () {
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    btn.textContent = light ? '切換淺色' : '切換深色';
+  });
+</script>
+</body>
+</html>

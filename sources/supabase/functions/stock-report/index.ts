@@ -646,6 +646,33 @@ function assertCronSecret(req: Request): Response | null {
   return null
 }
 
+/**
+ * 管理員專用端點的把關：驗證呼叫者的 JWT，且 `app_metadata.role === 'admin'`。
+ *
+ * **不能沿用 `assertCronSecret`** —— 那是給 pg_cron 用的共用密鑰，
+ * 前端拿不到也不該拿到（一旦放進前端就等於公開，任何人都能觸發整批抓取）。
+ *
+ * **也不能用 email 比對**。`app_metadata` 只能由 service role / Dashboard 寫入，
+ * 使用者改不了自己的；email 則是使用者可自行變更的欄位，拿它當授權依據等於沒有授權。
+ * 這與 `aiSettings.ts` 的 `isAiAdmin()` 是同一套判準，兩邊必須一致。
+ *
+ * 這支函式是 `--no-verify-jwt` 部署的，平台不會幫忙驗 JWT，所以這裡自己驗。
+ */
+async function assertAdmin(req: Request): Promise<Response | null> {
+  const auth = req.headers.get('Authorization') ?? ''
+  const token = auth.replace(/^Bearer\s+/i, '').trim()
+  if (!token) return json({ error: 'Unauthorized' }, 401)
+  try {
+    const { data, error } = await db.auth.getUser(token)
+    if (error || !data.user) return json({ error: 'Unauthorized' }, 401)
+    const meta = data.user.app_metadata as Record<string, unknown> | undefined
+    if (meta?.role !== 'admin') return json({ error: 'Forbidden' }, 403)
+    return null
+  } catch {
+    return json({ error: 'Unauthorized' }, 401)
+  }
+}
+
 function ymdMinusDays(ymd: string, days: number): string {
   const dt = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)))
   dt.setUTCDate(dt.getUTCDate() - days)
@@ -1597,6 +1624,112 @@ async function handleSyncMacro(): Promise<Response> {
   })
 }
 
+/**
+ * 管理員後台「資料抓取狀況」的資料來源。
+ *
+ * 一次把整頁要的東西撈齊，理由是前端逐項去打會變成十幾個往返，
+ * 而其中幾項（cron 排程、觀測表）前端根本沒有權限讀 ——
+ * `batch_run_log` / `source_probe_log` 開了 RLS 但刻意沒有任何 policy，
+ * `cron` schema 也不在 PostgREST 的 exposed schemas 裡。
+ * 與其為了一個唯讀後台去鬆綁那些防線，不如讓 service role 在這裡讀完再吐出去。
+ *
+ * ⚠️ 回傳內容經過挑選，**不含任何密鑰**：排程只取 jobname / schedule / action /
+ * 目標 ref（見 schema.sql §11 的 `admin_schedule_status`，那裡有更完整的說明）。
+ */
+async function handleAdminStatus(): Promise<Response> {
+  const startedAt = Date.now()
+  const now = new Date()
+  const todayYmd = taipeiYmd(now)
+
+  // 各段彼此獨立，任一段掛掉不該讓整頁空白 —— 全部 allSettled，缺的用 null 表示
+  const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage] = await Promise.all([
+    db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
+    downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
+    downloadJson<MacroFile>('macro/us.json'),
+    downloadJson<FxFile>('fx/twd.json'),
+    readLastRun(todayYmd).catch(() => null),
+    db
+      .from('source_probe_log')
+      .select('taipei_ymd, taipei_time, bwibbu_ok, bwibbu_date, bwibbu_rows, borrow_ok, borrow_date, borrow_rows, probed_at')
+      .order('id', { ascending: false })
+      .limit(1)
+      .then((r) => r.data?.[0] ?? null)
+      .catch(() => null),
+    latestChipSources(),
+    storageCoverage(),
+  ])
+
+  return json({
+    ok: true,
+    asOf: now.toISOString(),
+    todayYmd,
+    schedules,
+    manifest,
+    chip,
+    coverage,
+    macro: macro
+      ? {
+          asOf: macro.asOf,
+          checkedAt: macro.checkedAt ?? null,
+          indicators: (macro.indicators ?? []).map((i) => ({
+            id: i.id,
+            label: i.label,
+            unit: i.unit,
+            latest: i.latest,
+            previous: i.previous,
+          })),
+        }
+      : null,
+    fx: fx ? { asOf: fx.asOf, count: fx.currencies?.length ?? 0 } : null,
+    batch: lastRun,
+    probe,
+    durationMs: Date.now() - startedAt,
+  })
+}
+
+/**
+ * 最新一份報告裡三個籌碼來源各自的資料日期與抓取時間。
+ *
+ * 取 manifest 指向那天的**任一檔**即可 —— `sources` 是整批共用的（同一輪批次寫進去的），
+ * 不是 per-ticker 的資訊。挑第一檔比把 18 檔全下載回來便宜得多。
+ */
+async function latestChipSources(): Promise<unknown> {
+  const manifest = await downloadJson<{ ymd?: string }>('manifest.json')
+  const ymd = manifest?.ymd
+  if (!ymd) return null
+  const { data } = await db.storage.from(REPORTS_BUCKET).list(ymd, { limit: 1 })
+  const first = data?.[0]?.name
+  if (!first) return null
+  const rep = await downloadJson<{ dataDate?: string; sources?: unknown; notes?: unknown }>(
+    `${ymd}/${first}`,
+  )
+  const inner = (rep as { data?: { dataDate?: string; sources?: unknown; notes?: unknown } })?.data ?? rep
+  return inner ? { ymd, dataDate: inner.dataDate ?? null, sources: inner.sources ?? null } : null
+}
+
+/**
+ * 各 Storage 目錄的檔案數，用來算「18 檔裡到了幾檔」。
+ *
+ * 只數數量、不下載內容 —— 逐檔下載 18 個 JSON 只為了看時間戳，
+ * 會讓這個端點從 2 秒變成十幾秒，而畫面上要的其實只有分子分母。
+ */
+async function storageCoverage(): Promise<Record<string, number>> {
+  const dirs = ['daily', 'fundamental', 'news']
+  const out: Record<string, number> = {}
+  await Promise.all(
+    dirs.map(async (d) => {
+      const { data } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
+      out[d] = (data ?? []).filter((f) => f.name.endsWith('.json')).length
+    }),
+  )
+  try {
+    out.held = (await heldTwTickers()).length
+  } catch {
+    out.held = 0
+  }
+  return out
+}
+
 /** 手動或排程觸發匯率同步。拆排程的理由同 handleSyncMacro（見上），由 `fx-daily` 觸發 */
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -1669,6 +1802,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleProbe()
+  }
+
+  // 管理員後台：唯讀彙總。把關用使用者 JWT + app_metadata.role，不是 CRON_SECRET
+  // （那把密鑰不能進前端，見 assertAdmin 的說明）
+  if (body.action === 'admin-status') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminStatus()
   }
 
   return json({ error: 'Unknown action' }, 400)

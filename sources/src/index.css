@@ -2378,3 +2378,112 @@ input[type='date']::-webkit-calendar-picker-indicator {
   font-size: 14px;
   font-weight: 600;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   資料抓取狀況（管理員後台）。前綴一律 ast-，避免與既有 class 相撞。
+
+   狀態色沿用 --notice-*-ink，**刻意不用 --up / --down**：
+   台股的 --up 是紅色（漲），拿它當「異常」會與盤面語意打架。
+   ───────────────────────────────────────────────────────────── */
+.ast-ok    { --ast-c: var(--notice-ok-ink); }
+.ast-warn  { --ast-c: var(--notice-warn-ink); }
+.ast-late  { --ast-c: var(--notice-err-ink); }
+.ast-idle  { --ast-c: var(--ink-muted); }
+
+.ast-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ast-verdict-icon { color: var(--accent); flex: none; }
+.ast-verdict .section-stamp { margin-left: auto; }
+
+.ast-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; }
+.ast-sub { display: block; font-size: 11.5px; color: var(--ink-muted); }
+.ast-mono { font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
+.ast-unit { font-size: 13px; font-weight: 400; color: var(--ink-secondary); }
+.ast-fail { color: var(--notice-err-ink); font-size: 12px; }
+
+.ast-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  color: var(--ast-c, var(--ink-muted));
+  background: color-mix(in srgb, var(--ast-c, var(--ink-muted)) 14%, transparent);
+}
+
+/* 圖例 */
+.ast-legend {
+  display: flex; flex-wrap: wrap; gap: 9px 16px; align-items: center;
+  margin-top: 12px; padding-bottom: 10px;
+  font-size: 12px; color: var(--ink-muted); border-bottom: 1px solid var(--border);
+}
+.ast-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ast-lg-win {
+  width: 22px; height: 9px; border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.ast-lg-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ast-c); }
+.ast-rule { flex-basis: 100%; line-height: 1.55; }
+.ast-rule b { color: var(--ink-secondary); font-weight: 600; }
+
+/* 時間軸本體。窄螢幕橫向捲動，頁面本身不得橫捲 */
+.ast-tl-scroll { overflow-x: auto; margin-top: 4px; }
+.ast-tl { min-width: 700px; }
+
+.ast-ruler {
+  position: relative; height: 34px; margin-left: 132px; margin-right: 92px;
+  border-bottom: 1px solid var(--border);
+}
+.ast-ruler span {
+  position: absolute; top: 2px; transform: translateX(-50%);
+  font-size: 11px; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ast-ruler em {
+  position: absolute; top: 18px; transform: translateX(-50%);
+  font-size: 10.5px; font-style: normal; color: var(--accent); white-space: nowrap;
+}
+
+.ast-row {
+  display: grid; grid-template-columns: 132px 1fr 92px;
+  align-items: center; min-height: 46px;
+}
+.ast-row + .ast-row { border-top: 1px solid var(--border); }
+.ast-lbl { padding-right: 12px; font-size: 13px; }
+.ast-lbl b { display: block; font-weight: 600; }
+.ast-lbl span { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.ast-track { position: relative; height: 46px; }
+.ast-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: 0.55; }
+/* 來源公布窗 */
+.ast-win {
+  position: absolute; top: 16px; height: 13px; border-radius: 3px; min-width: 3px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+}
+/* 實際抓到的時刻。內圈描一圈底色，讓點壓在公布窗上仍分得出層次 */
+.ast-hit {
+  position: absolute; top: 17px; transform: translateX(-50%); z-index: 2;
+  width: 11px; height: 11px; border-radius: 50%; background: var(--ast-c);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px color-mix(in srgb, var(--ast-c) 22%, transparent);
+}
+/* 公布窗結束 → 實際抓到，中間的落後區間 */
+.ast-lag {
+  position: absolute; top: 21.5px; height: 2px; z-index: 1; opacity: 0.8;
+  background: repeating-linear-gradient(90deg, var(--ast-c) 0 4px, transparent 4px 8px);
+}
+.ast-hit-t {
+  position: absolute; bottom: 3px; transform: translateX(-50%);
+  font-size: 10.5px; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ast-none {
+  position: absolute; top: 50%; left: 8px; transform: translateY(-50%);
+  font-size: 11.5px; color: var(--ink-muted);
+}
+.ast-end { text-align: right; padding-left: 8px; }
+.ast-date {
+  display: block; margin-top: 3px; font-size: 10.5px;
+  color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }
+}

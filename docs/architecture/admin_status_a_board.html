@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 A ─ 狀態燈板｜資料抓取狀況後台</title>
+<style>
+/* ── 沿用 sources/src/index.css 的 token 命名與值，方便直接移植 ───────── */
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --accent-strong: #6366f1;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --thead-bg: rgba(255, 255, 255, 0.03);
+  --row-alt: rgba(255, 255, 255, 0.02);
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+
+  /* 狀態語意色 ── 刻意獨立於 --up/--down。
+     台股 --up 是紅色（漲），若拿它當「異常」會和盤面語意打架。
+     這裡沿用專案既有的 notice 色系。 */
+  --st-ok: #6ee7b7;
+  --st-warn: #fcd34d;
+  --st-late: #fca5a5;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(110, 231, 183, 0.12);
+  --st-warn-bg: rgba(252, 211, 77, 0.12);
+  --st-late-bg: rgba(252, 165, 165, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.12);
+
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --surface: rgba(255, 255, 255, 0.66);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --accent-strong: #4f46e5;
+  --thead-bg: rgba(15, 23, 42, 0.03);
+  --row-alt: rgba(15, 23, 42, 0.02);
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --st-ok: #047857;
+  --st-warn: #b45309;
+  --st-late: #be123c;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(4, 120, 87, 0.1);
+  --st-warn-bg: rgba(180, 83, 9, 0.1);
+  --st-late-bg: rgba(190, 18, 60, 0.1);
+  --st-idle-bg: rgba(100, 116, 139, 0.1);
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body {
+  margin: 0;
+  background: var(--bg);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at 96% 4%, var(--bg-glow-b), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+/* ── 比稿說明條 ─────────────────────────────────────────────── */
+.mock-note {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 26px;
+  color: var(--ink-muted); font-size: 12.5px;
+}
+.mock-note b { color: var(--ink-secondary); font-weight: 600; }
+
+/* ── 頁首 ──────────────────────────────────────────────────── */
+.head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 22px; }
+.head h1 {
+  font-family: var(--font-display); font-size: 25px; font-weight: 600;
+  margin: 0; letter-spacing: -0.01em; text-wrap: balance;
+}
+.admin-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 3px 11px; font-size: 11.5px; letter-spacing: 0.06em;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-transform: uppercase;
+}
+.head .spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink); border-radius: var(--radius-sm);
+  padding: 7px 13px; font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.btn:hover { background: var(--surface-strong); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 今日總覽條 ────────────────────────────────────────────── */
+.today {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 1px;
+  background: var(--border); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 26px;
+}
+.today > div { background: var(--surface); padding: 14px 16px; backdrop-filter: blur(8px); }
+.today dt {
+  font-size: 11.5px; color: var(--ink-muted); letter-spacing: 0.05em;
+  margin: 0 0 5px; text-transform: uppercase;
+}
+.today dd {
+  margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  font-variant-numeric: tabular-nums; line-height: 1.25;
+}
+.today dd small { font-size: 12.5px; font-weight: 400; color: var(--ink-secondary); margin-left: 5px; }
+
+/* ── 分域 ──────────────────────────────────────────────────── */
+.domain { margin-bottom: 30px; }
+.domain-head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding-bottom: 9px; margin-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.domain-head h2 {
+  font-family: var(--font-display); font-size: 15.5px; font-weight: 600;
+  margin: 0; letter-spacing: 0.01em;
+}
+.domain-head .cadence { font-size: 12px; color: var(--ink-muted); }
+.domain-head .roll { margin-left: auto; font-size: 12px; color: var(--ink-secondary); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 13px; }
+
+/* ── 資料源卡 ──────────────────────────────────────────────── */
+.card {
+  position: relative; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 15px 16px 14px 19px;
+  backdrop-filter: blur(10px); box-shadow: var(--shadow-card);
+}
+/* 左緣狀態條：讓狀態在不讀字的情況下也成立 */
+.card::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
+  background: var(--st-idle);
+}
+.card.ok::before { background: var(--st-ok); }
+.card.warn::before { background: var(--st-warn); }
+.card.late::before { background: var(--st-late); }
+
+.card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+.card-top h3 { font-size: 14.5px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-idle); flex: none; }
+.ok .dot { background: var(--st-ok); box-shadow: 0 0 0 3px var(--st-ok-bg); }
+.warn .dot { background: var(--st-warn); box-shadow: 0 0 0 3px var(--st-warn-bg); }
+.late .dot { background: var(--st-late); box-shadow: 0 0 0 3px var(--st-late-bg); }
+.chip {
+  margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  background: var(--st-idle-bg); color: var(--st-idle); white-space: nowrap;
+}
+.ok .chip { background: var(--st-ok-bg); color: var(--st-ok); }
+.warn .chip { background: var(--st-warn-bg); color: var(--st-warn); }
+.late .chip { background: var(--st-late-bg); color: var(--st-late); }
+
+.rows { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 13px; }
+.rows dt { color: var(--ink-muted); white-space: nowrap; }
+.rows dd {
+  margin: 0; font-family: var(--font-data); font-size: 12.5px;
+  font-variant-numeric: tabular-nums; color: var(--ink-secondary);
+  text-align: right;
+}
+.rows dd.strong { color: var(--ink); }
+.card-foot {
+  margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--border);
+  font-size: 11.5px; color: var(--ink-muted); display: flex; gap: 8px;
+}
+.card-foot .win { margin-left: auto; font-family: var(--font-data); }
+
+/* ── 總經列表（使用者特別要的） ─────────────────────────────── */
+.table-scroll { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 620px; background: var(--surface); }
+thead th {
+  background: var(--thead-bg); text-align: left; font-weight: 600; font-size: 12px;
+  color: var(--ink-secondary); letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 10px 14px; white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+td.period { font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.badge.ok { background: var(--st-ok-bg); color: var(--st-ok); }
+.badge.warn { background: var(--st-warn-bg); color: var(--st-warn); }
+.badge.idle { background: var(--st-idle-bg); color: var(--st-idle); }
+.sub { color: var(--ink-muted); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .wrap { padding: 20px 14px 52px; }
+  .head h1 { font-size: 21px; }
+  .cards { grid-template-columns: 1fr; }
+}
+.theme-btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-note">
+    <b>方案 A ─ 狀態燈板</b>
+    <span>設計比稿，非實作。資料為 2026-07-31 12:50 由兩區線上實際抓取的快照。</span>
+    <span>核心問題：<b>現在健康嗎？</b></span>
+  </div>
+
+  <div class="head">
+    <h1>資料抓取狀況</h1>
+    <span class="admin-pill">僅限管理員</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" type="button" id="theme">切換淺色</button>
+    <button class="btn" type="button">重新整理</button>
+  </div>
+
+  <!-- 今日總覽：先給結論，再給細節 -->
+  <dl class="today">
+    <div>
+      <dt>資料日</dt>
+      <dd>07-30<small>週四</small></dd>
+    </div>
+    <div>
+      <dt>盤後批次</dt>
+      <dd>32<small>輪 / 今日</small></dd>
+    </div>
+    <div>
+      <dt>資料源到齊</dt>
+      <dd>17<small>/ 18</small></dd>
+    </div>
+    <div>
+      <dt>延遲</dt>
+      <dd>1<small>項</small></dd>
+    </div>
+    <div>
+      <dt>最後一輪</dt>
+      <dd>09:10<small>+3h40m</small></dd>
+    </div>
+  </dl>
+
+  <!-- ── 台股籌碼：使用者點名的重點 ───────────────────────── -->
+  <section class="domain">
+    <div class="domain-head">
+      <h2>台股籌碼</h2>
+      <span class="cadence">交易日盤後・三個來源公布時間各不相同</span>
+      <span class="roll">3 / 3 到齊</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span>
+          <h3>三大法人買賣超</h3>
+          <span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>凍結狀態</dt><dd>已定稿・2 次改寫</dd>
+          <dt>指紋</dt><dd>1334:8kx2p9</dd>
+        </dl>
+        <div class="card-foot">
+          <span>T86</span>
+          <span class="win">預期 15:00–15:30</span>
+        </div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span>
+          <h3>融資融券</h3>
+          <span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 21:00</dd>
+          <dt>視窗涵蓋</dt><dd>7 / 7 交易日</dd>
+          <dt>來源</dt><dd>rwd</dd>
+        </dl>
+        <div class="card-foot">
+          <span>MI_MARGN</span>
+          <span class="win">預期 21:00–22:00</span>
+        </div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span>
+          <h3>借券賣出</h3>
+          <span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-31</dd>
+          <dt>抓到時間</dt><dd>07-31 09:10</dd>
+          <dt>探針</dt><dd>1,042 列</dd>
+          <dt>指紋</dt><dd>1042:q7m4tt</dd>
+        </dl>
+        <div class="card-foot">
+          <span>日期為次一交易日</span>
+          <span class="win">預期 21:00–22:30</span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 個股資料 ─────────────────────────────────────────── -->
+  <section class="domain">
+    <div class="domain-head">
+      <h2>個股資料</h2>
+      <span class="cadence">每檔持股一份・共 18 檔</span>
+      <span class="roll">4 / 5 到齊</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span><h3>日 K 線</h3><span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>最後交易日</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>涵蓋</dt><dd>18 / 18 檔</dd>
+        </dl>
+        <div class="card-foot"><span>daily/{代號}.json</span><span class="win">每交易日</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span><h3>估值指標</h3><span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>涵蓋</dt><dd>18 / 18 檔</dd>
+        </dl>
+        <div class="card-foot"><span>本益比 / 殖利率 / 股價淨值比</span><span class="win">每交易日</span></div>
+      </article>
+
+      <article class="card warn">
+        <div class="card-top">
+          <span class="dot"></span><h3>月營收</h3><span class="chip">等待公布</span>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06</dd>
+          <dt>抓到時間</dt><dd>07-11 16:20</dd>
+          <dt>涵蓋</dt><dd>18 / 18 檔・12 期</dd>
+        </dl>
+        <div class="card-foot"><span>2026-07 於 08-10 前公布</span><span class="win">每月 10 日</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top">
+          <span class="dot"></span><h3>獲利能力</h3><span class="chip">已到齊</span>
+        </div>
+        <dl class="rows">
+          <dt>最新季別</dt><dd class="strong">2026-Q1</dd>
+          <dt>抓到時間</dt><dd>05-16 16:18</dd>
+          <dt>累積</dt><dd>8 / 8 季</dd>
+        </dl>
+        <div class="card-foot"><span>毛利率 / 營益率 / 純益率</span><span class="win">每季</span></div>
+      </article>
+
+      <article class="card late">
+        <div class="card-top">
+          <span class="dot"></span><h3>個股新聞</h3><span class="chip">2 檔缺料</span>
+        </div>
+        <dl class="rows">
+          <dt>抓到時間</dt><dd class="strong">07-31 09:10</dd>
+          <dt>涵蓋</dt><dd>16 / 18 檔</dd>
+          <dt>缺</dt><dd>00929・2412</dd>
+        </dl>
+        <div class="card-foot"><span>來源查無結果，非故障</span><span class="win">每交易日</span></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 總經：使用者特別要「用列表看」 ───────────────────── -->
+  <section class="domain">
+    <div class="domain-head">
+      <h2>美國總體經濟</h2>
+      <span class="cadence">月頻・各指標發布日不同</span>
+      <span class="roll">最後檢查 07-31 12:40</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">指標</th>
+            <th scope="col">最新期別</th>
+            <th scope="col">數值</th>
+            <th scope="col">前期</th>
+            <th scope="col">下期預計</th>
+            <th scope="col">狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>核心 CPI<div class="sub">CPILFESL</div></td>
+            <td class="period">2026-06</td>
+            <td class="num">+2.57 %</td>
+            <td class="num">+2.82 %</td>
+            <td class="period">08-12</td>
+            <td><span class="badge ok">最新</span></td>
+          </tr>
+          <tr>
+            <td>核心 PPI<div class="sub">PPIFES</div></td>
+            <td class="period">2026-06</td>
+            <td class="num">+4.68 %</td>
+            <td class="num">+4.59 %</td>
+            <td class="period">08-14</td>
+            <td><span class="badge ok">最新</span></td>
+          </tr>
+          <tr>
+            <td>核心 PCE<div class="sub">PCEPILFE</div></td>
+            <td class="period">2026-06</td>
+            <td class="num">+3.29 %</td>
+            <td class="num">+3.41 %</td>
+            <td class="period">08-28</td>
+            <td><span class="badge ok">最新</span></td>
+          </tr>
+          <tr>
+            <td>非農就業<div class="sub">PAYEMS</div></td>
+            <td class="period">2026-06</td>
+            <td class="num">+57 千人</td>
+            <td class="num">+129 千人</td>
+            <td class="period">08-07</td>
+            <td><span class="badge ok">最新</span></td>
+          </tr>
+          <tr>
+            <td>消費者信心<div class="sub">UMCSENT</div></td>
+            <td class="period">2026-05</td>
+            <td class="num">44.8</td>
+            <td class="num">49.8</td>
+            <td class="period">待定</td>
+            <td><span class="badge idle">來源未更新</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot" style="border-top:none; padding-top:11px;">
+      <span>資料變動於 07-31 12:40・最後檢查 07-31 12:40</span>
+      <span class="win">每日 21:00 / 23:00 兩班</span>
+    </div>
+  </section>
+
+  <!-- ── 匯率與基礎設施 ───────────────────────────────────── -->
+  <section class="domain">
+    <div class="domain-head">
+      <h2>匯率與基礎設施</h2>
+      <span class="cadence">每日・非台股作息</span>
+      <span class="roll">4 / 4 正常</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>台幣匯率</h3><span class="chip">已到齊</span></div>
+        <dl class="rows">
+          <dt>抓到時間</dt><dd class="strong">07-31 11:00</dd>
+          <dt>幣別</dt><dd>8 / 8</dd>
+          <dt>美元</dt><dd>32.3489</dd>
+        </dl>
+        <div class="card-foot"><span>市場中價・非牌告</span><span class="win">11:00 / 17:00</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>盤後批次</h3><span class="chip">正常</span></div>
+        <dl class="rows">
+          <dt>今日輪次</dt><dd class="strong">32 / 40</dd>
+          <dt>最後一輪</dt><dd>07-31 09:10</dd>
+          <dt>短路</dt><dd>28 輪</dd>
+        </dl>
+        <div class="card-foot"><span>batch_run_log</span><span class="win">16:00–23:45 每 15 分</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>資料源探針</h3><span class="chip">正常</span></div>
+        <dl class="rows">
+          <dt>估值檔</dt><dd class="strong">1150730・OK</dd>
+          <dt>借券檔</dt><dd>1150731・OK</dd>
+          <dt>最後探測</dt><dd>07-31 09:10</dd>
+        </dl>
+        <div class="card-foot"><span>source_probe_log</span><span class="win">與批次同班</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>現價快取</h3><span class="chip">正常</span></div>
+        <dl class="rows">
+          <dt>快取筆數</dt><dd class="strong">26</dd>
+          <dt>最舊一筆</dt><dd>38 秒前</dd>
+          <dt>來源</dt><dd>MIS / Yahoo</dd>
+        </dl>
+        <div class="card-foot"><span>price_cache</span><span class="win">台股 60s / 美股 10m</span></div>
+      </article>
+
+    </div>
+  </section>
+
+</div>
+<script>
+  // 比稿用的主題切換：專案本身預設深色、以 data-theme 覆寫（見 index.css）
+  var root = document.documentElement, btn = document.getElementById('theme');
+  btn.addEventListener('click', function () {
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    btn.textContent = light ? '切換淺色' : '切換深色';
+  });
+</script>
+</body>
+</html>

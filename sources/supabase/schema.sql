@@ -591,3 +591,68 @@ SELECT cron.schedule(
   );
   $$
 );
+
+
+-- 11. 管理員後台：排程狀態查詢函式 (0.6.12)
+--
+--    「資料抓取狀況」頁需要 pg_cron 的排程與執行紀錄，但 `cron` schema 不在
+--    PostgREST 的 exposed schemas 裡，supabase-js 直接查不到。故以 SECURITY DEFINER
+--    函式包一層，由 Edge Function 以 service role 呼叫。
+--
+--    ⚠️ **絕對不可以回傳 `cron.job.command` 全文**：那裡面有 `x-cron-secret` 的
+--    明文（見 §6c / §9 / §10 的 job 定義）。這個函式只挑出 jobname、schedule、
+--    active、action 與目標 project ref —— 全部都是不敏感的欄位。
+--    要擴充回傳內容時務必重讀這一段，別把整個 command 撈出去。
+--
+--    目標 ref 之所以要回傳，是因為 BUG-003 就是「測試區的 cron 打到正式區」，
+--    後台把它顯示出來，那種事下次一眼就看得到。
+--
+--    ⚠️ **只跑這一段，不要整份重跑 schema.sql**（見本檔開頭的警告）。
+CREATE OR REPLACE FUNCTION public.admin_schedule_status()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT coalesce(jsonb_agg(t ORDER BY t->>'jobname'), '[]'::jsonb)
+  FROM (
+    SELECT jsonb_build_object(
+             'jobid',      j.jobid,
+             'jobname',    j.jobname,
+             'schedule',   j.schedule,
+             'active',     j.active,
+             -- 只取 action 與目標 ref，command 全文含密鑰、不得外流
+             'action',     (regexp_match(j.command, '"action"\s*:\s*"([a-z-]+)"'))[1],
+             'targetRef',  (regexp_match(j.command, 'url\s*:=\s*''https://([^.]+)\.'))[1],
+             'lastRun',    r.last_run,
+             'lastStatus', r.last_status,
+             'runsToday',  coalesce(r.runs_today, 0),
+             'failsToday', coalesce(r.fails_today, 0)
+           ) AS t
+    FROM cron.job j
+    LEFT JOIN LATERAL (
+      SELECT
+        max(d.start_time)                                      AS last_run,
+        (array_agg(d.status ORDER BY d.start_time DESC))[1]     AS last_status,
+        count(*) FILTER (
+          WHERE (d.start_time AT TIME ZONE 'Asia/Taipei')::date
+              = (now() AT TIME ZONE 'Asia/Taipei')::date
+        )                                                       AS runs_today,
+        count(*) FILTER (
+          WHERE d.status <> 'succeeded'
+            AND (d.start_time AT TIME ZONE 'Asia/Taipei')::date
+              = (now() AT TIME ZONE 'Asia/Taipei')::date
+        )                                                       AS fails_today
+      FROM cron.job_run_details d
+      WHERE d.jobid = j.jobid
+        AND d.start_time > now() - interval '2 days'
+    ) r ON true
+  ) s;
+$$;
+
+-- 只有 service role 能呼叫（Edge Function 會先驗過使用者是不是 admin 才轉呼叫）。
+-- 前端拿 anon / authenticated 金鑰直接打是不行的 —— 排程資訊不對一般使用者開放。
+REVOKE ALL ON FUNCTION public.admin_schedule_status() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_schedule_status() FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_schedule_status() TO service_role;

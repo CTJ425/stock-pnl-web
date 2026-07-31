@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  Activity,
   ArrowRightLeft,
   CalendarRange,
   Check,
@@ -43,9 +44,11 @@ import { HeaderMenu } from './Common/HeaderMenu'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
 import { MacroPage } from './Macro/MacroPage'
 import { FxPage } from './Fx/FxPage'
+import { AdminStatusPage } from './Admin/AdminStatusPage'
 import { isReportConfigured } from '../services/reportProxy'
+import { isAdmin } from '../services/adminStatus'
 
-type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
+type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions' | 'status'
 
 /**
  * `short` 供手機底部導覽列使用：底部列每格是直式（圖示在上、標籤在下），
@@ -63,6 +66,7 @@ const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof Layo
   { id: 'fx', label: '外幣匯率', short: '匯率', icon: ArrowRightLeft },
   { id: 'yearly', label: '年度收益', short: '年度', icon: CalendarRange },
   { id: 'transactions', label: '交易紀錄', short: '紀錄', icon: NotebookPen },
+  { id: 'status', label: '抓取狀況', short: '狀況', icon: Activity },
 ]
 
 /**
@@ -74,10 +78,25 @@ const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof Layo
  * 而空狀態寫的是「每日排程完成後會自動補上」—— 在本機模式那是假的，
  * 永遠不會補上，留著只會讓使用者一直等一個不會來的東西。
  */
-const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx']
-const TABS = isReportConfigured
+const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx', 'status']
+
+/**
+ * 只有管理員（`app_metadata.role === 'admin'`）看得到的分頁。
+ *
+ * 這裡的隱藏**只是介面上的整理，不是安全邊界** —— 真正的把關在 Edge Function 的
+ * `assertAdmin`（前端藏起來的東西，任何人改一行 JS 就能叫出來）。
+ * 所以即使有人繞過這個判斷把分頁叫出來，API 也只會回 403、頁面顯示讀不到資料。
+ */
+const ADMIN_ONLY_TABS: Tab[] = ['status']
+
+const BASE_TABS = isReportConfigured
   ? ALL_TABS
   : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
+
+/** admin 狀態是非同步取得的，故分頁清單不能在模組層固定下來 */
+function visibleTabs(admin: boolean): typeof ALL_TABS {
+  return admin ? BASE_TABS : BASE_TABS.filter((t) => !ADMIN_ONLY_TABS.includes(t.id))
+}
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
@@ -121,15 +140,17 @@ function TabNav({
   variant,
   current,
   onSelect,
+  tabs,
 }: {
   variant: 'header' | 'bottom'
   current: Tab
   onSelect: (tab: Tab) => void
+  tabs: typeof ALL_TABS
 }) {
   const isBottom = variant === 'bottom'
   return (
     <nav className={isBottom ? 'bottom-nav' : 'tabs'} aria-label="主要頁面">
-      {TABS.map(({ id, label, short, icon: Icon }) => (
+      {tabs.map(({ id, label, short, icon: Icon }) => (
         <button
           key={id}
           type="button"
@@ -523,7 +544,27 @@ export function AppShell() {
   const { loading, error, addTransactions } = useWorkspace()
   const [tab, setTab] = useState<Tab>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
+  const [admin, setAdmin] = useState(false)
   const narrow = useNarrowScreen()
+
+  // 管理員分頁：判定要打一次 auth，故非同步補上。判錯只會少一個分頁，
+  // 不影響任何既有功能（真正的把關在 Edge Function 端）
+  useEffect(() => {
+    let alive = true
+    void isAdmin().then((ok) => {
+      if (alive) setAdmin(ok)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const tabs = visibleTabs(admin)
+
+  // 權限在別的分頁上被收回時（例如登出換帳號），別把使用者留在看不到的分頁
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab('dashboard')
+  }, [tabs, tab])
 
   return (
     <>
@@ -536,7 +577,7 @@ export function AppShell() {
             <span className="brand-text">股票小幫手</span>
           </div>
 
-          {!narrow && <TabNav variant="header" current={tab} onSelect={setTab} />}
+          {!narrow && <TabNav variant="header" current={tab} onSelect={setTab} tabs={tabs} />}
 
           <div className="header-spacer" />
 
@@ -564,6 +605,7 @@ export function AppShell() {
             {tab === 'fx' && <FxPage />}
             {tab === 'yearly' && <YearlyPage />}
             {tab === 'transactions' && <TransactionsPage />}
+            {tab === 'status' && <AdminStatusPage />}
           </>
         )}
       </main>
@@ -580,7 +622,7 @@ export function AppShell() {
       </footer>
 
       {/* 手機底部導覽：必須掛在 .app-header 之外，理由見 useNarrowScreen 的註解 */}
-      {narrow && <TabNav variant="bottom" current={tab} onSelect={setTab} />}
+      {narrow && <TabNav variant="bottom" current={tab} onSelect={setTab} tabs={tabs} />}
 
       {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
       {!loading && (

@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A2 ─ 卡片 + 心跳｜資料抓取狀況後台</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+  --st-ok: #6ee7b7;
+  --st-warn: #fcd34d;
+  --st-late: #fca5a5;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(110, 231, 183, 0.12);
+  --st-warn-bg: rgba(252, 211, 77, 0.12);
+  --st-late-bg: rgba(252, 165, 165, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.16);
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-strong: rgba(255, 255, 255, 0.92);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --st-ok: #047857;
+  --st-warn: #b45309;
+  --st-late: #be123c;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(4, 120, 87, 0.13);
+  --st-warn-bg: rgba(180, 83, 9, 0.13);
+  --st-late-bg: rgba(190, 18, 60, 0.13);
+  --st-idle-bg: rgba(100, 116, 139, 0.17);
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body {
+  margin: 0; background: var(--bg);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at 96% 4%, var(--bg-glow-b), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 26px 20px 60px; }
+.mock-note {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 24px; color: var(--ink-muted); font-size: 12.5px;
+}
+.mock-note b { color: var(--ink-secondary); font-weight: 600; }
+.head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 20px; }
+.head h1 { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.admin-pill {
+  display: inline-flex; align-items: center; border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 3px 11px; font-size: 11.5px; letter-spacing: 0.06em;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-transform: uppercase;
+}
+.head .spacer { flex: 1; }
+.theme-btn, .btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.today {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 1px;
+  background: var(--border); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 24px;
+}
+.today > div { background: var(--surface); padding: 13px 16px; backdrop-filter: blur(8px); }
+.today dt { font-size: 11px; color: var(--ink-muted); letter-spacing: 0.05em; margin-bottom: 4px; text-transform: uppercase; }
+.today dd { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.today dd small { font-size: 12px; font-weight: 400; color: var(--ink-secondary); margin-left: 5px; }
+
+.domain { margin-bottom: 28px; }
+.domain-head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding-bottom: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--border);
+}
+.domain-head h2 { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0; }
+.domain-head .cadence { font-size: 12px; color: var(--ink-muted); }
+.domain-head .roll { margin-left: auto; font-size: 12px; color: var(--ink-secondary); font-family: var(--font-data); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(282px, 1fr)); gap: 13px; }
+
+.card {
+  position: relative; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 15px 16px 13px 19px;
+  backdrop-filter: blur(10px); box-shadow: var(--shadow-card);
+}
+.card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--st-idle); }
+.card.ok::before { background: var(--st-ok); }
+.card.warn::before { background: var(--st-warn); }
+.card.late::before { background: var(--st-late); }
+
+.card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.card-top h3 { font-size: 14.5px; font-weight: 600; margin: 0; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-idle); flex: none; }
+.ok .dot { background: var(--st-ok); box-shadow: 0 0 0 3px var(--st-ok-bg); }
+.warn .dot { background: var(--st-warn); box-shadow: 0 0 0 3px var(--st-warn-bg); }
+.late .dot { background: var(--st-late); box-shadow: 0 0 0 3px var(--st-late-bg); }
+.chip { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--st-idle-bg); color: var(--st-idle); white-space: nowrap; }
+.ok .chip { background: var(--st-ok-bg); color: var(--st-ok); }
+.warn .chip { background: var(--st-warn-bg); color: var(--st-warn); }
+.late .chip { background: var(--st-late-bg); color: var(--st-late); }
+
+/* ── 心跳：最近 10 期各自準時與否 ─────────────────────────── */
+.beat { margin: 2px 0 11px; }
+.beat-bars { display: flex; gap: 3px; align-items: flex-end; height: 26px; }
+.beat-bars i {
+  flex: 1; border-radius: 2px; background: var(--st-idle-bg);
+  min-width: 5px; position: relative;
+}
+/* 高度即「相對預期窗的準時程度」：滿格＝準時，越矮＝越晚 */
+.beat-bars i.t100 { height: 100%; background: var(--st-ok); }
+.beat-bars i.t80  { height: 80%;  background: var(--st-ok); opacity: 0.75; }
+.beat-bars i.t55  { height: 55%;  background: var(--st-warn); }
+.beat-bars i.t30  { height: 30%;  background: var(--st-late); }
+.beat-bars i.tno  { height: 14%;  background: var(--st-idle-bg); }
+.beat-legend {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-size: 10.5px; color: var(--ink-muted); font-family: var(--font-data);
+}
+.beat-legend em { font-style: normal; color: var(--ink-secondary); }
+
+.rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
+.rows dt { color: var(--ink-muted); white-space: nowrap; }
+.rows dd { margin: 0; font-family: var(--font-data); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-secondary); text-align: right; }
+.rows dd.strong { color: var(--ink); }
+.card-foot {
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--ink-muted); display: flex; gap: 8px;
+}
+.card-foot .win { margin-left: auto; font-family: var(--font-data); }
+
+/* 總經：卡片形式但用期別點陣，因為月頻沒有「每日心跳」 */
+.periods { display: flex; gap: 4px; margin: 2px 0 11px; }
+.periods i {
+  flex: 1; height: 22px; border-radius: 3px; background: var(--st-idle-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-data); font-size: 9.5px; color: var(--ink-muted);
+}
+.periods i.has { background: var(--st-ok-bg); color: var(--st-ok); }
+.periods i.new { background: var(--st-ok); color: var(--bg); font-weight: 600; }
+:root[data-theme='light'] .periods i.new { color: #fff; }
+.periods i.wait { background: var(--st-warn-bg); color: var(--st-warn); }
+
+@media (max-width: 640px) { .wrap { padding: 18px 13px 48px; } .head h1 { font-size: 20px; } .cards { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-note">
+    <b>A2 ─ 卡片 + 心跳</b>
+    <span>方案 A 的變體：每張卡多一條近 10 期的心跳，柱高＝相對預期窗的準時程度。</span>
+    <span>取捨：<b>看得出慣性</b> —— 不只今天好不好，還看得出誰經常拖。</span>
+  </div>
+
+  <div class="head">
+    <h1>資料抓取狀況</h1>
+    <span class="admin-pill">僅限管理員</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" type="button" id="theme">切換淺色</button>
+    <button class="btn" type="button">重新整理</button>
+  </div>
+
+  <dl class="today">
+    <div><dt>資料日</dt><dd>07-30<small>週四</small></dd></div>
+    <div><dt>盤後批次</dt><dd>32<small>輪</small></dd></div>
+    <div><dt>資料源到齊</dt><dd>17<small>/ 18</small></dd></div>
+    <div><dt>近 10 日準時率</dt><dd>92<small>%</small></dd></div>
+    <div><dt>最後一輪</dt><dd>09:10<small>+3h40m</small></dd></div>
+  </dl>
+
+  <section class="domain">
+    <div class="domain-head">
+      <h2>台股籌碼</h2>
+      <span class="cadence">交易日盤後・柱高＝當日準時程度</span>
+      <span class="roll">3 / 3</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>三大法人買賣超</h3><span class="chip">已到齊</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10 準時</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>凍結狀態</dt><dd>已定稿・2 次改寫</dd>
+        </dl>
+        <div class="card-foot"><span>T86</span><span class="win">預期 15:00–15:30</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>融資融券</h3><span class="chip">已到齊</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日，其中 1 日略晚">
+            <i class="t100"></i><i class="t100"></i><i class="t80"></i><i class="t100"></i><i class="t100"></i>
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>9 / 10 準時</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 21:00</dd>
+          <dt>視窗涵蓋</dt><dd>7 / 7 交易日</dd>
+        </dl>
+        <div class="card-foot"><span>MI_MARGN</span><span class="win">預期 21:00–22:00</span></div>
+      </article>
+
+      <!-- 心跳的價值：借券每隔幾天就拖到隔天早上，單看今天看不出來 -->
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>借券賣出</h3><span class="chip">已到齊</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日，其中 4 日延到隔天早上">
+            <i class="t100"></i><i class="t30"></i><i class="t100"></i><i class="t100"></i><i class="t30"></i>
+            <i class="t100"></i><i class="t30"></i><i class="t100"></i><i class="t100"></i><i class="t30"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>6 / 10 準時</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-31</dd>
+          <dt>抓到時間</dt><dd>07-31 09:10</dd>
+          <dt>常態延遲</dt><dd>4 / 10 日隔天才到</dd>
+        </dl>
+        <div class="card-foot"><span>次一交易日</span><span class="win">預期 21:00–22:30</span></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="domain">
+    <div class="domain-head">
+      <h2>個股資料</h2><span class="cadence">18 檔持股</span><span class="roll">4 / 5</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>日 K 線</h3><span class="chip">已到齊</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 檔全到</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>最後交易日</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+        </dl>
+        <div class="card-foot"><span>daily/{代號}.json</span><span class="win">每交易日</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>估值指標</h3><span class="chip">已到齊</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+            <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 檔全到</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
+          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+        </dl>
+        <div class="card-foot"><span>BWIBBU</span><span class="win">每交易日</span></div>
+      </article>
+
+      <article class="card late">
+        <div class="card-top"><span class="dot"></span><h3>個股新聞</h3><span class="chip">2 檔缺料</span></div>
+        <div class="beat">
+          <div class="beat-bars" role="img" aria-label="近 10 個交易日，多數日子有 1 至 2 檔查無結果">
+            <i class="t80"></i><i class="t100"></i><i class="t80"></i><i class="t80"></i><i class="t100"></i>
+            <i class="t80"></i><i class="t100"></i><i class="t80"></i><i class="t80"></i><i class="t55"></i>
+          </div>
+          <div class="beat-legend"><span>07-17</span><em>長期 16–17 / 18 檔</em><span>07-30</span></div>
+        </div>
+        <dl class="rows">
+          <dt>抓到時間</dt><dd class="strong">07-31 09:10</dd>
+          <dt>涵蓋</dt><dd>16 / 18 檔</dd>
+          <dt>缺</dt><dd>00929・2412</dd>
+        </dl>
+        <div class="card-foot"><span>來源查無結果，非故障</span><span class="win">每交易日</span></div>
+      </article>
+
+      <article class="card warn">
+        <div class="card-top"><span class="dot"></span><h3>月營收</h3><span class="chip">等待公布</span></div>
+        <div class="periods" role="img" aria-label="2025-10 至 2026-06 皆已取得，2026-07 待公布">
+          <i class="has">10</i><i class="has">11</i><i class="has">12</i><i class="has">01</i>
+          <i class="has">02</i><i class="has">03</i><i class="has">04</i><i class="has">05</i>
+          <i class="new">06</i><i class="wait">07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06</dd>
+          <dt>抓到時間</dt><dd>07-11 16:20</dd>
+          <dt>涵蓋</dt><dd>18 / 18 檔・12 期</dd>
+        </dl>
+        <div class="card-foot"><span>2026-07 於 08-10 前公布</span><span class="win">每月 10 日</span></div>
+      </article>
+
+      <article class="card warn">
+        <div class="card-top"><span class="dot"></span><h3>獲利能力</h3><span class="chip">等待 Q2</span></div>
+        <div class="periods" role="img" aria-label="2024-Q2 至 2026-Q1 共 8 季皆已取得，2026-Q2 待公布">
+          <i class="has">24Q2</i><i class="has">Q3</i><i class="has">Q4</i><i class="has">25Q1</i>
+          <i class="has">Q2</i><i class="has">Q3</i><i class="has">Q4</i><i class="new">26Q1</i>
+          <i class="wait">Q2</i>
+        </div>
+        <dl class="rows">
+          <dt>最新季別</dt><dd class="strong">2026-Q1</dd>
+          <dt>抓到時間</dt><dd>05-16 16:18</dd>
+          <dt>累積</dt><dd>8 / 8 季</dd>
+        </dl>
+        <div class="card-foot"><span>毛利率 / 營益率 / 純益率</span><span class="win">每季</span></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="domain">
+    <div class="domain-head">
+      <h2>美國總體經濟</h2>
+      <span class="cadence">月頻・格子＝該期是否已取得</span>
+      <span class="roll">最後檢查 07-31 12:40</span>
+    </div>
+    <div class="cards">
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>核心 CPI</h3><span class="chip">最新</span></div>
+        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 12 日公布">
+          <i class="has">01</i><i class="has">02</i><i class="has">03</i>
+          <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06・+2.57 %</dd>
+          <dt>前期</dt><dd>+2.82 %</dd>
+        </dl>
+        <div class="card-foot"><span>CPILFESL</span><span class="win">下期 08-12</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>核心 PPI</h3><span class="chip">最新</span></div>
+        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 14 日公布">
+          <i class="has">01</i><i class="has">02</i><i class="has">03</i>
+          <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06・+4.68 %</dd>
+          <dt>前期</dt><dd>+4.59 %</dd>
+        </dl>
+        <div class="card-foot"><span>PPIFES</span><span class="win">下期 08-14</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>核心 PCE</h3><span class="chip">最新</span></div>
+        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 28 日公布">
+          <i class="has">01</i><i class="has">02</i><i class="has">03</i>
+          <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06・+3.29 %</dd>
+          <dt>前期</dt><dd>+3.41 %</dd>
+        </dl>
+        <div class="card-foot"><span>PCEPILFE</span><span class="win">下期 08-28</span></div>
+      </article>
+
+      <article class="card ok">
+        <div class="card-top"><span class="dot"></span><h3>非農就業</h3><span class="chip">最新</span></div>
+        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 7 日公布">
+          <i class="has">01</i><i class="has">02</i><i class="has">03</i>
+          <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-06・+57 千人</dd>
+          <dt>前期</dt><dd>+129 千人</dd>
+        </dl>
+        <div class="card-foot"><span>PAYEMS</span><span class="win">下期 08-07</span></div>
+      </article>
+
+      <!-- 點陣一眼看出它比別人少一期 -->
+      <article class="card warn">
+        <div class="card-top"><span class="dot"></span><h3>消費者信心</h3><span class="chip">落後一期</span></div>
+        <div class="periods" role="img" aria-label="2026-01 至 05 已取得，06 與 07 來源尚未更新">
+          <i class="has">01</i><i class="has">02</i><i class="has">03</i>
+          <i class="has">04</i><i class="new">05</i><i>06</i><i>07</i>
+        </div>
+        <dl class="rows">
+          <dt>最新期別</dt><dd class="strong">2026-05・44.8</dd>
+          <dt>前期</dt><dd>49.8</dd>
+        </dl>
+        <div class="card-foot"><span>UMCSENT・FRED 尚未更新</span><span class="win">下期待定</span></div>
+      </article>
+
+    </div>
+  </section>
+
+</div>
+<script>
+  var root = document.documentElement, btn = document.getElementById('theme');
+  btn.addEventListener('click', function () {
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    btn.textContent = light ? '切換淺色' : '切換深色';
+  });
+</script>
+</body>
+</html>

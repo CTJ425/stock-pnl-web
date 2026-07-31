@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A3 ─ 例外優先｜資料抓取狀況後台</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --row-hover: rgba(255, 255, 255, 0.045);
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+  --st-ok: #6ee7b7;
+  --st-warn: #fcd34d;
+  --st-late: #fca5a5;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(110, 231, 183, 0.12);
+  --st-warn-bg: rgba(252, 211, 77, 0.12);
+  --st-late-bg: rgba(252, 165, 165, 0.12);
+  --st-idle-bg: rgba(100, 116, 139, 0.12);
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-strong: rgba(255, 255, 255, 0.92);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --row-hover: rgba(15, 23, 42, 0.04);
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.1);
+  --st-ok: #047857;
+  --st-warn: #b45309;
+  --st-late: #be123c;
+  --st-idle: #64748b;
+  --st-ok-bg: rgba(4, 120, 87, 0.1);
+  --st-warn-bg: rgba(180, 83, 9, 0.1);
+  --st-late-bg: rgba(190, 18, 60, 0.1);
+  --st-idle-bg: rgba(100, 116, 139, 0.1);
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body {
+  margin: 0; background: var(--bg);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at 96% 4%, var(--bg-glow-b), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1000px; margin: 0 auto; padding: 26px 20px 60px; }
+.mock-note {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 24px; color: var(--ink-muted); font-size: 12.5px;
+}
+.mock-note b { color: var(--ink-secondary); font-weight: 600; }
+.head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 22px; }
+.head h1 { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.admin-pill {
+  display: inline-flex; align-items: center; border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 3px 11px; font-size: 11.5px; letter-spacing: 0.06em;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-transform: uppercase;
+}
+.head .spacer { flex: 1; }
+.theme-btn, .btn {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-secondary); border-radius: 999px;
+  padding: 5px 13px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+}
+.theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
+.theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 結論：整頁最大的一件事 ───────────────────────────────── */
+.verdict {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--st-warn);
+  border-radius: var(--radius); padding: 18px 22px; margin-bottom: 26px;
+  backdrop-filter: blur(10px); box-shadow: var(--shadow-card);
+}
+.verdict h2 {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  margin: 0; letter-spacing: -0.01em; text-wrap: balance;
+}
+.verdict h2 em { font-style: normal; color: var(--st-warn); }
+.verdict p { margin: 3px 0 0; font-size: 13px; color: var(--ink-muted); flex-basis: 100%; }
+.verdict .meta { margin-left: auto; text-align: right; font-family: var(--font-data); font-size: 12px; color: var(--ink-muted); }
+.verdict .meta b { display: block; font-family: var(--font-display); font-size: 17px; color: var(--ink); font-weight: 600; }
+
+/* ── 需要注意：只放非正常項 ───────────────────────────────── */
+.sec-head { display: flex; align-items: baseline; gap: 11px; margin: 0 0 13px; }
+.sec-head h3 { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0; }
+.sec-head .note { font-size: 12px; color: var(--ink-muted); }
+.sec-head .roll { margin-left: auto; font-size: 12px; color: var(--ink-muted); font-family: var(--font-data); }
+
+.attn { display: flex; flex-direction: column; gap: 11px; margin-bottom: 30px; }
+.acard {
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 3px 1fr auto; gap: 0 17px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-card); padding: 15px 18px 15px 0;
+}
+.acard .bar { grid-row: 1 / -1; align-self: stretch; background: var(--st-idle); }
+.acard.late .bar { background: var(--st-late); }
+.acard.warn .bar { background: var(--st-warn); }
+.acard .body { min-width: 0; }
+.acard h4 { font-size: 15px; font-weight: 600; margin: 0 0 3px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.acard .tag { font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; font-weight: 400; }
+.late .tag { background: var(--st-late-bg); color: var(--st-late); }
+.warn .tag { background: var(--st-warn-bg); color: var(--st-warn); }
+/* 為什麼是這個狀態 —— 直接寫出來，不必再查 */
+.acard .why { font-size: 13px; color: var(--ink-secondary); margin: 0 0 8px; }
+.acard .facts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--ink-muted); }
+.acard .facts span { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.acard .facts b { color: var(--ink-secondary); font-weight: 400; }
+.acard .act { align-self: center; }
+.acard .act .btn { white-space: nowrap; }
+
+/* ── 一切正常：收合成一行一組 ─────────────────────────────── */
+.calm { display: flex; flex-direction: column; gap: 6px; }
+details.group {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+details.group > summary {
+  display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 13px;
+  padding: 12px 16px; cursor: pointer; list-style: none; font-size: 14px;
+}
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary:hover { background: var(--row-hover); }
+details.group > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+summary .tick { width: 10px; height: 10px; border-radius: 50%; background: var(--st-ok); box-shadow: 0 0 0 3px var(--st-ok-bg); }
+summary .gname b { font-weight: 600; }
+summary .gname span { color: var(--ink-muted); font-size: 12px; margin-left: 9px; }
+summary .gcount { font-family: var(--font-data); font-size: 12.5px; color: var(--st-ok); }
+summary .caret { color: var(--ink-muted); font-size: 11px; transition: transform 0.15s; }
+details[open] > summary .caret { transform: rotate(180deg); }
+
+.inner { border-top: 1px solid var(--border); }
+.line {
+  display: grid; grid-template-columns: 1fr 118px 104px 68px; gap: 12px;
+  align-items: center; padding: 9px 16px 9px 39px; font-size: 13px;
+}
+.line + .line { border-top: 1px solid var(--border); }
+.line:hover { background: var(--row-hover); }
+.line .n b { font-weight: 500; }
+.line .n span { font-size: 11.5px; color: var(--ink-muted); font-family: var(--font-data); margin-left: 8px; }
+.line .d, .line .t, .line .a {
+  font-family: var(--font-data); font-variant-numeric: tabular-nums;
+  font-size: 12.5px; color: var(--ink-secondary);
+}
+.line .a { text-align: right; color: var(--ink-muted); }
+
+@media (max-width: 720px) {
+  .line { grid-template-columns: 1fr auto; }
+  .line .t, .line .a { display: none; }
+  .acard { grid-template-columns: 3px 1fr; }
+  .acard .act { grid-column: 2; margin-top: 10px; align-self: start; }
+}
+@media (max-width: 640px) { .wrap { padding: 18px 13px 48px; } .head h1 { font-size: 20px; } .verdict h2 { font-size: 18px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-note">
+    <b>A3 ─ 例外優先</b>
+    <span>方案 A 的變體：有問題的浮上來、正常的收合成一行。</span>
+    <span>取捨：<b>安靜</b> —— 沒事的日子整頁只有幾行，不必每天掃 18 張卡。</span>
+  </div>
+
+  <div class="head">
+    <h1>資料抓取狀況</h1>
+    <span class="admin-pill">僅限管理員</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" type="button" id="theme">切換淺色</button>
+    <button class="btn" type="button">重新整理</button>
+  </div>
+
+  <div class="verdict">
+    <h2>18 項資料源中，<em>3 項需要注意</em></h2>
+    <div class="meta"><b>07-30</b>資料日・週四</div>
+    <p>其餘 15 項都在預期時間內取得。盤後批次今日跑了 32 輪，最後一輪 09:10。</p>
+  </div>
+
+  <div class="sec-head">
+    <h3>需要注意</h3>
+    <span class="note">依嚴重度排序</span>
+    <span class="roll">3 項</span>
+  </div>
+
+  <div class="attn">
+
+    <article class="acard late">
+      <i class="bar"></i>
+      <div class="body">
+        <h4>個股新聞 <span class="tag">2 檔缺料</span></h4>
+        <p class="why">00929 與 2412 連續 3 天查無新聞。來源本來就可能沒有結果，不一定是故障。</p>
+        <div class="facts">
+          <span><b>涵蓋</b> 16 / 18 檔</span>
+          <span><b>最後抓取</b> 07-31 09:10</span>
+          <span><b>距今</b> 3h 40m</span>
+        </div>
+      </div>
+      <div class="act"><button class="btn" type="button">查看細節</button></div>
+    </article>
+
+    <article class="acard warn">
+      <i class="bar"></i>
+      <div class="body">
+        <h4>月營收 <span class="tag">等待 2026-07</span></h4>
+        <p class="why">最新是 2026-06，7 月營收依規定於 8 月 10 日前公布，尚未到期。</p>
+        <div class="facts">
+          <span><b>最新期別</b> 2026-06</span>
+          <span><b>最後抓取</b> 07-11 16:20</span>
+          <span><b>涵蓋</b> 18 / 18 檔・12 期</span>
+        </div>
+      </div>
+      <div class="act"><button class="btn" type="button">查看細節</button></div>
+    </article>
+
+    <article class="acard warn">
+      <i class="bar"></i>
+      <div class="body">
+        <h4>消費者信心 <span class="tag">落後一期</span></h4>
+        <p class="why">其他四項總經指標已到 2026-06，只有這項停在 2026-05 —— FRED 上游尚未更新，非抓取失敗。</p>
+        <div class="facts">
+          <span><b>最新期別</b> 2026-05・44.8</span>
+          <span><b>最後檢查</b> 07-31 12:40</span>
+          <span><b>來源</b> UMCSENT</span>
+        </div>
+      </div>
+      <div class="act"><button class="btn" type="button">查看細節</button></div>
+    </article>
+
+  </div>
+
+  <div class="sec-head">
+    <h3>一切正常</h3>
+    <span class="note">點開看明細</span>
+    <span class="roll">15 項</span>
+  </div>
+
+  <div class="calm">
+
+    <details class="group">
+      <summary>
+        <i class="tick"></i>
+        <span class="gname"><b>台股籌碼</b><span>三大法人・融資融券・借券</span></span>
+        <span class="gcount">3 / 3</span>
+        <span class="caret">▼</span>
+      </summary>
+      <div class="inner">
+        <div class="line">
+          <span class="n"><b>三大法人</b><span>T86・已定稿</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>融資融券</b><span>MI_MARGN・7/7 日</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-30 21:00</span><span class="a">16h</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>借券賣出</b><span>次一交易日</span></span>
+          <span class="d">2026-07-31</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>
+        <i class="tick"></i>
+        <span class="gname"><b>個股資料</b><span>日 K 線・估值・獲利能力</span></span>
+        <span class="gcount">3 / 3</span>
+        <span class="caret">▼</span>
+      </summary>
+      <div class="inner">
+        <div class="line">
+          <span class="n"><b>日 K 線</b><span>18 / 18 檔</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>估值指標</b><span>18 / 18 檔</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>獲利能力</b><span>8 / 8 季</span></span>
+          <span class="d">2026-Q1</span><span class="t">05-16 16:18</span><span class="a">76d</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>
+        <i class="tick"></i>
+        <span class="gname"><b>美國總體經濟</b><span>4 項已到 2026-06</span></span>
+        <span class="gcount">4 / 4</span>
+        <span class="caret">▼</span>
+      </summary>
+      <div class="inner">
+        <div class="line">
+          <span class="n"><b>核心 CPI</b><span>+2.57 %・前期 +2.82 %</span></span>
+          <span class="d">2026-06</span><span class="t">下期 08-12</span><span class="a">10m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>核心 PPI</b><span>+4.68 %・前期 +4.59 %</span></span>
+          <span class="d">2026-06</span><span class="t">下期 08-14</span><span class="a">10m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>核心 PCE</b><span>+3.29 %・前期 +3.41 %</span></span>
+          <span class="d">2026-06</span><span class="t">下期 08-28</span><span class="a">10m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>非農就業</b><span>+57 千人・前期 +129 千人</span></span>
+          <span class="d">2026-06</span><span class="t">下期 08-07</span><span class="a">10m</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>
+        <i class="tick"></i>
+        <span class="gname"><b>匯率與基礎設施</b><span>匯率・批次・探針・快取・manifest</span></span>
+        <span class="gcount">5 / 5</span>
+        <span class="caret">▼</span>
+      </summary>
+      <div class="inner">
+        <div class="line">
+          <span class="n"><b>台幣匯率</b><span>8 / 8 幣・USD 32.3489</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-31 11:00</span><span class="a">1h50m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>盤後批次</b><span>32 / 40 輪・短路 88 %</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>資料源探針</b><span>2 / 2 端點</span></span>
+          <span class="d">1150731</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>現價快取</b><span>26 筆</span></span>
+          <span class="d">—</span><span class="t">07-31 12:49</span><span class="a">38s</span>
+        </div>
+        <div class="line">
+          <span class="n"><b>報告 manifest</b><span>18 檔</span></span>
+          <span class="d">2026-07-30</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
+        </div>
+      </div>
+    </details>
+
+  </div>
+
+</div>
+<script>
+  var root = document.documentElement, btn = document.getElementById('theme');
+  btn.addEventListener('click', function () {
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    btn.textContent = light ? '切換淺色' : '切換深色';
+  });
+</script>
+</body>
+</html>

@@ -1,9 +1,83 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修好「總經數據永遠慢一天」——冪等鍵由台北日改為內容指紋（BUG-008，0.6.11 定版）
-- Status: **完成 —— 兩區皆已部署並覆驗（PCE 補上 2026-06、第二次呼叫回 unchanged 且 asOf 不變）**
-- Timestamp: 2026-07-31 12:50:00 Asia/Taipei
+- Action: 新增「抓取狀況」管理員後台（0.6.12-dev.1）
+- Status: **程式完成、671 測試全綠、測試區已部署並驗過授權矩陣 —— ⏳ 正式區待部署**
+- Timestamp: 2026-07-31 13:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-31 13:55:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 新增管理員專用的「資料抓取狀況」頁（含排程資訊）
+- **Status**: CODE COMPLETE（測試區已部署；正式區尚未動）
+
+### 起因
+
+使用者要一個只有 admin 看得到的後台，追蹤所有資料的抓取狀況
+（點名三大法人、融資融券），並要求「PCE 等資料用列表呈現，不用每次都請 Agent 查」。
+設計比稿四輪（A 狀態燈板 / B 稽核總表 / C 時間軸，再出 A1–A3、C1–C2），
+最後定案 **C 單日時間軸**，比稿檔留在 `docs/architecture/admin_status_*.html`。
+
+### 架構
+
+```
+前端 AdminStatusPage ──functions.invoke（帶使用者 JWT）
+  └→ stock-report {action:'admin-status'}
+       ├ assertAdmin()  驗 JWT + app_metadata.role === 'admin'
+       ├ rpc admin_schedule_status()   cron.job + job_run_details
+       ├ storage: manifest / macro / fx / 各目錄檔案數
+       └ table:   batch_run_log（readLastRun）、source_probe_log
+```
+
+### Completed Tasks
+- [x] `schema.sql` §11：`admin_schedule_status()`（SECURITY DEFINER，只 GRANT service_role）。
+- [x] `index.ts`：`assertAdmin()` + `handleAdminStatus()` + `latestChipSources()` + `storageCoverage()`。
+- [x] `src/services/adminStatus.ts`：proxy 與通用 `isAdmin()`。
+- [x] `src/components/Admin/timeline.ts`：判定與座標純函式（29 測試）。
+- [x] `src/components/Admin/AdminStatusPage.tsx`：時間軸 / 排程 / 總經 / 涵蓋四段（10 測試）。
+- [x] `AppShell.tsx`：`ADMIN_ONLY_TABS`，分頁清單改為元件內計算（admin 是非同步取得的，
+      不能在模組層固定）；權限被收回時自動退回總覽。
+- [x] `index.css`：`ast-` 前綴樣式段（狀態色用 `--notice-*-ink`，**刻意不用 `--up/--down`** ——
+      台股 `--up` 是紅色代表漲，拿它當異常會與盤面語意打架）。
+- [x] 驗證：`npm test` 671/671（新增 39）、build 通過、lint 僅 3 個既有 warning。
+
+### 關鍵決定
+
+1. **判定基準是批次班次，不是來源公布時刻。** 詳見 SPEC。這是設計階段就踩到的坑：
+   法人 16:15 到手若用公布時刻判會變成「晚 45 分」，但批次本來就 16:00 起跑。
+2. **走 Edge Function 而不是鬆綁 RLS。** `batch_run_log` / `source_probe_log` 的
+   「有 RLS 但無 policy」是刻意設計，不該為了唯讀後台去開洞。
+3. **`cron.job.command` 不可外流** —— 裡面有 CRON_SECRET 明文。
+   SQL function 只挑五個不敏感欄位，已實測回應中不含任何密鑰。
+4. **目標 ref 要顯示出來。** BUG-003 就是測試區的 cron 打到正式區，
+   把它放進畫面，那種事下次一眼看得到。
+5. **Edge Function 端原本也寫了一份判定模組，發現前端已涵蓋後刪除** ——
+   兩份判準只會漂移。判定統一在 `timeline.ts`。
+
+### ✅ 測試區授權矩陣實測（2026-07-31 13:50）
+
+| 呼叫者 | 結果 |
+| ---- | ---- |
+| admin 帳號 JWT | **200**（0.9s，排程 4 筆、涵蓋率、總經 5 指標全到齊） |
+| 一般使用者 JWT | **403** |
+| 無 token / 亂編 token | **401** |
+| **CRON_SECRET** | **401**（刻意：那把密鑰不能開後台） |
+| anon 直呼 RPC | **401** |
+| admin 直呼 RPC | **403**（只有 service_role 能執行） |
+| admin 直讀 `batch_run_log` / `source_probe_log` | 200 但**回空陣列**（RLS 無 policy） |
+
+回應內容已實測不含 `x-cron-secret`、service_role key 或任何密鑰。
+
+### ⏳ 待辦
+
+1. **UI 版面未經瀏覽器實測** —— 專案未裝 playwright（`verify` skill 明說別為此安裝），
+   時間軸的絕對定位只有單元測試覆蓋座標計算。合併前值得人工開一次確認。
+2. 正式區：跑 `schema.sql` §11 + 部署 Edge Function + 確認 admin 帳號的
+   `app_metadata.role`（測試區已是 admin，正式區尚未確認）。
+3. `sources/.env.local` 已建立並指向**測試區**（gitignored）。
+   要改回本機模式把兩行註解掉即可。
 
 ---
 

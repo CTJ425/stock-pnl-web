@@ -402,6 +402,47 @@ auth / rate-limit / server / timeout / network / bad-response 六類並各給白
 
 ---
 
+## 資料抓取狀況頁（0.6.12，僅管理員）
+
+頂層頁面「抓取狀況」，只有 `app_metadata.role === 'admin'` 的帳號看得到。
+資料來自 Edge Function 的 `admin-status`（唯讀彙總），**不是**前端各自去撈。
+
+### 為什麼走 Edge Function 而不是前端直讀
+
+排程（`cron` schema）與觀測表（`batch_run_log` / `source_probe_log`）前端沒有權限：
+前者不在 PostgREST 的 exposed schemas、後者開了 RLS 但**刻意沒有任何 policy**。
+為了一個唯讀後台去鬆綁那些防線並不划算，故由 service role 在後端讀完再吐出。
+實測彙總耗時約 0.9–1.2 秒。
+
+### 授權（三層，缺一不可）
+
+| 層 | 機制 |
+| ---- | ---- |
+| 分頁顯示 | `ADMIN_ONLY_TABS`，**僅介面整理、不是安全邊界** |
+| API | `assertAdmin()` 驗使用者 JWT 且 `app_metadata.role === 'admin'` |
+| RPC | `admin_schedule_status()` 只 `GRANT` 給 service_role |
+
+- **不可用 CRON_SECRET 把關**：那把密鑰不能進前端（進了等於公開，任何人都能觸發整批抓取）。實測 CRON_SECRET 打 `admin-status` 回 401。
+- **不可用 email 比對**：email 使用者可自行變更；`app_metadata` 只有 service role / Dashboard 寫得動。判準必須與 `aiSettings.ts` 的 `isAiAdmin()` 一致。
+- ⚠️ **`cron.job.command` 內含 `x-cron-secret` 明文**，SQL function 只挑 jobname / schedule / active / action / 目標 ref，**絕不可回傳 command 全文**（詳見 `schema.sql` §11）。
+
+### 判定規則
+
+**基準是「公布窗結束後的第一個批次班次」，不是來源公布時刻。**
+三大法人 15:00–15:30 公布、批次 16:15 才抓到，用公布時刻判會變成「晚 45 分」——
+但盤後批次本來就 16:00 起跑，那是排程設計不是異常；反之借券當晚 32 輪都在跑卻沒抓到、
+隔天才補，那才該亮燈。與 BUG-008 同源：拿外部發布時程當基準，
+只會得到一片永遠亮著的黃燈，而永遠亮著的告警等於沒有告警。
+
+- 沒拿到且**未到** `dueBy` → `idle`（等待中），不是 late。每天傍晚都有一段常態空窗。
+- 月頻指標的落後判定**與同組其他指標比**，不查發布行事曆（那是一張必然會過期的常數表）。
+- 判定與座標計算全在 `src/components/Admin/timeline.ts`（純函式，29 個測試）。
+
+### 版面
+
+時間軸（當日 15:00 → 次日 10:00）→ 排程 → 總經期別 → 匯率與檔案涵蓋。
+月頻的總經**不放在日軸上**：它的節奏是「哪一期到了」而非「幾點到」。
+
 ## 總體經濟頁面（0.6.5）
 
 **頂層頁面**「總體經濟」（0.6.5-dev.2 起；dev.1 曾是個股分析的一個分頁），
