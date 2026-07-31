@@ -124,6 +124,11 @@ export interface MacroFile {
    * 舊檔沒有這個欄位，故為選填。
    */
   checkedAt?: string
+  /**
+   * 今天（台北日）已經真的去問過 FRED 幾次。0.6.15 起用來做自適應掃描：
+   * 發布日要密集掃，但要有上限；跨日自動歸零（`ymd` 不同就重算）。
+   */
+  scansToday?: { ymd: string; n: number }
   region: '美國'
   indicators: MacroIndicator[]
 }

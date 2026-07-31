@@ -8,6 +8,32 @@
 
 ## 📋 Active Tasks
 
+### Task 46: 總經改為發布行事曆驅動的自適應掃描（0.6.15）
+- **Status**: 🔧 **程式完成、測試區已驗證** —— cron 改密與前端跟進未做
+- **Agent**: Claude
+- **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
+- **需求**：使用者要求查官方公告時間，「區間就把 scan 拉長，一旦抓到就不抓」。
+- **前提修正**：官方給的是**確定日期**不是區間；真正的不確定是「官方發布 → FRED 匯入」的延遲。
+- **實作**：新增 `macroCalendar.ts`（`RELEASE_CALENDAR` / `decideMacroScan` / `expectedLatestPeriod`），
+  `syncMacro` 前面加決策、新增 `reason: 'skipped'`、`MacroFile` 加 `scansToday`。
+  BUG-008 的指紋邏輯完全沒動。
+- **驗證**：測試區連打三次 → `unchanged`(3186ms) / `skipped`(135ms) / `skipped`(75ms)，
+  證明抓到後完全不打 FRED。`npm test` 719/719。
+- **待辦**：
+  1. **cron 改密**（需授權）：`0 13,15 * * *` → `*/30 12-18 * * *`。
+     ⚠️ 用 `cron.alter_job`，不要重跑 `cron.schedule`（佔位符地雷）。不改也能運作。
+  2. 前端 `timeline.ts` 的 `RELEASE_RULE` 改用行事曆的確定日期（目前仍是區間推估）。
+  3. **8/7 非農發布日**是第一次真實迴歸，屆時觀察密集掃描有無如預期啟動並停止。
+
+### Task 47: 每年 12 月更新次年發布行事曆（長期）
+- **Status**: 🔁 **週期性任務**
+- **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
+- **做什麼**：更新 `macroCalendar.ts` 的 `RELEASE_CALENDAR` 為次年日期。
+- **為什麼要人工**：BLS 的 schedule 頁一律 403（換 UA 無效），無法自動同步；
+  BEA 的頁面可抓。可跑 `sources/scripts/find-release-dates.py` 以 ALFRED vintage 反查校準。
+- **忘了會怎樣**：不會壞 —— 行事曆用完會 fallback 到規則推算並標記 `stale`，
+  只是精準度下降（掃描窗抓不準發布時刻）。
+
 ### Task 45: 管理員後台「資料抓取狀況」
 - **Status**: ✅ **完成** —— 0.6.12 已進 `main`，兩區皆已部署並以 `functions download` 逐檔覆驗
 - **Agent**: Claude

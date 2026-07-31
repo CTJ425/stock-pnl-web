@@ -105,6 +105,11 @@ import {
   type MacroIndicator,
 } from './usMacro.ts'
 import {
+  decideMacroScan,
+  taipeiYmdOf,
+  type ScanReason,
+} from './macroCalendar.ts'
+import {
   FX_CURRENCIES,
   FX_MIN_POINTS,
   FX_SCHEMA,
@@ -1051,10 +1056,39 @@ async function syncMacro(now: Date): Promise<{
   count: number
   /** 資料最後變動時間（沒變時是既有檔的舊值） */
   asOf: string | null
-  /** updated：有新資料｜unchanged：問過了但內容一樣｜empty：五個序列全滅 */
-  reason: 'updated' | 'unchanged' | 'empty'
+  /**
+   * updated：有新資料｜unchanged：問過了但內容一樣｜empty：五個序列全滅｜
+   * skipped：依發布行事曆判定不需要問（零對外請求，見 macroCalendar.decideMacroScan）
+   */
+  reason: 'updated' | 'unchanged' | 'empty' | 'skipped'
+  /** skipped / 掃描決策的細節，供後台顯示與事後判讀 */
+  scan?: { reason: ScanReason; dueIds: string[]; scansToday: number }
 }> {
   const existing = await downloadJson<MacroFile>('macro/us.json')
+
+  // 0.6.15：先問「這一輪需不需要真的去打 FRED」。
+  // 平常每天只掃一次（跟上 FRED 回頭修正歷史值），發布日才密集掃到抓著為止。
+  // 「一旦抓到就不抓」就落在 decideMacroScan 的 satisfied 分支。
+  const todayYmd = taipeiYmdOf(now)
+  const prevScans = existing?.scansToday?.ymd === todayYmd ? (existing.scansToday?.n ?? 0) : 0
+  const decision = decideMacroScan({
+    now,
+    indicators: (existing?.indicators ?? []).map((i) => ({
+      id: i.id,
+      latestPeriod: i.latest?.period ?? null,
+    })),
+    scansToday: prevScans,
+    lastScanYmd: existing?.scansToday?.ymd ?? null,
+  })
+  if (!decision.scan && existing) {
+    return {
+      synced: false,
+      count: existing.indicators?.length ?? 0,
+      asOf: existing.asOf,
+      reason: 'skipped',
+      scan: { reason: decision.reason, dueIds: decision.dueIds, scansToday: prevScans },
+    }
+  }
 
   const since = fredSinceDate(now, MACRO_LOOKBACK_MONTHS)
   const indicators: MacroIndicator[] = []
@@ -1090,12 +1124,17 @@ async function syncMacro(now: Date): Promise<{
     macroFingerprint(existing.indicators) === macroFingerprint(indicators)
   ) {
     // 寫失敗也不是大事：下一班會再試，資料本身還在檔案裡
-    await uploadJson('macro/us.json', { ...existing, checkedAt: now.toISOString() })
+    await uploadJson('macro/us.json', {
+      ...existing,
+      checkedAt: now.toISOString(),
+      scansToday: { ymd: todayYmd, n: prevScans + 1 },
+    })
     return {
       synced: false,
       count: indicators.length,
       asOf: existing.asOf,
       reason: 'unchanged',
+      scan: { reason: decision.reason, dueIds: decision.dueIds, scansToday: prevScans + 1 },
     }
   }
 
@@ -1103,6 +1142,7 @@ async function syncMacro(now: Date): Promise<{
     schema: MACRO_SCHEMA,
     asOf: now.toISOString(),
     checkedAt: now.toISOString(),
+    scansToday: { ymd: todayYmd, n: prevScans + 1 },
     region: '美國',
     indicators,
   }
@@ -1112,6 +1152,7 @@ async function syncMacro(now: Date): Promise<{
     count: indicators.length,
     asOf: ok ? file.asOf : (existing?.asOf ?? null),
     reason: 'updated',
+    scan: { reason: decision.reason, dueIds: decision.dueIds, scansToday: prevScans + 1 },
   }
 }
 
@@ -1618,6 +1659,7 @@ async function handleSyncMacro(): Promise<Response> {
     // 單一 boolean 分不出「內容沒變」與「一個序列都抓不到」，那正是 0.6.5 查 BUG 時
     // 只剩 macroSynced: false 可看的窘境。reason 是唯一能事後判讀的線索
     reason: macro.reason,
+    scan: macro.scan ?? null,
     count: macro.count,
     asOf: macro.asOf,
     durationMs: Date.now() - startedAt,
