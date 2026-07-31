@@ -144,6 +144,24 @@ export function decideSkip(input: {
 }
 
 /**
+ * 融資融券在 `runSignature` 裡的那一段：**哪幾天真的有資料**（由舊到新的 ymd）。
+ *
+ * 存在的理由是 0.6.1 的實際迴歸（2026-07-30 正式區實測）：原本傳的是
+ * `marginDatedFailed ? '' : dataYmd`，而 `marginDatedFailed` 問的是「這 7 天有沒有**任何**
+ * 一天抓到」—— 歷史日一定有，所以它整天都是 false，這一段整天都等於 `dataYmd` 這個常數。
+ * 於是 21:00 那輪真的把當天的融資融券抓進快取了，指紋卻沒變、報告不重產，
+ * 21:15 起 `decideSkip` 又判定 complete 全數短路 —— 當天報告的 `margin` 永遠停在 null，
+ * 要等隔天第一輪（`batch_run_log` 按日查、`last` 為 null 而強制重產）才補上，
+ * 那時 manifest 早就換到新的一天了。
+ *
+ * 改看「有哪幾天」之後，當天的融資融券一到就會讓指紋改變，剛好觸發一次重產；
+ * 歷史日回補（走勢圖補洞）同樣涵蓋。
+ */
+export function marginSigPart(marginYmds: readonly string[]): string {
+  return marginYmds.slice().sort().join(',')
+}
+
+/**
  * 報告內容的輸入指紋。相同就不必重產報告 ——
  * 省的不是錢（5 檔 × 5KB），是讓 `generatedAt` 只在真的有變動時才跳，
  * 否則 32 次輪詢會把「什麼時候變的」這個訊號洗掉。

@@ -4,6 +4,7 @@ import {
   fingerprint,
   nextT86State,
   rowsFingerprint,
+  marginSigPart,
   runSignature,
   MAX_RUNS_PER_DAY,
   t86Fingerprint,
@@ -188,5 +189,36 @@ describe('runSignature', () => {
 
   it('融資融券由無到有 → 指紋不同', () => {
     expect(runSignature({ ...parts, margin: '' })).not.toBe(runSignature(parts))
+  })
+})
+
+describe('marginSigPart', () => {
+  const parts = { dataYmd: '20260730', t86: 'a', margin: '', borrow: 'c', tickers: ['2609', '0050'] }
+
+  it('順序不影響結果（哪幾天有資料才是重點）', () => {
+    expect(marginSigPart(['20260724', '20260723'])).toBe(marginSigPart(['20260723', '20260724']))
+  })
+
+  it('當天的融資融券由無到有 → 指紋必須改變', () => {
+    // 0.6.1 的實際迴歸形狀：16:15 那輪只有歷史日有融資融券，21:00 那輪才補上當天。
+    // 舊寫法傳的是 `dataYmd` 常數，兩輪指紋相同 → 不重產 → 當天報告的 margin 永遠是 null。
+    const history = ['20260728', '20260729']
+    const before = runSignature({ ...parts, dataYmd: '20260730', margin: marginSigPart(history) })
+    const after = runSignature({
+      ...parts,
+      dataYmd: '20260730',
+      margin: marginSigPart([...history, '20260730']),
+    })
+    expect(before).not.toBe(after)
+  })
+
+  it('歷史日回補（走勢圖補洞）也要重產', () => {
+    const before = marginSigPart(['20260729', '20260730'])
+    const after = marginSigPart(['20260728', '20260729', '20260730'])
+    expect(before).not.toBe(after)
+  })
+
+  it('一天都沒有 → 空字串（與「整批失敗」是同一件事）', () => {
+    expect(marginSigPart([])).toBe('')
   })
 })

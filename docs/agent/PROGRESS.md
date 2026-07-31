@@ -1,9 +1,59 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: README 修錯 + 架構圖由 Mermaid 改為 SVG（純文件，未 commit）
-- Status: **完成，工作目錄未提交；依 §13.1 要先進 `dev`**
-- Timestamp: 2026-07-30 21:08:19 Asia/Taipei
+- Action: 修好「當天融資融券永遠進不了報告」的重產閘門（BUG-007，0.6.10-dev.1）
+- Status: **程式已改並通過 lint / build / test，已進 `dev` 與 `main`；Edge Function 尚未部署**
+- Timestamp: 2026-07-31 09:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-07-31 09:10:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 修 BUG-007 —— 21:00 抓到的融資融券因重產閘門而永遠寫不進報告
+- **Status**: COMPLETED（程式面）；**線上覆驗待部署後才能做**
+
+### 根因（完整證據鏈見 `FIXED_BUG.md` BUG-007）
+
+`handleGenerateAll` 的 `runSignature` 傳的是
+`margin: series.marginDatedFailed ? '' : series.dataYmd`。
+`marginDatedFailed` 問的是「這 7 天有沒有**任何**一天抓到」，歷史日必定有 ——
+所以這一段整天都是 `dataYmd` 這個常數。21:00 那輪確實抓到當天的融資融券並寫進快取，
+但指紋沒變、`regenerate=false`，報告不重寫；21:15 起 `decideSkip` 判 `complete` 全面短路。
+結果：**每天的融資融券都晚一天才進報告**，而 manifest 早就指向新的一天，使用者看到的永遠是空的。
+
+這是 0.6.1-dev.1（`7e27a58`，2026-07-27 由三班制改 15 分鐘輪詢）引入的迴歸。
+
+### Completed Tasks
+- [x] `pollPlan.ts`：新增純函式 `marginSigPart(marginYmds)`（附完整成因註解）。
+- [x] `index.ts`：`SeriesResult` 新增 `marginYmds`（**視窗內**實際有融資融券的交易日，由舊到新）；
+      `marginDatedFailed` 改由它推導；重產閘門改用 `marginSigPart(series.marginYmds)`。
+- [x] `pollPlan.test.ts`：新增 4 條，含「當天由無到有 → 指紋必須改變」與「歷史日回補也要重產」。
+- [x] 版本三處 bump 至 `0.6.10-dev.1`，README 版本紀錄新增 0.6.10（開發中）。
+- [x] 驗證：`npm run lint`（僅既有 3 條 fast-refresh warning）、`npm run build` 通過；
+      `npm test -- --run` **622/622**（原 618 + 新增 4）。
+
+### 影響面（已逐一確認）
+- `marginDatedFailed` 語意不變，其兩個消費端不受影響：
+  `loadMarginFallback`（OpenAPI 備援觸發條件）與 `batch_run_log.margin_ok`。
+- `SeriesResult` 是**加欄位**，`assembleOne` 等既有消費端不動。
+- 前端零改動：`ReportData` 契約沒變，`ChipsTab` / `aiPayload` 不受影響。
+- 唯一的行為改變：**每天多一次重產**（約 21:00 融資融券到齊那輪）。
+  代價是 N 檔 × 約 5KB 上傳 + manifest + 一次 prune，可忽略。
+
+### ⚠️ 尚未做（需使用者指示，§13.2）
+**Edge Function 未部署，線上還是舊行為。** 部署指令（必須在 `sources/` 底下）：
+
+```bash
+supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt
+```
+
+（`--no-verify-jwt` 不可省，見 §13.3。測試區 ref 為 `wqetxuhncvfidqnklyew`。）
+
+部署後的覆驗點（今晚 21:00 之後）：
+1. `batch_run_log` 當天 21:00 前後那輪 `margin_today=true` **且 `regenerated=true`**。
+2. `reports/{今日ymd}/{ticker}.json` 的 `margin` 非 null、`sources.margin.fetchedAt` 為當晚。
+3. 籌碼頁的融資融券表當晚就有數字，不再顯示「尚未公布」。
 
 ---
 

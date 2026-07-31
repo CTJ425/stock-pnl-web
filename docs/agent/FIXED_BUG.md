@@ -8,6 +8,41 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-007 — 當天的融資融券永遠進不了報告，籌碼頁那一區恆為空
+- **Date**: 2026-07-31（0.6.1-dev.1 `7e27a58` 引入，0.6.10-dev.1 修復）
+- **Discovered by**: 使用者回報「融資融券此欄位好像都沒有抓到資料」
+- **Symptom**: 個股分析籌碼頁的融資融券表恆顯示
+  「今日融資融券尚未公布（約 21:00–22:00），稍晚的排程會自動補上」，
+  深夜與隔天早上看也一樣；7 日餘額走勢圖恆少最新的一天。
+- **證據鏈**（三段分別驗過，2026-07-31 08:50 實測）:
+  1. **抓取與解析正常**：`rwd/zh/marginTrading/MI_MARGN?date=20260730` 回 200，
+     `tables[1]` 為 16 欄、`fields[0]='代號'`，與 `MARGIN_IDX` 完全吻合。
+  2. **快取正常**：正式區 `20260729/0050.json` 的
+     `sources.margin.fetchedAt = 2026-07-29T13:00:03Z`（台北 21:00）——
+     當晚那輪確實抓到並寫進 `chip_raw_cache`。
+  3. **報告沒被重寫**：正式區 manifest 指向 `20260730`，該檔
+     `generatedAt=2026-07-30T08:15:04Z`（台北 16:15）、`margin: null`。
+     而 `20260729` 那份是**隔天 16:00** 才寫出來的（`batch_run_log` 按 `taipei_ymd` 查，
+     隔天第一輪 `last=null` → `runSig` 必不同 → 強制重產），那時才帶上 07-29 的數字。
+- **Root Cause**: `index.ts` 重產閘門的 `runSignature` 傳入
+  `margin: series.marginDatedFailed ? '' : series.dataYmd`。
+  `marginDatedFailed` 問的是「這 7 天有沒有**任何**一天抓到」，歷史日必定有，
+  所以它整天都是 `false`，這一段整天等於 `dataYmd` 這個常數。
+  於是 21:00 那輪抓到當天的融資融券、寫進快取，**指紋卻沒變 → `regenerate=false`**；
+  21:15 起 `decideSkip` 判定 `complete` 全數短路，當天報告的 `margin` 就永遠停在 null。
+- **Fix**:
+  - `SeriesResult` 新增 `marginYmds`（視窗內**實際有**融資融券的交易日，由舊到新），
+    `marginDatedFailed` 改由它推導（語意不變，只是更精確地限縮在視窗內的日子）。
+  - 重產閘門改用 `marginSigPart(series.marginYmds)`（`pollPlan.ts` 的純函式）。
+    當天資料一到就會讓指紋改變、剛好觸發一次重產；歷史日回補也一併涵蓋。
+- **Changed Files**: `sources/supabase/functions/stock-report/index.ts`、
+  `pollPlan.ts`、`pollPlan.test.ts`
+- **教訓**: `pollPlan.test.ts` 原本就有一條「融資融券由無到有 → 指紋不同」，測的是純函式
+  （`margin: ''` vs `'b'`）而**呼叫端根本產不出 `''`** —— 測試的意圖沒被實作滿足。
+  純函式測試必須連「呼叫端會餵什麼」一起釘住，否則測的是一個不存在的輸入。
+- **Verification**: `npm run lint` / `npm run build` 通過；`npm test` 622/622
+  （原 618 + 新增 4）。線上覆驗見 `PROGRESS.md`（需先部署 Edge Function）。
+
 ### Bug ID: BUG-006 — 手機上個股切換選單被擠成一小塊，只看得到「18…」
 - **Date**: 2026-07-29（0.6.7 引入，0.6.9-dev.1 修復）
 - **Discovered by**: 使用者切到手機版時回報，附截圖

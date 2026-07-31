@@ -8,6 +8,20 @@
 
 ## 📋 Active Tasks
 
+### Task 43: 修好「當天融資融券永遠進不了報告」（BUG-007）
+- **Status**: ✅ **程式完成並進版 0.6.10；⚠️ Edge Function 尚未部署，線上仍是舊行為**
+- **Agent**: Claude
+- **Timestamp**: 2026-07-31 09:10:00 Asia/Taipei
+- **起因**：使用者回報籌碼頁「融資融券此欄位好像都沒有抓到資料」。
+- **根因**：重產閘門的 `runSignature` 傳 `marginDatedFailed ? '' : dataYmd`，
+  而 `marginDatedFailed` 問的是「7 天內有沒有任何一天抓到」，整天恆為 false ——
+  這一段整天是常數，於是 21:00 抓到當天融資融券後指紋不變、報告不重產。
+  0.6.1-dev.1（`7e27a58`）引入的迴歸，完整證據鏈見 `FIXED_BUG.md` BUG-007。
+- **改法**：`SeriesResult` 新增 `marginYmds`（視窗內實際有資料的交易日），
+  閘門改用 `pollPlan.marginSigPart(series.marginYmds)`。
+- **驗證**：lint / build 通過；`npm test` 622/622（新增 4 條，含當天由無到有的迴歸測試）。
+- **下一步**：部署 `stock-report`（`--no-verify-jwt`，見 PROGRESS.md 的覆驗三點）。
+
 ### Task 42: README 錯誤修正 + 架構圖改為 SVG
 - **Status**: ✅ **完成（純文件，未進版，維持 0.6.9；尚未 commit）**
 - **Agent**: Claude

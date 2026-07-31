@@ -115,6 +115,7 @@ import {
 } from './fxRates.ts'
 import {
   decideSkip,
+  marginSigPart,
   nextT86State,
   rowsFingerprint,
   runSignature,
@@ -347,6 +348,11 @@ export interface SeriesResult {
   dataYmd: string
   /** 是否因抓取額度用盡而少於 HISTORY_DAYS 天 */
   incomplete: boolean
+  /**
+   * `days` 之中**實際有融資融券**的交易日（由舊到新）。
+   * 重產閘門看的是這個而不是 `marginDatedFailed` —— 理由見 `pollPlan.marginSigPart`。
+   */
+  marginYmds: string[]
   /** rwd 融資融券是否整批不可用（呼叫端據此回退 OpenAPI） */
   marginDatedFailed: boolean
 }
@@ -368,7 +374,7 @@ async function loadSeries(
   const cached = await cachedDayDatasets(candidates)
   let fetchBudget = MAX_BACKFILL_DAYS
   const collected: DaySlice[] = []
-  let marginSeen = false
+  const marginYmdSet = new Set<string>()
 
   // 由新到舊分批處理；同批內併發，批間序列，以此同時控住併發數與總抓取量
   for (let i = 0; i < candidates.length && collected.length < HISTORY_DAYS; i += FETCH_CONCURRENCY) {
@@ -397,7 +403,7 @@ async function loadSeries(
     const raws = await Promise.all(jobs)
     for (const raw of raws) {
       if (!raw) continue
-      if (raw.margin) marginSeen = true
+      if (raw.margin) marginYmdSet.add(raw.ymd)
       collected.push(sliceDay(raw, tickers))
     }
   }
@@ -406,11 +412,15 @@ async function loadSeries(
   collected.sort((a, b) => a.ymd.localeCompare(b.ymd))
   const days = collected.slice(-HISTORY_DAYS)
   const latest = days[days.length - 1]
+  // 只認落在視窗內的那幾天：批次可能多收幾天再裁掉，被裁掉的那些不在報告裡，
+  // 讓它們影響重產判斷只會製造假訊號
+  const marginYmds = days.map((d) => d.ymd).filter((ymd) => marginYmdSet.has(ymd))
   return {
     days,
     dataYmd: latest?.ymd ?? candidates[0] ?? '',
     incomplete: days.length < HISTORY_DAYS,
-    marginDatedFailed: days.length > 0 && !marginSeen,
+    marginYmds,
+    marginDatedFailed: days.length > 0 && marginYmds.length === 0,
   }
 }
 
@@ -1405,7 +1415,9 @@ async function handleGenerateAll(): Promise<Response> {
   const sig = runSignature({
     dataYmd: series.dataYmd,
     t86: t86Fp,
-    margin: series.marginDatedFailed ? '' : series.dataYmd,
+    // 必須是「哪幾天有」而不是「有沒有失敗過」：後者整天是常數，
+    // 會讓 21:00 才到的當日融資融券永遠進不了報告（見 pollPlan.marginSigPart）
+    margin: marginSigPart(series.marginYmds),
     borrow: borrow.date ?? '',
     tickers: tickers.map((t) => t.ticker),
   })
