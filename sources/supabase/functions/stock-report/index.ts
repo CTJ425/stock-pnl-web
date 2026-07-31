@@ -106,6 +106,7 @@ import {
 } from './usMacro.ts'
 import {
   decideMacroScan,
+  nextReleaseFor,
   taipeiYmdOf,
   type ScanReason,
 } from './macroCalendar.ts'
@@ -1719,6 +1720,8 @@ async function handleAdminStatus(): Promise<Response> {
             unit: i.unit,
             latest: i.latest,
             previous: i.previous,
+            // 由後端算，前端不再自備一份行事曆（兩份常數遲早漂移）
+            nextRelease: nextReleaseFor(i.id, i.latest?.period ?? null, now),
           })),
         }
       : null,

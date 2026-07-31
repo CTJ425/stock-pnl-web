@@ -194,6 +194,56 @@ export function expectedLatestPeriod(id: string, now: Date): ExpectedPeriod {
   return { period: `${Math.floor(total / 12)}-${p((total % 12) + 1)}`, stale: true }
 }
 
+export interface NextRelease {
+  /** 發布日（美東當地日）'YYYY-MM-DD' */
+  date: string
+  /** 這次會發布的資料期別 'YYYY-MM' */
+  period: string
+  /** true 代表行事曆已用完、日期是規則推算出來的 */
+  estimated: boolean
+}
+
+/**
+ * 某指標「下一期」的發布日。
+ *
+ * **由後端算完再回傳給前端**，而不是讓前端也放一份行事曆 ——
+ * 兩份常數遲早會漂移，而漂移的症狀（畫面說 8/12、後端卻按 8/14 判定）
+ * 幾乎不可能從畫面上看出來。單一真相來源就在這個檔案。
+ *
+ * 行事曆用完時回 `estimated: true` 並以 `FALLBACK_RULE` 的日子推算，
+ * 畫面據此標示「推估」。
+ */
+export function nextReleaseFor(
+  id: string,
+  latestPeriod: string | null,
+  now: Date,
+): NextRelease | null {
+  const entries = RELEASE_CALENDAR[id] ?? []
+  const t = now.getTime()
+  // 還沒發生、且期別比手上這期新的第一筆
+  const upcoming = entries
+    .filter((e) => releaseInstant(e, id) > t && (!latestPeriod || e.period > latestPeriod))
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
+  if (upcoming) return { date: upcoming.date, period: upcoming.period, estimated: false }
+
+  // 行事曆用完 → 依規則推算下一期
+  const day = FALLBACK_RULE[id]
+  if (day === undefined || !latestPeriod) return null
+  const m = /^(\d{4})-(\d{2})$/.exec(latestPeriod)
+  if (!m) return null
+  // 手上是 2026-06 → 下一期 2026-07，於 2026-08 發布
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + 2
+  const y = Math.floor(total / 12)
+  const mon = (total % 12) + 1
+  const p = (n: number) => String(n).padStart(2, '0')
+  const nextPeriodTotal = Number(m[1]) * 12 + (Number(m[2]) - 1) + 1
+  return {
+    date: `${y}-${p(mon)}-${p(day)}`,
+    period: `${Math.floor(nextPeriodTotal / 12)}-${p((nextPeriodTotal % 12) + 1)}`,
+    estimated: true,
+  }
+}
+
 export interface ScanInput {
   now: Date
   /** 既有檔裡各指標的最新期別 */

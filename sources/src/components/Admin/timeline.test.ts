@@ -7,7 +7,6 @@ import {
   describeCron,
   durationLabel,
   describeScope,
-  estimateNextRelease,
   hourLabel,
   nextRun,
   hoursFromBase,
@@ -255,33 +254,6 @@ describe('dayPercent / hourLabel / durationLabel', () => {
   it('時間長度用時分表示', () => {
     expect(durationLabel(6.667)).toBe('6h 40m')
     expect(durationLabel(0.5)).toBe('30m')
-  })
-})
-
-describe('estimateNextRelease', () => {
-  // 區間取自 ALFRED vintage 反查的實際發布日（近三期），見 timeline.ts 的表格
-  it('回傳區間而非單一日期——實際發布日每月都在跳', () => {
-    const w = estimateNextRelease('CPILFESL', '2026-06')!
-    // 已有 2026-06，下一期是 2026-07，於 2026-08 發布
-    expect(w.from).toBe('2026-08-10')
-    expect(w.to).toBe('2026-08-14')
-    expect(w.label).toBe('08-10 ~ 14')
-  })
-
-  it('各指標的區間依實測：非農月初、PCE 月底、UMCSENT 次月 1 日', () => {
-    expect(estimateNextRelease('PAYEMS', '2026-06')!.label).toBe('08-02 ~ 08')
-    expect(estimateNextRelease('PCEPILFE', '2026-06')!.label).toBe('08-25 ~ 30')
-    expect(estimateNextRelease('UMCSENT', '2026-05')!.label).toBe('07-01 ~ 03')
-  })
-
-  it('跨年推算不出錯', () => {
-    expect(estimateNextRelease('CPILFESL', '2026-11')!.from).toBe('2027-01-10')
-  })
-
-  it('不認得的指標或壞掉的期別回 null，畫面顯示「待定」', () => {
-    expect(estimateNextRelease('UNKNOWN', '2026-06')).toBeNull()
-    expect(estimateNextRelease('CPILFESL', null)).toBeNull()
-    expect(estimateNextRelease('CPILFESL', '亂寫')).toBeNull()
   })
 })
 

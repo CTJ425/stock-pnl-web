@@ -195,65 +195,15 @@ export function durationLabel(hours: number): string {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-/**
- * 各指標下一期的發布日**推估區間**。
+/*
+ * 發布日推估已移除（0.6.17）。
  *
- * ⚠️ 這是依實測歸納，**不是官方行事曆** —— FRED 沒有提供發布日 API。
- * 排程完全不依賴它（每天兩班照跑、比對內容指紋），它純粹是給人看的參考，
- * 畫面上必須標示「推估」。
+ * 那份 `RELEASE_RULE` 是前端自己依實測歸納的區間，與後端 `macroCalendar.ts` 的
+ * 官方行事曆是**兩份會漂移的常數** —— 而漂移的症狀（畫面說 8/12、後端卻按 8/14
+ * 判定）幾乎不可能從畫面上看出來。
  *
- * **為什麼是區間而不是單一日期**：以 ALFRED 的 vintage 反查近三期的實際發布日
- * （vintage 是單調的，某期首次出現的那天就是發布日），結果如下 ——
- *
- * | 指標 | 2026-04 期 | 2026-05 期 | 2026-06 期 |
- * | ---- | ---- | ---- | ---- |
- * | CPILFESL | 05-12 | 06-10 | 07-14 |
- * | PPIFES   | 05-13 | 06-11 | 07-15 |
- * | PCEPILFE | 05-28 | 06-25 | 07-30 |
- * | PAYEMS   | 05-08 | 06-05 | 07-02 |
- * | UMCSENT  | 04-01 | 05-01 | 06-01（皆為次月 1 日） |
- *
- * 日期每個月都在跳（CPI 就橫跨 10–14 日），給單一日期等於假裝精確。
- * 另外 `PAYEMS` 原本寫「次月第一個週五」是**錯的** —— 2026-07-02 是週四。
+ * 現在由 `admin-status` 直接回傳每個指標的 `nextRelease`，單一真相來源在後端。
  */
-const RELEASE_RULE: Record<string, { from: number; to: number }> = {
-  PAYEMS: { from: 2, to: 8 },
-  UMCSENT: { from: 1, to: 3 },
-  CPILFESL: { from: 10, to: 14 },
-  PPIFES: { from: 11, to: 15 },
-  PCEPILFE: { from: 25, to: 30 },
-}
-
-export interface ReleaseWindow {
-  /** 'YYYY-MM-DD'，區間起 */
-  from: string
-  /** 'YYYY-MM-DD'，區間迄 */
-  to: string
-  /** 供畫面顯示的短字串，如 '08-10 ~ 14' */
-  label: string
-}
-
-/**
- * 給定指標與它「已取得的最新期別」，推估下一期的發布區間。
- * 回 null 代表沒有規則（不認得的指標）或期別格式怪異 —— 此時畫面顯示「待定」。
- */
-export function estimateNextRelease(id: string, latestPeriod: string | null): ReleaseWindow | null {
-  const rule = RELEASE_RULE[id]
-  if (!rule || !latestPeriod) return null
-  const m = /^(\d{4})-(\d{2})$/.exec(latestPeriod)
-  if (!m) return null
-  // 資料期別的次月才是發布月：已有 2026-06 時，下一期是 2026-07，於 2026-08 發布
-  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + 2
-  const y = Math.floor(total / 12)
-  const mon = (total % 12) + 1
-  const p = (n: number) => String(n).padStart(2, '0')
-  const ym = `${y}-${p(mon)}`
-  return {
-    from: `${ym}-${p(rule.from)}`,
-    to: `${ym}-${p(rule.to)}`,
-    label: `${p(mon)}-${p(rule.from)} ~ ${p(rule.to)}`,
-  }
-}
 
 /**
  * 落後幾期。0 代表沒落後。

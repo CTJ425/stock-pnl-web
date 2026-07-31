@@ -38,6 +38,13 @@ export interface AdminMacroIndicator {
   unit: string
   latest: { period: string; value: number | null } | null
   previous: { period: string; value: number | null } | null
+  /**
+   * 下一期的發布日，**由後端依官方發布行事曆算好**（macroCalendar.ts）。
+   * 前端刻意不自備一份行事曆 —— 兩份常數遲早漂移，而漂移的症狀
+   * （畫面說 8/12、後端卻按 8/14 判定）幾乎看不出來。
+   * `estimated` 為 true 代表行事曆已用完、日期是規則推算的。
+   */
+  nextRelease: { date: string; period: string; estimated: boolean } | null
 }
 
 export interface AdminStatus {

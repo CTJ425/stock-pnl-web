@@ -60,6 +60,8 @@ const status: AdminStatus = {
         unit: '%',
         latest: { period: '2026-06', value: 2.57 },
         previous: { period: '2026-05', value: 2.82 },
+        // 由後端依官方行事曆算好；CPI 2026-07 期的官方公告日
+        nextRelease: { date: '2026-08-12', period: '2026-07', estimated: false },
       },
       {
         // 落後一期：其他指標到 2026-06，只有它停在 2026-05
@@ -68,6 +70,8 @@ const status: AdminStatus = {
         unit: '指數',
         latest: { period: '2026-05', value: 44.8 },
         previous: { period: '2026-04', value: 49.8 },
+        // UMCSENT 不在行事曆中（已停更、不密集掃）
+        nextRelease: null,
       },
     ],
   },
@@ -178,7 +182,7 @@ describe('AdminStatusPage', () => {
     await screen.findByText(/今日班次/)
     expect(screen.getByText('下次抓取')).toBeTruthy()
     // 下次抓取是 cron 算得出來的、100% 確定；發布日是推估的，兩者不可混為一談
-    expect(screen.getByText('（依實測歸納的區間）')).toBeTruthy()
+    expect(screen.getByText('（官方公告日）')).toBeTruthy()
     expect(screen.getByText('下一筆新數據')).toBeTruthy()
   })
 
@@ -190,16 +194,15 @@ describe('AdminStatusPage', () => {
     expect(screen.getByText(/FRED 五個序列/)).toBeTruthy()
   })
 
-  it('下期預計顯示區間而非單一日期——實際發布日每月都在跳', async () => {
+  it('下期預計用後端算好的官方公告日，前端不自備行事曆', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/今日班次/)
-    // 核心 CPI 已有 2026-06 → 下一期 2026-07 於 2026-08 的 10–14 日發布。
-    // 同一字串會出現兩次（表格的「下期預計」與提示列的「下一筆新數據」），故分開驗
+    // 改用後端依官方行事曆算好的確定日期（不再是前端自推的區間）
     const rows = [...document.querySelectorAll('.data-table tbody tr')]
     const cpi = rows.find((r) => r.textContent?.includes('CPILFESL'))!
-    expect(cpi.textContent).toContain('08-10 ~ 14')
-    expect(document.querySelector('.ast-next')?.textContent).toContain('08-10 ~ 14')
+    expect(cpi.textContent).toContain('2026-08-12')
+    expect(document.querySelector('.ast-next')?.textContent).toContain('2026-08-12')
   })
 
   it('落後的指標下期預計顯示「待定」——它連上一期都還沒發', async () => {

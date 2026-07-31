@@ -28,7 +28,6 @@ import {
   describeCron,
   describeScope,
   durationLabel,
-  estimateNextRelease,
   hourLabel,
   hoursFromBase,
   humanAgo,
@@ -158,21 +157,15 @@ export function AdminStatusPage() {
     return tp.getUTCHours() + tp.getUTCMinutes() / 60
   }, [data])
 
-  /** 最近的一筆預估發布：五個指標各推一次，取最早的那個 */
+  /** 最近的一筆發布：取後端算好的日期中最早的那個 */
   const nextRelease = useMemo(() => {
     const cands = (data?.macro?.indicators ?? [])
-      .map((i) => ({
-        window: estimateNextRelease(i.id, i.latest?.period ?? null),
-        label: i.label,
-        lagging: judgePeriod(i.latest?.period ?? null, macroPeer) === 'warn',
-      }))
-      .filter((c): c is { window: NonNullable<typeof c.window>; label: string; lagging: boolean } =>
-        c.window !== null,
-      )
-      // 落後的指標連上一期都還沒發，推估日沒有意義
-      .filter((c) => !c.lagging)
-      .sort((a, b) => a.window.from.localeCompare(b.window.from))
-    return cands[0] ?? null
+      .filter((i) => i.nextRelease)
+      // 落後中的指標連上一期都還沒發，它的「下一期」沒有參考價值
+      .filter((i) => judgePeriod(i.latest?.period ?? null, macroPeer) !== 'warn')
+      .sort((a, b) => a.nextRelease!.date.localeCompare(b.nextRelease!.date))
+    const top = cands[0]
+    return top ? { ...top.nextRelease!, label: top.label } : null
   }, [data, macroPeer])
 
   if (loading && !data) {
@@ -514,9 +507,11 @@ export function AdminStatusPage() {
           </span>
           {nextRelease && (
             <span className="sep">
-              <span className="k">下一筆新數據</span> <b>{nextRelease.window.label}</b>{' '}
+              <span className="k">下一筆新數據</span> <b>{nextRelease.date}</b>{' '}
               {nextRelease.label}
-              <span className="ast-est">（依實測歸納的區間）</span>
+              <span className="ast-est">
+                {nextRelease.estimated ? '（推估，行事曆已過期）' : '（官方公告日）'}
+              </span>
             </span>
           )}
         </div>
@@ -536,7 +531,6 @@ export function AdminStatusPage() {
             <tbody>
               {(data.macro?.indicators ?? []).map((i) => {
                 const st = judgePeriod(i.latest?.period ?? null, macroPeer)
-                const next = estimateNextRelease(i.id, i.latest?.period ?? null)
                 const behind = periodsBehind(i.latest?.period ?? null, macroPeer)
                 return (
                   <tr key={i.id}>
@@ -552,8 +546,11 @@ export function AdminStatusPage() {
                       {i.previous?.value != null ? `${i.previous.value} ${i.unit}` : '—'}
                     </td>
                     <td className="ast-mono">
-                      {/* 落後的指標推估不出有意義的日期——它連上一期都還沒發 */}
-                      {st === 'warn' ? '待定' : (next?.label ?? '待定')}
+                      {/* 落後的指標算不出有意義的日期——它連上一期都還沒發 */}
+                      {st === 'warn' ? '待定' : (i.nextRelease?.date ?? '待定')}
+                      {i.nextRelease?.estimated && st !== 'warn' && (
+                        <span className="ast-est"> 推估</span>
+                      )}
                     </td>
                     <td>
                       <Pill
