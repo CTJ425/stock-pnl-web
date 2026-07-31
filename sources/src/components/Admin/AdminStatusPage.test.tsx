@@ -136,7 +136,7 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/美國總體經濟/)
-    expect(screen.getByText('落後一期')).toBeTruthy()
+    expect(screen.getByText('落後 1 期')).toBeTruthy()
     expect(screen.getByText('最新')).toBeTruthy()
   })
 
@@ -178,8 +178,28 @@ describe('AdminStatusPage', () => {
     await screen.findByText(/今日班次/)
     expect(screen.getByText('下次抓取')).toBeTruthy()
     // 下次抓取是 cron 算得出來的、100% 確定；發布日是推估的，兩者不可混為一談
-    expect(screen.getByText('（推估）')).toBeTruthy()
+    expect(screen.getByText('（依實測歸納的區間）')).toBeTruthy()
     expect(screen.getByText('下一筆新數據')).toBeTruthy()
+  })
+
+  it('排程列出各自的抓取範圍——光看 action 代號看不出負責哪些資料', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByRole('heading', { name: '排程' })
+    expect(screen.getByText(/持股台股的三大法人/)).toBeTruthy()
+    expect(screen.getByText(/FRED 五個序列/)).toBeTruthy()
+  })
+
+  it('下期預計顯示區間而非單一日期——實際發布日每月都在跳', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/今日班次/)
+    // 核心 CPI 已有 2026-06 → 下一期 2026-07 於 2026-08 的 10–14 日發布。
+    // 同一字串會出現兩次（表格的「下期預計」與提示列的「下一筆新數據」），故分開驗
+    const rows = [...document.querySelectorAll('.data-table tbody tr')]
+    const cpi = rows.find((r) => r.textContent?.includes('CPILFESL'))!
+    expect(cpi.textContent).toContain('08-10 ~ 14')
+    expect(document.querySelector('.ast-next')?.textContent).toContain('08-10 ~ 14')
   })
 
   it('落後的指標下期預計顯示「待定」——它連上一期都還沒發', async () => {

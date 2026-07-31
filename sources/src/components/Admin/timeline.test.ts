@@ -6,6 +6,7 @@ import {
   dayPercent,
   describeCron,
   durationLabel,
+  describeScope,
   estimateNextRelease,
   hourLabel,
   nextRun,
@@ -15,6 +16,7 @@ import {
   judgePeriod,
   judgeSource,
   latestPeriod,
+  periodsBehind,
   tlLabel,
   tlPercent,
 } from './timeline'
@@ -244,23 +246,60 @@ describe('dayPercent / hourLabel / durationLabel', () => {
 })
 
 describe('estimateNextRelease', () => {
-  it('非農是發布月的第一個週五：2026-06 期 → 2026-08-07', () => {
+  // 區間取自 ALFRED vintage 反查的實際發布日（近三期），見 timeline.ts 的表格
+  it('回傳區間而非單一日期——實際發布日每月都在跳', () => {
+    const w = estimateNextRelease('CPILFESL', '2026-06')!
     // 已有 2026-06，下一期是 2026-07，於 2026-08 發布
-    expect(estimateNextRelease('PAYEMS', '2026-06')).toBe('2026-08-07')
+    expect(w.from).toBe('2026-08-10')
+    expect(w.to).toBe('2026-08-14')
+    expect(w.label).toBe('08-10 ~ 14')
   })
 
-  it('CPI 月中、PCE 月底', () => {
-    expect(estimateNextRelease('CPILFESL', '2026-06')).toBe('2026-08-12')
-    expect(estimateNextRelease('PCEPILFE', '2026-06')).toBe('2026-08-28')
+  it('各指標的區間依實測：非農月初、PCE 月底、UMCSENT 次月 1 日', () => {
+    expect(estimateNextRelease('PAYEMS', '2026-06')!.label).toBe('08-02 ~ 08')
+    expect(estimateNextRelease('PCEPILFE', '2026-06')!.label).toBe('08-25 ~ 30')
+    expect(estimateNextRelease('UMCSENT', '2026-05')!.label).toBe('07-01 ~ 03')
   })
 
   it('跨年推算不出錯', () => {
-    expect(estimateNextRelease('CPILFESL', '2026-11')).toBe('2027-01-12')
+    expect(estimateNextRelease('CPILFESL', '2026-11')!.from).toBe('2027-01-10')
   })
 
   it('不認得的指標或壞掉的期別回 null，畫面顯示「待定」', () => {
     expect(estimateNextRelease('UNKNOWN', '2026-06')).toBeNull()
     expect(estimateNextRelease('CPILFESL', null)).toBeNull()
     expect(estimateNextRelease('CPILFESL', '亂寫')).toBeNull()
+  })
+})
+
+describe('periodsBehind', () => {
+  it('落後幾期算得出來——「落後一期」與「落後三期」意思完全不同', () => {
+    expect(periodsBehind('2026-06', '2026-06')).toBe(0)
+    expect(periodsBehind('2026-05', '2026-06')).toBe(1)
+    expect(periodsBehind('2026-03', '2026-06')).toBe(3)
+  })
+
+  it('跨年相減正確', () => {
+    expect(periodsBehind('2025-11', '2026-02')).toBe(3)
+  })
+
+  it('領先或缺值不得回負數', () => {
+    expect(periodsBehind('2026-07', '2026-06')).toBe(0)
+    expect(periodsBehind(null, '2026-06')).toBe(0)
+    expect(periodsBehind('2026-06', null)).toBe(0)
+  })
+})
+
+describe('describeScope', () => {
+  it('每個排程都說得出自己抓什麼', () => {
+    expect(describeScope('generate-all')).toContain('三大法人')
+    expect(describeScope('sync-macro')).toContain('FRED')
+    expect(describeScope('sync-fx')).toContain('八個幣對')
+    expect(describeScope('probe')).toContain('不寫報告')
+  })
+
+  it('不認得的 action 回空字串，畫面就不顯示那一行', () => {
+    expect(describeScope('unknown')).toBe('')
+    expect(describeScope(null)).toBe('')
   })
 })

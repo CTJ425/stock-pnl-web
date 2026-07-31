@@ -182,43 +182,101 @@ export function durationLabel(hours: number): string {
 }
 
 /**
- * 各指標下一期的發布日**推估**。
+ * 各指標下一期的發布日**推估區間**。
  *
- * ⚠️ 這是依各機關的慣例推算，**不是官方行事曆** —— FRED 沒有提供發布日 API。
+ * ⚠️ 這是依實測歸納，**不是官方行事曆** —— FRED 沒有提供發布日 API。
  * 排程完全不依賴它（每天兩班照跑、比對內容指紋），它純粹是給人看的參考，
- * 畫面上必須標示「推估」。誤差通常在一兩天內。
+ * 畫面上必須標示「推估」。
  *
- * 規則來源：非農＝次月第一個週五、CPI＝次月中旬、PPI＝CPI 隔一兩天、
- * PCE＝次月底、密大消費者信心＝次月中旬發初值。
+ * **為什麼是區間而不是單一日期**：以 ALFRED 的 vintage 反查近三期的實際發布日
+ * （vintage 是單調的，某期首次出現的那天就是發布日），結果如下 ——
+ *
+ * | 指標 | 2026-04 期 | 2026-05 期 | 2026-06 期 |
+ * | ---- | ---- | ---- | ---- |
+ * | CPILFESL | 05-12 | 06-10 | 07-14 |
+ * | PPIFES   | 05-13 | 06-11 | 07-15 |
+ * | PCEPILFE | 05-28 | 06-25 | 07-30 |
+ * | PAYEMS   | 05-08 | 06-05 | 07-02 |
+ * | UMCSENT  | 04-01 | 05-01 | 06-01（皆為次月 1 日） |
+ *
+ * 日期每個月都在跳（CPI 就橫跨 10–14 日），給單一日期等於假裝精確。
+ * 另外 `PAYEMS` 原本寫「次月第一個週五」是**錯的** —— 2026-07-02 是週四。
  */
-const RELEASE_RULE: Record<string, { kind: 'firstFriday' } | { kind: 'dayOfMonth'; day: number }> = {
-  PAYEMS: { kind: 'firstFriday' },
-  CPILFESL: { kind: 'dayOfMonth', day: 12 },
-  PPIFES: { kind: 'dayOfMonth', day: 14 },
-  UMCSENT: { kind: 'dayOfMonth', day: 14 },
-  PCEPILFE: { kind: 'dayOfMonth', day: 28 },
+const RELEASE_RULE: Record<string, { from: number; to: number }> = {
+  PAYEMS: { from: 2, to: 8 },
+  UMCSENT: { from: 1, to: 3 },
+  CPILFESL: { from: 10, to: 14 },
+  PPIFES: { from: 11, to: 15 },
+  PCEPILFE: { from: 25, to: 30 },
+}
+
+export interface ReleaseWindow {
+  /** 'YYYY-MM-DD'，區間起 */
+  from: string
+  /** 'YYYY-MM-DD'，區間迄 */
+  to: string
+  /** 供畫面顯示的短字串，如 '08-10 ~ 14' */
+  label: string
 }
 
 /**
- * 給定指標與它「已取得的最新期別」，推估下一期會在哪天發布。
+ * 給定指標與它「已取得的最新期別」，推估下一期的發布區間。
  * 回 null 代表沒有規則（不認得的指標）或期別格式怪異 —— 此時畫面顯示「待定」。
  */
-export function estimateNextRelease(id: string, latestPeriod: string | null): string | null {
+export function estimateNextRelease(id: string, latestPeriod: string | null): ReleaseWindow | null {
   const rule = RELEASE_RULE[id]
   if (!rule || !latestPeriod) return null
   const m = /^(\d{4})-(\d{2})$/.exec(latestPeriod)
   if (!m) return null
-  // 資料期別的次月才是發布月：2026-06 的數據在 2026-07 之後才發布，
-  // 而我們要問的是「下一期（2026-07）什麼時候發」→ 發布月是 2026-08
+  // 資料期別的次月才是發布月：已有 2026-06 時，下一期是 2026-07，於 2026-08 發布
   const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + 2
   const y = Math.floor(total / 12)
   const mon = (total % 12) + 1
   const p = (n: number) => String(n).padStart(2, '0')
-  if (rule.kind === 'dayOfMonth') return `${y}-${p(mon)}-${p(rule.day)}`
-  // 第一個週五
-  const first = new Date(Date.UTC(y, mon - 1, 1))
-  const day = 1 + ((5 - first.getUTCDay() + 7) % 7)
-  return `${y}-${p(mon)}-${p(day)}`
+  const ym = `${y}-${p(mon)}`
+  return {
+    from: `${ym}-${p(rule.from)}`,
+    to: `${ym}-${p(rule.to)}`,
+    label: `${p(mon)}-${p(rule.from)} ~ ${p(rule.to)}`,
+  }
+}
+
+/**
+ * 落後幾期。0 代表沒落後。
+ *
+ * 畫面上「落後一期」與「落後三期」是完全不同的意思：前者多半只是還沒發布，
+ * 後者代表來源可能停更了（實測 UMCSENT 就是如此 —— 依規律 2026-06 該在
+ * 07-01 就發布，但 07-01 / 07-15 / 07-31 三個 vintage 全都還停在 2026-05）。
+ */
+export function periodsBehind(period: string | null, peerLatest: string | null): number {
+  if (!period || !peerLatest) return 0
+  const a = /^(\d{4})-(\d{2})$/.exec(period)
+  const b = /^(\d{4})-(\d{2})$/.exec(peerLatest)
+  if (!a || !b) return 0
+  const ma = Number(a[1]) * 12 + Number(a[2])
+  const mb = Number(b[1]) * 12 + Number(b[2])
+  return Math.max(0, mb - ma)
+}
+
+/**
+ * 每個排程實際抓什麼。畫面上光看 `generate-all` 這種代號看不出範圍，
+ * 而「這一班到底負責哪些資料」正是排查時第一個要問的問題。
+ *
+ * 內容對照 `sources/supabase/functions/stock-report/index.ts` 的各 handler，
+ * 改動那邊的抓取範圍時**這裡要跟著改**。
+ */
+export const ACTION_SCOPE: Record<string, string> = {
+  'generate-all':
+    '持股台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 新聞，寫入盤後報告',
+  probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
+  'sync-macro': 'FRED 五個序列：核心 CPI / PPI / PCE、非農就業、消費者信心',
+  'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣',
+  'backfill-revenue': '公開資訊觀測站的分月營收，補齊個股缺漏的月份',
+}
+
+/** 排程的抓取範圍說明；不認得的 action 回空字串（畫面就不顯示那一行） */
+export function describeScope(action: string | null): string {
+  return (action && ACTION_SCOPE[action]) || ''
 }
 
 /** cron 排程的健康度：停用、今日有失敗、或從未跑過都要看得出來 */

@@ -26,6 +26,7 @@ import {
   cronHoursTaipei,
   dayPercent,
   describeCron,
+  describeScope,
   durationLabel,
   estimateNextRelease,
   hourLabel,
@@ -36,6 +37,7 @@ import {
   judgeSource,
   latestPeriod,
   nextRun,
+  periodsBehind,
   tlLabel,
   tlPercent,
   type SourceState,
@@ -160,14 +162,16 @@ export function AdminStatusPage() {
   const nextRelease = useMemo(() => {
     const cands = (data?.macro?.indicators ?? [])
       .map((i) => ({
-        date: estimateNextRelease(i.id, i.latest?.period ?? null),
+        window: estimateNextRelease(i.id, i.latest?.period ?? null),
         label: i.label,
         lagging: judgePeriod(i.latest?.period ?? null, macroPeer) === 'warn',
       }))
-      .filter((c): c is { date: string; label: string; lagging: boolean } => c.date !== null)
+      .filter((c): c is { window: NonNullable<typeof c.window>; label: string; lagging: boolean } =>
+        c.window !== null,
+      )
       // 落後的指標連上一期都還沒發，推估日沒有意義
       .filter((c) => !c.lagging)
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => a.window.from.localeCompare(b.window.from))
     return cands[0] ?? null
   }, [data, macroPeer])
 
@@ -340,6 +344,10 @@ export function AdminStatusPage() {
                   <tr key={s.jobid}>
                     <td>
                       <b>{s.jobname}</b>
+                      {/* 光看 action 代號看不出這一班負責哪些資料 */}
+                      {describeScope(s.action) && (
+                        <span className="ast-scope">{describeScope(s.action)}</span>
+                      )}
                     </td>
                     <td className="ast-mono">{describeCron(s.schedule)}</td>
                     <td className="ast-mono">{s.action ?? '—'}</td>
@@ -504,8 +512,9 @@ export function AdminStatusPage() {
           </span>
           {nextRelease && (
             <span className="sep">
-              <span className="k">下一筆新數據</span> <b>{nextRelease.date}</b> {nextRelease.label}
-              <span className="ast-est">（推估）</span>
+              <span className="k">下一筆新數據</span> <b>{nextRelease.window.label}</b>{' '}
+              {nextRelease.label}
+              <span className="ast-est">（依實測歸納的區間）</span>
             </span>
           )}
         </div>
@@ -526,6 +535,7 @@ export function AdminStatusPage() {
               {(data.macro?.indicators ?? []).map((i) => {
                 const st = judgePeriod(i.latest?.period ?? null, macroPeer)
                 const next = estimateNextRelease(i.id, i.latest?.period ?? null)
+                const behind = periodsBehind(i.latest?.period ?? null, macroPeer)
                 return (
                   <tr key={i.id}>
                     <td>
@@ -541,10 +551,13 @@ export function AdminStatusPage() {
                     </td>
                     <td className="ast-mono">
                       {/* 落後的指標推估不出有意義的日期——它連上一期都還沒發 */}
-                      {st === 'warn' ? '待定' : (next ?? '待定')}
+                      {st === 'warn' ? '待定' : (next?.label ?? '待定')}
                     </td>
                     <td>
-                      <Pill state={st} text={st === 'warn' ? '落後一期' : '最新'} />
+                      <Pill
+                        state={st}
+                        text={behind > 0 ? `落後 ${behind} 期` : '最新'}
+                      />
                     </td>
                   </tr>
                 )
