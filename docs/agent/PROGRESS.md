@@ -52,7 +52,23 @@ CPI 月中、PPI 月中、PCE 月底），FRED 沒有發布日 API。畫面標�
 `npm test` 691/691（新增 20）、build 通過、lint 僅 3 個既有 warning、
 四種寬度深淺兩色掃描全過。
 
----
+### ✅ 正式區上線覆驗（2026-07-31 14:55）
+
+0.6.13 已在 `main`，GitHub Pages 部署成功（33 秒）。**本次無後端變更**
+（`git diff 846ffaa..f0d9fa3 -- sources/supabase/` 為空），故未重新部署 Edge Function；
+仍以 `functions download` 確認正式區 10 檔與 `main` 一致。
+
+1. **線上 bundle 內容檢查**：抓 GitHub Pages 的 `index-*.js`，確認含
+   `0.6.13` / `今日班次` / `美東發布` / `下次抓取` / `推估`，且
+   **`個股新聞` 與 `新聞檔` 皆已不存在**。
+2. **以正式區資料實地渲染**：`.env.local` 暫時指向正式區 + 正式區 admin session，
+   跑四種寬度掃描 → 全過。畫面確認：工作區「玉山證卷」、排程目標 ref 為
+   `kxnxadaghidwumqsqneu`（自己）、兩班顯示「待執行」、下次抓取「今日 21:00（6h 8m 後）」、
+   借券次日 09:11 標延遲、後端彙總 910ms。
+3. 驗畢已把 `.env.local` **還原為測試區**。
+
+⚠️ 覆驗過程需要暫時把 `.env.local` 指向正式區，事後務必還原 ——
+否則之後的本機開發會直接對著正式區資料。
 
 ## 📅 Log: 2026-07-31 13:55:00 Asia/Taipei
 
