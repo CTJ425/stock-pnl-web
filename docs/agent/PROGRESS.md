@@ -1,9 +1,47 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 移除表格收合（0.6.24 定版，回退 0.6.23）
-- Status: **完成 —— 純前端；780 測試全過**
-- Timestamp: 2026-08-04 19:30:00 Asia/Taipei
+- Action: 獲利能力 12 季走勢圖（0.6.25 定版）
+- Status: **完成 —— 純前端；786 測試全過**
+- Timestamp: 2026-08-04 19:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 19:55:00 Asia/Taipei（0.6.25）
+
+- **Agent**: Claude
+- **Action**: 獲利能力加上 12 季四線走勢圖（版本 A）
+
+### 選版經過
+
+先出三份設計稿並排比較（artifact，見 TASK.md Task 54），使用者選 **A｜四線同軸**。
+設計稿階段有兩個發現與原本的計畫不同，記下來：
+
+1. **A 的弱點比預期溫和**。原本以為低毛利股會「四條線擠在底部」，
+   實際上 `niceDomain` 會把鴻海的值域吸附成 2–8，線是有拉開的；
+   真正糊掉的是營益 / 稅前 / 稅後三者的差距（全在 1.2 個百分點內）。
+2. **B 有計畫沒列到的致命傷：PDF**。整頁被 html2canvas 擷取，而 B 一次只顯示一項，
+   另外三項在紙上永遠不存在 —— 與 0.6.24 移除收合的理由是同一條。
+
+### 實作
+
+`FundamentalTab.tsx` 獲利能力區塊，KPI 卡之下、表格之上（**圖在上、表在下**，
+照月營收既有版面）。`MultiLineChart` + `ChartLegend`，版面結構照抄 KD 那段的
+`.chart-with-legend` / `.chart-legend-side`。四項的名稱、顏色、順序集中在 `MARGIN_SERIES`
+一份資料，圖與圖例都由它產生。
+
+### ⚠️ 方向陷阱（與月營收同一個坑）
+
+圖必須用 `profitQuarters`（由舊到新），不是為了表格 reverse 成新→舊的 `quarters`。
+拿錯的話整條線會反過來、而且看起來完全像真的。已用「毛利率逐季走高 → y 座標逐點變小」
+寫成測試釘住方向。
+
+### 驗證
+
+`npm test` **786/786**（新增 6 條：四線與圖例、方向、X 軸抽稀、單季不畫、負值不破圖、
+金融業無毛利率）。lint 3 個既有 warning、build 通過。
+另建一個暫時的 vite 入口渲染 `FundamentalTab`，以 Playwright 掃深淺兩色與 375px：
+無橫向溢出（手機 svg 297px）、X 軸 6 個標籤不重疊、線色為字面值。驗完即刪，未進 commit。
 
 ---
 

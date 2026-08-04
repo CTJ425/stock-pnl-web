@@ -7,14 +7,33 @@
  * 不可只在程式裡知道（沿用籌碼分頁「股 / 張」的準則）。
  */
 import { RefreshCw } from 'lucide-react'
-import type { FundamentalData } from '../../services/fundamentalProxy'
+import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
+import { MultiLineChart } from '../Charts/MultiLineChart'
+import { ChartLegend } from '../Charts/ChartLegend'
+import { CATEGORICAL_COLORS } from '../Charts/chartColors'
 import { chipClass, fmtInt, fmtUpdatedAt } from './chipFormat'
 
 interface FundamentalTabProps {
   fundamental: FundamentalData | null
   loading: boolean
 }
+
+/**
+ * 獲利能力的四項比率：同一量綱、同一縱軸，故用類別色表達「這是誰」，
+ * 依序指派不循環（同 TechnicalTab 的均線）。順序即損益表由上而下的順序，
+ * 圖例與表格欄位都照這個順序，三處不可各排各的。
+ */
+const MARGIN_SERIES: Array<{
+  name: string
+  color: string
+  value: (q: ProfitQuarter) => number | null
+}> = [
+  { name: '毛利率', color: CATEGORICAL_COLORS[0], value: (q) => q.grossMarginPercent },
+  { name: '營益率', color: CATEGORICAL_COLORS[1], value: (q) => q.operatingMarginPercent },
+  { name: '稅前純益率', color: CATEGORICAL_COLORS[2], value: (q) => q.pretaxMarginPercent },
+  { name: '稅後純益率', color: CATEGORICAL_COLORS[3], value: (q) => q.netMarginPercent },
+]
 
 /** 小數點兩位；無資料回「—」（不以 0 冒充缺值） */
 function fmtRatio(n: number | null | undefined): string {
@@ -44,6 +63,17 @@ function fmtYearMonth(ym: string): string {
 function fmtChartMonth(ym: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]}/${m[2]}` : ym
+}
+
+/**
+ * 走勢圖用的短季別標籤：'2026-Q1' → '26Q1'。
+ *
+ * 表格用的「2026 年第 1 季」在 11px 字級約 84px 寬，而 12 季的圖每格只有約 41px。
+ * **年份不能整個省掉**（12 季跨三年，只留「Q1」會分不出是哪一年），故留末兩碼。
+ */
+function fmtChartQuarter(yq: string): string {
+  const m = yq.match(/^(\d{2})(\d{2})-Q(\d)$/)
+  return m ? `${m[2]}Q${m[3]}` : yq
 }
 
 export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
@@ -80,6 +110,11 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
     .filter((i) => revenueMonths.length <= 8 || i % 2 === 0)
   const quarters = [...profitQuarters].reverse()
   const latestQuarter = quarters[0] ?? null
+
+  /* 12 季每格約 41px，而「26Q1」約 30px —— 全標會貼在一起，故比照月營收隔一個標一個 */
+  const profitLabelIndices = profitQuarters
+    .map((_, i) => i)
+    .filter((i) => profitQuarters.length <= 8 || i % 2 === 0)
 
   return (
     <div>
@@ -153,6 +188,44 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
               </div>
             </div>
 
+            {/*
+              圖用 profitQuarters（由舊到新）而不是上面那個 quarters —— 後者是為了表格
+              才 reverse 成由新到舊的。拿錯會整條線反過來、而且看起來像真的，
+              與月營收是同一個陷阱（見 FundamentalTab.test 用 y 座標釘住方向的那條）。
+
+              圖在表之上，順序照月營收既有的版面。只有一季時不畫：
+              `lineSegments` 需要兩點才連得出線段，單季只會留下一張空的座標軸，
+              故與表格共用同一條 `> 1` 判斷。
+            */}
+            {quarters.length > 1 && (
+              <>
+                <div className="chart-title" style={{ marginTop: 12 }}>
+                  四項比率走勢（%）
+                </div>
+                <div className="chart-with-legend">
+                  <MultiLineChart
+                    labels={profitQuarters.map((q) => fmtChartQuarter(q.yearQuarter))}
+                    series={MARGIN_SERIES.map((s) => ({
+                      name: s.name,
+                      color: s.color,
+                      values: profitQuarters.map(s.value),
+                    }))}
+                    labelIndices={profitLabelIndices}
+                    formatValue={(v) => `${v.toFixed(2)}%`}
+                    ariaLabel={`近 ${profitQuarters.length} 季獲利能力走勢`}
+                  />
+                  <div className="chart-legend-side">
+                    <ChartLegend
+                      items={MARGIN_SERIES.map((s) => ({ label: s.name, color: s.color }))}
+                    />
+                    <div className="chart-legend-foot">
+                      金融業沒有毛利率，該條線會斷開，其餘三條照常。
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
             {quarters.length > 1 && (
               <div className="table-scroll" style={{ marginTop: 12 }}>
                 <table className="data-table">
@@ -190,7 +263,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           畫面上只有一列時使用者會以為是壞了，其實是還沒累積到。
         */}
         <p className="hint" style={{ marginTop: 8 }}>
-          季度比率由證交所彙總計算，每季財報公布後更新；序列逐季累積，最多保留 8 季。
+          季度比率由證交所彙總計算，每季財報公布後更新；序列逐季累積，最多保留 12 季。
         </p>
       </section>
 

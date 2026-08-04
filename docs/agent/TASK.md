@@ -8,10 +8,25 @@
 
 ## 📋 Active Tasks
 
-### Task 54: 獲利能力曲線圖（設計稿已出，待選版）
-- **Status**: ⏸️ **等使用者選版** —— 三份設計稿已發布，尚未動 `sources/`
+### Task 54: 獲利能力曲線圖（0.6.25）
+- **Status**: ✅ **完成** —— 使用者選 **A｜四線同軸**；純前端，不需要動 Supabase
 - **Agent**: Claude
-- **Timestamp**: 2026-08-04 19:45:00 Asia/Taipei
+- **Timestamp**: 2026-08-04 19:55:00 Asia/Taipei
+- **實作**：`FundamentalTab.tsx` 獲利能力區塊，KPI 卡之下、表格之上加一張
+  `MultiLineChart` + `ChartLegend`（`.chart-with-legend` / `.chart-legend-side`，照抄 KD）。
+  四項比率的名稱、顏色、順序集中在 `MARGIN_SERIES`，圖與圖例共用同一份，不會各排各的。
+- **⚠️ 方向陷阱**：圖用 `profitQuarters`（由舊到新），不是為了表格 reverse 過的 `quarters`。
+  拿錯會整條線反過來、而且看起來像真的 —— 與月營收同一個坑，已用 y 座標寫測試釘住。
+- **退化**：`quarters.length > 1` 才畫（與表格同一條判斷），單季只會留下空座標軸。
+  金融業 `grossMarginPercent` 為 null → 該序列畫不出線段，圖例仍保留該項。
+- **驗證**：`npm test` 786/786（新增 6 條）、lint 3 個既有 warning、build 通過；
+  另以暫時的 vite 入口 + Playwright 實測深淺兩色與 375px：
+  無橫向溢出（手機 svg 297px）、X 軸 6 個標籤不重疊、四線色為字面值
+  `#3987e5 / #d95926 / #199e70 / #c98500`。
+- **順帶修正**：說明文字「最多保留 8 季」→ 12 季（0.6.22 起實際為 `PROFIT_QUARTERS_CAP = 12`）。
+- **未採用**：B（點選單線）因 PDF 只會印出當下選中那一項而否決；
+  C（利潤瀑布帶）資訊量最高但需新元件，使用者選 A。設計稿保留於
+  <https://claude.ai/code/artifact/2007548e-86de-4085-afd0-70ba8b7dd34e>
 - **設計稿**: <https://claude.ai/code/artifact/2007548e-86de-4085-afd0-70ba8b7dd34e>
   （單一 HTML 三版並列，圖表以原生 SVG 重畫 `chartFrame.tsx` 的幾何，
   台積電與鴻海各畫一次，並含 1 季 / 2 季退化狀態與虧損季負值）

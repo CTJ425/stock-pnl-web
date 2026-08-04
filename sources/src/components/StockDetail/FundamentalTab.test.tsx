@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { FundamentalTab } from './FundamentalTab'
-import type { FundamentalData } from '../../services/fundamentalProxy'
+import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 
 const full: FundamentalData = {
   ticker: '2330',
@@ -220,5 +220,108 @@ describe('FundamentalTab', () => {
     )
     expect(screen.getByText('查無月營收資料。')).toBeTruthy()
     expect(container.querySelector('.chart-wrap')).toBeNull()
+  })
+
+  describe('獲利能力走勢圖（0.6.25）', () => {
+    /** 由舊到新的 12 季（2023 Q2 → 2026 Q1）；毛利率逐季走高，用來釘住方向 */
+    const twelve: ProfitQuarter[] = Array.from({ length: 12 }, (_, i) => {
+      const q = 1 + i // 0 = 該年第 1 季，故 1 起算即 2023 Q2
+      return {
+        yearQuarter: `${2023 + Math.floor(q / 4)}-Q${(q % 4) + 1}`,
+        revenueMillionTwd: 500000 + i * 20000,
+        grossMarginPercent: 50 + i,
+        operatingMarginPercent: 40 + i,
+        pretaxMarginPercent: 42 + i,
+        netMarginPercent: 35 + i,
+      }
+    })
+
+    /** 獲利能力那張圖排在月營收之前（區塊順序：估值 → 獲利能力 → 月營收） */
+    const profitChart = (c: HTMLElement) => c.querySelectorAll('.chart-wrap')[0]
+    const withQuarters = (profitQuarters: ProfitQuarter[]): FundamentalData => ({
+      ...full,
+      profitQuarters,
+    })
+
+    it('四項比率各一條線，圖例四項且順序與損益表一致', () => {
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
+      )
+      expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(4)
+
+      const labels = [...container.querySelectorAll('.chart-legend-label')].map(
+        (e) => e.textContent,
+      )
+      expect(labels).toEqual(['毛利率', '營益率', '稅前純益率', '稅後純益率'])
+    })
+
+    it('圖由舊到新（與表格的新→舊相反）', () => {
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
+      )
+      // 毛利率是第一條線，資料逐季走高 → SVG 的 y 應逐點變小
+      const pts = (profitChart(container).querySelector('polyline')!.getAttribute('points') ?? '')
+        .split(' ')
+        .map((p) => Number(p.split(',')[1]))
+      expect(pts[0]).toBeGreaterThan(pts[pts.length - 1])
+      // 表格第一列仍是最新一季
+      expect(container.querySelectorAll('.data-table tbody tr')[0].textContent).toContain(
+        '2026 年第 1 季',
+      )
+    })
+
+    it('12 季的 X 軸隔一季標一個，年份只留末兩碼', () => {
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
+      )
+      const ticks = [...profitChart(container).querySelectorAll('svg text')]
+        .map((t) => t.textContent ?? '')
+        .filter((t) => /^\d{2}Q\d$/.test(t))
+      expect(ticks).toEqual(['23Q2', '23Q4', '24Q2', '24Q4', '25Q2', '25Q4'])
+    })
+
+    it('只有一季時不畫圖：一個點連不出線段，只會留下一張空座標軸', () => {
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters([twelve[11]])} loading={false} />,
+      )
+      // 只剩月營收那張圖（X 軸標籤是 2026/05 這種帶斜線的月份）
+      const wraps = container.querySelectorAll('.chart-wrap')
+      expect(wraps).toHaveLength(1)
+      expect(wraps[0].textContent).toContain('2026/05')
+      // KPI 仍在，使用者不會覺得整段消失
+      expect(screen.getByText('+61.00%')).toBeTruthy()
+    })
+
+    it('虧損季的負值不破圖，四條線照畫', () => {
+      const loss = twelve.map((q, i) =>
+        i >= 6
+          ? { ...q, operatingMarginPercent: -3.5, pretaxMarginPercent: -4.2, netMarginPercent: -5.1 }
+          : q,
+      )
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(loss)} loading={false} />,
+      )
+      const polylines = profitChart(container).querySelectorAll('polyline')
+      expect(polylines).toHaveLength(4)
+      // 座標必須全是有限數（負值若讓值域算壞，這裡會冒出 NaN 而整條線消失）
+      const coords = [...polylines]
+        .flatMap((p) => (p.getAttribute('points') ?? '').split(' '))
+        .flatMap((pt) => pt.split(',').map(Number))
+      expect(coords.every((n) => Number.isFinite(n))).toBe(true)
+    })
+
+    it('金融業沒有毛利率：那條線斷開，其餘三條照常', () => {
+      const bank = twelve.map((q) => ({ ...q, grossMarginPercent: null }))
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(bank)} loading={false} />,
+      )
+      // 毛利率整條無值 → 該序列畫不出任何線段，只剩另外三條
+      expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(3)
+      // 圖例仍列出毛利率（少了它會以為這檔股票沒有這個概念以外的原因）
+      const labels = [...container.querySelectorAll('.chart-legend-label')].map(
+        (e) => e.textContent,
+      )
+      expect(labels).toContain('毛利率')
+    })
   })
 })
