@@ -92,14 +92,16 @@ describe('AiTab', () => {
     cleanup()
   })
 
-  it('未設定 AI 服務時應顯示設定表單，且畫面不出現任何 AI 生成文字', async () => {
+  it('未設定 AI 服務時指路到管理後台，且畫面不出現任何 AI 生成文字', async () => {
     loadAiSettings.mockResolvedValue(null)
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     await screen.findByText('未設定 AI 服務供應商')
 
-    expect(screen.getByLabelText(/AI 服務供應商/)).toBeTruthy()
+    // 0.6.19 起設定表單移到管理後台，這一頁只指路、不再就地填
+    expect(screen.getByText(/管理後台/)).toBeTruthy()
+    expect(screen.queryByLabelText(/AI 服務供應商/)).toBeNull()
     expect(screen.queryByText(/免責聲明/)).toBeNull()
   })
 

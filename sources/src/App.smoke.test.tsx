@@ -5,7 +5,7 @@
  * 驗證 Context、資料層（LocalProvider）與各頁面的實際接線。
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { APP_VERSION } from './version'
@@ -65,7 +65,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect(badge!.textContent).not.toContain('Ivan')
   })
 
-  it('服務狀態功能已移除；GitHub 連結改置於頁尾免責聲明下方', async () => {
+  it('服務狀態功能已移除；頁尾只剩免責聲明（GitHub 連結 0.6.19 移入帳號選單）', async () => {
     const { container } = render(<App />)
     await screen.findByText('本機模式')
 
@@ -74,13 +74,19 @@ describe('App（本機模式煙霧測試）', () => {
 
     const footer = container.querySelector('.app-footer')!
     expect(footer.textContent).toContain('僅供參考，不宜做為買賣依據')
-    const link = footer.querySelector('a.footer-link') as HTMLAnchorElement
-    expect(link).toBeTruthy()
+    expect(footer.querySelector('a')).toBeNull()
+  })
+
+  it('GitHub 連結收在帳號選單裡，且是外開的', async () => {
+    render(<App />)
+    // 本機模式的選單觸發鈕就是「本機模式」徽章本身
+    fireEvent.click(await screen.findByRole('button', { name: /本機模式選單/ }))
+
+    const link = screen.getByRole('menuitem', { name: /原始碼/ }) as HTMLAnchorElement
     expect(link.href).toContain('github.com/CTJ425/stock-pnl-web')
-    // 連結在免責聲明「下方」：DOM 順序上 <p> 在 <a> 之前
-    expect(footer.querySelector('p')!.compareDocumentPosition(link)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    )
+    expect(link.target).toBe('_blank')
+    // 沒有登入就沒有管理員，後台入口不該出現
+    expect(screen.queryByRole('menuitem', { name: /管理後台/ })).toBeNull()
   })
 
   it('本機模式沒有個股分析、總體經濟與外幣匯率分頁（資料源需要 Supabase）', async () => {
@@ -96,6 +102,21 @@ describe('App（本機模式煙霧測試）', () => {
     expect(screen.getByRole('button', { name: /庫存總覽/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /年度收益/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /交易紀錄/ })).toBeTruthy()
+  })
+
+  it('分頁依「持股 → 市場」重排，抓取狀況不再是分頁（0.6.19）', async () => {
+    const { container } = render(<App />)
+    await screen.findByText('本機模式')
+
+    const labels = [...container.querySelectorAll('.tabs .tab')].map((b) =>
+      b.getAttribute('aria-label'),
+    )
+    // 本機模式只留得下持股那一組，順序即宣告順序
+    expect(labels).toEqual(['庫存總覽', '年度收益', '交易紀錄'])
+    // 同一組之內不畫分隔線
+    expect(container.querySelector('.tabs .tab-div')).toBeNull()
+    // 抓取狀況已移入管理後台
+    expect(screen.queryByRole('button', { name: /抓取狀況/ })).toBeNull()
   })
 
   it('手機（≤720px）主導覽改成固定底部列，頁首不再有分頁', async () => {

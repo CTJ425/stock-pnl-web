@@ -32,16 +32,14 @@ import {
   hoursFromBase,
   humanAgo,
   judgeCron,
-  judgePeriod,
   judgeSource,
-  latestPeriod,
   nextRun,
-  periodsBehind,
   taipeiParts,
   tlLabel,
   tlPercent,
   type SourceState,
 } from './timeline'
+import { judgePeriod, latestPeriod, periodsBehind } from '../Macro/macroPeriod'
 
 const STATE_TEXT: Record<SourceState, string> = {
   ok: '正常',

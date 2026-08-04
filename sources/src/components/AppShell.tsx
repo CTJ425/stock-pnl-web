@@ -3,10 +3,9 @@
  *
  * 頁首右側在 0.6.5-dev.3 由 8 個控制項收斂成 2 個選單，理由見 docs/agent/PLAN.md §R。
  */
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  Activity,
   ArrowRightLeft,
   CalendarRange,
   Check,
@@ -26,6 +25,7 @@ import {
   Pencil,
   Percent,
   Plus,
+  ShieldCheck,
   Sun,
   Trash2,
   TrendingUp,
@@ -44,11 +44,25 @@ import { HeaderMenu } from './Common/HeaderMenu'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
 import { MacroPage } from './Macro/MacroPage'
 import { FxPage } from './Fx/FxPage'
-import { AdminStatusPage } from './Admin/AdminStatusPage'
+import { AdminConsolePage } from './Admin/AdminConsolePage'
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
 
-type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions' | 'status'
+type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
+
+/** 分頁以外的頁面。管理後台不在分頁列上，由使用者選單進入（見 `UserMenu`） */
+type View = Tab | 'admin'
+
+/**
+ * 分頁的功能分組。順序即畫面順序，換組時畫一道分隔線。
+ *
+ * - `holding`：我的部位 —— 庫存、個股、年度、紀錄
+ * - `market`：市場環境 —— 總經、匯率
+ *
+ * 0.6.19 依這個分法重排。分組只給一道 1px 分隔、不加組標題：
+ * 頁首的水平空間是最稀缺的資源，而組標題會讓整條導覽長高一截。
+ */
+type TabGroup = 'holding' | 'market'
 
 /**
  * `short` 供手機底部導覽列使用：底部列每格是直式（圖示在上、標籤在下），
@@ -59,14 +73,19 @@ type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
  * 仍然寬鬆 —— 底部列改成直式之後，橫式時代那套「圖示＋標籤擠在一行」的
  * 寬度算式已經不適用了（0.6.6 之前的註解算的是那個）。實測見 PROGRESS。
  */
-const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof LayoutDashboard }> = [
-  { id: 'dashboard', label: '庫存總覽', short: '總覽', icon: LayoutDashboard },
-  { id: 'analysis', label: '個股分析', short: '分析', icon: LineChart },
-  { id: 'macro', label: '總體經濟', short: '總經', icon: Globe },
-  { id: 'fx', label: '外幣匯率', short: '匯率', icon: ArrowRightLeft },
-  { id: 'yearly', label: '年度收益', short: '年度', icon: CalendarRange },
-  { id: 'transactions', label: '交易紀錄', short: '紀錄', icon: NotebookPen },
-  { id: 'status', label: '抓取狀況', short: '狀況', icon: Activity },
+const ALL_TABS: Array<{
+  id: Tab
+  label: string
+  short: string
+  group: TabGroup
+  icon: typeof LayoutDashboard
+}> = [
+  { id: 'dashboard', label: '庫存總覽', short: '總覽', group: 'holding', icon: LayoutDashboard },
+  { id: 'analysis', label: '個股分析', short: '分析', group: 'holding', icon: LineChart },
+  { id: 'yearly', label: '年度收益', short: '年度', group: 'holding', icon: CalendarRange },
+  { id: 'transactions', label: '交易紀錄', short: '紀錄', group: 'holding', icon: NotebookPen },
+  { id: 'macro', label: '總體經濟', short: '總經', group: 'market', icon: Globe },
+  { id: 'fx', label: '外幣匯率', short: '匯率', group: 'market', icon: ArrowRightLeft },
 ]
 
 /**
@@ -78,25 +97,11 @@ const ALL_TABS: Array<{ id: Tab; label: string; short: string; icon: typeof Layo
  * 而空狀態寫的是「每日排程完成後會自動補上」—— 在本機模式那是假的，
  * 永遠不會補上，留著只會讓使用者一直等一個不會來的東西。
  */
-const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx', 'status']
+const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx']
 
-/**
- * 只有管理員（`app_metadata.role === 'admin'`）看得到的分頁。
- *
- * 這裡的隱藏**只是介面上的整理，不是安全邊界** —— 真正的把關在 Edge Function 的
- * `assertAdmin`（前端藏起來的東西，任何人改一行 JS 就能叫出來）。
- * 所以即使有人繞過這個判斷把分頁叫出來，API 也只會回 403、頁面顯示讀不到資料。
- */
-const ADMIN_ONLY_TABS: Tab[] = ['status']
-
-const BASE_TABS = isReportConfigured
+const TABS = isReportConfigured
   ? ALL_TABS
   : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
-
-/** admin 狀態是非同步取得的，故分頁清單不能在模組層固定下來 */
-function visibleTabs(admin: boolean): typeof ALL_TABS {
-  return admin ? BASE_TABS : BASE_TABS.filter((t) => !ADMIN_ONLY_TABS.includes(t.id))
-}
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
@@ -143,27 +148,30 @@ function TabNav({
   tabs,
 }: {
   variant: 'header' | 'bottom'
-  current: Tab
+  current: View
   onSelect: (tab: Tab) => void
   tabs: typeof ALL_TABS
 }) {
   const isBottom = variant === 'bottom'
   return (
     <nav className={isBottom ? 'bottom-nav' : 'tabs'} aria-label="主要頁面">
-      {tabs.map(({ id, label, short, icon: Icon }) => (
-        <button
-          key={id}
-          type="button"
-          className={current === id ? 'tab active' : 'tab'}
-          onClick={() => onSelect(id)}
-          /* 頁首在窄視窗只剩圖示，名稱改由 title / aria-label 呈現 */
-          title={label}
-          aria-label={label}
-          aria-current={current === id ? 'page' : undefined}
-        >
-          <Icon size={isBottom ? 18 : 15} />
-          <span className="tab-label">{isBottom ? short : label}</span>
-        </button>
+      {tabs.map(({ id, label, short, group, icon: Icon }, i) => (
+        <Fragment key={id}>
+          {/* 換組時插一道分隔。純視覺，對輔助技術隱藏 */}
+          {i > 0 && tabs[i - 1].group !== group && <span className="tab-div" aria-hidden="true" />}
+          <button
+            type="button"
+            className={current === id ? 'tab active' : 'tab'}
+            onClick={() => onSelect(id)}
+            /* 頁首在窄視窗只剩圖示，名稱改由 title / aria-label 呈現 */
+            title={label}
+            aria-label={label}
+            aria-current={current === id ? 'page' : undefined}
+          >
+            <Icon size={isBottom ? 18 : 15} />
+            <span className="tab-label">{isBottom ? short : label}</span>
+          </button>
+        </Fragment>
       ))}
     </nav>
   )
@@ -247,12 +255,18 @@ function RecoveryPasswordModal() {
 
 
 /**
- * 使用者選單：外觀切換、身分、登出。
+ * 使用者選單：外觀切換、管理後台、原始碼、身分、登出。
  *
  * 本機模式**刻意保留「本機模式」徽章當作觸發鈕**，而不是換成頭像 ——
  * 「資料只存在這個瀏覽器」是使用者需要隨時看得到的事實，藏進選單等於把它降級。
+ *
+ * 0.6.19 收進兩樣東西：
+ * - **管理後台**（僅管理員）。原本是分頁列上的「抓取狀況」，但管理功能與
+ *   日常看盤的分頁混在同一條導覽上，等於讓每個使用者都看到一個自己按不了的位置。
+ * - **原始碼**（所有人）。原本是頁尾的一行文字連結；頁尾留給免責聲明，
+ *   連結收進這裡，頁首與頁尾都不必再為它讓出位置。
  */
-function UserMenu() {
+function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => void }) {
   const { mode, user, signOut } = useAuth()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
 
@@ -306,6 +320,39 @@ function UserMenu() {
             <ThemeIcon size={14} />
             <span>外觀：{THEME_LABEL[pref]}</span>
           </button>
+          <div className="hmenu-sep" />
+          {/*
+            管理後台的隱藏**只是介面上的整理，不是安全邊界** —— 真正的把關在
+            Edge Function 的 `assertAdmin` 與資料表的 RLS（前端藏起來的東西，
+            任何人改一行 JS 就能叫出來）。繞過這個判斷把後台叫出來，
+            也只會拿到 403 與讀不到資料的空頁。
+          */}
+          {admin && (
+            <button
+              type="button"
+              role="menuitem"
+              className="hmenu-item hmenu-item-admin"
+              onClick={() => {
+                close()
+                onOpenAdmin()
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>管理後台</span>
+            </button>
+          )}
+          <a
+            role="menuitem"
+            className="hmenu-item"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            onClick={close}
+          >
+            <Code2 size={14} />
+            <span>原始碼</span>
+            <ExternalLink size={12} className="hmenu-item-ext" />
+          </a>
           {!isLocal && (
             <>
               <div className="hmenu-sep" />
@@ -542,12 +589,12 @@ function WorkspaceControls() {
 export function AppShell() {
   const { recovery } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
-  const [tab, setTab] = useState<Tab>('dashboard')
+  const [view, setView] = useState<View>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
   const [admin, setAdmin] = useState(false)
   const narrow = useNarrowScreen()
 
-  // 管理員分頁：判定要打一次 auth，故非同步補上。判錯只會少一個分頁，
+  // 管理員入口：判定要打一次 auth，故非同步補上。判錯只會少一個選單項，
   // 不影響任何既有功能（真正的把關在 Edge Function 端）
   useEffect(() => {
     let alive = true
@@ -559,12 +606,10 @@ export function AppShell() {
     }
   }, [])
 
-  const tabs = visibleTabs(admin)
-
-  // 權限在別的分頁上被收回時（例如登出換帳號），別把使用者留在看不到的分頁
+  // 權限被收回時（例如登出換帳號）別把使用者留在後台
   useEffect(() => {
-    if (!tabs.some((t) => t.id === tab)) setTab('dashboard')
-  }, [tabs, tab])
+    if (view === 'admin' && !admin) setView('dashboard')
+  }, [admin, view])
 
   return (
     <>
@@ -577,14 +622,14 @@ export function AppShell() {
             <span className="brand-text">股票小幫手</span>
           </div>
 
-          {!narrow && <TabNav variant="header" current={tab} onSelect={setTab} tabs={tabs} />}
+          {!narrow && <TabNav variant="header" current={view} onSelect={setView} tabs={TABS} />}
 
           <div className="header-spacer" />
 
           <WorkspaceControls />
 
           <div className="header-meta">
-            <UserMenu />
+            <UserMenu admin={admin} onOpenAdmin={() => setView('admin')} />
           </div>
         </div>
       </header>
@@ -599,13 +644,13 @@ export function AppShell() {
           <div className="glass empty-state section">載入中…</div>
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardPage />}
-            {tab === 'analysis' && <AnalysisPage />}
-            {tab === 'macro' && <MacroPage />}
-            {tab === 'fx' && <FxPage />}
-            {tab === 'yearly' && <YearlyPage />}
-            {tab === 'transactions' && <TransactionsPage />}
-            {tab === 'status' && <AdminStatusPage />}
+            {view === 'dashboard' && <DashboardPage />}
+            {view === 'analysis' && <AnalysisPage />}
+            {view === 'macro' && <MacroPage />}
+            {view === 'fx' && <FxPage />}
+            {view === 'yearly' && <YearlyPage />}
+            {view === 'transactions' && <TransactionsPage />}
+            {view === 'admin' && <AdminConsolePage onExit={() => setView('dashboard')} />}
           </>
         )}
       </main>
@@ -614,15 +659,11 @@ export function AppShell() {
         <p>
           提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
         </p>
-        <a className="footer-link" href={GITHUB_URL} target="_blank" rel="noreferrer">
-          <Code2 size={13} />
-          GitHub Repository
-          <ExternalLink size={11} />
-        </a>
+        {/* GitHub 連結已收進使用者選單（0.6.19）：頁尾留給免責聲明 */}
       </footer>
 
       {/* 手機底部導覽：必須掛在 .app-header 之外，理由見 useNarrowScreen 的註解 */}
-      {narrow && <TabNav variant="bottom" current={tab} onSelect={setTab} tabs={tabs} />}
+      {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
 
       {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
       {!loading && (

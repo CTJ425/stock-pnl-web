@@ -76,11 +76,31 @@ describe('MacroPage', () => {
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
     await screen.findByText('美國總體經濟')
-    const labels = [...document.querySelectorAll('.kpi-label')].map((e) => e.textContent)
+    // 標籤取第一個文字節點：落後的指標會在同一列多掛一個徽章
+    const labels = [...document.querySelectorAll('.kpi-label')].map((e) => e.firstChild?.textContent)
     expect(labels).toEqual(['核心 CPI', '非農就業', '消費者信心'])
     const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
     // % / 千人 / 指數 三種口徑各自成立
     expect(values).toEqual(['+2.57%', '+57 千人', '44.8'])
+  })
+
+  it('落後的指標掛徽章，跟上的不掛——五張卡都寫「最新」等於沒有訊號', async () => {
+    fetchMacro.mockResolvedValue(macro)
+    render(<MacroPage />)
+    await screen.findByText('美國總體經濟')
+    // 三個指標的最新期別：CPI 與非農同為 2026-06，消費者信心停在 2026-05
+    const badges = [...document.querySelectorAll('.mac-behind')].map((e) => e.textContent)
+    expect(badges).toEqual(['落後 1 期'])
+  })
+
+  it('走勢線：只有一期的指標不畫，落後的那條改虛線（末端不是「現在」）', async () => {
+    fetchMacro.mockResolvedValue(macro)
+    render(<MacroPage />)
+    await screen.findByText('美國總體經濟')
+    // 非農在這份 fixture 只有一期，連不成線 → 三張卡只畫得出兩條
+    const sparks = [...document.querySelectorAll('.mac-spark polyline')]
+    expect(sparks).toHaveLength(2)
+    expect(sparks.filter((e) => e.getAttribute('stroke-dasharray'))).toHaveLength(1)
   })
 
   it('標示資料產出時間', async () => {

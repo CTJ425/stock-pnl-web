@@ -16,6 +16,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { CHART_COLORS } from '../Charts/chartColors'
+import { latestPeriod, periodsBehind } from './macroPeriod'
+import { sparkline } from './sparkline'
 
 /** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
 function isSameDay(a: string, b: string): boolean {
@@ -55,16 +58,62 @@ function fmtDelta(latest: MacroPoint | null, previous: MacroPoint | null, unit: 
   return `較上期${d > 0 ? '增加' : '減少'} ${shown}`
 }
 
-function IndicatorCard({ ind }: { ind: MacroIndicator }) {
+/** 迷你走勢線的 viewBox 尺寸。實際顯示尺寸由 CSS 決定（`.mac-spark`） */
+const SPARK_W = 100
+const SPARK_H = 28
+
+/**
+ * 指標卡上的走勢線。
+ *
+ * 顏色寫死不吃 CSS 變數：html2canvas 匯出 PDF 時解析不到祖先層的變數，
+ * 圖會整片變黑（`Charts/chartColors.ts` 有同一條註記）。
+ * 落後中的指標改用灰色虛線 —— 那條線的末端不是「現在」，實線會讓人誤會。
+ */
+function Spark({ ind, behind }: { ind: MacroIndicator; behind: number }) {
+  const g = sparkline(
+    ind.points.map((p) => p.value),
+    SPARK_W,
+    SPARK_H,
+  )
+  if (!g) return null
+  const color = behind > 0 ? CHART_COLORS.axis : CHART_COLORS.line
+  return (
+    <svg
+      className="mac-spark"
+      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={`${ind.label}近 ${ind.points.length} 期走勢`}
+    >
+      <path d={g.area} fill={color} opacity="0.16" />
+      <polyline
+        points={g.line}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeDasharray={behind > 0 ? '3 2' : undefined}
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={g.lastX} cy={g.lastY} r="2.2" fill={color} />
+    </svg>
+  )
+}
+
+function IndicatorCard({ ind, behind }: { ind: MacroIndicator; behind: number }) {
   return (
     <div className="glass kpi">
-      <div className="kpi-label">{ind.label}</div>
+      <div className="kpi-label">
+        {ind.label}
+        {/* 只有落後時才掛徽章：五張卡都掛「最新」等於沒有訊號 */}
+        {behind > 0 && <span className="badge badge-warn mac-behind">落後 {behind} 期</span>}
+      </div>
       <div className={`kpi-value ${ind.kind === 'momThousands' ? chipClass(ind.latest?.value) : ''}`}>
         {fmtValue(ind.latest?.value ?? null, ind.unit)}
       </div>
       <div className="kpi-sub">
         {fmtPeriod(ind.latest?.period)}・{fmtDelta(ind.latest, ind.previous, ind.unit)}
       </div>
+      <Spark ind={ind} behind={behind} />
       <div className="kpi-sub">{ind.note}</div>
     </div>
   )
@@ -115,6 +164,9 @@ export function MacroPage() {
     .reverse()
     .slice(0, 12)
 
+  // 落後判定的基準是「同組其他指標最新到哪一期」，不查發布行事曆（見 macroPeriod.ts）
+  const peerLatest = latestPeriod(macro.indicators.map((i) => i.latest?.period))
+
   return (
     <>
       {/*
@@ -145,7 +197,11 @@ export function MacroPage() {
 
         <div className="kpi-grid" style={{ marginTop: 14 }}>
           {macro.indicators.map((ind) => (
-            <IndicatorCard key={ind.id} ind={ind} />
+            <IndicatorCard
+              key={ind.id}
+              ind={ind}
+              behind={periodsBehind(ind.latest?.period ?? null, peerLatest)}
+            />
           ))}
         </div>
       </div>

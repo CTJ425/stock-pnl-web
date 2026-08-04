@@ -221,6 +221,27 @@ h3 {
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 
+/*
+ * 分頁分組的分隔線（0.6.19）：持股四項 ／ 市場兩項。
+ *
+ * 只給一道 1px、不給組標題 —— 頁首的水平空間是最稀缺的資源，
+ * 而組標題會讓整條導覽長高一截，換來的訊號並不值那個高度。
+ */
+.tab-div {
+  width: 1px;
+  align-self: stretch;
+  margin: 3px 4px;
+  background: var(--border-strong);
+  flex: 0 0 auto;
+}
+
+/* 底部列的格子是等寬 flex，分隔線不能跟著被拉寬成一格 */
+.bottom-nav .tab-div {
+  align-self: center;
+  height: 26px;
+  margin: 0 1px;
+}
+
 /* ---------- 手機底部導覽 (≤720px) ----------
  * 由 AppShell 在 ≤720px 時改渲染這一份（同一份分頁定義，不是複製一份 DOM）。
  * 它**必須**掛在 .app-header 之外：頁首有 backdrop-filter，會成為 fixed 子孫的
@@ -1325,6 +1346,26 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--danger);
 }
 
+/* 管理後台入口（0.6.19）：用強調色與其他項目分開，它會離開目前這一頁 */
+.hmenu-item-admin {
+  color: var(--accent);
+}
+
+.hmenu-item-admin:hover {
+  color: var(--accent);
+  background: rgba(124, 140, 248, 0.12);
+}
+
+/* 「原始碼」的外開圖示推到最右，與選單項的文字拉開距離 */
+.hmenu-item-ext {
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+
+a.hmenu-item {
+  text-decoration: none;
+}
+
 /* ---------- 工具列 ---------- */
 .toolbar {
   display: flex;
@@ -2345,6 +2386,156 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .fx-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ── 管理後台：全頁 ＋ 左側縱向導覽（0.6.19）──────────────────── */
+
+.adm-console {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 22px;
+}
+
+/*
+ * 側欄跟著捲動時黏在上方：後台的內容區（尤其是抓取狀況）比側欄長得多，
+ * 捲到底之後還要能直接換頁，不必先捲回去。
+ */
+.adm-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-self: start;
+  position: sticky;
+  top: 14px;
+}
+
+.adm-side nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.adm-side-label {
+  font-size: 9.5px;
+  letter-spacing: 1.4px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0 10px 6px;
+}
+
+.adm-side-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  text-align: left;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.adm-side-item:hover {
+  background: var(--btn-hover-bg);
+  color: var(--ink);
+}
+
+.adm-side-item.active {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.adm-side-item.active svg {
+  color: var(--accent);
+}
+
+/* 離開後台的出口。刻意做得比導覽項目安靜，它不是第五個項目 */
+.adm-back {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.adm-back:hover {
+  color: var(--ink);
+}
+
+.adm-main {
+  min-width: 0;
+}
+
+/* 後台面板自己就是第一個區塊，不需要再從上方推開 */
+.adm-main > .section:first-child {
+  margin-top: 0;
+}
+
+.adm-panel {
+  padding: 18px 20px;
+}
+
+/*
+ * ≤900px 側欄轉成橫向捲動列。維持它是「一整排可點的項目」而不是下拉選單：
+ * 四個項目在 390px 仍排得下（橫捲一小段），下拉則多一次點擊才看得到有哪些頁。
+ */
+@media (max-width: 900px) {
+  .adm-console {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .adm-side {
+    position: static;
+  }
+
+  .adm-side nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  .adm-side-item {
+    white-space: nowrap;
+  }
+
+  .adm-side-label {
+    display: none;
+  }
+}
+
+/* ── 總經指標卡上的迷你走勢線（0.6.19）───────────────────────── */
+
+/*
+ * 高度寫死 30px：viewBox 是 100×28、`preserveAspectRatio="none"`，
+ * 所以它會被拉伸填滿，線寬靠 SVG 的 vector-effect 維持不變形。
+ */
+.mac-spark {
+  display: block;
+  width: 100%;
+  height: 30px;
+  margin-top: 10px;
+}
+
+/* 落後徽章推到標籤列右端。.kpi-label 本來就是 flex，這裡只補對齊 */
+.mac-behind {
+  margin-left: auto;
 }
 
 /*

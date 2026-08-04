@@ -4,7 +4,7 @@
  * 不會自動重試，未設定時畫面不得出現任何 AI 生成文字。
  */
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Bot, CheckCircle, ChevronDown, ChevronUp, MessageSquare, RefreshCw, Settings, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bot, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react'
 import { fetchDailySeries } from '../../services/dailyProxy'
 import type { FundamentalData } from '../../services/fundamentalProxy'
 import { fetchMacro } from '../../services/macroProxy'
@@ -17,15 +17,7 @@ import {
   type AiMessage,
 } from '../../services/aiClient'
 import { clearChat, loadChat, saveChat } from '../../services/aiChatStore'
-import {
-  clearAiSettings,
-  isAiAdmin,
-  loadAiSettings,
-  saveAiSettings,
-  validateAiSettings,
-  type AiProviderKind,
-  type AiSettings,
-} from '../../services/aiSettings'
+import { isAiAdmin, loadAiSettings, type AiSettings } from '../../services/aiSettings'
 import { buildAiPayload, renderAiPrompt, type AiPayload } from './aiPayload'
 import {
   MAX_CHAT_TURNS,
@@ -51,18 +43,8 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   // 設定狀態
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
-  const [showSettingsForm, setShowSettingsForm] = useState(false)
-  // AI 設定為全站共用，只有 app_metadata.role = 'admin' 的帳號可修改
+  // 設定改在管理後台維護（0.6.19），這裡只用來決定「未設定」時該給誰看哪一句話
   const [isAdmin, setIsAdmin] = useState(false)
-
-  // 設定表單狀態
-  const [formProvider, setFormProvider] = useState<AiProviderKind>('google')
-  const [formBaseUrl, setFormBaseUrl] = useState('')
-  const [formModel, setFormModel] = useState('')
-  const [formApiKey, setFormApiKey] = useState('')
-  const [formErr, setFormErr] = useState('')
-  const [formSaving, setFormSaving] = useState(false)
-  const [formSuccessMsg, setFormSuccessMsg] = useState('')
 
   // 執行與結果狀態
   const [status, setStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
@@ -104,15 +86,6 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       if (alive) {
         setSettings(s)
         setIsAdmin(admin)
-        if (s) {
-          setFormProvider(s.provider)
-          setFormBaseUrl(s.baseUrl)
-          setFormModel(s.model)
-          setFormApiKey(s.apiKey)
-        } else if (admin) {
-          // 未設定時預設展開設定表單（非管理員無表單可填，不展開）
-          setShowSettingsForm(true)
-        }
         setSettingsLoading(false)
       }
     })()
@@ -120,75 +93,6 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       alive = false
     }
   }, [])
-
-  // 當 provider 切換時帶入預設範例
-  function handleProviderChange(kind: AiProviderKind) {
-    setFormProvider(kind)
-    setFormErr('')
-    if (kind === 'google') {
-      if (!formModel || formModel === 'llama3' || formModel === 'qwen2.5') {
-        setFormModel('gemini-2.5-flash')
-      }
-    } else {
-      if (!formBaseUrl) {
-        setFormBaseUrl('http://localhost:11434/v1')
-      }
-      if (!formModel || formModel.startsWith('gemini')) {
-        setFormModel('llama3')
-      }
-    }
-  }
-
-  async function handleSaveSettings(e: React.FormEvent) {
-    e.preventDefault()
-    setFormErr('')
-    setFormSuccessMsg('')
-
-    const candidate: AiSettings = {
-      provider: formProvider,
-      baseUrl: formBaseUrl,
-      model: formModel,
-      apiKey: formApiKey,
-    }
-
-    const valErr = validateAiSettings(candidate)
-    if (valErr) {
-      setFormErr(valErr)
-      return
-    }
-
-    setFormSaving(true)
-    const res = await saveAiSettings(candidate)
-    setFormSaving(false)
-
-    if (res.error) {
-      setFormErr(res.error)
-    } else {
-      setSettings(candidate)
-      setFormSuccessMsg('AI 設定已儲存')
-      setShowSettingsForm(false)
-      setTimeout(() => setFormSuccessMsg(''), 3000)
-    }
-  }
-
-  async function handleClearSettings() {
-    if (!confirm('確定要清除 AI 設定嗎？')) return
-    setFormSaving(true)
-    const res = await clearAiSettings()
-    setFormSaving(false)
-    if (res.error) {
-      setFormErr(res.error)
-    } else {
-      setSettings(null)
-      setFormProvider('google')
-      setFormBaseUrl('')
-      setFormModel('')
-      setFormApiKey('')
-      setShowSettingsForm(true)
-      setStatus('idle')
-      setAiText('')
-    }
-  }
 
   async function handleGenerate() {
     if (!settings) return
@@ -324,130 +228,34 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
                 )}
               </button>
             )}
-
-            {isAdmin && (
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => setShowSettingsForm(!showSettingsForm)}
-                aria-expanded={showSettingsForm}
-              >
-                <Settings size={14} />
-                AI 設定
-                {showSettingsForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-            )}
           </div>
         </div>
-
-        {formSuccessMsg && (
-          <div className="notice notice-info" style={{ marginTop: 12, padding: '8px 12px', fontSize: 13 }}>
-            <CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-            {formSuccessMsg}
-          </div>
-        )}
-
-        {/* 設定表單 (僅管理員；未設定時顯示或手動展開) */}
-        {isAdmin && showSettingsForm && (
-          <form className="ai-form" onSubmit={(e) => void handleSaveSettings(e)} style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <div className="ai-form-group">
-              <label htmlFor="ai-provider-select">AI 服務供應商 (Provider)</label>
-              <select
-                id="ai-provider-select"
-                className="ai-select"
-                value={formProvider}
-                onChange={(e) => handleProviderChange(e.target.value as AiProviderKind)}
-              >
-                <option value="google">Google AI (Gemini)</option>
-                <option value="openai-compatible">OpenAI 相容 (Ollama / vLLM / 其它)</option>
-              </select>
-            </div>
-
-            {formProvider === 'openai-compatible' && (
-              <div className="ai-form-group">
-                <label htmlFor="ai-base-url-input">Base URL</label>
-                <input
-                  id="ai-base-url-input"
-                  type="text"
-                  className="ai-input"
-                  placeholder="e.g. http://localhost:11434/v1"
-                  value={formBaseUrl}
-                  onChange={(e) => setFormBaseUrl(e.target.value)}
-                />
-                <span className="hint" style={{ fontSize: 11 }}>
-                  將自動補上 /v1，Ollama 本機請填 http://localhost:11434，並確認設定 OLLAMA_ORIGINS。
-                </span>
-              </div>
-            )}
-
-            <div className="ai-form-group">
-              <label htmlFor="ai-model-input">Model (模型名稱)</label>
-              <input
-                id="ai-model-input"
-                type="text"
-                className="ai-input"
-                placeholder={formProvider === 'google' ? 'e.g. gemini-2.5-flash' : 'e.g. llama3'}
-                value={formModel}
-                onChange={(e) => setFormModel(e.target.value)}
-              />
-            </div>
-
-            <div className="ai-form-group">
-              <label htmlFor="ai-api-key-input">
-                API Key {formProvider === 'openai-compatible' && '(選填，本機 Ollama 免填)'}
-              </label>
-              <input
-                id="ai-api-key-input"
-                type="password"
-                className="ai-input"
-                placeholder={formProvider === 'google' ? '請輸入 Google API Key' : '選填 API Key'}
-                value={formApiKey}
-                onChange={(e) => setFormApiKey(e.target.value)}
-              />
-            </div>
-
-            {formErr && (
-              <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13 }}>
-                <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                {formErr}
-              </div>
-            )}
-
-            <div className="ai-actions">
-              <button type="submit" className="btn btn-sm btn-primary" disabled={formSaving}>
-                {formSaving ? '儲存中…' : '儲存 AI 設定'}
-              </button>
-              {settings && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-ghost"
-                  onClick={() => void handleClearSettings()}
-                  disabled={formSaving}
-                  style={{ color: 'var(--down)' }}
-                >
-                  <Trash2 size={14} />
-                  清除設定
-                </button>
-              )}
-            </div>
-          </form>
-        )}
       </div>
 
       {/* 未設定時的引導提示 (不出現任何 AI 文字) */}
-      {!settings && !showSettingsForm && (
+      {!settings && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <Bot size={36} style={{ opacity: 0.5, marginBottom: 12 }} />
           <div style={{ fontSize: 15, fontWeight: 600 }}>尚未設定 AI 服務供應商</div>
-          <div className="hint" style={{ marginTop: 6, marginBottom: 16 }}>
-            {isAdmin
-              ? '請點擊「AI 設定」輸入您的 Google API Key 或本機 Ollama / OpenAI 相容端點資訊。'
-              : 'AI 設定為全站共用，僅管理員帳號可修改，請聯絡管理員完成設定。'}
+          {/*
+            0.6.19 起設定表單移到管理後台，所以這裡只能指路、不能就地填。
+            管理員與一般使用者看到的是同一個事實的兩種說法。
+          */}
+          <div className="hint" style={{ marginTop: 6 }}>
+            {isAdmin ? (
+              <>
+                請從右上角帳號選單進入<b>管理後台 → AI 連線</b>，填入 Google API Key
+                或本機 Ollama / OpenAI 相容端點。
+              </>
+            ) : (
+              'AI 設定為全站共用，僅管理員帳號可修改，請聯絡管理員完成設定。'
+            )}
           </div>
           {isAdmin && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowSettingsForm(true)}>
-              <Settings size={14} />
-              前往設定
-            </button>
+            <div className="hint" style={{ marginTop: 10, display: 'flex', justifyContent: 'center', gap: 6, alignItems: 'center' }}>
+              <ShieldCheck size={14} />
+              設定是全站共用的，改一次所有使用者都會套用。
+            </div>
           )}
         </div>
       )}
