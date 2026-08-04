@@ -2520,43 +2520,6 @@ a.hmenu-item {
   }
 }
 
-/* ── 總經頁：持股獲利能力（0.6.20）─────────────────────────── */
-
-.hp-name b {
-  display: block;
-  font-size: 13px;
-}
-
-.hp-name span {
-  font-size: 11px;
-  color: var(--ink-muted);
-}
-
-/* 數值靠右、走勢線緊接在後：一眼看得出「這個數字往哪走」 */
-.hp-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  justify-content: flex-end;
-}
-
-.hp-val {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  min-width: 58px;
-  text-align: right;
-}
-
-/*
- * 走勢線寬度寫死 56px：四欄各帶一條，讓它隨欄寬伸縮會讓同一列的四條
- * 各自用不同的水平比例，看起來像是斜率不同 —— 那是假的。
- */
-.hp-spark {
-  width: 56px;
-  height: 20px;
-  flex: 0 0 auto;
-}
-
 /* ── 庫存總覽：現價強調（0.6.20）────────────────────────────── */
 
 /*
