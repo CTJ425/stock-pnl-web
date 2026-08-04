@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { FundamentalTab } from './FundamentalTab'
 import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 
@@ -308,6 +309,56 @@ describe('FundamentalTab', () => {
         .flatMap((p) => (p.getAttribute('points') ?? '').split(' '))
         .flatMap((pt) => pt.split(',').map(Number))
       expect(coords.every((n) => Number.isFinite(n))).toBe(true)
+    })
+
+    it('點圖例可以把那條線關掉，再點一次回來', async () => {
+      const user = userEvent.setup()
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
+      )
+      const gross = screen.getByRole('button', { name: /毛利率/ })
+      expect(gross.getAttribute('aria-pressed')).toBe('true')
+
+      await user.click(gross)
+      expect(gross.getAttribute('aria-pressed')).toBe('false')
+      expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(3)
+      // 圖例本身不能跟著消失，否則就再也開不回來了
+      expect(screen.getByRole('button', { name: /毛利率/ })).toBeTruthy()
+
+      await user.click(gross)
+      expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(4)
+    })
+
+    it('只留一條時 Y 軸依它重算（這才是「只看單一項」的重點）', async () => {
+      const user = userEvent.setup()
+      const { container } = render(
+        <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
+      )
+      const yTicks = () =>
+        [...profitChart(container).querySelectorAll('svg text')]
+          .map((t) => t.textContent ?? '')
+          .filter((t) => /^-?\d+$/.test(t))
+      // 四條線同軸時，值域要蓋到毛利率的 61 與稅後的 35
+      expect(yTicks()).toContain('60')
+
+      for (const name of ['毛利率', '營益率', '稅前純益率']) {
+        await user.click(screen.getByRole('button', { name: new RegExp(name) }))
+      }
+      // 只剩稅後純益率（35–46）→ 60 那格刻度不再存在
+      expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(1)
+      expect(yTicks()).not.toContain('60')
+    })
+
+    it('最後一條可見的線不給關（全部關掉只會剩空座標軸）', async () => {
+      const user = userEvent.setup()
+      render(<FundamentalTab fundamental={withQuarters(twelve)} loading={false} />)
+      for (const name of ['毛利率', '營益率', '稅前純益率']) {
+        await user.click(screen.getByRole('button', { name: new RegExp(name) }))
+      }
+      const last = screen.getByRole('button', { name: /稅後純益率/ })
+      expect(last.hasAttribute('disabled')).toBe(true)
+      await user.click(last)
+      expect(last.getAttribute('aria-pressed')).toBe('true')
     })
 
     it('金融業沒有毛利率：那條線斷開，其餘三條照常', () => {

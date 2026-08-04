@@ -8,6 +8,20 @@
 
 ## 📋 Active Tasks
 
+### Task 55: 獲利能力走勢圖的圖例可切換（0.6.26）
+- **Status**: ✅ **完成** —— 純前端，不需要動 Supabase
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 20:10:00 Asia/Taipei
+- **需求**：點圖例讓某條線消失，方便單看一項數值。
+- **關鍵**：藏線之後**縱軸依剩下的線重算**（關掉的序列整條移出 `series`，
+  而非畫成透明）—— 這才是「只看單一項」的價值。
+- **範圍**：`ChartLegend` 的可切換是 **opt-in**（給 `onToggle` 才變按鈕），
+  KD / 均線 / 籌碼三處圖例不受影響。最後一條可見的線 disabled，不給關成空圖。
+- **結構**：狀態拆進同檔案的 `MarginTrendChart`，`FundamentalTab` 維持純呈現、
+  不必為了一個 hook 改寫提早 return 的結構。
+- **驗證**：`npm test` 789/789（新增 3 條）、lint 3 個既有 warning、build 通過；
+  Playwright 實測深淺兩色與 375px：軸由 30–70 重算為 35–50、空心色塊、最後一條 disabled。
+
 ### Task 54: 獲利能力曲線圖（0.6.25）
 - **Status**: ✅ **完成** —— 使用者選 **A｜四線同軸**；純前端，不需要動 Supabase
 - **Agent**: Claude

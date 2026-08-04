@@ -2006,6 +2006,46 @@ a.hmenu-item {
   transform: translateY(1px);
 }
 
+/*
+ * 可切換的圖例（0.6.26）：整列是 <button>，才有夠大的點擊面積。
+ * button 預設帶自己的字型、邊框與置中，全部清掉才能長得跟不可點的圖例一模一樣
+ * ——同一張圖上兩種圖例並存時，可點的那個只該多出游標與 hover，不該多出一個框。
+ */
+.chart-legend-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chart-legend-toggle:hover .chart-legend-label {
+  color: var(--ink);
+}
+
+/* 關掉的序列：色塊已改為空心（見 ChartLegend），文字再減淡一階 */
+.chart-legend-toggle[aria-pressed='false'] .chart-legend-label {
+  color: var(--ink-muted);
+}
+
+/* 最後一條可見的線不給關，游標要說明白 */
+.chart-legend-toggle:disabled {
+  cursor: default;
+}
+
+.chart-legend-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 /* 文字用一般文字色、不用序列色：色塊負責身分，文字負責可讀 */
 .chart-legend-label {
   color: var(--ink-secondary);

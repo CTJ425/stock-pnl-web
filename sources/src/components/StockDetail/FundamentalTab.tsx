@@ -6,6 +6,7 @@
  * 單位陷阱：月營收是**千元**、殖利率與增減率是 **%**。表頭與欄名都要標，
  * 不可只在程式裡知道（沿用籌碼分頁「股 / 張」的準則）。
  */
+import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
@@ -74,6 +75,67 @@ function fmtChartMonth(ym: string): string {
 function fmtChartQuarter(yq: string): string {
   const m = yq.match(/^(\d{2})(\d{2})-Q(\d)$/)
   return m ? `${m[2]}Q${m[3]}` : yq
+}
+
+/**
+ * 獲利能力走勢圖。四條線同軸，點圖例可把某一條關掉。
+ *
+ * 關掉的序列**整條移出 `series`**，而不是畫成透明 —— `MultiLineChart` 的值域是由
+ * 傳進去的 series 現算的，移出去之後 Y 軸會跟著只依剩下的線重算，
+ * 這正是「只想看單一項」的重點：稅後純益率單獨看時會撐滿整個縱軸，
+ * 而不是被毛利率的尺度壓在底下。
+ *
+ * 拆成獨立元件是因為它是這一頁唯一需要自己記狀態的東西；
+ * 放進 FundamentalTab 會逼那支（目前純呈現、開頭就有兩個提早 return）改成先宣告 hook。
+ */
+function MarginTrendChart({
+  quarters,
+  labelIndices,
+}: {
+  quarters: ProfitQuarter[]
+  labelIndices: number[]
+}) {
+  const [hidden, setHidden] = useState<string[]>([])
+  const visible = MARGIN_SERIES.filter((s) => !hidden.includes(s.name))
+
+  return (
+    <>
+      <div className="chart-title" style={{ marginTop: 12 }}>
+        四項比率走勢（%）
+      </div>
+      <div className="chart-with-legend">
+        <MultiLineChart
+          labels={quarters.map((q) => fmtChartQuarter(q.yearQuarter))}
+          series={visible.map((s) => ({
+            name: s.name,
+            color: s.color,
+            values: quarters.map(s.value),
+          }))}
+          labelIndices={labelIndices}
+          formatValue={(v) => `${v.toFixed(2)}%`}
+          ariaLabel={`近 ${quarters.length} 季獲利能力走勢`}
+        />
+        <div className="chart-legend-side">
+          <ChartLegend
+            items={MARGIN_SERIES.map((s) => ({
+              label: s.name,
+              color: s.color,
+              hidden: hidden.includes(s.name),
+              // 最後一條不給關：全部關掉只會剩一張空座標軸，看起來像壞掉
+              toggleLocked: visible.length === 1 && visible[0].name === s.name,
+              onToggle: () =>
+                setHidden((prev) =>
+                  prev.includes(s.name) ? prev.filter((n) => n !== s.name) : [...prev, s.name],
+                ),
+            }))}
+          />
+          <div className="chart-legend-foot">
+            點圖例可以把那條線關掉，只留想看的。金融業沒有毛利率，該條線會斷開。
+          </div>
+        </div>
+      </div>
+    </>
+  )
 }
 
 export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
@@ -198,32 +260,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
               故與表格共用同一條 `> 1` 判斷。
             */}
             {quarters.length > 1 && (
-              <>
-                <div className="chart-title" style={{ marginTop: 12 }}>
-                  四項比率走勢（%）
-                </div>
-                <div className="chart-with-legend">
-                  <MultiLineChart
-                    labels={profitQuarters.map((q) => fmtChartQuarter(q.yearQuarter))}
-                    series={MARGIN_SERIES.map((s) => ({
-                      name: s.name,
-                      color: s.color,
-                      values: profitQuarters.map(s.value),
-                    }))}
-                    labelIndices={profitLabelIndices}
-                    formatValue={(v) => `${v.toFixed(2)}%`}
-                    ariaLabel={`近 ${profitQuarters.length} 季獲利能力走勢`}
-                  />
-                  <div className="chart-legend-side">
-                    <ChartLegend
-                      items={MARGIN_SERIES.map((s) => ({ label: s.name, color: s.color }))}
-                    />
-                    <div className="chart-legend-foot">
-                      金融業沒有毛利率，該條線會斷開，其餘三條照常。
-                    </div>
-                  </div>
-                </div>
-              </>
+              <MarginTrendChart quarters={profitQuarters} labelIndices={profitLabelIndices} />
             )}
 
             {quarters.length > 1 && (
