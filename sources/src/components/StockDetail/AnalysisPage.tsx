@@ -13,6 +13,7 @@ import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
+import { HoldingProfitSection } from './HoldingProfitSection'
 
 export function AnalysisPage() {
   const { ledger, current } = useWorkspace()
@@ -109,19 +110,26 @@ export function AnalysisPage() {
   )
 
   return (
-    <StockDetailPage
-      // 換股時整組 state（分頁籤、報告、PDF 狀態）重置，避免看到上一檔的殘留
-      key={selected.holding.key}
-      ticker={selected.holding.ticker}
-      name={name}
-      holding={{
-        qty: selected.holding.qty,
-        avgCost: selected.holding.avgCost,
-        price: selected.price,
-        unrealized: selected.unrealized,
-        roi: selected.roi,
-      }}
-      selector={selector}
-    />
+    <>
+      <StockDetailPage
+        // 換股時整組 state（分頁籤、報告、PDF 狀態）重置，避免看到上一檔的殘留
+        key={selected.holding.key}
+        ticker={selected.holding.ticker}
+        name={name}
+        holding={{
+          qty: selected.holding.qty,
+          avgCost: selected.holding.avgCost,
+          price: selected.price,
+          unrealized: selected.unrealized,
+          roi: selected.roi,
+        }}
+        selector={selector}
+      />
+      {/*
+        全部持股的獲利能力比較（0.6.21）。排在個股內容之後：先看選中的那一檔，
+        要比較時再往下捲。它不隨 selected 重置，故不掛 key。
+      */}
+      <HoldingProfitSection />
+    </>
   )
 }

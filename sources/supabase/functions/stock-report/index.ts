@@ -76,9 +76,12 @@ import {
   extractProfit,
   extractRevenue,
   extractValuation,
+  mergeProfitQuarters,
   mergeRevenueMonths,
+  PROFIT_QUARTERS_CAP,
   REVENUE_MONTHS_CAP,
   type FundamentalFile,
+  type ProfitQuarter,
   type RevenueMonth,
 } from './twFundamental.ts'
 import {
@@ -90,6 +93,17 @@ import {
   publishedMonths,
   type RevenueProgress,
 } from './twRevenueHistory.ts'
+import {
+  MOPS_T163_HOST,
+  MOPS_T163_PATH,
+  T163_MARKETS,
+  mopsProfitBody,
+  nextProfitThrough,
+  parseMopsProfit,
+  planProfitBackfill,
+  publishedQuarters,
+  type ProfitProgress,
+} from './twProfitHistory.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
   FRED_SERIES,
@@ -165,6 +179,14 @@ const MAX_BACKFILL_DAYS = 5
  * 補滿 REVENUE_MONTHS_CAP（12）個月約需 3 輪，一個晚上的排程就跑得完。
  */
 const MAX_BACKFILL_MONTHS = 4
+/**
+ * 季度獲利能力回補：單次呼叫最多實抓幾季。
+ *
+ * **比月營收保守（4 → 2）**：一季要抓上市＋上櫃兩份、各約 **1.6MB**（月營收是 400KB），
+ * 解析時整份字串進記憶體。補滿 PROFIT_QUARTERS_CAP（12）季約需 6 輪，
+ * 盤後批次一個晚上跑 32 輪，一晚就補得完。
+ */
+const MAX_BACKFILL_QUARTERS = 2
 /** 同時進行的外部抓取數上限（T86 單檔約 1–2MB） */
 const FETCH_CONCURRENCY = 3
 
@@ -980,6 +1002,120 @@ async function backfillRevenue(
   return { filled, months: [...fetched.keys()].sort() }
 }
 
+/**
+ * 抓 MOPS 的季報彙總。**POST 表單、UTF-8**，與月營收那支（GET、big5）完全不同 ——
+ * 兩支放在一起維護時最容易搞混的就是這兩點。
+ * 失敗（含 20 秒逾時）回 null 不拋，比照 `fetchBig5Text` 的容錯準則。
+ */
+async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): Promise<string | null> {
+  const body = mopsProfitBody(market, yearQuarter)
+  if (!body) return null
+  try {
+    const res = await fetch(`${MOPS_T163_HOST}${MOPS_T163_PATH}`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': UA,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'text/html',
+      },
+      body,
+      // 單份約 1.6MB，比月營收的 400KB 大四倍，逾時放寬到 20 秒
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!res.ok) return null
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 把 fundamental/{ticker}.json 的 profitQuarters 補到最近 PROFIT_QUARTERS_CAP 季。
+ *
+ * 結構與 `backfillRevenue` 逐項對應（缺口驅動、不寫 chip_raw_cache、進度寫回檔案），
+ * 那三個設計決定的理由見該函式的說明，這裡不重複。差別只有三點：
+ *
+ * 1. **來源是 POST 表單**（`ajax_t163sb04`），不是靜態網址。
+ * 2. **比率要自己算**（該項 ÷ 營業收入），t187ap17_L 是官方算好的。
+ *    已與官方值對過答案：民國115 Q1 的 1802 / 2303 / 2609 四項比率逐位吻合。
+ * 3. **單次只補 2 季**（月營收是 4 個月）—— 單份 1.6MB，是月營收的四倍。
+ */
+async function backfillProfit(
+  tickers: Array<{ ticker: string; name: string }>,
+  now: Date,
+): Promise<{ filled: number; quarters: string[] }> {
+  if (tickers.length === 0) return { filled: 0, quarters: [] }
+
+  const wantQuarters = publishedQuarters(now, PROFIT_QUARTERS_CAP)
+
+  const files = new Map<string, FundamentalFile>()
+  const have = new Map<string, ProfitProgress>()
+  for (const { ticker } of tickers) {
+    const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+    // 檔案還沒產生就先跳過：syncFundamental 會在同一輪稍早建立它，下一輪再補
+    if (!file) continue
+    files.set(ticker, file)
+    have.set(ticker, {
+      quarters: new Set((file.profitQuarters ?? []).map((q) => q.yearQuarter)),
+      through: file.profitBackfilledThrough ?? null,
+    })
+  }
+
+  const targets = planProfitBackfill(have, wantQuarters, MAX_BACKFILL_QUARTERS)
+  if (targets.length === 0) return { filled: 0, quarters: [] }
+  const wanted = new Set(files.keys())
+
+  // 季別 → (代號 → ProfitQuarter)
+  const fetched = new Map<string, Map<string, ProfitQuarter>>()
+  // 「這一季我們確實去看過了」。判準是**抓取成功**，不是「有找到我們要的代號」——
+  // 全是 ETF 時 merged 必然是空的，用有無資料判斷會讓 through 永遠推不動、回補卡死
+  const attempted: string[] = []
+  for (const yq of targets) {
+    const merged = new Map<string, ProfitQuarter>()
+    let ok = false
+    for (const market of T163_MARKETS) {
+      const html = await fetchMopsProfitHtml(market, yq)
+      if (!html) continue
+      ok = true
+      for (const [ticker, row] of parseMopsProfit(html, yq, wanted)) merged.set(ticker, row)
+    }
+    if (ok) attempted.push(yq)
+    if (merged.size > 0) fetched.set(yq, merged)
+  }
+  // 一季都沒抓成功（對方掛了 / 網路不通）就什麼都別改，下一輪重試
+  if (attempted.length === 0) return { filled: 0, quarters: [] }
+
+  let filled = 0
+  for (const [ticker, file] of files) {
+    const incoming: ProfitQuarter[] = []
+    for (const byTicker of fetched.values()) {
+      const row = byTicker.get(ticker)
+      if (row) incoming.push(row)
+    }
+
+    // fillGapsOnly：既有值一律保留。t187ap17_L 是官方算好的比率，
+    // 不能被我們自己算的版本蓋掉（兩者對過答案相同，但官方的才是準的）
+    const merged = mergeProfitQuarters(file.profitQuarters, incoming, { fillGapsOnly: true })
+    // ⚠️ 比季別清單而不是比長度：已滿 12 筆時補進一季會擠掉最舊的一筆，
+    // 長度仍是 12 但內容變了 —— 用長度判斷會把真正的更新當成沒事發生而不寫檔
+    const before = (file.profitQuarters ?? []).map((q) => q.yearQuarter).join(',')
+    const changed = merged.map((q) => q.yearQuarter).join(',') !== before
+
+    // 進度也要寫回去，**即使一筆資料都沒找到** —— ETF 正是靠這個收斂
+    const through = nextProfitThrough(file.profitBackfilledThrough, attempted)
+    if (!changed && through === (file.profitBackfilledThrough ?? null)) continue
+
+    const next: FundamentalFile = {
+      ...file,
+      profitQuarters: merged,
+      profitBackfilledThrough: through,
+      asOf: new Date().toISOString(),
+    }
+    if (await uploadJson(`fundamental/${ticker}.json`, next)) filled++
+  }
+  return { filled, quarters: [...fetched.keys()].sort() }
+}
+
 // ---- 新聞（AI 分析的消息面）----
 
 /**
@@ -1557,6 +1693,9 @@ async function handleGenerateAll(): Promise<Response> {
   // 月營收歷史回補（0.6.4）。必須排在 syncFundamental 之後 —— 它讀的是剛寫好的檔案。
   // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
   const revenue = await backfillRevenue(tickers, now)
+  // 季度獲利能力回補（0.6.21）。同樣排在 syncFundamental 之後、同樣缺口驅動 ——
+  // 12 季補滿之後這行是零成本的。單次只補 2 季，一晚 32 輪綽綽有餘。
+  const profit = await backfillProfit(tickers, now)
   const newsSynced = await syncNews(tickers)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
@@ -1595,6 +1734,7 @@ async function handleGenerateAll(): Promise<Response> {
     daily_synced: dailySynced,
     fundamental_synced: fundamental.synced,
     revenue_backfilled: revenue.filled,
+    profit_backfilled: profit.filled,
     news_synced: newsSynced,
     duration_ms: Date.now() - startedAt,
   })
@@ -1610,6 +1750,8 @@ async function handleGenerateAll(): Promise<Response> {
     fundamentalSynced: fundamental.synced,
     revenueBackfilled: revenue.filled,
     revenueMonths: revenue.months,
+    profitBackfilled: profit.filled,
+    profitQuarters: profit.quarters,
     newsSynced,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
@@ -1623,6 +1765,25 @@ async function handleGenerateAll(): Promise<Response> {
  * 單次上限是 MAX_BACKFILL_MONTHS 個月，`months` 回報這次實際補了哪幾個月；
  * 回空陣列就代表已經補滿、不必再跑。
  */
+/**
+ * 手動催一次季度獲利能力回補。與 `handleBackfillRevenue` 同款：
+ * 不碰籌碼報告、不寫 batch_run_log（那張表的每一列代表一輪盤後批次）。
+ * 單次上限 MAX_BACKFILL_QUARTERS 季；回空陣列代表已補滿、不必再跑。
+ */
+async function handleBackfillProfit(): Promise<Response> {
+  const startedAt = Date.now()
+  const tickers = await heldTwTickers()
+  const profit = await backfillProfit(tickers, new Date())
+  return json({
+    ok: true,
+    total: tickers.length,
+    filled: profit.filled,
+    quarters: profit.quarters,
+    quartersPerRun: MAX_BACKFILL_QUARTERS,
+    durationMs: Date.now() - startedAt,
+  })
+}
+
 async function handleBackfillRevenue(): Promise<Response> {
   const startedAt = Date.now()
   const tickers = await heldTwTickers()
@@ -1897,6 +2058,12 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleBackfillRevenue()
+  }
+
+  if (body.action === 'backfill-profit') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleBackfillProfit()
   }
 
   // 總經同步：會寫 Storage 且對 FRED 發請求，把關同 generate-all。

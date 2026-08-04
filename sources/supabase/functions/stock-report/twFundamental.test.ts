@@ -197,14 +197,15 @@ describe('twFundamental', () => {
       expect(merged[0].grossMarginPercent).toBe(66.25)
     })
 
-    it('超過 8 季時砍最舊的', () => {
-      const prev = Array.from({ length: 8 }, (_, i) =>
-        q(`202${Math.floor(i / 4) + 4}-Q${(i % 4) + 1}`, i),
+    it('超過 12 季時砍最舊的（0.6.21 由 8 季提高到 12）', () => {
+      // 2023-Q1 起連續 12 季 → 2023-Q1..2025-Q4
+      const prev = Array.from({ length: 12 }, (_, i) =>
+        q(`${2023 + Math.floor(i / 4)}-Q${(i % 4) + 1}`, i),
       )
       const merged = mergeProfitQuarters(prev, [q('2026-Q1', 99)])
-      expect(merged).toHaveLength(8)
-      expect(merged[0].yearQuarter).toBe('2024-Q2')
-      expect(merged[7].yearQuarter).toBe('2026-Q1')
+      expect(merged).toHaveLength(12)
+      expect(merged[0].yearQuarter).toBe('2023-Q2')
+      expect(merged[11].yearQuarter).toBe('2026-Q1')
     })
 
     it('fillGapsOnly 不覆蓋既有值', () => {

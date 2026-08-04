@@ -4,12 +4,6 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 
 const { fetchMacro } = vi.hoisted(() => ({ fetchMacro: vi.fn() }))
 vi.mock('../../services/macroProxy', () => ({ fetchMacro }))
-/*
-  「持股獲利能力」是總經頁最下方另一個獨立區塊（0.6.20），它自己讀 workspace
-  與 fundamental 檔，有專屬的測試檔。這一份測的是總經指標本身，故整塊換掉——
-  否則每一條都得先鋪一套與總經無關的持股 fixture。
-*/
-vi.mock('./HoldingProfitSection', () => ({ HoldingProfitSection: () => null }))
 
 import { MacroPage } from './MacroPage'
 import type { MacroData } from '../../services/macroProxy'

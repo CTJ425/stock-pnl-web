@@ -1,9 +1,11 @@
 /**
- * 指標卡上那條迷你走勢線的座標計算（純函式，方便單獨測試）。
+ * 迷你走勢線的座標計算（純函式，方便單獨測試）。
  *
- * 為什麼不用 `components/Charts/LineSeriesChart`：那支帶座標軸、格線、hover 十字線與
- * tooltip，高度預設 170px —— 放進 KPI 卡片會比卡片本身還高。這裡要的是
+ * 為什麼不用同目錄的 `LineSeriesChart`：那支帶座標軸、格線、hover 十字線與
+ * tooltip，高度預設 170px —— 放進表格或 KPI 卡會比容器本身還高。這裡要的是
  * 「一眼看方向」，不是可讀值的圖，所以只算路徑、不畫任何刻度。
+ *
+ * 0.6.19 為總經指標卡而生，0.6.21 起持股獲利能力也用它，故由 Macro 移到 Charts。
  *
  * 座標系是 viewBox 的 0..width / 0..height，實際尺寸交給 CSS
  * （SVG 用 `preserveAspectRatio="none"` 拉伸，線寬則靠 `vector-effect` 維持）。

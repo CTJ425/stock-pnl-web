@@ -8,6 +8,34 @@
 
 ## 📋 Active Tasks
 
+### Task 51: 季度獲利能力歷史回補 + 併入個股分析（0.6.21）
+- **Status**: ✅ **完成** —— 兩區 schema 與 Edge Function 已更新
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 15:20:00 Asia/Taipei
+- **起因**：使用者問「抓取的排程為何、想先抓 2025-2026、會不會塞爆 free tier」。
+- **關鍵發現：`t187ap17_L` 是當季快照，不是歷史檔。**
+  實測只回 **58 家、且只有民國115 Q2 一季**。所以 `profitQuarters` 一季只長一筆 ——
+  持股實況也印證：1802 / 2609 只有 `2026-Q1`，2303 有 Q1+Q2。要湊滿 12 季得等三年。
+- **回補來源**：MOPS `POST /mops/web/ajax_t163sb04`（`twProfitHistory.ts`）。
+  三個與月營收那支完全不同、最容易搞混的點：**POST 表單**（不是靜態 GET）、
+  **UTF-8**（不是 big5）、**一頁 7 張表 6 種產業別格式**（故以表頭文字定位欄位，不寫死索引）。
+- **正確性驗證**：以真實 1.6MB 頁面跑 TS 解析器，民國115 Q1 的
+  1802 / 2303 / 2609 四項比率與營收**全部與官方 `t187ap17_L` 逐位吻合**
+  （例：1802 毛 19.23 / 營 7.88 / 前 6.44 / 後 5.71、營收 10244.19 百萬元）。
+  單位換算已驗：MOPS 是**千元**、t187ap17_L 是**百萬元**。
+- **金融業**：沒有「毛利」概念故回 null；**銀行業沒有單一營收欄**
+  （利息淨收益＋利息以外淨損益兩欄），整張表跳過而不硬湊分母。
+- **`PROFIT_QUARTERS_CAP` 8 → 12**，並新增 `profitBackfilledThrough`
+  （⚠️ 已在 `buildFundamentalFile` 帶過去 —— 漏帶就是每晚把回補進度抹掉，
+  這個坑 0.6.4-dev.2 在月營收上踩過）。
+- **Free tier 評估**（實測正式區）：Storage 346 KB / 1 GB（0.03%）、
+  DB 18 MB / 500 MB（3.6%）、Edge 呼叫約 1,830 / 500K 每月（0.4%）。
+  回補只增加約 3 KB。**瓶頸不是容量，是單次執行的記憶體與時間**
+  （單份 1.6MB，故 `MAX_BACKFILL_QUARTERS = 2`，比月營收的 4 保守）。
+- **併入個股分析**：`HoldingProfitSection` 由 `Macro/` 移到 `StockDetail/`；
+  `sparkline.ts` 兩個 feature 都要用，故提到 `Charts/`。
+- **驗證**：`npm test` 786/786（新增 20 條）、lint 3 個既有 warning、build 通過。
+
 ### Task 50: 四項調整（0.6.20）
 - **Status**: ✅ **完成** —— 已定版並上線；Edge Function 兩區已重新部署
 - **Agent**: Claude

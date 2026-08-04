@@ -1,15 +1,16 @@
 /**
- * 「持股獲利能力」：把每一檔持股的四項利率橫向排開比較（0.6.20）。
+ * 「持股獲利能力」：把每一檔持股的四項利率橫向排開比較。
  *
- * 為什麼放在總經頁：這四項本來就有（`fundamental/{代號}.json` 的 `profitQuarters`），
- * 但目前只出現在「個股分析 → 基本面」，一次看一檔 —— 而「這幾檔誰比較會賺」
- * 是看完就要下判斷的問題，得排在一起才比得出來。
+ * 這四項在「基本面」分頁裡本來就有，但那裡一次只看得到一檔 ——
+ * 而「這幾檔誰比較會賺」是看完就要下判斷的問題，得排在一起才比得出來。
+ * 0.6.20 先放在總經頁，0.6.21 依使用者要求併進個股分析：它講的是公司不是市場，
+ * 而且 `AnalysisPage` 本來就只列台股，正好對上「只有台股個股有這份資料」。
  *
  * ⚠️ **逐檔下載**：持股 N 檔就是 N 個請求（與庫存總覽抓現價同一個量級）。
- * 只對台股發請求 —— 美股與 ETF 在公開資訊觀測站的季報裡根本沒有，
+ * 只對台股發請求 —— ETF 與美股在公開資訊觀測站的季報裡根本沒有，
  * 對它們發請求只會換來 N 個 404。
  *
- * ⚠️ 欄位名稱沿用「稅前純益率 / 稅後純益率」，與個股基本面那一頁一致。
+ * ⚠️ 欄位名稱沿用「稅前純益率 / 稅後純益率」，與基本面分頁一致。
  * 同一個數字在兩個地方叫不同名字，比名稱不夠直覺更容易讓人誤判。
  */
 import { useEffect, useState } from 'react'
@@ -18,7 +19,7 @@ import { fetchFundamental, type ProfitQuarter } from '../../services/fundamental
 import { displayStockName } from '../../services/usStockNames'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { CHART_COLORS } from '../Charts/chartColors'
-import { sparkline } from './sparkline'
+import { sparkline } from '../Charts/sparkline'
 
 /** 走勢線的 viewBox 尺寸；實際顯示尺寸由 CSS 決定（`.hp-spark`） */
 const SPARK_W = 56

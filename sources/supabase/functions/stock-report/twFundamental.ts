@@ -142,14 +142,21 @@ export interface FundamentalFile {
    * 舊檔沒有這一欄（undefined）代表從未回補過，視同全部未嘗試。
    */
   revenueBackfilledThrough?: string | null
+  /**
+   * 季度獲利能力回補的進度，語意與 `revenueBackfilledThrough` 完全相同：
+   * 「比這一季更新的季別都已經找過了」。ETF 靠它收斂，否則缺口清單會永遠卡住。
+   *
+   * 舊檔沒有這一欄（undefined）代表從未回補過，視同全部未嘗試。
+   */
+  profitBackfilledThrough?: string | null
   /** 獲利能力比率的單位。與 revenueUnit 同款：單位不離開資料 */
   profitUnit?: '%'
   /**
-   * 由舊到新，最多 8 季（＝兩年）。與 revenueMonths 同為「覆寫制檔案內自累積」。
+   * 由舊到新，最多 12 季（＝三年）。與 revenueMonths 同為「覆寫制檔案內自累積」。
    *
-   * t187ap17_L 只回最新一季，所以這個序列要兩年才長滿 —— 與月營收當初一樣的處境。
-   * 月營收後來靠 MOPS 分月報表回補（見 twRevenueHistory.ts），
-   * 但季度版是 AJAX POST（實測靜態網址 404），0.6.5 不做回補。
+   * t187ap17_L 只回最新一季，所以光靠它要三年才長滿 —— 與月營收當初一樣的處境。
+   * 0.6.21 起由 `twProfitHistory.ts` 回補（MOPS 的 `ajax_t163sb04`，POST 表單、UTF-8），
+   * 0.6.5 當時記載的「靜態網址 404 故不做回補」已由 POST 解決。
    * 舊檔沒有這一欄（undefined）視同空陣列。
    */
   profitQuarters?: ProfitQuarter[]
@@ -317,6 +324,8 @@ export function buildFundamentalFile(args: {
     // ⚠️ 整份重建時每個「不由本次輸入決定」的欄位都必須明確帶過去，
     //    漏掉就是無聲的資料遺失。這一欄漏過一次，見上方說明。
     revenueBackfilledThrough: existing?.revenueBackfilledThrough ?? null,
+    // 同上：0.6.21 新增的回補進度，漏帶就是每晚把進度抹掉、隔天重走 12 季
+    profitBackfilledThrough: existing?.profitBackfilledThrough ?? null,
     profitUnit: '%',
     profitQuarters: mergeProfitQuarters(
       existing?.profitQuarters,
@@ -345,8 +354,16 @@ export function mergeRevenueMonths(
   return mergePeriodSeries(prev, incoming, (m) => m.yearMonth, REVENUE_MONTHS_CAP, opts)
 }
 
-/** profitQuarters 上限。8 季＝兩年，足以看出趨勢，也控住 payload 大小 */
-export const PROFIT_QUARTERS_CAP = 8
+/**
+ * profitQuarters 上限。12 季＝三年，看得到一輪完整的景氣循環，
+ * 也與 revenueMonths 的 12 個月上限對齊。
+ *
+ * 0.6.21 由 8 提高到 12：每晚批次的 `t187ap17_L` 是當季快照、一季只長一筆，
+ * 靠它累積要三年；而 `twProfitHistory.ts` 的回補一次就能補到位，
+ * 8 季（兩年）會在 2027 年中之後開始把 2025 的資料逐季擠掉。
+ * 一季的 JSON 約 180 bytes，12 季也才 2 KB，容量上完全不是問題。
+ */
+export const PROFIT_QUARTERS_CAP = 12
 
 /**
  * 把新的一季併入既有序列。語意與 `mergeRevenueMonths` 完全相同，

@@ -395,6 +395,10 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS bwibbu_date      TEXT;    -- 
 -- fundamental/*.json 是覆寫制，從 Storage 只看得到「現在幾筆」，看不到哪一輪補的。
 -- 補滿之後這欄會長期是 0（缺口為空就短路），那是正常的，不是壞掉。
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;  -- 這輪補寫了幾檔的月營收
+-- 0.6.21 季度獲利能力回補。理由與上面那欄完全相同（覆寫制檔案看不出是哪一輪補的）。
+-- ⚠️ **這一欄必須先加再部署函式**：logBatchRun 的 insert 失敗不會拋例外
+--    （supabase-js 回的是 error 物件，不是 throw），欄位不存在時整批觀測會靜默停擺。
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS profit_backfilled  INT;  -- 這輪補寫了幾檔的季度獲利能力
 -- ⚠️ 0.6.5-dev.1 加的 macro_synced 在 dev.2 已成**廢欄位**：總經拆到自己的
 --    cron job（見 §9），不再由 generate-all 寫入，所以永遠是 NULL。
 --    不 DROP 是因為刪欄位的風險大於留一個沒用的欄位；正式區從未加過，也不必補。
