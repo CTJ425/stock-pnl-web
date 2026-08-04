@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: 五項功能異動（0.6.19 定版）
-- Status: **完成 —— 測試區已更新並稽核；正式區隨 `main` 一併更新**
+- Status: **完成 —— 兩區 schema 與 Edge Function 皆已更新並逐檔稽核通過；0.6.19 已上線**
 - Timestamp: 2026-08-04 14:05:00 Asia/Taipei
 
 ---
@@ -79,7 +79,11 @@ SELECT (SELECT (regexp_match(command, 'https://([a-z]+)\.supabase\.co'))[1] FROM
 - **端點探測**（不需登入即可驗證新程式碼有沒有上線）：
   `admin-users` / `admin-set-role` 回 401（被 `assertAdmin` 擋下），
   不存在的 action 回 400 `Unknown action` —— 兩者不同即證明新 action 已被辨識。
-- **正式區**：定版 0.6.19 併入 `main` 後同步執行（§13.2：正式區只在 `main` 上動）。
+- **正式區**：先把 0.6.19 定版併入 `main` 並 push（§13.2：正式區只在 `main` 上動；
+  Pages 部署 run 30880978398 success），才執行同一組操作 ——
+  欄位已加（身分檢查回 `kxnxadaghidwumqsqneu`）、
+  `functions deploy stock-report --no-verify-jwt` 完成、
+  `functions download` 逐檔比對 **11 個檔全部與 `main` 相同**、端點探測結果與測試區一致。
 
 ### ⚠️ 尚未做到的驗證
 

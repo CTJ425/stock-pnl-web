@@ -32,7 +32,9 @@
     `functions deploy stock-report --no-verify-jwt` 完成，`functions download` 逐檔比對 11 檔全同。
     端點探測：`admin-users` / `admin-set-role` 皆回 401（已被 `assertAdmin` 擋下），
     而不存在的 action 回 400 —— 證明新程式碼確實上線。
-  - 正式區：定版 0.6.19 併入 `main` 之後同步執行（見 PROGRESS 同日紀錄）。
+  - 正式區：定版 0.6.19 併入 `main` 並 push（Pages 部署 success）之後執行 ——
+    兩欄已加（身分檢查回 `kxnxadaghidwumqsqneu`）、`functions deploy --no-verify-jwt` 完成、
+    `functions download` 逐檔比對 11 檔全部與 `main` 相同、端點探測結果與測試區一致。
 - **驗證**：`npm test` 759/759、`npm run lint` 3 個既有 warning、`npm run build` 通過。
 - **⚠️ 驗證盲區**：`index.ts` 的兩個新 handler 不在 `tsc -b` 範圍內、也沒有單元測試
   （本機無 deno）。已人工核對 `db.auth.admin.listUsers / getUserById / updateUserById`
