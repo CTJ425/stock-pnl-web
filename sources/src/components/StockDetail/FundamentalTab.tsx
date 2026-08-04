@@ -48,6 +48,17 @@ function fmtPercent(n: number | null | undefined): string {
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
+/**
+ * 每股盈餘：兩位小數帶「元」。
+ *
+ * 與 `fmtPercent` 分開而不共用：EPS **不帶正號**（+4.71 元讀起來像漲跌幅），
+ * 但虧損的負號必須留著。
+ */
+function fmtEps(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—'
+  return `${n.toFixed(2)} 元`
+}
+
 /** 'YYYY-MM' → 'YYYY 年 MM 月' */
 function fmtYearMonth(ym: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
@@ -172,6 +183,13 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
     .filter((i) => revenueMonths.length <= 8 || i % 2 === 0)
   const quarters = [...profitQuarters].reverse()
   const latestQuarter = quarters[0] ?? null
+  /*
+    EPS 與比率的來源不同（比率每晚更新、EPS 只有季報回補才有），最新一季常常
+    有比率、還沒有 EPS。取「最近一筆有 EPS 的季」而不是直接讀 latestQuarter，
+    否則畫面會在季報公布後的那幾天顯示「—」，看起來像壞掉。
+  */
+  const latestEps = quarters.find((q) => q.epsTwd !== null) ?? null
+  const epsQuarters = profitQuarters.filter((q) => q.epsTwd !== null)
 
   /* 12 季每格約 41px，而「26Q1」約 30px —— 全標會貼在一起，故比照月營收隔一個標一個 */
   const profitLabelIndices = profitQuarters
@@ -222,12 +240,27 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
               {quarters.length > 1 && `（已累積 ${quarters.length} 季）`}
             </span>
           )}
-          <span className="source-tag">單位：%</span>
+          <span className="source-tag">比率單位：%；每股盈餘單位：元</span>
         </div>
 
         {latestQuarter ? (
           <>
             <div className="kpi-grid">
+              {/*
+                EPS 排在四項比率之前：它是「一股賺了多少錢」，是與本益比對得起來的
+                那個數字，也是使用者最常先看的一個。比率回答的是另一個問題（賺得有多好）。
+              */}
+              <div className="glass kpi">
+                <div className="kpi-label">每股盈餘 (EPS)</div>
+                <div className="kpi-value">{fmtEps(latestEps?.epsTwd)}</div>
+                <div className="kpi-sub">
+                  {latestEps
+                    ? latestEps.yearQuarter === latestQuarter.yearQuarter
+                      ? '這一股在這一季替你賺到的錢'
+                      : `最近有數字的是 ${latestEps.yearQuarter.replace('-Q', ' 年第 ')} 季`
+                    : '季報公布後補上（來源與比率不同）'}
+                </div>
+              </div>
               <div className="glass kpi">
                 <div className="kpi-label">毛利率</div>
                 <div className="kpi-value">{fmtPercent(latestQuarter.grossMarginPercent)}</div>
@@ -263,6 +296,32 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
               <MarginTrendChart quarters={profitQuarters} labelIndices={profitLabelIndices} />
             )}
 
+            {/*
+              EPS 另外一張圖，**不能塞進上面那張同軸圖**：它的單位是元、比率是 %，
+              兩者放同一條縱軸時 59（%）與 13（元）會被當成同一種量比大小，毫無意義。
+
+              只畫有 EPS 的那幾季（`epsQuarters`）而不是整段補 null：
+              EPS 是逐季回補進來的，中間本來就會有洞，畫成斷線會讓人以為那幾季沒賺錢。
+            */}
+            {epsQuarters.length > 1 && (
+              <>
+                <div className="chart-title" style={{ marginTop: 12 }}>
+                  每股盈餘（元）
+                </div>
+                <LineSeriesChart
+                  points={epsQuarters.map((q) => ({
+                    label: fmtChartQuarter(q.yearQuarter),
+                    value: q.epsTwd,
+                  }))}
+                  labelIndices={epsQuarters
+                    .map((_, i) => i)
+                    .filter((i) => epsQuarters.length <= 8 || i % 2 === 0)}
+                  formatValue={(v) => `${v.toFixed(2)} 元`}
+                  ariaLabel={`近 ${epsQuarters.length} 季每股盈餘走勢`}
+                />
+              </>
+            )}
+
             {quarters.length > 1 && (
               <div className="table-scroll" style={{ marginTop: 12 }}>
                 <table className="data-table">
@@ -270,6 +329,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                     <tr>
                       <th>季別</th>
                       <th className="num">營收（百萬元）</th>
+                      <th className="num">每股盈餘（元）</th>
                       <th className="num">毛利率</th>
                       <th className="num">營益率</th>
                       <th className="num">稅前純益率</th>
@@ -281,6 +341,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <tr key={q.yearQuarter}>
                         <td>{q.yearQuarter.replace('-Q', ' 年第 ')} 季</td>
                         <td className="num">{fmtInt(q.revenueMillionTwd)}</td>
+                        <td className="num">{fmtEps(q.epsTwd)}</td>
                         <td className="num">{fmtPercent(q.grossMarginPercent)}</td>
                         <td className="num">{fmtPercent(q.operatingMarginPercent)}</td>
                         <td className="num">{fmtPercent(q.pretaxMarginPercent)}</td>
@@ -301,6 +362,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         */}
         <p className="hint" style={{ marginTop: 8 }}>
           季度比率由證交所彙總計算，每季財報公布後更新；序列逐季累積，最多保留 12 季。
+          每股盈餘來自季報，比比率晚幾天才補上，最新一季可能先顯示「—」。
         </p>
       </section>
 

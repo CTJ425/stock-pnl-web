@@ -162,6 +162,9 @@ describe('twFundamental', () => {
         operatingMarginPercent: 58.1,
         pretaxMarginPercent: 60.65,
         netMarginPercent: 50.51,
+        // 營益分析表沒有 EPS：標記成還沒查過，等回補去季報補（0.6.28）
+        epsTwd: null,
+        epsChecked: false,
       })
     })
 
@@ -206,6 +209,46 @@ describe('twFundamental', () => {
       expect(merged).toHaveLength(12)
       expect(merged[0].yearQuarter).toBe('2023-Q2')
       expect(merged[11].yearQuarter).toBe('2026-Q1')
+    })
+
+    /*
+      EPS 只有回補路徑（MOPS 季報）有，每晚的 t187ap17_L 沒有。
+      整筆取捨在兩個方向都會弄丟它，故 EPS 逐欄合併、誰查過誰贏。
+    */
+    describe('EPS 逐欄合併（0.6.28）', () => {
+      const withEps = (yearQuarter: string, eps: number | null): ProfitQuarter => ({
+        ...q(yearQuarter, 50),
+        epsTwd: eps,
+        epsChecked: true,
+      })
+
+      it('回補（fillGapsOnly）把 EPS 補進既有那一季，比率不動', () => {
+        const prev = [{ ...q('2026-Q1', 66), epsTwd: null, epsChecked: false }]
+        const merged = mergeProfitQuarters(prev, [withEps('2026-Q1', 13.94)], {
+          fillGapsOnly: true,
+        })
+        expect(merged[0].epsTwd).toBe(13.94)
+        // 官方算好的比率仍然是既有那一份，沒有被回補自己算的版本蓋掉
+        expect(merged[0].grossMarginPercent).toBe(66)
+      })
+
+      it('每晚的覆寫不會把補好的 EPS 洗掉', () => {
+        const prev = [withEps('2026-Q1', 13.94)]
+        // 夜間批次的那一筆沒有 EPS（epsChecked: false）
+        const nightly = [{ ...q('2026-Q1', 67), epsTwd: null, epsChecked: false }]
+        const merged = mergeProfitQuarters(prev, nightly)
+        expect(merged[0].grossMarginPercent).toBe(67) // 比率照常更新
+        expect(merged[0].epsTwd).toBe(13.94) // EPS 留著
+      })
+
+      it('查過但那一列真的沒有 EPS：仍標記已查過，不會被當成缺口重抓', () => {
+        const prev = [{ ...q('2026-Q1', 66), epsTwd: null, epsChecked: false }]
+        const merged = mergeProfitQuarters(prev, [withEps('2026-Q1', null)], {
+          fillGapsOnly: true,
+        })
+        expect(merged[0].epsTwd).toBeNull()
+        expect(merged[0].epsChecked).toBe(true)
+      })
     })
 
     it('fillGapsOnly 不覆蓋既有值', () => {

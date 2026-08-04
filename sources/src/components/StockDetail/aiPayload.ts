@@ -126,6 +126,7 @@ export interface AiPayload {
     /** 由新到舊，最多 8 季 */
     profitQuarters?: Array<{
       yearQuarter: string
+      epsTwd: number | null
       grossMarginPercent: number | null
       operatingMarginPercent: number | null
       pretaxMarginPercent: number | null
@@ -213,6 +214,8 @@ function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamenta
     profitUnit: '%',
     profitQuarters: [...f.profitQuarters].reverse().map((q) => ({
       yearQuarter: q.yearQuarter,
+      // EPS 一起送（0.6.28）：本益比在同一份 payload 裡，沒有 EPS 的話模型無從判斷它貴不貴
+      epsTwd: round(q.epsTwd),
       grossMarginPercent: round(q.grossMarginPercent),
       operatingMarginPercent: round(q.operatingMarginPercent),
       pretaxMarginPercent: round(q.pretaxMarginPercent),

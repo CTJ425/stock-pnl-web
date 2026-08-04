@@ -43,6 +43,13 @@ export interface ProfitQuarter {
   pretaxMarginPercent: number | null
   /** 稅後純益率 */
   netMarginPercent: number | null
+  /**
+   * 基本每股盈餘（元，0.6.28 起）。
+   *
+   * 比率是「賺得有多好」，EPS 是「一股賺了多少錢」——它是與本益比對得起來的那個數字。
+   * **只有回補路徑補得到**，所以最新一季通常會晚幾天才出現（見後端 epsChecked）。
+   */
+  epsTwd: number | null
 }
 
 export interface FundamentalData {
@@ -119,6 +126,7 @@ function normalizeProfitQuarter(v: unknown): ProfitQuarter | null {
     operatingMarginPercent: numOrNull(o.operatingMarginPercent),
     pretaxMarginPercent: numOrNull(o.pretaxMarginPercent),
     netMarginPercent: numOrNull(o.netMarginPercent),
+    epsTwd: numOrNull(o.epsTwd),
   }
 }
 

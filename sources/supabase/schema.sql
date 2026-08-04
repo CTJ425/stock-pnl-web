@@ -627,6 +627,47 @@ SELECT cron.schedule(
 );
 
 
+-- 10b. 台股全市場量能與三大法人買賣金額的獨立排程 (0.6.28)
+--
+--    **又是一支獨立 cron 的理由與 §9 / §10 相同**：`handleGenerateAll` 的 decideSkip
+--    短路會讓排在它後面的東西整段不執行，而這份資料與個股清單無關，
+--    不該被個股的完成狀態綁住。拆的一樣是排程不是函式。
+--
+--    **班次為什麼從 16:00 才開始（台北）**：三大法人買賣金額（BFI82U）約 15:00–15:30
+--    才公布。太早跑只會拿到「查無資料」，雖然函式端不會把它記成已補
+--    （planInstitutionalBackfill 只看「有沒有補到」），但那就是白跑一趟。
+--    三班是為了容忍公布延遲；補到之後後續班次不會重複抓同一天。
+--
+--    ⚠️ 與 §6c 同樣的兩個佔位符地雷（PROJECT_REF / CRON_SECRET），
+--    套用前務必替換，套用後務必跑 §6d 的覆驗查詢。
+--    ⚠️ **只跑這一段，不要整份重跑 schema.sql**。
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'market-daily') THEN
+    PERFORM cron.unschedule('market-daily');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'market-daily',
+  -- 台北 16:00 / 17:00 / 18:00（UTC 08/09/10），僅平日
+  '0 8-10 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"sync-market"}'::jsonb,
+    -- 一個月報 + 最多 5 個單日請求，實測 2–4 秒。給 60 秒與其他 job 一致
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+
 -- 11. 管理員後台：排程狀態查詢函式 (0.6.12)
 --
 --    「資料抓取狀況」頁需要 pg_cron 的排程與執行紀錄，但 `cron` schema 不在

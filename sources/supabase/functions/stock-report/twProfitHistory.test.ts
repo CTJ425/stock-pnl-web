@@ -18,17 +18,17 @@ const HTML = `
   <tr>
     <th>公司代號</th><th>公司名稱</th><th>營業收入</th><th>營業成本</th>
     <th>營業毛利（毛損）</th><th>營業毛利（毛損）淨額</th><th>營業利益（損失）</th>
-    <th>稅前淨利（淨損）</th><th>本期淨利（淨損）</th>
+    <th>稅前淨利（淨損）</th><th>本期淨利（淨損）</th><th>基本每股盈餘（元）</th>
   </tr>
   <tr>
     <td>1802</td><td>台泥</td><td>10,244,189</td><td>8,274,742</td>
-    <td>1,969,447</td><td>1,969,447</td><td>807,242</td><td>659,725</td><td>584,943</td>
+    <td>1,969,447</td><td>1,969,447</td><td>807,242</td><td>659,725</td><td>584,943</td><td>0.79</td>
   </tr>
   <tr>
     <td>9999</td><td>零營收公司</td><td>0</td><td>0</td>
-    <td>0</td><td>0</td><td>0</td><td>0</td><td>0</td>
+    <td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td>
   </tr>
-  <tr><td>小計</td><td>—</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+  <tr><td>小計</td><td>—</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
 </table>
 <table>
   <tr>
@@ -111,6 +111,20 @@ describe('parseMopsProfit', () => {
     expect(got.get('1802')!.yearQuarter).toBe('2026-Q1')
   })
 
+  it('基本每股盈餘照原值取，不除以營收（0.6.28）', () => {
+    const got = parseMopsProfit(HTML, '2026-Q1', new Set())
+    // 0.79 元就是 0.79 元 —— 它已經是每股金額，不是比率
+    expect(got.get('1802')!.epsTwd).toBe(0.79)
+    expect(got.get('1802')!.epsChecked).toBe(true)
+  })
+
+  it('沒有 EPS 欄的產業別：epsTwd 為 null 但仍標記已查過', () => {
+    // 金融業那張表沒有這一欄。標記已查過，才不會每晚重抓同一季的 1.6MB 季報
+    const got = parseMopsProfit(HTML, '2026-Q1', new Set())
+    expect(got.get('2882')!.epsTwd).toBeNull()
+    expect(got.get('2882')!.epsChecked).toBe(true)
+  })
+
   it('壞掉的 HTML 回空 Map 而不是拋錯', () => {
     expect(parseMopsProfit('', '2026-Q1', new Set()).size).toBe(0)
     expect(parseMopsProfit('<html>沒有表格</html>', '2026-Q1', new Set()).size).toBe(0)
@@ -140,6 +154,25 @@ describe('planProfitBackfill', () => {
       ['1802', { quarters: new Set(want), through: '2025-Q2' }],
     ])
     expect(planProfitBackfill(have, want, 4)).toEqual([])
+  })
+
+  it('已有的季別但還沒查過 EPS，也算缺口（0.6.28）', () => {
+    /*
+      這是 EPS 專屬的例外：through 記著「比它舊的都問過了」，而 EPS 缺口出現在
+      最新那幾季（夜間批次剛寫進來），正好在 through 的另一側 ——
+      沿用同一條判斷的話，新一季的 EPS 永遠補不到。
+    */
+    const have = new Map<string, ProfitProgress>([
+      [
+        '1802',
+        {
+          quarters: new Set(want),
+          needEps: new Set(['2026-Q1']),
+          through: '2025-Q2',
+        },
+      ],
+    ])
+    expect(planProfitBackfill(have, want, 4)).toEqual(['2026-Q1'])
   })
 
   it('沒有任何檔案或預算為 0 時不做事', () => {

@@ -45,6 +45,7 @@ describe('FundamentalTab', () => {
         operatingMarginPercent: 49.03,
         pretaxMarginPercent: 51.2,
         netMarginPercent: 43.11,
+        epsTwd: null,
       },
       {
         yearQuarter: '2026-Q1',
@@ -53,6 +54,7 @@ describe('FundamentalTab', () => {
         operatingMarginPercent: 58.1,
         pretaxMarginPercent: 60.65,
         netMarginPercent: 50.51,
+        epsTwd: null,
       },
     ],
   }
@@ -223,6 +225,80 @@ describe('FundamentalTab', () => {
     expect(container.querySelector('.chart-wrap')).toBeNull()
   })
 
+  describe('每股盈餘（0.6.28）', () => {
+    const eps = (yearQuarter: string, epsTwd: number | null): ProfitQuarter => ({
+      yearQuarter,
+      revenueMillionTwd: 500000,
+      grossMarginPercent: 55,
+      operatingMarginPercent: 45,
+      pretaxMarginPercent: 47,
+      netMarginPercent: 40,
+      epsTwd,
+    })
+
+    it('KPI 與表格都顯示 EPS，單位是元且不帶正號', () => {
+      render(
+        <FundamentalTab
+          fundamental={{ ...full, profitQuarters: [eps('2025-Q4', 12.5), eps('2026-Q1', 13.94)] }}
+          loading={false}
+        />,
+      )
+      const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
+      // 13.94 元，不是 +13.94%（EPS 是金額，帶正號會讀成漲跌幅）
+      expect(values).toContain('13.94 元')
+      expect(document.querySelectorAll('.data-table')[0].textContent).toContain('12.50 元')
+    })
+
+    it('最新一季還沒有 EPS 時退回最近一筆有的，並說明是哪一季', () => {
+      // 比率每晚更新、EPS 要等季報回補，中間那幾天最新一季本來就沒有 EPS
+      render(
+        <FundamentalTab
+          fundamental={{ ...full, profitQuarters: [eps('2025-Q4', 12.5), eps('2026-Q1', null)] }}
+          loading={false}
+        />,
+      )
+      const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
+      expect(values).toContain('12.50 元')
+      expect(screen.getByText(/最近有數字的是 2025 年第 4 季/)).toBeTruthy()
+    })
+
+    it('完全沒有 EPS 時顯示「—」而不是 0，也不畫 EPS 圖', () => {
+      const { container } = render(
+        <FundamentalTab
+          fundamental={{ ...full, profitQuarters: [eps('2025-Q4', null), eps('2026-Q1', null)] }}
+          loading={false}
+        />,
+      )
+      const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
+      expect(values).toContain('—')
+      // 兩張圖：獲利能力四線 + 月營收；沒有 EPS 那張
+      expect(container.querySelectorAll('.chart-wrap')).toHaveLength(2)
+    })
+
+    it('EPS 圖只畫有數字的季，缺的那幾季不畫成斷線', () => {
+      const { container } = render(
+        <FundamentalTab
+          fundamental={{
+            ...full,
+            profitQuarters: [
+              eps('2025-Q3', 11.4),
+              eps('2025-Q4', null),
+              eps('2026-Q1', 13.94),
+            ],
+          }}
+          loading={false}
+        />,
+      )
+      // 三張圖：四線 + EPS + 月營收
+      const wraps = container.querySelectorAll('.chart-wrap')
+      expect(wraps).toHaveLength(3)
+      // EPS 那張只有兩個點、連成一段，不是「中間掉下去」的三點
+      const epsChart = wraps[1]
+      expect(epsChart.querySelectorAll('circle')).toHaveLength(2)
+      expect(epsChart.querySelectorAll('polyline')).toHaveLength(1)
+    })
+  })
+
   describe('獲利能力走勢圖（0.6.25）', () => {
     /** 由舊到新的 12 季（2023 Q2 → 2026 Q1）；毛利率逐季走高，用來釘住方向 */
     const twelve: ProfitQuarter[] = Array.from({ length: 12 }, (_, i) => {
@@ -234,6 +310,7 @@ describe('FundamentalTab', () => {
         operatingMarginPercent: 40 + i,
         pretaxMarginPercent: 42 + i,
         netMarginPercent: 35 + i,
+        epsTwd: null,
       }
     })
 

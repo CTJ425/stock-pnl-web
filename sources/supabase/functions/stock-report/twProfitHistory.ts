@@ -70,6 +70,11 @@ const H_PRETAX = [
   '繼續營業單位稅前損益',
 ]
 const H_NET = ['本期淨利（淨損）', '本期稅後淨利（淨損）']
+/**
+ * 基本每股盈餘（元）。**不是比率，不除以營收** —— 它已經是每股的絕對金額。
+ * 稀釋每股盈餘不取：畫面上與本益比對得起來的是基本 EPS。
+ */
+const H_EPS = ['基本每股盈餘（元）', '基本每股盈餘', '基本每股盈餘(元)']
 
 /** 去標籤、去 &nbsp;、trim。tag 名大小寫不敏感（比照 twRevenueHistory 的處理） */
 function cellsOf(row: string, tag: 'td' | 'th'): string[] {
@@ -120,6 +125,7 @@ export function parseMopsProfit(
     const iOperating = columnOf(headers, H_OPERATING)
     const iPretax = columnOf(headers, H_PRETAX)
     const iNet = columnOf(headers, H_NET)
+    const iEps = columnOf(headers, H_EPS)
 
     for (const row of table.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? []) {
       const cells = cellsOf(row, 'td')
@@ -147,6 +153,9 @@ export function parseMopsProfit(
         operatingMarginPercent: ratio(iOperating),
         pretaxMarginPercent: ratio(iPretax),
         netMarginPercent: ratio(iNet),
+        epsTwd: iEps === null ? null : normNum(cells[iEps]),
+        // 這一列我們確實看過了：即使沒有 EPS 欄，也不必再抓一次同一季
+        epsChecked: true,
       })
     }
   }
@@ -161,6 +170,13 @@ function round2(n: number): number {
 export interface ProfitProgress {
   /** 這檔已有的季別 */
   quarters: Set<string>
+  /**
+   * 已有、但**還沒去季報找過 EPS** 的季別（0.6.28）。未給代表沒有這種缺口。
+   *
+   * 每晚的 `t187ap17_L` 只給四項比率，所以新的一季會先以「有比率、沒 EPS」落地；
+   * EPS 只有 MOPS 季報有，得靠回補補上。
+   */
+  needEps?: Set<string>
   /** 最舊的**已嘗試**季別；null 代表從未回補過 */
   through: string | null
 }
@@ -182,8 +198,19 @@ export function planProfitBackfill(
 ): string[] {
   if (have.size === 0 || maxQuarters <= 0) return []
   const missing = new Set<string>()
-  for (const { quarters, through } of have.values()) {
+  for (const { quarters, needEps, through } of have.values()) {
     for (const yq of wantQuarters) {
+      /*
+        EPS 缺口不受 `through` 限制（0.6.28）。
+        through 記的是「比它更舊的都還沒問過」，而 EPS 缺口恰好出現在**最新**那幾季
+        （夜間批次剛寫進來、還沒被回補碰過），正好在 through 的另一側 ——
+        沿用同一條判斷的話，新一季的 EPS 永遠補不到。
+        `epsChecked` 保證這不會變成無限重抓：問過一次就不再算缺口，即使那一季真的沒有 EPS。
+      */
+      if (needEps?.has(yq)) {
+        missing.add(yq)
+        continue
+      }
       if (quarters.has(yq)) continue
       if (through && yq >= through) continue
       missing.add(yq)

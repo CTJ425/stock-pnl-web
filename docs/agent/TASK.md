@@ -8,6 +8,38 @@
 
 ## 📋 Active Tasks
 
+### Task 58: 台股全市場量能與三大法人買賣超（0.6.28）
+- **Status**: 🚧 **程式碼完成，等部署** —— 需要 `functions deploy` + 新 cron 才會有資料
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 20:50:00 Asia/Taipei
+- **位置**：總經頁（`Macro/TwMarketSection.tsx`），**不是年度收益頁** ——
+  年度收益全是個人已實現損益，大盤量能混進去會讓那頁失焦。
+- **資料**：`market/daily.json`（全域單檔，滾動 120 個交易日），
+  後端 `twMarket.ts` + `syncMarket()`，action `sync-market`，cron `market-daily`（schema.sql §10b）。
+- **⚠️ 兩個來源的節奏不同**：成交量值（FMTQIK rwd 版）**一次抓一整月**；
+  三大法人買賣金額（BFI82U）**一天一個請求**（`type=month` 回的是整月合計、不是逐日），
+  故預算式回補、每輪 5 天。`institutional` 為 null 是「還沒補到」，不是「那天沒有法人進出」。
+- **⚠️ 整月重抓不可覆寫法人金額**：量值那份永遠不帶法人，整筆覆寫會每晚清掉回補成果
+  （`mergeMarketDays` 逐欄保留，與 EPS 同一個坑同一個解法）。
+- **待辦（需使用者指示）**：兩區 `supabase functions deploy stock-report --no-verify-jwt`；
+  SQL Editor 跑 schema.sql §10b 建 `market-daily`（替換佔位符後跑 §6d 覆驗）。
+
+### Task 57: 季度每股盈餘 EPS（0.6.28）
+- **Status**: 🚧 **程式碼完成，等部署** —— 前端已可顯示，但要新版 Edge Function 才有資料
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 20:50:00 Asia/Taipei
+- **來源**：MOPS 季報（`ajax_t163sb04`，回補路徑既有的那份 1.6MB HTML）多解析一欄
+  「基本每股盈餘（元）」。**每晚的 `t187ap17_L` 沒有 EPS**，故新一季會先缺、由回補補上。
+- **已驗證期間基準一致**：`t187ap06_L_ci` 的營業收入與 `t187ap17_L` 的營業收入(百萬元)
+  逐檔吻合，故季報 EPS 與畫面上的比率是同一個基準。
+- **⚠️ 三個坑（都已修，有測試）**：夜間覆寫會洗掉 EPS（改逐欄合併、誰查過誰贏）；
+  只補 EPS 時季別清單不變導致不寫檔（簽章帶 `epsChecked`）；
+  `through` 會擋住最新一季的 EPS（`needEps` 不受 through 限制，改以 `epsChecked` 收斂）。
+- **前端**：KPI 一格（最新一季沒有就退回最近一筆有的並標明季別）、季度表一欄、
+  **獨立一張走勢圖**（元與 % 不同量綱，不可同軸）。EPS 也一併送進 AI payload。
+- **待辦**：兩區 `supabase functions deploy stock-report --no-verify-jwt`；
+  部署後既有的 `backfill-profit` 排程會自己把 12 季逐批補上（每輪 2 季、約 6 輪），不需新排程。
+
 ### Task 56: 法人買賣超圖的圖例可切換（0.6.27）
 - **Status**: ✅ **完成** —— 純前端，不需要動 Supabase
 - **Agent**: Claude

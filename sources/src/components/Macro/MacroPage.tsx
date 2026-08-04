@@ -18,6 +18,7 @@ import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { latestPeriod, periodsBehind } from './macroPeriod'
+import { TwMarketSection } from './TwMarketSection'
 import { sparkline } from '../Charts/sparkline'
 
 /** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
@@ -134,26 +135,36 @@ export function MacroPage() {
     void load()
   }, [load])
 
+  /*
+    美國那份的載入中／查無狀態底下仍然掛著台股市場（0.6.28）：
+    兩塊資料各自載入、各自失敗，美國 FRED 抓不到不該讓整頁只剩一句「尚未產生」。
+  */
   if (loading) {
     return (
-      <div className="glass empty-state section">
-        <RefreshCw size={28} className="spin" />
-        <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
-      </div>
+      <>
+        <div className="glass empty-state section">
+          <RefreshCw size={28} className="spin" />
+          <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
+        </div>
+        <TwMarketSection />
+      </>
     )
   }
 
   if (!macro) {
     return (
-      <div className="glass empty-state section">
-        <div className="empty-icon">
-          <Globe size={36} />
+      <>
+        <div className="glass empty-state section">
+          <div className="empty-icon">
+            <Globe size={36} />
+          </div>
+          <div>總體經濟資料尚未產生。</div>
+          <div className="hint" style={{ marginTop: 6 }}>
+            每日排程完成後會自動補上，稍後再回來看看。
+          </div>
         </div>
-        <div>總體經濟資料尚未產生。</div>
-        <div className="hint" style={{ marginTop: 6 }}>
-          每日排程完成後會自動補上，稍後再回來看看。
-        </div>
-      </div>
+        <TwMarketSection />
+      </>
     )
   }
 
@@ -247,6 +258,13 @@ export function MacroPage() {
           非農就業為較上月增減人數，消費者信心為密西根大學指數。空格代表該期尚未發布。
         </p>
       </div>
+
+      {/*
+        台股市場擺在美國總經之後：這一頁的主軸是「與個股無關的市場背景」，
+        兩塊都屬於它。自己載入自己的資料（同本頁的做法），互不影響 ——
+        美國那份抓不到時，台股這段照樣看得到。
+      */}
+      <TwMarketSection />
     </>
   )
 }

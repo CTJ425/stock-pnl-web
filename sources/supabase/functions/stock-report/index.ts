@@ -106,6 +106,18 @@ import {
 } from './twProfitHistory.ts'
 import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
+  MARKET_SCHEMA,
+  bfi82uDayUrl,
+  fmtqikMonthUrl,
+  mergeMarketDays,
+  parseBfi82u,
+  parseFmtqik,
+  planInstitutionalBackfill,
+  planMarketMonths,
+  type MarketDay,
+  type MarketFile,
+} from './twMarket.ts'
+import {
   FRED_SERIES,
   MACRO_LOOKBACK_MONTHS,
   MACRO_SCHEMA,
@@ -1057,6 +1069,14 @@ async function backfillProfit(
     files.set(ticker, file)
     have.set(ticker, {
       quarters: new Set((file.profitQuarters ?? []).map((q) => q.yearQuarter)),
+      /*
+        0.6.28：既有季別但還沒去季報找過 EPS 的，也算缺口。
+        0.6.28 之前寫下的檔案整份都沒有 `epsChecked`，於是 12 季會被逐批重抓一次
+        （每輪 2 季、約 6 輪補完），之後只剩每季新增的那一筆需要補。
+      */
+      needEps: new Set(
+        (file.profitQuarters ?? []).filter((q) => !q.epsChecked).map((q) => q.yearQuarter),
+      ),
       through: file.profitBackfilledThrough ?? null,
     })
   }
@@ -1096,10 +1116,16 @@ async function backfillProfit(
     // fillGapsOnly：既有值一律保留。t187ap17_L 是官方算好的比率，
     // 不能被我們自己算的版本蓋掉（兩者對過答案相同，但官方的才是準的）
     const merged = mergeProfitQuarters(file.profitQuarters, incoming, { fillGapsOnly: true })
-    // ⚠️ 比季別清單而不是比長度：已滿 12 筆時補進一季會擠掉最舊的一筆，
-    // 長度仍是 12 但內容變了 —— 用長度判斷會把真正的更新當成沒事發生而不寫檔
-    const before = (file.profitQuarters ?? []).map((q) => q.yearQuarter).join(',')
-    const changed = merged.map((q) => q.yearQuarter).join(',') !== before
+    /*
+      ⚠️ 比季別清單而不是比長度：已滿 12 筆時補進一季會擠掉最舊的一筆，
+      長度仍是 12 但內容變了 —— 用長度判斷會把真正的更新當成沒事發生而不寫檔。
+
+      0.6.28 起簽章要帶上 EPS 的狀態：**只補 EPS 時季別清單一字不變**，
+      光比季別會把「這一輪終於補到 EPS 了」當成沒事發生，補了也不寫檔。
+    */
+    const signature = (qs: ProfitQuarter[] | null | undefined) =>
+      (qs ?? []).map((q) => `${q.yearQuarter}:${q.epsChecked ? 1 : 0}`).join(',')
+    const changed = signature(merged) !== signature(file.profitQuarters)
 
     // 進度也要寫回去，**即使一筆資料都沒找到** —— ETF 正是靠這個收斂
     const through = nextProfitThrough(file.profitBackfilledThrough, attempted)
@@ -1114,6 +1140,106 @@ async function backfillProfit(
     if (await uploadJson(`fundamental/${ticker}.json`, next)) filled++
   }
   return { filled, quarters: [...fetched.keys()].sort() }
+}
+
+// ---- 台股全市場量能與三大法人買賣金額（0.6.28）----
+
+/**
+ * 單輪最多補幾天的法人買賣金額。
+ *
+ * BFI82U 一天一個請求（`type=month` 回的是整月合計，不是逐日），所以補歷史必須有預算。
+ * 5 天／輪、cron 一天三班 → 半年份約兩週補完，同 MAX_BACKFILL_DAYS 的取捨：
+ * 排程的時間預算要留給個股，那才是使用者打開就要看的東西。
+ */
+const MAX_MARKET_INST_DAYS = 5
+
+/** 抓 rwd 的 JSON。失敗（含逾時）回 null 不拋，比照 fetchBig5Text 的容錯準則 */
+async function fetchRwdJson(url: string): Promise<unknown | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 產出 / 更新 market/daily.json：全市場每日成交量值 + 三大法人買賣金額。
+ *
+ * 與個股報告完全無關，故獨立成一支、也獨立成一個 action ——
+ * 它是**全域單檔**，不隨標的清單增減（同 syncMacro 的處置）。
+ *
+ * 兩段式：
+ * 1. 成交量值：整月一次抓得完（FMTQIK 的 rwd 版），所以每輪都重抓本月、順便更正。
+ * 2. 法人金額：一天一個請求，用 `planInstitutionalBackfill` 的預算逐日補。
+ *
+ * 全部失敗就不覆寫既有檔（留舊資料勝過空檔，沿用 syncNews 的準則）。
+ */
+async function syncMarket(now: Date): Promise<{
+  synced: boolean
+  days: number
+  /** 這一輪補到幾天的法人金額 */
+  institutionalFilled: number
+  asOf: string | null
+}> {
+  const existing = await downloadJson<MarketFile>('market/daily.json')
+  const have = existing?.days ?? []
+
+  let incoming: MarketDay[] = []
+  let anyOk = false
+  for (const yyyymm of planMarketMonths(now, have)) {
+    const url = fmtqikMonthUrl(yyyymm)
+    if (!url) continue
+    const parsed = parseFmtqik(await fetchRwdJson(url))
+    if (parsed.length > 0) {
+      anyOk = true
+      incoming = incoming.concat(parsed)
+    }
+  }
+
+  let days = mergeMarketDays(have, incoming)
+
+  // 法人金額：補的是合併後的清單，這樣本輪剛抓到的新交易日也會排進待補
+  let institutionalFilled = 0
+  for (const ymd of planInstitutionalBackfill(days, MAX_MARKET_INST_DAYS)) {
+    const url = bfi82uDayUrl(ymd)
+    if (!url) continue
+    const inst = parseBfi82u(await fetchRwdJson(url))
+    if (!inst) continue
+    anyOk = true
+    institutionalFilled++
+    const date = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6)}`
+    days = days.map((d) => (d.date === date ? { ...d, institutional: inst } : d))
+  }
+
+  if (!anyOk) return { synced: false, days: have.length, institutionalFilled: 0, asOf: existing?.asOf ?? null }
+
+  /*
+    比內容而不是比長度：只補了某幾天的法人金額時天數一字不變，
+    用長度判斷會把真正的更新當成沒事發生而不寫檔（與 backfillProfit 的 EPS 同一個坑）。
+  */
+  const signature = (ds: MarketDay[]) =>
+    ds.map((d) => `${d.date}:${d.tradeValueTwd ?? ''}:${d.institutional ? 1 : 0}`).join(',')
+  if (signature(days) === signature(have)) {
+    return { synced: false, days: days.length, institutionalFilled, asOf: existing?.asOf ?? null }
+  }
+
+  const asOf = new Date().toISOString()
+  const ok = await uploadJson('market/daily.json', {
+    schema: MARKET_SCHEMA,
+    asOf,
+    days,
+  } satisfies MarketFile)
+  return {
+    synced: ok,
+    days: days.length,
+    institutionalFilled,
+    asOf: ok ? asOf : (existing?.asOf ?? null),
+  }
 }
 
 // ---- 新聞（AI 分析的消息面）----
@@ -1827,6 +1953,31 @@ async function handleSyncMacro(): Promise<Response> {
 }
 
 /**
+ * 全市場量能與法人買賣金額的獨立排程入口（0.6.28）。
+ *
+ * **為什麼又是獨立 action 而不是掛進 generate-all**：與 §9 macro-daily、§10 fx-daily
+ * 同一個理由 —— `handleGenerateAll` 的 `decideSkip` 短路會在個股資料到齊後直接 return，
+ * 排在它後面的東西整段不會執行。這份資料與個股清單無關，不該被個股的完成狀態綁住。
+ *
+ * 班次要在 15:30 之後：三大法人買賣金額約 15:00–15:30 才公布，
+ * 太早跑只會拿到「非交易日」的空回應，然後把當天記成已補、再也不回頭。
+ * —— 這正是 `planInstitutionalBackfill` 只看「有沒有補到」而不記「問過沒」的原因：
+ * 沒補到就下一輪再問，寧可多問一次也不要永久缺一天。
+ */
+async function handleSyncMarket(): Promise<Response> {
+  const startedAt = Date.now()
+  const market = await syncMarket(new Date())
+  return json({
+    ok: true,
+    synced: market.synced,
+    days: market.days,
+    institutionalFilled: market.institutionalFilled,
+    asOf: market.asOf,
+    durationMs: Date.now() - startedAt,
+  })
+}
+
+/**
  * 管理員後台「資料抓取狀況」的資料來源。
  *
  * 一次把整頁要的東西撈齊，理由是前端逐項去打會變成十幾個往返，
@@ -2072,6 +2223,14 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncMacro()
+  }
+
+  // 全市場量能與法人買賣金額（0.6.28）：會寫 Storage 且對 TWSE 發請求，把關同 generate-all。
+  // 由獨立的 cron job `market-daily` 觸發（見 schema.sql §11）
+  if (body.action === 'sync-market') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleSyncMarket()
   }
 
   // 匯率同步：會寫 Storage 且對 Yahoo 發請求，把關同 generate-all。

@@ -524,6 +524,7 @@ describe('aiPayload', () => {
           operatingMarginPercent: 49.03,
           pretaxMarginPercent: 51.2,
           netMarginPercent: 43.11,
+          epsTwd: null,
         },
         {
           yearQuarter: '2026-Q1',
@@ -532,6 +533,7 @@ describe('aiPayload', () => {
           operatingMarginPercent: 58.1,
           pretaxMarginPercent: 60.65,
           netMarginPercent: 50.51,
+          epsTwd: null,
         },
       ],
     }

@@ -115,6 +115,21 @@ export interface ProfitQuarter {
   operatingMarginPercent: number | null
   pretaxMarginPercent: number | null
   netMarginPercent: number | null
+  /**
+   * 基本每股盈餘（元）。0.6.28 新增。
+   *
+   * **只有 MOPS 季報（回補路徑）有這個數字** —— 每晚的 `t187ap17_L` 是營益分析表，
+   * 只給四項比率。所以新的一季會先以 `epsChecked: false` 落地，等回補去補上。
+   */
+  epsTwd?: number | null
+  /**
+   * 「我們已經去季報裡找過 EPS 了」。
+   *
+   * 需要這個旗標而不是只看 `epsTwd == null`：找過但那一列真的沒有 EPS，
+   * 與根本還沒找過，兩者都是 null 但處置相反 —— 前者不該再抓（否則每晚
+   * 白抓 1.6MB 的季報一次），後者必須抓。
+   */
+  epsChecked?: boolean
 }
 
 /** Storage 內 fundamental/{ticker}.json 的結構 */
@@ -244,6 +259,9 @@ export function extractProfit(
     operatingMarginPercent: normNum(row['營業利益率(%)(營業利益)/(營業收入)']),
     pretaxMarginPercent: normNum(row['稅前純益率(%)(稅前純益)/(營業收入)']),
     netMarginPercent: normNum(row['稅後純益率(%)(稅後純益)/(營業收入)']),
+    // 營益分析表沒有 EPS，標記成「還沒找過」，交給回補去季報裡補（見 ProfitQuarter.epsChecked）
+    epsTwd: null,
+    epsChecked: false,
   }
 }
 
@@ -377,7 +395,26 @@ export function mergeProfitQuarters(
   incoming: ProfitQuarter[] | null | undefined,
   opts: { fillGapsOnly?: boolean } = {},
 ): ProfitQuarter[] {
-  return mergePeriodSeries(prev, incoming, (q) => q.yearQuarter, PROFIT_QUARTERS_CAP, opts)
+  const merged = mergePeriodSeries(prev, incoming, (q) => q.yearQuarter, PROFIT_QUARTERS_CAP, opts)
+
+  /*
+    EPS 逐欄合併，不跟著整筆取捨走（0.6.28）。它是唯一「只有回補路徑才有」的欄位，
+    整筆取捨會在**兩個方向**都出錯：
+
+    - `fillGapsOnly`（回補）：同一季以既有的為準 → 回補帶來的 EPS 整筆被丟掉，永遠補不進來。
+    - 預設覆寫（每晚的 t187ap17_L）：新的一筆沒有 EPS → 每晚把補好的 EPS 清掉一次。
+
+    規則因此與比率相反：**誰查過季報誰贏，不管它在合併的哪一邊。**
+  */
+  const known = new Map<string, ProfitQuarter>()
+  for (const q of [...(prev ?? []), ...(incoming ?? [])]) {
+    if (q?.epsChecked) known.set(q.yearQuarter, q)
+  }
+  return merged.map((q) => {
+    const src = known.get(q.yearQuarter)
+    if (!src || q.epsChecked) return q
+    return { ...q, epsTwd: src.epsTwd ?? null, epsChecked: true }
+  })
 }
 
 /**
