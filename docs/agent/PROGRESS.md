@@ -1,8 +1,8 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 程式碼簡化（0.6.18-dev.1）
-- Status: **完成 —— 已 commit 到 `dev`；未 push、未動任何 Supabase 環境**
+- Action: 程式碼簡化（0.6.18）
+- Status: **完成 —— 已定版 0.6.18 併入 `main` 並 push（觸發 Pages 部署）；未動任何 Supabase 環境**
 - Timestamp: 2026-08-04 12:15:00 Asia/Taipei
 
 ---

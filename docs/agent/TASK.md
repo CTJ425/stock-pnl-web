@@ -8,8 +8,11 @@
 
 ## 📋 Active Tasks
 
-### Task 48: 程式碼簡化（0.6.18-dev.1）
-- **Status**: ✅ **完成** —— 已 commit 到 `dev`，尚未 push、未動任何 Supabase 環境
+### Task 48: 程式碼簡化（0.6.18）
+- **Status**: ✅ **完成** —— 已定版 0.6.18 併入 `main` 並 push（觸發 Pages 部署）；未動任何 Supabase 環境
+- **⚠️ 未做的驗證**：使用者選擇跳過「測試區實際開一次抓取狀況頁」的目視確認。
+  jsdom 測試驗得了 DOM 結構、驗不了 CSS 定位，而班次軸（`DayRow`）是這次唯一有畫面輸出的改動。
+  正式區上線後若班次軸排版異常，第一個要看的就是 `AdminStatusPage.tsx` 的 `DayRow`。
 - **Agent**: Claude（三個 code-simplifier 子代理分批執行）
 - **Timestamp**: 2026-08-04 12:15:00 Asia/Taipei
 - **範圍**：0.6.14–0.6.17 動過的檔案 + `stock-report/index.ts`。純品質整理，行為不變。
