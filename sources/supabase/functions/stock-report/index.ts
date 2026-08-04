@@ -200,14 +200,20 @@ const MAX_BACKFILL_MONTHS = 4
 const MAX_BACKFILL_QUARTERS = 2
 
 /**
- * 即點即產（`warm`）自己的回補預算，刻意比夜間小（0.6.29）。
+ * 即點即產（`warm`）的回補：**一輪一輪補到沒東西可補，或用完時間預算為止**（0.6.29）。
  *
- * 這是使用者正在等的請求，不是排程 —— 目標是「第一眼就有東西看」，不是一次補到滿。
- * 季報單份 1.6MB、且每季要抓上市＋上櫃兩份，是月營收的四倍重，故只補 1 季；
- * 其餘的仍由夜間批次逐輪補完。
+ * 目標是「新加的股票第一次開頁就跟既有股票一樣完整」，所以不能只補一輪 ——
+ * 12 個月 + 12 季要補完約需月營收 3 輪、季報 6 輪。
+ *
+ * 預算是**時間**不是輪數：兩者的單輪成本差很多（月營收一輪 4 個月 × 兩市場 × 400KB、
+ * 季報一輪 2 季 × 兩市場 × 1.6MB），用輪數當上限會在慢的那一邊超時、快的那一邊浪費。
+ * 先補月營收再補季報：月營收便宜得多，同樣的秒數先換到比較多的完整度。
+ *
+ * 補不完也沒關係：夜間批次照樣會接手，而且前端下次開頁看到還缺就會再呼叫一次。
  */
-const WARM_BACKFILL_MONTHS = 2
-const WARM_BACKFILL_QUARTERS = 1
+const WARM_BUDGET_MS = 30_000
+const WARM_ROUND_MONTHS = 4
+const WARM_ROUND_QUARTERS = 2
 /** 同時進行的外部抓取數上限（T86 單檔約 1–2MB） */
 const FETCH_CONCURRENCY = 3
 
@@ -1523,20 +1529,40 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
     之後，當天資料一齊就整段短路。結果是晚上加的股票當天一輪都補不到，
     要等隔天的批次才開始長，而使用者當下看到的是一張只有一列的表。
 
-    **預算比夜間小**：這是使用者正在等的請求，不是排程。
-    月營收 2 個月（每月上市＋上櫃兩份、各約 400KB），
-    季報只補 1 季（單份 1.6MB、同樣兩個市場，是月營收的四倍重）。
-    其餘的仍由夜間批次逐輪補完 —— 這裡要的是「第一眼就有東西看」，不是一次補到滿。
+    **補到滿為止**（在時間預算內）：只補一輪的話，新股票第一次開頁仍然只有兩三個月，
+    與既有股票不一樣 —— 而那正是使用者要解決的問題。預算見 WARM_BUDGET_MS。
 
-    **⚠️ 兩步必須循序，不可 Promise.all**：兩支回補都會下載、合併、覆寫
+    **⚠️ 兩段必須循序，不可 Promise.all**：兩支回補都會下載、合併、覆寫
     同一個 fundamental/{ticker}.json，並行會有一邊的寫入被另一邊蓋掉。
 
-    回補本身是缺口驅動的：資料已齊時一個對外請求都不發（只多兩次 Storage 讀取），
-    所以對已經補滿的舊標的幾乎零成本。
+    回補本身是缺口驅動的：補滿之後回空陣列、一個對外請求都不發（只多兩次 Storage 讀取），
+    所以對已經補滿的舊標的幾乎零成本 —— 前端因此可以放心「看到還缺就再呼叫一次」。
   */
   const now = new Date()
-  const revenue = await backfillRevenue(one, now, WARM_BACKFILL_MONTHS)
-  const profit = await backfillProfit(one, now, WARM_BACKFILL_QUARTERS)
+  const deadline = now.getTime() + WARM_BUDGET_MS
+  const revenueMonths: string[] = []
+  const profitQuarters: string[] = []
+
+  // 先月營收（便宜）再季報（貴）：同樣的秒數先換到比較多的完整度
+  let revenueDone = false
+  while (Date.now() < deadline) {
+    const r = await backfillRevenue(one, now, WARM_ROUND_MONTHS)
+    if (r.months.length === 0) {
+      revenueDone = true
+      break
+    }
+    revenueMonths.push(...r.months)
+  }
+
+  let profitDone = false
+  while (Date.now() < deadline) {
+    const p = await backfillProfit(one, now, WARM_ROUND_QUARTERS)
+    if (p.quarters.length === 0) {
+      profitDone = true
+      break
+    }
+    profitQuarters.push(...p.quarters)
+  }
 
   return json({
     ok: true,
@@ -1545,8 +1571,10 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
     dailySynced,
     fundamentalSynced: fundamental.synced,
     // 回補結果一併回報：慢的時候要分得出是慢在哪一段
-    revenueMonths: revenue.months,
-    profitQuarters: profit.quarters,
+    revenueMonths,
+    profitQuarters,
+    // 前端據此決定要不要再叫一次（時間預算用完時會是 false）
+    fundamentalComplete: revenueDone && profitDone,
     durationMs: Date.now() - now.getTime(),
   })
 }

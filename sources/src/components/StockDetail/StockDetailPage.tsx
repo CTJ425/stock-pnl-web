@@ -54,6 +54,17 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'ai', label: 'AI 分析' },
 ]
 
+/**
+ * 這份基本面是不是還缺歷史。
+ *
+ * 門檻用後端的 cap（月營收 12 個月、獲利能力 12 季）。低於它就再叫一次 warm ——
+ * 真的沒那麼多期的標的（新上市、ETF）不會因此無限重試：伺服器補到沒東西可補時
+ * 會回 `fundamentalComplete: true`，warmStock 那層就封印該代號。
+ */
+function needsFundamentalBackfill(f: FundamentalData): boolean {
+  return f.revenueMonths.length < 12 || f.profitQuarters.length < 12
+}
+
 /** 長頁的分組標題。四段共用，讓層級明顯高過各段內部的 `.rpt-section h3` */
 function CardHead({ title, meta }: { title: string; meta?: string }) {
   return (
@@ -145,18 +156,26 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [ticker])
 
-  // 基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
-  // 查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），成功再讀一次。
-  // warmStock 自帶「同代號每個 session 只試一次」的節流，這裡不需要再防重。
+  /*
+    基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
+
+    **查無、或歷史還沒補滿時都補叫 warm**（0.6.29）。原本只在「完全查無」時叫，
+    結果是新股票第一次開頁建好檔案之後就再也不叫了 —— 剩下的月份與季別要等夜間批次，
+    而那段回補排在批次的短路判斷之後，當天多半輪不到。畫面上的差別是：
+    新股票只有兩三個月的月營收，既有股票有 12 個月。
+
+    伺服器端補滿之後回空、一個對外請求都不發，所以這個條件不會變成每次開頁都燒額度；
+    warmStock 那層也只在伺服器回報「還沒補完」時才解除同代號的封印。
+  */
   useEffect(() => {
     let alive = true
     setFundLoading(true)
     setFundamental(null)
     ;(async () => {
       let f = await fetchFundamental(ticker)
-      if (!f) {
+      if (!f || needsFundamentalBackfill(f)) {
         const warmed = await warmStock(ticker)
-        if (warmed.fundamentalSynced > 0) f = await fetchFundamental(ticker)
+        if (warmed.fundamentalSynced > 0 || warmed.backfilled > 0) f = (await fetchFundamental(ticker)) ?? f
       }
       if (alive) {
         setFundamental(f)

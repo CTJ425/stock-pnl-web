@@ -8,10 +8,25 @@ vi.mock('./supabase', () => ({
 
 import { warmStock, resetWarmState } from './warmStock'
 
-const ok = (daily: number, fund: number) => ({
-  data: { ok: true, dailySynced: daily, fundamentalSynced: fund },
+const ok = (daily: number, fund: number, complete = true) => ({
+  data: {
+    ok: true,
+    dailySynced: daily,
+    fundamentalSynced: fund,
+    fundamentalComplete: complete,
+    revenueMonths: [],
+    profitQuarters: [],
+  },
   error: null,
 })
+
+const FAILED_RESULT = {
+  ok: false,
+  dailySynced: 0,
+  fundamentalSynced: 0,
+  fundamentalComplete: false,
+  backfilled: 0,
+}
 
 describe('warmStock', () => {
   beforeEach(() => {
@@ -22,7 +37,7 @@ describe('warmStock', () => {
   it('以 action: warm 帶代號呼叫 stock-report', async () => {
     invoke.mockResolvedValue(ok(1, 1))
     const r = await warmStock('2330')
-    expect(r).toEqual({ ok: true, dailySynced: 1, fundamentalSynced: 1 })
+    expect(r).toEqual({ ok: true, dailySynced: 1, fundamentalSynced: 1, fundamentalComplete: true, backfilled: 0 })
     expect(invoke).toHaveBeenCalledWith('stock-report', { body: { action: 'warm', ticker: '2330' } })
   })
 
@@ -67,10 +82,10 @@ describe('warmStock', () => {
 
   it('函式回錯誤或丟出例外時回失敗值，且不重試', async () => {
     invoke.mockResolvedValue({ data: null, error: { message: '403' } })
-    expect(await warmStock('9999')).toEqual({ ok: false, dailySynced: 0, fundamentalSynced: 0 })
+    expect(await warmStock('9999')).toEqual(FAILED_RESULT)
 
     invoke.mockRejectedValue(new Error('network'))
-    expect(await warmStock('8888')).toEqual({ ok: false, dailySynced: 0, fundamentalSynced: 0 })
+    expect(await warmStock('8888')).toEqual(FAILED_RESULT)
 
     await warmStock('9999')
     await warmStock('8888')

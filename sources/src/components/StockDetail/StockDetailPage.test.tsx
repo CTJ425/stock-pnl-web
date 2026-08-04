@@ -101,7 +101,7 @@ describe('StockDetailPage', () => {
     fetchDailySeries.mockResolvedValue(null)
     fetchFundamental.mockResolvedValue(null)
     // 預設 warm 也產不出東西（例如 ETF），避免測試意外進入重讀分支
-    warmStock.mockResolvedValue({ ok: true, dailySynced: 0, fundamentalSynced: 0 })
+    warmStock.mockResolvedValue({ ok: true, dailySynced: 0, fundamentalSynced: 0, fundamentalComplete: true, backfilled: 0 })
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
@@ -503,13 +503,62 @@ describe('StockDetailPage', () => {
       notes: [],
     }
     fetchFundamental.mockResolvedValueOnce(null).mockResolvedValueOnce(fresh)
-    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 1 })
+    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 1, fundamentalComplete: true, backfilled: 0 })
 
     render(<StockDetailPage ticker="2609" name="陽明" holding={holding} />)
 
     expect(await screen.findByText('航運業')).toBeTruthy()
     expect(warmStock).toHaveBeenCalledWith('2609')
     expect(fetchFundamental).toHaveBeenCalledTimes(2)
+  })
+
+  it('基本面已存在但歷史沒補滿時仍補叫 warm（新股票不該只有兩三個月）', async () => {
+    /*
+      0.6.29：原本只在「完全查無」時叫 warm，於是新股票第一次開頁建好檔案之後
+      就再也不叫了 —— 剩下的月份與季別要等夜間批次，而那段排在批次的短路判斷之後。
+    */
+    const month = (yearMonth: string) => ({
+      yearMonth,
+      revenueThousandTwd: 1,
+      momPercent: null,
+      yoyPercent: null,
+      cumulativeYoyPercent: null,
+    })
+    const partial = {
+      ticker: '2609',
+      asOf: '2026-07-27T09:31:00.000Z',
+      dataDate: '2026-07-25',
+      industry: '航運業',
+      valuation: null,
+      revenueUnit: '千元' as const,
+      revenueMonths: [month('2026-05'), month('2026-06')],
+      profitQuarters: [],
+      notes: [],
+    }
+    const full = {
+      ...partial,
+      asOf: '2026-07-27T10:00:00.000Z',
+      revenueMonths: Array.from({ length: 12 }, (_, i) =>
+        month(`2025-${String(i + 1).padStart(2, '0')}`),
+      ),
+    }
+    fetchFundamental.mockResolvedValueOnce(partial).mockResolvedValueOnce(full)
+    // 回補確實補進了 10 個月 → 值得重讀一次 Storage
+    warmStock.mockResolvedValue({
+      ok: true,
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      fundamentalComplete: true,
+      backfilled: 10,
+    })
+
+    const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} />)
+
+    await screen.findByText('航運業')
+    expect(warmStock).toHaveBeenCalledWith('2609')
+    await waitFor(() =>
+      expect(container.querySelectorAll('#sec-fundamental .data-table tbody tr').length).toBe(12),
+    )
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
