@@ -14,7 +14,13 @@ export interface AdminUser {
   email: string
   /** ISO 時間；壞值或缺值為 null，畫面顯示「—」 */
   createdAt: string | null
-  lastSignInAt: string | null
+  /**
+   * 最近一次連線（後端取的是 `auth.users.updated_at`）。
+   *
+   * **不是 `last_sign_in_at`**：那個只在真的重新登入時才更新，
+   * 一直沒登出的帳號會永遠停在很舊的時間，畫面上看起來像壞掉（0.6.20 修正）。
+   */
+  lastActiveAt: string | null
   admin: boolean
 }
 
@@ -34,7 +40,7 @@ export async function fetchAdminUsers(): Promise<AdminUser[] | null> {
         id: typeof u.id === 'string' ? u.id : '',
         email: typeof u.email === 'string' ? u.email : '',
         createdAt: typeof u.createdAt === 'string' ? u.createdAt : null,
-        lastSignInAt: typeof u.lastSignInAt === 'string' ? u.lastSignInAt : null,
+        lastActiveAt: typeof u.lastActiveAt === 'string' ? u.lastActiveAt : null,
         admin: u.admin === true,
       }
     })

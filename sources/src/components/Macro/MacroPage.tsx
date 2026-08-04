@@ -19,6 +19,7 @@ import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { latestPeriod, periodsBehind } from './macroPeriod'
 import { sparkline } from './sparkline'
+import { HoldingProfitSection } from './HoldingProfitSection'
 
 /** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
 function isSameDay(a: string, b: string): boolean {
@@ -247,6 +248,12 @@ export function MacroPage() {
           非農就業為較上月增減人數，消費者信心為密西根大學指數。空格代表該期尚未發布。
         </p>
       </div>
+
+      {/*
+        持股的獲利能力（0.6.20）。它不是總經資料，故排在最後、標題明寫「持股」——
+        上面兩塊講的是市場，這一塊講的是你手上這幾家公司。
+      */}
+      <HoldingProfitSection />
     </>
   )
 }

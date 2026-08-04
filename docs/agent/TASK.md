@@ -8,6 +8,34 @@
 
 ## 📋 Active Tasks
 
+### Task 50: 四項調整（0.6.20）
+- **Status**: ✅ **完成** —— 已定版並上線；Edge Function 兩區已重新部署
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 14:35:00 Asia/Taipei
+- **設計稿**：https://claude.ai/code/artifact/c4eb5eef-82de-4412-99b9-0e5a27b0766b
+- **① 最後登入 → 最近活動（這是 bug，不是排版問題）**
+  查正式區（唯讀）：某帳號 `users.last_sign_in_at` 停在 08-02 17:17，
+  但 `auth.sessions.refreshed_at` 是 08-04 12:53。
+  **`last_sign_in_at` 只在真的重新登入時更新**，靠 refresh token 續命的帳號會永遠停在舊時間。
+  改用 `users.updated_at`（實測與 `refreshed_at` 差 0.02 秒，且 `listUsers()` 本來就回傳）。
+  → 動到 `handleAdminUsers`，**需重新部署 Edge Function**。
+- **② GitHub 官方 mark**：`lucide-react@1.24.0` 已移除品牌 icon，
+  故在 `AppShell.tsx` 內嵌一段 path（`GithubMark`），不為一顆圖示加依賴。
+- **③ 現價放大加粗**：`.dash-price` 17px/700 + 標題字體。只動這一欄 ——
+  整排都放大等於整排都沒重點。
+- **④ 總經頁新增「持股獲利能力」**：新增 `components/Macro/HoldingProfitSection.tsx`，
+  重用既有的 `fetchFundamental()` 與 0.6.19 的 `sparkline.ts`。
+  **只對台股發請求**（ETF 與美股在公開資訊觀測站的季報裡沒有，發了只會換來 404）。
+  欄位名沿用「稅前純益率 / 稅後純益率」與個股基本面一致；數值不帶正負號
+  （毛利率不是變化量，掛 `+` 會讀成「比上季多 59%」）。
+- **未採用**：現價的漲跌紅綠。現行現價資料只有價格、沒有前收，
+  要顯示漲跌得額外載入每檔日 K 線，另案處理。
+- **總經指標維持五項**：使用者原信列的六項（含「核心 CCI」「核心非農」）
+  0.6.5 就已定案 —— 見 `usMacro.ts` 檔頭。這次確認維持不動。
+- **驗證**：`npm test` 766/766（新增 7 條）、lint 3 個既有 warning、build 通過；
+  Playwright 實測深淺兩色 × 桌機/手機：現價 17px/700 vs 隔壁 13.5px/400、
+  GitHub mark 為 fill path、新區塊走勢線 56×20、皆無橫向溢出。
+
 ### Task 49: 五項功能異動（0.6.19）
 - **Status**: ✅ **完成** —— 測試區 schema 與 Edge Function 皆已更新並逐檔稽核通過；已定版 0.6.19
 - **Agent**: Claude

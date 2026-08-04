@@ -1,6 +1,62 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
+- Action: 四項調整（0.6.20 定版）
+- Status: **完成 —— 兩區 Edge Function 已重新部署；766 測試全過**
+- Timestamp: 2026-08-04 14:35:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 14:35:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 四項調整（0.6.20）
+- **Status**: 完成並上線
+
+### 「最後登入怪怪的」是真的 bug，值得記下來
+
+使用者只說「怪怪的」。查正式區資料庫（唯讀）才看出來：
+
+| 欄位 | 值 |
+| ---- | -- |
+| `users.last_sign_in_at`（畫面原本顯示這個） | 2026-08-02 09:17 UTC |
+| `auth.sessions.refreshed_at`（實際在用的時間） | 2026-08-04 04:53 UTC |
+
+**Supabase 的 `last_sign_in_at` 只在「真的重新登入」時才更新**，
+靠 refresh token 續命的帳號會一直停在很舊的時間。
+
+改用 `users.updated_at` —— 它會跟著 session 更新（實測與 `refreshed_at` 差 0.02 秒），
+而且 `listUsers()` 本來就回傳，**不必去查 `auth.sessions`**（那張表在 `auth` schema，
+PostgREST 讀不到，要查得另外寫一支 SECURITY DEFINER 的 RPC）。
+
+### 另外三項
+
+- **GitHub 官方 mark**：`lucide-react@1.24.0` 已把品牌 icon 全部移除
+  （`ls icons/ | grep -c '^github'` → 0），故自己內嵌一段 path。
+- **現價 17px/700**：只動這一欄。它是庫存總覽上唯一隨時在動的數字，
+  其餘都是成本與換算 —— 整排都放大等於整排都沒重點。
+- **總經頁新增「持股獲利能力」**：四項利率的資料早就有了
+  （`fundamental/{代號}.json` 的 `profitQuarters`），只是先前只出現在個股基本面、一次一檔。
+  這一區橫向排開比較，走勢線重用 0.6.19 的 `sparkline.ts`。
+  **只對台股發請求** —— ETF 與美股在公開資訊觀測站的季報裡沒有。
+
+### 一個沒有照使用者原話做的決定
+
+使用者寫的欄位名是「淨利率 / 稅後淨利率」，實作沿用既有的
+**「稅前純益率 / 稅後純益率」**。理由：個股基本面那一頁已經是這個名字，
+同一個數字在兩個地方叫不同名字，比名稱不夠直覺更容易讓人誤判。要改就兩邊一起改。
+
+### 驗證
+
+`npm test` **766/766**（新增 7 條）、lint 3 個既有 warning、build 通過。
+Playwright 實測深淺兩色 × 桌機/手機：現價 `17px/700` vs 隔壁欄 `13.5px/400`、
+GitHub mark 為 fill path、新區塊走勢線 56×20 且四欄一致、皆無橫向溢出。
+
+---
+
+## 📅 Log: 2026-08-04 14:05:00 Asia/Taipei（0.6.19）
+
+- Agent: Claude
 - Action: 五項功能異動（0.6.19 定版）
 - Status: **完成 —— 兩區 schema 與 Edge Function 皆已更新並逐檔稽核通過；0.6.19 已上線**
 - Timestamp: 2026-08-04 14:05:00 Asia/Taipei

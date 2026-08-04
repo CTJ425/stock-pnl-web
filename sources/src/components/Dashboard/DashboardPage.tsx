@@ -76,7 +76,12 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                   <span className="skeleton" aria-label="現價載入中" />
                 ) : (
                   <>
-                    {fmtPrice(price, currency)}
+                    {/*
+                      現價是這張表上唯一「隨時在動」的數字，其餘都是成本與換算，
+                      所以只有它放大加粗（0.6.20）。強調要有取捨才成立 ——
+                      整排都放大等於整排都沒重點。
+                    */}
+                    <span className="dash-price">{fmtPrice(price, currency)}</span>
                     {priceStale && (
                       <span className="badge badge-warn" style={{ marginLeft: 6 }} title="暫時抓不到新價格，顯示上一次抓到的">
                         快取

@@ -15,14 +15,14 @@ const users = [
     id: 'u1',
     email: 'zrchen0425@gmail.com',
     createdAt: '2026-03-12T02:00:00.000Z',
-    lastSignInAt: '2026-08-04T04:05:00.000Z',
+    lastActiveAt: '2026-08-04T04:05:00.000Z',
     admin: true,
   },
   {
     id: 'u2',
     email: 'alice.wu@example.com',
     createdAt: '2026-05-02T02:00:00.000Z',
-    lastSignInAt: null,
+    lastActiveAt: null,
     admin: false,
   },
 ]
@@ -43,9 +43,13 @@ describe('AccountsSection', () => {
     expect(switches.map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'false'])
   })
 
-  it('從未登入的帳號要寫「從未登入」，不能留空白讓人以為是壞掉', async () => {
+  it('欄位是「最近活動」不是「最後登入」——後者一直沒登出就永遠不會動', async () => {
     render(<AccountsSection />)
-    expect(await screen.findByText('從未登入')).toBeTruthy()
+    await screen.findByText('zrchen0425@gmail.com')
+    expect(screen.getByRole('columnheader', { name: '最近活動' })).toBeTruthy()
+    expect(screen.queryByRole('columnheader', { name: '最後登入' })).toBeNull()
+    // 這個時間是「最近一次連線」，畫面要把這件事講出來
+    expect(screen.getByText(/最近一次連線/)).toBeTruthy()
   })
 
   it('把「要重新登入才生效」寫在畫面上——不寫會被當成按了沒反應', async () => {

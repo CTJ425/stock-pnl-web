@@ -80,7 +80,7 @@ export function AccountsSection() {
                 <tr>
                   <th>帳號</th>
                   <th>建立於</th>
-                  <th>最後登入</th>
+                  <th>最近活動</th>
                   <th>管理員</th>
                 </tr>
               </thead>
@@ -92,7 +92,7 @@ export function AccountsSection() {
                     </td>
                     <td className="ast-mono">{u.createdAt ? fmtUpdatedAt(u.createdAt) : '—'}</td>
                     <td className="ast-mono">
-                      {u.lastSignInAt ? fmtUpdatedAt(u.lastSignInAt) : '從未登入'}
+                      {u.lastActiveAt ? fmtUpdatedAt(u.lastActiveAt) : '—'}
                     </td>
                     <td>
                       <button
@@ -112,6 +112,11 @@ export function AccountsSection() {
           </div>
 
           <p className="ast-note" style={{ marginTop: 12 }}>
+            <Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
+            持續登入中的帳號不會產生新的登入紀錄，所以「最近活動」看的是
+            <b>最近一次連線</b>的時間，不是最後一次輸入密碼。
+          </p>
+          <p className="ast-note" style={{ marginTop: 6 }}>
             <Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
             <b>改完權限，該帳號要重新登入才會生效。</b>
             權限寫在登入憑證裡，憑證要重新簽發才會帶上新身分。

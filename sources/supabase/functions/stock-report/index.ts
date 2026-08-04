@@ -1782,9 +1782,16 @@ async function storageCoverage(): Promise<Record<string, number>> {
  * 前端拿使用者 JWT 怎麼查都查不到；專案也沒有 profiles 表可以映射。
  * 只有 service role 讀得到，所以由這裡讀完再吐出去。
  *
- * ⚠️ 回傳內容經過挑選：只給 id / email / 建立時間 / 最後登入 / 是不是管理員。
+ * ⚠️ 回傳內容經過挑選：只給 id / email / 建立時間 / 最近活動 / 是不是管理員。
  * **不回傳 `app_metadata` 或 `user_metadata` 全文** —— 那裡面可能有其他欄位，
  * 一律轉發等於把未來新增的東西也順便公開了。
+ *
+ * ⚠️ **`lastActiveAt` 取的是 `updated_at`，不是 `last_sign_in_at`**（0.6.20 修正）。
+ * `last_sign_in_at` 只在「真的重新登入」時才更新，靠 refresh token 續命的帳號
+ * 會一直停在很舊的時間 —— 實測正式區：某帳號 `last_sign_in_at` 停在 08-02 17:17，
+ * 但同一帳號的 `auth.sessions.refreshed_at` 是 08-04 12:53，畫面因此看起來像壞掉。
+ * `updated_at` 會跟著 session 更新（實測與 `refreshed_at` 差 0.02 秒），
+ * 而且 `listUsers()` 本來就回傳它，不必再查 `auth.sessions`。
  */
 async function handleAdminUsers(): Promise<Response> {
   const startedAt = Date.now()
@@ -1795,7 +1802,7 @@ async function handleAdminUsers(): Promise<Response> {
     id: u.id,
     email: u.email ?? '',
     createdAt: u.created_at ?? null,
-    lastSignInAt: u.last_sign_in_at ?? null,
+    lastActiveAt: u.updated_at ?? null,
     admin: (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
   }))
   // 新帳號排前面，管理員通常要找的是「剛註冊的那個」
