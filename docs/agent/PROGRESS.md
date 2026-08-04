@@ -1,9 +1,51 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 每股盈餘 + 台股大盤量能與法人買賣超（0.6.28 定版）
-- Status: **程式碼完成、822 測試全過；⚠️ Edge Function 與 cron 尚未部署，兩區都還沒有資料**
-- Timestamp: 2026-08-04 20:50:00 Asia/Taipei
+- Action: 每股盈餘 + 台股大盤量能與法人買賣超（0.6.28 定版，**兩區已部署**）
+- Status: **完成 —— 822 測試全過；兩區 Edge Function 已部署、`market-daily` 排程已建、首跑資料已產出**
+- Timestamp: 2026-08-04 21:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 21:10:00 Asia/Taipei（0.6.28 部署）
+
+- **Agent**: Claude
+- **Action**: 依使用者明確指示，部署 0.6.28 到測試區與正式區
+- **Status**: COMPLETED
+
+### 做了什麼
+
+| 項目 | 測試區 `wqetxuhncvfidqnklyew` | 正式區 `kxnxadaghidwumqsqneu` |
+| ---- | ---- | ---- |
+| `stock-report` 部署 | v37，`verify_jwt=false` | v25，`verify_jwt=false` |
+| `market-daily` 排程 | 已建，`0 8-10 * * 1-5` | 已建，`0 8-10 * * 1-5` |
+| `market/daily.json` | 24 天（07-01→08-04），法人已補 5 天 | 同左 |
+| EPS 回補（抽查 1802） | 12 季中 2 季有 EPS | 同左 |
+
+首跑觸發後實測數字：最新交易日 2026-08-04 成交金額 10,870.5 億、加權指數 43,360.66、
+三大法人合計 +20.0 億（外資 −57.3 億）。1802 的 2026-Q1 EPS 為 0.2、2025-Q4 為 −0.2，
+`epsChecked` 恰好只標在這兩季 —— 與 `MAX_BACKFILL_QUARTERS = 2` 一致，
+**而且補的是最新的兩季**，證實「`needEps` 不受 `through` 限制」那條確實生效
+（舊邏輯下這兩季因為已存在而永遠不會被回頭補）。
+
+### 兩個做法值得沿用
+
+1. **cron 不用佔位符，改沿用同一個資料庫裡既有 job 的指令字串**：
+   ```sql
+   PERFORM cron.schedule('market-daily', '0 8-10 * * 1-5',
+     replace(cmd, '{"action":"sync-macro"}', '{"action":"sync-market"}'));
+   ```
+   `<PROJECT_REF>` / `<CRON_SECRET>` 從頭到尾沒出現過，BUG-002/003 那顆地雷直接繞開，
+   Agent 也不需要（也拿不到）密鑰明文。
+2. **身分檢查寫進同一個 DO 區塊**：先從 `macro-daily` 的 url 取出 ref，
+   不符預期就 `RAISE EXCEPTION` 中止。`db query --linked` 認的是當下 cwd，
+   分兩次查擋不住（supabase-ops 記載的 2026-07-27 事故）。正式區另以
+   `batch_run_log` 筆數（199）二次確認不是測試區。
+
+### 首跑是手動踢的，理由
+
+`market-daily` 下一班是隔天台北 16:00，不先跑一次的話今晚整夜都是空畫面。
+用的是同一招（`EXECUTE cmd`），順手也踢了一次 `backfill-profit` 讓 EPS 先補兩季。
 
 ---
 

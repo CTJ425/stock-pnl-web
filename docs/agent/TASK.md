@@ -9,7 +9,8 @@
 ## 📋 Active Tasks
 
 ### Task 58: 台股全市場量能與三大法人買賣超（0.6.28）
-- **Status**: 🚧 **程式碼完成，等部署** —— 需要 `functions deploy` + 新 cron 才會有資料
+- **Status**: ✅ **完成並部署** —— 兩區 Edge Function 已部署、`market-daily` 已建、資料已產出
+  （測試區 v37 / 正式區 v25；首跑 24 天、法人已補 5 天。詳見 PROGRESS 的部署紀錄）
 - **Agent**: Claude
 - **Timestamp**: 2026-08-04 20:50:00 Asia/Taipei
 - **位置**：總經頁（`Macro/TwMarketSection.tsx`），**不是年度收益頁** ——
@@ -25,7 +26,7 @@
   SQL Editor 跑 schema.sql §10b 建 `market-daily`（替換佔位符後跑 §6d 覆驗）。
 
 ### Task 57: 季度每股盈餘 EPS（0.6.28）
-- **Status**: 🚧 **程式碼完成，等部署** —— 前端已可顯示，但要新版 Edge Function 才有資料
+- **Status**: ✅ **完成並部署** —— 兩區已部署；回補進行中（每輪 2 季，1802 抽查已補到最新兩季）
 - **Agent**: Claude
 - **Timestamp**: 2026-08-04 20:50:00 Asia/Taipei
 - **來源**：MOPS 季報（`ajax_t163sb04`，回補路徑既有的那份 1.6MB HTML）多解析一欄
