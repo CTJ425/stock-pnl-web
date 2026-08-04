@@ -10,8 +10,10 @@ import { RefreshCw } from 'lucide-react'
 import type { FundamentalData } from '../../services/fundamentalProxy'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { chipClass, fmtInt, fmtUpdatedAt } from './chipFormat'
+import { CollapsibleSection } from '../Common/CollapsibleSection'
+import type { CollapseProps } from './tableSections'
 
-interface FundamentalTabProps {
+interface FundamentalTabProps extends CollapseProps {
   fundamental: FundamentalData | null
   loading: boolean
 }
@@ -46,7 +48,7 @@ function fmtChartMonth(ym: string): string {
   return m ? `${m[1]}/${m[2]}` : ym
 }
 
-export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
+export function FundamentalTab({ fundamental, loading, collapsed, onToggle }: FundamentalTabProps) {
   if (loading) {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
@@ -116,17 +118,23 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         )}
       </section>
 
-      <section className="rpt-section">
-        <div className="rpt-section-head">
-          <h3 className="head-tight">獲利能力</h3>
-          {latestQuarter && (
-            <span className="source-tag section-stamp">
-              {latestQuarter.yearQuarter.replace('-Q', ' 年第 ')} 季
-              {quarters.length > 1 && `（已累積 ${quarters.length} 季）`}
-            </span>
-          )}
-          <span className="source-tag">單位：%</span>
-        </div>
+      <CollapsibleSection
+        id="sec-fund-profit"
+        title="獲利能力"
+        open={!collapsed.has('sec-fund-profit')}
+        onToggle={() => onToggle('sec-fund-profit')}
+        meta={
+          <>
+            {latestQuarter && (
+              <span className="source-tag section-stamp">
+                {latestQuarter.yearQuarter.replace('-Q', ' 年第 ')} 季
+                {quarters.length > 1 && `（已累積 ${quarters.length} 季）`}
+              </span>
+            )}
+            <span className="source-tag">單位：%</span>
+          </>
+        }
+      >
 
         {latestQuarter ? (
           <>
@@ -190,26 +198,33 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           畫面上只有一列時使用者會以為是壞了，其實是還沒累積到。
         */}
         <p className="hint" style={{ marginTop: 8 }}>
-          季度比率由證交所彙總計算，每季財報公布後更新；序列逐季累積，最多保留 8 季。
+          季度比率由證交所彙總計算，每季財報公布後更新；歷史季別由公開資訊觀測站回補，最多保留 12 季。
         </p>
-      </section>
+      </CollapsibleSection>
 
-      <section className="rpt-section">
-        <div className="rpt-section-head">
-          {/*
-            時間戳緊貼標題，因為它要回答的是「我現在看的這張表是不是最新的」——
-            擺在表格下方時使用者不會注意到（0.6.4-dev.4 實際發生：畫面少了 11 個月，
-            而答案就在同一頁的下面兩行，仍然沒被看見）。
-            這是「我們寫檔的時刻」，與估值那邊的「資料日」是兩件事，別合併。
-          */}
-          <h3 className="head-tight">月營收</h3>
-          {fundamental.asOf && (
-            <span className="source-tag section-stamp">
-              資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
-            </span>
-          )}
-          <span className="source-tag">單位：千元</span>
-        </div>
+      <CollapsibleSection
+        id="sec-fund-revenue"
+        title="月營收"
+        open={!collapsed.has('sec-fund-revenue')}
+        onToggle={() => onToggle('sec-fund-revenue')}
+        meta={
+          <>
+            {/*
+              時間戳緊貼標題，因為它要回答的是「我現在看的這張表是不是最新的」——
+              擺在表格下方時使用者不會注意到（0.6.4-dev.4 實際發生：畫面少了 11 個月，
+              而答案就在同一頁的下面兩行，仍然沒被看見）。
+              這是「我們寫檔的時刻」，與估值那邊的「資料日」是兩件事，別合併。
+              **收起時這一行仍然看得見**：它正是「要不要展開來看」的判斷依據。
+            */}
+            {fundamental.asOf && (
+              <span className="source-tag section-stamp">
+                資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
+              </span>
+            )}
+            <span className="source-tag">單位：千元</span>
+          </>
+        }
+      >
 
         {months.length === 0 ? (
           <p className="hint">查無月營收資料。</p>
@@ -266,7 +281,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           月營收有明顯的季節性（例如年底旺季），單看絕對金額的高低起伏未必代表營運轉折，
           表格的年增率比較適合判斷方向。
         </p>
-      </section>
+      </CollapsibleSection>
 
       {notes.length > 0 && (
         <section className="rpt-section">

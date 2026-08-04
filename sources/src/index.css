@@ -2520,6 +2520,62 @@ a.hmenu-item {
   }
 }
 
+/* ── 個股分析：表格區塊收合（0.6.23）───────────────────────── */
+
+/*
+ * 標題本身就是開關。做成 button 而不是在標題旁邊放一顆小圖示鈕：
+ * 點擊目標大得多，而且「整條標題可點」是收合元件的通用預期。
+ *
+ * 樣式刻意繼承 h3 —— 這一行在收合前後看起來必須是同一個標題，
+ * 只有前面多一個箭頭。做成看起來像按鈕的東西反而會讓人以為是別的功能。
+ */
+.rpt-collapse {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+}
+
+.rpt-collapse:hover {
+  color: var(--accent);
+}
+
+.rpt-collapse:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* 收起時箭頭朝右（＝「還有東西在裡面」），展開時朝下 */
+.rpt-caret {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+  transform: rotate(-90deg);
+  transition: transform 0.18s ease;
+}
+
+.rpt-caret.open {
+  transform: rotate(0deg);
+}
+
+.rpt-collapse:hover .rpt-caret {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rpt-caret {
+    transition: none;
+  }
+}
+
 /* ── 庫存總覽：現價強調（0.6.20）────────────────────────────── */
 
 /*

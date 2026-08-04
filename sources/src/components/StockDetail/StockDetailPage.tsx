@@ -20,7 +20,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AlertTriangle, Download, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronsDownUp, ChevronsUpDown, Download, RefreshCw } from 'lucide-react'
 import {
   fetchStoredReport,
   generateReport,
@@ -32,6 +32,7 @@ import { warmStock } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
+import { TABLE_SECTION_IDS, type TableSectionId } from './tableSections'
 import { FundamentalTab } from './FundamentalTab'
 import { HoldingTab } from './HoldingTab'
 import { TechnicalTab } from './TechnicalTab'
@@ -76,6 +77,14 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
   // 需要它是因為：報告與基本面只在開頁（ticker 變更）時抓一次，而盤後批次
   // 會在使用者看著的當下更新資料 —— 沒有這個鈕就只能整頁重載才看得到新的。
   const [reloadKey, setReloadKey] = useState(0)
+  /**
+   * 已收起的表格區塊（0.6.23）。狀態放這一層而不是各分頁自己管，
+   * 是因為「全部收起 / 展開」那顆按鈕需要一個統一的來源。
+   *
+   * 收「起」而不是收「開」當預設：進頁面就看得到全部內容，
+   * 收合是使用者主動要求的動作，不是他得先發現並解開的狀態。
+   */
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfNote, setPdfNote] = useState('')
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -168,12 +177,36 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
     }
   }, [ticker, reloadKey])
 
+  const allOpen = collapsed.size === 0
+
+  const toggleSection = (id: TableSectionId) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleAll = () =>
+    setCollapsed((prev) => (prev.size === 0 ? new Set(TABLE_SECTION_IDS) : new Set()))
+
   async function handleDownload() {
     if (!surfaceRef.current) return
     setPdfBusy(true)
     setPdfNote('')
     try {
+      /*
+        ⚠️ 收起來的區塊**不在 DOM 裡**（CollapsibleSection 是條件渲染），
+        直接擷取會產出一份缺表格的 PDF，而且畫面上看不出少了什麼。
+        故先全部展開、等瀏覽器畫完一幀，擷取後再還原使用者原本的收合狀態。
+      */
+      const restore = collapsed
+      if (restore.size > 0) {
+        setCollapsed(new Set())
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      }
       const blob = await generatePdfBlob(surfaceRef.current)
+      if (restore.size > 0) setCollapsed(restore)
       // 檔名不再叫「盤後籌碼」：0.6.8 起擷取範圍是籌碼＋基本面＋技術面三段
       downloadBlob(blob, `個股分析-${ticker}-${report?.dataDate ?? ''}.pdf`)
     } catch {
@@ -216,6 +249,16 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
           <button className="btn btn-sm" onClick={() => void handleDownload()} disabled={pdfBusy}>
             <Download size={14} className={pdfBusy ? 'spin' : undefined} />
             {pdfBusy ? '產生 PDF 中…' : '下載 PDF'}
+          </button>
+        )}
+        {tab === 'analysis' && (
+          <button
+            className="btn btn-sm"
+            onClick={toggleAll}
+            title="收起或展開所有表格（圖表不受影響）"
+          >
+            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {allOpen ? '全部收起' : '全部展開'}
           </button>
         )}
       </div>
@@ -266,14 +309,21 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
                     {errMsg}
                   </div>
                 )}
-                {status === 'ready' && report && <ChipsTab report={report} />}
+                {status === 'ready' && report && (
+                  <ChipsTab report={report} collapsed={collapsed} onToggle={toggleSection} />
+                )}
               </div>
             </section>
 
             <section className="glass detail-card" aria-labelledby="sec-fundamental">
               <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
               <div id="sec-fundamental">
-                <FundamentalTab fundamental={fundamental} loading={fundLoading} />
+                <FundamentalTab
+                  fundamental={fundamental}
+                  loading={fundLoading}
+                  collapsed={collapsed}
+                  onToggle={toggleSection}
+                />
               </div>
             </section>
 

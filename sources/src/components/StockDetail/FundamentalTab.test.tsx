@@ -31,6 +31,9 @@ const full: FundamentalData = {
   notes: [],
 }
 
+/** 這幾支測試不驗收合行為（另有專屬測試），一律以全展開渲染 */
+const noCollapse = { collapsed: new Set<string>(), onToggle: () => {} }
+
 describe('FundamentalTab', () => {
   afterEach(() => cleanup())
 
@@ -57,7 +60,7 @@ describe('FundamentalTab', () => {
   }
 
   it('獲利能力四格 KPI 取最新一季', () => {
-    render(<FundamentalTab fundamental={withProfit} loading={false} />)
+    render(<FundamentalTab fundamental={withProfit} loading={false} {...noCollapse} />)
     // 「毛利率」同時是 KPI 標籤與表頭，故限定在 KPI 區塊內比對
     const labels = [...document.querySelectorAll('.kpi-label')].map((e) => e.textContent)
     expect(labels).toEqual(
@@ -72,7 +75,7 @@ describe('FundamentalTab', () => {
   })
 
   it('季度趨勢表由新到舊，且只有一季時不出現表格', () => {
-    const { unmount } = render(<FundamentalTab fundamental={withProfit} loading={false} />)
+    const { unmount } = render(<FundamentalTab fundamental={withProfit} loading={false} {...noCollapse} />)
     const rows = document.querySelectorAll('.data-table')
     // 兩張表：獲利能力季度表 + 月營收表
     expect(rows).toHaveLength(2)
@@ -81,20 +84,20 @@ describe('FundamentalTab', () => {
     unmount()
 
     const oneQuarter = { ...withProfit, profitQuarters: [withProfit.profitQuarters[1]] }
-    render(<FundamentalTab fundamental={oneQuarter} loading={false} />)
+    render(<FundamentalTab fundamental={oneQuarter} loading={false} {...noCollapse} />)
     // 只剩月營收那張表；KPI 仍在
     expect(document.querySelectorAll('.data-table')).toHaveLength(1)
     expect(screen.getByText('+66.25%')).toBeTruthy()
   })
 
   it('沒有獲利能力資料時顯示空狀態，不影響其他區塊', () => {
-    render(<FundamentalTab fundamental={full} loading={false} />)
+    render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     expect(screen.getByText('查無獲利能力資料。')).toBeTruthy()
     expect(screen.getByText('31.59')).toBeTruthy()
   })
 
   it('顯示估值三指標與資料日期', () => {
-    render(<FundamentalTab fundamental={full} loading={false} />)
+    render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     expect(screen.getByText('31.59')).toBeTruthy()
     expect(screen.getByText('0.94%')).toBeTruthy()
     expect(screen.getByText('10.34')).toBeTruthy()
@@ -103,19 +106,19 @@ describe('FundamentalTab', () => {
 
   it('標示這份資料是我們何時產出的，以及一共幾個月', () => {
     // 沒有這行的話，畫面上少了幾個月時分不出是「資料就這樣」還是「你看到的是舊的一份」
-    render(<FundamentalTab fundamental={full} loading={false} />)
+    render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     expect(screen.getByText(/資料更新於 2026-07-27 \d{2}:\d{2}（共 2 個月）/)).toBeTruthy()
   })
 
   it('產出時間與估值的「資料日」是兩個不同的東西，不可混為一談', () => {
-    render(<FundamentalTab fundamental={full} loading={false} />)
+    render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     // 資料日 = 資料自己宣告的日期；資料更新於 = 我們抓到並寫檔的時刻
     expect(screen.getByText(/資料日 2026-07-24/)).toBeTruthy()
     expect(screen.getByText(/資料更新於 2026-07-27/)).toBeTruthy()
   })
 
   it('月營收表由新到舊列出並標示千元單位', () => {
-    render(<FundamentalTab fundamental={full} loading={false} />)
+    render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     expect(screen.getByText('單位：千元')).toBeTruthy()
     const rows = screen.getAllByRole('row')
     // rows[0] 是表頭；第一列資料應是最新月份
@@ -140,7 +143,7 @@ describe('FundamentalTab', () => {
           profitQuarters: [],
         }}
         loading={false}
-      />,
+      {...noCollapse} />,
     )
     // 本益比與殖利率各一個「—」
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
@@ -148,12 +151,12 @@ describe('FundamentalTab', () => {
   })
 
   it('查無資料時顯示「尚未產生」空狀態', () => {
-    render(<FundamentalTab fundamental={null} loading={false} />)
+    render(<FundamentalTab fundamental={null} loading={false} {...noCollapse} />)
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
   })
 
   it('載入中顯示讀取提示', () => {
-    render(<FundamentalTab fundamental={null} loading={true} />)
+    render(<FundamentalTab fundamental={null} loading={true} {...noCollapse} />)
     expect(screen.getByText('正在讀取基本面…')).toBeTruthy()
   })
 
@@ -169,14 +172,14 @@ describe('FundamentalTab', () => {
           notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
         }}
         loading={false}
-      />,
+      {...noCollapse} />,
     )
     expect(screen.getByText(/可能為上櫃股票/)).toBeTruthy()
     expect(screen.getByText('查無估值資料。')).toBeTruthy()
   })
 
   it('月營收有走勢圖，且方向與表格相反（圖由舊到新、表由新到舊）', () => {
-    const { container } = render(<FundamentalTab fundamental={full} loading={false} />)
+    const { container } = render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     const poly = container.querySelector('.chart-wrap polyline')
     expect(poly).toBeTruthy()
 
@@ -192,7 +195,7 @@ describe('FundamentalTab', () => {
   })
 
   it('走勢圖的 X 軸標籤帶年份（跨年時才分得出是哪一年）', () => {
-    const { container } = render(<FundamentalTab fundamental={full} loading={false} />)
+    const { container } = render(<FundamentalTab fundamental={full} loading={false} {...noCollapse} />)
     const labels = [...container.querySelectorAll('.chart-wrap svg text')]
       .map((t) => t.textContent ?? '')
       .filter((t) => t.includes('/'))
@@ -209,14 +212,14 @@ describe('FundamentalTab', () => {
         { ...full.revenueMonths[1], yearMonth: '2026-06' },
       ],
     }
-    const { container } = render(<FundamentalTab fundamental={gap} loading={false} />)
+    const { container } = render(<FundamentalTab fundamental={gap} loading={false} {...noCollapse} />)
     // 前段只剩一個點（畫不出線）被丟棄，只留 05→06 那一段
     expect(container.querySelectorAll('.chart-wrap polyline')).toHaveLength(1)
   })
 
   it('查無月營收時不畫圖，只顯示空狀態', () => {
     const { container } = render(
-      <FundamentalTab fundamental={{ ...full, revenueMonths: [] }} loading={false} />,
+      <FundamentalTab fundamental={{ ...full, revenueMonths: [] }} loading={false} {...noCollapse} />,
     )
     expect(screen.getByText('查無月營收資料。')).toBeTruthy()
     expect(container.querySelector('.chart-wrap')).toBeNull()
