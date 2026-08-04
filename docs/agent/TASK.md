@@ -8,6 +8,35 @@
 
 ## 📋 Active Tasks
 
+### Task 49: 五項功能異動（0.6.19）
+- **Status**: 🟡 **程式完成、測試全過；Supabase 尚未更新**（schema 與 Edge Function 待授權）
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 14:05:00 Asia/Taipei
+- **需求**（使用者提出五項，先產 3 份 HTML mockup 選型，選定「版本 A ＋ 版本 B 的後台」）：
+  1. GitHub 網址改成 icon 並決定位置 → **收進帳號選單**
+  2. 總經頁排版更好讀 → **指標卡加 12 期走勢線＋落後徽章**
+  3. 分頁列依功能分組 → **持股四項 ／ 市場兩項，中間一道分隔線**
+  4. AI 提示詞可在網頁上編輯 → **後台「提示詞」頁**
+  5. 新增後台（帳號、admin tag、抓取狀況、AI 設定）→ **全頁＋左側導覽，帳號選單進入**
+- **設計稿**：定案稿 https://claude.ai/code/artifact/d3392953-faeb-4112-9668-074b2c299558
+  （另有三個比較版本 A/B/C，見 PROGRESS 2026-08-04 那則）
+- **分兩批**：dev.1 純前端（1/2/3/5 外殼）、dev.2 需要 Supabase 的部分（4 與帳號管理）。
+- **提示詞的可編輯／鎖定切線**（這次最重要的設計決定）：
+  可編輯的只有「風格」（幾段、口吻、要不要用操作框架語彙）；
+  **安全規則固定在程式碼裡**（`ANALYSIS_LOCKED` / `CHAT_LOCKED`），由程式接在使用者輸入**之後** ——
+  排在後面才蓋得住被改壞的前半段。整段開放編輯等於把護欄交給人一鍵刪掉，
+  而且刪掉之後畫面上不會有任何跡象。畫面上照實印出鎖定段落，讓管理員知道自己改不到什麼。
+- **⏳ 待授權的對外操作**（依 CLAUDE.md §13.2，未經明確指示不做）：
+  1. 兩區執行 `schema.sql` §4.1a 的兩行 `ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS`
+     （`ai_prompt_analysis` / `ai_prompt_chat`）。沿用既有 RLS，不必改 policy。
+  2. 兩區重新部署 `stock-report` Edge Function（新增 `admin-users` / `admin-set-role` 兩個 action）。
+  **在這兩件事完成之前**：後台「提示詞」頁存檔會失敗（欄位不存在）、「帳號」頁會顯示讀不到清單。
+  其餘四項功能不受影響。
+- **驗證**：`npm test` 759/759、`npm run lint` 3 個既有 warning、`npm run build` 通過。
+- **⚠️ 驗證盲區**：`index.ts` 的兩個新 handler 不在 `tsc -b` 範圍內、也沒有單元測試
+  （本機無 deno）。已人工核對 `db.auth.admin.listUsers / getUserById / updateUserById`
+  的回傳形狀，但**實際行為要等部署到測試區才驗得了**。
+
 ### Task 48: 程式碼簡化（0.6.18）
 - **Status**: ✅ **完成** —— 已定版 0.6.18 併入 `main` 並 push（觸發 Pages 部署）；未動任何 Supabase 環境
 - **⚠️ 未做的驗證**：使用者選擇跳過「測試區實際開一次抓取狀況頁」的目視確認。

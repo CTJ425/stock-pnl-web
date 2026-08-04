@@ -2520,6 +2520,191 @@ a.hmenu-item {
   }
 }
 
+/* ── 管理後台：管理員權限開關（0.6.19）─────────────────────── */
+
+/*
+ * 用開關而不是核取方塊：這是「立刻生效的動作」，不是表單欄位。
+ * 核取方塊看起來像是要按下某個「儲存」才會生效，但這裡按下去就送出了。
+ */
+.adm-toggle {
+  appearance: none;
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.adm-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--ink-secondary);
+  transition: left 0.18s ease, background 0.18s ease;
+}
+
+.adm-toggle.on {
+  background: linear-gradient(135deg, var(--accent-strong), #4f46e5);
+  border-color: transparent;
+}
+
+.adm-toggle.on::after {
+  left: 19px;
+  background: #fff;
+}
+
+.adm-toggle:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* ── 管理後台：提示詞編輯（0.6.19）──────────────────────────── */
+
+.adm-prompt {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.adm-prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-content: start;
+}
+
+.adm-prompt-item {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 11px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ink-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.adm-prompt-item:hover {
+  border-color: var(--btn-hover-border);
+}
+
+.adm-prompt-item.active {
+  border-color: var(--accent);
+  background: rgba(124, 140, 248, 0.1);
+  color: var(--ink);
+}
+
+.adm-prompt-item b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: var(--font-display);
+}
+
+.adm-prompt-item > span {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.adm-prompt-item .badge {
+  margin-top: 4px;
+}
+
+.adm-prompt-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  margin-bottom: 5px;
+}
+
+.adm-prompt-label span {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/*
+ * 提示詞是模型逐字讀的東西，換行與縮排都有意義，故用等寬字並保留空白。
+ * 高度給得比一般 textarea 大：這幾段本來就有二、三十行。
+ */
+.adm-prompt-text {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  background: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.adm-prompt-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 鎖定段落用虛線框：一眼看得出「這一塊不是輸入框」 */
+.adm-prompt-locked {
+  margin-top: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: var(--thead-bg);
+}
+
+.adm-prompt-locked b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.adm-prompt-locked pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 900px) {
+  .adm-prompt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-prompt-list {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .adm-prompt-item {
+    flex: 1 0 auto;
+  }
+}
+
 /* ── 總經指標卡上的迷你走勢線（0.6.19）───────────────────────── */
 
 /*

@@ -437,6 +437,9 @@ interface GenerateReportRequestBody {
   ticker?: string
   name?: string
   holding?: HoldingContext | null
+  /** admin-set-role 用：要改的帳號與要不要給管理員 */
+  userId?: string
+  admin?: boolean
 }
 
 type MarginRows = Record<string, string>[] | null
@@ -1772,6 +1775,73 @@ async function storageCoverage(): Promise<Record<string, number>> {
   return out
 }
 
+/**
+ * 管理後台的帳號清單（0.6.19）。
+ *
+ * **為什麼一定要走 Edge Function**：`auth.users` 不在 PostgREST 的 exposed schemas 裡，
+ * 前端拿使用者 JWT 怎麼查都查不到；專案也沒有 profiles 表可以映射。
+ * 只有 service role 讀得到，所以由這裡讀完再吐出去。
+ *
+ * ⚠️ 回傳內容經過挑選：只給 id / email / 建立時間 / 最後登入 / 是不是管理員。
+ * **不回傳 `app_metadata` 或 `user_metadata` 全文** —— 那裡面可能有其他欄位，
+ * 一律轉發等於把未來新增的東西也順便公開了。
+ */
+async function handleAdminUsers(): Promise<Response> {
+  const startedAt = Date.now()
+  // perPage 上限 1000。這個專案的帳號數是個位數，分頁對它沒有意義
+  const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  if (error) return json({ error: error.message }, 500)
+  const users = (data?.users ?? []).map((u) => ({
+    id: u.id,
+    email: u.email ?? '',
+    createdAt: u.created_at ?? null,
+    lastSignInAt: u.last_sign_in_at ?? null,
+    admin: (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
+  }))
+  // 新帳號排前面，管理員通常要找的是「剛註冊的那個」
+  users.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+  return json({ ok: true, users, durationMs: Date.now() - startedAt })
+}
+
+/**
+ * 指派或收回管理員權限（0.6.19）。
+ *
+ * 寫的是 `app_metadata.role`，與 `assertAdmin` 和資料表 RLS 判讀的是同一個欄位。
+ * **必須寫 `app_metadata` 而不是 `user_metadata`** —— 後者使用者自己改得動，
+ * 拿它當權限依據等於誰都能把自己變成管理員。
+ *
+ * ⚠️ **改完之後那個帳號要重新登入才會生效**：權限烤在已簽發的 JWT 裡，
+ * 舊 token 到期前仍帶著舊身分。前端必須把這件事寫在畫面上，
+ * 否則會被當成「按了沒反應」。
+ *
+ * ⚠️ **不允許取消自己的管理員權限**：這是唯一會把人鎖在門外的操作 ——
+ * 全站可能只剩你一個管理員，收回之後連後台都進不去，只能回 SQL Editor 手動改。
+ */
+async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody): Promise<Response> {
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
+  if (!userId) return json({ error: 'userId is required' }, 400)
+  const makeAdmin = body.admin === true
+
+  const auth = req.headers.get('Authorization') ?? ''
+  const token = auth.replace(/^Bearer\s+/i, '').trim()
+  const caller = await db.auth.getUser(token)
+  if (!makeAdmin && caller.data.user?.id === userId) {
+    return json({ error: '不能取消自己的管理員權限' }, 400)
+  }
+
+  const { data: target, error: readErr } = await db.auth.admin.getUserById(userId)
+  if (readErr || !target?.user) return json({ error: 'User not found' }, 404)
+
+  // 併進既有的 app_metadata，不要整包覆寫 —— 那裡面還有 provider 等 Supabase 自己的欄位
+  const meta = { ...(target.user.app_metadata as Record<string, unknown>) }
+  if (makeAdmin) meta.role = 'admin'
+  else delete meta.role
+
+  const { error } = await db.auth.admin.updateUserById(userId, { app_metadata: meta })
+  if (error) return json({ error: error.message }, 500)
+  return json({ ok: true, userId, admin: makeAdmin })
+}
+
 /** 手動或排程觸發匯率同步。拆排程的理由同 handleSyncMacro（見上），由 `fx-daily` 觸發 */
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -1852,6 +1922,18 @@ Deno.serve(async (req) => {
     const denied = await assertAdmin(req)
     if (denied) return denied
     return handleAdminStatus()
+  }
+
+  if (body.action === 'admin-users') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminUsers()
+  }
+
+  if (body.action === 'admin-set-role') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminSetRole(req, body)
   }
 
   return json({ error: 'Unknown action' }, 400)

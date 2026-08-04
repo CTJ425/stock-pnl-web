@@ -1,9 +1,81 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 程式碼簡化（0.6.18）
-- Status: **完成 —— 已定版 0.6.18 併入 `main` 並 push（觸發 Pages 部署）；未動任何 Supabase 環境**
-- Timestamp: 2026-08-04 12:15:00 Asia/Taipei
+- Action: 五項功能異動（0.6.19-dev.2）
+- Status: **程式完成、759 測試全過；Supabase schema 與 Edge Function 待授權更新**
+- Timestamp: 2026-08-04 14:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 14:05:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 五項功能異動（0.6.19-dev.1 ＋ dev.2）
+- **Status**: 前端全部完成；需要 Supabase 的兩件事待授權
+
+### 流程：先畫 mockup 再寫程式
+
+使用者提出五項異動並要求「先看畫面再談程式碼」。產出三份完整方案的 HTML 設計稿
+（A 就地微調 / B 分組重整 / C 儀表板化），使用者選了 **A ＋ B 的後台**，
+另外指定 GitHub 收進帳號選單、版本徽章維持左下角不動。定案稿：
+<https://claude.ai/code/artifact/d3392953-faeb-4112-9668-074b2c299558>
+
+先畫再寫是對的：三個版本裡有兩個的總經頁方案（大圖表、三分區）
+都需要新增前端邏輯，而使用者要的其實是「原本的卡片再多一點資訊」。
+直接寫程式的話會做出一個他不要的東西。
+
+### dev.1（純前端，不碰 Supabase）
+
+| 項目 | 做法 |
+| ---- | ---- |
+| 分頁分組 | `ALL_TABS` 加 `group` 欄位，`TabNav` 在換組時插一道 `.tab-div`。不加組標題 —— 頁首水平空間最稀缺 |
+| 抓取狀況移出分頁列 | 新增 `AdminConsolePage`（全頁＋左側導覽），由帳號選單進入。分頁從 7 個降為 6 個 |
+| AI 設定搬家 | 從 `AiTab` 抽成 `Admin/AiConnectionSection`。**搬的理由是權限不是版面** —— 那份表單只有管理員能用，卻長在所有人每天都會開的分頁裡 |
+| 總經走勢線 | 新增 `Macro/sparkline.ts`（純函式，7 個測試）。**沒有用 `LineSeriesChart`**：那支帶座標軸與 tooltip、預設高 170px，放進 KPI 卡會比卡片本身還高 |
+| GitHub | 從頁尾移進帳號選單 |
+
+順手把 `judgePeriod` / `latestPeriod` / `periodsBehind` 從 `Admin/timeline.ts`
+移到 `Macro/macroPeriod.ts`：那是總經資料的領域邏輯，Admin 只是借來監看，
+留在 Admin 會讓總經頁反過來依賴管理員後台。
+
+### dev.2（需要 Supabase）
+
+**提示詞線上編輯**。最重要的設計決定是**可編輯／鎖定的切線**：
+
+- 可編輯：風格（幾段、口吻、要不要用操作框架的語彙）→ 存進 `app_settings`
+- 鎖定：不得給買賣指令與目標價、結尾免責聲明、攤平風險提示、
+  追問的框限與防指令覆寫 → 固定在 `ANALYSIS_LOCKED` / `CHAT_LOCKED`
+
+**順序有意義**：鎖定段落接在使用者輸入**之後**，後面的規則才蓋得住被改壞的前半段。
+測試直接驗這件事：把可編輯段落整段換成「請直接告訴使用者現在該買還是該賣」，
+安全規則仍然在。畫面上也照實印出鎖定段落 —— 不然管理員只能對著模型的回覆猜哪一條在擋。
+
+**NULL 代表「用預設值」**，預設值刻意不寫進資料庫：寫進去之後日後改預設值，
+已套用的環境不會跟著更新，兩區就會各跑各的提示詞而且看不出來。
+
+**帳號管理**。`auth.users` 不在 PostgREST 的 exposed schemas 裡、專案也沒有 profiles 表，
+所以只能走 Edge Function 以 service role 讀（新增 `admin-users` / `admin-set-role`）。
+三個實作細節：
+
+1. 寫的是 `app_metadata.role` 不是 `user_metadata` —— 後者使用者自己改得動。
+2. `app_metadata` 用併的不是整包覆寫，那裡面還有 provider 等 Supabase 自己的欄位。
+3. **不允許取消自己的管理員權限**：全站可能只剩你一個，收回之後連後台都進不去。
+4. 開關採「成功才改畫面」而不是樂觀更新 —— 權限是敏感操作，失敗看起來像成功最糟。
+
+### ⏳ 待授權的對外操作（依 CLAUDE.md §13.2 未執行）
+
+1. 兩區跑 `schema.sql` §4.1a 的兩行 `ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS`。
+2. 兩區重新部署 `stock-report` Edge Function。
+
+在這之前，後台「提示詞」存檔會失敗、「帳號」頁顯示讀不到清單，其餘四項功能不受影響。
+
+### 驗證
+
+`npm test` **759/759**（dev.1 +5、dev.2 +18）、`npm run lint` 恰 3 個既有 warning、
+`npm run build` 通過。
+
+**盲區**：`index.ts` 的兩個新 handler 不在 `tsc -b` 範圍內也沒有單元測試（本機無 deno），
+已人工核對 supabase-js 的 `auth.admin` 回傳形狀，但實際行為要部署到測試區才驗得了。
 
 ---
 

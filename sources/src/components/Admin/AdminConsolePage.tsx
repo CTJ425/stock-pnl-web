@@ -13,8 +13,10 @@
  */
 import { useState } from 'react'
 import { Activity, ChevronLeft, FileText, KeyRound, Users } from 'lucide-react'
+import { AccountsSection } from './AccountsSection'
 import { AdminStatusPage } from './AdminStatusPage'
 import { AiConnectionSection } from './AiConnectionSection'
+import { PromptsSection } from './PromptsSection'
 
 type Panel = 'accounts' | 'status' | 'ai' | 'prompts'
 
@@ -53,39 +55,11 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
       </aside>
 
       <div className="adm-main">
-        {panel === 'accounts' && <AccountsPanel />}
+        {panel === 'accounts' && <AccountsSection />}
         {panel === 'status' && <AdminStatusPage />}
         {panel === 'ai' && <AiConnectionSection />}
-        {panel === 'prompts' && <PromptsPanel />}
+        {panel === 'prompts' && <PromptsSection />}
       </div>
     </div>
-  )
-}
-
-/** 帳號管理。第二批接上 Edge Function 之後才有內容 */
-function AccountsPanel() {
-  return (
-    <section className="section glass adm-panel">
-      <div className="rpt-section-head">
-        <h3 className="head-tight">帳號</h3>
-      </div>
-      <p className="hint" style={{ marginTop: 12 }}>
-        帳號清單與管理員權限設定即將上線。
-      </p>
-    </section>
-  )
-}
-
-/** 提示詞編輯。第二批把提示詞搬進 app_settings 之後才有內容 */
-function PromptsPanel() {
-  return (
-    <section className="section glass adm-panel">
-      <div className="rpt-section-head">
-        <h3 className="head-tight">提示詞</h3>
-      </div>
-      <p className="hint" style={{ marginTop: 12 }}>
-        AI 分析提示詞的線上編輯即將上線。
-      </p>
-    </section>
   )
 }

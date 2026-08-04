@@ -18,6 +18,7 @@ import {
 } from '../../services/aiClient'
 import { clearChat, loadChat, saveChat } from '../../services/aiChatStore'
 import { isAiAdmin, loadAiSettings, type AiSettings } from '../../services/aiSettings'
+import { EMPTY_PROMPTS, loadAiPrompts, type AiPrompts } from '../../services/aiPrompts'
 import { buildAiPayload, renderAiPrompt, type AiPayload } from './aiPayload'
 import {
   MAX_CHAT_TURNS,
@@ -45,6 +46,8 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   const [settings, setSettings] = useState<AiSettings | null>(null)
   // 設定改在管理後台維護（0.6.19），這裡只用來決定「未設定」時該給誰看哪一句話
   const [isAdmin, setIsAdmin] = useState(false)
+  // 管理員在後台改過的提示詞。取不到就是空字串，`resolvePrompt` 會退回預設
+  const [prompts, setPrompts] = useState<AiPrompts>(EMPTY_PROMPTS)
 
   // 執行與結果狀態
   const [status, setStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
@@ -82,10 +85,11 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     let alive = true
     setSettingsLoading(true)
     ;(async () => {
-      const [s, admin] = await Promise.all([loadAiSettings(), isAiAdmin()])
+      const [s, admin, ps] = await Promise.all([loadAiSettings(), isAiAdmin(), loadAiPrompts()])
       if (alive) {
         setSettings(s)
         setIsAdmin(admin)
+        setPrompts(ps)
         setSettingsLoading(false)
       }
     })()
@@ -117,7 +121,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       // 在每次開啟個股頁時都下載一次。缺料同樣不阻斷（buildMacroBlock 回 hasData: false）。
       const macro = await fetchMacro()
       const built = buildAiPayload({ ticker, name, view, report, range, fundamental, news, macro })
-      const { system, user } = renderAiPrompt(built)
+      const { system, user } = renderAiPrompt(built, prompts.analysis)
 
       const provider = createAiProvider(settings)
       const result = await provider.complete({
@@ -167,7 +171,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       const provider = createAiProvider(settings)
       // system 每一輪都重送，框限不會隨對話變長被稀釋（見 aiChat.ts）
       const reply = await provider.complete({
-        system: buildChatSystem(payload, aiText),
+        system: buildChatSystem(payload, aiText, prompts.chat),
         messages: next,
       })
       const withReply: AiMessage[] = [...next, { role: 'assistant', content: reply }]

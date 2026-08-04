@@ -141,6 +141,24 @@ CREATE TABLE IF NOT EXISTS app_settings (
     ai_updated_at TIMESTAMPTZ
 );
 
+-- 4.1a 提示詞的線上編輯（0.6.19）
+--
+--     管理員可在後台改分析與追問的準則，不必改程式碼重新部署。
+--
+--     ⚠️ **NULL 代表「用程式碼裡的預設值」，不是「沒有提示詞」。**
+--     預設值刻意不寫進資料庫：寫進去之後，日後在 aiPrompts.ts 調整預設值，
+--     已經套用過的環境不會跟著更新，兩區就會各跑各的提示詞而且看不出來。
+--     前端存檔時若內容與預設相同也會寫回 NULL（見 aiPrompts.ts 的 normalize）。
+--
+--     ⚠️ **只有「風格」那一段存在這裡。** 安全規則（不得給買賣指令與目標價、
+--     結尾免責聲明、攤平風險提示、追問的框限與防指令覆寫）固定在程式碼裡，
+--     由 `ANALYSIS_LOCKED` / `CHAT_LOCKED` 接在使用者輸入之後。
+--     整段開放編輯等於把護欄交給人一鍵刪掉，而且刪掉之後沒有任何跡象。
+--
+--     沿用本表既有的 RLS：所有登入帳號可讀（前端要用它組 prompt）、僅 admin 可寫。
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_analysis TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_chat     TEXT;
+
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
 -- 全員（登入後）可讀：非管理員也要拿得到端點與金鑰，瀏覽器才能直接發 AI 請求

@@ -19,6 +19,7 @@ import type { NewsData } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import type { RangeKey, TechnicalView } from './technicalView'
 import { RANGE_LABELS } from './technicalView'
+import { ANALYSIS_DEFAULT, ANALYSIS_LOCKED, resolvePrompt } from '../../services/aiPrompts'
 
 /** 四捨五入到 n 位小數；null 照樣回 null（不要用 0 代替缺值） */
 function round(value: number | null, digits = 2): number | null {
@@ -403,21 +404,21 @@ const STRATEGY_FRAMEWORKS = `【使用者採用的操作框架】
   且連續下跌時所需投入資金呈指數成長。**每次提到它，都必須同時說明這個前提**，
   不得把它描述成與前三項等價的選項。`
 
-export function renderAiPrompt(p: AiPayload): { system: string; user: string } {
-  const system = `你是一位專業且客觀的股市數據分析助理。請依據使用者提供的結構化資料進行綜合簡明分析。
+/**
+ * 組出送給模型的 system / user 兩段。
+ *
+ * `customAnalysis` 是管理員在後台改過的分析準則（0.6.19）。
+ * **順序有意義**：可編輯段落 → 固定的安全規則 → 操作框架語彙。
+ * 安全規則排在後面才蓋得住前面可能被改壞的內容，而框架語彙必須排在
+ * 安全規則之後，否則「可以講分批加碼」讀起來會像是放寬了前一段的限制。
+ */
+export function renderAiPrompt(
+  p: AiPayload,
+  customAnalysis?: string | null,
+): { system: string; user: string } {
+  const system = `${resolvePrompt(customAnalysis, ANALYSIS_DEFAULT)}
 
-分析準則：
-1. 必須全篇使用繁體中文，語言平實白話、句子簡短，先以 3 至 5 個段落分析數據，最後固定加上『建議操作』與『注意事項』兩個小節，小節標題須一字不差。
-2. 絕對不得列出任何數學公式或計算過程，避免使用艱深難懂的內行術語。
-3. 僅得引用提供資料中的明確數據與指標，絕對不得自行計算、猜測或臆測未提供的任何數據。
-4. 引用數字時必須沿用資料給定的單位（三大法人為股數、融資融券為張、月營收為千元、殖利率與增減率為百分比），不得自行換算。
-5. 『建議操作』僅得提出中性、條件式的觀察性參考（例如：若跌破月線可留意支撐是否守住），絕對不得給出明確的買進 / 賣出 / 加碼 / 出清指令，不得提供目標價、進出場價位或報酬預期。
-6. 『注意事項』須指出資料中可見的風險訊號（例如量能異常、資券餘額變化、指標鈍化、均線糾結）與資料本身的侷限（例如籌碼資料缺漏時要說明）。
-7. 新聞只提供標題，不含內文。僅得依標題字面判斷可能偏向利多或利空，絕對不得臆測、擴寫或引用標題以外的新聞內容；消息面的判讀只能以條件式觀察的形式併入『建議操作』與『注意事項』，不得單獨據以給出買賣指令。
-8. 總體經濟是**背景**不是個股因果。可以描述當前的通膨與就業環境，但絕對不得用總經數據推導本檔股票的漲跌，也不得預測下一期的總經數據。
-9. 結尾必須單獨成段，附上固定聲明：「本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。」
-10. 你可以用下方【使用者採用的操作框架】的語彙，描述目前數據落在該框架的哪個情境（例如：「價格已跌破月線，對採用分批建倉的人來說是觀察支撐是否有效的位置」）。但**這不放寬準則 5**：絕對不得指定加碼或減碼的比例、不得指定任何價位、不得說「現在該買」或「現在該賣」。框架中的百分比只是說明該方法時的舉例，絕對不得當成對本檔股票的具體指示。
-11. 只要提到分批加碼、攤平或左側交易相關內容，『注意事項』就必須同時指出：**攤平會放大部位，並不等於降低風險**；若標的的基本面或籌碼面持續惡化，越攤平虧損越大。
+${ANALYSIS_LOCKED}
 
 ${STRATEGY_FRAMEWORKS}`
 
