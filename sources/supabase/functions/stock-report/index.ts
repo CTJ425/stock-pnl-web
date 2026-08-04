@@ -979,23 +979,18 @@ async function backfillRevenue(
 
 // ---- 新聞（AI 分析的消息面）----
 
-/** ISO 時刻對應的台北日曆日 YYYY-MM-DD（UTC+8 固定偏移，台灣無日光節約） */
-function taipeiDateOf(iso: string): string {
-  return new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 /**
  * 每檔台股以股票名稱查 Google News RSS，產出 news/{ticker}.json（整份覆寫）。
  * 同一台北日曆日已抓過就跳過（新聞一天一抓即可；cron 一天三班，頭班抓、後兩班跳過）。
  * fetch 失敗或解析出 0 則時**不覆寫既有檔**——留舊新聞比空檔有用。
  */
 async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promise<number> {
-  const today = taipeiDateOf(new Date().toISOString())
+  const today = taipeiYmdOf(new Date())
   let synced = 0
   for (const { ticker, name } of tickers) {
     try {
       const existing = await downloadJson<NewsFile>(`news/${ticker}.json`)
-      if (existing && existing.schema === NEWS_SCHEMA && taipeiDateOf(existing.asOf) === today) {
+      if (existing && existing.schema === NEWS_SCHEMA && taipeiYmdOf(new Date(existing.asOf)) === today) {
         continue
       }
 
@@ -1174,9 +1169,9 @@ async function syncMacro(now: Date): Promise<{
  *    對每天都變的資料而言，內容指紋只會每次都判定「變了」，徒增一次無謂的抓取。
  */
 async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf: string | null }> {
-  const today = taipeiDateOf(now.toISOString())
+  const today = taipeiYmdOf(now)
   const existing = await downloadJson<FxFile>('fx/twd.json')
-  if (existing && existing.schema === FX_SCHEMA && taipeiDateOf(existing.asOf) === today) {
+  if (existing && existing.schema === FX_SCHEMA && taipeiYmdOf(new Date(existing.asOf)) === today) {
     // 今天已經抓過。count 用既有的幣別數，才分得出「跳過」與「抓不到」
     return { synced: false, count: existing.currencies?.length ?? 0, asOf: existing.asOf }
   }
@@ -1684,7 +1679,9 @@ async function handleAdminStatus(): Promise<Response> {
   const now = new Date()
   const todayYmd = taipeiYmd(now)
 
-  // 各段彼此獨立，任一段掛掉不該讓整頁空白 —— 全部 allSettled，缺的用 null 表示
+  // 各段彼此獨立，任一段掛掉不該讓整頁空白，缺的用 null 表示：
+  // 會拋的那幾項（rpc / readLastRun / 直接查表）各自掛 .catch(() => null)，
+  // downloadJson 與 latestChipSources / storageCoverage 本身就吞例外回 null。
   const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage] = await Promise.all([
     db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
     downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),

@@ -11,7 +11,7 @@
  *
  * 判定規則與座標計算全在 `timeline.ts`（純函式、有測試），這裡只做呈現。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Activity, RefreshCw, ShieldCheck } from 'lucide-react'
 import {
   fetchAdminStatus,
@@ -37,6 +37,7 @@ import {
   latestPeriod,
   nextRun,
   periodsBehind,
+  taipeiParts,
   tlLabel,
   tlPercent,
   type SourceState,
@@ -49,8 +50,53 @@ const STATE_TEXT: Record<SourceState, string> = {
   idle: '等待中',
 }
 
+const SECTION_PAD = { padding: '18px 20px' }
+
+/** 24 小時軸上要畫格線的時刻（刻度尺另含 0，那條由容器左緣代表） */
+const DAY_GRID = [6, 12, 18, 21]
+
 function Pill({ state, text }: { state: SourceState; text?: string }) {
   return <span className={`ast-pill ast-${state}`}>{text ?? STATE_TEXT[state]}</span>
+}
+
+/** 距現在多久，例：'3h 40m' */
+function agoLabel(iso: string): string {
+  return humanAgo(Date.now() - Date.parse(iso))
+}
+
+/**
+ * 總經班次軸的一列。三列（美東發布 / 班次 / 資料最後變動）只有軌道與右欄的內容不同，
+ * 格線與「現在」線則必須三列一致 —— 少畫一條就會看成資料對不齊軸。
+ */
+function DayRow({
+  label,
+  hint,
+  nowHour,
+  end,
+  children,
+}: {
+  label: string
+  hint: string
+  nowHour: number | null
+  end: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="ast-row">
+      <div className="ast-lbl">
+        <b>{label}</b>
+        <span>{hint}</span>
+      </div>
+      <div className="ast-track">
+        {DAY_GRID.map((h) => (
+          <i className="ast-grid" key={h} style={{ left: `${dayPercent(h)}%` }} />
+        ))}
+        {nowHour !== null && <i className="ast-now" style={{ left: `${dayPercent(nowHour)}%` }} />}
+        {children}
+      </div>
+      <div className="ast-end">{end}</div>
+    </div>
+  )
 }
 
 /**
@@ -125,14 +171,18 @@ export function AdminStatusPage() {
     [data],
   )
 
+  /** 每個總經指標的落後判定。三處（結論計數、下一筆發布、表格）必須是同一份判定 */
+  const macroRows = useMemo(
+    () =>
+      (data?.macro?.indicators ?? []).map((indicator) => ({
+        indicator,
+        state: judgePeriod(indicator.latest?.period ?? null, macroPeer),
+      })),
+    [data, macroPeer],
+  )
+
   /** 現在是台北的第幾小時（0–24），供「現在」線與班次判定用 */
-  const nowHour = useMemo(() => {
-    if (!data?.asOf) return null
-    const t = Date.parse(data.asOf)
-    if (!Number.isFinite(t)) return null
-    const tp = new Date(t + 8 * 3600_000)
-    return tp.getUTCHours() + tp.getUTCMinutes() / 60
-  }, [data])
+  const nowHour = useMemo(() => taipeiParts(data?.asOf)?.hour ?? null, [data])
 
   /** macro-daily 的班次時刻，以及各自今天跑過了沒 */
   const macroShifts = useMemo(() => {
@@ -148,29 +198,25 @@ export function AdminStatusPage() {
 
   /** 資料最後變動落在今天的第幾小時；不是今天就回 null（軸只畫今天） */
   const macroChangedHour = useMemo(() => {
-    if (!data?.macro?.asOf || !data.todayYmd) return null
-    const t = Date.parse(data.macro.asOf)
-    if (!Number.isFinite(t)) return null
-    const tp = new Date(t + 8 * 3600_000)
-    const ymd = `${tp.getUTCFullYear()}${String(tp.getUTCMonth() + 1).padStart(2, '0')}${String(tp.getUTCDate()).padStart(2, '0')}`
-    if (ymd !== data.todayYmd) return null
-    return tp.getUTCHours() + tp.getUTCMinutes() / 60
+    const tp = taipeiParts(data?.macro?.asOf)
+    if (!tp || tp.ymd !== data?.todayYmd) return null
+    return tp.hour
   }, [data])
 
   /** 最近的一筆發布：取後端算好的日期中最早的那個 */
   const nextRelease = useMemo(() => {
-    const cands = (data?.macro?.indicators ?? [])
-      .filter((i) => i.nextRelease)
+    const cands = macroRows
+      .filter((r) => r.indicator.nextRelease)
       // 落後中的指標連上一期都還沒發，它的「下一期」沒有參考價值
-      .filter((i) => judgePeriod(i.latest?.period ?? null, macroPeer) !== 'warn')
-      .sort((a, b) => a.nextRelease!.date.localeCompare(b.nextRelease!.date))
-    const top = cands[0]
+      .filter((r) => r.state !== 'warn')
+      .sort((a, b) => a.indicator.nextRelease!.date.localeCompare(b.indicator.nextRelease!.date))
+    const top = cands[0]?.indicator
     return top ? { ...top.nextRelease!, label: top.label } : null
-  }, [data, macroPeer])
+  }, [macroRows])
 
   if (loading && !data) {
     return (
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         正在讀取資料抓取狀況…
       </div>
     )
@@ -178,7 +224,7 @@ export function AdminStatusPage() {
 
   if (failed || !data) {
     return (
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         <h3 className="head-tight">讀不到資料抓取狀況</h3>
         <p className="ast-note">
           這一頁只有管理員帳號看得到。若你確定帳號有管理員權限，可能是後端尚未部署最新版本。
@@ -195,9 +241,7 @@ export function AdminStatusPage() {
     (data.schedules ?? []).filter(
       (s) => judgeCron(s.active, s.failsToday, s.lastRun) !== 'ok',
     ).length +
-    (data.macro?.indicators ?? []).filter(
-      (i) => judgePeriod(i.latest?.period ?? null, macroPeer) === 'warn',
-    ).length
+    macroRows.filter((r) => r.state === 'warn').length
 
   return (
     <>
@@ -218,7 +262,7 @@ export function AdminStatusPage() {
       </div>
 
       {/* ── 台股盤後時間軸 ───────────────────────────────── */}
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">台股盤後・{data.chip?.dataDate ?? '—'} 這一輪</h3>
           <span className="source-tag">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
@@ -312,7 +356,7 @@ export function AdminStatusPage() {
       </div>
 
       {/* ── 排程 ─────────────────────────────────────────── */}
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">排程</h3>
           <span className="source-tag">
@@ -335,14 +379,13 @@ export function AdminStatusPage() {
             <tbody>
               {(data.schedules ?? []).map((s: ScheduleRow) => {
                 const st = judgeCron(s.active, s.failsToday, s.lastRun)
+                const scope = describeScope(s.action)
                 return (
                   <tr key={s.jobid}>
                     <td>
                       <b>{s.jobname}</b>
                       {/* 光看 action 代號看不出這一班負責哪些資料 */}
-                      {describeScope(s.action) && (
-                        <span className="ast-scope">{describeScope(s.action)}</span>
-                      )}
+                      {scope && <span className="ast-scope">{scope}</span>}
                     </td>
                     <td className="ast-mono">{describeCron(s.schedule)}</td>
                     <td className="ast-mono">{s.action ?? '—'}</td>
@@ -372,7 +415,7 @@ export function AdminStatusPage() {
       </div>
 
       {/* ── 總經：當日班次軸（與上方台股盤後同一種讀法）───── */}
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">美國總體經濟・今日班次</h3>
           <span className="source-tag section-stamp">
@@ -413,84 +456,61 @@ export function AdminStatusPage() {
             </div>
 
             {/* 美東發布窗：夏令 20:30–21:30 涵蓋兩種日光節約情形 */}
-            <div className="ast-row">
-              <div className="ast-lbl">
-                <b>美東發布</b>
-                <span>8:30 ET</span>
-              </div>
-              <div className="ast-track">
-                {[6, 12, 18, 21].map((h) => (
-                  <i className="ast-grid" key={h} style={{ left: `${dayPercent(h)}%` }} />
-                ))}
-                {nowHour !== null && <i className="ast-now" style={{ left: `${dayPercent(nowHour)}%` }} />}
-                <div
-                  className="ast-win"
-                  style={{ left: `${dayPercent(20.5)}%`, width: `${dayPercent(1)}%` }}
-                />
-                <span className="ast-hit-t" style={{ left: `${dayPercent(21)}%` }}>
-                  夏令 20:30 / 冬令 21:30
-                </span>
-              </div>
-              <div className="ast-end">
-                <span className="ast-when">夏令中</span>
-              </div>
-            </div>
+            <DayRow
+              label="美東發布"
+              hint="8:30 ET"
+              nowHour={nowHour}
+              end={<span className="ast-when">夏令中</span>}
+            >
+              <div
+                className="ast-win"
+                style={{ left: `${dayPercent(20.5)}%`, width: `${dayPercent(1)}%` }}
+              />
+              <span className="ast-hit-t" style={{ left: `${dayPercent(21)}%` }}>
+                夏令 20:30 / 冬令 21:30
+              </span>
+            </DayRow>
 
             {macroShifts.map((s, i) => (
-              <div className="ast-row" key={s.hour}>
-                <div className="ast-lbl">
-                  <b>第{i === 0 ? '一' : '二'}班</b>
-                  <span>{hourLabel(s.hour)}</span>
-                </div>
-                <div className="ast-track">
-                  {[6, 12, 18, 21].map((h) => (
-                    <i className="ast-grid" key={h} style={{ left: `${dayPercent(h)}%` }} />
-                  ))}
-                  {nowHour !== null && <i className="ast-now" style={{ left: `${dayPercent(nowHour)}%` }} />}
-                  <div
-                    className={s.done ? 'ast-hit ast-ok' : 'ast-next-run'}
-                    style={{ left: `${dayPercent(s.hour)}%` }}
-                  />
-                  <span className="ast-hit-t" style={{ left: `${dayPercent(s.hour)}%` }}>
-                    {hourLabel(s.hour)}・{s.done ? '已執行' : '尚未執行'}
-                  </span>
-                </div>
-                <div className="ast-end">
-                  <Pill state={s.done ? 'ok' : 'idle'} text={s.done ? '已執行' : '待執行'} />
-                </div>
-              </div>
+              <DayRow
+                key={s.hour}
+                label={`第${i === 0 ? '一' : '二'}班`}
+                hint={hourLabel(s.hour)}
+                nowHour={nowHour}
+                end={<Pill state={s.done ? 'ok' : 'idle'} text={s.done ? '已執行' : '待執行'} />}
+              >
+                <div
+                  className={s.done ? 'ast-hit ast-ok' : 'ast-next-run'}
+                  style={{ left: `${dayPercent(s.hour)}%` }}
+                />
+                <span className="ast-hit-t" style={{ left: `${dayPercent(s.hour)}%` }}>
+                  {hourLabel(s.hour)}・{s.done ? '已執行' : '尚未執行'}
+                </span>
+              </DayRow>
             ))}
 
             {/* 資料最後變動：與班次分開一列，因為它不一定發生在班次時刻（可手動觸發） */}
-            <div className="ast-row">
-              <div className="ast-lbl">
-                <b>資料最後變動</b>
-                <span>asOf</span>
-              </div>
-              <div className="ast-track">
-                {[6, 12, 18, 21].map((h) => (
-                  <i className="ast-grid" key={h} style={{ left: `${dayPercent(h)}%` }} />
-                ))}
-                {nowHour !== null && <i className="ast-now" style={{ left: `${dayPercent(nowHour)}%` }} />}
-                {macroChangedHour !== null ? (
-                  <>
-                    <div className="ast-hit ast-ok" style={{ left: `${dayPercent(macroChangedHour)}%` }} />
-                    <span className="ast-hit-t" style={{ left: `${dayPercent(macroChangedHour)}%` }}>
-                      {hourLabel(macroChangedHour)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="ast-none">今天尚無新資料（正常，月度數據一個月才動一次）</span>
-                )}
-              </div>
-              <div className="ast-end">
+            <DayRow
+              label="資料最後變動"
+              hint="asOf"
+              nowHour={nowHour}
+              end={
                 <span className="ast-when">
-                  {data.macro?.asOf
-                    ? `${humanAgo(Date.now() - Date.parse(data.macro.asOf))} 前`
-                    : '—'}
+                  {data.macro?.asOf ? `${agoLabel(data.macro.asOf)} 前` : '—'}
                 </span>
-              </div>
-            </div>
+              }
+            >
+              {macroChangedHour !== null ? (
+                <>
+                  <div className="ast-hit ast-ok" style={{ left: `${dayPercent(macroChangedHour)}%` }} />
+                  <span className="ast-hit-t" style={{ left: `${dayPercent(macroChangedHour)}%` }}>
+                    {hourLabel(macroChangedHour)}
+                  </span>
+                </>
+              ) : (
+                <span className="ast-none">今天尚無新資料（正常，月度數據一個月才動一次）</span>
+              )}
+            </DayRow>
           </div>
         </div>
 
@@ -529,8 +549,7 @@ export function AdminStatusPage() {
               </tr>
             </thead>
             <tbody>
-              {(data.macro?.indicators ?? []).map((i) => {
-                const st = judgePeriod(i.latest?.period ?? null, macroPeer)
+              {macroRows.map(({ indicator: i, state: st }) => {
                 const behind = periodsBehind(i.latest?.period ?? null, macroPeer)
                 return (
                   <tr key={i.id}>
@@ -566,7 +585,7 @@ export function AdminStatusPage() {
         </div>
       </div>
 
-      <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">匯率與檔案涵蓋</h3>
           <span className="source-tag">不隨台股交易日走</span>
@@ -577,7 +596,7 @@ export function AdminStatusPage() {
             <div className="kpi-value">{data.fx?.count ?? 0} 幣別</div>
             <div className="kpi-sub">
               {data.fx?.asOf ? fmtUpdatedAt(data.fx.asOf) : '—'}
-              {data.fx?.asOf && `・${humanAgo(Date.now() - Date.parse(data.fx.asOf))} 前`}
+              {data.fx?.asOf && `・${agoLabel(data.fx.asOf)} 前`}
             </div>
           </div>
           <div className="glass kpi">

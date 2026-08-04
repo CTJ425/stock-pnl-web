@@ -133,11 +133,25 @@ function nthSunday(year: number, month: number, n: number): number {
   return 1 + ((7 - firstDow) % 7) + (n - 1) * 7
 }
 
-/** 台北時區的 'YYYY-MM-DD' */
+/** 補零成兩位數 */
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/**
+ * 'YYYY-MM' 往後推 n 個月（n 可為負）。
+ * 換算成「年×12 + 月序」再加減，跨年進位自然成立、不必特判 12 月。
+ */
+function shiftPeriod(period: string, n: number): string {
+  const [y, m] = period.split('-').map(Number)
+  const total = y * 12 + (m - 1) + n
+  return `${Math.floor(total / 12)}-${pad2((total % 12) + 1)}`
+}
+
+/** 台北時區的 'YYYY-MM-DD'（UTC+8 固定偏移，台灣無日光節約） */
 export function taipeiYmdOf(d: Date): string {
   const t = new Date(d.getTime() + 8 * 3600_000)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`
 }
 
 /**
@@ -184,14 +198,11 @@ export function expectedLatestPeriod(id: string, now: Date): ExpectedPeriod {
   // 行事曆用完（或該指標沒有行事曆）→ 退回規則推算
   const day = FALLBACK_RULE[id]
   if (day === undefined) return { period: null, stale: true }
-  const tp = new Date(t + 8 * 3600_000) // 以台北日曆判斷「這個月過了幾天」
-  const y = tp.getUTCFullYear()
-  const mon = tp.getUTCMonth() + 1
+  const taipeiYmd = taipeiYmdOf(now) // 以台北日曆判斷「這個月過了幾天」
+  const dayOfMonth = Number(taipeiYmd.split('-')[2])
   // 當月已過推估日 → 上個月的資料應該已發布；否則再往前一個月
-  const back = tp.getUTCDate() >= day ? 1 : 2
-  const total = y * 12 + (mon - 1) - back
-  const p = (n: number) => String(n).padStart(2, '0')
-  return { period: `${Math.floor(total / 12)}-${p((total % 12) + 1)}`, stale: true }
+  const back = dayOfMonth >= day ? 1 : 2
+  return { period: shiftPeriod(taipeiYmd.slice(0, 7), -back), stale: true }
 }
 
 export interface NextRelease {
@@ -229,17 +240,11 @@ export function nextReleaseFor(
   // 行事曆用完 → 依規則推算下一期
   const day = FALLBACK_RULE[id]
   if (day === undefined || !latestPeriod) return null
-  const m = /^(\d{4})-(\d{2})$/.exec(latestPeriod)
-  if (!m) return null
+  if (!/^\d{4}-\d{2}$/.test(latestPeriod)) return null
   // 手上是 2026-06 → 下一期 2026-07，於 2026-08 發布
-  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + 2
-  const y = Math.floor(total / 12)
-  const mon = (total % 12) + 1
-  const p = (n: number) => String(n).padStart(2, '0')
-  const nextPeriodTotal = Number(m[1]) * 12 + (Number(m[2]) - 1) + 1
   return {
-    date: `${y}-${p(mon)}-${p(day)}`,
-    period: `${Math.floor(nextPeriodTotal / 12)}-${p((nextPeriodTotal % 12) + 1)}`,
+    date: `${shiftPeriod(latestPeriod, 2)}-${pad2(day)}`,
+    period: shiftPeriod(latestPeriod, 1),
     estimated: true,
   }
 }

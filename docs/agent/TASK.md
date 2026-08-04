@@ -2,11 +2,41 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-31 12:40:00 Asia/Taipei
+- Timestamp: 2026-08-04 12:15:00 Asia/Taipei
 
 ---
 
 ## 📋 Active Tasks
+
+### Task 48: 程式碼簡化（0.6.18-dev.1）
+- **Status**: ✅ **完成** —— 已 commit 到 `dev`，尚未 push、未動任何 Supabase 環境
+- **Agent**: Claude（三個 code-simplifier 子代理分批執行）
+- **Timestamp**: 2026-08-04 12:15:00 Asia/Taipei
+- **範圍**：0.6.14–0.6.17 動過的檔案 + `stock-report/index.ts`。純品質整理，行為不變。
+- **改了什麼**：
+  - `AdminStatusPage.tsx`：抽檔內 `DayRow` 元件，班次軸三列重複的骨架／格線／「現在」線
+    從 3 份降為 1 份；`judgePeriod` 原本三處各算一次，改為 `macroRows` 一次算完共讀。
+  - `timeline.ts`：新增純函式 `taipeiParts()`（附 4 個測試），取代頁面裡兩處手寫 `+8h` 換算。
+  - `macroCalendar.ts`：`pad2` / `shiftPeriod` 兩個檔內私有 helper，收掉三處月序算式。
+  - `index.ts`：刪除 `taipeiDateOf()`，四個呼叫點改用早已 import 的 `taipeiYmdOf()`
+    （同一功能的第二份實作）；修正 `handleAdminStatus` 那句與程式碼不符的「allSettled」註解。
+- **一處刻意接受的行為差異**：`taipeiDateOf(existing.asOf)` 遇到無法解析的 `asOf` 會拋
+  RangeError（`syncNews` 吞掉後**永久跳過該檔**、`syncFx` 則整段失敗），改用 `taipeiYmdOf`
+  後回 `'NaN-NaN-NaN'` → 比對不符 → 重抓一次。該路徑需要檔案內容壞掉才會到達，
+  且新行為是自我修復，嚴格說是改善而非退步。
+- **刻意沒做**（評估後否決，理由留檔免得下個 Agent 重想一遍）：
+  - `+8h` 收斂成跨檔共用 helper：淨 +7 行，且 `macroCalendar.ts` 目前是**零 import 的純模組**
+    （檔頭註解說明它獨立就是為了測得到），為一行算術替它接上 `report.ts` 依賴不划算。
+  - 三支 `handleSyncX` 抽共用 wrapper：回應欄位各不相同，抽出來是帶一堆可選欄位的假抽象。
+  - `handleGenerateAll` 流程、`logBatchRun` 欄位名（對應 DB 欄位）、`json()` 鍵名（前端依賴）
+    全列為禁區未動。
+  - `usMacro.ts` 的 `fredSinceDate`：算 UTC 月份、輸出 `'YYYY-MM-01'`，與期別語意不同，
+    屬表面相似而非真重複。
+- **驗證**：`npm test` 721/721（+4 新測試）、`npm run lint` 恰 3 個既有 warning（未新增）、
+  `npm run build` 通過。
+- **⚠️ 驗證的盲區**：`tsconfig.app.json` 的 `include` 只有 `["src"]`，且本機無 deno →
+  **`supabase/functions/` 不在 `tsc -b` 範圍內、`index.ts` 也沒有單元測試**。
+  該檔的改動僅靠 oxlint 與人工核對呼叫點，故本次刻意只做機械式等價改動。
 
 ### Task 46: 總經改為發布行事曆驅動的自適應掃描（0.6.15）
 - **Status**: ✅ **完成** —— 程式、兩區部署、cron 改密皆已完成並覆驗

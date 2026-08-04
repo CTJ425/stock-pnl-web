@@ -17,6 +17,7 @@ import {
   ROUND_GRACE_HOURS,
   latestPeriod,
   periodsBehind,
+  taipeiParts,
   tlLabel,
   tlPercent,
 } from './timeline'
@@ -230,6 +231,29 @@ describe('cronHoursTaipei / nextRun（總經班次軸）', () => {
 
   it('沒有班次時回 null，畫面顯示破折號', () => {
     expect(nextRun([], 10)).toBeNull()
+  })
+})
+
+describe('taipeiParts', () => {
+  it('UTC 換算成台北的日期與當日小時數', () => {
+    // UTC 04:50 → 台北 12:50
+    expect(taipeiParts('2026-07-31T04:50:00.000Z')).toEqual({ ymd: '20260731', hour: 12 + 50 / 60 })
+  })
+
+  it('跨日：UTC 當天傍晚是台北的隔天凌晨', () => {
+    // UTC 07-30 16:30 → 台北 07-31 00:30
+    expect(taipeiParts('2026-07-30T16:30:00.000Z')).toEqual({ ymd: '20260731', hour: 0.5 })
+  })
+
+  it('月份與日期補零成 YYYYMMDD，才比得上後端的 todayYmd', () => {
+    expect(taipeiParts('2026-01-05T00:00:00.000Z')?.ymd).toBe('20260105')
+  })
+
+  it('壞掉的時間戳或空值回 null，不得回 NaN', () => {
+    expect(taipeiParts(null)).toBeNull()
+    expect(taipeiParts(undefined)).toBeNull()
+    expect(taipeiParts('')).toBeNull()
+    expect(taipeiParts('not-a-date')).toBeNull()
   })
 })
 

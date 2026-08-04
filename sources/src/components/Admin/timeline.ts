@@ -149,6 +149,23 @@ export function humanAgo(ms: number): string {
    總經班次軸（M1）。橫軸是一整天的台北時間 00:00 → 24:00。
    ────────────────────────────────────────────────────────────── */
 
+/**
+ * ISO 時間 → 台北當地的日期與當日小時數（0–24，含小數）。
+ * 時間戳壞掉或空值回 null，呼叫端一律當成「沒有這個時刻」。
+ *
+ * 回傳日期而不只是小時：班次軸只畫「今天」，呼叫端得先確認這個時刻確實落在今天。
+ */
+export function taipeiParts(
+  iso: string | null | undefined,
+): { ymd: string; hour: number } | null {
+  if (!iso) return null
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return null
+  const tp = new Date(t + 8 * 3600_000)
+  const ymd = `${tp.getUTCFullYear()}${String(tp.getUTCMonth() + 1).padStart(2, '0')}${String(tp.getUTCDate()).padStart(2, '0')}`
+  return { ymd, hour: tp.getUTCHours() + tp.getUTCMinutes() / 60 }
+}
+
 /** 台北小時（0–24）→ 24 小時軸上的百分比 */
 export function dayPercent(hour: number): number {
   return Math.round(Math.min(24, Math.max(0, hour)) / 24 * 10000) / 100

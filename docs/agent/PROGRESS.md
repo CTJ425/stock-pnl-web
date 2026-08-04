@@ -1,9 +1,69 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 總經改為發布行事曆驅動的自適應掃描（0.6.15）
-- Status: **完成 —— 0.6.15 已驗證「抓到就不抓」（3186ms → 75ms）；cron 改密待授權**
-- Timestamp: 2026-07-31 17:55:00 Asia/Taipei
+- Action: 程式碼簡化（0.6.18-dev.1）
+- Status: **完成 —— 已 commit 到 `dev`；未 push、未動任何 Supabase 環境**
+- Timestamp: 2026-08-04 12:15:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 12:15:00 Asia/Taipei
+
+- **Agent**: Claude（三個 code-simplifier 子代理分批）
+- **Action**: 程式碼簡化（0.6.18-dev.1）
+- **Status**: 完成並驗證；未 push
+
+### 做法：分三批、批次間避開共用檔
+
+範圍是 0.6.14–0.6.17 動過的檔案加上 `stock-report/index.ts`。
+批次 A（前端 Admin）與批次 B（`macroCalendar.ts`）檔案不重疊故並行；
+批次 C（`index.ts`）等 B 定案後才開始 —— `index.ts` import `macroCalendar`，
+同時改會衝突。每批完成都跑過完整的 test / lint / build。
+
+### 改了什麼（行為不變）
+
+| 檔案 | 改動 | 為什麼 |
+| ---- | ---- | ---- |
+| `AdminStatusPage.tsx` | 抽檔內 `DayRow` 元件、`DAY_GRID` / `SECTION_PAD` 常數 | 班次軸三列的骨架＋格線＋「現在」線原本各寫一份，漏改一份就會看成資料對不齊軸 |
+| 同上 | `macroRows` useMemo | `judgePeriod` 原本在結論計數／下一筆發布／表格三處各算一次，可能三份判定漂移 |
+| `timeline.ts` | 新增純函式 `taipeiParts()`（+4 測試） | 頁面裡兩處手寫 `+8h` 換算，時區運算屬於已有測試的純函式層 |
+| `macroCalendar.ts` | 私有 `pad2` / `shiftPeriod` | 「年×12 + 月序 ± k」算式原本出現三次，`nextReleaseFor` 更把只差 1 的兩個值分開算兩遍 |
+| `index.ts` | 刪 `taipeiDateOf()`，四處改用早已 import 的 `taipeiYmdOf()` | 同一功能的第二份實作；這是唯一不必新增 import edge 的收斂路徑 |
+| `index.ts` | `handleAdminStatus` 註解修正 | 原註解寫「全部 allSettled」，實際是 `Promise.all` + 逐項 `.catch()`，**只改註解不改行為** |
+
+### ⚠️ 一處刻意接受的行為差異
+
+`taipeiDateOf(existing.asOf)` 在 `asOf` 無法解析時會 `new Date(NaN).toISOString()` 拋
+RangeError —— `syncNews` 被自身 try/catch 吃掉會**永久跳過該檔**、`syncFx` 沒有 try/catch
+則整段失敗。改用 `taipeiYmdOf` 後回 `'NaN-NaN-NaN'`，比對不符 → 重抓一次。
+該路徑需要檔案內容壞掉才會到達（`asOf` 只由本檔以 `new Date().toISOString()` 寫入，
+壞到 JSON 解析不了時 `downloadJson` 早就回 null），且新行為是自我修復。
+
+### ⚠️ 驗證的盲區（下個 Agent 請注意）
+
+`sources/tsconfig.app.json` 的 `include` 只有 `["src"]`，本機也沒有安裝 deno →
+**`supabase/functions/` 完全不在 `tsc -b` 的檢查範圍內**，`npm run build` 通過
+不代表 `index.ts` 型別正確；`index.ts` 又因模組載入即 `Deno.serve` 而沒有單元測試。
+該檔唯一的自動防護是 oxlint。本次因此刻意只做機械式等價改動，並人工核對每個呼叫點。
+
+### 驗證結果
+
+- `npm test` **721/721**（48 檔；較基準 +4，為 `taipeiParts` 的新測試）
+- `npm run lint` **恰 3 個 warning**（SortableTh / AuthContext / WorkspaceContext，皆既有）
+- `npm run build` 通過
+
+### 刻意沒做的事（理由留檔，免得下個 Agent 重想一遍）
+
+- **`+8h` 收斂成跨檔共用 helper**（`report.ts` / `twRevenueHistory.ts` / `macroCalendar.ts`）：
+  實際算過是淨 +7 行，且 `macroCalendar.ts` 目前是**零 import 的純模組**
+  （檔頭註解說明它獨立出來就是為了測得到），為一行算術替它接上依賴是拿耦合換不存在的收益。
+- **三支 `handleSyncX` 抽共用 wrapper**：三者回應欄位各不相同，抽出來會變成帶一堆
+  可選欄位的假抽象，比現在難讀。
+- **`handleGenerateAll` 流程、`logBatchRun` 欄位名、`json()` 鍵名**：分別對應踩過坑的
+  執行順序、`batch_run_log` 的 DB 欄位、前端依賴的 API 契約，全列為禁區。
+- **`usMacro.ts` 的 `fredSinceDate`**：算 UTC 月份、輸出 `'YYYY-MM-01'`，與期別語意不同，
+  屬表面相似而非真重複。
+- **`adminStatus.ts`**：逐欄位 normalize 是刻意的防禦，抽 helper 只會是單次使用的抽象。
 
 ---
 
