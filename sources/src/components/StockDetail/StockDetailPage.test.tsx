@@ -234,8 +234,7 @@ describe('StockDetailPage', () => {
     )
     await screen.findByText('三大法人買賣超')
 
-    // 只取卡片層級的錨點：0.6.23 起各卡內部的可收合表格也帶 sec- 開頭的 id
-    const ids = [...container.querySelectorAll('.detail-card > [id^="sec-"]')].map((el) => el.id)
+    const ids = [...container.querySelectorAll('[id^="sec-"]')].map((el) => el.id)
     expect(ids).toEqual(['sec-holding', 'sec-chips', 'sec-fundamental', 'sec-technical'])
     // 卡片標題也照同一個順序
     const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
@@ -593,73 +592,28 @@ describe('StockDetailPage', () => {
     })
   })
 
-  describe('表格收合（0.6.23）', () => {
-    /** 展開狀態下才看得到表格內容；收起後只剩標題 */
-    const instTable = () => document.getElementById('sec-chips-institutional')
+  /*
+    0.6.23 曾讓表格可收合，收起來的區塊不在 DOM 裡，匯出就會產出一份缺表格的 PDF；
+    0.6.24 移除收合後，擷取範圍理當「畫面上有什麼就是什麼」——這條測試守住這件事，
+    順便確認當時為了收合而加的展開／還原邏輯沒有殘留。
+  */
+  it('匯出 PDF：擷取的是籌碼＋基本面＋技術面三段，持股不在裡面', async () => {
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    await screen.findByText('三大法人買賣超')
 
-    it('標題是開關：點一下收起、再點展開', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
-      const head = await screen.findByRole('button', { name: /三大法人買賣超/ })
+    fireEvent.click(screen.getByRole('button', { name: /下載 PDF/ }))
+    await waitFor(() => expect(generatePdfBlob).toHaveBeenCalled())
 
-      expect(head.getAttribute('aria-expanded')).toBe('true')
-      expect(instTable()).toBeTruthy()
+    const surface = generatePdfBlob.mock.calls[0][0] as HTMLElement
+    expect(surface.querySelector('#sec-chips')).toBeTruthy()
+    expect(surface.querySelector('#sec-fundamental')).toBeTruthy()
+    expect(surface.querySelector('#sec-technical')).toBeTruthy()
+    expect(within(surface).getByText('三大法人買賣超')).toBeTruthy()
+    // 共用報告不含個資：持股那段刻意留在擷取範圍外
+    expect(surface.querySelector('#sec-holding')).toBeNull()
 
-      fireEvent.click(head)
-      expect(head.getAttribute('aria-expanded')).toBe('false')
-      expect(instTable()).toBeNull()
-      // 標題本身不能跟著消失，否則就再也展不開了
-      expect(screen.getByRole('button', { name: /三大法人買賣超/ })).toBeTruthy()
-
-      fireEvent.click(head)
-      expect(instTable()).toBeTruthy()
-    })
-
-    it('一鍵全部收起／展開，按鈕文字跟著狀態走', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
-      await screen.findByText('三大法人買賣超')
-
-      fireEvent.click(screen.getByRole('button', { name: /全部收起/ }))
-      expect(instTable()).toBeNull()
-      expect(document.getElementById('sec-chips-margin')).toBeNull()
-
-      const expandAll = screen.getByRole('button', { name: /全部展開/ })
-      fireEvent.click(expandAll)
-      expect(instTable()).toBeTruthy()
-      expect(screen.getByRole('button', { name: /全部收起/ })).toBeTruthy()
-    })
-
-    it('收起任一區塊後，整體按鈕就變成「全部展開」', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
-      const head = await screen.findByRole('button', { name: /三大法人買賣超/ })
-
-      expect(screen.getByRole('button', { name: /全部收起/ })).toBeTruthy()
-      fireEvent.click(head)
-      expect(screen.getByRole('button', { name: /全部展開/ })).toBeTruthy()
-    })
-
-    /*
-      收起來的區塊不在 DOM 裡，直接擷取會產出一份缺表格的 PDF，
-      而且畫面上完全看不出少了什麼 —— 這是這個功能最容易無聲出錯的地方。
-    */
-    it('匯出 PDF 前會先全部展開，事後還原原本的收合狀態', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
-      const head = await screen.findByRole('button', { name: /三大法人買賣超/ })
-      fireEvent.click(head)
-      expect(instTable()).toBeNull()
-
-      let domAtCapture: HTMLElement | null = null
-      generatePdfBlob.mockImplementation(async () => {
-        domAtCapture = instTable()
-        return new Blob(['pdf'])
-      })
-
-      fireEvent.click(screen.getByRole('button', { name: /下載 PDF/ }))
-      await waitFor(() => expect(generatePdfBlob).toHaveBeenCalled())
-
-      // 擷取當下那張表必須在 DOM 裡
-      expect(domAtCapture).not.toBeNull()
-      // 事後還原：使用者收起來的東西不該被匯出動作偷偷展開
-      await waitFor(() => expect(instTable()).toBeNull())
-    })
+    await waitFor(() =>
+      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), '個股分析-2330-2026-07-23.pdf'),
+    )
   })
 })

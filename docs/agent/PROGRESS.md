@@ -1,9 +1,42 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 個股分析表格收合（0.6.23 定版）
-- Status: **完成 —— 純前端；783 測試全過**
-- Timestamp: 2026-08-04 16:05:00 Asia/Taipei
+- Action: 移除表格收合（0.6.24 定版，回退 0.6.23）
+- Status: **完成 —— 純前端；780 測試全過**
+- Timestamp: 2026-08-04 19:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 19:30:00 Asia/Taipei
+
+- **Agent**: Claude
+- **Action**: 移除個股分析的表格收合（0.6.24）
+
+### 決定：整個功能拿掉，不是只拿掉按鈕
+
+使用者在 0.6.23 上線後明確要求移除。做法是 **`git revert 2d9049b` 當機械性基底**，
+而不是手動逐處刪 —— 收合牽到的地方比表面上多（測試裡的 `noCollapse`、
+`StockDetailPage.test` 的 `.detail-card > [id^="sec-"]` 選擇器、
+`index.css` 的 `.rpt-collapse` / `.rpt-caret`、`handleDownload` 的展開／還原），
+手刪一定會漏。
+
+### revert 之後另外處理的三件事
+
+1. **版號不跟著回退**：revert 會把 `version.ts` / `package.json` 打回 0.6.22，
+   改成 **0.6.24**；README 版本紀錄保留 0.6.23 那則（歷史不抹除），另加 0.6.24 一則。
+   `docs/agent/` 兩份也是先 `git checkout HEAD --` 保住歷史再往上加。
+2. **保留 0.6.23 才加的 PDF 測試 mock**：`vi.mock('../../services/reportPdf')`
+   讓 PDF 路徑第一次測得到，拿掉是退步。收合那個 describe（4 條）刪掉，
+   改寫成 1 條「匯出 PDF：擷取的是籌碼＋基本面＋技術面三段，持股不在裡面」——
+   它同時守住「擷取範圍完整」與「沒有殘留的展開／還原邏輯」。
+3. **`index.css` 那段註解重新成立**：0.6.8 原本寫著四段刻意不收合，
+   0.6.23 推翻它，現在回來了。補上「0.6.23 試過、0.6.24 移除」與理由
+   （收起來的區塊不在 DOM，匯出 PDF 多一條沒人看得見的失敗路徑），
+   免得下一個 Agent 再走一次。
+
+### 驗證
+
+`npm test` **780/780**（783 − 收合 4 條 + PDF 1 條）、lint 3 個既有 warning、build 通過。
 
 ---
 

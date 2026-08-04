@@ -25,8 +25,6 @@ import {
   fmtUpdatedAt,
   shortDate,
 } from './chipFormat'
-import { CollapsibleSection } from '../Common/CollapsibleSection'
-import type { CollapseProps } from './tableSections'
 
 /**
  * 三大法人的四個組成 + 合計。
@@ -75,7 +73,7 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
   )
 }
 
-export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData } & CollapseProps) {
+export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
   // 表格預設看最新交易日，但可回看 7 天內任一天
@@ -133,18 +131,12 @@ export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData }
         </div>
       </header>
 
-      <CollapsibleSection
-        id="sec-chips-institutional"
-        title={
-          <>
+      <section className="rpt-section">
+        <div className="rpt-section-head">
+          <h3>
             三大法人買賣超
             <SourceTag stamp={report.sources?.institutional} />
-          </>
-        }
-        open={!collapsed.has('sec-chips-institutional')}
-        onToggle={() => onToggle('sec-chips-institutional')}
-        meta={
-          <>
+          </h3>
           {history.length > 1 && (
             <div className="chip-toggle" role="group" aria-label="選擇要看哪一個交易日">
               {history.map((d, i) => (
@@ -161,9 +153,8 @@ export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData }
               ))}
             </div>
           )}
-          </>
-        }
-      >
+        </div>
+
         {viewInst === null ? (
           <p className="hint">
             {viewDay ? `${viewDay.date} 查無此股資料。` : '查無此股當日資料。'}
@@ -212,7 +203,7 @@ export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData }
             </p>
           </>
         )}
-      </CollapsibleSection>
+      </section>
 
       <section className="rpt-section">
         <div className="rpt-section-head">
@@ -258,17 +249,11 @@ export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData }
         )}
       </section>
 
-      <CollapsibleSection
-        id="sec-chips-margin"
-        title={
-          <>
-            融資融券
-            <SourceTag stamp={report.sources?.margin} />
-          </>
-        }
-        open={!collapsed.has('sec-chips-margin')}
-        onToggle={() => onToggle('sec-chips-margin')}
-      >
+      <section className="rpt-section">
+        <h3>
+          融資融券
+          <SourceTag stamp={report.sources?.margin} />
+        </h3>
         {margin === null ? (
           <p className="hint">
             今日融資融券尚未公布（約 21:00–22:00 才會有），稍晚的排程會自動補上。
@@ -323,7 +308,7 @@ export function ChipsTab({ report, collapsed, onToggle }: { report: ReportData }
             </p>
           </>
         )}
-      </CollapsibleSection>
+      </section>
 
       {history.length > 0 && margin !== null && (
         <section className="rpt-section">

@@ -1770,6 +1770,10 @@ a.hmenu-item {
  * 四段（我的持股 / 籌碼 / 基本面 / 技術面）併成一頁後，原本的 .rpt-section
  * 全部同一級、間距一律 24px，看不出哪幾段屬於誰。每段給一張自己的卡，
  * 靠卡與卡之間的留白分邊界 —— 不需要任何互動，也不會有「東西被收起來找不到」。
+ *
+ * 0.6.23 曾把每個表格標題做成收合開關，0.6.24 整個移除：收起來的區塊不在 DOM 裡，
+ * 匯出 PDF 得先全部展開再還原，多出一條沒人看得見的失敗路徑，換來的只是少捲一點。
+ * 這條路走過了，不必再走一次。
  */
 .detail-stack {
   display: flex;
@@ -2517,62 +2521,6 @@ a.hmenu-item {
 
   .adm-side-label {
     display: none;
-  }
-}
-
-/* ── 個股分析：表格區塊收合（0.6.23）───────────────────────── */
-
-/*
- * 標題本身就是開關。做成 button 而不是在標題旁邊放一顆小圖示鈕：
- * 點擊目標大得多，而且「整條標題可點」是收合元件的通用預期。
- *
- * 樣式刻意繼承 h3 —— 這一行在收合前後看起來必須是同一個標題，
- * 只有前面多一個箭頭。做成看起來像按鈕的東西反而會讓人以為是別的功能。
- */
-.rpt-collapse {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-align: left;
-}
-
-.rpt-collapse:hover {
-  color: var(--accent);
-}
-
-.rpt-collapse:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-
-/* 收起時箭頭朝右（＝「還有東西在裡面」），展開時朝下 */
-.rpt-caret {
-  flex: 0 0 auto;
-  color: var(--ink-muted);
-  transform: rotate(-90deg);
-  transition: transform 0.18s ease;
-}
-
-.rpt-caret.open {
-  transform: rotate(0deg);
-}
-
-.rpt-collapse:hover .rpt-caret {
-  color: var(--accent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rpt-caret {
-    transition: none;
   }
 }
 

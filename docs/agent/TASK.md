@@ -8,8 +8,21 @@
 
 ## 📋 Active Tasks
 
-### Task 52: 個股分析的表格收合（0.6.23）
+### Task 53: 移除表格收合（0.6.24）
 - **Status**: ✅ **完成** —— 純前端，不需要動 Supabase
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 19:30:00 Asia/Taipei
+- **需求**：使用者在 0.6.23 上線後要求把表格收合**整個功能**拿掉（不是只拿掉按鈕）。
+- **做法**：`git revert 2d9049b` 當基底 —— 手動逐處刪會漏掉測試選擇器、
+  `index.css` 的 `.rpt-collapse` / `.rpt-caret`、`handleDownload` 的展開／還原。
+- **revert 之外**：版號改 0.6.24（不隨 revert 回到 0.6.22）；
+  README 與 `docs/agent/` 保留 0.6.23 的歷史紀錄再往上加；
+  保留 0.6.23 才加的 `reportPdf` 測試 mock，收合 4 條測試改寫成 1 條 PDF 擷取範圍測試；
+  `index.css` 補註「0.6.23 試過收合、0.6.24 移除」與理由。
+- **驗證**：`npm test` 780/780、lint 3 個既有 warning、build 通過。
+
+### Task 52: 個股分析的表格收合（0.6.23）
+- **Status**: ↩️ **已於 0.6.24 移除**（見 Task 53）——當時完成、純前端
 - **Agent**: Claude
 - **Timestamp**: 2026-08-04 16:05:00 Asia/Taipei
 - **需求**：個股分析中「有欄位的表格」都要能收合，並要有一鍵全部收起 / 展開。
