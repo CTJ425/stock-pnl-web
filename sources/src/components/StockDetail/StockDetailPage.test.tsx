@@ -592,6 +592,51 @@ describe('StockDetailPage', () => {
     })
   })
 
+  describe('法人買賣超圖的圖例可切換（0.6.27）', () => {
+    /** 外資（不含自營）是 CATEGORICAL_COLORS[0]；長條以該色填滿 */
+    const foreignBars = () => document.querySelectorAll('svg rect[fill="#3987e5"]')
+    const yTicks = () =>
+      [...document.querySelectorAll('#sec-chips svg text')]
+        .map((t) => t.textContent ?? '')
+        .filter((t) => /^-?[\d,]+$/.test(t))
+
+    /*
+      以 title 定位，不用 role + name：上方切換法人的 .chip-btn 用的是同一批文字，
+      按名稱抓會同時命中兩顆按鈕（切換與圖例）。
+    */
+    const legendToggle = (label: string) =>
+      screen.getByTitle(new RegExp(`^(隱藏|顯示)${label.replace(/[()（）]/g, '\\$&')}$`))
+
+    it('點圖例關掉某個法人，縱軸依剩下的重算', async () => {
+      const user = userEvent.setup()
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      await screen.findByText('三大法人買賣超')
+
+      // 外資單日買超 3000～5000 股，另外三家都在 100 股以內
+      expect(foreignBars().length).toBeGreaterThan(0)
+      expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(true)
+
+      await user.click(legendToggle('外資（不含自營）'))
+      expect(foreignBars()).toHaveLength(0)
+      // 剩下三家的量級小兩個數量級，值域必須跟著縮小才看得出彼此的差別
+      expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(false)
+
+      await user.click(legendToggle('外資（不含自營）'))
+      expect(foreignBars().length).toBeGreaterThan(0)
+    })
+
+    it('最後一個法人不給關（全部關掉只會剩空座標軸）', async () => {
+      const user = userEvent.setup()
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      await screen.findByText('三大法人買賣超')
+
+      for (const label of ['外資（不含自營）', '外資自營商', '投信']) {
+        await user.click(legendToggle(label))
+      }
+      expect(screen.getByTitle('至少要留一條線').hasAttribute('disabled')).toBe(true)
+    })
+  })
+
   /*
     0.6.23 曾讓表格可收合，收起來的區塊不在 DOM 裡，匯出就會產出一份缺表格的 PDF；
     0.6.24 移除收合後，擷取範圍理當「畫面上有什麼就是什麼」——這條測試守住這件事，

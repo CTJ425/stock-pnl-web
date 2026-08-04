@@ -8,6 +8,18 @@
 
 ## 📋 Active Tasks
 
+### Task 56: 法人買賣超圖的圖例可切換（0.6.27）
+- **Status**: ✅ **完成** —— 純前端，不需要動 Supabase
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 20:20:00 Asia/Taipei
+- **做法**：沿用 Task 55 在 `ChartLegend` 加的 opt-in 切換，`ChipsTab` 接上去即可。
+- **只在 `all` 模式**：單一法人檢視時圖例是紅買綠賣（極性），沒有身分可關。
+- **⚠️ 顏色要依 `COMPONENTS` 原始順序取**（`colorOf(key)`），不可依過濾後的索引，
+  否則關掉外資之後其餘三家會整組換色。
+- **⚠️ 測試定位**：圖例不能用 `getByRole('button', { name })` 抓 ——
+  上方 `.chip-btn` 切換鈕文字相同會撞名，改用 `title`。
+- **驗證**：`npm test` 791/791（新增 2 條）、lint 3 個既有 warning、build 通過。
+
 ### Task 55: 獲利能力走勢圖的圖例可切換（0.6.26）
 - **Status**: ✅ **完成** —— 純前端，不需要動 Supabase
 - **Agent**: Claude

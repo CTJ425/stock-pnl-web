@@ -91,11 +91,25 @@ export function ChipsTab({ report }: { report: ReportData }) {
   const netsOf = (pick: (i: InstitutionalChip) => ChipLeg): Array<number | null> =>
     history.map((d) => (d.institutional ? pick(d.institutional).net : null))
 
+  /*
+    並排模式下可以把某個法人關掉（0.6.27，與獲利能力走勢圖同一套互動）。
+    值域是由傳進去的 series 現算的，關掉之後 Y 軸會依剩下的法人重算 ——
+    外資的量級常常是投信的數十倍，把它關掉，另外三家才看得出彼此的差別。
+
+    只在 `all` 模式有意義：切到單一法人時圖例講的是紅買綠賣（極性），不是身分。
+  */
+  const [hiddenLegs, setHiddenLegs] = useState<string[]>([])
+  const visibleComponents = COMPONENTS.filter((c) => !hiddenLegs.includes(c.key))
+  const toggleLeg = (key: string) =>
+    setHiddenLegs((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  /** 顏色依 COMPONENTS 的原始順序指派，關掉幾個之後剩下的線不會換色 */
+  const colorOf = (key: string) => CATEGORICAL_COLORS[COMPONENTS.findIndex((c) => c.key === key)]
+
   const chartSeries =
     series === 'all'
-      ? COMPONENTS.map((c, idx) => ({
+      ? visibleComponents.map((c) => ({
           name: c.label,
-          color: CATEGORICAL_COLORS[idx],
+          color: colorOf(c.key),
           values: netsOf(c.pick),
         }))
       : [
@@ -107,10 +121,14 @@ export function ChipsTab({ report }: { report: ReportData }) {
 
   const legendItems =
     series === 'all'
-      ? COMPONENTS.map((c, idx) => ({
+      ? COMPONENTS.map((c) => ({
           label: c.label,
-          color: CATEGORICAL_COLORS[idx],
+          color: colorOf(c.key),
           note: fmtLotsFromShares(netsOf(c.pick)[lastIndex] ?? null),
+          hidden: hiddenLegs.includes(c.key),
+          // 最後一個不給關：全部關掉只會剩一張空座標軸，看起來像壞掉
+          toggleLocked: visibleComponents.length === 1 && visibleComponents[0].key === c.key,
+          onToggle: () => toggleLeg(c.key),
         }))
       : [
           { label: '買超（買比賣多）', color: CHART_COLORS.up },
@@ -240,7 +258,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                 <ChartLegend items={legendItems} />
                 <p className="chart-legend-foot">
                   {series === 'all'
-                    ? '長條在零軸以上是買超、以下是賣超。右側數字為最近交易日的約當張數。合計不另外畫，因為它就是這四項相加。'
+                    ? '長條在零軸以上是買超、以下是賣超。右側數字為最近交易日的約當張數。點圖例可以把某個法人關掉，縱軸會依剩下的重算。合計不另外畫，因為它就是這四項相加。'
                     : '紅色在零軸以上是買超，綠色在零軸以下是賣超。'}
                 </p>
               </div>

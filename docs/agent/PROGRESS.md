@@ -1,9 +1,37 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 獲利能力走勢圖的圖例可切換（0.6.26 定版）
-- Status: **完成 —— 純前端；789 測試全過**
-- Timestamp: 2026-08-04 20:10:00 Asia/Taipei
+- Action: 法人買賣超圖的圖例可切換（0.6.27 定版）
+- Status: **完成 —— 純前端；791 測試全過**
+- Timestamp: 2026-08-04 20:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 20:20:00 Asia/Taipei（0.6.27）
+
+- **Agent**: Claude
+- **Action**: 籌碼分頁「近 N 日買賣超」並排圖的圖例可關掉個別法人
+
+沿用 0.6.26 在 `ChartLegend` 加的 opt-in 切換，`ChipsTab` 只是接上去，沒有新機制。
+價值同樣在**縱軸重算**：外資的量級常是投信的數十倍，關掉外資之後另外三家才拉得開。
+
+### 兩個範圍決定
+
+1. **只有 `all`（並排）模式給切換**。切到單一法人時圖例講的是紅買綠賣（極性編碼），
+   不是身分，那裡沒有東西可以關。
+2. **顏色依 `COMPONENTS` 原始順序指派**（`colorOf(key)`），不是依過濾後的索引 ——
+   否則關掉外資之後，投信會接手外資的藍色，剩下的線等於整組換色。
+
+### 測試定位的坑
+
+`ChipsTab` 沒有獨立測試檔，測試加在 `StockDetailPage.test.tsx`。
+**不能用 `getByRole('button', { name })` 抓圖例** —— 上方切換法人的 `.chip-btn`
+用的是同一批文字，會同時命中兩顆。改以 `title`（隱藏 X／顯示 X）定位。
+
+### 驗證
+
+`npm test` **791/791**（新增 2 條：關掉外資後該色長條消失且值域縮小、最後一個 disabled）、
+lint 3 個既有 warning、build 通過。
 
 ---
 
