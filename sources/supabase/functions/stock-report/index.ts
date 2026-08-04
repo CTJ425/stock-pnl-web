@@ -104,7 +104,6 @@ import {
   publishedQuarters,
   type ProfitProgress,
 } from './twProfitHistory.ts'
-import { NEWS_SCHEMA, googleNewsRssUrl, parseGoogleNewsRss, type NewsFile } from './twNews.ts'
 import {
   MARKET_SCHEMA,
   bfi82uDayUrl,
@@ -199,6 +198,16 @@ const MAX_BACKFILL_MONTHS = 4
  * 盤後批次一個晚上跑 32 輪，一晚就補得完。
  */
 const MAX_BACKFILL_QUARTERS = 2
+
+/**
+ * 即點即產（`warm`）自己的回補預算，刻意比夜間小（0.6.29）。
+ *
+ * 這是使用者正在等的請求，不是排程 —— 目標是「第一眼就有東西看」，不是一次補到滿。
+ * 季報單份 1.6MB、且每季要抓上市＋上櫃兩份，是月營收的四倍重，故只補 1 季；
+ * 其餘的仍由夜間批次逐輪補完。
+ */
+const WARM_BACKFILL_MONTHS = 2
+const WARM_BACKFILL_QUARTERS = 1
 /** 同時進行的外部抓取數上限（T86 單檔約 1–2MB） */
 const FETCH_CONCURRENCY = 3
 
@@ -904,7 +913,7 @@ async function syncFundamental(
 
 /**
  * 抓 big5 網頁。MOPS 的 t21sc03 是 big5，直接當 UTF-8 讀會整份變亂碼。
- * 失敗（含 10 秒逾時）回 null 不拋，比照 syncNews 的容錯準則。
+ * 失敗（含 10 秒逾時）回 null 不拋，與 syncDaily / syncMacro 的容錯準則一致。
  */
 async function fetchBig5Text(url: string): Promise<string | null> {
   try {
@@ -937,6 +946,7 @@ async function fetchBig5Text(url: string): Promise<string | null> {
 async function backfillRevenue(
   tickers: Array<{ ticker: string; name: string }>,
   now: Date,
+  maxMonths = MAX_BACKFILL_MONTHS,
 ): Promise<{ filled: number; months: string[] }> {
   if (tickers.length === 0) return { filled: 0, months: [] }
 
@@ -956,7 +966,7 @@ async function backfillRevenue(
     })
   }
 
-  const targets = planRevenueBackfill(have, wantMonths, MAX_BACKFILL_MONTHS)
+  const targets = planRevenueBackfill(have, wantMonths, maxMonths)
   if (targets.length === 0) return { filled: 0, months: [] }
   const wanted = new Set(files.keys())
 
@@ -1055,6 +1065,7 @@ async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): 
 async function backfillProfit(
   tickers: Array<{ ticker: string; name: string }>,
   now: Date,
+  maxQuarters = MAX_BACKFILL_QUARTERS,
 ): Promise<{ filled: number; quarters: string[] }> {
   if (tickers.length === 0) return { filled: 0, quarters: [] }
 
@@ -1081,7 +1092,7 @@ async function backfillProfit(
     })
   }
 
-  const targets = planProfitBackfill(have, wantQuarters, MAX_BACKFILL_QUARTERS)
+  const targets = planProfitBackfill(have, wantQuarters, maxQuarters)
   if (targets.length === 0) return { filled: 0, quarters: [] }
   const wanted = new Set(files.keys())
 
@@ -1177,7 +1188,7 @@ async function fetchRwdJson(url: string): Promise<unknown | null> {
  * 1. 成交量值：整月一次抓得完（FMTQIK 的 rwd 版），所以每輪都重抓本月、順便更正。
  * 2. 法人金額：一天一個請求，用 `planInstitutionalBackfill` 的預算逐日補。
  *
- * 全部失敗就不覆寫既有檔（留舊資料勝過空檔，沿用 syncNews 的準則）。
+ * 全部失敗就不覆寫既有檔（留舊資料勝過空檔，同 syncMacro 的準則）。
  */
 async function syncMarket(now: Date): Promise<{
   synced: boolean
@@ -1242,48 +1253,6 @@ async function syncMarket(now: Date): Promise<{
   }
 }
 
-// ---- 新聞（AI 分析的消息面）----
-
-/**
- * 每檔台股以股票名稱查 Google News RSS，產出 news/{ticker}.json（整份覆寫）。
- * 同一台北日曆日已抓過就跳過（新聞一天一抓即可；cron 一天三班，頭班抓、後兩班跳過）。
- * fetch 失敗或解析出 0 則時**不覆寫既有檔**——留舊新聞比空檔有用。
- */
-async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promise<number> {
-  const today = taipeiYmdOf(new Date())
-  let synced = 0
-  for (const { ticker, name } of tickers) {
-    try {
-      const existing = await downloadJson<NewsFile>(`news/${ticker}.json`)
-      if (existing && existing.schema === NEWS_SCHEMA && taipeiYmdOf(new Date(existing.asOf)) === today) {
-        continue
-      }
-
-      const url = googleNewsRssUrl(name, ticker)
-      const res = await fetch(url, {
-        headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/xml' },
-        signal: AbortSignal.timeout(10_000),
-      })
-      if (!res.ok) continue
-      const items = parseGoogleNewsRss(await res.text())
-      if (items.length === 0) continue
-
-      const file: NewsFile = {
-        schema: NEWS_SCHEMA,
-        ticker,
-        name,
-        asOf: new Date().toISOString(),
-        query: `${name} ${ticker}`,
-        items,
-      }
-      if (await uploadJson(`news/${ticker}.json`, file)) synced++
-    } catch {
-      // 單檔失敗（含 10 秒逾時）不影響其他檔與主流程
-    }
-  }
-  return synced
-}
-
 // ---- 美國總經指標（0.6.5）----
 
 /**
@@ -1303,12 +1272,12 @@ async function syncNews(tickers: Array<{ ticker: string; name: string }>): Promi
  *    FRED 匯入更晚，13:00 那班拿到的序列還沒有 2026-06 那一筆；冬令時發布時間是
  *    13:30 UTC，13:00 那班甚至跑在發布之前，每個月都會固定慢一天。
  *    代價只是每天多五個 CSV 請求（兩班各抓一次），換掉一個必然發生的錯誤。
- *    ⚠️ 不用 `dataYmd`（比照 `syncNews`）：美國數據按自己的發布日走，
+ *    ⚠️ 不用 `dataYmd`：美國數據按自己的發布日走，
  *    與台股交易日無關，用交易日當鍵會在連假期間停更。
  * 4. **不寫 `chip_raw_cache`**。那張表的 prune 是 `ymd < cutoff` 的 8 碼日期字典序，
  *    月份鍵每輪都會被刪掉（`backfillRevenue` 就是為此不用它）。
  *    `macro/us.json` 自己就是快取。
- * 5. **全部失敗就不覆寫既有檔**，沿用 `syncNews` 的準則：留舊資料勝過空檔。
+ * 5. **全部失敗就不覆寫既有檔**：留舊資料勝過空檔。
  */
 async function syncMacro(now: Date): Promise<{
   /** 這次有沒有真的寫檔（＝內容變了且上傳成功） */
@@ -1368,7 +1337,7 @@ async function syncMacro(now: Date): Promise<{
       // 單一序列失敗不影響其他四個
     }
   }
-  // 全滅時不覆寫既有檔（沿用 syncNews 的準則：留舊資料勝過空檔）。
+  // 全滅時不覆寫既有檔（留舊資料勝過空檔）。
   // 回傳 count = 0 並標記 reason —— 這裡曾經整批失敗而只剩一個 boolean false
   // 可看，查不出是「跳過」還是「抓不到」。
   if (indicators.length === 0) {
@@ -1459,7 +1428,7 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
     }
   }
 
-  // 全滅時不覆寫既有檔（沿用 syncMacro / syncNews 的準則：留舊資料勝過空檔）。
+  // 全滅時不覆寫既有檔（沿用 syncMacro 的準則：留舊資料勝過空檔）。
   // 回傳 count = 0 讓 batch_run_log 分得出「跳過」與「抓不到」
   if (currencies.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
 
@@ -1523,8 +1492,9 @@ async function warmDataYmd(): Promise<string> {
  *    所以同一檔每天最多只會真的做一次事，之後前端直接讀 Storage。
  * 3. 基本面那三份是全市場大檔且走 `chip_raw_cache`，對外放大效應趨近於零。
  *
- * 刻意**不**含新聞：它只服務 AI 分析，而 AI 在缺新聞時本來就能正常降級
- * （prompt 有缺料文案），沒必要為它在開頁路徑上多付一次 10 秒逾時的 RSS 請求。
+ * 4. **也跑一輪歷史回補**（0.6.29）：來源端點只回最新一期，歷史與 EPS 全靠回補，
+ *    而回補在夜間批次裡排在 decideSkip 之後 —— 當天資料一齊就整段短路，
+ *    新加的股票當天一輪都補不到。預算刻意比夜間小，見函式內的說明。
  */
 async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
   const ticker = String(body.ticker ?? '').trim()
@@ -1545,12 +1515,39 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
   const dailySynced = await syncDaily(one, dataYmd, { onDemand: true })
   const fundamental = await syncFundamental(one, dataYmd)
 
+  /*
+    0.6.29：即點即產也跑一輪歷史回補。
+
+    **為什麼需要**：上面兩支只給得出「最新一個月營收」與「最新一季獲利能力」——
+    來源端點就只回最新一期。歷史與 EPS 全靠回補，而回補排在夜間批次的 decideSkip
+    之後，當天資料一齊就整段短路。結果是晚上加的股票當天一輪都補不到，
+    要等隔天的批次才開始長，而使用者當下看到的是一張只有一列的表。
+
+    **預算比夜間小**：這是使用者正在等的請求，不是排程。
+    月營收 2 個月（每月上市＋上櫃兩份、各約 400KB），
+    季報只補 1 季（單份 1.6MB、同樣兩個市場，是月營收的四倍重）。
+    其餘的仍由夜間批次逐輪補完 —— 這裡要的是「第一眼就有東西看」，不是一次補到滿。
+
+    **⚠️ 兩步必須循序，不可 Promise.all**：兩支回補都會下載、合併、覆寫
+    同一個 fundamental/{ticker}.json，並行會有一邊的寫入被另一邊蓋掉。
+
+    回補本身是缺口驅動的：資料已齊時一個對外請求都不發（只多兩次 Storage 讀取），
+    所以對已經補滿的舊標的幾乎零成本。
+  */
+  const now = new Date()
+  const revenue = await backfillRevenue(one, now, WARM_BACKFILL_MONTHS)
+  const profit = await backfillProfit(one, now, WARM_BACKFILL_QUARTERS)
+
   return json({
     ok: true,
     ticker,
     ymd: dataYmd,
     dailySynced,
     fundamentalSynced: fundamental.synced,
+    // 回補結果一併回報：慢的時候要分得出是慢在哪一段
+    revenueMonths: revenue.months,
+    profitQuarters: profit.quarters,
+    durationMs: Date.now() - now.getTime(),
   })
 }
 
@@ -1814,7 +1811,7 @@ async function handleGenerateAll(): Promise<Response> {
   // 技術面的日線；與籌碼報告各自獨立，抓不到也不影響上面已寫好的報告
   const dailySynced = await syncDaily(tickers, series.dataYmd)
 
-  // 基本面與新聞（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
+  // 基本面（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
   const fundamental = await syncFundamental(tickers, series.dataYmd)
   // 月營收歷史回補（0.6.4）。必須排在 syncFundamental 之後 —— 它讀的是剛寫好的檔案。
   // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
@@ -1822,10 +1819,9 @@ async function handleGenerateAll(): Promise<Response> {
   // 季度獲利能力回補（0.6.21）。同樣排在 syncFundamental 之後、同樣缺口驅動 ——
   // 12 季補滿之後這行是零成本的。單次只補 2 季，一晚 32 輪綽綽有餘。
   const profit = await backfillProfit(tickers, now)
-  const newsSynced = await syncNews(tickers)
 
   // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
-  // daily/ fundamental/ news/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
+  // daily/ fundamental/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
   // 而這三類都是覆寫制、本來就沒有舊檔要清。
   // 只在有重產時才清 —— 沒重產就沒有新東西進來，沒有要清的。
   if (regenerate) {
@@ -1861,7 +1857,6 @@ async function handleGenerateAll(): Promise<Response> {
     fundamental_synced: fundamental.synced,
     revenue_backfilled: revenue.filled,
     profit_backfilled: profit.filled,
-    news_synced: newsSynced,
     duration_ms: Date.now() - startedAt,
   })
 
@@ -1878,7 +1873,6 @@ async function handleGenerateAll(): Promise<Response> {
     revenueMonths: revenue.months,
     profitBackfilled: profit.filled,
     profitQuarters: profit.quarters,
-    newsSynced,
     t86Today,
     t86Revisions: t86State?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? false,
@@ -2071,7 +2065,7 @@ async function latestChipSources(): Promise<unknown> {
  * 會讓這個端點從 2 秒變成十幾秒，而畫面上要的其實只有分子分母。
  */
 async function storageCoverage(): Promise<Record<string, number>> {
-  const dirs = ['daily', 'fundamental', 'news']
+  const dirs = ['daily', 'fundamental']
   const out: Record<string, number> = {}
   await Promise.all(
     dirs.map(async (d) => {

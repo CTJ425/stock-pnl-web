@@ -8,6 +8,30 @@
 
 ## 📋 Active Tasks
 
+### Task 60: 移除新聞功能（0.6.29）
+- **Status**: 🚧 **程式碼完成，等部署** —— 部署後夜間批次才會停止產生 `news/*.json`
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 21:35:00 Asia/Taipei
+- **⚠️ 澄清一個容易誤記的點**：0.6.13「移除新聞」指的是**管理後台不再追蹤新聞狀態**，
+  功能本體當時仍在（當年的 PROGRESS 就寫明了）。0.6.29 才是真正把功能拿掉。
+- **刪除範圍**：`twNews.ts`、`newsProxy.ts` 與兩份測試、`syncNews()`、
+  AI payload 的 news 區塊與 prompt 段落、`aiPrompts` 準則第 6 條（並重新編號）、
+  追問範圍與婉拒句、後台說明文字、`SPEC.md` 的「消息面」段落。
+- **未處理（需指示）**：兩區 Storage 的 `news/*.json` 舊檔仍在（已不再讀寫）；
+  **後台若存過自訂分析提示詞，DB 裡那份仍留著舊的新聞條款**，程式預設值改了不會回寫。
+
+### Task 59: 即點即產順手補一輪歷史（0.6.29）
+- **Status**: 🚧 **程式碼完成，等部署**
+- **Agent**: Claude
+- **Timestamp**: 2026-08-04 21:35:00 Asia/Taipei
+- **問題**：`warm` 的來源端點只回最新一期（月營收 1 個月、獲利能力 1 季、無 EPS），
+  歷史全靠回補，而回補排在 `decideSkip` 之後 —— 當天資料齊了就短路，
+  晚上加的股票要等隔天才開始長。
+- **做法**：`handleWarm` 追加 `backfillRevenue`（2 個月）+ `backfillProfit`（1 季），
+  預算比夜間小，因為這是使用者正在等的請求。
+- **⚠️ 兩支回補必須循序**，都會覆寫同一個 `fundamental/{ticker}.json`，
+  並行會掉寫入。
+
 ### Task 58: 台股全市場量能與三大法人買賣超（0.6.28）
 - **Status**: ✅ **完成並部署** —— 兩區 Edge Function 已部署、`market-daily` 已建、資料已產出
   （測試區 v37 / 正式區 v25；首跑 24 天、法人已補 5 天。詳見 PROGRESS 的部署紀錄）

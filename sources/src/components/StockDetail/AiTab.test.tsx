@@ -10,7 +10,6 @@ const {
   clearAiSettings,
   isAiAdmin,
   fetchDailySeries,
-  fetchNews,
   createAiProvider,
 } = vi.hoisted(() => ({
   loadAiSettings: vi.fn(),
@@ -18,7 +17,6 @@ const {
   clearAiSettings: vi.fn(),
   isAiAdmin: vi.fn(),
   fetchDailySeries: vi.fn(),
-  fetchNews: vi.fn(),
   createAiProvider: vi.fn(),
 }))
 
@@ -35,10 +33,6 @@ vi.mock('../../services/aiSettings', async (importOriginal) => {
 
 vi.mock('../../services/dailyProxy', () => ({
   fetchDailySeries,
-}))
-
-vi.mock('../../services/newsProxy', () => ({
-  fetchNews,
 }))
 
 vi.mock('../../services/aiClient', async (importOriginal) => {
@@ -84,7 +78,6 @@ describe('AiTab', () => {
     sessionStorage.clear()
     vi.clearAllMocks()
     fetchDailySeries.mockResolvedValue(dummyDaily)
-    fetchNews.mockResolvedValue(null)
     isAiAdmin.mockResolvedValue(true)
   })
 
@@ -130,26 +123,14 @@ describe('AiTab', () => {
     expect(mockComplete).toHaveBeenCalledTimes(1)
   })
 
-  it('基本面與新聞有資料時應一併餵進 prompt；新聞為 null 時仍可完成解讀', async () => {
+  it('基本面有資料時應一併餵進 prompt', async () => {
     loadAiSettings.mockResolvedValue({
       provider: 'google',
       baseUrl: '',
       model: 'gemini-2.5-flash',
       apiKey: 'test-key',
     })
-    fetchNews.mockResolvedValue({
-      ticker: '2330',
-      asOf: '2026-07-27T09:35:00.000Z',
-      items: [
-        {
-          title: '台積電先進製程需求強勁',
-          source: '自由財經',
-          publishedAt: '2026-07-27T02:08:08.000Z',
-        },
-      ],
-    })
-
-    const mockComplete = vi.fn().mockResolvedValue('含基本面與消息面的解讀。')
+    const mockComplete = vi.fn().mockResolvedValue('含基本面的解讀。')
     createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
 
     render(
@@ -185,35 +166,32 @@ describe('AiTab', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
-    await screen.findByText('含基本面與消息面的解讀。')
+    await screen.findByText('含基本面的解讀。')
 
     const req = mockComplete.mock.calls[0][0] as { messages: Array<{ content: string }> }
     const user = req.messages[0].content
     expect(user).toContain('半導體業')
     expect(user).toContain('本益比 31.59')
-    expect(user).toContain('台積電先進製程需求強勁')
   })
 
-  it('新聞查無資料時不阻斷解讀，prompt 帶缺料文案', async () => {
+  it('基本面查無資料時不阻斷解讀，prompt 帶缺料文案', async () => {
     loadAiSettings.mockResolvedValue({
       provider: 'google',
       baseUrl: '',
       model: 'gemini-2.5-flash',
       apiKey: 'test-key',
     })
-    fetchNews.mockResolvedValue(null)
 
-    const mockComplete = vi.fn().mockResolvedValue('沒有新聞也能解讀。')
+    const mockComplete = vi.fn().mockResolvedValue('沒有基本面也能解讀。')
     createAiProvider.mockReturnValue({ kind: 'google', complete: mockComplete })
 
     render(<AiTab ticker="2330" name="台積電" report={dummyReport} fundamental={null} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '產生分析' }))
-    await screen.findByText('沒有新聞也能解讀。')
+    await screen.findByText('沒有基本面也能解讀。')
 
     const req = mockComplete.mock.calls[0][0] as { messages: Array<{ content: string }> }
     const user = req.messages[0].content
-    expect(user).toContain('請勿臆測消息面')
     expect(user).toContain('請勿臆測任何基本面數據')
   })
 

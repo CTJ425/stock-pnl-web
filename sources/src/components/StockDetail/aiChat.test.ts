@@ -18,7 +18,6 @@ const payload = {
   technical: { date: '2026-07-27', close: 1200 },
   chip: { hasReport: true, unitInstitutional: '股', unitMargin: '張' },
   fundamental: { hasData: true, industry: '半導體業' },
-  news: { hasData: false },
 } as unknown as AiPayload
 
 const msg = (role: AiMessage['role'], content: string): AiMessage => ({ role, content })
@@ -29,7 +28,7 @@ describe('buildChatSystem', () => {
   it('框住可談範圍，並點名這一檔', () => {
     expect(system).toContain('2330 台積電')
     expect(system).toContain('可以談的範圍')
-    expect(system).toContain('技術面、籌碼面、基本面、獲利能力、總體經濟背景、新聞標題')
+    expect(system).toContain('技術面、籌碼面、基本面、獲利能力、總體經濟背景')
   })
 
   it('要求越界時一字不差回固定句——固定句才看得出框限有沒有破', () => {

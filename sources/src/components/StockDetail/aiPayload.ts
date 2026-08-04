@@ -15,7 +15,6 @@
  */
 import type { FundamentalData } from '../../services/fundamentalProxy'
 import type { MacroData } from '../../services/macroProxy'
-import type { NewsData } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import type { RangeKey, TechnicalView } from './technicalView'
 import { RANGE_LABELS } from './technicalView'
@@ -149,16 +148,6 @@ export interface AiPayload {
       previousValue: number | null
     }>
   }
-  /** 消息面（0.6.0-dev.4）。只有標題，沒有內文——模型只能就標題字面判斷 */
-  news: {
-    hasData: boolean
-    items?: Array<{
-      /** YYYY-MM-DD；RSS 未附時間時為 null */
-      date: string | null
-      source: string | null
-      title: string
-    }>
-  }
 }
 
 const STREAK_NOTE =
@@ -171,16 +160,6 @@ function leg(src: { buy: number | null; sell: number | null; net: number | null 
     sellShares: src?.sell ?? null,
     netShares: src?.net ?? null,
   }
-}
-
-/** 進 prompt 的新聞則數上限，與 Edge Function 端的 NEWS_MAX_ITEMS 對齊 */
-const NEWS_ITEMS_IN_PROMPT = 10
-
-/** ISO 時間 → YYYY-MM-DD；缺時間或解析失敗回 null */
-function isoDateOnly(iso: string | null): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
 }
 
 function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamental'] {
@@ -243,18 +222,6 @@ function buildMacroBlock(m: MacroData | null): AiPayload['macro'] {
   }
 }
 
-function buildNewsBlock(n: NewsData | null): AiPayload['news'] {
-  if (!n || n.items.length === 0) return { hasData: false }
-  return {
-    hasData: true,
-    items: n.items.slice(0, NEWS_ITEMS_IN_PROMPT).map((i) => ({
-      date: isoDateOnly(i.publishedAt),
-      source: i.source,
-      title: i.title,
-    })),
-  }
-}
-
 export function buildAiPayload(args: {
   ticker: string
   name: string
@@ -262,7 +229,6 @@ export function buildAiPayload(args: {
   report: ReportData | null
   range: RangeKey
   fundamental?: FundamentalData | null
-  news?: NewsData | null
   macro?: MacroData | null
 }): AiPayload {
   const { ticker, name, view, report, range } = args
@@ -300,7 +266,6 @@ export function buildAiPayload(args: {
     periodLabel: RANGE_LABELS[range],
     technical,
     fundamental: buildFundamentalBlock(args.fundamental ?? null),
-    news: buildNewsBlock(args.news ?? null),
     macro: buildMacroBlock(args.macro ?? null),
   }
 
@@ -495,17 +460,10 @@ ${p.chip.notes?.length ? `- 報告附註：${p.chip.notes.join('; ')}` : ''}`
         .join('\n')
     : '（總體經濟資料暫時無法取得，請勿臆測總經數據。）'
 
-  const newsSection =
-    p.news.hasData && p.news.items
-      ? p.news.items
-          .map((i) => `  * ${i.date ?? '日期不明'}（${i.source ?? '來源不明'}）：${i.title}`)
-          .join('\n')
-      : '（近期無可取得之新聞標題，請勿臆測消息面。）'
-
   const changePctText =
     p.technical.changePctPercent === null ? '無' : `${signed(p.technical.changePctPercent)}%`
 
-  const user = `請為以下股票進行技術面、籌碼面、基本面、總體經濟與消息面的數據分析：
+  const user = `請為以下股票進行技術面、籌碼面、基本面與總體經濟的數據分析：
 
 【股票基本資訊】
 代號：${p.ticker}
@@ -527,9 +485,6 @@ ${fundamentalSection}
 
 【總體經濟背景】（${p.macro.region ?? '美國'}，全市場共用，非本檔個股數據）
 ${macroSection}
-
-【近期新聞標題】（只有標題、沒有內文）
-${newsSection}
 
 請在完成數據分析後，固定於最後包含「建議操作」與「注意事項」兩小節。`
 

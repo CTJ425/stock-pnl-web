@@ -8,7 +8,6 @@ import { AlertTriangle, Bot, MessageSquare, RefreshCw, ShieldCheck } from 'lucid
 import { fetchDailySeries } from '../../services/dailyProxy'
 import type { FundamentalData } from '../../services/fundamentalProxy'
 import { fetchMacro } from '../../services/macroProxy'
-import { fetchNews } from '../../services/newsProxy'
 import type { ReportData } from '../../services/reportProxy'
 import {
   AiError,
@@ -114,13 +113,11 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       if (!view) {
         throw new AiError('bad-response', '無法計算個股之技術面指標 (歷史股價資料不存在或為空)')
       }
-      // 新聞缺料不阻斷分析（prompt 有缺料文案），與 report 為 null 的處理一致
-      const news = await fetchNews(ticker)
       // 總經背景。0.6.5-dev.2 起自己抓 —— 它已不在個股分析的分頁裡，父元件沒理由替它載。
-      // 與 daily / news 同款：按下「產生分析」才抓，不必為了可能永遠不看的東西
-      // 在每次開啟個股頁時都下載一次。缺料同樣不阻斷（buildMacroBlock 回 hasData: false）。
+      // 與 daily 同款：按下「產生分析」才抓，不必為了可能永遠不看的東西
+      // 在每次開啟個股頁時都下載一次。缺料不阻斷（buildMacroBlock 回 hasData: false）。
       const macro = await fetchMacro()
-      const built = buildAiPayload({ ticker, name, view, report, range, fundamental, news, macro })
+      const built = buildAiPayload({ ticker, name, view, report, range, fundamental, macro })
       const { system, user } = renderAiPrompt(built, prompts.analysis)
 
       const provider = createAiProvider(settings)

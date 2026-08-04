@@ -49,7 +49,7 @@ const status: AdminStatus = {
       borrow: { date: '2026-07-31', fetchedAt: '2026-07-31T01:10:36.222Z' },
     },
   },
-  coverage: { daily: 5, fundamental: 5, news: 5, held: 5 },
+  coverage: { daily: 5, fundamental: 5, held: 5 },
   macro: {
     asOf: '2026-07-31T04:37:19.466Z',
     checkedAt: '2026-07-31T04:37:23.617Z',

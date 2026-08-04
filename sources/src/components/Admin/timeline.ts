@@ -217,7 +217,7 @@ export function durationLabel(hours: number): string {
  */
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
-    '持股台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 新聞，寫入盤後報告',
+    '持股台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 獲利能力，寫入盤後報告',
   probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
   'sync-macro': 'FRED 五個序列：核心 CPI / PPI / PCE、非農就業、消費者信心',
   'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣',

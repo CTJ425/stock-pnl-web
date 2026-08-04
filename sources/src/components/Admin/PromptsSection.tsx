@@ -180,7 +180,7 @@ export function PromptsSection() {
                 還原成預設
               </button>
               <span className="hint">
-                股價、籌碼、月營收、總經與新聞標題由程式在送出前自動接上，不必寫進這裡。
+                股價、籌碼、月營收與總經由程式在送出前自動接上，不必寫進這裡。
               </span>
             </div>
           </div>

@@ -198,7 +198,6 @@ describe('aiPayload', () => {
       expect(system).toContain('建議操作')
       expect(system).toContain('注意事項')
       expect(system).toContain('不得給出明確的買進')
-      expect(system).toContain('不得臆測、擴寫或引用標題以外的新聞內容')
       expect(system).toContain('月營收為千元')
       expect(system).toContain('本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
 
@@ -301,7 +300,7 @@ describe('aiPayload', () => {
       expect(system).toContain('越攤平虧損越大')
     })
 
-    it('基本面與新聞有資料時應帶單位、產業別與逐則標題', () => {
+    it('基本面有資料時應帶單位、產業別與逐則標題', () => {
       const payload = buildAiPayload({
         ticker: '2330',
         name: '台積電',
@@ -339,22 +338,9 @@ describe('aiPayload', () => {
           profitQuarters: [],
           notes: [],
         },
-        news: {
-          ticker: '2330',
-          asOf: '2026-07-27T09:35:00.000Z',
-          items: [
-            {
-              title: '台積電先進製程需求強勁',
-              source: '自由財經',
-              publishedAt: '2026-07-27T02:08:08.000Z',
-            },
-            { title: '法說會前夕觀望', source: null, publishedAt: null },
-          ],
-        },
       })
 
       expect(payload.fundamental.hasData).toBe(true)
-      expect(payload.news.hasData).toBe(true)
       // 月營收在 payload 內轉為由新到舊
       expect(payload.fundamental.revenueMonths?.[0].yearMonth).toBe('2026-06')
 
@@ -364,11 +350,9 @@ describe('aiPayload', () => {
       expect(user).toContain('殖利率 0.94%')
       expect(user).toContain('單位：千元')
       expect(user).toContain('2026-06：營收 442679969 千元（月增 +6.16% / 年增 +67.87%）')
-      expect(user).toContain('2026-07-27（自由財經）：台積電先進製程需求強勁')
-      expect(user).toContain('日期不明（來源不明）：法說會前夕觀望')
     })
 
-    it('基本面與新聞缺料時應印替代文案，且不得出現數字欄位', () => {
+    it('基本面缺料時應印替代文案，且不得出現數字欄位', () => {
       const payload = buildAiPayload({
         ticker: '5274',
         name: '上櫃股',
@@ -387,15 +371,12 @@ describe('aiPayload', () => {
           profitQuarters: [],
           notes: ['此代號查無上市基本面資料（可能為上櫃股票，暫不支援）'],
         },
-        news: null,
       })
 
       expect(payload.fundamental.hasData).toBe(false)
-      expect(payload.news.hasData).toBe(false)
 
       const { user } = renderAiPrompt(payload)
       expect(user).toContain('請勿臆測任何基本面數據')
-      expect(user).toContain('請勿臆測消息面')
       expect(user).not.toContain('本益比')
     })
 

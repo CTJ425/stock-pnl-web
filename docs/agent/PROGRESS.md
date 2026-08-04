@@ -1,9 +1,53 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 每股盈餘 + 台股大盤量能與法人買賣超（0.6.28 定版，**兩區已部署**）
-- Status: **完成 —— 822 測試全過；兩區 Edge Function 已部署、`market-daily` 排程已建、首跑資料已產出**
-- Timestamp: 2026-08-04 21:10:00 Asia/Taipei
+- Action: warm 順手回補歷史 + **移除新聞功能**（0.6.29 定版）
+- Status: **程式碼完成、809 測試全過；⚠️ Edge Function 尚未部署**
+- Timestamp: 2026-08-04 21:35:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-04 21:35:00 Asia/Taipei（0.6.29）
+
+- **Agent**: Claude
+- **Action**: 即點即產順手補一輪歷史；新聞功能整個移除
+
+### 1. 新股票不必等到隔天
+
+**問題**（使用者回報「新股票的月營收好像不會馬上抓」）：
+`warm` 只跑 `syncDaily` + `syncFundamental`，而後者的來源端點**只回最新一期** ——
+月營收 1 個月、獲利能力 1 季，且沒有 EPS。歷史與 EPS 全靠回補，
+而回補在 `handleGenerateAll` 裡排在 `decideSkip` **之後**：當天 T86 定稿且融資融券已到
+就整段短路。結果是晚上加的股票當天一輪都補不到，隔天的批次才開始長。
+
+**做法**：`handleWarm` 追加一輪 `backfillRevenue` + `backfillProfit`，
+預算刻意比夜間小（月營收 2 個月、季報 **1** 季），因為這是使用者正在等的請求。
+兩支回補**必須循序**：都會下載、合併、覆寫同一個 `fundamental/{ticker}.json`，
+並行會有一邊的寫入被蓋掉。回補本身缺口驅動，補滿的舊標的幾乎零成本。
+
+### 2. 新聞功能整個移除
+
+使用者要求全部刪掉，並提到「之前已經說過不要了」。**查證後：0.6.13 移除的是
+管理後台的新聞追蹤，功能本體當時仍在**（PROGRESS 當年就寫明「不是把新聞功能拿掉」），
+所以這次才是真正的移除。刪除範圍：
+
+- 後端：`twNews.ts` / `twNews.test.ts`、`syncNews()`、generate-all 的呼叫與 `news_synced`、
+  `pruneStorage` 的 `news` 目錄
+- 前端：`newsProxy.ts` / 測試、`AiTab` 的 `fetchNews`、`aiPayload` 的 news 區塊與 prompt 段落
+- 提示詞：`aiPrompts.ts` 分析準則第 6 條（新聞）刪除並重新編號、追問範圍去掉「新聞標題」、
+  `aiChat.ts` 的婉拒句、後台 PromptsSection 的說明文字、`timeline.ts` 的班次說明
+- 文件：`SPEC.md` 的「消息面」段落（改為一行移除註記）
+
+**⚠️ 尚未處理、需要人工決定的兩件事**：
+1. 兩區 Storage 仍有 `news/{ticker}.json` 舊檔（不再被讀取，也不再被寫入）。
+   要清掉的話得逐檔刪 —— 屬於資料刪除，未經指示不做。
+2. **管理員若曾在後台儲存過自訂的分析提示詞，那份仍留著舊的第 6 條（新聞）**。
+   程式碼的預設值已更新，但 DB 裡的自訂版本不會自動跟著改。
+
+### 驗證
+
+`npm test` **809/809**（822 − 13 條新聞測試）、lint 3 個既有 warning、build 通過、
+Edge Function 以 tsc 做語法檢查無誤（Deno 專用檔，不進 vitest）。
 
 ---
 

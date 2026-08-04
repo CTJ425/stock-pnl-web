@@ -62,7 +62,7 @@ export interface AdminStatus {
     } | null
   } | null
   /** 各 Storage 目錄的檔案數與持股檔數，用來算「N 檔裡到了幾檔」 */
-  coverage: { daily?: number; fundamental?: number; news?: number; held?: number }
+  coverage: { daily?: number; fundamental?: number; held?: number }
   macro: { asOf: string; checkedAt: string | null; indicators: AdminMacroIndicator[] } | null
   fx: { asOf: string; count: number } | null
   batch: { runsToday?: number; runSig?: string | null } | null
