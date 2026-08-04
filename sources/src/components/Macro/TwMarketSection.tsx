@@ -12,11 +12,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { fetchMarketDaily, type MarketData } from '../../services/marketProxy'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
+import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
-/** 畫面上顯示幾個交易日。約一季，看得出趨勢又不會把 X 軸擠爛 */
+/** 成交金額與大盤 K 線顯示幾個交易日。約一季，看得出趨勢又不會把 X 軸擠爛 */
 const SHOWN_DAYS = 60
+
+/**
+ * 三大法人買賣超只看最近 7 個交易日（0.6.30）。
+ *
+ * 與個股分析的籌碼圖一致（那裡是 HISTORY_DAYS = 7）—— 兩張圖問的是同一個問題
+ * 「法人這幾天在買還是在賣」，一張看一週、另一張看一季會讓人以為在比不同的東西。
+ * 量能與指數維持一季：那兩個問的是「行情在什麼位置」，需要更長的脈絡。
+ */
+const INSTITUTIONAL_DAYS = 7
 
 /** 元 → 億元。缺值回 null（不以 0 冒充） */
 function toBillion(twd: number | null | undefined): number | null {
@@ -78,6 +88,24 @@ export function TwMarketSection() {
   }
 
   const days = market.days.slice(-SHOWN_DAYS)
+  const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
+  /*
+    K 線要開高低收四個價，缺任何一個就畫不出那一根 —— 開高低與收盤是不同來源，
+    最新一兩天可能只有收盤。過濾掉不完整的那幾根，而不是拿收盤去補：
+    用收盤冒充開盤會畫出一整排十字線，看起來像真的「那天沒有波動」。
+  */
+  const candles = days
+    .filter(
+      (d) =>
+        d.taiexOpen !== null && d.taiexHigh !== null && d.taiexLow !== null && d.taiex !== null,
+    )
+    .map((d) => ({
+      label: shortDate(d.date),
+      open: d.taiexOpen as number,
+      high: d.taiexHigh as number,
+      low: d.taiexLow as number,
+      close: d.taiex as number,
+    }))
   const latest = days[days.length - 1] ?? null
   /*
     法人金額是逐日回補的，最新幾天常常還沒補到（見 marketProxy 的說明）。
@@ -88,6 +116,7 @@ export function TwMarketSection() {
 
   // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
+  const candleLabelIndices = candles.map((_, i) => i).filter((i) => i % 10 === 0)
 
   return (
     <div className="section glass" style={{ padding: '18px 20px' }}>
@@ -140,6 +169,20 @@ export function TwMarketSection() {
       </div>
 
       <div className="chart-title" style={{ marginTop: 16 }}>
+        加權指數日 K（近 {candles.length} 個交易日）
+      </div>
+      {candles.length === 0 ? (
+        <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
+      ) : (
+        <CandleChart
+          candles={candles}
+          labelIndices={candleLabelIndices}
+          formatValue={(v) => v.toFixed(2)}
+          ariaLabel={`近 ${candles.length} 個交易日的加權指數日 K 線`}
+        />
+      )}
+
+      <div className="chart-title" style={{ marginTop: 16 }}>
         每日成交金額（億元）
       </div>
       <LineSeriesChart
@@ -150,23 +193,22 @@ export function TwMarketSection() {
       />
 
       <div className="chart-title" style={{ marginTop: 16 }}>
-        三大法人買賣超（億元）
+        三大法人買賣超（億元）・近 {instDays.length} 個交易日
       </div>
       {/*
         單序列長條走紅正綠負的極性色（不指定 color），與個股籌碼的買賣超圖一致 ——
         方向才是這張圖要傳達的東西，「是誰」在這裡只有一個答案（全市場合計）。
       */}
       <BarSeriesChart
-        labels={days.map((d) => shortDate(d.date))}
+        labels={instDays.map((d) => shortDate(d.date))}
         series={[
           {
             name: '三大法人合計',
-            values: days.map((d) => toBillion(d.institutional?.totalTwd ?? null)),
+            values: instDays.map((d) => toBillion(d.institutional?.totalTwd ?? null)),
           },
         ]}
-        labelIndices={labelIndices}
         formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`}
-        ariaLabel={`近 ${days.length} 個交易日的三大法人買賣超金額`}
+        ariaLabel={`近 ${instDays.length} 個交易日的三大法人買賣超金額`}
       />
       <p className="hint" style={{ marginTop: 8 }}>
         買賣超是全市場的買進金額減掉賣出金額，紅色代表法人整體買超。

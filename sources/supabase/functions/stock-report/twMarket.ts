@@ -43,6 +43,15 @@ export interface MarketDay {
   taiex: number | null
   /** 漲跌點數 */
   changePoints: number | null
+  /**
+   * 加權指數的開高低（0.6.30，畫大盤日 K 用）。
+   *
+   * **來源與收盤價不同支**：FMTQIK 只有收盤與漲跌點數，開高低要另外向
+   * `MI_5MINS_HIST` 拿。兩者都是一次一個月，故同一輪一起抓、抓完再併。
+   */
+  taiexOpen: number | null
+  taiexHigh: number | null
+  taiexLow: number | null
   /** null＝這天的法人金額還沒補到（見檔頭說明） */
   institutional: MarketInstitutional | null
 }
@@ -62,6 +71,12 @@ export const MARKET_SCHEMA = 1
 export function fmtqikMonthUrl(yyyymm: string): string | null {
   if (!/^\d{6}$/.test(yyyymm)) return null
   return `https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${yyyymm}01&response=json`
+}
+
+/** 整月的加權指數開高低收（0.6.30）。`date` 同 FMTQIK，只有年月有意義 */
+export function taiexHistMonthUrl(yyyymm: string): string | null {
+  if (!/^\d{6}$/.test(yyyymm)) return null
+  return `https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date=${yyyymm}01&response=json`
 }
 
 /** 單日的三大法人買賣金額。**只有 type=day 是逐日**（見檔頭） */
@@ -123,7 +138,39 @@ export function parseFmtqik(json: unknown): MarketDay[] {
       transactions: iCount < 0 ? null : num(row[iCount]),
       taiex: iIndex < 0 ? null : num(row[iIndex]),
       changePoints: iChange < 0 ? null : num(row[iChange]),
+      taiexOpen: null,
+      taiexHigh: null,
+      taiexLow: null,
       institutional: null,
+    })
+  }
+  return out
+}
+
+/**
+ * 解析 MI_5MINS_HIST 的整月回應：加權指數的開高低收（0.6.30）。
+ *
+ * 只回 `date → 開高低`，收盤刻意不取 —— FMTQIK 那份已經有了，
+ * 同一個欄位讓兩支各寫一次，總有一天會不一致而且看不出是哪一支寫的。
+ */
+export function parseTaiexHist(json: unknown): Map<string, { open: number | null; high: number | null; low: number | null }> {
+  const out = new Map<string, { open: number | null; high: number | null; low: number | null }>()
+  const t = (json ?? {}) as RwdTable
+  if (t.stat !== 'OK' || !Array.isArray(t.data) || !Array.isArray(t.fields)) return out
+  const iDate = t.fields.indexOf('日期')
+  const iOpen = t.fields.indexOf('開盤指數')
+  const iHigh = t.fields.indexOf('最高指數')
+  const iLow = t.fields.indexOf('最低指數')
+  if (iDate < 0) return out
+
+  for (const row of t.data) {
+    if (!Array.isArray(row)) continue
+    const date = rocSlashDate(row[iDate])
+    if (!date) continue
+    out.set(date, {
+      open: iOpen < 0 ? null : num(row[iOpen]),
+      high: iHigh < 0 ? null : num(row[iHigh]),
+      low: iLow < 0 ? null : num(row[iLow]),
     })
   }
   return out
@@ -171,7 +218,8 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
 /**
  * 併入新的日期列：依日期去重、由舊到新、砍到 cap。
  *
- * **法人金額不會被沒有它的那一份蓋掉**：成交量值是整月重抓的（每次都不帶法人），
+ * **既有值不會被「沒有那一項」的新一份蓋掉**：三份來源的覆蓋範圍本來就不同步 ——
+ * 成交量值整月重抓（不帶法人、不帶開高低）、開高低另一支、法人一天一支。
  * 若整筆覆寫，補好的法人買賣超每晚都會被洗掉一次 ——
  * 與 mergeProfitQuarters 的 EPS 是同一個問題、同一個解法。
  */
@@ -187,6 +235,9 @@ export function mergeMarketDays(
     const old = byDate.get(d.date)
     byDate.set(d.date, {
       ...d,
+      taiexOpen: d.taiexOpen ?? old?.taiexOpen ?? null,
+      taiexHigh: d.taiexHigh ?? old?.taiexHigh ?? null,
+      taiexLow: d.taiexLow ?? old?.taiexLow ?? null,
       institutional: d.institutional ?? old?.institutional ?? null,
     })
   }
@@ -215,14 +266,40 @@ export function planInstitutionalBackfill(
     .slice(0, maxDays)
 }
 
-/** 要抓哪幾個月的成交量值：本月，加上檔案還空著時的上個月（讓第一輪就有兩個月的長度） */
-export function planMarketMonths(now: Date, have: MarketDay[] | null | undefined): string[] {
+/**
+ * 要抓哪幾個月：本月，加上**任何還缺開高低的月份**（0.6.30）。
+ *
+ * 缺口驅動而不是只抓本月 —— 開高低是 0.6.30 才加的，之前存下來的日子全都沒有，
+ * 而那些月份不會再被碰到，K 線就會永遠只有這個月的那幾根。
+ * 與 EPS 的處境完全相同（既有資料缺一個新欄位），故用同一個解法。
+ *
+ * 上限 `maxMonths`：一個月一次請求 × 兩支端點，不設限的話第一輪會去打半年份。
+ * 由新到舊補，補完之後這個函式每輪都只回本月，成本回到原本的樣子。
+ */
+export function planMarketMonths(
+  now: Date,
+  have: MarketDay[] | null | undefined,
+  maxMonths = 3,
+): string[] {
   // 台北時間的年月（批次跑在 UTC，直接用 UTC 會在月初的凌晨抓錯月份）
   const taipei = new Date(now.getTime() + 8 * 3600 * 1000)
   const y = taipei.getUTCFullYear()
   const m = taipei.getUTCMonth() + 1
   const thisMonth = `${y}${String(m).padStart(2, '0')}`
-  if ((have?.length ?? 0) >= 20) return [thisMonth]
-  const prev = new Date(Date.UTC(y, m - 2, 1))
-  return [`${prev.getUTCFullYear()}${String(prev.getUTCMonth() + 1).padStart(2, '0')}`, thisMonth]
+
+  const months = new Set<string>([thisMonth])
+  // 檔案還空著時連上個月一起抓，畫面一開始就有長度
+  if ((have?.length ?? 0) < 20) {
+    const prev = new Date(Date.UTC(y, m - 2, 1))
+    months.add(`${prev.getUTCFullYear()}${String(prev.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+  for (const d of have ?? []) {
+    /*
+      ⚠️ 用 `== null` 而不是 `=== null`：0.6.30 之前寫下的日子**根本沒有這個欄位**，
+      讀回來是 undefined 不是 null。用嚴格比較會漏掉全部舊資料 ——
+      實測就是這樣：部署後 K 線只有本月那 2 根，7 月的 22 天永遠補不到。
+    */
+    if (d?.date && d.taiexOpen == null) months.add(d.date.slice(0, 7).replace('-', ''))
+  }
+  return [...months].sort().reverse().slice(0, maxMonths)
 }

@@ -28,6 +28,10 @@ export interface MarketDay {
   transactions: number | null
   taiex: number | null
   changePoints: number | null
+  /** 加權指數的開高低（0.6.30，畫大盤日 K 用）；與收盤價不同來源，可能較晚才有 */
+  taiexOpen: number | null
+  taiexHigh: number | null
+  taiexLow: number | null
   /**
    * null＝**這天還沒補到**，不是「這天沒有法人進出」。
    * 成交量值一次抓一整月、法人金額一天一個請求，兩者的覆蓋範圍本來就不同步。
@@ -78,6 +82,9 @@ function normalizeDay(v: unknown): MarketDay | null {
     transactions: numOrNull(o.transactions),
     taiex: numOrNull(o.taiex),
     changePoints: numOrNull(o.changePoints),
+    taiexOpen: numOrNull(o.taiexOpen),
+    taiexHigh: numOrNull(o.taiexHigh),
+    taiexLow: numOrNull(o.taiexLow),
     institutional: normalizeInstitutional(o.institutional),
   }
 }

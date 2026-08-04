@@ -111,8 +111,10 @@ import {
   mergeMarketDays,
   parseBfi82u,
   parseFmtqik,
+  parseTaiexHist,
   planInstitutionalBackfill,
   planMarketMonths,
+  taiexHistMonthUrl,
   type MarketDay,
   type MarketFile,
 } from './twMarket.ts'
@@ -1212,10 +1214,26 @@ async function syncMarket(now: Date): Promise<{
     const url = fmtqikMonthUrl(yyyymm)
     if (!url) continue
     const parsed = parseFmtqik(await fetchRwdJson(url))
-    if (parsed.length > 0) {
-      anyOk = true
-      incoming = incoming.concat(parsed)
+    if (parsed.length === 0) continue
+    anyOk = true
+
+    /*
+      同一個月再抓一次加權指數的開高低（0.6.30，畫大盤日 K 用）。
+      FMTQIK 只有收盤與漲跌點數，開高低在 MI_5MINS_HIST ——
+      兩支都是「一次一個月」，所以在同一輪抓完就併好，不必各自維護進度。
+      這一支失敗不影響量值：開高低留 null，K 線那張圖自己會少畫幾根。
+    */
+    const histUrl = taiexHistMonthUrl(yyyymm)
+    const hist = histUrl ? parseTaiexHist(await fetchRwdJson(histUrl)) : new Map()
+    for (const d of parsed) {
+      const h = hist.get(d.date)
+      if (h) {
+        d.taiexOpen = h.open
+        d.taiexHigh = h.high
+        d.taiexLow = h.low
+      }
     }
+    incoming = incoming.concat(parsed)
   }
 
   let days = mergeMarketDays(have, incoming)
@@ -1240,7 +1258,9 @@ async function syncMarket(now: Date): Promise<{
     用長度判斷會把真正的更新當成沒事發生而不寫檔（與 backfillProfit 的 EPS 同一個坑）。
   */
   const signature = (ds: MarketDay[]) =>
-    ds.map((d) => `${d.date}:${d.tradeValueTwd ?? ''}:${d.institutional ? 1 : 0}`).join(',')
+    ds
+      .map((d) => `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${d.institutional ? 1 : 0}`)
+      .join(',')
   if (signature(days) === signature(have)) {
     return { synced: false, days: days.length, institutionalFilled, asOf: existing?.asOf ?? null }
   }

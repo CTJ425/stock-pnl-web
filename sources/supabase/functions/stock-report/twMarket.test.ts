@@ -6,8 +6,10 @@ import {
   parseBfi82u,
   parseFmtqik,
   planInstitutionalBackfill,
+  parseTaiexHist,
   planMarketMonths,
   rocSlashDate,
+  taiexHistMonthUrl,
   type MarketDay,
 } from './twMarket'
 
@@ -19,6 +21,17 @@ const FMTQIK = {
   data: [
     ['115/08/03', '11,427,047,935', '885,506,043,091', '4,191,882', '43,386.41', '266.66'],
     ['115/08/04', '11,340,636,777', '1,087,045,875,836', '4,751,347', '43,360.66', '-25.75'],
+  ],
+}
+
+/** 逐字取自 2026-08-04 對 rwd/zh/TAIEX/MI_5MINS_HIST 的實際回應（截短為兩列） */
+const TAIEX_HIST = {
+  stat: 'OK',
+  title: '115年08月 發行量加權股價指數歷史資料',
+  fields: ['日期', '開盤指數', '最高指數', '最低指數', '收盤指數'],
+  data: [
+    ['115/08/03', '42,780.42', '43,784.19', '42,780.42', '43,386.41'],
+    ['115/08/04', '43,092.49', '43,912.77', '42,895.81', '43,360.66'],
   ],
 }
 
@@ -75,6 +88,10 @@ describe('parseFmtqik', () => {
       transactions: 4191882,
       taiex: 43386.41,
       changePoints: 266.66,
+      // 開高低不在這一支，另由 MI_5MINS_HIST 補
+      taiexOpen: null,
+      taiexHigh: null,
+      taiexLow: null,
       institutional: null,
     })
     // 負的漲跌點數要留著負號
@@ -112,6 +129,25 @@ describe('parseBfi82u', () => {
   })
 })
 
+describe('parseTaiexHist（大盤日 K 的開高低）', () => {
+  it('取開高低，收盤不取——那一欄由 FMTQIK 負責', () => {
+    const m = parseTaiexHist(TAIEX_HIST)
+    expect(m.get('2026-08-03')).toEqual({ open: 42780.42, high: 43784.19, low: 42780.42 })
+    // 同一個欄位讓兩支各寫一次，總有一天會不一致而且看不出是哪一支寫的
+    expect(Object.keys(m.get('2026-08-04')!)).toEqual(['open', 'high', 'low'])
+  })
+
+  it('網址一次一個月；格式不符回 null', () => {
+    expect(taiexHistMonthUrl('202608')).toContain('date=20260801')
+    expect(taiexHistMonthUrl('2026-08')).toBeNull()
+  })
+
+  it('結構壞掉回空 Map 而不是拋錯', () => {
+    expect(parseTaiexHist({ stat: '很抱歉，沒有符合條件的資料!' }).size).toBe(0)
+    expect(parseTaiexHist(null).size).toBe(0)
+  })
+})
+
 describe('mergeMarketDays', () => {
   const day = (date: string, value: number): MarketDay => ({
     date,
@@ -120,6 +156,9 @@ describe('mergeMarketDays', () => {
     transactions: 1,
     taiex: 1,
     changePoints: 1,
+    taiexOpen: null,
+    taiexHigh: null,
+    taiexLow: null,
     institutional: null,
   })
   const inst = {
@@ -144,6 +183,14 @@ describe('mergeMarketDays', () => {
     expect(merged[0].institutional).toEqual(inst) // 法人留著
   })
 
+  it('整月重抓不會把已有的開高低洗掉（0.6.30）', () => {
+    // 開高低來自另一支端點，那一支失敗時 incoming 會是 null —— 不可覆寫既有值
+    const prev = [{ ...day('2026-08-03', 1), taiexOpen: 42780.42, taiexHigh: 43784.19, taiexLow: 42780.42 }]
+    const merged = mergeMarketDays(prev, [day('2026-08-03', 999)])
+    expect(merged[0].taiexOpen).toBe(42780.42)
+    expect(merged[0].tradeValueTwd).toBe(999)
+  })
+
   it('超過上限時砍最舊的', () => {
     const many = Array.from({ length: 5 }, (_, i) => day(`2026-08-0${i + 1}`, i))
     const merged = mergeMarketDays(many, [], 3)
@@ -159,6 +206,9 @@ describe('planInstitutionalBackfill', () => {
     transactions: null,
     taiex: null,
     changePoints: null,
+    taiexOpen: null,
+    taiexHigh: null,
+    taiexLow: null,
     institutional: hasInst
       ? {
           foreignTwd: 1,
@@ -189,17 +239,54 @@ describe('planInstitutionalBackfill', () => {
 })
 
 describe('planMarketMonths', () => {
-  it('檔案已有夠多天時只抓本月', () => {
-    const many = Array.from({ length: 20 }, (_, i) => ({ date: `2026-07-${i + 1}` }) as MarketDay)
+  const full = (date: string): MarketDay =>
+    ({ date, taiexOpen: 1, taiexHigh: 1, taiexLow: 1 }) as MarketDay
+
+  it('檔案已有夠多天、且開高低都齊時只抓本月', () => {
+    const many = Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`))
     expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), many)).toEqual(['202608'])
   })
 
+  it('舊資料連欄位都沒有（undefined）也算缺口', () => {
+    // 0.6.30 之前寫下的日子讀回來是 undefined 不是 null；用 === null 會漏掉全部舊資料
+    const legacy = [
+      ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
+      { date: '2026-06-30' } as MarketDay,
+    ]
+    expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), legacy)).toEqual(['202608', '202606'])
+  })
+
+  it('缺開高低的月份要重抓（0.6.30 新增欄位，舊資料整批沒有）', () => {
+    // 沒有這條，K 線會永遠只有這個月的那幾根 —— 舊月份不會再被碰到
+    const many = [
+      ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
+      { date: '2026-06-30', taiexOpen: null } as MarketDay,
+    ]
+    expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), many)).toEqual(['202608', '202606'])
+  })
+
+  it('缺口很多時仍受月數上限保護，由新到舊補', () => {
+    // 天數要夠多，否則會走「檔案還空著」的分支而多抓一個上個月
+    const gaps = [
+      ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
+      ...['2026-03-02', '2026-04-02', '2026-05-02', '2026-06-02'].map(
+        (date) => ({ date, taiexOpen: null }) as MarketDay,
+      ),
+    ]
+    expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), gaps, 3)).toEqual([
+      '202608',
+      '202606',
+      '202605',
+    ])
+  })
+
   it('第一次跑時連上個月一起抓，畫面一開始就有長度', () => {
-    expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), [])).toEqual(['202607', '202608'])
+    // 由新到舊：預算用完時留下的缺口是最舊的那個月（同其他回補的一貫作法）
+    expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), [])).toEqual(['202608', '202607'])
   })
 
   it('用台北時間判斷月份（UTC 的月初凌晨會落在上個月）', () => {
     // UTC 2026-07-31 17:00 = 台北 2026-08-01 01:00 → 本月是 8 月
-    expect(planMarketMonths(new Date('2026-07-31T17:00:00Z'), [])).toEqual(['202607', '202608'])
+    expect(planMarketMonths(new Date('2026-07-31T17:00:00Z'), [])).toEqual(['202608', '202607'])
   })
 })

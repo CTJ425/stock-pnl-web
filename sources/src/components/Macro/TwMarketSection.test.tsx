@@ -24,6 +24,9 @@ const day = (date: string, value: number, institutional: MarketDay['institutiona
   transactions: 4_000_000,
   taiex: 43386.41,
   changePoints: 266.66,
+  taiexOpen: 42780.42,
+  taiexHigh: 43784.19,
+  taiexLow: 42780.42,
   institutional,
 })
 
@@ -67,7 +70,7 @@ describe('TwMarketSection', () => {
     expect(screen.getByText('10870.5 億')).toBeTruthy()
   })
 
-  it('兩張圖：成交金額與法人買賣超各一張', async () => {
+  it('三張圖：大盤日 K、成交金額、法人買賣超', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
@@ -77,7 +80,33 @@ describe('TwMarketSection', () => {
     })
     const { container } = render(<TwMarketSection />)
     await screen.findByText('每日成交金額（億元）')
-    expect(container.querySelectorAll('.chart-wrap')).toHaveLength(2)
+    expect(container.querySelectorAll('.chart-wrap')).toHaveLength(3)
+  })
+
+  it('開高低還沒補到的日子不畫 K 線，不用收盤價冒充（會變成一排十字線）', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [
+        day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
+        { ...day('2026-08-04', 1_087_045_875_836, null), taiexOpen: null, taiexHigh: null, taiexLow: null },
+      ],
+    })
+    render(<TwMarketSection />)
+    // 標題會標明實際畫得出幾根
+    expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
+  })
+
+  it('法人買賣超只畫最近 7 個交易日（與個股籌碼一致）', async () => {
+    const many = Array.from({ length: 30 }, (_, i) =>
+      day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
+    )
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: many })
+    const { container } = render(<TwMarketSection />)
+
+    await screen.findByText(/三大法人買賣超（億元）・近 7 個交易日/)
+    // 第三張圖是法人：7 根長條（成交金額那張仍是 30 天）
+    const bars = container.querySelectorAll('.chart-wrap')[2].querySelectorAll('rect[rx]')
+    expect(bars).toHaveLength(7)
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {
