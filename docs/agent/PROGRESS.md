@@ -1,8 +1,8 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 五項功能異動（0.6.19-dev.2）
-- Status: **程式完成、759 測試全過；Supabase schema 與 Edge Function 待授權更新**
+- Action: 五項功能異動（0.6.19 定版）
+- Status: **完成 —— 測試區已更新並稽核；正式區隨 `main` 一併更新**
 - Timestamp: 2026-08-04 14:05:00 Asia/Taipei
 
 ---
@@ -62,12 +62,30 @@
 3. **不允許取消自己的管理員權限**：全站可能只剩你一個，收回之後連後台都進不去。
 4. 開關採「成功才改畫面」而不是樂觀更新 —— 權限是敏感操作，失敗看起來像成功最糟。
 
-### ⏳ 待授權的對外操作（依 CLAUDE.md §13.2 未執行）
+### 對外操作（2026-08-04，經授權執行）
 
-1. 兩區跑 `schema.sql` §4.1a 的兩行 `ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS`。
-2. 兩區重新部署 `stock-report` Edge Function。
+依 §13.1 先測試區、確認後才動正式區。**寫入型 `db query` 一律把身分檢查放進同一次查詢**
+（從 `cron.job.command` 抽 project ref），避免 skill 記載的 cwd 陷阱：
 
-在這之前，後台「提示詞」存檔會失敗、「帳號」頁顯示讀不到清單，其餘四項功能不受影響。
+```sql
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_analysis TEXT;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ai_prompt_chat     TEXT;
+SELECT (SELECT (regexp_match(command, 'https://([a-z]+)\.supabase\.co'))[1] FROM cron.job LIMIT 1) AS 身分檢查, ...;
+```
+
+- **測試區**：欄位已加（身分檢查回 `wqetxuhncvfidqnklyew`）、
+  `functions deploy stock-report --no-verify-jwt` 完成、
+  `functions download` 逐檔比對 **11 個檔全部與 `dev` 相同**。
+- **端點探測**（不需登入即可驗證新程式碼有沒有上線）：
+  `admin-users` / `admin-set-role` 回 401（被 `assertAdmin` 擋下），
+  不存在的 action 回 400 `Unknown action` —— 兩者不同即證明新 action 已被辨識。
+- **正式區**：定版 0.6.19 併入 `main` 後同步執行（§13.2：正式區只在 `main` 上動）。
+
+### ⚠️ 尚未做到的驗證
+
+後台的「帳號」與「提示詞」**沒有以真正的管理員帳號實際操作過** ——
+Agent 拿不到登入憑證，只驗到「端點存在且正確擋下未授權請求」。
+第一次用的時候請留意：帳號清單讀不讀得出來、提示詞存檔會不會成功。
 
 ### 驗證
 

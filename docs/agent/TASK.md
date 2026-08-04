@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 49: 五項功能異動（0.6.19）
-- **Status**: 🟡 **程式完成、測試全過；Supabase 尚未更新**（schema 與 Edge Function 待授權）
+- **Status**: ✅ **完成** —— 測試區 schema 與 Edge Function 皆已更新並逐檔稽核通過；已定版 0.6.19
 - **Agent**: Claude
 - **Timestamp**: 2026-08-04 14:05:00 Asia/Taipei
 - **需求**（使用者提出五項，先產 3 份 HTML mockup 選型，選定「版本 A ＋ 版本 B 的後台」）：
@@ -26,12 +26,13 @@
   **安全規則固定在程式碼裡**（`ANALYSIS_LOCKED` / `CHAT_LOCKED`），由程式接在使用者輸入**之後** ——
   排在後面才蓋得住被改壞的前半段。整段開放編輯等於把護欄交給人一鍵刪掉，
   而且刪掉之後畫面上不會有任何跡象。畫面上照實印出鎖定段落，讓管理員知道自己改不到什麼。
-- **⏳ 待授權的對外操作**（依 CLAUDE.md §13.2，未經明確指示不做）：
-  1. 兩區執行 `schema.sql` §4.1a 的兩行 `ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS`
-     （`ai_prompt_analysis` / `ai_prompt_chat`）。沿用既有 RLS，不必改 policy。
-  2. 兩區重新部署 `stock-report` Edge Function（新增 `admin-users` / `admin-set-role` 兩個 action）。
-  **在這兩件事完成之前**：後台「提示詞」頁存檔會失敗（欄位不存在）、「帳號」頁會顯示讀不到清單。
-  其餘四項功能不受影響。
+- **對外操作紀錄**（2026-08-04，經使用者授權後執行）：
+  - 測試區：`ALTER TABLE app_settings` 加 `ai_prompt_analysis` / `ai_prompt_chat` 兩欄
+    （與身分檢查同一次查詢執行，回傳 ref = `wqetxuhncvfidqnklyew`）；
+    `functions deploy stock-report --no-verify-jwt` 完成，`functions download` 逐檔比對 11 檔全同。
+    端點探測：`admin-users` / `admin-set-role` 皆回 401（已被 `assertAdmin` 擋下），
+    而不存在的 action 回 400 —— 證明新程式碼確實上線。
+  - 正式區：定版 0.6.19 併入 `main` 之後同步執行（見 PROGRESS 同日紀錄）。
 - **驗證**：`npm test` 759/759、`npm run lint` 3 個既有 warning、`npm run build` 通過。
 - **⚠️ 驗證盲區**：`index.ts` 的兩個新 handler 不在 `tsc -b` 範圍內、也沒有單元測試
   （本機無 deno）。已人工核對 `db.auth.admin.listUsers / getUserById / updateUserById`
