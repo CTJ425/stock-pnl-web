@@ -28,7 +28,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
-import { twQuoteTtlMs } from './quoteWindow.ts'
+import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US'
@@ -199,7 +199,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   // 1) 先查 DB 共用快取：分市場 TTL 內的報價直接回傳（asOf = 實際抓價時間）
   //    粗篩下界取兩市場的較大者 —— 台股收盤後的 TTL 長達十多小時，
   //    沿用固定值會把昨天收盤抓到的定案價濾掉，整夜白抓（0.6.36）
-  const freshAfter = new Date(nowMs - Math.max(twQuoteTtlMs(now), CACHE_TTL_US_MS)).toISOString()
+  const freshAfter = new Date(nowMs - Math.max(twMaxTtlMs(now), CACHE_TTL_US_MS)).toISOString()
   try {
     const { data } = await db
       .from('price_cache')

@@ -19,8 +19,6 @@ const MINUTE_MS = 60 * 1000
 const RESUME_MS = (8 * 60 + 25) * MINUTE_MS
 /** 收盤：13:30 最後一次撮合 */
 const CLOSE_MS = (13 * 60 + 30) * MINUTE_MS
-/** 收盤定案的寬限截止：14:00。這之後不論來源回什麼時間都鎖定 */
-const CONFIRM_MS = 14 * 60 * MINUTE_MS
 /** 盤中輪詢間隔（維持 0.6.35 以前的行為） */
 const POLL_MS = MINUTE_MS
 
@@ -35,20 +33,32 @@ function taipeiMsOfDay(now: Date): number {
  * 台股報價的快取有效期。
  *
  * - 08:25–13:30（試撮與盤中）：60 秒，與收盤前的即時性需求一致
- * - 其餘時段：到下一個 08:25 為止，期間不再對外抓價
+ * - 其餘時段：**只鎖已確認是收盤定案值的報價**，鎖到下一個 08:25
  *
  * @param tradeTime 來源回報的最後撮合時間（MIS 的 `t`，HH:mm:ss）。
- *   13:30–14:00 之間若它還沒到 13:30，表示收盤撮合尚未落地，
- *   這種過渡值不該被鎖上一整夜 —— 繼續用短 TTL 再問一輪。
- *   取不到（美股、TWSE OpenAPI 備援、舊快取）時不阻擋鎖定：
- *   「現在是台北 13:30 之後」本身已足以說明當日不會再有新價。
+ *   **沒到 13:30 或根本取不到就不鎖**（0.6.37 修正）：
+ *   0.6.36 原本的推理是「現在是 13:30 之後，當日不會再有新價」——
+ *   那對「價格」成立，對「這筆是不是收盤定案值」不成立。
+ *   缺這個欄位的快取有兩種來源：升級前寫入的舊列，以及沒有這個欄位的備援路徑
+ *   （Yahoo / TWSE OpenAPI）。兩者都只是盤中某一刻的快照，鎖了會把它凍到隔天早上，
+ *   畫面上就一路顯示「盤中」而且開高低量全是「—」。正式區實際發生過。
+ *   代價是來源持續回非定案值時整夜維持短輪詢 —— 那是異常狀態，本來就該持續重試。
  */
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
-  if (t >= CLOSE_MS && t < CONFIRM_MS && tradeTime != null && tradeTime < CLOSE_TIME_TEXT) {
-    return POLL_MS
-  }
+  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) return POLL_MS
   // 收盤後往後推到明天的 08:25；凌晨（t < RESUME_MS）則是今天的 08:25
   return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
+}
+
+/**
+ * 此刻台股快取「可能的最長有效期」，供 DB 查詢的粗篩下界使用。
+ *
+ * 粗篩不知道每一列的 `trade_time`，不能直接呼叫 `twQuoteTtlMs(now)` ——
+ * 那會回短 TTL（因為沒帶撮合時間），把昨天收盤抓到的定案價濾掉、整夜白抓。
+ * 這裡以「已定案」為假設取上界，逐列的實際判定仍由 `twQuoteTtlMs` 負責。
+ */
+export function twMaxTtlMs(now: Date): number {
+  return twQuoteTtlMs(now, CLOSE_TIME_TEXT)
 }

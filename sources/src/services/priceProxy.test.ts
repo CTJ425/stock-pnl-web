@@ -35,11 +35,22 @@ describe('cacheTtlMs', () => {
     expect(cacheTtlMs('US:AAPL')).toBe(10 * 60 * 1000)
   })
 
-  it('收盤後：台股鎖到隔天 08:25，美股不受影響', () => {
+  it('收盤後：帶收盤定案值的台股鎖到隔天 08:25，美股不受影響', () => {
     // 07:00Z = 台北 15:00，收盤後 90 分鐘 → 距離隔天 08:25 還有 17 小時 25 分
     vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
-    expect(cacheTtlMs('TPE:2330')).toBe((17 * 60 + 25) * 60 * 1000)
+    const closed = quote('2026-07-20T05:30:00Z', false, '13:30:00')
+    expect(cacheTtlMs('TPE:2330', closed)).toBe((17 * 60 + 25) * 60 * 1000)
     expect(cacheTtlMs('US:AAPL')).toBe(10 * 60 * 1000)
+  })
+
+  /*
+   * 0.6.37：沒有撮合時間就不鎖。正式區踩過 —— 升級前寫入的快取列沒有這個欄位，
+   * 卻被鎖到隔天早上，畫面一路顯示「盤中」、開高低量全是「—」。
+   */
+  it('收盤後：拿不到撮合時間的台股快取不鎖，會重抓', () => {
+    vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
+    expect(cacheTtlMs('TPE:2330')).toBe(60 * 1000)
+    expect(cacheTtlMs('TPE:2330', quote('2026-07-20T03:00:00Z'))).toBe(60 * 1000)
   })
 })
 
