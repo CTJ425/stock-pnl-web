@@ -8,6 +8,23 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-014 — The macro schedule row printed the raw cron string too
+- **Date**: 2026-08-05 (long-standing, fixed in 0.6.41)
+- **Discovered by**: Claude, cross-checking every row of the 排程 table while confirming BUG-012 for the user.
+- **Symptom**: `macro-daily` (`*/30 12-18 * * *`) rendered verbatim instead of as a sentence. Unlike BUG-012 this
+  was **not** caused by a recent change —— that row had been unreadable since the schedule took its current shape.
+- **Root Cause**: `describeCron`'s step-syntax branch requires a `1-5` (weekday) suffix, and this job runs every
+  day, so it matched nothing and fell through. Same fall-through as BUG-012, different missing branch.
+- **Impact**: Display only, admin console only.
+- **Fix**: A branch for a daily step range. It must mark 次日: 12–18 UTC is 20:00 through **02:30 the next day**
+  in Taipei, and without the marker the row reads 「每日 20:00–02:30」, i.e. as if it ran in the morning.
+  While there, the end minute is now derived from the step instead of the literal `:45` —— correct for the
+  15-minute job that had this shape, and 15 minutes short for anything else.
+- **Tests**: `timeline.test.ts` two entries (the daily crossing-midnight case, and a 30-minute weekday range that
+  pins the end minute at `:30`).
+- **Status**: ✅ FIXED (0.6.41) and live —— pure frontend.
+- **Timestamp**: 2026-08-05 23:55:00 Asia/Taipei
+
 ### Bug ID: BUG-013 — The timeline legend still said the earliest shift was 16:00
 - **Date**: 2026-08-05 (exposed by 0.6.38, fixed in 0.6.40)
 - **Discovered by**: The user, after BUG-012 was fixed: "排程上面的說明最早還是 16".

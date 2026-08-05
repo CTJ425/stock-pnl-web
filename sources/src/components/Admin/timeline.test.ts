@@ -164,6 +164,17 @@ describe('describeCron', () => {
     expect(describeCron('0 8-10 * * 1-5')).toBe('週一至週五 16:00 / 17:00 / 18:00')
   })
 
+  it('每日的步進區間會跨午夜：*/30 12-18 UTC → 台北 20:00–次日 02:30（0.6.41）', () => {
+    // macro-daily. Before this branch existed it printed the raw cron string, same as BUG-012 —— found while
+    // verifying that fix. Without the 次日 marker it would read "每日 20:00–02:30", i.e. as if it ran in the morning.
+    expect(describeCron('*/30 12-18 * * *')).toBe('每日 20:00–次日 02:30 每 30 分')
+  })
+
+  it('步進區間的結束分鐘由步長算出，不是寫死的 :45', () => {
+    // */15 ends at :45 and */30 at :30. The literal 45 was right only for the one job that had this shape.
+    expect(describeCron('*/30 8-15 * * 1-5')).toBe('週一至週五 16:00–23:30 每 30 分')
+  })
+
   it('認不得的表達式原樣回傳——顯示 cron 字串好過顯示翻錯的句子', () => {
     expect(describeCron('5 4 * * 0')).toBe('5 4 * * 0')
   })

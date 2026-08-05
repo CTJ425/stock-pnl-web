@@ -1,9 +1,40 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.40 —— the timeline legend names both schedules and derives both from cron (BUG-013)
-- Status: **Merged to `main`; 885 tests / build / lint green**
-- Timestamp: 2026-08-05 23:40:00 Asia/Taipei
+- Action: 0.6.41 —— the macro schedule row is readable too (BUG-014)
+- Status: **Merged to `main`; 887 tests / build / lint green**
+- Timestamp: 2026-08-05 23:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 23:55:00 Asia/Taipei (0.6.41)
+
+- **Agent**: Claude
+- **Action**: Fix BUG-014, found by checking every row instead of only the reported one
+
+The user pasted two schedule rows that still said 16:00 and asked why nothing had changed. They were
+`source-probe` and `stock-report-nightly` —— **both correct**, both `*/15 8-15 * * 1-5`, neither ever touched by
+0.6.38. The row that moved is `market-daily`, and the user then confirmed it reads 「週一至週五 15:00–18:30 每
+30 分」. So the reported symptom was a misreading, not a defect.
+
+**But checking the whole table rather than the reported row turned up a real one**: `macro-daily`
+(`*/30 12-18 * * *`) was also printing its raw cron string, and had been all along —— `describeCron`'s step branch
+demands a `1-5` weekday suffix and that job runs every day. Same fall-through as BUG-012, different missing
+branch. Two of five rows in that table were unreadable and only one had been noticed.
+
+The new branch has to mark 次日: 12–18 UTC is 20:00 through 02:30 **the next day** in Taipei, and without the
+marker the row reads 「每日 20:00–02:30」, which looks like a morning job. The end minute is now derived from the
+step as well, instead of the literal `:45` that was only ever right for a 15-minute step.
+
+### The same comment trap, twice in one evening
+Writing the step syntax inside a block comment closes the comment early and breaks the parse. It happened in
+0.6.39, was written up, and then happened again here —— the note was in PROGRESS, not in the file being edited.
+Both comments are now line comments. If a third case appears, the fix is a lint rule, not another note.
+
+### Completed Tasks
+- [x] `timeline.ts`: daily step-range branch with the 次日 marker; end minute derived from the step.
+- [x] `timeline.test.ts`: two entries; **887 tests across 57 files**, build and lint clean.
+- [x] `FIXED_BUG.md` BUG-014, README 0.6.41.
 
 ---
 

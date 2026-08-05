@@ -287,12 +287,29 @@ export function judgeCron(
  * It's better to display a cron string than a mistranslated sentence.
  */
 export function describeCron(expr: string): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  // Last firing minute of a step range: a 15-minute step ends at :45, a 30-minute one at :30. This used to be
+  // the literal 45 —— right for the only job that had this shape, silently wrong for any other step.
+  const lastMinute = (step: number) => (step > 0 && step < 60 ? 60 - step : 0)
+
   const w = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
   if (w) {
     const from = (Number(w[2]) + 8) % 24
     const to = (Number(w[3]) + 8) % 24
-    const p = (n: number) => String(n).padStart(2, '0')
-    return `週一至週五 ${p(from)}:00–${p(to)}:45 每 ${w[1]} 分`
+    return `週一至週五 ${p(from)}:00–${p(to)}:${p(lastMinute(Number(w[1])))} 每 ${w[1]} 分`
+  }
+  // Same step syntax but every day, not just weekdays —— `macro-daily`. Without this branch it printed the raw
+  // cron string: the same defect as BUG-012, on a different row of the same table, found while verifying that fix.
+  //
+  // This one can cross midnight in Taipei: 12–18 UTC becomes 20:00 through 02:30 the next day, so the end needs
+  // the 次日 marker. Without it the row reads "每日 20:00–02:30", which looks like it runs in the morning.
+  const dw = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+\*$/.exec(expr)
+  if (dw) {
+    const step = Number(dw[1])
+    const from = (Number(dw[2]) + 8) % 24
+    const toTotal = Number(dw[3]) + 8
+    const end = `${p(toTotal % 24)}:${p(lastMinute(step))}`
+    return `每日 ${p(from)}:00–${toTotal >= 24 ? '次日 ' : ''}${end} 每 ${step} 分`
   }
   const d = /^0\s+([\d,]+)\s+\*\s+\*\s+\*$/.exec(expr)
   if (d) {
@@ -324,7 +341,6 @@ export function describeCron(expr: string): string {
   const s = /^(\d+(?:,\d+)+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
   if (s) {
     const mins = s[1].split(',').map(Number).sort((a, b) => a - b)
-    const p = (n: number) => String(n).padStart(2, '0')
     const first = `${p((Number(s[2]) + 8) % 24)}:${p(mins[0])}`
     const last = `${p((Number(s[3]) + 8) % 24)}:${p(mins[mins.length - 1])}`
     return `週一至週五 ${first}–${last} 每 ${mins[1] - mins[0]} 分`
