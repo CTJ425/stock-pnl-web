@@ -657,10 +657,17 @@ SELECT cron.schedule(
 --    A short circuit will cause the entire section behind it to not be executed, and this information has nothing to do with the individual stock list.
 --    You should not be tied to the completion status of individual stocks. What is broken down is the schedule, not the function.
 --
---    **Why does the flight start at 16:00 (Taipei)**: The transaction amount of the three major legal persons (BFI82U) is about 15:00–15:30
---    Just announced. If you run too early, you will only get "no data found", although the function side will not record it as filled.
---    (planInstitutionalBackfill only looks at "whether it has been filled in"), but that is a wasted trip.
---    The three shifts are to tolerate the delay in announcement; after the catch-up, subsequent shifts will not repeat the same day.
+--    **Why it starts at 15:00 (Taipei) since 0.6.38**: BFI82U is announced around 15:00–15:30, and the
+--    schedule used to start only at 16:00 for fear that an early round would be "a wasted trip".
+--    Measured against the code, that fear was overpriced: when nothing new comes back, `syncMarket` finds an
+--    unchanged content signature, returns `synced: false` and **does not touch `asOf`** (index.ts) —— so an early
+--    round writes nothing and leaves no false "arrived" mark on the admin timeline. The cost is 2 GETs.
+--    Every half hour from 15:00 to 18:30 for the same reason: the earliest catch wins, the rest are no-ops.
+--
+--    ⚠️ **The early round depends on FMTQIK, not only on BFI82U**: today's institutional amount is only fetched
+--    when today's row already exists in the merged day list, and that list comes from FMTQIK
+--    (`planInstitutionalBackfill` filters `days`). So 15:00 succeeds only when **both** endpoints have published.
+--    Check `market/daily.json`'s `asOf` to see which round actually won.
 --
 --    ⚠️ Same two placeholder mines as in §6c (PROJECT_REF / CRON_SECRET),
 --    Be sure to replace before applying, and be sure to run the verification query in §6d after applying.
@@ -675,8 +682,10 @@ END $$;
 
 SELECT cron.schedule(
   'market-daily',
-  -- Taipei 16:00 / 17:00 / 18:00 (UTC 08/09/10), weekdays only
-  '0 8-10 * * 1-5',
+  -- Taipei 15:00–18:30 every half hour (UTC 07:00–10:30), weekdays only.
+  -- ⚠️ Already-deployed environments were moved with `cron.alter_job`, which keeps the existing command
+  --    (and therefore the CRON_SECRET inside it) —— re-running `cron.schedule` here would need the plaintext secret.
+  '0,30 7-10 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',

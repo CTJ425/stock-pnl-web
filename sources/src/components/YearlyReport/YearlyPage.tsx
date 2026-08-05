@@ -11,7 +11,7 @@
  * Mistakenly thinking that they can add and subtract from each other. The engine still has buyAmt / buyGross and can be taken back if needed.
  */
 import { useMemo, useState, Fragment } from 'react'
-import { CalendarRange, ChevronsDownUp, ChevronsUpDown, Minus, Plus } from 'lucide-react'
+import { CalendarRange, ChevronsDownUp, ChevronsUpDown, Minus, Plus, Search, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { YearTickerDetail } from '../../utils/pnlEngine'
@@ -38,9 +38,29 @@ function rawRealized(d: { sellGross: number; rawCostBasis: number }): number {
   return d.sellGross - d.rawCostBasis
 }
 
-function useSectionRows(currency: Currency): YearRow[] {
+/**
+ * Does this stock match the search box? Same rule as the transactions page (`filterTransactions`):
+ * code, original name, or the Chinese display name (AAPL → 蘋果), case-insensitive substring.
+ */
+function matchesQuery(yt: YearTickerDetail, q: string): boolean {
+  if (!q) return true
+  return (
+    yt.ticker.toLowerCase().includes(q) ||
+    yt.name.toLowerCase().includes(q) ||
+    displayStockName(yt.market, yt.ticker, yt.name).toLowerCase().includes(q)
+  )
+}
+
+/**
+ * @param query Filters **which stocks are aggregated**, not just which rows are visible.
+ *   Hiding the detail rows while leaving the year totals untouched would show a year whose total
+ *   does not add up to anything on screen. Recomputing means the table reads as "this stock, by year",
+ *   which is the question a search box is asked.
+ */
+function useSectionRows(currency: Currency, query: string): YearRow[] {
   const { ledger } = useWorkspace()
   return useMemo(() => {
+    const q = query.trim().toLowerCase()
     const rows: YearRow[] = []
     for (const year of ledger.years) {
       const y = ledger.yearly[year]
@@ -58,6 +78,7 @@ function useSectionRows(currency: Currency): YearRow[] {
       }
       for (const yt of Object.values(y.tickers)) {
         if (yt.currency !== currency) continue
+        if (!matchesQuery(yt, q)) continue
         agg.realized += yt.realized
         agg.costBasis += yt.costBasis
         agg.rawCostBasis += yt.rawCostBasis
@@ -78,7 +99,7 @@ function useSectionRows(currency: Currency): YearRow[] {
       rows.push(agg)
     }
     return rows
-  }, [ledger, currency])
+  }, [ledger, currency, query])
 }
 
 /** Amount cell: main number (including fees and taxes) + side row (excluding fees), isomorphic to the average cost of the inventory overview*/
@@ -159,8 +180,8 @@ function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; c
   )
 }
 
-function YearlySection({ title, currency }: { title: string; currency: Currency }) {
-  const rows = useSectionRows(currency)
+function YearlySection({ title, currency, query }: { title: string; currency: Currency; query: string }) {
+  const rows = useSectionRows(currency, query)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set())
 
@@ -213,7 +234,8 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
       </div>
       {rows.length === 0 ? (
         <div className="glass empty-state" style={{ padding: '26px 20px' }}>
-          （尚無交易紀錄）
+          {/* Two different nothings: an empty ledger is not the same as "your search matched nothing" */}
+          {query.trim() ? `找不到符合「${query.trim()}」的股票` : '（尚無交易紀錄）'}
         </div>
       ) : (
         <div className="glass table-scroll">
@@ -383,6 +405,7 @@ function YearRows({
 export function YearlyPage() {
   const { ledger } = useWorkspace()
   const { summary } = ledger
+  const [query, setQuery] = useState('')
 
   if (ledger.years.length === 0) {
     return (
@@ -424,8 +447,37 @@ export function YearlyPage() {
         </div>
       </div>
 
-      <YearlySection title="🇹🇼 台股 (TWD)" currency="TWD" />
-      <YearlySection title="🇺🇸 美股 (USD)" currency="USD" />
+      {/*
+        The box sits below the KPIs on purpose: the KPIs are lifetime totals over every trade and are
+        **not** filtered, so putting the search above them would read as if it narrowed them too.
+      */}
+      <div className="section" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="search-box">
+          <Search size={15} className="search-icon" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜尋代號或名稱"
+            aria-label="搜尋年度收益的股票"
+            className="search-input"
+          />
+          {query && (
+            <button
+              type="button"
+              className="search-clear-btn"
+              aria-label="清除搜尋"
+              onClick={() => setQuery('')}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {query.trim() && <span className="hint">上方四張卡是全部交易的累計，不受搜尋影響。</span>}
+      </div>
+
+      <YearlySection title="🇹🇼 台股 (TWD)" currency="TWD" query={query} />
+      <YearlySection title="🇺🇸 美股 (USD)" currency="USD" query={query} />
     </>
   )
 }

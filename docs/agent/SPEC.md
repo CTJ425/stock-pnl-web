@@ -190,6 +190,22 @@ A complete description of the sources and batch behavior can be found in `source
 `generate-all` is triggered by pg_cron, **every 15 minutes from 16:00–23:45 on each trading day** (Taipei, 32 rounds in total).
 0.6.1 Previously, there were three fixed shifts (17:30/22:30/23:30).
 
+### `market-daily` runs on its own clock (0.6.28, moved earlier in 0.6.38)
+
+Market-wide volume and the institutional **amounts** (BFI82U) are not part of `generate-all` —— they have nothing to do
+with the holdings list and must not be short-circuited by it. Since 0.6.38 the schedule is
+**`0,30 7-10 * * 1-5` (UTC) = Taipei 15:00–18:30 every half hour**, previously 16:00 / 17:00 / 18:00.
+
+- **Why it can start at 15:00**: TWSE announces BFI82U around 15:00–15:30. The old fear was that an early round
+  would be "a wasted trip", but `syncMarket` compares a content signature and, when nothing changed, returns
+  `synced: false` **without touching `asOf`** —— an early miss writes nothing and leaves no false "arrived" mark on
+  the admin timeline. It costs 2 GETs.
+- ⚠️ **An early round depends on FMTQIK too**: today's institutional amount is only fetched when today's date is
+  already in the merged day list, and that list comes from FMTQIK. 15:00 wins only when **both** have published.
+  `market/daily.json`'s `asOf` tells you which round actually won.
+- `dueBy` for the 全市場 row on the timeline stays 3 hours: the last round is still within it, and tightening it
+  before the real availability time is measured would just light a red lamp every day.
+
 ### Why change to polling
 
 The time point for Class 3 was set based on "the approximate time each data source will be announced", and that understanding is wrong——
@@ -540,6 +556,23 @@ Therefore, compare the fundamental `asOf` together.
 
 ## Quotation card and Taiwan stock price grabbing period (0.6.36)
 
+### The card is called 行情 since 0.6.38, and carries the indicator summary
+
+The first section of the individual-stock page holds two blocks under one title:
+
+1. the seven quote cells below (live, from MIS);
+2. **指標摘要（{data date}）** —— moving averages, KD, RSI(14), MACD histogram and the volume ratio,
+   moved here from the technical section.
+
+What the merge removed are the summary's 收盤 / 開高低 / 成交量 cells: the quote grid already shows them and shows
+them live. ⚠️ **The two blocks can describe different days and that is correct** —— the quote is real time, the
+summary comes from the after-hours daily batch (`daily/{ticker}.json`), which only lands in the evening. During the
+session the summary still describes the previous trading day, which is why it keeps its own date in the heading.
+
+`daily/{ticker}.json` is therefore loaded by `StockDetailPage` (`useDailySeries`) and passed down, instead of being
+fetched inside the technical section: two sections need the same file and it must only be downloaded once.
+`latest` is derived from the full series, so the range picker on the chart does not move it.
+
 ### Quotation card (first paragraph of individual stock analysis)
 
 Seven grids: **opening, highest, trading volume, yesterday's closing, lowest, estimated, today's closing** (the order is specified by the user).
@@ -594,6 +627,25 @@ It is a pure function shared by **front-end and Edge Function** (front-end cross
 `open` / `high` / `low` / `volume` / `trade_date` / `trade_time` / `trial`。
 The reason is the same as 0.6.34 adding `prev_close`: once the cache hits, the source will not be asked again.
 If you do not save them together, the quotation card will be missing. The front-end localStorage cache key is synchronously upgraded to `price-cache-v3`.
+
+## Annual income: search box (0.6.38)
+
+One box above both currency sections, matching on code / original name / Chinese display name (AAPL → 蘋果),
+case-insensitive substring —— the same rule as the transactions page (`filterTransactions`).
+
+**It filters what is aggregated, not what is visible.** Hiding detail rows while leaving the year totals alone
+would print a year whose total adds up to nothing on screen. Recomputing makes the table read as "this stock,
+by year", which is the question a search box is asked.
+
+- The four KPI cards stay lifetime totals over every trade. They sit **above** the box, and a hint appears next
+  to it while a query is active, so the asymmetry is stated rather than left to be discovered.
+- An empty result says 找不到符合「x」的股票, which is a different sentence from（尚無交易紀錄）—— an empty
+  ledger and a search miss are not the same thing.
+
+## Macro page: one card per region (0.6.38)
+
+The US chip row and the 近期走勢 table live in the same `.section.glass`. Split into two cards, the
+資料更新於 stamp and the 重新整理 button appeared to govern only the upper one, though they cover both.
 
 ## Line Chart Style (0.6.8)
 

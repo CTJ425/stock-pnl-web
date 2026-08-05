@@ -19,7 +19,7 @@
  * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title, the fundamentals section, and AI analysis).
  * Independent from chip reporting, failure of either does not affect the other.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AlertTriangle, Download, RefreshCw } from 'lucide-react'
 import {
@@ -36,6 +36,8 @@ import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import { TechnicalTab } from './TechnicalTab'
+import { useDailySeries } from './useDailySeries'
+import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
 
 export interface StockDetailTarget {
@@ -95,6 +97,17 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfNote, setPdfNote] = useState('')
   const surfaceRef = useRef<HTMLDivElement>(null)
+
+  /*
+    The daily series is loaded here rather than inside the technical section (0.6.38): since the indicator
+    summary moved into the 行情 card, two sections need the same file and it must only be downloaded once.
+    `latest` is derived from the whole series, so the range picked by the chart below does not affect it.
+  */
+  const { status: dailyStatus, series: dailySeries } = useDailySeries(ticker, reloadKey)
+  const technicalLatest = useMemo(
+    () => (dailySeries ? (buildTechnicalView(dailySeries.rows, '3m')?.latest ?? null) : null),
+    [dailySeries],
+  )
 
   useEffect(() => {
     let alive = true
@@ -267,9 +280,9 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
         */
         <div className="detail-stack" ref={surfaceRef}>
           <section className="glass detail-card" aria-labelledby="sec-quote">
-            <CardHead title="報價" meta={quoteMeta(quote)} />
+            <CardHead title="行情" meta={quoteMeta(quote)} />
             <div id="sec-quote">
-              <QuoteTab quote={quote} />
+              <QuoteTab quote={quote} latest={technicalLatest} />
             </div>
           </section>
 
@@ -303,7 +316,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
           <section className="glass detail-card" aria-labelledby="sec-technical">
             <CardHead title="技術面" meta="日 K · 成交量 · KD" />
             <div id="sec-technical">
-              <TechnicalTab ticker={ticker} reloadKey={reloadKey} />
+              <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
             </div>
           </section>
         </div>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { fetchMacro } = vi.hoisted(() => ({ fetchMacro: vi.fn() }))
@@ -83,6 +83,19 @@ describe('MacroPage', () => {
     // The entire set of old KPI cards has been removed, and the details are now handled by the form.
     expect(container.querySelectorAll('.kpi-value')).toHaveLength(0)
     expect(container.querySelectorAll('.mac-chip .mac-spark')).toHaveLength(0)
+  })
+
+  it('chip 列與近期走勢表同卡，不再拆成兩張（0.6.38）', async () => {
+    fetchMacro.mockResolvedValue(macro)
+    const { container } = render(<MacroPage />)
+    await screen.findByText('美國總體經濟')
+    // The US block is one card: the chips and the table sit inside the same .glass as the refresh button,
+    // which is the point of the merge —— split apart, the 資料更新於 stamp looked as if it only covered the chips.
+    const card = container.querySelector('.section.glass')!
+    expect(within(card as HTMLElement).getByText('美國總體經濟')).toBeTruthy()
+    expect(card.querySelector('.mac-chip-row')).toBeTruthy()
+    expect(card.querySelector('.data-table')).toBeTruthy()
+    expect(within(card as HTMLElement).getByText('近期走勢・近 12 期')).toBeTruthy()
   })
 
   it('一列一個指標，欄位為 指標／最新／較上期／趨勢／連續（0.6.35）', async () => {

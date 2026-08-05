@@ -245,7 +245,7 @@ describe('StockDetailPage', () => {
     expect(after).not.toBe(before)
   })
 
-  it('四段同時在一頁上，順序為 報價 → 籌碼 → 基本面 → 技術面', async () => {
+  it('四段同時在一頁上，順序為 行情 → 籌碼 → 基本面 → 技術面', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
@@ -255,17 +255,18 @@ describe('StockDetailPage', () => {
     expect(ids).toEqual(['sec-quote', 'sec-chips', 'sec-fundamental', 'sec-technical'])
     // Card titles are also in the same order.
     const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
-    expect(titles).toEqual(['報價', '籌碼', '基本面', '技術面'])
+    expect(titles).toEqual(['行情', '籌碼', '基本面', '技術面'])
   })
 
-  it('報價與技術面各自渲染，不必再切分頁', async () => {
+  it('行情與技術面各自渲染，不必再切分頁', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
     const q = within(sec(container, 'quote'))
-    expect(q.getByText('今日行情')).toBeTruthy()
+    // 0.6.38: the inner「今日行情」heading is gone —— the card head already says 行情
+    expect(q.queryByText('今日行情')).toBeNull()
     expect(q.getByText('31,851 張')).toBeTruthy() // 成交量
     // The box after closing is called "Today's Close" instead of "Deal", and the card title indicates the transaction date and status.
     expect(q.getByText('今收')).toBeTruthy()
@@ -291,7 +292,7 @@ describe('StockDetailPage', () => {
     expect(tabs).toEqual(['分析內容', 'AI 分析'])
   })
 
-  it('技術面：有日線時畫出 K 線與均線，並標出指標摘要', async () => {
+  it('技術面畫 K 線與均線，指標摘要則落在行情卡（0.6.38 合併）', async () => {
     // Create 80 incremental daily lines to make MA60 valuable (if there are less than 60 lines, the quarterly line cannot be tested)
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
@@ -323,10 +324,19 @@ describe('StockDetailPage', () => {
     // Moving average legend (weekly/monthly/quarterly lines for Taiwanese stocks must appear, otherwise people who only recognize one of them will not be able to understand)
     expect(screen.getByText('週線')).toBeTruthy()
     expect(screen.getByText('季線')).toBeTruthy()
-    // The summary takes the latest one: closing 179, rising all the way → long arrangement
+    // The summary lives in the 行情 card now, and it takes the latest day: rising all the way → 多頭排列
     const tech = within(sec(container, 'technical'))
-    expect(tech.getByText('179')).toBeTruthy()
-    expect(tech.getByText(/多頭排列/)).toBeTruthy()
+    expect(tech.queryByText(/多頭排列/)).toBeNull()
+    const q = within(sec(container, 'quote'))
+    expect(q.getByText(`指標摘要（${rows[rows.length - 1][0]}）`)).toBeTruthy()
+    expect(q.getByText(/多頭排列/)).toBeTruthy()
+    /*
+      The three cells that duplicated the live quote (收盤 / 開高低 / 成交量) were dropped in the merge.
+      Locking that here: 179 is the last close, and it must not come back as a summary cell —— the quote
+      grid above already shows today's price, and the two can legitimately be different days.
+    */
+    expect(q.queryByText('179')).toBeNull()
+    expect(q.getByText('量比')).toBeTruthy()
   })
 
   it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {

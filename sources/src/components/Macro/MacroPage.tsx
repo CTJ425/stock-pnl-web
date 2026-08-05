@@ -335,20 +335,22 @@ export function MacroPage() {
             <IndicatorChip key={ind.id} ind={ind} />
           ))}
         </div>
-      </div>
 
-      {/*
-        一列一個指標（0.6.35，原本是一列一個月份）。
+        {/*
+          一列一個指標（0.6.35，原本是一列一個月份）。
 
-        **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
-        而五個總經指標沒有合計可言（單位是 %、千人、指數，加總沒有意義）。
-        轉成一列一個指標之後，趨勢與連續描述的就是該指標自己的 12 期 —— 語意才成立，
-        而且對回法人表「一列一個東西 ＋ 它自己的趨勢與連續」的形狀。
+          **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
+          而五個總經指標沒有合計可言（單位是 %、千人、指數，加總沒有意義）。
+          轉成一列一個指標之後，趨勢與連續描述的就是該指標自己的 12 期 —— 語意才成立，
+          而且對回法人表「一列一個東西 ＋ 它自己的趨勢與連續」的形狀。
 
-        代價是「同一個月五個指標」要橫著看，這是刻意接受的取捨。
-      */}
-      <div className="section glass" style={{ padding: '18px 20px' }}>
-        <div className="rpt-section-head">
+          代價是「同一個月五個指標」要橫著看，這是刻意接受的取捨。
+
+          Since 0.6.38 this shares **one card** with the chip row above: both are the same set of indicators read
+          two ways (what it is now / how it moved over 12 periods). Split across two cards, the "資料更新於" stamp
+          and the refresh button looked as if they only governed the upper one.
+        */}
+        <div className="rpt-section-head" style={{ marginTop: 18 }}>
           <div className="chart-title">近期走勢・近 12 期</div>
           {expandable.length > 0 && (
             <button className="btn btn-sm" onClick={toggleAll}>

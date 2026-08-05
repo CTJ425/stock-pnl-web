@@ -217,6 +217,49 @@ describe('App（本機模式煙霧測試）', () => {
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
   })
 
+  it('年度收益搜尋：只留下符合的股票，找不到時說明是搜尋而非沒紀錄（0.6.38）', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+    for (const [ticker, name, price] of [
+      ['2330', '台積電', '500'],
+      ['2454', '聯發科', '900'],
+    ] as const) {
+      await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+      const dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+      const form = within(dialog)
+      await user.type(form.getByLabelText(/股票代號/), ticker)
+      await user.type(form.getByLabelText('股票名稱'), name)
+      await user.type(form.getByLabelText('交易單價'), price)
+      await user.type(form.getByLabelText('交易股數'), '1')
+      await user.click(form.getByRole('button', { name: '確認送出' }))
+      await form.findByText(/成功新增交易紀錄/)
+      await user.click(form.getByRole('button', { name: '關閉' }))
+    }
+
+    await user.click(screen.getByRole('button', { name: /年度收益/ }))
+    const year = String(new Date().getFullYear())
+    await user.click(await screen.findByRole('button', { name: '全部展開' }))
+    expect(screen.getByText(/2330/)).toBeTruthy()
+    expect(screen.getByText(/2454/)).toBeTruthy()
+
+    // Searching by name filters the aggregation itself, so the other stock leaves the table entirely
+    const box = screen.getByLabelText('搜尋年度收益的股票')
+    await user.type(box, '聯發科')
+    expect(screen.queryByText(/2330/)).toBeNull()
+    expect(screen.getByText(/2454/)).toBeTruthy()
+    // The KPI cards stay lifetime totals —— the hint next to the box says so, and both stocks are still counted
+    expect(screen.getByText(/上方四張卡是全部交易的累計/)).toBeTruthy()
+
+    // No match is a different sentence from an empty ledger, per section
+    await user.clear(box)
+    await user.type(box, 'NVDA')
+    expect(screen.getAllByText(/找不到符合「NVDA」的股票/).length).toBe(2)
+    expect(screen.queryByText(year)).toBeNull()
+  })
+
   it('編輯交易 → 修改單價後自動重算手續費並更新列表', async () => {
     const user = userEvent.setup()
     render(<App />)

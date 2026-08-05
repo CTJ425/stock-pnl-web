@@ -1,5 +1,6 @@
 /**
- * Technical page: daily K + moving average, trading volume, KD, and indicator summary for the latest day.
+ * Technical page: daily K + moving average, trading volume, KD.
+ * (The indicator summary moved to the 行情 card in 0.6.38 —— see QuoteTab.)
  *
  * The data comes from daily/{ticker}.json (see services/dailyProxy.ts), which is scheduled for after-hours production and stored in the public reports bucket.
  * The front-end downloads directly without going through Edge Function. A warm call is made when there is no check (the newly added stocks have not been covered by the night batch),
@@ -15,10 +16,10 @@
  * Comparison of Taiwan stock terminology (called "daily/weekly/quarterly lines" in PLAN.md §L):
  * Weekly line = MA5, monthly line = MA20, quarterly line = MA60. The two terms of UI are stated side by side, so that people who only recognize one of them will not understand.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, LineChart, RefreshCw } from 'lucide-react'
-import { fetchDailySeries, type DailySeries } from '../../services/dailyProxy'
-import { warmStock } from '../../services/warmStock'
+import type { DailySeries } from '../../services/dailyProxy'
+import type { DailyStatus } from './useDailySeries'
 import { CandleChart } from '../Charts/CandleChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
@@ -57,38 +58,16 @@ function fmtLots(shares: number): string {
   return `${Math.round(shares / 1000).toLocaleString('en-US')} 張`
 }
 
-function pnlClass(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v) || v === 0) return 'pnl-flat'
-  return v > 0 ? 'pnl-up' : 'pnl-down'
-}
-
-export function TechnicalTab({ ticker, reloadKey = 0 }: { ticker: string; reloadKey?: number }) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading')
-  const [series, setSeries] = useState<DailySeries | null>(null)
+export function TechnicalTab({
+  ticker,
+  status,
+  series,
+}: {
+  ticker: string
+  status: DailyStatus
+  series: DailySeries | null
+}) {
   const [range, setRange] = useState<RangeKey>('3m')
-  useEffect(() => {
-    let alive = true
-    setStatus('loading')
-    setSeries(null)
-    ;(async () => {
-      try {
-        let s = await fetchDailySeries(ticker)
-        if (!s) {
-          const warmed = await warmStock(ticker)
-          if (warmed.dailySynced > 0) s = await fetchDailySeries(ticker)
-        }
-        if (!alive) return
-        setSeries(s)
-        setStatus(s ? 'ready' : 'empty')
-      } catch {
-        if (alive) setStatus('error')
-      }
-    })()
-    return () => {
-      alive = false
-    }
-    // reloadKey: Force re-fetching when the user clicks "Refresh" (neither this layer nor dailyProxy has cache, re-run will be the latest)
-  }, [ticker, reloadKey])
 
   const view = useMemo(
     () => (series ? buildTechnicalView(series.rows, range) : null),
@@ -237,64 +216,11 @@ export function TechnicalTab({ ticker, reloadKey = 0 }: { ticker: string; reload
         </p>
       </section>
 
-      <section className="rpt-section">
-        <h3>指標摘要（{latest.date}）</h3>
-        {/* 不用 data-table：那個表最小寬 720px，為了 8 個數值強迫手機橫向捲動不划算 */}
-        <dl className="tech-summary">
-          <div className="tech-cell">
-            <dt>收盤</dt>
-            <dd>
-              {fmtPrice(latest.close)}
-              <span className={`tech-sub ${pnlClass(latest.change)}`}>
-                {latest.change === null
-                  ? '—'
-                  : `${latest.change > 0 ? '+' : ''}${fmtNum(latest.change)}`}
-                {latest.changePct !== null &&
-                  `（${latest.changePct > 0 ? '+' : ''}${(latest.changePct * 100).toFixed(2)}%）`}
-              </span>
-            </dd>
-          </div>
-          <div className="tech-cell">
-            <dt>開 / 高 / 低</dt>
-            <dd>
-              {fmtPrice(latest.open)}／{fmtPrice(latest.high)}／{fmtPrice(latest.low)}
-            </dd>
-          </div>
-          <div className="tech-cell">
-            <dt>成交量</dt>
-            <dd>
-              {fmtLots(latest.volume)}
-              {latest.volRatio !== null && (
-                <span className="tech-sub">20 日均量的 {fmtNum(latest.volRatio, 2)} 倍</span>
-              )}
-            </dd>
-          </div>
-          <div className="tech-cell">
-            <dt>均線</dt>
-            <dd>
-              {fmtNum(latest.ma5)}／{fmtNum(latest.ma20)}／{fmtNum(latest.ma60)}
-              <span className="tech-sub">
-                MA5 / MA20 / MA60{latest.alignment ? ` · ${latest.alignment}` : ''}
-              </span>
-            </dd>
-          </div>
-          <div className="tech-cell">
-            <dt>KD</dt>
-            <dd>
-              {fmtNum(latest.k, 1)}／{fmtNum(latest.d, 1)}
-              <span className="tech-sub">K / D</span>
-            </dd>
-          </div>
-          <div className="tech-cell">
-            <dt>RSI(14)</dt>
-            <dd>{fmtNum(latest.rsi14, 1)}</dd>
-          </div>
-          <div className="tech-cell">
-            <dt>MACD 柱</dt>
-            <dd className={pnlClass(latest.macdHist)}>{fmtNum(latest.macdHist)}</dd>
-          </div>
-        </dl>
-      </section>
+      {/*
+        「指標摘要」moved to the 行情 card in 0.6.38 —— it was a table of numbers about the latest day, sitting
+        at the bottom of a page of charts, repeating 收盤 / 開高低 / 成交量 that the quote already showed live.
+        This page keeps the charts, which are the thing it is actually for.
+      */}
     </>
   )
 }

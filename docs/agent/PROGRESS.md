@@ -1,9 +1,59 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Documented 0.6.37 and the comment translation, then deployed the Edge half that was still missing
-- Status: **Done — both environments now run 0.6.37; docs caught up; tests/build/lint green**
-- Timestamp: 2026-08-05 21:05:00 Asia/Taipei
+- Action: 0.6.38-dev.1 —— earlier BFI82U schedule, three UI merges, yearly search
+- Status: **Done on `dev`; cron live in both environments; 879 tests / build / lint green**
+- Timestamp: 2026-08-05 21:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 21:40:00 Asia/Taipei (0.6.38-dev.1)
+
+- **Agent**: Claude
+- **Action**: Move `market-daily` earlier, merge three pairs of UI, add a search box to the yearly page
+
+### The early round costs less than the old comment claimed
+
+`schema.sql` justified starting at 16:00 with "running early only gets 'no data found', which is a wasted trip".
+Reading `syncMarket` says otherwise: it compares a content signature and, when nothing changed, returns
+`synced: false` and **leaves `asOf` untouched** —— an early miss writes nothing and cannot put a false "arrived"
+mark on the admin timeline. The whole cost is two GETs. So the schedule moved to every half hour from 15:00.
+
+What is genuinely unknown is whether 15:00 will *win*: today's institutional amount is only fetched when today's
+date already exists in the merged day list, and that list comes from **FMTQIK**, not BFI82U. The early round
+therefore needs both publishers. Tomorrow's `market/daily.json` `asOf` answers it.
+
+Applied with `cron.alter_job` rather than re-running `cron.schedule`: altering keeps the existing command, so the
+plaintext `CRON_SECRET` —— which an agent cannot read —— is never needed. Every write carried the target ref in
+the same query, per the `supabase-ops` cwd trap.
+
+### The merges, and the one thing that must not be tidied away
+
+「報價」and its inner「今日行情」were two titles for one card; the technical page ended a wall of charts with a
+table of numbers about the latest day, repeating 收盤 / 開高低 / 成交量 that the quote already showed live.
+So: the card is now called **行情**, the duplicated cells are gone, and what survives from 指標摘要 is what a quote
+cannot give —— 均線 / KD / RSI / MACD 柱 / 量比.
+
+⚠️ **The two halves can be different days.** The quote is MIS in real time; the summary comes from the after-hours
+daily batch, which only lands in the evening, so during the session it still describes the previous trading day.
+That is why the summary keeps its own date in the heading, and a test now locks it.
+
+Same reasoning for the macro page: chip row and trend table are two readings of one set of indicators, and splitting
+them made 資料更新於 / 重新整理 look as if they only covered the top card.
+
+### Search that recomputes rather than hides
+
+The yearly search filters **what gets aggregated**. Hiding detail rows while leaving the year totals alone would
+print a year total that adds up to nothing visible. The four KPI cards stay lifetime totals and say so in a hint
+while a query is active.
+
+### Completed Tasks
+- [x] `schema.sql` §10b + both environments: `market-daily` → `0,30 7-10 * * 1-5` (Taipei 15:00–18:30).
+- [x] `QuoteTab` / `TechnicalTab` / `StockDetailPage` + new `useDailySeries`: one download feeds both sections.
+- [x] `MacroPage`: US indicators in a single card.
+- [x] `YearlyPage`: search box, aggregation-level filtering, distinct empty-state wording.
+- [x] `SPEC.md`: four sections added/updated; `TASK.md` Task 72; version bumped to 0.6.38-dev.1 in all three places.
+- [x] Verified: **879 tests across 57 files**, build and lint clean; three stale layout assertions rewritten.
 
 ---
 

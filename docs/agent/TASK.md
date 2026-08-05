@@ -12,6 +12,23 @@
 
 ## 📋 Active Tasks
 
+### Task 72: Earlier BFI82U schedule, three UI merges, yearly search (0.6.38-dev.1)
+- **Status**: ✅ Code done and verified; cron applied to **both** environments (user authorised). Not yet merged to `main`.
+- **Agent**: Claude
+- **Timestamp**: 2026-08-05 21:40:00 Asia/Taipei
+- **1. `market-daily` 16:00 → 15:00, every half hour** (`0,30 7-10 * * 1-5`): applied with `cron.alter_job`
+  (keeps the existing command, so the plaintext `CRON_SECRET` is not needed), verified with the target ref in the
+  same query per the `supabase-ops` skill. Test at 21:2x, production right after; `schema.sql` §10b updated to match.
+  **Open question for tomorrow**: whether the 15:00 round actually wins —— it needs FMTQIK to have published too,
+  not just BFI82U. Read `market/daily.json`'s `asOf`.
+- **2. 個股分析「報價」→「行情」, and 技術面's 指標摘要 merged into it**: dropped the summary's
+  收盤 / 開高低 / 成交量 (the quote grid shows the same things live), kept 均線 / KD / RSI / MACD 柱 / 量比.
+  ⚠️ The two halves can be **different days** —— that is why the summary keeps its own data date; do not "tidy" it away.
+  `daily/{ticker}.json` moved up to `StockDetailPage` (`useDailySeries`) so two sections share one download.
+- **3. 總經頁美國 chip 列與走勢表合併為一張卡**; **4. 年度收益搜尋欄位** (filters the aggregation, not just the rows).
+- **Verification**: 879 tests across 57 files (added 2), `npm run build` and `npm run lint` clean (same 4 pre-existing
+  fast-refresh warnings). Three tests that locked the old layout were rewritten to lock the new one.
+
 ### Task 71: Deploy the 0.6.37 `stock-price` fix to both environments
 - **Status**: ✅ **Done — deployed to both environments** (dev v11 at 20:57, prod v15 at 20:58, user explicitly authorised)
 - **Agent**: Claude
