@@ -16,7 +16,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
 import type { YearTickerDetail } from '../../utils/pnlEngine'
 import { displayStockName } from '../../services/usStockNames'
-import { fmtMoney, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
+import { fmtMoney, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { HelpTh } from '../Common/HelpTh'
 import { YEAR_HELP } from './columnHelp'
 
@@ -113,6 +113,38 @@ function AmountCell({
   )
 }
 
+/**
+ * 報酬率儲存格：已實現損益 ÷ 賣出成本，主行含費、副行未含費（與左邊三欄同一體例）。
+ *
+ * 分母為 0 時給 null 而不是算下去：「僅買進」的個股成本與損益都是 0（0/0 = NaN），
+ * 「超賣」則是成本以 0 計算但有損益（x/0 = Infinity）—— 兩種都不是能顯示的百分比。
+ */
+function RoiCell({
+  realized,
+  costBasis,
+  raw,
+  rawCostBasis,
+}: {
+  realized: number
+  costBasis: number
+  raw: number
+  rawCostBasis: number
+}) {
+  const roi = costBasis !== 0 ? realized / costBasis : null
+  const rawRoi = rawCostBasis !== 0 ? raw / rawCostBasis : null
+  if (roi === null && rawRoi === null) {
+    return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
+  }
+  return (
+    <td className={`num ${pnlClass(roi)}`}>
+      <div style={{ fontWeight: 600 }}>{roi === null ? '—' : fmtSignedPercent(roi)}</div>
+      <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+        未含費 {rawRoi === null ? '—' : fmtSignedPercent(rawRoi)}
+      </div>
+    </td>
+  )
+}
+
 /** 手續費儲存格：主數字為費稅合計，副行拆「手續費｜交易稅」；無稅（美股/僅買進）時不顯示副行 */
 function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
   return (
@@ -192,6 +224,7 @@ function YearlySection({ title, currency }: { title: string; currency: Currency 
                 <HelpTh label="賣出成本" help={YEAR_HELP.costBasis} numeric />
                 <HelpTh label="賣出收入" help={YEAR_HELP.sellAmt} numeric />
                 <HelpTh label="已實現損益" help={YEAR_HELP.realized} numeric />
+                <HelpTh label="報酬率" help={YEAR_HELP.roi} numeric />
                 <HelpTh label="手續費 / 稅金" help={YEAR_HELP.fees} numeric />
                 <HelpTh label="交易筆數" help={YEAR_HELP.count} numeric />
               </tr>
@@ -257,6 +290,12 @@ function YearRows({
         <AmountCell value={row.costBasis} raw={row.rawCostBasis} currency={currency} />
         <AmountCell value={row.sellAmt} raw={row.sellGross} currency={currency} />
         <AmountCell value={row.realized} raw={rawRealized(row)} currency={currency} signed />
+        <RoiCell
+          realized={row.realized}
+          costBasis={row.costBasis}
+          raw={rawRealized(row)}
+          rawCostBasis={row.rawCostBasis}
+        />
         <FeeCell fees={row.fees} feesTax={row.feesTax} currency={currency} />
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
@@ -298,6 +337,12 @@ function YearRows({
                 <AmountCell value={yt.costBasis} raw={yt.rawCostBasis} currency={currency} />
                 <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
                 <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
+                <RoiCell
+                  realized={yt.realized}
+                  costBasis={yt.costBasis}
+                  raw={rawRealized(yt)}
+                  rawCostBasis={yt.rawCostBasis}
+                />
                 <FeeCell fees={yt.fees} feesTax={yt.feesTax} currency={currency} />
                 <td className="num">{fmtQty(yt.count)}</td>
               </tr>
@@ -318,6 +363,12 @@ function YearRows({
                     <AmountCell value={sell.costBasis} raw={sell.rawCostBasis} currency={currency} />
                     <AmountCell value={sell.sellAmt} raw={sell.sellGross} currency={currency} />
                     <AmountCell value={sell.realized} raw={rawRealized(sell)} currency={currency} signed />
+                    <RoiCell
+                      realized={sell.realized}
+                      costBasis={sell.costBasis}
+                      raw={rawRealized(sell)}
+                      rawCostBasis={sell.rawCostBasis}
+                    />
                     <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} />
                     <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
                   </tr>

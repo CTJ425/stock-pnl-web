@@ -7,10 +7,17 @@
  *
  * 單位陷阱：來源是**元**，畫面一律換算成**億元**（大盤單日成交 8,855 億，
  * 用元顯示是 885,506,043,091 —— 沒有人這樣讀）。個股籌碼的單位是「股」，兩者不可比較。
+ *
+ * 逐日表格右側併入使用者自己的台股買賣金額：「法人這幾天在買還是在賣」與「那我呢」
+ * 是同一個問題的兩半，分成兩張表就要自己對日期。代價是同一列混了億元與元兩種單位 ——
+ * 靠表頭的「（元）」與分隔線區隔，而不是把自己的金額也換算成億元（個人單筆通常不到 0.01 億，
+ * 換算後整欄都是 0.0）。
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { fetchMarketDaily, type MarketData } from '../../services/marketProxy'
+import type { Transaction } from '../../types/models'
+import { fmtMoney } from '../../utils/formatters'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
@@ -49,9 +56,30 @@ function shortDate(date: string): string {
   return m ? `${m[1]}/${m[2]}` : date
 }
 
-export function TwMarketSection() {
+/**
+ * 自己的台股交易依日期彙總成買進 / 賣出金額（元）。
+ *
+ * 金額定義與交易紀錄頁的「損益 / 收支」欄一致（TransactionsPage 的 cashFlow）：
+ * 買進 = 單價×股數＋費用（實際付出的現金）、賣出 = 單價×股數－費用（實際收到的現金）。
+ * 美股交易不計入 —— 這是台股卡片，把美元金額混進來會變成無意義的數字相加。
+ */
+function twFlowByDate(transactions: Transaction[]): Map<string, { buy: number; sell: number }> {
+  const map = new Map<string, { buy: number; sell: number }>()
+  for (const tx of transactions) {
+    if (tx.market !== 'TPE') continue
+    const entry = map.get(tx.tx_date) ?? { buy: 0, sell: 0 }
+    const gross = tx.price * tx.qty
+    if (tx.tx_type === 'BUY') entry.buy += gross + tx.fee_tax
+    else entry.sell += gross - tx.fee_tax
+    map.set(tx.tx_date, entry)
+  }
+  return map
+}
+
+export function TwMarketSection({ transactions = [] }: { transactions?: Transaction[] }) {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
+  const myFlow = useMemo(() => twFlowByDate(transactions), [transactions])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -210,10 +238,72 @@ export function TwMarketSection() {
         formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`}
         ariaLabel={`近 ${instDays.length} 個交易日的三大法人買賣超金額`}
       />
+      {/*
+        圖看得出方向、表看得出數字，兩個都要（使用者回報「看不出以天為單位的買賣超」）。
+
+        **表由新到舊，圖由舊到新** —— 與月營收、獲利能力兩處的處置一致：
+        走勢圖左邊必須是比較早的日子，而表格第一列要是最近的那天。
+        兩者方向刻意相反，不是筆誤。
+      */}
+      <div className="table-scroll" style={{ marginTop: 12 }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th className="num">外資</th>
+              <th className="num">外資自營商</th>
+              <th className="num">投信</th>
+              <th className="num">自營商（自行）</th>
+              <th className="num">自營商（避險）</th>
+              <th className="num">合計</th>
+              {/* 分隔線標示單位換檔：左邊是全市場的億元，右邊是自己的元 */}
+              <th className="num" style={{ borderLeft: `1px solid var(--border-strong)` }}>
+                我的買進（元）
+              </th>
+              <th className="num">我的賣出（元）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...instDays].reverse().map((d) => {
+              const i = d.institutional
+              const cell = (v: number | null | undefined) => {
+                const b = toBillion(v ?? null)
+                return <td className={`num ${chipClass(b)}`}>{fmtBillionSigned(b)}</td>
+              }
+              const mine = myFlow.get(d.date)
+              return (
+                <tr key={d.date}>
+                  <td>{d.date}</td>
+                  {/* 這一天還沒補到法人金額時整列給「—」，不要用 0 冒充 */}
+                  {cell(i?.foreignTwd)}
+                  {cell(i?.foreignDealerTwd)}
+                  {cell(i?.trustTwd)}
+                  {cell(i?.dealerSelfTwd)}
+                  {cell(i?.dealerHedgeTwd)}
+                  {cell(i?.totalTwd)}
+                  {/*
+                    自己的金額不套 chipClass：買進賣出都是正值，紅綠在這裡沒有方向語意，
+                    只會跟左邊法人買賣超的顏色混淆。那天沒下單就給「—」（0 會讀成「買了 0 元」）。
+                  */}
+                  <td className="num" style={{ borderLeft: `1px solid var(--border-strong)` }}>
+                    {mine?.buy ? fmtMoney(mine.buy, 'TWD') : '—'}
+                  </td>
+                  <td className="num">{mine?.sell ? fmtMoney(mine.sell, 'TWD') : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
       <p className="hint" style={{ marginTop: 8 }}>
         買賣超是全市場的買進金額減掉賣出金額，紅色代表法人整體買超。
+        表格前五欄相加等於合計 —— 合計取的是官方揭露值，不是我們自己加總的。
         法人金額約 15:00–15:30 公布，且是逐日回補的 —— 最新一兩天沒有長條是還沒補到，
         不是那天沒有法人進出。成交金額與加權指數則收盤後就有。
+        最後兩欄是你自己的台股交易，單位是<b>元</b>不是億元：買進為實付金額（含手續費）、
+        賣出為實收金額（已扣手續費與交易稅），美股交易不計入。 只涵蓋表中這 {instDays.length}{' '}
+        個交易日，完整紀錄請看交易紀錄頁。
       </p>
     </div>
   )

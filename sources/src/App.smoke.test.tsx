@@ -212,6 +212,9 @@ describe('App（本機模式煙霧測試）', () => {
     expect(await screen.findByText('歷史累計交易筆數 (台美股合計)')).toBeTruthy()
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
 
+    // 只買未賣：報酬率分母為 0，整格「—」而不是 NaN% / Infinity%
+    expect(screen.getByRole('columnheader', { name: /報酬率/ })).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
   })
 
   it('編輯交易 → 修改單價後自動重算手續費並更新列表', async () => {
@@ -285,6 +288,10 @@ describe('App（本機模式煙霧測試）', () => {
     await user.click(screen.getByRole('button', { name: /年度收益/ }))
     const hits = await screen.findAllByText('+NT$98,096')
     expect(hits.length).toBeGreaterThan(0)
+
+    // 報酬率：含費 98096 / 250356 = +39.18%；副行未含費 100000 / 250000 = +40.00%
+    expect(screen.getAllByText('+39.18%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/未含費 \+40\.00%/).length).toBeGreaterThan(0)
   })
 
   it('工作區選單：切換在上、管理動作在下，刪除隔開且為危險樣式', async () => {
