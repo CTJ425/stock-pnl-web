@@ -61,6 +61,9 @@ it carries 1377 TWSE records and **6488 is absent** (TPEx), and its `TradeVolume
       measurement and item 2 re-scoped to run after the deploy.
 - [x] Verified the post-translation tree: **877 tests across 57 files passed**, `npm run build` and `npm run lint`
       clean (only the four pre-existing `only-export-components` warnings).
+- [x] `supabase-ops` skill: its prescribed audit (`functions download` + diff) cannot authenticate here, so the skill
+      was telling every future session to do something that does not work. Added the `ezbr_sha256` fallback with its
+      limits, and the "a git push does not deploy an Edge Function" trap that cost this session.
 
 ---
 

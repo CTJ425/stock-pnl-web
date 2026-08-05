@@ -26,6 +26,31 @@ diff <downloaded file> sources/supabase/functions/<slug>/<file>
 I have encountered that the one with a newer version number is the old code (the test area `stock-price` v2 is 137 lines behind,
 `misParse.ts` is not deployed at all).
 
+**But `functions download` cannot authenticate in this environment** —— it returns
+`Access token not provided. Supply an access token by running supabase login or setting SUPABASE_ACCESS_TOKEN`,
+while `projects list` / `functions list` / `functions deploy` all work fine: they take a different auth path.
+Observed 2026-08-05 on both `--project-ref` values. Do not read this as "the audit was done".
+
+**Fallback audit: compare `ezbr_sha256` from `functions list`.** It is the hash of the deployed bundle, so:
+
+```bash
+supabase functions list --project-ref <ref>   # read ezbr_sha256, not just version
+```
+
+- A **changed** sha right after your deploy proves new code actually landed (a bumped version number alone only proves
+  that *something* was uploaded —— that is the trap above).
+- The **same** sha in both environments proves both run the same bundle. On 2026-08-05 that was how the 0.6.36 build
+  was caught still running in both areas after 0.6.37 shipped (`00ce1004…` in both, becoming `733891b768b2…` after
+  deploying).
+- Its limit: a hash says *whether* the bundle differs, never *what* is inside it. It is only evidence when you deploy
+  from a working tree you know is clean and at a known commit —— record that commit alongside the sha.
+
+**A `git push` does not deploy an Edge Function.** Pushing to `main` fires GitHub Pages, so a fix that lives in
+`sources/supabase/functions/` looks shipped while the server still runs the old code. `quoteWindow.ts` is the sharp
+case: the browser imports the Edge copy across directories, so one file change is **two** deploy targets, and only one
+of them travels with git. After any commit that touches `sources/supabase/functions/`, check `functions list` before
+calling it released.
+
 **The comparison benchmark should correspond to the branch** (§13 comparison table): the official area is compared to `main`, and the test area is compared to `dev`.
 Taking the wrong benchmark will misjudge "synchronized" - I made this mistake once.
 
@@ -48,7 +73,8 @@ Checking twice (identity first, then writing) will not prevent this error - cwd 
 In addition, `cd` to `sources/` before executing `db query` each time, and do not rely on the cwd left by the previous command.
 
 **`supabase link` has global side effects, not per-directory. ** Re-linking in another directory will clear the previous one.
-When checking another project, use the commands that support `--project-ref` (`functions list/deploy/download`, `secrets list`);
+When checking another project, use the commands that support `--project-ref` (`functions list/deploy`, `secrets list`;
+`download` takes the flag too but fails on auth here, see above);
 Only `db query --linked` does not have `--project-ref`, link only if it is absolutely necessary.
 
 **Agent cannot get `CRON_SECRET` plaintext** (`secrets list` only returns hash),
