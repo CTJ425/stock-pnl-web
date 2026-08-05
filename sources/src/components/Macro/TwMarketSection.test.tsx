@@ -45,6 +45,16 @@ const day = (date: string, value: number, institutional: MarketDay['institutiona
   institutional,
 })
 
+/*
+  Two `.data-table`s live on this card since 0.6.38 (每日成交量 first, then 三大法人買賣超), so every selector has
+  to say which one it means —— an unscoped `.data-table tbody tr` silently returns both tables' rows.
+*/
+const instTable = (c: HTMLElement) =>
+  c.querySelector<HTMLElement>('table[aria-label="三大法人買賣超"]')!
+const instRows = (c: HTMLElement) => instTable(c).querySelectorAll('tbody tr')
+const turnoverRows = (c: HTMLElement) =>
+  c.querySelector<HTMLElement>('table[aria-label="每日成交量"]')!.querySelectorAll('tbody tr')
+
 describe('TwMarketSection', () => {
   afterEach(() => {
     cleanup()
@@ -60,7 +70,7 @@ describe('TwMarketSection', () => {
       ],
     })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('成交金額')
+    await screen.findByRole('table', { name: '每日成交量' })
 
     // The same number will also appear in the daily table below, so it is limited to KPI block comparison.
     const kpis = () => [...container.querySelectorAll('.kpi-value')].map((e) => e.textContent)
@@ -102,6 +112,46 @@ describe('TwMarketSection', () => {
     expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
   })
 
+  it('每日成交量表格：股數與金額並列，預設 7 列可展開全部（0.6.38）', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, i) =>
+      day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
+    )
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: many })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    expect(turnoverRows(container)).toHaveLength(7)
+    // Newest first, opposite to the charts above
+    expect(turnoverRows(container)[0].textContent).toContain('2026-07-30')
+
+    const cells = [...turnoverRows(container)[0].querySelectorAll('td')].map((td) => td.textContent)
+    // 11,000,000,000 shares → 110.0 億股; 8e11 元 → 8000.0 億; 4,000,000 筆 → 400.0 萬
+    expect(cells[1]).toBe('110.0 億股')
+    expect(cells[2]).toBe('8000.0 億')
+    expect(cells[3]).toBe('400.0 萬')
+    expect(cells[5]).toBe('+266.66')
+
+    await user.click(screen.getByRole('button', { name: /顯示全部 30 日/ }))
+    expect(turnoverRows(container)).toHaveLength(30)
+  })
+
+  it('成交股數與筆數缺料時給「—」，不用 0 冒充（0.6.38）', async () => {
+    // Days written before these columns existed read back as undefined, not null
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [{ ...day('2026-08-04', 8e11, null), tradeVolumeShares: null, transactions: null }],
+    })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    const cells = [...turnoverRows(container)[0].querySelectorAll('td')].map((td) => td.textContent)
+    expect(cells[1]).toBe('—')
+    expect(cells[3]).toBe('—')
+    // The amount is still there, so a missing column must not blank the whole row
+    expect(cells[2]).toBe('8000.0 億')
+  })
+
   it('法人只看最近 7 個交易日（與個股籌碼一致）', async () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
@@ -111,7 +161,7 @@ describe('TwMarketSection', () => {
 
     await screen.findByText(/三大法人買賣超（億元）・近 7 個交易日/)
     // 0.6.33 After removing the bar chart, the 7-day window is represented by a table (the two index charts and transaction amounts above are still 30 days)
-    expect(container.querySelectorAll('.data-table tbody tr')).toHaveLength(7)
+    expect(instRows(container)).toHaveLength(7)
   })
 
   it('逐日買賣超表格：由新到舊，五個法人分欄，缺料給「—」', async () => {
@@ -124,9 +174,9 @@ describe('TwMarketSection', () => {
       ],
     })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = container.querySelectorAll('.data-table tbody tr')
+    const rows = instRows(container)
     expect(rows).toHaveLength(2)
     // The table is from new to old (the picture is from old to new, the two are deliberately opposite)
     expect(rows[0].textContent).toContain('2026-08-04')
@@ -152,7 +202,7 @@ describe('TwMarketSection', () => {
       ],
     })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
 
     // The expand button will only be given on the day with the details, but the old information will not be given on that day (there is nothing to see if you click on it)
     const toggles = screen.getAllByRole('button', { name: /展開 .* 的買進賣出明細/ })
@@ -183,9 +233,9 @@ describe('TwMarketSection', () => {
     )
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-10T08:30:00.000Z', days })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = container.querySelectorAll('.data-table tbody tr')
+    const rows = instRows(container)
     expect(rows).toHaveLength(7)
     // The latest column (8/10): even the 10th day of overbuying, the 3 days outside the table are also included.
     expect(rows[0].textContent).toContain('連 10 日買超')
@@ -201,15 +251,15 @@ describe('TwMarketSection', () => {
     ]
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = container.querySelectorAll('.data-table tbody tr')
+    const rows = instRows(container)
     // There is only 1 day in the same direction on the turning day → Do not print "N days in a row" (1 day in a row is not a trend)
     expect(rows[0].textContent).not.toContain('連')
     // The day before was the second consecutive day of overselling.
     expect(rows[1].textContent).toContain('連 2 日賣超')
     // Three points draw a trend line
-    expect(container.querySelectorAll('.data-table .mac-spark').length).toBeGreaterThan(0)
+    expect(instTable(container).querySelectorAll('.mac-spark').length).toBeGreaterThan(0)
   })
 
   it('抓取週期不寫在卡片上，班次常數只有後台一份（0.6.33）', async () => {
@@ -219,7 +269,7 @@ describe('TwMarketSection', () => {
       days: [day('2026-08-04', 8e11, inst(1e9, 1e9))],
     })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
     expect(screen.queryByText(/抓取週期/)).toBeNull()
     expect(container.textContent).not.toContain('market-daily')
     // The sentence you replaced still needs to be clear about what "—" stands for.
@@ -276,7 +326,7 @@ describe('TwMarketSection', () => {
       ],
     })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
 
     await user.click(screen.getByRole('button', { name: /全部展開/ }))
     // Only one column can be expanded. After expansion, the button should be turned into "Collapse All"——
@@ -296,10 +346,10 @@ describe('TwMarketSection', () => {
     ]
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
     const { container } = render(<TwMarketSection />)
-    await screen.findByText('日期')
+    await screen.findByRole('table', { name: '三大法人買賣超' })
     expect(screen.getByRole('columnheader', { name: '連續' })).toBeTruthy()
 
-    const rows = container.querySelectorAll('.data-table tbody tr')
+    const rows = instRows(container)
     const cells = (r: Element) => [...r.querySelectorAll('td.num')]
     // The last two grids are fixed to be trend and continuity: the trend line is only in the trend grid, and the text is only in the continuous grid.
     const top = cells(rows[0])

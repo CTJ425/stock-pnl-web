@@ -339,6 +339,51 @@ describe('StockDetailPage', () => {
     expect(q.getByText('量比')).toBeTruthy()
   })
 
+  it('技術面：成交量表格排在 KD 之後，預設 20 列可展開，量比對 20 日均量（0.6.38）', async () => {
+    const user = userEvent.setup()
+    // 80 days so MA20 has a full window; volume climbs so the newest day is the heaviest
+    const rows = Array.from({ length: 80 }, (_, i) => {
+      const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
+      const close = 100 + i
+      return [date, close - 1, close + 1, close - 2, close, 1_000_000 + i * 20_000] as [
+        string, number, number, number, number, number,
+      ]
+    })
+    fetchDailySeries.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-07-27T09:31:00.000Z',
+      lastDate: rows[rows.length - 1][0],
+      rows,
+    })
+
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
+    )
+    await screen.findByText('日 K 與均線')
+
+    // Section order inside 技術面: 日 K → KD → 成交量 (KD and volume swapped in 0.6.38)
+    const heads = [...sec(container, 'technical').querySelectorAll('.rpt-section h3')].map(
+      (h) => h.textContent,
+    )
+    // The first heading carries a locale-dependent timestamp, so only its prefix is pinned
+    expect(heads[0]).toMatch(/^日 K 與均線/)
+    expect(heads.slice(1)).toEqual(['KD 指標', '成交量'])
+
+    const t = within(sec(container, 'technical'))
+    // 近 3 月 = 60 交易日, but the table starts collapsed at 20
+    const tableRows = () => sec(container, 'technical').querySelectorAll('.data-table tbody tr')
+    expect(tableRows()).toHaveLength(20)
+    // Newest first
+    expect(tableRows()[0].textContent).toContain('2026-06-19')
+    // 2,580,000 shares = 2,580 張, and it is above the 20-day average so the ratio exceeds 1
+    expect(tableRows()[0].textContent).toContain('2,580 張')
+    const ratio = [...tableRows()[0].querySelectorAll('td.num')][1].textContent!
+    expect(Number(ratio.replace(' 倍', ''))).toBeGreaterThan(1)
+
+    await user.click(t.getByRole('button', { name: /顯示全部 60 日/ }))
+    expect(tableRows()).toHaveLength(60)
+  })
+
   it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {
     // 200 information, 60 displayed. If you implement cropping first and then calculate the indicator, MA60 will disappear entirely.
     // There are only two moving averages left on the chart - this is what PLAN marked as the "most likely to make mistakes".

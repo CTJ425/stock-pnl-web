@@ -1,9 +1,56 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.38-dev.1 —— earlier BFI82U schedule, three UI merges, yearly search
-- Status: **Done on `dev`; cron live in both environments; 879 tests / build / lint green**
-- Timestamp: 2026-08-05 21:40:00 Asia/Taipei
+- Action: 0.6.38 released —— volume tables, UI merges, yearly search, earlier BFI82U schedule
+- Status: **Merged to `main`; cron live in both environments; 882 tests / build / lint green**
+- Timestamp: 2026-08-05 22:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 22:40:00 Asia/Taipei (0.6.38 → main)
+
+- **Agent**: Claude
+- **Action**: Daily volume tables for the stock and the market, then release
+
+### Mockup first, code second
+
+The user asked to see the layout before any implementation, so both areas were mocked in
+`docs/architecture/volume_table_layouts.html` with **real** 2026-08-05 numbers pulled from the live files
+(`daily/2330.json`, `market/daily.json`) —— column widths and digit counts cannot be judged from placeholder data.
+Two options each; the user picked A for both: collapsed by default with a 顯示全部 button.
+
+### What the tables add that the charts could not
+
+Per stock, the answer is **量比**: a bar chart shows relative height, the ratio says "today is N times the 20-day
+average", bold from 1.5x. It is computed over the full series rather than the visible slice, so the oldest visible
+row still has a real average behind it instead of a hole.
+
+Market-wide, the answer is that `tradeVolumeShares` and `transactions` had been sitting in `market/daily.json`
+since 0.6.28 **without ever being displayed** —— the chart only ever drew the amount. Shares and amount are listed
+side by side on purpose: 2026-07-29 traded 170.5 億股 for 11,492 億 while 08-05 traded 132.1 億股 for 12,002 億,
+which is what a rotation into pricier stocks looks like.
+
+### The disagreement that is not a bug
+
+2330 on 2026-08-05: 35,214 張 from the daily batch, 31,851 張 from MIS —— about 10% apart, and now both are on the
+same page (the new table and the 行情 card). This was flagged to the user before building, and the resolution is to
+state the sources rather than reconcile the numbers. It is also the measurement Task 69 was waiting on.
+
+### Two traps worth remembering
+
+**A second `.data-table` on a card breaks unscoped selectors.** Eight existing market tests read
+`.data-table tbody tr` with no scope and silently started matching both tables' rows. Both tables now carry
+`aria-label`, and the tests scope by it.
+
+**`npx tsc --noEmit` is not the type gate; `npm run build` is.** The build type-checks test files too, and a
+`TechnicalView` fixture in `aiPayload.test.ts` was missing the new field —— tsc and the whole vitest run were green
+while the build failed.
+
+### Completed Tasks
+- [x] `technicalView.ts`: `volumeRows` (newest first, ratios from the full series).
+- [x] `TechnicalTab`: KD and volume swapped, volume table under its own chart, 20 rows then 顯示全部.
+- [x] `TwMarketSection`: 每日成交量 table above the institutional one, 7 rows then 顯示全部; both tables labelled.
+- [x] 3 new tests (882 total across 57 files); `SPEC.md`, `TASK.md` Task 73, README finalised at 0.6.38.
 
 ---
 

@@ -628,6 +628,39 @@ It is a pure function shared by **front-end and Edge Function** (front-end cross
 The reason is the same as 0.6.34 adding `prev_close`: once the cache hits, the source will not be asked again.
 If you do not save them together, the quotation card will be missing. The front-end localStorage cache key is synchronously upgraded to `price-cache-v3`.
 
+## Daily volume tables (0.6.38)
+
+Two tables, same shape, both **newest first** —— the opposite of every chart beside them, matching how the
+institutional and monthly-revenue tables already read: a chart starts at the earlier date, a table starts at today.
+
+### Individual stock (技術面)
+
+Section order became 日 K 與均線 → **KD 指標** → **成交量**（KD and volume swapped）, with the table directly
+under its own chart. Columns: 日期 / 成交量 / 量比 / 收盤 / 漲跌.
+
+- **量比 is the reason the table exists**: the bar chart shows relative height, the ratio says "today is N times the
+  20-day average". Bold from 1.5x. `volRatio` and `changePct` come from `technicalView.volumeRows`, computed over the
+  **full** series rather than the visible slice, so the oldest visible row still has a real average behind it.
+- **20 rows, then 顯示全部**: the range picker goes to 近 1 年 = 244 rows, which would make this card taller than the
+  three charts above it combined. A capped scrolling box is **not** the alternative —— 0.2.x had one (480px, sticky
+  header) and it was deliberately removed so tables expand in full.
+- ⚠️ **This table and the 行情 card disagree by design**: 2026-08-05, 2330 was 35,214 張 from the daily batch and
+  31,851 張 from MIS —— about 10%. Two sources, two figures. The hint under the table says so; do not "fix" it by
+  making one match the other.
+
+### Market-wide (台股市場)
+
+A table of its own below the 成交金額 chart, above the institutional one. Columns: 日期 / 成交股數 / 成交金額 /
+筆數 / 加權指數 / 漲跌. Seven rows to match the institutional table, then 顯示全部.
+
+- **No backend change was needed**: `tradeVolumeShares` and `transactions` have been in `market/daily.json` since
+  0.6.28 and had simply never been displayed.
+- **Shares and amount are both listed on purpose**: a day can trade fewer shares for more money (2026-07-29:
+  170.5 億股 / 11,492 億 versus 08-05: 132.1 億股 / 12,002 億), which is what a rotation into pricier stocks looks like.
+- Missing columns print 「—」, never 0 —— days written before those fields existed read back as undefined.
+- Both tables on that card carry `aria-label` (`每日成交量` / `三大法人買賣超`). Tests must scope by it: an unscoped
+  `.data-table tbody tr` silently returns rows from both.
+
 ## Annual income: search box (0.6.38)
 
 One box above both currency sections, matching on code / original name / Chinese display name (AAPL → 蘋果),

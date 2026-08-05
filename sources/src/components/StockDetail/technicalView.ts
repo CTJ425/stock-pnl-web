@@ -46,6 +46,20 @@ export interface TechnicalView {
   d: Series
   /** Which indexes should be marked on the X-axis (to avoid 244 full indexes)*/
   labelIndices: number[]
+  /**
+   * Rows for the volume table (0.6.38), **newest first** —— the opposite of every chart here, matching how the
+   * institutional and monthly-revenue tables are read: a chart starts at the earlier date, a table starts at today.
+   *
+   * `volRatio` and `changePct` are computed from the **full** series, not the visible slice, so the oldest visible
+   * row still has a real 20-day average and a real previous close behind it rather than a hole.
+   */
+  volumeRows: Array<{
+    date: string
+    volume: number
+    volRatio: number | null
+    close: number
+    changePct: number | null
+  }>
   /** Indicator summary of the latest bar (taken from the complete sequence, regardless of the display interval)*/
   latest: {
     date: string
@@ -129,6 +143,20 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
     k: slice(kdRes.k),
     d: slice(kdRes.d),
     labelIndices: pickLabelIndices(viewRows.length),
+    volumeRows: viewRows
+      .map((r, i) => {
+        const idx = from + i
+        const ma = volMa20[idx]
+        const prev = idx > 0 ? rows[idx - 1][4] : null
+        return {
+          date: r[0],
+          volume: r[5],
+          volRatio: ma === null || ma === 0 ? null : r[5] / ma,
+          close: r[4],
+          changePct: prev === null || prev === 0 ? null : (r[4] - prev) / prev,
+        }
+      })
+      .reverse(),
     latest: {
       date: last[0],
       open: last[1],

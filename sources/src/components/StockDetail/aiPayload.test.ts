@@ -17,6 +17,12 @@ const dummyView: TechnicalView = {
   k: [50, 60, 70],
   d: [40, 50, 65],
   labelIndices: [0, 1, 2],
+  // Newest first, as the volume table reads it. The AI payload does not use this field; it is here to satisfy the type.
+  volumeRows: [
+    { date: '2026-07-22', volume: 15000, volRatio: 1.25, close: 1025, changePct: 0.0149 },
+    { date: '2026-07-21', volume: 12000, volRatio: 1.0, close: 1010, changePct: 0.0202 },
+    { date: '2026-07-20', volume: 10000, volRatio: 0.83, close: 990, changePct: null },
+  ],
   latest: {
     date: '2026-07-22',
     open: 1010,

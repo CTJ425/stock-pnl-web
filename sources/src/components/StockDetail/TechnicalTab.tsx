@@ -17,7 +17,8 @@
  * Weekly line = MA5, monthly line = MA20, quarterly line = MA60. The two terms of UI are stated side by side, so that people who only recognize one of them will not understand.
  */
 import { useMemo, useState } from 'react'
-import { AlertTriangle, LineChart, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronsDownUp, ChevronsUpDown, LineChart, RefreshCw } from 'lucide-react'
+import { fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import type { DailySeries } from '../../services/dailyProxy'
 import type { DailyStatus } from './useDailySeries'
 import { CandleChart } from '../Charts/CandleChart'
@@ -33,6 +34,20 @@ import {
 } from './technicalView'
 
 const RANGES: RangeKey[] = ['3m', '6m', '1y']
+
+/**
+ * How many rows the volume table shows before "顯示全部".
+ *
+ * The alternative —— always listing the whole range —— means 244 rows on 近 1 年, which makes this one card taller
+ * than the three charts above it put together. A capped scrolling box is **not** the way out: 0.2.x had one
+ * (480px, sticky header) and it was deliberately removed so tables expand in full.
+ */
+const VOLUME_ROWS_COLLAPSED = 20
+
+/** Volume worth a second look: 1.5x the 20-day average or more */
+function heavy(ratio: number | null): boolean {
+  return ratio !== null && ratio >= 1.5
+}
 
 /** Category colors of moving averages: one each for short, medium and long, assigned in sequence without looping*/
 const MA_COLORS = {
@@ -68,6 +83,7 @@ export function TechnicalTab({
   series: DailySeries | null
 }) {
   const [range, setRange] = useState<RangeKey>('3m')
+  const [showAllVolume, setShowAllVolume] = useState(false)
 
   const view = useMemo(
     () => (series ? buildTechnicalView(series.rows, range) : null),
@@ -114,6 +130,7 @@ export function TechnicalTab({
   }
 
   const { latest } = view
+  const volumeRows = showAllVolume ? view.volumeRows : view.volumeRows.slice(0, VOLUME_ROWS_COLLAPSED)
 
   return (
     <>
@@ -172,18 +189,6 @@ export function TechnicalTab({
       </section>
 
       <section className="rpt-section">
-        <h3>成交量</h3>
-        <BarSeriesChart
-          labels={view.labels}
-          series={[{ name: '成交量', color: CATEGORICAL_COLORS[0], values: view.volumes }]}
-          labelIndices={view.labelIndices}
-          height={120}
-          formatValue={(v) => fmtLots(v)}
-          ariaLabel={`${ticker} 每日成交量`}
-        />
-      </section>
-
-      <section className="rpt-section">
         <div className="rpt-section-head">
           <h3>KD 指標</h3>
         </div>
@@ -217,10 +222,68 @@ export function TechnicalTab({
       </section>
 
       {/*
-        「指標摘要」moved to the 行情 card in 0.6.38 —— it was a table of numbers about the latest day, sitting
-        at the bottom of a page of charts, repeating 收盤 / 開高低 / 成交量 that the quote already showed live.
-        This page keeps the charts, which are the thing it is actually for.
+        Volume sits after KD since 0.6.38 (the two swapped places), and the table follows its own chart directly:
+        the chart answers "was today heavy or light", the table answers "how heavy, exactly, and against what".
       */}
+      <section className="rpt-section">
+        <h3>成交量</h3>
+        <BarSeriesChart
+          labels={view.labels}
+          series={[{ name: '成交量', color: CATEGORICAL_COLORS[0], values: view.volumes }]}
+          labelIndices={view.labelIndices}
+          height={120}
+          formatValue={(v) => fmtLots(v)}
+          ariaLabel={`${ticker} 每日成交量`}
+        />
+
+        <div className="rpt-section-head" style={{ marginTop: 14 }}>
+          <div className="chart-title">
+            每日成交量・{RANGE_LABELS[range]}（{view.volumeRows.length} 個交易日）
+          </div>
+          {view.volumeRows.length > VOLUME_ROWS_COLLAPSED && (
+            <button className="btn btn-sm" onClick={() => setShowAllVolume((v) => !v)}>
+              {showAllVolume ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+              {showAllVolume ? `只顯示近 ${VOLUME_ROWS_COLLAPSED} 日` : `顯示全部 ${view.volumeRows.length} 日`}
+            </button>
+          )}
+        </div>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th className="num">成交量</th>
+                <th className="num">量比</th>
+                <th className="num">收盤</th>
+                <th className="num">漲跌</th>
+              </tr>
+            </thead>
+            <tbody>
+              {volumeRows.map((r) => (
+                <tr key={r.date}>
+                  <td>{r.date}</td>
+                  <td className="num">{fmtLots(r.volume)}</td>
+                  {/*
+                    The ratio is what the table gives that the bar chart cannot: the chart shows relative height,
+                    this says "today is N times the 20-day average". Bold from 1.5x —— that is the level worth a look.
+                  */}
+                  <td className="num" style={heavy(r.volRatio) ? { fontWeight: 700 } : undefined}>
+                    {r.volRatio === null ? '—' : `${fmtNum(r.volRatio, 2)} 倍`}
+                  </td>
+                  <td className="num">{fmtPrice(r.close)}</td>
+                  <td className={`num ${pnlClass(r.changePct)}`}>
+                    {r.changePct === null ? '—' : fmtSignedPercent(r.changePct)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">
+          量比是當日成交量相對前 20 個交易日平均量的倍數，1 倍代表與均量相當。
+          成交量與資料日來自盤後日線批次，與上方「行情」卡的即時報價是不同來源，數字可能略有差異。
+        </p>
+      </section>
     </>
   )
 }

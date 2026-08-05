@@ -34,6 +34,19 @@ const SHOWN_DAYS = 60
  */
 const INSTITUTIONAL_DAYS = 7
 
+/** How many rows the daily turnover table shows before "顯示全部" —— same 7 as the institutional table it sits above */
+const TURNOVER_ROWS_COLLAPSED = 7
+
+/** Shares → 億股. The file stores raw shares, which run to eleven digits and are unreadable as-is */
+function toBillionShares(shares: number | null | undefined): number | null {
+  return typeof shares === 'number' && Number.isFinite(shares) ? shares / 1e8 : null
+}
+
+/** Transaction count → 萬筆 */
+function toTenThousand(n: number | null | undefined): number | null {
+  return typeof n === 'number' && Number.isFinite(n) ? n / 1e4 : null
+}
+
 /** Yuan → billion yuan. Returns null if the value is missing (do not pretend to be 0)*/
 function toBillion(twd: number | null | undefined): number | null {
   return typeof twd === 'number' && Number.isFinite(twd) ? twd / 1e8 : null
@@ -195,6 +208,7 @@ export function TwMarketSection() {
     charts consume the same `days` (see candles below).
   */
   const [hover, setHover] = useState<number | null>(null)
+  const [showAllTurnover, setShowAllTurnover] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -232,6 +246,10 @@ export function TwMarketSection() {
 
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
+  // Newest first, opposite to every chart on this card —— see the comment above the institutional table
+  const turnoverRows = [...days]
+    .reverse()
+    .slice(0, showAllTurnover ? days.length : TURNOVER_ROWS_COLLAPSED)
   /*
     A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
     different source than close, so the last day or two may have close only. **But that day's slot must stay**
@@ -391,6 +409,58 @@ export function TwMarketSection() {
       />
 
       {/*
+        Daily turnover table (0.6.38). It needs no backend change: `tradeVolumeShares` and `transactions` have been
+        in market/daily.json all along and had simply never been shown —— the chart above only draws the amount.
+
+        Shares and amount are both listed on purpose: they answer different questions. A day can trade fewer shares
+        for more money (2026-07-29 vs 08-05 in the file: 170.5 億股 / 11,492 億 against 132.1 億股 / 12,002 億),
+        which is what a shift towards higher-priced stocks looks like.
+      */}
+      <div className="rpt-section-head" style={{ marginTop: 18 }}>
+        <div className="chart-title">每日成交量・近 {days.length} 個交易日</div>
+        {days.length > TURNOVER_ROWS_COLLAPSED && (
+          <button className="btn btn-sm" onClick={() => setShowAllTurnover((v) => !v)}>
+            {showAllTurnover ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {showAllTurnover ? `只顯示近 ${TURNOVER_ROWS_COLLAPSED} 日` : `顯示全部 ${days.length} 日`}
+          </button>
+        )}
+      </div>
+      <div className="table-scroll">
+        <table className="data-table" aria-label="每日成交量">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th className="num">成交股數</th>
+              <th className="num">成交金額</th>
+              <th className="num">筆數</th>
+              <th className="num">加權指數</th>
+              <th className="num">漲跌</th>
+            </tr>
+          </thead>
+          <tbody>
+            {turnoverRows.map((d) => {
+              const shares = toBillionShares(d.tradeVolumeShares)
+              const txn = toTenThousand(d.transactions)
+              return (
+                <tr key={d.date}>
+                  <td>{d.date}</td>
+                  <td className="num">{shares === null ? '—' : `${shares.toFixed(1)} 億股`}</td>
+                  <td className="num">{fmtBillion(toBillion(d.tradeValueTwd))}</td>
+                  <td className="num">{txn === null ? '—' : `${txn.toFixed(1)} 萬`}</td>
+                  <td className="num">{d.taiex === null ? '—' : d.taiex.toFixed(2)}</td>
+                  <td className={`num ${chipClass(d.changePoints)}`}>
+                    {d.changePoints === null
+                      ? '—'
+                      : `${d.changePoints > 0 ? '+' : ''}${d.changePoints.toFixed(2)}`}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/*
         **The table is from new to old, and the trend chart is from old to new** - consistent with the treatment of monthly revenue and profitability:
         The left edge of a trend chart must be the earlier day, while the first row of the table must be the most
         recent one. The two directions are deliberately opposite; this is not a slip.
@@ -411,7 +481,7 @@ export function TwMarketSection() {
         )}
       </div>
       <div className="table-scroll" style={{ marginTop: 12 }}>
-        <table className="data-table">
+        <table className="data-table" aria-label="三大法人買賣超">
           <thead>
             <tr>
               <th>日期</th>

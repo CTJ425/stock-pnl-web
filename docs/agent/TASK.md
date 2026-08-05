@@ -12,8 +12,30 @@
 
 ## 📋 Active Tasks
 
-### Task 72: Earlier BFI82U schedule, three UI merges, yearly search (0.6.38-dev.1)
-- **Status**: ✅ Code done and verified; cron applied to **both** environments (user authorised). Not yet merged to `main`.
+### Task 73: Daily volume tables, per stock and market-wide (0.6.38)
+- **Status**: ✅ Done, merged to `main` with 0.6.38 — pure frontend, no Edge Function deployment needed
+- **Agent**: Claude
+- **Timestamp**: 2026-08-05 22:40:00 Asia/Taipei
+- **Requirement**: The user asked for a daily volume table on the technical section (with KD and volume swapped so the
+  table sits under its own chart), and the same for the market card. Two layout options each were mocked up in
+  `docs/architecture/volume_table_layouts.html` with **real** 2026-08-05 numbers; the user picked A for both
+  (collapsed by default, expandable).
+- **Design points that must survive future edits**:
+  - 量比 is the reason the per-stock table exists —— a bar chart shows relative height, the ratio says "N times the
+    20-day average". It is computed over the full series, not the visible slice.
+  - Collapsed at 20 (per stock) / 7 (market) rows. **Do not** replace 顯示全部 with a capped scrolling box: 0.2.x had
+    one and it was deliberately removed.
+  - The per-stock table and the 行情 card **disagree by design** (35,214 張 vs 31,851 張 on 2026-08-05, ~10%).
+    Two sources, two figures; the hint says so.
+- **No backend change**: `tradeVolumeShares` / `transactions` were already in `market/daily.json`, never displayed.
+- **Test trap found**: adding a second `.data-table` to the market card broke 8 existing tests that selected rows
+  with an unscoped `.data-table tbody tr`. Both tables now carry `aria-label`, and the tests scope by it.
+- **Verification**: 882 tests across 57 files (added 3), `npm run build` and `npm run lint` clean.
+  ⚠️ `npx tsc --noEmit` passed while `npm run build` failed —— the build type-checks the test files too, and a
+  `TechnicalView` fixture was missing the new field. Run the build, not just tsc.
+
+### Task 72: Earlier BFI82U schedule, three UI merges, yearly search (0.6.38)
+- **Status**: ✅ Done and merged to `main`; cron applied to **both** environments (user authorised).
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 21:40:00 Asia/Taipei
 - **1. `market-daily` 16:00 → 15:00, every half hour** (`0,30 7-10 * * 1-5`): applied with `cron.alter_job`
