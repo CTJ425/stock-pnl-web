@@ -1,9 +1,45 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.39 —— the admin schedule can read the new half-hourly shift table (BUG-012)
-- Status: **Merged to `main`; 884 tests / build / lint green**
-- Timestamp: 2026-08-05 23:00:00 Asia/Taipei
+- Action: 0.6.40 —— the timeline legend names both schedules and derives both from cron (BUG-013)
+- Status: **Merged to `main`; 885 tests / build / lint green**
+- Timestamp: 2026-08-05 23:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 23:40:00 Asia/Taipei (0.6.40)
+
+- **Agent**: Claude
+- **Action**: Fix BUG-013 —— the same lesson as BUG-012, one file away
+
+The user reported that the admin console still said the earliest shift was 16:00 even on 0.6.39. Diagnosis first,
+and the schedule **table** turned out to be correct: DB (`0,30 7-10 * * 1-5`), the RPC (reads `cron.job.schedule`
+live) and `describeCron` all checked out. What still said 16:00 was the **prose** in the timeline legend, which
+hard-coded 「盤後批次 16:00–23:45 每 15 分」 and named only that one schedule.
+
+So it was BUG-012's lesson repeating one file away: a second copy of a value that lives in pg_cron. It had been
+true right up until 0.6.38 gave the 全市場 row its own, earlier schedule —— then it became wrong by omission
+without anyone touching it. Both schedules are now read from `data.schedules` through `describeCron`, and the
+sentence says plainly that 15:00 for 全市場 and 16:30 for 個股 T86 are both normal.
+
+### Three tests broke, and each break was informative
+- Two matched 「三大法人・全市場」 with no scope; the legend now names that row too. Scoped to `.ast-tl`, which is
+  what they meant all along —— they assert the axis has that row.
+- One pinned the old wording 「第一個**批次**班次」. The word 批次 had to go: the sentence now covers two schedules,
+  only one of which is the batch.
+
+### Tooling note (not a project problem)
+For roughly an hour the harness's Bash permission classifier was intermittently unavailable, which fails closed
+and blocks command execution. File edits were unaffected, so the code was written first and verified afterwards;
+the user ran one round of `npm test` themselves via the `!` prefix in the meantime. Nothing in the repo caused it.
+
+### Completed Tasks
+- [x] `AdminStatusPage`: `nightlyCron` alongside `marketCron`; legend rewritten to name both and derive both.
+- [x] Tests: one added, three adjusted; **885 across 57 files**, build and lint clean.
+- [x] `FIXED_BUG.md` BUG-013, README 0.6.40.
+- [x] Secret hygiene: the user pasted two project keys into the chat. Scanned the repo (including `sources/.env`
+      and `docs/`) and the scratchpad for 48-hex tokens —— **no match anywhere**; they were never written to disk.
+      They still count as exposed, so rotation was advised. A transcript cannot be edited from here.
 
 ---
 

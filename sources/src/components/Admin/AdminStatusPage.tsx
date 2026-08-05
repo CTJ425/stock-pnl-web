@@ -292,6 +292,13 @@ export function AdminStatusPage() {
 
   // The fetch cycle is taken directly from pg_cron, without writing another constant on the front end - the two copies will drift sooner or later, and the drift cannot be seen
   const marketCron = (data.schedules ?? []).find((s) => s.jobname === 'market-daily') ?? null
+  /*
+    Same reason for the after-hours batch (0.6.40): the timeline legend used to state "16:00–23:45 每 15 分" as
+    a literal. It was still true, but it was a second copy of a value that lives in pg_cron —— and 0.6.38 had
+    just proved how that ends (BUG-012). Read it from the schedule like everything else.
+  */
+  const nightlyCron =
+    (data.schedules ?? []).find((s) => s.jobname === 'stock-report-nightly') ?? null
 
   return (
     <>
@@ -337,10 +344,14 @@ export function AdminStatusPage() {
             延遲
           </span>
           <span className="ast-rule">
-            淡色是<b>來源端的公布時間</b>（證交所何時公布），不是我們的抓取排程 ——
-            盤後批次是週一至週五 16:00–23:45 每 15 分一輪。
-            判定基準是<b>公布窗結束後的第一個批次班次</b>（含該輪 15 分鐘的緩衝），
-            所以法人 15:00 公布、16:30 那輪到手屬正常。
+            淡色是<b>來源端的公布時間</b>（證交所何時公布），不是我們的抓取排程。
+            這條軸上有<b>兩套排程</b>：個股的法人、日 K、融資融券、借券走盤後批次
+            （{nightlyCron ? describeCron(nightlyCron.schedule) : '排程 stock-report-nightly'}）；
+            <b>三大法人・全市場</b>走獨立排程
+            （{marketCron ? describeCron(marketCron.schedule) : '排程 market-daily'}）。
+            判定基準是<b>公布窗結束後的第一個班次</b>（含該輪的緩衝），
+            所以法人 15:00 公布之後，全市場那列可能當天 15:00 那輪就到手，
+            個股 T86 則要等 16:30 那輪，兩者都算正常。
           </span>
         </div>
 

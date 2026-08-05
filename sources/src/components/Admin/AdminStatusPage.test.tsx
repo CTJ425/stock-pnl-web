@@ -125,10 +125,29 @@ describe('AdminStatusPage', () => {
   it('排程資訊逐列呈現，cron 表達式換算成台北時間的白話', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
+    const section = within(
+      (await screen.findByRole('heading', { name: '排程' })).closest('.section')!,
+    )
+    expect(section.getByText('stock-report-nightly')).toBeTruthy()
+    // Scoped since 0.6.40: the timeline legend prints the same sentence, from the same cron
+    expect(section.getByText('週一至週五 16:00–23:45 每 15 分')).toBeTruthy()
+    expect(section.getByText('每日 21:00 / 23:00')).toBeTruthy()
+  })
+
+  it('時間軸圖例分開交代兩套排程，且都取自 pg_cron（0.6.40）', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    const { container } = render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '排程' })
-    expect(screen.getByText('stock-report-nightly')).toBeTruthy()
-    expect(screen.getByText('週一至週五 16:00–23:45 每 15 分')).toBeTruthy()
-    expect(screen.getByText('每日 21:00 / 23:00')).toBeTruthy()
+
+    /*
+      The legend used to state "16:00–23:45 每 15 分" as a literal and mention only that batch, so after 0.6.38
+      moved market-daily to 15:00 the page still read as if nothing started before 16:00 —— which is exactly what
+      the user reported. Both schedules are now named, and both come from the cron rows.
+    */
+    const legend = container.querySelector('.ast-rule')!
+    expect(legend.textContent).toContain('週一至週五 16:00–23:45 每 15 分')
+    expect(legend.textContent).toContain('週一至週五 16:00 / 17:00 / 18:00')
+    expect(legend.textContent).toContain('三大法人・全市場')
   })
 
   it('顯示每個排程實際打的環境——BUG-003 就是測試區的 cron 打到正式區', async () => {
@@ -177,9 +196,11 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    // Two different pieces of information, the names must be distinguishable at a glance
-    expect(screen.getByText('三大法人・全市場')).toBeTruthy()
-    expect(screen.getByText('T86')).toBeTruthy()
+    // Two different pieces of information, the names must be distinguishable at a glance.
+    // Scoped to the axis since 0.6.40: the legend names the same row, so an unscoped query matches twice.
+    const axis = within(document.querySelector<HTMLElement>('.ast-tl')!)
+    expect(axis.getByText('三大法人・全市場')).toBeTruthy()
+    expect(axis.getByText('T86')).toBeTruthy()
     // The subtitle should indicate that this time is the output of the file, not the time when the legal person's amount is received.
     expect(screen.getByText('BFI82U・檔案產出時間')).toBeTruthy()
     // 18:00 output, boundary is 18:15 → on time, this column should not be included in "needs attention"
@@ -225,7 +246,9 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue({ ...status, market: null })
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    expect(screen.getByText('三大法人・全市場')).toBeTruthy()
+    expect(
+      within(document.querySelector<HTMLElement>('.ast-tl')!).getByText('三大法人・全市場'),
+    ).toBeTruthy()
   })
 
   it('法人 16:15 到手不算延遲——判定基準是批次班次不是公布時刻', async () => {
@@ -237,7 +260,7 @@ describe('AdminStatusPage', () => {
     const onAxis = [...document.querySelectorAll('.ast-hit-t')].map((e) => e.textContent)
     expect(onAxis.filter((t) => t === '16:15').length).toBe(2)
     // The legend writes this rule on the screen, otherwise it looks like a double standard
-    expect(screen.getByText(/公布窗結束後的第一個批次班次/)).toBeTruthy()
+    expect(screen.getByText(/公布窗結束後的第一個班次/)).toBeTruthy()
   })
 
   it('總經落後一期的指標被標出來，其餘為最新', async () => {

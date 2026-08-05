@@ -8,6 +8,23 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-013 — The timeline legend still said the earliest shift was 16:00
+- **Date**: 2026-08-05 (exposed by 0.6.38, fixed in 0.6.40)
+- **Discovered by**: The user, after BUG-012 was fixed: "排程上面的說明最早還是 16".
+- **Symptom**: The legend above the after-hours timeline read 「盤後批次是週一至週五 16:00–23:45 每 15 分一輪」
+  and mentioned no other schedule, so the page still read as if nothing ran before 16:00.
+- **Root Cause**: Two separate faults in one sentence. It **hard-coded** a value that lives in pg_cron —— the same
+  mistake BUG-012 punished, one file away —— and it described only `stock-report-nightly`, which was adequate while
+  every row on the axis came from that batch. 0.6.38 gave the 全市場 row its own earlier schedule and the sentence
+  silently became wrong-by-omission. Note the schedule **table** was already correct: this was the prose beside it.
+- **Impact**: Display only, admin console only.
+- **Fix**: The legend reads both schedules from `data.schedules` and renders them through `describeCron`, names the
+  two groups of rows separately, and says a 15:00 arrival for 全市場 and a 16:30 one for 個股 T86 are both normal.
+- **Tests**: One new (the legend names both schedules, both derived from cron). Three existing tests had to be
+  adjusted: two matched 「三大法人・全市場」 unscoped and now also hit the legend, and one pinned the old wording.
+- **Status**: ✅ FIXED (0.6.40) and live —— pure frontend.
+- **Timestamp**: 2026-08-05 23:40:00 Asia/Taipei
+
 ### Bug ID: BUG-012 — The admin schedule printed the raw cron string, so 15:00 never appeared
 - **Date**: 2026-08-05 (introduced in 0.6.38, fixed in 0.6.39)
 - **Discovered by**: The user, reading the admin console: "後台的排程好像沒有提到 15:00 的排程".
