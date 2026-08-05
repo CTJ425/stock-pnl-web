@@ -108,6 +108,7 @@ import {
   MARKET_SCHEMA,
   bfi82uDayUrl,
   fmtqikMonthUrl,
+  mergeInstitutional,
   mergeMarketDays,
   parseBfi82u,
   parseFmtqik,
