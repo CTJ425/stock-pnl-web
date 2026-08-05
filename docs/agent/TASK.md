@@ -82,12 +82,14 @@
 - **`Charts/SparkCell.tsx`**：迷你走勢線抽成共用元件，兩張表共用繪製；
   streak 判定各自保留（正負號 vs 升降，是兩件事）。
 
-### Task 47: 每年 12 月更新次年發布行事曆（長期）
-- **Status**: 🔁 **週期性任務**
+### Task 47: Refresh next year's release calendar every December (recurring)
+- **Status**: 🔁 **Recurring**
 - **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
-- **做什麼**：更新 `macroCalendar.ts` 的 `RELEASE_CALENDAR` 為次年日期。
-- **為什麼要人工**：BLS 的 schedule 頁一律 403（換 UA 無效），無法自動同步；
-  BEA 的頁面可抓。可跑 `sources/scripts/find-release-dates.py` 以 ALFRED vintage 反查校準。
-- **忘了會怎樣**：不會壞 —— 行事曆用完會 fallback 到規則推算並標記 `stale`，
-  只是精準度下降（掃描窗抓不準發布時刻）。
+- **What to do**: update `RELEASE_CALENDAR` in `macroCalendar.ts` with next year's dates.
+- **Why it is manual**: the BLS schedule page returns 403 for everything (changing the
+  User-Agent does not help), so it cannot be synced automatically; BEA's page is fetchable.
+  `sources/scripts/find-release-dates.py` cross-checks dates against ALFRED vintages.
+- **If it is forgotten**: nothing breaks — once the calendar runs out the code falls back
+  to rule-based estimation and marks the entry `stale`. Only precision drops, because the
+  scan window no longer lines up with the actual release time.
 
