@@ -1,4 +1,4 @@
-/** 年度收益各欄位的說明文案（表頭「?」圖示顯示）。寫給不熟股票的人看：短句、白話、不放公式。 */
+/** Explanatory text for each column of annual income (displayed by the "?" icon in the header). Written for people who are unfamiliar with stocks: short sentences, vernacular, no formulas.*/
 export const YEAR_HELP = {
   year: '依交易日期分年。買進算在買進那年，賺賠算在賣出那年。',
   costBasis: '當年賣掉的那些股票，當初買進花了多少錢（含買進手續費）。下方為不含手續費的版本。',

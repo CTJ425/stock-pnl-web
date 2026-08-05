@@ -1,16 +1,16 @@
 /**
- * 台股全市場每日量能與三大法人買賣金額：讀盤後排程預產、存於公開 `reports` bucket
- * 的 `market/daily.json`。
+ * The daily volume of the Taiwan stock market and the trading amount of the three major legal entities: scheduled production after reading the market, and stored in the public `reports` bucket
+ * `market/daily.json`.
  *
- * **與 chipsProxy 的差別是範圍不是內容**：那是單一個股的籌碼（單位「股」），
- * 這是整個集中市場的總量（單位「元」）。兩者的數字不可互相比較，也不可放進同一張圖。
+ * **The difference with chipsProxy is that the range is not the content**: that is the chips of a single stock (unit "share"),
+ * This is the total volume of the entire concentrated market (unit "yuan"). The two figures cannot be compared with each other, nor can they be included in the same picture.
  *
- * 此檔的型別是**網路介面契約**，須與 supabase/functions/stock-report/twMarket.ts
- * 的 MarketFile 對齊。
+ * The type of this file is **Web Interface Contract** and must be consistent with supabase/functions/stock-report/twMarket.ts
+ * The MarketFile is aligned.
  */
 import { downloadReportsJson } from './reportsBucket'
 
-/** 六個單位各一個金額，單位元。買進、賣出、買賣差額三種口徑共用這個形狀 */
+/** Each of the six units has an amount in yuan. The three calibers of buying, selling, and buying and selling difference share this shape.*/
 export interface MarketInstitutionalSide {
   foreignTwd: number | null
   foreignDealerTwd: number | null
@@ -21,11 +21,11 @@ export interface MarketInstitutionalSide {
 }
 
 /**
- * 三大法人金額。頂層六欄是**買賣差額**（正為買超、負為賣超）。
+ * The amount of the three major legal persons. The top six columns are the bid-ask spread (positive means overbought, negative means oversold).
  *
- * `buy` / `sell` 是 0.6.32 起才有的買進與賣出金額。**舊資料為 null** ——
- * 那些日子是 0.6.32 之前補到的，只存了差額，要等盤後排程逐日重抓才會長出來。
- * null 是「還沒重抓到」，不是「那天沒有買賣」，所以畫面一律顯示「—」而不是 0。
+ * `buy` / `sell` are the buying and selling amounts that are only available since 0.6.32. **Old data is null** ——
+ * Those days were made up before 0.6.32, and only the difference was saved. It will grow out after the after-hours schedule is recaptured day by day.
+ * null means "it hasn't been caught again", not "there was no trading that day", so the screen always displays "—" instead of 0.
  */
 export interface MarketInstitutional extends MarketInstitutionalSide {
   buy: MarketInstitutionalSide | null
@@ -40,20 +40,20 @@ export interface MarketDay {
   transactions: number | null
   taiex: number | null
   changePoints: number | null
-  /** 加權指數的開高低（0.6.30，畫大盤日 K 用）；與收盤價不同來源，可能較晚才有 */
+  /** The opening high and low of the weighted index (0.6.30, used to draw K for the market day); it is from a different source than the closing price and may be available later.*/
   taiexOpen: number | null
   taiexHigh: number | null
   taiexLow: number | null
   /**
-   * null＝**這天還沒補到**，不是「這天沒有法人進出」。
-   * 成交量值一次抓一整月、法人金額一天一個請求，兩者的覆蓋範圍本來就不同步。
+   * null = **has not been filled in on this day**, it does not mean "no legal person comes in or out on this day".
+   * The trading volume value is captured for a whole month at a time, and the legal person amount is requested once a day. The coverage of the two is inherently out of sync.
    */
   institutional: MarketInstitutional | null
 }
 
 export interface MarketData {
   asOf: string
-  /** 由舊到新 */
+  /** From old to new*/
   days: MarketDay[]
 }
 
@@ -63,7 +63,7 @@ interface StoredMarket {
   days: unknown[]
 }
 
-/** 前端認得的最低版本。用 `>=` 的理由見 fundamentalProxy（後端加欄位對舊前端無害） */
+/** The lowest version recognized by the front end. See fundamentalProxy for the reasons for using `>=` (adding fields to the backend is not harmful to the old frontend)*/
 const MIN_MARKET_SCHEMA = 1
 
 function numOrNull(v: unknown): number | null {
@@ -108,7 +108,7 @@ function normalizeDay(v: unknown): MarketDay | null {
   }
 }
 
-/** 讀全市場每日資料；查無 / 格式不符回 null */
+/** Read all market daily data; search none/return null if the format does not match*/
 export async function fetchMarketDaily(): Promise<MarketData | null> {
   const stored = await downloadReportsJson<StoredMarket>('market/daily.json')
   if (!stored || typeof stored !== 'object') return null

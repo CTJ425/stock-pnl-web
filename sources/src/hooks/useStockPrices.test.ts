@@ -21,7 +21,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // 卸載殘留的 hook 實例，否則其 visibilitychange listener 會污染後續測試
+  // Unload remaining hook instances, otherwise their visibilitychange listener will contaminate subsequent tests
   cleanup()
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -47,7 +47,7 @@ describe('useStockPrices', () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
     expect(fetchPrices).toHaveBeenCalledTimes(2)
-    // 輪詢為非 force：TTL 內的代號由 priceProxy 命中快取、不會真的打 API
+    // Polling is non-force: the code in the TTL is cached by priceProxy and will not actually hit the API.
     expect(fetchPrices).toHaveBeenLastCalledWith(expect.anything(), { force: undefined })
     expect(result.current.loading).toBe(false)
 

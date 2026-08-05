@@ -1,12 +1,12 @@
 /**
- * 圖表外框：Y 軸格線與刻度、X 軸標籤、hover 命中區與 tooltip。
- * 各圖表只負責畫「標記」（長條 / 折線），座標由 geo 提供。
+ * Chart outline: Y-axis grid and scale, X-axis label, hover hit area and tooltip.
+ * Each chart is only responsible for drawing "marks" (bars/polylines), and the coordinates are provided by geo.
  *
- * 兩個受 PDF 擷取限制而來的設計決定：
- * 1. viewBox 寬度＝實測容器寬度（1:1，不縮放）。用固定 viewBox 等比縮放雖然免去量測，
- *    但字級會跟著容器放大縮小 —— 寬螢幕上刻度變兩倍大、手機上又小到看不清。
- * 2. 字級與顏色一律寫成 SVG 屬性，不靠 CSS。html2canvas 會把 inline SVG 序列化成圖片，
- *    外部樣式表與祖先層的 CSS 變數都解析不到，PDF 會變成一團黑色巨大文字。
+ * Two design decisions dictated by the limitations of PDF capture:
+ * 1. viewBox width = measured container width (1:1, no scaling). Although using a fixed viewBox to scale proportionally eliminates the need for measurement,
+ *    However, the font size will expand and shrink according to the container - the scale becomes twice as large on a wide screen, but too small to be seen clearly on a mobile phone.
+ * 2. Font level and color should be written as SVG attributes without relying on CSS. html2canvas will serialize inline SVG into images.
+ *    CSS variables in external style sheets and ancestor layers cannot be parsed, and the PDF will turn into a giant black text.
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -15,12 +15,12 @@ import { clampTipCenter } from './chartPath'
 import { domainTicks, fmtAxisNumber, scaleY, tickStep, type Domain } from './chartScale'
 
 const PAD = { left: 58, right: 12, top: 10, bottom: 24 }
-/** 尚未量到寬度（首次 render / 無 ResizeObserver 的測試環境）時的預設值 */
+/** The default value when the width has not been measured yet (first render / test environment without ResizeObserver)*/
 const FALLBACK_W = 560
 const MIN_W = 240
 const FONT_SIZE = 11
 
-/** 量測容器寬度，讓 SVG 以 1:1 繪製 */
+/** Measure container width so SVG is drawn at 1:1*/
 function useMeasuredWidth() {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(FALLBACK_W)
@@ -41,46 +41,46 @@ export interface PlotGeometry {
   innerH: number
   count: number
   bandWidth: number
-  /** 第 i 個資料點的中心 x（繪圖區座標） */
+  /** Center x of the i-th data point (drawing area coordinates)*/
   bandCenter: (i: number) => number
-  /** 數值 → 繪圖區 y 座標 */
+  /** value → drawing area y coordinate*/
   y: (v: number) => number
-  /** 目前 hover 的索引（無則 null），供標記做高亮 */
+  /** The index of the current hover (null if not), used for marker highlighting*/
   hover: number | null
 }
 
 interface ChartFrameProps {
   height: number
   domain: Domain
-  /** X 軸標籤，長度即資料點數 */
+  /** X-axis label, the length is the number of data points*/
   labels: string[]
   /**
-   * 只標示這些索引的標籤（未指定時每個都標）。
-   * 籌碼圖只有 7 個點可以全標，但日 K 一年有 244 根 —— 全標會糊成一團黑條。
-   * 命中區仍然逐點建立，hover 精度不受影響。
+   * Label only these indexes (each one if not specified).
+   * There are only 7 points on the chip chart that can be fully marked, but there are 244 daily kings in a year - the full mark will become a black bar.
+   * The hit zone is still built point by point, and hover accuracy is not affected.
    */
   labelIndices?: number[]
   ariaLabel: string
-  /** 回傳該點的 tooltip 文字；回 null 表示該點不顯示 */
+  /** Return the tooltip text of the point; return null to indicate that the point is not displayed.*/
   tooltipFor?: (index: number) => string | null
   /**
-   * hover 時畫一條垂直虛線貫穿繪圖區。
+   * Draw a vertical dotted line across the drawing area when hovering.
    *
-   * **只有折線圖啟用**（0.6.8）。K 線與長條圖的標記本身就佔滿整欄、hover 已用減淡表示，
-   * 再加一條線只是噪音；而且它們有既有的 DOM 斷言，多一個元素就會踩到。
+   * **Only line charts enabled** (0.6.8). The markers of the K-line and bar charts themselves occupy the entire column, and the hover has been expressed with dodge.
+   * Adding another line is just noise; and they have existing DOM assertions that one more element will step on.
    */
   crosshair?: boolean
   /**
-   * 回傳該點的**數值**，讓 tooltip 貼著資料點上下移動（Google Finance 那種）。
+   * Return the **value** of the point and let the tooltip move up and down against the data point (like Google Finance).
    *
-   * 未給時 tooltip 維持釘在繪圖區頂端 —— 長條圖與 K 線沒有單一個「該點的 y」
-   * （長條有高低兩端、K 線有四個價），硬挑一個只會讓提示框停在沒有意義的位置。
+   * When not given, the tooltip remains pinned to the top of the drawing area - bar charts and K-lines do not have a single "y" of the point
+   * (The bar has two ends, high and low, and the K-line has four prices.) Selecting one will only make the prompt box stop at a meaningless position.
    */
   tooltipAnchor?: (index: number) => number | null
   /**
-   * 受控 hover（0.6.34）：多張上下疊放、共用同一組 X 軸的圖要一起反白同一天時，
-   * 索引由外部持有（見 `TwMarketSection`）。**不給就維持各圖自持**，
-   * 其餘呼叫端不受影響 —— 那些圖各問各的問題，一起反白只是干擾。
+   * Controlled hover (0.6.34): When multiple pictures stacked one on top of the other and sharing the same set of X-axis want to highlight the same day together,
+   * The index is held externally (see `TwMarketSection`). **If you don’t give it, keep each map self-sustaining**,
+   * The rest of the callers are unaffected - the images each ask their own questions, and together they are just interference.
    */
   hoverIndex?: number | null
   onHover?: (index: number | null) => void
@@ -128,14 +128,14 @@ export function ChartFrame({
   const step = tickStep(domain)
   const shownLabels = labelIndices ?? labels.map((_, i) => i)
   const tipText = hover === null ? null : (tooltipFor?.(hover) ?? null)
-  // 以百分比定位 tooltip，免在 React state 裡再存一份像素座標。
-  // 寬度由字元數估：中英數混排約 8px/字，加上左右 padding —— 只用來 clamp，不求精確
+  // Position the tooltip in percentage, eliminating the need to store another pixel coordinate in React state.
+  // The width is estimated by the number of characters: about 8px/word mixed with Chinese and English numbers, plus left and right padding - only used for clamp, no accuracy is required
   const tipCenter =
     hover === null
       ? 0
       : clampTipCenter(PAD.left + geo.bandCenter(hover), (tipText?.length ?? 0) * 8 + 18, viewW)
   const tipLeft = (tipCenter / viewW) * 100
-  // 有 tooltipAnchor 且該點有值時貼著資料點，否則沿用「釘在繪圖區頂端」
+  // If there is a tooltipAnchor and the point has a value, it will be attached to the data point. Otherwise, "pin to the top of the drawing area" will be used.
   const anchorValue = hover === null ? null : (tooltipAnchor?.(hover) ?? null)
   const tipTop =
     anchorValue === null
@@ -227,7 +227,7 @@ export function ChartFrame({
           {/*
             透明命中區：整欄可 hover，比細長條好點。
 
-            **這些 rect 刻意不可聚焦**（0.6.8）。它們原本每個都是 `tabIndex={0}`，
+            **These rects are intentionally unfocusable** (0.6.8). Originally each of them was `tabIndex={0}`,
             一年份的日 K 就是 244 個看不見的 tab stop；0.6.8 把四段併成一頁之後，
             同一頁最多會有 765 個 —— 鍵盤使用者要按七百多次才離得開這一頁。
             改成整張圖一個 tab stop（見 <svg> 的 tabIndex 與 onKeyDown），

@@ -1,15 +1,15 @@
 /**
- * 背景非同步拉取持股現價：
- * 持股清單變動時自動抓取；每分鐘背景輪詢（TTL 內的代號命中快取、不發請求，
- * 過期後 1 分鐘內更新）；分頁切回前景時補抓；提供手動重新整理。
- * 載入完成前呼叫端顯示骨架屏或快取價（quote.stale = true）。
+ * Background asynchronously pulls current share price:
+ * Automatically capture when the holding list changes; background polling every minute (the code in the TTL hits the cache, no request is sent,
+ * Updated within 1 minute after expiration); catch up when paging returns to the foreground; provide manual rearrangement.
+ * The caller displays a skeleton screen or cached price before loading is complete (quote.stale = true).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Holding } from '../utils/pnlEngine'
 import type { PriceMap } from '../services/priceProxy'
 import { fetchPrices } from '../services/priceProxy'
 
-/** 背景輪詢間隔：實際發請求與否由 priceProxy 的分市場 TTL 決定 */
+/** Background polling interval: whether to actually send a request is determined by the sub-market TTL of priceProxy*/
 const POLL_INTERVAL_MS = 60 * 1000
 
 export interface StockPricesState {
@@ -25,7 +25,7 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
   const requestSeq = useRef(0)
 
-  // 只在「持股組合」變動時重抓（qty 變動不需要）
+  // Only re-capture when the "holding portfolio" changes (not required for qty changes)
   const holdingsKey = useMemo(
     () => holdings.map((h) => h.key).sort().join(','),
     [holdings],
@@ -33,9 +33,9 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
   const itemsRef = useRef(holdings)
   itemsRef.current = holdings
 
-  // silent：背景輪詢用，不觸發 loading 指示（避免重新整理按鈕每分鐘閃動）
+  // silent: used for background polling, does not trigger loading instructions (to avoid the refresh button flashing every minute)
   const load = useCallback(async (options?: { force?: boolean; silent?: boolean }) => {
-    // 同代號可能出現多列，先以 key 去重再查價
+    // The same code number may appear in multiple columns. Use key to remove duplicates first and then check the price.
     const byKey = new Map(itemsRef.current.map((h) => [h.key, h]))
     const items = [...byKey.values()].map((h) => ({ market: h.market, ticker: h.ticker }))
     if (items.length === 0) {
@@ -59,7 +59,7 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdingsKey, load])
 
-  // 背景輪詢 + 分頁切回前景補抓（背景分頁 timer 會被瀏覽器節流，切回時補上）
+  // Background polling + re-capture when switching back to the foreground after paging (the background paging timer will be throttled by the browser and will be replenished when switching back)
   useEffect(() => {
     const timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS)
     const onVisible = () => {
@@ -72,7 +72,7 @@ export function useStockPrices(holdings: Holding[]): StockPricesState {
     }
   }, [load])
 
-  // 手動重新整理：略過 TTL 快取強制重抓
+  // Manual Refresh: Bypassing TTL cache and forcing a refetch
   const refresh = useCallback(() => void load({ force: true }), [load])
 
   return { prices, loading, refreshedAt, refresh }

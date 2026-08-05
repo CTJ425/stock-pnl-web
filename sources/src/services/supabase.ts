@@ -1,7 +1,7 @@
 /**
- * Supabase 客戶端初始化。
- * 未設定環境變數時回傳 null，應用程式降級為「本機模式」
- * （localStorage 儲存、免登入），方便在建立 Supabase 專案前先行使用。
+ * Supabase client initialization.
+ * If the environment variable is not set, null is returned and the application is downgraded to "native mode".
+ * (localStorage storage, no login required), convenient for use before creating a Supabase project.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 

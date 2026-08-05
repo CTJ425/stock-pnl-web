@@ -1,35 +1,35 @@
 /**
- * 輪詢決策的純邏輯（0.6.1）。
+ * Pure logic for polling decisions (0.6.1).
  *
- * **為什麼要獨立成一個檔**：`index.ts` 在模組載入時就呼叫 `Deno.serve`，vitest 匯入不了，
- * 所以寫在那裡的判斷等於沒有測試。批次從一天 3 班改成一天 32 次輪詢之後，
- * 「什麼時候可以完全不對外抓取」變成安全關鍵 —— 判斷寫錯的代價從 3 倍變成 32 倍。
- * 0.3.9 燒光額度的成因正是自己的邏輯錯誤（prune 的保留期單位錯配讓每晚做白工），
- * 不是惡意流量，所以這裡的每一條判斷都要有測試釘住。
+ * **Why should it be made into a separate file**: `index.ts` calls `Deno.serve` when the module is loaded, and vitest cannot import it.
+ * So the judgment written there is equal to no test. After changing the batch from 3 shifts a day to 32 polls a day,
+ * "When can we not crawl it at all?" becomes a security key - the cost of making a wrong judgment has increased from 3 times to 32 times.
+ * 0.3.9 The reason for burning out the quota is my own logical error (the mismatch of the retention period unit of prune makes me work in vain every night).
+ * It is not malicious traffic, so every judgment here must be tested.
  */
 
 /**
- * 一天最多允許幾次實際執行（超過就短路）。
+ * A maximum of several actual executions are allowed per day (more than this will cause a short circuit).
  *
- * cron 一天只排 32 次，所以正常情況永遠碰不到這個上限 —— 它是防呆，防的是兩件事：
- * 1. 我們自己的判斷邏輯出錯，導致該短路的時候沒短路（0.3.9 的形狀）。
- * 2. `generate-all` 只靠 `x-cron-secret` 把關，而函式以 `--no-verify-jwt` 部署、
- *    網址就在公開 bundle 裡。密鑰若外流，這個上限是最後一道剎車。
+ * cron is only executed 32 times a day, so under normal circumstances it will never hit this upper limit - it is foolproof, and it prevents two things:
+ * 1. Our own judgment logic was wrong, resulting in no short circuit when there should be a short circuit (shape 0.3.9).
+ * 2. `generate-all` only relies on `x-cron-secret`, and the function is deployed with `--no-verify-jwt`.
+ *    The URL is in the public bundle. If the key is leaked, this upper limit is the final brake.
  */
 export const MAX_RUNS_PER_DAY = 40
 
 /**
- * 連續幾次抓到的 T86 內容相同才視為定稿。
+ * The T86 captured several times in a row will be considered final if the content is the same.
  *
- * 刻意**看內容而不是看時鐘**：`schema.sql` §6c 那些「幾點公布」的註解在 2026-07-27
- * 一天之內就被實測推翻三處（T86 時間、借券時間、借券語意）。時鐘上的猜測會過期，
- * 「連續兩次抓到一樣的東西」不會。
+ * Deliberately **look at the content instead of looking at the clock**: `schema.sql` §6c Those "what time to announce" annotations are on 2026-07-27
+ * Within one day, it was overturned by actual testing in three aspects (T86 time, borrowing time, borrowing semantics). Guesses on the clock expire,
+ * "Catching the same thing twice in a row" doesn't work.
  */
 export const T86_STABLE_POLLS = 2
 
 /**
- * 內容指紋。長度 + djb2 雜湊，長度先擋掉絕大多數碰撞。
- * 只用來判斷「跟上次是不是同一份」，不需要密碼學強度。
+ * Content fingerprint. Length + djb2 hash, length first blocks most collisions.
+ * It is only used to determine "whether it is the same as last time" and does not require cryptographic strength.
  */
 export function fingerprint(value: unknown): string {
   const s = JSON.stringify(value) ?? ''
@@ -39,16 +39,16 @@ export function fingerprint(value: unknown): string {
 }
 
 /**
- * T86 專用的內容指紋。**必須先把 data 列排序**，不能直接對整包 JSON 算。
+ * T86-specific content fingerprint. **The data column must be sorted first** and cannot be calculated directly on the entire JSON package.
  *
- * 2026-07-27 正式區實測踩到：同一份資料連抓兩次，1334 列的內容與集合完全相同，
- * 但**其中幾列的順序會換**（末欄相同的列之間，端點的排序不穩定）。
- * 直接 `JSON.stringify` 的話每輪都算出不同指紋，於是 `nextT86State` 永遠判定「被改寫」、
- * `t86_frozen` 永遠是 false、`decideSkip` 永遠不短路 —— 一天 32 輪全跑，三道閘門全廢。
- * 當晚 20:30–22:00 的 `batch_run_log` 就是這個形狀：`t86_unchanged` 在 0/1 之間跳，到不了 2。
+ * 2026-07-27 The actual test in the official area was stepped on: the same information was captured twice, and the content of column 1334 was exactly the same as the collection.
+ * However, the order of several columns will be changed (the endpoint sorting between columns with the same last column is unstable).
+ * If `JSON.stringify` is used directly, different fingerprints will be calculated in each round, so `nextT86State` will always be judged as "overwritten",
+ * `t86_frozen` is always false, `decideSkip` is never short-circuited - all 32 rounds are run in one day, and all three gates are disabled.
+ * The `batch_run_log` from 20:30–22:00 that night was in this shape: `t86_unchanged` jumped between 0/1 and could not reach 2.
  *
- * 只取 `date` / `total` / 排序後的列：其餘欄位（title / fields / notes / hints）是固定樣板，
- * 而且快取走 Postgres jsonb，**jsonb 會重排物件的鍵**，把它們算進去等於自找不穩定。
+ * Only take `date` / `total` / sorted columns: the remaining fields (title / fields / notes / hints) are fixed templates,
+ * Moreover, if Postgres jsonb is removed quickly, **jsonb will rearrange the keys of objects**, and including them is inviting instability.
  */
 export function t86Fingerprint(resp: unknown): string {
   const r = resp as { data?: unknown; date?: unknown; total?: unknown } | null
@@ -61,37 +61,37 @@ export function t86Fingerprint(resp: unknown): string {
 }
 
 /**
- * 陣列型回應的語意指紋（`BWIBBU_ALL` 之類的裸陣列用）。
- * 與 `t86Fingerprint` 同一個理由：**TWSE 的端點不保證列順序穩定**，
- * 直接對整包算指紋會把「順序換了」誤判成「內容變了」。
+ * Semantic fingerprint of array-type responses (for bare arrays like `BWIBBU_ALL`).
+ * Same reason as `t86Fingerprint`: **TWSE's endpoints do not guarantee stable column order**,
+ * Directly counting fingerprints on the entire package will misjudge “the order has changed” as “the content has changed”.
  */
 export function rowsFingerprint(rows: unknown): string {
   if (!Array.isArray(rows)) return fingerprint(rows)
   return fingerprint(sortedRows(rows))
 }
 
-/** 每列各自序列化後排序 —— 把「列順序」這個不穩定來源消掉 */
+/** Each column is serialized and sorted independently - eliminating the source of instability of "column order"*/
 function sortedRows(rows: unknown[]): string[] {
   return rows.map((row) => (Array.isArray(row) ? row.join('') : JSON.stringify(row) ?? '')).sort()
 }
 
-/** 今天這份 T86 的改寫狀態；跨輪次由 `batch_run_log` 的最後一列帶回 */
+/** Today’s rewrite status of T86; brought back by the last column of `batch_run_log` across rounds*/
 export interface T86State {
   fingerprint: string
-  /** 今天被改寫過幾次（第一次抓到不算改寫） */
+  /** I have been rewritten several times today (the first time I caught it does not count as a rewrite)*/
   revisions: number
-  /** 連續幾次抓到的內容與上次相同 */
+  /** The content captured several times in a row is the same as last time*/
   unchanged: number
-  /** 已定稿：後續輪次不再重抓 */
+  /** Finalized: No more recaptures in subsequent rounds*/
   frozen: boolean
 }
 
 /**
- * 依這次抓到的指紋推進狀態。
+ * Advance the status based on the fingerprint captured this time.
  *
- * 使用者指出 T86「16:00 開始每 15 分鐘更新一次」—— 也就是說當天第一次抓到的**不一定是定稿**。
- * 而原本的 `loadT86` 是「當天第一次抓到非空回應就快取，之後永遠不再更新」，
- * 兩者相衝：早抓會把初版鎖成當天的答案，比晚抓一次還糟。這個函式就是為了解掉這個衝突。
+ * Users pointed out that T86 "updates every 15 minutes starting from 16:00" - which means that the first catch of the day is not necessarily the final version.
+ * The original `loadT86` is "cache the first non-empty response that day, and never update it again."
+ * The two conflict: catching it early will lock the first edition into the day's answers, which is worse than catching it late. This function is to resolve this conflict.
  */
 export function nextT86State(
   prev: T86State | null,
@@ -100,7 +100,7 @@ export function nextT86State(
 ): T86State {
   if (!prev) return { fingerprint: fp, revisions: 0, unchanged: 0, frozen: false }
   if (prev.fingerprint !== fp) {
-    // 內容變了：改寫次數 +1，連續相同歸零，重新開始觀察
+    // The content has changed: the number of rewrites is +1, consecutive times are reset to zero, and observation is restarted.
     return { fingerprint: fp, revisions: prev.revisions + 1, unchanged: 0, frozen: false }
   }
   const unchanged = prev.unchanged + 1
@@ -120,13 +120,13 @@ export interface SkipDecision {
 }
 
 /**
- * 這一輪要不要完全跳過（不做任何對外請求）。
+ * Do you want to skip this round completely (without making any external requests).
  *
- * `t86Frozen` 是關鍵而不只是 `t86Today` —— 抓到當天的 T86 不代表它已經定稿，
- * 定稿前還得繼續回來看有沒有被改寫（見 `nextT86State`）。
+ * `t86Frozen` is the key and not just `t86Today` - catching the T86 of the day does not mean it is finalized,
+ * You have to keep coming back to see if it has been rewritten before finalizing it (see `nextT86State`).
  *
- * 融資融券要等到 21:00 之後才會有，所以「今天全齊」必須包含它；
- * 只看 T86 就收工的話，17:00 停掉，當天的融資融券就永遠不會被抓到。
+ * Margin trading will not be available until after 21:00, so "Today's All" must include it;
+ * If you just look at T86 and call it a day, stop at 17:00, you will never be caught doing margin trading that day.
  */
 export function decideSkip(input: {
   t86Today: boolean
@@ -144,27 +144,27 @@ export function decideSkip(input: {
 }
 
 /**
- * 融資融券在 `runSignature` 裡的那一段：**哪幾天真的有資料**（由舊到新的 ymd）。
+ * The section of margin trading in `runSignature`: **Which days do the data really exist** (ymd from old to new).
  *
- * 存在的理由是 0.6.1 的實際迴歸（2026-07-30 正式區實測）：原本傳的是
- * `marginDatedFailed ? '' : dataYmd`，而 `marginDatedFailed` 問的是「這 7 天有沒有**任何**
- * 一天抓到」—— 歷史日一定有，所以它整天都是 false，這一段整天都等於 `dataYmd` 這個常數。
- * 於是 21:00 那輪真的把當天的融資融券抓進快取了，指紋卻沒變、報告不重產，
- * 21:15 起 `decideSkip` 又判定 complete 全數短路 —— 當天報告的 `margin` 永遠停在 null，
- * 要等隔天第一輪（`batch_run_log` 按日查、`last` 為 null 而強制重產）才補上，
- * 那時 manifest 早就換到新的一天了。
+ * The reason for existence is the actual regression of 0.6.1 (official area test on 2026-07-30): originally passed
+ * `marginDatedFailed ? '' : dataYmd`, while `marginDatedFailed` asks "Have there been any **any** in the past 7 days?
+ * Caught in one day" - there must be a historical day, so it is false all day long, and this period is equal to the constant `dataYmd` all day long.
+ * So in the 21:00 round, the day's margin trading was really captured into the cache, but the fingerprints did not change and the report was not heavy.
+ * Starting from 21:15, `decideSkip` determines that complete is all short-circuited - the `margin` reported that day always stops at null.
+ * You have to wait for the first round the next day (`batch_run_log` is checked daily, `last` is null and forced to re-produce).
+ * By then the manifest had already been changed to a new day.
  *
- * 改看「有哪幾天」之後，當天的融資融券一到就會讓指紋改變，剛好觸發一次重產；
- * 歷史日回補（走勢圖補洞）同樣涵蓋。
+ * After changing to look at "which days", the fingerprint will change as soon as the day's margin trading arrives, which just triggers a heavy production;
+ * Historical day covering (covering holes in the trend chart) is also covered.
  */
 export function marginSigPart(marginYmds: readonly string[]): string {
   return marginYmds.slice().sort().join(',')
 }
 
 /**
- * 報告內容的輸入指紋。相同就不必重產報告 ——
- * 省的不是錢（5 檔 × 5KB），是讓 `generatedAt` 只在真的有變動時才跳，
- * 否則 32 次輪詢會把「什麼時候變的」這個訊號洗掉。
+ * Input fingerprint of report content. If the same, there is no need to repeat the report——
+ * The saving is not money (5 files × 5KB), but making `generatedAt` only jump when there is a real change.
+ * Otherwise, 32 polls will wash out the signal "when did it change".
  */
 export function runSignature(parts: {
   dataYmd: string
@@ -178,7 +178,7 @@ export function runSignature(parts: {
     parts.t86,
     parts.margin,
     parts.borrow,
-    // 持股清單變了也要重產：新增一檔股票時，舊報告裡沒有它
+    // Even if the holding list has changed, it needs to be restocked: when a new stock is added, it is not included in the old report.
     parts.tickers.slice().sort().join(','),
   ].join('|')
 }

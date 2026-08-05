@@ -1,11 +1,11 @@
 /**
- * 買賣超長條圖。零軸固定顯示，長條由零軸往上/往下長，值域強制含 0
- * （否則正負長條的視覺長度會失真）。
+ * Buy and sell long bar charts. The zero axis is fixedly displayed, the bar grows upward/downward from the zero axis, and the value range is forced to include 0.
+ * (Otherwise the visual length of the positive and negative bars will be distorted).
  *
- * 兩種上色模式，取決於顏色在該圖裡做什麼工作：
- * - **單一序列**：不指定 color → 紅正綠負（極性編碼，台股慣例）。
- * - **多序列**：每條序列一個類別色（身分編碼），正負改由零軸上下方向表達。
- *   顏色不能同時表達「是誰」與「正或負」，故兩者互斥。多序列時呼叫端必須附圖例。
+ * Two coloring modes, depending on what the color is doing in the image:
+ * - **Single sequence**: Do not specify color → red positive, green negative (polarity encoding, Taiwan stock convention).
+ * - **Multiple Sequences**: Each sequence has a category color (identity code), and the positive and negative are expressed in the up and down direction of the zero axis.
+ *   Color cannot express "who" and "positive or negative" at the same time, so the two are mutually exclusive. When there are multiple sequences, the caller must attach a legend.
  */
 import { ChartFrame } from './chartFrame'
 import { CHART_COLORS } from './chartColors'
@@ -13,7 +13,7 @@ import { niceDomain } from './chartScale'
 
 export interface BarSeries {
   name: string
-  /** 省略時走紅正綠負；多序列時必填 */
+  /** If omitted, it will be red, positive, green, or negative; required if there are multiple sequences.*/
   color?: string
   values: Array<number | null>
 }
@@ -21,15 +21,15 @@ export interface BarSeries {
 interface BarSeriesChartProps {
   labels: string[]
   series: BarSeries[]
-  /** 只標示這些索引的 X 軸標籤（未指定時每個都標）；日線一年 244 根時必要 */
+  /** Only label the*/
   labelIndices?: number[]
   height?: number
-  /** tooltip 的數值格式化（含單位） */
+  /** Numeric formatting of tooltip (including unit)*/
   formatValue: (v: number) => string
   ariaLabel: string
 }
 
-/** 同組內長條間留 2px 空隙，相鄰色塊才不會黏成一塊 */
+/** Leave a 2px gap between strips in the same group so that adjacent color blocks will not stick together.*/
 const BAR_GAP = 2
 
 export function BarSeriesChart({
@@ -56,7 +56,7 @@ export function BarSeriesChart({
           const v = series[0]?.values[i]
           return `${labels[i]}　${v === null || v === undefined ? '無資料' : formatValue(v)}`
         }
-        // 多序列：一次列出當日各法人，省得逐條 hover 比對
+        // Multi-sequence: list each legal person of the day at once, eliminating the need for hover comparison one by one.
         const lines = series.map((s) => {
           const v = s.values[i]
           return `${s.name} ${v === null || v === undefined ? '無資料' : formatValue(v)}`
@@ -66,7 +66,7 @@ export function BarSeriesChart({
     >
       {(geo) => {
         const zeroY = geo.y(0)
-        // 單序列佔欄寬一半；多序列平分欄寬的八成，各留 2px 間隙
+        // A single sequence occupies half of the column width; multiple sequences occupy 80% of the column width, leaving a 2px gap for each.
         const groupW = multi ? geo.bandWidth * 0.8 : geo.bandWidth * 0.52
         const slotW = groupW / series.length
         const barW = Math.max(multi ? slotW - BAR_GAP : slotW, 2)
@@ -78,7 +78,7 @@ export function BarSeriesChart({
                 if (value === null || value === undefined) return null
                 const valueY = geo.y(value)
                 const top = Math.min(valueY, zeroY)
-                // 值為 0 時仍畫 1px，讓「有資料但為 0」與「無資料」看得出差別
+                // When the value is 0, still draw 1px, so that the difference between "there is data but 0" and "no data" can be seen
                 const h = Math.max(Math.abs(valueY - zeroY), 1)
                 const center = geo.bandCenter(i)
                 const x = multi

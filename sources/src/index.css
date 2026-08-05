@@ -1,7 +1,7 @@
 /* =========================================================
- * 設計系統：玻璃擬物風 (Glassmorphism)
- * 預設為暗色主題；<html data-theme="light"> 時套用亮色變數
- * 損益配色為台灣看盤習慣：紅漲 / 綠跌
+ * Design system: Glassmorphism
+ * Default is dark theme; apply light variable when <html data-theme="light">
+ * The profit and loss color matching is based on Taiwan’s market reading habits: red up / green down
  * ========================================================= */
 :root {
   --bg: #0b0f19;
@@ -17,12 +17,12 @@
   --accent: #7c8cf8;
   --accent-strong: #6366f1;
   --accent-2: #22d3ee;
-  --up: #ff4a5a;   /* 漲（紅） */
-  --down: #00e676; /* 跌（綠） */
+  --up: #ff4a5a; /* up (red) */
+  --down: #00e676; /* down (green) */
   --danger: #f87171;
   --radius: 14px;
   --radius-sm: 9px;
-  /* 手機底部導覽列高度（不含安全區）；浮動鈕、版本徽章、頁尾留白都由它推算 */
+  /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
   --bottom-nav-h: 54px;
   --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
   --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
@@ -122,12 +122,12 @@ h3 {
   margin: 0;
 }
 
-/* ---------- 版面 ---------- */
+/* ---------- Layout ----------*/
 .container {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  /* 撐滿高度讓頁尾貼底；底部預留浮動按鈕空間 */
+  /* Use full height to allow the footer of the page to stick to the bottom; leave space for floating buttons at the bottom*/
   flex: 1;
   padding: 0 20px 96px;
 }
@@ -185,7 +185,7 @@ h3 {
   font-size: 12.5px;
 }
 
-/* ---------- 分頁 (Tabs) ---------- */
+/* ----------Paging (Tabs) ----------*/
 .tabs {
   display: flex;
   gap: 6px;
@@ -222,10 +222,10 @@ h3 {
 }
 
 /*
- * 分頁分組的分隔線（0.6.19）：持股四項 ／ 市場兩項。
+ * Separator lines for paging groups (0.6.19): four holdings / two market items.
  *
- * 只給一道 1px、不給組標題 —— 頁首的水平空間是最稀缺的資源，
- * 而組標題會讓整條導覽長高一截，換來的訊號並不值那個高度。
+ * Only give one line 1px and no group title - the horizontal space at the top of the page is the scarcest resource.
+ * Grouping titles will make the entire navigation a bit taller, and the resulting signal is not worth the height.
  */
 .tab-div {
   width: 1px;
@@ -235,20 +235,20 @@ h3 {
   flex: 0 0 auto;
 }
 
-/* 底部列的格子是等寬 flex，分隔線不能跟著被拉寬成一格 */
+/* The grid in the bottom column is a constant-width flex, and the dividing line cannot be stretched into one grid.*/
 .bottom-nav .tab-div {
   align-self: center;
   height: 26px;
   margin: 0 1px;
 }
 
-/* ---------- 手機底部導覽 (≤720px) ----------
- * 由 AppShell 在 ≤720px 時改渲染這一份（同一份分頁定義，不是複製一份 DOM）。
- * 它**必須**掛在 .app-header 之外：頁首有 backdrop-filter，會成為 fixed 子孫的
- * containing block，放在頁首裡的話只會貼在頁首底部而不是視窗底部。
+/* ---------- Mobile phone bottom navigation (≤720px) ----------
+ * AppShell will render this copy when ≤720px (the same paging definition, not a copy of the DOM).
+ * It **must** hang outside .app-header: there is a backdrop-filter at the top of the page, which will become a descendant of fixed
+ * If the containing block is placed in the header of the page, it will only be posted at the bottom of the header instead of the bottom of the window.
  *
- * 高度以 --bottom-nav-h 為單一來源：浮動鈕、版本徽章、頁尾留白都從它算，
- * 改了這個數字三者會一起跟上。安全區（iPhone home indicator）另外加在下方 padding。
+ * The height is based on --bottom-nav-h as the single source: floating buttons, version badges, and footer blanks are all calculated from it.
+ * If this number is changed, the three will follow together. The safe area (iPhone home indicator) is additionally added with padding below.
  */
 .bottom-nav {
   position: fixed;
@@ -279,7 +279,7 @@ h3 {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 底部列的標籤永遠要看得見：.tab-label 在 ≤1020px 是隱藏的（頁首只留圖示） */
+/* The label in the bottom column should always be visible: .tab-label is hidden at ≤1020px (only the icon is left at the top of the page)*/
 .bottom-nav .tab-label {
   display: block;
   overflow: hidden;
@@ -289,8 +289,8 @@ h3 {
 }
 
 /*
- * 選中態不沿用頁首的漸層藥丸：整片實心色塊佔滿整格會太重，
- * 而且底部列本來就常駐畫面。改成強調色＋加粗，是行動裝置的通用寫法。
+ * When selected, the gradient pill at the top of the page will not be used: the entire solid color block will be too heavy to occupy the entire grid.
+ * And the bottom column is always on the screen. Change to accent color + bold, which is a common writing method for mobile devices.
  */
 .bottom-nav .tab.active {
   color: var(--accent);
@@ -299,7 +299,7 @@ h3 {
   font-weight: 600;
 }
 
-/* ---------- 玻璃卡片 ---------- */
+/* ---------- Glass Card ----------*/
 .glass {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -334,7 +334,7 @@ h3 {
   font-size: 12px;
 }
 
-/* ---------- KPI 大字報 ---------- */
+/* ---------- KPI big character poster ----------*/
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -380,7 +380,7 @@ h3 {
   font-size: 11.5px;
 }
 
-/* ---------- 市場面板（庫存總攬：台股 / 美股） ---------- */
+/* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
 .market-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -464,7 +464,7 @@ h3 {
   font-size: 11px;
 }
 
-/* ---------- 損益顏色（紅漲綠跌；數值一律帶正負號，不單靠顏色） ---------- */
+/* ---------- Profit and loss color (red rises, green falls; values ​​are always signed, not just color) ----------*/
 .pnl-up {
   color: var(--up);
 }
@@ -477,7 +477,7 @@ h3 {
   color: var(--ink-secondary);
 }
 
-/* ---------- 表格 ---------- */
+/* ---------- sheet ----------*/
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -520,14 +520,14 @@ table.data-table {
   padding-right: 14px;
 }
 
-/* 過長文字（如股票名稱）截斷，完整內容看 title 提示 */
+/* Text that is too long (such as stock names) is truncated. See the title prompt for the complete content.*/
 .cell-ellipsis {
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* 視窗較窄時進一步壓縮，讓交易紀錄等寬表格盡量不出現橫向捲軸 */
+/* When the window is narrow, further compress it to prevent horizontal scrolling in the same-width table of transaction records.*/
 @media (max-width: 1279px) {
   table.data-table {
     font-size: 12px;
@@ -576,7 +576,7 @@ table.data-table {
   text-align: right;
 }
 
-/* 可排序表頭 */
+/* Sortable header*/
 .th-sort {
   padding: 0;
 }
@@ -602,7 +602,7 @@ table.data-table {
   justify-content: flex-end;
 }
 
-/* 表頭內含說明圖示時，排序按鈕與「?」並排（padding 移到外層才不會夾出空隙） */
+/* When the header contains an explanation icon, the sort button is placed side by side with "?" (the padding is moved to the outer layer so that there will be no gaps)*/
 .th-head {
   display: flex;
   align-items: center;
@@ -615,7 +615,7 @@ table.data-table {
   padding-right: 0;
 }
 
-/* 不可排序的表頭文字（與排序按鈕的內距對齊） */
+/* Unsortable header text (aligned with the padding of the sort button)*/
 .th-head .th-plain {
   padding: 11px 0 11px 9px;
   white-space: nowrap;
@@ -625,7 +625,7 @@ table.data-table {
   justify-content: flex-end;
 }
 
-/* 欄位說明「?」圖示與氣泡 */
+/* Field description "?" icon and bubble*/
 .help-tip {
   appearance: none;
   flex-shrink: 0;
@@ -693,7 +693,7 @@ table.data-table {
   color: var(--ink-muted);
 }
 
-/* 年度收益：個股明細列（與年度列同屬一個表格，欄位才會對齊） */
+/* Annual income: individual stock details column (the columns will be aligned only if they belong to the same table as the annual column)*/
 .detail-row td {
   background: var(--row-alt);
   color: var(--ink-secondary);
@@ -706,7 +706,7 @@ table.data-table {
   color: var(--ink-muted);
 }
 
-/* 年度收益三層縮排：圖示欄固定 22px + 10px 間距（合計 32px 一層），
+/* Annual income three-layer indentation: the icon column is fixed at 22px + 10px spacing (a total of 32px per layer),
    無展開鈕的列以 .toggle-slot 空槽補位，各層文字才會垂直對齊 */
 .cell-tree {
   display: flex;
@@ -745,7 +745,7 @@ table.data-table {
   border-color: var(--accent);
 }
 
-/* ---------- 按鈕 ---------- */
+/* ---------- Button ----------*/
 .btn {
   appearance: none;
   border: 1px solid var(--border-strong);
@@ -808,7 +808,7 @@ table.data-table {
   border-radius: 8px;
 }
 
-/* 全域「新增交易」浮動按鈕 */
+/* Global "Add Transaction" floating button*/
 .fab {
   position: fixed;
   right: 22px;
@@ -820,7 +820,7 @@ table.data-table {
   box-shadow: 0 10px 30px rgba(79, 70, 229, 0.45);
 }
 
-/* 左下角固定版本標記 */
+/* Fixed version mark in lower left corner*/
 .version-badge {
   position: fixed;
   left: 14px;
@@ -838,7 +838,7 @@ table.data-table {
   user-select: none;
 }
 
-/* ---------- 表單 ---------- */
+/* ---------- Form ----------*/
 .field {
   margin-bottom: 13px;
   position: relative;
@@ -890,7 +890,7 @@ table.data-table {
   color: var(--ink-muted);
 }
 
-/* 提示文字內的連結式按鈕（如「還原原紀錄」） */
+/* Linked buttons within the tooltip (e.g. "Restore original record")*/
 .link-btn {
   appearance: none;
   border: none;
@@ -913,7 +913,7 @@ table.data-table {
   min-width: 0;
 }
 
-/* 巢狀列（股數＋單位、稅率＋快選）維持同行，由輸入框自行縮放 */
+/* The nested columns (number of shares + unit, tax rate + quick selection) remain in the same row and can be scaled by the input box.*/
 .field .field-row {
   flex-wrap: nowrap;
 }
@@ -935,7 +935,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* ---------- 模糊搜尋下拉 ---------- */
+/* ---------- Fuzzy search drop-down ----------*/
 .suggestions {
   position: absolute;
   z-index: 60;
@@ -1047,7 +1047,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: var(--surface-strong);
 }
 
-/* ---------- 骨架屏 ---------- */
+/* ---------- Skeleton screen ----------*/
 .skeleton {
   display: inline-block;
   width: 72px;
@@ -1063,7 +1063,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: shimmer 1.4s infinite;
 }
 
-/* ---------- 提示與徽章 ---------- */
+/* ---------- Tips and Badges ----------*/
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1120,7 +1120,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin-bottom: 8px;
 }
 
-/* ---------- 登入頁 ---------- */
+/* ---------- Login page ----------*/
 .auth-wrap {
   min-height: 100vh;
   display: grid;
@@ -1168,16 +1168,16 @@ input[type='date']::-webkit-calendar-picker-indicator {
   text-decoration: underline;
 }
 
-/* ---------- 選單外框（頁首工作區、個股分析的個股切換共用）---------- */
+/* ---------- Menu frame (common to the top work area and individual stock switching for individual stock analysis) ----------*/
 .ws-select {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* 0.6.5-dev.3 起裡面只剩一個選單觸發鈕，min-width 0 讓它能在窄螢幕縮而不塌 */
+  /* As of 0.6.5-dev.3, there is only one menu trigger button left, and min-width 0 allows it to shrink without collapsing on narrow screens.*/
   min-width: 0;
 }
 
-/* ---------- 下拉選單（工作區 / 帳號 / 個股切換共用，見 Common/HeaderMenu.tsx） ---------- */
+/* ---------- Drop-down menu (shared by workspace/account/stock switching, see Common/HeaderMenu.tsx) ----------*/
 .hmenu {
   position: relative;
   display: inline-flex;
@@ -1201,7 +1201,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   max-width: 200px;
 }
 
-/* 名稱可截斷，但左邊的圖示與右邊的箭頭永遠留著 ——
+/* The name can be truncated, but the icon on the left and the arrow on the right will always remain -
    0.6.5-dev.2 的 bug 就是整顆被擠到只剩箭頭，看不出目前在哪個工作區 */
 .hmenu-ws-name {
   overflow: hidden;
@@ -1240,7 +1240,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   justify-content: center;
 }
 
-/* 本機模式沿用既有的 badge 外觀，只是變成可點的觸發鈕 ——
+/* The native mode follows the existing badge appearance, but becomes a clickable trigger button——
    「資料只存在這個瀏覽器」要隨時看得到，不該藏進選單 */
 .hmenu-badge {
   appearance: none;
@@ -1263,15 +1263,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /*
- * 靠左展開。預設的 .hmenu-pop 是 `right: 0`（頁首右側選單），
- * 從畫面左側叫出來時會往左長而跑出畫面 —— 個股切換就在左側。
+ * Expand to the left. The default .hmenu-pop is `right: 0` (menu on the right side of the page),
+ * When called from the left side of the screen, it will go to the left and run out of the screen - the stock switching is on the left.
  */
 .hmenu-pop-left {
   right: auto;
   left: 0;
 }
 
-/* 清單可能很長（持股數十檔）時限高可捲，避免彈出層長到超出視窗 */
+/* The list may be very long (dozens of holdings) and the time limit is high and can be rolled up to prevent the pop-up layer from growing beyond the window.*/
 .hmenu-pop-scroll {
   max-height: min(320px, 60vh);
   overflow-y: auto;
@@ -1323,7 +1323,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   white-space: nowrap;
 }
 
-/* 未選中的工作區也要留出打勾的位置，否則清單會左右跳動 */
+/* Unselected workspaces must also have check marks, otherwise the list will jump left and right.*/
 .hmenu-check {
   visibility: hidden;
   color: var(--accent);
@@ -1346,7 +1346,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--danger);
 }
 
-/* 管理後台入口（0.6.19）：用強調色與其他項目分開，它會離開目前這一頁 */
+/* Admin backend entrance (0.6.19): use accent color to separate it from other projects, it will leave the current page*/
 .hmenu-item-admin {
   color: var(--accent);
 }
@@ -1356,7 +1356,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: rgba(124, 140, 248, 0.12);
 }
 
-/* 「原始碼」的外開圖示推到最右，與選單項的文字拉開距離 */
+/* The outward-facing icon of "Source Code" is pushed to the far right, away from the text of the menu item.*/
 .hmenu-item-ext {
   margin-left: auto;
   color: var(--ink-muted);
@@ -1366,7 +1366,7 @@ a.hmenu-item {
   text-decoration: none;
 }
 
-/* ---------- 工具列 ---------- */
+/* ---------- Toolbar ----------*/
 .toolbar {
   display: flex;
   align-items: center;
@@ -1430,7 +1430,7 @@ a.hmenu-item {
   flex: 1;
 }
 
-/* ---------- 頁尾 ---------- */
+/* ---------- footer ----------*/
 .app-footer {
   margin-top: auto;
   max-width: 1180px;
@@ -1444,7 +1444,7 @@ a.hmenu-item {
   line-height: 1.7;
 }
 
-/* GitHub 連結：置於免責聲明下方，比正文再低一階，不與內容爭注意力 */
+/* GitHub link: Place it below the disclaimer, one level below the main text, and do not compete with the content for attention.*/
 .footer-link {
   display: inline-flex;
   align-items: center;
@@ -1460,7 +1460,7 @@ a.hmenu-item {
   text-decoration: underline;
 }
 
-/* ---------- 動畫 ---------- */
+/* ---------- Animation ----------*/
 @keyframes shimmer {
   0% {
     background-position: 200% 0;
@@ -1515,7 +1515,7 @@ a.hmenu-item {
   }
 }
 
-/* ---------- 捲軸 ---------- */
+/* ---------- Scroll ----------*/
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -1532,23 +1532,23 @@ a.hmenu-item {
   background: transparent;
 }
 
-/* ---------- 頁首單行保障 ----------
- * 分頁增加到四個後，右側的工作區與帳號狀態會被擠到第二行。
+/* ---------- Top of page single line protection ----------
+ * After the number of paginations is increased to four, the workspace and account status on the right side will be squeezed to the second row.
  *
- * 關鍵：容器 max-width 1180px 使頁首可用寬度恆為 1140px，與視窗寬度無關，
- * 因此間距與信箱截斷必須無條件套用——只綁 media query 的話，1180px 以上
- * 反而完全不生效（1920px 與 1220px 面對的是同一個 1140px）。
+ * Key: container max-width 1180px makes the available width of the top of the page always 1140px, regardless of the window width.
+ * Therefore, spacing and letterbox truncation must be applied unconditionally - if only media query is tied, 1180px or more
+ * On the contrary, it has no effect at all (1920px and 1220px face the same 1140px).
  *
- * 逐級讓步：無條件收間距與信箱寬度 → 1220px 收起信箱（完整值仍在登出鈕 title）
- * → 1120px 收起品牌文字 → 1020px 分頁只留圖示（名稱移到 title / aria-label）
- * → 720px 分頁整個離開頁首，改成固定底部列（見 .bottom-nav）。
+ * Gradual concessions: unconditionally close the spacing and mailbox width → 1220px close the mailbox (the full value is still in the logout button title)
+ * → 1120px Collapse brand text → 1020px Leave only icon in paging (name moved to title / aria-label)
+ * → 720px paging completely leaves the top of the page and changes to a fixed bottom column (see .bottom-nav).
  *
- * 720px 以下不再需要壓縮分頁：頁首只剩品牌 ＋ 工作區 ＋ 帳號，橫向壓力歸零。
- * 這也是 0.6.5 那個「五個分頁在 375px 差 1px 就折行」的算式消失的原因 ——
- * 底部列每格是直式的，375px 五格每格 73px，加到第六個仍有 61px。
+ * There is no need to compress pagination below 720px: only the brand + workspace + account remain at the top of the page, and the horizontal pressure is reset to zero.
+ * This is also the reason why the calculation in 0.6.5 that "the five page breaks will be wrapped if there is a difference of 1px from 375px" disappeared——
+ * Each column at the bottom is vertical, 375px, each of the five columns is 73px, and the sixth column is still 61px.
  *
- * 註：Supabase 模式的 email + 登出鈕比本機模式的「本機模式」標籤寬約 140px，
- * 調整斷點時務必以 Supabase 模式驗證。
+ * Note: The email + logout button in Supabase mode is about 140px wider than the "local mode" label in local mode.
+ * Always verify in Supabase mode when adjusting breakpoints.
  */
 .app-header-inner {
   gap: 10px 12px;
@@ -1574,9 +1574,9 @@ a.hmenu-item {
   }
 }
 
-/* ---------- 行動裝置 (RWD) ---------- */
+/* ---------- Mobile Device (RWD) ----------*/
 @media (max-width: 720px) {
-  /* 分頁改由固定底部列呈現（見 .bottom-nav），頁首因此收斂成單列：
+  /* Pagination is changed to a fixed bottom column (see .bottom-nav), and the top of the page is therefore condensed into a single column:
      品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
   .container {
     padding: 0 14px 24px;
@@ -1596,13 +1596,13 @@ a.hmenu-item {
   }
 
   /*
-   * 工作區選單吃掉頁首剩下的橫向空間（名稱過長由 .hmenu-ws-name 截斷）。
+   * The workspace menu eats up the remaining horizontal space at the top of the page (names that are too long are truncated by .hmenu-ws-name).
    *
-   * ⚠️ **限定 .app-header 之內**。`.ws-select` 從 0.6.7 起也給個股分析的個股切換用，
-   * 而那裡同一列還有標題與兩顆按鈕在搶空間 —— `flex: 1` 的 flex-basis 是 0，
-   * 跟 `flex: 1 1 auto` 的 .detail-title 競爭時幾乎拿不到寬度：
-   * 實測 390px 只剩 48px、360px 只剩 33px，代號被截成「18…」。
-   * 個股選單的手機版另外處理（見下方 .detail-head .ws-select）。
+   * ⚠️ **Limited to .app-header**. `.ws-select` is also used for switching individual stocks in individual stock analysis starting from 0.6.7.
+   * And there are titles and two buttons competing for space in the same column - the flex-basis of `flex: 1` is 0,
+   * There is almost no width when competing with `flex: 1 1 auto`'s .detail-title:
+   * The measured 390px is only 48px, the 360px is only 33px, and the code name is cut to "18...".
+   * The mobile version of the stock selection list is handled separately (see .detail-head .ws-select below).
    */
   .app-header .ws-select {
     flex: 1;
@@ -1610,28 +1610,28 @@ a.hmenu-item {
   }
 
   /*
-   * 個股切換在手機上獨占一列：它是這一頁的主要控制項，
-   * 被標題與按鈕擠掉之後只剩「18…」，等於看不出現在選的是哪一檔。
+   * Stock switching has its own column on mobile phones: it is the main control on this page.
+   * After being squeezed out by the title and buttons, only "18..." is left, which means it is impossible to tell which gear is currently selected.
    */
   .detail-head .ws-select {
     flex: 1 0 100%;
   }
 
   /*
-   * 標題也獨占一列，兩顆按鈕才會併在同一列。
-   * 不這樣做的話標題會吃掉中間的寬度，只擠得下一顆按鈕，
-   * 另一顆被推到第四列 —— 三列變四列，而且兩顆同性質的按鈕被拆開。
+   * The title also occupies its own column, so the two buttons will be in the same column.
+   * If you don't do this, the title will eat up the width in the middle and only squeeze in a button.
+   * Another one was pushed to the fourth column - three columns became four columns, and two buttons of the same nature were disassembled.
    */
   .detail-head .detail-title {
     flex: 1 0 100%;
   }
 
-  /* 按鈕不縮：縮到只剩圖示更難點，寧可讓它們自己佔一列 */
+  /* Don’t shrink the buttons: it’s more difficult to shrink them down to just the icons, I’d rather have them occupy a column by themselves*/
   .detail-head .btn {
     flex: none;
   }
 
-  /* 輸入字級 ≥16px，避免 iOS Safari 聚焦時自動放大頁面 */
+  /* Enter the font size ≥16px to prevent iOS Safari from automatically enlarging the page when focusing*/
   .field input,
   .field select {
     font-size: 16px;
@@ -1676,7 +1676,7 @@ a.hmenu-item {
     font-size: 20px;
   }
 
-  /* 浮動鈕讓開底部導覽列 —— 這塊地本來就不是空的 */
+  /* The floating button gives way to the bottom navigation bar - this land is not empty to begin with*/
   .fab {
     right: 14px;
     bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
@@ -1685,9 +1685,9 @@ a.hmenu-item {
   }
 
   /*
-   * 版本徽章改回文件流、跟在頁尾後面（#root 是 flex column，它是最後一個子元素）。
-   * 手機沒有「左下角」可用：固定在那裡不是被導覽列蓋住，就是浮在卡片文字上。
-   * 底部留白由它的 margin 一併負責，故上面的 .app-footer 不再自己留。
+   * The version badge changes back to the file stream, following the footer (#root is the flex column, which is the last child element).
+   * There is no "lower left corner" available on mobile phones: it is either covered by the navigation bar or floating on the card text.
+   * The bottom margin is also responsible for its margin, so the .app-footer above is no longer left alone.
    */
   .version-badge {
     position: static;
@@ -1697,7 +1697,7 @@ a.hmenu-item {
 }
 
 /* =========================================================
- * 個股分析頁（下鑽檢視）：頁首、分頁籤、報告版面與自繪 SVG 圖表
+ * Individual stock analysis page (drill-down view): page top, tabs, report layout and self-drawn SVG charts
  * ========================================================= */
 .detail-head {
   display: flex;
@@ -1730,7 +1730,7 @@ a.hmenu-item {
   margin-bottom: 8px;
 }
 
-/* 二級分頁籤：比頁首 .tabs 輕，用底線標示而非填色 */
+/* Second-level tabs: lighter than .tabs at the top of the page, marked with underlines instead of coloring*/
 .subtabs {
   display: flex;
   gap: 4px;
@@ -1765,15 +1765,15 @@ a.hmenu-item {
   padding: 18px 20px;
 }
 
-/* ---------- 個股分析單頁（0.6.8，版型 D：卡片分組）----------
+/* ---------- Individual stock analysis single page (0.6.8, version D: card grouping) ----------
  *
- * 四段（我的持股 / 籌碼 / 基本面 / 技術面）併成一頁後，原本的 .rpt-section
- * 全部同一級、間距一律 24px，看不出哪幾段屬於誰。每段給一張自己的卡，
- * 靠卡與卡之間的留白分邊界 —— 不需要任何互動，也不會有「東西被收起來找不到」。
+ * After the four sections (my holdings/chips/fundamentals/technical aspects) were combined into one page, the original .rpt-section
+ * They are all of the same level, with the same spacing of 24px, so it’s hard to tell which paragraphs belong to whom. Give each segment its own card,
+ * The boundaries are defined by the blank space between cards - no interaction is required, and there will be no "things being put away that can't be found".
  *
- * 0.6.23 曾把每個表格標題做成收合開關，0.6.24 整個移除：收起來的區塊不在 DOM 裡，
- * 匯出 PDF 得先全部展開再還原，多出一條沒人看得見的失敗路徑，換來的只是少捲一點。
- * 這條路走過了，不必再走一次。
+ * In 0.6.23, each table title was made into a collapse switch. In 0.6.24, the entire table title was removed: the collapsed block is not in the DOM.
+ * To export a PDF, you must first expand it all and then restore it. This creates an additional failure path that no one can see, and only reduces the volume in return.
+ * This road has been walked before and there is no need to walk it again.
  */
 .detail-stack {
   display: flex;
@@ -1781,7 +1781,7 @@ a.hmenu-item {
   gap: 20px;
 }
 
-/* 巢狀的 .detail-stack（PDF 擷取範圍那層）不要再疊一次外距 */
+/* Nested .detail-stack (the layer of the PDF capture range) does not overlap the margins again.*/
 .detail-stack .detail-stack {
   gap: 20px;
 }
@@ -1790,7 +1790,7 @@ a.hmenu-item {
   padding: 18px 20px;
 }
 
-/* 分組標題：刻意比段內的 .rpt-section h3（14px + 1px 底線）高一級，
+/* Group title: deliberately one level higher than the .rpt-section h3 (14px + 1px bottom line) within the paragraph,
    否則同一頁 14 個標題全部長一樣，層級等於沒有 */
 .card-head {
   display: flex;
@@ -1818,7 +1818,7 @@ a.hmenu-item {
   color: var(--ink-muted);
 }
 
-/* 報告表頭：在 PDF 擷取範圍內，標明代號、資料日期與產生時間 */
+/* Report header: Within the PDF capture range, indicate the code number, data date and generation time*/
 .rpt-head {
   padding-bottom: 12px;
   margin-bottom: 18px;
@@ -1869,7 +1869,7 @@ a.hmenu-item {
   flex: 1 1 auto;
 }
 
-/* 標題後面要緊跟一段說明時（例：月營收的「資料更新於…」）：
+/* When the title should be followed by a description (for example: "Data updated on..." for monthly revenue):
    h3 預設 flex:1 會把後面的元素全推到最右邊，故改由 stamp 接手伸縮，
    靠右的標籤（單位：千元）仍會被推到最右。窄螢幕由既有的 flex-wrap 換行。 */
 .rpt-section-head h3.head-tight {
@@ -1891,7 +1891,7 @@ a.hmenu-item {
   font-weight: 600;
 }
 
-/* 法人切換鈕 */
+/* Legal person switch button*/
 .chip-toggle {
   display: flex;
   flex-wrap: wrap;
@@ -1923,8 +1923,8 @@ a.hmenu-item {
   border-color: var(--accent-strong);
 }
 
-/* ---------- 自繪 SVG 圖表 ---------- */
-/* 圖表以實測容器寬度 1:1 繪製（見 chartFrame.tsx）；上限避免超寬螢幕上長條過胖 */
+/* ---------- Self-drawn SVG chart ----------*/
+/* The chart is drawn with the measured container width 1:1 (see chartFrame.tsx); the upper limit avoids the bar being too fat on ultra-wide screens*/
 .chart-wrap {
   position: relative;
   width: 100%;
@@ -1932,10 +1932,10 @@ a.hmenu-item {
 }
 
 /*
- * 0.6.33 的 .chart-pair（台股指數 K 線與走勢左右並排）已於 0.6.34 移除：
- * 三張圖改成上中下疊放並共用 hover，左右並排時每張只有一半寬度，
- * 同一個像素位置在兩張圖上不是同一天，crosshair 對不起來。
- * 匯率頁的 .fx-chart-pair 不受影響（那兩張圖各自獨立 hover）。
+ * The .chart-pair of 0.6.33 (Taiwan stock index K-line and trend side by side) has been removed on 0.6.34:
+ * The three pictures are stacked top, middle and bottom and share the same hover. When placed side by side, each picture has only half the width.
+ * The same pixel position is on different days in the two pictures, crosshair, sorry.
+ * The .fx-chart-pair on the exchange rate page is not affected (the two charts hover independently).
  */
 
 .chart-svg {
@@ -1945,8 +1945,8 @@ a.hmenu-item {
 }
 
 /*
- * 0.6.8 起焦點落在整張圖上（原本是每個資料點一個 tab stop，一年份日 K 就 244 個，
- * 四段併成一頁後最多 765 個）。聚焦後用方向鍵逐點移動。
+ * 0.6.8 The focus falls on the entire picture (originally there is one tab stop for each data point, and there are 244 days K in one year.
+ * Maximum of 765 when four paragraphs are combined into one page). After focusing, use the direction keys to move point by point.
  */
 .chart-svg:focus-visible {
   outline: 2px solid var(--accent);
@@ -1975,7 +1975,7 @@ a.hmenu-item {
   gap: 14px;
 }
 
-/* 圖表 + 右側圖例：圖表上限 760px 後右邊本來就有空白，圖例正好放這裡 */
+/* Chart + legend on the right: There is a blank space on the right after the upper limit of the chart is 760px, so the legend is placed here.*/
 .chart-with-legend {
   display: flex;
   flex-wrap: wrap;
@@ -2014,9 +2014,9 @@ a.hmenu-item {
 }
 
 /*
- * 可切換的圖例（0.6.26）：整列是 <button>，才有夠大的點擊面積。
- * button 預設帶自己的字型、邊框與置中，全部清掉才能長得跟不可點的圖例一模一樣
- * ——同一張圖上兩種圖例並存時，可點的那個只該多出游標與 hover，不該多出一個框。
+ * Switchable legend (0.6.26): The entire column is <button>, so there is a large enough click area.
+ * The button comes with its own font, border and centering by default. Clear them all to make it look exactly like the unclickable legend.
+ * ——When two legends coexist on the same picture, the clickable one should only have an extra cursor and hover, not an extra box.
  */
 .chart-legend-toggle {
   appearance: none;
@@ -2037,12 +2037,12 @@ a.hmenu-item {
   color: var(--ink);
 }
 
-/* 關掉的序列：色塊已改為空心（見 ChartLegend），文字再減淡一階 */
+/* Turned off sequence: the color block has been changed to hollow (see ChartLegend), and the text is dimmer again.*/
 .chart-legend-toggle[aria-pressed='false'] .chart-legend-label {
   color: var(--ink-muted);
 }
 
-/* 最後一條可見的線不給關，游標要說明白 */
+/* The last visible line will not be closed, the cursor must be made clear*/
 .chart-legend-toggle:disabled {
   cursor: default;
 }
@@ -2053,7 +2053,7 @@ a.hmenu-item {
   border-radius: var(--radius-sm);
 }
 
-/* 文字用一般文字色、不用序列色：色塊負責身分，文字負責可讀 */
+/* Text should use normal text color and no sequence color: the color block is responsible for identity and the text is responsible for readability.*/
 .chart-legend-label {
   color: var(--ink-secondary);
 }
@@ -2077,8 +2077,8 @@ a.hmenu-item {
   margin-bottom: 2px;
 }
 
-/* ---------- 技術面指標摘要 ---------- */
-/* 用 grid 而非 data-table：那張表最小寬 720px，為了 7 個數值強迫手機橫向捲動不划算 */
+/* ---------- Summary of technical indicators ----------*/
+/* Use grid instead of data-table: the minimum width of the table is 720px, and it is not cost-effective to force the phone to scroll horizontally for 7 values.*/
 .tech-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -2089,9 +2089,9 @@ a.hmenu-item {
 }
 
 /*
- * 分隔線畫在格子上、不用「容器底色 + 1px gap」那招：
- * 指標數量（7）與每列格數不一定整除，最後一列會空出格子，
- * 而那招會把空出來的區域整塊塗成邊框色，看起來像壞掉的空面板。
+ * The dividing line is drawn on the grid without using the "container background color + 1px gap" method:
+ * The number of indicators (7) is not necessarily divisible by the number of cells in each column, and the last column will have empty cells.
+ * And that trick will paint the entire vacant area with a border color, making it look like a broken empty panel.
  */
 .tech-cell {
   padding: 10px 12px;
@@ -2119,7 +2119,7 @@ a.hmenu-item {
   font-variant-numeric: tabular-nums;
 }
 
-/* 副標若同時帶漲跌色，漲跌色要贏過 muted（.tech-sub 定義在後面，光靠順序會蓋掉 .pnl-*） */
+/* If the subscript has both rising and falling colors, the rising and falling colors must be better than muted (.tech-sub is defined later, and the order alone will cover .pnl-*)*/
 .tech-sub.pnl-up {
   color: var(--up);
 }
@@ -2128,7 +2128,7 @@ a.hmenu-item {
   color: var(--down);
 }
 
-/* ---------- 持股概況卡片 ---------- */
+/* ---------- Shareholding Profile Card ----------*/
 .rpt-cards {
   display: flex;
   flex-wrap: wrap;
@@ -2175,8 +2175,8 @@ a.hmenu-item {
 }
 
 /**
- * PDF 擷取容器：擷取期間由 reportPdf.ts 動態掛上此 class，把設計 token 覆寫為淺色，
- * 深色主題也能輸出像一份文件的 PDF。html2canvas 不處理 backdrop-filter，一併關掉。
+ * PDF capture container: This class is dynamically mounted by reportPdf.ts during capture, and the design token is overwritten to light color.
+ * The dark theme can also output a PDF like a document. html2canvas does not handle backdrop-filter and turns it off altogether.
  */
 .report-surface {
   --surface: #ffffff;
@@ -2209,7 +2209,7 @@ a.hmenu-item {
     padding: 14px;
   }
 
-  /* 手機上卡片間距收一點，否則整頁更長 */
+  /* The spacing between cards on mobile phones should be smaller, otherwise the whole page will be longer.*/
   .detail-stack {
     gap: 14px;
   }
@@ -2228,7 +2228,7 @@ a.hmenu-item {
   }
 }
 
-/* 區塊層級的資料時間標記：各資料源公布時間不同，故逐區塊標示而非整份一個時間 */
+/* Data time stamp at the block level: Each data source publishes data at different times, so it is marked block by block rather than as a whole time.*/
 .source-tag {
   margin-left: 10px;
   font-size: 11px;
@@ -2237,7 +2237,7 @@ a.hmenu-item {
   white-space: nowrap;
 }
 
-/* AI 分析分頁樣式 */
+/* AI analysis pagination style*/
 .ai-container {
   display: flex;
   flex-direction: column;
@@ -2308,12 +2308,12 @@ a.hmenu-item {
   color: var(--ink);
   padding: 16px;
   border-radius: 8px;
-  /* 用 token 而非硬寫深色疊層——淺色主題下硬寫的 rgba(0,0,0,.12) 會變成濁灰塊 */
+  /* Use tokens instead of hard-written dark overlays - hard-written rgba(0,0,0,.12) in light themes will become a turbid gray block*/
   background: var(--surface);
   border: 1px solid var(--border);
 }
 
-/* 追問對話（0.6.5）。沿用 .ai-card 的容器，只補內部版面 */
+/* Follow-up dialogue (0.6.5). Use the .ai-card container and only fill in the internal layout.*/
 .ai-chat-head {
   display: flex;
   align-items: center;
@@ -2327,7 +2327,7 @@ a.hmenu-item {
   flex-direction: column;
   gap: 10px;
   margin: 10px 0;
-  /* 對話長了不要把整頁撐開，讓它自己捲 */
+  /* If the conversation is long, don’t stretch the entire page, let it roll by itself.*/
   max-height: 420px;
   overflow-y: auto;
 }
@@ -2349,14 +2349,14 @@ a.hmenu-item {
 
 .ai-chat-text {
   flex: 1 1 auto;
-  /* 與 .ai-result 同款：純文字靠 pre-wrap 保留換行，不做 markdown 渲染 */
+  /* Same as .ai-result: pure text relies on pre-wrap to retain line breaks, without markdown rendering.*/
   white-space: pre-wrap;
   line-height: 1.7;
   font-size: 14px;
   padding: 8px 12px;
   border-radius: 10px;
   background: var(--surface-2);
-  /* 長網址或無空白的長字串不得撐破版面 */
+  /* Long URLs or long strings without whitespace must not fill the page*/
   overflow-wrap: anywhere;
 }
 
@@ -2373,7 +2373,7 @@ a.hmenu-item {
 .ai-chat-form input {
   flex: 1 1 auto;
   min-width: 0;
-  /* 16px 避免 iOS 聚焦時自動縮放（沿用專案既有準則） */
+  /* 16px avoids automatic scaling when iOS focuses (follow the existing guidelines of the project)*/
   font-size: 16px;
 }
 
@@ -2398,17 +2398,17 @@ a.hmenu-item {
 
 
 /* =========================================================
- * 外幣匯率頁 (0.6.7)
+ * Foreign Currency Exchange Rate Page (0.6.7)
  *
- * 手機版型不在 0.6.7 範圍（等桌機功能驗證後再做），這裡只寫桌機版。
+ * The mobile version is not within the scope of 0.6.7 (wait until the desktop function is verified), so only the desktop version will be written here.
  * ========================================================= */
 .fx-panel {
   padding: 18px 20px;
 }
 
 /*
- * 幣別卡是 <button>：整張卡可點才有足夠的點擊面積，而 button 預設會帶
- * 自己的字型、置中與邊框，全部要清掉才能長得跟 .kpi 一樣。
+ * The currency card is <button>: the entire card can be clicked to have enough click area, and button will have
+ * All your fonts, centering and borders must be cleared to look the same as .kpi.
  */
 .fx-card {
   appearance: none;
@@ -2426,11 +2426,11 @@ a.hmenu-item {
   transform: translateY(-1px);
 }
 
-/* 選中態：外框而非填色，才不會蓋掉卡片裡本來就有的數字層次 */
+/* Selected state: Outline instead of color filling, so as not to cover up the original number layer in the card*/
 .fx-card.is-active {
   border-color: var(--accent);
   border-width: 2px;
-  /* .kpi 是 16px 18px；邊框加粗 1px 會讓卡片長高、整排跟著跳，故各減 1px 補回來 */
+  /* .kpi is 16px 18px; thickening the border by 1px will make the cards grow taller and make the whole row jump, so each subtract 1px to make up for it.*/
   padding: 15px 17px;
 }
 
@@ -2439,7 +2439,7 @@ a.hmenu-item {
   outline-offset: 2px;
 }
 
-/* ── 管理後台：全頁 ＋ 左側縱向導覽（0.6.19）──────────────────── */
+/* ──Management backend: full page + left vertical navigation (0.6.19)────────────────────*/
 
 .adm-console {
   display: grid;
@@ -2449,8 +2449,8 @@ a.hmenu-item {
 }
 
 /*
- * 側欄跟著捲動時黏在上方：後台的內容區（尤其是抓取狀況）比側欄長得多，
- * 捲到底之後還要能直接換頁，不必先捲回去。
+ * The sidebar sticks to the top when scrolling: the content area in the background (especially in the crawling state) is much longer than the sidebar.
+ * You need to be able to change pages directly after scrolling to the end without having to scroll back first.
  */
 .adm-side {
   display: flex;
@@ -2508,7 +2508,7 @@ a.hmenu-item {
   color: var(--accent);
 }
 
-/* 離開後台的出口。刻意做得比導覽項目安靜，它不是第五個項目 */
+/* Exit backstage. Deliberately made quieter than the guided tour, it is not the fifth project*/
 .adm-back {
   appearance: none;
   display: flex;
@@ -2532,7 +2532,7 @@ a.hmenu-item {
   min-width: 0;
 }
 
-/* 後台面板自己就是第一個區塊，不需要再從上方推開 */
+/* The background panel itself is the first block and does not need to be pushed away from above.*/
 .adm-main > .section:first-child {
   margin-top: 0;
 }
@@ -2542,8 +2542,8 @@ a.hmenu-item {
 }
 
 /*
- * ≤900px 側欄轉成橫向捲動列。維持它是「一整排可點的項目」而不是下拉選單：
- * 四個項目在 390px 仍排得下（橫捲一小段），下拉則多一次點擊才看得到有哪些頁。
+ * ≤900px The sidebar is converted into a horizontal scroll column. Keep it a "full row of clickable items" rather than a drop-down menu:
+ * The four items can still be arranged at 390px (scroll horizontally for a short distance), and it takes one more click to see which pages there are when scrolling down.
  */
 @media (max-width: 900px) {
   .adm-console {
@@ -2571,13 +2571,13 @@ a.hmenu-item {
   }
 }
 
-/* ── 庫存總覽：現價強調（0.6.20）────────────────────────────── */
+/* ── Inventory Overview: Current Price Highlight (0.6.20)──────────────────────────────*/
 
-/* ── 管理後台：管理員權限開關（0.6.19）─────────────────────── */
+/* ──Management background: Administrator permission switch (0.6.19)──────────────────────*/
 
 /*
- * 用開關而不是核取方塊：這是「立刻生效的動作」，不是表單欄位。
- * 核取方塊看起來像是要按下某個「儲存」才會生效，但這裡按下去就送出了。
+ * Use switches instead of check boxes: this is an "immediate action", not a form field.
+ * The check box looks like you need to press a certain "Save" to take effect, but here it is sent.
  */
 .adm-toggle {
   appearance: none;
@@ -2619,7 +2619,7 @@ a.hmenu-item {
   cursor: progress;
 }
 
-/* ── 管理後台：提示詞編輯（0.6.19）──────────────────────────── */
+/* ──Management background: prompt word editing (0.6.19)────────────────────────────*/
 
 .adm-prompt {
   display: grid;
@@ -2694,8 +2694,8 @@ a.hmenu-item {
 }
 
 /*
- * 提示詞是模型逐字讀的東西，換行與縮排都有意義，故用等寬字並保留空白。
- * 高度給得比一般 textarea 大：這幾段本來就有二、三十行。
+ * Prompt words are things that the model reads word by word. Line breaks and indentations are meaningful, so use constant-width words and keep blank spaces.
+ * The height is given larger than the normal textarea: these paragraphs originally have twenty or thirty lines.
  */
 .adm-prompt-text {
   width: 100%;
@@ -2716,7 +2716,7 @@ a.hmenu-item {
   outline-offset: 1px;
 }
 
-/* 鎖定段落用虛線框：一眼看得出「這一塊不是輸入框」 */
+/* Use a dotted frame to lock a paragraph: you can tell at a glance that "this is not an input box."*/
 .adm-prompt-locked {
   margin-top: 12px;
   border: 1px dashed var(--border-strong);
@@ -2758,13 +2758,13 @@ a.hmenu-item {
   }
 }
 
-/* ── 迷你走勢線（0.6.19）───────────────────────────────────── */
+/* ── Mini trend line (0.6.19)────────────────────────────────────*/
 
 /*
- * 高度寫死 30px：viewBox 是 100×28、`preserveAspectRatio="none"`，
- * 所以它會被拉伸填滿，線寬靠 SVG 的 vector-effect 維持不變形。
- * 0.6.34 起總經指標卡不再用它（改成「連 N 期」chip），
- * 現在的使用者是台股法人表的趨勢欄 —— 那裡以 inline style 指定固定寬高。
+ * The height is hardcoded to 30px: the viewBox is 100×28, `preserveAspectRatio="none"`,
+ * So it will be stretched to fill, and the line width is maintained unchanged by SVG's vector-effect.
+ * Starting from 0.6.34, the total economic index card will no longer use it (changed to "Continuous N Periods" chip).
+ * The current user is the trend column of the Taiwan stock legal person table - where the fixed width and height are specified in inline style.
  */
 .mac-spark {
   display: block;
@@ -2773,17 +2773,17 @@ a.hmenu-item {
   margin-top: 10px;
 }
 
-/* 落後徽章推到標籤列右端。.kpi-label 本來就是 flex，這裡只補對齊 */
+/* The backward badge is pushed to the right end of the label column. .kpi-label is originally ​​flex, here only the alignment is supplemented*/
 .mac-behind {
   margin-left: auto;
 }
 
-/* ── 總經指標：瘦身成一行的 chip 與表格列內的小字（0.6.35）──────── */
+/* ── General economic indicators: chips slimmed down into a row and small characters in the table column (0.6.35)────────*/
 
 /*
- * 0.6.35 把五張 KPI 卡壓成一行。用 flex-wrap 而不是 grid：
- * 五個 chip 寬度不一（「消費者信心 49.5」比「核心 CPI +2.57%」長），
- * 等寬網格會在短的那幾個右邊留下大片空白。
+ * 0.6.35 Press five KPI cards into a row. Use flex-wrap instead of grid:
+ * The five chips have different widths ("Consumer Confidence 49.5" is longer than "Core CPI +2.57%"),
+ * An equal-width grid will leave large gaps to the right of the shorter ones.
  */
 .mac-chip-row {
   display: flex;
@@ -2808,28 +2808,28 @@ a.hmenu-item {
   color: var(--ink-secondary);
 }
 
-/* 值用等寬數字：五個 chip 並排時，比例數字會讓小數點上下對不齊 */
+/* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
 .mac-chip-value {
   font-size: 14.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-/* 指標名稱與「落後 N 期」徽章同一行 */
+/* The indicator name is on the same line as the "N periods behind" badge*/
 .mac-row-label {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-/* 指標說明（原本在卡片底部）。字卡瘦身後改掛在列裡，仍然看得到 */
+/* Indicator description (originally at the bottom of the card). After the word cards were slimmed down, they were hung in columns and can still be seen.*/
 .mac-row-note {
   font-size: 11.5px;
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
-/* 期別與「截至該期」：附註性質，不與主數字爭視線 */
+/* Period and "as of this period": they are notes and do not conflict with the main figures.*/
 .mac-row-period {
   font-size: 11px;
   color: var(--ink-muted);
@@ -2838,8 +2838,8 @@ a.hmenu-item {
 }
 
 /*
- * 走勢圖：兩個方向並排（0.6.7）。
- * 桌機兩欄；≤900px 疊成一欄 —— 兩張圖擠在半個手機寬會完全看不出趨勢。
+ * Trend chart: Both directions side by side (0.6.7).
+ * Two columns for desktop; ≤900px stacked into one column - if two pictures are squeezed into half the width of a mobile phone, no trend can be seen at all.
  */
 .fx-chart-pair {
   display: grid;
@@ -2886,7 +2886,7 @@ a.hmenu-item {
 
 .ast-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; }
 .ast-sub { display: block; font-size: 11.5px; color: var(--ink-muted); }
-/* 排程的抓取範圍：接在 jobname 下方，允許折行（表格其餘欄位是 nowrap） */
+/* The fetch range of the schedule: connected below jobname, allowing line breaks (the remaining fields in the table are nowrap)*/
 .ast-scope {
   display: block; margin-top: 3px; max-width: 34ch;
   font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); white-space: normal;
@@ -2902,7 +2902,7 @@ a.hmenu-item {
   background: color-mix(in srgb, var(--ast-c, var(--ink-muted)) 14%, transparent);
 }
 
-/* 圖例 */
+/* legend*/
 .ast-legend {
   display: flex; flex-wrap: wrap; gap: 9px 16px; align-items: center;
   margin-top: 12px; padding-bottom: 10px;
@@ -2924,7 +2924,7 @@ a.hmenu-item {
 .ast-legend .ast-rule { display: block; flex-basis: 100%; line-height: 1.55; }
 .ast-rule b { color: var(--ink-secondary); font-weight: 600; }
 
-/* 時間軸本體。窄螢幕橫向捲動，頁面本身不得橫捲 */
+/* The timeline itself. Horizontal scrolling for narrow screens, the page itself must not scroll horizontally*/
 .ast-tl-scroll { overflow-x: auto; margin-top: 4px; }
 .ast-tl { min-width: 700px; }
 
@@ -2953,19 +2953,19 @@ a.hmenu-item {
 
 .ast-track { position: relative; height: 46px; }
 .ast-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: 0.55; }
-/* 來源公布窗 */
+/* Source announcement window*/
 .ast-win {
   position: absolute; top: 16px; height: 13px; border-radius: 3px; min-width: 3px;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-left: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
 }
-/* 實際抓到的時刻。內圈描一圈底色，讓點壓在公布窗上仍分得出層次 */
+/* Actual caught moment. Draw a circle of background color in the inner circle, so that the points can still be distinguished when pressed on the announcement window.*/
 .ast-hit {
   position: absolute; top: 17px; transform: translateX(-50%); z-index: 2;
   width: 11px; height: 11px; border-radius: 50%; background: var(--ast-c);
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px color-mix(in srgb, var(--ast-c) 22%, transparent);
 }
-/* 公布窗結束 → 實際抓到，中間的落後區間 */
+/* End of the announcement window → Actual catch, the middle backward interval*/
 .ast-lag {
   position: absolute; top: 21.5px; height: 2px; z-index: 1; opacity: 0.8;
   background: repeating-linear-gradient(90deg, var(--ast-c) 0 4px, transparent 4px 8px);
@@ -2985,15 +2985,15 @@ a.hmenu-item {
   color: var(--ink-muted); font-variant-numeric: tabular-nums;
 }
 
-/* 桌機不需要重複時刻（軸上已經標了），只在手機顯示 */
+/* Desktop does not need to repeat the time (the axis is already marked), it is only displayed on the mobile phone*/
 .ast-when { display: none; }
 
-/* ── 總經班次軸（M1）──────────────────────────────────────── */
-/* 24 小時軸的刻度較密，標籤要能貼齊兩端不被切掉 */
+/* ── General shift axis (M1)──────────────────────────────────────*/
+/* The scale of the 24-hour axis is dense, and the labels must be able to be attached to both ends without being cut off.*/
 .ast-ruler-day span:first-child { transform: none; }
 .ast-ruler-day span:last-child { transform: translateX(-100%); }
 
-/* 「現在」的位置。用 accent 而非狀態色——它不是狀態，是參考線 */
+/* The "now" position. Use accent instead of status color - it's not a status, it's a guide*/
 .ast-now { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); opacity: .55; z-index: 1; }
 
 /*
@@ -3012,7 +3012,7 @@ a.hmenu-item {
   border: 2px solid var(--accent); background: transparent;
 }
 
-/* 下次抓取提示列 */
+/* Next crawl prompt column*/
 .ast-next {
   display: flex; flex-wrap: wrap; align-items: center; gap: 7px 18px;
   margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border);
@@ -3022,7 +3022,7 @@ a.hmenu-item {
 .ast-next b { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
 .ast-next .sep { margin-left: auto; }
 .ast-in { color: var(--ink-muted); }
-/* 推估日必須看得出是推估的——它不是官方行事曆 */
+/* The estimated date must be clearly seen as an estimate - it is not an official calendar*/
 .ast-est { font-size: 11px; color: var(--ink-muted); }
 
 @media (max-width: 720px) {
@@ -3043,7 +3043,7 @@ a.hmenu-item {
   .ast-when { display: inline; font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
   .ast-date { display: inline; margin-top: 0; }
 
-  /* 圖例在窄螢幕會把「判定基準是」擠成直排，故手機改為單欄堆疊 */
+  /* The legend will squeeze the "judgment criterion is" into a straight row on a narrow screen, so the mobile phone changes it to a single column stack.*/
   .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
   .ast-rule { line-height: 1.6; }
 }

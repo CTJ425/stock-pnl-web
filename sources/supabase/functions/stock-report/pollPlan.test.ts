@@ -19,8 +19,8 @@ describe('fingerprint', () => {
   })
 
   it('只有數值改變（長度相同）也要測得出來', () => {
-    // 這是 T86 被改寫的真實形態：筆數不變、某幾檔的買賣超數字被更正。
-    // 只比長度或筆數會漏掉，所以指紋必須含內容雜湊。
+    // This is the true state of T86 being rewritten: the number of transactions remains unchanged, and the transaction super figures of certain levels are corrected.
+    // Only the length or number of strokes will be missed, so the fingerprint must contain content hash.
     const a = fingerprint([['2609', '4705359', '6411000']])
     const b = fingerprint([['2609', '4705359', '6411001']])
     expect(a).not.toBe(b)
@@ -32,8 +32,8 @@ describe('fingerprint', () => {
 })
 
 describe('t86Fingerprint', () => {
-  // 2026-07-27 正式區實測：同一份資料連抓兩次，1334 列內容與集合相同，
-  // 但末欄相同的幾列之間順序會換。以下用實際觀察到的三列還原那個形狀。
+  // 2026-07-27 Actual test in the official area: The same data was captured twice, and the content of column 1334 is the same as the set.
+  // However, the order of the same columns in the last column will be changed. The shape is restored below using the three actually observed columns.
   const rowA = ['6606', '建德工業', '17,000', '13,000', '4,000', '5,000']
   const rowB = ['1614', '三洋電', '18,000', '15,000', '3,000', '5,000']
   const rowC = ['1516', '川飛', '4,000', '0', '4,000', '5,000']
@@ -150,7 +150,7 @@ describe('decideSkip', () => {
   })
 
   it('T86 已定稿但融資融券還沒到 → 不可短路', () => {
-    // 融資融券約 21:00 才有。只看 T86 就收工的話，17:00 停掉，當天融資融券就永遠沒了。
+    // Margin trading is only available at about 21:00. If you just look at T86 and call it a day, if it stops at 17:00, the margin trading on that day will be gone forever.
     const d = decideSkip({ ...base, t86Today: true, t86Frozen: true, marginToday: false })
     expect(d.skip).toBe(false)
   })
@@ -160,7 +160,7 @@ describe('decideSkip', () => {
   })
 
   it('達到當日執行上限 → 無論如何都短路', () => {
-    // 防呆上限優先於一切：邏輯出錯或密鑰外流時的最後一道剎車
+    // The fool-proof upper limit takes precedence over everything else: the last brake when logic errors occur or keys are leaked.
     const d = decideSkip({ ...base, runsToday: MAX_RUNS_PER_DAY })
     expect(d).toEqual({ skip: true, reason: 'run-cap' })
   })
@@ -200,8 +200,8 @@ describe('marginSigPart', () => {
   })
 
   it('當天的融資融券由無到有 → 指紋必須改變', () => {
-    // 0.6.1 的實際迴歸形狀：16:15 那輪只有歷史日有融資融券，21:00 那輪才補上當天。
-    // 舊寫法傳的是 `dataYmd` 常數，兩輪指紋相同 → 不重產 → 當天報告的 margin 永遠是 null。
+    // The actual regression shape of 0.6.1: In the 16:15 round, only the historical day had margin trading, and the 21:00 round only made up for that day.
+    // The old writing method passes the `dataYmd` constant, and the two rounds of fingerprints are the same → not repeated → the margin reported on the day is always null.
     const history = ['20260728', '20260729']
     const before = runSignature({ ...parts, dataYmd: '20260730', margin: marginSigPart(history) })
     const after = runSignature({

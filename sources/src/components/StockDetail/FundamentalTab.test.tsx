@@ -61,12 +61,12 @@ describe('FundamentalTab', () => {
 
   it('獲利能力四格 KPI 取最新一季', () => {
     render(<FundamentalTab fundamental={withProfit} loading={false} />)
-    // 「毛利率」同時是 KPI 標籤與表頭，故限定在 KPI 區塊內比對
+    // "Gross profit margin" is both the KPI label and header, so the comparison is limited to the KPI block.
     const labels = [...document.querySelectorAll('.kpi-label')].map((e) => e.textContent)
     expect(labels).toEqual(
       expect.arrayContaining(['毛利率', '營益率', '稅前純益率', '稅後純益率']),
     )
-    // 值同樣同時出現在 KPI 與表格，故也限定在 KPI 區塊
+    // The value also appears in both the KPI and the table, so it is also limited to the KPI block
     const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
     expect(values).toEqual(
       expect.arrayContaining(['+66.25%', '+58.10%', '+60.65%', '+50.51%']),
@@ -77,7 +77,7 @@ describe('FundamentalTab', () => {
   it('季度趨勢表由新到舊，且只有一季時不出現表格', () => {
     const { unmount } = render(<FundamentalTab fundamental={withProfit} loading={false} />)
     const rows = document.querySelectorAll('.data-table')
-    // 兩張表：獲利能力季度表 + 月營收表
+    // Two tables: quarterly profitability table + monthly revenue table
     expect(rows).toHaveLength(2)
     const firstBodyRow = rows[0].querySelectorAll('tbody tr')[0]
     expect(firstBodyRow.textContent).toContain('2026 年第 1 季')
@@ -85,7 +85,7 @@ describe('FundamentalTab', () => {
 
     const oneQuarter = { ...withProfit, profitQuarters: [withProfit.profitQuarters[1]] }
     render(<FundamentalTab fundamental={oneQuarter} loading={false} />)
-    // 只剩月營收那張表；KPI 仍在
+    // Only the monthly revenue table remains; KPIs are still there
     expect(document.querySelectorAll('.data-table')).toHaveLength(1)
     expect(screen.getByText('+66.25%')).toBeTruthy()
   })
@@ -105,14 +105,14 @@ describe('FundamentalTab', () => {
   })
 
   it('標示這份資料是我們何時產出的，以及一共幾個月', () => {
-    // 沒有這行的話，畫面上少了幾個月時分不出是「資料就這樣」還是「你看到的是舊的一份」
+    // Without this line, when a few months are missing from the screen, it would be impossible to tell whether "the data is just like this" or "what you are seeing is an old copy."
     render(<FundamentalTab fundamental={full} loading={false} />)
     expect(screen.getByText(/資料更新於 2026-07-27 \d{2}:\d{2}（共 2 個月）/)).toBeTruthy()
   })
 
   it('產出時間與估值的「資料日」是兩個不同的東西，不可混為一談', () => {
     render(<FundamentalTab fundamental={full} loading={false} />)
-    // 資料日 = 資料自己宣告的日期；資料更新於 = 我們抓到並寫檔的時刻
+    // Data date = the date the data was announced by itself; data updated = the time we captured and documented it
     expect(screen.getByText(/資料日 2026-07-24/)).toBeTruthy()
     expect(screen.getByText(/資料更新於 2026-07-27/)).toBeTruthy()
   })
@@ -121,7 +121,7 @@ describe('FundamentalTab', () => {
     render(<FundamentalTab fundamental={full} loading={false} />)
     expect(screen.getByText('單位：千元')).toBeTruthy()
     const rows = screen.getAllByRole('row')
-    // rows[0] 是表頭；第一列資料應是最新月份
+    // rows[0] is the header; the first column of data should be the latest month
     expect(rows[1].textContent).toContain('2026 年 06 月')
     expect(rows[1].textContent).toContain('442,679,969')
     expect(rows[1].textContent).toContain('+67.87%')
@@ -145,7 +145,7 @@ describe('FundamentalTab', () => {
         loading={false}
       />,
     )
-    // 本益比與殖利率各一個「—」
+    // The price-to-earnings ratio and yield rate each have a "—"
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('查無月營收資料。')).toBeTruthy()
   })
@@ -190,7 +190,7 @@ describe('FundamentalTab', () => {
     */
     const [p1, p2] = (poly!.getAttribute('points') ?? '').split(' ')
     const y = (pt: string) => Number(pt.split(',')[1])
-    // 05 月營收較低 → y 較大（SVG 的 y 往下增加）
+    // Revenue in May is lower → y is larger (SVG’s y increases downward)
     expect(y(p1)).toBeGreaterThan(y(p2))
   })
 
@@ -213,7 +213,7 @@ describe('FundamentalTab', () => {
       ],
     }
     const { container } = render(<FundamentalTab fundamental={gap} loading={false} />)
-    // 前段只剩一個點（畫不出線）被丟棄，只留 05→06 那一段
+    // There is only one point left in the previous section (no line can be drawn) and is discarded, leaving only the section 05→06.
     expect(container.querySelectorAll('.chart-wrap polyline')).toHaveLength(1)
   })
 
@@ -244,13 +244,13 @@ describe('FundamentalTab', () => {
         />,
       )
       const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
-      // 13.94 元，不是 +13.94%（EPS 是金額，帶正號會讀成漲跌幅）
+      // 13.94 yuan, not +13.94% (EPS is the amount, with a positive sign it will be read as an increase or decrease)
       expect(values).toContain('13.94 元')
       expect(document.querySelectorAll('.data-table')[0].textContent).toContain('12.50 元')
     })
 
     it('最新一季還沒有 EPS 時退回最近一筆有的，並說明是哪一季', () => {
-      // 比率每晚更新、EPS 要等季報回補，中間那幾天最新一季本來就沒有 EPS
+      // The ratio is updated every night, and EPS has to wait for the quarterly report to be replenished. In the intervening days, there is no EPS in the latest quarter.
       render(
         <FundamentalTab
           fundamental={{ ...full, profitQuarters: [eps('2025-Q4', 12.5), eps('2026-Q1', null)] }}
@@ -271,7 +271,7 @@ describe('FundamentalTab', () => {
       )
       const values = [...document.querySelectorAll('.kpi-value')].map((e) => e.textContent)
       expect(values).toContain('—')
-      // 兩張圖：獲利能力四線 + 月營收；沒有 EPS 那張
+      // Two pictures: fourth line of profitability + monthly revenue; the one without EPS
       expect(container.querySelectorAll('.chart-wrap')).toHaveLength(2)
     })
 
@@ -289,10 +289,10 @@ describe('FundamentalTab', () => {
           loading={false}
         />,
       )
-      // 三張圖：四線 + EPS + 月營收
+      // Three pictures: fourth line + EPS + monthly revenue
       const wraps = container.querySelectorAll('.chart-wrap')
       expect(wraps).toHaveLength(3)
-      // EPS 那張只有兩個點、連成一段，不是「中間掉下去」的三點
+      // The EPS picture only has two points connected into one section, not three points that "fall off in the middle"
       const epsChart = wraps[1]
       expect(epsChart.querySelectorAll('circle')).toHaveLength(2)
       expect(epsChart.querySelectorAll('polyline')).toHaveLength(1)
@@ -300,7 +300,7 @@ describe('FundamentalTab', () => {
   })
 
   describe('獲利能力走勢圖（0.6.25）', () => {
-    /** 由舊到新的 12 季（2023 Q2 → 2026 Q1）；毛利率逐季走高，用來釘住方向 */
+    /** 12 quarters from old to new (2023 Q2 → 2026 Q1); gross profit margin increases quarter by quarter, used to pin the direction*/
     const twelve: ProfitQuarter[] = Array.from({ length: 12 }, (_, i) => {
       const q = 1 + i // 0 = 該年第 1 季，故 1 起算即 2023 Q2
       return {
@@ -314,7 +314,7 @@ describe('FundamentalTab', () => {
       }
     })
 
-    /** 獲利能力那張圖排在月營收之前（區塊順序：估值 → 獲利能力 → 月營收） */
+    /** The profitability chart is ranked before monthly revenue (block sequence: Valuation → Profitability → Monthly Revenue)*/
     const profitChart = (c: HTMLElement) => c.querySelectorAll('.chart-wrap')[0]
     const withQuarters = (profitQuarters: ProfitQuarter[]): FundamentalData => ({
       ...full,
@@ -337,12 +337,12 @@ describe('FundamentalTab', () => {
       const { container } = render(
         <FundamentalTab fundamental={withQuarters(twelve)} loading={false} />,
       )
-      // 毛利率是第一條線，資料逐季走高 → SVG 的 y 應逐點變小
+      // Gross profit margin is the first line, and the data is getting higher quarter by quarter → SVG's y should become smaller point by point
       const pts = (profitChart(container).querySelector('polyline')!.getAttribute('points') ?? '')
         .split(' ')
         .map((p) => Number(p.split(',')[1]))
       expect(pts[0]).toBeGreaterThan(pts[pts.length - 1])
-      // 表格第一列仍是最新一季
+      // The first column of the table is still the latest season
       expect(container.querySelectorAll('.data-table tbody tr')[0].textContent).toContain(
         '2026 年第 1 季',
       )
@@ -362,11 +362,11 @@ describe('FundamentalTab', () => {
       const { container } = render(
         <FundamentalTab fundamental={withQuarters([twelve[11]])} loading={false} />,
       )
-      // 只剩月營收那張圖（X 軸標籤是 2026/05 這種帶斜線的月份）
+      // Only the monthly revenue chart is left (the X-axis label is the month with a slash like 2026/05)
       const wraps = container.querySelectorAll('.chart-wrap')
       expect(wraps).toHaveLength(1)
       expect(wraps[0].textContent).toContain('2026/05')
-      // KPI 仍在，使用者不會覺得整段消失
+      // The KPI is still there, and users won’t feel like the whole section has disappeared.
       expect(screen.getByText('+61.00%')).toBeTruthy()
     })
 
@@ -381,7 +381,7 @@ describe('FundamentalTab', () => {
       )
       const polylines = profitChart(container).querySelectorAll('polyline')
       expect(polylines).toHaveLength(4)
-      // 座標必須全是有限數（負值若讓值域算壞，這裡會冒出 NaN 而整條線消失）
+      // The coordinates must all be finite numbers (if the negative value makes the range calculation bad, NaN will appear here and the entire line will disappear)
       const coords = [...polylines]
         .flatMap((p) => (p.getAttribute('points') ?? '').split(' '))
         .flatMap((pt) => pt.split(',').map(Number))
@@ -399,7 +399,7 @@ describe('FundamentalTab', () => {
       await user.click(gross)
       expect(gross.getAttribute('aria-pressed')).toBe('false')
       expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(3)
-      // 圖例本身不能跟著消失，否則就再也開不回來了
+      // The legend itself cannot disappear, otherwise it will never be opened again.
       expect(screen.getByRole('button', { name: /毛利率/ })).toBeTruthy()
 
       await user.click(gross)
@@ -415,13 +415,13 @@ describe('FundamentalTab', () => {
         [...profitChart(container).querySelectorAll('svg text')]
           .map((t) => t.textContent ?? '')
           .filter((t) => /^-?\d+$/.test(t))
-      // 四條線同軸時，值域要蓋到毛利率的 61 與稅後的 35
+      // When the four lines are coaxial, the value range should cover 61 of gross profit margin and 35 of after tax.
       expect(yTicks()).toContain('60')
 
       for (const name of ['毛利率', '營益率', '稅前純益率']) {
         await user.click(screen.getByRole('button', { name: new RegExp(name) }))
       }
-      // 只剩稅後純益率（35–46）→ 60 那格刻度不再存在
+      // Only the after-tax net profit ratio (35–46) → 60 grid no longer exists
       expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(1)
       expect(yTicks()).not.toContain('60')
     })
@@ -443,9 +443,9 @@ describe('FundamentalTab', () => {
       const { container } = render(
         <FundamentalTab fundamental={withQuarters(bank)} loading={false} />,
       )
-      // 毛利率整條無值 → 該序列畫不出任何線段，只剩另外三條
+      // The entire gross profit margin line has no value → no line segments can be drawn in this sequence, only three other lines are left.
       expect(profitChart(container).querySelectorAll('polyline')).toHaveLength(3)
-      // 圖例仍列出毛利率（少了它會以為這檔股票沒有這個概念以外的原因）
+      // The legend still lists the gross profit margin (without it for reasons other than thinking that this stock does not have this concept)
       const labels = [...container.querySelectorAll('.chart-legend-label')].map(
         (e) => e.textContent,
       )

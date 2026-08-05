@@ -1,18 +1,18 @@
 /**
- * 管理員後台「資料抓取狀況」的資料來源。
+ * The data source of "Data Fetch Status" in the administrator's backend.
  *
- * 走 Edge Function 的 `admin-status`（唯讀彙總）而不是前端各自去撈，理由有二：
- * 1. 排程（`cron` schema）與觀測表（`batch_run_log` / `source_probe_log`）
- *    **前端沒有權限讀**，那些表開了 RLS 但刻意沒有任何 policy。
- *    為了一個唯讀後台去鬆綁那些防線並不划算。
- * 2. 整頁要十幾項資訊，逐項往返會很慢；後端一次撈完約 1 秒。
+ * Use Edge Function's `admin-status` (read-only summary) instead of the front-ends to get it individually. There are two reasons:
+ * 1. Scheduling (`cron` schema) and observation table (`batch_run_log` / `source_probe_log`)
+ *    **The front end does not have permission to read**, those tables have RLS enabled but deliberately do not have any policy.
+ *    It's not cost-effective to loosen those defenses for a read-only backend.
+ * 2. The entire page requires more than a dozen pieces of information, and going back and forth one by one will be very slow; it takes about 1 second for the backend to retrieve it all at once.
  *
- * 授權是 `functions.invoke` 自動帶上的使用者 JWT，後端再核 `app_metadata.role`。
- * **不是 CRON_SECRET** —— 那把密鑰不能進前端（進了就等於公開）。
+ * Authorization is the user JWT automatically brought by `functions.invoke`, and the backend then checks `app_metadata.role`.
+ * **Not CRON_SECRET** - that key cannot be entered into the front end (if it is entered, it means it is public).
  */
 import { supabase } from './supabase'
 
-/** 單一資料源的新鮮度（與 Edge Function 的 report.ts SourceStamp 對齊） */
+/** Freshness of a single source (aligned with Edge Function’s report.ts SourceStamp)*/
 export interface SourceStamp {
   date: string | null
   fetchedAt: string | null
@@ -24,7 +24,7 @@ export interface ScheduleRow {
   schedule: string
   active: boolean
   action: string | null
-  /** 這個排程打的是哪一區。BUG-003 就是測試區的 cron 打到正式區，顯示出來才擋得住 */
+  /** Which area does this schedule cover? BUG-003 is that when the cron in the test area hits the official area, it can only be blocked if it is displayed.*/
   targetRef: string | null
   lastRun: string | null
   lastStatus: string | null
@@ -39,10 +39,10 @@ export interface AdminMacroIndicator {
   latest: { period: string; value: number | null } | null
   previous: { period: string; value: number | null } | null
   /**
-   * 下一期的發布日，**由後端依官方發布行事曆算好**（macroCalendar.ts）。
-   * 前端刻意不自備一份行事曆 —— 兩份常數遲早漂移，而漂移的症狀
-   * （畫面說 8/12、後端卻按 8/14 判定）幾乎看不出來。
-   * `estimated` 為 true 代表行事曆已用完、日期是規則推算的。
+   * The release date of the next issue is calculated by the backend according to the official calendar (macroCalendar.ts).
+   * The front-end deliberately does not prepare its own calendar - the two constants will drift sooner or later, and the symptoms of drift
+   * (The screen says 8/12, but the backend judges it as 8/14) It’s almost invisible.
+   * `estimated` is true, which means the calendar has been used up and the date is calculated by rules.
    */
   nextRelease: { date: string; period: string; estimated: boolean } | null
 }
@@ -61,16 +61,16 @@ export interface AdminStatus {
       borrow: SourceStamp | null
     } | null
   } | null
-  /** 各 Storage 目錄的檔案數與持股檔數，用來算「N 檔裡到了幾檔」 */
+  /** The number of files and the number of holding files in each Storage directory are used to calculate "how many files are there in N files"*/
   coverage: { daily?: number; fundamental?: number; held?: number }
   macro: { asOf: string; checkedAt: string | null; indicators: AdminMacroIndicator[] } | null
   fx: { asOf: string; count: number } | null
   /**
-   * 全市場量能與三大法人的抓取狀況（0.6.32）。
+   * Total market volume and capture status of the three major legal entities (0.6.32).
    *
-   * 三個缺口分開數，因為代表的問題不同：`missingInstitutional` 是整天沒有法人金額
-   * （最新一兩天缺屬正常），`missingBuySell` 是 0.6.32 買進 / 賣出的回補進度（會歸零），
-   * `missingCandle` 是畫不出日 K 的天數。判定規則在前端，後端只吐事實。
+   * The three gaps are counted separately because they represent different issues: `missingInstitutional` is the amount of no legal person throughout the day
+   * (The latest one or two days are missing is normal), `missingBuySell` is the replenishment progress of 0.6.32 buy/sell (will be reset to zero),
+   * `missingCandle` is the number of days on which day K cannot be drawn. The decision rules are in the front end, and the back end only spits out facts.
    */
   market: {
     schema: number | null
@@ -96,12 +96,12 @@ export interface AdminStatus {
   durationMs: number
 }
 
-/** 呼叫者是否為管理員（`app_metadata.role === 'admin'`）。
+/** Whether the caller is an administrator (`app_metadata.role === 'admin'`).
  *
- * `app_metadata` 只能由 service role / Dashboard 寫入，使用者改不了自己的 ——
- * 這是它比 email 適合當授權依據的原因（email 使用者可自行變更）。
- * **此判準必須與 Edge Function 的 `assertAdmin` 一致**，兩邊漂移就會出現
- * 「畫面看得到分頁但 API 回 403」這種難查的狀況。
+ * `app_metadata` can only be written by service role / Dashboard, users cannot change their own ——
+ * This is the reason why it is more suitable as the authorization basis than email (email users can change it by themselves).
+ * **This criterion must be consistent with `assertAdmin` of Edge Function**, drift on both sides will occur
+ * "Pagination is visible on the screen but the API returns 403" is a difficult-to-check situation.
  */
 export async function isAdmin(): Promise<boolean> {
   if (!supabase) return false
@@ -115,7 +115,7 @@ export async function isAdmin(): Promise<boolean> {
   }
 }
 
-/** 讀取後台彙總。查無 / 無權限回 null（吞錯不拋，比照其他 proxy） */
+/** Read background summary. Check if there is no / no permission and return null (error will not be thrown, compare with other proxies)*/
 export async function fetchAdminStatus(): Promise<AdminStatus | null> {
   if (!supabase) return null
   try {

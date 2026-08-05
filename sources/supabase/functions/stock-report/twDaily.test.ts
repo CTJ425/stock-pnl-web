@@ -8,9 +8,9 @@ import {
 } from './twDaily.ts'
 
 /**
- * fixture 的數值取自 2026-07-27 對 query1.finance.yahoo.com 的實際回應（2330.TW，range=1y）。
- * 特別保留索引 6 那一格：實測回應中 2025-08-01 的五個欄位全是 null，
- * 這是解析必須擋掉的真實情況，不是假想的邊界。
+ * The value of fixture is taken from the actual response to query1.finance.yahoo.com on 2026-07-27 (2330.TW, range=1y).
+ * Specially reserve the box of index 6: all five fields of 2025-08-01 in the actual measurement response are null.
+ * This is a real situation that analysis must block, not an imaginary boundary.
  */
 const REAL: ChartResponse = {
   chart: {
@@ -36,15 +36,15 @@ const REAL: ChartResponse = {
 
 describe('tradingDateOf', () => {
   it('以 gmtoffset 換算成當地交易日', () => {
-    // 台股 09:00 開盤 = 01:00Z，加 8 小時後才是當地日期
+    // Taiwan stocks open at 09:00 = 01:00Z, add 8 hours to the local date
     expect(tradingDateOf(1753318800, 28800)).toBe('2025-07-24')
     expect(tradingDateOf(1784854800, 28800)).toBe('2026-07-24')
   })
 
   it('不套用位移時會落到前一天 —— 證明 gmtoffset 不是可省略的裝飾', () => {
-    // 這個案例是刻意留下的反證：若實作直接對原始 timestamp 取 UTC 日期，
-    // 在 UTC+9 以上的時區就會整條序列偏一天。
-    // 2026-07-24T16:00:00Z：套 +9h 就會跨到隔天，不套則否
+    // This case is deliberately left as counter-evidence: if the implementation directly obtains the UTC date from the original timestamp,
+    // In time zones above UTC+9, the entire sequence will be offset by one day.
+    // 2026-07-24T16:00:00Z: If +9h is applied, it will span to the next day, otherwise
     expect(tradingDateOf(1784908800, 0)).toBe('2026-07-24')
     expect(tradingDateOf(1784908800, 32400)).toBe('2026-07-25')
   })
@@ -53,7 +53,7 @@ describe('tradingDateOf', () => {
 describe('extractDaily', () => {
   it('抽出日線並丟棄無資料的交易日', () => {
     const rows = extractDaily(REAL)
-    // 6 格輸入、1 格全 null → 5 根
+    // 6 input cells, 1 cell all null → 5 roots
     expect(rows).toHaveLength(5)
     expect(rows.map((r) => r[0])).toEqual([
       '2025-07-24',

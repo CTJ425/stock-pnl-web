@@ -1,7 +1,7 @@
 /**
- * CSV 匯入（舊資料搬遷）：
- * 選擇檔案或貼上內容 → 逐列驗證與預覽 → 確認後批次寫入。
- * 支援舊 Google 試算表格式（TPE: 前綴、中文交易類型）與本應用匯出格式。
+ * CSV import (old data migration):
+ * Select files or paste content → Verify and preview column by column → Write in batches after confirmation.
+ * Supports old Google spreadsheet formats (TPE: prefix, Chinese transaction type) and this application export format.
  */
 import { useMemo, useRef, useState } from 'react'
 import { FileUp, Upload } from 'lucide-react'

@@ -1,7 +1,7 @@
 /**
- * 金額與數字格式化（與 GAS 版 Dashboard 的分區段格式同構）：
- * - 台股 (TWD)：損益/市值取整數；現價/均價保留兩位小數
- * - 美股 (USD)：全面保留兩位小數
+ * Amount and number formatting (same as the partition format of the GAS version of Dashboard):
+ * - Taiwan Stocks (TWD): Profit/loss/market capitalization is rounded to an integer; current price/average price is rounded to two decimal places.
+ * - US stocks (USD): rounded to two decimal places
  */
 import type { Currency } from '../types/models'
 
@@ -14,7 +14,7 @@ function withThousands(value: number, decimals: number): string {
   })
 }
 
-/** 金額（TWD 預設整數、USD 預設兩位小數），負值顯示為 -NT$1,234 */
+/** Amount (TWD defaults to an integer, USD defaults to two decimal places), negative values ​​are displayed as -NT$1,234*/
 export function fmtMoney(
   value: number | null | undefined,
   currency: Currency,
@@ -26,7 +26,7 @@ export function fmtMoney(
   return `${sign}${CURRENCY_PREFIX[currency]}${withThousands(Math.abs(value), d)}`
 }
 
-/** 現價 / 平均成本：兩種幣別皆保留兩位小數 */
+/** Current price / average cost: rounded to two decimal places in both currencies*/
 export function fmtPrice(value: number | null | undefined, currency: Currency): string {
   return fmtMoney(value, currency, 2)
 }
@@ -36,7 +36,7 @@ export function fmtPercent(value: number | null | undefined): string {
   return `${(value * 100).toFixed(2)}%`
 }
 
-/** 損益金額：正值帶 + 號（漲跌不單靠顏色辨識） */
+/** Profit and loss amount: Positive values ​​are marked with a + sign (increases and decreases are not identified solely by color)*/
 export function fmtSignedMoney(
   value: number | null | undefined,
   currency: Currency,
@@ -47,7 +47,7 @@ export function fmtSignedMoney(
   return value! > 0 ? `+${base}` : base
 }
 
-/** 報酬率：正值帶 + 號 */
+/** Rate of return: positive value with + sign*/
 export function fmtSignedPercent(value: number | null | undefined): string {
   const base = fmtPercent(value)
   if (base === '—') return base
@@ -59,8 +59,8 @@ export function fmtQty(value: number): string {
 }
 
 /**
- * 損益顏色 class：紅漲綠跌（台灣看盤習慣）。
- * 對應 index.css 的 .pnl-up / .pnl-down / .pnl-flat。
+ * Profit and loss color class: red up, green down (Taiwanese market reading habit).
+ * Corresponding to .pnl-up / .pnl-down / .pnl-flat of index.css.
  */
 export function pnlClass(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value) || value === 0) return 'pnl-flat'

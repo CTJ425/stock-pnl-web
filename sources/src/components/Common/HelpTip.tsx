@@ -1,18 +1,18 @@
 /**
- * 欄位說明提示：表頭旁的「?」圖示，滑鼠移入或鍵盤聚焦即顯示說明。
+ * Field description tips: The "?" icon next to the table header will display the description when the mouse is moved or the keyboard is focused.
  *
- * 氣泡以 position: fixed 配合實際座標渲染——表格外層是 overflow: auto 的捲動容器，
- * 用 absolute 會被裁掉。且必須 portal 到 body：表格容器 .glass 有 backdrop-filter，
- * 會成為 fixed 定位的包含區塊，留在原地會以玻璃容器而非視窗為基準而偏移。
- * 觸控裝置沒有 hover，因此點擊亦可開合。
+ * The bubbles are rendered with position: fixed and actual coordinates - the outer layer of the table is a scroll container with overflow: auto.
+ * Using absolute will be cropped. And must be portal to body: table container .glass has backdrop-filter,
+ * Will become a fixed positioned containing block, which will be offset relative to the terrarium instead of the viewport if left in place.
+ * Touch devices don't have hover, so they can be opened and closed by clicking on them.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 interface HelpTipProps {
-  /** 欄位說明內容 */
+  /** Field description content*/
   text: string
-  /** 無障礙標籤用的欄位名稱（如「現價」） */
+  /** Field name to use for accessibility labels (e.g. "Current Price")*/
   label: string
 }
 
@@ -29,7 +29,7 @@ export function HelpTip({ text, label }: HelpTipProps) {
     const el = btnRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    // 預設顯示在圖示下方並向左對齊；靠近視窗右緣時往內收，避免超出畫面
+    // By default, it is displayed below the icon and aligned to the left; when it is close to the right edge of the window, it is retracted to avoid exceeding the screen.
     const left = Math.max(
       GAP,
       Math.min(r.left, window.innerWidth - BUBBLE_WIDTH - GAP),
@@ -39,7 +39,7 @@ export function HelpTip({ text, label }: HelpTipProps) {
 
   const hide = useCallback(() => setPos(null), [])
 
-  // 下方空間不足時翻到圖示上方（高度要等實際渲染後才量得到）
+  // If there is insufficient space below, flip to the top of the icon (the height must be measured after actual rendering)
   useLayoutEffect(() => {
     const el = bubbleRef.current
     if (!pos || !el) return
@@ -49,7 +49,7 @@ export function HelpTip({ text, label }: HelpTipProps) {
     }
   }, [pos])
 
-  // 捲動或改變視窗大小時關閉：fixed 氣泡不會跟著表格捲動
+  // Close when scrolling or resizing the window: fixed bubbles will not scroll with the table
   useEffect(() => {
     if (!pos) return
     const onDismiss = () => setPos(null)

@@ -1,36 +1,36 @@
 /**
- * AI 分析與追問對話的暫存（`sessionStorage`）。
+ * Temporary storage (`sessionStorage`) for AI analysis and questioning conversations.
  *
- * ## 為什麼需要它
+ * ## Why is it needed?
  *
- * `AiTab` 的分析結果原本純為 component state，而 `StockDetailPage` 是
- * `{tab === 'ai' && <AiTab/>}` 條件渲染 —— 切到「籌碼」再切回來，元件 unmount，
- * 結果就消失了，使用者得重按一次**並重新付費**。
- * 加了追問對話之後這件事更難忍：聊到一半去看個籌碼，整串對話就沒了。
+ * The analysis result of `AiTab` was originally purely component state, while `StockDetailPage` was
+ * `{tab === 'ai' && <AiTab/>}` Conditional rendering - switch to "chips" and then switch back, component unmount,
+ * The result disappears and the user has to click again** and pay again**.
+ * After the questioning dialogue was added, this became even more unbearable: I looked at a chip in the middle of the conversation, and the entire conversation was gone.
  *
- * ## 為什麼是 sessionStorage 而不是 DB
+ * ## Why sessionStorage instead of DB
  *
- * 對話內容會累積，存進 Supabase 就要新建資料表、RLS 與清理策略。
- * `sessionStorage` 的生命週期（關掉分頁就清）剛好符合「這是一次查看過程中的暫存」，
- * 不留長期資料、不佔額度、零 migration。
+ * Conversation content will accumulate, and saving it to Supabase requires creating new data tables, RLS, and cleanup strategies.
+ * The life cycle of `sessionStorage` (cleared when paging is turned off) is exactly in line with "this is a temporary storage during a viewing process".
+ * No long-term information is retained, no quota is taken up, and there is zero migration.
  *
- * ## 為什麼每個操作都吞錯
+ * ## Why does every operation result in an error?
  *
- * `sessionStorage` 可能被瀏覽器停用（無痕的某些設定、隱私模式）或寫爆容量。
- * 那時應該降級成「這一輪還能用，只是切分頁會消失」，而不是讓整個 AI 分頁掛掉。
- * 沿用 `twMarketData.ts` 對 localStorage 的處理方式。
+ * `sessionStorage` may be disabled by the browser (certain settings of incognito, privacy mode) or the capacity may be exceeded.
+ * At that time, it should be downgraded to "this round can still be used, but the paging will disappear" instead of letting the entire AI paging hang up.
+ * Follow the way `twMarketData.ts` handles localStorage.
  */
 import type { AiMessage } from './aiClient'
 
-/** 暫存結構版本。改了形狀就升版，舊的直接丟掉（暫存資料沒有相容包袱） */
+/** Staging structure version. If the shape is changed, the version will be upgraded, and the old one will be discarded directly (there is no compatibility baggage for temporary data)*/
 export const CHAT_STORE_SCHEMA = 1
 
 export interface StoredChat {
   schema: number
   ticker: string
-  /** 初次分析全文 */
+  /** First analysis of full text*/
   analysis: string
-  /** 追問對話，由舊到新。不含初次分析那一輪 */
+  /** Follow up the conversation, from old to new. Excluding the first round of analysis*/
   messages: AiMessage[]
   savedAt: string
 }
@@ -41,14 +41,14 @@ export function chatKey(ticker: string): string {
 
 function safeSession(): Storage | null {
   try {
-    // 存取 sessionStorage 本身就可能拋（某些隱私設定），故連取用都要包起來
+    // Accessing sessionStorage itself may throw (some privacy settings), so even access must be wrapped
     return typeof sessionStorage === 'undefined' ? null : sessionStorage
   } catch {
     return null
   }
 }
 
-/** 讀某檔的暫存；沒有 / 壞掉 / 版本不符一律回 null（暫存壞了就當作沒有） */
+/** Read the temporary storage of a certain file; if there is no / is broken / the version does not match, null will be returned (if the temporary storage is broken, it will be treated as if there is no)*/
 export function loadChat(ticker: string): StoredChat | null {
   const store = safeSession()
   if (!store) return null
@@ -58,7 +58,7 @@ export function loadChat(ticker: string): StoredChat | null {
     const d = JSON.parse(raw) as StoredChat
     if (d?.schema !== CHAT_STORE_SCHEMA) return null
     if (typeof d.analysis !== 'string' || !Array.isArray(d.messages)) return null
-    // 逐則檢查：壞掉的訊息會讓對話角色錯位，寧可整份丟掉重來
+    // Check each item one by one: Broken messages will make the dialogue characters misplaced, and you would rather throw away the entire text and start over.
     const messages = d.messages.filter(
       (m): m is AiMessage =>
         !!m &&
@@ -71,7 +71,7 @@ export function loadChat(ticker: string): StoredChat | null {
   }
 }
 
-/** 寫入暫存；失敗就算了（降級為記憶體模式，這一輪仍可用） */
+/** Write to the temporary cache; forget it if it fails (downgrade to memory mode, still available for this round)*/
 export function saveChat(ticker: string, analysis: string, messages: AiMessage[]): void {
   const store = safeSession()
   if (!store) return
@@ -85,17 +85,17 @@ export function saveChat(ticker: string, analysis: string, messages: AiMessage[]
     }
     store.setItem(chatKey(ticker), JSON.stringify(payload))
   } catch {
-    // 容量爆掉或被停用：不影響當下的使用，只是切分頁後會消失
+    // Capacity is exhausted or disabled: it does not affect current use, but will disappear after splitting pages.
   }
 }
 
-/** 清掉某檔的暫存（重新產生分析時呼叫——新分析不該接著舊對話） */
+/** Clear the temporary cache of a certain file (called when regenerating the analysis - the new analysis should not continue the old conversation)*/
 export function clearChat(ticker: string): void {
   const store = safeSession()
   if (!store) return
   try {
     store.removeItem(chatKey(ticker))
   } catch {
-    // 同上
+    // Same as above
   }
 }

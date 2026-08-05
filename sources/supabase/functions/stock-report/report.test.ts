@@ -12,7 +12,7 @@ import type { ChipLeg, InstitutionalChip, MarginChip } from './twChips.ts'
 
 describe('tradingDateCandidates', () => {
   it('回推含當日的候選 YYYYMMDD（台北時區）', () => {
-    // 2026-07-24 12:00 UTC → 台北 20:00 同日
+    // 2026-07-24 12:00 UTC → Taipei 20:00 Same day
     const c = tradingDateCandidates(new Date('2026-07-24T12:00:00Z'), 3)
     expect(c[0]).toBe('20260724')
     expect(c[1]).toBe('20260723')
@@ -20,7 +20,7 @@ describe('tradingDateCandidates', () => {
   })
 
   it('跨 UTC 午夜時仍以台北日期為準', () => {
-    // 2026-07-24 20:00 UTC → 台北已是 07-25 04:00
+    // 2026-07-24 20:00 UTC → Taipei is 07-25 04:00
     const c = tradingDateCandidates(new Date('2026-07-24T20:00:00Z'), 1)
     expect(c[0]).toBe('20260725')
   })

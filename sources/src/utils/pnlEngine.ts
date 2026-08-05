@@ -1,13 +1,13 @@
 /**
- * 移動平均成本法損益計算引擎
+ * Moving average cost method profit and loss calculation engine
  *
- * 移植自 GAS 版 code.gs 的 computeLedger_，逐筆掃描交易並維護：
- * - 各股票目前部位（持股數、部位成本、歷史累計買入成本、已實現損益）
- * - 各年度彙整（已實現損益、買賣總額、手續費、筆數、個股明細）
- * - 資料異常警告（超賣：超賣部分成本以 0 計算，與 GAS 版同構）
+ * ComputeLedger_ transplanted from the GAS version of code.gs, scans transactions one by one and maintains:
+ * - Current position of each stock (number of shares held, position cost, historical accumulated purchase cost, realized profit and loss)
+ * - Summary for each year (realized profits and losses, total transaction volume, handling fees, number of transactions, individual stock details)
+ * - Data anomaly warning (oversold: the cost of the oversold part is calculated as 0, which is the same as the GAS version)
  *
- * 與 GAS 版差異：幣別由 market 欄位判斷（'TPE' → TWD、'US' → USD），
- * 不再依賴 ticker 的 'TPE:' 前綴。
+ * Differences from the GAS version: the currency is determined by the market field ('TPE' → TWD, 'US' → USD),
+ * No longer relies on the 'TPE:' prefix of ticker.
  */
 import type { Currency, Market, Transaction } from '../types/models'
 import { marketCurrency, positionKey } from '../types/models'
@@ -18,22 +18,22 @@ export interface Position {
   name: string
   market: Market
   currency: Currency
-  /** 目前持有股數 */
+  /** Number of shares currently held*/
   qty: number
-  /** 目前部位成本（移動平均，含買入手續費） */
+  /** Current position cost (moving average, including buying fees)*/
   cost: number
-  /** 目前部位成本（未含手續費，供「成交均價」使用） */
+  /** Current position cost (excluding handling fees, used for "average transaction price")*/
   rawCost: number
-  /** 歷史累計買入成本（報酬率分母） */
+  /** Historical accumulated purchase cost (denominator of return rate)*/
   buyCostTotal: number
-  /** 累計已實現損益 */
+  /** Cumulative realized gains and losses*/
   realized: number
 }
 
 export interface Holding extends Position {
-  /** 平均買入成本（cost / qty，含手續費） */
+  /** Average purchase cost (cost / qty, including handling fees)*/
   avgCost: number
-  /** 成交均價（rawCost / qty，未含手續費） */
+  /** Average transaction price (rawCost/qty, excluding handling fees)*/
   rawAvgCost: number
 }
 
@@ -54,10 +54,10 @@ export interface SellDetail {
 }
 
 /**
- * 年度內某一檔股票的進出彙整。金額欄位皆有「含費」與「未含費」兩種口徑：
- * - 含費（buyAmt / sellAmt / costBasis）：實際付出與收到的錢，已計入手續費與證交稅
- * - 未含費（buyGross / sellGross / rawCostBasis）：單純的成交價金，供對照券商成交回報
- * 恆等式：realized = sellAmt − costBasis（未含費版本同理）
+ * A summary of the entry and exit of a certain stock during the year. The amount field has two calibers: "fee included" and "fee not included":
+ * - Including fees (buyAmt / sellAmt / costBasis): The actual money paid and received has been included in the handling fee and certification tax
+ * - Not including fees (buyGross / sellGross / rawCostBasis): pure transaction price, for comparison with broker transaction returns
+ * Identity: realized = sellAmt − costBasis (the same applies to the non-fee version)
  */
 export interface YearTickerDetail {
   key: string
@@ -65,21 +65,21 @@ export interface YearTickerDetail {
   name: string
   market: Market
   currency: Currency
-  /** 買進現金流出（成交價金 + 手續費） */
+  /** Purchase cash outflow (transaction price + handling fee)*/
   buyAmt: number
-  /** 買進成交價金（未含手續費） */
+  /** Purchase transaction price (excluding handling fees)*/
   buyGross: number
-  /** 賣出實收（成交價金 − 手續費 − 證交稅） */
+  /** Actual receipts from sale (transaction price − handling fee − securities tax)*/
   sellAmt: number
-  /** 賣出成交價金（未扣費稅） */
+  /** Sales transaction price (before tax)*/
   sellGross: number
-  /** 賣出部位的取得成本（移動平均成本 × 配對股數，含當初買入手續費） */
+  /** Acquisition cost of selling position (moving average cost × number of matched shares, including original purchase fee)*/
   costBasis: number
-  /** 同上，但採未含手續費的成交均價 */
+  /** Same as above, but using the average transaction price without handling fees.*/
   rawCostBasis: number
   realized: number
   fees: number
-  /** 證交稅估算，同 summary 口徑 */
+  /** Securities tax estimate, same as summary caliber*/
   feesTax: number
   count: number
   sells: SellDetail[]
@@ -96,54 +96,54 @@ export interface YearSummary {
   costBasis: number
   rawCostBasis: number
   fees: number
-  /** 證交稅估算，同 summary 口徑 */
+  /** Securities tax estimate, same as summary caliber*/
   feesTax: number
   count: number
   tickers: Record<string, YearTickerDetail>
 }
 
 export interface LedgerSummary {
-  /** 台股歷史累計已實現損益 (TWD) */
+  /** Historical cumulative realized gains and losses (TWD) of Taiwan stocks*/
   realizedTw: number
-  /** 美股歷史累計已實現損益 (USD) */
+  /** Historical cumulative realized gains and losses on U.S. stocks (USD)*/
   realizedUs: number
-  /** 歷史累計手續費（幣別混計，與 GAS 版 KPI 同構） */
+  /** Historical accumulated handling fees (mixed currency, isomorphic to GAS version KPI)*/
   fees: number
-  /** 歷史累計「純手續費」估算（fees − feesTax） */
+  /** Estimation of historical accumulated "pure handling fees" (fees − feesTax)*/
   feesBrokerage: number
-  /** 歷史累計證交稅估算：台股賣出以 sellTaxRate 反推（floorSafe(成交價金 × 稅率)，上限為該筆 fee_tax）；買進與美股為 0 */
+  /** Estimation of historical accumulated securities tax: For selling Taiwan stocks, sellTaxRate is deduced (floorSafe (transaction price × tax rate), the upper limit is fee_tax); for buying and US stocks, it is 0*/
   feesTax: number
-  /** 歷史累計交易筆數 */
+  /** Historical cumulative number of transactions*/
   count: number
-  /** 歷史累計買入筆數 */
+  /** Historical cumulative number of purchases*/
   buyCount: number
-  /** 歷史累計賣出筆數 */
+  /** Historical cumulative number of sales*/
   sellCount: number
 }
 
 export interface Ledger {
   positions: Record<string, Position>
-  /** position key 依首次出現順序 */
+  /** position key in order of first appearance*/
   order: string[]
-  /** 目前持有股數 > 0 的個股，台股在前、代號排序（與 Dashboard 同構） */
+  /** For stocks currently holding > 0 shares, Taiwan stocks are listed first and are sorted by code (same structure as Dashboard)*/
   holdings: Holding[]
   yearly: Record<number, YearSummary>
-  /** 有交易的年度（遞增） */
+  /** Years with transactions (incremental)*/
   years: number[]
   summary: LedgerSummary
   warnings: string[]
 }
 
 /**
- * 台股賣出證交稅率：一般股票 0.3%，代號 00 開頭的 ETF 為 0.1%，
- * 債券 ETF（00 開頭、B 結尾，如 00679B）目前免徵為 0
+ * The securities tax rate for selling Taiwan stocks: 0.3% for general stocks, 0.1% for ETFs starting with code 00,
+ * Bond ETFs (starting with 00 and ending with B, such as 00679B) are currently exempt from 0
  */
 export function sellTaxRate(ticker: string): number {
   if (/^00\d+B$/i.test(ticker)) return 0
   return ticker.startsWith('00') ? 0.001 : 0.003
 }
 
-/** 先修掉二進位浮點誤差（如 114 誤存成 113.99999999999999）再捨去到元 */
+/** First correct the binary floating point error (for example, 114 is mistakenly stored as 113.99999999999999) and then round it to the nearest dollar.*/
 export function floorSafe(value: number): number {
   return Math.floor(Math.round(value * 1e6) / 1e6)
 }
@@ -159,7 +159,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     warnings: [],
   }
 
-  // 依日期排序；同日依建立時間（等同 GAS 版的輸入列順序）
+  // Sort by date; same day by creation time (equivalent to the input column order of the GAS version)
   const txs = transactions
     .filter((tx) => tx.qty > 0 && (tx.tx_type === 'BUY' || tx.tx_type === 'SELL'))
     .slice()
@@ -238,7 +238,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     yt.count++
     yt.fees += tx.fee_tax
 
-    // 根據稅率反推估算，手動調整或當沖退稅的誤差會落在手續費上
+    // Estimating based on the tax rate, the error in manual adjustment or on-the-spot tax refund will fall on the handling fee
     const estTax =
       tx.tx_type === 'SELL' && tx.market === 'TPE'
         ? Math.min(floorSafe(tx.price * tx.qty * sellTaxRate(tx.ticker)), tx.fee_tax)
@@ -338,10 +338,10 @@ export function computeLedger(transactions: Transaction[]): Ledger {
 }
 
 /**
- * 以現價估算單一持股的「淨未實現損益」（與 GAS 版 Dashboard 公式同構）：
- * - 台股：扣除預估賣出手續費與證交稅（分項 floor 捨去到元、手續費可套單筆下限），
- *   最外層 round 收整浮點尾數
- * - 美股：市值 - 成本，不預扣
+ * Estimating the "net unrealized profit and loss" of a single holding at current prices (identical to the GAS version of the Dashboard formula):
+ * - Taiwan stocks: after deducting the estimated selling fee and securities tax (the floor of each item is rounded to the nearest dollar, the handling fee can be set to a single minimum limit),
+ *   The outermost round rounds the floating point mantissa
+ * - US stocks: market capitalization - cost, no withholding
  */
 export function estimateUnrealized(
   holding: Holding,

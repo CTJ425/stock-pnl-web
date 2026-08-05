@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>方案 A ─ 狀態燈板｜資料抓取狀況後台</title>
+<title>plan A ─ Status light board｜Data capture status background</title>
 <style>
-/* ── 沿用 sources/src/index.css 的 token 命名與值，方便直接移植 ───────── */
+/*── Use the token naming and value of sources/src/index.css to facilitate direct transplantation ─────────*/
 :root {
   --bg: #0b0f19;
   --bg-glow-a: rgba(99, 102, 241, 0.16);
@@ -25,9 +25,9 @@
   --row-alt: rgba(255, 255, 255, 0.02);
   --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
 
-  /* 狀態語意色 ── 刻意獨立於 --up/--down。
-     台股 --up 是紅色（漲），若拿它當「異常」會和盤面語意打架。
-     這裡沿用專案既有的 notice 色系。 */
+  /*Status semantic color - intentionally independent of --up/--down.
+     Taiwan stocks --up It is red (rising). If you regard it as an "abnormality", it will conflict with the semantics of the market.
+     The existing ones of the project are used here. notice Color system. */
   --st-ok: #6ee7b7;
   --st-warn: #fcd34d;
   --st-late: #fca5a5;
@@ -82,7 +82,7 @@ body {
 }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
 
-/* ── 比稿說明條 ─────────────────────────────────────────────── */
+/*── Preview instructions ──────────────────────────────────────────*/
 .mock-note {
   display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
@@ -91,7 +91,7 @@ body {
 }
 .mock-note b { color: var(--ink-secondary); font-weight: 600; }
 
-/* ── 頁首 ──────────────────────────────────────────────────── */
+/*── Top ───────────────────────────────────────────────*/
 .head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 22px; }
 .head h1 {
   font-family: var(--font-display); font-size: 25px; font-weight: 600;
@@ -113,7 +113,7 @@ body {
 .btn:hover { background: var(--surface-strong); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ── 今日總覽條 ────────────────────────────────────────────── */
+/*── Today’s overview ──────────────────────────────────────────*/
 .today {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 1px;
   background: var(--border); border: 1px solid var(--border);
@@ -130,7 +130,7 @@ body {
 }
 .today dd small { font-size: 12.5px; font-weight: 400; color: var(--ink-secondary); margin-left: 5px; }
 
-/* ── 分域 ──────────────────────────────────────────────────── */
+/*──Division ────────────────────────────────────────────────*/
 .domain { margin-bottom: 30px; }
 .domain-head {
   display: flex; align-items: baseline; gap: 12px;
@@ -146,14 +146,14 @@ body {
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 13px; }
 
-/* ── 資料源卡 ──────────────────────────────────────────────── */
+/*── Data source card ────────────────────────────────────────────*/
 .card {
   position: relative; overflow: hidden;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 15px 16px 14px 19px;
   backdrop-filter: blur(10px); box-shadow: var(--shadow-card);
 }
-/* 左緣狀態條：讓狀態在不讀字的情況下也成立 */
+/*Left edge status bar: Let the status be established even if the word is not read.*/
 .card::before {
   content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
   background: var(--st-idle);
@@ -190,7 +190,7 @@ body {
 }
 .card-foot .win { margin-left: auto; font-family: var(--font-data); }
 
-/* ── 總經列表（使用者特別要的） ─────────────────────────────── */
+/*── Summary list (specially requested by the user) ───────────────────────────────*/
 .table-scroll { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 620px; background: var(--surface); }
 thead th {
@@ -228,297 +228,297 @@ td.period { font-family: var(--font-data); font-variant-numeric: tabular-nums; w
 <div class="wrap">
 
   <div class="mock-note">
-    <b>方案 A ─ 狀態燈板</b>
-    <span>設計比稿，非實作。資料為 2026-07-31 12:50 由兩區線上實際抓取的快照。</span>
-    <span>核心問題：<b>現在健康嗎？</b></span>
+    <b>plan A ─ Status light board</b>
+    <span>Design pitch, not implementation. The information is 2026-07-31 12:50 Snapshots actually taken from the two-zone line.</span>
+    <span>Core questions:<b>Are you healthy now?</b></span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
-  <!-- 今日總覽：先給結論，再給細節 -->
+  <!--Today’s overview: give conclusions first, then give details-->
   <dl class="today">
     <div>
-      <dt>資料日</dt>
-      <dd>07-30<small>週四</small></dd>
+      <dt>Material date</dt>
+      <dd>07-30<small>Thursday</small></dd>
     </div>
     <div>
-      <dt>盤後批次</dt>
-      <dd>32<small>輪 / 今日</small></dd>
+      <dt>After-hours batch</dt>
+      <dd>32<small>wheel / today</small></dd>
     </div>
     <div>
-      <dt>資料源到齊</dt>
+      <dt>All data sources are available</dt>
       <dd>17<small>/ 18</small></dd>
     </div>
     <div>
-      <dt>延遲</dt>
-      <dd>1<small>項</small></dd>
+      <dt>Delay</dt>
+      <dd>1<small>item</small></dd>
     </div>
     <div>
-      <dt>最後一輪</dt>
+      <dt>The last wheel</dt>
       <dd>09:10<small>+3h40m</small></dd>
     </div>
   </dl>
 
-  <!-- ── 台股籌碼：使用者點名的重點 ───────────────────────── -->
+  <!--──Taiwan Stock Chips: Key Points Named by Users ────────────────────────-->
   <section class="domain">
     <div class="domain-head">
-      <h2>台股籌碼</h2>
-      <span class="cadence">交易日盤後・三個來源公布時間各不相同</span>
-      <span class="roll">3 / 3 到齊</span>
+      <h2>Taiwan stock chips</h2>
+      <span class="cadence">After-hours trading day・The three sources were published at different times.</span>
+      <span class="roll">3 / 3 All here</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
         <div class="card-top">
           <span class="dot"></span>
-          <h3>三大法人買賣超</h3>
-          <span class="chip">已到齊</span>
+          <h3>The three major legal entities trade super</h3>
+          <span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
-          <dt>凍結狀態</dt><dd>已定稿・2 次改寫</dd>
-          <dt>指紋</dt><dd>1334:8kx2p9</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
+          <dt>frozen state</dt><dd>Finalized・2 rewritten</dd>
+          <dt>fingerprint</dt><dd>1334:8kx2p9</dd>
         </dl>
         <div class="card-foot">
           <span>T86</span>
-          <span class="win">預期 15:00–15:30</span>
+          <span class="win">expected 15:00–15:30</span>
         </div>
       </article>
 
       <article class="card ok">
         <div class="card-top">
           <span class="dot"></span>
-          <h3>融資融券</h3>
-          <span class="chip">已到齊</span>
+          <h3>Margin margin trading</h3>
+          <span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 21:00</dd>
-          <dt>視窗涵蓋</dt><dd>7 / 7 交易日</dd>
-          <dt>來源</dt><dd>rwd</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 21:00</dd>
+          <dt>window coverage</dt><dd>7 / 7 trading day</dd>
+          <dt>source</dt><dd>rwd</dd>
         </dl>
         <div class="card-foot">
           <span>MI_MARGN</span>
-          <span class="win">預期 21:00–22:00</span>
+          <span class="win">expected 21:00–22:00</span>
         </div>
       </article>
 
       <article class="card ok">
         <div class="card-top">
           <span class="dot"></span>
-          <h3>借券賣出</h3>
-          <span class="chip">已到齊</span>
+          <h3>Borrow bonds and sell</h3>
+          <span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-31</dd>
-          <dt>抓到時間</dt><dd>07-31 09:10</dd>
-          <dt>探針</dt><dd>1,042 列</dd>
-          <dt>指紋</dt><dd>1042:q7m4tt</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-31</dd>
+          <dt>seize the moment</dt><dd>07-31 09:10</dd>
+          <dt>probe</dt><dd>1,042 List</dd>
+          <dt>fingerprint</dt><dd>1042:q7m4tt</dd>
         </dl>
         <div class="card-foot">
-          <span>日期為次一交易日</span>
-          <span class="win">預期 21:00–22:30</span>
+          <span>The date is the next trading day</span>
+          <span class="win">expected 21:00–22:30</span>
         </div>
       </article>
 
     </div>
   </section>
 
-  <!-- ── 個股資料 ─────────────────────────────────────────── -->
+  <!--──Individual stock information────────────────────────────────────────-->
   <section class="domain">
     <div class="domain-head">
-      <h2>個股資料</h2>
-      <span class="cadence">每檔持股一份・共 18 檔</span>
-      <span class="roll">4 / 5 到齊</span>
+      <h2>Individual stock information</h2>
+      <span class="cadence">Hold one share per tranche・common 18 files</span>
+      <span class="roll">4 / 5 All here</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
         <div class="card-top">
-          <span class="dot"></span><h3>日 K 線</h3><span class="chip">已到齊</span>
+          <span class="dot"></span><h3>day K Wire</h3><span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>最後交易日</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
-          <dt>涵蓋</dt><dd>18 / 18 檔</dd>
+          <dt>last trading day</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
+          <dt>Cover</dt><dd>18 / 18 files</dd>
         </dl>
-        <div class="card-foot"><span>daily/{代號}.json</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>daily/{code name}.json</span><span class="win">every trading day</span></div>
       </article>
 
       <article class="card ok">
         <div class="card-top">
-          <span class="dot"></span><h3>估值指標</h3><span class="chip">已到齊</span>
+          <span class="dot"></span><h3>Valuation indicators</h3><span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
-          <dt>涵蓋</dt><dd>18 / 18 檔</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
+          <dt>Cover</dt><dd>18 / 18 files</dd>
         </dl>
-        <div class="card-foot"><span>本益比 / 殖利率 / 股價淨值比</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>price to earnings ratio / Yield / price to book value ratio</span><span class="win">every trading day</span></div>
       </article>
 
       <article class="card warn">
         <div class="card-top">
-          <span class="dot"></span><h3>月營收</h3><span class="chip">等待公布</span>
+          <span class="dot"></span><h3>monthly revenue</h3><span class="chip">Waiting for announcement</span>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06</dd>
-          <dt>抓到時間</dt><dd>07-11 16:20</dd>
-          <dt>涵蓋</dt><dd>18 / 18 檔・12 期</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06</dd>
+          <dt>seize the moment</dt><dd>07-11 16:20</dd>
+          <dt>Cover</dt><dd>18 / 18 files・12 Expect</dd>
         </dl>
-        <div class="card-foot"><span>2026-07 於 08-10 前公布</span><span class="win">每月 10 日</span></div>
+        <div class="card-foot"><span>2026-07 At 08-10 announced before</span><span class="win">per month 10 day</span></div>
       </article>
 
       <article class="card ok">
         <div class="card-top">
-          <span class="dot"></span><h3>獲利能力</h3><span class="chip">已到齊</span>
+          <span class="dot"></span><h3>Profitability</h3><span class="chip">Already arrived</span>
         </div>
         <dl class="rows">
-          <dt>最新季別</dt><dd class="strong">2026-Q1</dd>
-          <dt>抓到時間</dt><dd>05-16 16:18</dd>
-          <dt>累積</dt><dd>8 / 8 季</dd>
+          <dt>Latest seasonal</dt><dd class="strong">2026-Q1</dd>
+          <dt>seize the moment</dt><dd>05-16 16:18</dd>
+          <dt>accumulation</dt><dd>8 / 8 season</dd>
         </dl>
-        <div class="card-foot"><span>毛利率 / 營益率 / 純益率</span><span class="win">每季</span></div>
+        <div class="card-foot"><span>Gross profit margin / profit margin / net profit margin</span><span class="win">quarterly</span></div>
       </article>
 
       <article class="card late">
         <div class="card-top">
-          <span class="dot"></span><h3>個股新聞</h3><span class="chip">2 檔缺料</span>
+          <span class="dot"></span><h3>individual stock news</h3><span class="chip">2 Out of stock</span>
         </div>
         <dl class="rows">
-          <dt>抓到時間</dt><dd class="strong">07-31 09:10</dd>
-          <dt>涵蓋</dt><dd>16 / 18 檔</dd>
-          <dt>缺</dt><dd>00929・2412</dd>
+          <dt>seize the moment</dt><dd class="strong">07-31 09:10</dd>
+          <dt>Cover</dt><dd>16 / 18 files</dd>
+          <dt>lack</dt><dd>00929・2412</dd>
         </dl>
-        <div class="card-foot"><span>來源查無結果，非故障</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>Source check has no results, it is not a fault.</span><span class="win">every trading day</span></div>
       </article>
 
     </div>
   </section>
 
-  <!-- ── 總經：使用者特別要「用列表看」 ───────────────────── -->
+  <!--──General summary: Users should especially "read in the list" ─────────────────────-->
   <section class="domain">
     <div class="domain-head">
-      <h2>美國總體經濟</h2>
-      <span class="cadence">月頻・各指標發布日不同</span>
-      <span class="roll">最後檢查 07-31 12:40</span>
+      <h2>overall U.S. economy</h2>
+      <span class="cadence">monthly frequency・The release date of each indicator is different</span>
+      <span class="roll">final check 07-31 12:40</span>
     </div>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th scope="col">指標</th>
-            <th scope="col">最新期別</th>
-            <th scope="col">數值</th>
-            <th scope="col">前期</th>
-            <th scope="col">下期預計</th>
-            <th scope="col">狀態</th>
+            <th scope="col">index</th>
+            <th scope="col">By latest period</th>
+            <th scope="col">numerical value</th>
+            <th scope="col">Early stage</th>
+            <th scope="col">Expected next period</th>
+            <th scope="col">state</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>核心 CPI<div class="sub">CPILFESL</div></td>
+            <td>core CPI<div class="sub">CPILFESL</div></td>
             <td class="period">2026-06</td>
             <td class="num">+2.57 %</td>
             <td class="num">+2.82 %</td>
             <td class="period">08-12</td>
-            <td><span class="badge ok">最新</span></td>
+            <td><span class="badge ok">up to date</span></td>
           </tr>
           <tr>
-            <td>核心 PPI<div class="sub">PPIFES</div></td>
+            <td>core PPI<div class="sub">PPIFES</div></td>
             <td class="period">2026-06</td>
             <td class="num">+4.68 %</td>
             <td class="num">+4.59 %</td>
             <td class="period">08-14</td>
-            <td><span class="badge ok">最新</span></td>
+            <td><span class="badge ok">up to date</span></td>
           </tr>
           <tr>
-            <td>核心 PCE<div class="sub">PCEPILFE</div></td>
+            <td>core PCE<div class="sub">PCEPILFE</div></td>
             <td class="period">2026-06</td>
             <td class="num">+3.29 %</td>
             <td class="num">+3.41 %</td>
             <td class="period">08-28</td>
-            <td><span class="badge ok">最新</span></td>
+            <td><span class="badge ok">up to date</span></td>
           </tr>
           <tr>
-            <td>非農就業<div class="sub">PAYEMS</div></td>
+            <td>non-agricultural employment<div class="sub">PAYEMS</div></td>
             <td class="period">2026-06</td>
-            <td class="num">+57 千人</td>
-            <td class="num">+129 千人</td>
+            <td class="num">+57 Thousands of people</td>
+            <td class="num">+129 Thousands of people</td>
             <td class="period">08-07</td>
-            <td><span class="badge ok">最新</span></td>
+            <td><span class="badge ok">up to date</span></td>
           </tr>
           <tr>
-            <td>消費者信心<div class="sub">UMCSENT</div></td>
+            <td>consumer confidence<div class="sub">UMCSENT</div></td>
             <td class="period">2026-05</td>
             <td class="num">44.8</td>
             <td class="num">49.8</td>
-            <td class="period">待定</td>
-            <td><span class="badge idle">來源未更新</span></td>
+            <td class="period">To be determined</td>
+            <td><span class="badge idle">Source not updated</span></td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="card-foot" style="border-top:none; padding-top:11px;">
-      <span>資料變動於 07-31 12:40・最後檢查 07-31 12:40</span>
-      <span class="win">每日 21:00 / 23:00 兩班</span>
+      <span>Data changed from 07-31 12:40・final check 07-31 12:40</span>
+      <span class="win">daily 21:00 / 23:00 Two shifts</span>
     </div>
   </section>
 
-  <!-- ── 匯率與基礎設施 ───────────────────────────────────── -->
+  <!--── Exchange rate and infrastructure ────────────────────────────────────-->
   <section class="domain">
     <div class="domain-head">
-      <h2>匯率與基礎設施</h2>
-      <span class="cadence">每日・非台股作息</span>
-      <span class="roll">4 / 4 正常</span>
+      <h2>Exchange rates and infrastructure</h2>
+      <span class="cadence">daily・Non-Taiwan stocks schedule</span>
+      <span class="roll">4 / 4 normal</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>台幣匯率</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Taiwan dollar exchange rate</h3><span class="chip">Already arrived</span></div>
         <dl class="rows">
-          <dt>抓到時間</dt><dd class="strong">07-31 11:00</dd>
-          <dt>幣別</dt><dd>8 / 8</dd>
-          <dt>美元</dt><dd>32.3489</dd>
+          <dt>seize the moment</dt><dd class="strong">07-31 11:00</dd>
+          <dt>Currency</dt><dd>8 / 8</dd>
+          <dt>Dollar</dt><dd>32.3489</dd>
         </dl>
-        <div class="card-foot"><span>市場中價・非牌告</span><span class="win">11:00 / 17:00</span></div>
+        <div class="card-foot"><span>Market median price・Non-branded notice</span><span class="win">11:00 / 17:00</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>盤後批次</h3><span class="chip">正常</span></div>
+        <div class="card-top"><span class="dot"></span><h3>After-hours batch</h3><span class="chip">normal</span></div>
         <dl class="rows">
-          <dt>今日輪次</dt><dd class="strong">32 / 40</dd>
-          <dt>最後一輪</dt><dd>07-31 09:10</dd>
-          <dt>短路</dt><dd>28 輪</dd>
+          <dt>Today's round</dt><dd class="strong">32 / 40</dd>
+          <dt>The last wheel</dt><dd>07-31 09:10</dd>
+          <dt>short circuit</dt><dd>28 wheel</dd>
         </dl>
-        <div class="card-foot"><span>batch_run_log</span><span class="win">16:00–23:45 每 15 分</span></div>
+        <div class="card-foot"><span>batch_run_log</span><span class="win">16:00–23:45 Every 15 point</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>資料源探針</h3><span class="chip">正常</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Data source probe</h3><span class="chip">normal</span></div>
         <dl class="rows">
-          <dt>估值檔</dt><dd class="strong">1150730・OK</dd>
-          <dt>借券檔</dt><dd>1150731・OK</dd>
-          <dt>最後探測</dt><dd>07-31 09:10</dd>
+          <dt>Valuation document</dt><dd class="strong">1150730・OK</dd>
+          <dt>Borrowing stocks</dt><dd>1150731・OK</dd>
+          <dt>last detection</dt><dd>07-31 09:10</dd>
         </dl>
-        <div class="card-foot"><span>source_probe_log</span><span class="win">與批次同班</span></div>
+        <div class="card-foot"><span>source_probe_log</span><span class="win">Same class as batch</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>現價快取</h3><span class="chip">正常</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Current price cache</h3><span class="chip">normal</span></div>
         <dl class="rows">
-          <dt>快取筆數</dt><dd class="strong">26</dd>
-          <dt>最舊一筆</dt><dd>38 秒前</dd>
-          <dt>來源</dt><dd>MIS / Yahoo</dd>
+          <dt>Number of cache entries</dt><dd class="strong">26</dd>
+          <dt>The oldest one</dt><dd>38 seconds ago</dd>
+          <dt>source</dt><dd>MIS / Yahoo</dd>
         </dl>
-        <div class="card-foot"><span>price_cache</span><span class="win">台股 60s / 美股 10m</span></div>
+        <div class="card-foot"><span>price_cache</span><span class="win">Taiwan stocks 60s / US stocks 10m</span></div>
       </article>
 
     </div>
@@ -526,12 +526,12 @@ td.period { font-family: var(--font-data); font-variant-numeric: tabular-nums; w
 
 </div>
 <script>
-  // 比稿用的主題切換：專案本身預設深色、以 data-theme 覆寫（見 index.css）
+  //Theme switching for pitching: the project itself defaults to dark color and is overridden with data-theme (see index.css)
   var root = document.documentElement, btn = document.getElementById('theme');
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

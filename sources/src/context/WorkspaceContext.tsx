@@ -1,8 +1,8 @@
 /**
- * 工作區與交易資料管理：
- * - 依模式選用 SupabaseProvider 或 LocalProvider
- * - 首次使用自動建立預設工作區
- * - ledger 以 useMemo 即時重算（交易異動時 Dashboard / 年報同步更新）
+ * Workspace and transaction data management:
+ * - Use SupabaseProvider or LocalProvider depending on the mode
+ * - Automatically create a default workspace for first time use
+ * - Ledger uses useMemo to recalculate in real time (Dashboard/annual report is updated simultaneously when transactions change)
  */
 import {
   createContext,
@@ -30,7 +30,7 @@ export interface WorkspaceState {
   current: Workspace | null
   transactions: Transaction[]
   ledger: Ledger
-  /** 首次載入中 */
+  /** Loading for the first time*/
   loading: boolean
   error: string | null
   selectWorkspace: (id: string) => void
@@ -38,9 +38,9 @@ export interface WorkspaceState {
   renameWorkspace: (id: string, name: string) => Promise<void>
   deleteWorkspace: (id: string) => Promise<void>
   addTransactions: (txs: NewTransaction[]) => Promise<void>
-  /** 更新單筆交易內容 */
+  /** Update the contents of a single transaction*/
   updateTransaction: (id: string, patch: NewTransaction) => Promise<void>
-  /** 批次刪除（單筆刪除傳入單一元素陣列） */
+  /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions: (ids: string[]) => Promise<void>
 }
 
@@ -75,8 +75,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // 登入後載入工作區；無任何工作區時自動建立預設工作區
-  // 依賴 user.id 而非 user 物件：token 刷新不應重載（否則開啟中的 Modal 會被 unmount）
+  // Load the workspace after logging in; automatically create a default workspace if there is no workspace
+  // Rely on user.id instead of user object: token refresh should not be reloaded (otherwise the open Modal will be unmounted)
   const userId = user?.id
   useEffect(() => {
     if (!userId) return
@@ -90,7 +90,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       if (cancelled) return
       setWorkspaces(list)
-      // 找不到記憶的工作區時（含舊版總覽模式的 '__all__'）退回第一個工作區
+      // When the memorized workspace cannot be found (including '__all__' in the old version of the overview mode), return to the first workspace
       const saved = localStorage.getItem(CURRENT_WS_KEY)
       const initial = list.find((w) => w.id === saved) ?? list[0]
       setCurrentId(initial.id)
@@ -102,7 +102,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, provider, runSafely])
 
-  // 切換工作區時載入交易
+  // Load transactions when switching workspaces
   useEffect(() => {
     if (!currentId) return
     let cancelled = false
@@ -164,7 +164,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const updateTransaction = useCallback(
     async (id: string, patch: NewTransaction) => {
-      // 不經 runSafely：失敗時拋給表單顯示錯誤並保留輸入
+      // Without runSafely: throw an error to the form when it fails and retain the input
       await provider.updateTransaction(id, patch)
       setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
     },
@@ -174,7 +174,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const deleteTransactions = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return
-      // 不經 runSafely：失敗時拋給呼叫端，否則呼叫端無從得知而顯示假的「已刪除」成功通知
+      // Without runSafely: thrown to the caller in case of failure, otherwise the caller has no way of knowing and displays a false "deleted" success notification.
       setError(null)
       try {
         await provider.deleteTransactions(ids)

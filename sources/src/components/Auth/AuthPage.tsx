@@ -1,4 +1,4 @@
-/** 登入 / 註冊 / 忘記密碼頁（僅 Supabase 模式會顯示；本機模式免登入） */
+/** Login/Registration/Forgot Password page (only displayed in Supabase mode; no login required in local mode)*/
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { TrendingUp } from 'lucide-react'

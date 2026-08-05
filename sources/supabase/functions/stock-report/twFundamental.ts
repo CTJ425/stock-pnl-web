@@ -1,23 +1,23 @@
 /**
- * TWSE 基本面（估值 + 月營收 + 產業別）抓取與解析。
+ * Capture and analyze TWSE fundamentals (valuation + monthly revenue + industry).
  *
- * 資料來源（實測確認 2026-07-27，皆為 whole-market 大檔、無 date 參數，依代號篩單股）：
- * - 估值三指標：OpenAPI `exchangeReport/BWIBBU_ALL`
- *   英文鍵 { Date, Code, Name, PEratio, DividendYield, PBratio }，Date 為民國 7 碼（'1150724'）。
- *   虧損股 PEratio 為 '' 或 '-'（normNum 已處理成 null）。
- * - 月營收：OpenAPI `opendata/t187ap05_L`
- *   中文鍵；「資料年月」為民國 5 碼（'11506'）；營收單位是**千元**、增減率是 %；
- *   「產業別」直接給中文名稱（'半導體業'）。
- * - 公司基本資料：OpenAPI `opendata/t187ap03_L`
- *   「產業別」是**兩位數代碼**（'24'），需查 INDUSTRY_NAMES 對照表。
+ * Data source (actual measurement confirmed 2026-07-27, all are whole-market large stocks, no date parameters, single stocks are screened according to code names):
+ * - Three valuation indicators: OpenAPI `exchangeReport/BWIBBU_ALL`
+ *   English key {Date, Code, Name, PEratio, DividendYield, PBratio}, Date is Republic of China 7 code ('1150724').
+ *   Losing stock PEratio is '' or '-' (normNum has been processed to null).
+ * - Monthly revenue: OpenAPI `opendata/t187ap05_L`
+ *   Chinese key; "data year and month" is the Republic of China 5 code ('11506'); the revenue unit is **thousand yuan**, and the increase or decrease rate is %;
+ *   "Industry category" directly gives the Chinese name ('semiconductor industry').
+ * - Basic company information: OpenAPI `opendata/t187ap03_L`
+ *   "Industry" is a **two-digit code** ('24'), you need to check the INDUSTRY_NAMES comparison table.
  *
- * 產業別來源順位：t187ap05_L 的中文名稱（免維護）→ t187ap03_L 代碼查表 → 原始代碼。
+ * Industry source sequence: Chinese name of t187ap05_L (maintenance-free) → t187ap03_L code lookup table → original code.
  *
- * 單位陷阱：月營收千元、殖利率與增減率 %。欄位名一律帶單位
- * （revenueThousandTwd / yoyPercent），沿用 twChips「不讓單位離開欄位」的準則。
+ * Unit trap: monthly revenue of 1,000 yuan, profit rate and increase or decrease rate %. Field names must always include units
+ * (revenueThousandTwd / yoyPercent), following the twChips principle of "not letting units leave the slot".
  *
- * 解析函式皆為純函式、不觸網，便於單元測試；HTTP 抓取與快取在 index.ts 組合。
- * 上櫃 (TPEx) 不在這三份檔內，查無時由呼叫端寫入缺料註記。
+ * The parsing functions are all pure functions and do not touch the Internet, which is convenient for unit testing; HTTP crawling and caching are combined in index.ts.
+ * The cabinet (TPEx) is not included in these three files. When checking for lack of materials, the caller will write a shortage note.
  */
 
 import { normNum } from './twChips.ts'
@@ -26,25 +26,25 @@ export const BWIBBU_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWI
 export const T187AP05_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L'
 export const T187AP03_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L'
 /**
- * 營益分析查詢彙總表（0.6.5 起）。中文鍵、民國年、只回**最新一季**、上市限定，
- * 與 t187ap05_L 同一族。實測 2026-07-28：1051 筆、383KB。
+ * Profit analysis query summary table (starting from 0.6.5). Chinese key, Year of the Republic of China, only return to the latest season**, limited release,
+ * Same family as t187ap05_L. Actual measurement on 2026-07-28: 1051 pens, 383KB.
  *
- * 選它而不是綜合損益表 `t187ap06_L_ci`：**比率是官方算好的**
- * （毛利率 / 營業利益率 / 稅前純益率 / 稅後純益率），不必自己解析五張產業別損益表
- * 再做除法。PLAN.md §N2 當初以「欄位解析繁瑣」否決季報，那條理由在這個端點上不成立。
+ * Choose it instead of the consolidated income statement `t187ap06_L_ci`: **ratios are officially calculated**
+ * (Gross profit margin / operating profit rate / pre-tax net profit rate / after-tax net profit ratio), there is no need to parse five industry-specific profit and loss statements by yourself
+ * Do the division again. PLAN.md §N2 The quarterly report was originally rejected on the grounds that "field parsing is cumbersome", but that reason does not hold true at this point.
  */
 export const T187AP17_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap17_L'
 
 /**
- * 基本面檔的結構版本。
- * 前端守門必須用 `>=` 比對（見 src/services/fundamentalProxy.ts）——
- * 加欄位對舊前端是無害的加法，用等號會在後端升版時讓整個分頁當場全掛（0.4.1 事故）。
+ * A structural version of the fundamental profile.
+ * Front-end gatekeeping must use `>=` comparison (see src/services/fundamentalProxy.ts)——
+ * Adding fields is a harmless addition to the old front-end. Using the equal sign will cause the entire paging to hang on the spot when the back-end is upgraded (0.4.1 incident).
  *
- * 2 = 0.6.5 新增 `profitQuarters`（獲利能力比率）。
+ * 2 = 0.6.5 Added `profitQuarters` (profitability ratios).
  */
 export const FUNDAMENTAL_SCHEMA = 2
 
-/** TWSE 上市產業別代碼 → 中文名稱（t187ap03_L 用；t187ap05_L 直接給名稱不需查表） */
+/** TWSE listed industry code → Chinese name (for t187ap03_L; t187ap05_L gives the name directly without looking up the table)*/
 export const INDUSTRY_NAMES: Record<string, string> = {
   '01': '水泥工業',
   '02': '食品工業',
@@ -77,16 +77,16 @@ export const INDUSTRY_NAMES: Record<string, string> = {
   '31': '其他電子業',
 }
 
-/** 估值三指標。任一缺值以 null 表示（不以 0 冒充），虧損股本益比即為 null */
+/** Three indicators of valuation. Any missing value is represented by null (not pretended to be 0), and the loss-to-equity-to-earnings ratio is null.*/
 export interface ValuationChip {
   peRatio: number | null
   dividendYieldPercent: number | null
   pbRatio: number | null
-  /** BWIBBU 檔的資料日 YYYY-MM-DD；解析失敗為 null */
+  /** The data date of the BWIBBU file is YYYY-MM-DD; if the parsing fails, it will be null*/
   dataDate: string | null
 }
 
-/** 一個月份的營收。單位寫進欄位名：金額千元、增減率 % */
+/** One month’s revenue. Enter the unit into the field name: Amount in thousand yuan, increase or decrease rate %*/
 export interface RevenueMonth {
   /** 'YYYY-MM' */
   yearMonth: string
@@ -97,15 +97,15 @@ export interface RevenueMonth {
 }
 
 /**
- * 一季的獲利能力比率。單位一律寫進欄位名（沿用 twChips「不讓單位離開欄位」的準則）。
+ * Profitability ratio for one quarter. Units are always written into the field name (following twChips' principle of "not letting units leave the field").
  *
- * 命名對照 t187ap17_L 的中文欄位，以及使用者慣用的講法：
- *   毛利率     → grossMarginPercent      「毛利率(%)」
- *   營益率     → operatingMarginPercent  「營業利益率(%)」
- *   淨利率     → pretaxMarginPercent     「稅前純益率(%)」
- *   稅後淨利率 → netMarginPercent        「稅後純益率(%)」
- * 「淨利率」在台灣的口語同時指稅前與稅後，故兩個都留、名字寫死稅前 / 稅後，
- * 不用「淨利率」這種會被誤讀的字眼當欄位名。
+ * Name the Chinese field of t187ap17_L, and the user's usual way of speaking:
+ *   Gross profit margin → grossMarginPercent "Gross profit margin (%)"
+ *   Operating profit margin → operatingMarginPercent "Operating profit margin (%)"
+ *   Net profit margin → pretaxMarginPercent "Net profit margin before tax (%)"
+ *   Net profit margin after tax → netMarginPercent "Net profit margin after tax (%)"
+ * The colloquial term "net profit margin" in Taiwan refers to both pre-tax and after-tax, so keep both, and write the name pre-tax/after-tax.
+ * Do not use "net profit margin" as a field name that can be misunderstood.
  */
 export interface ProfitQuarter {
   /** 'YYYY-Qn' */
@@ -116,69 +116,69 @@ export interface ProfitQuarter {
   pretaxMarginPercent: number | null
   netMarginPercent: number | null
   /**
-   * 基本每股盈餘（元）。0.6.28 新增。
+   * Basic earnings per share (yuan). Added in 0.6.28.
    *
-   * **只有 MOPS 季報（回補路徑）有這個數字** —— 每晚的 `t187ap17_L` 是營益分析表，
-   * 只給四項比率。所以新的一季會先以 `epsChecked: false` 落地，等回補去補上。
+   * **Only the MOPS quarterly report (recovery path) has this number** ——The nightly `t187ap17_L` is the profit and loss analysis table,
+   * Only four ratios are given. Therefore, the new season will be implemented with `epsChecked: false` first and will be supplemented later.
    */
   epsTwd?: number | null
   /**
-   * 「我們已經去季報裡找過 EPS 了」。
+   * "We have already looked for EPS in the quarterly report."
    *
-   * 需要這個旗標而不是只看 `epsTwd == null`：找過但那一列真的沒有 EPS，
-   * 與根本還沒找過，兩者都是 null 但處置相反 —— 前者不該再抓（否則每晚
-   * 白抓 1.6MB 的季報一次），後者必須抓。
+   * Need this flag instead of just looking at `epsTwd == null`: looked for it but there really is no EPS in that column,
+   * and not found at all, both are null but the opposite is done - the former should not be caught again (otherwise every night
+   * Grab the 1.6MB quarterly report once for free), the latter must be caught.
    */
   epsChecked?: boolean
 }
 
-/** Storage 內 fundamental/{ticker}.json 的結構 */
+/** The structure of fundamental/{ticker}.json in Storage*/
 export interface FundamentalFile {
   schema: number
   ticker: string
   name: string
-  /** 我們實際產出它的時間 ISO */
+  /** The time we actually produced it ISO*/
   asOf: string
-  /** 本次批次的交易日 YYYY-MM-DD；批次據此判斷要不要重寫 */
+  /** The trading date of this batch is YYYY-MM-DD; the batch determines whether to rewrite based on this*/
   dataDate: string
   industry: string | null
   valuation: ValuationChip | null
   revenueUnit: '千元'
-  /** 由舊到新，最多 12 個月（覆寫制檔案內自累積） */
+  /** From old to new, up to 12 months (self-accumulation in overwritten files)*/
   revenueMonths: RevenueMonth[]
   /**
-   * 歷史回補「已經找到哪個月份為止」（最舊的**已嘗試**月份 'YYYY-MM'）。
+   * History backfill "until which month has been found" (oldest **tried** month 'YYYY-MM').
    *
-   * 存在的理由是要分辨兩種 `revenueMonths` 缺月：**還沒去找** vs **找過了就是沒有**。
-   * 沒有這一欄的話，ETF（不在 t21sc03 內，永遠填不滿）會把缺口清單
-   * 永遠釘在最新那幾個月，真正的公司就再也拿不到更舊的資料 —— 0.6.4-dev.1
-   * 部署到測試區後實測到的死結，見 PROGRESS.md。
+   * The reason for existence is to distinguish between two types of `revenueMonths`: missing moon: **not looking for it yet** vs **not even looking for it**.
+   * Without this column, the ETF (not in t21sc03, which will never be filled) will fill the gap list
+   * Always stick to the latest months, and real companies will never be able to get older information - 0.6.4-dev.1
+   * For the dead knots actually measured after being deployed to the test area, see PROGRESS.md.
    *
-   * 舊檔沒有這一欄（undefined）代表從未回補過，視同全部未嘗試。
+   * If the old file does not have this column (undefined), it means that it has never been replenished, and it is regarded as all untried.
    */
   revenueBackfilledThrough?: string | null
   /**
-   * 季度獲利能力回補的進度，語意與 `revenueBackfilledThrough` 完全相同：
-   * 「比這一季更新的季別都已經找過了」。ETF 靠它收斂，否則缺口清單會永遠卡住。
+   * The progress of quarterly profitability backfill has the same meaning as `revenueBackfilledThrough`:
+   * "I've already looked for seasons newer than this one." ETFs rely on it to converge, otherwise the gap list would be stuck forever.
    *
-   * 舊檔沒有這一欄（undefined）代表從未回補過，視同全部未嘗試。
+   * If the old file does not have this column (undefined), it means that it has never been replenished, and it is regarded as all untried.
    */
   profitBackfilledThrough?: string | null
-  /** 獲利能力比率的單位。與 revenueUnit 同款：單位不離開資料 */
+  /** The unit of profitability ratio. Same as revenueUnit: the unit does not leave the data*/
   profitUnit?: '%'
   /**
-   * 由舊到新，最多 12 季（＝三年）。與 revenueMonths 同為「覆寫制檔案內自累積」。
+   * From oldest to newest, up to 12 seasons (= three years). Same as revenueMonths, which is "overwrite the self-accumulation in the file".
    *
-   * t187ap17_L 只回最新一季，所以光靠它要三年才長滿 —— 與月營收當初一樣的處境。
-   * 0.6.21 起由 `twProfitHistory.ts` 回補（MOPS 的 `ajax_t163sb04`，POST 表單、UTF-8），
-   * 0.6.5 當時記載的「靜態網址 404 故不做回補」已由 POST 解決。
-   * 舊檔沒有這一欄（undefined）視同空陣列。
+   * t187ap17_L only goes back to the latest season, so it will take three years to fully grow - the same situation as the monthly revenue was at the beginning.
+   * Backed by `twProfitHistory.ts` starting from 0.6.21 (`ajax_t163sb04` of MOPS, POST form, UTF-8),
+   * The "Static URL 404, so no backfill" recorded at the time in 0.6.5 has been resolved by POST.
+   * Old files without this column (undefined) are treated as empty arrays.
    */
   profitQuarters?: ProfitQuarter[]
   notes: string[]
 }
 
-/** 民國 7 碼日期 '1150724' → '2026-07-24'；格式不符回 null */
+/** Republic of China 7-code date '1150724' → '2026-07-24'; if the format does not match, return null*/
 export function rocDate(v: unknown): string | null {
   const s = String(v ?? '').trim()
   if (!/^\d{7}$/.test(s)) return null
@@ -186,7 +186,7 @@ export function rocDate(v: unknown): string | null {
   return `${year}-${s.slice(3, 5)}-${s.slice(5, 7)}`
 }
 
-/** 民國 5 碼年月 '11506' → '2026-06'；格式不符回 null */
+/** The year and month of the Republic of China 5 code '11506' → '2026-06'; if the format does not match, return null*/
 export function rocYearMonth(v: unknown): string | null {
   const s = String(v ?? '').trim()
   if (!/^\d{5}$/.test(s)) return null
@@ -195,8 +195,8 @@ export function rocYearMonth(v: unknown): string | null {
 }
 
 /**
- * 民國年 + 季別 → 'YYYY-Qn'。例：`'115'` + `'1'` → `'2026-Q1'`。
- * 兩者任一格式不符回 null（季別只接受 1–4）。
+ * Republic of China year + quarter → 'YYYY-Qn'. Example: `'115'` + `'1'` → `'2026-Q1'`.
+ * If either format does not match, null will be returned (only 1–4 are accepted).
  */
 export function rocYearQuarter(year: unknown, quarter: unknown): string | null {
   const y = String(year ?? '').trim()
@@ -205,7 +205,7 @@ export function rocYearQuarter(year: unknown, quarter: unknown): string | null {
   return `${Number(y) + 1911}-Q${q}`
 }
 
-/** 由 BWIBBU_ALL 取單一代號的估值。查無回 null */
+/** Get the estimate of a single code by BWIBBU_ALL. No return found*/
 export function extractValuation(
   rows: Array<Record<string, string>> | null,
   ticker: string,
@@ -220,7 +220,7 @@ export function extractValuation(
   }
 }
 
-/** 由 t187ap05_L 取單一代號的最新月營收。查無或年月解析失敗回 null */
+/** Get the latest monthly revenue of a single code number from t187ap05_L. If there is no check or the year and month parsing fails, null will be returned.*/
 export function extractRevenue(
   rows: Array<Record<string, string>> | null,
   ticker: string,
@@ -239,10 +239,10 @@ export function extractRevenue(
 }
 
 /**
- * 由 t187ap17_L 取單一代號的最新一季獲利能力。查無或年季解析失敗回 null。
+ * Get the latest quarter's profitability for a single ticker from t187ap17_L. If the search fails or the year and season analysis fails, null will be returned.
  *
- * 欄位名帶著括號說明（例：`毛利率(%)(營業毛利)/(營業收入)`），是端點的原樣，
- * 不要「順手整理」—— 那是查表的鍵，改了就查不到。
+ * The field name is explained in parentheses (for example: `Gross profit margin (%) (operating gross profit)/(operating income)`), which is the original endpoint.
+ * Don't "organize it easily" - that is the key to look up the table. If you change it, you can't look it up.
  */
 export function extractProfit(
   rows: Array<Record<string, string>> | null,
@@ -259,15 +259,15 @@ export function extractProfit(
     operatingMarginPercent: normNum(row['營業利益率(%)(營業利益)/(營業收入)']),
     pretaxMarginPercent: normNum(row['稅前純益率(%)(稅前純益)/(營業收入)']),
     netMarginPercent: normNum(row['稅後純益率(%)(稅後純益)/(營業收入)']),
-    // 營益分析表沒有 EPS，標記成「還沒找過」，交給回補去季報裡補（見 ProfitQuarter.epsChecked）
+    // There is no EPS in the profit analysis table. It is marked as "Not found yet" and is left to be supplemented in the quarterly report (see ProfitQuarter.epsChecked)
     epsTwd: null,
     epsChecked: false,
   }
 }
 
 /**
- * 產業別：t187ap05_L 中文名稱優先，退 t187ap03_L 代碼查表，再退原始代碼。
- * 兩份都查無（上櫃股）回 null。
+ * Industry category: t187ap05_L Chinese name is preferred, return t187ap03_L code lookup table, and then return the original code.
+ * If both copies are found to be empty (over-the-counter stocks), null will be returned.
  */
 export function extractIndustry(
   revenueRows: Array<Record<string, string>> | null,
@@ -284,20 +284,20 @@ export function extractIndustry(
   return INDUSTRY_NAMES[code] ?? code
 }
 
-/** revenueMonths 上限。12 個月足以看出年增趨勢，也控住 payload 大小 */
+/** revenueMonths upper limit. 12 months is enough to see the annual growth trend and control the payload size.*/
 export const REVENUE_MONTHS_CAP = 12
 
 /**
- * 組出要寫進 Storage 的 fundamental/{ticker}.json。
+ * Set up fundamental/{ticker}.json to be written to Storage.
  *
- * 抽成純函式的理由是實際踩到的：這裡是**整份重建**物件，
- * 0.6.4-dev.2 新增 `revenueBackfilledThrough` 時漏了帶過去，
- * 等於每個交易日的第一輪批次都把回補進度抹掉、隔天再重走 12 個月。
- * 那個 bug 在 index.ts 裡看不出來 —— 它既不在 `tsc -b` 的涵蓋範圍
- * （只收 src/），也沒有任何測試碰得到。所以有判斷、有欄位組裝的部分放這裡。
+ * The reason for deducting pure functions is actually stepped on: here is the **entirely reconstructed** object,
+ * When 0.6.4-dev.2 added `revenueBackfilledThrough`, it was missed.
+ * This means that the first round of batches on each trading day erases the replenishment progress and starts over again the next 12 months.
+ * That bug is not visible in index.ts - it is neither covered by `tsc -b`
+ * (Only src/ is accepted), and no tests can touch it. So the parts with judgment and field assembly are placed here.
  *
- * @param bwibbuLoaded 估值大檔這輪**有沒有載到**（不是「這檔有沒有估值」）。
- *   兩者都會讓 valuation 為 null，但只有前者為 true 時才能斷定「這檔不在涵蓋範圍」。
+ * @param bwibbuLoaded Whether the valuation of the large tranche has been loaded in this round (not "whether this tranche has a valuation").
+ *   Both will make valuation null, but only when the former is true can it be concluded that "this file is not covered".
  */
 export function buildFundamentalFile(args: {
   ticker: string
@@ -313,14 +313,14 @@ export function buildFundamentalFile(args: {
 }): FundamentalFile {
   const { ticker, name, dataDate, asOf, existing, valuation, latestRevenue, industry } = args
 
-  // 註記分項，見 PLAN.md N6。**既有的資料量要算進來** ——
-  // 上櫃股回補後有營收但仍無估值，不能再套用「查無公司基本面資料」那條。
-  // 0.6.5 起獲利能力同理：這輪沒抓到不代表這檔從來沒有。
+  // Note points, see PLAN.md N6. **The amount of existing data must be taken into account** ——
+  // After the OTC stocks are covered, they will have revenue but still no valuation, so the article "No fundamental information about the company can be found" can no longer be applied.
+  // The same goes for profitability starting at 0.6.5: just because you didn’t catch it this round doesn’t mean you never did this round.
   const hasAnyHistory =
     (existing?.revenueMonths?.length ?? 0) > 0 || (existing?.profitQuarters?.length ?? 0) > 0
   const notes: string[] = []
   if (!valuation && !latestRevenue && !args.latestProfit && !industry && !hasAnyHistory) {
-    // ETF 與上櫃股都不在這三份 TWSE 檔內（實測 0050 三份皆查無）。
+    // Neither ETFs nor listed stocks are included in these three TWSE filings (actually 0050 was found in all three).
     notes.push('查無公司基本面資料：ETF 與上櫃（TPEx）標的不在 TWSE 這三份資料中')
   } else if (!valuation && args.bwibbuLoaded) {
     notes.push('無估值資料：本益比等三項只涵蓋上市（TWSE）個股')
@@ -339,10 +339,10 @@ export function buildFundamentalFile(args: {
       existing?.revenueMonths,
       latestRevenue ? [latestRevenue] : [],
     ),
-    // ⚠️ 整份重建時每個「不由本次輸入決定」的欄位都必須明確帶過去，
-    //    漏掉就是無聲的資料遺失。這一欄漏過一次，見上方說明。
+    // ⚠️ During the entire reconstruction, every field "not determined by this input" must be explicitly brought over.
+    //    Omissions are silent data loss. This column was missed once, see explanation above.
     revenueBackfilledThrough: existing?.revenueBackfilledThrough ?? null,
-    // 同上：0.6.21 新增的回補進度，漏帶就是每晚把進度抹掉、隔天重走 12 季
+    // Same as above: 0.6.21 newly added progress recovery, missing the tape means erasing the progress every night and restarting the 12th season the next day.
     profitBackfilledThrough: existing?.profitBackfilledThrough ?? null,
     profitUnit: '%',
     profitQuarters: mergeProfitQuarters(
@@ -354,15 +354,15 @@ export function buildFundamentalFile(args: {
 }
 
 /**
- * 把新的月份併入既有序列：依 yearMonth 去重、由舊到新排序、cap 12。
- * 覆寫制檔案靠這個在每晚重寫時自累積月營收史（首月 1 筆，逐月長到 12 筆）。
+ * Merge the new month into the existing sequence: remove duplicates by yearMonth, sort from old to new, cap 12.
+ * The overwrite file relies on this to automatically accumulate monthly revenue history when it is rewritten every night (1 transaction in the first month, and increases to 12 transactions each month).
  *
- * `fillGapsOnly` 決定同月份撞在一起時誰贏，兩種呼叫端的需求剛好相反：
- * - **每晚的最新月份**（t187ap05_L，index.ts syncFundamental）用預設的覆寫。
- *   月營收會更正重發，後抓的才是對的。
- * - **歷史回補**（MOPS t21sc03，index.ts backfillRevenue）要 `fillGapsOnly: true`。
- *   回補是「補缺口」，若讓它覆寫，一份較舊的爬取結果就會把 t187ap05_L 抓到的
- *   更正後數字蓋掉 —— 補歷史反而弄髒現況，是最不划算的交換。
+ * `fillGapsOnly` determines who wins when the same month collides. The needs of the two callers are exactly opposite:
+ * - **Latest month per night** (t187ap05_L, index.ts syncFundamental) overrides the default one.
+ *   The monthly revenue will be corrected and reissued, and the correct one will be caught later.
+ * - **History backfill** (MOPS t21sc03, index.ts backfillRevenue) requires `fillGapsOnly: true`.
+ *   Backfilling is "filling the gap". If it is overwritten, an older crawl result will capture t187ap05_L
+ *   After correction, the numbers will be covered up - filling in the history will contaminate the current situation, which is the most uneconomical exchange.
  */
 export function mergeRevenueMonths(
   prev: RevenueMonth[] | null | undefined,
@@ -373,22 +373,22 @@ export function mergeRevenueMonths(
 }
 
 /**
- * profitQuarters 上限。12 季＝三年，看得到一輪完整的景氣循環，
- * 也與 revenueMonths 的 12 個月上限對齊。
+ * profitQuarters upper limit. 12 seasons = three years, a complete business cycle can be seen.
+ * Also aligned with the 12-month cap on revenueMonths.
  *
- * 0.6.21 由 8 提高到 12：每晚批次的 `t187ap17_L` 是當季快照、一季只長一筆，
- * 靠它累積要三年；而 `twProfitHistory.ts` 的回補一次就能補到位，
- * 8 季（兩年）會在 2027 年中之後開始把 2025 的資料逐季擠掉。
- * 一季的 JSON 約 180 bytes，12 季也才 2 KB，容量上完全不是問題。
+ * 0.6.21 Increased from 8 to 12: The nightly batch of `t187ap17_L` is a snapshot of the current season, and only one increase is made in a season.
+ * It takes three years to accumulate it; and `twProfitHistory.ts` can be replenished in one go.
+ * Eight seasons (two years) will start squeezing out 2025 data season by season after mid-2027.
+ * One season's JSON is about 180 bytes, and 12 seasons is only 2 KB. There is no problem in terms of capacity.
  */
 export const PROFIT_QUARTERS_CAP = 12
 
 /**
- * 把新的一季併入既有序列。語意與 `mergeRevenueMonths` 完全相同，
- * 只是鍵換成 `yearQuarter`、上限換成 8。
+ * Incorporate the new season into the existing sequence. The semantics are exactly the same as `mergeRevenueMonths`,
+ * Just change the key to `yearQuarter` and the upper limit to 8.
  *
- * 目前只有「每季覆寫」一種呼叫端（沒有歷史回補），但 `fillGapsOnly` 仍然保留 ——
- * 季度回補只是還沒做，不是不會做（t187ap17_L 同樣只回最新一季）。
+ * Currently there is only a "quarterly overwrite" caller (no history backfill), but `fillGapsOnly` is still retained -
+ * Quarterly replenishment has just not been done yet, not that it will not be done (t187ap17_L will also only revert to the latest quarter).
  */
 export function mergeProfitQuarters(
   prev: ProfitQuarter[] | null | undefined,
@@ -418,13 +418,13 @@ export function mergeProfitQuarters(
 }
 
 /**
- * 上面兩支的共用核心：依期別鍵去重、由舊到新排序、砍到 cap。
+ * The above two share the same core: deduplication of keys by period, sorting from old to new, and cutting to cap.
  *
- * 抽出來是因為兩者的規則必須永遠一致 —— 各寫一份的話，
- * 哪天只修好其中一邊（例如只在月營收那邊補了「壞資料不混進結果」）
- * 就會變成兩套行為，而這種不一致從呼叫端完全看不出來。
+ * I extracted it because the rules of the two must always be consistent - if you write one copy for each,
+ * On which day only one side is fixed (for example, "bad data is not mixed into the results" is only fixed on the monthly revenue side)
+ * It will become two sets of behaviors, and this inconsistency is completely invisible from the calling end.
  *
- * 期別鍵都是可字典序比較的字串（`'2026-06'` / `'2026-Q1'`），故直接用字串比大小。
+ * The issue keys are all strings that can be compared in lexicographic order (`'2026-06'' / `'2026-Q1''), so the string size is directly compared.
  */
 function mergePeriodSeries<T>(
   prev: T[] | null | undefined,

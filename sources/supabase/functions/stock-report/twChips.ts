@@ -1,17 +1,17 @@
 /**
- * TWSE 盤後籌碼抓取與解析。
+ * TWSE after-hours chip capture and analysis.
  *
- * 資料來源（實測確認，皆為 whole-market 大檔，依 ticker 篩單股）：
- * - 三大法人個股買賣超：TWSE rwd `fund/T86`（需 date 參數，回 { fields, data, date }）
- * - 融資融券（主）：TWSE rwd `marginTrading/MI_MARGN`（需 date 參數，含買進 / 賣出 / 償還）
- * - 融資融券（fallback）：TWSE OpenAPI `exchangeReport/MI_MARGN`（無 date，只有最新交易日餘額）
- * - 借券賣出可用股數：TWSE OpenAPI `SBL/TWT96U`（無 date，TWSE/GRETAI 兩組平行欄位）
+ * Data source (confirmed by actual measurement, all are whole-market large stocks, single stocks are screened according to ticker):
+ * - The trading of individual stocks of the three major legal persons exceeded: TWSE rwd `fund/T86` (date parameter required, return { fields, data, date })
+ * - Margin margin trading (main): TWSE rwd `marginTrading/MI_MARGN` (requires date parameter, including buy/sell/repay)
+ * - Margin margin trading (fallback): TWSE OpenAPI `exchangeReport/MI_MARGN` (no date, only the balance on the latest trading day)
+ * - The number of shares available for borrowing and selling: TWSE OpenAPI `SBL/TWT96U` (no date, TWSE/GRETAI two parallel fields)
  *
- * 單位陷阱：T86 的數字是「股數」，MI_MARGN 的數字是「交易單位（張）」。兩者不可混算，
- * UI 必須各自標示（見 docs/agent/SPEC.md 的 UI 文案準則）。
+ * Unit trap: The number of T86 is "number of shares", and the number of MI_MARGN is "transaction unit (pieces)". The two cannot be confused,
+ * UIs must be individually labeled (see UI copywriting guidelines in docs/agent/SPEC.md).
  *
- * 解析函式皆為純函式、不觸網，便於單元測試；HTTP 抓取與 DB 快取在 index.ts 組合。
- * 上櫃(TPEx) 逐股端點暫不支援，查無資料時對應區塊標記缺漏。
+ * The parsing functions are all pure functions and do not touch the Internet, which is convenient for unit testing; HTTP crawling and DB cache are combined in index.ts.
+ * The over-the-counter (TPEx) stock-by-stock endpoint is currently not supported, and the corresponding block mark is missing when there is no data.
  */
 
 export const UA =
@@ -24,12 +24,12 @@ export function t86Url(dateYYYYMMDD: string): string {
   return `https://www.twse.com.tw/rwd/zh/fund/T86?date=${dateYYYYMMDD}&selectType=ALLBUT0999&response=json`
 }
 
-/** 帶 date 的融資融券逐股彙總（OpenAPI 版沒有 date 參數，做不出走勢圖） */
+/** Stock-by-stock summary of margin trading with date (the OpenAPI version does not have a date parameter and cannot produce trend charts)*/
 export function marginDatedUrl(dateYYYYMMDD: string): string {
   return `https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=${dateYYYYMMDD}&selectType=ALL&response=json`
 }
 
-/** 千分位字串轉數字；空字串 / 非數字回 null。保留正負號（買賣超可為負） */
+/** Thousands of strings are converted to numbers; empty strings/non-digits are returned to null. Keep the positive and negative signs (the buying and selling excess can be negative)*/
 export function normNum(v: unknown): number | null {
   if (v === null || v === undefined) return null
   const s = String(v).replace(/,/g, '').trim()
@@ -38,17 +38,17 @@ export function normNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** 買進 / 賣出 / 買賣超三件組。任一來源缺該拆項時以 null 表示（不以 0 冒充） */
+/** Buy/Sell/Trade Super Trio. If any source lacks this item, it will be represented by null (not pretended to be 0)*/
 export interface ChipLeg {
   buy: number | null
   sell: number | null
-  /** 買賣超（買進 − 賣出）；優先採用官方揭露值 */
+  /** Oversold (buy − sell); official disclosed values ​​are preferred*/
   net: number | null
 }
 
 const NULL_LEG: ChipLeg = { buy: null, sell: null, net: null }
 
-/** a + b，兩者皆 null 時回 null（單邊有值時視為另一邊 0） */
+/** a + b, return null when both are null (if one side has a value, it is regarded as 0 on the other side)*/
 function addNullable(a: number | null, b: number | null): number | null {
   if (a === null && b === null) return null
   return (a ?? 0) + (b ?? 0)
@@ -62,53 +62,53 @@ function addLegs(a: ChipLeg, b: ChipLeg): ChipLeg {
   }
 }
 
-/** 三大法人（單位：股）。各項含買進 / 賣出 / 買賣超 */
+/** Three major legal persons (unit: shares). Each item includes buying/selling/over-selling*/
 export interface InstitutionalChip {
-  /** 外陸資（不含外資自營商） */
+  /** Foreign mainland investment (excluding foreign self-operated operators)*/
   foreign: ChipLeg
-  /** 外資自營商 */
+  /** Foreign self-operated business*/
   foreignDealer: ChipLeg
-  /** 投信 */
+  /** investment trust*/
   trust: ChipLeg
-  /** 自營商（自行買賣 + 避險，T86 未直接揭露買進 / 賣出，由兩組拆項相加） */
+  /** Proprietary traders (self-trading + hedging, T86 does not directly disclose buying/selling, it is divided into two groups and added together)*/
   dealer: ChipLeg
-  /** 三大法人合計（T86 只揭露買賣超，買進 / 賣出由五個 leg 加總） */
+  /** The total of the three major legal persons (T86 only discloses the over-trading, buying/selling is summed by the five legs)*/
   total: ChipLeg
 }
 
 /**
- * 融資融券（單位：交易單位＝張）。
- * 融券的 buy 是「回補」、sell 是「放空」，方向與融資相反。
- * `source` 為 'openapi' 時只有餘額，buy / sell / redeem 為 null。
+ * Margin margin trading (unit: trading unit = Zhang).
+ * In securities lending, buy means "covering" and sell means "shorting", which are opposite to financing.
+ * When `source` is 'openapi', only the balance is available, and buy / sell / redeem is null.
  */
 export interface MarginChip {
   marginBuy: number | null
   marginSell: number | null
-  /** 融資現金償還 */
+  /** Financing cash repayment*/
   marginRedeem: number | null
   marginPrev: number | null
   marginToday: number | null
-  /** 融資餘額變化 = 今日 − 前日 */
+  /** Change in financing balance = today − day before yesterday*/
   marginChange: number | null
   marginLimit: number | null
-  /** 融券買進＝回補 */
+  /** Securities lending = covering*/
   shortBuy: number | null
-  /** 融券賣出＝放空 */
+  /** Short selling = short selling*/
   shortSell: number | null
-  /** 融券現券償還 */
+  /** Securities lending and cash repayment*/
   shortRedeem: number | null
   shortPrev: number | null
   shortToday: number | null
-  /** 融券餘額變化 = 今日 − 前日 */
+  /** Change in securities lending balance = today − the day before yesterday*/
   shortChange: number | null
   shortLimit: number | null
-  /** 資券互抵（張） */
+  /** Mutual offset of securities (sheets)*/
   offset: number | null
   source: 'rwd' | 'openapi'
 }
 
 export interface BorrowChip {
-  /** 借券賣出可用股數 */
+  /** Number of shares available for borrowing and selling*/
   availableVolume: number | null
 }
 
@@ -120,7 +120,7 @@ interface T86Response {
   tables?: Array<{ fields?: string[]; data?: string[][] }>
 }
 
-/** 從 T86 回應中取出 fields/data（相容 top-level 與 tables[0] 兩種結構） */
+/** Extract fields/data from T86 response (compatible with top-level and tables[0] structures)*/
 function t86Table(resp: T86Response): { fields: string[]; data: string[][] } {
   if (Array.isArray(resp.fields) && Array.isArray(resp.data)) {
     return { fields: resp.fields, data: resp.data }
@@ -132,14 +132,14 @@ function t86Table(resp: T86Response): { fields: string[]; data: string[][] } {
   return { fields: [], data: [] }
 }
 
-/** T86 欄位名稱可能夾雜全形空白 / 尾隨空白，比對時正規化 */
+/** T86 field names may contain full-width whitespace/trailing whitespace, normalize during comparison*/
 function cleanHeader(s: string): string {
   return s.replace(/\s+/g, '')
 }
 
 /**
- * T86 逐股三大法人。T86 欄位名稱不重複，故以名稱比對（比位置索引耐得住欄序調動）。
- * 官方只揭露自營商 / 三大法人的「買賣超」，其買進 / 賣出由拆項加總補齊。
+ * T86 shares the three major legal persons. T86 column names are not repeated, so the comparison is by name (the comparison position index can withstand column order changes).
+ * The official only discloses the "trading excess" of the dealers/three major legal entities, and their purchases/sales are made up by the sum of the items.
  */
 export function extractInstitutional(resp: T86Response, ticker: string): InstitutionalChip | null {
   const { fields, data } = t86Table(resp)
@@ -173,7 +173,7 @@ export function extractInstitutional(resp: T86Response, ticker: string): Institu
   )
   const dealerHedge = leg('自營商買進股數(避險)', '自營商賣出股數(避險)', '自營商買賣超股數(避險)')
   const dealerSum = addLegs(dealerSelf, dealerHedge)
-  // 自營商合計的買賣超以官方欄位為準，買進 / 賣出才用拆項加總
+  // The total transaction amount of the dealer shall be based on the official column, and only the split items shall be used for buying/selling.
   const dealer: ChipLeg = {
     buy: dealerSum.buy,
     sell: dealerSum.sell,
@@ -196,8 +196,8 @@ const diff = (a: number | null, b: number | null): number | null =>
   a === null || b === null ? null : a - b
 
 /**
- * OpenAPI 版融資融券（fallback）：只有餘額，沒有買進 / 賣出 / 償還。
- * 僅適用「最新交易日」，做不出走勢圖，故只在 rwd 端點失敗時使用。
+ * OpenAPI version of margin trading (fallback): only balance, no buying/selling/repayment.
+ * It is only applicable to the "latest trading day" and cannot produce trend charts, so it is only used when the rwd endpoint fails.
  */
 export function extractMargin(rows: MarginRow[], ticker: string): MarginChip | null {
   const row = rows.find((r) => String(r['股票代號']).trim() === ticker)
@@ -233,9 +233,9 @@ export interface MarginDatedResponse {
 }
 
 /**
- * rwd 版逐股融資融券表的欄位位置（實測 2026-07-22，共 16 欄）。
- * 「買進」「賣出」在同一列 fields 中各出現兩次（融資、融券各一組），
- * **必須以位置索引取值，用名稱比對會取到錯的那一組**。
+ * Column positions of the rwd version of the stock-by-stock margin trading table (actual measurement 2026-07-22, 16 columns in total).
+ * "Buy" and "Sell" appear twice each in the same column of fields (one group each for financing and securities lending).
+ * **The value must be obtained by position index. If you use name comparison, you will get the wrong group**.
  */
 const MARGIN_IDX = {
   code: 0,
@@ -254,12 +254,12 @@ const MARGIN_IDX = {
   offset: 14,
 } as const
 
-/** rwd 回應可能含多張表（大盤合計 / 逐股彙總）；逐股表的第一欄是「代號」 */
+/** The rwd response may contain multiple tables (large market total / stock-by-stock summary); the first column of the stock-by-stock table is "code"*/
 function marginTable(resp: MarginDatedResponse): { fields: string[]; data: string[][] } | null {
   for (const t of resp.tables ?? []) {
     const fields = t.fields ?? []
     const data = t.data ?? []
-    // 欄序防護：不符即視為端點格式變動，呼叫端回退 OpenAPI fallback
+    // Column order protection: If it does not match, it will be regarded as the endpoint format change, and the caller will fall back to OpenAPI fallback
     if (cleanHeader(fields[0] ?? '') === '代號' && fields.length >= 15 && data.length > 0) {
       return { fields, data }
     }
@@ -297,7 +297,7 @@ export function extractMarginDated(resp: MarginDatedResponse, ticker: string): M
   }
 }
 
-/** rwd 融資融券回應是否可用（供 index.ts 決定要不要快取 / 回退 fallback） */
+/** rwd Whether the margin trading response is available (for index.ts to decide whether to cache/fallback)*/
 export function marginDatedOk(resp: MarginDatedResponse): boolean {
   return marginTable(resp) !== null
 }
@@ -310,12 +310,12 @@ interface SblRow {
 }
 
 /**
- * OpenAPI 版借券（fallback）。**回應沒有任何日期欄位**，無從得知是哪一天的資料 ——
- * 這正是改用下方 rwd 版的原因。
+ * OpenAPI version fallback. **The response does not have any date field**, there is no way to know which day the data is——
+ * That's why the rwd version below is used instead.
  *
- * 註：欄位名稱的 TWSECode / GRETAICode 有誤導性。實測兩者都是上市股票，
- * 只是官方原始報表是「兩欄並排」的版面，OpenAPI 照著切成兩組欄位而已，
- * 所以兩欄都要找。
+ * NOTE: The field names TWSECode / GRETAICode are misleading. According to actual measurements, both are listed stocks.
+ * It's just that the official original report has a "two columns side by side" layout, and OpenAPI just cuts it into two sets of columns.
+ * So you have to look for both columns.
  */
 export function extractBorrow(rows: SblRow[], ticker: string): BorrowChip | null {
   for (const r of rows) {
@@ -325,16 +325,16 @@ export function extractBorrow(rows: SblRow[], ticker: string): BorrowChip | null
   return null
 }
 
-// ---- 借券（rwd 版，自帶日期）----
+// ---- Borrow coupons (rwd version, with date)----
 
 /**
- * 借券的 rwd 端點。`date` 參數**實測無效**（帶任何日期都回同一份最新資料），
- * 但 `title` 自帶日期（「115年07月27日 當日可借券賣出股數」），
- * 這就足以判斷拿到的是哪一天的資料 —— OpenAPI 版做不到這件事。
+ * rwd endpoint for borrowing bonds. `date` parameter **Invalid actual measurement** (with any date, the same latest data will be returned),
+ * But `title` comes with a date ("Number of shares that can be borrowed and sold on July 27, 115"),
+ * This is enough to determine which day the data is obtained - the OpenAPI version cannot do this.
  *
- * ⚠️ 語意提醒：「當日可借券賣出股數」是**下一個交易日的額度**，不是已收盤那天的數字。
- * 實測最後交易日為 07/24（週五）時，title 顯示的是 07/27（週一）。
- * 因此它的日期本來就會與籌碼的資料日期不同，必須各自標示。
+ * ⚠️ Semantic reminder: "The number of shares that can be borrowed and sold on that day" is the **quota for the next trading day**, not the number for the day that the market has closed.
+ * When the actual measured last trading day is 07/24 (Friday), the title displays 07/27 (Monday).
+ * Therefore, its date will be different from the chip's data date and must be marked separately.
  */
 export const BORROW_DATED_URL = 'https://www.twse.com.tw/rwd/zh/marginTrading/TWT96U?response=json'
 
@@ -345,7 +345,7 @@ export interface BorrowDatedResponse {
   data?: string[][]
 }
 
-/** 「115年07月27日 當日可借券賣出股數」→ `2026-07-27`；解析不出回 null */
+/** "Number of shares that can be borrowed and sold on July 27, 115" → `2026-07-27`; the parsing cannot return null*/
 export function parseRocTitleDate(title: string | null | undefined): string | null {
   const m = /(\d{2,3})年(\d{1,2})月(\d{1,2})日/.exec(String(title ?? ''))
   if (!m) return null
@@ -354,7 +354,7 @@ export function parseRocTitleDate(title: string | null | undefined): string | nu
   return `${year}-${p(m[2])}-${p(m[3])}`
 }
 
-/** rwd 的儲存格把代號包在 <a> 標籤裡，取純文字 */
+/** The storage cell of rwd wraps the code in the <a> tag and takes the plain text*/
 function cellText(v: unknown): string {
   return String(v ?? '').replace(/<[^>]*>/g, '').trim()
 }
@@ -367,14 +367,14 @@ export function borrowDatedOk(resp: BorrowDatedResponse): boolean {
   )
 }
 
-/** rwd 借券的資料日期（＝下一個交易日）；解析不出回 null */
+/** rwd The data date of borrowing securities (=next trading day); cannot be parsed and returns null*/
 export function borrowDatedDate(resp: BorrowDatedResponse): string | null {
   return parseRocTitleDate(resp?.title)
 }
 
 /**
- * 由 rwd 借券表取單一代號。原始報表是「兩欄並排」的版面：
- * 每一列有 4 個儲存格 = 兩組（代號, 股數），故兩組都要找。
+ * Get a single code from the rwd borrowing table. The original report is a "two columns side by side" layout:
+ * Each column has 4 cells = two groups (code, number of shares), so both groups must be searched.
  */
 export function extractBorrowDated(resp: BorrowDatedResponse, ticker: string): BorrowChip | null {
   for (const row of resp?.data ?? []) {

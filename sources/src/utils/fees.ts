@@ -1,14 +1,14 @@
 /**
- * 手續費 / 證交稅估算（移植自 GAS 版 Sidebar.html 的 calculateFee）：
- * - 台股：券商手續費「元以下無條件捨去」，可套用單筆最低手續費（整股常見 20 元、零股 1 元）；
- *   賣出加計證交稅（同樣捨去到元）
- * - 美股：保留兩位小數
+ * Handling fee/certificate tax estimate (ported from calculateFee of GAS version Sidebar.html):
+ * - Taiwan stocks: Brokerage fees are "unconditionally rounded off if they are less than ¥", and the minimum single transaction fee can be applied (commonly NT$20 for a whole share and NT$1 for odd lots);
+ *   Pay tax on selling additional certificates (also rounded to the nearest dollar)
+ * - US stocks: round to two decimal places
  */
 import type { Market, Transaction, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
 import { floorSafe, sellTaxRate } from './pnlEngine'
 
-/** 台股法定標準手續費率 0.1425% */
+/** The legal standard handling fee for Taiwan stocks is 0.1425%*/
 export const DEFAULT_FEE_RATE = 0.001425
 
 export interface FeeInput {
@@ -17,10 +17,10 @@ export interface FeeInput {
   price: number
   qty: number
   feeRate: number
-  /** 台股賣出證交稅率；未提供時依代號自動判斷（ETF 00 開頭 0.1%，其餘 0.3%） */
+  /** Securities tax rate for selling Taiwan stocks; if not provided, it will be automatically determined based on the code (0.1% starting with ETF 00, and 0.3% for the rest)*/
   taxRate?: number
   ticker?: string
-  /** 台股單筆最低手續費（元）；feeRate 為 0（免佣）時不套用 */
+  /** Minimum handling fee for Taiwan stocks (yuan); not applicable when feeRate is 0 (no commission)*/
   minFee?: number
 }
 
@@ -43,15 +43,15 @@ export function calculateFee(input: FeeInput): number {
 
 export interface FeeCorrection {
   tx: Transaction
-  /** 依目前費率設定重新估算的手續費（賣出含證交稅） */
+  /** Handling fee re-estimated based on current rate setting (sale includes certificate payment tax)*/
   newFee: number
 }
 
 /**
- * 找出手續費與「目前費率設定」不符的台股交易，供批次修正。
- * - 僅台股：美股各券商收費結構差異大（免佣 / 固定費 / SEC fee），不納入批次重算
- * - 賣出證交稅依代號自動判斷（ETF 0.1%、債券 ETF 0%、其餘 0.3%）；
- *   當沖等特殊稅率的交易重算會不準，由使用者在預覽中取消勾選或個別編輯
+ * Find Taiwan stock transactions whose handling fees are inconsistent with the "current fee setting" for batch correction.
+ * - Taiwan stocks only: The fee structure of each brokerage in the U.S. stock market is quite different (no commission/fixed fee/SEC fee) and is not included in the batch recalculation.
+ * - The tax on selling securities is automatically determined based on the code (0.1% for ETFs, 0% for bond ETFs, and 0.3% for the rest);
+ *   Recalculation of transactions with special tax rates such as hedging will not be allowed. Users can uncheck or edit individually in the preview.
  */
 export function proposeFeeCorrections(
   transactions: Transaction[],
@@ -75,10 +75,10 @@ export function proposeFeeCorrections(
 }
 
 /**
- * 保本賣出價（損益平衡價）：以此價全數賣出時「實收金額 ≥ 目前部位成本」的最低價（0.01 刻度）。
- * 先用封閉式解出候選價（比例費率與最低手續費兩種情形取較高者），
- * 再以 calculateFee 實算雙向收斂——floor 到元與最低手續費會造成封閉式的邊界誤差，
- * 不足時往上補、有餘裕時往下找最低，保證回傳「賣出必不虧的最低價」。
+ * Breakeven selling price (breakeven price): The lowest price (0.01 scale) when "the actual amount received ≥ the current position cost" is sold at this price.
+ * First use the closed form to solve the candidate price (whichever is higher between the proportional rate and the lowest handling fee),
+ * Then use calculateFee to actually calculate the two-way convergence - the floor to yuan and the minimum handling fee will cause a closed boundary error.
+ * When there is a shortage, make up for it; when there is a surplus, go down to find the lowest price, and ensure that the "lowest price at which you can sell without losing money" is sent back.
  */
 export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: number): number {
   const { qty, cost, market, ticker } = holding
@@ -89,7 +89,7 @@ export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: numbe
     p * qty - calculateFee({ market, txType: 'SELL', price: p, qty, feeRate, taxRate, minFee }) >= cost
 
   const byRate = cost / (qty * (1 - feeRate - taxRate))
-  // feeRate 為 0（免佣）時 calculateFee 不套最低手續費，封閉式同步略過
+  // When feeRate is 0 (no commission), calculateFee does not include the minimum handling fee, and closed synchronization is skipped.
   const byMinFee = (cost + (feeRate > 0 ? minFee ?? 0 : 0)) / (qty * (1 - taxRate))
   let price = Math.floor(Math.max(byRate, byMinFee) * 100) / 100
 

@@ -1,21 +1,21 @@
 /**
- * 「資料抓取狀況」時間軸的座標與判定（純函式，方便單獨測試）。
+ * The coordinates and judgment of the "data capture status" timeline (pure function, convenient for independent testing).
  *
- * 時間軸的範圍是**當日 15:00 → 次日 10:00**（19 小時）：台股收盤到隔天開盤前，
- * 涵蓋三個籌碼來源全部的公布時間（法人 15:00、融資融券 21:00、借券 21:00–22:30）
- * 以及隔天早上的補抓輪。
+ * The range of the time axis is **15:00 of the current day → 10:00** of the next day** (19 hours): Taiwan stocks close to the opening of the next day,
+ * Covers the announcement times of all three chip sources (legal persons 15:00, margin trading 21:00, and securities borrowing 21:00–22:30)
+ * and a make-up round the next morning.
  *
- * **判定基準是「公布窗結束後的第一個批次班次」，不是公布時刻。**
- * 三大法人 15:00–15:30 公布、我們 16:15 才抓到，用公布時刻判會變成「晚了 45 分」——
- * 但盤後批次本來就 16:00 才起跑，那是排程設計不是異常。
- * 反過來借券當晚 32 輪都在跑卻沒抓到、隔天才補，那才該亮燈。
- * 判定要對著我們控制得了的東西，與 BUG-008 同源：拿外部發布時程當基準，
- * 只會得到一片永遠亮著的黃燈，而永遠亮著的告警等於沒有告警。
+ * **The criterion is "the first batch after the announcement window ends", not the announcement time. **
+ * The three major legal entities were announced between 15:00 and 15:30, but we only caught it at 16:15. Based on the announcement time, it would be "45 minutes late"——
+ * However, the after-hours batch originally started at 16:00, which is due to scheduling design and not an anomaly.
+ * On the other hand, if you ran 32 rounds on the night you borrowed the ticket but failed to catch it, and only made up for it the next day, then the light should be turned on.
+ * The judgment must be based on things that we can control, which has the same origin as BUG-008: use the external release schedule as the benchmark,
+ * You will only get a yellow light that is always on, and an alarm that is always on means no alarm.
  */
 
 export type SourceState = 'ok' | 'warn' | 'late' | 'idle'
 
-/** 時間軸起點（台北時間的小時）與總長度 */
+/** Timeline starting point (hour in Taipei time) and total length*/
 export const TL_START_HOUR = 15
 export const TL_SPAN_HOURS = 19
 
@@ -23,23 +23,23 @@ export interface ChainSpec {
   id: 'institutional' | 'market' | 'daily' | 'margin' | 'borrow'
   label: string
   hint: string
-  /** 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」 */
+  /** Source announcement window, [from, to], the unit is "the number of hours from 15:00 on the current day"*/
   window: [number, number]
-  /** 寬限截止：這個時間點之前沒拿到就算延遲。對應的是批次班次而非公布時刻 */
+  /** Grace deadline: If you don’t get it before this time, it will be considered a delay. It corresponds to the batch shift rather than the announced time.*/
   dueBy: number
 }
 
 /**
- * 台股盤後鏈。順序即畫面順序（依公布時間先後）。
+ * Taiwan stocks after-hours chain. The order is the order of the pictures (in order of publication time).
  *
- * `dueBy` 的取法：公布窗結束後、盤後批次仍在跑的下一個班次
- * （批次是台北 16:00–23:45 每 15 分）。三大法人實測要到 16:30 那輪才抓得到
- * —— 15:00–15:30 雖已公布，但 16:00 / 16:15 兩輪都還讀不到，故 dueBy 給 1.5。
+ * How to get `dueBy`: after the end of the announcement window and the next shift in which the batch is still running after the market closes
+ * (Batches are Taipei 16:00–23:45 every 15 minutes). In actual testing, the three major legal entities cannot be caught until the 16:30 round.
+ * —— Although 15:00–15:30 has been announced, 16:00 / 16:15 cannot be read in both rounds, so dueBy gives 1.5.
  */
 export const TW_CHAIN: readonly ChainSpec[] = [
-  // 「個股」「全市場」要標在名字上：兩者都叫三大法人，但一個是 T86（每檔持股，單位股）、
-  // 一個是 BFI82U（整個集中市場，單位元）。0.6.33 之前只寫「三大法人」，
-  // 使用者因此以為全市場那份也已經納入監看。
+  // "Individual stocks" and "whole market" should be marked in the name: both are called the three major legal persons, but one is T86 (each holding, unit stock),
+  // One is BFI82U (entire concentrated market, unit yuan). 0.6.33 Previously, only "three major legal persons" were written.
+  // Users therefore believe that the entire market has also been monitored.
   { id: 'institutional', label: '三大法人・個股', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
   /*
     全市場法人的 dueBy 取法與其他四列不同，不是筆誤：
@@ -55,24 +55,24 @@ export const TW_CHAIN: readonly ChainSpec[] = [
 ]
 
 /**
- * 這一輪的目標交易日 = 各來源已知資料日的**最大值**（0.6.36-dev.2）。
+ * The target trading day for this round = the **maximum** of known data days from each source (0.6.36-dev.2).
  *
- * 先前用「個股籌碼報告的資料日」當整條軸的基準，但軸上五列來自不同批次：
- * 個股 T86 走盤後批次（16:30 才到手）、全市場 BFI82U 走獨立的 market-daily（16:00 就到）。
- * 跑得快的那列於是被拿「昨天 15:00」當原點去算座標 —— 2026-08-05 實際發生過：
- * 全市場當天 16:00 準時到手，卻算出 25 小時、被夾到軸最右端並判成 late。
- * 準時的來源亮紅燈，等於告警失效。
+ * Previously, the "data date of the individual stock chip report" was used as the basis for the entire axis, but the five columns on the axis came from different batches:
+ * T86 for individual stocks is available in post-market batches (available only at 16:30), and BFI82U for the entire market is available independently market-daily (available at 16:00).
+ * The column running faster was used as the origin "yesterday 15:00" to calculate the coordinates - 2026-08-05 What actually happened:
+ * The whole market arrived on time at 16:00 on the same day, but it was calculated as 25 hours, was clamped to the right end of the axis, and was judged to be late.
+ * The punctual source lights up red, which means the alarm is invalid.
  *
- * 取 max 而不是查交易日曆：週末與假日沒有新資料，基準日自然停在最後交易日；
- * 收盤後第一個到手的來源就把它推進到今天。少一份要維護的假日表。
- * 代價是 15:00–16:00（收盤了但還沒有任何來源到手）仍顯示前一輪 ——
- * 那段時間本來就沒有本輪的事件可畫。
+ * Take max instead of checking the trading calendar: there is no new data on weekends and holidays, and the base day naturally stops at the last trading day;
+ * The first source available after the close pushed it forward to today. One less holiday schedule to maintain.
+ * The price is 15:00–16:00 (closed but no source has been received yet) and the previous round is still displayed——
+ * During that period, there were no events of this cycle to draw.
  *
- * ⚠️ **借券的 date 不可以放進來**：它自報的是**公布日**（次一交易日），
- * 天生比本輪多一天（`batch_run_log` 可見 `borrow_data_date` 為隔日而 `data_ymd` 為本輪）。
- * 放進來會讓基準日整個快一天，整條軸的其他四列全部變成「未到手」。
+ * ⚠️ **The date of borrowing the bond cannot be put in**: it self-reports the **announcement date** (the next trading day),
+ * It is born one day longer than the current round (`batch_run_log` can be seen that `borrow_data_date` is the next day and `data_ymd` is the current round).
+ * Putting it in will make the base date one day earlier, and the other four columns of the entire axis will all become "not received".
  *
- * @param dates 'YYYY-MM-DD' 格式；格式不符或空值一律略過
+ * @param dates 'YYYY-MM-DD' format; formats that do not match or empty values ​​will be ignored
  */
 export function roundBaseYmd(dates: ReadonlyArray<string | null | undefined>): string {
   let max = ''
@@ -82,7 +82,7 @@ export function roundBaseYmd(dates: ReadonlyArray<string | null | undefined>): s
   return max
 }
 
-/** 時間軸刻度（小時數 → 標籤） */
+/** Timeline scale (hours → labels)*/
 export const TL_TICKS: ReadonlyArray<{ h: number; label: string }> = [
   { h: 0, label: '15:00' },
   { h: 3, label: '18:00' },
@@ -93,15 +93,15 @@ export const TL_TICKS: ReadonlyArray<{ h: number; label: string }> = [
   { h: 18, label: '09:00' },
 ]
 
-/** 小時數 → 軸上的百分比位置（夾在 0–100，超出範圍的事件貼邊而不是跑出容器） */
+/** Hours → Percentage position on axis (clamped between 0–100, out-of-range events wrap instead of outside the container)*/
 export function tlPercent(hour: number): number {
   const p = (hour / TL_SPAN_HOURS) * 100
   return Math.round(Math.min(100, Math.max(0, p)) * 100) / 100
 }
 
 /**
- * ISO 時間 → 距「資料日 15:00（台北）」的小時數。跨日自然算成 > 24 − 15 = 大於 9。
- * 時間戳或日期壞掉時回 null，呼叫端一律顯示為「未取得」。
+ * ISO time → Number of hours from "data day 15:00 (Taipei)". Cross days naturally count as > 24 − 15 = greater than 9.
+ * If the timestamp or date is corrupted, null will be returned, and the caller will always display "Not Obtained".
  */
 export function hoursFromBase(iso: string | null | undefined, baseYmd: string): number | null {
   if (!iso) return null
@@ -111,7 +111,7 @@ export function hoursFromBase(iso: string | null | undefined, baseYmd: string): 
   return (t - base) / 3_600_000
 }
 
-/** 小時數 → 'HH:mm'，跨日回 '次日 HH:mm' */
+/** Hours → 'HH:mm', cross-day return 'HH:mm' next day*/
 export function tlLabel(hour: number): string {
   const total = TL_START_HOUR * 60 + Math.round(hour * 60)
   const next = total >= 24 * 60
@@ -122,23 +122,23 @@ export function tlLabel(hour: number): string {
 }
 
 /**
- * 判定的輪次緩衝（小時）。盤後批次是每 15 分一輪，`dueBy` 指的是「哪一輪」
- * 而不是精確到秒的時刻。
+ * Decision round buffer (hours). The after-hours batch is one round every 15 minutes, `dueBy` refers to "which round"
+ * Rather than precise to the second.
  *
- * ⚠️ 少了它會出現這種畫面：三大法人 `dueBy` 是 1.5（＝16:30 那輪），
- * 而 16:30 那輪實際在 **16:30:03** 才寫入 —— 1.5009 > 1.5，**差三秒被判成延遲**，
- * 而同一時刻抓到的日 K 線卻因為 `dueBy` 是 2 而顯示正常。
- * 同一刻抓到卻一紅一綠，看起來就是壞的。
+ * ⚠️ Without it, this picture will appear: `dueBy` of the three major legal persons is 1.5 (=16:30 round),
+ * And the 16:30 round was actually written at **16:30:03** - 1.5009 > 1.5, **three seconds difference was judged as delay**,
+ * However, the daily K-line captured at the same time displays normally because `dueBy` is 2.
+ * One red and one green when caught at the same moment looks bad.
  */
 export const ROUND_GRACE_HOURS = 0.25
 
 /**
- * 判定單一資料源的狀態。
+ * Determine the status of a single data source.
  *
- * 沒拿到時，**還沒到 `dueBy` 就是 idle（等待中）而不是 late** ——
- * 每天傍晚都有一段時間資料本來就還沒公布，那時亮紅燈只會讓人學會忽略它。
+ * When it is not obtained, ** has not arrived yet and `dueBy` is idle (waiting) instead of late** ——
+ * There is a period of time every evening when the information has not been released to begin with, and turning on the red light at that time will only make people learn to ignore it.
  *
- * 拿到了則以 `dueBy + ROUND_GRACE_HOURS` 為界：只要落在那一輪之內就算準時。
+ * If you get it, the limit is `dueBy + ROUND_GRACE_HOURS`: as long as it falls within that round, it is considered on time.
  */
 export function judgeSource(
   spec: ChainSpec,
@@ -153,12 +153,12 @@ export function judgeSource(
 }
 
 /*
- * 月頻指標的期別判定（`judgePeriod` / `latestPeriod` / `periodsBehind`）已移到
- * `components/Macro/macroPeriod.ts` —— 那是總經資料本身的領域邏輯，
- * 這一頁只是借來監看。總經頁的指標卡也要用同一套判定，留在 Admin 會讓依賴反向。
+ * The period judgment of monthly frequency indicators (`judgePeriod` / `latestPeriod` / `periodsBehind`) has been moved to
+ * `components/Macro/macroPeriod.ts` - that is the domain logic of the general data itself,
+ * This page is only borrowed for monitoring. The indicator card on the general page must also use the same set of judgments. Leaving it in Admin will reverse the dependence.
  */
 
-/** 毫秒差 → '3h 40m' / '38s' / '19d 20h' */
+/** Millisecond difference → '3h 40m' / '38s' / '19d 20h'*/
 export function humanAgo(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '—'
   const s = Math.floor(ms / 1000)
@@ -175,10 +175,10 @@ export function humanAgo(ms: number): string {
    ────────────────────────────────────────────────────────────── */
 
 /**
- * ISO 時間 → 台北當地的日期與當日小時數（0–24，含小數）。
- * 時間戳壞掉或空值回 null，呼叫端一律當成「沒有這個時刻」。
+ * ISO time → Taipei local date and hour of the day (0–24, including decimals).
+ * If the timestamp is corrupted or returns null, the caller will treat it as "there is no such time".
  *
- * 回傳日期而不只是小時：班次軸只畫「今天」，呼叫端得先確認這個時刻確實落在今天。
+ * Return the date instead of just the hour: only "today" is drawn on the shift axis, and the caller must first confirm that this time indeed falls on today.
  */
 export function taipeiParts(
   iso: string | null | undefined,
@@ -191,14 +191,14 @@ export function taipeiParts(
   return { ymd, hour: tp.getUTCHours() + tp.getUTCMinutes() / 60 }
 }
 
-/** 台北小時（0–24）→ 24 小時軸上的百分比 */
+/** Taipei hour (0–24) → percentage on 24-hour axis*/
 export function dayPercent(hour: number): number {
   return Math.round(Math.min(24, Math.max(0, hour)) / 24 * 10000) / 100
 }
 
 /**
- * cron 表達式 → 當日的執行時刻（台北小時）。
- * 只認 `0 H[,H...] * * *` 這種每日固定時刻的形狀，其餘回空陣列。
+ * cron expression → execution time of the current day (Taipei hours).
+ * Only recognize the shape of `0 H[,H...] * * *` at a fixed time every day, and return the rest to empty arrays.
  */
 export function cronHoursTaipei(expr: string): number[] {
   const m = /^0\s+([\d,]+)\s+\*\s+\*\s+\*$/.exec(expr.trim())
@@ -210,8 +210,8 @@ export function cronHoursTaipei(expr: string): number[] {
 }
 
 /**
- * 下一次執行。`hours` 是當日的班次時刻，`nowHour` 是現在（台北小時）。
- * 今天已無班次時回明天的第一班（`tomorrow: true`）。
+ * executed next time. `hours` is the shift time of the day, `nowHour` is now (Taipei hours).
+ * If there is no shift today, return to the first shift tomorrow (`tomorrow: true`).
  */
 export function nextRun(
   hours: readonly number[],
@@ -225,34 +225,34 @@ export function nextRun(
   return { hour: hours[0], tomorrow: true, inHours: 24 - nowHour + hours[0] }
 }
 
-/** 小時數（可為小數）→ 'HH:mm' */
+/** Number of hours (can be decimal) → 'HH:mm'*/
 export function hourLabel(hour: number): string {
   const total = Math.round(((hour % 24) + 24) % 24 * 60)
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-/** 時間長度 → '6h 40m' / '25m' */
+/** Duration → '6h 40m' / '25m'*/
 export function durationLabel(hours: number): string {
   const m = Math.max(0, Math.round(hours * 60))
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
 /*
- * 發布日推估已移除（0.6.17）。
+ * Release day estimates have been removed (0.6.17).
  *
- * 那份 `RELEASE_RULE` 是前端自己依實測歸納的區間，與後端 `macroCalendar.ts` 的
- * 官方行事曆是**兩份會漂移的常數** —— 而漂移的症狀（畫面說 8/12、後端卻按 8/14
- * 判定）幾乎不可能從畫面上看出來。
+ * That `RELEASE_RULE` is the range summarized by the front-end itself based on actual measurements, and is the same as that of the back-end `macroCalendar.ts`
+ * The official calendar is **two constants that will drift** - and the symptoms of drift (the screen says 8/12, but the backend says 8/14
+ * Judgment) is almost impossible to see from the screen.
  *
- * 現在由 `admin-status` 直接回傳每個指標的 `nextRelease`，單一真相來源在後端。
+ * The `nextRelease` for each metric is now returned directly by `admin-status`, with a single source of truth in the backend.
  */
 
 /**
- * 每個排程實際抓什麼。畫面上光看 `generate-all` 這種代號看不出範圍，
- * 而「這一班到底負責哪些資料」正是排查時第一個要問的問題。
+ * What each schedule actually captures. Looking at the screen, the scope of the code name `generate-all` cannot be seen.
+ * And "What data is this class responsible for?" is the first question to be asked during the investigation.
  *
- * 內容對照 `sources/supabase/functions/stock-report/index.ts` 的各 handler，
- * 改動那邊的抓取範圍時**這裡要跟著改**。
+ * The content is compared with each handler of `sources/supabase/functions/stock-report/index.ts`,
+ * When changing the crawling range there, you need to change it here.
  */
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
@@ -263,12 +263,12 @@ export const ACTION_SCOPE: Record<string, string> = {
   'backfill-revenue': '公開資訊觀測站的分月營收，補齊個股缺漏的月份',
 }
 
-/** 排程的抓取範圍說明；不認得的 action 回空字串（畫面就不顯示那一行） */
+/** Description of the schedule's fetching range; an unrecognized action returns an empty string (that line will not be displayed on the screen)*/
 export function describeScope(action: string | null): string {
   return (action && ACTION_SCOPE[action]) || ''
 }
 
-/** cron 排程的健康度：停用、今日有失敗、或從未跑過都要看得出來 */
+/** The health of the cron schedule: it can be seen if it is disabled, has failed today, or has never been run.*/
 export function judgeCron(
   active: boolean,
   failsToday: number,
@@ -281,9 +281,9 @@ export function judgeCron(
 }
 
 /**
- * cron 表達式 → 一句白話（順帶把 UTC 換算成台北）。
- * 只認本專案實際用到的兩種形狀；認不得就原樣回傳 ——
- * 顯示 cron 字串總比顯示一個翻錯的句子好。
+ * cron expression → a vernacular (convert UTC to Taipei by the way).
+ * Only recognize the two shapes actually used in this project; if not recognized, return them as they are -
+ * It's better to display a cron string than a mistranslated sentence.
  */
 export function describeCron(expr: string): string {
   const w = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
@@ -301,8 +301,8 @@ export function describeCron(expr: string): string {
       .join(' / ')
     return `每日 ${hours}`
   }
-  // 整點的小時區間、僅平日（market-daily 是 `0 8-10 * * 1-5`）。
-  // 沒有這一條的話這一班會在排程表印出原始 cron 字串 —— 全表就它一個看不懂
+  // Hourly range on the hour, weekdays only (market-daily is `0 8-10 * * 1-5`).
+  // Without this item, this class will print out the original cron string in the schedule - it is the only one that cannot understand the whole table.
   const r = /^0\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
   if (r) {
     const from = Number(r[1])

@@ -1,19 +1,19 @@
 /**
- * 「抓取狀況」頁的版面掃描（Playwright）。
+ * Layout scan of the Crawl Status page (Playwright).
  *
- * 驗的是 jsdom 測試碰不到的東西：實際佈局、橫向溢出、元素重疊、
- * 絕對定位是否落在軌道內、手機上該隱藏的有沒有隱藏。
+ * What is tested is something that jsdom test cannot touch: actual layout, horizontal overflow, element overlap,
+ * Whether the absolute positioning falls within the track and whether the things that should be hidden are hidden on the mobile phone.
  *
- * 用法：
- *   1. sources/.env.local 指向某一區，並啟動 `npm run dev`
- *   2. 產生一組 admin session 存成 scratchpad/session.json：
+ * usage:
+ *   1. sources/.env.local points to a certain area and starts `npm run dev`
+ *   2. Generate a set of admin sessions and save them as scratchpad/session.json:
  *      auth/v1/admin/generate_link（magiclink）取 hashed_token，
- *      再打 auth/v1/verify 換 access_token / refresh_token
- *   3. SESSION=<session.json 路徑> OUT=<截圖目錄> node scripts/verify-admin-status.cjs
+ *      Type auth/v1/verify again to change access_token / refresh_token
+ *   3. SESSION=<session.json path> OUT=<screenshot directory> node scripts/verify-admin-status.cjs
  *
- * 為什麼要注入 session 而不是走登入表單：Agent 沒有帳號密碼，
- * 而 magic link 換來的 token 注入 localStorage 與真的登入等價
- * （supabase-js v2 的 session 就存在 `sb-<ref>-auth-token`）。
+ * Why inject session instead of going through the login form: Agent does not have an account or password.
+ * The token exchanged by magic link is injected into localStorage and is equivalent to real login.
+ * (`sb-<ref>-auth-token` exists in the session of supabase-js v2).
  */
 const { chromium } = require('playwright')
 const fs = require('fs')
@@ -23,7 +23,7 @@ const OUT = process.env.OUT || '/tmp/stock-pnl-admin-shots'
 const SESSION = process.env.SESSION || path.join(path.dirname(OUT), 'session.json')
 const BASE = process.env.BASE_URL || 'http://localhost:5173/'
 const session = JSON.parse(fs.readFileSync(SESSION, 'utf8'))
-// session 是哪一區換來的，就注入哪一區的 key；與 .env.local 必須一致
+// Which area the session is exchanged from will be injected with the key of that area; it must be consistent with .env.local
 const REF = process.env.REF || 'wqetxuhncvfidqnklyew'
 
 const WIDTHS = [1440, 1024, 768, 390]
@@ -41,7 +41,7 @@ const WIDTHS = [1440, 1024, 768, 390]
     page.on('pageerror', (e) => errors.push(String(e)))
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 
-    // supabase-js v2 的 session 存在 localStorage 的 sb-<ref>-auth-token
+    // The session of supabase-js v2 exists the sb-<ref>-auth-token of localStorage
     await page.addInitScript(
       ([ref, s]) => {
         window.localStorage.setItem(
@@ -61,7 +61,7 @@ const WIDTHS = [1440, 1024, 768, 390]
 
     await page.goto(BASE, { waitUntil: 'networkidle' })
 
-    // 進入「抓取狀況」分頁
+    // Enter the "Crawling Status" tab
     const tab = page.getByRole('button', { name: '抓取狀況' })
     if ((await tab.count()) === 0) {
       problems.push(`${width}px: 找不到「抓取狀況」分頁（admin 判定可能沒過）`)
@@ -73,7 +73,7 @@ const WIDTHS = [1440, 1024, 768, 390]
     await page.waitForSelector('.ast-row', { timeout: 15000 })
     await page.waitForTimeout(600)
 
-    // ── 1. 頁面不得橫向捲動 ───────────────────────────────
+    // ── 1. The page is not allowed to scroll horizontally ───────────────────────────────
     const overflow = await page.evaluate(() => ({
       doc: document.documentElement.scrollWidth,
       win: window.innerWidth,
@@ -82,15 +82,15 @@ const WIDTHS = [1440, 1024, 768, 390]
       problems.push(`${width}px: 頁面橫向溢出 ${overflow.doc - overflow.win}px`)
     }
 
-    // 手機刻意隱藏時間軸（橫捲看不到右半），改驗狀態與時刻仍看得見
+    // The mobile phone deliberately hides the timeline (the right half cannot be seen when scrolling horizontally), but the status and time of the changes are still visible.
     const mobile = width <= 720
     if (mobile) {
       const vis = await page.evaluate(() => {
         const rows = [...document.querySelectorAll('.ast-row')]
         return rows.map((r) => ({
           track: !!r.querySelector('.ast-track')?.checkVisibility?.(),
-          // 每列右側必須有可見內容：狀態標籤或時刻文字擇一
-          // （總經軸的「美東發布」「資料最後變動」兩列放的是資訊而非狀態）
+          // There must be visible content on the right side of each column: either a status label or a moment text
+          // (The "Eastern US Release" and "Last Data Change" columns of the main beam display information rather than status)
           pill: !!r.querySelector('.ast-pill')?.checkVisibility?.(),
           when: !!r.querySelector('.ast-when')?.checkVisibility?.(),
           endText: (r.querySelector('.ast-end')?.textContent || '').trim().length > 0,
@@ -104,7 +104,7 @@ const WIDTHS = [1440, 1024, 768, 390]
       if (!vis.some((v) => v.when)) problems.push(`${width}px: 沒有任何一列顯示抓取時刻`)
     }
 
-    // ── 2. 時間軸的點與公布窗必須落在軌道內（僅寬螢幕）─────
+    // ── 2. The point of the timeline and the announcement window must fall within the track (wide screen only)─────
     const stray = mobile ? [] : await page.evaluate(() => {
       const bad = []
       document.querySelectorAll('.ast-track').forEach((track, i) => {
@@ -123,7 +123,7 @@ const WIDTHS = [1440, 1024, 768, 390]
     })
     stray.forEach((s) => problems.push(`${width}px: ${s}`))
 
-    // ── 3. 時刻文字不得與下一列重疊 ───────────────────────
+    // ── 3. The time text must not overlap with the next column ──────────────────────
     const clash = mobile ? [] : await page.evaluate(() => {
       const labels = [...document.querySelectorAll('.ast-hit-t')]
       const bad = []
@@ -138,9 +138,9 @@ const WIDTHS = [1440, 1024, 768, 390]
     })
     clash.forEach((s) => problems.push(`${width}px: ${s}`))
 
-    // ── 3b. 說明文字不得被擠成直排 ────────────────────────
-    // 特異性沒壓過 .ast-legend span 時，文字節點會各自變成 flex item，
-    // 「判定基準是」會被擠成一字一行。用「高度遠大於行高」來偵測。
+    // ── 3b. Description text must not be squeezed into a vertical row ───────────────────────
+    // When specificity is not overwhelmed by .ast-legend span, the text nodes will each become flex items.
+    // "The criterion is" will be squeezed into one word and one line. Use "height is much greater than row height" to detect.
     const vertical = await page.evaluate(() => {
       const bad = []
       document.querySelectorAll('.ast-rule').forEach((el) => {
@@ -148,14 +148,14 @@ const WIDTHS = [1440, 1024, 768, 390]
         const lh = parseFloat(getComputedStyle(el).lineHeight) || 20
         const cs = getComputedStyle(el)
         if (cs.display.includes('flex')) bad.push('圖例說明是 flex，文字會被拆成欄')
-        // 一段兩三行的字塞成直排會變成十幾行高
+        // A paragraph of two or three lines of text will become more than ten lines high if it is crammed into a straight line.
         if (r.height > lh * 8) bad.push(`圖例說明高 ${Math.round(r.height)}px（行高 ${Math.round(lh)}px），疑似直排`)
       })
       return bad
     })
     vertical.forEach((s) => problems.push(`${width}px: ${s}`))
 
-    // ── 4. 主要區塊都在 ───────────────────────────────────
+    // ── 4. The main blocks are located at ─────────────────────────────────
     for (const t of ['台股盤後', '排程', '美國總體經濟', '匯率與檔案涵蓋']) {
       if ((await page.getByText(t, { exact: false }).count()) === 0) {
         problems.push(`${width}px: 缺少區塊「${t}」`)
@@ -166,12 +166,12 @@ const WIDTHS = [1440, 1024, 768, 390]
 
     await page.screenshot({ path: `${OUT}/${width}.png`, fullPage: true })
 
-    // 深色 / 淺色各一張（只在桌機寬度做）
+    // One each for dark/light colors (only available in desktop width)
     if (width === 1440) {
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
       await page.waitForTimeout(300)
       await page.screenshot({ path: `${OUT}/${width}-light.png`, fullPage: true })
-      // 時間軸單獨一張，看細節
+      // Timeline alone, look at the details
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
       await page.waitForTimeout(300)
       const tl = page.locator('.ast-tl-scroll').first()

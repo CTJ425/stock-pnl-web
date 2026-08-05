@@ -1,24 +1,24 @@
 /**
- * 台股日線 OHLCV 抓取與解析（Yahoo Finance chart 端點）。
+ * Taiwan stock daily OHLCV capture and analysis (Yahoo Finance chart endpoint).
  *
- * 為什麼是 Yahoo 而不是 TWSE：TWSE 的 `exchangeReport/STOCK_DAY` 是「逐股逐月」的檔案，
- * 要湊滿季線所需的 60 個交易日得打 4～5 次、每檔如此。Yahoo 的 chart 端點一次就回一整年，
- * 而且這個端點本來就在專案內（stock-price 已在用它取現價，只是丟掉了 timestamp 與 indicators）。
+ * Why Yahoo and not TWSE: TWSE's `exchangeReport/STOCK_DAY` is a "stock by stock and month by month" file.
+ * To complete the 60 trading days required for the season line, you need to play 4 to 5 times, each time. Yahoo's chart endpoint returns an entire year at a time,
+ * And this endpoint is already in the project (stock-price is already using it to get the current price, but the timestamp and indicators are lost).
  *
- * 實測（2330.TW，range=1y&interval=1d）：回 244 個交易日、16.8KB，
- * `indicators.quote[0]` 的 open/high/low/close/volume 五個欄位齊全。
+ * Actual measurement (2330.TW, range=1y&interval=1d): 244 trading days, 16.8KB,
+ * The five open/high/low/close/volume fields of `indicators.quote[0]` are complete.
  *
- * 兩個必須處理的陷阱（皆為實測所見，不是防禦性臆測）：
- * 1. **回應會包含沒有資料的交易日**：實測 2025-08-01 那一格五個欄位全是 null。
- *    這種列直接丟棄 —— 它不帶任何資訊，留著只會讓均線計算要處處防 null。
- * 2. **timestamp 是 UTC 秒數，指向當地開盤時刻**（台股 09:00 → 01:00Z）。
- *    直接 `toISOString().slice(0,10)` 在台股時區碰巧會對，但那是巧合而非保證；
- *    一律先加 `meta.gmtoffset` 再取 UTC 日期，這樣換到任何時區都成立。
+ * Two pitfalls that must be dealt with (both are actual observations, not defensive speculation):
+ * 1. **The response will include trading days with no data**: Actual test 2025-08-01 All five fields in that grid are null.
+ *    This kind of column is discarded directly - it does not carry any information, and keeping it will only prevent the average calculation from being null.
+ * 2. **timestamp is UTC seconds, pointing to the local opening time** (Taiwan stock market 09:00 → 01:00Z).
+ *    Directly `toISOString().slice(0,10)` happens to be correct in the Taiwan stock time zone, but that is a coincidence and not a guarantee;
+ *    Always add `meta.gmtoffset` first and then get the UTC date. This will work in any time zone.
  *
- * 解析函式為純函式、不觸網，便於單元測試；HTTP 抓取在 index.ts 組合。
+ * The parsing function is a pure function and does not touch the Internet, which is convenient for unit testing; HTTP crawling is combined in index.ts.
  */
 
-/** 一根日線。tuple 形式是為了壓縮 Storage 體積（244 天的物件陣列約為 tuple 的 3 倍大） */
+/** A daily line. The tuple form is to compress the Storage size (a 244-day object array is about 3 times the size of a tuple)*/
 export type DailyRow = [
   date: string,
   open: number,
@@ -28,44 +28,44 @@ export type DailyRow = [
   volume: number,
 ]
 
-/** Storage 內 daily/{ticker}.json 的結構 */
+/** The structure of daily/{ticker}.json in Storage*/
 export interface DailyFile {
   schema: number
   ticker: string
-  /** 我們實際抓到它的時間 ISO */
+  /** The time we actually caught it ISO*/
   asOf: string
-  /** 最新一根的交易日 YYYY-MM-DD；批次據此判斷要不要重抓。查無資料時為空字串 */
+  /** The trading day of the latest bar is YYYY-MM-DD; the batch will be judged based on this whether to re-draw. If no data is found, it will be an empty string.*/
   lastDate: string
-  /** 由舊到新 */
+  /** From old to new*/
   rows: DailyRow[]
   /**
-   * 「已經查過而且查無資料」時記錄當次的批次資料日（YYYY-MM-DD）。
+   * When "already checked and no data found", record the current batch data date (YYYY-MM-DD).
    *
-   * 為什麼需要這個欄位：0.6.0-dev.7 讓前端在查無日線時可以即點即產，
-   * 若查無就完全不寫檔，那麼上櫃股 / 剛上市 / 暫停交易的代號會變成
-   * 「每次開頁都重打一次 Edge Function、而且永遠不會停」—— 那才是真正會燒光額度的模式。
-   * 寫一個空殼檔並記下查詢日，即點即產就自然變成「每檔每天最多一次」。
+   * Why this field is needed: 0.6.0-dev.7 allows the front-end to click and produce when there is no daily line.
+   * If no file is found, no filing will be made at all. Then the code for OTC stocks/newly listed/suspended trading will become
+   * "Re-enter the Edge Function every time you open the page, and it will never stop" - that is the mode that will really burn up your credit limit.
+   * Write a shell file and write down the query date, and click-to-produce will naturally become "maximum once per day per file".
    *
-   * 夜間批次**不**看這個欄位（仍以 lastDate 判斷），因為三班本來就該給
-   * 剛上市、Yahoo 還沒補上資料的代號重試的機會。
+   * The night batch does not look at this field (still judged by lastDate), because the third shift should have given
+   * There is a chance to try again for codenames that have just been launched and Yahoo has not yet provided the information.
    */
   emptyCheckedDate?: string
 }
 
 /**
- * 日線檔的結構版本。
- * 前端的守門必須用 `>=` 比對（見 src/services/dailyProxy.ts）——
- * 加欄位對舊前端是無害的加法，用等號會在後端升版時讓整個技術面分頁當場全掛。
- * 這正是 0.4.1 修過的線上故障。
+ * The structural version of the daily file.
+ * Front-end gatekeeping must use `>=` comparison (see src/services/dailyProxy.ts)——
+ * Adding fields is a harmless addition to the old front-end. Using the equal sign will cause the entire technical paging to fail on the spot when the back-end is upgraded.
+ * This is exactly the bug fixed in 0.4.1.
  */
 export const DAILY_SCHEMA = 1
 
-/** 一年份足以涵蓋季線（60 個交易日）與各指標的暖身期，實測回 244 天 */
+/** One year is enough to cover the quarterly line (60 trading days) and the warm-up period of each indicator, with the actual measurement back to 244 days.*/
 export function dailyUrl(symbol: string): string {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
 }
 
-/** 台股代號轉 Yahoo 格式：上市 .TW，查無時呼叫端再試上櫃 .TWO（與 stock-price 同構） */
+/** Taiwan stock code transfer to Yahoo format: listing .TW, if the search fails, the caller will try again to list .TWO (same structure as stock-price)*/
 export function yahooDailySymbols(ticker: string): string[] {
   return [`${ticker}.TW`, `${ticker}.TWO`]
 }
@@ -81,8 +81,8 @@ interface ChartQuote {
 export interface ChartResponse {
   chart?: {
     result?: Array<{
-      // regularMarketTime 是 Yahoo 附加的「即時報價列」的 timestamp。
-      // extractDaily 不用它（台股日線一天一根、沒踩過問題），fxRates 靠它剔除那一列
+      // regularMarketTime is the timestamp of Yahoo's additional "real-time quote column".
+      // extractDaily does not use it (the daily line of Taiwan stocks is one per day, and there is no problem), fxRates relies on it to remove that column
       meta?: { gmtoffset?: number; symbol?: string; regularMarketTime?: number }
       timestamp?: number[]
       indicators?: { quote?: ChartQuote[] }
@@ -91,7 +91,7 @@ export interface ChartResponse {
   }
 }
 
-/** epoch 秒 + 時區位移 → 當地交易日 YYYY-MM-DD */
+/** epoch seconds + time zone offset → local trading day YYYY-MM-DD*/
 export function tradingDateOf(epochSeconds: number, gmtOffsetSeconds: number): string {
   return new Date((epochSeconds + gmtOffsetSeconds) * 1000).toISOString().slice(0, 10)
 }
@@ -101,8 +101,8 @@ function num(v: unknown): number | null {
 }
 
 /**
- * 由 chart 回應抽出日線序列（由舊到新）。
- * 結構不符或無有效資料時回空陣列，呼叫端據此改試下一個 symbol。
+ * Extract the daily series (from old to new) from the chart response.
+ * If the structure does not match or there is no valid data, an empty array will be returned, and the caller will try the next symbol accordingly.
  */
 export function extractDaily(resp: ChartResponse): DailyRow[] {
   const result = resp?.chart?.result?.[0]
@@ -114,7 +114,7 @@ export function extractDaily(resp: ChartResponse): DailyRow[] {
   const rows: DailyRow[] = []
   for (let i = 0; i < ts.length; i++) {
     const close = num(q.close?.[i])
-    // 收盤價是這根 K 棒存在與否的判定依據：實測那些「五欄全 null」的假日格就是這樣被濾掉的
+    // The closing price is the basis for determining the existence of this K stick: it is actually measured that those holiday grids with "all five columns null" are filtered out in this way.
     if (close === null) continue
     const open = num(q.open?.[i])
     const high = num(q.high?.[i])
@@ -123,7 +123,7 @@ export function extractDaily(resp: ChartResponse): DailyRow[] {
     if (open === null || high === null || low === null) continue
     rows.push([tradingDateOf(ts[i], offset), open, high, low, close, volume ?? 0])
   }
-  // Yahoo 回的本來就是由舊到新，但排序成本極低而順序錯掉會讓每一條均線都錯
+  // Yahoo's replies are originally from old to new, but the sorting cost is extremely low and the wrong order will make every moving average wrong.
   rows.sort((a, b) => a[0].localeCompare(b[0]))
   return rows
 }

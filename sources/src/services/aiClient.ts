@@ -1,35 +1,35 @@
 /**
- * AI 服務客戶端 Adapter：支援 Google Gemini 與 OpenAI 相容 API (ollama / vLLM)。
- * 提供純函式與 Provider 物件，不依賴任何外部 SDK。
+ * AI service client Adapter: supports Google Gemini and OpenAI compatible API (ollama / vLLM).
+ * Provides pure functions and Provider objects without relying on any external SDK.
  */
 import type { AiProviderKind, AiSettings } from './aiSettings'
 
 export type AiErrorKind = 'auth' | 'rate-limit' | 'server' | 'timeout' | 'network' | 'bad-response'
 
-/** 預設逾時。local model 推論慢，30 秒常常跑不完，放寬到 180 秒。UI 字樣一律由此推導。 */
+/** Default timeout. The local model inference is slow and often cannot run in 30 seconds, so it is relaxed to 180 seconds. UI typefaces are always derived from this.*/
 export const AI_TIMEOUT_MS = 180_000
 
 /**
- * Google 的輸出上限。
+ * Google's output cap.
  *
- * 原本是 1200，實測 Gemini Flash 只寫了一句話就被切斷 —— 因為 Gemini 2.5 起的
- * **思考（thinking）token 也計入 maxOutputTokens**，1200 幾乎被思考吃光。
- * 本專案的輸出是「3–5 段解讀＋建議操作＋注意事項＋免責聲明」，繁中約需 1500–2500 token，
- * 8192 留足餘裕；同時以 thinkingConfig 關閉思考（見 GoogleProviderImpl.buildBody）。
- * 這是上限不是預約量，調高不會增加實際用量與費用。
+ * Originally it was 1200. In actual testing, Gemini Flash was cut off after writing only one sentence - because Gemini 2.5 and above
+ * **Thinking tokens are also included in maxOutputTokens**, 1200 are almost eaten up by thinking.
+ * The output of this project is "3-5 paragraphs of interpretation + recommended operations + precautions + disclaimer", which costs about 1500-2500 tokens in Traditional Chinese.
+ * 8192 Leave enough margin; also turn off thinking with thinkingConfig (see GoogleProviderImpl.buildBody).
+ * This is the upper limit, not the reservation amount, and increasing it will not increase actual usage or costs.
  */
 export const GOOGLE_MAX_OUTPUT_TOKENS = 8192
 
 /**
- * OpenAI 相容端點的輸出上限。
+ * Output cap for OpenAI compliant endpoints.
  *
- * **原本完全沒送這個欄位**，用的是端點預設值 —— 而很多端點（含 Ollama 的部分設定）
- * 預設只有幾百 token，於是輸出寫到一半就被 `finish_reason: length` 切斷，
- * 畫面上只剩前一兩段加一行「未寫完」。這與 Google 那邊踩過的是同一個坑
- * （見 GOOGLE_MAX_OUTPUT_TOKENS），只是這條路徑一直沒補。
+ * **Originally this field was not sent at all**, the default value of the endpoint was used - and many endpoints (including some settings of Ollama)
+ * By default, there are only a few hundred tokens, so the output is cut off by `finish_reason: length` halfway through writing.
+ * Only the first one or two paragraphs and one line "unfinished" remain on the screen. This is the same pitfall that Google has stepped into.
+ * (See GOOGLE_MAX_OUTPUT_TOKENS), but this path has not been filled.
  *
- * 用與 Google 相同的值：輸出約需 1500–2500 token，8192 留足餘裕。
- * 這是上限不是預約量，調高不會增加實際用量與費用。
+ * Use the same values ​​as Google: about 1500–2500 tokens for output, 8192 to spare.
+ * This is the upper limit, not the reservation amount, and increasing it will not increase actual usage or costs.
  */
 export const OPENAI_MAX_TOKENS = 8192
 
@@ -43,7 +43,7 @@ export class AiError extends Error {
   }
 }
 
-/** 一則對話訊息。`assistant` 是模型先前的回覆 */
+/** A conversational message. `assistant` is the model’s previous reply*/
 export interface AiMessage {
   role: 'user' | 'assistant'
   content: string
@@ -52,21 +52,21 @@ export interface AiMessage {
 export interface AiRequest {
   system: string
   /**
-   * 由舊到新的對話。單輪就是只有一則 `user`。
+   * A conversation from old to new. A single round means there is only one `user`.
    *
-   * 0.6.5 之前這裡是單一個 `user: string`；改成陣列是為了支援「產生分析之後
-   * 繼續追問」。**system 每一輪都會重送**（見 aiChat.ts 的框限規則），
-   * 所以框限不會隨對話變長而被稀釋掉。
+   * Before 0.6.5, this was a single `user: string`; it was changed to an array to support "after generating the analysis
+   * Keep asking." **system will resend every round** (see the frame rules of aiChat.ts),
+   * So the frame doesn't get diluted as the dialogue gets longer.
    */
   messages: AiMessage[]
   timeoutMs?: number
 }
 
 /**
- * 純函式：把對話映射成 Google 的 `contents`。
+ * Pure function: mapping conversations to Google’s `contents`.
  *
- * ⚠️ **Gemini 的助理角色叫 `model` 不是 `assistant`**，送錯會被當成使用者發言，
- * 模型就會以為自己上一輪講的話是使用者說的 —— 最容易錯的一格，故抽出來測。
+ * ⚠️ **Gemini’s assistant role is called `model`, not `assistant`**. If you send it wrongly, it will be regarded as a user speaking.
+ * The model will think that what it said in the last round was said by the user - the most error-prone frame, so it is selected for testing.
  */
 export function toGoogleContents(messages: AiMessage[]): Array<{
   role: 'user' | 'model'
@@ -78,7 +78,7 @@ export function toGoogleContents(messages: AiMessage[]): Array<{
   }))
 }
 
-/** 純函式：把 system 與對話映射成 OpenAI 相容的 `messages` */
+/** Pure functions: mapping system and dialogue into OpenAI compatible `messages`*/
 export function toOpenAiMessages(
   system: string,
   messages: AiMessage[],
@@ -92,10 +92,10 @@ export interface AiProvider {
 }
 
 /**
- * 純函式：Base URL 正規化。
- * 去除尾斜線；若已包含 /v1 結尾則不重複附加，否則補上 /v1。
+ * Pure functions: Base URL normalization.
+ * Remove the trailing slash; if the end of /v1 is already included, do not append it again, otherwise add /v1.
  * 範例：http://h:11434, http://h:11434/, http://h:11434/v1, http://h:11434/v1/
- * 皆產出 http://h:11434/v1
+ * Both output http://h:11434/v1
  */
 export function normalizeBaseUrl(raw: string): string {
   const trimmed = raw.trim().replace(/\/+$/, '')
@@ -106,7 +106,7 @@ export function normalizeBaseUrl(raw: string): string {
 }
 
 /**
- * 純函式：HTTP 狀態碼對應 AiErrorKind
+ * Pure function: HTTP status code corresponds to AiErrorKind
  */
 export function mapHttpError(status: number): AiErrorKind {
   if (status === 401 || status === 403) return 'auth'
@@ -115,15 +115,15 @@ export function mapHttpError(status: number): AiErrorKind {
   return 'bad-response'
 }
 
-/** 輸出被長度上限截斷時附加的標記。有半截總比丟掉好，但**不能讓它看起來像完整結果** */
+/** Marks appended when the output is truncated by the upper length limit. It's better to have half than throw it away, but **don't make it look like the complete result***/
 export const TRUNCATION_NOTICE = '\n\n（⚠️ 本次輸出達到長度上限而未寫完，以上內容並不完整。）'
 
 /**
- * 只拿得到思考內容時，貼在最前面的警語。
+ * I only get the warning posted at the top when thinking about the content.
  *
- * **不可省略也不可淡化。** 思考是模型的推導草稿：會有自我懷疑、中途推翻、
- * 算到一半的數字。把它當成正式分析讀會被誤導 —— 這是使用者實際踩過的坑，
- * 也是當初要處理 `<think>` 的原因。
+ * **Do not omit or downplay. ** Thinking is a draft of model derivation: there will be self-doubt, overturning,
+ * Count to half the number. It would be misleading to read it as a formal analysis - this is a pitfall that users have actually stepped on.
+ * This is also the reason why we had to deal with `<think>` in the first place.
  */
 export const REASONING_FALLBACK_NOTICE =
   '⚠️ **以下是模型的思考過程，不是正式結論。**\n\n' +
@@ -132,8 +132,8 @@ export const REASONING_FALLBACK_NOTICE =
   '若要正式的分析，請改用一般對話模型。\n\n---\n\n'
 
 /**
- * 去掉 `<think>…</think>` 包裹（有些端點不拆欄位，直接把思考塞在文字裡）。
- * 未閉合的 `<think>` 也要處理 —— 輸出被截斷時很常見。
+ * Remove the `<think>…</think>` package (some endpoints do not split the fields and directly insert the thoughts into the text).
+ * Unclosed `<think>` are also handled - this is common when the output is truncated.
  */
 export function stripThinkTags(text: string): string {
   return String(text ?? '')
@@ -143,12 +143,12 @@ export function stripThinkTags(text: string): string {
 }
 
 /**
- * 純函式：解析 Google Gemini API 回傳 JSON。取不到內容時拋出 AiError('bad-response', …)
+ * Pure function: parsing the JSON returned by the Google Gemini API. AiError('bad-response', …) is thrown when the content cannot be obtained.
  *
- * `finishReason` 必須看：Gemini 2.5 起的思考（thinking）token 會計入 maxOutputTokens，
- * 額度不足時可能出現「finishReason=MAX_TOKENS 但 parts 是空的」——
- * 舊版只檢查 parts 存在與否，遇到這種情況會回一句莫名其妙的結構錯誤，
- * 更糟的是截斷但有內容時會把半截文字當成完整結果回傳（0.6.0-dev.5 實際踩到）。
+ * `finishReason` must read: thinking tokens from Gemini 2.5 will count towards maxOutputTokens,
+ * When the quota is insufficient, "finishReason=MAX_TOKENS but parts is empty" may appear——
+ * The old version only checks whether parts exists. In this case, an inexplicable structural error will be returned.
+ * What's worse is that when it is truncated but has content, the half text will be returned as the complete result (actually stepped on by 0.6.0-dev.5).
  */
 export function extractGoogleText(json: unknown): string {
   if (!json || typeof json !== 'object') {
@@ -191,15 +191,15 @@ export function extractGoogleText(json: unknown): string {
     throw new AiError('bad-response', 'Google API 回傳文字內容為空')
   }
 
-  // 有內容但被截斷：保留已產生的文字（使用者已為它付費），但明講它不完整
+  // Contains content but truncated: retains the text that was generated (the user paid for it), but makes it clear that it is incomplete
   return finishReason === 'MAX_TOKENS' ? text + TRUNCATION_NOTICE : text
 }
 
 /**
- * 純函式：解析 OpenAI 相容 API 回傳 JSON。取不到內容時拋出 AiError('bad-response', …)
+ * Pure function: Parse OpenAI compatible API and return JSON. AiError('bad-response', …) is thrown when the content cannot be obtained.
  *
- * `finish_reason: 'length'` 與 Google 的 MAX_TOKENS 是同一件事（ollama 的 num_predict
- * 上限也會這樣切斷），同樣附上未完成標記，不讓半截文字看起來像完整結果。
+ * `finish_reason: 'length'` is the same thing as Google's MAX_TOKENS (ollama's num_predict
+ * The upper limit will also be cut off like this), and an unfinished mark is also attached to prevent the half text from looking like the complete result.
  */
 export function extractOpenAiText(json: unknown): string {
   if (!json || typeof json !== 'object') {
@@ -211,7 +211,7 @@ export function extractOpenAiText(json: unknown): string {
       finish_reason?: string
       message?: {
         content?: string | null
-        /** 推理型模型（deepseek-r1 / qwq / gpt-oss…）把思考過程放這裡，命名各家不同 */
+        /** Inferential models (deepseek-r1 / qwq / gpt-oss...) put the thinking process here and name them differently.*/
         reasoning_content?: string | null
         reasoning?: string | null
         refusal?: string | null
@@ -219,7 +219,7 @@ export function extractOpenAiText(json: unknown): string {
     }>
   }
 
-  // 有些端點 HTTP 200 但在 body 裡回錯誤（Ollama 模型未載入、vLLM 佇列滿…）
+  // Some endpoints HTTP 200 but return errors in the body (Ollama model not loaded, vLLM queue full...)
   const bodyError = data.error?.message
   if (typeof bodyError === 'string' && bodyError.trim()) {
     throw new AiError('bad-response', `AI 端點回報錯誤：${bodyError.trim()}`)
@@ -263,7 +263,7 @@ export function extractOpenAiText(json: unknown): string {
 
     請求端已經盡量關掉思考（見 OpenAiCompatibleProviderImpl.buildBody），
     但不是每個端點都吃那些欄位。走到這裡代表關不掉 ——
-    **與其整個失敗，不如把思考內容拿來用，但一定要標示它是什麼。**
+    **Rather than fail altogether, take the reflection and use it, but be sure to label what it is. **
 
     標示不能省：思考是模型的推導草稿，會包含自我懷疑、中途否定、算到一半的數字。
     當成正式分析讀會被誤導，這是使用者實際踩過的坑。
@@ -273,7 +273,7 @@ export function extractOpenAiText(json: unknown): string {
     return REASONING_FALLBACK_NOTICE + stripThinkTags(reasoning).trim()
   }
 
-  // 2) 思考／前言把輸出額度用光，還沒寫到正文就被切斷（等同 Google 的 MAX_TOKENS）
+  // 2) Thoughts/Preface: The output quota is used up, and the text is cut off before the text is written (equivalent to Google's MAX_TOKENS)
   if (finish === 'length') {
     throw new AiError(
       'bad-response',
@@ -282,7 +282,7 @@ export function extractOpenAiText(json: unknown): string {
     )
   }
 
-  // 3) 模型明確拒答
+  // 3) The model explicitly refuses to answer
   if (typeof msg.refusal === 'string' && msg.refusal.trim()) {
     throw new AiError('bad-response', `模型拒絕回答：${msg.refusal.trim()}`)
   }
@@ -290,7 +290,7 @@ export function extractOpenAiText(json: unknown): string {
     throw new AiError('bad-response', '內容被端點的安全過濾擋下（finish_reason: content_filter）')
   }
 
-  // 4) 其餘：把 finish_reason 帶出來，至少讓人知道往哪查
+  // 4) The rest: Bring out finish_reason, at least let people know where to look.
   throw new AiError(
     'bad-response',
     `OpenAI 相容 API 回傳的 choices[0].message.content 是空的${
@@ -300,11 +300,11 @@ export function extractOpenAiText(json: unknown): string {
 }
 
 /**
- * 發出請求並在**同一個逾時計時器內**讀完 body。
+ * Make the request and finish reading the body within the same timeout timer.
  *
- * 逾時不可以只包住 `fetch()`：fetch 在收到 response headers 就 resolve，
- * body 還沒讀。若在 fetch 之後才 clearTimeout，遇到「headers 回來了但 body 卡住」
- * 的伺服器就完全沒有逾時保護，UI 會永遠停在「解讀中」。
+ * Timeout cannot just wrap `fetch()`: fetch will resolve after receiving the response headers.
+ * body has not been read yet. If you clearTimeout after fetch, you will encounter "headers are back but the body is stuck"
+ * The server has no timeout protection at all, and the UI will always stop at "interpreting".
  */
 async function requestJson(
   url: string,
@@ -320,14 +320,14 @@ async function requestJson(
     })
     if (!res.ok) return { ok: false, status: res.status, json: null }
     const json = await res.json().catch((err: unknown) => {
-      // 讀 body 途中被逾時 abort 的話要往外傳，交給下面映射成 timeout，
-      // 不能一律當成「回傳格式不對」。
+      // If abort is timed out while reading the body, it must be passed out and mapped to timeout below.
+      // It cannot always be regarded as "the return format is incorrect".
       if (err instanceof Error && err.name === 'AbortError') throw err
       throw new AiError('bad-response', 'AI 服務回傳的內容不是合法的 JSON')
     })
     return { ok: true, status: res.status, json }
   } catch (err: unknown) {
-    // 上面刻意丟出的 AiError 不要被下面的網路錯誤包裝掉
+    // The AiError deliberately thrown above should not be wrapped by the network error below.
     if (err instanceof AiError) throw err
     if (err instanceof Error && err.name === 'AbortError') {
       throw new AiError('timeout', `請求逾時（最長 ${Math.round(timeoutMs / 1000)} 秒），請稍後重試`)
@@ -357,8 +357,8 @@ class GoogleProviderImpl implements AiProvider {
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: GOOGLE_MAX_OUTPUT_TOKENS,
-        // 這份工作不需要推理：數字全由程式算好，模型只負責照著寫成白話。
-        // 思考 token 會計入 maxOutputTokens，開著只會壓縮正文額度。
+        // This job does not require reasoning: the numbers are all calculated by the program, and the model is only responsible for writing them down in the vernacular.
+        // Thinking token will be included in maxOutputTokens, and turning it on will only compress the text quota.
         ...(withThinkingConfig ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     })
@@ -376,10 +376,10 @@ class GoogleProviderImpl implements AiProvider {
 
     let res = await post(this.buildBody(req, true))
 
-    // 400 可能是模型不吃 thinkingConfig（各世代的控制欄位不同，不做模型名稱猜測）。
-    // 去掉該欄位重送一次；若仍是 400，就照原本的錯誤處理往下走。
-    // 這不違反「不自動重試」——那條是講不要替使用者重跑失敗的解讀（會重複計費），
-    // 這裡是同一次請求的參數協商，且只試一次。
+    // 400 may be because the model does not use thinkingConfig (the control fields of each generation are different, so model name guessing is not performed).
+    // Remove this field and resend it; if it is still 400, continue processing according to the original error.
+    // This does not violate the interpretation of "no automatic retries" - that is, do not rerun failed attempts for the user (repetitive billing will occur).
+    // Here is the parameter negotiation for the same request, and it is only tried once.
     if (!res.ok && res.status === 400) {
       res = await post(this.buildBody(req, false))
     }
@@ -406,21 +406,21 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
   }
 
   /**
-   * `full` 為 true 時附上相容性欄位；為 false 時只留所有端點都吃的最小集合。
+   * When `full` is true, compatibility fields are attached; when false, only the minimum set that is eaten by all endpoints is left.
    *
-   * **輸出上限**（`max_tokens`）：不送的話用端點預設，很多端點只有幾百 token，
-   * 輸出會被 `finish_reason: length` 從中間切斷。見 OPENAI_MAX_TOKENS。
+   * **Output upper limit** (`max_tokens`): If not sent, use the endpoint default. Many endpoints only have a few hundred tokens.
+   * The output will be cut in the middle by `finish_reason: length`. See OPENAI_MAX_TOKENS.
    *
-   * **關閉思考**：這份工作不需要推理（數字全由程式算好，模型只負責照著寫成白話），
-   * 而推理型模型會把整個輸出額度花在思考上、正文一個字都沒寫。
-   * 沒有跨家通用的開關，故三個都送、由端點各取所需：
-   * - `reasoning_effort`：OpenAI o 系列與多數相容端點
+   * **Close thinking**: This job does not require reasoning (the numbers are all calculated by the program, and the model is only responsible for writing them in vernacular),
+   * The inference model will spend the entire output quota on thinking and not write a single word of the text.
+   * There is no universal switch across homes, so all three are provided and each endpoint takes what it needs:
+   * - `reasoning_effort`: OpenAI o series with most compatible endpoints
    * - `think`：Ollama
    * - `chat_template_kwargs.enable_thinking`：vLLM / SGLang 上的 Qwen3 等
    *
-   * 不認得的欄位大多會被忽略；真的 400 的話呼叫端會用 `full = false` 重送一次，
-   * **退回最小集合而不是只拿掉其中一項** —— 400 不會告訴你是哪個欄位不合，
-   * 逐一嘗試等於要打好幾輪。
+   * Most of the unrecognized fields will be ignored; if it is really 400, the caller will resend it with `full = false`.
+   * **Return to the minimum set instead of just taking away one of them** - 400 will not tell you which column is inconsistent,
+   * Trying them one by one equals several rounds.
    */
   private buildBody(req: AiRequest, full: boolean): string {
     return JSON.stringify({
@@ -479,7 +479,7 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
   }
 }
 
-/** 依據設定工廠建立對應的 AiProvider */
+/** Create the corresponding AiProvider based on the setting factory*/
 export function createAiProvider(s: AiSettings): AiProvider {
   if (s.provider === 'google') {
     return new GoogleProviderImpl(s)

@@ -1,14 +1,14 @@
 /**
- * 日 K 蠟燭圖，可疊加均線。
+ * Daily K candle chart, moving average can be superimposed.
  *
- * 幾個刻意的取捨：
- * - **值域不含 0**。股價從 0 起算會把整年的波動壓成頂端一條細線。
- * - **紅漲綠跌**（台股慣例，與籌碼圖的 up/down 同一組色）：以「當根收盤 vs 開盤」決定，
- *   不是與前一根比 —— 這與看盤軟體的實心 / 空心邏輯一致。
- * - **均線用類別色**：均線之間的差異是「身分」（5/20/60 日），不是漲跌，
- *   故取 CATEGORICAL_COLORS 而非 up/down（顏色一次只能做一件事，見 SPEC）。
- * - 一年 244 根時每根不到 2px，蠟燭實體會退化成一條線；此時仍保證至少 1px 寬，
- *   讓「有這根」看得出來。
+ * A few deliberate trade-offs:
+ * - **Value range does not include 0**. A stock price starting at 0 would squeeze the entire year's volatility into a thin line at the top.
+ * - **Red Up and Green Down** (Taiwan stock market convention, the same color group as the up/down of the chip chart): determined by "current closing vs. opening",
+ *   Not compared to the previous bar - this is consistent with the solid/hollow logic of the market reading software.
+ * - **Category color for moving averages**: The difference between the moving averages is the "status" (5/20/60 days), not the rise or fall,
+ *   So use CATEGORICAL_COLORS instead of up/down (colors can only do one thing at a time, see SPEC).
+ * - When there are 244 candles in a year, each candle is less than 2px, and the candle entity will degenerate into a line; at this time, it is still guaranteed to be at least 1px wide,
+ *   Let it be seen that "there is this root".
  */
 import { ChartFrame } from './chartFrame'
 import { lineSegments } from './chartPath'
@@ -16,12 +16,12 @@ import { CHART_COLORS } from './chartColors'
 import { niceDomain } from './chartScale'
 
 /**
- * 開高低收任一為 null 就畫不出這根，該欄留白（0.6.34）。
+ * If either open high or low close is null, this root cannot be drawn and the column will be left blank (0.6.34).
  *
- * 原本呼叫端是先把不完整的日子**過濾掉**，但這樣一來第 N 根就不是第 N 天了 ——
- * 與其他共用 X 軸的圖疊在一起時，同一個 hover 索引會指到不同日期。
- * 保留欄位、只是不畫，索引才對得起來。用收盤去補開高低仍然不行：
- * 那會畫出一整排十字線，看起來像那天真的沒有波動。
+ * Originally, the caller first filtered out the incomplete days, but in this way, the Nth day was no longer the Nth day——
+ * When stacked with other graphs that share an x-axis, the same hover index will refer to different dates.
+ * Keep the fields, just don't draw them, so the index can be correct. It still doesn’t work to use the closing price to cover the opening high and low:
+ * That would draw a whole row of crosshairs that would look like there were really no fluctuations on that day.
  */
 export interface Candle {
   label: string
@@ -31,7 +31,7 @@ export interface Candle {
   close: number | null
 }
 
-/** 四個價都齊的那根（畫圖與 tooltip 用） */
+/** The one with the same price among the four (used for drawing and tooltip)*/
 type FullCandle = { label: string; open: number; high: number; low: number; close: number }
 
 function full(c: Candle | undefined): FullCandle | null {
@@ -52,9 +52,9 @@ interface CandleChartProps {
   height?: number
   formatValue: (v: number) => string
   ariaLabel: string
-  /** 額外附在 tooltip 尾端的文字（例如成交量） */
+  /** Additional text attached to the end of the tooltip (such as volume)*/
   tooltipExtra?: (index: number) => string | null
-  /** 與其他圖共用 hover 時由外部持有；未給則自持（見 chartFrame） */
+  /** When sharing hover with other charts, it is held externally; if not given, it is self-held (see chartFrame)*/
   hoverIndex?: number | null
   onHover?: (index: number | null) => void
   crosshair?: boolean
@@ -72,7 +72,7 @@ export function CandleChart({
   onHover,
   crosshair,
 }: CandleChartProps) {
-  // 值域要同時容納蠟燭的高低與均線，否則均線會被畫到框外
+  // The value range must accommodate both the high and low of the candle and the moving average, otherwise the moving average will be drawn outside the box.
   const domain = niceDomain([
     ...candles.flatMap((c) => [c.high, c.low]),
     ...overlays.flatMap((o) => o.values),
@@ -90,8 +90,8 @@ export function CandleChart({
       crosshair={crosshair}
       tooltipFor={(i) => {
         const c = full(candles[i])
-        // 開高低收沒齊的日子只報日期：其他共用 X 軸的圖仍有那天的數字，
-        // 這裡回 null 會讓整條 crosshair 上只有這張圖沒有提示，看起來像壞掉
+        // Only the date will be reported on days when the opening, closing, and closing are both high and low: other charts that share the X-axis will still have the number for that day.
+        // Returning null here will cause this picture to be the only one in the entire crosshair without a prompt, making it look like it is broken.
         if (!c) return candles[i]?.label ?? null
         const ohlc = `開 ${formatValue(c.open)}　高 ${formatValue(c.high)}　低 ${formatValue(c.low)}　收 ${formatValue(c.close)}`
         const ma = overlays
@@ -105,7 +105,7 @@ export function CandleChart({
       }}
     >
       {(geo) => {
-        // 蠟燭實體佔欄寬六成，留出間隙；再窄也保底 1px
+        // The candle body occupies 60% of the width of the column, leaving a gap; no matter how narrow it is, the minimum is 1px
         const bodyW = Math.max(geo.bandWidth * 0.6, 1)
 
         return (
@@ -120,7 +120,7 @@ export function CandleChart({
               const yOpen = geo.y(c.open)
               const yClose = geo.y(c.close)
               const top = Math.min(yOpen, yClose)
-              // 開盤等於收盤（十字線）時仍畫 1px，否則那天會整根消失
+              // When the opening is equal to the closing (crosshair), still draw 1px, otherwise the whole bar will disappear that day
               const bodyH = Math.max(Math.abs(yClose - yOpen), 1)
               const dim = geo.hover !== null && geo.hover !== i
 

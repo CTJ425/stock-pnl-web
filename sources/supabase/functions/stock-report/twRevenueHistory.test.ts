@@ -9,11 +9,11 @@ import {
 } from './twRevenueHistory.ts'
 
 /**
- * fixture 逐字取自 2026-07-28 對 mopsov.twse.com.tw 的實際回應（big5 解碼後）：
- *   上市 t21sc03_115_6_0.html —— 產業別標題列、2330、各產業「合計」列
- *   上櫃 t21sc03_115_6_0.html —— 6488（含兩個負值）
- * 刻意保留原文的大寫 `<Td nowrap>`、不規則空白與 `&nbsp;`，
- * 那些正是解析器要扛住的東西，整理過的 fixture 就測不出來了。
+ * fixture is taken verbatim from the actual response to mopsov.twse.com.tw on 2026-07-28 (after big5 decoding):
+ *   Listed t21sc03_115_6_0.html - Industry category column, 2330, "Total" column for each industry
+ *   On the counter t21sc03_115_6_0.html —— 6488 (including two negative values)
+ * The original capital letters `<Td nowrap>`, irregular spaces and ` ` are deliberately retained.
+ * Those are the things that the parser needs to handle, and the compiled fixture cannot detect them.
  */
 const ROW_2330 =
   '<tr align=right><td align=center>2330</td><td align=left>台積電</td><td nowrap>            442,679,969</td><td nowrap>            416,975,163</td><td nowrap>            263,708,978</td><td nowrap>                  6.16</td><Td nowrap>                 67.86</td><td nowrap>          2,404,483,690</td><td nowrap>          1,773,045,533</td><td nowrap>                 35.61</td><td align=left>因先進製程產品需求增加所致。</td></tr>'
@@ -21,11 +21,11 @@ const ROW_2330 =
 const ROW_6488 =
   '<tr align=right><td align=center>6488</td><td align=left>環球晶</td><td nowrap>              5,624,376</td><td nowrap>              4,842,007</td><td nowrap>              5,717,334</td><td nowrap>                 16.15</td><Td nowrap>                 -1.62</td><td nowrap>             29,199,108</td><td nowrap>             31,602,431</td><td nowrap>                 -7.60</td><td align=center>-</td></tr>'
 
-/** 各產業末尾的合計列：首格是 `<th>合計</th>` 而非代號，必須被跳過 */
+/** Total column at the end of each industry: the first column is `<th>Total</th>` instead of code name, and must be skipped*/
 const ROW_TOTAL =
   '<tr align=right><th class=tt nowrap colspan=2 align=center>合計</th><td nowrap>                 20,799,291</td><td nowrap>                 20,711,765</td><td nowrap>                 17,976,617</td><td nowrap>                  0.42</td><td nowrap>                 15.70</td><td >                114,117,916</td><td >                117,144,222</td><td nowrap>                 -2.58</td><td>&nbsp;</td></tr>'
 
-/** 產業別標題列（巢狀 table，格數不足） */
+/** Industry title column (nested table, insufficient cells)*/
 const ROW_HEADER =
   '<tr><td><br><table border=0 width=100%><tr><th class=tt align=left >產業別：半導體業</th><th class=tt align=right >單位：千元</th></tr>'
 
@@ -73,7 +73,7 @@ describe('parseMopsRevenue', () => {
   })
 
   it('「合計」列與產業別標題列不會被誤當成個股', () => {
-    // 合計列的當月營收是 20,799,291；若被誤收，代號會是 '合計' 或某個非 4 碼字串
+    // The current month's revenue in the total column is 20,799,291; if it is received by mistake, the code will be 'total' or a non-4-digit string
     const got = parseMopsRevenue(PAGE, '2026-06', new Set(['2330', '6488']))
     expect([...got.keys()].sort()).toEqual(['2330', '6488'])
     for (const v of got.values()) expect(v.revenueThousandTwd).not.toBe(20799291)
@@ -128,14 +128,14 @@ describe('planRevenueBackfill', () => {
   })
 
   it('through 以上的月份不再重問——找過了就是沒有', () => {
-    // ETF 的形狀：一筆營收都沒有，但 2026-04 以上都已經找過
+    // The shape of the ETF: Not a single revenue, but 2026-04 All of the above have been found
     const have = new Map([['0050', p([], '2026-04')]])
     expect(planRevenueBackfill(have, WANT, 4)).toEqual(['2026-03'])
   })
 
   it('ETF 不會把整批回補卡死（0.6.4-dev.1 實測到的死結）', () => {
-    // 0050 永遠填不滿。若用「檔案裡沒有的月份」當缺口，每輪都會回同樣的最新 4 個月，
-    // 2330 就永遠拿不到更舊的資料。through 推進後，缺口必須真的往舊的方向走。
+    // 0050 can never be filled. If "months not in the file" are used as the gap, the same latest 4 months will be returned in each round.
+    // 2330 you will never get older information. After advancing through, the gap must actually go in the old direction.
     const have = new Map([
       ['0050', p([], '2026-03')],
       ['2330', p(['2026-06', '2026-05', '2026-04', '2026-03'], '2026-03')],

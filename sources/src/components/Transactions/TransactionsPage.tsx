@@ -1,7 +1,7 @@
 /**
- * 交易紀錄頁：交易列表（日期新到舊）、刪除（單筆 / 勾選批次）、CSV 匯入 / 匯出。
- * 新增交易改由外殼層的全域浮動按鈕開啟（任何分頁皆可用）。
- * 「損益 / 收支」欄與 GAS 版 H 欄同構：買入 = -(單價×股數+費用)，賣出 = 單價×股數-費用。
+ * Transaction record page: transaction list (date from new to old), deletion (single transaction/checked batch), CSV import/export.
+ * New transactions are opened by the global floating button in the shell layer (available in any page).
+ * The "Profit and Loss/Income and Expenses" column is the same as column H in the GAS version: buy = -(unit price × number of shares + expenses), sell = unit price × number of shares - expenses.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Calculator, Download, NotebookPen, Pencil, Search, Trash2, Upload, X } from 'lucide-react'
@@ -35,7 +35,7 @@ type TxSortKey =
   | 'fee_tax'
   | 'flow'
 
-/** 文字欄位預設升冪、日期與數值欄位預設降冪 */
+/** The text field has the ascending power by default, and the date and numeric fields have the descending power by default.*/
 const TX_SORT_DEFAULT_DIR: Record<TxSortKey, 'asc' | 'desc'> = {
   tx_date: 'desc',
   market: 'asc',
@@ -57,7 +57,7 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
       d = a.market.localeCompare(b.market)
       break
     case 'ticker':
-      // 代號排序：先市場（台股在前）再代號
+      // Order of codes: Market first (Taiwan stocks first) and then code
       d = a.market.localeCompare(b.market) || a.ticker.localeCompare(b.ticker)
       break
     case 'name':
@@ -82,7 +82,7 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
       d = cashFlow(a) - cashFlow(b)
       break
   }
-  // 同值時以日期新到舊、再以建立時間為次序
+  // If the values ​​are the same, the date will be sorted from newer to older, and then the creation time will be the order.
   return d || b.tx_date.localeCompare(a.tx_date) || b.created_at.localeCompare(a.created_at)
 }
 
@@ -102,7 +102,7 @@ export function TransactionsPage() {
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [sort, setSort] = useState<SortState<TxSortKey>>({ key: 'tx_date', dir: 'desc' })
 
-  // 切換工作區時清空勾選與搜尋：勾選的是前一個工作區的交易，不可帶到新的檢視
+  // Clear the check and search when switching workspaces: the transactions in the previous workspace are checked and cannot be brought to the new view
   useEffect(() => {
     setSelected(new Set())
     setSearchQuery('')
@@ -117,7 +117,7 @@ export function TransactionsPage() {
     return filtered.slice().sort((a, b) => sign * compareTx(a, b, sort.key))
   }, [filtered, sort])
 
-  // 可見且被勾選的交易筆數
+  // The number of transactions that are visible and checked
   const visibleSelectedCount = useMemo(
     () => sorted.filter((tx) => selected.has(tx.id)).length,
     [sorted, selected],

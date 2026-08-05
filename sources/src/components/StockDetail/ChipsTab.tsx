@@ -1,7 +1,7 @@
 /**
- * 籌碼分頁：三大法人（買進 / 賣出 / 買賣超 / 約當張數 / 連買連賣，可切換檢視 7 天中任一天）、
- * 近 7 日買賣超長條圖（可切單一法人或全部法人並排）、融資融券與 7 日餘額走勢。
- * 資料全部來自 Edge Function 回傳的結構化報告，此元件只負責呈現。
+ * Chip paging: three major legal entities (buy/sell/over-trade/equivalent number of chips/continuous buying and selling, you can switch to view any day in 7 days),
+ * Ultra-long bar chart of buying and selling in the past 7 days (can be cut into a single legal person or all legal persons side by side), margin trading and 7-day balance trend.
+ * All data comes from the structured report returned by Edge Function, and this component is only responsible for presentation.
  */
 import { useState } from 'react'
 import type {
@@ -27,9 +27,9 @@ import {
 } from './chipFormat'
 
 /**
- * 三大法人的四個組成 + 合計。
- * 合計＝前四項之和（T86 的官方揭露值），所以並排比較時只畫前四項 ——
- * 把合計也畫進去等於同一筆量重複計算一次。
+ * The four components of the three major legal persons + total.
+ * The total = the sum of the first four items (the official disclosure value of T86), so only the first four items are drawn when comparing side by side——
+ * Drawing the total also equals to repeating the calculation for the same amount.
  */
 const COMPONENTS = [
   { key: 'foreign', label: '外資（不含自營）', pick: (i: InstitutionalChip) => i.foreign },
@@ -56,11 +56,11 @@ const SERIES_OPTIONS: Array<{ key: SeriesKey; label: string }> = [
 const EMPTY_LEG: ChipLeg = { buy: null, sell: null, net: null }
 
 /**
- * 區塊層級的資料時間標記。
+ * Block-level data timestamp.
  *
- * 為什麼每個區塊各標一個：三個資料源的公布時間差很多（三大法人約 15:00–15:30、
- * 融資融券約 21:00–22:00、借券約 21:00–22:30），而批次是分段執行的 ——
- * 同一份報告裡各區塊的新舊程度本來就不一樣，只給整份一個時間會誤導。
+ * Why each block is marked with one: The release times of the three data sources are very different (the three major legal persons are about 15:00–15:30,
+ * (approximately 21:00–22:00 for margin trading and 21:00–22:30 for borrowing and lending), and batches are executed in stages——
+ * The freshness of each block in the same report is inherently different, and giving only one time to the entire report would be misleading.
  */
 function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
   if (!stamp || (!stamp.date && !stamp.fetchedAt)) return null
@@ -76,18 +76,18 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
 export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
-  // 表格預設看最新交易日，但可回看 7 天內任一天
+  // The table defaults to the latest trading day, but you can look back to any day within 7 days.
   const [dayIndex, setDayIndex] = useState(lastIndex)
   const [series, setSeries] = useState<SeriesKey>('all')
 
   const safeIndex = Math.min(Math.max(dayIndex, 0), Math.max(lastIndex, 0))
   const viewDay = history[safeIndex] ?? null
   const isLatestDay = safeIndex === lastIndex
-  // 切到舊日期時看該日的籌碼；history 為空則退回頂層的最新值
+  // When switching to an old date, see the chips on that day; if history is empty, return to the latest value at the top level
   const viewInst = history.length > 0 ? (viewDay?.institutional ?? null) : institutional
 
   const labels = history.map((d) => shortDate(d.date))
-  /** 某一列（法人）的買賣超序列，由舊到新 */
+  /** Transactions of a certain column (legal person) in super sequence, from oldest to newest*/
   const netsOf = (pick: (i: InstitutionalChip) => ChipLeg): Array<number | null> =>
     history.map((d) => (d.institutional ? pick(d.institutional).net : null))
 
@@ -102,7 +102,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
   const visibleComponents = COMPONENTS.filter((c) => !hiddenLegs.includes(c.key))
   const toggleLeg = (key: string) =>
     setHiddenLegs((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
-  /** 顏色依 COMPONENTS 的原始順序指派，關掉幾個之後剩下的線不會換色 */
+  /** Colors are assigned according to the original order of COMPONENTS. After turning off a few, the remaining lines will not change colors.*/
   const colorOf = (key: string) => CATEGORICAL_COLORS[COMPONENTS.findIndex((c) => c.key === key)]
 
   const chartSeries =
@@ -126,7 +126,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
           color: colorOf(c.key),
           note: fmtLotsFromShares(netsOf(c.pick)[lastIndex] ?? null),
           hidden: hiddenLegs.includes(c.key),
-          // 最後一個不給關：全部關掉只會剩一張空座標軸，看起來像壞掉
+          // The last one is not turned off: turning them all off will only leave an empty coordinate axis, which looks broken.
           toggleLocked: visibleComponents.length === 1 && visibleComponents[0].key === c.key,
           onToggle: () => toggleLeg(c.key),
         }))
@@ -390,7 +390,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
   )
 }
 
-/** 融資 / 融券餘額變化的連增連減（與法人共用同一套規則） */
+/** Continuous increases and consecutive decreases in financing/securities lending balance changes (share the same set of rules with legal persons)*/
 function marginStreak(
   history: ReportData['history'],
   field: 'marginChange' | 'shortChange',

@@ -1,6 +1,6 @@
 import { HelpTip } from './HelpTip'
 
-/** 不可排序但附欄位說明的表頭 */
+/** Unsortable table header with field descriptions*/
 export function HelpTh({ label, help, numeric }: { label: string; help: string; numeric?: boolean }) {
   return (
     <th className={numeric ? 'num th-sort' : 'th-sort'}>

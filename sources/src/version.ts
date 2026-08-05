@@ -1,5 +1,5 @@
 /**
- * 版本資訊單一來源：顯示於畫面左下角徽章。
- * 格式**不帶 `v` 前綴**（見 CLAUDE.md §12）：正式版 `x.x.x`、測試版 `x.x.x-dev.x`。
+ * Single source of version information: displayed on the badge in the lower left corner of the screen.
+ * Format **without `v` prefix** (see CLAUDE.md §12): official version `x.x.x`, beta version `x.x.x-dev.x`.
  */
 export const APP_VERSION = '0.6.37'

@@ -1,7 +1,7 @@
 /**
- * 個股分析「AI 分析」分頁。
- * 獨立進行 daily series 載入與技術面計算，不將狀態上提到父元件或修改 TechnicalTab。
- * 不會自動重試，未設定時畫面不得出現任何 AI 生成文字。
+ * Individual stock analysis "AI Analysis" page.
+ * Carry out daily series loading and technical calculation independently without mentioning the status to the parent component or modifying the TechnicalTab.
+ * There will be no automatic retry, and no AI-generated text should appear on the screen when not set.
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Bot, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -33,36 +33,36 @@ interface AiTabProps {
   ticker: string
   name: string
   report: ReportData | null
-  /** 由 StockDetailPage 載入分發（標題 badge / 基本面分頁 / 此處共用同一份） */
+  /** Loaded and distributed by StockDetailPage (title badge / fundamental paging / share the same copy here)*/
   fundamental: FundamentalData | null
 }
 
 const AI_TIMEOUT_SECONDS = Math.round(AI_TIMEOUT_MS / 1000)
 
 export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
-  // 設定狀態
+  // Set status
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settings, setSettings] = useState<AiSettings | null>(null)
-  // 設定改在管理後台維護（0.6.19），這裡只用來決定「未設定」時該給誰看哪一句話
+  // The settings are maintained in the management background (0.6.19). This is only used to determine which sentence should be shown to whom when "not set".
   const [isAdmin, setIsAdmin] = useState(false)
-  // 管理員在後台改過的提示詞。取不到就是空字串，`resolvePrompt` 會退回預設
+  // The prompt word changed by the administrator in the background. If it cannot be obtained, it will be an empty string, and `resolvePrompt` will return to the default
   const [prompts, setPrompts] = useState<AiPrompts>(EMPTY_PROMPTS)
 
-  // 執行與結果狀態
+  // Execution and result status
   const [status, setStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
   const [aiText, setAiText] = useState('')
   const [errMsg, setErrMsg] = useState('')
 
-  // 追問對話（0.6.5）。payload 留著是因為每一輪都要重送完整資料與框限，
-  // 不能只靠第一輪 —— 見 aiChat.ts 的說明。
+  // Follow-up dialogue (0.6.5). The payload is retained because complete information and frame limits must be re-sent in each round.
+  // Don't just rely on the first round - see instructions for aiChat.ts.
   const [payload, setPayload] = useState<AiPayload | null>(null)
   const [chat, setChat] = useState<AiMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [chatErr, setChatErr] = useState('')
 
-  // 從 sessionStorage 還原上次的分析與對話。
-  // 這順便修掉「切分頁 AI 結果就消失、要重按一次（重新計費）」那個痛點。
+  // Restore the last analysis and conversation from sessionStorage.
+  // This also fixes the pain point of "the AI ​​result of splitting pages disappears and you have to press it again (re-billing)".
   useEffect(() => {
     const saved = loadChat(ticker)
     if (saved) {
@@ -79,7 +79,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     setChatErr('')
   }, [ticker])
 
-  // 初次載入設定
+  // First time loading settings
   useEffect(() => {
     let alive = true
     setSettingsLoading(true)
@@ -102,20 +102,20 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     setStatus('generating')
     setErrMsg('')
     try {
-      // 自己載入日線並計算技術面
+      // Load the daily line yourself and calculate the technical level
       const daily = await fetchDailySeries(ticker)
       if (!daily || !daily.rows) {
         throw new AiError('bad-response', '無法讀取該個股之日線資料')
       }
-      // 指標一律以完整序列（近 1 年）計算，範圍標籤要跟著傳，模型才知道區間極值是哪段區間的
+      // Indicators are always calculated based on the complete sequence (last year), and the range label must be passed along so that the model knows which range the extreme value of the range is.
       const range: RangeKey = '1y'
       const view = buildTechnicalView(daily.rows, range)
       if (!view) {
         throw new AiError('bad-response', '無法計算個股之技術面指標 (歷史股價資料不存在或為空)')
       }
-      // 總經背景。0.6.5-dev.2 起自己抓 —— 它已不在個股分析的分頁裡，父元件沒理由替它載。
-      // 與 daily 同款：按下「產生分析」才抓，不必為了可能永遠不看的東西
-      // 在每次開啟個股頁時都下載一次。缺料不阻斷（buildMacroBlock 回 hasData: false）。
+      // General background. 0.6.5-dev.2 Catch it yourself - it is no longer in the page of individual stock analysis, and the parent component has no reason to load it for it.
+      // Same as daily: press "generate analysis" to grab, not for something you may never read
+      // It is downloaded every time you open the individual stock page. Does not block when there is lack of material (buildMacroBlock returns hasData: false).
       const macro = await fetchMacro()
       const built = buildAiPayload({ ticker, name, view, report, range, fundamental, macro })
       const { system, user } = renderAiPrompt(built, prompts.analysis)
@@ -126,7 +126,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         messages: [{ role: 'user', content: user }],
       })
 
-      // 重新產生分析＝開一段新對話。舊的追問是針對舊分析問的，接著它會前後矛盾。
+      // Regenerate analysis = start a new conversation. The old questioning is asked against the old analysis, and then it becomes inconsistent.
       setPayload(built)
       setAiText(result)
       setChat([])
@@ -148,12 +148,12 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   }
 
   /**
-   * 送出一則追問。
+   * Send a follow-up question.
    *
-   * `payload` 只在「這次 session 有按過產生分析」時才有值；從 sessionStorage
-   * 還原回來的情況下是 null，因為 payload 沒有一起存（它很大，且可以重建）。
-   * 那時要求使用者重新產生一次分析 —— 沒有 payload 就沒有框限所依據的資料，
-   * 硬送等於讓模型在沒有數據的情況下憑空作答。
+   * `payload` only has a value if "this session has been clicked to generate analysis"; from sessionStorage
+   * It is null when restored back because the payload is not saved together (it is large and can be reconstructed).
+   * At that time, the user is required to re-generate an analysis - without the payload, there is no data on which to base the frame.
+   * Hard feeding is equivalent to letting the model answer out of thin air without data.
    */
   async function handleAsk() {
     if (!settings || !payload) return
@@ -166,7 +166,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     setChatErr('')
     try {
       const provider = createAiProvider(settings)
-      // system 每一輪都重送，框限不會隨對話變長被稀釋（見 aiChat.ts）
+      // system resends every round, and the frame limit will not be diluted as the conversation becomes longer (see aiChat.ts)
       const reply = await provider.complete({
         system: buildChatSystem(payload, aiText, prompts.chat),
         messages: next,
@@ -175,7 +175,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       setChat(withReply)
       saveChat(ticker, aiText, withReply)
     } catch (e: unknown) {
-      // 失敗時把剛送出的那則留在畫面上，使用者才知道是哪一句沒送成功
+      // When it fails, leave the sentence you just sent on the screen so that the user can know which sentence failed to be sent successfully.
       setChatErr(e instanceof Error ? e.message : '追問時發生未知錯誤')
     } finally {
       setChatBusy(false)

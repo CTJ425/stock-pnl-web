@@ -21,7 +21,7 @@ import { AdminConsolePage } from './AdminConsolePage'
 describe('AdminConsolePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // 兩個子面板都會自己載資料，統一給「查無」讓它們走空狀態
+    // Both sub-panels will load their own data, and they will all be "checked" to make them empty.
     fetchAdminStatus.mockResolvedValue(null)
     loadAiSettings.mockResolvedValue(null)
   })
@@ -39,7 +39,7 @@ describe('AdminConsolePage', () => {
     render(<AdminConsolePage onExit={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
     expect(await screen.findByLabelText(/AI 服務供應商/)).toBeTruthy()
-    // 切走之後抓取狀況就不該還留在畫面上
+    // The capture status should not remain on the screen after cutting away.
     expect(screen.queryByText(/讀不到資料抓取狀況/)).toBeNull()
   })
 

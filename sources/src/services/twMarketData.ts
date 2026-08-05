@@ -1,16 +1,16 @@
 /**
- * 台股全清單（上市 + 上櫃）：代號、名稱與最近收盤價。
+ * Full list of Taiwan stocks (listed + OTC): code, name and latest closing price.
  *
- * 資料來源（官方 OpenAPI 未開放 CORS，無法由瀏覽器直連）：
- * - 上市：TWSE openapi STOCK_DAY_AVG_ALL（日收盤價）
- * - 上櫃：TPEx openapi tpex_mainboard_quotes（與原 GAS 版 getOtcList_ 相同來源）
+ * Data source (the official OpenAPI does not open CORS and cannot be directly connected by the browser):
+ * - Listing: TWSE openapi STOCK_DAY_AVG_ALL (daily closing price)
+ * - Listing: TPEx openapi tpex_mainboard_quotes (same source as the original GAS version getOtcList_)
  *
- * 開發模式：經 Vite dev server 代理（vite.config.ts 的 /api/twse、/api/tpex）。
- * 正式環境：優先經 Supabase Edge Function `stock-price` 的 twlist 動作代理
- * （官方端點不開放 CORS，直連必失敗），Edge 不可用時才嘗試直連。
+ * Development mode: Proxy via Vite dev server (/api/twse, /api/tpex of vite.config.ts).
+ * Formal environment: First pass the twlist action proxy of Supabase Edge Function `stock-price`
+ * (The official endpoint does not open CORS, and direct connection will fail). Direct connection will be attempted only when Edge is unavailable.
  *
- * 清單快取於 localStorage（TTL 30 分鐘），同時供「名稱模糊搜尋 / 代號反查」
- * 與「台股現價備援」使用。
+ * The list is cached in localStorage (TTL 30 minutes), and is also available for "name fuzzy search/code reverse search"
+ * Use with "Taiwan Stock Current Price Reserve".
  */
 import { isSupabaseConfigured, supabase } from './supabase'
 
@@ -25,7 +25,7 @@ const TPEX_URL = DEV
 export interface TwStockRow {
   symbol: string
   name: string
-  /** 最近收盤價；來源暫缺時為 null */
+  /** Most recent closing price; null if source is missing*/
   close: number | null
 }
 
@@ -53,7 +53,7 @@ function writeCache(rows: TwStockRow[]): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows } satisfies CacheShape))
   } catch {
-    // 超過容量等情況直接放棄快取，功能不受影響
+    // If the capacity exceeds the capacity, the cache will be abandoned directly, and the functions will not be affected.
   }
 }
 
@@ -92,7 +92,7 @@ async function fetchTpex(): Promise<TwStockRow[]> {
     .filter((r) => r.symbol && r.name)
 }
 
-/** 直連（開發模式經 dev proxy；正式環境多半因 CORS 失敗） */
+/** Direct connection (development mode via dev proxy; formal environment mostly fails due to CORS)*/
 async function fetchDirect(): Promise<TwStockRow[]> {
   const results = await Promise.allSettled([fetchTwse(), fetchTpex()])
   const rows: TwStockRow[] = []
@@ -112,7 +112,7 @@ interface EdgeTwListResponse {
   rows?: Array<{ symbol?: unknown; name?: unknown; close?: unknown }>
 }
 
-/** 經 Supabase Edge Function 代理（正式環境的主要路徑） */
+/** Proxy via Supabase Edge Function (main path to the official environment)*/
 async function fetchViaEdge(): Promise<TwStockRow[]> {
   if (!isSupabaseConfigured || !supabase) return []
   try {
@@ -134,14 +134,14 @@ async function fetchViaEdge(): Promise<TwStockRow[]> {
 
 let inflight: Promise<TwStockRow[]> | null = null
 
-/** 取得台股全清單（記憶體去重 + localStorage 快取；多來源依序嘗試） */
+/** Get the full list of Taiwan stocks (memory deduplication + localStorage cache; try multiple sources in sequence)*/
 export async function getTwStockList(): Promise<TwStockRow[]> {
   const cached = readCache()
   if (cached) return cached
   if (inflight) return inflight
 
   inflight = (async () => {
-    // 開發模式走 dev proxy 直連；正式環境優先走 Edge Function，失敗才試直連
+    // In development mode, use dev proxy to connect directly; in formal environment, use Edge Function first, and only try direct connection if it fails.
     let rows = DEV ? await fetchDirect() : await fetchViaEdge()
     if (rows.length === 0) {
       rows = DEV ? await fetchViaEdge() : await fetchDirect()

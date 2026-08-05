@@ -79,7 +79,7 @@
 
   <rect x="0" y="0" width="1160" height="660" fill="var(--bg)"/>
 
-  <!-- ===== 群組框 ===== -->
+  <!--===== Group box =====-->
   <text class="group-label" x="24" y="38">瀏覽器（React 19 + Vite 8 + TypeScript SPA）</text>
   <rect class="group" x="20" y="48" width="290" height="422" rx="10"/>
 
@@ -89,7 +89,7 @@
   <text class="group-label" x="788" y="38">外部資料源（由 Edge Functions 伺服器端請求）</text>
   <rect class="group" x="784" y="48" width="356" height="426" rx="10"/>
 
-  <!-- ===== 瀏覽器 ===== -->
+  <!--===== Browser =====-->
   <rect class="node fe" x="38" y="84" width="254" height="76" rx="7"/>
   <text class="t fe-t" x="52" y="105">UI 頁面 / 元件</text>
   <text class="d fe-t" x="52" y="123">庫存總覽・年度收益・交易紀錄</text>
@@ -114,7 +114,7 @@
   <line class="edge" x1="165" y1="344" x2="165" y2="364" marker-end="url(#arrow)"/>
   <text class="el" x="175" y="360">本機模式</text>
 
-  <!-- ===== Supabase：資料面 ===== -->
+  <!--===== Supabase: Materials side =====-->
   <rect class="node sb" x="364" y="88" width="180" height="52" rx="7"/>
   <text class="t sb-t" x="376" y="108">Supabase Auth</text>
   <text class="d sb-t" x="376" y="126">GoTrue：Email 註冊 / 登入</text>
@@ -130,7 +130,7 @@
   <text class="s sb-t" x="382" y="271">price_cache · stock_names</text>
   <text class="s sb-t" x="382" y="286">chip_raw_cache（僅 EF 可寫）</text>
 
-  <!-- ===== Supabase：運算面 ===== -->
+  <!--===== Supabase: Operation surface =====-->
   <rect class="node sb" x="566" y="88" width="178" height="72" rx="7"/>
   <text class="t sb-t" x="578" y="108">pg_cron 排程</text>
   <text class="d sb-t" x="578" y="126">盤後每 15 分鐘輪詢</text>
@@ -161,14 +161,14 @@
   <text class="el" x="400" y="320">呼叫函式</text>
   <text class="el" x="400" y="372">下載預產報告</text>
 
-  <!-- Supabase 內部 -->
+  <!--Inside Supabase-->
   <line class="edge" x1="655" y1="160" x2="655" y2="180" marker-end="url(#arrow)"/>
   <text class="el" x="663" y="176">觸發</text>
   <line class="edge" x1="655" y1="312" x2="655" y2="332" marker-end="url(#arrow)"/>
   <text class="el" x="663" y="328">寫入報告</text>
   <line class="edge" x1="564" y1="268" x2="546" y2="268" marker-end="url(#arrow)"/>
 
-  <!-- ===== 外部資料源 ===== -->
+  <!--===== External data sources =====-->
   <rect class="node ex" x="802" y="88" width="318" height="52" rx="7"/>
   <text class="t ex-t" x="814" y="108">證交所 MIS 即時行情</text>
   <text class="d ex-t" x="814" y="126">台股現價（秒級延遲）</text>
@@ -200,7 +200,7 @@
   <line class="edge" x1="764" y1="418" x2="800" y2="418" marker-end="url(#arrow)"/>
   <circle class="dot" cx="764" cy="240" r="2.6"/>
 
-  <!-- ===== AI 端點（瀏覽器直連） ===== -->
+  <!--===== AI endpoint (direct browser connection) =====-->
   <rect class="node ai" x="802" y="520" width="318" height="76" rx="7"/>
   <text class="t ai-t" x="814" y="544">AI 端點（使用者自備）</text>
   <text class="d ai-t" x="814" y="562">Google Gemini 或 OpenAI 相容端點</text>

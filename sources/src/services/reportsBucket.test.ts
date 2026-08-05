@@ -14,9 +14,9 @@ describe('downloadReportsJson', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('讀取必須帶 cache: no-store', async () => {
-    // 這是 0.6.4-dev.5 線上事故的防線：Storage 回 max-age=3600，
-    // 少了 no-store 使用者會看到舊一小時的資料，而且 Ctrl+Shift+R 救不了
-    // （硬重整不涵蓋 JS 之後才發出的 fetch）。
+    // This is the line of defense for 0.6.4-dev.5 online incidents: Storage returns max-age=3600,
+    // Without no-store users will see one hour older data, and Ctrl+Shift+R cannot save it.
+    // (Hard refactoring does not cover fetch issued after JS).
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: 1 }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 

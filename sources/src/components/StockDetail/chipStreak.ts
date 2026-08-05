@@ -1,19 +1,19 @@
 /**
- * 連買連賣 / 連增連減的計算。
+ * Calculation of continuous buying and selling/continuous increase and continuous decrease.
  *
- * 為什麼前端要自己算：伺服器回的 `report.streaks` 只是「最新交易日」那一天的連續天數，
- * 但表格可以切換檢視 7 天中的任一天，那幾天各自的連續天數只有前端算得出來
- * （history 本來就在手上）。UI 一律走這裡，不混用 `report.streaks`，避免同一欄
- * 有兩種來源。
+ * Why does the front end have to calculate it by itself: the `report.streaks` returned by the server is only the number of consecutive days on the "latest trading day".
+ * However, the table can be switched to view any day among the 7 days. The number of consecutive days in those days can only be calculated by the front end.
+ * (history is already on hand). UI always go here, do not mix `report.streaks`, avoid the same column
+ * There are two sources.
  *
- * ⚠️ 必須與 `sources/supabase/functions/stock-report/report.ts` 的 `computeStreak`
- * 行為一致（同一套規則跨網路邊界，兩邊各有測試把關）。
+ * ⚠️Must be used with `computeStreak` of `sources/supabase/functions/stock-report/report.ts`
+ * Consistent behavior (the same set of rules across network boundaries, with testing on both sides).
  */
 
 /**
- * 由「由舊到新」的序列算到 endIndex 為止的連續天數：
- * 從 endIndex 往回數同號的連續筆數，遇 0 或 null（當日無資料）即中斷。
- * 回傳值帶正負號（+3 = 連 3 買 / 連 3 增；-2 = 連 2 賣 / 連 2 減）。
+ * Count the number of consecutive days from the "oldest to newest" sequence up to endIndex:
+ * Counting back the number of consecutive transactions with the same number from endIndex, it will be interrupted when it encounters 0 or null (no data on the current day).
+ * The returned value has a positive or negative sign (+3 = 3 consecutive buys/3 consecutive increases; -2 = 2 consecutive sells/2 consecutive decreases).
  */
 export function streakAt(series: Array<number | null>, endIndex: number): number {
   const last = series[endIndex]

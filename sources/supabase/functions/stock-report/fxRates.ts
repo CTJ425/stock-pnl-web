@@ -1,75 +1,75 @@
 /**
- * 台幣對主要外幣的匯率抓取與解析（Yahoo Finance chart 端點）。
+ * Capture and parse exchange rates of the Taiwan dollar against major foreign currencies (Yahoo Finance chart endpoint).
  *
- * **為什麼不是台灣銀行牌告匯率**（0.6.7 規劃時實測，2026-07-29）：
- * `https://rate.bot.com.tw/xrt/flcsv/0/day` 與
- * `https://rate.bot.com.tw/xrt/flcsv/0/{YYYY-MM}/{幣別}` 兩個 CSV 端點
- * 都回 `<title>Challenge Validation</title>` 的 JS proof-of-work 人機驗證頁，
- * 換成瀏覽器 UA 也一樣（與 FRED 那種「UA 挑食」不同層級 —— 這個要真的執行 JS
- * 才過得了，Deno Edge Function 做不到）。
+ * **Why is it not the exchange rate announced by the Bank of Taiwan** (0.6.7 measured during planning, 2026-07-29):
+ * `https://rate.bot.com.tw/xrt/flcsv/0/day` with
+ * `https://rate.bot.com.tw/xrt/flcsv/0/{YYYY-MM}/{currency}` Two CSV endpoints
+ * All return the JS proof-of-work human-machine verification page of `<title>Challenge Validation</title>`,
+ * The same goes for browser UA (it’s a different level from FRED’s “UA picky eaters” – this one needs to actually execute JS
+ * Just got by, Deno Edge Function can't do it).
  *
- * 代價要說清楚：**因此拿不到「現金／即期、買入／賣出」四個牌告價，只有市場中價。**
- * 畫面上必須標示「非銀行牌告匯率，實際結匯請以往來銀行為準」，不可略過。
+ * The price must be made clear: ** Therefore, we cannot get the four "cash/spot, buy/sell" price tags, only the market price. **
+ * The screen must be marked with "The exchange rate is not quoted by the bank. Please refer to the bank for actual exchange settlement" and cannot be ignored.
  *
- * 改用 Yahoo 的理由是它本來就在專案裡：twDaily.ts 抓台股日線用的是同一支 API、
- * 同樣的 `interval=1d&range=1y`，連 `ChartResponse` 型別與 `tradingDateOf()` 都直接沿用。
+ * The reason for switching to Yahoo is that it was already in the project: twDaily.ts uses the same API to capture the daily line of Taiwan stocks.
+ * The same `interval=1d&range=1y`, even the `ChartResponse` type and `tradingDateOf()` are directly used.
  *
- * 解析為純函式、不觸網，比照 twDaily.ts / usMacro.ts 的分工。
+ * The analysis is a pure function and does not touch the network. Compare the division of labor of twDaily.ts / usMacro.ts.
  */
 
 import { type ChartResponse, tradingDateOf } from './twDaily.ts'
 
 /**
- * fx/twd.json 的結構版本。前端守門必須用 `>=`（見 src/services/fxProxy.ts）——
- * 加欄位對舊前端是無害的加法，用等號會在後端升版時讓整個分頁當場全掛。
+ * Structured version of fx/twd.json. Front-end gatekeeping must use `>=` (see src/services/fxProxy.ts)——
+ * Adding fields is a harmless addition to the old front-end. Using the equal sign will cause the entire paging to hang on the spot when the back-end is upgraded.
  */
 export const FX_SCHEMA = 1
 
 /**
- * 一天的匯率。tuple 是為了壓 Storage 體積（沿用 twDaily.DailyRow 的理由：
- * 物件陣列約為 tuple 的 3 倍大）。8 個幣別 × 260 天，物件寫法會逼近 150KB。
+ * exchange rate for one day. Tuple is to reduce Storage volume (the reason for using twDaily.DailyRow:
+ * The object array is approximately 3 times the size of the tuple). 8 currencies × 260 days, the object writing method will approach 150KB.
  *
- * `rate` 一律是「**1 單位外幣可換多少台幣**」。反向（1 台幣換多少外幣）由前端取倒數，
- * 不另存一份 —— 兩份會走鐘。
+ * `rate` is always "**How ​​many Taiwan dollars can be exchanged for 1 unit of foreign currency**". Reverse (how much foreign currency is exchanged for 1 Taiwan dollar) is the reciprocal from the front end,
+ * Don’t save another copy – two copies will keep the clock running.
  */
 export type FxPoint = [date: string, rate: number]
 
 export interface FxSpec {
-  /** ISO 4217 代號 */
+  /** ISO 4217 code name*/
   code: string
   name: string
   /**
-   * 畫面顯示的小數位數。各幣別量級差很多：USD 32.387 用 3 位就夠，
-   * KRW 0.022289 用 3 位會變成 0.022、看不出任何變化。
+   * The number of decimal places displayed on the screen. The magnitude of each currency is very different: USD 32.387 only needs 3 digits.
+   * KRW 0.022289 will become 0.022 with 3 digits, and no change will be seen.
    */
   decimals: number
   /**
-   * Yahoo 幣對候選，**依序嘗試**。`invert` 為 true 代表該幣對報的是
-   * 「1 台幣換多少外幣」，要取倒數才是我們要存的方向。
+   * Yahoo currency pair candidates, **try in order**. `invert` is true, which means the currency is quoted as
+   * "How much foreign currency is exchanged for 1 Taiwan dollar?" The reciprocal is the direction we want to save.
    *
-   * ⚠️ **為什麼需要兩個候選、而不是統一用某一個方向**（2026-07-29 實測 8 個幣別）：
-   * 兩個方向都各有幣別是死的，而且死的方式一模一樣 —— 回 200、結構完整、
-   * 但 `timestamp` 只有 1 格（僅當下報價，沒有任何歷史）：
+   * ⚠️ **Why two candidates are needed instead of using a certain direction** (actual measurement of 8 currencies on 2026-07-29):
+   * There are coins in both directions that are dead, and the way of death is exactly the same - return to 200, complete structure,
+   * But `timestamp` only has 1 cell (only the current quote, without any history):
    *
-   *   `CNYTWD=X` → 1 格 ❌ ／ `TWDCNY=X` → 263 格 ✅
-   *   `TWDEUR=X` → 1 格 ❌ ／ `EURTWD=X` → 263 格 ✅
+   *   `CNYTWD=X` → 1 grid ❌ / `TWDCNY=X` → 263 grids ✅
+   *   `TWDEUR=X` → 1 grid ❌ / `EURTWD=X` → 263 grids ✅
    *
-   * 沒有任何單一方向對八個幣別都成立。這種「安靜地只回一格」不會拋錯、
-   * 不會有非 200 狀態碼，只會讓走勢圖變成一個點 —— 所以判定條件是
-   * **點數是否足夠**（見 FX_MIN_POINTS），不是請求成不成功。
+   * No single direction holds true for all eight currencies. This kind of "quietly returning only one frame" will not be wrong,
+   * There will be no non-200 status code, it will only turn the trend chart into a point - so the judgment condition is
+   * **Whether the points are enough** (see FX_MIN_POINTS), not whether the request is unsuccessful.
    *
-   * 候選順序是實測當下較有資料的那一側，第二個純粹是保險：
-   * 哪一側有流動性是 Yahoo 自己的事，將來對調了 fallback 會自動接上。
+   * The order of candidates is the side with more data at the moment of actual measurement. The second one is purely for insurance:
+   * Which side has liquidity is Yahoo's own business. If the fallback is reversed in the future, it will automatically connect it.
    */
   symbols: readonly { symbol: string; invert: boolean }[]
 }
 
-/** 主要 8 種幣別。順序即畫面順序 */
+/** Main 8 currencies. sequence i.e. screen sequence*/
 export const FX_CURRENCIES: readonly FxSpec[] = [
   { code: 'USD', name: '美元', decimals: 3, symbols: pair('USD') },
   { code: 'JPY', name: '日圓', decimals: 4, symbols: pair('JPY') },
   { code: 'EUR', name: '歐元', decimals: 3, symbols: pair('EUR') },
-  // 實測 CNYTWD=X 只回一格，故把台幣在前的那一側排第一
+  // The actual measurement of CNYTWD=X only returns one grid, so the side with the Taiwan dollar in front is ranked first.
   { code: 'CNY', name: '人民幣', decimals: 4, symbols: pairReversed('CNY') },
   { code: 'HKD', name: '港幣', decimals: 4, symbols: pair('HKD') },
   { code: 'GBP', name: '英鎊', decimals: 3, symbols: pair('GBP') },
@@ -77,7 +77,7 @@ export const FX_CURRENCIES: readonly FxSpec[] = [
   { code: 'KRW', name: '韓元', decimals: 5, symbols: pair('KRW') },
 ]
 
-/** 外幣在前（`USDTWD=X` 直接就是 1 外幣 = N 台幣），台幣在前的那側當備援 */
+/** The foreign currency comes first (`USDTWD=X` is directly 1 foreign currency = N Taiwan dollars), and the side with Taiwan dollars in front is used as a backup*/
 function pair(code: string): readonly { symbol: string; invert: boolean }[] {
   return [
     { symbol: `${code}TWD=X`, invert: false },
@@ -85,7 +85,7 @@ function pair(code: string): readonly { symbol: string; invert: boolean }[] {
   ]
 }
 
-/** 順序相反的版本，給實測上「外幣在前那側是死的」幣別用 */
+/** The reverse order version is used for currencies that have been measured as "Foreign currency is dead on the front side"*/
 function pairReversed(code: string): readonly { symbol: string; invert: boolean }[] {
   return [
     { symbol: `TWD${code}=X`, invert: true },
@@ -94,15 +94,15 @@ function pairReversed(code: string): readonly { symbol: string; invert: boolean 
 }
 
 /**
- * 判定「這個幣對算不算有歷史」的門檻。
+ * The threshold to determine "whether this currency pair has history".
  *
- * 一年的日線實測是 260 個交易日；死掉的那一側是 1 格。60 這個值取在兩者之間、
- * 且剛好是三個月的交易日數 —— 低於它連最短的 3 個月走勢圖都畫不出來，
- * 那就該去試下一個候選幣對。
+ * The actual daily measurement of a year is 260 trading days; the dead side is 1 square. 60 This value is taken between the two,
+ * And it is exactly the number of trading days in three months - below it, even the shortest three-month trend chart cannot be drawn.
+ * Then it’s time to try the next candidate pair.
  */
 export const FX_MIN_POINTS = 60
 
-/** 一年份，與 twDaily 同一組參數 */
+/** One year, the same set of parameters as twDaily*/
 export function fxUrl(symbol: string): string {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
 }
@@ -112,46 +112,46 @@ function num(v: unknown): number | null {
 }
 
 /**
- * 存進 Storage 的精度。六位小數對每個幣別都夠：
- * 最小的 KRW 是 0.022289，六位小數仍保有四位有效數字。
- * 不做這一步的話 Yahoo 原始值長這樣：0.19965200126171112（單檔會多出將近一倍體積）。
+ * The precision of storing into Storage. Six decimal places are enough for each currency:
+ * The smallest KRW is 0.022289, which is six decimal places and still has four significant figures.
+ * If you don't do this step, Yahoo's original value will look like this: 0.19965200126171112 (a single file will be nearly twice the size).
  */
 function round6(n: number): number {
   return Math.round(n * 1e6) / 1e6
 }
 
 /**
- * 由 chart 回應抽出「1 外幣 = N 台幣」的日序列（由舊到新）。
- * 結構不符或無有效資料時回空陣列，呼叫端據此改試下一個候選幣對。
+ * Extract the daily sequence of "1 foreign currency = N Taiwan dollars" from the chart response (from old to new).
+ * If the structure does not match or there is no valid data, an empty array will be returned, and the caller will try the next candidate currency pair accordingly.
  *
- * 三個實測到的處理（2026-07-29，八個幣對各打一次）：
+ * Three measured treatments (2026-07-29, one for each of the eight currency pairs):
  *
- * 1. **收盤為 null 的格要丟掉**：實測每個幣對都有 3 格，是耶誕節、元旦，
- *    以及「當天的日線還沒收」。同 twDaily 的 extractDaily。
+ * 1. **The cells that close as null should be discarded**: According to actual measurement, each currency pair has 3 cells, which are Christmas and New Year’s Day.
+ *    and "The daily line for the day has not been confiscated yet." Same as twDaily's extractDaily.
  *
- * 2. **timestamp 要先加 `meta.gmtoffset` 再取 UTC 日期**。匯率的時區是**倫敦**
- *    （gmtoffset=3600、timezone=BST），而且原始秒數指向 23:00Z ——
- *    直接 `toISOString().slice(0,10)` 會整條序列**倒退一天**。
- *    twDaily 的註解說「台股時區碰巧會對」，匯率這裡連碰巧都沒有。
+ * 2. **timestamp must first add `meta.gmtoffset` and then get the UTC date**. The time zone for the exchange rate is **London**
+ *    (gmtoffset=3600, timezone=BST), and the raw seconds point to 23:00Z ——
+ *    Directly `toISOString().slice(0,10)` will move the entire sequence **backward by one day**.
+ *    twDaily's note says that "Taiwan stock time zones coincidentally match", but the exchange rates are not even coincidental here.
  *
- * 3. **要剔除 Yahoo 附加在序列尾端的「即時報價列」**，它不是日線收盤。
+ * 3. **Exclude the "real-time quote column" that Yahoo attaches to the end of the sequence**, which is not the daily closing.
  *
- *    實測每個幣對的 timestamp 末端長這樣：
+ *    The actual timestamp end of each currency pair looks like this:
  *      …, 1785193200 (23:00:00Z), 1785279600 (23:00:00Z), 1785289523 (01:45:23Z)
- *    前面每一格都落在當地午夜（BST 時是 23:00Z），只有最後一格是抓取當下的秒數，
- *    而且它**精確等於 `meta.regularMarketTime`** —— 兩個幣對各驗一次都成立，
- *    所以判定是確定性的，不必去猜時間對齊。
+ *    Each of the previous cells falls on local midnight (23:00Z in BST), and only the last cell captures the current seconds.
+ *    And it is **exactly equal to `meta.regularMarketTime`** - it is true once for both currency pairs.
+ *    Therefore, the judgment is deterministic and there is no need to guess the time alignment.
  *
- *    **為什麼一定要剔除**（2026-07-29 實測，這是真的會顯示錯誤數字的 bug）：
- *    反向幣對（TWD 在前）那一側流動性差，即時報價與它自己的日線序列對不起來。
- *    人民幣當天的日線是 4.7766，附加的即時列換算後是 4.9900 —— 日變動 **+4.47%**，
- *    而同一天其他七個幣別都只動 0.4%。掛在畫面上就是一個一望即知的錯誤。
+ *    **Why it must be eliminated** (actual measurement on 2026-07-29, this is a bug that really displays wrong numbers):
+ *    The side of the inverse currency pair (TWD first) has poor liquidity, and the real-time quotes are inconsistent with its own daily sequence.
+ *    The daily line of RMB that day is 4.7766, and the attached real-time column is converted to 4.9900 - the daily change **+4.47%**,
+ *    On the same day, the other seven currencies moved only 0.4%. Hanging on the screen is an obvious mistake.
  *
- *    代價是 `latest` 變成「最後一根完整日線」而非當下報價。這與這頁本來的承諾
- *    （「每日更新兩次、非即時報價」）一致，反而更誠實。
+ *    The price is that `latest` becomes the "last full daily line" instead of the current quote. This is consistent with the original promise of this page
+ *    ("Updated twice a day, non-real-time quotes") are consistent, but more honest.
  *
- * 保留 Map 覆寫（同日以最後一筆為準）是防禦：剔除即時列之後理論上不會再有重覆日，
- * 但真的重覆時取新的那筆才對。
+ * Keeping Map overwrites (the last one on the same day shall prevail) is a defense: after removing the immediate column, theoretically there will be no duplicate days.
+ * But it is only appropriate to take the new amount when it is repeated.
  */
 export function extractFxPoints(resp: ChartResponse, invert: boolean): FxPoint[] {
   const result = resp?.chart?.result?.[0]
@@ -163,11 +163,11 @@ export function extractFxPoints(resp: ChartResponse, invert: boolean): FxPoint[]
   const liveAt = num(result?.meta?.regularMarketTime)
   const byDate = new Map<string, number>()
   for (let i = 0; i < ts.length; i++) {
-    // 即時報價列：不是日線收盤，且反向幣對那側的值不可信（見上方 3.）
+    // Real-time quotation column: It is not the daily closing price, and the value on that side of the inverse currency pair is not credible (see 3. above)
     if (liveAt !== null && ts[i] === liveAt) continue
     const close = num(q.close?.[i])
     if (close === null) continue
-    // 取倒數前必須排除 0：Yahoo 沒回過 0，但 1/0 會是 Infinity 而後續全部計算跟著壞掉
+    // 0 must be excluded before taking the reciprocal: Yahoo has not returned 0, but 1/0 will be Infinity and all subsequent calculations will be broken.
     if (invert && close === 0) continue
     byDate.set(tradingDateOf(ts[i], offset), round6(invert ? 1 / close : close))
   }
@@ -181,26 +181,26 @@ export interface FxCurrency {
   code: string
   name: string
   decimals: number
-  /** 實際採用的 Yahoo 幣對，供稽核用（哪一側有資料會隨時間變） */
+  /** The actual Yahoo currency pair used for audit purposes (which side has data will change over time)*/
   symbol: string
-  /** 最新一筆匯率（1 外幣 = N 台幣）。無資料時為 null */
+  /** The latest exchange rate (1 foreign currency = N Taiwan dollars). null if there is no data*/
   latest: number | null
-  /** 前一個交易日，用來算日變動 */
+  /** The previous trading day, used to calculate daily changes*/
   prevClose: number | null
-  /** 由舊到新，一年份 */
+  /** From old to new, one year*/
   points: FxPoint[]
 }
 
-/** Storage 內 fx/twd.json 的結構。**全域單檔，不是 per-ticker**（同 macro/us.json） */
+/** The structure of fx/twd.json in Storage. **Global single file, not per-ticker** (same as macro/us.json)*/
 export interface FxFile {
   schema: number
-  /** 我們實際產出它的時間 ISO */
+  /** The time we actually produced it ISO*/
   asOf: string
   base: 'TWD'
   currencies: FxCurrency[]
 }
 
-/** 由抓到的序列組出一個幣別的完整結構 */
+/** Create a complete structure of a currency from the captured sequence*/
 export function buildCurrency(spec: FxSpec, symbol: string, points: FxPoint[]): FxCurrency {
   return {
     code: spec.code,

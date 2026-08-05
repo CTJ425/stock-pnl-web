@@ -1,35 +1,35 @@
 /**
- * 季度獲利能力的歷史回補（MOPS 綜合損益表彙總）。
+ * Historical cover of quarterly profitability (MOPS consolidated income statement summary).
  *
- * ## 為什麼需要它
+ * ## Why is it needed?
  *
- * 每晚批次抓的 `t187ap17_L` 是**當季快照**，不是歷史檔 —— 實測只回 58 家、
- * 且只有一個季別（民國115 Q2）。所以 `profitQuarters` 一季只長一筆，
- * 要湊滿 12 季得等三年。這一支把過去的季度一次補起來，補完就零成本
- * （缺口為空直接回，不發任何對外請求），與月營收回補同一個精神。
+ * The `t187ap17_L` captured in batches every night is a snapshot of the current season, not a historical file - only 58 are returned in the actual test.
+ * And there is only one season (Republic of China 115 Q2). So `profitQuarters` only grows one amount per quarter,
+ * It would take three years to complete 12 seasons. This branch will replenish the past quarter at once, and the cost will be zero after the replenishment is completed.
+ * (If the gap is empty, it will be returned directly without sending any external request), which has the same spirit as monthly revenue recovery.
  *
- * ## 資料源與陷阱（皆為實測，2026-08-04）
+ * ## Data sources and traps (all actual measurements, 2026-08-04)
  *
  * `POST https://mopsov.twse.com.tw/mops/web/ajax_t163sb04`
- * body：`encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK={市場}&year={民國年}&season={01..04}`
+ * body：`encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK={Market}&year={Republic of China Year}&season={01..04}`
  *
- * 1. **是 POST 不是 GET**，而且吃的是表單編碼；月營收那支 t21sc03 是靜態 GET，兩者不同。
- * 2. **編碼是 UTF-8，不是 big5。** t21sc03 是 big5（見 twRevenueHistory 檔頭），
- *    這支照 big5 解會整份變亂碼 —— 兩支放在一起維護時特別容易搞混。
- * 3. **一頁有 7 張表格、6 種產業別格式**（一般業 30 欄、金融 22/23/18 欄…），
- *    欄位位置完全不同。所以**一律以表頭文字定位欄位，不寫死索引**。
- * 4. 回應約 1.6 MB。當季剛開始申報時會小很多（實測 115 Q2 只有 104 KB），
- *    那是正常的，不是抓錯。
+ * 1. ** is POST, not GET**, and it uses form encoding; the monthly revenue one t21sc03 is static GET, and they are different.
+ * 2. **The encoding is UTF-8, not big5. ** t21sc03 is big5 (see twRevenueHistory header),
+ *    This big5 solution will cause the whole copy to become garbled - it is especially easy to get confused when the two are put together for maintenance.
+ * 3. **There are 7 tables and 6 industry-specific formats on one page** (30 columns for general industry, 22/23/18 columns for finance...),
+ *    The field positions are completely different. Therefore, **always use header text to locate fields and do not hard-code indexes**.
+ * 4. Response approximately 1.6 MB. It will be much smaller when the quarter is first declared (actually measured 115 Q2 is only 104 KB).
+ *    That's normal, not a mistake.
  *
- * ## 比率的算法與驗證
+ * ## Algorithm and verification of ratio
  *
- * 四項比率都是「該項 ÷ 營業收入 × 100」。**已與官方 `t187ap17_L` 對過答案**：
- * 民國115 Q1 的 1802 / 2303 / 2609 四項比率全部逐位吻合
- * （例：1802 毛 19.23 / 營 7.88 / 前 6.44 / 後 5.71）。
+ * The four ratios are all "this item ÷ operating income × 100". **The answer has been checked with the official `t187ap17_L`**:
+ * The four ratios of 1802 / 2303 / 2609 in the Republic of China 115 Q1 are all consistent bit by bit.
+ * (Example: 1802 gross 19.23 / battalion 7.88 / front 6.44 / rear 5.71).
  *
- * ⚠️ **金融業沒有「毛利」的概念**，銀行業甚至沒有單一的「營業收入」欄
- * （它是利息淨收益＋利息以外淨損益兩欄）。找不到對應表頭的項目一律回 null，
- * 畫面顯示「—」。硬湊一個分母只會產生無法與其他產業比較的數字。
+ * ⚠️ **There is no concept of "gross profit" in the financial industry**, and the banking industry does not even have a single "operating income" column
+ * (It is the two columns of net interest income + net profit and loss other than interest). If the item corresponding to the header cannot be found, null will be returned.
+ * The screen displays "—". Forcing a denominator will only produce numbers that are not comparable to other industries.
  */
 
 import { normNum } from './twChips.ts'
@@ -42,8 +42,8 @@ export type MopsMarket = 'sii' | 'otc'
 export const T163_MARKETS: readonly MopsMarket[] = ['sii', 'otc']
 
 /**
- * 'YYYY-Qn' → POST 表單字串。年季格式不符回 null，
- * 讓呼叫端當作「這一季不存在」跳過，而不是去打一個必然失敗的請求。
+ * 'YYYY-Qn' → POST form string. If the year and quarter format does not match, null will be returned.
+ * Let the caller skip it as if "this season does not exist" instead of making a request that is bound to fail.
  */
 export function mopsProfitBody(market: MopsMarket, yearQuarter: string): string | null {
   const m = /^(\d{4})-Q([1-4])$/.exec(String(yearQuarter ?? '').trim())
@@ -54,12 +54,12 @@ export function mopsProfitBody(market: MopsMarket, yearQuarter: string): string 
   return `encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=${market}&year=${rocYear}&season=${season}`
 }
 
-/* ── 表頭對照 ──────────────────────────────────────────────
+/* ── Header comparison ──────────────────────────────────────────
    同一個概念在不同產業別的表格裡叫不同名字，依序比對、取第一個命中的。
    順序有意義：先試最精確的名稱，再退到比較泛用的。
    ────────────────────────────────────────────────────────── */
 
-/** 營業收入（比率的分母）。銀行業沒有單一欄位，故不列 —— 該產業整組回 null */
+/** Operating income (the denominator of the ratio). The banking industry does not have a single column, so it is not included - the entire industry group returns null*/
 const H_REVENUE = ['營業收入', '淨收益', '收益', '收入']
 const H_GROSS = ['營業毛利（毛損）淨額', '營業毛利（毛損）']
 const H_OPERATING = ['營業利益（損失）', '營業利益']
@@ -71,12 +71,12 @@ const H_PRETAX = [
 ]
 const H_NET = ['本期淨利（淨損）', '本期稅後淨利（淨損）']
 /**
- * 基本每股盈餘（元）。**不是比率，不除以營收** —— 它已經是每股的絕對金額。
- * 稀釋每股盈餘不取：畫面上與本益比對得起來的是基本 EPS。
+ * Basic earnings per share (yuan). **Not a ratio, not divided by revenue** -- it's already an absolute amount per share.
+ * Diluted EPS is not taken: What is comparable to the P/E ratio on the screen is basic EPS.
  */
 const H_EPS = ['基本每股盈餘（元）', '基本每股盈餘', '基本每股盈餘(元)']
 
-/** 去標籤、去 &nbsp;、trim。tag 名大小寫不敏感（比照 twRevenueHistory 的處理） */
+/** Go to tags, go to , trim. Tag names are case-insensitive (compare to twRevenueHistory's processing)*/
 function cellsOf(row: string, tag: 'td' | 'th'): string[] {
   const out: string[] = []
   const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'gi')
@@ -92,7 +92,7 @@ function cellsOf(row: string, tag: 'td' | 'th'): string[] {
   return out
 }
 
-/** 表頭清單裡找第一個命中的欄位索引；都沒有回 null（該產業沒有這個概念） */
+/** Find the first hit field index in the header list; null is not returned (this industry does not have this concept)*/
 function columnOf(headers: string[], names: readonly string[]): number | null {
   for (const n of names) {
     const i = headers.indexOf(n)
@@ -102,9 +102,9 @@ function columnOf(headers: string[], names: readonly string[]): number | null {
 }
 
 /**
- * 解析一頁 MOPS 綜合損益表，回傳 `代號 → ProfitQuarter`。
+ * Parse one page of MOPS comprehensive income statement and return `Code → ProfitQuarter`.
  *
- * @param wanted 只保留這些代號；空集合代表全要（測試用）
+ * @param wanted Only keep these code names; the empty set represents the complete code (for testing)
  */
 export function parseMopsProfit(
   html: string,
@@ -116,7 +116,7 @@ export function parseMopsProfit(
 
   for (const table of tables) {
     const headers = cellsOf(table, 'th')
-    // 版面用的表格沒有表頭，或第一欄不是公司代號 —— 都不是我們要的資料表
+    // The table used in the layout has no header, or the first column is not the company code - these are not the data tables we want.
     if (headers[0] !== '公司代號') continue
 
     const iRevenue = columnOf(headers, H_REVENUE)
@@ -135,7 +135,7 @@ export function parseMopsProfit(
       if (wanted.size > 0 && !wanted.has(ticker)) continue
 
       const revenue = normNum(cells[iRevenue])
-      // 分母為 0 或缺值時整列跳過：算出來的比率會是 Infinity 或 NaN，兩者都不能顯示
+      // The entire column is skipped when the denominator is 0 or missing: the calculated ratio will be Infinity or NaN, neither of which can be displayed.
       if (revenue === null || revenue === 0) continue
 
       const ratio = (i: number | null): number | null => {
@@ -146,15 +146,15 @@ export function parseMopsProfit(
 
       out.set(ticker, {
         yearQuarter,
-        // 這份表的金額單位是千元，與 t187ap17_L 的百萬元不同 —— 換算後再存，
-        // 否則同一個欄位會混著兩種單位，而畫面上看不出來是哪一種
+        // The amount in this table is in thousand yuan, which is different from t187ap17_L's million yuan - save after conversion.
+        // Otherwise, there will be two types of units mixed in the same column, and you can’t tell which one they are on the screen.
         revenueMillionTwd: round2(revenue / 1000),
         grossMarginPercent: ratio(iGross),
         operatingMarginPercent: ratio(iOperating),
         pretaxMarginPercent: ratio(iPretax),
         netMarginPercent: ratio(iNet),
         epsTwd: iEps === null ? null : normNum(cells[iEps]),
-        // 這一列我們確實看過了：即使沒有 EPS 欄，也不必再抓一次同一季
+        // We've definitely seen this one: Even without the EPS column, there's no need to catch the same season again
         epsChecked: true,
       })
     }
@@ -162,34 +162,34 @@ export function parseMopsProfit(
   return out
 }
 
-/** 比率取兩位小數，與 `t187ap17_L` 的精度一致（對過答案，逐位吻合） */
+/** The ratio is taken to two decimal places, which is consistent with the accuracy of `t187ap17_L` (checked the answer, consistent bit by bit)*/
 function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
 export interface ProfitProgress {
-  /** 這檔已有的季別 */
+  /** This season already exists*/
   quarters: Set<string>
   /**
-   * 已有、但**還沒去季報找過 EPS** 的季別（0.6.28）。未給代表沒有這種缺口。
+   * I have, but haven't looked for the quarterly EPS** (0.6.28) in the quarterly report. There is no such gap for non-representation.
    *
-   * 每晚的 `t187ap17_L` 只給四項比率，所以新的一季會先以「有比率、沒 EPS」落地；
-   * EPS 只有 MOPS 季報有，得靠回補補上。
+   * Every night's `t187ap17_L` only gives four ratios, so the new season will be launched first with "with ratio and no EPS";
+   * EPS is only available in the MOPS quarterly report, so it has to be supplemented by backfill.
    */
   needEps?: Set<string>
-  /** 最舊的**已嘗試**季別；null 代表從未回補過 */
+  /** The oldest **attempted** quarter; null means it has never been replenished*/
   through: string | null
 }
 
 /**
- * 這一輪要去抓哪幾季。
+ * Which seasons should I catch this round?
  *
- * 判斷邏輯與 `planRevenueBackfill` 完全相同，理由也相同 ——
- * **缺口不是「檔案裡沒有的季別」，是「還沒去找過的季別」。**
- * ETF 永遠不在這份表裡，用前者判斷會讓它把最新幾季永遠釘在待抓清單上，
- * 整批回補就此卡死（0.6.4-dev.1 在月營收上實際踩過這個死結）。
+ * The judgment logic is exactly the same as `planRevenueBackfill`, and the reason is the same -
+ * **The gap is not "Ji Bie that is not in the file", but "Ji Bie that has not been found yet". **
+ * ETFs will never be on this list, and judging by the former will keep the latest quarters permanently on the to-be-caught list.
+ * The entire batch of replenishment is stuck (0.6.4-dev.1 actually stepped on this deadlock in terms of monthly revenue).
  *
- * @returns 由新到舊；空陣列代表沒有要找的了，呼叫端應直接短路、不發任何請求
+ * @returns from new to old; an empty array means there is nothing more to find. The caller should directly short-circuit and not send any requests.
  */
 export function planProfitBackfill(
   have: Map<string, ProfitProgress>,
@@ -216,11 +216,11 @@ export function planProfitBackfill(
       missing.add(yq)
     }
   }
-  // 由新到舊補：預算用完時留下的缺口是最舊的那幾季，對使用者的價值最低
+  // Fill from new to old: The gaps left when the budget is exhausted are the oldest seasons, which have the lowest value to users.
   return [...missing].sort().reverse().slice(0, maxQuarters)
 }
 
-/** 這一輪跑完之後的 `through`：舊值與本輪實際嘗試過的季別取最舊 */
+/** `through` after this round of running: the old value and the season actually tried in this round, whichever is the oldest*/
 export function nextProfitThrough(
   prev: string | null | undefined,
   attempted: string[],
@@ -230,19 +230,19 @@ export function nextProfitThrough(
 }
 
 /**
- * 由「現在」往回數 count 個**已公布**的季別，新到舊。
+ * Count count **announced** seasons from "now" back, newest to oldest.
  *
- * 台灣的申報期限：Q1 → 5/15、Q2 → 8/14、Q3 → 11/14、Q4（年報）→ 次年 3/31。
- * 這裡一律往後抓五天當緩衝 —— 抓一個還沒公布的季別不會壞（回一張幾乎空的表），
- * 但每輪都白跑一次 1.6 MB 的請求。
+ * Taiwan’s filing deadlines: Q1 → 5/15, Q2 → 8/14, Q3 → 11/14, Q4 (annual report) → 3/31 of the following year.
+ * Here we always grab five days as a buffer - it won't hurt to grab a season that hasn't been announced yet (returning to an almost empty list),
+ * But each round is a 1.6 MB request in vain.
  */
 export function publishedQuarters(now: Date, count: number): string[] {
-  // 台北時間（UTC+8 固定偏移，台灣無日光節約）
+  // Taipei time (UTC+8 fixed offset, no daylight savings in Taiwan)
   const taipei = new Date(now.getTime() + 8 * 60 * 60 * 1000)
   const y = taipei.getUTCFullYear()
   const md = (taipei.getUTCMonth() + 1) * 100 + taipei.getUTCDate()
 
-  // 今年最新一個「應該已公布」的季別；都還沒到就退回去年 Q4
+  // This year’s latest quarter “should have been announced”; it hasn’t even arrived yet and has been returned to last year’s Q4
   let latest: { y: number; q: number }
   if (md >= 1119) latest = { y, q: 3 }
   else if (md >= 819) latest = { y, q: 2 }

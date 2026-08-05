@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C2 ─ 時間軸 + 全資料源｜資料抓取狀況後台</title>
+<title>C2 ─ Time axis + Full data source｜Data capture status backend</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -95,7 +95,7 @@ body {
 .theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
 .theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 一句結論 */
+/*One sentence conclusion*/
 .verdict {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
   background: var(--surface); border: 1px solid var(--border);
@@ -126,7 +126,7 @@ body {
 .legend .rule { flex-basis: 100%; line-height: 1.5; }
 .legend .rule b { color: var(--ink-secondary); font-weight: 600; }
 
-/* ── 時間軸 ─────────────────────────────────────────────── */
+/*── Time axis ──────────────────────────────────────────────*/
 .tl { padding: 6px 18px 16px; overflow-x: auto; }
 .tl-inner { min-width: 780px; }
 .ruler { position: relative; height: 40px; margin-left: 152px; border-bottom: 1px solid var(--border); }
@@ -165,7 +165,7 @@ body {
 .mini dd b { font-family: var(--font-display); font-size: 18px; color: var(--ink); font-weight: 600; margin-right: 6px; }
 .mini dd b.late { color: var(--st-late); }
 
-/* ── 總經表：月頻不在日軸上，另表呈現 ─────────────────────── */
+/*── General Meridian Table: The moon frequency is not on the daily axis, and is presented in another table ──────────────────────*/
 .table-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 660px; }
 thead th {
@@ -187,7 +187,7 @@ td.vl { text-align: right; }
 .st.late { color: var(--st-late); } .st.late::before { background: var(--st-late); }
 .st.idle { color: var(--st-idle); } .st.idle::before { background: var(--st-idle); }
 
-/* ── 其餘資料源：緊湊列 ───────────────────────────────────── */
+/*── Other data sources: compact columns ───────────────────────────────────*/
 .list { display: flex; flex-direction: column; }
 .item {
   display: grid; align-items: center; gap: 12px;
@@ -230,37 +230,37 @@ td.vl { text-align: right; }
 <div class="wrap">
 
   <div class="mock-note">
-    <b>C2 ─ 時間軸 + 全資料源</b>
-    <span>方案 C 的變體：時間軸只涵蓋「當日台股鏈」，月頻總經與基礎設施另表補上。</span>
-    <span>取捨：<b>完整</b> —— 18 項全在一頁，最接近真正能用的形態。</span>
+    <b>C2 ─ Time axis + Full data source</b>
+    <span>plan C Variation: The timeline only covers the "daily Taiwan stock chain", and the monthly frequency summary and infrastructure are supplemented separately.</span>
+    <span>Trade-offs:<b>whole</b> —— 18 All items are on one page, which is the closest to a truly usable form.</span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
   <div class="verdict">
-    <h2>18 項資料源中，<em>3 項需要注意</em></h2>
-    <span class="meta">資料日 2026-07-30 週四・更新於 12:50</span>
+    <h2>18 In the data source,<em>3 Items need attention</em></h2>
+    <span class="meta">Material date 2026-07-30 Thursday・updated on 12:50</span>
   </div>
 
-  <!-- ── 1. 當日台股鏈：只有這一段有時序關係 ─────────────── -->
+  <!--── 1. Taiwan stock chain of the day: only this section has a sequential relationship ───────────────-->
   <section class="panel">
     <div class="panel-head">
-      <h2>台股盤後・2026-07-30 這一輪</h2>
-      <span class="note">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
-      <span class="right">15:00 → 次日 10:00</span>
+      <h2>Taiwan stocks after-hours・2026-07-30 this round</h2>
+      <span class="note">The time difference between the announcements of the three chip sources is as much as 7 Hours, batches are captured in sections</span>
+      <span class="right">15:00 → next day 10:00</span>
     </div>
     <div class="legend">
-      <span><i class="lg-win"></i> 來源公布窗</span>
-      <span><i class="lg-hit"></i> 準時抓到</span>
-      <span><i class="lg-warn"></i> 抓到但不完整</span>
-      <span><i class="lg-late"></i> 延遲・虛線為落後區間</span>
-      <span class="rule">判定基準是<b>公布窗結束後的第一個批次班次</b>，不是公布時刻 —— 批次 16:00 才起跑，法人 16:15 到手屬正常。</span>
+      <span><i class="lg-win"></i> Source announcement window</span>
+      <span><i class="lg-hit"></i> caught on time</span>
+      <span><i class="lg-warn"></i> caught but incomplete</span>
+      <span><i class="lg-late"></i> Delay・The dotted line is the backward interval</span>
+      <span class="rule">The criterion is<b>The first batch of shifts after the announcement window ends</b>, not the announcement time —— batch 16:00 Just started, legal person 16:15 It's normal to get it.</span>
     </div>
 
     <div class="tl">
@@ -277,7 +277,7 @@ td.vl { text-align: right; }
         </div>
 
         <div class="row">
-          <div class="lbl"><b>批次輪次</b><span>每 15 分・32 輪</span></div>
+          <div class="lbl"><b>batch round</b><span>Every 15 point・32 wheel</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -296,7 +296,7 @@ td.vl { text-align: right; }
         </div>
 
         <div class="row">
-          <div class="lbl"><b>三大法人</b><span>T86</span></div>
+          <div class="lbl"><b>Three major corporations</b><span>T86</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -308,7 +308,7 @@ td.vl { text-align: right; }
         </div>
 
         <div class="row">
-          <div class="lbl"><b>日 K 線・估值</b><span>18 檔</span></div>
+          <div class="lbl"><b>day K Wire・Valuation</b><span>18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -320,7 +320,7 @@ td.vl { text-align: right; }
         </div>
 
         <div class="row">
-          <div class="lbl"><b>融資融券</b><span>MI_MARGN</span></div>
+          <div class="lbl"><b>Margin margin trading</b><span>MI_MARGN</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -332,7 +332,7 @@ td.vl { text-align: right; }
         </div>
 
         <div class="row">
-          <div class="lbl"><b>借券賣出</b><span>次一交易日</span></div>
+          <div class="lbl"><b>Borrow bonds and sell</b><span>next trading day</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -340,12 +340,12 @@ td.vl { text-align: right; }
             <div class="win" style="left:31.58%; width:7.89%"></div>
             <div class="lag" style="left:39.47%; width:56.13%"></div>
             <div class="hit late" style="left:95.6%"></div>
-            <div class="hit-t" style="left:95.6%">次日 09:10</div>
+            <div class="hit-t" style="left:95.6%">next day 09:10</div>
           </div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>個股新聞</b><span>16 / 18 檔</span></div>
+          <div class="lbl"><b>individual stock news</b><span>16 / 18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -353,12 +353,12 @@ td.vl { text-align: right; }
             <div class="win" style="left:31.58%; width:15.79%"></div>
             <div class="lag warn" style="left:47.37%; width:48.23%"></div>
             <div class="hit warn" style="left:95.6%"></div>
-            <div class="hit-t" style="left:95.6%">次日 09:10</div>
+            <div class="hit-t" style="left:95.6%">next day 09:10</div>
           </div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>總經班次</b><span>FRED・兩班</span></div>
+          <div class="lbl"><b>General shift</b><span>FRED・Two shifts</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -373,110 +373,110 @@ td.vl { text-align: right; }
     </div>
 
     <dl class="mini">
-      <div><dt>首筆 → 末筆</dt><dd><b>16h 55m</b>16:15 → 次日 09:10</dd></div>
-      <div><dt>最慢一環</dt><dd><b class="late">借券</b>晚於公布窗 10h 40m</dd></div>
-      <div><dt>批次短路率</dt><dd><b>88 %</b>28 / 32 輪</dd></div>
-      <div><dt>資料源到齊</dt><dd><b>17</b>/ 18 項</dd></div>
+      <div><dt>first transaction → end of the line</dt><dd><b>16h 55m</b>16:15 → next day 09:10</dd></div>
+      <div><dt>slowest link</dt><dd><b class="late">Borrow coupons</b>later than announcement window 10h 40m</dd></div>
+      <div><dt>Batch short circuit rate</dt><dd><b>88 %</b>28 / 32 wheel</dd></div>
+      <div><dt>All data sources are available</dt><dd><b>17</b>/ 18 item</dd></div>
     </dl>
   </section>
 
-  <!-- ── 2. 總經：月頻，沒有當日時序可言 ─────────────────── -->
+  <!--── 2. General meridian: monthly frequency, no day sequence to speak of ───────────────────-->
   <section class="panel">
     <div class="panel-head">
-      <h2>美國總體經濟</h2>
-      <span class="note">月頻 —— 不放在上面的日軸，因為它的節奏是「哪一期到了」而非「幾點到」</span>
-      <span class="right">最後檢查 07-31 12:40</span>
+      <h2>overall U.S. economy</h2>
+      <span class="note">monthly frequency —— The date axis is not placed on top, because its rhythm is "which issue is coming" rather than "what time is it coming"</span>
+      <span class="right">final check 07-31 12:40</span>
     </div>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th scope="col">指標</th><th scope="col">最新期別</th><th scope="col">數值</th>
-            <th scope="col">前期</th><th scope="col">下期預計</th><th scope="col">狀態</th>
+            <th scope="col">index</th><th scope="col">By latest period</th><th scope="col">numerical value</th>
+            <th scope="col">Early stage</th><th scope="col">Expected next period</th><th scope="col">state</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td class="nm"><b>核心 CPI</b><span>CPILFESL</span></td>
+            <td class="nm"><b>core CPI</b><span>CPILFESL</span></td>
             <td class="dt">2026-06</td><td class="vl">+2.57 %</td><td class="vl">+2.82 %</td>
-            <td class="dt">08-12</td><td><span class="st ok">最新</span></td>
+            <td class="dt">08-12</td><td><span class="st ok">up to date</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>核心 PPI</b><span>PPIFES</span></td>
+            <td class="nm"><b>core PPI</b><span>PPIFES</span></td>
             <td class="dt">2026-06</td><td class="vl">+4.68 %</td><td class="vl">+4.59 %</td>
-            <td class="dt">08-14</td><td><span class="st ok">最新</span></td>
+            <td class="dt">08-14</td><td><span class="st ok">up to date</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>核心 PCE</b><span>PCEPILFE</span></td>
+            <td class="nm"><b>core PCE</b><span>PCEPILFE</span></td>
             <td class="dt">2026-06</td><td class="vl">+3.29 %</td><td class="vl">+3.41 %</td>
-            <td class="dt">08-28</td><td><span class="st ok">最新</span></td>
+            <td class="dt">08-28</td><td><span class="st ok">up to date</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>非農就業</b><span>PAYEMS</span></td>
-            <td class="dt">2026-06</td><td class="vl">+57 千人</td><td class="vl">+129 千人</td>
-            <td class="dt">08-07</td><td><span class="st ok">最新</span></td>
+            <td class="nm"><b>non-agricultural employment</b><span>PAYEMS</span></td>
+            <td class="dt">2026-06</td><td class="vl">+57 Thousands of people</td><td class="vl">+129 Thousands of people</td>
+            <td class="dt">08-07</td><td><span class="st ok">up to date</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>消費者信心</b><span>UMCSENT</span></td>
+            <td class="nm"><b>consumer confidence</b><span>UMCSENT</span></td>
             <td class="dt">2026-05</td><td class="vl">44.8</td><td class="vl">49.8</td>
-            <td class="dt">待定</td><td><span class="st warn">落後一期</span></td>
+            <td class="dt">To be determined</td><td><span class="st warn">One period behind</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>月營收</b><span>18 檔台股・12 期</span></td>
-            <td class="dt">2026-06</td><td class="vl">18 / 18 檔</td><td class="vl">—</td>
-            <td class="dt">08-10</td><td><span class="st warn">等待 07 月</span></td>
+            <td class="nm"><b>monthly revenue</b><span>18 stall stocks・12 Expect</span></td>
+            <td class="dt">2026-06</td><td class="vl">18 / 18 files</td><td class="vl">—</td>
+            <td class="dt">08-10</td><td><span class="st warn">wait 07 moon</span></td>
           </tr>
           <tr>
-            <td class="nm"><b>獲利能力</b><span>18 檔台股・8 季</span></td>
-            <td class="dt">2026-Q1</td><td class="vl">8 / 8 季</td><td class="vl">—</td>
-            <td class="dt">Q2 季報後</td><td><span class="st warn">等待 Q2</span></td>
+            <td class="nm"><b>Profitability</b><span>18 stall stocks・8 season</span></td>
+            <td class="dt">2026-Q1</td><td class="vl">8 / 8 season</td><td class="vl">—</td>
+            <td class="dt">Q2 After quarterly report</td><td><span class="st warn">wait Q2</span></td>
           </tr>
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- ── 3. 其餘：匯率與基礎設施 ─────────────────────────── -->
+  <!--── 3. The rest: Exchange rate and infrastructure ─────────────────────────-->
   <section class="panel">
     <div class="panel-head">
-      <h2>匯率與基礎設施</h2>
-      <span class="note">每日或持續性，不隨台股交易日走</span>
-      <span class="right">5 / 5 正常</span>
+      <h2>Exchange rates and infrastructure</h2>
+      <span class="note">Daily or continuous, does not follow the Taiwan stock trading day</span>
+      <span class="right">5 / 5 normal</span>
     </div>
     <div class="cols">
-      <span></span><span>資料源</span><span>資料日期</span>
-      <span class="r h2">最後抓取</span><span class="r h3">距今</span><span class="e">狀態</span>
+      <span></span><span>Source</span><span>Data date</span>
+      <span class="r h2">last crawl</span><span class="r h3">since now</span><span class="e">state</span>
     </div>
     <div class="list">
       <div class="item">
         <i class="bar"></i>
-        <span class="who"><b>台幣匯率</b><span>8 / 8 幣・USD 32.3489</span></span>
+        <span class="who"><b>Taiwan dollar exchange rate</b><span>8 / 8 currency・USD 32.3489</span></span>
         <span class="w1"><b>2026-07-30</b></span><span class="w2">07-31 11:00</span>
-        <span class="w3">1h50m</span><span class="stw"><span class="st ok">正常</span></span>
+        <span class="w3">1h50m</span><span class="stw"><span class="st ok">normal</span></span>
       </div>
       <div class="item">
         <i class="bar"></i>
-        <span class="who"><b>盤後批次</b><span>batch_run_log・32 / 40 輪</span></span>
+        <span class="who"><b>After-hours batch</b><span>batch_run_log・32 / 40 wheel</span></span>
         <span class="w1"><b>2026-07-30</b></span><span class="w2">07-31 09:10</span>
-        <span class="w3">3h40m</span><span class="stw"><span class="st ok">正常</span></span>
+        <span class="w3">3h40m</span><span class="stw"><span class="st ok">normal</span></span>
       </div>
       <div class="item">
         <i class="bar"></i>
-        <span class="who"><b>資料源探針</b><span>source_probe_log・2 / 2 端點</span></span>
+        <span class="who"><b>Data source probe</b><span>source_probe_log・2 / 2 endpoint</span></span>
         <span class="w1"><b>1150731</b></span><span class="w2">07-31 09:10</span>
-        <span class="w3">3h40m</span><span class="stw"><span class="st ok">正常</span></span>
+        <span class="w3">3h40m</span><span class="stw"><span class="st ok">normal</span></span>
       </div>
       <div class="item">
         <i class="bar"></i>
-        <span class="who"><b>現價快取</b><span>price_cache・26 筆</span></span>
+        <span class="who"><b>Current price cache</b><span>price_cache・26 Pen</span></span>
         <span class="w1"><b>—</b></span><span class="w2">07-31 12:49</span>
-        <span class="w3">38s</span><span class="stw"><span class="st ok">正常</span></span>
+        <span class="w3">38s</span><span class="stw"><span class="st ok">normal</span></span>
       </div>
       <div class="item">
         <i class="bar"></i>
-        <span class="who"><b>報告 manifest</b><span>manifest.json・18 檔</span></span>
+        <span class="who"><b>Report manifest</b><span>manifest.json・18 files</span></span>
         <span class="w1"><b>2026-07-30</b></span><span class="w2">07-31 09:10</span>
-        <span class="w3">3h40m</span><span class="stw"><span class="st ok">正常</span></span>
+        <span class="w3">3h40m</span><span class="stw"><span class="st ok">normal</span></span>
       </div>
     </div>
   </section>
@@ -487,7 +487,7 @@ td.vl { text-align: right; }
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

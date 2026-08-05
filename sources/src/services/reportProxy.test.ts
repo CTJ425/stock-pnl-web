@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// 以可控 mock 取代 Supabase 客戶端：storageDownload 決定每個 path 的回應
+// Replace Supabase client with controlled mock: storageDownload determines response for each path
 const { storageDownload, functionsInvoke } = vi.hoisted(() => ({
   storageDownload: vi.fn(),
   functionsInvoke: vi.fn(),
@@ -17,9 +17,9 @@ vi.mock('./supabase', () => ({
   },
 }))
 
-// downloadReportsJson 改走 `fetch(publicUrl, { cache: 'no-store' })`（見 reportsBucket.ts
-// 的說明：max-age=3600 讓使用者看到舊資料且硬重整救不了）。這裡把 fetch 轉接回
-// storageDownload，既有案例的「以 path 決定回應」寫法不必改。
+// downloadReportsJson changes to `fetch(publicUrl, { cache: 'no-store' })` (see reportsBucket.ts
+// Description: max-age=3600 allows users to see old data and hard reorganization cannot save it). Transfer fetch back here
+// storageDownload, the existing case's "response determined by path" does not need to be changed.
 vi.stubGlobal('fetch', async (url: string) => {
   const path = String(url).replace('https://stub/', '')
   const { data, error } = await storageDownload(path)
@@ -76,8 +76,8 @@ describe('fetchStoredReport（Storage-first）', () => {
   })
 
   it('接受比前端已知版本更新的 schema（後端加欄位不該讓整份報告失效）', async () => {
-    // 這是 0.4.0 真實發生過的線上事故：後端升到 schema 3、前端還鎖 === 2，
-    // 導致 Storage-first 全數回 null、即點即產丟「格式不符」，籌碼分頁整個掛掉。
+    // This is an online accident that actually happened in 0.4.0: the backend was upgraded to schema 3, and the frontend was still locked === 2,
+    // As a result, all Storage-first returns are null, the click-to-create error is "format mismatch", and the entire chip paging fails.
     storageDownload.mockImplementation((path: string) => {
       if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))
       return Promise.resolve(
@@ -88,7 +88,7 @@ describe('fetchStoredReport（Storage-first）', () => {
     expect(r).not.toBeNull()
     expect(r!.schema).toBe(3)
 
-    // 未來再升版也一樣要收
+    // Future upgrades will also require the same fee
     storageDownload.mockImplementation((path: string) =>
       Promise.resolve(
         path === 'manifest.json'

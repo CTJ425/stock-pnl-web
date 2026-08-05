@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildTechnicalView, pickLabelIndices } from './technicalView'
 import type { DailyRow } from '../../services/dailyProxy'
 
-/** 造 n 根遞增的日線，收盤 = 100 + i，讓期望值可以手算 */
+/** Create n increasing daily lines, closing = 100 + i, so that the expected value can be calculated by hand*/
 function makeRows(n: number): DailyRow[] {
   const rows: DailyRow[] = []
   for (let i = 0; i < n; i++) {
@@ -15,16 +15,16 @@ function makeRows(n: number): DailyRow[] {
 
 describe('buildTechnicalView', () => {
   it('指標以完整序列計算後才裁切 —— 切到近 3 月時 MA60 仍必須有值', () => {
-    // 這是整個技術面最容易寫錯的地方：若先裁切再算指標，
-    // 顯示 60 根時 MA60 只會在最後一根有值，前 59 根全是 null，整條線等於消失。
+    // This is the most common mistake in writing the entire technical aspect: if you crop first and then calculate the indicators,
+    // When 60 lines are displayed, MA60 will only have a value in the last line, and the first 59 lines will be null, and the entire line will disappear.
     const view = buildTechnicalView(makeRows(200), '3m')!
     expect(view.candles).toHaveLength(60)
     expect(view.ma60).toHaveLength(60)
     expect(view.ma60.every((v) => v !== null)).toBe(true)
     expect(view.ma20.every((v) => v !== null)).toBe(true)
 
-    // 收盤為 100+i、共 200 根 → 最後一根 close = 299，
-    // MA60 = 前 60 根（240..299）的平均 = 269.5
+    // The closing price is 100+i, a total of 200 bars → the last bar close = 299,
+    // MA60 = average of the first 60 roots (240..299) = 269.5
     expect(view.ma60[59]).toBeCloseTo(269.5, 6)
   })
 
@@ -41,7 +41,7 @@ describe('buildTechnicalView', () => {
     const full = buildTechnicalView(rows, '1y')!
     expect(short.candles).toHaveLength(60)
     expect(full.candles).toHaveLength(200)
-    // 摘要與顯示區間無關，兩者必須完全一致
+    // The summary has nothing to do with the display interval, they must be completely consistent
     expect(short.latest).toEqual(full.latest)
   })
 
@@ -69,7 +69,7 @@ describe('pickLabelIndices', () => {
     expect(out[0]).toBe(0)
     expect(out[out.length - 1]).toBe(243)
     expect(out).toHaveLength(6)
-    // 嚴格遞增、不重複
+    // Strictly incremental, no duplication
     expect([...new Set(out)]).toEqual(out)
     expect([...out].sort((a, b) => a - b)).toEqual(out)
   })

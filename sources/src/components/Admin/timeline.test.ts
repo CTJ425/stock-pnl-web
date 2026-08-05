@@ -29,7 +29,7 @@ describe('hoursFromBase', () => {
   })
 
   it('跨日的時間戳算成大於 9（＝隔天 00:00 之後）', () => {
-    // 台北 07-31 09:10 = 資料日 15:00 起算的第 18.167 小時
+    // Taipei 07-31 09:10 = the 18.167th hour starting from 15:00 on the data day
     const h = hoursFromBase('2026-07-31T01:10:00.000Z', BASE)!
     expect(h).toBeCloseTo(18.167, 2)
     expect(h).toBeGreaterThan(9)
@@ -70,7 +70,7 @@ describe('judgeSource', () => {
   const inst = TW_CHAIN.find((s) => s.id === 'institutional')!
 
   it('法人 16:15 到手算正常——批次 16:00 才起跑，不能拿公布時刻判', () => {
-    // 公布窗 15:00–15:30 早就過了，但 dueBy 是批次班次（16:30）
+    // The announcement window 15:00–15:30 has long passed, but dueBy is a batch shift (16:30)
     expect(judgeSource(inst, 1.25, 2)).toBe('ok')
   })
 
@@ -80,17 +80,17 @@ describe('judgeSource', () => {
 
   it('全市場法人以 18:15 為界——它的排程一天只有三班，最後一班 18:00（0.6.33）', () => {
     const market = TW_CHAIN.find((s) => s.id === 'market')!
-    // 16:15（第 1.25 小時）：個股那條的界線，但全市場那時可能還沒跑第二班 —— 不算延遲
+    // 16:15 (Hour 1.25): The line for individual stocks, but the entire market may not have run the second shift at that time - not counting delays
     expect(judgeSource(market, 1.25, 4)).toBe('ok')
     expect(judgeSource(market, 3.25, 4)).toBe('ok') // 18:15 剛好在界上
     expect(judgeSource(market, 3.5, 4)).toBe('late') // 18:30 才產出才算延遲
-    // 還沒到 18:15 就還沒拿到，是等待中而不是延遲（每天傍晚都會經過這一段）
+    // I haven’t received it yet before 18:15. It’s because I’m waiting, not delayed (I pass this section every evening)
     expect(judgeSource(market, null, 2)).toBe('idle')
     expect(judgeSource(market, null, 4)).toBe('late')
   })
 
   it('還沒到寬限截止就沒拿到 → 等待中，不是延遲', () => {
-    // 每天傍晚都有一段時間資料本來就還沒公布，那時亮紅燈只會讓人學會忽略它
+    // There is a period of time every evening when the information has not been released to begin with. Turning on the red light at that time will only make people learn to ignore it.
     expect(judgeSource(borrow, null, 3)).toBe('idle')
   })
 
@@ -99,9 +99,9 @@ describe('judgeSource', () => {
   })
 
   it('剛好卡在 dueBy 之後幾秒仍算準時——判定以「輪次」為單位而非精確秒數', () => {
-    // 實測：三大法人 dueBy=1.5（16:30 那輪），而該輪在 16:30:03 才寫入 →
-    // 1.5009 小時。沒有輪次緩衝的話會差三秒被判成延遲，
-    // 而同一刻抓到的日 K 線（dueBy=2）卻顯示正常，畫面一紅一綠像壞掉。
+    // Actual measurement: dueBy=1.5 (16:30 round) of the three major legal persons, and this round was not written until 16:30:03 →
+    // 1.5009 hours. If there is no round buffering, the difference will be three seconds and it will be judged as delay.
+    // However, the daily K-line (dueBy=2) captured at the same moment displays normally, with one red and one green screen appearing broken.
     expect(judgeSource(inst, 1.5009, 3)).toBe('ok')
     expect(judgeSource(inst, inst.dueBy + ROUND_GRACE_HOURS - 0.01, 3)).toBe('ok')
   })
@@ -136,7 +136,7 @@ describe('judgeCron', () => {
 
 describe('describeCron', () => {
   it('盤後批次：UTC 換算成台北', () => {
-    // */15 8-15 * * 1-5 → 台北 16:00–23:45
+    // */15 8-15 * * 1-5 → Taipei 16:00–23:45
     expect(describeCron('*/15 8-15 * * 1-5')).toBe('週一至週五 16:00–23:45 每 15 分')
   })
 
@@ -149,7 +149,7 @@ describe('describeCron', () => {
   })
 
   it('全市場的整點區間、僅平日：8-10 UTC → 台北 16/17/18 點', () => {
-    // market-daily。沒有這一條的話整張排程表就它一個印原始 cron 字串
+    // market-daily. Without this item, the entire schedule will only print the original cron string.
     expect(describeCron('0 8-10 * * 1-5')).toBe('週一至週五 16:00 / 17:00 / 18:00')
   })
 
@@ -203,19 +203,19 @@ describe('roundBaseYmd（本輪的目標交易日）', () => {
   })
 
   /*
-   * 2026-08-05 實際發生的錯：全市場 BFI82U 走獨立排程，16:00 就抓到當天的資料，
-   * 而個股 T86 要等 16:30 那輪。基準日綁在個股報告上時，全市場那列被拿「昨天 15:00」
-   * 當原點，算出 25 小時、夾到軸最右端並判成 late —— 準時到手卻亮紅燈。
+   * 2026-08-05 What actually happened: BFI82U used independent scheduling in the whole market and captured the data of the day at 16:00.
+   * For individual stocks T86, you have to wait for the 16:30 round. When the base date is tied to individual stock reports, the column for the entire market is taken as "Yesterday 15:00"
+   * When it is the origin, calculate 25 hours, clamp it to the right end of the axis and judge it as late - it is on time but the red light is on.
    */
   it('全市場已到手、個股還沒時，基準日跟著跑得快的那個走', () => {
     const base = roundBaseYmd(['2026-08-04', null, '2026-08-04', undefined, '2026-08-05'])
     expect(base).toBe('2026-08-05')
-    // 全市場 16:00 到手 → 距 8/5 15:00 為 1 小時，落在 dueBy 3 之內
+    // Available at 16:00 in all markets → 1 hour from 8/5 15:00, within dueBy 3
     const market = TW_CHAIN.find((s) => s.id === 'market')!
     const h = hoursFromBase('2026-08-05T08:00:04.000Z', base)
     expect(h).toBeCloseTo(1, 2)
     expect(judgeSource(market, h, 1.3)).toBe('ok')
-    // 綁舊基準日的話會是 25 小時、判成 late —— 這就是修掉的那個 bug
+    // If the old base date is tied, it will be 25 hours and judged as late - this is the bug that has been fixed.
     expect(hoursFromBase('2026-08-05T08:00:04.000Z', '2026-08-04')).toBeCloseTo(25, 2)
     expect(judgeSource(market, 25, 25.3)).toBe('late')
   })
@@ -266,12 +266,12 @@ describe('cronHoursTaipei / nextRun（總經班次軸）', () => {
 
 describe('taipeiParts', () => {
   it('UTC 換算成台北的日期與當日小時數', () => {
-    // UTC 04:50 → 台北 12:50
+    // UTC 04:50 → Taipei 12:50
     expect(taipeiParts('2026-07-31T04:50:00.000Z')).toEqual({ ymd: '20260731', hour: 12 + 50 / 60 })
   })
 
   it('跨日：UTC 當天傍晚是台北的隔天凌晨', () => {
-    // UTC 07-30 16:30 → 台北 07-31 00:30
+    // UTC 07-30 16:30 → Taipei 07-31 00:30
     expect(taipeiParts('2026-07-30T16:30:00.000Z')).toEqual({ ymd: '20260731', hour: 0.5 })
   })
 

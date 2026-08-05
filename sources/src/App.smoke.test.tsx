@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * UI 煙霧測試（本機模式）：
- * 走過「啟動 → 新增交易 → Dashboard / 年度收益 / 交易紀錄呈現」的完整使用流程，
- * 驗證 Context、資料層（LocalProvider）與各頁面的實際接線。
+ * UI smoke test (native mode):
+ * Go through the complete usage process of "Start → Add Transaction → Dashboard/Annual Income/Transaction Record Presentation",
+ * Verify the actual wiring of Context, data layer (LocalProvider) and each page.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -11,9 +11,9 @@ import App from './App'
 import { APP_VERSION } from './version'
 
 /**
- * jsdom 沒有實作 matchMedia，AppShell 與 UserMenu 都靠它判斷環境。
- * 掛一份最小實作，讓測試能指定哪些 media query 成立（其餘測試維持「沒有
- * matchMedia」的原狀，也就是桌機版）。
+ * jsdom does not implement matchMedia, AppShell and UserMenu both rely on it to determine the environment.
+ * Hang a minimal implementation so that tests can specify which media queries are true (the rest of the tests remain "None"
+ * matchMedia", that is, the desktop version).
  */
 function stubMatchMedia(matches: (query: string) => boolean) {
   Object.defineProperty(window, 'matchMedia', {
@@ -39,16 +39,16 @@ describe('App（本機模式煙霧測試）', () => {
   })
 
   afterEach(() => {
-    // 不還原的話，模擬手機的那個測試會讓後面所有測試都跑在手機版
+    // If you don’t restore it, the test that simulates the mobile phone will cause all subsequent tests to run on the mobile version.
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
   it('啟動後自動建立預設工作區並顯示空狀態', async () => {
     render(<App />)
-    // 本機模式免登入，直接進入主畫面
+    // No need to log in in local mode, go directly to the main screen
     expect(await screen.findByText('本機模式')).toBeTruthy()
     expect(await screen.findByText(/目前沒有持股/)).toBeTruthy()
-    // 預設工作區：0.6.5-dev.3 起由選單觸發鈕直接顯示目前工作區名稱
+    // Default workspace: Starting from 0.6.5-dev.3, the name of the current workspace is directly displayed by the menu trigger button
     const wsTrigger = await screen.findByRole('button', { name: '工作區：我的投資組合' })
     expect(wsTrigger.textContent).toContain('我的投資組合')
   })
@@ -59,7 +59,7 @@ describe('App（本機模式煙霧測試）', () => {
 
     const badge = container.querySelector('.version-badge')
     expect(badge).toBeTruthy()
-    // 徽章只顯示版號本身：不帶 v 前綴、不顯示作者
+    // The badge only displays the version number itself: no v prefix, no author
     expect(badge!.textContent).toBe(APP_VERSION)
     expect(badge!.textContent).not.toMatch(/^v/)
     expect(badge!.textContent).not.toContain('Ivan')
@@ -79,13 +79,13 @@ describe('App（本機模式煙霧測試）', () => {
 
   it('GitHub 連結收在帳號選單裡，且是外開的', async () => {
     render(<App />)
-    // 本機模式的選單觸發鈕就是「本機模式」徽章本身
+    // The local mode menu trigger is the "local mode" badge itself
     fireEvent.click(await screen.findByRole('button', { name: /本機模式選單/ }))
 
     const link = screen.getByRole('menuitem', { name: /原始碼/ }) as HTMLAnchorElement
     expect(link.href).toContain('github.com/CTJ425/stock-pnl-web')
     expect(link.target).toBe('_blank')
-    // 沒有登入就沒有管理員，後台入口不該出現
+    // If you are not logged in, there will be no administrator, and the backend entrance should not appear.
     expect(screen.queryByRole('menuitem', { name: /管理後台/ })).toBeNull()
   })
 
@@ -93,12 +93,12 @@ describe('App（本機模式煙霧測試）', () => {
     render(<App />)
     await screen.findByText('本機模式')
     expect(screen.queryByRole('button', { name: /個股分析/ })).toBeNull()
-    // 總經同理：fetchMacro 在本機模式永遠回 null，而空狀態寫「排程完成後會補上」
-    // ——那在本機模式是假的，留著只會讓使用者等一個不會來的東西
+    // The general manager agrees: fetchMacro always returns null in local mode, and the empty state says "will be added after the schedule is completed"
+    // ——That is false in local mode. Keeping it will only make the user wait for something that will never come.
     expect(screen.queryByRole('button', { name: /總體經濟/ })).toBeNull()
-    // 匯率同理（0.6.7）：fetchFx 走同一個 reports bucket
+    // The exchange rate is the same (0.6.7): fetchFx goes to the same reports bucket
     expect(screen.queryByRole('button', { name: /外幣匯率/ })).toBeNull()
-    // 其餘三個分頁不受影響
+    // The remaining three tabs are not affected
     expect(screen.getByRole('button', { name: /庫存總覽/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /年度收益/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /交易紀錄/ })).toBeTruthy()
@@ -111,18 +111,18 @@ describe('App（本機模式煙霧測試）', () => {
     const labels = [...container.querySelectorAll('.tabs .tab')].map((b) =>
       b.getAttribute('aria-label'),
     )
-    // 本機模式只留得下持股那一組，順序即宣告順序
+    // In the local mode, only the holding group is left, and the order is the announcement order.
     expect(labels).toEqual(['庫存總覽', '年度收益', '交易紀錄'])
-    // 同一組之內不畫分隔線
+    // No dividing lines are drawn within the same group
     expect(container.querySelector('.tabs .tab-div')).toBeNull()
-    // 抓取狀況已移入管理後台
+    // The crawl status has been moved to the management background
     expect(screen.queryByRole('button', { name: /抓取狀況/ })).toBeNull()
   })
 
   it('手機（≤720px）主導覽改成固定底部列，頁首不再有分頁', async () => {
     const user = userEvent.setup()
-    // jsdom 沒有 matchMedia，AppShell 因此預設走桌機版；這裡補一份只讓
-    // 「≤720px」成立的實作，模擬手機視窗
+    // jsdom does not have matchMedia, so AppShell defaults to the desktop version; here is a copy only for
+    // Implementation of the establishment of "≤720px", simulating mobile phone windows
     stubMatchMedia((query) => query.includes('max-width: 720px'))
 
     const { container } = render(<App />)
@@ -130,18 +130,18 @@ describe('App（本機模式煙霧測試）', () => {
 
     const bottomNav = container.querySelector('nav.bottom-nav')
     expect(bottomNav).toBeTruthy()
-    // 底部列必須在 .app-header 之外：頁首的 backdrop-filter 會成為 fixed 子孫的
-    // containing block，掛在裡面只會貼在頁首底部而不是視窗底部
+    // The bottom column must be outside .app-header: the backdrop-filter at the top of the page will become a descendant of fixed
+    // containing block, hanging in it will only be posted at the top and bottom of the page instead of the bottom of the window.
     expect(container.querySelector('.app-header nav.bottom-nav')).toBeNull()
     expect(container.querySelector('.app-header nav.tabs')).toBeNull()
 
-    // 同一份導覽只渲染一次：底部列出現時不該還有第二組同名按鈕
+    // The same navigation is only rendered once: there should not be a second set of buttons with the same name when the bottom column appears
     expect(screen.getAllByRole('button', { name: '交易紀錄' }).length).toBe(1)
-    // 底部列用兩字短標籤（完整名稱仍在 aria-label / title）
+    // Use a short two-word label for the bottom column (the full name is still aria-label/title)
     expect(bottomNav!.textContent).toContain('紀錄')
     expect(bottomNav!.textContent).not.toContain('交易紀錄')
 
-    // 仍可切換分頁
+    // Pagination can still be switched
     await user.click(screen.getByRole('button', { name: '年度收益' }))
     expect(screen.getByRole('button', { name: '年度收益' }).getAttribute('aria-current')).toBe(
       'page',
@@ -162,12 +162,12 @@ describe('App（本機模式煙霧測試）', () => {
     await screen.findByText('本機模式')
 
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
-    // 台股、美股兩張卡片的未實現損益皆以「淨」命名（v0.3 起卡片標題不再帶市場前綴）
+    // The unrealized gains and losses of both Taiwan stocks and US stocks cards are named "net" (card titles no longer have the market prefix starting from v0.3)
     const netLabels = await screen.findAllByText('未實現淨損益')
     expect(netLabels.length).toBe(2)
-    // 說明改為卡片標題的 tooltip，不再佔一行
+    // The description is changed to the tooltip of the card title, which no longer occupies a line.
     expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
-    // 台股卡片（DOM 先出現）的 tooltip 說明已預扣手續費與證交稅
+    // The tooltip of the Taiwan stock card (DOM appears first) indicates that the handling fee and securities tax have been withheld
     expect(netLabels[0].getAttribute('title')).toContain('手續費和證交稅都已經扣掉了')
   })
 
@@ -176,7 +176,7 @@ describe('App（本機模式煙霧測試）', () => {
     render(<App />)
     await screen.findByText('本機模式')
 
-    // 切到「交易紀錄」開啟表單
+    // Switch to "Transaction Records" to open the form
     await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
     await user.click(await screen.findByRole('button', { name: /新增交易/ }))
 
@@ -188,7 +188,7 @@ describe('App（本機模式煙霧測試）', () => {
     await user.type(form.getByLabelText('交易單價'), '500')
     await user.type(form.getByLabelText('交易股數'), '1') // 1 張 = 1000 股
 
-    // 手續費自動估算：floor(500 * 1000 * 0.001425) = 712
+    // Automatic fee estimation: floor(500 * 1000 * 0.001425) = 712
     await waitFor(() => {
       expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('712')
     })
@@ -197,22 +197,22 @@ describe('App（本機模式煙霧測試）', () => {
     expect(await form.findByText(/成功新增交易紀錄/)).toBeTruthy()
     await user.click(form.getByRole('button', { name: '關閉' }))
 
-    // 交易紀錄表格
+    // Transaction Record Form
     expect(await screen.findByText('台積電')).toBeTruthy()
     expect(screen.getByText('買入')).toBeTruthy()
     expect(screen.getByText('1,000')).toBeTruthy()
 
-    // Dashboard：持股與均價 (500712 / 1000 = 500.712 → NT$500.71)
+    // Dashboard: Holdings and average price (500712 / 1000 = 500.712 → NT$500.71)
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
     expect(await screen.findByText('NT$500.71')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: /未實現淨損益/ })).toBeTruthy()
 
-    // 年度收益：KPI 與年度列
+    // Annual Revenue: KPI vs. Year Column
     await user.click(screen.getByRole('button', { name: /年度收益/ }))
     expect(await screen.findByText('歷史累計交易筆數 (台美股合計)')).toBeTruthy()
     expect(screen.getByText(String(new Date().getFullYear()))).toBeTruthy()
 
-    // 只買未賣：報酬率分母為 0，整格「—」而不是 NaN% / Infinity%
+    // Only buy but not sell: the denominator of the return rate is 0, the whole cell is "—" instead of NaN% / Infinity%
     expect(screen.getByRole('columnheader', { name: /報酬率/ })).toBeTruthy()
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
   })
@@ -222,7 +222,7 @@ describe('App（本機模式煙霧測試）', () => {
     render(<App />)
     await screen.findByText('本機模式')
 
-    // 以全域浮動按鈕新增一筆交易
+    // Add a new transaction using a global floating button
     await user.click(screen.getByRole('button', { name: /新增交易/ }))
     const addDialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
     const addForm = within(addDialog)
@@ -234,7 +234,7 @@ describe('App（本機模式煙霧測試）', () => {
     await addForm.findByText(/成功新增交易紀錄/)
     await user.click(addForm.getByRole('button', { name: '關閉' }))
 
-    // 開啟編輯：帶入原內容（股數以零股 1000 呈現、手續費保留原記錄 712 不被重算）
+    // Open editing: bring in the original content (the number of shares is presented as odd shares 1000, the handling fee retains the original record of 712 and will not be recalculated)
     await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
     await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
     const editDialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
@@ -243,7 +243,7 @@ describe('App（本機模式煙霧測試）', () => {
     expect((editForm.getByLabelText('交易股數') as HTMLInputElement).value).toBe('1000')
     expect((editForm.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('712')
 
-    // 改單價 → 手續費自動重算：floor(600 * 1000 * 0.001425) = 855
+    // Change unit price → Automatic recalculation of handling fee: floor(600 * 1000 * 0.001425) = 855
     const priceInput = editForm.getByLabelText('交易單價')
     await user.clear(priceInput)
     await user.type(priceInput, '600')
@@ -252,7 +252,7 @@ describe('App（本機模式煙霧測試）', () => {
     })
 
     await user.click(editForm.getByRole('button', { name: '儲存變更' }))
-    // 儲存後視窗關閉，列表呈現新單價
+    // After saving, the window closes and the new unit price appears in the list.
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '編輯交易紀錄' })).toBeNull()
     })
@@ -284,12 +284,12 @@ describe('App（本機模式煙霧測試）', () => {
 
     expect(await screen.findByText(/已匯入 2 筆交易/)).toBeTruthy()
 
-    // 年度收益：2025 已實現 = (700*500-1548) - 500.712*500 = +NT$98,096（+號、紅漲）
+    // Annual income: 2025 realized = (700*500-1548) - 500.712*500 = +NT$98,096 (+ sign, red increase)
     await user.click(screen.getByRole('button', { name: /年度收益/ }))
     const hits = await screen.findAllByText('+NT$98,096')
     expect(hits.length).toBeGreaterThan(0)
 
-    // 報酬率：含費 98096 / 250356 = +39.18%；副行未含費 100000 / 250000 = +40.00%
+    // Return rate: 98096 / 250356 = +39.18% including fees; 100000 / 250000 = +40.00% without fees for the deputy bank
     expect(screen.getAllByText('+39.18%').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/未含費 \+40\.00%/).length).toBeGreaterThan(0)
   })
@@ -308,10 +308,10 @@ describe('App（本機模式煙霧測試）', () => {
       '預設手續費率',
       '刪除工作區',
     ])
-    // 目前工作區以 menuitemradio 呈現並打勾
+    // The current workspace is presented with menuitemradio and checked
     const current = within(menu).getByRole('menuitemradio', { name: '我的投資組合' })
     expect(current.getAttribute('aria-checked')).toBe('true')
-    // 刪除要看得出是危險動作，不能與「重新命名」長得一樣
+    // Deletion must be clearly seen as a dangerous action and cannot look the same as "rename".
     expect(items[3].className).toContain('is-danger')
   })
 
@@ -333,14 +333,14 @@ describe('App（本機模式煙霧測試）', () => {
   it('本機模式的「本機模式」徽章本身就是帳號選單的觸發鈕（不藏進選單）', async () => {
     const user = userEvent.setup()
     render(<App />)
-    // 「資料只存在這個瀏覽器」要隨時看得到，不該降級成選單裡的一行
+    // "Data only exists in this browser" should be visible at any time and should not be reduced to a line in the menu.
     const badge = await screen.findByRole('button', { name: '本機模式選單' })
     expect(badge.textContent).toContain('本機模式')
 
     await user.click(badge)
     const menu = await screen.findByRole('menu', { name: '帳號與外觀' })
     expect(within(menu).getByText(/資料儲存於此瀏覽器/)).toBeTruthy()
-    // 本機模式沒有登出
+    // Local mode does not log out
     expect(within(menu).queryByRole('menuitem', { name: /登出/ })).toBeNull()
     expect(within(menu).getByRole('menuitem', { name: /外觀：/ })).toBeTruthy()
   })
@@ -348,7 +348,7 @@ describe('App（本機模式煙霧測試）', () => {
   it('頁首右側只剩兩個控制項（0.6.5-dev.3 由 8 個收斂）', async () => {
     render(<App />)
     await screen.findByText('本機模式')
-    // 工作區選單 + 帳號選單。原本是：下拉 + 新增 + 重新命名 + 費率 + 刪除 + 主題 + email + 登出
+    // Workspace menu + Account menu. Originally: drop down + add + rename + rate + delete + subject + email + log out
     const wsTrigger = screen.getByRole('button', { name: /^工作區：/ })
     const userTrigger = screen.getByRole('button', { name: '本機模式選單' })
     const header = wsTrigger.closest('.app-header-inner')!

@@ -1,8 +1,8 @@
 /**
- * 常見美股中文名稱對照表（zh-TW 慣用譯名）：
- * - 顯示層：美股名稱以中文顯示（表中沒有的維持原名）
- * - 搜尋層：支援用中文關鍵字反查美股代號（Yahoo 搜尋不支援中文，
- *   Edge Function 不可用時也能離線運作）
+ * Comparison table of common Chinese names of U.S. stocks (zh-TW commonly used translations):
+ * - Display layer: The names of US stocks are displayed in Chinese (the original names are maintained if they are not in the table)
+ * - Search layer: Supports using Chinese keywords to check US stock codes (Yahoo search does not support Chinese.
+ *   Can work offline even when Edge Function is unavailable)
  */
 import type { Market } from '../types/models'
 
@@ -12,7 +12,7 @@ export interface UsZhEntry {
 }
 
 const US_STOCK_ZH_NAMES: Record<string, string> = {
-  // --- 科技巨頭 ---
+  // ---Tech Giants ---
   AAPL: '蘋果',
   MSFT: '微軟',
   GOOGL: '谷歌 Alphabet',
@@ -31,7 +31,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   SHOP: 'Shopify',
   PLTR: 'Palantir',
   COIN: 'Coinbase',
-  // --- 半導體 ---
+  // --- Semiconductors ---
   TSM: '台積電 ADR',
   AVGO: '博通',
   AMD: '超微',
@@ -45,7 +45,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   ASML: '艾司摩爾',
   ARM: '安謀',
   CSCO: '思科',
-  // --- 消費 / 零售 ---
+  // ---Consumption/Retail ---
   COST: '好市多',
   WMT: '沃爾瑪',
   MCD: '麥當勞',
@@ -56,7 +56,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   PG: '寶僑',
   DIS: '迪士尼',
   BKNG: 'Booking',
-  // --- 醫療 ---
+  // ---Medical ---
   JNJ: '嬌生',
   PFE: '輝瑞',
   MRK: '默沙東',
@@ -67,7 +67,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   AMGN: '安進',
   GILD: '吉利德',
   ISRG: '直覺手術',
-  // --- 金融 ---
+  // --- finance ---
   JPM: '摩根大通',
   GS: '高盛',
   MS: '摩根士丹利',
@@ -79,7 +79,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   MA: '萬事達卡',
   BLK: '貝萊德',
   SCHW: '嘉信理財',
-  // --- 能源 / 工業 ---
+  // ---Energy/Industrial ---
   XOM: '埃克森美孚',
   CVX: '雪佛龍',
   BA: '波音',
@@ -93,12 +93,12 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   UPS: '優比速',
   F: '福特',
   GM: '通用汽車',
-  // --- 電信 / 媒體 ---
+  // ---Telecommunications/Media ---
   T: 'AT&T',
   VZ: '威訊',
   TMUS: 'T-Mobile',
   CMCSA: '康卡斯特',
-  // --- 中概股 ---
+  // --- China Concept Stocks ---
   BABA: '阿里巴巴',
   JD: '京東',
   PDD: '拼多多',
@@ -107,7 +107,7 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   NIO: '蔚來',
   LI: '理想汽車',
   XPEV: '小鵬汽車',
-  // --- 熱門 ETF ---
+  // --- Popular ETFs ---
   SPY: 'SPDR 標普 500 ETF',
   VOO: 'Vanguard 標普 500 ETF',
   IVV: 'iShares 標普 500 ETF',
@@ -125,12 +125,12 @@ const US_STOCK_ZH_NAMES: Record<string, string> = {
   ARKK: '方舟創新 ETF',
 }
 
-/** 代號查中文名；表中沒有時回傳 null */
+/** Check the Chinese name of the code; return null if not found in the table*/
 export function usZhName(symbol: string): string | null {
   return US_STOCK_ZH_NAMES[symbol.toUpperCase()] ?? null
 }
 
-/** 以中文關鍵字或代號前綴搜尋對照表 */
+/** Search the comparison table using Chinese keywords or code prefixes*/
 export function searchUsZhNames(
   query: string,
   limit = 10,
@@ -148,7 +148,7 @@ export function searchUsZhNames(
   return out
 }
 
-/** 顯示層名稱：美股優先採中文譯名，其餘（含台股）維持原始名稱 */
+/** Display layer name: U.S. stocks give priority to Chinese translations, and the rest (including Taiwan stocks) maintain their original names.*/
 export function displayStockName(market: Market, ticker: string, name: string): string {
   if (market === 'US') return usZhName(ticker) ?? name
   return name

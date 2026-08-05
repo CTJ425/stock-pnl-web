@@ -1,30 +1,30 @@
 /**
- * Supabase Edge Function：stock-price（現價 / 搜尋代理）
+ * Supabase Edge Function: stock-price (current price/search agent)
  *
- * 由伺服器端代為請求 TWSE MIS / Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
- * 現價來源：台股先走證交所 MIS 即時行情（秒級延遲），失敗退 Yahoo；美股走 Yahoo。
- * 現價帶 DB 共用快取（price_cache 資料表，見 sources/supabase/schema.sql）：
- * TTL 內全站共用同一份報價（台股見 quoteWindow.ts 的時段規則、美股 10 分鐘），
- * 同一支股票不重複請求外部 API。
- * 部署方式（需安裝 Supabase CLI 並登入）：
+ * The server side requests external APIs such as TWSE MIS / Yahoo Finance on behalf of the server to solve browser CORS limitations.
+ * Current price source: For Taiwan stocks, go to the stock exchange's MIS real-time quotes (second-level delay), if failed, go to Yahoo; for US stocks, go to Yahoo.
+ * Current price with DB shared cache (price_cache information table, see sources/supabase/schema.sql):
+ * The entire site within TTL shares the same quote (for Taiwan stocks, please see the time period rules of quoteWindow.ts, and for US stocks, 10 minutes).
+ * The same stock does not make repeated requests to external APIs.
+ * Deployment method (need to install Supabase CLI and log in):
  *   supabase functions deploy stock-price --no-verify-jwt
  *
- * 介面：
+ * interface:
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
  *     → { prices: { 'TPE:2330': { price, prevClose, open, high, low, volume,
  *                                 tradeDate, tradeTime, trial, asOf }, ... } }
- *       asOf 為報價的實際取得時間（ISO），供前端 TTL 判斷，避免與 DB 快取 TTL 疊加
- *       prevClose 為昨收，前端據此把現價著成漲紅跌綠（0.6.34；取不到時為 null）
- *       open/high/low/volume/tradeDate/tradeTime/trial 供個股分析的報價卡（0.6.36），
- *       全部來自報價本來就會回的同一筆資料，不額外請求（美股只有 OHLCV，無 trial）
+ *       asOf is the actual acquisition time (ISO) of the quotation, which is used for front-end TTL judgment to avoid overlapping with DB cache TTL.
+ *       prevClose is yesterday's closing price, and the front-end will mark the current price as rising red or green accordingly (0.6.34; null if not available)
+ *       open/high/low/volume/tradeDate/tradeTime/trial quotation card for individual stock analysis (0.6.36),
+ *       All come from the same data that will be returned by the quotation, no additional requests (only OHLCV for US stocks, no trial)
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
  *   POST { action: 'fx', codes: ['USD','JPY', …] }
- *       → { quotes: { USD: { price, asOf }, … } }  台幣對外幣的即時中價（1 外幣 = N 台幣）
- *         走勢圖的歷史由 stock-report 的 sync-fx 每日寫進 Storage，這裡只回「現在多少」
+ *       → { quotes: { USD: { price, asOf }, … } } The real-time median price of Taiwan dollars against foreign currencies (1 foreign currency = N Taiwan dollars)
+ *         The history of the trend chart is written into Storage every day by sync-fx of stock-report, and only "how much is now" is returned here.
  *   POST { action: 'twlist' }
- *     → { rows: [{ symbol, name, close }] }（台股全清單；TWSE/TPEx 不開放 CORS，
- *       正式環境由此代理供前端中文搜尋 / 代號反查 / 現價備援使用）
+ *     → { rows: [{ symbol, name, close }] } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
+ *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
@@ -36,40 +36,40 @@ interface SymbolItem {
 }
 
 /**
- * 一檔的報價。`prevClose` 是**昨收**，供前端判斷現價要紅要綠。
+ * First price quote. `prevClose` is **yesterday's closing**, which is used by the front-end to determine whether the current price is red or green.
  *
- * 兩個來源本來就把昨收放在同一筆回應裡（MIS 的 `y`、Yahoo 的 `chartPreviousClose`），
- * 取它不多打一次 API。**刻意不用今開**：MIS 有 `o`，但 Yahoo 的 chart meta 沒有對應欄位，
- * 兩個市場會變成不同口徑 —— 昨收是唯一台美都拿得到、且與看盤軟體「漲跌幅」定義一致的基準。
- * 取不到就是 null，不拿現價自己冒充（那會讓每一檔都是平盤色）。
+ * Both sources originally put yesterday in the same response (MIS's `y`, Yahoo's `chartPreviousClose`),
+ * Get it without hitting the API more than once. **Deliberately not using this opening**: MIS has `o`, but Yahoo’s chart meta does not have a corresponding field.
+ * The two markets will have different calibers - yesterday's closing price is the only benchmark that is available to both Taiwan and the United States and is consistent with the definition of "up and down" in the market-reading software.
+ * If you can't get it, it's null. If you don't take the current price, you can pretend to be yourself (that will make every level a flat color).
  */
 interface Quote {
   price: number
   prevClose: number | null
-  /** 以下為報價卡欄位（0.6.36）：同一筆來源回應裡白拿的，取不到就是 null */
+  /** The following is the quotation card field (0.6.36): it is obtained in vain in the same source response. If it cannot be obtained, it is null. */
   open: number | null
   high: number | null
   low: number | null
-  /** 累積成交量，單位「張」（Yahoo 回的是股數，除以 1000 後對齊 MIS 口徑） */
+  /** Cumulative trading volume, unit "sheet" (Yahoo returns the number of shares, divided by 1000 and then aligned with the MIS caliber) */
   volume: number | null
-  /** 交易日 YYYYMMDD（僅 MIS 提供） */
+  /**Trading day YYYYMMDD (only provided by MIS) */
   tradeDate: string | null
-  /** 最後撮合時間 HH:mm:ss（僅 MIS 提供）；達 13:30:00 表示收盤已定案 */
+  /**Last matching time HH:mm:ss (only provided by MIS); reaching 13:30:00 means the closing has been finalized */
   tradeTime: string | null
-  /** 是否為試撮階段（僅 MIS 提供） */
+  /** Whether it is in the trial stage (only provided by MIS) */
   trial: boolean
 }
 
-/** 美股 DB 快取有效期；台股改由 quoteWindow.ts 依時段決定（收盤後鎖到隔天 08:25） */
+/** US stock DB cache validity period; Taiwan stock change is determined by quoteWindow.ts based on time period (locked to 08:25 the next day after closing) */
 const CACHE_TTL_US_MS = 10 * 60 * 1000
 
-/** 該 key 此刻的快取有效期。台股在收盤後會長達十多小時，粗篩用的下界要跟著它走 */
+/** The cache validity period of this key at this moment. Taiwan stocks will last for more than ten hours after the market closes, and the lower bound for coarse screening must follow it. */
 function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null): number {
   return key.startsWith('TPE:') ? twQuoteTtlMs(now, tradeTime) : CACHE_TTL_US_MS
 }
 
-// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
-// service role 不受 RLS 限制，是 price_cache 唯一的寫入途徑
+// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
+// service role is not restricted by RLS and is the only way to write to price_cache
 const db = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -91,15 +91,15 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-/** 台股代號轉 Yahoo 格式：上市 .TW；查無時呼叫端會再試 .TWO（上櫃） */
+/** Taiwan stock code transfer to Yahoo format: listing .TW; if there is no search, the caller will try again .TWO (listing) */
 function yahooSymbols(item: SymbolItem): string[] {
   if (item.market === 'TPE') return [`${item.ticker}.TW`, `${item.ticker}.TWO`]
   return [item.ticker]
 }
 
 /**
- * 昨收：優先 `chartPreviousClose`（`range=1d` 時必有），退 `previousClose`。
- * 取不到就回 null —— 前端會把該檔的現價顯示成中性色，不猜一個基準。
+ * Yesterday's collection: Prioritize `chartPreviousClose` (must exist when `range=1d`), and return `previousClose`.
+ * If it cannot be obtained, null will be returned - the front end will display the current price of the file in a neutral color without guessing a benchmark.
  */
 function yahooPrevClose(meta: Record<string, unknown> | undefined): number | null {
   for (const key of ['chartPreviousClose', 'previousClose']) {
@@ -126,8 +126,8 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
     const meta = result?.meta
     const price = Number(meta?.regularMarketPrice)
     if (!Number.isFinite(price) || price <= 0) return null
-    // 開盤價不在 meta（實測 regularMarketOpen / open 皆為 undefined），
-    // 要從 indicators 的單根日線取；range=1d 時該序列只有一個元素
+    // The opening price is not in meta (the measured regularMarketOpen / open are both undefined),
+    // To be taken from a single daily line of indicators; when range=1d, the sequence has only one element
     const series = result?.indicators?.quote?.[0]
     const volumeShares = yahooNum(meta?.regularMarketVolume)
     return {
@@ -136,9 +136,9 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
       open: yahooNum(series?.open?.[0]),
       high: yahooNum(meta?.regularMarketDayHigh),
       low: yahooNum(meta?.regularMarketDayLow),
-      // Yahoo 給股數、MIS 給張數：統一成張，兩條路徑餵給報價卡的才是同一個口徑
+      // The number of shares given by Yahoo and the number of sheets given by MIS are unified into sheets. The two paths feed the quotation card with the same caliber.
       volume: volumeShares === null ? null : Math.round(volumeShares / 1000),
-      // 交易日 / 撮合時間 / 試撮旗標只有 MIS 有；Yahoo 這條路徑一律留空
+      // The trading day/matching time/trial matching flags are only available in MIS; this path in Yahoo should always be left blank.
       tradeDate: null,
       tradeTime: null,
       trial: false,
@@ -148,7 +148,7 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
   }
 }
 
-/** 台股即時報價（TWSE MIS）：回傳 ticker → 報價；整批失敗時回空 Map，交由 Yahoo fallback */
+/** Taiwan stock real-time quotation (TWSE MIS): return ticker → quotation; when the whole batch fails, return to empty Map and hand it over to Yahoo fallback */
 async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
   const resolved = new Map<string, Quote>()
   for (const channels of buildMisChannels(tickers)) {
@@ -172,13 +172,13 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
         }
       }
     } catch {
-      // MIS 為非官方文件化端點，失敗時靜默交由 Yahoo fallback
+      // MIS is an unofficial documented endpoint and is silently handed over to Yahoo fallback on failure.
     }
   }
   return resolved
 }
 
-/** DB 快取欄位轉回 Quote 的數值；NULL / 壞值一律回 null */
+/** The DB cache field returns the value of Quote; NULL / bad values ​​​​are returned to null */
 function cachedNum(value: unknown, allowZero = false): number | null {
   if (value === null || value === undefined) return null
   const n = Number(value)
@@ -196,9 +196,9 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const now = new Date()
   const nowMs = now.getTime()
 
-  // 1) 先查 DB 共用快取：分市場 TTL 內的報價直接回傳（asOf = 實際抓價時間）
-  //    粗篩下界取兩市場的較大者 —— 台股收盤後的 TTL 長達十多小時，
-  //    沿用固定值會把昨天收盤抓到的定案價濾掉，整夜白抓（0.6.36）
+  // 1) First check the DB shared cache: the quotation within the TTL of the market is directly returned (asOf = actual price capture time)
+  //    The lower bound of the coarse screen is the larger of the two markets - the TTL after the closing of the Taiwan stock market is more than ten hours.
+  //    Using the fixed value will filter out the final price captured at yesterday's closing price, and capture it all night long (0.6.36)
   const freshAfter = new Date(nowMs - Math.max(twMaxTtlMs(now), CACHE_TTL_US_MS)).toISOString()
   try {
     const { data } = await db
@@ -230,11 +230,11 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
       }
     }
   } catch {
-    // 快取表不可用（例如尚未建表）時，直接全部走外部 API
+    // When the cache table is unavailable (for example, the table has not been created yet), all external APIs are used directly.
   }
 
-  // 2) 台股缺漏者先走 MIS 即時行情（asOf = 向來源確認的時間，非最後成交時間，
-  //    避免盤後把快取一律視為過期而重複請求）
+  // 2) Those with missing information on Taiwan stocks should go to MIS real-time quotes first (asOf = the time confirmed by the source, not the last transaction time,
+  //    To avoid treating the cache as expired and making repeated requests after the market opens)
   const missing = items.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const fromMis = await fetchMisPrices(
     missing.filter((i) => i.market === 'TPE').map((i) => i.ticker),
@@ -243,7 +243,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
 
-  // 3) 仍缺者（含全部美股、MIS 失敗的台股）走 Yahoo
+  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed MIS) go to Yahoo
   const unresolved = missing.filter((i) => !prices[`${i.market}:${i.ticker}`])
   const entries = await Promise.all(
     unresolved.map(async (item) => {
@@ -261,7 +261,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     if (entry) prices[entry[0]] = entry[1]
   }
 
-  // 4) 新抓到的價格回寫快取，供全站共用（updated_at 記實際報價時間，TTL 由此起算）
+  // 4) The newly captured price is written back to the cache for sharing by the entire site (updated_at records the actual quotation time, and TTL is calculated from this point)
   const fetchedKeys = [
     ...[...fromMis.keys()].map((t) => `TPE:${t}`),
     ...entries.flatMap((e) => (e ? [e[0]] : [])),
@@ -284,7 +284,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
         })),
       )
     } catch {
-      // 回寫失敗不影響本次回應
+      // Failure to write back does not affect this response
     }
   }
 
@@ -297,7 +297,7 @@ interface SearchResult {
   market: string
 }
 
-/** 代號型查詢（如 AAPL、2330）：曾解析過的名稱直接由 DB 快取回覆，不再請求 Yahoo */
+/** Code-type query (such as AAPL, 2330): the name that has been resolved is directly answered by the DB cache, and Yahoo is no longer requested. */
 async function lookupCachedNames(query: string): Promise<SearchResult[]> {
   if (!/^[A-Z0-9.-]{1,10}$/.test(query)) return []
   try {
@@ -321,7 +321,7 @@ async function lookupCachedNames(query: string): Promise<SearchResult[]> {
   }
 }
 
-/** 解析成功的「代號 ↔ 名稱」回寫共用快取，之後所有使用者查詢免打 Yahoo */
+/** Successfully parsed "code ↔ name" will be written back to the shared cache, and all subsequent users will be able to query without hitting Yahoo */
 async function persistNames(results: SearchResult[]): Promise<void> {
   if (results.length === 0) return
   try {
@@ -333,7 +333,7 @@ async function persistNames(results: SearchResult[]): Promise<void> {
       })),
     )
   } catch {
-    // 回寫失敗不影響本次回應
+    // Failure to write back does not affect this response
   }
 }
 
@@ -365,7 +365,7 @@ async function handleSearch(query: string): Promise<Response> {
         }
       })
       .slice(0, 10)
-    // 只回寫美股：Yahoo 的台股名稱是英文，台股中文名以 twlist（TWSE/TPEx）為準
+    // Only write back US stocks: Yahoo’s Taiwan stock names are in English, and the Chinese names of Taiwan stocks are based on twlist (TWSE/TPEx).
     await persistNames(results.filter((r) => r.market === 'US'))
     return json({ results })
   } catch {
@@ -378,7 +378,7 @@ function listNumber(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-/** 台股全清單（上市 TWSE + 上櫃 TPEx），欄位精簡為 symbol/name/close 以縮小回應 */
+/** Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response */
 async function handleTwList(): Promise<Response> {
   const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
     const res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA } })
@@ -413,31 +413,31 @@ async function handleTwList(): Promise<Response> {
 
 
 /**
- * 匯率即時報價（0.6.7）。
+ * Real-time quotes on exchange rates (0.6.7).
  *
- * **為什麼要有這個 action**：走勢圖的歷史走每日排程寫進 Storage 的 `fx/twd.json`
- * （stock-report 的 sync-fx），但那份檔案的最後一筆是「最近一根**完整**日線」——
- * 今天的日線要等倫敦日過完才成立，所以整個交易日內畫面都停在昨天的收盤。
- * 實測 2026-07-29 台北 11:00：檔案顯示 32.302，市場實際 32.435，差 0.42%。
+ * **Why is this action**: The daily schedule of the historical trend of the trend chart is written into Storage's `fx/twd.json`
+ * (sync-fx of stock-report), but the last entry in that file is "the latest **complete** daily line"——
+ * Today's daily line will not be established until the London Day has passed, so the entire trading day will remain at yesterday's closing price.
+ * Actual measurement 2026-07-29 Taipei 11:00: The file shows 32.302, the market actual is 32.435, a difference of 0.42%.
  *
- * 兩種資料的更新節奏天生不同：259 天的歷史一天變一次，卡片上的報價要新。
- * 故拆開 —— 歷史走 Storage 每日排程，報價走這裡，比照現價的三層快取
- * （L1 前端 localStorage / L2 price_cache / L3 外部 API），使用者不開頁就不抓。
+ * The update rhythms of the two types of data are inherently different: the 259-day history changes once a day, and the quotes on the cards need to be new.
+ * So take it apart - go through the history of Storage daily schedule, go here for quotations, and compare the three-tier cache with the current price.
+ * (L1 front-end localStorage / L2 price_cache / L3 external API), users will not crawl if they do not open the page.
  *
- * **用逐檔 `chart?range=1d` 而不是 spark**：spark 一次就能拿全部（1.4KB / 0.11 秒）
- * 看似划算，但它的 `close` 與 `regularMarketPrice` 一樣**四捨五入到 3 位有效數字** ——
- * 韓元會變成 `0.0225`，而實際是 `0.022462`。那是 0.25% 的誤差，且尾數動一格就是 0.44%，
- * 卡片卻顯示 5 位小數，等於在假裝精度。chart 的即時列給的是完整浮點數。
- * 代價很小：8 檔並行實測合計 9.3KB、序列跑也只要 1.0 秒，何況外面還有 10 分鐘快取。
+ * **Use range-wise `chart?range=1d` instead of spark**: spark can get it all at once (1.4KB / 0.11 seconds)
+ * Seems like a good deal, but its `close` is the same as `regularMarketPrice` **rounded to 3 significant figures** -
+ * The Korean Won would become `0.0225` when it was actually `0.022462`. That's an error of 0.25%, and moving the mantissa one step is 0.44%,
+ * The card shows 5 decimal places, which is pretending to be accurate. The immediate column of the chart gives full floating point numbers.
+ * The price is very small: the measured total of 8 parallel files is 9.3KB, and the sequence run only takes 1.0 seconds, not to mention there is a 10-minute cache outside.
  *
- * **幣對一律用「外幣在前」的 `XXXTWD=X`**。反向（TWD 在前）那側流動性差，
- * 即時報價與自己的日線對不起來 —— 實測人民幣 `TWDCNY=X` 的即時價換算後
- * 比當日日線高 4.47%，而同日其他七個幣別都只動 0.4%。
- * （歷史正好相反：`CNYTWD=X` 沒有歷史、`TWDCNY=X` 才有。兩邊各取所長，
- * 見 stock-report/fxRates.ts 的 FxSpec.symbols。）
+ * **For currency pairs, always use `XXXTWD=X`** with "foreign currency first". The reverse (TWD in front) side has poor flow,
+ * The real-time quotation is different from your own daily line - after conversion of the real-time price of the measured RMB `TWDCNY=X`
+ * It was 4.47% higher than the day's daily line, while the other seven currencies only moved 0.4% on the same day.
+ * (History is just the opposite: `CNYTWD=X` has no history, only `TWDCNY=X` has it. Both sides draw on their own strengths,
+ * See FxSpec.symbols in stock-report/fxRates.ts. )
  */
 const FX_CACHE_TTL_MS = 10 * 60 * 1000
-/** 一次最多幾個幣別。這是公開端點，上限用來擋人拿它當代打工具 */
+/** Up to several currencies at a time. This is a public endpoint. The upper limit is used to prevent people from using it as modern tools. */
 const FX_MAX_CODES = 12
 
 interface ChartQuoteResp {
@@ -455,10 +455,10 @@ function num(v: unknown): number | null {
 }
 
 /**
- * 由 chart 回應取出「現在的報價」。
+ * Get the "current quote" from the chart response.
  *
- * 優先取 Yahoo 附加在尾端的即時列（`timestamp` 等於 `meta.regularMarketTime`）——
- * 它是完整精度的浮點數。收盤後那一列可能不存在，退回最後一筆有值的日線。
+ * Prioritize the immediate column appended to the end by Yahoo (`timestamp` is equal to `meta.regularMarketTime`)——
+ * It is a full precision floating point number. That column may not exist after the market closes, and the last valuable daily line is returned.
  */
 function extractLiveQuote(
   resp: ChartQuoteResp,
@@ -482,8 +482,8 @@ function extractLiveQuote(
 }
 
 async function handleFx(codes: unknown): Promise<Response> {
-  // 幣別代號由前端傳入（它從 fx/twd.json 讀得到清單），這裡只做格式與數量把關 ——
-  // 在兩支獨立部署的函式裡各維護一份幣別清單，遲早會有一邊漏改
+  // The currency code is passed in from the front end (it reads the list from fx/twd.json), and only the format and quantity are checked here——
+  // Maintain a currency list in two independently deployed functions. Sooner or later, one side will miss the change.
   const wanted = Array.isArray(codes)
     ? [...new Set(codes.filter((c): c is string => typeof c === 'string' && /^[A-Z]{3}$/.test(c)))]
         .slice(0, FX_MAX_CODES)
@@ -493,7 +493,7 @@ async function handleFx(codes: unknown): Promise<Response> {
   const nowMs = Date.now()
   const quotes: Record<string, { price: number; asOf: string }> = {}
 
-  // 1) 先查 DB 共用快取
+  // 1) First check the DB shared cache
   const freshAfter = new Date(nowMs - FX_CACHE_TTL_MS).toISOString()
   try {
     const { data } = await db
@@ -507,12 +507,12 @@ async function handleFx(codes: unknown): Promise<Response> {
       if (price !== null && price > 0) quotes[code] = { price, asOf: row.updated_at }
     }
   } catch {
-    // 快取讀取失敗就當作全部未命中，照樣往下抓
+    // If the cache fails to read, it will be treated as a miss and the cache will be fetched as usual.
   }
 
   const missing = wanted.filter((c) => !quotes[c])
 
-  // 2) 未命中的並行抓齊。單一幣別失敗不影響其他七個（沿用 syncMacro 的準則）
+  // 2) Parallel capture of misses. Failure of a single currency does not affect the other seven (following syncMacro's guidelines)
   if (missing.length > 0) {
     const got = await Promise.all(
       missing.map(async (code) => {
@@ -537,7 +537,7 @@ async function handleFx(codes: unknown): Promise<Response> {
     }
   }
 
-  // 3) 新抓到的回寫共用快取
+  // 3) Newly captured write-back shared cache
   const fresh = missing.filter((c) => quotes[c])
   if (fresh.length > 0) {
     try {
@@ -545,7 +545,7 @@ async function handleFx(codes: unknown): Promise<Response> {
         fresh.map((c) => ({ key: `FX:${c}`, price: quotes[c].price, updated_at: quotes[c].asOf })),
       )
     } catch {
-      // 回寫失敗不影響本次回應
+      // Failure to write back does not affect this response
     }
   }
 
@@ -573,7 +573,7 @@ Deno.serve(async (req) => {
   if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
     return handleSearch(body.query.trim())
   }
-  // 匯率即時報價：走勢圖的歷史仍由 stock-report 的每日排程寫進 Storage，這裡只回「現在多少」
+  // Real-time exchange rate quotation: The history of the trend chart is still written into Storage by the daily schedule of stock-report, and only "how much is now" is returned here.
   if (body.action === 'fx') {
     return handleFx(body.codes)
   }

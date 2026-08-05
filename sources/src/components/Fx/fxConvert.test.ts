@@ -98,7 +98,7 @@ describe('invertPoints', () => {
 })
 
 describe('sliceByRange', () => {
-  // 每月 1 日一筆，2025-01 ~ 2026-01 共 13 筆
+  // One transaction on the 1st of each month, 13 transactions in total from 2025-01 ~ 2026-01
   const points: FxPoint[] = Array.from({ length: 13 }, (_, i) => {
     const m = i % 12
     const y = 2025 + Math.floor(i / 12)
@@ -111,7 +111,7 @@ describe('sliceByRange', () => {
   })
 
   it('以序列最後一天回推，不是以今天回推', () => {
-    // 最後一天是 2026-01-01，三個月前 = 2025-10-01
+    // The last day is 2026-01-01, three months ago = 2025-10-01
     expect(sliceByRange(points, '3m').map((p) => p[0])).toEqual([
       '2025-10-01',
       '2025-11-01',

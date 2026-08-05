@@ -1,13 +1,13 @@
 /**
- * 管理後台「帳號」：列出所有註冊帳號，並指派 / 收回管理員權限。
+ * Management backend "Account": List all registered accounts and assign/revoke administrator rights.
  *
- * ⚠️ **改完權限，那個帳號要重新登入才會生效。**
- * 權限烤在已簽發的 JWT 裡，舊 token 到期前仍帶著舊身分。
- * 這件事一定要寫在畫面上 —— 不寫的話，管理員按下開關、對方回報「還是看不到」，
- * 兩邊都會以為是壞了。
+ * ⚠️ **After changing the permissions, the account will not take effect until you log in again. **
+ * Permissions are baked into the issued JWT, and the old identity will remain with the old token until it expires.
+ * This matter must be written on the screen - if not, the administrator will press the switch and the other party will report "still can't see it".
+ * Both sides will think it's broken.
  *
- * 開關採「先送出、成功才改畫面」：權限是敏感操作，樂觀更新會讓失敗的那次
- * 在畫面上看起來像成功了。
+ * The switch adopts "Send first, then change the screen after success": permissions are sensitive operations, and optimistic updates will cause failure
+ * On the screen it looks like success.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw } from 'lucide-react'

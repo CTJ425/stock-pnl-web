@@ -1,63 +1,63 @@
 /**
- * 台股報價的抓取時段規則（0.6.36）。純函式、無狀態，供前端與 Edge Function 共用
- * （前端單元測試見 src/services/quoteWindow.test.ts）。
+ * Fetching period rules for Taiwan stock quotes (0.6.36). Pure function, stateless, shared by front-end and Edge Function
+ * (For front-end unit testing, see src/services/quoteWindow.test.ts).
  *
- * 為什麼要分時段：13:30 收盤後價格就定案了，再每 60 秒問一次 MIS 只是白打 —— 對外部
- * 端點、Edge Function、DB 快取都是。收盤到隔天試撮前把 TTL 一路拉長，等於整段夜間零請求。
+ * Why is it divided into time periods: the price is finalized after the market closes at 13:30, and asking MIS every 60 seconds is just a waste of time - externally
+ * Endpoints, Edge Functions, DB caches are all. The TTL is extended all the way from closing to the next day's trial, which equals zero requests during the entire night.
  *
- * 為什麼不查交易日曆、也不存「已鎖定」旗標：判斷只看台北的時鐘就夠了。
- * 週末與國定假日在 13:30 後自然落入長 TTL；隔天 08:25 解除後若當天休市，
- * 一到 13:30 又重新落入長 TTL。少一份要維護的假日表，也少一份會失準的狀態。
+ * Why not check the trading calendar and save the "locked" flag: just look at the Taipei clock for judgment.
+ * Weekends and national holidays will naturally fall into long TTL after 13:30; if it is lifted at 08:25 the next day, if the market is closed that day,
+ * Once it reaches 13:30, it falls into the long TTL again. There is one less holiday schedule to maintain and one less state that may be inaccurate.
  */
 
-/** 台北時區固定 +8（台灣無日光節約），與 stock-report/macroCalendar.ts 的處理一致 */
+/** Taipei time zone is fixed at +8 (no daylight savings in Taiwan), consistent with the handling of stock-report/macroCalendar.ts*/
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
 
-/** 恢復抓價：08:25，比試撮（08:30）早 5 分鐘，讓開盤前第一筆試撮價就是新的 */
+/** Resume price grabbing: 08:25, 5 minutes earlier than trial trading (08:30), so that the first trial trading price before the market opens is new*/
 const RESUME_MS = (8 * 60 + 25) * MINUTE_MS
-/** 收盤：13:30 最後一次撮合 */
+/** Closing: 13:30 Last match*/
 const CLOSE_MS = (13 * 60 + 30) * MINUTE_MS
-/** 盤中輪詢間隔（維持 0.6.35 以前的行為） */
+/** Intraday polling interval (maintains pre-0.6.35 behavior)*/
 const POLL_MS = MINUTE_MS
 
 const CLOSE_TIME_TEXT = '13:30:00'
 
-/** 台北時間的「當日已過毫秒數」（00:00:00 起算） */
+/** "Number of milliseconds elapsed on the current day" in Taipei time (starting from 00:00:00)*/
 function taipeiMsOfDay(now: Date): number {
   return (now.getTime() + TAIPEI_OFFSET_MS) % DAY_MS
 }
 
 /**
- * 台股報價的快取有效期。
+ * The cache validity period of Taiwan stock quotes.
  *
- * - 08:25–13:30（試撮與盤中）：60 秒，與收盤前的即時性需求一致
- * - 其餘時段：**只鎖已確認是收盤定案值的報價**，鎖到下一個 08:25
+ * - 08:25–13:30 (trial and intraday): 60 seconds, consistent with immediate needs before closing
+ * - The rest of the time period: **Only lock the quotes that have been confirmed to be the closing value**, and lock them until the next 08:25
  *
- * @param tradeTime 來源回報的最後撮合時間（MIS 的 `t`，HH:mm:ss）。
- *   **沒到 13:30 或根本取不到就不鎖**（0.6.37 修正）：
- *   0.6.36 原本的推理是「現在是 13:30 之後，當日不會再有新價」——
- *   那對「價格」成立，對「這筆是不是收盤定案值」不成立。
- *   缺這個欄位的快取有兩種來源：升級前寫入的舊列，以及沒有這個欄位的備援路徑
- *   （Yahoo / TWSE OpenAPI）。兩者都只是盤中某一刻的快照，鎖了會把它凍到隔天早上，
- *   畫面上就一路顯示「盤中」而且開高低量全是「—」。正式區實際發生過。
- *   代價是來源持續回非定案值時整夜維持短輪詢 —— 那是異常狀態，本來就該持續重試。
+ * @param tradeTime The last matching time of the source return (`t` for MIS, HH:mm:ss).
+ *   **It will not be locked until 13:30 or if it cannot be obtained at all** (0.6.37 correction):
+ *   0.6.36 The original reasoning is "It is now after 13:30, and there will be no new prices that day"——
+ *   That is true for "price", but not true for "whether this is the closing value".
+ *   There are two sources of cache missing this field: old columns written before the upgrade, and backup paths that do not have this field.
+ *   (Yahoo/TWSE OpenAPI). Both are just snapshots of a certain moment on the disk. Locking them will freeze them until the next morning.
+ *   The screen displays "Intraday" all the way and the high and low volumes are all "-". Official area actually happened.
+ *   The price is to maintain short polling all night long when the source continues to return non-finalized values ​​- that is an abnormal state and should continue to be retried.
  */
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
   if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) return POLL_MS
-  // 收盤後往後推到明天的 08:25；凌晨（t < RESUME_MS）則是今天的 08:25
+  // After closing, it will be pushed back to 08:25 tomorrow; in the early morning (t < RESUME_MS), it will be 08:25 today
   return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
 }
 
 /**
- * 此刻台股快取「可能的最長有效期」，供 DB 查詢的粗篩下界使用。
+ * At this moment, the "maximum possible validity period" of the Taiwan stock cache is used for the coarse filter lower bound of DB query.
  *
- * 粗篩不知道每一列的 `trade_time`，不能直接呼叫 `twQuoteTtlMs(now)` ——
- * 那會回短 TTL（因為沒帶撮合時間），把昨天收盤抓到的定案價濾掉、整夜白抓。
- * 這裡以「已定案」為假設取上界，逐列的實際判定仍由 `twQuoteTtlMs` 負責。
+ * The coarse filter does not know the `trade_time` of each column and cannot directly call `twQuoteTtlMs(now)` ——
+ * Then the TTL will be shortened (because there is no matching time), and the final price captured at yesterday's closing price will be filtered out, and the captured price will be wasted all night.
+ * Here, "finalized" is assumed as the upper bound, and the actual judgment on a column-by-column basis is still the responsibility of `twQuoteTtlMs`.
  */
 export function twMaxTtlMs(now: Date): number {
   return twQuoteTtlMs(now, CLOSE_TIME_TEXT)

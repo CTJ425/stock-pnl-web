@@ -1,18 +1,18 @@
 /**
- * SVG 路徑組裝與版面定位的共用純函式。
+ * Common pure functions for SVG path assembly and layout positioning.
  *
- * 為什麼獨立成一個檔而不是放在 chartFrame.tsx：那個檔匯出元件，
- * 從元件檔一併匯出非元件會觸發 react(only-export-components) —— Fast Refresh 會整檔重載。
+ * Why separate it into a separate file instead of placing it in chartFrame.tsx: That file exports components.
+ * Exporting non-components from the component file will trigger react(only-export-components) - Fast Refresh will reload the entire file.
  */
 import type { PlotGeometry } from './chartFrame'
 
 /**
- * 把值序列切成連續有值的區段，每段是 `[x, y]` 座標陣列。
+ * Cut the value sequence into continuous value segments, each segment is a `[x, y]` coordinate array.
  *
- * 「遇 null 斷開、不內插、丟棄只有一個點的段」這條規則被折線、面積、均線疊圖共用，
- * 抽在這裡是因為**各寫一份必然會在「缺資料要不要連起來」上走鐘** ——
- * 面積填充尤其不能自己分一次段：填色與線條的斷點只要差一格，
- * 畫面上就會出現一塊沒有線的色塊，而且很難看出是哪邊錯。
+ * This rule "disconnect when null is encountered, do not interpolate, and discard segments with only one point" is shared by polyline, area, and moving average overlay charts.
+ * I picked it here because **writing one copy of each will inevitably lead to a delay in "should I connect the missing information?"**——
+ * In particular, area filling cannot be divided into segments by itself: as long as the breakpoint of the filling and the line is different by one grid,
+ * A color block without lines will appear on the screen, and it will be difficult to see which side is wrong.
  */
 function segments(values: Array<number | null>, geo: PlotGeometry): Array<Array<[number, number]>> {
   const out: Array<Array<[number, number]>> = []
@@ -32,19 +32,19 @@ function segments(values: Array<number | null>, geo: PlotGeometry): Array<Array<
 const pt = ([x, y]: [number, number]) => `${x.toFixed(2)},${y.toFixed(2)}`
 
 /**
- * 把連續有值的區段切成多條折線的 points 字串（遇 null 斷開、不內插）。
- * 折線圖、均線疊圖、KD 圖三處共用 —— 各寫一份必然會在「缺資料要不要連起來」上走鐘。
+ * A string of points that cuts a continuous value segment into multiple polylines (breaks when null is encountered and does not interpolate).
+ * The line chart, the moving average overlay chart, and the KD chart are shared in three places - writing one for each will inevitably lead to a delay in "should the missing information be connected?"
  */
 export function lineSegments(values: Array<number | null>, geo: PlotGeometry): string[] {
   return segments(values, geo).map((seg) => seg.map(pt).join(' '))
 }
 
 /**
- * 同樣的分段，但每段各自往下封閉到繪圖區底邊，供 `<polygon>` 做面積填充。
+ * The same segmentation, but each segment is closed down to the bottom edge of the drawing area for `<polygon>` to fill the area.
  *
- * 底邊用 `geo.innerH` 而不是 `geo.y(0)`：折線圖的值域刻意不含 0
- * （匯率 0.195～0.202、融資餘額動輒數萬張，從 0 起算會把變化壓成一條直線），
- * `geo.y(0)` 會落在繪圖區外面很遠的地方。
+ * Use `geo.innerH` instead of `geo.y(0)` for the bottom: the value range of the line chart deliberately does not contain 0
+ * (The exchange rate is 0.195~0.202, and the financing balance is often tens of thousands. Starting from 0 will suppress the changes into a straight line),
+ * `geo.y(0)` will fall far outside the plot area.
  */
 export function areaSegments(values: Array<number | null>, geo: PlotGeometry): string[] {
   return segments(values, geo).map((seg) => {
@@ -55,14 +55,14 @@ export function areaSegments(values: Array<number | null>, geo: PlotGeometry): s
 }
 
 /**
- * 把 tooltip 的中心 x 夾在容器內，避免最左 / 最右的資料點讓它超出去。
+ * Clamp the center x of the tooltip within the container to prevent the leftmost/rightmost data points from extending beyond it.
  *
- * `.chart-tip` 是 `translate(-50%, …)`，中心貼齊資料點；序列頭尾兩點的中心
- * 距離容器邊緣只有半個 bandWidth，寬一點的 tooltip 就會被裁掉。
+ * `.chart-tip` is `translate(-50%, …)`, the center is aligned with the data point; the center of the first and last points of the sequence
+ * If there is only half a bandWidth from the edge of the container, a wider tooltip will be cropped.
  *
- * `estWidth` 是**估算值**（呼叫端由字元數推），目的只是擋掉明顯溢出、不追求像素精確 ——
- * 要精確就得先 render 再量再重排，為了一個提示框不值得。
- * 容器比 tooltip 還窄時回正中間（再夾也只是換一邊被裁）。
+ * `estWidth` is an **estimate** (the caller pushes it by the number of characters). The purpose is only to block obvious overflow and does not pursue pixel accuracy——
+ * To be precise, you have to render first, then measure and then rearrange. It's not worth it for a prompt box.
+ * When the container is narrower than the tooltip, return it to the center (if you clip it again, it will just be cut on the other side).
  */
 export function clampTipCenter(centerPx: number, estWidthPx: number, viewW: number): number {
   const half = estWidthPx / 2

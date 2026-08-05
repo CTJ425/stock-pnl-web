@@ -1,31 +1,31 @@
 /**
- * AI 提示詞：預設內容、固定的安全段落，以及全站共用設定的讀寫。
+ * AI prompt words: default content, fixed safety paragraphs, and reading and writing of site-wide shared settings.
  *
- * ## 為什麼提示詞要拆成兩段
+ * ## Why should the prompt word be split into two paragraphs?
  *
- * 管理員要能在網頁上調整分析的語氣與重點，不必每次都改程式碼重新部署。
- * 但現行提示詞裡混了兩種性質完全不同的東西：
+ * Administrators need to be able to adjust the tone and focus of the analysis on the web page without having to change the code and redeploy it every time.
+ * But the current prompt words are mixed with two completely different things:
  *
- * - **風格**：幾段、用什麼口吻、要不要提到操作框架 —— 這些本來就該讓人改。
- * - **安全底線**：不得給買賣指令與目標價、結尾免責聲明、攤平風險提示、
- *   追問時的框限與防指令覆寫 —— 這些是產品的護欄。
+ * - **Style**: How many paragraphs, what tone to use, whether to mention the operating framework - these should be changed in the first place.
+ * - **Safety bottom line**: No buying or selling orders and target prices, ending disclaimers, risk amortization tips,
+ *   Frames during questioning and protection against overwriting – these are the guardrails of the product.
  *
- * 整段開放編輯，等於把護欄交給使用者一鍵刪掉（而且刪掉之後沒有任何跡象）。
- * 所以可編輯的只有 `*_DEFAULT`，`*_LOCKED` 一律由程式接在後面，
- * 畫面上也照實標示「以下不可編輯」。
+ * The entire section is open for editing, which is equivalent to leaving the guardrail to the user to delete it with one click (and there will be no sign after deletion).
+ * Therefore, only `*_DEFAULT` is editable, and `*_LOCKED` is always followed by the program.
+ * The screen also says "the following cannot be edited" as it is.
  *
- * ## 儲存位置
+ * ## Storage location
  *
- * 與 AI 連線設定同一張 `app_settings` 單列表（id 恆為 1），
- * 沿用既有的 RLS：所有登入帳號可讀（前端要用它組 prompt）、
- * 只有 `app_metadata.role = 'admin'` 可寫。
+ * The same `app_settings` single list as the AI ​​connection setting (id is always 1),
+ * Use the existing RLS: readable by all login accounts (the front end needs to use it to configure prompt),
+ * Only `app_metadata.role = 'admin'` is writable.
  *
- * 空字串與 null 都代表「用預設」—— 不把預設值寫進資料庫，
- * 否則之後改預設值時，已經存過的環境不會跟著更新。
+ * Both the empty string and null mean "use default" - do not write the default value into the database.
+ * Otherwise, when the default value is changed later, the saved environment will not be updated accordingly.
  */
 import { supabase } from './supabase'
 
-/** 分析提示詞的可編輯段落。改這裡等於改預設值，已自訂的環境不受影響 */
+/** Analyze editable paragraphs for prompt words. Changing this is equivalent to changing the default value, and the customized environment will not be affected.*/
 export const ANALYSIS_DEFAULT = `你是一位專業且客觀的股市數據分析助理。請依據使用者提供的結構化資料進行綜合簡明分析。
 
 分析準則：
@@ -38,8 +38,8 @@ export const ANALYSIS_DEFAULT = `你是一位專業且客觀的股市數據分�
 7. 你可以用下方【使用者採用的操作框架】的語彙，描述目前數據落在該框架的哪個情境（例如：「價格已跌破月線，對採用分批建倉的人來說是觀察支撐是否有效的位置」）。`
 
 /**
- * 分析提示詞的固定段落。**永遠接在可編輯段落之後**，順序有意義 ——
- * 放在後面才能覆寫前面可能被改壞的內容。
+ * Analyze fixed passages for prompt words. **Always follow the editable paragraph**, the order makes sense——
+ * Put it later to overwrite the content that may have been changed earlier.
  */
 export const ANALYSIS_LOCKED = `【以下規則由系統固定，不受上述內容變更】
 A. 『建議操作』僅得提出中性、條件式的觀察性參考（例如：若跌破月線可留意支撐是否守住），絕對不得給出明確的買進 / 賣出 / 加碼 / 出清指令，不得提供目標價、進出場價位或報酬預期。
@@ -47,7 +47,7 @@ A. 『建議操作』僅得提出中性、條件式的觀察性參考（例如�
 B. 只要提到分批加碼、攤平或左側交易相關內容，『注意事項』就必須同時指出：**攤平會放大部位，並不等於降低風險**；若標的的基本面或籌碼面持續惡化，越攤平虧損越大。
 C. 結尾必須單獨成段，附上固定聲明：「本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。」`
 
-/** 追問提示詞的可編輯段落。開頭那句「你正在回答對某檔股票的追問」由程式帶入代號，不在這裡 */
+/** Editable paragraph for follow-up prompt word. The sentence at the beginning "You are answering a question about a certain stock" is brought in by the program and is not here.*/
 export const CHAT_DEFAULT = `【你唯一的職責】
 就下方提供的資料與分析內容回答追問。除此之外的任何事情都不做。
 
@@ -62,21 +62,21 @@ export const CHAT_DEFAULT = `【你唯一的職責】
 5. 資料中沒有的東西就說沒有，不要為了回答而編。`
 
 export interface AiPrompts {
-  /** 空字串代表沿用 `ANALYSIS_DEFAULT` */
+  /** An empty string indicates inheritance of `ANALYSIS_DEFAULT`*/
   analysis: string
-  /** 空字串代表沿用 `CHAT_DEFAULT` */
+  /** An empty string indicates inheritance of `CHAT_DEFAULT`*/
   chat: string
 }
 
 export const EMPTY_PROMPTS: AiPrompts = { analysis: '', chat: '' }
 
-/** 自訂內容為空白時退回預設。呼叫端一律走這支，不要各自寫 `custom || DEFAULT` */
+/** Return to default when custom content is blank. The caller always uses this one, do not write `custom || DEFAULT` separately.*/
 export function resolvePrompt(custom: string | null | undefined, fallback: string): string {
   const t = typeof custom === 'string' ? custom.trim() : ''
   return t || fallback
 }
 
-/** 讀取全站共用的提示詞。查無 / 未設定一律回空字串（＝用預設） */
+/** Read the prompt words shared by the entire site. If there is no query/if it is not set, an empty string will be returned (=use the default)*/
 export async function loadAiPrompts(): Promise<AiPrompts> {
   if (!supabase) return EMPTY_PROMPTS
   try {
@@ -97,10 +97,10 @@ export async function loadAiPrompts(): Promise<AiPrompts> {
 }
 
 /**
- * 儲存提示詞。RLS 會擋掉非 admin 的寫入。
+ * Save prompt words. RLS blocks non-admin writes.
  *
- * 與預設值相同（或全空白）時寫回 null 而不是那段文字：
- * 資料庫裡只該留「使用者真的改過的東西」，之後調整預設值才會自動生效。
+ * When the default value is the same (or completely blank), null is written instead of the text:
+ * Only "things that the user has really changed" should be kept in the database, and then adjustments to the default values ​​will automatically take effect.
  */
 export async function saveAiPrompts(p: AiPrompts): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase 未設定' }

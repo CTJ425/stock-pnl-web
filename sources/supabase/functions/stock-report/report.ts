@@ -1,18 +1,18 @@
 /**
- * 報告資料模型組裝：把抓來的籌碼 + 前端帶入的持股脈絡（成本/損益）合成 ReportData。
- * 純資料層，不觸網、不碰 DB，便於單元測試。
+ * Report data model assembly: Synthesize the captured chips + the holding context (cost/profit and loss) brought in by the front end into ReportData.
+ * Pure data layer, does not touch the network or DB, which is convenient for unit testing.
  *
- * schema 2（v0.3.7-dev.3 起）：伺服器只回結構化資料，不再產生 HTML；
- * 內嵌最多 7 個交易日的 history 供前端自繪走勢圖。
- * schema 3（v0.4.0 起）：新增 `sources` —— 各資料源各自的資料日期與抓取時間。
- * 前端接受 schema >= 2，`sources` 視為選填。
+ * Schema 2 (from v0.3.7-dev.3): The server only returns structured data and no longer generates HTML;
+ * Embedded history of up to 7 trading days for front-end self-drawn trend charts.
+ * Schema 3 (from v0.4.0): Added `sources` - the data date and fetch time of each data source.
+ * The front end accepts schema >= 2, `sources` is considered optional.
  */
 import type { ChipLeg, InstitutionalChip, MarginChip, BorrowChip } from './twChips.ts'
 
-/** 報告結構版本 */
+/** Report structure version*/
 export const REPORT_SCHEMA = 3
 
-/** 前端帶入的持股脈絡（皆為前端已算好的值，Worker 不重算） */
+/** The shareholding context brought in by the front-end (all values ​​have been calculated by the front-end, Worker does not recalculate)*/
 export interface HoldingContext {
   qty: number
   avgCost: number
@@ -21,42 +21,42 @@ export interface HoldingContext {
   roi: number | null
 }
 
-/** 單一交易日的籌碼快照 */
+/** Chip snapshot of a single trading day*/
 export interface ChipDay {
-  /** 資料所屬交易日 YYYY-MM-DD */
+  /** The trading day to which the data belongs YYYY-MM-DD*/
   date: string
   institutional: InstitutionalChip | null
   margin: MarginChip | null
 }
 
-/** 連買連賣 / 連增連減：正數＝連續 N 天買超（增加），負數＝連續 N 天賣超（減少），0＝中斷 */
+/** Continuous buying and selling/continuous increasing and decreasing: positive number = overbuying (increasing) for N consecutive days, negative number = overselling (decreasing) for N consecutive days, 0 = interruption*/
 export interface ChipStreaks {
   foreign: number
   foreignDealer: number
   trust: number
   dealer: number
   total: number
-  /** 融資餘額連增連減 */
+  /** Financing balance continues to increase and decrease*/
   margin: number
-  /** 融券餘額連增連減 */
+  /** The balance of securities lending continued to increase and decrease*/
   short: number
 }
 
 /**
- * 單一資料源的新鮮度。
+ * Freshness from a single source.
  *
- * 存在的理由：三個資料源的公布時間差很多（三大法人約 15:00–15:30、融資融券約 21:00–22:00、
- * 借券約 21:00–22:30），批次是分段執行的，所以同一份報告裡各區塊的新舊程度本來就不一樣。
- * 只給整份報告一個 generatedAt 會讓使用者誤以為每塊都一樣新。
+ * Reason for existence: The release times of the three data sources are very different (approximately 15:00–15:30 for the three major legal persons, approximately 21:00–22:00 for margin trading,
+ * (approximately 21:00–22:30), the batches are executed in segments, so the freshness of each block in the same report is inherently different.
+ * Giving only one generatedAt to the entire report can fool the user into thinking that every block is equally new.
  */
 export interface SourceStamp {
-  /** 這份資料本身所屬的日期 YYYY-MM-DD（借券是「下一個交易日」，故可能與籌碼的資料日期不同） */
+  /** The date this data itself belongs to is YYYY-MM-DD (the borrowing period is the "next trading day", so it may be different from the data date of chips)*/
   date: string | null
-  /** 我們實際抓到它的時間 ISO；null 代表當下還沒有這份資料 */
+  /** The time when we actually captured it ISO; null means that the data does not exist yet*/
   fetchedAt: string | null
 }
 
-/** 各資料源的新鮮度。缺某一項代表該項今日尚未取得 */
+/** The freshness of each data source. If an item is missing, it means that the item has not been obtained today.*/
 export interface ReportSources {
   institutional: SourceStamp | null
   margin: SourceStamp | null
@@ -68,27 +68,27 @@ export interface ReportData {
   ticker: string
   name: string
   market: 'TPE'
-  /** 最新交易日 YYYY-MM-DD（= history 最後一筆） */
+  /** Latest trading day YYYY-MM-DD (= last transaction in history)*/
   dataDate: string
-  /** 產生時間 ISO */
+  /** Creation time ISO*/
   generatedAt: string
   holding: HoldingContext | null
-  /** 最新交易日的三大法人（= history 最後一筆，方便前端直接取用） */
+  /** The three major legal persons of the latest trading day (= the last transaction in history, convenient for direct access by the front end)*/
   institutional: InstitutionalChip | null
-  /** 最新交易日的融資融券 */
+  /** Margin margin trading on the latest trading day*/
   margin: MarginChip | null
-  /** 借券（來源無 date 參數，僅最新交易日） */
+  /** Borrow bonds (the source has no date parameter, only the latest trading day)*/
   borrow: BorrowChip | null
-  /** 由舊到新，最多 7 個交易日 */
+  /** Old to new, up to 7 trading days*/
   history: ChipDay[]
   streaks: ChipStreaks
-  /** 各資料源各自的資料日期與抓取時間（schema 3 起） */
+  /** The data date and crawl time of each data source (schema 3 and above)*/
   sources: ReportSources
-  /** 缺漏 / 降級說明（如上櫃暫不支援、歷史資料回補中） */
+  /** Missing/downgraded instructions (if listing is not currently supported, historical data is being replenished)*/
   notes: string[]
 }
 
-/** 台北時區（UTC+8）的 YYYYMMDD */
+/** YYYYMMDD in Taipei time zone (UTC+8)*/
 export function taipeiYmd(d: Date): string {
   const t = new Date(d.getTime() + 8 * 60 * 60 * 1000)
   const y = t.getUTCFullYear()
@@ -98,8 +98,8 @@ export function taipeiYmd(d: Date): string {
 }
 
 /**
- * 回推交易日候選（含當日往前數天，由新到舊），用於 rwd 端點嘗試；
- * 週末 / 假日 / 尚未收盤時前一候選會抓不到，改試更早的。
+ * Push back transaction day candidates (including several days before the current day, from new to old), used for rwd endpoint attempts;
+ * On weekends/holidays/when the market has not yet closed, the previous candidate will not be captured, so try an earlier one instead.
  */
 export function tradingDateCandidates(now: Date, back = 7): string[] {
   const out: string[] = []
@@ -110,8 +110,8 @@ export function tradingDateCandidates(now: Date, back = 7): string[] {
 }
 
 /**
- * 週六 / 週日必定非交易日，先剔除可省下白抓的外部請求（假日仍需實抓才知道）。
- * 直接以 YYYYMMDD 當 UTC 日期算星期，不受執行環境時區影響。
+ * Saturdays and Sundays must be non-trading days. First eliminate external requests that can save wasted time (holidays still need to be implemented to know).
+ * Calculate the day of the week directly using YYYYMMDD as the UTC date, which is not affected by the execution environment time zone.
  */
 export function isWeekendYmd(ymd: string): boolean {
   const dow = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8))).getUTCDay()
@@ -124,9 +124,9 @@ export function dashDate(ymd: string): string {
 }
 
 /**
- * 由「由舊到新」的序列算連續天數：
- * 從最新一筆往回數同號的連續筆數，遇 0 或 null（當日無資料）即中斷。
- * 回傳值帶正負號（+3 = 連 3 買 / 連 3 增；-2 = 連 2 賣 / 連 2 減）。
+ * Calculate the number of consecutive days from the "oldest to newest" sequence:
+ * Count the number of consecutive transactions with the same number from the latest one, and it will be interrupted when it encounters 0 or null (no data on the current day).
+ * The returned value has a positive or negative sign (+3 = 3 consecutive buys/3 consecutive increases; -2 = 2 consecutive sells/2 consecutive decreases).
  */
 export function computeStreak(series: Array<number | null>): number {
   const last = series[series.length - 1]
@@ -142,7 +142,7 @@ export function computeStreak(series: Array<number | null>): number {
   return sign * n
 }
 
-/** 取 history 中某條買賣超序列（由舊到新） */
+/** Get a certain transaction super sequence in history (from old to new)*/
 function netSeries(
   history: ChipDay[],
   pick: (i: InstitutionalChip) => ChipLeg,
@@ -167,7 +167,7 @@ export interface BuildReportParams {
   name: string
   dataDateYmd: string
   holding: HoldingContext | null
-  /** 由舊到新的交易日序列（最後一筆＝最新交易日） */
+  /** Trading day sequence from old to new (last transaction = latest trading day)*/
   history: ChipDay[]
   borrow: BorrowChip | null
   sources?: ReportSources

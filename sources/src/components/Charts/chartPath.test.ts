@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { areaSegments, clampTipCenter, lineSegments } from './chartPath'
 import type { PlotGeometry } from './chartFrame'
 
-/** 好算的假 geometry：bandCenter = 10i + 5、y = 值本身、底邊 100 */
+/** Easy to calculate fake geometry: bandCenter = 10i + 5, y = value itself, base 100*/
 const geo: PlotGeometry = {
   innerW: 100,
   innerH: 100,
@@ -65,7 +65,7 @@ describe('areaSegments', () => {
       const lines = lineSegments(values, geo)
       const areas = areaSegments(values, geo)
       expect(areas).toHaveLength(lines.length)
-      // 面積 = 底邊點 + 折線原樣 + 底邊點
+      // Area = bottom point + original polyline + bottom point
       areas.forEach((a, i) => {
         const inner = a.split(' ').slice(1, -1).join(' ')
         expect(inner).toBe(lines[i])
@@ -74,7 +74,7 @@ describe('areaSegments', () => {
   })
 
   it('底邊用 innerH 而不是 y(0) —— 折線圖的值域不含 0', () => {
-    // y(0) 會是 0（這個假 geo 的 y 是恆等函式），底邊必須是 100
+    // y(0) will be 0 (y for this fake geo is the identity function), and the base must be 100
     const pts = areaSegments([1, 2], geo)[0].split(' ')
     expect(pts[0]).toBe('5.00,100.00')
     expect(pts[pts.length - 1]).toBe('15.00,100.00')

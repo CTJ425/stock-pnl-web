@@ -1,30 +1,30 @@
 /**
- * 管理後台的帳號清單與管理員權限指派（0.6.19）。
+ * Account list and administrator permission assignment in the management background (0.6.19).
  *
- * 走 Edge Function 的理由與 `adminStatus.ts` 相同，但更硬：
- * **`auth.users` 根本不在 PostgREST 的 exposed schemas 裡**，前端拿使用者 JWT
- * 怎麼查都查不到；專案也沒有 profiles 表可以映射。只有 service role 讀得到。
+ * The reason for using Edge Function is the same as `adminStatus.ts`, but harder:
+ * **`auth.users` is not in the exposed schemas of PostgREST at all**, the front end gets the user JWT
+ * I can't find it no matter how I search; there is no profiles table for the project to map. Only service role can be read.
  *
- * 授權同樣是 `functions.invoke` 自動帶上的使用者 JWT，後端再核 `app_metadata.role`。
+ * Authorization is also the user JWT automatically brought by `functions.invoke`, and the backend then checks `app_metadata.role`.
  */
 import { supabase } from './supabase'
 
 export interface AdminUser {
   id: string
   email: string
-  /** ISO 時間；壞值或缺值為 null，畫面顯示「—」 */
+  /** ISO time; bad value or missing value is null, the screen displays "—"*/
   createdAt: string | null
   /**
-   * 最近一次連線（後端取的是 `auth.users.updated_at`）。
+   * The latest connection (the backend takes `auth.users.updated_at`).
    *
-   * **不是 `last_sign_in_at`**：那個只在真的重新登入時才更新，
-   * 一直沒登出的帳號會永遠停在很舊的時間，畫面上看起來像壞掉（0.6.20 修正）。
+   * **Not `last_sign_in_at`**: that is only updated when you actually log in again,
+   * Accounts that have not been logged out will always be stuck at a very old time, and the screen will look broken (fixed in 0.6.20).
    */
   lastActiveAt: string | null
   admin: boolean
 }
 
-/** 讀取帳號清單。查無 / 無權限回 null（吞錯不拋，比照其他 proxy） */
+/** Read the account list. Check if there is no / no permission and return null (error will not be thrown, compare with other proxies)*/
 export async function fetchAdminUsers(): Promise<AdminUser[] | null> {
   if (!supabase) return null
   try {
@@ -50,11 +50,11 @@ export async function fetchAdminUsers(): Promise<AdminUser[] | null> {
 }
 
 /**
- * 指派或收回管理員權限。
+ * Assign or revoke administrator privileges.
  *
- * 回傳錯誤訊息字串或 null（成功）—— 這一支**不能吞錯**：
- * 使用者按下開關之後，畫面必須據實回答「成功了沒」，
- * 而後端會擋掉「取消自己的權限」這種操作，那個理由要原樣傳到畫面上。
+ * Return an error message string or null (success) - this one can't swallow errors:
+ * After the user presses the switch, the screen must truthfully answer "Did it succeed?"
+ * The backend will block the operation of "cancelling one's own permissions", and the reason must be transmitted to the screen as it is.
  */
 export async function setUserAdmin(userId: string, admin: boolean): Promise<string | null> {
   if (!supabase) return 'Supabase 未設定'
@@ -72,11 +72,11 @@ export async function setUserAdmin(userId: string, admin: boolean): Promise<stri
 }
 
 /**
- * 從 supabase-js 的 FunctionsHttpError 裡挖出後端寫的訊息。
+ * Digging out the messages written by the backend from the FunctionsHttpError of supabase-js.
  *
- * 非 2xx 時 `invoke` 只給「Edge Function returned a non-2xx status code」，
- * 真正的原因（例如「不能取消自己的管理員權限」）在 `error.context` 那個 Response 裡。
- * 少了這一步，使用者看到的會是一句什麼都沒說的技術錯誤。
+ * When it is not 2xx, `invoke` will only give "Edge Function returned a non-2xx status code".
+ * The real reason (for example, "cannot revoke one's administrator privileges") is in the Response of `error.context`.
+ * Without this step, users will see technical errors that say nothing.
  */
 async function httpErrorMessage(error: unknown): Promise<string | null> {
   const ctx = (error as { context?: unknown })?.context

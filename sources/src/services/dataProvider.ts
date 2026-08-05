@@ -1,8 +1,8 @@
 /**
- * 資料層抽象：同一介面下有兩個實作——
- * - SupabaseProvider：正式模式，資料存 Supabase（多使用者 + RLS）
- * - LocalProvider：本機模式（未設定 Supabase 環境變數時），資料存 localStorage，
- *   免登入即可使用；之後設定環境變數即無縫切換為 Supabase 模式
+ * Data layer abstraction: There are two implementations under the same interface——
+ * - SupabaseProvider: formal mode, data is stored in Supabase (multi-user + RLS)
+ * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
+ *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
 import type { NewTransaction, Transaction, Workspace } from '../types/models'
 import { supabase } from './supabase'
@@ -11,19 +11,19 @@ export interface DataProvider {
   listWorkspaces(): Promise<Workspace[]>
   createWorkspace(name: string): Promise<Workspace>
   renameWorkspace(id: string, name: string): Promise<void>
-  /** 刪除工作區（其下交易一併刪除） */
+  /** Delete the workspace (the transactions under it are also deleted)*/
   deleteWorkspace(id: string): Promise<void>
   listTransactions(workspaceId: string): Promise<Transaction[]>
-  /** 批次新增（單筆與 CSV 匯入共用） */
+  /** Batch addition (shared with single transaction and CSV import)*/
   addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]>
-  /** 更新單筆交易內容 */
+  /** Update the contents of a single transaction*/
   updateTransaction(id: string, patch: NewTransaction): Promise<void>
-  /** 批次刪除（單筆刪除傳入單一元素陣列） */
+  /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions(ids: string[]): Promise<void>
 }
 
 /* =========================================================
- * 本機模式：localStorage
+ * Native mode: localStorage
  * ========================================================= */
 
 const LOCAL_KEY = 'stock-pnl-web/local-store-v1'
@@ -46,7 +46,7 @@ function readStore(): LocalStore {
       if (Array.isArray(parsed.workspaces) && Array.isArray(parsed.transactions)) return parsed
     }
   } catch {
-    // 資料損毀時重建空 store
+    // Rebuild empty store when data is damaged
   }
   return { workspaces: [], transactions: [] }
 }
@@ -100,7 +100,7 @@ export class LocalProvider implements DataProvider {
       ...tx,
       id: newId(),
       workspace_id: workspaceId,
-      // 以毫秒遞增確保同批匯入維持原始順序（引擎同日交易以 created_at 排序）
+      // Ensure that the same batch import maintains the original order in millisecond increments (engine same-day transactions are sorted by created_at)
       created_at: new Date(base + i).toISOString(),
     }))
     store.transactions.push(...created)
@@ -125,7 +125,7 @@ export class LocalProvider implements DataProvider {
 }
 
 /* =========================================================
- * Supabase 模式
+ * Supabase mode
  * ========================================================= */
 
 function client() {

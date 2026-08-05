@@ -48,7 +48,7 @@ describe('AccountsSection', () => {
     await screen.findByText('zrchen0425@gmail.com')
     expect(screen.getByRole('columnheader', { name: '最近活動' })).toBeTruthy()
     expect(screen.queryByRole('columnheader', { name: '最後登入' })).toBeNull()
-    // 這個時間是「最近一次連線」，畫面要把這件事講出來
+    // This time is the "last connection", the screen should tell this matter
     expect(screen.getByText(/最近一次連線/)).toBeTruthy()
   })
 
@@ -75,7 +75,7 @@ describe('AccountsSection', () => {
     fireEvent.click(screen.getAllByRole('switch')[0])
 
     expect(await screen.findByText('不能取消自己的管理員權限')).toBeTruthy()
-    // 樂觀更新會讓失敗看起來像成功，所以刻意等成功才改
+    // Optimistic updating makes failure look like success, so you deliberately wait for success before changing
     expect(screen.getAllByRole('switch')[0].getAttribute('aria-checked')).toBe('true')
   })
 

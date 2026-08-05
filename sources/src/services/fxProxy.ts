@@ -1,43 +1,43 @@
 /**
- * 台幣對主要外幣的匯率：讀取每日排程預產、存於公開 `reports` bucket 的 `fx/twd.json`。
+ * The exchange rate of the Taiwan dollar against major foreign currencies: Read the daily scheduled production and `fx/twd.json` stored in the public `reports` bucket.
  *
- * **與其他 proxy 的差別：這是全域單檔，不帶 ticker**（同 macroProxy）。
+ * **Difference from other proxies: This is a global single file without ticker** (same as macroProxy).
  *
- * 此檔的型別是**網路介面契約**，須與
- * sources/supabase/functions/stock-report/fxRates.ts 的 FxFile 對齊。
+ * This file is of type **Network Interface Contract** and must be used with
+ * FxFile alignment for sources/supabase/functions/stock-report/fxRates.ts.
  *
- * 方向陷阱：`rate` 一律是「**1 單位外幣可換多少台幣**」（1 USD = 32.387 TWD）。
- * 反向由前端取倒數，資料裡不存第二份。
+ * Direction trap: `rate` is always "**How ​​many Taiwan dollars can be exchanged for 1 unit of foreign currency**" (1 USD = 32.387 TWD).
+ * In the reverse direction, the reciprocal value is taken from the front end, and the second copy is not stored in the data.
  */
 import { downloadReportsJson } from './reportsBucket'
 
-/** [日期 YYYY-MM-DD, 1 外幣可換多少台幣] */
+/** [Date YYYY-MM-DD, how many Taiwan dollars can be exchanged for 1 foreign currency]*/
 export type FxPoint = [date: string, rate: number]
 
 export interface FxCurrency {
   code: string
   name: string
-  /** 顯示用小數位數，隨幣別量級不同（USD 3 位、KRW 5 位） */
+  /** The number of decimal places used for display varies with the currency level (USD 3 digits, KRW 5 digits)*/
   decimals: number
-  /** 實際採用的 Yahoo 幣對，供稽核 */
+  /** Actual Yahoo currency pairs used for auditing*/
   symbol: string
   latest: number | null
   prevClose: number | null
-  /** 由舊到新，一年份 */
+  /** From old to new, one year*/
   points: FxPoint[]
 }
 
 export interface FxData {
-  /** 批次產出時間 ISO */
+  /** Batch output time ISO*/
   asOf: string
   base: string
   currencies: FxCurrency[]
 }
 
 /**
- * 前端認得的**最低**結構版本。必須用 `>=` 比對，理由同 macroProxy / fundamentalProxy：
- * 後端加欄位對舊前端是無害的加法，用等號會在後端升版時讓整個分頁當場全掛
- * （0.4.1 修過的線上故障）。
+ * The **minimum** structural version recognized by the frontend. Must use `>=` for comparison, the reason is the same as macroProxy / fundamentalProxy:
+ * Adding fields to the backend is a harmless addition to the old frontend. Using the equal sign will cause the entire paging to hang on the spot when the backend is upgraded.
+ * (Online bug fixed in 0.4.1).
  */
 export const MIN_FX_SCHEMA = 1
 
@@ -52,7 +52,7 @@ function numOrNull(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
-/** 一格走勢點。壞掉的格子整筆丟掉，不補 0 —— 0 匯率會讓換算變成 Infinity */
+/** One trend point. The broken grid will be discarded in its entirety. If no 0 - 0 exchange rate is added, the conversion will become Infinity.*/
 function normalizePoint(v: unknown): FxPoint | null {
   if (!Array.isArray(v) || v.length < 2) return null
   const [date, rate] = v
@@ -71,15 +71,15 @@ function normalizeCurrency(v: unknown): FxCurrency | null {
   const points = Array.isArray(o.points)
     ? o.points.map(normalizePoint).filter((p): p is FxPoint => p !== null)
     : []
-  // 一格都沒有的幣別不放進畫面：卡片可以顯示現價，但點下去走勢圖是空的，
-  // 那比直接不出現更糟（使用者會以為壞了）
+  // Currencies with no squares are not put into the screen: the card can display the current price, but when you click on it, the trend chart is empty.
+  // That's worse than not showing up at all (the user will think it's broken)
   if (points.length === 0) return null
 
   const decimals = numOrNull(o.decimals)
   return {
     code: o.code,
     name: o.name,
-    // 後端沒給或給了離譜的值時退回 4 位，不讓 toFixed() 拋 RangeError
+    // When the backend does not provide or provides an outrageous value, it returns 4 digits to prevent toFixed() from throwing RangeError.
     decimals: decimals !== null && decimals >= 0 && decimals <= 8 ? Math.round(decimals) : 4,
     symbol: typeof o.symbol === 'string' ? o.symbol : '',
     latest: numOrNull(o.latest),
@@ -94,7 +94,7 @@ function isSupported(d: unknown): d is StoredFx {
   return typeof f.schema === 'number' && f.schema >= MIN_FX_SCHEMA
 }
 
-/** 讀匯率；查無 / 格式不符回 null（吞錯不拋，缺料不得拖垮整頁） */
+/** Read the exchange rate; find none / return null if the format does not match (if an error occurs, do not throw it away, and the lack of information must not drag down the entire page)*/
 export async function fetchFx(): Promise<FxData | null> {
   const stored = await downloadReportsJson<StoredFx>('fx/twd.json')
   if (!isSupported(stored)) return null

@@ -1,10 +1,10 @@
 /**
- * 折線圖（單一序列），Google Finance 風格：線下方漸層填充、hover 垂直虛線、
- * tooltip 貼著資料點（0.6.8）。
+ * Line chart (single series), Google Finance style: gradient fill below line, hover vertical dashed line,
+ * The tooltip is attached to the data point (0.6.8).
  *
- * 值域不強制含 0 —— 融資餘額動輒數萬張、匯率是 0.19x，從 0 起算會把變化壓成一條直線。
- * 融資與融券量級差距大，各自畫一張、不共用 Y 軸。
- * 缺資料的日子斷線（不內插），避免看起來像真有那天的數字。
+ * The value range is not forced to contain 0 - the financing balance is often tens of thousands, and the exchange rate is 0.19x. Starting from 0 will suppress the changes into a straight line.
+ * There is a big gap in magnitude between financing and securities lending, so draw one for each and do not share the Y-axis.
+ * Days with missing data are cut off (not interpolated) to avoid looking like there are real numbers for that day.
  */
 import { useId } from 'react'
 import { ChartFrame } from './chartFrame'
@@ -18,10 +18,10 @@ export interface LinePoint {
 }
 
 /**
- * 超過這個點數就不逐點畫圓點，只畫 hover 那一顆。
+ * If the number exceeds this number, dots will not be drawn point by point, only the hover one will be drawn.
  *
- * 籌碼頁只有 7 天，圓點標出「哪幾天有資料」是有用的；
- * 匯率一年 260 點，260 顆圓點會把線糊成一條毛毛蟲、反而看不出走勢。
+ * The chip page only has 7 days, and it is useful to mark "which days have information" with dots;
+ * The exchange rate is 260 points a year, 260 dots will paste the line into a caterpillar, but not see the trend.
  */
 const DOT_LIMIT = 20
 
@@ -30,13 +30,13 @@ interface LineSeriesChartProps {
   height?: number
   color?: string
   /**
-   * 只標這幾格的 X 軸標籤。融資餘額走勢只有 7 天、全部標得下，
-   * 但匯率一年有 260 個點，不抽稀會糊成一團（0.6.7 新增，沿用 MultiLineChart 的同名 prop）。
+   * Label only these cells on the X-axis. The financing balance trend only lasts 7 days, and all bids are eligible.
+   * However, the exchange rate has 260 points a year, and it will become a mess if it is not thinned out (newly added in 0.6.7, using the prop of the same name of MultiLineChart).
    */
   labelIndices?: number[]
   formatValue: (v: number) => string
   ariaLabel: string
-  /** 與其他圖共用 hover 時由外部持有；未給則自持（見 chartFrame） */
+  /** When sharing hover with other charts, it is held externally; if not given, it is self-held (see chartFrame)*/
   hoverIndex?: number | null
   onHover?: (index: number | null) => void
 }

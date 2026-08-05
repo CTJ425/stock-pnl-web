@@ -138,7 +138,7 @@ describe('fetchFx', () => {
     const d = await fetchFx()
     expect(d?.currencies[0].decimals).toBe(4)
     expect(d?.currencies[1].decimals).toBe(4)
-    // 退回值必須是 toFixed 接受的範圍
+    // The return value must be within the range accepted by toFixed
     expect(() => d?.currencies[0].latest?.toFixed(d.currencies[0].decimals)).not.toThrow()
   })
 

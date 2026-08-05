@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A1 ─ 緊湊列｜資料抓取狀況後台</title>
+<title>A1 ─ Compact column｜Data capture status backend</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -89,7 +89,7 @@ body {
 .theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
 .theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 總覽條：一句話結論 + 數字 */
+/*Overview bar: one sentence conclusion + numbers*/
 .summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
   background: var(--surface); border: 1px solid var(--border);
@@ -104,7 +104,7 @@ body {
 .i-ok { background: var(--st-ok); } .i-warn { background: var(--st-warn); } .i-late { background: var(--st-late); }
 .summary .tally b { font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); }
 
-/* 分組標題：細，不佔版面 */
+/*Group title: thin, does not occupy space*/
 .gh {
   display: flex; align-items: baseline; gap: 10px;
   margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
@@ -113,7 +113,7 @@ body {
 .gh .cadence { font-size: 11.5px; color: var(--ink-muted); }
 .gh .roll { margin-left: auto; font-size: 11.5px; color: var(--ink-muted); font-family: var(--font-data); }
 
-/* 緊湊列：一列一個資料源，一屏看完 */
+/*Compact column: one data source per column, read in one screen*/
 .list { display: flex; flex-direction: column; gap: 4px; }
 .item {
   display: grid; align-items: center; gap: 12px;
@@ -144,7 +144,7 @@ body {
 .late .st { background: var(--st-late-bg); color: var(--st-late); }
 .idle .st { background: var(--st-idle-bg); color: var(--st-idle); }
 
-/* 欄標：只出現一次，讓緊湊列不必每列重複標籤 */
+/*Column labels: only appear once, so that compact columns do not have to repeat labels in each column*/
 .cols {
   display: grid; gap: 12px; grid-template-columns: 3px 1fr 132px 104px 74px 96px;
   padding: 0 14px 6px 0; font-size: 10.5px; letter-spacing: 0.06em;
@@ -169,198 +169,198 @@ body {
 <div class="wrap">
 
   <div class="mock-note">
-    <b>A1 ─ 緊湊列</b>
-    <span>方案 A 的變體：一列一個資料源，18 項一屏看完，不用捲。</span>
-    <span>取捨：<b>密度優先</b>，每項只留最關鍵的四個數字。</span>
+    <b>A1 ─ compact column</b>
+    <span>plan A Variation of: one source per column,18 Read the item in one screen, no need to scroll.</span>
+    <span>Trade-offs:<b>Density first</b>, leaving only the four most critical numbers for each item.</span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
   <div class="summary">
-    <span class="verdict">今天有 <em>1 項延遲</em>、2 項等待公布</span>
+    <span class="verdict">Today there is <em>1 item delay</em>、2 items awaiting announcement</span>
     <span class="tally">
-      <span><i class="i-ok"></i>正常 <b>15</b></span>
-      <span><i class="i-warn"></i>等待 <b>2</b></span>
-      <span><i class="i-late"></i>延遲 <b>1</b></span>
+      <span><i class="i-ok"></i>normal <b>15</b></span>
+      <span><i class="i-warn"></i>wait <b>2</b></span>
+      <span><i class="i-late"></i>Delay <b>1</b></span>
     </span>
   </div>
 
   <div class="cols">
-    <span></span><span>資料源</span><span>資料日期 / 期別</span>
-    <span class="r h-ago">最後抓取</span><span class="r h-cov">距今</span><span class="e">狀態</span>
+    <span></span><span>Source</span><span>Data date / Farewell</span>
+    <span class="r h-ago">last crawl</span><span class="r h-cov">since now</span><span class="e">state</span>
   </div>
 
   <div class="gh">
-    <h2>台股籌碼</h2><span class="cadence">交易日盤後・公布時間差 7 小時</span><span class="roll">3 / 3</span>
+    <h2>Taiwan stock chips</h2><span class="cadence">After-hours trading day・Publication time difference 7 Hour</span><span class="roll">3 / 3</span>
   </div>
   <div class="list">
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>三大法人</b><span>T86・已定稿</span></span>
+      <span class="who"><b>Three major corporations</b><span>T86・Finalized</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-30 16:15</span>
       <span class="cov">20h</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>融資融券</b><span>MI_MARGN・7/7 日</span></span>
+      <span class="who"><b>Margin margin trading</b><span>MI_MARGN・7/7 day</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-30 21:00</span>
       <span class="cov">16h</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>借券賣出</b><span>次一交易日・1,042 列</span></span>
+      <span class="who"><b>Borrow bonds and sell</b><span>next trading day・1,042 List</span></span>
       <span class="when"><b>2026-07-31</b></span>
       <span class="ago">07-31 09:10</span>
       <span class="cov">3h40m</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
   </div>
 
   <div class="gh">
-    <h2>個股資料</h2><span class="cadence">18 檔持股</span><span class="roll">4 / 5</span>
+    <h2>Individual stock information</h2><span class="cadence">18 shareholding</span><span class="roll">4 / 5</span>
   </div>
   <div class="list">
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>日 K 線</b><span>18 / 18 檔</span></span>
+      <span class="who"><b>day K Wire</b><span>18 / 18 files</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-30 16:15</span>
       <span class="cov">20h</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>估值指標</b><span>本益比 / 殖利率 / 淨值比</span></span>
+      <span class="who"><b>Valuation indicators</b><span>price to earnings ratio / Yield / net worth ratio</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-30 16:15</span>
       <span class="cov">20h</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item warn">
       <i class="bar"></i>
-      <span class="who"><b>月營收</b><span>12 期・次月 10 日前公布</span></span>
+      <span class="who"><b>monthly revenue</b><span>12 Expect・next month 10 Recently announced</span></span>
       <span class="when"><b>2026-06</b></span>
       <span class="ago">07-11 16:20</span>
       <span class="cov">19d</span>
-      <span class="st">等待 07 月</span>
+      <span class="st">wait 07 moon</span>
     </div>
     <div class="item warn">
       <i class="bar"></i>
-      <span class="who"><b>獲利能力</b><span>8 / 8 季</span></span>
+      <span class="who"><b>Profitability</b><span>8 / 8 season</span></span>
       <span class="when"><b>2026-Q1</b></span>
       <span class="ago">05-16 16:18</span>
       <span class="cov">76d</span>
-      <span class="st">等待 Q2</span>
+      <span class="st">wait Q2</span>
     </div>
     <div class="item late">
       <i class="bar"></i>
-      <span class="who"><b>個股新聞</b><span>缺 00929・2412</span></span>
+      <span class="who"><b>individual stock news</b><span>lack 00929・2412</span></span>
       <span class="when"><b>—</b></span>
       <span class="ago">07-31 09:10</span>
       <span class="cov">3h40m</span>
-      <span class="st">16 / 18 檔</span>
+      <span class="st">16 / 18 files</span>
     </div>
   </div>
 
   <div class="gh">
-    <h2>美國總體經濟</h2><span class="cadence">月頻・每日 21:00 / 23:00 兩班</span><span class="roll">4 / 5</span>
+    <h2>overall U.S. economy</h2><span class="cadence">monthly frequency・daily 21:00 / 23:00 Two shifts</span><span class="roll">4 / 5</span>
   </div>
   <div class="list">
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>核心 CPI</b><span>CPILFESL・+2.57 %</span></span>
+      <span class="who"><b>core CPI</b><span>CPILFESL・+2.57 %</span></span>
       <span class="when"><b>2026-06</b></span>
       <span class="ago">07-31 12:40</span>
       <span class="cov">10m</span>
-      <span class="st">最新</span>
+      <span class="st">up to date</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>核心 PPI</b><span>PPIFES・+4.68 %</span></span>
+      <span class="who"><b>core PPI</b><span>PPIFES・+4.68 %</span></span>
       <span class="when"><b>2026-06</b></span>
       <span class="ago">07-31 12:40</span>
       <span class="cov">10m</span>
-      <span class="st">最新</span>
+      <span class="st">up to date</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>核心 PCE</b><span>PCEPILFE・+3.29 %</span></span>
+      <span class="who"><b>core PCE</b><span>PCEPILFE・+3.29 %</span></span>
       <span class="when"><b>2026-06</b></span>
       <span class="ago">07-31 12:40</span>
       <span class="cov">10m</span>
-      <span class="st">最新</span>
+      <span class="st">up to date</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>非農就業</b><span>PAYEMS・+57 千人</span></span>
+      <span class="who"><b>non-agricultural employment</b><span>PAYEMS・+57 Thousands of people</span></span>
       <span class="when"><b>2026-06</b></span>
       <span class="ago">07-31 12:40</span>
       <span class="cov">10m</span>
-      <span class="st">最新</span>
+      <span class="st">up to date</span>
     </div>
     <div class="item idle">
       <i class="bar"></i>
-      <span class="who"><b>消費者信心</b><span>UMCSENT・44.8</span></span>
+      <span class="who"><b>consumer confidence</b><span>UMCSENT・44.8</span></span>
       <span class="when"><b>2026-05</b></span>
       <span class="ago">07-31 12:40</span>
       <span class="cov">10m</span>
-      <span class="st">來源未更新</span>
+      <span class="st">Source not updated</span>
     </div>
   </div>
 
   <div class="gh">
-    <h2>匯率與基礎設施</h2><span class="cadence">每日・非台股作息</span><span class="roll">5 / 5</span>
+    <h2>Exchange rates and infrastructure</h2><span class="cadence">daily・Non-Taiwan stocks schedule</span><span class="roll">5 / 5</span>
   </div>
   <div class="list">
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>台幣匯率</b><span>8 / 8 幣・USD 32.3489</span></span>
+      <span class="who"><b>Taiwan dollar exchange rate</b><span>8 / 8 currency・USD 32.3489</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-31 11:00</span>
       <span class="cov">1h50m</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>盤後批次</b><span>32 / 40 輪・短路 88 %</span></span>
+      <span class="who"><b>After-hours batch</b><span>32 / 40 wheel・short circuit 88 %</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-31 09:10</span>
       <span class="cov">3h40m</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>資料源探針</b><span>2 / 2 端點</span></span>
+      <span class="who"><b>Data source probe</b><span>2 / 2 endpoint</span></span>
       <span class="when"><b>1150731</b></span>
       <span class="ago">07-31 09:10</span>
       <span class="cov">3h40m</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>現價快取</b><span>26 筆・台股 60s TTL</span></span>
+      <span class="who"><b>Current price cache</b><span>26 Pen・Taiwan stocks 60s TTL</span></span>
       <span class="when"><b>—</b></span>
       <span class="ago">07-31 12:49</span>
       <span class="cov">38s</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
     <div class="item ok">
       <i class="bar"></i>
-      <span class="who"><b>報告 manifest</b><span>18 檔</span></span>
+      <span class="who"><b>Report manifest</b><span>18 files</span></span>
       <span class="when"><b>2026-07-30</b></span>
       <span class="ago">07-31 09:10</span>
       <span class="cov">3h40m</span>
-      <span class="st">正常</span>
+      <span class="st">normal</span>
     </div>
   </div>
 
@@ -370,7 +370,7 @@ body {
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

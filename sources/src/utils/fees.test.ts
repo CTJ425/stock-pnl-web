@@ -44,14 +44,14 @@ describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
   })
 
   it('台股最低手續費：不足下限時收下限（整股 20 元）', () => {
-    // 50*100*0.001425 = 7.125 → floor 7 → 最低 20
+    // 50*100*0.001425 = 7.125 → floor 7 → minimum 20
     expect(
       calculateFee({ market: 'TPE', txType: 'BUY', price: 50, qty: 100, feeRate: DEFAULT_FEE_RATE, minFee: 20 }),
     ).toBe(20)
   })
 
   it('台股最低手續費：零股下限 1 元', () => {
-    // 10*10*0.001425 = 0.1425 → floor 0 → 最低 1
+    // 10*10*0.001425 = 0.1425 → floor 0 → lowest 1
     expect(
       calculateFee({ market: 'TPE', txType: 'BUY', price: 10, qty: 10, feeRate: DEFAULT_FEE_RATE, minFee: 1 }),
     ).toBe(1)
@@ -93,7 +93,7 @@ describe('breakEvenPrice（保本賣出價）', () => {
   it('台股 ETF：對照 bug_fix 0050 案例（成本 102,440 → 102.69）', () => {
     const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 1000, cost: 102440 })
     const p = breakEvenPrice(h, DEFAULT_FEE_RATE)
-    // 102.69 賣出：102,690 - fee 146 - tax 102 = 102,442 ≥ 102,440；102.68 只剩 102,432 不保本
+    // 102.69 Sell: 102,690 - fee 146 - tax 102 = 102,442 ≥ 102,440; 102.68, leaving only 102,432, no capital guarantee
     expect(p).toBe(102.69)
     const fee = calculateFee({ market: 'TPE', txType: 'SELL', price: p, qty: 1000, feeRate: DEFAULT_FEE_RATE, ticker: '0050' })
     expect(p * 1000 - fee).toBeGreaterThanOrEqual(102440)
@@ -102,7 +102,7 @@ describe('breakEvenPrice（保本賣出價）', () => {
   })
 
   it('極小部位＋最低手續費：qty=1 也收斂到正確最低保本價', () => {
-    // P - max(floor(P*0.001425), 20) - floor(P*0.003) ≥ 100 → 最低 P = 120.00
+    // P - max(floor(P*0.001425), 20) - floor(P*0.003) ≥ 100 → minimum P = 120.00
     const h = holdingOf({ market: 'TPE', ticker: '2330', qty: 1, cost: 100 })
     expect(breakEvenPrice(h, DEFAULT_FEE_RATE, 20)).toBe(120)
   })
@@ -164,9 +164,9 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
   const opts = { feeRate: 0.0004, minFeeWhole: 20, minFeeOdd: 1 }
 
   it('找出與目前費率不符的台股交易並附上重算值', () => {
-    // 102.4*1000*0.0004 = 40.96 → floor 40；原紀錄 80 → 需修正
+    // 102.4*1000*0.0004 = 40.96 → floor 40; original record 80 → needs to be corrected
     const wrong = txOf({ market: 'TPE', ticker: '0050', type: 'BUY', price: 102.4, qty: 1000, fee: 80 })
-    // 已正確的不列入
+    // Correctly not included
     const right = txOf({ market: 'TPE', ticker: '0050', type: 'BUY', price: 102.4, qty: 1000, fee: 40 })
     const out = proposeFeeCorrections([wrong, right], opts)
     expect(out).toHaveLength(1)
@@ -175,9 +175,9 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
   })
 
   it('賣出重算含證交稅，稅率依代號判斷（債券 ETF 免稅）', () => {
-    // 一般股票：fee = max(floor(100000*0.0004), 20) = 40；tax = floor(100000*0.003) = 300 → 340
+    // General stocks: fee = max(floor(100000*0.0004), 20) = 40; tax = floor(100000*0.003) = 300 → 340
     const sell = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 100, qty: 1000, fee: 0 })
-    // 債券 ETF：fee = 40；tax = 0 → 40
+    // Bond ETF: fee = 40; tax = 0 → 40
     const bond = txOf({ market: 'TPE', ticker: '00679B', type: 'SELL', price: 100, qty: 1000, fee: 0 })
     const out = proposeFeeCorrections([sell, bond], opts)
     expect(out.find((c) => c.tx.id === sell.id)?.newFee).toBe(340)
@@ -185,7 +185,7 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
   })
 
   it('零股套用零股最低手續費', () => {
-    // 50*10*0.0004 = 0.2 → floor 0 → 最低 1
+    // 50*10*0.0004 = 0.2 → floor 0 → lowest 1
     const odd = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 50, qty: 10, fee: 7 })
     const out = proposeFeeCorrections([odd], opts)
     expect(out[0].newFee).toBe(1)

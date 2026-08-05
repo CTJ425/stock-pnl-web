@@ -6,81 +6,78 @@
 
 ---
 
-> **本檔只留進行中與週期性任務。** 已完成的移到 `TASK_ARCHIVE.md`（見 CLAUDE.md §4.1）——
-> 這份檔案每個 session 都要載入，歸檔前它有 38.6K tokens，其中九成是完成歷史。
-> 詳細的實作經過一律看 `PROGRESS.md`，那裡才是敘事的地方。
+> **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md §4.1) ——
+> This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
+> For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
 ## 📋 Active Tasks
 
-### Task 69: 個股分析改放報價卡；台股收盤後不再抓價（0.6.36-dev.1）
-- **Status**: ✅ **完成，兩區皆已上線**（測試區 16:10、正式區 16:47；0.6.36 已併入 main）
+### Task 69: Move individual stock analysis to quote card; Stop fetching prices after Taiwan stock market closes (0.6.36-dev.1)
+- **Status**: ✅ **Done, deployed to both environments** (Test at 16:10, Prod at 16:47; 0.6.36 merged to main)
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 16:05:00 Asia/Taipei
-- **需求**：使用者要「個股分析刪掉我的持股卡片，改放開盤 / 最高 / 成交量 / 昨收 /
-  最低 / 預估 / 今收」，並希望「抓到日收盤價就更新到現價、之後不再打 API，
-  直到隔天 8:25 試搓前才恢復」。起因是擔心隔夜再看時價格基準錯亂。
-- **原構想被實測否決**：使用者原本要用 TWSE `STOCK_DAY_AVG_ALL` 定義今收。
-  2026-08-05 15:23（收盤後兩小時）實測，該端點與 `STOCK_DAY_ALL` 的 `Date` 都還是
-  `1150804`（前一交易日），2330 回 2320 —— 那是昨收；當日真正收盤價是 MIS 的 2405，差 3.6%。
-  照原構想會把昨收當今收並鎖 17 小時，正好製造出使用者要避免的錯亂。
-  **改用 MIS 單一來源**（同一筆回應已含 `o/h/l/v/y/z/d/t/ip`），使用者確認採用。
-- **收盤判斷改看時鐘而非資料到齊**：`quoteWindow.ts` 的 `twQuoteTtlMs` 是無狀態純函式，
-  不查交易日曆 —— 週末與假日 13:30 後自然落入長 TTL。詳見 `SPEC.md`「報價卡與台股抓價時段」。
-- **保留的東西**：`buildHoldingRows` 與 `generateReport` 的 holding 資料流照舊
-  （下拉選單要列持股、即點即產要帶脈絡），只是畫面上不再顯示持股數字。
-- **驗證**：`npm test -- --run` 56 檔 869 筆全通過（新增 `quoteWindow.test.ts` 9 筆、
-  `QuoteTab.test.tsx` 10 筆，擴充 misParse / priceProxy）；`npm run build`、`npm run lint` 乾淨。
-- **測試區部署紀錄（2026-08-05 16:00–16:10，使用者明確授權）**：
+- **Requirement**: The user wants to "remove my holdings card from individual stock analysis, replace it with open / high / volume / previous close / low / estimate / current close", and hopes to "update to current price once the daily closing price is fetched, and stop calling API thereafter, until 8:25 next day before trial matching resumes". The reason is to prevent price baseline confusion when checking overnight.
+- **Original idea rejected by actual test**: The user originally wanted to use TWSE `STOCK_DAY_AVG_ALL` to define today's close.
+  Tested at 2026-08-05 15:23 (two hours after close), the `Date` for that endpoint and `STOCK_DAY_ALL` were still `1150804` (previous trading day), 2330 returned 2320 —— that was yesterday's close; the actual closing price for the day was 2405 from MIS, a 3.6% difference.
+  Following the original idea would use yesterday's close as today's close and lock it for 17 hours, creating exactly the confusion the user wanted to avoid.
+  **Switched to MIS as single source** (same response includes `o/h/l/v/y/z/d/t/ip`), user confirmed adoption.
+- **Closing detection based on clock instead of data arrival**: `twQuoteTtlMs` in `quoteWindow.ts` is a stateless pure function,
+  does not check trading calendar —— after 13:30 on weekends and holidays it naturally falls into long TTL. See `SPEC.md` "Quote Card and TWSE Fetching Hours".
+- **What is kept**: The holding data flow in `buildHoldingRows` and `generateReport` remains the same
+  (dropdown needs to list holdings, click-to-generate needs context), just that the holding numbers are no longer displayed on screen.
+- **Verification**: `npm test -- --run` all 869 tests across 56 files passed (added 9 tests in `quoteWindow.test.ts`,
+  10 tests in `QuoteTab.test.tsx`, expanded misParse / priceProxy); `npm run build`, `npm run lint` are clean.
+- **Test environment deployment record (2026-08-05 16:00–16:10, user explicitly authorized)**:
   1. `supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew`
-     → v9 升到 **v10**，`verify_jwt` 維持 `true`（**不帶** `--no-verify-jwt`，那是 `stock-report` 專用）。
-  2. `price_cache` 補 7 個欄位完成，欄位序：
-     `key,price,updated_at,prev_close,open,high,low,volume,trade_date,trade_time,trial`。
-  3. 端到端實測（打測試區 Edge）：2330 與 6488 回齊七欄
-     （`tradeDate: 20260805`、`tradeTime: 13:30:00`、`trial: false`）；
-     AAPL 的 `tradeDate/tradeTime` 為 null、`volume` 67779 張（Yahoo 的股數已除以 1000），皆如設計。
-  4. **收盤鎖定實測生效**：把 `TPE:2330` 的 `updated_at` 往回撥 5 分鐘後再打一次，
-     回傳的 `asOf` 仍停在 5 分鐘前 —— 舊的 60 秒 TTL 必定會重抓，這是決定性證據。
-- **操作環境副作用**：`supabase link` 現在指向**測試區** `wqetxuhncvfidqnklyew`
-  （link 是全域的，見 `supabase-ops` skill）。要動正式區必須先重新 link。
-- **稽核方式的例外**：skill 要求用 `functions download` 逐檔比對，但此環境的 `download`
-  取不到 access token（`projects list` / `deploy` 卻可以，走不同認證路徑）。
-  改用「線上版本更新時間（v9 = 08-05 11:35，與 0.6.34 部署時程吻合）」＋「端到端回傳新欄位」
-  兩項替代 —— 後者比逐檔比對更有力，因為它證明的是**線上實際在跑的行為**。
-- **待驗證（收盤後無法確認，需隔日盤中回頭看）**：
-  1. MIS 的 `v` 與 TWSE 日報表 `TradeVolume` 有約 10% 落差（31,851 張 vs Yahoo 的 35,214 張），
-     推測是盤後定價交易未計入 —— 單位是「張」已確定，差異來源待隔日用 `STOCK_DAY_ALL` 對帳。
-  2. 試撮時段（08:30–09:00）MIS 實際回的 `ip` / `t`，確認「預估」格如預期顯示。
+     → v9 upgraded to **v10**, `verify_jwt` remains `true` (**without** `--no-verify-jwt`, which is for `stock-report` only).
+  2. `price_cache` completed with 7 new columns, column order:
+     `key,price,updated_at,prev_close,open,high,low,volume,trade_date,trade_time,trial`.
+  3. End-to-end test (hitting test env Edge): 2330 and 6488 returned all 7 columns
+     (`tradeDate: 20260805`, `tradeTime: 13:30:00`, `trial: false`);
+     AAPL's `tradeDate/tradeTime` are null, `volume` 67779 shares (Yahoo's shares already divided by 1000), all as designed.
+  4. **Close lock test successful**: Rolled back `updated_at` of `TPE:2330` by 5 minutes and fetched again,
+     the returned `asOf` stayed at 5 minutes ago —— old 60s TTL would definitely refetch, this is conclusive evidence.
+- **Operating environment side effects**: `supabase link` is now pointing to **Test environment** `wqetxuhncvfidqnklyew`
+  (link is global, see `supabase-ops` skill). Must re-link before touching the production environment.
+- **Exception to audit method**: The skill requires using `functions download` for file-by-file comparison, but `download` in this environment
+  cannot get access token (`projects list` / `deploy` work fine, using different auth paths).
+  Substituted with "online version update time (v9 = 08-05 11:35, matches 0.6.34 deployment schedule)" + "end-to-end returns new columns"
+  —— the latter is more powerful than file comparison because it proves **the actual running behavior online**.
+- **Pending verification (cannot confirm after hours, need to check next day during market hours)**:
+  1. There is an approx 10% discrepancy between MIS `v` and TWSE daily report `TradeVolume` (31,851 shares vs Yahoo's 35,214 shares),
+     speculated to be after-hours fixed-price trading not included —— unit is confirmed as "shares", discrepancy source to be reconciled next day with `STOCK_DAY_ALL`.
+  2. MIS actual returned `ip` / `t` during trial matching period (08:30–09:00), confirm "Estimate" cell displays as expected.
 
-### Task 70: 後台時間軸基準日修正（0.6.36-dev.2）
-- **Status**: ✅ **完成並已上線**（0.6.36 已併入 main）—— 純前端，不需要部署 Edge Function
+### Task 70: Fix backend timeline base date (0.6.36-dev.2)
+- **Status**: ✅ **Done and deployed** (0.6.36 merged to main) —— pure frontend, no Edge Function deployment needed
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 16:35:00 Asia/Taipei
-- **起因**：使用者問「16:00 這班車啟動後，台股盤後・2026-08-04 這一輪 狀態都還是舊的，是 BUG 嗎」。
-  查證後分成兩件事：
-  1. **資料源時序，不是 bug**：批次用的 `T86?selectType=ALLBUT0999` 在 16:00 / 16:15 都還沒發布
-     （同一支 API 換 `selectType=ALL` 已有資料，但那份含權證 ETF 共 16575 筆，
-     與批次要的 1339 筆股票是兩份、產製時間不同步）。16:30 那輪 `t86_today` 轉 true、
-     `data_ymd` 推進到 20260805，完全如 `timeline.ts` 註解記載的實測。
-  2. **但挖出一個真的 bug（BUG-010）**：全市場法人 16:00 已到手卻被判成延遲並畫到軸外。
-- **修正**：基準日改取各來源資料日的最大值（`roundBaseYmd`），詳見 `FIXED_BUG.md` BUG-010。
-- **使用者定案**：基準日取 max（而非用報價的 tradeDate 判交易日 —— 那要改 Edge 多帶欄位）；
-  現在就改、接在 0.6.36-dev.2。
-- **驗證**：`npm test -- --run` 57 檔 **874 筆全通過**；`npm run build` 乾淨。
+- **Cause**: User asked "After the 16:00 batch started, the status of 'TWSE After-Hours 2026-08-04' is still old, is this a BUG?".
+  Investigation revealed two things:
+  1. **Data source timing, not a bug**: The batch `T86?selectType=ALLBUT0999` is not yet published at 16:00 / 16:15
+     (same API with `selectType=ALL` has data, but that dataset includes warrants/ETFs totaling 16575 records,
+     which is a different dataset from the 1339 stock records needed for batch, production times are not synchronized). In the 16:30 batch, `t86_today` becomes true,
+     `data_ymd` advances to 20260805, exactly as documented by actual tests in `timeline.ts` comments.
+  2. **But uncovered a real bug (BUG-010)**: Overall market institutional data arrived by 16:00 but was judged as delayed and drawn off-axis.
+- **Fix**: Base date changed to take the maximum data date across sources (`roundBaseYmd`), see `FIXED_BUG.md` BUG-010.
+- **User decision**: Base date takes max (instead of using quote's tradeDate to determine trading day —— that would require Edge changes to add columns);
+  Fix it now, append to 0.6.36-dev.2.
+- **Verification**: `npm test -- --run` all **874 tests across 57 files passed**; `npm run build` is clean.
 
-### Task 68: 美國總經改成台股法人表版型（0.6.35）
-- **Status**: ✅ **完成** —— 純前端，不需要部署 Edge Function、不需要動 Supabase
+### Task 68: Change US Macro layout to Taiwan Institutional table format (0.6.35)
+- **Status**: ✅ **Done** —— pure frontend, no Edge Function deployment needed, no Supabase changes
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 13:20:00 Asia/Taipei
-- **需求**：使用者看著台股法人表，要求「CPI 等指數改成和三大法人買賣超類似」，
-  並先看了兩個版型範本才定案。
-- **轉置而非照抄**：法人表的趨勢／連續描述的是「合計」這一個序列，五個總經指標沒有合計
-  （單位是 %、千人、指數）。改成一列一個指標，趨勢／連續才有東西可描述。
-- **字卡瘦身成一行 chip**（只有名稱與最新值）；期別、說明、落後徽章全部搬進表格列。
-- ⚠️ **顏色語意改變（刻意）**：全表統一「紅＝比上期高、綠＝比上期低」，
-  非農就業不再依數值正負上色 —— 「+57 千人但比上期少 72」現在是綠的。
-  表格下方的 hint 與 `IndicatorRow` 註解、一條測試都鎖著這件事，**不可刪**。
-- **`Charts/SparkCell.tsx`**：迷你走勢線抽成共用元件，兩張表共用繪製；
-  streak 判定各自保留（正負號 vs 升降，是兩件事）。
+- **Requirement**: Looking at the Taiwan institutional table, the user asked to "change CPI and other indices to be similar to the three major institutional net buys/sells",
+  and settled on the design after viewing two templates.
+- **Transposition instead of copying**: The trend/streak in the institutional table describes the "Total" series, but the five macro indicators have no total
+  (units are %, thousands, indices). Changed to one indicator per row so trend/streak has something to describe.
+- **Slimming cards to a single chip line** (only name and latest value); period, description, and lagging badge are all moved into the table row.
+- ⚠️ **Semantic color changes (intentional)**: The entire table unifies on "Red = higher than previous, Green = lower than previous",
+  Non-farm payrolls are no longer colored based on the sign of the value —— "+57k but 72k less than previous" is now green.
+  The hint below the table, `IndicatorRow` comments, and a test are locked to this behavior; **DO NOT DELETE**.
+- **`Charts/SparkCell.tsx`**: The mini trend line is extracted as a shared component, used by both tables;
+  streak determination is kept separate for each (sign vs ascending/descending are two different things).
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**

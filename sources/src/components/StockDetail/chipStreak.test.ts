@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { streakAt } from './chipStreak'
 
-// 這些案例刻意與 supabase/functions/stock-report/report.test.ts 的 computeStreak 對齊：
-// 同一套規則跨網路邊界，兩邊行為必須一致。
+// These cases are intentionally aligned with the computeStreak of supabase/functions/stock-report/report.test.ts:
+// The same set of rules spans network boundaries, and the behavior on both sides must be consistent.
 describe('streakAt', () => {
   const last = (s: Array<number | null>) => streakAt(s, s.length - 1)
 

@@ -1,15 +1,15 @@
 /**
- * 管理後台（0.6.19）。只有 `app_metadata.role === 'admin'` 的帳號進得來，
- * 入口在右上角的帳號選單，**不佔分頁列的位置** ——
- * 管理功能與日常看盤的分頁混在同一條導覽上，等於讓每個使用者都看到一個
- * 自己按不了的位置。
+ * Management backend (0.6.19). Only accounts with `app_metadata.role === 'admin'` can enter.
+ * The entrance is in the account menu in the upper right corner, **does not occupy the position of the paging bar**——
+ * The management functions and the tabs for daily viewing are mixed on the same navigation, which is equivalent to allowing every user to see one
+ * A position that I can't press.
  *
- * 版面是「全頁 + 左側縱向導覽」而不是子分頁：後台是一個獨立的工作區，
- * 之後還會長出更多項目，橫向的子分頁列撐不住。
+ * The layout is "full page + left vertical navigation" instead of sub-pages: the background is an independent workspace.
+ * More items will grow later, and the horizontal sub-page column will not be able to support it.
  *
- * ⚠️ 這裡的權限判斷**只是介面上的整理，不是安全邊界**。
- * 真正的把關在 Edge Function 的 `assertAdmin` 與資料表的 RLS ——
- * 任何人改一行 JS 都能把這一頁叫出來，但叫出來也只會拿到 403 與空資料。
+ * ⚠️ The permission judgment here** is just an arrangement on the interface, not a security boundary**.
+ * The real key lies in the `assertAdmin` of Edge Function and the RLS of the data table——
+ * Anyone who changes a line of JS can call this page out, but calling it out will only get 403 and empty data.
  */
 import { useState } from 'react'
 import { Activity, ChevronLeft, FileText, KeyRound, Users } from 'lucide-react'

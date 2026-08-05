@@ -1,15 +1,15 @@
 /**
- * 匯率換算與走勢區間的純函式。
+ * Pure function of exchange rate conversion and trend range.
  *
- * 抽出來的理由與 technicalView.ts / chipStreak.ts 相同：這些是這個 feature
- * 唯一真正會算錯的地方（除以 0、區間切錯、千分位解析），把它們留在元件裡就只能靠
- * render 出來的字串反推，測不乾淨。
+ * The reason for pulling out is the same as technicalView.ts / chipStreak.ts: these are the features of this
+ * The only real miscalculations (dividing by 0, misintervals, thousandth analysis) can only be done by keeping them in the component.
+ * The string produced by render is inferred and cannot be measured cleanly.
  *
- * **方向約定：`rate` 一律是「1 單位外幣可換多少台幣」**，與後端
- * supabase/functions/stock-report/fxRates.ts 的 FxPoint 一致。反向不另存一份。
+ * **Direction agreement: `rate` is always "how many Taiwan dollars can be exchanged for 1 unit of foreign currency"**, and the backend
+ * The FxPoint of supabase/functions/stock-report/fxRates.ts is consistent. Reverse without saving a copy.
  *
- * 0.6.7 移除換算器後，金額換算與輸入解析（twdToForeign / foreignToTwd /
- * parseAmount / formatAmount）一併刪除 —— 沒有呼叫端的函式留著只會被誤以為還有人用。
+ * 0.6.7 After removing the converter, amount conversion and input analysis (twdToForeign / foreignToTwd /
+ * parseAmount / formatAmount) are deleted together - leaving functions without call-side will only be mistaken for being used by others.
  */
 import type { FxPoint } from '../../services/fxProxy'
 
@@ -21,19 +21,19 @@ export const FX_RANGES: readonly { id: FxRange; label: string; months: number }[
   { id: '1y', label: '1 年', months: 12 },
 ]
 
-/** 匯率顯示：各幣別量級差很大，小數位數由幣別自帶（KRW 需要 5 位） */
+/** Exchange rate display: The magnitude of each currency is very different, and the number of decimal places is determined by the currency (KRW requires 5 digits)*/
 export function formatRate(v: number | null, decimals: number): string {
   if (v === null || !Number.isFinite(v)) return '—'
   return v.toFixed(decimals)
 }
 
 /**
- * 依數值量級決定小數位（取約 5 位有效數字），夾在 2～6 位之間。
+ * The number of decimal places is determined according to the magnitude of the value (approximately 5 significant digits), sandwiched between 2 and 6 digits.
  *
- * 用在**反向**那張圖：幣別自帶的 `decimals` 是為正向量級挑的，倒過來就不合用了。
- * 1 TWD 可換的外幣量級跨了四個數量級：
- *   美元 0.030958（要 6 位）／日圓 5.0710（4 位）／韓元 45.366（3 位）
- * 一律沿用正向的位數，不是全變 0.031 就是變 5.0710000。
+ * Used in the **reverse** picture: the `decimals` that come with the currency are selected for the forward vector magnitude, and the reverse is not applicable.
+ * The amount of foreign currency that can be exchanged for 1 TWD spans four orders of magnitude:
+ *   USD 0.030958 (6 digits required) / JPY 5.0710 (4 digits) / KRW 45.366 (3 digits)
+ * Always use the positive number of digits, either completely changing to 0.031 or changing to 5.0710000.
  */
 export function autoDecimals(v: number | null): number {
   if (v === null || !Number.isFinite(v) || v === 0) return 2
@@ -42,12 +42,12 @@ export function autoDecimals(v: number | null): number {
 }
 
 /**
- * 取倒數序列：「1 外幣 = N 台幣」→「1 台幣 = N 外幣」。
+ * Take the reciprocal sequence: "1 foreign currency = N Taiwan dollars" → "1 Taiwan dollar = N foreign currencies".
  *
- * 注意這**不是把圖上下翻轉**：1/x 是非線性的，兩張圖的形狀不會互為鏡像，
- * 高低點的日期會對調（正向的最高點就是反向的最低點）。這是數學事實，不是 bug。
+ * Note that this is not flipping the graph upside down: 1/x is nonlinear, and the shapes of the two graphs are not mirror images of each other,
+ * The dates of the high and low points are reversed (the highest point in the positive direction is the lowest point in the negative direction). This is a mathematical fact, not a bug.
  *
- * 0 一律跳過（不可能，但除以 0 會產生 Infinity 汙染整個值域計算）。
+ * 0 is always skipped (not possible, but dividing by 0 would produce Infinity polluting the entire range calculation).
  */
 export function invertPoints(points: FxPoint[]): FxPoint[] {
   const out: FxPoint[] = []
@@ -59,11 +59,11 @@ export function invertPoints(points: FxPoint[]): FxPoint[] {
 }
 
 /**
- * 取最近 N 個月的資料。
+ * Get the last N months of data.
  *
- * **基準點是序列的最後一天，不是今天。** 資料若停在幾天前（排程掛掉、假日），
- * 用今天當基準會讓「3 個月」實際上只剩兩個多月，圖會莫名其妙變短；
- * 以資料本身的最後一天回推，看到的永遠是「這份資料最近三個月」。
+ * **The base point is the last day of the sequence, not today. ** If the data stops a few days ago (scheduling down, holiday),
+ * Using today as the benchmark will actually leave "3 months" with just over two months left, and the picture will become inexplicably shorter;
+ * If you push back based on the last day of the data itself, you will always see "the last three months of this data."
  */
 export function sliceByRange(points: FxPoint[], range: FxRange): FxPoint[] {
   if (points.length === 0) return []
@@ -76,7 +76,7 @@ export function sliceByRange(points: FxPoint[], range: FxRange): FxPoint[] {
   return points.filter((p) => p[0] >= cutoff)
 }
 
-/** 變動百分比。基期為 0 時回 null（不硬算） */
+/** Change percentage. Returns null when the base period is 0 (no hard calculation)*/
 export function changePct(latest: number | null, base: number | null): number | null {
   if (latest === null || base === null) return null
   if (!Number.isFinite(latest) || !Number.isFinite(base) || base === 0) return null
@@ -88,11 +88,11 @@ export interface RangeStats {
   highDate: string
   low: number
   lowDate: string
-  /** 區間首尾的漲跌幅（%），只有一筆時為 null */
+  /** The increase or decrease (%) at the beginning and end of the range, null if there is only one*/
   changePct: number | null
 }
 
-/** 區間高低與首尾漲跌幅。空序列回 null */
+/** The high and low range and the first and last increase or decrease. Empty sequence returns null*/
 export function rangeStats(points: FxPoint[]): RangeStats | null {
   if (points.length === 0) return null
   let hi = points[0]
@@ -111,9 +111,9 @@ export function rangeStats(points: FxPoint[]): RangeStats | null {
 }
 
 /**
- * X 軸要標哪幾格。一年份有 260 個點，全部標會糊成一團黑。
+ * Which cells should be marked on the X-axis? There are 260 points in a year, and all marks will turn into black.
  *
- * 平均取 `want` 個（含頭尾），交給 ChartFrame 的 labelIndices。
+ * Take an average of `want` items (including head and tail) and give them to labelIndices of ChartFrame.
  */
 export function labelIndicesFor(n: number, want = 6): number[] {
   if (n <= 0) return []
@@ -123,11 +123,11 @@ export function labelIndicesFor(n: number, want = 6): number[] {
 }
 
 /**
- * 資料是否過期。
+ * Whether the data has expired.
  *
- * 為什麼要有這個判斷：Storage 上的舊檔在畫面上與新檔長得**一模一樣**，
- * 而這頁的數字會被拿去做金錢決策。0.6.4-dev.5 那次的教訓正是這種
- * 「顯示的資料是錯的、而且使用者看不出來」（見 services/reportsBucket.ts 的說明）。
+ * Why is this judgment necessary: ​​the old files on Storage look exactly the same as the new files on the screen?
+ * The numbers on this page will be used to make money decisions. The lesson learned in 0.6.4-dev.5 is exactly this
+ * "The data displayed is wrong and cannot be seen by the user" (see description of services/reportsBucket.ts).
  */
 export const FX_STALE_DAYS = 3
 
@@ -137,7 +137,7 @@ export function isStale(asOf: string, now: Date, days = FX_STALE_DAYS): boolean 
   return now.getTime() - t > days * 86_400_000
 }
 
-/** 'YYYY-MM-DD' → 'MM/DD'；跨年的序列要看得出年份，故 1 年區間帶年份 */
+/** 'YYYY-MM-DD' → 'MM/DD'; the year must be seen in the sequence across years, so the 1-year interval contains the year*/
 export function fmtChartLabel(date: string, withYear: boolean): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
   if (!m) return date

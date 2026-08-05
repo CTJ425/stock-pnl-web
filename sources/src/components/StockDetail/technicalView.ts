@@ -1,9 +1,9 @@
 /**
- * 技術面的資料整備：由日線序列算出各指標，再裁切成要顯示的區間。
+ * Technical data preparation: Calculate each indicator from the daily sequence, and then cut it into the interval to be displayed.
  *
- * **順序不能顛倒**：指標一律以完整序列計算後才裁切。
- * 若先裁切再算，切到「近 3 月」（60 根）時 MA60 只會在最後一根有值、KD 的遞迴也會從
- * 初值 50 重新起跑，整條線都是錯的。這是這個功能最容易寫錯的地方，故獨立成純函式並加測試。
+ * **The order cannot be reversed**: The indicators are always calculated based on the complete sequence before being cut.
+ * If you cut it first and then calculate it, when you cut to the "last 3 months" (60 bars), MA60 will only have a value on the last bar, and the KD retracement will also start from
+ * Start again with an initial value of 50 and the entire line is wrong. This is the easiest place to write errors in this function, so it is separated into a pure function and tested.
  */
 import type { DailyRow } from '../../services/dailyProxy'
 import {
@@ -18,7 +18,7 @@ import {
 
 export type RangeKey = '3m' | '6m' | '1y'
 
-/** 各區間顯示幾根 K 棒（**交易日**，非日曆日；台股約每月 20 個交易日） */
+/** How many K bars are displayed in each interval (**Trading day**, non-calendar day; Taiwan stocks have approximately 20 trading days per month)*/
 export const RANGE_BARS: Record<RangeKey, number> = {
   '3m': 60,
   '6m': 120,
@@ -34,9 +34,9 @@ export const RANGE_LABELS: Record<RangeKey, string> = {
 type Series = Array<number | null>
 
 export interface TechnicalView {
-  /** 顯示區間內的 X 軸標籤（MM/DD） */
+  /** Display X-axis labels within intervals (MM/DD)*/
   labels: string[]
-  /** 顯示區間內的蠟燭 */
+  /** Display candles within a range*/
   candles: Array<{ label: string; open: number; high: number; low: number; close: number }>
   volumes: number[]
   ma5: Series
@@ -44,9 +44,9 @@ export interface TechnicalView {
   ma60: Series
   k: Series
   d: Series
-  /** X 軸要標出哪幾個索引（避免 244 根全標） */
+  /** Which indexes should be marked on the X-axis (to avoid 244 full indexes)*/
   labelIndices: number[]
-  /** 最新一根的指標摘要（取自完整序列，與顯示區間無關） */
+  /** Indicator summary of the latest bar (taken from the complete sequence, regardless of the display interval)*/
   latest: {
     date: string
     close: number
@@ -54,7 +54,7 @@ export interface TechnicalView {
     high: number
     low: number
     volume: number
-    /** 較前一交易日的漲跌 */
+    /** Increase or decrease from the previous trading day*/
     change: number | null
     changePct: number | null
     ma5: number | null
@@ -65,12 +65,12 @@ export interface TechnicalView {
     d: number | null
     rsi14: number | null
     macdHist: number | null
-    /** 成交量相對 20 日均量的倍數 */
+    /** The multiple of trading volume relative to the 20-day average volume*/
     volRatio: number | null
   }
 }
 
-/** 由 X 軸標籤挑出約 `want` 個等距索引（含頭尾） */
+/** Select about `want` equidistant indices (including head and tail) from the X-axis label*/
 export function pickLabelIndices(count: number, want = 6): number[] {
   if (count <= want) return Array.from({ length: count }, (_, i) => i)
   const step = (count - 1) / (want - 1)
@@ -87,7 +87,7 @@ function shortDate(date: string): string {
 export function buildTechnicalView(rows: DailyRow[], range: RangeKey): TechnicalView | null {
   if (rows.length === 0) return null
 
-  // ---- 1. 以「完整序列」算指標 ----
+  // ---- 1. Calculate the indicator based on "complete sequence" ----
   const closes: Series = rows.map((r) => r[4])
   const volumes = rows.map((r) => r[5])
   const bars: Array<Bar | null> = rows.map((r) => ({ high: r[2], low: r[3], close: r[4] }))
@@ -100,7 +100,7 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
   const macdRes = macd(closes)
   const volMa20 = sma(volumes, 20)
 
-  // ---- 2. 才裁切成顯示區間 ----
+  // ---- 2. Crop it into the display area ----
   const take = Math.min(RANGE_BARS[range], rows.length)
   const from = rows.length - take
   const slice = <T,>(arr: T[]): T[] => arr.slice(from)

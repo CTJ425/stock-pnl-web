@@ -7,7 +7,7 @@ const { loadAiPrompts, saveAiPrompts } = vi.hoisted(() => ({
   saveAiPrompts: vi.fn(),
 }))
 vi.mock('../../services/aiPrompts', async (importOriginal) => {
-  // 預設值與 resolvePrompt 用真的，只換掉會打網路的兩支
+  // The default value and resolvePrompt are set to real, and only the two that can connect to the network are replaced.
   const actual = await importOriginal<typeof import('../../services/aiPrompts')>()
   return { ...actual, loadAiPrompts, saveAiPrompts }
 })
@@ -85,7 +85,7 @@ describe('PromptsSection', () => {
 
     const box = (await screen.findByLabelText(/追問對話準則/)) as HTMLTextAreaElement
     expect(box.value).toBe('追問時請簡短。')
-    // 追問的鎖定段落是框限那一段
+    // The locked paragraph in question is the framed paragraph
     expect(screen.getByText(/使用者無權變更本段規則/)).toBeTruthy()
   })
 })

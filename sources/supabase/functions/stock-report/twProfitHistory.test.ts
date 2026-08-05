@@ -9,8 +9,8 @@ import {
 } from './twProfitHistory'
 
 /**
- * 依實際頁面縮寫的 fixture（欄名逐字取自 2026-08-04 實測的 ajax_t163sb04）。
- * 三張表對應三種產業別格式：一般業、金融（有營業利益）、銀行（沒有單一營收欄）。
+ * Fixture abbreviated according to the actual page (the column name is taken verbatim from the ajax_t163sb04 measured on 2026-08-04).
+ * The three tables correspond to three industry formats: general industry, finance (with business interests), and banking (without a single revenue column).
  */
 const HTML = `
 <table><tr><td>版面用的表格，沒有表頭</td></tr></table>
@@ -68,7 +68,7 @@ describe('parseMopsProfit', () => {
   const got = parseMopsProfit(HTML, '2026-Q1', new Set())
 
   it('一般業四項比率都算得出來，且與官方 t187ap17_L 逐位吻合', () => {
-    // 這組數字取自民國115 Q1 的台泥，官方值為 毛19.23 / 營7.88 / 前6.44 / 後5.71
+    // This set of figures is taken from Taiwan Cement Corporation in 115 Q1 of the Republic of China. The official value is gross 19.23 / camp 7.88 / front 6.44 / back 5.71
     const q = got.get('1802')!
     expect(q.grossMarginPercent).toBe(19.23)
     expect(q.operatingMarginPercent).toBe(7.88)
@@ -89,7 +89,7 @@ describe('parseMopsProfit', () => {
   })
 
   it('銀行業沒有單一營收欄 → 整張表跳過，不硬湊分母', () => {
-    // 利息淨收益 + 利息以外淨損益 才等於它的營收，湊出來的比率無法與其他產業比較
+    // Net interest income + net profit and loss other than interest equals its revenue, and the resulting ratio cannot be compared with other industries.
     expect(got.has('2801')).toBe(false)
   })
 
@@ -113,13 +113,13 @@ describe('parseMopsProfit', () => {
 
   it('基本每股盈餘照原值取，不除以營收（0.6.28）', () => {
     const got = parseMopsProfit(HTML, '2026-Q1', new Set())
-    // 0.79 元就是 0.79 元 —— 它已經是每股金額，不是比率
+    // 0.79 yuan is 0.79 yuan - it is already an amount per share, not a ratio
     expect(got.get('1802')!.epsTwd).toBe(0.79)
     expect(got.get('1802')!.epsChecked).toBe(true)
   })
 
   it('沒有 EPS 欄的產業別：epsTwd 為 null 但仍標記已查過', () => {
-    // 金融業那張表沒有這一欄。標記已查過，才不會每晚重抓同一季的 1.6MB 季報
+    // The financial industry table does not have this column. The mark has been checked so that the 1.6MB quarterly report of the same season is not re-crawled every night.
     const got = parseMopsProfit(HTML, '2026-Q1', new Set())
     expect(got.get('2882')!.epsTwd).toBeNull()
     expect(got.get('2882')!.epsChecked).toBe(true)
@@ -142,7 +142,7 @@ describe('planProfitBackfill', () => {
   })
 
   it('through 以上都已經找過，不再重問', () => {
-    // ETF 找不到資料，但 through 記著「這些季別問過了」——否則會永遠卡在同一批
+    // ETF can't find the information, but through remember "don't ask in these quarters" - otherwise you will always be stuck in the same batch
     const have = new Map<string, ProfitProgress>([
       ['0050', { quarters: new Set(), through: '2025-Q3' }],
     ])
@@ -194,16 +194,16 @@ describe('nextProfitThrough', () => {
 })
 
 describe('publishedQuarters', () => {
-  /** 台北時間轉成 UTC 的 Date（函式內部會加 8 小時） */
+  /** Convert Taipei time to UTC Date (8 hours will be added inside the function)*/
   const taipei = (iso: string) => new Date(Date.parse(`${iso}+08:00`))
 
   it('依申報期限判斷最新一季，並留五天緩衝', () => {
-    // Q1 期限 5/15，5/20 之後才算已公布
+    // Q1 deadline is 5/15, it will be announced after 5/20
     expect(publishedQuarters(taipei('2026-05-14T10:00:00'), 1)).toEqual(['2025-Q4'])
     expect(publishedQuarters(taipei('2026-05-20T10:00:00'), 1)).toEqual(['2026-Q1'])
-    // Q2 期限 8/14
+    // Q2 deadline 8/14
     expect(publishedQuarters(taipei('2026-08-19T10:00:00'), 1)).toEqual(['2026-Q2'])
-    // Q3 期限 11/14
+    // Q3 deadline 11/14
     expect(publishedQuarters(taipei('2026-11-19T10:00:00'), 1)).toEqual(['2026-Q3'])
   })
 

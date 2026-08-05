@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A3 ─ 例外優先｜資料抓取狀況後台</title>
+<title>A3 ─ Exception priority｜Data capture status background</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -89,7 +89,7 @@ body {
 .theme-btn:hover, .btn:hover { background: var(--surface-strong); color: var(--ink); }
 .theme-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ── 結論：整頁最大的一件事 ───────────────────────────────── */
+/*──Conclusion: The biggest thing on the whole page───────────────────────────────*/
 .verdict {
   display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px;
   background: var(--surface); border: 1px solid var(--border);
@@ -106,7 +106,7 @@ body {
 .verdict .meta { margin-left: auto; text-align: right; font-family: var(--font-data); font-size: 12px; color: var(--ink-muted); }
 .verdict .meta b { display: block; font-family: var(--font-display); font-size: 17px; color: var(--ink); font-weight: 600; }
 
-/* ── 需要注意：只放非正常項 ───────────────────────────────── */
+/*── Note: Only include abnormal items ────────────────────────────────*/
 .sec-head { display: flex; align-items: baseline; gap: 11px; margin: 0 0 13px; }
 .sec-head h3 { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0; }
 .sec-head .note { font-size: 12px; color: var(--ink-muted); }
@@ -128,7 +128,7 @@ body {
 .acard .tag { font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; font-weight: 400; }
 .late .tag { background: var(--st-late-bg); color: var(--st-late); }
 .warn .tag { background: var(--st-warn-bg); color: var(--st-warn); }
-/* 為什麼是這個狀態 —— 直接寫出來，不必再查 */
+/*Why is it in this state - just write it down, no need to check it again*/
 .acard .why { font-size: 13px; color: var(--ink-secondary); margin: 0 0 8px; }
 .acard .facts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--ink-muted); }
 .acard .facts span { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
@@ -136,7 +136,7 @@ body {
 .acard .act { align-self: center; }
 .acard .act .btn { white-space: nowrap; }
 
-/* ── 一切正常：收合成一行一組 ─────────────────────────────── */
+/*── Everything is normal: Collapsed into a row and a group ───────────────────────────────*/
 .calm { display: flex; flex-direction: column; gap: 6px; }
 details.group {
   background: var(--surface); border: 1px solid var(--border);
@@ -185,29 +185,29 @@ details[open] > summary .caret { transform: rotate(180deg); }
 <div class="wrap">
 
   <div class="mock-note">
-    <b>A3 ─ 例外優先</b>
-    <span>方案 A 的變體：有問題的浮上來、正常的收合成一行。</span>
-    <span>取捨：<b>安靜</b> —— 沒事的日子整頁只有幾行，不必每天掃 18 張卡。</span>
+    <b>A3 ─ Exceptions take precedence</b>
+    <span>plan A Variations of: problematic ones float up, normal ones collapse into one line.</span>
+    <span>Trade-offs:<b>Quiet</b> —— On good days, there are only a few lines on the entire page, so you don’t have to scan it every day. 18 card.</span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
   <div class="verdict">
-    <h2>18 項資料源中，<em>3 項需要注意</em></h2>
-    <div class="meta"><b>07-30</b>資料日・週四</div>
-    <p>其餘 15 項都在預期時間內取得。盤後批次今日跑了 32 輪，最後一輪 09:10。</p>
+    <h2>18 In the data source,<em>3 Items need attention</em></h2>
+    <div class="meta"><b>07-30</b>Material date・Thursday</div>
+    <p>the remaining 15 All items were obtained within the expected time. The after-hours batch ran out today 32 wheel, last wheel 09:10。</p>
   </div>
 
   <div class="sec-head">
-    <h3>需要注意</h3>
-    <span class="note">依嚴重度排序</span>
-    <span class="roll">3 項</span>
+    <h3>need attention</h3>
+    <span class="note">Sort by severity</span>
+    <span class="roll">3 item</span>
   </div>
 
   <div class="attn">
@@ -215,51 +215,51 @@ details[open] > summary .caret { transform: rotate(180deg); }
     <article class="acard late">
       <i class="bar"></i>
       <div class="body">
-        <h4>個股新聞 <span class="tag">2 檔缺料</span></h4>
-        <p class="why">00929 與 2412 連續 3 天查無新聞。來源本來就可能沒有結果，不一定是故障。</p>
+        <h4>individual stock news <span class="tag">2 Out of stock</span></h4>
+        <p class="why">00929 and 2412 continuous 3 No news from Tiancha. The source may have no results to begin with and is not necessarily a malfunction.</p>
         <div class="facts">
-          <span><b>涵蓋</b> 16 / 18 檔</span>
-          <span><b>最後抓取</b> 07-31 09:10</span>
-          <span><b>距今</b> 3h 40m</span>
+          <span><b>Cover</b> 16 / 18 files</span>
+          <span><b>last crawl</b> 07-31 09:10</span>
+          <span><b>since now</b> 3h 40m</span>
         </div>
       </div>
-      <div class="act"><button class="btn" type="button">查看細節</button></div>
+      <div class="act"><button class="btn" type="button">View details</button></div>
     </article>
 
     <article class="acard warn">
       <i class="bar"></i>
       <div class="body">
-        <h4>月營收 <span class="tag">等待 2026-07</span></h4>
-        <p class="why">最新是 2026-06，7 月營收依規定於 8 月 10 日前公布，尚未到期。</p>
+        <h4>monthly revenue <span class="tag">wait 2026-07</span></h4>
+        <p class="why">The latest is 2026-06，7 Monthly revenue is determined by 8 moon 10 It was announced a few days ago and has not yet expired.</p>
         <div class="facts">
-          <span><b>最新期別</b> 2026-06</span>
-          <span><b>最後抓取</b> 07-11 16:20</span>
-          <span><b>涵蓋</b> 18 / 18 檔・12 期</span>
+          <span><b>By latest period</b> 2026-06</span>
+          <span><b>last crawl</b> 07-11 16:20</span>
+          <span><b>Cover</b> 18 / 18 files・12 Expect</span>
         </div>
       </div>
-      <div class="act"><button class="btn" type="button">查看細節</button></div>
+      <div class="act"><button class="btn" type="button">View details</button></div>
     </article>
 
     <article class="acard warn">
       <i class="bar"></i>
       <div class="body">
-        <h4>消費者信心 <span class="tag">落後一期</span></h4>
-        <p class="why">其他四項總經指標已到 2026-06，只有這項停在 2026-05 —— FRED 上游尚未更新，非抓取失敗。</p>
+        <h4>consumer confidence <span class="tag">One period behind</span></h4>
+        <p class="why">The other four general economic indicators have reached 2026-06, only this item stops at 2026-05 —— FRED The upstream has not been updated and the non-fetch failed.</p>
         <div class="facts">
-          <span><b>最新期別</b> 2026-05・44.8</span>
-          <span><b>最後檢查</b> 07-31 12:40</span>
-          <span><b>來源</b> UMCSENT</span>
+          <span><b>By latest period</b> 2026-05・44.8</span>
+          <span><b>final check</b> 07-31 12:40</span>
+          <span><b>source</b> UMCSENT</span>
         </div>
       </div>
-      <div class="act"><button class="btn" type="button">查看細節</button></div>
+      <div class="act"><button class="btn" type="button">View details</button></div>
     </article>
 
   </div>
 
   <div class="sec-head">
-    <h3>一切正常</h3>
-    <span class="note">點開看明細</span>
-    <span class="roll">15 項</span>
+    <h3>everything is fine</h3>
+    <span class="note">Click to see details</span>
+    <span class="roll">15 item</span>
   </div>
 
   <div class="calm">
@@ -267,21 +267,21 @@ details[open] > summary .caret { transform: rotate(180deg); }
     <details class="group">
       <summary>
         <i class="tick"></i>
-        <span class="gname"><b>台股籌碼</b><span>三大法人・融資融券・借券</span></span>
+        <span class="gname"><b>Taiwan stock chips</b><span>Three major corporations・Margin margin trading・Borrow coupons</span></span>
         <span class="gcount">3 / 3</span>
         <span class="caret">▼</span>
       </summary>
       <div class="inner">
         <div class="line">
-          <span class="n"><b>三大法人</b><span>T86・已定稿</span></span>
+          <span class="n"><b>Three major corporations</b><span>T86・Finalized</span></span>
           <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
         </div>
         <div class="line">
-          <span class="n"><b>融資融券</b><span>MI_MARGN・7/7 日</span></span>
+          <span class="n"><b>Margin margin trading</b><span>MI_MARGN・7/7 day</span></span>
           <span class="d">2026-07-30</span><span class="t">07-30 21:00</span><span class="a">16h</span>
         </div>
         <div class="line">
-          <span class="n"><b>借券賣出</b><span>次一交易日</span></span>
+          <span class="n"><b>Borrow bonds and sell</b><span>next trading day</span></span>
           <span class="d">2026-07-31</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
         </div>
       </div>
@@ -290,21 +290,21 @@ details[open] > summary .caret { transform: rotate(180deg); }
     <details class="group">
       <summary>
         <i class="tick"></i>
-        <span class="gname"><b>個股資料</b><span>日 K 線・估值・獲利能力</span></span>
+        <span class="gname"><b>Individual stock information</b><span>day K Wire・Valuation・Profitability</span></span>
         <span class="gcount">3 / 3</span>
         <span class="caret">▼</span>
       </summary>
       <div class="inner">
         <div class="line">
-          <span class="n"><b>日 K 線</b><span>18 / 18 檔</span></span>
+          <span class="n"><b>day K Wire</b><span>18 / 18 files</span></span>
           <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
         </div>
         <div class="line">
-          <span class="n"><b>估值指標</b><span>18 / 18 檔</span></span>
+          <span class="n"><b>Valuation indicators</b><span>18 / 18 files</span></span>
           <span class="d">2026-07-30</span><span class="t">07-30 16:15</span><span class="a">20h</span>
         </div>
         <div class="line">
-          <span class="n"><b>獲利能力</b><span>8 / 8 季</span></span>
+          <span class="n"><b>Profitability</b><span>8 / 8 season</span></span>
           <span class="d">2026-Q1</span><span class="t">05-16 16:18</span><span class="a">76d</span>
         </div>
       </div>
@@ -313,26 +313,26 @@ details[open] > summary .caret { transform: rotate(180deg); }
     <details class="group" open>
       <summary>
         <i class="tick"></i>
-        <span class="gname"><b>美國總體經濟</b><span>4 項已到 2026-06</span></span>
+        <span class="gname"><b>overall U.S. economy</b><span>4 Item has arrived 2026-06</span></span>
         <span class="gcount">4 / 4</span>
         <span class="caret">▼</span>
       </summary>
       <div class="inner">
         <div class="line">
-          <span class="n"><b>核心 CPI</b><span>+2.57 %・前期 +2.82 %</span></span>
-          <span class="d">2026-06</span><span class="t">下期 08-12</span><span class="a">10m</span>
+          <span class="n"><b>core CPI</b><span>+2.57 %・Early stage +2.82 %</span></span>
+          <span class="d">2026-06</span><span class="t">next issue 08-12</span><span class="a">10m</span>
         </div>
         <div class="line">
-          <span class="n"><b>核心 PPI</b><span>+4.68 %・前期 +4.59 %</span></span>
-          <span class="d">2026-06</span><span class="t">下期 08-14</span><span class="a">10m</span>
+          <span class="n"><b>core PPI</b><span>+4.68 %・Early stage +4.59 %</span></span>
+          <span class="d">2026-06</span><span class="t">next issue 08-14</span><span class="a">10m</span>
         </div>
         <div class="line">
-          <span class="n"><b>核心 PCE</b><span>+3.29 %・前期 +3.41 %</span></span>
-          <span class="d">2026-06</span><span class="t">下期 08-28</span><span class="a">10m</span>
+          <span class="n"><b>core PCE</b><span>+3.29 %・Early stage +3.41 %</span></span>
+          <span class="d">2026-06</span><span class="t">next issue 08-28</span><span class="a">10m</span>
         </div>
         <div class="line">
-          <span class="n"><b>非農就業</b><span>+57 千人・前期 +129 千人</span></span>
-          <span class="d">2026-06</span><span class="t">下期 08-07</span><span class="a">10m</span>
+          <span class="n"><b>non-agricultural employment</b><span>+57 Thousands of people・Early stage +129 Thousands of people</span></span>
+          <span class="d">2026-06</span><span class="t">next issue 08-07</span><span class="a">10m</span>
         </div>
       </div>
     </details>
@@ -340,29 +340,29 @@ details[open] > summary .caret { transform: rotate(180deg); }
     <details class="group">
       <summary>
         <i class="tick"></i>
-        <span class="gname"><b>匯率與基礎設施</b><span>匯率・批次・探針・快取・manifest</span></span>
+        <span class="gname"><b>Exchange rates and infrastructure</b><span>exchange rate・batch・probe・cache・manifest</span></span>
         <span class="gcount">5 / 5</span>
         <span class="caret">▼</span>
       </summary>
       <div class="inner">
         <div class="line">
-          <span class="n"><b>台幣匯率</b><span>8 / 8 幣・USD 32.3489</span></span>
+          <span class="n"><b>Taiwan dollar exchange rate</b><span>8 / 8 currency・USD 32.3489</span></span>
           <span class="d">2026-07-30</span><span class="t">07-31 11:00</span><span class="a">1h50m</span>
         </div>
         <div class="line">
-          <span class="n"><b>盤後批次</b><span>32 / 40 輪・短路 88 %</span></span>
+          <span class="n"><b>After-hours batch</b><span>32 / 40 wheel・short circuit 88 %</span></span>
           <span class="d">2026-07-30</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
         </div>
         <div class="line">
-          <span class="n"><b>資料源探針</b><span>2 / 2 端點</span></span>
+          <span class="n"><b>Data source probe</b><span>2 / 2 endpoint</span></span>
           <span class="d">1150731</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
         </div>
         <div class="line">
-          <span class="n"><b>現價快取</b><span>26 筆</span></span>
+          <span class="n"><b>Current price cache</b><span>26 Pen</span></span>
           <span class="d">—</span><span class="t">07-31 12:49</span><span class="a">38s</span>
         </div>
         <div class="line">
-          <span class="n"><b>報告 manifest</b><span>18 檔</span></span>
+          <span class="n"><b>Report manifest</b><span>18 files</span></span>
           <span class="d">2026-07-30</span><span class="t">07-31 09:10</span><span class="a">3h40m</span>
         </div>
       </div>
@@ -376,7 +376,7 @@ details[open] > summary .caret { transform: rotate(180deg); }
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

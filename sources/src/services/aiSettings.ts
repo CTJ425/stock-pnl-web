@@ -1,8 +1,8 @@
 /**
- * AI 助理設定：儲存於 Supabase `app_settings` 全域單列（id 恆為 1）。
- * 全站共用、不分帳號、不分工作區；所有登入帳號可讀（前端直連供應商需要金鑰），
- * 寫入由 RLS 限制為 app_metadata.role = 'admin' 的帳號。
- * 提供規格要求的純函式與 CRUD 操作。
+ * AI assistant settings: stored in Supabase `app_settings` global single column (id is always 1).
+ * Shared by the entire site, regardless of account or workspace; all login accounts are readable (front-end direct connection to suppliers requires a key),
+ * Writing to accounts restricted by RLS to app_metadata.role = 'admin'.
+ * Provide pure functions and CRUD operations required by specifications.
  */
 import { supabase } from './supabase'
 
@@ -21,7 +21,7 @@ function client() {
 }
 
 /**
- * 純函式：正規化輸入物為 AiSettings。若欄位缺漏、型別錯誤或 provider 無效則傳回 null。
+ * Pure function: the normalized input is AiSettings. Returns null if the field is missing, has the wrong type, or the provider is invalid.
  */
 export function normalizeAiSettings(raw: unknown): AiSettings | null {
   if (!raw || typeof raw !== 'object') return null
@@ -49,11 +49,11 @@ export function normalizeAiSettings(raw: unknown): AiSettings | null {
 }
 
 /**
- * 純函式：驗證 AiSettings 物件。傳回錯誤訊息字串或 null（驗證通過）。
- * 規則：
- * 1. model 必填
- * 2. openai-compatible 的 baseUrl 必填且需為合法 URL
- * 3. google 的 apiKey 必填（openai-compatible 允許空字串）
+ * Pure function: validate AiSettings object. Returns an error message string or null (verification passed).
+ * rule:
+ * 1. model required
+ * 2. The baseUrl of openai-compatible is required and must be a legal URL.
+ * 3. Google’s apiKey is required (openai-compatible allows empty strings)
  */
 export function validateAiSettings(s: AiSettings): string | null {
   if (!s.model || !s.model.trim()) {
@@ -80,7 +80,7 @@ export function validateAiSettings(s: AiSettings): string | null {
   return null
 }
 
-/** 是否為 AI 設定管理員（app_metadata.role === 'admin'，只能由 Dashboard / SQL 設定，使用者無法自改） */
+/** Whether to set an administrator for AI (app_metadata.role === 'admin', can only be set by Dashboard / SQL, users cannot change it)*/
 export async function isAiAdmin(): Promise<boolean> {
   try {
     const { data, error } = await client().auth.getUser()
@@ -92,7 +92,7 @@ export async function isAiAdmin(): Promise<boolean> {
   }
 }
 
-/** 讀取全站共用的 AI 設定 */
+/** Read AI settings shared by the entire site*/
 export async function loadAiSettings(): Promise<AiSettings | null> {
   try {
     const { data, error } = await client()
@@ -108,7 +108,7 @@ export async function loadAiSettings(): Promise<AiSettings | null> {
   }
 }
 
-/** 儲存全站共用的 AI 設定 (upsert app_settings 單列)。RLS 會擋掉非 admin 的寫入。 */
+/** Stores site-wide shared AI settings (upsert app_settings single column). RLS blocks non-admin writes.*/
 export async function saveAiSettings(s: AiSettings): Promise<{ error: string | null }> {
   const valErr = validateAiSettings(s)
   if (valErr) return { error: valErr }
@@ -135,7 +135,7 @@ export async function saveAiSettings(s: AiSettings): Promise<{ error: string | n
   }
 }
 
-/** 清除全站共用的 AI 設定。RLS 會擋掉非 admin 的寫入。 */
+/** Clear site-wide AI settings. RLS blocks non-admin writes.*/
 export async function clearAiSettings(): Promise<{ error: string | null }> {
   try {
     const { error } = await client()

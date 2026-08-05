@@ -1,93 +1,93 @@
-# 新功能開發計畫書：庫存均價細分與保本價（損益平衡價）顯示
+# New function development plan: average inventory price breakdown and breakeven price (profit and loss even price) display
 
-本計畫書旨在為「庫存總覽」功能進行升級，讓使用者能一目了然：
-1. **成交均價 (未含手續費)**：當下買入股票的原始價格。
-2. **買入均價 (已含手續費)**：您實際付出的每股成本。
-3. **保本賣出價 (預估平衡價)**：考慮未來賣出時的手續費與證交稅後，最低需要賣在多少價格才不會虧損。
+This plan aims to upgrade the "Inventory Overview" function so that users can see at a glance:
+1. **Average transaction price (excluding handling fees)**: The original price at which the stock was purchased at the moment.
+2. **Average purchase price (including handling fees)**: The actual cost per share you pay.
+3. **Break-even selling price (estimated equilibrium price)**: After taking into account the handling fees and securities taxes when selling in the future, what is the minimum price that needs to be sold at to avoid loss.
 
 ---
 
-## 1. 核心計算邏輯與公式設計
+## 1. Core calculation logic and formula design
 
-### A. 庫存成本維護 (P&L Engine 擴充)
-目前 `computeLedger` 只維護了含手續費的 `cost`（部位成本）。為了精確計算不含手續費的成交均價，我們需要在 `Position` 結構中加入 `rawCost`（未含手續費的原始部位成本）。
+### A. Inventory Cost Maintenance (P&L Engine Extension)
+Currently `computeLedger` only maintains `cost` (position cost) including handling fees. In order to accurately calculate the average transaction price without handling fees, we need to add `rawCost` (original position cost without handling fees) to the `Position` structure.
 
-* **買入時 (BUY)**：
-  * `pos.cost += (price * qty) + fee_tax` (維持不變)
-  * `pos.rawCost += (price * qty)` (新增)
-* **賣出時 (SELL)**：
-  * 依持股比例扣除：
+* **When Buying (BUY)**:
+  * `pos.cost += (price * qty) + fee_tax` (remain unchanged)
+  * `pos.rawCost += (price * qty)` (new)
+* **When selling (SELL)**:
+  * Deduction based on shareholding ratio:
     * `avgCost = pos.cost / pos.qty`
     * `avgRawCost = pos.rawCost / pos.qty`
     * `pos.cost -= avgCost * matchedQty`
     * `pos.rawCost -= avgRawCost * matchedQty`
 
-### B. 三種均價的計算公式
-1. **成交均價 (未含手續費)**：
-   $$\text{成交均價} = \frac{\text{rawCost}}{\text{qty}}$$
-2. **買入均價 (已含手續費)**：
-   $$\text{買入均價} = \frac{\text{cost}}{\text{qty}}$$
-3. **保本賣出價 (損益平衡價)**：
-   為了賣出時實收金額 $\ge$ 買入總成本（`cost`），設定賣出單價為 $P$：
-   $$\text{實收金額} = P \times Q - \text{賣出手續費} - \text{賣出證交稅} \ge \text{cost}$$
-   $$\text{賣出手續費} = \lfloor P \times Q \times \text{工作區手續費率} \rfloor$$
-   $$\text{賣出證交稅} = \lfloor P \times Q \times \text{證交稅率} \rfloor$$
+### B. Calculation formulas for three average prices
+1. **Average transaction price (excluding handling fees)**:
+   $$\text{Average Transaction Price} = \frac{\text{rawCost}}{\text{qty}}$$
+2. **Average buying price (including handling fee)**:
+   $$\text{Average purchase price} = \frac{\text{cost}}{\text{qty}}$$
+3. **Break-even selling price (breakeven price)**:
+   In order to get the actual amount received when selling $\ge$ and the total purchase cost (`cost`), set the selling unit price to $P$:
+   $$\text{Amount actually received} = P \times Q - \text{Selling fee} - \text{Tax on selling certificate} \ge \text{cost}$$
+   $$\text{Selling fee} = \lfloor P \times Q \times \text{Workspace fee} \rfloor$$
+   $$\text{Selling certificate tax} = \lfloor P \times Q \times \text{Security tax rate} \rfloor$$
    
-   簡化後，每股的**保本賣出價**計算公式為（無條件進位至小數點後第 2 位以確保保本）：
-   $$P_{\text{break-even}} = \left\lceil \frac{\text{cost}}{Q \times (1 - \text{手續費率} - \text{證交稅率})} \right\rceil_{0.01}$$
-   *其中美股的證交稅率為 0，台股 ETF 證交稅率為 0.1%，台股一般股票為 0.3%。*
+   After simplification, the calculation formula for the **breakeven selling price** per share is (unconditionally rounded to the 2nd decimal place to ensure capital preservation):
+   $$P_{\text{break-even}} = \left\lceil \frac{\text{cost}}{Q \times (1 - \text{handling rate} - \text{securities tax rate})} \right\rceil_{0.01}$$
+   *Among them, the securities tax rate for U.S. stocks is 0, the securities tax rate for Taiwan stocks ETF is 0.1%, and the securities tax rate for general Taiwan stocks is 0.3%. *
 
 ---
 
-## 2. 程式碼修改範例
+## 2. Code modification example
 
-### 調整一：[pnlEngine.ts](file:///home/ivan/stock-pnl-web/sources/src/utils/pnlEngine.ts)
-擴充 `Position` 與計算引擎，追蹤 `rawCost` 並導出 `rawAvgCost`。
+### Adjustment 1:[pnlEngine.ts](file:///home/ivan/stock-pnl-web/sources/src/utils/pnlEngine.ts)
+Extend `Position` with calculation engine, track `rawCost` and export `rawAvgCost`.
 
 ```typescript
 export interface Position {
-  // ... 既有欄位 ...
+  // ... existing fields ...
   qty: number
-  cost: number         // 含手續費
-  rawCost: number      // 未含手續費 (新增)
+  cost: number // Including handling fee
+  rawCost: number // Not including handling fee (new)
   buyCostTotal: number
   realized: number
 }
 
 export interface Holding extends Position {
-  avgCost: number      // 含手續費的均價
-  rawAvgCost: number   // 未含手續費的成交均價 (新增)
+  avgCost: number // Average price including handling fee
+  rawAvgCost: number // Average transaction price without handling fees (new)
 }
 
-// 在 computeLedger 初始位置加入：
+// Add at the initial position of computeLedger:
 // pos.rawCost = 0
-// 在 BUY 交易中加入：
+// Add to BUY transaction:
 // pos.rawCost += tx.price * tx.qty
-// 在 SELL 交易中計算與扣除：
+// Calculate and deduct in SELL transactions:
 // const avgRawCost = pos.qty > 0 ? pos.rawCost / pos.qty : 0
 // pos.rawCost -= avgRawCost * matchedQty
 ```
 
-### 調整二：[DashboardPage.tsx](file:///home/ivan/stock-pnl-web/sources/src/components/Dashboard/DashboardPage.tsx)
-計算保本價並呈現在前端表格中。
+### Adjustment 2:[DashboardPage.tsx](file:///home/ivan/stock-pnl-web/sources/src/components/Dashboard/DashboardPage.tsx)
+Calculate the breakeven price and present it in the front-end table.
 
 ```typescript
-// 計算保本價
+// Calculate the breakeven price
 const taxRate = h.currency === 'TWD' ? sellTaxRate(h.ticker) : 0
 const breakEvenPrice = Math.ceil((h.cost / (h.qty * (1 - feeRate - taxRate))) * 100) / 100
 ```
 
 ---
 
-## 3. UI 呈現設計 (庫存總覽表格)
+## 3. UI presentation design (inventory overview table)
 
-為了保持介面簡潔且美觀，我們將現有表格的「平均買入成本」欄位改造成雙行顯示，並新增一欄「保本賣出價」：
+In order to keep the interface simple and beautiful, we changed the "Average Buying Cost" field of the existing table into a two-row display, and added a new column of "Break-Proof Selling Price":
 
-| 代號 | 名稱 | 現價 | 持有股數 | 平均買入成本 (均價) | 保本賣出價 | 目前市值 | 未實現損益 | 未實現報酬率 |
+| Code | Name | Current price | Number of shares held | Average purchase cost (average price) | Breakeven selling price | Current market value | Unrealized gains and losses | Unrealized rate of return |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 0050 | 元大台灣50 | 105.00 | 1,000 | **NT$102.44** <br> <span style="font-size:11px;color:gray;">未含費 NT$102.40</span> | <span style="color:#22c55e;font-weight:600;">NT$102.63</span> | NT$105,000 | +NT$2,327 | +2.27% |
-| 2330 | 台積電 | 1,010.00 | 100 | **NT$951.35** <br> <span style="font-size:11px;color:gray;">未含費 NT$950.00</span> | <span style="color:#22c55e;font-weight:600;">NT$955.62</span> | NT$101,000 | +NT$5,198 | +5.46% |
+| 0050 | Yuanta Taiwan 50 | 105.00 | 1,000 | **NT$102.44** <br> <span style="font-size:11px;color:gray;">NT$102.40</span> | <span style="color:#22c55e;font-weight:600;">NT$102.63</span> | NT$105,000 | +NT$2,327 | +2.27% |
+| 2330 | TSMC | 1,010.00 | 100 | **NT$951.35** <br> <span style="font-size:11px;color:gray;">NT$950.00</span> | <span style="color:#22c55e;font-weight:600;">NT$955.62</span> | NT$101,000 | +NT$5,198 | +5.46% |
 
-### 設計亮點：
-1. **雙行均價顯示**：主標題加粗顯示「含手續費的實際每股成本」，副標題以灰色小字顯示「未含手續費的成交均價」，方便與券商軟體的不同欄位進行比對。
-2. **新增「保本賣出價」欄位**：以綠色/顯眼字體標示出安全打平的賣出點，當現價高於此價格時即代表賣出必有獲利，極具交易參考價值。
+### Design highlights:
+1. **Double-line average price display**: The main title displays "Actual cost per share including handling fees" in bold, and the subtitle displays "Average transaction price without handling fees" in small gray letters, making it easier to compare with different fields in the brokerage software.
+2. **Added "Break-Profit Selling Price" field**: Mark the safe selling point in green/prominent fonts. When the current price is higher than this price, it means that selling will definitely make a profit, which is of great trading reference value.

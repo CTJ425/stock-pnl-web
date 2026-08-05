@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import type { PriceQuote } from '../../services/priceProxy'
 
-/** 2026-08-05 收盤後的 2330 實測回應 */
+/** 2026-08-05 2330 measured response after closing*/
 const closedQuote: PriceQuote = {
   price: 2405,
   prevClose: 2320,

@@ -1,23 +1,23 @@
 /**
- * 個股分析的內容區。
+ * Content area for individual stock analysis.
  *
- * 0.6.8 起「我的持股 / 籌碼 / 基本面 / 技術面」四段**併成單一長頁**（版型 D：卡片分組），
- * 只留「分析內容 / AI 分析」兩個分頁籤。AI 沒有一起併是刻意的 ——
- * 它有 API Key 輸入框與對話狀態，而且內容是按鈕觸發、不是一直在那。
+ * Starting from 0.6.8, the four sections of "My Holdings/Chips/Fundamentals/Technicals" are merged into a single long page** (Type D: card grouping),
+ * Only two tabs are left: "Analysis Content/AI Analysis". AI does not work together and deliberately -
+ * It has an API Key input box and dialog state, and the content is triggered by buttons and is not always there.
  *
- * 每段各自一張 `.glass` 卡（`.detail-card`），靠卡與卡之間的留白分邊界。
- * 選這個版型是因為它零互動、沒有「東西被收起來找不到」的問題。
+ * Each segment has a `.glass` card (`.detail-card`), and the borders are separated by the white space between cards.
+ * I chose this version because it has zero interaction and no problem of "things being put away and cannot be found".
  *
- * 0.6.36 把第一段的「我的持股」換成「報價」（今日開高低量 / 昨收 / 今收）。
- * 持股當初排在 PDF 擷取範圍之外是因為那是個資；報價是公開市場資料，
- * 沒有這個顧慮，所以 `surfaceRef` 改為包住四段全部。
+ * 0.6.36 Replace "My holdings" in the first paragraph with "Quotation" (today's open high and low volume/yesterday's close/today's close).
+ * The reason why stock holdings were initially excluded from the PDF capture is because they are private capital; the quotations are public market data.
+ * There is no such concern, so `surfaceRef` is changed to wrap all four segments.
  *
- * 這是純呈現元件：要看哪一檔、報價從哪來，都由呼叫端（AnalysisPage）決定。
- * 頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
+ * This is a pure presentation component: which level to look at and where the quote comes from are all determined by the caller (AnalysisPage).
+ * The selector on the left side of the page is also passed in from the caller (currently it is a drop-down menu for switching individual stocks).
  *
- * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
- * 基本面在這一層載入一次分發給三處（標題的產業別 badge、基本面那段、AI 分析），
- * 與籌碼報告各自獨立，任一失敗不影響另一個。
+ * Data flow: Storage-first reads the shared report of scheduled pre-production, and then clicks and produces fallback if there is no problem.
+ * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title, the fundamentals section, and AI analysis).
+ * Independent from chip reporting, failure of either does not affect the other.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -41,14 +41,14 @@ import type { PriceQuote } from '../../services/priceProxy'
 export interface StockDetailTarget {
   ticker: string
   name: string
-  /** 持股脈絡：畫面上不再顯示，但即點即產報告時仍會帶給後端 */
+  /** Stockholding context: No longer displayed on the screen, but it will still be brought to the backend when reporting on click*/
   holding: ReportHolding | null
-  /** 現價報價，供報價卡顯示；抓不到時為 null */
+  /** The current price quotation is displayed on the quotation card; if it cannot be caught, it will be null.*/
   quote: PriceQuote | null
 }
 
 interface StockDetailPageProps extends StockDetailTarget {
-  /** 頁首左側的控制項（AnalysisPage 傳入切換個股的下拉選單） */
+  /** The control items on the left side of the top of the page (AnalysisPage passes in the drop-down menu for switching stocks)*/
   selector?: ReactNode
 }
 
@@ -60,17 +60,17 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
 ]
 
 /**
- * 這份基本面是不是還缺歷史。
+ * Is this fundamental lack of history?
  *
- * 門檻用後端的 cap（月營收 12 個月、獲利能力 12 季）。低於它就再叫一次 warm ——
- * 真的沒那麼多期的標的（新上市、ETF）不會因此無限重試：伺服器補到沒東西可補時
- * 會回 `fundamentalComplete: true`，warmStock 那層就封印該代號。
+ * The threshold uses the back-end cap (monthly revenue for 12 months, profitability for 12 quarters). Below it call warm again——
+ * There are really not that many issues (new listings, ETFs) that will not cause infinite retries: the server will replenish the time until there is nothing left to replenish.
+ * It will return `fundamentalComplete: true`, and the warmStock layer will seal the codename.
  */
 function needsFundamentalBackfill(f: FundamentalData): boolean {
   return f.revenueMonths.length < 12 || f.profitQuarters.length < 12
 }
 
-/** 長頁的分組標題。四段共用，讓層級明顯高過各段內部的 `.rpt-section h3` */
+/** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
 function CardHead({ title, meta }: { title: string; meta?: string }) {
   return (
     <div className="card-head">
@@ -88,9 +88,9 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   const [report, setReport] = useState<ReportData | null>(null)
   const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
   const [fundLoading, setFundLoading] = useState(true)
-  // 使用者按「重新整理」時 +1，串進各載入 effect 的依賴強制重抓。
-  // 需要它是因為：報告與基本面只在開頁（ticker 變更）時抓一次，而盤後批次
-  // 會在使用者看著的當下更新資料 —— 沒有這個鈕就只能整頁重載才看得到新的。
+  // +1 when the user clicks "Refresh" to string in the dependencies of each loaded effect to force a refetch.
+  // It is needed because: reports and fundamentals are only captured once when the page is opened (ticker changes), and batches are captured after the opening
+  // The data will be updated while the user is looking at it - without this button, you would have to reload the entire page to see the new information.
   const [reloadKey, setReloadKey] = useState(0)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfNote, setPdfNote] = useState('')
@@ -102,14 +102,14 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     setReport(null)
     ;(async () => {
       try {
-        // Storage-first：盤後排程預產的共用報告（快、免打 TWSE）
+        // Storage-first: Shared report for after-hours scheduled production (quick, no need to type TWSE)
         const stored = await fetchStoredReport(ticker)
         if (alive && stored) {
           setReport(stored)
           setStatus('ready')
           return
         }
-        // fallback：未預產（不在清單 / 當日尚未產 / 舊格式）時即點即產
+        // Fallback: Click to deliver when the delivery is not scheduled (not in the list/not yet produced on the day/old format)
         const fresh = await generateReport({ market: 'TPE', ticker, name, holding })
         if (alive) {
           setReport(fresh)
@@ -125,35 +125,35 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     return () => {
       alive = false
     }
-    // holding 不列入依賴：開頁當下的持股脈絡即可，避免現價刷新導致重複產生
+    // Holding is not included in the dependency: the current holding context when opening the page is enough to avoid duplication caused by refreshing the current price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name, reloadKey])
 
-  // 分頁切回前景時比對報告有沒有換過一份（0.6.2）。
+  // Check whether the comparison report has been changed when switching back to the foreground after pagination (0.6.2).
   //
-  // 上面那個 effect 只在開頁時抓一次。三班制時代一天才更新 3 次，還算堪用；
-  // 0.6.1 起盤後批次改成 16:00–23:45 每 15 分鐘輪詢，**報告會在使用者看著的當下更新**，
-  // 開著不動就會一直停在開頁那一刻的快照 —— 實際發生過：20:15 的批次已寫出當天的報告，
-  // 而 20:15 之前開的分頁仍顯示前一個交易日的籌碼。
+  // The above effect is only captured once when the page is opened. In the three-shift era, it was only updated three times a day, which was pretty usable;
+  // After 0.6.1, the batch is changed to 16:00–23:45 and polling every 15 minutes. **The report will be updated while the user is watching**.
+  // If it is turned on, it will always stop at the snapshot of the moment when the page is opened - what actually happened: the batch of 20:15 has written the report for the day,
+  // The tab opened before 20:15 still displays the chips of the previous trading day.
   //
-  // 作法沿用 useStockPrices 的 visibilitychange，不另開 timer：
-  // 背景分頁的 timer 會被瀏覽器節流，而切回前景本來就是使用者要看資料的時刻。
+  // The method follows the visibilitychange of useStockPrices without opening another timer:
+  // The timer of background paging will be throttled by the browser, and switching back to the foreground is the time when the user wants to see the data.
   //
-  // 0.6.8 起基本面也一起比對。四段併成一頁之後，「只有籌碼會自己更新」這件事
-  // 從看不見變成肉眼可見的不對稱 —— 同一張畫面上籌碼跳到今天、月營收還停在昨天。
-  // 技術面不在這裡處理：它由自己的 effect 管，且日線一天只換一次。
+  // The fundamentals starting from 0.6.8 are also compared together. After merging four paragraphs into one page, "Only the chips will update themselves"
+  // The asymmetry has changed from invisible to visible to the naked eye - on the same picture, the chips jumped to today, but the monthly revenue stayed at yesterday.
+  // The technical side is not dealt with here: it is managed by its own effect, and the daily line only changes once a day.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void (async () => {
         const stored = await fetchStoredReport(ticker)
         if (stored) {
-          // 只在 generatedAt 真的變了才換：沒變就別動 state，
-          // 否則每次切回前景都重繪一次，捲動位置與展開狀態會被洗掉。
+          // Only change generatedAt if it really changes: if it doesn’t change, don’t change state.
+          // Otherwise, it will be redrawn every time you switch back to the foreground, and the scroll position and expanded state will be washed away.
           setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
         }
         const f = await fetchFundamental(ticker)
-        // 同樣只在真的換過一份時才 setState（比 asOf，那是我們寫檔的時刻）
+        // Also setState only when a copy is actually changed (than asOf, that's when we write the file)
         if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
       })()
     }
@@ -164,7 +164,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   /*
     基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
 
-    **查無、或歷史還沒補滿時都補叫 warm**（0.6.29）。原本只在「完全查無」時叫，
+    **When there is no search, or the history has not been filled up, warm** (0.6.29) is called. Originally it was only called when "completely found nothing",
     結果是新股票第一次開頁建好檔案之後就再也不叫了 —— 剩下的月份與季別要等夜間批次，
     而那段回補排在批次的短路判斷之後，當天多半輪不到。畫面上的差別是：
     新股票只有兩三個月的月營收，既有股票有 12 個月。
@@ -198,7 +198,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     setPdfNote('')
     try {
       const blob = await generatePdfBlob(surfaceRef.current)
-      // 檔名不再叫「盤後籌碼」：0.6.8 起擷取範圍是籌碼＋基本面＋技術面三段
+      // The file name is no longer called "After-hours chips": 0.6.8 The starting range is chips + fundamentals + technicals.
       downloadBlob(blob, `個股分析-${ticker}-${report?.dataDate ?? ''}.pdf`)
     } catch {
       setPdfNote('PDF 產生失敗，請再試一次。')

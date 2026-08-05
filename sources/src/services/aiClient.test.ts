@@ -84,8 +84,8 @@ describe('aiClient', () => {
     })
 
     it('finishReason=MAX_TOKENS 且有內容時，保留文字但附上「未完成」標記', () => {
-      // 釘住 0.6.0-dev.5 的實際災情：Gemini Flash 只寫了半句就被切斷，
-      // 舊版把半截文字當成完整結果回傳，使用者無從得知它不完整。
+      // The actual disaster that pinned 0.6.0-dev.5: Gemini Flash was cut off after writing only half a sentence,
+      // The old version returned half of the text as a complete result, so the user had no way of knowing that it was incomplete.
       const out = extractGoogleText({
         candidates: [
           {
@@ -99,7 +99,7 @@ describe('aiClient', () => {
     })
 
     it('finishReason=MAX_TOKENS 但完全沒有內容時，錯誤訊息要點出思考 token 吃掉額度', () => {
-      // 思考 token 計入 maxOutputTokens，額度不足時 parts 會整個消失
+      // Thinking tokens are included in maxOutputTokens. When the quota is insufficient, parts will disappear entirely.
       try {
         extractGoogleText({ candidates: [{ finishReason: 'MAX_TOKENS' }] })
         throw new Error('should have thrown')
@@ -167,10 +167,10 @@ describe('aiClient', () => {
     })
 
     /*
-     * 以下都是「HTTP 200 但沒有正文」的各種成因。
-     * 原本不論原因一律拋同一句「回傳結構未包含有效的 choices[0].message.content」，
-     * 使用者拿到那句完全看不出下一步該做什麼 —— 而 Google 那條路徑早就分了
-     * MAX_TOKENS / SAFETY / 結構不符。這組測試釘住補齊後的診斷。
+     * The following are various causes of "HTTP 200 but no body".
+     * Originally, regardless of the reason, the same sentence "The return structure does not contain a valid choices[0].message.content" was thrown.
+     * The user has no idea what to do next when they get that sentence - and Google's path has long been divided.
+     * MAX_TOKENS / SAFETY / structure does not match. This set of tests nails the diagnosis after completion.
      */
     const kindOf = (json: unknown) => {
       try {
@@ -182,9 +182,9 @@ describe('aiClient', () => {
     }
 
     /*
-     * 推理型模型：0.6.9-dev.4 起不再直接失敗。
-     * 請求端會先嘗試關掉思考；關不掉時改成「拿思考內容來用，但標示清楚」——
-     * 使用者不必為了這件事一直換模型，而思考會誤導人的問題由警語處理。
+     * Inferential model: no longer fails directly starting from 0.6.9-dev.4.
+     * The requester will first try to turn off thinking; if it cannot be turned off, it will be changed to "use the thinking content, but clearly mark it"——
+     * Users don't have to keep changing models just to do this, and thinking about misleading issues is handled by warnings.
      */
     it('關不掉思考時改用思考內容，但前面必須加警語', () => {
       const out = extractOpenAiText({
@@ -290,7 +290,7 @@ describe('aiClient', () => {
       await mkProvider().complete({ system: 'sys', messages: [{ role: 'user', content: 'usr' }] })
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-      // 沒有跨家通用的開關，三個都送、由端點各取所需
+      // There is no universal switch across homes, all three are provided, and each endpoint takes what it needs.
       expect(body.reasoning_effort).toBe('none')
       expect(body.think).toBe(false)
       expect(body.chat_template_kwargs).toEqual({ enable_thinking: false })
@@ -304,7 +304,7 @@ describe('aiClient', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body)
       expect(body.max_tokens).toBe(OPENAI_MAX_TOKENS)
-      // 輸出約需 1500~2500 token，上限要留足餘裕
+      // The output requires about 1500~2500 tokens, and there should be enough margin for the upper limit.
       expect(OPENAI_MAX_TOKENS).toBeGreaterThanOrEqual(4096)
     })
 
@@ -334,7 +334,7 @@ describe('aiClient', () => {
       expect(second.think).toBeUndefined()
       expect(second.chat_template_kwargs).toBeUndefined()
       expect(second.max_tokens).toBeUndefined()
-      // 但正事不能掉：model 與 messages 要還在
+      // But the business cannot be lost: the model and messages must still be there
       expect(second.model).toBe('llama3')
       expect(second.messages).toHaveLength(2)
     })
@@ -382,7 +382,7 @@ describe('aiClient', () => {
       const body = JSON.parse(opts.body)
       expect(body.systemInstruction.parts[0].text).toBe('sys')
       expect(body.contents[0].parts[0].text).toBe('usr')
-      // 額度要夠寫完整篇（思考 token 也算在這個上限裡），且預設關閉思考
+      // The quota must be enough to write the entire article (thinking tokens are also included in this limit), and thinking is turned off by default.
       expect(body.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
       expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
     })
@@ -539,8 +539,8 @@ describe('aiClient', () => {
     })
 
     it('headers 回來但 body 卡住時仍要逾時（逾時計時器必須包住讀 body）', async () => {
-      // fetch 在收到 headers 就 resolve。若在那之後才 clearTimeout，
-      // 「headers 回來了但 body 不來」的伺服器會讓 UI 永遠停在解讀中。
+      // fetch resolves after receiving headers. If clearTimeout occurs after that,
+      // A server with "headers coming back but not body" will cause the UI to be stuck in interpretation forever.
       const mockFetch = vi.fn().mockImplementation((_url: string, opts: RequestInit) =>
         Promise.resolve({
           ok: true,
@@ -603,8 +603,8 @@ describe('多輪對話的角色映射（0.6.5）', () => {
   ]
 
   it('Google：assistant 必須映射成 model', () => {
-    // ⚠️ Gemini 的助理角色叫 model。送成 assistant 會被當成使用者發言，
-    // 模型會以為自己上一輪講的話是使用者說的，整段對話的角色就錯位了。
+    // ⚠️ Gemini’s assistant character is called model. If sent as assistant, it will be treated as a user speaking.
+    // The model will think that what it said in the last round was said by the user, and the role of the entire conversation will be misplaced.
     expect(toGoogleContents(convo)).toEqual([
       { role: 'user', parts: [{ text: '第一次的分析請求' }] },
       { role: 'model', parts: [{ text: '這是分析結果' }] },

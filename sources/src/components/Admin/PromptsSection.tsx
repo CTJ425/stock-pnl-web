@@ -1,12 +1,12 @@
 /**
- * 管理後台「提示詞」：分析與追問的準則，管理員可直接在網頁上改，不必動程式碼。
+ * "Prompt words" in the management background: The criteria for analysis and inquiry can be changed directly by the administrator on the web page without having to touch the code.
  *
- * 兩件事刻意做在畫面上：
- * 1. **鎖定段落照實列出來**。安全規則由程式固定接在使用者輸入之後，
- *    這裡把它印出來，管理員才知道「我改不到的部分寫了什麼」，
- *    而不是改完之後對著模型的回覆猜哪一條在擋。
- * 2. **「還原成預設」不寫回資料庫**，只把文字框填回預設值 —— 要按下儲存才生效，
- *    誤按不會直接把別人的設定沖掉。
+ * Two things are deliberately done on the screen:
+ * 1. **List the locked paragraphs truthfully**. Security rules are fixed by the program after user input.
+ *    Print it out here so that the administrator can know "what is written in the parts that I cannot change".
+ *    Instead of guessing which one is blocking based on the model's response after making the changes.
+ * 2. **"Restore to Default" does not write back to the database**, but only fills the text box back with the default value - it will take effect only when you click Save.
+ *    Misclicking will not directly erase other people's settings.
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle, FileText, Lock, MessageSquare } from 'lucide-react'
@@ -63,7 +63,7 @@ export function PromptsSection() {
     let alive = true
     void loadAiPrompts().then((p) => {
       if (!alive) return
-      // 資料庫存的是「有沒有改過」，文字框要看得到實際生效的內容，故一律解析成完整文字
+      // The data stored in the database is "has it been modified?". The text box needs to be able to see the actual effective content, so it will be parsed into complete text.
       const filled: AiPrompts = {
         analysis: resolvePrompt(p.analysis, ANALYSIS_DEFAULT),
         chat: resolvePrompt(p.chat, CHAT_DEFAULT),

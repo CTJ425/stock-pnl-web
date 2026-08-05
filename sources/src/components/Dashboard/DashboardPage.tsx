@@ -1,10 +1,10 @@
 /**
- * 庫存總覽 Dashboard：
- * - 台股 (TWD) / 美股 (USD) 分開統計，只顯示 active 持股
- * - 損益口徑對齊券商 APP：僅計算「當前持有部位」（未實現損益 ÷ 當前部位成本），
- *   不混入歷史已結清週期；歷史績效請看「年度收益」頁
- * - 現價背景非同步載入：載入中顯示骨架屏；抓不到現價時市值 / 未實現損益留空
- * - 台股未實現損益為「淨」值：預扣賣出手續費與證交稅（estimateUnrealized）
+ * Inventory overview Dashboard:
+ * - Taiwan stocks (TWD) / US stocks (USD) are counted separately, only active holdings are displayed
+ * - The profit and loss caliber is aligned with the brokerage APP: only the "current position held" (unrealized profit and loss ÷ current position cost) is calculated,
+ *   Do not mix into historical settled periods; please see the "Annual Income" page for historical performance
+ * - Asynchronous loading of the current price background: the skeleton screen is displayed during loading; when the current price cannot be captured, the market value / unrealized profit and loss are left blank
+ * - Unrealized gains and losses on Taiwan stocks are "net" values: withholding selling fees and securities taxes (estimateUnrealized)
  */
 import { useMemo } from 'react'
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
@@ -24,7 +24,7 @@ import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
 
-/** 各欄位說明（表頭「?」圖示顯示）。寫給不熟股票的人看：短句、白話、不放公式。 */
+/** Description of each field (shown by the "?" icon in the header). Written for people who are unfamiliar with stocks: short sentences, vernacular, no formulas.*/
 const HELP = {
   ticker: '股票的編號。台股是數字（如 2330），美股是英文代號（如 AAPL）。',
   name: '股票名稱。台股來自證交所官方清單，常見的美股會顯示中文名。',
@@ -42,11 +42,11 @@ const HELP = {
 } as const
 
 /**
- * 現價欄的 tooltip：顏色本身說不出「漲了多少」，也說不出基準是哪一天。
- * 抓不到昨收時完全不掛 tooltip —— 掛一句「無資料」只是讓人多滑一次鼠。
+ * Tooltip of the current price column: The color itself cannot tell "how much it has increased", nor can it tell which day the benchmark is.
+ * If you can't catch yesterday's collection, the tooltip will not be displayed at all - displaying "no information" will only make people swipe the mouse one more time.
  *
- * 0.6.36 補上「哪一天」：收盤後標交易日與「收盤」，快取價則明說它不一定是今天的。
- * 在那之前，隔夜看到的快取價會被描述成「較昨收 …」，而那個昨收其實是前天的。
+ * 0.6.36 Add "which day": mark the trading day and "closing" after the closing price, and the cache price clearly states that it is not necessarily today's.
+ * Before that, the cache price seen overnight would be described as "higher than yesterday's closing...", and that yesterday's closing was actually the day before yesterday.
  */
 function dayChangeHint(row: HoldingRow, currency: Currency): string | undefined {
   const { dayChange, price, tradeDay, closed, priceStale } = row

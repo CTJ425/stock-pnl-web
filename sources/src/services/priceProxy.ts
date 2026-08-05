@@ -1,13 +1,13 @@
 /**
- * 股票現價取得：
- * 0. TTL 快取：TTL 內（台股 60 秒、美股 10 分鐘）取得過的價格直接採用、不打 API
- *    （登入 / 重整 / 多人同時使用不會重複連線；手動重新整理可強制重抓）。
- *    asOf 採 Edge Function 回傳的實際抓價時間，前端 TTL 不與伺服器端快取 TTL 疊加。
- * 1. 主要策略：Supabase Edge Function `stock-price`（伺服器端代抓：台股 TWSE MIS 即時行情、
- *    美股 Yahoo Finance，繞開 CORS）
- * 2. 台股備援：TWSE / TPEx OpenAPI 直連（支援 CORS 的官方端點）
- * 3. 降級機制：API 失敗時回傳 localStorage 的上次快取價（標記 stale），
- *    完全無資料則為 null——UI 留空、不誤顯示為全額虧損（與 GAS 版同構）
+ * Obtain current stock price:
+ * 0. TTL cache: The prices obtained within TTL (60 seconds for Taiwan stocks, 10 minutes for US stocks) are directly used without hitting the API.
+ *    (Login/reorganization/multiple people using it at the same time will not duplicate the connection; manual reorganization can force a re-capture).
+ *    asOf uses the actual price capture time returned by the Edge Function. The front-end TTL does not overlap with the server-side cache TTL.
+ * 1. Main strategy: Supabase Edge Function `stock-price` (Server-side proxy capture: Taiwan stock TWSE MIS real-time quotations,
+ *    US stock Yahoo Finance, bypassing CORS)
+ * 2. Taiwan stock backup: TWSE / TPEx OpenAPI direct connection (official endpoint supporting CORS)
+ * 3. Downgrade mechanism: When the API fails, the last cached price of localStorage (marked stale) is returned.
+ *    If there is no data at all, it will be null - the UI will be left blank and will not mistakenly display a full loss (the same as the GAS version)
  */
 import type { Market } from '../types/models'
 import { positionKey } from '../types/models'
@@ -18,28 +18,28 @@ import { twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
 export interface PriceQuote {
   price: number
   /**
-   * 昨收（0.6.34）：呼叫端據此把現價著成漲紅跌綠。
-   * 台股備援（TWSE / TPEx 日收盤清單）沒有這個欄位，走那條路徑時為 null —— 該檔顯示平盤色。
+   * Yesterday's closing (0.6.34): The caller marked the current price as rising red or green accordingly.
+   * The Taiwan stock backup (TWSE/TPEx daily closing list) does not have this field and is null when taking that path - the file displays flat color.
    */
   prevClose: number | null
   /**
-   * 今日開高低與累積成交量（張）（0.6.36）：個股分析的報價卡用。
-   * 與 prevClose 同樣來自報價本身那筆回應，不額外請求；台股備援路徑一律為 null。
+   * Today's opening high and low and cumulative trading volume (tickets) (0.6.36): quotation card for individual stock analysis.
+   * Like prevClose, it also comes from the response of the quotation itself, no additional request is required; the Taiwan stock backup path is always null.
    */
   open: number | null
   high: number | null
   low: number | null
   volume: number | null
-  /** 交易日 YYYYMMDD；只有 MIS 這條路徑有 */
+  /** Trading day YYYYMMDD; only the path MIS has*/
   tradeDate: string | null
-  /** 最後撮合時間 HH:mm:ss；達 13:30:00 表示收盤已定案 */
+  /** The final matching time is HH:mm:ss; reaching 13:30:00 means the closing has been finalized*/
   tradeTime: string | null
-  /** 抓價當下是否為試撮階段（此時 price 是試撮預估價，不是成交價） */
+  /** Whether the current price grab is in the trial trading stage (at this time, the price is the estimated trial trading price, not the transaction price)*/
   trial: boolean
-  /** 取得時間 (ISO) */
+  /** Get time (ISO)*/
   asOf: string
   source: 'edge' | 'twse' | 'cache'
-  /** 是否為過期快取價 */
+  /** Whether it is an expired cache price*/
   stale: boolean
 }
 
@@ -48,35 +48,35 @@ export interface PriceRequestItem {
   ticker: string
 }
 
-/** key 為 positionKey(market, ticker)，查無現價的代號不會出現在結果中 */
+/** The key is positionKey(market, ticker), and the ticker without current price will not appear in the results.*/
 export type PriceMap = Record<string, PriceQuote>
 
-/** 最後撮合時間達 13:30 即為收盤定案 */
+/** The closing will be finalized when the final matching time reaches 13:30*/
 const CLOSE_TIME = '13:30:00'
 
 /**
- * 這筆報價是不是當日收盤定案值。
- * 個股分析的報價卡與庫存總覽的 tooltip 都要據此換句話說（「收盤」而非「現價」）。
+ * Is this quote the final closing value for that day?
+ * The quotation card for individual stock analysis and the tooltip for the inventory overview must be expressed in other words accordingly ("closing price" rather than "current price").
  */
 export function isClosed(quote: PriceQuote | null | undefined): boolean {
   return !!quote && quote.tradeTime !== null && quote.tradeTime >= CLOSE_TIME
 }
 
-/** 交易日 'YYYYMMDD' → 'M/D'；格式不符或沒有（美股 / 備援路徑）時回 null */
+/** Trading day 'YYYYMMDD' → 'M/D'; returns null if the format does not match or does not exist (US stocks/recovery path)*/
 export function tradeDateLabel(tradeDate: string | null | undefined): string | null {
   if (!tradeDate || !/^\d{8}$/.test(tradeDate)) return null
   return `${Number(tradeDate.slice(4, 6))}/${Number(tradeDate.slice(6, 8))}`
 }
 
-// v3（0.6.36）：quote 多了開高低量與交易日 / 撮合時間。理由同 v2（0.6.34）加 prevClose 時 ——
-// 沿用舊 key 的話報價卡會一路缺格，直到每一檔各自過期為止；換 key 一次汰換掉。
+// v3 (0.6.36): Quote has added opening high and low volume and trading day/matching time. The reason is the same as v2 (0.6.34) when adding prevClose——
+// If you continue to use the old key, the quotation card will be missing all the way until each level expires; change the key once and replace it.
 const CACHE_KEY = 'stock-pnl-web/price-cache-v3'
-/** 美股快取有效期（與 Edge Function DB 快取一致）；台股改依時段決定，見 quoteWindow.ts */
+/** US stock cache validity period (same as Edge Function DB cache); Taiwan stock changes are determined by time period, see quoteWindow.ts*/
 const CACHE_TTL_US_MS = 10 * 60 * 1000
 
 /**
- * 依 positionKey 取得該市場此刻的快取 TTL。
- * 台股 13:30 收盤後會一路鎖到隔天 08:25 試撮前，期間輪詢全部命中快取、不發請求（0.6.36）。
+ * Get the cache TTL of the market at this moment based on positionKey.
+ * After the Taiwan stock market closes at 13:30, it will be locked all the way until 08:25 the next day before trial trading. During this period, all polling will hit the cache and no request will be sent (0.6.36).
  */
 export function cacheTtlMs(key: string, quote?: PriceQuote): number {
   return key.startsWith('TPE:')
@@ -90,7 +90,7 @@ export function isFresh(key: string, quote: PriceQuote | undefined, now: number)
   return Number.isFinite(at) && now - at < cacheTtlMs(key, quote)
 }
 
-/** 讀取 localStorage 的報價快取（L1）；同檔內的 fetchPrices 用它判斷 TTL 命中 */
+/** Read the quote cache (L1) of localStorage; fetchPrices in the same file uses it to determine TTL hits*/
 export function readPriceCache(): PriceMap {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
@@ -105,7 +105,7 @@ function writePriceCache(map: PriceMap): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(map))
   } catch {
-    // 快取寫入失敗不影響功能
+    // Cache write failure does not affect functionality
   }
 }
 
@@ -126,7 +126,7 @@ interface EdgePriceResponse {
   prices?: Record<string, EdgeQuote>
 }
 
-/** Edge 回來的數值欄位：非數字或非正數一律當取不到（成交量允許 0） */
+/** The numerical field returned by Edge: non-numeric or non-positive numbers will be treated as unavailable (0 is allowed for trading volume)*/
 function edgeNum(value: unknown, allowZero = false): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
   return allowZero ? (value >= 0 ? value : null) : value > 0 ? value : null
@@ -148,11 +148,11 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, Res
     if (error || !data?.prices) return resolved
     for (const [key, quote] of Object.entries(data.prices)) {
       if (Number.isFinite(quote?.price) && quote.price > 0) {
-        // asOf 為實際抓價時間（DB 快取命中時早於現在）；舊版 Edge 無此欄位，交由呼叫端補 now
+        // asOf is the actual price capture time (the DB cache hits earlier than now); the old version of Edge does not have this field, and it is left to the caller to fill in now
         const asOf = typeof quote.asOf === 'string' && Number.isFinite(Date.parse(quote.asOf))
           ? quote.asOf
           : null
-        // 尚未部署對應版本的 Edge 不回這些欄位；缺的就是 null，報價卡顯示「—」，不是錯誤
+        // Edge that has not yet deployed the corresponding version does not return these fields; the missing ones are null, and the quotation card displays "—", which is not an error.
         resolved.set(key, {
           price: quote.price,
           prevClose: edgeNum(quote.prevClose),
@@ -168,7 +168,7 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, Res
       }
     }
   } catch {
-    // Edge Function 不可用時交由備援路徑處理
+    // When the Edge Function is unavailable, it will be handled by the backup path.
   }
   return resolved
 }
@@ -185,15 +185,15 @@ async function fetchTwFallback(items: PriceRequestItem[]): Promise<Map<string, n
       if (row?.close) resolved.set(positionKey(item.market, item.ticker), row.close)
     }
   } catch {
-    // 直連備援也失敗時交由快取降級
+    // When direct backup also fails, it will be downgraded to the cache.
   }
   return resolved
 }
 
 /**
- * 批次取得現價。回傳的 PriceMap 內含新鮮價與（僅在無新鮮價時的）快取價；
- * 兩者皆無的代號不在 map 中，呼叫端應將市值 / 未實現損益留空。
- * @param options.force 忽略 TTL 快取、強制重抓（手動重新整理用）
+ * Get the current price for the batch. The returned PriceMap contains the fresh price and (only when there is no fresh price) the cache price;
+ * Symbols with neither are not in the map and the caller should leave Market Cap / Unrealized P&L blank.
+ * @param options.force Ignore TTL cache and force re-fetch (for manual refresh)
  */
 export async function fetchPrices(
   items: PriceRequestItem[],
@@ -205,7 +205,7 @@ export async function fetchPrices(
   const cache = readPriceCache()
   const nowMs = Date.now()
 
-  // TTL 內的快取價直接使用（保留原取得時間），只重抓過期 / 缺少的代號
+  // The cache price in the TTL is used directly (the original acquisition time is retained), and only expired/missing codes are recaptured.
   let toFetch = items
   if (!options?.force) {
     toFetch = []
@@ -227,8 +227,8 @@ export async function fetchPrices(
     result[key] = { ...quote, asOf: quote.asOf ?? now, source: 'edge', stale: false }
   }
   for (const [key, price] of fromTw) {
-    // 日收盤清單只有收盤價，沒有昨收也沒有開高低量 ——
-    // 走到這條備援的代號一律平盤色，報價卡各格顯示「—」
+    // The daily closing list only has the closing price, and does not include yesterday’s closing price nor the opening of high and low volumes——
+    // The code numbers that come to this backup line are all flat, and each box of the quotation card displays "—"
     result[key] = {
       price,
       prevClose: null,
@@ -245,7 +245,7 @@ export async function fetchPrices(
     }
   }
 
-  // 快取降級：仍無現價者採用上次成功取得的價格（標記 stale）
+  // Cache downgrade: If there is still no current price, the last successfully obtained price will be used (marked stale)
   for (const item of items) {
     const key = positionKey(item.market, item.ticker)
     if (!result[key] && cache[key]) {
@@ -253,7 +253,7 @@ export async function fetchPrices(
     }
   }
 
-  // 僅把「新鮮價」寫回快取
+  // Only write "fresh price" back to cache
   const nextCache = { ...cache }
   for (const [key, quote] of Object.entries(result)) {
     if (!quote.stale) nextCache[key] = quote

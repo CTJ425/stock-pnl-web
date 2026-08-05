@@ -82,7 +82,7 @@ describe('fmtAxisNumber', () => {
   it('step 小於 1 時依級距補小數位 —— 匯率的日圓否則整條 Y 軸都是 0', () => {
     expect(fmtAxisNumber(0.1957, 0.002)).toBe('0.196')
     expect(fmtAxisNumber(0.2015, 0.002)).toBe('0.202')
-    // 韓元量級更小
+    // The Korean won is smaller
     expect(fmtAxisNumber(0.022043, 0.0002)).toBe('0.0220')
   })
 

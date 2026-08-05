@@ -1,10 +1,10 @@
 /**
- * 基本面分頁：估值三指標（本益比 / 殖利率 / 股價淨值比）與近 12 個月月營收。
- * 資料來自盤後批次預產的 fundamental/{ticker}.json，此元件只負責呈現、不自己載入
- * ——同一份資料還要餵給標題列的產業別 badge 與 AI 分析，故由 StockDetailPage 載一次分發。
+ * Fundamentals page: three valuation indicators (price-to-earnings ratio/yield rate/price-to-book value ratio) and monthly revenue in the past 12 months.
+ * The data comes from fundamental/{ticker}.json, which is pre-produced in batches after the market opens. This component is only responsible for rendering and does not load it by itself.
+ * ——The same data is also fed to the industry badge and AI analysis of the title column, so it is loaded and distributed by StockDetailPage.
  *
- * 單位陷阱：月營收是**千元**、殖利率與增減率是 **%**。表頭與欄名都要標，
- * 不可只在程式裡知道（沿用籌碼分頁「股 / 張」的準則）。
+ * Unit trap: The monthly revenue is **thousand yuan**, and the profit rate and increase/decrease rate are **%**. Table headers and column names must be marked.
+ * You can't just know it in the program (follow the principle of "stock/ticket" in chip tab).
  */
 import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
@@ -21,9 +21,9 @@ interface FundamentalTabProps {
 }
 
 /**
- * 獲利能力的四項比率：同一量綱、同一縱軸，故用類別色表達「這是誰」，
- * 依序指派不循環（同 TechnicalTab 的均線）。順序即損益表由上而下的順序，
- * 圖例與表格欄位都照這個順序，三處不可各排各的。
+ * The four ratios of profitability: the same dimension and the same vertical axis, so categorical colors are used to express "who is this"?
+ * Sequentially assigned non-cyclical (same as TechnicalTab's moving average). The order is the order of the income statement from top to bottom.
+ * The legend and table fields are all in this order, and the three places cannot be arranged separately.
  */
 const MARGIN_SERIES: Array<{
   name: string
@@ -36,41 +36,41 @@ const MARGIN_SERIES: Array<{
   { name: '稅後純益率', color: CATEGORICAL_COLORS[3], value: (q) => q.netMarginPercent },
 ]
 
-/** 小數點兩位；無資料回「—」（不以 0 冒充缺值） */
+/** Two decimal places; if there is no data, return "-" (do not use 0 to pretend to be a missing value)*/
 function fmtRatio(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   return n.toFixed(2)
 }
 
-/** 帶正負號的百分比 */
+/** signed percentage*/
 function fmtPercent(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
 /**
- * 每股盈餘：兩位小數帶「元」。
+ * Earnings per share: two decimal places with "yuan".
  *
- * 與 `fmtPercent` 分開而不共用：EPS **不帶正號**（+4.71 元讀起來像漲跌幅），
- * 但虧損的負號必須留著。
+ * Separate from `fmtPercent` but not shared: EPS **without positive sign** (+4.71 yuan reads like an increase or decrease),
+ * But the negative sign of the loss must remain.
  */
 function fmtEps(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   return `${n.toFixed(2)} 元`
 }
 
-/** 'YYYY-MM' → 'YYYY 年 MM 月' */
+/** 'YYYY-MM' → 'YYYY year MM month'*/
 function fmtYearMonth(ym: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]} 年 ${m[2]} 月` : ym
 }
 
 /**
- * 走勢圖用的短月份標籤。
+ * Short month labels for charts.
  *
- * 不能用 `fmtYearMonth`：「2026 年 06 月」在 11px 字級約 100px 寬，
- * 而 12 個月的圖每格只有約 39px —— 標籤會整排疊在一起。
- * **年份不能省**（只留「06月」的話跨年那兩格會分不出是哪一年），故用 `2026/06`。
+ * Cannot use `fmtYearMonth`: "June 2026" is about 100px wide at 11px font level,
+ * The 12-month chart, on the other hand, is only about 39px per grid – the labels will be stacked on top of each other.
+ * **The year cannot be omitted** (if only "06" is left, the two boxes crossing the new year will not be able to tell which year it is), so `2026/06` is used.
  */
 function fmtChartMonth(ym: string): string {
   const m = ym.match(/^(\d{4})-(\d{2})$/)
@@ -78,10 +78,10 @@ function fmtChartMonth(ym: string): string {
 }
 
 /**
- * 走勢圖用的短季別標籤：'2026-Q1' → '26Q1'。
+ * Short quarter labels for trend charts: '2026-Q1' → '26Q1'.
  *
- * 表格用的「2026 年第 1 季」在 11px 字級約 84px 寬，而 12 季的圖每格只有約 41px。
- * **年份不能整個省掉**（12 季跨三年，只留「Q1」會分不出是哪一年），故留末兩碼。
+ * The "2026 Quarter 1" used in the table is about 84px wide at the 11px font size, while the 12-season image is only about 41px per box.
+ * **You cannot omit the entire year** (12 seasons span three years, leaving only "Q1" will make it impossible to tell which year it is), so the last two digits are left.
  */
 function fmtChartQuarter(yq: string): string {
   const m = yq.match(/^(\d{2})(\d{2})-Q(\d)$/)
@@ -89,15 +89,15 @@ function fmtChartQuarter(yq: string): string {
 }
 
 /**
- * 獲利能力走勢圖。四條線同軸，點圖例可把某一條關掉。
+ * Profitability chart. The four lines are coaxial. Click on the legend to turn off one of them.
  *
- * 關掉的序列**整條移出 `series`**，而不是畫成透明 —— `MultiLineChart` 的值域是由
- * 傳進去的 series 現算的，移出去之後 Y 軸會跟著只依剩下的線重算，
- * 這正是「只想看單一項」的重點：稅後純益率單獨看時會撐滿整個縱軸，
- * 而不是被毛利率的尺度壓在底下。
+ * The turned off sequence is moved entirely out of `series`** instead of being drawn transparent - the value range of `MultiLineChart` is given by
+ * The series passed in is currently calculated. After it is removed, the Y-axis will be recalculated only based on the remaining lines.
+ * This is exactly the point of "only looking at a single item": when viewed alone, the after-tax net income ratio will fill the entire vertical axis.
+ * Rather than being held down by the scale of gross profit margin.
  *
- * 拆成獨立元件是因為它是這一頁唯一需要自己記狀態的東西；
- * 放進 FundamentalTab 會逼那支（目前純呈現、開頭就有兩個提早 return）改成先宣告 hook。
+ * It is split into independent components because it is the only thing on this page that needs to record its own status;
+ * Putting it into FundamentalTab will force the one (currently pure presentation, with two early returns at the beginning) to declare the hook first.
  */
 function MarginTrendChart({
   quarters,
@@ -132,7 +132,7 @@ function MarginTrendChart({
               label: s.name,
               color: s.color,
               hidden: hidden.includes(s.name),
-              // 最後一條不給關：全部關掉只會剩一張空座標軸，看起來像壞掉
+              // The last one is not turned off: turning them all off will only leave an empty coordinate axis, which looks broken.
               toggleLocked: visible.length === 1 && visible[0].name === s.name,
               onToggle: () =>
                 setHidden((prev) =>
@@ -171,7 +171,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
   }
 
   const { valuation, revenueMonths, profitQuarters, notes } = fundamental
-  // 由新到舊呈現（檔案內是由舊到新，方便批次合併）
+  // Presented from new to old (the files are presented from old to new to facilitate batch merging)
   const months = [...revenueMonths].reverse()
 
   /*
@@ -191,7 +191,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
   const latestEps = quarters.find((q) => q.epsTwd !== null) ?? null
   const epsQuarters = profitQuarters.filter((q) => q.epsTwd !== null)
 
-  /* 12 季每格約 41px，而「26Q1」約 30px —— 全標會貼在一起，故比照月營收隔一個標一個 */
+  /* Each grid of 12 quarters is about 41px, while "26Q1" is about 30px - all the labels will be pasted together, so they are separated by one according to the monthly revenue.*/
   const profitLabelIndices = profitQuarters
     .map((_, i) => i)
     .filter((i) => profitQuarters.length <= 8 || i % 2 === 0)

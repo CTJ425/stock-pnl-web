@@ -15,13 +15,13 @@ import {
 } from './twFundamental.ts'
 
 /**
- * fixture 的數值取自 2026-07-27 對 openapi.twse.com.tw 的實際回應（節錄 2330 一列）。
- * BWIBBU_ALL 是英文鍵、民國 7 碼日期；t187ap05_L 是中文鍵、民國 5 碼年月，
- * 且「產業別」直接給中文名稱；t187ap03_L 的「產業別」是兩位數代碼。
+ * The value of fixture is taken from the actual response to openapi.twse.com.tw on 2026-07-27 (excerpt column 2330).
+ * BWIBBU_ALL is the English key, the Republic of China 7-code date; t187ap05_L is the Chinese key, the Republic of China 5-code year and month,
+ * And the "Industry Category" is directly given to the Chinese name; the "Industry Category" of t187ap03_L is a two-digit code.
  */
 const BWIBBU_ROWS = [
   { Date: '1150724', Code: '2330', Name: '台積電', PEratio: '31.59', DividendYield: '0.94', PBratio: '10.34' },
-  // 虧損股：本益比為 '-'（實測 BWIBBU 對虧損股的呈現）
+  // Loss-making stocks: P/E ratio is '-' (measured BWIBBU presentation of loss-making stocks)
   { Date: '1150724', Code: '9999', Name: '虧損股', PEratio: '-', DividendYield: '0.00', PBratio: '0.85' },
 ]
 
@@ -39,7 +39,7 @@ const REVENUE_ROWS = [
   },
 ]
 
-/** 逐字取自 2026-07-28 對 openapi.twse.com.tw/v1/opendata/t187ap17_L 的實際回應（節錄 2330） */
+/** Taken verbatim from the actual response to openapi.twse.com.tw/v1/opendata/t187ap17_L on 2026-07-28 (Excerpt 2330)*/
 const PROFIT_ROWS = [
   {
     出表日期: '1150728',
@@ -162,7 +162,7 @@ describe('twFundamental', () => {
         operatingMarginPercent: 58.1,
         pretaxMarginPercent: 60.65,
         netMarginPercent: 50.51,
-        // 營益分析表沒有 EPS：標記成還沒查過，等回補去季報補（0.6.28）
+        // There is no EPS in the profit analysis table: mark it as not checked yet, wait for it to be supplemented in the quarterly report (0.6.28)
         epsTwd: null,
         epsChecked: false,
       })
@@ -201,7 +201,7 @@ describe('twFundamental', () => {
     })
 
     it('超過 12 季時砍最舊的（0.6.21 由 8 季提高到 12）', () => {
-      // 2023-Q1 起連續 12 季 → 2023-Q1..2025-Q4
+      // 12 consecutive quarters starting from 2023-Q1 → 2023-Q1..2025-Q4
       const prev = Array.from({ length: 12 }, (_, i) =>
         q(`${2023 + Math.floor(i / 4)}-Q${(i % 4) + 1}`, i),
       )
@@ -228,13 +228,13 @@ describe('twFundamental', () => {
           fillGapsOnly: true,
         })
         expect(merged[0].epsTwd).toBe(13.94)
-        // 官方算好的比率仍然是既有那一份，沒有被回補自己算的版本蓋掉
+        // The officially calculated ratio is still the existing share and has not been overwritten by the self-calculated version.
         expect(merged[0].grossMarginPercent).toBe(66)
       })
 
       it('每晚的覆寫不會把補好的 EPS 洗掉', () => {
         const prev = [withEps('2026-Q1', 13.94)]
-        // 夜間批次的那一筆沒有 EPS（epsChecked: false）
+        // There is no EPS for the night batch (epsChecked: false)
         const nightly = [{ ...q('2026-Q1', 67), epsTwd: null, epsChecked: false }]
         const merged = mergeProfitQuarters(prev, nightly)
         expect(merged[0].grossMarginPercent).toBe(67) // 比率照常更新
@@ -317,7 +317,7 @@ describe('twFundamental', () => {
         profitQuarters: [q],
         notes: [],
       }
-      // 這輪沒抓到獲利能力（latestProfit: null）時，既有的那一季不可以被抹掉
+      // When no profit ability is captured in this round (latestProfit: null), the existing season cannot be erased.
       const file = buildFundamentalFile({ ...base, existing })
       expect(file.profitQuarters).toEqual([q])
       expect(file.profitUnit).toBe('%')
@@ -458,8 +458,8 @@ describe('twFundamental', () => {
     })
 
     it('fillGapsOnly：回補只填缺口，不覆蓋既有值', () => {
-      // 2026-06 既有值 6 是 t187ap05_L 抓到的更正後數字，
-      // MOPS 爬到的舊值 999 不可以蓋掉它；2026-05 是缺口，要補進去。
+      // 2026-06 The existing value 6 is the corrected number captured by t187ap05_L,
+      // The old value of 999 that MOPS climbed to cannot be overwritten; 2026-05 is a gap that needs to be filled.
       const merged = mergeRevenueMonths([m('2026-06', 6)], [m('2026-06', 999), m('2026-05', 5)], {
         fillGapsOnly: true,
       })

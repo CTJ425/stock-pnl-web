@@ -1,33 +1,33 @@
 /**
- * 前端把報告 DOM 轉成 PDF blob。
- * 用 html2canvas 擷取（瀏覽器直接渲染中文，免處理 CJK 字型嵌入），
- * 再以 jsPDF 內嵌影像；內容高於一頁時自動分頁。
- * html2canvas / jsPDF 較大，改為動態載入：只在使用者按「下載 PDF」時才載入，
- * 不進主 bundle。
+ * The front end converts the report DOM into a PDF blob.
+ * Use html2canvas to capture (the browser directly renders Chinese without processing CJK font embedding),
+ * Then use jsPDF to embed images; when the content is higher than one page, it will automatically break into pages.
+ * html2canvas / jsPDF is larger, changed to dynamic loading: only loaded when the user clicks "Download PDF".
+ * Not entering the main bundle.
  */
 
 /**
- * 擷取期間套在容器上的 class（見 index.css）：把 --surface / --ink / --border 等 token
- * 覆寫成淺色，深色主題也能輸出像文件的淺色 PDF。擷取完立刻移除，畫面不受影響。
+ * Retrieve the class set on the container during retrieval (see index.css): put --surface / --ink / --border and other tokens
+ * Overwriting to light and dark themes can also output light PDFs like documents. Remove it immediately after capturing, and the screen will not be affected.
  */
 const SURFACE_CLASS = 'report-surface'
 
 /**
- * canvas 面積上限（px²）。
+ * The upper limit of canvas area (px²).
  *
- * **iOS Safari 對單一 canvas 的面積有硬性上限（約 16.7M px²），超過就靜默失敗** ——
- * `toDataURL()` 回空白，使用者只會看到「PDF 產生失敗」。這裡取 16M 留一點餘裕。
+ * **iOS Safari has a hard upper limit on the area of ​​a single canvas (about 16.7M px²), and it will fail silently if it exceeds it** ——
+ * `toDataURL()` returns blank, the user will only see "PDF generation failed". Take 16M here to leave a little margin.
  *
- * 0.6.8 把四段併成一頁之後這條線就踩到了：實測擷取範圍 1140×3885 CSS px，
- * 在 scale 2 下是 2280×7772 ＝ **17.7M px²**，剛好越過去。
+ * 0.6.8 After merging the four paragraphs into one page, this line is stepped on: the measured capture range is 1140×3885 CSS px,
+ * At scale 2 it is 2280×7772 = **17.7M px²**, which is just over.
  */
 const MAX_CANVAS_AREA = 16_000_000
 
 /**
- * 依內容面積決定擷取倍率。
+ * The capture magnification is determined based on the content area.
  *
- * 內容短時維持 scale 2（既有畫質不變）；長到會撐爆 canvas 時逐步降，
- * **寧可略降解析度也不要產出一份空白 PDF**。下限 1 是為了讓文字仍然讀得出來。
+ * The content remains at scale 2 for a short period of time (the existing image quality remains unchanged); when it grows to the point where the canvas will burst, it will gradually decrease.
+ * **It is better to reduce the resolution slightly rather than produce a blank PDF**. The lower limit of 1 is so that the text is still readable.
  */
 export function pdfScaleFor(cssWidth: number, cssHeight: number): number {
   const area = Math.max(cssWidth * cssHeight, 1)
@@ -58,7 +58,7 @@ export async function generatePdfBlob(el: HTMLElement): Promise<Blob> {
   if (imgH <= pageH) {
     pdf.addImage(img, 'JPEG', 0, 0, imgW, imgH)
   } else {
-    // 單張長圖跨頁：每頁往上位移一個頁高，只顯示該頁對應的切片
+    // Single long image spread across pages: Each page is shifted upward by one page height, and only the slices corresponding to that page are displayed.
     let remaining = imgH
     let position = 0
     while (remaining > 0) {

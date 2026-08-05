@@ -1,44 +1,44 @@
 /**
- * 台股**全市場**每日量能與三大法人買賣金額（0.6.28）。
+ * The daily volume of Taiwan stocks **all markets** can match the trading amount of the three major legal entities (0.6.28).
  *
- * 與 twChips 的差別是「範圍」不是「內容」：那支是單一個股的籌碼，這支是整個集中市場的
- * 總量。兩者不可混用 —— 個股買賣超的單位是**股**，全市場的單位是**元**（金額）。
- * 欄位名一律帶單位，沿用專案準則。
+ * The difference with twChips is that the "scope" is not the "content": that chip is for a single stock, and this one is for the entire concentrated market.
+ * total amount. The two cannot be mixed - the unit for buying and selling of individual stocks is **share**, and the unit for the whole market is **yuan** (amount).
+ * Field names should always include units and follow the project guidelines.
  *
- * 兩個來源，取捨理由不同：
+ * Two sources, with different reasons for choosing:
  *
- * 1. **成交量值**：`FMTQIK`（rwd 版）帶 `date=YYYYMM01` 會回**整個月的每日列**，
- *    所以歷史一次一個月就補得完。OpenAPI 版只回最新一天，補歷史要等好幾個月，故不用。
- * 2. **三大法人買賣金額**：`BFI82U` 只有「單日」才是逐日資料（`type=month` 回的是整月合計，
- *    不是每日）。所以它**一天一個請求**，得像個股籌碼那樣用預算式回補，不能一次抓完。
+ * 1. **Trading volume value**: `FMTQIK` (rwd version) with `date=YYYYMM01` will return **daily column** for the entire month,
+ *    So history can be made up in one month at a time. The OpenAPI version only goes back to the latest one day, and it takes several months to update the history, so it is not used.
+ * 2. **Trading amount of the three major legal persons**: `BFI82U` Only "single day" is the daily data (`type=month` returns the total of the whole month,
+ *    not daily). Therefore, it requires one request per day and needs to be replenished in a budgetary manner like stock chips. It cannot be captured all at once.
  *
- * 兩者的日期覆蓋範圍因此不一致：成交量值會先到，法人買賣超逐日補上 ——
- * `MarketDay.institutional` 為 null 就是「這天還沒補到」，不是「這天沒有法人進出」。
+ * The date coverage range of the two is therefore inconsistent: the trading volume value will arrive first, and the legal person trading excess will be added day by day -
+ * If `MarketDay.institutional` is null, it means "this day has not been filled yet", not "no legal person has entered or exited this day".
  */
 
-/** 保留幾個交易日。約半年，夠看趨勢又不讓單檔 JSON 過大（每日一列約 200 bytes） */
+/** Leave it open for a few trading days. About half a year, enough to see trends without making a single file of JSON too large (about 200 bytes per column per day)*/
 export const MARKET_DAYS_CAP = 120
 
-/** 六個單位各一個金額，單位一律元。買進、賣出、買賣差額三種口徑共用這個形狀 */
+/** Each of the six units has an amount, and the units are all yuan. The three calibers of buying, selling, and buying and selling difference share this shape.*/
 export interface MarketInstitutionalSide {
-  /** 外資及陸資（不含外資自營商） */
+  /** Foreign capital and Mainland capital (excluding foreign self-operated operators)*/
   foreignTwd: number | null
   foreignDealerTwd: number | null
   trustTwd: number | null
-  /** 自營商（自行買賣） */
+  /** Proprietor (self-trading)*/
   dealerSelfTwd: number | null
-  /** 自營商（避險） */
+  /** Proprietor (risk hedging)*/
   dealerHedgeTwd: number | null
-  /** 官方揭露的合計。**不由前五項相加得來**，直接取端點的值 */
+  /** Officially disclosed total. **Not obtained by adding the first five items**, directly take the value of the endpoint*/
   totalTwd: number | null
 }
 
 /**
- * 三大法人金額。**頂層六欄是買賣差額**（正為買超、負為賣超），維持 0.6.28 以來的位置不動。
+ * The amount of the three major legal persons. **The top six columns are the bid-ask difference** (positive means overbought, negative means oversold), maintaining the same position since 0.6.28.
  *
- * `buy` / `sell` 是 0.6.32 才加的買進與賣出金額（BFI82U 本來就有這兩欄，先前只取了差額）。
- * **舊資料這兩項是 null** —— 0.6.32 之前補到的日子只存了差額，要靠回補逐日重抓才會長出來
- * （見 `planInstitutionalBackfill`）。null 是「還沒重抓到」，不是「那天沒有買賣」。
+ * `buy` / `sell` are the buying and selling amounts added on 0.6.32 (BFI82U originally had these two columns, and previously only the difference was taken).
+ * **These two items in the old data are null** - The days that were made up before 0.6.32 are only the difference, which can only be grown by making up for it day by day.
+ * (See `planInstitutionalBackfill`). null means "it hasn't been caught yet", not "there was no trading that day".
  */
 export interface MarketInstitutional extends MarketInstitutionalSide {
   buy: MarketInstitutionalSide | null
@@ -51,54 +51,54 @@ export interface MarketDay {
   tradeVolumeShares: number | null
   tradeValueTwd: number | null
   transactions: number | null
-  /** 發行量加權股價指數（收盤） */
+  /** Volume-weighted stock price index (closing)*/
   taiex: number | null
-  /** 漲跌點數 */
+  /** Price points*/
   changePoints: number | null
   /**
-   * 加權指數的開高低（0.6.30，畫大盤日 K 用）。
+   * The opening high and low of the weighted index (0.6.30, used to draw K for the market day).
    *
-   * **來源與收盤價不同支**：FMTQIK 只有收盤與漲跌點數，開高低要另外向
-   * `MI_5MINS_HIST` 拿。兩者都是一次一個月，故同一輪一起抓、抓完再併。
+   * **The source and the closing price are different**: FMTQIK only has the closing and rising and falling points, and the opening high and low must be in another direction.
+   * `MI_5MINS_HIST` Take. Both are for one month at a time, so they are captured together in the same round, and then merged after they are captured.
    */
   taiexOpen: number | null
   taiexHigh: number | null
   taiexLow: number | null
-  /** null＝這天的法人金額還沒補到（見檔頭說明） */
+  /** null=The legal person amount for this day has not been paid yet (see the stall description)*/
   institutional: MarketInstitutional | null
 }
 
-/** Storage 內 market/daily.json 的結構 */
+/** The structure of market/daily.json in Storage*/
 export interface MarketFile {
   schema: number
-  /** 我們實際產出它的時間 ISO */
+  /** The time we actually produced it ISO*/
   asOf: string
-  /** 由舊到新，最多 MARKET_DAYS_CAP 筆 */
+  /** Oldest to newest, up to MARKET_DAYS_CAP*/
   days: MarketDay[]
 }
 
-/** 2：法人金額加上買進 / 賣出（0.6.32）。前端 `MIN_MARKET_SCHEMA` 仍收 1 —— 加欄位對舊讀者無害 */
+/** 2: Legal person amount plus buy/sell (0.6.32). Front-end `MIN_MARKET_SCHEMA` still receives 1 - adding fields is not harmful to old readers*/
 export const MARKET_SCHEMA = 2
 
-/** 整月的每日成交量值。`date` 只有年月有意義，日固定給 01 */
+/** Daily volume values ​​for the entire month. `date` is only meaningful for the year and month, and the day is fixed to 01*/
 export function fmtqikMonthUrl(yyyymm: string): string | null {
   if (!/^\d{6}$/.test(yyyymm)) return null
   return `https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${yyyymm}01&response=json`
 }
 
-/** 整月的加權指數開高低收（0.6.30）。`date` 同 FMTQIK，只有年月有意義 */
+/** The weighted index opened higher and closed lower throughout the month (0.6.30). `date` is the same as FMTQIK, only the year and month are meaningful*/
 export function taiexHistMonthUrl(yyyymm: string): string | null {
   if (!/^\d{6}$/.test(yyyymm)) return null
   return `https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date=${yyyymm}01&response=json`
 }
 
-/** 單日的三大法人買賣金額。**只有 type=day 是逐日**（見檔頭） */
+/** The transaction amounts of the three major legal persons in a single day. **Only type=day is day by day** (see stall header)*/
 export function bfi82uDayUrl(ymd: string): string | null {
   if (!/^\d{8}$/.test(ymd)) return null
   return `https://www.twse.com.tw/rwd/zh/fund/BFI82U?dayDate=${ymd}&type=day&response=json`
 }
 
-/** '1,234,567' → 1234567；'--' / 空字串 / 非數字 → null（不以 0 冒充缺值） */
+/** '1,234,567' → 1234567; '--' / empty string / non-number → null (do not use 0 to pretend to be a missing value)*/
 function num(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
   if (typeof v !== 'string') return null
@@ -108,7 +108,7 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** 民國 '115/08/03' → 西元 '2026-08-03'；格式不符回 null */
+/** Republic of China '115/08/03' → AD '2026-08-03'; if the format does not match, return null*/
 export function rocSlashDate(v: unknown): string | null {
   const m = String(v ?? '').match(/^(\d{2,3})\/(\d{2})\/(\d{2})$/)
   if (!m) return null
@@ -122,10 +122,10 @@ interface RwdTable {
 }
 
 /**
- * 解析 FMTQIK 的整月回應。
+ * Parsing FMTQIK's full month of responses.
  *
- * 欄位以**表頭文字**定位而不是寫死索引，理由同 twProfitHistory：
- * 端點改版時錯位比缺欄難發現得多 —— 數字還在，只是全部對到隔壁那一欄。
+ * The field is positioned with **header text** instead of a hard-coded index. The reason is the same as twProfitHistory:
+ * Misalignment during endpoint revision is much harder to spot than missing columns - the numbers are still there, but they all line up in the next column.
  */
 export function parseFmtqik(json: unknown): MarketDay[] {
   const t = (json ?? {}) as RwdTable
@@ -161,10 +161,10 @@ export function parseFmtqik(json: unknown): MarketDay[] {
 }
 
 /**
- * 解析 MI_5MINS_HIST 的整月回應：加權指數的開高低收（0.6.30）。
+ * Analyzing the full month response of MI_5MINS_HIST: the weighted index opened high and closed low (0.6.30).
  *
- * 只回 `date → 開高低`，收盤刻意不取 —— FMTQIK 那份已經有了，
- * 同一個欄位讓兩支各寫一次，總有一天會不一致而且看不出是哪一支寫的。
+ * Only returns `date → open high and low`, deliberately not taking the closing price - FMTQIK already has that share,
+ * Let both write in the same column once. One day they will be inconsistent and it will be impossible to tell which one is written.
  */
 export function parseTaiexHist(json: unknown): Map<string, { open: number | null; high: number | null; low: number | null }> {
   const out = new Map<string, { open: number | null; high: number | null; low: number | null }>()
@@ -190,10 +190,10 @@ export function parseTaiexHist(json: unknown): Map<string, { open: number | null
 }
 
 /**
- * 解析 BFI82U 的單日回應。查無資料（非交易日）回 null。
+ * Analyzing BFI82U’s single-day response. If there is no data (not on a trading day), null will be returned.
  *
- * 以**單位名稱**對應欄位，不靠列的順序 —— 這張表的列順序在歷史上變動過
- * （自營商拆成自行買賣與避險兩列的那次），寫死索引會整組錯位而且看起來像真的。
+ * Corresponding fields are represented by **unit name**, regardless of column order - the column order of this table has changed historically.
+ * (The time when dealers split it into two columns: self-trading and hedging), the hard-coded index will be completely misaligned and look real.
  */
 export function parseBfi82u(json: unknown): MarketInstitutional | null {
   const t = (json ?? {}) as RwdTable
@@ -201,7 +201,7 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
   const iName = t.fields.indexOf('單位名稱')
   const iNet = t.fields.indexOf('買賣差額')
   if (iName < 0 || iNet < 0) return null
-  // 買進 / 賣出是 0.6.32 才取的。端點少了這兩欄仍要能解析出差額 —— 差額才是舊畫面的命脈
+  // Buy/Sell is taken at 0.6.32. Without these two columns, the endpoint still needs to be able to parse the difference - the difference is the lifeblood of the old picture
   const iBuy = t.fields.indexOf('買進金額')
   const iSell = t.fields.indexOf('賣出金額')
 
@@ -218,7 +218,7 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
   }
   if (byName.size === 0) return null
 
-  /** 同一組單位名稱要取三次（差額 / 買進 / 賣出），故把別名表抽出來共用 */
+  /** The same group of unit names needs to be taken three times (difference/buy/sell), so the alias table is extracted and shared.*/
   const side = (of: 'net' | 'buy' | 'sell'): MarketInstitutionalSide => {
     const pick = (...names: string[]): number | null => {
       for (const n of names) {
@@ -241,27 +241,27 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
   const sell = side('sell')
   return {
     ...side('net'),
-    // 整組都沒解出來就給 null，而不是留一個六欄全 null 的空殼 ——
-    // 回補判定看的正是「buy 是不是 null」，空殼會讓那天永遠不再重抓
+    // Give null if the whole group is not solved, instead of leaving an empty shell with six columns all null——
+    // The replenishment judgment depends on "whether the buy is null". Empty shells will never retake that day.
     buy: buy.totalTwd === null ? null : buy,
     sell: sell.totalTwd === null ? null : sell,
   }
 }
 
 /**
- * 併入新的日期列：依日期去重、由舊到新、砍到 cap。
+ * Merge into a new date column: remove duplicates by date, from old to new, and cut to cap.
  *
- * **既有值不會被「沒有那一項」的新一份蓋掉**：三份來源的覆蓋範圍本來就不同步 ——
- * 成交量值整月重抓（不帶法人、不帶開高低）、開高低另一支、法人一天一支。
- * 若整筆覆寫，補好的法人買賣超每晚都會被洗掉一次 ——
- * 與 mergeProfitQuarters 的 EPS 是同一個問題、同一個解法。
+ * **Existing values ​​will not be overwritten by a new copy without that item**: The coverage of the three sources is inherently out of sync——
+ * The trading volume value will be re-captured throughout the month (without legal persons, without opening high and low), another branch will be opened for high and low, and one branch will be opened per day for legal persons.
+ * If the entire transaction is overwritten, the completed legal person transaction will be washed out once every night——
+ * It is the same problem and the same solution as EPS of mergeProfitQuarters.
  */
 /**
- * 併同一天的法人金額：新的整組取代舊的，但 `buy` / `sell` 缺就留用舊值。
+ * And the legal person amount on the same day: the new whole group replaces the old one, but if `buy` / `sell` is missing, the old value is retained.
  *
- * 為什麼要留：假如某天重抓時端點暫時沒吐買進 / 賣出欄，整組覆寫會把已經補好的
- * 買賣金額洗成 null，下一輪又把它排進回補 —— 補了又掉、掉了又補的無限迴圈。
- * 這與函式本身「既有值不會被沒有那一項的新一份蓋掉」是同一條原則。
+ * Why keep it: If the endpoint does not spit out the buy/sell column temporarily when re-capturing one day, the entire set of overwrites will replace the completed ones.
+ * The purchase and sale amount is washed to null, and it is put into covering again in the next round - an infinite loop of filling up and then losing, and losing and filling again.
+ * This is the same principle as the function itself "the existing value will not be overwritten by a new copy without that item".
  */
 export function mergeInstitutional(
   old: MarketInstitutional | null | undefined,
@@ -300,16 +300,16 @@ export function mergeMarketDays(
 }
 
 /**
- * 這一輪要補哪幾天的法人金額（一天一個請求，故要預算）。
+ * Which days should the legal person amount be paid in this round (one request per day, so budget is required).
  *
- * 由新到舊：預算用完時留下的缺口是最舊的那幾天，對使用者的價值最低（同回補的一貫作法）。
+ * From newer to older: The gap left when the budget is used up is the oldest days, which have the lowest value to users (the same as the consistent practice of backfilling).
  *
- * **「缺」包含只有差額、沒有買進金額的日子**（0.6.32）：買進 / 賣出是後來才取的，
- * 0.6.32 之前補到的日子只存了差額。若仍只看 `!institutional`，那些日子永遠不會被重抓，
- * 買進 / 賣出就會停在 null 直到它們被 cap 擠掉 —— 等於這個欄位對歷史資料永遠是空的。
- * 改看 `buy` 之後，既有的 120 天會依預算逐日補齊，補完就自然停止。
+ * **"Missing" includes days with only difference and no buying amount** (0.6.32): Buying/selling is taken later,
+ * 0.6.32 Only the difference was saved for the days made up before. If you still only look at `!institutional`, those days will never be recaptured,
+ * Buys/Sells will stay at null until they are squeezed out by the cap - this means that this field will always be empty for historical data.
+ * After changing to `buy`, the existing 120 days will be made up day by day according to the budget, and it will stop naturally after the make up.
  *
- * @returns 'YYYYMMDD'，可直接餵給 `bfi82uDayUrl`
+ * @returns 'YYYYMMDD', which can be fed directly to `bfi82uDayUrl`
  */
 export function planInstitutionalBackfill(
   days: MarketDay[] | null | undefined,
@@ -325,28 +325,28 @@ export function planInstitutionalBackfill(
 }
 
 /**
- * 要抓哪幾個月：本月，加上**任何還缺開高低的月份**（0.6.30）。
+ * Which months to focus on: this month, plus **any months that are still missing a high or low** (0.6.30).
  *
- * 缺口驅動而不是只抓本月 —— 開高低是 0.6.30 才加的，之前存下來的日子全都沒有，
- * 而那些月份不會再被碰到，K 線就會永遠只有這個月的那幾根。
- * 與 EPS 的處境完全相同（既有資料缺一個新欄位），故用同一個解法。
+ * Gap driven instead of just grabbing this month - the opening high and low was added at 0.6.30, and all the days saved before are gone.
+ * And those months will never be touched again, and the K-lines will always only be the few of this month.
+ * The situation is exactly the same as EPS (the existing data lacks a new field), so the same solution is used.
  *
- * 上限 `maxMonths`：一個月一次請求 × 兩支端點，不設限的話第一輪會去打半年份。
- * 由新到舊補，補完之後這個函式每輪都只回本月，成本回到原本的樣子。
+ * The upper limit `maxMonths`: one request per month × two endpoints. If there is no limit, the first round will be for half a year.
+ * From new to old, this function will only return to this month in each round after completion, and the cost will return to its original state.
  */
 export function planMarketMonths(
   now: Date,
   have: MarketDay[] | null | undefined,
   maxMonths = 3,
 ): string[] {
-  // 台北時間的年月（批次跑在 UTC，直接用 UTC 會在月初的凌晨抓錯月份）
+  // The year and month in Taipei time (the batch is run in UTC, if you use UTC directly, the wrong month will be caught in the early morning of the first month)
   const taipei = new Date(now.getTime() + 8 * 3600 * 1000)
   const y = taipei.getUTCFullYear()
   const m = taipei.getUTCMonth() + 1
   const thisMonth = `${y}${String(m).padStart(2, '0')}`
 
   const months = new Set<string>([thisMonth])
-  // 檔案還空著時連上個月一起抓，畫面一開始就有長度
+  // When the file was still empty, I grabbed it together with the previous month, and the screen had a length from the beginning.
   if ((have?.length ?? 0) < 20) {
     const prev = new Date(Date.UTC(y, m - 2, 1))
     months.add(`${prev.getUTCFullYear()}${String(prev.getUTCMonth() + 1).padStart(2, '0')}`)

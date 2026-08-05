@@ -1,49 +1,49 @@
 /**
- * 月營收「歷史月份」抓取與解析（公開資訊觀測站 t21sc03）。
+ * Monthly revenue "historical month" capture and analysis (Public Information Observation Station t21sc03).
  *
- * 為什麼需要這一支：現行的 `openapi.twse.com.tw/v1/opendata/t187ap05_L`（見 twFundamental.ts）
- * **只回最新一個月，端點不吃年月參數**。原本的設計是讓 fundamental/{ticker}.json 每月自累積
- * （mergeRevenueMonths），代價是新標的第一個月只有 1 筆、要一整年才長滿 12 筆。
- * 這支模組補上「指定年月抓回全市場那一個月」的能力，讓缺口可以一次補齊。
+ * Why this branch is needed: Current `openapi.twse.com.tw/v1/opendata/t187ap05_L` (see twFundamental.ts)
+ * **Only the latest month is returned, the endpoint does not take the year and month parameters**. The original design was to let fundamental/{ticker}.json accumulate itself every month
+ * (mergeRevenueMonths), the cost is that the new bid only has 1 transaction in the first month, and it takes a whole year to reach 12 transactions.
+ * This module has the ability to "capture the entire market in a specified year and month", allowing the gap to be filled in one go.
  *
- * 資料來源（實測確認 2026-07-28）：
- *   https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{民國年}_{月}_0.html   上市 ~450KB
- *   https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_{民國年}_{月}_0.html   上櫃 ~390KB
+ * Data source (actual measurement confirmed 2026-07-28):
+ *   https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{Republic of China Year}_{Month}_0.html Listed ~450KB
+ *   https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_{Republic of China Year}_{Month}_0.html Listed on the counter ~390KB
  *
- * 實測踩到的三個陷阱，改動前務必看過：
- *  1. **host 是 `mopsov` 不是 `mops`**。`mops.twse.com.tw` 的同一條路徑已回 404。
- *  2. **編碼是 big5**，不是 UTF-8（HTML 內的 meta 有寫）。抓取端要用
- *     `new TextDecoder('big5')` 解，直接當 UTF-8 讀會整份變亂碼。
- *  3. **年增率那格的 tag 是大寫 `<Td nowrap>`**（上市上櫃皆然，疑似產表程式的手誤）。
- *     cell 比對一律大小寫不敏感，否則會少抓一欄、後面全部位移。
+ * Three traps that were stepped on during actual testing. Be sure to read them before making any changes:
+ *  1. **host is `mopsov` not `mops`**. The same path to `mops.twse.com.tw` has returned 404.
+ *  2. **The encoding is big5**, not UTF-8 (the meta in HTML is written). The crawler needs to use
+ *     `new TextDecoder('big5')` solution, if read directly as UTF-8, the entire text will become garbled.
+ *  3. The tag in the **annual growth rate box is capitalized `<Td nowrap>`** (this is true for both listings and over-the-counter listings. It is suspected to be a manual error in the watch production program).
+ *     Cell comparisons are always case-insensitive, otherwise one column will be missed and all subsequent displacements will be lost.
  *
- * 版面（上市與上櫃完全相同，實測 991 / 860 家、代號全為 4 碼且兩邊不重疊）：
+ * Layout (the listing is exactly the same as the one on the counter, the actual measurement is 991 / 860, the code numbers are all 4 digits and the two sides do not overlap):
  *   <tr align=right><td align=center>2330</td><td align=left>台積電</td>
- *     <td>當月營收</td><td>上月營收</td><td>去年當月營收</td>
- *     <td>上月比較增減(%)</td><Td>去年同月增減(%)</td>
- *     <td>當月累計營收</td><td>去年累計營收</td><td>前期比較增減(%)</td>
- *     <td>備註</td></tr>
- * 各產業別的「合計」列用的是 `<th …>合計</th>` 而非 `<td>`，
- * 以「第一格必須是 4 碼數字」為條件即自然排除，毋需另外偵測。
+ *     <td>Revenue for the current month</td><td>Revenue for the previous month</td><td>Revenue for the previous month</td>
+ *     <td>Comparison of increase and decrease in the previous month (%)</td><Td>Increase and decrease in the same month last year (%)</td>
+ *     <td>Cumulative revenue of the current month</td><td>Cumulative revenue of last year</td><td>Comparative increase or decrease in the previous period (%)</td>
+ *     <td>Remarks</td></tr>
+ * The "Total" column for each industry category uses `<th...>Total</th>` instead of `<td>`,
+ * Based on the condition that "the first cell must be a 4-digit number", it will be automatically eliminated and no additional detection is required.
  *
- * 解析為純函式、不觸網，比照 twChips.ts / twFundamental.ts 的分工（HTTP 在 index.ts）。
+ * It is parsed as a pure function and does not touch the Internet. Compare the division of labor of twChips.ts / twFundamental.ts (HTTP is in index.ts).
  */
 
 import { normNum } from './twChips.ts'
 import type { RevenueMonth } from './twFundamental.ts'
 
-/** ⚠️ 是 mopsov 不是 mops，見檔頭陷阱 1 */
+/** ⚠️ It’s mopsov not mops, see stall trap 1*/
 export const MOPS_HOST = 'https://mopsov.twse.com.tw'
 
-/** t21sc03 分上市 / 上櫃兩份，版面相同、代號不重疊 */
+/** t21sc03 is listed in two copies, with the same layout and no overlapping code names.*/
 export type MopsMarket = 'sii' | 'otc'
 
 export const MOPS_MARKETS: readonly MopsMarket[] = ['sii', 'otc']
 
 /**
- * 'YYYY-MM' → t21sc03 網址。
- * 民國年 = 西元 − 1911；**月份不補零**（實測 1 月是 `t21sc03_115_1_0.html`，不是 `115_01`）。
- * 年月格式不符回 null，讓呼叫端當作「這個月不存在」跳過，而不是去抓一個必然 404 的網址。
+ * 'YYYY-MM' → t21sc03 URL.
+ * Year of the Republic of China = AD − 1911; **The month is not filled with zeros** (the actual measured January is `t21sc03_115_1_0.html`, not `115_01`).
+ * If the year and month formats do not match, null will be returned, allowing the caller to skip it as "this month does not exist" instead of grabbing a URL that must be 404.
  */
 export function mopsRevenueUrl(market: MopsMarket, yearMonth: string): string | null {
   const m = /^(\d{4})-(\d{2})$/.exec(String(yearMonth ?? '').trim())
@@ -54,10 +54,10 @@ export function mopsRevenueUrl(market: MopsMarket, yearMonth: string): string | 
   return `${MOPS_HOST}/nas/t21/${market}/t21sc03_${rocYear}_${month}_0.html`
 }
 
-/** 一列的 cell 內容（去標籤、去 &nbsp;、trim） */
+/** Cell content of a column (remove labels, remove , trim)*/
 function cellsOf(row: string): string[] {
   const out: string[] = []
-  // tag 名 td/th 一律大小寫不敏感 —— 見檔頭陷阱 3
+  // Tag names td/th are always case insensitive - see stall trap 3
   const re = /<t([dh])\b[^>]*>([\s\S]*?)<\/t\1>/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(row)) !== null) {
@@ -71,15 +71,15 @@ function cellsOf(row: string): string[] {
   return out
 }
 
-/** 代號格式：t21sc03 的公司代號實測全部是 4 碼數字 */
+/** Code name format: The actual company code of t21sc03 is all 4-digit numbers.*/
 const MOPS_CODE_RE = /^\d{4}$/
 
 /**
- * 單月 t21sc03 HTML → Map<公司代號, RevenueMonth>。
+ * Single Month t21sc03 HTML → Map<Company Code, RevenueMonth>.
  *
- * 只取 `wanted` 集合內的代號 —— 全市場近 1900 家，為了 5 檔持股全解析是白費 CPU，
- * 而 Edge Function 的 CPU 額度正是本流程最緊的一條線。
- * 傳入空集合等同「一檔都不要」，會回空 Map（不是「全要」）。
+ * Only the codes in the `wanted` set are taken - there are nearly 1900 companies in the whole market. It is a waste of CPU to fully analyze the 5 holdings.
+ * The CPU quota of Edge Function is the most important line in this process.
+ * Passing in an empty collection is equivalent to "requiring none" and will return an empty Map (not "requiring all").
  */
 export function parseMopsRevenue(
   html: string,
@@ -93,7 +93,7 @@ export function parseMopsRevenue(
   let row: RegExpExecArray | null
   while ((row = rowRe.exec(html)) !== null) {
     const cells = cellsOf(row[1])
-    // 資料列固定 11 格；產業別標題列與「合計」列格數或首格都對不上
+    // The data column has a fixed number of 11 cells; the industry heading column does not match the number or first cell of the "Total" column.
     if (cells.length < 10) continue
     const code = cells[0]
     if (!MOPS_CODE_RE.test(code)) continue
@@ -101,7 +101,7 @@ export function parseMopsRevenue(
 
     found.set(code, {
       yearMonth,
-      // normNum 已處理千分位逗號，且備註常見的 '-' 會落到 Number.isFinite false → null
+      // normNum already handles thousandth commas, and notes that common '-' will fall into Number.isFinite false → null
       revenueThousandTwd: normNum(cells[2]),
       momPercent: normNum(cells[5]),
       yoyPercent: normNum(cells[6]),
@@ -111,30 +111,30 @@ export function parseMopsRevenue(
   return found
 }
 
-/** 單一標的的回補進度 */
+/** The replenishment progress of a single target*/
 export interface RevenueProgress {
-  /** 這檔已有的月份 */
+  /** The existing months in this file*/
   months: Set<string>
-  /** 最舊的**已嘗試**月份；null 代表從未回補過。見 FundamentalFile.revenueBackfilledThrough */
+  /** The oldest **tried** month; null means it has never been backfilled. See FundamentalFile.revenueBackfilledThrough*/
   through: string | null
 }
 
 /**
- * 這一輪要去抓哪幾個月。
+ * Which months should I catch this round?
  *
- * 抽成純函式是因為它是整條回補路徑上唯一有判斷的地方（其餘都是 fetch / upload 的膠水），
- * 而 index.ts 綁死 Deno 與 Supabase client、在本專案的測試環境裡跑不起來。
+ * The pure function is extracted because it is the only place where there is judgment in the entire backfill path (the rest are the glue of fetch / upload).
+ * However, index.ts is tied to Deno and Supabase client and cannot run in the test environment of this project.
  *
- * **關鍵：缺口不是「檔案裡沒有的月份」，是「還沒去找過的月份」。**
- * 兩者的差別在 ETF 身上會要命 —— 它不在 t21sc03 內，`months` 永遠是空的，
- * 若用前者判斷，它會把最新那幾個月永遠釘在待抓清單上，整批回補就此卡住、
- * 每輪重抓同樣的月份卻一筆也填不進去（0.6.4-dev.1 部署測試區後實測到的死結）。
- * 所以只有**比 `through` 更舊**的月份才算缺口 —— `through` 以上都找過了，
- * 沒有就是沒有，不必再問一次。
+ * **Key point: The gap is not "the month that is not in the file", but "the month that has not been found yet". **
+ * The difference between the two is fatal for ETF - it is not in t21sc03, `months` is always empty,
+ * If judged by the former, it will always pin the latest months on the to-be-caught list, and the entire batch of replenishment will be stuck.
+ * The same month is re-captured in each round but cannot be filled in (a deadlock that was measured after deploying the test area in 0.6.4-dev.1).
+ * So only months older than `through` are considered gaps - `through` has been searched for all the above,
+ * No means no, no need to ask again.
  *
- * @param wantMonths 目標月份（publishedMonths 的輸出）
- * @param maxMonths 單次上限，見 index.ts MAX_BACKFILL_MONTHS
- * @returns 由新到舊；空陣列代表沒有要找的了，呼叫端應直接短路、不發任何對外請求
+ * @param wantMonths target month (output of publishedMonths)
+ * @param maxMonths single upper limit, see index.ts MAX_BACKFILL_MONTHS
+ * @returns from new to old; an empty array means there is nothing more to find. The caller should directly short-circuit and not send any external requests.
  */
 export function planRevenueBackfill(
   have: Map<string, RevenueProgress>,
@@ -146,16 +146,16 @@ export function planRevenueBackfill(
   for (const { months, through } of have.values()) {
     for (const ym of wantMonths) {
       if (months.has(ym)) continue
-      // through 以上（含）都已經找過，沒找到就是這個月份沒有這檔的資料
+      // through I have searched for the above (inclusive), but if I can’t find it, it means there is no information for this month.
       if (through && ym >= through) continue
       missing.add(ym)
     }
   }
-  // 由新到舊補：預算用完時，留下的缺口是最舊的那幾個月，對使用者的價值最低
+  // Fill in from new to old: When the budget is used up, the gaps left are the oldest months, which have the lowest value to users.
   return [...missing].sort().reverse().slice(0, maxMonths)
 }
 
-/** 這一輪跑完之後的 `through`：舊值與本輪實際嘗試過的月份取最舊 */
+/** `through` after this round of running: the old value and the month actually tried in this round, whichever is oldest*/
 export function nextBackfilledThrough(
   prev: string | null | undefined,
   attempted: string[],
@@ -165,20 +165,20 @@ export function nextBackfilledThrough(
 }
 
 /**
- * 由「現在」往回數 count 個**已公布**的月份，新到舊。
+ * Count count **announced** months from "now" back, newest to oldest.
  *
- * 月營收依規定於次月 10 日前公布，故當月 10 日前只保證看得到上上個月的數字。
- * 抓一個還沒公布的月份得到的是 404 或空表 —— 不會壞，但每輪都白跑一次對外請求，
- * 所以寧可保守一格。
+ * Monthly revenue is required to be announced before the 10th of the following month, so only the previous month’s figures are guaranteed to be visible before the 10th of the current month.
+ * If you grab a month that hasn't been announced yet, you'll get a 404 or an empty table - it's not bad, but it will be a waste of an external request every round.
+ * So I'd rather be conservative.
  */
 export function publishedMonths(now: Date, count: number): string[] {
-  // 台北時間（UTC+8 固定偏移，台灣無日光節約），與 taipeiYmd 的作法一致
+  // Taipei time (UTC+8 fixed offset, no daylight savings in Taiwan), consistent with taipeiYmd's approach
   const taipei = new Date(now.getTime() + 8 * 60 * 60 * 1000)
   const year = taipei.getUTCFullYear()
   const month = taipei.getUTCMonth() + 1 // 1-12
   const day = taipei.getUTCDate()
 
-  // 最新一個「已公布」的月份：10 日之後是上個月，10 日之前是上上個月
+  // The latest "announced" month: after the 10th is the previous month, before the 10th is the previous month
   let offset = day >= 10 ? 1 : 2
   const out: string[] = []
   for (let i = 0; i < count; i++, offset++) {

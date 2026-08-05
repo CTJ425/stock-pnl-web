@@ -1,14 +1,14 @@
 /**
- * 管理後台「AI 連線」：全站共用的 AI 供應商設定。
+ * Management backend "AI connection": AI supplier settings shared by the entire site.
  *
- * 0.6.19 從個股分析的「AI 分析」分頁搬過來。搬的理由是**權限而不是版面** ——
- * 那份表單只有管理員看得到，卻長在一個所有人每天都會開的分頁裡，
- * 等於讓每個使用者都看到一個自己按不了的按鈕。設定類的東西集中在後台，
- * `AiTab` 只負責讀設定去發請求。
+ * 0.6.19 Moved from the "AI Analysis" page of individual stock analysis. The reason for moving is **permissions rather than layout**——
+ * That form can only be seen by the administrator, but it lives in a tab that everyone opens every day.
+ * It is equivalent to letting every user see a button that they cannot press. Setting things are concentrated in the background.
+ * `AiTab` is only responsible for reading settings and sending requests.
  *
- * ⚠️ 金鑰以明文存放且所有登入帳號可讀，那是「前端直連 AI 供應商」的必然結果 ——
- * 金鑰終究得回到瀏覽器才發得出請求（schema.sql §4.1 有完整說明）。
- * 這不是疏忽，但畫面上要講出來，否則會被誤會成疏忽。
+ * ⚠️ The key is stored in plain text and is readable by all login accounts. This is the inevitable result of "direct front-end connection to the AI ​​supplier"——
+ * The key must eventually be returned to the browser before the request can be made (schema.sql §4.1 has complete instructions).
+ * This is not an oversight, but it needs to be stated on the screen, otherwise it will be misunderstood as an oversight.
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle, Trash2 } from 'lucide-react'
@@ -51,7 +51,7 @@ export function AiConnectionSection() {
     }
   }, [])
 
-  /** 切換供應商時帶入該供應商的範例值，省得每次都要查一次型號怎麼寫 */
+  /** When switching suppliers, bring in the supplier's example value to avoid having to check how to write the model number every time.*/
   function changeProvider(kind: AiProviderKind) {
     setProvider(kind)
     setErr('')

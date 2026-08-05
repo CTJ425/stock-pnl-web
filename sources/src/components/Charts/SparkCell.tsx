@@ -1,27 +1,27 @@
 /**
- * 表格「趨勢」欄裡的迷你走勢線（0.6.35 由 TwMarketSection 抽出）。
+ * Mini trend line in the "Trend" column of the table (0.6.35 extracted from TwMarketSection).
  *
- * 兩張表都要這個東西：台股法人表看合計買賣超的近 15 個交易日，
- * 美國總經表看單一指標的近 12 期。**只抽繪製，不抽「連續」的判定** ——
- * 法人看的是金額正負號、總經看的是與前一期的升降，那是兩件不同的事，
- * 硬合成一個「通用 streak」只會多一個參數與一段條件。
+ * Both tables require this thing: The Taiwan stock legal person table shows that the total trading volume exceeded the last 15 trading days.
+ * The U.S. General Economic Statement looks at the last 12 periods of a single indicator. **Only draw, not "continuous" judgment** ——
+ * What legal persons look at is the sign of the amount, and what the general manager looks at is the increase or decrease from the previous period. Those are two different things.
+ * Hardly synthesizing a "universal streak" will only add one parameter and a condition.
  *
- * 顏色由呼叫端決定並以字面值傳入，不吃 CSS 變數：html2canvas 匯出 PDF 時
- * 解析不到祖先層的變數，圖會整片變黑（`chartColors.ts` 有同一條註記）。
+ * The color is determined by the caller and passed in as a literal value. CSS variables are not used: when exporting PDF with html2canvas
+ * If the variables of the ancestor layer cannot be resolved, the entire image will turn black (`chartColors.ts` has the same note).
  *
- * 不足兩點時 `sparkline` 回 null，此處印「—」而不是留白 ——
- * 一個點連不成線，硬畫會變成一個小點，看起來像壞掉的圖；
- * 而留白會被讀成「這格沒有資料」，與「資料還不夠畫線」不是同一件事。
- * 兩張表要的都是這個行為，所以放在元件裡而不是各自處理。
+ * When there are less than two points, `sparkline` returns null, and "—" is printed here instead of leaving blank ——
+ * If a dot cannot be connected to a line, the hard drawing will become a small dot and look like a broken picture;
+ * The blank space will be read as "there is no data in this box", which is not the same thing as "the data is not enough to draw a line".
+ * Both tables require this behavior, so they are placed in the component rather than handled separately.
  */
 import { sparkline } from './sparkline'
 
-/** viewBox 尺寸。實際顯示尺寸由呼叫端以 inline style 指定（兩張表的欄寬需求不同） */
+/** viewBox size. The actual display size is specified by the caller in inline style (the column width requirements of the two tables are different)*/
 export const SPARK_W = 64
 export const SPARK_H = 18
 
 interface SparkCellProps {
-  /** 由舊到新 */
+  /** From old to new*/
   points: ReadonlyArray<number | null>
   color: string
   ariaLabel: string

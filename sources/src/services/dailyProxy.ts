@@ -1,34 +1,34 @@
 /**
- * 日線 OHLCV：讀取盤後排程預產、存於公開 `reports` bucket 的 `daily/{ticker}.json`。
+ * Daily OHLCV: Read the post-market schedule and `daily/{ticker}.json` stored in the public `reports` bucket.
  *
- * 沒有「即點即產」的 fallback，這是刻意的：日線只服務個股分析頁，而該頁的下拉選單
- * 本來就只列使用者的台股持股 —— 那些代號正是夜間批次 `generate-all` 會涵蓋的清單。
- * 查無檔案代表批次還沒跑過，UI 顯示「稍晚會自動補上」比多開一個公開端點健康。
+ * There is no fallback for "click and buy". This is intentional: the daily line only serves the individual stock analysis page, and the drop-down menu on this page
+ * Originally, only the user's Taiwan stock holdings were listed - those codes were the list that would be covered by the night batch `generate-all`.
+ * Finding no files means that the batch has not been run yet, and the UI displays "it will be automatically added later" which is healthier than opening an additional public endpoint.
  *
- * 此檔的型別是**網路介面契約**，須與 sources/supabase/functions/stock-report/twDaily.ts
- * 的 DailyFile 對齊。
+ * This file is of type **Web Interface Contract** and must be consistent with sources/supabase/functions/stock-report/twDaily.ts
+ * DailyFile alignment.
  */
 import { downloadReportsJson } from './reportsBucket'
 
-/** 一根日線：[交易日, 開, 高, 低, 收, 量] */
+/** A daily line: [Trading day, opening, high, low, closing, volume]*/
 export type DailyRow = [string, number, number, number, number, number]
 
 export interface DailySeries {
   ticker: string
-  /** 我們實際抓到它的時間 ISO */
+  /** The time we actually caught it ISO*/
   asOf: string
-  /** 最新一根的交易日 YYYY-MM-DD */
+  /** The latest trading day YYYY-MM-DD*/
   lastDate: string
-  /** 由舊到新 */
+  /** From old to new*/
   rows: DailyRow[]
 }
 
 /**
- * 前端認得的**最低**日線結構版本。
+ * The **lowest** daily structure version recognized by the front end.
  *
- * 必須是「>=」而不是「===」：伺服器每次為檔案加欄位就會升 schema，而新增欄位對舊前端
- * 是無害的加法。用等號的話，後端一升版就會讓技術面分頁當場全掛 ——
- * 這正是 0.4.0 在籌碼報告上真實發生過的事（見 reportProxy.ts 的 MIN_REPORT_SCHEMA）。
+ * It must be ">=" instead of "===": the server will upgrade the schema every time it adds a field to the file, and adding new fields will affect the old front-end.
+ * It's a harmless addition. If you use the equal sign, once the backend version is upgraded, all technical paging will be suspended on the spot——
+ * This is exactly what happened with the chip reporting in 0.4.0 (see MIN_REPORT_SCHEMA in reportProxy.ts).
  */
 export const MIN_DAILY_SCHEMA = 1
 
@@ -55,7 +55,7 @@ function isSupported(d: unknown): d is Required<StoredDaily> {
   return typeof f.schema === 'number' && f.schema >= MIN_DAILY_SCHEMA && Array.isArray(f.rows)
 }
 
-/** 讀某檔的日線序列；查無 / 格式不符 / 無有效資料回 null */
+/** Read the daily series of a certain file; search for none / format does not match / no valid data and return null*/
 export async function fetchDailySeries(ticker: string): Promise<DailySeries | null> {
   const stored = await downloadReportsJson<StoredDaily>(`daily/${ticker}.json`)
   if (!isSupported(stored)) return null

@@ -6,9 +6,9 @@ import {
 } from '../../supabase/functions/stock-price/misParse.ts'
 
 /**
- * 舊案例只餵 c/z/b/y，關心的也只有 price / prevClose。
- * 0.6.36 起 MisQuote 多了開高低量與交易日 / 撮合時間，這個 helper 補上它們的預設值，
- * 讓那些案例維持 toEqual 的嚴格比對（不放行多帶出來的欄位）。
+ * The old case only feeds c/z/b/y, and only cares about price / prevClose.
+ * Starting from 0.6.36, MisQuote has added opening high and low volume and trading day/matching time. This helper supplements their default values.
+ * Let those cases maintain a strict comparison of toEqual (do not allow extra fields).
  */
 const q = (partial: Pick<MisQuote, 'ticker' | 'price' | 'prevClose'>): MisQuote => ({
   open: null,
@@ -60,7 +60,7 @@ describe('parseMisResponse', () => {
     expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 600, prevClose: 600 })])
   })
 
-  // prevClose 是現價漲跌著色的基準（0.6.34）：它與成交價來自同一筆回應，不另外請求
+  // prevClose is the benchmark for coloring the rise and fall of the current price (0.6.34): it comes from the same response as the transaction price and does not require additional requests.
   it('昨收 y 一併帶出；y 無效時為 null（不拿成交價冒充基準）', () => {
     const data = { msgArray: [{ c: '2330', z: '605.00', y: '-' }] }
     expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: null })])
@@ -91,8 +91,8 @@ describe('parseMisResponse', () => {
     expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: null })])
   })
 
-  // 取自 mis.twse.com.tw 的實際回應（2026-07-20 盤中，欄位已精簡）：
-  // z 為 '-' 是常態，無效 channel 會回傳 c 為空字串的佔位列
+  // Actual response taken from mis.twse.com.tw (2026-07-20 intraday, fields have been streamlined):
+  // It is normal for z to be '-'. If the channel is invalid, it will return a placeholder column where c is an empty string.
   it('解析真實 MIS 回應（含上市 / 上櫃 / 空佔位列）', () => {
     const data = {
       msgArray: [
@@ -125,9 +125,9 @@ describe('parseMisResponse', () => {
   })
 
   /*
-   * 0.6.36：報價卡要的開高低量與交易日 / 撮合時間，全部在同一筆回應裡。
-   * 下面這筆取自 mis.twse.com.tw 的實際回應（2026-08-05 15:23，收盤後 —— 注意此刻
-   * TWSE OpenAPI 的日收盤端點仍停在 8/4，這正是「今收」不採用該端點的原因）。
+   * 0.6.36: The quotation card requires opening high and low volume and trading day/matching time, all in the same response.
+   * The following is taken from the actual response of mis.twse.com.tw (2026-08-05 15:23, after the close - pay attention to this moment
+   * The daily closing endpoint of TWSE OpenAPI is still stuck at 8/4, which is why "Today's Close" does not use this endpoint).
    */
   it('收盤後的真實回應：帶出開高低量、交易日與撮合時間', () => {
     const data = {
@@ -174,7 +174,7 @@ describe('parseMisResponse', () => {
     expect(quote.trial).toBe(true)
     expect(quote.price).toBe(2400)
     expect(quote.open).toBeNull()
-    // 尚無成交是 0 張，不是「取不到」—— 兩者在畫面上分別顯示 0 與「—」
+    // The number of transactions that have not yet been completed is 0, not "cannot be obtained" - the two are displayed on the screen as 0 and "—" respectively.
     expect(quote.volume).toBe(0)
   })
 

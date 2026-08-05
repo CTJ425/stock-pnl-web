@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C1 ─ 時間軸・七日散布｜資料抓取狀況後台</title>
+<title>C1 ─ Time axis・Seven-day distribution｜Data capture status background</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -121,7 +121,7 @@ body {
 }
 .ruler .day { position: absolute; top: 21px; transform: translateX(-50%); font-size: 10.5px; color: var(--accent); letter-spacing: 0.04em; white-space: nowrap; }
 
-/* 一列一個資料源；7 天的抓到時刻全部落在同一條軸上 */
+/*One source per column; 7 days of catch moments all fall on the same axis*/
 .row { display: grid; grid-template-columns: 168px 1fr 92px; align-items: center; min-height: 52px; }
 .row + .row { border-top: 1px solid var(--border); }
 .row .lbl { padding-right: 12px; font-size: 13.5px; }
@@ -134,7 +134,7 @@ body {
   position: absolute; top: 19px; height: 13px; border-radius: 3px;
   background: var(--win-bg); border-left: 2px solid var(--win-line);
 }
-/* 每一天一個點；最新的實心不透明，愈舊愈淡 */
+/*One point each day; the newest is solid and opaque, the older it becomes, the lighter it gets.*/
 .d {
   position: absolute; top: 20px; transform: translateX(-50%); z-index: 2;
   width: 11px; height: 11px; border-radius: 50%;
@@ -146,7 +146,7 @@ body {
 .d.today { box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-ok-bg); }
 .d.today.late { box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-late-bg); }
 .d.today.warn { box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-warn-bg); }
-/* 群聚範圍：把散布的兩端連起來，讓「雙峰」看得出來 */
+/*Gathering range: Connect the two ends of the spread so that "Twin Peaks" can be seen*/
 .spread {
   position: absolute; top: 24.5px; height: 2px; z-index: 1;
   background: var(--st-idle-bg); border-radius: 1px;
@@ -156,7 +156,7 @@ body {
   font-family: var(--font-data); font-size: 10.5px; color: var(--ink-muted); white-space: nowrap;
 }
 
-/* 右欄：準時率 */
+/*Right column: On-time performance*/
 .rate { text-align: right; padding-left: 10px; }
 .rate b { font-family: var(--font-display); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .rate span { display: block; font-size: 10.5px; color: var(--ink-muted); font-family: var(--font-data); }
@@ -179,31 +179,31 @@ body {
 <div class="wrap">
 
   <div class="mock-note">
-    <b>C1 ─ 時間軸・七日散布</b>
-    <span>方案 C 的變體：同一條軸上疊 7 個交易日，最新的點最實、愈舊愈淡。</span>
-    <span>取捨：<b>看得出慣性</b> —— 單日圖看不出「借券每隔幾天就拖」。</span>
+    <b>C1 ─ Time axis・seven days spread</b>
+    <span>plan C Variation of: overlapping on the same axis 7 On a trading day, the latest point is the most solid, and the older it becomes, the weaker it becomes.</span>
+    <span>Trade-offs:<b>You can see the inertia</b> —— The single-day chart does not show that "the borrowing of coupons is postponed every few days."</span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
   <section class="panel">
     <div class="panel-head">
-      <h2>台股盤後・近 7 個交易日</h2>
+      <h2>Taiwan stocks after-hours・close 7 trading days</h2>
       <span class="note">07-22 ~ 07-30</span>
-      <span class="right">15:00 → 次日 10:00</span>
+      <span class="right">15:00 → next day 10:00</span>
     </div>
     <div class="legend">
-      <span><i class="lg-win"></i> 來源公布窗</span>
-      <span><i class="lg-hit"></i> 最新一日</span>
-      <span><i class="lg-old"></i> 較早的日子</span>
-      <span><i class="lg-late"></i> 延遲</span>
-      <span class="rule">判定基準是<b>公布窗結束後的第一個批次班次</b>，不是公布時刻 —— 批次 16:00 才起跑，法人 16:15 到手屬正常。</span>
+      <span><i class="lg-win"></i> Source announcement window</span>
+      <span><i class="lg-hit"></i> latest day</span>
+      <span><i class="lg-old"></i> earlier days</span>
+      <span><i class="lg-late"></i> Delay</span>
+      <span class="rule">The criterion is<b>The first batch of shifts after the announcement window ends</b>, not the announcement time —— batch 16:00 Just started, legal person 16:15 It's normal to get it.</span>
     </div>
 
     <div class="tl">
@@ -214,15 +214,15 @@ body {
           <i style="left:15.79%"></i><b style="left:15.79%">18:00</b>
           <i style="left:31.58%"></i><b style="left:31.58%">21:00</b>
           <i style="left:47.37%"></i><b style="left:47.37%">00:00</b>
-          <span class="day" style="left:47.37%">次日</span>
+          <span class="day" style="left:47.37%">next day</span>
           <i style="left:63.16%"></i><b style="left:63.16%">03:00</b>
           <i style="left:78.95%"></i><b style="left:78.95%">06:00</b>
           <i style="left:94.74%"></i><b style="left:94.74%">09:00</b>
         </div>
 
-        <!-- 集中：7 天全部落在同一處 -->
+        <!--Concentration: All in one place for 7 days-->
         <div class="row">
-          <div class="lbl"><b>三大法人</b><span>T86</span></div>
+          <div class="lbl"><b>Three major corporations</b><span>T86</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -238,11 +238,11 @@ body {
             <div class="d today" style="left:6.58%" title="07-30 16:15"></div>
             <div class="cluster-t" style="left:6.58%">16:15–16:30</div>
           </div>
-          <div class="rate ok"><b>7/7</b><span>準時</span></div>
+          <div class="rate ok"><b>7/7</b><span>on time</span></div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>日 K 線・估值</b><span>18 檔</span></div>
+          <div class="lbl"><b>day K Wire・Valuation</b><span>18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -258,11 +258,11 @@ body {
             <div class="d today" style="left:6.58%" title="07-30 16:15"></div>
             <div class="cluster-t" style="left:6.58%">16:15–16:30</div>
           </div>
-          <div class="rate ok"><b>7/7</b><span>準時</span></div>
+          <div class="rate ok"><b>7/7</b><span>on time</span></div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>融資融券</b><span>MI_MARGN</span></div>
+          <div class="lbl"><b>Margin margin trading</b><span>MI_MARGN</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -278,12 +278,12 @@ body {
             <div class="d today" style="left:31.58%" title="07-30 21:00"></div>
             <div class="cluster-t" style="left:33%">21:00–22:15</div>
           </div>
-          <div class="rate ok"><b>7/7</b><span>準時</span></div>
+          <div class="rate ok"><b>7/7</b><span>on time</span></div>
         </div>
 
-        <!-- 雙峰：這正是單日圖看不出來的東西 -->
+        <!--Twin Peaks: This is exactly what you can’t see on the single-day chart-->
         <div class="row">
-          <div class="lbl"><b>借券賣出</b><span>次一交易日</span></div>
+          <div class="lbl"><b>Borrow bonds and sell</b><span>next trading day</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -291,60 +291,60 @@ body {
             <div class="win" style="left:31.58%; width:7.89%"></div>
             <div class="spread" style="left:38.16%; width:57.63%"></div>
             <div class="d o3" style="left:38.16%" title="07-22 22:15"></div>
-            <div class="d o3 late" style="left:95.44%" title="07-23 次日 09:08"></div>
+            <div class="d o3 late" style="left:95.44%" title="07-23 next day 09:08"></div>
             <div class="d o4" style="left:38.60%" title="07-24 22:20"></div>
-            <div class="d o4 late" style="left:95.79%" title="07-25 次日 09:12"></div>
+            <div class="d o4 late" style="left:95.79%" title="07-25 next day 09:12"></div>
             <div class="d o6" style="left:38.16%" title="07-28 22:15"></div>
-            <div class="d o6 late" style="left:95.61%" title="07-29 次日 09:10"></div>
-            <div class="d today late" style="left:95.61%" title="07-30 次日 09:10"></div>
+            <div class="d o6 late" style="left:95.61%" title="07-29 next day 09:10"></div>
+            <div class="d today late" style="left:95.61%" title="07-30 next day 09:10"></div>
             <div class="cluster-t" style="left:38.16%">22:15</div>
-            <div class="cluster-t" style="left:95.61%">次日 09:10</div>
+            <div class="cluster-t" style="left:95.61%">next day 09:10</div>
           </div>
-          <div class="rate late"><b>3/7</b><span>準時</span></div>
+          <div class="rate late"><b>3/7</b><span>on time</span></div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>個股新聞</b><span>16 / 18 檔</span></div>
+          <div class="lbl"><b>individual stock news</b><span>16 / 18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
             <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
             <div class="win" style="left:31.58%; width:15.79%"></div>
             <div class="spread" style="left:95.44%; width:0.35%"></div>
-            <div class="d o3 warn" style="left:95.44%" title="07-22 次日 09:08"></div>
-            <div class="d o3 warn" style="left:95.61%" title="07-23 次日 09:10"></div>
-            <div class="d o4 warn" style="left:95.61%" title="07-24 次日 09:10"></div>
-            <div class="d o4 warn" style="left:95.79%" title="07-25 次日 09:12"></div>
-            <div class="d o6 warn" style="left:95.61%" title="07-28 次日 09:10"></div>
-            <div class="d o6 warn" style="left:95.61%" title="07-29 次日 09:10"></div>
-            <div class="d today warn" style="left:95.61%" title="07-30 次日 09:10"></div>
-            <div class="cluster-t" style="left:95.61%">次日 09:10</div>
+            <div class="d o3 warn" style="left:95.44%" title="07-22 next day 09:08"></div>
+            <div class="d o3 warn" style="left:95.61%" title="07-23 next day 09:10"></div>
+            <div class="d o4 warn" style="left:95.61%" title="07-24 next day 09:10"></div>
+            <div class="d o4 warn" style="left:95.79%" title="07-25 next day 09:12"></div>
+            <div class="d o6 warn" style="left:95.61%" title="07-28 next day 09:10"></div>
+            <div class="d o6 warn" style="left:95.61%" title="07-29 next day 09:10"></div>
+            <div class="d today warn" style="left:95.61%" title="07-30 next day 09:10"></div>
+            <div class="cluster-t" style="left:95.61%">next day 09:10</div>
           </div>
-          <div class="rate warn"><b>0/7</b><span>準時</span></div>
+          <div class="rate warn"><b>0/7</b><span>on time</span></div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>總經班次</b><span>FRED・兩班</span></div>
+          <div class="lbl"><b>General shift</b><span>FRED・Two shifts</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
             <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
-            <div class="d o4" style="left:31.58%" title="每日 21:00 第一班"></div>
-            <div class="d today" style="left:42.11%" title="每日 23:00 第二班"></div>
+            <div class="d o4" style="left:31.58%" title="daily 21:00 first shift"></div>
+            <div class="d today" style="left:42.11%" title="daily 23:00 second shift"></div>
             <div class="cluster-t" style="left:31.58%">21:00</div>
             <div class="cluster-t" style="left:42.11%">23:00</div>
           </div>
-          <div class="rate ok"><b>7/7</b><span>兩班皆執行</span></div>
+          <div class="rate ok"><b>7/7</b><span>Performed in both shifts</span></div>
         </div>
 
       </div>
     </div>
 
     <dl class="mini">
-      <div><dt>七日準時率</dt><dd><b>74 %</b>31 / 42 次</dd></div>
-      <div><dt>最不穩定</dt><dd><b class="late">借券</b>4 / 7 日拖到隔天</dd></div>
-      <div><dt>長期落後</dt><dd><b class="late">新聞</b>7 / 7 日都在隔天才到</dd></div>
-      <div><dt>值得處理</dt><dd><b>2</b>項的公布窗設定與實況不符</dd></div>
+      <div><dt>Seven-day punctuality</dt><dd><b>74 %</b>31 / 42 Second-rate</dd></div>
+      <div><dt>Most unstable</dt><dd><b class="late">Borrow coupons</b>4 / 7 Drag one day to the next day</dd></div>
+      <div><dt>long-term lag behind</dt><dd><b class="late">news</b>7 / 7 The day arrived the next day</dd></div>
+      <div><dt>worth dealing with</dt><dd><b>2</b>The item's publishing window setting does not match the actual situation</dd></div>
     </dl>
   </section>
 
@@ -354,7 +354,7 @@ body {
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

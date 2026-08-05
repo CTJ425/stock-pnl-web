@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-// 以 mock 取代網路層：這裡驗的是版面與分頁切換，不是抓取邏輯
+// Replace the network layer with mock: what is tested here is the layout and paging switching, not the crawling logic
 const {
   fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental, warmStock,
   generatePdfBlob, downloadBlob,
@@ -24,7 +24,7 @@ vi.mock('../../services/reportProxy', () => ({
 vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStock }))
-// html2canvas 在 jsdom 跑不起來，而這裡驗的是「擷取當下 DOM 長什麼樣」
+// html2canvas cannot run in jsdom, and the test here is "capturing what the current DOM looks like"
 vi.mock('../../services/reportPdf', () => ({ generatePdfBlob, downloadBlob }))
 
 import { StockDetailPage } from './StockDetailPage'
@@ -78,7 +78,7 @@ const report: ReportData = {
 
 const holding = { qty: 3000, avgCost: 100.5, price: 120, unrealized: 58500, roi: 0.194 }
 
-/** 收盤後的一筆台股報價（數字取自 2026-08-05 的 2330 實測回應） */
+/** A Taiwan stock quote after the market close (numbers are taken from 2330 measured responses on 2026-08-05)*/
 const quote: PriceQuote = {
   price: 2405,
   prevClose: 2320,
@@ -95,9 +95,9 @@ const quote: PriceQuote = {
 }
 
 /*
- * 0.6.8 起四段併成一頁，全頁的「第 N 個 svg」「第一個 .rpt-section」這種順序假設
- * 全部失效，而且是那種「今天剛好會過、明天加一段就爆」的脆弱寫法。
- * 一律改成以區塊 id 定位（#sec-chips / #sec-fundamental / #sec-technical / #sec-holding）。
+ * Starting from 0.6.8, four sections are combined into one page, and the order of "the Nth svg" and "the first .rpt-section" of the whole page is assumed.
+ * All of them failed, and it was written in a fragile way of "I can just pass it today, but it will explode tomorrow if I add a paragraph."
+ * Always change to block id positioning (#sec-chips / #sec-fundamental / #sec-technical / #sec-holding).
  */
 const sec = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`#sec-${id}`)!
 const charts = (c: HTMLElement, id: string) => sec(c, id).querySelectorAll('svg.chart-svg')
@@ -114,10 +114,10 @@ describe('StockDetailPage', () => {
     downloadBlob.mockReset()
     generatePdfBlob.mockResolvedValue(new Blob(['pdf']))
     fetchStoredReport.mockResolvedValue(report)
-    // 預設無日線 / 無基本面（批次尚未跑過）；需要的個案自行覆寫
+    // Default is no daily line / no fundamentals (the batch has not been run yet); overwrite the required cases by yourself
     fetchDailySeries.mockResolvedValue(null)
     fetchFundamental.mockResolvedValue(null)
-    // 預設 warm 也產不出東西（例如 ETF），避免測試意外進入重讀分支
+    // The default warm will not produce anything (such as ETF) to prevent the test from accidentally entering the reread branch.
     warmStock.mockResolvedValue({ ok: true, dailySynced: 0, fundamentalSynced: 0, fundamentalComplete: true, backfilled: 0 })
   })
 
@@ -136,7 +136,7 @@ describe('StockDetailPage', () => {
     expect(head).toBeTruthy()
     expect(head!.textContent).toContain('2330 台積電｜盤後籌碼')
     expect(head!.textContent).toContain('資料日期 2026-07-23（最近交易日盤後）')
-    // generatedAt = 2026-07-23T12:30:00Z，顯示為觀看者時區的 YYYY-MM-DD HH:mm
+    // generatedAt = 2026-07-23T12:30:00Z, displayed as YYYY-MM-DD HH:mm in the viewer's time zone
     const expected = new Date('2026-07-23T12:30:00.000Z')
     const p = (n: number) => String(n).padStart(2, '0')
     expect(head!.textContent).toContain(
@@ -155,16 +155,16 @@ describe('StockDetailPage', () => {
   it('三大法人表格顯示買進 / 賣出 / 買賣超與連買連賣', async () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
-    // 圖表軸標籤也會出現相同數字，故限定在三大法人表格內查
+    // The same numbers will also appear on the chart axis labels, so the search is limited to the three major legal entity tables.
     const instTable = within(screen.getAllByRole('table')[0])
     const foreignRow = within(instTable.getByText('外資（不含自營）').closest('tr')!)
-    // 外資 leg：買 6,000 / 賣 1,000 / 買賣超 +5,000 / 約當 +5 張 / 連 2 買
+    // Foreign leg: buy 6,000 / sell 1,000 / buy and sell over +5,000 / contract +5 lots / buy 2 in a row
     expect(foreignRow.getByText('6,000')).toBeTruthy()
     expect(foreignRow.getByText('1,000')).toBeTruthy()
     expect(foreignRow.getByText('+5,000')).toBeTruthy()
     expect(foreignRow.getByText('+5')).toBeTruthy()
     expect(foreignRow.getByText('連 2 買')).toBeTruthy()
-    // 融資融券的「連增連減」由前端依 history 計算：fixture 兩天都 +105 / +1，故皆為連 2 增
+    // The "consecutive increases and consecutive decreases" of margin trading are calculated by the front end based on history: the fixture is +105 / +1 on both days, so they are both consecutive increases of 2
     const marginTable = within(screen.getAllByRole('table')[1])
     expect(within(marginTable.getByText('融資').closest('tr')!).getByText('連 2 增')).toBeTruthy()
     expect(within(marginTable.getByText('融券').closest('tr')!).getByText('連 2 增')).toBeTruthy()
@@ -179,15 +179,15 @@ describe('StockDetailPage', () => {
 
     const rowOf = (label: string) =>
       within(within(screen.getAllByRole('table')[0]).getByText(label).closest('tr')!)
-    // 三大法人區塊的說明句（籌碼段內第一個 .rpt-section 的 .hint）
+    // Explanatory sentences for the three major legal person blocks (the .hint of the first .rpt-section in the chip section)
     const caption = () => sec(container, 'chips').querySelector('.rpt-section .hint')!.textContent
 
-    // 預設看最新交易日（07/23）：外資 net +5,000、連 2 買
+    // Default to see the latest trading day (07/23): foreign investment net +5,000, 2 consecutive purchases
     expect(caption()).toContain('2026-07-23')
     expect(rowOf('外資（不含自營）').getByText('+5,000')).toBeTruthy()
     expect(rowOf('外資（不含自營）').getByText('連 2 買')).toBeTruthy()
 
-    // 切到前一天（07/22）：net 變 +3,000，連買天數降為 1
+    // Cut to the previous day (07/22): net becomes +3,000, and the number of consecutive buying days is reduced to 1
     await user.click(screen.getByRole('button', { name: /07\/22/ }))
     expect(caption()).toContain('2026-07-22')
     expect(rowOf('外資（不含自營）').getByText('+3,000')).toBeTruthy()
@@ -203,10 +203,10 @@ describe('StockDetailPage', () => {
     for (const label of ['外資（不含自營）', '外資自營商', '投信', '自營商']) {
       expect(legend.getByText(label)).toBeTruthy()
     }
-    // 合計不入圖（它就是四項相加，畫進去等於重複計算）
+    // The total does not appear in the picture (it is the sum of four items, and drawing it in means double counting)
     expect(legend.queryByText('三大法人合計')).toBeNull()
     expect(container.querySelectorAll('.chart-legend-swatch').length).toBe(4)
-    // 2 天 × 4 個法人 = 8 根長條
+    // 2 days × 4 legal persons = 8 bars
     expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(8)
   })
 
@@ -219,7 +219,7 @@ describe('StockDetailPage', () => {
     await user.click(screen.getByRole('button', { name: '投信' }))
     const labels = [...container.querySelectorAll('.chart-legend-label')].map((el) => el.textContent)
     expect(labels).toEqual(['買超（買比賣多）', '賣超（賣比買多）'])
-    // 單一序列 2 天 = 2 根長條
+    // Single sequence 2 days = 2 bars
     expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(2)
   })
 
@@ -228,7 +228,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    // 籌碼段：買賣超長條圖 + 融資 / 融券兩張折線圖
+    // Chip segment: buying and selling super long bar chart + two line charts of financing/securities lending
     expect(charts(container, 'chips').length).toBe(3)
     expect(container.querySelectorAll('polyline').length).toBeGreaterThan(0)
   })
@@ -253,7 +253,7 @@ describe('StockDetailPage', () => {
 
     const ids = [...container.querySelectorAll('[id^="sec-"]')].map((el) => el.id)
     expect(ids).toEqual(['sec-quote', 'sec-chips', 'sec-fundamental', 'sec-technical'])
-    // 卡片標題也照同一個順序
+    // Card titles are also in the same order.
     const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
     expect(titles).toEqual(['報價', '籌碼', '基本面', '技術面'])
   })
@@ -267,17 +267,17 @@ describe('StockDetailPage', () => {
     const q = within(sec(container, 'quote'))
     expect(q.getByText('今日行情')).toBeTruthy()
     expect(q.getByText('31,851 張')).toBeTruthy() // 成交量
-    // 收盤後那格叫「今收」而不是「成交」，且卡片標題標出交易日與狀態
+    // The box after closing is called "Today's Close" instead of "Deal", and the card title indicates the transaction date and status.
     expect(q.getByText('今收')).toBeTruthy()
     expect(container.querySelector('#sec-quote')?.previousElementSibling?.textContent).toContain(
       '8/5 · 已收盤 · 13:30:00',
     )
 
-    // 持股數字不再出現在畫面上（0.6.36 起這頁只談市場資料）
+    // The shareholding figures no longer appear on the screen (since 0.6.36, this page only talks about market data)
     expect(screen.queryByText('持股概況')).toBeNull()
     expect(screen.queryByText('+NT$58,500')).toBeNull()
 
-    // 技術面（fixture 無日線）顯示自己的空狀態，且不影響其他三段
+    // The technical aspect (fixture has no daily line) shows its own empty state and does not affect the other three segments.
     expect(await within(sec(container, 'technical')).findByText(/這檔還沒有歷史股價/)).toBeTruthy()
     expect(screen.getByText('三大法人買賣超')).toBeTruthy()
   })
@@ -292,7 +292,7 @@ describe('StockDetailPage', () => {
   })
 
   it('技術面：有日線時畫出 K 線與均線，並標出指標摘要', async () => {
-    // 造 80 根遞增日線，讓 MA60 也有值（少於 60 根就驗不到季線）
+    // Create 80 incremental daily lines to make MA60 valuable (if there are less than 60 lines, the quarterly line cannot be tested)
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -318,20 +318,20 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
 
     await screen.findByText('日 K 與均線')
-    // 技術面段：日K、成交量、KD 三張（籌碼段另有 3 張，故必須限定範圍）
+    // Technical section: three sheets of daily K, trading volume, and KD (there are also three sheets in the chip section, so the range must be limited)
     expect(charts(container, 'technical')).toHaveLength(3)
-    // 均線圖例（週/月/季線的台股說法要出現，否則只認得其中一種的人看不懂）
+    // Moving average legend (weekly/monthly/quarterly lines for Taiwanese stocks must appear, otherwise people who only recognize one of them will not be able to understand)
     expect(screen.getByText('週線')).toBeTruthy()
     expect(screen.getByText('季線')).toBeTruthy()
-    // 摘要取最新一根：收盤 179、一路上漲 → 多頭排列
+    // The summary takes the latest one: closing 179, rising all the way → long arrangement
     const tech = within(sec(container, 'technical'))
     expect(tech.getByText('179')).toBeTruthy()
     expect(tech.getByText(/多頭排列/)).toBeTruthy()
   })
 
   it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {
-    // 200 根資料、顯示 60 根。若實作先裁切再算指標，MA60 會整條消失、
-    // 圖上就只剩兩條均線 —— 這正是 PLAN 標記為「最容易寫錯」的地方。
+    // 200 information, 60 displayed. If you implement cropping first and then calculate the indicator, MA60 will disappear entirely.
+    // There are only two moving averages left on the chart - this is what PLAN marked as the "most likely to make mistakes".
     const rows = Array.from({ length: 200 }, (_, i) => {
       const date = new Date(Date.UTC(2025, 9, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -360,7 +360,7 @@ describe('StockDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: '近 3 月' }))
     const kChart = charts(container, 'technical')[0]
-    // 三條均線都必須有折線（polyline）；少一條就是 MA60 被裁沒了
+    // All three moving averages must have polylines; if one is missing, MA60 will be cut off.
     expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(3)
   })
 
@@ -371,7 +371,7 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
     const tags = [...sec(container, 'chips').querySelectorAll('.source-tag')].map((el) => el.textContent)
     expect(tags).toHaveLength(3)
-    // 三個抓取時間不同 —— 這正是逐區塊標示的理由
+    // The three crawl times are different - this is the reason for block-by-block marking
     expect(new Set(tags).size).toBe(3)
     expect(tags[0]).toContain('資料日 2026-07-23') // 三大法人
     expect(tags[2]).toContain('資料日 2026-07-24') // 借券是下一個交易日，比籌碼晚一天
@@ -388,7 +388,7 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
     expect(screen.getByText(/今日融資融券尚未公布（約 21:00–22:00 才會有）/)).toBeTruthy()
     expect(screen.getByText(/上方的三大法人不受影響/)).toBeTruthy()
-    // 不該再出現會被誤解成故障的舊文案
+    // There should be no more old copy that could be misinterpreted as a glitch.
     expect(screen.queryByText(/來源暫時無回應/)).toBeNull()
   })
 
@@ -431,7 +431,7 @@ describe('StockDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'AI 分析' }))
     expect(screen.queryByText('三大法人買賣超')).toBeNull()
     expect(screen.queryByText('持股概況')).toBeNull()
-    // AI 分頁沒有報告可擷取，下載 PDF 不出現
+    // There is no report to retrieve for AI paging, and the PDF download does not appear.
     expect(screen.queryByRole('button', { name: /下載 PDF/ })).toBeNull()
   })
 
@@ -567,7 +567,7 @@ describe('StockDetailPage', () => {
       ),
     }
     fetchFundamental.mockResolvedValueOnce(partial).mockResolvedValueOnce(full)
-    // 回補確實補進了 10 個月 → 值得重讀一次 Storage
+    // The catch-up did make up for 10 months → Worth re-reading Storage
     warmStock.mockResolvedValue({
       ok: true,
       dailySynced: 0,
@@ -592,7 +592,7 @@ describe('StockDetailPage', () => {
     await screen.findByText('三大法人買賣超')
 
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
-    // 只讀過一次：warm 回報沒產出就不該再打一次 Storage
+    // I only read it once: If the warm return has no output, you should not call Storage again.
     expect(fetchFundamental).toHaveBeenCalledTimes(1)
   })
 
@@ -604,8 +604,8 @@ describe('StockDetailPage', () => {
     expect(screen.queryByText('半導體業')).toBeNull()
   })
 
-  // 0.6.1 起盤後批次每 15 分鐘輪詢一次，報告會在使用者看著的當下更新。
-  // 沒有這組行為的話，開著不動的分頁會一直停在開頁那一刻的快照。
+  // After 0.6.1, the batch will be polled every 15 minutes, and the report will be updated while the user is watching.
+  // Without this set of behaviors, the paging that is open will always stop at the snapshot of the moment when the page is opened.
   describe('切回前景時比對報告是否已更新（0.6.2）', () => {
     const fireVisible = async (state: 'visible' | 'hidden' = 'visible') => {
       Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
@@ -635,7 +635,7 @@ describe('StockDetailPage', () => {
       await screen.findByText('三大法人買賣超')
       const before = container.querySelector('.detail-card .rpt-head')!.textContent
 
-      // 回同一份（不同物件實體，但 generatedAt 相同）
+      // Return the same copy (different object entities, but the same generatedAt)
       fetchStoredReport.mockResolvedValue({ ...report })
       await fireVisible()
       await waitFor(() => expect(fetchStoredReport).toHaveBeenCalledTimes(2))
@@ -666,7 +666,7 @@ describe('StockDetailPage', () => {
   })
 
   describe('法人買賣超圖的圖例可切換（0.6.27）', () => {
-    /** 外資（不含自營）是 CATEGORICAL_COLORS[0]；長條以該色填滿 */
+    /** Foreign capital (excluding self-operated) is CATEGORICAL_COLORS[0]; the bar is filled with this color*/
     const foreignBars = () => document.querySelectorAll('svg rect[fill="#3987e5"]')
     const yTicks = () =>
       [...document.querySelectorAll('#sec-chips svg text')]
@@ -685,13 +685,13 @@ describe('StockDetailPage', () => {
       render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
 
-      // 外資單日買超 3000～5000 股，另外三家都在 100 股以內
+      // Foreign investors bought more than 3,000 to 5,000 shares in a single day, and the other three companies all bought less than 100 shares.
       expect(foreignBars().length).toBeGreaterThan(0)
       expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(true)
 
       await user.click(legendToggle('外資（不含自營）'))
       expect(foreignBars()).toHaveLength(0)
-      // 剩下三家的量級小兩個數量級，值域必須跟著縮小才看得出彼此的差別
+      // The magnitudes of the remaining three are two orders of magnitude smaller, and the value range must be narrowed to see the difference between them.
       expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(false)
 
       await user.click(legendToggle('外資（不含自營）'))
@@ -728,7 +728,7 @@ describe('StockDetailPage', () => {
     expect(surface.querySelector('#sec-fundamental')).toBeTruthy()
     expect(surface.querySelector('#sec-technical')).toBeTruthy()
     expect(within(surface).getByText('三大法人買賣超')).toBeTruthy()
-    // 共用報告不含個資：報價是公開資料，持股數字整頁都不再出現
+    // The shared report does not contain personal information: the quotation is public information, and the shareholding figures no longer appear on the entire page.
     expect(surface.textContent).not.toContain('持股概況')
 
     await waitFor(() =>

@@ -37,10 +37,10 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
       tx({ date: '2025-02-01', market: 'TPE', ticker: '2330', name: '台積電', type: 'SELL', price: 700, qty: 500, fee: 1548 }),
     ])
 
-    // 買入成本含手續費：500*1000+712 + 600*1000+855 = 1,101,567
-    // 賣出收入扣手續費：700*500-1548 = 348,452
-    // 均價 = 1,101,567 / 2000 = 550.7835；成本基礎 = 550.7835*500 = 275,391.75
-    // 已實現 = 348,452 - 275,391.75 = 73,060.25
+    // Buying cost including handling fee: 500*1000+712 + 600*1000+855 = 1,101,567
+    // Sales income minus handling fee: 700*500-1548 = 348,452
+    // Average price = 1,101,567 / 2000 = 550.7835; Cost basis = 550.7835*500 = 275,391.75
+    // Realized = 348,452 - 275,391.75 = 73,060.25
     expect(ledger.holdings).toHaveLength(1)
     const h = ledger.holdings[0]
     expect(h.qty).toBe(1500)
@@ -77,7 +77,7 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
   it('輸入順序無關：依日期排序、同日依建立時間', () => {
     const buy = tx({ date: '2024-01-01', market: 'US', ticker: 'VOO', type: 'BUY', price: 400, qty: 10 })
     const sell = tx({ date: '2024-06-01', market: 'US', ticker: 'VOO', type: 'SELL', price: 450, qty: 10 })
-    // 陣列順序故意顛倒
+    // Array order intentionally reversed
     const ledger = computeLedger([sell, buy])
     expect(ledger.warnings).toHaveLength(0)
     expect(ledger.summary.realizedUs).toBeCloseTo(500, 6)
@@ -89,7 +89,7 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
       tx({ date: '2024-02-01', market: 'TPE', ticker: '2603', name: '長榮', type: 'SELL', price: 120, qty: 1000, fee: 531 }),
     ])
     expect(ledger.holdings).toHaveLength(0)
-    // 已實現 = (120000-531) - (100142) = 19,327
+    // Realized = (120000-531) - (100142) = 19,327
     expect(ledger.summary.realizedTw).toBeCloseTo(19327, 6)
     expect(ledger.yearly[2024].tickers['TPE:2603'].realized).toBeCloseTo(19327, 6)
   })
@@ -102,21 +102,21 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
     ])
 
     const y2025 = ledger.yearly[2025]
-    // 含費：成本基礎 550.7835*500 = 275,391.75；收入 350,000-1,548 = 348,452
+    // Including fees: Cost basis 550.7835*500 = 275,391.75; Revenue 350,000-1,548 = 348,452
     expect(y2025.costBasis).toBeCloseTo(275391.75, 6)
     expect(y2025.sellGross).toBeCloseTo(350000, 6)
     expect(y2025.realizedTw).toBeCloseTo(y2025.sellAmt - y2025.costBasis, 6)
-    // 未含費：成本基礎 550*500 = 275,000，價差 350,000-275,000 = 75,000（比實際獲利樂觀）
+    // Excluding fees: cost basis 550*500 = 275,000, spread 350,000-275,000 = 75,000 (more optimistic than actual profit)
     expect(y2025.rawCostBasis).toBeCloseTo(275000, 6)
     expect(y2025.sellGross - y2025.rawCostBasis).toBeCloseTo(75000, 6)
     expect(y2025.sellGross - y2025.rawCostBasis).toBeGreaterThan(y2025.realizedTw)
 
-    // 買進年度：只有支出、無成本基礎；未含費價金不含手續費
+    // Purchase year: only expenditures, no cost basis; price before fees does not include handling fees
     expect(ledger.yearly[2024].buyGross).toBeCloseTo(1100000, 6)
     expect(ledger.yearly[2024].buyAmt).toBeCloseTo(1101567, 6)
     expect(ledger.yearly[2024].costBasis).toBe(0)
 
-    // 個股明細與年度加總一致
+    // Individual stock details are consistent with the annual total
     const yt = y2025.tickers['TPE:2330']
     expect(yt.costBasis).toBeCloseTo(y2025.costBasis, 6)
     expect(yt.realized).toBeCloseTo(yt.sellAmt - yt.costBasis, 6)
@@ -129,10 +129,10 @@ describe('computeLedger（移動平均成本法，與 GAS computeLedger_ 同構�
       tx({ date: '2025-02-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 700, qty: 500, fee: 1548 }),
     ])
     const h = ledger.holdings[0]
-    // rawCost = 500*1000 + 600*1000 = 1,100,000；賣 500 股扣 550*500 = 275,000 → 825,000
+    // rawCost = 500*1000 + 600*1000 = 1,100,000; sell 500 shares and discount 550*500 = 275,000 → 825,000
     expect(h.rawCost).toBeCloseTo(825000, 6)
     expect(h.rawAvgCost).toBeCloseTo(550, 6)
-    // 含費均價必高於未含費成交均價
+    // The average price including fees must be higher than the average transaction price without fees
     expect(h.avgCost).toBeGreaterThan(h.rawAvgCost)
   })
 
@@ -272,7 +272,7 @@ describe('estimateUnrealized（與 GAS Dashboard 未實現損益公式同構）'
     // mkt = 11,000；fee = max(floor(15.675), 20) = 20；tax = floor(11) = 11
     // round(11,000 - 10,000 - 20 - 11) = 969
     expect(estimateUnrealized(h, 110, 0.001425, 20)).toBe(969)
-    // 未提供 minFee 時維持原公式：11,000 - 10,000 - 15 - 11 = 974
+    // Not provided minFee Time maintenance source formula: 11,000 - 10,000 - 15 - 11 = 974
     expect(estimateUnrealized(h, 110, 0.001425)).toBe(974)
   })
 

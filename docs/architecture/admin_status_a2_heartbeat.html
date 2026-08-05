@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A2 ─ 卡片 + 心跳｜資料抓取狀況後台</title>
+<title>A2 ─ card + Heartbeat｜Data capture status background</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -130,14 +130,14 @@ body {
 .warn .chip { background: var(--st-warn-bg); color: var(--st-warn); }
 .late .chip { background: var(--st-late-bg); color: var(--st-late); }
 
-/* ── 心跳：最近 10 期各自準時與否 ─────────────────────────── */
+/*── Heartbeat: The last 10 periods are on time or not ────────────────────────────*/
 .beat { margin: 2px 0 11px; }
 .beat-bars { display: flex; gap: 3px; align-items: flex-end; height: 26px; }
 .beat-bars i {
   flex: 1; border-radius: 2px; background: var(--st-idle-bg);
   min-width: 5px; position: relative;
 }
-/* 高度即「相對預期窗的準時程度」：滿格＝準時，越矮＝越晚 */
+/*Height is "on-time relative to the expected window": full = on time, shorter = later*/
 .beat-bars i.t100 { height: 100%; background: var(--st-ok); }
 .beat-bars i.t80  { height: 80%;  background: var(--st-ok); opacity: 0.75; }
 .beat-bars i.t55  { height: 55%;  background: var(--st-warn); }
@@ -159,7 +159,7 @@ body {
 }
 .card-foot .win { margin-left: auto; font-family: var(--font-data); }
 
-/* 總經：卡片形式但用期別點陣，因為月頻沒有「每日心跳」 */
+/*General: Card format but different period of use, because monthly frequency does not have "daily heartbeat"*/
 .periods { display: flex; gap: 4px; margin: 2px 0 11px; }
 .periods i {
   flex: 1; height: 22px; border-radius: 3px; background: var(--st-idle-bg);
@@ -179,85 +179,85 @@ body {
 <div class="wrap">
 
   <div class="mock-note">
-    <b>A2 ─ 卡片 + 心跳</b>
-    <span>方案 A 的變體：每張卡多一條近 10 期的心跳，柱高＝相對預期窗的準時程度。</span>
-    <span>取捨：<b>看得出慣性</b> —— 不只今天好不好，還看得出誰經常拖。</span>
+    <b>A2 ─ card + heartbeat</b>
+    <span>plan A Variation: Each card has one more 10 Period's heartbeat, bar height = punctuality relative to the expected window.</span>
+    <span>Trade-offs:<b>You can see the inertia</b> —— Not only did you have a good day, but you can also tell who is always procrastinating.</span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <button class="btn" type="button">重新整理</button>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <button class="btn" type="button">rearrange</button>
   </div>
 
   <dl class="today">
-    <div><dt>資料日</dt><dd>07-30<small>週四</small></dd></div>
-    <div><dt>盤後批次</dt><dd>32<small>輪</small></dd></div>
-    <div><dt>資料源到齊</dt><dd>17<small>/ 18</small></dd></div>
-    <div><dt>近 10 日準時率</dt><dd>92<small>%</small></dd></div>
-    <div><dt>最後一輪</dt><dd>09:10<small>+3h40m</small></dd></div>
+    <div><dt>Material date</dt><dd>07-30<small>Thursday</small></dd></div>
+    <div><dt>After-hours batch</dt><dd>32<small>wheel</small></dd></div>
+    <div><dt>All data sources are available</dt><dd>17<small>/ 18</small></dd></div>
+    <div><dt>close 10 daily punctuality</dt><dd>92<small>%</small></dd></div>
+    <div><dt>The last wheel</dt><dd>09:10<small>+3h40m</small></dd></div>
   </dl>
 
   <section class="domain">
     <div class="domain-head">
-      <h2>台股籌碼</h2>
-      <span class="cadence">交易日盤後・柱高＝當日準時程度</span>
+      <h2>Taiwan stock chips</h2>
+      <span class="cadence">After-hours trading day・Column height = on-time performance on the day</span>
       <span class="roll">3 / 3</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>三大法人買賣超</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>The three major legal entities trade super</h3><span class="chip">Already arrived</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+          <div class="beat-bars" role="img" aria-label="close 10 All trading days are on time">
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>10 / 10 準時</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10 on time</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
-          <dt>凍結狀態</dt><dd>已定稿・2 次改寫</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
+          <dt>frozen state</dt><dd>Finalized・2 rewritten</dd>
         </dl>
-        <div class="card-foot"><span>T86</span><span class="win">預期 15:00–15:30</span></div>
+        <div class="card-foot"><span>T86</span><span class="win">expected 15:00–15:30</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>融資融券</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Margin margin trading</h3><span class="chip">Already arrived</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日，其中 1 日略晚">
+          <div class="beat-bars" role="img" aria-label="close 10 trading days, of which 1 It's a little late">
             <i class="t100"></i><i class="t100"></i><i class="t80"></i><i class="t100"></i><i class="t100"></i>
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>9 / 10 準時</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>9 / 10 on time</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 21:00</dd>
-          <dt>視窗涵蓋</dt><dd>7 / 7 交易日</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 21:00</dd>
+          <dt>window coverage</dt><dd>7 / 7 trading day</dd>
         </dl>
-        <div class="card-foot"><span>MI_MARGN</span><span class="win">預期 21:00–22:00</span></div>
+        <div class="card-foot"><span>MI_MARGN</span><span class="win">expected 21:00–22:00</span></div>
       </article>
 
-      <!-- 心跳的價值：借券每隔幾天就拖到隔天早上，單看今天看不出來 -->
+      <!--The value of a heartbeat: Borrowing coupons is postponed to the next morning every few days. You can’t tell it by looking at it today.-->
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>借券賣出</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Borrow bonds and sell</h3><span class="chip">Already arrived</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日，其中 4 日延到隔天早上">
+          <div class="beat-bars" role="img" aria-label="close 10 trading days, of which 4 The day is extended to the next morning">
             <i class="t100"></i><i class="t30"></i><i class="t100"></i><i class="t100"></i><i class="t30"></i>
             <i class="t100"></i><i class="t30"></i><i class="t100"></i><i class="t100"></i><i class="t30"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>6 / 10 準時</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>6 / 10 on time</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-31</dd>
-          <dt>抓到時間</dt><dd>07-31 09:10</dd>
-          <dt>常態延遲</dt><dd>4 / 10 日隔天才到</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-31</dd>
+          <dt>seize the moment</dt><dd>07-31 09:10</dd>
+          <dt>normal delay</dt><dd>4 / 10 Arrived the next day</dd>
         </dl>
-        <div class="card-foot"><span>次一交易日</span><span class="win">預期 21:00–22:30</span></div>
+        <div class="card-foot"><span>next trading day</span><span class="win">expected 21:00–22:30</span></div>
       </article>
 
     </div>
@@ -265,87 +265,87 @@ body {
 
   <section class="domain">
     <div class="domain-head">
-      <h2>個股資料</h2><span class="cadence">18 檔持股</span><span class="roll">4 / 5</span>
+      <h2>Individual stock information</h2><span class="cadence">18 shareholding</span><span class="roll">4 / 5</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>日 K 線</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>day K Wire</h3><span class="chip">Already arrived</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+          <div class="beat-bars" role="img" aria-label="close 10 All trading days are on time">
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 檔全到</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 All files arrived</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>最後交易日</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>last trading day</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
         </dl>
-        <div class="card-foot"><span>daily/{代號}.json</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>daily/{code name}.json</span><span class="win">every trading day</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>估值指標</h3><span class="chip">已到齊</span></div>
+        <div class="card-top"><span class="dot"></span><h3>Valuation indicators</h3><span class="chip">Already arrived</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日全部準時">
+          <div class="beat-bars" role="img" aria-label="close 10 All trading days are on time">
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
             <i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i><i class="t100"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 檔全到</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>10 / 10・18 All files arrived</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>資料日期</dt><dd class="strong">2026-07-30</dd>
-          <dt>抓到時間</dt><dd>07-30 16:15</dd>
+          <dt>Data date</dt><dd class="strong">2026-07-30</dd>
+          <dt>seize the moment</dt><dd>07-30 16:15</dd>
         </dl>
-        <div class="card-foot"><span>BWIBBU</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>BWIBBU</span><span class="win">every trading day</span></div>
       </article>
 
       <article class="card late">
-        <div class="card-top"><span class="dot"></span><h3>個股新聞</h3><span class="chip">2 檔缺料</span></div>
+        <div class="card-top"><span class="dot"></span><h3>individual stock news</h3><span class="chip">2 Out of stock</span></div>
         <div class="beat">
-          <div class="beat-bars" role="img" aria-label="近 10 個交易日，多數日子有 1 至 2 檔查無結果">
+          <div class="beat-bars" role="img" aria-label="close 10 trading days, most days have 1 to 2 No results found in file search">
             <i class="t80"></i><i class="t100"></i><i class="t80"></i><i class="t80"></i><i class="t100"></i>
             <i class="t80"></i><i class="t100"></i><i class="t80"></i><i class="t80"></i><i class="t55"></i>
           </div>
-          <div class="beat-legend"><span>07-17</span><em>長期 16–17 / 18 檔</em><span>07-30</span></div>
+          <div class="beat-legend"><span>07-17</span><em>long 16–17 / 18 files</em><span>07-30</span></div>
         </div>
         <dl class="rows">
-          <dt>抓到時間</dt><dd class="strong">07-31 09:10</dd>
-          <dt>涵蓋</dt><dd>16 / 18 檔</dd>
-          <dt>缺</dt><dd>00929・2412</dd>
+          <dt>seize the moment</dt><dd class="strong">07-31 09:10</dd>
+          <dt>Cover</dt><dd>16 / 18 files</dd>
+          <dt>lack</dt><dd>00929・2412</dd>
         </dl>
-        <div class="card-foot"><span>來源查無結果，非故障</span><span class="win">每交易日</span></div>
+        <div class="card-foot"><span>Source check has no results, it is not a fault.</span><span class="win">every trading day</span></div>
       </article>
 
       <article class="card warn">
-        <div class="card-top"><span class="dot"></span><h3>月營收</h3><span class="chip">等待公布</span></div>
-        <div class="periods" role="img" aria-label="2025-10 至 2026-06 皆已取得，2026-07 待公布">
+        <div class="card-top"><span class="dot"></span><h3>monthly revenue</h3><span class="chip">Waiting for announcement</span></div>
+        <div class="periods" role="img" aria-label="2025-10 to 2026-06 All have been obtained,2026-07 To be announced">
           <i class="has">10</i><i class="has">11</i><i class="has">12</i><i class="has">01</i>
           <i class="has">02</i><i class="has">03</i><i class="has">04</i><i class="has">05</i>
           <i class="new">06</i><i class="wait">07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06</dd>
-          <dt>抓到時間</dt><dd>07-11 16:20</dd>
-          <dt>涵蓋</dt><dd>18 / 18 檔・12 期</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06</dd>
+          <dt>seize the moment</dt><dd>07-11 16:20</dd>
+          <dt>Cover</dt><dd>18 / 18 files・12 Expect</dd>
         </dl>
-        <div class="card-foot"><span>2026-07 於 08-10 前公布</span><span class="win">每月 10 日</span></div>
+        <div class="card-foot"><span>2026-07 At 08-10 announced before</span><span class="win">per month 10 day</span></div>
       </article>
 
       <article class="card warn">
-        <div class="card-top"><span class="dot"></span><h3>獲利能力</h3><span class="chip">等待 Q2</span></div>
-        <div class="periods" role="img" aria-label="2024-Q2 至 2026-Q1 共 8 季皆已取得，2026-Q2 待公布">
+        <div class="card-top"><span class="dot"></span><h3>Profitability</h3><span class="chip">wait Q2</span></div>
+        <div class="periods" role="img" aria-label="2024-Q2 to 2026-Q1 common 8 All seasons have been obtained,2026-Q2 To be announced">
           <i class="has">24Q2</i><i class="has">Q3</i><i class="has">Q4</i><i class="has">25Q1</i>
           <i class="has">Q2</i><i class="has">Q3</i><i class="has">Q4</i><i class="new">26Q1</i>
           <i class="wait">Q2</i>
         </div>
         <dl class="rows">
-          <dt>最新季別</dt><dd class="strong">2026-Q1</dd>
-          <dt>抓到時間</dt><dd>05-16 16:18</dd>
-          <dt>累積</dt><dd>8 / 8 季</dd>
+          <dt>Latest seasonal</dt><dd class="strong">2026-Q1</dd>
+          <dt>seize the moment</dt><dd>05-16 16:18</dd>
+          <dt>accumulation</dt><dd>8 / 8 season</dd>
         </dl>
-        <div class="card-foot"><span>毛利率 / 營益率 / 純益率</span><span class="win">每季</span></div>
+        <div class="card-foot"><span>Gross profit margin / profit margin / net profit margin</span><span class="win">quarterly</span></div>
       </article>
 
     </div>
@@ -353,76 +353,76 @@ body {
 
   <section class="domain">
     <div class="domain-head">
-      <h2>美國總體經濟</h2>
-      <span class="cadence">月頻・格子＝該期是否已取得</span>
-      <span class="roll">最後檢查 07-31 12:40</span>
+      <h2>overall U.S. economy</h2>
+      <span class="cadence">monthly frequency・Grid = Whether this period has been obtained</span>
+      <span class="roll">final check 07-31 12:40</span>
     </div>
     <div class="cards">
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>核心 CPI</h3><span class="chip">最新</span></div>
-        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 12 日公布">
+        <div class="card-top"><span class="dot"></span><h3>core CPI</h3><span class="chip">up to date</span></div>
+        <div class="periods" role="img" aria-label="2026-01 to 06 All have been obtained,07 treat 8 moon 12 announced on">
           <i class="has">01</i><i class="has">02</i><i class="has">03</i>
           <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06・+2.57 %</dd>
-          <dt>前期</dt><dd>+2.82 %</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06・+2.57 %</dd>
+          <dt>Early stage</dt><dd>+2.82 %</dd>
         </dl>
-        <div class="card-foot"><span>CPILFESL</span><span class="win">下期 08-12</span></div>
+        <div class="card-foot"><span>CPILFESL</span><span class="win">next issue 08-12</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>核心 PPI</h3><span class="chip">最新</span></div>
-        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 14 日公布">
+        <div class="card-top"><span class="dot"></span><h3>core PPI</h3><span class="chip">up to date</span></div>
+        <div class="periods" role="img" aria-label="2026-01 to 06 All have been obtained,07 treat 8 moon 14 announced on">
           <i class="has">01</i><i class="has">02</i><i class="has">03</i>
           <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06・+4.68 %</dd>
-          <dt>前期</dt><dd>+4.59 %</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06・+4.68 %</dd>
+          <dt>Early stage</dt><dd>+4.59 %</dd>
         </dl>
-        <div class="card-foot"><span>PPIFES</span><span class="win">下期 08-14</span></div>
+        <div class="card-foot"><span>PPIFES</span><span class="win">next issue 08-14</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>核心 PCE</h3><span class="chip">最新</span></div>
-        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 28 日公布">
+        <div class="card-top"><span class="dot"></span><h3>core PCE</h3><span class="chip">up to date</span></div>
+        <div class="periods" role="img" aria-label="2026-01 to 06 All have been obtained,07 treat 8 moon 28 announced on">
           <i class="has">01</i><i class="has">02</i><i class="has">03</i>
           <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06・+3.29 %</dd>
-          <dt>前期</dt><dd>+3.41 %</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06・+3.29 %</dd>
+          <dt>Early stage</dt><dd>+3.41 %</dd>
         </dl>
-        <div class="card-foot"><span>PCEPILFE</span><span class="win">下期 08-28</span></div>
+        <div class="card-foot"><span>PCEPILFE</span><span class="win">next issue 08-28</span></div>
       </article>
 
       <article class="card ok">
-        <div class="card-top"><span class="dot"></span><h3>非農就業</h3><span class="chip">最新</span></div>
-        <div class="periods" role="img" aria-label="2026-01 至 06 皆已取得，07 待 8 月 7 日公布">
+        <div class="card-top"><span class="dot"></span><h3>non-agricultural employment</h3><span class="chip">up to date</span></div>
+        <div class="periods" role="img" aria-label="2026-01 to 06 All have been obtained,07 treat 8 moon 7 announced on">
           <i class="has">01</i><i class="has">02</i><i class="has">03</i>
           <i class="has">04</i><i class="has">05</i><i class="new">06</i><i class="wait">07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-06・+57 千人</dd>
-          <dt>前期</dt><dd>+129 千人</dd>
+          <dt>By latest period</dt><dd class="strong">2026-06・+57 Thousands of people</dd>
+          <dt>Early stage</dt><dd>+129 Thousands of people</dd>
         </dl>
-        <div class="card-foot"><span>PAYEMS</span><span class="win">下期 08-07</span></div>
+        <div class="card-foot"><span>PAYEMS</span><span class="win">next issue 08-07</span></div>
       </article>
 
-      <!-- 點陣一眼看出它比別人少一期 -->
+      <!--At a glance, you can tell from the dot matrix that it has one issue less than others.-->
       <article class="card warn">
-        <div class="card-top"><span class="dot"></span><h3>消費者信心</h3><span class="chip">落後一期</span></div>
-        <div class="periods" role="img" aria-label="2026-01 至 05 已取得，06 與 07 來源尚未更新">
+        <div class="card-top"><span class="dot"></span><h3>consumer confidence</h3><span class="chip">One period behind</span></div>
+        <div class="periods" role="img" aria-label="2026-01 to 05 has been obtained,06 and 07 The source has not been updated yet">
           <i class="has">01</i><i class="has">02</i><i class="has">03</i>
           <i class="has">04</i><i class="new">05</i><i>06</i><i>07</i>
         </div>
         <dl class="rows">
-          <dt>最新期別</dt><dd class="strong">2026-05・44.8</dd>
-          <dt>前期</dt><dd>49.8</dd>
+          <dt>By latest period</dt><dd class="strong">2026-05・44.8</dd>
+          <dt>Early stage</dt><dd>49.8</dd>
         </dl>
-        <div class="card-foot"><span>UMCSENT・FRED 尚未更新</span><span class="win">下期待定</span></div>
+        <div class="card-foot"><span>UMCSENT・FRED Not updated yet</span><span class="win">To be determined next time</span></div>
       </article>
 
     </div>
@@ -434,7 +434,7 @@ body {
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

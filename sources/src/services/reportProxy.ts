@@ -1,28 +1,28 @@
 /**
- * 盤後籌碼報告：呼叫 Supabase Edge Function `stock-report`，或直接讀盤後排程預產的共用報告。
- * 未設定 Supabase 時 isReportConfigured 為 false，UI 隱藏入口。
+ * After-hours stock report: Call Supabase Edge Function `stock-report`, or directly read the shared report of after-hours scheduled production.
+ * When Supabase is not set, isReportConfigured is false and the UI entrance is hidden.
  *
- * 此檔的型別是**網路介面契約**，須與 sources/supabase/functions/stock-report/report.ts
- * 的 ReportData（schema 2）對齊；伺服器只回結構化資料，畫面全部由 React 繪製。
+ * This file is of type **Web Interface Contract** and must be consistent with sources/supabase/functions/stock-report/report.ts
+ * ReportData (schema 2) is aligned; the server only returns structured data, and the screen is all drawn by React.
  */
 import type { Market } from '../types/models'
 import { downloadReportsJson } from './reportsBucket'
 import { isSupabaseConfigured, supabase } from './supabase'
 
-/** 是否已設定 Supabase 網址與金鑰（未設定則整個盤後報告功能隱藏） */
+/** Whether the Supabase URL and key have been set (if not set, the entire after-hours reporting function will be hidden)*/
 export const isReportConfigured = isSupabaseConfigured
 
 /**
- * 前端認得的**最低**報告結構版本。
+ * The **minimum** report structure version recognized by the frontend.
  *
- * 必須是「>=」而不是「===」：伺服器每次為報告加欄位就會升 schema（2 → 3 加了 sources），
- * 而新增欄位對舊前端是無害的加法。用等號的話，後端一升版就會讓**所有**報告被判為不支援 ——
- * Storage-first 回 null、即點即產丟「格式不符」，整個籌碼分頁當場全掛。
- * 這正是 0.4.0 實際發生的事（後端升到 3、前端還鎖 2），故此處以測試釘住。
+ * It must be ">=" instead of "===": the server will upgrade the schema every time it adds a field to the report (2 → 3 adds sources),
+ * The new fields are a harmless addition to the old front end. If you use the equal sign, once the backend is upgraded, **all** reports will be judged as not supported——
+ * Storage-first returned null, and the click-and-click output lost "Format does not match", and the entire chip page failed on the spot.
+ * This is exactly what happened in 0.4.0 (backend up to 3, frontend back to lock 2), so this is pinned as a test.
  */
 export const MIN_REPORT_SCHEMA = 2
 
-/** 前端帶入的持股脈絡（Edge Function 不重算，直接放進報告） */
+/** The shareholding context brought in by the front end (Edge Function does not recalculate and is directly put into the report)*/
 export interface ReportHolding {
   qty: number
   avgCost: number
@@ -31,14 +31,14 @@ export interface ReportHolding {
   roi: number | null
 }
 
-/** 買進 / 賣出 / 買賣超三件組；來源缺該拆項時為 null */
+/** Buy / sell / buy and sell super three-piece set; if the source is missing the split item, it will be null*/
 export interface ChipLeg {
   buy: number | null
   sell: number | null
   net: number | null
 }
 
-/** 三大法人（單位：股） */
+/** Three major legal persons (unit: shares)*/
 export interface InstitutionalChip {
   foreign: ChipLeg
   foreignDealer: ChipLeg
@@ -47,7 +47,7 @@ export interface InstitutionalChip {
   total: ChipLeg
 }
 
-/** 融資融券（單位：交易單位＝張）。融券 buy＝回補、sell＝放空 */
+/** Margin margin trading (unit: trading unit = Zhang). Securities lending buy=covering, sell=short selling*/
 export interface MarginChip {
   marginBuy: number | null
   marginSell: number | null
@@ -64,7 +64,7 @@ export interface MarginChip {
   shortChange: number | null
   shortLimit: number | null
   offset: number | null
-  /** 'openapi' 為備援來源：只有餘額，無買進 / 賣出拆項 */
+  /** 'openapi' is the backup source: only balance, no buy/sell split*/
   source: 'rwd' | 'openapi'
 }
 
@@ -72,16 +72,16 @@ export interface BorrowChip {
   availableVolume: number | null
 }
 
-/** 單一交易日的籌碼快照 */
+/** Chip snapshot of a single trading day*/
 /**
- * 單一資料源的新鮮度（schema 3 起）。
- * 三個資料源公布時間差很多、批次又是分段執行，同一份報告裡各區塊的新舊本來就不同 ——
- * 只看整份報告的 generatedAt 會誤以為每塊都一樣新。
+ * Freshness from a single source (schema 3 onwards).
+ * The release times of the three data sources are quite different, and the batches are executed in sections. The old and new blocks in the same report are inherently different——
+ * Just looking at generatedAt for the entire report can lead to the illusion that every block is equally new.
  */
 export interface SourceStamp {
-  /** 資料本身所屬日期 YYYY-MM-DD（借券是「下一個交易日」，會與籌碼的資料日期不同） */
+  /** The date of the data itself is YYYY-MM-DD (the borrowing time is the "next trading day", which will be different from the data date of the chips)*/
   date: string | null
-  /** 我們實際抓到它的時間 ISO */
+  /** The time we actually caught it ISO*/
   fetchedAt: string | null
 }
 
@@ -97,7 +97,7 @@ export interface ChipDay {
   margin: MarginChip | null
 }
 
-/** 連買連賣 / 連增連減：正數＝連續 N 天買超（增加），負數＝連續 N 天賣超（減少） */
+/** Continuous buying and selling/continuous increasing and decreasing: Positive number = over-buying (increasing) for N consecutive days, negative number = over-selling (decreasing) for N consecutive days*/
 export interface ChipStreaks {
   foreign: number
   foreignDealer: number
@@ -119,10 +119,10 @@ export interface ReportData {
   institutional: InstitutionalChip | null
   margin: MarginChip | null
   borrow: BorrowChip | null
-  /** 由舊到新，最多 7 個交易日 */
+  /** Old to new, up to 7 trading days*/
   history: ChipDay[]
   streaks: ChipStreaks
-  /** schema 3 起才有；schema 2 的報告為 undefined，UI 須容忍 */
+  /** Available only from schema 3 onwards; schema 2 is reported as undefined and must be tolerated by the UI*/
   sources?: ReportSources
   notes: string[]
 }
@@ -141,14 +141,14 @@ interface GenerateReportResponse {
   data: ReportData
 }
 
-/** 結構是否為前端認得的報告（schema 1 的舊 HTML 格式一律當未命中） */
+/** Report whether the structure is recognized by the front end (the old HTML format of schema 1 will always be regarded as a miss)*/
 function isSupportedReport(d: unknown): d is ReportData {
   if (!d || typeof d !== 'object') return false
   const r = d as Partial<ReportData>
   return typeof r.schema === 'number' && r.schema >= MIN_REPORT_SCHEMA && Array.isArray(r.history)
 }
 
-/** 即點即產：未預產（不在持股清單 / 當日尚未產）時的 fallback，較慢但可用 */
+/** Immediate delivery: fallback when delivery is not scheduled (not in the holding list/has not yet been delivered on the day), slower but available*/
 export async function generateReport(input: GenerateReportInput): Promise<ReportData> {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('Supabase 未設定')
@@ -165,12 +165,12 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
   return data.data
 }
 
-// ---- Storage-first：讀取盤後排程預先產好的共用報告（reports bucket）----
+// ----Storage-first: Read the pre-generated shared reports (reports bucket) scheduled after reading the disk----
 
 /**
- * 讀取盤後排程預產的共用報告（不含個人持股，持股概況由前端自行渲染）。
- * 先讀 manifest 取得最近交易日，再讀 {ymd}/{ticker}.json。
- * 查無或格式非 schema 2 時回 null，呼叫端 fallback 即點即產。
+ * Read the shared report of the after-hours scheduled production (excluding individual shareholdings, the shareholding profile is rendered by the front end).
+ * First read the manifest to get the latest transaction date, and then read {ymd}/{ticker}.json.
+ * If the result is not found or the format is not schema 2, null will be returned, and the caller's fallback will be generated immediately.
  */
 export async function fetchStoredReport(ticker: string): Promise<ReportData | null> {
   if (!isSupabaseConfigured || !supabase) return null

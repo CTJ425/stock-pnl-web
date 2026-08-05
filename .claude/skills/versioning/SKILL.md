@@ -1,32 +1,32 @@
 ---
 name: versioning
-description: stock-pnl-web 的版本號決定規則。要決定下一個版號、在 dev 分支上遞增 dev.N、或把 dev 併入 main 定版、撰寫 README 版本紀錄時使用。
+description: The version number determination rule of stock-pnl-web. Use it when you want to determine the next version number, increment dev.N on the dev branch, merge dev into main for final version, or write a README version record.
 ---
 
-# 版本號規範細則
+# Version number specification details
 
-前提（`CLAUDE.md` §12 已載明，此處不重複）：版號不帶 `v` 前綴，
-三處必須同步 —— `sources/src/version.ts`、`sources/package.json`（連同 `package-lock.json`）、`README.md`。
+Prerequisite (`CLAUDE.md` §12 has been stated and will not be repeated here): the version number does not have the `v` prefix,
+Three places must be synchronized - `sources/src/version.ts`, `sources/package.json` (together with `package-lock.json`), `README.md`.
 
-## 正式版本（`main` 分支）
+## Official version (`main` branch)
 
-格式為 **`x.x.x`**（標準 semver，不帶任何尾綴）。
+The format is **`x.x.x`** (standard semver, without any suffix).
 
-- 依照前一個正式版號**依序遞增 patch**（例：`0.3.6` → `0.3.7`）。
-- **除非是大版本異動**（破壞性變更、架構重構、功能里程碼），才進 minor 或 major（例：`0.3.7` → `0.4.0` → `1.0.0`）。
-- `README.md` 的「版本紀錄」以正式版號為標題並定稿。
+- Increment patches** sequentially according to the previous official version number** (for example: `0.3.6` → `0.3.7`).
+- **Unless it is a major version change** (destructive changes, architectural reconstruction, functional mileage code), enter minor or major (for example: `0.3.7` → `0.4.0` → `1.0.0`).
+- The "version record" of `README.md` is titled and finalized with the official version number.
 
-## 測試版本（`dev` 及其他開發分支）
+## Test versions (`dev` and other development branches)
 
-格式為 **`x.x.x-dev.x`**（注意：`dev` 與序號之間是**點號** `.`，不是連字號）：
+The format is **`x.x.x-dev.x`** (note: there is a **dot** `.` between `dev` and the serial number, not a hyphen):
 
-- `x.x.x` = 這批 dev 工作併入 `main` 後會成為的正式版號（依上一節決定）。
-- 最後的 `.x` = 該正式版號在 dev 期間的**異動次數**，從 `1` 起、每次有意義的異動 +1。
-- 範例：目標 `0.3.7`、第 2 次異動 → `0.3.7-dev.2`。
+- `x.x.x` = The official version number that this batch of dev work will become after being merged into `main` (determined according to the previous section).
+- The last `.x` = the **number of changes** of the official version number during the dev period, starting from `1`, each meaningful change +1.
+- Example: Target `0.3.7`, second change → `0.3.7-dev.2`.
 
-`README.md` 版本紀錄在 dev 期間以「未來正式版號（開發中）」為標題，底下用 `dev.1 / dev.2 …` 分段列出各次異動。
+The `README.md` version record is titled "Future official version number (under development)" during the dev period, and each change is listed in sections with `dev.1 / dev.2...` underneath.
 
-## 併入 main
+## merge into main
 
-把 `-dev.<N>` 尾綴去掉即為正式版號（`0.3.7-dev.2` → `0.3.7`），並把該版的版本紀錄定稿。
-目的：讓正式與測試版號永遠對得起來，不再出現正式停在 `0.3.6`、測試卻跳到 `0.3.8` 的落差。
+Remove the `-dev.<N>` suffix to get the official version number (`0.3.7-dev.2` → `0.3.7`), and finalize the version record of this version.
+Purpose: To always match the official and beta version numbers, so that there will no longer be a gap where the official version stops at `0.3.6`, but the test version jumps to `0.3.8`.

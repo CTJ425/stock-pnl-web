@@ -20,8 +20,8 @@ function quote(asOf: string, stale = false, tradeTime: string | null = null): Pr
 }
 
 /*
- * 台股 TTL 自 0.6.36 起隨台北時間浮動，所以這裡一律固定系統時間再測。
- * 05:00Z = 台北 13:00（盤中），沿用它讓既有的 60 秒案例維持原意。
+ * The TTL of Taiwan stocks has fluctuated with Taipei time since 0.6.36, so the system time will be fixed here before testing.
+ * 05:00Z = Taipei 13:00 (intraday), use this to keep the existing 60-second case as it is.
  */
 const INTRADAY = '2026-07-20T05:00:00Z'
 
@@ -36,7 +36,7 @@ describe('cacheTtlMs', () => {
   })
 
   it('收盤後：帶收盤定案值的台股鎖到隔天 08:25，美股不受影響', () => {
-    // 07:00Z = 台北 15:00，收盤後 90 分鐘 → 距離隔天 08:25 還有 17 小時 25 分
+    // 07:00Z = Taipei 15:00, 90 minutes after the close → 17 hours and 25 minutes until 08:25 the next day
     vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
     const closed = quote('2026-07-20T05:30:00Z', false, '13:30:00')
     expect(cacheTtlMs('TPE:2330', closed)).toBe((17 * 60 + 25) * 60 * 1000)
@@ -44,8 +44,8 @@ describe('cacheTtlMs', () => {
   })
 
   /*
-   * 0.6.37：沒有撮合時間就不鎖。正式區踩過 —— 升級前寫入的快取列沒有這個欄位，
-   * 卻被鎖到隔天早上，畫面一路顯示「盤中」、開高低量全是「—」。
+   * 0.6.37: No locking until matching time. The official area has been checked - the cache column written before the upgrade does not have this field.
+   * But it was locked until the next morning, and the screen showed "Intraday" all the way, and the open high and low volume all showed "-".
    */
   it('收盤後：拿不到撮合時間的台股快取不鎖，會重抓', () => {
     vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
@@ -80,14 +80,14 @@ describe('isFresh', () => {
   })
 
   it('收盤價在整個夜間都算新鮮 —— 這是「收盤後不再抓價」的實際效果', () => {
-    // 台北 22:00 打開頁面，快取是當天 13:30 收盤抓的
+    // Open the page at 22:00 in Taipei, and the cache is captured at the close of trading at 13:30 that day.
     vi.setSystemTime(new Date('2026-07-20T14:00:00Z'))
     const closed = quote('2026-07-20T05:30:00Z', false, '13:30:00')
     expect(isFresh('TPE:2330', closed, Date.parse('2026-07-20T14:00:00Z'))).toBe(true)
   })
 
   it('13:30 剛過但撮合還沒落地的過渡值不鎖夜，仍走 60 秒', () => {
-    // 05:31Z = 台北 13:31，來源回的最後撮合時間還停在 13:29:58
+    // 05:31Z = Taipei 13:31, the last matching time from the source is still at 13:29:58
     vi.setSystemTime(new Date('2026-07-20T05:31:00Z'))
     const pending = quote('2026-07-20T05:29:00Z', false, '13:29:58')
     expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:31:00Z'))).toBe(false)

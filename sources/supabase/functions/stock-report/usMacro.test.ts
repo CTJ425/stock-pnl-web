@@ -13,8 +13,8 @@ import {
 } from './usMacro.ts'
 
 /**
- * fixture 逐字取自 2026-07-28 對 fredgraph.csv 的實際回應（節錄）。
- * 刻意保留空值列（`1952-12,`）與三位小數 —— 那些正是解析器要扛住的東西。
+ * fixture is taken verbatim from the actual response to fredgraph.csv on 2026-07-28 (excerpt).
+ * Deliberately retaining null columns (`1952-12,`) and three decimal places - those are the things the parser is meant to handle.
  */
 const UMCSENT_HEAD = `observation_date,UMCSENT
 1952-11-01,86.2
@@ -22,7 +22,7 @@ const UMCSENT_HEAD = `observation_date,UMCSENT
 1953-01-01,
 1953-02-01,90.7`
 
-/** 25 個月的等比序列，方便手算驗證年增與月增 */
+/** 25-month geometric series, convenient for hand calculation to verify annual and monthly growth*/
 function synth(id: string, start: number, step: number, months = 25): string {
   const rows = ['observation_date,' + id]
   for (let i = 0; i < months; i++) {
@@ -77,13 +77,13 @@ describe('parseFredCsv', () => {
 
 describe('deriveIndicator', () => {
   it('yoy：與 12 個月前相比的百分比', () => {
-    // 2024-01 起 100、每月 +1，共 25 個月。前 12 個月算不出年增，
-    // 可用的是 2025-01…2026-01 共 13 期，取最後 12 期 → 2025-02…2026-01
+    // 100 from 2024-01, +1 per month, for a total of 25 months. The first 12 months do not add up to annual growth;
+    // Available are 2025-01…2026-01, a total of 13 periods, take the last 12 periods → 2025-02…2026-01
     const ind = deriveIndicator(spec('yoy'), parseFredCsv(synth('X', 100, 1)))
     expect(ind.unit).toBe('%')
-    // 2025-02 = 113，基期 2024-02 = 101 → 11.88%
+    // 2025-02 = 113, base period 2024-02 = 101 → 11.88%
     expect(ind.points[0]).toEqual({ period: '2025-02', value: 11.88 })
-    // 2026-01 = 124，基期 2025-01 = 112 → 10.71%
+    // 2026-01 = 124, base period 2025-01 = 112 → 10.71%
     expect(ind.latest).toEqual({ period: '2026-01', value: 10.71 })
   })
 
@@ -114,7 +114,7 @@ describe('deriveIndicator', () => {
       return m <= 12 ? `2025-${String(m).padStart(2, '0')}-01,100` : `2026-01-01,100`
     })].join('\n')
     const ind = deriveIndicator(spec('yoy'), parseFredCsv(csv))
-    // 2026-01 的基期是 2025-01 的 0 → 不得產生 Infinity
+    // The base period of 2026-01 is 0 of 2025-01 → Infinity must not be generated
     expect(ind.points.every((p) => p.value === null || Number.isFinite(p.value))).toBe(true)
   })
 
@@ -139,7 +139,7 @@ describe('FRED_SERIES', () => {
 })
 
 describe('macroFingerprint', () => {
-  /** 造一個指標，只有 points 是重點 */
+  /** Create an indicator, only points is the focus*/
   const ind = (id: string, points: [string, number | null][]): MacroIndicator => ({
     id,
     label: id,
@@ -170,8 +170,8 @@ describe('macroFingerprint', () => {
   })
 
   it('歷史值被修正也算變動——只比最新一期會漏掉 FRED 的回頭修正', () => {
-    // 2026-07-30 的 vintage 就同時把 2026-04 與 2026-05 改掉了，
-    // 最新一期的期別沒變。指紋只涵蓋 latest 的話，這種修正永遠追不上。
+    // The vintage of 2026-07-30 has changed 2026-04 and 2026-05 at the same time.
+    // The latest issue remains unchanged. If the fingerprint only covers latest, this correction will never catch up.
     const revised = [base[0], ind('PCEPILFE', [['2026-04', 3.33], ['2026-05', 3.41]])]
     expect(macroFingerprint(revised)).not.toBe(macroFingerprint(base))
   })
@@ -193,8 +193,8 @@ describe('macroFingerprint', () => {
 
 describe('MACRO_UA', () => {
   it('不得宣稱自己是瀏覽器——FRED 會直接重置連線', () => {
-    // 0.6.5-dev.1 第一次部署就是沿用 twChips 的瀏覽器 UA，整批抓不到，
-    // 而錯誤被 catch 吃掉，只剩 macroSynced: false 一個線索。
+    // The first deployment of 0.6.5-dev.1 is to use the browser UA of twChips, and the entire batch cannot be caught.
+    // The error is eaten by catch, leaving only macroSynced: false as a clue.
     expect(MACRO_UA).not.toContain('Mozilla')
     expect(MACRO_UA).not.toContain('Chrome')
     expect(MACRO_UA).not.toContain('Safari')

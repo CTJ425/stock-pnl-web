@@ -1,19 +1,19 @@
 /**
- * 技術面分頁：日 K + 均線、成交量、KD，以及最新一日的指標摘要。
+ * Technical page: daily K + moving average, trading volume, KD, and indicator summary for the latest day.
  *
- * 資料來自盤後排程預產、存於公開 reports bucket 的 daily/{ticker}.json（見 services/dailyProxy.ts），
- * 前端直接下載、不經 Edge Function。查無時補叫一次 warm（新加入的股票還沒被夜間批次涵蓋），
- * 節流規則見 services/warmStock.ts —— 同代號每個 session 只試一次。
+ * The data comes from daily/{ticker}.json (see services/dailyProxy.ts), which is scheduled for after-hours production and stored in the public reports bucket.
+ * The front-end downloads directly without going through Edge Function. A warm call is made when there is no check (the newly added stocks have not been covered by the night batch),
+ * For throttling rules, see services/warmStock.ts - the same codename will only be tried once per session.
  *
- * **試過用 IntersectionObserver 延後到「捲到才載」，量過之後拿掉了**（0.6.8）：
- * 四段併成一頁時，掛載當下籌碼與基本面都還在載、各自只有一個 spinner，
- * 整頁不到 500px 高 —— 技術面本來就在視窗內，observer 立刻判定可見而照樣載。
- * 要讓它真的延後就得在上面兩段預留一兩千像素的假高度，那是用猜的。
- * 而實際省下的只有一個約 17KB 的 Storage 請求（warmStock 的 session 名額
- * 早就被基本面那條路徑用掉了），不值得換一個「宣稱延後、實際每次都載」的機制。
+ * **Tried to use IntersectionObserver to defer to "until loading", and then removed it after measuring** (0.6.8):
+ * When the four paragraphs are combined into one page, the chips and fundamentals are still loaded at the moment of mounting, and each has only one spinner.
+ * The entire page is less than 500px high - the technical page is already in the window, and the observer immediately determines that it is visible and loads it anyway.
+ * To make it really delayed, you have to reserve a false height of one or two thousand pixels in the upper two sections. That's just guessing.
+ * What is actually saved is only one Storage request of about 17KB (warmStock’s session quota)
+ * It has long been used by the fundamental path), and it is not worth changing to a mechanism that "claims to be delayed, but is actually loaded every time".
  *
- * 台股術語對照（PLAN.md §L 所稱的「日線 / 週線 / 季線」）：
- * 週線＝MA5、月線＝MA20、季線＝MA60。UI 兩種說法並陳，免得只認得其中一種的人看不懂。
+ * Comparison of Taiwan stock terminology (called "daily/weekly/quarterly lines" in PLAN.md §L):
+ * Weekly line = MA5, monthly line = MA20, quarterly line = MA60. The two terms of UI are stated side by side, so that people who only recognize one of them will not understand.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, LineChart, RefreshCw } from 'lucide-react'
@@ -33,7 +33,7 @@ import {
 
 const RANGES: RangeKey[] = ['3m', '6m', '1y']
 
-/** 均線的類別色：短中長各一，依序指派不循環 */
+/** Category colors of moving averages: one each for short, medium and long, assigned in sequence without looping*/
 const MA_COLORS = {
   ma5: CATEGORICAL_COLORS[0],
   ma20: CATEGORICAL_COLORS[1],
@@ -42,7 +42,7 @@ const MA_COLORS = {
 
 const KD_COLORS = { k: CATEGORICAL_COLORS[0], d: CATEGORICAL_COLORS[3] } as const
 
-/** 價格：台股多為兩位小數以內，去掉無意義的尾隨零 */
+/** Price: Most Taiwanese stocks are within two decimal places, with meaningless trailing zeros removed.*/
 function fmtPrice(v: number): string {
   return v.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
@@ -52,7 +52,7 @@ function fmtNum(v: number | null | undefined, digits = 2): string {
   return v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
-/** 成交量以「張」呈現（1 張 = 1000 股），與台股看盤軟體一致 */
+/** Trading volume is presented in "ticks" (1 tick = 1,000 shares), which is consistent with the Taiwan stock market reading software.*/
 function fmtLots(shares: number): string {
   return `${Math.round(shares / 1000).toLocaleString('en-US')} 張`
 }
@@ -87,7 +87,7 @@ export function TechnicalTab({ ticker, reloadKey = 0 }: { ticker: string; reload
     return () => {
       alive = false
     }
-    // reloadKey：使用者按「重新整理」時強制重抓（本層與 dailyProxy 都沒有快取，重跑即最新）
+    // reloadKey: Force re-fetching when the user clicks "Refresh" (neither this layer nor dailyProxy has cache, re-run will be the latest)
   }, [ticker, reloadKey])
 
   const view = useMemo(

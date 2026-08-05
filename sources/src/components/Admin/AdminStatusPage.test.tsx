@@ -8,7 +8,7 @@ vi.mock('../../services/adminStatus', () => ({ fetchAdminStatus, isAdmin: vi.fn(
 import { AdminStatusPage } from './AdminStatusPage'
 import type { AdminStatus } from '../../services/adminStatus'
 
-/** 逐字取自 2026-07-31 測試區 admin-status 的實際回應（節錄） */
+/** Verbatim taken from the actual response of admin-status in the test area on 2026-07-31 (excerpt)*/
 const status: AdminStatus = {
   asOf: '2026-07-31T04:50:00.000Z',
   todayYmd: '20260731',
@@ -57,7 +57,7 @@ const status: AdminStatus = {
     sources: {
       institutional: { date: '2026-07-30', fetchedAt: '2026-07-30T08:15:04.519Z' },
       margin: { date: '2026-07-30', fetchedAt: '2026-07-30T13:00:03.949Z' },
-      // 借券拖到隔天早上才抓到 —— 真實情況，也是唯一該亮紅燈的一項
+      // Borrowing coupons was not caught until the next morning - the real situation, and the only one that should have a red light
       borrow: { date: '2026-07-31', fetchedAt: '2026-07-31T01:10:36.222Z' },
     },
   },
@@ -72,17 +72,17 @@ const status: AdminStatus = {
         unit: '%',
         latest: { period: '2026-06', value: 2.57 },
         previous: { period: '2026-05', value: 2.82 },
-        // 由後端依官方行事曆算好；CPI 2026-07 期的官方公告日
+        // Calculated by the back end according to the official calendar; the official announcement date of the CPI 2026-07 period
         nextRelease: { date: '2026-08-12', period: '2026-07', estimated: false },
       },
       {
-        // 落後一期：其他指標到 2026-06，只有它停在 2026-05
+        // One period behind: other indicators to 2026-06, only it stops at 2026-05
         id: 'UMCSENT',
         label: '消費者信心',
         unit: '指數',
         latest: { period: '2026-05', value: 44.8 },
         previous: { period: '2026-04', value: 49.8 },
-        // UMCSENT 不在行事曆中（已停更、不密集掃）
+        // UMCSENT is not in the calendar (no updates, no intensive scanning)
         nextRelease: null,
       },
     ],
@@ -90,11 +90,11 @@ const status: AdminStatus = {
   fx: { asOf: '2026-07-31T03:00:02.713Z', count: 8 },
   market: {
     schema: 2,
-    // 資料日當天台北 18:00（market-daily 最後一班）—— 時間軸據此判定為準時
+    // Taipei 18:00 on the data day (the last market-daily flight) - the timeline is judged to be on time accordingly
     asOf: '2026-07-30T10:00:00.000Z',
     days: 120,
     latestDate: '2026-07-31',
-    // 法人比量能晚一天是正常的（15:00 才公布、逐日回補）
+    // It is normal for the legal person to be one day later than the quantity (announced only at 15:00 and supplemented daily)
     latestInstitutionalDate: '2026-07-30',
     missingInstitutional: 1,
     missingBuySell: 12,
@@ -135,7 +135,7 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '排程' })
-    // 每一個排程列都要標出目標環境，故綁 fixture 的排程數而不是寫死數字
+    // Each schedule column must indicate the target environment, so it is tied to the schedule number of the fixture rather than a hard-coded number.
     expect(screen.getAllByText('wqetxuhncvfidqnklyew').length).toBe(status.schedules.length)
   })
 
@@ -144,11 +144,11 @@ describe('AdminStatusPage', () => {
     render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '台股全市場・量能與三大法人' })
 
-    // 日期字串整頁到處都有，斷言必須限定在這一段之內
+    // Date strings appear all over the page, and assertions must be limited to this paragraph.
     const section = within(
       screen.getByRole('heading', { name: '台股全市場・量能與三大法人' }).closest('.section')!,
     )
-    // 週期直接翻譯 market-daily 的 cron，前端不另存一份常數
+    // The cycle directly translates market-daily's cron, and the front-end does not save a separate copy of the constants.
     expect(section.getByText('週一至週五 16:00 / 17:00 / 18:00')).toBeTruthy()
     expect(section.getByText('2026-07-31')).toBeTruthy() // 最新交易日
     expect(section.getByText('2026-07-30')).toBeTruthy() // 法人只到前一天，正常
@@ -177,19 +177,19 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    // 兩份不同的資料，名字必須一眼分得出來
+    // Two different pieces of information, the names must be distinguishable at a glance
     expect(screen.getByText('三大法人・全市場')).toBeTruthy()
     expect(screen.getByText('T86')).toBeTruthy()
-    // 副標要講明這個時刻是檔案產出，不是法人金額到手的時刻
+    // The subtitle should indicate that this time is the output of the file, not the time when the legal person's amount is received.
     expect(screen.getByText('BFI82U・檔案產出時間')).toBeTruthy()
-    // 18:00 產出、界線是 18:15 → 準時，不該把這一列算進「需要注意」
+    // 18:00 output, boundary is 18:15 → on time, this column should not be included in "needs attention"
     expect(screen.queryByText('有 3 項需要注意')).toBeNull()
   })
 
   /*
-   * 2026-08-05 實際遇到的錯：全市場 BFI82U 走獨立排程、16:00 就抓到當天資料，
-   * 個股 T86 要等 16:30 那輪。基準日綁在個股報告上時，標題停在前一天，
-   * 而已到手的全市場那列被拿前一天 15:00 當原點，算出 25 小時、判成延遲。
+   * 2026-08-05 Actual errors encountered: BFI82U in the whole market uses independent scheduling and captures the data of the day at 16:00.
+   * For individual stocks T86, you have to wait for the 16:30 round. When the base date is tied to an individual stock report, the title stops at the previous day.
+   * The acquired market-wide column was taken as the starting point at 15:00 of the previous day, and 25 hours was calculated and judged as a delay.
    */
   it('全市場先到手時，整條軸跟著跳到新一輪，個股顯示等待中（0.6.36-dev.2）', async () => {
     fetchAdminStatus.mockResolvedValue({
@@ -202,22 +202,22 @@ describe('AdminStatusPage', () => {
       },
     })
     render(<AdminStatusPage />)
-    // 標題跟著跑得快的那個來源走，而不是停在個股報告的 7/30
+    // The headline follows the fastest source, rather than stopping at 7/30 of the individual stock report.
     await screen.findByText('台股盤後・2026-07-31 這一輪')
 
     const rowOf = (label: string) =>
       [...document.querySelectorAll('.ast-row')].find((r) => r.querySelector('b')?.textContent === label)!
 
-    // 全市場：16:00 到手 → 畫在軸上且不是延遲
+    // Whole market: 16:00 arrival → drawn on the axis and not delayed
     const market = rowOf('三大法人・全市場')
     expect(market.querySelector('.ast-hit-t')?.textContent).toBe('16:00')
     expect(market.querySelector('.ast-pill')?.textContent).not.toBe('延遲')
 
-    // 個股 T86：還停在上一輪 → 不拿舊時間戳畫點，顯示等待中
+    // Individual stock T86: Still stuck in the previous round → Dots are not drawn with the old timestamp, and it is displayed as waiting.
     const inst = rowOf('三大法人・個股')
     expect(inst.querySelector('.ast-hit-t')).toBeNull()
     expect(inst.querySelector('.ast-pill')?.textContent).toBe('等待中')
-    // 上一輪的日期不顯示，否則會被讀成本輪已到手
+    // The date of the previous round is not displayed, otherwise it will be read that the current round has been obtained.
     expect(inst.querySelector('.ast-date')).toBeNull()
   })
 
@@ -232,11 +232,11 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    // 只數時間軸上的時刻標籤：.ast-when 是手機才顯示的複本，
-    // 但 jsdom 不套 CSS，用 getAllByText 會把它一起數進來
+    // Just count the time labels on the timeline: .ast-when is the copy that is displayed on the mobile phone.
+    // But jsdom does not include CSS. Use getAllByText to count it together.
     const onAxis = [...document.querySelectorAll('.ast-hit-t')].map((e) => e.textContent)
     expect(onAxis.filter((t) => t === '16:15').length).toBe(2)
-    // 圖例把這條規則寫在畫面上，否則看起來像雙標
+    // The legend writes this rule on the screen, otherwise it looks like a double standard
     expect(screen.getByText(/公布窗結束後的第一個批次班次/)).toBeTruthy()
   })
 
@@ -258,7 +258,7 @@ describe('AdminStatusPage', () => {
   it('需要注意的項數出現在最上方的結論', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
-    // 借券延遲 + 消費者信心落後 = 2 項
+    // Borrowing delays + lagging consumer confidence = 2 items
     expect(await screen.findByText('有 2 項需要注意')).toBeTruthy()
   })
 
@@ -274,7 +274,7 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/今日班次/)
-    // macro-daily 是 0 13,15 UTC → 台北 21:00 / 23:00
+    // macro-daily is 0 13,15 UTC → Taipei 21:00 / 23:00
     expect(screen.getByText(/21:00・/)).toBeTruthy()
     expect(screen.getByText(/23:00・/)).toBeTruthy()
     expect(screen.getByText('美東發布')).toBeTruthy()
@@ -285,7 +285,7 @@ describe('AdminStatusPage', () => {
     render(<AdminStatusPage />)
     await screen.findByText(/今日班次/)
     expect(screen.getByText('下次抓取')).toBeTruthy()
-    // 下次抓取是 cron 算得出來的、100% 確定；發布日是推估的，兩者不可混為一談
+    // The next crawl is calculated by cron and is 100% certain; the release date is estimated, and the two cannot be confused.
     expect(screen.getByText('（官方公告日）')).toBeTruthy()
     expect(screen.getByText('下一筆新數據')).toBeTruthy()
   })
@@ -302,7 +302,7 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/今日班次/)
-    // 改用後端依官方行事曆算好的確定日期（不再是前端自推的區間）
+    // Switch to using the determined date calculated by the back-end according to the official calendar (no longer the interval self-promoted by the front-end)
     const rows = [...document.querySelectorAll('.data-table tbody tr')]
     const cpi = rows.find((r) => r.textContent?.includes('CPILFESL'))!
     expect(cpi.textContent).toContain('2026-08-12')

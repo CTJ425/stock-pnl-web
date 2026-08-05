@@ -12,7 +12,7 @@ vi.mock('../../services/fxQuoteProxy', () => ({ fetchFxQuotes }))
 import { FxPage } from './FxPage'
 import type { FxData, FxPoint } from '../../services/fxProxy'
 
-/** 由舊到新的 n 天序列，最後一天固定為 2026-07-29 */
+/** A sequence of n days from old to new, with the last day fixed at 2026-07-29*/
 function series(n: number, from: number, to: number): FxPoint[] {
   const out: FxPoint[] = []
   const end = Date.UTC(2026, 6, 29)
@@ -24,11 +24,11 @@ function series(n: number, from: number, to: number): FxPoint[] {
 }
 
 /**
- * asOf 一律相對於「執行測試的當下」，不寫死日期。
+ * asOf is always relative to "the current time when the test is executed" and does not include a hard date.
  *
- * 過期判斷（isStale）比的是 asOf 與 new Date()，寫死日期的話這幾個案例
- * 過了 3 天就會自己變紅；而改用 vi.useFakeTimers() 會讓 testing-library 的
- * findBy* 永遠等不到（它的 waitFor 靠真實 timer 推進），整支測試直接掛住。
+ * Expiration judgment (isStale) compares asOf and new Date(). If the date is hard-coded, these are the cases.
+ * It will turn red on its own after 3 days; using vi.useFakeTimers() instead will make testing-library
+ * findBy* can never wait (its waitFor is advanced by the real timer), and the entire test hangs directly.
  */
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
 
@@ -61,7 +61,7 @@ describe('FxPage', () => {
   beforeEach(() => {
     fetchFx.mockReset()
     fetchFxQuotes.mockReset()
-    // 預設「取不到即時報價」，個別案例再覆寫
+    // Default "cannot get real-time quotation", and overwrite it in individual cases
     fetchFxQuotes.mockResolvedValue({})
     localStorage.clear()
   })
@@ -83,7 +83,7 @@ describe('FxPage', () => {
     fetchFx.mockResolvedValue(fx)
     render(<FxPage />)
     expect(await screen.findByText('外幣匯率')).toBeTruthy()
-    // USD 3 位、JPY 4 位
+    // USD 3 digits, JPY 4 digits
     expect(screen.getByText('32.387')).toBeTruthy()
     expect(screen.getByText('0.1956')).toBeTruthy()
   })
@@ -119,9 +119,9 @@ describe('FxPage', () => {
     fetchFx.mockResolvedValue(fx)
     render(<FxPage />)
     await screen.findByText('外幣匯率')
-    // USD 32.387 > 前一日 32.302 ⇒ 台幣要付更多才換得到 ⇒ 台幣貶值
+    // USD 32.387 > Previous day 32.302 ⇒ You have to pay more to get Taiwan dollar ⇒ Taiwan dollar depreciates
     expect(screen.getByText('台幣貶值')).toBeTruthy()
-    // JPY 0.1956 < 前一日 0.1972 ⇒ 台幣升值
+    // JPY 0.1956 < Previous day 0.1972 ⇒ Taiwan dollar appreciates
     expect(screen.getByText('台幣升值')).toBeTruthy()
   })
 
@@ -165,7 +165,7 @@ describe('FxPage', () => {
     fetchFx.mockResolvedValue(fx)
     const { container } = render(<FxPage />)
     await screen.findByText('美元走勢')
-    // 走勢區塊內兩張 SVG
+    // Two SVGs in the trend block
     const charts = container.querySelectorAll('.fx-chart svg')
     expect(charts).toHaveLength(2)
   })
@@ -178,12 +178,12 @@ describe('FxPage', () => {
 
     const texts = screen.getAllByText(/^高 /).map((el) => el.textContent ?? '')
     expect(texts).toHaveLength(2)
-    // 反向（新臺幣/日圓）量級約 5，正向（日圓/新臺幣）量級約 0.2
+    // The reverse (NTD/JPY) magnitude is about 5, and the forward (JPY/NTD) magnitude is about 0.2
     const inv = texts.find((t) => /高 [45]\./.test(t))
     const fwd = texts.find((t) => /高 0\./.test(t))
     expect(inv).toBeTruthy()
     expect(fwd).toBeTruthy()
-    // 兩邊都不該出現 Infinity 或一整排 0
+    // There should be no Infinity or a row of 0's on either side
     expect(texts.join()).not.toContain('Infinity')
     expect(texts.join()).not.toMatch(/高 0（/)
   })
@@ -210,7 +210,7 @@ describe('FxPage', () => {
     fetchFx.mockResolvedValue({ ...fx, asOf: daysAgo(5) })
     render(<FxPage />)
     expect(await screen.findByText(/已超過 3 天未更新/)).toBeTruthy()
-    // 過期不等於不能看，數字仍要顯示
+    // Expired does not mean that you cannot view it, the numbers must still be displayed
     expect(screen.getByText('32.387')).toBeTruthy()
   })
 
@@ -229,7 +229,7 @@ describe('FxPage', () => {
     })
     render(<FxPage />)
     expect(await screen.findByText('32.478')).toBeTruthy()
-    // 收盤價 32.387 不該再出現在卡片上
+    // The closing price of 32.387 should no longer appear on the card
     expect(screen.queryByText('32.387')).toBeNull()
   })
 
@@ -271,7 +271,7 @@ describe('FxPage', () => {
     })
     render(<FxPage />)
     await screen.findByText('32.478')
-    // JPY 沒有即時報價，仍顯示每日檔的 0.1956
+    // There is no real-time quote for JPY, still showing 0.1956 on the daily basis
     expect(screen.getByText('0.1956')).toBeTruthy()
   })
 

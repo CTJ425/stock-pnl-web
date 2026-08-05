@@ -11,7 +11,7 @@ import type { MacroData } from '../../services/macroProxy'
 
 const macro: MacroData = {
   asOf: '2026-07-28T07:33:38.000Z',
-  // 同一天檢查過 —— 這種情況不該多印一段「最後檢查」（沒有資訊量）
+  // Inspected on the same day - In this case, there should not be an extra paragraph of "Final Inspection" (no information)
   checkedAt: '2026-07-28T07:33:38.000Z',
   region: '美國',
   indicators: [
@@ -36,7 +36,7 @@ const macro: MacroData = {
       note: '較上月增減',
       latest: { period: '2026-06', value: 57 },
       previous: { period: '2026-05', value: 129 },
-      // 發布時程不同：這一項少一期，走勢表不得因此錯位
+      // The release schedule is different: this item is missing one issue, and the trend chart must not be misaligned because of this.
       points: [{ period: '2026-06', value: 57 }],
     },
     {
@@ -78,9 +78,9 @@ describe('MacroPage', () => {
     const { container } = render(<MacroPage />)
     await screen.findByText('美國總體經濟')
     const chips = [...container.querySelectorAll('.mac-chip')].map((e) => e.textContent)
-    // % / 千人 / 指數 三種口徑各自成立
+    // %/Thousand people/Index Three calibers are established separately
     expect(chips).toEqual(['核心 CPI+2.57%', '非農就業+57 千人', '消費者信心44.8'])
-    // 舊的 KPI 卡整組移除，細節改由表格負責
+    // The entire set of old KPI cards has been removed, and the details are now handled by the form.
     expect(container.querySelectorAll('.kpi-value')).toHaveLength(0)
     expect(container.querySelectorAll('.mac-chip .mac-spark')).toHaveLength(0)
   })
@@ -97,9 +97,9 @@ describe('MacroPage', () => {
       '非農就業',
       '消費者信心',
     ])
-    // 指標說明由卡片底部搬進列裡，字卡瘦身後仍看得到
+    // The indicator description has been moved from the bottom of the card to the column, and can still be seen after the word card is slimmed down.
     expect(rows[0].querySelector('.mac-row-note')?.textContent).toBe('排除食品與能源後的年增率')
-    // 兩點以上畫得出走勢線；非農只有一期，該格印「—」
+    // A trend line can be drawn at more than two points; there is only one issue of non-agricultural products, and the box is marked with "—"
     expect(rows[0].querySelectorAll('.mac-spark')).toHaveLength(1)
     expect(rows[1].querySelectorAll('.mac-spark')).toHaveLength(0)
   })
@@ -108,7 +108,7 @@ describe('MacroPage', () => {
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
     await screen.findByText('美國總體經濟')
-    // 三個指標的最新期別：CPI 與非農同為 2026-06，消費者信心停在 2026-05
+    // The latest period of the three indicators: CPI and non-farm payrolls are both 2026-06, and consumer confidence stopped at 2026-05
     const badges = [...container.querySelectorAll('.mac-row-label .badge')].map((e) => e.textContent)
     expect(badges).toEqual(['落後 1 期'])
   })
@@ -121,7 +121,7 @@ describe('MacroPage', () => {
     fetchMacro.mockResolvedValue({
       ...macro,
       indicators: macro.indicators.map((ind) =>
-        // 消費者信心改成比上期高，用來對照「升＝紅」
+        // Consumer confidence is changed to be higher than the previous period, used to compare "rising = red"
         ind.id === 'UMCSENT' ? { ...ind, previous: { period: '2026-04', value: 40 } } : ind,
       ),
     })
@@ -141,7 +141,7 @@ describe('MacroPage', () => {
   })
 
   it('連 2 期以上才在「連續」欄印字，否則給「—」而非留白', async () => {
-    // 核心 CPI 連三期走低；非農只有一期、消費者信心只有兩期，都構不成趨勢
+    // Core CPI fell for three consecutive periods; non-farm payrolls only fell for one period, and consumer confidence only fell for two periods, neither of which constitutes a trend.
     fetchMacro.mockResolvedValue({
       ...macro,
       indicators: macro.indicators.map((ind) =>
@@ -185,7 +185,7 @@ describe('MacroPage', () => {
     })
     const { container } = render(<MacroPage />)
     await screen.findByText('美國總體經濟')
-    // 缺值之後只剩 2.82 → 2.57 一段降幅，連 1 期不成趨勢
+    // After the missing value, there is only a period of decline from 2.82 → 2.57, which is not a trend for one period in a row.
     const streaks = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')].map(
       (r) => r.querySelectorAll('td')[4].textContent,
     )
@@ -202,7 +202,7 @@ describe('MacroPage', () => {
     await user.click(screen.getByRole('button', { name: /展開 核心 CPI/ }))
     expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
     expect(screen.getByText('核心 CPI 明細')).toBeTruthy()
-    // 明細由新到舊，與父表相反（走勢線才由舊到新）
+    // The details are from new to old, which is opposite to the parent table (the trend line is from old to new)
     const detailRows = [...container.querySelectorAll('.detail-row tbody tr')]
     expect(detailRows.map((r) => r.querySelector('td')!.textContent)).toEqual([
       '2026 年 06 月',
@@ -236,8 +236,8 @@ describe('MacroPage', () => {
   })
 
   it('資料已數日未變時補上「最後檢查」，讓沒發布與排程掛掉分得開', async () => {
-    // 0.6.11 起 asOf 只在資料真的變動時才跳，月度數據一個月才動一次。
-    // 少了這行，畫面上會像是壞掉了。
+    // Starting from 0.6.11, asOf only jumps when the data really changes, and monthly data only moves once a month.
+    // Without this line, the screen will look broken.
     fetchMacro.mockResolvedValue({ ...macro, checkedAt: '2026-07-31T13:00:01.000Z' })
     render(<MacroPage />)
     expect(await screen.findByText(/最後檢查 2026-07-31 \d{2}:\d{2}/)).toBeTruthy()

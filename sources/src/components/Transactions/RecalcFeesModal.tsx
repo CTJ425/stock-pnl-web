@@ -1,8 +1,8 @@
 /**
- * 批次重算手續費：
- * - 依「目前工作區費率＋最低手續費」找出所有不一致的台股交易，列表預覽
- * - 逐筆勾選（預設全選）後一鍵更新；當沖等特殊稅率的交易可取消勾選改用個別編輯
- * - 美股不納入批次重算（各券商收費結構差異大）
+ * Batch recalculation fee:
+ * - Find all inconsistent Taiwan stock transactions based on "current workspace rate + minimum handling fee" and preview the list
+ * - Check each transaction one by one (select all by default) and then update with one click; for transactions with special tax rates such as hedging, you can uncheck the check box and use individual editing instead.
+ * - U.S. stocks are not included in the batch recalculation (the charging structures of each brokerage vary greatly)
  */
 import { useMemo, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'

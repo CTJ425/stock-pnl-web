@@ -10,13 +10,13 @@ import {
 import { type ChartResponse } from './twDaily.ts'
 
 /**
- * fixture 取自 2026-07-29 對 query1.finance.yahoo.com 的實際回應（JPYTWD=X，range=1y）。
+ * fixture is taken from the actual response to query1.finance.yahoo.com on 2026-07-29 (JPYTWD=X, range=1y).
  *
- * 三格是原樣照抄的真實情況，不是假想的邊界：
- * - 索引 0–2：序列開頭，注意 timestamp 是 23:00Z 而 gmtoffset 是 3600（倫敦）
- * - 索引 3：2025-12-25 耶誕節，close 為 null
- * - 索引 4–5：同為 2026-07-29 —— 前者是「今天的日線還沒收」（null），
- *   後者是 Yahoo 附加的即時報價列（epoch 不是整點，且等於 meta.regularMarketTime）
+ * The three grids are copied as they are, not imaginary boundaries:
+ * - Index 0–2: Beginning of sequence, note timestamp is 23:00Z and gmtoffset is 3600 (London)
+ * - Index 3: 2025-12-25 Christmas, close is null
+ * - Index 4–5: both 2026-07-29 - the former is "Today's daily line has not been confiscated" (null),
+ *   The latter is Yahoo's additional real-time quote column (epoch is not a whole point, and is equal to meta.regularMarketTime)
  */
 const REAL: ChartResponse = {
   chart: {
@@ -46,7 +46,7 @@ const REAL: ChartResponse = {
 describe('extractFxPoints', () => {
   it('以 gmtoffset 換算日期 —— 不加位移會整條倒退一天', () => {
     const pts = extractFxPoints(REAL, false)
-    // 1753743600 = 2025-07-28T23:00Z；加 1 小時才進到 07-29
+    // 1753743600 = 2025-07-28T23:00Z; add 1 hour to 07-29
     expect(pts[0][0]).toBe('2025-07-29')
     expect(new Date(1753743600 * 1000).toISOString().slice(0, 10)).toBe('2025-07-28')
   })
@@ -58,7 +58,7 @@ describe('extractFxPoints', () => {
 
   it('剔除 Yahoo 附加的即時報價列（ts === meta.regularMarketTime）', () => {
     const pts = extractFxPoints(REAL, false)
-    // 2026-07-29 那天只剩一格 null 日線與一格即時價，兩者都該被排除
+    // 2026-07-29 There is only one null frame left that day, the daily line and the real-time price, both of which should be excluded.
     expect(pts.map((p) => p[0])).not.toContain('2026-07-29')
     expect(pts.map((p) => p[1])).not.toContain(0.1956)
   })
@@ -79,7 +79,7 @@ describe('extractFxPoints', () => {
   })
 
   it('反向幣對的即時報價被剔除 —— 實測人民幣會多算 4.47% 的日變動', () => {
-    // TWDCNY=X 實際回應：日線 0.20936(→4.7766)，附加的即時列 0.2004(→4.9900)
+    // TWDCNY=X Actual response: daily line 0.20936(→4.7766), additional real-time column 0.2004(→4.9900)
     const resp: ChartResponse = {
       chart: {
         result: [
@@ -93,7 +93,7 @@ describe('extractFxPoints', () => {
     }
     const pts = extractFxPoints(resp, true)
     expect(pts).toHaveLength(2)
-    // 留下的兩筆彼此相差不到 0.1%，不會出現 4.47% 的假跳動
+    // The remaining two transactions are less than 0.1% different from each other, and there will be no false jump of 4.47%.
     const jump = Math.abs(pts[1][1] / pts[0][1] - 1) * 100
     expect(jump).toBeLessThan(0.1)
   })
@@ -108,7 +108,7 @@ describe('extractFxPoints', () => {
   })
 
   it('invert 取倒數，換算出「1 外幣 = N 台幣」', () => {
-    // TWDCNY=X 報的是 1 台幣換多少人民幣，要倒過來才是我們存的方向
+    // TWDCNY=X quotes how much RMB is exchanged for 1 Taiwan dollar. The reverse is the direction for our deposit.
     const resp: ChartResponse = {
       chart: {
         result: [
@@ -162,7 +162,7 @@ describe('FX_CURRENCIES', () => {
     for (const c of FX_CURRENCIES) {
       expect(c.symbols).toHaveLength(2)
       for (const s of c.symbols) {
-        // TWD 在前 ⇒ 報的是 1 台幣換多少外幣 ⇒ 必須 invert
+        // TWD comes first ⇒ What is quoted is how much foreign currency is exchanged for 1 Taiwan dollar ⇒ Must invert
         expect(s.invert).toBe(s.symbol.startsWith('TWD'))
       }
       expect(new Set(c.symbols.map((s) => s.symbol)).size).toBe(2)
@@ -172,7 +172,7 @@ describe('FX_CURRENCIES', () => {
   it('人民幣把台幣在前的那側排第一 —— 實測 CNYTWD=X 只回一格', () => {
     const cny = FX_CURRENCIES.find((c) => c.code === 'CNY')!
     expect(cny.symbols[0].symbol).toBe('TWDCNY=X')
-    // 其餘幣別都是外幣在前
+    // The remaining currencies are all foreign currencies first.
     for (const c of FX_CURRENCIES.filter((x) => x.code !== 'CNY')) {
       expect(c.symbols[0].symbol).toBe(`${c.code}TWD=X`)
     }

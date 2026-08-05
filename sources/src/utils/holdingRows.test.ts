@@ -4,7 +4,7 @@ import { computeLedger } from './pnlEngine'
 import type { PriceMap } from '../services/priceProxy'
 import type { Transaction } from '../types/models'
 
-/** 測試用報價：只有 price / prevClose / stale 有意義，其餘是型別要求的欄位 */
+/** Quotation for testing: only price / prevClose / stale are meaningful, the rest are fields required by the type*/
 const quote = (price: number, stale = false, prevClose: number | null = null): PriceMap[string] => ({
   price,
   prevClose,
@@ -47,7 +47,7 @@ describe('buildHoldingRows', () => {
     const [row] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
     expect(row.mktVal).toBe(120000)
     expect(row.unrealized).not.toBeNull()
-    // 台股預扣賣出手續費與證交稅，故淨損益必定小於純價差
+    // Taiwan stocks withhold selling fees and securities taxes, so the net profit or loss must be less than the pure price difference
     expect(row.unrealized!).toBeLessThan(row.rawUnrealized!)
     expect(row.roi).toBeCloseTo(row.unrealized! / row.holding.cost, 10)
     expect(row.priceStale).toBe(false)
@@ -61,7 +61,7 @@ describe('buildHoldingRows', () => {
     expect(row.unrealized).toBeNull()
     expect(row.rawUnrealized).toBeNull()
     expect(row.roi).toBeNull()
-    // 保本價不需要現價，仍算得出來
+    // The breakeven price does not require the current price, it can still be calculated.
     expect(row.breakEven).toBeGreaterThan(0)
   })
 
@@ -87,7 +87,7 @@ describe('buildHoldingRows', () => {
     const prices: PriceMap = { 'TPE:2330': quote(100) }
     const [oddRow] = buildHoldingRows(odd, prices, 0.001425)
     const [wholeRow] = buildHoldingRows(whole, prices, 0.001425)
-    // 兩者都預扣了賣出成本，故未實現淨損益均為負；整股的絕對金額較大（部位大 10 倍）
+    // Both have withheld selling costs, so the net unrealized gains and losses are negative; the absolute amount of the entire stock is larger (the position is 10 times larger)
     expect(oddRow.unrealized!).toBeLessThan(0)
     expect(wholeRow.unrealized!).toBeLessThan(oddRow.unrealized!)
   })

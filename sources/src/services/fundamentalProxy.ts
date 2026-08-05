@@ -1,12 +1,12 @@
 /**
- * 基本面（估值 + 月營收 + 產業別）：讀取盤後排程預產、存於公開 `reports` bucket 的
+ * Fundamentals (valuation + monthly revenue + industry): Read the after-hours scheduled production and save it in the public `reports` bucket
  * `fundamental/{ticker}.json`。
  *
- * 沒有「即點即產」的 fallback，理由同 dailyProxy：個股分析頁的選單只列台股持股，
- * 正是夜間批次 `generate-all` 涵蓋的清單。查無檔案代表批次還沒跑過。
+ * There is no fallback for "click and buy", the reason is the same as dailyProxy: the selection list on the individual stock analysis page only lists Taiwan stocks.
+ * Exactly the list covered by the nightly batch `generate-all`. Checking no files means that the batch has not been run yet.
  *
- * 此檔的型別是**網路介面契約**，須與 sources/supabase/functions/stock-report/twFundamental.ts
- * 的 FundamentalFile 對齊。單位陷阱：月營收為千元、殖利率與增減率為 %（欄位名已帶單位）。
+ * This file is of type **Web Interface Contract** and must be consistent with sources/supabase/functions/stock-report/twFundamental.ts
+ * The FundamentalFile is aligned. Unit trap: The monthly revenue is 1,000 yuan, the profit rate and the increase/decrease rate are % (the column name already contains the unit).
  */
 import { downloadReportsJson } from './reportsBucket'
 
@@ -14,7 +14,7 @@ export interface Valuation {
   peRatio: number | null
   dividendYieldPercent: number | null
   pbRatio: number | null
-  /** BWIBBU 檔的資料日 YYYY-MM-DD */
+  /** Data date of BWIBBU file YYYY-MM-DD*/
   dataDate: string | null
 }
 
@@ -28,50 +28,50 @@ export interface RevenueMonth {
 }
 
 /**
- * 一季的獲利能力比率（0.6.5 起）。單位一律 %，欄位名寫死稅前 / 稅後：
- * 「淨利率」在台灣的口語同時指兩者，用它當欄位名一定會被誤讀。
+ * Profitability ratio for one quarter (from 0.6.5). The unit must always be %, and the field name must be written before tax/after tax:
+ * "Net profit margin" is a colloquial term in Taiwan that refers to both, so using it as a field name will definitely be misunderstood.
  */
 export interface ProfitQuarter {
   /** 'YYYY-Qn' */
   yearQuarter: string
   revenueMillionTwd: number | null
-  /** 毛利率 */
+  /** Gross profit margin*/
   grossMarginPercent: number | null
-  /** 營益率 */
+  /** profit margin*/
   operatingMarginPercent: number | null
-  /** 稅前純益率 */
+  /** Net profit margin before tax*/
   pretaxMarginPercent: number | null
-  /** 稅後純益率 */
+  /** net profit margin after tax*/
   netMarginPercent: number | null
   /**
-   * 基本每股盈餘（元，0.6.28 起）。
+   * Basic earnings per share (yuan, starting from 0.6.28).
    *
-   * 比率是「賺得有多好」，EPS 是「一股賺了多少錢」——它是與本益比對得起來的那個數字。
-   * **只有回補路徑補得到**，所以最新一季通常會晚幾天才出現（見後端 epsChecked）。
+   * A ratio is "how well earned" and EPS is "how much is earned per share" - it is the number that compares to the price-to-earnings ratio.
+   * **Only backend paths are available**, so the latest season usually appears a few days later (see backend epsChecked).
    */
   epsTwd: number | null
 }
 
 export interface FundamentalData {
   ticker: string
-  /** 批次產出時間 ISO */
+  /** Batch output time ISO*/
   asOf: string
-  /** 批次的交易日 YYYY-MM-DD */
+  /** The trading day of the batch YYYY-MM-DD*/
   dataDate: string
   industry: string | null
   valuation: Valuation | null
   revenueUnit: '千元'
-  /** 由舊到新，最多 12 個月 */
+  /** Old to new, up to 12 months*/
   revenueMonths: RevenueMonth[]
-  /** 由舊到新，最多 8 季。schema 1 的舊檔沒有這一欄，正規化後為空陣列 */
+  /** Oldest to Newest, up to 8 seasons. The old file of schema 1 does not have this column, and it is an empty array after normalization.*/
   profitQuarters: ProfitQuarter[]
   notes: string[]
 }
 
 /**
- * 前端認得的**最低**基本面結構版本。
- * 必須是「>=」而不是「===」：後端加欄位就會升 schema，新增欄位對舊前端是無害的加法；
- * 用等號會在後端升版時讓整個分頁當場全掛（0.4.0 在籌碼報告上真實發生過）。
+ * The **minimum** version of the fundamental structure that the front end recognizes.
+ * It must be ">=" instead of "===": adding fields to the backend will upgrade the schema, and adding new fields is a harmless addition to the old frontend;
+ * Using the equal sign will cause the entire page to crash when the backend is upgraded (this actually happened in the chip report in 0.4.0).
  */
 export const MIN_FUNDAMENTAL_SCHEMA = 1
 
@@ -136,7 +136,7 @@ function isSupported(d: unknown): d is StoredFundamental {
   return typeof f.schema === 'number' && f.schema >= MIN_FUNDAMENTAL_SCHEMA
 }
 
-/** 讀某檔的基本面；查無 / 格式不符回 null */
+/** Read the fundamentals of a certain file; find none/return null if the format does not match*/
 export async function fetchFundamental(ticker: string): Promise<FundamentalData | null> {
   const stored = await downloadReportsJson<StoredFundamental>(`fundamental/${ticker}.json`)
   if (!isSupported(stored)) return null
@@ -145,7 +145,7 @@ export async function fetchFundamental(ticker: string): Promise<FundamentalData 
     ? stored.revenueMonths.map(normalizeRevenueMonth).filter((m): m is RevenueMonth => m !== null)
     : []
 
-  // schema 1 的舊檔沒有這一欄；缺欄與空陣列在畫面上是同一件事（沒有獲利能力可看）
+  // The old file of schema 1 does not have this column; the missing column and the empty array are the same thing on the screen (no profitability to see)
   const quarters = Array.isArray(stored.profitQuarters)
     ? stored.profitQuarters.map(normalizeProfitQuarter).filter((q): q is ProfitQuarter => q !== null)
     : []

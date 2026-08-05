@@ -1,39 +1,39 @@
 ---
 name: verify
-description: 驗證 stock-pnl-web 變更：啟動 vite dev server 後以 Playwright 驅動本機模式 UI
+description: Verify stock-pnl-web changes: drive native mode UI with Playwright after starting vite dev server
 ---
 
-# 驗證流程（本機模式，免 Supabase）
+# Verification process (native mode, no need for Supabase)
 
-## 啟動
+## start up
 
 ```bash
-cd sources && npm run dev   # http://localhost:5173，未設 Supabase env 時自動進入本機模式
+cd sources && npm run dev # http://localhost:5173, automatically enter local mode when Supabase env is not set
 ```
 
-## 以 Playwright 驅動
+## Powered by Playwright
 
-> ⚠️ 2026-07-21 實測：`~/.npm/_npx` 與 `~/.cache/ms-playwright` 已無 playwright（npx 快取會被清）。
-> 純文案 / DOM 結構的驗證請優先加進 `src/App.smoke.test.tsx`（jsdom + Testing Library）——
-> 比一次性瀏覽器腳本耐久，還順便變成回歸測試。真正需要像素或版面掃描時，才 `npm i -D playwright && npx playwright install chromium`。
+> ⚠️ 2026-07-21 Actual measurement: `~/.npm/_npx` and `~/.cache/ms-playwright` no longer have playwright (npx cache will be cleared).
+> For verification of pure copywriting/DOM structure, please add `src/App.smoke.test.tsx` (jsdom + Testing Library) first——
+> It is more durable than a one-time browser script and also becomes a regression test. When you really need pixel or layout scanning, use `npm i -D playwright && npx playwright install chromium`.
 
-- 專案未安裝 playwright，若 npx 快取仍在：以
+- The project does not have playwright installed, if the npx cache is still there:
   `NODE_PATH=$(find ~/.npm/_npx -maxdepth 4 -name playwright -type d | head -1 | xargs dirname) node <script>.js`
-  執行 `require('playwright')` 腳本；chromium 已裝於 `~/.cache/ms-playwright`。
-- 免登入注入測試資料（localStorage）後 `page.reload()`：
+  Execute the `require('playwright')` script; chromium is installed in `~/.cache/ms-playwright`.
+- `page.reload()` after injecting test data (localStorage) without logging in:
   - `stock-pnl-web/local-store-v1`：`{ workspaces: [{id,name,created_at}], transactions: [{id,workspace_id,tx_date,market:'TPE'|'US',ticker,name,tx_type:'BUY'|'SELL',price,qty,fee_tax,created_at}] }`
-  - `stock-pnl-web/current-workspace`：工作區 id（總覽模式已於 v0.2.1 移除）
-- 常用選擇器：工作區切換 `.ws-select select`（selectOption）、分頁 `getByRole('button', {name:'交易紀錄'})`、
-  新增交易 FAB `.fab`、通知 `.notice-ok` / `.notice-warn`、表格 `.data-table`。
-- 原生 confirm 對話框：`page.on('dialog', d => d.accept())`。
-- 匯出 CSV：`page.waitForEvent('download')` 搭配點擊「匯出 CSV」。
+  - `stock-pnl-web/current-workspace`: workspace id (overview mode was removed in v0.2.1)
+- Commonly used selectors: workspace switching `.ws-select select` (selectOption), paging `getByRole('button', {name:'Transaction Record'})`,
+  Added transaction FAB `.fab`, notification `.notice-ok` / `.notice-warn`, and table `.data-table`.
+- Native confirm dialog: `page.on('dialog', d => d.accept())`.
+- Export CSV: `page.waitForEvent('download')` and click "Export CSV".
 
-## 值得驅動的流程
+## A process worth driving
 
-- 交易勾選 → 刪除選取 → `.notice-ok` 成功通知
-- CSV 匯出 → 貼回匯入 Modal 驗證解析（含「工作區」欄且多工作區的舊備份檔會被整批拒絕）
-- 現價為外部 API：無網路時顯示骨架屏 / 快取價，驗證勿依賴現價欄位
+- Transaction check → Delete selection → `.notice-ok` Success notification
+- CSV export → paste back the imported Modal verification analysis (old backup files containing the "Workspace" column and multiple workspaces will be rejected in batches)
+- The current price is an external API: when there is no network, the skeleton screen/cache price is displayed. Do not rely on the current price field for verification.
 
-## 注意
+## Notice
 
-- `pkill -f vite` 會連自己的 shell 一起殺（指令列含 "vite"）；改記下 PID 再 kill。
+- `pkill -f vite` will kill your own shell as well (the command line contains "vite"); write down the PID and then kill.

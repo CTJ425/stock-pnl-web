@@ -1,16 +1,16 @@
 /**
- * 「總體經濟」頂層頁面：美國五項總體經濟指標。
+ * "General Economy" top page: Five general economic indicators in the United States.
  *
- * 0.6.5-dev.1 時這是個股分析底下的一個分頁，dev.2 提為頂層頁 ——
- * **這份資料與個股無關**，全市場共用一份。掛在個股分析底下會逼使用者
- * 先選一檔股票，才看得到一份跟那檔股票無關的資料，還得特地印一行
- * 「與您正在查看的個股無關」來補救。提到頂層之後那句話就不必了。
+ * In 0.6.5-dev.1, this was a page under individual stock analysis, and dev.2 was promoted to the top page——
+ * **This information has nothing to do with individual stocks** and is shared by the entire market. Hanging under individual stock analysis will force users to
+ * After selecting a stock first, you can see a piece of information that has nothing to do with that stock, and you have to print a special line
+ * "It has nothing to do with the stock you are looking at" to remedy the situation. That sentence is unnecessary after mentioning the top layer.
  *
- * 資料來自 `macro/us.json`（全域單檔，非 per-ticker），本元件**自己載入** ——
- * 它不再有父元件可以分發（`AiTab` 需要同一份資料時自己去抓，見該檔說明）。
+ * The data comes from `macro/us.json` (global single file, not per-ticker), this component **loads itself** ——
+ * It no longer has a parent component to distribute (`AiTab` needs to grab the same data by itself, see the description of this file).
  *
- * 單位陷阱：三個物價指標是 **%**（年增率）、非農是**千人**（較上月增減）、
- * 消費者信心是**指數值**。一律讀資料自帶的 `unit`，不要在這裡寫死。
+ * Unit Trap: The three price indicators are **%** (annual growth rate), non-agriculture is **thousand people** (increase or decrease from the previous month),
+ * Consumer confidence is an **index value**. Always read the `unit` that comes with the information, and don’t write it down here.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronsDownUp, ChevronsUpDown, Globe, Minus, Plus, RefreshCw } from 'lucide-react'
@@ -21,7 +21,7 @@ import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { latestPeriod, periodsBehind } from './macroPeriod'
 import { TwMarketSection } from './TwMarketSection'
 
-/** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
+/** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a)
   const db = new Date(b)
@@ -29,14 +29,14 @@ function isSameDay(a: string, b: string): boolean {
   return da.toDateString() === db.toDateString()
 }
 
-/** 'YYYY-MM' → 'YYYY 年 MM 月' */
+/** 'YYYY-MM' → 'YYYY year MM month'*/
 function fmtPeriod(period: string | undefined): string {
   if (!period) return '—'
   const m = period.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]} 年 ${m[2]} 月` : period
 }
 
-/** 帶單位的值。缺值回「—」（不以 0 冒充） */
+/** Value with unit. Return "-" if missing value (do not pretend to be 0)*/
 function fmtValue(v: number | null | undefined, unit: string): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—'
   if (unit === '指數') return v.toFixed(1)
@@ -44,7 +44,7 @@ function fmtValue(v: number | null | undefined, unit: string): string {
   return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
 }
 
-/** 與前一期的差；兩期都要有值才算得出來（缺一期回 null，不以 0 冒充「持平」） */
+/** The difference from the previous period; both periods must have value to be calculated (if one period is missing, null will be returned, and 0 will not be used to pretend to be "flat")*/
 function delta(latest: MacroPoint | null, previous: MacroPoint | null): number | null {
   const a = latest?.value
   const b = previous?.value
@@ -52,7 +52,7 @@ function delta(latest: MacroPoint | null, previous: MacroPoint | null): number |
   return a - b
 }
 
-/** 帶正負號的變化量。單位跟著指標走（千人不取小數、其餘兩位） */
+/** A signed delta. The unit follows the indicator (thousands of people do not take decimals, the remaining two digits)*/
 function fmtDelta(d: number | null, unit: string): string {
   if (d === null) return '—'
   if (Math.abs(d) < 0.005) return '持平'
@@ -61,22 +61,22 @@ function fmtDelta(d: number | null, unit: string): string {
 }
 
 /**
- * 每一期與其前一期的差，由舊到新，長度與 `points` 相同（第一期沒有前一期，為 null）。
- * 表格的顏色、走勢線方向、連續判定全部由這一份推導，避免三處各算一次而漂移。
+ * The difference between each period and the previous period, from old to new, has the same length as `points` (the first period has no previous period, so it is null).
+ * The color of the table, the direction of the trend line, and the continuous judgment are all derived from this one to avoid drifting due to counting each of the three places once.
  */
 function deltaSeries(points: MacroPoint[]): Array<number | null> {
   return points.map((p, i) => (i === 0 ? null : delta(p, points[i - 1])))
 }
 
 /**
- * 連續同向的期數（0.6.34），仿台股法人表的「連續」欄。
+ * The number of consecutive periods in the same direction (0.6.34), imitating the "continuous" column of the Taiwan stock legal person table.
  *
- * **但判定的東西不一樣，不能直接沿用 `trendAt`**：法人買賣超看的是金額的正負號
- * （買超 / 賣超本身就有方向），而 CPI 年增率永遠是正的，正負號沒有意義 ——
- * 這裡看的是**與前一期相比的升降**。
+ * **But the judgment is different and cannot be used directly. `trendAt`**: Legal person trading depends on the positive and negative sign of the amount.
+ * (Overbuying/overselling has its own direction), and the annual growth rate of CPI is always positive, and the plus and minus signs are meaningless——
+ * What you look at here is the increase or decrease compared to the previous period.
  *
- * `points` 由舊到新。缺值的期別會中斷計算：把它當成「與前一期相同」會把兩段
- * 不相干的升勢接成一段，比少報一期更糟。
+ * `points` from oldest to newest. A missing period will break the calculation: treating it as "same as the previous period" will cause the two periods to
+ * A continuation of unrelated uptrends is worse than underreporting by one period.
  */
 function risingStreak(points: MacroPoint[]): { direction: 1 | -1; periods: number } | null {
   const values: number[] = []
@@ -92,15 +92,15 @@ function risingStreak(points: MacroPoint[]): { direction: 1 | -1; periods: numbe
     if (Math.sign(values[i] - values[i - 1]) !== direction) break
     periods++
   }
-  // 連 1 期不是趨勢，只是「這期比上期高」，而那句話上面那行已經說了
+  // 1 period in a row is not a trend, it is just "this period is higher than the previous period", and the line above that sentence has already been said
   return periods >= 2 ? { direction: direction as 1 | -1, periods } : null
 }
 
 /**
- * 瘦身後的指標 chip（0.6.35 取代原本的五張 KPI 卡）。
+ * The reduced indicator chip (0.6.35 replaces the original five KPI cards).
  *
- * 只留名稱與最新值：期別、較上期、走勢、連續、說明全部在下方那張表裡，
- * 卡片版等於把同一份數字說兩次。這一行的用途只有「現在幾 %」的快速一覽。
+ * Only the name and latest value are left: period, compared to the previous period, trend, continuity, and description are all in the table below.
+ * The card version is equivalent to saying the same number twice. The purpose of this line is just a quick look at "what % is now".
  */
 function IndicatorChip({ ind }: { ind: MacroIndicator }) {
   return (
@@ -112,11 +112,11 @@ function IndicatorChip({ ind }: { ind: MacroIndicator }) {
 }
 
 /**
- * 展開某個指標的逐期明細（0.6.35）。
+ * Expand the period-by-period details of an indicator (0.6.35).
  *
- * 巢狀表格的寫法與台股法人表的 `DayDetail` 一致：明細是「期別 × 數值 / 較上期」，
- * 與父列的欄位形狀不同，硬塞進同一組欄位只會逼出一堆 colSpan 佔位格。
- * 由新到舊，與父表相反 —— 表格第一列要是最近的那期，走勢線才由舊到新。
+ * The writing method of the nested table is consistent with the `DayDetail` of the Taiwan stock legal person table: the detail is "period × value / compared to the previous period",
+ * Unlike the column shape of the parent column, forcing the same set of columns will just force a bunch of colSpan placeholders.
+ * From new to old, contrary to the parent table - if the first column of the table is the most recent period, the trend line will go from old to new.
  */
 function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
   const deltas = deltaSeries(ind.points)
@@ -149,16 +149,16 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
 }
 
 /**
- * 指標列：一列一個指標，右側掛自己的趨勢線與連續期數（0.6.35）。
+ * Indicator column: one indicator per column, with its own trend line and consecutive periods (0.6.35) hanging on the right.
  *
- * ⚠️ **顏色的規則是「紅＝比上期高、綠＝比上期低」，紅不等於好。**
- * 0.6.34 之前非農就業是依**數值正負**上色（就業人數增加＝紅），改成全表一致之後
- * 它跟著看升降 —— 所以「+57 千人但比上期少 72」現在是綠的。同一張表不能有些格子
- * 紅代表「值是正的」、有些代表「比上期高」，兩套規則並存比一套規則更難讀。
- * 表格下方那句 hint 就是為了講明這件事，不可刪。
+ * ⚠️ **The color rule is "red = higher than the previous issue, green = lower than the previous issue", red does not mean good. **
+ * 0.6.34 Previously, non-agricultural employment was colored according to the positive and negative values ​​(increase in employment = red). After changing it to be consistent across the table
+ * It follows the rise and fall - so "+57 thousand but 72 less than last period" is now green. There cannot be multiple grids in the same table
+ * Red means "the value is positive", and some means "it is higher than the previous period". The coexistence of two sets of rules is more difficult to read than one set of rules.
+ * The hint below the table is to explain this and cannot be deleted.
  *
- * 走勢線畫的是**該指標自己的 12 期數值**（不是升降量）：使用者要看的是
- * 「這個指標往哪走」，畫升降量會變成一條在 0 上下跳的線，看不出水位。
+ * The trend line draws **the indicator's own 12-period value** (not the increase or decrease): what the user wants to see is
+ * "Where is this indicator going?" If you draw the increase or decrease, it will become a line jumping above and below 0, and the water level cannot be seen.
  */
 function IndicatorRow({
   ind,
@@ -282,7 +282,7 @@ export function MacroPage() {
     )
   }
 
-  // 落後判定的基準是「同組其他指標最新到哪一期」，不查發布行事曆（見 macroPeriod.ts）
+  // The benchmark for lagging behind is "which period is the latest for other indicators in the same group", without checking the release calendar (see macroPeriod.ts)
   const peerLatest = latestPeriod(macro.indicators.map((i) => i.latest?.period))
 
   const toggle = (id: string) =>
@@ -340,7 +340,7 @@ export function MacroPage() {
       {/*
         一列一個指標（0.6.35，原本是一列一個月份）。
 
-        **為什麼要轉置**：法人表的「趨勢／連續」描述的是「合計」這一個序列，
+        **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
         而五個總經指標沒有合計可言（單位是 %、千人、指數，加總沒有意義）。
         轉成一列一個指標之後，趨勢與連續描述的就是該指標自己的 12 期 —— 語意才成立，
         而且對回法人表「一列一個東西 ＋ 它自己的趨勢與連續」的形狀。

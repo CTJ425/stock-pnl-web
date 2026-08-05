@@ -1,19 +1,19 @@
 /**
- * 報價卡：今日開高低量、昨收與今收（0.6.36，取代原本的「我的持股」卡）。
+ * Quotation card: Today's opening high and low volume, yesterday's closing and today's closing (0.6.36, replacing the original "My Holdings" card).
  *
- * 七格全部來自同一筆現價回應（TWSE MIS 的 o/h/l/v/y/z/ip），不另外請求 ——
- * 這也是不用 TWSE OpenAPI 日收盤端點的原因：實測收盤後兩小時它仍停在前一個交易日，
- * 拿它當「今收」會把昨收當成今收（2026-08-05 實測差 3.6%）。
+ * All seven boxes come from the same current price response (TWSE MIS’s o/h/l/v/y/z/ip), no additional requests are made——
+ * This is also the reason why the TWSE OpenAPI daily closing endpoint is not used: it still stops at the previous trading day two hours after the actual closing.
+ * Taking it as "today's closing" will regard yesterday's closing as today's closing (actual measured difference on 2026-08-05 is 3.6%).
  *
- * 這張卡是公開市場資料、不含個資，所以放在 PDF 擷取範圍內；
- * 被它取代的持股卡當初排在範圍外，正是因為那是個資。
+ * This card is public market data and does not contain personal information, so it is included in the PDF extraction range;
+ * The shareholding card it replaced was originally outside the scope precisely because it was a capital.
  */
 import { Inbox } from 'lucide-react'
 import { isClosed, tradeDateLabel, type PriceQuote } from '../../services/priceProxy'
 import { fmtPrice, pnlClass } from '../../utils/formatters'
 import { fmtInt } from './chipFormat'
 
-/** 卡片標題右側的狀態：什麼時候的報價、是不是快取 */
+/** The status on the right side of the card title: when was the quotation and whether it was cached*/
 export function quoteMeta(quote: PriceQuote | null): string {
   if (!quote) return '尚未取得'
   const day = tradeDateLabel(quote.tradeDate)
@@ -44,7 +44,7 @@ export function QuoteTab({ quote }: { quote: PriceQuote | null }) {
   }
 
   const closed = isClosed(quote)
-  // 昨收缺漏時不著色（平盤色），與庫存總覽現價欄同一個原則：不拿現價自己冒充基準
+  // It will not be colored (flat color) when there are missing items in yesterday's collection. The principle is the same as the current price column in the inventory overview: do not use the current price as a benchmark.
   const dayChange = quote.prevClose === null ? null : quote.price - quote.prevClose
 
   return (

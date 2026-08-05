@@ -1,7 +1,7 @@
 /**
- * 登入狀態管理：
- * - Supabase 模式：email/密碼註冊與登入，維持 session
- * - 本機模式（未設定 Supabase）：免登入，直接以本機使用者進入
+ * Login status management:
+ * - Supabase mode: email/password registration and login, maintaining session
+ * - Local mode (no Supabase is set): no need to log in, enter directly as the local user
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -15,19 +15,19 @@ export interface AuthUser {
 export interface AuthState {
   mode: 'local' | 'supabase'
   user: AuthUser | null
-  /** session 還原中（首屏 loading） */
+  /** Session is being restored (first screen loading)*/
   loading: boolean
-  /** 使用者由「重設密碼」信件連結進入，應提示設定新密碼 */
+  /** Users who enter through the "Reset Password" email link should be prompted to set a new password.*/
   recovery: boolean
-  /** 回傳錯誤訊息；成功為 null */
+  /** Returns an error message; null on success*/
   signIn: (email: string, password: string) => Promise<string | null>
-  /** 回傳錯誤訊息；成功為 null。若專案開啟信箱驗證，回傳提示訊息字串（非錯誤） */
+  /** Returns an error message; null on success. If mailbox verification is enabled for the project, a prompt message string (not an error) will be returned.*/
   signUp: (email: string, password: string) => Promise<string | null>
-  /** 寄送重設密碼信件；回傳錯誤訊息，成功為 null */
+  /** Send password reset email; return error message, success is null*/
   resetPassword: (email: string) => Promise<string | null>
-  /** 設定新密碼（重設流程進站後）；回傳錯誤訊息，成功為 null */
+  /** Set a new password (after entering the reset process); return an error message, and return null if successful*/
   updatePassword: (password: string) => Promise<string | null>
-  /** 略過本次設定新密碼提示 */
+  /** Skip this prompt to set a new password*/
   dismissRecovery: () => void
   signOut: () => Promise<void>
 }
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [recovery, setRecovery] = useState(false)
 
-  // 內容未變時沿用同一物件：token 刷新（如切回分頁）不應觸發下游 effect 重載
+  // Use the same object when the content does not change: token refresh (such as switching back to paging) should not trigger downstream effect reloading
   const applyUser = useCallback((u: { id: string; email?: string | null } | null | undefined) => {
     setUser((prev) => {
       if (!u) return null
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      // 由重設密碼信件連結進站：提示使用者設定新密碼
+      // Entering the site from the reset password email link: prompting the user to set a new password
       if (event === 'PASSWORD_RECOVERY') setRecovery(true)
       applyUser(session?.user)
     })
@@ -81,14 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return null
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) return error.message
-    // 專案若開啟信箱驗證，註冊後不會立即有 session
+    // If mailbox verification is enabled for the project, there will be no session immediately after registration.
     if (!data.session) return '註冊成功！請至信箱點擊驗證連結後再登入。'
     return null
   }, [])
 
   const resetPassword = useCallback(async (email: string) => {
     if (!supabase) return null
-    // 信件連結導回目前站點（本地測試需將 localhost 加入 Supabase 的 Redirect URLs）
+    // The email link is directed back to the current site (local testing requires adding localhost to Supabase's Redirect URLs)
     const redirectTo = window.location.origin + window.location.pathname
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     return error ? error.message : null

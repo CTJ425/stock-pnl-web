@@ -1,11 +1,11 @@
 /**
- * 多序列折線圖（KD 這種「同一量綱、同一縱軸」的指標用）。
+ * Multi-series line chart (for indicators such as KD with "same dimension and same vertical axis").
  *
- * 與 LineSeriesChart 分開的理由：那支是單序列、用極性色（紅正綠負）並畫資料點圓點；
- * 這支是多序列、用類別色表達身分、不畫圓點（點太密會糊成一片）。
- * 兩者的差異不是參數多寡，是顏色在圖裡做的事不一樣，硬併成一支只會兩邊都彆扭。
+ * Reason for separation from LineSeriesChart: That one is a single sequence, uses polar colors (red positive, green negative) and draws data point dots;
+ * This one is a multi-sequence, uses category colors to express identity, and does not draw dots (too dense dots will make them blur together).
+ * The difference between the two is not the number of parameters, but the colors do different things in the picture. If they are combined into one, both sides will look awkward.
  *
- * 呼叫端必須另外附圖例（SPEC：兩條以上序列一律附圖例，身分不能只靠顏色）。
+ * The calling end must also attach a legend (SPEC: two or more sequences must be attached with a legend, and the identification cannot be based on color alone).
  */
 import { ChartFrame } from './chartFrame'
 import { lineSegments } from './chartPath'
@@ -22,9 +22,9 @@ interface MultiLineChartProps {
   series: LineSeries[]
   labelIndices?: number[]
   height?: number
-  /** 指定固定值域（KD 恆在 0–100，讓它隨資料浮動反而看不出高低檔） */
+  /** Specify a fixed value range (KD is always between 0 and 100, so that it can float with the data and the high and low ranges cannot be seen)*/
   domain?: Domain
-  /** 額外的水平參考線（例如 KD 的 20 / 80） */
+  /** Additional horizontal reference lines (e.g. 20 / 80 for KD)*/
   guides?: number[]
   formatValue: (v: number) => string
   ariaLabel: string

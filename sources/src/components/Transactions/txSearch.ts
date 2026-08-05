@@ -2,7 +2,7 @@ import type { Transaction } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 
 /**
- * 交易紀錄過濾：依代號、原始名稱或中文譯名（如 AAPL → 蘋果）進行即時子字串比對
+ * Transaction record filtering: real-time substring comparison based on code name, original name or Chinese translation (such as AAPL → Apple)
  */
 export function filterTransactions(txs: Transaction[], query: string): Transaction[] {
   const q = query.trim().toLowerCase()

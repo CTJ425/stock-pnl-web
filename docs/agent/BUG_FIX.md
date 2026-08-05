@@ -8,20 +8,20 @@
 
 ## 🐛 Currently Active / Open Bugs
 
-目前暫無開啟中的 Bug。
+There are currently no open bugs.
 
-BUG-003（測試區 cron 打到正式區）已於 2026-07-27 20:15 修復並驗證，
-BUG-004（T86 列順序不穩定害輪詢永不收工）已於同日 22:10 修復並部署，
-兩者皆移至 `FIXED_BUG.md`。
+BUG-003 (cron from test area to official area) has been fixed and verified at 2026-07-27 20:15.
+BUG-004 (T86 column order is unstable and polling never ends) has been fixed and deployed at 22:10 on the same day.
+Both moved to `FIXED_BUG.md`.
 
-BUG-004 的線上驗證已於 23:00 通過（`skip_reason=complete`、753ms、零對外抓取）。
+The online verification of BUG-004 passed at 23:00 (`skip_reason=complete`, 753ms, zero external crawling).
 
-**明天（2026-07-28）第一個完整的 32 輪日值得回頭看一次** —— 今天只從 20:30 起
-在新排程下跑了 13 輪，且 `t86_revisions` 含修復前的假改寫。要驗的是：
-16:00–17:00 那幾輪（T86 尚未發布）會不會有非預期的行為，以及一整天的短路比率。
+**The first full 32 round day tomorrow (2026-07-28) is worth a look back** – today only from 20:30
+13 rounds were run under the new schedule, and `t86_revisions` contained fake revisions before the fix. What needs to be checked is:
+16:00–17:00 Will those rounds (not yet released for T86) have unintended behavior, and short circuit ratios throughout the day.
 
 
-若發現新 Bug，請在此記錄：
+If you find a new bug, please record it here:
 
 ```markdown
 ### Bug ID: BUG-XXX

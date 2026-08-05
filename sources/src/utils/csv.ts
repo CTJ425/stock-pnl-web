@@ -1,18 +1,18 @@
 /**
- * CSV 匯入 / 匯出 — 舊資料搬遷的關鍵路徑
+ * CSV import/export – critical path for migrating old data
  *
- * 匯入支援兩種格式：
- * 1. 舊 Google 試算表「個股交易紀錄」分頁匯出的 CSV：
- *    交易日期,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金[,損益/收支]
- *    - 台股代號帶 'TPE:' 前綴（如 TPE:2330）→ 拆解為 market='TPE' + ticker='2330'
- *    - 交易類型為中文「買入 / 賣出」→ 轉為 'BUY' / 'SELL'
- * 2. 本應用匯出的 CSV（多一欄「市場」，代號不帶前綴）
+ * Import supports two formats:
+ * 1. CSV exported from the "Individual Stock Transaction Records" page of the old Google spreadsheet:
+ *    Transaction date, stock code, stock name, transaction type, transaction unit price, number of shares traded, handling fees/taxes [, profit and loss/income and expenses]
+ *    - Taiwan stock code with 'TPE:' prefix (such as TPE:2330) → broken down into market='TPE' + ticker='2330'
+ *    - The transaction type is "Buy/Sell" in Chinese → converted to 'BUY' / 'SELL'
+ * 2. CSV exported by this application (one more column "Market", code without prefix)
  */
 import type { Market, NewTransaction, Transaction, TxType } from '../types/models'
 import { TX_TYPE_LABEL } from '../types/models'
 
 export interface CsvRowError {
-  /** 原始檔案中的列號（1-based，含表頭） */
+  /** Column number in the original file (1-based, including header)*/
   line: number
   message: string
 }
@@ -20,11 +20,11 @@ export interface CsvRowError {
 export interface CsvImportResult {
   rows: NewTransaction[]
   errors: CsvRowError[]
-  /** 資料列總數（不含表頭與空白列） */
+  /** Total number of data columns (excluding headers and blank columns)*/
   total: number
 }
 
-/** 輕量 CSV 解析：支援引號欄位、跳脫雙引號與 CRLF */
+/** Lightweight CSV parsing: support for quote fields, escaping double quotes and CRLF*/
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^\uFEFF/, '')
   const rows: string[][] = []
@@ -67,7 +67,7 @@ export function parseCsv(text: string): string[][] {
   return rows
 }
 
-/** 支援 2026/07/15、2026-07-15（含補零與日期有效性檢查），回傳 YYYY-MM-DD */
+/** Supports 2026/07/15, 2026-07-15 (including zero padding and date validity check), returns YYYY-MM-DD*/
 export function parseTxDate(value: string): string | null {
   const m = value.trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)
   if (!m) return null
@@ -87,7 +87,7 @@ export function parseTxDate(value: string): string | null {
 }
 
 function parseNumber(value: string): number {
-  // 容忍 Google Sheets 匯出可能帶有的貨幣符號與千分位
+  // Tolerate possible currency symbols and thousandths in Google Sheets exports
   const cleaned = value.replace(/(NT\$|US\$|\$|,|\s)/g, '')
   if (cleaned === '') return NaN
   return Number(cleaned)
@@ -100,7 +100,7 @@ function parseTxType(value: string): TxType | null {
   return null
 }
 
-/** 台股代號樣式（3-6 位數字，可帶一碼英文尾碼），供無市場資訊時的啟發式判斷 */
+/** Taiwan stock code format (3-6 digits, with an English suffix) for heuristic judgment when there is no market information*/
 const TW_TICKER_RE = /^\d{3,6}[A-Z]?$/
 
 function parseMarket(rawTicker: string, marketCell: string): { market: Market; ticker: string } | null {
@@ -115,11 +115,11 @@ function parseMarket(rawTicker: string, marketCell: string): { market: Market; t
   if (m === 'TPE' || m === '台股') return { market: 'TPE', ticker }
   if (m === 'US' || m === '美股') return { market: 'US', ticker }
 
-  // 無市場資訊（舊格式無前綴者視為美股；純數字代號視為台股）
+  // No market information (those with no prefix in the old format are regarded as US stocks; pure numeric codes are regarded as Taiwan stocks)
   return { market: TW_TICKER_RE.test(ticker) ? 'TPE' : 'US', ticker }
 }
 
-/** 表頭正規化：去除空白與斜線（「手續費 / 稅金」與「手續費/稅金」視為相同） */
+/** Header normalization: remove blanks and slashes ("Fees/Taxes" and "Fees/Taxes" are considered the same)*/
 function normalizeHeader(cell: string): string {
   return cell.replace(/[\s/]/g, '')
 }
@@ -134,8 +134,8 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
 
   const header = table[0].map(normalizeHeader)
 
-  // 舊版（v0.2）「全部工作區」總覽匯出的備份檔含「工作區」欄；若其中有多個工作區，
-  // 擋下整批匯入——不同券商的交易混進同一工作區會污染移動平均成本
+  // The backup file exported by the "All Workspaces" overview of the old version (v0.2) contains the "Workspace" column; if there are multiple workspaces,
+  // Block the entire batch of imports - the mixing of transactions from different brokers into the same workspace will contaminate the moving average cost
   const wsCol = header.indexOf('工作區')
   if (wsCol >= 0) {
     const wsNames = new Set<string>()
@@ -242,7 +242,7 @@ function csvField(value: string): string {
   return value
 }
 
-/** 匯出為 CSV（含 BOM 供 Excel 正確辨識 UTF-8；交易類型以中文輸出、可再匯入） */
+/** Export to CSV (including BOM for Excel to correctly recognize UTF-8; transaction type is output in Chinese and can be re-imported)*/
 export function transactionsToCsv(txs: Transaction[]): string {
   const header = ['交易日期', '市場', '股票代號', '股票名稱', '交易類型', '交易單價', '交易股數', '手續費 / 稅金']
   const lines = [header.join(',')]

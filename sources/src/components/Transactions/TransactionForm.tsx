@@ -1,11 +1,11 @@
 /**
- * 交易輸入表單（移植自 GAS 版 Sidebar.html）：
- * - 代號失焦自動反查名稱與市場；名稱輸入防抖模糊搜尋下拉
- * - 台股股數可依「張 / 零股」切換並自動換算（美股鎖定零股）
- * - 手續費自動估算：台股元以下捨去、賣出加計證交稅（ETF 00 開頭 0.1%）
- * - 寫入失敗保留所有輸入內容
- * - 傳入 initial 即為「編輯模式」：帶入既有交易內容，成功後不清空欄位；
- *   手續費開啟時即依目前費率重新估算（舊資料可能登錄錯誤），可一鍵還原原紀錄
+ * Transaction input form (ported from GAS version Sidebar.html):
+ * - The code name is out of focus and the name and market are automatically checked; the name input is anti-shake and blurry and the search drop-down
+ * - The number of Taiwanese stocks can be switched and automatically converted according to "lots/odd lots" (U.S. stocks are locked in odd lots)
+ * - Handling fee is automatically estimated: Taiwanese stocks are rounded off if they are below the dollar, and the certificate tax is added when sold (ETF 00 starts with 0.1%)
+ * - Write failure retains all input content
+ * - Passing in initial is the "edit mode": the existing transaction content is brought in, and the fields are not cleared after success;
+ *   When the handling fee is turned on, it will be re-estimated based on the current rate (the old data may be logged in incorrectly), and the original record can be restored with one click.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -26,7 +26,7 @@ import { isSupabaseConfigured } from '../../services/supabase'
 
 type Unit = '張' | '零股'
 
-/** 證交稅率快選值（一般 / ETF / 當沖減半 / 免稅） */
+/** Securities tax rate quick selection value (general/ETF/halved/tax-free)*/
 const TAX_PRESET_VALUES = ['0.003', '0.001', '0.0015', '0']
 
 function todayStr(): string {
@@ -37,7 +37,7 @@ function todayStr(): string {
 interface TransactionFormProps {
   onSubmit: (tx: NewTransaction) => Promise<void>
   onDone?: () => void
-  /** 編輯模式：帶入既有交易內容 */
+  /** Edit mode: bring in existing transaction content*/
   initial?: Transaction
 }
 
@@ -52,13 +52,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [name, setName] = useState(initial?.name ?? '')
   const [price, setPrice] = useState(initial ? String(initial.price) : '')
   const [qty, setQty] = useState(initial ? String(initial.qty) : '')
-  // 編輯模式以「零股」顯示原始股數，避免張/零股換算歧義
+  // Edit mode displays the original number of shares in "odd shares" to avoid ambiguity in lot/odd share conversions
   const [unit, setUnit] = useState<Unit>(initial ? '零股' : '張')
   const [feeRate, setFeeRate] = useState(() => String(getFeeRate(workspaceId)))
   const minFeeUnit = unit === '張' ? 'whole' : 'odd'
   const [minFee, setMinFee] = useState(() => String(getMinFee(minFeeUnit, workspaceId)))
 
-  // 切換工作區 / 整股零股單位時帶入對應記憶的費率與最低手續費
+  // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
   useEffect(() => {
     setFeeRate(String(getFeeRate(workspaceId)))
   }, [workspaceId])
@@ -75,7 +75,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
-  // 編輯模式下原代號視為已反查過，避免失焦時覆寫使用者自訂的名稱
+  // In edit mode, the original codename is considered to have been reverse-checked to avoid overwriting the user-defined name when out of focus.
   const lastSearchedTicker = useRef(initial?.ticker ?? '')
   const searchSeq = useRef(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -87,7 +87,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     return market === 'TPE' ? Math.round(val) : val
   }, [qty, unit, market])
 
-  // 證交稅率欄位：未手動修改時依代號自動帶入（ETF 00 開頭 0.1%）
+  // Securities tax rate field: automatically brought in according to the code if not manually modified (0.1% starting with ETF 00)
   const updateTaxRateAuto = useCallback(
     (nextTicker: string) => {
       if (taxRateManual.current) return
@@ -97,9 +97,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     [],
   )
 
-  // 自動換算手續費（開啟與依賴變動時皆重算；使用者仍可手動修改欄位值）。
-  // 編輯模式也照算：舊資料的手續費可能登錄錯誤，開啟時即依目前費率重新估算，
-  // 欄位下方提供「還原原紀錄」可改回原值
+  // Automatic conversion of handling fees (recalculated when enabled and dependent on changes; users can still manually modify field values).
+  // Edit mode is also calculated: the handling fee for old data may be logged in incorrectly, and will be re-estimated based on the current rate when it is turned on.
+  // "Restore original record" is provided below the field to change it back to the original value.
   useEffect(() => {
     const p = parseFloat(price) || 0
     const shares = getActualShares()
@@ -118,7 +118,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     }
   }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, getActualShares])
 
-  // 市場切換：美股強制「零股」單位
+  // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {
     setMarket(next)
     if (next === 'US' && unit === '張') {
@@ -126,7 +126,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     }
   }
 
-  // 單位切換時換算股數（張 = 1000 股）
+  // Number of shares converted when switching units (sheets = 1000 shares)
   const convertUnit = (next: Unit) => {
     const val = parseFloat(qty)
     if (!Number.isNaN(val)) {
@@ -136,7 +136,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     setUnit(next)
   }
 
-  // 代號失焦 → 反查名稱與市場
+  // The code name is out of focus → Check the name and market
   const handleTickerBlur = async () => {
     const clean = ticker.trim().toUpperCase()
     if (!clean || clean === lastSearchedTicker.current) return
@@ -157,7 +157,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     }
   }
 
-  // 名稱輸入 → 防抖模糊搜尋（searchSeq 丟棄過期回應）
+  // Name input → anti-shake fuzzy search (searchSeq discards expired responses)
   const handleNameInput = (value: string) => {
     setName(value)
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -184,7 +184,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     setSuggestions(null)
   }
 
-  // 點擊表單其它區域時收合下拉
+  // Collapse drop-down when clicking elsewhere in the form
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
@@ -227,11 +227,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         fee_tax: feeVal,
       })
       if (isEdit) {
-        // 編輯模式：保留內容、直接交由呼叫端關閉視窗
+        // Edit mode: keep the content and let the caller close the window directly
         onDone?.()
         return
       }
-      // 成功：保留日期 / 市場 / 類型，清空個股相關欄位（與 GAS 版同構）
+      // Success: retain date/market/type, clear individual stock related fields (same structure as GAS version)
       setTicker('')
       setName('')
       setPrice('')
@@ -243,7 +243,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       setMessage({ kind: 'ok', text: '🎉 成功新增交易紀錄，Dashboard 與年度收益已同步更新！' })
       onDone?.()
     } catch (err) {
-      // 失敗：保留所有輸入內容
+      // Failure: Keep all input
       setMessage({
         kind: 'error',
         text: `寫入失敗：${err instanceof Error ? err.message : '請稍後再試'}`,

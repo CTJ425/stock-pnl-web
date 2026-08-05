@@ -1,4 +1,4 @@
-/** 可點擊排序的表頭：顯示目前排序方向，點擊切換升冪/降冪；可另附欄位說明 */
+/** Clickable sorting header: displays the current sorting direction, click to switch ascending/descending power; additional field descriptions can be attached*/
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { HelpTip } from './HelpTip'
 
@@ -7,7 +7,7 @@ export interface SortState<K extends string> {
   dir: 'asc' | 'desc'
 }
 
-/** 點擊表頭：同欄位切換方向，換欄位則以預設方向開始 */
+/** Click on the header: switch directions in the same field, and start with the default direction when changing fields.*/
 export function nextSort<K extends string>(
   sort: SortState<K>,
   key: K,
@@ -23,7 +23,7 @@ interface SortableThProps<K extends string> {
   sort: SortState<K>
   onSort: (key: K) => void
   numeric?: boolean
-  /** 欄位說明；提供時表頭會多一個「?」圖示 */
+  /** Field description; when provided, there will be an additional "?" icon in the header*/
   help?: string
 }
 

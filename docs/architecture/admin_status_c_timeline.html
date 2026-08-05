@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>方案 C ─ 發布時間軸｜資料抓取狀況後台</title>
+<title>plan C ─ Publishing timeline｜Data capture status background</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -31,7 +31,7 @@
   --st-warn-bg: rgba(252, 211, 77, 0.12);
   --st-late-bg: rgba(252, 165, 165, 0.12);
   --st-idle-bg: rgba(100, 116, 139, 0.14);
-  /* 預期公布窗：低調的 accent 底，不與狀態色搶 */
+  /*Expected release window: low-key accent bottom, not competing with the status color*/
   --win-bg: rgba(124, 140, 248, 0.16);
   --win-line: rgba(124, 140, 248, 0.42);
 
@@ -113,22 +113,22 @@ body {
 .panel-head .note { font-size: 12px; color: var(--ink-muted); }
 .panel-head .right { margin-left: auto; font-size: 12px; color: var(--ink-secondary); font-family: var(--font-data); }
 
-/* ── 圖例 ─────────────────────────────────────────────────── */
+/*── Legend ───────────────────────────────────────────────*/
 .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 11px 18px; font-size: 12px; color: var(--ink-muted); border-bottom: 1px solid var(--border); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .lg-win { width: 22px; height: 9px; border-radius: 2px; background: var(--win-bg); border-left: 2px solid var(--win-line); }
 .lg-hit { width: 9px; height: 9px; border-radius: 50%; background: var(--st-ok); }
 .lg-warn { width: 9px; height: 9px; border-radius: 50%; background: var(--st-warn); }
 .lg-late { width: 9px; height: 9px; border-radius: 50%; background: var(--st-late); }
-/* 判定規則講清楚，否則「法人晚 45 分是綠點、借券晚了是紅點」看起來像雙標 */
+/*The judgment rules must be made clear, otherwise "if a legal person is 45 minutes late, it will be a green dot, and if a bond is borrowed late, it will be a red dot" it will look like a double standard*/
 .legend .rule { flex-basis: 100%; color: var(--ink-muted); line-height: 1.5; }
 .legend .rule b { color: var(--ink-secondary); font-weight: 600; }
 
-/* ── 時間軸 ───────────────────────────────────────────────── */
+/*── Time axis ────────────────────────────────────────────────*/
 .tl { padding: 6px 18px 18px; overflow-x: auto; }
 .tl-inner { min-width: 760px; }
 
-/* 標尺 */
+/*ruler*/
 .ruler { position: relative; height: 40px; margin-left: 148px; border-bottom: 1px solid var(--border); }
 .ruler i {
   position: absolute; top: 20px; bottom: 0; width: 1px; background: var(--border);
@@ -143,7 +143,7 @@ body {
   font-size: 10.5px; color: var(--accent); letter-spacing: 0.04em; white-space: nowrap;
 }
 
-/* 每一列 */
+/*each column*/
 .row { display: grid; grid-template-columns: 148px 1fr; align-items: center; min-height: 46px; }
 .row + .row { border-top: 1px solid var(--border); }
 .row .lbl { padding-right: 12px; font-size: 13px; }
@@ -151,16 +151,16 @@ body {
 .row .lbl span { font-size: 11px; color: var(--ink-muted); font-family: var(--font-data); }
 
 .track { position: relative; height: 46px; }
-/* 網格線與標尺對齊 */
+/*Align grid lines with ruler*/
 .track i.grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: 0.55; }
 
-/* 軌道上緣 16px 處是「事件帶」，下緣留給時刻文字，兩者不互相重疊 */
+/*The upper edge of the track at 16px is the "event zone", and the lower edge is reserved for time text. The two do not overlap each other.*/
 .win {
   position: absolute; top: 16px; height: 13px; border-radius: 3px;
   background: var(--win-bg); border-left: 2px solid var(--win-line);
 }
-/* 實際抓到的時刻。內圈用底色描一圈，讓點壓在公布窗上時仍分得出層次
-   （原本點落在窗的左端會被誤讀成「點在窗外」） */
+/*Actual caught moment. Trace the inner circle with the background color so that the points can still be distinguished when pressed on the announcement window.
+   (Originally, clicking on the left end of the window will be misread as "clicking outside the window") */
 .hit {
   position: absolute; top: 17px; transform: translateX(-50%); z-index: 2;
   width: 11px; height: 11px; border-radius: 50%;
@@ -168,7 +168,7 @@ body {
 }
 .hit.late { background: var(--st-late); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-late-bg); }
 .hit.warn { background: var(--st-warn); box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px var(--st-warn-bg); }
-/* 從公布窗拉到實際點的落後區間 */
+/*The backward interval drawn from the announcement window to the actual point*/
 .lag {
   position: absolute; top: 21.5px; height: 2px; z-index: 1;
   background: repeating-linear-gradient(90deg, var(--st-late) 0 4px, transparent 4px 8px);
@@ -181,13 +181,13 @@ body {
   color: var(--ink-muted); white-space: nowrap;
 }
 
-/* 批次心跳：每輪一格 */
+/*Batch heartbeat: one frame per round*/
 .beats { position: absolute; top: 16px; display: flex; gap: 1px; }
 .beats u { display: block; width: 4px; height: 14px; border-radius: 1px; background: var(--st-idle-bg); }
 .beats u.work { background: var(--st-ok); }
 .beats u.skip { background: var(--st-ok-bg); }
 
-/* ── 月頻期別網格 ─────────────────────────────────────────── */
+/*── Monthly frequency grid ────────────────────────────────────────*/
 .grid-wrap { padding: 4px 18px 18px; overflow-x: auto; }
 .pgrid { border-collapse: collapse; font-size: 13px; min-width: 620px; width: 100%; }
 .pgrid th {
@@ -211,7 +211,7 @@ body {
 .cell.wait { background: var(--st-warn-bg); color: var(--st-warn); }
 .pgrid td.tail { text-align: right; font-family: var(--font-data); font-size: 12px; color: var(--ink-secondary); white-space: nowrap; }
 
-/* ── 底部小卡 ─────────────────────────────────────────────── */
+/*── Small card at the bottom ───────────────────────────────────────────*/
 .mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1px; background: var(--border); }
 .mini > div { background: var(--surface); padding: 13px 17px; }
 .mini dt { font-size: 11.5px; color: var(--ink-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
@@ -236,38 +236,38 @@ body {
 <div class="wrap">
 
   <div class="mock-note">
-    <b>方案 C ─ 發布時間軸</b>
-    <span>設計比稿，非實作。資料為 2026-07-31 12:50 由兩區線上實際抓取的快照。</span>
-    <span>核心問題：<b>該來的來了沒？慢了多久？</b></span>
+    <b>plan C ─ Publishing timeline</b>
+    <span>Design pitch, not implementation. The information is 2026-07-31 12:50 Snapshots actually taken from the two-zone line.</span>
+    <span>Core questions:<b>Has what is supposed to come come? How long has it been slow?</b></span>
   </div>
 
   <div class="head">
-    <h1>資料抓取狀況</h1>
-    <span class="admin-pill">僅限管理員</span>
+    <h1>Data capture status</h1>
+    <span class="admin-pill">Administrators only</span>
     <span class="spacer"></span>
-    <button class="theme-btn" type="button" id="theme">切換淺色</button>
-    <span class="stamp">2026-07-31 12:50 台北</span>
+    <button class="theme-btn" type="button" id="theme">Toggle light color</button>
+    <span class="stamp">2026-07-31 12:50 Taipei</span>
   </div>
 
-  <!-- ── 台股盤後鏈：時序才是重點 ───────────────────────────── -->
+  <!--──Taiwan stock market after-hours chain: Timing is the key ──────────────────────────────-->
   <section class="panel">
     <div class="panel-head">
-      <h2>台股盤後・2026-07-30 這一輪</h2>
-      <span class="note">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
-      <span class="right">15:00 → 次日 10:00</span>
+      <h2>Taiwan stocks after-hours・2026-07-30 this round</h2>
+      <span class="note">The time difference between the announcements of the three chip sources is as much as 7 Hours, batches are captured in sections</span>
+      <span class="right">15:00 → next day 10:00</span>
     </div>
     <div class="legend">
-      <span><i class="lg-win"></i> 來源公布窗</span>
-      <span><i class="lg-hit"></i> 準時抓到</span>
-      <span><i class="lg-warn"></i> 抓到但不完整</span>
-      <span><i class="lg-late"></i> 延遲・虛線為落後區間</span>
-      <span class="rule">判定基準是<b>公布窗結束後的第一個批次班次</b>，不是公布時刻 —— 批次 16:00 才起跑，法人 16:15 到手屬正常。</span>
+      <span><i class="lg-win"></i> Source announcement window</span>
+      <span><i class="lg-hit"></i> caught on time</span>
+      <span><i class="lg-warn"></i> caught but incomplete</span>
+      <span><i class="lg-late"></i> Delay・The dotted line is the backward interval</span>
+      <span class="rule">The criterion is<b>The first batch of shifts after the announcement window ends</b>, not the announcement time —— batch 16:00 Just started, legal person 16:15 It's normal to get it.</span>
     </div>
 
     <div class="tl">
       <div class="tl-inner">
 
-        <!-- 標尺：15:00 = 0%，次日 10:00 = 100%，共 19 小時，每小時 5.263% -->
+        <!--Scale: 15:00 = 0%, 10:00 the next day = 100%, 19 hours in total, 5.263% per hour-->
         <div class="ruler">
           <i style="left:0%"></i><b style="left:0%">15:00</b>
           <i style="left:15.79%"></i><b style="left:15.79%">18:00</b>
@@ -280,12 +280,12 @@ body {
         </div>
 
         <div class="row">
-          <div class="lbl"><b>批次輪次</b><span>每 15 分・32 輪</span></div>
+          <div class="lbl"><b>batch round</b><span>Every 15 point・32 wheel</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
             <i class="grid" style="left:78.95%"></i><i class="grid" style="left:94.74%"></i>
-            <!-- 16:00–23:45，實心=有產出，淡色=短路 -->
+            <!--16:00–23:45, solid = output, light = short circuit-->
             <div class="beats" style="left:5.26%">
               <u class="work"></u><u class="work"></u><u class="skip"></u><u class="skip"></u>
               <u class="skip"></u><u class="skip"></u><u class="skip"></u><u class="skip"></u>
@@ -300,7 +300,7 @@ body {
         </div>
 
         <div class="row">
-          <div class="lbl"><b>三大法人</b><span>T86</span></div>
+          <div class="lbl"><b>Three major corporations</b><span>T86</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -312,7 +312,7 @@ body {
         </div>
 
         <div class="row">
-          <div class="lbl"><b>日 K 線・估值</b><span>18 檔</span></div>
+          <div class="lbl"><b>day K Wire・Valuation</b><span>18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -324,7 +324,7 @@ body {
         </div>
 
         <div class="row">
-          <div class="lbl"><b>融資融券</b><span>MI_MARGN</span></div>
+          <div class="lbl"><b>Margin margin trading</b><span>MI_MARGN</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -335,9 +335,9 @@ body {
           </div>
         </div>
 
-        <!-- 真實的延遲案例：借券前一晚沒抓到，隔天早上才補 -->
+        <!--A real case of delay: the coupon was not caught the night before, but was replenished the next morning-->
         <div class="row">
-          <div class="lbl"><b>借券賣出</b><span>次一交易日</span></div>
+          <div class="lbl"><b>Borrow bonds and sell</b><span>next trading day</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -345,12 +345,12 @@ body {
             <div class="win" style="left:31.58%; width:7.89%"></div>
             <div class="lag" style="left:39.47%; width:56.13%"></div>
             <div class="hit late" style="left:95.6%"></div>
-            <div class="hit-t" style="left:95.6%">次日 09:10</div>
+            <div class="hit-t" style="left:95.6%">next day 09:10</div>
           </div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>個股新聞</b><span>16 / 18 檔</span></div>
+          <div class="lbl"><b>individual stock news</b><span>16 / 18 files</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -358,12 +358,12 @@ body {
             <div class="win" style="left:31.58%; width:15.79%"></div>
             <div class="lag warn" style="left:47.37%; width:48.23%"></div>
             <div class="hit warn" style="left:95.6%"></div>
-            <div class="hit-t" style="left:95.6%">次日 09:10</div>
+            <div class="hit-t" style="left:95.6%">next day 09:10</div>
           </div>
         </div>
 
         <div class="row">
-          <div class="lbl"><b>總經班次</b><span>FRED・兩班</span></div>
+          <div class="lbl"><b>General shift</b><span>FRED・Two shifts</span></div>
           <div class="track">
             <i class="grid" style="left:15.79%"></i><i class="grid" style="left:31.58%"></i>
             <i class="grid" style="left:47.37%"></i><i class="grid" style="left:63.16%"></i>
@@ -379,34 +379,34 @@ body {
     </div>
 
     <dl class="mini">
-      <div><dt>資料日</dt><dd><b>07-30</b>週四</dd></div>
-      <div><dt>首筆 → 末筆</dt><dd><b>16h 55m</b>16:15 → 次日 09:10</dd></div>
-      <div><dt>最慢一環</dt><dd><b>借券</b>晚於公布窗 10h 40m</dd></div>
-      <div><dt>批次短路率</dt><dd><b>88 %</b>28 / 32 輪</dd></div>
+      <div><dt>Material date</dt><dd><b>07-30</b>Thursday</dd></div>
+      <div><dt>first transaction → end of the line</dt><dd><b>16h 55m</b>16:15 → next day 09:10</dd></div>
+      <div><dt>slowest link</dt><dd><b>Borrow coupons</b>later than announcement window 10h 40m</dd></div>
+      <div><dt>Batch short circuit rate</dt><dd><b>88 %</b>28 / 32 wheel</dd></div>
     </dl>
   </section>
 
-  <!-- ── 月頻期別網格：使用者要的「總經更新狀況一覽」 ─────── -->
+  <!--──Monthly period grid: "Overview of general economic update status" that users want ───────-->
   <section class="panel">
     <div class="panel-head">
-      <h2>月頻與季頻資料・期別涵蓋</h2>
-      <span class="note">每格一期，看得出哪個指標落後了幾期</span>
-      <span class="right">最後檢查 07-31 12:40</span>
+      <h2>Monthly and quarterly data・Period covered</h2>
+      <span class="note">Each grid has one period, and you can see which indicator lags behind by how many periods.</span>
+      <span class="right">final check 07-31 12:40</span>
     </div>
     <div class="grid-wrap">
       <table class="pgrid">
         <thead>
           <tr>
-            <th class="lead" scope="col">指標</th>
+            <th class="lead" scope="col">index</th>
             <th scope="col">2026-01</th><th scope="col">02</th><th scope="col">03</th>
             <th scope="col">04</th><th scope="col">05</th><th scope="col">06</th>
             <th scope="col">07</th>
-            <th scope="col" style="text-align:right">最新值</th>
+            <th scope="col" style="text-align:right">latest value</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td class="lead"><b>核心 CPI</b><span>CPILFESL</span></td>
+            <td class="lead"><b>core CPI</b><span>CPILFESL</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell new">✓</span></td>
@@ -414,7 +414,7 @@ body {
             <td class="tail">+2.57 %</td>
           </tr>
           <tr>
-            <td class="lead"><b>核心 PPI</b><span>PPIFES</span></td>
+            <td class="lead"><b>core PPI</b><span>PPIFES</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell new">✓</span></td>
@@ -422,7 +422,7 @@ body {
             <td class="tail">+4.68 %</td>
           </tr>
           <tr>
-            <td class="lead"><b>核心 PCE</b><span>PCEPILFE</span></td>
+            <td class="lead"><b>core PCE</b><span>PCEPILFE</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell new">✓</span></td>
@@ -430,15 +430,15 @@ body {
             <td class="tail">+3.29 %</td>
           </tr>
           <tr>
-            <td class="lead"><b>非農就業</b><span>PAYEMS</span></td>
+            <td class="lead"><b>non-agricultural employment</b><span>PAYEMS</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell new">✓</span></td>
             <td><span class="cell wait">08-07</span></td>
-            <td class="tail">+57 千人</td>
+            <td class="tail">+57 Thousands of people</td>
           </tr>
           <tr>
-            <td class="lead"><b>消費者信心</b><span>UMCSENT</span></td>
+            <td class="lead"><b>consumer confidence</b><span>UMCSENT</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell miss">—</span></td>
@@ -446,39 +446,39 @@ body {
             <td class="tail">44.8</td>
           </tr>
           <tr>
-            <td class="lead"><b>月營收</b><span>18 檔台股</span></td>
+            <td class="lead"><b>monthly revenue</b><span>18 stall stocks</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell has">✓</span></td><td><span class="cell has">✓</span></td>
             <td><span class="cell wait">08-10</span></td>
-            <td class="tail">18 / 18 檔</td>
+            <td class="tail">18 / 18 files</td>
           </tr>
           <tr>
-            <td class="lead"><b>獲利能力</b><span>按季・18 檔</span></td>
+            <td class="lead"><b>Profitability</b><span>quarterly・18 files</span></td>
             <td colspan="3"><span class="cell has">2026-Q1 ✓</span></td>
-            <td colspan="3"><span class="cell wait">2026-Q2 待公布</span></td>
+            <td colspan="3"><span class="cell wait">2026-Q2 To be announced</span></td>
             <td><span class="cell miss">—</span></td>
-            <td class="tail">8 / 8 季</td>
+            <td class="tail">8 / 8 season</td>
           </tr>
         </tbody>
       </table>
     </div>
     <dl class="mini">
-      <div><dt>總經資料變動</dt><dd><b>07-31</b>12:40 補上 PCE 2026-06</dd></div>
-      <div><dt>落後指標</dt><dd><b>1</b>消費者信心・來源未更新</dd></div>
-      <div><dt>下一個發布</dt><dd><b>08-07</b>非農就業 2026-07</dd></div>
-      <div><dt>台幣匯率</dt><dd><b>11:00</b>8 / 8 幣別・USD 32.3489</dd></div>
+      <div><dt>Changes in general economic data</dt><dd><b>07-31</b>12:40 make up PCE 2026-06</dd></div>
+      <div><dt>lagging indicators</dt><dd><b>1</b>consumer confidence・Source not updated</dd></div>
+      <div><dt>next release</dt><dd><b>08-07</b>non-agricultural employment 2026-07</dd></div>
+      <div><dt>Taiwan dollar exchange rate</dt><dd><b>11:00</b>8 / 8 Currency・USD 32.3489</dd></div>
     </dl>
   </section>
 
 </div>
 <script>
-  // 比稿用的主題切換：專案本身預設深色、以 data-theme 覆寫（見 index.css）
+  //Theme switching for pitching: the project itself defaults to dark color and is overridden with data-theme (see index.css)
   var root = document.documentElement, btn = document.getElementById('theme');
   btn.addEventListener('click', function () {
     var light = root.getAttribute('data-theme') === 'light';
     root.setAttribute('data-theme', light ? 'dark' : 'light');
-    btn.textContent = light ? '切換淺色' : '切換深色';
+    btn.textContent = light ? 'Toggle light color' : 'switch dark color';
   });
 </script>
 </body>

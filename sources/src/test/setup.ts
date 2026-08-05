@@ -1,8 +1,8 @@
 /**
- * Vitest 共用 setup：
- * happy-dom 在 Node 環境會把 localStorage 委派給 Node 的實驗性 localStorage
- * （需要 --localstorage-file 才可用）；為了讓測試不依賴 Node 旗標，
- * 缺少 localStorage 時改掛一個記憶體實作。
+ * Vitest shared setup:
+ * happy-dom will delegate localStorage to Node's experimental localStorage in the Node environment
+ * (requires --localstorage-file to be available); in order for the test not to rely on the Node flag,
+ * Change to a memory implementation when localStorage is missing.
  */
 
 class MemoryStorage implements Storage {

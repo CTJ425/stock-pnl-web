@@ -5,7 +5,7 @@ describe('sparkline', () => {
   it('最高值貼上緣、最低值貼下緣（留 pad）', () => {
     const g = sparkline([1, 3], 100, 20, 3)
     expect(g).not.toBeNull()
-    // 由舊到新：1 是最低 → y = height - pad；3 是最高 → y = pad
+    // From oldest to newest: 1 is the lowest → y = height - pad; 3 is the highest → y = pad
     expect(g!.line).toBe('0,17 100,3')
     expect(g!.lastX).toBe(100)
     expect(g!.lastY).toBe(3)
@@ -22,7 +22,7 @@ describe('sparkline', () => {
   })
 
   it('null 跳過不畫，但仍佔一個 x 位置（時間軸不壓縮）', () => {
-    // 第 2 期未發布：線從 x=0 直接連到 x=100，中間沒有點
+    // Issue 2 Unpublished: The line goes directly from x=0 to x=100 with no points in between
     const g = sparkline([1, null, 3], 100, 20, 3)
     expect(g!.line).toBe('0,17 100,3')
     expect(g!.lastX).toBe(100)

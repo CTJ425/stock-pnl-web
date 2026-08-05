@@ -1,30 +1,30 @@
 /**
- * Supabase Edge Function：stock-report（盤後籌碼報告產生器）
+ * Supabase Edge Function: stock-report (after-hours chip report generator)
  *
- * 由伺服器端代抓 TWSE 盤後籌碼並產出**結構化資料**（schema 2 起不再產生 HTML，
- * 畫面一律由前端 React 繪製）。報告內嵌最近 7 個交易日的 history 供前端自繪走勢圖。
- * 共用 raw 檔快取（chip_raw_cache 資料表，見 sources/supabase/schema.sql）。
- * 部署方式（需安裝 Supabase CLI 並登入）：
+ * The server side captures TWSE after-hours chips and generates **structured data** (HTML is no longer generated starting from schema 2,
+ * The screen is always drawn by front-end React). The report embeds the history of the last 7 trading days for front-end self-drawn trend charts.
+ * Shared raw file cache (chip_raw_cache data table, see sources/supabase/schema.sql).
+ * Deployment method (need to install Supabase CLI and log in):
  *   supabase functions deploy stock-report --no-verify-jwt
  *
- * 介面：
+ * interface:
  *   POST { action: 'generate', market: 'TPE', ticker: string, name: string, holding?: HoldingContext }
- *     → { reportId, generatedAt, dataDate, data }（籌碼即點即產，前端 fallback 用）
+ *     → { reportId, generatedAt, dataDate, data } (chips are generated immediately with one click, used for front-end fallback)
  *   POST { action: 'warm', ticker: string }
  *     → { ok, ticker, ymd, dailySynced, fundamentalSynced }
- *       單檔補上日線與基本面並寫入 Storage，供新加入的股票不必等夜間批次（0.6.0-dev.7）
- *   POST { action: 'generate-all' }  header: x-cron-secret（盤後 pg_cron 觸發）
- *     → 產生全體持有台股的共用報告存入 Storage(reports bucket)，並清理超過 7 天的舊資料
- *   POST { action: 'sync-macro' }  header: x-cron-secret（由 macro-daily 排程觸發）
- *     → 抓 FRED 五個序列寫入 macro/us.json（全域單檔）。與台股交易日無關，故獨立排程。
- *   POST { action: 'sync-fx' }  header: x-cron-secret（由 fx-daily 排程觸發）
- *     → 抓 Yahoo 八個幣對寫入 fx/twd.json（全域單檔）。與台股交易日無關，故獨立排程。
+ *       The daily line and fundamentals are added in a single file and written into Storage, so that newly added stocks do not have to wait for the night batch (0.6.0-dev.7)
+ *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
+ *     → Generate a common report for all Taiwan stocks held and store it in Storage (reports bucket), and clean up old data older than 7 days
+ *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
+ *     → Capture five FRED sequences and write them into macro/us.json (global single file). It has nothing to do with Taiwan stock trading days, so it is scheduled independently.
+ *   POST { action: 'sync-fx' } header: x-cron-secret (triggered by fx-daily schedule)
+ *     → Capture eight Yahoo currency pairs and write them into fx/twd.json (global single file). It has nothing to do with Taiwan stock trading days, so it is scheduled independently.
  *   POST { action: 'backfill-revenue' }  header: x-cron-secret
- *     → 由 MOPS 分月報表把 fundamental/{ticker}.json 的月營收補到 12 個月（0.6.4）。
- *       generate-all 每輪也會順手跑一次，這個入口是給「不想等排程」用的。
+ *     → The monthly revenue of fundamental/{ticker}.json is supplemented to 12 months (0.6.4) by MOPS monthly report.
+ *       generate-all will also run once every round. This entrance is for those who "don't want to wait for the schedule".
  *
- * `generate` 與 `warm` 都以 heldTwTickers() 白名單把關：本函式以 --no-verify-jwt 部署，
- * 網址就在公開的前端 bundle 裡，白名單是把濫用上限壓到最低的那道防線（見 0.3.9 紀錄）。
+ * Both `generate` and `warm` are controlled by the heldTwTickers() whitelist: this function is deployed with --no-verify-jwt.
+ * The URL is in the public front-end bundle, and the whitelist is the line of defense that keeps the abuse limit to the lowest (see 0.3.9 record).
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
@@ -158,8 +158,8 @@ import {
   type T86State,
 } from './pollPlan.ts'
 
-// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
-// service role 不受 RLS 限制，是 chip_raw_cache 唯一的讀寫途徑
+// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
+// The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
 const db = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -180,44 +180,44 @@ function json(body: unknown, status = 200): Response {
 
 const TICKER_RE = /^[0-9A-Za-z]{2,8}$/
 
-/** 報告內嵌的歷史交易日數（**交易日**，不是日曆日） */
+/** The number of historical trading days embedded in the report (**Trading days**, not calendar days)*/
 const HISTORY_DAYS = 7
-/** 往回推的日曆天數，需足夠涵蓋 HISTORY_DAYS 個交易日（含週末與連假） */
+/** The number of calendar days to push back must be enough to cover HISTORY_DAYS trading days (including weekends and consecutive holidays)*/
 const LOOKBACK_DAYS = 14
-/** 單次呼叫最多實抓幾個缺漏日；Edge Function 有 wall-clock 上限，不足的隔日排程補齊 */
+/** A single call can capture up to a few missing days; the Edge Function has a wall-clock upper limit, and the missing days are scheduled to be filled in every other day.*/
 const MAX_BACKFILL_DAYS = 5
 /**
- * 月營收歷史回補：單次呼叫最多實抓幾個月。
- * 一個月要抓上市＋上櫃兩份、各約 400KB，同 MAX_BACKFILL_DAYS 的理由 ——
- * Edge Function 的 CPU / wall-clock 上限才是這條路徑最緊的一條線，不是資料量。
- * 補滿 REVENUE_MONTHS_CAP（12）個月約需 3 輪，一個晚上的排程就跑得完。
+ * Monthly revenue history replenishment: a single call can be captured for up to several months.
+ * There are two copies of listing + listing in a month, each about 400KB, the same reason as MAX_BACKFILL_DAYS——
+ * The upper limit of the CPU/wall-clock of the Edge Function is the tightest line on this path, not the amount of data.
+ * It takes about 3 rounds to fill up REVENUE_MONTHS_CAP (12) months, which can be completed in one night's schedule.
  */
 const MAX_BACKFILL_MONTHS = 4
 /**
- * 季度獲利能力回補：單次呼叫最多實抓幾季。
+ * Quarterly profitability replenishment: the maximum number of quarters that can be captured in a single call.
  *
- * **比月營收保守（4 → 2）**：一季要抓上市＋上櫃兩份、各約 **1.6MB**（月營收是 400KB），
- * 解析時整份字串進記憶體。補滿 PROFIT_QUARTERS_CAP（12）季約需 6 輪，
- * 盤後批次一個晚上跑 32 輪，一晚就補得完。
+ * **Conservative compared to monthly revenue (4 → 2)**: One quarter should focus on listing + over-the-counter listings, each about **1.6MB** (monthly revenue is 400KB),
+ * During parsing, the entire string is stored in memory. It takes about 6 rounds to fill up PROFIT_QUARTERS_CAP (12).
+ * The after-hours batch runs 32 rounds in one night and can be completed in one night.
  */
 const MAX_BACKFILL_QUARTERS = 2
 
 /**
- * 即點即產（`warm`）的回補：**一輪一輪補到沒東西可補，或用完時間預算為止**（0.6.29）。
+ * Replenishment of instant production (`warm`): **Replenish one round until there is nothing left to replenish, or until the time budget is used up** (0.6.29).
  *
- * 目標是「新加的股票第一次開頁就跟既有股票一樣完整」，所以不能只補一輪 ——
- * 12 個月 + 12 季要補完約需月營收 3 輪、季報 6 輪。
+ * The goal is "the newly added stocks will be as complete as the existing stocks when opening the page for the first time", so you can't just make up one round -
+ * It takes about 3 rounds of monthly revenue and 6 rounds of quarterly reports to complete 12 months + 12 quarters.
  *
- * 預算是**時間**不是輪數：兩者的單輪成本差很多（月營收一輪 4 個月 × 兩市場 × 400KB、
- * 季報一輪 2 季 × 兩市場 × 1.6MB），用輪數當上限會在慢的那一邊超時、快的那一邊浪費。
- * 先補月營收再補季報：月營收便宜得多，同樣的秒數先換到比較多的完整度。
+ * The budget is **time** not the number of rounds: the cost per round between the two is very different (monthly revenue per round 4 months × two markets × 400KB,
+ * Quarterly report is one round (2 quarters × two markets × 1.6MB). Using the number of rounds as the upper limit will cause timeout on the slow side and waste on the fast side.
+ * Supplement the monthly revenue first and then the quarterly report: Monthly revenue is much cheaper, and the same number of seconds can be exchanged for more completeness first.
  *
- * 補不完也沒關係：夜間批次照樣會接手，而且前端下次開頁看到還缺就會再呼叫一次。
+ * It doesn’t matter if it can’t be filled up: the night batch will still take over, and the front end will call again when it sees that there is still a shortage when the page is opened.
  */
 const WARM_BUDGET_MS = 30_000
 const WARM_ROUND_MONTHS = 4
 const WARM_ROUND_QUARTERS = 2
-/** 同時進行的外部抓取數上限（T86 單檔約 1–2MB） */
+/** The maximum number of simultaneous external crawls (T86 single file is about 1–2MB)*/
 const FETCH_CONCURRENCY = 3
 
 function t86Ok(r: T86ResponseShape): boolean {
@@ -230,8 +230,8 @@ export function makeReportId(dateYmd: string, ticker: string): string {
 }
 
 /**
- * 各 dataset 最近一次寫入快取的時間。這就是「這份資料我們是什麼時候抓到的」——
- * 不必另建欄位，`chip_raw_cache.updated_at` 本來就記著。
+ * The time when each dataset was last written to the cache. This is "when did we catch this information"——
+ * There is no need to create another field, `chip_raw_cache.updated_at` is already remembered.
  */
 const fetchedAtByDataset = new Map<string, string>()
 
@@ -262,14 +262,14 @@ async function writeCache(ymd: string, dataset: string, payload: unknown): Promi
       updated_at: now,
     })
   } catch {
-    // 快取寫入失敗不影響主流程
+    // Cache writing failure does not affect the main process
   }
 }
 
 /**
- * 哪些 (日期, dataset) 組合已有快取，回傳 `${ymd}:${dataset}` 集合。
- * 只查鍵、不取 payload —— 每筆 payload 是 1–2MB，全撈回來會直接吃爆記憶體。
- * 必須逐 dataset 判斷：v1 時期只快取了 T86，那些日子仍需補抓 MI_MARGN_D。
+ * Which (date, dataset) combinations have been cached, return the `${ymd}:${dataset}` collection.
+ * Only search the key, do not retrieve the payload - each payload is 1-2MB, and retrieving them all will directly consume the memory.
+ * It must be judged dataset by dataset: only T86 was cached during the v1 period, and MI_MARGN_D still needs to be captured in those days.
  */
 async function cachedDayDatasets(candidates: string[]): Promise<Set<string>> {
   try {
@@ -285,7 +285,7 @@ async function cachedDayDatasets(candidates: string[]): Promise<Set<string>> {
   }
 }
 
-/** 讀取「最新交易日」型的 whole-market 檔（無 date 參數），按解析日期快取於 Postgres */
+/** Read the "latest trading day" type whole-market file (without date parameter) and cache it in Postgres based on the parsed date*/
 async function readLatest<T>(ymd: string, dataset: string, url: string): Promise<T | null> {
   const cached = await readCache<T>(ymd, dataset)
   if (cached) return cached
@@ -298,34 +298,34 @@ async function readLatest<T>(ymd: string, dataset: string, url: string): Promise
   }
 }
 
-// ---- 逐日籌碼序列 ----
+// ---- Daily chip sequence ----
 
-/** 一天的全市場原始檔。用完即棄：抽出各代號的籌碼後就釋放，避免同時持有數十 MB */
+/** One day's market-wide raw files. Disposable: Release the chips of each code after drawing them to avoid holding dozens of MB at the same time*/
 interface DayRaw {
   ymd: string
   t86: T86ResponseShape
   margin: MarginDatedResponse | null
 }
 
-/** 一天中「我們關心的代號」的籌碼（以 ticker 為鍵） */
+/** The chips of "Codenames We Care" during the day (keyed by ticker)*/
 interface DaySlice {
   ymd: string
   chips: Map<string, ChipDay>
 }
 
 /**
- * 這一輪抓到的 T86 內容指紋，以 ymd 為鍵。
- * 每次 `handleGenerateAll` 開頭清空，避免同一個 isolate 跨請求殘留。
+ * The T86 content fingerprint captured in this round uses ymd as the key.
+ * Each time `handleGenerateAll` is cleared at the beginning to avoid the same isolate remaining across requests.
  */
 const t86FingerprintByYmd = new Map<string, string>()
 
 /**
- * 讀某日 T86（快取優先）；非交易日 / 尚未收盤回 null。fetch=false 時只讀快取。
+ * Read T86 on a certain day (cache priority); return null if it is not a trading day/has not yet closed. Read-only cache when fetch=false.
  *
- * `refresh=true` 時**即使已有快取也重抓一次並比對** —— 這是 0.6.1 輪詢的核心。
- * T86 自 16:00 起每 15 分鐘更新一次，當天第一次抓到的不一定是定稿；
- * 原本「第一次抓到就快取、之後永不更新」的作法會把初版鎖成當天的答案，
- * 比晚抓一次還糟。只有今天、且尚未定稿的那一天會走這條路（見 pollPlan.nextT86State）。
+ * When `refresh=true` **re-fetch and compare even if the cache already exists** - this is the core of 0.6.1 polling.
+ * T86 is updated every 15 minutes starting from 16:00, the first catch of the day is not necessarily the final one;
+ * The original practice of "cache the first time you catch it and never update it again" would lock the first version as the answer for that day.
+ * It's worse than being caught once too late. Only today, and not yet finalized, will go this route (see pollPlan.nextT86State).
  */
 async function loadT86(
   ymd: string,
@@ -341,8 +341,8 @@ async function loadT86(
   try {
     const resp = await fetchJson<T86ResponseShape>(t86Url(ymd))
     if (!t86Ok(resp)) {
-      // 非交易日 / 尚未發布：不快取空回應。重抓模式下已有的快取仍然有效，
-      // 不能因為這次拿到空的就把好資料丟掉。
+      // Non-trading days/not released yet: do not respond quickly. Existing caches in re-fetch mode are still valid.
+      // Don’t throw away good information just because you got an empty one this time.
       if (cached && t86Ok(cached)) {
         t86FingerprintByYmd.set(ymd, t86Fingerprint(cached))
         return cached
@@ -351,7 +351,7 @@ async function loadT86(
     }
     const fp = t86Fingerprint(resp)
     t86FingerprintByYmd.set(ymd, fp)
-    // 內容沒變就別重寫，省下 194KB 的 UPSERT 與隨之而來的 dead tuple
+    // If the content has not changed, don’t rewrite it to save the 194KB UPSERT and the dead tuple that comes with it.
     if (!cached || !t86Ok(cached) || t86Fingerprint(cached) !== fp) {
       await writeCache(ymd, 'T86', resp)
     }
@@ -361,7 +361,7 @@ async function loadT86(
   }
 }
 
-/** 讀某日帶 date 的融資融券（快取優先）；端點格式變動或抓取失敗回 null */
+/** Read the margin trading with date on a certain day (cache priority); if the endpoint format changes or the fetch fails, null will be returned*/
 async function loadMarginDated(ymd: string, fetchAllowed: boolean): Promise<MarginDatedResponse | null> {
   const cached = await readCache<MarginDatedResponse>(ymd, 'MI_MARGN_D')
   if (cached && marginDatedOk(cached)) return cached
@@ -386,7 +386,7 @@ async function loadDayRaw(
   return { ymd, t86, margin }
 }
 
-/** 把一天的原始大檔壓成只含目標代號的切片，隨即釋放 raw */
+/** Compress one day's raw files into slices containing only the target code, and then release the raw*/
 function sliceDay(raw: DayRaw, tickers: string[]): DaySlice {
   const date = dashDate(raw.ymd)
   const chips = new Map<string, ChipDay>()
@@ -401,28 +401,28 @@ function sliceDay(raw: DayRaw, tickers: string[]): DaySlice {
 }
 
 export interface SeriesResult {
-  /** 由舊到新的交易日切片，最多 HISTORY_DAYS 筆；空陣列代表完全無資料 */
+  /** Slice transaction days from old to new, up to HISTORY_DAYS transactions; an empty array represents no data at all*/
   days: DaySlice[]
-  /** 最新交易日 YYYYMMDD（無資料時退回最近的非週末候選日當標示） */
+  /** Latest trading day YYYYMMDD (if no data is available, the nearest non-weekend candidate day will be returned and marked)*/
   dataYmd: string
-  /** 是否因抓取額度用盡而少於 HISTORY_DAYS 天 */
+  /** Is it less than HISTORY_DAYS days due to crawl quota exhausted?*/
   incomplete: boolean
   /**
-   * `days` 之中**實際有融資融券**的交易日（由舊到新）。
-   * 重產閘門看的是這個而不是 `marginDatedFailed` —— 理由見 `pollPlan.marginSigPart`。
+   * `days` is the actual trading day with margin trading** (from old to new).
+   * The heavy production gate looks at this instead of `marginDatedFailed` - see `pollPlan.marginSigPart` for the reason.
    */
   marginYmds: string[]
-  /** rwd 融資融券是否整批不可用（呼叫端據此回退 OpenAPI） */
+  /** rwd Whether the entire batch of margin trading is unavailable (the caller falls back to OpenAPI accordingly)*/
   marginDatedFailed: boolean
 }
 
 /**
- * 組出最近 HISTORY_DAYS 個交易日的籌碼序列。
+ * Create a chip sequence for the last HISTORY_DAYS trading days.
  *
- * 策略（見 docs/agent/PLAN.md §E）：
- * - 候選日往回推 LOOKBACK_DAYS 個日曆日，先剔除週六日（必定非交易日，省下白抓）。
- * - 已有快取的日子不佔抓取額度；其餘以 FETCH_CONCURRENCY 併發抓取。
- * - 單次呼叫最多實抓 MAX_BACKFILL_DAYS 個缺漏日，收集滿 HISTORY_DAYS 天即停。
+ * Strategy (see docs/agent/PLAN.md §E):
+ * - The candidate days are pushed back LOOKBACK_DAYS calendar days, excluding Saturdays and Sundays first (must be non-trading days, so as to save wasted time).
+ * - The days that have been cached do not account for the crawl quota; the rest are crawled concurrently with FETCH_CONCURRENCY.
+ * - A single call can capture up to MAX_BACKFILL_DAYS missing days, and the collection will stop after HISTORY_DAYS days.
  */
 async function loadSeries(
   tickers: string[],
@@ -435,13 +435,13 @@ async function loadSeries(
   const collected: DaySlice[] = []
   const marginYmdSet = new Set<string>()
 
-  // 由新到舊分批處理；同批內併發，批間序列，以此同時控住併發數與總抓取量
+  // Batch processing from new to old; concurrency within the same batch, sequence between batches, so as to control the number of concurrencies and the total amount of crawling at the same time
   for (let i = 0; i < candidates.length && collected.length < HISTORY_DAYS; i += FETCH_CONCURRENCY) {
     const batch = candidates.slice(i, i + FETCH_CONCURRENCY)
     const jobs: Array<Promise<DayRaw | null>> = []
     for (const ymd of batch) {
-      // 今天且尚未定稿時強制重抓比對；不佔 fetchBudget（那是給回補缺漏日用的額度，
-      // 今天這一份是輪詢的主角，不能被回補排擠掉）
+      // It is mandatory to retake the comparison today and it has not yet been finalized; it does not account for the fetchBudget (that is the daily quota for filling in the gaps,
+      // Today’s portion is the protagonist of polling and cannot be squeezed out by replenishment)
       const refreshT86 = opts?.refreshT86Ymd === ymd
       if (refreshT86) {
         jobs.push(loadDayRaw(ymd, { t86: true, margin: !cached.has(`${ymd}:MI_MARGN_D`), refreshT86: true }))
@@ -450,8 +450,8 @@ async function loadSeries(
       const needT86 = !cached.has(`${ymd}:T86`)
       const needMargin = !cached.has(`${ymd}:MI_MARGN_D`)
       if (fetchBudget <= 0) {
-        // 額度用盡：T86 沒快取就無從判定是不是交易日，只能跳過；
-        // T86 有快取則照樣出圖，那天單純沒有融資融券資料。
+        // Quota exhausted: T86 Without cache, there is no way to determine whether it is a trading day and can only be skipped;
+        // If T86 has a cache, it will still produce the picture. There is simply no margin trading information on that day.
         if (needT86) continue
         jobs.push(loadDayRaw(ymd, { t86: false, margin: false }))
         continue
@@ -467,12 +467,12 @@ async function loadSeries(
     }
   }
 
-  // collected 為由新到舊；轉成由舊到新並裁到 HISTORY_DAYS
+  // collected is new to old; converted to old to new and cropped to HISTORY_DAYS
   collected.sort((a, b) => a.ymd.localeCompare(b.ymd))
   const days = collected.slice(-HISTORY_DAYS)
   const latest = days[days.length - 1]
-  // 只認落在視窗內的那幾天：批次可能多收幾天再裁掉，被裁掉的那些不在報告裡，
-  // 讓它們影響重產判斷只會製造假訊號
+  // Only recognize the days that fall within the window: the batch may be collected for a few more days before being eliminated, and the eliminated ones are not included in the report.
+  // Allowing them to influence the judgment of heavy production will only create false signals.
   const marginYmds = days.map((d) => d.ymd).filter((ymd) => marginYmdSet.has(ymd))
   return {
     days,
@@ -489,7 +489,7 @@ interface GenerateReportRequestBody {
   ticker?: string
   name?: string
   holding?: HoldingContext | null
-  /** admin-set-role 用：要改的帳號與要不要給管理員 */
+  /** admin-set-role is used: the account to be changed and whether to give it to the administrator*/
   userId?: string
   admin?: boolean
 }
@@ -497,7 +497,7 @@ interface GenerateReportRequestBody {
 type MarginRows = Record<string, string>[] | null
 type SblRows = Parameters<typeof extractBorrow>[0] | null
 
-/** 由已抓好的序列組出單一代號的報告資料。holding 為 null 時前端不顯示持股概況。 */
+/** The report data of a single code is assembled from the captured sequences. When holding is null, the front end does not display the holding summary.*/
 function assembleOne(opts: {
   ticker: string
   name: string
@@ -509,7 +509,7 @@ function assembleOne(opts: {
   const { ticker, name, holding, series, marginFallbackRows, borrow: borrowSrc } = opts
   const notes: string[] = []
 
-  // 複製一份再組：series 的切片可能被多個代號共用讀取，下面的 fallback 會就地補值
+  // Make a copy and regroup: the slices of the series may be shared and read by multiple codenames, and the following fallback will fill in the value in place.
   const history: ChipDay[] = series.days.map((d) => {
     const chip = d.chips.get(ticker)
     return chip ? { ...chip } : { date: dashDate(d.ymd), institutional: null, margin: null }
@@ -524,7 +524,7 @@ function assembleOne(opts: {
     )
   }
 
-  // rwd 端點整批失敗時，用 OpenAPI 補上「最新交易日」的餘額（缺買進 / 賣出拆項）
+  // When the rwd endpoint fails to complete the batch, use OpenAPI to make up the balance of the "latest trading day" (lack of buy/sell split items)
   if (latest && latest.margin === null && marginFallbackRows) {
     const fallback = extractMargin(marginFallbackRows, ticker)
     if (fallback) {
@@ -533,7 +533,7 @@ function assembleOne(opts: {
     }
   }
   if (latest && latest.margin === null) {
-    // 分段執行下這是常態而非故障：早班跑的時候融資融券根本還沒公布
+    // Under staged execution, this is the norm rather than a fault: when I ran the morning shift, margin trading had not been announced at all.
     notes.push('今日融資融券尚未公布（約 21:00–22:00），稍晚會自動補上。')
   }
 
@@ -575,7 +575,7 @@ function assembleOne(opts: {
   })
 }
 
-/** 取「日期 >= minYmd」中最新的一份借券快取；查無回 null（見 loadBorrow 的說明） */
+/** Get the latest borrowing cache in "date >= minYmd"; if the search fails, null is returned (see the description of loadBorrow)*/
 async function readBorrowCacheFrom(
   minYmd: string,
 ): Promise<{ resp: BorrowDatedResponse; date: string } | null> {
@@ -599,24 +599,24 @@ async function readBorrowCacheFrom(
 
 interface BorrowSource {
   resp: BorrowDatedResponse | null
-  /** rwd 版回應 title 裡的日期（＝下一個交易日）；用 OpenAPI fallback 時為 null */
+  /** rwd version responds to the date in title (= next trading day); null when using OpenAPI fallback*/
   date: string | null
   fallbackRows: SblRows
 }
 
 /**
- * 借券：優先用自帶日期的 rwd 版。
+ * Borrowing coupons: Priority is given to the rwd version with its own date.
  *
- * **為什麼要先看日期再快取**：借券端點沒有 date 參數，回的永遠是「目前最新」。
- * 批次改成一天分段跑好幾次之後，早班（17:30）拿到的其實是前一天的資料 ——
- * 若照舊直接存成今天，後面幾班會因為「快取已存在」而永遠沿用那份錯的。
- * 改成解析 title 的日期後就變成可驗證的：拿到什麼日期就存成什麼日期，
- * 早班存前一天（本來就對），晚班拿到新的自然會寫進新的鍵，不會互相污染。
+ * **Why do we need to look at the date first and then cache it**: The borrowing endpoint does not have a date parameter, and the returned value is always "the latest".
+ * After the batch was changed to run several times a day, the morning shift (17:30) actually got the data from the previous day——
+ * If you continue to save it directly as today, the subsequent batches will always use the wrong one because "the cache already exists".
+ * After changing to parse the date of title, it becomes verifiable: whatever date you get is saved as that date.
+ * If the morning shift saves the data from the previous day (which is correct in the first place), and if the evening shift gets new ones, they will naturally write new keys into them, and they will not contaminate each other.
  */
 async function loadBorrow(minYmd?: string): Promise<BorrowSource> {
-  // 0.6.1：借券端點沒有 date 參數，原本每次執行都無條件重抓一次（244KB）。
-  // 三班時代那是一天 3 次，改成 32 次輪詢後就是一天 7.8MB 的純浪費。
-  // 已經有「日期 >= 今天」的快取就直接用 —— 那份就是我們要的最新額度。
+  // 0.6.1: The borrowing endpoint does not have a date parameter. Originally, it was unconditionally re-captured (244KB) every time it was executed.
+  // In the third shift era, it was three times a day. After changing to 32 polls, it was a pure waste of 7.8MB a day.
+  // If there is already a cache with "date >= today", just use it directly - that one is the latest quota we want.
   if (minYmd) {
     const cached = await readBorrowCacheFrom(minYmd)
     if (cached) return { resp: cached.resp, date: cached.date, fallbackRows: null }
@@ -630,7 +630,7 @@ async function loadBorrow(minYmd?: string): Promise<BorrowSource> {
   if (resp && borrowDatedOk(resp)) {
     const date = borrowDatedDate(resp)!
     const ymd = date.replace(/-/g, '')
-    // 以「資料自己宣告的日期」為鍵，而不是我們正在處理的交易日
+    // Keyed by "date declared by the data itself" rather than the transaction date we are processing
     const cached = await readCache<BorrowDatedResponse>(ymd, 'SBL_D')
     if (!cached) await writeCache(ymd, 'SBL_D', resp)
     return { resp, date, fallbackRows: null }
@@ -638,7 +638,7 @@ async function loadBorrow(minYmd?: string): Promise<BorrowSource> {
   return { resp: null, date: null, fallbackRows: null }
 }
 
-/** OpenAPI 融資融券沒有 date 參數，只在 rwd 整批失敗時當備援 */
+/** OpenAPI margin trading does not have a date parameter and is only used as a backup when the entire batch of rwd fails.*/
 async function loadMarginFallback(dataYmd: string, needed: boolean): Promise<MarginRows> {
   return needed
     ? await readLatest<Record<string, string>[]>(dataYmd, 'MI_MARGN', MI_MARGN_URL)
@@ -657,13 +657,13 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   const holding = body.holding ?? null
 
   /*
-   * 這個端點以 --no-verify-jwt 部署（夜間 cron 只帶 x-cron-secret 進來），
-   * 也就是任何人拿到專案網址就能呼叫 —— 而網址就在 GitHub Pages 的公開 bundle 裡。
+   * This endpoint is deployed with --no-verify-jwt (the nightly cron only comes in with x-cron-secret),
+   * That means anyone can call it if they get the project URL - and the URL is in the public bundle of GitHub Pages.
    *
-   * 限制只接受「確實有人持有」的代號，把濫用的上限壓到最低：
-   * 攻擊者最多只能打這幾檔，而它們的當日資料早已被夜間批次快取，
-   * 因此無法逼這個專案去大量抓 TWSE（放大效應歸零），只剩單純的 DB 讀取。
-   * 回應刻意不透露清單內容或長度。
+   * Only accept code names that "are actually held by someone" to minimize the limit of abuse:
+   * The attacker can only attack these files at most, and their data for the day has already been cached in the night batch.
+   * Therefore, this project cannot be forced to capture a large number of TWSE (the amplification effect is reset to zero), and only pure DB reading is left.
+   * The response deliberately did not reveal the content or length of the list.
    */
   const held = await heldTwTickers()
   if (!held.some((h) => h.ticker === ticker)) {
@@ -682,24 +682,24 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   return json({ reportId, generatedAt: data.generatedAt, dataDate: data.dataDate, data })
 }
 
-// ---- 盤後批次：產生全體持有台股的共用報告存入 Storage(reports bucket)，保留最近 7 天 ----
+// ---- After-hours batch: Generate a common report for all Taiwan stocks held and store it in Storage (reports bucket), retaining the last 7 days ----
 
 const REPORTS_BUCKET = 'reports'
 
-/** 報告在 Storage 保留幾個**日曆日**。前端只讀 manifest 指到的最新一份，舊的純粹留著備查 */
+/** Reports are retained in Storage for a number of **calendar days**. The front-end only reads the latest manifest pointed to, the old one is simply kept for reference.*/
 const REPORT_RETAIN_DAYS = 7
 /**
- * 原始檔快取保留幾個**日曆日**，必須涵蓋整個 LOOKBACK_DAYS 視窗。
+ * The raw cache is kept for a number of **calendar days** and must cover the entire LOOKBACK_DAYS window.
  *
- * 為什麼不是 7：`HISTORY_DAYS` 數的是**交易日**，而 prune 砍的是**日曆日** ——
- * 7 個交易日要跨 9–11 個日曆日。用 7 天會把隔天還要用的 2–3 天一起砍掉，
- * 於是每晚的批次都得重抓那幾天（實測正式區 prune 後只剩 6 個交易日可用，
- * 每次 generate 都還在補抓）。設成與 LOOKBACK_DAYS 相同最不容易再錯：
- * 那正是 loadSeries 會回頭找的範圍，更舊的資料本來就永遠不會被讀到。
+ * Why not 7: `HISTORY_DAYS` counts **trading days**, while prune counts **calendar days** ——
+ * 7 trading days span 9–11 calendar days. Using it for 7 days will cut off the 2-3 days that need to be used the next day.
+ * So every night's batches have to be re-captured for those days (actually measured, there are only 6 trading days left after the official area prune.
+ * Still catching up every time generate). Setting it to the same as LOOKBACK_DAYS is the least likely to go wrong:
+ * That's exactly the range that loadSeries will look back for, and older data will never be read in the first place.
  */
 const CACHE_RETAIN_DAYS = LOOKBACK_DAYS
 
-/** generate-all 會寫 Storage，端點為公開(--no-verify-jwt)，故要求 x-cron-secret 與環境變數相符 */
+/** generate-all will write Storage, and the endpoint is public (--no-verify-jwt), so x-cron-secret is required to match the environment variable*/
 function assertCronSecret(req: Request): Response | null {
   const expected = Deno.env.get('CRON_SECRET') ?? ''
   const got = req.headers.get('x-cron-secret') ?? ''
@@ -708,16 +708,16 @@ function assertCronSecret(req: Request): Response | null {
 }
 
 /**
- * 管理員專用端點的把關：驗證呼叫者的 JWT，且 `app_metadata.role === 'admin'`。
+ * Gatekeeping for the admin-specific endpoint: Validate the caller's JWT and `app_metadata.role === 'admin'`.
  *
- * **不能沿用 `assertCronSecret`** —— 那是給 pg_cron 用的共用密鑰，
- * 前端拿不到也不該拿到（一旦放進前端就等於公開，任何人都能觸發整批抓取）。
+ * **Cannot use `assertCronSecret`** - that is the shared secret used by pg_cron,
+ * The front end can't get it and shouldn't get it (once it's put in the front end, it's public, and anyone can trigger the entire batch of fetching).
  *
- * **也不能用 email 比對**。`app_metadata` 只能由 service role / Dashboard 寫入，
- * 使用者改不了自己的；email 則是使用者可自行變更的欄位，拿它當授權依據等於沒有授權。
- * 這與 `aiSettings.ts` 的 `isAiAdmin()` 是同一套判準，兩邊必須一致。
+ * **Cannot use email to compare**. `app_metadata` can only be written by service role / Dashboard,
+ * Users cannot change their own; email is a field that users can change by themselves. Using it as the basis for authorization means no authorization.
+ * This is the same set of criteria as `isAiAdmin()` of `aiSettings.ts`, and both sides must be consistent.
  *
- * 這支函式是 `--no-verify-jwt` 部署的，平台不會幫忙驗 JWT，所以這裡自己驗。
+ * This function is deployed with `--no-verify-jwt`. The platform will not help verify JWT, so you can verify it yourself here.
  */
 async function assertAdmin(req: Request): Promise<Response | null> {
   const auth = req.headers.get('Authorization') ?? ''
@@ -741,7 +741,7 @@ function ymdMinusDays(ymd: string, days: number): string {
   return `${dt.getUTCFullYear()}${p(dt.getUTCMonth() + 1)}${p(dt.getUTCDate())}`
 }
 
-/** 全體使用者「淨持有（買 − 賣 > 0）」的台股代號（service role 掃 transactions；跨使用者去重） */
+/** The Taiwan stock code of all users' "net holdings (buy − sell > 0)" (service role scan transactions; cross-user deduplication)*/
 async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
   const { data, error } = await db
     .from('transactions')
@@ -768,10 +768,10 @@ async function uploadJson(path: string, payload: unknown): Promise<boolean> {
     const { error } = await db.storage.from(REPORTS_BUCKET).upload(path, blob, {
       upsert: true,
       contentType: 'application/json; charset=utf-8',
-      // ⚠️ 一定要明寫。不給的話 supabase-js 預設 3600，Storage 就回
-      // `cache-control: public, max-age=3600`，前端拿到的資料會整整舊一小時，
-      // 而且 Ctrl+Shift+R 救不了（硬重整不涵蓋 JS 發出的 fetch）——0.6.4-dev.5 的線上事故。
-      // 這些檔一天最多更新 32 次，讓它每次重新驗證的成本遠低於顯示錯誤資料。
+      // ⚠️ Must be written clearly. If not, supabase-js defaults to 3600, and Storage will return
+      // `cache-control: public, max-age=3600`, the data obtained by the front end will be one hour old.
+      // And Ctrl+Shift+R can't save it (hard refactoring does not cover fetch issued by JS) - online crash in 0.6.4-dev.5.
+      // These files are updated up to 32 times a day, making each revalidation much less expensive than displaying incorrect data.
       cacheControl: '0',
     })
     return !error
@@ -790,19 +790,19 @@ async function downloadJson<T>(path: string): Promise<T | null> {
   }
 }
 
-// ---- 日線 OHLCV（技術面用）----
+// ----Daily OHLCV (for technical purposes)----
 
 /**
- * 每檔台股抓一年日線存成 daily/{ticker}.json（整份覆寫）。
+ * For each Taiwanese stock, capture the one-year daily line and save it into daily/{ticker}.json (overwrite the entire copy).
  *
- * 為什麼是 Storage 單檔覆寫、而不是 PLAN §G 原本設想的 price_daily 資料表：
- * 1. **沒有保留期問題**。覆寫不累積，不需要 prune —— 而 prune 的保留期單位錯配
- *    正是 0.3.9 修過的坑（砍日曆日 vs 數交易日），不要再製造第二個。
- * 2. **前端直接下載，不耗 Edge Function 額度**（0.3.9 的教訓：額度燒光會連帶讓 stock-price 停擺）。
- * 代價是每晚重抓整年而非增量，但 5 檔持股 = 5 個請求，可忽略。
+ * Why is Storage single file overwritten instead of the price_daily data table originally envisioned by PLAN §G:
+ * 1. **No retention issues**. Overwrites are not cumulative and do not require prune - prune's retention period units are mismatched
+ *    It is the pit that was repaired in 0.3.9 (cutting calendar days vs. counting trading days), don’t create a second one.
+ * 2. **The front-end is downloaded directly, without consuming the Edge Function quota** (lesson from 0.3.9: burning out the quota will also cause the stock-price to stop).
+ * The trade-off is to recapture the entire year each night rather than in increments, but 5 holdings = 5 requests, which is negligible.
  *
- * 跳過條件：既有檔案的 lastDate 已達本次的資料日就不重抓。三段式 cron 一天跑三次，
- * 17:30 那班抓到後，22:30 / 23:30 兩班會直接跳過。
+ * Skip conditions: The existing file's lastDate has reached the current data date and will not be re-caught. Three-stage cron runs three times a day,
+ * After the 17:30 class is caught, the 22:30 / 23:30 classes will be skipped directly.
  */
 async function syncDaily(
   tickers: Array<{ ticker: string; name: string }>,
@@ -816,8 +816,8 @@ async function syncDaily(
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
       if (existing && existing.schema === DAILY_SCHEMA) {
         if (existing.lastDate >= targetDate) continue
-        // 即點即產專用：今天已經查過、確認查無資料，就別再對外打一次。
-        // 夜間批次刻意不看這個條件——三班要留給剛上市、Yahoo 還沒補資料的代號重試的機會。
+        // Exclusively for immediate production: If you have checked today and confirmed that there is no information, please do not call again.
+        // The night batch deliberately ignores this condition - the third shift should give the code names that have just been launched and Yahoo has not yet provided information a chance to try again.
         if (opts?.onDemand && (existing.emptyCheckedDate ?? '') >= targetDate) continue
       }
 
@@ -828,8 +828,8 @@ async function syncDaily(
         if (rows.length > 0) break
       }
 
-      // 查無資料也要寫檔（空殼＋查詢日）：即點即產靠它才不會每次開頁重抓。
-      // 理由與批次仍會重試的原因見 twDaily.ts 的 emptyCheckedDate 註解。
+      // Even if there is no data to be found, a file must be written (empty shell + query date): it can be used to produce instant results without re-fetching every time the page is opened.
+      // See the emptyCheckedDate annotation of twDaily.ts for the reason and why the batch will still be retried.
       const file: DailyFile =
         rows.length === 0
           ? {
@@ -849,22 +849,22 @@ async function syncDaily(
             }
       if (await uploadJson(`daily/${ticker}.json`, file)) synced++
     } catch {
-      // 單檔失敗不影響其他檔，也不影響籌碼報告（與 borrow / margin 的容錯一致）
+      // The failure of a single file does not affect other files, nor does it affect the chip report (consistent with the fault tolerance of borrow / margin)
     }
   }
   return synced
 }
 
-// ---- 基本面（估值 + 月營收 + 產業別）----
+// ----Fundamentals (Valuation + Monthly Revenue + Industry)----
 
 /**
- * 每檔台股產出 fundamental/{ticker}.json（整份覆寫，佈局同 daily/：
- * 不符 pruneStorage 的 ^\d{8}$ 目錄名，不會被清、也不需要清）。
+ * Each Taiwan stock output is fundamental/{ticker}.json (overwritten in its entirety, the layout is the same as daily/:
+ * The ^\d{8}$ directory name that does not match pruneStorage will not be cleared and does not need to be cleared).
  *
- * 三份 whole-market 大檔在迴圈外各載一次（chip_raw_cache 以本次交易日快取，
- * 頭班實抓、後兩班吃快取），迴圈內只做逐代號抽取。
- * revenueMonths 讀回既有檔合併：覆寫制檔案靠這個自累積月營收史（首月 1 筆→12 筆）。
- * 上櫃股三份都查無：仍寫檔（nulls + notes），讓前端能區分「跑過但無料」與「還沒跑」。
+ * Three whole-market batches are loaded once outside the loop (chip_raw_cache is cached on this trading day,
+ * The first shift will be the real ones, the last two shifts will be quick picks), and only code-by-code draws will be done in the circle.
+ * revenueMonths reads back the existing files and merges them: the overwritten file relies on this accumulated monthly revenue history (1 transaction in the first month → 12 transactions).
+ * None of the three listed stocks were found: still write the file (nulls + notes), so that the front-end can distinguish between "ran but no information" and "not yet ran".
  */
 async function syncFundamental(
   tickers: Array<{ ticker: string; name: string }>,
@@ -874,14 +874,14 @@ async function syncFundamental(
   const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
   const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
-  // 獲利能力（0.6.5）。同樣是 whole-market 大檔、走 chip_raw_cache，
-  // 所以一天 32 輪只有第一輪真的去抓。季更資料，多數輪次抽出來的值與昨天相同。
+  // Profitability (0.6.5). The same is the whole-market large stall, go for chip_raw_cache,
+  // So out of 32 rounds a day, only the first round is really going to be caught. The data is updated quarterly, and the values ​​extracted in most rounds are the same as yesterday.
   const profit = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP17_L', T187AP17_URL)
-  // 估值檔自帶民國日期（例：'1150724'）。記進 batch_run_log 才回答得出
-  // 「基本面什麼時候更新」—— 原本只記 synced 計數，而那個數字會被「新增股票」干擾。
+  // The valuation file comes with the date of the Republic of China (for example: '1150724'). Enter batch_run_log to answer the question
+  // "When will the fundamentals be updated?" - Originally, only the synced count was recorded, and that number would be interfered with by "new stocks".
   const bwibbuDate = bwibbu?.[0]?.Date ?? null
-  // 全部失敗才整段跳過。只要有一份抓到就照常寫檔 ——
-  // buildFundamentalFile 會保留既有欄位，不會把沒抓到的部分覆寫成空殼。
+  // If all failed, skip the entire section. As long as one is caught, the file will be written as usual——
+  // buildFundamentalFile will retain the existing fields and will not overwrite the uncaptured parts into empty shells.
   if (!bwibbu && !revenue && !company && !profit) return { synced: 0, bwibbuDate }
 
   let synced = 0
@@ -897,7 +897,7 @@ async function syncFundamental(
       const latestProfit = extractProfit(profit, ticker)
       const industry = extractIndustry(revenue, company, ticker)
 
-      // 欄位組裝與註記判斷都在 twFundamental.ts 的純函式裡（那裡測得到）
+      // Field assembly and annotation judgment are all in the pure functions of twFundamental.ts (can be measured there)
       const file = buildFundamentalFile({
         ticker,
         name,
@@ -912,17 +912,17 @@ async function syncFundamental(
       })
       if (await uploadJson(`fundamental/${ticker}.json`, file)) synced++
     } catch {
-      // 單檔失敗不影響其他檔，也不影響已寫好的籌碼報告
+      // Failure of a single file will not affect other files, nor will it affect the chip report that has been written.
     }
   }
   return { synced, bwibbuDate }
 }
 
-// ---- 月營收歷史回補（MOPS t21sc03）----
+// ----Monthly revenue historical replenishment (MOPS t21sc03)----
 
 /**
- * 抓 big5 網頁。MOPS 的 t21sc03 是 big5，直接當 UTF-8 讀會整份變亂碼。
- * 失敗（含 10 秒逾時）回 null 不拋，與 syncDaily / syncMacro 的容錯準則一致。
+ * Grab big5 web pages. MOPS's t21sc03 is big5, and reading it directly as UTF-8 will cause the entire file to become garbled.
+ * In case of failure (including 10 seconds timeout), null will be returned without throwing, which is consistent with the fault tolerance guidelines of syncDaily / syncMacro.
  */
 async function fetchBig5Text(url: string): Promise<string | null> {
   try {
@@ -938,19 +938,19 @@ async function fetchBig5Text(url: string): Promise<string | null> {
 }
 
 /**
- * 把 fundamental/{ticker}.json 的 revenueMonths 補到最近 REVENUE_MONTHS_CAP 個已公布月份。
+ * Add revenueMonths in fundamental/{ticker}.json to the most recent REVENUE_MONTHS_CAP published months.
  *
- * **為什麼需要它**：每晚的 syncFundamental 只拿得到最新一個月（t187ap05_L 端點不吃年月），
- * 所以新標的第一個月只有 1 筆、要整整一年才長滿。這裡改由 MOPS 的分月報表把缺口一次補起來。
+ * **Why is it needed**: The nightly syncFundamental only gets the latest month (the t187ap05_L endpoint does not take the year and month),
+ * Therefore, there is only one transaction in the first month of the new bid, and it will take a full year to grow. Here, MOPS’s monthly reports are used to fill the gap at once.
  *
- * 設計上的三個決定：
- * 1. **缺口驅動**。先讀所有目標檔算出還缺哪些月份，全滿就直接回，一個對外請求都不發 ——
- *    與 decideSkip 的短路同一個精神。補齊之後每晚都是零成本。
- * 2. **不寫 chip_raw_cache**。pruneChipCache 是 `ymd < cutoff`（8 碼日期）的字典序比較，
- *    任何月份鍵（'2026-06'）都比它小，**每輪都會被刪掉**，快取等於白寫。
- *    fundamental/*.json 本身就是快取：某個月補進所有檔之後就再也不會被請求。
- * 3. **每個月抓上市＋上櫃兩份**。代號在兩份之間不重疊（實測 991 / 860 家），
- *    合成一張表就不必去判斷某檔是上市還是上櫃 —— 而我們的 transactions 裡本來就沒存這件事。
+ * Three design decisions:
+ * 1. **Notch Drive**. First read all the target files to figure out which months are missing. If they are full, you will reply directly without sending a single external request——
+ *    In the same spirit as decideSkip's short circuit. After top-up, every night is zero cost.
+ * 2. **Do not write chip_raw_cache**. pruneChipCache is a lexicographic comparison of `ymd < cutoff` (8-code date),
+ *    Any month key ('2026-06') is smaller than it and will be deleted every round, so the cache is written in vain.
+ *    fundamental/*.json itself is a cache: after all files are added in a certain month, they will never be requested again.
+ * 3. **Catch the listing + two copies on the counter every month**. The code names do not overlap between the two copies (actually measured 991 / 860 companies),
+ *    Combining a table eliminates the need to determine whether a certain file is listed or listed on the OTC market - this matter is not stored in our transactions.
  */
 async function backfillRevenue(
   tickers: Array<{ ticker: string; name: string }>,
@@ -961,12 +961,12 @@ async function backfillRevenue(
 
   const wantMonths = publishedMonths(now, REVENUE_MONTHS_CAP)
 
-  // 先讀一輪算出缺口。順便把檔案留著，省得補完再下載一次。
+  // Read one round first to figure out the gaps. By the way, keep the file so you don’t have to download it again after completing it.
   const files = new Map<string, FundamentalFile>()
   const have = new Map<string, RevenueProgress>()
   for (const { ticker } of tickers) {
     const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
-    // 檔案還沒產生就先跳過：syncFundamental 會在同一輪稍早建立它，下一輪再補
+    // Skip the file before it is generated: syncFundamental will create it earlier in the same round and fill it in the next round
     if (!file) continue
     files.set(ticker, file)
     have.set(ticker, {
@@ -981,8 +981,8 @@ async function backfillRevenue(
 
   // month → (ticker → RevenueMonth)
   const fetched = new Map<string, Map<string, RevenueMonth>>()
-  // 「這個月份我們確實去看過了」。判準是**抓取成功**，不是「有找到我們要的代號」——
-  // 全是 ETF 時 merged 必然是空的，用有無資料判斷會讓 through 永遠推不動、回補卡死。
+  // "We actually went to see it this month." The judgment is **catch successfully**, not "the code we want is found"——
+  // When all are ETFs, merged must be empty. Judging by the presence or absence of data will make the through forever unable to push and the replenishment will be stuck.
   const attempted: string[] = []
   for (const ym of targets) {
     const merged = new Map<string, RevenueMonth>()
@@ -998,7 +998,7 @@ async function backfillRevenue(
     if (ok) attempted.push(ym)
     if (merged.size > 0) fetched.set(ym, merged)
   }
-  // 一個月都沒抓成功（對方掛了 / 網路不通）就什麼都別改，下一輪重試
+  // If you haven't succeeded in catching it for a month (the other party is down/the network is unavailable), don't change anything and try again in the next round.
   if (attempted.length === 0) return { filled: 0, months: [] }
 
   let filled = 0
@@ -1009,16 +1009,16 @@ async function backfillRevenue(
       if (row) incoming.push(row)
     }
 
-    // fillGapsOnly：既有值一律保留。t187ap05_L 抓到的是更正後的數字，
-    // 不能被一份較舊的 MOPS 爬取蓋掉（見 mergeRevenueMonths 的說明）。
+    // fillGapsOnly: Existing values ​​are retained. t187ap05_L caught the corrected number,
+    // Cannot be overwritten by an older MOPS crawl (see description of mergeRevenueMonths).
     const merged = mergeRevenueMonths(file.revenueMonths, incoming, { fillGapsOnly: true })
-    // ⚠️ 比月份清單而不是比長度：已有 12 筆的檔補進一個新月份時，cap 會砍掉最舊的一筆，
-    // 長度仍是 12 但內容變了 —— 用長度判斷會把這次真正的更新當成沒事發生而不寫檔。
+    // ⚠️ Compare the monthly list instead of the length: when adding a new month to a file that already has 12 transactions, cap will cut off the oldest one.
+    // The length is still 12 but the content has changed - judging by the length will treat this real update as nothing happened and not write the file.
     const before = (file.revenueMonths ?? []).map((m) => m.yearMonth).join(',')
     const monthsChanged = merged.map((m) => m.yearMonth).join(',') !== before
 
-    // 進度也要寫回去，**即使一筆資料都沒找到** —— ETF 正是靠這個收斂，
-    // 否則它每輪都會把同樣的月份重新列為缺口。
+    // The progress must also be written back, **even if no information is found** - ETF relies on this to converge.
+    // Otherwise it will re-list the same months as gaps each round.
     const through = nextBackfilledThrough(file.revenueBackfilledThrough, attempted)
     if (!monthsChanged && through === (file.revenueBackfilledThrough ?? null)) continue
 
@@ -1034,9 +1034,9 @@ async function backfillRevenue(
 }
 
 /**
- * 抓 MOPS 的季報彙總。**POST 表單、UTF-8**，與月營收那支（GET、big5）完全不同 ——
- * 兩支放在一起維護時最容易搞混的就是這兩點。
- * 失敗（含 20 秒逾時）回 null 不拋，比照 `fetchBig5Text` 的容錯準則。
+ * Catch MOPS’s quarterly report summary. **POST form, UTF-8**, completely different from the monthly revenue one (GET, big5)——
+ * These two points are most likely to be confused when the two are put together for maintenance.
+ * In case of failure (including 20 seconds timeout), null will be returned without throwing, refer to the fault tolerance principle of `fetchBig5Text`.
  */
 async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): Promise<string | null> {
   const body = mopsProfitBody(market, yearQuarter)
@@ -1050,7 +1050,7 @@ async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): 
         Accept: 'text/html',
       },
       body,
-      // 單份約 1.6MB，比月營收的 400KB 大四倍，逾時放寬到 20 秒
+      // A single copy is about 1.6MB, four times larger than the monthly revenue of 400KB, and the timeout is relaxed to 20 seconds.
       signal: AbortSignal.timeout(20_000),
     })
     if (!res.ok) return null
@@ -1061,15 +1061,15 @@ async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): 
 }
 
 /**
- * 把 fundamental/{ticker}.json 的 profitQuarters 補到最近 PROFIT_QUARTERS_CAP 季。
+ * Add the profitQuarters of fundamental/{ticker}.json to the latest PROFIT_QUARTERS_CAP quarter.
  *
- * 結構與 `backfillRevenue` 逐項對應（缺口驅動、不寫 chip_raw_cache、進度寫回檔案），
- * 那三個設計決定的理由見該函式的說明，這裡不重複。差別只有三點：
+ * The structure corresponds to `backfillRevenue` item by item (gap driver, do not write chip_raw_cache, write progress back to the file),
+ * The reasons for those three design decisions can be found in the description of the function and will not be repeated here. There are only three differences:
  *
- * 1. **來源是 POST 表單**（`ajax_t163sb04`），不是靜態網址。
- * 2. **比率要自己算**（該項 ÷ 營業收入），t187ap17_L 是官方算好的。
- *    已與官方值對過答案：民國115 Q1 的 1802 / 2303 / 2609 四項比率逐位吻合。
- * 3. **單次只補 2 季**（月營收是 4 個月）—— 單份 1.6MB，是月營收的四倍。
+ * 1. **The source is POST form** (`ajax_t163sb04`), not a static URL.
+ * 2. **The ratio must be calculated by yourself** (this item ÷ operating income), t187ap17_L is calculated by the official.
+ *    The answer has been compared with the official value: the four ratios of 1802 / 2303 / 2609 of the Republic of China 115 Q1 are consistent bit by bit.
+ * 3. **Only for 2 quarters at a time** (monthly revenue is 4 months) - a single copy is 1.6MB, which is four times the monthly revenue.
  */
 async function backfillProfit(
   tickers: Array<{ ticker: string; name: string }>,
@@ -1084,7 +1084,7 @@ async function backfillProfit(
   const have = new Map<string, ProfitProgress>()
   for (const { ticker } of tickers) {
     const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
-    // 檔案還沒產生就先跳過：syncFundamental 會在同一輪稍早建立它，下一輪再補
+    // Skip the file before it is generated: syncFundamental will create it earlier in the same round and fill it in the next round
     if (!file) continue
     files.set(ticker, file)
     have.set(ticker, {
@@ -1105,10 +1105,10 @@ async function backfillProfit(
   if (targets.length === 0) return { filled: 0, quarters: [] }
   const wanted = new Set(files.keys())
 
-  // 季別 → (代號 → ProfitQuarter)
+  // Quarter → (Codename → ProfitQuarter)
   const fetched = new Map<string, Map<string, ProfitQuarter>>()
-  // 「這一季我們確實去看過了」。判準是**抓取成功**，不是「有找到我們要的代號」——
-  // 全是 ETF 時 merged 必然是空的，用有無資料判斷會讓 through 永遠推不動、回補卡死
+  // "We actually went to see it this season." The judgment is **catch successfully**, not "the code we want is found"——
+  // When all are ETFs, merged must be empty. Judging by the presence or absence of data will make the through unable to be pushed forever and the replenishment will be stuck.
   const attempted: string[] = []
   for (const yq of targets) {
     const merged = new Map<string, ProfitQuarter>()
@@ -1122,7 +1122,7 @@ async function backfillProfit(
     if (ok) attempted.push(yq)
     if (merged.size > 0) fetched.set(yq, merged)
   }
-  // 一季都沒抓成功（對方掛了 / 網路不通）就什麼都別改，下一輪重試
+  // If you haven’t succeeded in catching in one season (the opponent is down/the network is unavailable), don’t change anything and try again in the next round.
   if (attempted.length === 0) return { filled: 0, quarters: [] }
 
   let filled = 0
@@ -1133,8 +1133,8 @@ async function backfillProfit(
       if (row) incoming.push(row)
     }
 
-    // fillGapsOnly：既有值一律保留。t187ap17_L 是官方算好的比率，
-    // 不能被我們自己算的版本蓋掉（兩者對過答案相同，但官方的才是準的）
+    // fillGapsOnly: Existing values ​​are retained. t187ap17_L is the officially calculated ratio.
+    // It cannot be overwritten by our own calculated version (the two have the same answer, but the official one is accurate)
     const merged = mergeProfitQuarters(file.profitQuarters, incoming, { fillGapsOnly: true })
     /*
       ⚠️ 比季別清單而不是比長度：已滿 12 筆時補進一季會擠掉最舊的一筆，
@@ -1147,7 +1147,7 @@ async function backfillProfit(
       (qs ?? []).map((q) => `${q.yearQuarter}:${q.epsChecked ? 1 : 0}`).join(',')
     const changed = signature(merged) !== signature(file.profitQuarters)
 
-    // 進度也要寫回去，**即使一筆資料都沒找到** —— ETF 正是靠這個收斂
+    // The progress must also be written back, **even if no information is found** - ETF relies on this to converge
     const through = nextProfitThrough(file.profitBackfilledThrough, attempted)
     if (!changed && through === (file.profitBackfilledThrough ?? null)) continue
 
@@ -1162,23 +1162,23 @@ async function backfillProfit(
   return { filled, quarters: [...fetched.keys()].sort() }
 }
 
-// ---- 台股全市場量能與三大法人買賣金額（0.6.28）----
+// ----The total market volume of Taiwan stocks can be compared with the trading amount of the three major legal persons (0.6.28)----
 
 /**
- * 單輪最多補幾天的法人買賣金額。
+ * The maximum number of days of legal person trading amount in a single round can be supplemented.
  *
- * BFI82U 一天一個請求（`type=month` 回的是整月合計，不是逐日），所以補歷史必須有預算。
+ * BFI82U makes one request per day (`type=month` returns the total of the whole month, not day by day), so there must be a budget to supplement the history.
  *
- * 0.6.32 由 5 調到 15：買進 / 賣出要把既有的 120 天全部重抓一輪，5 天／輪要 8 個工作天。
- * 15 天／輪 × 一天三班 → 約 3 個工作天補完，之後每輪只剩 1–2 天要補，預算根本用不到。
+ * 0.6.32 Adjusted from 5 to 15: Buying/selling requires all the existing 120 days to be recaptured in one round, and 5 days/round takes 8 working days.
+ * 15 days/round × three shifts a day → It takes about 3 working days to make up, and then there are only 1–2 days left to make up for each round, so the budget is not used at all.
  *
- * **時間預算撐得住**：每個請求自帶 10 秒逾時，實測單日請求約 0.2–0.4 秒，
- * 15 個約 3–6 秒，加上兩份月報仍遠低於 cron 的 60 秒 `timeout_milliseconds`。
- * 這一班是獨立 action（不與個股報告共用時間），所以不會排擠使用者打開就要看的東西。
+ * **Sustainable time budget**: Each request comes with a 10-second timeout, and the actual measured single-day request is about 0.2–0.4 seconds.
+ * 15 of about 3–6 seconds, plus two monthly reports is still well below cron's 60 seconds `timeout_milliseconds`.
+ * This class is an independent action (does not share time with individual stock reports), so it will not crowd out what users need to see when they open it.
  */
 const MAX_MARKET_INST_DAYS = 15
 
-/** 抓 rwd 的 JSON。失敗（含逾時）回 null 不拋，比照 fetchBig5Text 的容錯準則 */
+/** Grab the JSON of rwd. On failure (including timeout), null will be returned without throwing, refer to the fault tolerance principle of fetchBig5Text*/
 async function fetchRwdJson(url: string): Promise<unknown | null> {
   try {
     const res = await fetch(url, {
@@ -1193,21 +1193,21 @@ async function fetchRwdJson(url: string): Promise<unknown | null> {
 }
 
 /**
- * 產出 / 更新 market/daily.json：全市場每日成交量值 + 三大法人買賣金額。
+ * Output/update market/daily.json: daily trading volume value of the entire market + trading amount of the three major legal persons.
  *
- * 與個股報告完全無關，故獨立成一支、也獨立成一個 action ——
- * 它是**全域單檔**，不隨標的清單增減（同 syncMacro 的處置）。
+ * It has nothing to do with the individual stock report, so it is an independent entity and an independent action——
+ * It is a **global single file** and does not increase or decrease with the target list (same as syncMacro's treatment).
  *
- * 兩段式：
- * 1. 成交量值：整月一次抓得完（FMTQIK 的 rwd 版），所以每輪都重抓本月、順便更正。
- * 2. 法人金額：一天一個請求，用 `planInstitutionalBackfill` 的預算逐日補。
+ * Two-stage form:
+ * 1. Trading volume value: It can be captured once for the entire month (rwd version of FMTQIK), so every round, the current month is captured again and corrected along the way.
+ * 2. Legal person amount: one request per day, and the budget of `planInstitutionalBackfill` is used to fill it up day by day.
  *
- * 全部失敗就不覆寫既有檔（留舊資料勝過空檔，同 syncMacro 的準則）。
+ * If all fails, the existing file will not be overwritten (leaving old data is better than empty files, the same principle as syncMacro).
  */
 async function syncMarket(now: Date): Promise<{
   synced: boolean
   days: number
-  /** 這一輪補到幾天的法人金額 */
+  /** How many days of legal person amount will be paid in this round?*/
   institutionalFilled: number
   asOf: string | null
 }> {
@@ -1244,7 +1244,7 @@ async function syncMarket(now: Date): Promise<{
 
   let days = mergeMarketDays(have, incoming)
 
-  // 法人金額：補的是合併後的清單，這樣本輪剛抓到的新交易日也會排進待補
+  // Legal person amount: The list to be supplemented is the merged list, so that the new trading days just captured in this round will also be queued to be supplemented.
   let institutionalFilled = 0
   for (const ymd of planInstitutionalBackfill(days, MAX_MARKET_INST_DAYS)) {
     const url = bfi82uDayUrl(ymd)
@@ -1254,7 +1254,7 @@ async function syncMarket(now: Date): Promise<{
     anyOk = true
     institutionalFilled++
     const date = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6)}`
-    // 走 mergeInstitutional 而不是直接覆寫：這一次若沒吐買賣金額，不可把已補好的洗掉
+    // Use mergeInstitutional instead of overwriting directly: if the transaction amount is not spit out this time, you cannot wash out the completed ones.
     days = days.map((d) =>
       d.date === date ? { ...d, institutional: mergeInstitutional(d.institutional, inst) } : d,
     )
@@ -1270,8 +1270,8 @@ async function syncMarket(now: Date): Promise<{
     ds
       .map(
         (d) =>
-          // 法人要記到「有沒有買賣金額」而不只是「有沒有這一項」：0.6.32 的回補是去補
-          // 已經有差額的舊日子，只記 1/0 的話簽章一字不變，補到的買賣金額每輪都會被丟掉
+          // The legal person must record "whether there is a transaction amount" instead of just "whether there is this item": the backfill of 0.6.32 is to make up for it
+          // In the old days when there was already a balance, if only 1/0 was recorded, the signature would remain unchanged, and the amount of the transaction made up would be lost in each round.
           `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${
             d.institutional ? (d.institutional.buy ? 2 : 1) : 0
           }`,
@@ -1295,52 +1295,52 @@ async function syncMarket(now: Date): Promise<{
   }
 }
 
-// ---- 美國總經指標（0.6.5）----
+// ----U.S. General Economic Indicator (0.6.5)----
 
 /**
- * 產出 `macro/us.json`：五個 FRED 序列的最新值與近 12 期走勢。
+ * Output `macro/us.json`: the latest values ​​of the five FRED series and the trends in the past 12 periods.
  *
- * **這是本專案第一份非個股資料**，幾個刻意的決定：
+ * **This is the first non-individual stock data of this project**, several deliberate decisions:
  *
- * 1. **單一全域檔，不是 per-ticker**。全市場共用，每檔股票看到的完全一樣；
- *    寫成 per-ticker 只是把同一份資料抄 N 遍。形狀最接近 `manifest.json`。
- * 2. **不進 `tickers` 迴圈、不進 `warmStock`**。它與個股無關，
- *    掛進去只會讓「新增一檔股票」誤觸五次對外請求。
- * 3. **冪等鍵是內容指紋，不是日期**（0.6.11 起，修 BUG-008）。
- *    原本是「同一台北日抓過就跳過」，但 `macro-daily` 排兩班（13:00 / 15:00 UTC）
- *    的用意就是「第一班沒接到就讓第二班補」—— 而第一班「成功抓到一份還沒更新的
- *    資料」時，日期冪等會讓第二班一個請求都不發，於是要等到隔天。
- *    2026-07-30 的核心 PCE 正是如此：BEA 美東 8:30 發布（夏令 12:30 UTC）、
- *    FRED 匯入更晚，13:00 那班拿到的序列還沒有 2026-06 那一筆；冬令時發布時間是
- *    13:30 UTC，13:00 那班甚至跑在發布之前，每個月都會固定慢一天。
- *    代價只是每天多五個 CSV 請求（兩班各抓一次），換掉一個必然發生的錯誤。
- *    ⚠️ 不用 `dataYmd`：美國數據按自己的發布日走，
- *    與台股交易日無關，用交易日當鍵會在連假期間停更。
- * 4. **不寫 `chip_raw_cache`**。那張表的 prune 是 `ymd < cutoff` 的 8 碼日期字典序，
- *    月份鍵每輪都會被刪掉（`backfillRevenue` 就是為此不用它）。
- *    `macro/us.json` 自己就是快取。
- * 5. **全部失敗就不覆寫既有檔**：留舊資料勝過空檔。
+ * 1. **Single global file, not per-ticker**. Shared by the entire market, each stock sees exactly the same;
+ *    Written per-ticker is just copying the same information N times. Shape closest to `manifest.json`.
+ * 2. **Do not enter `tickers` loop, do not enter `warmStock`**. It has nothing to do with individual stocks;
+ *    Hanging in will only cause "Add a new stock" to trigger five external requests by mistake.
+ * 3. **The idempotent key is the content fingerprint, not the date** (from 0.6.11, fixes BUG-008).
+ *    Originally it was "skip if caught on the same Taipei day", but `macro-daily` is scheduled in two shifts (13:00 / 15:00 UTC)
+ *    The intention is to "let the second shift make up if the first shift doesn't receive it" - and the first shift "successfully caught a copy that has not been updated yet"
+ *    Data", date idempotence will cause the second class not to send a single request, so it will have to wait until the next day.
+ *    The core PCE of 2026-07-30 is exactly this: BEA released at 8:30 US ET (12:30 UTC in summer),
+ *    FRED is imported even later, and the sequence obtained by the 13:00 batch is not as good as that of 2026-06; the winter time release time is
+ *    13:30 UTC, the 13:00 class even runs before the release, and will be one day slower every month.
+ *    The price is just five more CSV requests per day (one caught in each of the two shifts) and one error that is bound to occur.
+ *    ⚠️ No need for `dataYmd`: US data is based on its own release date.
+ *    It has nothing to do with the Taiwan stock trading day. If you use the trading day as the key, updates will be stopped during consecutive holidays.
+ * 4. **Do not write `chip_raw_cache`**. The prune of that table is the 8-digit date lexicographic order with `ymd < cutoff`,
+ *    The month key is deleted every round (`backfillRevenue` is not used for this purpose).
+ *    `macro/us.json` itself is cached.
+ * 5. **Do not overwrite existing files if all fails**: Keeping old data is better than empty files.
  */
 async function syncMacro(now: Date): Promise<{
-  /** 這次有沒有真的寫檔（＝內容變了且上傳成功） */
+  /** Did you actually write the file this time (= the content has changed and the upload was successful)*/
   synced: boolean
-  /** 抓到的指標數；配合 `reason` 才分得出「沒變」與「抓不到」 */
+  /** The number of indicators caught; combined with `reason`, we can distinguish between "unchanged" and "uncaught"*/
   count: number
-  /** 資料最後變動時間（沒變時是既有檔的舊值） */
+  /** The last change time of the data (if it has not changed, it is the old value of the existing file)*/
   asOf: string | null
   /**
-   * updated：有新資料｜unchanged：問過了但內容一樣｜empty：五個序列全滅｜
-   * skipped：依發布行事曆判定不需要問（零對外請求，見 macroCalendar.decideMacroScan）
+   * updated: There is new information｜unchanged: I asked but the content is the same｜empty: All five sequences are destroyed｜
+   * skipped: No need to ask based on the release calendar (zero external requests, see macroCalendar.decideMacroScan)
    */
   reason: 'updated' | 'unchanged' | 'empty' | 'skipped'
-  /** skipped / 掃描決策的細節，供後台顯示與事後判讀 */
+  /** skipped / Scan the details of the decision for background display and subsequent interpretation*/
   scan?: { reason: ScanReason; dueIds: string[]; scansToday: number }
 }> {
   const existing = await downloadJson<MacroFile>('macro/us.json')
 
-  // 0.6.15：先問「這一輪需不需要真的去打 FRED」。
-  // 平常每天只掃一次（跟上 FRED 回頭修正歷史值），發布日才密集掃到抓著為止。
-  // 「一旦抓到就不抓」就落在 decideMacroScan 的 satisfied 分支。
+  // 0.6.15: Let’s first ask “Do we really need to play FRED this round?”
+  // I usually only scan once a day (to keep up with FRED and go back to correct the historical value), and only scan intensively on the day of release until I catch it.
+  // "Once caught, don't catch it" falls into the satisfied branch of decideMacroScan.
   const todayYmd = taipeiYmdOf(now)
   const prevScans = existing?.scansToday?.ymd === todayYmd ? (existing.scansToday?.n ?? 0) : 0
   const decision = decideMacroScan({
@@ -1367,35 +1367,35 @@ async function syncMacro(now: Date): Promise<{
   for (const spec of FRED_SERIES) {
     try {
       const res = await fetch(fredCsvUrl(spec.id, since), {
-        // ⚠️ 不是 twChips 的 UA。送瀏覽器字串會被 FRED 直接重置連線，見 MACRO_UA
+        // ⚠️ Not a UA by twChips. Sending a browser string will cause FRED to directly reset the connection, see MACRO_UA
         headers: { 'User-Agent': MACRO_UA, Accept: 'text/csv' },
         signal: AbortSignal.timeout(10_000),
       })
       if (!res.ok) continue
       const ind = deriveIndicator(spec, parseFredCsv(await res.text()))
-      // 一期都算不出來（序列停更或格式改了）就別放進檔案，讓前端顯示缺料
+      // If you can't calculate one issue (the sequence has been stopped or the format has changed), don't put it in the file and let the front end show that it is missing materials.
       if (ind.latest) indicators.push(ind)
     } catch {
-      // 單一序列失敗不影響其他四個
+      // Failure of a single sequence does not affect the other four
     }
   }
-  // 全滅時不覆寫既有檔（留舊資料勝過空檔）。
-  // 回傳 count = 0 並標記 reason —— 這裡曾經整批失敗而只剩一個 boolean false
-  // 可看，查不出是「跳過」還是「抓不到」。
+  // Existing files will not be overwritten when completely destroyed (leaving old data is better than empty files).
+  // Return count = 0 and mark reason - here once the entire batch failed and there was only one boolean false
+  // However, I can’t tell whether it’s “skip” or “can’t catch”.
   if (indicators.length === 0) {
     return { synced: false, count: 0, asOf: existing?.asOf ?? null, reason: 'empty' }
   }
 
-  // 內容沒變就不動 asOf，讓它保持「資料最後真的變動」而非「最後跑過」的時間
-  // （沿用 pollPlan 的 runSignature 準則：輸入指紋沒變就不該讓時間戳跳動）。
-  // 仍要寫一次檔以更新 checkedAt —— 那是「排程還活著」的唯一線索，
-  // 否則畫面上只會看到一個好幾天不動的日期，分不出是沒新資料還是排程掛了。
+  // If the content does not change, it will not change asOf, so that it keeps the time of "the last real change of the data" rather than "the last time it ran".
+  // (Follow the runSignature principle of pollPlan: the timestamp should not jump if the input fingerprint has not changed).
+  // Still have to write a file to update checkedAt - that's the only clue that the schedule is still alive.
+  // Otherwise, you will only see a date that has not moved for several days on the screen, and you cannot tell whether there is no new data or the schedule is down.
   if (
     existing?.schema === MACRO_SCHEMA &&
     Array.isArray(existing.indicators) &&
     macroFingerprint(existing.indicators) === macroFingerprint(indicators)
   ) {
-    // 寫失敗也不是大事：下一班會再試，資料本身還在檔案裡
+    // Failure to write is not a big deal: I will try again in the next class, and the data itself is still in the file.
     await uploadJson('macro/us.json', {
       ...existing,
       checkedAt: now.toISOString(),
@@ -1429,26 +1429,26 @@ async function syncMacro(now: Date): Promise<{
 }
 
 /**
- * 抓台幣對主要 8 種外幣的匯率，寫入 `fx/twd.json`（全域單檔）。
+ * Get the exchange rate of the Taiwan dollar against eight major foreign currencies and write it into `fx/twd.json` (global single file).
  *
- * 結構大致與 `syncMacro` 對應（單一失敗不影響其他、全滅不覆寫），三點差異：
+ * The structure roughly corresponds to `syncMacro` (single failure does not affect others, total destruction does not overwrite), there are three differences:
  *
- * 1. **每個幣別要試兩個方向的幣對**。Yahoo 有一側是「回 200、結構完整、
- *    但只有一格資料」，而且哪一側是死的因幣別而異（實測 CNYTWD=X 與 TWDEUR=X
- *    都只回一格，方向還相反）。故以 `FX_MIN_POINTS` 判定夠不夠，不夠就換下一個候選。
- *    詳見 fxRates.ts 的 FxSpec.symbols 註解。
- * 2. **成功就跳出候選迴圈**，正常情況下每個幣別只發一次請求，八個幣別八次。
- * 3. **冪等仍是台北日曆日，刻意不跟進 `syncMacro` 的內容指紋**（0.6.11）。
- *    總經改指紋是因為「月度數據當天稍晚才發布」，第一班抓到的可能是舊的一期；
- *    匯率沒有這個問題 —— 它每個交易日都收出一個新價，03:00 UTC 那班（紐約收盤後）
- *    拿到的必然已是完整的前一交易日日線，第二班補不到任何東西。
- *    對每天都變的資料而言，內容指紋只會每次都判定「變了」，徒增一次無謂的抓取。
+ * 1. **Try currency pairs in two directions for each currency**. On one side of Yahoo is "Back to 200, complete structure,
+ *    But there is only one grid of data", and which side is dead varies depending on the currency (actual measurement CNYTWD=X and TWDEUR=X
+ *    They only return one square, and the direction is opposite). Therefore, `FX_MIN_POINTS` is used to determine whether it is enough. If it is not enough, the next candidate will be replaced.
+ *    See the FxSpec.symbols annotation of fxRates.ts for details.
+ * 2. **Exit the candidate loop if successful**. Under normal circumstances, only one request is sent for each currency, eight times for eight currencies.
+ * 3. **Impotent is still the Taipei calendar day, deliberately not following the content fingerprint of `syncMacro`** (0.6.11).
+ *    The general manager changed the fingerprints because "the monthly data was released later that day", and the first shift may have caught an older issue;
+ *    The exchange rate doesn't have this problem - it closes a new price every trading day, at 03:00 UTC (after the New York close)
+ *    What you get must be the complete daily line of the previous trading day, and the second shift cannot make up anything.
+ *    For data that changes every day, content fingerprinting will only determine "changed" every time, which will only add one unnecessary crawl.
  */
 async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf: string | null }> {
   const today = taipeiYmdOf(now)
   const existing = await downloadJson<FxFile>('fx/twd.json')
   if (existing && existing.schema === FX_SCHEMA && taipeiYmdOf(new Date(existing.asOf)) === today) {
-    // 今天已經抓過。count 用既有的幣別數，才分得出「跳過」與「抓不到」
+    // Already caught today. count uses the existing currency number to distinguish between "skip" and "cannot catch"
     return { synced: false, count: existing.currencies?.length ?? 0, asOf: existing.asOf }
   }
 
@@ -1456,22 +1456,22 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
   for (const spec of FX_CURRENCIES) {
     for (const cand of spec.symbols) {
       try {
-        // 沿用抓 Yahoo 日線的同一個 helper（帶 UA、非 200 拋錯）——
-        // Yahoo 吃瀏覽器 UA，與 FRED 那種「不能宣稱是瀏覽器」相反，別搞混
+        // Use the same helper used to catch the Yahoo daily line (with UA, non-200 throw error)——
+        // Yahoo eats browser UA, which is the opposite of FRED's "cannot claim to be a browser", don't be confused
         const resp = await fetchJson<ChartResponse>(fxUrl(cand.symbol))
         const points = extractFxPoints(resp, cand.invert)
-        // 點數不足代表這一側是死的（只回當下報價），換下一個候選幣對
+        // Insufficient points means this side is dead (only the current quote will be returned), change to the next candidate currency pair
         if (points.length < FX_MIN_POINTS) continue
         currencies.push(buildCurrency(spec, cand.symbol, points))
         break
       } catch {
-        // 單一候選失敗就試下一個；八個幣別彼此獨立
+        // If a single candidate fails, try the next one; the eight currencies are independent of each other
       }
     }
   }
 
-  // 全滅時不覆寫既有檔（沿用 syncMacro 的準則：留舊資料勝過空檔）。
-  // 回傳 count = 0 讓 batch_run_log 分得出「跳過」與「抓不到」
+  // Existing files will not be overwritten when completely destroyed (follow the principle of syncMacro: leaving old data is better than empty files).
+  // Return count = 0 to let batch_run_log distinguish between "skip" and "catch"
   if (currencies.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
 
   const file: FxFile = {
@@ -1488,7 +1488,7 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
   }
 }
 
-/** 刪除 reports bucket 中資料日早於 cutoff 的整個 {ymd}/ 目錄 */
+/** Delete the entire {ymd}/ directory in the reports bucket whose data date is earlier than cutoff*/
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
     const { data: entries } = await db.storage.from(REPORTS_BUCKET).list('', { limit: 1000 })
@@ -1499,7 +1499,7 @@ async function pruneStorage(cutoffYmd: string): Promise<void> {
       if (paths.length > 0) await db.storage.from(REPORTS_BUCKET).remove(paths)
     }
   } catch {
-    // 清理失敗不影響主流程
+    // Failure to clean up does not affect the main process
   }
 }
 
@@ -1507,13 +1507,13 @@ async function pruneChipCache(cutoffYmd: string): Promise<void> {
   try {
     await db.from('chip_raw_cache').delete().lt('ymd', cutoffYmd)
   } catch {
-    // 清理失敗不影響主流程
+    // Failure to clean up does not affect the main process
   }
 }
 
 /**
- * 即點即產要用的交易日：以 `manifest.json` 的 ymd 為準，跟夜間批次同一個基準。
- * 沒有 manifest（批次從未跑過）時退而取最近的非週末日。
+ * The trading day to be used for click-to-produce: based on the ymd of `manifest.json`, which is the same as the night batch.
+ * If there is no manifest (the batch has never been run), the nearest non-weekend day is used.
  */
 async function warmDataYmd(): Promise<string> {
   const m = await downloadJson<{ ymd?: unknown }>('manifest.json')
@@ -1523,20 +1523,20 @@ async function warmDataYmd(): Promise<string> {
 }
 
 /**
- * 單一代號的即點即產：補上日線與基本面（0.6.0-dev.7）。
+ * Instant production of a single symbol: supplement the daily line and fundamentals (0.6.0-dev.7).
  *
- * 為什麼需要它：新加入的股票要等下一班夜間批次才有日線與基本面，
- * 在那之前技術面與基本面分頁是空的，AI 分析甚至會因為拿不到日線而整個失敗。
+ * Why it is needed: Newly added stocks have to wait for the next night batch to have daily lines and fundamentals.
+ * Before that, the technical and fundamental pages are empty, and the AI ​​analysis will even fail because it cannot get the daily line.
  *
- * 為什麼安全（0.3.9 燒掉額度的教訓）：
- * 1. 沿用 `heldTwTickers()` 白名單，非持股一律 403 —— 與 `generate` 同一道防線。
- * 2. 兩者都與批次共用「已是最新就跳過」的條件，且**查無資料也會寫檔**，
- *    所以同一檔每天最多只會真的做一次事，之後前端直接讀 Storage。
- * 3. 基本面那三份是全市場大檔且走 `chip_raw_cache`，對外放大效應趨近於零。
+ * Why it’s safe (lessons from burning credits in 0.3.9):
+ * 1. Use the `heldTwTickers()` whitelist, non-holdings will always be 403 - the same line of defense as `generate`.
+ * 2. Both share the condition of "skip if it is the latest" with the batch, and **file will be written if no data is found**,
+ *    Therefore, the same file will only actually do something once a day at most, and then the front end will directly read the Storage.
+ * 3. The three fundamentals are the largest in the market and use `chip_raw_cache`, and the external amplification effect is close to zero.
  *
- * 4. **也跑一輪歷史回補**（0.6.29）：來源端點只回最新一期，歷史與 EPS 全靠回補，
- *    而回補在夜間批次裡排在 decideSkip 之後 —— 當天資料一齊就整段短路，
- *    新加的股票當天一輪都補不到。預算刻意比夜間小，見函式內的說明。
+ * 4. **Also run a round of historical backfill** (0.6.29): The source endpoint only returns the latest period, and the history and EPS all rely on backfill.
+ *    And backfill is ranked after decideSkip in the night batch - the entire section is short-circuited when the data is all available that day.
+ *    Newly added stocks cannot be replenished in one round that day. The budget is deliberately smaller than night time, see instructions in the function.
  */
 async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
   const ticker = String(body.ticker ?? '').trim()
@@ -1558,28 +1558,28 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
   const fundamental = await syncFundamental(one, dataYmd)
 
   /*
-    0.6.29：即點即產也跑一輪歷史回補。
+    0.6.29: On-demand generation also runs a round of historical backfill.
 
-    **為什麼需要**：上面兩支只給得出「最新一個月營收」與「最新一季獲利能力」——
-    來源端點就只回最新一期。歷史與 EPS 全靠回補，而回補排在夜間批次的 decideSkip
-    之後，當天資料一齊就整段短路。結果是晚上加的股票當天一輪都補不到，
-    要等隔天的批次才開始長，而使用者當下看到的是一張只有一列的表。
+    **Why it is needed**: The two functions above can only provide the "latest month's revenue" and "latest quarter's profitability" --
+    The source endpoint only returns the latest period. History and EPS rely entirely on backfilling, and backfilling is scheduled after the decideSkip of the nightly batch,
+    so once the day's data is complete, the whole segment is short-circuited. As a result, stocks added at night won't be supplemented at all that day,
+    and have to wait for the next day's batch to start growing, while the user sees a table with only one row at that moment.
 
-    **補到滿為止**（在時間預算內）：只補一輪的話，新股票第一次開頁仍然只有兩三個月，
-    與既有股票不一樣 —— 而那正是使用者要解決的問題。預算見 WARM_BUDGET_MS。
+    **Fill up until full** (within time budget): If only one round is supplemented, the new stock will still only have two or three months on its first page load,
+    which is different from existing stocks -- and that is exactly the problem the user wants to solve. See WARM_BUDGET_MS for budget.
 
-    **⚠️ 兩段必須循序，不可 Promise.all**：兩支回補都會下載、合併、覆寫
-    同一個 fundamental/{ticker}.json，並行會有一邊的寫入被另一邊蓋掉。
+    **⚠️ The two segments must be sequential, not Promise.all**: Both backfills will download, merge, and overwrite
+    the same fundamental/{ticker}.json, parallel execution will cause one side's write to overwrite the other.
 
-    回補本身是缺口驅動的：補滿之後回空陣列、一個對外請求都不發（只多兩次 Storage 讀取），
-    所以對已經補滿的舊標的幾乎零成本 —— 前端因此可以放心「看到還缺就再呼叫一次」。
+    Backfilling itself is gap-driven: once filled, it returns an empty array and makes zero external requests (only two extra Storage reads),
+    so it has almost zero cost for old targets that are already full -- thus the frontend can safely "call it again if it sees it's still missing".
   */
   const now = new Date()
   const deadline = now.getTime() + WARM_BUDGET_MS
   const revenueMonths: string[] = []
   const profitQuarters: string[] = []
 
-  // 先月營收（便宜）再季報（貴）：同樣的秒數先換到比較多的完整度
+  // Monthly revenue first (cheap) and then quarterly report (expensive): For the same number of seconds, switch to more completeness first.
   let revenueDone = false
   while (Date.now() < deadline) {
     const r = await backfillRevenue(one, now, WARM_ROUND_MONTHS)
@@ -1606,18 +1606,18 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
     ymd: dataYmd,
     dailySynced,
     fundamentalSynced: fundamental.synced,
-    // 回補結果一併回報：慢的時候要分得出是慢在哪一段
+    // The replenishment results will be reported together: when it is slow, you have to tell which section it is.
     revenueMonths,
     profitQuarters,
-    // 前端據此決定要不要再叫一次（時間預算用完時會是 false）
+    // The front end decides based on this whether to call again (it will be false when the time budget is exhausted)
     fundamentalComplete: revenueDone && profitDone,
     durationMs: Date.now() - now.getTime(),
   })
 }
 
 /**
- * 台北時間 HH:MM。存進 batch_run_log 是為了「一眼看得出這是哪一班」，
- * 免得每次查都要自己把 UTC 轉時區。
+ * Taipei time HH:MM. The purpose of saving into batch_run_log is to "see which class this is at a glance".
+ * This prevents you from having to convert UTC to the time zone yourself every time you check it.
  */
 function taipeiHhmm(d: Date): string {
   const t = new Date(d.getTime() + 8 * 60 * 60 * 1000)
@@ -1626,40 +1626,40 @@ function taipeiHhmm(d: Date): string {
 }
 
 /**
- * 記錄一次批次執行。寫入失敗完全不影響主流程 —— 這是觀測資料，不是產出。
+ * Record a batch execution. The write failure does not affect the main process at all - this is observation data, not output.
  *
- * 存在的理由見 schema.sql §7：pg_net 的回應只留 6 小時、chip_raw_cache 只記成功時間，
- * 兩者都答不出「那一班跑的時候當天資料到了沒」，而那正是微調 cron 時段唯一需要的事實。
+ * For the reason of existence, see schema.sql §7: pg_net’s response only keeps 6 hours, chip_raw_cache only remembers the success time.
+ * Neither of them can answer "Whether that day's data arrived when that class ran?", and that is the only fact needed to fine-tune the cron schedule.
  */
 async function logBatchRun(row: Record<string, unknown>): Promise<void> {
   try {
     await db.from('batch_run_log').insert(row)
   } catch {
-    // 觀測失敗不能拖垮批次
+    // Observation failure cannot bring down the batch
   }
 }
 
-// ---- 資料源探針（0.6.3）----
+// ----Data source probe (0.6.3)----
 
 /**
- * 每輪對外看一眼「各來源現在自己宣告是哪一天的」，寫進 `source_probe_log`。
+ * In each round, take a look at "Each source now announces which day it is" and write it into `source_probe_log`.
  *
- * **為什麼要獨立一條路徑，而不是在批次裡順便記**：
- * `batch_run_log.bwibbu_date` 看起來像在記這件事，其實記的是**快取值** ——
- * `readLatest` 用「我們去抓的那天」當快取鍵，當天第一輪抓完就整天吃快取。
- * 2026-07-27 那 12 輪全記成同一個 `1150724`，**那不是 12 次觀測，是同一次被讀了 12 遍**；
- * 而且批次一短路就完全不記（當晚 23:00 起三輪空白）。用它來判斷「幾點更新」會得到假答案。
+ * **Why should we have a separate path instead of remembering it in the batch**:
+ * `batch_run_log.bwibbu_date` looks like it is recording this, but in fact it is recording **fast value**——
+ * `readLatest` uses "the day we went to catch" as the cache key. After the first round of catching that day, we will eat the cache all day long.
+ * 2026-07-27 Those 12 rounds are all recorded as the same `1150724`, **That is not 12 observations, it is the same one that was read 12 times**;
+ * And once the batch is short-circuited, it is completely ignored (three rounds of blanks starting from 23:00 that night). Using it to determine "what time of update" will result in false answers.
  *
- * 探針刻意**不寫快取、不寫 Storage、不碰批次的任何狀態**：它只回答
- * 「這個時刻，這個來源說自己是哪一天的、內容有沒有變」。
- * 批次那三道閘門（含「短路＝零對外請求」）因此完全不受影響，仍然可證。
+ * The probe deliberately does not write to cache, does not write to Storage, and does not touch any state of the batch: it only answers
+ * "At this moment, this source says which day it is from and whether the content has changed."
+ * The three gates in the batch (including "short circuit = zero external request") are not affected at all and are still verifiable.
  *
- * 只探 `BWIBBU_ALL`（116KB，每日）與借券 `TWT96U`（244KB）—— 這兩個是目前唯二
- * 「有快取就整天不再看」的來源。T86 與融資融券已由 `batch_run_log` 的
- * `t86_revisions` / `margin_today` 如實記錄，不必重複探。
- * 月營收與公司資料是月更新，15 分鐘探一次沒有意義。
+ * Only explore `BWIBBU_ALL` (116KB, daily) and borrow coupon `TWT96U` (244KB) - these two are currently the only ones
+ * The source of "If you have a cache, you won't look at it all day". T86 and margin trading have been processed by `batch_run_log`
+ * `t86_revisions` / `margin_today` Record it truthfully, no need to repeat it.
+ * Monthly revenue and company information are updated monthly, so there is no point in checking it every 15 minutes.
  *
- * 要停掉：`SELECT cron.unschedule('source-probe');` —— 不必重新部署。
+ * To stop: `SELECT cron.unschedule('source-probe');` - no need to redeploy.
  */
 async function probeOne<T>(
   url: string,
@@ -1686,7 +1686,7 @@ async function handleProbe(): Promise<Response> {
   const startedAt = Date.now()
   const now = new Date()
 
-  // 兩個來源互不相干，併發探；任一失敗只讓自己那組欄位為 null
+  // The two sources are unrelated to each other and are explored concurrently; if either one fails, only its own set of fields will be null.
   const [bwibbu, borrow] = await Promise.all([
     probeOne<Array<Record<string, string>>>(
       BWIBBU_ALL_URL,
@@ -1718,12 +1718,12 @@ async function handleProbe(): Promise<Response> {
   try {
     await db.from('source_probe_log').insert(row)
   } catch {
-    // 觀測失敗不能拖垮任何東西；探針本來就只是儀器
+    // Observation failure cannot bring down anything; the probe is just an instrument.
   }
   return json({ ok: true, ...row })
 }
 
-/** 今天最後一次執行留下的狀態；查無（第一次跑、或表不存在）回 null */
+/** The status left by the last execution today; if found (the first run, or the table does not exist), null will be returned*/
 interface LastRun {
   runsToday: number
   t86: T86State | null
@@ -1731,12 +1731,12 @@ interface LastRun {
 }
 
 /**
- * 從 `batch_run_log` today 的最後一列取回跨輪次狀態。
+ * Retrieve the cross-run status from the last column of `batch_run_log` today.
  *
- * **為什麼把狀態放在觀測表**：這些欄位本來就是我們想觀測的東西（改寫幾次、什麼時候定稿），
- * 沒必要為同一份資料再建一張表。代價是它變成半承載狀態的 —— 寫入失敗時
- * （`logBatchRun` 刻意吞例外）下一輪會當成當天第一次跑，於是重抓一次 T86 並重新計數。
- * 那是**多做事**而不是做錯事，可以接受；但別把這個特性忘了。
+ * **Why put the status in the observation table**: These fields are what we want to observe (how many times will it be rewritten, when will it be finalized),
+ * There is no need to create another table for the same data. The price is that it becomes half-loaded - when the write fails
+ * (`logBatchRun` intentionally swallows exceptions) The next round will be regarded as the first run of the day, so T86 will be captured again and counted again.
+ * That's **doing more** rather than doing wrong things, which is acceptable; but don't forget this characteristic.
  */
 async function readLastRun(todayYmd: string): Promise<LastRun | null> {
   try {
@@ -1768,16 +1768,16 @@ async function readLastRun(todayYmd: string): Promise<LastRun | null> {
 }
 
 /**
- * 盤後批次（0.6.1 起改為 16:00–23:45 每 15 分鐘輪詢，取代原本的三班制）。
+ * After-hours batch (changed to polling every 15 minutes from 16:00–23:45 starting from 0.6.1, replacing the original three shifts).
  *
- * 三件事讓「一天跑 32 次」不會變成一天做 32 次白工：
- * 1. **短路**：今天該有的都有了就直接回，一個對外請求都不發（`decideSkip`）。
- * 2. **改寫偵測**：T86 定稿前每輪重抓比對，定稿後才凍結（`nextT86State`）。
- *    這是必要的 —— T86 自 16:00 起每 15 分鐘更新，早抓到的不一定是定稿。
- * 3. **重產閘門**：輸入沒變就不重寫報告，讓 `generatedAt` 只在真有變動時才跳。
+ * Three things to keep “running 32 times a day” from turning into doing 32 times a day:
+ * 1. **Short circuit**: If you have everything you need today, just reply directly without sending any external request (`decidSkip`).
+ * 2. **Rewrite Detection**: T86 re-compares each round before finalization, and freezes after finalization (`nextT86State`).
+ *    This is necessary - T86 is updated every 15 minutes starting from 16:00, and what is caught early may not be the final version.
+ * 3. **Reproduction Gate**: Do not rewrite the report if the input does not change, so that `generatedAt` will only jump when there is a real change.
  *
- * 判斷邏輯全部抽在 `pollPlan.ts` 並有測試釘住 —— 這裡只負責接線。
- * 理由見該檔開頭：判斷寫錯的代價從三班時代的 3 倍變成 32 倍。
+ * All judgment logic is extracted in `pollPlan.ts` and pinned with tests - only wiring is responsible here.
+ * The reason is shown at the beginning of this file: the cost of making a wrong judgment has been increased from 3 times to 32 times in the third shift era.
  */
 async function handleGenerateAll(): Promise<Response> {
   const startedAt = Date.now()
@@ -1785,7 +1785,7 @@ async function handleGenerateAll(): Promise<Response> {
   const todayYmd = taipeiYmd(now)
   t86FingerprintByYmd.clear()
 
-  // ---- 短路判定：必須在任何對外請求之前 ----
+  // ---- Short circuit determination: must be before any external request ----
   const last = await readLastRun(todayYmd)
   const cachedToday = await cachedDayDatasets([todayYmd])
   const skip = decideSkip({
@@ -1813,7 +1813,7 @@ async function handleGenerateAll(): Promise<Response> {
   }
 
   const tickers = await heldTwTickers()
-  // 今天的 T86 已有快取但尚未定稿 → 重抓比對；還沒有的話走原本的抓取路徑即可
+  // Today's T86 has a cache but has not yet been finalized → Re-catch and compare; if not, just follow the original fetching path
   const refreshT86Ymd =
     cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
   const series = await loadSeries(
@@ -1827,15 +1827,15 @@ async function handleGenerateAll(): Promise<Response> {
   )
   const borrow = await loadBorrow(todayYmd)
 
-  // 這一輪跑完之後，今天的融資融券到了沒。必須重讀 —— `cachedToday` 是短路判定用的
-  // 「執行前」快照，若今天的融資融券正好是這一輪抓到的，用它會晚一輪才記到。
-  // 也不能用 `margin_ok`（＝ `!marginDatedFailed`）代替：那個旗標問的是「有沒有任何一天
-  // 抓成功」，不是「今天的到了沒」。2026-07-27 17:46 正式區實測就是這個形狀 ——
-  // `margin_ok=true` 但今天的 MI_MARGN_D 根本還沒發布（那時只有 20260724 那份）。
+  // After this round, has today’s margin financing arrived? Must be reread - `cachedToday` is used for short circuit determination
+  // "Pre-execution" snapshot, if today's margin trading happens to be caught in this round, it will be recorded one round later.
+  // Nor can you use `margin_ok` (= `!marginDatedFailed`) instead: that flag asks "Is there any day
+  // "Succeeded", not "Has today's date arrived?" 2026-07-27 17:46 The actual measurement in the official area is this shape——
+  // `margin_ok=true` But today's MI_MARGN_D has not been released at all (there was only the 20260724 copy at that time).
   const cachedAfter = await cachedDayDatasets([todayYmd])
 
-  // T86 改寫狀態：只有抓到「今天」的資料時才推進 ——
-  // 資料日還停在前一個交易日時，今天的那份根本還沒發布，沒有定稿可言。
+  // T86 rewrite status: advance only when "today's" data is captured——
+  // When the data day was still on the previous trading day, today's copy had not been released at all, and there was no final version to speak of.
   const t86Today = series.dataYmd === todayYmd
   const t86Fp = t86FingerprintByYmd.get(todayYmd) ?? ''
   const t86State = t86Today && t86Fp ? nextT86State(last?.t86 ?? null, t86Fp) : null
@@ -1843,8 +1843,8 @@ async function handleGenerateAll(): Promise<Response> {
   const sig = runSignature({
     dataYmd: series.dataYmd,
     t86: t86Fp,
-    // 必須是「哪幾天有」而不是「有沒有失敗過」：後者整天是常數，
-    // 會讓 21:00 才到的當日融資融券永遠進不了報告（見 pollPlan.marginSigPart）
+    // It must be "on which days" rather than "has it failed": the latter is a constant throughout the day.
+    // This will prevent the day's margin trading that arrived at 21:00 from entering the report forever (see pollPlan.marginSigPart)
     margin: marginSigPart(series.marginYmds),
     borrow: borrow.date ?? '',
     tickers: tickers.map((t) => t.ticker),
@@ -1864,7 +1864,7 @@ async function handleGenerateAll(): Promise<Response> {
       if (okUp) generated++
     }
 
-    // 讓前端知道「最近一份」是哪個交易日，免在前端重算交易日
+    // Let the front-end know which trading day the "most recent transaction" is, so as to avoid recalculating the trading day on the front-end.
     await uploadJson('manifest.json', {
       ymd: series.dataYmd,
       dataDate: dashDate(series.dataYmd),
@@ -1872,30 +1872,30 @@ async function handleGenerateAll(): Promise<Response> {
     })
   }
 
-  // 技術面的日線；與籌碼報告各自獨立，抓不到也不影響上面已寫好的報告
+  // Technical daily line; it is independent from the chip report. If it is not caught, it will not affect the report written above.
   const dailySynced = await syncDaily(tickers, series.dataYmd)
 
-  // 基本面（0.6.0-dev.4）；同樣各自獨立、單檔容錯，不拖垮主流程
+  // Fundamentals (0.6.0-dev.4); also independent, single-file fault-tolerant, without dragging down the main process
   const fundamental = await syncFundamental(tickers, series.dataYmd)
-  // 月營收歷史回補（0.6.4）。必須排在 syncFundamental 之後 —— 它讀的是剛寫好的檔案。
-  // 12 個月補滿之後這行是零成本的（缺口為空就直接回，不發任何對外請求）。
+  // Monthly revenue historical replenishment (0.6.4). Must come after syncFundamental - it reads the file just written.
+  // After 12 months of replenishment, this business has zero cost (if the gap is empty, you will return directly without sending any external requests).
   const revenue = await backfillRevenue(tickers, now)
-  // 季度獲利能力回補（0.6.21）。同樣排在 syncFundamental 之後、同樣缺口驅動 ——
-  // 12 季補滿之後這行是零成本的。單次只補 2 季，一晚 32 輪綽綽有餘。
+  // Quarterly profitability cover (0.6.21). Also ranked behind syncFundamental, also gap driven——
+  // After 12 seasons of replenishment, this line of work is zero cost. With only 2 seasons to fill at a time, 32 rounds a night is more than enough.
   const profit = await backfillProfit(tickers, now)
 
-  // 清掉過期的報告與原始檔快取；兩者保留期不同，原因見常數定義處。
-  // daily/ fundamental/ 不受影響：pruneStorage 只認 ^\d{8}$ 的目錄名，
-  // 而這三類都是覆寫制、本來就沒有舊檔要清。
-  // 只在有重產時才清 —— 沒重產就沒有新東西進來，沒有要清的。
+  // Clear out expired reports and raw file cache; the retention period of the two is different, see the constant definition for the reason.
+  // daily/ fundamental/ is not affected: pruneStorage only recognizes the directory name of ^\d{8}$,
+  // These three categories are all overwrite systems, and there are no old files to clear.
+  // Only clear when there is heavy production - without heavy production, nothing new comes in and there is nothing to clear.
   if (regenerate) {
     await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
     await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
   }
 
-  // 觀測紀錄：t86_today 回答「這一輪跑的時候，當天的個股三大法人到了沒」；
-  // 各源的 *_data_* 欄位回答「它自己宣告是哪一天的」—— 端點都不給 Last-Modified，
-  // 這是唯一能記下來的時間事實（2026-07-27 實測，見 PROGRESS.md）。
+  // Observation record: t86_today answered "During this round of running, have the three major legal persons of the day's individual stocks arrived?";
+  // The *_data_* fields of each source answer "which day it declares itself" - the endpoints are not given Last-Modified,
+  // This is the only time fact that can be recorded (actual measurement on 2026-07-27, see PROGRESS.md).
   await logBatchRun({
     taipei_ymd: todayYmd,
     taipei_time: taipeiHhmm(now),
@@ -1944,15 +1944,15 @@ async function handleGenerateAll(): Promise<Response> {
 }
 
 /**
- * 手動催一次月營收回補。不碰籌碼報告、不寫 batch_run_log ——
- * 那張表的每一列代表「一輪盤後批次」，塞進手動操作會汙染「幾點資料到齊」的判讀。
- * 單次上限是 MAX_BACKFILL_MONTHS 個月，`months` 回報這次實際補了哪幾個月；
- * 回空陣列就代表已經補滿、不必再跑。
+ * Manually urge monthly revenue reimbursement. Do not touch chip reports or write batch_run_log ——
+ * Each column of that table represents "one round of post-market batches", and inserting manual operations will contaminate the interpretation of "how many points of data are available."
+ * The single upper limit is MAX_BACKFILL_MONTHS months, `months` reports the actual number of months that were supplemented this time;
+ * Returning an empty array means it has been filled and there is no need to run again.
  */
 /**
- * 手動催一次季度獲利能力回補。與 `handleBackfillRevenue` 同款：
- * 不碰籌碼報告、不寫 batch_run_log（那張表的每一列代表一輪盤後批次）。
- * 單次上限 MAX_BACKFILL_QUARTERS 季；回空陣列代表已補滿、不必再跑。
+ * Manually urge a quarterly profitability replenishment. Same as `handleBackfillRevenue`:
+ * Do not touch the chip report, do not write batch_run_log (each column of that table represents the batch after one round).
+ * The single limit is MAX_BACKFILL_QUARTERS quarter; returning an empty array means it has been filled and there is no need to run again.
  */
 async function handleBackfillProfit(): Promise<Response> {
   const startedAt = Date.now()
@@ -1983,16 +1983,16 @@ async function handleBackfillRevenue(): Promise<Response> {
 }
 
 /**
- * 手動或排程觸發總經同步。
+ * Manual or scheduled triggering of total warp synchronization.
  *
- * 0.6.5-dev.2 從 `generate-all` 拆出來，理由是**觸發時機**而不是程式碼位置：
- * 盤後批次的 cron 是台股作息（每 15 分鐘、UTC 8-15 時、週一至週五），
- * 而美國數據跟台股交易日無關 —— 週末完全不跑。
- * 更直接的是 `handleGenerateAll` 的 `decideSkip` 短路會在資料到齊後直接 return，
- * 排在它後面的東西整段不會執行。
+ * 0.6.5-dev.2 Detached from `generate-all`, the reason is **trigger timing** rather than code location:
+ * The cron of the after-hours batch is the Taiwan stock schedule (every 15 minutes, UTC 8-15 hours, Monday to Friday),
+ * The US data has nothing to do with the Taiwan stock trading day - it does not run at all on weekends.
+ * More directly, the `decideSkip` short circuit of `handleGenerateAll` will return directly after all the data is received.
+ * The entire section after it will not be executed.
  *
- * 拆的是 cron job 不是函式：`source-probe` 已有「同一支函式、不同 action、
- * 不同排程」的先例，多開一支 Edge Function 只是多一個要部署與稽核的對象。
+ * What is being dismantled is the cron job, not the function: `source-probe` already has "the same function, different actions,
+ * "Different schedule" precedent, opening an additional Edge Function is just one more object to be deployed and audited.
  */
 async function handleSyncMacro(): Promise<Response> {
   const startedAt = Date.now()
@@ -2000,8 +2000,8 @@ async function handleSyncMacro(): Promise<Response> {
   return json({
     ok: true,
     synced: macro.synced,
-    // 單一 boolean 分不出「內容沒變」與「一個序列都抓不到」，那正是 0.6.5 查 BUG 時
-    // 只剩 macroSynced: false 可看的窘境。reason 是唯一能事後判讀的線索
+    // A single boolean cannot distinguish between "the content has not changed" and "not a single sequence can be caught". That was exactly when the bug was checked in 0.6.5
+    // That leaves only macroSynced: false to see. reason is the only clue that can be interpreted after the fact
     reason: macro.reason,
     scan: macro.scan ?? null,
     count: macro.count,
@@ -2011,16 +2011,16 @@ async function handleSyncMacro(): Promise<Response> {
 }
 
 /**
- * 全市場量能與法人買賣金額的獨立排程入口（0.6.28）。
+ * Independent scheduling entrance for total market volume and legal person transaction amount (0.6.28).
  *
- * **為什麼又是獨立 action 而不是掛進 generate-all**：與 §9 macro-daily、§10 fx-daily
- * 同一個理由 —— `handleGenerateAll` 的 `decideSkip` 短路會在個股資料到齊後直接 return，
- * 排在它後面的東西整段不會執行。這份資料與個股清單無關，不該被個股的完成狀態綁住。
+ * **Why is it an independent action instead of hanging into generate-all**: Same as §9 macro-daily, §10 fx-daily
+ * The same reason - the `decideSkip` short circuit of `handleGenerateAll` will return directly after the individual stock information is available.
+ * The entire section after it will not be executed. This information has nothing to do with the individual stock list and should not be tied to the completion status of individual stocks.
  *
- * 班次要在 15:30 之後：三大法人買賣金額約 15:00–15:30 才公布，
- * 太早跑只會拿到「非交易日」的空回應，然後把當天記成已補、再也不回頭。
- * —— 這正是 `planInstitutionalBackfill` 只看「有沒有補到」而不記「問過沒」的原因：
- * 沒補到就下一輪再問，寧可多問一次也不要永久缺一天。
+ * The shift starts after 15:30: the trading amounts of the three major legal persons are not announced until about 15:00–15:30.
+ * If you run too early, you will only get an empty response on a "non-trading day", and then record that day as filled and never look back.
+ * ——This is why `planInstitutionalBackfill` only checks "whether it has been added" and not "has it been asked":
+ * If you haven’t made it up, ask again in the next round. It’s better to ask one more time than to miss a day permanently.
  */
 async function handleSyncMarket(): Promise<Response> {
   const startedAt = Date.now()
@@ -2036,25 +2036,25 @@ async function handleSyncMarket(): Promise<Response> {
 }
 
 /**
- * 管理員後台「資料抓取狀況」的資料來源。
+ * The data source of "Data Fetch Status" in the administrator's backend.
  *
- * 一次把整頁要的東西撈齊，理由是前端逐項去打會變成十幾個往返，
- * 而其中幾項（cron 排程、觀測表）前端根本沒有權限讀 ——
- * `batch_run_log` / `source_probe_log` 開了 RLS 但刻意沒有任何 policy，
- * `cron` schema 也不在 PostgREST 的 exposed schemas 裡。
- * 與其為了一個唯讀後台去鬆綁那些防線，不如讓 service role 在這裡讀完再吐出去。
+ * Get everything you need from the entire page at once. The reason is that it will turn into more than a dozen round trips on the front end to type them one by one.
+ * And some of them (cron schedule, observation table) the front end does not have permission to read at all——
+ * `batch_run_log` / `source_probe_log` has RLS enabled but deliberately does not have any policy.
+ * The `cron` schema is also not among PostgREST's exposed schemas.
+ * Instead of loosening those defense lines for a read-only backend, it is better to let the service role be read here and then spit out.
  *
- * ⚠️ 回傳內容經過挑選，**不含任何密鑰**：排程只取 jobname / schedule / action /
- * 目標 ref（見 schema.sql §11 的 `admin_schedule_status`，那裡有更完整的說明）。
+ * ⚠️ The returned content is selected, **does not contain any key**: the schedule only takes jobname/schedule/action/
+ * Target ref (see `admin_schedule_status` in schema.sql §11 for a more complete description).
  */
 async function handleAdminStatus(): Promise<Response> {
   const startedAt = Date.now()
   const now = new Date()
   const todayYmd = taipeiYmd(now)
 
-  // 各段彼此獨立，任一段掛掉不該讓整頁空白，缺的用 null 表示：
-  // 會拋的那幾項（rpc / readLastRun / 直接查表）各自掛 .catch(() => null)，
-  // downloadJson 與 latestChipSources / storageCoverage 本身就吞例外回 null。
+  // Each paragraph is independent of each other. If any paragraph fails, the entire page should not be blank. The missing paragraph is represented by null:
+  // The items that will be thrown (rpc / readLastRun / direct table lookup) are each linked to .catch(() => null),
+  // downloadJson and latestChipSources/storageCoverage themselves swallow exceptions and return null.
   const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage, market] = await Promise.all([
     db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
     downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
@@ -2091,7 +2091,7 @@ async function handleAdminStatus(): Promise<Response> {
             unit: i.unit,
             latest: i.latest,
             previous: i.previous,
-            // 由後端算，前端不再自備一份行事曆（兩份常數遲早漂移）
+            // Calculated by the backend, the frontend no longer prepares its own calendar (the two constants will drift sooner or later)
             nextRelease: nextReleaseFor(i.id, i.latest?.period ?? null, now),
           })),
         }
@@ -2105,17 +2105,17 @@ async function handleAdminStatus(): Promise<Response> {
 }
 
 /**
- * 全市場資料的抓取狀況（0.6.32）。
+ * The crawling status of all market data (0.6.32).
  *
- * 三個缺口分開數，因為它們代表不同的問題：
- * - `missingInstitutional`：整天沒有法人金額。最新一兩天正常（15:00 才公布、逐日回補），
- *   但如果連舊的日子都缺，就是回補排程沒在跑。
- * - `missingBuySell`：有差額、沒有買進 / 賣出。這是 0.6.32 的回補進度條，
- *   會隨每輪 5 天逐日歸零；歸零後就不該再增加。
- * - `missingCandle`：缺開高低，畫不出日 K 的那幾天。
+ * The three gaps are numbered separately because they represent different problems:
+ * - `missingInstitutional`: No legal entity amount throughout the day. The latest one or two days are normal (announced only at 15:00, supplemented daily),
+ *   But if even the old days are missing, it means that the replenishment schedule is not running.
+ * - `missingBuySell`: There is a difference and no buying/selling. This is the replenishment progress bar of 0.6.32,
+ *   It will be reset to zero every 5 days in each round; once it reaches zero, it should not be increased.
+ * - `missingCandle`: The days when the opening high and low are missing and the day K cannot be drawn.
  *
- * 這裡不判定「延遲與否」——判定規則全部留在前端的 timeline.ts（純函式、有測試），
- * 後端只吐事實。兩邊各判一次遲早會不一致。
+ * There is no determination of "delay or not" here - the determination rules are all left in the front-end timeline.ts (pure function, with tests).
+ * The backend just spits out facts. Sooner or later, both sides will be inconsistent.
  */
 function marketStatus(m: MarketFile | null) {
   if (!m) return null
@@ -2125,9 +2125,9 @@ function marketStatus(m: MarketFile | null) {
     schema: m.schema ?? null,
     asOf: m.asOf ?? null,
     days: days.length,
-    /** 最新一個交易日（有沒有法人金額不論） */
+    /** The latest trading day (regardless of whether there is a legal person amount)*/
     latestDate: days[days.length - 1]?.date ?? null,
-    /** 最新一個**有法人金額**的交易日。與上一項差一兩天是正常的回補時差 */
+    /** The latest trading day with legal person amount**. One or two days difference from the previous item is a normal compensation time difference.*/
     latestInstitutionalDate: withInst[withInst.length - 1]?.date ?? null,
     missingInstitutional: days.length - withInst.length,
     missingBuySell: withInst.filter((d) => !d.institutional?.buy).length,
@@ -2136,10 +2136,10 @@ function marketStatus(m: MarketFile | null) {
 }
 
 /**
- * 最新一份報告裡三個籌碼來源各自的資料日期與抓取時間。
+ * The data dates and capture times of the three chip sources in the latest report.
  *
- * 取 manifest 指向那天的**任一檔**即可 —— `sources` 是整批共用的（同一輪批次寫進去的），
- * 不是 per-ticker 的資訊。挑第一檔比把 18 檔全下載回來便宜得多。
+ * Just point the manifest to **any file** of that day - `sources` is shared by the entire batch (written in the same round of batches),
+ * Not per-ticker information. Picking the first file is much cheaper than downloading all 18 files back.
  */
 async function latestChipSources(): Promise<unknown> {
   const manifest = await downloadJson<{ ymd?: string }>('manifest.json')
@@ -2156,10 +2156,10 @@ async function latestChipSources(): Promise<unknown> {
 }
 
 /**
- * 各 Storage 目錄的檔案數，用來算「18 檔裡到了幾檔」。
+ * The number of files in each Storage directory is used to calculate "how many files are there among the 18 files."
  *
- * 只數數量、不下載內容 —— 逐檔下載 18 個 JSON 只為了看時間戳，
- * 會讓這個端點從 2 秒變成十幾秒，而畫面上要的其實只有分子分母。
+ * Just count the quantity, do not download the content - download 18 JSONs file by file just to see the timestamp.
+ * This will change the endpoint from 2 seconds to more than ten seconds, and the only thing on the screen is the numerator and denominator.
  */
 async function storageCoverage(): Promise<Record<string, number>> {
   const dirs = ['daily', 'fundamental']
@@ -2179,26 +2179,26 @@ async function storageCoverage(): Promise<Record<string, number>> {
 }
 
 /**
- * 管理後台的帳號清單（0.6.19）。
+ * Account list in the management background (0.6.19).
  *
- * **為什麼一定要走 Edge Function**：`auth.users` 不在 PostgREST 的 exposed schemas 裡，
- * 前端拿使用者 JWT 怎麼查都查不到；專案也沒有 profiles 表可以映射。
- * 只有 service role 讀得到，所以由這裡讀完再吐出去。
+ * **Why you must use Edge Function**: `auth.users` is not in the exposed schemas of PostgREST.
+ * The front end cannot find the user's JWT no matter how you look it up; there is no profiles table for the project to map.
+ * Only service role can be read, so read it here and then spit it out.
  *
- * ⚠️ 回傳內容經過挑選：只給 id / email / 建立時間 / 最近活動 / 是不是管理員。
- * **不回傳 `app_metadata` 或 `user_metadata` 全文** —— 那裡面可能有其他欄位，
- * 一律轉發等於把未來新增的東西也順便公開了。
+ * ⚠️ The returned content is selected: only id/email/creation time/recent activities/whether you are an administrator.
+ * **Do not return the full text of `app_metadata` or `user_metadata` - there may be other fields in there,
+ * Always forwarding it means making future additions public.
  *
- * ⚠️ **`lastActiveAt` 取的是 `updated_at`，不是 `last_sign_in_at`**（0.6.20 修正）。
- * `last_sign_in_at` 只在「真的重新登入」時才更新，靠 refresh token 續命的帳號
- * 會一直停在很舊的時間 —— 實測正式區：某帳號 `last_sign_in_at` 停在 08-02 17:17，
- * 但同一帳號的 `auth.sessions.refreshed_at` 是 08-04 12:53，畫面因此看起來像壞掉。
- * `updated_at` 會跟著 session 更新（實測與 `refreshed_at` 差 0.02 秒），
- * 而且 `listUsers()` 本來就回傳它，不必再查 `auth.sessions`。
+ * ⚠️ **`lastActiveAt` takes `updated_at`, not `last_sign_in_at`** (0.6.20 fix).
+ * `last_sign_in_at` is only updated when "really logging in again", and accounts that rely on refresh tokens to survive
+ * It will always stop at a very old time - actual test official area: a certain account `last_sign_in_at` stopped at 08-02 17:17,
+ * But the `auth.sessions.refreshed_at` for the same account is 08-04 12:53, so the screen looks broken.
+ * `updated_at` will be updated along with the session (the difference between actual measurement and `refreshed_at` is 0.02 seconds),
+ * Moreover, `listUsers()` already returns it, so there is no need to check `auth.sessions`.
  */
 async function handleAdminUsers(): Promise<Response> {
   const startedAt = Date.now()
-  // perPage 上限 1000。這個專案的帳號數是個位數，分頁對它沒有意義
+  // perPage upper limit 1000. The number of accounts in this project is single digits, and paging has no meaning for it.
   const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
   if (error) return json({ error: error.message }, 500)
   const users = (data?.users ?? []).map((u) => ({
@@ -2208,24 +2208,24 @@ async function handleAdminUsers(): Promise<Response> {
     lastActiveAt: u.updated_at ?? null,
     admin: (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
   }))
-  // 新帳號排前面，管理員通常要找的是「剛註冊的那個」
+  // New accounts are listed first, and administrators usually look for "the one who just registered"
   users.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   return json({ ok: true, users, durationMs: Date.now() - startedAt })
 }
 
 /**
- * 指派或收回管理員權限（0.6.19）。
+ * Assign or revoke administrator privileges (0.6.19).
  *
- * 寫的是 `app_metadata.role`，與 `assertAdmin` 和資料表 RLS 判讀的是同一個欄位。
- * **必須寫 `app_metadata` 而不是 `user_metadata`** —— 後者使用者自己改得動，
- * 拿它當權限依據等於誰都能把自己變成管理員。
+ * What is written is `app_metadata.role`, which is the same field that `assertAdmin` and data table RLS interpret.
+ * **Must write `app_metadata` instead of `user_metadata`** - the latter can be changed by the user.
+ * Using it as a basis for permissions means that anyone can turn themselves into an administrator.
  *
- * ⚠️ **改完之後那個帳號要重新登入才會生效**：權限烤在已簽發的 JWT 裡，
- * 舊 token 到期前仍帶著舊身分。前端必須把這件事寫在畫面上，
- * 否則會被當成「按了沒反應」。
+ * ⚠️ **After the change is completed, the account will not take effect until you log in again**: The permissions are baked in the issued JWT.
+ * The old token will still carry the old identity until it expires. The front end must write this thing on the screen,
+ * Otherwise, it will be regarded as "no response after pressing".
  *
- * ⚠️ **不允許取消自己的管理員權限**：這是唯一會把人鎖在門外的操作 ——
- * 全站可能只剩你一個管理員，收回之後連後台都進不去，只能回 SQL Editor 手動改。
+ * ⚠️ **You are not allowed to cancel your own administrator privileges**: This is the only operation that will lock people out——
+ * You may be the only administrator left in the entire site. After the recovery, you will not even be able to enter the backend, so you can only go back to the SQL Editor and make manual changes.
  */
 async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody): Promise<Response> {
   const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
@@ -2242,7 +2242,7 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
   const { data: target, error: readErr } = await db.auth.admin.getUserById(userId)
   if (readErr || !target?.user) return json({ error: 'User not found' }, 404)
 
-  // 併進既有的 app_metadata，不要整包覆寫 —— 那裡面還有 provider 等 Supabase 自己的欄位
+  // Integrate the existing app_metadata, do not overwrite the entire package - there are also Supabase's own fields such as provider.
   const meta = { ...(target.user.app_metadata as Record<string, unknown>) }
   if (makeAdmin) meta.role = 'admin'
   else delete meta.role
@@ -2252,7 +2252,7 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
   return json({ ok: true, userId, admin: makeAdmin })
 }
 
-/** 手動或排程觸發匯率同步。拆排程的理由同 handleSyncMacro（見上），由 `fx-daily` 觸發 */
+/** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
   const fx = await syncFx(new Date())
@@ -2294,8 +2294,8 @@ Deno.serve(async (req) => {
     return handleGenerateAll()
   }
 
-  // 月營收歷史回補：會寫 Storage 且會對 MOPS 發請求，把關同 generate-all。
-  // 夜間批次本來就會順手跑，這個入口是給「不想等排程、現在就要補滿」用的。
+  // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.
+  // The night batch will run smoothly. This entrance is for those who "don't want to wait for the schedule and need to fill it up now."
   if (body.action === 'backfill-revenue') {
     const denied = assertCronSecret(req)
     if (denied) return denied
@@ -2308,40 +2308,40 @@ Deno.serve(async (req) => {
     return handleBackfillProfit()
   }
 
-  // 總經同步：會寫 Storage 且對 FRED 發請求，把關同 generate-all。
-  // 由獨立的 cron job `macro-daily` 觸發（每天兩班，見 schema.sql）
+  // General synchronization: it can write Storage and send requests to FRED, and the control is the same as generate-all.
+  // Triggered by independent cron job `macro-daily` (two shifts per day, see schema.sql)
   if (body.action === 'sync-macro') {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncMacro()
   }
 
-  // 全市場量能與法人買賣金額（0.6.28）：會寫 Storage 且對 TWSE 發請求，把關同 generate-all。
-  // 由獨立的 cron job `market-daily` 觸發（見 schema.sql §11）
+  // Total market volume and legal person transaction amount (0.6.28): Can write Storage and make requests to TWSE, and check the same as generate-all.
+  // Triggered by standalone cron job `market-daily` (see schema.sql §11)
   if (body.action === 'sync-market') {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncMarket()
   }
 
-  // 匯率同步：會寫 Storage 且對 Yahoo 發請求，把關同 generate-all。
-  // 由獨立的 cron job `fx-daily` 觸發（每天兩班，見 schema.sql §10）
+  // Exchange rate synchronization: can write Storage and make requests to Yahoo, and the control is the same as generate-all.
+  // Triggered by independent cron job `fx-daily` (two shifts per day, see schema.sql §10)
   if (body.action === 'sync-fx') {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncFx()
   }
 
-  // 資料源探針：只讀不寫（除了自己的觀測表），但仍走 CRON_SECRET ——
-  // 它會對 TWSE 發請求，公開端點不設防等於送人一個代打工具
+  // Data source probe: only read and not write (except for its own observation table), but still go CRON_SECRET ——
+  // It will send a request to TWSE. Exposing the endpoint undefended is equivalent to giving away a proxy tool.
   if (body.action === 'probe') {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleProbe()
   }
 
-  // 管理員後台：唯讀彙總。把關用使用者 JWT + app_metadata.role，不是 CRON_SECRET
-  // （那把密鑰不能進前端，見 assertAdmin 的說明）
+  // Administrator backend: read-only summary. Gatekeeping uses user JWT + app_metadata.role, not CRON_SECRET
+  // (That key cannot enter the front end, see the description of assertAdmin)
   if (body.action === 'admin-status') {
     const denied = await assertAdmin(req)
     if (denied) return denied

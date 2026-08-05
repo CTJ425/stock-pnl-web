@@ -1,40 +1,40 @@
 /**
- * 公開 `reports` bucket 的共用讀取。
+ * Exposes the `reports` bucket for public reading.
  *
- * 盤後排程把兩種東西寫進同一個 bucket，前端都是直接下載、不經 Edge Function：
- * - `manifest.json` / `{ymd}/{ticker}.json` —— 籌碼報告（reportProxy.ts）
- * - `daily/{ticker}.json`                  —— 日線 OHLCV（dailyProxy.ts）
+ * The after-hours schedule writes two things into the same bucket, and the front-end downloads them directly without going through the Edge Function:
+ * - `manifest.json` / `{ymd}/{ticker}.json` —— Chip report (reportProxy.ts)
+ * - `daily/{ticker}.json` —— Daily OHLCV (dailyProxy.ts)
  *
- * 兩邊各寫一份下載邏輯必然會走鐘，這裡是單一來源。
- * 走 Storage 而非 Edge Function 是刻意的：0.3.9 的教訓是 invocation 額度燒光
- * 會連帶讓 stock-price 一起停擺，能不打 Edge Function 就不打。
+ * Writing a copy of the download logic on both sides will inevitably lead to failure. This is a single source.
+ * Choosing Storage instead of Edge Function is deliberate: the lesson from 0.3.9 is that the invocation quota is burned out
+ * It will also cause the stock-price to stop together. If possible, the Edge Function will not be implemented.
  */
 import { isSupabaseConfigured, supabase } from './supabase'
 
 export const REPORTS_BUCKET = 'reports'
 
 /**
- * 從 reports bucket 讀一個 JSON 檔（公開 bucket，anon 可讀）；查無 / 失敗回 null。
+ * Read a JSON file from the reports bucket (public bucket, readable by anon); return null if none/failed.
  *
- * **為什麼是 `fetch(..., { cache: 'no-store' })` 而不是 `supabase.storage.download()`**
- * （0.6.4-dev.5，實際線上事故）：
+ * **Why is `fetch(..., { cache: 'no-store' })` instead of `supabase.storage.download()`**
+ * (0.6.4-dev.5, actual online accident):
  *
- * 這些檔案由盤後批次寫入，而 Edge Function 的 `uploadJson` 沒有指定 `cacheControl`，
- * supabase-js 的預設值是 **3600**，於是 Storage 回 `cache-control: public, max-age=3600`。
- * `download()` 底層就是 `fetch()`，這份回應因此被瀏覽器整整快取一小時。
+ * These files are written in batches after the event, and Edge Function's `uploadJson` does not specify `cacheControl`.
+ * The default value of supabase-js is **3600**, so Storage returns `cache-control: public, max-age=3600`.
+ * The bottom layer of `download()` is `fetch()`, so the response is cached by the browser for a full hour.
  *
- * 最惡劣的地方是**使用者救不了自己**：`Ctrl+Shift+R` 只跳過「文件與其子資源」的快取，
- * **不涵蓋 JS 之後才發出的 `fetch()`**。實測結果是一般視窗重整幾十次都停在舊資料、
- * 無痕視窗（空快取）才正確 —— 而畫面上完全看不出來自己拿的是舊的。
+ * The worst part is that **users cannot save themselves**: `Ctrl+Shift+R` only skips the cache of "files and sub-resources".
+ * **Does not cover `fetch()`** issued after JS. The actual test result is that after resetting the window dozens of times, it will always stop at the old data,
+ * Incognito window (empty cache) is correct - and there is no way to tell on the screen that you are getting the old one.
  *
- * `no-store` 讓每次讀取都真的走網路。這些檔一天最多更新 32 次、每份數 KB，
- * 省那點流量遠不值得換來「顯示的資料是錯的、而且使用者無法自救」。
+ * `no-store` makes every read actually go through the network. These files can be updated up to 32 times a day and each copy is KB.
+ * The traffic saved is far from worth the cost of "the displayed data is wrong and the user cannot save themselves."
  *
- * 另一半的修法在 Edge Function 的 `uploadJson`（改寫 cacheControl），
- * 但**既有檔案要等下次寫入才會換掉 metadata**，所以前端這道不能省。
+ * The other half of the modification is in Edge Function's `uploadJson` (rewriting cacheControl).
+ * However, the metadata of the existing file will not be replaced until the next write, so the front-end cannot be omitted.
  *
- * 診斷陷阱：用 `curl -I`（HEAD）量這個端點會得到 `no-cache`，與 GET 的實際標頭不符，
- * 會讓人誤判「不是快取問題」。**一律用 GET 驗證**（`curl -s -o /dev/null -D -`）。
+ * Diagnostic pitfall: Measuring this endpoint with `curl -I` (HEAD) results in `no-cache`, which does not match the actual header of GET.
+ * It will make people misjudge that "it is not a cache problem". **Always use GET verification** (`curl -s -o /dev/null -D -`).
  */
 export async function downloadReportsJson<T>(path: string): Promise<T | null> {
   if (!isSupabaseConfigured || !supabase) return null

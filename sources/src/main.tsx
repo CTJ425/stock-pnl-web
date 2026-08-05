@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { applyTheme, getThemePref } from './utils/settings'
 
-// 首次渲染前套用主題，避免亮色使用者看到暗色閃爍
+// Apply a theme before rendering for the first time to prevent users with bright colors from seeing flickering in dark colors
 applyTheme(getThemePref())
 
 createRoot(document.getElementById('root')!).render(

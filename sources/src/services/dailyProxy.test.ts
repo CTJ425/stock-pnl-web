@@ -10,9 +10,9 @@ vi.mock('./supabase', () => ({
     } },
 }))
 
-// downloadReportsJson 改走 `fetch(publicUrl, { cache: 'no-store' })`（見 reportsBucket.ts
-// 的說明：max-age=3600 讓使用者看到舊資料且硬重整救不了）。這裡把 fetch 轉接回
-// storageDownload，既有案例的「以 path 決定回應」寫法不必改。
+// downloadReportsJson changes to `fetch(publicUrl, { cache: 'no-store' })` (see reportsBucket.ts
+// Description: max-age=3600 allows users to see old data and hard reorganization cannot save it). Transfer fetch back here
+// storageDownload, the existing case's "response determined by path" does not need to be changed.
 vi.stubGlobal('fetch', async (url: string) => {
   const path = String(url).replace('https://stub/', '')
   const { data, error } = await storageDownload(path)
@@ -55,8 +55,8 @@ describe('fetchDailySeries', () => {
   })
 
   it('接受比前端已知版本更新的 schema —— 後端加欄位不該讓技術面整個失效', async () => {
-    // 釘住 0.4.0 的線上事故：那次是後端升到 schema 3、前端還鎖 === 2，籌碼分頁全掛。
-    // 同一個錯誤不可以在日線上重演，故此處以測試把 `>=` 的行為固定住。
+    // The online accident that pinned 0.4.0: that time the backend was upgraded to schema 3, the frontend was still locked === 2, and all chip paging failed.
+    // The same error cannot be repeated on the daily line, so the behavior of `>=` is fixed here by testing.
     storageDownload.mockResolvedValue(blobOf({ ...file, schema: 3, extraField: 'x' }))
     expect((await fetchDailySeries('2330'))?.rows).toHaveLength(2)
 

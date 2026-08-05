@@ -8,10 +8,10 @@ async function setupAppWithTwoTransactions(user: ReturnType<typeof userEvent.set
   render(<App />)
   await screen.findByText('本機模式')
 
-  // 前往交易紀錄頁面
+  // Go to transaction history page
   await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
 
-  // 新增第 1 筆：2330 台積電
+  // The first new transaction: 2330 TSMC
   await user.click(await screen.findByRole('button', { name: /新增交易/ }))
   let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
   let form = within(dialog)
@@ -23,7 +23,7 @@ async function setupAppWithTwoTransactions(user: ReturnType<typeof userEvent.set
   await form.findByText(/成功新增交易紀錄/)
   await user.click(form.getByRole('button', { name: '關閉' }))
 
-  // 新增第 2 筆：AAPL (Apple Inc. -> 顯示名稱為 蘋果)
+  // Added 2nd item: AAPL (Apple Inc. -> display name is Apple)
   await user.click(screen.getByRole('button', { name: /新增交易/ }))
   dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
   form = within(dialog)
@@ -92,7 +92,7 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
     const selectAllCheckbox = screen.getByRole('checkbox', { name: '全選 / 取消全選' })
     await user.click(selectAllCheckbox)
 
-    // 清除搜尋
+    // clear search
     const clearBtn = screen.getByRole('button', { name: '清除搜尋' })
     await user.click(clearBtn)
 
@@ -107,24 +107,24 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
     const user = userEvent.setup()
     await setupAppWithTwoTransactions(user)
 
-    // 勾選全部 2 筆
+    // Check all 2 items
     const selectAllCheckbox = screen.getByRole('checkbox', { name: '全選 / 取消全選' })
     await user.click(selectAllCheckbox)
 
-    // 搜尋「台積」過濾到只剩 1 筆
+    // Search "TSMC" and filter to only 1 item left
     const searchInput = screen.getByRole('textbox', { name: '搜尋交易' })
     await user.type(searchInput, '台積')
 
-    // 刪除選取（1）
+    // Delete selection(1)
     const deleteBtn = screen.getByRole('button', { name: /刪除選取（1）/ })
     window.confirm = () => true
     await user.click(deleteBtn)
 
-    // 刪除後「台積」無命中，點第一個清除搜尋按鈕
+    // After deleting "TSMC", there is no hit, click the first clear search button
     const clearBtns = screen.getAllByRole('button', { name: '清除搜尋' })
     await user.click(clearBtns[0])
 
-    // 台積電已被刪除，AAPL (蘋果) 仍然存在
+    // TSMC has been deleted, AAPL (Apple) remains
     expect(screen.queryByText('台積電')).toBeNull()
     expect(screen.getByText('蘋果')).toBeTruthy()
   })
@@ -148,7 +148,7 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
     await user.type(searchInput, '台積')
     expect(searchInput.value).toBe('台積')
 
-    // 新增並切換至新工作區（0.6.5-dev.3 起管理動作收在工作區選單裡，要先開選單）
+    // Add and switch to a new workspace (from 0.6.5-dev.3, management actions are included in the workspace menu, you must open the menu first)
     await user.click(screen.getByRole('button', { name: /^工作區：/ }))
     await user.click(await screen.findByRole('menuitem', { name: '新增工作區' }))
     const dialog = await screen.findByRole('dialog', { name: '新增工作區' })

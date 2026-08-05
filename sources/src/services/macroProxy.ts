@@ -1,13 +1,13 @@
 /**
- * 美國總經指標：讀取盤後排程預產、存於公開 `reports` bucket 的 `macro/us.json`。
+ * U.S. General Economic Indicators: Read after-hours scheduled production and stored in `macro/us.json` in the public `reports` bucket.
  *
- * **與其他 proxy 的差別：這是全域單檔，不帶 ticker。** 全市場共用同一份，
- * 每檔股票看到的完全一樣（資料本身就與個股無關）。
+ * **Difference from other proxies: This is a global single file without ticker. ** The whole market shares the same copy.
+ * What you see for each stock is exactly the same (the data itself has nothing to do with individual stocks).
  *
- * 此檔的型別是**網路介面契約**，須與 sources/supabase/functions/stock-report/usMacro.ts
- * 的 MacroFile 對齊。單位陷阱：三個物價指標是 **%**（年增率）、
- * 非農是 **千人**（較上月增減）、消費者信心是**指數值**。欄位 `unit` 已帶著單位，
- * 畫面一律讀它，不要在元件裡另外寫死。
+ * This file is of type **Web Interface Contract** and must be consistent with sources/supabase/functions/stock-report/usMacro.ts
+ * MacroFile alignment. Unit trap: The three price indicators are **%** (annual growth rate),
+ * Non-farm payrolls are **thousand people** (increase or decrease from the previous month), and consumer confidence is **index value**. The field `unit` already carries the unit,
+ * The screen must read it, do not write it in the component.
  */
 import { downloadReportsJson } from './reportsBucket'
 
@@ -27,19 +27,19 @@ export interface MacroIndicator {
   note: string
   latest: MacroPoint | null
   previous: MacroPoint | null
-  /** 由舊到新，最多 12 期 */
+  /** From old to new, up to 12 issues*/
   points: MacroPoint[]
 }
 
 export interface MacroData {
   /**
-   * **資料最後一次變動**的時間 ISO（不是最後一次執行排程的時間）。
-   * FRED 沒發布新數據時它會停著不動，那是正常的 —— 別把它當成健康度指標。
+   * **The time ISO when the data was last changed** (not the time when the schedule was last executed).
+   * FRED will sit still when it's not releasing new data, and that's normal - don't think of it as a health indicator.
    */
   asOf: string
   /**
-   * 排程最後一次真的去問過 FRED 的時間 ISO。0.6.11 起才有，舊檔為空字串。
-   * 有了它，「這個月還沒發布」與「排程掛了」才分得開。
+   * The last time the scheduler actually asked FRED for the time ISO. Only available since 0.6.11, old files are empty strings.
+   * With it, "it hasn't been released this month" can be distinguished from "the schedule is down".
    */
   checkedAt: string
   region: string
@@ -47,8 +47,8 @@ export interface MacroData {
 }
 
 /**
- * 前端認得的**最低**結構版本。必須用 `>=` 比對，理由同 fundamentalProxy：
- * 後端加欄位對舊前端是無害的加法，用等號會在後端升版時讓整個分頁當場全掛。
+ * The **minimum** structural version recognized by the frontend. Must use `>=` for comparison, the reason is the same as fundamentalProxy:
+ * Adding fields to the backend is a harmless addition to the old frontend. Using the equal sign will cause the entire paging to hang on the spot when the backend is upgraded.
  */
 export const MIN_MACRO_SCHEMA = 1
 
@@ -78,7 +78,7 @@ function normalizeIndicator(v: unknown): MacroIndicator | null {
   const o = v as Record<string, unknown>
   if (typeof o.id !== 'string' || !o.id) return null
   if (typeof o.label !== 'string' || !o.label) return null
-  // 後端若新增了前端不認得的 kind，整筆丟掉勝過用錯的單位呈現
+  // If the backend adds a new kind that the frontend does not recognize, it is better to throw it away than to use the wrong unit.
   const kind = KINDS.find((k) => k === o.kind)
   if (!kind) return null
   return {
@@ -101,7 +101,7 @@ function isSupported(d: unknown): d is StoredMacro {
   return typeof f.schema === 'number' && f.schema >= MIN_MACRO_SCHEMA
 }
 
-/** 讀總經指標；查無 / 格式不符回 null（吞錯不拋，缺料不得拖垮個股分析頁） */
+/** Read the general economic indicators; find none/return null if the format does not match (don’t throw out if you swallow an error, and don’t bring down the individual stock analysis page if you don’t have enough information)*/
 export async function fetchMacro(): Promise<MacroData | null> {
   const stored = await downloadReportsJson<StoredMacro>('macro/us.json')
   if (!isSupported(stored)) return null
@@ -113,7 +113,7 @@ export async function fetchMacro(): Promise<MacroData | null> {
 
   return {
     asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
-    // 0.6.11 之前產出的檔案沒有這個欄位，回空字串讓畫面自行決定要不要顯示
+    // 0.6.11 The previously generated files do not have this field. Return an empty string and let the screen decide whether to display it.
     checkedAt: typeof stored.checkedAt === 'string' ? stored.checkedAt : '',
     region: typeof stored.region === 'string' ? stored.region : '美國',
     indicators,

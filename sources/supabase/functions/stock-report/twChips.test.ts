@@ -70,14 +70,14 @@ describe('extractInstitutional', () => {
   it('自營商買進 / 賣出由「自行買賣」+「避險」相加，買賣超取官方欄位', () => {
     const resp = { stat: 'OK', fields: T86_FIELDS, data: [T86_ROW] }
     const chip = extractInstitutional(resp, '2303')
-    // 自行 300/100 + 避險 400/100
+    // Self 300/100 + Hedging 400/100
     expect(chip?.dealer).toEqual({ buy: 700, sell: 200, net: 500 })
   })
 
   it('三大法人合計：買進 / 賣出為五個 leg 加總，買賣超取官方 idx 18', () => {
     const resp = { stat: 'OK', fields: T86_FIELDS, data: [T86_ROW] }
     const chip = extractInstitutional(resp, '2303')
-    // 買進 10000 + 0 + 1000 + 300 + 400 = 11700；賣出 20000 + 0 + 3000 + 100 + 100 = 23200
+    // Buy 10000 + 0 + 1000 + 300 + 400 = 11700; sell 20000 + 0 + 3000 + 100 + 100 = 23200
     expect(chip?.total).toEqual({ buy: 11700, sell: 23200, net: -11500 })
   })
 
@@ -92,7 +92,7 @@ describe('extractInstitutional', () => {
   })
 })
 
-// rwd 逐股融資融券表（實測 2026-07-22）：欄位名稱重複，必須用位置索引
+// rwd stock-by-stock margin trading table (actual measurement 2026-07-22): field names are repeated and must be indexed by position
 const MARGIN_FIELDS = [
   '代號', '名稱',
   '買進', '賣出', '現金償還', '前日餘額', '今日餘額', '次一營業日限額',
@@ -100,7 +100,7 @@ const MARGIN_FIELDS = [
   '資券互抵', '註記',
 ]
 
-// 2330 實測列
+// 2330 measured column
 const MARGIN_ROW_2330 = [
   '2330', '台積電',
   '855', '662', '88', '31,823', '31,928', '6,483,092',
@@ -111,7 +111,7 @@ const MARGIN_ROW_2330 = [
 const MARGIN_RESP = {
   stat: 'OK',
   tables: [
-    // tables[0] 是大盤合計，第一欄不是「代號」，必須跳過
+    // tables[0] is the total of the market. The first column is not "code name" and must be skipped.
     { fields: ['項目', '買進', '賣出'], data: [['融資(交易單位)', '1', '2']] },
     { fields: MARGIN_FIELDS, data: [MARGIN_ROW_2330] },
   ],
@@ -183,7 +183,7 @@ describe('extractMargin（OpenAPI fallback）', () => {
   })
 })
 
-// rwd 借券實測回應（2026-07-26 抓取）：代號包在 <a> 裡、每列兩欄配對、日期只在 title
+// rwd coupon borrowing test response (captured on 2026-07-26): the code is wrapped in <a>, two columns in each column are matched, and the date is only in the title
 const BORROW_RWD = {
   stat: 'OK',
   title: '115年07月27日 當日可借券賣出股數',

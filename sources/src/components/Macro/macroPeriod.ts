@@ -1,18 +1,18 @@
 /**
- * 月頻總經指標的「期別」判定（純函式，方便單獨測試）。
+ * "Period" determination of the monthly frequency total economic indicator (pure function, convenient for independent testing).
  *
- * 放在 Macro 而不是 Admin：這是總經資料本身的領域邏輯，
- * 管理員後台的「抓取狀況」頁只是借來監看而已 —— 依賴方向是 Admin → Macro。
+ * Put it in Macro instead of Admin: This is the domain logic of the general manager data itself.
+ * The "Crawling Status" page in the administrator's backend is only used for monitoring - the dependent direction is Admin → Macro.
  */
 
 export type PeriodState = 'ok' | 'warn' | 'idle'
 
 /**
- * 月頻資料的落後判定：與**同組其他來源的最新期別**比，而不是查發布行事曆。
+ * Determining the backwardness of monthly frequency data: comparing the latest period with other sources in the same group, rather than checking the release calendar.
  *
- * 發布日每個指標都不一樣（非農每月第一個週五、CPI 月中、PCE 月底），
- * 維護行事曆等於維護一個一定會過期的常數表；但「其他四個都到 2026-06 了、
- * 只有你還在 2026-05」這件事不必查行事曆也成立。
+ * Each indicator is different on the release day (non-farm payrolls on the first Friday of each month, CPI in the middle of the month, PCE at the end of the month),
+ * Maintaining the calendar is equivalent to maintaining a constant table that will definitely expire; but "the other four are all up to 2026-06,
+ * Only you are still in 2026-05" This is true without checking the calendar.
  */
 export function judgePeriod(period: string | null, peerLatest: string | null): PeriodState {
   if (!period) return 'idle'
@@ -20,7 +20,7 @@ export function judgePeriod(period: string | null, peerLatest: string | null): P
   return 'warn'
 }
 
-/** 一組期別字串裡最新的那個（'YYYY-MM' 字典序即時序） */
+/** The latest one in a set of period strings ('YYYY-MM' dictionary sequence)*/
 export function latestPeriod(periods: ReadonlyArray<string | null | undefined>): string | null {
   let best: string | null = null
   for (const p of periods) if (typeof p === 'string' && p && (best === null || p > best)) best = p
@@ -28,11 +28,11 @@ export function latestPeriod(periods: ReadonlyArray<string | null | undefined>):
 }
 
 /**
- * 落後幾期。0 代表沒落後。
+ * A few issues behind. 0 means after decline.
  *
- * 畫面上「落後一期」與「落後三期」是完全不同的意思：前者多半只是還沒發布，
- * 後者代表來源可能停更了（實測 UMCSENT 就是如此 —— 依規律 2026-06 該在
- * 07-01 就發布，但 07-01 / 07-15 / 07-31 三個 vintage 全都還停在 2026-05）。
+ * On the screen, "one issue behind" and "three issues behind" have completely different meanings: the former is probably just not released yet.
+ * The latter means that the source may have stopped updating (actually measured UMCSENT is like this - according to the rules, 2026-06 should be in
+ * It was released on 07-01, but the three vintages of 07-01 / 07-15 / 07-31 are all still stopped at 2026-05).
  */
 export function periodsBehind(period: string | null, peerLatest: string | null): number {
   if (!period || !peerLatest) return 0

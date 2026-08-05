@@ -1,4 +1,4 @@
-/** 共用資料模型：與 Supabase schema (sources/supabase/schema.sql) 對齊 */
+/** Shared data model: aligned with Supabase schema (sources/supabase/schema.sql)*/
 
 export type Market = 'TPE' | 'US'
 export type TxType = 'BUY' | 'SELL'
@@ -13,10 +13,10 @@ export interface Workspace {
 export interface Transaction {
   id: string
   workspace_id: string
-  /** 交易日期，格式 YYYY-MM-DD */
+  /** Transaction date, format YYYY-MM-DD*/
   tx_date: string
   market: Market
-  /** 股票代號，不含 'TPE:' 前綴（如 '2330'、'AAPL'） */
+  /** Stock code without 'TPE:' prefix (e.g. '2330', 'AAPL')*/
   ticker: string
   name: string
   tx_type: TxType
@@ -26,14 +26,14 @@ export interface Transaction {
   created_at: string
 }
 
-/** 尚未寫入資料庫的交易（無 id / created_at / workspace_id） */
+/** Transactions not yet written to the database (no id/created_at/workspace_id)*/
 export type NewTransaction = Omit<Transaction, 'id' | 'created_at' | 'workspace_id'>
 
 export function marketCurrency(market: Market): Currency {
   return market === 'TPE' ? 'TWD' : 'USD'
 }
 
-/** 個股在 ledger 中的唯一鍵：市場 + 代號（台美股代號空間不同，仍以複合鍵防碰撞） */
+/** The only key for individual stocks in ledger: market + code (the code spaces for Taiwan and the United States are different, so composite keys are still used to prevent collisions)*/
 export function positionKey(market: Market, ticker: string): string {
   return `${market}:${ticker}`
 }

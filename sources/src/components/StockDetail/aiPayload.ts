@@ -1,17 +1,17 @@
 /**
- * AI Payload 與 Prompt 產生邏輯。
+ * AI Payload and Prompt generate logic.
  *
- * 核心約束 (PLAN.md §M1.1)：
- * 1. 技術面由程式計算好 (TechnicalView.latest)，絕對不把 243 筆原始收盤價放進 payload。
- * 2. 單位必須寫進欄位標籤：三大法人為「股數」、融資融券為「張」。
- * 3. 嚴禁包含持股 (holding)、成本 (avgCost) 或未實現損益 (unrealized)。
+ * Core constraints (PLAN.md §M1.1):
+ * 1. The technical side is calculated by the program (TechnicalView.latest), and the 243 original closing prices are never put into the payload.
+ * 2. The unit must be written in the field label: "number of shares" for the three major legal entities, and "number of shares" for margin trading and securities lending.
+ * 3. It is strictly prohibited to include holdings (holding), costs (avgCost) or unrealized gains and losses (unrealized).
  *
- * 兩個餵給模型時特別容易出錯、已用測試釘住的地方：
- * - `TechnicalView.latest.changePct` 是**小數比例**（0.0148 = +1.48%），
- *   直接接個 `%` 印出去會讓模型講出小 100 倍的漲跌幅。故此處欄位名為
- *   `changePctPercent`，值已乘 100。
- * - `ChipStreaks` 的正負號帶語意（正＝連買 / 連增，負＝連賣 / 連減），
- *   光給數字模型會把 -3 讀成「增加了 -3 天」。故 payload 附 `streakNote` 說明。
+ * Two particularly error-prone areas when feeding the model have been pinned with testing:
+ * - `TechnicalView.latest.changePct` is **decimal scale** (0.0148 = +1.48%),
+ *   Printing it directly with `%` will make the model tell a 100 times smaller increase and decrease. Therefore, the field name here is
+ *   `changePctPercent`, value multiplied by 100.
+ * - The positive and negative signs of `ChipStreaks` have semantic meaning (positive = continuous buying/continuous increase, negative = continuous selling/continuous decrease),
+ *   A mere numerical model would read -3 as "an additional -3 days". Therefore, the payload is accompanied by a `streakNote` description.
  */
 import type { FundamentalData } from '../../services/fundamentalProxy'
 import type { MacroData } from '../../services/macroProxy'
@@ -20,14 +20,14 @@ import type { RangeKey, TechnicalView } from './technicalView'
 import { RANGE_LABELS } from './technicalView'
 import { ANALYSIS_DEFAULT, ANALYSIS_LOCKED, resolvePrompt } from '../../services/aiPrompts'
 
-/** 四捨五入到 n 位小數；null 照樣回 null（不要用 0 代替缺值） */
+/** Round to n decimal places; null will still be returned (do not use 0 to replace missing values)*/
 function round(value: number | null, digits = 2): number | null {
   if (value === null || !Number.isFinite(value)) return null
   const f = 10 ** digits
   return Math.round(value * f) / f
 }
 
-/** 買進 / 賣出 / 買賣超三件組（單位：股數） */
+/** Buy / sell / buy and sell super three-piece set (unit: number of shares)*/
 interface LegShares {
   buyShares: number | null
   sellShares: number | null
@@ -37,7 +37,7 @@ interface LegShares {
 export interface AiPayload {
   ticker: string
   name: string
-  /** 技術面資料涵蓋的區間（例：近 1 年） */
+  /** The range covered by technical data (for example: the past 1 year)*/
   periodLabel: string
   technical: {
     date: string
@@ -45,10 +45,10 @@ export interface AiPayload {
     open: number
     high: number
     low: number
-    /** 成交量，單位：股數 */
+    /** Trading volume, unit: number of shares*/
     volumeShares: number
     change: number | null
-    /** 已換算為百分比數值：1.48 代表 +1.48% */
+    /** Converted to a percentage value: 1.48 represents +1.48%*/
     changePctPercent: number | null
     ma5: number | null
     ma20: number | null
@@ -58,7 +58,7 @@ export interface AiPayload {
     d: number | null
     rsi14: number | null
     macdHist: number | null
-    /** 成交量相對 20 日均量的倍數：1.5 代表 1.5 倍 */
+    /** The multiple of trading volume relative to the 20-day average volume: 1.5 means 1.5 times*/
     volRatioVs20DayAvg: number | null
     periodHighClose: number
     periodLowClose: number
@@ -101,7 +101,7 @@ export interface AiPayload {
     }>
     notes?: string[]
   }
-  /** 基本面（0.6.0-dev.4）。上櫃股與批次未跑到的代號皆為 hasData: false */
+  /** Fundamentals (0.6.0-dev.4). The codes for listed stocks and batches that have not been released are hasData: false*/
   fundamental: {
     hasData: boolean
     industry?: string | null
@@ -111,18 +111,18 @@ export interface AiPayload {
       pbRatio: number | null
       dataDate: string | null
     }
-    /** 月營收金額的單位；與籌碼的 unitInstitutional 同樣是「單位不離開 payload」 */
+    /** The unit of monthly revenue amount; the same as the unitInstitutional of chips, "the unit does not leave the payload"*/
     revenueUnit?: '千元'
-    /** 由新到舊，最多 12 個月 */
+    /** New to old, up to 12 months*/
     revenueMonths?: Array<{
       yearMonth: string
       revenueThousandTwd: number | null
       momPercent: number | null
       yoyPercent: number | null
     }>
-    /** 獲利能力比率的單位（0.6.5）。同樣是「單位不離開 payload」 */
+    /** The unit of profitability ratio (0.6.5). The same is "the unit does not leave the payload"*/
     profitUnit?: '%'
-    /** 由新到舊，最多 8 季 */
+    /** From new to old, up to 8 seasons*/
     profitQuarters?: Array<{
       yearQuarter: string
       epsTwd: number | null
@@ -133,15 +133,15 @@ export interface AiPayload {
     }>
   }
   /**
-   * 總體經濟背景（0.6.5，美國）。**與個股無關**，是共用的背景資料。
-   * system prompt 有一條準則明令不得用它推導個股漲跌。
+   * General economic context (0.6.5, United States). **Not related to individual stocks**, it is shared background information.
+   * system prompt There is a rule that explicitly prohibits using it to deduce the rise and fall of individual stocks.
    */
   macro: {
     hasData: boolean
     region?: string
     indicators?: Array<{
       label: string
-      /** 單位隨值走：'%' / '千人' / '指數' */
+      /** The unit follows the value: '%' / 'thousands of people' / 'index'*/
       unit: string
       period: string | null
       value: number | null
@@ -163,7 +163,7 @@ function leg(src: { buy: number | null; sell: number | null; net: number | null 
 }
 
 function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamental'] {
-  // 有檔案但三項全空（上櫃股的缺料檔）等同沒資料，不要讓 prompt 印出一串「無」
+  // There is a file but all three items are empty (the lack of information file for OTC stocks) means there is no data. Do not let the prompt print a string of "none"
   const hasAny =
     !!f &&
     (f.valuation !== null ||
@@ -193,7 +193,7 @@ function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamenta
     profitUnit: '%',
     profitQuarters: [...f.profitQuarters].reverse().map((q) => ({
       yearQuarter: q.yearQuarter,
-      // EPS 一起送（0.6.28）：本益比在同一份 payload 裡，沒有 EPS 的話模型無從判斷它貴不貴
+      // EPS is sent together (0.6.28): The price-to-earnings ratio is in the same payload. Without EPS, the model cannot judge whether it is expensive or not.
       epsTwd: round(q.epsTwd),
       grossMarginPercent: round(q.grossMarginPercent),
       operatingMarginPercent: round(q.operatingMarginPercent),
@@ -204,8 +204,8 @@ function buildFundamentalBlock(f: FundamentalData | null): AiPayload['fundamenta
 }
 
 /**
- * 總經區塊。缺料時 hasData: false，prompt 會印替代文案而不是一串「無」。
- * 只送最新與前一期的值 —— 12 期序列對模型的邊際價值低，卻會顯著拉長每一輪的 token。
+ * General block. When there is a shortage of materials, hasData: false, the prompt will print the replacement copy instead of a string of "none".
+ * Only the latest and previous period values ​​are sent - the 12-period sequence has low marginal value to the model, but will significantly lengthen the tokens in each round.
  */
 function buildMacroBlock(m: MacroData | null): AiPayload['macro'] {
   if (!m || m.indicators.length === 0) return { hasData: false }
@@ -245,7 +245,7 @@ export function buildAiPayload(args: {
     low: round(latest.low) as number,
     volumeShares: latest.volume,
     change: round(latest.change),
-    // ×100：latest.changePct 是小數比例，見檔頭說明
+    // ×100: latest.changePct is a decimal ratio, see the file header description
     changePctPercent: round(latest.changePct === null ? null : latest.changePct * 100),
     ma5: round(latest.ma5),
     ma20: round(latest.ma20),
@@ -327,12 +327,12 @@ export function buildAiPayload(args: {
   }
 }
 
-/** 數字缺值時一律印「無」，不要印 0——0 在買賣超裡是「持平」，與「沒資料」是兩件事 */
+/** When the number is missing, always print "None", do not print 0 - 0 in the transaction super is "flat", and "no data" are two different things.*/
 function num(value: number | null): string {
   return value === null ? '無' : String(value)
 }
 
-/** 帶正負號輸出（連續天數與買賣超都要看得出方向） */
+/** Output with positive and negative signs (the direction can be seen both for the number of consecutive days and the buying and selling super)*/
 function signed(value: number | null): string {
   if (value === null) return '無'
   return value > 0 ? `+${value}` : String(value)
@@ -343,17 +343,17 @@ function legText(label: string, l: LegShares): string {
 }
 
 /**
- * 使用者採用的分批進出框架（0.6.9-dev.2，由使用者指定）。
+ * The batching in and out framework adopted by the user (0.6.9-dev.2, specified by the user).
  *
- * **這是給模型的「描述用語彙」，不是放寬準則 5 的許可。**
- * 模型可以用這些名詞說明目前數據落在哪個情境，但仍不得指定加碼比例、
- * 不得指定價位、不得說「現在該買 / 該賣」—— 分批百分比只是說明框架時的舉例。
+ * **This is a "descriptive vocabulary" for the model, not a license to relax Guideline 5. **
+ * The model can use these terms to explain which situation the current data falls in, but it is still not allowed to specify the overweight ratio,
+ * You are not allowed to specify a price, you are not allowed to say "should you buy/sell now" - the tranche percentage is just an example to illustrate the framework.
  *
- * **馬丁格爾與另外三個性質不同，故單獨標註前提。** 金字塔、倒金字塔、非等距網格
- * 都是**有上限**的部位管理；馬丁格爾照定義是無上限的（虧損後加倍下注），
- * 它「最終只要一次反彈就解套」的說法成立於「標的不歸零且資金無限」——
- * 而真實帳戶兩個都不成立，連續下跌時所需資金呈指數成長。
- * prompt 強制模型每次提到它就講出這個前提，避免它被當成與其他三者等價的選項。
+ * **Martinale has different properties from the other three, so the premise is marked separately. ** Pyramid, inverted pyramid, non-equidistant grid
+ * They are all position management with an upper limit; Martingale by definition has no upper limit (double your bet after a loss),
+ * Its statement that "it only takes one rebound to unwind in the end" is based on the fact that "the target does not return to zero and the funds are unlimited"——
+ * However, neither of these is true for real accounts, and the funds required grow exponentially when there is a continuous decline.
+ * prompt forces the model to state this premise every time it is mentioned, preventing it from being treated as an equivalent option to the other three.
  */
 const STRATEGY_FRAMEWORKS = `【使用者採用的操作框架】
 
@@ -373,12 +373,12 @@ const STRATEGY_FRAMEWORKS = `【使用者採用的操作框架】
   不得把它描述成與前三項等價的選項。`
 
 /**
- * 組出送給模型的 system / user 兩段。
+ * Set the system / user sections sent to the model.
  *
- * `customAnalysis` 是管理員在後台改過的分析準則（0.6.19）。
- * **順序有意義**：可編輯段落 → 固定的安全規則 → 操作框架語彙。
- * 安全規則排在後面才蓋得住前面可能被改壞的內容，而框架語彙必須排在
- * 安全規則之後，否則「可以講分批加碼」讀起來會像是放寬了前一段的限制。
+ * `customAnalysis` is an analysis criterion modified by the administrator in the background (0.6.19).
+ * **The order makes sense**: Editable paragraphs → Fixed security rules → Operating framework vocabulary.
+ * Security rules must be placed at the back to cover content that may be modified in the front, and framework vocabulary must be placed at the end.
+ * After the safety rules, otherwise "you can talk about adding weight in batches" will read like relaxing the restrictions in the previous paragraph.
  */
 export function renderAiPrompt(
   p: AiPayload,

@@ -1,15 +1,15 @@
-# Supabase SQL 常用查詢指令
+# Supabase SQL Common Queries
 
-使用方式：到 [Supabase Dashboard](https://supabase.com/dashboard) → 你的專案 → **SQL Editor**，貼上要執行的段落後按 Run。
+Usage: Go to [Supabase Dashboard](https://supabase.com/dashboard) → your project → **SQL Editor**, paste the snippet you want to execute, and click Run.
 
-> 注意：SQL Editor 是以專案擁有者身分執行，**不受 RLS 限制**，看得到所有使用者的資料。
-> 資料表結構定義見 `sources/supabase/schema.sql`。
+> Note: SQL Editor runs as the project owner, **bypassing RLS (Row Level Security)**, and can see all users' data.
+> For table definitions, see `sources/supabase/schema.sql`.
 
 ---
 
-## 一、帳號查詢（auth.users）
+## 1. Account Queries (auth.users)
 
-### 1. 列出所有註冊帳號
+### 1. List all registered accounts
 
 ```sql
 select id, email, created_at, email_confirmed_at, last_sign_in_at
@@ -17,10 +17,10 @@ from auth.users
 order by created_at desc;
 ```
 
-- `email_confirmed_at` 為 `null` 表示尚未完成信箱驗證。
-- `last_sign_in_at` 可看出帳號最近是否有登入。
+- `email_confirmed_at` being `null` means email verification is not complete.
+- `last_sign_in_at` shows if the account has logged in recently.
 
-### 2. 查詢特定帳號
+### 2. Query a specific account
 
 ```sql
 select id, email, created_at, email_confirmed_at
@@ -28,7 +28,7 @@ from auth.users
 where email = 'someone@example.com';
 ```
 
-### 3. 統計帳號總數
+### 3. Count total accounts
 
 ```sql
 select count(*) as total_users,
@@ -36,9 +36,9 @@ select count(*) as total_users,
 from auth.users;
 ```
 
-### 4. 將所有未驗證帳號標記為已驗證
+### 4. Mark all unverified accounts as verified
 
-適用情境：關閉 Confirm email 之前註冊、卡在未驗證狀態的帳號。
+Use case: Accounts registered before turning off Confirm email, stuck in an unverified state.
 
 ```sql
 update auth.users
@@ -48,9 +48,9 @@ where email_confirmed_at is null;
 
 ---
 
-## 二、資料查詢
+## 2. Data Queries
 
-### 1. 各使用者的工作區
+### 1. Workspaces of each user
 
 ```sql
 select w.name as workspace, w.created_at, u.email as owner
@@ -59,7 +59,7 @@ join auth.users u on u.id = w.user_id
 order by u.email, w.created_at;
 ```
 
-### 2. 最近的交易紀錄（含所屬帳號與工作區）
+### 2. Recent transaction records (including account and workspace)
 
 ```sql
 select t.tx_date, t.market, t.ticker, t.name, t.tx_type,
@@ -72,7 +72,7 @@ order by t.created_at desc
 limit 50;
 ```
 
-### 3. 查詢特定帳號的所有交易
+### 3. Query all transactions of a specific account
 
 ```sql
 select t.tx_date, t.market, t.ticker, t.name, t.tx_type, t.price, t.qty, t.fee_tax
@@ -82,17 +82,17 @@ where u.email = 'someone@example.com'
 order by t.tx_date desc;
 ```
 
-### 4. 查詢特定股票的交易紀錄
+### 4. Query transaction records of a specific stock
 
 ```sql
 select t.tx_date, t.tx_type, t.price, t.qty, t.fee_tax, u.email
 from transactions t
 join auth.users u on u.id = t.user_id
-where t.ticker = '2330'      -- 台股代號不含 'TPE:' 前綴；美股如 'AAPL'
+where t.ticker = '2330'      -- TWSE stock code does not contain 'TPE:' prefix; US stocks like 'AAPL'
 order by t.tx_date;
 ```
 
-### 5. 每個使用者的交易筆數統計
+### 5. Transaction count per user
 
 ```sql
 select u.email, count(*) as tx_count,
@@ -103,7 +103,7 @@ group by u.email
 order by tx_count desc;
 ```
 
-### 6. 各股票的買賣彙總（以某帳號為例）
+### 6. Summary of buy/sell for each stock (example for a specific account)
 
 ```sql
 select t.market, t.ticker, t.name,
@@ -119,7 +119,7 @@ group by t.market, t.ticker, t.name
 order by t.market, t.ticker;
 ```
 
-### 7. 使用者設定
+### 7. User settings
 
 ```sql
 select u.email, s.default_fee_rate, s.theme, s.created_at
@@ -129,25 +129,25 @@ join auth.users u on u.id = s.user_id;
 
 ---
 
-## 三、維護用（謹慎使用）
+## 3. Maintenance (Use with caution)
 
-### 1. 刪除特定帳號及其所有資料
+### 1. Delete a specific account and all its data
 
-`auth.users` 上的外鍵皆設定 `ON DELETE CASCADE`，刪除帳號會一併刪除其工作區、交易與設定。
-建議優先使用 Console → Authentication → Users 介面刪除；SQL 方式如下：
+Foreign keys on `auth.users` are set to `ON DELETE CASCADE`, deleting an account will also delete its workspaces, transactions, and settings.
+It is recommended to prioritize using the Console → Authentication → Users interface to delete; SQL method is as follows:
 
 ```sql
 delete from auth.users where email = 'someone@example.com';
 ```
 
-### 2. 清空某帳號的所有交易（保留帳號與工作區）
+### 2. Clear all transactions of an account (keep account and workspace)
 
 ```sql
 delete from transactions
 where user_id = (select id from auth.users where email = 'someone@example.com');
 ```
 
-### 3. 確認 RLS 是否啟用
+### 3. Check if RLS is enabled
 
 ```sql
 select tablename, rowsecurity
@@ -155,4 +155,4 @@ from pg_tables
 where schemaname = 'public';
 ```
 
-三張表（`workspaces`、`transactions`、`user_settings`）的 `rowsecurity` 都應為 `true`。
+The `rowsecurity` for all three tables (`workspaces`, `transactions`, `user_settings`) should be `true`.

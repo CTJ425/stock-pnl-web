@@ -1,26 +1,26 @@
 /**
- * 「外幣匯率」頂層頁面：台幣對主要 8 種外幣的匯率、雙向換算與走勢圖。
+ * "Foreign Currency Exchange Rate" top page: exchange rates, two-way conversions and trend charts of the Taiwan dollar against eight major foreign currencies.
  *
- * 資料來自 `fx/twd.json`（全域單檔，非 per-ticker），本元件**自己載入** ——
- * 頂層頁沒有父元件可以分發（同 MacroPage）。
+ * The data comes from `fx/twd.json` (global single file, not per-ticker), this component **loads itself** ——
+ * Top-level pages have no parent components to distribute (same as MacroPage).
  *
- * 三個刻意的設計決定：
+ * Three deliberate design decisions:
  *
- * 1. **不套用損益的紅漲綠跌。** 「台幣貶值」對持有美股的人是好事、對出國的人是壞事，
- *    本身沒有好壞之分。沿用 MacroPage 對總經指標的同一個判斷：只陳述方向，
- *    用文字明說「台幣升值 / 貶值」，不呼叫 chipClass()。
+ * 1. **Do not apply the red rise and green fall of profit and loss. ** "The depreciation of the Taiwan dollar" is a good thing for those who hold U.S. stocks, and a bad thing for those who go abroad.
+ *    There is nothing inherently good or bad about it. Follow the same judgment of MacroPage on the general economic indicator: only state the direction,
+ *    Use text to clearly state "Taiwan dollar appreciation/depreciation" and do not call chipClass().
  *
- * 2. **資料過期要主動說。** Storage 上的舊檔在畫面上與新檔長得一模一樣，
- *    而這頁的數字會被拿去換錢。這正是 0.6.4-dev.5 那次線上事故的性質
- *    （顯示的資料是錯的、使用者卻看不出來，見 services/reportsBucket.ts）。
+ * 2. **Please take the initiative to tell us if your information is expired. ** The old files on Storage look exactly the same as the new files on the screen.
+ *    The numbers on this page will be exchanged for money. This is exactly the nature of the online incident in 0.6.4-dev.5
+ *    (The displayed data is wrong, but the user cannot see it, see services/reportsBucket.ts).
  *
- * 3. **必須標示「非銀行牌告匯率」。** 資料是 Yahoo 的市場中價，不是台銀的
- *    現金／即期買賣價 —— 使用者拿去銀行換一定會有落差，不講清楚是誤導。
- *    （台銀的 CSV 端點已被人機驗證擋住，抓不到，見 fxRates.ts 的說明。）
+ * 3. **Must indicate "non-bank quoted exchange rate". **The information is Yahoo’s market median price, not the Bank of Taiwan’s
+ *    Cash/spot buying and selling price - there will definitely be a difference when the user takes it to the bank to exchange. Failure to explain clearly is misleading.
+ *    (Taiwan Bank’s CSV endpoint has been blocked by human-machine verification and cannot be captured. See the instructions of fxRates.ts.)
  *
- * 方向陷阱：`rate` 一律是「1 單位外幣 = N 台幣」。反向一律現算，不另存。
+ * Direction trap: `rate` is always "1 unit of foreign currency = N Taiwan dollars". The reverse direction will be calculated immediately and will not be saved separately.
  *
- * 手機版型不在 0.6.7 範圍（使用者決定等桌機功能驗證後再做）。
+ * The mobile version is not in the 0.6.7 range (the user decided to wait for the desktop function to be verified).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRightLeft, RefreshCw } from 'lucide-react'
@@ -56,11 +56,11 @@ function writeSelected(code: string): void {
   try {
     localStorage.setItem(SELECTED_KEY, code)
   } catch {
-    // 無痕模式 / 停用儲存：記不住偏好不影響功能
+    // Incognito mode/disable storage: unable to remember preferences does not affect functionality
   }
 }
 
-/** 日變動的方向敘述。台幣要換更多錢才買得到同樣的外幣 ＝ 台幣貶值 */
+/** Description of the direction of daily changes. The Taiwan dollar needs to be exchanged for more money to buy the same foreign currency = the Taiwan dollar depreciates.*/
 function trendText(pct: number | null): string {
   if (pct === null) return '—'
   if (Math.abs(pct) < 0.005) return '與前一日持平'
@@ -73,16 +73,16 @@ function pctText(pct: number | null): string {
 }
 
 /**
- * 卡片要顯示哪個數字。
+ * Which number should the card display.
  *
- * 優先用即時報價；拿不到（Edge Function 掛了、額度用盡、本機模式）就退回
- * 每日檔的最後收盤。**兩者一定要在畫面上分得出來** —— 差距不是小數點後幾位，
- * 實測同一時刻可以差 0.42%，使用者若以為看到的是即時價會被誤導。
+ * Give priority to real-time quotation; if you can’t get it (Edge Function hangs up, quota is exhausted, local mode), it will be returned.
+ * The last closing price of the daily session. **The two must be distinguished on the screen** - the difference is not a few decimal places,
+ * The actual measured difference can be 0.42% at the same time. Users will be misled if they think they are seeing real-time prices.
  *
- * 日變動的基期兩種情況不同：
- * - 即時價：跟每日檔的**最後一根完整日線**比 → 「今天到目前為止的變化」
- * - 收盤價：跟**前一根**日線比 → 「昨天相對前天的變化」
- * 兩者都是「與前一個交易日相比」，口徑一致。
+ * There are two different situations for the base period of daily changes:
+ * - Real-time price: compared with the **last complete daily bar** of the daily session → "Changes so far today"
+ * - Closing price: compared with the **previous** daily line → "Yesterday's change relative to the day before yesterday"
+ * Both are "compared to the previous trading day" and have the same caliber.
  */
 function cardView(cur: FxCurrency, quote: FxQuote | undefined) {
   if (quote) {
@@ -129,10 +129,10 @@ function CurrencyCard({
 }
 
 /**
- * 單一方向的走勢圖。兩張圖共用同一組時間範圍，故 range 由父元件持有。
+ * Single direction trend chart. The two charts share the same set of time ranges, so the range is held by the parent component.
  *
- * `decimals` 由呼叫端決定：正向用幣別自帶的位數，反向用 `autoDecimals()`
- * 依量級現算（1 台幣可換的外幣從 0.03 到 45 都有）。
+ * `decimals` is determined by the caller: forward direction uses the number of digits provided by the currency, reverse direction uses `autoDecimals()`
+ * Calculate according to the magnitude (the foreign currencies that can be exchanged for 1 Taiwan dollar range from 0.03 to 45).
  */
 function DirectionChart({
   title,
@@ -175,22 +175,22 @@ function DirectionChart({
 }
 
 /**
- * 走勢圖：同一段期間、兩個方向並排。
+ * Trend chart: Same period, two directions side by side.
  *
- * **為什麼要兩張而不是一張**：使用者的問題有兩種問法 ——
- * 「我這 1000 台幣能換多少日圓」看的是台幣→日圓；
- * 「這件日本商品 3000 日圓等於多少台幣」看的是日圓→台幣。
- * 兩者互為倒數，但腦內換算很麻煩，尤其日圓那種 0.1972 的量級。
+ * **Why two instead of one**: There are two ways to ask the user's question -
+ * "How much Japanese yen can I exchange for my NT$1,000?" looks at Taiwan dollar → Japanese yen;
+ * "How many Taiwan dollars is 3,000 yen for this Japanese product?" It looks at Japanese yen → Taiwan dollars.
+ * The two are reciprocal to each other, but it is very troublesome to convert in the mind, especially the Japanese yen, which is of the order of 0.1972.
  *
- * ⚠️ 兩張圖**不是彼此的鏡像**：1/x 是非線性的，曲線形狀不同，
- * 而且高低點的日期會對調（正向的最高點＝反向的最低點）。這是對的，不是 bug。
+ * ⚠️ The two graphs are not mirror images of each other: 1/x is non-linear and the curve shapes are different,
+ * Moreover, the dates of the high and low points will be adjusted (the highest point in the forward direction = the lowest point in the reverse direction). This is correct, not a bug.
  */
 function TrendChart({ cur }: { cur: FxCurrency }) {
   const [range, setRange] = useState<FxRange>('3m')
 
   const points = useMemo(() => sliceByRange(cur.points, range), [cur.points, range])
   const inverted = useMemo(() => invertPoints(points), [points])
-  // 反向的量級與正向差很多，位數依中位量級現算一次就好（同一張圖內要一致，不可逐點算）
+  // The magnitude of the reverse direction is much different from that of the forward direction. Just calculate the digits once according to the median magnitude (it must be consistent in the same picture and cannot be calculated point by point).
   const invDecimals = useMemo(
     () => autoDecimals(inverted.length ? inverted[inverted.length - 1][1] : null),
     [inverted],
@@ -251,9 +251,9 @@ export function FxPage() {
   const [selected, setSelected] = useState<string | null>(readSelected)
 
   /**
-   * 兩份資料一起載入，但**歷史檔決定畫面能不能顯示、報價只是加分**：
-   * 報價拿不到時卡片退回收盤價（見 cardView），歷史拿不到才是空狀態。
-   * 故報價的失敗不進 loading 判斷，也不擋畫面。
+   * The two data are loaded together, but the historical file determines whether the screen can be displayed and the quotation is just a bonus**:
+   * When the quotation cannot be obtained, the card will return the trading price (see cardView). If the history cannot be obtained, the card will be in an empty state.
+   * Therefore, the failure of the quotation does not enter the loading judgment and does not block the screen.
    */
   const load = useCallback(async (force = false) => {
     setLoading(true)
@@ -299,7 +299,7 @@ export function FxPage() {
   }
 
   const stale = isStale(fx.asOf, new Date())
-  // 任一幣別有即時報價就算取得成功（八個是同一次請求，不會只回一半）
+  // If there is a real-time quote for any currency, it will be considered successful (eight are the same request, and only half will be returned)
   const liveAt = fx.currencies.map((c) => quotes[c.code]?.asOf).find(Boolean) ?? ''
 
   return (

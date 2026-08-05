@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-// 只驗容器的選取邏輯，內容區以 stub 取代（籌碼本身另有 StockDetailPage.test.tsx）
+// Only the selection logic of the container is tested, and the content area is replaced by a stub (the chip itself also has StockDetailPage.test.tsx)
 vi.mock('./StockDetailPage', () => ({
   StockDetailPage: ({
     ticker,
@@ -146,7 +146,7 @@ describe('AnalysisPage', () => {
     await user.click(screen.getByRole('menuitemradio', { name: '2330 台積電' }))
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
 
-    // 2330 全數賣出 → 不再是持股
+    // 2330 Sell all → No longer a holding
     setup([...TW_AND_US, tx({ ticker: '2330', tx_type: 'SELL', qty: 1000, price: 120 })])
     rerender(<AnalysisPage />)
     expect(screen.getByTestId('detail-ticker').textContent).toBe('1802')

@@ -1,13 +1,13 @@
 /**
- * 下拉選單的共用外殼。
+ * A common shell for drop-down menus.
  *
- * 抽出來是因為多個選單需要一模一樣的行為：點外面關閉、Esc 關閉並把焦點還給觸發鈕、
- * 正確的 aria。各寫一份遲早只會修好其中一邊，而這種不一致從呼叫端完全看不出來
- * （與 mergePeriodSeries 同一個理由）。
+ * It was extracted because multiple menus require the same behavior: click outside to close, Esc to close and return focus to the trigger button,
+ * Correct aria. Writing a copy of each will sooner or later only fix one side, and this inconsistency is completely invisible from the caller.
+ * (Same reason as mergePeriodSeries).
  *
- * 0.6.7 從 AppShell 搬到 Common：使用者從第三個呼叫端（個股分析的個股切換）開始，
- * 它已經不是頁首專屬了。搬家的另一個理由見 AnalysisPage —— 那裡原本是原生 `<select>`，
- * 而它的樣式在 0.6.6 被當成死 CSS 刪掉了。
+ * 0.6.7 Moving from AppShell to Common: The user starts from the third call terminal (individual stock switching for individual stock analysis),
+ * It is no longer exclusive to the top of the page. Another reason to move see AnalysisPage - where it used to be native `<select>`,
+ * And its style was deleted as dead CSS in 0.6.6.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -25,12 +25,12 @@ export function HeaderMenu({
   triggerClass: string
   menuLabel: string
   /**
-   * 附加在彈出層上的樣式。預設 `.hmenu-pop` 是**靠右對齊**（`right: 0`），
-   * 那是為頁首右側的選單設計的 —— 從畫面左側叫出來時要加 `hmenu-pop-left`，
-   * 否則彈出層會往左展開而跑出畫面。清單可能很長時再加 `hmenu-pop-scroll`。
+   * Style attached to the popup layer. The default `.hmenu-pop` is **right aligned** (`right: 0`),
+   * That's for the menu on the right side of the page header - add `hmenu-pop-left` when calling it from the left side of the screen,
+   * Otherwise, the pop-up layer will expand to the left and run out of the screen. Add `hmenu-pop-scroll` if the list may be long.
    */
   popClass?: string
-  /** 收到的 close 用來讓選項點完自己關閉 */
+  /** The close received is used to close the option after clicking it.*/
   children: (close: () => void) => ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -45,7 +45,7 @@ export function HeaderMenu({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       setOpen(false)
-      // 焦點要還回觸發鈕，否則鍵盤使用者按 Esc 之後會掉到 document
+      // The focus must be returned to the trigger button, otherwise the keyboard user will drop to the document after pressing Esc.
       triggerRef.current?.focus()
     }
     document.addEventListener('mousedown', onPointerDown)

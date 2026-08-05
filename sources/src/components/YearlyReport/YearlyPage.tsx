@@ -1,14 +1,14 @@
 /**
- * 年度收益總覽（已實現損益）：
- * - 頂部 4 大 KPI：台股歷史已實現 (TWD)、美股歷史已實現 (USD)、累計手續費、累計交易筆數
- * - 台股 / 美股上下分區，各自獨立年度表格，幣別完全分開（與 GAS 版同構）
- * - 金額欄位採「含費 / 未含費」雙行（與庫存總覽的平均成本同構）：
- *   主數字為實際付出與收到的錢，副行為單純成交價金
- * - 年度列可展開個股明細（含當年只買進、尚未賣出者）
+ * Annual income overview (realized gains and losses):
+ * - Top 4 KPIs: Taiwan Stock Historical Realization (TWD), U.S. Stock Historical Realization (USD), Accumulated Handling Fees, Accumulated Number of Transactions
+ * - Taiwan stocks/U.S. stocks are divided into upper and lower divisions, with separate annual tables, and currencies are completely separated (the same as the GAS version)
+ * - The amount field adopts double rows of "fee included/fee not included" (the same as the average cost of the inventory overview):
+ *   The main figure is the actual money paid and received, and the side figure is simply the transaction price.
+ * - The year column can be expanded with individual stock details (including those that were only bought but not sold during the year)
  *
- * 只呈現賣出側（賣出成本 / 賣出收入 / 已實現損益），刻意不顯示當年買進金額：
- * 買進含當年尚未賣出的部位，與同一列的賣出三欄不是同一批股票，並列會讓人
- * 誤以為可以互相加減。engine 仍保有 buyAmt / buyGross，需要時可再接回。
+ * Only the selling side (selling cost / selling income / realized profit and loss) is displayed, and the purchase amount of the year is deliberately not displayed:
+ * Buying includes positions that have not yet been sold in the current year. The three columns of selling in the same column are not the same batch of stocks. The juxtaposition will make people confused.
+ * Mistakenly thinking that they can add and subtract from each other. The engine still has buyAmt / buyGross and can be taken back if needed.
  */
 import { useMemo, useState, Fragment } from 'react'
 import { CalendarRange, ChevronsDownUp, ChevronsUpDown, Minus, Plus } from 'lucide-react'
@@ -33,7 +33,7 @@ interface YearRow {
   details: YearTickerDetail[]
 }
 
-/** 未含任何費用的價差：成交價金 − 未含費成本，供副行對照 */
+/** Price difference without any fees: Transaction price − Cost without fees, for comparison by the deputy bank*/
 function rawRealized(d: { sellGross: number; rawCostBasis: number }): number {
   return d.sellGross - d.rawCostBasis
 }
@@ -69,7 +69,7 @@ function useSectionRows(currency: Currency): YearRow[] {
         agg.details.push(yt)
       }
       if (agg.count === 0) continue
-      // 有賣出的排前面（該年真正產生損益者），其餘依代號
+      // Those who have sold are ranked first (those who actually incurred profits and losses in the year), and the rest are listed according to code numbers.
       agg.details.sort(
         (a, b) =>
           Number(b.sellAmt !== 0) - Number(a.sellAmt !== 0) ||
@@ -81,7 +81,7 @@ function useSectionRows(currency: Currency): YearRow[] {
   }, [ledger, currency])
 }
 
-/** 金額儲存格：主數字（含費稅）＋副行（未含費），與庫存總覽的平均成本同構 */
+/** Amount cell: main number (including fees and taxes) + side row (excluding fees), isomorphic to the average cost of the inventory overview*/
 function AmountCell({
   value,
   raw,
@@ -95,8 +95,8 @@ function AmountCell({
   signed?: boolean
   rawLabel?: string
 }) {
-  // 該年沒有對應進出（如「僅買進」個股的賣出三欄）時整格顯示「—」：
-  // 含費與未含費同時為 0 才成立，真正打平的賣出因費用差仍會有未含費金額，不會誤判
+  // When there is no corresponding entry or exit in the year (such as the three sell columns of "Buy Only" stocks), the whole box displays "—":
+  // This is true only if both the fee-inclusive and the non-inclusive fees are 0 at the same time. A truly even sale will still have an uninclusive amount due to the fee difference, so there will be no misjudgment.
   const hasActivity = value !== 0 || raw !== 0
   if (!hasActivity) {
     return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
@@ -114,10 +114,10 @@ function AmountCell({
 }
 
 /**
- * 報酬率儲存格：已實現損益 ÷ 賣出成本，主行含費、副行未含費（與左邊三欄同一體例）。
+ * Return rate cell: realized profit and loss ÷ selling cost, the main row includes fees and the sub-row does not include fees (the same format as the three columns on the left).
  *
- * 分母為 0 時給 null 而不是算下去：「僅買進」的個股成本與損益都是 0（0/0 = NaN），
- * 「超賣」則是成本以 0 計算但有損益（x/0 = Infinity）—— 兩種都不是能顯示的百分比。
+ * When the denominator is 0, give null instead of counting: the cost and profit and loss of "only buy" stocks are both 0 (0/0 = NaN),
+ * "Oversold" means the cost is calculated at 0 but there is profit and loss (x/0 = Infinity) - neither of which is a percentage that can be displayed.
  */
 function RoiCell({
   realized,
@@ -145,7 +145,7 @@ function RoiCell({
   )
 }
 
-/** 手續費儲存格：主數字為費稅合計，副行拆「手續費｜交易稅」；無稅（美股/僅買進）時不顯示副行 */
+/** Handling fee storage cell: The main number is the total of fees and taxes, and the sub-line is "handling fee | transaction tax"; the sub-line is not displayed when there is no tax (US stocks/buying only)*/
 function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; currency: Currency }) {
   return (
     <td className="num">

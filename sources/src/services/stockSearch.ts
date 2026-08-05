@@ -1,8 +1,8 @@
 /**
- * 台美股搜尋與代號反查（移植自 GAS 版 unifiedSearch / searchByTicker）：
- * - 台股：由 TWSE / TPEx OpenAPI 全清單在本地模糊比對（雙向：代號前綴、名稱包含）
- * - 美股：先比對內建中文名稱表（支援中文反查、離線可用），
- *   再經 Supabase Edge Function 代理 Yahoo Finance 搜尋補足
+ * Taiwan and US stock search and code reverse check (ported from GAS version unifiedSearch / searchByTicker):
+ * - Taiwan stocks: local fuzzy comparison by TWSE / TPEx OpenAPI full list (two-way: code prefix, name inclusion)
+ * - US stocks: first compare the built-in Chinese name table (supports Chinese reverse search, available offline),
+ *   Then search and supplement through Supabase Edge Function agent Yahoo Finance
  */
 import type { Market } from '../types/models'
 import { isSupabaseConfigured, supabase } from './supabase'
@@ -23,10 +23,10 @@ function hasCJK(str: string): boolean {
 
 const TW_TICKER_QUERY_RE = /^\d{3,6}[A-Z]?$/i
 
-/** 權證 / 牛熊證名稱結尾如「群益5A售12」「統一58購02」「富邦64熊01」；搜尋結果排除，避免蓋過正股 */
+/** The names of warrants/CBBCs end with "Qunyi 5A Sell 12", "Tongyi 58 Buy 02", "Fubon 64 Bear 01"; the search results are excluded to avoid overshadowing the underlying stocks.*/
 const TW_WARRANT_NAME_RE = /[購售牛熊]\d+$/
 
-/** 匹配程度排名：完全相符 > 名稱開頭相符 > 代號前綴 > 名稱包含；分數越小越前面 */
+/** Ranking of matching degree: exact match > match at the beginning of the name > code prefix > name contains; the smaller the score, the higher it is*/
 function twMatchScore(symbol: string, name: string, query: string, upperQuery: string): number {
   if (name === query || symbol === upperQuery) return 0
   if (name.startsWith(query)) return 1
@@ -46,7 +46,7 @@ async function searchTw(query: string): Promise<StockSearchResult[]> {
       .sort(
         (a, b) =>
           a.score - b.score ||
-          // 同分時短名優先（「台積電」排在「台積電群益92」等衍生商品前）
+          // Priority will be given to short names at the same time ("TSMC" is ranked before derivatives such as "TSMC Qunyi 92")
           a.row.name.length - b.row.name.length ||
           a.row.symbol.localeCompare(b.row.symbol),
       )
@@ -81,8 +81,8 @@ async function searchViaEdge(query: string): Promise<StockSearchResult[]> {
   }
 }
 
-/** 名稱 / 代號關鍵字搜尋：中文或數字代號優先走台股清單（中文另比對美股中文名表），
- *  其餘優先走 Yahoo（經 Edge），名稱以中文譯名優先顯示 */
+/** Name/code keyword search: Chinese or numeric code priority list of Taiwan stocks (Chinese is compared to the Chinese list of US stocks),
+ *  For others, go to Yahoo first (via Edge), and the Chinese translation of the name will be displayed first.*/
 export async function searchStocks(query: string): Promise<StockSearchResult[]> {
   const q = query.trim()
   if (!q) return []
@@ -97,7 +97,7 @@ export async function searchStocks(query: string): Promise<StockSearchResult[]> 
   }
   const edge = await searchViaEdge(q)
   if (edge.length > 0) {
-    // Yahoo 回傳英文名稱；常見美股改以中文譯名顯示
+    // Yahoo returns the English name; common U.S. stock changes are displayed with Chinese translations
     return edge.map((r) =>
       r.market === 'US' ? { ...r, name: usZhName(r.symbol) ?? r.name } : r,
     )
@@ -107,7 +107,7 @@ export async function searchStocks(query: string): Promise<StockSearchResult[]> 
   return searchTw(q)
 }
 
-/** 代號反查名稱與市場（優先精確比對代號與指定市場） */
+/** Code name and market reverse check (priority is given to accurate comparison of code names and designated markets)*/
 export async function lookupTicker(
   ticker: string,
   preferredMarket: Market,

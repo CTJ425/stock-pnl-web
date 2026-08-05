@@ -1,7 +1,7 @@
 /**
- * 應用外殼：頁首（品牌、工作區選單、使用者選單）、分頁導覽、全域新增交易與內容區。
+ * Application shell: Home page (brand, workspace menu, user menu), paginated navigation, global new transactions and content area.
  *
- * 頁首右側在 0.6.5-dev.3 由 8 個控制項收斂成 2 個選單，理由見 docs/agent/PLAN.md §R。
+ * The right side of the top page is reduced from 8 control items to 2 menus in 0.6.5-dev.3. For the reason, see docs/agent/PLAN.md §R.
  */
 import { Fragment, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -49,28 +49,28 @@ import { isAdmin } from '../services/adminStatus'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
 
-/** 分頁以外的頁面。管理後台不在分頁列上，由使用者選單進入（見 `UserMenu`） */
+/** Pages other than pagination. The management background is not on the paging bar and is entered through the user menu (see `UserMenu`)*/
 type View = Tab | 'admin'
 
 /**
- * 分頁的功能分組。順序即畫面順序，換組時畫一道分隔線。
+ * Paginated functional grouping. The order is the order of the pictures, and a dividing line is drawn when changing groups.
  *
- * - `holding`：我的部位 —— 庫存、個股、年度、紀錄
- * - `market`：市場環境 —— 總經、匯率
+ * - `holding`: my positions - stocks, stocks, years, records
+ * - `market`: market environment - general economics, exchange rate
  *
- * 0.6.19 依這個分法重排。分組只給一道 1px 分隔、不加組標題：
- * 頁首的水平空間是最稀缺的資源，而組標題會讓整條導覽長高一截。
+ * 0.6.19 Rearrange according to this division. Grouping is only separated by 1px and does not add a group title:
+ * The horizontal space at the top of the page is the scarcest resource, and group titles will make the entire navigation taller.
  */
 type TabGroup = 'holding' | 'market'
 
 /**
- * `short` 供手機底部導覽列使用：底部列每格是直式（圖示在上、標籤在下），
- * 375px 螢幕上五格每格約 73px，兩字（26px）綽綽有餘，四字則會折行。
- * 新增分頁時 `short` 一律給兩個字。
+ * `short` is used for the bottom navigation bar of mobile phones: each cell in the bottom column is vertical (icons at the top, labels at the bottom),
+ * Each of the five boxes on the 375px screen is about 73px. Two characters (26px) are more than enough, and four characters will break.
+ * When adding pagination, always give two words for `short`.
  *
- * 0.6.7 加到六格：375px 每格約 60px、320px 約 51px，兩字在 11px 字級是 22px，
- * 仍然寬鬆 —— 底部列改成直式之後，橫式時代那套「圖示＋標籤擠在一行」的
- * 寬度算式已經不適用了（0.6.6 之前的註解算的是那個）。實測見 PROGRESS。
+ * 0.6.7 Add to six cells: 375px is about 60px per cell, 320px is about 51px, two words at 11px font level is 22px,
+ * Still loose - after the bottom column was changed to vertical format, the set of "icons + labels squeezed into one line" in the horizontal format era
+ * The width calculation is no longer applicable (the comment before 0.6.6 calculated that). See PROGRESS for actual measurement.
  */
 const ALL_TABS: Array<{
   id: Tab
@@ -88,13 +88,13 @@ const ALL_TABS: Array<{
 ]
 
 /**
- * 個股分析與總體經濟的資料都來自 Supabase Storage / Edge Function，
- * 本機模式沒有來源可讀，故未設定 Supabase 時整個分頁隱藏
- * （與盤後報告一路以來的入口規則一致）。
+ * Data on individual stock analysis and the overall economy come from Supabase Storage/Edge Function.
+ * There is no source to read in native mode, so the entire page is hidden when Supabase is not configured.
+ * (Similar to the entry rules for after-hours reports).
  *
- * 總經與匯率**必須**跟著隱藏：`fetchMacro()` / `fetchFx()` 在本機模式永遠回 null，
- * 而空狀態寫的是「每日排程完成後會自動補上」—— 在本機模式那是假的，
- * 永遠不會補上，留著只會讓使用者一直等一個不會來的東西。
+ * General economics and exchange rates **must** be followed by hiding: `fetchMacro()` / `fetchFx()` always returns null in native mode,
+ * The empty state says "It will be automatically added after the daily schedule is completed" - that is false in local mode.
+ * It will never be replenished, and keeping it will only keep the user waiting for something that will never come.
  */
 const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx']
 
@@ -104,22 +104,22 @@ const TABS = isReportConfigured
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
-/** 需與 index.css 的 `@media (max-width: 720px)` 一致 */
+/** Need to be consistent with `@media (max-width: 720px)` in index.css*/
 const NARROW_QUERY = '(max-width: 720px)'
 
 /**
- * 手機（≤720px）把主導覽從頁首搬到固定底部列，桌機維持頁首橫列。
+ * Mobile phones (≤720px) move the main navigation from the top of the page to the fixed bottom row, while desktop computers maintain the top row.
  *
- * **為什麼要用 JS 判斷、不能純靠 CSS：**`.app-header` 有 `backdrop-filter`，
- * 它會成為所有 fixed 子孫的 containing block —— 頁首裡的 `<nav>` 即使設
- * `position: fixed; bottom: 0` 也只會貼在頁首那一塊的底部，不是視窗底部。
- * 底部列因此必須是頁首以外的節點，而「同一份導覽渲染在哪」只能由 JS 決定
- * （渲染兩份會有兩組同名按鈕，對輔助技術與測試都是雜訊）。
+ * **Why should we use JS to judge and not rely solely on CSS: **`.app-header` has `backdrop-filter`,
+ * It will become the containing block for all fixed descendants - `<nav>` in the header even if
+ * `position: fixed; bottom: 0` will only be attached to the bottom of the page header, not the bottom of the window.
+ * The bottom column must therefore be a node other than the top of the page, and "where the same navigation is rendered" can only be determined by JS
+ * (Rendering two copies will have two sets of buttons with the same name, which is noisy to assistive technologies and testing).
  */
 function useNarrowScreen(): boolean {
   const [narrow, setNarrow] = useState(
-    // matchMedia 的存在檢查不可省：jsdom 沒有實作它（與 UserMenu 同一個理由），
-    // 測試環境一律走桌機版
+    // The existence check of matchMedia is not optional: jsdom does not implement it (same reason as UserMenu),
+    // The test environment must be the desktop version.
     () => typeof window.matchMedia === 'function' && window.matchMedia(NARROW_QUERY).matches,
   )
 
@@ -136,9 +136,9 @@ function useNarrowScreen(): boolean {
 }
 
 /**
- * 主導覽。同一份分頁定義渲染成兩種型態：
- * - `header`：桌機頁首的藥丸橫列（≤1020px 只剩圖示，名稱在 title / aria-label）
- * - `bottom`：手機固定底部列，直式圖示＋兩字短標籤
+ * Main navigation. The same paging definition is rendered into two types:
+ * - `header`: the pill row at the top of the desktop page (≤1020px, only the icon is left, the name is in title / aria-label)
+ * - `bottom`: Fixed bottom column for mobile phones, straight icon + two-word short label
  */
 function TabNav({
   variant,
@@ -162,7 +162,7 @@ function TabNav({
             type="button"
             className={current === id ? 'tab active' : 'tab'}
             onClick={() => onSelect(id)}
-            /* 頁首在窄視窗只剩圖示，名稱改由 title / aria-label 呈現 */
+            /* Only the icon is left at the top of the page in the narrow window, and the name is changed to title / aria-label.*/
             title={label}
             aria-label={label}
             aria-current={current === id ? 'page' : undefined}
@@ -177,11 +177,11 @@ function TabNav({
 }
 
 /**
- * GitHub 官方 mark。
+ * GitHub official mark.
  *
- * 自己內嵌一段 path 而不是用圖示庫：**lucide 1.x 已經把品牌 icon 全部移除**
- * （`lucide-react@1.24.0` 沒有 `Github`），為了一顆圖示多裝一個套件不划算。
- * 尺寸與筆畫對齊 lucide：24×24 viewBox、`currentColor` 填色（這支是實心不是線稿）。
+ * Embed a path yourself instead of using an icon library: **lucide 1.x has removed all brand icons**
+ * (`lucide-react@1.24.0` does not have `Github`), it is not cost-effective to install one more package for one icon.
+ * Size and stroke alignment lucide: 24×24 viewBox, `currentColor` coloring (this is solid not line art).
  */
 function GithubMark({ size = 14 }: { size?: number }) {
   return (
@@ -206,7 +206,7 @@ const THEME_LABEL: Record<ThemePref, string> = {
   light: '淺色',
 }
 
-/** 使用者點擊「重設密碼」信件連結進站後，提示設定新密碼 */
+/** After the user clicks the "Reset Password" email link to enter the site, he or she is prompted to set a new password.*/
 function RecoveryPasswordModal() {
   const { updatePassword, dismissRecovery } = useAuth()
   const [password, setPassword] = useState('')
@@ -230,7 +230,7 @@ function RecoveryPasswordModal() {
     try {
       const err = await updatePassword(password)
       if (err) setError(`設定失敗：${err}`)
-      // 成功時 updatePassword 會自動關閉此視窗（recovery = false）
+      // updatePassword will automatically close this window when successful (recovery = false)
     } finally {
       setBusy(false)
     }
@@ -277,16 +277,16 @@ function RecoveryPasswordModal() {
 
 
 /**
- * 使用者選單：外觀切換、管理後台、原始碼、身分、登出。
+ * User menu: appearance switching, management background, source code, identity, logout.
  *
- * 本機模式**刻意保留「本機模式」徽章當作觸發鈕**，而不是換成頭像 ——
- * 「資料只存在這個瀏覽器」是使用者需要隨時看得到的事實，藏進選單等於把它降級。
+ * Local mode** deliberately retains the "local mode" badge as a trigger button** instead of replacing it with an avatar——
+ * "Data only exists in this browser" is a fact that users need to see at all times. Hiding it in the menu is equivalent to downgrading it.
  *
- * 0.6.19 收進兩樣東西：
- * - **管理後台**（僅管理員）。原本是分頁列上的「抓取狀況」，但管理功能與
- *   日常看盤的分頁混在同一條導覽上，等於讓每個使用者都看到一個自己按不了的位置。
- * - **原始碼**（所有人）。原本是頁尾的一行文字連結；頁尾留給免責聲明，
- *   連結收進這裡，頁首與頁尾都不必再為它讓出位置。
+ * 0.6.19 Collect two things:
+ * - **Admin Backstage** (Administrator only). Originally it was "crawl status" on the paginated column, but the management function is the same as
+ *   The paginations for daily viewing are mixed into the same navigation, which means that every user sees a location that they cannot click on.
+ * - **Source Code** (for everyone). Originally a line of text link at the end of the page; a disclaimer at the end of the page,
+ *   The link is included here, and there is no need to make room for it at the top or bottom of the page.
  */
 function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => void }) {
   const { mode, user, signOut } = useAuth()
@@ -297,7 +297,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
   }, [pref])
 
   useEffect(() => {
-    // matchMedia 的存在檢查不可省：jsdom 沒有實作它，少了這道測試會整批炸掉
+    // The existence check of matchMedia cannot be omitted: jsdom has not implemented it. Without this test, the whole batch will explode.
     if (pref !== 'system' || typeof window.matchMedia !== 'function') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => applyTheme('system')
@@ -410,7 +410,7 @@ function WorkspaceControls() {
   const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
   const [feeInput, setFeeInput] = useState('')
-  // 費率異動後開啟批次重算預覽，讓歷史紀錄可跟著新費率調整
+  // After the rate changes, batch recalculation preview is enabled so that historical records can be adjusted according to the new rate.
   const [showRecalc, setShowRecalc] = useState(false)
 
   const openCreate = () => {
@@ -436,7 +436,7 @@ function WorkspaceControls() {
       if (current) {
         const changed = rate !== getFeeRate(current.id)
         setFeeRate(rate, current.id)
-        // 費率有變動時帶出批次重算，供歷史紀錄同步調整（可勾選、可取消）
+        // When the rates change, batch recalculation will be carried out for simultaneous adjustment of historical records (can be checked or cancelled)
         if (changed) setShowRecalc(true)
       }
       setModal(null)
@@ -616,8 +616,8 @@ export function AppShell() {
   const [admin, setAdmin] = useState(false)
   const narrow = useNarrowScreen()
 
-  // 管理員入口：判定要打一次 auth，故非同步補上。判錯只會少一個選單項，
-  // 不影響任何既有功能（真正的把關在 Edge Function 端）
+  // Administrator entrance: It is determined that auth needs to be made once, so it is added asynchronously. If you make a mistake, there will only be one less menu item.
+  // Does not affect any existing functions (the real control is on the Edge Function side)
   useEffect(() => {
     let alive = true
     void isAdmin().then((ok) => {
@@ -628,7 +628,7 @@ export function AppShell() {
     }
   }, [])
 
-  // 權限被收回時（例如登出換帳號）別把使用者留在後台
+  // When permissions are revoked (such as logging out to change accounts), do not leave the user in the background
   useEffect(() => {
     if (view === 'admin' && !admin) setView('dashboard')
   }, [admin, view])

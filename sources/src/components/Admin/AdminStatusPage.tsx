@@ -1,15 +1,15 @@
 /**
- * 「資料抓取狀況」頁（僅管理員可見）。
+ * Data Fetch Status page (visible to administrators only).
  *
- * 為什麼以時間軸為主體：台股盤後的三個籌碼來源公布時間差達 7 小時
- * （法人 15:00、融資融券 21:00、借券 21:00–22:30），批次是分段抓的。
- * 卡片或表格看得到「有沒有到」，卻看不出「該來的來了沒、慢了多久」——
- * 而那正是排查排程問題時唯一重要的資訊。
+ * Why the timeline is the main body: The release time difference of the three chip sources after the Taiwan stock market is up to 7 hours
+ * (15:00 for legal persons, 21:00 for margin trading, and 21:00–22:30 for borrowing securities). The batches are divided into sections.
+ * Cards or forms can tell "whether it has arrived", but cannot tell "whether the thing that is supposed to come has arrived or how long it has been delayed" -
+ * And that's the only information that matters when troubleshooting scheduling problems.
  *
- * 月頻的總經與基礎設施不放在日軸上：它們的節奏是「哪一期到了」而非「幾點到」，
- * 硬塞進時間軸只會讓軸的語意變得模糊。故分成三段：時間軸 → 排程 → 期別與基礎設施。
+ * The monthly general statistics and infrastructure are not placed on the daily axis: their rhythm is "which issue is coming" rather than "what time is it coming".
+ * Shouting a timeline only makes the semantics of the axis blurry. Therefore, it is divided into three sections: Timeline → Scheduling → Periods and Infrastructure.
  *
- * 判定規則與座標計算全在 `timeline.ts`（純函式、有測試），這裡只做呈現。
+ * The decision rules and coordinate calculations are all in `timeline.ts` (pure function, with tests), and are only presented here.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Activity, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -52,21 +52,21 @@ const STATE_TEXT: Record<SourceState, string> = {
 
 const SECTION_PAD = { padding: '18px 20px' }
 
-/** 24 小時軸上要畫格線的時刻（刻度尺另含 0，那條由容器左緣代表） */
+/** The time at which the grid line is to be drawn on the 24-hour axis (the scale also contains 0, which is represented by the left edge of the container)*/
 const DAY_GRID = [6, 12, 18, 21]
 
 function Pill({ state, text }: { state: SourceState; text?: string }) {
   return <span className={`ast-pill ast-${state}`}>{text ?? STATE_TEXT[state]}</span>
 }
 
-/** 距現在多久，例：'3h 40m' */
+/** How long since now, for example: '3h 40m'*/
 function agoLabel(iso: string): string {
   return humanAgo(Date.now() - Date.parse(iso))
 }
 
 /**
- * 總經班次軸的一列。三列（美東發布 / 班次 / 資料最後變動）只有軌道與右欄的內容不同，
- * 格線與「現在」線則必須三列一致 —— 少畫一條就會看成資料對不齊軸。
+ * A column along the general shift axis. In the three columns (Eastern US Release/Shift/Last Change of Data), only the track is different from the content in the right column.
+ * The grid line and the "now" line must be consistent in three columns - if one is missing, it will be regarded as the data misalignment axis.
  */
 function DayRow({
   label,
@@ -100,8 +100,8 @@ function DayRow({
 }
 
 /**
- * 探針列數的括號段落。整段一起組，不要拆成兩個條件式 ——
- * 只有其中一項有值時會印出沒有右括號的「（估值 1081 列」。
+ * A bracketed paragraph for the probe column number. Put the whole paragraph together, do not split it into two conditional expressions——
+ * If only one of the items has a value, "(Valuation 1081 column" without the closing bracket will be printed.
  */
 function probeRows(probe: AdminStatus['probe']): string {
   const parts: string[] = []
@@ -110,7 +110,7 @@ function probeRows(probe: AdminStatus['probe']): string {
   return parts.length ? `（${parts.join('、')}）` : ''
 }
 
-/** 'YYYYMMDD' → 'YYYY-MM-DD'（manifest 用的是無分隔格式） */
+/** 'YYYYMMDD' → 'YYYY-MM-DD' (manifest uses undelimited format)*/
 function dashYmd(ymd: string | undefined): string {
   if (!ymd || ymd.length !== 8) return ''
   return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
@@ -156,8 +156,8 @@ export function AdminStatusPage() {
     const held = data.coverage.held ?? 0
     const nowHour = hoursFromBase(data.asOf, baseYmd) ?? 0
     return TW_CHAIN.map((spec) => {
-      // 日 K 線沒有 sources 條目：它與三大法人同一輪批次寫入，時間戳共用，
-      // 完整與否則看 daily/ 目錄的檔案數是否追上持股數
+      // There is no sources entry for the daily K-line: it is written in the same batch as the three major legal persons, and the timestamp is shared.
+      // Whether it is complete or not depends on whether the number of files in the daily/ directory has caught up with the number of holdings.
       let stamp: SourceStamp | null = null
       let partial = false
       let cover: string | null = null
@@ -179,11 +179,11 @@ export function AdminStatusPage() {
           ? { date: data.market.latestInstitutionalDate, fetchedAt: data.market.asOf }
           : null
         /*
-          **刻意不套 partial**（與 daily 不同）：法人是逐日回補的，最新一兩天沒補到是常態，
+          **Deliberately not using partial** (different from daily): Legal persons are replenished on a daily basis. It is normal for the latest one or two days not to be replenished.
           拿它當「不完整」會讓這一列幾乎每天都是黃燈。待補天數已經在下方的
           「台股全市場」KPI 講得很清楚，這條軸只回答「檔案有沒有準時產出」。
         */
-        // 副標同時要交代來源與「這個時刻是檔案產出、不是法人到手」，故不用 spec.hint
+        // The subscript must also explain the source and "this moment is the file output, not the legal person's acquisition", so there is no need to specify spec.hint
         cover = 'BFI82U・檔案產出時間'
       } else {
         stamp = src?.[spec.id] ?? null
@@ -204,7 +204,7 @@ export function AdminStatusPage() {
         spec,
         state: judgeSource(spec, h, nowHour, inRound && partial),
         hour: h,
-        // 別輪的日期在這條軸上沒有意義，不顯示以免被讀成本輪已到手
+        // The date of the other round has no meaning on this axis and is not displayed to avoid being read that the current round has been obtained.
         date: inRound ? stamp?.date ?? null : null,
         cover,
       }
@@ -216,7 +216,7 @@ export function AdminStatusPage() {
     [data],
   )
 
-  /** 每個總經指標的落後判定。三處（結論計數、下一筆發布、表格）必須是同一份判定 */
+  /** Determination of lagging behind each general economic indicator. The three places (conclusion count, next release, table) must be the same judgment*/
   const macroRows = useMemo(
     () =>
       (data?.macro?.indicators ?? []).map((indicator) => ({
@@ -226,10 +226,10 @@ export function AdminStatusPage() {
     [data, macroPeer],
   )
 
-  /** 現在是台北的第幾小時（0–24），供「現在」線與班次判定用 */
+  /** What hour is it in Taipei now (0–24), used for determining the "now" line and flight*/
   const nowHour = useMemo(() => taipeiParts(data?.asOf)?.hour ?? null, [data])
 
-  /** macro-daily 的班次時刻，以及各自今天跑過了沒 */
+  /** The shift time of macro-daily and whether they have run there today*/
   const macroShifts = useMemo(() => {
     const job = (data?.schedules ?? []).find((s) => s.action === 'sync-macro')
     if (!job || nowHour === null) return []
@@ -241,18 +241,18 @@ export function AdminStatusPage() {
     [macroShifts, nowHour],
   )
 
-  /** 資料最後變動落在今天的第幾小時；不是今天就回 null（軸只畫今天） */
+  /** The hour of today when the last data change occurred; if it is not today, return null (the axis only draws today)*/
   const macroChangedHour = useMemo(() => {
     const tp = taipeiParts(data?.macro?.asOf)
     if (!tp || tp.ymd !== data?.todayYmd) return null
     return tp.hour
   }, [data])
 
-  /** 最近的一筆發布：取後端算好的日期中最早的那個 */
+  /** The most recent release: take the earliest date calculated by the backend*/
   const nextRelease = useMemo(() => {
     const cands = macroRows
       .filter((r) => r.indicator.nextRelease)
-      // 落後中的指標連上一期都還沒發，它的「下一期」沒有參考價值
+      // The indicator that is lagging behind has not even been released in the previous period, and its "next period" has no reference value.
       .filter((r) => r.state !== 'warn')
       .sort((a, b) => a.indicator.nextRelease!.date.localeCompare(b.indicator.nextRelease!.date))
     const top = cands[0]?.indicator
@@ -288,7 +288,7 @@ export function AdminStatusPage() {
     ).length +
     macroRows.filter((r) => r.state === 'warn').length
 
-  // 抓取週期直接取自 pg_cron，不在前端另寫一份常數 —— 兩份遲早漂移，而漂移看不出來
+  // The fetch cycle is taken directly from pg_cron, without writing another constant on the front end - the two copies will drift sooner or later, and the drift cannot be seen
   const marketCron = (data.schedules ?? []).find((s) => s.jobname === 'market-daily') ?? null
 
   return (

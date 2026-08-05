@@ -10,9 +10,9 @@ vi.mock('./supabase', () => ({
     } },
 }))
 
-// downloadReportsJson 改走 `fetch(publicUrl, { cache: 'no-store' })`（見 reportsBucket.ts
-// 的說明：max-age=3600 讓使用者看到舊資料且硬重整救不了）。這裡把 fetch 轉接回
-// storageDownload，既有案例的「以 path 決定回應」寫法不必改。
+// downloadReportsJson changes to `fetch(publicUrl, { cache: 'no-store' })` (see reportsBucket.ts
+// Description: max-age=3600 allows users to see old data and hard reorganization cannot save it). Transfer fetch back here
+// storageDownload, the existing case's "response determined by path" does not need to be changed.
 vi.stubGlobal('fetch', async (url: string) => {
   const path = String(url).replace('https://stub/', '')
   const { data, error } = await storageDownload(path)

@@ -1,51 +1,51 @@
 /**
- * 美國總經的官方發布行事曆，與「這一輪要不要真的去問 FRED」的決策（純函式，不觸網）。
+ * The official calendar released by the General Manager of the United States, and the decision of "should we really ask FRED this round" (purely functional, not online).
  *
- * 為什麼獨立成模組：`index.ts` 模組載入即 `Deno.serve`，vitest 匯入不了，
- * 判斷寫在那裡等於沒測試（`pollPlan.ts:2-9` 的教訓）。
+ * Why is it an independent module: `index.ts` module is loaded as `Deno.serve`, and vitest cannot import it.
+ * If the judgment is written there, it means there is no test (lesson from `pollPlan.ts:2-9`).
  *
- * ## 為什麼需要行事曆
+ * ## Why do we need a calendar?
  *
- * 0.6.14 之前是每天兩班盲掃，每天固定 10 個 FRED 請求，而且即時性最差要等隔天。
- * 官方其實**提前公告了確定的發布日期**（不是區間），所以可以反過來做：
- * 平常每天只掃一次（跟上 FRED 回頭修正歷史值），**發布日才從發布時刻起密集掃，
- * 一抓到就完全不再打 FRED**。請求數反而變少，即時性從「最慢隔天」變成「半小時內」。
+ * Before 0.6.14, there were two shifts of blind scanning every day, with a fixed number of 10 FRED requests every day, and the worst timeliness had to wait for the next day.
+ * The official actually announced the confirmed release date in advance (not the range), so you can do the opposite:
+ * Normally, I only scan once a day (to keep up with FRED and go back to correct the historical values). On the release day, I scan intensively from the time of release.
+ * Stop fighting FRED** completely once caught. On the contrary, the number of requests has decreased, and the timeliness has changed from "the next day at the latest" to "within half an hour".
  *
- * ## 真正的不確定區間
+ * ## True uncertainty interval
  *
- * 發布日是確定的，**不確定的是「官方發布 → FRED 匯入可用」的延遲**。
- * 實證：2026-07-30 的 PCE 官方在台北 20:30 發布，我們 21:00 那班就是抓不到
- * （當時線上檔的 yoy 對應的是同日已修正的 2026-05 值 —— 序列有更新，
- * 只是 2026-06 那筆還沒進去）。`SCAN_WINDOW_HOURS` 就是為這段延遲而留。
+ * The release date is confirmed, but what is uncertain is the delay of "official release → FRED import is available".
+ * Empirical evidence: The PCE of 2026-07-30 was officially released at 20:30 in Taipei, but we couldn’t catch it at 21:00
+ * (The yoy in the online file at that time corresponds to the 2026-05 value that has been corrected on the same day - the sequence has been updated,
+ * It’s just that the 2026-06 sum hasn’t gone in yet). `SCAN_WINDOW_HOURS` is reserved for this delay.
  *
- * ## ⚠️ 維護須知
+ * ## ⚠️ Maintenance instructions
  *
- * `RELEASE_CALENDAR` 需**每年 12 月手動更新次年日期**。
- * BLS 的 schedule 頁一律回 403（換瀏覽器 UA 也一樣），**無法自動同步**。
- * 行事曆用完時會自動 fallback 到 `FALLBACK_RULE` 的月中/月底規則並標記 `stale`，
- * 所以忘記更新不會讓整組失效，只是精準度下降。
+ * `RELEASE_CALENDAR` requires **manual updating of the following year's date in December each year**.
+ * The schedule page of BLS always returns 403 (the same goes for changing the browser UA), and **cannot be automatically synchronized**.
+ * When the calendar is used up, it will automatically fallback to the mid-month/end-of-month rules of `FALLBACK_RULE` and mark `stale`.
+ * So forgetting to update will not invalidate the entire set, just a loss of accuracy.
  *
- * 資料來源（2026-07-31 查證）：
- * - BLS <https://www.bls.gov/schedule/news_release/> — CPI / PPI / 非農，皆美東 8:30
- * - BEA <https://www.bea.gov/news/schedule> — PCE，美東 8:30
- * - 密大 <https://www.sca.isr.umich.edu/> — 消費者信心，美東 **10:00**（與其他四項不同）
+ * Data source (verified on 2026-07-31):
+ * - BLS <https://www.bls.gov/schedule/news_release/> — CPI / PPI / Nonfarm, both US East 8:30
+ * - BEA <https://www.bea.gov/news/schedule> — PCE, 8:30 ET
+ * - U of M <https://www.sca.isr.umich.edu/> — Consumer Confidence, **10:00** (different from the other four)
  *
- * 以 ALFRED vintage 反查的實際發布日與官方表完全吻合（見 scripts/find-release-dates.py）。
+ * The actual release date checked using ALFRED vintage is completely consistent with the official list (see scripts/find-release-dates.py).
  */
 
-/** 一次發布：哪一天、發的是哪一期 */
+/** One release: which day and issue*/
 export interface ReleaseEntry {
-  /** 發布日，美東當地日 'YYYY-MM-DD' */
+  /** Release date, US East local day 'YYYY-MM-DD'*/
   date: string
-  /** 這次發布的資料期別 'YYYY-MM' */
+  /** The data issue released this time is 'YYYY-MM'*/
   period: string
 }
 
 /**
- * 官方已公告的發布日期。**有效到 2026 年底**，之後走 `FALLBACK_RULE`。
+ * Officially announced release date. **Valid until the end of 2026**, then go to `FALLBACK_RULE`.
  *
- * 只列已查證的部分：非農與 PCE 的上半年、PPI 的 1–3 月未查，
- * 但那些都已是過去式，對「下一期什麼時候到」的判斷沒有影響。
+ * Only the verified parts are listed: non-agricultural and PCE in the first half of the year, PPI from January to March are not verified,
+ * But those are in the past tense and have no impact on the judgment of "when will the next issue arrive?"
  */
 export const RELEASE_CALENDAR: Record<string, readonly ReleaseEntry[]> = {
   CPILFESL: [
@@ -75,10 +75,10 @@ export const RELEASE_CALENDAR: Record<string, readonly ReleaseEntry[]> = {
     { date: '2026-11-25', period: '2026-10' },
     { date: '2026-12-23', period: '2026-11' },
   ],
-  // UMCSENT 刻意留空 —— 見 SKIP_INTENSIVE
+  // UMCSENT intentionally left blank - see SKIP_INTENSIVE
 }
 
-/** 各指標的發布時刻（美東當地時，24 小時制的小時數） */
+/** Release time of each indicator (Eastern United States local time, hours in 24-hour format)*/
 export const RELEASE_HOUR_ET: Record<string, number> = {
   CPILFESL: 8.5,
   PPIFES: 8.5,
@@ -88,17 +88,17 @@ export const RELEASE_HOUR_ET: Record<string, number> = {
 }
 
 /**
- * **不納入行事曆驅動密集掃**的指標。
+ * **Indicators that are not included in calendar-driven intensive scanning**.
  *
- * `UMCSENT`：實測在 FRED 上已停更 —— 依「次月 1 日進 FRED」的規律，2026-06 期
- * 該在 07-01 出現，但 07-01 / 07-15 / 07-31 三個 vintage 全停在 2026-05。
- * 納入密集掃只會每個發布日白掃到上限。它仍由**每日例行那一班**跟進，
- * 一旦來源恢復就會自動拿到。
- * （前例：`usMacro.ts` 開頭記載的 OECD 版 `CSCICP03USM665S` 已停更於 2024-01。）
+ * `UMCSENT`: The actual measurement has been stopped on FRED - according to the rule of "enter FRED on the 1st of the next month", issue 2026-06
+ * It should appear in 07-01, but the three vintages 07-01 / 07-15 / 07-31 are all stopped in 2026-05.
+ * Including intensive scanning will only scan up to the upper limit on each release day. It is still followed by the **daily routine**,
+ * It will be obtained automatically once the source is restored.
+ * (Previous example: The OECD version `CSCICP03USM665S` recorded at the beginning of `usMacro.ts` has been discontinued on 2024-01.)
  */
 export const SKIP_INTENSIVE: readonly string[] = ['UMCSENT']
 
-/** 行事曆用完時的退路：每月的第幾天算「應該已發布」。取自實測區間的**下緣** */
+/** Fallback when the calendar runs out: Calculate the day of the month that "should have been released". Taken from the **lower edge** of the actual measured interval*/
 const FALLBACK_RULE: Record<string, number> = {
   PAYEMS: 8,
   UMCSENT: 3,
@@ -107,17 +107,17 @@ const FALLBACK_RULE: Record<string, number> = {
   PCEPILFE: 30,
 }
 
-/** 發布後持續掃描的時數。涵蓋 FRED 從官方匯入的延遲 */
+/** The number of hours to continue scanning after publishing. Covers delays in FRED imports from the official*/
 export const SCAN_WINDOW_HOURS = 6
 
-/** 單一台北日的掃描次數上限（防呆，比照 pollPlan 的 MAX_RUNS_PER_DAY） */
+/** The maximum number of scans for a single Taipei day (foolproof, compare pollPlan's MAX_RUNS_PER_DAY)*/
 export const MAX_SCANS_PER_DAY = 16
 
 /**
- * 某個 UTC 時點在美東是否為日光節約時間（EDT, UTC-4）。
+ * Whether a certain UTC point in time is Daylight Saving Time (EDT, UTC-4) in the Eastern United States.
  *
- * 美國規則：3 月第二個週日 02:00 起、11 月第一個週日 02:00 止。
- * 邊界那兩小時的誤差不影響判斷（發布都在 8:30/10:00，離切換點很遠）。
+ * US rules: from 02:00 on the second Sunday in March to 02:00 on the first Sunday in November.
+ * The two-hour error at the boundary does not affect the judgment (the releases are both at 8:30/10:00, which is far from the switching point).
  */
 export function isEasternDst(d: Date): boolean {
   const y = d.getUTCFullYear()
@@ -127,20 +127,20 @@ export function isEasternDst(d: Date): boolean {
   return t >= Date.UTC(y, 2, secondSunOfMarch, 7) && t < Date.UTC(y, 10, firstSunOfNov, 6)
 }
 
-/** 某年某月的第 n 個週日是幾號（month 為 0-based） */
+/** What is the nth Sunday of a certain month in a certain year (month is 0-based)*/
 function nthSunday(year: number, month: number, n: number): number {
   const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay()
   return 1 + ((7 - firstDow) % 7) + (n - 1) * 7
 }
 
-/** 補零成兩位數 */
+/** Fill in zeros to make a two-digit number*/
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
 /**
- * 'YYYY-MM' 往後推 n 個月（n 可為負）。
- * 換算成「年×12 + 月序」再加減，跨年進位自然成立、不必特判 12 月。
+ * 'YYYY-MM' moves back n months (n can be negative).
+ * Convert it to "year × 12 + month sequence" and then add and subtract. The round-up is naturally established and there is no need to specify 12 months.
  */
 function shiftPeriod(period: string, n: number): string {
   const [y, m] = period.split('-').map(Number)
@@ -148,37 +148,37 @@ function shiftPeriod(period: string, n: number): string {
   return `${Math.floor(total / 12)}-${pad2((total % 12) + 1)}`
 }
 
-/** 台北時區的 'YYYY-MM-DD'（UTC+8 固定偏移，台灣無日光節約） */
+/** 'YYYY-MM-DD' in Taipei time zone (UTC+8 fixed offset, no daylight saving in Taiwan)*/
 export function taipeiYmdOf(d: Date): string {
   const t = new Date(d.getTime() + 8 * 3600_000)
   return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`
 }
 
 /**
- * 某指標的某次發布，其**實際可開始掃描的時刻**（UTC 毫秒）。
- * 美東當地日 + 當地時刻 → UTC，依當日是否夏令換算。
+ * The time (UTC milliseconds) at which scanning can actually begin for a certain release of a certain indicator.
+ * Local day in the East United States + local time → UTC, converted according to whether daylight saving time exists on that day.
  */
 export function releaseInstant(entry: ReleaseEntry, id: string): number {
   const [y, m, d] = entry.date.split('-').map(Number)
   const hourEt = RELEASE_HOUR_ET[id] ?? 8.5
-  // 先以 EST(UTC-5) 粗估當天中午，判斷夏令與否，再定案偏移
+  // First use EST (UTC-5) to roughly estimate the noon of the day to determine whether it is daylight saving or not, and then finalize the offset.
   const probe = new Date(Date.UTC(y, m - 1, d, 12))
   const offset = isEasternDst(probe) ? 4 : 5
   return Date.UTC(y, m - 1, d, 0, 0, 0) + (hourEt + offset) * 3600_000
 }
 
 export interface ExpectedPeriod {
-  /** 此刻依行事曆應該已經發布的最新期別；沒有任何一期到期時為 null */
+  /** The latest issue that should have been published according to the calendar at this time; null if no issue is due*/
   period: string | null
-  /** 是否已用完行事曆、改用規則推算 */
+  /** Have you exhausted the calendar and switched to rule calculation?*/
   stale: boolean
 }
 
 /**
- * 依行事曆算出「此刻應該已經取得的最新期別」。
+ * Calculate "the latest period that should have been obtained at this time" according to the calendar.
  *
- * 判斷基準是**發布時刻**而非發布日 —— 發布日當天早上還沒到 8:30 ET 時，
- * 那一期不算「應該已有」，否則會在發布前就把指標判成落後。
+ * The basis of judgment is the **release time** rather than the release day - before 8:30 ET on the morning of the release day,
+ * That period does not count as "should have existed", otherwise the indicator would be judged to be lagging behind before the release.
  */
 export function expectedLatestPeriod(id: string, now: Date): ExpectedPeriod {
   const entries = RELEASE_CALENDAR[id] ?? []
@@ -191,38 +191,38 @@ export function expectedLatestPeriod(id: string, now: Date): ExpectedPeriod {
     if (at > t) covered = true // 行事曆還有未來的項目 → 尚未用完
   }
   // ⚠️ 判斷「用完了沒」要看**有沒有未來項目**，不能看 best 有沒有值 ——
-  // 行事曆過期時 best 仍會是最後一筆（例如停在 2026-11），
-  // 若據此回 stale:false，跨年後就會永遠卡在去年最後一期而不自知。
+  // When the calendar expires, best will still be the last entry (for example, it stops at 2026-11).
+  // If you return stale:false based on this, you will always be stuck in the last issue of last year after New Year's Eve without realizing it.
   if (covered) return { period: best, stale: false }
 
-  // 行事曆用完（或該指標沒有行事曆）→ 退回規則推算
+  // The calendar is exhausted (or there is no calendar for this indicator) → return to rule calculation
   const day = FALLBACK_RULE[id]
   if (day === undefined) return { period: null, stale: true }
   const taipeiYmd = taipeiYmdOf(now) // 以台北日曆判斷「這個月過了幾天」
   const dayOfMonth = Number(taipeiYmd.split('-')[2])
-  // 當月已過推估日 → 上個月的資料應該已發布；否則再往前一個月
+  // The current month has passed the estimation date → the data from the previous month should have been released; otherwise, go back to the previous month
   const back = dayOfMonth >= day ? 1 : 2
   return { period: shiftPeriod(taipeiYmd.slice(0, 7), -back), stale: true }
 }
 
 export interface NextRelease {
-  /** 發布日（美東當地日）'YYYY-MM-DD' */
+  /** Release date (Eastern US local day) 'YYYY-MM-DD'*/
   date: string
-  /** 這次會發布的資料期別 'YYYY-MM' */
+  /** The information released this time is 'YYYY-MM'*/
   period: string
-  /** true 代表行事曆已用完、日期是規則推算出來的 */
+  /** true means that the calendar has been used up and the date is calculated by the rules.*/
   estimated: boolean
 }
 
 /**
- * 某指標「下一期」的發布日。
+ * The release date of the "next issue" of an indicator.
  *
- * **由後端算完再回傳給前端**，而不是讓前端也放一份行事曆 ——
- * 兩份常數遲早會漂移，而漂移的症狀（畫面說 8/12、後端卻按 8/14 判定）
- * 幾乎不可能從畫面上看出來。單一真相來源就在這個檔案。
+ * **The back-end calculates and then passes it back to the front-end** instead of letting the front-end also put a calendar——
+ * The two constants will drift sooner or later, and the symptoms of drift (the screen says 8/12, but the backend judges it as 8/14)
+ * It's almost impossible to tell from the picture. The single source of truth is in this archive.
  *
- * 行事曆用完時回 `estimated: true` 並以 `FALLBACK_RULE` 的日子推算，
- * 畫面據此標示「推估」。
+ * When the calendar is exhausted, return `estimated: true` and estimate based on the days of `FALLBACK_RULE`.
+ * The screen is marked "Estimated" accordingly.
  */
 export function nextReleaseFor(
   id: string,
@@ -231,17 +231,17 @@ export function nextReleaseFor(
 ): NextRelease | null {
   const entries = RELEASE_CALENDAR[id] ?? []
   const t = now.getTime()
-  // 還沒發生、且期別比手上這期新的第一筆
+  // It hasn’t happened yet, and don’t expect it to be newer than the first one in your hand.
   const upcoming = entries
     .filter((e) => releaseInstant(e, id) > t && (!latestPeriod || e.period > latestPeriod))
     .sort((a, b) => a.date.localeCompare(b.date))[0]
   if (upcoming) return { date: upcoming.date, period: upcoming.period, estimated: false }
 
-  // 行事曆用完 → 依規則推算下一期
+  // The calendar is exhausted → Calculate the next issue according to the rules
   const day = FALLBACK_RULE[id]
   if (day === undefined || !latestPeriod) return null
   if (!/^\d{4}-\d{2}$/.test(latestPeriod)) return null
-  // 手上是 2026-06 → 下一期 2026-07，於 2026-08 發布
+  // On hand is 2026-06 → next issue 2026-07, published on 2026-08
   return {
     date: `${shiftPeriod(latestPeriod, 2)}-${pad2(day)}`,
     period: shiftPeriod(latestPeriod, 1),
@@ -251,46 +251,46 @@ export function nextReleaseFor(
 
 export interface ScanInput {
   now: Date
-  /** 既有檔裡各指標的最新期別 */
+  /** The latest period of each indicator in the existing file*/
   indicators: ReadonlyArray<{ id: string; latestPeriod: string | null }>
-  /** 今天（台北日）已掃過幾次 */
+  /** How many times have I scanned today (Taipei Day)?*/
   scansToday: number
-  /** 上次掃描的台北日；與今天不同代表今天還沒掃過 */
+  /** The Taipei day of the last scan; if it is different from today, it means that it has not been scanned today.*/
   lastScanYmd: string | null
 }
 
 export type ScanReason =
-  /** 今天還沒掃過，例行掃一次（用來跟上 FRED 回頭修正歷史值） */
+  /** I haven’t scanned it yet today, I will scan it once a day (to keep up with FRED and go back and correct the historical values)*/
   | 'routine'
-  /** 有指標到了發布時間卻還沒拿到，且落在掃描窗內 */
+  /** There are indicators that have not been obtained when the release time comes, and they fall within the scanning window.*/
   | 'due'
-  /** 該拿的都拿到了 */
+  /** Got everything that should be taken*/
   | 'satisfied'
-  /** 有指標還沒拿到，但已超出掃描窗（等明天的例行班） */
+  /** There are indicators that have not been obtained yet, but they have exceeded the scanning window (waiting for tomorrow’s regular shift)*/
   | 'outside-window'
-  /** 今日掃描次數已達上限 */
+  /** The number of scans today has reached the limit*/
   | 'capped'
 
 export interface ScanDecision {
   scan: boolean
   reason: ScanReason
-  /** 觸發掃描的指標（reason='due' 時才有內容） */
+  /** Indicators that trigger the scan (only available if reason='due')*/
   dueIds: string[]
 }
 
 /**
- * 這一輪要不要真的去問 FRED。
+ * Should I really ask FRED this round?
  *
- * 沿用 `pollPlan.decideSkip` 的形狀：讓「要不要發請求」變成一個測得到的純函式，
- * 而不是散在 IO 流程裡的 if。
+ * Follow the form of `pollPlan.decideSkip`: make "should you send a request or not" a testable pure function?
+ * Instead of if scattered in the IO process.
  *
- * 順序有意義：
- * 1. **次數上限**優先 —— 來源真的掛掉時（如 UMCSENT 停更）不能無限掃。
- * 2. **今天還沒掃 → 掃**。這一條保證每天至少問一次，
- *    因為 FRED 會回頭修正已發布的歷史值（BUG-008 那次 vintage 就同時改了兩期），
- *    只靠發布日掃會漏掉修正。
- * 3. **發布窗內且還沒拿到 → 掃**，這就是「拉長 scan」。
- * 4. 其餘不掃 —— **「一旦抓到就不抓」正是走到這裡**（satisfied）。
+ * The order makes sense:
+ * 1. **Maximum number of times** takes priority - unlimited scanning cannot be done when the source is really down (such as UMCSENT stopped updating).
+ * 2. **Not scanned today → Scan**. Make sure you ask this question at least once a day.
+ *    Because FRED will go back and correct the published historical values ​​(BUG-008 vintage changed two issues at the same time),
+ *    Relying solely on release day scans will miss corrections.
+ * 3. **Within the release window and not yet received → Scan**, this is "stretched scan".
+ * 4. Do not scan the rest - **"Once caught, don't catch" is exactly where it ends** (satisfied).
  */
 export function decideMacroScan(input: ScanInput): ScanDecision {
   const { now, indicators, scansToday, lastScanYmd } = input
@@ -307,10 +307,10 @@ export function decideMacroScan(input: ScanInput): ScanDecision {
     if (SKIP_INTENSIVE.includes(ind.id)) continue
     const expected = expectedLatestPeriod(ind.id, now)
     if (!expected.period) continue
-    // 已經拿到（或更新）→ 這一項不需要掃。這就是「抓到就不抓」
+    // Already got it (or updated) → No need to scan this item. This is "if you catch me, don't catch me."
     if (ind.latestPeriod && ind.latestPeriod >= expected.period) continue
 
-    // 還沒拿到：只有落在該期發布後的掃描窗內才值得繼續掃
+    // Not got it yet: Only if it falls within the scanning window after the release of the issue, it is worth continuing to scan.
     const entry = (RELEASE_CALENDAR[ind.id] ?? []).find((e) => e.period === expected.period)
     if (!entry) {
       anyPendingOutsideWindow = true

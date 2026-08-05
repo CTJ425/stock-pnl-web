@@ -1,10 +1,10 @@
 /**
- * 個股分析頁（導覽分頁）：負責「看哪一檔」與持股數字，內容區交給 StockDetailPage。
+ * Individual stock analysis page (navigation pagination): Responsible for "Which stock to look at" and holding figures, the content area is handed over to StockDetailPage.
  *
- * 只列台股：盤後籌碼的資料源（TWSE）只涵蓋上市台股，把美股放進選單只會讓人選了才發現沒東西。
- * 持股數字與庫存總覽共用 buildHoldingRows，避免兩頁各算一份而走鐘 ——
- * 0.6.36 起畫面上不再顯示持股，但下拉選單要列出持有的台股、即點即產報告也要帶持股脈絡，
- * 所以這層仍照算；報價卡要的那筆 PriceQuote 也由這裡的 prices 直接往下傳。
+ * Only Taiwanese stocks are listed: The data source of after-hours chips (TWSE) only covers listed Taiwanese stocks. Putting US stocks into the menu will only make you realize that there is nothing.
+ * The holding figures and the inventory overview share the same buildHoldingRows to avoid counting one copy on each page and running out of time——
+ * Starting from 0.6.36, stock holdings will no longer be displayed on the screen, but the drop-down menu must list the Taiwan stocks held, and the click-to-purchase report must also include the holding context.
+ * So this layer is still calculated; the PriceQuote required by the quotation card is also directly passed down from the prices here.
  */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, Inbox } from 'lucide-react'
@@ -31,7 +31,7 @@ export function AnalysisPage() {
     [holdings, prices, feeRate, current?.id],
   )
 
-  // 選中的代號可能因交易異動而不在持股裡了（賣光、換工作區），此時回退到第一檔
+  // The selected code may no longer be in the holdings due to transaction changes (sold out, changed workspace), and will fall back to the first level at this time.
   const selected = twRows.find((r) => r.holding.key === selectedKey) ?? twRows[0] ?? null
 
   if (!selected) {
@@ -81,7 +81,7 @@ export function AnalysisPage() {
           </>
         }
         menuLabel="個股清單"
-        // 這顆在畫面左側，且持股可能有數十檔：靠左展開並限高可捲
+        // This one is on the left side of the screen, and there may be dozens of holdings: expand to the left and can be rolled up to a limited height.
         popClass="hmenu-pop-left hmenu-pop-scroll"
       >
         {(close) => (
@@ -112,7 +112,7 @@ export function AnalysisPage() {
 
   return (
     <StockDetailPage
-      // 換股時整組 state（分頁籤、報告、PDF 狀態）重置，避免看到上一檔的殘留
+      // When exchanging shares, the entire state (tab, report, PDF state) is reset to avoid seeing the remnants of the previous file.
       key={selected.holding.key}
       ticker={selected.holding.ticker}
       name={name}

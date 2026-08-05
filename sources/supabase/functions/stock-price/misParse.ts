@@ -1,49 +1,49 @@
 /**
- * TWSE MIS 即時行情（mis.twse.com.tw/stock/api/getStockInfo.jsp）純解析邏輯。
- * 與 Deno 執行環境無關，供 index.ts 使用並由前端 Vitest 直接單元測試
+ * TWSE MIS real-time quotes (mis.twse.com.tw/stock/api/getStockInfo.jsp) is purely analytical logic.
+ * Independent of the Deno execution environment, used by index.ts and directly unit tested by the front-end Vitest
  * （見 src/services/misParse.test.ts）。
  *
- * MIS 為證交所看盤網站背後的非官方文件化端點，回應格式：
+ * MIS is the unofficial documented endpoint behind the stock exchange's market viewing website. The response format is:
  *   { rtcode: '0000', msgArray: [{ c, z, y, b, ... }] }
- *   c: 代號；z: 最新成交價；y: 昨收；b: 最佳五檔買價（'_' 分隔）；
- *   o/h/l: 今日開盤 / 最高 / 最低；v: 累積成交量（張）；
- *   d: 交易日（YYYYMMDD）；t: 最後撮合時間（HH:mm:ss）；ip: 試撮中為 '1'。
- *   昨收本來就在同一筆回應裡，取它當漲跌著色的基準不會多打一次 API（0.6.34）。
- *   0.6.36 同理再取 o/h/l/v/d/t/ip 供個股分析的報價卡 —— 同一筆回應，零額外請求。
- *   收盤後這些欄位仍是當日定案值（實測 15:23 仍回 d=當日、t=13:30:00），
- *   而 TWSE OpenAPI 此時還停在前一個交易日，所以「今收」一律以本端點為準。
- *   無效值以 '-' 表示。
+ *   c: code; z: latest transaction price; y: yesterday's closing price; b: best five buying prices (separated by '_');
+ *   o/h/l: Today’s opening/highest/lowest; v: Accumulated trading volume (tickets);
+ *   d: Trading day (YYYYMMDD); t: Last matching time (HH:mm:ss); ip: Trial matching is '1'.
+ *   Yesterday's closing price is already in the same response, and it will be used as the benchmark for ups and downs coloring by hitting API (0.6.34) one more time.
+ *   0.6.36 In the same way, get o/h/l/v/d/t/ip quotation card for individual stock analysis - same response, zero additional requests.
+ *   After the market closes, these fields will still be the finalized values ​​for that day (actual measurement at 15:23 will still return d=that day, t=13:30:00),
+ *   The TWSE OpenAPI is still at the previous trading day at this time, so "today's close" will always be based on this endpoint.
+ *   Invalid values ​​are represented by '-'.
  */
 
 export interface MisQuote {
   ticker: string
   price: number
-  /** 昨收（`y`）；無效時為 null。前端據此判斷現價的漲跌著色 */
+  /** Yesterday's collection (`y`); if invalid, it is null. The front-end determines the rise and fall of the current price based on this.*/
   prevClose: number | null
-  /** 今日開盤（`o`） */
+  /** Open today (`o`)*/
   open: number | null
-  /** 今日最高（`h`） */
+  /** Today’s highest (`h`)*/
   high: number | null
-  /** 今日最低（`l`） */
+  /** Today’s lowest (`l`)*/
   low: number | null
-  /** 累積成交量（`v`，單位：張）；尚無成交時為 0，與「取不到」的 null 不同 */
+  /** Cumulative trading volume (`v`, unit: Zhang); when there is no transaction, it is 0, which is different from null for "cannot get"*/
   volume: number | null
-  /** 交易日（`d`，YYYYMMDD）—— 報價卡據此標示這組數字屬於哪一天 */
+  /** Trading day (`d`, YYYYMMDD) - the quotation card indicates which day this set of numbers belongs to.*/
   tradeDate: string | null
-  /** 最後撮合時間（`t`，HH:mm:ss）；達 13:30:00 表示收盤已定案 */
+  /** The final matching time (`t`, HH:mm:ss); reaching 13:30:00 means the closing has been finalized*/
   tradeTime: string | null
-  /** 是否為試撮階段（`ip` === '1'）：此時 z 是試撮預估價，不是成交價 */
+  /** Whether it is the trial trading stage (`ip` === '1'): At this time, z is the estimated trial trading price, not the transaction price*/
   trial: boolean
 }
 
-/** 每檔同時嘗試上市（tse_）與上櫃（otc_）channel，MIS 會自動忽略無效者 */
+/** Each file attempts to list (tse_) and over-the-counter (otc_) channels at the same time, MIS will automatically ignore the invalid ones.*/
 const CHANNELS_PER_TICKER = 2
-/** MIS 單次請求的 channel 上限（保守值，避免 URL 過長或被拒） */
+/** MIS channel upper limit for a single request (conservative value to avoid URLs that are too long or rejected)*/
 const MAX_CHANNELS_PER_REQUEST = 50
 
 /**
- * 將台股代號組成 MIS 查詢 channel 群組，每群組不超過單次請求上限，
- * 且同一代號的 tse/otc channel 保證落在同一群組。
+ * Group Taiwan stock codes into MIS query channel groups. Each group should not exceed the single request limit.
+ * And tse/otc channels with the same codename are guaranteed to fall into the same group.
  */
 export function buildMisChannels(tickers: string[]): string[][] {
   const tickersPerGroup = Math.floor(MAX_CHANNELS_PER_REQUEST / CHANNELS_PER_TICKER)
@@ -62,9 +62,9 @@ function toPrice(value: unknown): number | null {
 }
 
 /**
- * 成交量與價格的有效範圍不同：0 張是「今天還沒成交」，是真值，不能當成取不到。
- * 正因為 0 有效，空字串就不能交給 Number() —— 它會回 0，讓「沒有這個欄位」
- * 變成「成交量 0 張」。缺欄位一律先擋在前面。
+ * The effective range of trading volume and price is different: 0 lots means "no transactions have been made today", which is a true value and cannot be regarded as unavailable.
+ * Just because 0 is valid, an empty string cannot be passed to Number() - it will return 0, making "there is no such field"
+ * It becomes "Volume 0 contracts". Any missing columns will be blocked in front first.
  */
 function toCount(value: unknown): number | null {
   const s = String(value ?? '').replace(/,/g, '').trim()
@@ -73,24 +73,24 @@ function toCount(value: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-/** 交易日 `d`：只認 8 位數字（YYYYMMDD），其餘一律當取不到 */
+/** Trading day `d`: only recognizes 8 digits (YYYYMMDD), the rest will be treated as unavailable*/
 function toTradeDate(value: unknown): string | null {
   const s = String(value ?? '').trim()
   return /^\d{8}$/.test(s) ? s : null
 }
 
-/** 最後撮合時間 `t`：只認 HH:mm:ss */
+/** Last matching time `t`: only recognize HH:mm:ss*/
 function toTradeTime(value: unknown): string | null {
   const s = String(value ?? '').trim()
   return /^\d{2}:\d{2}:\d{2}$/.test(s) ? s : null
 }
 
 /**
- * 成交價退階：z（成交）→ b 第一檔（買一）→ y（昨收，含盤後 / 尚無成交）。
+ * The transaction price is reduced: z (transaction) → b first level (buy one) → y (yesterday’s closing, including after-hours / no transaction yet).
  *
- * 實測 z 經常為 '-'（此端點的快照未必帶最後成交價），因此買一價是常態路徑而非例外。
- * 退階選買一（而非賣一或買賣中價）是刻意的：本頁的市值 / 未實現損益語意是
- * 「現在全部賣出可拿回多少」，買一才是實際可成交的賣出價，估算偏保守不偏樂觀。
+ * The measured z is often '-' (the snapshot of this endpoint does not necessarily have the last traded price), so buying one price is the norm rather than the exception.
+ * The step back to buy one (rather than sell one or mid-price) is deliberate: the market value / unrealized profit and loss semantics on this page are
+ * "How much can you get back if you sell them all now?" Buying one is the actual selling price that can be transacted. The estimate is conservative rather than optimistic.
  */
 function pickPrice(row: Record<string, unknown>): number | null {
   const last = toPrice(row.z)
@@ -101,8 +101,8 @@ function pickPrice(row: Record<string, unknown>): number | null {
 }
 
 /**
- * 解析 MIS 回應為報價清單；無法解析的列直接略過。
- * 同一代號出現多列（理論上 tse/otc 不會同時有效）時取第一列。
+ * Parse the MIS response as a quotation list; columns that cannot be parsed are simply ignored.
+ * When the same code number appears in multiple columns (theoretically, tse/otc will not be valid at the same time), the first column is taken.
  */
 export function parseMisResponse(data: unknown): MisQuote[] {
   const body = data as { msgArray?: unknown } | null | undefined

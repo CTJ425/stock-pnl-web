@@ -1,33 +1,33 @@
 /**
- * 迷你走勢線的座標計算（純函式，方便單獨測試）。
+ * Coordinate calculation of mini trend lines (pure function, convenient for independent testing).
  *
- * 為什麼不用同目錄的 `LineSeriesChart`：那支帶座標軸、格線、hover 十字線與
- * tooltip，高度預設 170px —— 放進表格或 KPI 卡會比容器本身還高。這裡要的是
- * 「一眼看方向」，不是可讀值的圖，所以只算路徑、不畫任何刻度。
+ * Why not use `LineSeriesChart` in the same directory: the one with coordinate axes, grid lines, hover crosshairs and
+ * Tooltip, the default height is 170px - when placed in a table or KPI card, it will be higher than the container itself. What we want here is
+ * "Looking at the direction at a glance" is not a map of readable values, so it only counts the path and does not draw any scales.
  *
- * 0.6.19 為總經指標卡而生，0.6.21 起持股獲利能力也用它，故由 Macro 移到 Charts。
+ * 0.6.19 was born for the general economic indicator card. From 0.6.21, it is also used for stock holding profitability, so it was moved from Macro to Charts.
  *
- * 座標系是 viewBox 的 0..width / 0..height，實際尺寸交給 CSS
- * （SVG 用 `preserveAspectRatio="none"` 拉伸，線寬則靠 `vector-effect` 維持）。
+ * The coordinate system is 0..width / 0..height of viewBox, and the actual size is left to CSS
+ * (SVG is stretched with `preserveAspectRatio="none"`, and line width is maintained with `vector-effect`).
  */
 
 export interface SparklineGeometry {
-  /** `<polyline points>` 用的座標字串 */
+  /** The coordinate string used by `<polyline points>`*/
   line: string
-  /** 線下填色用的封閉路徑（`<path d>`） */
+  /** Closed path for offline coloring (`<path d>`)*/
   area: string
-  /** 最後一個有值的點，用來畫端點圓 */
+  /** The last point with value is used to draw the endpoint circle*/
   lastX: number
   lastY: number
 }
 
 /**
- * 把一組數值換算成迷你走勢線的座標。
+ * Convert a set of values ​​into the coordinates of a mini trend line.
  *
- * `null`（該期尚未發布）**跳過不畫**，但仍佔一個 x 位置 ——
- * 壓縮掉會讓時間軸失真，畫成 0 則是憑空捏造一個數字。
+ * `null` (the issue has not yet been released) **skip without drawing**, but still occupies an x ​​position ——
+ * Compressing it will distort the timeline, and drawing it as 0 is just making up a number out of thin air.
  *
- * 少於兩個有效值時回 null（一個點連不成線），呼叫端據此不渲染。
+ * If there are less than two valid values, null is returned (one point cannot be connected), and the caller does not render accordingly.
  */
 export function sparkline(
   values: ReadonlyArray<number | null | undefined>,
@@ -42,7 +42,7 @@ export function sparkline(
 
   const min = Math.min(...finite)
   const max = Math.max(...finite)
-  // 全部一樣高時擺中線，不要除以 0
+  // When all are of the same height, pendulum center line, do not divide by 0
   const span = max - min || 1
   const top = pad
   const bottom = height - pad
@@ -65,7 +65,7 @@ export function sparkline(
   }
 }
 
-/** 座標留兩位小數就夠，字串短一點 DOM 也小一點 */
+/** Two decimal places are enough for the coordinates. The string should be shorter and the DOM should be smaller.*/
 function round(n: number): number {
   return Math.round(n * 100) / 100
 }

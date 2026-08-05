@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void
   children: ReactNode
   wide?: boolean
-  /** 表單類彈窗防誤觸：點擊遮罩空白處不關閉（僅能按 X 或 Esc） */
+  /** Anti-accidental touch for form pop-up windows: Clicking on the blank space of the mask will not close it (you can only press X or Esc)*/
   disableBackdropClose?: boolean
 }
 
@@ -21,8 +21,8 @@ export function Modal({ title, onClose, children, wide, disableBackdropClose }: 
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Portal 到 body：祖先若有 backdrop-filter（如 app-header）會攔截 fixed 定位，
-  // 導致遮罩被限制在祖先的框內
+  // Portal to body: If the ancestor has a backdrop-filter (such as app-header), it will intercept fixed positioning.
+  // Causes the mask to be constrained to the ancestor's box
   return createPortal(
     <div
       className="modal-overlay"

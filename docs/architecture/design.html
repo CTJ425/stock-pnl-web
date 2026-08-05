@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stock PnL Web - 既有架構 12 大真實 UI 設計體系展示 (Design Options Showcase)</title>
+  <title>Stock PnL Web - Existing architecture 12 great reality UI Design system display (Design Options Showcase)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -11,14 +11,14 @@
   <style>
     /* =========================================================
      * REAL UI DESIGN SYSTEMS & AESTHETICS ENGINE
-     * 100% 忠實對齊 stock-pnl-web 既有 HTML 結構與元件定義
+     * 100% faithful alignment to stock-pnl-web’s existing HTML structure and component definitions
      * ========================================================= */
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* 1. 深色極致水晶玻璃 (Ultra Glassmorphism - 現代高科技感) */
+    /*1. Dark ultra-dark crystal glass (Ultra Glassmorphism - modern high-tech feel)*/
     :root[data-design="1"] {
-      --name: "選項 1：深色極致水晶玻璃 (Ultra Glassmorphism)";
-      --desc: "流暢藍青發光背景、高透明度微光玻璃卡片 (backdrop-filter 20px)、微霓虹邊框與漸層藥丸分頁。";
+      --name: "Options 1:Dark ultimate crystal glass (Ultra Glassmorphism)";
+      --desc: "Smooth blue-green glowing background, high transparency shimmering glass card (backdrop-filter 20px), micro neon border and gradient pill pagination.";
       --bg: #0b0f19;
       --bg-image: radial-gradient(1000px 520px at 85% -10%, rgba(99, 102, 241, 0.16), transparent 60%), radial-gradient(900px 480px at -10% 30%, rgba(34, 211, 238, 0.1), transparent 55%);
       --surface: rgba(255, 255, 255, 0.045);
@@ -32,10 +32,10 @@
       --shadow: 0 8px 32px rgba(2, 6, 18, 0.45); --header-bg: rgba(11, 15, 25, 0.75); --backdrop: blur(18px);
     }
 
-    /* 2. Shadcn UI / Vercel Slate (極簡真實 SaaS 風格) */
+    /*2. Shadcn UI / Vercel Slate (minimalist and real SaaS style)*/
     :root[data-design="2"] {
-      --name: "選項 2：Shadcn UI / Vercel 風格 (當代極簡黑白 SaaS)";
-      --desc: "Vercel / Linear 代表性的中性灰階 (#09090b)、極致清爽 1px 細線 (#27272a)、無發光、高度專注於數據與字體。";
+      --name: "Options 2：Shadcn UI / Vercel style (Contemporary minimalist black and white SaaS)";
+      --desc: "Vercel / Linear Representative neutral grayscale (#09090b), extremely refreshing 1px thin line (#27272a), no luminescence, highly focused on data and fonts.";
       --bg: #09090b; --bg-image: none;
       --surface: #18181b; --surface-strong: #27272a; --border: #27272a; --border-strong: #3f3f46;
       --ink: #fafafa; --ink-sub: #a1a1aa; --ink-muted: #71717a;
@@ -47,8 +47,8 @@
 
     /* 3. MUI - Material UI / Google Material Design 3 */
     :root[data-design="3"] {
-      --name: "選項 3：MUI (Google Material Design 3 規範)";
-      --desc: "Google 經典規範。柔和卡片陰影 Elevation、標準 Material 藍 (#1976d2)、紙張感清爽卡片與填滿型按鈕。";
+      --name: "Options 3：MUI (Google Material Design 3 specification)";
+      --desc: "Google Classic norm. soft card shadow Elevation,standard Material blue (#1976d2), cards with a refreshing paper feel and filled-in buttons.";
       --bg: #f8fafc; --bg-image: none;
       --surface: #ffffff; --surface-strong: #f1f5f9; --border: #e2e8f0; --border-strong: #cbd5e1;
       --ink: #0f172a; --ink-sub: #475569; --ink-muted: #94a3b8;
@@ -58,10 +58,10 @@
       --shadow: 0px 2px 6px rgba(15,23,42,0.08); --header-bg: #ffffff; --backdrop: none;
     }
 
-    /* 4. Ant Design (阿里巴巴 AntD 金融企業級) */
+    /*4. Ant Design (Alibaba AntD Financial Enterprise Level)*/
     :root[data-design="4"] {
-      --name: "選項 4：Ant Design (阿里巴巴 AntD 金融企業級)";
-      --desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格、灰色標頭 (#fafafa) 與標準方圓角。";
+      --name: "Options 4：Ant Design (Alibaba AntD Financial enterprise level)";
+      --desc: "The global financial and business backend standard. classic Ant blue (#1677ff), compact high-density data table, gray header (#fafafa) With standard square and rounded corners.";
       --bg: #f5f5f5; --bg-image: none;
       --surface: #ffffff; --surface-strong: #fafafa; --border: #d9d9d9; --border-strong: #bfbfbf;
       --ink: rgba(0, 0, 0, 0.88); --ink-sub: rgba(0, 0, 0, 0.65); --ink-muted: rgba(0, 0, 0, 0.45);
@@ -71,10 +71,10 @@
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.03); --header-bg: #ffffff; --backdrop: none;
     }
 
-    /* 5. Stripe FinTech (白金高質感金融美學) */
+    /*5. Stripe FinTech (Platinum high-quality financial aesthetics)*/
     :root[data-design="5"] {
-      --name: "選項 5：Stripe FinTech (白金高質感金融美學)";
-      --desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練多層次陰影與頂級字體微調。";
+      --name: "Options 5：Stripe FinTech (Platinum high-quality financial aesthetics)";
+      --desc: "Stripe Top online asset platform style. unique indigo Accent (#635bff), soft and refined multi-level shadows and top-notch font fine-tuning.";
       --bg: #f6f9fc; --bg-image: none;
       --surface: #ffffff; --surface-strong: #f8fafc; --border: #e6ebf1; --border-strong: #d8e2ec;
       --ink: #0a2540; --ink-sub: #425466; --ink-muted: #a3acb9;
@@ -84,10 +84,10 @@
       --shadow: 0 13px 27px -5px rgba(50,50,93,0.08), 0 8px 16px -8px rgba(0,0,0,0.08); --header-bg: #ffffff; --backdrop: none;
     }
 
-    /* 6. IBM Carbon Design System (IBM 碳素硬派風) */
+    /*6. IBM Carbon Design System (IBM carbon hard style)*/
     :root[data-design="6"] {
-      --name: "選項 6：IBM Carbon Design System (IBM 碳素硬派風)";
-      --desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與專業藍色 (#0f62fe)。";
+      --name: "Options 6：IBM Carbon Design System (IBM Carbon hard style)";
+      --desc: "IBM A system developed specifically for Bloomberg-style complex terminals. High contrast grid lines,0 rounded corners (0px), extreme data density and professional blue (#0f62fe)。";
       --bg: #161616; --bg-image: none;
       --surface: #262626; --surface-strong: #393939; --border: #393939; --border-strong: #525252;
       --ink: #f4f4f4; --ink-sub: #c6c6c6; --ink-muted: #8d8d8d;
@@ -97,10 +97,10 @@
       --shadow: none; --header-bg: #161616; --backdrop: none;
     }
 
-    /* 7. Apple macOS Sonoma / iOS HIG Light (蘋果純白質感) */
+    /*7. Apple macOS Sonoma / iOS HIG Light (Apple pure white texture)*/
     :root[data-design="7"] {
-      --name: "選項 7：Apple macOS / iOS HIG (蘋果白金質感)";
-      --desc: "蘋果官方 HIG 人機介面風格。純潔雪白背景、系統天藍 Accent (#007aff)、經典 14px 圓角與超細微邊框。";
+      --name: "Options 7：Apple macOS / iOS HIG (Apple platinum texture)";
+      --desc: "Apple official HIG Human-computer interface style. Pure snow-white background, system sky blue Accent (#007aff),classic 14px Rounded corners and ultra-fine borders.";
       --bg: #f5f5f7; --bg-image: none;
       --surface: #ffffff; --surface-strong: #e8e8ed; --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.16);
       --ink: #1d1d1f; --ink-sub: #86868b; --ink-muted: #a1a1a6;
@@ -110,10 +110,10 @@
       --shadow: 0 4px 20px rgba(0,0,0,0.04); --header-bg: rgba(245,245,247,0.85); --backdrop: blur(20px);
     }
 
-    /* 8. 金融時報報業黑金 (Financial Times Gold Editorial) */
+    /*8. Financial Times Gold Editorial*/
     :root[data-design="8"] {
-      --name: "選項 8：金融時報報業黑金 (Financial Times Gold Editorial)";
-      --desc: "奢華香檳金 (#d4af37) 與深邃墨黑對比、Playfair 經典襯線標題與細緻分隔線。展現頂級權威質感。";
+      --name: "Options 8:Financial Times Newspaper Black Gold (Financial Times Gold Editorial)";
+      --desc: "Luxurious champagne gold (#d4af37) Contrast with the deep inky black,Playfair Classic serif titles and subtle dividers. Show top-notch authoritative quality.";
       --bg: #121214; --bg-image: none;
       --surface: #1a1a1e; --surface-strong: #242429; --border: rgba(212, 175, 55, 0.25); --border-strong: rgba(212, 175, 55, 0.45);
       --ink: #f4f4f6; --ink-sub: #d4af37; --ink-muted: #8e8e93;
@@ -123,10 +123,10 @@
       --shadow: 0 6px 20px rgba(0,0,0,0.5); --header-bg: #121214; --backdrop: none;
     }
 
-    /* 9. 賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix) */
+    /*9. Cyberpunk Neon Matrix*/
     :root[data-design="9"] {
-      --name: "選項 9：賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix)";
-      --desc: "曜黑底色搭配發光洋紅與電光青藍線條、未來科技感 HUD 標頭與高彩度數據標籤。視覺力強烈。";
+      --name: "Options 9: Cyberpunk Neon Matrix (Cyberpunk Neon Matrix)";
+      --desc: "Obsidian black background with luminous magenta and electric cyan blue lines, a sense of future technology HUD Headers and high-color data labels. Strong vision.";
       --bg: #05070d; --bg-image: radial-gradient(600px 300px at 100% 100%, rgba(255,0,128,0.08), transparent 50%);
       --surface: rgba(12, 16, 28, 0.85); --surface-strong: rgba(20, 28, 48, 0.9); --border: rgba(0, 243, 255, 0.25); --border-strong: rgba(255, 0, 128, 0.4);
       --ink: #ffffff; --ink-sub: #00f3ff; --ink-muted: #627299;
@@ -136,10 +136,10 @@
       --shadow: 0 0 25px rgba(0, 243, 255, 0.15); --header-bg: rgba(5, 7, 13, 0.95); --backdrop: blur(12px);
     }
 
-    /* 10. 便當盒非對稱模組 (Bento Grid Modular) */
+    /*10. Bento Grid Modular*/
     :root[data-design="10"] {
-      --name: "選項 10：極簡日系便當盒 (Bento Grid Modular)";
-      --desc: "非對稱便當盒 (Bento) 模組化卡片、暖色暗夜石墨、圓潤邊角與舒適留白。資訊清晰分塊。";
+      --name: "Options 10: Minimalist Japanese bento box (Bento Grid Modular)";
+      --desc: "Asymmetric lunch box (Bento) Modular cards, warm dark graphite, rounded corners and comfortable white space. Information is clearly divided into chunks.";
       --bg: #11141c; --bg-image: radial-gradient(800px 400px at 50% 0%, rgba(255, 255, 255, 0.03), transparent 70%);
       --surface: #181c28; --surface-strong: #212636; --border: rgba(255, 255, 255, 0.06); --border-strong: rgba(255, 255, 255, 0.12);
       --ink: #f1f5f9; --ink-sub: #94a3b8; --ink-muted: #64748b;
@@ -149,10 +149,10 @@
       --shadow: 0 12px 36px rgba(0, 0, 0, 0.3); --header-bg: rgba(17, 20, 28, 0.85); --backdrop: blur(20px);
     }
 
-    /* 11. 北歐極簡冷調石墨 (Minimalist Nordic Slate) */
+    /*11. Minimalist Nordic Slate*/
     :root[data-design="11"] {
-      --name: "選項 11：北歐極簡冷調石墨 (Minimalist Nordic Slate)";
-      --desc: "冷冽石墨藍灰色調 (#0f172a)、純粹平滑矩陣線條、無過度裝飾。強調最高的數據可讀性。";
+      --name: "Options 11: Nordic minimalist cold tone graphite (Minimalist Nordic Slate)";
+      --desc: "Cool graphite blue-gray tone (#0f172a), pure smooth matrix lines, no excessive decoration. Emphasis on maximum data readability.";
       --bg: #0f172a; --bg-image: none;
       --surface: #1e293b; --surface-strong: #334155; --border: #334155; --border-strong: #475569;
       --ink: #f8fafc; --ink-sub: #94a3b8; --ink-muted: #64748b;
@@ -162,10 +162,10 @@
       --shadow: 0 4px 16px rgba(0, 0, 0, 0.2); --header-bg: #0f172a; --backdrop: none;
     }
 
-    /* 12. 柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0) */
+    /*12. Neumorphic Soft UI 2.0*/
     :root[data-design="12"] {
-      --name: "選項 12：柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0)";
-      --desc: "浮雕凸起雙重光影立體卡片、沉陷式輸入框與實體觸感按鈕。給予實體裝置互動沉浸感。";
+      --name: "Options 12: Soft new skeuomorphic neurosis 2.0 (Neumorphic Soft UI 2.0)";
+      --desc: "Embossed and raised dual light and shadow three-dimensional cards, sunken input boxes and physical touch buttons. Give physical devices a sense of interactive immersion.";
       --bg: #1a1d24; --bg-image: none;
       --surface: #1a1d24; --surface-strong: #222630; --border: transparent; --border-strong: rgba(255, 255, 255, 0.08);
       --ink: #e2e8f0; --ink-sub: #94a3b8; --ink-muted: #64748b;
@@ -382,31 +382,31 @@
   <header class="showcase-banner">
     <div class="showcase-header">
       <div class="showcase-title">
-        <span>📈 Stock PnL Web - 既有架構 12 大真實 UI 設計體系展示</span>
+        <span>📈 Stock PnL Web - Existing architecture 12 great reality UI Design system display</span>
         <span class="showcase-badge" id="designBadge">Option 1</span>
       </div>
 
       <div style="display: flex; gap: 8px;">
-        <button class="btn" onclick="toggleViewport('desktop')">🖥️ 桌機版 Layout</button>
-        <button class="btn" onclick="toggleViewport('mobile')">📱 手機版 Frame (375px)</button>
+        <button class="btn" onclick="toggleViewport('desktop')">🖥️ Desktop version Layout</button>
+        <button class="btn" onclick="toggleViewport('mobile')">📱 Mobile version Frame (375px)</button>
       </div>
     </div>
 
-    <div class="showcase-desc" id="designDesc">載入中...</div>
+    <div class="showcase-desc" id="designDesc">loading...</div>
 
     <div class="design-grid-selector" style="margin-top:10px;">
-      <button class="design-opt-btn active" onclick="switchDesign(1)">1. 深色極致水晶玻璃 (Glassmorphism)</button>
-      <button class="design-opt-btn" onclick="switchDesign(2)">2. Shadcn UI / Vercel (極簡 SaaS)</button>
+      <button class="design-opt-btn active" onclick="switchDesign(1)">1. Dark extreme crystal glass (Glassmorphism)</button>
+      <button class="design-opt-btn" onclick="switchDesign(2)">2. Shadcn UI / Vercel (minimalist SaaS)</button>
       <button class="design-opt-btn" onclick="switchDesign(3)">3. MUI (Google Material Design 3)</button>
-      <button class="design-opt-btn" onclick="switchDesign(4)">4. Ant Design (阿里巴巴金融級)</button>
-      <button class="design-opt-btn" onclick="switchDesign(5)">5. Stripe FinTech (白金高質感金融)</button>
-      <button class="design-opt-btn" onclick="switchDesign(6)">6. IBM Carbon (IBM 碳素硬派風)</button>
-      <button class="design-opt-btn" onclick="switchDesign(7)">7. Apple macOS (蘋果純白 HIG)</button>
-      <button class="design-opt-btn" onclick="switchDesign(8)">8. 金融時報報業黑金 (Financial Times)</button>
-      <button class="design-opt-btn" onclick="switchDesign(9)">9. 賽博朋克霓虹矩陣 (Cyberpunk HUD)</button>
-      <button class="design-opt-btn" onclick="switchDesign(10)">10. 日式極簡便當盒 (Bento Grid)</button>
-      <button class="design-opt-btn" onclick="switchDesign(11)">11. 北歐極簡石墨 (Nordic Slate)</button>
-      <button class="design-opt-btn" onclick="switchDesign(12)">12. 柔和新擬物態 (Neumorphic Soft)</button>
+      <button class="design-opt-btn" onclick="switchDesign(4)">4. Ant Design (Alibaba financial grade)</button>
+      <button class="design-opt-btn" onclick="switchDesign(5)">5. Stripe FinTech (Platinum high-quality finance)</button>
+      <button class="design-opt-btn" onclick="switchDesign(6)">6. IBM Carbon (IBM Carbon hard style)</button>
+      <button class="design-opt-btn" onclick="switchDesign(7)">7. Apple macOS (Apple pure white HIG)</button>
+      <button class="design-opt-btn" onclick="switchDesign(8)">8. Financial Times Newspaper Black Gold (Financial Times)</button>
+      <button class="design-opt-btn" onclick="switchDesign(9)">9. Cyberpunk Neon Matrix (Cyberpunk HUD)</button>
+      <button class="design-opt-btn" onclick="switchDesign(10)">10. Japanese minimalist lunch box (Bento Grid)</button>
+      <button class="design-opt-btn" onclick="switchDesign(11)">11. Nordic minimalist graphite (Nordic Slate)</button>
+      <button class="design-opt-btn" onclick="switchDesign(12)">12. Soft new pseudo-physical state (Neumorphic Soft)</button>
     </div>
   </header>
 
@@ -420,24 +420,24 @@
       <div class="app-header-inner">
         <div class="brand">
           <span class="brand-mark">📈</span>
-          <span>股票小幫手</span>
+          <span>Stock Helper</span>
         </div>
 
         <nav class="tabs-nav">
-          <button class="tab-btn active" onclick="switchTab('dashboard')">📊 庫存總覽</button>
-          <button class="tab-btn" onclick="switchTab('analysis')">🔍 個股分析</button>
-          <button class="tab-btn" onclick="switchTab('macro')">🌐 總體經濟</button>
-          <button class="tab-btn" onclick="switchTab('fx')">💱 外幣匯率</button>
-          <button class="tab-btn" onclick="switchTab('yearly')">📅 年度收益</button>
-          <button class="tab-btn" onclick="switchTab('transactions')">📝 交易紀錄</button>
+          <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Stock overview</button>
+          <button class="tab-btn" onclick="switchTab('analysis')">🔍 individual stock analysis</button>
+          <button class="tab-btn" onclick="switchTab('macro')">🌐 overall economy</button>
+          <button class="tab-btn" onclick="switchTab('fx')">💱 foreign currency exchange rate</button>
+          <button class="tab-btn" onclick="switchTab('yearly')">📅 annual income</button>
+          <button class="tab-btn" onclick="switchTab('transactions')">📝 transaction history</button>
         </nav>
 
         <div class="header-meta">
           <div class="ws-select" onclick="openModal('modalWs')">
-            <span>💼 工作區：主帳戶</span>
+            <span>💼 Workspace: Master Account</span>
             <small>▼</small>
           </div>
-          <div class="ws-select" title="本機模式">💾 本機模式</div>
+          <div class="ws-select" title="native mode">💾 native mode</div>
         </div>
       </div>
     </header>
@@ -445,54 +445,54 @@
     <div style="padding-top: 20px;">
 
       <!-- =========================================================
-       * PAGE 1: 庫存總覽 (DASHBOARDPAGE.TSX)
+       * PAGE 1: Stock Overview (DASHBOARDPAGE.TSX)
        * ========================================================= -->
       <section id="page-dashboard" class="page-section active">
         <div class="notice notice-warn">
-          ⚠️ 發現 1 筆資料異動提醒：2330 台積電現價來自證交所最新盤後快取。
+          ⚠️ Discover 1 Reminder of changes in pen data:2330 TSMC's current price comes from the latest after-hours cache of the stock exchange.
         </div>
 
         <div class="market-grid">
-          <!-- 台股 Market Panel -->
+          <!--Taiwan Stocks Market Panel-->
           <div class="card" style="margin-bottom:0;">
             <div class="card-head">
-              <span class="card-title">🇹🇼 台股持倉總覽</span>
+              <span class="card-title">🇹🇼 Overview of Taiwan stock holdings</span>
               <span class="badge">TWD</span>
             </div>
-            <div class="kpi-label">持倉總市值</div>
+            <div class="kpi-label">Total market value of positions</div>
             <div class="kpi-value" style="font-size: 28px; margin-bottom: 12px;">$1,854,000</div>
             <div style="display: flex; gap: 20px;">
               <div>
-                <div class="kpi-label">投入總成本 (含費)</div>
+                <div class="kpi-label">total investment cost (Included)</div>
                 <div style="font-weight: 600;">$1,420,000</div>
-                <div class="kpi-sub">未含費 $1,417,976</div>
+                <div class="kpi-sub">Not included $1,417,976</div>
               </div>
               <div>
-                <div class="kpi-label">未實現淨損益</div>
+                <div class="kpi-label">Unrealized net profit or loss</div>
                 <div class="pnl-up" style="font-size: 17px;">+$434,000 (+30.56%)</div>
-                <div class="kpi-sub">未含費 +$436,024</div>
+                <div class="kpi-sub">Not included +$436,024</div>
               </div>
             </div>
           </div>
 
-          <!-- 美股 Market Panel -->
+          <!--US Stock Market Panel-->
           <div class="card" style="margin-bottom:0;">
             <div class="card-head">
-              <span class="card-title">🇺🇸 美股持倉總覽</span>
+              <span class="card-title">🇺🇸 Overview of U.S. stock holdings</span>
               <span class="badge">USD</span>
             </div>
-            <div class="kpi-label">持倉總市值</div>
+            <div class="kpi-label">Total market value of positions</div>
             <div class="kpi-value" style="font-size: 28px; margin-bottom: 12px;">$24,850.00</div>
             <div style="display: flex; gap: 20px;">
               <div>
-                <div class="kpi-label">投入總成本 (含費)</div>
+                <div class="kpi-label">total investment cost (Included)</div>
                 <div style="font-weight: 600;">$18,200.00</div>
-                <div class="kpi-sub">未含費 $18,180.00</div>
+                <div class="kpi-sub">Not included $18,180.00</div>
               </div>
               <div>
-                <div class="kpi-label">未實現淨損益</div>
+                <div class="kpi-label">Unrealized net profit or loss</div>
                 <div class="pnl-up" style="font-size: 17px;">+$6,650.00 (+36.54%)</div>
-                <div class="kpi-sub">未含費 +$6,670.00</div>
+                <div class="kpi-sub">Not included +$6,670.00</div>
               </div>
             </div>
           </div>
@@ -501,60 +501,60 @@
         <!-- Holdings Table -->
         <div class="card">
           <div class="card-head">
-            <span class="card-title">當前活躍持股明細 (Holdings)</span>
-            <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ 新增交易</button>
+            <span class="card-title">Current active shareholding details (Holdings)</span>
+            <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ Add transaction</button>
           </div>
 
           <div class="table-scroll">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>代號</th>
-                  <th>股票名稱</th>
-                  <th class="num">現價</th>
-                  <th class="num">持有股數</th>
-                  <th class="num">投入成本 (含費/未含費)</th>
-                  <th class="num">平均買入成本</th>
-                  <th class="num">保本賣出價</th>
-                  <th class="num">目前市值</th>
-                  <th class="num">未實現淨損益</th>
-                  <th class="num">未實現報酬率</th>
+                  <th>code name</th>
+                  <th>Stock name</th>
+                  <th class="num">Current price</th>
+                  <th class="num">Number of shares held</th>
+                  <th class="num">input cost (Included/Not included)</th>
+                  <th class="num">average buying cost</th>
+                  <th class="num">breakeven selling price</th>
+                  <th class="num">Current market value</th>
+                  <th class="num">Unrealized net profit or loss</th>
+                  <th class="num">unrealized rate of return</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td><b>2330</b></td>
-                  <td>台積電</td>
-                  <td class="num">$985.00 <span class="badge">快取</span></td>
+                  <td>TSMC</td>
+                  <td class="num">$985.00 <span class="badge">cache</span></td>
                   <td class="num">1,000</td>
                   <td class="num">
                     <div style="font-weight:600;">$750,000</div>
-                    <div class="kpi-sub">未含費 $748,932</div>
+                    <div class="kpi-sub">Not included $748,932</div>
                   </td>
                   <td class="num">$750.00</td>
                   <td class="num">$753.20</td>
                   <td class="num">$985,000</td>
                   <td class="num pnl-up">
                     <div>+$235,000</div>
-                    <div class="kpi-sub">未含費 +$236,068</div>
+                    <div class="kpi-sub">Not included +$236,068</div>
                   </td>
                   <td class="num pnl-up">+31.33%</td>
                 </tr>
                 <tr>
                   <td><b>2454</b></td>
-                  <td>聯發科</td>
+                  <td>MediaTek</td>
                   <td class="num">$1,220.00</td>
                   <td class="num">500</td>
                   <td class="num">
                     <div style="font-weight:600;">$670,000</div>
-                    <div class="kpi-sub">未含費 $669,044</div>
+                    <div class="kpi-sub">Not included $669,044</div>
                   </td>
                   <td class="num">$1,340.00</td>
                   <td class="num">$1,345.50</td>
                   <td class="num">$610,000</td>
                   <td class="num pnl-down">
                     <div>-$60,000</div>
-                    <div class="kpi-sub">未含費 -$59,044</div>
+                    <div class="kpi-sub">Not included -$59,044</div>
                   </td>
                   <td class="num pnl-down">-8.95%</td>
                 </tr>
@@ -565,41 +565,41 @@
       </section>
 
       <!-- =========================================================
-       * PAGE 2: 個股分析 (ANALYSISPAGE.TSX / STOCKDETAILPAGE.TSX)
+       * PAGE 2: Individual Stock Analysis (ANALYSISPAGE.TSX / STOCKDETAILPAGE.TSX)
        * ========================================================= -->
       <section id="page-analysis" class="page-section">
         <div class="card">
           <div class="card-head">
             <div style="display: flex; align-items: center; gap: 12px;">
               <select class="btn" style="font-weight: 700;">
-                <option>2330 台積電 (TSMC)</option>
-                <option>2454 聯發科 (MediaTek)</option>
+                <option>2330 TSMC (TSMC)</option>
+                <option>2454 MediaTek (MediaTek)</option>
               </select>
-              <span class="badge">半導體業</span>
+              <span class="badge">Semiconductor industry</span>
             </div>
             <div>
-              <button class="btn">📄 匯出 PDF 報告</button>
-              <button class="btn">🔄 重新整理</button>
+              <button class="btn">📄 remit PDF Report</button>
+              <button class="btn">🔄 rearrange</button>
             </div>
           </div>
 
           <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:8px;">
-            <button class="btn btn-primary" onclick="switchSubTab('analysis-content')">📊 分析內容 (個股長頁)</button>
-            <button class="btn" onclick="switchSubTab('ai-content')">🤖 AI 智慧問答與評估</button>
+            <button class="btn btn-primary" onclick="switchSubTab('analysis-content')">📊 Analyze content (Individual stock long page)</button>
+            <button class="btn" onclick="switchSubTab('ai-content')">🤖 AI Smart Q&A and Assessment</button>
           </div>
 
           <div id="subtab-analysis-content">
             <div class="kpi-grid">
-              <div class="kpi-card"><div class="kpi-label">持有股數</div><div class="kpi-value">1,000 股</div></div>
-              <div class="kpi-card"><div class="kpi-label">平均成本</div><div class="kpi-value">$750.00</div></div>
-              <div class="kpi-card"><div class="kpi-label">最新現價</div><div class="kpi-value">$985.00</div></div>
-              <div class="kpi-card"><div class="kpi-label">未實現損益</div><div class="kpi-value pnl-up">+$235,000 (+31.3%)</div></div>
+              <div class="kpi-card"><div class="kpi-label">Number of shares held</div><div class="kpi-value">1,000 share</div></div>
+              <div class="kpi-card"><div class="kpi-label">average cost</div><div class="kpi-value">$750.00</div></div>
+              <div class="kpi-card"><div class="kpi-label">Latest current price</div><div class="kpi-value">$985.00</div></div>
+              <div class="kpi-card"><div class="kpi-label">Unrealized gains and losses</div><div class="kpi-value pnl-up">+$235,000 (+31.3%)</div></div>
             </div>
 
-            <h4 style="margin: 20px 0 10px;">🏛️ 三大法人籌碼明細</h4>
+            <h4 style="margin: 20px 0 10px;">🏛️ Details of the chips of the three major legal entities</h4>
             <div class="table-scroll">
               <table class="data-table">
-                <thead><tr><th>日期</th><th class="num">外資 (張)</th><th class="num">投信 (張)</th><th class="num">自營商 (張)</th><th class="num">三大法人合計</th></tr></thead>
+                <thead><tr><th>date</th><th class="num">foreign investment (open)</th><th class="num">investment trust (open)</th><th class="num">proprietor (open)</th><th class="num">Total of three major corporations</th></tr></thead>
                 <tbody>
                   <tr><td>2026-07-29</td><td class="num pnl-up">+12,450</td><td class="num pnl-up">+1,200</td><td class="num pnl-down">-320</td><td class="num pnl-up">+13,330</td></tr>
                 </tbody>
@@ -609,81 +609,81 @@
 
           <div id="subtab-ai-content" style="display:none;">
             <div class="card" style="background:var(--surface-strong);">
-              🤖 <b>AI 智慧分析對話</b>：根據籌碼與基本面資料，分析台積電未來佈局策略。
+              🤖 <b>AI Smart Analysis Dialogue</b>: Analyze TSMC’s future layout strategy based on chips and fundamental data.
             </div>
           </div>
         </div>
       </section>
 
       <!-- =========================================================
-       * PAGE 3: 總體經濟 (MACROPAGE.TSX)
+       * PAGE 3: General Economy (MACROPAGE.TSX)
        * ========================================================= -->
       <section id="page-macro" class="page-section">
         <div class="card">
           <div class="card-head">
-            <span class="card-title">🌐 美國 5 大總體經濟指標</span>
-            <span class="kpi-sub">資料來源：FRED 聖路易聯準銀行</span>
+            <span class="card-title">🌐 USA 5 Big overall economic indicators</span>
+            <span class="kpi-sub">Source:FRED St. Louis Federal Reserve Bank</span>
           </div>
           <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-label">核心 PCE 年增率</div><div class="kpi-value">+2.60%</div><div class="kpi-sub">較上期減少 0.10%</div></div>
-            <div class="kpi-card"><div class="kpi-label">CPI 物價指數</div><div class="kpi-value">+3.00%</div><div class="kpi-sub">與上期持平</div></div>
-            <div class="kpi-card"><div class="kpi-label">非農就業人數</div><div class="kpi-value pnl-up">+206 千人</div><div class="kpi-sub">較上期增加 52 千人</div></div>
-            <div class="kpi-card"><div class="kpi-label">消費者信心指數</div><div class="kpi-value">68.20</div><div class="kpi-sub">較上期增加 2.60</div></div>
+            <div class="kpi-card"><div class="kpi-label">core PCE annual growth rate</div><div class="kpi-value">+2.60%</div><div class="kpi-sub">Decrease compared with the previous period 0.10%</div></div>
+            <div class="kpi-card"><div class="kpi-label">CPI price index</div><div class="kpi-value">+3.00%</div><div class="kpi-sub">Same as last period</div></div>
+            <div class="kpi-card"><div class="kpi-label">Nonfarm employment</div><div class="kpi-value pnl-up">+206 Thousands of people</div><div class="kpi-sub">Increase compared with last period 52 Thousands of people</div></div>
+            <div class="kpi-card"><div class="kpi-label">consumer confidence index</div><div class="kpi-value">68.20</div><div class="kpi-sub">Increase compared with last period 2.60</div></div>
           </div>
         </div>
       </section>
 
       <!-- =========================================================
-       * PAGE 4: 外幣匯率 (FXPAGE.TSX)
+       * PAGE 4: Foreign Currency Exchange Rates (FXPAGE.TSX)
        * ========================================================= -->
       <section id="page-fx" class="page-section">
         <div class="card">
-          <div class="card-head"><span class="card-title">💱 台幣對主要外幣匯率</span><span class="badge">即時報價</span></div>
+          <div class="card-head"><span class="card-title">💱 Taiwan dollar exchange rate against major foreign currencies</span><span class="badge">real time quotes</span></div>
           <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-label">美金 USD / TWD</div><div class="kpi-value">32.650</div><div class="kpi-sub pnl-up">▲ 0.15% (台幣貶值)</div></div>
-            <div class="kpi-card"><div class="kpi-label">日圓 JPY / TWD</div><div class="kpi-value">0.2125</div><div class="kpi-sub pnl-down">▼ 0.32% (台幣升值)</div></div>
+            <div class="kpi-card"><div class="kpi-label">US dollars USD / TWD</div><div class="kpi-value">32.650</div><div class="kpi-sub pnl-up">▲ 0.15% (Taiwan dollar depreciates)</div></div>
+            <div class="kpi-card"><div class="kpi-label">yen JPY / TWD</div><div class="kpi-value">0.2125</div><div class="kpi-sub pnl-down">▼ 0.32% (Taiwan dollar appreciates)</div></div>
           </div>
         </div>
       </section>
 
       <!-- =========================================================
-       * PAGE 5: 年度收益 (YEARLYPAGE.TSX)
+       * PAGE 5: YEARLY PAGE (YEARLYPAGE.TSX)
        * ========================================================= -->
       <section id="page-yearly" class="page-section">
         <div class="card">
-          <div class="card-head"><span class="card-title">📅 歷史已實現收益總覽</span></div>
+          <div class="card-head"><span class="card-title">📅 Overview of Historical Realized Revenues</span></div>
           <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-label">台股已實現淨損益</div><div class="kpi-value pnl-up">+$682,500 TWD</div></div>
-            <div class="kpi-card"><div class="kpi-label">美股已實現淨損益</div><div class="kpi-value pnl-up">+$14,200.00 USD</div></div>
-            <div class="kpi-card"><div class="kpi-label">累計手續費與稅</div><div class="kpi-value">$28,450 TWD</div></div>
-            <div class="kpi-card"><div class="kpi-label">總交易筆數</div><div class="kpi-value">48 筆</div></div>
+            <div class="kpi-card"><div class="kpi-label">Taiwan stocks have realized net profits and losses</div><div class="kpi-value pnl-up">+$682,500 TWD</div></div>
+            <div class="kpi-card"><div class="kpi-label">U.S. stocks have realized net gains and losses</div><div class="kpi-value pnl-up">+$14,200.00 USD</div></div>
+            <div class="kpi-card"><div class="kpi-label">Accumulated fees and taxes</div><div class="kpi-value">$28,450 TWD</div></div>
+            <div class="kpi-card"><div class="kpi-label">Total number of transactions</div><div class="kpi-value">48 Pen</div></div>
           </div>
         </div>
       </section>
 
       <!-- =========================================================
-       * PAGE 6: 交易紀錄 (TRANSACTIONSPAGE.TSX)
+       * PAGE 6: Transaction History (TRANSACTIONSPAGE.TSX)
        * ========================================================= -->
       <section id="page-transactions" class="page-section">
         <div class="card">
           <div class="card-head">
-            <span class="card-title">📝 完整買賣交易歷史清單</span>
+            <span class="card-title">📝 Complete buy and sell transaction history list</span>
             <div style="display:flex; gap:8px;">
-              <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ 新增紀錄</button>
-              <button class="btn">📥 匯入 CSV</button>
-              <button class="btn">📤 匯出 CSV</button>
+              <button class="btn btn-primary" onclick="openModal('modalAddTx')">+ Add record</button>
+              <button class="btn">📥 Import CSV</button>
+              <button class="btn">📤 remit CSV</button>
             </div>
           </div>
           <div class="table-scroll">
             <table class="data-table">
               <thead>
-                <tr><th><input type="checkbox"></th><th>日期</th><th>市場</th><th>代號</th><th>名稱</th><th>類別</th><th class="num">成交單價</th><th class="num">股數</th><th class="num">手續費+稅</th><th class="num">現金流金額</th></tr>
+                <tr><th><input type="checkbox"></th><th>date</th><th>market</th><th>code name</th><th>name</th><th>category</th><th class="num">Transaction unit price</th><th class="num">Number of shares</th><th class="num">handling fee+Tax</th><th class="num">Cash flow amount</th></tr>
               </thead>
               <tbody>
                 <tr>
                   <td><input type="checkbox"></td>
-                  <td>2026-06-15</td><td>🇹🇼 台股</td><td><b>2330</b></td><td>台積電</td>
-                  <td><span class="badge" style="color:var(--up);">買入</span></td>
+                  <td>2026-06-15</td><td>🇹🇼 Taiwan stocks</td><td><b>2330</b></td><td>TSMC</td>
+                  <td><span class="badge" style="color:var(--up);">buy</span></td>
                   <td class="num">$750.00</td><td class="num">1,000</td><td class="num">$1,068</td><td class="num pnl-down">-$751,068</td>
                 </tr>
               </tbody>
@@ -695,43 +695,43 @@
     </div>
 
     <!-- Floating Global Add Transaction Button -->
-    <button class="btn btn-primary fab" onclick="openModal('modalAddTx')">📝 新增交易</button>
+    <button class="btn btn-primary fab" onclick="openModal('modalAddTx')">📝 Add transaction</button>
 
   </div>
 
   <!-- MODALS -->
   <div class="modal-overlay" id="modalAddTx" style="display:none;">
     <div class="modal-box">
-      <div class="card-head"><span class="card-title">➕ 新增交易紀錄</span><button class="btn" onclick="closeModal('modalAddTx')">✕</button></div>
+      <div class="card-head"><span class="card-title">➕ Add transaction record</span><button class="btn" onclick="closeModal('modalAddTx')">✕</button></div>
       <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
-        <input type="text" value="2330" placeholder="股票代號" style="background:var(--surface-strong); border:1px solid var(--border); color:var(--ink); padding:8px; border-radius:var(--radius-sm);">
-        <button class="btn btn-primary" style="justify-content:center;" onclick="closeModal('modalAddTx')">儲存交易</button>
+        <input type="text" value="2330" placeholder="Stock code" style="background:var(--surface-strong); border:1px solid var(--border); color:var(--ink); padding:8px; border-radius:var(--radius-sm);">
+        <button class="btn btn-primary" style="justify-content:center;" onclick="closeModal('modalAddTx')">Save transaction</button>
       </div>
     </div>
   </div>
 
   <div class="modal-overlay" id="modalWs" style="display:none;">
     <div class="modal-box">
-      <div class="card-head"><span class="card-title">💼 工作區管理</span><button class="btn" onclick="closeModal('modalWs')">✕</button></div>
-      <p style="margin:10px 0; color:var(--ink-sub);">當前選取：主帳戶 (Default Workspace)</p>
-      <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="closeModal('modalWs')">確定關閉</button>
+      <div class="card-head"><span class="card-title">💼 Workspace management</span><button class="btn" onclick="closeModal('modalWs')">✕</button></div>
+      <p style="margin:10px 0; color:var(--ink-sub);">Currently selected: Master account (Default Workspace)</p>
+      <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="closeModal('modalWs')">OK to close</button>
     </div>
   </div>
 
   <script>
     const DESIGNS = {
-      1: { name: "選項 1：深色極致水晶玻璃 (Ultra Glassmorphism)", desc: "流暢藍青發光背景、高透明度微光玻璃卡片 (backdrop-filter 20px)、微霓虹邊框與漸層藥丸分頁。" },
-      2: { name: "選項 2：Shadcn UI / Vercel 風格 (當代極簡黑白 SaaS)", desc: "Vercel / Linear 代表性的中性灰階 (#09090b)、極致清爽 1px 細線 (#27272a)、無發光、高度專注於數據與字體。" },
-      3: { name: "選項 3：MUI (Google Material Design 3 規範)", desc: "Google 經典規範。柔和卡片陰影 Elevation、標準 Material 藍 (#1976d2)、紙張感清爽卡片與填滿型按鈕。" },
-      4: { name: "選項 4：Ant Design (阿里巴巴 AntD 金融企業級)", desc: "全球金融與商業後台標準。經典 Ant 藍 (#1677ff)、緊密高密度數據表格、灰色標頭 (#fafafa) 與標準方圓角。" },
-      5: { name: "選項 5：Stripe FinTech (白金高質感金融美學)", desc: "Stripe 頂級線上資產平台風格。獨特靛藍 Accent (#635bff)、柔和洗練多層次陰影與頂級字體微調。" },
-      6: { name: "選項 6：IBM Carbon Design System (IBM 碳素硬派風)", desc: "IBM 專為彭博式複雜終端開發的系統。高對比網格線、0 圓角 (0px)、極致數據密度與專業藍色 (#0f62fe)。" },
-      7: { name: "選項 7：Apple macOS / iOS HIG (蘋果白金質感)", desc: "蘋果官方 HIG 人機介面風格。純潔雪白背景、系統天藍 Accent (#007aff)、經典 14px 圓角與超細微邊框。" },
-      8: { name: "選項 8：金融時報報業黑金 (Financial Times Gold Editorial)", desc: "奢華香檳金 (#d4af37) 與深邃墨黑對比、Playfair 經典襯線標題與細緻分隔線。展現頂級權威質感。" },
-      9: { name: "選項 9：賽博朋克霓虹矩陣 (Cyberpunk Neon Matrix)", desc: "曜黑底色搭配發光洋紅與電光青藍線條、未來科技感 HUD 標頭與高彩度數據標籤。視覺力強烈。" },
-      10: { name: "選項 10：極簡日系便當盒 (Bento Grid Modular)", desc: "非對稱便當盒 (Bento) 模組化卡片、暖色暗夜石墨、圓潤邊角與舒適留白。資訊清晰分塊。" },
-      11: { name: "選項 11：北歐極簡石墨 (Nordic Slate)", desc: "冷冽石墨藍灰色調 (#0f172a)、純粹平滑矩陣線條、無過度裝飾。強調最高的數據可讀性。" },
-      12: { name: "選項 12：柔和新擬物神經態 2.0 (Neumorphic Soft UI 2.0)", desc: "浮雕凸起雙重光影立體卡片、沉陷式輸入框與實體觸感按鈕。給予實體裝置互動沉浸感。" }
+      1: { name: "Options 1:Dark ultimate crystal glass (Ultra Glassmorphism)", desc: "Smooth blue-green glowing background, high transparency shimmering glass card (backdrop-filter 20px), micro neon border and gradient pill pagination." },
+      2: { name: "Options 2：Shadcn UI / Vercel style (Contemporary minimalist black and white SaaS)", desc: "Vercel / Linear Representative neutral grayscale (#09090b), extremely refreshing 1px thin line (#27272a), no luminescence, highly focused on data and fonts." },
+      3: { name: "Options 3：MUI (Google Material Design 3 specification)", desc: "Google Classic norm. soft card shadow Elevation,standard Material blue (#1976d2), cards with a refreshing paper feel and filled-in buttons." },
+      4: { name: "Options 4：Ant Design (Alibaba AntD Financial enterprise level)", desc: "The global financial and business backend standard. classic Ant blue (#1677ff), compact high-density data table, gray header (#fafafa) With standard square and rounded corners." },
+      5: { name: "Options 5：Stripe FinTech (Platinum high-quality financial aesthetics)", desc: "Stripe Top online asset platform style. unique indigo Accent (#635bff), soft and refined multi-level shadows and top-notch font fine-tuning." },
+      6: { name: "Options 6：IBM Carbon Design System (IBM Carbon hard style)", desc: "IBM A system developed specifically for Bloomberg-style complex terminals. High contrast grid lines,0 rounded corners (0px), extreme data density and professional blue (#0f62fe)。" },
+      7: { name: "Options 7：Apple macOS / iOS HIG (Apple platinum texture)", desc: "Apple official HIG Human-computer interface style. Pure snow-white background, system sky blue Accent (#007aff),classic 14px Rounded corners and ultra-fine borders." },
+      8: { name: "Options 8:Financial Times Newspaper Black Gold (Financial Times Gold Editorial)", desc: "Luxurious champagne gold (#d4af37) Contrast with the deep inky black,Playfair Classic serif titles and subtle dividers. Show top-notch authoritative quality." },
+      9: { name: "Options 9: Cyberpunk Neon Matrix (Cyberpunk Neon Matrix)", desc: "Obsidian black background with luminous magenta and electric cyan blue lines, a sense of future technology HUD Headers and high-color data labels. Strong vision." },
+      10: { name: "Options 10: Minimalist Japanese bento box (Bento Grid Modular)", desc: "Asymmetric lunch box (Bento) Modular cards, warm dark graphite, rounded corners and comfortable white space. Information is clearly divided into chunks." },
+      11: { name: "Options 11：Nordic minimalist graphite (Nordic Slate)", desc: "Cool graphite blue-gray tone (#0f172a), pure smooth matrix lines, no excessive decoration. Emphasis on maximum data readability." },
+      12: { name: "Options 12: Soft new skeuomorphic neurosis 2.0 (Neumorphic Soft UI 2.0)", desc: "Embossed and raised dual light and shadow three-dimensional cards, sunken input boxes and physical touch buttons. Give physical devices a sense of interactive immersion." }
     };
 
     function switchDesign(opt) {

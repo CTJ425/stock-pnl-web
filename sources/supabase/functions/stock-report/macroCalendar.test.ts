@@ -11,10 +11,10 @@ import {
   taipeiYmdOf,
 } from './macroCalendar.ts'
 
-/** CPI 2026-07 期的官方發布時刻：2026-08-12 08:30 EDT = 12:30 UTC */
+/** The official release time of CPI 2026-07 issue: 2026-08-12 08:30 EDT = 12:30 UTC*/
 const CPI_JUL_RELEASE = Date.UTC(2026, 7, 12, 12, 30)
 
-/** 五個指標都已取得 2026-06（＝ 8/12 之前的正常狀態） */
+/** Five indicators have been achieved 2026-06 (= normal status before 8/12)*/
 const ALL_AT_JUN = [
   { id: 'CPILFESL', latestPeriod: '2026-06' },
   { id: 'PPIFES', latestPeriod: '2026-06' },
@@ -30,7 +30,7 @@ describe('isEasternDst', () => {
   })
 
   it('切換點：3 月第二個週日起、11 月第一個週日止', () => {
-    // 2026-03-08 是第二個週日、2026-11-01 是第一個週日
+    // 2026-03-08 is the second Sunday, 2026-11-01 is the first Sunday
     expect(isEasternDst(new Date(Date.UTC(2026, 2, 1)))).toBe(false)
     expect(isEasternDst(new Date(Date.UTC(2026, 2, 20)))).toBe(true)
     expect(isEasternDst(new Date(Date.UTC(2026, 10, 20)))).toBe(false)
@@ -73,7 +73,7 @@ describe('expectedLatestPeriod', () => {
     const far = new Date(Date.UTC(2027, 4, 20))
     const r = expectedLatestPeriod('CPILFESL', far)
     expect(r.stale).toBe(true)
-    // 2027-05-20 已過推估日 14 → 上個月（2027-04）的資料應該已發布
+    // 2027-05-20 Estimate date 14 has passed → the data from last month (2027-04) should have been released
     expect(r.period).toBe('2027-04')
   })
 })
@@ -103,10 +103,10 @@ describe('decideMacroScan', () => {
     expect(d.dueIds).toContain('CPILFESL')
   })
 
-  // ★ 這是本次改動的核心行為
+  // ★ This is the core behavior of this change
   it('已經拿到那一期 → 不掃（「一旦抓到就不抓」）', () => {
-    // 8/12 當下，非農 2026-07 期（8/7 發布）也早該到手了，
-    // 故兩者都要填成最新才是真正的「都拿到了」
+    // As of 8/12, the non-agricultural issue 2026-07 (released on 8/7) should have been obtained long ago.
+    // Therefore, both must be filled in up to date to truly "get them both."
     const got = ALL_AT_JUN.map((i) =>
       i.id === 'CPILFESL' || i.id === 'PAYEMS' ? { ...i, latestPeriod: '2026-07' } : i,
     )
@@ -125,8 +125,8 @@ describe('decideMacroScan', () => {
 
   it('超出掃描窗就停手，等明天的例行班', () => {
     const late = new Date(CPI_JUL_RELEASE + (SCAN_WINDOW_HOURS + 1) * 3600_000)
-    // lastScanYmd 要跟著換算成 late 當下的台北日，否則會先觸發 routine
-    // （+7h 已跨過台北日界線 16:00 UTC）
+    // lastScanYmd must be converted into late current Taipei day, otherwise the routine will be triggered first
+    // (+7h has crossed the Taipei date line 16:00 UTC)
     const d = decideMacroScan({ ...base, now: late, lastScanYmd: taipeiYmdOf(late) })
     expect(d.scan).toBe(false)
     expect(d.reason).toBe('outside-window')
@@ -147,7 +147,7 @@ describe('decideMacroScan', () => {
   })
 
   it('UMCSENT 不觸發密集掃——它在 FRED 上已停更，納入只會白掃到上限', () => {
-    // 把其他四項都填成最新，只剩 UMCSENT 落後
+    // Fill in the other four items up to date, leaving only UMCSENT behind.
     const onlyUmcBehind = [
       { id: 'CPILFESL', latestPeriod: '2026-07' },
       { id: 'PPIFES', latestPeriod: '2026-07' },

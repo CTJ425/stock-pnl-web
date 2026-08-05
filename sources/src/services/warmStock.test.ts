@@ -42,7 +42,7 @@ describe('warmStock', () => {
   })
 
   it('同一代號整個 session 只送出一次請求——這是額度安全的關鍵', async () => {
-    // 沒有這條節流，一檔永遠拿不到資料的股票會讓使用者每切一次分頁就燒一次 invocation
+    // Without this throttling, a stock that never gets data will cause users to burn an invocation every time they switch to a page.
     invoke.mockResolvedValue(ok(1, 1))
     await warmStock('2330')
     await warmStock('2330')

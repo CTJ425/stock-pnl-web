@@ -1,6 +1,6 @@
 /**
- * 自繪 SVG 圖表的座標軸計算。純函式、無 DOM 依賴，便於單元測試。
- * 不引入圖表函式庫的理由見 docs/agent/PLAN.md §B（html2canvas 可擷取 inline SVG，PDF 才能保真）。
+ * Axis calculation for self-drawn SVG charts. Pure function, no DOM dependencies, easy for unit testing.
+ * The reason for not introducing the chart function library can be found in docs/agent/PLAN.md §B (html2canvas can capture inline SVG, and PDF can maintain fidelity).
  */
 
 export interface Domain {
@@ -9,13 +9,13 @@ export interface Domain {
 }
 
 export interface DomainOptions {
-  /** 買賣超這類跨零的資料要強制含 0，餘額走勢圖則不必（會壓平變化） */
+  /** Data that crosses zero such as buying and selling exceeds must contain 0, but the balance chart does not (it will flatten the changes)*/
   includeZero?: boolean
-  /** 期望的刻度段數，用於挑選好看的級距 */
+  /** The desired number of scale segments, used to select good-looking intervals*/
   tickCount?: number
 }
 
-/** 把粗略級距吸附到 1 / 2 / 5 × 10^n */
+/** Snap the rough level distance to 1 / 2 / 5 × 10^n*/
 function niceStep(rough: number): number {
   if (!(rough > 0)) return 1
   const exp = Math.floor(Math.log10(rough))
@@ -30,10 +30,10 @@ function finite(values: Array<number | null | undefined>): number[] {
 }
 
 /**
- * 由資料算出對齊好看級距的值域。
- * - 無有效資料 → { 0, 1 }（畫出空軸而非崩掉）
- * - 全部為 0 → { -1, 1 }（保留零軸在中間）
- * - 單一值 → 以該值上下各留一成
+ * Calculate the value range that aligns with the good-looking intervals from the data.
+ * - No valid data → { 0, 1 } (draw empty axis instead of collapse)
+ * - all 0 → { -1, 1 } (leaving the zero axis in the middle)
+ * - Single value → Leave 10% above and below the value
  */
 export function niceDomain(
   values: Array<number | null | undefined>,
@@ -63,25 +63,25 @@ export function niceDomain(
   }
 }
 
-/** 刻度級距；值域退化時回 0 */
+/** Scale interval; returns to 0 when the value range degrades*/
 export function tickStep(domain: Domain, count = 4): number {
   const span = domain.max - domain.min
   return span > 0 ? niceStep(span / count) : 0
 }
 
-/** 值域內的刻度值（由小到大，含端點） */
+/** Scale values ​​within the range (from small to large, including endpoints)*/
 export function domainTicks(domain: Domain, count = 4): number[] {
   const step = tickStep(domain, count)
   if (step === 0) return [domain.min]
   const out: number[] = []
-  // 浮點累加會漂移，改以整數倍數推進
+  // Floating point accumulation will drift and be advanced by integer multiples instead.
   for (let k = Math.ceil(domain.min / step); k * step <= domain.max + step * 1e-9; k++) {
     out.push(k * step)
   }
   return out.length > 0 ? out : [domain.min, domain.max]
 }
 
-/** 值 → SVG y 座標（0 在頂部）。值域退化時回中線 */
+/** Value → SVG y-coordinate (0 on top). When the value range degenerates, it returns to the center line.*/
 export function scaleY(value: number, domain: Domain, height: number): number {
   const span = domain.max - domain.min
   if (!(span > 0)) return height / 2
@@ -90,20 +90,20 @@ export function scaleY(value: number, domain: Domain, height: number): number {
 }
 
 /**
- * 大數字軸標籤：12,345,678 → 1235 萬、250,000,000 → 2.5 億。
- * 傳入 step（刻度級距）時會依級距決定小數位 —— 否則像融資餘額 31,100～31,928 這種
- * 級距遠小於單位的序列，相鄰刻度會全部標成「3.1 萬」而分不出高低。
+ * Large number axis labels: 12,345,678 → 12.35 million, 250,000,000 → 250 million.
+ * When the step (scale interval) is passed in, the decimal places will be determined according to the step interval - otherwise, it will be like financing balance 31,100~31,928
+ * For a sequence whose level interval is much smaller than the unit, the adjacent scales will all be marked as "31,000" and it will be impossible to distinguish between high and low.
  *
- * **小於 1 的值也要靠 step 決定小數位**（0.6.7 修）：原本一律 `Math.round`，
- * 對餘額、股價、成交量都沒問題（都 ≥ 1），但匯率的日圓是 0.1957～0.2015、
- * 韓元是 0.022 —— 整條 Y 軸會標成一排「0」，實測畫面上就是這樣。
+ * **Values ​​less than 1 also rely on step to determine the decimal place** (0.6.7 revision): Originally, it was always `Math.round`,
+ * There is no problem with the balance, stock price, and trading volume (all ≥ 1), but the exchange rate of yen is 0.1957~0.2015,
+ * The Korean won is 0.022 - the entire Y-axis will be marked with a row of "0", as is the case on the actual measurement screen.
  */
 export function fmtAxisNumber(v: number, step?: number): string {
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
   const unit = abs >= 1e8 ? 1e8 : abs >= 1e4 ? 1e4 : 1
   if (unit === 1) {
-    // step 夠大（≥1）時維持原本的整數呈現，既有圖表一個字都不會變
+    // When the step is large enough (≥1), the original integer presentation is maintained, and not a word of the existing chart will be changed.
     const decimals =
       step !== undefined && step > 0 && step < 1
         ? Math.min(Math.max(Math.ceil(-Math.log10(step)), 0), 6)

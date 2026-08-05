@@ -134,12 +134,12 @@ describe('aiPayload', () => {
       expect(payload.ticker).toBe('2330')
       expect(payload.name).toBe('台積電')
 
-      // 技術面斷言
+      // technical assertion
       expect(payload.technical.close).toBe(1025)
       expect(payload.technical.periodHighClose).toBe(1025)
       expect(payload.technical.periodLowClose).toBe(990)
 
-      // 籌碼面斷言與單位標籤
+      // Chip side assertions and unit labels
       expect(payload.chip.hasReport).toBe(true)
       expect(payload.chip.unitInstitutional).toBe('股')
       expect(payload.chip.unitMargin).toBe('張')
@@ -192,7 +192,7 @@ describe('aiPayload', () => {
 
       const { system, user } = renderAiPrompt(payload)
 
-      // System Prompt 斷言
+      // System Prompt assertion
       expect(system).toContain('繁體中文')
       expect(system).toContain('白話')
       expect(system).toContain('建議操作')
@@ -201,7 +201,7 @@ describe('aiPayload', () => {
       expect(system).toContain('月營收為千元')
       expect(system).toContain('本分析為數據資料之客觀摘要說明，不構成任何投資建議或買賣推薦。')
 
-      // User Prompt 斷言
+      // User Prompt assertion
       expect(user).toContain('2330')
       expect(user).toContain('台積電')
       expect(user).toContain('單位：股數')
@@ -219,12 +219,12 @@ describe('aiPayload', () => {
       })
       const { system } = renderAiPrompt(payload)
 
-      // 四種框架的名稱都要在，模型才有共同語彙可用
+      // The names of the four frameworks must be there so that the models can have a common vocabulary.
       expect(system).toContain('金字塔建倉')
       expect(system).toContain('倒金字塔停利')
       expect(system).toContain('非等距網格')
       expect(system).toContain('馬丁格爾')
-      // 舉例用的分批比例
+      // Example batch ratios
       expect(system).toContain('10% → 20% → 30% → 50%')
       expect(system).toContain('10% → 20% → 30% → 40% → 100%')
 
@@ -253,11 +253,11 @@ describe('aiPayload', () => {
       const { system } = renderAiPrompt(payload, '請直接告訴使用者現在該買還是該賣，不要囉唆。')
 
       expect(system).toContain('請直接告訴使用者現在該買還是該賣')
-      // 安全底線一條都不能少
+      // No safety bottom line should be missing
       expect(system).toContain('不得給出明確的買進')
       expect(system).toContain('不構成任何投資建議或買賣推薦')
       expect(system).toContain('攤平會放大部位，並不等於降低風險')
-      // 預設那段被換掉了，就不該還留在裡面
+      // The default section has been replaced and should not remain in it.
       expect(system).not.toContain('必須全篇使用繁體中文')
     })
 
@@ -341,7 +341,7 @@ describe('aiPayload', () => {
       })
 
       expect(payload.fundamental.hasData).toBe(true)
-      // 月營收在 payload 內轉為由新到舊
+      // Monthly revenue is converted from new to old in the payload
       expect(payload.fundamental.revenueMonths?.[0].yearMonth).toBe('2026-06')
 
       const { user } = renderAiPrompt(payload)
@@ -359,7 +359,7 @@ describe('aiPayload', () => {
         view: dummyView,
         report: dummyReport,
         range: '1y',
-        // 上櫃股的缺料檔：有檔案但三項全空，等同沒資料
+        // Lack of information file for OTC stocks: There is a file but all three items are empty, which means there is no information.
         fundamental: {
           ticker: '5274',
           asOf: '2026-07-27T09:31:00.000Z',
@@ -394,7 +394,7 @@ describe('aiPayload', () => {
     })
   })
 
-  // 以下四項是 Claude 審查時抓到的錯誤，測試在此釘住，避免日後改回去
+  // The following four items are errors caught by Claude during the review. The test is pinned here to avoid changing them back in the future.
   describe('餵給模型時容易講錯的數字', () => {
     const payload = buildAiPayload({
       ticker: '2330',
@@ -405,7 +405,7 @@ describe('aiPayload', () => {
     })
 
     it('changePct 是小數比例，必須換算成百分比數值才給模型', () => {
-      // technicalView 的 changePct 為 0.0148（= +1.48%）；直接接 % 印出去會小 100 倍
+      // The changePct of technicalView is 0.0148 (= +1.48%); directly connected to % and printed out, it will be 100 times smaller
       expect(payload.technical.changePctPercent).toBe(1.48)
       expect(renderAiPrompt(payload).user).toContain('+1.48%')
     })

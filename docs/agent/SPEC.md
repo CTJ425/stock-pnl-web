@@ -5,744 +5,744 @@
 
 ---
 
-## 🚀 專案概述 (Project Overview)
+## 🚀 Project Overview
 
-**Stock PnL Web** 是一套專為台股與美股投資人設計的個股持有與損益管理 Web 應用程式。支援多工作區切換、移動平均成本計算、歷史已實現損益統計以及預扣稅費的未實現損益估算。
+**Stock PnL Web** is a set of individual stock holding and profit and loss management web applications designed specifically for Taiwanese and US stock investors. Supports multi-workspace switching, moving average cost calculation, historical realized profit and loss statistics, and unrealized profit and loss estimation of withholding taxes.
 
 ---
 
-## 🛠️ 技術架構 (Technology Stack)
+## 🛠️Technology Stack
 
 - **Frontend**: React 18, TypeScript, Vite, TailwindCSS / Custom CSS
 - **Backend / Database**: Supabase (PostgreSQL, Row Level Security, Edge Functions)
 - **Deployment**: GitHub Pages (SPA static bundle) + Supabase Edge Functions
 - **State & Storage**:
-  - 本機模式: LocalStorage (免登入、即時體驗)
-  - 雲端模式: Supabase Auth + Database (跨裝置同步)
+  - Local mode: LocalStorage (no need to log in, instant experience)
+  - Cloud mode: Supabase Auth + Database (sync across devices)
 
 ---
 
-## 核心邏輯規範 (Core Business Logic)
+## Core Business Logic
 
-1. **成本與損益計算 (PnL Calculation Engine)**:
-   - 使用**移動平均成本法** (Moving Average Cost)。
-   - 買入交易：買入手續費計入持股總成本。
-   - 賣出交易：計算當前批次已實現損益；如遇超賣情況，以 0 成本計算並顯示警告。
-   - 年度收益：移除欄位排序，新增第三層逐筆賣出明細（移動平均成本口徑）；新增 KPI 買賣筆數與手續費/交易稅拆分，並將年度表格之手續費改為費稅雙行顯示。
-   - 台股與美股分區計算與獨立統計。
-2. **稅費計算 (Fees & Taxes)**:
-   - 台股手續費/證交稅無條件捨去至整數。
-   - ETF (00開頭) 證交稅為 0.1%，一般股票為 0.3%。
-   - 庫存未實現損益預扣賣出手續費與證交稅（預估淨值）。
-3. **庫存總覽與券商對齊**:
-   - 庫存總覽表僅計算當前持有部位之「未實現淨損益」與「未實現報酬率」（報酬率 ＝ 未實現淨損益 ÷ 當前部位總成本）。
-   - UI 一律以「未實現**淨**損益」命名（v0.3.3），強調數字已把交易成本計入：含買入手續費，台股再預扣賣出手續費與證交稅；美股不預扣賣出費用。費用口徑說明收於欄位「?」與 KPI 標題 tooltip，不另外佔用版面。
-   - 歷史已結清損益獨立展示於「年度收益」頁面。
-
----
-
-## 📑 關聯文件 (References)
-
-- 架構與系統設計文件：[system_design.md](file:///home/ivan/stock-pnl-web/docs/architecture/system_design.md)
-- 資料庫 Schema：`sources/supabase/schema.sql`（v0.3.7-dev.1 起由 `docs/database/` 搬至此）
-- 後端部署與報告 JSON 結構：`sources/supabase/README.md`
-
-## UI 文案準則 (v0.3.4)
-畫面上的說明文字（欄位 `?`、tooltip、field-hint、空狀態）**讀者是不熟股票的人**，撰寫規則：
-1. 一則說明 1–2 句，短句白話。
-2. 不放公式，改講白話結果。
-3. 不用「移動平均成本法」「同口徑」「純價差」等行話。
-4. 砍掉次要但書與跨頁交叉引用，只留當下決策需要的資訊。
-5. 但必須保留：費用是否已計入、資料是否延遲、數字涵蓋範圍。
-
-程式碼註解不適用本準則——那是寫給開發者與後續 Agent 的。
-
-- 版本標記（v0.3.3 起）：單一來源為 `src/version.ts`，顯示於畫面左下角固定徽章。徽章只顯示版號本身（不帶 `v` 前綴、不顯示作者）。
-- 服務狀態功能已於 0.3.8-dev.1 整個移除（含 `serviceHealth.ts`）。
+1. **Cost and Profit and Loss Calculation (PnL Calculation Engine)**:
+   - Use Moving Average Cost.
+   - Buy transaction: The buying fee is included in the total cost of holding shares.
+   - Sell ​​transaction: Calculate the realized profit and loss of the current batch; in case of oversold condition, calculate it at 0 cost and display a warning.
+   - Annual income: Remove the field sorting, add a third layer of transaction-by-transaction details (moving average cost caliber); add KPI transaction number and split of handling fees/transaction taxes, and change the handling fees in the annual form to display in two rows of fees and taxes.
+   - Calculation and independent statistics of Taiwan stocks and US stocks.
+2. **Fees & Taxes**:
+   - Taiwan stock handling fees/securities taxes are unconditionally rounded to the nearest whole number.
+   - ETF (starting with 00) securities tax is 0.1%, and general stocks are 0.3%.
+   - Unrealized gains and losses on inventory are withheld for selling fees and securities taxes (estimated net value).
+3. **Inventory Overview Aligned with Brokers**:
+   - The inventory summary table only calculates the "unrealized net profit and loss" and "unrealized return rate" of the currently held positions (return rate = unrealized net profit and loss ÷ total cost of the current position).
+   - The UI is always named after "Unrealized **Net** Profit and Loss" (v0.3.3), emphasizing that the figures have included transaction costs: including buying fees, and selling fees and securities taxes are withheld for Taiwan stocks; selling fees are not withheld for U.S. stocks. The description of the cost calculus is contained in the field "?" and the KPI title tooltip, and does not occupy additional space.
+   - Historical settled profits and losses are displayed independently on the "Annual Revenue" page.
 
 ---
 
-## 新增模組：個股分析頁與盤後籌碼 (v0.3.7)
+## 📑References
 
-### 進入點與範圍
-- 僅**台股**提供。**「個股分析」是獨立的導覽分頁**（0.3.8-dev.1 起；先前是從庫存總覽下鑽的檢視）。
-  頁內以下拉選單切換個股，**選單只列台股持股** —— 盤後籌碼只涵蓋上市台股，
-  把美股放進選單只會讓人選了才發現沒東西。無台股持股時顯示空狀態。
-- 未設定 Supabase（本機模式）時**整個分頁隱藏**（資料源是 Edge Function，本機無從讀取）。
-- 持股數字與庫存總覽共用 `utils/holdingRows.ts` 的 `buildHoldingRows`，兩頁不各算一份。
-- `StockDetailPage` 是純呈現元件（看哪一檔、持股從哪來由呼叫端決定）；
-  頁首左側的 `selector` prop 由 `AnalysisPage` 傳入切換個股的下拉選單。
-- 五個分頁籤：**籌碼**（盤後資料）、**技術面**（0.5.0 起有實質內容）、
-  **基本面**（0.6.0-dev.4）、**報價**（0.6.36，取代原本的「我的持股」）、**AI 解讀**（0.6.0）。
-- 標題旁顯示**產業別 badge**（0.6.0-dev.4，資料來自基本面檔，查無時不顯示）。
+- Architecture and system design document: [system_design.md](file:///home/ivan/stock-pnl-web/docs/architecture/system_design.md)
+- Database Schema: `sources/supabase/schema.sql` (moved here from `docs/database/` since v0.3.7-dev.1)
+- Backend deployment and reporting JSON structure: `sources/supabase/README.md`
 
-### 資料職責邊界
-- **伺服器（Edge Function `stock-report`）只回結構化資料**，`schema: 2`；不產生任何 HTML。
-  前端讀到 `schema !== 2` 一律視為未命中，改走即點即產 fallback。
-- 盤後排程產生的是**共用**報告（三大法人 / 融資融券 / 借券全市場共用），**不含個資**。
-  0.6.36 起這頁**畫面上完全不顯示持股數字**；持股脈絡仍會在即點即產（`generateReport`）
-  時帶給後端，且下拉選單本來就要列出持有的台股，所以 `buildHoldingRows` 那層照算。
-- 報告內嵌最近 **7 個交易日** `history`（由舊到新）。單次呼叫最多實抓 5 個缺漏日，
-  不足時照常出圖並於 `notes[]` 說明「歷史資料回補中」。
+## UI Copywriting Guidelines (v0.3.4)
+Description text on the screen (field `?`, tooltip, field-hint, empty state) **Readers are unfamiliar with stocks**, writing rules:
+1. An explanation is 1–2 sentences, short and in plain language.
+2. Instead of using formulas, talk about results in vernacular.
+3. There is no need to use jargon such as "moving average cost method", "same caliber" and "pure spread".
+4. Cut out minor provisos and cross-page cross-references, leaving only the information needed for immediate decision-making.
+5. But it must be retained: whether fees have been accounted for, whether the data is delayed, and what the numbers cover.
 
-### 數字口徑（UI 必須標示）
-- **三大法人的單位是「股」**，融資融券的單位是「**張**（交易單位，1 張 = 1000 股）」。兩區不可混算，各自標示。
-- 買賣超 ＝ 買進 − 賣出；自營商的買進 / 賣出由「自行買賣」+「避險」相加，買賣超取官方揭露值。
-- 三大法人合計的買進 / 賣出為五個 leg 加總；買賣超取官方揭露值（非加總）。
-- 融券的「賣出」是**放空**、「買進」是**回補**，方向與融資相反，UI 必須寫出來。
-- 連買連賣 / 連增連減：由最新一日往回數同號連續天數，**遇 0 或當日無資料即中斷**。
-- 借券顯示的是「賣出可用股數」（還能借出去賣的額度），不是已被賣出的量。
+This guideline does not apply to code comments - those are written for developers and subsequent agents.
 
-### 逐日檢視
-- 三大法人表格可切換檢視 history 內**任一交易日**（預設最新），日期鈕列於區塊標題旁。
-- 「連買連賣」是**算到所檢視那一天為止**的連續天數，不是永遠只算最新日 ——
-  故由前端依 history 計算（`chipStreak.ts`），不使用伺服器 `report.streaks`（那只有最新日）。
-  該函式行為必須與 Edge Function 的 `computeStreak` 一致，兩邊各有測試把關。
+- Version mark (from v0.3.3): The single source is `src/version.ts`, which is displayed in the fixed badge in the lower left corner of the screen. The badge only shows the version number itself (without the `v` prefix and without the author).
+- The service status function has been completely removed in 0.3.8-dev.1 (including `serviceHealth.ts`).
 
-### 圖表
-- **自繪 inline SVG，不引入圖表函式庫**（`components/Charts/`）。理由：html2canvas 可擷取 inline SVG，PDF 才能保真。
-- **顏色與字級以字面值寫入 SVG 屬性**（不用 CSS 變數、不靠外部樣式表）——
-  html2canvas 會把 SVG 序列化成圖片，祖先層的 CSS 變數與樣式表規則都解析不到。
-- viewBox 寬度＝實測容器寬度（1:1 繪製），字級在任何視窗寬度都固定。
-- 融資與融券餘額量級差距大，**各自獨立縱軸**、畫成兩張圖；缺資料的日子**斷線不內插**。
-- **顏色一次只做一件事**：
-  - 單一序列 → 顏色表達**極性**（台股慣例紅正綠負）。
-  - 多序列並排 → 顏色表達**身分**（每個法人一個類別色），正負改由長條在零軸上下的方向表達。
-  - 兩者不可疊在同一組標記上。類別色取自 `chartColors.ts` 的固定順序、**依序指派不循環**，
-    且必須是同時通過淺底與深底檢查的一組（單一組字面值要同時服務兩種主題與 PDF）。
-- **兩條以上序列一律附圖例**（身分不能只靠顏色）。圖例文字用一般文字色、不用序列色，顏色由色塊承擔。
-- **合計不與其組成並排**：三大法人合計＝四個法人之和，一起畫等於同一筆量重複計算一次。
+---
 
-### 資料出處標示
-- 籌碼報告的表頭（`.rpt-head`）必須標明 **代號 / 名稱、資料日期、報告更新時間**，
-  且**放在 PDF 擷取範圍內** —— 下載的 PDF 必須自己看得出是哪支股票、哪一個交易日、什麼時候產的。
-- 「資料日期」是最近交易日盤後（資料涵蓋到哪天），「報告更新時間」是這份報告實際產生的時間
-  （盤後排程或即點即產）。兩者不同：報告可能在資料日的隔天才產生。時間以觀看者所在時區顯示。
-- 頁首（`.detail-head`）不重複這些資訊 —— 它們是籌碼報告的屬性，不是整個分析頁的屬性。
+## New modules: individual stock analysis page and after-hours chips (v0.3.7)
+
+### Entry point and scope
+- Only available in **Taiwan stocks**. **"Individual Stock Analysis" is an independent navigation page** (from 0.3.8-dev.1; previously it was a drill-down view from the stock overview).
+  Use the drop-down menu to switch between individual stocks on the page. **The menu only lists Taiwan stocks held** - after-hours chips only cover listed Taiwan stocks.
+  Putting U.S. stocks into the menu will only make you realize that there is nothing after choosing it. If there are no Taiwan stocks holding, it will show empty status.
+- When Supabase (native mode) is not set, **the entire page is hidden** (the data source is Edge Function and cannot be read by this machine).
+- The holding figures and the inventory overview share the same `buildHoldingRows` of `utils/holdingRows.ts`, and the two pages do not count as one copy each.
+- `StockDetailPage` is a pure presentation component (which stock to look at and where the stock holdings come from are determined by the caller);
+  The `selector` prop on the left side of the page is passed in from `AnalysisPage` to switch the drop-down menu of individual stocks.
+- Five tabs: **Chips** (post-market information), **Technical** (substantial content starting from 0.5.0),
+  **Fundamentals** (0.6.0-dev.4), **Quotes** (0.6.36, replacing the original "My Holdings"), **AI Interpretation** (0.6.0).
+- The **Industry Badge** is displayed next to the title (0.6.0-dev.4, the data comes from the fundamental file, and is not displayed when there is none).
+
+### Data responsibility boundaries
+- **The server (Edge Function `stock-report`) only returns structured data**, `schema: 2`; does not generate any HTML.
+  When the front-end reads `schema !== 2`, it will be regarded as a miss, and a fallback will be generated when the click is changed.
+- The after-hours schedule generates a **shared** report (shared by the three major legal persons/margin and securities lending/securities lending market), **not including personal information**.
+  0.6.36 From this page **No shareholding figures are displayed on the screen at all**; the shareholding context will still be generated immediately (`generateReport`)
+  It is brought to the backend at the same time, and the drop-down menu originally lists the Taiwan stocks held, so the `buildHoldingRows` layer is calculated accordingly.
+- The report embeds the `history` of the last **7 trading days** (oldest to newest). A maximum of 5 missing days can be captured in a single call.
+  If it is insufficient, the picture will be produced as usual and "historical data is being replenished" in `notes[]`.
+
+### Numeric caliber (must be marked on UI)
+- **The unit of the three major legal persons is "share"**, and the unit of margin trading is "**pieces** (trading unit, 1 piece = 1,000 shares)". The two areas cannot be mixed and are marked separately.
+- The buying and selling excess = buying − selling; the dealer's buying/selling is the sum of "self-trading" + "risk hedging", and the buying and selling excess is the official disclosed value.
+- The total buying/selling of the three major legal persons is the sum of the five legs; the buying and selling exceeds the official disclosed value (non-summing).
+- The "selling" of securities lending means **short selling**, and the "buying" means **covering**. The direction is opposite to financing, and the UI must be written out.
+- Continuous buying and selling/continuous increasing and decreasing: counting the number of consecutive days with the same number from the latest day, **will be interrupted if it encounters 0 or there is no data on that day**.
+- Borrowing bonds shows the "number of shares available for sale" (the amount that can be lent for sale), not the amount that has been sold.
+
+### Daily review
+- The three major legal person tables can be switched to view **any trading day** in the history (the latest by default), and the date button is listed next to the block title.
+- "Continuous buying and selling" refers to the number of consecutive days up to the day being viewed, and does not always count only the latest day -
+  Therefore, the front-end calculates based on history (`chipStreak.ts`) and does not use the server `report.streaks` (that only has the latest date).
+  The behavior of this function must be consistent with the `computeStreak` of Edge Function, and both sides must be tested.
+
+### chart
+- **Self-drawn inline SVG, without introducing chart library** (`components/Charts/`). Reason: html2canvas can capture inline SVG, but PDF can retain its fidelity.
+- **Color and font size are written as literal values ​​to SVG properties** (no CSS variables, no external style sheets) -
+  html2canvas will serialize SVG into images, and the CSS variables and style sheet rules of the ancestor layer cannot be parsed.
+- viewBox width = measured container width (1:1 drawing), the font level is fixed in any view window width.
+- There is a big gap in the magnitude of the balance between financing and securities lending, **each has an independent vertical axis** and is drawn into two graphs; on days when data is lacking, the line is disconnected and no interpolation is performed**.
+- **Color only does one thing at a time**:
+  - Single sequence → Color expresses **polarity** (Taiwan stocks convention is red, green, and negative).
+  - Multiple sequences side by side → Color expresses **identity** (one category color for each legal person), and positive and negative are expressed by the direction of the bar above and below the zero axis.
+  - The two cannot be stacked on the same set of marks. Category colors are taken from the fixed order of `chartColors.ts`, **assigned in order without looping**,
+    And it must be a group that passes both the shallow and deep checks (a single group of literal values ​​must serve both themes and PDF at the same time).
+- **Two or more sequences must be accompanied by a legend** (identification cannot be based solely on color). The legend text uses normal text color and does not use sequence color. The color is borne by the color block.
+- **The total is not side by side with its components**: The total of the three legal persons = the sum of the four legal persons. Drawing them together equals the same amount being counted twice.
+
+### Information source indication
+- The header (`.rpt-head`) of the chip report must indicate **code/name, data date, report update time**,
+  And **put it within the PDF extraction range** - the downloaded PDF must be able to tell which stock, which trading day and when it was produced.
+- The "data date" is after the closing of the latest trading day (to which day the data is covered), and the "report update time" is the time when this report was actually generated.
+  (After-hours schedule or immediate production). The difference is that the report may not be generated until the day after the data date. Times are displayed in the viewer's time zone.
+- The header (`.detail-head`) does not repeat this information - they are properties of the chip report, not the entire analysis page.
 
 ### PDF
-- 前端 `html2canvas` + `jsPDF` 動態載入（不進主 bundle），伺服器不存 PDF。
-- 擷取前後動態掛上 / 移除 `.report-surface`（把設計 token 覆寫為淺色），**深色主題也輸出淺色文件**。
-- 「下載 PDF」只在籌碼分頁出現。**注意：0.5.0 起技術面已有實質內容，
-  但 PDF 仍只涵蓋籌碼分頁** —— 要不要擴到技術面尚未決定，不是疏漏。
+- The front-end `html2canvas` + `jsPDF` is dynamically loaded (without entering the main bundle), and the server does not store PDF.
+- Dynamically mount/remove `.report-surface` before and after capturing (overwrite the design token to light color), **dark themes also output light-colored files**.
+- "Download PDF" only appears in the chip tab. **Note: There is substantial technical content starting from 0.5.0.
+  But PDF still only covers chip paging** - it has not been decided whether to expand it to technical aspects, it is not an oversight.
 
 ---
 
-## 技術面（0.5.0）
+## Technical (0.5.0)
 
-### 資料來源與儲存
-- 日線 OHLCV 來自 **Yahoo Finance chart 端點**（`interval=1d&range=1y`，實測回 244 個交易日）。
-  由既有的盤後批次 `generate-all` 順帶抓取，**不是獨立的 Edge Function**。
-- 存於公開 `reports` bucket 的 **`daily/{ticker}.json`，每晚整份覆寫**（實測 10.8KB / 檔）。
-  刻意不建 `price_daily` 資料表：覆寫制沒有保留期問題，也不必 prune。
-- 前端**直接下載 Storage**、不經 Edge Function（額度考量，見 PROGRESS 0.3.9）。
-- **沒有即點即產 fallback**：技術面只服務個股分析頁，而該頁只列使用者的台股持股，
-  那正是夜間批次涵蓋的清單。查無檔案時顯示「稍晚會自動補上」的空狀態。
+### Data sources and storage
+- Daily OHLCV comes from **Yahoo Finance chart endpoint** (`interval=1d&range=1y`, measured back to 244 trading days).
+  Fetched incidentally from the existing post-market batch `generate-all`, **not an independent Edge Function**.
+- **`daily/{ticker}.json` stored in the public `reports` bucket, overwritten in full every night** (measured 10.8KB/file).
+  The `price_daily` data table is intentionally not created: there is no retention issue with overwriting, and no need to prune.
+- The front-end **directly downloads Storage** without going through Edge Function (for quota consideration, see PROGRESS 0.3.9).
+- **No instant fallback**: The technical side only serves the individual stock analysis page, and this page only lists the user’s Taiwan stock holdings.
+  That’s exactly what the nightly batch covers. When no files are found, an empty status of "It will be automatically added later" is displayed.
 
-### 數字口徑（UI 必須標示）
-- **用原始收盤價，不做除權息還原**。台股看盤軟體的均線慣例即如此，改用還原價會與
-  使用者在券商 App 看到的均線對不上；除權息當天的跳空是真實存在的事實，UI 不修飾。
-- 台股術語對照：**週線＝MA5、月線＝MA20、季線＝MA60**，圖例兩種說法並陳。
-- 成交量以「**張**」呈現（1 張 = 1000 股），與看盤軟體一致。
-- KD 採台股慣用的 (9,3,3)，K/D 初值 50；n 日內最高等於最低時 RSV 取 50
-  （分母為零不能當作 0 或 100，那會憑空造出超賣 / 超買訊號）。
-- MACD 柱採國際慣例的 DIF − DEA，不乘 2。
+### Numeric caliber (must be marked on UI)
+- **Use the original closing price and do not restore ex-rights and dividends**. This is the moving average convention of Taiwan stock market reading software. Switching to the reduction price will be different from the
+  The moving averages that users see on the brokerage app do not match up; the gap on the day of ex-dividend is a real fact, and the UI is not modified.
+- Comparison of terminology for Taiwan stocks: ** Weekly line = MA5, monthly line = MA20, quarterly line = MA60**, the two versions are presented together in the legend.
+- Trading volume is presented in "**tickets**" (1 tick = 1,000 shares), which is consistent with the market-reading software.
+- KD adopts the usual formula (9,3,3) for Taiwanese stocks, and the initial value of K/D is 50; when the highest value in n days is equal to the lowest value, RSV takes 50
+  (A denominator of zero cannot be treated as 0 or 100, as that would create an oversold/overbought signal out of thin air).
+- The MACD column adopts the international convention of DIF − DEA, which is not multiplied by 2.
 
-### 計算規則（三條，違反任一條都會產生看似合理但錯誤的線）
-1. **指標一律以完整序列計算後才裁切顯示區間**。先裁後算的話，「近 3 月」（60 根）
-   的 MA60 只會在最後一根有值、KD 遞迴還會從初值重新起跑。
-2. **輸出與輸入等長**，暖身期不足的前段為 `null`，圖表據此斷線不內插。
-3. **null 不當成 0**，且遞迴狀態遇 null 不更新 —— 把缺漏當 0 會讓均線瞬間崩到接近零。
+### Calculation rules (three, violation of any one will produce lines that appear reasonable but are wrong)
+1. **Indicators are always calculated based on the complete sequence before cropping the display range**. If you cut it first and calculate it later, "nearly 3 months" (60 pieces)
+   The MA60 will only have a value on the last bar, and the KD recursion will start again from the initial value.
+2. **Output and input are of equal length**, the early part with insufficient warm-up period is `null`, and the chart will be disconnected accordingly and will not be interpolated.
+3. **null should not be treated as 0**, and the recursive state will not be updated if it encounters null - treating the missing value as 0 will cause the moving average to collapse to close to zero instantly.
 
-### 圖表
-- 日 K + MA5/20/60 疊圖、成交量、KD（附 20/80 參考線）三張，沿用既有的自繪 SVG 體系。
-- 蠟燭紅漲綠跌以「**當根收盤 vs 開盤**」決定（與看盤軟體的實心 / 空心邏輯一致），
-  不是與前一根比。均線則用**類別色**（身分編碼）—— 顏色一次只能做一件事。
-- X 軸標籤以 `labelIndices` 稀疏標示（一年 244 根不可能每根都標），命中區仍逐點建立。
+### chart
+- Three daily K + MA5/20/60 overlay charts, trading volume, and KD (with 20/80 reference line attached), following the existing self-drawn SVG system.
+- The candle's red rise and green fall are determined by "**Closing vs. Opening**" (consistent with the solid/empty logic of the market-reading software),
+  Not compared to the previous one. Moving averages use category colors (identity codes) - colors can only do one thing at a time.
+- The X-axis labels are sparsely labeled with `labelIndices` (it is impossible to label every 244 labels in a year), and the hit area is still established point by point.
 
 ---
 
-## 基本面（0.6.0-dev.4）
+## Fundamentals (0.6.0-dev.4)
 
-個股分析頁的「**基本面**」分頁，資料來自盤後批次預產的 `fundamental/{ticker}.json`
-（Storage 直讀，無即點即產 fallback，理由同技術面）。
+The "**Fundamentals**" page of the individual stock analysis page, the data comes from `fundamental/{ticker}.json` which is pre-produced in batches after the market opens.
+(Storage is read directly, and there is no fallback at the click of a button. The reason is the same as the technical aspect).
 
-- **估值三指標**：本益比 / 殖利率（%）/ 股價淨值比，來源 TWSE OpenAPI `BWIBBU_ALL`（每日）。
-  虧損公司的本益比為 `—`（不以 0 冒充）。
-- **月營收**：當月營收（**單位：千元**）、月增 %、年增 %、累計年增 %，
-  來源 `t187ap05_L`（每月）。檔內自累積最多 12 個月，由新到舊呈現。
-  0.6.4 起缺的月份另由公開資訊觀測站分月報表 `t21sc03` 回補，**不必再等一年才長滿**；
-  回補只填缺口、不覆蓋既有值（既有值是更正後的數字）。
-- **產業別**：`t187ap05_L` 的中文產業名優先，退 `t187ap03_L` 代碼查表。顯示於頁面標題旁的 badge。
-- **獲利能力**（0.6.5）：毛利率 / 營業利益率 / 稅前純益率 / 稅後純益率（**單位：%**），
-  來源 `t187ap17_L`（上市公司營益分析查詢彙總表，比率由證交所算好）。
-  只回最新一季，故序列**逐季累積**、最多 8 季，不做歷史回補。
-- **上櫃股部分支援**（0.6.4 起）：三份 OpenAPI 只涵蓋上市，但 `t21sc03` 另有上櫃版，
-  故上櫃股**有月營收、沒有估值與產業別**。批次仍會寫檔並附 `notes`：
-  完全查無時說明「ETF 與上櫃標的不在 TWSE 這三份資料中」，
-  有營收卻無估值時單獨說明「估值只涵蓋上市」。
-  UI 據此顯示「暫不支援」而非「稍後補上」——兩者是不同的訊息，不可混談。
+- **Three valuation indicators**: Price to earnings ratio / Yield rate (%) / Stock price to net value ratio, source TWSE OpenAPI `BWIBBU_ALL` (daily).
+  The price-to-earnings ratio of a loss-making company is `—` (not passed off as 0).
+- **Monthly revenue**: current month’s revenue (**unit: thousand yuan**), monthly growth %, annual growth %, cumulative annual growth %,
+  Source `t187ap05_L` (monthly). The archives have been accumulated for up to 12 months and are presented from newest to oldest.
+  0.6.4 The missing months will be filled in by the monthly report `t21sc03` of the Public Information Observation Station, so you don’t have to wait another year for it to be full**;
+  Backfill only fills the gap and does not overwrite the existing value (the existing value is the corrected number).
+- **Industry Category**: The Chinese industry name of `t187ap05_L` is given priority, and `t187ap03_L` is returned to the code lookup table. The badge that appears next to the page title.
+- **Profitability** (0.6.5): gross profit margin / operating profit rate / pre-tax net profit rate / after-tax net profit rate (**unit: %**),
+  Source `t187ap17_L` (listed company profit analysis query summary table, the ratio is calculated by the stock exchange).
+  Only the latest season is returned, so the sequence is accumulated season by season, up to 8 seasons, and no historical backfilling is performed.
+- **Partial support for OTC stocks** (from 0.6.4): The three OpenAPIs only cover listings, but `t21sc03` also has an OTC version,
+  Therefore, OTC stocks have monthly revenue, no valuation and industry classification. The batch will still be written and attached with `notes`:
+  When there is no complete search, it is explained that "ETFs and listed targets are not included in the three TWSE information."
+  When there is revenue but no valuation, state separately that "the valuation only covers listings."
+  Accordingly, the UI displays "not supported yet" instead of "will be added later" - the two are different messages and cannot be confused.
 
-資料源與批次行為的完整說明見 `sources/supabase/README.md`，設計理由見 `PLAN.md §N`。
+A complete description of the sources and batch behavior can be found in `sources/supabase/README.md`, and the design rationale can be found in `PLAN.md §N`.
 
-## 盤後批次排程（0.6.1）
+## After-hours batch scheduling (0.6.1)
 
-`generate-all` 由 pg_cron 觸發，**每交易日 16:00–23:45 每 15 分鐘一次**（台北，共 32 輪）。
-0.6.1 前是固定三班（17:30 / 22:30 / 23:30）。
+`generate-all` is triggered by pg_cron, **every 15 minutes from 16:00–23:45 on each trading day** (Taipei, 32 rounds in total).
+0.6.1 Previously, there were three fixed shifts (17:30/22:30/23:30).
 
-### 為什麼改成輪詢
+### Why change to polling
 
-三班的時間點是照「各資料源大約幾點公布」訂的，而那個認知是錯的 ——
-2026-07-27 一天之內實測推翻三處（T86 的時間窗與 BFI82U 混為一談、
-借券 17:07 就有、我們抓的 TWT96U 語意也記錯）。
-**時鐘上的猜測會過期，「連續兩次抓到一樣的東西」不會。** 故改為密集輪詢＋內容判斷。
+The time point for Class 3 was set based on "the approximate time each data source will be announced", and that understanding is wrong——
+2026-07-27 The actual measurement overturned three points in one day (the time window of T86 is confused with BFI82U,
+The coupon was available at 17:07, and the semantic meaning of the TWT96U we caught was also wrong).
+**The guesses on the clock will expire, "catching the same thing twice in a row" will not. ** Therefore, it is changed to intensive polling + content judgment.
 
-### 三道閘門（純邏輯集中在 `pollPlan.ts`，每條都有測試）
+### Three gates (pure logic is concentrated in `pollPlan.ts`, each one has tests)
 
-| 閘門 | 規則 | 少了它會怎樣 |
+| Gate | Rules | What happens without it |
 |---|---|---|
-| 短路 | 今天的 T86 已到**且已定稿**、且今天的融資融券已到 → 該輪不發任何對外請求 | 32 輪全都真的去抓 |
-| T86 改寫偵測 | 定稿前每輪重抓比對指紋，**連續 2 次內容相同**才凍結 | 早抓會把 16:00 的初版鎖成當天答案，比晚抓更糟 |
-| 當日執行上限 | `MAX_RUNS_PER_DAY = 40`（cron 只排 32，正常碰不到） | 判斷邏輯出錯或 `CRON_SECRET` 外流時沒有剎車 |
+| Short circuit | Today's T86 has arrived** and has been finalized**, and today's margin trading has arrived → No external requests will be issued in this round | All 32 rounds will be really caught |
+| T86 Rewriting Detection | Re-capture and compare fingerprints in each round before finalizing, and freeze only if the content is the same 2 times in a row | Catching early will lock the 16:00 first version as the answer for the day, which is worse than catching late |
+| Execution upper limit for the day | `MAX_RUNS_PER_DAY = 40` (cron is only ranked 32 and cannot be touched normally) | There is an error in the judgment logic or there is no brake when `CRON_SECRET` is outflow |
 
-短路條件**必須包含融資融券**：只看 T86 就收工的話，17:00 停掉，
-當天約 21:00 才發布的融資融券就永遠不會被抓到。
+Short-circuit conditions **must include margin trading**: If you just look at T86 and call it a day, it will stop at 17:00.
+Margin lending that is posted only around 21:00 that day will never be caught.
 
-### 重產閘門
+### heavy production gate
 
-報告輸入的指紋（資料日＋T86 內容＋融資融券資料日＋借券資料日＋持股清單）沒變就不重產。
-省的不是空間，是讓報告的「更新時間」只在真的有變動時才跳 ——
-否則 32 輪會把「什麼時候變的」這個訊號洗掉。持股清單也算輸入：新增一檔股票時舊報告裡沒有它。
+The fingerprint entered in the report (data date + T86 content + margin trading data date + bond borrowing data date + shareholding list) will not change if it does not change.
+The purpose is not to save space, but to make the "update time" of the report only jump when there is a real change——
+Otherwise, 32 rounds will wash out the signal of "when did it change". The holding list is also an input: when adding a new stock, it is not included in the old report.
 
-### 資料源探針（0.6.3）
+### Data source probe (0.6.3)
 
-`source_probe_log` 回答的問題只有一個：**「這個來源，實際上是幾點更新的？」**
+`source_probe_log` answers only one question: **"When was this source actually updated?"**
 
-**為什麼 `batch_run_log` 答不了**：`bwibbu_date` 記的是**快取值**。
-`readLatest` 用「我們去抓的那天」當快取鍵，當天第一輪抓完就整天吃快取 ——
-2026-07-27 那 12 輪全記成同一個 `1150724`，**那不是 12 次觀測，是同一次被讀了 12 遍**；
-批次一短路更是完全不記。拿它判斷發布時間會得到假答案，
-而「用假答案猜發布時間」正是 0.6.1 重做的起因。
+**Why `batch_run_log` cannot answer**: `bwibbu_date` remembers the **fast value**.
+`readLatest` uses "the day we went to catch" as the cache key, and after the first round of catching that day, we will eat the cache all day long——
+2026-07-27 Those 12 rounds are all recorded as the same `1150724`, **that is not 12 observations, but the same one that was read 12 times**;
+A short circuit in batch 1 is completely ignored. Using it to judge the release time will lead to false answers.
+And "guessing the release time with fake answers" is the reason for the 0.6.1 rework.
 
-- **獨立路徑**（`action: 'probe'` ＋ 專屬 cron job）。刻意不寫快取、不寫 Storage、
-  不碰批次的任何狀態 —— 0.6.1 那三道閘門（含「短路＝零對外請求」）因此仍然可證。
-- **只探兩個**：`BWIBBU_ALL`（估值，每日）與借券 `TWT96U`。
-  它們是目前唯二「有快取就整天不再看」的來源。T86 與融資融券已由
-  `t86_revisions` / `margin_today` 如實記錄；月營收與公司資料是月更新，探它沒有意義。
-- **指紋一律先排序再算**（`rowsFingerprint`）—— TWSE 端點不保證列順序穩定（0.6.2 的教訓）。
-- 授權同樣走 `CRON_SECRET`：它會對 TWSE 發請求，公開端點不設防等於送人一個代打工具。
-- 成本約 11.5MB/日。答案拿到後 `SELECT cron.unschedule('source-probe');` 即可停，
-  不必重新部署。
+- **Independent path** (`action: 'probe'` + exclusive cron job). Deliberately not writing cache, not writing Storage,
+  Does not touch any state of the batch - the three gates of 0.6.1 (including "short circuit = zero external requests") are therefore still provable.
+- **Only two are explored**: `BWIBBU_ALL` (valuation, daily) and borrowing bond `TWT96U`.
+  They are currently the only two sources of "if you have a cache, don't look at it all day". T86 and margin trading have been
+  `t86_revisions` / `margin_today` is recorded truthfully; monthly revenue and company information are updated monthly, so there is no point in exploring it.
+- **Fingerprints are always sorted first and then calculated** (`rowsFingerprint`) - TWSE endpoint does not guarantee stable column order (lesson from 0.6.2).
+- Authorization also goes through `CRON_SECRET`: it will send a request to TWSE. Exposing the endpoint undefended is equivalent to giving away a proxy tool.
+- Cost is approximately 11.5MB/day. After getting the answer, `SELECT cron.unschedule('source-probe');` can be stopped.
+  No need to redeploy.
 
-### 前端的重抓時機（0.6.2）
+### Front-end re-catch timing (0.6.2)
 
-輪詢的直接後果是**報告會在使用者看著的當下更新**。個股分析頁原本只在開頁那一刻抓一次，
-分頁開著不動就會一直停在開頁時的快照（實際遇到：20:15 的批次已寫出當天籌碼，
-20:15 之前開的分頁仍顯示前一個交易日）。
+The direct consequence of polling is that the report will be updated while the user is watching it. The individual stock analysis page was originally only captured once when the page was opened.
+If the paging is turned on, it will always stop at the snapshot when the page is opened (actual encounter: the batch at 20:15 has written out the chips for the day,
+20:15 The tab opened before still displays the previous trading day).
 
-- 觸發時機：`visibilitychange` 且 `visibilityState === 'visible'`。與現價共用同一個慣例，
-  **不另開計時器** —— 背景分頁的計時器會被瀏覽器節流，切回前景本來就是要看資料的時刻。
-- 替換條件：**`generatedAt` 不同才 `setReport`**。沒變就不動 state，
-  否則每次切回前景都重繪，捲動位置與展開狀態會被洗掉。
-- 查無報告（或該檔走即點即產路線）時**保留畫面上現有那份**，不清空。
-- 已知限制：使用者從不切換分頁時不會觸發。要覆蓋這種情況得加計時器，
-  代價是背景分頁的節流與額外請求，目前判斷不值得。
+- Triggered when: `visibilitychange` and `visibilityState === 'visible'`. Sharing the same convention as the current price,
+  **Do not open another timer** - the timer for background paging will be throttled by the browser, and switching back to the foreground is the time when you want to read the data.
+- Replacement condition: **`generatedAt` is different from `setReport`**. If the state does not change, the state will remain unchanged.
+  Otherwise, it will be redrawn every time you switch back to the foreground, and the scroll position and expanded state will be washed away.
+- When there is no report (or the file is produced by clicking on it), the existing copy on the screen will be retained and will not be cleared.
+- Known limitation: Does not trigger when user never switches tabs. To cover this situation, a timer must be added.
+  The price is throttling and extra requests for background paging, which is currently not worth it.
 
-### 觀測（`batch_run_log`）
+### Observation(`batch_run_log`)
 
-TWSE 的 openapi 與 rwd 端點一律 `Cache-Control: no-cache`，**不給 `Last-Modified` / `ETag`**
-（2026-07-27 實測）。所以「它幾點上架」記不到，能記的只有「我們去看的時候它說自己是哪一天的」。
-每輪記一列，含各源自報的資料日、T86 改寫次數與定稿時刻、是否短路與短路原因。
-這是往後任何「要不要調整輪詢窗口」的唯一事實依據 —— 不要再憑印象決定。
+TWSE's openapi and rwd endpoints are all `Cache-Control: no-cache`, **do not give `Last-Modified` / `ETag`**
+(Tested on 2026-07-27). So I can’t remember “what time it was put on the shelves.” All I can remember is “what day it said it was when we went to see it.”
+One column is recorded for each round, including the data date of each report, the number of T86 rewrites and the finalization time, whether there is a short circuit and the reason for the short circuit.
+This is the only factual basis for any future "whether to adjust the polling window" - stop making decisions based on impressions.
 
 ---
 
-## AI 助理（0.6.0）
+## AI Assistant (0.6.0)
 
-### 進入點與前提
+### Entry point and premise
 
-個股分析頁的第五個分頁籤「**AI 解讀**」。三個前提：
+The fifth tab of the individual stock analysis page is labeled "**AI Interpretation**". Three premises:
 
-1. **只在 Supabase 模式出現**（整個個股分析頁本來就是）—— 設定存在 `app_settings`，本機模式無處可存。
-2. **需先套用 `sources/supabase/schema.sql` §4.1** 的 `app_settings` 全域單列表（0.6.0-dev.2 起；
-   dev.1 曾放在 `user_settings.ai_*` 五欄位，重跑 schema 會順手清掉）。
-3. **使用者自帶 AI 供應商**：專案不內建任何金鑰、不代付任何費用。
+1. **Only appears in Supabase mode** (the entire stock analysis page is originally) - the settings exist in `app_settings`, and there is nowhere to save them in native mode.
+2. **You need to apply the `app_settings` global single list of `sources/supabase/schema.sql` §4.1** first (from 0.6.0-dev.2;
+   dev.1 was once placed in the fifth column of `user_settings.ai_*`, and it will be cleared easily by re-running the schema).
+3. **User brings his or her own AI provider**: The project does not have any built-in keys and does not pay any fees.
 
-### 設定的範圍與權限（0.6.0-dev.2）
+### Set scope and permissions (0.6.0-dev.2)
 
-AI 設定為**全站共用**：不分帳號、不分工作區，所有登入帳號讀同一份（前端直連供應商，
-金鑰本來就得進瀏覽器，故全員可讀是架構必然）。**寫入僅限管理員**——RLS 檢查 JWT 的
-`app_metadata.role = 'admin'`；tag 由 Dashboard / SQL 設定（語法見 schema.sql §4.1 註解），
-貼完 tag 該帳號要重新登入才生效。非管理員的 UI 沒有設定表單，只看到唯讀摘要
-（provider / model，不顯示金鑰）與「僅管理員可修改」提示；未設定時顯示「請聯絡管理員」。
+AI is set to **shared by the whole site**: regardless of account or workspace, all login accounts read the same copy (the front-end is directly connected to the supplier,
+The key has to be entered into the browser, so it is an architectural necessity that everyone can read it). **Write to Admins Only** - RLS checks for JWT's
+`app_metadata.role = 'admin'`; tag is set by Dashboard/SQL (see schema.sql §4.1 comment for syntax),
+After posting the tag, the account will not take effect until you log in again. The UI for non-administrators does not have a configuration form and only sees a read-only summary.
+(provider/model, key is not displayed) and "Only administrators can modify" prompt; when not set, "Please contact administrator" is displayed.
 
-### 產品紅線
+### product red line
 
-**不主動產生 AI 文字。** 未設定供應商時分頁只有設定表單；設定完成後也要使用者按下
-「產生解讀」才會呼叫模型。籌碼與技術面分頁一律不出現 AI 生成內容。
+**Does not actively generate AI text. ** When the supplier is not set, the page only has the setting form; after the setting is completed, the user also needs to click
+The model will be called only when "Generate Interpretation". There will be no AI-generated content in the chips and technical pages.
 
-### 輸出結構與建議的邊界（0.6.0-dev.3）
+### Output structure with recommended bounds (0.6.0-dev.3)
 
-輸出固定為「3–5 段數據解讀＋『建議操作』＋『注意事項』兩小節＋免責聲明」。
-「建議操作」**僅限中性、條件式的觀察性參考**（如「若跌破月線可留意支撐是否守住」），
-prompt 明令不得給出明確買賣/加碼/出清指令、目標價、進出場價位或報酬預期；
-「注意事項」須指出資料可見的風險訊號與資料侷限。結尾免責聲明字句固定且有測試鎖定。
-（dev.2 以前完全禁止任何操作建議；dev.3 起放寬為上述條件式參考，經使用者決定。）
+The output is fixed to "3-5 paragraphs of data interpretation + "Recommended actions" + two sections of "Precautions" + disclaimer".
+"Recommended operations" are limited to neutral and conditional observational references** (such as "if it falls below the monthly line, pay attention to whether the support is held"),
+prompt is expressly prohibited from giving clear buy/sell/add/clear orders, target prices, entry and exit prices or reward expectations;
+"Notes" must point out the visible risk signals and data limitations of the data. Ending disclaimer text is fixed and has test lock.
+(Before dev.2, any operation suggestions were completely prohibited; starting from dev.3, it will be relaxed to the above conditional reference, subject to the user’s decision.)
 
-### 使用者的操作框架（0.6.9-dev.2）
+### User operation framework (0.6.9-dev.2)
 
-system prompt 帶入使用者採用的四種分批進出框架，讓模型在『建議操作』中有共同語彙
-可以描述「目前數據落在哪個情境」：**金字塔建倉**（下跌加碼 10→20→30→50%）、
-**倒金字塔停利**（上漲分批賣 10→20→30→40→100%）、**非等距網格**、**馬丁格爾變體**。
+system prompt brings in the four batched entry and exit frameworks adopted by the user, allowing the model to have a common vocabulary in "recommended actions"
+It can describe "which situation the current data falls in": **Pyramid position** (increased 10→20→30→50% for declines),
+**Inverted pyramid stop profit** (sell in batches when rising 10→20→30→40→100%), **non-equidistant grid**, **Martinale variant**.
 
-**這不是放寬建議邊界。** 準則 10 明文寫著「這不放寬準則 5」——
-模型仍不得指定加碼／減碼比例、不得指定價位、不得說「現在該買 / 該賣」；
-框架裡的百分比只是說明該方法時的舉例，不得當成對本檔的具體指示。
+**This is not a relaxation of the boundaries of advice. ** Criterion 10 clearly states “This does not relax Criterion 5”——
+The model is still not allowed to specify the increase/decrease ratio, the price, or say "it is time to buy/it is time to sell";
+The percentages in the framework are only examples illustrating the method and should not be taken as specific instructions for this document.
 
-**馬丁格爾單獨標註前提，不與其他三項並列。** 金字塔／倒金字塔／網格都是
-**有上限**的部位管理，而馬丁格爾照定義是無上限的（虧損後加倍）。
-它「只要一次反彈就能全數解套」的說法成立於「標的不歸零且資金無限」，
-真實帳戶兩者都不成立、且連續下跌時所需資金呈指數成長。
-prompt 強制模型**每次提到它就要說明這個前提**，否則它讀起來會像一個穩賺的方法。
+**Martingale labels the premise alone, not in conjunction with the other three. ** Pyramid/Inverted Pyramid/Grid are all
+**Position management with a cap**, while Martingale is by definition unlimited (doubled after losses).
+Its statement that "all the losses can be solved with just one rebound" is based on the fact that "the target does not return to zero and the funds are unlimited."
+Neither is true for a real account, and the funds required grow exponentially when there is a continuous decline.
+prompt forces the model to state this premise every time it is mentioned, otherwise it will read like a sure-fire way to make money.
 
-準則 11 另要求：只要提到分批加碼／攤平／左側交易，『注意事項』就必須指出
-**攤平會放大部位、不等於降低風險**。
+Guideline 11 also requires that whenever batch overweighting/flattening/left-hand trading is mentioned, "notes" must be pointed out
+**Flattening will enlarge the position and does not mean reducing the risk**.
 
-以上字句皆有測試鎖定（`aiPayload.test.ts`）。
+The above words are all tested and locked (`aiPayload.test.ts`).
 
-### 輸出上限（0.6.9-dev.5）
+### Output upper limit (0.6.9-dev.5)
 
-**兩條路徑都必須明確送出輸出上限。** Google 一直有送
+**Both paths must explicitly send the output cap. ** Google always delivers
 （`maxOutputTokens: GOOGLE_MAX_OUTPUT_TOKENS = 8192`），
-OpenAI 相容那條**原本完全沒送** —— 用端點預設值，而很多端點預設只有幾百 token，
-輸出會被 `finish_reason: length` 從中間切斷，畫面上只剩前一兩段加一行「未寫完」。
-`OPENAI_MAX_TOKENS` 取相同的 8192：輸出約需 1500–2500 token，留足餘裕；
-這是上限不是預約量，調高不會增加實際用量與費用。
+OpenAI compatibility was not provided at all originally - it uses endpoint default values, and many endpoint defaults only have a few hundred tokens.
+The output will be cut off in the middle by `finish_reason: length`, leaving only the first one or two paragraphs plus a line of "unfinished" on the screen.
+`OPENAI_MAX_TOKENS` takes the same 8192: the output requires about 1500–2500 tokens, leaving enough margin;
+This is the upper limit, not the reservation amount, and increasing it will not increase actual usage or costs.
 
-### 推理型模型的處理（0.6.9-dev.4）
+### Processing of inferential models (0.6.9-dev.4)
 
-**這份工作不需要推理**：數字全由程式算好，模型只負責照著寫成白話。
-推理型模型會把輸出額度花在思考上，正文一個字都沒寫 —— 使用者實際遇到過。
+**This job does not require reasoning**: the numbers are all calculated by the program, and the model is only responsible for writing them down in vernacular.
+The inferential model will spend the output quota on thinking, without writing a word in the text - the user has actually encountered it.
 
-三道處理，由前到後：
+Three treatments, from front to back:
 
-1. **請求時要求關掉思考。** Google 早就這樣做（`thinkingConfig.thinkingBudget: 0`）；
-   0.6.9-dev.4 起 OpenAI 相容端點也送，因為沒有跨家通用的開關，三個一起送、
-   由端點各取所需：`reasoning_effort: 'none'`（OpenAI o 系列與多數相容端點）、
+1. **Ask to turn off thinking when requesting. ** Google has been doing this for a long time (`thinkingConfig.thinkingBudget: 0`);
+   0.6.9-Starting from dev.4, OpenAI compatible endpoints are also included. Because there is no switch that can be used across different families, all three are included together.
+   Take what you need from each endpoint: `reasoning_effort: 'none'` (OpenAI o series and most compatible endpoints),
    `think: false`（Ollama）、`chat_template_kwargs.enable_thinking: false`
-   （vLLM / SGLang 上的 Qwen3 等）。
-   端點不認得而回 **400 時退回最小集合重送一次**（與 Google 同一個模式，只試一次）。
-   退回的是**整組相容性欄位**（含 `max_tokens`）而不是逐一嘗試 ——
-   400 不會告訴你是哪個欄位不合，逐一試等於要打好幾輪。
-2. **`content` 裡夾著 `<think>…</think>` 就剝掉**，只留正文。
-   有些端點不把思考拆成獨立欄位，不剝的話畫面上會先出現一大段自言自語。
-3. **關不掉又只有思考內容時，改用它但強制加警語**，不整個失敗。
-   警語（`REASONING_FALLBACK_NOTICE`）明講「這是思考過程、不是正式結論」、
-   「數字與判斷都可能是它後來否定掉的」—— **這句不可省略也不可淡化**，
-   思考是推導草稿，當成正式分析讀會被誤導，那是使用者實際踩過的坑。
+   (Qwen3 on vLLM/SGLang, etc.).
+   If the endpoint does not recognize it and returns **400, it will return to the minimum set and resend it once** (the same mode as Google, only try once).
+   What is returned is the entire set of compatibility fields (including `max_tokens`) instead of trying one by one -
+   400 I won't tell you which column is different. Trying one by one means you have to play several rounds.
+2. **`content` is sandwiched with `<think>…</think>`, so peel it off**, leaving only the main text.
+   Some endpoints do not split thinking into independent columns. If not, a large section of self-talk will first appear on the screen.
+3. **When you can't turn it off and you can only think about the content, use it instead but force a warning** to avoid total failure.
+   The warning (`REASONING_FALLBACK_NOTICE`) clearly states that "this is a thinking process, not a formal conclusion",
+   "Numbers and judgments may be what it later negates" - **This sentence cannot be omitted or downplayed**,
+   Thinking is a draft of derivation, and reading it as a formal analysis will be misleading. It is a pitfall that users have actually stepped on.
 
-### 支援的供應商
+### Supported vendors
 
-| 設定值 | 對象 | 認證 |
+| Settings | Object | Authentication |
 | ---- | ---- | ---- |
 | `google` | Google AI (Gemini) | `x-goog-api-key` |
-| `openai-compatible` | Ollama / vLLM / 任何 OpenAI 相容端點 | `Authorization: Bearer`（可空，本機 Ollama 免填） |
+| `openai-compatible` | Ollama / vLLM / any OpenAI compatible endpoint | `Authorization: Bearer` (optional, no need to fill in for native Ollama) |
 
-`baseUrl` 填 `http://host:11434` 或 `http://host:11434/v1` 都可以，程式會正規化。
+`baseUrl` can be filled in with `http://host:11434` or `http://host:11434/v1`, and the program will be normalized.
 
-### 餵給模型的資料（口徑必須標示）
+### Information fed to the model (the caliber must be indicated)
 
-- **技術面**：`TechnicalView.latest` 已算好的指標 —— 收盤 / 開高低、漲跌、
-  MA5（週線）/ MA20（月線）/ MA60（季線）、均線排列、K / D、RSI14、MACD 柱、
-  量能比（20 日均量的幾倍）、近 1 年區間最高最低收盤。**不含任何原始收盤價序列。**
-- **籌碼**：三大法人各自的買進 / 賣出 / 買賣超（**單位：股數**）、
-  融資與融券今日餘額與較前日（**單位：張**）、連續天數、近 7 個交易日序列、報告附註。
-- **基本面**（0.6.0-dev.4）：產業別、估值三指標、近 12 個月月營收（**單位：千元**，含月增與年增 %）。
-- **不含持股、成本、未實現損益。**
-- 基本面缺料時，user prompt 印替代文案（「請勿臆測任何基本面數據」），
-  解讀功能照常運作、不阻斷。
+- **Technical**: `TechnicalView.latest` Calculated indicators - closing / opening high and low, up and down,
+  MA5 (weekly line)/MA20 (monthly line)/MA60 (quarterly line), moving average arrangement, K / D, RSI14, MACD column,
+  The volume-to-energy ratio (how many times the 20-day average volume), the highest and lowest closing price in the past year. **Does not include any original closing price series. **
+- **Chips**: The buying/selling/trading excess of each of the three major legal persons (**unit: number of shares**),
+  Today's balance of financing and securities lending compared with the previous day (**Unit: Zhang**), number of consecutive days, sequence of the last 7 trading days, and report notes.
+- **Fundamentals** (0.6.0-dev.4): Industry, three valuation indicators, monthly revenue in the past 12 months (**Unit: thousand yuan**, including monthly growth and annual growth %).
+- **Excluding shareholdings, costs, unrealized gains and losses. **
+- When the fundamentals are short of information, the user prompt prints alternative text ("Please do not speculate on any fundamental data").
+  The interpretation function operates as usual and is not blocked.
 
-> **消息面已於 0.6.29 整個移除**（Google News RSS、`news/{ticker}.json`、prompt 段落全數刪除）。
-> 0.6.13 移除的只是管理後台的新聞追蹤，功能本體當時仍在 —— 這次是連功能一起拿掉。
+> **The entire news page was removed on 0.6.29** (Google News RSS, `news/{ticker}.json`, and prompt paragraphs were all deleted).
+> What was removed in 0.6.13 was only the news tracking in the management background. The function itself was still there - this time the function was removed together.
 
-三個餵給模型時必須明確標示、否則模型會講錯的地方：
+There are three things that must be clearly marked when feeding the model, otherwise the model will make mistakes:
 
-1. **漲跌幅**：`changePct` 原始值是小數比例（0.0148），payload 欄位為
-   `changePctPercent` 且已乘 100，否則模型會講出小 100 倍的漲跌幅。
-2. **連續天數的正負號**：正＝連買 / 連增，負＝連賣 / 連減。payload 附 `streakNote` 說明，
-   否則 `-3` 會被讀成「增加了 -3 天」。
-3. **兩種單位並存**：三大法人是股數、融資融券是張。prompt 明令模型不得自行換算。
+1. **Increase and decrease**: `changePct` The original value is a decimal ratio (0.0148), and the payload field is
+   `changePctPercent` has been multiplied by 100, otherwise the model will tell a change that is 100 times smaller.
+2. **The positive and negative sign of the number of consecutive days**: positive = continuous buying/continuous increase, negative = continuous selling/continuous decrease. The payload is attached with `streakNote` description,
+   Otherwise `-3` will be read as "-3 days added".
+3. **Two types of units coexist**: the three major legal persons are shares, and margin trading and securities lending are Zhang. prompt explicitly states that the model cannot be converted by itself.
 
-### 輸出長度與截斷（0.6.0-dev.6）
+### Output length and truncation (0.6.0-dev.6)
 
-Google 的 `maxOutputTokens` 為 `GOOGLE_MAX_OUTPUT_TOKENS = 8192`，並以
-`thinkingConfig.thinkingBudget: 0` 關閉思考。**原因：Gemini 2.5 起的思考 token 計入
-`maxOutputTokens`**，原本的 1200 幾乎被思考吃光，正文只寫一句就被截斷（實測踩到）。
-模型若不接受 `thinkingConfig`（HTTP 400），自動去掉該欄位重送一次——
-不以模型名稱猜測支援度，因為各世代的控制欄位不同且會再變。
-（這不違反「不自動重試」：那條是禁止替使用者重跑失敗的解讀以免重複計費，
-此處是同一次請求的參數協商，且只試一次。）
+Google's `maxOutputTokens` is `GOOGLE_MAX_OUTPUT_TOKENS = 8192`, and ends with
+`thinkingConfig.thinkingBudget: 0` turns off thinking. **Reason: Thinking tokens are included starting from Gemini 2.5
+`maxOutputTokens`**, the original 1200 was almost eaten up by thinking, and the text was truncated after writing only one sentence (actually tested).
+If the model does not accept `thinkingConfig` (HTTP 400), it will automatically remove this field and resend it——
+The support level is not estimated based on the model name, because the control fields of each generation are different and will change again.
+(This does not violate "no automatic retry": that prohibits re-running failed attempts for the user to avoid repeated billing.
+Here is the parameter negotiation for the same request, and it is only tried once. )
 
-**截斷一律要讓使用者看得出來。** `finishReason`（Google）與 `finish_reason`
-（OpenAI 相容，含 ollama 的 `num_predict`）都要檢查：
-有內容但被截斷 → 保留文字並附上 `TRUNCATION_NOTICE`；
-完全沒有正文（思考吃光額度）→ 拋 `bad-response` 並在訊息中點明原因。
-絕不可把半截文字當成完整結果回傳。
+**Truncation must always be visible to the user. ** `finishReason` (Google) and `finish_reason`
+(OpenAI compatible, including ollama's `num_predict`) Both check:
+Contains content but truncated → keep text and append `TRUNCATION_NOTICE`;
+No text at all (thinking about eating up the quota) → Throw `bad-response` and indicate the reason in the message.
+Never return half text as a complete result.
 
-### 失敗行為
+### failure behavior
 
-180 秒逾時（0.6.0-dev.2 起，自 30 秒放寬以支援本機 local model；**含讀取回應主體**，
-不只連線階段；數值集中在 `aiClient.ts` 的 `AI_TIMEOUT_MS`，UI 字樣由它推導）；錯誤分為
-auth / rate-limit / server / timeout / network / bad-response 六類並各給白話訊息；
-**不自動重試**，只提供「重試」按鈕（AI 呼叫要付費，靜默重試等於讓使用者付兩次）。
+180 seconds timeout (as of 0.6.0-dev.2, relaxed from 30 seconds to support native local model; **includes reading response body**,
+Not only the connection stage; the values ​​​​are concentrated in `AI_TIMEOUT_MS` of `aiClient.ts`, and the UI words are derived from it); errors are divided into
+auth / rate-limit / server / timeout / network / bad-response six categories and each gives vernacular messages;
+**No automatic retry**, only a "Retry" button is provided (AI calls require payment, and silent retry is equivalent to asking the user to pay twice).
 
-### UI 必須說明的事
+### What the UI must explain
 
-結果區固定附免責聲明，並明講「AI 仍有可能講錯數字，重要數字請回頭對照技術面與籌碼分頁」——
-模型輸出無法用測試保證，這句是唯一的防線。
+The result area always has a disclaimer, and clearly states that "AI may still give wrong numbers, please refer back to the technical and chip pages for important numbers"——
+Model output cannot be guaranteed by testing, this sentence is the only line of defense.
 
 ---
 
-## 資料抓取狀況頁（0.6.12，僅管理員）
+## Data crawl status page (0.6.12, admin only)
 
-頂層頁面「抓取狀況」，只有 `app_metadata.role === 'admin'` 的帳號看得到。
-資料來自 Edge Function 的 `admin-status`（唯讀彙總），**不是**前端各自去撈。
+The top-level page "Crawling Status" is only visible to accounts with `app_metadata.role === 'admin'`.
+The data comes from the `admin-status` (read-only summary) of Edge Function and is not collected by the front-ends individually.
 
-### 為什麼走 Edge Function 而不是前端直讀
+### Why use Edge Function instead of front-end direct reading?
 
-排程（`cron` schema）與觀測表（`batch_run_log` / `source_probe_log`）前端沒有權限：
-前者不在 PostgREST 的 exposed schemas、後者開了 RLS 但**刻意沒有任何 policy**。
-為了一個唯讀後台去鬆綁那些防線並不划算，故由 service role 在後端讀完再吐出。
-實測彙總耗時約 0.9–1.2 秒。
+The schedule (`cron` schema) and observation table (`batch_run_log` / `source_probe_log`) front ends do not have permissions:
+The former is not in PostgREST's exposed schemas, and the latter has RLS enabled but deliberately does not have any policy.
+It is not cost-effective to loosen those defense lines for a read-only backend, so the service role reads the data in the backend and then spits it out.
+Measured aggregation takes about 0.9–1.2 seconds.
 
-### 授權（三層，缺一不可）
+### Authorization (three layers, all are indispensable)
 
-| 層 | 機制 |
+| Layers | Mechanisms |
 | ---- | ---- |
-| 分頁顯示 | `ADMIN_ONLY_TABS`，**僅介面整理、不是安全邊界** |
-| API | `assertAdmin()` 驗使用者 JWT 且 `app_metadata.role === 'admin'` |
-| RPC | `admin_schedule_status()` 只 `GRANT` 給 service_role |
+| Paginated display | `ADMIN_ONLY_TABS`, **Only interface organization, not security boundaries** |
+| API | `assertAdmin()` validates user JWT and `app_metadata.role === 'admin'` |
+| RPC | `admin_schedule_status()` only `GRANT` to service_role |
 
-- **不可用 CRON_SECRET 把關**：那把密鑰不能進前端（進了等於公開，任何人都能觸發整批抓取）。實測 CRON_SECRET 打 `admin-status` 回 401。
-- **不可用 email 比對**：email 使用者可自行變更；`app_metadata` 只有 service role / Dashboard 寫得動。判準必須與 `aiSettings.ts` 的 `isAiAdmin()` 一致。
-- ⚠️ **`cron.job.command` 內含 `x-cron-secret` 明文**，SQL function 只挑 jobname / schedule / active / action / 目標 ref，**絕不可回傳 command 全文**（詳見 `schema.sql` §11）。
+- **Unavailable CRON_SECRET check**: That key cannot enter the front end (if it enters, it means it is public, and anyone can trigger the entire batch of crawling). Actual measurement: CRON_SECRET returns 401 when calling `admin-status`.
+- **Unavailable email comparison**: email users can change it themselves; `app_metadata` can only be written in service role / Dashboard. The criterion must be consistent with `isAiAdmin()` of `aiSettings.ts`.
+- ⚠️ **`cron.job.command` contains `x-cron-secret` plain text**, the SQL function only selects jobname / schedule / active / action / target ref, and ** must not return the full text of the command ** (see `schema.sql` §11 for details).
 
-### 判定規則
+### Decision rules
 
-**基準是「公布窗結束後的第一個批次班次」，不是來源公布時刻。**
-三大法人 15:00–15:30 公布、批次 16:15 才抓到，用公布時刻判會變成「晚 45 分」——
-但盤後批次本來就 16:00 起跑，那是排程設計不是異常；反之借券當晚 32 輪都在跑卻沒抓到、
-隔天才補，那才該亮燈。與 BUG-008 同源：拿外部發布時程當基準，
-只會得到一片永遠亮著的黃燈，而永遠亮著的告警等於沒有告警。
+**The benchmark is "the first batch after the end of the announcement window", not the source announcement time. **
+The three major legal persons were announced between 15:00 and 15:30, and the batch was caught at 16:15. Based on the announcement time, it will become "45 minutes late"——
+However, the after-hours batch originally started at 16:00, which is due to the schedule design and not an abnormality; on the contrary, the ticket borrowing night was running for 32 rounds but no one was caught.
+Just make up for it the next day, then turn on the light. Same origin as BUG-008: use the external release schedule as the benchmark,
+You will only get a yellow light that is always on, and an alarm that is always on means no alarm.
 
-- 沒拿到且**未到** `dueBy` → `idle`（等待中），不是 late。每天傍晚都有一段常態空窗。
-- 月頻指標的落後判定**與同組其他指標比**，不查發布行事曆（那是一張必然會過期的常數表）。
-- 判定與座標計算全在 `src/components/Admin/timeline.ts`（純函式，29 個測試）。
+- Didn’t get it and **not arrived** `dueBy` → `idle` (waiting), not late. There is a regular gap every evening.
+- The monthly frequency indicator's lagging determination is compared with other indicators in the same group, without checking the release calendar (which is a constant table that will inevitably expire).
+- Determination and coordinate calculation are all in `src/components/Admin/timeline.ts` (pure function, 29 tests).
 
-### 版面
+### Layout
 
-時間軸（當日 15:00 → 次日 10:00）→ 排程 → 總經期別 → 匯率與檔案涵蓋。
-月頻的總經**不放在日軸上**：它的節奏是「哪一期到了」而非「幾點到」。
+Timeline (15:00 on the current day → 10:00 on the next day) → Schedule → Total menstrual period → Exchange rate and file coverage.
+The total period of the monthly frequency is not placed on the daily axis: its rhythm is "which period arrives" rather than "what time it arrives".
 
-## 總體經濟頁面（0.6.5）
+## General Economy Page (0.6.5)
 
-**頂層頁面**「總體經濟」（0.6.5-dev.2 起；dev.1 曾是個股分析的一個分頁），
-資料來自 `macro/us.json`（**全域單檔，非 per-ticker**）。
+**Top-level page** "General Economy" (from 0.6.5-dev.2; dev.1 was once a page for individual stock analysis),
+The data comes from `macro/us.json` (**global single file, not per-ticker**).
 
-| 指標 | 來源序列（FRED） | 呈現 |
+| Indicators | Source Series (FRED) | Presentation |
 | ---- | ---- | ---- |
-| 核心 CPI | `CPILFESL` | 年增 % |
-| 核心 PPI | `PPIFES` | 年增 % |
-| 核心 PCE | `PCEPILFE` | 年增 % |
-| 非農就業 | `PAYEMS` | 較上月增減（千人） |
-| 消費者信心 | `UMCSENT` | 指數值 |
+| Core CPI | `CPILFESL` | Annual % growth |
+| Core PPI | `PPIFES` | Annual % growth |
+| Core PCE | `PCEPILFE` | Annual % growth |
+| Non-agricultural employment | `PAYEMS` | Increase or decrease from the previous month (thousands of people) |
+| Consumer Confidence | `UMCSENT` | Index Value |
 
-- **這一頁與個股無關**，故為頂層頁面而非個股分析的分頁（`PLAN.md §Q5`）。
-- 「核心」只有 CPI / PPI / PCE 有標準定義；非農採月增人數、
-  消費者信心與 CCI 合併為密大指數（理由見 `PLAN.md §Q4`）。
-- **由獨立的 `macro-daily` cron job 觸發**（每天兩班 13:00 / 15:00 UTC，非台股作息），
-  近 12 期走勢。
-- **冪等鍵是內容指紋，不是日期**（0.6.11 起，修 BUG-008）。每班都真的去問 FRED，
-  比對 `macroFingerprint`（涵蓋整段 points，因為 FRED 會回頭修正歷史值），
-  內容變了才重寫檔案。用日期當鍵會讓第一班的成功把第二班消音 ——
-  而月度數據常常在第一班之後才進 FRED，冬令甚至發布在 13:00 之後。
-- **檔案有兩個時間欄位，語意不同**：`asOf` 是資料最後變動時間（沒新數據就不動，
-  月度資料一個月才跳一次，屬正常）；`checkedAt` 是最後一次問過 FRED 的時間（每班都更新）。
-  畫面在兩者不同日時才補顯示「（最後檢查 …）」—— 同日顯示只會重複 `asOf`。
-  **查排程健康度看 `checkedAt`，查資料新舊看 `asOf`。**
-- **本機模式不顯示此頁**：資料源需要 Supabase，與「個股分析」同一條入口規則。
+- **This page has nothing to do with individual stocks**, so it is a top-level page rather than a pagination for individual stock analysis (`PLAN.md §Q5`).
+- "Core" only has standard definitions for CPI / PPI / PCE; the monthly increase in the number of non-agricultural buyers,
+  Consumer confidence is combined with the CCI into the UM Index (see `PLAN.md §Q4` for the rationale).
+- **Triggered by an independent `macro-daily` cron job** (two shifts per day 13:00 / 15:00 UTC, non-Taiwan stock schedules),
+  Trends in the last 12 periods.
+- **The idempotent key is the content fingerprint, not the date** (from 0.6.11, fixes BUG-008). Really ask FRED every class,
+  Compare `macroFingerprint` (covering the entire points, because FRED will go back and correct the historical values),
+  The file is rewritten only when the content has changed. Using the date as a key will cause the success of the first shift to silence the second shift -
+  Monthly data often enters FRED after the first shift, and in winter it is even released after 13:00.
+- **The file has two time fields with different semantics**: `asOf` is the last change time of the data (it will not move if there is no new data.
+  Monthly data only jumps once a month, which is normal); `checkedAt` is the last time FRED was asked (updated every shift).
+  The screen will only display "(last check...)" when the two dates are different - the display on the same day will only repeat `asOf`.
+  **To check the health of the schedule, look at `checkedAt`, and to check whether the data is old or new, look at `asOf`. **
+- **This page is not displayed in local mode**: The data source requires Supabase, which has the same entry rule as "Individual Stock Analysis".
 
-## 基本面的月營收走勢圖（0.6.8）
+## Fundamental monthly revenue trend chart (0.6.8)
 
-月營收在**基本面**分頁（不是技術面），表格上方加一張 `LineSeriesChart`。
+Monthly revenue is in the **Fundamentals** page (not technical), and a `LineSeriesChart` is added above the table.
 
-- **圖用 `revenueMonths`（由舊到新），表格用它 reverse 後的 `months`（由新到舊）。**
-  拿錯那一份的話整條線會反過來、而且**看起來像真的**（趨勢完全相反），
-  是最不容易被發現的錯 —— 已用 y 座標的測試直接釘住方向。
-- X 軸標籤用 `2026/06` 而非「2026 年 06 月」：後者在 11px 字級約 100px 寬，
-  而 12 個月每格只有約 39px。**年份不能省**，跨年那兩格會分不出是哪一年。
-  12 個月時隔一個標一個（6 個標籤、間距約 78px）；少於 8 個月則全標。
-- 12 點 ≤ `DOT_LIMIT`，故維持逐點畫圓；營收缺值的月份斷線不內插。
-- 文案要提醒**月營收有季節性**，判斷方向請看表格的年增率 ——
-  絕對金額的高低起伏未必代表營運轉折。
+- **The graph uses `revenueMonths` (from old to new), and the table uses `months` (from new to old) after reversed. **
+  If you take the wrong one, the entire line will be reversed, and it will look real (the trend is completely opposite).
+  This is the least likely error to detect - the direction has been pinned directly using the y-coordinate test.
+- The X-axis label uses `2026/06` instead of "June 2026": the latter is about 100px wide at an 11px font size.
+  And 12 months is only about 39px per square. **The year cannot be omitted**, and the two spaces crossing the New Year will not be able to tell which year it is.
+  12 Mark one label every other month (6 labels, spacing about 78px); mark all labels if less than 8 months.
+- 12 points ≤ `DOT_LIMIT`, so the circle is drawn point by point; months with missing revenue will not be interpolated.
+- The copywriter should remind ** that monthly revenue is seasonal**. To determine the direction, please look at the annual growth rate in the table——
+  Highs and lows in absolute amounts do not necessarily represent operating changes.
 
-## 個股分析：單一長頁（0.6.8）
+## Individual Stock Analysis: Single Long Page (0.6.8)
 
-分頁從 5 個減為 **2 個**：「分析內容」與「AI 分析」。
-分析內容是一頁到底，順序固定為 **報價 → 籌碼 → 基本面 → 技術面**（使用者指定；
-0.6.36 前第一段是「我的持股」）。
+The number of paginations has been reduced from 5 to **2**: "Analysis Content" and "AI Analysis".
+The analysis content is from one page to the end, and the order is fixed as **Quotation → Chip → Fundamental → Technical** (specified by the user;
+0.6.36 The first paragraph above is "My shareholdings").
 
-採**卡片分組**（比稿版型 D）：每段一張 `.glass .detail-card`，靠卡與卡之間的留白分邊界。
-選它是因為零互動、沒有「東西被收起來找不到」的問題。
-分組標題 `.card-head h3` 是 16px，刻意比段內的 `.rpt-section h3`（14px）高一級 ——
-同一頁有 14 個標題，全部同一級等於沒有層級。
+Adopt **card grouping** (bill version D): one `.glass .detail-card` for each section, with the boundaries defined by the white space between cards.
+I chose it because there is zero interaction and there is no problem of "things being put away and cannot be found".
+The group title `.card-head h3` is 16px, which is deliberately one level higher than the `.rpt-section h3` (14px) in the paragraph ——
+There are 14 titles on the same page, all at the same level, which means there is no hierarchy.
 
-**AI 分析沒有一起併**：它有 API Key 輸入框與對話狀態，而且內容是按鈕觸發、不是一直在那。
+**AI analysis is not integrated: it has an API Key input box and dialog state, and the content is triggered by buttons and is not always there.
 
-### PDF 擷取範圍與個資（0.6.36 改）
+### PDF retrieval scope and personal information (modified in 0.6.36)
 
-`surfaceRef` **包住全部四段**，匯出檔＝畫面上看到的內容。
-0.6.35 以前第一段是持股，靠「排在 `surfaceRef` 之外」擋住個資流進匯出檔；
-0.6.36 起那張卡換成報價（公開市場資料），改由**畫面上根本不出現持股數字**把關 ——
-測試釘的也換成後者（`captured.textContent` 不得含未實現損益與「持股概況」）。
-檔名前綴同時由「盤後籌碼-」改為「個股分析-」。
+`surfaceRef` **encloses all four segments**, the exported file = the content seen on the screen.
+0.6.35 In the past, the first section was for shareholding, which relied on "ranking outside `surfaceRef`" to block the inflow and outflow of individual capital;
+0.6.36 The card was replaced with a quotation (open market data), and the number of holdings did not appear on the screen at all**. ——
+The test pins are also changed to the latter (`captured.textContent` must not contain unrealized profits and losses and "shareholding overview").
+The file name prefix was also changed from "After-hours chips-" to "Individual stock analysis-".
 
-**擷取倍率改成依內容面積自動調**（`pdfScaleFor`）：
-iOS Safari 對單一 canvas 有約 16.7M px² 的硬上限，超過就靜默失敗
-（`toDataURL` 回空白，使用者只看到「PDF 產生失敗」）。
-合併後實測擷取範圍 1140×3885 CSS px，scale 2 下是 **17.7M px²**，剛好越過去。
-現在會自動降到剛好落在 16M 以內（實測 scale 1.901），下限 1 以維持文字可讀。
+**Change the capture magnification to automatically adjust based on the content area (`pdfScaleFor`):
+iOS Safari has a hard upper limit of about 16.7M px² for a single canvas. If it exceeds it, it will fail silently.
+(`toDataURL` returns blank, the user only sees "PDF generation failed").
+The actual measured capture range after merging is 1140×3885 CSS px, and under scale 2 it is **17.7M px²**, which is just over.
+Now it will automatically drop to just within 16M (measured scale 1.901), with a lower limit of 1 to maintain readable text.
 
-### 圖表焦點改為 roving tabindex
+### Chart focus changed to roving tabindex
 
-`ChartFrame` 原本**逐點**建立 `<rect tabIndex={0}>`，一年份日 K 就是 244 個看不見的
-tab stop；四段併成一頁後同頁最多 765 個。改成**整張圖一個 tab stop**
-（`<svg tabIndex={0} role="group">`），聚焦後用左右方向鍵逐點移動、Home / End 跳頭尾、Esc 取消。
-實測整頁 Tab 次數由 213～765 降為 **24**。
+`ChartFrame` originally created `<rect tabIndex={0}>` **point by point**, and the number of days and days in a year is 244 invisible ones.
+tab stop; after merging four paragraphs into one page, the maximum number of pages on the same page is 765. Change to **The whole picture is one tab stop**
+(`<svg tabIndex={0} role="group">`), after focusing, use the left and right arrow keys to move point by point, Home / End to jump to the beginning and the end, and Esc to cancel.
+The measured number of tabs on the entire page has been reduced from 213 to 765 to **24**.
 
-### 試過但拿掉的：技術面延後載入
+### Tried but discarded: technical delayed loading
 
-用 `IntersectionObserver` 讓技術面捲到才載，**量過之後拿掉**：
-掛載當下籌碼與基本面都還在載、各自只有一個 spinner，整頁不到 500px 高，
-技術面本來就在視窗內，observer 立刻判定可見而照樣載。
-要讓它真的延後就得在上面兩段預留一兩千像素的假高度，那是用猜的；
-而實際省下的只有一個約 17KB 的 Storage 請求
-（`warmStock` 的 session 名額早被基本面那條路徑用掉）。
-**不值得換一個「宣稱延後、實際每次都載」的機制。**
+Use `IntersectionObserver` to let the technical aspects roll in before loading, and then remove them after measuring:
+At the moment of mounting, the chips and fundamentals are still loading, each has only one spinner, and the entire page is less than 500px high.
+The technical side is already in the window, and the observer immediately determines that it is visible and loads it anyway.
+To make it really delayed, you have to reserve a false height of one or two thousand pixels in the upper two sections. That's just guessing;
+What is actually saved is only a Storage request of about 17KB
+(The session quota of `warmStock` has long been used by the fundamental path).
+**It's not worth changing to a mechanism that "claims to be delayed but actually loads every time". **
 
-### 順帶修正
+### Correction by the way
 
-`visibilitychange` 的重抓原本只涵蓋籌碼。併成一頁後「只有籌碼會自己更新」
-從看不見變成肉眼可見的不對稱（同一張畫面上籌碼跳到今天、月營收還停在昨天），
-故一併比對基本面的 `asOf`。
+The redraw of `visibilitychange` originally only covered chips. After merging into one page, "Only the chips will update themselves"
+From invisible to visible asymmetry (on the same picture, the chips jumped to today, but the monthly revenue stayed at yesterday),
+Therefore, compare the fundamental `asOf` together.
 
 ---
 
-## 報價卡與台股抓價時段（0.6.36）
+## Quotation card and Taiwan stock price grabbing period (0.6.36)
 
-### 報價卡（個股分析第一段）
+### Quotation card (first paragraph of individual stock analysis)
 
-七格：**開盤、最高、成交量、昨收、最低、預估、今收**（順序由使用者指定）。
-全部來自現價本來就會回的**同一筆 TWSE MIS 回應**（`o/h/l/v/y/z/d/t/ip`），零額外請求。
+Seven grids: **opening, highest, trading volume, yesterday's closing, lowest, estimated, today's closing** (the order is specified by the user).
+All from the same TWSE MIS response** (`o/h/l/v/y/z/d/t/ip`) that the current price would have returned, with zero additional requests.
 
-- **今收 / 成交**：`t >= 13:30:00` 時該格叫「今收」（收盤定案值），否則叫「成交」。
-  盤中還沒有收盤價，沿用同一個字會被誤讀。著色基準是昨收（紅漲綠跌）。
-- **預估**：只有 `ip === '1'`（試撮）時顯示，其餘顯示「—」。
-  試撮時段為 08:30–09:00 與 13:25–13:30。
-- **成交量**單位是**張**。Yahoo 那條備援路徑回的是股數，除以 1000 後才寫進來，
-  兩條路徑必須同口徑。`0` 張（尚無成交）與 `null`（取不到）在畫面上分別是 `0 張` 與 `—`。
-- 卡片標題右側標出「交易日 · 狀態 · 撮合時間」，快取價另加「· 快取」。
+- **Today's close/deal**: When `t >= 13:30:00`, the box is called "today's close" (the closing value), otherwise it is called "deal".
+  There is no intraday closing price yet, so using the same word will be misunderstood. The coloring benchmark is yesterday's closing (red up, green down).
+- **Estimation**: Only `ip === '1'` (trial pinch) is displayed, and "—" is displayed for the rest.
+  The trial period is 08:30–09:00 and 13:25–13:30.
+- The unit of **Trading Volume** is **tickets**. Yahoo's backup path returns the number of shares, which is divided by 1000 before being written in.
+  Both paths must be of the same diameter. `0` sheets (no transaction yet) and `null` (cannot be obtained) are shown as `0` and `—` respectively on the screen.
+- The right side of the card title is marked with "Transaction Date·Status·Matching Time", and "·Cache" is added to the cache price.
 
-⚠️ **今收刻意不用 TWSE OpenAPI 的日收盤端點**（`STOCK_DAY_AVG_ALL` / `STOCK_DAY_ALL`）。
-2026-08-05 15:23 實測（收盤後兩小時）兩個端點的 `Date` 都還是 `1150804`（前一交易日），
-2330 回 `ClosingPrice` 2320 —— 那其實是昨收，當日真正的收盤價是 MIS 的 2405，差 3.6%。
-拿它當「今收」會把昨收當今收顯示，而且會被鎖上一整夜。
+⚠️ **Today’s closing deliberately does not use the daily closing endpoint of TWSE OpenAPI** (`STOCK_DAY_AVG_ALL` / `STOCK_DAY_ALL`).
+2026-08-05 15:23 According to actual measurement (two hours after the market close), the `Date` of both endpoints is still `1150804` (the previous trading day).
+2330 Return to `ClosingPrice` 2320 - that was actually yesterday's closing price. The real closing price that day was MIS's 2405, a difference of 3.6%.
+Using it as "today's closing" will display yesterday's closing and today's closing, and it will be locked all night.
 
-### 台股收盤後不再抓價
+### Taiwan stocks no longer price-catch after closing
 
 `supabase/functions/stock-price/quoteWindow.ts` 的 `twQuoteTtlMs(now, tradeTime?)`
-是**前端與 Edge Function 共用**的純函式（前端跨目錄 import，沿用 `misParse.ts` 的既有模式）：
+It is a pure function shared by **front-end and Edge Function** (front-end cross-directory import follows the existing pattern of `misParse.ts`):
 
-| 台北時間 | 台股報價 TTL |
+| Taipei Time | Taiwan Stock Quote TTL |
 | ---- | ---- |
-| 08:25–13:30（試撮與盤中） | 60 秒 |
-| 13:30 至隔日 08:25 | 到下一個 08:25 為止 |
+| 08:25–13:30 (Trial and Intraday) | 60 seconds |
+| 13:30 to 08:25 of the next day | to 08:25 of the next day |
 
-- **無狀態、不查交易日曆**：只看台北時鐘（固定 +8）。週末與國定假日一到 13:30
-  自然落入長 TTL；隔天 08:25 解除後若當天休市，13:30 又重新落入。
-- **13:30–14:00 的過渡窗**：來源回的 `t` 若還沒到 13:30，表示收盤撮合尚未落地，
-  這種過渡值不鎖夜、繼續走 60 秒。過了 14:00 一律鎖定。
-  來源沒給 `t`（美股 / OpenAPI 備援 / 舊快取）時不阻擋鎖定。
-- **兩層都要套用**：前端 `priceProxy.cacheTtlMs` 與 Edge 的 `price_cache` 判斷。
-  只改前端的話，其他裝置或快取過期時 Edge 仍會去打 MIS。
-  Edge 端查 `price_cache` 的粗篩下界（`freshAfter`）也必須跟著取兩市場的較大者，
-  否則昨天收盤抓到的定案價會被濾掉、整夜白抓。
-- `useStockPrices` 的 60 秒輪詢**不需要改**：是否真的發請求本來就由 TTL 決定，
-  鎖定期間輪詢全部命中快取、零請求。手動「重新整理」（`force`）永遠略過 TTL。
-- **美股不比照**（維持 10 分鐘 TTL）：台股鎖定期間美股正好在交易，
-  且美股有夏令時間與盤前盤後，判斷收盤的規則複雜得多。
+- **No status, no transaction calendar check**: only look at Taipei clock (fixed +8). On weekends and national holidays until 13:30
+  It will naturally fall into the long TTL; if it is lifted at 08:25 the next day, if the market is closed that day, it will fall again at 13:30.
+- **13:30–14:00 transition window**: If the `t` returned from the source has not reached 13:30, it means that the closing matchmaking has not yet been implemented.
+  This transition value does not lock the night and continue walking for 60 seconds. It will be locked after 14:00.
+  Locking is not blocked when the source is not given `t` (US Stocks/OpenAPI Fallback/Old Cache).
+- **Both layers must be applied**: front-end `priceProxy.cacheTtlMs` and Edge's `price_cache` judgment.
+  If you only change the front-end, Edge will still issue MIS when other devices or caches expire.
+  The coarse filter lower bound (`freshAfter`) of the `price_cache` checked on the Edge side must also be followed by taking the larger of the two markets.
+  Otherwise, the final price captured at yesterday's closing price will be filtered out and captured in vain all night long.
+- The 60-second polling of `useStockPrices` does not need to be changed: whether the request is actually sent is determined by the TTL.
+  Polling for all cache hits, zero requests during lockout period. Manual "refresh" (`force`) always bypasses TTL.
+- **U.S. stocks are not compared** (10-minute TTL maintained): U.S. stocks happened to be trading during the Taiwan stock lockup period.
+  Moreover, U.S. stocks have daylight saving time and pre-market and post-market hours, so the rules for determining closing prices are much more complicated.
 
-### price_cache 新增欄位
+### price_cache new field
 
 `open` / `high` / `low` / `volume` / `trade_date` / `trade_time` / `trial`。
-理由與 0.6.34 加 `prev_close` 相同：快取一命中就不會再問來源，
-不一起存的話報價卡會缺格。前端 localStorage 快取 key 同步升為 `price-cache-v3`。
+The reason is the same as 0.6.34 adding `prev_close`: once the cache hits, the source will not be asked again.
+If you do not save them together, the quotation card will be missing. The front-end localStorage cache key is synchronously upgraded to `price-cache-v3`.
 
-## 折線圖樣式（0.6.8）
+## Line Chart Style (0.6.8)
 
-`LineSeriesChart` 採 Google Finance 風格；套用於**匯率頁 2 張與籌碼頁融資／融券 2 張**。
-K 線、成交量長條、KD 三張**不套用**。
+`LineSeriesChart` adopts Google Finance style; applied to **Exchange rate page 2 sheets and Chip page financing/securities 2 sheets**.
+K-line, trading volume bar, and KD are **not applicable**.
 
-- **漸層面積填充**：`<defs><linearGradient>`，由線色 0.28 不透明度淡出到 0。
-  底邊用 `geo.innerH` 而非 `geo.y(0)` —— 折線圖的值域刻意不含 0，`y(0)` 會落在繪圖區外很遠。
-- **hover 垂直虛線**（`ChartFrame` 的 `crosshair` prop，預設關閉）。
-- **提示框貼著資料點**（`tooltipAnchor` prop，預設關閉 → 沿用釘在頂端）。
-  長條圖與 K 線沒有單一個「該點的 y」，硬挑一個只會讓提示框停在沒有意義的位置。
-- **圓點依點數自動**：≤ 20 點逐點畫（籌碼頁 7 天），> 20 點只畫 hover 那一顆
-  （匯率一年 260 顆圓點會把線糊成一條毛毛蟲）。
-- 提示框中心會 clamp 在容器內（`clampTipCenter`），寬度由字元數估。
+- **Gradient area fill**: `<defs><linearGradient>`, fade from line color 0.28 opacity to 0.
+  Use `geo.innerH` instead of `geo.y(0)` for the bottom edge - the value range of the line chart deliberately does not contain 0, and `y(0)` will fall far outside the plot area.
+- **hover vertical dashed line** (`ChartFrame`'s `crosshair` prop, default off).
+- **The prompt box is attached to the data point** (`tooltipAnchor` prop, default is off → continue to be pinned to the top).
+  There is no single "y" for the bar chart and K-line. Picking one will only cause the prompt box to stop at a meaningless position.
+- **Dots are automatically drawn according to the number of points**: ≤ 20 points are drawn one by one (7 days on the chip page), > 20 points are drawn only on the hover point
+  (The exchange rate 260 dots a year will paste the line into a caterpillar).
+- The center of the tooltip will be clamped within the container (`clampTipCenter`), and the width will be estimated in characters.
 
-### 兩個實作陷阱
+### Two implementation traps
 
-1. **漸層的 id 不能直接用 `useId()`**：React 產生的是 `:r3:`，
-   而 `url(#:r3:)` 不是合法選擇器語法，填色會整片消失。必須去掉冒號。
-2. **分段邏輯只能有一份**：`lineSegments` 與 `areaSegments` 共用內部的 `segments()`。
-   各自分一次段的話，填色與線條的斷點只要差一格，畫面上就會出現一塊沒有線的色塊。
+1. **The id of the gradient cannot be used directly with `useId()`**: React generates `:r3:`,
+   And `url(#:r3:)` is not a legal selector syntax, and the coloring will disappear entirely. The colon must be removed.
+2. **There can only be one copy of segmentation logic**: `lineSegments` and `areaSegments` share the internal `segments()`.
+   If each is divided into segments, as long as the breakpoints of the filling and the lines differ by one frame, a color block without lines will appear on the screen.
 
-### html2canvas / PDF 相容性（已實測，2026-07-29）
+### html2canvas / PDF compatibility (tested, 2026-07-29)
 
-籌碼頁的兩張折線圖會進 PDF，而本專案先前從未用過 SVG `<defs>`。
-實測結論：**html2canvas 正確渲染 `<linearGradient>` 與 `url(#id)` 填色**，
-同一次擷取內多個實例的 id 不衝突，文字也沒有變成巨大黑字。
-（若將來哪個版本壞掉：把 `<defs>` 拿掉、`fill` 改成線色加 `fillOpacity`，效果只少了淡出。）
+The two line charts on the chip page will be imported into PDF, and SVG `<defs>` has never been used in this project before.
+Measured conclusion: **html2canvas correctly renders `<linearGradient>` and `url(#id)` for coloring**,
+The IDs of multiple instances in the same capture do not conflict, and the text does not turn into huge black characters.
+(If any version breaks in the future: remove `<defs>`, change `fill` to line color and add `fillOpacity`, the effect will only be less fade out.)
 
-## 外幣匯率頁面（0.6.7）
+## Foreign currency exchange rate page (0.6.7)
 
-**頂層頁面**「外幣匯率」，以台幣為本位，資料來自 `fx/twd.json`
-（**全域單檔，非 per-ticker**，同 `macro/us.json` 的模式）。
+**Top-level page** "Foreign Currency Exchange Rate", based on Taiwan Dollar, data comes from `fx/twd.json`
+(**Global single file, not per-ticker**, the same mode as `macro/us.json`).
 
-| 幣別 | Yahoo 幣對（實際採用） | 顯示小數位 |
+| Currency | Yahoo currency pair (actually used) | Display decimal places |
 | ---- | ---- | ---- |
-| 美元 USD | `USDTWD=X` | 3 |
-| 日圓 JPY | `JPYTWD=X` | 4 |
-| 歐元 EUR | `EURTWD=X` | 3 |
-| 人民幣 CNY | `TWDCNY=X`（取倒數） | 4 |
-| 港幣 HKD | `HKDTWD=X` | 4 |
-| 英鎊 GBP | `GBPTWD=X` | 3 |
-| 澳幣 AUD | `AUDTWD=X` | 3 |
+| USD USD | `USDTWD=X` | 3 |
+| Japanese Yen JPY | `JPYTWD=X` | 4 |
+| Euro EUR | `EURTWD=X` | 3 |
+| Renminbi CNY | `TWDCNY=X` (take the reciprocal) | 4 |
+| Hong Kong Dollar HKD | `HKDTWD=X` | 4 |
+| British Pound GBP | `GBPTWD=X` | 3 |
+| Australian Dollar AUD | `AUDTWD=X` | 3 |
 | 韓元 KRW | `KRWTWD=X` | 5 |
 
-### 兩種資料、兩條路（0.6.7）
+### Two data, two roads (0.6.7)
 
-| 用途 | 來源 | 更新 |
+| Purpose | Source | Update |
 | ---- | ---- | ---- |
-| **幣別卡的數字與日變動** | `stock-price` 的 `action: 'fx'`，開頁才查 | 即時，10 分鐘 TTL |
-| **走勢圖的歷史** | `fx/twd.json`，每日排程預產 | 每天一次 |
+| **Numbers and daily changes of currency cards** | `action: 'fx'` of `stock-price`, check only after opening the page | Instant, 10 minutes TTL |
+| **History of trend charts** | `fx/twd.json`, daily scheduled production | once a day |
 
-**為什麼非拆不可**：`fx/twd.json` 的最後一筆是「最近一根**完整**日線」，
-而今天的日線要等倫敦日過完（台北隔天早上 07:00）才成立 ——
-整個交易日內卡片都會停在昨天的收盤。實測 2026-07-29 台北 11:00：
-檔案 32.302、市場實際 32.435，差 0.42%。
+**Why it must be dismantled: The last stroke of `fx/twd.json` is "the most recent **complete** daily line",
+Today's daily line will not be established until London Day is over (07:00 the next morning in Taipei) -
+The card will remain at yesterday's close throughout the trading day. Actual measurement 2026-07-29 Taipei 11:00:
+File 32.302, market actual 32.435, a difference of 0.42%.
 
-即時報價沿用現價的三層快取（L1 localStorage / L2 `price_cache` 的 `FX:<code>` 鍵 /
-L3 Yahoo），TTL 10 分鐘、兩層一致，`asOf` 用報價的實際取得時間避免兩層 TTL 疊加。
-**使用者不開頁就不抓**（這是它勝過「把排程調密」的地方：後者不管有沒有人看都抓）。
+The real-time quotation continues to use the three-layer cache of the current price (the `FX:<code>` key of L1 localStorage / L2 `price_cache` /
+L3 Yahoo), TTL is 10 minutes, the two layers are consistent, `asOf` uses the actual acquisition time of the quotation to avoid the superposition of the two layers of TTL.
+**The user will not crawl the page unless the page is opened (this is where it is better than "tune the schedule": the latter will crawl regardless of whether anyone is watching it).
 
-- 即時報價用**逐檔 `chart?range=1d`，不是 spark**。spark 一次拿全部看似划算
-  （1.4KB / 0.11 秒 vs 9.3KB / 0.73 秒），但它的 `close` 四捨五入到 **3 位有效數字** ——
-  韓元會變成 `0.0225`（實際 `0.022467`），誤差 0.25%、尾數動一格就是 0.44%，
-  而卡片顯示 5 位小數，等於在假裝精度。
-- 即時報價一律用**正向幣對 `XXXTWD=X`**；歷史則各幣別二選一（見下）。兩者各取所長。
-- 報價拿不到時卡片**退回每日檔的收盤價，並在畫面上明說** ——
-  兩者可以差 0.4%，讓使用者以為看到即時價是誤導。
+- Real-time quotation uses **chart?range=1d`, not spark**. spark It seems like a good deal to get it all at once
+  (1.4KB / 0.11 seconds vs 9.3KB / 0.73 seconds), but its `close` is rounded to **3 significant digits** -
+  The Korean won will become `0.0225` (actual `0.022467`), the error is 0.25%, and the mantissa is moved one space to 0.44%.
+  And the card shows 5 decimal places, which amounts to pretending precision.
+- Real-time quotations always use the forward currency pair `XXXTWD=X`**; for historical quotes, choose one of the two currencies (see below). Both have their own strengths.
+- When the quotation cannot be obtained, the card** will return the closing price of the daily period and clearly state it on the screen**——
+  The difference between the two can be 0.4%, making users think that seeing the real-time price is misleading.
 
-### 數字口徑（UI 必須標示）
+### Numeric caliber (must be marked on UI)
 
-- 儲存與顯示的方向一律是「**1 單位外幣可換多少台幣**」；反向現算取倒數，不另存第二份。
-- **是市場中價，不是銀行牌告匯率**，沒有現金／即期買賣價。畫面上必須標明
-  「實際結匯請以往來銀行為準」—— 使用者拿去銀行換一定會有落差，不講清楚是誤導。
-  （原訂用台灣銀行牌告匯率，抓不到，理由見下方三個硬限制。）
-- **走勢圖是每日收盤**（最後一根完整日線）；**卡片是即時中價**（最多延遲 10 分鐘）。
-- 日變動為與前一交易日相比。**不套用損益的紅漲綠跌**，改以文字明說
-  「台幣升值／貶值」—— 台幣貶值對持有美股的人是好事、對出國的人是壞事，
-  本身沒有好壞（同總經指標的處理）。
-- 資料超過 **3 天**未更新時，頁首顯示過期警示。理由是這頁的數字會被拿去換錢，
-  而 Storage 上的舊檔在畫面上與新檔長得一模一樣（0.6.4-dev.5 的事故性質）。
+- The direction of storage and display is always "**How ​​many Taiwan dollars can be exchanged for 1 unit of foreign currency**"; in reverse calculation, the reciprocal is used and the second copy is not saved.
+- **This is the mid-market price, not the exchange rate quoted by the bank**, there is no cash/spot buying and selling price. It must be marked on the screen
+  "Please refer to the bank you visit for the actual settlement of foreign exchange." - There will definitely be a discrepancy when the user exchanges it at the bank. Failure to explain it clearly is misleading.
+  (Originally, the exchange rate was quoted using Taiwan Bank’s card, but it couldn’t be caught. Please see the three hard restrictions below for the reason.)
+- **Charts are daily close** (last full daily bar); **Cards are real-time mid-price** (delayed up to 10 minutes).
+- Daily change is compared to the previous trading day. **Do not apply the red rise and green fall of profit and loss**, instead express it in words
+  "Taiwan Dollar Appreciation/Depreciation" - The depreciation of the Taiwan dollar is a good thing for those who hold US stocks, but a bad thing for those who go abroad.
+  There is no good or bad in itself (the same as the treatment of general economic indicators).
+- When the data has not been updated for more than **3 days**, an expiration warning will be displayed on the top of the page. The reason is that the numbers on this page will be exchanged for money.
+  The old files on Storage look exactly the same as the new files on the screen (accidental nature of 0.6.4-dev.5).
 
-### 資料源的三個硬限制（都是實測，不要再走一次冤枉路）
+### Three hard limitations of data sources (all are actual measurements, don’t go down the wrong path again)
 
-1. **台灣銀行牌告匯率抓不到。** `rate.bot.com.tw/xrt/flcsv/0/day` 與
-   `/xrt/flcsv/0/{YYYY-MM}/{幣別}` 都回 JS proof-of-work 人機驗證頁
-   （`Challenge Validation`），換瀏覽器 UA 無效，Edge Function 無法通過。
-   這是選 Yahoo 的**唯一**原因，也是「只有中價」這個限制的來源。
-2. **沒有任何單一幣對方向對 8 個幣別都成立。** 兩側都各有幣別只回 1 格資料
-   （回 200、結構完整，但沒有歷史）：`CNYTWD=X` 死而 `TWDCNY=X` 活、
-   `TWDEUR=X` 死而 `EURTWD=X` 活。故每個幣別備兩個候選，以點數判定（`FX_MIN_POINTS`）。
-3. **Yahoo 在序列尾端附加的「即時報價列」必須剔除**（其 timestamp 等於
-   `meta.regularMarketTime`）。反向幣對那側的即時價與自己的日線對不起來 ——
-   實測人民幣因此多算 +4.47% 的日變動。
+1. **Taiwan Bank reported that the exchange rate could not be obtained. ** `rate.bot.com.tw/xrt/flcsv/0/day` and
+   `/xrt/flcsv/0/{YYYY-MM}/{Currency}` returns JS proof-of-work human-machine verification page
+   (`Challenge Validation`), changing the browser UA is invalid, and the Edge Function cannot pass.
+   This is the **only** reason to choose Yahoo, and it is also the source of the "only mid-price" limitation.
+2. **No single currency pair direction holds true for all 8 currencies. ** If both sides have currencies, only 1 grid of data will be returned.
+   (Back to 200, complete structure, but no history): `CNYTWD=X` dead and `TWDCNY=X` alive,
+   `TWDEUR=X` dies and `EURTWD=X` lives. Therefore, there are two candidates for each currency, which are judged by points (`FX_MIN_POINTS`).
+3. **The "real-time quote column" appended by Yahoo at the end of the sequence must be eliminated** (its timestamp is equal to
+   `meta.regularMarketTime`). The real-time price on the opposite side of the currency pair is different from your own daily line——
+   The measured CNY is therefore overweighted by a +4.47% daily change.
 
-### 沒有換算器（0.6.7 移除）
+### No converter (removed in 0.6.7)
 
-0.6.6 曾有「台幣 ⇄ 外幣」雙向輸入的換算器，0.6.7 依使用者要求整塊移除，
-連同只服務它的純函式（`twdToForeign` / `foreignToTwd` / `parseAmount` / `formatAmount`）
-一併刪除 —— 沒有呼叫端的函式留著只會被誤以為還有人用。
-兩個方向的匯率仍看得到：卡片是「1 外幣 = N 台幣」，走勢圖兩張分別是兩個方向。
+0.6.6 There used to be a converter with two-way input of "Taiwan Dollar ⇄ Foreign Currency", but it was completely removed in 0.6.7 according to the user's request.
+Along with pure functions that just serve it (`twdToForeign` / `foreignToTwd` / `parseAmount` / `formatAmount`)
+Delete them altogether - leaving functions without callers will only be mistaken for being used by others.
+The exchange rates in both directions can still be seen: the card is "1 foreign currency = N Taiwan dollars", and the two trend charts are in two directions.
 
-### 走勢圖（兩個方向並排）
+### Trend chart (side by side in both directions)
 
-同一段期間畫**兩張**圖：左「新臺幣 / 外幣」（1 TWD 可換的外幣）、
-右「外幣 / 新臺幣」（1 外幣 可換的台幣）。
+Draw **two** pictures during the same period: "New Taiwan Dollar/Foreign Currency" on the left (1 TWD can be exchanged for foreign currency),
+Right "Foreign Currency / New Taiwan Dollar" (1 foreign currency can be exchanged for Taiwan dollars).
 
-- **為什麼要兩張**：使用者的問題有兩種問法 ——「這 1000 台幣能換多少日圓」
-  看的是台幣→日圓，「這件 3000 日圓的商品是多少台幣」看的是日圓→台幣。
-  互為倒數但腦內換算麻煩，尤其日圓 0.1972 那種量級。
-- ⚠️ **兩張圖不是彼此的鏡像**：1/x 是非線性的，曲線形狀不同，
-  而且**高低點的日期會對調**（正向的最高＝反向的最低）。這是數學事實，不是 bug，
-  有測試釘住（`invertPoints` 的「高低點日期對調」案例）。
-- 反向那張的小數位數由 `autoDecimals()` 依量級現算（約 5 位有效數字，夾在 2～6）——
-  1 台幣可換的外幣跨四個數量級：美元 0.030958、日圓 5.0710、韓元 45.366，
-  沿用幣別自帶的位數不是全變 0.031 就是變 5.0710000。
-- 桌機兩欄並排，≤900px 疊成一欄（兩張圖擠在半個手機寬看不出趨勢）。
+- **Why need two**: There are two ways to ask the user's question - "How many Japanese yen can this NT$1,000 be exchanged for?"
+  What we are looking at is Taiwan dollar → Japanese yen. "How much is this 3,000 yen item in Taiwan dollars?" What we are looking at is Japanese yen → Taiwan dollar.
+  They are reciprocal to each other, but it is troublesome to convert in the mind, especially the magnitude of yen 0.1972.
+- ⚠️ **The two graphs are not mirror images of each other**: 1/x is non-linear, the curve shape is different,
+  Moreover, the dates of the high and low points will be adjusted (highest in the forward direction = lowest in the reverse direction). This is a mathematical fact, not a bug,
+  There is test pinning (the "high and low date swap" case of `invertPoints`).
+- The number of decimal places for the reverse card is calculated by `autoDecimals()` according to the magnitude (about 5 significant figures, sandwiched between 2 and 6)——
+  1 The foreign currencies that the Taiwan dollar can be exchanged for span four orders of magnitude: US dollar 0.030958, Japanese yen 5.0710, Korean won 45.366,
+  The number of digits that comes with the currency will either change to 0.031 or to 5.0710000.
+- The two columns on the desktop are side by side, ≤900px stacked into one column (the two pictures are squeezed into half the width of the mobile phone, and the trend cannot be seen).
 
-3 個月／6 個月／1 年三段，切換只重算切片不重打網路（一年份本來就在手上）。
-區間以**序列最後一天**回推而非今天，資料若停在幾天前圖不會莫名變短。
-Y 軸不強制含 0；缺資料的日子斷線不內插。
+3 There are three sections: month/6 months/1 year. Switching only recalculates the slices but not the network (one year is already on hand).
+The interval is pushed back to the last day of the sequence instead of today. If the data stops a few days ago, the chart will not become inexplicably shorter.
+The Y-axis is not forced to contain 0; days without data are disconnected and will not be interpolated.
 
-- **由獨立的 `fx-daily` cron job 觸發**（`0 3,9 * * *` UTC ＝ 台北 11:00／17:00，
-  每天跑，非台股作息），一天只抓一次（台北日曆日）。
-- **本機模式不顯示此頁**：與「個股分析」「總體經濟」同一條入口規則。
-- **手機版型於 0.6.7 未做**（使用者決定等桌機功能驗證後再處理）。
-  分頁增為六格，0.6.6 的底部導覽列是直式排版，本來就容得下（320px 每格仍約 51px）。
+- **Triggered by independent `fx-daily` cron job** (`0 3,9 * * *` UTC = Taipei 11:00/17:00,
+  Run every day, non-Taiwan stock schedule), only catch once a day (Taipei calendar day).
+- **This page is not displayed in local mode**: The same entry rule as "Individual Stock Analysis" and "General Economy".
+- **The mobile version was not implemented in 0.6.7** (the user decided to wait for the desktop function to be verified before processing).
+  The pagination is increased to six cells, and the bottom navigation bar of 0.6.6 is a vertical typesetting, which can accommodate it (320px each cell is still about 51px).
 
-## AI 分析追問對話（0.6.5）
+## AI analysis questioning dialogue (0.6.5)
 
-初次分析產生後，可在同一分頁繼續追問。
+After the initial analysis is generated, you can continue to ask questions on the same page.
 
-- **嚴格框在「這檔股票的數據」**：技術面 / 籌碼面 / 基本面 / 獲利能力 /
-  總經背景 / 那份分析本身。範圍外一律回固定婉拒句。
-- **框限規則每一輪都重送**，不會隨對話變長被稀釋；並含防提示詞注入條款。
-- **上限 10 輪**。每輪重送完整資料，成本以輪數控制。
-- 分析與對話存於瀏覽器 `sessionStorage`：切分頁再切回來直接還原，
-  不必重按（＝不重複計費）。還原後要繼續問須先重新產生分析
-  —— 沒有 payload 就沒有框限所依據的資料。
-- **總經在 prompt 中只能當背景**：system prompt 明令不得用它推導個股漲跌。
+- **Strictly framed in "data of this stock"**: technical aspect / chip aspect / fundamental aspect / profitability /
+  General background/the analysis itself. Outside the scope, a fixed polite rejection sentence will be returned.
+- **The frame limit rules are reissued in every round** and will not be diluted as the conversation becomes longer; it also contains provisions to prevent prompt word injection.
+- **Maximum 10 rounds**. Complete data is re-sent in each round, and the cost is controlled by the number of rounds.
+- Analysis and dialogue are stored in the browser `sessionStorage`: split the page and then cut it back to restore directly.
+  No need to press again (= no repeated billing). To continue after restoration, you must first regenerate the analysis.
+  ——Without payload, there is no data to base the frame on.
+- **General manager can only be used as background in prompt**: system prompt explicitly prohibits using it to deduce the rise and fall of individual stocks.
 
-## 主導覽版面（0.6.6-dev.1）
+## Main navigation layout (0.6.6-dev.1)
 
-同一份分頁定義（`AppShell` 的 `TABS`）依視窗寬度渲染成兩種型態：
+The same paging definition (`TABS` of `AppShell`) is rendered into two types according to the width of the window:
 
-| 寬度 | 型態 | 標籤 |
+| width | type | label |
 | ---- | ---- | ---- |
-| ≥1021px | 頁首藥丸橫列 | 完整四字（庫存總覽…） |
-| 721–1020px | 頁首橫列，只剩圖示 | 名稱在 `title` / `aria-label` |
-| ≤720px | **固定底部導覽列** | 兩字短標籤（總覽、分析、總經、年度、紀錄） |
+| ≥1021px | Table of pills at the top of the page | Complete four words (inventory overview...) |
+| 721–1020px | Header column, only icon left | Name in `title` / `aria-label` |
+| ≤720px | **Fixed bottom navigation bar** | Two-word short tags (overview, analysis, general manager, year, record) |
 
-- 斷點在 CSS（`@media (max-width: 720px)`）與 JS（`matchMedia`）各有一份，
-  **改一處必須同步另一處**。
-- 底部列**必須掛在 `.app-header` 之外**（`PLAN.md §S4`：頁首的 `backdrop-filter`
-  會綁架 fixed 定位），且同一時間只渲染一份導覽。
-- 高度單一來源 `--bottom-nav-h`；浮動鈕與版本徽章的位置由它推算，
-  安全區另加 `env(safe-area-inset-bottom)`。
-- 手機的版本徽章**不是固定定位**，而是跟在頁尾之後（左下角已被導覽列與浮動鈕佔滿）。
-- 新增分頁時 `short` 一律兩個字；底部列六格在 375px 仍有 59px，無需再收間距。
+- The breakpoints are in CSS (`@media (max-width: 720px)`) and JS (`matchMedia`).
+  **Changes in one place must be synchronized with the other**.
+- The bottom column **must hang outside `.app-header`** (`PLAN.md §S4`: `backdrop-filter` at the top of the page
+  will bind fixed positioning) and only render one tour at a time.
+- Highly single source `--bottom-nav-h`; the position of the floating button and version badge is calculated by it,
+  Add `env(safe-area-inset-bottom)` to the safe area.
+- The mobile version badge is not fixedly positioned, but follows the footer of the page (the lower left corner is occupied by the navigation bar and floating button).
+- When adding pagination, always use two words for `short`; the six columns at the bottom are still 59px at 375px, so there is no need to close the spacing.

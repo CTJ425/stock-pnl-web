@@ -13,7 +13,7 @@ import {
   type MarketDay,
 } from './twMarket'
 
-/** 逐字取自 2026-08-04 對 rwd/zh/afterTrading/FMTQIK 的實際回應（截短為兩列） */
+/** Taken verbatim from actual response to rwd/zh/afterTrading/FMTQIK on 2026-08-04 (truncated to two columns)*/
 const FMTQIK = {
   stat: 'OK',
   title: '115年08月市場成交資訊',
@@ -24,7 +24,7 @@ const FMTQIK = {
   ],
 }
 
-/** 逐字取自 2026-08-04 對 rwd/zh/TAIEX/MI_5MINS_HIST 的實際回應（截短為兩列） */
+/** Taken verbatim from actual response to rwd/zh/TAIEX/MI_5MINS_HIST on 2026-08-04 (truncated to two columns)*/
 const TAIEX_HIST = {
   stat: 'OK',
   title: '115年08月 發行量加權股價指數歷史資料',
@@ -35,7 +35,7 @@ const TAIEX_HIST = {
   ],
 }
 
-/** 逐字取自 2026-08-04 對 rwd/zh/fund/BFI82U 的實際回應 */
+/** Taken verbatim from actual response to rwd/zh/fund/BFI82U on 2026-08-04*/
 const BFI82U = {
   stat: 'OK',
   date: '20260803',
@@ -67,7 +67,7 @@ describe('網址', () => {
   it('成交量值一次一個月、法人金額一次一天', () => {
     expect(fmtqikMonthUrl('202608')).toContain('date=20260801')
     expect(bfi82uDayUrl('20260803')).toContain('dayDate=20260803')
-    // type=month 回的是整月合計而不是逐日，所以一律 day
+    // type=month returns the total of the whole month instead of day by day, so it is always day
     expect(bfi82uDayUrl('20260803')).toContain('type=day')
   })
 
@@ -88,13 +88,13 @@ describe('parseFmtqik', () => {
       transactions: 4191882,
       taiex: 43386.41,
       changePoints: 266.66,
-      // 開高低不在這一支，另由 MI_5MINS_HIST 補
+      // The open high and low is not in this one, and is supplemented by MI_5MINS_HIST.
       taiexOpen: null,
       taiexHigh: null,
       taiexLow: null,
       institutional: null,
     })
-    // 負的漲跌點數要留著負號
+    // Negative price points should be left with a negative sign.
     expect(days[1].changePoints).toBe(-25.75)
   })
 
@@ -113,7 +113,7 @@ describe('parseBfi82u', () => {
     expect(got.dealerSelfTwd).toBe(-5826785940)
     expect(got.dealerHedgeTwd).toBe(-14826586402)
     expect(got.foreignDealerTwd).toBe(0)
-    // 合計取官方值，不自己加總
+    // The total is the official value, do not add it yourself
     expect(got.totalTwd).toBe(-16519607403)
   })
 
@@ -124,7 +124,7 @@ describe('parseBfi82u', () => {
     expect(got.buy!.trustTwd).toBe(35468123234)
     expect(got.buy!.totalTwd).toBe(425338164528)
     expect(got.sell!.totalTwd).toBe(441857771931)
-    // 買 − 賣確實等於官方差額，但頂層那個數字是端點給的，不是這裡算出來的
+    // Buy − Sell is indeed equal to the official difference, but the top number is given by the endpoint, not calculated here.
     expect(got.buy!.totalTwd! - got.sell!.totalTwd!).toBe(got.totalTwd)
   })
 
@@ -137,7 +137,7 @@ describe('parseBfi82u', () => {
     const got = parseBfi82u(netOnly)!
     expect(got.totalTwd).toBe(-16519607403)
     expect(got.trustTwd).toBe(23324680573)
-    // 六欄全 null 的空殼會讓回補判定以為已經補過，故整組給 null
+    // An empty shell with all six columns filled with nulls will make the replenishment judgment think that it has been filled, so the entire group will be null.
     expect(got.buy).toBeNull()
     expect(got.sell).toBeNull()
   })
@@ -158,7 +158,7 @@ describe('parseTaiexHist（大盤日 K 的開高低）', () => {
   it('取開高低，收盤不取——那一欄由 FMTQIK 負責', () => {
     const m = parseTaiexHist(TAIEX_HIST)
     expect(m.get('2026-08-03')).toEqual({ open: 42780.42, high: 43784.19, low: 42780.42 })
-    // 同一個欄位讓兩支各寫一次，總有一天會不一致而且看不出是哪一支寫的
+    // If two teams each write in the same column once, one day they will be inconsistent and it will be impossible to tell which one wrote it.
     expect(Object.keys(m.get('2026-08-04')!)).toEqual(['open', 'high', 'low'])
   })
 
@@ -202,7 +202,7 @@ describe('mergeMarketDays', () => {
   })
 
   it('整月重抓不會把補好的法人金額洗掉', () => {
-    // 成交量值每晚整月重抓，那一份永遠不帶法人 —— 整筆覆寫的話會天天清掉回補成果
+    // The trading volume is re-captured every night for the entire month, and that share will never include legal persons - if the entire transaction is overwritten, the replenishment results will be cleared every day.
     const prev = [{ ...day('2026-08-03', 1), institutional: inst }]
     const merged = mergeMarketDays(prev, [day('2026-08-03', 999)])
     expect(merged[0].tradeValueTwd).toBe(999) // 量值照常更新
@@ -210,7 +210,7 @@ describe('mergeMarketDays', () => {
   })
 
   it('整月重抓不會把已有的開高低洗掉（0.6.30）', () => {
-    // 開高低來自另一支端點，那一支失敗時 incoming 會是 null —— 不可覆寫既有值
+    // Opening high and low comes from another endpoint. When that one fails, incoming will be null - the existing value cannot be overwritten.
     const prev = [{ ...day('2026-08-03', 1), taiexOpen: 42780.42, taiexHigh: 43784.19, taiexLow: 42780.42 }]
     const merged = mergeMarketDays(prev, [day('2026-08-03', 999)])
     expect(merged[0].taiexOpen).toBe(42780.42)
@@ -218,7 +218,7 @@ describe('mergeMarketDays', () => {
   })
 
   it('重抓沒吐買進 / 賣出時留用已補好的那份（0.6.32）', () => {
-    // 否則會變成「補了又被洗掉、洗掉又排進回補」的無限迴圈
+    // Otherwise, it will become an infinite cycle of "replenishing, then being washed away, washing away, then being replenished"
     const filled = { ...side(1), buy: side(2), sell: side(3) }
     const prev = [{ ...day('2026-08-03', 1), institutional: filled }]
     const merged = mergeMarketDays(prev, [
@@ -245,7 +245,7 @@ describe('planInstitutionalBackfill', () => {
     dealerHedgeTwd: 1,
     totalTwd: 1,
   })
-  /** hasBuy=false 代表 0.6.32 之前補到的舊資料：有差額、沒有買進 / 賣出 */
+  /** hasBuy=false represents the old data supplemented before 0.6.32: there is a difference and no buying/selling*/
   const day = (date: string, hasInst: boolean, hasBuy = true): MarketDay => ({
     date,
     tradeVolumeShares: null,
@@ -272,7 +272,7 @@ describe('planInstitutionalBackfill', () => {
   })
 
   it('只有差額、沒有買進金額的舊資料也算缺，會被排進回補（0.6.32）', () => {
-    // 否則 0.6.32 之前補到的 120 天永遠長不出買進 / 賣出
+    // Otherwise, the 120 days made up before 0.6.32 will never be able to generate buy/sell
     const days = [day('2026-08-01', true, false), day('2026-08-02', true, true)]
     expect(planInstitutionalBackfill(days, 5)).toEqual(['20260801'])
   })
@@ -294,7 +294,7 @@ describe('planMarketMonths', () => {
   })
 
   it('舊資料連欄位都沒有（undefined）也算缺口', () => {
-    // 0.6.30 之前寫下的日子讀回來是 undefined 不是 null；用 === null 會漏掉全部舊資料
+    // The days written before 0.6.30 are read back as undefined, not null; using === null will miss all the old data.
     const legacy = [
       ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
       { date: '2026-06-30' } as MarketDay,
@@ -303,7 +303,7 @@ describe('planMarketMonths', () => {
   })
 
   it('缺開高低的月份要重抓（0.6.30 新增欄位，舊資料整批沒有）', () => {
-    // 沒有這條，K 線會永遠只有這個月的那幾根 —— 舊月份不會再被碰到
+    // Without this, the K-lines will always only be the ones from this month - the old months will not be touched again.
     const many = [
       ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
       { date: '2026-06-30', taiexOpen: null } as MarketDay,
@@ -312,7 +312,7 @@ describe('planMarketMonths', () => {
   })
 
   it('缺口很多時仍受月數上限保護，由新到舊補', () => {
-    // 天數要夠多，否則會走「檔案還空著」的分支而多抓一個上個月
+    // The number of days must be enough, otherwise you will take the "file is still empty" branch and grab an extra one from the previous month.
     const gaps = [
       ...Array.from({ length: 20 }, (_, i) => full(`2026-07-${String(i + 1).padStart(2, '0')}`)),
       ...['2026-03-02', '2026-04-02', '2026-05-02', '2026-06-02'].map(
@@ -327,12 +327,12 @@ describe('planMarketMonths', () => {
   })
 
   it('第一次跑時連上個月一起抓，畫面一開始就有長度', () => {
-    // 由新到舊：預算用完時留下的缺口是最舊的那個月（同其他回補的一貫作法）
+    // From newest to oldest: the gap left when the budget is used up is the oldest month (the same as other consistent practices of backfilling)
     expect(planMarketMonths(new Date('2026-08-04T13:00:00Z'), [])).toEqual(['202608', '202607'])
   })
 
   it('用台北時間判斷月份（UTC 的月初凌晨會落在上個月）', () => {
-    // UTC 2026-07-31 17:00 = 台北 2026-08-01 01:00 → 本月是 8 月
+    // UTC 2026-07-31 17:00 = Taipei 2026-08-01 01:00 → This month is August
     expect(planMarketMonths(new Date('2026-07-31T17:00:00Z'), [])).toEqual(['202608', '202607'])
   })
 })

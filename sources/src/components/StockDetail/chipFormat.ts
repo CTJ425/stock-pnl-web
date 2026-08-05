@@ -1,54 +1,54 @@
 /**
- * 籌碼數字格式化。單位陷阱：三大法人是「股」、融資融券是「張（交易單位）」，
- * 兩者不可互換，故分成 fmtShares / fmtLots 兩組函式，呼叫端不需再自己換算。
+ * Chip number formatting. Unit trap: The three major legal persons are "shares", and margin trading and securities lending are "pieces (trading units)".
+ * The two are not interchangeable, so they are divided into two sets of functions: fmtShares / fmtLots. The caller does not need to convert by itself.
  */
 
-/** 千分位整數；無資料回「—」 */
+/** Thousandth place integer; no data returns "-"*/
 export function fmtInt(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   return Math.round(n).toLocaleString('en-US')
 }
 
-/** 帶正負號的整數（買賣超、增減） */
+/** Integer with plus or minus sign (buy and sell over, increase or decrease)*/
 export function fmtSigned(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   const base = Math.round(n).toLocaleString('en-US')
   return n > 0 ? `+${base}` : base
 }
 
-/** 股數 → 約當張數（1 張 = 1000 股），帶正負號 */
+/** Number of shares → Approximate number of shares (1 share = 1000 shares), with plus or minus sign*/
 export function fmtLotsFromShares(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—'
   const lots = Math.round(n / 1000)
   return `${lots > 0 ? '+' : ''}${lots.toLocaleString('en-US')}`
 }
 
-/** 連買連賣（法人）：+3 → 連 3 買 */
+/** Continuous buying and selling (legal person): +3 → 3 consecutive buys*/
 export function fmtTradeStreak(n: number): string {
   if (!n) return '—'
   return n > 0 ? `連 ${n} 買` : `連 ${-n} 賣`
 }
 
-/** 連增連減（融資融券餘額）：-2 → 連 2 減 */
+/** Consecutive increases and consecutive decreases (margin margin trading balance): -2 → 2 consecutive decreases*/
 export function fmtBalanceStreak(n: number): string {
   if (!n) return '—'
   return n > 0 ? `連 ${n} 增` : `連 ${-n} 減`
 }
 
-/** 紅正綠負的 class（對應 index.css 的 .pnl-up / .pnl-down / .pnl-flat） */
+/** Positive red, green and negative classes (corresponding to .pnl-up / .pnl-down / .pnl-flat of index.css)*/
 export function chipClass(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n) || n === 0) return 'pnl-flat'
   return n > 0 ? 'pnl-up' : 'pnl-down'
 }
 
-/** YYYY-MM-DD → MM/DD（X 軸標籤用） */
+/** YYYY-MM-DD → MM/DD (for X-axis label)*/
 export function shortDate(date: string): string {
   return date.length >= 10 ? `${date.slice(5, 7)}/${date.slice(8, 10)}` : date
 }
 
 /**
- * 報告產生時間（ISO UTC）→ 觀看者所在時區的 `YYYY-MM-DD HH:mm`。
- * 不用 toLocaleString 是為了格式固定，避免不同 locale 輸出不同樣子（PDF 也要看）。
+ * Report generation time (ISO UTC) → `YYYY-MM-DD HH:mm` in the viewer's time zone.
+ * The reason for not using toLocaleString is to fix the format and avoid different output looks in different locales (PDF should also be viewed).
  */
 export function fmtUpdatedAt(iso: string | null | undefined): string {
   if (!iso) return '—'

@@ -1,12 +1,12 @@
 /**
- * 台股全市場的量能與三大法人買賣金額（0.6.28）。
+ * The volume of the entire Taiwan stock market can be compared with the trading volume of the three major legal persons (0.6.28).
  *
- * **為什麼放在總經頁而不是年度收益頁**：年度收益回答的是「我賺了多少」（全部是個人
- * 已實現損益），這裡回答的是「市場如何」。兩者放同一頁，讀者每看一個數字都要先判斷
- * 這是自己的還是大盤的。這一頁本來就是「與個股無關的共用背景」，市場量能屬於這裡。
+ * **Why put it on the general economic page instead of the annual income page**: The annual income answers "how much I earned" (all personal
+ * Realized profit and loss), the answer here is "How is the market?" Put both on the same page. Readers must judge first every time they look at a number.
+ * Is this your own or the market's? This page is originally a "common background unrelated to individual stocks", and market volume can belong here.
  *
- * 單位陷阱：來源是**元**，畫面一律換算成**億元**（大盤單日成交 8,855 億，
- * 用元顯示是 885,506,043,091 —— 沒有人這樣讀）。個股籌碼的單位是「股」，兩者不可比較。
+ * Unit trap: The source is **yuan**, and the screen is converted into **billion yuan** (the market's single-day turnover is 885.5 billion,
+ * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { ChevronsDownUp, ChevronsUpDown, Minus, Plus, RefreshCw } from 'lucide-react'
@@ -22,24 +22,24 @@ import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
-/** 成交金額與大盤 K 線顯示幾個交易日。約一季，看得出趨勢又不會把 X 軸擠爛 */
+/** The trading amount and the market K-line show several trading days. After about one season, you can see the trend without crushing the X-axis.*/
 const SHOWN_DAYS = 60
 
 /**
- * 三大法人買賣超只看最近 7 個交易日（0.6.30）。
+ * The trading super of the three major legal persons only looks at the last 7 trading days (0.6.30).
  *
- * 與個股分析的籌碼圖一致（那裡是 HISTORY_DAYS = 7）—— 兩張圖問的是同一個問題
- * 「法人這幾天在買還是在賣」，一張看一週、另一張看一季會讓人以為在比不同的東西。
- * 量能與指數維持一季：那兩個問的是「行情在什麼位置」，需要更長的脈絡。
+ * Consistent with the chip chart of individual stock analysis (where HISTORY_DAYS = 7) - the two charts ask the same question
+ * "Is the legal person buying or selling these days?" If you look at one picture for a week and the other for a season, you will think that you are comparing different things.
+ * Volume energy and index can last for one season: those two ask "where is the market?" and require a longer context.
  */
 const INSTITUTIONAL_DAYS = 7
 
-/** 元 → 億元。缺值回 null（不以 0 冒充） */
+/** Yuan → billion yuan. Returns null if the value is missing (do not pretend to be 0)*/
 function toBillion(twd: number | null | undefined): number | null {
   return typeof twd === 'number' && Number.isFinite(twd) ? twd / 1e8 : null
 }
 
-/** 億元，一位小數；帶正負號（買賣超要看得出方向） */
+/** 100 million yuan, one decimal place; with plus or minus sign (you need to be able to see the direction when buying and selling super)*/
 function fmtBillionSigned(v: number | null): string {
   if (v === null) return '—'
   return `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`
@@ -49,32 +49,32 @@ function fmtBillion(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1)} 億`
 }
 
-/** 'YYYY-MM-DD' → 'MM/DD'（X 軸一格只有約 8px，年份放不下也不需要） */
+/** 'YYYY-MM-DD' → 'MM/DD' (the X-axis grid is only about 8px, so there is no need to fit the year)*/
 function shortDate(date: string): string {
   const m = date.match(/^\d{4}-(\d{2})-(\d{2})$/)
   return m ? `${m[1]}/${m[2]}` : date
 }
 
 /**
- * 三張圖上下疊放後各自的高度（0.6.34）。
+ * The height of each of the three pictures stacked one on top of the other (0.6.34).
  *
- * 疊起來的總高就是三者相加，沿用並排時的 220 會讓這一段變成 700px 的一面牆。
- * K 線與走勢線同高（它們是同一份指數的兩種畫法），成交金額矮一截 ——
- * 它是配角，用高度說出主從關係比再加一行說明有效。
+ * The total height of the stacked elements is the sum of the three. Using the 220 when placed side by side will turn this section into a 700px wall.
+ * The K line and the trend line are at the same height (they are two ways of drawing the same index), and the transaction amount is a bit lower -
+ * It is a supporting role. It is more effective to describe the master-slave relationship in a high degree than to add a line to explain it.
  */
 const STACK_CHART_H = 180
 const STACK_VOLUME_H = 140
 
 /**
- * 趨勢欄的走勢線看幾天（0.6.32）。
+ * Look at the trend line of the trend bar for a few days (0.6.32).
  *
- * 刻意比表格的 7 列長：只用表內那幾天的話，第一列只有一個點畫不出線、第二列兩個點
- * 也看不出什麼。取 15 天讓每一列都有足夠的脈絡，代價是最舊那幾列的線會伸出表格範圍
- * —— 但那正是「趨勢」該有的意思：它回答的是「這天處在什麼走勢裡」，不是「表格內發生什麼」。
+ * Deliberately longer than the 7 columns of the table: if we only use those days in the table, there will be only one dot in the first column and no line can be drawn, and two dots in the second column.
+ * Nothing can be seen. Taking 15 days allows each column to have enough context, at the cost of the lines in the oldest columns extending out of the table.
+ * ——But that's exactly what "trend" should mean: it answers "what's the trend today", not "what's happening in the table."
  */
 const TREND_DAYS = 15
 
-/** 六個單位的顯示順序與欄名。表頭、展開明細、KPI 都吃這一份，避免三處各寫一次而漂移 */
+/** The display order and column names of the six units. The table header, expansion details, and KPIs should all be included to avoid drifting due to writing each of the three places once.*/
 const UNITS: ReadonlyArray<{ key: keyof MarketInstitutionalSide; label: string }> = [
   { key: 'foreignTwd', label: '外資' },
   { key: 'foreignDealerTwd', label: '外資自營商' },
@@ -85,10 +85,10 @@ const UNITS: ReadonlyArray<{ key: keyof MarketInstitutionalSide; label: string }
 ]
 
 /**
- * 截至某一天為止的合計買賣超走勢與連續同向天數。
+ * The total buying and selling trend up to a certain day and the number of consecutive days in the same direction.
  *
- * `values` 由舊到新且**只含有法人金額的日子** —— 把還沒補到的日子留在序列裡，
- * 走勢線會出現憑空的斷點，連續天數也會被一個「還沒補到」打斷而低報。
+ * `values` is from old to new and **only contains the days of the legal person amount** - leaving the days that have not been filled up in the sequence,
+ * The trend line will have a breakpoint out of thin air, and the number of consecutive days will be interrupted by a "not yet made up" and reported low.
  */
 function trendAt(values: number[], endIdx: number): { points: number[]; streak: number } {
   const points = values.slice(Math.max(0, endIdx - TREND_DAYS + 1), endIdx + 1)
@@ -102,13 +102,13 @@ function trendAt(values: number[], endIdx: number): { points: number[]; streak: 
 }
 
 /**
- * 趨勢與連續兩格（0.6.33 由一格拆開）。
+ * Trend and two consecutive grids (0.6.33 split by one grid).
  *
- * **為什麼一定要分成兩欄**：原本走勢線與「連 N 日」擠在同一格靠右排，
- * 有標籤的列會把線往左推，整欄的線頭線尾對不齊，看起來像每一列的走勢範圍不一樣。
- * 分欄之後線固定寬、固定位置，列與列之間才比較得起來。
+ * **Why it must be divided into two columns**: Originally, the trend line and "N consecutive days" were squeezed into the same grid on the right row.
+ * The labeled columns will push the lines to the left, and the beginning and end of the lines in the entire column will not be aligned, making it look like the trend range of each column is different.
+ * After the columns are divided, the lines have a fixed width and fixed position, so that the columns can be compared.
  *
- * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向）；畫不出線時 `SparkCell` 自己印「—」。
+ * The trend line uses **polar colors** (red for buying and green for selling, according to the direction of the last day); when the line cannot be drawn, `SparkCell` prints "—" by itself.
  */
 function TrendCells({ points, streak }: { points: number[]; streak: number }) {
   const last = points[points.length - 1]
@@ -121,7 +121,7 @@ function TrendCells({ points, streak }: { points: number[]; streak: number }) {
     )
   }
   const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
-  // 連 1 日不是趨勢，不印（此時連續欄給「—」而不是留白，留白會被讀成資料缺漏）
+  // 1 consecutive day is not a trend and will not be printed (at this time, the continuous column is given "—" instead of leaving it blank, which will be read as missing data)
   const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : null
   return (
     <>
@@ -140,12 +140,12 @@ function TrendCells({ points, streak }: { points: number[]; streak: number }) {
 }
 
 /**
- * 展開某一天的買進 / 賣出明細。
+ * Expand the buy/sell details for a certain day.
  *
- * **這裡用巢狀表格，與年度收益的處置相反**，而且是刻意的：那邊的明細列與父列
- * 是同一組欄位（同樣是金額、同樣的口徑），欄寬必須對齊才讀得下去；這裡的明細是
- * 「六個單位 × 買進 / 賣出 / 買賣超」，跟父列的「六個單位各一欄」根本是不同的形狀，
- * 硬塞進同一組欄位只會逼出一堆 colSpan 佔位格。
+ * **The nested table is used here, which is contrary to the disposal of annual income**, and it is deliberate: the detail column over there is the same as the parent column
+ * It’s the same set of fields (same amount, same caliber), and the column widths must be aligned to be readable; the details here are
+ * "Six units × buy / sell / buy and sell over" is fundamentally different from the "six units in each column" of the parent column.
+ * Forcing the same set of columns will just force a bunch of colSpan placeholders.
  */
 function DayDetail({ day }: { day: MarketDay }) {
   const buy = day.institutional?.buy
@@ -280,8 +280,8 @@ export function TwMarketSection() {
   const allOpen = expandable.length > 0 && expandable.every((d) => expanded.has(d))
   const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
 
-  // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）。
-  // 三張圖同一組索引、同一組標籤，X 軸才真的對得起來
+  // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
+  // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
 
   return (
@@ -337,7 +337,7 @@ export function TwMarketSection() {
       {/*
         三張圖上中下疊放、共用同一個 hover 索引（0.6.34；0.6.33 是 K 線與走勢線左右並排）。
 
-        **為什麼是上下而不是左右**：滑到某一天要同時看到那天的振幅、指數位置與量能，
+        **Why is it up and down instead of left and right**: Swipe to a certain day to see the amplitude, index position and energy of that day at the same time.
         而三張圖只有在同寬、同一組 X 軸、同一個索引時，crosshair 才會落在同一天。
         左右並排的話每張只有一半寬度，同一個像素位置代表的日子不一樣。
 
@@ -389,7 +389,7 @@ export function TwMarketSection() {
       />
 
       {/*
-        **表由新到舊，走勢圖由舊到新** —— 與月營收、獲利能力兩處的處置一致：
+        **The table is from new to old, and the trend chart is from old to new** - consistent with the treatment of monthly revenue and profitability:
         走勢圖左邊必須是比較早的日子，而表格第一列要是最近的那天。
         兩者方向刻意相反，不是筆誤。
 
@@ -429,7 +429,7 @@ export function TwMarketSection() {
                 ? { points: [], streak: 0 }
                 : trendAt(trendValues, idx)
               const isOpen = expanded.has(d.date)
-              // 買進 / 賣出是 0.6.32 才存的，舊資料只有差額 —— 沒有明細就不給展開鈕
+              // Buying/selling was only saved in 0.6.32. The old data only has the difference - no expand button will be given without details.
               const canExpand = Boolean(inst?.buy)
               return (
                 <Fragment key={d.date}>

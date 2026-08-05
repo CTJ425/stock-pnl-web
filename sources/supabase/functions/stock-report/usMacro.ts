@@ -1,54 +1,54 @@
 /**
- * 美國總體經濟指標抓取與解析（FRED）。
+ * Capture and Analysis of U.S. Aggregate Economic Indicators (FRED).
  *
- * 為什麼是這五項：使用者要的是「核心 CPI / 核心 PPI / 核心非農就業 / 核心 PCE /
- * 核心 CCI / 核心消費者信心指數」。實際處理如下 ——
+ * Why are these five items: What users want is "core CPI / core PPI / core non-agricultural employment / core PCE /
+ * Core CCI/Core Consumer Confidence Index". The actual processing is as follows -
  *
- * - **「核心」只有 CPI / PPI / PCE 有標準定義**（排除食品與能源），照做。
- * - **「核心非農就業」不是既有概念**。市場實際看的是總非農就業的**月增人數**，
- *   故採 `PAYEMS` 的月變化，不硬造一個不存在的「核心非農」。
- * - **CCI 與消費者信心是同一件事**，且免費且仍在更新的只有密西根大學那支。
- *   Conference Board 的 CCI 是付費資料；FRED 上的 OECD 版 `CSCICP03USM665S`
- *   實測已停更（最後一筆 2024-01）。故依使用者定案合併為一項。
+ * - **"Core" only has a standard definition for CPI/PPI/PCE** (excluding food and energy), follow suit.
+ * - **"Core non-agricultural employment" is not an existing concept**. What the market actually looks at is the **monthly increase in total non-farm employment**,
+ *   Therefore, we adopt the monthly changes of `PAYEMS` and do not forcibly create a non-existent "core non-agricultural sector".
+ * - **CCI and consumer confidence are the same thing**, and the only one that is free and still updated is the one from the University of Michigan.
+ *   Conference Board's CCI is a paid resource; OECD version `CSCICP03USM665S` on FRED
+ *   The actual measurement has been stopped (the last one is 2024-01). Therefore, they are combined into one item according to the user's decision.
  *
- * 資料源（實測確認 2026-07-28）：
- *   https://fred.stlouisfed.org/graph/fredgraph.csv?id={序列}&cosd={起始日}
+ * Data source (confirmed by actual measurement 2026-07-28):
+ *   https://fred.stlouisfed.org/graph/fredgraph.csv?id={sequence}&cosd={starting day}
  *
- * 四個實測要點：
- *  1. **不需要 API key**。FRED 的 REST API 要金鑰，但 fredgraph 的 CSV 匯出不用。
- *     這也是選它而不是官方 API 的原因：少一組要保管的密鑰。
- *  2. **抓原始值，不用 `transformation=pc1`**。端點確實支援直接回年增率，
- *     但同一份原始序列可以同時算出年增、月增與指數值，而且算法是純函式、測得到；
- *     交給對方轉換就得為每種口徑各抓一次，也失去驗算的能力。
- *  3. **會有空值列**（例：`1952-12,`）。早年月份不是每月都有觀測值，
- *     解析時必須保留「這一期沒有值」而不是跳過或補 0。
- *  4. **不能送 twChips 那個瀏覽器 UA**（見 `MACRO_UA`）。
+ * Four practical measurement points:
+ *  1. **No API key required**. FRED's REST API requires a key, but fredgraph's CSV export does not.
+ *     This is why it was chosen over the official API: one less set of keys to keep.
+ *  2. **Capture the original value without `transformation=pc1`**. The endpoint does support direct return to annual growth rate,
+ *     However, the same original sequence can calculate the annual increase, monthly increase and exponential value at the same time, and the algorithm is a pure function and can be measured;
+ *     If you leave it to the other party to convert, you have to capture each caliber once, and you lose the ability to check.
+ *  3. **There will be null value columns** (for example: `1952-12,`). There are not observations every month in the early years.
+ *     When parsing, "there is no value in this period" must be retained instead of skipping or padding with 0.
+ *  4. **Cannot send twChips to the browser UA** (see `MACRO_UA`).
  *
- * 由 Edge Function 伺服器端抓取，故不受瀏覽器 CORS 限制。
- * 解析為純函式、不觸網，比照 twChips.ts / twFundamental.ts 的分工。
+ * Fetched by the Edge Function server side, it is not subject to browser CORS restrictions.
+ * The analysis is a pure function and does not touch the network. Compare the division of labor of twChips.ts / twFundamental.ts.
  */
 
 import { normNum } from './twChips.ts'
 import { fingerprint } from './pollPlan.ts'
 
 /**
- * macro/us.json 的結構版本。前端守門用 `>=`（見 src/services/macroProxy.ts）。
+ * Structured version of macro/us.json. Front-end gatekeeping uses `>=` (see src/services/macroProxy.ts).
  */
 export const MACRO_SCHEMA = 1
 
-/** 指標的呈現口徑。決定 `deriveIndicator` 怎麼從原始序列算出要顯示的數字 */
+/** The presentation caliber of the indicator. Determine how the `deriveIndicator` calculates the number to display from the original sequence*/
 export type MacroKind = 'yoy' | 'momThousands' | 'index'
 
 export interface MacroSeriesSpec {
-  /** FRED 序列代號 */
+  /** FRED serial code*/
   id: string
   label: string
   kind: MacroKind
-  /** 這個指標在講什麼，一句白話（會直接顯示在畫面上） */
+  /** What is this indicator talking about? In plain English (it will be displayed directly on the screen)*/
   note: string
 }
 
-/** 五個指標。順序即畫面順序：三個物價、一個就業、一個信心 */
+/** five indicators. The order is the order of the picture: three prices, one employment, and one confidence*/
 export const FRED_SERIES: readonly MacroSeriesSpec[] = [
   {
     id: 'CPILFESL',
@@ -82,14 +82,14 @@ export const FRED_SERIES: readonly MacroSeriesSpec[] = [
   },
 ]
 
-/** 各口徑對應的顯示單位。單位不離開資料（沿用 twChips 的準則） */
+/** Display units corresponding to each caliber. The unit does not leave the data (following twChips' guidelines)*/
 export const MACRO_UNITS: Record<MacroKind, string> = {
   yoy: '%',
   momThousands: '千人',
   index: '指數',
 }
 
-/** 一期的觀測值。`value` 為 null 代表那一期沒有資料（FRED 會回空字串） */
+/** Observations for one period. `value` is null, which means there is no data in that period (FRED will return an empty string)*/
 export interface MacroPoint {
   /** 'YYYY-MM' */
   period: string
@@ -102,62 +102,62 @@ export interface MacroIndicator {
   kind: MacroKind
   unit: string
   note: string
-  /** 最新一期（已換算成 kind 的口徑）；沒有可用資料時為 null */
+  /** The latest issue (converted to the caliber of kind); null if no data is available*/
   latest: MacroPoint | null
-  /** 前一期，用來看方向。同樣是換算後的口徑 */
+  /** The previous issue was used to see the direction. The same is the caliber after conversion.*/
   previous: MacroPoint | null
-  /** 由舊到新，最多 12 期，已換算成 kind 的口徑 */
+  /** From old to new, up to 12 issues, converted to kind caliber*/
   points: MacroPoint[]
 }
 
-/** Storage 內 macro/us.json 的結構。**全域單檔，不是 per-ticker** */
+/** The structure of macro/us.json in Storage. **Global single file, not per-ticker***/
 export interface MacroFile {
   schema: number
   /**
-   * **資料最後一次真的變動**的時間 ISO（不是最後一次執行的時間）。
-   * 內容沒變時不會動它，所以它停著不代表排程壞了 —— 那要看 `checkedAt`。
+   * **The time ISO when the data was last really changed** (not the time of the last execution).
+   * It will not be moved when the content has not changed, so just because it is parked does not mean that the schedule is broken - that depends on `checkedAt`.
    */
   asOf: string
   /**
-   * 最後一次真的去問過 FRED 的時間 ISO。與 `asOf` 分離是 0.6.11 的修正：
-   * 兩者合一時，「今天問過了」與「今天有新資料」分不開，正是慢一天的成因。
-   * 舊檔沒有這個欄位，故為選填。
+   * The last time I actually asked FRED for the time ISO. Separation from `asOf` is a fix in 0.6.11:
+   * When the two are combined, "I asked about it today" and "I have new information today" are inseparable, which is the reason for a slow day.
+   * The old file does not have this field, so it is optional.
    */
   checkedAt?: string
   /**
-   * 今天（台北日）已經真的去問過 FRED 幾次。0.6.15 起用來做自適應掃描：
-   * 發布日要密集掃，但要有上限；跨日自動歸零（`ymd` 不同就重算）。
+   * I have actually asked FRED several times today (Taipei Day). 0.6.15 enabled for adaptive scanning:
+   * Scan intensively on the release day, but there must be an upper limit; it will automatically reset to zero across days (`ymd` will be recalculated if it is different).
    */
   scansToday?: { ymd: string; n: number }
   region: '美國'
   indicators: MacroIndicator[]
 }
 
-/** 呈現幾期走勢 */
+/** Show several trends*/
 export const MACRO_POINTS = 12
 
 /**
- * 年增率要拿 13 個月前的值當基期，12 期走勢就需要 24 個月，
- * 再加一個月的緩衝（月度資料的發布落差）。
+ * The annual growth rate needs to be based on the value 13 months ago, and the 12-period trend requires 24 months.
+ * Add a month's buffer (the release gap of monthly data).
  */
 export const MACRO_LOOKBACK_MONTHS = 26
 
 /**
- * 打 FRED 專用的 User-Agent。
+ * Open the FRED-specific User-Agent.
  *
- * ⚠️ **不可以沿用 twChips.ts 的 `UA`**（那是瀏覽器字串，給 TWSE 用的）。
- * FRED 的防護會對「宣稱是瀏覽器卻不是瀏覽器」的請求**直接重置 HTTP/2 連線**
- * （`INTERNAL_ERROR`，連 HTTP 狀態碼都拿不到），0.6.5-dev.1 第一次部署就是這樣
- * 整批抓不到、而錯誤被 catch 吃掉，只剩 `macroSynced: false` 一個線索。
+ * ⚠️ **You cannot use the `UA`** of twChips.ts (that is the browser string, used by TWSE).
+ * FRED's protection will directly reset the HTTP/2 connection for requests that claim to be a browser but are not.
+ * (`INTERNAL_ERROR`, even the HTTP status code cannot be obtained), this is the first deployment of 0.6.5-dev.1
+ * The entire batch cannot be caught, and the error is eaten by catch, leaving only `macroSynced: false` as a clue.
  *
- * 實測（2026-07-28，各試兩次）：
- *   ❌ `Mozilla/5.0 (Windows NT 10.0…Chrome/120…)`  連線被重置
- *   ❌ `stock-pnl-web/0.6.5`、`Deno`、空的 UA        同上
+ * Actual test (2026-07-28, tested twice each):
+ *   ❌ `Mozilla/5.0 (Windows NT 10.0…Chrome/120…)` connection reset
+ *   ❌ `stock-pnl-web/0.6.5`, `Deno`, empty UA as above
  *   ✅ `Deno/1.45.5`、`curl/8.5.0`、`python-requests/2.31.0`
  *   ✅ `stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)`
  *
- * 選最後這個：誠實表明自己是誰、附上聯絡處，是對公開資料源該有的禮貌，
- * 也不必賭 Deno 預設 UA 的格式哪天會不會變。
+ * Choose the last one: honestly stating who you are and attaching a contact address are the courtesy you should have for public information sources.
+ * There is no need to bet on whether the format of Deno's default UA will change one day.
  */
 export const MACRO_UA = 'stock-pnl-web (+https://github.com/CTJ425/stock-pnl-web)'
 
@@ -165,7 +165,7 @@ export function fredCsvUrl(id: string, since: string): string {
   return `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}&cosd=${since}`
 }
 
-/** 由「現在」往回推 months 個月的 YYYY-MM-01，給 `cosd` 用 */
+/** Push back months months from "now" to YYYY-MM-01, for `cosd`*/
 export function fredSinceDate(now: Date, months: number): string {
   const total = now.getUTCFullYear() * 12 + now.getUTCMonth() - months
   const y = Math.floor(total / 12)
@@ -174,11 +174,11 @@ export function fredSinceDate(now: Date, months: number): string {
 }
 
 /**
- * FRED CSV → 由舊到新的觀測序列。
+ * FRED CSV → Sequence of observations from old to new.
  *
- * 格式：第一列是表頭（`observation_date,CPILFESL`），其後每列 `YYYY-MM-DD,值`。
- * **空值列要保留為 `{ value: null }`**（實測 UMCSENT 早年有 `1952-12,` 這種列）——
- * 跳過會讓「前一期」錯位，補 0 會讓年增率算出天文數字。
+ * Format: The first column is the header (`observation_date,CPILFESL`), and each subsequent column is `YYYY-MM-DD,value`.
+ * **Null value columns should be retained as `{ value: null }`** (actually measured UMCSENT had such columns as `1952-12,` in the early years)——
+ * Skipping will cause the "previous period" to be misaligned, and adding 0 will cause the annual growth rate to be astronomical.
  */
 export function parseFredCsv(csv: string): MacroPoint[] {
   const out: MacroPoint[] = []
@@ -191,14 +191,14 @@ export function parseFredCsv(csv: string): MacroPoint[] {
 }
 
 /**
- * 把原始序列換算成該指標要顯示的口徑，並取最後 MACRO_POINTS 期。
+ * Convert the original sequence to the caliber to be displayed by the indicator, and take the last MACRO_POINTS period.
  *
- * - `yoy`：與 12 個月前相比的百分比。基期缺值或為 0 時該期為 null（不硬算）。
- * - `momThousands`：與上一期的差（FRED 的 PAYEMS 本來就是千人）。
- * - `index`：原值照抄。
+ * - `yoy`: Percentage compared to 12 months ago. If the base period has a missing value or is 0, the period is null (no hard calculation).
+ * - `momThousands`: The difference from the previous issue (FRED’s PAYEMS was originally thousands).
+ * - `index`: The original value is copied.
  *
- * 缺值一律以 null 表示，不以 0 冒充 —— 「這個月是 0」與「這個月沒有資料」
- * 在通膨與就業數據上是天差地遠的兩件事。
+ * Missing values ​​are always represented by null, and are not pretended to be 0 - "This month is 0" and "There is no data for this month"
+ * Inflation and employment data are two very different things.
  */
 export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): MacroIndicator {
   const derived: MacroPoint[] = []
@@ -221,7 +221,7 @@ export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): Macro
     derived.push({ period: raw[i].period, value })
   }
 
-  // 尾端可能有整段沒有換算結果（序列開頭 12 個月算不出年增），砍掉再取最後 N 期
+  // There may be a whole section at the end with no conversion result (the first 12 months of the sequence cannot calculate the annual increase), cut it off and then take the last N periods
   const usable = derived.filter((p) => p.value !== null).slice(-MACRO_POINTS)
   return {
     id: spec.id,
@@ -235,29 +235,29 @@ export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): Macro
   }
 }
 
-/** 小數兩位，避免浮點尾巴（沿用 aiPayload 的作法） */
+/** Two decimal places to avoid floating point tails (follow the approach of aiPayload)*/
 function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
 /**
- * 一組指標的內容指紋。`syncMacro` 用它決定「這次抓到的跟檔案裡的是不是同一份」。
+ * Content fingerprint of a set of metrics. `syncMacro` uses it to determine "whether the one captured this time is the same as the one in the file".
  *
- * **為什麼需要它**（0.6.11 修 BUG-008）：原本的冪等鍵是台北日曆日 ——
- * 今天抓過就跳過。但 macro-daily 排兩班（13:00 / 15:00 UTC）的用意是
- * 「第一班沒接到就讓第二班補」，而第一班「成功抓到一份還沒更新的資料」時，
- * 台北日冪等會讓第二班一個請求都不發，於是要等到隔天。
- * 2026-07-30 的核心 PCE 就是這樣慢一天：BEA 美東 8:30 發布、FRED 匯入更晚，
- * 13:00 那班抓到的序列還沒有 2026-06 那一筆。
- * 改用內容指紋後，「今天問過了」與「今天拿到新東西了」才分得開。
+ * **Why is it needed** (0.6.11 fix BUG-008): The original idempotent key is Taipei calendar day——
+ * If you catch it today, skip it. But the purpose of macro-daily scheduling two shifts (13:00 / 15:00 UTC) is
+ * "If the first shift fails to receive it, let the second shift make up for it", and when the first shift "successfully captures a piece of information that has not been updated",
+ * Taipei's daily idempotence will cause the second shift not to send a request, so it will have to wait until the next day.
+ * The core PCE on 2026-07-30 is just one day slower: BEA is released at 8:30 US Eastern, and FRED is imported even later.
+ * The sequence caught at 13:00 is not as big as 2026-06.
+ * After switching to content fingerprinting, "I asked about it today" and "I got something new today" can be distinguished.
  *
- * **要涵蓋整段 points，不能只比最新一期**：FRED 會回頭修正歷史值
- * （2026-07-30 那次 vintage 就同時把 2026-04 與 2026-05 改掉了）。
- * 只比 latest 的話，「最新期沒變但前幾期被修正」會被判定為沒變動而永遠不更新。
+ * **To cover the entire period of points, not just the latest period**: FRED will go back and correct the historical value
+ * (2026-04 and 2026-05 were changed at the same time in the 2026-07-30 vintage).
+ * If only compared to latest, "the latest issue has not changed but previous issues have been revised" will be judged as unchanged and will never be updated.
  *
- * **要先排序**：沿用 `pollPlan.ts` 的教訓 —— 來源的順序不保證穩定，
- * 直接對整包算指紋會把「順序換了」誤判成「內容變了」，讓比對永遠失效。
- * 這裡的 `parts` 以 `id` 開頭，排序 `parts` 即等同依 `id` 排序。
+ * **Sort first**: Follow the lesson of `pollPlan.ts` - the order of sources is not guaranteed to be stable.
+ * Directly counting fingerprints on the entire package will misjudge "the order has changed" as "the content has changed", making the comparison permanently invalid.
+ * Here `parts` starts with `id`, and sorting `parts` is equivalent to sorting by `id`.
  */
 export function macroFingerprint(indicators: readonly MacroIndicator[]): string {
   const parts = indicators
