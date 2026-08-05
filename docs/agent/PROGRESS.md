@@ -1,9 +1,81 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 美國總經改成台股法人表版型（0.6.35 定版）
-- Status: **完成 —— 843 測試全過；純前端，不需要部署 Edge Function**
-- Timestamp: 2026-08-05 13:20:00 Asia/Taipei
+- Action: 個股分析改放報價卡；台股收盤後不再抓價（0.6.36-dev.1）
+- Status: **程式碼完成 —— 869 測試全過；⚠️ 待部署 Edge Function 與 price_cache 新欄位**
+- Timestamp: 2026-08-05 16:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 16:05:00 Asia/Taipei（0.6.36-dev.1）
+
+- **Agent**: Claude
+- **Action**: 個股分析的持股卡換成報價卡；台股 13:30 收盤後鎖到隔天 08:25 不再抓價
+
+### 使用者原本的構想被實測否決
+
+使用者要求「今天收盤價直接從 TWSE 個股日收盤價及月平均價（`STOCK_DAY_AVG_ALL`）定義，
+庫存總覽抓到就更新到現價、不再打 API，直到隔天 8:25 試搓前」。動工前先打了三個端點：
+
+| 來源 | 交易日 | 2330 收盤 | OHLCV |
+| ---- | ---- | ---- | ---- |
+| `STOCK_DAY_AVG_ALL` | 1150804（**前一交易日**） | 2320 | 無 |
+| `STOCK_DAY_ALL` | 1150804（**前一交易日**） | 2320 | 有 |
+| MIS `getStockInfo.jsp` | **20260805**，t=13:30:00 | **2405** | 全有 |
+
+實測時間是 2026-08-05 15:23 台北，**收盤後整整兩小時**，兩個 OpenAPI 端點都還停在昨天，
+而它們回的 2320 恰好等於 MIS 的昨收 `y`。照原構想實作，今天會把 2320 當成今收
+（實際 2405，差 3.6%）**並鎖定 17 小時** —— 正好把使用者要避免的「隔夜價格錯亂」制度化。
+
+同一時間 MIS 的一筆回應已含全部所需欄位（`o` 2385 / `h` 2415 / `l` 2370 / `z` 2405 /
+`y` 2320 / `v` 31851 / `d` 20260805 / `t` 13:30:00 / `ip` 0），且收盤後仍是當日定案值。
+向使用者說明後改採 **MIS 單一來源**，四個決策點都由使用者定案（單一來源、只做台股、
+只刪卡片保留資料流、七格不含月均價）。
+
+### 收盤判斷改看時鐘，不看資料到齊
+
+`quoteWindow.ts` 的 `twQuoteTtlMs(now, tradeTime?)` 是無狀態純函式，只看台北時鐘：
+08:25–13:30 走 60 秒，其餘時段一路鎖到下一個 08:25。
+
+**刻意不查交易日曆、不存鎖定旗標**：週末與國定假日一到 13:30 自然落入長 TTL；
+隔天 08:25 解除後若當天休市，13:30 又重新落入。少一份要維護的假日表。
+唯一的例外處理是 13:30–14:00 的過渡窗 —— 來源 `t` 還沒到 13:30 表示收盤撮合尚未落地，
+這種過渡值不鎖夜，免得整晚顯示一個錯的收盤價。
+
+### 踩到的坑：`Number('')` 是 0
+
+`toCount()`（成交量）允許 0，因為「今天還沒成交」是真值。但也正因為 0 有效，
+空字串不能直接交給 `Number()` —— 它回 0，會把「回應裡沒有 `v` 欄位」變成「成交量 0 張」。
+既有測試（舊的 MIS 真實回應樣本沒有 `v`）當場抓到，補上空字串前置檢查。
+
+### Completed Tasks
+- [x] `misParse.ts`：`MisQuote` 擴充 `open/high/low/volume/tradeDate/tradeTime/trial`；
+      `pickPrice` 的 z→b→y 退階邏輯**未動**。
+- [x] `quoteWindow.ts`（新）：時段 TTL 純函式，前端與 Edge 共用（跨目錄 import，
+      沿用 `misParse.test.ts` 既有模式）。
+- [x] `stock-price/index.ts`：`Quote` 擴充；Yahoo 路徑補 OHLCV
+      （開盤價**不在 `meta`**，要從 `indicators.quote[0].open[0]` 取；
+      成交量 Yahoo 給股數、MIS 給張數，除以 1000 對齊）；
+      DB 快取讀寫新欄位；`freshAfter` 粗篩下界改取兩市場較大者。
+- [x] `schema.sql`：`price_cache` 補 7 個欄位（`ADD COLUMN IF NOT EXISTS`，可重複執行）。
+- [x] `priceProxy.ts`：`PriceQuote` 擴充、快取 key 升 `v3`、`cacheTtlMs` 改吃 quote；
+      新增共用的 `isClosed` / `tradeDateLabel`。
+- [x] `QuoteTab.tsx`（新）取代 `HoldingTab.tsx`（刪）；`StockDetailPage` 的 `surfaceRef`
+      改為包住四段全部；`AnalysisPage` 把 `PriceQuote` 往下傳。
+- [x] `DashboardPage.tsx`：現價 tooltip 補上交易日與「收盤」，快取價明說不一定是今天的。
+- [x] 測試：新增 `quoteWindow.test.ts`(9)、`QuoteTab.test.tsx`(10)；
+      擴充 `misParse.test.ts`(3)、`priceProxy.test.ts`；更新 `StockDetailPage.test.tsx`
+      的持股相關斷言（PDF 那兩條改為釘「畫面上沒有持股數字」）。
+- [x] 驗證：`npm test -- --run` 56 檔 **869 筆全通過**；`npm run build`、`npm run lint` 乾淨。
+
+### ⚠️ 尚未做（需使用者明確授權）
+- 測試區跑 `price_cache` 的 ALTER、部署 `stock-price` Edge Function。
+  兩者都沒做之前，報價卡在測試區會各格顯示「—」（前端拿不到新欄位，這是預期的降級）。
+
+### 待隔日盤中回頭確認
+1. MIS 的 `v`（31,851 張）與 Yahoo 同日的 35,214 張差約 10%，推測是盤後定價交易未計入；
+   單位是「張」已確定，差異來源用隔日的 `STOCK_DAY_ALL` 對帳。
+2. 試撮時段（08:30–09:00）MIS 實際回的 `ip` / `t`，確認「預估」格如預期顯示。
 
 ---
 

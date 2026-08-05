@@ -4,15 +4,19 @@
  * 由伺服器端代為請求 TWSE MIS / Yahoo Finance 等外部 API，解決瀏覽器 CORS 限制。
  * 現價來源：台股先走證交所 MIS 即時行情（秒級延遲），失敗退 Yahoo；美股走 Yahoo。
  * 現價帶 DB 共用快取（price_cache 資料表，見 sources/supabase/schema.sql）：
- * TTL 內全站共用同一份報價（台股 60 秒、美股 10 分鐘），同一支股票不重複請求外部 API。
+ * TTL 內全站共用同一份報價（台股見 quoteWindow.ts 的時段規則、美股 10 分鐘），
+ * 同一支股票不重複請求外部 API。
  * 部署方式（需安裝 Supabase CLI 並登入）：
  *   supabase functions deploy stock-price --no-verify-jwt
  *
  * 介面：
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
- *     → { prices: { 'TPE:2330': { price: number, prevClose: number|null, asOf: string }, ... } }
+ *     → { prices: { 'TPE:2330': { price, prevClose, open, high, low, volume,
+ *                                 tradeDate, tradeTime, trial, asOf }, ... } }
  *       asOf 為報價的實際取得時間（ISO），供前端 TTL 判斷，避免與 DB 快取 TTL 疊加
  *       prevClose 為昨收，前端據此把現價著成漲紅跌綠（0.6.34；取不到時為 null）
+ *       open/high/low/volume/tradeDate/tradeTime/trial 供個股分析的報價卡（0.6.36），
+ *       全部來自報價本來就會回的同一筆資料，不額外請求（美股只有 OHLCV，無 trial）
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
  *   POST { action: 'fx', codes: ['USD','JPY', …] }
@@ -24,6 +28,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
+import { twQuoteTtlMs } from './quoteWindow.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US'
@@ -41,14 +46,27 @@ interface SymbolItem {
 interface Quote {
   price: number
   prevClose: number | null
+  /** 以下為報價卡欄位（0.6.36）：同一筆來源回應裡白拿的，取不到就是 null */
+  open: number | null
+  high: number | null
+  low: number | null
+  /** 累積成交量，單位「張」（Yahoo 回的是股數，除以 1000 後對齊 MIS 口徑） */
+  volume: number | null
+  /** 交易日 YYYYMMDD（僅 MIS 提供） */
+  tradeDate: string | null
+  /** 最後撮合時間 HH:mm:ss（僅 MIS 提供）；達 13:30:00 表示收盤已定案 */
+  tradeTime: string | null
+  /** 是否為試撮階段（僅 MIS 提供） */
+  trial: boolean
 }
 
-/** DB 快取有效期（與前端 localStorage 快取一致）：台股走 MIS 即時源用短 TTL，美股維持 10 分鐘 */
-const CACHE_TTL_MS: Record<SymbolItem['market'], number> = {
-  TPE: 60 * 1000,
-  US: 10 * 60 * 1000,
+/** 美股 DB 快取有效期；台股改由 quoteWindow.ts 依時段決定（收盤後鎖到隔天 08:25） */
+const CACHE_TTL_US_MS = 10 * 60 * 1000
+
+/** 該 key 此刻的快取有效期。台股在收盤後會長達十多小時，粗篩用的下界要跟著它走 */
+function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null): number {
+  return key.startsWith('TPE:') ? twQuoteTtlMs(now, tradeTime) : CACHE_TTL_US_MS
 }
-const MAX_CACHE_TTL_MS = Math.max(...Object.values(CACHE_TTL_MS))
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 Supabase 執行環境自動注入；
 // service role 不受 RLS 限制，是 price_cache 唯一的寫入途徑
@@ -91,6 +109,11 @@ function yahooPrevClose(meta: Record<string, unknown> | undefined): number | nul
   return null
 }
 
+function yahooNum(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
   try {
     const res = await fetch(
@@ -99,10 +122,27 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
     )
     if (!res.ok) return null
     const data = await res.json()
-    const meta = data?.chart?.result?.[0]?.meta
+    const result = data?.chart?.result?.[0]
+    const meta = result?.meta
     const price = Number(meta?.regularMarketPrice)
     if (!Number.isFinite(price) || price <= 0) return null
-    return { price, prevClose: yahooPrevClose(meta) }
+    // 開盤價不在 meta（實測 regularMarketOpen / open 皆為 undefined），
+    // 要從 indicators 的單根日線取；range=1d 時該序列只有一個元素
+    const series = result?.indicators?.quote?.[0]
+    const volumeShares = yahooNum(meta?.regularMarketVolume)
+    return {
+      price,
+      prevClose: yahooPrevClose(meta),
+      open: yahooNum(series?.open?.[0]),
+      high: yahooNum(meta?.regularMarketDayHigh),
+      low: yahooNum(meta?.regularMarketDayLow),
+      // Yahoo 給股數、MIS 給張數：統一成張，兩條路徑餵給報價卡的才是同一個口徑
+      volume: volumeShares === null ? null : Math.round(volumeShares / 1000),
+      // 交易日 / 撮合時間 / 試撮旗標只有 MIS 有；Yahoo 這條路徑一律留空
+      tradeDate: null,
+      tradeTime: null,
+      trial: false,
+    }
   } catch {
     return null
   }
@@ -127,7 +167,8 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
       const data = await res.json()
       for (const quote of parseMisResponse(data)) {
         if (!resolved.has(quote.ticker)) {
-          resolved.set(quote.ticker, { price: quote.price, prevClose: quote.prevClose })
+          const { ticker: _ticker, ...rest } = quote
+          resolved.set(quote.ticker, rest)
         }
       }
     } catch {
@@ -137,30 +178,54 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
   return resolved
 }
 
+/** DB 快取欄位轉回 Quote 的數值；NULL / 壞值一律回 null */
+function cachedNum(value: unknown, allowZero = false): number | null {
+  if (value === null || value === undefined) return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return allowZero ? (n >= 0 ? n : null) : n > 0 ? n : null
+}
+
+function cachedText(value: unknown): string | null {
+  return value === null || value === undefined ? null : String(value)
+}
+
 async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const items = symbols.slice(0, 50)
-  const prices: Record<string, { price: number; prevClose: number | null; asOf: string }> = {}
-  const nowMs = Date.now()
+  const prices: Record<string, Quote & { asOf: string }> = {}
+  const now = new Date()
+  const nowMs = now.getTime()
 
   // 1) 先查 DB 共用快取：分市場 TTL 內的報價直接回傳（asOf = 實際抓價時間）
-  const freshAfter = new Date(nowMs - MAX_CACHE_TTL_MS).toISOString()
+  //    粗篩下界取兩市場的較大者 —— 台股收盤後的 TTL 長達十多小時，
+  //    沿用固定值會把昨天收盤抓到的定案價濾掉，整夜白抓（0.6.36）
+  const freshAfter = new Date(nowMs - Math.max(twQuoteTtlMs(now), CACHE_TTL_US_MS)).toISOString()
   try {
     const { data } = await db
       .from('price_cache')
-      .select('key, price, prev_close, updated_at')
+      .select(
+        'key, price, prev_close, open, high, low, volume, trade_date, trade_time, trial, updated_at',
+      )
       .in('key', items.map((i) => `${i.market}:${i.ticker}`))
       .gte('updated_at', freshAfter)
     for (const row of data ?? []) {
       const key = String(row.key)
       const price = Number(row.price)
       const at = Date.parse(String(row.updated_at))
-      const ttl = key.startsWith('TPE:') ? CACHE_TTL_MS.TPE : CACHE_TTL_MS.US
+      const tradeTime = cachedText(row.trade_time)
+      const ttl = cacheTtlMsFor(key, now, tradeTime)
       if (!Number.isFinite(price) || price <= 0) continue
       if (!Number.isFinite(at) || nowMs - at >= ttl) continue
-      const prev = Number(row.prev_close)
       prices[key] = {
         price,
-        prevClose: Number.isFinite(prev) && prev > 0 ? prev : null,
+        prevClose: cachedNum(row.prev_close),
+        open: cachedNum(row.open),
+        high: cachedNum(row.high),
+        low: cachedNum(row.low),
+        volume: cachedNum(row.volume, true),
+        tradeDate: cachedText(row.trade_date),
+        tradeTime,
+        trial: row.trial === true,
         asOf: new Date(at).toISOString(),
       }
     }
@@ -208,6 +273,13 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
           key,
           price: prices[key].price,
           prev_close: prices[key].prevClose,
+          open: prices[key].open,
+          high: prices[key].high,
+          low: prices[key].low,
+          volume: prices[key].volume,
+          trade_date: prices[key].tradeDate,
+          trade_time: prices[key].tradeTime,
+          trial: prices[key].trial,
           updated_at: prices[key].asOf,
         })),
       )

@@ -8,6 +8,34 @@
 
 ## 📋 Active Tasks
 
+### Task 69: 個股分析改放報價卡；台股收盤後不再抓價（0.6.36-dev.1）
+- **Status**: ✅ **程式碼完成，待部署** —— ⚠️ 需要動 Supabase（見下方「部署待辦」）
+- **Agent**: Claude
+- **Timestamp**: 2026-08-05 16:05:00 Asia/Taipei
+- **需求**：使用者要「個股分析刪掉我的持股卡片，改放開盤 / 最高 / 成交量 / 昨收 /
+  最低 / 預估 / 今收」，並希望「抓到日收盤價就更新到現價、之後不再打 API，
+  直到隔天 8:25 試搓前才恢復」。起因是擔心隔夜再看時價格基準錯亂。
+- **原構想被實測否決**：使用者原本要用 TWSE `STOCK_DAY_AVG_ALL` 定義今收。
+  2026-08-05 15:23（收盤後兩小時）實測，該端點與 `STOCK_DAY_ALL` 的 `Date` 都還是
+  `1150804`（前一交易日），2330 回 2320 —— 那是昨收；當日真正收盤價是 MIS 的 2405，差 3.6%。
+  照原構想會把昨收當今收並鎖 17 小時，正好製造出使用者要避免的錯亂。
+  **改用 MIS 單一來源**（同一筆回應已含 `o/h/l/v/y/z/d/t/ip`），使用者確認採用。
+- **收盤判斷改看時鐘而非資料到齊**：`quoteWindow.ts` 的 `twQuoteTtlMs` 是無狀態純函式，
+  不查交易日曆 —— 週末與假日 13:30 後自然落入長 TTL。詳見 `SPEC.md`「報價卡與台股抓價時段」。
+- **保留的東西**：`buildHoldingRows` 與 `generateReport` 的 holding 資料流照舊
+  （下拉選單要列持股、即點即產要帶脈絡），只是畫面上不再顯示持股數字。
+- **驗證**：`npm test -- --run` 56 檔 869 筆全通過（新增 `quoteWindow.test.ts` 9 筆、
+  `QuoteTab.test.tsx` 10 筆，擴充 misParse / priceProxy）；`npm run build`、`npm run lint` 乾淨。
+- **部署待辦（需使用者明確授權，依 CLAUDE.md §13.2）**：
+  1. 測試區跑 `sources/supabase/schema.sql` 的 `price_cache` 新欄位 ALTER（可重複執行）。
+  2. `supabase functions deploy stock-price --no-verify-jwt`（測試區）。
+  3. 兩者缺一時的行為：Edge 未部署 → 前端拿不到新欄位，報價卡各格顯示「—」；
+     schema 未跑 → Edge 回寫快取會失敗（該次不影響回應，但每次都要重抓）。
+- **待驗證（收盤後無法確認，需隔日盤中回頭看）**：
+  1. MIS 的 `v` 與 TWSE 日報表 `TradeVolume` 有約 10% 落差（31,851 張 vs Yahoo 的 35,214 張），
+     推測是盤後定價交易未計入 —— 單位是「張」已確定，差異來源待隔日用 `STOCK_DAY_ALL` 對帳。
+  2. 試撮時段（08:30–09:00）MIS 實際回的 `ip` / `t`，確認「預估」格如預期顯示。
+
 ### Task 68: 美國總經改成台股法人表版型（0.6.35）
 - **Status**: ✅ **完成** —— 純前端，不需要部署 Edge Function、不需要動 Supabase
 - **Agent**: Claude

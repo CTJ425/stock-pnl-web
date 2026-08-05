@@ -28,6 +28,7 @@ vi.mock('../../services/warmStock', () => ({ warmStock }))
 vi.mock('../../services/reportPdf', () => ({ generatePdfBlob, downloadBlob }))
 
 import { StockDetailPage } from './StockDetailPage'
+import type { PriceQuote } from '../../services/priceProxy'
 import type { ChipDay, ChipLeg, ReportData } from '../../services/reportProxy'
 
 const leg = (buy: number, sell: number): ChipLeg => ({ buy, sell, net: buy - sell })
@@ -77,6 +78,22 @@ const report: ReportData = {
 
 const holding = { qty: 3000, avgCost: 100.5, price: 120, unrealized: 58500, roi: 0.194 }
 
+/** 收盤後的一筆台股報價（數字取自 2026-08-05 的 2330 實測回應） */
+const quote: PriceQuote = {
+  price: 2405,
+  prevClose: 2320,
+  open: 2385,
+  high: 2415,
+  low: 2370,
+  volume: 31851,
+  tradeDate: '20260805',
+  tradeTime: '13:30:00',
+  trial: false,
+  asOf: '2026-08-05T07:30:00.000Z',
+  source: 'edge',
+  stale: false,
+}
+
 /*
  * 0.6.8 起四段併成一頁，全頁的「第 N 個 svg」「第一個 .rpt-section」這種順序假設
  * 全部失效，而且是那種「今天剛好會過、明天加一段就爆」的脆弱寫法。
@@ -105,14 +122,14 @@ describe('StockDetailPage', () => {
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     expect(await screen.findByText('三大法人買賣超')).toBeTruthy()
     expect(generateReport).not.toHaveBeenCalled()
   })
 
   it('報告表頭在擷取範圍內，含代號、資料日期與更新時間（PDF 才認得出是哪份報告）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const head = container.querySelector('.detail-card .rpt-head')
@@ -129,14 +146,14 @@ describe('StockDetailPage', () => {
 
   it('資料日期不在頁首重複（那是籌碼報告的屬性，非整頁的）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     expect(container.querySelector('.detail-head')!.textContent).not.toContain('資料日期')
   })
 
   it('三大法人表格顯示買進 / 賣出 / 買賣超與連買連賣', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
     // 圖表軸標籤也會出現相同數字，故限定在三大法人表格內查
     const instTable = within(screen.getAllByRole('table')[0])
@@ -156,7 +173,7 @@ describe('StockDetailPage', () => {
   it('三大法人表格可切換檢視 7 天中任一天，連買連賣隨之重算', async () => {
     const user = userEvent.setup()
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
@@ -179,7 +196,7 @@ describe('StockDetailPage', () => {
 
   it('圖表預設並排四個法人，並附色塊圖例（身分不只靠顏色）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const legend = within(container.querySelector('.chart-legend-side')! as HTMLElement)
@@ -196,7 +213,7 @@ describe('StockDetailPage', () => {
   it('切成單一法人時圖例改講紅正綠負（顏色改為表達極性）', async () => {
     const user = userEvent.setup()
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     await user.click(screen.getByRole('button', { name: '投信' }))
@@ -208,7 +225,7 @@ describe('StockDetailPage', () => {
 
   it('畫出走勢圖（inline SVG，非圖表函式庫）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     // 籌碼段：買賣超長條圖 + 融資 / 融券兩張折線圖
@@ -219,7 +236,7 @@ describe('StockDetailPage', () => {
   it('可切換法人，重畫買賣超長條圖', async () => {
     const user = userEvent.setup()
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const before = charts(container, 'chips')[0]?.innerHTML
@@ -228,29 +245,37 @@ describe('StockDetailPage', () => {
     expect(after).not.toBe(before)
   })
 
-  it('四段同時在一頁上，順序為 持股 → 籌碼 → 基本面 → 技術面', async () => {
+  it('四段同時在一頁上，順序為 報價 → 籌碼 → 基本面 → 技術面', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
     const ids = [...container.querySelectorAll('[id^="sec-"]')].map((el) => el.id)
-    expect(ids).toEqual(['sec-holding', 'sec-chips', 'sec-fundamental', 'sec-technical'])
+    expect(ids).toEqual(['sec-quote', 'sec-chips', 'sec-fundamental', 'sec-technical'])
     // 卡片標題也照同一個順序
     const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
-    expect(titles).toEqual(['我的持股', '籌碼', '基本面', '技術面'])
+    expect(titles).toEqual(['報價', '籌碼', '基本面', '技術面'])
   })
 
-  it('持股與技術面各自渲染，不必再切分頁', async () => {
+  it('報價與技術面各自渲染，不必再切分頁', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
-    const hold = within(sec(container, 'holding'))
-    expect(hold.getByText('持股概況')).toBeTruthy()
-    expect(hold.getByText('3,000')).toBeTruthy() // 持有股數
-    expect(hold.getByText('+NT$58,500')).toBeTruthy() // 未實現淨損益
+    const q = within(sec(container, 'quote'))
+    expect(q.getByText('今日行情')).toBeTruthy()
+    expect(q.getByText('31,851 張')).toBeTruthy() // 成交量
+    // 收盤後那格叫「今收」而不是「成交」，且卡片標題標出交易日與狀態
+    expect(q.getByText('今收')).toBeTruthy()
+    expect(container.querySelector('#sec-quote')?.previousElementSibling?.textContent).toContain(
+      '8/5 · 已收盤 · 13:30:00',
+    )
+
+    // 持股數字不再出現在畫面上（0.6.36 起這頁只談市場資料）
+    expect(screen.queryByText('持股概況')).toBeNull()
+    expect(screen.queryByText('+NT$58,500')).toBeNull()
 
     // 技術面（fixture 無日線）顯示自己的空狀態，且不影響其他三段
     expect(await within(sec(container, 'technical')).findByText(/這檔還沒有歷史股價/)).toBeTruthy()
@@ -259,7 +284,7 @@ describe('StockDetailPage', () => {
 
   it('只有「分析內容」與「AI 分析」兩個分頁籤', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
@@ -288,7 +313,7 @@ describe('StockDetailPage', () => {
     })
 
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
@@ -328,7 +353,7 @@ describe('StockDetailPage', () => {
 
     const user = userEvent.setup()
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     await screen.findByText('日 K 與均線')
@@ -341,7 +366,7 @@ describe('StockDetailPage', () => {
 
   it('各區塊各自標示資料日與更新時間（三個來源公布時間不同）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const tags = [...sec(container, 'chips').querySelectorAll('.source-tag')].map((el) => el.textContent)
@@ -359,7 +384,7 @@ describe('StockDetailPage', () => {
       history: report.history.map((d) => ({ ...d, margin: null })),
       sources: { ...report.sources!, margin: null },
     })
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
     expect(screen.getByText(/今日融資融券尚未公布（約 21:00–22:00 才會有）/)).toBeTruthy()
     expect(screen.getByText(/上方的三大法人不受影響/)).toBeTruthy()
@@ -371,38 +396,37 @@ describe('StockDetailPage', () => {
     const { sources: _omit, ...legacy } = report
     fetchStoredReport.mockResolvedValue({ ...legacy, schema: 2 })
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     expect(sec(container, 'chips').querySelectorAll('.source-tag')).toHaveLength(0)
   })
 
-  it('PDF 擷取範圍含籌碼／基本面／技術面，但不含持股（個資不進匯出檔）', async () => {
+  it('PDF 擷取範圍含四段，且不含任何持股數字（個資不進匯出檔）', async () => {
     const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     expect(screen.getByRole('button', { name: /下載 PDF/ })).toBeTruthy()
 
     /*
-      共用報告一路以來就不含個資，持股數字是前端依交易紀錄算的。
-      四段併成一頁之後，唯一擋住它流進匯出檔的就是「持股排在 surfaceRef 之外」——
-      這條測試就是釘住那件事，否則哪天有人把持股搬進去也不會有人發現。
-      辨識方式：持股段必須不是任何 .detail-stack[ref] 的後代 ——
-      實作上 surfaceRef 那層是第二個 .detail-stack。
+      共用報告一路以來就不含個資。0.6.35 以前靠「持股排在 surfaceRef 之外」擋住，
+      0.6.36 起那張卡換成報價（公開市場資料），四段都進匯出範圍 ——
+      改由「畫面上根本沒有持股數字」把關，這條測試釘的是後者。
     */
     const stacks = container.querySelectorAll('.detail-stack')
     const captured = stacks[stacks.length - 1]
+    expect(captured.querySelector('#sec-quote')).toBeTruthy()
     expect(captured.querySelector('#sec-chips')).toBeTruthy()
     expect(captured.querySelector('#sec-fundamental')).toBeTruthy()
     expect(captured.querySelector('#sec-technical')).toBeTruthy()
-    expect(captured.querySelector('#sec-holding')).toBeNull()
     expect(captured.textContent).not.toContain('+NT$58,500') // 未實現損益
+    expect(captured.textContent).not.toContain('持股概況')
   })
 
   it('AI 分析仍是獨立分頁，切過去後長頁四段都不在畫面上', async () => {
     const user = userEvent.setup()
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
     await user.click(screen.getByRole('button', { name: 'AI 分析' }))
     expect(screen.queryByText('三大法人買賣超')).toBeNull()
@@ -414,7 +438,7 @@ describe('StockDetailPage', () => {
   it('Storage 未命中時走即點即產 fallback', async () => {
     fetchStoredReport.mockResolvedValue(null)
     generateReport.mockResolvedValue(report)
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
     expect(generateReport).toHaveBeenCalledWith({
       market: 'TPE',
@@ -427,19 +451,19 @@ describe('StockDetailPage', () => {
   it('兩條路徑都失敗時顯示錯誤訊息', async () => {
     fetchStoredReport.mockResolvedValue(null)
     generateReport.mockRejectedValue(new Error('伺服器回傳的報告格式不符，請稍後再試'))
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('格式不符'))
   })
 
   it('history 只有 2 天時，圖表標題與資料同步（不假裝有 7 天）', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     expect(await screen.findByText('近 2 日買賣超')).toBeTruthy()
     expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
   })
 
   it('應包含「AI 分析」分頁籤並可點擊切換', async () => {
     const user = userEvent.setup()
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
     const aiTabButton = screen.getByRole('button', { name: 'AI 分析' })
@@ -467,7 +491,7 @@ describe('StockDetailPage', () => {
       notes: [],
     })
 
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
     expect(screen.getByText('31.59')).toBeTruthy()
@@ -486,7 +510,7 @@ describe('StockDetailPage', () => {
       profitQuarters: [],
       notes: [],
     })
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     expect(await screen.findByText('半導體業')).toBeTruthy()
   })
 
@@ -505,7 +529,7 @@ describe('StockDetailPage', () => {
     fetchFundamental.mockResolvedValueOnce(null).mockResolvedValueOnce(fresh)
     warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 1, fundamentalComplete: true, backfilled: 0 })
 
-    render(<StockDetailPage ticker="2609" name="陽明" holding={holding} />)
+    render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     expect(await screen.findByText('航運業')).toBeTruthy()
     expect(warmStock).toHaveBeenCalledWith('2609')
@@ -552,7 +576,7 @@ describe('StockDetailPage', () => {
       backfilled: 10,
     })
 
-    const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} />)
+    const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     await screen.findByText('航運業')
     expect(warmStock).toHaveBeenCalledWith('2609')
@@ -564,7 +588,7 @@ describe('StockDetailPage', () => {
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
     warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 0 })
 
-    render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} />)
+    render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
@@ -573,7 +597,7 @@ describe('StockDetailPage', () => {
   })
 
   it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
@@ -589,7 +613,7 @@ describe('StockDetailPage', () => {
     }
 
     it('報告換過一份 → 自動換上新的，不必重新整理', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
       expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
 
@@ -606,7 +630,7 @@ describe('StockDetailPage', () => {
 
     it('generatedAt 沒變 → 不動 state（否則每次切回都重繪，捲動與展開狀態會被洗掉）', async () => {
       const { container } = render(
-        <StockDetailPage ticker="2330" name="台積電" holding={holding} />,
+        <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
       )
       await screen.findByText('三大法人買賣超')
       const before = container.querySelector('.detail-card .rpt-head')!.textContent
@@ -620,7 +644,7 @@ describe('StockDetailPage', () => {
     })
 
     it('切到背景時不抓（只在使用者真的要看的時候才打 Storage）', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
       expect(fetchStoredReport).toHaveBeenCalledTimes(1)
 
@@ -629,7 +653,7 @@ describe('StockDetailPage', () => {
     })
 
     it('切回前景時查無 Storage 報告 → 保留畫面上這份，不清空', async () => {
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
 
       fetchStoredReport.mockResolvedValue(null)
@@ -658,7 +682,7 @@ describe('StockDetailPage', () => {
 
     it('點圖例關掉某個法人，縱軸依剩下的重算', async () => {
       const user = userEvent.setup()
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
 
       // 外資單日買超 3000～5000 股，另外三家都在 100 股以內
@@ -676,7 +700,7 @@ describe('StockDetailPage', () => {
 
     it('最後一個法人不給關（全部關掉只會剩空座標軸）', async () => {
       const user = userEvent.setup()
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
       await screen.findByText('三大法人買賣超')
 
       for (const label of ['外資（不含自營）', '外資自營商', '投信']) {
@@ -691,20 +715,21 @@ describe('StockDetailPage', () => {
     0.6.24 移除收合後，擷取範圍理當「畫面上有什麼就是什麼」——這條測試守住這件事，
     順便確認當時為了收合而加的展開／還原邏輯沒有殘留。
   */
-  it('匯出 PDF：擷取的是籌碼＋基本面＋技術面三段，持股不在裡面', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} />)
+  it('匯出 PDF：擷取的是報價＋籌碼＋基本面＋技術面四段', async () => {
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
     fireEvent.click(screen.getByRole('button', { name: /下載 PDF/ }))
     await waitFor(() => expect(generatePdfBlob).toHaveBeenCalled())
 
     const surface = generatePdfBlob.mock.calls[0][0] as HTMLElement
+    expect(surface.querySelector('#sec-quote')).toBeTruthy()
     expect(surface.querySelector('#sec-chips')).toBeTruthy()
     expect(surface.querySelector('#sec-fundamental')).toBeTruthy()
     expect(surface.querySelector('#sec-technical')).toBeTruthy()
     expect(within(surface).getByText('三大法人買賣超')).toBeTruthy()
-    // 共用報告不含個資：持股那段刻意留在擷取範圍外
-    expect(surface.querySelector('#sec-holding')).toBeNull()
+    // 共用報告不含個資：報價是公開資料，持股數字整頁都不再出現
+    expect(surface.textContent).not.toContain('持股概況')
 
     await waitFor(() =>
       expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), '個股分析-2330-2026-07-23.pdf'),

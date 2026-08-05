@@ -9,7 +9,7 @@ import type { Holding } from './pnlEngine'
 import { estimateUnrealized } from './pnlEngine'
 import { breakEvenPrice } from './fees'
 import { getMinFee } from './settings'
-import type { PriceMap } from '../services/priceProxy'
+import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
 
 export interface HoldingRow {
   holding: Holding
@@ -20,6 +20,10 @@ export interface HoldingRow {
    * 報價來源沒給昨收時為 null —— 顯示平盤色，不拿 0 冒充「今天沒漲沒跌」。
    */
   dayChange: number | null
+  /** 這筆報價所屬的交易日（'M/D'）；美股與台股備援路徑沒有，為 null */
+  tradeDay: string | null
+  /** 是否為當日收盤定案值 —— tooltip 據此說「收盤」而不是「現價」（0.6.36） */
+  closed: boolean
   mktVal: number | null
   unrealized: number | null
   /** 未含任何費用的純價差：市值 − 未含費成本，與年度收益的 rawRealized 同構 */
@@ -54,6 +58,8 @@ export function buildHoldingRows(
       price,
       priceStale: quote?.stale ?? false,
       dayChange: price !== null && prevClose !== null ? price - prevClose : null,
+      tradeDay: tradeDateLabel(quote?.tradeDate),
+      closed: isClosed(quote),
       mktVal,
       unrealized,
       rawUnrealized,

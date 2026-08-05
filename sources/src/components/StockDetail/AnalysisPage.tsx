@@ -2,7 +2,9 @@
  * 個股分析頁（導覽分頁）：負責「看哪一檔」與持股數字，內容區交給 StockDetailPage。
  *
  * 只列台股：盤後籌碼的資料源（TWSE）只涵蓋上市台股，把美股放進選單只會讓人選了才發現沒東西。
- * 持股數字與庫存總覽共用 buildHoldingRows，避免兩頁各算一份而走鐘。
+ * 持股數字與庫存總覽共用 buildHoldingRows，避免兩頁各算一份而走鐘 ——
+ * 0.6.36 起畫面上不再顯示持股，但下拉選單要列出持有的台股、即點即產報告也要帶持股脈絡，
+ * 所以這層仍照算；報價卡要的那筆 PriceQuote 也由這裡的 prices 直接往下傳。
  */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, Inbox } from 'lucide-react'
@@ -121,6 +123,7 @@ export function AnalysisPage() {
         unrealized: selected.unrealized,
         roi: selected.roi,
       }}
+      quote={prices[selected.holding.key] ?? null}
       selector={selector}
     />
   )
