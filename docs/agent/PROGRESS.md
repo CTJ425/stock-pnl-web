@@ -62,6 +62,20 @@
 
 使用者於 2026-08-05 明確授權部署測試區並調高回補預算。
 
+**測試區已部署** —— 2026-08-05 10:15:00 Asia/Taipei，`Stock-Pnl-Web-Dev`
+（`wqetxuhncvfidqnklyew`），`stock-report` v41 → **v42**，`verify_jwt` 維持 `false`。
+指令：`supabase functions deploy stock-report --project-ref wqetxuhncvfidqnklyew --no-verify-jwt`。
+已用 `functions download` 逐檔比對，`index.ts` / `twMarket.ts` / `twChips.ts` / `report.ts`
+與 `dev` 分支**位元組相同**（不看版本號推論，見 supabase-ops skill）。
+**正式區未動**（仍是舊版，`main` 分支也還沒合併）。
+
+部署當下的 `market/daily.json` 基準（10:17 讀取，公開 bucket 唯讀）：
+`schema: 1`、24 天、20 天有法人金額、**0 天有買賣金額**。
+測試區這份檔案只有 24 天（不是 120），以 15 天／輪計，當天 16:00 與 17:00 兩輪就會補完。
+
+⚠️ **無法手動觸發驗證**：`sync-market` 要求 `x-cron-secret`，而 Agent 拿不到明文
+（`secrets list` 只回雜湊）。要等 cron 自己跑 —— 下一輪為當日台北 16:00。
+
 `MAX_MARKET_INST_DAYS` 由 5 調到 **15**（`schema.sql` 的 cron 註解同步更新）：
 120 天的重抓由 8 個工作天縮到約 3 個。每個請求自帶 10 秒逾時、單日請求實測 0.2–0.4 秒，
 15 個約 3–6 秒，遠低於 cron 的 60 秒 `timeout_milliseconds`；這一班是獨立 action，
