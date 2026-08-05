@@ -89,19 +89,6 @@ describe('TwMarketSection', () => {
     expect(kpis).toContain('10870.5 億')
   })
 
-  it('三張圖：大盤日 K、成交金額、法人買賣超', async () => {
-    fetchMarketDaily.mockResolvedValue({
-      asOf: '2026-08-04T08:30:00.000Z',
-      days: [
-        day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
-        day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000)),
-      ],
-    })
-    const { container } = render(<TwMarketSection />)
-    await screen.findByText('每日成交金額（億元）')
-    expect(container.querySelectorAll('.chart-wrap')).toHaveLength(3)
-  })
-
   it('開高低還沒補到的日子不畫 K 線，不用收盤價冒充（會變成一排十字線）', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
@@ -115,7 +102,7 @@ describe('TwMarketSection', () => {
     expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
   })
 
-  it('法人買賣超只畫最近 7 個交易日（與個股籌碼一致）', async () => {
+  it('法人只看最近 7 個交易日（與個股籌碼一致）', async () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
     )
@@ -123,9 +110,8 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
 
     await screen.findByText(/三大法人買賣超（億元）・近 7 個交易日/)
-    // 第三張圖是法人：7 根長條（成交金額那張仍是 30 天）
-    const bars = container.querySelectorAll('.chart-wrap')[2].querySelectorAll('rect[rx]')
-    expect(bars).toHaveLength(7)
+    // 0.6.33 移除長條圖後，7 日視窗由表格表達（上方兩張指數圖與成交金額仍是 30 天）
+    expect(container.querySelectorAll('.data-table tbody tr')).toHaveLength(7)
   })
 
   it('逐日買賣超表格：由新到舊，五個法人分欄，缺料給「—」', async () => {
@@ -145,9 +131,9 @@ describe('TwMarketSection', () => {
     // 表由新到舊（圖由舊到新，兩者刻意相反）
     expect(rows[0].textContent).toContain('2026-08-04')
     // 最新那天還沒補到法人金額 → 六個法人欄整列「—」，不以 0 冒充
-    // （第 7 個 td.num 是趨勢欄，那天沒有合計就沒有走勢，同樣是「—」）
+    // （後兩個 td.num 是趨勢與連續，那天沒有合計就沒有走勢，同樣是「—」）
     expect([...rows[0].querySelectorAll('td.num')].map((td) => td.textContent)).toEqual(
-      Array(7).fill('—'),
+      Array(8).fill('—'),
     )
     // 前一天有資料：外資 −191.9 億、投信 +5.0 億、合計 −165.2 億
     const prev = [...rows[1].querySelectorAll('td.num')].map((td) => td.textContent)
@@ -226,15 +212,81 @@ describe('TwMarketSection', () => {
     expect(container.querySelectorAll('.data-table .mac-spark').length).toBeGreaterThan(0)
   })
 
-  it('抓取週期寫在卡片上，使用者不必去猜多久更新一次（0.6.32）', async () => {
+  it('抓取週期不寫在卡片上，班次常數只有後台一份（0.6.33）', async () => {
+    // 卡片自備一份班次必然與 pg_cron 漂移 —— 實際漂過（寫「最多 5 天」時後端已是 15）
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [day('2026-08-04', 8e11, inst(1e9, 1e9))],
     })
-    render(<TwMarketSection />)
-    expect(await screen.findByText(/抓取週期/)).toBeTruthy()
-    expect(screen.getByText(/16:00 \/ 17:00 \/ 18:00，僅平日/)).toBeTruthy()
-    expect(screen.getByText('market-daily')).toBeTruthy()
+    const { container } = render(<TwMarketSection />)
+    await screen.findByText('日期')
+    expect(screen.queryByText(/抓取週期/)).toBeNull()
+    expect(container.textContent).not.toContain('market-daily')
+    // 換成的那一句仍要說清楚「—」代表什麼
+    expect(screen.getByText(/還沒補到，不是沒有進出/)).toBeTruthy()
+  })
+
+  it('三張圖：指數 K 線與指數走勢並排，成交金額在下方（0.6.33）', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [
+        day('2026-08-03', 885_506_043_091, inst(-16_519_607_403, -19_190_915_634)),
+        day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000)),
+      ],
+    })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByText('加權指數走勢（收盤）')
+    // 法人長條圖已移除，剩 K 線 / 指數走勢 / 成交金額
+    expect(container.querySelectorAll('.chart-wrap')).toHaveLength(3)
+    expect(container.querySelectorAll('.chart-pair')).toHaveLength(1)
+    expect(screen.queryByText(/三大法人買賣超（億元）・近 2 個交易日/)).toBeTruthy()
+  })
+
+  it('全部展開 / 全部收起：只認展得開的列（0.6.33）', async () => {
+    const user = userEvent.setup()
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [
+        day('2026-08-03', 8e11, inst(-1.65e10, -1.9e10)), // 舊資料，沒有明細
+        day('2026-08-04', 8e11, instFull(1.445e10, 1.127e10)),
+      ],
+    })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByText('日期')
+
+    await user.click(screen.getByRole('button', { name: /全部展開/ }))
+    // 只有一列展得開，展開後按鈕就該翻成「全部收起」——
+    // 若把沒有明細的舊資料日也算進來，allOpen 永遠 false，按鈕會卡住
+    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
+    const collapse = screen.getByRole('button', { name: /全部收起/ })
+
+    await user.click(collapse)
+    expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
+  })
+
+  it('趨勢與連續分成兩欄，走勢線才不會被標籤推歪（0.6.33）', async () => {
+    const days = [
+      day('2026-08-01', 8e11, inst(-3e9, -1e9)),
+      day('2026-08-02', 8e11, inst(-2e9, -1e9)),
+      day('2026-08-03', 8e11, inst(5e9, 1e9)), // 轉買超，連 1 日不算趨勢
+    ]
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByText('日期')
+    expect(screen.getByRole('columnheader', { name: '連續' })).toBeTruthy()
+
+    const rows = container.querySelectorAll('.data-table tbody tr')
+    const cells = (r: Element) => [...r.querySelectorAll('td.num')]
+    // 最後兩格固定是趨勢與連續：走勢線只在趨勢格，文字只在連續格
+    const top = cells(rows[0])
+    expect(top[top.length - 2].querySelector('svg')).toBeTruthy()
+    expect(top[top.length - 1].querySelector('svg')).toBeNull()
+    // 轉向當天連 1 日 → 連續欄給「—」而不是留白
+    expect(top[top.length - 1].textContent).toBe('—')
+
+    const prev = cells(rows[1])
+    expect(prev[prev.length - 1].textContent).toBe('連 2 日賣超')
+    expect(prev[prev.length - 2].querySelector('svg')).toBeTruthy()
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {

@@ -32,3 +32,5 @@ raw/
 # Supabase CLI local artifacts (repo-root supabase/ is CLI-generated; real code is in sources/supabase/)
 /supabase/.temp/
 /supabase/.branches/
+# Added by code-review-graph
+.code-review-graph/

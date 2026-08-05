@@ -1931,6 +1931,23 @@ a.hmenu-item {
   max-width: 760px;
 }
 
+/*
+ * 兩張圖左右並排（0.6.33，台股市場的指數 K 線與走勢）。
+ * ≤900px 疊成一欄 —— 兩張圖擠在半個手機寬會完全看不出趨勢（同 .fx-chart-pair 的取捨）。
+ * 與 .fx-chart-pair 分開定義：那支綁著匯率頁的 .fx-chart-head 版面，共用會讓兩處互相牽連。
+ */
+.chart-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .chart-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
 .chart-svg {
   display: block;
   max-width: 100%;

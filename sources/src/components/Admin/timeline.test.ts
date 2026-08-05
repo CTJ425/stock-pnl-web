@@ -77,6 +77,17 @@ describe('judgeSource', () => {
     expect(judgeSource(borrow, 18.167, 19)).toBe('late')
   })
 
+  it('全市場法人以 18:15 為界——它的排程一天只有三班，最後一班 18:00（0.6.33）', () => {
+    const market = TW_CHAIN.find((s) => s.id === 'market')!
+    // 16:15（第 1.25 小時）：個股那條的界線，但全市場那時可能還沒跑第二班 —— 不算延遲
+    expect(judgeSource(market, 1.25, 4)).toBe('ok')
+    expect(judgeSource(market, 3.25, 4)).toBe('ok') // 18:15 剛好在界上
+    expect(judgeSource(market, 3.5, 4)).toBe('late') // 18:30 才產出才算延遲
+    // 還沒到 18:15 就還沒拿到，是等待中而不是延遲（每天傍晚都會經過這一段）
+    expect(judgeSource(market, null, 2)).toBe('idle')
+    expect(judgeSource(market, null, 4)).toBe('late')
+  })
+
   it('還沒到寬限截止就沒拿到 → 等待中，不是延遲', () => {
     // 每天傍晚都有一段時間資料本來就還沒公布，那時亮紅燈只會讓人學會忽略它
     expect(judgeSource(borrow, null, 3)).toBe('idle')
@@ -169,7 +180,13 @@ describe('TW_CHAIN', () => {
   })
 
   it('不含個股新聞——0.6.13 起後台不再追蹤它', () => {
-    expect(TW_CHAIN.map((s) => s.id)).toEqual(['institutional', 'daily', 'margin', 'borrow'])
+    expect(TW_CHAIN.map((s) => s.id)).toEqual([
+      'institutional',
+      'market',
+      'daily',
+      'margin',
+      'borrow',
+    ])
   })
 
   it('所有時點都落在軸的範圍內', () => {

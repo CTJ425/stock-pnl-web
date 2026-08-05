@@ -23,34 +23,8 @@ Claude implements code directly, and the primary responsibility is to ensure tha
 
 **stock-pnl-web** — 股票損益試算與盤後籌碼報告的網頁應用。
 
-技術棧：React 19 + Vite 8 + TypeScript + Supabase（Postgres / Edge Functions / Storage）。
-Lint 用 oxlint，測試用 vitest，部署到 GitHub Pages。
-
-實際結構：
-
-```text
-stock-pnl-web/
-├── CLAUDE.md               # 本檔（Claude 操作規則）
-├── README.md               # 版本徽章與版本紀錄
-├── docs/
-│   └── agent/              # 持久化 Agent 記憶（見 §3、§4）
-├── .claude/
-│   └── skills/verify/      # UI 驗證 skill
-└── sources/                # 應用程式根目錄（npm 專案）
-    ├── src/                # 前端原始碼
-    ├── supabase/           # migrations / functions
-    ├── package.json        # version 來源，見 §12
-    └── vite.config.ts
-```
-
-所有 npm 指令一律在 `sources/` 底下執行：
-
-| 指令 | 內容 |
-| ---- | ---- |
-| `npm run dev` | vite dev server |
-| `npm run build` | `tsc -b && vite build` |
-| `npm run lint` | oxlint |
-| `npm run test` | `vitest run` |
+**應用程式根目錄是 `sources/`，不是 repo root** —— 所有 npm 指令一律在 `sources/` 底下執行。
+（repo root 只放 `CLAUDE.md`、`README.md`、`docs/`、`.claude/`。）
 
 結構原則：
 
@@ -121,27 +95,7 @@ Do not assume that the current conversation contains the complete project state.
 
 # 6. Standard Workflow
 
-```text
-READ
-  ↓
-UNDERSTAND
-  ↓
-INSPECT STRUCTURE
-  ↓
-PLAN
-  ↓
-DECIDE
-  ↓
-IMPLEMENT
-  ↓
-REVIEW
-  ↓
-VERIFY
-  ↓
-DOCUMENT
-  ↓
-HANDOFF
-```
+READ → UNDERSTAND → INSPECT STRUCTURE → PLAN → DECIDE → IMPLEMENT → REVIEW → VERIFY → DOCUMENT → HANDOFF
 
 ---
 
@@ -163,16 +117,6 @@ Before starting a major feature:
 # 8. Review Procedure
 
 After completing implementation, review:
-
-### Code
-
-- Correctness
-- Architecture
-- Maintainability
-- Error handling
-- Security
-- Performance
-- Compatibility
 
 ### Structure
 
@@ -277,27 +221,8 @@ Before finishing work:
 畫面左下角的版本徽章**只顯示版號本身**，不顯示作者、不加前綴。
 （`APP_AUTHOR` 已於 0.3.7-dev.6 移除。）
 
-## 12.1 正式版本（`main` 分支）
-
-格式為 **`x.x.x`**（標準 semver，不帶任何尾綴）。
-
-- 依照前一個正式版號**依序遞增 patch**（例：`0.3.6` → `0.3.7`）。
-- **除非是大版本異動**（破壞性變更、架構重構、功能里程碼），才進 minor 或 major（例：`0.3.7` → `0.4.0` → `1.0.0`）。
-- `README.md` 的「版本紀錄」以正式版號為標題並定稿。
-
-## 12.2 測試版本（`dev` 及其他開發分支）
-
-格式為 **`x.x.x-dev.x`**（注意：`dev` 與序號之間是**點號** `.`，不是連字號）：
-
-- `x.x.x` = 這批 dev 工作併入 `main` 後會成為的正式版號（依 §12.1 決定）。
-- 最後的 `.x` = 該正式版號在 dev 期間的**異動次數**，從 `1` 起、每次有意義的異動 +1。
-- 範例：目標 `0.3.7`、第 2 次異動 → `0.3.7-dev.2`。
-
-`README.md` 版本紀錄在 dev 期間以「未來正式版號（開發中）」為標題，底下用 `dev.1 / dev.2 …` 分段列出各次異動。
-
-## 12.3 併入 main
-
-把 `-dev.<N>` 尾綴去掉即為正式版號（`0.3.7-dev.2` → `0.3.7`），並把該版的版本紀錄定稿。目的：讓正式與測試版號永遠對得起來，不再出現正式停在 `0.3.6`、測試卻跳到 `0.3.8` 的落差。
+正式版（`main`）用 `x.x.x`、開發版（`dev`）用 `x.x.x-dev.x`。
+要決定下一個版號、遞增 `dev.N`、或併入 `main` 定版時，讀 **`versioning` skill**。
 
 ---
 
@@ -324,7 +249,7 @@ Before finishing work:
 理由：`push` 到 `main` 會觸發 `.github/workflows/deploy.yml`，
 GitHub Pages 立刻上線，沒有反悔餘地。dev 先行等於多一道實際環境的驗證。
 
-合併到 `main` 時，依 §12.3 把 `-dev.<N>` 尾綴去掉定版，並將 README 版本紀錄定稿。
+合併到 `main` 時，依 `versioning` skill 把 `-dev.<N>` 尾綴去掉定版，並將 README 版本紀錄定稿。
 
 **合併後讓兩個分支保持一致**（`git push origin main:dev` 快轉），
 避免 dev 落後 main 造成下一輪比對基準混亂 —— 稽核測試區時是拿 `dev` 當基準的。
@@ -336,56 +261,10 @@ GitHub Pages 立刻上線，沒有反悔餘地。dev 先行等於多一道實際
 - **正式區只在 `main` 分支且經明確指示才動。**
 - **唯讀查詢不算異動、可自由執行**：`supabase projects/functions list`、透過 service key 打 REST / Storage 檢查表與 bucket 是否存在等。
 
-## 13.3 Supabase 實務陷阱（都是實際踩過的）
+## 13.3 Supabase 實務陷阱
 
-**指令要在 `sources/` 底下執行。** Edge Functions 在 `sources/supabase/functions/`，
-不是 repo root。在 root 執行會出現 `entrypoint path does not exist`。
-
-**部署 `stock-report` 一定要帶 `--no-verify-jwt`。**
-兩區的 `stock-report` 都是 `verify_jwt=false`，因為 pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT。
-被重設成 `true` 的話盤後批次會全數 401。
-（`stock-price` 是 `verify_jwt=true`，用預設即可。）
-
-**稽核要用 `functions download` 逐檔比對，不要看版本號推論。**
-
-```bash
-supabase functions download <slug> --project-ref <ref>   # 抓線上實際跑的程式碼
-diff <下載的檔> sources/supabase/functions/<slug>/<檔>
-```
-
-曾遇到版本號較新的那支反而是舊程式碼（測試區 `stock-price` v2 落後 137 行、
-`misParse.ts` 根本沒部署上去）。
-
-**比對基準要對應分支**（§13 對照表）：正式區比 `main`、測試區比 `dev`。
-拿錯基準會誤判「已同步」—— 這個錯犯過一次。
-
-**`db query --linked` 認的是「當下的工作目錄」，不是你以為的那個專案。**
-2026-07-27 實際踩到：`functions download` 把 cwd 留在 scratchpad，
-之後一次「改測試區 cron」的 `db query --linked` 在那個沒有 link 設定的目錄下執行，
-CLI 退回全域設定，**寫進了正式區**。`cron.schedule` 照樣回傳成功，
-緊接著的覆驗查詢也在同一個（錯的）資料庫，所以驗起來完全正確 —— 錯得無聲無息。
-
-**對策：任何會寫入的 `db query`，把「專案身分欄位」放進同一次查詢裡。**
-挑一個兩區必然不同的值，例如：
-
-```sql
-SELECT (SELECT count(*) FROM batch_run_log) AS 身分檢查,  -- 正式區 2 / 測試區 0
-       jobid, schedule, (regexp_match(command, 'url\s*:=\s*''([^'']*)'''))[1] AS url
-FROM cron.job;
-```
-
-分兩次查（先驗身分、再寫入）擋不住這種錯 —— cwd 可能在兩次之間被別的指令改掉。
-另外每次執行 `db query` 前先 `cd` 到 `sources/`，不要依賴上一個指令留下的 cwd。
-
-**`supabase link` 有全域副作用，不是 per-directory。** 在別的目錄重新 link 會把前一份清掉。
-要查另一個專案時優先用支援 `--project-ref` 的指令（`functions list/deploy/download`、`secrets list`）；
-只有 `db query --linked` 沒有 `--project-ref`，非用不可時才 link。
-
-**Agent 拿不到 `CRON_SECRET` 明文**（`secrets list` 只回雜湊），
-所以手動觸發 `generate-all` 一定要請使用者自己執行。
-
-**`manifest.json` 日期落後時先確認星期。** cron 是 `1-5`，週末本來就不跑，
-週末看到日期停在週五是正確的，不是故障。
+實際踩過的坑（`--no-verify-jwt`、`db query --linked` 的 cwd 陷阱、`supabase link` 全域副作用、
+稽核要用 `functions download` 逐檔比對等）整理在 **`supabase-ops` skill**，動到 Supabase 前先讀。
 
 ---
 
@@ -402,3 +281,29 @@ Explicit enough for deployment and testing
 ```
 
 Create directories because the project has a real responsibility that needs to be represented — not because a template contains them.
+
+<!-- code-review-graph MCP tools -->
+## MCP Tools: code-review-graph
+
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
+
+### When to use graph tools FIRST
+
+- **Exploring code**: `semantic_search_nodes_tool` or `query_graph_tool` instead of Grep
+- **Understanding impact**: `get_impact_radius_tool` instead of manually tracing imports
+- **Code review**: `detect_changes_tool` + `get_review_context_tool` instead of reading entire files
+- **Finding relationships**: `query_graph_tool` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview_tool` + `list_communities_tool`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes_tool` for code review.
+3. Use `get_affected_flows_tool` to understand impact.
+4. Use `query_graph_tool` pattern="tests_for" to check coverage.

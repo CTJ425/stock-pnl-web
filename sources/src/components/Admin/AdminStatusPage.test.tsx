@@ -90,7 +90,8 @@ const status: AdminStatus = {
   fx: { asOf: '2026-07-31T03:00:02.713Z', count: 8 },
   market: {
     schema: 2,
-    asOf: '2026-07-31T02:00:01.000Z',
+    // 資料日當天台北 18:00（market-daily 最後一班）—— 時間軸據此判定為準時
+    asOf: '2026-07-30T10:00:00.000Z',
     days: 120,
     latestDate: '2026-07-31',
     // 法人比量能晚一天是正常的（15:00 才公布、逐日回補）
@@ -166,10 +167,30 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/台股盤後/)
-    expect(screen.getByText('三大法人')).toBeTruthy()
+    expect(screen.getByText('三大法人・個股')).toBeTruthy()
     expect(screen.getByText('融資融券')).toBeTruthy()
     expect(screen.getByText('借券賣出')).toBeTruthy()
     expect(screen.getAllByText(/次日 09:1\d/).length).toBeGreaterThan(0)
+  })
+
+  it('全市場法人自成一列，與個股 T86 分得開（0.6.33）', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByText(/台股盤後/)
+    // 兩份不同的資料，名字必須一眼分得出來
+    expect(screen.getByText('三大法人・全市場')).toBeTruthy()
+    expect(screen.getByText('T86')).toBeTruthy()
+    // 副標要講明這個時刻是檔案產出，不是法人金額到手的時刻
+    expect(screen.getByText('BFI82U・檔案產出時間')).toBeTruthy()
+    // 18:00 產出、界線是 18:15 → 準時，不該把這一列算進「需要注意」
+    expect(screen.queryByText('有 3 項需要注意')).toBeNull()
+  })
+
+  it('讀不到 market 時全市場那列是等待中，不會讓整頁壞掉（0.6.33）', async () => {
+    fetchAdminStatus.mockResolvedValue({ ...status, market: null })
+    render(<AdminStatusPage />)
+    await screen.findByText(/台股盤後/)
+    expect(screen.getByText('三大法人・全市場')).toBeTruthy()
   })
 
   it('法人 16:15 到手不算延遲——判定基準是批次班次不是公布時刻', async () => {

@@ -20,7 +20,7 @@ export const TL_START_HOUR = 15
 export const TL_SPAN_HOURS = 19
 
 export interface ChainSpec {
-  id: 'institutional' | 'daily' | 'margin' | 'borrow'
+  id: 'institutional' | 'market' | 'daily' | 'margin' | 'borrow'
   label: string
   hint: string
   /** 來源公布窗，[起, 迄]，單位為「距當日 15:00 的小時數」 */
@@ -37,7 +37,18 @@ export interface ChainSpec {
  * —— 15:00–15:30 雖已公布，但 16:00 / 16:15 兩輪都還讀不到，故 dueBy 給 1.5。
  */
 export const TW_CHAIN: readonly ChainSpec[] = [
-  { id: 'institutional', label: '三大法人', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
+  // 「個股」「全市場」要標在名字上：兩者都叫三大法人，但一個是 T86（每檔持股，單位股）、
+  // 一個是 BFI82U（整個集中市場，單位元）。0.6.33 之前只寫「三大法人」，
+  // 使用者因此以為全市場那份也已經納入監看。
+  { id: 'institutional', label: '三大法人・個股', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
+  /*
+    全市場法人的 dueBy 取法與其他四列不同，不是筆誤：
+    其他列由盤後批次（16:00–23:45 每 15 分）負責，公布窗一結束的下一班就該到手；
+    全市場走的是獨立排程 market-daily，**整天只有 16:00 / 17:00 / 18:00 三班**，
+    最後一班是距 15:00 的第 3 小時。取 3（加 ROUND_GRACE_HOURS 後為 18:15）。
+    若沿用 1.5，每天 16:15 一到就亮紅燈 —— 而永遠亮著的告警等於沒有告警。
+  */
+  { id: 'market', label: '三大法人・全市場', hint: 'BFI82U', window: [0, 0.5], dueBy: 3 },
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
   { id: 'margin', label: '融資融券', hint: 'MI_MARGN', window: [6, 7], dueBy: 7.5 },
   { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 8.75 },

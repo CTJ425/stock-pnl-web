@@ -150,6 +150,25 @@ export function AdminStatusPage() {
         stamp = src?.institutional ?? null
         partial = held > 0 && n < held
         cover = held > 0 ? `${n} / ${held} 檔` : null
+      } else if (spec.id === 'market') {
+        /*
+          全市場法人不在 chip.sources 裡（那是個股批次寫的），改讀 market/daily.json。
+
+          ⚠️ 時刻是**檔案產出時間**的近似值，不是那一天法人金額實際到手的時刻：
+          17:00 那輪就算只更新了成交量值也會推進 asOf。要精確到逐日必須在 schema
+          加 institutionalFetchedAt，但既有的日子都不會有那個欄位，加了也是空的。
+          畫面上的 hint 因此標明是「檔案產出」，不要讓人以為這是抓到法人的時刻。
+        */
+        stamp = data.market
+          ? { date: data.market.latestInstitutionalDate, fetchedAt: data.market.asOf }
+          : null
+        /*
+          **刻意不套 partial**（與 daily 不同）：法人是逐日回補的，最新一兩天沒補到是常態，
+          拿它當「不完整」會讓這一列幾乎每天都是黃燈。待補天數已經在下方的
+          「台股全市場」KPI 講得很清楚，這條軸只回答「檔案有沒有準時產出」。
+        */
+        // 副標同時要交代來源與「這個時刻是檔案產出、不是法人到手」，故不用 spec.hint
+        cover = 'BFI82U・檔案產出時間'
       } else {
         stamp = src?.[spec.id] ?? null
       }
@@ -648,8 +667,19 @@ export function AdminStatusPage() {
             <p className="ast-note" style={{ marginTop: 12 }}>
               檔案產出於 {data.market.asOf ? fmtUpdatedAt(data.market.asOf) : '—'}
               {data.market.asOf && `・${agoLabel(data.market.asOf)} 前`}
-              ・成交量值與指數一次抓一整月，法人金額一天一個請求 ——
-              兩者的日期覆蓋範圍本來就不同步，「待補」不等於異常。
+            </p>
+            {/*
+              抓取週期的說明 0.6.33 由總經頁的卡片移到這裡：那是排程的事，看盤時不需要，
+              而且卡片上寫死班次必然與 pg_cron 漂移（實際漂過一次）。班次一律取自
+              marketCron.schedule，每輪補幾天則只描述機制不給數字 —— 後端的
+              MAX_MARKET_INST_DAYS 沒有透過 API 吐出來，寫數字就是再造一份會漂移的常數。
+            */}
+            <p className="ast-note" style={{ marginTop: 6 }}>
+              <b>抓取週期</b>：
+              {marketCron ? describeCron(marketCron.schedule) : '排程 market-daily'}
+              。每輪抓一份當月的成交量值與加權指數（一次一整月），另補若干個交易日的法人金額 ——
+              法人是<b>一天一個請求</b>，所以歷史是逐日補上來的，不是一次到位。
+              兩者的日期覆蓋範圍本來就不同步，上方的「待補」不等於異常。
             </p>
           </>
         )}

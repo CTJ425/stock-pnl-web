@@ -9,14 +9,13 @@
  * 用元顯示是 885,506,043,091 —— 沒有人這樣讀）。個股籌碼的單位是「股」，兩者不可比較。
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { Minus, Plus, RefreshCw } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Minus, Plus, RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
   type MarketData,
   type MarketDay,
   type MarketInstitutionalSide,
 } from '../../services/marketProxy'
-import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
@@ -55,6 +54,9 @@ function shortDate(date: string): string {
   const m = date.match(/^\d{4}-(\d{2})-(\d{2})$/)
   return m ? `${m[1]}/${m[2]}` : date
 }
+
+/** 並排兩張圖各自的高度。兩者必須一致，否則左右對不齊（元件預設是 260 / 170） */
+const PAIR_CHART_H = 220
 
 /**
  * 趨勢欄的走勢線看幾天（0.6.32）。
@@ -96,29 +98,40 @@ function trendAt(values: number[], endIdx: number): { points: number[]; streak: 
 }
 
 /**
- * 趨勢儲存格：迷你走勢線＋連續同向天數。
+ * 趨勢與連續兩格（0.6.33 由一格拆開）。
  *
- * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向），與同卡片的長條圖一致。
- * 不足兩點時 `sparkline` 回 null，此時只印文字 —— 一個點連不成線，硬畫會變成一個小點，
- * 看起來像壞掉的圖而不是「資料還不夠」。
+ * **為什麼一定要分成兩欄**：原本走勢線與「連 N 日」擠在同一格靠右排，
+ * 有標籤的列會把線往左推，整欄的線頭線尾對不齊，看起來像每一列的走勢範圍不一樣。
+ * 分欄之後線固定寬、固定位置，列與列之間才比較得起來。
+ *
+ * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向）。不足兩點時 `sparkline` 回 null，
+ * 此時整格留白 —— 一個點連不成線，硬畫會變成一個小點，看起來像壞掉的圖而不是「資料還不夠」。
  */
-function TrendCell({ points, streak }: { points: number[]; streak: number }) {
+function TrendCells({ points, streak }: { points: number[]; streak: number }) {
   const last = points[points.length - 1]
-  if (last === undefined) return <td className="num">—</td>
+  if (last === undefined) {
+    return (
+      <>
+        <td className="num">—</td>
+        <td className="num">—</td>
+      </>
+    )
+  }
   const g = sparkline(points, SPARK_W, SPARK_H)
   const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
-  const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : ''
+  // 連 1 日不是趨勢，不印（此時連續欄給「—」而不是留白，留白會被讀成資料缺漏）
+  const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : null
   return (
-    <td className="num">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-        {g && (
+    <>
+      <td className="num" style={{ width: SPARK_W + 18 }}>
+        {g ? (
           <svg
             className="mac-spark"
             viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
             preserveAspectRatio="none"
             role="img"
             aria-label={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
-            style={{ width: SPARK_W, height: SPARK_H, flex: 'none' }}
+            style={{ width: SPARK_W, height: SPARK_H, display: 'block', marginLeft: 'auto' }}
           >
             <path d={g.area} fill={color} opacity="0.16" />
             <polyline
@@ -130,14 +143,14 @@ function TrendCell({ points, streak }: { points: number[]; streak: number }) {
             />
             <circle cx={g.lastX} cy={g.lastY} r="2.2" fill={color} />
           </svg>
+        ) : (
+          '—'
         )}
-        {label && (
-          <span className={chipClass(last)} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-            {label}
-          </span>
-        )}
-      </div>
-    </td>
+      </td>
+      <td className={`num ${label ? chipClass(last) : ''}`} style={{ whiteSpace: 'nowrap' }}>
+        {label ?? '—'}
+      </td>
+    </>
   )
 }
 
@@ -154,7 +167,8 @@ function DayDetail({ day }: { day: MarketDay }) {
   const sell = day.institutional?.sell
   return (
     <tr className="detail-row">
-      <td colSpan={UNITS.length + 2} style={{ padding: '4px 14px 10px 34px' }}>
+      {/* 日期欄 + 六個單位 + 趨勢 + 連續 */}
+      <td colSpan={UNITS.length + 3} style={{ padding: '4px 14px 10px 34px' }}>
         <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
           <thead>
             <tr>
@@ -267,6 +281,15 @@ export function TwMarketSection() {
       return next
     })
 
+  /*
+    「全部展開」只認**展得開**的列（有買進 / 賣出明細的）。
+    若把還沒補到明細的舊資料日也算進來，allOpen 永遠是 false，
+    按鈕會卡在「全部展開」按不動 —— 同 YearlyPage 只計 sells 不為空的個股。
+  */
+  const expandable = instDays.filter((d) => d.institutional?.buy).map((d) => d.date)
+  const allOpen = expandable.length > 0 && expandable.every((d) => expanded.has(d))
+  const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
+
   // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
   const candleLabelIndices = candles.map((_, i) => i).filter((i) => i % 10 === 0)
@@ -321,19 +344,36 @@ export function TwMarketSection() {
         </div>
       </div>
 
-      <div className="chart-title" style={{ marginTop: 16 }}>
-        加權指數日 K（近 {candles.length} 個交易日）
+      {/*
+        指數兩種畫法並排（0.6.33）：K 線看得出當日振幅與開收關係，折線看得出整段走勢的形狀。
+        同一份收盤價，兩張圖回答的問題不同，所以並排而不是二選一。
+      */}
+      <div className="chart-pair" style={{ marginTop: 16 }}>
+        <div>
+          <div className="chart-title">加權指數日 K（近 {candles.length} 個交易日）</div>
+          {candles.length === 0 ? (
+            <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
+          ) : (
+            <CandleChart
+              candles={candles}
+              labelIndices={candleLabelIndices}
+              height={PAIR_CHART_H}
+              formatValue={(v) => v.toFixed(2)}
+              ariaLabel={`近 ${candles.length} 個交易日的加權指數日 K 線`}
+            />
+          )}
+        </div>
+        <div>
+          <div className="chart-title">加權指數走勢（收盤）</div>
+          <LineSeriesChart
+            points={days.map((d) => ({ label: shortDate(d.date), value: d.taiex }))}
+            labelIndices={labelIndices}
+            height={PAIR_CHART_H}
+            formatValue={(v) => v.toFixed(2)}
+            ariaLabel={`近 ${days.length} 個交易日的加權指數收盤走勢`}
+          />
+        </div>
       </div>
-      {candles.length === 0 ? (
-        <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
-      ) : (
-        <CandleChart
-          candles={candles}
-          labelIndices={candleLabelIndices}
-          formatValue={(v) => v.toFixed(2)}
-          ariaLabel={`近 ${candles.length} 個交易日的加權指數日 K 線`}
-        />
-      )}
 
       <div className="chart-title" style={{ marginTop: 16 }}>
         每日成交金額（億元）
@@ -345,31 +385,25 @@ export function TwMarketSection() {
         ariaLabel={`近 ${days.length} 個交易日的台股成交金額`}
       />
 
-      <div className="chart-title" style={{ marginTop: 16 }}>
-        三大法人買賣超（億元）・近 {instDays.length} 個交易日
-      </div>
       {/*
-        單序列長條走紅正綠負的極性色（不指定 color），與個股籌碼的買賣超圖一致 ——
-        方向才是這張圖要傳達的東西，「是誰」在這裡只有一個答案（全市場合計）。
-      */}
-      <BarSeriesChart
-        labels={instDays.map((d) => shortDate(d.date))}
-        series={[
-          {
-            name: '三大法人合計',
-            values: instDays.map((d) => toBillion(d.institutional?.totalTwd ?? null)),
-          },
-        ]}
-        formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`}
-        ariaLabel={`近 ${instDays.length} 個交易日的三大法人買賣超金額`}
-      />
-      {/*
-        圖看得出方向、表看得出數字，兩個都要（使用者回報「看不出以天為單位的買賣超」）。
-
-        **表由新到舊，圖由舊到新** —— 與月營收、獲利能力兩處的處置一致：
+        **表由新到舊，走勢圖由舊到新** —— 與月營收、獲利能力兩處的處置一致：
         走勢圖左邊必須是比較早的日子，而表格第一列要是最近的那天。
         兩者方向刻意相反，不是筆誤。
+
+        原本這裡還有一張法人買賣超長條圖，0.6.33 移除：同一份數字已經有表格（看得到金額）
+        與趨勢欄（看得出方向），長條圖是第三種說法，只是把卡片拉長。
       */}
+      <div className="rpt-section-head" style={{ marginTop: 18 }}>
+        <div className="chart-title">
+          三大法人買賣超（億元）・近 {instDays.length} 個交易日
+        </div>
+        {expandable.length > 0 && (
+          <button className="btn btn-sm" onClick={toggleAll}>
+            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {allOpen ? '全部收起' : '全部展開'}
+          </button>
+        )}
+      </div>
       <div className="table-scroll" style={{ marginTop: 12 }}>
         <table className="data-table">
           <thead>
@@ -381,6 +415,7 @@ export function TwMarketSection() {
                 </th>
               ))}
               <th className="num">趨勢</th>
+              <th className="num">連續</th>
             </tr>
           </thead>
           <tbody>
@@ -422,7 +457,7 @@ export function TwMarketSection() {
                         </td>
                       )
                     })}
-                    <TrendCell points={points} streak={streak} />
+                    <TrendCells points={points} streak={streak} />
                   </tr>
                   {isOpen && <DayDetail day={d} />}
                 </Fragment>
@@ -432,18 +467,13 @@ export function TwMarketSection() {
         </table>
       </div>
 
+      {/*
+        0.6.33 由兩大段砍成一句。原本連抓取週期都寫在這裡，但那是排程的事、
+        使用者看盤時不需要，而且前端自備一份班次常數必然與 pg_cron 漂移
+        （實際就漂了：寫著「最多 5 天」時後端已經是 15）。整段移到後台的抓取狀況頁。
+      */}
       <p className="hint" style={{ marginTop: 8 }}>
-        買賣超是全市場的買進金額減掉賣出金額，紅色代表法人整體買超。
-        表格前五欄相加等於合計 —— 合計取的是官方揭露值，不是我們自己加總的。
-        點日期左邊的「＋」可展開那天的買進與賣出金額。趨勢欄是合計買賣超近{' '}
-        {TREND_DAYS} 個交易日的走勢，不受表格只顯示 {instDays.length} 列的限制。
-        法人金額約 15:00–15:30 公布，且是逐日回補的 —— 最新一兩天沒有長條是還沒補到，
-        不是那天沒有法人進出。成交金額與加權指數則收盤後就有。
-      </p>
-      <p className="hint" style={{ marginTop: 6 }}>
-        <b>抓取週期</b>：台北時間 <b>16:00 / 17:00 / 18:00，僅平日</b>（排程 <code>market-daily</code>）。
-        每輪抓一份當月的成交量值與指數，另補最多 5 個交易日的法人金額 —— 法人是一天一個請求，
-        所以歷史是逐日補上來的，不是一次到位。詳細狀況見管理員後台的「資料抓取狀況」。
+        買賣超＝買進金額−賣出金額，紅色為買超；「—」是那天還沒補到，不是沒有進出。
       </p>
     </div>
   )
