@@ -24,6 +24,14 @@ export interface HoldingRow {
   tradeDay: string | null
   /** Whether it is the finalized value of the day's closing price - the tooltip therefore says "closing price" instead of "current price" (0.6.36)*/
   closed: boolean
+  /**
+   * Is this price an indicative auction price rather than a trade? (0.6.42, AUDIT-01)
+   *
+   * During 08:30–09:00 and 13:25–13:30 MIS's `z` is the trial-matching estimate —— **nothing changed hands at it**.
+   * The quote card has always labelled it 「試撮中」; the dashboard was computing 未實現淨損益 from the same number
+   * with no marker at all, which is the asymmetry this field closes.
+   */
+  trial: boolean
   mktVal: number | null
   unrealized: number | null
   /** Pure price difference before any fees: market value − cost before fees, isomorphic to rawRealized annual return*/
@@ -60,6 +68,7 @@ export function buildHoldingRows(
       dayChange: price !== null && prevClose !== null ? price - prevClose : null,
       tradeDay: tradeDateLabel(quote?.tradeDate),
       closed: isClosed(quote),
+      trial: quote?.trial ?? false,
       mktVal,
       unrealized,
       rawUnrealized,

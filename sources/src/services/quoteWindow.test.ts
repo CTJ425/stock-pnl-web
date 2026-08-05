@@ -3,6 +3,8 @@ import { twMaxTtlMs, twQuoteTtlMs } from '../../supabase/functions/stock-price/q
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
+/** Retry interval for a quote that cannot be confirmed as settled, outside trading hours (0.6.42) */
+const RETRY = 10 * MIN
 
 /** Taipei Time → Date (Taiwan fixed +8)*/
 const taipei = (ymd: string, hms: string) => new Date(`${ymd}T${hms}+08:00`)
@@ -42,29 +44,35 @@ describe('twQuoteTtlMs', () => {
    * The screen displays "Intraday" all the way, and the opening high and low volume are all "-".
    */
   it('撮合時間未達 13:30 就不鎖夜（收盤撮合尚未落地）', () => {
-    expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:29:58')).toBe(MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:29:58')).toBe(RETRY)
     expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:30:00')).toBe(18 * HOUR + 54 * MIN)
   })
 
   it('過了 14:00 仍然只鎖定案值 —— 盤中時刻的快照不會被凍一整夜', () => {
-    expect(twQuoteTtlMs(taipei('2026-08-05', '14:00:00'), '11:05:23')).toBe(MIN)
-    expect(twQuoteTtlMs(taipei('2026-08-05', '20:00:00'), '11:05:23')).toBe(MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '14:00:00'), '11:05:23')).toBe(RETRY)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '20:00:00'), '11:05:23')).toBe(RETRY)
     expect(twQuoteTtlMs(taipei('2026-08-05', '14:00:00'), '13:30:00')).toBe(18 * HOUR + 25 * MIN)
   })
 
-  it('沒有撮合時間就不鎖（升級前的舊快取、Yahoo / OpenAPI 備援）', () => {
-    expect(twQuoteTtlMs(taipei('2026-08-05', '16:55:00'), null)).toBe(MIN)
-    expect(twQuoteTtlMs(taipei('2026-08-05', '16:55:00'))).toBe(MIN)
+  it('沒有撮合時間就不鎖，但改為 10 分鐘重試而非每分鐘（0.6.42，AUDIT-02）', () => {
+    /*
+      Not locking is 0.6.37's fix and must stay —— such a row may be an intraday snapshot (BUG-011).
+      What 0.6.42 adds is a bound: the Yahoo fallback never reports a matching time, so an outage used to mean
+      per-minute polling all night for every user. Ten minutes keeps the recovery, at a tenth of the traffic.
+    */
+    expect(twQuoteTtlMs(taipei('2026-08-05', '16:55:00'), null)).toBe(RETRY)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '16:55:00'))).toBe(RETRY)
     // The same goes for early morning, otherwise the old train will last all the way until morning
-    expect(twQuoteTtlMs(taipei('2026-08-06', '03:00:00'), null)).toBe(MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-06', '03:00:00'), null)).toBe(RETRY)
   })
 })
 
 describe('twMaxTtlMs（DB 粗篩的下界）', () => {
   it('以「已定案」為假設取上界，不會把昨天的收盤價濾掉', () => {
-    // Directly using twQuoteTtlMs(now) will return 60 seconds (without matching time), and the coarse filter will miss the final cache.
+    // Calling twQuoteTtlMs(now) directly returns the short retry interval (no matching time given), and a coarse
+    // filter built on that would drop yesterday's settled close.
     const now = taipei('2026-08-05', '20:00:00')
-    expect(twQuoteTtlMs(now)).toBe(MIN)
+    expect(twQuoteTtlMs(now)).toBe(RETRY)
     expect(twMaxTtlMs(now)).toBe(12 * HOUR + 25 * MIN)
   })
 

@@ -12,6 +12,47 @@
 
 ## 📋 Active Tasks
 
+### Task 75: Deploy the Edge half of 0.6.42
+- **Status**: ⏳ **BLOCKED — needs the user's explicit go-ahead** (CLAUDE.md §13.2). Frontend is already live.
+- **Agent**: Claude
+- **Timestamp**: 2026-08-06 01:10:00 Asia/Taipei
+- **Why**: two of the four audit fixes are in Edge Function code, and **a git push does not deploy those** ——
+  the lesson from BUG-011, now the second time it applies.
+  - `stock-price` ← `quoteWindow.ts` (BUG-016, the 10-minute retry bound). Prod is on **v15**, sha `733891b768b2`.
+  - `stock-report` ← `pollPlan.ts` (BUG-018, the fingerprint separator). Prod is on **v29**, sha `91d1dce6ac72`.
+- **Commands** (from `sources/`, dev first per §13.1; **`--no-verify-jwt` is required for `stock-report` and must
+  not be used for `stock-price`**):
+  ```bash
+  supabase functions deploy stock-price  --project-ref wqetxuhncvfidqnklyew
+  supabase functions deploy stock-report --project-ref wqetxuhncvfidqnklyew --no-verify-jwt
+  supabase functions deploy stock-price  --project-ref kxnxadaghidwumqsqneu
+  supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt
+  ```
+- **Verify by sha, not version number**: both must move off the values recorded above, and the two environments
+  should end up matching each other.
+- ⚠️ **Expected one-off after the `stock-report` deploy**: every T86 fingerprint changes, so the first round counts
+  one extra `revisions` and restarts the stability count. Harmless, settles by itself —— do not read it as a bug.
+- **Until deployed**: the browser half of BUG-016 is live (a client asks at most once per 10 minutes), but Edge
+  still applies the 60-second rule to its own cache; BUG-018 has no effect at all, it is Edge-only.
+
+### Task 74: Codebase audit —— 8 findings recorded, 4 fixed in 0.6.42
+- **Status**: 🔄 **AUDIT-01…04 fixed** (BUG-015…018); **AUDIT-05…08 still open**
+- **Agent**: Claude
+- **Timestamp**: 2026-08-06 00:20:00 Asia/Taipei
+- **Where**: `BUG_FIX.md` → "Codebase audit 2026-08-06", entries AUDIT-01 … AUDIT-08.
+- **The two worth acting on first**, both in the price path:
+  1. **AUDIT-01**: `trial` is carried on every quote but only the quote card reads it, so the dashboard prints
+     unrealised P&L from the indicative auction price during 08:30–09:00 and 13:25–13:30 with no marker.
+  2. **AUDIT-02**: the Yahoo fallback returns no matching time, which since 0.6.37 means a 60-second TTL at any
+     hour —— unbounded overnight polling whenever MIS is down, plus a silent ~10% shift in the volume figure.
+- **Two are proven by execution, not by reading**: AUDIT-03 (month-end arithmetic loses up to 3 days) and
+  AUDIT-04 (`row.join('')` lets two different rows share a fingerprint).
+- **One is a suggestion rather than a defect**: AUDIT-05 —— make `describeCron`'s fall-through self-announcing, so
+  the next unmatched cron shape is visible immediately instead of after a user notices. BUG-012 and BUG-014 were
+  both that shape.
+- **Scope note**: this pass read the core logic and both Edge Functions. Not covered: the AI client's provider
+  matrix, the PDF path, and CSS/layout.
+
 ### Task 73: Daily volume tables, per stock and market-wide (0.6.38)
 - **Status**: ✅ Done, merged to `main` with 0.6.38 — pure frontend, no Edge Function deployment needed
 - **Agent**: Claude

@@ -47,10 +47,12 @@ describe('cacheTtlMs', () => {
    * 0.6.37: No locking until matching time. The official area has been checked - the cache column written before the upgrade does not have this field.
    * But it was locked until the next morning, and the screen showed "Intraday" all the way, and the open high and low volume all showed "-".
    */
-  it('收盤後：拿不到撮合時間的台股快取不鎖，會重抓', () => {
+  it('收盤後：拿不到撮合時間的台股快取不鎖，改以 10 分鐘重試（0.6.42，AUDIT-02）', () => {
+    // Still not locked (that is 0.6.37 / BUG-011), but no longer once a minute all night —— the fallback path
+    // never reports a matching time, so an outage used to mean per-minute polling with no cap.
     vi.setSystemTime(new Date('2026-07-20T07:00:00Z'))
-    expect(cacheTtlMs('TPE:2330')).toBe(60 * 1000)
-    expect(cacheTtlMs('TPE:2330', quote('2026-07-20T03:00:00Z'))).toBe(60 * 1000)
+    expect(cacheTtlMs('TPE:2330')).toBe(10 * 60 * 1000)
+    expect(cacheTtlMs('TPE:2330', quote('2026-07-20T03:00:00Z'))).toBe(10 * 60 * 1000)
   })
 })
 
@@ -86,11 +88,14 @@ describe('isFresh', () => {
     expect(isFresh('TPE:2330', closed, Date.parse('2026-07-20T14:00:00Z'))).toBe(true)
   })
 
-  it('13:30 剛過但撮合還沒落地的過渡值不鎖夜，仍走 60 秒', () => {
+  it('13:30 剛過但撮合還沒落地的過渡值不鎖夜，改走 10 分鐘重試（0.6.42）', () => {
     // 05:31Z = Taipei 13:31, the last matching time from the source is still at 13:29:58
     vi.setSystemTime(new Date('2026-07-20T05:31:00Z'))
     const pending = quote('2026-07-20T05:29:00Z', false, '13:29:58')
-    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:31:00Z'))).toBe(false)
+    // Two minutes old: within the retry interval, so it is not refetched on every poll…
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:31:00Z'))).toBe(true)
+    // …but it is emphatically not locked until tomorrow —— eleven minutes later it is asked again.
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:40:00Z'))).toBe(false)
   })
 })
 

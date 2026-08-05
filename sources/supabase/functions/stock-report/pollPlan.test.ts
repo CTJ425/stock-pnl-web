@@ -47,6 +47,16 @@ describe('t86Fingerprint', () => {
     )
   })
 
+  it('相鄰欄位的數字挪動位置也算改寫 —— 串接不得無分隔（0.6.42，AUDIT-04）', () => {
+    /*
+      With cells joined by an empty string, ['12','3'] and ['1','23'] both encode as '123', so a real revision
+      could read as "unchanged" —— and that fingerprint is what freezes T86 as final for the day.
+    */
+    const a = [['2330', '台積電', '12', '3', '4,000', '5,000']]
+    const b = [['2330', '台積電', '1', '23', '4,000', '5,000']]
+    expect(t86Fingerprint(resp(a))).not.toBe(t86Fingerprint(resp(b)))
+  })
+
   it('任何一列的數字改了 → 不同指紋（真正的改寫仍測得出來）', () => {
     const changed = [rowA, rowB, ['1516', '川飛', '4,000', '0', '4,001', '5,000']]
     expect(t86Fingerprint(resp([rowA, rowB, rowC]))).not.toBe(t86Fingerprint(resp(changed)))

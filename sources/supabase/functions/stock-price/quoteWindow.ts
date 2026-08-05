@@ -22,6 +22,20 @@ const CLOSE_MS = (13 * 60 + 30) * MINUTE_MS
 /** Intraday polling interval (maintains pre-0.6.35 behavior)*/
 const POLL_MS = MINUTE_MS
 
+/**
+ * Retry interval outside trading hours for a quote we cannot confirm as the settled close (0.6.42).
+ *
+ * 0.6.37 was right that such a quote must not be locked —— it may be an intraday snapshot, and locking freezes it
+ * until the next morning (BUG-011). What it did not do is bound the retry: the Yahoo fallback **never** reports a
+ * matching time, so during a MIS outage every TW quote refetched once a minute, all night, for every user, with no
+ * backoff and no cap.
+ *
+ * Ten minutes keeps the recovery property that mattered (the row is still replaced as soon as a settled quote
+ * appears) at a tenth of the traffic. It matches the US TTL for the same reason: outside its own session, a market
+ * that cannot tell you it has settled is not worth asking every minute.
+ */
+const UNSETTLED_RETRY_MS = 10 * MINUTE_MS
+
 const CLOSE_TIME_TEXT = '13:30:00'
 
 /** "Number of milliseconds elapsed on the current day" in Taipei time (starting from 00:00:00)*/
@@ -42,12 +56,14 @@ function taipeiMsOfDay(now: Date): number {
  *   There are two sources of cache missing this field: old columns written before the upgrade, and backup paths that do not have this field.
  *   (Yahoo/TWSE OpenAPI). Both are just snapshots of a certain moment on the disk. Locking them will freeze them until the next morning.
  *   The screen displays "Intraday" all the way and the high and low volumes are all "-". Official area actually happened.
- *   The price is to maintain short polling all night long when the source continues to return non-finalized values ​​- that is an abnormal state and should continue to be retried.
+ *   Such a quote keeps being retried rather than locked —— but on a **10-minute** interval since 0.6.42, not every
+ *   minute (AUDIT-02): the fallback path never reports a matching time, so an outage used to mean all-night
+ *   per-minute polling with no cap. Retrying still replaces the row the moment a settled quote appears.
  */
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
-  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) return POLL_MS
+  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) return UNSETTLED_RETRY_MS
   // After closing, it will be pushed back to 08:25 tomorrow; in the early morning (t < RESUME_MS), it will be 08:25 today
   return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
 }

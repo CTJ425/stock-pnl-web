@@ -1,9 +1,83 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.41 —— the macro schedule row is readable too (BUG-014)
-- Status: **Merged to `main`; 887 tests / build / lint green**
-- Timestamp: 2026-08-05 23:55:00 Asia/Taipei
+- Action: 0.6.42 —— fixed the four audit findings the user asked for (BUG-015 … BUG-018)
+- Status: **Frontend merged to `main`; ⚠️ two Edge Functions not deployed yet (Task 75); 890 tests green**
+- Timestamp: 2026-08-06 01:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-06 01:10:00 Asia/Taipei (0.6.42)
+
+- **Agent**: Claude
+- **Action**: Fix AUDIT-01 … AUDIT-04
+
+### Two were about a field that existed and was ignored
+
+`trial` was carried correctly on every quote and read by exactly one of its consumers, so the dashboard priced
+holdings at the indicative auction estimate during the two auction windows —— a price nothing traded at —— while
+the quote card labelled the identical number 「試撮中」. The fix is a flag on the row and a badge; the test also
+pins that ordinary quotes stay unmarked, because a badge that always shows says nothing.
+
+The fallback path was the mirror image: it never reports a matching time, which since 0.6.37 means "not settled"
+and therefore the short TTL **at any hour**. 0.6.37 accepted that retry deliberately and never bounded it, so a MIS
+outage meant per-minute polling all night for every user. Now 10 minutes: still not locked (that is BUG-011's fix
+and must stay), just asked ten times less often. The test pins the contract as "fresh at 2 minutes, refetched at
+11" rather than as a single number.
+
+### Two were arithmetic, both proven by running them
+
+`setUTCMonth(m - n)` keeps the day of month, so a series ending on the 31st overflowed: `2026-05-31` minus three
+months landed on `2026-03-03`, three days short, invisibly. And `sortedRows` joined cells with an empty string, so
+`['12','3']` and `['1','23']` hashed identically —— on the fingerprint that decides whether today's T86 is final.
+Neither had been observed in the wild; both were cheap enough that waiting for a report made no sense.
+
+### The deploy trap, for the second time in two days
+
+`quoteWindow.ts` and `pollPlan.ts` are Edge Function code. **A git push does not ship them.** The frontend half of
+the retry bound is live with Pages; the server half and the fingerprint fix are not, and need
+`supabase functions deploy` with the user's explicit go-ahead. Task 75 carries the commands, the current shas, and
+the one-off effect to expect on the `stock-report` side.
+
+### Completed Tasks
+- [x] `holdingRows` + `DashboardPage`: `trial` carried and badged (BUG-015).
+- [x] `quoteWindow`: `UNSETTLED_RETRY_MS` (BUG-016) —— bounded, still unlocked.
+- [x] `fxConvert`: month stepped arithmetically, day clamped (BUG-017).
+- [x] `pollPlan`: U+001F cell separator (BUG-018).
+- [x] 4 new tests (**890 across 57 files**), build and lint clean; `FIXED_BUG.md`, `BUG_FIX.md`, README, Task 75.
+
+---
+
+## 📅 Log: 2026-08-06 00:20:00 Asia/Taipei (audit, no changes)
+
+- **Agent**: Claude
+- **Action**: Read the core logic looking for defects and for values written to drift
+
+Findings live in `BUG_FIX.md` as AUDIT-01 … AUDIT-08; Task 74 summarises them. Nothing was edited.
+
+### What the audit actually turned up
+
+The two findings that matter are both in the **price path**, and both are the same species: a field that exists,
+is carried correctly, and is then read by only one of its consumers.
+
+`trial` is set from MIS's `ip` on every quote, but `buildHoldingRows` drops it —— so during the two auction windows
+the dashboard computes unrealised P&L from a price nothing traded at, while the quote card one page away labels the
+identical number 「試撮中」. And the Yahoo fallback returns no matching time, which since 0.6.37 means "not settled"
+and therefore a 60-second TTL at any hour: while MIS is down, every quote refetches once a minute all night with no
+cap, and the volume figure shifts by ~10% with no marker. 0.6.37 accepted the retry deliberately; what it did not do
+is bound it.
+
+Two more were **proven by running them** rather than by reading: month-end arithmetic in `sliceByRange`
+(`2026-05-31` minus 3 months lands on `2026-03-03`, so the FX range is short by three days), and the T86 fingerprint
+joining cells with an empty string (`['12','3']` and `['1','23']` hash identically —— and that fingerprint is the
+gate deciding whether today's T86 is final).
+
+### Note on method
+
+Reading is not observation. AUDIT-01 says what the code does, not what a user saw; the honest confirmation is to
+watch a trial window, which is Task 69 item 2 tomorrow morning. Entries state which side of that line they fall on.
+
+Not covered by this pass: the AI client's provider matrix, the PDF path, CSS/layout.
 
 ---
 

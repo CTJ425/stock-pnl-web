@@ -101,6 +101,22 @@ describe('buildHoldingRows', () => {
     expect(row.unrealized).toBe(row.rawUnrealized)
   })
 
+  it('試撮價的標記要帶到列上，未實現損益是用它算的（0.6.42，AUDIT-01）', () => {
+    /*
+      During 08:30–09:00 and 13:25–13:30 the price is the indicative auction estimate —— nothing traded at it.
+      The quote card had always said 「試撮中」 while the dashboard computed 未實現淨損益 from the same number and
+      said nothing, so the flag has to reach the row for the table to be able to mark it.
+    */
+    const holdings = holdingsOf([tx({ ticker: '2330', qty: 1000, price: 100, fee_tax: 20 })])
+    const trialQuote = { ...quote(120), trial: true, tradeTime: '08:45:00' }
+    const [row] = buildHoldingRows(holdings, { 'TPE:2330': trialQuote }, 0.001425)
+    expect(row.trial).toBe(true)
+    expect(row.price).toBe(120)
+    // Ordinary quotes must not be marked, or the badge means nothing
+    const [plain] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
+    expect(plain.trial).toBe(false)
+  })
+
   it('空持股回空陣列', () => {
     expect(buildHoldingRows([], {}, 0.001425)).toEqual([])
   })

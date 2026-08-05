@@ -8,6 +8,52 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-015 — The dashboard priced holdings at the trial-matching estimate with no marker (AUDIT-01)
+- **Date**: found 2026-08-06 by audit, fixed in 0.6.42
+- **Root Cause**: `trial` was set from MIS's `ip` on every quote and read by exactly one consumer, the quote card.
+  `buildHoldingRows` dropped it, so the dashboard's 現價 and 未實現淨損益 used the indicative auction price —— a
+  price **nothing traded at** —— during 08:30–09:00 and 13:25–13:30, while the quote card labelled the same number
+  「試撮中」 one page away.
+- **Fix**: `HoldingRow.trial`, and a 「試撮」 badge beside the price with a tooltip saying the P&L beside it is
+  computed from that estimate. Frontend only.
+- **Tests**: `holdingRows.test.ts` (flag carried, and ordinary quotes stay unmarked —— a badge that shows always
+  means nothing).
+- **Status**: ✅ FIXED (0.6.42), live with the frontend.
+
+### Bug ID: BUG-016 — The fallback path polled every minute all night, unbounded (AUDIT-02)
+- **Date**: found 2026-08-06 by audit, fixed in 0.6.42
+- **Root Cause**: the Yahoo fallback never reports a matching time, and since 0.6.37 a missing matching time means
+  "not settled" → 60-second TTL **at any hour**. While MIS was unavailable, every TW quote refetched once a minute
+  all night, for every user, with no backoff and no cap. 0.6.37 accepted the retry deliberately; it never bounded it.
+- **Fix**: a separate `UNSETTLED_RETRY_MS` of 10 minutes outside trading hours. The row is still **not locked** ——
+  that is BUG-011's fix and must stay —— it is just asked ten times less often, and is still replaced the moment a
+  settled quote appears.
+- **Tests**: `quoteWindow.test.ts` and `priceProxy.test.ts`, including the pair that pins "fresh at 2 minutes,
+  refetched at 11" —— the contract is bounded retry, not locking.
+- **Status**: ✅ FIXED in code (0.6.42); ⚠️ **`stock-price` must be redeployed** for the server half —— Task 75.
+
+### Bug ID: BUG-017 — The FX range lost up to three days at month ends (AUDIT-03)
+- **Date**: found 2026-08-06 by audit, fixed in 0.6.42
+- **Root Cause**: `setUTCMonth(m - n)` keeps the day of month, so a series ending on the 29th–31st overflowed into
+  the next month. Measured: `2026-05-31` minus 3 months → `2026-03-03`, and `2026-03-31` minus 1 month → the same
+  date. The window came out short and nothing on screen said so.
+- **Fix**: step the month arithmetically and clamp the day to the target month's last day.
+- **Tests**: `fxConvert.test.ts` with a series ending on 05-31, asserting the cutoff lands on 02-28.
+- **Status**: ✅ FIXED (0.6.42), live with the frontend.
+
+### Bug ID: BUG-018 — Two different T86 rows could share a fingerprint (AUDIT-04)
+- **Date**: found 2026-08-06 by audit, fixed in 0.6.42
+- **Root Cause**: `sortedRows` joined cells with an empty string, so `['12','3']` and `['1','23']` both encoded as
+  `'123'`. That fingerprint is the gate deciding whether today's T86 is **final** (`nextT86State` freezes after N
+  identical polls), so a collision would read a genuine revision as "unchanged" and freeze the wrong version.
+- **Probability was low** (fixed-arity numeric columns) and no occurrence is known —— this is a latent defect found
+  by reading, fixed because the fix is one character.
+- **Fix**: join with U+001F, which cannot occur in a TWSE JSON string field.
+- ⚠️ **Expected one-off effect on deploy**: every fingerprint changes, so the first round after deployment counts
+  one extra `revisions` against the stored value and restarts the stability count. It settles by itself.
+- **Tests**: `pollPlan.test.ts` —— digits moved between adjacent cells must change the fingerprint.
+- **Status**: ✅ FIXED in code (0.6.42); ⚠️ **`stock-report` must be redeployed** (with `--no-verify-jwt`) —— Task 75.
+
 ### Bug ID: BUG-014 — The macro schedule row printed the raw cron string too
 - **Date**: 2026-08-05 (long-standing, fixed in 0.6.41)
 - **Discovered by**: Claude, cross-checking every row of the 排程 table while confirming BUG-012 for the user.

@@ -115,6 +115,20 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                         快取
                       </span>
                     )}
+                    {/*
+                      0.6.42 (AUDIT-01): during 08:30–09:00 and 13:25–13:30 this number is the trial-matching
+                      estimate —— nothing traded at it, yet the 未實現淨損益 beside it is computed from it. The
+                      quote card had said 「試撮中」 all along; the dashboard said nothing, which is the gap.
+                    */}
+                    {row.trial && (
+                      <span
+                        className="badge badge-warn"
+                        style={{ marginLeft: 6 }}
+                        title="這是開盤前 / 收盤前試撮的預估價，還沒有成交；右側的未實現損益也是用它算的"
+                      >
+                        試撮
+                      </span>
+                    )}
                   </>
                 )}
               </td>

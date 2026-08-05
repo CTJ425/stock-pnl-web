@@ -125,6 +125,27 @@ describe('sliceByRange', () => {
     expect(sliceByRange(points, '1y')).toHaveLength(13)
   })
 
+  it('序列結尾落在月底時不會少算幾天（0.6.42，AUDIT-03）', () => {
+    /*
+      `setUTCMonth(m - n)` keeps the day-of-month, so 05-31 minus 3 months overflowed into 2026-03-03 and the
+      window came out three days short with nothing on screen saying so. The cutoff is now clamped to the last
+      day of the target month, i.e. 2026-02-28.
+    */
+    const monthEnd: FxPoint[] = [
+      ['2026-02-27', 31.9],
+      ['2026-02-28', 32.0],
+      ['2026-03-02', 32.1],
+      ['2026-03-03', 32.2],
+      ['2026-05-31', 32.5],
+    ]
+    expect(sliceByRange(monthEnd, '3m').map((p) => p[0])).toEqual([
+      '2026-02-28',
+      '2026-03-02',
+      '2026-03-03',
+      '2026-05-31',
+    ])
+  })
+
   it('空序列回空陣列', () => {
     expect(sliceByRange([], '3m')).toEqual([])
   })

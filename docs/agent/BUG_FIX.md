@@ -2,7 +2,75 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-05 21:05:00 Asia/Taipei
+- Timestamp: 2026-08-06 00:20:00 Asia/Taipei
+
+---
+
+> **AUDIT-01 … AUDIT-04 were fixed in 0.6.42** (see `FIXED_BUG.md` BUG-015 … BUG-018). ⚠️ Two of them live in Edge
+> Function code and **are not live until those functions are deployed** —— see Task 75. AUDIT-05 … AUDIT-08 remain open.
+
+## 🔍 Codebase audit 2026-08-06 —— findings only, nothing changed
+
+A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pollPlan`, `twChips`, `macroCalendar`,
+`fxConvert`, the two Edge Functions and the admin page) looking for defects and for values that are written to drift.
+**No code was touched.** Ranked by what it costs if it bites; each entry states what is proven and what is inferred.
+
+### AUDIT-01 — The trial-matching price is shown as 現價 with no marker outside the quote card
+- **Proven by reading**: `priceProxy.ts` carries `trial` on every quote (set from MIS `ip`), `QuoteTab` is its **only**
+  consumer, and `buildHoldingRows` never reads it —— the dashboard's 現價 column and 未實現淨損益 take `quote.price`.
+- **Why it matters**: during 08:30–09:00 and 13:25–13:30, MIS's `z` is the **indicative auction price**. Nothing was
+  traded at it. For that hour the dashboard prints a P&L computed from a price that does not exist yet, and says
+  nothing about it —— while the quote card one page away labels the very same number 「試撮中」.
+- **Not yet observed in the wild**: this is a reading of the code, not a report. Task 69 item 2 (watch a trial window)
+  would confirm it on screen.
+- **Cheapest fix if wanted**: carry `trial` into `HoldingRow` and mark the cell, the same way `stale` already is.
+
+### AUDIT-02 — The Yahoo fallback silently defeats the after-close lock, and nothing caps it
+- **Proven by reading**: the Yahoo path in `stock-price/index.ts` always returns `tradeTime: null`, and since 0.6.37
+  `twQuoteTtlMs` treats a missing matching time as "not settled" → 60-second TTL **at any hour**.
+- **Consequence**: while MIS is unavailable, every TW quote refetches once a minute all night, for every user, with
+  no backoff and no daily cap. 0.6.37 accepted this deliberately ("an abnormal state should keep retrying") but the
+  retry is unbounded, and the state is invisible on screen.
+- **Second-order**: the two sources disagree on volume by about 10% (measured 2026-08-05 on 2330: MIS 31,851 張 vs
+  35,214 張 from the daily batch, which is the Yahoo-calibre figure). A fallback therefore shifts a displayed number
+  by ~10% with no source marker.
+
+### AUDIT-03 — `sliceByRange` loses 1–3 days whenever the series ends on a 29th–31st
+- **Proven by execution**: `fxConvert.ts` does `d.setUTCMonth(d.getUTCMonth() - months)`, which overflows on
+  month-end dates. Verified with node: `2026-05-31` minus 3 months gives **2026-03-03** (not 02-28), and
+  `2026-03-31` minus 1 month also gives **2026-03-03**.
+- **Impact**: the FX range picker quietly returns a window short by up to three days. Invisible —— the chart just
+  starts a little later than the label claims.
+
+### AUDIT-04 — The T86 fingerprint joins cells with an empty string
+- **Proven by execution**: `pollPlan.ts` `sortedRows` uses `row.join('')`, and `['12','3'].join('')` equals
+  `['1','23'].join('')`. Two different rows can produce the same string.
+- **Why it matters more than it looks**: this fingerprint is the gate that decides whether today's T86 is **finalised**
+  (`nextT86State` freezes after N identical polls). A collision means a real revision reads as "unchanged".
+- **Probability is low** (fixed-arity numeric columns) but the fix is one character —— a separator that cannot occur
+  in the data.
+
+### AUDIT-05 — `describeCron`'s silent fall-through is a defect generator
+- Two bugs in one evening (BUG-012, BUG-014) had the same shape: a cron shape with no branch falls through to
+  `return expr`, and a raw cron string on screen looks like a deliberate rendering rather than a failure.
+- **Suggestion, not a bug**: make the fallback self-announcing (e.g. prefix 「未解析」) so the next unmatched shape is
+  obvious the moment it appears, instead of waiting for a user to notice that a time looks wrong.
+
+### AUDIT-06 — `writeStore` is the one unguarded localStorage write
+- `dataProvider.ts` writes the local-mode ledger with no `try`, while `priceProxy` / `twMarketData` / `aiChatStore`
+  all guard theirs. A quota or private-mode failure throws out of the save path with no message.
+- **Arguably correct to fail loudly** for user data —— silently dropping a transaction would be worse. What is wrong
+  is that it fails *unhandled*: the user sees nothing.
+
+### AUDIT-07 — `shiftPeriod` breaks for negative period arithmetic
+- `macroCalendar.ts` computes `total % 12` on `y * 12 + m - 1 + n`. JavaScript's `%` keeps the sign, so a negative
+  total yields a negative month. Unreachable at today's years; a trap for whoever first calls it with a large
+  negative `n`.
+
+### AUDIT-08 — 「顯示全部」 on the new market volume table cannot reach the whole file
+- `SHOWN_DAYS = 60` slices the days before the table sees them, while `market/daily.json` keeps up to
+  `MARKET_DAYS_CAP = 120`. The button names the number it will show, so nothing lies —— but 「全部」 means "all 60 of
+  the 60 I was given", not "everything on file". Introduced by me in 0.6.38.
 
 ---
 

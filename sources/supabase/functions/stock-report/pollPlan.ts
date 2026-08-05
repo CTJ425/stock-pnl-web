@@ -70,9 +70,23 @@ export function rowsFingerprint(rows: unknown): string {
   return fingerprint(sortedRows(rows))
 }
 
-/** Each column is serialized and sorted independently - eliminating the source of instability of "column order"*/
+/**
+ * Each row is serialized and sorted independently —— removing "row order" as a source of instability.
+ *
+ * ⚠️ The separator matters (0.6.42, AUDIT-04). Joining with an empty string made the encoding ambiguous:
+ * ['12','3'] and ['1','23'] both produced '123', so two genuinely different rows could share a fingerprint. That
+ * fingerprint is the gate deciding whether today's T86 is **final** (`nextT86State` freezes after N identical
+ * polls), so a collision reads a real revision as "unchanged". U+001F cannot occur in a TWSE JSON string field.
+ *
+ * Changing the separator changes every fingerprint, so the first round after deploying counts one extra
+ * `revisions` against yesterday's stored value and restarts the stability count. It settles by itself.
+ */
+const CELL_SEP = '\u001f'
+
 function sortedRows(rows: unknown[]): string[] {
-  return rows.map((row) => (Array.isArray(row) ? row.join('') : JSON.stringify(row) ?? '')).sort()
+  return rows
+    .map((row) => (Array.isArray(row) ? row.join(CELL_SEP) : (JSON.stringify(row) ?? '')))
+    .sort()
 }
 
 /** Today’s rewrite status of T86; brought back by the last column of `batch_run_log` across rounds*/

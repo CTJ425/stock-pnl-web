@@ -71,8 +71,20 @@ export function sliceByRange(points: FxPoint[], range: FxRange): FxPoint[] {
   const last = points[points.length - 1][0]
   const d = new Date(`${last}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return points
-  d.setUTCMonth(d.getUTCMonth() - months)
-  const cutoff = d.toISOString().slice(0, 10)
+  /*
+    Step the month by hand and clamp the day (0.6.42, AUDIT-03). `setUTCMonth(m - n)` keeps the day-of-month, so a
+    series ending on the 29th–31st overflows into the following month: measured, 2026-05-31 minus 3 months landed on
+    **2026-03-03**, and 2026-03-31 minus 1 month on the same date —— the window came out up to three days short and
+    nothing on screen said so.
+  */
+  const total = d.getUTCFullYear() * 12 + d.getUTCMonth() - months
+  const year = Math.floor(total / 12)
+  const month = total % 12
+  const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const cutoffDate = new Date(
+    Date.UTC(year, month, Math.min(d.getUTCDate(), lastDayOfMonth)),
+  )
+  const cutoff = cutoffDate.toISOString().slice(0, 10)
   return points.filter((p) => p[0] >= cutoff)
 }
 
