@@ -312,5 +312,22 @@ export function describeCron(expr: string): string {
     for (let h = from; h <= to; h++) hours.push(`${String((h + 8) % 24).padStart(2, '0')}:00`)
     return `週一至週五 ${hours.join(' / ')}`
   }
+  /*
+    Minute list within an hour range, weekdays —— `market-daily` became `0,30 7-10 * * 1-5` in 0.6.38.
+    Without this branch the admin schedule printed the raw cron string, so the page never mentioned 15:00
+    and the whole table had one row nobody could read. Listing every shift would be eight entries, hence
+    a range plus the step, the same shape as the step-syntax branch at the top.
+
+    It is deliberately below the single-minute branch above: `0 8-10 * * 1-5` must keep listing its shifts
+    one by one (three of them reads better than "每 60 分"), so this one demands at least one comma.
+  */
+  const s = /^(\d+(?:,\d+)+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
+  if (s) {
+    const mins = s[1].split(',').map(Number).sort((a, b) => a - b)
+    const p = (n: number) => String(n).padStart(2, '0')
+    const first = `${p((Number(s[2]) + 8) % 24)}:${p(mins[0])}`
+    const last = `${p((Number(s[3]) + 8) % 24)}:${p(mins[mins.length - 1])}`
+    return `週一至週五 ${first}–${last} 每 ${mins[1] - mins[0]} 分`
+  }
   return expr
 }

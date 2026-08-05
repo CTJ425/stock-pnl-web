@@ -153,6 +153,17 @@ describe('describeCron', () => {
     expect(describeCron('0 8-10 * * 1-5')).toBe('週一至週五 16:00 / 17:00 / 18:00')
   })
 
+  it('全市場改成每半小時後仍讀得懂：0,30 7-10 UTC → 台北 15:00–18:30（0.6.38）', () => {
+    // 0.6.38 moved market-daily earlier; without the minute-list branch this printed the raw cron string,
+    // so the admin schedule never mentioned 15:00 at all —— which is how the gap was noticed.
+    expect(describeCron('0,30 7-10 * * 1-5')).toBe('週一至週五 15:00–18:30 每 30 分')
+  })
+
+  it('單一分鐘的整點區間仍逐班列出，不被上面那條吃掉', () => {
+    // Three shifts read better one by one than as "每 60 分"
+    expect(describeCron('0 8-10 * * 1-5')).toBe('週一至週五 16:00 / 17:00 / 18:00')
+  })
+
   it('認不得的表達式原樣回傳——顯示 cron 字串好過顯示翻錯的句子', () => {
     expect(describeCron('5 4 * * 0')).toBe('5 4 * * 0')
   })

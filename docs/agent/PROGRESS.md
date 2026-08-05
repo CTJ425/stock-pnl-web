@@ -1,9 +1,36 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.38 released —— volume tables, UI merges, yearly search, earlier BFI82U schedule
-- Status: **Merged to `main`; cron live in both environments; 882 tests / build / lint green**
-- Timestamp: 2026-08-05 22:40:00 Asia/Taipei
+- Action: 0.6.39 —— the admin schedule can read the new half-hourly shift table (BUG-012)
+- Status: **Merged to `main`; 884 tests / build / lint green**
+- Timestamp: 2026-08-05 23:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 23:00:00 Asia/Taipei (0.6.39)
+
+- **Agent**: Claude
+- **Action**: Fix BUG-012 —— `describeCron` had no branch for the shift shape 0.6.38 introduced
+
+The user read the admin console and noticed 15:00 was mentioned nowhere. Correct observation, and the cause was
+mine: 0.6.38 changed `market-daily` to `0,30 7-10 * * 1-5` without teaching `describeCron` that shape, so it fell
+through to `return expr` and printed the raw cron string —— which is in UTC, hence no 15:00 on the page anywhere.
+
+**The lesson generalises beyond this one function**: the schedule display is *derived* from `cron.job` precisely so
+it cannot drift from reality, and that is exactly why changing the cron silently changed the UI. Anything that
+formats a value has a domain, and moving the value outside that domain is a UI change even when no UI code moved.
+Grepping for who reads a constant is not enough —— check who *formats* it.
+
+`cronHoursTaipei` and `judgeCron` were checked too: the first is only applied to `sync-macro`, the second never
+parses the expression. `describeCron` was the only gap.
+
+### Completed Tasks
+- [x] `timeline.ts`: branch for a minute list inside an hour range, placed below the single-minute branch and
+      requiring a comma so `0 8-10 * * 1-5` keeps listing three shifts individually.
+- [x] `timeline.test.ts`: the new shape plus a control for the old one; `FIXED_BUG.md` BUG-012; README 0.6.39.
+- [x] Verified: **884 tests across 57 files**, build and lint clean.
+- ⚠️ A comment containing the literal step syntax closed the block comment early and broke the parse —— caught by
+      the test run, worth remembering when writing about cron inside `/* */`.
 
 ---
 

@@ -8,6 +8,24 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-012 — The admin schedule printed the raw cron string, so 15:00 never appeared
+- **Date**: 2026-08-05 (introduced in 0.6.38, fixed in 0.6.39)
+- **Discovered by**: The user, reading the admin console: "後台的排程好像沒有提到 15:00 的排程".
+- **Symptom**: After `market-daily` moved to `0,30 7-10 * * 1-5`, the 排程 table showed that expression verbatim
+  instead of a sentence. One row of an otherwise readable table was unreadable, and since the raw string is in UTC
+  the page never mentioned 15:00 anywhere.
+- **Root Cause**: `describeCron` in `timeline.ts` has one branch per shift shape and falls back to `return expr`.
+  It covered step syntax, a daily hour list, and a single-minute hour range —— but not **a minute list inside an
+  hour range**, which is exactly the shape 0.6.38 introduced. Changing the cron and not teaching the formatter is
+  the whole bug: the schedule display is derived from `cron.job`, so it was correct and unreadable at once.
+- **Impact**: Display only, admin console only. The schedule itself ran correctly the whole time.
+- **Fix**: A branch for `M[,M…] H1-H2 * * 1-5` rendering 「週一至週五 15:00–18:30 每 30 分」. It sits **below** the
+  single-minute branch and requires at least one comma, so `0 8-10 * * 1-5` keeps listing its three shifts one by
+  one —— three times reads better than "每 60 分".
+- **Tests**: `timeline.test.ts` two entries (the new shape, and a control that the old shape is still listed).
+- **Status**: ✅ FIXED (0.6.39) and live —— pure frontend, shipped with the merge to `main`.
+- **Timestamp**: 2026-08-05 23:00:00 Asia/Taipei
+
 ### Bug ID: BUG-011 — The after-close lock froze an intraday snapshot until the next morning
 - **Date**: 2026-08-05 (introduced in 0.6.36, fixed in 0.6.37)
 - **Discovered by**: Production, on the same day 0.6.36 went live.
