@@ -9,6 +9,7 @@ import {
   describeScope,
   hourLabel,
   nextRun,
+  roundBaseYmd,
   hoursFromBase,
   humanAgo,
   judgeCron,
@@ -193,6 +194,39 @@ describe('TW_CHAIN', () => {
     for (const s of TW_CHAIN) {
       expect(s.dueBy).toBeLessThanOrEqual(TL_SPAN_HOURS)
     }
+  })
+})
+
+describe('roundBaseYmd（本輪的目標交易日）', () => {
+  it('取各來源資料日的最大值', () => {
+    expect(roundBaseYmd(['2026-08-04', '2026-08-05', '2026-08-03'])).toBe('2026-08-05')
+  })
+
+  /*
+   * 2026-08-05 實際發生的錯：全市場 BFI82U 走獨立排程，16:00 就抓到當天的資料，
+   * 而個股 T86 要等 16:30 那輪。基準日綁在個股報告上時，全市場那列被拿「昨天 15:00」
+   * 當原點，算出 25 小時、夾到軸最右端並判成 late —— 準時到手卻亮紅燈。
+   */
+  it('全市場已到手、個股還沒時，基準日跟著跑得快的那個走', () => {
+    const base = roundBaseYmd(['2026-08-04', null, '2026-08-04', undefined, '2026-08-05'])
+    expect(base).toBe('2026-08-05')
+    // 全市場 16:00 到手 → 距 8/5 15:00 為 1 小時，落在 dueBy 3 之內
+    const market = TW_CHAIN.find((s) => s.id === 'market')!
+    const h = hoursFromBase('2026-08-05T08:00:04.000Z', base)
+    expect(h).toBeCloseTo(1, 2)
+    expect(judgeSource(market, h, 1.3)).toBe('ok')
+    // 綁舊基準日的話會是 25 小時、判成 late —— 這就是修掉的那個 bug
+    expect(hoursFromBase('2026-08-05T08:00:04.000Z', '2026-08-04')).toBeCloseTo(25, 2)
+    expect(judgeSource(market, 25, 25.3)).toBe('late')
+  })
+
+  it('沒有任何有效日期時回空字串（畫面顯示「—」）', () => {
+    expect(roundBaseYmd([])).toBe('')
+    expect(roundBaseYmd([null, undefined, '', '20260805', '2026-8-5'])).toBe('')
+  })
+
+  it('週末沒有新資料，基準日自然停在最後交易日', () => {
+    expect(roundBaseYmd(['2026-08-07', '2026-08-07', null])).toBe('2026-08-07')
   })
 })
 

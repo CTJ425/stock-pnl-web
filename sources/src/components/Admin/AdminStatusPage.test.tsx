@@ -186,6 +186,41 @@ describe('AdminStatusPage', () => {
     expect(screen.queryByText('有 3 項需要注意')).toBeNull()
   })
 
+  /*
+   * 2026-08-05 實際遇到的錯：全市場 BFI82U 走獨立排程、16:00 就抓到當天資料，
+   * 個股 T86 要等 16:30 那輪。基準日綁在個股報告上時，標題停在前一天，
+   * 而已到手的全市場那列被拿前一天 15:00 當原點，算出 25 小時、判成延遲。
+   */
+  it('全市場先到手時，整條軸跟著跳到新一輪，個股顯示等待中（0.6.36-dev.2）', async () => {
+    fetchAdminStatus.mockResolvedValue({
+      ...status,
+      asOf: '2026-07-31T08:20:00.000Z', // 台北 7/31 16:20
+      market: {
+        ...status.market!,
+        latestInstitutionalDate: '2026-07-31',
+        asOf: '2026-07-31T08:00:04.000Z', // 台北 7/31 16:00，本輪 +1 小時
+      },
+    })
+    render(<AdminStatusPage />)
+    // 標題跟著跑得快的那個來源走，而不是停在個股報告的 7/30
+    await screen.findByText('台股盤後・2026-07-31 這一輪')
+
+    const rowOf = (label: string) =>
+      [...document.querySelectorAll('.ast-row')].find((r) => r.querySelector('b')?.textContent === label)!
+
+    // 全市場：16:00 到手 → 畫在軸上且不是延遲
+    const market = rowOf('三大法人・全市場')
+    expect(market.querySelector('.ast-hit-t')?.textContent).toBe('16:00')
+    expect(market.querySelector('.ast-pill')?.textContent).not.toBe('延遲')
+
+    // 個股 T86：還停在上一輪 → 不拿舊時間戳畫點，顯示等待中
+    const inst = rowOf('三大法人・個股')
+    expect(inst.querySelector('.ast-hit-t')).toBeNull()
+    expect(inst.querySelector('.ast-pill')?.textContent).toBe('等待中')
+    // 上一輪的日期不顯示，否則會被讀成本輪已到手
+    expect(inst.querySelector('.ast-date')).toBeNull()
+  })
+
   it('讀不到 market 時全市場那列是等待中，不會讓整頁壞掉（0.6.33）', async () => {
     fetchAdminStatus.mockResolvedValue({ ...status, market: null })
     render(<AdminStatusPage />)
