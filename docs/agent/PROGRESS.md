@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 大盤法人逐日表格併入自己的交易金額；年度收益加報酬率欄（0.6.31 定版）
-- Status: **完成 —— 821 測試全過；純前端，不需要部署 Edge Function**
-- Timestamp: 2026-08-05 09:35:00 Asia/Taipei
+- Action: 大盤法人買賣超逐日表格；年度收益加報酬率欄（0.6.31 定版）
+- Status: **完成 —— 820 測試全過；純前端，不需要部署 Edge Function**
+- Timestamp: 2026-08-05 09:42:00 Asia/Taipei
 
 ---
 
@@ -33,34 +33,27 @@
 
 ---
 
-## 📅 Log: 2026-08-05 09:25:00 Asia/Taipei（0.6.31，同版第二次異動）
+## 📅 Log: 2026-08-05 09:42:00 Asia/Taipei（0.6.31，同版第四次異動）
 
 - **Agent**: Claude
-- **Action**: 逐日法人表格右側併入使用者自己的台股買賣金額
+- **Action**: 移除法人表格右側「我的買進 / 我的賣出」兩欄
 
-使用者要在同一列看到「法人這幾天在買還是在賣」與「那我呢」。分成兩張表就得自己對日期，
-所以直接在既有表格右側加「我的買進（元）」「我的賣出（元）」兩欄，跟著同一個 7 交易日視窗。
+⚠️ **這兩欄曾在 commit `1960345` 實作並提交，同日經使用者決定移除。不要再加回來** ——
+不是漏做，是刻意拿掉的。要看自己的交易請到交易紀錄頁。
 
-**為什麼用 prop 而不是在元件裡呼叫 `useWorkspace()`**（這是本次唯一的架構決定）：
-`useWorkspace` 沒有 provider 時會 throw（`WorkspaceContext.tsx:228`），而 `WorkspaceContext`
-本身沒有 export，無法用 `useContext` 做寬容 fallback。`TwMarketSection.test.tsx` 與
-`MacroPage.test.tsx` 都是裸 render，直接呼叫會一次打掛既有測試。
-改走 `AppShell`（已有 `useWorkspace()`）→ `MacroPage`（只轉交、自己不用）→ `TwMarketSection`
-的 prop 傳遞，預設 `[]`，測試維持裸 render。
+一併移除的還有為它拉出來的整條資料通道：`AppShell` → `MacroPage` → `TwMarketSection`
+的 `transactions` prop（`MacroPage` 只負責轉交，自己從未使用）、`twFlowByDate()` 彙總函式、
+以及對應的測試案例。`TwMarketSection` 回到完全自載入、無 props 的形態。
 
-其餘決定：
+若日後要重做，`1960345` 裡有完整實作，當時記下的兩個關鍵點仍然成立：
 
-1. **金額定義沿用交易紀錄頁的 `cashFlow`**：買進 = 單價×股數＋費用（實付）、
-   賣出 = 單價×股數－費用（實收）。兩頁對同一筆交易不該給出兩個數字。
-2. **單位刻意不統一**：法人是億元、自己是元。個人單筆通常不到 0.01 億，換算後整欄都是 0.0。
-   靠表頭的「（元）」與一條 `border-left` 分隔線標示單位換檔。
-3. **自己的金額不套 `chipClass` / `pnlClass`**：買進賣出都是正值，紅綠在這裡沒有方向語意，
-   只會跟左邊法人買賣超的顏色混淆。
-4. **美股交易不計入**（這是台股卡片），沒下單的日子給「—」不給 0。
+1. **不能在 `TwMarketSection` 內呼叫 `useWorkspace()`** —— 沒有 provider 時會 throw
+   （`WorkspaceContext.tsx:228`），且 `WorkspaceContext` 沒有 export、無法做寬容 fallback；
+   `TwMarketSection.test.tsx` 與 `MacroPage.test.tsx` 都是裸 render，直接呼叫會打掛既有測試。
+2. **金額口徑**沿用交易紀錄頁的 `cashFlow`（買進含費、賣出扣費），單位維持元不換算成億元。
 
-驗證：`npm test` 821/821（新增 1 個案例，涵蓋同日多筆加總、美股排除、7 日視窗外排除、
-無交易日「—」）、`oxlint` 僅 3 個既有 warning、`tsc -b` 通過。
-既有的「缺料列整列 —」斷言由 6 欄改為 8 欄。
+驗證：`npm test` 820/820、`oxlint` 僅 3 個既有 warning、`npm run build` 通過。
+「缺料列整列 —」斷言由 8 欄改回 6 欄。
 
 ---
 

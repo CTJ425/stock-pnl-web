@@ -15,7 +15,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
-import type { Transaction } from '../../types/models'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { latestPeriod, periodsBehind } from './macroPeriod'
@@ -121,8 +120,7 @@ function IndicatorCard({ ind, behind }: { ind: MacroIndicator; behind: number })
   )
 }
 
-/** transactions 只是轉交給台股市場卡片對照用，本頁自己不使用 */
-export function MacroPage({ transactions = [] }: { transactions?: Transaction[] }) {
+export function MacroPage() {
   const [macro, setMacro] = useState<MacroData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -148,7 +146,7 @@ export function MacroPage({ transactions = [] }: { transactions?: Transaction[] 
           <RefreshCw size={28} className="spin" />
           <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
         </div>
-        <TwMarketSection transactions={transactions} />
+        <TwMarketSection />
       </>
     )
   }
@@ -165,7 +163,7 @@ export function MacroPage({ transactions = [] }: { transactions?: Transaction[] 
             每日排程完成後會自動補上，稍後再回來看看。
           </div>
         </div>
-        <TwMarketSection transactions={transactions} />
+        <TwMarketSection />
       </>
     )
   }
@@ -266,7 +264,7 @@ export function MacroPage({ transactions = [] }: { transactions?: Transaction[] 
         兩塊都屬於它。自己載入自己的資料（同本頁的做法），互不影響 ——
         美國那份抓不到時，台股這段照樣看得到。
       */}
-      <TwMarketSection transactions={transactions} />
+      <TwMarketSection />
     </>
   )
 }

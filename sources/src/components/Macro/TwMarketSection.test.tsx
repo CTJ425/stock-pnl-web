@@ -7,7 +7,6 @@ vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
 
 import { TwMarketSection } from './TwMarketSection'
 import type { MarketDay } from '../../services/marketProxy'
-import type { Transaction } from '../../types/models'
 
 const inst = (total: number, foreign: number) => ({
   foreignTwd: foreign,
@@ -29,26 +28,6 @@ const day = (date: string, value: number, institutional: MarketDay['institutiona
   taiexHigh: 43784.19,
   taiexLow: 42780.42,
   institutional,
-})
-
-const tx = (
-  tx_date: string,
-  tx_type: 'BUY' | 'SELL',
-  price: number,
-  qty: number,
-  fee_tax: number,
-): Transaction => ({
-  id: `${tx_date}-${tx_type}-${price}`,
-  workspace_id: 'ws',
-  tx_date,
-  market: 'TPE',
-  ticker: '2330',
-  name: '台積電',
-  tx_type,
-  price,
-  qty,
-  fee_tax,
-  created_at: `${tx_date}T01:00:00.000Z`,
 })
 
 describe('TwMarketSection', () => {
@@ -150,58 +129,15 @@ describe('TwMarketSection', () => {
     expect(rows).toHaveLength(2)
     // 表由新到舊（圖由舊到新，兩者刻意相反）
     expect(rows[0].textContent).toContain('2026-08-04')
-    // 最新那天還沒補到法人金額 → 整列「—」，不以 0 冒充（後兩欄是自己的交易，沒傳也是「—」）
+    // 最新那天還沒補到法人金額 → 整列「—」，不以 0 冒充
     expect([...rows[0].querySelectorAll('td.num')].map((td) => td.textContent)).toEqual(
-      Array(8).fill('—'),
+      Array(6).fill('—'),
     )
     // 前一天有資料：外資 −191.9 億、投信 +5.0 億、合計 −165.2 億
     const prev = [...rows[1].querySelectorAll('td.num')].map((td) => td.textContent)
     expect(prev[0]).toBe('-191.9 億')
     expect(prev[2]).toBe('+5.0 億')
     expect(prev[5]).toBe('-165.2 億')
-  })
-
-  it('逐日表格併入自己的台股買賣金額：同日加總、美股不計、視窗外不出現', async () => {
-    fetchMarketDaily.mockResolvedValue({
-      asOf: '2026-08-04T08:30:00.000Z',
-      days: [
-        // 8 天，表格只取最後 7 天 —— 7/24 落在視窗外
-        ...['2026-07-24', '2026-07-27', '2026-07-28', '2026-07-29', '2026-07-30'].map((d) =>
-          day(d, 8e11, inst(1e9, 1e9)),
-        ),
-        day('2026-07-31', 8e11, inst(1e9, 1e9)),
-        day('2026-08-01', 8e11, inst(1e9, 1e9)),
-        day('2026-08-04', 8e11, inst(1e9, 1e9)),
-      ],
-      // 8/4 兩筆買進要加總、8/1 是賣出、7/31 只有美股、7/24 在視窗外
-    })
-    const { container } = render(
-      <TwMarketSection
-        transactions={[
-          tx('2026-08-04', 'BUY', 1000, 100, 500),
-          tx('2026-08-04', 'BUY', 500, 200, 300),
-          tx('2026-08-01', 'SELL', 800, 100, 250),
-          { ...tx('2026-07-31', 'BUY', 100, 10, 1), market: 'US' },
-          tx('2026-07-24', 'BUY', 999, 999, 0),
-        ]}
-      />,
-    )
-    await screen.findByText('日期')
-
-    const rows = container.querySelectorAll('.data-table tbody tr')
-    expect(rows).toHaveLength(7)
-    const mine = (row: Element) => {
-      const cells = [...row.querySelectorAll('td.num')].map((td) => td.textContent)
-      return cells.slice(-2) // 後兩欄才是自己的
-    }
-    // 8/4：買進 1000×100+500 = 100,500 加上 500×200+300 = 100,300 → 200,800
-    expect(mine(rows[0])).toEqual(['NT$200,800', '—'])
-    // 8/1：賣出 800×100-250 = 79,750
-    expect(mine(rows[1])).toEqual(['—', 'NT$79,750'])
-    // 7/31 只有美股交易 → 不計入
-    expect(mine(rows[2])).toEqual(['—', '—'])
-    // 7/24 落在 7 個交易日視窗之外 → 表格裡根本沒有這一列
-    expect(container.textContent).not.toContain('2026-07-24')
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {

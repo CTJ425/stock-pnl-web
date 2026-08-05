@@ -610,7 +610,7 @@ function WorkspaceControls() {
 
 export function AppShell() {
   const { recovery } = useAuth()
-  const { loading, error, addTransactions, transactions } = useWorkspace()
+  const { loading, error, addTransactions } = useWorkspace()
   const [view, setView] = useState<View>('dashboard')
   const [showAddTx, setShowAddTx] = useState(false)
   const [admin, setAdmin] = useState(false)
@@ -668,7 +668,7 @@ export function AppShell() {
           <>
             {view === 'dashboard' && <DashboardPage />}
             {view === 'analysis' && <AnalysisPage />}
-            {view === 'macro' && <MacroPage transactions={transactions} />}
+            {view === 'macro' && <MacroPage />}
             {view === 'fx' && <FxPage />}
             {view === 'yearly' && <YearlyPage />}
             {view === 'transactions' && <TransactionsPage />}
