@@ -139,13 +139,18 @@ function pad2(n: number): string {
 }
 
 /**
- * 'YYYY-MM' moves back n months (n can be negative).
- * Convert it to "year × 12 + month sequence" and then add and subtract. The round-up is naturally established and there is no need to specify 12 months.
+ * 'YYYY-MM' shifted by n months (n may be negative).
+ * Converted to a "year × 12 + month" ordinal and back, so the year rolls over on its own.
+ *
+ * ⚠️ The month must be taken with a floored modulo, not `%` (0.6.43, AUDIT-07). JavaScript's `%` keeps the sign of
+ * the dividend, so a negative ordinal yields a negative month and a period like `-1--2`. Today's years never reach
+ * it —— this is a trap disarmed for whoever first calls it with a large negative `n`, not an observed defect.
  */
 function shiftPeriod(period: string, n: number): string {
   const [y, m] = period.split('-').map(Number)
   const total = y * 12 + (m - 1) + n
-  return `${Math.floor(total / 12)}-${pad2((total % 12) + 1)}`
+  const month = ((total % 12) + 12) % 12
+  return `${Math.floor(total / 12)}-${pad2(month + 1)}`
 }
 
 /** 'YYYY-MM-DD' in Taipei time zone (UTC+8 fixed offset, no daylight saving in Taiwan)*/

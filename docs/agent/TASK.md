@@ -13,7 +13,12 @@
 ## 📋 Active Tasks
 
 ### Task 75: Deploy the Edge half of 0.6.42
-- **Status**: ⏳ **BLOCKED — needs the user's explicit go-ahead** (CLAUDE.md §13.2). Frontend is already live.
+- **Status**: ✅ **Done — deployed to both environments** (user authorised 2026-08-06 01:2x)
+  - Test: `stock-price` v11 → **v12**, `stock-report` v43 → **v44**
+  - Prod: `stock-price` v15 → **v16**, `stock-report` v29 → **v30**
+  - Both environments now report the **same** shas —— `stock-price` `2797ede37f0a`, `stock-report` `c8825b1f4908`
+    —— moved off `733891b768b2` / `91d1dce6ac72`. `verify_jwt` stayed `true` / `false` respectively.
+  - ⚠️ Watch for one extra T86 `revisions` count on the first post-deploy round: expected, see BUG-018.
 - **Agent**: Claude
 - **Timestamp**: 2026-08-06 01:10:00 Asia/Taipei
 - **Why**: two of the four audit fixes are in Edge Function code, and **a git push does not deploy those** ——
@@ -35,8 +40,8 @@
 - **Until deployed**: the browser half of BUG-016 is live (a client asks at most once per 10 minutes), but Edge
   still applies the 60-second rule to its own cache; BUG-018 has no effect at all, it is Edge-only.
 
-### Task 74: Codebase audit —— 8 findings recorded, 4 fixed in 0.6.42
-- **Status**: 🔄 **AUDIT-01…04 fixed** (BUG-015…018); **AUDIT-05…08 still open**
+### Task 74: Codebase audit —— all 8 findings closed
+- **Status**: ✅ **Done** —— AUDIT-01…04 in 0.6.42 (BUG-015…018), AUDIT-05…08 in 0.6.43 (BUG-019…022)
 - **Agent**: Claude
 - **Timestamp**: 2026-08-06 00:20:00 Asia/Taipei
 - **Where**: `BUG_FIX.md` → "Codebase audit 2026-08-06", entries AUDIT-01 … AUDIT-08.

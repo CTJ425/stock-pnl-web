@@ -175,8 +175,14 @@ describe('describeCron', () => {
     expect(describeCron('*/30 8-15 * * 1-5')).toBe('週一至週五 16:00–23:30 每 30 分')
   })
 
-  it('認不得的表達式原樣回傳——顯示 cron 字串好過顯示翻錯的句子', () => {
-    expect(describeCron('5 4 * * 0')).toBe('5 4 * * 0')
+  it('認不得的表達式標記後回傳，不再看起來像正常輸出（0.6.43，AUDIT-05）', () => {
+    /*
+      Echoing the expression was already the honest choice —— a cron string beats a mistranslated sentence.
+      What it could not do is tell a missing branch apart from a design decision, which is where BUG-012 and
+      BUG-014 hid. The prefix makes the next unmatched shape announce itself; the expression is still shown.
+    */
+    expect(describeCron('5 4 * * 0')).toBe('未解析的排程 5 4 * * 0')
+    expect(describeCron('5 4 * * 0')).toContain('5 4 * * 0')
   })
 })
 

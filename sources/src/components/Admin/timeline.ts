@@ -282,10 +282,15 @@ export function judgeCron(
 }
 
 /**
- * cron expression → a vernacular (convert UTC to Taipei by the way).
- * Only recognize the two shapes actually used in this project; if not recognized, return them as they are -
- * It's better to display a cron string than a mistranslated sentence.
+ * cron expression → plain language (converting UTC to Taipei on the way).
+ *
+ * One branch per shift shape actually used in this project. An unrecognised shape is **marked, not silently
+ * echoed** (0.6.43, AUDIT-05): returning the bare expression was still the honest thing to do —— better a cron
+ * string than a mistranslated sentence —— but on screen it looked like a deliberate rendering, so nobody could
+ * tell a missing branch from a design decision. BUG-012 and BUG-014 both hid there, the second for months.
+ * With the prefix, the next unmatched shape announces itself the moment it appears.
  */
+export const UNPARSED_CRON_PREFIX = '未解析的排程 '
 export function describeCron(expr: string): string {
   const p = (n: number) => String(n).padStart(2, '0')
   // Last firing minute of a step range: a 15-minute step ends at :45, a 30-minute one at :30. This used to be
@@ -345,5 +350,5 @@ export function describeCron(expr: string): string {
     const last = `${p((Number(s[3]) + 8) % 24)}:${p(mins[mins.length - 1])}`
     return `週一至週五 ${first}–${last} 每 ${mins[1] - mins[0]} 分`
   }
-  return expr
+  return `${UNPARSED_CRON_PREFIX}${expr}`
 }

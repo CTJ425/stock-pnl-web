@@ -1,9 +1,47 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.42 —— fixed the four audit findings the user asked for (BUG-015 … BUG-018)
-- Status: **Frontend merged to `main`; ⚠️ two Edge Functions not deployed yet (Task 75); 890 tests green**
-- Timestamp: 2026-08-06 01:10:00 Asia/Taipei
+- Action: 0.6.43 —— audit list closed (BUG-019 … BUG-022) and 0.6.42's Edge halves deployed
+- Status: **All 8 audit findings fixed and live in both environments; 890 tests green**
+- Timestamp: 2026-08-06 01:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-06 01:30:00 Asia/Taipei (0.6.43 + the 0.6.42 Edge deploy)
+
+- **Agent**: Claude
+- **Action**: Deploy what a git push cannot, then close AUDIT-05 … 08
+
+### The deploy (Task 75)
+
+Test first, then production, `--no-verify-jwt` on `stock-report` only. Both environments came out on the **same**
+shas —— `stock-price` `2797ede37f0a`, `stock-report` `c8825b1f4908` —— off the previous `733891b768b2` /
+`91d1dce6ac72`, with `verify_jwt` still `true` / `false`. Only now is the retry bound (BUG-016) applied on the
+server side, and the fingerprint separator (BUG-018) applied at all.
+
+### The remaining four, and what connects them
+
+Three of the four were about **a program that knew something and did not say it**, which is the same shape as the
+first four:
+
+- `describeCron` knew it had failed to parse and returned the raw expression, which on screen is indistinguishable
+  from a deliberate rendering —— that is where BUG-012 and BUG-014 both hid. It now says 未解析的排程 and still
+  shows the expression. **This is the one that pays forward**: the next missing branch reports itself.
+- `writeStore` knew the write had failed and threw a raw `QuotaExceededError` into nobody's hands. Letting it
+  throw is right —— losing a transaction silently would be worse —— but the user saw nothing. It now throws a
+  cause they can act on, and `TransactionForm` already renders it.
+- 「顯示全部」 knew it was showing 60 of up to 120 days. The table now reads the whole file; `SHOWN_DAYS` goes on
+  keeping the charts' X axis readable, which was always its only job.
+
+The fourth, `shiftPeriod`'s signed modulo, is unreachable at today's years —— a trap disarmed, not a defect fixed,
+and the entry says so rather than dressing it up.
+
+### Completed Tasks
+- [x] Deployed `stock-price` + `stock-report` to test and production; shas verified matching across environments.
+- [x] `timeline.ts` `UNPARSED_CRON_PREFIX` (BUG-019); `dataProvider.writeStore` message (BUG-020);
+      `macroCalendar.shiftPeriod` floored modulo (BUG-021); turnover table reads the full file (BUG-022).
+- [x] **890 tests across 57 files**, build and lint clean; `FIXED_BUG.md` ×4, `BUG_FIX.md` header, README 0.6.43,
+      Tasks 74 and 75 closed.
 
 ---
 

@@ -246,10 +246,17 @@ export function TwMarketSection() {
 
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
-  // Newest first, opposite to every chart on this card —— see the comment above the institutional table
-  const turnoverRows = [...days]
-    .reverse()
-    .slice(0, showAllTurnover ? days.length : TURNOVER_ROWS_COLLAPSED)
+  /*
+    Newest first, opposite to every chart on this card —— see the comment above the institutional table.
+
+    The table reads the **whole file**, not the 60-day slice the charts use (0.6.43, AUDIT-08). `SHOWN_DAYS` exists
+    to keep an X axis readable, which is a chart's problem; a table has no axis to crowd. Before this, 「顯示全部」
+    could only ever reach 60 of the up-to-120 days on file, which is not what "全部" says.
+  */
+  const allTurnoverDays = [...market.days].reverse()
+  const turnoverRows = showAllTurnover
+    ? allTurnoverDays
+    : allTurnoverDays.slice(0, TURNOVER_ROWS_COLLAPSED)
   /*
     A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
     different source than close, so the last day or two may have close only. **But that day's slot must stay**
@@ -417,11 +424,11 @@ export function TwMarketSection() {
         which is what a shift towards higher-priced stocks looks like.
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
-        <div className="chart-title">每日成交量・近 {days.length} 個交易日</div>
-        {days.length > TURNOVER_ROWS_COLLAPSED && (
+        <div className="chart-title">每日成交量・近 {allTurnoverDays.length} 個交易日</div>
+        {allTurnoverDays.length > TURNOVER_ROWS_COLLAPSED && (
           <button className="btn btn-sm" onClick={() => setShowAllTurnover((v) => !v)}>
             {showAllTurnover ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-            {showAllTurnover ? `只顯示近 ${TURNOVER_ROWS_COLLAPSED} 日` : `顯示全部 ${days.length} 日`}
+            {showAllTurnover ? `只顯示近 ${TURNOVER_ROWS_COLLAPSED} 日` : `顯示全部 ${allTurnoverDays.length} 日`}
           </button>
         )}
       </div>

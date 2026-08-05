@@ -6,8 +6,9 @@
 
 ---
 
-> **AUDIT-01 … AUDIT-04 were fixed in 0.6.42** (see `FIXED_BUG.md` BUG-015 … BUG-018). ⚠️ Two of them live in Edge
-> Function code and **are not live until those functions are deployed** —— see Task 75. AUDIT-05 … AUDIT-08 remain open.
+> **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
+> environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
+> of what the audit found and why each mattered.
 
 ## 🔍 Codebase audit 2026-08-06 —— findings only, nothing changed
 

@@ -51,8 +51,28 @@ function readStore(): LocalStore {
   return { workspaces: [], transactions: [] }
 }
 
+/**
+ * Persist the local-mode store.
+ *
+ * **Deliberately the one localStorage write that is allowed to throw** —— the cache writers elsewhere
+ * (`priceProxy`, `twMarketData`, `aiChatStore`) swallow failures because a lost cache costs one refetch, while a
+ * lost transaction is the user's own data and silence would be the worst outcome.
+ *
+ * What 0.6.43 adds (AUDIT-06) is a message. It used to throw the raw `QuotaExceededError`, which surfaces as an
+ * unhandled rejection somewhere far from the save the user just made —— the write failed and the screen said
+ * nothing. Now the reason reaches the caller, and the caller already shows the message.
+ */
 function writeStore(store: LocalStore): void {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(store))
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(store))
+  } catch (e) {
+    const quota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)
+    throw new Error(
+      quota
+        ? '瀏覽器的本機儲存空間已滿，這筆資料沒有存下來。請先匯出備份並刪除一些舊紀錄。'
+        : '無法寫入瀏覽器的本機儲存空間，這筆資料沒有存下來。若使用無痕視窗，請改用一般視窗。',
+    )
+  }
 }
 
 export class LocalProvider implements DataProvider {

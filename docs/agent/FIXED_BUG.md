@@ -8,6 +8,39 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-019 — An unparsed cron looked like intended output (AUDIT-05)
+- **Date**: 2026-08-06, fixed in 0.6.43
+- **Root Cause**: `describeCron` returned the bare expression when no branch matched. Echoing it was the honest
+  choice —— a cron string beats a mistranslated sentence —— but on screen it was indistinguishable from a
+  deliberate rendering, so a missing branch could sit there unnoticed. BUG-012 and BUG-014 both hid exactly there.
+- **Fix**: the fallback prefixes 「未解析的排程 」 and still shows the expression. The next unmatched shape announces
+  itself the moment it renders.
+- **Status**: ✅ FIXED (0.6.43), frontend only.
+
+### Bug ID: BUG-020 — A failed local-mode write said nothing (AUDIT-06)
+- **Date**: 2026-08-06, fixed in 0.6.43
+- **Root Cause**: `dataProvider.writeStore` was the one unguarded localStorage write. Letting it throw is correct
+  —— silently dropping a user's transaction would be worse than an error —— but it threw the raw
+  `QuotaExceededError`, which surfaced as an unhandled rejection far from the save. The data was lost and the
+  screen said nothing.
+- **Fix**: catch and rethrow with a cause the user can act on (storage full → export and prune; private window →
+  use a normal window). `TransactionForm` already renders `寫入失敗：{message}`, so the message now reaches the user.
+- **Status**: ✅ FIXED (0.6.43), frontend only.
+
+### Bug ID: BUG-021 — `shiftPeriod` could produce a negative month (AUDIT-07)
+- **Date**: 2026-08-06, fixed in 0.6.43
+- **Root Cause**: `total % 12` where JavaScript's `%` keeps the dividend's sign, so a negative ordinal yields a
+  negative month. **Unreachable at today's years** —— a trap disarmed rather than an observed defect.
+- **Fix**: floored modulo `((total % 12) + 12) % 12`.
+- **Status**: ✅ FIXED (0.6.43). Edge code, deployed with the 0.6.43 functions.
+
+### Bug ID: BUG-022 — 「顯示全部」 could not reach the whole file (AUDIT-08)
+- **Date**: 2026-08-06 (introduced by me in 0.6.38), fixed in 0.6.43
+- **Root Cause**: the turnover table read the same 60-day slice the charts use, while `market/daily.json` keeps up
+  to 120 days. `SHOWN_DAYS` exists to keep an X axis readable —— a chart's problem, which a table does not have.
+- **Fix**: the table reads `market.days` in full; the charts keep the slice. The header and button count the file.
+- **Status**: ✅ FIXED (0.6.43), frontend only.
+
 ### Bug ID: BUG-015 — The dashboard priced holdings at the trial-matching estimate with no marker (AUDIT-01)
 - **Date**: found 2026-08-06 by audit, fixed in 0.6.42
 - **Root Cause**: `trial` was set from MIS's `ip` on every quote and read by exactly one consumer, the quote card.
