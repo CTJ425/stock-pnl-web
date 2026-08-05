@@ -21,6 +21,7 @@ import {
 } from '../../services/adminStatus'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import {
+  TL_SPAN_HOURS,
   TL_TICKS,
   TW_CHAIN,
   cronHoursTaipei,
@@ -34,6 +35,7 @@ import {
   judgeCron,
   judgeSource,
   nextRun,
+  roundBaseYmd,
   taipeiParts,
   tlLabel,
   tlPercent,
@@ -131,8 +133,22 @@ export function AdminStatusPage() {
     void load()
   }, [load])
 
-  // 時間軸的基準日是「資料日」而非今天 —— 隔天早上補抓的事件要落在同一條軸上
-  const baseYmd = dashYmd(data?.chip?.ymd ?? data?.manifest?.ymd)
+  /*
+    時間軸的基準日是「資料日」而非今天 —— 隔天早上補抓的事件要落在同一條軸上。
+    0.6.36-dev.2 起改取**各來源資料日的最大值**（見 timeline.ts 的 roundBaseYmd）：
+    綁單一來源會讓跑得快的那列（全市場走獨立排程，16:00 就到手）算出跨日的座標。
+  */
+  const baseYmd = useMemo(
+    () =>
+      roundBaseYmd([
+        dashYmd(data?.chip?.ymd ?? data?.manifest?.ymd),
+        data?.chip?.dataDate,
+        data?.chip?.sources?.institutional?.date,
+        data?.chip?.sources?.margin?.date,
+        data?.market?.latestInstitutionalDate,
+      ]),
+    [data],
+  )
 
   const chain = useMemo(() => {
     if (!data || !baseYmd) return []
@@ -172,12 +188,24 @@ export function AdminStatusPage() {
       } else {
         stamp = src?.[spec.id] ?? null
       }
-      const h = hoursFromBase(stamp?.fetchedAt ?? null, baseYmd)
+      /*
+        時間戳落在本輪軸範圍外的，屬於別輪 —— 一律當未取得，由 judgeSource 依 dueBy 判定。
+        不能拿上一輪的時間戳去算座標：個股 T86 還停在昨天時會算出 -22.5 小時，
+        被 tlPercent 夾到 0（軸最左），看起來像「超早就到手」。
+
+        判「屬不屬於本輪」用時間戳而不是比對 date，是因為 date 的語意各列不同：
+        借券自報的是**公布日**（次一交易日），天生比本輪多一天 ——
+        拿它比對會讓唯一該亮紅燈的那列反而被當成沒抓到。
+      */
+      const raw = hoursFromBase(stamp?.fetchedAt ?? null, baseYmd)
+      const inRound = raw !== null && raw >= 0 && raw <= TL_SPAN_HOURS
+      const h = inRound ? raw : null
       return {
         spec,
-        state: judgeSource(spec, h, nowHour, partial),
+        state: judgeSource(spec, h, nowHour, inRound && partial),
         hour: h,
-        date: stamp?.date ?? null,
+        // 別輪的日期在這條軸上沒有意義，不顯示以免被讀成本輪已到手
+        date: inRound ? stamp?.date ?? null : null,
         cover,
       }
     })
@@ -284,7 +312,8 @@ export function AdminStatusPage() {
       {/* ── 台股盤後時間軸 ───────────────────────────────── */}
       <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
-          <h3 className="head-tight">台股盤後・{data.chip?.dataDate ?? '—'} 這一輪</h3>
+          {/* 標題與軸座標必須同一個基準日，否則標題說 8/4、軸上卻畫著 8/5 的點 */}
+          <h3 className="head-tight">台股盤後・{baseYmd || '—'} 這一輪</h3>
           <span className="source-tag">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
         </div>
 

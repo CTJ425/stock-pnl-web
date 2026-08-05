@@ -44,19 +44,24 @@ const HELP = {
 /**
  * 現價欄的 tooltip：顏色本身說不出「漲了多少」，也說不出基準是哪一天。
  * 抓不到昨收時完全不掛 tooltip —— 掛一句「無資料」只是讓人多滑一次鼠。
+ *
+ * 0.6.36 補上「哪一天」：收盤後標交易日與「收盤」，快取價則明說它不一定是今天的。
+ * 在那之前，隔夜看到的快取價會被描述成「較昨收 …」，而那個昨收其實是前天的。
  */
-function dayChangeHint(
-  dayChange: number | null,
-  price: number,
-  currency: Currency,
-): string | undefined {
-  if (dayChange === null) return undefined
+function dayChangeHint(row: HoldingRow, currency: Currency): string | undefined {
+  const { dayChange, price, tradeDay, closed, priceStale } = row
+  if (dayChange === null || price === null) return undefined
   const prevClose = price - dayChange
   const pct = prevClose === 0 ? null : (dayChange / prevClose) * 100
-  if (dayChange === 0) return `與昨收持平（昨收 ${fmtPrice(prevClose, currency)}）`
   const sign = dayChange > 0 ? '+' : ''
   const pctText = pct === null ? '' : `（${sign}${pct.toFixed(2)}%）`
-  return `較昨收 ${sign}${fmtPrice(dayChange, currency)}${pctText}・昨收 ${fmtPrice(prevClose, currency)}`
+  const move =
+    dayChange === 0
+      ? `與昨收持平（昨收 ${fmtPrice(prevClose, currency)}）`
+      : `較昨收 ${sign}${fmtPrice(dayChange, currency)}${pctText}・昨收 ${fmtPrice(prevClose, currency)}`
+  const head = closed && tradeDay ? `${tradeDay} 收盤・` : ''
+  const tail = priceStale ? '・這是上次抓到的價格，不一定是今天的' : ''
+  return `${head}${move}${tail}`
 }
 
 function sumOrNull(values: Array<number | null>): number | null {
@@ -100,7 +105,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                       顏色說得出「今天是漲是跌」，而後者才是看現價時真正想知道的事。
                       抓不到昨收（台股 OpenAPI 備援）時是平盤色，不是「今天沒動」。
                     */}
-                    <span title={dayChangeHint(dayChange, price, currency)}>
+                    <span title={dayChangeHint(row, currency)}>
                       {fmtPrice(price, currency)}
                     </span>
                     {priceStale && (

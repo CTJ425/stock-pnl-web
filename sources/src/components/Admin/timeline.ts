@@ -54,6 +54,34 @@ export const TW_CHAIN: readonly ChainSpec[] = [
   { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 8.75 },
 ]
 
+/**
+ * 這一輪的目標交易日 = 各來源已知資料日的**最大值**（0.6.36-dev.2）。
+ *
+ * 先前用「個股籌碼報告的資料日」當整條軸的基準，但軸上五列來自不同批次：
+ * 個股 T86 走盤後批次（16:30 才到手）、全市場 BFI82U 走獨立的 market-daily（16:00 就到）。
+ * 跑得快的那列於是被拿「昨天 15:00」當原點去算座標 —— 2026-08-05 實際發生過：
+ * 全市場當天 16:00 準時到手，卻算出 25 小時、被夾到軸最右端並判成 late。
+ * 準時的來源亮紅燈，等於告警失效。
+ *
+ * 取 max 而不是查交易日曆：週末與假日沒有新資料，基準日自然停在最後交易日；
+ * 收盤後第一個到手的來源就把它推進到今天。少一份要維護的假日表。
+ * 代價是 15:00–16:00（收盤了但還沒有任何來源到手）仍顯示前一輪 ——
+ * 那段時間本來就沒有本輪的事件可畫。
+ *
+ * ⚠️ **借券的 date 不可以放進來**：它自報的是**公布日**（次一交易日），
+ * 天生比本輪多一天（`batch_run_log` 可見 `borrow_data_date` 為隔日而 `data_ymd` 為本輪）。
+ * 放進來會讓基準日整個快一天，整條軸的其他四列全部變成「未到手」。
+ *
+ * @param dates 'YYYY-MM-DD' 格式；格式不符或空值一律略過
+ */
+export function roundBaseYmd(dates: ReadonlyArray<string | null | undefined>): string {
+  let max = ''
+  for (const d of dates) {
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > max) max = d
+  }
+  return max
+}
+
 /** 時間軸刻度（小時數 → 標籤） */
 export const TL_TICKS: ReadonlyArray<{ h: number; label: string }> = [
   { h: 0, label: '15:00' },

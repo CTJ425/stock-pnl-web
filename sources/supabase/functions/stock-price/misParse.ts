@@ -5,8 +5,13 @@
  *
  * MIS 為證交所看盤網站背後的非官方文件化端點，回應格式：
  *   { rtcode: '0000', msgArray: [{ c, z, y, b, ... }] }
- *   c: 代號；z: 最新成交價；y: 昨收；b: 最佳五檔買價（'_' 分隔）。
+ *   c: 代號；z: 最新成交價；y: 昨收；b: 最佳五檔買價（'_' 分隔）；
+ *   o/h/l: 今日開盤 / 最高 / 最低；v: 累積成交量（張）；
+ *   d: 交易日（YYYYMMDD）；t: 最後撮合時間（HH:mm:ss）；ip: 試撮中為 '1'。
  *   昨收本來就在同一筆回應裡，取它當漲跌著色的基準不會多打一次 API（0.6.34）。
+ *   0.6.36 同理再取 o/h/l/v/d/t/ip 供個股分析的報價卡 —— 同一筆回應，零額外請求。
+ *   收盤後這些欄位仍是當日定案值（實測 15:23 仍回 d=當日、t=13:30:00），
+ *   而 TWSE OpenAPI 此時還停在前一個交易日，所以「今收」一律以本端點為準。
  *   無效值以 '-' 表示。
  */
 
@@ -15,6 +20,20 @@ export interface MisQuote {
   price: number
   /** 昨收（`y`）；無效時為 null。前端據此判斷現價的漲跌著色 */
   prevClose: number | null
+  /** 今日開盤（`o`） */
+  open: number | null
+  /** 今日最高（`h`） */
+  high: number | null
+  /** 今日最低（`l`） */
+  low: number | null
+  /** 累積成交量（`v`，單位：張）；尚無成交時為 0，與「取不到」的 null 不同 */
+  volume: number | null
+  /** 交易日（`d`，YYYYMMDD）—— 報價卡據此標示這組數字屬於哪一天 */
+  tradeDate: string | null
+  /** 最後撮合時間（`t`，HH:mm:ss）；達 13:30:00 表示收盤已定案 */
+  tradeTime: string | null
+  /** 是否為試撮階段（`ip` === '1'）：此時 z 是試撮預估價，不是成交價 */
+  trial: boolean
 }
 
 /** 每檔同時嘗試上市（tse_）與上櫃（otc_）channel，MIS 會自動忽略無效者 */
@@ -40,6 +59,30 @@ export function buildMisChannels(tickers: string[]): string[][] {
 function toPrice(value: unknown): number | null {
   const n = Number(String(value ?? '').replace(/,/g, ''))
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * 成交量與價格的有效範圍不同：0 張是「今天還沒成交」，是真值，不能當成取不到。
+ * 正因為 0 有效，空字串就不能交給 Number() —— 它會回 0，讓「沒有這個欄位」
+ * 變成「成交量 0 張」。缺欄位一律先擋在前面。
+ */
+function toCount(value: unknown): number | null {
+  const s = String(value ?? '').replace(/,/g, '').trim()
+  if (s === '') return null
+  const n = Number(s)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/** 交易日 `d`：只認 8 位數字（YYYYMMDD），其餘一律當取不到 */
+function toTradeDate(value: unknown): string | null {
+  const s = String(value ?? '').trim()
+  return /^\d{8}$/.test(s) ? s : null
+}
+
+/** 最後撮合時間 `t`：只認 HH:mm:ss */
+function toTradeTime(value: unknown): string | null {
+  const s = String(value ?? '').trim()
+  return /^\d{2}:\d{2}:\d{2}$/.test(s) ? s : null
 }
 
 /**
@@ -75,7 +118,18 @@ export function parseMisResponse(data: unknown): MisQuote[] {
     const price = pickPrice(row)
     if (price === null) continue
     seen.add(ticker)
-    quotes.push({ ticker, price, prevClose: toPrice(row.y) })
+    quotes.push({
+      ticker,
+      price,
+      prevClose: toPrice(row.y),
+      open: toPrice(row.o),
+      high: toPrice(row.h),
+      low: toPrice(row.l),
+      volume: toCount(row.v),
+      tradeDate: toTradeDate(row.d),
+      tradeTime: toTradeTime(row.t),
+      trial: String(row.ip ?? '').trim() === '1',
+    })
   }
   return quotes
 }

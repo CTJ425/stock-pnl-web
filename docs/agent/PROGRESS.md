@@ -1,9 +1,143 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 美國總經改成台股法人表版型（0.6.35 定版）
-- Status: **完成 —— 843 測試全過；純前端，不需要部署 Edge Function**
-- Timestamp: 2026-08-05 13:20:00 Asia/Taipei
+- Action: 後台時間軸基準日修正（0.6.36-dev.2）
+- Status: **完成 —— 874 測試全過；純前端，無需再動 Supabase**
+- Timestamp: 2026-08-05 16:35:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 16:35:00 Asia/Taipei（0.6.36-dev.2）
+
+- **Agent**: Claude
+- **Action**: 修正後台台股盤後時間軸的基準日（BUG-010）
+
+### 使用者的問題帶出兩件事
+
+問題是「16:00 這班車啟動後，台股盤後・2026-08-04 這一輪 狀態都還是舊的，是 BUG 嗎」。
+
+**第一件：不是 bug。** 批次用的 `T86?selectType=ALLBUT0999` 在 16:00 / 16:15 都還沒發布
+（`batch_run_log` 兩列 `t86_today = false`、cron 兩班都 succeeded）。
+容易誤導的是同一支 API 換成 `selectType=ALL` 當時已經有 8/5 的 16575 筆 ——
+但那份含權證、ETF、可轉債，與批次要的 1339 筆股票是**兩份不同的資料、產製時間不同步**。
+16:30 那輪 `t86_today` 轉 true、`data_ymd` 推進到 20260805，與 `timeline.ts` 註解
+記載的「實測要到 16:30 那輪才抓得到」完全一致。
+
+**第二件：但使用者的直覺指向了一個真的 bug。** 他說「甚至 BFI82U 開始跑的時候就該切換」——
+查下去發現全市場法人 16:00 那班確實已經抓到 8/5（`market/daily.json` 的 `asOf` 是台北 16:00:04），
+但標題與軸座標都綁在個股籌碼的資料日 8/4，於是那一列被算成 25 小時、
+`tlPercent` 夾到 100% 貼在軸最右端、`judgeSource` 判成 `late`。
+**準時到手的來源天天亮紅燈**（每個交易日 16:00–16:30 這段）。
+
+### 修法與一個差點踩進去的坑
+
+基準日改取各來源資料日的**最大值**（`roundBaseYmd`）。使用者在兩個方案中選了這個 ——
+另一案是用 0.6.36 剛加的報價 `tradeDate` 判交易日，能連 15:00–16:00 的空窗都正確，
+但要改 Edge 多帶欄位、再部署一次。
+
+**坑**：第一版把借券的 date 也放進 max，既有測試立刻爆掉 ——
+借券自報的是**公布日（次一交易日）**，天生比本輪多一天
+（`batch_run_log` 可見 `borrow_data_date` 是隔日而 `data_ymd` 是本輪）。
+放進去會讓基準日整個快一天、其他四列全變「未到手」。
+連帶把「屬不屬於本輪」的判斷從「比對 date」改成「時間戳落不落在軸範圍內」——
+後者對五列語意一致，也才不會把唯一該亮紅燈的借券誤判成沒抓到。
+
+### Completed Tasks
+- [x] `timeline.ts`：新增 `roundBaseYmd()`（含「借券不可放進來」的警告註解）。
+- [x] `AdminStatusPage.tsx`：基準日改用 `roundBaseYmd`、標題與軸共用同一基準、
+      本輪判定改用 `[0, TL_SPAN_HOURS]` 範圍、別輪的日期不顯示。
+- [x] 測試：`timeline.test.ts` 4 筆（含鎖住舊行為「25 小時 → late」的對照）、
+      `AdminStatusPage.test.tsx` 1 筆（全市場先到手時整條軸跳輪）。
+- [x] 驗證：`npm test -- --run` 57 檔 **874 筆全通過**；`npm run build` 乾淨。
+
+---
+
+## 📅 Log: 2026-08-05 16:05:00 Asia/Taipei（0.6.36-dev.1）
+
+- **Agent**: Claude
+- **Action**: 個股分析的持股卡換成報價卡；台股 13:30 收盤後鎖到隔天 08:25 不再抓價
+
+### 使用者原本的構想被實測否決
+
+使用者要求「今天收盤價直接從 TWSE 個股日收盤價及月平均價（`STOCK_DAY_AVG_ALL`）定義，
+庫存總覽抓到就更新到現價、不再打 API，直到隔天 8:25 試搓前」。動工前先打了三個端點：
+
+| 來源 | 交易日 | 2330 收盤 | OHLCV |
+| ---- | ---- | ---- | ---- |
+| `STOCK_DAY_AVG_ALL` | 1150804（**前一交易日**） | 2320 | 無 |
+| `STOCK_DAY_ALL` | 1150804（**前一交易日**） | 2320 | 有 |
+| MIS `getStockInfo.jsp` | **20260805**，t=13:30:00 | **2405** | 全有 |
+
+實測時間是 2026-08-05 15:23 台北，**收盤後整整兩小時**，兩個 OpenAPI 端點都還停在昨天，
+而它們回的 2320 恰好等於 MIS 的昨收 `y`。照原構想實作，今天會把 2320 當成今收
+（實際 2405，差 3.6%）**並鎖定 17 小時** —— 正好把使用者要避免的「隔夜價格錯亂」制度化。
+
+同一時間 MIS 的一筆回應已含全部所需欄位（`o` 2385 / `h` 2415 / `l` 2370 / `z` 2405 /
+`y` 2320 / `v` 31851 / `d` 20260805 / `t` 13:30:00 / `ip` 0），且收盤後仍是當日定案值。
+向使用者說明後改採 **MIS 單一來源**，四個決策點都由使用者定案（單一來源、只做台股、
+只刪卡片保留資料流、七格不含月均價）。
+
+### 收盤判斷改看時鐘，不看資料到齊
+
+`quoteWindow.ts` 的 `twQuoteTtlMs(now, tradeTime?)` 是無狀態純函式，只看台北時鐘：
+08:25–13:30 走 60 秒，其餘時段一路鎖到下一個 08:25。
+
+**刻意不查交易日曆、不存鎖定旗標**：週末與國定假日一到 13:30 自然落入長 TTL；
+隔天 08:25 解除後若當天休市，13:30 又重新落入。少一份要維護的假日表。
+唯一的例外處理是 13:30–14:00 的過渡窗 —— 來源 `t` 還沒到 13:30 表示收盤撮合尚未落地，
+這種過渡值不鎖夜，免得整晚顯示一個錯的收盤價。
+
+### 踩到的坑：`Number('')` 是 0
+
+`toCount()`（成交量）允許 0，因為「今天還沒成交」是真值。但也正因為 0 有效，
+空字串不能直接交給 `Number()` —— 它回 0，會把「回應裡沒有 `v` 欄位」變成「成交量 0 張」。
+既有測試（舊的 MIS 真實回應樣本沒有 `v`）當場抓到，補上空字串前置檢查。
+
+### Completed Tasks
+- [x] `misParse.ts`：`MisQuote` 擴充 `open/high/low/volume/tradeDate/tradeTime/trial`；
+      `pickPrice` 的 z→b→y 退階邏輯**未動**。
+- [x] `quoteWindow.ts`（新）：時段 TTL 純函式，前端與 Edge 共用（跨目錄 import，
+      沿用 `misParse.test.ts` 既有模式）。
+- [x] `stock-price/index.ts`：`Quote` 擴充；Yahoo 路徑補 OHLCV
+      （開盤價**不在 `meta`**，要從 `indicators.quote[0].open[0]` 取；
+      成交量 Yahoo 給股數、MIS 給張數，除以 1000 對齊）；
+      DB 快取讀寫新欄位；`freshAfter` 粗篩下界改取兩市場較大者。
+- [x] `schema.sql`：`price_cache` 補 7 個欄位（`ADD COLUMN IF NOT EXISTS`，可重複執行）。
+- [x] `priceProxy.ts`：`PriceQuote` 擴充、快取 key 升 `v3`、`cacheTtlMs` 改吃 quote；
+      新增共用的 `isClosed` / `tradeDateLabel`。
+- [x] `QuoteTab.tsx`（新）取代 `HoldingTab.tsx`（刪）；`StockDetailPage` 的 `surfaceRef`
+      改為包住四段全部；`AnalysisPage` 把 `PriceQuote` 往下傳。
+- [x] `DashboardPage.tsx`：現價 tooltip 補上交易日與「收盤」，快取價明說不一定是今天的。
+- [x] 測試：新增 `quoteWindow.test.ts`(9)、`QuoteTab.test.tsx`(10)；
+      擴充 `misParse.test.ts`(3)、`priceProxy.test.ts`；更新 `StockDetailPage.test.tsx`
+      的持股相關斷言（PDF 那兩條改為釘「畫面上沒有持股數字」）。
+- [x] 驗證：`npm test -- --run` 56 檔 **869 筆全通過**；`npm run build`、`npm run lint` 乾淨。
+
+### 測試區部署與實測（16:00–16:10，使用者授權後執行）
+
+`stock-price` v9 → **v10**（`verify_jwt` 維持 `true`）、`price_cache` 補齊 7 個欄位。
+端到端打測試區的 Edge Function：2330 / 6488 回齊七欄（`tradeDate: 20260805`、
+`tradeTime: 13:30:00`）；AAPL 的交易日與撮合時間為 null、成交量 67779 張（股數已除以 1000）。
+
+**收盤鎖定的決定性驗證**：把 `TPE:2330` 的 `updated_at` 往回撥 5 分鐘再打一次，
+`asOf` 仍停在 5 分鐘前 —— 舊的 60 秒 TTL 必定會重抓，所以這證明長 TTL 真的在 Edge 端生效。
+
+踩到的環境問題兩則：
+- `db query` 在 repo root 執行會連本機 Docker DB（skill 警告的 cwd 陷阱的另一種表現），
+  且新版 CLI 不認舊的 `supabase/.temp/linked-project.json`，必須重新 `link`。
+- `functions download` 取不到 access token（`projects list` / `deploy` 卻可以，
+  走不同的認證路徑），所以 skill 要求的逐檔比對這次改用「版本更新時間 ＋ 端到端回傳」替代。
+
+⚠️ **`supabase link` 現在指向測試區**（全域副作用），要動正式區必須先重新 link。
+
+### ⚠️ 尚未做
+- `git push origin dev`：這台機器沒有 GitHub 認證（無 `gh`、remote 是 https 且無 credential helper），
+  需由使用者自行 push。commit 已在本地 `dev` 分支。
+
+### 待隔日盤中回頭確認
+1. MIS 的 `v`（31,851 張）與 Yahoo 同日的 35,214 張差約 10%，推測是盤後定價交易未計入；
+   單位是「張」已確定，差異來源用隔日的 `STOCK_DAY_ALL` 對帳。
+2. 試撮時段（08:30–09:00）MIS 實際回的 `ip` / `t`，確認「預估」格如預期顯示。
 
 ---
 

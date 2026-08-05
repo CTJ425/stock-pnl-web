@@ -4,10 +4,17 @@ import { computeLedger } from './pnlEngine'
 import type { PriceMap } from '../services/priceProxy'
 import type { Transaction } from '../types/models'
 
-/** 測試用報價：只有 price / prevClose / stale 有意義，asOf 與 source 是型別要求的欄位 */
+/** 測試用報價：只有 price / prevClose / stale 有意義，其餘是型別要求的欄位 */
 const quote = (price: number, stale = false, prevClose: number | null = null): PriceMap[string] => ({
   price,
   prevClose,
+  open: null,
+  high: null,
+  low: null,
+  volume: null,
+  tradeDate: null,
+  tradeTime: null,
+  trial: false,
   asOf: '2026-07-25T12:00:00.000Z',
   source: stale ? 'cache' : 'edge',
   stale,

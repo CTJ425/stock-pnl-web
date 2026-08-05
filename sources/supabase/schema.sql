@@ -60,23 +60,41 @@ WITH CHECK (auth.uid() = user_id);
 -- 3. 共用現價快取資料表 (price_cache)
 --     Edge Function stock-price 的 L2 快取：TTL 內全站共用同一份報價，
 --     避免每個使用者重複請求外部 API。
---     TTL 由 Edge Function 判斷（非 DB 層）：台股 60 秒、美股 10 分鐘——
---     台股走證交所 MIS 即時行情，短 TTL 才能反映即時價；美股走 Yahoo，維持 10 分鐘。
+--     TTL 由 Edge Function 判斷（非 DB 層）：台股依時段（見 stock-price/quoteWindow.ts）、
+--     美股 10 分鐘——台股盤中走證交所 MIS 即時行情，短 TTL 才能反映即時價；
+--     13:30 收盤後價格已定案，TTL 一路拉長到隔天 08:25 試撮前，整段夜間不再對外抓價（0.6.36）。
 --     updated_at 記的是「報價實際取得時間」，前端據此判斷新鮮度，
 --     避免前端 localStorage 快取與本表 TTL 疊加（見 src/services/priceProxy.ts）。
 --     僅 Edge Function（service role）可寫入；一般使用者只能讀取，
 --     避免有人直接竄改快取價格影響所有人。
 --     prev_close 是昨收（0.6.34）：現價的漲跌著色要有基準，而快取一命中就不會再去問來源，
 --     基準不跟著存的話，顏色會在 TTL 內外之間閃 —— 有色、灰、有色。可為 NULL（來源沒給）。
+--     open / high / low / volume / trade_date / trade_time / trial 是報價卡欄位（0.6.36）：
+--     個股分析的報價卡要顯示今日開高低量與試撮價，而這些欄位本來就在同一筆來源回應裡。
+--     不一起存的話，快取一命中報價卡就會缺格 —— 與 prev_close 當初的理由相同。
 CREATE TABLE IF NOT EXISTS price_cache (
     key TEXT PRIMARY KEY,                         -- 'TPE:2330'、'US:AAPL'
     price NUMERIC NOT NULL CHECK (price > 0),
     prev_close NUMERIC CHECK (prev_close > 0),    -- 昨收；來源未提供時為 NULL
+    open NUMERIC CHECK (open > 0),                -- 今開
+    high NUMERIC CHECK (high > 0),                -- 今日最高
+    low NUMERIC CHECK (low > 0),                  -- 今日最低
+    volume NUMERIC CHECK (volume >= 0),           -- 累積成交量（張）；尚無成交為 0
+    trade_date TEXT,                              -- 交易日 YYYYMMDD（僅 MIS 提供）
+    trade_time TEXT,                              -- 最後撮合時間 HH:mm:ss（僅 MIS 提供）
+    trial BOOLEAN NOT NULL DEFAULT FALSE,         -- 抓價當下是否為試撮階段
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 既有環境補欄位（本檔可重複執行；新建的表已含此欄，這行為 no-op）
+-- 既有環境補欄位（本檔可重複執行；新建的表已含這些欄，以下為 no-op）
 ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS prev_close NUMERIC CHECK (prev_close > 0);
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS open NUMERIC CHECK (open > 0);
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS high NUMERIC CHECK (high > 0);
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS low NUMERIC CHECK (low > 0);
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS volume NUMERIC CHECK (volume >= 0);
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trade_date TEXT;
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trade_time TEXT;
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trial BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE price_cache ENABLE ROW LEVEL SECURITY;
 

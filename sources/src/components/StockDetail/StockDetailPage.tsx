@@ -8,10 +8,11 @@
  * 每段各自一張 `.glass` 卡（`.detail-card`），靠卡與卡之間的留白分邊界。
  * 選這個版型是因為它零互動、沒有「東西被收起來找不到」的問題。
  *
- * **持股那段刻意排在 PDF 擷取範圍之外**（`surfaceRef` 只包後三段）：
- * 共用報告一路以來就不含個資，持股數字是前端算的，不該因為版面合併而流進匯出檔。
+ * 0.6.36 把第一段的「我的持股」換成「報價」（今日開高低量 / 昨收 / 今收）。
+ * 持股當初排在 PDF 擷取範圍之外是因為那是個資；報價是公開市場資料，
+ * 沒有這個顧慮，所以 `surfaceRef` 改為包住四段全部。
  *
- * 這是純呈現元件：要看哪一檔、持股數字從哪來，都由呼叫端（AnalysisPage）決定。
+ * 這是純呈現元件：要看哪一檔、報價從哪來，都由呼叫端（AnalysisPage）決定。
  * 頁首左側的 selector 也由呼叫端傳入（目前是切換個股的下拉選單）。
  *
  * 資料流：Storage-first 讀盤後排程預產的共用報告，查無再即點即產 fallback。
@@ -33,13 +34,17 @@ import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
-import { HoldingTab } from './HoldingTab'
+import { QuoteTab, quoteMeta } from './QuoteTab'
 import { TechnicalTab } from './TechnicalTab'
+import type { PriceQuote } from '../../services/priceProxy'
 
 export interface StockDetailTarget {
   ticker: string
   name: string
+  /** 持股脈絡：畫面上不再顯示，但即點即產報告時仍會帶給後端 */
   holding: ReportHolding | null
+  /** 現價報價，供報價卡顯示；抓不到時為 null */
+  quote: PriceQuote | null
 }
 
 interface StockDetailPageProps extends StockDetailTarget {
@@ -76,7 +81,7 @@ function CardHead({ title, meta }: { title: string; meta?: string }) {
   )
 }
 
-export function StockDetailPage({ ticker, name, holding, selector }: StockDetailPageProps) {
+export function StockDetailPage({ ticker, name, holding, quote, selector }: StockDetailPageProps) {
   const [tab, setTab] = useState<DetailTab>('analysis')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
@@ -255,54 +260,52 @@ export function StockDetailPage({ ticker, name, holding, selector }: StockDetail
       {pdfNote && <div className="detail-note">{pdfNote}</div>}
 
       {tab === 'analysis' ? (
-        <div className="detail-stack">
-          {/*
-            持股在 surfaceRef **外面**，所以不會進 PDF。
-            這是刻意的：共用報告一路以來就不含個資，持股數字是前端依交易紀錄算的。
-            順序是使用者定的（持股 → 籌碼 → 基本面 → 技術面），別自行調換。
-          */}
-          <section className="glass detail-card" aria-labelledby="sec-holding">
-            <CardHead title="我的持股" meta="你的部位" />
-            <div id="sec-holding">
-              <HoldingTab holding={holding} />
+        /*
+          順序是使用者定的（報價 → 籌碼 → 基本面 → 技術面），別自行調換。
+          0.6.36 起第一段是報價（公開市場資料），四段都在 surfaceRef 內、都會進 PDF；
+          在那之前第一段是持股，因為含個資而被排除在匯出範圍外，故當時多包了一層。
+        */
+        <div className="detail-stack" ref={surfaceRef}>
+          <section className="glass detail-card" aria-labelledby="sec-quote">
+            <CardHead title="報價" meta={quoteMeta(quote)} />
+            <div id="sec-quote">
+              <QuoteTab quote={quote} />
             </div>
           </section>
 
-          <div className="detail-stack" ref={surfaceRef}>
-            <section className="glass detail-card" aria-labelledby="sec-chips">
-              <CardHead title="籌碼" meta="三大法人 · 融資融券" />
-              <div id="sec-chips">
-                {/* 籌碼的載入 / 錯誤只影響自己這張卡，其他三段照常顯示 */}
-                {status === 'loading' && (
-                  <div className="empty-state" style={{ padding: 32 }}>
-                    <RefreshCw size={28} className="spin" />
-                    <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
-                  </div>
-                )}
-                {status === 'error' && (
-                  <div className="notice notice-warn" role="alert">
-                    <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                    {errMsg}
-                  </div>
-                )}
-                {status === 'ready' && report && <ChipsTab report={report} />}
-              </div>
-            </section>
+          <section className="glass detail-card" aria-labelledby="sec-chips">
+            <CardHead title="籌碼" meta="三大法人 · 融資融券" />
+            <div id="sec-chips">
+              {/* 籌碼的載入 / 錯誤只影響自己這張卡，其他三段照常顯示 */}
+              {status === 'loading' && (
+                <div className="empty-state" style={{ padding: 32 }}>
+                  <RefreshCw size={28} className="spin" />
+                  <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+                </div>
+              )}
+              {status === 'error' && (
+                <div className="notice notice-warn" role="alert">
+                  <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                  {errMsg}
+                </div>
+              )}
+              {status === 'ready' && report && <ChipsTab report={report} />}
+            </div>
+          </section>
 
-            <section className="glass detail-card" aria-labelledby="sec-fundamental">
-              <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
-              <div id="sec-fundamental">
-                <FundamentalTab fundamental={fundamental} loading={fundLoading} />
-              </div>
-            </section>
+          <section className="glass detail-card" aria-labelledby="sec-fundamental">
+            <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
+            <div id="sec-fundamental">
+              <FundamentalTab fundamental={fundamental} loading={fundLoading} />
+            </div>
+          </section>
 
-            <section className="glass detail-card" aria-labelledby="sec-technical">
-              <CardHead title="技術面" meta="日 K · 成交量 · KD" />
-              <div id="sec-technical">
-                <TechnicalTab ticker={ticker} reloadKey={reloadKey} />
-              </div>
-            </section>
-          </div>
+          <section className="glass detail-card" aria-labelledby="sec-technical">
+            <CardHead title="技術面" meta="日 K · 成交量 · KD" />
+            <div id="sec-technical">
+              <TechnicalTab ticker={ticker} reloadKey={reloadKey} />
+            </div>
+          </section>
         </div>
       ) : (
         <div className="glass detail-body">

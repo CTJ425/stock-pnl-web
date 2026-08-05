@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { buildMisChannels, parseMisResponse } from '../../supabase/functions/stock-price/misParse.ts'
+import {
+  buildMisChannels,
+  parseMisResponse,
+  type MisQuote,
+} from '../../supabase/functions/stock-price/misParse.ts'
+
+/**
+ * 舊案例只餵 c/z/b/y，關心的也只有 price / prevClose。
+ * 0.6.36 起 MisQuote 多了開高低量與交易日 / 撮合時間，這個 helper 補上它們的預設值，
+ * 讓那些案例維持 toEqual 的嚴格比對（不放行多帶出來的欄位）。
+ */
+const q = (partial: Pick<MisQuote, 'ticker' | 'price' | 'prevClose'>): MisQuote => ({
+  open: null,
+  high: null,
+  low: null,
+  volume: null,
+  tradeDate: null,
+  tradeTime: null,
+  trial: false,
+  ...partial,
+})
 
 describe('buildMisChannels', () => {
   it('每檔同時產生 tse/otc channel', () => {
@@ -27,28 +47,28 @@ describe('buildMisChannels', () => {
 describe('parseMisResponse', () => {
   it('取成交價 z', () => {
     const data = { msgArray: [{ c: '2330', z: '605.0000', y: '600.0000' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: 600 }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: 600 })])
   })
 
   it('z 無效時退買一價 b 的第一檔', () => {
     const data = { msgArray: [{ c: '2330', z: '-', b: '604.00_603.00_602.00', y: '600.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 604, prevClose: 600 }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 604, prevClose: 600 })])
   })
 
   it('z 與 b 皆無效時退昨收 y（盤後 / 尚無成交）', () => {
     const data = { msgArray: [{ c: '2330', z: '-', b: '-', y: '600.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 600, prevClose: 600 }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 600, prevClose: 600 })])
   })
 
   // prevClose 是現價漲跌著色的基準（0.6.34）：它與成交價來自同一筆回應，不另外請求
   it('昨收 y 一併帶出；y 無效時為 null（不拿成交價冒充基準）', () => {
     const data = { msgArray: [{ c: '2330', z: '605.00', y: '-' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: null })])
   })
 
   it('支援千分位逗號價格', () => {
     const data = { msgArray: [{ c: '3008', z: '2,150.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '3008', price: 2150, prevClose: null }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '3008', price: 2150, prevClose: null })])
   })
 
   it('全部無效的列直接略過', () => {
@@ -58,7 +78,7 @@ describe('parseMisResponse', () => {
         { c: '2330', z: '605.00' },
       ],
     }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: null })])
   })
 
   it('同一代號多列時取第一列', () => {
@@ -68,7 +88,7 @@ describe('parseMisResponse', () => {
         { c: '2330', z: '999.00' },
       ],
     }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
+    expect(parseMisResponse(data)).toEqual([q({ ticker: '2330', price: 605, prevClose: null })])
   })
 
   // 取自 mis.twse.com.tw 的實際回應（2026-07-20 盤中，欄位已精簡）：
@@ -91,9 +111,9 @@ describe('parseMisResponse', () => {
       ],
     }
     expect(parseMisResponse(data)).toEqual([
-      { ticker: '2330', price: 2335, prevClose: 2290 },
-      { ticker: '0050', price: 99.85, prevClose: 100.15 },
-      { ticker: '6488', price: 1235, prevClose: 1250 },
+      q({ ticker: '2330', price: 2335, prevClose: 2290 }),
+      q({ ticker: '0050', price: 99.85, prevClose: 100.15 }),
+      q({ ticker: '6488', price: 1235, prevClose: 1250 }),
     ])
   })
 
@@ -102,5 +122,69 @@ describe('parseMisResponse', () => {
     expect(parseMisResponse({})).toEqual([])
     expect(parseMisResponse({ msgArray: 'oops' })).toEqual([])
     expect(parseMisResponse({ msgArray: [null, 42, { z: '605.00' }] })).toEqual([])
+  })
+
+  /*
+   * 0.6.36：報價卡要的開高低量與交易日 / 撮合時間，全部在同一筆回應裡。
+   * 下面這筆取自 mis.twse.com.tw 的實際回應（2026-08-05 15:23，收盤後 —— 注意此刻
+   * TWSE OpenAPI 的日收盤端點仍停在 8/4，這正是「今收」不採用該端點的原因）。
+   */
+  it('收盤後的真實回應：帶出開高低量、交易日與撮合時間', () => {
+    const data = {
+      msgArray: [
+        {
+          c: '2330',
+          n: '台積電',
+          z: '2405.0000',
+          y: '2320.0000',
+          o: '2385.0000',
+          h: '2415.0000',
+          l: '2370.0000',
+          v: '31851',
+          d: '20260805',
+          t: '13:30:00',
+          ip: '0',
+          ex: 'tse',
+        },
+      ],
+    }
+    expect(parseMisResponse(data)).toEqual([
+      {
+        ticker: '2330',
+        price: 2405,
+        prevClose: 2320,
+        open: 2385,
+        high: 2415,
+        low: 2370,
+        volume: 31851,
+        tradeDate: '20260805',
+        tradeTime: '13:30:00',
+        trial: false,
+      },
+    ])
+  })
+
+  it('試撮階段 ip=1：成交價欄位是試撮價，開高低尚未成形', () => {
+    const data = {
+      msgArray: [
+        { c: '2330', z: '2400.0000', y: '2320.0000', o: '-', h: '-', l: '-', v: '0', ip: '1' },
+      ],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.trial).toBe(true)
+    expect(quote.price).toBe(2400)
+    expect(quote.open).toBeNull()
+    // 尚無成交是 0 張，不是「取不到」—— 兩者在畫面上分別顯示 0 與「—」
+    expect(quote.volume).toBe(0)
+  })
+
+  it('壞掉的交易日 / 撮合時間一律當取不到，不硬塞進畫面', () => {
+    const data = {
+      msgArray: [{ c: '2330', z: '605.00', d: '2026-08-05', t: '13:30', v: '-' }],
+    }
+    const [quote] = parseMisResponse(data)
+    expect(quote.tradeDate).toBeNull()
+    expect(quote.tradeTime).toBeNull()
+    expect(quote.volume).toBeNull()
   })
 })
