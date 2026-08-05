@@ -136,6 +136,11 @@ describe('describeCron', () => {
     expect(describeCron('0 3,9 * * *')).toBe('每日 11:00 / 17:00')
   })
 
+  it('全市場的整點區間、僅平日：8-10 UTC → 台北 16/17/18 點', () => {
+    // market-daily。沒有這一條的話整張排程表就它一個印原始 cron 字串
+    expect(describeCron('0 8-10 * * 1-5')).toBe('週一至週五 16:00 / 17:00 / 18:00')
+  })
+
   it('認不得的表達式原樣回傳——顯示 cron 字串好過顯示翻錯的句子', () => {
     expect(describeCron('5 4 * * 0')).toBe('5 4 * * 0')
   })

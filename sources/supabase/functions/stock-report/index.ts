@@ -1167,10 +1167,15 @@ async function backfillProfit(
  * 單輪最多補幾天的法人買賣金額。
  *
  * BFI82U 一天一個請求（`type=month` 回的是整月合計，不是逐日），所以補歷史必須有預算。
- * 5 天／輪、cron 一天三班 → 半年份約兩週補完，同 MAX_BACKFILL_DAYS 的取捨：
- * 排程的時間預算要留給個股，那才是使用者打開就要看的東西。
+ *
+ * 0.6.32 由 5 調到 15：買進 / 賣出要把既有的 120 天全部重抓一輪，5 天／輪要 8 個工作天。
+ * 15 天／輪 × 一天三班 → 約 3 個工作天補完，之後每輪只剩 1–2 天要補，預算根本用不到。
+ *
+ * **時間預算撐得住**：每個請求自帶 10 秒逾時，實測單日請求約 0.2–0.4 秒，
+ * 15 個約 3–6 秒，加上兩份月報仍遠低於 cron 的 60 秒 `timeout_milliseconds`。
+ * 這一班是獨立 action（不與個股報告共用時間），所以不會排擠使用者打開就要看的東西。
  */
-const MAX_MARKET_INST_DAYS = 5
+const MAX_MARKET_INST_DAYS = 15
 
 /** 抓 rwd 的 JSON。失敗（含逾時）回 null 不拋，比照 fetchBig5Text 的容錯準則 */
 async function fetchRwdJson(url: string): Promise<unknown | null> {
@@ -1248,7 +1253,10 @@ async function syncMarket(now: Date): Promise<{
     anyOk = true
     institutionalFilled++
     const date = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6)}`
-    days = days.map((d) => (d.date === date ? { ...d, institutional: inst } : d))
+    // 走 mergeInstitutional 而不是直接覆寫：這一次若沒吐買賣金額，不可把已補好的洗掉
+    days = days.map((d) =>
+      d.date === date ? { ...d, institutional: mergeInstitutional(d.institutional, inst) } : d,
+    )
   }
 
   if (!anyOk) return { synced: false, days: have.length, institutionalFilled: 0, asOf: existing?.asOf ?? null }
@@ -1259,7 +1267,14 @@ async function syncMarket(now: Date): Promise<{
   */
   const signature = (ds: MarketDay[]) =>
     ds
-      .map((d) => `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${d.institutional ? 1 : 0}`)
+      .map(
+        (d) =>
+          // 法人要記到「有沒有買賣金額」而不只是「有沒有這一項」：0.6.32 的回補是去補
+          // 已經有差額的舊日子，只記 1/0 的話簽章一字不變，補到的買賣金額每輪都會被丟掉
+          `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${
+            d.institutional ? (d.institutional.buy ? 2 : 1) : 0
+          }`,
+      )
       .join(',')
   if (signature(days) === signature(have)) {
     return { synced: false, days: days.length, institutionalFilled, asOf: existing?.asOf ?? null }
@@ -2039,7 +2054,7 @@ async function handleAdminStatus(): Promise<Response> {
   // 各段彼此獨立，任一段掛掉不該讓整頁空白，缺的用 null 表示：
   // 會拋的那幾項（rpc / readLastRun / 直接查表）各自掛 .catch(() => null)，
   // downloadJson 與 latestChipSources / storageCoverage 本身就吞例外回 null。
-  const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage] = await Promise.all([
+  const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage, market] = await Promise.all([
     db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
     downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
     downloadJson<MacroFile>('macro/us.json'),
@@ -2054,6 +2069,7 @@ async function handleAdminStatus(): Promise<Response> {
       .catch(() => null),
     latestChipSources(),
     storageCoverage(),
+    downloadJson<MarketFile>('market/daily.json'),
   ])
 
   return json({
@@ -2080,10 +2096,42 @@ async function handleAdminStatus(): Promise<Response> {
         }
       : null,
     fx: fx ? { asOf: fx.asOf, count: fx.currencies?.length ?? 0 } : null,
+    market: marketStatus(market),
     batch: lastRun,
     probe,
     durationMs: Date.now() - startedAt,
   })
+}
+
+/**
+ * 全市場資料的抓取狀況（0.6.32）。
+ *
+ * 三個缺口分開數，因為它們代表不同的問題：
+ * - `missingInstitutional`：整天沒有法人金額。最新一兩天正常（15:00 才公布、逐日回補），
+ *   但如果連舊的日子都缺，就是回補排程沒在跑。
+ * - `missingBuySell`：有差額、沒有買進 / 賣出。這是 0.6.32 的回補進度條，
+ *   會隨每輪 5 天逐日歸零；歸零後就不該再增加。
+ * - `missingCandle`：缺開高低，畫不出日 K 的那幾天。
+ *
+ * 這裡不判定「延遲與否」——判定規則全部留在前端的 timeline.ts（純函式、有測試），
+ * 後端只吐事實。兩邊各判一次遲早會不一致。
+ */
+function marketStatus(m: MarketFile | null) {
+  if (!m) return null
+  const days = Array.isArray(m.days) ? m.days : []
+  const withInst = days.filter((d) => d?.institutional)
+  return {
+    schema: m.schema ?? null,
+    asOf: m.asOf ?? null,
+    days: days.length,
+    /** 最新一個交易日（有沒有法人金額不論） */
+    latestDate: days[days.length - 1]?.date ?? null,
+    /** 最新一個**有法人金額**的交易日。與上一項差一兩天是正常的回補時差 */
+    latestInstitutionalDate: withInst[withInst.length - 1]?.date ?? null,
+    missingInstitutional: days.length - withInst.length,
+    missingBuySell: withInst.filter((d) => !d.institutional?.buy).length,
+    missingCandle: days.filter((d) => d?.taiexOpen == null).length,
+  }
 }
 
 /**

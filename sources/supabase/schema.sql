@@ -661,7 +661,8 @@ SELECT cron.schedule(
                  'x-cron-secret', '<CRON_SECRET>'
                ),
     body    := '{"action":"sync-market"}'::jsonb,
-    -- 一個月報 + 最多 5 個單日請求，實測 2–4 秒。給 60 秒與其他 job 一致
+    -- 一個月報 + 最多 15 個單日請求（0.6.32 由 5 調高以回補買進 / 賣出），估 5–8 秒。
+    -- 給 60 秒與其他 job 一致
     timeout_milliseconds := 60000
   );
   $$

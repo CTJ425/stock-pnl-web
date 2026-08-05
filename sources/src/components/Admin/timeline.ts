@@ -262,5 +262,15 @@ export function describeCron(expr: string): string {
       .join(' / ')
     return `每日 ${hours}`
   }
+  // 整點的小時區間、僅平日（market-daily 是 `0 8-10 * * 1-5`）。
+  // 沒有這一條的話這一班會在排程表印出原始 cron 字串 —— 全表就它一個看不懂
+  const r = /^0\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
+  if (r) {
+    const from = Number(r[1])
+    const to = Number(r[2])
+    const hours: string[] = []
+    for (let h = from; h <= to; h++) hours.push(`${String((h + 8) % 24).padStart(2, '0')}:00`)
+    return `週一至週五 ${hours.join(' / ')}`
+  }
   return expr
 }

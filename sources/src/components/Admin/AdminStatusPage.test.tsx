@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 
 const { fetchAdminStatus } = vi.hoisted(() => ({ fetchAdminStatus: vi.fn() }))
 vi.mock('../../services/adminStatus', () => ({ fetchAdminStatus, isAdmin: vi.fn() }))
@@ -33,6 +33,18 @@ const status: AdminStatus = {
       action: 'sync-macro',
       targetRef: 'wqetxuhncvfidqnklyew',
       lastRun: '2026-07-30T15:00:00.124Z',
+      lastStatus: 'succeeded',
+      runsToday: 0,
+      failsToday: 0,
+    },
+    {
+      jobid: 14,
+      jobname: 'market-daily',
+      schedule: '0 8-10 * * 1-5',
+      active: true,
+      action: 'sync-market',
+      targetRef: 'wqetxuhncvfidqnklyew',
+      lastRun: '2026-07-30T10:00:00.000Z',
       lastStatus: 'succeeded',
       runsToday: 0,
       failsToday: 0,
@@ -76,6 +88,17 @@ const status: AdminStatus = {
     ],
   },
   fx: { asOf: '2026-07-31T03:00:02.713Z', count: 8 },
+  market: {
+    schema: 2,
+    asOf: '2026-07-31T02:00:01.000Z',
+    days: 120,
+    latestDate: '2026-07-31',
+    // 法人比量能晚一天是正常的（15:00 才公布、逐日回補）
+    latestInstitutionalDate: '2026-07-30',
+    missingInstitutional: 1,
+    missingBuySell: 12,
+    missingCandle: 0,
+  },
   batch: { runsToday: 1, runSig: 'x' },
   probe: { taipei_ymd: '20260730', taipei_time: '23:45', bwibbu_rows: 1081, borrow_rows: 1042 },
   durationMs: 928,
@@ -111,7 +134,32 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '排程' })
-    expect(screen.getAllByText('wqetxuhncvfidqnklyew').length).toBe(2)
+    // 每一個排程列都要標出目標環境，故綁 fixture 的排程數而不是寫死數字
+    expect(screen.getAllByText('wqetxuhncvfidqnklyew').length).toBe(status.schedules.length)
+  })
+
+  it('台股全市場：抓取週期取自 pg_cron，三個缺口分開數（0.6.32）', async () => {
+    fetchAdminStatus.mockResolvedValue(status)
+    render(<AdminStatusPage />)
+    await screen.findByRole('heading', { name: '台股全市場・量能與三大法人' })
+
+    // 日期字串整頁到處都有，斷言必須限定在這一段之內
+    const section = within(
+      screen.getByRole('heading', { name: '台股全市場・量能與三大法人' }).closest('.section')!,
+    )
+    // 週期直接翻譯 market-daily 的 cron，前端不另存一份常數
+    expect(section.getByText('週一至週五 16:00 / 17:00 / 18:00')).toBeTruthy()
+    expect(section.getByText('2026-07-31')).toBeTruthy() // 最新交易日
+    expect(section.getByText('2026-07-30')).toBeTruthy() // 法人只到前一天，正常
+    expect(section.getByText('1 天待補')).toBeTruthy()
+    expect(section.getByText('12')).toBeTruthy() // 買賣金額回補進度
+  })
+
+  it('台股全市場：讀不到檔案時說清楚，不是印一排 0', async () => {
+    fetchAdminStatus.mockResolvedValue({ ...status, market: null })
+    render(<AdminStatusPage />)
+    await screen.findByRole('heading', { name: '台股全市場・量能與三大法人' })
+    expect(screen.getByText(/讀不到 market\/daily.json/)).toBeTruthy()
   })
 
   it('時間軸列出台股盤後鏈，借券顯示為次日補抓', async () => {

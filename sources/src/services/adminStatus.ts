@@ -65,6 +65,23 @@ export interface AdminStatus {
   coverage: { daily?: number; fundamental?: number; held?: number }
   macro: { asOf: string; checkedAt: string | null; indicators: AdminMacroIndicator[] } | null
   fx: { asOf: string; count: number } | null
+  /**
+   * 全市場量能與三大法人的抓取狀況（0.6.32）。
+   *
+   * 三個缺口分開數，因為代表的問題不同：`missingInstitutional` 是整天沒有法人金額
+   * （最新一兩天缺屬正常），`missingBuySell` 是 0.6.32 買進 / 賣出的回補進度（會歸零），
+   * `missingCandle` 是畫不出日 K 的天數。判定規則在前端，後端只吐事實。
+   */
+  market: {
+    schema: number | null
+    asOf: string | null
+    days: number
+    latestDate: string | null
+    latestInstitutionalDate: string | null
+    missingInstitutional: number
+    missingBuySell: number
+    missingCandle: number
+  } | null
   batch: { runsToday?: number; runSig?: string | null } | null
   probe: {
     taipei_ymd?: string
@@ -116,6 +133,7 @@ export async function fetchAdminStatus(): Promise<AdminStatus | null> {
       coverage: d.coverage ?? {},
       macro: d.macro ?? null,
       fx: d.fx ?? null,
+      market: d.market ?? null,
       batch: d.batch ?? null,
       probe: d.probe ?? null,
       durationMs: typeof d.durationMs === 'number' ? d.durationMs : 0,

@@ -19,8 +19,8 @@
 /** 保留幾個交易日。約半年，夠看趨勢又不讓單檔 JSON 過大（每日一列約 200 bytes） */
 export const MARKET_DAYS_CAP = 120
 
-/** 三大法人**買賣差額**，單位一律元。正為買超、負為賣超 */
-export interface MarketInstitutional {
+/** 六個單位各一個金額，單位一律元。買進、賣出、買賣差額三種口徑共用這個形狀 */
+export interface MarketInstitutionalSide {
   /** 外資及陸資（不含外資自營商） */
   foreignTwd: number | null
   foreignDealerTwd: number | null
@@ -31,6 +31,18 @@ export interface MarketInstitutional {
   dealerHedgeTwd: number | null
   /** 官方揭露的合計。**不由前五項相加得來**，直接取端點的值 */
   totalTwd: number | null
+}
+
+/**
+ * 三大法人金額。**頂層六欄是買賣差額**（正為買超、負為賣超），維持 0.6.28 以來的位置不動。
+ *
+ * `buy` / `sell` 是 0.6.32 才加的買進與賣出金額（BFI82U 本來就有這兩欄，先前只取了差額）。
+ * **舊資料這兩項是 null** —— 0.6.32 之前補到的日子只存了差額，要靠回補逐日重抓才會長出來
+ * （見 `planInstitutionalBackfill`）。null 是「還沒重抓到」，不是「那天沒有買賣」。
+ */
+export interface MarketInstitutional extends MarketInstitutionalSide {
+  buy: MarketInstitutionalSide | null
+  sell: MarketInstitutionalSide | null
 }
 
 export interface MarketDay {
@@ -65,7 +77,8 @@ export interface MarketFile {
   days: MarketDay[]
 }
 
-export const MARKET_SCHEMA = 1
+/** 2：法人金額加上買進 / 賣出（0.6.32）。前端 `MIN_MARKET_SCHEMA` 仍收 1 —— 加欄位對舊讀者無害 */
+export const MARKET_SCHEMA = 2
 
 /** 整月的每日成交量值。`date` 只有年月有意義，日固定給 01 */
 export function fmtqikMonthUrl(yyyymm: string): string | null {
@@ -188,30 +201,50 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
   const iName = t.fields.indexOf('單位名稱')
   const iNet = t.fields.indexOf('買賣差額')
   if (iName < 0 || iNet < 0) return null
+  // 買進 / 賣出是 0.6.32 才取的。端點少了這兩欄仍要能解析出差額 —— 差額才是舊畫面的命脈
+  const iBuy = t.fields.indexOf('買進金額')
+  const iSell = t.fields.indexOf('賣出金額')
 
-  const byName = new Map<string, number | null>()
+  const byName = new Map<string, { net: number | null; buy: number | null; sell: number | null }>()
   for (const row of t.data) {
     if (!Array.isArray(row)) continue
     const name = String(row[iName] ?? '').trim()
-    if (name) byName.set(name, num(row[iNet]))
+    if (!name) continue
+    byName.set(name, {
+      net: num(row[iNet]),
+      buy: iBuy < 0 ? null : num(row[iBuy]),
+      sell: iSell < 0 ? null : num(row[iSell]),
+    })
   }
   if (byName.size === 0) return null
 
-  const pick = (...names: string[]): number | null => {
-    for (const n of names) {
-      const v = byName.get(n)
-      if (v !== undefined) return v
+  /** 同一組單位名稱要取三次（差額 / 買進 / 賣出），故把別名表抽出來共用 */
+  const side = (of: 'net' | 'buy' | 'sell'): MarketInstitutionalSide => {
+    const pick = (...names: string[]): number | null => {
+      for (const n of names) {
+        const v = byName.get(n)
+        if (v !== undefined) return v[of]
+      }
+      return null
     }
-    return null
+    return {
+      foreignTwd: pick('外資及陸資(不含外資自營商)', '外資及陸資'),
+      foreignDealerTwd: pick('外資自營商'),
+      trustTwd: pick('投信'),
+      dealerSelfTwd: pick('自營商(自行買賣)', '自營商'),
+      dealerHedgeTwd: pick('自營商(避險)'),
+      totalTwd: pick('合計'),
+    }
   }
 
+  const buy = side('buy')
+  const sell = side('sell')
   return {
-    foreignTwd: pick('外資及陸資(不含外資自營商)', '外資及陸資'),
-    foreignDealerTwd: pick('外資自營商'),
-    trustTwd: pick('投信'),
-    dealerSelfTwd: pick('自營商(自行買賣)', '自營商'),
-    dealerHedgeTwd: pick('自營商(避險)'),
-    totalTwd: pick('合計'),
+    ...side('net'),
+    // 整組都沒解出來就給 null，而不是留一個六欄全 null 的空殼 ——
+    // 回補判定看的正是「buy 是不是 null」，空殼會讓那天永遠不再重抓
+    buy: buy.totalTwd === null ? null : buy,
+    sell: sell.totalTwd === null ? null : sell,
   }
 }
 
@@ -223,6 +256,25 @@ export function parseBfi82u(json: unknown): MarketInstitutional | null {
  * 若整筆覆寫，補好的法人買賣超每晚都會被洗掉一次 ——
  * 與 mergeProfitQuarters 的 EPS 是同一個問題、同一個解法。
  */
+/**
+ * 併同一天的法人金額：新的整組取代舊的，但 `buy` / `sell` 缺就留用舊值。
+ *
+ * 為什麼要留：假如某天重抓時端點暫時沒吐買進 / 賣出欄，整組覆寫會把已經補好的
+ * 買賣金額洗成 null，下一輪又把它排進回補 —— 補了又掉、掉了又補的無限迴圈。
+ * 這與函式本身「既有值不會被沒有那一項的新一份蓋掉」是同一條原則。
+ */
+export function mergeInstitutional(
+  old: MarketInstitutional | null | undefined,
+  next: MarketInstitutional | null | undefined,
+): MarketInstitutional | null {
+  if (!next) return old ?? null
+  return {
+    ...next,
+    buy: next.buy ?? old?.buy ?? null,
+    sell: next.sell ?? old?.sell ?? null,
+  }
+}
+
 export function mergeMarketDays(
   prev: MarketDay[] | null | undefined,
   incoming: MarketDay[] | null | undefined,
@@ -238,7 +290,7 @@ export function mergeMarketDays(
       taiexOpen: d.taiexOpen ?? old?.taiexOpen ?? null,
       taiexHigh: d.taiexHigh ?? old?.taiexHigh ?? null,
       taiexLow: d.taiexLow ?? old?.taiexLow ?? null,
-      institutional: d.institutional ?? old?.institutional ?? null,
+      institutional: mergeInstitutional(old?.institutional, d.institutional),
     })
   }
   return [...byDate.entries()]
@@ -251,6 +303,12 @@ export function mergeMarketDays(
  * 這一輪要補哪幾天的法人金額（一天一個請求，故要預算）。
  *
  * 由新到舊：預算用完時留下的缺口是最舊的那幾天，對使用者的價值最低（同回補的一貫作法）。
+ *
+ * **「缺」包含只有差額、沒有買進金額的日子**（0.6.32）：買進 / 賣出是後來才取的，
+ * 0.6.32 之前補到的日子只存了差額。若仍只看 `!institutional`，那些日子永遠不會被重抓，
+ * 買進 / 賣出就會停在 null 直到它們被 cap 擠掉 —— 等於這個欄位對歷史資料永遠是空的。
+ * 改看 `buy` 之後，既有的 120 天會依預算逐日補齊，補完就自然停止。
+ *
  * @returns 'YYYYMMDD'，可直接餵給 `bfi82uDayUrl`
  */
 export function planInstitutionalBackfill(
@@ -259,7 +317,7 @@ export function planInstitutionalBackfill(
 ): string[] {
   if (maxDays <= 0) return []
   return (days ?? [])
-    .filter((d) => d?.date && !d.institutional)
+    .filter((d) => d?.date && (!d.institutional || !d.institutional.buy))
     .map((d) => d.date.replace(/-/g, ''))
     .sort()
     .reverse()

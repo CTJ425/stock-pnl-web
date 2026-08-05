@@ -117,6 +117,31 @@ describe('parseBfi82u', () => {
     expect(got.totalTwd).toBe(-16519607403)
   })
 
+  it('買進與賣出金額各自成組（0.6.32），差額仍取官方值不自行相減', () => {
+    const got = parseBfi82u(BFI82U)!
+    expect(got.buy!.foreignTwd).toBe(351436807764)
+    expect(got.sell!.foreignTwd).toBe(370627723398)
+    expect(got.buy!.trustTwd).toBe(35468123234)
+    expect(got.buy!.totalTwd).toBe(425338164528)
+    expect(got.sell!.totalTwd).toBe(441857771931)
+    // 買 − 賣確實等於官方差額，但頂層那個數字是端點給的，不是這裡算出來的
+    expect(got.buy!.totalTwd! - got.sell!.totalTwd!).toBe(got.totalTwd)
+  })
+
+  it('端點少了買進 / 賣出欄時仍解得出差額，buy / sell 給 null', () => {
+    const netOnly = {
+      stat: 'OK',
+      fields: ['單位名稱', '買賣差額'],
+      data: [['合計', '-16,519,607,403'], ['投信', '23,324,680,573']],
+    }
+    const got = parseBfi82u(netOnly)!
+    expect(got.totalTwd).toBe(-16519607403)
+    expect(got.trustTwd).toBe(23324680573)
+    // 六欄全 null 的空殼會讓回補判定以為已經補過，故整組給 null
+    expect(got.buy).toBeNull()
+    expect(got.sell).toBeNull()
+  })
+
   it('列順序顛倒也照樣對得上', () => {
     const shuffled = { ...BFI82U, data: [...BFI82U.data].reverse() }
     expect(parseBfi82u(shuffled)!.trustTwd).toBe(23324680573)
@@ -161,14 +186,15 @@ describe('mergeMarketDays', () => {
     taiexLow: null,
     institutional: null,
   })
-  const inst = {
-    foreignTwd: 1,
+  const side = (n: number) => ({
+    foreignTwd: n,
     foreignDealerTwd: 0,
-    trustTwd: 2,
-    dealerSelfTwd: 3,
-    dealerHedgeTwd: 4,
-    totalTwd: 10,
-  }
+    trustTwd: n * 2,
+    dealerSelfTwd: n * 3,
+    dealerHedgeTwd: n * 4,
+    totalTwd: n * 10,
+  })
+  const inst = { ...side(1), buy: null, sell: null }
 
   it('依日期去重、由舊到新', () => {
     const merged = mergeMarketDays([day('2026-08-04', 2)], [day('2026-08-03', 1)])
@@ -191,6 +217,18 @@ describe('mergeMarketDays', () => {
     expect(merged[0].tradeValueTwd).toBe(999)
   })
 
+  it('重抓沒吐買進 / 賣出時留用已補好的那份（0.6.32）', () => {
+    // 否則會變成「補了又被洗掉、洗掉又排進回補」的無限迴圈
+    const filled = { ...side(1), buy: side(2), sell: side(3) }
+    const prev = [{ ...day('2026-08-03', 1), institutional: filled }]
+    const merged = mergeMarketDays(prev, [
+      { ...day('2026-08-03', 999), institutional: { ...side(9), buy: null, sell: null } },
+    ])
+    expect(merged[0].institutional!.totalTwd).toBe(90) // 差額用新的
+    expect(merged[0].institutional!.buy).toEqual(side(2)) // 買賣金額留舊的
+    expect(merged[0].institutional!.sell).toEqual(side(3))
+  })
+
   it('超過上限時砍最舊的', () => {
     const many = Array.from({ length: 5 }, (_, i) => day(`2026-08-0${i + 1}`, i))
     const merged = mergeMarketDays(many, [], 3)
@@ -199,7 +237,16 @@ describe('mergeMarketDays', () => {
 })
 
 describe('planInstitutionalBackfill', () => {
-  const day = (date: string, hasInst: boolean): MarketDay => ({
+  const side = () => ({
+    foreignTwd: 1,
+    foreignDealerTwd: 1,
+    trustTwd: 1,
+    dealerSelfTwd: 1,
+    dealerHedgeTwd: 1,
+    totalTwd: 1,
+  })
+  /** hasBuy=false 代表 0.6.32 之前補到的舊資料：有差額、沒有買進 / 賣出 */
+  const day = (date: string, hasInst: boolean, hasBuy = true): MarketDay => ({
     date,
     tradeVolumeShares: null,
     tradeValueTwd: null,
@@ -210,14 +257,7 @@ describe('planInstitutionalBackfill', () => {
     taiexHigh: null,
     taiexLow: null,
     institutional: hasInst
-      ? {
-          foreignTwd: 1,
-          foreignDealerTwd: 1,
-          trustTwd: 1,
-          dealerSelfTwd: 1,
-          dealerHedgeTwd: 1,
-          totalTwd: 1,
-        }
+      ? { ...side(), buy: hasBuy ? side() : null, sell: hasBuy ? side() : null }
       : null,
   })
 
@@ -229,6 +269,12 @@ describe('planInstitutionalBackfill', () => {
       day('2026-08-04', false),
     ]
     expect(planInstitutionalBackfill(days, 2)).toEqual(['20260804', '20260803'])
+  })
+
+  it('只有差額、沒有買進金額的舊資料也算缺，會被排進回補（0.6.32）', () => {
+    // 否則 0.6.32 之前補到的 120 天永遠長不出買進 / 賣出
+    const days = [day('2026-08-01', true, false), day('2026-08-02', true, true)]
+    expect(planInstitutionalBackfill(days, 5)).toEqual(['20260801'])
   })
 
   it('補滿或預算為 0 時回空陣列，呼叫端據此完全不發請求', () => {

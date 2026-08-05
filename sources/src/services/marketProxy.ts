@@ -10,14 +10,26 @@
  */
 import { downloadReportsJson } from './reportsBucket'
 
-/** 三大法人買賣差額，單位元。正為買超、負為賣超 */
-export interface MarketInstitutional {
+/** 六個單位各一個金額，單位元。買進、賣出、買賣差額三種口徑共用這個形狀 */
+export interface MarketInstitutionalSide {
   foreignTwd: number | null
   foreignDealerTwd: number | null
   trustTwd: number | null
   dealerSelfTwd: number | null
   dealerHedgeTwd: number | null
   totalTwd: number | null
+}
+
+/**
+ * 三大法人金額。頂層六欄是**買賣差額**（正為買超、負為賣超）。
+ *
+ * `buy` / `sell` 是 0.6.32 起才有的買進與賣出金額。**舊資料為 null** ——
+ * 那些日子是 0.6.32 之前補到的，只存了差額，要等盤後排程逐日重抓才會長出來。
+ * null 是「還沒重抓到」，不是「那天沒有買賣」，所以畫面一律顯示「—」而不是 0。
+ */
+export interface MarketInstitutional extends MarketInstitutionalSide {
+  buy: MarketInstitutionalSide | null
+  sell: MarketInstitutionalSide | null
 }
 
 export interface MarketDay {
@@ -58,7 +70,7 @@ function numOrNull(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
-function normalizeInstitutional(v: unknown): MarketInstitutional | null {
+function normalizeSide(v: unknown): MarketInstitutionalSide | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
   return {
@@ -69,6 +81,13 @@ function normalizeInstitutional(v: unknown): MarketInstitutional | null {
     dealerHedgeTwd: numOrNull(o.dealerHedgeTwd),
     totalTwd: numOrNull(o.totalTwd),
   }
+}
+
+function normalizeInstitutional(v: unknown): MarketInstitutional | null {
+  const net = normalizeSide(v)
+  if (!net) return null
+  const o = v as Record<string, unknown>
+  return { ...net, buy: normalizeSide(o.buy), sell: normalizeSide(o.sell) }
 }
 
 function normalizeDay(v: unknown): MarketDay | null {

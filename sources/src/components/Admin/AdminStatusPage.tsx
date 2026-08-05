@@ -241,6 +241,9 @@ export function AdminStatusPage() {
     ).length +
     macroRows.filter((r) => r.state === 'warn').length
 
+  // 抓取週期直接取自 pg_cron，不在前端另寫一份常數 —— 兩份遲早漂移，而漂移看不出來
+  const marketCron = (data.schedules ?? []).find((s) => s.jobname === 'market-daily') ?? null
+
   return (
     <>
       {/* ── 結論先行 ─────────────────────────────────────── */}
@@ -581,6 +584,75 @@ export function AdminStatusPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* ── 台股全市場（0.6.32）───────────────────────────── */}
+      <div className="section glass" style={SECTION_PAD}>
+        <div className="rpt-section-head">
+          <h3 className="head-tight">台股全市場・量能與三大法人</h3>
+          <span className="source-tag">
+            {marketCron ? describeCron(marketCron.schedule) : 'market-daily'}
+          </span>
+        </div>
+        {!data.market ? (
+          <p className="ast-note" style={{ marginTop: 12 }}>
+            讀不到 market/daily.json —— 排程還沒跑過，或檔案被刪掉了。
+          </p>
+        ) : (
+          <>
+            <div className="kpi-grid" style={{ marginTop: 14 }}>
+              <div className="glass kpi">
+                <div className="kpi-label">最新交易日</div>
+                <div className="kpi-value">{data.market.latestDate ?? '—'}</div>
+                <div className="kpi-sub">
+                  共 {data.market.days} 個交易日・schema {data.market.schema ?? '—'}
+                </div>
+              </div>
+              <div className="glass kpi">
+                <div className="kpi-label">法人金額最新到</div>
+                <div className="kpi-value">{data.market.latestInstitutionalDate ?? '—'}</div>
+                {/*
+                  與上一格差一兩天是正常的：法人 15:00 才公布、且一天一個請求逐日補。
+                  這裡刻意不亮燈 —— 判定「幾天算延遲」需要交易日曆，而我們沒有。
+                */}
+                <div className="kpi-sub">
+                  {data.market.missingInstitutional > 0
+                    ? `${data.market.missingInstitutional} 天待補`
+                    : '全部補齊'}
+                </div>
+              </div>
+              <div className="glass kpi">
+                <div className="kpi-label">買進 / 賣出回補</div>
+                <div className="kpi-value">
+                  {data.market.missingBuySell === 0 ? (
+                    '已補齊'
+                  ) : (
+                    <>
+                      {data.market.missingBuySell}
+                      <span className="ast-unit"> 天待補</span>
+                    </>
+                  )}
+                </div>
+                {/* 0.6.32 之前補到的日子只有差額，靠回補逐日長出來，補完就不該再增加 */}
+                <div className="kpi-sub">每輪最多補 5 天</div>
+              </div>
+              <div className="glass kpi">
+                <div className="kpi-label">缺開高低</div>
+                <div className="kpi-value">
+                  {data.market.missingCandle}
+                  <span className="ast-unit"> / {data.market.days} 天</span>
+                </div>
+                <div className="kpi-sub">缺的那幾天畫不出日 K</div>
+              </div>
+            </div>
+            <p className="ast-note" style={{ marginTop: 12 }}>
+              檔案產出於 {data.market.asOf ? fmtUpdatedAt(data.market.asOf) : '—'}
+              {data.market.asOf && `・${agoLabel(data.market.asOf)} 前`}
+              ・成交量值與指數一次抓一整月，法人金額一天一個請求 ——
+              兩者的日期覆蓋範圍本來就不同步，「待補」不等於異常。
+            </p>
+          </>
+        )}
       </div>
 
       <div className="section glass" style={SECTION_PAD}>

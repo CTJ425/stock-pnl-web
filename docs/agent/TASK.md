@@ -8,6 +8,26 @@
 
 ## 📋 Active Tasks
 
+### Task 65: 法人買進 / 賣出 / 趨勢；抓取週期與全市場監控（0.6.32）
+- **Status**: ✅ **程式完成** —— ⚠️ **Edge Function 尚未部署**，買進 / 賣出要部署後才會產生
+- **Agent**: Claude
+- **Timestamp**: 2026-08-05 10:05:00 Asia/Taipei
+- **需求**：法人統計表要有買進、賣出與趨勢；要看得到抓取週期；狀態監控要進後台。
+- **後端**（`twMarket.ts` / `index.ts`）：
+  - `parseBfi82u` 多取「買進金額」「賣出金額」（端點本來就有，先前只取差額）。
+  - `MarketInstitutional` 頂層六個差額欄位不動，新增 `buy` / `sell`，共用
+    新抽出的 `MarketInstitutionalSide`。`MARKET_SCHEMA` 1 → 2，前端 MIN 維持 1。
+  - `planInstitutionalBackfill` 判定改為「沒有 `buy` 也算缺」，否則既有 120 天永遠不重抓。
+  - 新增 `mergeInstitutional`：重抓沒吐買賣金額時留用舊值，擋掉「補了又被洗掉」的迴圈。
+  - **`syncMarket` 的寫檔簽章改記三態**（0 / 1 / 2）：原本只記 `institutional ? 1 : 0`，
+    回補舊日子時簽章一字不變 → 整份檔案不寫回 Storage → 補到的買賣金額每輪被丟掉。
+  - `MAX_MARKET_INST_DAYS` 5 → **15**（`schema.sql` cron 註解同步）：120 天由 8 個工作天縮到約 3 個。
+  - `handleAdminStatus` 多吐 `market`（最新日、法人補到哪天、三個缺口）。後端只吐事實。
+- **前端**：卡片表格可展開單日明細（六單位 × 買進 / 賣出 / 買賣超）、新增趨勢欄
+  （15 日走勢＋連 N 日同向）、hint 寫出抓取週期；後台新增「台股全市場」一段；
+  `describeCron` 補上 `0 H-H * * 1-5` 形狀（market-daily 原本印原始 cron 字串）。
+- **回補時程**：每輪最多 15 天 × 每日 3 輪，120 天約 3 個工作天補齊；補完前那些日子沒有展開鈕。
+
 ### Task 64: 年度收益新增「報酬率」欄（0.6.31）
 - **Status**: ✅ **完成** —— 純前端，不需要部署 Edge Function
 - **Agent**: Claude

@@ -8,12 +8,19 @@
  * 單位陷阱：來源是**元**，畫面一律換算成**億元**（大盤單日成交 8,855 億，
  * 用元顯示是 885,506,043,091 —— 沒有人這樣讀）。個股籌碼的單位是「股」，兩者不可比較。
  */
-import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { fetchMarketDaily, type MarketData } from '../../services/marketProxy'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Minus, Plus, RefreshCw } from 'lucide-react'
+import {
+  fetchMarketDaily,
+  type MarketData,
+  type MarketDay,
+  type MarketInstitutionalSide,
+} from '../../services/marketProxy'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
+import { CHART_COLORS } from '../Charts/chartColors'
+import { sparkline } from '../Charts/sparkline'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
 /** 成交金額與大盤 K 線顯示幾個交易日。約一季，看得出趨勢又不會把 X 軸擠爛 */
@@ -49,9 +56,139 @@ function shortDate(date: string): string {
   return m ? `${m[1]}/${m[2]}` : date
 }
 
+/**
+ * 趨勢欄的走勢線看幾天（0.6.32）。
+ *
+ * 刻意比表格的 7 列長：只用表內那幾天的話，第一列只有一個點畫不出線、第二列兩個點
+ * 也看不出什麼。取 15 天讓每一列都有足夠的脈絡，代價是最舊那幾列的線會伸出表格範圍
+ * —— 但那正是「趨勢」該有的意思：它回答的是「這天處在什麼走勢裡」，不是「表格內發生什麼」。
+ */
+const TREND_DAYS = 15
+
+const SPARK_W = 64
+const SPARK_H = 18
+
+/** 六個單位的顯示順序與欄名。表頭、展開明細、KPI 都吃這一份，避免三處各寫一次而漂移 */
+const UNITS: ReadonlyArray<{ key: keyof MarketInstitutionalSide; label: string }> = [
+  { key: 'foreignTwd', label: '外資' },
+  { key: 'foreignDealerTwd', label: '外資自營商' },
+  { key: 'trustTwd', label: '投信' },
+  { key: 'dealerSelfTwd', label: '自營商（自行）' },
+  { key: 'dealerHedgeTwd', label: '自營商（避險）' },
+  { key: 'totalTwd', label: '合計' },
+]
+
+/**
+ * 截至某一天為止的合計買賣超走勢與連續同向天數。
+ *
+ * `values` 由舊到新且**只含有法人金額的日子** —— 把還沒補到的日子留在序列裡，
+ * 走勢線會出現憑空的斷點，連續天數也會被一個「還沒補到」打斷而低報。
+ */
+function trendAt(values: number[], endIdx: number): { points: number[]; streak: number } {
+  const points = values.slice(Math.max(0, endIdx - TREND_DAYS + 1), endIdx + 1)
+  const last = values[endIdx]
+  let streak = 0
+  if (last !== undefined && last !== 0) {
+    const sign = Math.sign(last)
+    for (let i = endIdx; i >= 0 && Math.sign(values[i]) === sign; i--) streak++
+  }
+  return { points, streak }
+}
+
+/**
+ * 趨勢儲存格：迷你走勢線＋連續同向天數。
+ *
+ * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向），與同卡片的長條圖一致。
+ * 不足兩點時 `sparkline` 回 null，此時只印文字 —— 一個點連不成線，硬畫會變成一個小點，
+ * 看起來像壞掉的圖而不是「資料還不夠」。
+ */
+function TrendCell({ points, streak }: { points: number[]; streak: number }) {
+  const last = points[points.length - 1]
+  if (last === undefined) return <td className="num">—</td>
+  const g = sparkline(points, SPARK_W, SPARK_H)
+  const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+  const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : ''
+  return (
+    <td className="num">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+        {g && (
+          <svg
+            className="mac-spark"
+            viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
+            style={{ width: SPARK_W, height: SPARK_H, flex: 'none' }}
+          >
+            <path d={g.area} fill={color} opacity="0.16" />
+            <polyline
+              points={g.line}
+              fill="none"
+              stroke={color}
+              strokeWidth="1.6"
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle cx={g.lastX} cy={g.lastY} r="2.2" fill={color} />
+          </svg>
+        )}
+        {label && (
+          <span className={chipClass(last)} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+            {label}
+          </span>
+        )}
+      </div>
+    </td>
+  )
+}
+
+/**
+ * 展開某一天的買進 / 賣出明細。
+ *
+ * **這裡用巢狀表格，與年度收益的處置相反**，而且是刻意的：那邊的明細列與父列
+ * 是同一組欄位（同樣是金額、同樣的口徑），欄寬必須對齊才讀得下去；這裡的明細是
+ * 「六個單位 × 買進 / 賣出 / 買賣超」，跟父列的「六個單位各一欄」根本是不同的形狀，
+ * 硬塞進同一組欄位只會逼出一堆 colSpan 佔位格。
+ */
+function DayDetail({ day }: { day: MarketDay }) {
+  const buy = day.institutional?.buy
+  const sell = day.institutional?.sell
+  return (
+    <tr className="detail-row">
+      <td colSpan={UNITS.length + 2} style={{ padding: '4px 14px 10px 34px' }}>
+        <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th>{day.date} 明細</th>
+              <th className="num">買進</th>
+              <th className="num">賣出</th>
+              <th className="num">買賣超</th>
+            </tr>
+          </thead>
+          <tbody>
+            {UNITS.map((u) => {
+              const b = toBillion(buy?.[u.key] ?? null)
+              const s = toBillion(sell?.[u.key] ?? null)
+              const n = toBillion(day.institutional?.[u.key] ?? null)
+              return (
+                <tr key={u.key}>
+                  <td>{u.label}</td>
+                  <td className="num">{fmtBillion(b)}</td>
+                  <td className="num">{fmtBillion(s)}</td>
+                  <td className={`num ${chipClass(n)}`}>{fmtBillionSigned(n)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  )
+}
+
 export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -113,6 +250,22 @@ export function TwMarketSection() {
     否則剛收盤那幾小時整排會顯示「—」，看起來像壞掉。
   */
   const latestInst = [...days].reverse().find((d) => d.institutional) ?? null
+
+  /*
+    趨勢欄的底稿：取全部 60 天裡「有法人金額」的日子，由舊到新。
+    表格只有 7 列，但走勢要看 15 天 —— 所以底稿不能只用 instDays。
+  */
+  const trendDays = days.filter((d) => d.institutional?.totalTwd != null)
+  const trendValues = trendDays.map((d) => d.institutional!.totalTwd!)
+  const trendIdx = new Map(trendDays.map((d, i) => [d.date, i]))
+
+  const toggle = (date: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
 
   // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
@@ -222,32 +375,57 @@ export function TwMarketSection() {
           <thead>
             <tr>
               <th>日期</th>
-              <th className="num">外資</th>
-              <th className="num">外資自營商</th>
-              <th className="num">投信</th>
-              <th className="num">自營商（自行）</th>
-              <th className="num">自營商（避險）</th>
-              <th className="num">合計</th>
+              {UNITS.map((u) => (
+                <th className="num" key={u.key}>
+                  {u.label}
+                </th>
+              ))}
+              <th className="num">趨勢</th>
             </tr>
           </thead>
           <tbody>
             {[...instDays].reverse().map((d) => {
-              const i = d.institutional
-              const cell = (v: number | null | undefined) => {
-                const b = toBillion(v ?? null)
-                return <td className={`num ${chipClass(b)}`}>{fmtBillionSigned(b)}</td>
-              }
+              const inst = d.institutional
+              const idx = trendIdx.get(d.date)
+              const { points, streak } = idx === undefined
+                ? { points: [], streak: 0 }
+                : trendAt(trendValues, idx)
+              const isOpen = expanded.has(d.date)
+              // 買進 / 賣出是 0.6.32 才存的，舊資料只有差額 —— 沒有明細就不給展開鈕
+              const canExpand = Boolean(inst?.buy)
               return (
-                <tr key={d.date}>
-                  <td>{d.date}</td>
-                  {/* 這一天還沒補到法人金額時整列給「—」，不要用 0 冒充 */}
-                  {cell(i?.foreignTwd)}
-                  {cell(i?.foreignDealerTwd)}
-                  {cell(i?.trustTwd)}
-                  {cell(i?.dealerSelfTwd)}
-                  {cell(i?.dealerHedgeTwd)}
-                  {cell(i?.totalTwd)}
-                </tr>
+                <Fragment key={d.date}>
+                  <tr>
+                    <td>
+                      <div className="cell-tree">
+                        {canExpand ? (
+                          <button
+                            className="year-toggle"
+                            onClick={() => toggle(d.date)}
+                            aria-expanded={isOpen}
+                            aria-label={`${isOpen ? '收合' : '展開'} ${d.date} 的買進賣出明細`}
+                          >
+                            {isOpen ? <Minus size={13} /> : <Plus size={13} />}
+                          </button>
+                        ) : (
+                          <span className="toggle-slot" />
+                        )}
+                        {d.date}
+                      </div>
+                    </td>
+                    {/* 這一天還沒補到法人金額時整列給「—」，不要用 0 冒充 */}
+                    {UNITS.map((u) => {
+                      const b = toBillion(inst?.[u.key] ?? null)
+                      return (
+                        <td className={`num ${chipClass(b)}`} key={u.key}>
+                          {fmtBillionSigned(b)}
+                        </td>
+                      )
+                    })}
+                    <TrendCell points={points} streak={streak} />
+                  </tr>
+                  {isOpen && <DayDetail day={d} />}
+                </Fragment>
               )
             })}
           </tbody>
@@ -257,8 +435,15 @@ export function TwMarketSection() {
       <p className="hint" style={{ marginTop: 8 }}>
         買賣超是全市場的買進金額減掉賣出金額，紅色代表法人整體買超。
         表格前五欄相加等於合計 —— 合計取的是官方揭露值，不是我們自己加總的。
+        點日期左邊的「＋」可展開那天的買進與賣出金額。趨勢欄是合計買賣超近{' '}
+        {TREND_DAYS} 個交易日的走勢，不受表格只顯示 {instDays.length} 列的限制。
         法人金額約 15:00–15:30 公布，且是逐日回補的 —— 最新一兩天沒有長條是還沒補到，
         不是那天沒有法人進出。成交金額與加權指數則收盤後就有。
+      </p>
+      <p className="hint" style={{ marginTop: 6 }}>
+        <b>抓取週期</b>：台北時間 <b>16:00 / 17:00 / 18:00，僅平日</b>（排程 <code>market-daily</code>）。
+        每輪抓一份當月的成交量值與指數，另補最多 5 個交易日的法人金額 —— 法人是一天一個請求，
+        所以歷史是逐日補上來的，不是一次到位。詳細狀況見管理員後台的「資料抓取狀況」。
       </p>
     </div>
   )
