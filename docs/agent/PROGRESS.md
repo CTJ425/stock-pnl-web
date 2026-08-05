@@ -1,9 +1,41 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.6.43 —— audit list closed (BUG-019 … BUG-022) and 0.6.42's Edge halves deployed
-- Status: **All 8 audit findings fixed and live in both environments; 890 tests green**
-- Timestamp: 2026-08-06 01:30:00 Asia/Taipei
+- Action: Session handoff —— state recorded, `TASK.md` archived back down to what is actually open
+- Status: **0.6.43 live everywhere; nothing in flight; two checks wait for market hours (Task 76)**
+- Timestamp: 2026-08-06 01:50:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-06 01:50:00 Asia/Taipei (handoff)
+
+- **Agent**: Claude
+- **Action**: Write down where things stand and archive the finished tasks
+
+### What shipped in this session
+
+0.6.36 → **0.6.43** in one evening: the quote/indicator merge and the macro card merge, the yearly search box, the
+two daily-volume tables, `market-daily` moved to 15:00–18:30 every half hour, the remaining Chinese code comments
+translated, and then a run of defects —— BUG-011 through BUG-022 —— five of which were found by the schedule change
+tripping over things that had quietly assumed the old shape.
+
+### The pattern worth carrying forward
+
+Nearly every defect this session was **a program that knew something and did not say it**. `describeCron` knew it
+had failed to parse. `writeStore` knew the save had failed. `trial` was set on every quote and read by one consumer.
+The Yahoo fallback knew it had no matching time. None of these were wrong computations; they were computations
+whose result never reached the surface. That is why the audit found more by asking "who reads this?" than by
+looking for bad arithmetic —— and why BUG-019's fix (make the unparsed case announce itself) is the one most likely
+to pay for itself.
+
+The other repeated lesson is mechanical: **a git push does not deploy an Edge Function**, and `npx tsc --noEmit`
+is not the type gate that `npm run build` is. Both cost a round trip tonight, both are now in the task notes.
+
+### Housekeeping
+
+`TASK.md` was back up to 219 lines with seven finished tasks in it. Tasks 68–75 moved verbatim to
+`TASK_ARCHIVE.md`; the still-open verifications that were living inside Task 69 were **lifted out into Task 76
+first**, so archiving did not bury them. `TASK.md` now holds a state summary, Task 76, and the recurring Task 47.
 
 ---
 

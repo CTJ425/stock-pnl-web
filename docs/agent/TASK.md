@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-05 21:05:00 Asia/Taipei
+- Timestamp: 2026-08-06 01:50:00 Asia/Taipei
 
 ---
 
@@ -10,201 +10,45 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
+## 📍 Where the project stands (2026-08-06 01:50)
+
+- **Version 0.6.43**, `main` = `origin/main` = `origin/dev` = `2e4103e`, working tree clean, Pages deployed.
+- **Edge Functions are current in both environments** —— `stock-price` `2797ede37f0a` (prod v16 / test v12),
+  `stock-report` `c8825b1f4908` (prod v30 / test v44), `verify_jwt` `true` / `false` respectively.
+- **`market-daily` runs Taipei 15:00–18:30 every half hour** in both environments (`0,30 7-10 * * 1-5`).
+- **890 tests across 57 files**; `npm run build` and `npm run lint` clean apart from four long-standing
+  `only-export-components` warnings.
+- The 2026-08-06 codebase audit is closed: all eight findings fixed (BUG-015 … BUG-022).
+
+⚠️ **Two environment facts the next session must know**:
+1. `supabase link` currently points at **production** (`kxnxadaghidwumqsqneu`). Re-link before any
+   `db query --linked` against test.
+2. The user pasted two project keys into the chat on 2026-08-05. They were never written to disk (repo and
+   scratchpad both scanned, no match), but they are exposed and **rotation was advised and not confirmed done**.
+
 ## 📋 Active Tasks
 
-### Task 75: Deploy the Edge half of 0.6.42
-- **Status**: ✅ **Done — deployed to both environments** (user authorised 2026-08-06 01:2x)
-  - Test: `stock-price` v11 → **v12**, `stock-report` v43 → **v44**
-  - Prod: `stock-price` v15 → **v16**, `stock-report` v29 → **v30**
-  - Both environments now report the **same** shas —— `stock-price` `2797ede37f0a`, `stock-report` `c8825b1f4908`
-    —— moved off `733891b768b2` / `91d1dce6ac72`. `verify_jwt` stayed `true` / `false` respectively.
-  - ⚠️ Watch for one extra T86 `revisions` count on the first post-deploy round: expected, see BUG-018.
+### Task 76: Two checks that can only be made during market hours
+- **Status**: ⏳ **Waiting for a trading session** —— first opportunity 2026-08-06
 - **Agent**: Claude
-- **Timestamp**: 2026-08-06 01:10:00 Asia/Taipei
-- **Why**: two of the four audit fixes are in Edge Function code, and **a git push does not deploy those** ——
-  the lesson from BUG-011, now the second time it applies.
-  - `stock-price` ← `quoteWindow.ts` (BUG-016, the 10-minute retry bound). Prod is on **v15**, sha `733891b768b2`.
-  - `stock-report` ← `pollPlan.ts` (BUG-018, the fingerprint separator). Prod is on **v29**, sha `91d1dce6ac72`.
-- **Commands** (from `sources/`, dev first per §13.1; **`--no-verify-jwt` is required for `stock-report` and must
-  not be used for `stock-price`**):
-  ```bash
-  supabase functions deploy stock-price  --project-ref wqetxuhncvfidqnklyew
-  supabase functions deploy stock-report --project-ref wqetxuhncvfidqnklyew --no-verify-jwt
-  supabase functions deploy stock-price  --project-ref kxnxadaghidwumqsqneu
-  supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt
-  ```
-- **Verify by sha, not version number**: both must move off the values recorded above, and the two environments
-  should end up matching each other.
-- ⚠️ **Expected one-off after the `stock-report` deploy**: every T86 fingerprint changes, so the first round counts
-  one extra `revisions` and restarts the stability count. Harmless, settles by itself —— do not read it as a bug.
-- **Until deployed**: the browser half of BUG-016 is live (a client asks at most once per 10 minutes), but Edge
-  still applies the 60-second rule to its own cache; BUG-018 has no effect at all, it is Edge-only.
+- **Timestamp**: 2026-08-06 01:50:00 Asia/Taipei
+- **Lifted out of Task 69 before archiving it**, so that archiving would not bury them.
 
-### Task 74: Codebase audit —— all 8 findings closed
-- **Status**: ✅ **Done** —— AUDIT-01…04 in 0.6.42 (BUG-015…018), AUDIT-05…08 in 0.6.43 (BUG-019…022)
-- **Agent**: Claude
-- **Timestamp**: 2026-08-06 00:20:00 Asia/Taipei
-- **Where**: `BUG_FIX.md` → "Codebase audit 2026-08-06", entries AUDIT-01 … AUDIT-08.
-- **The two worth acting on first**, both in the price path:
-  1. **AUDIT-01**: `trial` is carried on every quote but only the quote card reads it, so the dashboard prints
-     unrealised P&L from the indicative auction price during 08:30–09:00 and 13:25–13:30 with no marker.
-  2. **AUDIT-02**: the Yahoo fallback returns no matching time, which since 0.6.37 means a 60-second TTL at any
-     hour —— unbounded overnight polling whenever MIS is down, plus a silent ~10% shift in the volume figure.
-- **Two are proven by execution, not by reading**: AUDIT-03 (month-end arithmetic loses up to 3 days) and
-  AUDIT-04 (`row.join('')` lets two different rows share a fingerprint).
-- **One is a suggestion rather than a defect**: AUDIT-05 —— make `describeCron`'s fall-through self-announcing, so
-  the next unmatched cron shape is visible immediately instead of after a user notices. BUG-012 and BUG-014 were
-  both that shape.
-- **Scope note**: this pass read the core logic and both Edge Functions. Not covered: the AI client's provider
-  matrix, the PDF path, and CSS/layout.
-
-### Task 73: Daily volume tables, per stock and market-wide (0.6.38)
-- **Status**: ✅ Done, merged to `main` with 0.6.38 — pure frontend, no Edge Function deployment needed
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 22:40:00 Asia/Taipei
-- **Requirement**: The user asked for a daily volume table on the technical section (with KD and volume swapped so the
-  table sits under its own chart), and the same for the market card. Two layout options each were mocked up in
-  `docs/architecture/volume_table_layouts.html` with **real** 2026-08-05 numbers; the user picked A for both
-  (collapsed by default, expandable).
-- **Design points that must survive future edits**:
-  - 量比 is the reason the per-stock table exists —— a bar chart shows relative height, the ratio says "N times the
-    20-day average". It is computed over the full series, not the visible slice.
-  - Collapsed at 20 (per stock) / 7 (market) rows. **Do not** replace 顯示全部 with a capped scrolling box: 0.2.x had
-    one and it was deliberately removed.
-  - The per-stock table and the 行情 card **disagree by design** (35,214 張 vs 31,851 張 on 2026-08-05, ~10%).
-    Two sources, two figures; the hint says so.
-- **No backend change**: `tradeVolumeShares` / `transactions` were already in `market/daily.json`, never displayed.
-- **Test trap found**: adding a second `.data-table` to the market card broke 8 existing tests that selected rows
-  with an unscoped `.data-table tbody tr`. Both tables now carry `aria-label`, and the tests scope by it.
-- **Verification**: 882 tests across 57 files (added 3), `npm run build` and `npm run lint` clean.
-  ⚠️ `npx tsc --noEmit` passed while `npm run build` failed —— the build type-checks the test files too, and a
-  `TechnicalView` fixture was missing the new field. Run the build, not just tsc.
-
-### Task 72: Earlier BFI82U schedule, three UI merges, yearly search (0.6.38)
-- **Status**: ✅ Done and merged to `main`; cron applied to **both** environments (user authorised).
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 21:40:00 Asia/Taipei
-- **1. `market-daily` 16:00 → 15:00, every half hour** (`0,30 7-10 * * 1-5`): applied with `cron.alter_job`
-  (keeps the existing command, so the plaintext `CRON_SECRET` is not needed), verified with the target ref in the
-  same query per the `supabase-ops` skill. Test at 21:2x, production right after; `schema.sql` §10b updated to match.
-  **Open question for tomorrow**: whether the 15:00 round actually wins —— it needs FMTQIK to have published too,
-  not just BFI82U. Read `market/daily.json`'s `asOf`.
-- **2. 個股分析「報價」→「行情」, and 技術面's 指標摘要 merged into it**: dropped the summary's
-  收盤 / 開高低 / 成交量 (the quote grid shows the same things live), kept 均線 / KD / RSI / MACD 柱 / 量比.
-  ⚠️ The two halves can be **different days** —— that is why the summary keeps its own data date; do not "tidy" it away.
-  `daily/{ticker}.json` moved up to `StockDetailPage` (`useDailySeries`) so two sections share one download.
-- **3. 總經頁美國 chip 列與走勢表合併為一張卡**; **4. 年度收益搜尋欄位** (filters the aggregation, not just the rows).
-- **Verification**: 879 tests across 57 files (added 2), `npm run build` and `npm run lint` clean (same 4 pre-existing
-  fast-refresh warnings). Three tests that locked the old layout were rewritten to lock the new one.
-
-### Task 71: Deploy the 0.6.37 `stock-price` fix to both environments
-- **Status**: ✅ **Done — deployed to both environments** (dev v11 at 20:57, prod v15 at 20:58, user explicitly authorised)
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 21:05:00 Asia/Taipei
-- **What is done**: 0.6.37 fixes BUG-011 (the after-close lock froze an intraday snapshot). Version is synchronised
-  across `version.ts` / `package.json` / `README.md`, `main` and `dev` are both at `2dac793`, and the browser half
-  went live with the push to `main`.
-- **What is not done**: the fix also changed `supabase/functions/stock-price/{index.ts,quoteWindow.ts}`, and the
-  Edge Function was never redeployed. Read-only check at 2026-08-05 20:51 —— prod `stock-price` **v14**
-  (deployed 16:47) and dev **v10** (deployed 16:01) carry the **same** `ezbr_sha256 00ce1004…`, i.e. the 0.6.36 build;
-  the 0.6.37 commit came later, at 17:06. So neither environment is running the fix.
-- **Why it matters**: the two layers must agree (`SPEC.md`, "Taiwan stocks no longer price-catch after closing").
-  With only the browser fixed, any device whose local cache expires still gets the locked snapshot from Edge.
-- **What was run** (from `sources/`, dev first per §13.1; **`--no-verify-jwt` is for `stock-report` only**,
-  `stock-price` keeps `verify_jwt: true` and did):
-  ```bash
-  supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew   # v10 → v11, 20:57
-  supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu   # v14 → v15, 20:58
-  ```
-- **Evidence it is really the new code**: `ezbr_sha256` went from `00ce1004…` — the 0.6.36 build **both** environments
-  were sharing — to `733891b768b2…`, again identical in both. The sha is the evidence; a bumped version number only
-  proves that *something* was uploaded, and the `supabase-ops` skill records a case where a newer version was older code.
-- **The skill's preferred audit was not available**: `functions download` still fails with "Access token not provided"
-  in this environment, exactly as Task 69 found — `deploy` and `list` use a different auth path and work fine.
-  The cross-environment sha match substitutes for the file-by-file diff.
-- **Not verified at runtime**: that a `price_cache` row with a null `trade_time` now refreshes instead of staying frozen.
-  It needs either a service key (only the anon key is in `sources/.env`) or `db query --linked`, and linking has global
-  side effects. The rule itself is covered by the `quoteWindow` unit tests; the natural end-to-end check is Task 69
-  item 2 tomorrow morning.
-- ⚠️ `supabase link` still points at **production** (`kxnxadaghidwumqsqneu`) — see the `supabase-ops` skill;
-  re-link before any command that relies on the linked project, especially any writing `db query --linked`.
-- **Note on process**: 0.6.37 was committed straight to `main`, against CLAUDE.md §13.1 (dev first). The two branches
-  are back in sync, so nothing needs unwinding — recorded so the next Agent does not read it as the norm.
-
-### Task 69: Move individual stock analysis to quote card; Stop fetching prices after Taiwan stock market closes (0.6.36-dev.1)
-- **Status**: ✅ **Done, deployed to both environments** (Test at 16:10, Prod at 16:47; 0.6.36 merged to main)
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 16:05:00 Asia/Taipei
-- **Requirement**: The user wants to "remove my holdings card from individual stock analysis, replace it with open / high / volume / previous close / low / estimate / current close", and hopes to "update to current price once the daily closing price is fetched, and stop calling API thereafter, until 8:25 next day before trial matching resumes". The reason is to prevent price baseline confusion when checking overnight.
-- **Original idea rejected by actual test**: The user originally wanted to use TWSE `STOCK_DAY_AVG_ALL` to define today's close.
-  Tested at 2026-08-05 15:23 (two hours after close), the `Date` for that endpoint and `STOCK_DAY_ALL` were still `1150804` (previous trading day), 2330 returned 2320 —— that was yesterday's close; the actual closing price for the day was 2405 from MIS, a 3.6% difference.
-  Following the original idea would use yesterday's close as today's close and lock it for 17 hours, creating exactly the confusion the user wanted to avoid.
-  **Switched to MIS as single source** (same response includes `o/h/l/v/y/z/d/t/ip`), user confirmed adoption.
-- **Closing detection based on clock instead of data arrival**: `twQuoteTtlMs` in `quoteWindow.ts` is a stateless pure function,
-  does not check trading calendar —— after 13:30 on weekends and holidays it naturally falls into long TTL. See `SPEC.md` "Quote Card and TWSE Fetching Hours".
-- **What is kept**: The holding data flow in `buildHoldingRows` and `generateReport` remains the same
-  (dropdown needs to list holdings, click-to-generate needs context), just that the holding numbers are no longer displayed on screen.
-- **Verification**: `npm test -- --run` all 869 tests across 56 files passed (added 9 tests in `quoteWindow.test.ts`,
-  10 tests in `QuoteTab.test.tsx`, expanded misParse / priceProxy); `npm run build`, `npm run lint` are clean.
-- **Test environment deployment record (2026-08-05 16:00–16:10, user explicitly authorized)**:
-  1. `supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew`
-     → v9 upgraded to **v10**, `verify_jwt` remains `true` (**without** `--no-verify-jwt`, which is for `stock-report` only).
-  2. `price_cache` completed with 7 new columns, column order:
-     `key,price,updated_at,prev_close,open,high,low,volume,trade_date,trade_time,trial`.
-  3. End-to-end test (hitting test env Edge): 2330 and 6488 returned all 7 columns
-     (`tradeDate: 20260805`, `tradeTime: 13:30:00`, `trial: false`);
-     AAPL's `tradeDate/tradeTime` are null, `volume` 67779 shares (Yahoo's shares already divided by 1000), all as designed.
-  4. **Close lock test successful**: Rolled back `updated_at` of `TPE:2330` by 5 minutes and fetched again,
-     the returned `asOf` stayed at 5 minutes ago —— old 60s TTL would definitely refetch, this is conclusive evidence.
-- **Operating environment side effects**: `supabase link` is now pointing to **Test environment** `wqetxuhncvfidqnklyew`
-  (link is global, see `supabase-ops` skill). Must re-link before touching the production environment.
-- **Exception to audit method**: The skill requires using `functions download` for file-by-file comparison, but `download` in this environment
-  cannot get access token (`projects list` / `deploy` work fine, using different auth paths).
-  Substituted with "online version update time (v9 = 08-05 11:35, matches 0.6.34 deployment schedule)" + "end-to-end returns new columns"
-  —— the latter is more powerful than file comparison because it proves **the actual running behavior online**.
-- **Pending verification (cannot confirm after hours, need to check next day during market hours)**:
-  1. There is an approx 10% discrepancy between MIS `v` and TWSE daily report `TradeVolume` (31,851 shares vs Yahoo's 35,214 shares),
-     speculated to be after-hours fixed-price trading not included —— unit is confirmed as "shares", discrepancy source to be reconciled next day with `STOCK_DAY_ALL`.
-     **Still blocked as of 2026-08-05 20:50** —— `STOCK_DAY_ALL` was re-checked seven hours after the close and its
-     `Date` is *still* `1150804`, 2330 still at `ClosingPrice` 2320. So the endpoint lags by more than a full evening,
-     not merely a couple of hours; reconcile against 08-05 once it finally publishes. Two extra facts worth keeping:
-     that endpoint returns 1377 TWSE records only —— **6488 is not in it at all** (TPEx listing), so it could never have
-     served as a single source anyway, and its `TradeVolume` is in **shares** (2330 on 08-04: 41,021,199), while the
-     quote card's unit is lots. Convert before comparing.
-  2. MIS actual returned `ip` / `t` during trial matching period (08:30–09:00), confirm "Estimate" cell displays as expected.
-     Do this **after** Task 71 is deployed, otherwise Edge is still running 0.6.36 and the observation would not describe
-     the shipped code.
-
-### Task 70: Fix backend timeline base date (0.6.36-dev.2)
-- **Status**: ✅ **Done and deployed** (0.6.36 merged to main) —— pure frontend, no Edge Function deployment needed
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 16:35:00 Asia/Taipei
-- **Cause**: User asked "After the 16:00 batch started, the status of 'TWSE After-Hours 2026-08-04' is still old, is this a BUG?".
-  Investigation revealed two things:
-  1. **Data source timing, not a bug**: The batch `T86?selectType=ALLBUT0999` is not yet published at 16:00 / 16:15
-     (same API with `selectType=ALL` has data, but that dataset includes warrants/ETFs totaling 16575 records,
-     which is a different dataset from the 1339 stock records needed for batch, production times are not synchronized). In the 16:30 batch, `t86_today` becomes true,
-     `data_ymd` advances to 20260805, exactly as documented by actual tests in `timeline.ts` comments.
-  2. **But uncovered a real bug (BUG-010)**: Overall market institutional data arrived by 16:00 but was judged as delayed and drawn off-axis.
-- **Fix**: Base date changed to take the maximum data date across sources (`roundBaseYmd`), see `FIXED_BUG.md` BUG-010.
-- **User decision**: Base date takes max (instead of using quote's tradeDate to determine trading day —— that would require Edge changes to add columns);
-  Fix it now, append to 0.6.36-dev.2.
-- **Verification**: `npm test -- --run` all **874 tests across 57 files passed**; `npm run build` is clean.
-
-### Task 68: Change US Macro layout to Taiwan Institutional table format (0.6.35)
-- **Status**: ✅ **Done** —— pure frontend, no Edge Function deployment needed, no Supabase changes
-- **Agent**: Claude
-- **Timestamp**: 2026-08-05 13:20:00 Asia/Taipei
-- **Requirement**: Looking at the Taiwan institutional table, the user asked to "change CPI and other indices to be similar to the three major institutional net buys/sells",
-  and settled on the design after viewing two templates.
-- **Transposition instead of copying**: The trend/streak in the institutional table describes the "Total" series, but the five macro indicators have no total
-  (units are %, thousands, indices). Changed to one indicator per row so trend/streak has something to describe.
-- **Slimming cards to a single chip line** (only name and latest value); period, description, and lagging badge are all moved into the table row.
-- ⚠️ **Semantic color changes (intentional)**: The entire table unifies on "Red = higher than previous, Green = lower than previous",
-  Non-farm payrolls are no longer colored based on the sign of the value —— "+57k but 72k less than previous" is now green.
-  The hint below the table, `IndicatorRow` comments, and a test are locked to this behavior; **DO NOT DELETE**.
-- **`Charts/SparkCell.tsx`**: The mini trend line is extracted as a shared component, used by both tables;
-  streak determination is kept separate for each (sign vs ascending/descending are two different things).
+1. **Did the 15:00 `market-daily` round actually win?** (from 0.6.38)
+   Read `market/daily.json`'s `asOf`: if it lands near 15:00 the early round works; if it stays at 16:00 or later,
+   the binding constraint is **FMTQIK**, not BFI82U —— today's institutional amount is only fetched once today's
+   date exists in the merged day list, and that list comes from FMTQIK. Nothing is broken either way; the answer
+   decides whether the 15:00/15:30 rounds are worth keeping.
+2. **The 成交量 discrepancy between the two sources** (Task 69's original item).
+   Measured 2026-08-05 on 2330: daily batch **35,214 張** vs MIS **31,851 張**, about 10%. Both are now visible on
+   the same page (the 行情 card is MIS, the new 成交量 table is the batch). Reconcile against `STOCK_DAY_ALL` once
+   it publishes —— re-checked at 20:50 on 08-05 it was **still** on `1150804`, so it lags by more than an evening.
+   Two facts already established: that endpoint carries 1377 TWSE records only (**6488 is absent**, TPEx), and its
+   `TradeVolume` is in **shares**, not lots.
+3. **Also worth one glance**: the first post-deploy T86 round will report one extra `revisions`. That is the
+   expected one-off from changing the fingerprint separator (BUG-018) —— do not open a bug for it.
+4. **Trial-matching window (08:30–09:00)**: confirm the new 「試撮」 badge appears on the dashboard and the 「預估」
+   cell fills in on the quote card. This is the on-screen confirmation BUG-015 was fixed from reading, not seeing.
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**
