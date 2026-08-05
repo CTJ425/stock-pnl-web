@@ -9,7 +9,8 @@
 ## 📋 Active Tasks
 
 ### Task 67: 現價漲跌著色；三張圖同步 hover；總經卡片連續期數（0.6.34）
-- **Status**: ✅ **完成** —— ⚠️ 測試區已加欄位並部署；**正式區未動，合併 `main` 前必須補**
+- **Status**: ✅ **完成並已併入 `main`** —— 兩區皆已加欄位、部署 `stock-price`；
+  正式區同時補上 0.6.31–0.6.34 累積的 `stock-report`（v29，`--no-verify-jwt`）
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 11:45:00 Asia/Taipei
 - **需求**（使用者三點）：① 現價字級調回、以昨收或今開為基準著色；② 台股三張圖排成上中下、
@@ -22,10 +23,12 @@
   高度 180/180/140；`.chart-pair` 移除。
 - **③ 總經卡片**：採 **b 方案**（卡片上的文字 chip，非表格欄）。判定的是與前一期的升降，
   不是正負號；連 2 期以上才顯示；不套漲跌色（升降本身無好壞）。
-- ⚠️ **部署狀態**：測試區 `wqetxuhncvfidqnklyew` 已跑 `ALTER TABLE price_cache
-  ADD COLUMN IF NOT EXISTS prev_close NUMERIC` 且 `stock-price` 已部署並實打驗證。
-  **正式區 `kxnxadaghidwumqsqneu` 未動** —— 合併到 `main` 時要先 ALTER 再部署，
-  順序反了會讓回寫快取整批失敗。
+- ✅ **部署狀態（2026-08-05 11:52 完成）**：兩區都已跑 `ALTER TABLE price_cache
+  ADD COLUMN IF NOT EXISTS prev_close NUMERIC` 並部署 `stock-price`
+  （測試區 wqetxuhncvfidqnklyew、正式區 kxnxadaghidwumqsqneu v13），皆實打驗證。
+  正式區另補上停在 0.6.30 的 `stock-report`（v29，`--no-verify-jwt`）。
+  **順序是「先 ALTER、再部署函式、最後推 main」** —— 反過來會讓快取回寫整批失敗，
+  或讓 Pages 上線的前端跑在後端前面（畫面整排平盤色）。
 
 ### Task 66: 台股市場卡片整理；全市場法人進到後台時間軸（0.6.33）
 - **Status**: ✅ **完成** —— 純前端，Edge Function 不需重新部署

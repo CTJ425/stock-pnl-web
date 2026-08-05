@@ -1,8 +1,42 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
+- Action: 0.6.34 合併到 `main`，正式區補上 0.6.31–0.6.34 的後端異動
+- Status: **完成 —— 兩區程式碼與 schema 已同步**
+- Timestamp: 2026-08-05 11:52:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 11:52:00 Asia/Taipei（0.6.34 併入 main）
+
+- **Agent**: Claude
+- **Action**: dev → main 快轉合併並部署正式區
+
+**正式區先前停在 0.6.30 的程式碼**，所以這次一口氣要補 0.6.31–0.6.34 的後端異動。
+順序刻意是「先後端、後推 main」—— push 到 `main` 會立刻觸發 Pages，
+前端上線時後端若還沒補，畫面會整排平盤色。
+
+| 項目 | 正式區處置 |
+| ---- | ---- |
+| `price_cache.prev_close` | `ALTER TABLE … ADD COLUMN IF NOT EXISTS` 已執行（身分檢查：27 筆快取） |
+| `stock-price` | v12 → v13（預設 `verify_jwt=true`） |
+| `stock-report` | v28 → v29，**帶 `--no-verify-jwt`**（確認部署後仍是 `verify_jwt=false`） |
+| `sync-market` cron | 已存在（jobid 15，`0 8-10 * * 1-5` UTC＝台北 16–18 點），未新增 |
+
+實打驗證：`TPE:2330` 2400／昨收 2320、`US:AAPL` 309.38／303.42，
+`price_cache` 的 `prev_close` 已回寫。
+
+**所有 Supabase 操作都走 Management API（URL 帶 project ref），不用 `db query --linked`** ——
+當下 CLI link 的其實是正式區，用 `--linked` 改測試區會無聲寫錯專案（`supabase-ops` skill 記載的坑）。
+
+⚠️ **法人買進 / 賣出在正式區需要時間回補**：`stock-report` 每班最多補 15 天（`MAX_MARKET_INST_DAYS`），
+0.6.32 之前補到的日子只有差額。畫面上那些日子的展開鈕要等排程跑過才會出現。
+
+---
+
+- Agent: Claude
 - Action: 現價漲跌著色；台股三張圖同步 hover；總經卡片改用連續期數（0.6.34 定版）
-- Status: **完成 —— 841 測試全過；⚠️ 測試區已加 `price_cache.prev_close` 並部署 stock-price，正式區未動**
+- Status: **完成 —— 841 測試全過；兩區皆已部署（見上一則）**
 - Timestamp: 2026-08-05 11:45:00 Asia/Taipei
 
 ---
