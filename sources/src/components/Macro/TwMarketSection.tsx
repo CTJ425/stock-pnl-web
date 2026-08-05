@@ -19,7 +19,7 @@ import {
 import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
-import { sparkline } from '../Charts/sparkline'
+import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 
 /** 成交金額與大盤 K 線顯示幾個交易日。約一季，看得出趨勢又不會把 X 軸擠爛 */
@@ -74,9 +74,6 @@ const STACK_VOLUME_H = 140
  */
 const TREND_DAYS = 15
 
-const SPARK_W = 64
-const SPARK_H = 18
-
 /** 六個單位的顯示順序與欄名。表頭、展開明細、KPI 都吃這一份，避免三處各寫一次而漂移 */
 const UNITS: ReadonlyArray<{ key: keyof MarketInstitutionalSide; label: string }> = [
   { key: 'foreignTwd', label: '外資' },
@@ -111,8 +108,7 @@ function trendAt(values: number[], endIdx: number): { points: number[]; streak: 
  * 有標籤的列會把線往左推，整欄的線頭線尾對不齊，看起來像每一列的走勢範圍不一樣。
  * 分欄之後線固定寬、固定位置，列與列之間才比較得起來。
  *
- * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向）。不足兩點時 `sparkline` 回 null，
- * 此時整格留白 —— 一個點連不成線，硬畫會變成一個小點，看起來像壞掉的圖而不是「資料還不夠」。
+ * 走勢線用**極性色**（紅買超綠賣超，依最後一天的方向）；畫不出線時 `SparkCell` 自己印「—」。
  */
 function TrendCells({ points, streak }: { points: number[]; streak: number }) {
   const last = points[points.length - 1]
@@ -124,35 +120,17 @@ function TrendCells({ points, streak }: { points: number[]; streak: number }) {
       </>
     )
   }
-  const g = sparkline(points, SPARK_W, SPARK_H)
   const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
   // 連 1 日不是趨勢，不印（此時連續欄給「—」而不是留白，留白會被讀成資料缺漏）
   const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : null
   return (
     <>
       <td className="num" style={{ width: SPARK_W + 18 }}>
-        {g ? (
-          <svg
-            className="mac-spark"
-            viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
-            style={{ width: SPARK_W, height: SPARK_H, display: 'block', marginLeft: 'auto' }}
-          >
-            <path d={g.area} fill={color} opacity="0.16" />
-            <polyline
-              points={g.line}
-              fill="none"
-              stroke={color}
-              strokeWidth="1.6"
-              vectorEffect="non-scaling-stroke"
-            />
-            <circle cx={g.lastX} cy={g.lastY} r="2.2" fill={color} />
-          </svg>
-        ) : (
-          '—'
-        )}
+        <SparkCell
+          points={points}
+          color={color}
+          ariaLabel={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
+        />
       </td>
       <td className={`num ${label ? chipClass(last) : ''}`} style={{ whiteSpace: 'nowrap' }}>
         {label ?? '—'}

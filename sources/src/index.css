@@ -2778,9 +2778,63 @@ a.hmenu-item {
   margin-left: auto;
 }
 
-/* 連續期數 chip（0.6.34）。沿用中性的 .badge，刻意不套漲跌色——見 MacroPage 的 StreakChip */
-.mac-streak {
-  margin-top: 8px;
+/* ── 總經指標：瘦身成一行的 chip 與表格列內的小字（0.6.35）──────── */
+
+/*
+ * 0.6.35 把五張 KPI 卡壓成一行。用 flex-wrap 而不是 grid：
+ * 五個 chip 寬度不一（「消費者信心 49.5」比「核心 CPI +2.57%」長），
+ * 等寬網格會在短的那幾個右邊留下大片空白。
+ */
+.mac-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mac-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-strong);
+  white-space: nowrap;
+}
+
+.mac-chip-label {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+/* 值用等寬數字：五個 chip 並排時，比例數字會讓小數點上下對不齊 */
+.mac-chip-value {
+  font-size: 14.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 指標名稱與「落後 N 期」徽章同一行 */
+.mac-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 指標說明（原本在卡片底部）。字卡瘦身後改掛在列裡，仍然看得到 */
+.mac-row-note {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+/* 期別與「截至該期」：附註性質，不與主數字爭視線 */
+.mac-row-period {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-weight: 400;
+  margin-top: 2px;
 }
 
 /*

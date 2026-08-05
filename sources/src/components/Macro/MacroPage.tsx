@@ -13,9 +13,11 @@
  * 消費者信心是**指數值**。一律讀資料自帶的 `unit`，不要在這裡寫死。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Globe, RefreshCw } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Globe, Minus, Plus, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { CHART_COLORS } from '../Charts/chartColors'
+import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 import { latestPeriod, periodsBehind } from './macroPeriod'
 import { TwMarketSection } from './TwMarketSection'
 
@@ -42,19 +44,28 @@ function fmtValue(v: number | null | undefined, unit: string): string {
   return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
 }
 
+/** 與前一期的差；兩期都要有值才算得出來（缺一期回 null，不以 0 冒充「持平」） */
+function delta(latest: MacroPoint | null, previous: MacroPoint | null): number | null {
+  const a = latest?.value
+  const b = previous?.value
+  if (typeof a !== 'number' || typeof b !== 'number') return null
+  return a - b
+}
+
+/** 帶正負號的變化量。單位跟著指標走（千人不取小數、其餘兩位） */
+function fmtDelta(d: number | null, unit: string): string {
+  if (d === null) return '—'
+  if (Math.abs(d) < 0.005) return '持平'
+  const shown = unit === '千人' ? Math.abs(d).toLocaleString('en-US') : Math.abs(d).toFixed(2)
+  return `${d > 0 ? '+' : '−'}${shown}`
+}
+
 /**
- * 與前一期的差。
- *
- * 物價的年增率與信心指數，「比上期高」本身沒有好壞之分（通膨升高對股市未必是壞事，
- * 端看情境），所以這裡只陳述變化量，不套用漲綠跌紅的損益色。
+ * 每一期與其前一期的差，由舊到新，長度與 `points` 相同（第一期沒有前一期，為 null）。
+ * 表格的顏色、走勢線方向、連續判定全部由這一份推導，避免三處各算一次而漂移。
  */
-function fmtDelta(latest: MacroPoint | null, previous: MacroPoint | null, unit: string): string {
-  if (!latest?.value || !previous?.value) return '—'
-  const d = latest.value - previous.value
-  const abs = Math.abs(d)
-  const shown = unit === '千人' ? abs.toLocaleString('en-US') : abs.toFixed(2)
-  if (abs < 0.005) return '與上期持平'
-  return `較上期${d > 0 ? '增加' : '減少'} ${shown}`
+function deltaSeries(points: MacroPoint[]): Array<number | null> {
+  return points.map((p, i) => (i === 0 ? null : delta(p, points[i - 1])))
 }
 
 /**
@@ -86,48 +97,146 @@ function risingStreak(points: MacroPoint[]): { direction: 1 | -1; periods: numbe
 }
 
 /**
- * 「連 N 期上升 / 下降」的 chip（0.6.34，取代原本的迷你走勢線）。
+ * 瘦身後的指標 chip（0.6.35 取代原本的五張 KPI 卡）。
  *
- * **刻意不套漲紅跌綠**：物價年增率或信心指數「比上期高」本身沒有好壞之分
- * （同本檔 `fmtDelta` 的取捨），套損益色等於幫使用者下一個資料裡沒有的結論。
- * 落後中的指標另外標明 —— 那個「連續」的末端不是現在，不講清楚會被讀成當前趨勢。
+ * 只留名稱與最新值：期別、較上期、走勢、連續、說明全部在下方那張表裡，
+ * 卡片版等於把同一份數字說兩次。這一行的用途只有「現在幾 %」的快速一覽。
  */
-function StreakChip({ ind, behind }: { ind: MacroIndicator; behind: number }) {
-  const streak = risingStreak(ind.points)
-  if (!streak) return null
+function IndicatorChip({ ind }: { ind: MacroIndicator }) {
   return (
-    <div className="kpi-sub">
-      <span className="badge mac-streak">
-        連 {streak.periods} 期{streak.direction > 0 ? '上升' : '下降'}
-        {behind > 0 && '（截至該期）'}
-      </span>
+    <div className="mac-chip">
+      <span className="mac-chip-label">{ind.label}</span>
+      <span className="mac-chip-value">{fmtValue(ind.latest?.value ?? null, ind.unit)}</span>
     </div>
   )
 }
 
-function IndicatorCard({ ind, behind }: { ind: MacroIndicator; behind: number }) {
+/**
+ * 展開某個指標的逐期明細（0.6.35）。
+ *
+ * 巢狀表格的寫法與台股法人表的 `DayDetail` 一致：明細是「期別 × 數值 / 較上期」，
+ * 與父列的欄位形狀不同，硬塞進同一組欄位只會逼出一堆 colSpan 佔位格。
+ * 由新到舊，與父表相反 —— 表格第一列要是最近的那期，走勢線才由舊到新。
+ */
+function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
+  const deltas = deltaSeries(ind.points)
+  const rows = ind.points.map((p, i) => ({ point: p, d: deltas[i] })).reverse()
   return (
-    <div className="glass kpi">
-      <div className="kpi-label">
-        {ind.label}
-        {/* 只有落後時才掛徽章：五張卡都掛「最新」等於沒有訊號 */}
-        {behind > 0 && <span className="badge badge-warn mac-behind">落後 {behind} 期</span>}
-      </div>
-      <div className={`kpi-value ${ind.kind === 'momThousands' ? chipClass(ind.latest?.value) : ''}`}>
-        {fmtValue(ind.latest?.value ?? null, ind.unit)}
-      </div>
-      <div className="kpi-sub">
-        {fmtPeriod(ind.latest?.period)}・{fmtDelta(ind.latest, ind.previous, ind.unit)}
-      </div>
-      <StreakChip ind={ind} behind={behind} />
-      <div className="kpi-sub">{ind.note}</div>
-    </div>
+    <tr className="detail-row">
+      {/* 指標欄 + 最新 + 較上期 + 趨勢 + 連續 */}
+      <td colSpan={5} style={{ padding: '4px 14px 10px 34px' }}>
+        <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th>{ind.label} 明細</th>
+              <th className="num">數值</th>
+              <th className="num">較上期</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ point, d }) => (
+              <tr key={point.period}>
+                <td>{fmtPeriod(point.period)}</td>
+                <td className={`num ${chipClass(d)}`}>{fmtValue(point.value, ind.unit)}</td>
+                <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * 指標列：一列一個指標，右側掛自己的趨勢線與連續期數（0.6.35）。
+ *
+ * ⚠️ **顏色的規則是「紅＝比上期高、綠＝比上期低」，紅不等於好。**
+ * 0.6.34 之前非農就業是依**數值正負**上色（就業人數增加＝紅），改成全表一致之後
+ * 它跟著看升降 —— 所以「+57 千人但比上期少 72」現在是綠的。同一張表不能有些格子
+ * 紅代表「值是正的」、有些代表「比上期高」，兩套規則並存比一套規則更難讀。
+ * 表格下方那句 hint 就是為了講明這件事，不可刪。
+ *
+ * 走勢線畫的是**該指標自己的 12 期數值**（不是升降量）：使用者要看的是
+ * 「這個指標往哪走」，畫升降量會變成一條在 0 上下跳的線，看不出水位。
+ */
+function IndicatorRow({
+  ind,
+  behind,
+  open,
+  onToggle,
+}: {
+  ind: MacroIndicator
+  behind: number
+  open: boolean
+  onToggle: () => void
+}) {
+  const d = delta(ind.latest, ind.previous)
+  const streak = risingStreak(ind.points)
+  const canExpand = ind.points.length > 0
+  return (
+    <>
+      <tr>
+        <td>
+          <div className="cell-tree">
+            {canExpand ? (
+              <button
+                className="year-toggle"
+                onClick={onToggle}
+                aria-expanded={open}
+                aria-label={`${open ? '收合' : '展開'} ${ind.label} 的逐期明細`}
+              >
+                {open ? <Minus size={13} /> : <Plus size={13} />}
+              </button>
+            ) : (
+              <span className="toggle-slot" />
+            )}
+            <div>
+              <div className="mac-row-label">
+                {ind.label}
+                {/* 只有落後時才掛徽章：五列都掛「最新」等於沒有訊號 */}
+                {behind > 0 && <span className="badge badge-warn">落後 {behind} 期</span>}
+              </div>
+              <div className="mac-row-note">{ind.note}</div>
+            </div>
+          </div>
+        </td>
+        <td className={`num ${chipClass(d)}`}>
+          <div>{fmtValue(ind.latest?.value ?? null, ind.unit)}</div>
+          <div className="mac-row-period">{fmtPeriod(ind.latest?.period)}</div>
+        </td>
+        <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit)}</td>
+        <td className="num" style={{ width: SPARK_W + 18 }}>
+          <SparkCell
+            points={ind.points.map((p) => p.value)}
+            color={d === null ? CHART_COLORS.axis : d > 0 ? CHART_COLORS.up : CHART_COLORS.down}
+            ariaLabel={`${ind.label}近 ${ind.points.length} 期走勢`}
+          />
+        </td>
+        <td
+          className={`num ${streak ? chipClass(streak.direction) : ''}`}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {streak ? (
+            <>
+              連 {streak.periods} 期{streak.direction > 0 ? '上升' : '下降'}
+              {/* 落後中的指標，那個「連續」的末端不是現在，不講清楚會被讀成當前趨勢 */}
+              {behind > 0 && <div className="mac-row-period">截至該期</div>}
+            </>
+          ) : (
+            '—'
+          )}
+        </td>
+      </tr>
+      {open && <IndicatorDetail ind={ind} />}
+    </>
   )
 }
 
 export function MacroPage() {
   const [macro, setMacro] = useState<MacroData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -173,15 +282,24 @@ export function MacroPage() {
     )
   }
 
-  // 走勢表的欄位＝所有指標出現過的期別聯集，由新到舊。
-  // 各指標的發布時程不同（PCE 通常比 CPI 晚一個月），不能假設它們對齊。
-  const periods = [...new Set(macro.indicators.flatMap((i) => i.points.map((p) => p.period)))]
-    .sort()
-    .reverse()
-    .slice(0, 12)
-
   // 落後判定的基準是「同組其他指標最新到哪一期」，不查發布行事曆（見 macroPeriod.ts）
   const peerLatest = latestPeriod(macro.indicators.map((i) => i.latest?.period))
+
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  /*
+    「全部展開」只認展得開的列（有 points 的）——若把沒有資料的指標也算進來，
+    allOpen 永遠是 false，按鈕會卡在「全部展開」按不動（同法人表與年度收益頁的處置）。
+  */
+  const expandable = macro.indicators.filter((i) => i.points.length > 0).map((i) => i.id)
+  const allOpen = expandable.length > 0 && expandable.every((id) => expanded.has(id))
+  const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
 
   return (
     <>
@@ -211,56 +329,67 @@ export function MacroPage() {
           </button>
         </div>
 
-        <div className="kpi-grid" style={{ marginTop: 14 }}>
+        {/* 瘦身成一行（0.6.35）：細節全在下方的表，卡片版等於把同一份數字說兩次 */}
+        <div className="mac-chip-row">
           {macro.indicators.map((ind) => (
-            <IndicatorCard
-              key={ind.id}
-              ind={ind}
-              behind={periodsBehind(ind.latest?.period ?? null, peerLatest)}
-            />
+            <IndicatorChip key={ind.id} ind={ind} />
           ))}
         </div>
       </div>
 
+      {/*
+        一列一個指標（0.6.35，原本是一列一個月份）。
+
+        **為什麼要轉置**：法人表的「趨勢／連續」描述的是「合計」這一個序列，
+        而五個總經指標沒有合計可言（單位是 %、千人、指數，加總沒有意義）。
+        轉成一列一個指標之後，趨勢與連續描述的就是該指標自己的 12 期 —— 語意才成立，
+        而且對回法人表「一列一個東西 ＋ 它自己的趨勢與連續」的形狀。
+
+        代價是「同一個月五個指標」要橫著看，這是刻意接受的取捨。
+      */}
       <div className="section glass" style={{ padding: '18px 20px' }}>
         <div className="rpt-section-head">
-          <h3>近期走勢</h3>
-          <span className="source-tag">單位見各欄標題</span>
+          <div className="chart-title">近期走勢・近 12 期</div>
+          {expandable.length > 0 && (
+            <button className="btn btn-sm" onClick={toggleAll}>
+              {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+              {allOpen ? '全部收起' : '全部展開'}
+            </button>
+          )}
         </div>
 
         <div className="table-scroll" style={{ marginTop: 12 }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>月份</th>
-                {macro.indicators.map((ind) => (
-                  <th key={ind.id} className="num">
-                    {ind.label}（{ind.unit}）
-                  </th>
-                ))}
+                <th>指標</th>
+                <th className="num">最新</th>
+                <th className="num">較上期</th>
+                <th className="num">趨勢</th>
+                <th className="num">連續</th>
               </tr>
             </thead>
             <tbody>
-              {periods.map((period) => (
-                <tr key={period}>
-                  <td>{fmtPeriod(period)}</td>
-                  {macro.indicators.map((ind) => {
-                    const p = ind.points.find((x) => x.period === period)
-                    return (
-                      <td key={ind.id} className="num">
-                        {p ? fmtValue(p.value, ind.unit) : '—'}
-                      </td>
-                    )
-                  })}
-                </tr>
+              {macro.indicators.map((ind) => (
+                <IndicatorRow
+                  key={ind.id}
+                  ind={ind}
+                  behind={periodsBehind(ind.latest?.period ?? null, peerLatest)}
+                  open={expanded.has(ind.id)}
+                  onToggle={() => toggle(ind.id)}
+                />
               ))}
             </tbody>
           </table>
         </div>
 
+        {/*
+          這句不可刪：全表改用升降色之後，非農就業的紅綠不再代表「就業增加 / 減少」，
+          而是「比上期高 / 低」。沒有這句，紅色會被讀成「好消息」。
+        */}
         <p className="hint" style={{ marginTop: 8 }}>
-          資料來源：美國聖路易聯準銀行 FRED。物價指標為排除食品與能源後的年增率，
-          非農就業為較上月增減人數，消費者信心為密西根大學指數。空格代表該期尚未發布。
+          紅色代表比上期高、綠色代表比上期低；升降本身沒有好壞之分。
+          點左側的「＋」看該指標逐期的數字。資料來源：美國聖路易聯準銀行 FRED。
         </p>
       </div>
 
