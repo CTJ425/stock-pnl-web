@@ -212,8 +212,9 @@ describe('twFundamental', () => {
     })
 
     /*
-      EPS 只有回補路徑（MOPS 季報）有，每晚的 t187ap17_L 沒有。
-      整筆取捨在兩個方向都會弄丟它，故 EPS 逐欄合併、誰查過誰贏。
+      EPS exists only on the backfill path (the MOPS quarterly report); the nightly t187ap17_L does not carry it.
+      A whole-record decision loses it in both directions, hence field-by-field merging where whoever consulted
+      the quarterly report wins.
     */
     describe('EPS 逐欄合併（0.6.28）', () => {
       const withEps = (yearQuarter: string, eps: number | null): ProfitQuarter => ({

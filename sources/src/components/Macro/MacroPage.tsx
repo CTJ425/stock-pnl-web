@@ -123,7 +123,7 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
   const rows = ind.points.map((p, i) => ({ point: p, d: deltas[i] })).reverse()
   return (
     <tr className="detail-row">
-      {/* 指標欄 + 最新 + 較上期 + 趨勢 + 連續 */}
+      {/* Indicator column + latest + vs previous + trend + streak */}
       <td colSpan={5} style={{ padding: '4px 14px 10px 34px' }}>
         <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
           <thead>
@@ -194,7 +194,7 @@ function IndicatorRow({
             <div>
               <div className="mac-row-label">
                 {ind.label}
-                {/* 只有落後時才掛徽章：五列都掛「最新」等於沒有訊號 */}
+                {/* Badge only when behind: five rows all reading「最新」would be no signal at all */}
                 {behind > 0 && <span className="badge badge-warn">落後 {behind} 期</span>}
               </div>
               <div className="mac-row-note">{ind.note}</div>
@@ -220,7 +220,7 @@ function IndicatorRow({
           {streak ? (
             <>
               連 {streak.periods} 期{streak.direction > 0 ? '上升' : '下降'}
-              {/* 落後中的指標，那個「連續」的末端不是現在，不講清楚會被讀成當前趨勢 */}
+              {/* For a lagging indicator the streak does not end at today; unsaid, it reads as the current trend */}
               {behind > 0 && <div className="mac-row-period">截至該期</div>}
             </>
           ) : (
@@ -250,8 +250,8 @@ export function MacroPage() {
   }, [load])
 
   /*
-    美國那份的載入中／查無狀態底下仍然掛著台股市場（0.6.28）：
-    兩塊資料各自載入、各自失敗，美國 FRED 抓不到不該讓整頁只剩一句「尚未產生」。
+    The Taiwan market block stays mounted underneath the US loading / empty states (0.6.28):
+    the two blocks load and fail independently, and a FRED outage must not reduce the whole page to one line.
   */
   if (loading) {
     return (
@@ -294,8 +294,8 @@ export function MacroPage() {
     })
 
   /*
-    「全部展開」只認展得開的列（有 points 的）——若把沒有資料的指標也算進來，
-    allOpen 永遠是 false，按鈕會卡在「全部展開」按不動（同法人表與年度收益頁的處置）。
+    "Expand all" only counts rows that can expand (those with points) —— counting indicators without data would
+    keep allOpen false forever, jamming the button on "expand all" (same handling as the institutional and yearly tables).
   */
   const expandable = macro.indicators.filter((i) => i.points.length > 0).map((i) => i.id)
   const allOpen = expandable.length > 0 && expandable.every((id) => expanded.has(id))
@@ -304,8 +304,8 @@ export function MacroPage() {
   return (
     <>
       {/*
-        頂層頁沒有 .detail-body 包著（那是個股分析的容器，padding 在 index.css），
-        故自己包 .section + .glass，否則內容會貼齊視窗邊緣。
+        A top-level page has no .detail-body around it (that is the individual-stock container, padded in index.css),
+        so it wraps itself in .section + .glass —— without that the content sits flush against the window edge.
       */}
       <div className="section glass" style={{ padding: '18px 20px' }}>
         <div className="rpt-section-head">
@@ -314,9 +314,9 @@ export function MacroPage() {
             <span className="source-tag section-stamp">
               資料更新於 {fmtUpdatedAt(macro.asOf)}
               {/*
-                0.6.11 起 asOf 只在資料真的變動時才跳，月度數據一個月才動一次 ——
-                單看它會像是壞掉了。同日的檢查時間沒有資訊量（就是 asOf 本身），
-                只在不同日時才補上，讓「這個月還沒發布」與「排程掛了」分得開。
+                Since 0.6.11 asOf only moves when the data really changed, and monthly series move once a month ——
+                on its own that looks broken. A check time on the same day carries no information (it is asOf itself),
+                so it is only appended on a different day, which separates "not published yet" from "the schedule died".
               */}
               {macro.checkedAt && !isSameDay(macro.checkedAt, macro.asOf) && (
                 <>（最後檢查 {fmtUpdatedAt(macro.checkedAt)}）</>
@@ -329,7 +329,7 @@ export function MacroPage() {
           </button>
         </div>
 
-        {/* 瘦身成一行（0.6.35）：細節全在下方的表，卡片版等於把同一份數字說兩次 */}
+        {/* Slimmed to one line (0.6.35): the detail is all in the table below, so cards said the same numbers twice */}
         <div className="mac-chip-row">
           {macro.indicators.map((ind) => (
             <IndicatorChip key={ind.id} ind={ind} />
@@ -337,14 +337,15 @@ export function MacroPage() {
         </div>
 
         {/*
-          一列一個指標（0.6.35，原本是一列一個月份）。
+          One row per indicator (0.6.35; it used to be one row per month).
 
           **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
-          而五個總經指標沒有合計可言（單位是 %、千人、指數，加總沒有意義）。
-          轉成一列一個指標之後，趨勢與連續描述的就是該指標自己的 12 期 —— 語意才成立，
-          而且對回法人表「一列一個東西 ＋ 它自己的趨勢與連續」的形狀。
+          The five macro indicators have no such total (their units are %, thousands of people, index points ——
+          adding them means nothing). One row per indicator makes trend and streak describe that indicator's own
+          12 periods, so the semantics hold, and it matches the institutional table's shape: one row per thing,
+          plus that thing's own trend and streak.
 
-          代價是「同一個月五個指標」要橫著看，這是刻意接受的取捨。
+          The cost is that "five indicators in the same month" must be read across. That trade-off is deliberate.
 
           Since 0.6.38 this shares **one card** with the chip row above: both are the same set of indicators read
           two ways (what it is now / how it moved over 12 periods). Split across two cards, the "資料更新於" stamp
@@ -386,8 +387,9 @@ export function MacroPage() {
         </div>
 
         {/*
-          這句不可刪：全表改用升降色之後，非農就業的紅綠不再代表「就業增加 / 減少」，
-          而是「比上期高 / 低」。沒有這句，紅色會被讀成「好消息」。
+          Do not delete this sentence: once the whole table switched to rise/fall colouring, red and green on
+          non-farm payrolls stopped meaning "jobs added / lost" and started meaning "higher / lower than last
+          period". Without it, red reads as good news.
         */}
         <p className="hint" style={{ marginTop: 8 }}>
           紅色代表比上期高、綠色代表比上期低；升降本身沒有好壞之分。
@@ -396,9 +398,9 @@ export function MacroPage() {
       </div>
 
       {/*
-        台股市場擺在美國總經之後：這一頁的主軸是「與個股無關的市場背景」，
-        兩塊都屬於它。自己載入自己的資料（同本頁的做法），互不影響 ——
-        美國那份抓不到時，台股這段照樣看得到。
+        The Taiwan market goes after the US macro block: this page is about market background unrelated to any
+        one stock, and both belong to that. It loads its own data the same way this page does, independently ——
+        when the US side cannot be fetched, this section still shows.
       */}
       <TwMarketSection />
     </>

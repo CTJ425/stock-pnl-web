@@ -158,9 +158,9 @@ describe('planProfitBackfill', () => {
 
   it('已有的季別但還沒查過 EPS，也算缺口（0.6.28）', () => {
     /*
-      這是 EPS 專屬的例外：through 記著「比它舊的都問過了」，而 EPS 缺口出現在
-      最新那幾季（夜間批次剛寫進來），正好在 through 的另一側 ——
-      沿用同一條判斷的話，新一季的 EPS 永遠補不到。
+      This is the EPS-only exception: `through` records "everything older than this has been asked about", but EPS
+      gaps appear in the newest quarters (just written by the nightly batch), on the other side of `through` ——
+      reusing the same condition would mean a new quarter's EPS is never filled.
     */
     const have = new Map<string, ProfitProgress>([
       [

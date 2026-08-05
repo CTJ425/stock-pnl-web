@@ -1,7 +1,7 @@
 /**
  * TWSE MIS real-time quotes (mis.twse.com.tw/stock/api/getStockInfo.jsp) is purely analytical logic.
  * Independent of the Deno execution environment, used by index.ts and directly unit tested by the front-end Vitest
- * （見 src/services/misParse.test.ts）。
+ * (see src/services/misParse.test.ts).
  *
  * MIS is the unofficial documented endpoint behind the stock exchange's market viewing website. The response format is:
  *   { rtcode: '0000', msgArray: [{ c, z, y, b, ... }] }

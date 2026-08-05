@@ -7,7 +7,7 @@
  * usage:
  *   1. sources/.env.local points to a certain area and starts `npm run dev`
  *   2. Generate a set of admin sessions and save them as scratchpad/session.json:
- *      auth/v1/admin/generate_link（magiclink）取 hashed_token，
+ *      auth/v1/admin/generate_link (magiclink) for the hashed_token,
  *      Type auth/v1/verify again to change access_token / refresh_token
  *   3. SESSION=<session.json path> OUT=<screenshot directory> node scripts/verify-admin-status.cjs
  *

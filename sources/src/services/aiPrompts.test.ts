@@ -19,8 +19,8 @@ describe('resolvePrompt', () => {
 
 describe('可編輯段落與鎖定段落的分工', () => {
   /*
-    這幾條是產品的安全底線，只能待在 *_LOCKED（程式固定接上），
-    不能出現在可編輯的預設值裡 —— 放在可編輯段落等於允許管理員刪掉它們。
+    These lines are the product's safety floor. They may only live in *_LOCKED (appended by the code) and must
+    never appear in the editable defaults —— putting them in the editable section is permission to delete them.
   */
   it('買賣指令、免責聲明、攤平風險三條都鎖在 ANALYSIS_LOCKED', () => {
     expect(ANALYSIS_LOCKED).toContain('絕對不得給出明確的買進 / 賣出 / 加碼 / 出清指令')

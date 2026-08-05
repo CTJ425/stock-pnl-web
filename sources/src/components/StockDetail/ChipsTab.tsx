@@ -92,11 +92,13 @@ export function ChipsTab({ report }: { report: ReportData }) {
     history.map((d) => (d.institutional ? pick(d.institutional).net : null))
 
   /*
-    並排模式下可以把某個法人關掉（0.6.27，與獲利能力走勢圖同一套互動）。
-    值域是由傳進去的 series 現算的，關掉之後 Y 軸會依剩下的法人重算 ——
-    外資的量級常常是投信的數十倍，把它關掉，另外三家才看得出彼此的差別。
+    In side-by-side mode an individual investor type can be switched off (0.6.27, the same interaction the
+    profitability trend chart uses). The value range is computed from the series passed in, so switching one off
+    rescales the Y axis to the rest —— foreign investors are often tens of times larger than the trusts, and
+    turning them off is what makes the other three distinguishable from each other.
 
-    只在 `all` 模式有意義：切到單一法人時圖例講的是紅買綠賣（極性），不是身分。
+    Only meaningful in `all` mode: on a single investor type the legend is about red-buy / green-sell (polarity),
+    not identity.
   */
   const [hiddenLegs, setHiddenLegs] = useState<string[]>([])
   const visibleComponents = COMPONENTS.filter((c) => !hiddenLegs.includes(c.key))
@@ -137,7 +139,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
 
   return (
     <>
-      {/* 報告表頭放在擷取範圍內，下載的 PDF 才看得出是哪支股票、哪一天、什麼時候產的 */}
+      {/* The report header is inside the capture range so the downloaded PDF says which stock, which day and when it was produced */}
       <header className="rpt-head">
         <h2>
           {report.ticker} {report.name}｜盤後籌碼

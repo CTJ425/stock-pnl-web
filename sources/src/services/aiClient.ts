@@ -94,7 +94,7 @@ export interface AiProvider {
 /**
  * Pure functions: Base URL normalization.
  * Remove the trailing slash; if the end of /v1 is already included, do not append it again, otherwise add /v1.
- * 範例：http://h:11434, http://h:11434/, http://h:11434/v1, http://h:11434/v1/
+ * Examples: http://h:11434, http://h:11434/, http://h:11434/v1, http://h:11434/v1/
  * Both output http://h:11434/v1
  */
 export function normalizeBaseUrl(raw: string): string {
@@ -237,12 +237,12 @@ export function extractOpenAiText(json: unknown): string {
   const finish = choice?.finish_reason
 
   /*
-    正文有內容就用它，但要先剝掉 `<think>…</think>`：
-    有些端點不把思考拆成獨立欄位，而是連同正文一起塞進 content。
-    不剝的話畫面上會先出現一大段模型的自言自語，正式結論被埋在下面。
+    Use the body when it has content, but strip `<think>…</think>` first: some endpoints do not split
+    reasoning into its own field and stuff it into `content` together with the answer. Without stripping, the
+    screen opens with a long stretch of the model talking to itself and buries the real conclusion below it.
 
-    剝完若整段變空（content 裡其實只有思考），就往下走到 reasoning 那條 ——
-    那裡會加上警語再呈現，而不是當作正常結果。
+    If stripping leaves nothing (content really was only reasoning), fall through to the reasoning branch ——
+    that one presents it with a warning instead of passing it off as a normal result.
   */
   if (typeof content === 'string') {
     const clean = stripThinkTags(content)
@@ -252,21 +252,21 @@ export function extractOpenAiText(json: unknown): string {
   }
 
   /*
-    以下都是「HTTP 200 但沒有正文」。原本這裡不論原因一律拋同一句，
-    使用者拿到的訊息完全指不出下一步該做什麼 —— 而 Google 那條路徑早就分了
-    MAX_TOKENS / SAFETY / 結構不符 三種。這裡補齊對應的診斷。
+    Everything below is "HTTP 200 with no body". This used to throw the same sentence regardless of cause,
+    which told the user nothing about what to do next —— while the Google path had long separated MAX_TOKENS /
+    SAFETY / malformed structure. These are the matching diagnostics.
   */
   const msg = choice?.message ?? {}
 
   /*
-    1) 推理型模型：答案全進了思考欄位，content 是空的。
+    1) Reasoning models: the answer went entirely into the reasoning field and content came back empty.
 
-    請求端已經盡量關掉思考（見 OpenAiCompatibleProviderImpl.buildBody），
-    但不是每個端點都吃那些欄位。走到這裡代表關不掉 ——
+    The request side already tries to switch reasoning off (see OpenAiCompatibleProviderImpl.buildBody), but
+    not every endpoint honours those fields. Reaching here means it could not be switched off ——
     **Rather than fail altogether, take the reflection and use it, but be sure to label what it is. **
 
-    標示不能省：思考是模型的推導草稿，會包含自我懷疑、中途否定、算到一半的數字。
-    當成正式分析讀會被誤導，這是使用者實際踩過的坑。
+    The label must not be dropped: reasoning is the model's working draft and carries self-doubt, retractions
+    and half-finished numbers. Read as a finished analysis it misleads —— a user actually hit this.
   */
   const reasoning = msg.reasoning_content ?? msg.reasoning
   if (typeof reasoning === 'string' && stripThinkTags(reasoning).trim()) {
@@ -416,7 +416,7 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
    * There is no universal switch across homes, so all three are provided and each endpoint takes what it needs:
    * - `reasoning_effort`: OpenAI o series with most compatible endpoints
    * - `think`：Ollama
-   * - `chat_template_kwargs.enable_thinking`：vLLM / SGLang 上的 Qwen3 等
+    * - `chat_template_kwargs.enable_thinking`: Qwen3 and friends on vLLM / SGLang
    *
    * Most of the unrecognized fields will be ignored; if it is really 400, the caller will resend it with `full = false`.
    * **Return to the minimum set instead of just taking away one of them** - 400 will not tell you which column is inconsistent,
@@ -457,10 +457,11 @@ class OpenAiCompatibleProviderImpl implements AiProvider {
     let res = await post(this.buildBody(req, true))
 
     /*
-      400 可能是端點不認得那些相容性欄位（`max_tokens` 與三個關閉思考的欄位，見 buildBody）。
-      退回最小集合重送一次；仍失敗就照原本的錯誤處理往下走。
-      與 Google 那條路徑同一個模式，也同樣不違反「不自動重試」——
-      那條是講不要替使用者重跑失敗的解讀（會重複計費），這裡是同一次請求的參數協商，只試一次。
+       A 400 may mean the endpoint does not recognise the compatibility fields (`max_tokens` plus the three
+       reasoning-off fields, see buildBody). Fall back to the minimal set and send once more; if it still fails,
+       carry on into the normal error handling. Same pattern as the Google path, and it does not break the
+       "no automatic retry" rule either —— that rule is about not re-running a failed interpretation for the
+       user (which bills twice); this is parameter negotiation inside one request, attempted once.
     */
     if (!res.ok && res.status === 400) {
       res = await post(this.buildBody(req, false))

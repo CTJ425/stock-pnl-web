@@ -25,9 +25,9 @@ export function ChartLegend({ items }: { items: LegendItem[] }) {
     <ul className="chart-legend">
       {items.map((it) => {
         /*
-          關掉的序列改畫空心色塊：它仍然在圖例上（這檔股票有這項指標），
-          只是沒畫進圖裡。色塊的顏色是字面值，故用 inline style 直接改，
-          不靠 CSS 覆蓋（背景色本來就是 inline 的，用 class 蓋要 !important）。
+          A switched-off series gets a hollow swatch: it is still in the legend (this stock has that indicator),
+          it is just not drawn. The swatch colour is a literal, so it is set with an inline style rather than a
+          CSS override (the background is inline anyway, and a class would need !important).
         */
         const swatch = (
           <span

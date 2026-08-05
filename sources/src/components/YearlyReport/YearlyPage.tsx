@@ -321,7 +321,7 @@ function YearRows({
         <FeeCell fees={row.fees} feesTax={row.feesTax} currency={currency} />
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
-      {/* 明細列直接放在同一個表格內：巢狀表格的欄寬各自計算，數字會對不到上方欄位 */}
+      {/* Detail rows live inside the same table: a nested table computes its own column widths and the numbers stop lining up with the header above */}
       {isOpen &&
         row.details.map((yt) => {
           const tickerKey = `${row.year}|${yt.key}`
@@ -330,7 +330,7 @@ function YearRows({
             <Fragment key={yt.key}>
               <tr className="detail-row">
                 <td>
-                  {/* 圖示與年度列同一直欄（無鈕以空槽補位），層級由列底色與字重呈現 */}
+                  {/* Icon shares the year row's column (an empty slot where there is no button); hierarchy is carried by row background and weight */}
                   <div className="cell-tree">
                     {yt.sells.length > 0 ? (
                       <button
@@ -372,7 +372,7 @@ function YearRows({
                 yt.sells.map((sell) => (
                   <tr key={sell.txId} className="detail-row sell-row">
                     <td title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
-                      {/* 貼齊父層個股文字起點（32 = 圖示 22 + 間距 10） */}
+                      {/* Aligned to where the parent's ticker text starts (32 = 22px icon + 10px gap) */}
                       <div className="cell-tree" style={{ paddingLeft: 32 }}>
                         {sell.date}　賣出 {fmtQty(sell.qty)} 股 ｜ {sell.price}
                         {sell.oversold && (

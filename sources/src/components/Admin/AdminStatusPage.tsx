@@ -134,9 +134,9 @@ export function AdminStatusPage() {
   }, [load])
 
   /*
-    時間軸的基準日是「資料日」而非今天 —— 隔天早上補抓的事件要落在同一條軸上。
-    0.6.36-dev.2 起改取**各來源資料日的最大值**（見 timeline.ts 的 roundBaseYmd）：
-    綁單一來源會讓跑得快的那列（全市場走獨立排程，16:00 就到手）算出跨日的座標。
+    The axis is based on the **data day**, not today —— events picked up the next morning must land on the same
+    axis. Since 0.6.36-dev.2 it takes the **maximum data day across sources** (see roundBaseYmd in timeline.ts):
+    binding to one source lets the fastest row (market-wide, on its own schedule) compute a cross-day coordinate.
   */
   const baseYmd = useMemo(
     () =>
@@ -168,20 +168,21 @@ export function AdminStatusPage() {
         cover = held > 0 ? `${n} / ${held} 檔` : null
       } else if (spec.id === 'market') {
         /*
-          全市場法人不在 chip.sources 裡（那是個股批次寫的），改讀 market/daily.json。
+          Market-wide institutional data is not in chip.sources (that is written by the per-stock batch), so it
+          is read from market/daily.json.
 
-          ⚠️ 時刻是**檔案產出時間**的近似值，不是那一天法人金額實際到手的時刻：
-          17:00 那輪就算只更新了成交量值也會推進 asOf。要精確到逐日必須在 schema
-          加 institutionalFetchedAt，但既有的日子都不會有那個欄位，加了也是空的。
-          畫面上的 hint 因此標明是「檔案產出」，不要讓人以為這是抓到法人的時刻。
+          ⚠️ The time shown approximates **when the file was produced**, not when that day's institutional
+          amounts actually arrived: a 17:00 round advances asOf even if it only refreshed turnover. Getting it
+          per-day would need an institutionalFetchedAt column in the schema, and every existing day would have
+          it empty anyway. The hint on screen therefore says 檔案產出, so nobody reads it as the fetch moment.
         */
         stamp = data.market
           ? { date: data.market.latestInstitutionalDate, fetchedAt: data.market.asOf }
           : null
         /*
           **Deliberately not using partial** (different from daily): Legal persons are replenished on a daily basis. It is normal for the latest one or two days not to be replenished.
-          拿它當「不完整」會讓這一列幾乎每天都是黃燈。待補天數已經在下方的
-          「台股全市場」KPI 講得很清楚，這條軸只回答「檔案有沒有準時產出」。
+          Treating that as "incomplete" would leave this row amber almost every day. The number of days still to
+          fill is already spelled out in the 台股全市場 KPI below; this axis only answers "was the file produced on time".
         */
         // The subscript must also explain the source and "this moment is the file output, not the legal person's acquisition", so there is no need to specify spec.hint
         cover = 'BFI82U・檔案產出時間'
@@ -189,13 +190,14 @@ export function AdminStatusPage() {
         stamp = src?.[spec.id] ?? null
       }
       /*
-        時間戳落在本輪軸範圍外的，屬於別輪 —— 一律當未取得，由 judgeSource 依 dueBy 判定。
-        不能拿上一輪的時間戳去算座標：個股 T86 還停在昨天時會算出 -22.5 小時，
-        被 tlPercent 夾到 0（軸最左），看起來像「超早就到手」。
+        A timestamp outside this round's axis range belongs to another round —— treat it as not received and let
+        judgeSource decide by dueBy. The previous round's timestamp must not be used for coordinates: when the
+        per-stock T86 is still on yesterday it computes −22.5 hours, gets clamped to 0 by tlPercent (far left of
+        the axis) and looks like it arrived absurdly early.
 
-        判「屬不屬於本輪」用時間戳而不是比對 date，是因為 date 的語意各列不同：
-        借券自報的是**公布日**（次一交易日），天生比本輪多一天 ——
-        拿它比對會讓唯一該亮紅燈的那列反而被當成沒抓到。
+        Membership of the round is decided by timestamp rather than by comparing `date`, because `date` means
+        different things per row: securities borrowing self-reports the **announcement date** (the next trading
+        day) and is naturally one day ahead —— comparing it would make the one row that should be red look fine.
       */
       const raw = hoursFromBase(stamp?.fetchedAt ?? null, baseYmd)
       const inRound = raw !== null && raw >= 0 && raw <= TL_SPAN_HOURS
@@ -293,7 +295,7 @@ export function AdminStatusPage() {
 
   return (
     <>
-      {/* ── 結論先行 ─────────────────────────────────────── */}
+      {/* ── Conclusion first ──────────────────────────────── */}
       <div className="section glass ast-verdict" style={{ padding: '16px 20px' }}>
         <ShieldCheck size={18} className="ast-verdict-icon" />
         <h3 className="head-tight">
@@ -309,10 +311,10 @@ export function AdminStatusPage() {
         </button>
       </div>
 
-      {/* ── 台股盤後時間軸 ───────────────────────────────── */}
+      {/* ── Taiwan after-hours timeline ───────────────────── */}
       <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
-          {/* 標題與軸座標必須同一個基準日，否則標題說 8/4、軸上卻畫著 8/5 的點 */}
+          {/* Title and axis coordinates must share one base day, or the title says 8/4 while the axis plots 8/5 */}
           <h3 className="head-tight">台股盤後・{baseYmd || '—'} 這一輪</h3>
           <span className="source-tag">三個籌碼來源的公布時間差達 7 小時，批次是分段抓的</span>
         </div>
@@ -394,7 +396,7 @@ export function AdminStatusPage() {
                 </div>
                 <div className="ast-end">
                   <Pill state={state} />
-                  {/* 手機隱藏時間軸（橫捲看不到右半，等於看不出延遲），時刻改列在這裡 */}
+                  {/* Phones hide the axis (its right half is off-screen, so delays are invisible); the times are listed here instead */}
                   {hour !== null && <span className="ast-when">{tlLabel(hour)}</span>}
                   {date && <span className="ast-date">{date}</span>}
                 </div>
@@ -404,7 +406,7 @@ export function AdminStatusPage() {
         </div>
       </div>
 
-      {/* ── 排程 ─────────────────────────────────────────── */}
+      {/* ── Schedules ─────────────────────────────────────── */}
       <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">排程</h3>
@@ -433,7 +435,7 @@ export function AdminStatusPage() {
                   <tr key={s.jobid}>
                     <td>
                       <b>{s.jobname}</b>
-                      {/* 光看 action 代號看不出這一班負責哪些資料 */}
+                      {/* The action code alone does not say which data this shift is responsible for */}
                       {scope && <span className="ast-scope">{scope}</span>}
                     </td>
                     <td className="ast-mono">{describeCron(s.schedule)}</td>
@@ -457,13 +459,13 @@ export function AdminStatusPage() {
           <p className="ast-note" style={{ marginTop: 10 }}>
             盤後批次今日第 {data.batch.runsToday ?? 0} 輪
             {data.probe?.taipei_time && `・探針最後探測 ${data.probe.taipei_time}`}
-            {/* 括號整段一起組，分成兩個條件式會在只有其中一項時印出沒閉合的括號 */}
+            {/* The parenthesised part is assembled as one piece: split into two conditionals it prints an unclosed bracket when only one side exists */}
             {probeRows(data.probe)}
           </p>
         )}
       </div>
 
-      {/* ── 總經：當日班次軸（與上方台股盤後同一種讀法）───── */}
+      {/* ── Macro: the day's shift axis (read the same way as the Taiwan one above) ── */}
       <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">美國總體經濟・今日班次</h3>
@@ -504,7 +506,7 @@ export function AdminStatusPage() {
               <span style={{ left: '100%' }}>24:00</span>
             </div>
 
-            {/* 美東發布窗：夏令 20:30–21:30 涵蓋兩種日光節約情形 */}
+            {/* US release window: 20:30–21:30 in summer covers both daylight-saving cases */}
             <DayRow
               label="美東發布"
               hint="8:30 ET"
@@ -538,7 +540,7 @@ export function AdminStatusPage() {
               </DayRow>
             ))}
 
-            {/* 資料最後變動：與班次分開一列，因為它不一定發生在班次時刻（可手動觸發） */}
+            {/* Last data change: its own row, because it does not necessarily happen at a shift time (it can be triggered manually) */}
             <DayRow
               label="資料最後變動"
               hint="asOf"
@@ -563,7 +565,7 @@ export function AdminStatusPage() {
           </div>
         </div>
 
-        {/* 下次抓取：cron 算得出來、100% 確定，與推估的發布日分開陳述 */}
+        {/* Next fetch: computable from cron and therefore certain —— stated separately from the estimated release date */}
         <div className="ast-next">
           <span>
             <span className="k">下次抓取</span>{' '}
@@ -614,7 +616,7 @@ export function AdminStatusPage() {
                       {i.previous?.value != null ? `${i.previous.value} ${i.unit}` : '—'}
                     </td>
                     <td className="ast-mono">
-                      {/* 落後的指標算不出有意義的日期——它連上一期都還沒發 */}
+                      {/* A lagging indicator has no meaningful date to compute —— its previous period is not out either */}
                       {st === 'warn' ? '待定' : (i.nextRelease?.date ?? '待定')}
                       {i.nextRelease?.estimated && st !== 'warn' && (
                         <span className="ast-est"> 推估</span>
@@ -634,7 +636,7 @@ export function AdminStatusPage() {
         </div>
       </div>
 
-      {/* ── 台股全市場（0.6.32）───────────────────────────── */}
+      {/* ── Taiwan market-wide (0.6.32) ───────────────────── */}
       <div className="section glass" style={SECTION_PAD}>
         <div className="rpt-section-head">
           <h3 className="head-tight">台股全市場・量能與三大法人</h3>
@@ -660,8 +662,9 @@ export function AdminStatusPage() {
                 <div className="kpi-label">法人金額最新到</div>
                 <div className="kpi-value">{data.market.latestInstitutionalDate ?? '—'}</div>
                 {/*
-                  與上一格差一兩天是正常的：法人 15:00 才公布、且一天一個請求逐日補。
-                  這裡刻意不亮燈 —— 判定「幾天算延遲」需要交易日曆，而我們沒有。
+                  Being a day or two behind the box above is normal: institutional amounts are only published at
+                  15:00 and are filled one request per day. Deliberately no lamp here —— deciding "how many days
+                  counts as late" needs a trading calendar, and we do not have one.
                 */}
                 <div className="kpi-sub">
                   {data.market.missingInstitutional > 0
@@ -681,7 +684,7 @@ export function AdminStatusPage() {
                     </>
                   )}
                 </div>
-                {/* 0.6.32 之前補到的日子只有差額，靠回補逐日長出來，補完就不該再增加 */}
+                {/* Days filled before 0.6.32 only had the net figure; they grow back day by day and must stop growing once complete */}
                 <div className="kpi-sub">每輪最多補 5 天</div>
               </div>
               <div className="glass kpi">
@@ -698,10 +701,12 @@ export function AdminStatusPage() {
               {data.market.asOf && `・${agoLabel(data.market.asOf)} 前`}
             </p>
             {/*
-              抓取週期的說明 0.6.33 由總經頁的卡片移到這裡：那是排程的事，看盤時不需要，
-              而且卡片上寫死班次必然與 pg_cron 漂移（實際漂過一次）。班次一律取自
-              marketCron.schedule，每輪補幾天則只描述機制不給數字 —— 後端的
-              MAX_MARKET_INST_DAYS 沒有透過 API 吐出來，寫數字就是再造一份會漂移的常數。
+              The fetch-cycle explanation moved here from the macro page card in 0.6.33: it is a scheduling
+              matter, not something needed while watching the market, and a hard-coded shift list on a card is
+              bound to drift from pg_cron (it did, once). Shifts always come from marketCron.schedule, and how
+              many days each round fills is described as a mechanism without a number —— the backend's
+              MAX_MARKET_INST_DAYS is not exposed through the API, so writing a number would just recreate a
+              constant that drifts.
             */}
             <p className="ast-note" style={{ marginTop: 6 }}>
               <b>抓取週期</b>：

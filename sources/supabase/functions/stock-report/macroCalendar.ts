@@ -188,9 +188,9 @@ export function expectedLatestPeriod(id: string, now: Date): ExpectedPeriod {
   for (const e of entries) {
     const at = releaseInstant(e, id)
     if (at <= t && (best === null || e.period > best)) best = e.period
-    if (at > t) covered = true // 行事曆還有未來的項目 → 尚未用完
+    if (at > t) covered = true // the calendar still has future entries → not exhausted
   }
-  // ⚠️ 判斷「用完了沒」要看**有沒有未來項目**，不能看 best 有沒有值 ——
+  // ⚠️ "Is it exhausted?" is answered by **whether future entries exist**, not by whether best has a value ——
   // When the calendar expires, best will still be the last entry (for example, it stops at 2026-11).
   // If you return stale:false based on this, you will always be stuck in the last issue of last year after New Year's Eve without realizing it.
   if (covered) return { period: best, stale: false }

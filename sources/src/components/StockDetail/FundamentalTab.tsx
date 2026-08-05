@@ -175,8 +175,8 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
   const months = [...revenueMonths].reverse()
 
   /*
-    12 個月每格約 39px，而「2026/06」約 48px —— 全標會互相重疊。
-    隔一個標一個（12 → 6 個標籤，間距約 78px）；資料少於 8 個月時格子夠寬，全標。
+    12 months means about 39px per slot, while "2026/06" needs about 48px —— labelling every one overlaps.
+    Label every other one (12 → 6 labels, about 78px apart); under 8 months the slots are wide enough for all.
   */
   const revenueLabelIndices = revenueMonths
     .map((_, i) => i)
@@ -184,9 +184,10 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
   const quarters = [...profitQuarters].reverse()
   const latestQuarter = quarters[0] ?? null
   /*
-    EPS 與比率的來源不同（比率每晚更新、EPS 只有季報回補才有），最新一季常常
-    有比率、還沒有 EPS。取「最近一筆有 EPS 的季」而不是直接讀 latestQuarter，
-    否則畫面會在季報公布後的那幾天顯示「—」，看起來像壞掉。
+    EPS and the ratios come from different sources (ratios refresh nightly, EPS only arrives when a quarterly
+    report is backfilled), so the newest quarter often has ratios but no EPS yet. Take "the most recent quarter
+    that has an EPS" instead of reading latestQuarter directly —— otherwise the screen shows "—" for the few days
+    after a quarterly release, which looks broken.
   */
   const latestEps = quarters.find((q) => q.epsTwd !== null) ?? null
   const epsQuarters = profitQuarters.filter((q) => q.epsTwd !== null)
@@ -247,8 +248,8 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           <>
             <div className="kpi-grid">
               {/*
-                EPS 排在四項比率之前：它是「一股賺了多少錢」，是與本益比對得起來的
-                那個數字，也是使用者最常先看的一個。比率回答的是另一個問題（賺得有多好）。
+                EPS comes before the four ratios: it is "how much did one share earn", the number that lines up
+                with the P/E, and the one users look at first. The ratios answer a different question (how well).
               */}
               <div className="glass kpi">
                 <div className="kpi-label">每股盈餘 (EPS)</div>
@@ -284,24 +285,26 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
             </div>
 
             {/*
-              圖用 profitQuarters（由舊到新）而不是上面那個 quarters —— 後者是為了表格
-              才 reverse 成由新到舊的。拿錯會整條線反過來、而且看起來像真的，
-              與月營收是同一個陷阱（見 FundamentalTab.test 用 y 座標釘住方向的那條）。
+              The chart uses profitQuarters (oldest first), not the `quarters` above —— that one was reversed to
+              newest-first for the table. Getting it wrong flips the whole line **and still looks plausible**;
+              it is the same trap as monthly revenue (see the FundamentalTab test that pins direction by y coordinate).
 
-              圖在表之上，順序照月營收既有的版面。只有一季時不畫：
-              `lineSegments` 需要兩點才連得出線段，單季只會留下一張空的座標軸，
-              故與表格共用同一條 `> 1` 判斷。
+              Chart above table, following the layout monthly revenue already uses. Not drawn for a single quarter:
+              `lineSegments` needs two points to connect anything, so one quarter would leave an empty axis ——
+              hence the same `> 1` guard the table uses.
             */}
             {quarters.length > 1 && (
               <MarginTrendChart quarters={profitQuarters} labelIndices={profitLabelIndices} />
             )}
 
             {/*
-              EPS 另外一張圖，**不能塞進上面那張同軸圖**：它的單位是元、比率是 %，
-              兩者放同一條縱軸時 59（%）與 13（元）會被當成同一種量比大小，毫無意義。
+              EPS gets its own chart and **must not go into the shared-axis one above**: its unit is TWD while the
+              ratios are %, and on one vertical axis 59 (%) and 13 (TWD) would be compared as if they were the
+              same kind of quantity, which means nothing.
 
-              只畫有 EPS 的那幾季（`epsQuarters`）而不是整段補 null：
-              EPS 是逐季回補進來的，中間本來就會有洞，畫成斷線會讓人以為那幾季沒賺錢。
+              Only the quarters that have an EPS (`epsQuarters`) are drawn, rather than padding the range with
+              nulls: EPS is backfilled quarter by quarter so gaps are normal, and a broken line would read as
+              "those quarters earned nothing".
             */}
             {epsQuarters.length > 1 && (
               <>
@@ -357,8 +360,8 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           <p className="hint">查無獲利能力資料。</p>
         )}
         {/*
-          刻意講明白「一季一筆、慢慢累積」——來源只回最新一季，
-          畫面上只有一列時使用者會以為是壞了，其實是還沒累積到。
+          Saying "one row per quarter, accumulated over time" out loud is deliberate —— the source only returns the
+          newest quarter, so a single row on screen reads as broken when it just has not accumulated yet.
         */}
         <p className="hint" style={{ marginTop: 8 }}>
           季度比率由證交所彙總計算，每季財報公布後更新；序列逐季累積，最多保留 12 季。
@@ -369,10 +372,10 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
       <section className="rpt-section">
         <div className="rpt-section-head">
           {/*
-            時間戳緊貼標題，因為它要回答的是「我現在看的這張表是不是最新的」——
-            擺在表格下方時使用者不會注意到（0.6.4-dev.4 實際發生：畫面少了 11 個月，
-            而答案就在同一頁的下面兩行，仍然沒被看見）。
-            這是「我們寫檔的時刻」，與估值那邊的「資料日」是兩件事，別合併。
+            The stamp sits right next to the title because it answers "is the table I am looking at current?" ——
+            below the table nobody notices it (0.6.4-dev.4, actually happened: 11 months were missing from the
+            screen and the answer was two lines further down the same page, still unseen).
+            This is "when we wrote the file", a different thing from the 資料日 on the valuation side. Do not merge them.
           */}
           <h3 className="head-tight">月營收</h3>
           {fundamental.asOf && (
@@ -388,9 +391,10 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
         ) : (
           <>
             {/*
-              圖用 revenueMonths（由舊到新）而不是上面那個 months —— 後者是為了表格
-              才 reverse 成由新到舊的。走勢圖左邊必須是比較早的月份，拿錯會整條反過來
-              而且看起來像真的（趨勢完全相反），是最不容易被發現的那種錯。
+              The chart uses revenueMonths (oldest first), not the `months` above —— that one was reversed to
+              newest-first for the table. The left edge of a trend chart must be the earlier month; getting it
+              wrong flips the line **and still looks plausible** (the trend reads exactly backwards), which is the
+              hardest kind of mistake to spot.
             */}
             <div className="chart-title" style={{ marginTop: 4 }}>
               當月營收（千元）

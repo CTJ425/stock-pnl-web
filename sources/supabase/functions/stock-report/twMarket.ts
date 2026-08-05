@@ -353,9 +353,9 @@ export function planMarketMonths(
   }
   for (const d of have ?? []) {
     /*
-      ⚠️ 用 `== null` 而不是 `=== null`：0.6.30 之前寫下的日子**根本沒有這個欄位**，
-      讀回來是 undefined 不是 null。用嚴格比較會漏掉全部舊資料 ——
-      實測就是這樣：部署後 K 線只有本月那 2 根，7 月的 22 天永遠補不到。
+      ⚠️ `== null`, not `=== null`: days written before 0.6.30 **do not have this field at all**, so it reads
+      back as undefined rather than null. Strict comparison would skip every old record —— measured exactly that:
+      after deploying, the K chart had only this month's 2 candles and July's 22 days were never filled.
     */
     if (d?.date && d.taiexOpen == null) months.add(d.date.slice(0, 7).replace('-', ''))
   }

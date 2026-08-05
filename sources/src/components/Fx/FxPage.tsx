@@ -344,10 +344,10 @@ export function FxPage() {
       </div>
 
       {/*
-        key 讓切換幣別時整個重建（換算器的輸入、走勢圖的區間都回到預設）。
-        ⚠️ 兩個 key **必須不同**：它們是同一層的兄弟節點，共用 `current.code`
-        會撞成「同一層出現兩個相同 key」，React 會把兩者混在一起 ——
-        實測結果是切到日圓後畫面上同時留著兩個美元換算器。
+        The key rebuilds everything when the currency changes (converter input and chart range return to default).
+        ⚠️ The two keys **must differ**: they are siblings at the same level, and sharing `current.code` collides
+        into "two identical keys at one level", after which React merges them —— measured result: switching to JPY
+        left two USD converters on screen at once.
       */}
       <TrendChart key={`trend-${current.code}`} cur={current} />
 

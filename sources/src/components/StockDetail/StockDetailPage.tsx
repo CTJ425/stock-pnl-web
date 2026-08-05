@@ -175,15 +175,17 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   }, [ticker])
 
   /*
-    基本面獨立載入：與籌碼報告平行、互不阻塞，查無即 null（proxy 已吞錯）。
+    Fundamentals load independently: parallel to the chip report, neither blocking the other, and a miss is
+    just null (the proxy already swallows errors).
 
-    **When there is no search, or the history has not been filled up, warm** (0.6.29) is called. Originally it was only called when "completely found nothing",
-    結果是新股票第一次開頁建好檔案之後就再也不叫了 —— 剩下的月份與季別要等夜間批次，
-    而那段回補排在批次的短路判斷之後，當天多半輪不到。畫面上的差別是：
-    新股票只有兩三個月的月營收，既有股票有 12 個月。
+    The result is that once a new stock's file is built on first open it is never called again —— the remaining
+    months and quarters wait for the nightly batch, and that backfill runs after the batch's short-circuit check,
+    so most days it never gets a turn. On screen the difference is: a new stock shows two or three months of
+    revenue while an existing one shows twelve.
 
-    伺服器端補滿之後回空、一個對外請求都不發，所以這個條件不會變成每次開頁都燒額度；
-    warmStock 那層也只在伺服器回報「還沒補完」時才解除同代號的封印。
+    Once the server side is complete it returns empty and sends no outbound request, so this condition does not
+    burn quota on every page open; the warmStock layer likewise only unseals a ticker when the server reports
+    that it is still incomplete.
   */
   useEffect(() => {
     let alive = true
@@ -233,7 +235,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
               </span>
             )}
           </h2>
-          {/* 資料日期與更新時間屬於「籌碼」報告本身，故顯示於報告表頭（也在 PDF 擷取範圍內），此處不重複 */}
+          {/* Data date and update time belong to the chip report itself, so they live in its header (also inside the PDF capture range) and are not repeated here */}
           <span className="hint">個股分析</span>
         </div>
         <button
@@ -246,8 +248,9 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
           重新整理
         </button>
         {/*
-          0.6.8 起不再限定「籌碼分頁」（那個分頁已經不存在），改成籌碼報告載好就能匯出。
-          擷取範圍是籌碼＋基本面＋技術面，**不含持股**（見 surfaceRef 掛載處）。
+          Since 0.6.8 this is no longer tied to a "chips tab" (that tab no longer exists); export is available as
+          soon as the chip report has loaded. The capture range is chips + fundamentals + technicals,
+          **excluding holdings** (see where surfaceRef is mounted).
         */}
         {status === 'ready' && tab === 'analysis' && (
           <button className="btn btn-sm" onClick={() => void handleDownload()} disabled={pdfBusy}>
@@ -274,9 +277,10 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
 
       {tab === 'analysis' ? (
         /*
-          順序是使用者定的（報價 → 籌碼 → 基本面 → 技術面），別自行調換。
-          0.6.36 起第一段是報價（公開市場資料），四段都在 surfaceRef 內、都會進 PDF；
-          在那之前第一段是持股，因為含個資而被排除在匯出範圍外，故當時多包了一層。
+          The order is the user's (行情 → 籌碼 → 基本面 → 技術面). Do not rearrange it.
+          Since 0.6.36 the first section is the quote (public market data) and all four sit inside surfaceRef, so
+          all four go into the PDF; before that the first section was holdings, excluded from export because it
+          is personal data —— which is why there used to be an extra wrapper here.
         */
         <div className="detail-stack" ref={surfaceRef}>
           <section className="glass detail-card" aria-labelledby="sec-quote">
@@ -289,7 +293,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
           <section className="glass detail-card" aria-labelledby="sec-chips">
             <CardHead title="籌碼" meta="三大法人 · 融資融券" />
             <div id="sec-chips">
-              {/* 籌碼的載入 / 錯誤只影響自己這張卡，其他三段照常顯示 */}
+              {/* Chip loading / errors only affect this card; the other three sections render as usual */}
               {status === 'loading' && (
                 <div className="empty-state" style={{ padding: 32 }}>
                   <RefreshCw size={28} className="spin" />

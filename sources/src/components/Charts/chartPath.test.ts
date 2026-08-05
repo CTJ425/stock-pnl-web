@@ -15,9 +15,9 @@ const geo: PlotGeometry = {
 
 describe('lineSegments', () => {
   /*
-    0.6.8 把分段邏輯抽成內部的 segments()，供折線與面積共用。
-    這一組是**行為未變的護欄** —— 三個呼叫端（籌碼、匯率、技術面均線）
-    與 PDF 匯出都依賴這個輸出，格式改一個字都算破壞。
+    0.6.8 extracted the segmentation logic into an internal segments(), shared by the line and the area.
+    This group is a **guard rail for unchanged behaviour** —— three call sites (chips, FX, technical moving
+    averages) and the PDF export depend on this output; changing one character of the format counts as breaking it.
   */
   it('連續有值時輸出一段，座標為 x,y 空白分隔、各取兩位小數', () => {
     expect(lineSegments([1, 2, 3], geo)).toEqual(['5.00,1.00 15.00,2.00 25.00,3.00'])

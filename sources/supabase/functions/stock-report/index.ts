@@ -1090,9 +1090,9 @@ async function backfillProfit(
     have.set(ticker, {
       quarters: new Set((file.profitQuarters ?? []).map((q) => q.yearQuarter)),
       /*
-        0.6.28：既有季別但還沒去季報找過 EPS 的，也算缺口。
-        0.6.28 之前寫下的檔案整份都沒有 `epsChecked`，於是 12 季會被逐批重抓一次
-        （每輪 2 季、約 6 輪補完），之後只剩每季新增的那一筆需要補。
+        0.6.28: a quarter that exists but has never been looked up for EPS counts as a gap too.
+        Files written before 0.6.28 have no `epsChecked` at all, so their 12 quarters get re-fetched batch by
+        batch (2 per round, about 6 rounds), after which only each new quarter needs filling.
       */
       needEps: new Set(
         (file.profitQuarters ?? []).filter((q) => !q.epsChecked).map((q) => q.yearQuarter),
@@ -1137,11 +1137,12 @@ async function backfillProfit(
     // It cannot be overwritten by our own calculated version (the two have the same answer, but the official one is accurate)
     const merged = mergeProfitQuarters(file.profitQuarters, incoming, { fillGapsOnly: true })
     /*
-      ⚠️ 比季別清單而不是比長度：已滿 12 筆時補進一季會擠掉最舊的一筆，
-      長度仍是 12 但內容變了 —— 用長度判斷會把真正的更新當成沒事發生而不寫檔。
+      ⚠️ Compare the quarter list, not its length: once 12 entries are full, adding one pushes the oldest out,
+      so the length is still 12 while the content changed —— judging by length would treat a real update as
+      nothing happening and skip the write.
 
-      0.6.28 起簽章要帶上 EPS 的狀態：**只補 EPS 時季別清單一字不變**，
-      光比季別會把「這一輪終於補到 EPS 了」當成沒事發生，補了也不寫檔。
+      Since 0.6.28 the signature must carry the EPS state too: **filling only EPS leaves the quarter list
+      identical**, so comparing quarters alone would treat "this round finally got the EPS" as nothing happening.
     */
     const signature = (qs: ProfitQuarter[] | null | undefined) =>
       (qs ?? []).map((q) => `${q.yearQuarter}:${q.epsChecked ? 1 : 0}`).join(',')
@@ -1224,10 +1225,11 @@ async function syncMarket(now: Date): Promise<{
     anyOk = true
 
     /*
-      同一個月再抓一次加權指數的開高低（0.6.30，畫大盤日 K 用）。
-      FMTQIK 只有收盤與漲跌點數，開高低在 MI_5MINS_HIST ——
-      兩支都是「一次一個月」，所以在同一輪抓完就併好，不必各自維護進度。
-      這一支失敗不影響量值：開高低留 null，K 線那張圖自己會少畫幾根。
+      Fetch the same month's TAIEX open/high/low as well (0.6.30, for the market daily-K chart).
+      FMTQIK only has close and point change; open/high/low live in MI_5MINS_HIST —— both are "one month per
+      request", so they are merged in the same round rather than each tracking its own progress.
+      A failure here does not affect the volume figures: open/high/low stay null and the K chart simply draws
+      fewer candles.
     */
     const histUrl = taiexHistMonthUrl(yyyymm)
     const hist = histUrl ? parseTaiexHist(await fetchRwdJson(histUrl)) : new Map()
@@ -1263,8 +1265,9 @@ async function syncMarket(now: Date): Promise<{
   if (!anyOk) return { synced: false, days: have.length, institutionalFilled: 0, asOf: existing?.asOf ?? null }
 
   /*
-    比內容而不是比長度：只補了某幾天的法人金額時天數一字不變，
-    用長度判斷會把真正的更新當成沒事發生而不寫檔（與 backfillProfit 的 EPS 同一個坑）。
+    Compare content, not length: when only some days had their institutional amounts filled in, the day count
+    does not move —— judging by length would treat a real update as nothing happening and skip the write
+    (the same pit as EPS in backfillProfit).
   */
   const signature = (ds: MarketDay[]) =>
     ds

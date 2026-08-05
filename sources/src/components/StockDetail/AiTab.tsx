@@ -193,7 +193,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
 
   return (
     <div className="ai-container">
-      {/* 頂端操作列與設定摺疊區 */}
+      {/* Top action bar and the collapsible settings area */}
       <div className="ai-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -233,14 +233,14 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         </div>
       </div>
 
-      {/* 未設定時的引導提示 (不出現任何 AI 文字) */}
+      {/* Guidance shown when nothing is configured (no AI text appears at all) */}
       {!settings && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <Bot size={36} style={{ opacity: 0.5, marginBottom: 12 }} />
           <div style={{ fontSize: 15, fontWeight: 600 }}>尚未設定 AI 服務供應商</div>
           {/*
-            0.6.19 起設定表單移到管理後台，所以這裡只能指路、不能就地填。
-            管理員與一般使用者看到的是同一個事實的兩種說法。
+            Since 0.6.19 the settings form lives in the admin console, so this can only point the way rather
+            than let you fill it in here. Admins and ordinary users see two phrasings of the same fact.
           */}
           <div className="hint" style={{ marginTop: 6 }}>
             {isAdmin ? (
@@ -261,7 +261,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         </div>
       )}
 
-      {/* 執行中提示 */}
+      {/* In-progress notice */}
       {status === 'generating' && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <RefreshCw size={28} className="spin" style={{ marginBottom: 12, color: 'var(--primary)' }} />
@@ -270,7 +270,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         </div>
       )}
 
-      {/* 錯誤顯示區 + 手動重試 */}
+      {/* Error area + manual retry */}
       {status === 'error' && (
         <div className="ai-error">
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -289,7 +289,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
         </div>
       )}
 
-      {/* 分析結果顯示區 + 免責聲明 */}
+      {/* Analysis output + disclaimer */}
       {status === 'success' && aiText && (
         <div className="ai-card">
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -304,8 +304,8 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       )}
 
       {/*
-        追問對話（0.6.5）。只在已有分析時出現 —— 沒有分析就沒有可討論的脈絡，
-        也沒有框限所依據的資料。
+        Follow-up conversation (0.6.5). Only appears once an analysis exists —— without one there is no context
+        to discuss and no data to keep the model bounded.
       */}
       {status === 'success' && aiText && (
         <div className="ai-card">
@@ -320,9 +320,9 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           </div>
 
           {/*
-            對話紀錄**一律顯示**（含從 sessionStorage 還原的）。
-            能不能「繼續問」才取決於 payload —— 兩件事分開，
-            否則重新整理後看得到分析卻看不到自己剛才問過什麼。
+            The transcript is **always shown**, including what was restored from sessionStorage. Whether you can
+            keep asking is what depends on the payload —— two separate things, otherwise a refresh leaves you
+            looking at the analysis without the questions you just asked.
           */}
           {chat.length === 0 && payload && (
             <p className="hint">
@@ -362,9 +362,9 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           )}
 
           {/*
-            payload 只在「這次 session 按過產生分析」時才有值。從 sessionStorage
-            還原的情況下是 null（payload 很大且可重建，故沒有一起存）。
-            沒有它就沒有框限所依據的資料，硬送等於讓模型憑空作答。
+            payload only has a value when this session pressed "generate". Restored from sessionStorage it is
+            null (the payload is large and reproducible, so it is not stored alongside). Without it there is no
+            grounding data, and sending anyway would have the model answer out of thin air.
           */}
           {!payload ? (
             <p className="hint">

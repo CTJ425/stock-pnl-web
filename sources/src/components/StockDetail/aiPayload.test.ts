@@ -229,8 +229,8 @@ describe('aiPayload', () => {
       expect(system).toContain('10% → 20% → 30% → 40% → 100%')
 
       /*
-        關鍵：加了操作框架**不等於**放行買賣指令。
-        準則 5 那條必須原封不動地還在，而且新準則要明講它不放寬 5。
+        The point: adding a trading framework is **not** the same as allowing buy/sell instructions.
+        Guideline 5 must still be there word for word, and the new guideline must say it does not relax 5.
       */
       expect(system).toContain('不得給出明確的買進')
       expect(system).toContain('不放寬本條')
@@ -239,8 +239,9 @@ describe('aiPayload', () => {
     })
 
     /*
-      0.6.19 起分析準則可由管理員在後台改寫。可改的只有「風格」那一段，
-      安全規則由程式固定接在後面 —— 把可編輯段落整段換成惡意內容也拆不掉。
+      Since 0.6.19 an admin can rewrite the analysis guidelines from the console. Only the "style" part is
+      editable; the safety rules are appended by the code afterwards —— replacing the whole editable section
+      with hostile content still cannot strip them.
     */
     it('管理員改寫準則時，固定的安全規則仍然接在後面', () => {
       const payload = buildAiPayload({
@@ -280,10 +281,10 @@ describe('aiPayload', () => {
       )
 
       /*
-        這一條是刻意鎖死的。馬丁格爾與另外三個框架性質不同：
-        金字塔／倒金字塔／網格都是有上限的部位管理，而它照定義是無上限的
-        （虧損後加倍）。「只要一次反彈就解套」在「資金無限」時才成立，
-        真實帳戶不成立 —— 少了這個前提，它讀起來就會像一個穩賺的方法。
+        This one is deliberately nailed down. Martingale differs in kind from the other three frameworks:
+        pyramid, inverted pyramid and grid are all bounded position management, while by definition Martingale is
+        unbounded (double after a loss). "One bounce and you are whole again" only holds with infinite capital,
+        which no real account has —— without that premise stated, it reads like a guaranteed win.
       */
       expect(system).toContain('標的不會歸零、而且資金無限')
       expect(system).toContain('真實帳戶兩者都不成立')

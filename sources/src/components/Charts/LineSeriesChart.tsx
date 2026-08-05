@@ -56,9 +56,10 @@ export function LineSeriesChart({
   const values = points.map((p) => p.value)
 
   /*
-    漸層的 id 不能直接用 useId() 的原值：React 產生的是 `:r3:` 這種帶冒號的字串，
-    而 `url(#:r3:)` 不是合法的選擇器語法，填色會整片消失。去掉冒號再用。
-    同一頁會有多張圖（匯率頁兩張、籌碼頁兩張），id 必須逐個實例唯一，不能寫死。
+    The gradient id cannot be useId()'s raw value: React produces strings like `:r3:` with colons in them, and
+    `url(#:r3:)` is not valid selector syntax —— the fill silently disappears. Strip the colons first.
+    One page can hold several charts (two on the FX page, two on the chips page), so the id must be unique per
+    instance and cannot be hard-coded.
   */
   const gradId = `chart-area-${useId().replace(/:/g, '')}`
 
@@ -83,8 +84,9 @@ export function LineSeriesChart({
         <>
           <defs>
             {/*
-              stop 的顏色必須是字面值，不可用 CSS 變數 —— html2canvas 序列化 SVG 時
-              解析不到祖先層的變數，籌碼報告的 PDF 會整片變黑（見 chartColors.ts）。
+              The stop colours must be literals, never CSS variables —— when html2canvas serialises the SVG it
+              cannot resolve variables from ancestor scopes, and the chip report's PDF comes out solid black
+              (see chartColors.ts).
             */}
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.28} />
@@ -92,7 +94,7 @@ export function LineSeriesChart({
             </linearGradient>
           </defs>
 
-          {/* 面積在折線之下：先畫，才不會蓋住線與圓點 */}
+          {/* Area below the line: drawn first so it cannot cover the line and its dots */}
           {areaSegments(values, geo).map((d, i) => (
             <polygon key={`area-${i}`} points={d} fill={`url(#${gradId})`} stroke="none" />
           ))}

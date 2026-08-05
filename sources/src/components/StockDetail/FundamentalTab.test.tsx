@@ -184,9 +184,10 @@ describe('FundamentalTab', () => {
     expect(poly).toBeTruthy()
 
     /*
-      圖必須由舊到新。resource: revenueMonths 是 05 月 → 06 月（舊→新），
-      而表格刻意 reverse 成新→舊 —— 圖若拿錯那份，整條線會反過來而且看起來像真的
-      （趨勢完全相反），是最不容易被發現的錯，故用 y 座標直接釘住方向。
+      The chart must run oldest to newest. Source: revenueMonths goes May → June (old → new), while the table is
+      deliberately reversed to new → old —— if the chart took the wrong one the line would run backwards **and
+      still look plausible** (the trend exactly inverted), the hardest kind of bug to notice, so the direction is
+      pinned by y coordinate.
     */
     const [p1, p2] = (poly!.getAttribute('points') ?? '').split(' ')
     const y = (pt: string) => Number(pt.split(',')[1])

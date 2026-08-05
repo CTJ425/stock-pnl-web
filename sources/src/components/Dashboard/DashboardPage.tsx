@@ -100,10 +100,12 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
                 ) : (
                   <>
                     {/*
-                      0.6.34 把 0.6.20 的放大加粗改回一般字級，改用顏色表示今天的漲跌
-                      （紅漲綠跌，基準是昨收）。顏色比字級精確：放大只說得出「這欄重要」，
-                      顏色說得出「今天是漲是跌」，而後者才是看現價時真正想知道的事。
-                      抓不到昨收（台股 OpenAPI 備援）時是平盤色，不是「今天沒動」。
+                      0.6.34 reverted 0.6.20's larger bold type to the normal size and uses colour for today's
+                      move instead (red up, green down, against yesterday's close). Colour is more precise than
+                      size: size only says "this column matters", colour says "today it is up or down", and the
+                      latter is what you actually want from a current price.
+                      With no previous close (the TWSE OpenAPI fallback) it is flat-coloured, which does not
+                      mean "unchanged today".
                     */}
                     <span title={dayChangeHint(row, currency)}>
                       {fmtPrice(price, currency)}

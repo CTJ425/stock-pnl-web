@@ -327,8 +327,8 @@ describe('aiClient', () => {
       expect(first.reasoning_effort).toBe('none')
       expect(first.max_tokens).toBe(OPENAI_MAX_TOKENS)
       /*
-        第二次退回最小集合。400 不會告訴你是哪個欄位不合，
-        逐一嘗試等於要打好幾輪，所以一次全部拿掉。
+        The second attempt falls back to the minimal set. A 400 does not say which field it disliked, and trying
+        them one at a time would take several rounds, so they all come off at once.
       */
       expect(second.reasoning_effort).toBeUndefined()
       expect(second.think).toBeUndefined()

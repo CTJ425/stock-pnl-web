@@ -156,7 +156,7 @@ function TabNav({
     <nav className={isBottom ? 'bottom-nav' : 'tabs'} aria-label="主要頁面">
       {tabs.map(({ id, label, short, group, icon: Icon }, i) => (
         <Fragment key={id}>
-          {/* 換組時插一道分隔。純視覺，對輔助技術隱藏 */}
+          {/* A divider between groups. Purely visual, hidden from assistive technology */}
           {i > 0 && tabs[i - 1].group !== group && <span className="tab-div" aria-hidden="true" />}
           <button
             type="button"
@@ -344,10 +344,10 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
           </button>
           <div className="hmenu-sep" />
           {/*
-            管理後台的隱藏**只是介面上的整理，不是安全邊界** —— 真正的把關在
-            Edge Function 的 `assertAdmin` 與資料表的 RLS（前端藏起來的東西，
-            任何人改一行 JS 就能叫出來）。繞過這個判斷把後台叫出來，
-            也只會拿到 403 與讀不到資料的空頁。
+            Hiding the admin console is **housekeeping in the interface, not a security boundary** —— the real
+            gate is `assertAdmin` in the Edge Function plus RLS on the tables (anything the frontend hides can
+            be summoned by editing one line of JS). Bypassing this check to open the console only earns a 403
+            and a page with no data in it.
           */}
           {admin && (
             <button
@@ -464,9 +464,9 @@ function WorkspaceControls() {
   return (
     <div className="ws-select">
       {/*
-        切換與管理放在同一個選單裡：管理動作本來就只作用在「目前這個工作區」，
-        把它們跟工作區清單擺在一起，作用對象不必用猜的。
-        刪除隔一條分隔線並用紅色 —— 它原本與「重新命名」並排，都是 14px 無標籤圖示。
+        Switching and managing share one menu: the management actions only ever act on "the workspace you are
+        in", so putting them next to the workspace list means the target never has to be guessed.
+        Delete is set off by a divider and coloured red —— it used to sit beside 重新命名, both 14px unlabelled icons.
       */}
       <HeaderMenu
         triggerLabel={`工作區：${current?.name ?? '未選擇'}`}
@@ -681,13 +681,13 @@ export function AppShell() {
         <p>
           提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
         </p>
-        {/* GitHub 連結已收進使用者選單（0.6.19）：頁尾留給免責聲明 */}
+        {/* The GitHub link moved into the user menu (0.6.19): the footer is left to the disclaimer */}
       </footer>
 
-      {/* 手機底部導覽：必須掛在 .app-header 之外，理由見 useNarrowScreen 的註解 */}
+      {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
       {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
 
-      {/* 全域新增交易：任何分頁皆可使用；Modal 掛在外殼層，內容區重載也不會消失 */}
+      {/* Global "add transaction": available from any tab; the modal is mounted at the shell level so a content reload cannot drop it */}
       {!loading && (
         <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
           <ListPlus size={17} />

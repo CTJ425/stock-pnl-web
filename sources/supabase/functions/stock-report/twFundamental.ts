@@ -398,13 +398,16 @@ export function mergeProfitQuarters(
   const merged = mergePeriodSeries(prev, incoming, (q) => q.yearQuarter, PROFIT_QUARTERS_CAP, opts)
 
   /*
-    EPS 逐欄合併，不跟著整筆取捨走（0.6.28）。它是唯一「只有回補路徑才有」的欄位，
-    整筆取捨會在**兩個方向**都出錯：
+    EPS is merged field by field rather than following the whole-record decision (0.6.28). It is the only field
+    that **exists solely on the backfill path**, and a whole-record decision goes wrong in **both** directions:
 
-    - `fillGapsOnly`（回補）：同一季以既有的為準 → 回補帶來的 EPS 整筆被丟掉，永遠補不進來。
-    - 預設覆寫（每晚的 t187ap17_L）：新的一筆沒有 EPS → 每晚把補好的 EPS 清掉一次。
+    - `fillGapsOnly` (backfill): the existing quarter wins → the EPS the backfill just found is thrown away and
+      can never land.
+    - default overwrite (the nightly t187ap17_L): the new record has no EPS → every night wipes the EPS that was
+      filled in.
 
-    規則因此與比率相反：**誰查過季報誰贏，不管它在合併的哪一邊。**
+    So the rule is the opposite of the ratios': **whoever consulted the quarterly report wins, whichever side of
+    the merge they are on.**
   */
   const known = new Map<string, ProfitQuarter>()
   for (const q of [...(prev ?? []), ...(incoming ?? [])]) {

@@ -128,8 +128,9 @@ describe('MacroPage', () => {
 
   it('全表依升降上色：非農「值是正的但比上期低」也是綠的（0.6.35）', async () => {
     /*
-      這條測試鎖的是 0.6.35 那個刻意的取捨：0.6.34 之前非農依「數值正負」上色
-      （+57 千人＝紅），現在全表統一看升降，所以它變綠。同一張表不能有兩套顏色規則。
+      This test pins the deliberate trade-off from 0.6.35: before 0.6.34 non-farm payrolls were coloured by the
+      sign of the value (+57k = red); the whole table now reads rise/fall, so it turns green. One table cannot
+      carry two colour rules.
     */
     fetchMacro.mockResolvedValue({
       ...macro,

@@ -152,7 +152,7 @@ function DayDetail({ day }: { day: MarketDay }) {
   const sell = day.institutional?.sell
   return (
     <tr className="detail-row">
-      {/* 日期欄 + 六個單位 + 趨勢 + 連續 */}
+      {/* Date column + six units + trend + streak */}
       <td colSpan={UNITS.length + 3} style={{ padding: '4px 14px 10px 34px' }}>
         <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
           <thead>
@@ -189,9 +189,10 @@ export function TwMarketSection() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   /*
-    三張圖共用的 hover 索引（0.6.34）。放在這裡而不是各圖自持，是為了讓滑到某一天時
-    K 線、指數走勢、成交金額同時反白同一天 —— 使用者問的是「那天發生什麼」，
-    不是「那天的指數是多少」。索引對得起來的前提是三張圖吃同一組 days（見下方 candles）。
+    A hover index shared by all three charts (0.6.34). It lives here rather than in each chart so that hovering
+    a day highlights that same day on the candles, the index line and the turnover bars —— the user is asking
+    "what happened that day", not "what was the index that day". The indices only line up because all three
+    charts consume the same `days` (see candles below).
   */
   const [hover, setHover] = useState<number | null>(null)
 
@@ -232,10 +233,11 @@ export function TwMarketSection() {
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
   /*
-    K 線要開高低收四個價，缺任何一個那根就不畫 —— 開高低與收盤是不同來源，
-    最新一兩天可能只有收盤。**但那一天的欄位要留著**（0.6.34）：三張圖疊起來共用
-    一個 hover 索引，把不完整的日子過濾掉會讓 K 線的第 N 根不是另外兩張的第 N 天。
-    用收盤補開高低仍然不行，那會畫出一整排十字線，看起來像那天真的沒有波動。
+    A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
+    different source than close, so the last day or two may have close only. **But that day's slot must stay**
+    (0.6.34): the three stacked charts share one hover index, and filtering incomplete days out would make the
+    Nth candle a different day from the Nth point of the others. Padding open/high/low with the close is no
+    better: it draws a row of doji that look like a day with no movement at all.
   */
   const candles = days.map((d) => ({
     label: shortDate(d.date),
@@ -249,15 +251,15 @@ export function TwMarketSection() {
   ).length
   const latest = days[days.length - 1] ?? null
   /*
-    法人金額是逐日回補的，最新幾天常常還沒補到（見 marketProxy 的說明）。
-    KPI 取「最近一筆有法人金額的日子」而不是直接讀 latest，
-    否則剛收盤那幾小時整排會顯示「—」，看起來像壞掉。
+    Institutional amounts are backfilled day by day and the most recent days are often not filled yet (see the
+    notes in marketProxy). The KPI takes "the latest day that has institutional amounts" rather than reading
+    `latest` directly —— otherwise the whole row shows "—" for the hours right after the close and looks broken.
   */
   const latestInst = [...days].reverse().find((d) => d.institutional) ?? null
 
   /*
-    趨勢欄的底稿：取全部 60 天裡「有法人金額」的日子，由舊到新。
-    表格只有 7 列，但走勢要看 15 天 —— 所以底稿不能只用 instDays。
+    Source for the trend column: every day among the 60 that has institutional amounts, oldest first.
+    The table shows 7 rows but the trend needs 15 days —— so it cannot be built from instDays alone.
   */
   const trendDays = days.filter((d) => d.institutional?.totalTwd != null)
   const trendValues = trendDays.map((d) => d.institutional!.totalTwd!)
@@ -272,9 +274,9 @@ export function TwMarketSection() {
     })
 
   /*
-    「全部展開」只認**展得開**的列（有買進 / 賣出明細的）。
-    若把還沒補到明細的舊資料日也算進來，allOpen 永遠是 false，
-    按鈕會卡在「全部展開」按不動 —— 同 YearlyPage 只計 sells 不為空的個股。
+    "Expand all" only counts rows that **can** expand (those with buy/sell detail). Counting older data days
+    whose detail has not been backfilled would keep allOpen false forever and jam the button on "expand all" ——
+    same as YearlyPage counting only stocks whose sells are non-empty.
   */
   const expandable = instDays.filter((d) => d.institutional?.buy).map((d) => d.date)
   const allOpen = expandable.length > 0 && expandable.every((d) => expanded.has(d))
@@ -335,14 +337,14 @@ export function TwMarketSection() {
       </div>
 
       {/*
-        三張圖上中下疊放、共用同一個 hover 索引（0.6.34；0.6.33 是 K 線與走勢線左右並排）。
+        Three charts stacked top to bottom sharing one hover index (0.6.34; in 0.6.33 the candles and the index
+        line sat side by side).
 
-        **Why is it up and down instead of left and right**: Swipe to a certain day to see the amplitude, index position and energy of that day at the same time.
-        而三張圖只有在同寬、同一組 X 軸、同一個索引時，crosshair 才會落在同一天。
-        左右並排的話每張只有一半寬度，同一個像素位置代表的日子不一樣。
+        The crosshair only lands on the same day across all three when they share width, X axis and index.
+        Side by side, each is half as wide and the same pixel position means a different day in each.
 
-        `hover` 由這裡持有、傳給三張圖，所以滑鼠在任何一張上都會三張一起反白，
-        三個 tooltip 各報自己那件事（K 線報開高低收、走勢線報指數、金額報億元）。
+        `hover` is held here and passed down, so the mouse over any one of them highlights all three, and each
+        tooltip reports its own thing (candles: OHLC; line: the index; bars: hundred-million TWD).
       */}
       <div style={{ marginTop: 16 }}>
         <div className="chart-title">加權指數日 K（近 {drawableCandles} 個交易日）</div>
@@ -390,11 +392,12 @@ export function TwMarketSection() {
 
       {/*
         **The table is from new to old, and the trend chart is from old to new** - consistent with the treatment of monthly revenue and profitability:
-        走勢圖左邊必須是比較早的日子，而表格第一列要是最近的那天。
-        兩者方向刻意相反，不是筆誤。
+        The left edge of a trend chart must be the earlier day, while the first row of the table must be the most
+        recent one. The two directions are deliberately opposite; this is not a slip.
 
-        原本這裡還有一張法人買賣超長條圖，0.6.33 移除：同一份數字已經有表格（看得到金額）
-        與趨勢欄（看得出方向），長條圖是第三種說法，只是把卡片拉長。
+        There used to be an institutional net-buy bar chart here, removed in 0.6.33: the same numbers already have
+        a table (showing the amounts) and a trend column (showing direction). A bar chart was a third telling of
+        the same thing that only made the card taller.
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
         <div className="chart-title">
@@ -451,7 +454,7 @@ export function TwMarketSection() {
                         {d.date}
                       </div>
                     </td>
-                    {/* 這一天還沒補到法人金額時整列給「—」，不要用 0 冒充 */}
+                    {/* When a day's institutional amounts are not filled yet the whole row is "—"; never fake it with 0 */}
                     {UNITS.map((u) => {
                       const b = toBillion(inst?.[u.key] ?? null)
                       return (
@@ -471,9 +474,10 @@ export function TwMarketSection() {
       </div>
 
       {/*
-        0.6.33 由兩大段砍成一句。原本連抓取週期都寫在這裡，但那是排程的事、
-        使用者看盤時不需要，而且前端自備一份班次常數必然與 pg_cron 漂移
-        （實際就漂了：寫著「最多 5 天」時後端已經是 15）。整段移到後台的抓取狀況頁。
+        Cut from two long paragraphs to one sentence in 0.6.33. The fetch cycle used to be described here too,
+        but that is a scheduling matter the user does not need while watching the market, and a frontend copy of
+        the shift constants is bound to drift from pg_cron —— it did: this said "at most 5 days" while the
+        backend was already on 15. The whole passage moved to the admin fetch-status page.
       */}
       <p className="hint" style={{ marginTop: 8 }}>
         買賣超＝買進金額−賣出金額，紅色為買超；「—」是那天還沒補到，不是沒有進出。

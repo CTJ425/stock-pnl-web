@@ -145,8 +145,9 @@ export function ChartFrame({
   return (
     <div className="chart-wrap" ref={wrapRef}>
       {/*
-        整張圖一個 tab stop：聚焦後用左右方向鍵逐點移動、Home / End 跳頭尾、Esc 取消。
-        role 由 img 改為 group —— 可聚焦、可操作的東西不該宣告成一張圖片。
+        One tab stop for the whole chart: once focused, arrow keys step point by point, Home / End jump to the
+        ends, Esc cancels. role changed from img to group —— something focusable and operable should not
+        announce itself as a picture.
       */}
       <svg
         className="chart-svg"
@@ -196,7 +197,7 @@ export function ChartFrame({
             </g>
           ))}
 
-          {/* crosshair 畫在標記之前，才會被折線與面積蓋在下面（同 Google Finance） */}
+          {/* The crosshair is drawn before the markers so the line and area sit on top of it (as Google Finance does) */}
           {crosshair && hover !== null && (
             <line
               x1={geo.bandCenter(hover)}
@@ -225,13 +226,12 @@ export function ChartFrame({
           ))}
 
           {/*
-            透明命中區：整欄可 hover，比細長條好點。
+            Transparent hit area: the whole column is hoverable, which is easier to hit than a thin bar.
 
-            **These rects are intentionally unfocusable** (0.6.8). Originally each of them was `tabIndex={0}`,
-            一年份的日 K 就是 244 個看不見的 tab stop；0.6.8 把四段併成一頁之後，
-            同一頁最多會有 765 個 —— 鍵盤使用者要按七百多次才離得開這一頁。
-            改成整張圖一個 tab stop（見 <svg> 的 tabIndex 與 onKeyDown），
-            進到圖上後用左右方向鍵逐點移動。
+            A year of daily candles is 244 invisible tab stops; after 0.6.8 merged the four sections into one
+            page, a single page could hold up to 765 —— a keyboard user would press tab seven hundred times to
+            get past it. Hence one tab stop for the whole chart (see tabIndex and onKeyDown on the <svg>),
+            with arrow keys stepping between points once inside.
           */}
           {labels.map((label, i) => (
             <rect

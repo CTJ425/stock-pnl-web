@@ -55,8 +55,8 @@ export function mopsProfitBody(market: MopsMarket, yearQuarter: string): string 
 }
 
 /* ── Header comparison ──────────────────────────────────────────
-   同一個概念在不同產業別的表格裡叫不同名字，依序比對、取第一個命中的。
-   順序有意義：先試最精確的名稱，再退到比較泛用的。
+   The same concept is named differently in each industry's table, so the candidates are tried in order and the
+   first hit wins. The order matters: try the most specific name first, then fall back to the more generic one.
    ────────────────────────────────────────────────────────── */
 
 /** Operating income (the denominator of the ratio). The banking industry does not have a single column, so it is not included - the entire industry group returns null*/
@@ -201,11 +201,12 @@ export function planProfitBackfill(
   for (const { quarters, needEps, through } of have.values()) {
     for (const yq of wantQuarters) {
       /*
-        EPS 缺口不受 `through` 限制（0.6.28）。
-        through 記的是「比它更舊的都還沒問過」，而 EPS 缺口恰好出現在**最新**那幾季
-        （夜間批次剛寫進來、還沒被回補碰過），正好在 through 的另一側 ——
-        沿用同一條判斷的話，新一季的 EPS 永遠補不到。
-        `epsChecked` 保證這不會變成無限重抓：問過一次就不再算缺口，即使那一季真的沒有 EPS。
+        EPS gaps are not bounded by `through` (0.6.28).
+        `through` records "everything older than this has not been asked about yet", but EPS gaps appear in the
+        **newest** quarters —— just written by the nightly batch and never touched by backfill —— which is on the
+        other side of `through`. Reusing the same condition would mean a new quarter's EPS is never filled.
+        `epsChecked` keeps this from becoming an endless refetch: once asked, a quarter stops counting as a gap,
+        even if it genuinely has no EPS.
       */
       if (needEps?.has(yq)) {
         missing.add(yq)

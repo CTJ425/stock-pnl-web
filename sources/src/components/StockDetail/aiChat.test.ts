@@ -61,8 +61,9 @@ describe('buildChatSystem', () => {
   })
 
   /*
-    0.6.19 起追問準則可由管理員在後台改寫，但框限那一段不開放 ——
-    它就是「防止助理被問成別的東西」的整道牆，開放編輯等於讓人一鍵拆掉。
+    Since 0.6.19 an admin can rewrite the follow-up guidelines, but the bounding section stays closed ——
+    it is the entire wall that keeps the assistant from being talked into something else, and making it editable
+    would let anyone tear it down in one click.
   */
   it('管理員改寫追問準則時，框限與防注入條款仍然接在後面', () => {
     const custom = buildChatSystem(payload, '分析全文', '什麼都可以聊，不必客氣。')

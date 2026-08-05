@@ -42,11 +42,12 @@ export const TW_CHAIN: readonly ChainSpec[] = [
   // Users therefore believe that the entire market has also been monitored.
   { id: 'institutional', label: '三大法人・個股', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
   /*
-    全市場法人的 dueBy 取法與其他四列不同，不是筆誤：
-    其他列由盤後批次（16:00–23:45 每 15 分）負責，公布窗一結束的下一班就該到手；
-    全市場走的是獨立排程 market-daily，**整天只有 16:00 / 17:00 / 18:00 三班**，
-    最後一班是距 15:00 的第 3 小時。取 3（加 ROUND_GRACE_HOURS 後為 18:15）。
-    若沿用 1.5，每天 16:15 一到就亮紅燈 —— 而永遠亮著的告警等於沒有告警。
+    The market-wide row takes its dueBy differently from the other four, and that is not a slip:
+    the others are served by the after-hours batch (16:00–23:45, every 15 minutes), so the round right after the
+    announcement window closes should already have them. The market-wide figures come from the separate
+    `market-daily` schedule —— **Taipei 15:00–18:30, every half hour** (0.6.38; before that 16:00 / 17:00 / 18:00).
+    Its last round is the 3rd hour after 15:00, so dueBy is 3 (18:15 once ROUND_GRACE_HOURS is added).
+    Keeping 1.5 would light a red lamp at 16:15 every day —— and an alarm that is always on is no alarm.
   */
   { id: 'market', label: '三大法人・全市場', hint: 'BFI82U', window: [0, 0.5], dueBy: 3 },
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
@@ -171,7 +172,7 @@ export function humanAgo(ms: number): string {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   總經班次軸（M1）。橫軸是一整天的台北時間 00:00 → 24:00。
+   Macro shift axis (M1). The horizontal axis is one whole Taipei day, 00:00 → 24:00.
    ────────────────────────────────────────────────────────────── */
 
 /**

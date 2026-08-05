@@ -60,14 +60,14 @@ export function AnalysisPage() {
     `${r.holding.ticker} ${displayStockName(r.holding.market, r.holding.ticker, r.holding.name)}`
 
   /*
-    0.6.7 由原生 `<select>` 換成與頁首工作區選單同一個 HeaderMenu。
+    0.6.7 swapped the native `<select>` for the same HeaderMenu the workspace switcher uses.
 
-    起因是實際壞掉了：`.ws-select select` 的樣式（含內嵌的 chevron 圖示）在 0.6.6
-    被當成「dev.3 之後選不到任何元素的死 CSS」整段刪除 —— 但那只對頁首成立，
-    這裡一直還在用它，於是這顆下拉退化成毫無樣式的瀏覽器原生控制項。
+    It was prompted by an actual breakage: the styles for `.ws-select select` (including the inline chevron icon)
+    were deleted wholesale in 0.6.6 as "dead CSS that has matched nothing since dev.3" —— true for the header,
+    but this dropdown was still using them, so it degraded into an unstyled native browser control.
 
-    修法不是把 CSS 補回來，而是收斂到同一個元件：兩處本來就該長一樣，
-    各留一份樣式正是這次會走鐘的原因。
+    The fix was not to restore the CSS but to converge on one component: the two places were always meant to
+    look the same, and keeping a copy of the styles each is exactly why they drifted.
   */
   const selector = (
     <div className="ws-select">

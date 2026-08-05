@@ -420,9 +420,10 @@ describe('StockDetailPage', () => {
     expect(screen.getByRole('button', { name: /下載 PDF/ })).toBeTruthy()
 
     /*
-      共用報告一路以來就不含個資。0.6.35 以前靠「持股排在 surfaceRef 之外」擋住，
-      0.6.36 起那張卡換成報價（公開市場資料），四段都進匯出範圍 ——
-      改由「畫面上根本沒有持股數字」把關，這條測試釘的是後者。
+      The shared report has never contained personal data. Before 0.6.35 that was enforced by keeping holdings
+      outside surfaceRef; since 0.6.36 that card is the quote (public market data) and all four sections are in
+      the export range —— what guards it now is that no holding figure appears on screen at all, and this test
+      pins the latter.
     */
     const stacks = container.querySelectorAll('.detail-stack')
     const captured = stacks[stacks.length - 1]
@@ -548,8 +549,9 @@ describe('StockDetailPage', () => {
 
   it('基本面已存在但歷史沒補滿時仍補叫 warm（新股票不該只有兩三個月）', async () => {
     /*
-      0.6.29：原本只在「完全查無」時叫 warm，於是新股票第一次開頁建好檔案之後
-      就再也不叫了 —— 剩下的月份與季別要等夜間批次，而那段排在批次的短路判斷之後。
+      0.6.29: warm used to be called only on a complete miss, so once a new stock's file was built on first open
+      it was never called again —— the remaining months and quarters had to wait for the nightly batch, and that
+      part runs after the batch's short-circuit check.
     */
     const month = (yearMonth: string) => ({
       yearMonth,
@@ -684,8 +686,8 @@ describe('StockDetailPage', () => {
         .filter((t) => /^-?[\d,]+$/.test(t))
 
     /*
-      以 title 定位，不用 role + name：上方切換法人的 .chip-btn 用的是同一批文字，
-      按名稱抓會同時命中兩顆按鈕（切換與圖例）。
+      Located by title rather than role + name: the institutional toggle .chip-btn above uses the same words, so
+      querying by name would match two buttons (the toggle and the legend).
     */
     const legendToggle = (label: string) =>
       screen.getByTitle(new RegExp(`^(隱藏|顯示)${label.replace(/[()（）]/g, '\\$&')}$`))
@@ -721,9 +723,10 @@ describe('StockDetailPage', () => {
   })
 
   /*
-    0.6.23 曾讓表格可收合，收起來的區塊不在 DOM 裡，匯出就會產出一份缺表格的 PDF；
-    0.6.24 移除收合後，擷取範圍理當「畫面上有什麼就是什麼」——這條測試守住這件事，
-    順便確認當時為了收合而加的展開／還原邏輯沒有殘留。
+    0.6.23 briefly made the tables collapsible; a collapsed block is not in the DOM, so exporting produced a PDF
+    with the table missing. After 0.6.24 removed collapsing, the capture range is simply "whatever is on screen"
+    —— this test holds that line, and incidentally checks that the expand/restore logic added for collapsing left
+    nothing behind.
   */
   it('匯出 PDF：擷取的是報價＋籌碼＋基本面＋技術面四段', async () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
