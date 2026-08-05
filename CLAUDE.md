@@ -83,8 +83,6 @@ The same bug record takes 930 tokens / 1416 characters in Chinese, but 383 token
 **Exceptions to keeping Chinese:**
 
 - `README.md` —— The facade of the project, readers are humans, not agents.
-- **Code comments and UI text** —— Readers are developers and users. This rule is absolute:
-  The value of comments lies in precisely expressing "why it is not done that way", and language translation is exactly what wears down this kind of reasoning.
 - Conversations with users —— According to global rules, still use Traditional Chinese (Taiwanese usage).
 
 **Existing Chinese documents are not forced to be retroactively translated**: The one-time cost is about 300K tokens, and it takes about 20 sessions to break even.
