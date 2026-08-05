@@ -8,6 +8,33 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-011 — The after-close lock froze an intraday snapshot until the next morning
+- **Date**: 2026-08-05 (introduced in 0.6.36, fixed in 0.6.37)
+- **Discovered by**: Production, on the same day 0.6.36 went live.
+- **Symptom**: After 13:30 the quote card on the individual-stock analysis page kept reading "盤中",
+  and open / high / low / volume / previous close were all "—", with no way to recover before 08:25 the next day.
+- **Root Cause**: `twQuoteTtlMs` locked the quote on the clock alone — "it is past 13:30, so no new price will arrive
+  today". That reasoning holds for the **price**, but not for **"is this row the settled closing value"**.
+  Rows lacking `trade_time` are intraday snapshots: written before the 0.6.36 column upgrade, or coming from a fallback
+  path that has no such field (Yahoo / TWSE OpenAPI). 0.6.36 explicitly chose not to let a missing `t` block the lock,
+  and the production upgrade at 16:47 left exactly such pre-upgrade rows in `price_cache`.
+  The 13:30–14:00 grace window did not help either: it only covered a `t` that existed but was too early, and it expired
+  at 14:00, after which even a stuck intraday matching time was frozen for the whole night.
+- **Impact**: Production only, after 13:30 on 2026-08-05. Display layer only — no wrong number was ever shown,
+  the card simply stopped updating and showed placeholders.
+- **Fix**: `quoteWindow.ts` — the lock now requires a confirmed close (`tradeTime >= '13:30:00'`); a missing or earlier
+  `t` returns the 60-second TTL at any hour, and the 14:00 `CONFIRM_MS` deadline is gone.
+  A new `twMaxTtlMs(now)` supplies the upper bound for the `freshAfter` coarse filter in `stock-price/index.ts`,
+  which cannot know each row's `trade_time` — without it the coarse filter would drop yesterday's settled close
+  and refetch all night.
+- **Tests**: `quoteWindow.test.ts` (rewritten around the new rule, including the case that locks the old behaviour out)
+  and `priceProxy.test.ts`; whole suite 877 passed across 57 files.
+- **Status**: ✅ FIXED and **live in both environments** (0.6.37). The browser half shipped with the push to `main`;
+  the Edge half was deployed at 20:57 (dev v10 → **v11**) and 20:58 (prod v14 → **v15**), `verify_jwt` staying `true`.
+  Evidence that it is the new code: `ezbr_sha256` moved from `00ce1004…` (the 0.6.36 build both environments shared)
+  to `733891b768b2…`, **identical in both** — see Task 71 for why the sha, not the version number, is the evidence.
+- **Timestamp**: 2026-08-05 21:05:00 Asia/Taipei
+
 ### Bug ID: BUG-010 — All legal entities in the market were received on time, but were drawn off-axis and judged as "delayed"
 - **Date**: 2026-08-05 (introduced in 0.6.33, fixed in 0.6.36-dev.2)
 - **Discovered by**: The user looked at the screen and reported "After the train started at 16:00, the status is still the same. Is this a BUG?"
@@ -32,7 +59,7 @@
   Comparing it with it will cause the only column that should have a red light to be regarded as not caught; similarly, it will not participate in the calculation of `roundBaseYmd`.
 - **Tests**: `timeline.test.ts` 4 items (including the control that directly locks the old behavior of "25 hours → late"),
   `AdminStatusPage.test.tsx` 1 transaction (when the whole market comes first, the title will jump, the individual stocks will show waiting and the old date will not be displayed).
-- **Status**: ✅ FIXED (0.6.36-dev.2); ⚠️ Not yet deployed to the official area (pure front-end, merged and launched with main)
+- **Status**: ✅ FIXED (0.6.36-dev.2) and live — pure front-end, shipped with the 0.6.36 merge to `main` at 16:55.
 - **Timestamp**: 2026-08-05 16:35:00 Asia/Taipei
 
 ### Bug ID: BUG-009 — The three major legal entities arrived on time but were judged to be "delayed" by three seconds.

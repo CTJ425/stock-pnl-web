@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-05 16:55:00 Asia/Taipei
+- Timestamp: 2026-08-05 21:05:00 Asia/Taipei
 
 ---
 
@@ -11,6 +11,40 @@
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
 ## 📋 Active Tasks
+
+### Task 71: Deploy the 0.6.37 `stock-price` fix to both environments
+- **Status**: ✅ **Done — deployed to both environments** (dev v11 at 20:57, prod v15 at 20:58, user explicitly authorised)
+- **Agent**: Claude
+- **Timestamp**: 2026-08-05 21:05:00 Asia/Taipei
+- **What is done**: 0.6.37 fixes BUG-011 (the after-close lock froze an intraday snapshot). Version is synchronised
+  across `version.ts` / `package.json` / `README.md`, `main` and `dev` are both at `2dac793`, and the browser half
+  went live with the push to `main`.
+- **What is not done**: the fix also changed `supabase/functions/stock-price/{index.ts,quoteWindow.ts}`, and the
+  Edge Function was never redeployed. Read-only check at 2026-08-05 20:51 —— prod `stock-price` **v14**
+  (deployed 16:47) and dev **v10** (deployed 16:01) carry the **same** `ezbr_sha256 00ce1004…`, i.e. the 0.6.36 build;
+  the 0.6.37 commit came later, at 17:06. So neither environment is running the fix.
+- **Why it matters**: the two layers must agree (`SPEC.md`, "Taiwan stocks no longer price-catch after closing").
+  With only the browser fixed, any device whose local cache expires still gets the locked snapshot from Edge.
+- **What was run** (from `sources/`, dev first per §13.1; **`--no-verify-jwt` is for `stock-report` only**,
+  `stock-price` keeps `verify_jwt: true` and did):
+  ```bash
+  supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew   # v10 → v11, 20:57
+  supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu   # v14 → v15, 20:58
+  ```
+- **Evidence it is really the new code**: `ezbr_sha256` went from `00ce1004…` — the 0.6.36 build **both** environments
+  were sharing — to `733891b768b2…`, again identical in both. The sha is the evidence; a bumped version number only
+  proves that *something* was uploaded, and the `supabase-ops` skill records a case where a newer version was older code.
+- **The skill's preferred audit was not available**: `functions download` still fails with "Access token not provided"
+  in this environment, exactly as Task 69 found — `deploy` and `list` use a different auth path and work fine.
+  The cross-environment sha match substitutes for the file-by-file diff.
+- **Not verified at runtime**: that a `price_cache` row with a null `trade_time` now refreshes instead of staying frozen.
+  It needs either a service key (only the anon key is in `sources/.env`) or `db query --linked`, and linking has global
+  side effects. The rule itself is covered by the `quoteWindow` unit tests; the natural end-to-end check is Task 69
+  item 2 tomorrow morning.
+- ⚠️ `supabase link` still points at **production** (`kxnxadaghidwumqsqneu`) — see the `supabase-ops` skill;
+  re-link before any command that relies on the linked project, especially any writing `db query --linked`.
+- **Note on process**: 0.6.37 was committed straight to `main`, against CLAUDE.md §13.1 (dev first). The two branches
+  are back in sync, so nothing needs unwinding — recorded so the next Agent does not read it as the norm.
 
 ### Task 69: Move individual stock analysis to quote card; Stop fetching prices after Taiwan stock market closes (0.6.36-dev.1)
 - **Status**: ✅ **Done, deployed to both environments** (Test at 16:10, Prod at 16:47; 0.6.36 merged to main)
@@ -46,7 +80,15 @@
 - **Pending verification (cannot confirm after hours, need to check next day during market hours)**:
   1. There is an approx 10% discrepancy between MIS `v` and TWSE daily report `TradeVolume` (31,851 shares vs Yahoo's 35,214 shares),
      speculated to be after-hours fixed-price trading not included —— unit is confirmed as "shares", discrepancy source to be reconciled next day with `STOCK_DAY_ALL`.
+     **Still blocked as of 2026-08-05 20:50** —— `STOCK_DAY_ALL` was re-checked seven hours after the close and its
+     `Date` is *still* `1150804`, 2330 still at `ClosingPrice` 2320. So the endpoint lags by more than a full evening,
+     not merely a couple of hours; reconcile against 08-05 once it finally publishes. Two extra facts worth keeping:
+     that endpoint returns 1377 TWSE records only —— **6488 is not in it at all** (TPEx listing), so it could never have
+     served as a single source anyway, and its `TradeVolume` is in **shares** (2330 on 08-04: 41,021,199), while the
+     quote card's unit is lots. Convert before comparing.
   2. MIS actual returned `ip` / `t` during trial matching period (08:30–09:00), confirm "Estimate" cell displays as expected.
+     Do this **after** Task 71 is deployed, otherwise Edge is still running 0.6.36 and the observation would not describe
+     the shipped code.
 
 ### Task 70: Fix backend timeline base date (0.6.36-dev.2)
 - **Status**: ✅ **Done and deployed** (0.6.36 merged to main) —— pure frontend, no Edge Function deployment needed

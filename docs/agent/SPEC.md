@@ -563,20 +563,27 @@ Using it as "today's closing" will display yesterday's closing and today's closi
 `supabase/functions/stock-price/quoteWindow.ts` 的 `twQuoteTtlMs(now, tradeTime?)`
 It is a pure function shared by **front-end and Edge Function** (front-end cross-directory import follows the existing pattern of `misParse.ts`):
 
-| Taipei Time | Taiwan Stock Quote TTL |
-| ---- | ---- |
-| 08:25–13:30 (Trial and Intraday) | 60 seconds |
-| 13:30 to 08:25 of the next day | to 08:25 of the next day |
+| Taipei Time | Matching time `t` reported by the source | Taiwan Stock Quote TTL |
+| ---- | ---- | ---- |
+| 08:25–13:30 (Trial and Intraday) | any | 60 seconds |
+| Outside that window | `t` ≥ `13:30:00` (confirmed close) | to 08:25 of the next day |
+| Outside that window | `t` missing or earlier than 13:30 | 60 seconds (keep retrying) |
 
 - **No status, no transaction calendar check**: only look at Taipei clock (fixed +8). On weekends and national holidays until 13:30
   It will naturally fall into the long TTL; if it is lifted at 08:25 the next day, if the market is closed that day, it will fall again at 13:30.
-- **13:30–14:00 transition window**: If the `t` returned from the source has not reached 13:30, it means that the closing matchmaking has not yet been implemented.
-  This transition value does not lock the night and continue walking for 60 seconds. It will be locked after 14:00.
-  Locking is not blocked when the source is not given `t` (US Stocks/OpenAPI Fallback/Old Cache).
+- **Only a confirmed close gets locked (0.6.37)**: the clock alone is not enough. "It is past 13:30, so no new price will
+  arrive today" holds for the **price**, but not for "is this row the settled closing value". A row without `t` is an
+  intraday snapshot — either written before the 0.6.36 upgrade, or from a fallback path that has no such field
+  (Yahoo / TWSE OpenAPI). Locking it freezes that snapshot until 08:25 the next morning, and the quote card then shows
+  "盤中" with open/high/low/volume all "—" all night. This happened in production on 2026-08-05.
+  The cost of the fix is that a source which keeps returning non-final values keeps the 60-second retry going overnight —
+  that is an abnormal state and should keep retrying. There is **no 14:00 grace deadline any more** (0.6.36 had one).
 - **Both layers must be applied**: front-end `priceProxy.cacheTtlMs` and Edge's `price_cache` judgment.
   If you only change the front-end, Edge will still issue MIS when other devices or caches expire.
-  The coarse filter lower bound (`freshAfter`) of the `price_cache` checked on the Edge side must also be followed by taking the larger of the two markets.
-  Otherwise, the final price captured at yesterday's closing price will be filtered out and captured in vain all night long.
+- **The coarse filter needs its own upper bound**: `freshAfter` on the Edge side does not know each row's `trade_time`,
+  so it cannot call `twQuoteTtlMs(now)` — that returns the short TTL (no matching time given) and filters out yesterday's
+  settled close, making the app fetch all night for nothing. `twMaxTtlMs(now)` assumes "already settled" to get the upper
+  bound; the per-row decision still belongs to `twQuoteTtlMs`. The lower bound is still the larger of the two markets.
 - The 60-second polling of `useStockPrices` does not need to be changed: whether the request is actually sent is determined by the TTL.
   Polling for all cache hits, zero requests during lockout period. Manual "refresh" (`force`) always bypasses TTL.
 - **U.S. stocks are not compared** (10-minute TTL maintained): U.S. stocks happened to be trading during the Taiwan stock lockup period.

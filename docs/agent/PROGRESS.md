@@ -1,9 +1,66 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Merged 0.6.36 to main, deployed production, archived TASK.md
-- Status: **Done — both regions live; TASK.md down from 38.6K to 2.6K tokens**
-- Timestamp: 2026-08-05 16:55:00 Asia/Taipei
+- Action: Documented 0.6.37 and the comment translation, then deployed the Edge half that was still missing
+- Status: **Done — both environments now run 0.6.37; docs caught up; tests/build/lint green**
+- Timestamp: 2026-08-05 21:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 21:05:00 Asia/Taipei (documentation catch-up)
+
+- **Agent**: Claude
+- **Action**: Write down what 0.6.37 and the translation commits changed, and audit what is actually running
+
+Three commits landed after the last log — 0.6.37 (`b3109b4`) plus the comment/doc translation
+(`aba1aa4`, `c87ea0e`, `2dac793`) — and none of them reached the agent documents. Version numbers were
+in sync in all three places, tests and build were green, so the gap was invisible from the code side.
+
+### The deploy that was never done — now done
+
+0.6.37 fixes BUG-011 in `quoteWindow.ts`, a file that exists **twice** — once for the browser, once for the
+Edge Function. Pushing to `main` shipped the browser half through Pages, which made the bug look fixed.
+It was not: a read-only `functions list` at 20:51 showed prod `stock-price` **v14** and dev **v10** carrying
+the *same* `ezbr_sha256 00ce1004…`, the 0.6.36 build, while the 0.6.37 commit is timestamped 17:06 — after both
+deploys. Every device whose local cache expired was still getting a locked snapshot from the server.
+
+The lesson is the file-count one: **a fix that touches `supabase/functions/` is not shipped by a git push.**
+
+With the user's authorisation, deployed dev first (**v11**, 20:57) then production (**v15**, 20:58), `verify_jwt`
+staying `true` on both. The sha moved to `733891b768b2…`, identical in both environments — that match is the
+evidence, not the version numbers; `functions download` still cannot get an access token here, as Task 69 found.
+
+### What deliberately was not verified
+
+That a `price_cache` row with a null `trade_time` now refreshes rather than staying frozen would need a service key
+(only the anon key is in `sources/.env`) or a `db query --linked` — and `link` currently points at production, which
+is the exact configuration the `supabase-ops` skill warns silently writes to the wrong database. The rule is covered
+by unit tests; the honest end-to-end check is Task 69 item 2 tomorrow morning during trial matching.
+
+### The previous entry's summary of the language policy was already stale
+
+The 16:55 log recorded "README, **code comments and UI copy** stay Chinese". Two commits later that changed:
+`c87ea0e` removed the code-comment exception and `aba1aa4` translated the comments, then `2dac793` restored
+the exception **for UI text and user-facing copy only**. CLAUDE.md §4.1 is the authority; the older log entry
+is left in place as history rather than edited.
+
+### A pending verification that got less pending
+
+Task 69 item 1 needed `STOCK_DAY_ALL` to publish 08-05 data so the volume discrepancy could be reconciled.
+Re-checked at 20:50, seven hours after the close: still `Date: 1150804`, 2330 still at 2320. The endpoint lags
+by more than an evening, which strengthens the original decision to drop it. Two facts recorded alongside it:
+it carries 1377 TWSE records and **6488 is absent** (TPEx), and its `TradeVolume` is in shares, not lots.
+
+### Completed Tasks
+- [x] `FIXED_BUG.md`: BUG-011 written up — root cause is that "past 13:30" proves a *price* is final but not that a
+      *row* is the settled close; rows without `trade_time` are intraday snapshots.
+- [x] `SPEC.md`: the TTL table now keys on the reported matching time, the 13:30–14:00 grace window is removed,
+      and `twMaxTtlMs`'s role as the coarse-filter upper bound is written down.
+- [x] `BUG_FIX.md`: no open bugs; the obsolete 2026-07-28 BUG-004 look-back retired with the reason.
+- [x] `TASK.md`: Task 71 added and closed (deployed to both environments), Task 69 item 1 updated with tonight's
+      measurement and item 2 re-scoped to run after the deploy.
+- [x] Verified the post-translation tree: **877 tests across 57 files passed**, `npm run build` and `npm run lint`
+      clean (only the four pre-existing `only-export-components` warnings).
 
 ---
 
