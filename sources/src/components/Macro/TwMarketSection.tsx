@@ -55,8 +55,15 @@ function shortDate(date: string): string {
   return m ? `${m[1]}/${m[2]}` : date
 }
 
-/** 並排兩張圖各自的高度。兩者必須一致，否則左右對不齊（元件預設是 260 / 170） */
-const PAIR_CHART_H = 220
+/**
+ * 三張圖上下疊放後各自的高度（0.6.34）。
+ *
+ * 疊起來的總高就是三者相加，沿用並排時的 220 會讓這一段變成 700px 的一面牆。
+ * K 線與走勢線同高（它們是同一份指數的兩種畫法），成交金額矮一截 ——
+ * 它是配角，用高度說出主從關係比再加一行說明有效。
+ */
+const STACK_CHART_H = 180
+const STACK_VOLUME_H = 140
 
 /**
  * 趨勢欄的走勢線看幾天（0.6.32）。
@@ -203,6 +210,12 @@ export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  /*
+    三張圖共用的 hover 索引（0.6.34）。放在這裡而不是各圖自持，是為了讓滑到某一天時
+    K 線、指數走勢、成交金額同時反白同一天 —— 使用者問的是「那天發生什麼」，
+    不是「那天的指數是多少」。索引對得起來的前提是三張圖吃同一組 days（見下方 candles）。
+  */
+  const [hover, setHover] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -241,22 +254,21 @@ export function TwMarketSection() {
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
   /*
-    K 線要開高低收四個價，缺任何一個就畫不出那一根 —— 開高低與收盤是不同來源，
-    最新一兩天可能只有收盤。過濾掉不完整的那幾根，而不是拿收盤去補：
-    用收盤冒充開盤會畫出一整排十字線，看起來像真的「那天沒有波動」。
+    K 線要開高低收四個價，缺任何一個那根就不畫 —— 開高低與收盤是不同來源，
+    最新一兩天可能只有收盤。**但那一天的欄位要留著**（0.6.34）：三張圖疊起來共用
+    一個 hover 索引，把不完整的日子過濾掉會讓 K 線的第 N 根不是另外兩張的第 N 天。
+    用收盤補開高低仍然不行，那會畫出一整排十字線，看起來像那天真的沒有波動。
   */
-  const candles = days
-    .filter(
-      (d) =>
-        d.taiexOpen !== null && d.taiexHigh !== null && d.taiexLow !== null && d.taiex !== null,
-    )
-    .map((d) => ({
-      label: shortDate(d.date),
-      open: d.taiexOpen as number,
-      high: d.taiexHigh as number,
-      low: d.taiexLow as number,
-      close: d.taiex as number,
-    }))
+  const candles = days.map((d) => ({
+    label: shortDate(d.date),
+    open: d.taiexOpen,
+    high: d.taiexHigh,
+    low: d.taiexLow,
+    close: d.taiex,
+  }))
+  const drawableCandles = candles.filter(
+    (c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null,
+  ).length
   const latest = days[days.length - 1] ?? null
   /*
     法人金額是逐日回補的，最新幾天常常還沒補到（見 marketProxy 的說明）。
@@ -290,9 +302,9 @@ export function TwMarketSection() {
   const allOpen = expandable.length > 0 && expandable.every((d) => expanded.has(d))
   const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
 
-  // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）
+  // X 軸：60 天每格約 8px，全標會糊成一團 —— 每 10 天標一個（六個標籤）。
+  // 三張圖同一組索引、同一組標籤，X 軸才真的對得起來
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
-  const candleLabelIndices = candles.map((_, i) => i).filter((i) => i % 10 === 0)
 
   return (
     <div className="section glass" style={{ padding: '18px 20px' }}>
@@ -345,44 +357,57 @@ export function TwMarketSection() {
       </div>
 
       {/*
-        指數兩種畫法並排（0.6.33）：K 線看得出當日振幅與開收關係，折線看得出整段走勢的形狀。
-        同一份收盤價，兩張圖回答的問題不同，所以並排而不是二選一。
+        三張圖上中下疊放、共用同一個 hover 索引（0.6.34；0.6.33 是 K 線與走勢線左右並排）。
+
+        **為什麼是上下而不是左右**：滑到某一天要同時看到那天的振幅、指數位置與量能，
+        而三張圖只有在同寬、同一組 X 軸、同一個索引時，crosshair 才會落在同一天。
+        左右並排的話每張只有一半寬度，同一個像素位置代表的日子不一樣。
+
+        `hover` 由這裡持有、傳給三張圖，所以滑鼠在任何一張上都會三張一起反白，
+        三個 tooltip 各報自己那件事（K 線報開高低收、走勢線報指數、金額報億元）。
       */}
-      <div className="chart-pair" style={{ marginTop: 16 }}>
-        <div>
-          <div className="chart-title">加權指數日 K（近 {candles.length} 個交易日）</div>
-          {candles.length === 0 ? (
-            <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
-          ) : (
-            <CandleChart
-              candles={candles}
-              labelIndices={candleLabelIndices}
-              height={PAIR_CHART_H}
-              formatValue={(v) => v.toFixed(2)}
-              ariaLabel={`近 ${candles.length} 個交易日的加權指數日 K 線`}
-            />
-          )}
-        </div>
-        <div>
-          <div className="chart-title">加權指數走勢（收盤）</div>
-          <LineSeriesChart
-            points={days.map((d) => ({ label: shortDate(d.date), value: d.taiex }))}
+      <div style={{ marginTop: 16 }}>
+        <div className="chart-title">加權指數日 K（近 {drawableCandles} 個交易日）</div>
+        {drawableCandles === 0 ? (
+          <p className="hint">開高低尚未補到，暫時畫不出 K 線（收盤指數見上方 KPI）。</p>
+        ) : (
+          <CandleChart
+            candles={candles}
             labelIndices={labelIndices}
-            height={PAIR_CHART_H}
+            height={STACK_CHART_H}
             formatValue={(v) => v.toFixed(2)}
-            ariaLabel={`近 ${days.length} 個交易日的加權指數收盤走勢`}
+            ariaLabel={`近 ${drawableCandles} 個交易日的加權指數日 K 線`}
+            hoverIndex={hover}
+            onHover={setHover}
+            crosshair
           />
-        </div>
+        )}
       </div>
 
-      <div className="chart-title" style={{ marginTop: 16 }}>
+      <div className="chart-title" style={{ marginTop: 14 }}>
+        加權指數走勢（收盤）
+      </div>
+      <LineSeriesChart
+        points={days.map((d) => ({ label: shortDate(d.date), value: d.taiex }))}
+        labelIndices={labelIndices}
+        height={STACK_CHART_H}
+        formatValue={(v) => v.toFixed(2)}
+        ariaLabel={`近 ${days.length} 個交易日的加權指數收盤走勢`}
+        hoverIndex={hover}
+        onHover={setHover}
+      />
+
+      <div className="chart-title" style={{ marginTop: 14 }}>
         每日成交金額（億元）
       </div>
       <LineSeriesChart
         points={days.map((d) => ({ label: shortDate(d.date), value: toBillion(d.tradeValueTwd) }))}
         labelIndices={labelIndices}
+        height={STACK_VOLUME_H}
         formatValue={(v) => `${v.toFixed(1)} 億`}
         ariaLabel={`近 ${days.length} 個交易日的台股成交金額`}
+        hoverIndex={hover}
+        onHover={setHover}
       />
 
       {/*

@@ -1,6 +1,70 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
+- Action: 現價漲跌著色；台股三張圖同步 hover；總經卡片改用連續期數（0.6.34 定版）
+- Status: **完成 —— 841 測試全過；⚠️ 測試區已加 `price_cache.prev_close` 並部署 stock-price，正式區未動**
+- Timestamp: 2026-08-05 11:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 11:45:00 Asia/Taipei（0.6.34）
+
+- **Agent**: Claude
+- **Action**: 依使用者三點要求實作
+
+### 1. 現價字級調回 + 漲跌著色
+
+0.6.20 把現價放大到 17px/700，這次改回一般字級，改用顏色（紅漲綠跌，基準昨收）。
+**取捨的理由**：放大只說得出「這欄重要」，顏色說得出「今天是漲是跌」，後者才是看現價時要知道的。
+
+**基準取昨收、不取今開**（使用者原話是「昨收或今開」，這裡選了昨收）：
+MIS 兩個都給（`y` / `o`），但 Yahoo 的 chart meta 只穩定給昨收，今開要另外拆
+`indicators.quote[0].open`。用昨收台美才是同一套口徑，也與看盤軟體的「漲跌幅」一致。
+
+**不多打任何一次外部 API** —— `y` 與 `chartPreviousClose` 本來就在同一筆回應裡，先前被丟棄。
+
+⚠️ **需要 schema 異動**：`price_cache` 加 `prev_close`。快取一命中就不會再問來源，
+基準沒跟著存的話顏色會在 TTL 內外之間閃（有色 → 灰 → 有色）。
+localStorage 快取 key 同步升到 `price-cache-v2`，讓舊快取一次汰換。
+
+**台股 OpenAPI 備援路徑（TWSE/TPEx 日收盤清單）沒有昨收**，走到那條的代號一律平盤色。
+
+### 2. 台股三張圖上中下 + 共用 hover
+
+`ChartFrame` 新增**受控 hover**（`hoverIndex` / `onHover`），未給則維持各圖自持 ——
+其餘呼叫端不受影響。索引由 `TwMarketSection` 持有，三張圖一起反白同一天。
+
+**關鍵前提是三張圖吃同一組 days**：原本 K 線把開高低不全的日子過濾掉，
+那樣第 N 根就不是另外兩張的第 N 天。改成 `Candle` 的開高低收可為 null、該欄留白但保留。
+用收盤補開高低仍然不行（會畫出一整排十字線）。
+
+高度由並排的 220 改成 180/180/140 —— 疊起來總高是三者相加，沿用 220 會變成 700px 的一面牆。
+`.chart-pair` 已無使用者，一併移除（匯率頁的 `.fx-chart-pair` 不受影響）。
+
+### 3. 美國總經卡片：走勢線 → 連續期數 chip
+
+使用者選的是 b 方案（保留在卡片上，換成文字 chip），不是把趨勢欄加進下方表格。
+
+**不能直接沿用 `trendAt`**：法人買賣超看正負號（買超 / 賣超本身有方向），
+但 CPI 年增率永遠是正的，這裡看的是**與前一期的升降**。連 2 期以上才顯示。
+**刻意不套漲跌色** —— 物價或信心「比上期高」沒有好壞之分（同 `fmtDelta` 既有的取捨）。
+缺值會中斷連續計算：把缺值當成「與前一期相同」會把兩段不相干的走勢接成一段。
+
+### 驗證
+
+`npm test` 841/841（新增 5 案例、改 10 個）、`oxlint` 僅 3 個既有 warning、
+`tsc -b` 與 `npm run build` 通過。
+
+測試區實機驗證（Management API，專案 ref 明確指定，不走 `db query --linked`）：
+- `ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS prev_close` 已執行。
+- `stock-price` 已部署（index.ts + misParse.ts 都上傳）。
+- 實打回應：`TPE:2330 price 2400 / prevClose 2320`、`US:AAPL 309.38 / 303.42`，台美兩市都有。
+- 立即再打一次，`asOf` 不變（確認命中 DB 快取）且 `prevClose` 仍在 —— 加欄位的目的達成。
+
+⚠️ **正式區完全未動**（仍是 0.6.30 的程式碼與沒有 `prev_close` 的表）。
+合併到 `main` 時必須先跑那條 ALTER、再部署 `stock-price`，否則前端會整排平盤色。
+
+- Agent: Claude
 - Action: 台股市場卡片整理；全市場法人進到後台時間軸（0.6.33 定版）
 - Status: **完成 —— 836 測試全過；純前端，不需要部署 Edge Function**
 - Timestamp: 2026-08-05 10:55:00 Asia/Taipei

@@ -1932,21 +1932,11 @@ a.hmenu-item {
 }
 
 /*
- * 兩張圖左右並排（0.6.33，台股市場的指數 K 線與走勢）。
- * ≤900px 疊成一欄 —— 兩張圖擠在半個手機寬會完全看不出趨勢（同 .fx-chart-pair 的取捨）。
- * 與 .fx-chart-pair 分開定義：那支綁著匯率頁的 .fx-chart-head 版面，共用會讓兩處互相牽連。
+ * 0.6.33 的 .chart-pair（台股指數 K 線與走勢左右並排）已於 0.6.34 移除：
+ * 三張圖改成上中下疊放並共用 hover，左右並排時每張只有一半寬度，
+ * 同一個像素位置在兩張圖上不是同一天，crosshair 對不起來。
+ * 匯率頁的 .fx-chart-pair 不受影響（那兩張圖各自獨立 hover）。
  */
-.chart-pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-@media (max-width: 900px) {
-  .chart-pair {
-    grid-template-columns: 1fr;
-  }
-}
 
 .chart-svg {
   display: block;
@@ -2583,19 +2573,6 @@ a.hmenu-item {
 
 /* ── 庫存總覽：現價強調（0.6.20）────────────────────────────── */
 
-/*
- * 表格內文是 13.5px，現價拉到 17px 並改用標題字體 —— 它是這張表上唯一
- * 隨時在動的數字，其餘欄位都是成本與換算。
- * 只動這一欄：整排都放大等於整排都沒重點。
- */
-.dash-price {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ── 管理後台：管理員權限開關（0.6.19）─────────────────────── */
 
 /*
@@ -2781,11 +2758,13 @@ a.hmenu-item {
   }
 }
 
-/* ── 總經指標卡上的迷你走勢線（0.6.19）───────────────────────── */
+/* ── 迷你走勢線（0.6.19）───────────────────────────────────── */
 
 /*
  * 高度寫死 30px：viewBox 是 100×28、`preserveAspectRatio="none"`，
  * 所以它會被拉伸填滿，線寬靠 SVG 的 vector-effect 維持不變形。
+ * 0.6.34 起總經指標卡不再用它（改成「連 N 期」chip），
+ * 現在的使用者是台股法人表的趨勢欄 —— 那裡以 inline style 指定固定寬高。
  */
 .mac-spark {
   display: block;
@@ -2797,6 +2776,11 @@ a.hmenu-item {
 /* 落後徽章推到標籤列右端。.kpi-label 本來就是 flex，這裡只補對齊 */
 .mac-behind {
   margin-left: auto;
+}
+
+/* 連續期數 chip（0.6.34）。沿用中性的 .badge，刻意不套漲跌色——見 MacroPage 的 StreakChip */
+.mac-streak {
+  margin-top: 8px;
 }
 
 /*

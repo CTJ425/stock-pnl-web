@@ -36,6 +36,9 @@ interface LineSeriesChartProps {
   labelIndices?: number[]
   formatValue: (v: number) => string
   ariaLabel: string
+  /** 與其他圖共用 hover 時由外部持有；未給則自持（見 chartFrame） */
+  hoverIndex?: number | null
+  onHover?: (index: number | null) => void
 }
 
 export function LineSeriesChart({
@@ -45,6 +48,8 @@ export function LineSeriesChart({
   labelIndices,
   formatValue,
   ariaLabel,
+  hoverIndex,
+  onHover,
 }: LineSeriesChartProps) {
   const domain = niceDomain(points.map((p) => p.value))
   const showDots = points.length <= DOT_LIMIT
@@ -65,6 +70,8 @@ export function LineSeriesChart({
       labelIndices={labelIndices}
       ariaLabel={ariaLabel}
       crosshair
+      hoverIndex={hoverIndex}
+      onHover={onHover}
       tooltipAnchor={(i) => points[i]?.value ?? null}
       tooltipFor={(i) => {
         const p = points[i]

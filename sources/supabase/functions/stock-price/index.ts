@@ -10,8 +10,9 @@
  *
  * 介面：
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
- *     → { prices: { 'TPE:2330': { price: number, asOf: string }, ... } }
+ *     → { prices: { 'TPE:2330': { price: number, prevClose: number|null, asOf: string }, ... } }
  *       asOf 為報價的實際取得時間（ISO），供前端 TTL 判斷，避免與 DB 快取 TTL 疊加
+ *       prevClose 為昨收，前端據此把現價著成漲紅跌綠（0.6.34；取不到時為 null）
  *   POST { action: 'search', query: string }
  *     → { results: [{ symbol, name, market }] }
  *   POST { action: 'fx', codes: ['USD','JPY', …] }
@@ -27,6 +28,19 @@ import { buildMisChannels, parseMisResponse } from './misParse.ts'
 interface SymbolItem {
   market: 'TPE' | 'US'
   ticker: string
+}
+
+/**
+ * 一檔的報價。`prevClose` 是**昨收**，供前端判斷現價要紅要綠。
+ *
+ * 兩個來源本來就把昨收放在同一筆回應裡（MIS 的 `y`、Yahoo 的 `chartPreviousClose`），
+ * 取它不多打一次 API。**刻意不用今開**：MIS 有 `o`，但 Yahoo 的 chart meta 沒有對應欄位，
+ * 兩個市場會變成不同口徑 —— 昨收是唯一台美都拿得到、且與看盤軟體「漲跌幅」定義一致的基準。
+ * 取不到就是 null，不拿現價自己冒充（那會讓每一檔都是平盤色）。
+ */
+interface Quote {
+  price: number
+  prevClose: number | null
 }
 
 /** DB 快取有效期（與前端 localStorage 快取一致）：台股走 MIS 即時源用短 TTL，美股維持 10 分鐘 */
@@ -65,7 +79,19 @@ function yahooSymbols(item: SymbolItem): string[] {
   return [item.ticker]
 }
 
-async function fetchYahooPrice(symbol: string): Promise<number | null> {
+/**
+ * 昨收：優先 `chartPreviousClose`（`range=1d` 時必有），退 `previousClose`。
+ * 取不到就回 null —— 前端會把該檔的現價顯示成中性色，不猜一個基準。
+ */
+function yahooPrevClose(meta: Record<string, unknown> | undefined): number | null {
+  for (const key of ['chartPreviousClose', 'previousClose']) {
+    const v = Number(meta?.[key])
+    if (Number.isFinite(v) && v > 0) return v
+  }
+  return null
+}
+
+async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
   try {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
@@ -75,15 +101,16 @@ async function fetchYahooPrice(symbol: string): Promise<number | null> {
     const data = await res.json()
     const meta = data?.chart?.result?.[0]?.meta
     const price = Number(meta?.regularMarketPrice)
-    return Number.isFinite(price) && price > 0 ? price : null
+    if (!Number.isFinite(price) || price <= 0) return null
+    return { price, prevClose: yahooPrevClose(meta) }
   } catch {
     return null
   }
 }
 
-/** 台股即時報價（TWSE MIS）：回傳 ticker → 價格；整批失敗時回空 Map，交由 Yahoo fallback */
-async function fetchMisPrices(tickers: string[]): Promise<Map<string, number>> {
-  const resolved = new Map<string, number>()
+/** 台股即時報價（TWSE MIS）：回傳 ticker → 報價；整批失敗時回空 Map，交由 Yahoo fallback */
+async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
+  const resolved = new Map<string, Quote>()
   for (const channels of buildMisChannels(tickers)) {
     try {
       const res = await fetch(
@@ -99,7 +126,9 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, number>> {
       if (!res.ok) continue
       const data = await res.json()
       for (const quote of parseMisResponse(data)) {
-        if (!resolved.has(quote.ticker)) resolved.set(quote.ticker, quote.price)
+        if (!resolved.has(quote.ticker)) {
+          resolved.set(quote.ticker, { price: quote.price, prevClose: quote.prevClose })
+        }
       }
     } catch {
       // MIS 為非官方文件化端點，失敗時靜默交由 Yahoo fallback
@@ -110,7 +139,7 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, number>> {
 
 async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const items = symbols.slice(0, 50)
-  const prices: Record<string, { price: number; asOf: string }> = {}
+  const prices: Record<string, { price: number; prevClose: number | null; asOf: string }> = {}
   const nowMs = Date.now()
 
   // 1) 先查 DB 共用快取：分市場 TTL 內的報價直接回傳（asOf = 實際抓價時間）
@@ -118,7 +147,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   try {
     const { data } = await db
       .from('price_cache')
-      .select('key, price, updated_at')
+      .select('key, price, prev_close, updated_at')
       .in('key', items.map((i) => `${i.market}:${i.ticker}`))
       .gte('updated_at', freshAfter)
     for (const row of data ?? []) {
@@ -128,7 +157,12 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
       const ttl = key.startsWith('TPE:') ? CACHE_TTL_MS.TPE : CACHE_TTL_MS.US
       if (!Number.isFinite(price) || price <= 0) continue
       if (!Number.isFinite(at) || nowMs - at >= ttl) continue
-      prices[key] = { price, asOf: new Date(at).toISOString() }
+      const prev = Number(row.prev_close)
+      prices[key] = {
+        price,
+        prevClose: Number.isFinite(prev) && prev > 0 ? prev : null,
+        asOf: new Date(at).toISOString(),
+      }
     }
   } catch {
     // 快取表不可用（例如尚未建表）時，直接全部走外部 API
@@ -140,8 +174,8 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const fromMis = await fetchMisPrices(
     missing.filter((i) => i.market === 'TPE').map((i) => i.ticker),
   )
-  for (const [ticker, price] of fromMis) {
-    prices[`TPE:${ticker}`] = { price, asOf: new Date().toISOString() }
+  for (const [ticker, quote] of fromMis) {
+    prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
 
   // 3) 仍缺者（含全部美股、MIS 失敗的台股）走 Yahoo
@@ -150,9 +184,9 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     unresolved.map(async (item) => {
       const key = `${item.market}:${item.ticker}`
       for (const symbol of yahooSymbols(item)) {
-        const price = await fetchYahooPrice(symbol)
-        if (price !== null) {
-          return [key, { price, asOf: new Date().toISOString() }] as const
+        const quote = await fetchYahooPrice(symbol)
+        if (quote !== null) {
+          return [key, { ...quote, asOf: new Date().toISOString() }] as const
         }
       }
       return null
@@ -173,6 +207,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
         fetchedKeys.map((key) => ({
           key,
           price: prices[key].price,
+          prev_close: prices[key].prevClose,
           updated_at: prices[key].asOf,
         })),
       )

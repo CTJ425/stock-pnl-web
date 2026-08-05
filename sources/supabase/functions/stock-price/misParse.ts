@@ -6,12 +6,15 @@
  * MIS 為證交所看盤網站背後的非官方文件化端點，回應格式：
  *   { rtcode: '0000', msgArray: [{ c, z, y, b, ... }] }
  *   c: 代號；z: 最新成交價；y: 昨收；b: 最佳五檔買價（'_' 分隔）。
+ *   昨收本來就在同一筆回應裡，取它當漲跌著色的基準不會多打一次 API（0.6.34）。
  *   無效值以 '-' 表示。
  */
 
 export interface MisQuote {
   ticker: string
   price: number
+  /** 昨收（`y`）；無效時為 null。前端據此判斷現價的漲跌著色 */
+  prevClose: number | null
 }
 
 /** 每檔同時嘗試上市（tse_）與上櫃（otc_）channel，MIS 會自動忽略無效者 */
@@ -72,7 +75,7 @@ export function parseMisResponse(data: unknown): MisQuote[] {
     const price = pickPrice(row)
     if (price === null) continue
     seen.add(ticker)
-    quotes.push({ ticker, price })
+    quotes.push({ ticker, price, prevClose: toPrice(row.y) })
   }
   return quotes
 }

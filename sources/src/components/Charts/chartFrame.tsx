@@ -77,6 +77,13 @@ interface ChartFrameProps {
    * （長條有高低兩端、K 線有四個價），硬挑一個只會讓提示框停在沒有意義的位置。
    */
   tooltipAnchor?: (index: number) => number | null
+  /**
+   * 受控 hover（0.6.34）：多張上下疊放、共用同一組 X 軸的圖要一起反白同一天時，
+   * 索引由外部持有（見 `TwMarketSection`）。**不給就維持各圖自持**，
+   * 其餘呼叫端不受影響 —— 那些圖各問各的問題，一起反白只是干擾。
+   */
+  hoverIndex?: number | null
+  onHover?: (index: number | null) => void
   children: (geo: PlotGeometry) => ReactNode
 }
 
@@ -89,9 +96,17 @@ export function ChartFrame({
   tooltipFor,
   crosshair = false,
   tooltipAnchor,
+  hoverIndex,
+  onHover,
   children,
 }: ChartFrameProps) {
-  const [hover, setHover] = useState<number | null>(null)
+  const [ownHover, setOwnHover] = useState<number | null>(null)
+  const controlled = hoverIndex !== undefined
+  const hover = controlled ? hoverIndex : ownHover
+  const setHover = (index: number | null) => {
+    if (!controlled) setOwnHover(index)
+    onHover?.(index)
+  }
   const { ref: wrapRef, width: viewW } = useMeasuredWidth()
   const titleId = useId()
 

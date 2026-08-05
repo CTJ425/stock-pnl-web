@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { fetchMarketDaily } = vi.hoisted(() => ({ fetchMarketDaily: vi.fn() }))
@@ -226,7 +226,7 @@ describe('TwMarketSection', () => {
     expect(screen.getByText(/還沒補到，不是沒有進出/)).toBeTruthy()
   })
 
-  it('三張圖：指數 K 線與指數走勢並排，成交金額在下方（0.6.33）', async () => {
+  it('三張圖上中下疊放，滑到某一天時三張一起給出那天的提示（0.6.34）', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
@@ -236,10 +236,34 @@ describe('TwMarketSection', () => {
     })
     const { container } = render(<TwMarketSection />)
     await screen.findByText('加權指數走勢（收盤）')
-    // 法人長條圖已移除，剩 K 線 / 指數走勢 / 成交金額
-    expect(container.querySelectorAll('.chart-wrap')).toHaveLength(3)
-    expect(container.querySelectorAll('.chart-pair')).toHaveLength(1)
-    expect(screen.queryByText(/三大法人買賣超（億元）・近 2 個交易日/)).toBeTruthy()
+    // 法人長條圖已移除，剩 K 線 / 指數走勢 / 成交金額；並排的 .chart-pair 已拿掉
+    const wraps = container.querySelectorAll('.chart-wrap')
+    expect(wraps).toHaveLength(3)
+    expect(container.querySelectorAll('.chart-pair')).toHaveLength(0)
+
+    // 滑到最下面那張（成交金額）的第一天 → 三張圖都要指到 08/03
+    const hits = wraps[2].querySelectorAll('rect[fill="transparent"]')
+    fireEvent.mouseEnter(hits[0])
+    const tips = [...container.querySelectorAll('.chart-tip')].map((e) => e.textContent)
+    expect(tips).toHaveLength(3)
+    for (const t of tips) expect(t).toContain('08/03')
+  })
+
+  it('開高低沒補到的日子仍佔一欄——過濾掉會讓三張圖的索引錯開（0.6.34）', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [
+        { ...day('2026-08-03', 8e11, inst(-1.6e10, -1.9e10)), taiexOpen: null },
+        day('2026-08-04', 1e12, inst(2.3e10, 1.2e10)),
+      ],
+    })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByText('加權指數走勢（收盤）')
+    // 畫得出來的只有一根，但三張圖的命中欄位都還是兩欄
+    expect(screen.getByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
+    for (const wrap of container.querySelectorAll('.chart-wrap')) {
+      expect(wrap.querySelectorAll('rect[fill="transparent"]')).toHaveLength(2)
+    }
   })
 
   it('全部展開 / 全部收起：只認展得開的列（0.6.33）', async () => {

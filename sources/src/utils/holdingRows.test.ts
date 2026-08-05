@@ -4,9 +4,10 @@ import { computeLedger } from './pnlEngine'
 import type { PriceMap } from '../services/priceProxy'
 import type { Transaction } from '../types/models'
 
-/** 測試用報價：只有 price / stale 有意義，asOf 與 source 是型別要求的欄位 */
-const quote = (price: number, stale = false): PriceMap[string] => ({
+/** 測試用報價：只有 price / prevClose / stale 有意義，asOf 與 source 是型別要求的欄位 */
+const quote = (price: number, stale = false, prevClose: number | null = null): PriceMap[string] => ({
   price,
+  prevClose,
   asOf: '2026-07-25T12:00:00.000Z',
   source: stale ? 'cache' : 'edge',
   stale,
@@ -55,6 +56,16 @@ describe('buildHoldingRows', () => {
     expect(row.roi).toBeNull()
     // 保本價不需要現價，仍算得出來
     expect(row.breakEven).toBeGreaterThan(0)
+  })
+
+  it('dayChange 為現價與昨收的差；報價沒帶昨收時為 null（不以 0 冒充平盤）', () => {
+    const holdings = holdingsOf([tx({})])
+    const [up] = buildHoldingRows(holdings, { 'TPE:2330': quote(120, false, 118) }, 0.001425)
+    expect(up.dayChange).toBeCloseTo(2, 10)
+    const [down] = buildHoldingRows(holdings, { 'TPE:2330': quote(120, false, 125) }, 0.001425)
+    expect(down.dayChange).toBeCloseTo(-5, 10)
+    const [unknown] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
+    expect(unknown.dayChange).toBeNull()
   })
 
   it('帶出快取價的 stale 旗標', () => {

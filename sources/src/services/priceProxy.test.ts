@@ -3,7 +3,7 @@ import type { PriceQuote } from './priceProxy'
 import { cacheTtlMs, isFresh } from './priceProxy'
 
 function quote(asOf: string, stale = false): PriceQuote {
-  return { price: 100, asOf, source: 'edge', stale }
+  return { price: 100, prevClose: 99, asOf, source: 'edge', stale }
 }
 
 describe('cacheTtlMs', () => {

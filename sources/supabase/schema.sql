@@ -66,11 +66,17 @@ WITH CHECK (auth.uid() = user_id);
 --     避免前端 localStorage 快取與本表 TTL 疊加（見 src/services/priceProxy.ts）。
 --     僅 Edge Function（service role）可寫入；一般使用者只能讀取，
 --     避免有人直接竄改快取價格影響所有人。
+--     prev_close 是昨收（0.6.34）：現價的漲跌著色要有基準，而快取一命中就不會再去問來源，
+--     基準不跟著存的話，顏色會在 TTL 內外之間閃 —— 有色、灰、有色。可為 NULL（來源沒給）。
 CREATE TABLE IF NOT EXISTS price_cache (
     key TEXT PRIMARY KEY,                         -- 'TPE:2330'、'US:AAPL'
     price NUMERIC NOT NULL CHECK (price > 0),
+    prev_close NUMERIC CHECK (prev_close > 0),    -- 昨收；來源未提供時為 NULL
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 既有環境補欄位（本檔可重複執行；新建的表已含此欄，這行為 no-op）
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS prev_close NUMERIC CHECK (prev_close > 0);
 
 ALTER TABLE price_cache ENABLE ROW LEVEL SECURITY;
 

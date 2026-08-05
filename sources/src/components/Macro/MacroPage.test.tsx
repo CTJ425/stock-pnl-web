@@ -93,14 +93,59 @@ describe('MacroPage', () => {
     expect(badges).toEqual(['落後 1 期'])
   })
 
-  it('走勢線：只有一期的指標不畫，落後的那條改虛線（末端不是「現在」）', async () => {
+  it('指標卡不再有走勢線（0.6.34）', async () => {
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
     await screen.findByText('美國總體經濟')
-    // 非農在這份 fixture 只有一期，連不成線 → 三張卡只畫得出兩條
-    const sparks = [...document.querySelectorAll('.mac-spark polyline')]
-    expect(sparks).toHaveLength(2)
-    expect(sparks.filter((e) => e.getAttribute('stroke-dasharray'))).toHaveLength(1)
+    expect(document.querySelectorAll('.kpi .mac-spark')).toHaveLength(0)
+  })
+
+  it('連 2 期以上才給「連續」chip，且不套漲跌色——升降本身無好壞之分', async () => {
+    // 核心 CPI 連三期走低；非農只有一期、消費者信心只有兩期，都構不成趨勢
+    fetchMacro.mockResolvedValue({
+      ...macro,
+      indicators: macro.indicators.map((ind) =>
+        ind.id === 'CPILFESL'
+          ? {
+              ...ind,
+              points: [
+                { period: '2026-03', value: 3.1 },
+                { period: '2026-04', value: 2.95 },
+                { period: '2026-05', value: 2.82 },
+                { period: '2026-06', value: 2.57 },
+              ],
+            }
+          : ind,
+      ),
+    })
+    render(<MacroPage />)
+    await screen.findByText('美國總體經濟')
+    const chips = [...document.querySelectorAll('.mac-streak')]
+    expect(chips.map((e) => e.textContent)).toEqual(['連 3 期下降'])
+    expect(chips[0].className).not.toMatch(/pnl-(up|down)/)
+  })
+
+  it('缺值中斷連續：不把兩段不相干的走勢接起來', async () => {
+    fetchMacro.mockResolvedValue({
+      ...macro,
+      indicators: macro.indicators.map((ind) =>
+        ind.id === 'CPILFESL'
+          ? {
+              ...ind,
+              points: [
+                { period: '2026-03', value: 3.1 },
+                { period: '2026-04', value: null },
+                { period: '2026-05', value: 2.82 },
+                { period: '2026-06', value: 2.57 },
+              ],
+            }
+          : ind,
+      ),
+    })
+    render(<MacroPage />)
+    await screen.findByText('美國總體經濟')
+    // 缺值之後只剩 2.82 → 2.57 一段降幅，連 1 期不成趨勢
+    expect(document.querySelectorAll('.mac-streak')).toHaveLength(0)
   })
 
   it('標示資料產出時間', async () => {

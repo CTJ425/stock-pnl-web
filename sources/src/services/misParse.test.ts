@@ -27,22 +27,28 @@ describe('buildMisChannels', () => {
 describe('parseMisResponse', () => {
   it('取成交價 z', () => {
     const data = { msgArray: [{ c: '2330', z: '605.0000', y: '600.0000' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: 600 }])
   })
 
   it('z 無效時退買一價 b 的第一檔', () => {
     const data = { msgArray: [{ c: '2330', z: '-', b: '604.00_603.00_602.00', y: '600.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 604 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 604, prevClose: 600 }])
   })
 
   it('z 與 b 皆無效時退昨收 y（盤後 / 尚無成交）', () => {
     const data = { msgArray: [{ c: '2330', z: '-', b: '-', y: '600.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 600 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 600, prevClose: 600 }])
+  })
+
+  // prevClose 是現價漲跌著色的基準（0.6.34）：它與成交價來自同一筆回應，不另外請求
+  it('昨收 y 一併帶出；y 無效時為 null（不拿成交價冒充基準）', () => {
+    const data = { msgArray: [{ c: '2330', z: '605.00', y: '-' }] }
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
   })
 
   it('支援千分位逗號價格', () => {
     const data = { msgArray: [{ c: '3008', z: '2,150.00' }] }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '3008', price: 2150 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '3008', price: 2150, prevClose: null }])
   })
 
   it('全部無效的列直接略過', () => {
@@ -52,7 +58,7 @@ describe('parseMisResponse', () => {
         { c: '2330', z: '605.00' },
       ],
     }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
   })
 
   it('同一代號多列時取第一列', () => {
@@ -62,7 +68,7 @@ describe('parseMisResponse', () => {
         { c: '2330', z: '999.00' },
       ],
     }
-    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605 }])
+    expect(parseMisResponse(data)).toEqual([{ ticker: '2330', price: 605, prevClose: null }])
   })
 
   // 取自 mis.twse.com.tw 的實際回應（2026-07-20 盤中，欄位已精簡）：
@@ -85,9 +91,9 @@ describe('parseMisResponse', () => {
       ],
     }
     expect(parseMisResponse(data)).toEqual([
-      { ticker: '2330', price: 2335 },
-      { ticker: '0050', price: 99.85 },
-      { ticker: '6488', price: 1235 },
+      { ticker: '2330', price: 2335, prevClose: 2290 },
+      { ticker: '0050', price: 99.85, prevClose: 100.15 },
+      { ticker: '6488', price: 1235, prevClose: 1250 },
     ])
   })
 

@@ -16,6 +16,11 @@ import { getTwStockList } from './twMarketData'
 
 export interface PriceQuote {
   price: number
+  /**
+   * 昨收（0.6.34）：呼叫端據此把現價著成漲紅跌綠。
+   * 台股備援（TWSE / TPEx 日收盤清單）沒有這個欄位，走那條路徑時為 null —— 該檔顯示平盤色。
+   */
+  prevClose: number | null
   /** 取得時間 (ISO) */
   asOf: string
   source: 'edge' | 'twse' | 'cache'
@@ -31,7 +36,9 @@ export interface PriceRequestItem {
 /** key 為 positionKey(market, ticker)，查無現價的代號不會出現在結果中 */
 export type PriceMap = Record<string, PriceQuote>
 
-const CACHE_KEY = 'stock-pnl-web/price-cache-v1'
+// v2（0.6.34）：quote 多了 prevClose。沿用 v1 的話舊快取會一路沒有基準價、顯示平盤色，
+// 直到每一檔都各自過期為止 —— 換個 key 讓它一次汰換掉（報價本來就是幾十秒就重抓的東西）
+const CACHE_KEY = 'stock-pnl-web/price-cache-v2'
 /** 快取有效期（與 Edge Function DB 快取一致）：台股走 MIS 即時源用短 TTL，美股 10 分鐘 */
 const CACHE_TTL_TW_MS = 60 * 1000
 const CACHE_TTL_US_MS = 10 * 60 * 1000
@@ -67,13 +74,13 @@ function writePriceCache(map: PriceMap): void {
 }
 
 interface EdgePriceResponse {
-  prices?: Record<string, { price: number; asOf?: string }>
+  prices?: Record<string, { price: number; prevClose?: number | null; asOf?: string }>
 }
 
 async function fetchFromEdge(
   items: PriceRequestItem[],
-): Promise<Map<string, { price: number; asOf: string | null }>> {
-  const resolved = new Map<string, { price: number; asOf: string | null }>()
+): Promise<Map<string, { price: number; prevClose: number | null; asOf: string | null }>> {
+  const resolved = new Map<string, { price: number; prevClose: number | null; asOf: string | null }>()
   if (!isSupabaseConfigured || !supabase || items.length === 0) return resolved
   try {
     const { data, error } = await supabase.functions.invoke<EdgePriceResponse>('stock-price', {
@@ -86,7 +93,10 @@ async function fetchFromEdge(
         const asOf = typeof quote.asOf === 'string' && Number.isFinite(Date.parse(quote.asOf))
           ? quote.asOf
           : null
-        resolved.set(key, { price: quote.price, asOf })
+        // 尚未部署 0.6.34 的 Edge 不回 prevClose；此時該檔顯示平盤色，不是錯誤
+        const prevClose =
+          typeof quote.prevClose === 'number' && quote.prevClose > 0 ? quote.prevClose : null
+        resolved.set(key, { price: quote.price, prevClose, asOf })
       }
     }
   } catch {
@@ -146,10 +156,17 @@ export async function fetchPrices(
   const fromTw = await fetchTwFallback(unresolved)
 
   for (const [key, quote] of fromEdge) {
-    result[key] = { price: quote.price, asOf: quote.asOf ?? now, source: 'edge', stale: false }
+    result[key] = {
+      price: quote.price,
+      prevClose: quote.prevClose,
+      asOf: quote.asOf ?? now,
+      source: 'edge',
+      stale: false,
+    }
   }
   for (const [key, price] of fromTw) {
-    result[key] = { price, asOf: now, source: 'twse', stale: false }
+    // 日收盤清單只有收盤價，沒有昨收 —— 走到這條備援的代號一律平盤色
+    result[key] = { price, prevClose: null, asOf: now, source: 'twse', stale: false }
   }
 
   // 快取降級：仍無現價者採用上次成功取得的價格（標記 stale）

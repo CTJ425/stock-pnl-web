@@ -15,6 +15,11 @@ export interface HoldingRow {
   holding: Holding
   price: number | null
   priceStale: boolean
+  /**
+   * 現價與昨收的差（0.6.34），供現價欄著色。
+   * 報價來源沒給昨收時為 null —— 顯示平盤色，不拿 0 冒充「今天沒漲沒跌」。
+   */
+  dayChange: number | null
   mktVal: number | null
   unrealized: number | null
   /** 未含任何費用的純價差：市值 − 未含費成本，與年度收益的 rawRealized 同構 */
@@ -43,10 +48,12 @@ export function buildHoldingRows(
     // 僅當前部位（與券商 APP 同口徑）：分母為現有持股的移動平均成本
     const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
     const breakEven = breakEvenPrice(h, feeRate, minFee)
+    const prevClose = quote?.prevClose ?? null
     return {
       holding: h,
       price,
       priceStale: quote?.stale ?? false,
+      dayChange: price !== null && prevClose !== null ? price - prevClose : null,
       mktVal,
       unrealized,
       rawUnrealized,

@@ -29,7 +29,7 @@ const HELP = {
   ticker: '股票的編號。台股是數字（如 2330），美股是英文代號（如 AAPL）。',
   name: '股票名稱。台股來自證交所官方清單，常見的美股會顯示中文名。',
   price:
-    '最新股價。台股接近即時、每分鐘更新；美股最多延遲 20 分鐘。標示「快取」代表暫時抓不到新價格，顯示的是上一次抓到的。',
+    '最新股價。紅色代表比昨天收盤高、綠色代表比昨天低。台股接近即時、每分鐘更新；美股最多延遲 20 分鐘。標示「快取」代表暫時抓不到新價格，顯示的是上一次抓到的。',
   qty: '你現在還持有的股數。已經全部賣光的股票不會出現在這裡。',
   avgCost:
     '每股平均買進的價格，含買進手續費，也就是每股實際付出的錢。下方「未含費」是不含手續費的價格。',
@@ -40,6 +40,24 @@ const HELP = {
     '如果現在全部賣掉，大概會賺或賠多少。「淨」代表手續費和稅都已經算進去（美股不含賣出費用）。下方「未含費」是不扣任何費用的價差，會比實際好看一點。',
   roi: '這些持股目前賺賠的百分比。只看手上還有的部分；已經賣掉的請看「年度收益」頁。',
 } as const
+
+/**
+ * 現價欄的 tooltip：顏色本身說不出「漲了多少」，也說不出基準是哪一天。
+ * 抓不到昨收時完全不掛 tooltip —— 掛一句「無資料」只是讓人多滑一次鼠。
+ */
+function dayChangeHint(
+  dayChange: number | null,
+  price: number,
+  currency: Currency,
+): string | undefined {
+  if (dayChange === null) return undefined
+  const prevClose = price - dayChange
+  const pct = prevClose === 0 ? null : (dayChange / prevClose) * 100
+  if (dayChange === 0) return `與昨收持平（昨收 ${fmtPrice(prevClose, currency)}）`
+  const sign = dayChange > 0 ? '+' : ''
+  const pctText = pct === null ? '' : `（${sign}${pct.toFixed(2)}%）`
+  return `較昨收 ${sign}${fmtPrice(dayChange, currency)}${pctText}・昨收 ${fmtPrice(prevClose, currency)}`
+}
 
 function sumOrNull(values: Array<number | null>): number | null {
   const known = values.filter((v): v is number => v !== null)
@@ -66,22 +84,25 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
         </thead>
         <tbody>
           {rows.map((row) => {
-            const { holding: h, price, priceStale, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
+            const { holding: h, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
             return (
             <tr key={h.key}>
               <td>{h.ticker}</td>
               <td>{displayStockName(h.market, h.ticker, h.name)}</td>
-              <td className="num">
+              <td className={`num ${pnlClass(dayChange)}`}>
                 {price === null ? (
                   <span className="skeleton" aria-label="現價載入中" />
                 ) : (
                   <>
                     {/*
-                      現價是這張表上唯一「隨時在動」的數字，其餘都是成本與換算，
-                      所以只有它放大加粗（0.6.20）。強調要有取捨才成立 ——
-                      整排都放大等於整排都沒重點。
+                      0.6.34 把 0.6.20 的放大加粗改回一般字級，改用顏色表示今天的漲跌
+                      （紅漲綠跌，基準是昨收）。顏色比字級精確：放大只說得出「這欄重要」，
+                      顏色說得出「今天是漲是跌」，而後者才是看現價時真正想知道的事。
+                      抓不到昨收（台股 OpenAPI 備援）時是平盤色，不是「今天沒動」。
                     */}
-                    <span className="dash-price">{fmtPrice(price, currency)}</span>
+                    <span title={dayChangeHint(dayChange, price, currency)}>
+                      {fmtPrice(price, currency)}
+                    </span>
                     {priceStale && (
                       <span className="badge badge-warn" style={{ marginLeft: 6 }} title="暫時抓不到新價格，顯示上一次抓到的">
                         快取

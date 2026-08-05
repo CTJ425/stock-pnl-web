@@ -15,12 +15,28 @@ import { lineSegments } from './chartPath'
 import { CHART_COLORS } from './chartColors'
 import { niceDomain } from './chartScale'
 
+/**
+ * 開高低收任一為 null 就畫不出這根，該欄留白（0.6.34）。
+ *
+ * 原本呼叫端是先把不完整的日子**過濾掉**，但這樣一來第 N 根就不是第 N 天了 ——
+ * 與其他共用 X 軸的圖疊在一起時，同一個 hover 索引會指到不同日期。
+ * 保留欄位、只是不畫，索引才對得起來。用收盤去補開高低仍然不行：
+ * 那會畫出一整排十字線，看起來像那天真的沒有波動。
+ */
 export interface Candle {
   label: string
-  open: number
-  high: number
-  low: number
-  close: number
+  open: number | null
+  high: number | null
+  low: number | null
+  close: number | null
+}
+
+/** 四個價都齊的那根（畫圖與 tooltip 用） */
+type FullCandle = { label: string; open: number; high: number; low: number; close: number }
+
+function full(c: Candle | undefined): FullCandle | null {
+  if (!c || c.open === null || c.high === null || c.low === null || c.close === null) return null
+  return c as FullCandle
 }
 
 export interface OverlayLine {
@@ -38,6 +54,10 @@ interface CandleChartProps {
   ariaLabel: string
   /** 額外附在 tooltip 尾端的文字（例如成交量） */
   tooltipExtra?: (index: number) => string | null
+  /** 與其他圖共用 hover 時由外部持有；未給則自持（見 chartFrame） */
+  hoverIndex?: number | null
+  onHover?: (index: number | null) => void
+  crosshair?: boolean
 }
 
 export function CandleChart({
@@ -48,6 +68,9 @@ export function CandleChart({
   formatValue,
   ariaLabel,
   tooltipExtra,
+  hoverIndex,
+  onHover,
+  crosshair,
 }: CandleChartProps) {
   // 值域要同時容納蠟燭的高低與均線，否則均線會被畫到框外
   const domain = niceDomain([
@@ -62,9 +85,14 @@ export function CandleChart({
       labels={candles.map((c) => c.label)}
       labelIndices={labelIndices}
       ariaLabel={ariaLabel}
+      hoverIndex={hoverIndex}
+      onHover={onHover}
+      crosshair={crosshair}
       tooltipFor={(i) => {
-        const c = candles[i]
-        if (!c) return null
+        const c = full(candles[i])
+        // 開高低收沒齊的日子只報日期：其他共用 X 軸的圖仍有那天的數字，
+        // 這裡回 null 會讓整條 crosshair 上只有這張圖沒有提示，看起來像壞掉
+        if (!c) return candles[i]?.label ?? null
         const ohlc = `開 ${formatValue(c.open)}　高 ${formatValue(c.high)}　低 ${formatValue(c.low)}　收 ${formatValue(c.close)}`
         const ma = overlays
           .map((o) => {
@@ -82,7 +110,9 @@ export function CandleChart({
 
         return (
           <>
-            {candles.map((c, i) => {
+            {candles.map((raw, i) => {
+              const c = full(raw)
+              if (!c) return null
               const color = c.close >= c.open ? CHART_COLORS.up : CHART_COLORS.down
               const center = geo.bandCenter(i)
               const yHigh = geo.y(c.high)

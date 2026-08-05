@@ -16,10 +16,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from '../../services/macroProxy'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
-import { CHART_COLORS } from '../Charts/chartColors'
 import { latestPeriod, periodsBehind } from './macroPeriod'
 import { TwMarketSection } from './TwMarketSection'
-import { sparkline } from '../Charts/sparkline'
 
 /** 兩個 ISO 時間是否落在同一個本地日曆日。壞值一律視為不同日（寧可多顯示一行） */
 function isSameDay(a: string, b: string): boolean {
@@ -59,44 +57,51 @@ function fmtDelta(latest: MacroPoint | null, previous: MacroPoint | null, unit: 
   return `較上期${d > 0 ? '增加' : '減少'} ${shown}`
 }
 
-/** 迷你走勢線的 viewBox 尺寸。實際顯示尺寸由 CSS 決定（`.mac-spark`） */
-const SPARK_W = 100
-const SPARK_H = 28
+/**
+ * 連續同向的期數（0.6.34），仿台股法人表的「連續」欄。
+ *
+ * **但判定的東西不一樣，不能直接沿用 `trendAt`**：法人買賣超看的是金額的正負號
+ * （買超 / 賣超本身就有方向），而 CPI 年增率永遠是正的，正負號沒有意義 ——
+ * 這裡看的是**與前一期相比的升降**。
+ *
+ * `points` 由舊到新。缺值的期別會中斷計算：把它當成「與前一期相同」會把兩段
+ * 不相干的升勢接成一段，比少報一期更糟。
+ */
+function risingStreak(points: MacroPoint[]): { direction: 1 | -1; periods: number } | null {
+  const values: number[] = []
+  for (const p of points) {
+    if (typeof p.value !== 'number' || !Number.isFinite(p.value)) values.length = 0
+    else values.push(p.value)
+  }
+  if (values.length < 3) return null
+  const direction = Math.sign(values[values.length - 1] - values[values.length - 2])
+  if (direction === 0) return null
+  let periods = 0
+  for (let i = values.length - 1; i > 0; i--) {
+    if (Math.sign(values[i] - values[i - 1]) !== direction) break
+    periods++
+  }
+  // 連 1 期不是趨勢，只是「這期比上期高」，而那句話上面那行已經說了
+  return periods >= 2 ? { direction: direction as 1 | -1, periods } : null
+}
 
 /**
- * 指標卡上的走勢線。
+ * 「連 N 期上升 / 下降」的 chip（0.6.34，取代原本的迷你走勢線）。
  *
- * 顏色寫死不吃 CSS 變數：html2canvas 匯出 PDF 時解析不到祖先層的變數，
- * 圖會整片變黑（`Charts/chartColors.ts` 有同一條註記）。
- * 落後中的指標改用灰色虛線 —— 那條線的末端不是「現在」，實線會讓人誤會。
+ * **刻意不套漲紅跌綠**：物價年增率或信心指數「比上期高」本身沒有好壞之分
+ * （同本檔 `fmtDelta` 的取捨），套損益色等於幫使用者下一個資料裡沒有的結論。
+ * 落後中的指標另外標明 —— 那個「連續」的末端不是現在，不講清楚會被讀成當前趨勢。
  */
-function Spark({ ind, behind }: { ind: MacroIndicator; behind: number }) {
-  const g = sparkline(
-    ind.points.map((p) => p.value),
-    SPARK_W,
-    SPARK_H,
-  )
-  if (!g) return null
-  const color = behind > 0 ? CHART_COLORS.axis : CHART_COLORS.line
+function StreakChip({ ind, behind }: { ind: MacroIndicator; behind: number }) {
+  const streak = risingStreak(ind.points)
+  if (!streak) return null
   return (
-    <svg
-      className="mac-spark"
-      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={`${ind.label}近 ${ind.points.length} 期走勢`}
-    >
-      <path d={g.area} fill={color} opacity="0.16" />
-      <polyline
-        points={g.line}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.6"
-        strokeDasharray={behind > 0 ? '3 2' : undefined}
-        vectorEffect="non-scaling-stroke"
-      />
-      <circle cx={g.lastX} cy={g.lastY} r="2.2" fill={color} />
-    </svg>
+    <div className="kpi-sub">
+      <span className="badge mac-streak">
+        連 {streak.periods} 期{streak.direction > 0 ? '上升' : '下降'}
+        {behind > 0 && '（截至該期）'}
+      </span>
+    </div>
   )
 }
 
@@ -114,7 +119,7 @@ function IndicatorCard({ ind, behind }: { ind: MacroIndicator; behind: number })
       <div className="kpi-sub">
         {fmtPeriod(ind.latest?.period)}・{fmtDelta(ind.latest, ind.previous, ind.unit)}
       </div>
-      <Spark ind={ind} behind={behind} />
+      <StreakChip ind={ind} behind={behind} />
       <div className="kpi-sub">{ind.note}</div>
     </div>
   )
