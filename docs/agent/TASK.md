@@ -9,7 +9,7 @@
 ## 📋 Active Tasks
 
 ### Task 69: 個股分析改放報價卡；台股收盤後不再抓價（0.6.36-dev.1）
-- **Status**: ✅ **程式碼完成，待部署** —— ⚠️ 需要動 Supabase（見下方「部署待辦」）
+- **Status**: ✅ **完成並已部署測試區**（2026-08-05 16:10）；⚠️ 尚未 push 到 origin/dev（本機無 GitHub 認證）
 - **Agent**: Claude
 - **Timestamp**: 2026-08-05 16:05:00 Asia/Taipei
 - **需求**：使用者要「個股分析刪掉我的持股卡片，改放開盤 / 最高 / 成交量 / 昨收 /
@@ -26,11 +26,22 @@
   （下拉選單要列持股、即點即產要帶脈絡），只是畫面上不再顯示持股數字。
 - **驗證**：`npm test -- --run` 56 檔 869 筆全通過（新增 `quoteWindow.test.ts` 9 筆、
   `QuoteTab.test.tsx` 10 筆，擴充 misParse / priceProxy）；`npm run build`、`npm run lint` 乾淨。
-- **部署待辦（需使用者明確授權，依 CLAUDE.md §13.2）**：
-  1. 測試區跑 `sources/supabase/schema.sql` 的 `price_cache` 新欄位 ALTER（可重複執行）。
-  2. `supabase functions deploy stock-price --no-verify-jwt`（測試區）。
-  3. 兩者缺一時的行為：Edge 未部署 → 前端拿不到新欄位，報價卡各格顯示「—」；
-     schema 未跑 → Edge 回寫快取會失敗（該次不影響回應，但每次都要重抓）。
+- **測試區部署紀錄（2026-08-05 16:00–16:10，使用者明確授權）**：
+  1. `supabase functions deploy stock-price --project-ref wqetxuhncvfidqnklyew`
+     → v9 升到 **v10**，`verify_jwt` 維持 `true`（**不帶** `--no-verify-jwt`，那是 `stock-report` 專用）。
+  2. `price_cache` 補 7 個欄位完成，欄位序：
+     `key,price,updated_at,prev_close,open,high,low,volume,trade_date,trade_time,trial`。
+  3. 端到端實測（打測試區 Edge）：2330 與 6488 回齊七欄
+     （`tradeDate: 20260805`、`tradeTime: 13:30:00`、`trial: false`）；
+     AAPL 的 `tradeDate/tradeTime` 為 null、`volume` 67779 張（Yahoo 的股數已除以 1000），皆如設計。
+  4. **收盤鎖定實測生效**：把 `TPE:2330` 的 `updated_at` 往回撥 5 分鐘後再打一次，
+     回傳的 `asOf` 仍停在 5 分鐘前 —— 舊的 60 秒 TTL 必定會重抓，這是決定性證據。
+- **操作環境副作用**：`supabase link` 現在指向**測試區** `wqetxuhncvfidqnklyew`
+  （link 是全域的，見 `supabase-ops` skill）。要動正式區必須先重新 link。
+- **稽核方式的例外**：skill 要求用 `functions download` 逐檔比對，但此環境的 `download`
+  取不到 access token（`projects list` / `deploy` 卻可以，走不同認證路徑）。
+  改用「線上版本更新時間（v9 = 08-05 11:35，與 0.6.34 部署時程吻合）」＋「端到端回傳新欄位」
+  兩項替代 —— 後者比逐檔比對更有力，因為它證明的是**線上實際在跑的行為**。
 - **待驗證（收盤後無法確認，需隔日盤中回頭看）**：
   1. MIS 的 `v` 與 TWSE 日報表 `TradeVolume` 有約 10% 落差（31,851 張 vs Yahoo 的 35,214 張），
      推測是盤後定價交易未計入 —— 單位是「張」已確定，差異來源待隔日用 `STOCK_DAY_ALL` 對帳。

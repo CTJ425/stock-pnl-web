@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: 個股分析改放報價卡；台股收盤後不再抓價（0.6.36-dev.1）
-- Status: **程式碼完成 —— 869 測試全過；⚠️ 待部署 Edge Function 與 price_cache 新欄位**
-- Timestamp: 2026-08-05 16:05:00 Asia/Taipei
+- Status: **完成 —— 869 測試全過；測試區已部署並實測通過**
+- Timestamp: 2026-08-05 16:10:00 Asia/Taipei
 
 ---
 
@@ -68,9 +68,26 @@
       的持股相關斷言（PDF 那兩條改為釘「畫面上沒有持股數字」）。
 - [x] 驗證：`npm test -- --run` 56 檔 **869 筆全通過**；`npm run build`、`npm run lint` 乾淨。
 
-### ⚠️ 尚未做（需使用者明確授權）
-- 測試區跑 `price_cache` 的 ALTER、部署 `stock-price` Edge Function。
-  兩者都沒做之前，報價卡在測試區會各格顯示「—」（前端拿不到新欄位，這是預期的降級）。
+### 測試區部署與實測（16:00–16:10，使用者授權後執行）
+
+`stock-price` v9 → **v10**（`verify_jwt` 維持 `true`）、`price_cache` 補齊 7 個欄位。
+端到端打測試區的 Edge Function：2330 / 6488 回齊七欄（`tradeDate: 20260805`、
+`tradeTime: 13:30:00`）；AAPL 的交易日與撮合時間為 null、成交量 67779 張（股數已除以 1000）。
+
+**收盤鎖定的決定性驗證**：把 `TPE:2330` 的 `updated_at` 往回撥 5 分鐘再打一次，
+`asOf` 仍停在 5 分鐘前 —— 舊的 60 秒 TTL 必定會重抓，所以這證明長 TTL 真的在 Edge 端生效。
+
+踩到的環境問題兩則：
+- `db query` 在 repo root 執行會連本機 Docker DB（skill 警告的 cwd 陷阱的另一種表現），
+  且新版 CLI 不認舊的 `supabase/.temp/linked-project.json`，必須重新 `link`。
+- `functions download` 取不到 access token（`projects list` / `deploy` 卻可以，
+  走不同的認證路徑），所以 skill 要求的逐檔比對這次改用「版本更新時間 ＋ 端到端回傳」替代。
+
+⚠️ **`supabase link` 現在指向測試區**（全域副作用），要動正式區必須先重新 link。
+
+### ⚠️ 尚未做
+- `git push origin dev`：這台機器沒有 GitHub 認證（無 `gh`、remote 是 https 且無 credential helper），
+  需由使用者自行 push。commit 已在本地 `dev` 分支。
 
 ### 待隔日盤中回頭確認
 1. MIS 的 `v`（31,851 張）與 Yahoo 同日的 35,214 張差約 10%，推測是盤後定價交易未計入；
