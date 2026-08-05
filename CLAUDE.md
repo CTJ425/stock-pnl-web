@@ -65,10 +65,34 @@ If information is important for future work, write it to `docs/agent/`.
 | `docs/agent/TASK.md` | 任務追蹤 |
 | `docs/agent/BUG_FIX.md` | 未解決的 Bug |
 | `docs/agent/FIXED_BUG.md` | 已修復 Bug 的歷史紀錄 |
+| `docs/agent/TASK_ARCHIVE.md` | 已完成任務的歸檔（TASK.md 只留進行中與週期性任務） |
 
 The Agent state files are authoritative for project progress.
 
 其他文件路徑：`docs/architecture/`（架構）、`docs/api/`（API）、`docs/database/`（資料模型）、`docs/development/`（開發指南）、`docs/deployment/`（部署維運）。
+
+## 4.1 文件語言 (Documentation Language)
+
+**Agent 產出的 Markdown 一律用英文寫**：`docs/agent/`、`docs/architecture/`、
+`docs/api/`、`docs/database/`、`docs/development/`、`docs/deployment/`、`.claude/skills/`。
+
+理由是 token 成本，這些檔案每個 session 都要載入。實測（2026-08-05，o200k_base）：
+同一個 bug 的紀錄，中文 930 tokens / 1416 字元、英文 383 tokens / 1482 字元 ——
+**同樣長度中文貴 2.5 倍**，扣掉中文表達較精簡的抵銷後，等義資訊約 **1.6–1.8 倍**。
+
+**維持中文的例外：**
+
+- `README.md` —— 專案門面，讀者是人不是 agent。
+- **程式碼註解與 UI 文案** —— 讀者是開發者與使用者。這條不可動搖：
+  註解的價值在於精確表達「為什麼不那樣做」，語言轉換最容易磨損的正是這種推理。
+- 與使用者的對話 —— 依全域規則仍為繁體中文（正體字、台灣用語）。
+
+**既有的中文文件不強制回頭翻譯**：一次性成本約 300K tokens，而回本要約 20 次 session，
+且翻譯會磨損那些實測數字與踩坑推理。自然編輯到哪一段，就順手把那段轉成英文。
+
+真正的 token 大戶是**文件肥大**而非語言：`TASK.md` 曾達 38.6K tokens，
+其中九成是已完成任務的歷史。已完成的請移到 `TASK_ARCHIVE.md`，
+`TASK.md` 只留進行中與週期性任務 —— 歸檔省下的比翻譯多一倍。
 
 ---
 

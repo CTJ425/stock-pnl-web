@@ -1,9 +1,76 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 後台時間軸基準日修正（0.6.36-dev.2）
-- Status: **完成 —— 874 測試全過；純前端，無需再動 Supabase**
-- Timestamp: 2026-08-05 16:35:00 Asia/Taipei
+- Action: Merged 0.6.36 to main, deployed production, archived TASK.md
+- Status: **Done — both regions live; TASK.md down from 38.6K to 2.6K tokens**
+- Timestamp: 2026-08-05 16:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-05 16:55:00 Asia/Taipei (0.6.36 → main)
+
+- **Agent**: Claude
+- **Action**: Merge to main, production deploy, and a documentation-language policy
+
+> First entry written in English under the new CLAUDE.md §4.1. Existing Chinese
+> entries stay as they are — see the cost analysis below for why.
+
+### Deploy order mattered
+
+Merging to `main` fires GitHub Pages immediately, but production Supabase was still
+on the old Edge Function with no new `price_cache` columns. Pushing first would have
+put the live site in a state where every quote-card cell reads "—".
+
+CLAUDE.md §13.2 also says production is only touched from `main`. Both constraints are
+satisfied by merging locally first, deploying production while sitting on `main`, and
+only then pushing — the merge is local, the push is what deploys.
+
+Production: `stock-price` v13 → **v14** (`verify_jwt` stays `true`), `price_cache`
+got the seven columns, and an end-to-end call returned the full set for 2330
+(`tradeDate: 20260805`, `tradeTime: 13:30:00`). `main` and `dev` both at `1a9f37f`.
+
+⚠️ `supabase link` now points at **production**. Re-link before touching dev.
+
+### The first production deploy attempt was blocked
+
+The harness permission classifier denied `functions deploy --project-ref <prod>`.
+It went through on a second attempt after the user explicitly authorised it. Worth
+knowing: that classifier is not something a user authorisation flag overrides, so if
+it blocks again the fallback is for the user to run the command themselves.
+
+### Chinese vs English token cost — measured, not assumed
+
+The user asked whether Chinese docs cost more tokens. Measured with `gpt-tokenizer`
+(o200k_base) on a natural bilingual pair — the BUG-010 entry in `FIXED_BUG.md` versus
+the commit message describing the same bug:
+
+| Sample | tokens | chars | tok/char |
+| --- | --- | --- | --- |
+| Chinese (FIXED_BUG entry) | 930 | 1,416 | 0.657 |
+| English (commit message) | 383 | 1,482 | 0.258 |
+
+**Same length, Chinese costs 2.5x.** Netting out that Chinese says the same thing in
+roughly 0.65 the characters, equivalent information runs **1.6–1.8x**.
+
+### But translating everything was the wrong fix
+
+Converting all 8,688 lines would cost ~300K tokens once and take ~20 sessions to pay
+back, and translation erodes exactly what makes these files worth keeping — the
+measured numbers and the "why we did not do it that way" reasoning.
+
+The real cost was file bloat. `TASK.md` was **38,579 tokens** and loaded every session,
+nine tenths of it completed-task history. Moving those to `TASK_ARCHIVE.md` cut it to
+**2,558 tokens — 93.4% saved**, more than double what translation would have given,
+with no translation risk at all.
+
+### Completed Tasks
+- [x] `CLAUDE.md` §4.1: agent-authored Markdown is written in English from now on.
+      README, **code comments and UI copy** stay Chinese — comments carry the
+      "why not" reasoning that translation damages most.
+- [x] `TASK.md`: kept only Task 68/69/70 and the recurring Task 47; the other 66 went
+      to `TASK_ARCHIVE.md` verbatim (moved, not translated).
+- [x] Merged `dev` into `main` as 0.6.36, deployed production, pushed, and
+      fast-forwarded `dev` back to `main`.
 
 ---
 
