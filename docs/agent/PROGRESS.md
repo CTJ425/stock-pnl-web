@@ -1,9 +1,67 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Session handoff —— state recorded, `TASK.md` archived back down to what is actually open
-- Status: **0.6.43 live everywhere; nothing in flight; two checks wait for market hours (Task 76)**
-- Timestamp: 2026-08-06 01:50:00 Asia/Taipei
+- Action: Task 76 item 2 —— reconcile the 成交量 discrepancy against TWSE, now that `STOCK_DAY_ALL` has caught up
+- Status: **0.6.43 live everywhere; no open bugs; Task 76 item 2 closed, items 1/3/4 waiting on today's clock**
+- Timestamp: 2026-08-06 10:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-06 10:00:00 Asia/Taipei (Task 76 item 2, documentation only —— no code changed)
+
+- **Agent**: Claude
+- **Action**: Reconcile the two volume sources against TWSE; correct what `SPEC.md` claimed about them
+
+### The recorded discrepancy does not exist any more, and the recorded explanation was the wrong shape
+
+`SPEC.md` carried "this table and the 行情 card disagree by design —— 2330 was 35,214 張 from the daily batch and
+31,851 張 from MIS, about 10%", with the working theory that 盤後定價交易 was missing from MIS. Both halves fail
+on the data:
+
+| Source | 2330, 2026-08-05, shares | vs official |
+| ---- | ---- | ---- |
+| TWSE `STOCK_DAY` / `STOCK_DAY_ALL` | 36,782,301 | — |
+| Yahoo daily batch, re-read 08-06 | 31,905,196 | −13.3% |
+| MIS `v` (31,851 張) | 31,851,000 | −13.4% |
+
+**The app's own two sources agree to within 0.2%.** The 10% spread was a snapshot of an unsettled Yahoo bar:
+Yahoo has since revised 08-05 down from 35,214 張 to 31,905 張. That Yahoo revises is not a guess —— the stored
+`daily/2303.json`, captured 08-04 16:15, holds 181,531,926 for 08-04 where Yahoo now says 180,117,150. So the
+number the batch writes at 16:30 is **not** the number Yahoo will stand behind the next morning, and any future
+"the two cards disagree" report should first ask *when* each figure was captured.
+
+**Both sources sit ~13% below the exchange's own figure**, and 盤後定價 is not why: `BFT41U` for 08-05 returned
+**nine rows for the entire market**, the largest 26 張, and 2330 was not among them. What is verified is
+鉅額交易 1,464,000 shares (`block/BFIAUU`) and 盤後零股 42,196 (`TWT53U`) —— 1.5M of a 4.93M gap. The ~3.4M
+residual is **inferred** to be 盤中零股; TWSE does not expose that per-stock report on any endpoint tried
+(`TWTB4U`, `oddLot/TWTASU` both 302, and the OpenAPI catalogue lists only `TWT53U`). Recorded as inference.
+
+### Market-wide, the app is right
+
+FMTQIK against the sum of `STOCK_DAY_ALL`'s 1377 records for the same day: 成交金額 within **0.33%**, 筆數 within
+**2.3%**, 成交股數 26% higher (132.1 億股 vs 97.8 億股). That last one is the expected shape, not a defect ——
+`STOCK_DAY_ALL` omits 權證/ETN, which move enormous share counts at negligible value, so the gap lands almost
+entirely on shares and almost not at all on amount. Which is exactly what the two ratios show.
+
+### A premise in Task 76 item 1 that would have produced a wrong answer
+
+Item 1 said to read `market/daily.json`'s `asOf` and conclude that 16:00-or-later means FMTQIK is the constraint.
+`asOf` is currently 2026-08-05T10:00:02Z = **18:00 Taipei**, which under that rule reads as a clear verdict. It
+is not one. `cron.job_run_details` (retained back to 07-27) shows jobid 15 has run **three times in its life**:
+08-05 at 16:00, 17:00 and 18:00. The job was created that afternoon on an hourly schedule and only later became
+`0,30 7-10 * * 1-5`. 18:00 was simply the last round of the day. **2026-08-06 is the first day the 15:00/15:30
+rounds fire at all**, so the question is answerable today and was never answerable before.
+
+Same correction for item 3: every 08-05 round logged `t86_revisions = 0` because all of them predate the 01:2x
+deploy. The first post-deploy T86 round is today's 16:30.
+
+### Completed Tasks
+- [x] Task 76 item 2 closed; `SPEC.md` 技術面 and 市場 sections rewritten with the measured table and provenance.
+- [x] Items 1, 3, 4 re-scoped with what the run history actually shows; `TASK.md` state summary corrected.
+- [x] `scratchpad/task76-capture.sh` running in the background: MIS every 20s from 13:22 (the 13:25–13:30 closing
+      auction is the same `ip` path as 08:30–09:00, which had already passed when this session began), and
+      `market/daily.json` at 15:03 / 15:34 / 16:04 / 16:34 for item 1.
+- [x] Read-only throughout —— no Supabase deploy, no schema change, no code change.
 
 ---
 

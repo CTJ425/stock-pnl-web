@@ -644,9 +644,27 @@ under its own chart. Columns: 日期 / 成交量 / 量比 / 收盤 / 漲跌.
 - **20 rows, then 顯示全部**: the range picker goes to 近 1 年 = 244 rows, which would make this card taller than the
   three charts above it combined. A capped scrolling box is **not** the alternative —— 0.2.x had one (480px, sticky
   header) and it was deliberately removed so tables expand in full.
-- ⚠️ **This table and the 行情 card disagree by design**: 2026-08-05, 2330 was 35,214 張 from the daily batch and
-  31,851 張 from MIS —— about 10%. Two sources, two figures. The hint under the table says so; do not "fix" it by
-  making one match the other.
+- ⚠️ **This table and the 行情 card are two sources and may disagree**: the hint under the table says so; do not
+  "fix" it by making one match the other. The ~10% figure once recorded here (2026-08-05, 2330: 35,214 張 batch vs
+  31,851 張 MIS) **did not survive reconciliation** —— see below.
+- **Reconciled against TWSE on 2026-08-06** (Task 76 item 2, 2330 on 2026-08-05, shares):
+
+  | Source | Shares | vs TWSE |
+  | ---- | ---- | ---- |
+  | TWSE `STOCK_DAY` / `STOCK_DAY_ALL` (official) | 36,782,301 | — |
+  | Yahoo daily batch, re-read 08-06 | 31,905,196 | −13.3% |
+  | MIS `v` 31,851 張 | 31,851,000 | −13.4% |
+
+  Two conclusions. **(a) The app's own two sources agree to within 0.2%** —— Yahoo revised that day down from
+  35,214 張 to 31,905 張 after the batch captured it, so the ~10% spread was a snapshot of an unsettled Yahoo bar,
+  not a standing difference. Yahoo revising is confirmed independently: stored `daily/2303.json` (captured
+  08-04 16:15) holds 181,531,926 for 08-04 where Yahoo now says 180,117,150. **(b) Both sit ~13% below the
+  exchange's own daily figure**, because `STOCK_DAY` counts sessions the regular-session feeds do not:
+  鉅額交易 1,464,000 shares (`block/BFIAUU`, verified) and 盤後零股 42,196 (`TWT53U`, verified) cover 1.5M of the
+  4.93M gap; 盤後定價 is nil for 2330 (`BFT41U` had 9 rows market-wide). The ~3.4M residual is **inferred** to be
+  盤中零股, whose per-stock daily report is not reachable on the endpoints tried.
+- **Do not switch the table to `STOCK_DAY_ALL`**: it carries 1377 TWSE records only (6488 and every TPEx code are
+  absent) and its `TradeVolume` is in shares, not lots.
 
 ### Market-wide (台股市場)
 
@@ -660,6 +678,10 @@ A table of its own below the 成交金額 chart, above the institutional one. Co
 - Missing columns print 「—」, never 0 —— days written before those fields existed read back as undefined.
 - Both tables on that card carry `aria-label` (`每日成交量` / `三大法人買賣超`). Tests must scope by it: an unscoped
   `.data-table tbody tr` silently returns rows from both.
+- **These market-wide figures do reconcile with TWSE** (checked 2026-08-06 for 2026-08-05, FMTQIK vs the sum of
+  `STOCK_DAY_ALL`'s 1377 records): 成交金額 within **0.33%**, 筆數 within **2.3%**. 成交股數 is 26% higher
+  (132.1 億股 vs 97.8 億股) and that is expected —— `STOCK_DAY_ALL` omits 權證/ETN, which trade enormous share
+  counts at negligible value, which is exactly the shape of a gap that moves shares but not amount.
 
 ## Annual income: search box (0.6.38)
 
