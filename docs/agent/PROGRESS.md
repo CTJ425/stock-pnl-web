@@ -1,9 +1,66 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Ship 0.6.44-dev.7 to origin/dev + DEV backfill-profit
-- Status: **pushed 13126fa; DEV profit backfill multi-round done**
-- Timestamp: 2026-08-07 17:30:00 Asia/Taipei
+- Action: Release 0.6.45 — FOMC catalog force-resync; merge dev → main
+- Status: **0.6.45 on main/dev**
+- Timestamp: 2026-08-07 18:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 18:20:00 Asia/Taipei (release 0.6.45)
+
+- Finalize 0.6.45 (was 0.6.45-dev.1): force macro resync when FRED catalog incomplete.
+- Prod already stock-report v32 + macro/us.json has FOMC; this ships the fix to main.
+
+---
+
+# Progress Log (PROGRESS.md)
+
+- Agent: Grok
+- Action: Prod align admin_run_log + stock-price v17
+- Status: **PROD tables complete; stock-price v17 / stock-report v31**
+- Timestamp: 2026-08-07 18:01:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 18:01:00 Asia/Taipei (prod align)
+
+- **Agent**: Grok
+- **Action**: User authorized prod DDL + deploy (admin_run_log, stock-price)
+
+### Applied
+1. `admin_run_log` + replaced `admin_schedule_status` (cron+manual merge)
+2. `stock-price` deploy → **v17** (was v16)
+
+### Verify
+- Identity: kxnxadaghidwumqsqneu, batch_run_log=284
+- Tables: admin_run_log, warm_quota, tw_watchlist all present
+
+---
+
+# Progress Log (PROGRESS.md)
+
+- Agent: Grok
+- Action: Production 0.6.44 DDL + stock-report deploy
+- Status: **PROD green — warm_quota, tw_watchlist, stock-report v31**
+- Timestamp: 2026-08-07 17:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 17:55:00 Asia/Taipei (prod 0.6.44)
+
+- **Agent**: Grok
+- **Action**: User authorized prod DDL + Edge deploy
+
+### Identity
+- Linked `kxnxadaghidwumqsqneu`, batch_run_log=282, nightly URL prod.
+
+### Applied
+1. DDL: `warm_quota` + `take_warm_quota` + `tw_watchlist` (RLS, max-5 trigger)
+2. `supabase functions deploy stock-report --no-verify-jwt` → **v31** (was v30)
+
+### Smoke
+- probe without secret → HTTP 401 (path up, auth gate intact)
 
 ---
 
