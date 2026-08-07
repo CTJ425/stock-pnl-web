@@ -1,12 +1,12 @@
 ---
 name: versioning
-description: The version number determination rule of stock-pnl-web. Use it when you want to determine the next version number, increment dev.N on the dev branch, merge dev into main for final version, or write a README version record.
+description: The version number determination rule of stock-pnl-web. Use it when you want to determine the next version number, increment dev.N on the dev branch, merge dev into main for final version, or write a docs/CHANGELOG.md version record.
 ---
 
 # Version number specification details
 
 Prerequisite (`CLAUDE.md` §12 has been stated and will not be repeated here): the version number does not have the `v` prefix,
-Three places must be synchronized - `sources/src/version.ts`, `sources/package.json` (together with `package-lock.json`), `README.md`.
+Three places must be synchronized - `sources/src/version.ts`, `sources/package.json` (together with `package-lock.json`), `README.md` (version badge only). The version record itself lives in `docs/CHANGELOG.md`.
 
 ## Official version (`main` branch)
 
@@ -14,7 +14,7 @@ The format is **`x.x.x`** (standard semver, without any suffix).
 
 - Increment patches** sequentially according to the previous official version number** (for example: `0.3.6` → `0.3.7`).
 - **Unless it is a major version change** (destructive changes, architectural reconstruction, functional mileage code), enter minor or major (for example: `0.3.7` → `0.4.0` → `1.0.0`).
-- The "version record" of `README.md` is titled and finalized with the official version number.
+- The "version record" of `docs/CHANGELOG.md` is titled and finalized with the official version number.
 
 ## Test versions (`dev` and other development branches)
 
@@ -24,7 +24,7 @@ The format is **`x.x.x-dev.x`** (note: there is a **dot** `.` between `dev` and 
 - The last `.x` = the **number of changes** of the official version number during the dev period, starting from `1`, each meaningful change +1.
 - Example: Target `0.3.7`, second change → `0.3.7-dev.2`.
 
-The `README.md` version record is titled "Future official version number (under development)" during the dev period, and each change is listed in sections with `dev.1 / dev.2...` underneath.
+The `docs/CHANGELOG.md` version record is titled "Future official version number (under development)" during the dev period, and each change is listed in sections with `dev.1 / dev.2...` underneath.
 
 ## merge into main
 

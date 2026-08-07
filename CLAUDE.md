@@ -239,7 +239,8 @@ Version numbers **must never contain a `v` prefix**, and only take the form `x.x
 
 - `sources/src/version.ts` → `APP_VERSION` (frontend display)
 - `sources/package.json` → `version` (along with `package-lock.json`)
-- `README.md` → Version badge (line 3) and "Version History"
+- `README.md` → Version badge (line 3)
+- `docs/CHANGELOG.md` → Version History
 
 The version badge in the bottom left corner of the screen **only shows the version number itself**, no author, no prefix.
 (`APP_AUTHOR` was removed in 0.3.7-dev.6.)
@@ -272,7 +273,7 @@ Change → commit to dev → push origin dev → verify in test environment
 Reason: `push` to `main` will trigger `.github/workflows/deploy.yml`,
 GitHub Pages will go online immediately, with no room for regret. Going to dev first equals an extra verification step in an actual environment.
 
-When merging to `main`, remove the `-dev.<N>` suffix to finalize the version according to the `versioning` skill, and finalize the README version history.
+When merging to `main`, remove the `-dev.<N>` suffix to finalize the version according to the `versioning` skill, and finalize the docs/CHANGELOG.md version history.
 
 **Keep both branches synchronized after merging** (`git push origin main:dev` fast-forward),
 to avoid dev falling behind main and causing confusion in the next comparison baseline —— auditing the test environment uses `dev` as the baseline.
