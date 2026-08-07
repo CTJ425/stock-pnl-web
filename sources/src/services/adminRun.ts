@@ -41,7 +41,8 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   'sync-market': {
     title: '台股全市場',
     cron: 'market-daily',
-    hint: '量能與三大法人（market/daily.json）',
+    hint:
+      'FMTQIK 量能／加權收盤 + MI_5MINS_HIST 開高低 + BFI82U 三大法人買賣超 → market/daily.json',
   },
   'sync-macro': {
     title: '美總經',

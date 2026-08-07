@@ -736,11 +736,21 @@ export function AdminStatusPage() {
               constant that drifts.
             */}
             <p className="ast-note" style={{ marginTop: 6 }}>
+              <b>抓取對象</b>：證交所三個來源，寫成單一檔 <code>market/daily.json</code>
+              （全市場共用，不是持股清單）。
+              <br />
+              · <b>FMTQIK</b>：當日成交股數／金額／筆數、加權指數收盤與漲跌點（一次抓整月）
+              <br />
+              · <b>MI_5MINS_HIST</b>：加權指數開／高／低（日 K 用；與 FMTQIK 同月一次抓）
+              <br />
+              · <b>BFI82U</b>：三大法人（外資、投信、自營）買進／賣出／買賣超金額（
+              <b>一天一個請求</b>，歷史逐日回補）
+            </p>
+            <p className="ast-note" style={{ marginTop: 6 }}>
               <b>抓取週期</b>：
               {marketCron ? describeCron(marketCron.schedule) : '排程 market-daily'}
-              。每輪抓一份當月的成交量值與加權指數（一次一整月），另補若干個交易日的法人金額 ——
-              法人是<b>一天一個請求</b>，所以歷史是逐日補上來的，不是一次到位。
-              兩者的日期覆蓋範圍本來就不同步，上方的「待補」不等於異常。
+              。每輪重抓當月量能與加權指數，另補若干個交易日的法人金額。
+              量能與法人的日期覆蓋本來就不同步，上方的「待補」不等於異常。
             </p>
           </>
         )}

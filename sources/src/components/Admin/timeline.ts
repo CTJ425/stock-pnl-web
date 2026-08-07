@@ -258,6 +258,14 @@ export function durationLabel(hours: number): string {
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
     '持股台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 獲利能力，寫入盤後報告',
+  /*
+    market-daily / sync-market (0.6.44-dev.3 made the label explicit — ACTION_SCOPE had no
+    entry before, so the schedule table showed only the code name). Three TWSE sources,
+    one shared file market/daily.json; not per-ticker (unlike generate-all).
+  */
+  'sync-market':
+    '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
+    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json',
   probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
   'sync-macro': 'FRED 五個序列：核心 CPI / PPI / PCE、非農就業、消費者信心',
   'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣',

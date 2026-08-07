@@ -4,6 +4,10 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.44（開發中）— 個股分析可查全市場台股
 
+#### dev.4（2026-08-07）
+
+- 📝 **market-daily 補上抓取對象說明**（FMTQIK / MI_5MINS_HIST / BFI82U → `market/daily.json`）。排程表 `describeScope` 先前漏了 `sync-market`，畫面上看不出這班抓什麼。
+
 #### dev.3（2026-08-07）
 
 - 🐛 **手動更新會反映在「抓取狀況」排程表**。先前手動只打 handler、不經 pg_cron，圖表有更新但最後執行時間空白。現在寫入 `admin_run_log`，並與 `cron.job_run_details` 合併顯示（標「手動」／「排程」）。

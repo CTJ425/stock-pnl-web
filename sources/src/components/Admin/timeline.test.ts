@@ -342,6 +342,9 @@ describe('dayPercent / hourLabel / durationLabel', () => {
 describe('describeScope', () => {
   it('每個排程都說得出自己抓什麼', () => {
     expect(describeScope('generate-all')).toContain('三大法人')
+    expect(describeScope('sync-market')).toContain('FMTQIK')
+    expect(describeScope('sync-market')).toContain('BFI82U')
+    expect(describeScope('sync-market')).toContain('market/daily.json')
     expect(describeScope('sync-macro')).toContain('FRED')
     expect(describeScope('sync-fx')).toContain('八個幣對')
     expect(describeScope('probe')).toContain('不寫報告')
