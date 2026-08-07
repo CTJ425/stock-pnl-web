@@ -254,10 +254,13 @@ When deciding the next version number, incrementing `dev.N`, or merging to `main
 
 Two independent Supabase projects, corresponding to git branches:
 
-| Environment | Supabase Project | project-ref | Corresponding Branch |
+| Environment | Supabase Project | project-ref / host | Corresponding Branch |
 | ---- | ---- | ---- | ---- |
-| Production | Stock-Pnl-Web | `kxnxadaghidwumqsqneu` | `main` |
-| Test | Stock-Pnl-Web-Dev | `wqetxuhncvfidqnklyew` | `dev` |
+| Production | Stock-Pnl-Web (cloud) | `kxnxadaghidwumqsqneu` | `main` |
+| Test / DEV | self-hosted Docker `stock-pnl-web-dev` | `https://korq9tvdz0jd7yblr72p.ivan.lab` (compose: `/root/container/supabase/stock-pnl-web-dev`) | `dev` |
+
+> Former cloud test project `wqetxuhncvfidqnklyew` was removed; DEV is the self-hosted stack above (2026-08-07).
+> Edge deploy on DEV is **volume copy** into `volumes/functions/` + recreate the functions container — not `supabase functions deploy --project-ref`.
 
 ## 13.1 Branch Flow: dev First
 

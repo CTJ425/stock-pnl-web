@@ -2,7 +2,7 @@
 
 - Agent: Grok
 - Status: ACTIVE
-- Timestamp: 2026-08-07 15:10:00 Asia/Taipei
+- Timestamp: 2026-08-07 15:39:33 Asia/Taipei
 
 ---
 
@@ -10,41 +10,44 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-07 15:10)
+## 📍 Where the project stands (2026-08-07 15:39)
 
-- **Version 0.6.44** (working tree / about to ship on `dev`): full-market search on the individual stock
-  analysis page; `stock-report` `generate`/`warm` gated by `assertUser` + `warm_quota` (30/day).
-- **0.6.43 remains the last fully deployed baseline** until Edge Function + `warm_quota` DDL land in both
-  environments. Frontend-only deploy without those will 401/403 non-holding warm/generate.
+- **Version 0.6.44** (working tree): full-market search + `assertUser` / `warm_quota` gating.
+- **Self-hosted DEV is live**: `https://korq9tvdz0jd7yblr72p.ivan.lab` (Docker
+  `stock-pnl-web-dev`). Schema, `take_warm_quota`, `reports` bucket, 5 cron jobs, Edge
+  `stock-price` + `stock-report`, and CRON_SECRET (Edge env + cron jobs) are applied.
+  Smoke green on DEV (price 200 / warm anon 401 / generate-all 200).
+- **Former cloud test project** `wqetxuhncvfidqnklyew` is **not** the active DEV target.
+- **Production** (`kxnxadaghidwumqsqneu`) still on the previous baseline until explicitly updated.
 - **Open bugs: none.**
-- **Task 76 items 1/3/4** were clock-bound on 2026-08-06 and were never written back as verified. Re-check
-  is cheap (read-only Storage / `batch_run_log`); left open rather than closed by assumption.
+- **Task 76 items 1/3/4** still unrecorded.
 
 ⚠️ **Environment facts**:
-1. `supabase link` may still point at **production** (`kxnxadaghidwumqsqneu`). Re-link before any
-   `db query --linked` against test (`wqetxuhncvfidqnklyew`).
-2. Project keys pasted in chat on 2026-08-05 — rotation was advised; **not confirmed done**.
-3. **Deploy checklist for 0.6.44** (user must request; do not freestyle):
-   - Apply `schema.sql` §5a on **test**, then **prod**: table `warm_quota` **and** function
-     `take_warm_quota` (order: table first, then function).
-   - `supabase functions deploy stock-report` (test first, `--no-verify-jwt`) then prod.
-   - Smoke: signed-in warm of a non-held ticker → 200; anon → 401; 31st warm same day → 429;
-     missing table/function → 503 (not unlimited).
+1. **DEV** = self-hosted `korq9tvdz0jd7yblr72p.ivan.lab` at
+   `/root/container/supabase/stock-pnl-web-dev` (not cloud `wqetxuhncvfidqnklyew`).
+2. **PROD** = cloud `kxnxadaghidwumqsqneu` only — never freestyle; needs explicit user go-ahead.
+3. Self-hosted Edge deploy is **volume copy** into `volumes/functions/` + recreate the
+   `functions` container (CLI `supabase functions deploy` does not target this stack).
+4. CRON_SECRET is set on Edge + embedded in pg_cron jobs (value not stored in git docs).
+5. Remaining 0.6.44 checklist:
+   - Prod: apply `warm_quota` + `take_warm_quota`, deploy `stock-report --no-verify-jwt`, smoke.
+   - Push `dev` → Pages verify → merge `main` when prod is green.
 
 ## 📋 Active Tasks
 
 ### Task 77: Ship 0.6.44 (full-market analysis search)
-- **Status**: 🔄 **Code + tests + docs ready; deploy / DDL pending user confirmation**
+- **Status**: 🔄 **DEV bootstrap + smoke done; prod deploy + push still open**
 - **Agent**: Grok
-- **Timestamp**: 2026-08-07 15:10:00 Asia/Taipei
+- **Timestamp**: 2026-08-07 15:39:33 Asia/Taipei
 
 1. ~~Frontend: search box, non-holding path, one-shot quote, stale daily re-warm~~ ✅
 2. ~~Edge: `assertUser`, atomic `take_warm_quota`, unknown-ticker still runs `syncFundamental`, prune~~ ✅
-3. ~~Schema: `warm_quota` table + `take_warm_quota` function in `schema.sql`~~ ✅ (file only — not applied yet)
+3. ~~Schema: `warm_quota` table + `take_warm_quota` function in `schema.sql`~~ ✅
 4. ~~Tests: `warmStock`, `AnalysisPage` search paths, `StockDetailPage` name passthrough~~ ✅
 5. ~~Version / CHANGELOG / SPEC / PROGRESS~~ ✅
-6. **DDL + Edge deploy to test, smoke, then prod** —— ⏳ needs explicit user go-ahead (CLAUDE.md §13.2)
-7. **Push `dev` → verify Pages/test → merge main** —— ⏳ after 6
+6. **DDL + Edge deploy** —— ✅ **self-hosted DEV** (2026-08-07 15:39); ⏳ **prod** still needs
+   explicit go-ahead (CLAUDE.md §13.2)
+7. **Push `dev` → verify Pages/test → merge main** —— ⏳ after prod half of 6
 
 ### Task 76: Checks that can only be made during market hours
 - **Status**: 🔄 **Item 2 closed 2026-08-06; items 1, 3, 4 still unrecorded**

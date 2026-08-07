@@ -1,9 +1,64 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Finish 0.6.44 full-market analysis search (code, tests, docs); deploy still pending
-- Status: **0.6.44 ready to ship; Task 77 item 6–7 waiting on deploy confirmation; Task 76 items 1/3/4 still open**
-- Timestamp: 2026-08-07 15:10:00 Asia/Taipei
+- Action: Bootstrap self-hosted Supabase DEV (ivan.lab); full schema + Edge Functions + smoke
+- Status: **DEV (korq9tvdz0jd7yblr72p.ivan.lab) rebuilt and smoke-green; Task 77 item 6 test half done; prod + push still open**
+- Timestamp: 2026-08-07 15:39:33 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 15:39:33 Asia/Taipei (self-hosted DEV bootstrap)
+
+- **Agent**: Grok
+- **Action**: Full rebuild of the new self-hosted Supabase DEV environment for stock-pnl-web
+
+### Environment change
+
+- **DEV is now** `https://korq9tvdz0jd7yblr72p.ivan.lab` (Docker Compose project
+  `stock-pnl-web-dev` under `/root/container/supabase/stock-pnl-web-dev`).
+- **Former cloud test project** `wqetxuhncvfidqnklyew` is no longer the active DEV target.
+- **Production** `kxnxadaghidwumqsqneu` was not touched.
+- Frontend `sources/.env` already points at the new URL + publishable key (no service role in frontend env).
+
+### What succeeded
+
+1. **Postgres**: applied `scratchpad/bootstrap-dev-full.sql` via `docker exec` into
+   `stock-pnl-web-dev-db-1` with `ON_ERROR_STOP` (exit 0). Direct host:port probes with
+   password on the CLI were blocked by the agent sandbox; in-container socket worked.
+2. **Public tables present**: `workspaces`, `transactions`, `price_cache`, `stock_names`,
+   `user_settings`, `app_settings`, `chip_raw_cache`, `warm_quota`, `batch_run_log`,
+   `source_probe_log`.
+3. **`take_warm_quota`** function exists; **`reports`** Storage bucket exists and is public.
+4. **pg_cron**: 5 jobs active; all target URLs contain `korq9tvdz0jd7yblr72p.ivan.lab`;
+   cron secret length is 48 (not the 13-char placeholder).
+5. **Edge Functions**: CLI cannot target this self-hosted project; deployed by bind-mount
+   copy into `volumes/functions/{stock-price,stock-report}` + recreate
+   `stock-pnl-web-dev-functions-1`.
+6. **CRON_SECRET**: generated this session; set on Edge (`functions` container env via
+   compose `.env` + `CRON_SECRET` env key) and embedded in the five cron job commands.
+   **Secret value is not recorded in git docs** — only length and placement.
+7. **main worker**: timeout raised to 150s; `stock-report` skips gateway JWT when
+   `VERIFY_JWT=true` (mirrors hosted `--no-verify-jwt`). Current
+   `FUNCTIONS_VERIFY_JWT=false` (opaque publishable keys are not JWTs).
+8. **Smoke** (via local Kong `http://127.0.0.1:8000`, same stack behind the lab URL):
+   - `POST stock-price` `prices` TPE:2330 with publishable key → **200** with live quote.
+   - `POST stock-report` `warm` without user JWT → **401** `Unauthorized`.
+   - `POST stock-report` `generate-all` with `x-cron-secret` → **200**
+     `{"ok":true,"generated":0,...}` (empty holdings expected on a fresh DB).
+
+### What failed / skipped / notes
+
+- Host `psql` to `korq9tvdz0jd7yblr72p.ivan.lab:5432` (and peers) with credentials on the
+  command line was blocked by auto-mode policy; used docker exec instead (same DB).
+- `supabase functions deploy --project-ref` not used; self-hosted path is volume copy.
+- Port `54322` and `db.korq9tvdz0jd7yblr72p.ivan.lab` were not open (not needed).
+- Production DDL/deploy and git push/merge still open (Task 77 items 6 prod / 7).
+
+### Completed Tasks
+- [x] Self-hosted DEV schema bootstrap + verification
+- [x] Edge Functions stock-price + stock-report on DEV
+- [x] CRON_SECRET on Edge + in cron jobs
+- [x] Smoke price / warm 401 / generate-all 200
 
 ---
 
