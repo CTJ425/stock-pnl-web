@@ -246,7 +246,12 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
 
   return (
     <div className="section">
-      <div className="detail-head">
+      {/*
+        With a selector (AnalysisPage): column of subtabs + a stable row
+        [menu tools | stock title | actions]. Search-only controls sit under that row so
+        switching 我的持股 / 其他台股 does not shove the title around.
+      */}
+      <div className={selector ? 'detail-head detail-head-analysis' : 'detail-head'}>
         {selector}
         <div className="detail-title">
           <h2>
@@ -257,8 +262,6 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
               </span>
             )}
           </h2>
-          {/* Data date and update time belong to the chip report itself, so they live in its header (also inside the PDF capture range) and are not repeated here */}
-          <span className="hint">個股分析</span>
         </div>
         <button
           className="btn btn-sm"

@@ -1681,6 +1681,25 @@ a.hmenu-item {
     flex: none;
   }
 
+  /*
+   * Analysis header: keep menu + title on one visual block; search already full-width (order 4).
+   * Primary menu may take the full first content row on narrow screens; title follows — still
+   * stable when switching 我的持股 / 其他台股 (search never sits above the title).
+   */
+  .detail-head-analysis .analysis-select-primary {
+    flex: 1 1 auto;
+    min-width: min(100%, 12rem);
+  }
+
+  .detail-head-analysis .detail-title {
+    flex: 1 0 100%;
+  }
+
+  .detail-head-analysis .analysis-select-secondary .stock-search {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
   /* Enter the font size ≥16px to prevent iOS Safari from automatically enlarging the page when focusing*/
   .field input,
   .field select {
@@ -1755,6 +1774,70 @@ a.hmenu-item {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+/*
+ * AnalysisPage selector is a fragment: subtabs + primary menu (+ optional secondary search).
+ * Order keeps [menu | title | actions] on one stable row; search wraps under so switching
+ * 我的持股 / 其他台股 does not push the stock name down.
+ */
+.detail-head-analysis {
+  align-items: center;
+}
+
+.detail-head-analysis .subtabs {
+  flex: 1 0 100%;
+  order: 0;
+  margin-bottom: 0;
+}
+
+.detail-head-analysis .analysis-select-primary {
+  order: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.detail-head-analysis .detail-title {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detail-head-analysis > .btn {
+  order: 3;
+  flex: none;
+}
+
+.detail-head-analysis .analysis-select-secondary {
+  order: 4;
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-head-analysis .analysis-watch-error {
+  order: 5;
+  flex: 1 0 100%;
+  color: var(--danger, #c44);
+}
+
+.detail-head-empty {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.detail-head-empty .analysis-select-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-head-empty .analysis-watch-error {
+  color: var(--danger, #c44);
 }
 
 .detail-title {

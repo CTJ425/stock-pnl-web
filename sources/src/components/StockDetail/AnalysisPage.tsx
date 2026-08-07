@@ -265,9 +265,10 @@ export function AnalysisPage() {
     </div>
   )
 
-  const holdingsSelector =
+  /** Primary menu only — sits on the same row as the stock title in StockDetailPage. */
+  const holdingsMenu =
     twRows.length > 0 ? (
-      <div className="ws-select">
+      <div className="ws-select analysis-select-primary">
         <HeaderMenu
           triggerLabel={`切換個股：${selectedRow ? label(selectedRow) : ''}`}
           triggerClass="hmenu-ws"
@@ -308,9 +309,9 @@ export function AnalysisPage() {
       </div>
     ) : null
 
-  const otherControls = (
-    <div className="ws-select" style={{ flexWrap: 'wrap', gap: 8 }}>
-      {watchlist.length > 0 && (
+  const watchMenu =
+    watchlist.length > 0 ? (
+      <div className="ws-select analysis-select-primary">
         <HeaderMenu
           triggerLabel={`觀察中：${watchItem ? `${watchItem.ticker} ${watchItem.name}` : ''}`}
           triggerClass="hmenu-ws"
@@ -348,8 +349,12 @@ export function AnalysisPage() {
             </>
           )}
         </HeaderMenu>
-      )}
+      </div>
+    ) : null
 
+  /** Search / remove / count — full-width row under the menu+title line so the title does not jump. */
+  const watchSecondary = (
+    <div className="analysis-select-secondary">
       <div className="stock-search" ref={searchBoxRef}>
         <Search size={13} className="stock-search-icon" aria-hidden="true" />
         <input
@@ -413,12 +418,35 @@ export function AnalysisPage() {
     </div>
   )
 
+  /*
+    Fragment (not a nested .detail-head): children participate in StockDetailPage's
+    .detail-head-analysis flex/order layout — primary menu shares a row with the title.
+  */
   const head = (
-    <div className="detail-head" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+    <>
       {subtabs}
-      {subTab === 'holdings' ? holdingsSelector : otherControls}
+      {subTab === 'holdings' ? holdingsMenu : watchMenu}
+      {subTab === 'other' && watchSecondary}
       {watchError && subTab === 'other' && (
-        <div className="hint" role="status" style={{ color: 'var(--danger, #c44)' }}>
+        <div className="hint analysis-watch-error" role="status">
+          {watchError}
+        </div>
+      )}
+    </>
+  )
+
+  /** Empty states still need a simple column chrome (no stock title row). */
+  const emptyHead = (
+    <div className="detail-head detail-head-empty">
+      {subtabs}
+      {subTab === 'holdings' ? holdingsMenu : (
+        <>
+          {watchMenu}
+          {watchSecondary}
+        </>
+      )}
+      {watchError && subTab === 'other' && (
+        <div className="hint analysis-watch-error" role="status">
           {watchError}
         </div>
       )}
@@ -428,7 +456,7 @@ export function AnalysisPage() {
   if (subTab === 'holdings' && !holdingTarget) {
     return (
       <div className="section">
-        {head}
+        {emptyHead}
         <div className="glass empty-state">
           <div className="empty-icon">
             <Inbox size={36} />
@@ -448,7 +476,7 @@ export function AnalysisPage() {
   if (subTab === 'other' && !watchTarget) {
     return (
       <div className="section">
-        {head}
+        {emptyHead}
         <div className="glass empty-state">
           <div className="empty-icon">
             <Inbox size={36} />
@@ -465,7 +493,7 @@ export function AnalysisPage() {
   if (!target) {
     return (
       <div className="section">
-        {head}
+        {emptyHead}
       </div>
     )
   }

@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Fundamental load soft-warm (A+B+C) — 0.6.44-dev.7
-- Status: **0.6.44-dev.7 code + tests green**
-- Timestamp: 2026-08-07 17:20:00 Asia/Taipei
+- Action: Ship 0.6.44-dev.7 to origin/dev + DEV backfill-profit
+- Status: **pushed 13126fa; DEV profit backfill multi-round done**
+- Timestamp: 2026-08-07 17:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 17:30:00 Asia/Taipei (push + DEV profit backfill)
+
+- **Agent**: Grok
+- **Action**: User asked to run both recommended next steps
+
+### Git
+- Commit `13126fa` on `dev`: watchlist, early revenue, soft warm (0.6.44-dev.7)
+- `git push origin dev` — done (Pages will pick up frontend)
+
+### DEV `backfill-profit`
+- Multiple rounds with 180s pg_net timeout; HTTP 200, `filled` decreasing over rounds
+- Holdings sample improved but not all at 12/12 (2330 still thin on profit — likely source/through)
+- Soft-warm frontend no longer requires 12/12 for snappy opens
 
 ---
 
@@ -5922,3 +5938,13 @@ dev 專案原本沒有 `reports` bucket、沒有 `CRON_SECRET`，代表 dev.2 �
 ## 🚧 Next Steps
 1. 設定 GitHub Actions 自動部署流程 (Task 2)。
 2. 配合使用者引導完成 Supabase 專案連結與 Edge Function `stock-price` 部署 (Task 3)。
+
+---
+
+## 📅 Log: 2026-08-07 17:55:00 Asia/Taipei (release 0.6.44)
+
+- **Agent**: Grok
+- **Action**: UI title row fix + finalize 0.6.44; merge dev → main
+- **Status**: release commit on dev then merge main
+- **Timestamp**: 2026-08-07 17:55:00 Asia/Taipei
+
