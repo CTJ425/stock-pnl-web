@@ -1,9 +1,30 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Bootstrap self-hosted Supabase DEV (ivan.lab); full schema + Edge Functions + smoke
-- Status: **DEV (korq9tvdz0jd7yblr72p.ivan.lab) rebuilt and smoke-green; Task 77 item 6 test half done; prod + push still open**
-- Timestamp: 2026-08-07 15:39:33 Asia/Taipei
+- Action: Grant DEV admin to zrchen0425@gmail.com; rename version to 0.6.44-dev.1
+- Status: **0.6.44-dev.1; DEV admin set; re-login required for JWT**
+- Timestamp: 2026-08-07 15:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 15:45:00 Asia/Taipei (admin + dev version suffix)
+
+- **Agent**: Grok
+- **Action**: Two housekeeping items requested by the user
+
+1. **Admin on self-hosted DEV**:
+   ```sql
+   UPDATE auth.users
+   SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+   WHERE email = 'zrchen0425@gmail.com';
+   ```
+   Verified: `raw_app_meta_data` contains `"role": "admin"`.
+   ⚠️ The user must **log out and log in again** (or refresh session) so the JWT carries
+   `app_metadata.role`. Old tokens still lack the claim.
+
+2. **Version on `dev` must use the `-dev.N` form** (versioning skill / CLAUDE.md §12).
+   Corrected `0.6.44` → **`0.6.44-dev.1`** in `version.ts`, `package.json`, `package-lock.json`,
+   README badge, and CHANGELOG (under-development heading with a `dev.1` section).
 
 ---
 

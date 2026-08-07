@@ -12,7 +12,9 @@
 
 ## 📍 Where the project stands (2026-08-07 15:39)
 
-- **Version 0.6.44** (working tree): full-market search + `assertUser` / `warm_quota` gating.
+- **Version 0.6.44-dev.1** (`dev` branch; official `0.6.44` only after merge to `main`):
+  full-market search + `assertUser` / `warm_quota` gating.
+- **DEV admin**: `zrchen0425@gmail.com` has `app_metadata.role = admin` (must re-login for JWT).
 - **Self-hosted DEV is live**: `https://korq9tvdz0jd7yblr72p.ivan.lab` (Docker
   `stock-pnl-web-dev`). Schema, `take_warm_quota`, `reports` bucket, 5 cron jobs, Edge
   `stock-price` + `stock-report`, and CRON_SECRET (Edge env + cron jobs) are applied.

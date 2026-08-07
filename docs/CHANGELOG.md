@@ -2,12 +2,14 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.6.44（2026-08-07）— 個股分析可查全市場台股
+### 0.6.44（開發中）— 個股分析可查全市場台股
+
+#### dev.1（2026-08-07）
 
 - ✨ **個股分析頁可搜尋未持股的上市櫃台股**。持股下拉仍列你的台股；旁邊「查詢其他台股」走與交易表單相同的 `searchStocks`。搜到自己已持有的代號仍走持股路徑，保留成本與 ROI。
 - 🔐 **`stock-report` 的 `generate` / `warm` 改以登入帳號把關**，不再限制「必須有人持有該代號」。`warm`（會打 Yahoo/MOPS）另加每帳號每日 30 次上限；計次走 Postgres 函式 `take_warm_quota`（原子遞增，併發打不穿）。額度表/函式故障時 **fail-closed**（503），避免白名單撤掉後無上限。`generate` 只讀批次已備的籌碼快取，不加計次。
 - 🐛 **搜過的個股日 K 過期會再 warm**。夜批只刷新有人持有的 `daily/*.json`，純搜尋留下的檔會永遠停在搜尋當日；現在對照籌碼報告的 `dataDate`，落後就補抓。
-- ⚠️ **需同步（順序）**：先在兩個環境套用 `warm_quota` 表 + `take_warm_quota` 函式，再 deploy `stock-report`（`--no-verify-jwt`）。只上前端不上 Edge → 非持股 403；只上 Edge 未建表 → warm 503。
+- ⚠️ **需同步（順序）**：先套用 `warm_quota` 表 + `take_warm_quota` 函式，再 deploy `stock-report`（`--no-verify-jwt`）。只上前端不上 Edge → 非持股 403；只上 Edge 未建表 → warm 503。DEV（self-hosted）已套用；正式區待授權。
 
 ### 0.6.43（2026-08-06）— 稽核清單收尾
 
