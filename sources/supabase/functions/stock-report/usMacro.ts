@@ -156,6 +156,19 @@ export interface MacroFile {
   indicators: MacroIndicator[]
 }
 
+/**
+ * True when the stored file is missing any series from the current catalog.
+ * Used so decideMacroScan "satisfied" on an old 5-indicator file cannot skip forever
+ * after FRED_SERIES grows (e.g. FOMC DFEDTARU in 0.6.44).
+ */
+export function macroCatalogIncomplete(
+  existingIds: Iterable<string>,
+  catalog: ReadonlyArray<{ id: string }> = FRED_SERIES,
+): boolean {
+  const have = new Set(existingIds)
+  return catalog.some((s) => !have.has(s.id))
+}
+
 /** Show several trends*/
 export const MACRO_POINTS = 12
 

@@ -7,6 +7,7 @@ import {
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
+  macroCatalogIncomplete,
   macroFingerprint,
   parseFredCsv,
   parseFredCsvDaily,
@@ -185,6 +186,14 @@ describe('FRED_SERIES', () => {
       'UMCSENT:index',
     ])
     expect(FRED_SERIES.find((s) => s.id === 'DFEDTARU')?.idLow).toBe('DFEDTARL')
+  })
+})
+
+describe('macroCatalogIncomplete', () => {
+  it('舊檔缺 FOMC 時為 true；六項齊全為 false', () => {
+    const five = ['CPILFESL', 'PPIFES', 'PCEPILFE', 'PAYEMS', 'UMCSENT']
+    expect(macroCatalogIncomplete(five)).toBe(true)
+    expect(macroCatalogIncomplete([...five, 'DFEDTARU'])).toBe(false)
   })
 })
 

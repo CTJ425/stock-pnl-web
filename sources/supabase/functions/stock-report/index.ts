@@ -126,6 +126,7 @@ import {
 } from './twMarket.ts'
 import {
   FRED_SERIES,
+  macroCatalogIncomplete,
   MACRO_LOOKBACK_MONTHS,
   MACRO_SCHEMA,
   collapseRateSteps,
@@ -1450,7 +1451,14 @@ async function syncMacro(now: Date): Promise<{
     scansToday: prevScans,
     lastScanYmd: existing?.scansToday?.ymd ?? null,
   })
-  if (!decision.scan && existing) {
+  /*
+    Catalog growth (0.6.44 FOMC): decideMacroScan only sees indicators **already in the file**.
+    After a routine scan on an old 5-series file, reason becomes `satisfied` for the rest of the
+    Taipei day and we never discover a newly added FRED_SERIES id. Force a fetch when the
+    on-disk set is missing any catalog entry so deploy + same-day manual sync still fills FOMC.
+  */
+  const catalogIncomplete = macroCatalogIncomplete((existing?.indicators ?? []).map((i) => i.id))
+  if (!decision.scan && existing && !catalogIncomplete) {
     return {
       synced: false,
       count: existing.indicators?.length ?? 0,

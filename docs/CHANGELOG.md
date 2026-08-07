@@ -2,6 +2,12 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.6.45（開發中）— FOMC 目錄補齊
+
+#### dev.1（2026-08-07）
+
+- 🐛 **總經 `sync-macro` 在舊檔已「今日掃過」時會永遠跳過新指標**（prod 手動更新 115ms、`reason=skipped`，FOMC 不進檔）。現在若 Storage 缺 `FRED_SERIES` 任一 id（如 DFEDTARU）會強制重抓。正式區已 deploy `stock-report` v32 並寫入含 FOMC 的 `macro/us.json`。
+
 ### 0.6.44（2026-08-07）— 個股分析可查全市場台股
 
 #### 版面
