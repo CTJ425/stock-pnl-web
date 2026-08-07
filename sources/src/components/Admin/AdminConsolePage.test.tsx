@@ -27,12 +27,31 @@ describe('AdminConsolePage', () => {
   })
   afterEach(cleanup)
 
-  it('四個項目都在側欄，預設停在抓取狀況', async () => {
+  it('五個項目都在側欄，預設停在抓取狀況', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
     const nav = screen.getByRole('navigation', { name: '管理後台頁面' })
     const items = [...nav.querySelectorAll('button')].map((b) => b.textContent)
-    expect(items).toEqual(['帳號', '抓取狀況', 'AI 連線', '提示詞'])
+    expect(items).toEqual(['帳號', '抓取狀況', '手動更新', 'AI 連線', '提示詞'])
     expect(await screen.findByText(/讀不到資料抓取狀況/)).toBeTruthy()
+  })
+
+  it('手動更新面板列出五個可觸發的排程 job', async () => {
+    render(<AdminConsolePage onExit={() => {}} />)
+    const nav = screen.getByRole('navigation', { name: '管理後台頁面' })
+    fireEvent.click([...nav.querySelectorAll('button')].find((b) => b.textContent === '手動更新')!)
+    expect(await screen.findByRole('heading', { name: '手動更新' })).toBeTruthy()
+    // Labels appear both as row titles and checkbox aria-labels — just assert each job id is present.
+    for (const job of [
+      'generate-all',
+      'sync-market',
+      'sync-macro',
+      'sync-fx',
+      'probe',
+    ]) {
+      expect(screen.getByText(job)).toBeTruthy()
+    }
+    expect(screen.getByRole('button', { name: /全部執行/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /執行勾選項目/ })).toBeTruthy()
   })
 
   it('點側欄切換面板，AI 連線顯示設定表單', async () => {

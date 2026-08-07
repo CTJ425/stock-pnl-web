@@ -511,6 +511,14 @@ interface GenerateReportRequestBody {
   /** admin-set-role is used: the account to be changed and whether to give it to the administrator*/
   userId?: string
   admin?: boolean
+  /**
+   * admin-run: which batch job(s) to fire. Same handlers as pg_cron / x-cron-secret,
+   * but gated by assertAdmin so the console never needs CRON_SECRET in the browser.
+   * `'all'` or a list of: generate-all | sync-market | sync-macro | sync-fx | probe
+   */
+  jobs?: string[] | 'all'
+  /** Singular alias for a one-job admin-run */
+  job?: string
 }
 
 type MarginRows = Record<string, string>[] | null
@@ -2398,6 +2406,123 @@ async function handleSyncFx(): Promise<Response> {
   })
 }
 
+/** Batch job ids that mirror the five pg_cron actions (and their handle* implementations). */
+const ADMIN_RUN_JOBS = [
+  'generate-all',
+  'sync-market',
+  'sync-macro',
+  'sync-fx',
+  'probe',
+] as const
+type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
+
+function isAdminRunJob(v: string): v is AdminRunJob {
+  return (ADMIN_RUN_JOBS as readonly string[]).includes(v)
+}
+
+/**
+ * Admin console: run one or more of the same handlers that cron hits with x-cron-secret.
+ *
+ * Why not re-use CRON_SECRET from the browser: that secret is in every cron.job.command and in
+ * the Edge env; shipping it to the SPA would make the secret public. assertAdmin is the gate
+ * the rest of the console already uses.
+ *
+ * Jobs run **sequentially** so generate-all does not race the market/macro writers for Storage
+ * bandwidth. `all` is the five jobs in ADMIN_RUN_JOBS order (nightly first, probe last).
+ */
+async function handleAdminRun(
+  req: Request,
+  body: GenerateReportRequestBody,
+): Promise<Response> {
+  const denied = await assertAdmin(req)
+  if (denied) return denied
+
+  let jobs: AdminRunJob[]
+  if (body.jobs === 'all' || body.job === 'all') {
+    jobs = [...ADMIN_RUN_JOBS]
+  } else {
+    const raw: unknown[] = Array.isArray(body.jobs)
+      ? body.jobs
+      : typeof body.job === 'string'
+        ? [body.job]
+        : []
+    jobs = []
+    for (const item of raw) {
+      if (typeof item !== 'string' || !isAdminRunJob(item)) {
+        return json(
+          {
+            error: `未知的 job：${String(item)}。可用：${ADMIN_RUN_JOBS.join(', ')} 或 all`,
+          },
+          400,
+        )
+      }
+      if (!jobs.includes(item)) jobs.push(item)
+    }
+    if (jobs.length === 0) {
+      return json(
+        { error: `jobs 必填。可用：${ADMIN_RUN_JOBS.join(', ')} 或 all` },
+        400,
+      )
+    }
+  }
+
+  const started = Date.now()
+  const results: Record<
+    string,
+    { httpStatus: number; durationMs: number; body: unknown }
+  > = {}
+
+  for (const job of jobs) {
+    const t0 = Date.now()
+    let resp: Response
+    try {
+      switch (job) {
+        case 'generate-all':
+          resp = await handleGenerateAll()
+          break
+        case 'sync-market':
+          resp = await handleSyncMarket()
+          break
+        case 'sync-macro':
+          resp = await handleSyncMacro()
+          break
+        case 'sync-fx':
+          resp = await handleSyncFx()
+          break
+        case 'probe':
+          resp = await handleProbe()
+          break
+      }
+      let parsed: unknown = null
+      try {
+        parsed = await resp.clone().json()
+      } catch {
+        parsed = null
+      }
+      results[job] = {
+        httpStatus: resp.status,
+        durationMs: Date.now() - t0,
+        body: parsed,
+      }
+    } catch (e) {
+      results[job] = {
+        httpStatus: 500,
+        durationMs: Date.now() - t0,
+        body: { error: e instanceof Error ? e.message : String(e) },
+      }
+    }
+  }
+
+  const failed = jobs.filter((j) => results[j].httpStatus >= 400)
+  return json({
+    ok: failed.length === 0,
+    jobs,
+    results,
+    failed,
+    durationMs: Date.now() - started,
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -2491,6 +2616,12 @@ Deno.serve(async (req) => {
     const denied = await assertAdmin(req)
     if (denied) return denied
     return handleAdminSetRole(req, body)
+  }
+
+  // Manual batch trigger from the admin console (0.6.44-dev.2).
+  // Same work as the cron jobs, but auth is assertAdmin — never expose CRON_SECRET to the browser.
+  if (body.action === 'admin-run') {
+    return handleAdminRun(req, body)
   }
 
   return json({ error: 'Unknown action' }, 400)

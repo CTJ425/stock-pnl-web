@@ -1,9 +1,29 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Grant DEV admin to zrchen0425@gmail.com; rename version to 0.6.44-dev.1
-- Status: **0.6.44-dev.1; DEV admin set; re-login required for JWT**
-- Timestamp: 2026-08-07 15:45:00 Asia/Taipei
+- Action: Admin console manual batch run (admin-run) — 0.6.44-dev.2
+- Status: **0.6.44-dev.2 code ready; Edge volume deploy to DEV still needs a one-shot restart**
+- Timestamp: 2026-08-07 15:52:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 15:52:00 Asia/Taipei (admin manual run)
+
+- **Agent**: Grok
+- **Action**: Let admins force the same five batch jobs the crons fire, from the console
+
+### Design
+
+- New Edge action `admin-run` (assertAdmin, **not** CRON_SECRET): `jobs: 'all' | AdminRunJob[]`.
+- Jobs: `generate-all`, `sync-market`, `sync-macro`, `sync-fx`, `probe` — sequential, reusing
+  the existing handle* functions.
+- Frontend: `services/adminRun.ts` + `ManualRunSection` panel under 管理後台 → 手動更新.
+- Version **0.6.44-dev.2**.
+
+### Deploy note
+
+Self-hosted DEV still needs a volume copy of `stock-report` + functions container restart
+before the UI can call `admin-run` successfully (CLI deploy does not apply here).
 
 ---
 
