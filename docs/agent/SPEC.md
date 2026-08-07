@@ -470,8 +470,12 @@ The data comes from `macro/us.json` (**global single file, not per-ticker**).
 | Core CPI | `CPILFESL` | Annual % growth |
 | Core PPI | `PPIFES` | Annual % growth |
 | Core PCE | `PCEPILFE` | Annual % growth |
+| FOMC target range | `DFEDTARU` + `DFEDTARL` | Level % range (`L–U%`); change-point steps (not monthly) |
 | Non-agricultural employment | `PAYEMS` | Increase or decrease from the previous month (thousands of people) |
 | Consumer Confidence | `UMCSENT` | Index Value |
+
+- **FOMC (0.6.44-dev.5)**: target range only (not effective funds rate, not FedWatch). Daily FRED
+  series are collapsed to rate-change days; period is `YYYY-MM-DD`. Excluded from monthly peer lag badges.
 
 - **This page has nothing to do with individual stocks**, so it is a top-level page rather than a pagination for individual stock analysis (`PLAN.md §Q5`).
 - "Core" only has standard definitions for CPI / PPI / PCE; the monthly increase in the number of non-agricultural buyers,

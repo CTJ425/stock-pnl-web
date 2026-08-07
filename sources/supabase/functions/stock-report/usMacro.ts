@@ -37,18 +37,28 @@ import { fingerprint } from './pollPlan.ts'
 export const MACRO_SCHEMA = 1
 
 /** The presentation caliber of the indicator. Determine how the `deriveIndicator` calculates the number to display from the original sequence*/
-export type MacroKind = 'yoy' | 'momThousands' | 'index'
+export type MacroKind = 'yoy' | 'momThousands' | 'index' | 'rate'
 
 export interface MacroSeriesSpec {
-  /** FRED serial code*/
+  /** FRED serial code (upper bound for rate series)*/
   id: string
+  /**
+   * Optional second FRED id. Only used for `kind: 'rate'`: federal-funds target **lower** bound
+   * (`DFEDTARL`) paired with `id` as upper (`DFEDTARU`).
+   */
+  idLow?: string
   label: string
   kind: MacroKind
   /** What is this indicator talking about? In plain English (it will be displayed directly on the screen)*/
   note: string
+  /**
+   * Months of history to pull from FRED. Monthly series use `MACRO_LOOKBACK_MONTHS`;
+   * the FOMC target range needs a longer window so the last 12 *steps* (meetings) fit.
+   */
+  lookbackMonths?: number
 }
 
-/** five indicators. The order is the order of the picture: three prices, one employment, and one confidence*/
+/** Indicators. Order = screen order: three prices, FOMC rate, employment, confidence */
 export const FRED_SERIES: readonly MacroSeriesSpec[] = [
   {
     id: 'CPILFESL',
@@ -69,6 +79,14 @@ export const FRED_SERIES: readonly MacroSeriesSpec[] = [
     note: '聯準會最看重的通膨指標，排除食品與能源',
   },
   {
+    id: 'DFEDTARU',
+    idLow: 'DFEDTARL',
+    label: 'FOMC 目標利率',
+    kind: 'rate',
+    note: '聯邦基金目標利率區間（FOMC 決議），非市場有效利率',
+    lookbackMonths: 60,
+  },
+  {
     id: 'PAYEMS',
     label: '非農就業',
     kind: 'momThousands',
@@ -87,13 +105,18 @@ export const MACRO_UNITS: Record<MacroKind, string> = {
   yoy: '%',
   momThousands: '千人',
   index: '指數',
+  rate: '%',
 }
 
 /** Observations for one period. `value` is null, which means there is no data in that period (FRED will return an empty string)*/
 export interface MacroPoint {
-  /** 'YYYY-MM' */
+  /**
+   * Monthly series: `'YYYY-MM'`. FOMC rate steps: `'YYYY-MM-DD'` (day the target range changed).
+   */
   period: string
   value: number | null
+  /** Lower bound of the target range; only set for `kind: 'rate'`. */
+  valueLow?: number | null
 }
 
 export interface MacroIndicator {
@@ -191,11 +214,68 @@ export function parseFredCsv(csv: string): MacroPoint[] {
 }
 
 /**
+ * Daily FRED series → points with full `YYYY-MM-DD` period (for FOMC target range).
+ * Monthly series must keep using `parseFredCsv` (period = month).
+ */
+export function parseFredCsvDaily(csv: string): MacroPoint[] {
+  const out: MacroPoint[] = []
+  for (const line of String(csv ?? '').split(/\r?\n/)) {
+    const m = /^(\d{4}-\d{2}-\d{2})\s*,\s*(.*)$/.exec(line.trim())
+    if (!m) continue
+    out.push({ period: m[1], value: normNum(m[2]) })
+  }
+  return out
+}
+
+/**
+ * Merge upper + lower target series into **change-points only**.
+ *
+ * FRED repeats the same target every calendar day until the next FOMC move. Keeping every day
+ * would make the spark chart "last 12 days" instead of "last 12 decisions".
+ * A step is kept when either bound changes; the other bound carries forward if missing that day.
+ */
+export function collapseRateSteps(
+  upper: readonly MacroPoint[],
+  lower: readonly MacroPoint[],
+): MacroPoint[] {
+  const lowByDate = new Map<string, number | null>()
+  for (const p of lower) lowByDate.set(p.period, p.value)
+
+  const dates = new Set<string>()
+  for (const p of upper) dates.add(p.period)
+  for (const p of lower) dates.add(p.period)
+  const sorted = [...dates].sort()
+
+  const steps: MacroPoint[] = []
+  let lastU: number | null = null
+  let lastL: number | null = null
+  const upByDate = new Map(upper.map((p) => [p.period, p.value]))
+
+  for (const d of sorted) {
+    const u = upByDate.has(d) ? upByDate.get(d)! : lastU
+    const l = lowByDate.has(d) ? lowByDate.get(d)! : lastL
+    if (u === null && l === null) continue
+    if (u === lastU && l === lastL && steps.length > 0) continue
+    // First row or a real change
+    if (steps.length === 0 || u !== lastU || l !== lastL) {
+      steps.push({
+        period: d,
+        value: u,
+        valueLow: l,
+      })
+      lastU = u
+      lastL = l
+    }
+  }
+  return steps
+}
+
+/**
  * Convert the original sequence to the caliber to be displayed by the indicator, and take the last MACRO_POINTS period.
  *
  * - `yoy`: Percentage compared to 12 months ago. If the base period has a missing value or is 0, the period is null (no hard calculation).
  * - `momThousands`: The difference from the previous issue (FRED’s PAYEMS was originally thousands).
- * - `index`: The original value is copied.
+ * - `index` / `rate`: The original value is copied (`rate` points should already be collapsed steps).
  *
  * Missing values ​​are always represented by null, and are not pretended to be 0 - "This month is 0" and "There is no data for this month"
  * Inflation and employment data are two very different things.
@@ -206,7 +286,7 @@ export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): Macro
     const cur = raw[i].value
     let value: number | null = null
     if (cur !== null) {
-      if (spec.kind === 'index') {
+      if (spec.kind === 'index' || spec.kind === 'rate') {
         value = cur
       } else if (spec.kind === 'momThousands') {
         const prev = raw[i - 1]?.value
@@ -218,7 +298,11 @@ export function deriveIndicator(spec: MacroSeriesSpec, raw: MacroPoint[]): Macro
         }
       }
     }
-    derived.push({ period: raw[i].period, value })
+    const point: MacroPoint = { period: raw[i].period, value }
+    if (spec.kind === 'rate' && raw[i].valueLow !== undefined) {
+      point.valueLow = raw[i].valueLow ?? null
+    }
+    derived.push(point)
   }
 
   // There may be a whole section at the end with no conversion result (the first 12 months of the sequence cannot calculate the annual increase), cut it off and then take the last N periods
@@ -261,7 +345,15 @@ function round2(n: number): number {
  */
 export function macroFingerprint(indicators: readonly MacroIndicator[]): string {
   const parts = indicators
-    .map((i) => `${i.id}|${i.points.map((p) => `${p.period}=${p.value ?? ''}`).join(',')}`)
+    .map((i) =>
+      `${i.id}|${i.points
+        .map((p) => {
+          const low =
+            p.valueLow !== undefined && p.valueLow !== null ? `/${p.valueLow}` : p.valueLow === null ? '/null' : ''
+          return `${p.period}=${p.value ?? ''}${low}`
+        })
+        .join(',')}`,
+    )
     .sort()
   return fingerprint(parts)
 }

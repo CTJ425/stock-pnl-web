@@ -29,16 +29,32 @@ function isSameDay(a: string, b: string): boolean {
   return da.toDateString() === db.toDateString()
 }
 
-/** 'YYYY-MM' → 'YYYY year MM month'*/
+/** 'YYYY-MM' → calendar month; 'YYYY-MM-DD' → statement / step date */
 function fmtPeriod(period: string | undefined): string {
   if (!period) return '—'
+  const day = period.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (day) return `${day[1]} 年 ${Number(day[2])} 月 ${Number(day[3])} 日`
   const m = period.match(/^(\d{4})-(\d{2})$/)
   return m ? `${m[1]} 年 ${m[2]} 月` : period
 }
 
-/** Value with unit. Return "-" if missing value (do not pretend to be 0)*/
-function fmtValue(v: number | null | undefined, unit: string): string {
+/**
+ * Value with unit. Return "-" if missing value (do not pretend to be 0).
+ * `rate` shows the target range when `valueLow` is present (no leading + — it is a level, not a growth rate).
+ */
+function fmtValue(
+  v: number | null | undefined,
+  unit: string,
+  kind?: MacroIndicator['kind'],
+  valueLow?: number | null,
+): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—'
+  if (kind === 'rate') {
+    if (typeof valueLow === 'number' && Number.isFinite(valueLow)) {
+      return `${valueLow.toFixed(2)}–${v.toFixed(2)}%`
+    }
+    return `${v.toFixed(2)}%`
+  }
   if (unit === '指數') return v.toFixed(1)
   if (unit === '千人') return `${v > 0 ? '+' : ''}${v.toLocaleString('en-US')} 千人`
   return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
@@ -53,9 +69,13 @@ function delta(latest: MacroPoint | null, previous: MacroPoint | null): number |
 }
 
 /** A signed delta. The unit follows the indicator (thousands of people do not take decimals, the remaining two digits)*/
-function fmtDelta(d: number | null, unit: string): string {
+function fmtDelta(d: number | null, unit: string, kind?: MacroIndicator['kind']): string {
   if (d === null) return '—'
   if (Math.abs(d) < 0.005) return '持平'
+  if (kind === 'rate') {
+    // Percentage-point change of the upper bound (e.g. −0.25)
+    return `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(2)}`
+  }
   const shown = unit === '千人' ? Math.abs(d).toLocaleString('en-US') : Math.abs(d).toFixed(2)
   return `${d > 0 ? '+' : '−'}${shown}`
 }
@@ -106,7 +126,9 @@ function IndicatorChip({ ind }: { ind: MacroIndicator }) {
   return (
     <div className="mac-chip">
       <span className="mac-chip-label">{ind.label}</span>
-      <span className="mac-chip-value">{fmtValue(ind.latest?.value ?? null, ind.unit)}</span>
+      <span className="mac-chip-value">
+        {fmtValue(ind.latest?.value ?? null, ind.unit, ind.kind, ind.latest?.valueLow)}
+      </span>
     </div>
   )
 }
@@ -137,8 +159,10 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
             {rows.map(({ point, d }) => (
               <tr key={point.period}>
                 <td>{fmtPeriod(point.period)}</td>
-                <td className={`num ${chipClass(d)}`}>{fmtValue(point.value, ind.unit)}</td>
-                <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit)}</td>
+                <td className={`num ${chipClass(d)}`}>
+                  {fmtValue(point.value, ind.unit, ind.kind, point.valueLow)}
+                </td>
+                <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit, ind.kind)}</td>
               </tr>
             ))}
           </tbody>
@@ -202,10 +226,12 @@ function IndicatorRow({
           </div>
         </td>
         <td className={`num ${chipClass(d)}`}>
-          <div>{fmtValue(ind.latest?.value ?? null, ind.unit)}</div>
+          <div>
+            {fmtValue(ind.latest?.value ?? null, ind.unit, ind.kind, ind.latest?.valueLow)}
+          </div>
           <div className="mac-row-period">{fmtPeriod(ind.latest?.period)}</div>
         </td>
-        <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit)}</td>
+        <td className={`num ${chipClass(d)}`}>{fmtDelta(d, ind.unit, ind.kind)}</td>
         <td className="num" style={{ width: SPARK_W + 18 }}>
           <SparkCell
             points={ind.points.map((p) => p.value)}
@@ -282,8 +308,11 @@ export function MacroPage() {
     )
   }
 
-  // The benchmark for lagging behind is "which period is the latest for other indicators in the same group", without checking the release calendar (see macroPeriod.ts)
-  const peerLatest = latestPeriod(macro.indicators.map((i) => i.latest?.period))
+  // Monthly peer lag only (see macroPeriod.ts). FOMC rate steps use YYYY-MM-DD and must not
+  // sit in the same comparison — they would almost always look "behind".
+  const peerLatest = latestPeriod(
+    macro.indicators.filter((i) => i.kind !== 'rate').map((i) => i.latest?.period),
+  )
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -377,7 +406,11 @@ export function MacroPage() {
                 <IndicatorRow
                   key={ind.id}
                   ind={ind}
-                  behind={periodsBehind(ind.latest?.period ?? null, peerLatest)}
+                  behind={
+                    ind.kind === 'rate'
+                      ? 0
+                      : periodsBehind(ind.latest?.period ?? null, peerLatest)
+                  }
                   open={expanded.has(ind.id)}
                   onToggle={() => toggle(ind.id)}
                 />

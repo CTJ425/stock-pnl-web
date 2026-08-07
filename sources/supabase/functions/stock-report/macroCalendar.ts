@@ -75,6 +75,27 @@ export const RELEASE_CALENDAR: Record<string, readonly ReleaseEntry[]> = {
     { date: '2026-11-25', period: '2026-10' },
     { date: '2026-12-23', period: '2026-11' },
   ],
+  /*
+    FOMC statement day = second day of the two-day meeting (Fed calendar).
+    `period` is the statement date itself (YYYY-MM-DD), matching rate step periods in macro/us.json.
+    Source: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
+  */
+  DFEDTARU: [
+    // 2025 remaining (for lookback / nextRelease after a long skip)
+    { date: '2025-07-30', period: '2025-07-30' },
+    { date: '2025-09-17', period: '2025-09-17' },
+    { date: '2025-10-29', period: '2025-10-29' },
+    { date: '2025-12-10', period: '2025-12-10' },
+    // 2026
+    { date: '2026-01-28', period: '2026-01-28' },
+    { date: '2026-03-18', period: '2026-03-18' },
+    { date: '2026-04-29', period: '2026-04-29' },
+    { date: '2026-06-17', period: '2026-06-17' },
+    { date: '2026-07-29', period: '2026-07-29' },
+    { date: '2026-09-16', period: '2026-09-16' },
+    { date: '2026-10-28', period: '2026-10-28' },
+    { date: '2026-12-09', period: '2026-12-09' },
+  ],
   // UMCSENT intentionally left blank - see SKIP_INTENSIVE
 }
 
@@ -85,6 +106,7 @@ export const RELEASE_HOUR_ET: Record<string, number> = {
   PAYEMS: 8.5,
   PCEPILFE: 8.5,
   UMCSENT: 10, // 密大是 10:00，與其他四項不同
+  DFEDTARU: 14, // FOMC statement typically 14:00 ET
 }
 
 /**

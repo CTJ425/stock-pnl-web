@@ -4,6 +4,10 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.44（開發中）— 個股分析可查全市場台股
 
+#### dev.5（2026-08-07）
+
+- ✨ **美國總經新增 FOMC 目標利率區間**（FRED `DFEDTARU` / `DFEDTARL`）。以決議變動日為階梯點，畫面顯示 `下限–上限%`，版型與 CPI 等同列；不參與月頻「落後 N 期」比較。
+
 #### dev.4（2026-08-07）
 
 - 📝 **market-daily 補上抓取對象說明**（FMTQIK / MI_5MINS_HIST / BFI82U → `market/daily.json`）。排程表 `describeScope` 先前漏了 `sync-market`，畫面上看不出這班抓什麼。

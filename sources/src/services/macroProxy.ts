@@ -11,12 +11,14 @@
  */
 import { downloadReportsJson } from './reportsBucket'
 
-export type MacroKind = 'yoy' | 'momThousands' | 'index'
+export type MacroKind = 'yoy' | 'momThousands' | 'index' | 'rate'
 
 export interface MacroPoint {
-  /** 'YYYY-MM' */
+  /** Monthly: 'YYYY-MM'. FOMC rate steps: 'YYYY-MM-DD'. */
   period: string
   value: number | null
+  /** Target-range lower bound; only for kind `rate`. */
+  valueLow?: number | null
 }
 
 export interface MacroIndicator {
@@ -68,10 +70,12 @@ function normalizePoint(v: unknown): MacroPoint | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
   if (typeof o.period !== 'string' || !o.period) return null
-  return { period: o.period, value: numOrNull(o.value) }
+  const point: MacroPoint = { period: o.period, value: numOrNull(o.value) }
+  if ('valueLow' in o) point.valueLow = numOrNull(o.valueLow)
+  return point
 }
 
-const KINDS: MacroKind[] = ['yoy', 'momThousands', 'index']
+const KINDS: MacroKind[] = ['yoy', 'momThousands', 'index', 'rate']
 
 function normalizeIndicator(v: unknown): MacroIndicator | null {
   if (!v || typeof v !== 'object') return null

@@ -3,11 +3,13 @@ import {
   FRED_SERIES,
   MACRO_UA,
   MACRO_POINTS,
+  collapseRateSteps,
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
   macroFingerprint,
   parseFredCsv,
+  parseFredCsvDaily,
   type MacroIndicator,
   type MacroSeriesSpec,
 } from './usMacro.ts'
@@ -126,15 +128,63 @@ describe('deriveIndicator', () => {
   })
 })
 
+describe('parseFredCsvDaily / collapseRateSteps / rate', () => {
+  const upper = `observation_date,DFEDTARU
+2024-09-17,5.50
+2024-09-18,5.50
+2024-09-19,5.00
+2024-09-20,5.00
+2024-11-07,4.75
+2024-11-08,4.75`
+
+  const lower = `observation_date,DFEDTARL
+2024-09-17,5.25
+2024-09-18,5.25
+2024-09-19,4.75
+2024-09-20,4.75
+2024-11-07,4.50
+2024-11-08,4.50`
+
+  it('日頻解析保留 YYYY-MM-DD', () => {
+    const pts = parseFredCsvDaily(upper)
+    expect(pts[0]).toEqual({ period: '2024-09-17', value: 5.5 })
+    expect(pts).toHaveLength(6)
+  })
+
+  it('只保留利率變動日（階梯），並帶上下限', () => {
+    const steps = collapseRateSteps(parseFredCsvDaily(upper), parseFredCsvDaily(lower))
+    expect(steps).toEqual([
+      { period: '2024-09-17', value: 5.5, valueLow: 5.25 },
+      { period: '2024-09-19', value: 5.0, valueLow: 4.75 },
+      { period: '2024-11-07', value: 4.75, valueLow: 4.5 },
+    ])
+  })
+
+  it('derive rate：水準值、最多 12 階、latest/previous 正確', () => {
+    const steps = collapseRateSteps(parseFredCsvDaily(upper), parseFredCsvDaily(lower))
+    const ind = deriveIndicator(
+      { id: 'DFEDTARU', idLow: 'DFEDTARL', label: 'FOMC', kind: 'rate', note: '' },
+      steps,
+    )
+    expect(ind.unit).toBe('%')
+    expect(ind.kind).toBe('rate')
+    expect(ind.points).toHaveLength(3)
+    expect(ind.latest).toEqual({ period: '2024-11-07', value: 4.75, valueLow: 4.5 })
+    expect(ind.previous).toEqual({ period: '2024-09-19', value: 5.0, valueLow: 4.75 })
+  })
+})
+
 describe('FRED_SERIES', () => {
-  it('五個指標，代號與口徑固定（改動等於改變畫面語意）', () => {
+  it('六個指標，代號與口徑固定（改動等於改變畫面語意）', () => {
     expect(FRED_SERIES.map((s) => `${s.id}:${s.kind}`)).toEqual([
       'CPILFESL:yoy',
       'PPIFES:yoy',
       'PCEPILFE:yoy',
+      'DFEDTARU:rate',
       'PAYEMS:momThousands',
       'UMCSENT:index',
     ])
+    expect(FRED_SERIES.find((s) => s.id === 'DFEDTARU')?.idLow).toBe('DFEDTARL')
   })
 })
 

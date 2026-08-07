@@ -29,6 +29,19 @@ const macro: MacroData = {
       ],
     },
     {
+      id: 'DFEDTARU',
+      label: 'FOMC 目標利率',
+      kind: 'rate',
+      unit: '%',
+      note: '聯邦基金目標利率區間',
+      latest: { period: '2025-12-10', value: 4.5, valueLow: 4.25 },
+      previous: { period: '2025-09-17', value: 4.75, valueLow: 4.5 },
+      points: [
+        { period: '2025-09-17', value: 4.75, valueLow: 4.5 },
+        { period: '2025-12-10', value: 4.5, valueLow: 4.25 },
+      ],
+    },
+    {
       id: 'PAYEMS',
       label: '非農就業',
       kind: 'momThousands',
@@ -73,13 +86,18 @@ describe('MacroPage', () => {
     expect(screen.queryByText(/盤後批次/)).toBeNull()
   })
 
-  it('五個指標壓成一行 chip，只有名稱與最新值（0.6.35）', async () => {
+  it('指標壓成一行 chip，只有名稱與最新值（0.6.35）；rate 顯示區間無 + 前綴', async () => {
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
     await screen.findByText('美國總體經濟')
     const chips = [...container.querySelectorAll('.mac-chip')].map((e) => e.textContent)
-    // %/Thousand people/Index Three calibers are established separately
-    expect(chips).toEqual(['核心 CPI+2.57%', '非農就業+57 千人', '消費者信心44.8'])
+    // % growth / rate range / thousand people / index
+    expect(chips).toEqual([
+      '核心 CPI+2.57%',
+      'FOMC 目標利率4.25–4.50%',
+      '非農就業+57 千人',
+      '消費者信心44.8',
+    ])
     // The entire set of old KPI cards has been removed, and the details are now handled by the form.
     expect(container.querySelectorAll('.kpi-value')).toHaveLength(0)
     expect(container.querySelectorAll('.mac-chip .mac-spark')).toHaveLength(0)
@@ -107,14 +125,15 @@ describe('MacroPage', () => {
     const rows = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')]
     expect(rows.map((r) => r.querySelector('.mac-row-label')?.firstChild?.textContent)).toEqual([
       '核心 CPI',
+      'FOMC 目標利率',
       '非農就業',
       '消費者信心',
     ])
     // The indicator description has been moved from the bottom of the card to the column, and can still be seen after the word card is slimmed down.
     expect(rows[0].querySelector('.mac-row-note')?.textContent).toBe('排除食品與能源後的年增率')
-    // A trend line can be drawn at more than two points; there is only one issue of non-agricultural products, and the box is marked with "—"
+    // A trend line can be drawn at more than two points; non-farm has only one point → no spark
     expect(rows[0].querySelectorAll('.mac-spark')).toHaveLength(1)
-    expect(rows[1].querySelectorAll('.mac-spark')).toHaveLength(0)
+    expect(rows[2].querySelectorAll('.mac-spark')).toHaveLength(0)
   })
 
   it('落後的指標在列上掛徽章，跟上的不掛——五列都寫「最新」等於沒有訊號', async () => {
@@ -143,13 +162,13 @@ describe('MacroPage', () => {
     await screen.findByText('美國總體經濟')
     const rows = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')]
 
-    const payroll = [...rows[1].querySelectorAll('td')]
+    const payroll = [...rows[2].querySelectorAll('td')]
     expect(payroll[1].textContent).toContain('+57 千人')
     expect(payroll[1].className).toContain('pnl-down')
     expect(payroll[2].textContent).toBe('−72')
     expect(payroll[2].className).toContain('pnl-down')
 
-    const sentiment = [...rows[2].querySelectorAll('td')]
+    const sentiment = [...rows[3].querySelectorAll('td')]
     expect(sentiment[2].textContent).toBe('+4.80')
     expect(sentiment[2].className).toContain('pnl-up')
   })
@@ -177,7 +196,7 @@ describe('MacroPage', () => {
     const streaks = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')].map(
       (r) => r.querySelectorAll('td')[4].textContent,
     )
-    expect(streaks).toEqual(['連 3 期下降', '—', '—'])
+    expect(streaks).toEqual(['連 3 期下降', '—', '—', '—'])
   })
 
   it('缺值中斷連續：不把兩段不相干的走勢接起來', async () => {
@@ -203,7 +222,7 @@ describe('MacroPage', () => {
     const streaks = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')].map(
       (r) => r.querySelectorAll('td')[4].textContent,
     )
-    expect(streaks).toEqual(['—', '—', '—'])
+    expect(streaks).toEqual(['—', '—', '—', '—'])
   })
 
   it('點＋展開該指標的逐期明細；「全部展開」一次開完（0.6.35）', async () => {
@@ -224,7 +243,7 @@ describe('MacroPage', () => {
     ])
 
     await user.click(screen.getByRole('button', { name: '全部展開' }))
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(3)
+    expect(container.querySelectorAll('.detail-row')).toHaveLength(4)
     await user.click(screen.getByRole('button', { name: '全部收起' }))
     expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
   })

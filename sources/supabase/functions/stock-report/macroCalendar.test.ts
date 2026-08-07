@@ -170,8 +170,14 @@ describe('RELEASE_CALENDAR 資料完整性', () => {
     for (const [id, entries] of Object.entries(RELEASE_CALENDAR)) {
       for (const e of entries) {
         expect(e.date, `${id} ${e.date}`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-        expect(e.period, `${id} ${e.period}`).toMatch(/^\d{4}-\d{2}$/)
-        expect(e.date.slice(0, 7) > e.period, `${id} ${e.date} 應晚於期別 ${e.period}`).toBe(true)
+        // FOMC: period is the statement day itself (YYYY-MM-DD). Monthly series: YYYY-MM lag.
+        if (id === 'DFEDTARU') {
+          expect(e.period, `${id} ${e.period}`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+          expect(e.period, `${id}`).toBe(e.date)
+        } else {
+          expect(e.period, `${id} ${e.period}`).toMatch(/^\d{4}-\d{2}$/)
+          expect(e.date.slice(0, 7) > e.period, `${id} ${e.date} 應晚於期別 ${e.period}`).toBe(true)
+        }
       }
     }
   })

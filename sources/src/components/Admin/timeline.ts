@@ -267,7 +267,8 @@ export const ACTION_SCOPE: Record<string, string> = {
     '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
     'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json',
   probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
-  'sync-macro': 'FRED 五個序列：核心 CPI / PPI / PCE、非農就業、消費者信心',
+  'sync-macro':
+    'FRED：核心 CPI / PPI / PCE、FOMC 目標利率區間（DFEDTARU/L）、非農就業、消費者信心',
   'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣',
   'backfill-revenue': '公開資訊觀測站的分月營收，補齊個股缺漏的月份',
 }

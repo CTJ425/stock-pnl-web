@@ -127,12 +127,14 @@ import {
   FRED_SERIES,
   MACRO_LOOKBACK_MONTHS,
   MACRO_SCHEMA,
+  collapseRateSteps,
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
   MACRO_UA,
   macroFingerprint,
   parseFredCsv,
+  parseFredCsvDaily,
   type MacroFile,
   type MacroIndicator,
 } from './usMacro.ts'
@@ -1453,17 +1455,35 @@ async function syncMacro(now: Date): Promise<{
     }
   }
 
-  const since = fredSinceDate(now, MACRO_LOOKBACK_MONTHS)
   const indicators: MacroIndicator[] = []
   for (const spec of FRED_SERIES) {
     try {
+      const since = fredSinceDate(now, spec.lookbackMonths ?? MACRO_LOOKBACK_MONTHS)
+      const headers = { 'User-Agent': MACRO_UA, Accept: 'text/csv' }
       const res = await fetch(fredCsvUrl(spec.id, since), {
         // ⚠️ Not a UA by twChips. Sending a browser string will cause FRED to directly reset the connection, see MACRO_UA
-        headers: { 'User-Agent': MACRO_UA, Accept: 'text/csv' },
-        signal: AbortSignal.timeout(10_000),
+        headers,
+        signal: AbortSignal.timeout(15_000),
       })
       if (!res.ok) continue
-      const ind = deriveIndicator(spec, parseFredCsv(await res.text()))
+
+      let raw
+      if (spec.kind === 'rate' && spec.idLow) {
+        // Target range: two daily series → change-points only (see collapseRateSteps).
+        const resLow = await fetch(fredCsvUrl(spec.idLow, since), {
+          headers,
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!resLow.ok) continue
+        raw = collapseRateSteps(
+          parseFredCsvDaily(await res.text()),
+          parseFredCsvDaily(await resLow.text()),
+        )
+      } else {
+        raw = parseFredCsv(await res.text())
+      }
+
+      const ind = deriveIndicator(spec, raw)
       // If you can't calculate one issue (the sequence has been stopped or the format has changed), don't put it in the file and let the front end show that it is missing materials.
       if (ind.latest) indicators.push(ind)
     } catch {
