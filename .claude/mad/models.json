@@ -1,0 +1,30 @@
+{
+  "_comment": "Run /mad:models apply after editing.",
+  "agents": {
+    "architect": {
+      "model": "opus",
+      "effort": "high"
+    },
+    "builder": {
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "reviewer": {
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "scout": {
+      "model": "haiku",
+      "effort": "low"
+    },
+    "scribe": {
+      "model": "haiku",
+      "effort": "low"
+    }
+  },
+  "docs": {
+    "_managed_comment": "Empty on purpose. This project tracks state in docs/agent/ (see CLAUDE.md 4), whose files use section headings archive.py cannot recognise. Archiving is done by hand into TASK_ARCHIVE.md / FIXED_BUG.md.",
+    "max_lines": 100,
+    "managed": []
+  }
+}

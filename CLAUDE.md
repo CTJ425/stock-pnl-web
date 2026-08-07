@@ -66,10 +66,11 @@ If information is important for future work, write it to `docs/agent/`.
 | `docs/agent/BUG_FIX.md` | Unresolved Bugs |
 | `docs/agent/FIXED_BUG.md` | Historical record of fixed Bugs |
 | `docs/agent/TASK_ARCHIVE.md` | Archive of completed tasks (`TASK.md` only keeps active and recurring tasks) |
+| `docs/agent/specs/<task-id>.md` | Per-task implementation spec written by the `architect` agent (see the mad section) |
 
 The Agent state files are authoritative for project progress.
 
-Other documentation paths: `docs/architecture/` (architecture), `docs/api/` (API), `docs/database/` (data models), `docs/development/` (development guide), `docs/deployment/` (deployment and operations).
+Other documentation paths: `docs/architecture/` (architecture).
 
 ## 4.1 Documentation Language
 
@@ -243,7 +244,6 @@ Version numbers **must never contain a `v` prefix**, and only take the form `x.x
 - `docs/CHANGELOG.md` → Version History
 
 The version badge in the bottom left corner of the screen **only shows the version number itself**, no author, no prefix.
-(`APP_AUTHOR` was removed in 0.3.7-dev.6.)
 
 Production release (`main`) uses `x.x.x`, development release (`dev`) uses `x.x.x-dev.x`.
 When deciding the next version number, incrementing `dev.N`, or merging to `main` for release, read the **`versioning` skill**.
@@ -306,28 +306,44 @@ Explicit enough for deployment and testing
 
 Create directories because the project has a real responsibility that needs to be represented — not because a template contains them.
 
-<!-- code-review-graph MCP tools -->
-## MCP Tools: code-review-graph
+<!-- mad:begin -->
+## Multi-agent workflow (mad)
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
+This project uses tiered agents. The main thread plans; subagents execute.
 
-### When to use graph tools FIRST
+**Roles** — `architect` (design, specs, tests), `builder` (implementation only),
+`reviewer` (findings only, never suggestions), `scout` (read-only codebase mapping
+and log compression), `scribe` (doc bookkeeping). Their model tiers live in
+`.claude/mad/models.json`; change them with `/mad:models`.
 
-- **Exploring code**: `semantic_search_nodes_tool` or `query_graph_tool` instead of Grep
-- **Understanding impact**: `get_impact_radius_tool` instead of manually tracing imports
-- **Code review**: `detect_changes_tool` + `get_review_context_tool` instead of reading entire files
-- **Finding relationships**: `query_graph_tool` with callers_of/callees_of/imports_of/tests_for
-- **Architecture questions**: `get_architecture_overview_tool` + `list_communities_tool`
+**Tracking documents — `docs/agent/` only.** The mad defaults (`docs/TASKS.md`,
+`docs/BUGS.md`, `docs/PROGRESS.md`, `docs/specs/`, `docs/archive/`) are **not used**
+here; those files were deleted after `/mad:init` created them. Wherever a mad skill,
+command or agent says one of them, read it as the §4 file instead:
 
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+| mad default | this project |
+| ---- | ---- |
+| `docs/TASKS.md` | `docs/agent/TASK.md` (active) + `docs/agent/TASK_ARCHIVE.md` (done) |
+| `docs/BUGS.md` | `docs/agent/BUG_FIX.md` (open) + `docs/agent/FIXED_BUG.md` (fixed) |
+| `docs/PROGRESS.md` | `docs/agent/PROGRESS.md` — **newest entry at the top** |
+| `docs/specs/<id>.md` | `docs/agent/specs/<id>.md` |
+| `docs/archive/` | no equivalent; archiving is manual |
 
-### Workflow
+**No auto-archiver.** `.claude/mad/models.json` sets `docs.managed: []` on purpose:
+`archive.py` keys its rules off the filenames `TASKS.md` / `BUGS.md` / `PROGRESS.md`
+and off `## Done` / `## Fixed` / `## Log` headings, none of which the §4 files use.
+The 100-line cap and `/mad:archive` therefore do not apply. Keep `TASK.md` and
+`BUG_FIX.md` small by moving settled entries out by hand (§4).
 
-1. The graph auto-updates on file changes (via hooks).
-2. Use `detect_changes_tool` for code review.
-3. Use `get_affected_flows_tool` to understand impact.
-4. Use `query_graph_tool` pattern="tests_for" to check coverage.
+**Regenerated files** — `.claude/agents/*.md` are rendered from the plugin's
+templates. They have been hand-patched to the paths above, so **`/mad:models apply`
+overwrites that patch**; re-apply it if you run the command.
+
+**Language** — every artefact written to disk is in English: code, comments, specs,
+tests, tracking entries, commit messages. Conversation language is separate and is
+the user's choice.
+
+**Scope discipline** — a spec's `## Files` list is exhaustive. Builder modifies
+nothing outside it and never edits a test. Violating scope is an automatic review
+failure regardless of code quality.
+<!-- mad:end -->

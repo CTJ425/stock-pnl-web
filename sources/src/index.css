@@ -1177,6 +1177,49 @@ input[type='date']::-webkit-calendar-picker-indicator {
   min-width: 0;
 }
 
+/*
+ * Full-market search box on the individual stock analysis page (0.6.44).
+ *
+ * `position: relative` is load-bearing: `.suggestions` is absolutely positioned and would otherwise
+ * anchor to whatever ancestor happens to be positioned. The dropdown itself reuses the transaction
+ * form's `.suggestions` / `.suggestion-item` rules —— same control, so the same look.
+ */
+.stock-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  /* Narrow enough not to crowd the holdings switcher, wide enough for 「代號 + 四字名稱」 */
+  flex: 0 1 190px;
+}
+
+.stock-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.stock-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px 6px 27px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.stock-search input::placeholder {
+  color: var(--ink-muted);
+}
+
+.stock-search-clear {
+  flex: none;
+}
+
 /* ---------- Drop-down menu (shared by workspace/account/stock switching, see Common/HeaderMenu.tsx) ----------*/
 .hmenu {
   position: relative;
@@ -1614,6 +1657,13 @@ a.hmenu-item {
    * After being squeezed out by the title and buttons, only "18..." is left, which means it is impossible to tell which gear is currently selected.
    */
   .detail-head .ws-select {
+    flex: 1 0 100%;
+    /* Two controls now share this row (0.6.44). At 375px they do not both fit, and shrinking
+       either one reproduces exactly the 「18…」 truncation this rule was written to stop. */
+    flex-wrap: wrap;
+  }
+
+  .detail-head .stock-search {
     flex: 1 0 100%;
   }
 

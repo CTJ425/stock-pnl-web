@@ -13,8 +13,10 @@
  *    This is a loop with an endpoint: after it is filled up, the server will return true and the seal will take effect from now on.
  * 3. Concurrency deduplication: `inflight` allows multiple components that are triggered at the same time to share the same promise.
  *
- * The server side also has the heldTwTickers() whitelist and the "skip if it is the latest" condition check.
- * Doing both sides is deliberate: the front-end layer saves invocation, and the back-end layer blocks abuse.
+ * Server side (0.6.44): `assertUser` + per-account `WARM_DAILY_LIMIT`, plus the batch's own
+ * "skip if already latest" short-circuit. Front-end session seal and back-end quota both stay ——
+ * the former saves invocations for the user, the latter bounds abuse after the holdings whitelist
+ * was retired so any listed code can be warmed.
  */
 import { supabase } from './supabase'
 
@@ -54,8 +56,12 @@ export function resetWarmState(): void {
 /**
  * Replace the daily production line and fundamentals of a single model.
  * The same code number will only be sent once in the same session; repeated calls will directly return the last result or failure value.
+ *
+ * `name` became the caller's job in 0.6.44: the server used to look it up in the holdings whitelist,
+ * and that whitelist is gone. It only lands in `fundamental/{ticker}.json`, which nothing on screen
+ * reads, so an omitted name costs nothing —— pass it when you have it and the stored file stays honest.
  */
-export async function warmStock(ticker: string): Promise<WarmResult> {
+export async function warmStock(ticker: string, name?: string): Promise<WarmResult> {
   if (!supabase) return FAILED
 
   const pending = inflight.get(ticker)
@@ -67,7 +73,7 @@ export async function warmStock(ticker: string): Promise<WarmResult> {
   const task = (async (): Promise<WarmResult> => {
     try {
       const { data, error } = await supabase.functions.invoke('stock-report', {
-        body: { action: 'warm', ticker },
+        body: { action: 'warm', ticker, name: name ?? '' },
       })
       if (error || !data || typeof data !== 'object') return FAILED
       const d = data as Record<string, unknown>

@@ -229,6 +229,67 @@ ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
 -- The service role (Edge Function) is not restricted by RLS and is the only way to read and write. The front end will not access it.
 
 
+-- 5a. Daily quota for on-demand stock warming (warm_quota) —— 0.6.44
+--
+--     Until 0.6.44 the `warm` / `generate` actions of stock-report only accepted codes that somebody
+--     already held (`heldTwTickers()`). That was an anti-abuse ceiling, not a privacy rule: the
+--     function is deployed --no-verify-jwt and its URL ships inside the public GitHub Pages bundle,
+--     so the whitelist was what stopped a stranger from using us to hammer TWSE / MOPS.
+--
+--     The individual stock analysis page can now search the whole market, so that ceiling is gone.
+--     What replaces it: `assertUser()` (a real account, not just the anon key) plus this table,
+--     which caps `warm` —— the only action whose cost is not already paid by chip_raw_cache ——
+--     at WARM_DAILY_LIMIT calls per account per Taipei day.
+--
+--     ⚠️ `assertUser` alone would not be enough: signup is open, so an attacker just registers.
+--
+--     `ymd` is the 8-digit Taipei date, the same shape chip_raw_cache uses, so the same
+--     lexicographic `ymd < cutoff` prune in pruneChipCache() clears both tables.
+CREATE TABLE IF NOT EXISTS warm_quota (
+    user_id UUID NOT NULL,
+    ymd     TEXT NOT NULL,
+    used    INT  NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, ymd)
+);
+
+ALTER TABLE warm_quota ENABLE ROW LEVEL SECURITY;
+
+-- NOTE: Same as chip_raw_cache —— deliberately no policy at all. The Edge Function (service role)
+-- is the only reader and writer; a user being able to read their own counter would be harmless,
+-- but a user being able to write it would make the whole table decorative.
+
+-- Atomic take-one for warm_quota. Read-then-upsert in the Edge Function races under parallel
+-- warms (every concurrent call can read used=0 and write used=1). This function does
+-- insert-or-increment under the row lock, and only succeeds when used stays below p_limit.
+CREATE OR REPLACE FUNCTION take_warm_quota(p_user_id uuid, p_ymd text, p_limit int)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  new_used int;
+BEGIN
+  IF p_limit IS NULL OR p_limit < 1 THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO warm_quota (user_id, ymd, used)
+  VALUES (p_user_id, p_ymd, 1)
+  ON CONFLICT (user_id, ymd) DO UPDATE
+    SET used = warm_quota.used + 1
+    WHERE warm_quota.used < p_limit
+  RETURNING used INTO new_used;
+
+  RETURN new_used IS NOT NULL;
+END;
+$$;
+
+-- service_role only (Edge Function). Anon/authenticated must not bump their own counter.
+REVOKE ALL ON FUNCTION take_warm_quota(uuid, text, int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION take_warm_quota(uuid, text, int) TO service_role;
+
+
 -- 6. After-hours report Storage bucket + daily automatic generation schedule (pg_cron + pg_net)
 --
 --    reports bucket stores the common after-hours report of "each Taiwan stock × each trading day" (purely structured JSON, schema 2 and above)

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { cleanup, render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Only the selection logic of the container is tested, and the content area is replaced by a stub (the chip itself also has StockDetailPage.test.tsx)
@@ -9,11 +9,13 @@ vi.mock('./StockDetailPage', () => ({
     ticker,
     name,
     holding,
+    quote,
     selector,
   }: {
     ticker: string
     name: string
     holding: { qty: number; price: number | null } | null
+    quote?: { price: number | null } | null
     selector?: React.ReactNode
   }) => (
     <div>
@@ -22,16 +24,24 @@ vi.mock('./StockDetailPage', () => ({
       <div data-testid="detail-name">{name}</div>
       <div data-testid="detail-qty">{holding?.qty ?? '—'}</div>
       <div data-testid="detail-price">{holding?.price ?? '—'}</div>
+      <div data-testid="detail-quote">{quote?.price ?? '—'}</div>
     </div>
   ),
 }))
 
-const { useWorkspace, useStockPrices } = vi.hoisted(() => ({
+const { useWorkspace, useStockPrices, searchStocks, fetchPrices } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   useStockPrices: vi.fn(),
+  searchStocks: vi.fn(),
+  fetchPrices: vi.fn(),
 }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../hooks/useStockPrices', () => ({ useStockPrices }))
+vi.mock('../../services/stockSearch', () => ({ searchStocks }))
+vi.mock('../../services/priceProxy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/priceProxy')>()
+  return { ...actual, fetchPrices }
+})
 
 import { AnalysisPage } from './AnalysisPage'
 import { computeLedger } from '../../utils/pnlEngine'
@@ -72,6 +82,15 @@ describe('AnalysisPage', () => {
     cleanup()
     useWorkspace.mockReset()
     useStockPrices.mockReset()
+    searchStocks.mockReset()
+    fetchPrices.mockReset()
+    searchStocks.mockResolvedValue([])
+    fetchPrices.mockResolvedValue({})
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('個股選單只列台股持股，美股不入選單', async () => {
@@ -152,17 +171,69 @@ describe('AnalysisPage', () => {
     expect(screen.getByTestId('detail-ticker').textContent).toBe('1802')
   })
 
-  it('沒有台股持股時顯示空狀態，不渲染分析內容', () => {
+  it('沒有台股持股時顯示空狀態與查詢框，不渲染分析內容', () => {
     setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
     render(<AnalysisPage />)
     expect(screen.getByText(/目前沒有台股持股/)).toBeTruthy()
+    expect(screen.getByLabelText('查詢其他台股')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /切換個股/ })).toBeNull()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 
-  it('完全沒有持股時同樣顯示空狀態', () => {
+  it('完全沒有持股時同樣顯示空狀態與查詢框', () => {
     setup([])
     render(<AnalysisPage />)
     expect(screen.getByText(/目前沒有台股持股/)).toBeTruthy()
+    expect(screen.getByLabelText('查詢其他台股')).toBeTruthy()
+  })
+
+  it('查詢非持股台股會進入分析且不帶持股', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    setup(TW_AND_US)
+    searchStocks.mockResolvedValue([
+      { symbol: '2303', name: '聯電', market: 'TPE' },
+      { symbol: 'AAPL', name: 'Apple', market: 'US' },
+    ])
+    fetchPrices.mockResolvedValue({ 'TPE:2303': { price: 55, stale: false } })
+
+    render(<AnalysisPage />)
+    await user.type(screen.getByLabelText('查詢其他台股'), '2303')
+    await vi.advanceTimersByTimeAsync(350)
+
+    // US results are filtered out; only TW shows
+    expect(await screen.findByRole('option', { name: /2303 聯電/ })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: /AAPL/ })).toBeNull()
+
+    await user.click(screen.getByRole('option', { name: /2303 聯電/ }))
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2303')
+    expect(screen.getByTestId('detail-name').textContent).toBe('聯電')
+    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+    expect(screen.getByRole('button', { name: /回到持股/ })).toBeTruthy()
+
+    await waitFor(() => expect(screen.getByTestId('detail-quote').textContent).toBe('55'))
+    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2303' }])
+  })
+
+  it('查詢自己已持有的代號走持股路徑，保留成本與股數', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    setup(TW_AND_US, {
+      'TPE:1802': { price: 51, stale: false },
+      'TPE:2330': { price: 2350, stale: false },
+    })
+    searchStocks.mockResolvedValue([{ symbol: '2330', name: '台積電', market: 'TPE' }])
+
+    render(<AnalysisPage />)
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('1802')
+
+    await user.type(screen.getByLabelText('查詢其他台股'), '2330')
+    await vi.advanceTimersByTimeAsync(350)
+    await user.click(await screen.findByRole('option', { name: /2330 台積電/ }))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
+    expect(screen.getByTestId('detail-qty').textContent).toBe('1000')
+    expect(screen.getByTestId('detail-price').textContent).toBe('2350')
+    // Owned path must not open the "not held" clear button
+    expect(screen.queryByRole('button', { name: /回到持股/ })).toBeNull()
+    expect(fetchPrices).not.toHaveBeenCalled()
   })
 })

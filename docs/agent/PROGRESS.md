@@ -1,9 +1,41 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: Task 76 item 2 —— reconcile the 成交量 discrepancy against TWSE, now that `STOCK_DAY_ALL` has caught up
-- Status: **0.6.43 live everywhere; no open bugs; Task 76 item 2 closed, items 1/3/4 waiting on today's clock**
-- Timestamp: 2026-08-06 10:00:00 Asia/Taipei
+- Agent: Grok
+- Action: Finish 0.6.44 full-market analysis search (code, tests, docs); deploy still pending
+- Status: **0.6.44 ready to ship; Task 77 item 6–7 waiting on deploy confirmation; Task 76 items 1/3/4 still open**
+- Timestamp: 2026-08-07 15:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 15:10:00 Asia/Taipei (0.6.44 code complete)
+
+- **Agent**: Grok
+- **Action**: Close the unfinished 0.6.44 work that was sitting dirty in the tree
+
+### What landed in this session
+
+Working tree already held the feature half-done (AnalysisPage search, `assertUser` / `warm_quota`,
+stale daily re-warm, schema DDL). This session finished the release surface and fixed review findings:
+
+- Fixed `warmStock.test.ts` for the new `name` body field; added a name-passthrough case.
+- Extended `AnalysisPage.test.tsx` for empty-state + search box, non-holding pick, owned-code path.
+- `StockDetailPage` / `useDailySeries` forward `name` into `warmStock`.
+- **Review fixes**: atomic `take_warm_quota` SQL function (no more concurrent lost-update);
+  fail-closed 503 when the counter is down; unknown-ticker path still runs `syncFundamental`;
+  search timer cleanup, Space preventDefault, holdings trigger shows non-holding target.
+- Version **0.6.44** across `version.ts`, `package.json`, README, `docs/CHANGELOG.md`.
+- `SPEC.md` / `TASK.md` Task 77 ship checklist; Task 76 items 1/3/4 left open.
+
+### Still not done (needs the user)
+
+1. Apply `warm_quota` + `take_warm_quota` DDL on test then prod.
+2. Deploy `stock-report` with `--no-verify-jwt` to test, smoke, then prod.
+3. Push / Pages verify / merge to main when (1)(2) are green.
+
+### Completed Tasks
+- [x] Tests green (893 across 57 files after +3 for 0.6.44 paths).
+- [x] Docs and version aligned; self-review Criticals fixed.
+- [ ] Supabase DDL + function deploy (blocked on explicit go-ahead).
 
 ---
 

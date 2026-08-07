@@ -508,6 +508,42 @@ The number of paginations has been reduced from 5 to **2**: "Analysis Content" a
 The analysis content is from one page to the end, and the order is fixed as **Quotation → Chip → Fundamental → Technical** (specified by the user;
 0.6.36 The first paragraph above is "My shareholdings").
 
+### Full-market target picker (0.6.44)
+
+Until 0.6.44 the analysis page only listed Taiwan holdings. That is still the default path (dropdown
+of owned TPE names, with cost / ROI available to the report). A search box beside it reaches the
+whole listed + OTC universe through the same `searchStocks` the transaction form uses:
+
+- **Results are TPE-only** — chips, fundamentals and daily files are all TWSE/TPEx feeds.
+- **A hit that is already held** switches the dropdown selection and keeps the holding context.
+- **A hit that is not held** sets `holding: null` (the shape `StockDetailPage` has always accepted
+  for the nightly batch path) and fetches a one-shot quote via `fetchPrices` (not polled).
+- Empty holdings no longer hide the page: the search box stays, and the empty-state copy tells the
+  user to pick a code.
+
+**Server gate change that made this possible.** `stock-report` `generate` / `warm` used to reject any
+ticker nobody held (`heldTwTickers()`). That was an anti-abuse ceiling for an endpoint deployed
+`--no-verify-jwt` whose URL is in the public bundle, not a privacy rule. Opening the page to the
+whole market retires the whitelist:
+
+| Action | Gate (0.6.44) | Why |
+| ---- | ---- | ---- |
+| `generate` | `assertUser` (real JWT `sub`) | Reads `chip_raw_cache` the batch already filled; marginal cost is a DB read. |
+| `warm` | `assertUser` + `take_warm_quota` ≤ 30 / account / Taipei day | Hits Yahoo / MOPS; charged *before* work. |
+
+`warm_quota` is service-role only (RLS on, no policies), pruned with the same `ymd < cutoff` as
+`chip_raw_cache`. Counting goes through the SQL function `take_warm_quota` (atomic insert-or-increment
+with `WHERE used < limit`) so parallel warms cannot all read `used=0` and each write `used=1`. A
+broken counter **fails closed** (HTTP 503): after the holdings whitelist was retired, an open signup
+plus a missing table would otherwise mean unlimited warm. Unknown symbols (Yahoo empty under both
+`.TW` and `.TWO`) still run `syncFundamental` (cache-only), skip the MOPS backfill loops, and return
+`fundamentalComplete: true` so the front end seals the ticker against further MOPS work.
+
+**Stale daily files.** The nightly batch only refreshes `daily/*.json` for held tickers, and
+`pruneStorage` only touches report folders. A stock that was only ever searched keeps the file from
+the day it was first warmed. `useDailySeries` therefore accepts `freshThrough` (the chip report's
+`dataDate`) and re-warms when `series.lastDate` lags.
+
 Adopt **card grouping** (bill version D): one `.glass .detail-card` for each section, with the boundaries defined by the white space between cards.
 I chose it because there is zero interaction and there is no problem of "things being put away and cannot be found".
 The group title `.card-head h3` is 16px, which is deliberately one level higher than the `.rpt-section h3` (14px) in the paragraph ——

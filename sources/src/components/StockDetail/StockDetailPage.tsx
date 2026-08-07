@@ -103,7 +103,13 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     summary moved into the 行情 card, two sections need the same file and it must only be downloaded once.
     `latest` is derived from the whole series, so the range picked by the chart below does not affect it.
   */
-  const { status: dailyStatus, series: dailySeries } = useDailySeries(ticker, reloadKey)
+  // The report's data date doubles as "how fresh the daily file ought to be" —— see useDailySeries.
+  const { status: dailyStatus, series: dailySeries } = useDailySeries(
+    ticker,
+    reloadKey,
+    report?.dataDate,
+    name,
+  )
   const technicalLatest = useMemo(
     () => (dailySeries ? (buildTechnicalView(dailySeries.rows, '3m')?.latest ?? null) : null),
     [dailySeries],
@@ -194,7 +200,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     ;(async () => {
       let f = await fetchFundamental(ticker)
       if (!f || needsFundamentalBackfill(f)) {
-        const warmed = await warmStock(ticker)
+        const warmed = await warmStock(ticker, name)
         if (warmed.fundamentalSynced > 0 || warmed.backfilled > 0) f = (await fetchFundamental(ticker)) ?? f
       }
       if (alive) {
@@ -205,7 +211,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     return () => {
       alive = false
     }
-  }, [ticker, reloadKey])
+  }, [ticker, name, reloadKey])
 
   async function handleDownload() {
     if (!surfaceRef.current) return

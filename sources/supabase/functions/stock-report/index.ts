@@ -10,7 +10,7 @@
  * interface:
  *   POST { action: 'generate', market: 'TPE', ticker: string, name: string, holding?: HoldingContext }
  *     → { reportId, generatedAt, dataDate, data } (chips are generated immediately with one click, used for front-end fallback)
- *   POST { action: 'warm', ticker: string }
+ *   POST { action: 'warm', ticker: string, name?: string }
  *     → { ok, ticker, ymd, dailySynced, fundamentalSynced }
  *       The daily line and fundamentals are added in a single file and written into Storage, so that newly added stocks do not have to wait for the night batch (0.6.0-dev.7)
  *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
@@ -23,8 +23,12 @@
  *     → The monthly revenue of fundamental/{ticker}.json is supplemented to 12 months (0.6.4) by MOPS monthly report.
  *       generate-all will also run once every round. This entrance is for those who "don't want to wait for the schedule".
  *
- * Both `generate` and `warm` are controlled by the heldTwTickers() whitelist: this function is deployed with --no-verify-jwt.
- * The URL is in the public front-end bundle, and the whitelist is the line of defense that keeps the abuse limit to the lowest (see 0.3.9 record).
+ * `generate` and `warm` are gated by `assertUser()`, and `warm` additionally by `WARM_DAILY_LIMIT`
+ * (0.6.44). This function is deployed with --no-verify-jwt and its URL is in the public front-end
+ * bundle, so it has to do that verification itself. Until 0.6.44 the gate was the `heldTwTickers()`
+ * whitelist instead; the analysis page can now search the whole market, which retired it (see the
+ * comment on `assertUser` for why the replacement is shaped the way it is, and the 0.3.9 record for
+ * what happens when there is no gate at all).
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
@@ -217,6 +221,21 @@ const MAX_BACKFILL_QUARTERS = 2
 const WARM_BUDGET_MS = 30_000
 const WARM_ROUND_MONTHS = 4
 const WARM_ROUND_QUARTERS = 2
+/**
+ * How many `warm` calls one account may make per Taipei day (0.6.44).
+ *
+ * Why a cap exists at all: until 0.6.44 the abuse ceiling was `heldTwTickers()` —— only codes
+ * somebody already held could be warmed, so the whole endpoint could not amplify against MOPS.
+ * The analysis page now searches the whole market, so that ceiling is gone and a new one is needed.
+ * `assertUser` alone is not it: signup is open, and an attacker registers an account in a second.
+ *
+ * Sized against the only expensive path, the `backfillRevenue` / `backfillProfit` loops below:
+ * each is capped at `WARM_BUDGET_MS`, so 30 calls is at most 15 wall-clock minutes of MOPS traffic
+ * per account per day. A human hits nothing like it —— `warmStock.ts` only calls this when Storage
+ * is missing or the fundamental history is short, and seals the ticker for the rest of the session,
+ * so 30 is 30 *different, never-before-seen* stocks in one day.
+ */
+const WARM_DAILY_LIMIT = 30
 /** The maximum number of simultaneous external crawls (T86 single file is about 1–2MB)*/
 const FETCH_CONCURRENCY = 3
 
@@ -645,7 +664,10 @@ async function loadMarginFallback(dataYmd: string, needed: boolean): Promise<Mar
     : null
 }
 
-async function handleGenerate(body: GenerateReportRequestBody): Promise<Response> {
+async function handleGenerate(
+  req: Request,
+  body: GenerateReportRequestBody,
+): Promise<Response> {
   if (body.market !== 'TPE') {
     return json({ error: '盤後籌碼報告僅支援台股（TPE）' }, 400)
   }
@@ -657,18 +679,14 @@ async function handleGenerate(body: GenerateReportRequestBody): Promise<Response
   const holding = body.holding ?? null
 
   /*
-   * This endpoint is deployed with --no-verify-jwt (the nightly cron only comes in with x-cron-secret),
-   * That means anyone can call it if they get the project URL - and the URL is in the public bundle of GitHub Pages.
+   * Any signed-in account, any listed code (0.6.44 —— was: only codes somebody held).
    *
-   * Only accept code names that "are actually held by someone" to minimize the limit of abuse:
-   * The attacker can only attack these files at most, and their data for the day has already been cached in the night batch.
-   * Therefore, this project cannot be forced to capture a large number of TWSE (the amplification effect is reset to zero), and only pure DB reading is left.
-   * The response deliberately did not reveal the content or length of the list.
+   * No per-day counter here on purpose, unlike `warm`: everything below reads whole-market files
+   * out of `chip_raw_cache`, which the nightly batch has already filled. The marginal cost of one
+   * more ticker is a DB read, so there is nothing to meter. `assertUser` is the whole defence.
    */
-  const held = await heldTwTickers()
-  if (!held.some((h) => h.ticker === ticker)) {
-    return json({ error: '此代號不在持股清單內，無法產生報告' }, 403)
-  }
+  const auth = await assertUser(req)
+  if (auth instanceof Response) return auth
 
   const series = await loadSeries([ticker], new Date())
   const marginFallbackRows = await loadMarginFallback(
@@ -731,6 +749,68 @@ async function assertAdmin(req: Request): Promise<Response | null> {
     return null
   } catch {
     return json({ error: 'Unauthorized' }, 401)
+  }
+}
+
+/**
+ * Gatekeeping for the two per-stock endpoints the browser calls directly (`generate` / `warm`).
+ *
+ * **What this replaced** (0.6.44): both used to require the ticker to be in `heldTwTickers()`.
+ * That was never about privacy —— it capped the TWSE/MOPS amplification of an endpoint deployed
+ * `--no-verify-jwt` whose project URL ships inside the public GitHub Pages bundle. Opening the
+ * analysis page to the whole market retires that whitelist, so the ceiling moves here: a real
+ * account, plus `WARM_DAILY_LIMIT` on the one path that actually costs anything.
+ *
+ * **Why `getUser` and not "is there an Authorization header"**: the anon key is itself a JWT and
+ * every browser holds a copy, so the header's presence proves nothing. The anon token carries no
+ * `sub`, so GoTrue rejects it and we land in the error branch —— that is the whole separation.
+ *
+ * **Do not "simplify" this by deploying the function with JWT verification on.** `generate-all`
+ * and the backfill actions are called by pg_cron with `x-cron-secret` and no JWT at all; platform
+ * verification would reject them before this file ever runs. Same reason `assertAdmin` verifies
+ * by hand right above.
+ */
+async function assertUser(req: Request): Promise<{ userId: string } | Response> {
+  const auth = req.headers.get('Authorization') ?? ''
+  const token = auth.replace(/^Bearer\s+/i, '').trim()
+  if (!token) return json({ error: 'Unauthorized' }, 401)
+  try {
+    const { data, error } = await db.auth.getUser(token)
+    if (error || !data.user) return json({ error: 'Unauthorized' }, 401)
+    return { userId: data.user.id }
+  } catch {
+    return json({ error: 'Unauthorized' }, 401)
+  }
+}
+
+/**
+ * Count one `warm` against today's per-account allowance.
+ *
+ * Uses the `take_warm_quota` SQL function (atomic insert-or-increment with a WHERE used < limit)
+ * so parallel warms cannot all read used=0 and each write used=1. The count is charged **before**
+ * the work: charging on success would make a failing upstream free to retry against.
+ *
+ * Returns:
+ * - `'ok'` — slot taken
+ * - `'limited'` — already at `WARM_DAILY_LIMIT`
+ * - `'error'` — RPC/table missing or other infrastructure fault (fail **closed**: without a working
+ *   counter the only remaining ceiling after the holdings whitelist was retired would be "have an
+ *   account", and signup is open)
+ */
+async function takeWarmQuota(
+  userId: string,
+  ymd: string,
+): Promise<'ok' | 'limited' | 'error'> {
+  try {
+    const { data, error } = await db.rpc('take_warm_quota', {
+      p_user_id: userId,
+      p_ymd: ymd,
+      p_limit: WARM_DAILY_LIMIT,
+    })
+    if (error) return 'error'
+    return data === true ? 'ok' : 'limited'
+  } catch {
+    return 'error'
   }
 }
 
@@ -1509,6 +1589,9 @@ async function pruneStorage(cutoffYmd: string): Promise<void> {
 async function pruneChipCache(cutoffYmd: string): Promise<void> {
   try {
     await db.from('chip_raw_cache').delete().lt('ymd', cutoffYmd)
+    // The warm counters key off the same 8-digit Taipei date, so the same lexicographic cutoff
+    // clears them. Only today's row is ever read; everything older is dead weight.
+    await db.from('warm_quota').delete().lt('ymd', cutoffYmd)
   } catch {
     // Failure to clean up does not affect the main process
   }
@@ -1532,7 +1615,9 @@ async function warmDataYmd(): Promise<string> {
  * Before that, the technical and fundamental pages are empty, and the AI ​​analysis will even fail because it cannot get the daily line.
  *
  * Why it’s safe (lessons from burning credits in 0.3.9):
- * 1. Use the `heldTwTickers()` whitelist, non-holdings will always be 403 - the same line of defense as `generate`.
+ * 1. `assertUser` + `WARM_DAILY_LIMIT` (0.6.44; was the `heldTwTickers()` whitelist, retired when the
+ *    analysis page opened to the whole market). This is the only endpoint here that meters per user,
+ *    because it is the only one whose cost is not already paid by `chip_raw_cache`.
  * 2. Both share the condition of "skip if it is the latest" with the batch, and **file will be written if no data is found**,
  *    Therefore, the same file will only actually do something once a day at most, and then the front end will directly read the Storage.
  * 3. The three fundamentals are the largest in the market and use `chip_raw_cache`, and the external amplification effect is close to zero.
@@ -1541,24 +1626,68 @@ async function warmDataYmd(): Promise<string> {
  *    And backfill is ranked after decideSkip in the night batch - the entire section is short-circuited when the data is all available that day.
  *    Newly added stocks cannot be replenished in one round that day. The budget is deliberately smaller than night time, see instructions in the function.
  */
-async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
+async function handleWarm(req: Request, body: GenerateReportRequestBody): Promise<Response> {
   const ticker = String(body.ticker ?? '').trim()
   if (!TICKER_RE.test(ticker)) {
     return json({ error: 'ticker 格式不正確' }, 400)
   }
 
-  const held = await heldTwTickers()
-  const entry = held.find((h) => h.ticker === ticker)
-  if (!entry) {
-    return json({ error: '此代號不在持股清單內，無法產生資料' }, 403)
+  const auth = await assertUser(req)
+  if (auth instanceof Response) return auth
+
+  const now = new Date()
+  const quota = await takeWarmQuota(auth.userId, taipeiYmd(now))
+  if (quota === 'limited') {
+    return json({ error: '今日查詢新個股的次數已達上限，請明天再試' }, 429)
   }
+  if (quota === 'error') {
+    // Prefer a hard stop over an unbound warm once the whitelist is gone.
+    return json({ error: '查詢額度服務暫時無法使用，請稍後再試' }, 503)
+  }
+
+  // The name used to come from the holdings whitelist. Without it the caller has to supply one ——
+  // the search box already has it, and an empty string is harmless (buildFundamentalFile keeps
+  // whatever the existing file had, and the batch overwrites it with the official name later).
+  const name = String(body.name ?? '').trim().slice(0, 40)
 
   const dataYmd = await warmDataYmd()
   if (!dataYmd) return json({ error: '無法判斷交易日' }, 503)
 
-  const one = [{ ticker, name: entry.name }]
+  const one = [{ ticker, name }]
   const dailySynced = await syncDaily(one, dataYmd, { onDemand: true })
+
+  /*
+    Does this code exist at all? (0.6.44)
+
+    `TICKER_RE` accepts 2–8 alphanumerics, which is a space of millions, and before this release the
+    holdings whitelist was what kept the made-up ones out. Yahoo is the cheapest oracle we already
+    pay for: `syncDaily` has just asked it under both `.TW` and `.TWO`, and an empty `rows` means
+    nobody trades this symbol.
+
+    Only the two MOPS backfill loops are skipped —— not `syncFundamental`. That path only reads
+    `chip_raw_cache`, and a genuinely newly-listed stock that Yahoo has not picked up yet still
+    deserves its valuation row. The loops are the ones that hit MOPS for up to `WARM_BUDGET_MS`,
+    and a symbol with no price history has no revenue history to go looking for either.
+
+    `fundamentalComplete: true` on the unknown path tells `warmStock.ts` to seal the ticker so we
+    do not re-ask MOPS on every page open for a code that will never have history.
+  */
+  const daily = await downloadJson<DailyFile>(`daily/${ticker}.json`)
   const fundamental = await syncFundamental(one, dataYmd)
+  if (!daily || (daily.rows?.length ?? 0) === 0) {
+    return json({
+      ok: true,
+      ticker,
+      ymd: dataYmd,
+      unknownTicker: true,
+      dailySynced,
+      fundamentalSynced: fundamental,
+      revenueMonths: [],
+      profitQuarters: [],
+      fundamentalComplete: true,
+      durationMs: Date.now() - now.getTime(),
+    })
+  }
 
   /*
     0.6.29: On-demand generation also runs a round of historical backfill.
@@ -1577,8 +1706,9 @@ async function handleWarm(body: GenerateReportRequestBody): Promise<Response> {
     Backfilling itself is gap-driven: once filled, it returns an empty array and makes zero external requests (only two extra Storage reads),
     so it has almost zero cost for old targets that are already full -- thus the frontend can safely "call it again if it sees it's still missing".
   */
-  const now = new Date()
-  const deadline = now.getTime() + WARM_BUDGET_MS
+  // The budget starts here, not at the top of the call: `now` is only the reference date for
+  // "which months are published by now", and the two syncs above are bounded work of their own.
+  const deadline = Date.now() + WARM_BUDGET_MS
   const revenueMonths: string[] = []
   const profitQuarters: string[] = []
 
@@ -2284,11 +2414,11 @@ Deno.serve(async (req) => {
   }
 
   if (body.action === 'generate') {
-    return handleGenerate(body)
+    return handleGenerate(req, body)
   }
 
   if (body.action === 'warm') {
-    return handleWarm(body)
+    return handleWarm(req, body)
   }
 
   if (body.action === 'generate-all') {

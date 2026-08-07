@@ -588,7 +588,7 @@ describe('StockDetailPage', () => {
     render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     expect(await screen.findByText('航運業')).toBeTruthy()
-    expect(warmStock).toHaveBeenCalledWith('2609')
+    expect(warmStock).toHaveBeenCalledWith('2609', '陽明')
     expect(fetchFundamental).toHaveBeenCalledTimes(2)
   })
 
@@ -636,7 +636,7 @@ describe('StockDetailPage', () => {
     const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     await screen.findByText('航運業')
-    expect(warmStock).toHaveBeenCalledWith('2609')
+    expect(warmStock).toHaveBeenCalledWith('2609', '陽明')
     await waitFor(() =>
       expect(container.querySelectorAll('#sec-fundamental .data-table tbody tr').length).toBe(12),
     )
