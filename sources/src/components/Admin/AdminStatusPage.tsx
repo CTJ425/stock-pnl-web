@@ -456,7 +456,19 @@ export function AdminStatusPage() {
                       {s.runsToday}
                       {s.failsToday > 0 && <span className="ast-fail"> / {s.failsToday} 失敗</span>}
                     </td>
-                    <td className="ast-mono">{s.lastRun ? fmtUpdatedAt(s.lastRun) : '—'}</td>
+                    <td className="ast-mono">
+                      {s.lastRun ? fmtUpdatedAt(s.lastRun) : '—'}
+                      {s.lastSource === 'manual' && (
+                        <span className="ast-scope" title="由管理後台「手動更新」觸發">
+                          手動
+                        </span>
+                      )}
+                      {s.lastSource === 'cron' && s.lastRun && (
+                        <span className="ast-scope" title="由 pg_cron 排程觸發">
+                          排程
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <Pill state={st} text={s.active ? undefined : '已停用'} />
                     </td>
@@ -466,8 +478,12 @@ export function AdminStatusPage() {
             </tbody>
           </table>
         </div>
+        <p className="ast-note" style={{ marginTop: 10 }}>
+          「今日／最後執行」含排程與後台<strong>手動更新</strong>；手動不會寫入 pg_cron
+          的 job_run_details，但會記在 admin_run_log 並合併顯示。
+        </p>
         {data.batch && (
-          <p className="ast-note" style={{ marginTop: 10 }}>
+          <p className="ast-note" style={{ marginTop: 6 }}>
             盤後批次今日第 {data.batch.runsToday ?? 0} 輪
             {data.probe?.taipei_time && `・探針最後探測 ${data.probe.taipei_time}`}
             {/* The parenthesised part is assembled as one piece: split into two conditionals it prints an unclosed bracket when only one side exists */}

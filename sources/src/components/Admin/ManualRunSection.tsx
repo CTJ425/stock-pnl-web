@@ -95,6 +95,8 @@ export function ManualRunSection() {
         與後台「抓取狀況」的五個 cron 同一組 handler。資料尚未公布時可能回
         unchanged / skipped，不代表壞掉。
         <strong> 盤後個股批次</strong>可能需數十秒到兩分鐘，請勿重複連按。
+        執行後會寫入 admin_run_log，到「抓取狀況」重新整理即可看到最後執行時間（標
+        「手動」）。
       </div>
 
       <div className="table-scroll" style={{ marginTop: 14 }}>

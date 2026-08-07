@@ -1,9 +1,29 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Admin console manual batch run (admin-run) — 0.6.44-dev.2
-- Status: **0.6.44-dev.2 code ready; Edge volume deploy to DEV still needs a one-shot restart**
-- Timestamp: 2026-08-07 15:52:00 Asia/Taipei
+- Action: Merge admin-run into schedule status (admin_run_log) — 0.6.44-dev.3
+- Status: **0.6.44-dev.3; manual runs show on 抓取狀況**
+- Timestamp: 2026-08-07 15:58:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 15:58:00 Asia/Taipei (manual run visible on schedule table)
+
+- **Agent**: Grok
+- **Action**: Fix "manual update updates charts but schedule table stays idle"
+
+### Root cause
+`admin_schedule_status` only read `cron.job_run_details`. `admin-run` never goes through
+pg_cron, so Storage/charts moved while lastRun/runsToday did not.
+
+### Fix
+- Table `admin_run_log` (service-role only).
+- `handleAdminRun` writes a row per job under the matching `cron.job.jobname`.
+- `admin_schedule_status` merges cron + manual for lastRun / lastStatus / runsToday /
+  failsToday and adds `lastSource` (`cron` | `manual`).
+- UI: 最後執行 shows 「手動」/「排程」 badge; note under the table.
+
+Version **0.6.44-dev.3**.
 
 ---
 

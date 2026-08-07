@@ -2416,8 +2416,35 @@ const ADMIN_RUN_JOBS = [
 ] as const
 type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
 
+/** cron.job.jobname for each admin-run action — must match what admin_schedule_status joins on. */
+const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
+  'generate-all': 'stock-report-nightly',
+  'sync-market': 'market-daily',
+  'sync-macro': 'macro-daily',
+  'sync-fx': 'fx-daily',
+  probe: 'source-probe',
+}
+
 function isAdminRunJob(v: string): v is AdminRunJob {
   return (ADMIN_RUN_JOBS as readonly string[]).includes(v)
+}
+
+/** Best-effort insert into admin_run_log so the schedule table sees manual runs. */
+async function logAdminRun(row: {
+  jobname: string
+  action: string
+  started_at: string
+  finished_at: string
+  ok: boolean
+  http_status: number
+  duration_ms: number
+  triggered_by: string | null
+}): Promise<void> {
+  try {
+    await db.from('admin_run_log').insert(row)
+  } catch {
+    // Must not fail the batch just because the observation table is missing or broken.
+  }
 }
 
 /**
@@ -2466,6 +2493,19 @@ async function handleAdminRun(
     }
   }
 
+  // Who pressed the button — for admin_run_log.triggered_by (observation only).
+  let triggeredBy: string | null = null
+  try {
+    const auth = req.headers.get('Authorization') ?? ''
+    const token = auth.replace(/^Bearer\s+/i, '').trim()
+    if (token) {
+      const { data } = await db.auth.getUser(token)
+      triggeredBy = data.user?.id ?? null
+    }
+  } catch {
+    triggeredBy = null
+  }
+
   const started = Date.now()
   const results: Record<
     string,
@@ -2474,8 +2514,11 @@ async function handleAdminRun(
 
   for (const job of jobs) {
     const t0 = Date.now()
-    let resp: Response
+    const startedAt = new Date(t0).toISOString()
+    let httpStatus = 500
+    let parsed: unknown = null
     try {
+      let resp: Response
       switch (job) {
         case 'generate-all':
           resp = await handleGenerateAll()
@@ -2493,24 +2536,31 @@ async function handleAdminRun(
           resp = await handleProbe()
           break
       }
-      let parsed: unknown = null
+      httpStatus = resp.status
       try {
         parsed = await resp.clone().json()
       } catch {
         parsed = null
       }
-      results[job] = {
-        httpStatus: resp.status,
-        durationMs: Date.now() - t0,
-        body: parsed,
-      }
     } catch (e) {
-      results[job] = {
-        httpStatus: 500,
-        durationMs: Date.now() - t0,
-        body: { error: e instanceof Error ? e.message : String(e) },
-      }
+      httpStatus = 500
+      parsed = { error: e instanceof Error ? e.message : String(e) }
     }
+    const durationMs = Date.now() - t0
+    const finishedAt = new Date().toISOString()
+    const ok = httpStatus < 400
+    results[job] = { httpStatus, durationMs, body: parsed }
+    // Record under the cron jobname so the schedule table merges this into lastRun / runsToday.
+    await logAdminRun({
+      jobname: ADMIN_RUN_JOBNAME[job],
+      action: job,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      ok,
+      http_status: httpStatus,
+      duration_ms: durationMs,
+      triggered_by: triggeredBy,
+    })
   }
 
   const failed = jobs.filter((j) => results[j].httpStatus >= 400)

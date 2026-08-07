@@ -778,6 +778,33 @@ SELECT cron.schedule(
 --    Display it in the background so that you can see it at a glance next time.
 --
 --    ⚠️ **Only run this section, do not rerun the entire schema.sql** (see the warning at the beginning of this file).
+-- 11a. Manual admin-run log (0.6.44-dev.3)
+--
+--     The console's "手動更新" calls the same handlers as cron but **does not go through pg_cron**,
+--     so nothing lands in `cron.job_run_details`. Charts/Storage still update, but the schedule
+--     table looked idle. This table records each admin-run so `admin_schedule_status` can merge
+--     lastRun / runsToday with the real cron history.
+CREATE TABLE IF NOT EXISTS admin_run_log (
+    id           BIGSERIAL PRIMARY KEY,
+    -- Same strings as cron.job.jobname (stock-report-nightly, market-daily, …)
+    jobname      TEXT NOT NULL,
+    -- Edge action id (generate-all, sync-market, …)
+    action       TEXT NOT NULL,
+    started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at  TIMESTAMPTZ,
+    ok           BOOLEAN,
+    http_status  INT,
+    duration_ms  INT,
+    -- auth.users id of the admin who pressed the button; null if unknown
+    triggered_by UUID
+);
+
+ALTER TABLE admin_run_log ENABLE ROW LEVEL SECURITY;
+-- No policies: service role (Edge) only, same shape as batch_run_log / chip_raw_cache.
+
+CREATE INDEX IF NOT EXISTS admin_run_log_job_finished_idx
+  ON admin_run_log (jobname, finished_at DESC);
+
 CREATE OR REPLACE FUNCTION public.admin_schedule_status()
 RETURNS jsonb
 LANGUAGE sql
@@ -795,10 +822,29 @@ AS $$
              -- Only get the action and target ref. The full text of the command contains the key and must not be leaked out.
              'action',     (regexp_match(j.command, '"action"\s*:\s*"([a-z-]+)"'))[1],
              'targetRef',  (regexp_match(j.command, 'url\s*:=\s*''https://([^.]+)\.'))[1],
-             'lastRun',    r.last_run,
-             'lastStatus', r.last_status,
-             'runsToday',  coalesce(r.runs_today, 0),
-             'failsToday', coalesce(r.fails_today, 0)
+             -- Prefer the newer of cron vs admin-run; status follows that winner.
+             'lastRun',    CASE
+                             WHEN m.last_manual IS NOT NULL
+                              AND (r.last_run IS NULL OR m.last_manual >= r.last_run)
+                             THEN m.last_manual
+                             ELSE r.last_run
+                           END,
+             'lastStatus', CASE
+                             WHEN m.last_manual IS NOT NULL
+                              AND (r.last_run IS NULL OR m.last_manual >= r.last_run)
+                             THEN CASE WHEN m.last_ok THEN 'succeeded' ELSE 'failed' END
+                             ELSE r.last_status
+                           END,
+             -- How the winning lastRun was produced (cron | manual); UI can label it.
+             'lastSource', CASE
+                             WHEN m.last_manual IS NOT NULL
+                              AND (r.last_run IS NULL OR m.last_manual >= r.last_run)
+                             THEN 'manual'
+                             WHEN r.last_run IS NOT NULL THEN 'cron'
+                             ELSE NULL
+                           END,
+             'runsToday',  coalesce(r.runs_today, 0) + coalesce(m.runs_today, 0),
+             'failsToday', coalesce(r.fails_today, 0) + coalesce(m.fails_today, 0)
            ) AS t
     FROM cron.job j
     LEFT JOIN LATERAL (
@@ -818,6 +864,25 @@ AS $$
       WHERE d.jobid = j.jobid
         AND d.start_time > now() - interval '2 days'
     ) r ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        max(a.finished_at) AS last_manual,
+        (array_agg(a.ok ORDER BY a.finished_at DESC NULLS LAST))[1] AS last_ok,
+        count(*) FILTER (
+          WHERE a.finished_at IS NOT NULL
+            AND (a.finished_at AT TIME ZONE 'Asia/Taipei')::date
+              = (now() AT TIME ZONE 'Asia/Taipei')::date
+        ) AS runs_today,
+        count(*) FILTER (
+          WHERE a.ok IS DISTINCT FROM true
+            AND a.finished_at IS NOT NULL
+            AND (a.finished_at AT TIME ZONE 'Asia/Taipei')::date
+              = (now() AT TIME ZONE 'Asia/Taipei')::date
+        ) AS fails_today
+      FROM public.admin_run_log a
+      WHERE a.jobname = j.jobname
+        AND a.finished_at > now() - interval '2 days'
+    ) m ON true
   ) s;
 $$;
 

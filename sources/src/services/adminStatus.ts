@@ -28,6 +28,11 @@ export interface ScheduleRow {
   targetRef: string | null
   lastRun: string | null
   lastStatus: string | null
+  /**
+   * Whether the winning `lastRun` came from pg_cron or the admin console (0.6.44-dev.3).
+   * Null when there is no run in the look-back window.
+   */
+  lastSource?: 'cron' | 'manual' | null
   runsToday: number
   failsToday: number
 }
@@ -127,7 +132,25 @@ export async function fetchAdminStatus(): Promise<AdminStatus | null> {
     return {
       asOf: typeof d.asOf === 'string' ? d.asOf : '',
       todayYmd: typeof d.todayYmd === 'string' ? d.todayYmd : '',
-      schedules: Array.isArray(d.schedules) ? d.schedules : [],
+      schedules: Array.isArray(d.schedules)
+        ? d.schedules.map((raw) => {
+            const s = raw as Partial<ScheduleRow>
+            const src = s.lastSource
+            return {
+              jobid: typeof s.jobid === 'number' ? s.jobid : 0,
+              jobname: typeof s.jobname === 'string' ? s.jobname : '',
+              schedule: typeof s.schedule === 'string' ? s.schedule : '',
+              active: s.active === true,
+              action: typeof s.action === 'string' ? s.action : null,
+              targetRef: typeof s.targetRef === 'string' ? s.targetRef : null,
+              lastRun: typeof s.lastRun === 'string' ? s.lastRun : null,
+              lastStatus: typeof s.lastStatus === 'string' ? s.lastStatus : null,
+              lastSource: src === 'cron' || src === 'manual' ? src : null,
+              runsToday: typeof s.runsToday === 'number' ? s.runsToday : 0,
+              failsToday: typeof s.failsToday === 'number' ? s.failsToday : 0,
+            } satisfies ScheduleRow
+          })
+        : [],
       manifest: d.manifest ?? null,
       chip: d.chip ?? null,
       coverage: d.coverage ?? {},
