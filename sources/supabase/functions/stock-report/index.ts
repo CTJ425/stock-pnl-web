@@ -93,6 +93,7 @@ import {
   mopsRevenueUrl,
   nextBackfilledThrough,
   parseMopsRevenue,
+  closedAttemptedMonths,
   planRevenueBackfill,
   publishedMonths,
   type RevenueProgress,
@@ -1065,7 +1066,7 @@ async function backfillRevenue(
     })
   }
 
-  const targets = planRevenueBackfill(have, wantMonths, maxMonths)
+  const targets = planRevenueBackfill(have, wantMonths, maxMonths, now)
   if (targets.length === 0) return { filled: 0, months: [] }
   const wanted = new Set(files.keys())
 
@@ -1091,6 +1092,9 @@ async function backfillRevenue(
   // If you haven't succeeded in catching it for a month (the other party is down/the network is unavailable), don't change anything and try again in the next round.
   if (attempted.length === 0) return { filled: 0, months: [] }
 
+  // Only months past the 10th deadline may seal "not found" into through. Open-window hits still merge.
+  const attemptedForThrough = closedAttemptedMonths(attempted, now)
+
   let filled = 0
   for (const [ticker, file] of files) {
     const incoming: RevenueMonth[] = []
@@ -1109,7 +1113,8 @@ async function backfillRevenue(
 
     // The progress must also be written back, **even if no information is found** - ETF relies on this to converge.
     // Otherwise it will re-list the same months as gaps each round.
-    const through = nextBackfilledThrough(file.revenueBackfilledThrough, attempted)
+    // Open-window months are excluded so a partial early MOPS page cannot pin through forever.
+    const through = nextBackfilledThrough(file.revenueBackfilledThrough, attemptedForThrough)
     if (!monthsChanged && through === (file.revenueBackfilledThrough ?? null)) continue
 
     const next: FundamentalFile = {

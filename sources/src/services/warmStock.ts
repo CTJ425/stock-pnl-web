@@ -8,9 +8,11 @@
  *    Even if the server replies "There is no data in this file" (for example, the ETF has no fundamentals), it will not be retried.
  *    Without this, a stock that can never get data will cause users to burn an invocation every time they cut a page.
  *
- *    **The only exception (0.6.29)**: Unseal the codename when the server returns `fundamentalComplete: false`.
- *    That means the history has not been completed (the time budget has been used up), and it should be completed next time the page is opened——
- *    This is a loop with an endpoint: after it is filled up, the server will return true and the seal will take effect from now on.
+ *    **Unseal only when incomplete AND this call made progress** (0.6.44-dev.7):
+ *    `fundamentalComplete: false` alone used to unseal every time, so a stock stuck below 12 quarters
+ *    (budget exhausted, MOPS empty) re-warmed on every page open. Now we unseal only when
+ *    `backfilled > 0` — real progress with room left. No progress → stay sealed; nightly batch
+ *    remains the path to finish the rest.
  * 3. Concurrency deduplication: `inflight` allows multiple components that are triggered at the same time to share the same promise.
  *
  * Server side (0.6.44): `assertUser` + per-account `WARM_DAILY_LIMIT`, plus the batch's own
@@ -86,8 +88,11 @@ export async function warmStock(ticker: string, name?: string): Promise<WarmResu
           (Array.isArray(d.revenueMonths) ? d.revenueMonths.length : 0) +
           (Array.isArray(d.profitQuarters) ? d.profitQuarters.length : 0),
       }
-      // Release the seal before the filling is completed, and let the filling continue the next time the page is opened (the server returns true after the filling is completed, and the seal takes effect)
-      if (result.ok && !result.fundamentalComplete) attempted.delete(ticker)
+      // Unseal only if incomplete *and* this round filled something — otherwise seal sticks
+      // (avoids burning warm quota every open when the server keeps returning complete=false).
+      if (result.ok && !result.fundamentalComplete && result.backfilled > 0) {
+        attempted.delete(ticker)
+      }
       return result
     } catch {
       return FAILED

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   MOPS_HOST,
+  closedAttemptedMonths,
+  isRevenueMonthClosed,
   mopsRevenueUrl,
   nextBackfilledThrough,
   parseMopsRevenue,
@@ -150,6 +152,44 @@ describe('planRevenueBackfill', () => {
     const have = new Map([['2330', p(['2026-06'], null)]])
     expect(planRevenueBackfill(have, WANT, 4)).toEqual(['2026-05', '2026-04', '2026-03'])
   })
+
+  it('公告窗未關的月份即使 through 較舊仍會重試（早申報／川湖）', () => {
+    // Established stock finished its initial fill (through deep in the past). July is still open
+    // on Aug 7 — must re-ask MOPS, not be sealed by through.
+    const have = new Map([['2059', p(['2026-06', '2026-05'], '2025-08')]])
+    const want = ['2026-07', '2026-06', '2026-05', '2026-04']
+    const aug7 = new Date('2026-08-07T04:00:00Z') // Taipei 12:00
+    expect(planRevenueBackfill(have, want, 4, aug7)).toEqual(['2026-07'])
+  })
+
+  it('公告窗已關後 through 會蓋住 frontier 新月（之後靠 openapi）', () => {
+    const have = new Map([['2059', p(['2026-06'], '2026-06')]])
+    const want = ['2026-07', '2026-06', '2026-05']
+    const aug15 = new Date('2026-08-15T04:00:00Z')
+    // July closed + through=2026-06 → skip July/June; May is older than through → still a gap
+    expect(planRevenueBackfill(have, want, 4, aug15)).toEqual(['2026-05'])
+    // Only frontier months in want → nothing left to ask MOPS
+    expect(planRevenueBackfill(have, ['2026-07', '2026-06'], 4, aug15)).toEqual([])
+  })
+})
+
+describe('isRevenueMonthClosed / closedAttemptedMonths', () => {
+  it('次月 10 日前未關閉，10 日起關閉', () => {
+    expect(isRevenueMonthClosed('2026-07', new Date('2026-08-07T04:00:00Z'))).toBe(false)
+    // Taipei 8/9 23:59 (UTC 8/9 15:59) still open
+    expect(isRevenueMonthClosed('2026-07', new Date('2026-08-09T15:59:00Z'))).toBe(false)
+    // Taipei 8/10 00:00 → closed
+    expect(isRevenueMonthClosed('2026-07', new Date('2026-08-10T00:00:00+08:00'))).toBe(true)
+    expect(isRevenueMonthClosed('2026-06', new Date('2026-08-07T04:00:00Z'))).toBe(true)
+  })
+
+  it('closedAttemptedMonths 只留下已過截止的月份', () => {
+    const aug7 = new Date('2026-08-07T04:00:00Z')
+    expect(closedAttemptedMonths(['2026-07', '2026-06', '2026-05'], aug7)).toEqual([
+      '2026-06',
+      '2026-05',
+    ])
+  })
 })
 
 describe('nextBackfilledThrough', () => {
@@ -169,19 +209,21 @@ describe('nextBackfilledThrough', () => {
 })
 
 describe('publishedMonths', () => {
-  it('10 日之後，最新的已公布月份是上個月', () => {
+  it('最新月份永遠是上個月（含 10 日前的早申報窗）', () => {
     const got = publishedMonths(new Date('2026-07-28T05:00:00Z'), 12)
     expect(got[0]).toBe('2026-06')
     expect(got[11]).toBe('2025-07')
     expect(got).toHaveLength(12)
   })
 
-  it('10 日之前只保證看得到上上個月（月營收次月 10 日前公布）', () => {
+  it('10 日之前也把上個月放進清單（早申報靠 open-window 重試，不靠隱藏月份）', () => {
     expect(publishedMonths(new Date('2026-07-09T05:00:00Z'), 3)).toEqual([
+      '2026-06',
       '2026-05',
       '2026-04',
-      '2026-03',
     ])
+    // Aug 7 → July is the frontier (川湖 case)
+    expect(publishedMonths(new Date('2026-08-07T04:00:00Z'), 1)).toEqual(['2026-07'])
   })
 
   it('跨年往回數不會算錯', () => {
@@ -192,8 +234,8 @@ describe('publishedMonths', () => {
     ])
   })
 
-  it('用台北時間判斷，不是 UTC——UTC 7/9 23:00 在台北已是 7/10', () => {
-    expect(publishedMonths(new Date('2026-07-09T23:00:00Z'), 1)).toEqual(['2026-06'])
-    expect(publishedMonths(new Date('2026-07-09T01:00:00Z'), 1)).toEqual(['2026-05'])
+  it('用台北時間判斷，不是 UTC——UTC 7/31 23:00 在台北已是 8/1，最新月是 7 月', () => {
+    expect(publishedMonths(new Date('2026-07-31T23:00:00Z'), 1)).toEqual(['2026-07'])
+    expect(publishedMonths(new Date('2026-07-31T01:00:00Z'), 1)).toEqual(['2026-06'])
   })
 })

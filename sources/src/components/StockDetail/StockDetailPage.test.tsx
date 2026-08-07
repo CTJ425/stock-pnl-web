@@ -592,11 +592,10 @@ describe('StockDetailPage', () => {
     expect(fetchFundamental).toHaveBeenCalledTimes(2)
   })
 
-  it('基本面已存在但歷史沒補滿時仍補叫 warm（新股票不該只有兩三個月）', async () => {
+  it('基本面明顯過短（月 < 6 或無季）時仍補叫 warm，有進度再重讀', async () => {
     /*
-      0.6.29: warm used to be called only on a complete miss, so once a new stock's file was built on first open
-      it was never called again —— the remaining months and quarters had to wait for the nightly batch, and that
-      part runs after the batch's short-circuit check.
+      Soft threshold 0.6.44-dev.7: warm when thin, not whenever count < 12.
+      Two months + zero quarters still qualifies.
     */
     const month = (yearMonth: string) => ({
       yearMonth,
@@ -624,7 +623,6 @@ describe('StockDetailPage', () => {
       ),
     }
     fetchFundamental.mockResolvedValueOnce(partial).mockResolvedValueOnce(full)
-    // The catch-up did make up for 10 months → Worth re-reading Storage
     warmStock.mockResolvedValue({
       ok: true,
       dailySynced: 0,
@@ -635,11 +633,62 @@ describe('StockDetailPage', () => {
 
     const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
+    // Storage paints first (industry badge) before warm finishes
     await screen.findByText('航運業')
     expect(warmStock).toHaveBeenCalledWith('2609', '陽明')
     await waitFor(() =>
       expect(container.querySelectorAll('#sec-fundamental .data-table tbody tr').length).toBe(12),
     )
+  })
+
+  it('月營收已夠長且已有季獲利時不再 warm（其餘交給夜批）', async () => {
+    const month = (yearMonth: string) => ({
+      yearMonth,
+      revenueThousandTwd: 1,
+      momPercent: null,
+      yoyPercent: null,
+      cumulativeYoyPercent: null,
+    })
+    const quarter = (yearQuarter: string) => ({
+      yearQuarter,
+      revenueMillionTwd: 1,
+      grossMarginPercent: null,
+      operatingMarginPercent: null,
+      pretaxMarginPercent: null,
+      netMarginPercent: null,
+      epsTwd: null,
+    })
+    // Daily present so useDailySeries does not call warm either
+    fetchDailySeries.mockResolvedValue({
+      ticker: '2059',
+      asOf: '2026-08-07T09:00:00.000Z',
+      lastDate: '2026-08-07',
+      rows: [
+        ['2026-08-01', 1, 1, 1, 1, 1],
+        ['2026-08-07', 1, 1, 1, 1, 1],
+      ],
+    })
+    fetchFundamental.mockResolvedValue({
+      ticker: '2059',
+      asOf: '2026-08-07T09:00:00.000Z',
+      dataDate: '2026-08-07',
+      industry: '電子零組件業',
+      valuation: null,
+      revenueUnit: '千元' as const,
+      revenueMonths: Array.from({ length: 12 }, (_, i) =>
+        month(`2025-${String(i + 1).padStart(2, '0')}`),
+      ),
+      // 8/12 — old rule would warm; soft rule must not
+      profitQuarters: Array.from({ length: 8 }, (_, i) => {
+        const y = 2023 + Math.floor(i / 4)
+        return quarter(`${y}-Q${(i % 4) + 1}`)
+      }),
+      notes: [],
+    })
+
+    render(<StockDetailPage ticker="2059" name="川湖" holding={holding} quote={quote} />)
+    await screen.findByText('電子零組件業')
+    expect(warmStock).not.toHaveBeenCalled()
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {

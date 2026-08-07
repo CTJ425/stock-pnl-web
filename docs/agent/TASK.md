@@ -37,6 +37,19 @@
 
 ## 📋 Active Tasks
 
+### Task 78: Watchlist sub-tabs + early monthly revenue (0.6.44-dev.6)
+- **Status**: 🔄 **DEV green; prod + frontend push still open**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-07 17:10:00 Asia/Taipei
+
+1. ~~Frontend: 我的持股 / 其他台股 subtabs, max 5 watchlist, prune vs holdings~~ ✅
+2. ~~Schema: `tw_watchlist` + RLS + max-5 trigger in `schema.sql`~~ ✅
+3. ~~Edge: `publishedMonths` always previous month; open-window through safety~~ ✅
+4. ~~Tests: revenue history, twWatchlist, AnalysisPage~~ ✅
+5. ~~**DEV**: `tw_watchlist` DDL + volume-copy `stock-report` + smoke (2059 July, max-5)~~ ✅
+6. **Prod**: DDL + Edge when user authorizes —— ⏳
+7. **Push `dev`** for frontend subtabs on Pages —— ⏳
+
 ### Task 77: Ship 0.6.44 (full-market analysis search)
 - **Status**: 🔄 **DEV bootstrap + smoke done; prod deploy + push still open**
 - **Agent**: Grok

@@ -8,14 +8,20 @@ vi.mock('./supabase', () => ({
 
 import { warmStock, resetWarmState } from './warmStock'
 
-const ok = (daily: number, fund: number, complete = true) => ({
+const ok = (
+  daily: number,
+  fund: number,
+  complete = true,
+  revenueMonths: string[] = [],
+  profitQuarters: string[] = [],
+) => ({
   data: {
     ok: true,
     dailySynced: daily,
     fundamentalSynced: fund,
     fundamentalComplete: complete,
-    revenueMonths: [],
-    profitQuarters: [],
+    revenueMonths,
+    profitQuarters,
   },
   error: null,
 })
@@ -100,5 +106,28 @@ describe('warmStock', () => {
     await warmStock('9999')
     await warmStock('8888')
     expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('incomplete 且本輪有補到資料 → 解封，下次還可再 warm', async () => {
+    invoke.mockResolvedValue(ok(0, 0, false, ['2026-07', '2026-06'], []))
+    const first = await warmStock('2059')
+    expect(first.fundamentalComplete).toBe(false)
+    expect(first.backfilled).toBe(2)
+
+    invoke.mockResolvedValue(ok(0, 0, true, [], []))
+    await warmStock('2059')
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('incomplete 但本輪無進度 → 保持封印，不再打 Edge', async () => {
+    invoke.mockResolvedValue(ok(0, 0, false, [], []))
+    const first = await warmStock('2330')
+    expect(first.ok).toBe(true)
+    expect(first.backfilled).toBe(0)
+    expect(first.fundamentalComplete).toBe(false)
+
+    const second = await warmStock('2330')
+    expect(second.ok).toBe(false)
+    expect(invoke).toHaveBeenCalledTimes(1)
   })
 })

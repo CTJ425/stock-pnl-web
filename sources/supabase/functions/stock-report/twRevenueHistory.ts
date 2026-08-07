@@ -120,6 +120,36 @@ export interface RevenueProgress {
 }
 
 /**
+ * Whether the statutory filing window for a revenue month has closed.
+ *
+ * Monthly revenue is due by the **10th of the following calendar month** (Taipei).
+ * Before that day the MOPS page is only a partial roster of early filers; after it, "not found"
+ * is a stable answer (ETF / non-covered) and may advance `revenueBackfilledThrough`.
+ *
+ * Example: `2026-07` closes on Taipei 2026-08-10.
+ */
+export function isRevenueMonthClosed(yearMonth: string, now: Date): boolean {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(yearMonth ?? '').trim())
+  if (!m) return true
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  if (mo < 1 || mo > 12) return true
+  let deadlineY = y
+  let deadlineM = mo + 1
+  if (deadlineM > 12) {
+    deadlineM = 1
+    deadlineY += 1
+  }
+  const taipei = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  const ty = taipei.getUTCFullYear()
+  const tm = taipei.getUTCMonth() + 1
+  const td = taipei.getUTCDate()
+  if (ty !== deadlineY) return ty > deadlineY
+  if (tm !== deadlineM) return tm > deadlineM
+  return td >= 10
+}
+
+/**
  * Which months should I catch this round?
  *
  * The pure function is extracted because it is the only place where there is judgment in the entire backfill path (the rest are the glue of fetch / upload).
@@ -132,20 +162,33 @@ export interface RevenueProgress {
  * So only months older than `through` are considered gaps - `through` has been searched for all the above,
  * No means no, no need to ask again.
  *
+ * **Open filing window (0.6.44+):** months that are not yet past the 10th deadline always stay eligible
+ * even when `through` would otherwise skip them. Early filers (e.g. 川湖 on Aug 7 for July) land via
+ * MOPS; late/non-filers keep being retried until the window closes, and only then may `through`
+ * advance (see `closedAttemptedMonths`). Without this, a stock that finished its initial 12-month
+ * backfill would never re-ask MOPS for a brand-new frontier month.
+ *
  * @param wantMonths target month (output of publishedMonths)
  * @param maxMonths single upper limit, see index.ts MAX_BACKFILL_MONTHS
+ * @param now reference instant for open/closed (defaults to "all closed" when omitted — test helper)
  * @returns from new to old; an empty array means there is nothing more to find. The caller should directly short-circuit and not send any external requests.
  */
 export function planRevenueBackfill(
   have: Map<string, RevenueProgress>,
   wantMonths: string[],
   maxMonths: number,
+  now?: Date,
 ): string[] {
   if (have.size === 0 || maxMonths <= 0) return []
   const missing = new Set<string>()
   for (const { months, through } of have.values()) {
     for (const ym of wantMonths) {
       if (months.has(ym)) continue
+      // Still inside the announcement window: re-try until the row appears or the window closes.
+      if (now && !isRevenueMonthClosed(ym, now)) {
+        missing.add(ym)
+        continue
+      }
       // through I have searched for the above (inclusive), but if I can’t find it, it means there is no information for this month.
       if (through && ym >= through) continue
       missing.add(ym)
@@ -165,21 +208,31 @@ export function nextBackfilledThrough(
 }
 
 /**
- * Count count **announced** months from "now" back, newest to oldest.
+ * Months that may advance `revenueBackfilledThrough`.
  *
- * Monthly revenue is required to be announced before the 10th of the following month, so only the previous month’s figures are guaranteed to be visible before the 10th of the current month.
- * If you grab a month that hasn't been announced yet, you'll get a 404 or an empty table - it's not bad, but it will be a waste of an external request every round.
- * So I'd rather be conservative.
+ * Open-window months must not enter `through`: a 200 OK on a partial MOPS page (only early filers)
+ * would otherwise seal "not found" for everyone else until the file is rebuilt.
+ */
+export function closedAttemptedMonths(attempted: string[], now: Date): string[] {
+  return attempted.filter((ym) => isRevenueMonthClosed(ym, now))
+}
+
+/**
+ * Count `count` calendar months ending at the previous month, newest to oldest.
+ *
+ * Always includes last calendar month (offset 1), even before the statutory 10th deadline.
+ * Early filers publish on MOPS days before openapi `t187ap05_L` flips; excluding them made
+ * 川湖-style July revenue invisible until the 10th. Safety against false "no data" seals is
+ * handled by `isRevenueMonthClosed` / `closedAttemptedMonths`, not by hiding the month.
  */
 export function publishedMonths(now: Date, count: number): string[] {
   // Taipei time (UTC+8 fixed offset, no daylight savings in Taiwan), consistent with taipeiYmd's approach
   const taipei = new Date(now.getTime() + 8 * 60 * 60 * 1000)
   const year = taipei.getUTCFullYear()
   const month = taipei.getUTCMonth() + 1 // 1-12
-  const day = taipei.getUTCDate()
 
-  // The latest "announced" month: after the 10th is the previous month, before the 10th is the previous month
-  let offset = day >= 10 ? 1 : 2
+  // Previous calendar month is always the frontier — open-window retries are gated elsewhere.
+  let offset = 1
   const out: string[] = []
   for (let i = 0; i < count; i++, offset++) {
     const total = year * 12 + (month - 1) - offset

@@ -1,9 +1,83 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Merge admin-run into schedule status (admin_run_log) — 0.6.44-dev.3
-- Status: **0.6.44-dev.3; manual runs show on 抓取狀況**
-- Timestamp: 2026-08-07 15:58:00 Asia/Taipei
+- Action: Fundamental load soft-warm (A+B+C) — 0.6.44-dev.7
+- Status: **0.6.44-dev.7 code + tests green**
+- Timestamp: 2026-08-07 17:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-07 17:20:00 Asia/Taipei (fundamental warm soft path)
+
+- **Agent**: Grok
+- **Action**: Stop “every open re-warms incomplete fundamentals”
+
+### Changes
+- `needsFundamentalBackfill`: only no file / 0 months / months < 6 / 0 quarters.
+- Paint Storage first; warm in background; no clear-while-waiting when file exists.
+- `warmStock` unseals only if `!complete && backfilled > 0`.
+
+### New-stock behaviour (product answer)
+- Adding a transaction alone does **not** fetch fundamentals.
+- Opening 個股分析 (or 其他台股) on a missing file **does** on-demand `warm` (up to ~30s budget).
+- Further fills: same session if progress continues unsealing; otherwise nightly `generate-all` for holdings.
+
+Version **0.6.44-dev.7**.
+
+---
+
+## 📅 Log: 2026-08-07 17:10:00 Asia/Taipei (DEV setup + smoke)
+
+- **Agent**: Grok
+- **Action**: Apply 0.6.44-dev.6 pieces on self-hosted DEV after TLS trust
+
+### Applied
+1. **DDL** `tw_watchlist` (+ RLS + max-5 trigger) via
+   `scratchpad/tw_watchlist_0.6.44-dev.6.sql`
+2. **Edge** volume sync `sources/supabase/functions/{stock-report,stock-price}` →
+   `volumes/functions/…` + `docker compose up -d --force-recreate functions`
+3. Confirmed container code has `isRevenueMonthClosed` / `offset = 1`
+
+### Smoke
+| Check | Result |
+|-------|--------|
+| `backfill-revenue` (cron secret) | HTTP **200** `filled:2, months:["2026-07"]` |
+| `fundamental/2059.json` | **has 2026-07** — 6,407,256 / MoM +44.22% / YoY +355.52% (matches MOPS) |
+| `tw_watchlist` max-5 trigger | 6th INSERT rejected with `limit is 5` |
+| Host + db TLS | already fixed earlier (IvanLab Root CA) |
+
+### Not done
+- Prod DDL / Edge deploy (needs explicit go-ahead)
+- Frontend Pages still needs git push of 0.6.44-dev.6 UI for subtabs
+
+---
+
+## 📅 Log: 2026-08-07 16:45:00 Asia/Taipei (watchlist + early revenue)
+
+- **Agent**: Grok
+- **Action**: Two product changes requested after discussion
+
+### 1. 個股分析 → 二次分頁 + 5 檔觀察清單
+- UI: `AnalysisPage` subtabs 我的持股 / 其他台股 (existing `.subtabs` styles).
+- Persistence: table `tw_watchlist` (RLS, max 5 trigger) + `services/twWatchlist.ts`
+  (localStorage fallback for native mode).
+- Rules: max 5; held tickers pruned (buy-in); sell-out does not auto-add.
+- Search lives only on 其他台股; picking an owned code switches to 我的持股.
+
+### 2. Monthly revenue early filers (川湖 / 2059)
+- Root cause: `publishedMonths` used `offset=2` before the 10th, so July never entered
+  `wantMonths` on Aug 7 even though MOPS `t21sc03_115_7` already listed 2059.
+  openapi `t187ap05_L` was still all `11506` (June).
+- Fix: always include previous calendar month; `isRevenueMonthClosed` +
+  `closedAttemptedMonths` so open-window months re-try and never seal `through`.
+- Tests: `twRevenueHistory.test.ts`, `twWatchlist.test.ts`, `AnalysisPage.test.tsx`.
+
+### Deploy checklist (not done here)
+1. Apply `tw_watchlist` DDL on DEV (and prod when authorized).
+2. Volume-copy / deploy `stock-report` Edge for revenue logic.
+3. Optional: warm or wait for nightly batch to fill early July rows.
+
+Version **0.6.44-dev.6**.
 
 ---
 

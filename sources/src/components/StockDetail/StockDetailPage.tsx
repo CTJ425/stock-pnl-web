@@ -62,14 +62,23 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
 ]
 
 /**
- * Is this fundamental lack of history?
+ * Should we on-demand-warm this fundamental file?
  *
- * The threshold uses the back-end cap (monthly revenue for 12 months, profitability for 12 quarters). Below it call warm again——
- * There are really not that many issues (new listings, ETFs) that will not cause infinite retries: the server will replenish the time until there is nothing left to replenish.
- * It will return `fundamentalComplete: true`, and the warmStock layer will seal the codename.
+ * Soft threshold (0.6.44-dev.7): the backend cap is 12 months / 12 quarters, but that is the
+ * *nightly* goal, not a reason to block every page open on Edge. Warm only when the file is
+ * clearly thin (missing, no revenue, fewer than 6 months, or zero profit quarters). Partial
+ * histories (e.g. 12 months + 8 quarters) display immediately; the rest waits for the batch.
+ *
+ * New listings still warm on first open (no file → warm). warmStock only unseals when a round
+ * makes progress, so multi-open can keep filling a brand-new stock without infinite retries.
  */
+const REVENUE_WARM_MIN = 6
+
 function needsFundamentalBackfill(f: FundamentalData): boolean {
-  return f.revenueMonths.length < 12 || f.profitQuarters.length < 12
+  if (f.revenueMonths.length === 0) return true
+  if (f.revenueMonths.length < REVENUE_WARM_MIN) return true
+  if (f.profitQuarters.length === 0) return true
+  return false
 }
 
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
@@ -181,17 +190,14 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   }, [ticker])
 
   /*
-    Fundamentals load independently: parallel to the chip report, neither blocking the other, and a miss is
-    just null (the proxy already swallows errors).
+    Fundamentals load independently of the chip report.
 
-    The result is that once a new stock's file is built on first open it is never called again —— the remaining
-    months and quarters wait for the nightly batch, and that backfill runs after the batch's short-circuit check,
-    so most days it never gets a turn. On screen the difference is: a new stock shows two or three months of
-    revenue while an existing one shows twelve.
-
-    Once the server side is complete it returns empty and sends no outbound request, so this condition does not
-    burn quota on every page open; the warmStock layer likewise only unseals a ticker when the server reports
-    that it is still incomplete.
+    0.6.44-dev.7 load order:
+    1. Storage-first — if a file exists, paint it immediately (stop the section spinner).
+    2. Soft needsFundamentalBackfill → warm in the background; re-read Storage only when the
+       warm actually wrote something. Do not clear the painted snapshot to null while warming.
+    3. No file → keep loading until warm finishes (or fails); new holdings/watchlist picks still
+       get an on-demand fill without waiting for the nightly batch.
   */
   useEffect(() => {
     let alive = true
@@ -199,14 +205,24 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     setFundamental(null)
     ;(async () => {
       let f = await fetchFundamental(ticker)
-      if (!f || needsFundamentalBackfill(f)) {
-        const warmed = await warmStock(ticker, name)
-        if (warmed.fundamentalSynced > 0 || warmed.backfilled > 0) f = (await fetchFundamental(ticker)) ?? f
-      }
-      if (alive) {
+      if (!alive) return
+
+      // Paint Storage snapshot right away so partial files are usable while warm runs.
+      if (f) {
         setFundamental(f)
         setFundLoading(false)
       }
+
+      if (!f || needsFundamentalBackfill(f)) {
+        const warmed = await warmStock(ticker, name)
+        if (!alive) return
+        if (warmed.fundamentalSynced > 0 || warmed.backfilled > 0) {
+          f = (await fetchFundamental(ticker)) ?? f
+          if (alive) setFundamental(f)
+        }
+      }
+
+      if (alive) setFundLoading(false)
     })()
     return () => {
       alive = false

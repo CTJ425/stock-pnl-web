@@ -1,18 +1,16 @@
 /**
- * Individual stock analysis page (navigation pagination): Responsible for "Which stock to look at" and holding figures, the content area is handed over to StockDetailPage.
+ * Individual stock analysis page: two sub-tabs under 個股分析.
  *
- * Only Taiwanese stocks are listed: The data source of after-hours chips (TWSE) only covers listed Taiwanese stocks. Putting US stocks into the menu will only make you realize that there is nothing.
- * The holding figures and the inventory overview share the same buildHoldingRows to avoid counting one copy on each page and running out of time——
- * Starting from 0.6.36, stock holdings will no longer be displayed on the screen, but the drop-down menu must list the Taiwan stocks held, and the click-to-purchase report must also include the holding context.
- * So this layer is still calculated; the PriceQuote required by the quotation card is also directly passed down from the prices here.
+ * - 我的持股: dropdown of current TW holdings + StockDetail with cost/ROI.
+ * - 其他台股: up to 5 non-holdings (cloud `tw_watchlist` + local fallback), search to add,
+ *   same StockDetail with holding=null.
  *
- * 0.6.44 —— **the target no longer has to be a holding**. The dropdown keeps listing what you own
- * (that is the common case and it carries cost/ROI), but a search box beside it reaches the whole
- * listed + OTC market via the same `searchStocks` the transaction form uses. A searched stock has
- * no `holding`, which `StockDetailPage` has always accepted (`holding: null` is what the nightly
- * batch itself passes), and no entry in `useStockPrices` either, so its quote is fetched here.
+ * Rules (0.6.44+):
+ * - Max 5 non-holdings per user.
+ * - Sell-out or buy-in: ticker is pruned from the watchlist (holdings ∩ watchlist = ∅).
+ * - Searching a code you already hold switches to the holdings tab.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Inbox, Search, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
@@ -23,10 +21,20 @@ import { searchStocks, type StockSearchResult } from '../../services/stockSearch
 import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
 import { positionKey } from '../../types/models'
 import type { ReportHolding } from '../../services/reportProxy'
+import {
+  WATCHLIST_MAX,
+  addWatchItem,
+  loadWatchlist,
+  pruneWatchlist,
+  removeWatchItem,
+  saveWatchlist,
+  type WatchItem,
+} from '../../services/twWatchlist'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
 
-/** What the content area is currently looking at, whichever of the two pickers produced it */
+type SubTab = 'holdings' | 'other'
+
 interface Target {
   ticker: string
   name: string
@@ -34,7 +42,6 @@ interface Target {
   holding: ReportHolding | null
 }
 
-/** Debounce for the search box, same 300ms the transaction form settled on */
 const SEARCH_DEBOUNCE_MS = 300
 
 export function AnalysisPage() {
@@ -42,9 +49,8 @@ export function AnalysisPage() {
   const holdings = ledger.holdings
   const { prices } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
+  const [subTab, setSubTab] = useState<SubTab>('holdings')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  /** Set only by the search box; wins over the dropdown until cleared */
-  const [searched, setSearched] = useState<Target | null>(null)
 
   const twRows = useMemo(
     () =>
@@ -54,7 +60,59 @@ export function AnalysisPage() {
     [holdings, prices, feeRate, current?.id],
   )
 
-  // The selected code may no longer be in the holdings due to transaction changes (sold out, changed workspace), and will fall back to the first level at this time.
+  const heldTickers = useMemo(() => new Set(twRows.map((r) => r.holding.ticker)), [twRows])
+  /** Stable key so we re-prune only when the held set actually changes, not on price ticks. */
+  const heldKey = useMemo(
+    () =>
+      [...heldTickers]
+        .sort()
+        .join(','),
+    [heldTickers],
+  )
+
+  // ---- Watchlist (其他台股) ----
+  const [watchlist, setWatchlist] = useState<WatchItem[]>([])
+  const [watchLoaded, setWatchLoaded] = useState(false)
+  const [selectedWatchTicker, setSelectedWatchTicker] = useState<string | null>(null)
+  const [watchError, setWatchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const items = await loadWatchlist()
+      if (!alive) return
+      setWatchlist(items)
+      setWatchLoaded(true)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Buy-in → drop from watchlist (holdings ∩ list = ∅). Sell-out never auto-adds.
+  useEffect(() => {
+    if (!watchLoaded) return
+    setWatchlist((prev) => {
+      const held = new Set(heldKey ? heldKey.split(',') : [])
+      const next = pruneWatchlist(prev, held)
+      if (next.length === prev.length && next.every((n, i) => n.ticker === prev[i]?.ticker)) {
+        return prev
+      }
+      void saveWatchlist(next)
+      setSelectedWatchTicker((cur) =>
+        cur && !next.some((i) => i.ticker === cur) ? (next[0]?.ticker ?? null) : cur,
+      )
+      return next
+    })
+  }, [heldKey, watchLoaded])
+
+  const persistWatch = useCallback(async (next: WatchItem[]) => {
+    setWatchlist(next)
+    const r = await saveWatchlist(next)
+    if (!r.ok) setWatchError(r.error ?? '儲存觀察清單失敗')
+    else setWatchError(null)
+  }, [])
+
   const selectedRow = twRows.find((r) => r.holding.key === selectedKey) ?? twRows[0] ?? null
 
   const holdingTarget: Target | null = selectedRow
@@ -75,45 +133,41 @@ export function AnalysisPage() {
       }
     : null
 
-  const target = searched ?? holdingTarget
+  const watchItem =
+    watchlist.find((i) => i.ticker === selectedWatchTicker) ?? watchlist[0] ?? null
+  const watchTarget: Target | null = watchItem
+    ? { ticker: watchItem.ticker, name: watchItem.name, holding: null }
+    : null
 
-  /*
-    Quote for a searched stock.
+  const target = subTab === 'holdings' ? holdingTarget : watchTarget
 
-    `useStockPrices` polls the holdings and nothing else, so a stock you do not own is simply absent
-    from `prices`. Rather than fake a Holding to feed that hook, fetch this one directly —— the
-    `stock-price` function has no whitelist of any kind, and `fetchPrices` already de-duplicates
-    against the same localStorage TTL cache the hook uses, so opening a stock you looked at a minute
-    ago sends no request at all.
-
-    Deliberately one-shot, not polled: the holdings are what the user watches tick; a stock being
-    researched is looked at, not monitored.
-  */
-  const [searchedQuote, setSearchedQuote] = useState<PriceQuote | null>(null)
-  const searchedTicker = searched?.ticker ?? null
+  // Quote for a watched (non-holding) stock — one-shot, same as pre-0.6.45 search path.
+  const [watchQuote, setWatchQuote] = useState<PriceQuote | null>(null)
+  const watchTicker = subTab === 'other' ? (watchTarget?.ticker ?? null) : null
   useEffect(() => {
-    if (!searchedTicker) {
-      setSearchedQuote(null)
+    if (!watchTicker) {
+      setWatchQuote(null)
       return
     }
     let alive = true
-    setSearchedQuote(null)
+    setWatchQuote(null)
     void (async () => {
-      const map = await fetchPrices([{ market: 'TPE', ticker: searchedTicker }])
-      if (alive) setSearchedQuote(map[positionKey('TPE', searchedTicker)] ?? null)
+      const map = await fetchPrices([{ market: 'TPE', ticker: watchTicker }])
+      if (alive) setWatchQuote(map[positionKey('TPE', watchTicker)] ?? null)
     })()
     return () => {
       alive = false
     }
-  }, [searchedTicker])
+  }, [watchTicker])
 
-  const quote = searched
-    ? searchedQuote
-    : selectedRow
-      ? (prices[selectedRow.holding.key] ?? null)
-      : null
+  const quote =
+    subTab === 'other'
+      ? watchQuote
+      : selectedRow
+        ? (prices[selectedRow.holding.key] ?? null)
+        : null
 
-  // ---- Search box: same three-part pattern as TransactionForm (debounce, stale-response guard, outside-click collapse) ----
+  // ---- Search (其他台股 only) ----
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -133,7 +187,6 @@ export function AnalysisPage() {
       const mySeq = ++searchSeq.current
       const results = await searchStocks(q)
       if (mySeq !== searchSeq.current) return
-      // Taiwan only: the whole page (chips, fundamentals, daily) is fed by TWSE/TPEx sources.
       setSuggestions(results.filter((r) => r.market === 'TPE'))
     }, SEARCH_DEBOUNCE_MS)
   }
@@ -145,17 +198,35 @@ export function AnalysisPage() {
   }, [])
 
   const pickSuggestion = (item: StockSearchResult) => {
-    // A code you actually own goes through the holdings path instead, so the analysis keeps its
-    // cost basis and ROI —— otherwise searching for your own stock would silently lose them.
     const owned = twRows.find((r) => r.holding.ticker === item.symbol)
     if (owned) {
       setSelectedKey(owned.holding.key)
-      setSearched(null)
-    } else {
-      setSearched({ ticker: item.symbol, name: item.name, holding: null })
+      setSubTab('holdings')
+      setQuery('')
+      setSuggestions(null)
+      setWatchError(null)
+      return
     }
+    const result = addWatchItem(watchlist, { ticker: item.symbol, name: item.name }, heldTickers)
     setQuery('')
     setSuggestions(null)
+    if (!result.ok) {
+      if (result.reason === 'full') {
+        setWatchError(`最多只能保留 ${WATCHLIST_MAX} 檔非持股，請先移除一檔再新增`)
+      } else if (result.reason === 'duplicate') {
+        setSelectedWatchTicker(item.symbol)
+        setWatchError(null)
+      } else if (result.reason === 'held') {
+        setWatchError(null)
+      } else {
+        setWatchError('無法加入此代號')
+      }
+      return
+    }
+    setWatchError(null)
+    void persistWatch(result.items)
+    setSelectedWatchTicker(item.symbol)
+    setSubTab('other')
   }
 
   useEffect(() => {
@@ -171,40 +242,42 @@ export function AnalysisPage() {
   const label = (r: (typeof twRows)[number]) =>
     `${r.holding.ticker} ${displayStockName(r.holding.market, r.holding.ticker, r.holding.name)}`
 
-  /*
-    0.6.7 swapped the native `<select>` for the same HeaderMenu the workspace switcher uses.
+  const subtabs = (
+    <div className="subtabs" role="tablist" aria-label="個股分析分類">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'holdings'}
+        className={`subtab${subTab === 'holdings' ? ' active' : ''}`}
+        onClick={() => setSubTab('holdings')}
+      >
+        我的持股
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'other'}
+        className={`subtab${subTab === 'other' ? ' active' : ''}`}
+        onClick={() => setSubTab('other')}
+      >
+        其他台股
+      </button>
+    </div>
+  )
 
-    It was prompted by an actual breakage: the styles for `.ws-select select` (including the inline chevron icon)
-    were deleted wholesale in 0.6.6 as "dead CSS that has matched nothing since dev.3" —— true for the header,
-    but this dropdown was still using them, so it degraded into an unstyled native browser control.
-
-    The fix was not to restore the CSS but to converge on one component: the two places were always meant to
-    look the same, and keeping a copy of the styles each is exactly why they drifted.
-  */
-  const selector = (
-    <div className="ws-select">
-      {twRows.length > 0 && (
+  const holdingsSelector =
+    twRows.length > 0 ? (
+      <div className="ws-select">
         <HeaderMenu
-          triggerLabel={
-            searched
-              ? `目前：${searched.ticker} ${searched.name}（非持股）`
-              : `切換個股：${selectedRow ? label(selectedRow) : ''}`
-          }
+          triggerLabel={`切換個股：${selectedRow ? label(selectedRow) : ''}`}
           triggerClass="hmenu-ws"
           triggerContent={
             <>
-              <span className="hmenu-ws-name">
-                {searched
-                  ? `${searched.ticker} ${searched.name}`
-                  : selectedRow
-                    ? label(selectedRow)
-                    : ''}
-              </span>
+              <span className="hmenu-ws-name">{selectedRow ? label(selectedRow) : ''}</span>
               <ChevronDown size={12} className="hmenu-caret" />
             </>
           }
           menuLabel="個股清單"
-          // This one is on the left side of the screen, and there may be dozens of holdings: expand to the left and can be rolled up to a limited height.
           popClass="hmenu-pop-left hmenu-pop-scroll"
         >
           {(close) => (
@@ -214,20 +287,62 @@ export function AnalysisPage() {
                   key={r.holding.key}
                   type="button"
                   role="menuitemradio"
-                  aria-checked={!searched && r.holding.key === selectedRow?.holding.key}
+                  aria-checked={r.holding.key === selectedRow?.holding.key}
                   className={
-                    !searched && r.holding.key === selectedRow?.holding.key
+                    r.holding.key === selectedRow?.holding.key
                       ? 'hmenu-item is-current'
                       : 'hmenu-item'
                   }
                   onClick={() => {
                     setSelectedKey(r.holding.key)
-                    setSearched(null)
                     close()
                   }}
                 >
                   <Check size={14} className="hmenu-check" aria-hidden="true" />
                   <span>{label(r)}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </HeaderMenu>
+      </div>
+    ) : null
+
+  const otherControls = (
+    <div className="ws-select" style={{ flexWrap: 'wrap', gap: 8 }}>
+      {watchlist.length > 0 && (
+        <HeaderMenu
+          triggerLabel={`觀察中：${watchItem ? `${watchItem.ticker} ${watchItem.name}` : ''}`}
+          triggerClass="hmenu-ws"
+          triggerContent={
+            <>
+              <span className="hmenu-ws-name">
+                {watchItem ? `${watchItem.ticker} ${watchItem.name}` : '選擇觀察股'}
+              </span>
+              <ChevronDown size={12} className="hmenu-caret" />
+            </>
+          }
+          menuLabel="觀察清單"
+          popClass="hmenu-pop-left hmenu-pop-scroll"
+        >
+          {(close) => (
+            <>
+              {watchlist.map((w) => (
+                <button
+                  key={w.ticker}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={w.ticker === watchItem?.ticker}
+                  className={w.ticker === watchItem?.ticker ? 'hmenu-item is-current' : 'hmenu-item'}
+                  onClick={() => {
+                    setSelectedWatchTicker(w.ticker)
+                    close()
+                  }}
+                >
+                  <Check size={14} className="hmenu-check" aria-hidden="true" />
+                  <span>
+                    {w.ticker} {w.name}
+                  </span>
                 </button>
               ))}
             </>
@@ -241,7 +356,7 @@ export function AnalysisPage() {
           type="text"
           value={query}
           onChange={(e) => handleQueryInput(e.target.value)}
-          placeholder="查詢其他台股"
+          placeholder="搜尋並加入觀察（最多 5 檔）"
           aria-label="查詢其他台股"
           autoComplete="off"
         />
@@ -267,6 +382,7 @@ export function AnalysisPage() {
                 >
                   <span>
                     {s.symbol} {s.name}
+                    {heldTickers.has(s.symbol) ? '（已持股）' : ''}
                   </span>
                 </div>
               ))
@@ -275,52 +391,93 @@ export function AnalysisPage() {
         )}
       </div>
 
-      {searched && (
+      {watchItem && (
         <button
           type="button"
           className="btn btn-sm stock-search-clear"
-          onClick={() => setSearched(null)}
-          // Only offered when there is somewhere to go back to; otherwise it would clear the page.
-          disabled={twRows.length === 0}
+          onClick={() => {
+            const next = removeWatchItem(watchlist, watchItem.ticker)
+            void persistWatch(next)
+            setSelectedWatchTicker(next[0]?.ticker ?? null)
+          }}
+          aria-label={`移除 ${watchItem.ticker}`}
         >
           <X size={13} />
-          回到持股
+          移除
         </button>
+      )}
+
+      <span className="hint" style={{ alignSelf: 'center' }}>
+        {watchlist.length}/{WATCHLIST_MAX}
+      </span>
+    </div>
+  )
+
+  const head = (
+    <div className="detail-head" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+      {subtabs}
+      {subTab === 'holdings' ? holdingsSelector : otherControls}
+      {watchError && subTab === 'other' && (
+        <div className="hint" role="status" style={{ color: 'var(--danger, #c44)' }}>
+          {watchError}
+        </div>
       )}
     </div>
   )
 
-  /*
-    No target at all = no TW holdings and nothing searched yet. Before 0.6.44 this branch returned
-    early with just the empty state, which now would hide the search box along with it —— the one
-    control that gets the user out of this state.
-  */
-  if (!target) {
+  if (subTab === 'holdings' && !holdingTarget) {
     return (
       <div className="section">
-        <div className="detail-head">{selector}</div>
+        {head}
         <div className="glass empty-state">
           <div className="empty-icon">
             <Inbox size={36} />
           </div>
-          <div>目前沒有台股持股，用上面的查詢框挑一檔台股來看。</div>
+          <div>目前沒有台股持股。</div>
           <div className="hint" style={{ marginTop: 6 }}>
-            盤後籌碼資料只涵蓋上市櫃台股。到「交易紀錄」新增一筆台股買入後，這裡也會列出你的持股。
+            到「交易紀錄」新增台股買入後，這裡會列出你的持股；或切到「其他台股」觀察非持股。
+          </div>
+          <button type="button" className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => setSubTab('other')}>
+            前往其他台股
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (subTab === 'other' && !watchTarget) {
+    return (
+      <div className="section">
+        {head}
+        <div className="glass empty-state">
+          <div className="empty-icon">
+            <Inbox size={36} />
+          </div>
+          <div>尚未加入觀察的台股。</div>
+          <div className="hint" style={{ marginTop: 6 }}>
+            用上方搜尋加入，最多 {WATCHLIST_MAX} 檔。賣光的持股不會自動進來；若之後買進，也會從這裡移除。
           </div>
         </div>
       </div>
     )
   }
 
+  if (!target) {
+    return (
+      <div className="section">
+        {head}
+      </div>
+    )
+  }
+
   return (
     <StockDetailPage
-      // When exchanging shares, the entire state (tab, report, PDF state) is reset to avoid seeing the remnants of the previous file.
-      key={target.ticker}
+      key={`${subTab}-${target.ticker}`}
       ticker={target.ticker}
       name={target.name}
       holding={target.holding}
       quote={quote}
-      selector={selector}
+      selector={head}
     />
   )
 }
