@@ -1,9 +1,30 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.46-dev.4 progressive warm (core → history)
-- Status: **Code + unit tests green; DEV Edge not volume-copied yet; prod untouched**
-- Timestamp: 2026-08-10 18:40:00 Asia/Taipei
+- Action: 0.6.46-dev.4 commit + DEV Edge volume-copy
+- Status: **f89de86 on local dev; DEV functions healthy; not pushed; prod untouched**
+- Timestamp: 2026-08-10 18:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 18:55:00 Asia/Taipei (0.6.46-dev.4 deploy)
+
+- **Agent**: Grok
+- **Action**: Commit progressive warm + deploy stock-report to self-hosted DEV
+
+### Git
+- `f89de86` feat: progressive warm core then history (0.6.46-dev.4)
+- Branch `dev` ahead of origin by 2 (`f03ade5`, `f89de86`); **no push** until local UI OK
+
+### DEV Edge
+- rsync `sources/supabase/functions/stock-report/` → `volumes/functions/stock-report/`
+- `docker compose up -d --force-recreate functions` → `stock-pnl-web-dev-functions-1` healthy
+- `index.ts` SHA match repo
+- Smoke: `POST warm phase=core` without JWT → **401**; invalid ticker → **400**
+
+### Still open
+- Manual cold-ticker timing on local vite against DEV
+- push origin/dev after user confirms
 
 ---
 
@@ -21,9 +42,7 @@
 3. `StockDetailPage`: paint after core, then history re-read. `useDailySeries`: core only.
 
 ### Verify
-- Targeted tests green (warmStock + StockDetailPage + prefetch).
-- Full suite pending at end of turn.
-- DEV Edge deploy + cold-ticker timing still open.
+- Full suite **933/933**.
 
 ---
 
