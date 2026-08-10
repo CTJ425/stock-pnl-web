@@ -99,7 +99,10 @@ import { mergeTwTickerLists } from './batchTickers.ts'
 import {
   TOP_TICKERS_DEFAULT_N,
   TOP_TICKERS_STORAGE_PATH,
-  buildTopTickersFile,
+  buildTopTickersDay,
+  latestTopTickers,
+  mergeTopTickersArchive,
+  normalizeTopTickersFile,
   rankTopByTradeValue,
   type StockDayAllRow,
   type TopTickersFile,
@@ -1018,51 +1021,51 @@ async function syncTopTickers(opts?: { force?: boolean }): Promise<{
   n: number
   sourceDate: string | null
   reused: boolean
+  days: number
   error?: string
 }> {
   const force = opts?.force === true
-  const existing = await downloadJson<TopTickersFile>(TOP_TICKERS_STORAGE_PATH)
+  const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
+  const existing = normalizeTopTickersFile(raw)
   const todayYmd = taipeiYmd(new Date())
-  if (!force && existing?.tickers?.length && typeof existing.asOf === 'string') {
-    try {
-      const asOfYmd = taipeiYmd(new Date(existing.asOf))
-      if (asOfYmd === todayYmd) {
-        return {
-          ok: true,
-          n: existing.tickers.length,
-          sourceDate: existing.sourceDate ?? null,
-          reused: true,
-        }
-      }
-    } catch {
-      // fall through to refresh
+  const latest = existing?.days?.[0]
+  if (!force && latest?.ymd === todayYmd && latest.tickers.length > 0) {
+    return {
+      ok: true,
+      n: latest.tickers.length,
+      sourceDate: latest.sourceDate,
+      reused: true,
+      days: existing?.days.length ?? 1,
     }
   }
 
   const rows = await fetchJson<StockDayAllRow[]>(STOCK_DAY_ALL_URL)
   if (!Array.isArray(rows) || rows.length === 0) {
-    if (existing?.tickers?.length) {
+    if (latest?.tickers.length) {
       return {
         ok: true,
-        n: existing.tickers.length,
-        sourceDate: existing.sourceDate ?? null,
+        n: latest.tickers.length,
+        sourceDate: latest.sourceDate,
         reused: true,
+        days: existing?.days.length ?? 1,
         error: 'fetch_failed_kept_previous',
       }
     }
-    return { ok: false, n: 0, sourceDate: null, reused: false, error: 'fetch_failed' }
+    return { ok: false, n: 0, sourceDate: null, reused: false, days: 0, error: 'fetch_failed' }
   }
 
   const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
   const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
-  const file = buildTopTickersFile({ sourceDate, tickers: ranked })
+  const day = buildTopTickersDay({ ymd: todayYmd, sourceDate, tickers: ranked })
+  const file = mergeTopTickersArchive(existing, day)
   const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
-  if (!uploaded && existing?.tickers?.length) {
+  if (!uploaded && latest?.tickers.length) {
     return {
       ok: true,
-      n: existing.tickers.length,
-      sourceDate: existing.sourceDate ?? null,
+      n: latest.tickers.length,
+      sourceDate: latest.sourceDate,
       reused: true,
+      days: existing?.days.length ?? 1,
       error: 'upload_failed_kept_previous',
     }
   }
@@ -1071,14 +1074,14 @@ async function syncTopTickers(opts?: { force?: boolean }): Promise<{
     n: ranked.length,
     sourceDate,
     reused: false,
+    days: file.days.length,
     error: uploaded ? undefined : 'upload_failed',
   }
 }
 
 async function topTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const f = await downloadJson<TopTickersFile>(TOP_TICKERS_STORAGE_PATH)
-  if (!f?.tickers?.length) return []
-  return f.tickers.map((t) => ({ ticker: t.ticker, name: t.name }))
+  const f = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
+  return latestTopTickers(f).map((t) => ({ ticker: t.ticker, name: t.name }))
 }
 
 /**
@@ -1103,6 +1106,7 @@ async function handleSyncTopTickers(): Promise<Response> {
     n: result.n,
     sourceDate: result.sourceDate,
     reused: result.reused,
+    days: result.days,
     error: result.error ?? null,
     path: TOP_TICKERS_STORAGE_PATH,
     durationMs: Date.now() - startedAt,

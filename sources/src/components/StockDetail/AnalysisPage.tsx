@@ -1,9 +1,10 @@
 /**
- * Individual stock analysis page: two sub-tabs under 個股分析.
+ * Individual stock analysis page: sub-tabs under 個股分析.
  *
  * - 我的持股: dropdown of current TW holdings + StockDetail with cost/ROI.
  * - 其他台股: up to 5 non-holdings (cloud `tw_watchlist` + local fallback), search to add,
  *   same StockDetail with holding=null.
+ * - 成交值 Top30: ranked list from Storage (today + previous snapshot); open detail with holding=null.
  *
  * Rules (0.6.44+):
  * - Max 5 non-holdings per user.
@@ -33,8 +34,9 @@ import {
 import { prefetchStockData } from '../../services/prefetchStockData'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
+import { Top30Panel } from './Top30Panel'
 
-type SubTab = 'holdings' | 'other'
+type SubTab = 'holdings' | 'other' | 'top30'
 
 interface Target {
   ticker: string
@@ -76,6 +78,9 @@ export function AnalysisPage() {
   const [watchLoaded, setWatchLoaded] = useState(false)
   const [selectedWatchTicker, setSelectedWatchTicker] = useState<string | null>(null)
   const [watchError, setWatchError] = useState<string | null>(null)
+
+  // ---- Top30 ----
+  const [top30Pick, setTop30Pick] = useState<{ ticker: string; name: string } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -140,30 +145,40 @@ export function AnalysisPage() {
     ? { ticker: watchItem.ticker, name: watchItem.name, holding: null }
     : null
 
-  const target = subTab === 'holdings' ? holdingTarget : watchTarget
+  const top30Target: Target | null = top30Pick
+    ? { ticker: top30Pick.ticker, name: top30Pick.name, holding: null }
+    : null
 
-  // Quote for a watched (non-holding) stock — one-shot, same as pre-0.6.45 search path.
-  const [watchQuote, setWatchQuote] = useState<PriceQuote | null>(null)
-  const watchTicker = subTab === 'other' ? (watchTarget?.ticker ?? null) : null
+  const target =
+    subTab === 'holdings' ? holdingTarget : subTab === 'other' ? watchTarget : top30Target
+
+  // Quote for watched / top30 (non-holding) — one-shot.
+  const [extraQuote, setExtraQuote] = useState<PriceQuote | null>(null)
+  const extraTicker =
+    subTab === 'other'
+      ? (watchTarget?.ticker ?? null)
+      : subTab === 'top30'
+        ? (top30Target?.ticker ?? null)
+        : null
   useEffect(() => {
-    if (!watchTicker) {
-      setWatchQuote(null)
+    if (!extraTicker) {
+      setExtraQuote(null)
       return
     }
     let alive = true
-    setWatchQuote(null)
+    setExtraQuote(null)
     void (async () => {
-      const map = await fetchPrices([{ market: 'TPE', ticker: watchTicker }])
-      if (alive) setWatchQuote(map[positionKey('TPE', watchTicker)] ?? null)
+      const map = await fetchPrices([{ market: 'TPE', ticker: extraTicker }])
+      if (alive) setExtraQuote(map[positionKey('TPE', extraTicker)] ?? null)
     })()
     return () => {
       alive = false
     }
-  }, [watchTicker])
+  }, [extraTicker])
 
   const quote =
-    subTab === 'other'
-      ? watchQuote
+    subTab === 'other' || subTab === 'top30'
+      ? extraQuote
       : selectedRow
         ? (prices[selectedRow.holding.key] ?? null)
         : null
@@ -264,6 +279,15 @@ export function AnalysisPage() {
         onClick={() => setSubTab('other')}
       >
         其他台股
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'top30'}
+        className={`subtab${subTab === 'top30' ? ' active' : ''}`}
+        onClick={() => setSubTab('top30')}
+      >
+        成交值 Top30
       </button>
     </div>
   )
@@ -428,8 +452,14 @@ export function AnalysisPage() {
   const head = (
     <>
       {subtabs}
-      {subTab === 'holdings' ? holdingsMenu : watchMenu}
+      {subTab === 'holdings' && holdingsMenu}
+      {subTab === 'other' && watchMenu}
       {subTab === 'other' && watchSecondary}
+      {subTab === 'top30' && top30Pick && (
+        <div className="hint" style={{ alignSelf: 'center' }}>
+          已選 {top30Pick.ticker} {top30Pick.name} · 可從下方排行再點其他檔
+        </div>
+      )}
       {watchError && subTab === 'other' && (
         <div className="hint analysis-watch-error" role="status">
           {watchError}
@@ -442,7 +472,8 @@ export function AnalysisPage() {
   const emptyHead = (
     <div className="detail-head detail-head-empty">
       {subtabs}
-      {subTab === 'holdings' ? holdingsMenu : (
+      {subTab === 'holdings' && holdingsMenu}
+      {subTab === 'other' && (
         <>
           {watchMenu}
           {watchSecondary}
@@ -489,6 +520,30 @@ export function AnalysisPage() {
             用上方搜尋加入，最多 {WATCHLIST_MAX} 檔。賣光的持股不會自動進來；若之後買進，也會從這裡移除。
           </div>
         </div>
+      </div>
+    )
+  }
+
+  if (subTab === 'top30') {
+    return (
+      <div className="section">
+        {emptyHead}
+        <Top30Panel
+          selectedTicker={top30Pick?.ticker ?? null}
+          onSelect={(ticker, name) => setTop30Pick({ ticker, name })}
+        />
+        {top30Target && (
+          <div style={{ marginTop: 12 }}>
+            <StockDetailPage
+              key={`top30-${top30Target.ticker}`}
+              ticker={top30Target.ticker}
+              name={top30Target.name}
+              holding={null}
+              quote={quote}
+              selector={null}
+            />
+          </div>
+        )}
       </div>
     )
   }

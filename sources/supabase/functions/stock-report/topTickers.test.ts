@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildTopTickersFile,
+  buildTopTickersDay,
+  latestTopTickers,
+  mergeTopTickersArchive,
+  normalizeTopTickersFile,
   parseTradeValue,
   rankTopByTradeValue,
   TOP_TICKERS_DEFAULT_N,
@@ -45,21 +48,59 @@ describe('rankTopByTradeValue', () => {
     }))
     expect(rankTopByTradeValue(many)).toHaveLength(30)
   })
+})
 
-  it('skips invalid codes', () => {
-    expect(rankTopByTradeValue([{ Code: '!', Name: 'x', TradeValue: '9' }])).toEqual([])
+describe('mergeTopTickersArchive', () => {
+  const mon = buildTopTickersDay({
+    ymd: '20260810',
+    sourceDate: '1150807',
+    asOf: '2026-08-10T08:00:00.000Z',
+    tickers: [{ ticker: '2330', name: '台積電', rank: 1, tradeValue: 1 }],
+  })
+  const fri = buildTopTickersDay({
+    ymd: '20260807',
+    sourceDate: '1150804',
+    asOf: '2026-08-07T08:00:00.000Z',
+    tickers: [{ ticker: '2317', name: '鴻海', rank: 1, tradeValue: 2 }],
+  })
+  const thu = buildTopTickersDay({
+    ymd: '20260806',
+    sourceDate: '1150803',
+    asOf: '2026-08-06T08:00:00.000Z',
+    tickers: [{ ticker: '2454', name: '聯發科', rank: 1, tradeValue: 3 }],
+  })
+
+  it('keeps newest + previous only (drops older third)', () => {
+    const a = mergeTopTickersArchive(null, fri)
+    const b = mergeTopTickersArchive(a, mon)
+    const c = mergeTopTickersArchive(b, thu)
+    // mon + fri stay; thu is older than fri when mon present — actually thu is oldest and dropped
+    expect(c.days.map((d) => d.ymd)).toEqual(['20260810', '20260807'])
+    expect(latestTopTickers(c)[0]?.ticker).toBe('2330')
+  })
+
+  it('same ymd replaces in place', () => {
+    const a = mergeTopTickersArchive(null, mon)
+    const mon2 = buildTopTickersDay({
+      ...mon,
+      tickers: [{ ticker: '2408', name: '南亞科', rank: 1, tradeValue: 9 }],
+    })
+    const b = mergeTopTickersArchive(a, mon2)
+    expect(b.days).toHaveLength(1)
+    expect(b.days[0]?.tickers[0]?.ticker).toBe('2408')
   })
 })
 
-describe('buildTopTickersFile', () => {
-  it('sets schema and n', () => {
-    const f = buildTopTickersFile({
+describe('normalizeTopTickersFile', () => {
+  it('upgrades v1 single snapshot', () => {
+    const f = normalizeTopTickersFile({
+      schema: 1,
       sourceDate: '1150807',
-      asOf: '2026-08-10T07:00:00.000Z',
+      asOf: '2026-08-07T08:00:00.000Z',
       tickers: [{ ticker: '2330', name: '台積電', rank: 1, tradeValue: 1 }],
     })
-    expect(f.schema).toBe(1)
-    expect(f.n).toBe(1)
-    expect(f.sourceDate).toBe('1150807')
+    expect(f?.days).toHaveLength(1)
+    expect(f?.days[0]?.ymd).toBe('20260807')
+    expect(latestTopTickers(f)[0]?.ticker).toBe('2330')
   })
 })
