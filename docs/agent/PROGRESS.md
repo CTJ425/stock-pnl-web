@@ -1,9 +1,18 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.7.1-dev.2 institutional table format (buy/sell columns, no expand)
+- Action: 0.7.1-dev.3 institutional spark + expand default newest
 - Status: **on dev only**
-- Timestamp: 2026-08-10 17:31:10 Asia/Taipei
+- Timestamp: 2026-08-10 17:36:21 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:36:21 Asia/Taipei (0.7.1-dev.3)
+
+- Larger spark (100×36); label above: 連 N 日買超／賣超
+- Expand/collapse restored; default open = newest day only
+- 全部展開 / 全部收起; collapsed shows 合計 only
+- Macro tests 33 passed (TwMarket + MacroPage)
 
 ---
 

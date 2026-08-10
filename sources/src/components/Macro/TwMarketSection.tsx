@@ -8,8 +8,8 @@
  * Unit trap: The source is **yuan**, and the screen is converted into **billion yuan** (the market's single-day turnover is 885.5 billion,
  * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
-import { useCallback, useEffect, useState } from 'react'
-import { ChevronsDownUp, ChevronsUpDown, RefreshCw } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { ChevronsDownUp, ChevronsUpDown, Minus, Plus, RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
   type MarketData,
@@ -19,8 +19,12 @@ import {
 import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
-import { SPARK_W, SparkCell } from '../Charts/SparkCell'
+import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
+
+/** Larger spark for the institutional date column (0.7.1-dev.3). */
+const DAY_SPARK_W = 100
+const DAY_SPARK_H = 36
 
 /** The trading amount and the market K-line show several trading days. After about one season, you can see the trend without crushing the X-axis.*/
 const SHOWN_DAYS = 60
@@ -115,8 +119,8 @@ function trendAt(values: number[], endIdx: number): { points: number[]; streak: 
 }
 
 /**
- * Day-level streak + spark for the 合計 series (shown once per date in the 單位 table).
- * Polar colors: red buy-side, green sell-side, by last day's net.
+ * Day-level streak + spark for the 合計 series (date column).
+ * Label above the wave: 「連 N 日買超／賣超」; spark enlarged for the institutional table.
  */
 function DayTrend({ points, streak }: { points: number[]; streak: number }) {
   const last = points[points.length - 1]
@@ -124,24 +128,43 @@ function DayTrend({ points, streak }: { points: number[]; streak: number }) {
     return <span className="hint">—</span>
   }
   const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+  // streak < 2 is not a trend — show "—" rather than "連 1 日"
   const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : null
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 4,
+        marginTop: 6,
+      }}
+    >
+      <span
+        className={label ? chipClass(last) : 'hint'}
+        style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: label ? 600 : undefined }}
+      >
+        {label ?? '—'}
+      </span>
       <SparkCell
         points={points}
         color={color}
+        width={DAY_SPARK_W}
+        height={DAY_SPARK_H}
         ariaLabel={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
       />
-      <span className={label ? chipClass(last) : 'hint'} style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>
-        {label ?? '—'}
-      </span>
-    </span>
+    </div>
   )
 }
 
 export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
+  /**
+   * Which trading days show unit × buy/sell rows (0.7.1-dev.3).
+   * Default: only the newest day open.
+   */
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   /*
     A hover index shared by all three charts (0.6.34). It lives here rather than in each chart so that hovering
     a day highlights that same day on the candles, the index line and the turnover bars —— the user is asking
@@ -153,7 +176,16 @@ export function TwMarketSection() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setMarket(await fetchMarketDaily())
+    const data = await fetchMarketDaily()
+    setMarket(data)
+    // Newest of the institutional window (last slice item) opens by default.
+    if (data) {
+      const window = data.days.slice(-INSTITUTIONAL_DAYS)
+      const newest = window[window.length - 1]?.date
+      setExpanded(newest ? new Set([newest]) : new Set())
+    } else {
+      setExpanded(new Set())
+    }
     setLoading(false)
   }, [])
 
@@ -230,6 +262,21 @@ export function TwMarketSection() {
   const trendDays = days.filter((d) => d.institutional?.totalTwd != null)
   const trendValues = trendDays.map((d) => d.institutional!.totalTwd!)
   const trendIdx = new Map(trendDays.map((d, i) => [d.date, i]))
+
+  const toggle = (date: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+
+  /** Every day in the 7-day window can expand (show unit breakdown). */
+  const expandableDates = instDays.map((d) => d.date)
+  const allOpen =
+    expandableDates.length > 0 && expandableDates.every((d) => expanded.has(d))
+  const toggleAll = () =>
+    setExpanded(allOpen ? new Set() : new Set(expandableDates))
 
   // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
   // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
@@ -392,13 +439,19 @@ export function TwMarketSection() {
       </div>
 
       {/*
-        0.7.1-dev.2: flat table 日期×單位 with 買進／賣出／買賣超 columns (no expand).
-        Rows are newest day first; spark/streak sit under the date (合計 series only).
+        0.7.1-dev.3: 日期×單位×買進／賣出／買賣超 with per-day expand.
+        Default: newest day open. Label above larger spark: 連 N 日買超／賣超.
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
         <div className="chart-title">
           三大法人買賣超（億元）・近 {instDays.length} 個交易日
         </div>
+        {expandableDates.length > 0 && (
+          <button className="btn btn-sm" onClick={toggleAll}>
+            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {allOpen ? '全部收起' : '全部展開'}
+          </button>
+        )}
       </div>
       <div className="table-scroll" style={{ marginTop: 12 }}>
         <table className="data-table" aria-label="三大法人買賣超">
@@ -412,35 +465,56 @@ export function TwMarketSection() {
             </tr>
           </thead>
           <tbody>
-            {[...instDays].reverse().flatMap((d) => {
+            {[...instDays].reverse().map((d) => {
               const inst = d.institutional
               const buy = inst?.buy
               const sell = inst?.sell
               const hasLegs = Boolean(buy)
+              const isOpen = expanded.has(d.date)
               const idx = trendIdx.get(d.date)
               const { points, streak } =
                 idx === undefined ? { points: [] as number[], streak: 0 } : trendAt(trendValues, idx)
-              return UNITS.map((u, ui) => {
-                const net = toBillion(inst?.[u.key] ?? null)
-                const b = hasLegs ? toBillion(buy?.[u.key] ?? null) : null
-                const s = hasLegs ? toBillion(sell?.[u.key] ?? null) : null
-                return (
-                  <tr key={`${d.date}-${u.key}`}>
-                    {ui === 0 ? (
-                      <td rowSpan={UNITS.length} style={{ verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                        <div>{d.date}</div>
-                        <div style={{ marginTop: 6 }}>
-                          <DayTrend points={points} streak={streak} />
-                        </div>
-                      </td>
-                    ) : null}
-                    <td>{u.label}</td>
-                    <td className="num">{hasLegs ? fmtBillion(b) : '—'}</td>
-                    <td className="num">{hasLegs ? fmtBillion(s) : '—'}</td>
-                    <td className={`num ${chipClass(net)}`}>{fmtBillionSigned(net)}</td>
-                  </tr>
-                )
-              })
+
+              // Collapsed: one summary row (合計 only). Expanded: all six units.
+              const unitRows = isOpen ? UNITS : UNITS.filter((u) => u.key === 'totalTwd')
+
+              return (
+                <Fragment key={d.date}>
+                  {unitRows.map((u, ui) => {
+                    const net = toBillion(inst?.[u.key] ?? null)
+                    const b = hasLegs ? toBillion(buy?.[u.key] ?? null) : null
+                    const s = hasLegs ? toBillion(sell?.[u.key] ?? null) : null
+                    return (
+                      <tr key={`${d.date}-${u.key}`}>
+                        {ui === 0 ? (
+                          <td
+                            rowSpan={unitRows.length}
+                            style={{ verticalAlign: 'top', whiteSpace: 'nowrap' }}
+                          >
+                            <div className="cell-tree">
+                              <button
+                                type="button"
+                                className="year-toggle"
+                                onClick={() => toggle(d.date)}
+                                aria-expanded={isOpen}
+                                aria-label={`${isOpen ? '收合' : '展開'} ${d.date} 的單位明細`}
+                              >
+                                {isOpen ? <Minus size={13} /> : <Plus size={13} />}
+                              </button>
+                              {d.date}
+                            </div>
+                            <DayTrend points={points} streak={streak} />
+                          </td>
+                        ) : null}
+                        <td>{u.label}</td>
+                        <td className="num">{hasLegs ? fmtBillion(b) : '—'}</td>
+                        <td className="num">{hasLegs ? fmtBillion(s) : '—'}</td>
+                        <td className={`num ${chipClass(net)}`}>{fmtBillionSigned(net)}</td>
+                      </tr>
+                    )
+                  })}
+                </Fragment>
+              )
             })}
           </tbody>
         </table>
@@ -448,6 +522,7 @@ export function TwMarketSection() {
 
       <p className="hint" style={{ marginTop: 8 }}>
         買賣超＝買進金額−賣出金額，紅色為買超；「—」是那天還沒補到（或舊檔僅有差額），不是沒有進出。
+        預設展開最新交易日；可點＋／− 或「全部展開」。
       </p>
     </div>
   )

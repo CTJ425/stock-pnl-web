@@ -25,9 +25,20 @@ interface SparkCellProps {
   points: ReadonlyArray<number | null>
   color: string
   ariaLabel: string
+  /** Display width (px). Defaults to SPARK_W; larger for the institutional day column. */
+  width?: number
+  /** Display height (px). Defaults to SPARK_H. */
+  height?: number
 }
 
-export function SparkCell({ points, color, ariaLabel }: SparkCellProps) {
+export function SparkCell({
+  points,
+  color,
+  ariaLabel,
+  width = SPARK_W,
+  height = SPARK_H,
+}: SparkCellProps) {
+  // Geometry always uses the fixed viewBox so path math stays stable; CSS size scales the SVG.
   const g = sparkline(points, SPARK_W, SPARK_H)
   if (!g) return <>—</>
   return (
@@ -37,7 +48,7 @@ export function SparkCell({ points, color, ariaLabel }: SparkCellProps) {
       preserveAspectRatio="none"
       role="img"
       aria-label={ariaLabel}
-      style={{ width: SPARK_W, height: SPARK_H, display: 'block', marginLeft: 'auto' }}
+      style={{ width, height, display: 'block' }}
     >
       <path d={g.area} fill={color} opacity="0.16" />
       <polyline
