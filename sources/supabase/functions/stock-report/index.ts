@@ -1190,24 +1190,34 @@ async function downloadJson<T>(path: string): Promise<T | null> {
  * 2. **The front-end is downloaded directly, without consuming the Edge Function quota** (lesson from 0.3.9: burning out the quota will also cause the stock-price to stop).
  * The trade-off is to recapture the entire year each night rather than in increments, but 5 holdings = 5 requests, which is negligible.
  *
- * Skip conditions: The existing file's lastDate has reached the current data date and will not be re-caught. Three-stage cron runs three times a day,
- * After the 17:30 class is caught, the 22:30 / 23:30 classes will be skipped directly.
+ * Skip conditions (must not drop data):
+ * - Existing file `lastDate >= targetDate` → **no Yahoo call**, keep Storage file as-is.
+ * - onDemand only: empty shell already checked today → no Yahoo retry (night batch still retries).
+ * Re-fetch only when the file is missing, stale, or schema-mismatched — never wipe a good file
+ * because a later fetch failed (failure is per-ticker catch; existing object stays).
  */
 async function syncDaily(
   tickers: Array<{ ticker: string; name: string }>,
   dataYmd: string,
   opts?: { onDemand?: boolean },
-): Promise<number> {
+): Promise<{ synced: number; skipped: number }> {
   const targetDate = dashDate(dataYmd)
   let synced = 0
+  let skipped = 0
   for (const { ticker } of tickers) {
     try {
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
       if (existing && existing.schema === DAILY_SCHEMA) {
-        if (existing.lastDate >= targetDate) continue
+        if (existing.lastDate >= targetDate) {
+          skipped++
+          continue
+        }
         // Exclusively for immediate production: If you have checked today and confirmed that there is no information, please do not call again.
         // The night batch deliberately ignores this condition - the third shift should give the code names that have just been launched and Yahoo has not yet provided information a chance to try again.
-        if (opts?.onDemand && (existing.emptyCheckedDate ?? '') >= targetDate) continue
+        if (opts?.onDemand && (existing.emptyCheckedDate ?? '') >= targetDate) {
+          skipped++
+          continue
+        }
       }
 
       let rows: ReturnType<typeof extractDaily> = []
@@ -1219,6 +1229,8 @@ async function syncDaily(
 
       // Even if there is no data to be found, a file must be written (empty shell + query date): it can be used to produce instant results without re-fetching every time the page is opened.
       // See the emptyCheckedDate annotation of twDaily.ts for the reason and why the batch will still be retried.
+      // If Yahoo fails after we already had rows, we still write what we got this attempt — we never
+      // upload an empty shell over a good existing file (empty only when rows.length === 0 from fetch).
       const file: DailyFile =
         rows.length === 0
           ? {
@@ -1236,12 +1248,22 @@ async function syncDaily(
               lastDate: rows[rows.length - 1][0],
               rows,
             }
+      // Protect against clobbering a good file with an empty shell (fetch failed / Yahoo empty).
+      if (
+        rows.length === 0 &&
+        existing &&
+        existing.schema === DAILY_SCHEMA &&
+        (existing.rows?.length ?? 0) > 0
+      ) {
+        skipped++
+        continue
+      }
       if (await uploadJson(`daily/${ticker}.json`, file)) synced++
     } catch {
       // The failure of a single file does not affect other files, nor does it affect the chip report (consistent with the fault tolerance of borrow / margin)
     }
   }
-  return synced
+  return { synced, skipped }
 }
 
 // ----Fundamentals (Valuation + Monthly Revenue + Industry)----
@@ -1258,7 +1280,7 @@ async function syncDaily(
 async function syncFundamental(
   tickers: Array<{ ticker: string; name: string }>,
   dataYmd: string,
-): Promise<{ synced: number; bwibbuDate: string | null }> {
+): Promise<{ synced: number; skipped: number; bwibbuDate: string | null }> {
   const targetDate = dashDate(dataYmd)
   const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
@@ -1271,13 +1293,18 @@ async function syncFundamental(
   const bwibbuDate = bwibbu?.[0]?.Date ?? null
   // If all failed, skip the entire section. As long as one is caught, the file will be written as usual——
   // buildFundamentalFile will retain the existing fields and will not overwrite the uncaptured parts into empty shells.
-  if (!bwibbu && !revenue && !company && !profit) return { synced: 0, bwibbuDate }
+  if (!bwibbu && !revenue && !company && !profit) {
+    return { synced: 0, skipped: 0, bwibbuDate }
+  }
 
   let synced = 0
+  let skipped = 0
   for (const { ticker, name } of tickers) {
     try {
       const existing = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+      // Already written for this trading day — keep file, no rewrite (avoids thrash; does not drop data).
       if (existing && existing.schema === FUNDAMENTAL_SCHEMA && existing.dataDate >= targetDate) {
+        skipped++
         continue
       }
 
@@ -1304,7 +1331,7 @@ async function syncFundamental(
       // Failure of a single file will not affect other files, nor will it affect the chip report that has been written.
     }
   }
-  return { synced, bwibbuDate }
+  return { synced, skipped, bwibbuDate }
 }
 
 // ----Monthly revenue historical replenishment (MOPS t21sc03)----
@@ -2111,7 +2138,8 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
   if (!dataYmd) return json({ error: '無法判斷交易日' }, 503)
 
   const one = [{ ticker, name }]
-  const dailySynced = await syncDaily(one, dataYmd, { onDemand: true })
+  const dailyResult = await syncDaily(one, dataYmd, { onDemand: true })
+  const dailySynced = dailyResult.synced
 
   /*
     Does this code exist at all? (0.6.44)
@@ -2559,16 +2587,21 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
 
   let seriesDataYmd: string | null = null
   let dailySynced = 0
+  let dailySkipped = 0
   let fundamentalSynced = 0
+  let fundamentalSkipped = 0
   let bwibbuDate: string | null = null
 
   if (tickers.length > 0) {
     const dataYmdForDaily = await warmDataYmd()
     if (dataYmdForDaily) {
       seriesDataYmd = dataYmdForDaily
-      dailySynced = await syncDaily(tickers, dataYmdForDaily)
+      const daily = await syncDaily(tickers, dataYmdForDaily)
+      dailySynced = daily.synced
+      dailySkipped = daily.skipped
       const fundamental = await syncFundamental(tickers, dataYmdForDaily)
       fundamentalSynced = fundamental.synced
+      fundamentalSkipped = fundamental.skipped
       bwibbuDate = fundamental.bwibbuDate
     }
   }
@@ -2582,7 +2615,11 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
     ymd: seriesDataYmd,
     total: tickers.length,
     dailySynced,
+    dailySkipped,
     fundamentalSynced,
+    fundamentalSkipped,
+    /** True when every ticker already had daily+fund for this data day (no Yahoo / no rewrite). */
+    allCached: tickers.length > 0 && dailySynced === 0 && fundamentalSynced === 0,
     bwibbuDate,
     scopes: {
       holdings: {

@@ -357,7 +357,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
           </section>
 
           <section className="glass detail-card" aria-labelledby="sec-technical">
-            <CardHead title="技術面" meta="日 K · 成交量 · KD" />
+            <CardHead title="技術面" meta="成交量" />
             <div id="sec-technical">
               <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
             </div>

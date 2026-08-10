@@ -310,8 +310,7 @@ describe('StockDetailPage', () => {
     expect(tabs).toEqual(['分析內容', 'AI 分析'])
   })
 
-  it('技術面畫 K 線與均線，指標摘要則落在行情卡（0.6.38 合併）', async () => {
-    // Create 80 incremental daily lines to make MA60 valuable (if there are less than 60 lines, the quarterly line cannot be tested)
+  it('技術面只畫成交量折線；指標摘要在行情卡保留量比等（0.6.50）', async () => {
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -336,28 +335,23 @@ describe('StockDetailPage', () => {
     )
     await screen.findByText('三大法人買賣超')
 
-    await screen.findByText('日 K 與均線')
-    // Technical section: three sheets of daily K, trading volume, and KD (there are also three sheets in the chip section, so the range must be limited)
-    expect(charts(container, 'technical')).toHaveLength(3)
-    // Moving average legend (weekly/monthly/quarterly lines for Taiwanese stocks must appear, otherwise people who only recognize one of them will not be able to understand)
-    expect(screen.getByText('週線')).toBeTruthy()
-    expect(screen.getByText('季線')).toBeTruthy()
-    // The summary lives in the 行情 card now, and it takes the latest day: rising all the way → 多頭排列
+    await within(sec(container, 'technical')).findByRole('heading', { name: /成交量/ })
+    // One volume line chart only (no candle / KD)
+    expect(charts(container, 'technical')).toHaveLength(1)
+    expect(screen.queryByText('日 K 與均線')).toBeNull()
+    expect(screen.queryByText('KD 指標')).toBeNull()
+    expect(screen.queryByText('週線')).toBeNull()
     const tech = within(sec(container, 'technical'))
     expect(tech.queryByText(/多頭排列/)).toBeNull()
     const q = within(sec(container, 'quote'))
     expect(q.getByText(`指標摘要（${rows[rows.length - 1][0]}）`)).toBeTruthy()
-    expect(q.getByText(/多頭排列/)).toBeTruthy()
-    /*
-      The three cells that duplicated the live quote (收盤 / 開高低 / 成交量) were dropped in the merge.
-      Locking that here: 179 is the last close, and it must not come back as a summary cell —— the quote
-      grid above already shows today's price, and the two can legitimately be different days.
-    */
-    expect(q.queryByText('179')).toBeNull()
+    expect(q.queryByText(/多頭排列/)).toBeNull()
+    expect(q.queryByText('均線')).toBeNull()
+    expect(q.queryByText('KD')).toBeNull()
     expect(q.getByText('量比')).toBeTruthy()
   })
 
-  it('技術面：成交量表格排在 KD 之後，預設 20 列可展開，量比對 20 日均量（0.6.38）', async () => {
+  it('技術面：成交量表格預設 20 列可展開，量比對 20 日均量（0.6.50）', async () => {
     const user = userEvent.setup()
     // 80 days so MA20 has a full window; volume climbs so the newest day is the heaviest
     const rows = Array.from({ length: 80 }, (_, i) => {
@@ -377,17 +371,15 @@ describe('StockDetailPage', () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
-    await screen.findByText('日 K 與均線')
+    const t = within(sec(container, 'technical'))
+    await t.findByRole('heading', { name: /成交量/ })
 
-    // Section order inside 技術面: 日 K → KD → 成交量 (KD and volume swapped in 0.6.38)
     const heads = [...sec(container, 'technical').querySelectorAll('.rpt-section h3')].map(
       (h) => h.textContent,
     )
-    // The first heading carries a locale-dependent timestamp, so only its prefix is pinned
-    expect(heads[0]).toMatch(/^日 K 與均線/)
-    expect(heads.slice(1)).toEqual(['KD 指標', '成交量'])
+    expect(heads).toHaveLength(1)
+    expect(heads[0]).toMatch(/^成交量/)
 
-    const t = within(sec(container, 'technical'))
     // 近 3 月 = 60 交易日, but the table starts collapsed at 20
     const tableRows = () => sec(container, 'technical').querySelectorAll('.data-table tbody tr')
     expect(tableRows()).toHaveLength(20)
@@ -402,13 +394,11 @@ describe('StockDetailPage', () => {
     expect(tableRows()).toHaveLength(60)
   })
 
-  it('技術面：切到近 3 月時季線仍畫得出來（指標以完整序列計算後才裁切）', async () => {
-    // 200 information, 60 displayed. If you implement cropping first and then calculate the indicator, MA60 will disappear entirely.
-    // There are only two moving averages left on the chart - this is what PLAN marked as the "most likely to make mistakes".
+  it('技術面：切區間時成交量折線仍有點數（序列先算再裁切）', async () => {
     const rows = Array.from({ length: 200 }, (_, i) => {
       const date = new Date(Date.UTC(2025, 9, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
-      return [date, close - 1, close + 1, close - 2, close, 1_000_000] as [
+      return [date, close - 1, close + 1, close - 2, close, 1_000_000 + i] as [
         string,
         number,
         number,
@@ -429,12 +419,12 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    await screen.findByText('日 K 與均線')
+    await within(sec(container, 'technical')).findByRole('heading', { name: /成交量/ })
 
     await user.click(screen.getByRole('button', { name: '近 3 月' }))
-    const kChart = charts(container, 'technical')[0]
-    // All three moving averages must have polylines; if one is missing, MA60 will be cut off.
-    expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(3)
+    const volChart = charts(container, 'technical')[0]
+    // One volume series → at least one polyline path
+    expect(volChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(1)
   })
 
   it('各區塊各自標示資料日與更新時間（三個來源公布時間不同）', async () => {

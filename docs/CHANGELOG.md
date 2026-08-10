@@ -2,6 +2,18 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.6.50（2026-08-10）— 技術面只留成交量；日線 skip 更穩
+
+#### 功能摘要
+
+- 🎨 **技術面移除日 K／均線／KD**，保留**成交量折線**＋表格（量比／收盤／漲跌）；行情卡摘要去掉均線與 KD，保留 RSI／MACD／量比。
+- 🛡️ **盤後日線／基本面**：檔案已達資料日則**不打 Yahoo、不重寫**；Yahoo 空回覆不覆蓋既有有資料的 daily 檔（防丟資料）。
+- 📊 手動更新摘要顯示 `dailySkipped` / `fundSkipped` / `allCached`，方便二次手動驗證是否短路。
+- ⚠️ UI 精簡**不直接縮短**籌碼／history 秒數；二次手動若 market-data 出現大量 skipped 才是 skip 生效。
+- ⚠️ Edge 有 `syncDaily`/`syncFundamental` 變更 → 需 deploy `stock-report --no-verify-jwt`。
+
+---
+
 ### 0.6.49（2026-08-10）— 盤後 generate 三階段（防雲端 546）
 
 #### 功能摘要

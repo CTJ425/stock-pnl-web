@@ -35,6 +35,11 @@ function summarizeBody(body: unknown): string {
   }
   if (typeof o.synced === 'boolean') bits.push(o.synced ? 'synced' : 'unchanged')
   if (typeof o.generated === 'number') bits.push(`generated=${o.generated}`)
+  if (typeof o.dailySynced === 'number') bits.push(`dailySynced=${o.dailySynced}`)
+  if (typeof o.dailySkipped === 'number') bits.push(`dailySkipped=${o.dailySkipped}`)
+  if (typeof o.fundamentalSynced === 'number') bits.push(`fundSynced=${o.fundamentalSynced}`)
+  if (typeof o.fundamentalSkipped === 'number') bits.push(`fundSkipped=${o.fundamentalSkipped}`)
+  if (o.allCached === true) bits.push('allCached')
   if (typeof o.total === 'number') bits.push(`total=${o.total}`)
   if (typeof o.count === 'number') bits.push(`count=${o.count}`)
   if (typeof o.ymd === 'string') bits.push(`ymd=${o.ymd}`)
