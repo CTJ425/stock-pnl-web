@@ -127,4 +127,32 @@ describe('runAdminJobs', () => {
       expect(r.error).toMatch(/Unauthorized|401/)
     }
   })
+
+  it('onProgress 在每個 job 開始與結束時回報', async () => {
+    invoke.mockImplementation(async (_name: string, opts: { body: { jobs: string[] } }) => {
+      const job = opts.body.jobs[0]
+      return {
+        data: {
+          ok: true,
+          jobs: [job],
+          results: {
+            [job]: { httpStatus: 200, durationMs: 1, body: { ok: true } },
+          },
+          failed: [],
+          durationMs: 1,
+        },
+        error: null,
+      }
+    })
+    const events: Array<{ phase: string; job: string; completed: number }> = []
+    await runAdminJobs(['sync-fx', 'probe'], (p) => {
+      events.push({ phase: p.phase, job: p.job, completed: p.completed })
+    })
+    expect(events).toEqual([
+      { phase: 'job-start', job: 'sync-fx', completed: 0 },
+      { phase: 'job-done', job: 'sync-fx', completed: 1 },
+      { phase: 'job-start', job: 'probe', completed: 1 },
+      { phase: 'job-done', job: 'probe', completed: 2 },
+    ])
+  })
 })

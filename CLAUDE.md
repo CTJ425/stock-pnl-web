@@ -245,7 +245,10 @@ Version numbers **must never contain a `v` prefix**, and only take the form `x.x
 
 The version badge in the bottom left corner of the screen **only shows the version number itself**, no author, no prefix.
 
-Production release (`main`) uses `x.x.x`, development release (`dev`) uses `x.x.x-dev.x`.
+Production release (`main`) uses `x.x.x`; unfinished work on `dev` uses `x.x.x-dev.N`.
+**After a release, `dev` and `main` must show the same version** (fast-forward / `git push origin main:dev`).
+The next change on `dev` then starts at the **next** target with `-dev.1` (e.g. release `0.6.48` → next work `0.6.49-dev.1`).
+Only the official release commit may drop the `-dev.N` suffix.
 When deciding the next version number, incrementing `dev.N`, or merging to `main` for release, read the **`versioning` skill**.
 
 ---

@@ -5,28 +5,58 @@ description: The version number determination rule of stock-pnl-web. Use it when
 
 # Version number specification details
 
-Prerequisite (`CLAUDE.md` §12 has been stated and will not be repeated here): the version number does not have the `v` prefix,
-Three places must be synchronized - `sources/src/version.ts`, `sources/package.json` (together with `package-lock.json`), `README.md` (version badge only). The version record itself lives in `docs/CHANGELOG.md`.
+Prerequisite (`CLAUDE.md` §12 has been stated and will not be repeated here): the version number does not have the `v` prefix.
+Keep these synchronized:
 
-## Official version (`main` branch)
+- `sources/src/version.ts` → `APP_VERSION` (UI badge)
+- `sources/package.json` → `version` (with `package-lock.json`)
+- `README.md` → version badge line only
+- `docs/CHANGELOG.md` → version history
 
-The format is **`x.x.x`** (standard semver, without any suffix).
+**`dev` and `main` must never disagree on the version string after a sync.** After every release merge, fast-forward so both tips carry the **same** finalized `x.x.x`.
 
-- Increment patches** sequentially according to the previous official version number** (for example: `0.3.6` → `0.3.7`).
-- **Unless it is a major version change** (destructive changes, architectural reconstruction, functional mileage code), enter minor or major (for example: `0.3.7` → `0.4.0` → `1.0.0`).
-- The "version record" of `docs/CHANGELOG.md` is titled and finalized with the official version number.
+---
 
-## Test versions (`dev` and other development branches)
+## Official version (`main` branch / release commit)
 
-The format is **`x.x.x-dev.x`** (note: there is a **dot** `.` between `dev` and the serial number, not a hyphen):
+Format: **`x.x.x`** (semver, no suffix).
 
-- `x.x.x` = The official version number that this batch of dev work will become after being merged into `main` (determined according to the previous section).
-- The last `.x` = the **number of changes** of the official version number during the dev period, starting from `1`, each meaningful change +1.
-- Example: Target `0.3.7`, second change → `0.3.7-dev.2`.
+- Bump patch from the previous official version (`0.3.6` → `0.3.7`), unless the change is large enough for minor/major.
+- The release commit (or the commit that finalizes the merge into `main`) is the **only** place that may drop `-dev.N`.
+- `docs/CHANGELOG.md` title for that version is the official number (no “under development”).
 
-The `docs/CHANGELOG.md` version record is titled "Future official version number (under development)" during the dev period, and each change is listed in sections with `dev.1 / dev.2...` underneath.
+---
 
-## merge into main
+## Development versions (`dev` and feature work)
 
-Remove the `-dev.<N>` suffix to get the official version number (`0.3.7-dev.2` → `0.3.7`), and finalize the version record of this version.
-Purpose: To always match the official and beta version numbers, so that there will no longer be a gap where the official version stops at `0.3.6`, but the test version jumps to `0.3.8`.
+Format: **`x.x.x-dev.N`** (dot between `dev` and `N`, not a second hyphen).
+
+| Piece | Meaning |
+| ---- | ---- |
+| `x.x.x` | The **next** official version this line of work will become when released |
+| `N` | Sequential change count on that target, starting at **1** |
+
+Examples: target `0.6.48` → first change `0.6.48-dev.1`, second `0.6.48-dev.2`.
+
+### When to put `-dev`
+
+- **Any non-release work on `dev`** (features, fixes, docs that ship with a version bump): use `x.x.x-dev.N`.
+- After an official `x.x.x` is on both branches, the **next** edit that needs a version bump starts at **`(x.x.x + patch)-dev.1`**, not a bare `x.x.x` on `dev`.
+- Do **not** leave `dev` showing a bare official number while unfinished work is in progress.
+
+### When to remove `-dev`
+
+- **Only on the official release commit** that merges to `main` (or the finalization commit on that path): strip `-dev.N` → `x.x.x`, finalize CHANGELOG, then `git push origin main:dev` so both branches match.
+
+---
+
+## merge into main (release checklist)
+
+1. Confirm the target official number (e.g. work was `0.6.48-dev.3` → release **`0.6.48`**).
+2. Set `version.ts` / `package.json` / lock / README badge to **`0.6.48`** (no `-dev`).
+3. Finalize `docs/CHANGELOG.md` under that official heading.
+4. Merge to `main`, push (Pages deploys).
+5. **Sync branches**: `git push origin main:dev` (or merge main→dev) so **dev and main show the same `0.6.48`**.
+6. Next feature on `dev`: first versioned change → **`0.6.49-dev.1`**.
+
+Purpose: official and pre-release numbers stay aligned; there is never a gap where main is `0.3.6` while dev already claims `0.3.8` without a release, and dev does not sit on a bare release number mid-work.

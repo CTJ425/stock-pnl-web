@@ -37,6 +37,26 @@ export interface AdminRunResult {
   durationMs: number
 }
 
+/** Live progress while jobs run one-by-one (for progress bar / "stuck on which job?"). */
+export interface AdminRunProgress {
+  /** Full list for this run, fixed order. */
+  jobs: AdminRunJob[]
+  total: number
+  /** 0-based index of the job currently starting / just finished. */
+  index: number
+  /** Job about to run, or just finished (see `phase`). */
+  job: AdminRunJob
+  phase: 'job-start' | 'job-done'
+  /** Jobs that have finished (ok or fail). */
+  completed: number
+  results: Partial<Record<AdminRunJob, AdminRunJobResult>>
+  failed: AdminRunJob[]
+  /** Wall time since runAdminJobs started. */
+  elapsedMs: number
+}
+
+export type AdminRunProgressHandler = (p: AdminRunProgress) => void
+
 /** UI labels for cron-backed jobs (Traditional Chinese). */
 export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string; hint: string }> = {
   'generate-all': {
@@ -77,9 +97,12 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
  * Returns `{ ok: false, error }` only when **every** job fails at the transport layer
  * before any result is collected; partial success still returns `ok: true` with
  * `data.ok` / `data.failed` describing per-job outcomes.
+ *
+ * Optional `onProgress` fires before/after each job so the UI can show a progress bar.
  */
 export async function runAdminJobs(
   jobs: AdminRunJob[] | 'all',
+  onProgress?: AdminRunProgressHandler,
 ): Promise<{ ok: true; data: AdminRunResult } | { ok: false; error: string }> {
   if (!supabase) return { ok: false, error: 'Supabase 未設定' }
 
@@ -95,9 +118,30 @@ export async function runAdminJobs(
   const failed: AdminRunJob[] = []
   const transportErrors: string[] = []
   let transportFails = 0
+  let completed = 0
+
+  const emit = (
+    phase: 'job-start' | 'job-done',
+    index: number,
+    job: AdminRunJob,
+  ): void => {
+    onProgress?.({
+      jobs: list,
+      total: list.length,
+      index,
+      job,
+      phase,
+      completed,
+      results: { ...results },
+      failed: [...failed],
+      elapsedMs: Date.now() - started,
+    })
+  }
 
   try {
-    for (const job of list) {
+    for (let i = 0; i < list.length; i++) {
+      const job = list[i]!
+      emit('job-start', i, job)
       const one = await invokeOneJob(job)
       if (!one.ok) {
         transportFails++
@@ -108,10 +152,12 @@ export async function runAdminJobs(
           durationMs: one.durationMs,
           body: { error: one.error },
         }
-        continue
+      } else {
+        results[job] = one.result
+        if (one.result.httpStatus >= 400) failed.push(job)
       }
-      results[job] = one.result
-      if (one.result.httpStatus >= 400) failed.push(job)
+      completed++
+      emit('job-done', i, job)
     }
   } catch (e: unknown) {
     return { ok: false, error: e instanceof Error ? e.message : '執行失敗' }

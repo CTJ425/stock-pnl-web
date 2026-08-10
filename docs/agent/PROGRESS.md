@@ -1,9 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Prod Edge audit + deploy attempt (stock-report / stock-price)
-- Status: **Already in sync with main @ 9809980; no new bundle**
-- Timestamp: 2026-08-10 23:10:00 Asia/Taipei
+- Action: 0.6.48 manual-run progress bar + versioning rule docs; ship main
+- Status: **0.6.48 on main (Pages)**
+- Timestamp: 2026-08-10 23:25:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 23:25:00 Asia/Taipei (0.6.48 release)
+
+- **Agent**: Grok
+- **Action**: Manual-run progress UI + version policy clarification
+
+### Product
+- `runAdminJobs(..., onProgress)` emits job-start / job-done
+- `ManualRunSection`: bar + per-job status table while running
+
+### Versioning docs
+- `versioning` skill + CLAUDE.md §12: after release dev=main=`x.x.x`; next work uses
+  next target `-dev.1`; only release commit drops `-dev`
+
+### Ship
+- Frontend-only **0.6.48** → main / Pages
 
 ---
 
