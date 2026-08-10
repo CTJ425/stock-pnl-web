@@ -24,8 +24,15 @@ function summarizeBody(body: unknown): string {
   const o = body as Record<string, unknown>
   if (typeof o.error === 'string') return o.error
   const bits: string[] = []
+  if (typeof o.phase === 'string') bits.push(`phase=${o.phase}`)
   if (o.ok === true) bits.push('ok')
   if (o.ok === false) bits.push('not-ok')
+  if (Array.isArray(o.phasesDone) && o.phasesDone.length) {
+    bits.push(`done=${o.phasesDone.join('+')}`)
+  }
+  if (Array.isArray(o.phasesSkipped) && o.phasesSkipped.length) {
+    bits.push(`skip=${o.phasesSkipped.join('+')}`)
+  }
   if (typeof o.synced === 'boolean') bits.push(o.synced ? 'synced' : 'unchanged')
   if (typeof o.generated === 'number') bits.push(`generated=${o.generated}`)
   if (typeof o.total === 'number') bits.push(`total=${o.total}`)
@@ -169,10 +176,9 @@ export function ManualRunSection() {
         與後台「抓取狀況」的排程同一組 handler。資料尚未公布時可能回
         unchanged / skipped，不代表壞掉。多項會<strong>逐一</strong>呼叫（各有獨立時間預算），
         進度條會顯示卡在哪一項。
-        <strong> 盤後個股批次</strong>可能需數十秒到兩分鐘，請勿重複連按；若逾時，到「抓取狀況」
-        確認是否已寫入（伺服器端有時仍會跑完）。
-        執行後會寫入 admin_run_log，到「抓取狀況」重新整理即可看到最後執行時間（標
-        「手動」）。
+        <strong>盤後已拆成三階段</strong>（籌碼 → 日K／基本面 → 營收／獲利一輪），避免雲端 Edge
+        單次 546；完整歷史靠夜班多輪，手動不必一次補滿。
+        請勿重複連按；若某段失敗，到「抓取狀況」確認是否已寫入。
       </div>
 
       <div className="table-scroll" style={{ marginTop: 14 }}>

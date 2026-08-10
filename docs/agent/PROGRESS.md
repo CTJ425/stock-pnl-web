@@ -1,9 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.48 manual-run progress bar + versioning rule docs; ship main
-- Status: **0.6.48 on main (Pages)**
-- Timestamp: 2026-08-10 23:25:00 Asia/Taipei
+- Action: 0.6.49 generate-all phases A2+P1; ship main + prod Edge
+- Status: **0.6.49 shipping**
+- Timestamp: 2026-08-10 23:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 23:45:00 Asia/Taipei (0.6.49 A2+P1)
+
+- **Agent**: Grok
+- **Action**: Split post-close batch to avoid cloud Edge 546
+
+### Design
+- Phases: `chips` | `market-data` | `history`
+- `generate-all` (cron): budget 110s + 12s reserve between phases
+- Admin: three jobs, one HTTP each (progress bar already per job)
+- P1: history = one backfill round only
+
+### Ship
+- Frontend + Edge `stock-report --no-verify-jwt` to prod
+- DEV: volume-copy when convenient (self-hosted)
 
 ---
 

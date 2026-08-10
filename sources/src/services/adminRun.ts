@@ -11,9 +11,14 @@
  */
 import { supabase } from './supabase'
 
-/** Same ids the Edge `admin-run` handler accepts (mirrors cron actions). */
+/**
+ * Same ids the Edge `admin-run` handler accepts.
+ * Nightly is three phases (0.6.49) so each call has its own cloud compute budget.
+ */
 export const ADMIN_RUN_JOBS = [
-  'generate-all',
+  'generate-chips',
+  'generate-market-data',
+  'generate-history',
   'sync-market',
   'sync-top-tickers',
   'sync-macro',
@@ -59,10 +64,20 @@ export type AdminRunProgressHandler = (p: AdminRunProgress) => void
 
 /** UI labels for cron-backed jobs (Traditional Chinese). */
 export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string; hint: string }> = {
-  'generate-all': {
-    title: '盤後個股批次',
+  'generate-chips': {
+    title: '盤後 · 籌碼報告',
     cron: 'stock-report-nightly',
-    hint: '持股∪觀察∪Top30：T86 籌碼、日 K、基本面（16:00 起；可能較久）',
+    hint: '持股∪觀察∪TOP30：T86／融資借券、組報告上傳（較重；與下兩段分開打避免 546）',
+  },
+  'generate-market-data': {
+    title: '盤後 · 日K／基本面',
+    cron: 'stock-report-nightly',
+    hint: 'syncDaily + 估值／產業等（不含 MOPS 長歷史）',
+  },
+  'generate-history': {
+    title: '盤後 · 營收／獲利補齊',
+    cron: 'stock-report-nightly',
+    hint: '一輪月營收+季報補齊（P1；完整 12 個月／季靠多輪排程或再按）',
   },
   'sync-market': {
     title: '台股全市場',
@@ -72,7 +87,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   },
   'sync-top-tickers': {
     title: 'TOP30 名單',
-    cron: '（併 generate-all／可手動）',
+    cron: '（併盤後籌碼／可手動）',
     hint: 'STOCK_DAY_ALL 排行（含 ETF）→ meta/top_tickers.json；與 15:00 全市場分開',
   },
   'sync-macro': {
@@ -276,7 +291,7 @@ async function httpErrorMessage(error: unknown): Promise<string | null> {
 
   if (status === 504 || status === 546) {
     const hint =
-      '逾時（Edge 約 150 秒上限）。盤後個股請單獨執行；若仍逾時，到「抓取狀況」確認是否已寫入'
+      '逾時或算力不足（雲端 Edge 上限）。請逐段執行盤後三階段；若仍失敗，到「抓取狀況」確認是否已寫入'
     return detail ? `${statusBit}: ${detail} — ${hint}` : `${statusBit}: ${hint}`
   }
 

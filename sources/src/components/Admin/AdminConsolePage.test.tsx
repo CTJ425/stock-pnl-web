@@ -42,7 +42,9 @@ describe('AdminConsolePage', () => {
     expect(await screen.findByRole('heading', { name: '手動更新' })).toBeTruthy()
     // Labels appear both as row titles and checkbox aria-labels — just assert each job id is present.
     for (const job of [
-      'generate-all',
+      'generate-chips',
+      'generate-market-data',
+      'generate-history',
       'sync-market',
       'sync-top-tickers',
       'sync-macro',

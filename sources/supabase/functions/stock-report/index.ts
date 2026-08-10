@@ -17,9 +17,11 @@
  *       revenue/profit backfill (no second quota charge; requires an existing fundamental file);
  *       `full` (default) = core then history in one request (legacy / background prefetch).
  *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
- *     → Generate a common report for holdings ∪ watchlist ∪ top-30 (by trade value, incl. ETFs)
- *       and store it in Storage (reports bucket), and clean up old data older than 7 days.
- *       Top-30 snapshot is refreshed on this path (first useful after ~16:00 with T86); BFI82U stays on sync-market from 15:00.
+ *     → Orchestrates phases chips → market-data → history under GENERATE_ALL_BUDGET_MS (0.6.49).
+ *       May skip later phases when wall time is short; next cron tick continues. P1: history is one
+ *       backfill round only. Admin console prefers per-phase admin-run jobs (separate HTTP budgets).
+ *   POST { action: 'generate-chips' | 'generate-market-data' | 'generate-history' } x-cron-secret
+ *     → Single phase (same handlers as generate-all internals).
  *   POST { action: 'sync-top-tickers' } header: x-cron-secret
  *     → Fetch STOCK_DAY_ALL, rank Top 30 by TradeValue (ETFs kept), write meta/top_tickers.json
  *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
@@ -247,6 +249,14 @@ const MAX_BACKFILL_QUARTERS = 2
 const WARM_BUDGET_MS = 30_000
 const WARM_ROUND_MONTHS = 4
 const WARM_ROUND_QUARTERS = 2
+/**
+ * Orchestrated `generate-all` wall budget (0.6.49).
+ * Cloud Edge ~150s idle/wall; 546 is often CPU/memory from packing chips+daily+history
+ * in one isolate. Leave headroom; remaining phases wait for the next cron tick (P1).
+ */
+const GENERATE_ALL_BUDGET_MS = 110_000
+/** Do not start another phase if fewer ms remain than this reserve. */
+const GENERATE_ALL_PHASE_RESERVE_MS = 12_000
 /**
  * How many `warm` calls one account may make per Taipei day (0.6.44).
  *
@@ -2337,27 +2347,51 @@ async function readLastRun(todayYmd: string): Promise<LastRun | null> {
  * All judgment logic is extracted in `pollPlan.ts` and pinned with tests - only wiring is responsible here.
  * The reason is shown at the beginning of this file: the cost of making a wrong judgment has been increased from 3 times to 32 times in the third shift era.
  */
-async function handleGenerateAll(): Promise<Response> {
-  const startedAt = Date.now()
-  const now = new Date()
-  const todayYmd = taipeiYmd(now)
-  t86FingerprintByYmd.clear()
+/**
+ * Nightly / manual post-close work, split so one Edge isolate does not pack
+ * chips + Yahoo daily + MOPS history (546 on cloud Free/Pro compute).
+ *
+ * Phases (0.6.49, A2 + P1):
+ * - `chips` — TOP list, T86 series, per-ticker reports, prune
+ * - `market-data` — syncDaily + syncFundamental
+ * - `history` — one round of revenue + profit backfill (caps; full 12/12 needs many rounds)
+ *
+ * `generate-all` (cron) runs phases in order until `GENERATE_ALL_BUDGET_MS` is nearly spent.
+ * Admin console invokes each phase as its own `admin-run` job (separate HTTP = separate budget).
+ */
+type GeneratePhaseId = 'chips' | 'market-data' | 'history'
 
-  // Top-30 list (official codes by TradeValue, ETFs kept). Same clock window as T86 work
-  // (generate-all from 16:00) — not on 15:00 market-daily (BFI82U only).
+const GENERATE_PHASE_IDS: GeneratePhaseId[] = ['chips', 'market-data', 'history']
+
+type BatchTickerBundle = {
+  topSync: Awaited<ReturnType<typeof syncTopTickers>>
+  personalList: Array<{ ticker: string; name: string }>
+  topList: Array<{ ticker: string; name: string }>
+  tickers: Array<{ ticker: string; name: string }>
+}
+
+async function resolveBatchTickerBundle(): Promise<BatchTickerBundle> {
+  // Top-30 same clock window as T86 work (generate-all from 16:00) — not 15:00 market-daily.
   const topSync = await syncTopTickers()
   const [heldList, watchedList, topList] = await Promise.all([
     heldTwTickers(),
     watchedTwTickers(),
     topTwTickers(),
   ])
-  // Personal set first for name priority, then top-30.
   const personalList = mergeTwTickerLists(heldList, watchedList)
   const tickers = mergeTwTickerLists(personalList, topList)
+  return { topSync, personalList, topList, tickers }
+}
 
-  // ---- Chip short circuit: must be before TWSE chip fetches ----
-  // Fundamentals still run when chips skip so top-30 / holdings history can finish
-  // (reportComplete is dual-scope, not "chips frozen").
+async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
+  const startedAt = Date.now()
+  const now = new Date()
+  const todayYmd = taipeiYmd(now)
+  t86FingerprintByYmd.clear()
+
+  const { topSync, personalList, topList, tickers } = await resolveBatchTickerBundle()
+
+  // Chip short circuit before TWSE fetches. Fundamentals still run in later phases when chips skip.
   const last = await readLastRun(todayYmd)
   const cachedToday = await cachedDayDatasets([todayYmd])
   const skip = decideSkip({
@@ -2370,13 +2404,6 @@ async function handleGenerateAll(): Promise<Response> {
   let generated = 0
   let regenerate = false
   let seriesDataYmd: string | null = null
-  let dailySynced = 0
-  let fundamentalSynced = 0
-  let bwibbuDate: string | null = null
-  let revenueFilled = 0
-  let revenueMonths: string[] = []
-  let profitFilled = 0
-  let profitQuarters: string[] = []
   let t86Today = false
   let t86State: ReturnType<typeof nextT86State> | null = null
   let marginOk = false
@@ -2391,10 +2418,8 @@ async function handleGenerateAll(): Promise<Response> {
   if (skip.skip) {
     chipsSkipped = true
     skipReason = skip.reason
-    // Best-effort data day from last run signature is not stored as ymd alone — use cache probe.
     seriesDataYmd = cachedToday.has(`${todayYmd}:T86`) ? todayYmd : null
   } else {
-    // Today's T86 has a cache but has not yet been finalized → re-catch and compare.
     const refreshT86Ymd =
       cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
     const series = await loadSeries(
@@ -2450,24 +2475,6 @@ async function handleGenerateAll(): Promise<Response> {
     }
   }
 
-  // Daily + fundamentals always (even when chip section skipped) so top-30 / holdings can soft-fill.
-  if (tickers.length > 0) {
-    const dataYmdForDaily = seriesDataYmd ?? (await warmDataYmd())
-    if (dataYmdForDaily) {
-      dailySynced = await syncDaily(tickers, dataYmdForDaily)
-      const fundamental = await syncFundamental(tickers, dataYmdForDaily)
-      fundamentalSynced = fundamental.synced
-      bwibbuDate = fundamental.bwibbuDate
-      if (!seriesDataYmd) seriesDataYmd = dataYmdForDaily
-    }
-    const revenue = await backfillRevenue(tickers, now)
-    revenueFilled = revenue.filled
-    revenueMonths = revenue.months
-    const profit = await backfillProfit(tickers, now)
-    profitFilled = profit.filled
-    profitQuarters = profit.quarters
-  }
-
   if (regenerate && seriesDataYmd) {
     await pruneStorage(ymdMinusDays(seriesDataYmd, REPORT_RETAIN_DAYS))
     await pruneChipCache(ymdMinusDays(seriesDataYmd, CACHE_RETAIN_DAYS))
@@ -2475,12 +2482,8 @@ async function handleGenerateAll(): Promise<Response> {
 
   const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
   const top30Scope = await evaluateTickerScope(topList, seriesDataYmd)
-  const reportComplete =
-    holdingsScope.chipsComplete &&
-    holdingsScope.fundComplete &&
-    top30Scope.chipsComplete &&
-    top30Scope.fundComplete
 
+  // Nightly observation row: chips phase owns the primary batch_run_log write.
   await logBatchRun({
     taipei_ymd: todayYmd,
     taipei_time: taipeiHhmm(now),
@@ -2497,19 +2500,20 @@ async function handleGenerateAll(): Promise<Response> {
     margin_today: marginToday,
     borrow_ok: borrowOk,
     borrow_data_date: borrowDataDate,
-    bwibbu_date: bwibbuDate,
+    bwibbu_date: null,
     run_sig: runSig,
     regenerated: regenerate,
     history_days: historyDays,
     generated,
-    daily_synced: dailySynced,
-    fundamental_synced: fundamentalSynced,
-    revenue_backfilled: revenueFilled,
-    profit_backfilled: profitFilled,
+    daily_synced: 0,
+    fundamental_synced: 0,
+    revenue_backfilled: 0,
+    profit_backfilled: 0,
     duration_ms: Date.now() - startedAt,
   })
 
-  return json({
+  return {
+    phase: 'chips',
     ok: true,
     ymd: seriesDataYmd,
     generated,
@@ -2518,12 +2522,6 @@ async function handleGenerateAll(): Promise<Response> {
     skipReason,
     total: tickers.length,
     historyDays,
-    dailySynced,
-    fundamentalSynced,
-    revenueBackfilled: revenueFilled,
-    revenueMonths,
-    profitBackfilled: profitFilled,
-    profitQuarters,
     t86Today,
     t86Revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
@@ -2551,8 +2549,215 @@ async function handleGenerateAll(): Promise<Response> {
         missingFund: top30Scope.missingFund,
       },
     },
-    /** True only when holdings ∪ top30 both have chips + soft fundamentals ready. */
+    durationMs: Date.now() - startedAt,
+  }
+}
+
+async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
+  const startedAt = Date.now()
+  const { tickers, personalList, topList } = await resolveBatchTickerBundle()
+
+  let seriesDataYmd: string | null = null
+  let dailySynced = 0
+  let fundamentalSynced = 0
+  let bwibbuDate: string | null = null
+
+  if (tickers.length > 0) {
+    const dataYmdForDaily = await warmDataYmd()
+    if (dataYmdForDaily) {
+      seriesDataYmd = dataYmdForDaily
+      dailySynced = await syncDaily(tickers, dataYmdForDaily)
+      const fundamental = await syncFundamental(tickers, dataYmdForDaily)
+      fundamentalSynced = fundamental.synced
+      bwibbuDate = fundamental.bwibbuDate
+    }
+  }
+
+  const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
+  const top30Scope = await evaluateTickerScope(topList, seriesDataYmd)
+
+  return {
+    phase: 'market-data',
+    ok: true,
+    ymd: seriesDataYmd,
+    total: tickers.length,
+    dailySynced,
+    fundamentalSynced,
+    bwibbuDate,
+    scopes: {
+      holdings: {
+        total: holdingsScope.total,
+        chipsReady: holdingsScope.chipsReady,
+        fundReady: holdingsScope.fundReady,
+        chipsComplete: holdingsScope.chipsComplete,
+        fundComplete: holdingsScope.fundComplete,
+        missingFund: holdingsScope.missingFund,
+      },
+      top30: {
+        total: top30Scope.total,
+        chipsReady: top30Scope.chipsReady,
+        fundReady: top30Scope.fundReady,
+        chipsComplete: top30Scope.chipsComplete,
+        fundComplete: top30Scope.fundComplete,
+        missingFund: top30Scope.missingFund,
+      },
+    },
+    durationMs: Date.now() - startedAt,
+  }
+}
+
+/**
+ * One backfill round only (P1). Full REVENUE_MONTHS_CAP / PROFIT_QUARTERS_CAP
+ * still needs multiple cron/admin rounds — same caps as before.
+ */
+async function runGeneratePhaseHistory(): Promise<Record<string, unknown>> {
+  const startedAt = Date.now()
+  const now = new Date()
+  const { tickers } = await resolveBatchTickerBundle()
+
+  let revenueFilled = 0
+  let revenueMonths: string[] = []
+  let profitFilled = 0
+  let profitQuarters: string[] = []
+
+  if (tickers.length > 0) {
+    const revenue = await backfillRevenue(tickers, now)
+    revenueFilled = revenue.filled
+    revenueMonths = revenue.months
+    const profit = await backfillProfit(tickers, now)
+    profitFilled = profit.filled
+    profitQuarters = profit.quarters
+  }
+
+  return {
+    phase: 'history',
+    ok: true,
+    total: tickers.length,
+    revenueBackfilled: revenueFilled,
+    revenueMonths,
+    profitBackfilled: profitFilled,
+    profitQuarters,
+    monthsPerRun: MAX_BACKFILL_MONTHS,
+    quartersPerRun: MAX_BACKFILL_QUARTERS,
+    note: 'P1: one round only; repeat via cron/admin for full history',
+    durationMs: Date.now() - startedAt,
+  }
+}
+
+async function runGeneratePhase(phase: GeneratePhaseId): Promise<Record<string, unknown>> {
+  switch (phase) {
+    case 'chips':
+      return runGeneratePhaseChips()
+    case 'market-data':
+      return runGeneratePhaseMarketData()
+    case 'history':
+      return runGeneratePhaseHistory()
+  }
+}
+
+async function handleGeneratePhase(phase: GeneratePhaseId): Promise<Response> {
+  try {
+    const body = await runGeneratePhase(phase)
+    return json(body)
+  } catch (e) {
+    return json(
+      {
+        ok: false,
+        phase,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      500,
+    )
+  }
+}
+
+/**
+ * Cron entry: run chips → market-data → history while wall budget remains.
+ * Stops early with `phasesSkipped` rather than risking 546/504 on cloud.
+ */
+async function handleGenerateAll(): Promise<Response> {
+  const startedAt = Date.now()
+  const deadline = startedAt + GENERATE_ALL_BUDGET_MS
+  const phasesDone: GeneratePhaseId[] = []
+  const phasesSkipped: GeneratePhaseId[] = []
+  const phaseResults: Partial<Record<GeneratePhaseId, Record<string, unknown>>> = {}
+
+  for (const phase of GENERATE_PHASE_IDS) {
+    const remaining = deadline - Date.now()
+    if (remaining < GENERATE_ALL_PHASE_RESERVE_MS) {
+      phasesSkipped.push(phase)
+      continue
+    }
+    try {
+      const result = await runGeneratePhase(phase)
+      phaseResults[phase] = result
+      phasesDone.push(phase)
+    } catch (e) {
+      return json(
+        {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          failedPhase: phase,
+          phasesDone,
+          phasesSkipped: GENERATE_PHASE_IDS.filter((p) => !phasesDone.includes(p) && p !== phase),
+          phaseResults,
+          durationMs: Date.now() - startedAt,
+          budgetMs: GENERATE_ALL_BUDGET_MS,
+        },
+        500,
+      )
+    }
+  }
+
+  // Prefer chips metrics for top-level fields (schedule UI / old consumers).
+  const chips = phaseResults.chips ?? {}
+  const market = phaseResults['market-data'] ?? {}
+  const history = phaseResults.history ?? {}
+
+  const holdingsScope = (market.scopes as { holdings?: unknown } | undefined)?.holdings
+    ?? (chips.scopes as { holdings?: unknown } | undefined)?.holdings
+    ?? null
+  const top30Scope = (market.scopes as { top30?: unknown } | undefined)?.top30
+    ?? (chips.scopes as { top30?: unknown } | undefined)?.top30
+    ?? null
+
+  const reportComplete = Boolean(
+    holdingsScope &&
+      top30Scope &&
+      (holdingsScope as { chipsComplete?: boolean }).chipsComplete &&
+      (holdingsScope as { fundComplete?: boolean }).fundComplete &&
+      (top30Scope as { chipsComplete?: boolean }).chipsComplete &&
+      (top30Scope as { fundComplete?: boolean }).fundComplete,
+  )
+
+  return json({
+    ok: true,
+    ymd: (market.ymd as string | null | undefined) ?? (chips.ymd as string | null | undefined) ?? null,
+    generated: chips.generated ?? 0,
+    regenerated: chips.regenerated ?? false,
+    chipsSkipped: chips.chipsSkipped ?? false,
+    skipReason: chips.skipReason ?? null,
+    total: chips.total ?? market.total ?? history.total ?? 0,
+    historyDays: chips.historyDays ?? 0,
+    dailySynced: market.dailySynced ?? 0,
+    fundamentalSynced: market.fundamentalSynced ?? 0,
+    revenueBackfilled: history.revenueBackfilled ?? 0,
+    revenueMonths: history.revenueMonths ?? [],
+    profitBackfilled: history.profitBackfilled ?? 0,
+    profitQuarters: history.profitQuarters ?? [],
+    t86Today: chips.t86Today ?? false,
+    t86Revisions: chips.t86Revisions ?? 0,
+    t86Frozen: chips.t86Frozen ?? false,
+    topTickers: chips.topTickers ?? null,
+    scopes: {
+      holdings: holdingsScope,
+      top30: top30Scope,
+    },
     reportComplete,
+    phasesDone,
+    phasesSkipped,
+    phaseResults,
+    budgetMs: GENERATE_ALL_BUDGET_MS,
     durationMs: Date.now() - startedAt,
   })
 }
@@ -2881,9 +3086,14 @@ async function handleSyncFx(): Promise<Response> {
   })
 }
 
-/** Batch job ids that mirror the five pg_cron actions (and their handle* implementations). */
+/**
+ * Admin-run job ids (0.6.49): nightly split into three phases so each HTTP call
+ * gets its own cloud compute budget; plus the other cron-backed actions.
+ */
 const ADMIN_RUN_JOBS = [
-  'generate-all',
+  'generate-chips',
+  'generate-market-data',
+  'generate-history',
   'sync-market',
   'sync-macro',
   'sync-fx',
@@ -2894,7 +3104,10 @@ type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
 
 /** cron.job.jobname for each admin-run action — must match what admin_schedule_status joins on. */
 const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
-  'generate-all': 'stock-report-nightly',
+  // All three phases roll into the same schedule row as the nightly cron.
+  'generate-chips': 'stock-report-nightly',
+  'generate-market-data': 'stock-report-nightly',
+  'generate-history': 'stock-report-nightly',
   'sync-market': 'market-daily',
   // No dedicated cron jobname yet — generate-all refreshes the list; manual admin-run still logs.
   'sync-top-tickers': 'sync-top-tickers',
@@ -2932,8 +3145,10 @@ async function logAdminRun(row: {
  * the Edge env; shipping it to the SPA would make the secret public. assertAdmin is the gate
  * the rest of the console already uses.
  *
- * Jobs run **sequentially** so generate-all does not race the market/macro writers for Storage
- * bandwidth. `all` is the five jobs in ADMIN_RUN_JOBS order (nightly first, probe last).
+ * Jobs run **sequentially** so phases do not race market/macro writers for Storage
+ * bandwidth. `all` is ADMIN_RUN_JOBS order (nightly phases first, probe last).
+ * Prefer separate admin-run jobs (one HTTP each) from the SPA; this loop is for
+ * rare multi-job payloads and still runs handlers in-process.
  */
 async function handleAdminRun(
   req: Request,
@@ -2998,8 +3213,14 @@ async function handleAdminRun(
     try {
       let resp: Response
       switch (job) {
-        case 'generate-all':
-          resp = await handleGenerateAll()
+        case 'generate-chips':
+          resp = await handleGeneratePhase('chips')
+          break
+        case 'generate-market-data':
+          resp = await handleGeneratePhase('market-data')
+          break
+        case 'generate-history':
+          resp = await handleGeneratePhase('history')
           break
         case 'sync-market':
           resp = await handleSyncMarket()
@@ -3081,6 +3302,23 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleGenerateAll()
+  }
+
+  // Single nightly phase (cron secret). Prefer admin-run from the console.
+  if (
+    body.action === 'generate-chips' ||
+    body.action === 'generate-market-data' ||
+    body.action === 'generate-history'
+  ) {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    const phase: GeneratePhaseId =
+      body.action === 'generate-chips'
+        ? 'chips'
+        : body.action === 'generate-market-data'
+          ? 'market-data'
+          : 'history'
+    return handleGeneratePhase(phase)
   }
 
   // Top-30 by TradeValue (official codes, ETFs kept). Intended from the T86 window (~16:00+), not 15:00 market-daily.
