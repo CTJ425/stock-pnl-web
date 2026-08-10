@@ -110,19 +110,13 @@ export function formatTradeValueYi(v: number): string {
   return `${yi.toFixed(2)} 億`
 }
 
-/**
- * Prefer Storage; if empty, ask Edge to pull the latest STOCK_DAY_ALL ranking (writes archive).
- * @param forceEnsure when true, always call Edge to refresh if client wants a hard reload
- */
-export async function fetchTopTickers(opts?: { forceEnsure?: boolean }): Promise<TopTickersData | null> {
-  const force = opts?.forceEnsure === true
-  if (!force) {
-    const raw = await downloadReportsJson<Record<string, unknown>>('meta/top_tickers.json')
-    const parsed = parseTopTickersPayload(raw)
-    if (parsed) return parsed
-  }
+async function readTopTickersFromStorage(): Promise<TopTickersData | null> {
+  const raw = await downloadReportsJson<Record<string, unknown>>('meta/top_tickers.json')
+  return parseTopTickersPayload(raw)
+}
 
-  // Storage miss or force: ensure via Edge (logged-in user JWT from supabase client)
+/** Logged-in Edge ensure: return archive; may pull TWSE when Storage empty. */
+async function ensureTopTickersFromEdge(): Promise<TopTickersData | null> {
   if (!supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
@@ -138,4 +132,21 @@ export async function fetchTopTickers(opts?: { forceEnsure?: boolean }): Promise
   } catch {
     return null
   }
+}
+
+/**
+ * Prefer Storage; if empty, ask Edge to pull the latest STOCK_DAY_ALL ranking (writes archive).
+ * @param forceEnsure when true, try Edge first then fall back to Storage (never drop a good cache
+ *   just because ensure failed — e.g. Edge not deployed / not logged in).
+ */
+export async function fetchTopTickers(opts?: { forceEnsure?: boolean }): Promise<TopTickersData | null> {
+  if (opts?.forceEnsure === true) {
+    const fromEdge = await ensureTopTickersFromEdge()
+    if (fromEdge) return fromEdge
+    return readTopTickersFromStorage()
+  }
+
+  const fromStorage = await readTopTickersFromStorage()
+  if (fromStorage) return fromStorage
+  return ensureTopTickersFromEdge()
 }

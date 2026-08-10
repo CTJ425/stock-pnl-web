@@ -21,7 +21,10 @@ describe('formatTopYmd / formatTradeValueYi', () => {
 })
 
 describe('fetchTopTickers', () => {
-  beforeEach(() => download.mockReset())
+  beforeEach(() => {
+    download.mockReset()
+    invoke.mockReset()
+  })
 
   it('reads schema 2 days (newest first, max 2)', async () => {
     download.mockResolvedValue({
@@ -44,6 +47,7 @@ describe('fetchTopTickers', () => {
     const d = await fetchTopTickers()
     expect(d?.days).toHaveLength(2)
     expect(d?.latest?.tickers[0]?.ticker).toBe('2330')
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('returns null when missing and ensure fails', async () => {
@@ -78,5 +82,24 @@ describe('fetchTopTickers', () => {
     expect(invoke).toHaveBeenCalledWith('stock-report', {
       body: { action: 'ensure-top-tickers' },
     })
+  })
+
+  it('forceEnsure falls back to Storage when Edge fails (refresh must not wipe)', async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: 'not deployed' } })
+    download.mockResolvedValue({
+      schema: 2,
+      days: [
+        {
+          ymd: '20260807',
+          sourceDate: '1150804',
+          asOf: 'z',
+          tickers: [{ ticker: '2317', name: '鴻海', rank: 1, tradeValue: 2 }],
+        },
+      ],
+    })
+    const d = await fetchTopTickers({ forceEnsure: true })
+    expect(invoke).toHaveBeenCalled()
+    expect(d?.latest?.tickers[0]?.ticker).toBe('2317')
+    expect(d?.fromEnsure).toBeUndefined()
   })
 })

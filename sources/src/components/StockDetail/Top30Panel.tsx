@@ -1,9 +1,9 @@
 /**
  * TOP30 list (Storage meta/top_tickers.json; ensure-top-tickers if empty).
- * Day switcher when both today and previous snapshot exist.
+ * Day switcher when both today and previous snapshot exist. Paginated 10/page.
  */
 import { useEffect, useState } from 'react'
-import { Inbox, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Inbox, RefreshCw } from 'lucide-react'
 import {
   fetchTopTickers,
   formatTopYmd,
@@ -11,6 +11,8 @@ import {
   type TopTickersData,
   type TopTickersDayView,
 } from '../../services/topTickersProxy'
+
+const PAGE_SIZE = 10
 
 interface Top30PanelProps {
   selectedTicker: string | null
@@ -22,23 +24,36 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
   const [loading, setLoading] = useState(true)
   const [dayYmd, setDayYmd] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const load = async (forceEnsure = false) => {
     setLoading(true)
     setNote(null)
     const d = await fetchTopTickers({ forceEnsure })
-    setData(d)
-    setDayYmd((prev) => {
-      if (prev && d?.days.some((x) => x.ymd === prev)) return prev
-      return d?.latest?.ymd ?? null
-    })
-    if (d?.fromEnsure) setNote('已向證交所補抓最新可取得的排行並寫入快取')
+    if (d) {
+      setData(d)
+      setDayYmd((prev) => {
+        if (prev && d.days.some((x) => x.ymd === prev)) return prev
+        return d.latest?.ymd ?? null
+      })
+      if (d.fromEnsure) setNote('已向證交所補抓最新可取得的排行並寫入快取')
+    } else if (forceEnsure) {
+      // Keep previous rows; refresh used to wipe the table when Edge ensure failed.
+      setNote('重新整理未成功，仍顯示先前資料（請確認已登入，或稍後再試）')
+    } else {
+      setData(null)
+      setDayYmd(null)
+    }
     setLoading(false)
   }
 
   useEffect(() => {
     void load(false)
   }, [])
+
+  useEffect(() => {
+    setPage(0)
+  }, [dayYmd])
 
   const day: TopTickersDayView | null =
     data?.days.find((d) => d.ymd === dayYmd) ?? data?.latest ?? null
@@ -74,6 +89,13 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
       </div>
     )
   }
+
+  const total = day.tickers.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage = Math.min(Math.max(0, page), totalPages - 1)
+  const pageRows = day.tickers.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const from = total === 0 ? 0 : safePage * PAGE_SIZE + 1
+  const to = Math.min((safePage + 1) * PAGE_SIZE, total)
 
   return (
     <div className="glass" style={{ padding: '12px 14px' }}>
@@ -139,7 +161,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
             </tr>
           </thead>
           <tbody>
-            {day.tickers.map((t) => {
+            {pageRows.map((t) => {
               const active = t.ticker === selectedTicker
               return (
                 <tr
@@ -177,6 +199,46 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginTop: 10,
+          }}
+        >
+          <span className="hint">
+            第 {from}–{to} 名 · 共 {total} 檔 · 第 {safePage + 1}/{totalPages} 頁
+          </span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={safePage <= 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              aria-label="上一頁"
+            >
+              <ChevronLeft size={14} />
+              上一頁
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              aria-label="下一頁"
+            >
+              下一頁
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <p className="hint" style={{ marginTop: 10 }}>
         點列開個股分析（與「其他台股」相同，無持股成本）。名單最多保留兩個寫入日。
       </p>
