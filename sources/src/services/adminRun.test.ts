@@ -81,7 +81,7 @@ describe('runAdminJobs', () => {
   it('transport 失敗時仍彙總其他 job 的結果', async () => {
     invoke.mockImplementation(async (_name: string, opts: { body: { jobs: string[] } }) => {
       const job = opts.body.jobs[0]
-      if (job === 'generate-all') {
+      if (job === 'generate-chips') {
         const res = new Response('Gateway Timeout', { status: 504 })
         return {
           data: null,
@@ -103,12 +103,12 @@ describe('runAdminJobs', () => {
         error: null,
       }
     })
-    const r = await runAdminJobs(['generate-all', 'sync-fx'])
+    const r = await runAdminJobs(['generate-chips', 'sync-fx'])
     expect(r.ok).toBe(true)
     if (r.ok) {
-      expect(r.data.failed).toContain('generate-all')
+      expect(r.data.failed).toContain('generate-chips')
       expect(r.data.results['sync-fx']?.httpStatus).toBe(200)
-      const genBody = r.data.results['generate-all']?.body as { error?: string }
+      const genBody = r.data.results['generate-chips']?.body as { error?: string }
       expect(genBody?.error).toMatch(/504|逾時|Gateway/)
     }
   })
