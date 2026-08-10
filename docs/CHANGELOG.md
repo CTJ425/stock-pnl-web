@@ -2,55 +2,53 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.6.46（開發中）— 新股票籌碼／基本面提早就緒
+### 0.6.46（2026-08-10）— 新股票提早就緒、TOP30、搜尋個股
 
-#### dev.11（2026-08-10）
+#### 功能摘要
 
-- 🐛 **TOP30 重新整理變空**：`forceEnsure` 失敗時改回讀 Storage，且 UI 保留先前名單並提示，不再整表清空。
-- ✨ **TOP30 分頁**：一次顯示 10 檔，其餘用上一頁／下一頁。
+- ⚡ **progressive warm**（`phase=core|history`）：新股／觀察先秒級可畫，歷史背景補齊；BUG-A 封印後仍可走 history。
+- ✨ **夜批 = 持股 ∪ 觀察 ∪ TOP30**（16:00 起與 T86 同窗）；15:00 仍只有全市場 BFI82U。
+- ✨ **個股分析 TOP30** 分頁（成交金額排行、含 ETF、最多兩交易日快照、每頁 10 檔）；空檔可 `ensure-top-tickers` 補抓。
+- 🎨 分頁文案：**其他台股 → 搜尋個股**；TOP30 **資料日 = 交易日**（與證交所來源對齊，不再並列民國來源日造成誤解）。
+- ✨ FOMC 會議點、market-daily 15 分 + 當日齊備短路等（dev 期間累積）。
 
-#### dev.10（2026-08-10）
+#### 部署注意
 
-- 🐛 **TOP30 無資料**：Storage 空時前端改呼叫 `ensure-top-tickers`（登入）向證交所補抓最近排行並寫入；分頁文案改為 **TOP30**。
+- ⚠️ 需 deploy `stock-report`（`--no-verify-jwt`）：`phase`、TOP30、`ensure-top-tickers`、`sync-top-tickers`、`reportComplete` scopes。
+- ⚠️ 正式區首次需寫入 `meta/top_tickers.json`（管理後台 TOP30 或等 16:00 `generate-all`）。
 
-#### dev.7（2026-08-10）
+<details><summary>開發期間明細（dev.1–dev.12）</summary>
 
-- ✨ **成交值 Top30（含 ETF）併入盤後個股批次**：`generate-all`（**16:00 起**，與 T86 同窗）刷新 `meta/top_tickers.json`，名單 = 持股 ∪ 觀察 ∪ Top30；**15:00 仍只有** `sync-market`／BFI82U 全市場。
-- ✨ 回傳 `scopes.holdings` / `scopes.top30` 與 **`reportComplete`**（雙範圍籌碼 + soft 基本面就緒）；籌碼 `decideSkip` 時仍跑日 K／基本面回補。
-- ✨ 管理後台可手動 `sync-top-tickers`；排程說明更新。
+#### dev.12（2026-08-10）— release polish
 
-#### dev.6（2026-08-10）
+- 🎨 **其他台股 → 搜尋個股**。
+- 🐛 **TOP30 資料日對齊交易日**：寫入 ymd 取證交所 `Date`；UI 只顯示一個資料日（西元）。
 
-- 🐛 **其他台股季報偏薄**：soft warm 以前只要「月 ≥6 且有任一季」就不再 on-demand，導致觀測股在 progressive warm 先補滿月營收後卡在 1–2 季。現在拆成 `needsCoreWarm` / `needsHistoryWarm`（季 &lt; 6 也會再補 history，且不扣 core 額度）。
-- 📌 夜批仍負責 6–11 → 12 的最後一段；UI「歷史補齊中」條件不變（12/12）。
+#### dev.11
 
-#### dev.5（2026-08-10）
+- 🐛 TOP30 重新整理失敗不再清空；分頁 10 檔。
 
-- 🐛 **BUG-A**：session 內 core 封印後不再回傳裸 `FAILED`，改回傳上次結果；個股頁在 core 已封印但基本面仍偏薄時仍可跑 `history`（prefetch 後再開頁不會卡在薄檔）。
+#### dev.10
 
-#### dev.4（2026-08-10）
+- 🐛 Storage 空時 `ensure-top-tickers`；文案 TOP30。
 
-- ⚡ **新股 / 觀測 warm 拆成 core → history**：`phase=core` 只做日 K + 最新基本面（秒級可畫），`phase=history` 再補 MOPS 月營收／季報歷史（不扣第二次日額度）；`phase=full` 仍為一次做完（prefetch 用 progressive 兩段）。
-- 📌 個股分析頁：core 完成即顯示估值／最新月季，歷史表背景補齊並可顯示「歷史補齊中」。
-- ⚠️ **需 deploy `stock-report`** 後 `phase` 才生效；舊 Edge 忽略 phase 會當 full 失敗或行為不符——前後端請一併上。
+#### dev.9
 
-#### dev.3（2026-08-10）
+- ⚡ market-daily 每 15 分；當日量能+法人齊備短路。
 
-- 🎨 非農／消費者信心標籤補英文縮寫：`非農就業 NFP`、`消費者信心 UMCSENT`。
-- 🎨 總經頁移除「落後 N 期」徽章（避免誤以為沒更新）；**管理後台抓取狀況仍顯示**。
+#### dev.8
 
-#### dev.2（2026-08-10）
+- ✨ TOP30 分析分頁與兩日 archive。
 
-- ✨ **FOMC 改為「每次會議一點」**（官方月曆 statement day + FRED 上下限），**含維持利率**；不再只顯示上次調息日。
-- 📌 舊 `macro/us.json` 若 latest 不是月曆會議日會強制重抓一次。
-- ⚠️ 需 deploy `stock-report` 並跑一輪 `sync-macro`。
+#### dev.7
 
-#### dev.1（2026-08-09）
+- ✨ TOP30 併入 generate-all；雙 scope `reportComplete`。
 
-- ✨ **加入觀察清單或首次買進台股時背景 warm**：不必等開「個股分析」才開始抓日 K／基本面（已夠厚的檔案會跳過，省每日額度）。
-- ✨ **夜批標的 = 持股 ∪ 觀察清單**：`generate-all`／手動回補會一併補觀察清單的籌碼報告與 12 個月／12 季歷史。
-- 📌 基本面未滿 12/12 時標示「歷史補齊中（月營收 n/12 · 獲利 m/12）」。
-- ⚠️ **需 deploy `stock-report`**（`--no-verify-jwt`）後夜批才含觀察清單；只上前端仍可在加入清單時 warm。
+#### dev.6–dev.1
+
+- progressive warm、薄季報 history、FOMC 會議點、prefetch／觀察清單夜批等。
+
+</details>
 
 ### 0.6.45（2026-08-07）— FOMC 目錄補齊
 

@@ -1,5 +1,5 @@
 /**
- * Per-user Taiwan-stock watchlist for the "其他台股" analysis sub-tab.
+ * Per-user Taiwan-stock watchlist for the "搜尋個股" analysis sub-tab.
  *
  * - Max 5 tickers; never includes current holdings (pruned client-side when ledger changes).
  * - Cloud: `tw_watchlist` table with RLS. Local / unauthenticated: localStorage fallback so the

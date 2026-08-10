@@ -101,6 +101,22 @@ export function formatTopYmd(ymd: string): string {
   return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
 }
 
+/**
+ * Trading-session day for display: prefer TWSE sourceDate (ROC 7-digit or AD),
+ * else archive ymd. Keeps 「資料日」 aligned with the ranking session even if an
+ * older snapshot stored write-clock ymd.
+ */
+export function displayTopDayYmd(day: Pick<TopTickersDayView, 'ymd' | 'sourceDate'>): string {
+  const src = String(day.sourceDate ?? '').trim()
+  if (/^\d{7}$/.test(src)) {
+    const year = Number(src.slice(0, 3)) + 1911
+    return `${year}${src.slice(3, 5)}${src.slice(5, 7)}`
+  }
+  if (/^\d{8}$/.test(src)) return src
+  if (/^\d{4}-\d{2}-\d{2}$/.test(src)) return src.replace(/-/g, '')
+  return day.ymd
+}
+
 /** Trade value TWD → e.g. 579.5 億 */
 export function formatTradeValueYi(v: number): string {
   if (!Number.isFinite(v) || v <= 0) return '—'

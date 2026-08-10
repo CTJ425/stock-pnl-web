@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Inbox, RefreshCw } from 'lucide-react'
 import {
+  displayTopDayYmd,
   fetchTopTickers,
   formatTopYmd,
   formatTradeValueYi,
@@ -130,7 +131,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
                 className={`subtab${d.ymd === day.ymd ? ' active' : ''}`}
                 onClick={() => setDayYmd(d.ymd)}
               >
-                {formatTopYmd(d.ymd)}
+                {formatTopYmd(displayTopDayYmd(d))}
                 {d.ymd === data.latest?.ymd ? '（最新）' : '（前次）'}
               </button>
             ))}
@@ -142,13 +143,12 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           {note}
         </div>
       )}
-      {data && data.days.length === 1 && (
-        <div className="hint" style={{ marginBottom: 8 }}>
-          資料日 {formatTopYmd(day.ymd)}
-          {day.sourceDate ? ` · 來源日 ${day.sourceDate}` : ''}
-          （若僅一份，即最近一次成功寫入；週一未重跑前可能仍是上週五）
-        </div>
-      )}
+      <div className="hint" style={{ marginBottom: 8 }}>
+        資料日 {formatTopYmd(displayTopDayYmd(day))}
+        {data && data.days.length === 1
+          ? '（成交金額排行所屬交易日；非交易日或尚未更新時可能仍是上一交易日）'
+          : '（成交金額排行所屬交易日）'}
+      </div>
 
       <div className="table-scroll">
         <table className="data-table">
@@ -240,7 +240,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
       )}
 
       <p className="hint" style={{ marginTop: 10 }}>
-        點列開個股分析（與「其他台股」相同，無持股成本）。名單最多保留兩個寫入日。
+        點列開個股分析（與「搜尋個股」相同，無持股成本）。名單最多保留兩個交易日快照。
       </p>
     </div>
   )

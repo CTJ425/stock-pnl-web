@@ -2,7 +2,7 @@
  * Individual stock analysis page: sub-tabs under 個股分析.
  *
  * - 我的持股: dropdown of current TW holdings + StockDetail with cost/ROI.
- * - 其他台股: up to 5 non-holdings (cloud `tw_watchlist` + local fallback), search to add,
+ * - 搜尋個股: up to 5 non-holdings (cloud `tw_watchlist` + local fallback), search to add,
  *   same StockDetail with holding=null.
  * - TOP30: ranked list from Storage (today + previous snapshot); open detail with holding=null.
  *
@@ -73,7 +73,7 @@ export function AnalysisPage() {
     [heldTickers],
   )
 
-  // ---- Watchlist (其他台股) ----
+  // ---- Watchlist (搜尋個股) ----
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
   const [watchLoaded, setWatchLoaded] = useState(false)
   const [selectedWatchTicker, setSelectedWatchTicker] = useState<string | null>(null)
@@ -183,7 +183,7 @@ export function AnalysisPage() {
         ? (prices[selectedRow.holding.key] ?? null)
         : null
 
-  // ---- Search (其他台股 only) ----
+  // ---- Search (搜尋個股 only) ----
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -278,7 +278,7 @@ export function AnalysisPage() {
         className={`subtab${subTab === 'other' ? ' active' : ''}`}
         onClick={() => setSubTab('other')}
       >
-        其他台股
+        搜尋個股
       </button>
       <button
         type="button"
@@ -389,7 +389,7 @@ export function AnalysisPage() {
           value={query}
           onChange={(e) => handleQueryInput(e.target.value)}
           placeholder="搜尋並加入觀察（最多 5 檔）"
-          aria-label="查詢其他台股"
+          aria-label="搜尋個股"
           autoComplete="off"
         />
         {suggestions !== null && (
@@ -497,10 +497,10 @@ export function AnalysisPage() {
           </div>
           <div>目前沒有台股持股。</div>
           <div className="hint" style={{ marginTop: 6 }}>
-            到「交易紀錄」新增台股買入後，這裡會列出你的持股；或切到「其他台股」觀察非持股。
+            到「交易紀錄」新增台股買入後，這裡會列出你的持股；或切到「搜尋個股」觀察非持股。
           </div>
           <button type="button" className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => setSubTab('other')}>
-            前往其他台股
+            前往搜尋個股
           </button>
         </div>
       </div>

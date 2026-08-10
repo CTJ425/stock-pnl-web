@@ -6,8 +6,19 @@ import {
   normalizeTopTickersFile,
   parseTradeValue,
   rankTopByTradeValue,
+  tradingYmdFromSource,
   TOP_TICKERS_DEFAULT_N,
 } from './topTickers.ts'
+
+describe('tradingYmdFromSource', () => {
+  it('maps ROC 7-digit and AD forms to YYYYMMDD', () => {
+    expect(tradingYmdFromSource('1150807')).toBe('20260807')
+    expect(tradingYmdFromSource('20260807')).toBe('20260807')
+    expect(tradingYmdFromSource('2026-08-07')).toBe('20260807')
+    expect(tradingYmdFromSource(null)).toBeNull()
+    expect(tradingYmdFromSource('x')).toBeNull()
+  })
+})
 
 describe('parseTradeValue', () => {
   it('parses plain and comma integers', () => {

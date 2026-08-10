@@ -9,14 +9,26 @@ vi.mock('./supabase', () => ({
 }))
 
 import { downloadReportsJson } from './reportsBucket'
-import { fetchTopTickers, formatTopYmd, formatTradeValueYi } from './topTickersProxy'
+import {
+  displayTopDayYmd,
+  fetchTopTickers,
+  formatTopYmd,
+  formatTradeValueYi,
+} from './topTickersProxy'
 
 const download = vi.mocked(downloadReportsJson)
 
-describe('formatTopYmd / formatTradeValueYi', () => {
+describe('formatTopYmd / formatTradeValueYi / displayTopDayYmd', () => {
   it('formats ymd and 億', () => {
     expect(formatTopYmd('20260807')).toBe('2026-08-07')
     expect(formatTradeValueYi(57_947_015_347)).toMatch(/億/)
+  })
+
+  it('prefers TWSE sourceDate (ROC) over write-clock ymd', () => {
+    expect(
+      displayTopDayYmd({ ymd: '20260810', sourceDate: '1150807' }),
+    ).toBe('20260807')
+    expect(displayTopDayYmd({ ymd: '20260807', sourceDate: null })).toBe('20260807')
   })
 })
 

@@ -45,6 +45,27 @@ export function parseTradeValue(raw: unknown): number {
 }
 
 /**
+ * TWSE STOCK_DAY_ALL `Date` is usually ROC 7-digit (`1150807` → calendar `20260807`).
+ * Also accepts `YYYYMMDD` / `YYYY-MM-DD`. Returns null when unparseable.
+ * Snapshot `ymd` must be this trading day — not the Taipei write clock — so UI
+ * 「資料日」 matches the ranking session and never looks like “Mon write of Fri bars”.
+ */
+export function tradingYmdFromSource(sourceDate: string | null | undefined): string | null {
+  const s = String(sourceDate ?? '').trim()
+  if (!s) return null
+  if (/^\d{7}$/.test(s)) {
+    const year = Number(s.slice(0, 3)) + 1911
+    const mm = s.slice(3, 5)
+    const dd = s.slice(5, 7)
+    if (year < 1912 || year > 2100) return null
+    return `${year}${mm}${dd}`
+  }
+  if (/^\d{8}$/.test(s)) return s
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replace(/-/g, '')
+  return null
+}
+
+/**
  * Rank STOCK_DAY_ALL rows by TradeValue desc and take the first `n`.
  * Zero / invalid trade value rows sink to the bottom and are usually dropped by the slice.
  */

@@ -114,11 +114,11 @@ describe('AnalysisPage', () => {
     vi.useRealTimers()
   })
 
-  it('有二次分頁：我的持股 / 其他台股', () => {
+  it('有二次分頁：我的持股 / 搜尋個股', () => {
     setup(TW_AND_US)
     render(<AnalysisPage />)
     expect(screen.getByRole('tab', { name: '我的持股' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: '其他台股' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '搜尋個股' })).toBeTruthy()
   })
 
   it('個股選單只列台股持股，美股不入選單', async () => {
@@ -198,17 +198,17 @@ describe('AnalysisPage', () => {
     expect(screen.getByTestId('detail-ticker').textContent).toBe('1802')
   })
 
-  it('沒有台股持股時持股分頁顯示空狀態，可切到其他台股', async () => {
+  it('沒有台股持股時持股分頁顯示空狀態，可切到搜尋個股', async () => {
     const user = userEvent.setup()
     setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
     render(<AnalysisPage />)
     expect(screen.getByText(/目前沒有台股持股/)).toBeTruthy()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
-    await user.click(screen.getByRole('button', { name: '前往其他台股' }))
-    expect(screen.getByLabelText('查詢其他台股')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '前往搜尋個股' }))
+    expect(screen.getByLabelText('搜尋個股')).toBeTruthy()
   })
 
-  it('其他台股：搜尋加入觀察後進入分析且不帶持股', async () => {
+  it('搜尋個股：搜尋加入觀察後進入分析且不帶持股', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     setup(TW_AND_US)
     searchStocks.mockResolvedValue([
@@ -218,8 +218,8 @@ describe('AnalysisPage', () => {
     fetchPrices.mockResolvedValue({ 'TPE:2303': { price: 55, stale: false } })
 
     render(<AnalysisPage />)
-    await user.click(screen.getByRole('tab', { name: '其他台股' }))
-    await user.type(screen.getByLabelText('查詢其他台股'), '2303')
+    await user.click(screen.getByRole('tab', { name: '搜尋個股' }))
+    await user.type(screen.getByLabelText('搜尋個股'), '2303')
     await vi.advanceTimersByTimeAsync(350)
 
     expect(await screen.findByRole('option', { name: /2303 聯電/ })).toBeTruthy()
@@ -236,7 +236,7 @@ describe('AnalysisPage', () => {
     expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2303' }])
   })
 
-  it('其他台股：搜尋自己已持有的代號改走持股分頁', async () => {
+  it('搜尋個股：搜尋自己已持有的代號改走持股分頁', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     setup(TW_AND_US, {
       'TPE:1802': { price: 51, stale: false },
@@ -245,8 +245,8 @@ describe('AnalysisPage', () => {
     searchStocks.mockResolvedValue([{ symbol: '2330', name: '台積電', market: 'TPE' }])
 
     render(<AnalysisPage />)
-    await user.click(screen.getByRole('tab', { name: '其他台股' }))
-    await user.type(screen.getByLabelText('查詢其他台股'), '2330')
+    await user.click(screen.getByRole('tab', { name: '搜尋個股' }))
+    await user.type(screen.getByLabelText('搜尋個股'), '2330')
     await vi.advanceTimersByTimeAsync(350)
     await user.click(await screen.findByRole('option', { name: /2330 台積電/ }))
 

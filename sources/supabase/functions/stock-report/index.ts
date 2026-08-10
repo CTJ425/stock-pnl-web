@@ -104,6 +104,7 @@ import {
   mergeTopTickersArchive,
   normalizeTopTickersFile,
   rankTopByTradeValue,
+  tradingYmdFromSource,
   type StockDayAllRow,
   type TopTickersFile,
 } from './topTickers.ts'
@@ -1057,7 +1058,9 @@ async function syncTopTickers(opts?: { force?: boolean }): Promise<{
 
   const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
   const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
-  const day = buildTopTickersDay({ ymd: todayYmd, sourceDate, tickers: ranked })
+  // Prefer TWSE session day over write clock so archive ymd === ranking trade day.
+  const ymd = tradingYmdFromSource(sourceDate) ?? todayYmd
+  const day = buildTopTickersDay({ ymd, sourceDate, tickers: ranked })
   const file = mergeTopTickersArchive(existing, day)
   const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
   if (!uploaded && latest?.tickers.length) {
