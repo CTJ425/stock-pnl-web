@@ -1,9 +1,11 @@
 /**
- * Trade-value Top 30 (official TWSE codes, ETFs included).
- * Reads public `meta/top_tickers.json` — written by stock-report generate-all / sync-top-tickers.
- * Keeps at most today + previous snapshot (e.g. Monday still shows Friday until re-ranked).
+ * TOP30 (trade-value rank, official TWSE codes, ETFs included).
+ * 1) Read public `meta/top_tickers.json` (today + previous snapshot).
+ * 2) If missing/empty, invoke Edge `ensure-top-tickers` (logged-in) to fetch last available
+ *    STOCK_DAY_ALL ranking and write Storage so the UI is never stuck empty.
  */
 import { downloadReportsJson } from './reportsBucket'
+import { supabase } from './supabase'
 
 export interface TopTickerRow {
   ticker: string
@@ -23,6 +25,8 @@ export interface TopTickersData {
   days: TopTickersDayView[]
   /** Newest day (or only day). */
   latest: TopTickersDayView | null
+  /** True when data came from ensure-top-tickers refresh this call. */
+  fromEnsure?: boolean
 }
 
 function parseDay(raw: unknown): TopTickersDayView | null {
@@ -53,26 +57,9 @@ function parseDay(raw: unknown): TopTickersDayView | null {
   }
 }
 
-/** Format YYYYMMDD → YYYY-MM-DD for UI. */
-export function formatTopYmd(ymd: string): string {
-  if (!/^\d{8}$/.test(ymd)) return ymd
-  return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
-}
-
-/** Trade value TWD → e.g. 579.5 億 */
-export function formatTradeValueYi(v: number): string {
-  if (!Number.isFinite(v) || v <= 0) return '—'
-  const yi = v / 1e8
-  if (yi >= 100) return `${yi.toFixed(0)} 億`
-  if (yi >= 10) return `${yi.toFixed(1)} 億`
-  return `${yi.toFixed(2)} 億`
-}
-
-export async function fetchTopTickers(): Promise<TopTickersData | null> {
-  const raw = await downloadReportsJson<Record<string, unknown>>('meta/top_tickers.json')
+function parseTopTickersPayload(raw: Record<string, unknown> | null | undefined): TopTickersData | null {
   if (!raw) return null
 
-  // schema 2: days[]
   if (Array.isArray(raw.days)) {
     const days: TopTickersDayView[] = []
     for (const d of raw.days) {
@@ -106,4 +93,49 @@ export async function fetchTopTickers(): Promise<TopTickersData | null> {
   })
   if (!day) return null
   return { days: [day], latest: day }
+}
+
+/** Format YYYYMMDD → YYYY-MM-DD for UI. */
+export function formatTopYmd(ymd: string): string {
+  if (!/^\d{8}$/.test(ymd)) return ymd
+  return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
+}
+
+/** Trade value TWD → e.g. 579.5 億 */
+export function formatTradeValueYi(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return '—'
+  const yi = v / 1e8
+  if (yi >= 100) return `${yi.toFixed(0)} 億`
+  if (yi >= 10) return `${yi.toFixed(1)} 億`
+  return `${yi.toFixed(2)} 億`
+}
+
+/**
+ * Prefer Storage; if empty, ask Edge to pull the latest STOCK_DAY_ALL ranking (writes archive).
+ * @param forceEnsure when true, always call Edge to refresh if client wants a hard reload
+ */
+export async function fetchTopTickers(opts?: { forceEnsure?: boolean }): Promise<TopTickersData | null> {
+  const force = opts?.forceEnsure === true
+  if (!force) {
+    const raw = await downloadReportsJson<Record<string, unknown>>('meta/top_tickers.json')
+    const parsed = parseTopTickersPayload(raw)
+    if (parsed) return parsed
+  }
+
+  // Storage miss or force: ensure via Edge (logged-in user JWT from supabase client)
+  if (!supabase) return null
+  try {
+    const { data, error } = await supabase.functions.invoke('stock-report', {
+      body: { action: 'ensure-top-tickers' },
+    })
+    if (error || !data || typeof data !== 'object') return null
+    const d = data as Record<string, unknown>
+    const file = d.file
+    if (!file || typeof file !== 'object') return null
+    const parsed = parseTopTickersPayload(file as Record<string, unknown>)
+    if (!parsed) return null
+    return { ...parsed, fromEnsure: d.refreshed === true }
+  } catch {
+    return null
+  }
 }

@@ -1114,6 +1114,30 @@ async function handleSyncTopTickers(): Promise<Response> {
   })
 }
 
+/**
+ * Logged-in browser path: return top_tickers archive; if Storage empty, fetch TWSE once and write.
+ * Avoids empty TOP30 UI when nightly has not run yet (or only prod Edge is old).
+ */
+async function handleEnsureTopTickers(): Promise<Response> {
+  const startedAt = Date.now()
+  let file = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
+  let refreshed = false
+  let syncErr: string | null = null
+  if (!file?.days?.length) {
+    const result = await syncTopTickers({ force: true })
+    refreshed = !result.reused
+    syncErr = result.error ?? null
+    file = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
+  }
+  return json({
+    ok: file != null && (file.days?.length ?? 0) > 0,
+    file,
+    refreshed,
+    error: file ? null : syncErr ?? 'empty',
+    durationMs: Date.now() - startedAt,
+  })
+}
+
 async function uploadJson(path: string, payload: unknown): Promise<boolean> {
   try {
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
@@ -3061,6 +3085,13 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleSyncTopTickers()
+  }
+
+  // Browser: read archive; if empty, pull TWSE and write Storage (assertUser, not cron).
+  if (body.action === 'ensure-top-tickers') {
+    const auth = await assertUser(req)
+    if (auth instanceof Response) return auth
+    return handleEnsureTopTickers()
   }
 
   // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.

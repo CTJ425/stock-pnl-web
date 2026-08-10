@@ -1,5 +1,5 @@
 /**
- * Trade-value Top 30 list (Storage meta/top_tickers.json).
+ * TOP30 list (Storage meta/top_tickers.json; ensure-top-tickers if empty).
  * Day switcher when both today and previous snapshot exist.
  */
 import { useEffect, useState } from 'react'
@@ -21,20 +21,23 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
   const [data, setData] = useState<TopTickersData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dayYmd, setDayYmd] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = async (forceEnsure = false) => {
     setLoading(true)
-    const d = await fetchTopTickers()
+    setNote(null)
+    const d = await fetchTopTickers({ forceEnsure })
     setData(d)
     setDayYmd((prev) => {
       if (prev && d?.days.some((x) => x.ymd === prev)) return prev
       return d?.latest?.ymd ?? null
     })
+    if (d?.fromEnsure) setNote('已向證交所補抓最新可取得的排行並寫入快取')
     setLoading(false)
   }
 
   useEffect(() => {
-    void load()
+    void load(false)
   }, [])
 
   const day: TopTickersDayView | null =
@@ -43,7 +46,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
   if (loading && !data) {
     return (
       <div className="glass empty-state">
-        <div className="hint">正在讀取成交值 Top30…</div>
+        <div className="hint">正在讀取 TOP30…</div>
       </div>
     )
   }
@@ -54,13 +57,19 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
         <div className="empty-icon">
           <Inbox size={36} />
         </div>
-        <div>尚無 Top30 名單。</div>
+        <div>尚無 TOP30 名單。</div>
         <div className="hint" style={{ marginTop: 6 }}>
-          盤後批次（16:00 起）會寫入 meta/top_tickers.json；週末或尚未跑批前會顯示最近一次（例如週一仍見週五）。
+          請確認已登入。將向證交所補抓最近交易日排行（寫入 Storage，之後批次會沿用）。
         </div>
-        <button type="button" className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => void load()}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          style={{ marginTop: 12 }}
+          onClick={() => void load(true)}
+          disabled={loading}
+        >
           <RefreshCw size={14} />
-          重新整理
+          補抓排行
         </button>
       </div>
     )
@@ -77,14 +86,19 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           marginBottom: 10,
         }}
       >
-        <strong style={{ fontSize: 14 }}>成交值 Top30</strong>
-        <span className="hint">上市（含 ETF）· 官方證券代號</span>
-        <button type="button" className="btn btn-sm" onClick={() => void load()} disabled={loading}>
+        <strong style={{ fontSize: 14 }}>TOP30</strong>
+        <span className="hint">上市成交金額 · 含 ETF · 官方證券代號</span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => void load(true)}
+          disabled={loading}
+        >
           <RefreshCw size={13} className={loading ? 'spin' : undefined} />
           重新整理
         </button>
         {data && data.days.length > 1 && (
-          <div className="subtabs" role="tablist" aria-label="Top30 資料日" style={{ marginLeft: 'auto' }}>
+          <div className="subtabs" role="tablist" aria-label="TOP30 資料日" style={{ marginLeft: 'auto' }}>
             {data.days.map((d) => (
               <button
                 key={d.ymd}
@@ -101,10 +115,16 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           </div>
         )}
       </div>
+      {note && (
+        <div className="hint" style={{ marginBottom: 8 }} role="status">
+          {note}
+        </div>
+      )}
       {data && data.days.length === 1 && (
         <div className="hint" style={{ marginBottom: 8 }}>
           資料日 {formatTopYmd(day.ymd)}
           {day.sourceDate ? ` · 來源日 ${day.sourceDate}` : ''}
+          （若僅一份，即最近一次成功寫入；週一未重跑前可能仍是上週五）
         </div>
       )}
 
@@ -158,7 +178,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
         </table>
       </div>
       <p className="hint" style={{ marginTop: 10 }}>
-        點列開個股分析（與「其他台股」相同，無持股成本）。名單僅保留最近兩個寫入日。
+        點列開個股分析（與「其他台股」相同，無持股成本）。名單最多保留兩個寫入日。
       </p>
     </div>
   )

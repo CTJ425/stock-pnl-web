@@ -46,7 +46,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
       '15:00–18:45 每 15 分：FMTQIK + BFI82U → market/daily.json；當日量能+法人買進齊了就短路不重打',
   },
   'sync-top-tickers': {
-    title: '成交值 Top30 名單',
+    title: 'TOP30 名單',
     cron: '（併 generate-all／可手動）',
     hint: 'STOCK_DAY_ALL 排行（含 ETF）→ meta/top_tickers.json；與 15:00 全市場分開',
   },

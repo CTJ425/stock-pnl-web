@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('./reportsBucket', () => ({
   downloadReportsJson: vi.fn(),
+}))
+vi.mock('./supabase', () => ({
+  supabase: { functions: { invoke } },
 }))
 
 import { downloadReportsJson } from './reportsBucket'
@@ -42,8 +46,37 @@ describe('fetchTopTickers', () => {
     expect(d?.latest?.tickers[0]?.ticker).toBe('2330')
   })
 
-  it('returns null when missing', async () => {
+  it('returns null when missing and ensure fails', async () => {
     download.mockResolvedValue(null)
+    invoke.mockResolvedValue({ data: null, error: { message: 'x' } })
     expect(await fetchTopTickers()).toBeNull()
+  })
+
+  it('falls back to ensure-top-tickers when Storage empty', async () => {
+    download.mockResolvedValue(null)
+    invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        refreshed: true,
+        file: {
+          schema: 2,
+          days: [
+            {
+              ymd: '20260807',
+              sourceDate: '1150804',
+              asOf: 'z',
+              tickers: [{ ticker: '2330', name: '台積電', rank: 1, tradeValue: 1 }],
+            },
+          ],
+        },
+      },
+      error: null,
+    })
+    const d = await fetchTopTickers()
+    expect(d?.latest?.tickers[0]?.ticker).toBe('2330')
+    expect(d?.fromEnsure).toBe(true)
+    expect(invoke).toHaveBeenCalledWith('stock-report', {
+      body: { action: 'ensure-top-tickers' },
+    })
   })
 })
