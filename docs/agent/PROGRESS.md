@@ -1,9 +1,40 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.47 manual admin-run one job per request; merge main
-- Status: **0.6.47 on main (Pages)**
-- Timestamp: 2026-08-10 23:05:00 Asia/Taipei
+- Action: Prod Edge audit + deploy attempt (stock-report / stock-price)
+- Status: **Already in sync with main @ 9809980; no new bundle**
+- Timestamp: 2026-08-10 23:10:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 23:10:00 Asia/Taipei (prod Edge verify)
+
+- **Agent**: Grok
+- **Action**: User authorized prod Edge patch after 0.6.47 frontend ship
+
+### Before / deploy
+| Function | Version | verify_jwt | ezbr_sha256 (prefix) | CLI deploy result |
+| ---- | ---- | ---- | ---- | ---- |
+| stock-report | **v33** | false | `7b64e4b765083b07…` | **No change found** (bundle = local) |
+| stock-price | **v17** | true | `8c1b665d73b791df…` | **No change found** |
+
+- Project: `kxnxadaghidwumqsqneu`
+- Local tree: `main` / `9809980` (0.6.47)
+- `functions download stock-report`: `sync-top-tickers` present in `ADMIN_RUN_JOBS` + action routes
+
+### Smoke (no JWT)
+| action | HTTP | body |
+| ---- | ---- | ---- |
+| admin-run | 401 | Unauthorized |
+| sync-top-tickers | 401 | Unauthorized |
+| ensure-top-tickers | 401 | Unauthorized |
+| warm | 400 | ticker 格式不正確 |
+| unknown-xyz | 400 | Unknown action |
+
+### Conclusion
+Prod Edge already carried the 0.6.46 TOP30 / progressive-warm / admin-run job list
+(v33 updated 2026-08-10 06:46 UTC). The opaque non-2xx on 「全部執行」 was the
+**frontend multi-job single request** issue fixed in 0.6.47 Pages, not missing Edge code.
 
 ---
 
