@@ -3,11 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-const { fetchMacro } = vi.hoisted(() => ({ fetchMacro: vi.fn() }))
+const { fetchMacro, fetchMarketDaily } = vi.hoisted(() => ({
+  fetchMacro: vi.fn(),
+  fetchMarketDaily: vi.fn(),
+}))
 vi.mock('../../services/macroProxy', () => ({ fetchMacro }))
+vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
 
 import { MacroPage } from './MacroPage'
 import type { MacroData } from '../../services/macroProxy'
+
+/** Open the US tab (default is 台股 since 0.7.1-dev.1). */
+async function openUsTab(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('tab', { name: '美國經濟' }))
+}
 
 const macro: MacroData = {
   asOf: '2026-07-28T07:33:38.000Z',
@@ -69,26 +78,45 @@ const macro: MacroData = {
 }
 
 describe('MacroPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: [] })
+  })
   afterEach(() => cleanup())
 
-  it('載入中顯示佔位', () => {
+  it('總經有二次分頁：台股 / 美國經濟（預設台股）', async () => {
+    fetchMacro.mockResolvedValue(macro)
+    render(<MacroPage />)
+    expect(screen.getByRole('tab', { name: '台股' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: '美國經濟' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByText('美國總體經濟')).toBeNull()
+    // TW section loads its own empty/market card
+    expect(await screen.findByText(/台股市場|正在讀取台股市場/)).toBeTruthy()
+  })
+
+  it('載入中顯示佔位', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockReturnValue(new Promise(() => {}))
     render(<MacroPage />)
+    await openUsTab(user)
     expect(screen.getByText('正在讀取總體經濟資料…')).toBeTruthy()
   })
 
   it('查無資料時的空狀態，文案不提「盤後批次」（總經跟台股盤後無關）', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(null)
     render(<MacroPage />)
+    await openUsTab(user)
     expect(await screen.findByText('總體經濟資料尚未產生。')).toBeTruthy()
     expect(screen.getByText(/每日排程完成後會自動補上/)).toBeTruthy()
     expect(screen.queryByText(/盤後批次/)).toBeNull()
   })
 
   it('指標壓成一行 chip，只有名稱與最新值（0.6.35）；rate 顯示區間無 + 前綴', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     const chips = [...container.querySelectorAll('.mac-chip')].map((e) => e.textContent)
     // % growth / rate range / thousand people / index
@@ -104,8 +132,10 @@ describe('MacroPage', () => {
   })
 
   it('chip 列與近期走勢表同卡，不再拆成兩張（0.6.38）', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     // The US block is one card: the chips and the table sit inside the same .glass as the refresh button,
     // which is the point of the merge —— split apart, the 資料更新於 stamp looked as if it only covered the chips.
@@ -117,8 +147,10 @@ describe('MacroPage', () => {
   })
 
   it('一列一個指標，欄位為 指標／最新／較上期／趨勢／連續（0.6.35）', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     const heads = [...container.querySelectorAll('.data-table thead th')].map((e) => e.textContent)
     expect(heads).toEqual(['指標', '最新', '較上期', '趨勢', '連續'])
@@ -137,8 +169,10 @@ describe('MacroPage', () => {
   })
 
   it('總經頁不顯示「落後 N 期」——避免誤以為沒更新（後台抓取狀況才顯示）', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     // Fixture still has UMCSENT one month behind PAYEMS; end-user page must not badge it.
     expect(container.querySelectorAll('.mac-row-label .badge')).toHaveLength(0)
@@ -158,7 +192,9 @@ describe('MacroPage', () => {
         ind.id === 'UMCSENT' ? { ...ind, previous: { period: '2026-04', value: 40 } } : ind,
       ),
     })
+    const user = userEvent.setup()
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     const rows = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')]
 
@@ -175,6 +211,7 @@ describe('MacroPage', () => {
 
   it('連 2 期以上才在「連續」欄印字，否則給「—」而非留白', async () => {
     // Core CPI fell for three consecutive periods; non-farm payrolls only fell for one period, and consumer confidence only fell for two periods, neither of which constitutes a trend.
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue({
       ...macro,
       indicators: macro.indicators.map((ind) =>
@@ -192,6 +229,7 @@ describe('MacroPage', () => {
       ),
     })
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     const streaks = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')].map(
       (r) => r.querySelectorAll('td')[4].textContent,
@@ -200,6 +238,7 @@ describe('MacroPage', () => {
   })
 
   it('缺值中斷連續：不把兩段不相干的走勢接起來', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue({
       ...macro,
       indicators: macro.indicators.map((ind) =>
@@ -217,6 +256,7 @@ describe('MacroPage', () => {
       ),
     })
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     // After the missing value, there is only a period of decline from 2.82 → 2.57, which is not a trend for one period in a row.
     const streaks = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')].map(
@@ -229,6 +269,7 @@ describe('MacroPage', () => {
     const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
 
@@ -249,21 +290,27 @@ describe('MacroPage', () => {
   })
 
   it('顏色的意思要寫出來——紅不等於好消息', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     expect(screen.getByText(/升降本身沒有好壞之分/)).toBeTruthy()
   })
 
   it('標示資料產出時間', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
+    await openUsTab(user)
     expect(await screen.findByText(/資料更新於 2026-07-28 \d{2}:\d{2}/)).toBeTruthy()
   })
 
   it('同日檢查過時不多印「最後檢查」——那只會重複 asOf，沒有資訊量', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText(/資料更新於/)
     expect(screen.queryByText(/最後檢查/)).toBeNull()
   })
@@ -271,22 +318,28 @@ describe('MacroPage', () => {
   it('資料已數日未變時補上「最後檢查」，讓沒發布與排程掛掉分得開', async () => {
     // Starting from 0.6.11, asOf only jumps when the data really changes, and monthly data only moves once a month.
     // Without this line, the screen will look broken.
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue({ ...macro, checkedAt: '2026-07-31T13:00:01.000Z' })
     render(<MacroPage />)
+    await openUsTab(user)
     expect(await screen.findByText(/最後檢查 2026-07-31 \d{2}:\d{2}/)).toBeTruthy()
     expect(screen.getByText(/資料更新於 2026-07-28 \d{2}:\d{2}/)).toBeTruthy()
   })
 
   it('舊檔沒有 checkedAt 時照常渲染，不印空括號', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue({ ...macro, checkedAt: '' })
     render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText(/資料更新於/)
     expect(screen.queryByText(/最後檢查/)).toBeNull()
   })
 
   it('重新整理鈕會重抓', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     expect(fetchMacro).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: /重新整理/ }))
@@ -294,8 +347,10 @@ describe('MacroPage', () => {
   })
 
   it('不再有「與您正在查看的個股無關」那句補救文案（已是獨立頁面）', async () => {
+    const user = userEvent.setup()
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
+    await openUsTab(user)
     await screen.findByText('美國總體經濟')
     expect(screen.queryByText(/正在查看的個股/)).toBeNull()
   })

@@ -1,16 +1,14 @@
 /**
- * "General Economy" top page: Five general economic indicators in the United States.
+ * Top-level 「總體經濟」 page (0.7.1-dev.1): two sub-tabs under one nav item.
  *
- * In 0.6.5-dev.1, this was a page under individual stock analysis, and dev.2 was promoted to the top page——
- * **This information has nothing to do with individual stocks** and is shared by the entire market. Hanging under individual stock analysis will force users to
- * After selecting a stock first, you can see a piece of information that has nothing to do with that stock, and you have to print a special line
- * "It has nothing to do with the stock you are looking at" to remedy the situation. That sentence is unnecessary after mentioning the top layer.
+ * - 台股: market volume / TAIEX / 三大法人 (TwMarketSection)
+ * - 美國經濟: FRED indicators from macro/us.json
  *
- * The data comes from `macro/us.json` (global single file, not per-ticker), this component **loads itself** ——
- * It no longer has a parent component to distribute (`AiTab` needs to grab the same data by itself, see the description of this file).
+ * Both blocks used to stack on one scroll. Splitting keeps each question in its own pane
+ * (market vs US macro) without promoting either to a top-level route.
  *
- * Unit Trap: The three price indicators are **%** (annual growth rate), non-agriculture is **thousand people** (increase or decrease from the previous month),
- * Consumer confidence is an **index value**. Always read the `unit` that comes with the information, and don’t write it down here.
+ * US unit trap: price series are **%** (YoY), non-farm is **thousands** (MoM), consumer
+ * confidence is an **index**. Always use each indicator's `unit`.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronsDownUp, ChevronsUpDown, Globe, Minus, Plus, RefreshCw } from 'lucide-react'
@@ -20,6 +18,8 @@ import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 // Peer lag badges live on Admin only — on this page they read as "stale data" to end users.
 import { TwMarketSection } from './TwMarketSection'
+
+type MacroSubTab = 'tw' | 'us'
 
 /** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
 function isSameDay(a: string, b: string): boolean {
@@ -251,7 +251,7 @@ function IndicatorRow({
   )
 }
 
-export function MacroPage() {
+function UsMacroPanel() {
   const [macro, setMacro] = useState<MacroData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -267,36 +267,26 @@ export function MacroPage() {
     void load()
   }, [load])
 
-  /*
-    The Taiwan market block stays mounted underneath the US loading / empty states (0.6.28):
-    the two blocks load and fail independently, and a FRED outage must not reduce the whole page to one line.
-  */
   if (loading) {
     return (
-      <>
-        <div className="glass empty-state section">
-          <RefreshCw size={28} className="spin" />
-          <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
-        </div>
-        <TwMarketSection />
-      </>
+      <div className="glass empty-state section">
+        <RefreshCw size={28} className="spin" />
+        <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
+      </div>
     )
   }
 
   if (!macro) {
     return (
-      <>
-        <div className="glass empty-state section">
-          <div className="empty-icon">
-            <Globe size={36} />
-          </div>
-          <div>總體經濟資料尚未產生。</div>
-          <div className="hint" style={{ marginTop: 6 }}>
-            每日排程完成後會自動補上，稍後再回來看看。
-          </div>
+      <div className="glass empty-state section">
+        <div className="empty-icon">
+          <Globe size={36} />
         </div>
-        <TwMarketSection />
-      </>
+        <div>總體經濟資料尚未產生。</div>
+        <div className="hint" style={{ marginTop: 6 }}>
+          每日排程完成後會自動補上，稍後再回來看看。
+        </div>
+      </div>
     )
   }
 
@@ -317,106 +307,129 @@ export function MacroPage() {
   const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
 
   return (
-    <>
-      {/*
-        A top-level page has no .detail-body around it (that is the individual-stock container, padded in index.css),
-        so it wraps itself in .section + .glass —— without that the content sits flush against the window edge.
-      */}
-      <div className="section glass" style={{ padding: '18px 20px' }}>
-        <div className="rpt-section-head">
-          <h3 className="head-tight">{macro.region}總體經濟</h3>
-          {macro.asOf && (
-            <span className="source-tag section-stamp">
-              資料更新於 {fmtUpdatedAt(macro.asOf)}
-              {/*
-                Since 0.6.11 asOf only moves when the data really changed, and monthly series move once a month ——
-                on its own that looks broken. A check time on the same day carries no information (it is asOf itself),
-                so it is only appended on a different day, which separates "not published yet" from "the schedule died".
-              */}
-              {macro.checkedAt && !isSameDay(macro.checkedAt, macro.asOf) && (
-                <>（最後檢查 {fmtUpdatedAt(macro.checkedAt)}）</>
-              )}
-            </span>
-          )}
-          <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'spin' : undefined} />
-            重新整理
-          </button>
-        </div>
+    /*
+      A top-level page has no .detail-body around it (that is the individual-stock container, padded in index.css),
+      so it wraps itself in .section + .glass —— without that the content sits flush against the window edge.
+    */
+    <div className="section glass" style={{ padding: '18px 20px' }}>
+      <div className="rpt-section-head">
+        <h3 className="head-tight">{macro.region}總體經濟</h3>
+        {macro.asOf && (
+          <span className="source-tag section-stamp">
+            資料更新於 {fmtUpdatedAt(macro.asOf)}
+            {/*
+              Since 0.6.11 asOf only moves when the data really changed, and monthly series move once a month ——
+              on its own that looks broken. A check time on the same day carries no information (it is asOf itself),
+              so it is only appended on a different day, which separates "not published yet" from "the schedule died".
+            */}
+            {macro.checkedAt && !isSameDay(macro.checkedAt, macro.asOf) && (
+              <>（最後檢查 {fmtUpdatedAt(macro.checkedAt)}）</>
+            )}
+          </span>
+        )}
+        <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'spin' : undefined} />
+          重新整理
+        </button>
+      </div>
 
-        {/* Slimmed to one line (0.6.35): the detail is all in the table below, so cards said the same numbers twice */}
-        <div className="mac-chip-row">
-          {macro.indicators.map((ind) => (
-            <IndicatorChip key={ind.id} ind={ind} />
-          ))}
-        </div>
-
-        {/*
-          One row per indicator (0.6.35; it used to be one row per month).
-
-          **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
-          The five macro indicators have no such total (their units are %, thousands of people, index points ——
-          adding them means nothing). One row per indicator makes trend and streak describe that indicator's own
-          12 periods, so the semantics hold, and it matches the institutional table's shape: one row per thing,
-          plus that thing's own trend and streak.
-
-          The cost is that "five indicators in the same month" must be read across. That trade-off is deliberate.
-
-          Since 0.6.38 this shares **one card** with the chip row above: both are the same set of indicators read
-          two ways (what it is now / how it moved over 12 periods). Split across two cards, the "資料更新於" stamp
-          and the refresh button looked as if they only governed the upper one.
-        */}
-        <div className="rpt-section-head" style={{ marginTop: 18 }}>
-          <div className="chart-title">近期走勢・近 12 期</div>
-          {expandable.length > 0 && (
-            <button className="btn btn-sm" onClick={toggleAll}>
-              {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-              {allOpen ? '全部收起' : '全部展開'}
-            </button>
-          )}
-        </div>
-
-        <div className="table-scroll" style={{ marginTop: 12 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>指標</th>
-                <th className="num">最新</th>
-                <th className="num">較上期</th>
-                <th className="num">趨勢</th>
-                <th className="num">連續</th>
-              </tr>
-            </thead>
-            <tbody>
-              {macro.indicators.map((ind) => (
-                <IndicatorRow
-                  key={ind.id}
-                  ind={ind}
-                  open={expanded.has(ind.id)}
-                  onToggle={() => toggle(ind.id)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/*
-          Do not delete this sentence: once the whole table switched to rise/fall colouring, red and green on
-          non-farm payrolls stopped meaning "jobs added / lost" and started meaning "higher / lower than last
-          period". Without it, red reads as good news.
-        */}
-        <p className="hint" style={{ marginTop: 8 }}>
-          紅色代表比上期高、綠色代表比上期低；升降本身沒有好壞之分。
-          點左側的「＋」看該指標逐期的數字。資料來源：美國聖路易聯準銀行 FRED。
-        </p>
+      {/* Slimmed to one line (0.6.35): the detail is all in the table below, so cards said the same numbers twice */}
+      <div className="mac-chip-row">
+        {macro.indicators.map((ind) => (
+          <IndicatorChip key={ind.id} ind={ind} />
+        ))}
       </div>
 
       {/*
-        The Taiwan market goes after the US macro block: this page is about market background unrelated to any
-        one stock, and both belong to that. It loads its own data the same way this page does, independently ——
-        when the US side cannot be fetched, this section still shows.
+        One row per indicator (0.6.35; it used to be one row per month).
+
+        **Why transpose**: The "trend/continuation" of the legal person table describes the sequence of "total".
+        The five macro indicators have no such total (their units are %, thousands of people, index points ——
+        adding them means nothing). One row per indicator makes trend and streak describe that indicator's own
+        12 periods, so the semantics hold, and it matches the institutional table's shape: one row per thing,
+        plus that thing's own trend and streak.
+
+        The cost is that "five indicators in the same month" must be read across. That trade-off is deliberate.
+
+        Since 0.6.38 this shares **one card** with the chip row above: both are the same set of indicators read
+        two ways (what it is now / how it moved over 12 periods). Split across two cards, the "資料更新於" stamp
+        and the refresh button looked as if they only governed the upper one.
       */}
-      <TwMarketSection />
+      <div className="rpt-section-head" style={{ marginTop: 18 }}>
+        <div className="chart-title">近期走勢・近 12 期</div>
+        {expandable.length > 0 && (
+          <button className="btn btn-sm" onClick={toggleAll}>
+            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+            {allOpen ? '全部收起' : '全部展開'}
+          </button>
+        )}
+      </div>
+
+      <div className="table-scroll" style={{ marginTop: 12 }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>指標</th>
+              <th className="num">最新</th>
+              <th className="num">較上期</th>
+              <th className="num">趨勢</th>
+              <th className="num">連續</th>
+            </tr>
+          </thead>
+          <tbody>
+            {macro.indicators.map((ind) => (
+              <IndicatorRow
+                key={ind.id}
+                ind={ind}
+                open={expanded.has(ind.id)}
+                onToggle={() => toggle(ind.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/*
+        Do not delete this sentence: once the whole table switched to rise/fall colouring, red and green on
+        non-farm payrolls stopped meaning "jobs added / lost" and started meaning "higher / lower than last
+        period". Without it, red reads as good news.
+      */}
+      <p className="hint" style={{ marginTop: 8 }}>
+        紅色代表比上期高、綠色代表比上期低；升降本身沒有好壞之分。
+        點左側的「＋」看該指標逐期的數字。資料來源：美國聖路易聯準銀行 FRED。
+      </p>
+    </div>
+  )
+}
+
+export function MacroPage() {
+  const [tab, setTab] = useState<MacroSubTab>('tw')
+
+  return (
+    <>
+      <div className="section" style={{ marginBottom: 0, paddingBottom: 0 }}>
+        <div className="subtabs" role="tablist" aria-label="總體經濟分類">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'tw'}
+            className={`subtab${tab === 'tw' ? ' active' : ''}`}
+            onClick={() => setTab('tw')}
+          >
+            台股
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'us'}
+            className={`subtab${tab === 'us' ? ' active' : ''}`}
+            onClick={() => setTab('us')}
+          >
+            美國經濟
+          </button>
+        </div>
+      </div>
+      {tab === 'tw' ? <TwMarketSection /> : <UsMacroPanel />}
     </>
   )
 }

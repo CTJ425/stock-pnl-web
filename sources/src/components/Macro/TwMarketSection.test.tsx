@@ -192,7 +192,7 @@ describe('TwMarketSection', () => {
     expect(prev[5]).toBe('-165.2 億')
   })
 
-  it('展開某一天可看到六個單位的買進 / 賣出，舊資料沒有明細就沒有展開鈕（0.6.32）', async () => {
+  it('有買賣明細的列預設展開，可見六單位買進／賣出；舊資料無展開鈕（0.7.1-dev.1）', async () => {
     const user = userEvent.setup()
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
@@ -204,25 +204,22 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    // The expand button will only be given on the day with the details, but the old information will not be given on that day (there is nothing to see if you click on it)
-    const toggles = screen.getAllByRole('button', { name: /展開 .* 的買進賣出明細/ })
-    expect(toggles).toHaveLength(1)
-    expect(toggles[0].getAttribute('aria-label')).toContain('2026-08-04')
-
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
-    await user.click(toggles[0])
+    // Default open (0.7.1-dev.1): buy/sell visible without an extra click
+    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
+    const collapseBtn = screen.getByRole('button', { name: /收合 2026-08-04 的買進賣出明細/ })
+    expect(collapseBtn).toBeTruthy()
+    // Old row has no toggle
+    expect(screen.queryByRole('button', { name: /2026-08-03 的買進賣出明細/ })).toBeNull()
 
     const detail = container.querySelector('.detail-row')!
     expect(detail.textContent).toContain('2026-08-04 明細')
-    // Using the descendant selector: `tbody tr` will select the inner thead column together - its tbody ancestor is the outer one
     const unitRows = detail.querySelectorAll('tbody > tr')
     expect(unitRows).toHaveLength(6)
     const cells = [...unitRows[0].querySelectorAll('td')].map((td) => td.textContent)
     // Foreign capital: buying 350 billion, selling 3500−112.7 = 338.73 billion, buying and selling exceeding +11.27 billion
     expect(cells).toEqual(['外資', '3500.0 億', '3387.3 億', '+112.7 億'])
 
-    // Click again to collapse
-    await user.click(screen.getByRole('button', { name: /收合 .* 的買進賣出明細/ }))
+    await user.click(collapseBtn)
     expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
   })
 
@@ -316,7 +313,7 @@ describe('TwMarketSection', () => {
     }
   })
 
-  it('全部展開 / 全部收起：只認展得開的列（0.6.33）', async () => {
+  it('全部展開 / 全部收起：只認展得開的列（0.6.33）；載入後預設已展開', async () => {
     const user = userEvent.setup()
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
@@ -328,14 +325,15 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    await user.click(screen.getByRole('button', { name: /全部展開/ }))
-    // Only one column can be expanded. After expansion, the button should be turned into "Collapse All"——
-    // If old data dates without details are also included, allOpen will always be false and the button will get stuck.
+    // Default open for the one expandable day
     expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
     const collapse = screen.getByRole('button', { name: /全部收起/ })
 
     await user.click(collapse)
     expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: /全部展開/ }))
+    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
   })
 
   it('趨勢與連續分成兩欄，走勢線才不會被標籤推歪（0.6.33）', async () => {

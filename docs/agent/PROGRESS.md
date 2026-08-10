@@ -1,9 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.7.0 prod Edge stock-report v38 deployed
-- Status: **0.7.0 fully shipped (Pages + PROD Edge + DEV Edge)**
-- Timestamp: 2026-08-10 17:11:45 Asia/Taipei
+- Action: 0.7.1-dev.1 macro subtabs + institutional default expand
+- Status: **on dev only; not merged to main**
+- Timestamp: 2026-08-10 17:24:28 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:24:28 Asia/Taipei (0.7.1-dev.1)
+
+- **Agent**: Grok
+- **Action**: Macro page UX
+
+### Product
+- 總體經濟 subtabs: **台股** | **美國經濟** (default 台股)
+- 三大法人買賣超: rows with buy/sell detail **default expanded**
+
+### Verify
+- Macro tests 42 passed
+- Frontend-only; no Edge deploy
+
+### Open
+- push `dev` when ready; main stays 0.7.0 until release
 
 ---
 

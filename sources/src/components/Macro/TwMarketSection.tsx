@@ -197,9 +197,18 @@ function DayDetail({ day }: { day: MarketDay }) {
   )
 }
 
+/** Dates among the last N institutional rows that have buy/sell detail (expandable). */
+function expandableInstDates(days: MarketDay[]): string[] {
+  return days
+    .slice(-INSTITUTIONAL_DAYS)
+    .filter((d) => d.institutional?.buy)
+    .map((d) => d.date)
+}
+
 export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
+  /** 0.7.1-dev.1: default open so buy / sell / net are visible without an extra click. */
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   /*
     A hover index shared by all three charts (0.6.34). It lives here rather than in each chart so that hovering
@@ -212,7 +221,10 @@ export function TwMarketSection() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setMarket(await fetchMarketDaily())
+    const data = await fetchMarketDaily()
+    setMarket(data)
+    // Open every day that has buy/sell legs (user wants 買進／賣出 at a glance).
+    if (data) setExpanded(new Set(expandableInstDates(data.days)))
     setLoading(false)
   }, [])
 
