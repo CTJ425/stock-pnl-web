@@ -7,6 +7,7 @@
  */
 import type { DailyRow } from '../../services/dailyProxy'
 import {
+  bollinger,
   kd,
   lastValue,
   macd,
@@ -42,6 +43,10 @@ export interface TechnicalView {
   ma5: Series
   ma20: Series
   ma60: Series
+  /** Bollinger Bands (20, 2) */
+  bbMid: Series
+  bbUpper: Series
+  bbLower: Series
   k: Series
   d: Series
   /** Which indexes should be marked on the X-axis (to avoid 244 full indexes)*/
@@ -75,6 +80,9 @@ export interface TechnicalView {
     ma20: number | null
     ma60: number | null
     alignment: ReturnType<typeof maAlignment>
+    bbMid: number | null
+    bbUpper: number | null
+    bbLower: number | null
     k: number | null
     d: number | null
     rsi14: number | null
@@ -109,6 +117,7 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
   const ma5 = sma(closes, 5)
   const ma20 = sma(closes, 20)
   const ma60 = sma(closes, 60)
+  const bb = bollinger(closes, 20, 2)
   const kdRes = kd(bars)
   const rsiRes = rsi(closes)
   const macdRes = macd(closes)
@@ -140,6 +149,9 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
     ma5: slice(ma5),
     ma20: slice(ma20),
     ma60: slice(ma60),
+    bbMid: slice(bb.mid),
+    bbUpper: slice(bb.upper),
+    bbLower: slice(bb.lower),
     k: slice(kdRes.k),
     d: slice(kdRes.d),
     labelIndices: pickLabelIndices(viewRows.length),
@@ -170,6 +182,9 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
       ma20: ma20[lastIdx],
       ma60: ma60[lastIdx],
       alignment: maAlignment(ma5[lastIdx], ma20[lastIdx], ma60[lastIdx]),
+      bbMid: bb.mid[lastIdx],
+      bbUpper: bb.upper[lastIdx],
+      bbLower: bb.lower[lastIdx],
       k: kdRes.k[lastIdx],
       d: kdRes.d[lastIdx],
       rsi14: rsiRes[lastIdx],

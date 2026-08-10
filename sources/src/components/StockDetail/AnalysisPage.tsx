@@ -4,7 +4,7 @@
  * - 我的持股: dropdown of current TW holdings + StockDetail with cost/ROI.
  * - 搜尋個股: up to 5 non-holdings (cloud `tw_watchlist` + local fallback), search to add,
  *   same StockDetail with holding=null.
- * - TOP30: ranked list from Storage (today + previous snapshot); open detail with holding=null.
+ * - TOP20: MI_INDEX20 volume rank from Storage; open detail with holding=null.
  *
  * Rules (0.6.44+):
  * - Max 5 non-holdings per user.
@@ -287,7 +287,7 @@ export function AnalysisPage() {
         className={`subtab${subTab === 'top30' ? ' active' : ''}`}
         onClick={() => setSubTab('top30')}
       >
-        TOP30
+        TOP20
       </button>
     </div>
   )

@@ -23,7 +23,7 @@
  *   POST { action: 'generate-chips' | 'generate-market-data' | 'generate-history' } x-cron-secret
  *     → Single phase (same handlers as generate-all internals).
  *   POST { action: 'sync-top-tickers' } header: x-cron-secret
- *     → Fetch STOCK_DAY_ALL, rank Top 30 by TradeValue (ETFs kept), write meta/top_tickers.json
+ *     → Fetch MI_INDEX20 (volume top 20 / mi-stock20), write meta/top_tickers.json
  *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
  *     → Capture five FRED sequences and write them into macro/us.json (global single file). It has nothing to do with Taiwan stock trading days, so it is scheduled independently.
  *   POST { action: 'sync-fx' } header: x-cron-secret (triggered by fx-daily schedule)
@@ -966,8 +966,11 @@ async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string 
   }
 }
 
-/** TWSE daily all issues — TradeValue ranking source for top-30 preheat. */
-const STOCK_DAY_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+/**
+ * TWSE「每日成交量前二十名」(mi-stock20.html → data-api MI_INDEX20).
+ * OpenAPI: exchangeReport/MI_INDEX20 — volume rank, fixed top 20.
+ */
+const MI_INDEX20_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20'
 
 /**
  * Soft-ready fundamental (batch reportComplete), aligned with frontend PROFIT/REVENUE_WARM_MIN = 6.
@@ -1025,7 +1028,7 @@ async function evaluateTickerScope(
 }
 
 /**
- * Refresh meta/top_tickers.json from STOCK_DAY_ALL (official codes, ranked by TradeValue).
+ * Refresh meta/top_tickers.json from MI_INDEX20 (official volume top-20).
  * ETFs kept. On fetch failure, keep previous file when present.
  */
 async function syncTopTickers(opts?: { force?: boolean }): Promise<{
@@ -1051,7 +1054,7 @@ async function syncTopTickers(opts?: { force?: boolean }): Promise<{
     }
   }
 
-  const rows = await fetchJson<StockDayAllRow[]>(STOCK_DAY_ALL_URL)
+  const rows = await fetchJson<StockDayAllRow[]>(MI_INDEX20_URL)
   if (!Array.isArray(rows) || rows.length === 0) {
     if (latest?.tickers.length) {
       return {
@@ -1100,7 +1103,7 @@ async function topTwTickers(): Promise<Array<{ ticker: string; name: string }>> 
 
 /**
  * Holdings ∪ watchlist ∪ trade-value top 30 — single source for generate-all / backfill.
- * Top 30 is refreshed on generate-all / sync-top-tickers (not on the 15:00 market-daily path).
+ * Top 20 (MI_INDEX20) is refreshed on generate-all / sync-top-tickers (not on the 15:00 market-daily path).
  */
 async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
   const [held, watched, top] = await Promise.all([
@@ -1129,7 +1132,7 @@ async function handleSyncTopTickers(): Promise<Response> {
 
 /**
  * Logged-in browser path: return top_tickers archive; if Storage empty, fetch TWSE once and write.
- * Avoids empty TOP30 UI when nightly has not run yet (or only prod Edge is old).
+ * Avoids empty TOP20 UI when nightly has not run yet (or only prod Edge is old).
  */
 async function handleEnsureTopTickers(): Promise<Response> {
   const startedAt = Date.now()

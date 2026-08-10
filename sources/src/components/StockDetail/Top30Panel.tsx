@@ -1,5 +1,5 @@
 /**
- * TOP30 list (Storage meta/top_tickers.json; ensure-top-tickers if empty).
+ * TOP20 volume list (TWSE MI_INDEX20 / mi-stock20). Storage meta/top_tickers.json.
  * Day switcher when both today and previous snapshot exist. Paginated 10/page.
  */
 import { useEffect, useState } from 'react'
@@ -8,7 +8,7 @@ import {
   displayTopDayYmd,
   fetchTopTickers,
   formatTopYmd,
-  formatTradeValueYi,
+  formatVolumeLots,
   type TopTickersData,
   type TopTickersDayView,
 } from '../../services/topTickersProxy'
@@ -62,7 +62,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
   if (loading && !data) {
     return (
       <div className="glass empty-state">
-        <div className="hint">正在讀取 TOP30…</div>
+        <div className="hint">正在讀取 TOP20…</div>
       </div>
     )
   }
@@ -73,9 +73,9 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
         <div className="empty-icon">
           <Inbox size={36} />
         </div>
-        <div>尚無 TOP30 名單。</div>
+        <div>尚無 TOP20 名單。</div>
         <div className="hint" style={{ marginTop: 6 }}>
-          請確認已登入。將向證交所補抓最近交易日排行（寫入 Storage，之後批次會沿用）。
+          請確認已登入。將向證交所補抓「成交量前二十名」（MI_INDEX20，寫入 Storage）。
         </div>
         <button
           type="button"
@@ -109,8 +109,8 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           marginBottom: 10,
         }}
       >
-        <strong style={{ fontSize: 14 }}>TOP30</strong>
-        <span className="hint">上市成交金額 · 含 ETF · 官方證券代號</span>
+        <strong style={{ fontSize: 14 }}>TOP20</strong>
+        <span className="hint">上市成交量前 20 · 含 ETF · 官方代號（MI_INDEX20）</span>
         <button
           type="button"
           className="btn btn-sm"
@@ -121,7 +121,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
           重新整理
         </button>
         {data && data.days.length > 1 && (
-          <div className="subtabs" role="tablist" aria-label="TOP30 資料日" style={{ marginLeft: 'auto' }}>
+          <div className="subtabs" role="tablist" aria-label="TOP20 資料日" style={{ marginLeft: 'auto' }}>
             {data.days.map((d) => (
               <button
                 key={d.ymd}
@@ -146,8 +146,8 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
       <div className="hint" style={{ marginBottom: 8 }}>
         資料日 {formatTopYmd(displayTopDayYmd(day))}
         {data && data.days.length === 1
-          ? '（成交金額排行所屬交易日；非交易日或尚未更新時可能仍是上一交易日）'
-          : '（成交金額排行所屬交易日）'}
+          ? '（成交量排行所屬交易日；非交易日或尚未更新時可能仍是上一交易日）'
+          : '（成交量排行所屬交易日）'}
       </div>
 
       <div className="table-scroll">
@@ -157,7 +157,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
               <th style={{ width: 48 }}>#</th>
               <th>代號</th>
               <th>名稱</th>
-              <th className="num">成交金額</th>
+              <th className="num">成交量</th>
             </tr>
           </thead>
           <tbody>
@@ -192,7 +192,7 @@ export function Top30Panel({ selectedTicker, onSelect }: Top30PanelProps) {
                     </button>
                   </td>
                   <td>{t.name}</td>
-                  <td className="num">{formatTradeValueYi(t.tradeValue)}</td>
+                  <td className="num">{formatVolumeLots(t.tradeValue)}</td>
                 </tr>
               )
             })}

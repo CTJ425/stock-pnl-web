@@ -43,21 +43,43 @@ describe('rankTopByTradeValue', () => {
     { Code: '00631L', Name: '元大台灣50正2', TradeValue: '900' },
   ]
 
-  it('ranks by TradeValue and keeps ETFs (00xx / letter codes)', () => {
+  it('ranks by volume / TradeValue and keeps ETFs (00xx / letter codes)', () => {
     const top = rankTopByTradeValue(rows, 3)
     expect(top.map((t) => t.ticker)).toEqual(['2330', '00631L', '2408'])
     expect(top[0]).toMatchObject({ rank: 1, name: '台積電', tradeValue: 1000 })
     expect(top[1].ticker).toBe('00631L')
   })
 
-  it('default n is 30', () => {
-    expect(TOP_TICKERS_DEFAULT_N).toBe(30)
+  it('prefers official Rank and TradeVolume (MI_INDEX20 shape)', () => {
+    const mi = [
+      {
+        Date: '20260807',
+        Rank: '2',
+        Code: '2317',
+        Name: '鴻海',
+        TradeVolume: '100',
+      },
+      {
+        Date: '20260807',
+        Rank: '1',
+        Code: '3481',
+        Name: '群創',
+        TradeVolume: '200',
+      },
+    ]
+    const top = rankTopByTradeValue(mi, 20)
+    expect(top.map((t) => t.ticker)).toEqual(['3481', '2317'])
+    expect(top[0]).toMatchObject({ rank: 1, tradeValue: 200 })
+  })
+
+  it('default n is 20 (MI_INDEX20)', () => {
+    expect(TOP_TICKERS_DEFAULT_N).toBe(20)
     const many = Array.from({ length: 40 }, (_, i) => ({
       Code: String(1000 + i),
       Name: `n${i}`,
-      TradeValue: String(40 - i),
+      TradeVolume: String(40 - i),
     }))
-    expect(rankTopByTradeValue(many)).toHaveLength(30)
+    expect(rankTopByTradeValue(many)).toHaveLength(20)
   })
 })
 

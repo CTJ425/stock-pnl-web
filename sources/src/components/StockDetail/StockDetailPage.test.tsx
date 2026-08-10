@@ -310,7 +310,7 @@ describe('StockDetailPage', () => {
     expect(tabs).toEqual(['分析內容', 'AI 分析'])
   })
 
-  it('技術面只畫成交量折線；指標摘要在行情卡保留量比等（0.6.50）', async () => {
+  it('技術面畫日 K／均線／布林，指標摘要在行情卡（0.6.51）', async () => {
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -335,25 +335,23 @@ describe('StockDetailPage', () => {
     )
     await screen.findByText('三大法人買賣超')
 
-    await within(sec(container, 'technical')).findByRole('heading', { name: /成交量/ })
-    // One volume line chart only (no candle / KD)
-    expect(charts(container, 'technical')).toHaveLength(1)
-    expect(screen.queryByText('日 K 與均線')).toBeNull()
-    expect(screen.queryByText('KD 指標')).toBeNull()
-    expect(screen.queryByText('週線')).toBeNull()
+    await screen.findByText(/日 K · 均線 · 布林通道/)
+    // daily K + volume + KD
+    expect(charts(container, 'technical')).toHaveLength(3)
+    expect(screen.getByText('週線')).toBeTruthy()
+    expect(screen.getByText('季線')).toBeTruthy()
+    expect(screen.getByText('BB上')).toBeTruthy()
     const tech = within(sec(container, 'technical'))
     expect(tech.queryByText(/多頭排列/)).toBeNull()
     const q = within(sec(container, 'quote'))
     expect(q.getByText(`指標摘要（${rows[rows.length - 1][0]}）`)).toBeTruthy()
-    expect(q.queryByText(/多頭排列/)).toBeNull()
-    expect(q.queryByText('均線')).toBeNull()
-    expect(q.queryByText('KD')).toBeNull()
+    expect(q.getByText(/多頭排列/)).toBeTruthy()
+    expect(q.getByText('布林')).toBeTruthy()
     expect(q.getByText('量比')).toBeTruthy()
   })
 
-  it('技術面：成交量表格預設 20 列可展開，量比對 20 日均量（0.6.50）', async () => {
+  it('技術面：成交量表格排在 KD 之後，預設 20 列可展開', async () => {
     const user = userEvent.setup()
-    // 80 days so MA20 has a full window; volume climbs so the newest day is the heaviest
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -371,21 +369,18 @@ describe('StockDetailPage', () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
-    const t = within(sec(container, 'technical'))
-    await t.findByRole('heading', { name: /成交量/ })
+    await screen.findByText(/日 K · 均線 · 布林通道/)
 
     const heads = [...sec(container, 'technical').querySelectorAll('.rpt-section h3')].map(
       (h) => h.textContent,
     )
-    expect(heads).toHaveLength(1)
-    expect(heads[0]).toMatch(/^成交量/)
+    expect(heads[0]).toMatch(/^日 K · 均線 · 布林通道/)
+    expect(heads.slice(1)).toEqual(['KD 指標', '成交量'])
 
-    // 近 3 月 = 60 交易日, but the table starts collapsed at 20
+    const t = within(sec(container, 'technical'))
     const tableRows = () => sec(container, 'technical').querySelectorAll('.data-table tbody tr')
     expect(tableRows()).toHaveLength(20)
-    // Newest first
     expect(tableRows()[0].textContent).toContain('2026-06-19')
-    // 2,580,000 shares = 2,580 張, and it is above the 20-day average so the ratio exceeds 1
     expect(tableRows()[0].textContent).toContain('2,580 張')
     const ratio = [...tableRows()[0].querySelectorAll('td.num')][1].textContent!
     expect(Number(ratio.replace(' 倍', ''))).toBeGreaterThan(1)
@@ -394,11 +389,11 @@ describe('StockDetailPage', () => {
     expect(tableRows()).toHaveLength(60)
   })
 
-  it('技術面：切區間時成交量折線仍有點數（序列先算再裁切）', async () => {
+  it('技術面：切到近 3 月時均線與布林仍畫得出來', async () => {
     const rows = Array.from({ length: 200 }, (_, i) => {
       const date = new Date(Date.UTC(2025, 9, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
-      return [date, close - 1, close + 1, close - 2, close, 1_000_000 + i] as [
+      return [date, close - 1, close + 1, close - 2, close, 1_000_000] as [
         string,
         number,
         number,
@@ -419,12 +414,12 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    await within(sec(container, 'technical')).findByRole('heading', { name: /成交量/ })
+    await screen.findByText(/日 K · 均線 · 布林通道/)
 
     await user.click(screen.getByRole('button', { name: '近 3 月' }))
-    const volChart = charts(container, 'technical')[0]
-    // One volume series → at least one polyline path
-    expect(volChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(1)
+    const kChart = charts(container, 'technical')[0]
+    // MA5/20/60 + BB upper/mid/lower = 6 polylines minimum
+    expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(6)
   })
 
   it('各區塊各自標示資料日與更新時間（三個來源公布時間不同）', async () => {

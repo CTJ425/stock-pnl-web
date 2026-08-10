@@ -1,8 +1,8 @@
 /**
- * TOP30 (trade-value rank, official TWSE codes, ETFs included).
+ * TOP20 volume rank (TWSE MI_INDEX20 / mi-stock20.html).
  * 1) Read public `meta/top_tickers.json` (today + previous snapshot).
- * 2) If missing/empty, invoke Edge `ensure-top-tickers` (logged-in) to fetch last available
- *    STOCK_DAY_ALL ranking and write Storage so the UI is never stuck empty.
+ * 2) If missing/empty, invoke Edge `ensure-top-tickers` (logged-in) to fetch MI_INDEX20.
+ * `tradeValue` on rows holds **share volume** (股) after 0.6.51.
  */
 import { downloadReportsJson } from './reportsBucket'
 import { supabase } from './supabase'
@@ -122,13 +122,20 @@ export function displayTopDayYmd(day: Pick<TopTickersDayView, 'ymd' | 'sourceDat
   return day.ymd
 }
 
-/** Trade value TWD → e.g. 579.5 億 */
+/** Legacy trade value TWD → e.g. 579.5 億 (pre–MI_INDEX20). */
 export function formatTradeValueYi(v: number): string {
   if (!Number.isFinite(v) || v <= 0) return '—'
   const yi = v / 1e8
   if (yi >= 100) return `${yi.toFixed(0)} 億`
   if (yi >= 10) return `${yi.toFixed(1)} 億`
   return `${yi.toFixed(2)} 億`
+}
+
+/** Share volume (股) → 張 for TOP20 list (MI_INDEX20 TradeVolume). */
+export function formatVolumeLots(shares: number): string {
+  if (!Number.isFinite(shares) || shares <= 0) return '—'
+  const lots = Math.round(shares / 1000)
+  return `${lots.toLocaleString('en-US')} 張`
 }
 
 async function readTopTickersFromStorage(): Promise<TopTickersData | null> {
@@ -156,7 +163,7 @@ async function ensureTopTickersFromEdge(): Promise<TopTickersData | null> {
 }
 
 /**
- * Prefer Storage; if empty, ask Edge to pull the latest STOCK_DAY_ALL ranking (writes archive).
+ * Prefer Storage; if empty, ask Edge to pull the latest MI_INDEX20 ranking (writes archive).
  * @param forceEnsure when true, try Edge first then fall back to Storage (never drop a good cache
  *   just because ensure failed — e.g. Edge not deployed / not logged in).
  */

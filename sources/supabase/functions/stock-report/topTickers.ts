@@ -1,16 +1,18 @@
 /**
- * TWSE daily turnover ranking → Top N tickers for batch warm / preheat.
+ * TWSE daily volume ranking → Top N tickers for batch warm / preheat.
  *
- * Source: OpenAPI `exchangeReport/STOCK_DAY_ALL` (same-day list after the session).
- * Ranking key: TradeValue (成交金額, TWD). ETFs and special codes are **kept** when they
- * rank high — product rule 0.6.46+: do not strip 00xx / letter-suffix products.
+ * Source (0.6.51): OpenAPI `exchangeReport/MI_INDEX20` — same table as the official
+ * page「每日成交量前二十名證券」(mi-stock20.html, data-api `/afterTrading/MI_INDEX20`).
+ * Ranking key: **TradeVolume** (成交股數). Official Rank field is preferred when present.
+ * ETFs / leveraged products are kept when they appear (no strip of 00xx / letter codes).
  *
- * Retention (0.6.46-dev.8): at most **two** calendar snapshots (today + previous), so Monday
- * before a new rank still shows Friday. Pure helpers only — fetch + Storage live in index.ts.
+ * Retention: at most **two** snapshots (today + previous). Pure helpers — fetch + Storage in index.ts.
  */
 
+/** MI_INDEX20 row (OpenAPI). Also accepts legacy STOCK_DAY_ALL field names for tests. */
 export interface StockDayAllRow {
   Date?: string
+  Rank?: string
   Code?: string
   Name?: string
   TradeVolume?: string
@@ -22,14 +24,18 @@ export interface TopTicker {
   ticker: string
   name: string
   rank: number
-  /** Trade value in TWD (integer). */
+  /**
+   * Metric shown in the list: for MI_INDEX20 this is **share volume** (股).
+   * Field name kept for Storage / UI compatibility with older top_tickers.json.
+   */
   tradeValue: number
 }
 
 /** Same envelope as index TICKER_RE — 2–8 alphanumerics. */
 const TICKER_RE = /^[0-9A-Za-z]{2,8}$/
 
-export const TOP_TICKERS_DEFAULT_N = 30
+/** Official MI_INDEX20 list length. */
+export const TOP_TICKERS_DEFAULT_N = 20
 
 /** Keep newest + previous only (e.g. Mon before refresh → Fri still present). */
 export const TOP_TICKERS_MAX_DAYS = 2
@@ -66,8 +72,9 @@ export function tradingYmdFromSource(sourceDate: string | null | undefined): str
 }
 
 /**
- * Rank STOCK_DAY_ALL rows by TradeValue desc and take the first `n`.
- * Zero / invalid trade value rows sink to the bottom and are usually dropped by the slice.
+ * Rank rows by **share volume** (TradeVolume). Prefer official `Rank` when present
+ * (MI_INDEX20). Falls back to sorting by volume desc (legacy STOCK_DAY_ALL-shaped rows
+ * that only had TradeValue still work if you pass that field via parseTradeValue on volume).
  */
 export function rankTopByTradeValue(
   rows: readonly StockDayAllRow[],
@@ -75,18 +82,31 @@ export function rankTopByTradeValue(
 ): TopTicker[] {
   if (!Array.isArray(rows) || n <= 0) return []
 
-  const parsed: Array<{ ticker: string; name: string; tradeValue: number }> = []
+  const parsed: Array<{
+    ticker: string
+    name: string
+    tradeValue: number
+    officialRank: number | null
+  }> = []
   for (const row of rows) {
     const ticker = String(row.Code ?? '').trim()
     if (!TICKER_RE.test(ticker)) continue
+    // MI_INDEX20: TradeVolume (shares). Legacy fallback: TradeValue if volume missing.
+    const volume = parseTradeValue(row.TradeVolume)
+    const metric = volume > 0 ? volume : parseTradeValue(row.TradeValue)
+    const rankRaw = Number(String(row.Rank ?? '').replace(/,/g, '').trim())
     parsed.push({
       ticker,
       name: String(row.Name ?? '').trim(),
-      tradeValue: parseTradeValue(row.TradeValue),
+      tradeValue: metric,
+      officialRank: Number.isFinite(rankRaw) && rankRaw > 0 ? rankRaw : null,
     })
   }
 
   parsed.sort((a, b) => {
+    if (a.officialRank != null && b.officialRank != null && a.officialRank !== b.officialRank) {
+      return a.officialRank - b.officialRank
+    }
     if (b.tradeValue !== a.tradeValue) return b.tradeValue - a.tradeValue
     return a.ticker.localeCompare(b.ticker)
   })
@@ -94,7 +114,7 @@ export function rankTopByTradeValue(
   return parsed.slice(0, n).map((r, i) => ({
     ticker: r.ticker,
     name: r.name,
-    rank: i + 1,
+    rank: r.officialRank ?? i + 1,
     tradeValue: r.tradeValue,
   }))
 }

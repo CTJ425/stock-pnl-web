@@ -127,6 +127,29 @@ describe('maAlignment', () => {
   })
 })
 
+describe('bollinger', () => {
+  it('mid is SMA20; upper/lower symmetric around mid for flat series', async () => {
+    const { bollinger, sma } = await import('./indicators')
+    const flat = Array.from({ length: 30 }, () => 100 as number | null)
+    const bb = bollinger(flat, 20, 2)
+    const mid = sma(flat, 20)
+    expect(bb.mid[29]).toBeCloseTo(100, 10)
+    expect(bb.mid[29]).toBeCloseTo(mid[29]!, 10)
+    expect(bb.upper[29]).toBeCloseTo(100, 10)
+    expect(bb.lower[29]).toBeCloseTo(100, 10)
+    expect(bb.upper[10]).toBeNull()
+  })
+
+  it('bands widen when closes move', async () => {
+    const { bollinger } = await import('./indicators')
+    const closes = Array.from({ length: 25 }, (_, i) => 100 + i)
+    const bb = bollinger(closes, 20, 2)
+    expect(bb.mid[24]).not.toBeNull()
+    expect(bb.upper[24]!).toBeGreaterThan(bb.mid[24]!)
+    expect(bb.lower[24]!).toBeLessThan(bb.mid[24]!)
+  })
+})
+
 describe('lastValue', () => {
   it('取最後一個非 null 值', () => {
     expect(lastValue([1, 2, null])).toBe(2)

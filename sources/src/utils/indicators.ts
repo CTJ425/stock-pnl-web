@@ -189,6 +189,48 @@ export function maAlignment(
   return '糾結'
 }
 
+export interface BollingerResult {
+  /** Middle band = SMA(period) */
+  mid: Series
+  /** Upper = mid + k × population stdev of the same window */
+  upper: Series
+  /** Lower = mid − k × population stdev */
+  lower: Series
+}
+
+/**
+ * Bollinger Bands (default 20, 2) — same shape as common charting software:
+ * mid = SMA(n), bands = mid ± k × √(mean square deviation of the n closes).
+ * Window with any null → that bar is null on all three series.
+ */
+export function bollinger(closes: Series, period = 20, k = 2): BollingerResult {
+  const mid = sma(closes, period)
+  const upper: Series = new Array(closes.length).fill(null)
+  const lower: Series = new Array(closes.length).fill(null)
+  if (period <= 0) return { mid, upper, lower }
+
+  for (let i = period - 1; i < closes.length; i++) {
+    const m = mid[i]
+    if (m === null) continue
+    let sumSq = 0
+    let ok = true
+    for (let j = i - period + 1; j <= i; j++) {
+      const v = closes[j]
+      if (v === null) {
+        ok = false
+        break
+      }
+      const d = v - m
+      sumSq += d * d
+    }
+    if (!ok) continue
+    const sd = Math.sqrt(sumSq / period)
+    upper[i] = m + k * sd
+    lower[i] = m - k * sd
+  }
+  return { mid, upper, lower }
+}
+
 /** Get the last non-null value in the sequence; return null if empty*/
 export function lastValue(series: Series): number | null {
   for (let i = series.length - 1; i >= 0; i--) {

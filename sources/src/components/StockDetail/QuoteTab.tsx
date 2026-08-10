@@ -1,13 +1,22 @@
 /**
- * Market card ("行情"): today's quote plus a short indicator summary of the latest completed trading day.
+ * Market card ("行情"): today's quote plus the indicator summary of the latest completed trading day.
  *
- * 0.6.50: summary keeps RSI / MACD / 量比 only (MA and KD left the technical UI).
+ * 0.6.38 merged the technical page's "指標摘要" into here, because the two answered the same question in
+ * two places. What was dropped in the merge are the summary's 收盤 / 開高低 / 成交量 cells: the quote grid
+ * above already shows them, live. What is kept are the things the quote cannot give — moving averages, KD,
+ * RSI, MACD and the volume ratio.
  *
  * ⚠️ **The two halves can be different days and that is not a bug**: the quote is MIS in real time, the
  * summary comes from the after-hours daily batch (`daily/{ticker}.json`), which only lands in the evening.
+ * During the session the summary still describes the previous trading day —— hence its own date in the
+ * heading. Do not "tidy" that date away.
  *
- * All seven boxes come from the same current price response (TWSE MIS’s o/h/l/v/y/z/ip), no additional requests.
- * This card is public market data and is included in the PDF extraction range.
+ * All seven boxes come from the same current price response (TWSE MIS’s o/h/l/v/y/z/ip), no additional requests are made——
+ * This is also the reason why the TWSE OpenAPI daily closing endpoint is not used: it still stops at the previous trading day two hours after the actual closing.
+ * Taking it as "today's closing" will regard yesterday's closing as today's closing (actual measured difference on 2026-08-05 is 3.6%).
+ *
+ * This card is public market data and does not contain personal information, so it is included in the PDF extraction range;
+ * The shareholding card it replaced was originally outside the scope precisely because it was a capital.
  */
 import { Inbox } from 'lucide-react'
 import { isClosed, tradeDateLabel, type PriceQuote } from '../../services/priceProxy'
@@ -40,13 +49,36 @@ function Cell({ label, value, className }: { label: string; value: string; class
   )
 }
 
-/** What the live quote cannot say (RSI / MACD / volume ratio). */
+/** The half that survives the merge: only what the live quote cannot say (see the file header). */
 function IndicatorSummary({ latest }: { latest: TechnicalLatest }) {
   return (
     <section className="rpt-section">
       <h3>指標摘要（{latest.date}）</h3>
-      {/* Not data-table: that one has a 720px min width, which forces phones to scroll sideways */}
+      {/* Not data-table: that one has a 720px min width, which forces phones to scroll sideways for five values */}
       <dl className="tech-summary">
+        <div className="tech-cell">
+          <dt>均線</dt>
+          <dd>
+            {fmtNum(latest.ma5)}／{fmtNum(latest.ma20)}／{fmtNum(latest.ma60)}
+            <span className="tech-sub">
+              MA5 / MA20 / MA60{latest.alignment ? ` · ${latest.alignment}` : ''}
+            </span>
+          </dd>
+        </div>
+        <div className="tech-cell">
+          <dt>KD</dt>
+          <dd>
+            {fmtNum(latest.k, 1)}／{fmtNum(latest.d, 1)}
+            <span className="tech-sub">K / D</span>
+          </dd>
+        </div>
+        <div className="tech-cell">
+          <dt>布林</dt>
+          <dd>
+            {fmtNum(latest.bbLower)}／{fmtNum(latest.bbMid)}／{fmtNum(latest.bbUpper)}
+            <span className="tech-sub">下／中／上（20, 2）</span>
+          </dd>
+        </div>
         <div className="tech-cell">
           <dt>RSI(14)</dt>
           <dd>{fmtNum(latest.rsi14, 1)}</dd>
