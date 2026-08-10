@@ -61,15 +61,20 @@ function parseTopTickersPayload(raw: Record<string, unknown> | null | undefined)
   if (!raw) return null
 
   if (Array.isArray(raw.days)) {
-    const days: TopTickersDayView[] = []
+    // Collapse write-clock vs trading-day keys that share the same TWSE session.
+    const byTrade = new Map<string, TopTickersDayView>()
     for (const d of raw.days) {
       const parsed = parseDay(d)
-      if (parsed) days.push(parsed)
+      if (!parsed) continue
+      const key = displayTopDayYmd(parsed)
+      const prev = byTrade.get(key)
+      if (!prev || (parsed.asOf || '') >= (prev.asOf || '')) {
+        byTrade.set(key, { ...parsed, ymd: key })
+      }
     }
-    days.sort((a, b) => b.ymd.localeCompare(a.ymd))
-    const slim = days.slice(0, 2)
-    if (slim.length === 0) return null
-    return { days: slim, latest: slim[0] ?? null }
+    const days = [...byTrade.values()].sort((a, b) => b.ymd.localeCompare(a.ymd)).slice(0, 2)
+    if (days.length === 0) return null
+    return { days, latest: days[0] ?? null }
   }
 
   // schema 1 fallback

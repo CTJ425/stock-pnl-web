@@ -160,6 +160,27 @@ export function mergeTopTickersArchive(
   return { schema: TOP_TICKERS_SCHEMA, days }
 }
 
+/**
+ * Re-key each day by TWSE session (sourceDate) so a write-clock ymd cannot sit
+ * beside the same ranking as a "newer" snapshot (e.g. Mon write of Fri bars).
+ */
+export function rekeyTopTickersArchive(file: TopTickersFile | null): TopTickersFile | null {
+  if (!file?.days?.length) return file
+  let acc: TopTickersFile | null = null
+  // Oldest first (asOf, then ymd) so the newest write of the same trading day wins.
+  const ordered = [...file.days].sort((a, b) => {
+    const aa = a.asOf || ''
+    const bb = b.asOf || ''
+    if (aa && bb && aa !== bb) return aa.localeCompare(bb)
+    return a.ymd.localeCompare(b.ymd)
+  })
+  for (const d of ordered) {
+    const ymd = tradingYmdFromSource(d.sourceDate) ?? d.ymd
+    acc = mergeTopTickersArchive(acc, { ...d, ymd })
+  }
+  return acc
+}
+
 /** Accept v1 or v2 on-disk shapes. */
 export function normalizeTopTickersFile(raw: unknown): TopTickersFile | null {
   if (!raw || typeof raw !== 'object') return null
@@ -168,24 +189,26 @@ export function normalizeTopTickersFile(raw: unknown): TopTickersFile | null {
     const days: TopTickersDay[] = []
     for (const d of o.days) {
       if (!d || typeof d !== 'object') continue
-      const ymd = String((d as TopTickersDay).ymd ?? '').trim()
+      const ymdRaw = String((d as TopTickersDay).ymd ?? '').trim()
+      const sourceDate =
+        (d as TopTickersDay).sourceDate == null
+          ? null
+          : String((d as TopTickersDay).sourceDate)
+      const ymd = tradingYmdFromSource(sourceDate) ?? ymdRaw
       const tickers = Array.isArray((d as TopTickersDay).tickers)
         ? (d as TopTickersDay).tickers
         : []
       if (!/^\d{8}$/.test(ymd) || tickers.length === 0) continue
       days.push({
         ymd,
-        sourceDate:
-          (d as TopTickersDay).sourceDate == null
-            ? null
-            : String((d as TopTickersDay).sourceDate),
+        sourceDate,
         asOf: String((d as TopTickersDay).asOf ?? ''),
         tickers,
       })
     }
     if (days.length === 0) return null
-    days.sort((a, b) => b.ymd.localeCompare(a.ymd))
-    return { schema: TOP_TICKERS_SCHEMA, days: days.slice(0, TOP_TICKERS_MAX_DAYS) }
+    // Collapse same trading-day keys (write-clock vs source).
+    return rekeyTopTickersArchive({ schema: TOP_TICKERS_SCHEMA, days })
   }
   // v1: single list → one synthetic day from asOf if possible
   if (Array.isArray(o.tickers) && o.tickers.length > 0) {

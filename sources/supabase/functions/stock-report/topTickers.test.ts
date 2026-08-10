@@ -114,4 +114,28 @@ describe('normalizeTopTickersFile', () => {
     expect(f?.days[0]?.ymd).toBe('20260807')
     expect(latestTopTickers(f)[0]?.ticker).toBe('2330')
   })
+
+  it('collapses write-clock ymd + sourceDate into one trading day', () => {
+    const f = normalizeTopTickersFile({
+      schema: 2,
+      days: [
+        {
+          ymd: '20260810',
+          sourceDate: '1150807',
+          asOf: '2026-08-10T06:17:54.000Z',
+          tickers: [{ ticker: '2330', name: '台積電', rank: 1, tradeValue: 1 }],
+        },
+        {
+          ymd: '20260807',
+          sourceDate: '1150807',
+          asOf: '2026-08-07T08:00:00.000Z',
+          tickers: [{ ticker: '2408', name: '南亞科', rank: 1, tradeValue: 2 }],
+        },
+      ],
+    })
+    expect(f?.days).toHaveLength(1)
+    expect(f?.days[0]?.ymd).toBe('20260807')
+    // newer asOf (Mon rewrite of Fri session) wins
+    expect(f?.days[0]?.tickers[0]?.ticker).toBe('2330')
+  })
 })
