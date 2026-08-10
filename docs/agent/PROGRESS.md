@@ -1,9 +1,24 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.7.1-dev.1 macro subtabs + institutional default expand
-- Status: **on dev only; not merged to main**
-- Timestamp: 2026-08-10 17:24:28 Asia/Taipei
+- Action: 0.7.1-dev.2 institutional table format (buy/sell columns, no expand)
+- Status: **on dev only**
+- Timestamp: 2026-08-10 17:31:10 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:31:10 Asia/Taipei (0.7.1-dev.2)
+
+- **Agent**: Grok
+- **Action**: User rejected default-expand; reformat table instead
+
+### Product
+- Revert expand-by-default
+- 三大法人 table columns: **日期 | 單位 | 買進 | 賣出 | 買賣超**
+- Trend/streak under date cell; no +/- expand
+
+### Verify
+- Macro tests 41 passed
 
 ---
 

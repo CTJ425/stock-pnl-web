@@ -160,12 +160,11 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
 
     await screen.findByText(/三大法人買賣超（億元）・近 7 個交易日/)
-    // 0.6.33 After removing the bar chart, the 7-day window is represented by a table (the two index charts and transaction amounts above are still 30 days)
-    expect(instRows(container)).toHaveLength(7)
+    // 0.7.1-dev.2: 7 days × 6 units per day
+    expect(instRows(container)).toHaveLength(7 * 6)
   })
 
-  it('逐日買賣超表格：由新到舊，五個法人分欄，缺料給「—」', async () => {
-    // You can see the direction in the chart, and you can see the numbers in the table (users reported that the amount in days is not visible in the bar chart)
+  it('主表欄位為 日期／單位／買進／賣出／買賣超；缺料給「—」（0.7.1-dev.2）', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
@@ -176,54 +175,59 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = instRows(container)
-    expect(rows).toHaveLength(2)
-    // The table is from new to old (the picture is from old to new, the two are deliberately opposite)
+    const heads = [...instTable(container).querySelectorAll('thead th')].map((e) => e.textContent)
+    expect(heads).toEqual(['日期', '單位', '買進', '賣出', '買賣超'])
+
+    const rows = [...instRows(container)]
+    // 2 days × 6 units
+    expect(rows).toHaveLength(12)
+    // Newest day first; first unit row carries the date cell
     expect(rows[0].textContent).toContain('2026-08-04')
-    // The legal person amount has not been paid on the latest day → The six legal person columns should be filled with "—", do not pretend to be 0
-    // (The last two td.num are trend and continuity. If there is no total on that day, there will be no trend. The same is "-")
-    expect([...rows[0].querySelectorAll('td.num')].map((td) => td.textContent)).toEqual(
-      Array(8).fill('—'),
-    )
-    // Data available the day before: foreign investment −19.19 billion, investment credit +500 million, total −16.52 billion
-    const prev = [...rows[1].querySelectorAll('td.num')].map((td) => td.textContent)
-    expect(prev[0]).toBe('-191.9 億')
-    expect(prev[2]).toBe('+5.0 億')
-    expect(prev[5]).toBe('-165.2 億')
+    expect(rows[0].textContent).toContain('外資')
+    // No institutional data → buy / sell / net all —
+    expect([...rows[0].querySelectorAll('td.num')].map((td) => td.textContent)).toEqual([
+      '—',
+      '—',
+      '—',
+    ])
+    // Previous day (starts at row 6): foreign net −191.9, trust +5.0, total −165.2
+    const foreignPrev = [...rows[6].querySelectorAll('td')].map((td) => td.textContent)
+    // rowspan date only on first unit row of that day → [單位, 買進, 賣出, 買賣超] or [日期, 單位, ...]
+    expect(foreignPrev).toContain('外資')
+    expect(foreignPrev).toContain('-191.9 億')
+    const trustPrev = [...rows[8].querySelectorAll('td')].map((td) => td.textContent)
+    expect(trustPrev).toContain('投信')
+    expect(trustPrev).toContain('+5.0 億')
+    const totalPrev = [...rows[11].querySelectorAll('td')].map((td) => td.textContent)
+    expect(totalPrev).toContain('合計')
+    expect(totalPrev).toContain('-165.2 億')
+    // Old file without buy/sell legs → 買進／賣出 —
+    expect(totalPrev).toContain('—')
   })
 
-  it('有買賣明細的列預設展開，可見六單位買進／賣出；舊資料無展開鈕（0.7.1-dev.1）', async () => {
-    const user = userEvent.setup()
+  it('有買賣明細時直接顯示買進／賣出／買賣超，無展開鈕（0.7.1-dev.2）', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [
-        day('2026-08-03', 8e11, inst(-1.65e10, -1.9e10)), // 舊資料：只有差額
-        day('2026-08-04', 8e11, instFull(1.445e10, 1.127e10)), // 有買賣明細
+        day('2026-08-03', 8e11, inst(-1.65e10, -1.9e10)),
+        day('2026-08-04', 8e11, instFull(1.445e10, 1.127e10)),
       ],
     })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    // Default open (0.7.1-dev.1): buy/sell visible without an extra click
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
-    const collapseBtn = screen.getByRole('button', { name: /收合 2026-08-04 的買進賣出明細/ })
-    expect(collapseBtn).toBeTruthy()
-    // Old row has no toggle
-    expect(screen.queryByRole('button', { name: /2026-08-03 的買進賣出明細/ })).toBeNull()
-
-    const detail = container.querySelector('.detail-row')!
-    expect(detail.textContent).toContain('2026-08-04 明細')
-    const unitRows = detail.querySelectorAll('tbody > tr')
-    expect(unitRows).toHaveLength(6)
-    const cells = [...unitRows[0].querySelectorAll('td')].map((td) => td.textContent)
-    // Foreign capital: buying 350 billion, selling 3500−112.7 = 338.73 billion, buying and selling exceeding +11.27 billion
-    expect(cells).toEqual(['外資', '3500.0 億', '3387.3 億', '+112.7 億'])
-
-    await user.click(collapseBtn)
+    expect(screen.queryByRole('button', { name: /展開/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /全部展開/ })).toBeNull()
     expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
+
+    // Newest day, 外資 row: buy 3500 / sell 3387.3 / net +112.7
+    const foreign = [...instRows(container)[0].querySelectorAll('td')].map((td) => td.textContent)
+    expect(foreign).toEqual(
+      expect.arrayContaining(['外資', '3500.0 億', '3387.3 億', '+112.7 億']),
+    )
   })
 
-  it('趨勢欄：連續同向天數，且走勢不受表格只顯示 7 列的限制（0.6.32）', async () => {
+  it('趨勢：連續同向天數，且走勢不受表格只顯示 7 日的限制（0.6.32）', async () => {
     // 10 consecutive days of overbuying - the table only lists the last 7 days, but the trend must last for 10 days
     const days = Array.from({ length: 10 }, (_, i) =>
       day(`2026-08-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9 * (i + 1), 1e9)),
@@ -232,15 +236,15 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = instRows(container)
-    expect(rows).toHaveLength(7)
-    // The latest column (8/10): even the 10th day of overbuying, the 3 days outside the table are also included.
+    const rows = [...instRows(container)]
+    expect(rows).toHaveLength(7 * 6)
+    // First unit row of latest day (8/10) carries the streak label
     expect(rows[0].textContent).toContain('連 10 日買超')
-    // The oldest column (8/04) is day 4
-    expect(rows[6].textContent).toContain('連 4 日買超')
+    // First unit row of oldest listed day (8/04) is day 4
+    expect(rows[6 * 6].textContent).toContain('連 4 日買超')
   })
 
-  it('趨勢欄：轉向當天不算連續，走勢線畫得出來', async () => {
+  it('趨勢：轉向當天不算連續，走勢線畫得出來', async () => {
     const days = [
       day('2026-08-01', 8e11, inst(-3e9, -1e9)),
       day('2026-08-02', 8e11, inst(-2e9, -1e9)),
@@ -250,12 +254,11 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
 
-    const rows = instRows(container)
-    // There is only 1 day in the same direction on the turning day → Do not print "N days in a row" (1 day in a row is not a trend)
+    const rows = [...instRows(container)]
+    // Turning day (first block): 1 day in a row → no 「連」
     expect(rows[0].textContent).not.toContain('連')
-    // The day before was the second consecutive day of overselling.
-    expect(rows[1].textContent).toContain('連 2 日賣超')
-    // Three points draw a trend line
+    // Previous day block starts at row 6
+    expect(rows[6].textContent).toContain('連 2 日賣超')
     expect(instTable(container).querySelectorAll('.mac-spark').length).toBeGreaterThan(0)
   })
 
@@ -270,7 +273,7 @@ describe('TwMarketSection', () => {
     expect(screen.queryByText(/抓取週期/)).toBeNull()
     expect(container.textContent).not.toContain('market-daily')
     // The sentence you replaced still needs to be clear about what "—" stands for.
-    expect(screen.getByText(/還沒補到，不是沒有進出/)).toBeTruthy()
+    expect(screen.getByText(/還沒補到/)).toBeTruthy()
   })
 
   it('三張圖上中下疊放，滑到某一天時三張一起給出那天的提示（0.6.34）', async () => {
@@ -313,30 +316,7 @@ describe('TwMarketSection', () => {
     }
   })
 
-  it('全部展開 / 全部收起：只認展得開的列（0.6.33）；載入後預設已展開', async () => {
-    const user = userEvent.setup()
-    fetchMarketDaily.mockResolvedValue({
-      asOf: '2026-08-04T08:30:00.000Z',
-      days: [
-        day('2026-08-03', 8e11, inst(-1.65e10, -1.9e10)), // 舊資料，沒有明細
-        day('2026-08-04', 8e11, instFull(1.445e10, 1.127e10)),
-      ],
-    })
-    const { container } = render(<TwMarketSection />)
-    await screen.findByRole('table', { name: '三大法人買賣超' })
-
-    // Default open for the one expandable day
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
-    const collapse = screen.getByRole('button', { name: /全部收起/ })
-
-    await user.click(collapse)
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(0)
-
-    await user.click(screen.getByRole('button', { name: /全部展開/ }))
-    expect(container.querySelectorAll('.detail-row')).toHaveLength(1)
-  })
-
-  it('趨勢與連續分成兩欄，走勢線才不會被標籤推歪（0.6.33）', async () => {
+  it('日期列帶走勢與連續標籤（合計序列，0.7.1-dev.2）', async () => {
     const days = [
       day('2026-08-01', 8e11, inst(-3e9, -1e9)),
       day('2026-08-02', 8e11, inst(-2e9, -1e9)),
@@ -345,20 +325,17 @@ describe('TwMarketSection', () => {
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '三大法人買賣超' })
-    expect(screen.getByRole('columnheader', { name: '連續' })).toBeTruthy()
+    // No separate 趨勢／連續 columns — both sit under the date cell
+    expect(screen.queryByRole('columnheader', { name: '連續' })).toBeNull()
 
-    const rows = instRows(container)
-    const cells = (r: Element) => [...r.querySelectorAll('td.num')]
-    // The last two grids are fixed to be trend and continuity: the trend line is only in the trend grid, and the text is only in the continuous grid.
-    const top = cells(rows[0])
-    expect(top[top.length - 2].querySelector('svg')).toBeTruthy()
-    expect(top[top.length - 1].querySelector('svg')).toBeNull()
-    // Turn to the current day and then 1 day → leave "-" in the continuous column instead of leaving it blank
-    expect(top[top.length - 1].textContent).toBe('—')
-
-    const prev = cells(rows[1])
-    expect(prev[prev.length - 1].textContent).toBe('連 2 日賣超')
-    expect(prev[prev.length - 2].querySelector('svg')).toBeTruthy()
+    const rows = [...instRows(container)]
+    // First unit row of latest day has date + spark; 1-day streak → "—"
+    expect(rows[0].querySelector('.mac-spark')).toBeTruthy()
+    expect(rows[0].textContent).toMatch(/—/)
+    expect(rows[0].textContent).not.toContain('連 ')
+    // First unit row of previous day (index 6)
+    expect(rows[6].textContent).toContain('連 2 日賣超')
+    expect(rows[6].querySelector('.mac-spark')).toBeTruthy()
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {

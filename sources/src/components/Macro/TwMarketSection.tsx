@@ -8,8 +8,8 @@
  * Unit trap: The source is **yuan**, and the screen is converted into **billion yuan** (the market's single-day turnover is 885.5 billion,
  * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
-import { Fragment, useCallback, useEffect, useState } from 'react'
-import { ChevronsDownUp, ChevronsUpDown, Minus, Plus, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { ChevronsDownUp, ChevronsUpDown, RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
   type MarketData,
@@ -115,101 +115,33 @@ function trendAt(values: number[], endIdx: number): { points: number[]; streak: 
 }
 
 /**
- * Trend and two consecutive grids (0.6.33 split by one grid).
- *
- * **Why it must be divided into two columns**: Originally, the trend line and "N consecutive days" were squeezed into the same grid on the right row.
- * The labeled columns will push the lines to the left, and the beginning and end of the lines in the entire column will not be aligned, making it look like the trend range of each column is different.
- * After the columns are divided, the lines have a fixed width and fixed position, so that the columns can be compared.
- *
- * The trend line uses **polar colors** (red for buying and green for selling, according to the direction of the last day); when the line cannot be drawn, `SparkCell` prints "—" by itself.
+ * Day-level streak + spark for the 合計 series (shown once per date in the 單位 table).
+ * Polar colors: red buy-side, green sell-side, by last day's net.
  */
-function TrendCells({ points, streak }: { points: number[]; streak: number }) {
+function DayTrend({ points, streak }: { points: number[]; streak: number }) {
   const last = points[points.length - 1]
   if (last === undefined) {
-    return (
-      <>
-        <td className="num">—</td>
-        <td className="num">—</td>
-      </>
-    )
+    return <span className="hint">—</span>
   }
   const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
-  // 1 consecutive day is not a trend and will not be printed (at this time, the continuous column is given "—" instead of leaving it blank, which will be read as missing data)
   const label = streak >= 2 ? `連 ${streak} 日${last > 0 ? '買超' : '賣超'}` : null
   return (
-    <>
-      <td className="num" style={{ width: SPARK_W + 18 }}>
-        <SparkCell
-          points={points}
-          color={color}
-          ariaLabel={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
-        />
-      </td>
-      <td className={`num ${label ? chipClass(last) : ''}`} style={{ whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <SparkCell
+        points={points}
+        color={color}
+        ariaLabel={`近 ${points.length} 個交易日的三大法人合計買賣超走勢`}
+      />
+      <span className={label ? chipClass(last) : 'hint'} style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>
         {label ?? '—'}
-      </td>
-    </>
+      </span>
+    </span>
   )
-}
-
-/**
- * Expand the buy/sell details for a certain day.
- *
- * **The nested table is used here, which is contrary to the disposal of annual income**, and it is deliberate: the detail column over there is the same as the parent column
- * It’s the same set of fields (same amount, same caliber), and the column widths must be aligned to be readable; the details here are
- * "Six units × buy / sell / buy and sell over" is fundamentally different from the "six units in each column" of the parent column.
- * Forcing the same set of columns will just force a bunch of colSpan placeholders.
- */
-function DayDetail({ day }: { day: MarketDay }) {
-  const buy = day.institutional?.buy
-  const sell = day.institutional?.sell
-  return (
-    <tr className="detail-row">
-      {/* Date column + six units + trend + streak */}
-      <td colSpan={UNITS.length + 3} style={{ padding: '4px 14px 10px 34px' }}>
-        <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
-          <thead>
-            <tr>
-              <th>{day.date} 明細</th>
-              <th className="num">買進</th>
-              <th className="num">賣出</th>
-              <th className="num">買賣超</th>
-            </tr>
-          </thead>
-          <tbody>
-            {UNITS.map((u) => {
-              const b = toBillion(buy?.[u.key] ?? null)
-              const s = toBillion(sell?.[u.key] ?? null)
-              const n = toBillion(day.institutional?.[u.key] ?? null)
-              return (
-                <tr key={u.key}>
-                  <td>{u.label}</td>
-                  <td className="num">{fmtBillion(b)}</td>
-                  <td className="num">{fmtBillion(s)}</td>
-                  <td className={`num ${chipClass(n)}`}>{fmtBillionSigned(n)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </td>
-    </tr>
-  )
-}
-
-/** Dates among the last N institutional rows that have buy/sell detail (expandable). */
-function expandableInstDates(days: MarketDay[]): string[] {
-  return days
-    .slice(-INSTITUTIONAL_DAYS)
-    .filter((d) => d.institutional?.buy)
-    .map((d) => d.date)
 }
 
 export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
-  /** 0.7.1-dev.1: default open so buy / sell / net are visible without an extra click. */
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   /*
     A hover index shared by all three charts (0.6.34). It lives here rather than in each chart so that hovering
     a day highlights that same day on the candles, the index line and the turnover bars —— the user is asking
@@ -221,10 +153,7 @@ export function TwMarketSection() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const data = await fetchMarketDaily()
-    setMarket(data)
-    // Open every day that has buy/sell legs (user wants 買進／賣出 at a glance).
-    if (data) setExpanded(new Set(expandableInstDates(data.days)))
+    setMarket(await fetchMarketDaily())
     setLoading(false)
   }, [])
 
@@ -301,23 +230,6 @@ export function TwMarketSection() {
   const trendDays = days.filter((d) => d.institutional?.totalTwd != null)
   const trendValues = trendDays.map((d) => d.institutional!.totalTwd!)
   const trendIdx = new Map(trendDays.map((d, i) => [d.date, i]))
-
-  const toggle = (date: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(date)) next.delete(date)
-      else next.add(date)
-      return next
-    })
-
-  /*
-    "Expand all" only counts rows that **can** expand (those with buy/sell detail). Counting older data days
-    whose detail has not been backfilled would keep allOpen false forever and jam the button on "expand all" ——
-    same as YearlyPage counting only stocks whose sells are non-empty.
-  */
-  const expandable = instDays.filter((d) => d.institutional?.buy).map((d) => d.date)
-  const allOpen = expandable.length > 0 && expandable.every((d) => expanded.has(d))
-  const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(expandable))
 
   // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
   // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
@@ -480,96 +392,62 @@ export function TwMarketSection() {
       </div>
 
       {/*
-        **The table is from new to old, and the trend chart is from old to new** - consistent with the treatment of monthly revenue and profitability:
-        The left edge of a trend chart must be the earlier day, while the first row of the table must be the most
-        recent one. The two directions are deliberately opposite; this is not a slip.
-
-        There used to be an institutional net-buy bar chart here, removed in 0.6.33: the same numbers already have
-        a table (showing the amounts) and a trend column (showing direction). A bar chart was a third telling of
-        the same thing that only made the card taller.
+        0.7.1-dev.2: flat table 日期×單位 with 買進／賣出／買賣超 columns (no expand).
+        Rows are newest day first; spark/streak sit under the date (合計 series only).
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
         <div className="chart-title">
           三大法人買賣超（億元）・近 {instDays.length} 個交易日
         </div>
-        {expandable.length > 0 && (
-          <button className="btn btn-sm" onClick={toggleAll}>
-            {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-            {allOpen ? '全部收起' : '全部展開'}
-          </button>
-        )}
       </div>
       <div className="table-scroll" style={{ marginTop: 12 }}>
         <table className="data-table" aria-label="三大法人買賣超">
           <thead>
             <tr>
               <th>日期</th>
-              {UNITS.map((u) => (
-                <th className="num" key={u.key}>
-                  {u.label}
-                </th>
-              ))}
-              <th className="num">趨勢</th>
-              <th className="num">連續</th>
+              <th>單位</th>
+              <th className="num">買進</th>
+              <th className="num">賣出</th>
+              <th className="num">買賣超</th>
             </tr>
           </thead>
           <tbody>
-            {[...instDays].reverse().map((d) => {
+            {[...instDays].reverse().flatMap((d) => {
               const inst = d.institutional
+              const buy = inst?.buy
+              const sell = inst?.sell
+              const hasLegs = Boolean(buy)
               const idx = trendIdx.get(d.date)
-              const { points, streak } = idx === undefined
-                ? { points: [], streak: 0 }
-                : trendAt(trendValues, idx)
-              const isOpen = expanded.has(d.date)
-              // Buying/selling was only saved in 0.6.32. The old data only has the difference - no expand button will be given without details.
-              const canExpand = Boolean(inst?.buy)
-              return (
-                <Fragment key={d.date}>
-                  <tr>
-                    <td>
-                      <div className="cell-tree">
-                        {canExpand ? (
-                          <button
-                            className="year-toggle"
-                            onClick={() => toggle(d.date)}
-                            aria-expanded={isOpen}
-                            aria-label={`${isOpen ? '收合' : '展開'} ${d.date} 的買進賣出明細`}
-                          >
-                            {isOpen ? <Minus size={13} /> : <Plus size={13} />}
-                          </button>
-                        ) : (
-                          <span className="toggle-slot" />
-                        )}
-                        {d.date}
-                      </div>
-                    </td>
-                    {/* When a day's institutional amounts are not filled yet the whole row is "—"; never fake it with 0 */}
-                    {UNITS.map((u) => {
-                      const b = toBillion(inst?.[u.key] ?? null)
-                      return (
-                        <td className={`num ${chipClass(b)}`} key={u.key}>
-                          {fmtBillionSigned(b)}
-                        </td>
-                      )
-                    })}
-                    <TrendCells points={points} streak={streak} />
+              const { points, streak } =
+                idx === undefined ? { points: [] as number[], streak: 0 } : trendAt(trendValues, idx)
+              return UNITS.map((u, ui) => {
+                const net = toBillion(inst?.[u.key] ?? null)
+                const b = hasLegs ? toBillion(buy?.[u.key] ?? null) : null
+                const s = hasLegs ? toBillion(sell?.[u.key] ?? null) : null
+                return (
+                  <tr key={`${d.date}-${u.key}`}>
+                    {ui === 0 ? (
+                      <td rowSpan={UNITS.length} style={{ verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                        <div>{d.date}</div>
+                        <div style={{ marginTop: 6 }}>
+                          <DayTrend points={points} streak={streak} />
+                        </div>
+                      </td>
+                    ) : null}
+                    <td>{u.label}</td>
+                    <td className="num">{hasLegs ? fmtBillion(b) : '—'}</td>
+                    <td className="num">{hasLegs ? fmtBillion(s) : '—'}</td>
+                    <td className={`num ${chipClass(net)}`}>{fmtBillionSigned(net)}</td>
                   </tr>
-                  {isOpen && <DayDetail day={d} />}
-                </Fragment>
-              )
+                )
+              })
             })}
           </tbody>
         </table>
       </div>
 
-      {/*
-        Cut from two long paragraphs to one sentence in 0.6.33. The fetch cycle used to be described here too,
-        but that is a scheduling matter the user does not need while watching the market, and a frontend copy of
-        the shift constants is bound to drift from pg_cron —— it did: this said "at most 5 days" while the
-        backend was already on 15. The whole passage moved to the admin fetch-status page.
-      */}
       <p className="hint" style={{ marginTop: 8 }}>
-        買賣超＝買進金額−賣出金額，紅色為買超；「—」是那天還沒補到，不是沒有進出。
+        買賣超＝買進金額−賣出金額，紅色為買超；「—」是那天還沒補到（或舊檔僅有差額），不是沒有進出。
       </p>
     </div>
   )
