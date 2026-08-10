@@ -1,9 +1,29 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.7.0 remove search + TOP20; holdings-only analysis
-- Status: **code complete; tests pending verify; deploy not run**
-- Timestamp: 2026-08-10 17:04:08 Asia/Taipei
+- Action: 0.7.0 shipped to main (Pages); prod Edge deploy blocked (no token)
+- Status: **frontend on main 2026-08-10; Edge PROD pending token**
+- Timestamp: 2026-08-10 17:08:26 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:08:26 Asia/Taipei (0.7.0 ship)
+
+- **Agent**: Grok
+- **Action**: User asked merge to main
+
+### Git
+- Commit `944548c` on `dev` + `main` (ff)
+- Pushed `origin/main` and `origin/dev` (synced)
+
+### Edge
+- **DEV** self-hosted: volume-copy `stock-report` + restart functions — `sync-top-tickers` → 400 Unknown action (good)
+- **PROD** cloud: `supabase functions deploy` failed — **no SUPABASE_ACCESS_TOKEN** in this environment
+- PROD still answers `sync-top-tickers` with 401 (route still present — old bundle)
+
+### Open
+- Re-run with access token:  
+  `cd sources && supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt`
 
 ---
 

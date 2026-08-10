@@ -36,8 +36,8 @@
 2. ~~Edge holdings-only batch; restore generate/warm whitelist; drop TOP actions~~ ✅
 3. ~~Admin jobs/timeline/labels; version 0.7.0 + CHANGELOG~~ ✅
 4. ~~Run unit tests (942 passed)~~ ✅
-5. Commit on `dev` —— ⏳
-6. Deploy Edge + push —— ⏳ explicit auth only
+5. ~~Commit + merge main `944548c`~~ ✅
+6. ~~push main/dev~~ ✅ · PROD Edge deploy —— ⏳ need SUPABASE_ACCESS_TOKEN
 
 ### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6) — kept under holdings path
 - **Status**: 🔄 **dev.6 fixes thin quarters; commit; push after you OK**
