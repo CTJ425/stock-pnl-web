@@ -81,6 +81,28 @@ describe('warmStock (progressive)', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
+  it('BUG-A: core 封印後再呼叫回傳上次結果（非 FAILED），history 仍可接續', async () => {
+    invoke
+      .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
+      .mockResolvedValueOnce(ok(0, 0, true, ['2026-07'], ['2026-Q1'], 'history'))
+
+    const firstCore = await warmStockCore('2881', '富邦金')
+    expect(firstCore.ok).toBe(true)
+    expect(firstCore.fundamentalComplete).toBe(false)
+
+    // Second core: sealed, must echo last result so callers can chain history
+    const sealed = await warmStockCore('2881')
+    expect(sealed).toEqual(firstCore)
+    expect(invoke).toHaveBeenCalledTimes(1)
+
+    // warmStock still runs history because cached core is incomplete
+    const progressive = await warmStock('2881', '富邦金')
+    expect(progressive.fundamentalComplete).toBe(true)
+    expect(progressive.backfilled).toBe(2)
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect(invoke.mock.calls[1][1].body.phase).toBe('history')
+  })
+
   it('incomplete 且 history 有進度 → 解封 history，下次還可再補', async () => {
     invoke
       .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
@@ -98,7 +120,7 @@ describe('warmStock (progressive)', () => {
     expect(invoke.mock.calls[2][1].body.phase).toBe('history')
   })
 
-  it('incomplete 但 history 無進度 → 保持封印', async () => {
+  it('incomplete 但 history 無進度 → 保持封印並回傳上次 history 結果', async () => {
     invoke
       .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
       .mockResolvedValueOnce(ok(0, 0, false, [], [], 'history'))
@@ -107,7 +129,10 @@ describe('warmStock (progressive)', () => {
     expect(first.backfilled).toBe(0)
 
     const second = await warmStockHistory('2330')
-    expect(second.ok).toBe(false)
+    // Sealed: echo last history (ok with 0 backfill), not a bare FAILED
+    expect(second.ok).toBe(true)
+    expect(second.backfilled).toBe(0)
+    expect(second.fundamentalComplete).toBe(false)
     expect(invoke).toHaveBeenCalledTimes(2)
   })
 

@@ -4,6 +4,10 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.46（開發中）— 新股票籌碼／基本面提早就緒
 
+#### dev.5（2026-08-10）
+
+- 🐛 **BUG-A**：session 內 core 封印後不再回傳裸 `FAILED`，改回傳上次結果；個股頁在 core 已封印但基本面仍偏薄時仍可跑 `history`（prefetch 後再開頁不會卡在薄檔）。
+
 #### dev.4（2026-08-10）
 
 - ⚡ **新股 / 觀測 warm 拆成 core → history**：`phase=core` 只做日 K + 最新基本面（秒級可畫），`phase=history` 再補 MOPS 月營收／季報歷史（不扣第二次日額度）；`phase=full` 仍為一次做完（prefetch 用 progressive 兩段）。

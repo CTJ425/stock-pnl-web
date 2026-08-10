@@ -25,6 +25,11 @@
  * - `warmStockHistory` — MOPS revenue/profit backfill only (no second quota). Call after core when
  *   `fundamentalComplete` is false.
  * - `warmStock` — progressive: core then history (prefetch / one-shot callers).
+ *
+ * BUG-A fix (0.6.46-dev.5):
+ * - Sealed core/history returns the **last result** for that ticker (not a bare FAILED) so callers
+ *   still see `ok` / `fundamentalComplete` and can decide to run history.
+ * - Detail page also starts history when Storage is still thin even if core did not re-run.
  */
 import { supabase } from './supabase'
 
@@ -60,6 +65,9 @@ const inflightCore = new Map<string, Promise<WarmResult>>()
 const inflightHistory = new Map<string, Promise<WarmResult>>()
 const attemptedCore = new Set<string>()
 const attemptedHistory = new Set<string>()
+/** Last outcome per ticker so a sealed re-call does not look like a hard failure (BUG-A). */
+const lastCore = new Map<string, WarmResult>()
+const lastHistory = new Map<string, WarmResult>()
 
 /** For testing: clear the deduplication status of this module*/
 export function resetWarmState(): void {
@@ -67,6 +75,8 @@ export function resetWarmState(): void {
   inflightHistory.clear()
   attemptedCore.clear()
   attemptedHistory.clear()
+  lastCore.clear()
+  lastHistory.clear()
 }
 
 function parseWarmResult(data: Record<string, unknown>, phase: WarmPhase): WarmResult {
@@ -97,7 +107,7 @@ async function invokeWarm(
   name: string | undefined,
   phase: WarmPhase,
 ): Promise<WarmResult> {
-  if (!supabase) return FAILED
+  if (!supabase) return { ...FAILED, phase }
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
       body: { action: 'warm', ticker, name: name ?? '', phase },
@@ -112,19 +122,24 @@ async function invokeWarm(
 /**
  * Daily line + latest fundamental only. Quota is charged on the server for this phase.
  * Same ticker is sealed for the rest of the session after one attempt (including concurrent share).
+ * Re-calls return the last result (not FAILED) so UI can still chain history (BUG-A).
  */
 export async function warmStockCore(ticker: string, name?: string): Promise<WarmResult> {
   if (!supabase) return FAILED
 
   const pending = inflightCore.get(ticker)
   if (pending) return pending
-  if (attemptedCore.has(ticker)) return FAILED
+  if (attemptedCore.has(ticker)) {
+    return lastCore.get(ticker) ?? { ...FAILED, phase: 'core' }
+  }
 
   attemptedCore.add(ticker)
 
   const task = (async (): Promise<WarmResult> => {
     try {
-      return await invokeWarm(ticker, name, 'core')
+      const result = await invokeWarm(ticker, name, 'core')
+      lastCore.set(ticker, result)
+      return result
     } finally {
       inflightCore.delete(ticker)
     }
@@ -138,19 +153,23 @@ export async function warmStockCore(ticker: string, name?: string): Promise<Warm
  * MOPS history backfill only. Does not charge a second daily quota (server-side).
  * Call after `warmStockCore` when `fundamentalComplete` is false.
  * Unseals only when incomplete and this round made progress.
+ * Sealed re-calls return the last history result (BUG-A companion).
  */
 export async function warmStockHistory(ticker: string, name?: string): Promise<WarmResult> {
   if (!supabase) return FAILED
 
   const pending = inflightHistory.get(ticker)
   if (pending) return pending
-  if (attemptedHistory.has(ticker)) return FAILED
+  if (attemptedHistory.has(ticker)) {
+    return lastHistory.get(ticker) ?? { ...FAILED, phase: 'history' }
+  }
 
   attemptedHistory.add(ticker)
 
   const task = (async (): Promise<WarmResult> => {
     try {
       const result = await invokeWarm(ticker, name, 'history')
+      lastHistory.set(ticker, result)
       maybeUnsealHistory(ticker, result)
       return result
     } finally {

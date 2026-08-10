@@ -1,9 +1,35 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.46-dev.4 commit + DEV Edge volume-copy
-- Status: **f89de86 on local dev; DEV functions healthy; not pushed; prod untouched**
-- Timestamp: 2026-08-10 18:55:00 Asia/Taipei
+- Action: 0.6.46-dev.5 BUG-A fix + cold ticker DEV metrics (2881)
+- Status: **Code fixed + unit tests; DEV live warm measured; not pushed; prod untouched**
+- Timestamp: 2026-08-10 19:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 19:05:00 Asia/Taipei (0.6.46-dev.5 + verify)
+
+- **Agent**: Grok
+- **Action**: Fix sealed-core skipping history; measure progressive warm on cold stock
+
+### Fix
+- `warmStockCore` / `warmStockHistory`: sealed re-call returns **last result**
+- `StockDetailPage`: `shouldHistory` = core incomplete, or thin file when core not ok
+
+### DEV live metrics (2881 富邦金, no prior fundamental/daily)
+| Step | client_ms | server durationMs | file after |
+|------|-----------|-------------------|------------|
+| core | **859** | 450 | months=1, quarters=0, valuation+industry |
+| history | 26363 | 26246 | months=11, quarters=12, complete |
+| total | 27222 | — | — |
+| TTFP proxy (core) | **859** | vs full wait **27222** (~**31.7×** earlier first paint) |
+
+- Pre Storage: fundamental/daily not present (API 400)
+- Post core: both HTTP 200; `dailySynced=1`, `fundamentalSynced=1`, `fundamentalComplete=false`
+- Post history: `fundamentalComplete=true`; revenue filled 10 new months + 12 quarters this round
+
+### Tests
+- warmStock + StockDetailPage paths green after BUG-A
 
 ---
 

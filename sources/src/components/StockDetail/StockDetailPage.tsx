@@ -173,12 +173,12 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   /*
     Fundamentals load independently of the chip report.
 
-    0.6.46-dev.4 progressive warm:
+    0.6.46-dev.4 progressive warm (+ BUG-A fix in 0.6.46-dev.5):
     1. Storage-first — if a file exists, paint it immediately (stop the section spinner).
     2. Soft needsFundamentalBackfill → warmStockCore (daily + latest only) so first paint is
        not blocked by MOPS history; re-read Storage after core when it wrote something.
-    3. If core says incomplete → warmStockHistory in the same effect; re-read when backfilled.
-       (History does not charge a second daily quota; session seal still applies.)
+    3. History when core is incomplete, OR when Storage is still thin after a sealed core
+       (prefetch / prior open). Unknown/ETF with complete=true still skips history.
     4. No file → keep loading until core finishes (or fails); history may still extend the table.
   */
   useEffect(() => {
@@ -208,11 +208,15 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
           setFundLoading(false)
         }
 
-        // History only when core ran and still incomplete (unknown/ETF seals complete=true).
-        if (core.ok && !core.fundamentalComplete) {
+        // History: prefer server complete flag; if core was sealed/failed, still try when thin.
+        // Do NOT history when core.ok && complete (ETF / unknownTicker).
+        const shouldHistory = core.ok
+          ? !core.fundamentalComplete
+          : Boolean(f && needsFundamentalBackfill(f))
+        if (shouldHistory) {
           const hist = await warmStockHistory(ticker, name)
           if (!alive) return
-          if (hist.backfilled > 0) {
+          if (hist.backfilled > 0 || hist.fundamentalSynced > 0) {
             f = (await fetchFundamental(ticker)) ?? f
             if (alive) setFundamental(f)
           }
