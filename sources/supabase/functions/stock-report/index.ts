@@ -969,8 +969,42 @@ async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string 
 /**
  * TWSE「每日成交量前二十名」(mi-stock20.html → data-api MI_INDEX20).
  * OpenAPI: exchangeReport/MI_INDEX20 — volume rank, fixed top 20.
+ * Cloud Edge often gets connection reset from openapi.twse.com.tw — soft-fetch + fallback.
  */
 const MI_INDEX20_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20'
+/** Fallback when MI_INDEX20 is unreachable: full day list, rank by TradeVolume, take 20. */
+const STOCK_DAY_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Soft OpenAPI GET: retries, never throws (returns null).
+ * Connection reset / timeouts are common from non-TWSE cloud egress.
+ */
+async function fetchOpenApiJsonSoft<T>(url: string, tries = 3): Promise<T | null> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': UA,
+          Referer: 'https://www.twse.com.tw/',
+        },
+        signal: AbortSignal.timeout(12_000),
+      })
+      if (!res.ok) {
+        await sleepMs(250 * (i + 1))
+        continue
+      }
+      return (await res.json()) as T
+    } catch {
+      await sleepMs(350 * (i + 1))
+    }
+  }
+  return null
+}
 
 /**
  * Soft-ready fundamental (batch reportComplete), aligned with frontend PROFIT/REVENUE_WARM_MIN = 6.
@@ -1029,7 +1063,8 @@ async function evaluateTickerScope(
 
 /**
  * Refresh meta/top_tickers.json from MI_INDEX20 (official volume top-20).
- * ETFs kept. On fetch failure, keep previous file when present.
+ * Never throws: OpenAPI connection resets must not fail the whole generate phase.
+ * On failure: keep previous archive when present; optional STOCK_DAY_ALL volume fallback.
  */
 async function syncTopTickers(opts?: { force?: boolean }): Promise<{
   ok: boolean
@@ -1038,61 +1073,109 @@ async function syncTopTickers(opts?: { force?: boolean }): Promise<{
   reused: boolean
   days: number
   error?: string
+  source?: 'mi_index20' | 'stock_day_all' | 'storage'
 }> {
   const force = opts?.force === true
-  const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
-  const existing = normalizeTopTickersFile(raw)
-  const todayYmd = taipeiYmd(new Date())
-  const latest = existing?.days?.[0]
-  if (!force && latest?.ymd === todayYmd && latest.tickers.length > 0) {
-    return {
-      ok: true,
-      n: latest.tickers.length,
-      sourceDate: latest.sourceDate,
-      reused: true,
-      days: existing?.days.length ?? 1,
-    }
-  }
+  try {
+    const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
+    const existing = normalizeTopTickersFile(raw)
+    const todayYmd = taipeiYmd(new Date())
+    const latest = existing?.days?.[0]
 
-  const rows = await fetchJson<StockDayAllRow[]>(MI_INDEX20_URL)
-  if (!Array.isArray(rows) || rows.length === 0) {
-    if (latest?.tickers.length) {
+    // Same Taipei calendar day already on file → no network.
+    if (!force && latest?.tickers.length && latest.ymd === todayYmd) {
       return {
         ok: true,
         n: latest.tickers.length,
         sourceDate: latest.sourceDate,
         reused: true,
         days: existing?.days.length ?? 1,
-        error: 'fetch_failed_kept_previous',
+        source: 'storage',
       }
     }
-    return { ok: false, n: 0, sourceDate: null, reused: false, days: 0, error: 'fetch_failed' }
-  }
 
-  const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
-  const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
-  // Prefer TWSE session day over write clock so archive ymd === ranking trade day.
-  const ymd = tradingYmdFromSource(sourceDate) ?? todayYmd
-  const day = buildTopTickersDay({ ymd, sourceDate, tickers: ranked })
-  const file = mergeTopTickersArchive(existing, day)
-  const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
-  if (!uploaded && latest?.tickers.length) {
-    return {
-      ok: true,
-      n: latest.tickers.length,
-      sourceDate: latest.sourceDate,
-      reused: true,
-      days: existing?.days.length ?? 1,
-      error: 'upload_failed_kept_previous',
+    // Primary: MI_INDEX20 (soft, retries). On RST/empty → fallback or keep previous (never throw).
+    let rows = await fetchOpenApiJsonSoft<StockDayAllRow[]>(MI_INDEX20_URL, 3)
+    let source: 'mi_index20' | 'stock_day_all' = 'mi_index20'
+    if (!Array.isArray(rows) || rows.length === 0) {
+      // Fallback: full day list, rank by volume
+      rows = await fetchOpenApiJsonSoft<StockDayAllRow[]>(STOCK_DAY_ALL_URL, 2)
+      source = 'stock_day_all'
     }
-  }
-  return {
-    ok: uploaded,
-    n: ranked.length,
-    sourceDate,
-    reused: false,
-    days: file.days.length,
-    error: uploaded ? undefined : 'upload_failed',
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      if (latest?.tickers.length) {
+        return {
+          ok: true,
+          n: latest.tickers.length,
+          sourceDate: latest.sourceDate,
+          reused: true,
+          days: existing?.days.length ?? 1,
+          error: 'fetch_failed_kept_previous',
+          source: 'storage',
+        }
+      }
+      return {
+        ok: false,
+        n: 0,
+        sourceDate: null,
+        reused: false,
+        days: 0,
+        error: 'fetch_failed',
+      }
+    }
+
+    const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
+    if (ranked.length === 0) {
+      if (latest?.tickers.length) {
+        return {
+          ok: true,
+          n: latest.tickers.length,
+          sourceDate: latest.sourceDate,
+          reused: true,
+          days: existing?.days.length ?? 1,
+          error: 'empty_rank_kept_previous',
+          source: 'storage',
+        }
+      }
+      return { ok: false, n: 0, sourceDate: null, reused: false, days: 0, error: 'empty_rank' }
+    }
+
+    const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
+    const ymd = tradingYmdFromSource(sourceDate) ?? todayYmd
+    const day = buildTopTickersDay({ ymd, sourceDate, tickers: ranked })
+    const file = mergeTopTickersArchive(existing, day)
+    const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
+    if (!uploaded && latest?.tickers.length) {
+      return {
+        ok: true,
+        n: latest.tickers.length,
+        sourceDate: latest.sourceDate,
+        reused: true,
+        days: existing?.days.length ?? 1,
+        error: 'upload_failed_kept_previous',
+        source: 'storage',
+      }
+    }
+    return {
+      ok: uploaded,
+      n: ranked.length,
+      sourceDate,
+      reused: false,
+      days: file.days.length,
+      error: uploaded ? undefined : 'upload_failed',
+      source,
+    }
+  } catch (e) {
+    // Absolute last resort: never bubble Connect errors to Deno.serve as 500.
+    return {
+      ok: false,
+      n: 0,
+      sourceDate: null,
+      reused: false,
+      days: 0,
+      error: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 
@@ -1118,6 +1201,7 @@ async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>
 async function handleSyncTopTickers(): Promise<Response> {
   const startedAt = Date.now()
   const result = await syncTopTickers({ force: true })
+  // Always HTTP 200: ok=false means empty/unusable; never 500 on Connect RST.
   return json({
     ok: result.ok,
     n: result.n,
@@ -1125,6 +1209,7 @@ async function handleSyncTopTickers(): Promise<Response> {
     reused: result.reused,
     days: result.days,
     error: result.error ?? null,
+    source: result.source ?? null,
     path: TOP_TICKERS_STORAGE_PATH,
     durationMs: Date.now() - startedAt,
   })
@@ -2401,9 +2486,39 @@ type BatchTickerBundle = {
   tickers: Array<{ ticker: string; name: string }>
 }
 
-async function resolveBatchTickerBundle(): Promise<BatchTickerBundle> {
-  // Top-30 same clock window as T86 work (generate-all from 16:00) — not 15:00 market-daily.
-  const topSync = await syncTopTickers()
+/**
+ * Storage-only peek of top list (no OpenAPI). Used by market-data / history so a flaky
+ * MI_INDEX20 cannot fail Yahoo/MOPS work. If Storage is empty, one soft force-sync is tried.
+ */
+async function peekOrSoftTopTickers(): Promise<Awaited<ReturnType<typeof syncTopTickers>>> {
+  const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
+  const existing = normalizeTopTickersFile(raw)
+  const latest = existing?.days?.[0]
+  if (latest?.tickers.length) {
+    return {
+      ok: true,
+      n: latest.tickers.length,
+      sourceDate: latest.sourceDate,
+      reused: true,
+      days: existing?.days.length ?? 1,
+      source: 'storage',
+    }
+  }
+  return syncTopTickers({ force: true })
+}
+
+/**
+ * @param refreshTop chips: soft-refresh top list (OpenAPI with fallback).
+ * market-data / history: storage only (unless empty).
+ */
+async function resolveBatchTickerBundle(
+  opts?: { refreshTop?: boolean },
+): Promise<BatchTickerBundle> {
+  const topSync =
+    opts?.refreshTop === false
+      ? await peekOrSoftTopTickers()
+      : await syncTopTickers({ force: false })
+  // If top empty after soft fail, holdings/watchlist still run alone.
   const [heldList, watchedList, topList] = await Promise.all([
     heldTwTickers(),
     watchedTwTickers(),
@@ -2420,7 +2535,9 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   const todayYmd = taipeiYmd(now)
   t86FingerprintByYmd.clear()
 
-  const { topSync, personalList, topList, tickers } = await resolveBatchTickerBundle()
+  const { topSync, personalList, topList, tickers } = await resolveBatchTickerBundle({
+    refreshTop: true,
+  })
 
   // Chip short circuit before TWSE fetches. Fundamentals still run in later phases when chips skip.
   const last = await readLastRun(todayYmd)
@@ -2586,7 +2703,9 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
 
 async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
-  const { tickers, personalList, topList } = await resolveBatchTickerBundle()
+  const { tickers, personalList, topList } = await resolveBatchTickerBundle({
+    refreshTop: false,
+  })
 
   let seriesDataYmd: string | null = null
   let dailySynced = 0
@@ -2653,7 +2772,7 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
 async function runGeneratePhaseHistory(): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
   const now = new Date()
-  const { tickers } = await resolveBatchTickerBundle()
+  const { tickers } = await resolveBatchTickerBundle({ refreshTop: false })
 
   let revenueFilled = 0
   let revenueMonths: string[] = []

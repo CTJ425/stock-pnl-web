@@ -2,6 +2,17 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.6.52（2026-08-10）— MI_INDEX20 連線 RST 不再炸掉盤後
+
+#### 功能摘要
+
+- 🐛 OpenAPI `MI_INDEX20` **Connection reset** 時不再讓 `sync-top-tickers` / `generate-history` 回 **HTTP 500**。
+- 重試 + 失敗改走 `STOCK_DAY_ALL` 依成交量排前 20；仍失敗則**沿用 Storage 舊名單**。
+- **market-data / history** 只讀 Storage 的 TOP 名單，不再每 phase 重打證交所（避免 RST 拖垮營收補齊）。
+- ⚠️ 需 deploy `stock-report --no-verify-jwt`。
+
+---
+
 ### 0.6.51（2026-08-10）— TOP20 成交量（MI_INDEX20）；日K／布林回來
 
 #### 功能摘要
