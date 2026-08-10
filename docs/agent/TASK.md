@@ -29,6 +29,29 @@
 
 ## 📋 Active Tasks
 
+### Task 82: Top-30 (+ETF) preheat + dual-scope report gate (0.6.46-dev.7)
+- **Status**: 🔄 **Edge wired + DEV smoke; commit pending; push later**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 21:30:00 Asia/Taipei
+
+**Product rules (user):**
+1. Rank **includes ETFs** (no strip of 00xx).
+2. **15:00 = BFI82U / market only**; **Top30 + T86 work with generate-all from 16:00**.
+3. **`reportComplete` only when Top30 scope AND holdings∪watchlist scope are both ready** (soft fund).
+
+**Done**
+1. ~~Source + rank module~~ ✅
+2. ~~`syncTopTickers` + `batchTwTickers` = held∪watch∪top30~~ ✅
+3. ~~generate-all: chips skip still runs fund; scopes + reportComplete~~ ✅
+4. ~~action `sync-top-tickers` + admin-run label~~ ✅
+5. ~~DEV volume-copy + smoke sync-top-tickers~~ ✅
+
+**Todo**
+6. Commit 0.6.46-dev.7
+7. Full generate-all night verify (reportComplete path)
+8. Optional dedicated cron for sync-top-tickers (not required — embedded in generate-all)
+9. push / prod when authorized
+
 ### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6)
 - **Status**: 🔄 **dev.6 fixes thin quarters; commit; push after you OK**
 - **Agent**: Grok

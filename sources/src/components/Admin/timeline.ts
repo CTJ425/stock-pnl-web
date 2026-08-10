@@ -257,7 +257,8 @@ export function durationLabel(hours: number): string {
  */
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
-    '持股與觀察清單台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 獲利能力，寫入盤後報告',
+    '持股∪觀察∪成交值 Top30（含 ETF）台股：三大法人 T86 / 融資融券 / 借券 + 日 K + 估值 + 月營收 + 獲利能力；' +
+    '並回傳 reportComplete（持股與 Top30 雙範圍 soft 就緒）。16:00 起與 T86 同窗，非 15:00',
   /*
     market-daily / sync-market (0.6.44-dev.3 made the label explicit — ACTION_SCOPE had no
     entry before, so the schedule table showed only the code name). Three TWSE sources,
@@ -265,7 +266,10 @@ export const ACTION_SCOPE: Record<string, string> = {
   */
   'sync-market':
     '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
-    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json',
+    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。15:00 起',
+  'sync-top-tickers':
+    'TWSE STOCK_DAY_ALL 依成交金額排 Top30（含 ETF，官方證券代號），寫入 meta/top_tickers.json；' +
+    '供 generate-all 併入批次（建議 16:00 窗，勿與 15:00 全市場混淆）',
   probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
   'sync-macro':
     'FRED：核心 CPI / PPI / PCE、FOMC 目標利率區間（DFEDTARU/L）、非農就業、消費者信心',

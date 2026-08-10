@@ -10,6 +10,7 @@ import { supabase } from './supabase'
 export const ADMIN_RUN_JOBS = [
   'generate-all',
   'sync-market',
+  'sync-top-tickers',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -31,18 +32,23 @@ export interface AdminRunResult {
   durationMs: number
 }
 
-/** UI labels for the five cron-backed jobs (Traditional Chinese). */
+/** UI labels for cron-backed jobs (Traditional Chinese). */
 export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string; hint: string }> = {
   'generate-all': {
     title: '盤後個股批次',
     cron: 'stock-report-nightly',
-    hint: '持股與觀察清單台股籌碼報告、日 K、基本面（可能較久）',
+    hint: '持股∪觀察∪Top30：T86 籌碼、日 K、基本面（16:00 起；可能較久）',
   },
   'sync-market': {
     title: '台股全市場',
     cron: 'market-daily',
     hint:
-      'FMTQIK 量能／加權收盤 + MI_5MINS_HIST 開高低 + BFI82U 三大法人買賣超 → market/daily.json',
+      '15:00 起：FMTQIK + MI_5MINS_HIST + BFI82U → market/daily.json（不含個股 T86）',
+  },
+  'sync-top-tickers': {
+    title: '成交值 Top30 名單',
+    cron: '（併 generate-all／可手動）',
+    hint: 'STOCK_DAY_ALL 排行（含 ETF）→ meta/top_tickers.json；與 15:00 全市場分開',
   },
   'sync-macro': {
     title: '美總經',

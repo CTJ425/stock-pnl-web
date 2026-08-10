@@ -4,6 +4,12 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.46（開發中）— 新股票籌碼／基本面提早就緒
 
+#### dev.7（2026-08-10）
+
+- ✨ **成交值 Top30（含 ETF）併入盤後個股批次**：`generate-all`（**16:00 起**，與 T86 同窗）刷新 `meta/top_tickers.json`，名單 = 持股 ∪ 觀察 ∪ Top30；**15:00 仍只有** `sync-market`／BFI82U 全市場。
+- ✨ 回傳 `scopes.holdings` / `scopes.top30` 與 **`reportComplete`**（雙範圍籌碼 + soft 基本面就緒）；籌碼 `decideSkip` 時仍跑日 K／基本面回補。
+- ✨ 管理後台可手動 `sync-top-tickers`；排程說明更新。
+
 #### dev.6（2026-08-10）
 
 - 🐛 **其他台股季報偏薄**：soft warm 以前只要「月 ≥6 且有任一季」就不再 on-demand，導致觀測股在 progressive warm 先補滿月營收後卡在 1–2 季。現在拆成 `needsCoreWarm` / `needsHistoryWarm`（季 &lt; 6 也會再補 history，且不扣 core 額度）。

@@ -44,6 +44,7 @@ describe('AdminConsolePage', () => {
     for (const job of [
       'generate-all',
       'sync-market',
+      'sync-top-tickers',
       'sync-macro',
       'sync-fx',
       'probe',

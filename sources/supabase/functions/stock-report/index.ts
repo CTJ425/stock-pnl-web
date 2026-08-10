@@ -17,7 +17,11 @@
  *       revenue/profit backfill (no second quota charge; requires an existing fundamental file);
  *       `full` (default) = core then history in one request (legacy / background prefetch).
  *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
- *     → Generate a common report for all Taiwan stocks held and store it in Storage (reports bucket), and clean up old data older than 7 days
+ *     → Generate a common report for holdings ∪ watchlist ∪ top-30 (by trade value, incl. ETFs)
+ *       and store it in Storage (reports bucket), and clean up old data older than 7 days.
+ *       Top-30 snapshot is refreshed on this path (first useful after ~16:00 with T86); BFI82U stays on sync-market from 15:00.
+ *   POST { action: 'sync-top-tickers' } header: x-cron-secret
+ *     → Fetch STOCK_DAY_ALL, rank Top 30 by TradeValue (ETFs kept), write meta/top_tickers.json
  *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
  *     → Capture five FRED sequences and write them into macro/us.json (global single file). It has nothing to do with Taiwan stock trading days, so it is scheduled independently.
  *   POST { action: 'sync-fx' } header: x-cron-secret (triggered by fx-daily schedule)
@@ -92,6 +96,14 @@ import {
   type RevenueMonth,
 } from './twFundamental.ts'
 import { mergeTwTickerLists } from './batchTickers.ts'
+import {
+  TOP_TICKERS_DEFAULT_N,
+  TOP_TICKERS_STORAGE_PATH,
+  buildTopTickersFile,
+  rankTopByTradeValue,
+  type StockDayAllRow,
+  type TopTickersFile,
+} from './topTickers.ts'
 import {
   MOPS_MARKETS,
   mopsRevenueUrl,
@@ -939,11 +951,162 @@ async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string 
   }
 }
 
-/** Holdings ∪ watchlist — single source for generate-all / backfill entry points. */
+/** TWSE daily all issues — TradeValue ranking source for top-30 preheat. */
+const STOCK_DAY_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+
+/**
+ * Soft-ready fundamental (batch reportComplete), aligned with frontend PROFIT/REVENUE_WARM_MIN = 6.
+ * Empty shell after a real backfill pass (through markers) counts ready — typical ETF / no MOPS path.
+ */
+function fundamentalSoftReady(f: FundamentalFile | null | undefined): boolean {
+  if (!f) return false
+  const months = f.revenueMonths?.length ?? 0
+  const quarters = f.profitQuarters?.length ?? 0
+  if (months >= 6 && quarters >= 6) return true
+  if (
+    months === 0 &&
+    quarters === 0 &&
+    (f.revenueBackfilledThrough != null || f.profitBackfilledThrough != null)
+  ) {
+    return true
+  }
+  return false
+}
+
+async function chipReportReady(dataYmd: string, ticker: string): Promise<boolean> {
+  const file = await downloadJson<unknown>(`${dataYmd}/${ticker}.json`)
+  return file != null
+}
+
+async function evaluateTickerScope(
+  tickers: Array<{ ticker: string }>,
+  dataYmd: string | null,
+): Promise<{
+  total: number
+  chipsReady: number
+  fundReady: number
+  chipsComplete: boolean
+  fundComplete: boolean
+  missingFund: string[]
+}> {
+  const missingFund: string[] = []
+  let chipsReady = 0
+  let fundReady = 0
+  for (const { ticker } of tickers) {
+    if (dataYmd && (await chipReportReady(dataYmd, ticker))) chipsReady++
+    const f = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+    if (fundamentalSoftReady(f)) fundReady++
+    else missingFund.push(ticker)
+  }
+  const total = tickers.length
+  return {
+    total,
+    chipsReady,
+    fundReady,
+    chipsComplete: total === 0 || (dataYmd != null && chipsReady === total),
+    fundComplete: total === 0 || fundReady === total,
+    missingFund: missingFund.slice(0, 15),
+  }
+}
+
+/**
+ * Refresh meta/top_tickers.json from STOCK_DAY_ALL (official codes, ranked by TradeValue).
+ * ETFs kept. On fetch failure, keep previous file when present.
+ */
+async function syncTopTickers(opts?: { force?: boolean }): Promise<{
+  ok: boolean
+  n: number
+  sourceDate: string | null
+  reused: boolean
+  error?: string
+}> {
+  const force = opts?.force === true
+  const existing = await downloadJson<TopTickersFile>(TOP_TICKERS_STORAGE_PATH)
+  const todayYmd = taipeiYmd(new Date())
+  if (!force && existing?.tickers?.length && typeof existing.asOf === 'string') {
+    try {
+      const asOfYmd = taipeiYmd(new Date(existing.asOf))
+      if (asOfYmd === todayYmd) {
+        return {
+          ok: true,
+          n: existing.tickers.length,
+          sourceDate: existing.sourceDate ?? null,
+          reused: true,
+        }
+      }
+    } catch {
+      // fall through to refresh
+    }
+  }
+
+  const rows = await fetchJson<StockDayAllRow[]>(STOCK_DAY_ALL_URL)
+  if (!Array.isArray(rows) || rows.length === 0) {
+    if (existing?.tickers?.length) {
+      return {
+        ok: true,
+        n: existing.tickers.length,
+        sourceDate: existing.sourceDate ?? null,
+        reused: true,
+        error: 'fetch_failed_kept_previous',
+      }
+    }
+    return { ok: false, n: 0, sourceDate: null, reused: false, error: 'fetch_failed' }
+  }
+
+  const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
+  const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
+  const file = buildTopTickersFile({ sourceDate, tickers: ranked })
+  const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
+  if (!uploaded && existing?.tickers?.length) {
+    return {
+      ok: true,
+      n: existing.tickers.length,
+      sourceDate: existing.sourceDate ?? null,
+      reused: true,
+      error: 'upload_failed_kept_previous',
+    }
+  }
+  return {
+    ok: uploaded,
+    n: ranked.length,
+    sourceDate,
+    reused: false,
+    error: uploaded ? undefined : 'upload_failed',
+  }
+}
+
+async function topTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  const f = await downloadJson<TopTickersFile>(TOP_TICKERS_STORAGE_PATH)
+  if (!f?.tickers?.length) return []
+  return f.tickers.map((t) => ({ ticker: t.ticker, name: t.name }))
+}
+
+/**
+ * Holdings ∪ watchlist ∪ trade-value top 30 — single source for generate-all / backfill.
+ * Top 30 is refreshed on generate-all / sync-top-tickers (not on the 15:00 market-daily path).
+ */
 async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const [held, watched] = await Promise.all([heldTwTickers(), watchedTwTickers()])
-  // Holdings first so their names win when both lists have the same code.
-  return mergeTwTickerLists(held, watched)
+  const [held, watched, top] = await Promise.all([
+    heldTwTickers(),
+    watchedTwTickers(),
+    topTwTickers(),
+  ])
+  // Holdings first so their names win when lists overlap.
+  return mergeTwTickerLists(held, watched, top)
+}
+
+async function handleSyncTopTickers(): Promise<Response> {
+  const startedAt = Date.now()
+  const result = await syncTopTickers({ force: true })
+  return json({
+    ok: result.ok,
+    n: result.n,
+    sourceDate: result.sourceDate,
+    reused: result.reused,
+    error: result.error ?? null,
+    path: TOP_TICKERS_STORAGE_PATH,
+    durationMs: Date.now() - startedAt,
+  })
 }
 
 async function uploadJson(path: string, payload: unknown): Promise<boolean> {
@@ -2114,7 +2277,21 @@ async function handleGenerateAll(): Promise<Response> {
   const todayYmd = taipeiYmd(now)
   t86FingerprintByYmd.clear()
 
-  // ---- Short circuit determination: must be before any external request ----
+  // Top-30 list (official codes by TradeValue, ETFs kept). Same clock window as T86 work
+  // (generate-all from 16:00) — not on 15:00 market-daily (BFI82U only).
+  const topSync = await syncTopTickers()
+  const [heldList, watchedList, topList] = await Promise.all([
+    heldTwTickers(),
+    watchedTwTickers(),
+    topTwTickers(),
+  ])
+  // Personal set first for name priority, then top-30.
+  const personalList = mergeTwTickerLists(heldList, watchedList)
+  const tickers = mergeTwTickerLists(personalList, topList)
+
+  // ---- Chip short circuit: must be before TWSE chip fetches ----
+  // Fundamentals still run when chips skip so top-30 / holdings history can finish
+  // (reportComplete is dual-scope, not "chips frozen").
   const last = await readLastRun(todayYmd)
   const cachedToday = await cachedDayDatasets([todayYmd])
   const skip = decideSkip({
@@ -2123,152 +2300,194 @@ async function handleGenerateAll(): Promise<Response> {
     marginToday: cachedToday.has(`${todayYmd}:MI_MARGN_D`),
     runsToday: last?.runsToday ?? 0,
   })
-  if (skip.skip) {
-    await logBatchRun({
-      taipei_ymd: todayYmd,
-      taipei_time: taipeiHhmm(now),
-      runs_today: (last?.runsToday ?? 0) + 1,
-      skipped: true,
-      skip_reason: skip.reason,
-      t86_today: cachedToday.has(`${todayYmd}:T86`),
-      t86_fingerprint: last?.t86?.fingerprint ?? null,
-      t86_revisions: last?.t86?.revisions ?? 0,
-      t86_unchanged: last?.t86?.unchanged ?? 0,
-      t86_frozen: last?.t86?.frozen ?? false,
-      run_sig: last?.runSig ?? null,
-      duration_ms: Date.now() - startedAt,
-    })
-    return json({ ok: true, skipped: true, reason: skip.reason, ymd: todayYmd })
-  }
-
-  const tickers = await batchTwTickers()
-  // Today's T86 has a cache but has not yet been finalized → Re-catch and compare; if not, just follow the original fetching path
-  const refreshT86Ymd =
-    cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
-  const series = await loadSeries(
-    tickers.map((t) => t.ticker),
-    now,
-    { refreshT86Ymd },
-  )
-  const marginFallbackRows = await loadMarginFallback(
-    series.dataYmd,
-    series.marginDatedFailed || series.days.length === 0,
-  )
-  const borrow = await loadBorrow(todayYmd)
-
-  // After this round, has today’s margin financing arrived? Must be reread - `cachedToday` is used for short circuit determination
-  // "Pre-execution" snapshot, if today's margin trading happens to be caught in this round, it will be recorded one round later.
-  // Nor can you use `margin_ok` (= `!marginDatedFailed`) instead: that flag asks "Is there any day
-  // "Succeeded", not "Has today's date arrived?" 2026-07-27 17:46 The actual measurement in the official area is this shape——
-  // `margin_ok=true` But today's MI_MARGN_D has not been released at all (there was only the 20260724 copy at that time).
-  const cachedAfter = await cachedDayDatasets([todayYmd])
-
-  // T86 rewrite status: advance only when "today's" data is captured——
-  // When the data day was still on the previous trading day, today's copy had not been released at all, and there was no final version to speak of.
-  const t86Today = series.dataYmd === todayYmd
-  const t86Fp = t86FingerprintByYmd.get(todayYmd) ?? ''
-  const t86State = t86Today && t86Fp ? nextT86State(last?.t86 ?? null, t86Fp) : null
-
-  const sig = runSignature({
-    dataYmd: series.dataYmd,
-    t86: t86Fp,
-    // It must be "on which days" rather than "has it failed": the latter is a constant throughout the day.
-    // This will prevent the day's margin trading that arrived at 21:00 from entering the report forever (see pollPlan.marginSigPart)
-    margin: marginSigPart(series.marginYmds),
-    borrow: borrow.date ?? '',
-    tickers: tickers.map((t) => t.ticker),
-  })
-  const regenerate = sig !== last?.runSig
 
   let generated = 0
-  if (regenerate) {
-    for (const { ticker, name } of tickers) {
-      const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
-      const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
-        ticker,
-        dataDate: data.dataDate,
-        generatedAt: data.generatedAt,
-        data,
-      })
-      if (okUp) generated++
-    }
+  let regenerate = false
+  let seriesDataYmd: string | null = null
+  let dailySynced = 0
+  let fundamentalSynced = 0
+  let bwibbuDate: string | null = null
+  let revenueFilled = 0
+  let revenueMonths: string[] = []
+  let profitFilled = 0
+  let profitQuarters: string[] = []
+  let t86Today = false
+  let t86State: ReturnType<typeof nextT86State> | null = null
+  let marginOk = false
+  let marginToday = cachedToday.has(`${todayYmd}:MI_MARGN_D`)
+  let borrowOk = false
+  let borrowDataDate: string | null = null
+  let historyDays = 0
+  let runSig: string | null = last?.runSig ?? null
+  let chipsSkipped = false
+  let skipReason: string | null = null
 
-    // Let the front-end know which trading day the "most recent transaction" is, so as to avoid recalculating the trading day on the front-end.
-    await uploadJson('manifest.json', {
-      ymd: series.dataYmd,
-      dataDate: dashDate(series.dataYmd),
-      generatedAt: new Date().toISOString(),
+  if (skip.skip) {
+    chipsSkipped = true
+    skipReason = skip.reason
+    // Best-effort data day from last run signature is not stored as ymd alone — use cache probe.
+    seriesDataYmd = cachedToday.has(`${todayYmd}:T86`) ? todayYmd : null
+  } else {
+    // Today's T86 has a cache but has not yet been finalized → re-catch and compare.
+    const refreshT86Ymd =
+      cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
+    const series = await loadSeries(
+      tickers.map((t) => t.ticker),
+      now,
+      { refreshT86Ymd },
+    )
+    seriesDataYmd = series.dataYmd
+    historyDays = series.days.length
+    const marginFallbackRows = await loadMarginFallback(
+      series.dataYmd,
+      series.marginDatedFailed || series.days.length === 0,
+    )
+    const borrow = await loadBorrow(todayYmd)
+    borrowOk = borrow.resp !== null
+    borrowDataDate = borrow.date
+    marginOk = !series.marginDatedFailed
+
+    const cachedAfter = await cachedDayDatasets([todayYmd])
+    marginToday = cachedAfter.has(`${todayYmd}:MI_MARGN_D`)
+
+    t86Today = series.dataYmd === todayYmd
+    const t86Fp = t86FingerprintByYmd.get(todayYmd) ?? ''
+    t86State = t86Today && t86Fp ? nextT86State(last?.t86 ?? null, t86Fp) : null
+
+    const sig = runSignature({
+      dataYmd: series.dataYmd,
+      t86: t86Fp,
+      margin: marginSigPart(series.marginYmds),
+      borrow: borrow.date ?? '',
+      tickers: tickers.map((t) => t.ticker),
     })
+    runSig = sig
+    regenerate = sig !== last?.runSig
+
+    if (regenerate) {
+      for (const { ticker, name } of tickers) {
+        const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
+        const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
+          ticker,
+          dataDate: data.dataDate,
+          generatedAt: data.generatedAt,
+          data,
+        })
+        if (okUp) generated++
+      }
+
+      await uploadJson('manifest.json', {
+        ymd: series.dataYmd,
+        dataDate: dashDate(series.dataYmd),
+        generatedAt: new Date().toISOString(),
+      })
+    }
   }
 
-  // Technical daily line; it is independent from the chip report. If it is not caught, it will not affect the report written above.
-  const dailySynced = await syncDaily(tickers, series.dataYmd)
-
-  // Fundamentals (0.6.0-dev.4); also independent, single-file fault-tolerant, without dragging down the main process
-  const fundamental = await syncFundamental(tickers, series.dataYmd)
-  // Monthly revenue historical replenishment (0.6.4). Must come after syncFundamental - it reads the file just written.
-  // After 12 months of replenishment, this business has zero cost (if the gap is empty, you will return directly without sending any external requests).
-  const revenue = await backfillRevenue(tickers, now)
-  // Quarterly profitability cover (0.6.21). Also ranked behind syncFundamental, also gap driven——
-  // After 12 seasons of replenishment, this line of work is zero cost. With only 2 seasons to fill at a time, 32 rounds a night is more than enough.
-  const profit = await backfillProfit(tickers, now)
-
-  // Clear out expired reports and raw file cache; the retention period of the two is different, see the constant definition for the reason.
-  // daily/ fundamental/ is not affected: pruneStorage only recognizes the directory name of ^\d{8}$,
-  // These three categories are all overwrite systems, and there are no old files to clear.
-  // Only clear when there is heavy production - without heavy production, nothing new comes in and there is nothing to clear.
-  if (regenerate) {
-    await pruneStorage(ymdMinusDays(series.dataYmd, REPORT_RETAIN_DAYS))
-    await pruneChipCache(ymdMinusDays(series.dataYmd, CACHE_RETAIN_DAYS))
+  // Daily + fundamentals always (even when chip section skipped) so top-30 / holdings can soft-fill.
+  if (tickers.length > 0) {
+    const dataYmdForDaily = seriesDataYmd ?? (await warmDataYmd())
+    if (dataYmdForDaily) {
+      dailySynced = await syncDaily(tickers, dataYmdForDaily)
+      const fundamental = await syncFundamental(tickers, dataYmdForDaily)
+      fundamentalSynced = fundamental.synced
+      bwibbuDate = fundamental.bwibbuDate
+      if (!seriesDataYmd) seriesDataYmd = dataYmdForDaily
+    }
+    const revenue = await backfillRevenue(tickers, now)
+    revenueFilled = revenue.filled
+    revenueMonths = revenue.months
+    const profit = await backfillProfit(tickers, now)
+    profitFilled = profit.filled
+    profitQuarters = profit.quarters
   }
 
-  // Observation record: t86_today answered "During this round of running, have the three major legal persons of the day's individual stocks arrived?";
-  // The *_data_* fields of each source answer "which day it declares itself" - the endpoints are not given Last-Modified,
-  // This is the only time fact that can be recorded (actual measurement on 2026-07-27, see PROGRESS.md).
+  if (regenerate && seriesDataYmd) {
+    await pruneStorage(ymdMinusDays(seriesDataYmd, REPORT_RETAIN_DAYS))
+    await pruneChipCache(ymdMinusDays(seriesDataYmd, CACHE_RETAIN_DAYS))
+  }
+
+  const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
+  const top30Scope = await evaluateTickerScope(topList, seriesDataYmd)
+  const reportComplete =
+    holdingsScope.chipsComplete &&
+    holdingsScope.fundComplete &&
+    top30Scope.chipsComplete &&
+    top30Scope.fundComplete
+
   await logBatchRun({
     taipei_ymd: todayYmd,
     taipei_time: taipeiHhmm(now),
     runs_today: (last?.runsToday ?? 0) + 1,
-    skipped: false,
-    skip_reason: null,
-    data_ymd: series.dataYmd,
-    t86_today: t86Today,
-    t86_fingerprint: t86State?.fingerprint ?? null,
-    t86_revisions: t86State?.revisions ?? 0,
-    t86_unchanged: t86State?.unchanged ?? 0,
-    t86_frozen: t86State?.frozen ?? false,
-    margin_ok: !series.marginDatedFailed,
-    margin_today: cachedAfter.has(`${todayYmd}:MI_MARGN_D`),
-    borrow_ok: borrow.resp !== null,
-    borrow_data_date: borrow.date,
-    bwibbu_date: fundamental.bwibbuDate,
-    run_sig: sig,
+    skipped: chipsSkipped,
+    skip_reason: skipReason,
+    data_ymd: seriesDataYmd,
+    t86_today: t86Today || cachedToday.has(`${todayYmd}:T86`),
+    t86_fingerprint: t86State?.fingerprint ?? last?.t86?.fingerprint ?? null,
+    t86_revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
+    t86_unchanged: t86State?.unchanged ?? last?.t86?.unchanged ?? 0,
+    t86_frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
+    margin_ok: marginOk,
+    margin_today: marginToday,
+    borrow_ok: borrowOk,
+    borrow_data_date: borrowDataDate,
+    bwibbu_date: bwibbuDate,
+    run_sig: runSig,
     regenerated: regenerate,
-    history_days: series.days.length,
+    history_days: historyDays,
     generated,
     daily_synced: dailySynced,
-    fundamental_synced: fundamental.synced,
-    revenue_backfilled: revenue.filled,
-    profit_backfilled: profit.filled,
+    fundamental_synced: fundamentalSynced,
+    revenue_backfilled: revenueFilled,
+    profit_backfilled: profitFilled,
     duration_ms: Date.now() - startedAt,
   })
 
   return json({
     ok: true,
-    ymd: series.dataYmd,
+    ymd: seriesDataYmd,
     generated,
     regenerated: regenerate,
+    chipsSkipped,
+    skipReason,
     total: tickers.length,
-    historyDays: series.days.length,
+    historyDays,
     dailySynced,
-    fundamentalSynced: fundamental.synced,
-    revenueBackfilled: revenue.filled,
-    revenueMonths: revenue.months,
-    profitBackfilled: profit.filled,
-    profitQuarters: profit.quarters,
+    fundamentalSynced,
+    revenueBackfilled: revenueFilled,
+    revenueMonths,
+    profitBackfilled: profitFilled,
+    profitQuarters,
     t86Today,
-    t86Revisions: t86State?.revisions ?? 0,
-    t86Frozen: t86State?.frozen ?? false,
+    t86Revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
+    t86Frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
+    topTickers: {
+      n: topSync.n,
+      reused: topSync.reused,
+      sourceDate: topSync.sourceDate,
+      error: topSync.error ?? null,
+    },
+    scopes: {
+      holdings: {
+        total: holdingsScope.total,
+        chipsReady: holdingsScope.chipsReady,
+        fundReady: holdingsScope.fundReady,
+        chipsComplete: holdingsScope.chipsComplete,
+        fundComplete: holdingsScope.fundComplete,
+        missingFund: holdingsScope.missingFund,
+      },
+      top30: {
+        total: top30Scope.total,
+        chipsReady: top30Scope.chipsReady,
+        fundReady: top30Scope.fundReady,
+        chipsComplete: top30Scope.chipsComplete,
+        fundComplete: top30Scope.fundComplete,
+        missingFund: top30Scope.missingFund,
+      },
+    },
+    /** True only when holdings ∪ top30 both have chips + soft fundamentals ready. */
+    reportComplete,
+    durationMs: Date.now() - startedAt,
   })
 }
 
@@ -2600,6 +2819,7 @@ const ADMIN_RUN_JOBS = [
   'sync-market',
   'sync-macro',
   'sync-fx',
+  'sync-top-tickers',
   'probe',
 ] as const
 type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
@@ -2608,6 +2828,8 @@ type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
 const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
   'generate-all': 'stock-report-nightly',
   'sync-market': 'market-daily',
+  // No dedicated cron jobname yet — generate-all refreshes the list; manual admin-run still logs.
+  'sync-top-tickers': 'sync-top-tickers',
   'sync-macro': 'macro-daily',
   'sync-fx': 'fx-daily',
   probe: 'source-probe',
@@ -2720,6 +2942,9 @@ async function handleAdminRun(
         case 'sync-fx':
           resp = await handleSyncFx()
           break
+        case 'sync-top-tickers':
+          resp = await handleSyncTopTickers()
+          break
         case 'probe':
           resp = await handleProbe()
           break
@@ -2788,6 +3013,13 @@ Deno.serve(async (req) => {
     const denied = assertCronSecret(req)
     if (denied) return denied
     return handleGenerateAll()
+  }
+
+  // Top-30 by TradeValue (official codes, ETFs kept). Intended from the T86 window (~16:00+), not 15:00 market-daily.
+  if (body.action === 'sync-top-tickers') {
+    const denied = assertCronSecret(req)
+    if (denied) return denied
+    return handleSyncTopTickers()
   }
 
   // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.

@@ -317,7 +317,7 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '排程' })
-    expect(screen.getByText(/持股與觀察清單台股的三大法人/)).toBeTruthy()
+    expect(screen.getByText(/Top30/)).toBeTruthy()
     expect(screen.getByText(/FRED：核心 CPI/)).toBeTruthy()
   })
 
