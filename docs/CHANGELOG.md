@@ -4,6 +4,11 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.46（開發中）— 新股票籌碼／基本面提早就緒
 
+#### dev.6（2026-08-10）
+
+- 🐛 **其他台股季報偏薄**：soft warm 以前只要「月 ≥6 且有任一季」就不再 on-demand，導致觀測股在 progressive warm 先補滿月營收後卡在 1–2 季。現在拆成 `needsCoreWarm` / `needsHistoryWarm`（季 &lt; 6 也會再補 history，且不扣 core 額度）。
+- 📌 夜批仍負責 6–11 → 12 的最後一段；UI「歷史補齊中」條件不變（12/12）。
+
 #### dev.5（2026-08-10）
 
 - 🐛 **BUG-A**：session 內 core 封印後不再回傳裸 `FAILED`，改回傳上次結果；個股頁在 core 已封印但基本面仍偏薄時仍可跑 `history`（prefetch 後再開頁不會卡在薄檔）。

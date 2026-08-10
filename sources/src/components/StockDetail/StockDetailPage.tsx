@@ -29,7 +29,7 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
-import { needsFundamentalBackfill } from '../../services/needsFundamentalBackfill'
+import { needsCoreWarm, needsHistoryWarm } from '../../services/needsFundamentalBackfill'
 import { warmStockCore, warmStockHistory } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
@@ -173,13 +173,13 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   /*
     Fundamentals load independently of the chip report.
 
-    0.6.46-dev.4 progressive warm (+ BUG-A fix in 0.6.46-dev.5):
-    1. Storage-first — if a file exists, paint it immediately (stop the section spinner).
-    2. Soft needsFundamentalBackfill → warmStockCore (daily + latest only) so first paint is
-       not blocked by MOPS history; re-read Storage after core when it wrote something.
-    3. History when core is incomplete, OR when Storage is still thin after a sealed core
-       (prefetch / prior open). Unknown/ETF with complete=true still skips history.
-    4. No file → keep loading until core finishes (or fails); history may still extend the table.
+    Progressive warm (0.6.46-dev.4+) with phase split (0.6.46-dev.6):
+    1. Storage-first — paint immediately when a file exists.
+    2. needsCoreWarm → warmStockCore only (quota). Skipped when months+quarters already exist
+       so reopening a watchlist stock with full months / thin quarters does not burn quota.
+    3. needsHistoryWarm (months < 6 or quarters < 6) or core incomplete → warmStockHistory
+       (no second quota). Fixes 其他台股 stuck at 1–2 quarters after revenue-first budget.
+    4. ETF / unknownTicker: core complete=true → no history.
   */
   useEffect(() => {
     let alive = true
@@ -195,9 +195,21 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
         setFundLoading(false)
       }
 
-      if (!f || needsFundamentalBackfill(f)) {
+      const wantCore = needsCoreWarm(f)
+      const wantHistory = !f || needsHistoryWarm(f)
+      if (!wantCore && !wantHistory) {
+        if (alive) setFundLoading(false)
+        return
+      }
+
+      let coreComplete = false
+      let coreOk = false
+
+      if (wantCore) {
         const core = await warmStockCore(ticker, name)
         if (!alive) return
+        coreOk = core.ok
+        coreComplete = core.fundamentalComplete
         if (core.fundamentalSynced > 0 || core.backfilled > 0) {
           f = (await fetchFundamental(ticker)) ?? f
           if (alive) {
@@ -207,19 +219,20 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
         } else if (alive && !f) {
           setFundLoading(false)
         }
+      }
 
-        // History: prefer server complete flag; if core was sealed/failed, still try when thin.
-        // Do NOT history when core.ok && complete (ETF / unknownTicker).
-        const shouldHistory = core.ok
-          ? !core.fundamentalComplete
-          : Boolean(f && needsFundamentalBackfill(f))
-        if (shouldHistory) {
-          const hist = await warmStockHistory(ticker, name)
-          if (!alive) return
-          if (hist.backfilled > 0 || hist.fundamentalSynced > 0) {
-            f = (await fetchFundamental(ticker)) ?? f
-            if (alive) setFundamental(f)
-          }
+      // History: skip when core proved unknown/ETF (complete). Otherwise run if soft history
+      // need, or core said incomplete, or sealed-core path still has a thin file.
+      const skipHistory = wantCore && coreOk && coreComplete
+      const shouldHistory =
+        !skipHistory &&
+        (wantHistory || (wantCore && coreOk && !coreComplete) || Boolean(f && needsHistoryWarm(f)))
+      if (shouldHistory) {
+        const hist = await warmStockHistory(ticker, name)
+        if (!alive) return
+        if (hist.backfilled > 0 || hist.fundamentalSynced > 0) {
+          f = (await fetchFundamental(ticker)) ?? f
+          if (alive) setFundamental(f)
         }
       }
 

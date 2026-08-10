@@ -29,21 +29,19 @@
 
 ## 📋 Active Tasks
 
-### Task 81: Progressive warm core → history (0.6.46-dev.4 / dev.5)
-- **Status**: 🔄 **DEV measured; BUG-A fixed; commit pending; push after you OK**
+### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6)
+- **Status**: 🔄 **dev.6 fixes thin quarters; commit; push after you OK**
 - **Agent**: Grok
-- **Timestamp**: 2026-08-10 19:05:00 Asia/Taipei
+- **Timestamp**: 2026-08-10 19:15:00 Asia/Taipei
 
 1. ~~Edge `phase=core|history|full`; history no second quota~~ ✅
-2. ~~Frontend `warmStockCore` / `warmStockHistory` / progressive `warmStock`~~ ✅
-3. ~~StockDetailPage paint after core; useDailySeries uses core only~~ ✅
-4. ~~Unit tests (incl. BUG-A)~~ ✅
-5. ~~**DEV**: volume-copy `stock-report` + recreate functions~~ ✅
-6. ~~**DEV live**: cold **2881** core **859ms** → history **26.4s**; TTFP ~32× earlier~~ ✅
-7. ~~BUG-A sealed-core last-result + thin-file history~~ ✅
-8. **Commit 0.6.46-dev.5** —— ⏳ this turn
-9. **push `dev`** —— ⏳ after you OK
-10. **Prod** deploy when authorized —— ⏳
+2. ~~Frontend progressive warm + BUG-A last-result seal~~ ✅
+3. ~~DEV cold 2881 TTFP metrics~~ ✅
+4. ~~**dev.6**: `needsHistoryWarm` when quarters &lt; 6; history-only path~~ ✅
+5. ~~DEV: history-only fill 2330 2→12q, 2408 1→11q, 2344 5→12q~~ ✅
+6. **Commit 0.6.46-dev.5 + dev.6** —— ⏳
+7. **push `dev`** —— ⏳ after you OK
+8. **Prod** deploy when authorized —— ⏳
 
 ### Task 80: FOMC meeting points (0.6.46-dev.2)
 - **Status**: 🔄 **Code committed in f03ade5; push + prod open**

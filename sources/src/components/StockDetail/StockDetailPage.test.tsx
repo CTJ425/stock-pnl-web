@@ -678,7 +678,7 @@ describe('StockDetailPage', () => {
     )
   })
 
-  it('月營收已夠長且已有季獲利時不再 warm（其餘交給夜批）', async () => {
+  it('月營收已夠長且季報已達 soft min 時不再 warm（其餘交給夜批）', async () => {
     const month = (yearMonth: string) => ({
       yearMonth,
       revenueThousandTwd: 1,
@@ -715,7 +715,7 @@ describe('StockDetailPage', () => {
       revenueMonths: Array.from({ length: 12 }, (_, i) =>
         month(`2025-${String(i + 1).padStart(2, '0')}`),
       ),
-      // 8/12 — old rule would warm; soft rule must not
+      // 8/12 — above PROFIT_WARM_MIN(6); soft rule must not warm (night batch finishes rest)
       profitQuarters: Array.from({ length: 8 }, (_, i) => {
         const y = 2023 + Math.floor(i / 4)
         return quarter(`${y}-Q${(i % 4) + 1}`)
@@ -727,6 +727,68 @@ describe('StockDetailPage', () => {
     await screen.findByText('電子零組件業')
     expect(warmStockCore).not.toHaveBeenCalled()
     expect(warmStockHistory).not.toHaveBeenCalled()
+  })
+
+  it('月營收已滿但季報偏薄時只打 history、不扣 core 額度（其他台股典型）', async () => {
+    const month = (yearMonth: string) => ({
+      yearMonth,
+      revenueThousandTwd: 1,
+      momPercent: null,
+      yoyPercent: null,
+      cumulativeYoyPercent: null,
+    })
+    const quarter = (yearQuarter: string) => ({
+      yearQuarter,
+      revenueMillionTwd: 1,
+      grossMarginPercent: null,
+      operatingMarginPercent: null,
+      pretaxMarginPercent: null,
+      netMarginPercent: null,
+      epsTwd: null,
+    })
+    fetchDailySeries.mockResolvedValue({
+      ticker: '2330',
+      asOf: '2026-08-07T09:00:00.000Z',
+      lastDate: '2026-08-07',
+      rows: [
+        ['2026-08-01', 1, 1, 1, 1, 1],
+        ['2026-08-07', 1, 1, 1, 1, 1],
+      ],
+    })
+    const thinQuarters = {
+      ticker: '2330',
+      asOf: '2026-08-07T09:00:00.000Z',
+      dataDate: '2026-08-07',
+      industry: '半導體業',
+      valuation: null,
+      revenueUnit: '千元' as const,
+      revenueMonths: Array.from({ length: 12 }, (_, i) =>
+        month(`2025-${String(i + 1).padStart(2, '0')}`),
+      ),
+      profitQuarters: [quarter('2025-Q4'), quarter('2026-Q1')],
+      notes: [],
+    }
+    const fuller = {
+      ...thinQuarters,
+      profitQuarters: Array.from({ length: 10 }, (_, i) => {
+        const y = 2023 + Math.floor(i / 4)
+        return quarter(`${y}-Q${(i % 4) + 1}`)
+      }),
+    }
+    fetchFundamental.mockResolvedValueOnce(thinQuarters).mockResolvedValueOnce(fuller)
+    warmStockHistory.mockResolvedValue({
+      ok: true,
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      fundamentalComplete: false,
+      backfilled: 8,
+      phase: 'history',
+    })
+
+    render(<StockDetailPage ticker="2330" name="台積電" holding={null} quote={quote} />)
+    await screen.findByText('半導體業')
+    expect(warmStockCore).not.toHaveBeenCalled()
+    await waitFor(() => expect(warmStockHistory).toHaveBeenCalledWith('2330', '台積電'))
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {

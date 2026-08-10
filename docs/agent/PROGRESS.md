@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.46-dev.5 BUG-A fix + cold ticker DEV metrics (2881)
-- Status: **Code fixed + unit tests; DEV live warm measured; not pushed; prod untouched**
-- Timestamp: 2026-08-10 19:05:00 Asia/Taipei
+- Action: 0.6.46-dev.6 history soft min for thin quarters (其他台股)
+- Status: **Code + tests; DEV history backfill verified on 2330/2408/2344; not pushed**
+- Timestamp: 2026-08-10 19:15:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 19:15:00 Asia/Taipei (0.6.46-dev.6)
+
+- **Agent**: Grok
+- **Action**: Fix incomplete quarterly profit on watchlist / 其他台股
+
+### Root cause
+- Soft warm only checked revenue &lt; 6 or **zero** quarters. After progressive warm spent budget on months first, files often sat at 12m + 1–2q and never on-demand warmed again.
+
+### Fix
+- `needsCoreWarm` (no file / no months / no quarters) vs `needsHistoryWarm` (months &lt; 6 **or** quarters &lt; 6)
+- Detail page + prefetch: history-only when months full but quarters thin (no core quota)
+
+### DEV verify (phase=history only)
+| ticker | before q | after q | client_ms | complete |
+|--------|----------|---------|-----------|----------|
+| 2330 | 2 | **12** | 44417 | false (EPS/gap tail) |
+| 2408 | 1 | **11** | 32016 | false |
+| 2344 | 5 | **12** | 16761 | true |
+
+### Tests
+- needsFundamentalBackfill / prefetch / StockDetailPage paths green
 
 ---
 
