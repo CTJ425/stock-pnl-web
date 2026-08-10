@@ -30,7 +30,7 @@ import {
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
 import { needsFundamentalBackfill } from '../../services/needsFundamentalBackfill'
-import { warmStock } from '../../services/warmStock'
+import { warmStockCore, warmStockHistory } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
@@ -173,12 +173,13 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
   /*
     Fundamentals load independently of the chip report.
 
-    0.6.44-dev.7 load order:
+    0.6.46-dev.4 progressive warm:
     1. Storage-first — if a file exists, paint it immediately (stop the section spinner).
-    2. Soft needsFundamentalBackfill → warm in the background; re-read Storage only when the
-       warm actually wrote something. Do not clear the painted snapshot to null while warming.
-    3. No file → keep loading until warm finishes (or fails); new holdings/watchlist picks still
-       get an on-demand fill without waiting for the nightly batch.
+    2. Soft needsFundamentalBackfill → warmStockCore (daily + latest only) so first paint is
+       not blocked by MOPS history; re-read Storage after core when it wrote something.
+    3. If core says incomplete → warmStockHistory in the same effect; re-read when backfilled.
+       (History does not charge a second daily quota; session seal still applies.)
+    4. No file → keep loading until core finishes (or fails); history may still extend the table.
   */
   useEffect(() => {
     let alive = true
@@ -195,11 +196,26 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
       }
 
       if (!f || needsFundamentalBackfill(f)) {
-        const warmed = await warmStock(ticker, name)
+        const core = await warmStockCore(ticker, name)
         if (!alive) return
-        if (warmed.fundamentalSynced > 0 || warmed.backfilled > 0) {
+        if (core.fundamentalSynced > 0 || core.backfilled > 0) {
           f = (await fetchFundamental(ticker)) ?? f
-          if (alive) setFundamental(f)
+          if (alive) {
+            setFundamental(f)
+            setFundLoading(false)
+          }
+        } else if (alive && !f) {
+          setFundLoading(false)
+        }
+
+        // History only when core ran and still incomplete (unknown/ETF seals complete=true).
+        if (core.ok && !core.fundamentalComplete) {
+          const hist = await warmStockHistory(ticker, name)
+          if (!alive) return
+          if (hist.backfilled > 0) {
+            f = (await fetchFundamental(ticker)) ?? f
+            if (alive) setFundamental(f)
+          }
         }
       }
 

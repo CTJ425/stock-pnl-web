@@ -5,14 +5,16 @@ import userEvent from '@testing-library/user-event'
 
 // Replace the network layer with mock: what is tested here is the layout and paging switching, not the crawling logic
 const {
-  fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental, warmStock,
+  fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental,
+  warmStockCore, warmStockHistory,
   generatePdfBlob, downloadBlob,
 } = vi.hoisted(() => ({
   fetchStoredReport: vi.fn(),
   generateReport: vi.fn(),
   fetchDailySeries: vi.fn(),
   fetchFundamental: vi.fn(),
-  warmStock: vi.fn(),
+  warmStockCore: vi.fn(),
+  warmStockHistory: vi.fn(),
   generatePdfBlob: vi.fn(),
   downloadBlob: vi.fn(),
 }))
@@ -23,7 +25,7 @@ vi.mock('../../services/reportProxy', () => ({
 }))
 vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
-vi.mock('../../services/warmStock', () => ({ warmStock }))
+vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
 // html2canvas cannot run in jsdom, and the test here is "capturing what the current DOM looks like"
 vi.mock('../../services/reportPdf', () => ({ generatePdfBlob, downloadBlob }))
 
@@ -109,7 +111,8 @@ describe('StockDetailPage', () => {
     generateReport.mockReset()
     fetchDailySeries.mockReset()
     fetchFundamental.mockReset()
-    warmStock.mockReset()
+    warmStockCore.mockReset()
+    warmStockHistory.mockReset()
     generatePdfBlob.mockReset()
     downloadBlob.mockReset()
     generatePdfBlob.mockResolvedValue(new Blob(['pdf']))
@@ -117,8 +120,23 @@ describe('StockDetailPage', () => {
     // Default is no daily line / no fundamentals (the batch has not been run yet); overwrite the required cases by yourself
     fetchDailySeries.mockResolvedValue(null)
     fetchFundamental.mockResolvedValue(null)
-    // The default warm will not produce anything (such as ETF) to prevent the test from accidentally entering the reread branch.
-    warmStock.mockResolvedValue({ ok: true, dailySynced: 0, fundamentalSynced: 0, fundamentalComplete: true, backfilled: 0 })
+    // Default core seals complete (e.g. ETF) so history is not entered and no re-read runs.
+    warmStockCore.mockResolvedValue({
+      ok: true,
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      fundamentalComplete: true,
+      backfilled: 0,
+      phase: 'core',
+    })
+    warmStockHistory.mockResolvedValue({
+      ok: true,
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      fundamentalComplete: true,
+      backfilled: 0,
+      phase: 'history',
+    })
   })
 
   it('Storage 命中時直接顯示籌碼分頁，不呼叫即點即產', async () => {
@@ -583,12 +601,20 @@ describe('StockDetailPage', () => {
       notes: [],
     }
     fetchFundamental.mockResolvedValueOnce(null).mockResolvedValueOnce(fresh)
-    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 1, fundamentalComplete: true, backfilled: 0 })
+    warmStockCore.mockResolvedValue({
+      ok: true,
+      dailySynced: 1,
+      fundamentalSynced: 1,
+      fundamentalComplete: true,
+      backfilled: 0,
+      phase: 'core',
+    })
 
     render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     expect(await screen.findByText('航運業')).toBeTruthy()
-    expect(warmStock).toHaveBeenCalledWith('2609', '陽明')
+    expect(warmStockCore).toHaveBeenCalledWith('2609', '陽明')
+    expect(warmStockHistory).not.toHaveBeenCalled()
     expect(fetchFundamental).toHaveBeenCalledTimes(2)
   })
 
@@ -622,20 +648,31 @@ describe('StockDetailPage', () => {
         month(`2025-${String(i + 1).padStart(2, '0')}`),
       ),
     }
+    // Paint partial first; core writes nothing new; history backfills → re-read full.
     fetchFundamental.mockResolvedValueOnce(partial).mockResolvedValueOnce(full)
-    warmStock.mockResolvedValue({
+    warmStockCore.mockResolvedValue({
+      ok: true,
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      fundamentalComplete: false,
+      backfilled: 0,
+      phase: 'core',
+    })
+    warmStockHistory.mockResolvedValue({
       ok: true,
       dailySynced: 0,
       fundamentalSynced: 0,
       fundamentalComplete: true,
       backfilled: 10,
+      phase: 'history',
     })
 
     const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     // Storage paints first (industry badge) before warm finishes
     await screen.findByText('航運業')
-    expect(warmStock).toHaveBeenCalledWith('2609', '陽明')
+    expect(warmStockCore).toHaveBeenCalledWith('2609', '陽明')
+    await waitFor(() => expect(warmStockHistory).toHaveBeenCalledWith('2609', '陽明'))
     await waitFor(() =>
       expect(container.querySelectorAll('#sec-fundamental .data-table tbody tr').length).toBe(12),
     )
@@ -688,11 +725,19 @@ describe('StockDetailPage', () => {
 
     render(<StockDetailPage ticker="2059" name="川湖" holding={holding} quote={quote} />)
     await screen.findByText('電子零組件業')
-    expect(warmStock).not.toHaveBeenCalled()
+    expect(warmStockCore).not.toHaveBeenCalled()
+    expect(warmStockHistory).not.toHaveBeenCalled()
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
-    warmStock.mockResolvedValue({ ok: true, dailySynced: 1, fundamentalSynced: 0 })
+    warmStockCore.mockResolvedValue({
+      ok: true,
+      dailySynced: 1,
+      fundamentalSynced: 0,
+      fundamentalComplete: true,
+      backfilled: 0,
+      phase: 'core',
+    })
 
     render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
@@ -700,6 +745,7 @@ describe('StockDetailPage', () => {
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     // I only read it once: If the warm return has no output, you should not call Storage again.
     expect(fetchFundamental).toHaveBeenCalledTimes(1)
+    expect(warmStockHistory).not.toHaveBeenCalled()
   })
 
   it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {

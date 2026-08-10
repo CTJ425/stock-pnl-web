@@ -4,6 +4,12 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.6.46（開發中）— 新股票籌碼／基本面提早就緒
 
+#### dev.4（2026-08-10）
+
+- ⚡ **新股 / 觀測 warm 拆成 core → history**：`phase=core` 只做日 K + 最新基本面（秒級可畫），`phase=history` 再補 MOPS 月營收／季報歷史（不扣第二次日額度）；`phase=full` 仍為一次做完（prefetch 用 progressive 兩段）。
+- 📌 個股分析頁：core 完成即顯示估值／最新月季，歷史表背景補齊並可顯示「歷史補齊中」。
+- ⚠️ **需 deploy `stock-report`** 後 `phase` 才生效；舊 Edge 忽略 phase 會當 full 失敗或行為不符——前後端請一併上。
+
 #### dev.3（2026-08-10）
 
 - 🎨 非農／消費者信心標籤補英文縮寫：`非農就業 NFP`、`消費者信心 UMCSENT`。

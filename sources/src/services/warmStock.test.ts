@@ -6,7 +6,7 @@ vi.mock('./supabase', () => ({
   supabase: { functions: { invoke } },
 }))
 
-import { warmStock, resetWarmState } from './warmStock'
+import { warmStock, warmStockCore, warmStockHistory, resetWarmState } from './warmStock'
 
 const ok = (
   daily: number,
@@ -14,6 +14,7 @@ const ok = (
   complete = true,
   revenueMonths: string[] = [],
   profitQuarters: string[] = [],
+  phase?: string,
 ) => ({
   data: {
     ok: true,
@@ -22,6 +23,7 @@ const ok = (
     fundamentalComplete: complete,
     revenueMonths,
     profitQuarters,
+    phase,
   },
   error: null,
 })
@@ -34,100 +36,149 @@ const FAILED_RESULT = {
   backfilled: 0,
 }
 
-describe('warmStock', () => {
+describe('warmStock (progressive)', () => {
   beforeEach(() => {
     invoke.mockReset()
     resetWarmState()
   })
 
-  it('以 action: warm 帶代號呼叫 stock-report', async () => {
-    invoke.mockResolvedValue(ok(1, 1))
+  it('core then history when incomplete; combines counts', async () => {
+    invoke
+      .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
+      .mockResolvedValueOnce(ok(0, 0, true, ['2026-07', '2026-06'], ['2026-Q1'], 'history'))
+
+    const r = await warmStock('2330', '台積電')
+    expect(r).toEqual({
+      ok: true,
+      dailySynced: 1,
+      fundamentalSynced: 1,
+      fundamentalComplete: true,
+      backfilled: 3,
+      phase: 'full',
+    })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect(invoke).toHaveBeenNthCalledWith(1, 'stock-report', {
+      body: { action: 'warm', ticker: '2330', name: '台積電', phase: 'core' },
+    })
+    expect(invoke).toHaveBeenNthCalledWith(2, 'stock-report', {
+      body: { action: 'warm', ticker: '2330', name: '台積電', phase: 'history' },
+    })
+  })
+
+  it('skips history when core reports complete', async () => {
+    invoke.mockResolvedValue(ok(1, 1, true, [], [], 'core'))
     const r = await warmStock('2330')
-    expect(r).toEqual({ ok: true, dailySynced: 1, fundamentalSynced: 1, fundamentalComplete: true, backfilled: 0 })
-    expect(invoke).toHaveBeenCalledWith('stock-report', {
-      body: { action: 'warm', ticker: '2330', name: '' },
-    })
-  })
-
-  it('有 name 時一併帶上（0.6.44 後白名單已撤，名稱改由呼叫端提供）', async () => {
-    invoke.mockResolvedValue(ok(1, 1))
-    await warmStock('2330', '台積電')
-    expect(invoke).toHaveBeenCalledWith('stock-report', {
-      body: { action: 'warm', ticker: '2330', name: '台積電' },
-    })
-  })
-
-  it('同一代號整個 session 只送出一次請求——這是額度安全的關鍵', async () => {
-    // Without this throttling, a stock that never gets data will cause users to burn an invocation every time they switch to a page.
-    invoke.mockResolvedValue(ok(1, 1))
-    await warmStock('2330')
-    await warmStock('2330')
-    await warmStock('2330')
+    expect(r.fundamentalComplete).toBe(true)
+    expect(r.phase).toBe('core')
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
-  it('伺服器回「沒有產出任何東西」時也不重試', async () => {
-    invoke.mockResolvedValue(ok(0, 0))
-    const first = await warmStock('0050')
-    expect(first.ok).toBe(true)
-    expect(first.fundamentalSynced).toBe(0)
+  it('同一代號整個 session core 只送出一次——額度安全', async () => {
+    invoke.mockResolvedValue(ok(1, 1, true, [], [], 'core'))
+    await warmStock('2330')
+    await warmStock('2330')
+    await warmStockCore('2330')
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
 
-    const second = await warmStock('0050')
+  it('incomplete 且 history 有進度 → 解封 history，下次還可再補', async () => {
+    invoke
+      .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
+      .mockResolvedValueOnce(ok(0, 0, false, ['2026-07'], [], 'history'))
+      .mockResolvedValueOnce(ok(0, 0, true, ['2026-06'], [], 'history'))
+
+    const first = await warmStock('2059')
+    expect(first.fundamentalComplete).toBe(false)
+    expect(first.backfilled).toBe(1)
+
+    // core still sealed; history unsealed → only history fires
+    const second = await warmStockHistory('2059')
+    expect(second.fundamentalComplete).toBe(true)
+    expect(invoke).toHaveBeenCalledTimes(3)
+    expect(invoke.mock.calls[2][1].body.phase).toBe('history')
+  })
+
+  it('incomplete 但 history 無進度 → 保持封印', async () => {
+    invoke
+      .mockResolvedValueOnce(ok(1, 1, false, [], [], 'core'))
+      .mockResolvedValueOnce(ok(0, 0, false, [], [], 'history'))
+
+    const first = await warmStock('2330')
+    expect(first.backfilled).toBe(0)
+
+    const second = await warmStockHistory('2330')
     expect(second.ok).toBe(false)
-    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledTimes(2)
   })
 
-  it('併發呼叫共用同一個 promise，不會送出兩次', async () => {
+  it('函式回錯誤或丟出例外時回失敗值，且不重試 core', async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: '403' } })
+    expect(await warmStockCore('9999')).toMatchObject(FAILED_RESULT)
+
+    invoke.mockRejectedValue(new Error('network'))
+    expect(await warmStockCore('8888')).toMatchObject(FAILED_RESULT)
+
+    await warmStockCore('9999')
+    await warmStockCore('8888')
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('warmStockCore', () => {
+  beforeEach(() => {
+    invoke.mockReset()
+    resetWarmState()
+  })
+
+  it('以 phase: core 呼叫', async () => {
+    invoke.mockResolvedValue(ok(1, 1, false, [], [], 'core'))
+    const r = await warmStockCore('2609', '陽明')
+    expect(r).toEqual({
+      ok: true,
+      dailySynced: 1,
+      fundamentalSynced: 1,
+      fundamentalComplete: false,
+      backfilled: 0,
+      phase: 'core',
+    })
+    expect(invoke).toHaveBeenCalledWith('stock-report', {
+      body: { action: 'warm', ticker: '2609', name: '陽明', phase: 'core' },
+    })
+  })
+
+  it('併發呼叫共用同一個 promise', async () => {
     let resolve: (v: unknown) => void = () => {}
     invoke.mockReturnValue(new Promise((r) => { resolve = r }))
 
-    const a = warmStock('2609')
-    const b = warmStock('2609')
-    resolve(ok(1, 1))
+    const a = warmStockCore('2609')
+    const b = warmStockCore('2609')
+    resolve(ok(1, 1, false, [], [], 'core'))
 
     expect(await a).toEqual(await b)
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
   it('不同代號各自獨立', async () => {
-    invoke.mockResolvedValue(ok(1, 1))
-    await warmStock('2330')
-    await warmStock('2609')
+    invoke.mockResolvedValue(ok(1, 1, true, [], [], 'core'))
+    await warmStockCore('2330')
+    await warmStockCore('2609')
     expect(invoke).toHaveBeenCalledTimes(2)
   })
+})
 
-  it('函式回錯誤或丟出例外時回失敗值，且不重試', async () => {
-    invoke.mockResolvedValue({ data: null, error: { message: '403' } })
-    expect(await warmStock('9999')).toEqual(FAILED_RESULT)
-
-    invoke.mockRejectedValue(new Error('network'))
-    expect(await warmStock('8888')).toEqual(FAILED_RESULT)
-
-    await warmStock('9999')
-    await warmStock('8888')
-    expect(invoke).toHaveBeenCalledTimes(2)
+describe('warmStockHistory', () => {
+  beforeEach(() => {
+    invoke.mockReset()
+    resetWarmState()
   })
 
-  it('incomplete 且本輪有補到資料 → 解封，下次還可再 warm', async () => {
-    invoke.mockResolvedValue(ok(0, 0, false, ['2026-07', '2026-06'], []))
-    const first = await warmStock('2059')
-    expect(first.fundamentalComplete).toBe(false)
-    expect(first.backfilled).toBe(2)
-
-    invoke.mockResolvedValue(ok(0, 0, true, [], []))
-    await warmStock('2059')
-    expect(invoke).toHaveBeenCalledTimes(2)
-  })
-
-  it('incomplete 但本輪無進度 → 保持封印，不再打 Edge', async () => {
-    invoke.mockResolvedValue(ok(0, 0, false, [], []))
-    const first = await warmStock('2330')
-    expect(first.ok).toBe(true)
-    expect(first.backfilled).toBe(0)
-    expect(first.fundamentalComplete).toBe(false)
-
-    const second = await warmStock('2330')
-    expect(second.ok).toBe(false)
-    expect(invoke).toHaveBeenCalledTimes(1)
+  it('以 phase: history 呼叫', async () => {
+    invoke.mockResolvedValue(ok(0, 0, true, ['2026-07'], ['2026-Q1'], 'history'))
+    const r = await warmStockHistory('2330')
+    expect(r.backfilled).toBe(2)
+    expect(r.phase).toBe('history')
+    expect(invoke).toHaveBeenCalledWith('stock-report', {
+      body: { action: 'warm', ticker: '2330', name: '', phase: 'history' },
+    })
   })
 })

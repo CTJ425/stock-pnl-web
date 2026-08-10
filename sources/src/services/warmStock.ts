@@ -19,8 +19,16 @@
  * "skip if already latest" short-circuit. Front-end session seal and back-end quota both stay ——
  * the former saves invocations for the user, the latter bounds abuse after the holdings whitelist
  * was retired so any listed code can be warmed.
+ *
+ * Phased warm (0.6.46-dev.4):
+ * - `warmStockCore` — daily + latest fundamental (quota charged). Page paint + daily chart use this.
+ * - `warmStockHistory` — MOPS revenue/profit backfill only (no second quota). Call after core when
+ *   `fundamentalComplete` is false.
+ * - `warmStock` — progressive: core then history (prefetch / one-shot callers).
  */
 import { supabase } from './supabase'
+
+export type WarmPhase = 'core' | 'history' | 'full'
 
 export interface WarmResult {
   ok: boolean
@@ -36,6 +44,8 @@ export interface WarmResult {
    * The caller must look at this to determine whether it is worth re-reading Storage.
    */
   backfilled: number
+  /** Echo of the phase that ran (absent on failed/local short-circuits). */
+  phase?: WarmPhase
 }
 
 const FAILED: WarmResult = {
@@ -46,61 +56,132 @@ const FAILED: WarmResult = {
   backfilled: 0,
 }
 
-const inflight = new Map<string, Promise<WarmResult>>()
-const attempted = new Set<string>()
+const inflightCore = new Map<string, Promise<WarmResult>>()
+const inflightHistory = new Map<string, Promise<WarmResult>>()
+const attemptedCore = new Set<string>()
+const attemptedHistory = new Set<string>()
 
 /** For testing: clear the deduplication status of this module*/
 export function resetWarmState(): void {
-  inflight.clear()
-  attempted.clear()
+  inflightCore.clear()
+  inflightHistory.clear()
+  attemptedCore.clear()
+  attemptedHistory.clear()
+}
+
+function parseWarmResult(data: Record<string, unknown>, phase: WarmPhase): WarmResult {
+  return {
+    ok: data.ok === true,
+    dailySynced: typeof data.dailySynced === 'number' ? data.dailySynced : 0,
+    fundamentalSynced: typeof data.fundamentalSynced === 'number' ? data.fundamentalSynced : 0,
+    fundamentalComplete: data.fundamentalComplete === true,
+    backfilled:
+      (Array.isArray(data.revenueMonths) ? data.revenueMonths.length : 0) +
+      (Array.isArray(data.profitQuarters) ? data.profitQuarters.length : 0),
+    phase,
+  }
 }
 
 /**
- * Replace the daily production line and fundamentals of a single model.
- * The same code number will only be sent once in the same session; repeated calls will directly return the last result or failure value.
+ * Unseal history only when incomplete *and* this round filled something — otherwise seal sticks
+ * (avoids burning warm every open when the server keeps returning complete=false).
+ */
+function maybeUnsealHistory(ticker: string, result: WarmResult): void {
+  if (result.ok && !result.fundamentalComplete && result.backfilled > 0) {
+    attemptedHistory.delete(ticker)
+  }
+}
+
+async function invokeWarm(
+  ticker: string,
+  name: string | undefined,
+  phase: WarmPhase,
+): Promise<WarmResult> {
+  if (!supabase) return FAILED
+  try {
+    const { data, error } = await supabase.functions.invoke('stock-report', {
+      body: { action: 'warm', ticker, name: name ?? '', phase },
+    })
+    if (error || !data || typeof data !== 'object') return { ...FAILED, phase }
+    return parseWarmResult(data as Record<string, unknown>, phase)
+  } catch {
+    return { ...FAILED, phase }
+  }
+}
+
+/**
+ * Daily line + latest fundamental only. Quota is charged on the server for this phase.
+ * Same ticker is sealed for the rest of the session after one attempt (including concurrent share).
+ */
+export async function warmStockCore(ticker: string, name?: string): Promise<WarmResult> {
+  if (!supabase) return FAILED
+
+  const pending = inflightCore.get(ticker)
+  if (pending) return pending
+  if (attemptedCore.has(ticker)) return FAILED
+
+  attemptedCore.add(ticker)
+
+  const task = (async (): Promise<WarmResult> => {
+    try {
+      return await invokeWarm(ticker, name, 'core')
+    } finally {
+      inflightCore.delete(ticker)
+    }
+  })()
+
+  inflightCore.set(ticker, task)
+  return task
+}
+
+/**
+ * MOPS history backfill only. Does not charge a second daily quota (server-side).
+ * Call after `warmStockCore` when `fundamentalComplete` is false.
+ * Unseals only when incomplete and this round made progress.
+ */
+export async function warmStockHistory(ticker: string, name?: string): Promise<WarmResult> {
+  if (!supabase) return FAILED
+
+  const pending = inflightHistory.get(ticker)
+  if (pending) return pending
+  if (attemptedHistory.has(ticker)) return FAILED
+
+  attemptedHistory.add(ticker)
+
+  const task = (async (): Promise<WarmResult> => {
+    try {
+      const result = await invokeWarm(ticker, name, 'history')
+      maybeUnsealHistory(ticker, result)
+      return result
+    } finally {
+      inflightHistory.delete(ticker)
+    }
+  })()
+
+  inflightHistory.set(ticker, task)
+  return task
+}
+
+/**
+ * Progressive warm: core then history when needed.
+ * Prefer this for background prefetch. Detail pages should call core, paint, then history
+ * so first paint is not blocked by MOPS.
  *
  * `name` became the caller's job in 0.6.44: the server used to look it up in the holdings whitelist,
  * and that whitelist is gone. It only lands in `fundamental/{ticker}.json`, which nothing on screen
  * reads, so an omitted name costs nothing —— pass it when you have it and the stored file stays honest.
  */
 export async function warmStock(ticker: string, name?: string): Promise<WarmResult> {
-  if (!supabase) return FAILED
+  const core = await warmStockCore(ticker, name)
+  if (!core.ok || core.fundamentalComplete) return core
 
-  const pending = inflight.get(ticker)
-  if (pending) return pending
-  if (attempted.has(ticker)) return FAILED
-
-  attempted.add(ticker)
-
-  const task = (async (): Promise<WarmResult> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('stock-report', {
-        body: { action: 'warm', ticker, name: name ?? '' },
-      })
-      if (error || !data || typeof data !== 'object') return FAILED
-      const d = data as Record<string, unknown>
-      const result: WarmResult = {
-        ok: d.ok === true,
-        dailySynced: typeof d.dailySynced === 'number' ? d.dailySynced : 0,
-        fundamentalSynced: typeof d.fundamentalSynced === 'number' ? d.fundamentalSynced : 0,
-        fundamentalComplete: d.fundamentalComplete === true,
-        backfilled:
-          (Array.isArray(d.revenueMonths) ? d.revenueMonths.length : 0) +
-          (Array.isArray(d.profitQuarters) ? d.profitQuarters.length : 0),
-      }
-      // Unseal only if incomplete *and* this round filled something — otherwise seal sticks
-      // (avoids burning warm quota every open when the server keeps returning complete=false).
-      if (result.ok && !result.fundamentalComplete && result.backfilled > 0) {
-        attempted.delete(ticker)
-      }
-      return result
-    } catch {
-      return FAILED
-    } finally {
-      inflight.delete(ticker)
-    }
-  })()
-
-  inflight.set(ticker, task)
-  return task
+  const hist = await warmStockHistory(ticker, name)
+  return {
+    ok: core.ok || hist.ok,
+    dailySynced: core.dailySynced + hist.dailySynced,
+    fundamentalSynced: core.fundamentalSynced + hist.fundamentalSynced,
+    fundamentalComplete: hist.ok ? hist.fundamentalComplete : core.fundamentalComplete,
+    backfilled: core.backfilled + hist.backfilled,
+    phase: 'full',
+  }
 }

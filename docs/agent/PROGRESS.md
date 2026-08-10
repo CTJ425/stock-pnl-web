@@ -1,8 +1,37 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
+- Action: 0.6.46-dev.4 progressive warm (core → history)
+- Status: **Code + unit tests green; DEV Edge not volume-copied yet; prod untouched**
+- Timestamp: 2026-08-10 18:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 18:40:00 Asia/Taipei (0.6.46-dev.4)
+
+- **Agent**: Grok
+- **Action**: Split on-demand warm so first paint is not blocked by MOPS history
+
+### Baseline
+- Prior work 0.6.46-dev.1–3 committed as `f03ade5` before this change.
+
+### Code
+1. Edge `handleWarm`: `phase=core|history|full` (default full). Core = `syncDaily` + `syncFundamental`. History = MOPS loops only, **no second `takeWarmQuota`**. Full = previous one-shot.
+2. Frontend: `warmStockCore` / `warmStockHistory` / progressive `warmStock` (prefetch).
+3. `StockDetailPage`: paint after core, then history re-read. `useDailySeries`: core only.
+
+### Verify
+- Targeted tests green (warmStock + StockDetailPage + prefetch).
+- Full suite pending at end of turn.
+- DEV Edge deploy + cold-ticker timing still open.
+
+---
+
+# Progress Log (PROGRESS.md)
+
+- Agent: Grok
 - Action: 0.6.46-dev.2 FOMC meeting-calendar points (DEV)
-- Status: **DEV Edge + sync-macro green; local uncommitted; prod untouched**
+- Status: **DEV Edge + sync-macro green; later committed in f03ade5**
 - Timestamp: 2026-08-10 09:47:00 Asia/Taipei
 
 ---

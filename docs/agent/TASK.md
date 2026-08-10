@@ -2,7 +2,7 @@
 
 - Agent: Grok
 - Status: ACTIVE
-- Timestamp: 2026-08-09 13:40:00 Asia/Taipei
+- Timestamp: 2026-08-10 18:40:00 Asia/Taipei
 
 ---
 
@@ -10,10 +10,11 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-09 13:40)
+## 📍 Where the project stands (2026-08-10 18:40)
 
-- **Version 0.6.46-dev.1** on `dev` (local; commit/push pending user).
-- **DEV Edge**: `stock-report` volume-copied with `batchTwTickers` (holdings ∪ watchlist); warm anon → 401.
+- **Version 0.6.46-dev.4** on `dev` (local; commit/push pending user).
+- **0.6.46-dev.1–3** committed as `f03ade5` (prefetch + FOMC meetings + macro UI).
+- **dev.4**: progressive warm core/history — code local; DEV Edge volume-copy still open.
 - **PROD**: do not deploy until user authorizes.
 - **Open bugs: none.**
 - **Task 76 items 1/3/4** still unrecorded.
@@ -28,28 +29,42 @@
 
 ## 📋 Active Tasks
 
+### Task 81: Progressive warm core → history (0.6.46-dev.4)
+- **Status**: 🔄 **Code + unit tests green; DEV Edge deploy + manual timing still open**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 18:40:00 Asia/Taipei
+
+1. ~~Edge `phase=core|history|full`; history no second quota~~ ✅
+2. ~~Frontend `warmStockCore` / `warmStockHistory` / progressive `warmStock`~~ ✅
+3. ~~StockDetailPage paint after core; useDailySeries uses core only~~ ✅
+4. ~~Unit tests (warmStock + StockDetailPage paths)~~ ✅
+5. **DEV**: volume-copy `stock-report` + restart functions —— ⏳
+6. **Manual**: open cold ticker; measure time-to-valuation vs full history —— ⏳
+7. **Commit + push `dev`** —— ⏳ user go-ahead
+8. **Prod** deploy when authorized —— ⏳
+
 ### Task 80: FOMC meeting points (0.6.46-dev.2)
-- **Status**: 🔄 **DEV green; commit/push + prod open**
+- **Status**: 🔄 **Code committed in f03ade5; push + prod open**
 - **Agent**: Grok
 - **Timestamp**: 2026-08-10 09:47:00 Asia/Taipei
 
 1. ~~`meetingRatePoints` + syncMacro calendar wiring~~ ✅
 2. ~~Tests + force rebuild for legacy step-only files~~ ✅
 3. ~~DEV deploy + sync-macro → latest 2026-07-29~~ ✅
-4. **Commit + push `dev`** —— ⏳
+4. ~~Commit (bundled in f03ade5)~~ ✅ · **push `dev`** —— ⏳
 5. **Prod** deploy + sync-macro —— ⏳
 
 ### Task 79: Prefetch + night batch for new / watched stocks (0.6.46-dev.1)
-- **Status**: 🔄 **Code + DEV Edge green; commit/push + prod still open**
+- **Status**: 🔄 **Code committed in f03ade5; push + prod still open**
 - **Agent**: Grok
 - **Timestamp**: 2026-08-09 13:40:00 Asia/Taipei
 
 1. ~~Edge: `batchTwTickers` = holdings ∪ `tw_watchlist`; generate-all / backfill use it~~ ✅
 2. ~~Frontend: `prefetchStockData` on watchlist add + first TPE buy~~ ✅
 3. ~~UI: 「歷史補齊中」 when short of 12/12~~ ✅
-4. ~~Tests 928 pass; version 0.6.46-dev.1~~ ✅
+4. ~~Tests; version trail through dev.3~~ ✅
 5. ~~**DEV**: volume-copy `stock-report` + restart functions; warm anon 401~~ ✅
-6. **Commit + push `dev`** —— ⏳ user go-ahead
+6. ~~Commit (bundled in f03ade5)~~ ✅ · **push `dev`** —— ⏳ user go-ahead
 7. **Prod**: deploy `stock-report --no-verify-jwt` when authorized —— ⏳
 
 ### Task 78: Watchlist sub-tabs + early monthly revenue (0.6.44-dev.6)

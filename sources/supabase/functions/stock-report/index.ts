@@ -10,9 +10,12 @@
  * interface:
  *   POST { action: 'generate', market: 'TPE', ticker: string, name: string, holding?: HoldingContext }
  *     → { reportId, generatedAt, dataDate, data } (chips are generated immediately with one click, used for front-end fallback)
- *   POST { action: 'warm', ticker: string, name?: string }
- *     → { ok, ticker, ymd, dailySynced, fundamentalSynced }
- *       The daily line and fundamentals are added in a single file and written into Storage, so that newly added stocks do not have to wait for the night batch (0.6.0-dev.7)
+ *   POST { action: 'warm', ticker: string, name?: string, phase?: 'core' | 'history' | 'full' }
+ *     → { ok, ticker, ymd, dailySynced, fundamentalSynced, fundamentalComplete, phase, ... }
+ *       Instant production for a single symbol (0.6.0-dev.7). From 0.6.46-dev.4 the caller may
+ *       split work: `core` = daily + latest fundamental only (fast first paint); `history` = MOPS
+ *       revenue/profit backfill (no second quota charge; requires an existing fundamental file);
+ *       `full` (default) = core then history in one request (legacy / background prefetch).
  *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
  *     → Generate a common report for all Taiwan stocks held and store it in Storage (reports bucket), and clean up old data older than 7 days
  *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
@@ -513,6 +516,11 @@ interface GenerateReportRequestBody {
   market?: string
   ticker?: string
   name?: string
+  /**
+   * warm only (0.6.46-dev.4). `core` | `history` | `full` (default).
+   * See handleWarm header comment.
+   */
+  phase?: string
   holding?: HoldingContext | null
   /** admin-set-role is used: the account to be changed and whether to give it to the administrator*/
   userId?: string
@@ -525,6 +533,58 @@ interface GenerateReportRequestBody {
   jobs?: string[] | 'all'
   /** Singular alias for a one-job admin-run */
   job?: string
+}
+
+/** warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default). */
+type WarmPhase = 'core' | 'history' | 'full'
+
+function parseWarmPhase(raw: unknown): WarmPhase {
+  const s = String(raw ?? 'full').trim().toLowerCase()
+  if (s === 'core' || s === 'history' || s === 'full') return s
+  return 'full'
+}
+
+/** Soft "12/12 present" check for warm-core responses (gap-driven backfill is the hard source of truth). */
+function fundamentalHistoryLooksComplete(file: FundamentalFile | null): boolean {
+  if (!file) return false
+  const months = file.revenueMonths?.length ?? 0
+  const quarters = file.profitQuarters?.length ?? 0
+  return months >= REVENUE_MONTHS_CAP && quarters >= PROFIT_QUARTERS_CAP
+}
+
+/**
+ * MOPS history loops for on-demand warm (shared by phase=history and phase=full).
+ * Sequential on purpose: both rewrite the same fundamental/{ticker}.json.
+ */
+async function warmHistoryBackfill(
+  one: Array<{ ticker: string; name: string }>,
+  now: Date,
+): Promise<{ revenueMonths: string[]; profitQuarters: string[]; complete: boolean }> {
+  const deadline = Date.now() + WARM_BUDGET_MS
+  const revenueMonths: string[] = []
+  const profitQuarters: string[] = []
+
+  let revenueDone = false
+  while (Date.now() < deadline) {
+    const r = await backfillRevenue(one, now, WARM_ROUND_MONTHS)
+    if (r.months.length === 0) {
+      revenueDone = true
+      break
+    }
+    revenueMonths.push(...r.months)
+  }
+
+  let profitDone = false
+  while (Date.now() < deadline) {
+    const p = await backfillProfit(one, now, WARM_ROUND_QUARTERS)
+    if (p.quarters.length === 0) {
+      profitDone = true
+      break
+    }
+    profitQuarters.push(...p.quarters)
+  }
+
+  return { revenueMonths, profitQuarters, complete: revenueDone && profitDone }
 }
 
 type MarginRows = Record<string, string>[] | null
@@ -1726,9 +1786,16 @@ async function warmDataYmd(): Promise<string> {
  *    Therefore, the same file will only actually do something once a day at most, and then the front end will directly read the Storage.
  * 3. The three fundamentals are the largest in the market and use `chip_raw_cache`, and the external amplification effect is close to zero.
  *
- * 4. **Also run a round of historical backfill** (0.6.29): The source endpoint only returns the latest period, and the history and EPS all rely on backfill.
- *    And backfill is ranked after decideSkip in the night batch - the entire section is short-circuited when the data is all available that day.
- *    Newly added stocks cannot be replenished in one round that day. The budget is deliberately smaller than night time, see instructions in the function.
+ * 4. **Also run historical backfill** (0.6.29): The source endpoint only returns the latest period; history and EPS
+ *    rely on MOPS backfill. Budget is `WARM_BUDGET_MS` (see warmHistoryBackfill).
+ *
+ * 5. **Phased warm** (0.6.46-dev.4): `phase=core` returns after daily + latest fundamental so the UI can paint
+ *    in seconds; `phase=history` runs only the MOPS loops (no second quota charge — same ticker already paid
+ *    on core/full). `phase=full` (default) keeps the one-shot behaviour for background prefetch.
+ *
+ *    History still requires `assertUser`. Gap-driven backfill is free when the file is already complete, so a
+ *    stray history call on a full stock costs two Storage reads. Thin files without a prior core still cost
+ *    MOPS if they already exist from the night batch; session seal on the frontend is the main throttle.
  */
 async function handleWarm(req: Request, body: GenerateReportRequestBody): Promise<Response> {
   const ticker = String(body.ticker ?? '').trim()
@@ -1739,7 +1806,56 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
   const auth = await assertUser(req)
   if (auth instanceof Response) return auth
 
+  const phase = parseWarmPhase(body.phase)
   const now = new Date()
+  const name = String(body.name ?? '').trim().slice(0, 40)
+  const started = Date.now()
+
+  // History is the second half of a progressive warm: quota was charged on core (or full).
+  if (phase === 'history') {
+    const one = [{ ticker, name }]
+    const existing = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+    if (!existing) {
+      return json({
+        ok: true,
+        ticker,
+        phase: 'history',
+        dailySynced: 0,
+        fundamentalSynced: 0,
+        revenueMonths: [],
+        profitQuarters: [],
+        fundamentalComplete: false,
+        durationMs: Date.now() - started,
+      })
+    }
+    if (fundamentalHistoryLooksComplete(existing)) {
+      return json({
+        ok: true,
+        ticker,
+        phase: 'history',
+        dailySynced: 0,
+        fundamentalSynced: 0,
+        revenueMonths: [],
+        profitQuarters: [],
+        fundamentalComplete: true,
+        durationMs: Date.now() - started,
+      })
+    }
+    const hist = await warmHistoryBackfill(one, now)
+    return json({
+      ok: true,
+      ticker,
+      phase: 'history',
+      dailySynced: 0,
+      fundamentalSynced: 0,
+      revenueMonths: hist.revenueMonths,
+      profitQuarters: hist.profitQuarters,
+      fundamentalComplete: hist.complete,
+      durationMs: Date.now() - started,
+    })
+  }
+
+  // core + full: charge quota once per call
   const quota = await takeWarmQuota(auth.userId, taipeiYmd(now))
   if (quota === 'limited') {
     return json({ error: '今日查詢新個股的次數已達上限，請明天再試' }, 429)
@@ -1752,8 +1868,6 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
   // The name used to come from the holdings whitelist. Without it the caller has to supply one ——
   // the search box already has it, and an empty string is harmless (buildFundamentalFile keeps
   // whatever the existing file had, and the batch overwrites it with the official name later).
-  const name = String(body.name ?? '').trim().slice(0, 40)
-
   const dataYmd = await warmDataYmd()
   if (!dataYmd) return json({ error: '無法判斷交易日' }, 503)
 
@@ -1783,72 +1897,50 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
       ok: true,
       ticker,
       ymd: dataYmd,
+      phase,
       unknownTicker: true,
       dailySynced,
-      fundamentalSynced: fundamental,
+      fundamentalSynced: fundamental.synced,
       revenueMonths: [],
       profitQuarters: [],
       fundamentalComplete: true,
-      durationMs: Date.now() - now.getTime(),
+      durationMs: Date.now() - started,
+    })
+  }
+
+  // Fast path: stop after latest valuation / month / quarter so the UI can paint.
+  if (phase === 'core') {
+    const file = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
+    return json({
+      ok: true,
+      ticker,
+      ymd: dataYmd,
+      phase: 'core',
+      dailySynced,
+      fundamentalSynced: fundamental.synced,
+      revenueMonths: [],
+      profitQuarters: [],
+      fundamentalComplete: fundamentalHistoryLooksComplete(file),
+      durationMs: Date.now() - started,
     })
   }
 
   /*
-    0.6.29: On-demand generation also runs a round of historical backfill.
-
-    **Why it is needed**: The two functions above can only provide the "latest month's revenue" and "latest quarter's profitability" --
-    The source endpoint only returns the latest period. History and EPS rely entirely on backfilling, and backfilling is scheduled after the decideSkip of the nightly batch,
-    so once the day's data is complete, the whole segment is short-circuited. As a result, stocks added at night won't be supplemented at all that day,
-    and have to wait for the next day's batch to start growing, while the user sees a table with only one row at that moment.
-
-    **Fill up until full** (within time budget): If only one round is supplemented, the new stock will still only have two or three months on its first page load,
-    which is different from existing stocks -- and that is exactly the problem the user wants to solve. See WARM_BUDGET_MS for budget.
-
-    **⚠️ The two segments must be sequential, not Promise.all**: Both backfills will download, merge, and overwrite
-    the same fundamental/{ticker}.json, parallel execution will cause one side's write to overwrite the other.
-
-    Backfilling itself is gap-driven: once filled, it returns an empty array and makes zero external requests (only two extra Storage reads),
-    so it has almost zero cost for old targets that are already full -- thus the frontend can safely "call it again if it sees it's still missing".
+    phase=full (default): same as pre-0.6.46-dev.4 one-shot warm.
+    History backfill within WARM_BUDGET_MS — see warmHistoryBackfill.
   */
-  // The budget starts here, not at the top of the call: `now` is only the reference date for
-  // "which months are published by now", and the two syncs above are bounded work of their own.
-  const deadline = Date.now() + WARM_BUDGET_MS
-  const revenueMonths: string[] = []
-  const profitQuarters: string[] = []
-
-  // Monthly revenue first (cheap) and then quarterly report (expensive): For the same number of seconds, switch to more completeness first.
-  let revenueDone = false
-  while (Date.now() < deadline) {
-    const r = await backfillRevenue(one, now, WARM_ROUND_MONTHS)
-    if (r.months.length === 0) {
-      revenueDone = true
-      break
-    }
-    revenueMonths.push(...r.months)
-  }
-
-  let profitDone = false
-  while (Date.now() < deadline) {
-    const p = await backfillProfit(one, now, WARM_ROUND_QUARTERS)
-    if (p.quarters.length === 0) {
-      profitDone = true
-      break
-    }
-    profitQuarters.push(...p.quarters)
-  }
-
+  const hist = await warmHistoryBackfill(one, now)
   return json({
     ok: true,
     ticker,
     ymd: dataYmd,
+    phase: 'full',
     dailySynced,
     fundamentalSynced: fundamental.synced,
-    // The replenishment results will be reported together: when it is slow, you have to tell which section it is.
-    revenueMonths,
-    profitQuarters,
-    // The front end decides based on this whether to call again (it will be false when the time budget is exhausted)
-    fundamentalComplete: revenueDone && profitDone,
-    durationMs: Date.now() - now.getTime(),
+    revenueMonths: hist.revenueMonths,
+    profitQuarters: hist.profitQuarters,
+    fundamentalComplete: hist.complete,
+    durationMs: Date.now() - started,
   })
 }
 

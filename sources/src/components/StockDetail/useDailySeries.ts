@@ -5,8 +5,9 @@
  * same page now need the same series. Leaving the fetch inside the technical section would have meant either
  * downloading it twice or letting one card reach into another's state.
  *
- * A warm call is made when the file is missing —— newly added stocks are not covered by the nightly batch yet;
- * `warmStock` throttles that to one attempt per session per ticker.
+ * A warm-core call is made when the file is missing —— newly added stocks are not covered by the
+ * nightly batch yet; `warmStockCore` throttles that to one attempt per session per ticker and does
+ * not wait on MOPS history (0.6.46-dev.4).
  *
  * …and when the file is **stale**, which since 0.6.44 is a case that actually happens. The nightly
  * batch only refreshes `daily/*.json` for tickers somebody holds, and `pruneStorage` only touches
@@ -16,7 +17,7 @@
  */
 import { useEffect, useState } from 'react'
 import { fetchDailySeries, type DailySeries } from '../../services/dailyProxy'
-import { warmStock } from '../../services/warmStock'
+import { warmStockCore } from '../../services/warmStock'
 
 export type DailyStatus = 'loading' | 'ready' | 'empty' | 'error'
 
@@ -46,7 +47,7 @@ export function useDailySeries(
       try {
         let s = await fetchDailySeries(ticker)
         if (!s) {
-          const warmed = await warmStock(ticker, name)
+          const warmed = await warmStockCore(ticker, name)
           if (warmed.dailySynced > 0) s = await fetchDailySeries(ticker)
         }
         if (!alive) return
@@ -70,14 +71,14 @@ export function useDailySeries(
     dependency list would download the series twice on every single page open.
 
     Cannot loop. If the warm advances the file, the new `lastDate` satisfies the guard. If it does
-    not —— Yahoo has not published the bar yet —— `warmStock` has already sealed the ticker for this
-    session and answers `dailySynced: 0`, so nothing is set and nothing re-runs.
+    not —— Yahoo has not published the bar yet —— `warmStockCore` has already sealed the ticker for
+    this session and answers `dailySynced: 0`, so nothing is set and nothing re-runs.
   */
   useEffect(() => {
     if (!series || !freshThrough || series.lastDate >= freshThrough) return
     let alive = true
     void (async () => {
-      const warmed = await warmStock(ticker, name)
+      const warmed = await warmStockCore(ticker, name)
       if (!alive || warmed.dailySynced === 0) return
       const s = await fetchDailySeries(ticker)
       if (alive && s) setSeries(s)
