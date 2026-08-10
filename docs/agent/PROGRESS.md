@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.7.0 shipped to main (Pages); prod Edge deploy blocked (no token)
-- Status: **frontend on main 2026-08-10; Edge PROD pending token**
-- Timestamp: 2026-08-10 17:08:26 Asia/Taipei
+- Action: 0.7.0 prod Edge stock-report v38 deployed
+- Status: **0.7.0 fully shipped (Pages + PROD Edge + DEV Edge)**
+- Timestamp: 2026-08-10 17:11:45 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:11:45 Asia/Taipei (0.7.0 prod Edge)
+
+- **Agent**: Grok
+- **Action**: User supplied access token; deploy stock-report
+
+### Deploy
+- Project: `kxnxadaghidwumqsqneu` (PROD)
+- `stock-report` **v37 → v38**, `verify_jwt=false` (`--no-verify-jwt`)
+- Updated (UTC): 2026-08-10 09:11:24
+
+### Smoke (no JWT / no cron secret)
+| action | HTTP | body |
+| ---- | ---- | ---- |
+| sync-top-tickers | **400** | Unknown action (route gone) |
+| warm 2330 | **401** | Unauthorized |
+| unknown-xyz | **400** | Unknown action |
+| generate-chips | **401** | Unauthorized |
+
+### Note
+- Token used only in shell env for this deploy; not written to repo.
+- Recommend user rotate personal access token after sharing in chat.
 
 ---
 

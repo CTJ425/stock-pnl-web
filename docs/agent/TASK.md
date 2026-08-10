@@ -12,7 +12,7 @@
 
 ## 📍 Where the project stands (2026-08-10 17:04)
 
-- **Version 0.7.0** on `dev` (local; remove search/TOP20; commit/push/deploy pending user).
+- **Version 0.7.0** on `dev`/`main` (shipped). PROD Edge **stock-report v38**; DEV volume-copied.
 - Analysis page = **holdings only**; night batch = held tickers only; whitelist restored.
 - **PROD / Edge**: do not deploy until user authorizes.
 - **Open bugs: none.**
@@ -37,7 +37,7 @@
 3. ~~Admin jobs/timeline/labels; version 0.7.0 + CHANGELOG~~ ✅
 4. ~~Run unit tests (942 passed)~~ ✅
 5. ~~Commit + merge main `944548c`~~ ✅
-6. ~~push main/dev~~ ✅ · PROD Edge deploy —— ⏳ need SUPABASE_ACCESS_TOKEN
+6. ~~push main/dev~~ ✅ · ~~PROD Edge stock-report v38~~ ✅ · ~~DEV volume-copy~~ ✅
 
 ### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6) — kept under holdings path
 - **Status**: 🔄 **dev.6 fixes thin quarters; commit; push after you OK**
