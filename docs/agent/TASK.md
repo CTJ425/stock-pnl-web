@@ -10,14 +10,12 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-10 18:40)
+## 📍 Where the project stands (2026-08-10 17:04)
 
-- **Version 0.6.46-dev.4** on `dev` (local; commit/push pending user).
-- **0.6.46-dev.1–3** committed as `f03ade5` (prefetch + FOMC meetings + macro UI).
-- **dev.4**: progressive warm core/history — code local; DEV Edge volume-copy still open.
-- **PROD**: do not deploy until user authorizes.
+- **Version 0.7.0** on `dev` (local; remove search/TOP20; commit/push/deploy pending user).
+- Analysis page = **holdings only**; night batch = held tickers only; whitelist restored.
+- **PROD / Edge**: do not deploy until user authorizes.
 - **Open bugs: none.**
-- **Task 76 items 1/3/4** still unrecorded.
 
 ⚠️ **Environment facts**:
 1. **DEV** = self-hosted `korq9tvdz0jd7yblr72p.ivan.lab` at
@@ -29,30 +27,19 @@
 
 ## 📋 Active Tasks
 
-### Task 82: Top-30 (+ETF) preheat + dual-scope report gate (0.6.46-dev.7)
-- **Status**: 🔄 **Edge wired + DEV smoke; commit pending; push later**
+### Task 83: 0.7.0 remove 搜尋個股 + TOP20
+- **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
 - **Agent**: Grok
-- **Timestamp**: 2026-08-10 21:30:00 Asia/Taipei
+- **Timestamp**: 2026-08-10 17:04:08 Asia/Taipei
 
-**Product rules (user):**
-1. Rank **includes ETFs** (no strip of 00xx).
-2. **15:00 = BFI82U / market only**; **Top30 + T86 work with generate-all from 16:00**.
-3. **`reportComplete` only when Top30 scope AND holdings∪watchlist scope are both ready** (soft fund).
+1. ~~Frontend holdings-only AnalysisPage; delete Top30/watchlist modules~~ ✅
+2. ~~Edge holdings-only batch; restore generate/warm whitelist; drop TOP actions~~ ✅
+3. ~~Admin jobs/timeline/labels; version 0.7.0 + CHANGELOG~~ ✅
+4. ~~Run unit tests (942 passed)~~ ✅
+5. Commit on `dev` —— ⏳
+6. Deploy Edge + push —— ⏳ explicit auth only
 
-**Done**
-1. ~~Source + rank module~~ ✅
-2. ~~`syncTopTickers` + `batchTwTickers` = held∪watch∪top30~~ ✅
-3. ~~generate-all: chips skip still runs fund; scopes + reportComplete~~ ✅
-4. ~~action `sync-top-tickers` + admin-run label~~ ✅
-5. ~~DEV volume-copy + smoke sync-top-tickers~~ ✅
-
-**Todo**
-6. Commit 0.6.46-dev.7
-7. Full generate-all night verify (reportComplete path)
-8. Optional dedicated cron for sync-top-tickers (not required — embedded in generate-all)
-9. push / prod when authorized
-
-### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6)
+### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6) — kept under holdings path
 - **Status**: 🔄 **dev.6 fixes thin quarters; commit; push after you OK**
 - **Agent**: Grok
 - **Timestamp**: 2026-08-10 19:15:00 Asia/Taipei

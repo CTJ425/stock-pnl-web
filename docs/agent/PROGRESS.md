@@ -1,9 +1,34 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.49 generate-all phases A2+P1; ship main + prod Edge
-- Status: **0.6.49 shipping**
-- Timestamp: 2026-08-10 23:45:00 Asia/Taipei
+- Action: 0.7.0 remove search + TOP20; holdings-only analysis
+- Status: **code complete; tests pending verify; deploy not run**
+- Timestamp: 2026-08-10 17:04:08 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 17:04:08 Asia/Taipei (0.7.0)
+
+- **Agent**: Grok
+- **Action**: Product rollback of 搜尋個股 + TOP20 while keeping post-0.6.43 non-feature fixes
+
+### Removed
+- Analysis subtabs 搜尋個股 / TOP20; `Top30Panel`, `topTickersProxy`, `twWatchlist`
+- Edge: `topTickers.ts`, MI_INDEX20 sync, watchlist batch, dual-scope reportComplete
+- Admin job `sync-top-tickers`; ACTION_SCOPE TOP copy
+- Night batch = **held tickers only**
+
+### Restored / kept
+- `generate`/`warm` holdings whitelist + assertUser (+ warm_quota)
+- Progressive warm, generate phases, admin manual run/progress, FOMC, Bollinger/K, skips, BUG-023, …
+
+### Version
+- `0.7.0` in version.ts / package.json / lock / README / CHANGELOG
+
+### Open
+- Run frontend tests
+- Deploy Edge `stock-report --no-verify-jwt` only when authorized
+- Push / Pages when authorized
 
 ---
 

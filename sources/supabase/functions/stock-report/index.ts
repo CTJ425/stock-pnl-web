@@ -22,8 +22,6 @@
  *       backfill round only. Admin console prefers per-phase admin-run jobs (separate HTTP budgets).
  *   POST { action: 'generate-chips' | 'generate-market-data' | 'generate-history' } x-cron-secret
  *     → Single phase (same handlers as generate-all internals).
- *   POST { action: 'sync-top-tickers' } header: x-cron-secret
- *     → Fetch MI_INDEX20 (volume top 20 / mi-stock20), write meta/top_tickers.json
  *   POST { action: 'sync-macro' } header: x-cron-secret (triggered by macro-daily schedule)
  *     → Capture five FRED sequences and write them into macro/us.json (global single file). It has nothing to do with Taiwan stock trading days, so it is scheduled independently.
  *   POST { action: 'sync-fx' } header: x-cron-secret (triggered by fx-daily schedule)
@@ -32,12 +30,10 @@
  *     → The monthly revenue of fundamental/{ticker}.json is supplemented to 12 months (0.6.4) by MOPS monthly report.
  *       generate-all will also run once every round. This entrance is for those who "don't want to wait for the schedule".
  *
- * `generate` and `warm` are gated by `assertUser()`, and `warm` additionally by `WARM_DAILY_LIMIT`
- * (0.6.44). This function is deployed with --no-verify-jwt and its URL is in the public front-end
- * bundle, so it has to do that verification itself. Until 0.6.44 the gate was the `heldTwTickers()`
- * whitelist instead; the analysis page can now search the whole market, which retired it (see the
- * comment on `assertUser` for why the replacement is shaped the way it is, and the 0.3.9 record for
- * what happens when there is no gate at all).
+ * `generate` and `warm` require a signed-in user (`assertUser`) and the ticker must appear in
+ * `heldTwTickers()` (0.7.0 restored holdings whitelist after removing full-market search / TOP20).
+ * `warm` additionally charges `WARM_DAILY_LIMIT` via `take_warm_quota`. Deployed with
+ * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
@@ -97,19 +93,6 @@ import {
   type ProfitQuarter,
   type RevenueMonth,
 } from './twFundamental.ts'
-import { mergeTwTickerLists } from './batchTickers.ts'
-import {
-  TOP_TICKERS_DEFAULT_N,
-  TOP_TICKERS_STORAGE_PATH,
-  buildTopTickersDay,
-  latestTopTickers,
-  mergeTopTickersArchive,
-  normalizeTopTickersFile,
-  rankTopByTradeValue,
-  tradingYmdFromSource,
-  type StockDayAllRow,
-  type TopTickersFile,
-} from './topTickers.ts'
 import {
   MOPS_MARKETS,
   mopsRevenueUrl,
@@ -780,14 +763,14 @@ async function handleGenerate(
   const holding = body.holding ?? null
 
   /*
-   * Any signed-in account, any listed code (0.6.44 —— was: only codes somebody held).
-   *
-   * No per-day counter here on purpose, unlike `warm`: everything below reads whole-market files
-   * out of `chip_raw_cache`, which the nightly batch has already filled. The marginal cost of one
-   * more ticker is a DB read, so there is nothing to meter. `assertUser` is the whole defence.
+   * Signed-in + holdings whitelist (0.7.0). No per-day counter: reads chip_raw_cache only.
    */
   const auth = await assertUser(req)
   if (auth instanceof Response) return auth
+  const held = await heldTwTickers()
+  if (!held.some((h) => h.ticker === ticker)) {
+    return json({ error: '僅限有人持有的台股代號' }, 403)
+  }
 
   const series = await loadSeries([ticker], new Date())
   const marginFallbackRows = await loadMarginFallback(
@@ -854,22 +837,13 @@ async function assertAdmin(req: Request): Promise<Response | null> {
 }
 
 /**
- * Gatekeeping for the two per-stock endpoints the browser calls directly (`generate` / `warm`).
+ * Login gate for browser-called endpoints (`generate` / `warm` / admin helpers).
  *
- * **What this replaced** (0.6.44): both used to require the ticker to be in `heldTwTickers()`.
- * That was never about privacy —— it capped the TWSE/MOPS amplification of an endpoint deployed
- * `--no-verify-jwt` whose project URL ships inside the public GitHub Pages bundle. Opening the
- * analysis page to the whole market retires that whitelist, so the ceiling moves here: a real
- * account, plus `WARM_DAILY_LIMIT` on the one path that actually costs anything.
+ * 0.7.0 pairs this with `heldTwTickers()` again (search/TOP removed). Keep both: account proof
+ * via getUser (anon JWT has no sub) plus the holdings amplification ceiling.
  *
- * **Why `getUser` and not "is there an Authorization header"**: the anon key is itself a JWT and
- * every browser holds a copy, so the header's presence proves nothing. The anon token carries no
- * `sub`, so GoTrue rejects it and we land in the error branch —— that is the whole separation.
- *
- * **Do not "simplify" this by deploying the function with JWT verification on.** `generate-all`
- * and the backfill actions are called by pg_cron with `x-cron-secret` and no JWT at all; platform
- * verification would reject them before this file ever runs. Same reason `assertAdmin` verifies
- * by hand right above.
+ * **Do not deploy this function with platform JWT verification on.** `generate-all` and cron
+ * actions use `x-cron-secret` only; platform JWT would reject them before this file runs.
  */
 async function assertUser(req: Request): Promise<{ userId: string } | Response> {
   const auth = req.headers.get('Authorization') ?? ''
@@ -943,92 +917,11 @@ async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>>
     .map(([ticker, v]) => ({ ticker, name: v.name }))
 }
 
-/**
- * Every ticker on any user's `tw_watchlist` (service role; cross-user dedupe).
- *
- * 0.6.46: night batch used to cover holdings only, so watchlist / search picks never
- * received overnight chip or fundamental history until someone reopened the page.
- * Cap is 5 rows per user, so the global set stays small.
- */
-async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  try {
-    const { data, error } = await db.from('tw_watchlist').select('ticker, name')
-    if (error || !data) return []
-    const out: Array<{ ticker: string; name: string }> = []
-    for (const row of data) {
-      const ticker = String(row.ticker ?? '').trim()
-      if (!TICKER_RE.test(ticker)) continue
-      out.push({ ticker, name: String(row.name ?? '').trim() })
-    }
-    return out
-  } catch {
-    return []
-  }
+/** Night batch / backfill scope: holdings only (0.7.0 — no watchlist / TOP). */
+async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  return heldTwTickers()
 }
 
-/**
- * TWSE「每日成交量前二十名」(mi-stock20.html → data-api MI_INDEX20).
- * OpenAPI: exchangeReport/MI_INDEX20 — volume rank, fixed top 20.
- * Cloud Edge often gets connection reset from openapi.twse.com.tw — soft-fetch + fallback.
- */
-const MI_INDEX20_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20'
-/** Fallback when MI_INDEX20 is unreachable: full day list, rank by TradeVolume, take 20. */
-const STOCK_DAY_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
-
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-/**
- * Soft OpenAPI GET: retries, never throws (returns null).
- * Connection reset / timeouts are common from non-TWSE cloud egress.
- */
-async function fetchOpenApiJsonSoft<T>(url: string, tries = 3): Promise<T | null> {
-  for (let i = 0; i < tries; i++) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': UA,
-          Referer: 'https://www.twse.com.tw/',
-        },
-        signal: AbortSignal.timeout(12_000),
-      })
-      if (!res.ok) {
-        await sleepMs(250 * (i + 1))
-        continue
-      }
-      return (await res.json()) as T
-    } catch {
-      await sleepMs(350 * (i + 1))
-    }
-  }
-  return null
-}
-
-/**
- * Soft-ready fundamental (batch reportComplete), aligned with frontend PROFIT/REVENUE_WARM_MIN = 6.
- * Empty shell after a real backfill pass (through markers) counts ready — typical ETF / no MOPS path.
- */
-function fundamentalSoftReady(f: FundamentalFile | null | undefined): boolean {
-  if (!f) return false
-  const months = f.revenueMonths?.length ?? 0
-  const quarters = f.profitQuarters?.length ?? 0
-  if (months >= 6 && quarters >= 6) return true
-  if (
-    months === 0 &&
-    quarters === 0 &&
-    (f.revenueBackfilledThrough != null || f.profitBackfilledThrough != null)
-  ) {
-    return true
-  }
-  return false
-}
-
-async function chipReportReady(dataYmd: string, ticker: string): Promise<boolean> {
-  const file = await downloadJson<unknown>(`${dataYmd}/${ticker}.json`)
-  return file != null
-}
 
 async function evaluateTickerScope(
   tickers: Array<{ ticker: string }>,
@@ -1059,184 +952,6 @@ async function evaluateTickerScope(
     fundComplete: total === 0 || fundReady === total,
     missingFund: missingFund.slice(0, 15),
   }
-}
-
-/**
- * Refresh meta/top_tickers.json from MI_INDEX20 (official volume top-20).
- * Never throws: OpenAPI connection resets must not fail the whole generate phase.
- * On failure: keep previous archive when present; optional STOCK_DAY_ALL volume fallback.
- */
-async function syncTopTickers(opts?: { force?: boolean }): Promise<{
-  ok: boolean
-  n: number
-  sourceDate: string | null
-  reused: boolean
-  days: number
-  error?: string
-  source?: 'mi_index20' | 'stock_day_all' | 'storage'
-}> {
-  const force = opts?.force === true
-  try {
-    const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
-    const existing = normalizeTopTickersFile(raw)
-    const todayYmd = taipeiYmd(new Date())
-    const latest = existing?.days?.[0]
-
-    // Same Taipei calendar day already on file → no network.
-    if (!force && latest?.tickers.length && latest.ymd === todayYmd) {
-      return {
-        ok: true,
-        n: latest.tickers.length,
-        sourceDate: latest.sourceDate,
-        reused: true,
-        days: existing?.days.length ?? 1,
-        source: 'storage',
-      }
-    }
-
-    // Primary: MI_INDEX20 (soft, retries). On RST/empty → fallback or keep previous (never throw).
-    let rows = await fetchOpenApiJsonSoft<StockDayAllRow[]>(MI_INDEX20_URL, 3)
-    let source: 'mi_index20' | 'stock_day_all' = 'mi_index20'
-    if (!Array.isArray(rows) || rows.length === 0) {
-      // Fallback: full day list, rank by volume
-      rows = await fetchOpenApiJsonSoft<StockDayAllRow[]>(STOCK_DAY_ALL_URL, 2)
-      source = 'stock_day_all'
-    }
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      if (latest?.tickers.length) {
-        return {
-          ok: true,
-          n: latest.tickers.length,
-          sourceDate: latest.sourceDate,
-          reused: true,
-          days: existing?.days.length ?? 1,
-          error: 'fetch_failed_kept_previous',
-          source: 'storage',
-        }
-      }
-      return {
-        ok: false,
-        n: 0,
-        sourceDate: null,
-        reused: false,
-        days: 0,
-        error: 'fetch_failed',
-      }
-    }
-
-    const ranked = rankTopByTradeValue(rows, TOP_TICKERS_DEFAULT_N)
-    if (ranked.length === 0) {
-      if (latest?.tickers.length) {
-        return {
-          ok: true,
-          n: latest.tickers.length,
-          sourceDate: latest.sourceDate,
-          reused: true,
-          days: existing?.days.length ?? 1,
-          error: 'empty_rank_kept_previous',
-          source: 'storage',
-        }
-      }
-      return { ok: false, n: 0, sourceDate: null, reused: false, days: 0, error: 'empty_rank' }
-    }
-
-    const sourceDate = typeof rows[0]?.Date === 'string' ? rows[0].Date : null
-    const ymd = tradingYmdFromSource(sourceDate) ?? todayYmd
-    const day = buildTopTickersDay({ ymd, sourceDate, tickers: ranked })
-    const file = mergeTopTickersArchive(existing, day)
-    const uploaded = await uploadJson(TOP_TICKERS_STORAGE_PATH, file)
-    if (!uploaded && latest?.tickers.length) {
-      return {
-        ok: true,
-        n: latest.tickers.length,
-        sourceDate: latest.sourceDate,
-        reused: true,
-        days: existing?.days.length ?? 1,
-        error: 'upload_failed_kept_previous',
-        source: 'storage',
-      }
-    }
-    return {
-      ok: uploaded,
-      n: ranked.length,
-      sourceDate,
-      reused: false,
-      days: file.days.length,
-      error: uploaded ? undefined : 'upload_failed',
-      source,
-    }
-  } catch (e) {
-    // Absolute last resort: never bubble Connect errors to Deno.serve as 500.
-    return {
-      ok: false,
-      n: 0,
-      sourceDate: null,
-      reused: false,
-      days: 0,
-      error: e instanceof Error ? e.message : String(e),
-    }
-  }
-}
-
-async function topTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const f = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
-  return latestTopTickers(f).map((t) => ({ ticker: t.ticker, name: t.name }))
-}
-
-/**
- * Holdings ∪ watchlist ∪ trade-value top 30 — single source for generate-all / backfill.
- * Top 20 (MI_INDEX20) is refreshed on generate-all / sync-top-tickers (not on the 15:00 market-daily path).
- */
-async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const [held, watched, top] = await Promise.all([
-    heldTwTickers(),
-    watchedTwTickers(),
-    topTwTickers(),
-  ])
-  // Holdings first so their names win when lists overlap.
-  return mergeTwTickerLists(held, watched, top)
-}
-
-async function handleSyncTopTickers(): Promise<Response> {
-  const startedAt = Date.now()
-  const result = await syncTopTickers({ force: true })
-  // Always HTTP 200: ok=false means empty/unusable; never 500 on Connect RST.
-  return json({
-    ok: result.ok,
-    n: result.n,
-    sourceDate: result.sourceDate,
-    reused: result.reused,
-    days: result.days,
-    error: result.error ?? null,
-    source: result.source ?? null,
-    path: TOP_TICKERS_STORAGE_PATH,
-    durationMs: Date.now() - startedAt,
-  })
-}
-
-/**
- * Logged-in browser path: return top_tickers archive; if Storage empty, fetch TWSE once and write.
- * Avoids empty TOP20 UI when nightly has not run yet (or only prod Edge is old).
- */
-async function handleEnsureTopTickers(): Promise<Response> {
-  const startedAt = Date.now()
-  let file = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
-  let refreshed = false
-  let syncErr: string | null = null
-  if (!file?.days?.length) {
-    const result = await syncTopTickers({ force: true })
-    refreshed = !result.reused
-    syncErr = result.error ?? null
-    file = normalizeTopTickersFile(await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH))
-  }
-  return json({
-    ok: file != null && (file.days?.length ?? 0) > 0,
-    file,
-    refreshed,
-    error: file ? null : syncErr ?? 'empty',
-    durationMs: Date.now() - startedAt,
-  })
 }
 
 async function uploadJson(path: string, payload: unknown): Promise<boolean> {
@@ -2133,9 +1848,9 @@ async function warmDataYmd(): Promise<string> {
  * Before that, the technical and fundamental pages are empty, and the AI ​​analysis will even fail because it cannot get the daily line.
  *
  * Why it’s safe (lessons from burning credits in 0.3.9):
- * 1. `assertUser` + `WARM_DAILY_LIMIT` (0.6.44; was the `heldTwTickers()` whitelist, retired when the
- *    analysis page opened to the whole market). This is the only endpoint here that meters per user,
- *    because it is the only one whose cost is not already paid by `chip_raw_cache`.
+ * 1. `assertUser` + `heldTwTickers()` whitelist (0.7.0) + `WARM_DAILY_LIMIT`. This is the only
+ *    endpoint here that meters per user, because it is the only one whose cost is not already paid
+ *    by `chip_raw_cache`.
  * 2. Both share the condition of "skip if it is the latest" with the batch, and **file will be written if no data is found**,
  *    Therefore, the same file will only actually do something once a day at most, and then the front end will directly read the Storage.
  * 3. The three fundamentals are the largest in the market and use `chip_raw_cache`, and the external amplification effect is close to zero.
@@ -2159,6 +1874,10 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
 
   const auth = await assertUser(req)
   if (auth instanceof Response) return auth
+  const heldForWarm = await heldTwTickers()
+  if (!heldForWarm.some((h) => h.ticker === ticker)) {
+    return json({ error: '僅限有人持有的台股代號' }, 403)
+  }
 
   const phase = parseWarmPhase(body.phase)
   const now = new Date()
@@ -2468,7 +2187,7 @@ async function readLastRun(todayYmd: string): Promise<LastRun | null> {
  * chips + Yahoo daily + MOPS history (546 on cloud Free/Pro compute).
  *
  * Phases (0.6.49, A2 + P1):
- * - `chips` — TOP list, T86 series, per-ticker reports, prune
+ * - `chips` — T86 series, per-ticker reports, prune
  * - `market-data` — syncDaily + syncFundamental
  * - `history` — one round of revenue + profit backfill (caps; full 12/12 needs many rounds)
  *
@@ -2479,65 +2198,14 @@ type GeneratePhaseId = 'chips' | 'market-data' | 'history'
 
 const GENERATE_PHASE_IDS: GeneratePhaseId[] = ['chips', 'market-data', 'history']
 
-type BatchTickerBundle = {
-  topSync: Awaited<ReturnType<typeof syncTopTickers>>
-  personalList: Array<{ ticker: string; name: string }>
-  topList: Array<{ ticker: string; name: string }>
-  tickers: Array<{ ticker: string; name: string }>
-}
-
-/**
- * Storage-only peek of top list (no OpenAPI). Used by market-data / history so a flaky
- * MI_INDEX20 cannot fail Yahoo/MOPS work. If Storage is empty, one soft force-sync is tried.
- */
-async function peekOrSoftTopTickers(): Promise<Awaited<ReturnType<typeof syncTopTickers>>> {
-  const raw = await downloadJson<unknown>(TOP_TICKERS_STORAGE_PATH)
-  const existing = normalizeTopTickersFile(raw)
-  const latest = existing?.days?.[0]
-  if (latest?.tickers.length) {
-    return {
-      ok: true,
-      n: latest.tickers.length,
-      sourceDate: latest.sourceDate,
-      reused: true,
-      days: existing?.days.length ?? 1,
-      source: 'storage',
-    }
-  }
-  return syncTopTickers({ force: true })
-}
-
-/**
- * @param refreshTop chips: soft-refresh top list (OpenAPI with fallback).
- * market-data / history: storage only (unless empty).
- */
-async function resolveBatchTickerBundle(
-  opts?: { refreshTop?: boolean },
-): Promise<BatchTickerBundle> {
-  const topSync =
-    opts?.refreshTop === false
-      ? await peekOrSoftTopTickers()
-      : await syncTopTickers({ force: false })
-  // If top empty after soft fail, holdings/watchlist still run alone.
-  const [heldList, watchedList, topList] = await Promise.all([
-    heldTwTickers(),
-    watchedTwTickers(),
-    topTwTickers(),
-  ])
-  const personalList = mergeTwTickerLists(heldList, watchedList)
-  const tickers = mergeTwTickerLists(personalList, topList)
-  return { topSync, personalList, topList, tickers }
-}
-
 async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
   const now = new Date()
   const todayYmd = taipeiYmd(now)
   t86FingerprintByYmd.clear()
 
-  const { topSync, personalList, topList, tickers } = await resolveBatchTickerBundle({
-    refreshTop: true,
-  })
+  const tickers = await batchTwTickers()
+  const personalList = tickers
 
   // Chip short circuit before TWSE fetches. Fundamentals still run in later phases when chips skip.
   const last = await readLastRun(todayYmd)
@@ -2629,7 +2297,6 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   }
 
   const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
-  const top30Scope = await evaluateTickerScope(topList, seriesDataYmd)
 
   // Nightly observation row: chips phase owns the primary batch_run_log write.
   await logBatchRun({
@@ -2673,12 +2340,6 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     t86Today,
     t86Revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
-    topTickers: {
-      n: topSync.n,
-      reused: topSync.reused,
-      sourceDate: topSync.sourceDate,
-      error: topSync.error ?? null,
-    },
     scopes: {
       holdings: {
         total: holdingsScope.total,
@@ -2688,14 +2349,6 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
         fundComplete: holdingsScope.fundComplete,
         missingFund: holdingsScope.missingFund,
       },
-      top30: {
-        total: top30Scope.total,
-        chipsReady: top30Scope.chipsReady,
-        fundReady: top30Scope.fundReady,
-        chipsComplete: top30Scope.chipsComplete,
-        fundComplete: top30Scope.fundComplete,
-        missingFund: top30Scope.missingFund,
-      },
     },
     durationMs: Date.now() - startedAt,
   }
@@ -2703,9 +2356,8 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
 
 async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
-  const { tickers, personalList, topList } = await resolveBatchTickerBundle({
-    refreshTop: false,
-  })
+  const tickers = await batchTwTickers()
+  const personalList = tickers
 
   let seriesDataYmd: string | null = null
   let dailySynced = 0
@@ -2729,7 +2381,6 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
   }
 
   const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
-  const top30Scope = await evaluateTickerScope(topList, seriesDataYmd)
 
   return {
     phase: 'market-data',
@@ -2752,14 +2403,6 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
         fundComplete: holdingsScope.fundComplete,
         missingFund: holdingsScope.missingFund,
       },
-      top30: {
-        total: top30Scope.total,
-        chipsReady: top30Scope.chipsReady,
-        fundReady: top30Scope.fundReady,
-        chipsComplete: top30Scope.chipsComplete,
-        fundComplete: top30Scope.fundComplete,
-        missingFund: top30Scope.missingFund,
-      },
     },
     durationMs: Date.now() - startedAt,
   }
@@ -2772,7 +2415,7 @@ async function runGeneratePhaseMarketData(): Promise<Record<string, unknown>> {
 async function runGeneratePhaseHistory(): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
   const now = new Date()
-  const { tickers } = await resolveBatchTickerBundle({ refreshTop: false })
+  const tickers = await batchTwTickers()
 
   let revenueFilled = 0
   let revenueMonths: string[] = []
@@ -2876,17 +2519,11 @@ async function handleGenerateAll(): Promise<Response> {
   const holdingsScope = (market.scopes as { holdings?: unknown } | undefined)?.holdings
     ?? (chips.scopes as { holdings?: unknown } | undefined)?.holdings
     ?? null
-  const top30Scope = (market.scopes as { top30?: unknown } | undefined)?.top30
-    ?? (chips.scopes as { top30?: unknown } | undefined)?.top30
-    ?? null
 
   const reportComplete = Boolean(
     holdingsScope &&
-      top30Scope &&
       (holdingsScope as { chipsComplete?: boolean }).chipsComplete &&
-      (holdingsScope as { fundComplete?: boolean }).fundComplete &&
-      (top30Scope as { chipsComplete?: boolean }).chipsComplete &&
-      (top30Scope as { fundComplete?: boolean }).fundComplete,
+      (holdingsScope as { fundComplete?: boolean }).fundComplete,
   )
 
   return json({
@@ -2907,10 +2544,8 @@ async function handleGenerateAll(): Promise<Response> {
     t86Today: chips.t86Today ?? false,
     t86Revisions: chips.t86Revisions ?? 0,
     t86Frozen: chips.t86Frozen ?? false,
-    topTickers: chips.topTickers ?? null,
     scopes: {
       holdings: holdingsScope,
-      top30: top30Scope,
     },
     reportComplete,
     phasesDone,
@@ -3256,7 +2891,6 @@ const ADMIN_RUN_JOBS = [
   'sync-market',
   'sync-macro',
   'sync-fx',
-  'sync-top-tickers',
   'probe',
 ] as const
 type AdminRunJob = (typeof ADMIN_RUN_JOBS)[number]
@@ -3268,8 +2902,6 @@ const ADMIN_RUN_JOBNAME: Record<AdminRunJob, string> = {
   'generate-market-data': 'stock-report-nightly',
   'generate-history': 'stock-report-nightly',
   'sync-market': 'market-daily',
-  // No dedicated cron jobname yet — generate-all refreshes the list; manual admin-run still logs.
-  'sync-top-tickers': 'sync-top-tickers',
   'sync-macro': 'macro-daily',
   'sync-fx': 'fx-daily',
   probe: 'source-probe',
@@ -3390,9 +3022,6 @@ async function handleAdminRun(
         case 'sync-fx':
           resp = await handleSyncFx()
           break
-        case 'sync-top-tickers':
-          resp = await handleSyncTopTickers()
-          break
         case 'probe':
           resp = await handleProbe()
           break
@@ -3478,20 +3107,6 @@ Deno.serve(async (req) => {
           ? 'market-data'
           : 'history'
     return handleGeneratePhase(phase)
-  }
-
-  // Top-30 by TradeValue (official codes, ETFs kept). Intended from the T86 window (~16:00+), not 15:00 market-daily.
-  if (body.action === 'sync-top-tickers') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleSyncTopTickers()
-  }
-
-  // Browser: read archive; if empty, pull TWSE and write Storage (assertUser, not cron).
-  if (body.action === 'ensure-top-tickers') {
-    const auth = await assertUser(req)
-    if (auth instanceof Response) return auth
-    return handleEnsureTopTickers()
   }
 
   // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.

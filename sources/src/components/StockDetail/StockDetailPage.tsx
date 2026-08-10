@@ -176,9 +176,9 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
     Progressive warm (0.6.46-dev.4+) with phase split (0.6.46-dev.6):
     1. Storage-first — paint immediately when a file exists.
     2. needsCoreWarm → warmStockCore only (quota). Skipped when months+quarters already exist
-       so reopening a watchlist stock with full months / thin quarters does not burn quota.
+       so reopening a stock with full months / thin quarters does not burn quota.
     3. needsHistoryWarm (months < 6 or quarters < 6) or core incomplete → warmStockHistory
-       (no second quota). Fixes 其他台股 stuck at 1–2 quarters after revenue-first budget.
+       (no second quota). Fixes thin quarterly history after revenue-first budget.
     4. ETF / unknownTicker: core complete=true → no history.
   */
   useEffect(() => {
@@ -263,7 +263,7 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
       {/*
         With a selector (AnalysisPage): column of subtabs + a stable row
         [menu tools | stock title | actions]. Search-only controls sit under that row so
-        switching 我的持股 / 其他台股 does not shove the title around.
+        switching holdings does not shove the title around.
       */}
       <div className={selector ? 'detail-head detail-head-analysis' : 'detail-head'}>
         {selector}

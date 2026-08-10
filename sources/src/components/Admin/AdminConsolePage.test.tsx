@@ -46,13 +46,13 @@ describe('AdminConsolePage', () => {
       'generate-market-data',
       'generate-history',
       'sync-market',
-      'sync-top-tickers',
       'sync-macro',
       'sync-fx',
       'probe',
     ]) {
       expect(screen.getByText(job)).toBeTruthy()
     }
+    expect(screen.queryByText('sync-top-tickers')).toBeNull()
     expect(screen.getByRole('button', { name: /全部執行/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /執行勾選項目/ })).toBeTruthy()
   })

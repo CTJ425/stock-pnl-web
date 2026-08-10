@@ -153,7 +153,8 @@ ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_model;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_api_key;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_updated_at;
 
--- 4.0b Non-holding TW watchlist for 個股分析 → 其他台股 (0.6.44+)
+-- 4.0b Non-holding TW watchlist (0.6.44–0.6.52 UI). Unused since 0.7.0 (search/TOP removed);
+-- table kept so existing DEV/PROD DBs do not need a destructive DROP.
 --     Max 5 rows per user (trigger). Never meant to hold current positions — the client prunes
 --     against ledger holdings (sell-out and buy-in both remove the ticker). Per-user, not per-workspace.
 CREATE TABLE IF NOT EXISTS tw_watchlist (
@@ -276,17 +277,9 @@ ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
 
 -- 5a. Daily quota for on-demand stock warming (warm_quota) —— 0.6.44
 --
---     Until 0.6.44 the `warm` / `generate` actions of stock-report only accepted codes that somebody
---     already held (`heldTwTickers()`). That was an anti-abuse ceiling, not a privacy rule: the
---     function is deployed --no-verify-jwt and its URL ships inside the public GitHub Pages bundle,
---     so the whitelist was what stopped a stranger from using us to hammer TWSE / MOPS.
---
---     The individual stock analysis page can now search the whole market, so that ceiling is gone.
---     What replaces it: `assertUser()` (a real account, not just the anon key) plus this table,
---     which caps `warm` —— the only action whose cost is not already paid by chip_raw_cache ——
---     at WARM_DAILY_LIMIT calls per account per Taipei day.
---
---     ⚠️ `assertUser` alone would not be enough: signup is open, so an attacker just registers.
+--     Caps `warm` at WARM_DAILY_LIMIT per account per Taipei day (atomic take_warm_quota).
+--     0.7.0 restored `heldTwTickers()` for generate/warm after removing full-market search;
+--     this table remains as a second ceiling while assertUser still requires a real account.
 --
 --     `ymd` is the 8-digit Taipei date, the same shape chip_raw_cache uses, so the same
 --     lexicographic `ymd < cutoff` prune in pruneChipCache() clears both tables.

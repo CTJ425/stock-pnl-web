@@ -714,7 +714,7 @@ describe('StockDetailPage', () => {
     expect(warmStockHistory).not.toHaveBeenCalled()
   })
 
-  it('月營收已滿但季報偏薄時只打 history、不扣 core 額度（其他台股典型）', async () => {
+  it('月營收已滿但季報偏薄時只打 history、不扣 core 額度', async () => {
     const month = (yearMonth: string) => ({
       yearMonth,
       revenueThousandTwd: 1,

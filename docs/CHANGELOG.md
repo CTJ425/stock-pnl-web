@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.0（2026-08-10）— 移除搜尋個股與 TOP20；個股分析回到僅持股
+
+#### 功能摘要
+
+- 🗑️ **個股分析**拿掉「搜尋個股」（觀察清單／全市場搜尋）與 **TOP20** 分頁，回到**僅台股持股下拉**（pre-0.6.44 產品形態）。
+- 🗑️ Edge 夜批／backfill 範圍改回**全站淨持股**；刪除 `sync-top-tickers` / `ensure-top-tickers`、`meta/top_tickers` 寫入路徑與管理後台「TOP20 名單」。
+- 🔐 `generate` / `warm` **恢復持股白名單**（`heldTwTickers`）+ 登入把關；`warm_quota` 仍作第二層上限。
+- ✅ **保留** 0.6.44 以降與兩功能無關的修訂：progressive warm、generate 三 phase、手動更新／進度條、FOMC、月營收早申報、daily/fund skip、日 K／布林、BUG-023 等。
+- 📦 DB：`tw_watchlist` / `warm_quota` **不強制 DROP**（既有環境免破壞性 migration；code 不再讀觀察清單）。
+- ⚠️ 需 deploy `stock-report --no-verify-jwt`；前端推送後 Pages 生效。
+
+---
+
 ### 0.6.52（2026-08-10）— MI_INDEX20 連線 RST 不再炸掉盤後
 
 #### 功能摘要

@@ -4,7 +4,7 @@
  * Backend target is 12 months / 12 quarters (nightly). On-demand warm only when the file is
  * clearly thin so partial histories still paint without blocking the UI — but "thin" must cover
  * **both** series. Until 0.6.46-dev.6 only revenue < 6 or zero quarters triggered warm, so a
- * watchlist stock that already had 12 months + 1–2 quarters (typical after one progressive
+ * stock that already had 12 months + 1–2 quarters (typical after one progressive
  * history pass that spent the budget on revenue first) never re-warmed and quarterly profit
  * stayed short forever except for the slow night batch (2 quarters/round).
  */

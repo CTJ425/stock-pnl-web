@@ -20,7 +20,6 @@ export const ADMIN_RUN_JOBS = [
   'generate-market-data',
   'generate-history',
   'sync-market',
-  'sync-top-tickers',
   'sync-macro',
   'sync-fx',
   'probe',
@@ -67,7 +66,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   'generate-chips': {
     title: '盤後 · 籌碼報告',
     cron: 'stock-report-nightly',
-    hint: '持股∪觀察∪TOP20（成交量）：T86／融資借券、組報告上傳（較重；與下兩段分開打避免 546）',
+    hint: '全站淨持股台股：T86／融資借券、組報告上傳（較重；與下兩段分開打避免 546）',
   },
   'generate-market-data': {
     title: '盤後 · 日K／基本面',
@@ -84,11 +83,6 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
     cron: 'market-daily',
     hint:
       '15:00–18:45 每 15 分：FMTQIK + BFI82U → market/daily.json；當日量能+法人買進齊了就短路不重打',
-  },
-  'sync-top-tickers': {
-    title: 'TOP20 名單',
-    cron: '（併盤後籌碼／可手動）',
-    hint: 'MI_INDEX20 成交量前 20（mi-stock20）→ meta/top_tickers.json',
   },
   'sync-macro': {
     title: '美總經',

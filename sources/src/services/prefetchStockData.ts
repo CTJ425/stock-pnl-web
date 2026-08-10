@@ -1,6 +1,6 @@
 /**
  * Fire-and-forget warm when the user shows interest in a ticker **before** opening
- * the analysis detail (watchlist add / first TPE buy).
+ * the analysis detail (e.g. first TPE buy).
  *
  * Skips when Storage already has a non-thin fundamental file so daily quota is not
  * burned on re-buys of stocks that night batch already filled.
