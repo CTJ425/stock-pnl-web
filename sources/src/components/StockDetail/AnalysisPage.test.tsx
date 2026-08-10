@@ -28,18 +28,27 @@ vi.mock('./StockDetailPage', () => ({
   ),
 }))
 
-const { useWorkspace, useStockPrices, searchStocks, fetchPrices, loadWatchlist, saveWatchlist } =
-  vi.hoisted(() => ({
-    useWorkspace: vi.fn(),
-    useStockPrices: vi.fn(),
-    searchStocks: vi.fn(),
-    fetchPrices: vi.fn(),
-    loadWatchlist: vi.fn(),
-    saveWatchlist: vi.fn(),
-  }))
+const {
+  useWorkspace,
+  useStockPrices,
+  searchStocks,
+  fetchPrices,
+  loadWatchlist,
+  saveWatchlist,
+  prefetchStockData,
+} = vi.hoisted(() => ({
+  useWorkspace: vi.fn(),
+  useStockPrices: vi.fn(),
+  searchStocks: vi.fn(),
+  fetchPrices: vi.fn(),
+  loadWatchlist: vi.fn(),
+  saveWatchlist: vi.fn(),
+  prefetchStockData: vi.fn(),
+}))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../hooks/useStockPrices', () => ({ useStockPrices }))
 vi.mock('../../services/stockSearch', () => ({ searchStocks }))
+vi.mock('../../services/prefetchStockData', () => ({ prefetchStockData }))
 vi.mock('../../services/twWatchlist', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/twWatchlist')>()
   return { ...actual, loadWatchlist, saveWatchlist }
@@ -92,10 +101,12 @@ describe('AnalysisPage', () => {
     fetchPrices.mockReset()
     loadWatchlist.mockReset()
     saveWatchlist.mockReset()
+    prefetchStockData.mockReset()
     searchStocks.mockResolvedValue([])
     fetchPrices.mockResolvedValue({})
     loadWatchlist.mockResolvedValue([])
     saveWatchlist.mockResolvedValue({ ok: true })
+    prefetchStockData.mockResolvedValue(undefined)
     vi.useFakeTimers({ shouldAdvanceTime: true })
   })
 
@@ -219,6 +230,7 @@ describe('AnalysisPage', () => {
     expect(screen.getByTestId('detail-name').textContent).toBe('聯電')
     expect(screen.getByTestId('detail-qty').textContent).toBe('—')
     expect(saveWatchlist).toHaveBeenCalled()
+    expect(prefetchStockData).toHaveBeenCalledWith('2303', '聯電')
 
     await waitFor(() => expect(screen.getByTestId('detail-quote').textContent).toBe('55'))
     expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2303' }])

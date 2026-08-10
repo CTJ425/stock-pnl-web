@@ -9,6 +9,11 @@
 import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
+import {
+  isFundamentalIncomplete,
+  PROFIT_TARGET,
+  REVENUE_TARGET,
+} from '../../services/needsFundamentalBackfill'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
 import { ChartLegend } from '../Charts/ChartLegend'
@@ -381,6 +386,12 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
           {fundamental.asOf && (
             <span className="source-tag section-stamp">
               資料更新於 {fmtUpdatedAt(fundamental.asOf)}（共 {revenueMonths.length} 個月）
+            </span>
+          )}
+          {isFundamentalIncomplete(fundamental) && (
+            <span className="source-tag section-stamp" title="夜批或再開一次個股分析會繼續補齊">
+              歷史補齊中（月營收 {revenueMonths.length}/{REVENUE_TARGET} · 獲利{' '}
+              {profitQuarters.length}/{PROFIT_TARGET}）
             </span>
           )}
           <span className="source-tag">單位：千元</span>

@@ -43,7 +43,7 @@ const macro: MacroData = {
     },
     {
       id: 'PAYEMS',
-      label: '非農就業',
+      label: '非農就業 NFP',
       kind: 'momThousands',
       unit: '千人',
       note: '較上月增減',
@@ -54,7 +54,7 @@ const macro: MacroData = {
     },
     {
       id: 'UMCSENT',
-      label: '消費者信心',
+      label: '消費者信心 UMCSENT',
       kind: 'index',
       unit: '指數',
       note: '密大指數',
@@ -95,8 +95,8 @@ describe('MacroPage', () => {
     expect(chips).toEqual([
       '核心 CPI+2.57%',
       'FOMC 目標利率4.25–4.50%',
-      '非農就業+57 千人',
-      '消費者信心44.8',
+      '非農就業 NFP+57 千人',
+      '消費者信心 UMCSENT44.8',
     ])
     // The entire set of old KPI cards has been removed, and the details are now handled by the form.
     expect(container.querySelectorAll('.kpi-value')).toHaveLength(0)
@@ -123,11 +123,11 @@ describe('MacroPage', () => {
     const heads = [...container.querySelectorAll('.data-table thead th')].map((e) => e.textContent)
     expect(heads).toEqual(['指標', '最新', '較上期', '趨勢', '連續'])
     const rows = [...container.querySelectorAll('.table-scroll > .data-table > tbody > tr')]
-    expect(rows.map((r) => r.querySelector('.mac-row-label')?.firstChild?.textContent)).toEqual([
+    expect(rows.map((r) => r.querySelector('.mac-row-label')?.textContent)).toEqual([
       '核心 CPI',
       'FOMC 目標利率',
-      '非農就業',
-      '消費者信心',
+      '非農就業 NFP',
+      '消費者信心 UMCSENT',
     ])
     // The indicator description has been moved from the bottom of the card to the column, and can still be seen after the word card is slimmed down.
     expect(rows[0].querySelector('.mac-row-note')?.textContent).toBe('排除食品與能源後的年增率')
@@ -136,13 +136,13 @@ describe('MacroPage', () => {
     expect(rows[2].querySelectorAll('.mac-spark')).toHaveLength(0)
   })
 
-  it('落後的指標在列上掛徽章，跟上的不掛——五列都寫「最新」等於沒有訊號', async () => {
+  it('總經頁不顯示「落後 N 期」——避免誤以為沒更新（後台抓取狀況才顯示）', async () => {
     fetchMacro.mockResolvedValue(macro)
     const { container } = render(<MacroPage />)
     await screen.findByText('美國總體經濟')
-    // The latest period of the three indicators: CPI and non-farm payrolls are both 2026-06, and consumer confidence stopped at 2026-05
-    const badges = [...container.querySelectorAll('.mac-row-label .badge')].map((e) => e.textContent)
-    expect(badges).toEqual(['落後 1 期'])
+    // Fixture still has UMCSENT one month behind PAYEMS; end-user page must not badge it.
+    expect(container.querySelectorAll('.mac-row-label .badge')).toHaveLength(0)
+    expect(screen.queryByText(/落後 \d+ 期/)).toBeNull()
   })
 
   it('全表依升降上色：非農「值是正的但比上期低」也是綠的（0.6.35）', async () => {

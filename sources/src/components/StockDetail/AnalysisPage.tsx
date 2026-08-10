@@ -30,6 +30,7 @@ import {
   saveWatchlist,
   type WatchItem,
 } from '../../services/twWatchlist'
+import { prefetchStockData } from '../../services/prefetchStockData'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
 
@@ -225,6 +226,8 @@ export function AnalysisPage() {
     }
     setWatchError(null)
     void persistWatch(result.items)
+    // Kick off chip/fundamental warm before the detail pane mounts (quota-safe skip if already thick).
+    void prefetchStockData(item.symbol, item.name)
     setSelectedWatchTicker(item.symbol)
     setSubTab('other')
   }

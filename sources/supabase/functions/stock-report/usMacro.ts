@@ -83,20 +83,20 @@ export const FRED_SERIES: readonly MacroSeriesSpec[] = [
     idLow: 'DFEDTARL',
     label: 'FOMC 目標利率',
     kind: 'rate',
-    note: '聯邦基金目標利率區間（FOMC 決議），非市場有效利率',
+    note: '每次 FOMC 會議的目標利率區間（含維持；非市場有效利率）',
     lookbackMonths: 60,
   },
   {
     id: 'PAYEMS',
-    label: '非農就業',
+    label: '非農就業 NFP',
     kind: 'momThousands',
-    note: '非農業部門就業人數較上月增減',
+    note: '非農業部門就業人數較上月增減（Nonfarm Payrolls）',
   },
   {
     id: 'UMCSENT',
-    label: '消費者信心',
+    label: '消費者信心 UMCSENT',
     kind: 'index',
-    note: '密西根大學消費者信心指數，數字越高越樂觀',
+    note: '密西根大學消費者信心指數（U. of Michigan），數字越高越樂觀',
   },
 ]
 
@@ -241,11 +241,10 @@ export function parseFredCsvDaily(csv: string): MacroPoint[] {
 }
 
 /**
- * Merge upper + lower target series into **change-points only**.
+ * Merge upper + lower target series into **change-points only** (hike/cut days).
  *
- * FRED repeats the same target every calendar day until the next FOMC move. Keeping every day
- * would make the spark chart "last 12 days" instead of "last 12 decisions".
- * A step is kept when either bound changes; the other bound carries forward if missing that day.
+ * Kept for unit tests. Production FOMC path uses `meetingRatePoints` so hold meetings
+ * still appear (0.6.46-dev.2).
  */
 export function collapseRateSteps(
   upper: readonly MacroPoint[],
@@ -281,6 +280,78 @@ export function collapseRateSteps(
     }
   }
   return steps
+}
+
+/** 'YYYY-MM-DD' + N calendar days (UTC date arithmetic; FOMC periods are calendar dates). */
+export function addUtcDays(ymd: string, days: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? '').trim())
+  if (!m) return null
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days))
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`
+}
+
+function utcYmd(now: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${now.getUTCFullYear()}-${p(now.getUTCMonth() + 1)}-${p(now.getUTCDate())}`
+}
+
+/**
+ * One point per **FOMC meeting** (statement day), including holds.
+ *
+ * FRED `DFEDTARU/L` only *changes* on hike/cut days, so collapsing to steps hid every
+ * hold meeting and left the UI stuck on the last move (e.g. 2025-12). Meeting dates come
+ * from the official calendar (`RELEASE_CALENDAR.DFEDTARU`); levels still come from FRED.
+ *
+ * **Settle window**: FRED often updates the target the calendar day after the statement.
+ * For meeting `M` we take the forward-filled range as-of `min(M + lookaheadDays, today)`.
+ * `period` stays `M` (meeting day), not the FRED effective day.
+ */
+export function meetingRatePoints(
+  upper: readonly MacroPoint[],
+  lower: readonly MacroPoint[],
+  meetingDates: readonly string[],
+  now: Date,
+  lookaheadDays = 3,
+): MacroPoint[] {
+  const upByDate = new Map<string, number | null>()
+  for (const p of upper) upByDate.set(p.period, p.value)
+  const lowByDate = new Map<string, number | null>()
+  for (const p of lower) lowByDate.set(p.period, p.value)
+
+  const allDates = [...new Set([...upByDate.keys(), ...lowByDate.keys()])].sort()
+  if (allDates.length === 0) return []
+
+  /** Forward-filled upper/lower as of `date` (last observation on or before that day). */
+  function asOf(date: string): { u: number | null; l: number | null } {
+    let u: number | null = null
+    let l: number | null = null
+    for (const d of allDates) {
+      if (d > date) break
+      if (upByDate.has(d)) u = upByDate.get(d) ?? null
+      if (lowByDate.has(d)) l = lowByDate.get(d) ?? null
+    }
+    return { u, l }
+  }
+
+  const today = utcYmd(now)
+  const meetings = [...new Set(meetingDates.map((d) => String(d ?? '').trim()))]
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort()
+
+  const out: MacroPoint[] = []
+  for (const M of meetings) {
+    if (M > today) continue
+    const settleRaw = addUtcDays(M, Math.max(0, lookaheadDays))
+    if (!settleRaw) continue
+    const settle = settleRaw > today ? today : settleRaw
+    // Need some FRED history by settle day; skip meetings before the series starts.
+    if (settle < allDates[0]) continue
+    const { u, l } = asOf(settle)
+    if (u === null && l === null) continue
+    out.push({ period: M, value: u, valueLow: l })
+  }
+  return out
 }
 
 /**

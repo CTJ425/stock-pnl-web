@@ -18,7 +18,7 @@ import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
-import { latestPeriod, periodsBehind } from './macroPeriod'
+// Peer lag badges live on Admin only — on this page they read as "stale data" to end users.
 import { TwMarketSection } from './TwMarketSection'
 
 /** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
@@ -186,12 +186,10 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
  */
 function IndicatorRow({
   ind,
-  behind,
   open,
   onToggle,
 }: {
   ind: MacroIndicator
-  behind: number
   open: boolean
   onToggle: () => void
 }) {
@@ -216,11 +214,7 @@ function IndicatorRow({
               <span className="toggle-slot" />
             )}
             <div>
-              <div className="mac-row-label">
-                {ind.label}
-                {/* Badge only when behind: five rows all reading「最新」would be no signal at all */}
-                {behind > 0 && <span className="badge badge-warn">落後 {behind} 期</span>}
-              </div>
+              <div className="mac-row-label">{ind.label}</div>
               <div className="mac-row-note">{ind.note}</div>
             </div>
           </div>
@@ -246,8 +240,6 @@ function IndicatorRow({
           {streak ? (
             <>
               連 {streak.periods} 期{streak.direction > 0 ? '上升' : '下降'}
-              {/* For a lagging indicator the streak does not end at today; unsaid, it reads as the current trend */}
-              {behind > 0 && <div className="mac-row-period">截至該期</div>}
             </>
           ) : (
             '—'
@@ -307,12 +299,6 @@ export function MacroPage() {
       </>
     )
   }
-
-  // Monthly peer lag only (see macroPeriod.ts). FOMC rate steps use YYYY-MM-DD and must not
-  // sit in the same comparison — they would almost always look "behind".
-  const peerLatest = latestPeriod(
-    macro.indicators.filter((i) => i.kind !== 'rate').map((i) => i.latest?.period),
-  )
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -406,11 +392,6 @@ export function MacroPage() {
                 <IndicatorRow
                   key={ind.id}
                   ind={ind}
-                  behind={
-                    ind.kind === 'rate'
-                      ? 0
-                      : periodsBehind(ind.latest?.period ?? null, peerLatest)
-                  }
                   open={expanded.has(ind.id)}
                   onToggle={() => toggle(ind.id)}
                 />

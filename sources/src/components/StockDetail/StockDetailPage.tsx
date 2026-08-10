@@ -29,6 +29,7 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
+import { needsFundamentalBackfill } from '../../services/needsFundamentalBackfill'
 import { warmStock } from '../../services/warmStock'
 import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
@@ -60,26 +61,6 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
   { id: 'ai', label: 'AI 分析' },
 ]
-
-/**
- * Should we on-demand-warm this fundamental file?
- *
- * Soft threshold (0.6.44-dev.7): the backend cap is 12 months / 12 quarters, but that is the
- * *nightly* goal, not a reason to block every page open on Edge. Warm only when the file is
- * clearly thin (missing, no revenue, fewer than 6 months, or zero profit quarters). Partial
- * histories (e.g. 12 months + 8 quarters) display immediately; the rest waits for the batch.
- *
- * New listings still warm on first open (no file → warm). warmStock only unseals when a round
- * makes progress, so multi-open can keep filling a brand-new stock without infinite retries.
- */
-const REVENUE_WARM_MIN = 6
-
-function needsFundamentalBackfill(f: FundamentalData): boolean {
-  if (f.revenueMonths.length === 0) return true
-  if (f.revenueMonths.length < REVENUE_WARM_MIN) return true
-  if (f.profitQuarters.length === 0) return true
-  return false
-}
 
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
 function CardHead({ title, meta }: { title: string; meta?: string }) {

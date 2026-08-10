@@ -1,6 +1,62 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
+- Action: 0.6.46-dev.2 FOMC meeting-calendar points (DEV)
+- Status: **DEV Edge + sync-macro green; local uncommitted; prod untouched**
+- Timestamp: 2026-08-10 09:47:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 09:47:00 Asia/Taipei (0.6.46-dev.2)
+
+- **Agent**: Grok
+- **Action**: FOMC = official meeting days + FRED range (includes holds)
+
+### Code
+- `meetingRatePoints` in `usMacro.ts`; `syncMacro` uses `RELEASE_CALENDAR.DFEDTARU`
+- Force rebuild when on-disk FOMC latest is not a calendar statement day
+
+### DEV verify
+- volume-copy `stock-report` + `sync-macro` → `synced:true`, `reason:updated`
+- FOMC latest **2026-07-29** 3.50–3.75%; points include 2026 hold meetings
+
+---
+
+# Progress Log (PROGRESS.md)
+
+- Agent: Grok
+- Action: 0.6.46-dev.1 new-stock prefetch + batch includes watchlist (DEV only)
+- Status: **DEV Edge green; local uncommitted; prod untouched**
+- Timestamp: 2026-08-09 13:40:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-09 13:40:00 Asia/Taipei (0.6.46-dev.1)
+
+- **Agent**: Grok
+- **Action**: Improve chip/fundamental readiness for new and watched stocks
+
+### Code
+1. Edge `batchTwTickers` = `heldTwTickers` ∪ `tw_watchlist` (pure merge in `batchTickers.ts`)
+2. Frontend `prefetchStockData` on watchlist add and first TPE buy (skip if file already thick)
+3. Fundamental UI badge when short of 12 months / 12 quarters
+4. Admin schedule scope text mentions watchlist; stale FRED test text fixed
+
+### Verify
+- `npm test` **928/928**
+- DEV volume-copy `stock-report` + restart `stock-pnl-web-dev-functions-1` healthy
+- Warm without JWT → HTTP 401
+- `tw_watchlist` has 2 rows on DEV (batch will include them next generate-all)
+
+### Not done
+- Commit / push `dev`
+- Prod Edge deploy
+
+---
+
+# Progress Log (PROGRESS.md)
+
+- Agent: Grok
 - Action: Release 0.6.45 — FOMC catalog force-resync; merge dev → main
 - Status: **0.6.45 on main/dev**
 - Timestamp: 2026-08-07 18:20:00 Asia/Taipei

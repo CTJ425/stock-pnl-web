@@ -257,7 +257,7 @@ export function durationLabel(hours: number): string {
  */
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
-    '持股台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 獲利能力，寫入盤後報告',
+    '持股與觀察清單台股的三大法人 / 融資融券 / 借券 + 日 K 線 + 估值 + 月營收 + 獲利能力，寫入盤後報告',
   /*
     market-daily / sync-market (0.6.44-dev.3 made the label explicit — ACTION_SCOPE had no
     entry before, so the schedule table showed only the code name). Three TWSE sources,

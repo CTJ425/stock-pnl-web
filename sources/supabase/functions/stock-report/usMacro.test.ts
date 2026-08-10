@@ -3,12 +3,14 @@ import {
   FRED_SERIES,
   MACRO_UA,
   MACRO_POINTS,
+  addUtcDays,
   collapseRateSteps,
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
   macroCatalogIncomplete,
   macroFingerprint,
+  meetingRatePoints,
   parseFredCsv,
   parseFredCsvDaily,
   type MacroIndicator,
@@ -172,6 +174,82 @@ describe('parseFredCsvDaily / collapseRateSteps / rate', () => {
     expect(ind.points).toHaveLength(3)
     expect(ind.latest).toEqual({ period: '2024-11-07', value: 4.75, valueLow: 4.5 })
     expect(ind.previous).toEqual({ period: '2024-09-19', value: 5.0, valueLow: 4.75 })
+  })
+})
+
+describe('meetingRatePoints', () => {
+  // Daily series: cut on 09-19 and 11-07; holds in between keep the same level.
+  const upper = `observation_date,DFEDTARU
+2024-09-17,5.50
+2024-09-18,5.50
+2024-09-19,5.00
+2024-09-20,5.00
+2024-11-06,5.00
+2024-11-07,4.75
+2024-11-08,4.75
+2025-01-28,4.75
+2025-01-29,4.75`
+
+  const lower = `observation_date,DFEDTARL
+2024-09-17,5.25
+2024-09-18,5.25
+2024-09-19,4.75
+2024-09-20,4.75
+2024-11-06,4.75
+2024-11-07,4.50
+2024-11-08,4.50
+2025-01-28,4.50
+2025-01-29,4.50`
+
+  it('addUtcDays rolls across months', () => {
+    expect(addUtcDays('2024-09-18', 3)).toBe('2024-09-21')
+    expect(addUtcDays('2024-01-30', 3)).toBe('2024-02-02')
+  })
+
+  it('one point per past meeting including holds; period stays meeting day', () => {
+    const now = new Date('2025-02-01T12:00:00Z')
+    const pts = meetingRatePoints(
+      parseFredCsvDaily(upper),
+      parseFredCsvDaily(lower),
+      // 09-18 cut (FRED settles 09-19), 11-07 cut, 01-28 hold
+      ['2024-09-18', '2024-11-07', '2025-01-28', '2025-03-19'],
+      now,
+      3,
+    )
+    expect(pts.map((p) => p.period)).toEqual(['2024-09-18', '2024-11-07', '2025-01-28'])
+    expect(pts[0]).toEqual({ period: '2024-09-18', value: 5.0, valueLow: 4.75 })
+    expect(pts[1]).toEqual({ period: '2024-11-07', value: 4.75, valueLow: 4.5 })
+    // Hold: same range as previous meeting, but still a new period
+    expect(pts[2]).toEqual({ period: '2025-01-28', value: 4.75, valueLow: 4.5 })
+  })
+
+  it('future meetings are skipped', () => {
+    const now = new Date('2024-10-01T12:00:00Z')
+    const pts = meetingRatePoints(
+      parseFredCsvDaily(upper),
+      parseFredCsvDaily(lower),
+      ['2024-09-18', '2024-11-07'],
+      now,
+      3,
+    )
+    expect(pts.map((p) => p.period)).toEqual(['2024-09-18'])
+  })
+
+  it('derive latest is last meeting not last rate change only', () => {
+    const now = new Date('2025-02-01T12:00:00Z')
+    const raw = meetingRatePoints(
+      parseFredCsvDaily(upper),
+      parseFredCsvDaily(lower),
+      ['2024-09-18', '2024-11-07', '2025-01-28'],
+      now,
+    )
+    const ind = deriveIndicator(
+      { id: 'DFEDTARU', idLow: 'DFEDTARL', label: 'FOMC', kind: 'rate', note: '' },
+      raw,
+    )
+    expect(ind.latest?.period).toBe('2025-01-28')
+    expect(ind.latest?.value).toBe(4.75)
+    expect(ind.points).toHaveLength(3)
   })
 })
 

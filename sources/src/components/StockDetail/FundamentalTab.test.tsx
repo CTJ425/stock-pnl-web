@@ -110,6 +110,11 @@ describe('FundamentalTab', () => {
     expect(screen.getByText(/資料更新於 2026-07-27 \d{2}:\d{2}（共 2 個月）/)).toBeTruthy()
   })
 
+  it('未滿 12 個月或 12 季時顯示歷史補齊中', () => {
+    render(<FundamentalTab fundamental={full} loading={false} />)
+    expect(screen.getByText(/歷史補齊中（月營收 2\/12 · 獲利 0\/12）/)).toBeTruthy()
+  })
+
   it('產出時間與估值的「資料日」是兩個不同的東西，不可混為一談', () => {
     render(<FundamentalTab fundamental={full} loading={false} />)
     // Data date = the date the data was announced by itself; data updated = the time we captured and documented it

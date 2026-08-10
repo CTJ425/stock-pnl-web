@@ -2,7 +2,7 @@
 
 - Agent: Grok
 - Status: ACTIVE
-- Timestamp: 2026-08-07 15:39:33 Asia/Taipei
+- Timestamp: 2026-08-09 13:40:00 Asia/Taipei
 
 ---
 
@@ -10,17 +10,11 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-07 15:39)
+## 📍 Where the project stands (2026-08-09 13:40)
 
-- **Version 0.6.44-dev.1** (`dev` branch; official `0.6.44` only after merge to `main`):
-  full-market search + `assertUser` / `warm_quota` gating.
-- **DEV admin**: `zrchen0425@gmail.com` has `app_metadata.role = admin` (must re-login for JWT).
-- **Self-hosted DEV is live**: `https://korq9tvdz0jd7yblr72p.ivan.lab` (Docker
-  `stock-pnl-web-dev`). Schema, `take_warm_quota`, `reports` bucket, 5 cron jobs, Edge
-  `stock-price` + `stock-report`, and CRON_SECRET (Edge env + cron jobs) are applied.
-  Smoke green on DEV (price 200 / warm anon 401 / generate-all 200).
-- **Former cloud test project** `wqetxuhncvfidqnklyew` is **not** the active DEV target.
-- **Production** (`kxnxadaghidwumqsqneu`) still on the previous baseline until explicitly updated.
+- **Version 0.6.46-dev.1** on `dev` (local; commit/push pending user).
+- **DEV Edge**: `stock-report` volume-copied with `batchTwTickers` (holdings ∪ watchlist); warm anon → 401.
+- **PROD**: do not deploy until user authorizes.
 - **Open bugs: none.**
 - **Task 76 items 1/3/4** still unrecorded.
 
@@ -31,11 +25,32 @@
 3. Self-hosted Edge deploy is **volume copy** into `volumes/functions/` + recreate the
    `functions` container (CLI `supabase functions deploy` does not target this stack).
 4. CRON_SECRET is set on Edge + embedded in pg_cron jobs (value not stored in git docs).
-5. Remaining 0.6.44 checklist:
-   - Prod: apply `warm_quota` + `take_warm_quota`, deploy `stock-report --no-verify-jwt`, smoke.
-   - Push `dev` → Pages verify → merge `main` when prod is green.
 
 ## 📋 Active Tasks
+
+### Task 80: FOMC meeting points (0.6.46-dev.2)
+- **Status**: 🔄 **DEV green; commit/push + prod open**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 09:47:00 Asia/Taipei
+
+1. ~~`meetingRatePoints` + syncMacro calendar wiring~~ ✅
+2. ~~Tests + force rebuild for legacy step-only files~~ ✅
+3. ~~DEV deploy + sync-macro → latest 2026-07-29~~ ✅
+4. **Commit + push `dev`** —— ⏳
+5. **Prod** deploy + sync-macro —— ⏳
+
+### Task 79: Prefetch + night batch for new / watched stocks (0.6.46-dev.1)
+- **Status**: 🔄 **Code + DEV Edge green; commit/push + prod still open**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-09 13:40:00 Asia/Taipei
+
+1. ~~Edge: `batchTwTickers` = holdings ∪ `tw_watchlist`; generate-all / backfill use it~~ ✅
+2. ~~Frontend: `prefetchStockData` on watchlist add + first TPE buy~~ ✅
+3. ~~UI: 「歷史補齊中」 when short of 12/12~~ ✅
+4. ~~Tests 928 pass; version 0.6.46-dev.1~~ ✅
+5. ~~**DEV**: volume-copy `stock-report` + restart functions; warm anon 401~~ ✅
+6. **Commit + push `dev`** —— ⏳ user go-ahead
+7. **Prod**: deploy `stock-report --no-verify-jwt` when authorized —— ⏳
 
 ### Task 78: Watchlist sub-tabs + early monthly revenue (0.6.44-dev.6)
 - **Status**: 🔄 **DEV green; prod + frontend push still open**

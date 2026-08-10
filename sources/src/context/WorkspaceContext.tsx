@@ -20,6 +20,7 @@ import { computeLedger } from '../utils/pnlEngine'
 import type { DataProvider } from '../services/dataProvider'
 import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
 import { isSupabaseConfigured } from '../services/supabase'
+import { prefetchStockData } from '../services/prefetchStockData'
 import { useAuth } from './AuthContext'
 
 const CURRENT_WS_KEY = 'stock-pnl-web/current-workspace'
@@ -156,10 +157,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const addTransactions = useCallback(
     async (txs: NewTransaction[]) => {
       if (!currentId) throw new Error('尚未選擇工作區')
+      // Snapshot which TPE tickers already have net holdings — first buy of a code warms data.
+      const heldBefore = new Set(
+        computeLedger(transactions)
+          .holdings.filter((h) => h.market === 'TPE' && h.qty > 0)
+          .map((h) => h.ticker),
+      )
       const created = await provider.addTransactions(currentId, txs)
       setTransactions((prev) => [...prev, ...created])
+      const seen = new Set<string>()
+      for (const tx of created) {
+        if (tx.market !== 'TPE') continue
+        if (heldBefore.has(tx.ticker) || seen.has(tx.ticker)) continue
+        seen.add(tx.ticker)
+        void prefetchStockData(tx.ticker, tx.name)
+      }
     },
-    [provider, currentId],
+    [provider, currentId, transactions],
   )
 
   const updateTransaction = useCallback(

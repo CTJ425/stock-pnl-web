@@ -36,7 +36,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   'generate-all': {
     title: '盤後個股批次',
     cron: 'stock-report-nightly',
-    hint: '持股台股籌碼報告、日 K、基本面（可能較久）',
+    hint: '持股與觀察清單台股籌碼報告、日 K、基本面（可能較久）',
   },
   'sync-market': {
     title: '台股全市場',

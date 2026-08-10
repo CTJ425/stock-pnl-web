@@ -88,6 +88,7 @@ import {
   type ProfitQuarter,
   type RevenueMonth,
 } from './twFundamental.ts'
+import { mergeTwTickerLists } from './batchTickers.ts'
 import {
   MOPS_MARKETS,
   mopsRevenueUrl,
@@ -129,7 +130,7 @@ import {
   macroCatalogIncomplete,
   MACRO_LOOKBACK_MONTHS,
   MACRO_SCHEMA,
-  collapseRateSteps,
+  meetingRatePoints,
   deriveIndicator,
   fredCsvUrl,
   fredSinceDate,
@@ -143,6 +144,7 @@ import {
 import {
   decideMacroScan,
   nextReleaseFor,
+  RELEASE_CALENDAR,
   taipeiYmdOf,
   type ScanReason,
 } from './macroCalendar.ts'
@@ -854,6 +856,36 @@ async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>>
     .map(([ticker, v]) => ({ ticker, name: v.name }))
 }
 
+/**
+ * Every ticker on any user's `tw_watchlist` (service role; cross-user dedupe).
+ *
+ * 0.6.46: night batch used to cover holdings only, so watchlist / search picks never
+ * received overnight chip or fundamental history until someone reopened the page.
+ * Cap is 5 rows per user, so the global set stays small.
+ */
+async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  try {
+    const { data, error } = await db.from('tw_watchlist').select('ticker, name')
+    if (error || !data) return []
+    const out: Array<{ ticker: string; name: string }> = []
+    for (const row of data) {
+      const ticker = String(row.ticker ?? '').trim()
+      if (!TICKER_RE.test(ticker)) continue
+      out.push({ ticker, name: String(row.name ?? '').trim() })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/** Holdings ∪ watchlist — single source for generate-all / backfill entry points. */
+async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  const [held, watched] = await Promise.all([heldTwTickers(), watchedTwTickers()])
+  // Holdings first so their names win when both lists have the same code.
+  return mergeTwTickerLists(held, watched)
+}
+
 async function uploadJson(path: string, payload: unknown): Promise<boolean> {
   try {
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
@@ -1458,7 +1490,29 @@ async function syncMacro(now: Date): Promise<{
     on-disk set is missing any catalog entry so deploy + same-day manual sync still fills FOMC.
   */
   const catalogIncomplete = macroCatalogIncomplete((existing?.indicators ?? []).map((i) => i.id))
-  if (!decision.scan && existing && !catalogIncomplete) {
+  /*
+    0.6.46-dev.2: FOMC switched from rate-change steps to meeting-calendar points.
+    Legacy files keep a latest period that is a FRED effective day (e.g. 2025-12-11) rather
+    than a statement day in RELEASE_CALENDAR (2025-12-10). Force one rebuild so holds appear
+    even when decideMacroScan already said satisfied/outside-window for the Taipei day.
+  */
+  const fomc = (existing?.indicators ?? []).find((i) => i.id === 'DFEDTARU')
+  const meetingSet = new Set((RELEASE_CALENDAR.DFEDTARU ?? []).map((e) => e.period))
+  const fomcNeedsMeetingRebuild =
+    !fomc?.latest?.period || !meetingSet.has(fomc.latest.period)
+  // Catalog copy (labels/notes) drifted after a deploy — still force a rewrite.
+  const catalogLabelMismatch = (existing?.indicators ?? []).some((i) => {
+    const spec = FRED_SERIES.find((s) => s.id === i.id)
+    return Boolean(spec && i.label !== spec.label)
+  })
+
+  if (
+    !decision.scan &&
+    existing &&
+    !catalogIncomplete &&
+    !fomcNeedsMeetingRebuild &&
+    !catalogLabelMismatch
+  ) {
     return {
       synced: false,
       count: existing.indicators?.length ?? 0,
@@ -1482,15 +1536,18 @@ async function syncMacro(now: Date): Promise<{
 
       let raw
       if (spec.kind === 'rate' && spec.idLow) {
-        // Target range: two daily series → change-points only (see collapseRateSteps).
+        // Target range: two daily series × official FOMC meeting calendar (holds included).
         const resLow = await fetch(fredCsvUrl(spec.idLow, since), {
           headers,
           signal: AbortSignal.timeout(15_000),
         })
         if (!resLow.ok) continue
-        raw = collapseRateSteps(
+        const meetingDates = (RELEASE_CALENDAR[spec.id] ?? []).map((e) => e.period)
+        raw = meetingRatePoints(
           parseFredCsvDaily(await res.text()),
           parseFredCsvDaily(await resLow.text()),
+          meetingDates,
+          now,
         )
       } else {
         raw = parseFredCsv(await res.text())
@@ -1519,9 +1576,15 @@ async function syncMacro(now: Date): Promise<{
     Array.isArray(existing.indicators) &&
     macroFingerprint(existing.indicators) === macroFingerprint(indicators)
   ) {
-    // Failure to write is not a big deal: I will try again in the next class, and the data itself is still in the file.
+    // Fingerprint ignores labels/notes. Still rewrite them when the catalog copy changes
+    // (e.g. 「非農就業」→「非農就業 (NFP)」) without bumping asOf.
+    const copyOnly = indicators.some((n) => {
+      const e = existing.indicators.find((x) => x.id === n.id)
+      return Boolean(e && (e.label !== n.label || e.note !== n.note))
+    })
     await uploadJson('macro/us.json', {
       ...existing,
+      indicators: copyOnly ? indicators : existing.indicators,
       checkedAt: now.toISOString(),
       scansToday: { ymd: todayYmd, n: prevScans + 1 },
     })
@@ -1986,7 +2049,7 @@ async function handleGenerateAll(): Promise<Response> {
     return json({ ok: true, skipped: true, reason: skip.reason, ymd: todayYmd })
   }
 
-  const tickers = await heldTwTickers()
+  const tickers = await batchTwTickers()
   // Today's T86 has a cache but has not yet been finalized → Re-catch and compare; if not, just follow the original fetching path
   const refreshT86Ymd =
     cachedToday.has(`${todayYmd}:T86`) && !(last?.t86?.frozen ?? false) ? todayYmd : undefined
@@ -2130,7 +2193,7 @@ async function handleGenerateAll(): Promise<Response> {
  */
 async function handleBackfillProfit(): Promise<Response> {
   const startedAt = Date.now()
-  const tickers = await heldTwTickers()
+  const tickers = await batchTwTickers()
   const profit = await backfillProfit(tickers, new Date())
   return json({
     ok: true,
@@ -2144,7 +2207,7 @@ async function handleBackfillProfit(): Promise<Response> {
 
 async function handleBackfillRevenue(): Promise<Response> {
   const startedAt = Date.now()
-  const tickers = await heldTwTickers()
+  const tickers = await batchTwTickers()
   const revenue = await backfillRevenue(tickers, new Date())
   return json({
     ok: true,

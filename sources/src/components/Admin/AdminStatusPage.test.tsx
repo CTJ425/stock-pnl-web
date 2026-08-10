@@ -317,8 +317,8 @@ describe('AdminStatusPage', () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByRole('heading', { name: '排程' })
-    expect(screen.getByText(/持股台股的三大法人/)).toBeTruthy()
-    expect(screen.getByText(/FRED 五個序列/)).toBeTruthy()
+    expect(screen.getByText(/持股與觀察清單台股的三大法人/)).toBeTruthy()
+    expect(screen.getByText(/FRED：核心 CPI/)).toBeTruthy()
   })
 
   it('下期預計用後端算好的官方公告日，前端不自備行事曆', async () => {
