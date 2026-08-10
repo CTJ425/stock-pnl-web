@@ -8,6 +8,16 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-023 — Manual 「全部執行」 showed opaque non-2xx
+- **Date**: 2026-08-10, fixed in **0.6.47**
+- **Root Cause**: Frontend sent one `admin-run` with all jobs; Edge ran them
+  sequentially in a single request. Wall-clock / idle ~150s → gateway **504**;
+  body often not `{ error: string }`, so supabase-js only showed
+  `Edge Function returned a non-2xx status code`. Confirmed path: 全部執行.
+- **Fix**: `runAdminJobs` invokes **one job per request** and aggregates results;
+  504/non-JSON errors surface status + hint. Frontend only (Pages deploy).
+- **Status**: ✅ FIXED (0.6.47).
+
 ### Bug ID: BUG-019 — An unparsed cron looked like intended output (AUDIT-05)
 - **Date**: 2026-08-06, fixed in 0.6.43
 - **Root Cause**: `describeCron` returned the bare expression when no branch matched. Echoing it was the honest

@@ -3,6 +3,11 @@
  *
  * Gate is the caller's JWT + `app_metadata.role === 'admin'` (see Edge `admin-run`).
  * **Not CRON_SECRET** — that key must never enter the browser.
+ *
+ * Each job is invoked in its **own** Edge request. Packing several jobs into one
+ * `admin-run` call (server-side sequential) used to hit the platform wall-clock /
+ * idle timeout (~150s) and surface only the opaque
+ * "Edge Function returned a non-2xx status code" (504 body is often not `{ error }`).
  */
 import { supabase } from './supabase'
 
@@ -68,50 +73,175 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
 }
 
 /**
- * Run one job, several jobs, or all five.
- * Returns `{ ok: false, error }` on transport / auth failure; on success returns the Edge payload.
+ * Run one job, several jobs, or all.
+ * Returns `{ ok: false, error }` only when **every** job fails at the transport layer
+ * before any result is collected; partial success still returns `ok: true` with
+ * `data.ok` / `data.failed` describing per-job outcomes.
  */
 export async function runAdminJobs(
   jobs: AdminRunJob[] | 'all',
 ): Promise<{ ok: true; data: AdminRunResult } | { ok: false; error: string }> {
   if (!supabase) return { ok: false, error: 'Supabase 未設定' }
+
+  const list: AdminRunJob[] =
+    jobs === 'all' ? [...ADMIN_RUN_JOBS] : jobs.filter((j, i, a) => a.indexOf(j) === i)
+
+  if (list.length === 0) {
+    return { ok: false, error: `jobs 必填。可用：${ADMIN_RUN_JOBS.join(', ')} 或 all` }
+  }
+
+  const started = Date.now()
+  const results: Partial<Record<AdminRunJob, AdminRunJobResult>> = {}
+  const failed: AdminRunJob[] = []
+  const transportErrors: string[] = []
+  let transportFails = 0
+
   try {
-    const body =
-      jobs === 'all'
-        ? { action: 'admin-run', jobs: 'all' as const }
-        : { action: 'admin-run', jobs }
-    const { data, error } = await supabase.functions.invoke('stock-report', { body })
-    if (error) {
-      const msg = await httpErrorMessage(error)
-      return { ok: false, error: msg ?? error.message }
-    }
-    const res = data as Partial<AdminRunResult> & { error?: string }
-    if (!res || typeof res !== 'object') return { ok: false, error: '無回應' }
-    if (typeof res.error === 'string' && res.ok !== true) {
-      return { ok: false, error: res.error }
-    }
-    return {
-      ok: true,
-      data: {
-        ok: res.ok === true,
-        jobs: Array.isArray(res.jobs) ? (res.jobs as AdminRunJob[]) : [],
-        results: (res.results ?? {}) as AdminRunResult['results'],
-        failed: Array.isArray(res.failed) ? (res.failed as AdminRunJob[]) : [],
-        durationMs: typeof res.durationMs === 'number' ? res.durationMs : 0,
-      },
+    for (const job of list) {
+      const one = await invokeOneJob(job)
+      if (!one.ok) {
+        transportFails++
+        transportErrors.push(`${job}: ${one.error}`)
+        failed.push(job)
+        results[job] = {
+          httpStatus: one.httpStatus ?? 0,
+          durationMs: one.durationMs,
+          body: { error: one.error },
+        }
+        continue
+      }
+      results[job] = one.result
+      if (one.result.httpStatus >= 400) failed.push(job)
     }
   } catch (e: unknown) {
     return { ok: false, error: e instanceof Error ? e.message : '執行失敗' }
   }
+
+  // Every job died at the HTTP layer (auth / timeout / network) — surface the first reason.
+  if (transportFails === list.length && transportErrors.length > 0) {
+    return { ok: false, error: transportErrors[0] ?? '執行失敗' }
+  }
+
+  return {
+    ok: true,
+    data: {
+      ok: failed.length === 0,
+      jobs: list,
+      results,
+      failed,
+      durationMs: Date.now() - started,
+    },
+  }
 }
 
+type OneJobOk = {
+  ok: true
+  result: AdminRunJobResult
+}
+type OneJobErr = {
+  ok: false
+  error: string
+  httpStatus?: number
+  durationMs: number
+}
+
+async function invokeOneJob(job: AdminRunJob): Promise<OneJobOk | OneJobErr> {
+  if (!supabase) return { ok: false, error: 'Supabase 未設定', durationMs: 0 }
+  const t0 = Date.now()
+  const { data, error } = await supabase.functions.invoke('stock-report', {
+    body: { action: 'admin-run', jobs: [job] },
+  })
+  const durationMs = Date.now() - t0
+
+  if (error) {
+    const msg = await httpErrorMessage(error)
+    const httpStatus = responseStatus(error)
+    return {
+      ok: false,
+      error: msg ?? error.message,
+      httpStatus: httpStatus ?? undefined,
+      durationMs,
+    }
+  }
+
+  const res = data as Partial<AdminRunResult> & { error?: string }
+  if (!res || typeof res !== 'object') {
+    return { ok: false, error: '無回應', durationMs }
+  }
+  // Auth / validation failures on the Edge still come back as non-2xx (handled above)
+  // or as 200-shaped payloads with error (legacy / defensive).
+  if (typeof res.error === 'string' && res.ok !== true && !res.results) {
+    return { ok: false, error: res.error, durationMs }
+  }
+
+  const fromServer = res.results?.[job]
+  if (fromServer && typeof fromServer.httpStatus === 'number') {
+    return {
+      ok: true,
+      result: {
+        httpStatus: fromServer.httpStatus,
+        durationMs:
+          typeof fromServer.durationMs === 'number' ? fromServer.durationMs : durationMs,
+        body: fromServer.body,
+      },
+    }
+  }
+
+  // Server returned 200 without a per-job row — treat envelope as the body.
+  return {
+    ok: true,
+    result: {
+      httpStatus: res.ok === false ? 500 : 200,
+      durationMs: typeof res.durationMs === 'number' ? res.durationMs : durationMs,
+      body: res,
+    },
+  }
+}
+
+/**
+ * Dig the real reason out of supabase-js FunctionsHttpError.
+ * Non-2xx often only expose "Edge Function returned a non-2xx status code";
+ * the useful text is in `error.context` (Response), and gateway timeouts may
+ * not use `{ error: string }` at all.
+ */
 async function httpErrorMessage(error: unknown): Promise<string | null> {
   const ctx = (error as { context?: unknown })?.context
   if (!(ctx instanceof Response)) return null
+  const status = ctx.status
+  const statusBit = status ? `HTTP ${status}` : null
+
+  let detail: string | null = null
   try {
-    const body = (await ctx.clone().json()) as { error?: unknown }
-    return typeof body.error === 'string' ? body.error : null
+    const text = await ctx.clone().text()
+    if (text) {
+      try {
+        const body = JSON.parse(text) as Record<string, unknown>
+        if (typeof body.error === 'string') detail = body.error
+        else if (typeof body.message === 'string') detail = body.message
+        else if (typeof body.msg === 'string') detail = body.msg
+        else detail = text.slice(0, 200)
+      } catch {
+        detail = text.slice(0, 200)
+      }
+    }
   } catch {
-    return null
+    detail = null
   }
+
+  if (status === 504 || status === 546) {
+    const hint =
+      '逾時（Edge 約 150 秒上限）。盤後個股請單獨執行；若仍逾時，到「抓取狀況」確認是否已寫入'
+    return detail ? `${statusBit}: ${detail} — ${hint}` : `${statusBit}: ${hint}`
+  }
+
+  if (statusBit && detail) return `${statusBit}: ${detail}`
+  if (detail) return detail
+  if (statusBit) return statusBit
+  return null
+}
+
+function responseStatus(error: unknown): number | null {
+  const ctx = (error as { context?: unknown })?.context
+  if (ctx instanceof Response) return ctx.status
+  return null
 }

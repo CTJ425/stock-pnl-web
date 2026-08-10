@@ -79,6 +79,8 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 There are no open bugs.
 
+BUG-023 (manual 「全部執行」 opaque non-2xx) fixed in **0.6.47** — see `FIXED_BUG.md`.
+
 BUG-011 (the after-close lock froze an intraday snapshot) was fixed as 0.6.37, deployed to both environments at
 20:57 / 20:58, and moved to `FIXED_BUG.md`.
 

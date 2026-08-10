@@ -1,9 +1,28 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: 0.6.46-dev.6 history soft min for thin quarters (其他台股)
-- Status: **Code + tests; DEV history backfill verified on 2330/2408/2344; not pushed**
-- Timestamp: 2026-08-10 19:15:00 Asia/Taipei
+- Action: 0.6.47 manual admin-run one job per request; merge main
+- Status: **0.6.47 on main (Pages)**
+- Timestamp: 2026-08-10 23:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-10 23:05:00 Asia/Taipei (0.6.47 release)
+
+- **Agent**: Grok
+- **Action**: BUG-023 — 「全部執行」 Edge non-2xx (timeout)
+
+### Fix
+- `adminRun.ts`: each job = separate `functions.invoke` (own ~150s budget)
+- Clearer 504 / non-JSON error text
+- UI note: multi-job is sequential client-side; check 抓取狀況 if one times out
+
+### Verify
+- Full suite 962 tests green; `tsc --noEmit` ok
+- Frontend-only; no Edge redeploy required for this fix
+
+### Ship
+- Version **0.6.47**; commit on `dev` → merge `main` → push (Pages)
 
 ---
 

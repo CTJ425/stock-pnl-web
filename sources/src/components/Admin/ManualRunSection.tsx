@@ -92,9 +92,10 @@ export function ManualRunSection() {
 
       <div className="notice" style={{ padding: '10px 12px', fontSize: 13, marginTop: 12 }}>
         <Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-        與後台「抓取狀況」的五個 cron 同一組 handler。資料尚未公布時可能回
-        unchanged / skipped，不代表壞掉。
-        <strong> 盤後個股批次</strong>可能需數十秒到兩分鐘，請勿重複連按。
+        與後台「抓取狀況」的排程同一組 handler。資料尚未公布時可能回
+        unchanged / skipped，不代表壞掉。多項會<strong>逐一</strong>呼叫（各有獨立時間預算）。
+        <strong> 盤後個股批次</strong>可能需數十秒到兩分鐘，請勿重複連按；若逾時，到「抓取狀況」
+        確認是否已寫入（伺服器端有時仍會跑完）。
         執行後會寫入 admin_run_log，到「抓取狀況」重新整理即可看到最後執行時間（標
         「手動」）。
       </div>
