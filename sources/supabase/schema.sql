@@ -768,7 +768,9 @@ SELECT cron.schedule(
 --    Measured against the code, that fear was overpriced: when nothing new comes back, `syncMarket` finds an
 --    unchanged content signature, returns `synced: false` and **does not touch `asOf`** (index.ts) —— so an early
 --    round writes nothing and leaves no false "arrived" mark on the admin timeline. The cost is 2 GETs.
---    Every half hour from 15:00 to 18:30 for the same reason: the earliest catch wins, the rest are no-ops.
+--    Every 15 minutes from 15:00 to 18:45 (0.6.46-dev.9; was every 30 minutes): earliest catch wins.
+--    After today's FMTQIK row + BFI82U (with buy) are on disk, `syncMarket` short-circuits with
+--    **zero external requests** (`reason=skipped`) so denser cron does not hammer TWSE.
 --
 --    ⚠️ **The early round depends on FMTQIK, not only on BFI82U**: today's institutional amount is only fetched
 --    when today's row already exists in the merged day list, and that list comes from FMTQIK
@@ -778,6 +780,7 @@ SELECT cron.schedule(
 --    ⚠️ Same two placeholder mines as in §6c (PROJECT_REF / CRON_SECRET),
 --    Be sure to replace before applying, and be sure to run the verification query in §6d after applying.
 --    ⚠️ **Only run this section, do not rerun the entire schema.sql**.
+--    ⚠️ Live envs: prefer `cron.alter_job(..., schedule := '*/15 7-10 * * 1-5')` to keep command/secret.
 
 DO $$
 BEGIN
@@ -788,10 +791,9 @@ END $$;
 
 SELECT cron.schedule(
   'market-daily',
-  -- Taipei 15:00–18:30 every half hour (UTC 07:00–10:30), weekdays only.
-  -- ⚠️ Already-deployed environments were moved with `cron.alter_job`, which keeps the existing command
-  --    (and therefore the CRON_SECRET inside it) —— re-running `cron.schedule` here would need the plaintext secret.
-  '0,30 7-10 * * 1-5',
+  -- Taipei 15:00–18:45 every 15 minutes (UTC 07:00–10:45), weekdays only.
+  -- ⚠️ Already-deployed environments: use cron.alter_job to keep CRON_SECRET in the command.
+  '*/15 7-10 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',

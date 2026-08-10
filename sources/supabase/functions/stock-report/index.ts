@@ -132,6 +132,7 @@ import {
   MARKET_SCHEMA,
   bfi82uDayUrl,
   fmtqikMonthUrl,
+  isMarketSessionReady,
   mergeInstitutional,
   mergeMarketDays,
   parseBfi82u,
@@ -1566,9 +1567,28 @@ async function syncMarket(now: Date): Promise<{
   /** How many days of legal person amount will be paid in this round?*/
   institutionalFilled: number
   asOf: string | null
+  /**
+   * skipped: session day already complete — zero external requests (0.6.46-dev.9)
+   * unchanged: asked TWSE, content fingerprint same
+   * updated: wrote a new file
+   * empty: nothing usable from upstream
+   */
+  reason: 'skipped' | 'unchanged' | 'updated' | 'empty'
 }> {
   const existing = await downloadJson<MarketFile>('market/daily.json')
   const have = existing?.days ?? []
+
+  // Taipei calendar day: once FMTQIK + BFI82U (with buy) for this day are on disk, stop hammering TWSE.
+  const sessionDate = dashDate(taipeiYmd(now))
+  if (isMarketSessionReady(have, sessionDate)) {
+    return {
+      synced: false,
+      days: have.length,
+      institutionalFilled: 0,
+      asOf: existing?.asOf ?? null,
+      reason: 'skipped',
+    }
+  }
 
   let incoming: MarketDay[] = []
   let anyOk = false
@@ -1617,7 +1637,15 @@ async function syncMarket(now: Date): Promise<{
     )
   }
 
-  if (!anyOk) return { synced: false, days: have.length, institutionalFilled: 0, asOf: existing?.asOf ?? null }
+  if (!anyOk) {
+    return {
+      synced: false,
+      days: have.length,
+      institutionalFilled: 0,
+      asOf: existing?.asOf ?? null,
+      reason: 'empty',
+    }
+  }
 
   /*
     Compare content, not length: when only some days had their institutional amounts filled in, the day count
@@ -1636,7 +1664,13 @@ async function syncMarket(now: Date): Promise<{
       )
       .join(',')
   if (signature(days) === signature(have)) {
-    return { synced: false, days: days.length, institutionalFilled, asOf: existing?.asOf ?? null }
+    return {
+      synced: false,
+      days: days.length,
+      institutionalFilled,
+      asOf: existing?.asOf ?? null,
+      reason: 'unchanged',
+    }
   }
 
   const asOf = new Date().toISOString()
@@ -1650,6 +1684,7 @@ async function syncMarket(now: Date): Promise<{
     days: days.length,
     institutionalFilled,
     asOf: ok ? asOf : (existing?.asOf ?? null),
+    reason: ok ? 'updated' : 'unchanged',
   }
 }
 
@@ -2580,6 +2615,8 @@ async function handleSyncMarket(): Promise<Response> {
   return json({
     ok: true,
     synced: market.synced,
+    skipped: market.reason === 'skipped',
+    reason: market.reason,
     days: market.days,
     institutionalFilled: market.institutionalFilled,
     asOf: market.asOf,

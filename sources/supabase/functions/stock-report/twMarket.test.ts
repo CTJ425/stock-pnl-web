@@ -5,6 +5,7 @@ import {
   mergeMarketDays,
   parseBfi82u,
   parseFmtqik,
+  isMarketSessionReady,
   planInstitutionalBackfill,
   parseTaiexHist,
   planMarketMonths,
@@ -281,6 +282,59 @@ describe('planInstitutionalBackfill', () => {
     expect(planInstitutionalBackfill([day('2026-08-01', true)], 5)).toEqual([])
     expect(planInstitutionalBackfill([day('2026-08-01', false)], 0)).toEqual([])
     expect(planInstitutionalBackfill(null, 5)).toEqual([])
+  })
+})
+
+describe('isMarketSessionReady', () => {
+  const full = (date: string): MarketDay => ({
+    date,
+    tradeVolumeShares: 1,
+    tradeValueTwd: 1e12,
+    transactions: 1,
+    taiex: 1,
+    changePoints: 1,
+    taiexOpen: 1,
+    taiexHigh: 1,
+    taiexLow: 1,
+    institutional: {
+      foreignTwd: 1,
+      foreignDealerTwd: 1,
+      trustTwd: 1,
+      dealerSelfTwd: 1,
+      dealerHedgeTwd: 1,
+      totalTwd: 1,
+      buy: {
+        foreignTwd: 1,
+        foreignDealerTwd: 1,
+        trustTwd: 1,
+        dealerSelfTwd: 1,
+        dealerHedgeTwd: 1,
+        totalTwd: 1,
+      },
+      sell: {
+        foreignTwd: 1,
+        foreignDealerTwd: 1,
+        trustTwd: 1,
+        dealerSelfTwd: 1,
+        dealerHedgeTwd: 1,
+        totalTwd: 1,
+      },
+    },
+  })
+
+  it('true when session day has trade value and institutional buy', () => {
+    expect(isMarketSessionReady([full('2026-08-07')], '2026-08-07')).toBe(true)
+  })
+
+  it('false when day missing, no value, or no buy side', () => {
+    expect(isMarketSessionReady([full('2026-08-06')], '2026-08-07')).toBe(false)
+    const noVal = { ...full('2026-08-07'), tradeValueTwd: null }
+    expect(isMarketSessionReady([noVal], '2026-08-07')).toBe(false)
+    const noBuy = {
+      ...full('2026-08-07'),
+      institutional: { ...full('2026-08-07').institutional!, buy: null },
+    }
+    expect(isMarketSessionReady([noBuy], '2026-08-07')).toBe(false)
   })
 })
 

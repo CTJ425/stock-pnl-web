@@ -325,6 +325,27 @@ export function planInstitutionalBackfill(
 }
 
 /**
+ * True when the Taipei session day's market row is "frozen enough" that further market-daily
+ * rounds should not hit TWSE (0.6.46-dev.9).
+ *
+ * Requires: day present, trade value, and institutional **buy** side (BFI82U with amounts).
+ * History gaps for older days are not a reason to keep polling after today's session is done.
+ *
+ * @param sessionDate 'YYYY-MM-DD' (Taipei calendar day of the run)
+ */
+export function isMarketSessionReady(
+  days: MarketDay[] | null | undefined,
+  sessionDate: string,
+): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return false
+  const d = (days ?? []).find((x) => x?.date === sessionDate)
+  if (!d) return false
+  if (d.tradeValueTwd == null) return false
+  if (!d.institutional?.buy) return false
+  return true
+}
+
+/**
  * Which months to focus on: this month, plus **any months that are still missing a high or low** (0.6.30).
  *
  * Gap driven instead of just grabbing this month - the opening high and low was added at 0.6.30, and all the days saved before are gone.

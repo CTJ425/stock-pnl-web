@@ -45,9 +45,9 @@ export const TW_CHAIN: readonly ChainSpec[] = [
     The market-wide row takes its dueBy differently from the other four, and that is not a slip:
     the others are served by the after-hours batch (16:00–23:45, every 15 minutes), so the round right after the
     announcement window closes should already have them. The market-wide figures come from the separate
-    `market-daily` schedule —— **Taipei 15:00–18:30, every half hour** (0.6.38; before that 16:00 / 17:00 / 18:00).
-    Its last round is the 3rd hour after 15:00, so dueBy is 3 (18:15 once ROUND_GRACE_HOURS is added).
-    Keeping 1.5 would light a red lamp at 16:15 every day —— and an alarm that is always on is no alarm.
+    `market-daily` schedule —— **Taipei 15:00–18:45 every 15 minutes** (0.6.46-dev.9; was 30m / earlier 16–18).
+    dueBy stays 3h (18:15 with grace): session should be filled well before the window ends; denser cron
+    only retries until `isMarketSessionReady`, then short-circuits.
   */
   { id: 'market', label: '三大法人・全市場', hint: 'BFI82U', window: [0, 0.5], dueBy: 3 },
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
@@ -294,7 +294,8 @@ export const ACTION_SCOPE: Record<string, string> = {
   */
   'sync-market':
     '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
-    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。15:00 起',
+    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。' +
+    '15:00–18:45 每 15 分；當日列齊（量能+法人買進）後短路零外部請求',
   'sync-top-tickers':
     'TWSE STOCK_DAY_ALL 依成交金額排 Top30（含 ETF，官方證券代號），寫入 meta/top_tickers.json；' +
     '供 generate-all 併入批次（建議 16:00 窗，勿與 15:00 全市場混淆）',

@@ -43,7 +43,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
     title: '台股全市場',
     cron: 'market-daily',
     hint:
-      '15:00 起：FMTQIK + MI_5MINS_HIST + BFI82U → market/daily.json（不含個股 T86）',
+      '15:00–18:45 每 15 分：FMTQIK + BFI82U → market/daily.json；當日量能+法人買進齊了就短路不重打',
   },
   'sync-top-tickers': {
     title: '成交值 Top30 名單',
