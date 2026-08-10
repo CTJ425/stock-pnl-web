@@ -19,8 +19,10 @@
 - P1: history = one backfill round only
 
 ### Ship
-- Frontend + Edge `stock-report --no-verify-jwt` to prod
-- DEV: volume-copy when convenient (self-hosted)
+- Frontend **0.6.49** Pages success (`60cc525` after test-id fix)
+- Prod Edge **stock-report v34** `verify_jwt=false` sha `e0168beb…` (was v33)
+- Smoke: `generate-chips|market-data|history` → 401 Unauthorized (route present)
+- DEV: volume-copy + functions recreate; generate-chips → 401
 
 ---
 
