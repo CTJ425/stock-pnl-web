@@ -198,16 +198,44 @@ export function dayPercent(hour: number): number {
 }
 
 /**
- * cron expression → execution time of the current day (Taipei hours).
- * Only recognize the shape of `0 H[,H...] * * *` at a fixed time every day, and return the rest to empty arrays.
+ * cron expression → fire times as Taipei hours (0–24, may be fractional).
+ *
+ * Supports:
+ * - fixed hours daily `0 H,H * * *` (legacy macro two-shift; fx-daily)
+ * - step over UTC hour range, e.g. every 30 min 12-18 UTC (macro-daily dense → Taipei 20:00–02:30)
+ *
+ * Unrecognised shapes return [] so the UI does not invent shifts.
  */
 export function cronHoursTaipei(expr: string): number[] {
-  const m = /^0\s+([\d,]+)\s+\*\s+\*\s+\*$/.exec(expr.trim())
-  if (!m) return []
-  return m[1]
-    .split(',')
-    .map((h) => (Number(h) + 8) % 24)
-    .sort((a, b) => a - b)
+  const raw = expr.trim()
+  const fixed = /^0\s+([\d,]+)\s+\*\s+\*\s+\*$/.exec(raw)
+  if (fixed) {
+    return fixed[1]
+      .split(',')
+      .map((h) => (Number(h) + 8) % 24)
+      .sort((a, b) => a - b)
+  }
+
+  // e.g. */30 12-18 * * *  (minutes step + UTC hour range, every day)
+  const step = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+\*$/.exec(raw)
+  if (step) {
+    const stepMin = Number(step[1])
+    const fromH = Number(step[2])
+    const toH = Number(step[3])
+    if (!(stepMin > 0 && stepMin <= 60 && fromH <= toH)) return []
+    const out: number[] = []
+    for (let h = fromH; h <= toH; h++) {
+      for (let m = 0; m < 60; m += stepMin) {
+        // Standard cron: every listed hour gets every step minute (:00, :30, …).
+        const taipei = ((h + 8) % 24) + m / 60
+        out.push(taipei)
+      }
+    }
+    // Unique + sort (overnight windows still work with nextRun: e.g. 20…23.5 then 0…2.5).
+    return [...new Set(out.map((x) => Math.round(x * 60) / 60))].sort((a, b) => a - b)
+  }
+
+  return []
 }
 
 /**

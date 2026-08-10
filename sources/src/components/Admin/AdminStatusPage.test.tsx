@@ -28,7 +28,8 @@ const status: AdminStatus = {
     {
       jobid: 12,
       jobname: 'macro-daily',
-      schedule: '0 13,15 * * *',
+      // schema.sql / DEV live: dense scan, not the old two-slot 0 13,15
+      schedule: '*/30 12-18 * * *',
       active: true,
       action: 'sync-macro',
       targetRef: 'wqetxuhncvfidqnklyew',
@@ -40,7 +41,8 @@ const status: AdminStatus = {
     {
       jobid: 14,
       jobname: 'market-daily',
-      schedule: '0 8-10 * * 1-5',
+      // schema.sql / DEV live: 15:00–18:30 every 30m (not legacy 16/17/18)
+      schedule: '0,30 7-10 * * 1-5',
       active: true,
       action: 'sync-market',
       targetRef: 'wqetxuhncvfidqnklyew',
@@ -131,7 +133,7 @@ describe('AdminStatusPage', () => {
     expect(section.getByText('stock-report-nightly')).toBeTruthy()
     // Scoped since 0.6.40: the timeline legend prints the same sentence, from the same cron
     expect(section.getByText('週一至週五 16:00–23:45 每 15 分')).toBeTruthy()
-    expect(section.getByText('每日 21:00 / 23:00')).toBeTruthy()
+    expect(section.getByText('每日 20:00–次日 02:30 每 30 分')).toBeTruthy()
   })
 
   it('時間軸圖例分開交代兩套排程，且都取自 pg_cron（0.6.40）', async () => {
@@ -146,7 +148,7 @@ describe('AdminStatusPage', () => {
     */
     const legend = container.querySelector('.ast-rule')!
     expect(legend.textContent).toContain('週一至週五 16:00–23:45 每 15 分')
-    expect(legend.textContent).toContain('週一至週五 16:00 / 17:00 / 18:00')
+    expect(legend.textContent).toContain('週一至週五 15:00–18:30 每 30 分')
     expect(legend.textContent).toContain('三大法人・全市場')
   })
 
@@ -168,7 +170,7 @@ describe('AdminStatusPage', () => {
       screen.getByRole('heading', { name: '台股全市場・量能與三大法人' }).closest('.section')!,
     )
     // The cycle directly translates market-daily's cron, and the front-end does not save a separate copy of the constants.
-    expect(section.getByText('週一至週五 16:00 / 17:00 / 18:00')).toBeTruthy()
+    expect(section.getByText('週一至週五 15:00–18:30 每 30 分')).toBeTruthy()
     expect(section.getByText('2026-07-31')).toBeTruthy() // 最新交易日
     expect(section.getByText('2026-07-30')).toBeTruthy() // 法人只到前一天，正常
     expect(section.getByText('1 天待補')).toBeTruthy()
@@ -293,13 +295,14 @@ describe('AdminStatusPage', () => {
     expect(screen.queryByText('新聞檔')).toBeNull()
   })
 
-  it('總經班次軸標出兩班與各自是否已執行', async () => {
+  it('總經班次軸：密集掃描顯示 pg_cron 白話而非假兩班', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
     await screen.findByText(/今日班次/)
-    // macro-daily is 0 13,15 UTC → Taipei 21:00 / 23:00
-    expect(screen.getByText(/21:00・/)).toBeTruthy()
-    expect(screen.getByText(/23:00・/)).toBeTruthy()
+    // macro-daily is */30 12-18 UTC → Taipei 20:00–02:30 /30m (dense, collapsed UI)
+    expect(screen.getByText('密集掃描')).toBeTruthy()
+    // Same phrase appears on the schedule table and the dense-shift axis — both from describeCron.
+    expect(screen.getAllByText(/20:00–次日 02:30 每 30 分/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('美東發布')).toBeTruthy()
   })
 

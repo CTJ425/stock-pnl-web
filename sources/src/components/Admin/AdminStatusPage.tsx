@@ -516,9 +516,9 @@ export function AdminStatusPage() {
             尚未執行
           </span>
           <span className="ast-rule">
-            BEA / BLS 在美東 8:30 發布 ＝ <b>夏令台北 20:30、冬令 21:30</b>。21:00
-            那班在冬令會跑在發布之前 —— 這正是 0.6.11 之前總經固定慢一天的成因，
-            現在兩班都會實際去問 FRED，內容變了才寫檔。
+            BEA / BLS 在美東 8:30 發布 ＝ <b>夏令台北 20:30、冬令 21:30</b>。
+            抓取時刻以 pg_cron 的 <code>macro-daily</code> 為準（排程表有白話）；
+            密集掃描時每班都會問 FRED，內容變了才寫檔。
           </span>
         </div>
 
@@ -533,7 +533,7 @@ export function AdminStatusPage() {
               <span style={{ left: '100%' }}>24:00</span>
             </div>
 
-            {/* US release window: 20:30–21:30 in summer covers both daylight-saving cases */}
+            {/* US release window: 20:30–21:30 covers both daylight-saving cases */}
             <DayRow
               label="美東發布"
               hint="8:30 ET"
@@ -549,23 +549,62 @@ export function AdminStatusPage() {
               </span>
             </DayRow>
 
-            {macroShifts.map((s, i) => (
-              <DayRow
-                key={s.hour}
-                label={`第${i === 0 ? '一' : '二'}班`}
-                hint={hourLabel(s.hour)}
-                nowHour={nowHour}
-                end={<Pill state={s.done ? 'ok' : 'idle'} text={s.done ? '已執行' : '待執行'} />}
-              >
-                <div
-                  className={s.done ? 'ast-hit ast-ok' : 'ast-next-run'}
-                  style={{ left: `${dayPercent(s.hour)}%` }}
-                />
-                <span className="ast-hit-t" style={{ left: `${dayPercent(s.hour)}%` }}>
-                  {hourLabel(s.hour)}・{s.done ? '已執行' : '尚未執行'}
-                </span>
-              </DayRow>
-            ))}
+            {/*
+              Few shifts (legacy two-slot cron): one row per hour.
+              Dense scan (step every 30m over a UTC hour range): collapse — 14 half-hours is unreadable.
+            */}
+            {macroShifts.length > 0 && macroShifts.length <= 4
+              ? macroShifts.map((s, i) => (
+                  <DayRow
+                    key={s.hour}
+                    label={`第${i + 1}班`}
+                    hint={hourLabel(s.hour)}
+                    nowHour={nowHour}
+                    end={
+                      <Pill state={s.done ? 'ok' : 'idle'} text={s.done ? '已執行' : '待執行'} />
+                    }
+                  >
+                    <div
+                      className={s.done ? 'ast-hit ast-ok' : 'ast-next-run'}
+                      style={{ left: `${dayPercent(s.hour)}%` }}
+                    />
+                    <span className="ast-hit-t" style={{ left: `${dayPercent(s.hour)}%` }}>
+                      {hourLabel(s.hour)}・{s.done ? '已執行' : '尚未執行'}
+                    </span>
+                  </DayRow>
+                ))
+              : macroShifts.length > 4
+                ? (() => {
+                    const job = (data.schedules ?? []).find((s) => s.action === 'sync-macro')
+                    // Overnight window sorts as 0…2.5 then 20…23.5 — bar from evening start only.
+                    const evening = macroShifts.map((s) => s.hour).filter((h) => h >= 12)
+                    const markAt = evening.length ? Math.min(...evening) : macroShifts[0]!.hour
+                    const anyDone = macroShifts.some((s) => s.done)
+                    const allDone = macroShifts.every((s) => s.done)
+                    return (
+                      <DayRow
+                        key="macro-dense"
+                        label="密集掃描"
+                        hint={`${macroShifts.length} 班`}
+                        nowHour={nowHour}
+                        end={
+                          <Pill
+                            state={allDone ? 'ok' : anyDone ? 'warn' : 'idle'}
+                            text={allDone ? '今日窗已過' : anyDone ? '進行中' : '待執行'}
+                          />
+                        }
+                      >
+                        <div
+                          className={anyDone ? 'ast-hit ast-ok' : 'ast-next-run'}
+                          style={{ left: `${dayPercent(markAt)}%` }}
+                        />
+                        <span className="ast-hit-t" style={{ left: `${dayPercent(markAt)}%` }}>
+                          {job ? describeCron(job.schedule) : hourLabel(markAt)}
+                        </span>
+                      </DayRow>
+                    )
+                  })()
+                : null}
 
             {/* Last data change: its own row, because it does not necessarily happen at a shift time (it can be triggered manually) */}
             <DayRow

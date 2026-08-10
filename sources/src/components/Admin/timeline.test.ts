@@ -275,6 +275,17 @@ describe('cronHoursTaipei / nextRun（總經班次軸）', () => {
     expect(cronHoursTaipei('*/15 8-15 * * 1-5')).toEqual([])
   })
 
+  it('macro-daily 密集掃描 */30 12-18 UTC → 台北 20:00–02:30 每半小時', () => {
+    const hours = cronHoursTaipei('*/30 12-18 * * *')
+    // Sorted 0–23: overnight tail (0…2.5) then evening (20…23.5)
+    expect(hours).toContain(20)
+    expect(hours).toContain(20.5)
+    expect(hours).toContain(23.5)
+    expect(hours).toContain(0)
+    expect(hours).toContain(2.5)
+    expect(hours).toHaveLength(14) // 7h × 2
+  })
+
   it('下一班是今天的下一個時刻', () => {
     expect(nextRun([21, 23], 14.5)).toEqual({ hour: 21, tomorrow: false, inHours: 6.5 })
     expect(nextRun([21, 23], 21.5)).toEqual({ hour: 23, tomorrow: false, inHours: 1.5 })
