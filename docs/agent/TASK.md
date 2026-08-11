@@ -17,12 +17,12 @@
   Fixed — see PROGRESS 0.7.4. **The 0.7.3 ticks for those three sources are not usable data.**
 - Admin probe panel: one row per source + hit progress bar + expandable log. 「排程」table removed.
 - Fixed after-hours crons still **off**; only `source-probe` `*/5 * * * *`.
-- PROD Edge stock-report **v40** (0.7.3 bundle) — **needs redeploy for the fix**, see Task 84.
+- PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
 - After validation: restore generate/market/macro/fx schedules.
 - **Open bugs: none.**
 
 ### Task 84: 0.7.4 ship
-- **Status**: 🔄 DEV live; PROD Edge + main merge outstanding
+- **Status**: ✅ shipped DEV+PROD; only the two-day read-out remains
 - **Agent**: Claude
 - **Timestamp**: 2026-08-11 13:25:00 Asia/Taipei
 
@@ -31,8 +31,8 @@
 3. ~~Admin: one row per probe, progress bar, expandable log; delete 排程 table~~ ✅
 4. ~~Tests (959 passed) + live-endpoint check of all four predicates~~ ✅
 5. ~~DEV volume-copy + functions restart + probe fires 200~~ ✅
-6. **PROD Edge `stock-report --no-verify-jwt`** —— ⏳ needs `SUPABASE_ACCESS_TOKEN` in shell
-7. **Merge `main` + push** (Pages ships the admin rework) —— ⏳
+6. ~~PROD Edge `stock-report` v40 → **v41** (`--no-verify-jwt`); anon smoke 401/401/400~~ ✅
+7. ~~Merge `main` + push (Pages ships the admin rework)~~ ✅ `ac3911b`
 8. **Read the 15:00–22:45 windows tomorrow** and decide the real schedule —— ⏳
 
 > Observability lost with the 排程 table: no screen now shows which environment a cron targets

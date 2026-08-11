@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: 0.7.4 fix three always-true probe hits; admin "one row per probe"
-- Status: **DEV live; PROD Edge pending token**
-- Timestamp: 2026-08-11 13:25:00 Asia/Taipei
+- Status: **live DEV+PROD**
+- Timestamp: 2026-08-11 13:30:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
@@ -63,7 +63,15 @@ observation would have concluded "these three land before their window opens", w
 
 - DEV: volume-copy `index.ts` / `sourceProbePlan.ts` + restart `stock-pnl-web-dev-functions-1`;
   manual probe fire → HTTP 200, `taipei_time 13:15`, `sources: []` (first window is 15:00 — expected).
-- PROD Edge: **not yet** — `SUPABASE_ACCESS_TOKEN` is not in this shell. User authorized the deploy.
+- PROD (`kxnxadaghidwumqsqneu`), user-authorized, deployed from clean tree at `ac3911b`:
+  `stock-report` **v40 → v41**, `verify_jwt=false` (`--no-verify-jwt`),
+  `ezbr_sha256` `6ea97d1b…` → **`9194ae6fb9bcdb0673b738ee3e5d93456d58b9ca0fb6cd0936f948b7752353ce`**,
+  updated 2026-08-11 05:24:33 UTC.
+  Anon smoke: `probe` **401**, `generate-chips` **401**, `unknown-xyz` **400** — gate intact.
+  Token supplied in chat and used only in the deploy shell env; **user should rotate it**.
+- `main` and `dev` both at `ac3911b`; Pages ships the admin rework on the `main` push.
+- **Not verified from here**: PROD's own `cron.job` rows (no DB credentials in this shell). 0.7.3
+  recorded them as set; confirm on the admin page that `source-probe` is the only active one.
 
 ---
 
