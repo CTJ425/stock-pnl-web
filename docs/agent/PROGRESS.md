@@ -1,12 +1,21 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Archive PROGRESS before 2026-08-10; README testing section
-- Status: **docs**
-- Timestamp: 2026-08-11 09:50:00 Asia/Taipei
+- Action: Release 0.7.1 — tests green; merge main
+- Status: **release**
+- Timestamp: 2026-08-11 10:05:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 10:05:00 Asia/Taipei (release 0.7.1)
+
+- Verified `dev`: `npm test` 942 passed; `tsc --noEmit` clean; working tree clean (scratchpad untracked only)
+- Commits vs main: macro TW/US tabs + institutional table/spark (dev.1–3) + BUG-024 stock-report helpers + docs/skills
+- Version finalized **0.7.1**; CHANGELOG official entry; push `dev` → merge `main` → sync `main:dev`
+- **Not** deploying PROD Edge (needs explicit authorize); Pages ships frontend on main push
 
 ---
 
