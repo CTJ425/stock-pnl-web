@@ -44,11 +44,29 @@ describe('twQuoteTtlMs', () => {
    * The screen displays "Intraday" all the way, and the opening high and low volume are all "-".
    */
   it('撮合時間未達 13:30 就不鎖夜（收盤撮合尚未落地）', () => {
-    expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:29:58')).toBe(RETRY)
     expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:30:00')).toBe(18 * HOUR + 54 * MIN)
   })
 
-  it('過了 14:00 仍然只鎖定案值 —— 盤中時刻的快照不會被凍一整夜', () => {
+  /*
+    BUG-025：13:30–14:00 是「收盤撮合還沒落地」的正常暫態，不是 AUDIT-02 講的來源斷線。
+    0.6.42 把十分鐘退避套用到 13:30 之後的每一刻，於是 13:30:30 那一輪拿著 13:29 的盤中快照
+    直接被判為「還新鮮十分鐘」——行情卡就一路印「盤中」與收盤前的價量到約 13:40，
+    連手動重新整理都救不了（Edge 的 price_cache 也是用這支函式判定）。
+  */
+  it('13:30–14:00 沉澱窗內，未定案的報價維持每分鐘重試（BUG-025）', () => {
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:30:00'), '13:29:58')).toBe(MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:29:58')).toBe(MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:59:59'), '13:29:58')).toBe(MIN)
+    // 沉澱窗內就算完全沒有撮合時間（Yahoo 備援）也照樣快輪，才追得回收盤價
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:45:00'), null)).toBe(MIN)
+  })
+
+  it('沉澱窗只護未定案的：拿到 13:30:00 就立刻鎖夜，不會白輪半小時', () => {
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:31:00'), '13:30:00')).toBe(18 * HOUR + 54 * MIN)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '13:59:00'), '13:30:00')).toBe(18 * HOUR + 26 * MIN)
+  })
+
+  it('過了 14:00 退回十分鐘退避 —— 沉澱窗有界，不會變成整夜每分鐘輪詢', () => {
     expect(twQuoteTtlMs(taipei('2026-08-05', '14:00:00'), '11:05:23')).toBe(RETRY)
     expect(twQuoteTtlMs(taipei('2026-08-05', '20:00:00'), '11:05:23')).toBe(RETRY)
     expect(twQuoteTtlMs(taipei('2026-08-05', '14:00:00'), '13:30:00')).toBe(18 * HOUR + 25 * MIN)

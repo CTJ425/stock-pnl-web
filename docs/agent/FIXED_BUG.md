@@ -8,6 +8,31 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-025 — 收盤後十分鐘，行情卡仍寫「盤中」且價量是收盤前的值
+- **Date**: 2026-08-11, fixed in **0.7.5**
+- **Reported**: user, 13:31 Taipei — 「應該已經是盤後了，右上角還是盤中」.
+- **Symptom**: 13:30–約 13:40 之間，個股分析「行情」右上角狀態停在 `盤中`（正確應為 `已收盤`），
+  現價／開高低／量都是收盤前最後一次撮合的值。儀表板的現價與未實現損益吃同一份報價。
+  **手動重新整理無效**。約 13:40 自行恢復。
+- **Proven, not inferred**: MIS 在 13:31 已回 `t=13:30:00`、`ip=0`（實測 2330／2317），上游沒問題。
+  `QuoteTab` 的狀態來自 `isClosed(quote)`＝`tradeTime >= '13:30:00'`，所以問題在快取沒換掉那筆
+  13:29 的報價。
+- **Root Cause**: `quoteWindow.twQuoteTtlMs` 在 08:25–13:30 之外，只要 `tradeTime` 未達 13:30:00
+  就回 `UNSETTLED_RETRY_MS = 10 分`。收盤那一輪（13:30:30）拿到的正是 13:29 的盤中快照 →
+  被判為「還新鮮十分鐘」→ 前端 60 秒輪詢空轉，一次請求都不發。
+  `UNSETTLED_RETRY_MS` 是 0.6.42 為了 AUDIT-02（Yahoo 備援永遠不回撮合時間，整夜每分鐘輪詢）
+  加的退避，但它被套用到 13:30 之後的**每一刻**，包含收盤撮合即將落地的那幾分鐘。
+  手動重新整理無效是因為 `force` 只跳過前端 L1；Edge 的 `price_cache` 用同一支函式判 TTL。
+- **Impact**: 每個交易日固定重現的十分鐘。顯示的是真實成交價，但不是收盤價，且標籤主動說謊。
+- **Fix**: 新增 `SETTLE_END_MS = 14:00` 沉澱窗——13:30–14:00 之間未定案的報價回到 `POLL_MS`
+  60 秒，過 14:00 才退回 10 分鐘。已定案的（`tradeTime >= 13:30:00`）仍立刻鎖到隔天 08:25。
+  最壞情況（整個沉澱窗 MIS 都掛）每檔多 30 次請求，有界，與 AUDIT-02 的整夜輪詢不同量級。
+  **前端與 `stock-price` Edge 兩邊都要部署**，只改一半不會生效。
+- **Regression test**: `quoteWindow.test.ts`「13:30–14:00 沉澱窗…」與 `priceProxy.test.ts`
+  「沉澱窗內每分鐘重問」——後者原本斷言的正是錯誤行為，已改寫。
+- **Not fixed here（既有問題）**: Yahoo 備援永遠回 `tradeTime: null`，`isClosed` 因此恆為 false，
+  MIS 斷線期間整天都會顯示「盤中」。那是 AUDIT-02 的第二半，需要另外標示資料來源才能解。
+
 ### Bug ID: BUG-024 — 融資／融券 both empty (chips phase 500 after 0.7.0)
 - **Date**: 2026-08-11, fixed in **0.7.1**; PROD Edge **stock-report v39**
 - **Symptom**: 個股籌碼「融資融券」整區空（融資＋融券同掛，因同一 `MarginChip`）；Admin 盤後批次在

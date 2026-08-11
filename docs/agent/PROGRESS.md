@@ -1,12 +1,30 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.4 fix three always-true probe hits; admin "one row per probe"
-- Status: **live DEV+PROD**
-- Timestamp: 2026-08-11 13:30:00 Asia/Taipei
+- Action: 0.7.5 BUG-025 post-close quote stuck on 「盤中」 for ten minutes
+- Status: **DEV live; PROD pending**
+- Timestamp: 2026-08-11 13:40:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 13:40:00 Asia/Taipei (0.7.5 BUG-025)
+
+User reported at 13:31 that the quote card still said 「盤中」. It is a fixed ten-minute window every
+trading day, not a one-off: `twQuoteTtlMs` gave any not-yet-settled quote a 10-minute backoff at every
+moment outside 08:25–13:30, so the 13:30:30 poll treated the 13:29 intraday snapshot as fresh and sent
+no request at all. Manual refresh did not help either — `force` only skips the frontend L1, and the
+Edge `price_cache` row is judged by the same function.
+
+Checked upstream first: MIS returned `t=13:30:00`, `ip=0` for 2330/2317 at 13:31, so the source was fine.
+
+Fix is a 13:30–14:00 settle window where an unsettled quote goes back to the 60-second poll; after
+14:00 the 10-minute AUDIT-02 backoff resumes, and a settled quote still locks to 08:25 immediately.
+Full detail and the two rewritten regression tests: `FIXED_BUG.md` BUG-025.
+
+**Both halves must ship** — frontend L1 and the `stock-price` Edge share `quoteWindow.ts`.
 
 ---
 

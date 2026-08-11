@@ -88,14 +88,27 @@ describe('isFresh', () => {
     expect(isFresh('TPE:2330', closed, Date.parse('2026-07-20T14:00:00Z'))).toBe(true)
   })
 
-  it('13:30 剛過但撮合還沒落地的過渡值不鎖夜，改走 10 分鐘重試（0.6.42）', () => {
+  /*
+    BUG-025. This case used to assert the opposite —— that a two-minute-old intraday snapshot is still
+    "fresh" at 13:31 —— which is precisely how the quote card stayed on 「盤中」 for ten minutes after
+    the close. Inside the 13:30–14:00 settle window the closing match is seconds away, so the row must
+    expire on the normal one-minute poll.
+  */
+  it('13:30 剛過但撮合還沒落地：沉澱窗內每分鐘重問，不是等十分鐘（BUG-025）', () => {
     // 05:31Z = Taipei 13:31, the last matching time from the source is still at 13:29:58
     vi.setSystemTime(new Date('2026-07-20T05:31:00Z'))
     const pending = quote('2026-07-20T05:29:00Z', false, '13:29:58')
-    // Two minutes old: within the retry interval, so it is not refetched on every poll…
-    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:31:00Z'))).toBe(true)
-    // …but it is emphatically not locked until tomorrow —— eleven minutes later it is asked again.
-    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:40:00Z'))).toBe(false)
+    // Two minutes old, close already passed → stale, so the next poll actually goes and fetches
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:31:00Z'))).toBe(false)
+    // 30 秒前抓的仍算新鮮，維持盤中同樣的節奏而不是每一輪都打
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:29:30Z'))).toBe(true)
+  })
+
+  it('沉澱窗結束後（14:00 起）才退回十分鐘退避', () => {
+    vi.setSystemTime(new Date('2026-07-20T08:00:00Z')) // Taipei 16:00
+    const pending = quote('2026-07-20T07:58:00Z', false, '13:29:58')
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T08:00:00Z'))).toBe(true)
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T08:09:00Z'))).toBe(false)
   })
 })
 

@@ -36,6 +36,22 @@ const POLL_MS = MINUTE_MS
  */
 const UNSETTLED_RETRY_MS = 10 * MINUTE_MS
 
+/**
+ * End of the post-close settle window: 14:00 (BUG-025).
+ *
+ * 0.6.42 applied `UNSETTLED_RETRY_MS` to **every** moment outside 08:25–13:30, and that swallowed the
+ * one moment where a fast retry is exactly what is needed. At 13:30:30 the cached row is still the
+ * 13:29 intraday snapshot: not settled, so the TTL jumped straight to ten minutes and the quote card
+ * printed 「盤中」 with pre-close numbers until ~13:40 — even on manual refresh, because the Edge's
+ * `price_cache` row is judged by this same function.
+ *
+ * Right after the close, "not settled yet" is a normal transient measured in seconds, not the outage
+ * AUDIT-02 was about. Poll it at the intraday rate for half an hour, then fall back to the ten-minute
+ * bound. Worst case (MIS down the whole window) is 30 extra requests per ticker — bounded, unlike the
+ * all-night polling that motivated the backoff.
+ */
+const SETTLE_END_MS = 14 * 60 * MINUTE_MS
+
 const CLOSE_TIME_TEXT = '13:30:00'
 
 /** "Number of milliseconds elapsed on the current day" in Taipei time (starting from 00:00:00)*/
@@ -63,7 +79,10 @@ function taipeiMsOfDay(now: Date): number {
 export function twQuoteTtlMs(now: Date, tradeTime?: string | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
-  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) return UNSETTLED_RETRY_MS
+  if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) {
+    // 13:30–14:00 的沉澱窗：收盤撮合馬上就會落地，這時退避十分鐘等於把盤中價停在畫面上
+    return t >= CLOSE_MS && t < SETTLE_END_MS ? POLL_MS : UNSETTLED_RETRY_MS
+  }
   // After closing, it will be pushed back to 08:25 tomorrow; in the early morning (t < RESUME_MS), it will be 08:25 today
   return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
 }
