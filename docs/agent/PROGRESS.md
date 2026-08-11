@@ -48,6 +48,32 @@ sources, exactly what the probe measured independently:
 
 Verification: 970/970 vitest, tsc clean, oxlint 0 errors.
 
+### ⛔ PROD is blocked on CLI auth (2026-08-11 19:00)
+
+`supabase` in this environment has **no access token** —— `SUPABASE_ACCESS_TOKEN` is unset and there is
+no stored login, so `projects list` / `functions list` / `functions deploy` all return
+`LegacyPlatformAuthRequiredError`. (The `supabase-ops` skill records these as working; that is no longer
+true here, and the skill's existing note about `functions download` failing the same way is the clue ——
+the whole platform path is unauthenticated now, not just download.) `supabase db query --linked` was
+additionally refused by the sandbox's permission classifier.
+
+So **PROD still runs the 0.7.4 Edge bundle (v41)** while `main` is at 0.7.9. Pages is current; Edge is
+five versions behind. To finish, the user runs, from `sources/`:
+
+```bash
+supabase login                       # or export SUPABASE_ACCESS_TOKEN=...
+# 1. DDL FIRST — the bundle queries this column
+supabase db query "ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS data_landed BOOLEAN;" --linked
+# 2. then the Edge half — --no-verify-jwt is mandatory (pg_cron calls with CRON_SECRET, no JWT)
+supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt
+supabase functions list --project-ref kxnxadaghidwumqsqneu   # ezbr_sha256 must change; record it vs fa57ed4
+```
+
+Order is not optional: bundle-before-column makes `readDoneSourcesToday` error, the done-set come back
+empty, and the probe re-fetch every 5 minutes. Two further things to check on PROD before assuming this
+works there at all: whether `source_probe_tick` and the `source-probe` cron job even exist on cloud, and
+that PROD's after-hours crons are still on their **untouched** schedules (only DEV was retuned in 0.7.7).
+
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
 

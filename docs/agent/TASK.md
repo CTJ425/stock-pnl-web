@@ -86,7 +86,10 @@ precisely what 0.7.8 would have mis-retired).
 9. **Watch one live round with a hit** —— ⏳ **no follow-up has fired yet.** Confirm a green cell's note
    reads `… · 已觸發 … · 資料已到位` and `data_landed = true`. Next chances: `margin` from 20:30,
    MOPS 21:00/21:05, then tomorrow's 15:00 open. This is the only step still unproven in the wild.
-10. **PROD** —— DDL + Edge, see the ship record in `PROGRESS.md`.
+10. **PROD** —— ⛔ **blocked: the `supabase` CLI has no access token in this environment**
+    (`LegacyPlatformAuthRequiredError` on every platform call; `db query --linked` also refused by the
+    sandbox classifier). PROD Edge is therefore still the **0.7.4 bundle (v41)** while `main` is 0.7.9.
+    Exact commands + the mandatory DDL-before-bundle order: ship record in `PROGRESS.md`.
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
