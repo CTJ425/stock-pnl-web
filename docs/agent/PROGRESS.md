@@ -2,8 +2,8 @@
 
 - Agent: Claude
 - Action: 0.7.5 BUG-025 post-close quote stuck on 「盤中」 for ten minutes
-- Status: **DEV live; PROD pending**
-- Timestamp: 2026-08-11 13:40:00 Asia/Taipei
+- Status: **live DEV+PROD**
+- Timestamp: 2026-08-11 13:42:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
@@ -25,6 +25,15 @@ Fix is a 13:30–14:00 settle window where an unsettled quote goes back to the 6
 Full detail and the two rewritten regression tests: `FIXED_BUG.md` BUG-025.
 
 **Both halves must ship** — frontend L1 and the `stock-price` Edge share `quoteWindow.ts`.
+
+### Deploy (0.7.5, commit `1a6bc88`, `main` = `dev`)
+
+- DEV: volume-copy `quoteWindow.ts` into `stock-price` + restart functions. `price_cache` then held
+  `trade_time 13:30:00` for every TPE row (2208 / 2609 / 8033 / 2317 / 2059) at 13:38:40.
+- PROD `kxnxadaghidwumqsqneu`: `stock-price` **v17 → v18**, `verify_jwt=true` **preserved**
+  (no `--no-verify-jwt` — this one is user-facing), sha `17fc299c81a8d91e…`, 05:39:31 UTC.
+  Anon smoke → 401. `stock-report` untouched at v41.
+- Pages ships the frontend half on the `main` push.
 
 ---
 
