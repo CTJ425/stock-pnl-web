@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>台股盤後排程甘特圖 · 0.7.2 + 建議 market-data / history</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel2: #18233a;
+      --border: #2a3a55;
+      --text: #e8eef9;
+      --muted: #93a4c3;
+      --grid: #1e2b42;
+      --chip: #3b82f6;
+      --market: #14b8a6;
+      --mdata: #a78bfa;
+      --hist: #f59e0b;
+      --macro: #64748b;
+      --risk: #f43f5e;
+      --ok: #22c55e;
+      --warn: #eab308;
+      --source: #38bdf8;
+      --close: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2744 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 28px 20px 64px;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    h1 { font-size: 1.55rem; margin: 0 0 6px; letter-spacing: 0.02em; }
+    h2 {
+      font-size: 1.1rem;
+      margin: 28px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      color: #dbe7ff;
+    }
+    .sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 20px; }
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .badge.on { background: #16301f; border-color: #245c38; color: #86efac; }
+    .badge.prop { background: #2a2140; border-color: #5b4a8a; color: #ddd6fe; }
+    .badge.risk { background: #3a1520; border-color: #7f1d1d; color: #fecaca; }
+
+    /* Gantt */
+    .gantt-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    }
+    .gantt-head {
+      display: grid;
+      grid-template-columns: 168px 1fr;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel2);
+    }
+    .gantt-label {
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-right: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+    }
+    .axis {
+      position: relative;
+      height: 44px;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(100% / 12 - 1px),
+          var(--grid) calc(100% / 12 - 1px),
+          var(--grid) calc(100% / 12)
+        );
+    }
+    .axis-tick {
+      position: absolute;
+      top: 8px;
+      transform: translateX(-50%);
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .axis-tick.close { color: var(--close); font-weight: 600; }
+    .row {
+      display: grid;
+      grid-template-columns: 168px 1fr;
+      border-bottom: 1px solid #1a2538;
+      min-height: 52px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row-name {
+      padding: 10px 12px;
+      border-right: 1px solid var(--border);
+      font-size: 0.82rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      background: #0f1728;
+    }
+    .row-name small { color: var(--muted); font-size: 0.7rem; }
+    .track {
+      position: relative;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(100% / 12 - 1px),
+          var(--grid) calc(100% / 12 - 1px),
+          var(--grid) calc(100% / 12)
+        );
+    }
+    /* 13:30 = 0, 01:30 next day = 12h → use 13:30–01:30 as 12h span */
+    .bar {
+      position: absolute;
+      top: 14px;
+      height: 24px;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .bar.thin { height: 18px; top: 17px; opacity: 0.85; }
+    .bar.chip { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+    .bar.market { background: linear-gradient(90deg, #0f766e, #14b8a6); }
+    .bar.mdata { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+    .bar.hist { background: linear-gradient(90deg, #d97706, #f59e0b); color: #1a1200; }
+    .bar.source {
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(56,189,248,.25),
+        rgba(56,189,248,.25) 4px,
+        rgba(56,189,248,.12) 4px,
+        rgba(56,189,248,.12) 8px
+      );
+      border: 1px dashed #38bdf8;
+      color: #bae6fd;
+      font-weight: 500;
+    }
+    .bar.dashed {
+      background: transparent;
+      border: 1.5px dashed #a78bfa;
+      color: #ddd6fe;
+    }
+    .bar.hist-dashed {
+      background: transparent;
+      border: 1.5px dashed #f59e0b;
+      color: #fde68a;
+    }
+    .vline {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: rgba(251,113,133,.55);
+      z-index: 1;
+      pointer-events: none;
+    }
+    .vline::after {
+      content: attr(data-label);
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      font-size: 0.62rem;
+      color: var(--close);
+      white-space: nowrap;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      padding: 12px 14px;
+      background: var(--panel2);
+      border-top: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .swatch {
+      display: inline-block;
+      width: 14px; height: 10px;
+      border-radius: 3px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel2);
+      color: #c5d4f0;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    .tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 1px 7px;
+      border-radius: 4px;
+      margin-right: 4px;
+    }
+    .tag.live { background: #14532d; color: #86efac; }
+    .tag.suggest { background: #4c1d95; color: #e9d5ff; }
+    .tag.official { background: #0c4a6e; color: #bae6fd; }
+    .tag.measured { background: #713f12; color: #fde68a; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 0.92rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card p, .card li { font-size: 0.84rem; color: var(--muted); margin: 0; }
+    .card ul { margin: 6px 0 0; padding-left: 1.15rem; }
+    .card li { margin: 4px 0; }
+    .sev {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block;
+    }
+    .sev.high { background: var(--risk); }
+    .sev.med { background: var(--warn); }
+    .sev.low { background: var(--ok); }
+
+    .note {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid #3b82f6;
+      background: rgba(59,130,246,.08);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+    footer {
+      margin-top: 28px;
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.8em;
+      background: #0f172a;
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #93c5fd;
+    }
+    @media (max-width: 720px) {
+      .gantt-head, .row { grid-template-columns: 110px 1fr; }
+      .bar { font-size: 0.58rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>台股盤後排程甘特圖</h1>
+    <p class="sub">
+      <span class="badge on">0.7.2 已上線</span>
+      <span class="badge prop">建議 market-data / history</span>
+      <span class="badge risk">風險 · Cloud latency</span>
+      · 時間軸自<strong>收盤 13:30</strong> 起至次日 01:30（台北）· 獨立 HTTP、不併 <code>generate-all</code>
+    </p>
+
+    <h2>1. 甘特圖 · 交易日時序</h2>
+    <div class="gantt-panel">
+      <div class="gantt-head">
+        <div class="gantt-label">來源 / 排程</div>
+        <div class="axis" id="axis"></div>
+      </div>
+
+      <!-- Source availability (not cron) -->
+      <div class="row">
+        <div class="row-name">
+          收盤 / 盤後定價
+          <small>市場制度</small>
+        </div>
+        <div class="track">
+          <div class="vline" style="left:0%" data-label="13:30"></div>
+          <div class="bar source thin" style="left:0%; width:8.33%" title="一般交易收盤 13:30">收盤</div>
+          <div class="bar source thin" style="left:4.17%; width:8.33%; top:28px" title="盤後定價 14:00–14:30">盤後定價</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          BFI82U 窗口
+          <small>全市場法人 · 約 15:00 起</small>
+        </div>
+        <div class="track">
+          <div class="bar source" style="left:12.5%; width:12.5%" title="~15:00–15:45 常見可用">~15:00–15:45</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          T86 窗口
+          <small>個股法人 · 會改寫</small>
+        </div>
+        <div class="track">
+          <div class="bar source" style="left:20.83%; width:16.67%" title="~16:00–16:45+">~16:00–16:45+</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          BWIBBU 估值
+          <small>官方約 18:00 產製</small>
+        </div>
+        <div class="track">
+          <div class="bar source" style="left:37.5%; width:8.33%" title="~18:00">~18:00</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          融資 / 借券窗
+          <small>~21:00 / 20:30·22:30</small>
+        </div>
+        <div class="track">
+          <div class="bar source" style="left:58.33%; width:20.83%" title="融資~21:00+ 借券20:30/22:30">~20:30–22:30</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          月營收申報
+          <small>日曆 1–10 日陸續</small>
+        </div>
+        <div class="track">
+          <div class="bar source" style="left:0%; width:100%; opacity:.55" title="非每日鐘點；每月截止日前陸續">非固定鐘點 · 每月上旬全日陸續</div>
+        </div>
+      </div>
+
+      <!-- Live crons 0.7.2 -->
+      <div class="row">
+        <div class="row-name">
+          market-daily
+          <small><span class="tag live">已上線</span>sync-market</small>
+        </div>
+        <div class="track">
+          <div class="bar market" style="left:16.67%; width:2.08%" title="15:30">15:30</div>
+          <div class="bar market" style="left:18.75%; width:2.08%" title="15:45">15:45</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          stock-report-nightly
+          <small><span class="tag live">已上線</span>generate-chips</small>
+        </div>
+        <div class="track">
+          <div class="bar chip" style="left:25%; width:2.08%" title="16:30 T86">16:30</div>
+          <div class="bar chip" style="left:27.08%; width:2.08%" title="16:45 T86 freeze">16:45</div>
+          <div class="bar chip" style="left:66.67%; width:2.08%" title="21:30 margin">21:30</div>
+          <div class="bar chip" style="left:68.75%; width:2.08%" title="21:45 margin">21:45</div>
+        </div>
+      </div>
+
+      <!-- Proposed -->
+      <div class="row">
+        <div class="row-name">
+          market-data（建議）
+          <small><span class="tag suggest">建議</span>generate-market-data</small>
+        </div>
+        <div class="track">
+          <div class="bar mdata" style="left:31.25%; width:4.17%" title="17:15 主班 日K+估值">17:15 主</div>
+          <div class="bar mdata dashed" style="left:70.83%; width:4.17%" title="22:00 保險班">22:00 保險</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          history（建議）
+          <small><span class="tag suggest">建議</span>generate-history</small>
+        </div>
+        <div class="track">
+          <div class="bar hist" style="left:34.72%; width:4.17%" title="17:20 一輪 月4+季2">17:20</div>
+          <div class="bar hist hist-dashed" style="left:73.61%; width:4.17%" title="22:05 同日第二輪">22:05</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">
+          錯開禁區
+          <small>避免與 chips 同秒</small>
+        </div>
+        <div class="track">
+          <div class="bar thin" style="left:25%; width:4.17%; background:rgba(244,63,94,.25); border:1px solid rgba(244,63,94,.5); color:#fecaca" title="16:30-16:45 chips">chips</div>
+          <div class="bar thin" style="left:66.67%; width:4.17%; background:rgba(244,63,94,.25); border:1px solid rgba(244,63,94,.5); color:#fecaca" title="21:30-21:45 chips">chips</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i class="swatch" style="background:#38bdf8;opacity:.5"></i>來源可用窗（非 cron）</span>
+        <span><i class="swatch" style="background:#14b8a6"></i>sync-market 已上線</span>
+        <span><i class="swatch" style="background:#3b82f6"></i>generate-chips 已上線</span>
+        <span><i class="swatch" style="background:#a78bfa"></i>generate-market-data 建議</span>
+        <span><i class="swatch" style="background:#f59e0b"></i>generate-history 建議</span>
+        <span>實線 = 主班 · 虛線 = 保險／第二輪</span>
+      </div>
+    </div>
+
+    <p class="note">
+      <strong>時間軸換算：</strong>左緣 = 13:30，每格 1 小時，右緣 = 次日 01:30（共 12 小時）。
+      例如 15:30 → (15:30−13:30)/12 = 16.67%；22:00 → 70.83%。
+      月營收／季報<strong>沒有</strong>「每天固定鐘點」；甘特上以全日底色表示「截止日前陸續」。
+    </p>
+
+    <h2>2. 排程一覽（已上線 vs 建議）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>狀態</th>
+          <th>Job / Action</th>
+          <th>台北時間</th>
+          <th>UTC cron（例）</th>
+          <th>對準資料</th>
+          <th>預期 wall 時間</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag live">已上線</span></td>
+          <td><code>market-daily</code><br/>sync-market</td>
+          <td>15:30 / 15:45</td>
+          <td><code>30,45 7 * * 1-5</code></td>
+          <td>BFI82U、FMTQIK 等全市場</td>
+          <td>~5–15s（齊後 skip ~0 外部）</td>
+        </tr>
+        <tr>
+          <td><span class="tag live">已上線</span></td>
+          <td><code>stock-report-nightly</code><br/>generate-chips</td>
+          <td>16:30 / 16:45<br/>21:30 / 21:45</td>
+          <td><code>30,45 8,13 * * 1-5</code></td>
+          <td>T86；融資／借券；持股報告</td>
+          <td>首抓 ~10–40s+；齊後短路</td>
+        </tr>
+        <tr>
+          <td><span class="tag suggest">建議主</span></td>
+          <td><code>stock-report-market-data</code><br/>generate-market-data</td>
+          <td><strong>17:15</strong></td>
+          <td><code>15 9 * * 1-5</code></td>
+          <td>日 K（Yahoo）+ 估值／當日 fundamental</td>
+          <td>持股數 × Yahoo；二次多 skipped</td>
+        </tr>
+        <tr>
+          <td><span class="tag suggest">建議主</span></td>
+          <td><code>stock-report-history</code><br/>generate-history</td>
+          <td><strong>17:20</strong>（market-data +5m）</td>
+          <td><code>20 9 * * 1-5</code></td>
+          <td>月營收史 ≤4 月/輪；季報 ≤2 季/輪</td>
+          <td>MOPS 重；可能 30–90s+</td>
+        </tr>
+        <tr>
+          <td><span class="tag suggest">建議保險</span></td>
+          <td>同上兩個 action</td>
+          <td><strong>22:00</strong> / <strong>22:05</strong></td>
+          <td><code>0,5 14 * * 1-5</code></td>
+          <td>估值晚到、history 第二輪、融資後仍可補檔</td>
+          <td>多半 skip；新股／截止日前才重</td>
+        </tr>
+        <tr>
+          <td>—</td>
+          <td>macro-daily / fx-daily</td>
+          <td>既有密集／兩班</td>
+          <td>（不變）</td>
+          <td>美總經、匯率</td>
+          <td>與台股錯開即可</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. 資料來源時間 vs 排程對齊</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>資料</th>
+          <th>公開／實務時點</th>
+          <th>類型</th>
+          <th>建議對齊</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>收盤 / 盤後定價</td>
+          <td>13:30；14:00–14:30</td>
+          <td><span class="tag official">制度</span></td>
+          <td>日 K 不早於 14:30 後</td>
+        </tr>
+        <tr>
+          <td>BFI82U 全市場法人</td>
+          <td>~15:00–15:30 起常見</td>
+          <td><span class="tag measured">實務</span></td>
+          <td>已：15:30／15:45</td>
+        </tr>
+        <tr>
+          <td>T86 個股法人</td>
+          <td>~16:00 後較完整；會改寫</td>
+          <td><span class="tag measured">實務+本專案實測</span></td>
+          <td>已：16:30／16:45</td>
+        </tr>
+        <tr>
+          <td>BWIBBU 本益比等</td>
+          <td>證交所說明約<strong>每日 18:00</strong>產製</td>
+          <td><span class="tag official">官方說明</span></td>
+          <td>建議 17:15 可能偏早 → <strong>22:00 保險</strong>補估值</td>
+        </tr>
+        <tr>
+          <td>融資融券</td>
+          <td>晚間彙整；常見 ~21:00+</td>
+          <td><span class="tag official">官方晚間</span></td>
+          <td>已：21:30／21:45</td>
+        </tr>
+        <tr>
+          <td>借券相關</td>
+          <td>~20:30 與 ~22:30 二次更新</td>
+          <td><span class="tag official">官方</span></td>
+          <td>21:45 主；極晚改寫靠次日或後續補洞</td>
+        </tr>
+        <tr>
+          <td>月營收</td>
+          <td><strong>次月 10 日前</strong>；公司 1–10 日任意時申報</td>
+          <td><span class="tag official">法規截止</span></td>
+          <td>每日 1–2 輪 history；上旬較有感</td>
+        </tr>
+        <tr>
+          <td>季報／年報</td>
+          <td>Q1 5/15、Q2 8/14、Q3 11/14、年報 ~3/31 前</td>
+          <td><span class="tag official">法規截止</span></td>
+          <td>同 history；滿 12 季約需多日多輪</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. 風險評估</h2>
+    <div class="cards">
+      <div class="card">
+        <h3><span class="sev high"></span> Supabase Cloud 546 / wall</h3>
+        <ul>
+          <li>單 isolate 串 chips+daily+history 易 546 → <strong>禁止併回 generate-all</strong></li>
+          <li>cloud 約 ~150s wall；history 單輪 MOPS 大檔可能吃滿</li>
+          <li><strong>緩解：</strong>每 action 獨立 HTTP；錯開 ≥5 分鐘；持股少時較穩</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="sev high"></span> pg_net / cron 延遲</h3>
+        <ul>
+          <li>cron 觸發 ≠ Edge 立刻跑完；高峰時 queue 可延數秒～數十秒</li>
+          <li>timeout_milliseconds 需足夠（現有 60s；history 若常踩線可提到 120s）</li>
+          <li>同分鐘多 job 互搶 → 甘特上 chips 禁區勿重疊</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="sev med"></span> 資料窗 miss</h3>
+        <ul>
+          <li>BFI/T86 兩班可能雙 miss（來源晚）</li>
+          <li>17:15 market-data 時 BWIBBU 可能尚未 18:00 → 靠 22:00 保險</li>
+          <li>借券 22:30 更新晚於 21:45 → 當日可能不完整</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="sev med"></span> history 12/12 速度</h3>
+        <ul>
+          <li>一輪：月 ≤4、季 ≤2 → 季滿約需 <strong>6 輪</strong></li>
+          <li>一天 2 輪 ≈ 3 交易日近 12 季（優於完全無自動）</li>
+          <li>新股仍可 warm / 手動加速</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="sev med"></span> 外部源限流 / 空回</h3>
+        <ul>
+          <li>Yahoo 空回不覆蓋既有 daily（0.6.50）</li>
+          <li>MOPS 大檔記憶體；MAX_BACKFILL_QUARTERS=2 是刻意保守</li>
+          <li>TWSE RST 等：market 短路、history 下輪再試</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="sev low"></span> 密操作 / 文案</h3>
+        <ul>
+          <li>job 必須<strong>分開命名</strong>，避免再以為 nightly=整包</li>
+          <li>改線上用 <code>cron.alter_job</code>，勿重灌 secret</li>
+          <li>Admin dueBy / ACTION_SCOPE 同步</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>5. 建議落地順序</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>動作</th><th>風險</th><th>驗收</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>新增 <code>stock-report-market-data</code>：17:15 + 22:00，action=<code>generate-market-data</code></td>
+          <td><span class="sev low"></span> 低</td>
+          <td>二次跑 <code>dailySkipped</code>/<code>allCached</code> 高</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>新增 <code>stock-report-history</code>：17:20 + 22:05，action=<code>generate-history</code></td>
+          <td><span class="sev med"></span> 中（wall）</td>
+          <td>持股 <code>revenueMonths</code>/<code>profitQuarters</code> 跨日增長</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>pg_net timeout 若 history 常 timeout → 該 job 調 90–120s</td>
+          <td><span class="sev med"></span></td>
+          <td>net._http_response 非 null timeout</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Admin 文案 + 時間軸 dueBy</td>
+          <td><span class="sev low"></span></td>
+          <td>排程表可讀、無「未解析」</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>（可選）觀測 1–2 週後再加深夜 chips 補洞</td>
+          <td><span class="sev low"></span></td>
+          <td>BFI/T86 命中率</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>6. 設計原則（摘要）</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>要做</h3>
+        <ul>
+          <li>phase 分開 HTTP（對齊 0.6.49 free tier）</li>
+          <li>market-data → +5m → history 順序</li>
+          <li>主班對準來源窗；保險班對準晚到／第二輪</li>
+          <li>齊了短路，多班成本可控</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>不要做</h3>
+        <ul>
+          <li>cron body 再塞回 generate-all 一把抓</li>
+          <li>與 chips 同分鐘連打</li>
+          <li>假設月營收「每天 21:00 統一更新」</li>
+          <li>unschedule+schedule 重寫 CRON_SECRET</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      stock-pnl-web · schedule Gantt · 文件版本對應產品 0.7.2 稀疏籌碼 + 建議 market-data/history ·
+      法規截止與鐘點來源：證交所／券商公開說明 + 專案 batch 實測註記 · 鐘點窗會隨量能浮動，以 batch_run_log 校準為準。
+    </footer>
+  </div>
+
+  <script>
+    // Build hour axis labels: 13:30 .. 01:30 (12 hours)
+    const axis = document.getElementById('axis');
+    const startMin = 13 * 60 + 30; // 13:30
+    for (let i = 0; i <= 12; i++) {
+      const total = startMin + i * 60;
+      const day = Math.floor(total / (24 * 60));
+      const m = total % (24 * 60);
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = String(m % 60).padStart(2, '0');
+      const el = document.createElement('span');
+      el.className = 'axis-tick' + (i === 0 ? ' close' : '');
+      el.style.left = (i / 12 * 100) + '%';
+      el.textContent = (day ? '次' : '') + hh + ':' + mm;
+      axis.appendChild(el);
+    }
+  </script>
+</body>
+</html>

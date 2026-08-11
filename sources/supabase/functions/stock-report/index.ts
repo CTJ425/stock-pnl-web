@@ -89,6 +89,7 @@ import {
   extractValuation,
   mergeProfitQuarters,
   mergeRevenueMonths,
+  rocDate,
   PROFIT_QUARTERS_CAP,
   REVENUE_MONTHS_CAP,
   type FundamentalFile,
@@ -1158,6 +1159,8 @@ async function syncFundamental(
   // The valuation file comes with the date of the Republic of China (for example: '1150724'). Enter batch_run_log to answer the question
   // "When will the fundamentals be updated?" - Originally, only the synced count was recorded, and that number would be interfered with by "new stocks".
   const bwibbuDate = bwibbu?.[0]?.Date ?? null
+  /** The valuation day this round actually holds (YYYY-MM-DD), or null if nothing was fetched. */
+  const freshValuationDay = rocDate(bwibbuDate)
   // If all failed, skip the entire section. As long as one is caught, the file will be written as usual——
   // buildFundamentalFile will retain the existing fields and will not overwrite the uncaptured parts into empty shells.
   if (!bwibbu && !revenue && !company && !profit) {
@@ -1169,8 +1172,24 @@ async function syncFundamental(
   for (const { ticker, name } of tickers) {
     try {
       const existing = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
-      // Already written for this trading day — keep file, no rewrite (avoids thrash; does not drop data).
-      if (existing && existing.schema === FUNDAMENTAL_SCHEMA && existing.dataDate >= targetDate) {
+      /*
+        Already written for this trading day — keep file, no rewrite (avoids thrash; does not drop data).
+
+        The valuation clause is the 0.7.11 half of BUG-024. `dataDate` records **which trading day the
+        file was built for**, not how fresh the valuation inside is, so a file built earlier today from
+        the stale snapshot was sealed for the rest of the day —— the endpoint fix alone would still not
+        have reached it. Rewrite when this round holds a valuation day the file does not yet carry;
+        when nothing fresh was fetched (`freshValuationDay` null, e.g. not published yet) the original
+        seal stands and nothing thrashes.
+      */
+      const valuationCurrent =
+        !freshValuationDay || existing?.valuation?.dataDate === freshValuationDay
+      if (
+        existing &&
+        existing.schema === FUNDAMENTAL_SCHEMA &&
+        existing.dataDate >= targetDate &&
+        valuationCurrent
+      ) {
         skipped++
         continue
       }
@@ -2437,8 +2456,11 @@ function advanced(before: string | null | undefined, after: string | null | unde
  * 取一檔代表即可（與 `latestChipSources` 同一個取捨）：這幾個來源都是整份全市場一起出，
  * 一檔到位就是全部到位；為此把上百檔全下載回來只為了看日期並不划算。
  */
+/** How many holdings files the landing check reads. Small: it runs only on a hit round. */
+const MAX_FUNDAMENTAL_SAMPLE = 20
+
 interface FundamentalSnapshot {
-  ticker: string
+  sampled: number
   valuationDate: string | null
   revenueMonth: string | null
   profitQuarter: string | null
@@ -2446,22 +2468,37 @@ interface FundamentalSnapshot {
 
 async function readFundamentalSnapshot(): Promise<FundamentalSnapshot | null> {
   try {
-    const { data } = await db.storage.from(REPORTS_BUCKET).list('fundamental', { limit: 1 })
-    const first = data?.[0]?.name
-    if (!first) return null
-    const f = await downloadJson<{
-      valuation?: { dataDate?: string | null }
-      revenueMonths?: Array<{ yearMonth?: string }>
-      profitQuarters?: Array<{ yearQuarter?: string }>
-    }>(`fundamental/${first}`)
-    if (!f) return null
-    const months = f.revenueMonths ?? []
-    const quarters = f.profitQuarters ?? []
+    /*
+      Read the **batch tickers** —— what the user actually holds —— not the first entry in the bucket.
+      The first listing entry is alphabetical, which on this bucket is `00403A`, an ETF: it has no
+      valuation at all, so judging landing by it would answer 「沒到位」 forever. Learned the hard way
+      on the first live hit (2026-08-11 20:35).
+
+      `max` across the sample, not the first file: ETFs and TPEx names legitimately carry no valuation,
+      and one of them must not veto a day that did land.
+    */
+    const tickers = (await batchTwTickers()).slice(0, MAX_FUNDAMENTAL_SAMPLE)
+    if (tickers.length === 0) return null
+    const files = await Promise.all(
+      tickers.map(({ ticker }) =>
+        downloadJson<{
+          valuation?: { dataDate?: string | null }
+          revenueMonths?: Array<{ yearMonth?: string }>
+          profitQuarters?: Array<{ yearQuarter?: string }>
+        }>(`fundamental/${ticker}.json`).catch(() => null),
+      ),
+    )
+    const maxOf = (pick: (f: NonNullable<(typeof files)[number]>) => string | null | undefined) =>
+      files.reduce<string | null>((acc, f) => {
+        const v = f ? (pick(f) ?? null) : null
+        return v && (!acc || v > acc) ? v : acc
+      }, null)
+
     return {
-      ticker: first.replace(/\.json$/, ''),
-      valuationDate: f.valuation?.dataDate ?? null,
-      revenueMonth: months[months.length - 1]?.yearMonth ?? null,
-      profitQuarter: quarters[quarters.length - 1]?.yearQuarter ?? null,
+      sampled: tickers.length,
+      valuationDate: maxOf((f) => f.valuation?.dataDate),
+      revenueMonth: maxOf((f) => (f.revenueMonths ?? []).at(-1)?.yearMonth),
+      profitQuarter: maxOf((f) => (f.profitQuarters ?? []).at(-1)?.yearQuarter),
     }
   } catch {
     return null

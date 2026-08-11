@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>台股市場完整資料 · 6 套 UI 設計</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-glow-a: rgba(99, 102, 241, 0.16);
+      --bg-glow-b: rgba(34, 211, 238, 0.1);
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-2: #22d3ee;
+      --up: #ff4a5a;
+      --down: #00e676;
+      --radius: 14px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', sans-serif;
+      --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+      --u-f: #ff6b7a;
+      --u-t: #f472b6;
+      --u-s: #a78bfa;
+      --u-h: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
+        radial-gradient(800px 420px at 10% 20%, var(--bg-glow-b), transparent 55%);
+      line-height: 1.5;
+    }
+    .page-head {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(16px);
+      background: rgba(11, 15, 25, 0.82);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px 12px;
+    }
+    .page-head-inner { max-width: 1200px; margin: 0 auto; }
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 1.22rem; font-weight: 700; margin: 0 0 4px;
+      letter-spacing: -0.02em;
+    }
+    .page-lead {
+      margin: 0 0 12px; color: var(--ink-secondary);
+      font-size: 0.88rem; max-width: 56rem;
+    }
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; }
+    .toc a {
+      text-decoration: none; color: var(--ink-secondary);
+      font-size: 0.76rem; font-weight: 600;
+      padding: 6px 11px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface);
+    }
+    .toc a:hover { color: var(--ink); border-color: var(--border-strong); }
+    .toc a.rec {
+      border-color: rgba(124, 140, 248, 0.45);
+      color: #c7ceff; background: rgba(99, 102, 241, 0.14);
+    }
+
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 20px 100px; }
+    .option { margin-bottom: 60px; scroll-margin-top: 120px; }
+    .option-tag { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    .pill {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+      background: rgba(99, 102, 241, 0.18); color: #b8c1ff;
+      border: 1px solid rgba(124, 140, 248, 0.3);
+    }
+    .pill.rec {
+      background: rgba(0, 230, 118, 0.1); color: #6ee7b7;
+      border-color: rgba(0, 230, 118, 0.28);
+    }
+    .pill.soft {
+      background: var(--surface); color: var(--ink-secondary);
+      border-color: var(--border); text-transform: none;
+      letter-spacing: 0; font-weight: 600;
+    }
+    .option h2 {
+      font-family: var(--font-display); font-size: 1.12rem;
+      margin: 0 0 6px; font-weight: 700;
+    }
+    .option > .desc {
+      margin: 0; color: var(--ink-secondary); font-size: 0.9rem; max-width: 52rem;
+    }
+    .data-list {
+      display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0;
+    }
+    .data-list span {
+      font-size: 0.7rem; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+      background: rgba(255,255,255,0.05); color: var(--ink-muted);
+      border: 1px solid var(--border);
+    }
+    .data-list span.on {
+      color: #c7ceff; border-color: rgba(124,140,248,0.35);
+      background: rgba(99,102,241,0.12);
+    }
+
+    .mock {
+      margin-top: 14px; border: 1px solid var(--border);
+      border-radius: 18px; background: rgba(8, 12, 22, 0.55);
+      box-shadow: var(--shadow-card); overflow: hidden;
+    }
+    .mock-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02); font-size: 0.78rem; color: var(--ink-secondary);
+      flex-wrap: wrap;
+    }
+    .mock-bar .tabs { display: flex; gap: 4px; }
+    .mock-bar .tab { padding: 4px 10px; border-radius: 8px; color: var(--ink-muted); }
+    .mock-bar .tab.on { background: rgba(124,140,248,0.16); color: #c7ceff; font-weight: 600; }
+    .mock-body { padding: 16px; }
+
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .muted { color: var(--ink-muted); }
+    .sec { color: var(--ink-secondary); }
+    .mono { font-variant-numeric: tabular-nums; }
+
+    .glass {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--border-strong); background: var(--surface-strong);
+      color: var(--ink); border-radius: 9px; padding: 6px 10px;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+      background: rgba(255,255,255,0.06); color: var(--ink-secondary);
+    }
+    .chip.up { background: rgba(255,74,90,0.12); color: var(--up); }
+    .chip.down { background: rgba(0,230,118,0.1); color: var(--down); }
+
+    .section-h {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .section-h h3 {
+      margin: 0; font-size: 0.9rem; font-weight: 700; font-family: var(--font-display);
+    }
+    .stamp { font-size: 0.72rem; color: var(--ink-muted); }
+    .ct {
+      font-size: 0.76rem; font-weight: 600; color: var(--ink-secondary); margin-bottom: 8px;
+    }
+
+    table.data { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    table.data th {
+      text-align: left; color: var(--ink-muted); font-weight: 600;
+      font-size: 0.7rem; padding: 7px 9px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    table.data td {
+      padding: 7px 9px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap;
+    }
+    table.data th.num, table.data td.num { text-align: right; }
+    table.data tr:hover td { background: rgba(255,255,255,0.025); }
+
+    .candle-row {
+      display: flex; align-items: flex-end; gap: 2.5px; height: 110px;
+    }
+    .candle {
+      flex: 1; height: 100%; position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    }
+    .candle .wick { width: 1px; background: currentColor; position: absolute; }
+    .candle .body { width: 70%; max-width: 9px; min-width: 3px; border-radius: 1px; }
+    .candle.up { color: var(--up); }
+    .candle.up .body { background: var(--up); }
+    .candle.down { color: var(--down); }
+    .candle.down .body { background: var(--down); }
+
+    .bars { display: flex; align-items: flex-end; gap: 2.5px; height: 72px; }
+    .bars .b {
+      flex: 1; border-radius: 2px 2px 0 0; min-width: 2px;
+      background: linear-gradient(180deg, rgba(34,211,238,0.8), rgba(34,211,238,0.18));
+    }
+    .bars.inst .b.up { background: linear-gradient(180deg, #ff7a86, rgba(255,74,90,0.35)); }
+    .bars.inst .b.down {
+      background: linear-gradient(180deg, rgba(0,230,118,0.85), rgba(0,230,118,0.25));
+      align-self: flex-start;
+    }
+
+    .line-area svg { width: 100%; height: 100%; display: block; }
+
+    .kpi4 {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;
+    }
+    @media (max-width: 800px) { .kpi4 { grid-template-columns: 1fr 1fr; } }
+    .kpi {
+      padding: 12px 14px;
+    }
+    .kpi .k { font-size: 0.7rem; color: var(--ink-muted); font-weight: 600; }
+    .kpi .v {
+      font-family: var(--font-display); font-size: 1.2rem; font-weight: 700;
+      margin-top: 2px; letter-spacing: -0.02em;
+    }
+    .kpi .s { font-size: 0.72rem; color: var(--ink-secondary); margin-top: 2px; }
+
+    .compare {
+      margin-top: 36px; padding: 20px; border-radius: 16px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.03);
+    }
+    .compare h2 {
+      font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 12px;
+    }
+    .compare table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .compare th, .compare td {
+      text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    .compare th { color: var(--ink-muted); font-weight: 600; font-size: 0.72rem; }
+    .compare td.dim { color: var(--ink-secondary); }
+    .footer-note {
+      margin-top: 28px; color: var(--ink-muted); font-size: 0.8rem; text-align: center;
+    }
+
+    /* ========== D1 Command Triple ========== */
+    .d1-hero {
+      display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; margin-bottom: 12px;
+    }
+    @media (max-width: 860px) { .d1-hero { grid-template-columns: 1fr; } }
+    .d1-index { padding: 16px 18px 12px; position: relative; overflow: hidden; }
+    .d1-index::after {
+      content: ''; position: absolute; right: -15%; top: -40%; width: 55%; height: 140%;
+      background: radial-gradient(circle, rgba(255,74,90,0.12), transparent 65%); pointer-events: none;
+    }
+    .d1-index .label { font-size: 0.74rem; color: var(--ink-secondary); font-weight: 600; }
+    .d1-index .value {
+      font-family: var(--font-display); font-size: 2.25rem; font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.1; margin: 2px 0;
+    }
+    .d1-side { display: flex; flex-direction: column; gap: 10px; }
+    .d1-side .cell { padding: 12px 14px; flex: 1; }
+    .d1-side .k { font-size: 0.7rem; color: var(--ink-muted); font-weight: 600; }
+    .d1-side .v { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; margin-top: 2px; }
+    .d1-side .s { font-size: 0.72rem; color: var(--ink-secondary); margin-top: 2px; }
+    .d1-charts {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;
+    }
+    @media (max-width: 900px) { .d1-charts { grid-template-columns: 1fr; } }
+    .d1-charts .card { padding: 12px; }
+    .d1-tables {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    @media (max-width: 900px) { .d1-tables { grid-template-columns: 1fr; } }
+    .d1-tables .panel { padding: 12px 14px; }
+    .net-zero {
+      display: flex; align-items: flex-end; gap: 4px; height: 70px;
+      position: relative; border-bottom: 1px solid var(--border);
+    }
+    .net-zero::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%;
+      border-top: 1px dashed rgba(255,255,255,0.15);
+    }
+    .net-zero .c {
+      flex: 1; height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; position: relative;
+    }
+    .net-zero .bar {
+      width: 70%; max-width: 16px; border-radius: 2px; position: absolute;
+    }
+    .net-zero .bar.up { background: var(--up); bottom: 50%; }
+    .net-zero .bar.down { background: var(--down); top: 50%; }
+
+    /* ========== D2 Three equal columns ========== */
+    .d2-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    @media (max-width: 960px) { .d2-grid { grid-template-columns: 1fr; } }
+    .d2-col {
+      padding: 14px; display: flex; flex-direction: column; min-height: 420px;
+    }
+    .d2-col .domain {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .d2-col.idx .domain { color: #ff9aa3; }
+    .d2-col.vol .domain { color: var(--accent-2); }
+    .d2-col.inst .domain { color: #c4b5fd; }
+    .d2-col .big {
+      font-family: var(--font-display); font-size: 1.65rem; font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.15;
+    }
+    .d2-col .sub { font-size: 0.8rem; margin: 4px 0 12px; }
+    .d2-col .chart-box { flex: 1; margin: 8px 0; }
+    .d2-col .foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
+    .d2-unit {
+      display: flex; justify-content: space-between; font-size: 0.78rem;
+      padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+
+    /* ========== D3 Sync board ========== */
+    .d3-kpi { margin-bottom: 10px; }
+    .d3-main {
+      display: grid; grid-template-rows: auto auto auto; gap: 0;
+      border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+    }
+    .d3-layer {
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .d3-layer:last-child { border-bottom: none; }
+    .d3-layer .head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 6px; font-size: 0.78rem;
+    }
+    .d3-layer .head strong { font-weight: 700; }
+    .d3-layer .head .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .d3-sync {
+      display: flex; align-items: center; gap: 8px; margin: 10px 0;
+      padding: 6px 10px; border-radius: 8px; font-size: 0.75rem;
+      background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.18);
+      color: #7dd3e8;
+    }
+    .d3-sync .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2);
+      box-shadow: 0 0 8px var(--accent-2);
+    }
+    .d3-bottom {
+      display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; margin-top: 12px;
+    }
+    @media (max-width: 860px) { .d3-bottom { grid-template-columns: 1fr; } }
+
+    /* ========== D4 Day ledger ========== */
+    .d4-summary {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+    .d4-pill {
+      padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface); font-size: 0.8rem;
+    }
+    .d4-pill strong { font-weight: 700; }
+    .d4-days { display: flex; flex-direction: column; gap: 10px; }
+    .d4-day {
+      padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .d4-day.latest {
+      border-color: rgba(124,140,248,0.4);
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), var(--surface));
+    }
+    .d4-day .dh {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .d4-day .date { font-weight: 700; font-size: 0.95rem; }
+    .d4-metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    @media (max-width: 700px) { .d4-metrics { grid-template-columns: 1fr 1fr; } }
+    .d4-metrics .mk .k { font-size: 0.68rem; color: var(--ink-muted); font-weight: 600; }
+    .d4-metrics .mk .v { font-weight: 700; font-size: 0.92rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .d4-inst {
+      margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border);
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; font-size: 0.75rem;
+    }
+    @media (max-width: 700px) { .d4-inst { grid-template-columns: 1fr 1fr; } }
+    .d4-inst .u { color: var(--ink-secondary); }
+    .d4-charts-mini {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px;
+    }
+    @media (max-width: 800px) { .d4-charts-mini { grid-template-columns: 1fr; } }
+    .d4-charts-mini .card { padding: 10px 12px; }
+
+    /* ========== D5 Dashboard matrix ========== */
+    .d5 {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      grid-auto-rows: minmax(70px, auto);
+      gap: 10px;
+    }
+    .d5 > * {
+      border: 1px solid var(--border); border-radius: 14px;
+      background: var(--surface); padding: 12px 14px; overflow: hidden;
+    }
+    .d5 .span7 { grid-column: span 7; }
+    .d5 .span5 { grid-column: span 5; }
+    .d5 .span4 { grid-column: span 4; }
+    .d5 .span6 { grid-column: span 6; }
+    .d5 .span8 { grid-column: span 8; }
+    .d5 .span12 { grid-column: span 12; }
+    .d5 .row2 { grid-row: span 2; }
+    @media (max-width: 900px) {
+      .d5 .span7, .d5 .span5, .d5 .span4, .d5 .span6, .d5 .span8, .d5 .span12 {
+        grid-column: span 12; grid-row: auto;
+      }
+    }
+    .d5 .k { font-size: 0.7rem; color: var(--ink-muted); font-weight: 600; }
+    .d5 .v {
+      font-family: var(--font-display); font-size: 1.45rem; font-weight: 700;
+      margin: 2px 0; letter-spacing: -0.02em;
+    }
+    .d5 .s { font-size: 0.75rem; color: var(--ink-secondary); }
+    .d5-units { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .d5-units .row {
+      display: flex; justify-content: space-between; font-size: 0.8rem;
+    }
+    .d5-units .nm { color: var(--ink-secondary); }
+
+    /* ========== D6 Tabbed deep dive ========== */
+    .d6-kpis { margin-bottom: 12px; }
+    .d6-tabs {
+      display: flex; gap: 4px; padding: 4px; background: rgba(0,0,0,0.28);
+      border-radius: 12px; width: fit-content; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .d6-tabs button {
+      border: none; background: transparent; color: var(--ink-muted);
+      font-size: 0.8rem; font-weight: 600; padding: 8px 14px; border-radius: 9px;
+      cursor: pointer; font-family: inherit;
+    }
+    .d6-tabs button.on {
+      background: rgba(124,140,248,0.22); color: #d4daff;
+    }
+    .d6-panel { display: none; }
+    .d6-panel.on { display: block; }
+    .d6-panel .grid2 {
+      display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px;
+    }
+    @media (max-width: 800px) { .d6-panel .grid2 { grid-template-columns: 1fr; } }
+    .d6-panel .card { padding: 12px 14px; }
+    .d6-all {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    }
+    @media (max-width: 900px) { .d6-all { grid-template-columns: 1fr; } }
+    .d6-all .card { padding: 12px; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <div class="page-head-inner">
+      <h1 class="page-title">台股市場 · 6 套完整 UI 設計</h1>
+      <p class="page-lead">
+        每一套都是<strong>完整頁面</strong>，同時呈現：加權指數、成交金額／成交量、三大法人買賣超（含單位），
+        以及可選的日 K、走勢、明細表。假資料 · 紅漲綠跌 · 對齊現有資料契約。
+      </p>
+      <nav class="toc">
+        <a href="#d1" class="rec">1 三主軸操盤台</a>
+        <a href="#d2">2 三欄並置</a>
+        <a href="#d3" class="rec">3 同步三層圖</a>
+        <a href="#d4">4 逐日總帳</a>
+        <a href="#d5" class="rec">5 儀表拼圖</a>
+        <a href="#d6">6 分頁深潛</a>
+        <a href="#compare">對照</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ==================== D1 ==================== -->
+    <section class="option" id="d1">
+      <div class="option-tag">
+        <span class="pill">Design 1</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">三主軸操盤台</span>
+      </div>
+      <h2>指數 Hero + 量能／法人同級副卡 → 三張主圖 → 雙明細表</h2>
+      <p class="desc">
+        延續你喜歡的操盤台感，但把<strong>成交金額</strong>與<strong>三大法人</strong>拉成與指數同級的主資料，
+        不是附屬數字。中段三張圖分別對應指數日 K、成交金額、法人淨額；下段左量表、右法人表。
+      </p>
+      <div class="data-list">
+        <span class="on">加權指數</span>
+        <span class="on">成交金額</span>
+        <span class="on">成交股數</span>
+        <span class="on">三大法人合計</span>
+        <span class="on">外資／投信／自營</span>
+        <span class="on">日 K</span>
+        <span class="on">明細表</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>資料更新 2026-08-08 16:42 · 120 個交易日</span>
+        </div>
+        <div class="mock-body">
+          <div class="d1-hero">
+            <div class="glass d1-index">
+              <div class="label">加權指數 · TAIEX</div>
+              <div class="value mono">23,418.52</div>
+              <div class="up mono" style="font-weight:700">+186.40（+0.80%）</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                <span class="chip">開 23,210</span>
+                <span class="chip">高 23,452</span>
+                <span class="chip">低 23,188</span>
+                <span class="chip">收 23,418</span>
+                <span class="chip">08/08</span>
+              </div>
+              <div class="line-area" style="height:56px;margin-top:12px">
+                <svg viewBox="0 0 400 56" preserveAspectRatio="none">
+                  <path d="M0,40 L50,38 L100,44 L150,30 L200,28 L250,20 L300,18 L350,12 L400,8 L400,56 L0,56 Z" fill="rgba(255,74,90,0.2)"/>
+                  <path d="M0,40 L50,38 L100,44 L150,30 L200,28 L250,20 L300,18 L350,12 L400,8" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="d1-side">
+              <div class="glass cell">
+                <div class="k">成交金額</div>
+                <div class="v mono">4,218.6 億</div>
+                <div class="s">股數 148.2 億股 · 筆數 312 萬 · 高於 5 日均</div>
+              </div>
+              <div class="glass cell">
+                <div class="k">三大法人買賣超</div>
+                <div class="v mono up">+128.4 億</div>
+                <div class="s">連 3 日買超 · 外資 +96.2 · 投信 +18.7 · 自營 +13.5</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d1-charts">
+            <div class="glass card">
+              <div class="ct">加權指數日 K · 近 30 日</div>
+              <div class="candle-row" data-candles></div>
+            </div>
+            <div class="glass card">
+              <div class="ct">每日成交金額（億）</div>
+              <div class="bars" data-bars></div>
+            </div>
+            <div class="glass card">
+              <div class="ct">三大法人合計買賣超（億）</div>
+              <div class="net-zero" data-net></div>
+              <div class="stamp" style="margin-top:6px">零軸上紅＝買超 · 下綠＝賣超</div>
+            </div>
+          </div>
+
+          <div class="d1-tables">
+            <div class="glass panel">
+              <div class="section-h">
+                <h3>每日成交量</h3>
+                <button class="btn">顯示全部</button>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th class="num">股數</th>
+                    <th class="num">金額</th>
+                    <th class="num">指數</th>
+                    <th class="num">漲跌</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>08/08</td>
+                    <td class="num">148.2 億股</td>
+                    <td class="num">4,218.6 億</td>
+                    <td class="num">23,418</td>
+                    <td class="num up">+186</td>
+                  </tr>
+                  <tr>
+                    <td>08/07</td>
+                    <td class="num">132.1 億股</td>
+                    <td class="num">3,902.1 億</td>
+                    <td class="num">23,232</td>
+                    <td class="num down">−42</td>
+                  </tr>
+                  <tr>
+                    <td>08/06</td>
+                    <td class="num">140.5 億股</td>
+                    <td class="num">4,105.8 億</td>
+                    <td class="num">23,274</td>
+                    <td class="num up">+98</td>
+                  </tr>
+                  <tr>
+                    <td>08/05</td>
+                    <td class="num">125.8 億股</td>
+                    <td class="num">3,756.4 億</td>
+                    <td class="num">23,176</td>
+                    <td class="num up">+55</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="glass panel">
+              <div class="section-h">
+                <h3>三大法人買賣超</h3>
+                <button class="btn">全部展開</button>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>單位</th>
+                    <th class="num">買進</th>
+                    <th class="num">賣出</th>
+                    <th class="num">買賣超</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td rowspan="3" style="vertical-align:top">
+                      08/08
+                      <div class="chip up" style="margin-top:4px">連 3 日</div>
+                    </td>
+                    <td>合計</td>
+                    <td class="num">1,842</td>
+                    <td class="num">1,714</td>
+                    <td class="num up">+128.4</td>
+                  </tr>
+                  <tr><td>外資</td><td class="num">1,240</td><td class="num">1,144</td><td class="num up">+96.2</td></tr>
+                  <tr><td>投信</td><td class="num">210</td><td class="num">191</td><td class="num up">+18.7</td></tr>
+                  <tr>
+                    <td>08/07</td><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num up">+42.1</td>
+                  </tr>
+                  <tr>
+                    <td>08/06</td><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num up">+15.8</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== D2 ==================== -->
+    <section class="option" id="d2">
+      <div class="option-tag">
+        <span class="pill">Design 2</span>
+        <span class="pill soft">三欄並置 · 指數｜量能｜法人</span>
+      </div>
+      <h2>三大資料域各佔一欄，互不從屬</h2>
+      <p class="desc">
+        左欄只談<strong>加權指數</strong>，中欄只談<strong>成交金額／股數</strong>，右欄只談<strong>三大法人</strong>。
+        每欄都有「今日數字 + 圖 + 近況表」，掃一眼就完成三種市場問題。
+      </p>
+      <div class="data-list">
+        <span class="on">加權指數</span>
+        <span class="on">日 K／走勢</span>
+        <span class="on">成交金額</span>
+        <span class="on">成交股數／筆數</span>
+        <span class="on">三大法人合計</span>
+        <span class="on">單位拆解</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>2026-08-08 收盤後</span>
+        </div>
+        <div class="mock-body">
+          <div class="d2-grid">
+            <!-- Index -->
+            <div class="glass d2-col idx">
+              <div class="domain">Index · 加權指數</div>
+              <div class="big mono">23,418.52</div>
+              <div class="sub up mono">+186.40 · +0.80%</div>
+              <div class="chart-box">
+                <div class="ct">日 K · 近 20 日</div>
+                <div class="candle-row" data-candles style="height:100px"></div>
+                <div class="ct" style="margin-top:10px">收盤走勢</div>
+                <div class="line-area" style="height:48px">
+                  <svg viewBox="0 0 200 48" preserveAspectRatio="none">
+                    <path d="M0,36 L30,34 L60,40 L90,28 L120,24 L150,16 L180,12 L200,8" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="foot">
+                <div class="d2-unit"><span class="sec">開</span><span class="mono">23,210</span></div>
+                <div class="d2-unit"><span class="sec">高</span><span class="mono">23,452</span></div>
+                <div class="d2-unit"><span class="sec">低</span><span class="mono">23,188</span></div>
+                <div class="d2-unit"><span class="sec">收</span><span class="mono">23,418</span></div>
+              </div>
+            </div>
+
+            <!-- Volume -->
+            <div class="glass d2-col vol">
+              <div class="domain">Volume · 成交量能</div>
+              <div class="big mono">4,218.6 億</div>
+              <div class="sub sec">成交金額 · 高於 5 日均 6%</div>
+              <div class="chart-box">
+                <div class="ct">每日成交金額（億）</div>
+                <div class="bars" data-bars style="height:90px"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+                  <div class="glass" style="padding:10px">
+                    <div class="k muted" style="font-size:0.68rem;font-weight:600">成交股數</div>
+                    <div class="mono" style="font-weight:700;font-size:1rem">148.2 億股</div>
+                  </div>
+                  <div class="glass" style="padding:10px">
+                    <div class="k muted" style="font-size:0.68rem;font-weight:600">成交筆數</div>
+                    <div class="mono" style="font-weight:700;font-size:1rem">312.4 萬</div>
+                  </div>
+                </div>
+              </div>
+              <div class="foot">
+                <div class="d2-unit"><span class="sec">08/08</span><span class="mono">4,219 億</span></div>
+                <div class="d2-unit"><span class="sec">08/07</span><span class="mono">3,902 億</span></div>
+                <div class="d2-unit"><span class="sec">08/06</span><span class="mono">4,106 億</span></div>
+                <div class="d2-unit"><span class="sec">5 日均</span><span class="mono">3,980 億</span></div>
+              </div>
+            </div>
+
+            <!-- Institutional -->
+            <div class="glass d2-col inst">
+              <div class="domain">Institutional · 三大法人</div>
+              <div class="big mono up">+128.4 億</div>
+              <div class="sub"><span class="chip up">連 3 日買超</span></div>
+              <div class="chart-box">
+                <div class="ct">合計買賣超 · 近 7 日</div>
+                <div class="net-zero" data-net style="height:80px"></div>
+                <div style="margin-top:12px">
+                  <div class="d2-unit"><span class="sec">外資</span><span class="up mono">+96.2 億</span></div>
+                  <div class="d2-unit"><span class="sec">投信</span><span class="up mono">+18.7 億</span></div>
+                  <div class="d2-unit"><span class="sec">自營（自行）</span><span class="down mono">−1.2 億</span></div>
+                  <div class="d2-unit"><span class="sec">自營（避險）</span><span class="up mono">+14.7 億</span></div>
+                  <div class="d2-unit"><span class="sec">外資自營商</span><span class="mono muted">0.0</span></div>
+                </div>
+              </div>
+              <div class="foot">
+                <div class="d2-unit"><span class="sec">買進合計</span><span class="mono">1,842 億</span></div>
+                <div class="d2-unit"><span class="sec">賣出合計</span><span class="mono">1,714 億</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== D3 ==================== -->
+    <section class="option" id="d3">
+      <div class="option-tag">
+        <span class="pill">Design 3</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">同步三層圖 · 共 X 軸</span>
+      </div>
+      <h2>KPI 總覽 → 指數／量能／法人三層圖同日對齊 → 雙表</h2>
+      <p class="desc">
+        核心體驗：hover／選某一日，三層圖一起亮。上面是指數，中間是成交金額，下面是法人買賣超。
+        回答「那一天指數漲了嗎、量夠不夠、法人買還賣」一次看完。
+      </p>
+      <div class="data-list">
+        <span class="on">加權指數 KPI</span>
+        <span class="on">成交金額 KPI</span>
+        <span class="on">法人 KPI</span>
+        <span class="on">三層同步圖</span>
+        <span class="on">成交明細表</span>
+        <span class="on">法人明細表</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>同步選日 · 示意 2026-08-08</span>
+        </div>
+        <div class="mock-body">
+          <div class="kpi4 d3-kpi">
+            <div class="glass kpi">
+              <div class="k">加權指數</div>
+              <div class="v mono">23,418</div>
+              <div class="s up">+186.40 · +0.80%</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">成交金額</div>
+              <div class="v mono">4,219 億</div>
+              <div class="s">148.2 億股 · 312 萬筆</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">三大法人合計</div>
+              <div class="v mono up">+128.4 億</div>
+              <div class="s">連 3 日買超</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">其中外資</div>
+              <div class="v mono up">+96.2 億</div>
+              <div class="s">投信 +18.7 · 自營 +13.5</div>
+            </div>
+          </div>
+
+          <div class="d3-sync"><span class="dot"></span> 已對齊交易日 2026-08-08 · 三層圖共用 X 軸</div>
+
+          <div class="d3-main">
+            <div class="d3-layer">
+              <div class="head">
+                <strong>加權指數（收盤）</strong>
+                <span class="val mono">23,418.52 <span class="up">+186.40</span></span>
+              </div>
+              <div class="line-area" style="height:90px">
+                <svg viewBox="0 0 600 90" preserveAspectRatio="none">
+                  <line x1="560" y1="0" x2="560" y2="90" stroke="rgba(124,140,248,0.45)" stroke-dasharray="3 3"/>
+                  <circle cx="560" cy="18" r="4" fill="#ff4a5a"/>
+                  <path d="M0,70 L50,68 L100,74 L150,58 L200,55 L250,48 L300,40 L350,42 L400,32 L450,30 L500,24 L550,18 L600,16" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="d3-layer">
+              <div class="head">
+                <strong>成交金額（億）</strong>
+                <span class="val mono">4,218.6 億</span>
+              </div>
+              <div class="bars" data-bars style="height:64px"></div>
+            </div>
+            <div class="d3-layer">
+              <div class="head">
+                <strong>三大法人合計買賣超（億）</strong>
+                <span class="val mono up">+128.4 億</span>
+              </div>
+              <div class="net-zero" data-net style="height:72px"></div>
+            </div>
+          </div>
+
+          <div class="d3-bottom">
+            <div class="glass" style="padding:12px 14px">
+              <div class="section-h">
+                <h3>每日成交量</h3>
+                <span class="stamp">近 7 日</span>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr><th>日期</th><th class="num">金額</th><th class="num">股數</th><th class="num">漲跌</th></tr>
+                </thead>
+                <tbody>
+                  <tr style="background:rgba(99,102,241,0.1)"><td>08/08</td><td class="num">4,218.6 億</td><td class="num">148.2 億股</td><td class="num up">+186</td></tr>
+                  <tr><td>08/07</td><td class="num">3,902.1 億</td><td class="num">132.1 億股</td><td class="num down">−42</td></tr>
+                  <tr><td>08/06</td><td class="num">4,105.8 億</td><td class="num">140.5 億股</td><td class="num up">+98</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="glass" style="padding:12px 14px">
+              <div class="section-h">
+                <h3>三大法人 · 08/08</h3>
+                <span class="stamp">單位明細</span>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr><th>單位</th><th class="num">買進</th><th class="num">賣出</th><th class="num">買賣超</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>外資</td><td class="num">1,240</td><td class="num">1,144</td><td class="num up">+96.2</td></tr>
+                  <tr><td>投信</td><td class="num">210</td><td class="num">191</td><td class="num up">+18.7</td></tr>
+                  <tr><td>自營自行</td><td class="num">88</td><td class="num">89</td><td class="num down">−1.2</td></tr>
+                  <tr><td>自營避險</td><td class="num">302</td><td class="num">287</td><td class="num up">+14.7</td></tr>
+                  <tr><td><strong>合計</strong></td><td class="num"><strong>1,842</strong></td><td class="num"><strong>1,714</strong></td><td class="num up"><strong>+128.4</strong></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== D4 ==================== -->
+    <section class="option" id="d4">
+      <div class="option-tag">
+        <span class="pill">Design 4</span>
+        <span class="pill soft">逐日總帳 · 一日一卡</span>
+      </div>
+      <h2>先看長線三圖，再往下讀「每一天」的指數＋量＋法人</h2>
+      <p class="desc">
+        頂部迷你三圖保留趨勢；主體是交易日卡片。每張卡把<strong>指數、漲跌、成交金額、法人合計與單位</strong>綁在同一天，
+        適合盤後回顧「這週每天發生什麼」。
+      </p>
+      <div class="data-list">
+        <span class="on">加權指數</span>
+        <span class="on">漲跌點數</span>
+        <span class="on">成交金額</span>
+        <span class="on">三大法人合計</span>
+        <span class="on">外資／投信／自營</span>
+        <span class="on">近 7 日卡片</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>以交易日為閱讀單位</span>
+        </div>
+        <div class="mock-body">
+          <div class="d4-summary">
+            <div class="d4-pill">指數 <strong class="up">23,418</strong> <span class="up">+0.80%</span></div>
+            <div class="d4-pill">成交 <strong>4,219 億</strong></div>
+            <div class="d4-pill">法人 <strong class="up">+128.4 億</strong></div>
+            <div class="d4-pill">外資 <strong class="up">+96.2</strong></div>
+          </div>
+
+          <div class="d4-charts-mini">
+            <div class="glass card">
+              <div class="ct">加權指數</div>
+              <div class="line-area" style="height:52px">
+                <svg viewBox="0 0 200 52" preserveAspectRatio="none">
+                  <path d="M0,40 L40,38 L80,42 L120,28 L160,18 L200,12" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="glass card">
+              <div class="ct">成交金額</div>
+              <div class="bars" data-bars style="height:52px"></div>
+            </div>
+            <div class="glass card">
+              <div class="ct">法人合計</div>
+              <div class="net-zero" data-net style="height:52px"></div>
+            </div>
+          </div>
+
+          <div class="d4-days">
+            <article class="d4-day latest">
+              <div class="dh">
+                <span class="date">2026-08-08（五）· 最新</span>
+                <span class="chip up">連 3 日買超</span>
+              </div>
+              <div class="d4-metrics">
+                <div class="mk">
+                  <div class="k">加權指數</div>
+                  <div class="v mono">23,418.52</div>
+                </div>
+                <div class="mk">
+                  <div class="k">漲跌</div>
+                  <div class="v mono up">+186.40</div>
+                </div>
+                <div class="mk">
+                  <div class="k">成交金額</div>
+                  <div class="v mono">4,218.6 億</div>
+                </div>
+                <div class="mk">
+                  <div class="k">法人合計</div>
+                  <div class="v mono up">+128.4 億</div>
+                </div>
+              </div>
+              <div class="d4-inst">
+                <div><span class="u">外資</span> <strong class="up mono">+96.2</strong></div>
+                <div><span class="u">投信</span> <strong class="up mono">+18.7</strong></div>
+                <div><span class="u">自營自行</span> <strong class="down mono">−1.2</strong></div>
+                <div><span class="u">自營避險</span> <strong class="up mono">+14.7</strong></div>
+                <div><span class="u">股數／筆數</span> <strong class="mono">148 億股 · 312 萬</strong></div>
+              </div>
+            </article>
+
+            <article class="d4-day">
+              <div class="dh">
+                <span class="date">2026-08-07（四）</span>
+                <span class="chip up">連 2 日買超</span>
+              </div>
+              <div class="d4-metrics">
+                <div class="mk"><div class="k">加權指數</div><div class="v mono">23,232.12</div></div>
+                <div class="mk"><div class="k">漲跌</div><div class="v mono down">−42.18</div></div>
+                <div class="mk"><div class="k">成交金額</div><div class="v mono">3,902.1 億</div></div>
+                <div class="mk"><div class="k">法人合計</div><div class="v mono up">+42.1 億</div></div>
+              </div>
+              <div class="d4-inst">
+                <div><span class="u">外資</span> <strong class="up mono">+31.0</strong></div>
+                <div><span class="u">投信</span> <strong class="up mono">+8.2</strong></div>
+                <div><span class="u">自營自行</span> <strong class="down mono">−1.0</strong></div>
+                <div><span class="u">自營避險</span> <strong class="up mono">+3.9</strong></div>
+                <div><span class="u">股數／筆數</span> <strong class="mono">132 億股 · 288 萬</strong></div>
+              </div>
+            </article>
+
+            <article class="d4-day">
+              <div class="dh">
+                <span class="date">2026-08-06（三）</span>
+                <span class="chip">法人翻多</span>
+              </div>
+              <div class="d4-metrics">
+                <div class="mk"><div class="k">加權指數</div><div class="v mono">23,274.30</div></div>
+                <div class="mk"><div class="k">漲跌</div><div class="v mono up">+98.05</div></div>
+                <div class="mk"><div class="k">成交金額</div><div class="v mono">4,105.8 億</div></div>
+                <div class="mk"><div class="k">法人合計</div><div class="v mono up">+15.8 億</div></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== D5 ==================== -->
+    <section class="option" id="d5">
+      <div class="option-tag">
+        <span class="pill">Design 5</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">儀表拼圖 · Bento</span>
+      </div>
+      <h2>面積＝優先級：指數大圖、量能與法人並重、表收底部</h2>
+      <p class="desc">
+        現代儀表板拼圖。指數佔大卡；成交金額與法人合計並排；外資／投信／自營各有小卡；
+        下方全寬放成交量表與法人表。三種資料都在第一屏可見。
+      </p>
+      <div class="data-list">
+        <span class="on">加權指數 + 走勢</span>
+        <span class="on">成交金額／股數</span>
+        <span class="on">法人合計</span>
+        <span class="on">單位拆卡</span>
+        <span class="on">成交表</span>
+        <span class="on">法人表</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="stamp">更新 08/08 16:42</span>
+            <button class="btn">重新整理</button>
+          </div>
+        </div>
+        <div class="mock-body">
+          <div class="d5">
+            <div class="span7 row2">
+              <div class="k">加權指數</div>
+              <div class="v mono">23,418.52</div>
+              <div class="s up mono">+186.40 · +0.80% · 2026-08-08</div>
+              <div class="line-area" style="height:130px;margin-top:12px">
+                <svg viewBox="0 0 480 130" preserveAspectRatio="none">
+                  <path d="M0,100 L40,98 L80,105 L120,85 L160,80 L200,70 L240,55 L280,58 L320,42 L360,38 L400,30 L440,22 L480,18 L480,130 L0,130 Z" fill="rgba(255,74,90,0.18)"/>
+                  <path d="M0,100 L40,98 L80,105 L120,85 L160,80 L200,70 L240,55 L280,58 L320,42 L360,38 L400,30 L440,22 L480,18" fill="none" stroke="#ff4a5a" stroke-width="2.5"/>
+                </svg>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                <span class="chip">O 23,210</span>
+                <span class="chip">H 23,452</span>
+                <span class="chip">L 23,188</span>
+                <span class="chip">C 23,418</span>
+              </div>
+            </div>
+
+            <div class="span5">
+              <div class="k">成交金額</div>
+              <div class="v mono" style="font-size:1.35rem">4,218.6 億</div>
+              <div class="s">股數 148.2 億股 · 筆數 312.4 萬</div>
+              <div class="bars" data-bars style="height:56px;margin-top:10px"></div>
+            </div>
+
+            <div class="span5">
+              <div class="k">三大法人合計買賣超</div>
+              <div class="v mono up" style="font-size:1.35rem">+128.4 億</div>
+              <div class="s">連 3 日買超 · 08/08</div>
+              <div class="net-zero" data-net style="height:56px;margin-top:10px"></div>
+            </div>
+
+            <div class="span4">
+              <div class="k">外資</div>
+              <div class="v mono up" style="font-size:1.2rem">+96.2 億</div>
+              <div class="s">買 1,240 · 賣 1,144</div>
+            </div>
+            <div class="span4">
+              <div class="k">投信</div>
+              <div class="v mono up" style="font-size:1.2rem">+18.7 億</div>
+              <div class="s">買 210 · 賣 191</div>
+            </div>
+            <div class="span4">
+              <div class="k">自營（自行＋避險）</div>
+              <div class="v mono up" style="font-size:1.2rem">+13.5 億</div>
+              <div class="s">自行 −1.2 · 避險 +14.7</div>
+            </div>
+
+            <div class="span6">
+              <div class="section-h">
+                <h3 style="font-size:0.88rem">每日成交量</h3>
+                <button class="btn">全部</button>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr><th>日期</th><th class="num">金額</th><th class="num">指數</th><th class="num">漲跌</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>08/08</td><td class="num">4,218.6 億</td><td class="num">23,418</td><td class="num up">+186</td></tr>
+                  <tr><td>08/07</td><td class="num">3,902.1 億</td><td class="num">23,232</td><td class="num down">−42</td></tr>
+                  <tr><td>08/06</td><td class="num">4,105.8 億</td><td class="num">23,274</td><td class="num up">+98</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="span6">
+              <div class="section-h">
+                <h3 style="font-size:0.88rem">三大法人（億）</h3>
+                <button class="btn">展開</button>
+              </div>
+              <table class="data">
+                <thead>
+                  <tr><th>日期</th><th class="num">合計</th><th class="num">外資</th><th class="num">投信</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>08/08</td><td class="num up">+128.4</td><td class="num up">+96.2</td><td class="num up">+18.7</td></tr>
+                  <tr><td>08/07</td><td class="num up">+42.1</td><td class="num up">+31.0</td><td class="num up">+8.2</td></tr>
+                  <tr><td>08/06</td><td class="num up">+15.8</td><td class="num up">+12.4</td><td class="num up">+4.1</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== D6 ==================== -->
+    <section class="option" id="d6">
+      <div class="option-tag">
+        <span class="pill">Design 6</span>
+        <span class="pill soft">分頁深潛 · 總覽＋專頁</span>
+      </div>
+      <h2>頂部永遠看得到四個關鍵數；下方用分頁深看指數／量能／法人</h2>
+      <p class="desc">
+        適合螢幕較窄或想減少一次資訊量的情境。KPI 固定顯示指數、成交、法人合計、外資；
+        分頁「總覽／指數／量能／法人」各自放圖與表。資料齊全，只是分層取用。
+      </p>
+      <div class="data-list">
+        <span class="on">四 KPI 常駐</span>
+        <span class="on">總覽三圖</span>
+        <span class="on">指數專頁</span>
+        <span class="on">量能專頁</span>
+        <span class="on">法人專頁</span>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>點下方分頁切換 · 可互動</span>
+        </div>
+        <div class="mock-body">
+          <div class="kpi4 d6-kpis">
+            <div class="glass kpi">
+              <div class="k">加權指數</div>
+              <div class="v mono">23,418</div>
+              <div class="s up">+186 · +0.80%</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">成交金額</div>
+              <div class="v mono">4,219 億</div>
+              <div class="s">148 億股</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">三大法人</div>
+              <div class="v mono up">+128.4 億</div>
+              <div class="s">連 3 日買超</div>
+            </div>
+            <div class="glass kpi">
+              <div class="k">外資</div>
+              <div class="v mono up">+96.2 億</div>
+              <div class="s">投信 +18.7</div>
+            </div>
+          </div>
+
+          <div class="d6-tabs" id="d6-tabs">
+            <button type="button" class="on" data-panel="all">總覽</button>
+            <button type="button" data-panel="idx">加權指數</button>
+            <button type="button" data-panel="vol">成交量能</button>
+            <button type="button" data-panel="inst">三大法人</button>
+          </div>
+
+          <div class="d6-panel on" data-panel-body="all">
+            <div class="d6-all">
+              <div class="glass card">
+                <div class="ct">加權指數走勢</div>
+                <div class="line-area" style="height:100px">
+                  <svg viewBox="0 0 220 100" preserveAspectRatio="none">
+                    <path d="M0,75 L40,72 L80,80 L120,55 L160,40 L200,28 L220,22" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                  </svg>
+                </div>
+                <div class="mono" style="font-weight:700;margin-top:6px">23,418.52 <span class="up">+0.80%</span></div>
+              </div>
+              <div class="glass card">
+                <div class="ct">成交金額（億）</div>
+                <div class="bars" data-bars style="height:100px"></div>
+                <div class="mono" style="font-weight:700;margin-top:6px">4,218.6 億</div>
+              </div>
+              <div class="glass card">
+                <div class="ct">法人合計買賣超</div>
+                <div class="net-zero" data-net style="height:100px"></div>
+                <div class="mono up" style="font-weight:700;margin-top:6px">+128.4 億 · 連 3 日</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d6-panel" data-panel-body="idx">
+            <div class="grid2">
+              <div class="glass card">
+                <div class="ct">加權指數日 K · 近 40 日</div>
+                <div class="candle-row" data-candles style="height:160px"></div>
+              </div>
+              <div class="glass card">
+                <div class="ct">今日 OHLC</div>
+                <table class="data">
+                  <tbody>
+                    <tr><td>開盤</td><td class="num mono">23,210.15</td></tr>
+                    <tr><td>最高</td><td class="num mono">23,452.80</td></tr>
+                    <tr><td>最低</td><td class="num mono">23,188.40</td></tr>
+                    <tr><td>收盤</td><td class="num mono">23,418.52</td></tr>
+                    <tr><td>漲跌</td><td class="num mono up">+186.40</td></tr>
+                    <tr><td>漲跌幅</td><td class="num mono up">+0.80%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="d6-panel" data-panel-body="vol">
+            <div class="grid2">
+              <div class="glass card">
+                <div class="ct">每日成交金額（億）· 近 40 日</div>
+                <div class="bars" data-bars style="height:140px"></div>
+              </div>
+              <div class="glass card">
+                <div class="section-h">
+                  <h3 style="font-size:0.88rem">成交明細</h3>
+                  <button class="btn">顯示全部</button>
+                </div>
+                <table class="data">
+                  <thead>
+                    <tr><th>日期</th><th class="num">金額</th><th class="num">股數</th><th class="num">筆數</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>08/08</td><td class="num">4,218.6 億</td><td class="num">148.2 億股</td><td class="num">312 萬</td></tr>
+                    <tr><td>08/07</td><td class="num">3,902.1 億</td><td class="num">132.1 億股</td><td class="num">288 萬</td></tr>
+                    <tr><td>08/06</td><td class="num">4,105.8 億</td><td class="num">140.5 億股</td><td class="num">301 萬</td></tr>
+                    <tr><td>08/05</td><td class="num">3,756.4 億</td><td class="num">125.8 億股</td><td class="num">275 萬</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="d6-panel" data-panel-body="inst">
+            <div class="grid2">
+              <div class="glass card">
+                <div class="ct">三大法人合計 · 近 15 日（億）</div>
+                <div class="net-zero" data-net style="height:120px"></div>
+                <div class="ct" style="margin-top:12px">單位占比（當日買超側）</div>
+                <div style="display:flex;height:12px;border-radius:999px;overflow:hidden;margin:8px 0">
+                  <div style="width:62%;background:var(--u-f)"></div>
+                  <div style="width:15%;background:var(--u-t)"></div>
+                  <div style="width:12%;background:var(--u-h)"></div>
+                  <div style="width:11%;background:var(--u-s)"></div>
+                </div>
+                <div class="stamp">外資 62% · 投信 15% · 避險 12% · 其他</div>
+              </div>
+              <div class="glass card">
+                <div class="section-h">
+                  <h3 style="font-size:0.88rem">2026-08-08 單位明細</h3>
+                  <span class="chip up">連 3 日買超</span>
+                </div>
+                <table class="data">
+                  <thead>
+                    <tr><th>單位</th><th class="num">買進</th><th class="num">賣出</th><th class="num">買賣超</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>外資</td><td class="num">1,240</td><td class="num">1,144</td><td class="num up">+96.2</td></tr>
+                    <tr><td>投信</td><td class="num">210</td><td class="num">191</td><td class="num up">+18.7</td></tr>
+                    <tr><td>外資自營</td><td class="num">12</td><td class="num">12</td><td class="num muted">0.0</td></tr>
+                    <tr><td>自營自行</td><td class="num">88</td><td class="num">89</td><td class="num down">−1.2</td></tr>
+                    <tr><td>自營避險</td><td class="num">302</td><td class="num">287</td><td class="num up">+14.7</td></tr>
+                    <tr><td><strong>合計</strong></td><td class="num"><strong>1,842</strong></td><td class="num"><strong>1,714</strong></td><td class="num up"><strong>+128.4</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare -->
+    <section class="compare" id="compare">
+      <h2>六案對照</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>怎麼看三種資料</th>
+            <th>第一屏重點</th>
+            <th>適合</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1 三主軸操盤台</strong></td>
+            <td class="dim">Hero 指數 + 量／法人副卡；中段三圖；下雙表</td>
+            <td class="dim">指數最大，量與法人同級可見</td>
+            <td class="dim">喜歡 A、又要三種資料都完整</td>
+          </tr>
+          <tr>
+            <td><strong>2 三欄並置</strong></td>
+            <td class="dim">左指數｜中量能｜右法人，完全平等</td>
+            <td class="dim">三欄同時</td>
+            <td class="dim">桌面寬螢幕、任務分明</td>
+          </tr>
+          <tr>
+            <td><strong>3 同步三層圖</strong></td>
+            <td class="dim">KPI + 同日對齊的指數／量／法人圖 + 雙表</td>
+            <td class="dim">「同一天」因果</td>
+            <td class="dim">盤後對照最直覺</td>
+          </tr>
+          <tr>
+            <td><strong>4 逐日總帳</strong></td>
+            <td class="dim">迷你三圖 + 每日一卡含指數量法人</td>
+            <td class="dim">近幾日故事</td>
+            <td class="dim">週回顧、日帳閱讀</td>
+          </tr>
+          <tr>
+            <td><strong>5 儀表拼圖</strong></td>
+            <td class="dim">Bento：指數大、量／法人中、單位小、表底</td>
+            <td class="dim">現代儀表板全貌</td>
+            <td class="dim">質感與資訊密度平衡</td>
+          </tr>
+          <tr>
+            <td><strong>6 分頁深潛</strong></td>
+            <td class="dim">四 KPI 常駐；分頁看指數／量／法人細節</td>
+            <td class="dim">數字總覽</td>
+            <td class="dim">手機、或怕一次太滿</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="sec" style="margin:14px 0 0;font-size:0.88rem">
+        若延續你對「操盤台」的偏好：優先看 <strong>1</strong> 或 <strong>3</strong>；
+        要三種資料完全平權看 <strong>2</strong>；
+        要現代感看 <strong>5</strong>。
+      </p>
+    </section>
+
+    <p class="footer-note">
+      檔案：<code>scratchpad/tw-market-fullpage-6.html</code>
+      · 每案皆含加權指數、成交量能、三大法人 · 假資料僅供視覺討論
+    </p>
+  </main>
+
+  <script>
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    document.querySelectorAll('[data-candles]').forEach((el) => {
+      const n = 28;
+      for (let i = 0; i < n; i++) {
+        const up = Math.random() > 0.42;
+        const body = rand(12, 38);
+        const wickTop = rand(4, 14);
+        const wickBot = rand(4, 12);
+        const total = body + wickTop + wickBot;
+        const bottom = rand(0, Math.max(1, 100 - total));
+        const d = document.createElement('div');
+        d.className = 'candle ' + (up ? 'up' : 'down');
+        d.innerHTML =
+          '<div class="wick" style="height:' + total + '%;bottom:' + bottom + '%"></div>' +
+          '<div class="body" style="height:' + body + '%;margin-bottom:' + bottom + '%"></div>';
+        el.appendChild(d);
+      }
+    });
+
+    document.querySelectorAll('[data-bars]').forEach((el) => {
+      const n = 24;
+      for (let i = 0; i < n; i++) {
+        const b = document.createElement('div');
+        b.className = 'b';
+        b.style.height = rand(28, 100) + '%';
+        el.appendChild(b);
+      }
+    });
+
+    // Institutional net bars (7 days): older → newer
+    const nets = [9, -12, -88, -31, 16, 42, 128];
+    document.querySelectorAll('[data-net]').forEach((el) => {
+      const max = Math.max(...nets.map(Math.abs), 1);
+      nets.forEach((v) => {
+        const c = document.createElement('div');
+        c.className = 'c';
+        const pct = (Math.abs(v) / max) * 46;
+        const bar = document.createElement('div');
+        bar.className = 'bar ' + (v >= 0 ? 'up' : 'down');
+        bar.style.height = pct + '%';
+        c.appendChild(bar);
+        el.appendChild(c);
+      });
+    });
+
+    // D6 tabs
+    const tabs = document.getElementById('d6-tabs');
+    if (tabs) {
+      tabs.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          tabs.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+          btn.classList.add('on');
+          const id = btn.getAttribute('data-panel');
+          document.querySelectorAll('[data-panel-body]').forEach((p) => {
+            p.classList.toggle('on', p.getAttribute('data-panel-body') === id);
+          });
+        });
+      });
+    }
+  </script>
+</body>
+</html>

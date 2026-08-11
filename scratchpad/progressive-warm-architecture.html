@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>stock-pnl-web — Progressive Warm 架構說明（0.6.46-dev.4）</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2332;
+    --panel2: #243044;
+    --text: #e7ecf3;
+    --muted: #9aa8bc;
+    --accent: #3d9cf0;
+    --good: #3ecf8e;
+    --warn: #f0b429;
+    --bad: #f07178;
+    --core: #5b8def;
+    --hist: #c792ea;
+    --batch: #82aaff;
+    --sql: #ffcb6b;
+    --stor: #89ddff;
+    --border: #2d3a4d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Noto Sans TC", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  header {
+    padding: 2rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #152033 0%, var(--bg) 100%);
+  }
+  header h1 { margin: 0 0 0.4rem; font-size: 1.55rem; }
+  header p { margin: 0; color: var(--muted); max-width: 70rem; }
+  main { max-width: 72rem; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.4rem 1.5rem;
+    margin: 1.1rem 0;
+  }
+  section h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  section h2 .num {
+    display: inline-flex;
+    width: 1.6rem; height: 1.6rem;
+    align-items: center; justify-content: center;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #061018;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  h3 { margin: 1.1rem 0 0.5rem; font-size: 1rem; color: #c5d4e8; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 800px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+  }
+  .card h3 { margin-top: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.6rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #1e2a3d; color: #cfe0f5; }
+  code, .mono {
+    font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+    font-size: 0.86em;
+    background: #0d121a;
+    padding: 0.08em 0.35em;
+    border-radius: 4px;
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .tag-good { background: #163528; color: var(--good); }
+  .tag-warn { background: #3a2e12; color: var(--warn); }
+  .tag-bad { background: #3a1a1e; color: var(--bad); }
+  .tag-info { background: #153048; color: var(--accent); }
+  .svg-wrap {
+    overflow-x: auto;
+    background: #0d121a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin: 0.75rem 0 0.25rem;
+  }
+  svg text { font-family: "Segoe UI", "Noto Sans TC", sans-serif; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem;
+    margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted);
+  }
+  .legend i {
+    display: inline-block; width: 0.75rem; height: 0.75rem;
+    border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px;
+  }
+  footer {
+    margin-top: 1.5rem; color: var(--muted); font-size: 0.85rem;
+    text-align: center;
+  }
+  ul.tight li { margin: 0.25rem 0; }
+  .callout {
+    border-left: 3px solid var(--warn);
+    background: #2a2414;
+    padding: 0.7rem 0.9rem;
+    border-radius: 0 8px 8px 0;
+    margin: 0.75rem 0;
+  }
+  .callout.bad { border-left-color: var(--bad); background: #2a1618; }
+  .callout.good { border-left-color: var(--good); background: #12261c; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Progressive Warm 架構與風險說明</h1>
+  <p>
+    版本 <strong>0.6.46-dev.4</strong> · 方案 1：<code>warm phase=core → history</code> ·
+    本頁說明「改善了什麼、為何差這麼多、風險、已知邏輯問題」，
+    以及元件／排程／Storage／SQL 的整體資料流（SVG）。
+  </p>
+</header>
+<main>
+
+<!-- ========== 1 ========== -->
+<section>
+  <h2><span class="num">1</span> 改善了什麼？為什麼體感差這麼多？</h2>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>改之前（單一 warm）</h3>
+      <p class="muted">一次 Edge 請求做完全部事，前端 <code>await</code> 到結束才重讀 Storage。</p>
+      <table>
+        <tr><th>步驟</th><th>大致成本</th></tr>
+        <tr><td>Yahoo 日 K</td><td>中（1–3s）</td></tr>
+        <tr><td>最新基本面（估值／當月營收）</td><td><strong>快</strong>（多半吃 chip_raw_cache）</td></tr>
+        <tr><td>MOPS 月營收歷史</td><td>中，可多輪</td></tr>
+        <tr><td>MOPS 季報歷史</td><td><strong>很貴</strong>（每輪 ~1.6MB×2 市場）</td></tr>
+        <tr><td>合計上限</td><td><code>WARM_BUDGET_MS = 30s</code> + 前面 sync</td></tr>
+      </table>
+      <p>使用者第一次開新股／觀測股：<strong>空白轉圈直到整包結束</strong>（常 10–30 秒）。</p>
+    </div>
+    <div class="card">
+      <h3>改之後（方案 1 拆分）</h3>
+      <p class="muted">把「能先畫的」與「慢慢補的」切開。</p>
+      <table>
+        <tr><th>階段</th><th>做什麼</th><th>額度</th></tr>
+        <tr><td><span class="tag tag-info">core</span></td><td>日 K + 最新基本面</td><td>扣 1 次 / 日</td></tr>
+        <tr><td><span class="tag" style="background:#2a1f3d;color:var(--hist)">history</span></td><td>MOPS 12 月／12 季補齊</td><td><strong>不扣第二次</strong></td></tr>
+        <tr><td><span class="tag tag-good">UI</span></td><td>core 完就 paint，history 背景延長表格</td><td>—</td></tr>
+      </table>
+      <p>體感目標：<strong>首屏有用內容 ~1–3s</strong>；歷史仍可花到 ~30s，但不擋畫面。</p>
+    </div>
+  </div>
+
+  <h3>為何「差這麼多」？—— 不是少抓資料，是「可互動時間」提前</h3>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 920 220" width="100%" height="220" role="img" aria-label="時間軸前後對比">
+      <text x="20" y="28" fill="#9aa8bc" font-size="13">時間軸（同一冷代號第一次開啟）</text>
+
+      <!-- Before -->
+      <text x="20" y="62" fill="#e7ecf3" font-size="13" font-weight="600">改前</text>
+      <rect x="80" y="48" width="720" height="28" rx="6" fill="#3a1a1e" stroke="#f07178"/>
+      <text x="100" y="67" fill="#f5c2c7" font-size="12">████ 整段 await warm(full) ── 日K+最新+月營收歷史+季報歷史 ── 最多 ~30s+ ████</text>
+      <polygon points="800,62 820,54 820,70" fill="#3ecf8e"/>
+      <text x="830" y="67" fill="#3ecf8e" font-size="12">才畫</text>
+
+      <!-- After -->
+      <text x="20" y="120" fill="#e7ecf3" font-size="13" font-weight="600">改後</text>
+      <rect x="80" y="106" width="140" height="28" rx="6" fill="#153048" stroke="#5b8def"/>
+      <text x="100" y="125" fill="#b8d4ff" font-size="12">core ~1–3s</text>
+      <polygon points="220,120 240,112 240,128" fill="#3ecf8e"/>
+      <text x="248" y="125" fill="#3ecf8e" font-size="12">先畫估值/最新月</text>
+      <rect x="380" y="106" width="420" height="28" rx="6" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="400" y="125" fill="#e0c4ff" font-size="12">history 背景補 12/12（使用者已可看畫面）</text>
+
+      <text x="80" y="175" fill="#9aa8bc" font-size="12">關鍵差：TTFP（Time To First Paint of fundamentals）從「整包結束」改成「core 結束」。</text>
+      <text x="80" y="195" fill="#9aa8bc" font-size="12">總資料量差不多；變的是「何時能用」，不是「最終抓多少」。</text>
+    </svg>
+  </div>
+  <p class="legend">
+    <span><i style="background:#5b8def"></i>core</span>
+    <span><i style="background:#c792ea"></i>history</span>
+    <span><i style="background:#3ecf8e"></i>可畫 UI</span>
+    <span><i style="background:#f07178"></i>使用者空等</span>
+  </p>
+</section>
+
+<!-- ========== 2 ========== -->
+<section>
+  <h2><span class="num">2</span> 風險評估</h2>
+  <table>
+    <tr>
+      <th>風險</th>
+      <th>嚴重度</th>
+      <th>說明</th>
+      <th>現況緩解</th>
+    </tr>
+    <tr>
+      <td>history 不扣額度被濫用</td>
+      <td><span class="tag tag-warn">中</span></td>
+      <td>已登入者可對「已存在但偏薄」的 <code>fundamental/*.json</code> 反覆打 history，燒 MOPS。</td>
+      <td>需 JWT；前端 session seal；滿檔 gap-driven 近乎 0 成本。長期可再加 history 額度或 token。</td>
+    </tr>
+    <tr>
+      <td>前後端版本不一致</td>
+      <td><span class="tag tag-bad">高（部署時）</span></td>
+      <td>新前端送 <code>phase</code>，舊 Edge 忽略 → 每次都當 full 或行為不符。</td>
+      <td>DEV 已 volume-copy；prod 必須前端+Edge 一併上。</td>
+    </tr>
+    <tr>
+      <td>兩次 RTT / 兩次 invoke</td>
+      <td><span class="tag tag-info">低</span></td>
+      <td>core + history 比單次 full 多一次網路往返。</td>
+      <td>首屏仍較快；prefetch 用 progressive 可接受。</td>
+    </tr>
+    <tr>
+      <td>使用者只看到「最新一期」誤以為資料完整</td>
+      <td><span class="tag tag-warn">中（產品）</span></td>
+      <td>先畫後補，表格會變長。</td>
+      <td>UI「歷史補齊中（月 n/12 · 獲利 m/12）」。</td>
+    </tr>
+    <tr>
+      <td>夜批與 on-demand 寫同一檔</td>
+      <td><span class="tag tag-info">低</span></td>
+      <td>兩邊都 merge 寫 <code>fundamental/{ticker}.json</code>。</td>
+      <td>gap-driven merge；最壞覆寫競爭，不是結構性毀損。</td>
+    </tr>
+    <tr>
+      <td>session seal 過嚴</td>
+      <td><span class="tag tag-warn">中</span></td>
+      <td>core 封印後同 session 不再試；若 history 該補卻被跳過會卡住（見 §3）。</td>
+      <td>整頁 reload 清模組狀態；夜批兜底。</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ========== 3 ========== -->
+<section>
+  <h2><span class="num">3</span> 已發現的邏輯問題 / 潛在 BUG</h2>
+
+  <div class="callout bad">
+    <strong>BUG-A（中）— core 已封印時，頁面不再跑 history</strong><br />
+    <code>StockDetailPage</code> 只有在 <code>core.ok &amp;&amp; !core.fundamentalComplete</code> 才呼叫 <code>warmStockHistory</code>。
+    若本 session 先前 prefetch / 日 K 已跑過 core，再次開頁時 <code>warmStockCore</code> 因 <code>attemptedCore</code> 直接回 <code>FAILED</code>（ok=false），
+    即使 Storage 仍偏薄、history 其實可補，也<strong>不會</strong>進入 history。
+    <br /><span class="muted">建議修：core 封印但檔案仍 incomplete 時，仍允許 <code>warmStockHistory</code>；或 core seal 改回傳上次結果而非 FAILED。</span>
+  </div>
+
+  <div class="callout">
+    <strong>BUG-B（低）— fundamentalSynced=0 時可能不重讀，但實際檔案已更新</strong><br />
+    <code>syncFundamental</code> 在 <code>dataDate</code> 已是最新時 skip，回傳 <code>synced:0</code>。
+    前端只在 <code>fundamentalSynced &gt; 0 || backfilled &gt; 0</code> 才 re-fetch。
+    多數情況 Storage 已 paint 過；若初讀 null、core 其實寫了檔但計數為 0（邊界），可能少讀一次。
+    <br /><span class="muted">實務上 write 成功會 +synced；skip 表示檔已存在。風險低。</span>
+  </div>
+
+  <div class="callout">
+    <strong>注意-C（設計）— <code>fundamentalHistoryLooksComplete</code> 只看長度 ≥12</strong><br />
+    不檢查 gap。真正是否補完以 history 迴圈「回傳空」為準。core 階段的 complete 旗標可能偏樂觀（長度夠但有洞時極少見）。
+  </div>
+
+  <div class="callout good">
+    <strong>已做對的部分</strong>
+    <ul class="tight">
+      <li>history / full 的 revenue→profit <strong>必須串行</strong>（同檔互蓋）。</li>
+      <li>unknown ticker：跳過 MOPS，<code>fundamentalComplete:true</code> 封印，不燒額度迴圈。</li>
+      <li>history 無進度不 unseal，避免每開一次頁狂打 MOPS。</li>
+      <li>soft threshold（月&lt;6 或無季）才 on-demand warm；6–11 交給夜批。</li>
+      <li>日 K 只打 core，不再被 30s 歷史拖住。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 4 ========== -->
+<section>
+  <h2><span class="num">4</span> 前端元件如何協作（開個股分析）</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 960 520" width="100%" height="520" role="img" aria-label="前端元件資料流">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#9aa8bc"/>
+        </marker>
+      </defs>
+
+      <!-- Boxes -->
+      <rect x="20" y="20" width="200" height="56" rx="8" fill="#243044" stroke="#3d9cf0"/>
+      <text x="120" y="44" text-anchor="middle" fill="#e7ecf3" font-size="13" font-weight="600">AnalysisPage</text>
+      <text x="120" y="62" text-anchor="middle" fill="#9aa8bc" font-size="11">持股 / 觀測 / 搜尋</text>
+
+      <rect x="280" y="20" width="200" height="56" rx="8" fill="#243044" stroke="#3d9cf0"/>
+      <text x="380" y="44" text-anchor="middle" fill="#e7ecf3" font-size="13" font-weight="600">StockDetailPage</text>
+      <text x="380" y="62" text-anchor="middle" fill="#9aa8bc" font-size="11">籌碼 + 基本面 + 技術</text>
+
+      <rect x="540" y="20" width="180" height="56" rx="8" fill="#1e2a20" stroke="#3ecf8e"/>
+      <text x="630" y="44" text-anchor="middle" fill="#e7ecf3" font-size="13" font-weight="600">prefetchStockData</text>
+      <text x="630" y="62" text-anchor="middle" fill="#9aa8bc" font-size="11">加入觀測 / 首買</text>
+
+      <rect x="760" y="20" width="180" height="56" rx="8" fill="#1e2a20" stroke="#3ecf8e"/>
+      <text x="850" y="44" text-anchor="middle" fill="#e7ecf3" font-size="13" font-weight="600">WorkspaceContext</text>
+      <text x="850" y="62" text-anchor="middle" fill="#9aa8bc" font-size="11">首次 TPE 買進</text>
+
+      <!-- Middle services -->
+      <rect x="60" y="140" width="160" height="48" rx="8" fill="#153048" stroke="#5b8def"/>
+      <text x="140" y="168" text-anchor="middle" fill="#b8d4ff" font-size="12">warmStockCore</text>
+
+      <rect x="250" y="140" width="160" height="48" rx="8" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="330" y="168" text-anchor="middle" fill="#e0c4ff" font-size="12">warmStockHistory</text>
+
+      <rect x="440" y="140" width="160" height="48" rx="8" fill="#243044" stroke="#89ddff"/>
+      <text x="520" y="168" text-anchor="middle" fill="#b8eaff" font-size="12">warmStock()</text>
+      <text x="520" y="182" text-anchor="middle" fill="#9aa8bc" font-size="10">= core→history</text>
+
+      <rect x="640" y="120" width="140" height="40" rx="8" fill="#243044" stroke="#9aa8bc"/>
+      <text x="710" y="145" text-anchor="middle" fill="#e7ecf3" font-size="11">fetchFundamental</text>
+
+      <rect x="800" y="120" width="140" height="40" rx="8" fill="#243044" stroke="#9aa8bc"/>
+      <text x="870" y="145" text-anchor="middle" fill="#e7ecf3" font-size="11">fetchDailySeries</text>
+
+      <rect x="640" y="175" width="140" height="40" rx="8" fill="#243044" stroke="#9aa8bc"/>
+      <text x="710" y="200" text-anchor="middle" fill="#e7ecf3" font-size="11">fetchStoredReport</text>
+
+      <rect x="800" y="175" width="140" height="40" rx="8" fill="#243044" stroke="#9aa8bc"/>
+      <text x="870" y="200" text-anchor="middle" fill="#e7ecf3" font-size="11">useDailySeries</text>
+
+      <!-- Edge -->
+      <rect x="200" y="260" width="560" height="70" rx="10" fill="#1a2332" stroke="#ffcb6b"/>
+      <text x="480" y="288" text-anchor="middle" fill="#ffcb6b" font-size="14" font-weight="600">Edge Function：stock-report</text>
+      <text x="480" y="310" text-anchor="middle" fill="#9aa8bc" font-size="12">action=warm · phase=core|history|full · assertUser · take_warm_quota(core/full)</text>
+
+      <!-- Storage + SQL -->
+      <rect x="80" y="380" width="360" height="100" rx="10" fill="#102028" stroke="#89ddff"/>
+      <text x="260" y="408" text-anchor="middle" fill="#89ddff" font-size="13" font-weight="600">Storage bucket: reports</text>
+      <text x="100" y="432" fill="#c5d4e8" font-size="11">daily/{ticker}.json</text>
+      <text x="100" y="450" fill="#c5d4e8" font-size="11">fundamental/{ticker}.json</text>
+      <text x="100" y="468" fill="#c5d4e8" font-size="11">{ymd}/{ticker}.json · macro/us.json · fx/twd.json · market/daily.json</text>
+
+      <rect x="500" y="380" width="400" height="100" rx="10" fill="#282410" stroke="#ffcb6b"/>
+      <text x="700" y="408" text-anchor="middle" fill="#ffcb6b" font-size="13" font-weight="600">Postgres (SQL)</text>
+      <text x="520" y="432" fill="#c5d4e8" font-size="11">warm_quota + take_warm_quota()</text>
+      <text x="520" y="450" fill="#c5d4e8" font-size="11">chip_raw_cache · batch_run_log · tw_watchlist</text>
+      <text x="520" y="468" fill="#c5d4e8" font-size="11">transactions / holdings 等業務表（非 warm 寫入）</text>
+
+      <!-- Arrows -->
+      <line x1="220" y1="48" x2="278" y2="48" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+      <line x1="380" y1="76" x2="140" y2="138" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <line x1="400" y1="76" x2="330" y2="138" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <line x1="630" y1="76" x2="520" y2="138" stroke="#3ecf8e" marker-end="url(#arrow)"/>
+      <line x1="850" y1="76" x2="520" y2="138" stroke="#3ecf8e" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+      <line x1="140" y1="188" x2="400" y2="258" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <line x1="330" y1="188" x2="450" y2="258" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <line x1="520" y1="188" x2="480" y2="258" stroke="#89ddff" marker-end="url(#arrow)"/>
+      <line x1="870" y1="215" x2="870" y2="140" stroke="#9aa8bc" opacity="0"/>
+      <line x1="870" y1="215" x2="780" y2="250" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <text x="900" y="250" fill="#9aa8bc" font-size="10">core only</text>
+
+      <line x1="380" y1="330" x2="260" y2="378" stroke="#89ddff" marker-end="url(#arrow)"/>
+      <line x1="560" y1="330" x2="700" y2="378" stroke="#ffcb6b" marker-end="url(#arrow)"/>
+      <line x1="710" y1="160" x2="400" y2="380" stroke="#9aa8bc" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+    </svg>
+  </div>
+  <p class="muted">讀路徑（虛線）：前端直接讀 Storage。寫路徑（實線）：僅 Edge 寫入 Storage / SQL。</p>
+</section>
+
+<!-- ========== 5 ========== -->
+<section>
+  <h2><span class="num">5</span> warm 內部：core / history / full</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 960 420" width="100%" height="420" role="img" aria-label="warm phase 流程">
+      <text x="20" y="28" fill="#9aa8bc" font-size="13">handleWarm(req, body)</text>
+
+      <rect x="20" y="50" width="140" height="40" rx="6" fill="#243044" stroke="#9aa8bc"/>
+      <text x="90" y="75" text-anchor="middle" fill="#e7ecf3" font-size="12">assertUser</text>
+
+      <path d="M160 70 H200" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+      <rect x="200" y="50" width="120" height="40" rx="6" fill="#243044" stroke="#ffcb6b"/>
+      <text x="260" y="75" text-anchor="middle" fill="#ffcb6b" font-size="12">parse phase</text>
+
+      <!-- history branch -->
+      <path d="M320 70 H360 V120 H400" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <rect x="400" y="100" width="200" height="44" rx="6" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="500" y="118" text-anchor="middle" fill="#e0c4ff" font-size="12">phase=history</text>
+      <text x="500" y="134" text-anchor="middle" fill="#9aa8bc" font-size="10">不 take_warm_quota</text>
+
+      <path d="M600 122 H640" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <rect x="640" y="100" width="280" height="44" rx="6" fill="#102028" stroke="#89ddff"/>
+      <text x="780" y="118" text-anchor="middle" fill="#b8eaff" font-size="11">backfillRevenue → backfillProfit</text>
+      <text x="780" y="134" text-anchor="middle" fill="#9aa8bc" font-size="10">寫 fundamental/{t}.json · ≤30s</text>
+
+      <!-- core/full -->
+      <path d="M260 90 V180 H400" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="400" y="160" width="200" height="44" rx="6" fill="#153048" stroke="#5b8def"/>
+      <text x="500" y="178" text-anchor="middle" fill="#b8d4ff" font-size="12">phase=core | full</text>
+      <text x="500" y="194" text-anchor="middle" fill="#9aa8bc" font-size="10">take_warm_quota 扣 1</text>
+
+      <path d="M500 204 V230" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="400" y="230" width="200" height="36" rx="6" fill="#243044" stroke="#9aa8bc"/>
+      <text x="500" y="252" text-anchor="middle" fill="#e7ecf3" font-size="12">syncDaily (Yahoo)</text>
+
+      <path d="M500 266 V290" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="400" y="290" width="200" height="36" rx="6" fill="#243044" stroke="#9aa8bc"/>
+      <text x="500" y="312" text-anchor="middle" fill="#e7ecf3" font-size="12">syncFundamental (cache)</text>
+
+      <path d="M600 308 H640 V250" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="640" y="230" width="280" height="40" rx="6" fill="#153048" stroke="#5b8def"/>
+      <text x="780" y="254" text-anchor="middle" fill="#b8d4ff" font-size="12">core → 立即 return JSON</text>
+
+      <path d="M600 308 H640 V340" stroke="#82aaff" marker-end="url(#arrow)"/>
+      <rect x="640" y="320" width="280" height="40" rx="6" fill="#1a2030" stroke="#82aaff"/>
+      <text x="780" y="344" text-anchor="middle" fill="#c5d4e8" font-size="12">full → 再跑 history backfill</text>
+
+      <text x="20" y="380" fill="#9aa8bc" font-size="12">外部：Yahoo（日K）· TWSE 全市場大檔經 chip_raw_cache · MOPS big5/POST（歷史）</text>
+      <text x="20" y="400" fill="#9aa8bc" font-size="12">unknown（Yahoo 無列）：fundamentalComplete=true，跳過 MOPS，封印前端重試</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ========== 6 ========== -->
+<section>
+  <h2><span class="num">6</span> 排程（pg_cron）怎麼跑</h2>
+  <p class="muted">均透過 <code>net.http_post</code> → Edge <code>stock-report</code>，header <code>x-cron-secret</code>，函數 <code>--no-verify-jwt</code>。</p>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 960 360" width="100%" height="360" role="img" aria-label="排程總覽">
+      <!-- timeline -->
+      <line x1="80" y1="40" x2="900" y2="40" stroke="#2d3a4d" stroke-width="2"/>
+      <text x="80" y="28" fill="#9aa8bc" font-size="11">UTC 示意（標籤為台北時間）</text>
+
+      <circle cx="120" cy="40" r="5" fill="#3ecf8e"/>
+      <text x="120" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">11:00</text>
+      <text x="120" y="86" text-anchor="middle" fill="#ffcb6b" font-size="10">fx</text>
+
+      <circle cx="220" cy="40" r="5" fill="#3d9cf0"/>
+      <text x="220" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">15:00</text>
+      <text x="220" y="86" text-anchor="middle" fill="#89ddff" font-size="10">market</text>
+
+      <circle cx="300" cy="40" r="5" fill="#82aaff"/>
+      <text x="300" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">16:00</text>
+      <text x="300" y="86" text-anchor="middle" fill="#5b8def" font-size="10">nightly 起</text>
+
+      <circle cx="480" cy="40" r="5" fill="#c792ea"/>
+      <text x="480" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">~21:00</text>
+      <text x="480" y="86" text-anchor="middle" fill="#c792ea" font-size="10">macro 窗</text>
+
+      <circle cx="700" cy="40" r="5" fill="#5b8def"/>
+      <text x="700" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">23:45</text>
+      <text x="700" y="86" text-anchor="middle" fill="#5b8def" font-size="10">nightly 迄</text>
+
+      <circle cx="820" cy="40" r="5" fill="#ffcb6b"/>
+      <text x="820" y="70" text-anchor="middle" fill="#9aa8bc" font-size="10">17:00</text>
+      <text x="820" y="86" text-anchor="middle" fill="#ffcb6b" font-size="10">fx</text>
+
+      <!-- job cards -->
+      <rect x="40" y="120" width="210" height="100" rx="8" fill="#153048" stroke="#5b8def"/>
+      <text x="145" y="145" text-anchor="middle" fill="#b8d4ff" font-size="12" font-weight="600">stock-report-nightly</text>
+      <text x="50" y="168" fill="#9aa8bc" font-size="11">*/15 08–15 UTC · 平日</text>
+      <text x="50" y="186" fill="#c5d4e8" font-size="11">= 台北 16:00–23:45 /15m</text>
+      <text x="50" y="204" fill="#e7ecf3" font-size="11">action: generate-all</text>
+
+      <rect x="270" y="120" width="210" height="100" rx="8" fill="#102028" stroke="#89ddff"/>
+      <text x="375" y="145" text-anchor="middle" fill="#b8eaff" font-size="12" font-weight="600">market-daily</text>
+      <text x="280" y="168" fill="#9aa8bc" font-size="11">0,30 07–10 UTC 平日</text>
+      <text x="280" y="186" fill="#c5d4e8" font-size="11">= 台北 15:00–18:30 /30m</text>
+      <text x="280" y="204" fill="#e7ecf3" font-size="11">action: sync-market</text>
+
+      <rect x="500" y="120" width="210" height="100" rx="8" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="605" y="145" text-anchor="middle" fill="#e0c4ff" font-size="12" font-weight="600">macro-daily</text>
+      <text x="510" y="168" fill="#9aa8bc" font-size="11">*/30 12–18 UTC 每日</text>
+      <text x="510" y="186" fill="#c5d4e8" font-size="11">（schema 註解為雙班制演進）</text>
+      <text x="510" y="204" fill="#e7ecf3" font-size="11">action: sync-macro</text>
+
+      <rect x="730" y="120" width="200" height="100" rx="8" fill="#282410" stroke="#ffcb6b"/>
+      <text x="830" y="145" text-anchor="middle" fill="#ffcb6b" font-size="12" font-weight="600">fx-daily</text>
+      <text x="740" y="168" fill="#9aa8bc" font-size="11">0 3,9 UTC 每日</text>
+      <text x="740" y="186" fill="#c5d4e8" font-size="11">= 台北 11:00 / 17:00</text>
+      <text x="740" y="204" fill="#e7ecf3" font-size="11">action: sync-fx</text>
+
+      <rect x="40" y="250" width="900" height="80" rx="8" fill="#1a2332" stroke="#2d3a4d"/>
+      <text x="60" y="278" fill="#e7ecf3" font-size="12" font-weight="600">generate-all 一輪（對 batchTwTickers = 持股 ∪ tw_watchlist）</text>
+      <text x="60" y="300" fill="#9aa8bc" font-size="12">籌碼報告 → daily → fundamental 最新 → backfill 月營收 → backfill 季報 → prune 舊檔 / 寫 batch_run_log</text>
+      <text x="60" y="318" fill="#9aa8bc" font-size="12">另：source-probe / admin-run 手動觸發同一批 handler（assertAdmin）</text>
+    </svg>
+  </div>
+  <table>
+    <tr><th>Job</th><th>Cron（schema）</th><th>Body</th><th>主要寫入</th></tr>
+    <tr>
+      <td>stock-report-nightly</td>
+      <td><code>*/15 8-15 * * 1-5</code></td>
+      <td><code>generate-all</code></td>
+      <td><code>{ymd}/{ticker}.json</code> · daily · fundamental · batch_run_log</td>
+    </tr>
+    <tr>
+      <td>market-daily</td>
+      <td><code>0,30 7-10 * * 1-5</code></td>
+      <td><code>sync-market</code></td>
+      <td><code>market/daily.json</code></td>
+    </tr>
+    <tr>
+      <td>macro-daily</td>
+      <td><code>*/30 12-18 * * *</code></td>
+      <td><code>sync-macro</code></td>
+      <td><code>macro/us.json</code></td>
+    </tr>
+    <tr>
+      <td>fx-daily</td>
+      <td><code>0 3,9 * * *</code></td>
+      <td><code>sync-fx</code></td>
+      <td><code>fx/twd.json</code></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ========== 7 ========== -->
+<section>
+  <h2><span class="num">7</span> Storage 與 SQL 寫入地圖</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 960 480" width="100%" height="480" role="img" aria-label="Storage SQL 地圖">
+      <rect x="20" y="20" width="920" height="40" rx="8" fill="#243044" stroke="#2d3a4d"/>
+      <text x="480" y="45" text-anchor="middle" fill="#e7ecf3" font-size="14" font-weight="600">誰寫什麼？（只有 Edge 寫 Storage；前端只讀 + 業務表）</text>
+
+      <!-- Storage column -->
+      <rect x="40" y="80" width="420" height="360" rx="10" fill="#102028" stroke="#89ddff"/>
+      <text x="250" y="110" text-anchor="middle" fill="#89ddff" font-size="14" font-weight="600">Storage · reports</text>
+
+      <rect x="60" y="130" width="380" height="50" rx="6" fill="#153048" stroke="#5b8def"/>
+      <text x="70" y="150" fill="#b8d4ff" font-size="12">warm core / generate-all</text>
+      <text x="70" y="168" fill="#9aa8bc" font-size="11">→ daily/{ticker}.json</text>
+
+      <rect x="60" y="195" width="380" height="70" rx="6" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="70" y="215" fill="#e0c4ff" font-size="12">warm core + history / generate-all backfill</text>
+      <text x="70" y="233" fill="#9aa8bc" font-size="11">→ fundamental/{ticker}.json</text>
+      <text x="70" y="251" fill="#9aa8bc" font-size="11">（估值、月營收序列、季報序列、progress 指標）</text>
+
+      <rect x="60" y="280" width="380" height="50" rx="6" fill="#1a2030" stroke="#82aaff"/>
+      <text x="70" y="300" fill="#c5d4e8" font-size="12">generate-all / generate</text>
+      <text x="70" y="318" fill="#9aa8bc" font-size="11">→ {ymd}/{ticker}.json 籌碼報告（7 天剪枝）</text>
+
+      <rect x="60" y="345" width="380" height="70" rx="6" fill="#1a2332" stroke="#9aa8bc"/>
+      <text x="70" y="365" fill="#e7ecf3" font-size="12">獨立排程</text>
+      <text x="70" y="383" fill="#9aa8bc" font-size="11">macro/us.json · fx/twd.json · market/daily.json</text>
+      <text x="70" y="401" fill="#9aa8bc" font-size="11">全站共用，與個股 warm 無關</text>
+
+      <!-- SQL column -->
+      <rect x="500" y="80" width="420" height="360" rx="10" fill="#282410" stroke="#ffcb6b"/>
+      <text x="710" y="110" text-anchor="middle" fill="#ffcb6b" font-size="14" font-weight="600">Postgres</text>
+
+      <rect x="520" y="130" width="380" height="55" rx="6" fill="#3a2e12" stroke="#f0b429"/>
+      <text x="530" y="152" fill="#ffcb6b" font-size="12">warm 時</text>
+      <text x="530" y="170" fill="#e7ecf3" font-size="11">warm_quota 列 + take_warm_quota(user, ymd, 30)</text>
+
+      <rect x="520" y="200" width="380" height="55" rx="6" fill="#243044" stroke="#9aa8bc"/>
+      <text x="530" y="222" fill="#c5d4e8" font-size="12">generate-all / 抓 TWSE 大檔</text>
+      <text x="530" y="240" fill="#9aa8bc" font-size="11">chip_raw_cache（ymd + dataset）</text>
+
+      <rect x="520" y="270" width="380" height="55" rx="6" fill="#243044" stroke="#9aa8bc"/>
+      <text x="530" y="292" fill="#c5d4e8" font-size="12">每輪 generate-all 結束</text>
+      <text x="530" y="310" fill="#9aa8bc" font-size="11">batch_run_log（觀測用，失敗不擋主流程）</text>
+
+      <rect x="520" y="340" width="380" height="70" rx="6" fill="#1e2a20" stroke="#3ecf8e"/>
+      <text x="530" y="362" fill="#3ecf8e" font-size="12">前端 / RLS 業務資料</text>
+      <text x="530" y="380" fill="#9aa8bc" font-size="11">transactions · tw_watchlist · user_settings …</text>
+      <text x="530" y="398" fill="#9aa8bc" font-size="11">決定 batchTwTickers 名單（持股 ∪ 觀測）</text>
+    </svg>
+  </div>
+
+  <h3>warm 額度 SQL（概念）</h3>
+  <pre class="mono" style="display:block;padding:0.9rem;overflow:auto;background:#0d121a;border-radius:8px;border:1px solid var(--border);color:#c5d4e8;">-- 原子扣次：used &lt; 30 才 +1，否則 limited
+SELECT take_warm_quota(p_user_id := $uid, p_ymd := '20260810', p_limit := 30);
+-- core / full 呼叫一次扣一次；history 不呼叫此 RPC
+</pre>
+</section>
+
+<!-- ========== 8 ========== -->
+<section>
+  <h2><span class="num">8</span> 端到端：新觀測股第一次</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 960 300" width="100%" height="300" role="img" aria-label="新觀測股時序">
+      <text x="20" y="30" fill="#9aa8bc" font-size="13">時序（理想路徑）</text>
+
+      <rect x="40" y="60" width="100" height="50" rx="6" fill="#243044" stroke="#3d9cf0"/>
+      <text x="90" y="82" text-anchor="middle" fill="#e7ecf3" font-size="11">加入觀測</text>
+      <text x="90" y="98" text-anchor="middle" fill="#9aa8bc" font-size="10">tw_watchlist</text>
+
+      <path d="M140 85 H170" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+      <rect x="170" y="60" width="110" height="50" rx="6" fill="#1e2a20" stroke="#3ecf8e"/>
+      <text x="225" y="82" text-anchor="middle" fill="#e7ecf3" font-size="11">prefetch</text>
+      <text x="225" y="98" text-anchor="middle" fill="#9aa8bc" font-size="10">warmStock()</text>
+
+      <path d="M280 85 H310" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="310" y="55" width="90" height="30" rx="5" fill="#153048" stroke="#5b8def"/>
+      <text x="355" y="75" text-anchor="middle" fill="#b8d4ff" font-size="11">core</text>
+      <path d="M400 70 H420" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <rect x="420" y="55" width="90" height="30" rx="5" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="465" y="75" text-anchor="middle" fill="#e0c4ff" font-size="11">history</text>
+
+      <path d="M225 110 V140 H355 V150" stroke="#9aa8bc" stroke-dasharray="3 2"/>
+      <text x="240" y="135" fill="#9aa8bc" font-size="10">背景，使用者可能已開頁</text>
+
+      <rect x="40" y="170" width="100" height="50" rx="6" fill="#243044" stroke="#3d9cf0"/>
+      <text x="90" y="192" text-anchor="middle" fill="#e7ecf3" font-size="11">開個股分析</text>
+      <text x="90" y="208" text-anchor="middle" fill="#9aa8bc" font-size="10">StockDetail</text>
+
+      <path d="M140 195 H180" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+      <rect x="180" y="170" width="120" height="50" rx="6" fill="#102028" stroke="#89ddff"/>
+      <text x="240" y="192" text-anchor="middle" fill="#b8eaff" font-size="11">Storage-first</text>
+      <text x="240" y="208" text-anchor="middle" fill="#9aa8bc" font-size="10">有檔先畫</text>
+
+      <path d="M300 195 H340" stroke="#5b8def" marker-end="url(#arrow)"/>
+      <rect x="340" y="170" width="130" height="50" rx="6" fill="#153048" stroke="#5b8def"/>
+      <text x="405" y="192" text-anchor="middle" fill="#b8d4ff" font-size="11">必要時 core</text>
+      <text x="405" y="208" text-anchor="middle" fill="#9aa8bc" font-size="10">soft threshold</text>
+
+      <path d="M470 195 H510" stroke="#c792ea" marker-end="url(#arrow)"/>
+      <rect x="510" y="170" width="130" height="50" rx="6" fill="#2a1f3d" stroke="#c792ea"/>
+      <text x="575" y="192" text-anchor="middle" fill="#e0c4ff" font-size="11">history</text>
+      <text x="575" y="208" text-anchor="middle" fill="#9aa8bc" font-size="10">未 complete</text>
+
+      <path d="M640 195 H680" stroke="#3ecf8e" marker-end="url(#arrow)"/>
+      <rect x="680" y="170" width="220" height="50" rx="6" fill="#12261c" stroke="#3ecf8e"/>
+      <text x="790" y="192" text-anchor="middle" fill="#3ecf8e" font-size="11">夜批 generate-all</text>
+      <text x="790" y="208" text-anchor="middle" fill="#9aa8bc" font-size="10">補到 12/12 · 含觀測股</text>
+
+      <text x="40" y="260" fill="#9aa8bc" font-size="12">若 Storage 已夠厚（≥6 月且有季）→ soft 規則不 warm，直接顯示；未滿 12/12 仍顯示「歷史補齊中」。</text>
+      <text x="40" y="280" fill="#f0b429" font-size="12">⚠ 若 core 已在本 session 封印，再開頁可能跳過 history（BUG-A）。</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ========== 9 ========== -->
+<section>
+  <h2><span class="num">9</span> 本地測試檢查清單</h2>
+  <ol>
+    <li>DEV Edge 已 volume-copy（目前已做）+ 本地 <code>npm run dev</code> 指到 DEV。</li>
+    <li>選一檔 Storage <strong>沒有</strong> <code>fundamental/*.json</code> 的代號。</li>
+    <li>Network 應見兩次 <code>stock-report</code>：body 含 <code>"phase":"core"</code> 再 <code>"history"</code>。</li>
+    <li>core 回應後 UI 應已有產業／估值／至少最新月或季。</li>
+    <li>history 期間可操作畫面；表格列數增加；可出現「歷史補齊中」。</li>
+    <li>同 session 再開同一檔：不應再扣第二次 core 額度（封印）；確認是否仍需要修 BUG-A。</li>
+    <li>無 JWT 打 warm → 401；額度用盡 → 429。</li>
+  </ol>
+</section>
+
+<footer>
+  產生自 stock-pnl-web 工作區 · 0.6.46-dev.4 · 檔案位置
+  <code>scratchpad/progressive-warm-architecture.html</code>
+  · 可用瀏覽器直接開啟
+</footer>
+</main>
+</body>
+</html>

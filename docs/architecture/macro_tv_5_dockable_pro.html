@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案五：可拖曳 Dock 面板戰情室 (Dockable Studio View)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-dark: #131722;
+      --tv-panel-bg: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-blue: #2962ff;
+      --tv-up-red: #f23645;
+      --tv-down-green: #089981;
+      --tv-text: #d1d4dc;
+      --tv-text-sub: #787b86;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-dark); color: var(--tv-text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Header Navigation Tabs */
+    .tv-header { height: 48px; background: var(--tv-panel-bg); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .tv-brand { font-weight: 700; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
+
+    .nav-tabs { display: flex; gap: 12px; }
+    .nav-tab { background: transparent; border: none; color: var(--tv-text-sub); font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+    .nav-tab.active, .nav-tab:hover { background: #2a2e39; color: #fff; }
+    .nav-tab.active { color: var(--tv-blue); border-bottom: 2px solid var(--tv-blue); border-radius: 4px 4px 0 0; }
+
+    /* Workspace Studio split */
+    .studio-workspace { flex: 1; display: flex; overflow: hidden; }
+
+    .left-studio { flex: 1; display: flex; flex-direction: column; background: var(--tv-bg-dark); }
+    .pane-top { flex: 2; position: relative; padding: 12px; border-bottom: 2px solid var(--tv-border); }
+    .pane-bottom { flex: 1; position: relative; padding: 12px; }
+
+    .right-dock { width: 320px; background: var(--tv-panel-bg); border-left: 1px solid var(--tv-border); padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .dock-card { background: var(--tv-bg-dark); border: 1px solid var(--tv-border); border-radius: 8px; padding: 14px; }
+    .dock-title { font-size: 12px; font-weight: 700; color: var(--tv-text-sub); text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .dock-val { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header Tabs -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-cubes" style="color: var(--tv-blue);"></i>
+      <span>TradingView Dockable Studio — 模組工作區戰情室</span>
+    </div>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchStudioTab('tw')">台股與三大法人對照</button>
+      <button class="nav-tab" onclick="switchStudioTab('us')">美股與 FRED 總經</button>
+      <button class="nav-tab" onclick="switchStudioTab('all')">全市場綜合面板</button>
+    </div>
+  </header>
+
+  <div class="studio-workspace">
+    
+    <!-- Left Top/Bottom Split View -->
+    <div class="left-studio">
+      <!-- Upper Chart (Price Series) -->
+      <div class="pane-top">
+        <div style="position: absolute; top: 12px; left: 16px; font-size: 12px; font-weight: 700; color: #fff; z-index: 10;">
+          <i class="fa-solid fa-chart-line" style="color: var(--tv-blue);"></i> 上半部面板：TAIEX 加權指數點數
+        </div>
+        <canvas id="studioChartTop"></canvas>
+      </div>
+
+      <!-- Lower Chart (Volume & Sub Indicators) -->
+      <div class="pane-bottom">
+        <div style="position: absolute; top: 12px; left: 16px; font-size: 12px; font-weight: 700; color: #fff; z-index: 10;">
+          <i class="fa-solid fa-chart-column" style="color: var(--tv-up-red);"></i> 下半部面板：外資與投信單日籌碼動向
+        </div>
+        <canvas id="studioChartBottom"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Dock Panel -->
+    <div class="right-dock">
+      <div class="dock-card">
+        <div class="dock-title"><span>大盤今日表現</span><i class="fa-solid fa-circle" style="color: var(--tv-up-red); font-size: 8px;"></i></div>
+        <div class="dock-val">23,850.20</div>
+        <div style="font-size: 13px; color: var(--tv-up-red); font-weight: 700;">+185.20 (+0.78%)</div>
+      </div>
+
+      <div class="dock-card">
+        <div class="dock-title"><span>外資累計買超</span><span>連 3 日</span></div>
+        <div class="dock-val" style="color: var(--tv-up-red);">+203.2 億</div>
+        <div style="font-size: 12px; color: var(--tv-text-sub);">今日淨買超 +98.2 億</div>
+      </div>
+
+      <div class="dock-card">
+        <div class="dock-title"><span>通膨降溫進度</span><span>TARGET 2%</span></div>
+        <div class="dock-val">2.60%</div>
+        <div style="font-size: 12px; color: var(--tv-down-green); font-weight: 600;">距離 2% 目標僅差 0.60%</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const opts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+        y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+      }
+    };
+
+    // Upper Chart
+    new Chart(document.getElementById('studioChartTop'), {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '加權指數',
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          fill: false
+        }]
+      },
+      options: opts
+    });
+
+    // Lower Chart
+    new Chart(document.getElementById('studioChartBottom'), {
+      type: 'bar',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '外資買賣超',
+          data: [-120, -210, 85, 110, 65, 40, 98.2],
+          backgroundColor: '#f23645'
+        }]
+      },
+      options: opts
+    });
+
+    function switchStudioTab(tab) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>金融產品 UI/UX 重構 — 六大設計版本原型總覽畫廊</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111726;
+      --border: #1d263b;
+      --accent: #00f0ff;
+      --gold: #ffb700;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --font-sans: 'Inter', 'Noto Sans TC', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
+    }
+
+    .version-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .version-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+    }
+    .card-preview {
+      height: 160px;
+      background: #050810;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      font-size: 40px;
+      position: relative;
+    }
+    .badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0, 240, 255, 0.15);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .card-body {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-target {
+      font-size: 12px;
+      color: var(--gold);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      flex: 1;
+    }
+    .btn-open {
+      display: block;
+      text-align: center;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      padding: 10px;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <div class="title">
+        <span>📈 股票損益網站 (Stock PnL Web)</span>
+        <span style="font-size: 14px; background: rgba(255,183,0,0.15); color: var(--gold); padding: 4px 10px; border-radius: 20px;">
+          金融導向六大 UI/UX 重構設計原型
+        </span>
+      </div>
+      <div class="subtitle">
+        完全針對專案三大核心功能打造：<b>1. 股票交易與損益狀態</b>、<b>2. 盤後台股與美國總經匯率</b>、<b>3. 後台排程運作狀況</b>。<br>
+        原型檔均存放於 <code>docs/architecture/</code>，點選下方版本開啟可互動預覽系統。
+      </div>
+    </div>
+
+    <div class="gallery-grid">
+      <!-- V1 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 1</span>
+          🏛️
+        </div>
+        <div class="card-body">
+          <div class="card-title">V1: Institutional Terminal Pro</div>
+          <div class="card-target">彭博 / 路透終端機風格 (Bloomberg Terminal)</div>
+          <div class="card-desc">高密度資訊陣列、跑馬燈、命令列 Prompt (`CMD>`)、五檔深度與三頁面互動切換。</div>
+          <a href="fin_ui_v1_terminal.html" class="btn-open">開啟 V1 原型 (Terminal Style)</a>
+        </div>
+      </div>
+
+      <!-- V2 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 2</span>
+          📈
+        </div>
+        <div class="card-body">
+          <div class="card-title">V2: TradingView Technical Desk</div>
+          <div class="card-target">TradingView 技術分析與盤後戰情室</div>
+          <div class="card-desc">K 線圖畫布、移動平均線 (MA20/60)、RSI 指標、繪圖工具列與持倉均價線疊加。</div>
+          <a href="fin_ui_v2_tradingview.html" class="btn-open">開啟 V2 原型 (TradingView Style)</a>
+        </div>
+      </div>
+
+      <!-- V3 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 3</span>
+          👑
+        </div>
+        <div class="card-body">
+          <div class="card-title">V3: Private Wealth Portal</div>
+          <div class="card-target">瑞士私人銀行 / 家族辦公室</div>
+          <div class="card-desc">典雅高對比金屬/香檳金配色、資產淨值曲線、資產配置 Donut 圖與保本試算。</div>
+          <a href="fin_ui_v3_wealth.html" class="btn-open">開啟 V3 原型 (Swiss Wealth Style)</a>
+        </div>
+      </div>
+
+      <!-- V4 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 4</span>
+          ⚛️
+        </div>
+        <div class="card-body">
+          <div class="card-title">V4: Quant & Risk Workstation</div>
+          <div class="card-target">風控主管 / 量化基金經理人</div>
+          <div class="card-desc">持倉損益動態熱力圖 (Heatmap)、Monte Carlo 模擬、VaR 風險值與夏普比率矩陣。</div>
+          <a href="fin_ui_v4_quant.html" class="btn-open">開啟 V4 原型 (Quant Heatmap Style)</a>
+        </div>
+      </div>
+
+      <!-- V5 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 5</span>
+          📱
+        </div>
+        <div class="card-body">
+          <div class="card-title">V5: Retail Neo-Fintech Pro</div>
+          <div class="card-target">新世代零售投資人 / Robinhood</div>
+          <div class="card-desc">現代暗色微光流體卡片、微型走勢圖 (Sparklines)、流暢交易下單抽屜與保本價滑桿。</div>
+          <a href="fin_ui_v5_neofintech.html" class="btn-open">開啟 V5 原型 (Neo-Fintech Style)</a>
+        </div>
+      </div>
+
+      <!-- V6 -->
+      <div class="version-card">
+        <div class="card-preview">
+          <span class="badge">VERSION 6</span>
+          📊
+        </div>
+        <div class="card-body">
+          <div class="card-title">V6: Dense Execution PnL Matrix</div>
+          <div class="card-target">高頻交易者 / 稅務審計師</div>
+          <div class="card-desc">試算表極致數據矩陣、固頂標頭、單筆買賣對應展開、稅費拆解與排程日誌稽核軌跡。</div>
+          <a href="fin_ui_v6_matrix.html" class="btn-open">開啟 V6 原型 (Matrix Style)</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

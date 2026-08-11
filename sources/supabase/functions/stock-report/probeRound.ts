@@ -27,7 +27,7 @@ export interface ProbeTick {
   data_ymd: string | null
   fingerprint: string | null
   rows: number | null
-  note: string
+  note: string | null
   duration_ms: number
 }
 

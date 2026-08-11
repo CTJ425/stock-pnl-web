@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三大法人 - 矩陣視圖</title>
+  <!--
+    Concept: Unit-as-row time-series matrix
+    Fixes: Comparison across days is impossible. This matrix makes it easy to read a unit's buy/sell over 7 days horizontally. Includes a heatmap for magnitude.
+    Trade-offs: Cannot show buy/sell legs (gross) easily in the same view without clutter.
+    Cost: Medium (requires custom heatmap logic and sparklines).
+  -->
+  <style>
+    :root {
+      --tv-bg-main: #ffffff;
+      --tv-bg-panel: #f8f9fa;
+      --tv-bg-hover: #f1f3f5;
+      --tv-border: #e9ecef;
+      --tv-text: #212529;
+      --tv-text-muted: #868e96;
+      --tv-up: #f23645;
+      --tv-down: #089981;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --tv-bg-main: #131722;
+        --tv-bg-panel: #1e222d;
+        --tv-bg-hover: #2a2e39;
+        --tv-border: #2a2e39;
+        --tv-text: #d1d4dc;
+        --tv-text-muted: #787b86;
+      }
+    }
+    body { background: var(--tv-bg-main); color: var(--tv-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 20px; font-size: 14px; }
+    .up { color: var(--tv-up); }
+    .down { color: var(--tv-down); }
+    .table-scroll { overflow-x: auto; background: var(--tv-bg-panel); border: 1px solid var(--tv-border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 12px; border-bottom: 1px solid var(--tv-border); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--tv-text-muted); font-weight: normal; }
+    .spark { display: flex; align-items: flex-end; gap: 2px; height: 24px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div style="max-width: 1000px; margin: 0 auto;">
+    <h2>三大法人買賣超 (矩陣視圖)</h2>
+    <div class="table-scroll" id="app"></div>
+  </div>
+  <script>
+    const UNITS = [
+      { key: 'foreign', label: '外資' },
+      { key: 'foreignDealer', label: '外資自營商' },
+      { key: 'trust', label: '投信' },
+      { key: 'dealerSelf', label: '自營商(自行)' },
+      { key: 'dealerHedge', label: '自營商(避險)' },
+      { key: 'total', label: '合計' }
+    ];
+    const MOCK_DATA = [
+      { date: '07/31', foreign: -156.4, foreignDealer: -1.2, trust: 35.6, dealerSelf: -10.5, dealerHedge: -40.2, total: -172.7 },
+      { date: '08/01', foreign: -200.5, foreignDealer: 0.8, trust: 22.4, dealerSelf: -15.1, dealerHedge: -55.8, total: -248.2 },
+      { date: '08/04', foreign: -450.2, foreignDealer: -5.4, trust: 60.5, dealerSelf: -30.2, dealerHedge: -120.4, total: -545.7 },
+      { date: '08/05', foreign: 120.5, foreignDealer: 2.1, trust: 45.2, dealerSelf: 8.5, dealerHedge: -15.2, total: 161.1 },
+      { date: '08/06', foreign: 235.8, foreignDealer: -1.5, trust: 15.6, dealerSelf: 22.4, dealerHedge: 18.5, total: 290.8 },
+      { date: '08/07', foreign: -50.4, foreignDealer: 0.5, trust: 10.2, dealerSelf: -5.6, dealerHedge: -12.4, total: -57.7 },
+      { date: '08/08', foreign: 85.2, foreignDealer: 1.2, trust: 28.5, dealerSelf: 12.0, dealerHedge: 5.4, total: 132.3 }
+    ];
+
+    let html = `<table aria-label="單位時間矩陣"><thead><tr><th>單位</th>`;
+    MOCK_DATA.forEach(d => html += `<th>${d.date}</th>`);
+    html += `<th>趨勢</th></tr></thead><tbody>`;
+
+    UNITS.forEach(u => {
+      html += `<tr><td><strong>${u.label}</strong></td>`;
+      MOCK_DATA.forEach(d => {
+        let val = d[u.key];
+        let color = val > 0 ? 'var(--tv-up)' : val < 0 ? 'var(--tv-down)' : 'inherit';
+        let bg = val > 0 ? `rgba(242, 54, 69, ${Math.min(val/600, 0.25)})` : val < 0 ? `rgba(8, 153, 129, ${Math.min(Math.abs(val)/600, 0.25)})` : '';
+        html += `<td style="color:${color}; background:${bg}">${val > 0 ? '+' : ''}${val.toFixed(1)}</td>`;
+      });
+      html += `<td><div class="spark">`;
+      MOCK_DATA.forEach(d => {
+          let val = d[u.key];
+          let h = Math.max(Math.abs(val) / 500 * 24, 2);
+          let color = val > 0 ? 'var(--tv-up)' : 'var(--tv-down)';
+          html += `<div style="height:${h}px; width:4px; background:${color};"></div>`;
+      });
+      html += `</div></td></tr>`;
+    });
+    html += `</tbody></table>`;
+    document.getElementById('app').innerHTML = html;
+  </script>
+</body>
+</html>

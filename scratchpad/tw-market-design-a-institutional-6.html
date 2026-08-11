@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>方案 A + 三大法人圖示化 · 6 變體</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-glow-a: rgba(99, 102, 241, 0.16);
+      --bg-glow-b: rgba(34, 211, 238, 0.1);
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-2: #22d3ee;
+      --up: #ff4a5a;
+      --down: #00e676;
+      --radius: 14px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', sans-serif;
+      --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+      /* unit palette */
+      --u-foreign: #ff6b7a;
+      --u-trust: #f472b6;
+      --u-dealer-self: #a78bfa;
+      --u-dealer-hedge: #fbbf24;
+      --u-foreign-d: #38bdf8;
+      --u-total: #e7ecf5;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
+        radial-gradient(800px 420px at 10% 20%, var(--bg-glow-b), transparent 55%);
+      line-height: 1.5;
+    }
+    .page-head {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(16px);
+      background: rgba(11, 15, 25, 0.8);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px 12px;
+    }
+    .page-head-inner { max-width: 1180px; margin: 0 auto; }
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 1.22rem; font-weight: 700; margin: 0 0 4px;
+      letter-spacing: -0.02em;
+    }
+    .page-lead {
+      margin: 0 0 12px; color: var(--ink-secondary);
+      font-size: 0.88rem; max-width: 54rem;
+    }
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; }
+    .toc a {
+      text-decoration: none; color: var(--ink-secondary);
+      font-size: 0.76rem; font-weight: 600;
+      padding: 6px 11px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface);
+    }
+    .toc a:hover { color: var(--ink); border-color: var(--border-strong); }
+    .toc a.rec {
+      border-color: rgba(124, 140, 248, 0.45);
+      color: #c7ceff; background: rgba(99, 102, 241, 0.14);
+    }
+
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 100px; }
+    .option { margin-bottom: 56px; scroll-margin-top: 120px; }
+    .option-tag { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    .pill {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+      background: rgba(99, 102, 241, 0.18); color: #b8c1ff;
+      border: 1px solid rgba(124, 140, 248, 0.3);
+    }
+    .pill.rec {
+      background: rgba(0, 230, 118, 0.1); color: #6ee7b7;
+      border-color: rgba(0, 230, 118, 0.28);
+    }
+    .pill.soft {
+      background: var(--surface); color: var(--ink-secondary);
+      border-color: var(--border); text-transform: none;
+      letter-spacing: 0; font-weight: 600;
+    }
+    .option h2 {
+      font-family: var(--font-display); font-size: 1.12rem;
+      margin: 0 0 6px; font-weight: 700;
+    }
+    .option > .desc {
+      margin: 0; color: var(--ink-secondary); font-size: 0.9rem; max-width: 50rem;
+    }
+    .pros {
+      margin: 10px 0 0; padding-left: 1.15rem;
+      color: var(--ink-muted); font-size: 0.82rem;
+    }
+    .pros li { margin: 3px 0; }
+    .pros strong { color: var(--ink-secondary); }
+
+    .mock {
+      margin-top: 14px; border: 1px solid var(--border);
+      border-radius: 18px; background: rgba(8, 12, 22, 0.55);
+      box-shadow: var(--shadow-card); overflow: hidden;
+    }
+    .mock-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02); font-size: 0.78rem; color: var(--ink-secondary);
+    }
+    .mock-bar .tabs { display: flex; gap: 4px; }
+    .mock-bar .tab { padding: 4px 10px; border-radius: 8px; color: var(--ink-muted); }
+    .mock-bar .tab.on { background: rgba(124,140,248,0.16); color: #c7ceff; font-weight: 600; }
+    .mock-body { padding: 16px; }
+
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .muted { color: var(--ink-muted); }
+    .sec { color: var(--ink-secondary); }
+    .mono { font-variant-numeric: tabular-nums; }
+
+    .glass {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--border-strong); background: var(--surface-strong);
+      color: var(--ink); border-radius: 9px; padding: 6px 10px;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-secondary); }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+      background: rgba(255,255,255,0.06); color: var(--ink-secondary);
+    }
+    .chip.up { background: rgba(255,74,90,0.12); color: var(--up); }
+    .chip.down { background: rgba(0,230,118,0.1); color: var(--down); }
+
+    /* —— Shared A chrome (compact) —— */
+    .a-hero {
+      display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 12px;
+    }
+    @media (max-width: 820px) { .a-hero { grid-template-columns: 1fr; } }
+    .a-index { padding: 16px 18px 12px; position: relative; overflow: hidden; }
+    .a-index::after {
+      content: ''; position: absolute; right: -20%; top: -40%; width: 60%; height: 140%;
+      background: radial-gradient(circle, rgba(255,74,90,0.12), transparent 65%);
+      pointer-events: none;
+    }
+    .a-index .label { font-size: 0.74rem; color: var(--ink-secondary); font-weight: 600; }
+    .a-index .value {
+      font-family: var(--font-display); font-size: 2.2rem; font-weight: 700;
+      letter-spacing: -0.03em; margin: 2px 0; line-height: 1.1;
+    }
+    .a-index .delta { font-size: 0.92rem; font-weight: 600; }
+    .a-index .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .a-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .a-mini .cell { padding: 11px 13px; }
+    .a-mini .k { font-size: 0.68rem; color: var(--ink-muted); font-weight: 600; }
+    .a-mini .v { font-family: var(--font-display); font-size: 1.08rem; font-weight: 700; margin-top: 2px; }
+    .a-mini .s { font-size: 0.7rem; color: var(--ink-secondary); margin-top: 2px; }
+
+    .a-charts {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;
+    }
+    @media (max-width: 820px) { .a-charts { grid-template-columns: 1fr; } }
+    .a-chart-card { padding: 12px 14px 10px; }
+    .a-chart-card .ct {
+      font-size: 0.76rem; font-weight: 600; color: var(--ink-secondary); margin-bottom: 8px;
+    }
+
+    .candle-row {
+      display: flex; align-items: flex-end; gap: 3px; height: 100px; padding-top: 4px;
+    }
+    .candle {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-end; height: 100%; position: relative;
+    }
+    .candle .wick { width: 1px; background: currentColor; position: absolute; }
+    .candle .body { width: 70%; max-width: 9px; min-width: 3px; border-radius: 1px; }
+    .candle.up { color: var(--up); }
+    .candle.up .body { background: var(--up); }
+    .candle.down { color: var(--down); }
+    .candle.down .body { background: var(--down); }
+    .bars { display: flex; align-items: flex-end; gap: 3px; height: 80px; }
+    .bars .b {
+      flex: 1; border-radius: 2px 2px 0 0; min-width: 3px;
+      background: linear-gradient(180deg, rgba(34,211,238,0.75), rgba(34,211,238,0.2));
+    }
+    .line-area { height: 64px; }
+    .line-area svg { width: 100%; height: 100%; display: block; }
+
+    .section-h {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .section-h h3 {
+      margin: 0; font-size: 0.92rem; font-weight: 700; font-family: var(--font-display);
+    }
+    .stamp { font-size: 0.72rem; color: var(--ink-muted); }
+
+    table.data { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    table.data th {
+      text-align: left; color: var(--ink-muted); font-weight: 600;
+      font-size: 0.7rem; padding: 7px 9px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    table.data td {
+      padding: 7px 9px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap;
+    }
+    table.data th.num, table.data td.num { text-align: right; }
+    table.data tr:hover td { background: rgba(255,255,255,0.025); }
+    table.data tr.selected td { background: rgba(99,102,241,0.1); }
+
+    .a-split {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    @media (max-width: 900px) { .a-split { grid-template-columns: 1fr; } }
+    .a-panel { padding: 12px 14px 10px; }
+
+    /* full-width inst block under A chrome */
+    .inst-block {
+      margin-top: 12px; padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(99,102,241,0.06), var(--surface));
+    }
+    .inst-block .focus {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
+    }
+
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 10px 14px;
+      font-size: 0.72rem; color: var(--ink-secondary); margin: 8px 0 4px;
+    }
+    .legend i {
+      display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px;
+    }
+
+    /* ========== A1 Net bars under zero ========== */
+    .net-chart {
+      position: relative; height: 160px; margin: 8px 0 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .net-chart .zero {
+      position: absolute; left: 0; right: 0; top: 50%;
+      border-top: 1px dashed rgba(255,255,255,0.18);
+    }
+    .net-chart .cols {
+      display: flex; align-items: stretch; height: 100%; gap: 6px; padding: 0 2px;
+    }
+    .net-chart .col {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; position: relative; cursor: pointer;
+      border-radius: 6px;
+    }
+    .net-chart .col:hover, .net-chart .col.on {
+      background: rgba(255,255,255,0.04);
+    }
+    .net-chart .bar-wrap {
+      flex: 1; width: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; position: relative;
+    }
+    .net-chart .bar {
+      width: 55%; max-width: 22px; min-width: 8px; border-radius: 3px;
+      transition: opacity 0.15s;
+    }
+    .net-chart .bar.up { background: linear-gradient(180deg, #ff7a86, var(--up)); }
+    .net-chart .bar.down { background: linear-gradient(180deg, var(--down), #00b85c); }
+    .net-chart .lab {
+      font-size: 0.65rem; color: var(--ink-muted); margin-top: 4px; font-weight: 600;
+    }
+    .net-chart .val {
+      font-size: 0.68rem; font-weight: 700; position: absolute; white-space: nowrap;
+    }
+    .a1-detail {
+      display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 12px; margin-top: 12px;
+    }
+    @media (max-width: 800px) { .a1-detail { grid-template-columns: 1fr; } }
+
+    /* ========== A2 Butterfly buy/sell ========== */
+    .bfly { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .bfly-row {
+      display: grid; grid-template-columns: 88px 1fr 72px 1fr; gap: 8px; align-items: center;
+      font-size: 0.8rem;
+    }
+    @media (max-width: 600px) {
+      .bfly-row { grid-template-columns: 72px 1fr; gap: 4px 8px; }
+      .bfly-row .net, .bfly-row .right { grid-column: 2; }
+    }
+    .bfly-row .name { font-weight: 600; color: var(--ink-secondary); font-size: 0.78rem; }
+    .bfly-row .left, .bfly-row .right {
+      height: 14px; position: relative; border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+    }
+    .bfly-row .left { display: flex; justify-content: flex-end; }
+    .bfly-row .fill-buy {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(270deg, rgba(255,74,90,0.85), rgba(255,74,90,0.25));
+    }
+    .bfly-row .fill-sell {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, rgba(0,230,118,0.85), rgba(0,230,118,0.25));
+    }
+    .bfly-row .net {
+      text-align: center; font-weight: 700; font-size: 0.78rem; font-variant-numeric: tabular-nums;
+    }
+    .bfly-axis {
+      display: grid; grid-template-columns: 88px 1fr 72px 1fr; gap: 8px;
+      font-size: 0.68rem; color: var(--ink-muted); margin-bottom: 2px;
+    }
+    .bfly-axis .c1 { text-align: right; padding-right: 4px; }
+    .bfly-axis .c2 { text-align: center; }
+    .bfly-axis .c3 { text-align: left; padding-left: 4px; }
+
+    /* ========== A3 Stacked composition ========== */
+    .stack-days {
+      display: flex; align-items: flex-end; gap: 8px; height: 150px;
+      padding: 8px 0 0; border-bottom: 1px solid var(--border);
+    }
+    .stack-day {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      height: 100%; cursor: pointer; border-radius: 6px; padding: 0 2px;
+    }
+    .stack-day:hover, .stack-day.on { background: rgba(255,255,255,0.04); }
+    .stack-day .stack {
+      flex: 1; width: 70%; max-width: 28px; display: flex; flex-direction: column-reverse;
+      border-radius: 4px; overflow: hidden; min-height: 8px;
+    }
+    .stack-day .seg { width: 100%; min-height: 2px; }
+    .stack-day .lab { font-size: 0.65rem; color: var(--ink-muted); margin-top: 6px; font-weight: 600; }
+    .stack-day .net-lab {
+      font-size: 0.68rem; font-weight: 700; margin-bottom: 4px; font-variant-numeric: tabular-nums;
+    }
+    .donut-wrap {
+      display: grid; grid-template-columns: 140px 1fr; gap: 16px; align-items: center;
+      margin-top: 14px; padding: 12px; border-radius: 12px;
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border);
+    }
+    @media (max-width: 560px) { .donut-wrap { grid-template-columns: 1fr; justify-items: center; } }
+    .donut { width: 120px; height: 120px; position: relative; }
+    .donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .donut .center {
+      position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+      transform: none;
+    }
+    .donut .center .v { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+    .donut .center .k { font-size: 0.65rem; color: var(--ink-muted); }
+
+    /* ========== A4 Unit multi-line ========== */
+    .ml-chart { height: 180px; position: relative; margin-top: 6px; }
+    .ml-chart svg { width: 100%; height: 100%; display: block; }
+    .ml-toggles {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+    }
+    .ml-toggles button {
+      border: 1px solid var(--border); background: rgba(0,0,0,0.2);
+      color: var(--ink-secondary); border-radius: 999px; padding: 4px 10px;
+      font-size: 0.72rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .ml-toggles button.on { border-color: transparent; color: #0b0f19; }
+    .ml-toggles button[data-u="foreign"].on { background: var(--u-foreign); }
+    .ml-toggles button[data-u="trust"].on { background: var(--u-trust); }
+    .ml-toggles button[data-u="self"].on { background: var(--u-dealer-self); color: #fff; }
+    .ml-toggles button[data-u="hedge"].on { background: var(--u-dealer-hedge); color: #1a1200; }
+    .ml-toggles button[data-u="total"].on { background: var(--ink); color: #0b0f19; }
+
+    /* ========== A5 Heat matrix ========== */
+    .heat {
+      width: 100%; border-collapse: separate; border-spacing: 4px; margin-top: 6px;
+    }
+    .heat th {
+      font-size: 0.68rem; color: var(--ink-muted); font-weight: 600;
+      padding: 4px; text-align: center;
+    }
+    .heat th.row { text-align: left; white-space: nowrap; padding-right: 8px; }
+    .heat td {
+      text-align: center; font-size: 0.72rem; font-weight: 700;
+      padding: 10px 6px; border-radius: 8px; font-variant-numeric: tabular-nums;
+      cursor: pointer; min-width: 52px;
+      transition: transform 0.12s, box-shadow 0.12s;
+    }
+    .heat td:hover { transform: scale(1.04); box-shadow: 0 0 0 1px rgba(255,255,255,0.2); }
+    .heat td.total-row { font-size: 0.78rem; }
+    .heat-tip {
+      margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(0,0,0,0.22);
+      font-size: 0.8rem; color: var(--ink-secondary);
+    }
+    .heat-tip strong { color: var(--ink); }
+
+    /* ========== A6 Index + inst overlay ========== */
+    .combo {
+      position: relative; height: 200px; margin-top: 4px;
+    }
+    .combo svg { width: 100%; height: 100%; display: block; }
+    .combo-note {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;
+      font-size: 0.75rem; color: var(--ink-secondary);
+    }
+    .combo-note span { display: inline-flex; align-items: center; gap: 6px; }
+    .combo-note .sw {
+      width: 14px; height: 3px; border-radius: 2px; display: inline-block;
+    }
+    .combo-note .sw.bar {
+      width: 10px; height: 10px; border-radius: 2px;
+      background: linear-gradient(180deg, rgba(255,74,90,0.5), rgba(0,230,118,0.5));
+    }
+
+    /* unit cards strip (shared in some variants) */
+    .unit-cards {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px;
+    }
+    @media (max-width: 800px) { .unit-cards { grid-template-columns: repeat(2, 1fr); } }
+    .unit-card {
+      padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+      background: rgba(0,0,0,0.18);
+    }
+    .unit-card .nm {
+      font-size: 0.68rem; font-weight: 600; color: var(--ink-muted);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .unit-card .nm i {
+      width: 7px; height: 7px; border-radius: 2px; display: inline-block;
+    }
+    .unit-card .vv {
+      font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; margin-top: 2px;
+    }
+    .unit-card svg { display: block; margin-top: 6px; width: 100%; height: 24px; }
+
+    .compare {
+      margin-top: 40px; padding: 20px; border-radius: 16px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.03);
+    }
+    .compare h2 {
+      font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 12px;
+    }
+    .compare table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .compare th, .compare td {
+      text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    .compare th { color: var(--ink-muted); font-weight: 600; font-size: 0.72rem; }
+    .compare td.dim { color: var(--ink-secondary); }
+    .footer-note {
+      margin-top: 28px; color: var(--ink-muted); font-size: 0.8rem; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <div class="page-head-inner">
+      <h1 class="page-title">方案 A 操盤台 · 三大法人圖示化 6 變體</h1>
+      <p class="page-lead">
+        上方固定方案 A 的 Hero 指數 + KPI + 日 K／量能骨架；下方六種不同方式把「三大法人買賣超」做成圖示。
+        假資料 · 可點選互動。選一種後可混搭進 A 的右欄或底部全寬。
+      </p>
+      <nav class="toc">
+        <a href="#a1" class="rec">A1 零軸淨額柱</a>
+        <a href="#a2">A2 買賣蝶形</a>
+        <a href="#a3" class="rec">A3 堆疊構成</a>
+        <a href="#a4">A4 多線走勢</a>
+        <a href="#a5">A5 熱力矩陣</a>
+        <a href="#a6" class="rec">A6 指數疊加</a>
+        <a href="#compare">對照</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ========== A1 ========== -->
+    <section class="option" id="a1">
+      <div class="option-tag">
+        <span class="pill">Variant A1</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">零軸淨額柱 · Net Bars</span>
+      </div>
+      <h2>合計買賣超柱狀圖（零軸上下）+ 點選看單位明細</h2>
+      <p class="desc">
+        最直覺的籌碼圖：零線以上紅＝買超、以下綠＝賣超。點某一日，右側／下方展開六單位與買進賣出表。
+        與現有「連 N 日」spark 語意一致，但可掃整週趨勢。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：零學習成本、方向一眼可辨、互動成本低</li>
+        <li><strong>劣</strong>：只看合計時看不出誰在主導（需點開）</li>
+        <li><strong>落地</strong>：現有 <code>totalTwd</code> 序列即可畫；明細重用展開表</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A 骨架 · 法人區＝A1</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A1</div>
+            <div class="section-h">
+              <h3>三大法人買賣超（億元）· 近 7 日</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="chip up">連 3 日買超</span>
+                <button class="btn">全部展開表</button>
+              </div>
+            </div>
+
+            <div class="net-chart" id="net-a1">
+              <div class="zero"></div>
+              <div class="cols"></div>
+            </div>
+
+            <div class="a1-detail">
+              <div>
+                <div class="section-h" style="margin-bottom:6px">
+                  <h3 style="font-size:0.85rem">2026-08-08 單位明細</h3>
+                  <span class="stamp">點柱可切換日期</span>
+                </div>
+                <table class="data">
+                  <thead>
+                    <tr>
+                      <th>單位</th>
+                      <th class="num">買進</th>
+                      <th class="num">賣出</th>
+                      <th class="num">買賣超</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>外資</td><td class="num">1,240</td><td class="num">1,144</td><td class="num up">+96.2</td></tr>
+                    <tr><td>投信</td><td class="num">210</td><td class="num">191</td><td class="num up">+18.7</td></tr>
+                    <tr><td>外資自營商</td><td class="num">12</td><td class="num">12</td><td class="num muted">0.0</td></tr>
+                    <tr><td>自營（自行）</td><td class="num">88</td><td class="num">89</td><td class="num down">−1.2</td></tr>
+                    <tr><td>自營（避險）</td><td class="num">302</td><td class="num">287</td><td class="num up">+14.7</td></tr>
+                    <tr><td><strong>合計</strong></td><td class="num"><strong>1,842</strong></td><td class="num"><strong>1,714</strong></td><td class="num up"><strong>+128.4</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <div class="section-h" style="margin-bottom:6px">
+                  <h3 style="font-size:0.85rem">單位迷你走勢</h3>
+                  <span class="stamp">近 15 日</span>
+                </div>
+                <div class="unit-cards" style="grid-template-columns:1fr 1fr; margin-top:0">
+                  <div class="unit-card">
+                    <div class="nm"><i style="background:var(--u-foreign)"></i>外資</div>
+                    <div class="vv up mono">+96.2</div>
+                    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="var(--u-foreign)" stroke-width="1.8" points="0,18 15,16 30,20 45,12 60,14 75,8 90,6 100,4"/></svg>
+                  </div>
+                  <div class="unit-card">
+                    <div class="nm"><i style="background:var(--u-trust)"></i>投信</div>
+                    <div class="vv up mono">+18.7</div>
+                    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="var(--u-trust)" stroke-width="1.8" points="0,14 15,12 30,15 45,10 60,11 75,9 90,8 100,7"/></svg>
+                  </div>
+                  <div class="unit-card">
+                    <div class="nm"><i style="background:var(--u-dealer-self)"></i>自營自行</div>
+                    <div class="vv down mono">−1.2</div>
+                    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="var(--u-dealer-self)" stroke-width="1.8" points="0,10 20,11 40,9 60,12 80,13 100,14"/></svg>
+                  </div>
+                  <div class="unit-card">
+                    <div class="nm"><i style="background:var(--u-dealer-hedge)"></i>自營避險</div>
+                    <div class="vv up mono">+14.7</div>
+                    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="var(--u-dealer-hedge)" stroke-width="1.8" points="0,16 20,14 40,15 60,11 80,10 100,8"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== A2 ========== -->
+    <section class="option" id="a2">
+      <div class="option-tag">
+        <span class="pill">Variant A2</span>
+        <span class="pill soft">買賣蝶形 · Butterfly</span>
+      </div>
+      <h2>左賣出／右買進對稱條 + 中間淨額</h2>
+      <p class="desc">
+        回答「有進出、還是只是淨額」——有時合計不大，但買進賣出都很兇。蝶形圖把腿（buy/sell）攤開，淨額居中上色。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：買／賣／超三者同視；適合解讀週轉率高的日子</li>
+        <li><strong>劣</strong>：要有 buy/sell 明細（舊檔只有差額時會退化）</li>
+        <li><strong>落地</strong>：依賴 <code>institutional.buy / sell</code>；缺腿時顯示「—」並灰掉條</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A · 法人區＝A2</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A2</div>
+            <div class="section-h">
+              <h3>三大法人 · 買進 vs 賣出（億）· 2026-08-08</h3>
+              <div style="display:flex;gap:6px">
+                <button class="btn">‹ 08/07</button>
+                <button class="btn">08/08 ›</button>
+              </div>
+            </div>
+
+            <div class="bfly-axis">
+              <span></span>
+              <span class="c1">賣出 →</span>
+              <span class="c2">買賣超</span>
+              <span class="c3">← 買進</span>
+            </div>
+            <div class="bfly">
+              <div class="bfly-row">
+                <span class="name">外資</span>
+                <div class="left"><div class="fill-sell" style="width:78%"></div></div>
+                <span class="net up mono">+96.2</span>
+                <div class="right"><div class="fill-buy" style="width:85%"></div></div>
+              </div>
+              <div class="bfly-row">
+                <span class="name">投信</span>
+                <div class="left"><div class="fill-sell" style="width:22%"></div></div>
+                <span class="net up mono">+18.7</span>
+                <div class="right"><div class="fill-buy" style="width:24%"></div></div>
+              </div>
+              <div class="bfly-row">
+                <span class="name">外資自營</span>
+                <div class="left"><div class="fill-sell" style="width:4%"></div></div>
+                <span class="net muted mono">0.0</span>
+                <div class="right"><div class="fill-buy" style="width:4%"></div></div>
+              </div>
+              <div class="bfly-row">
+                <span class="name">自營自行</span>
+                <div class="left"><div class="fill-sell" style="width:14%"></div></div>
+                <span class="net down mono">−1.2</span>
+                <div class="right"><div class="fill-buy" style="width:13%"></div></div>
+              </div>
+              <div class="bfly-row">
+                <span class="name">自營避險</span>
+                <div class="left"><div class="fill-sell" style="width:32%"></div></div>
+                <span class="net up mono">+14.7</span>
+                <div class="right"><div class="fill-buy" style="width:34%"></div></div>
+              </div>
+              <div class="bfly-row" style="padding-top:8px;border-top:1px solid var(--border);margin-top:4px">
+                <span class="name" style="color:var(--ink)">合計</span>
+                <div class="left"><div class="fill-sell" style="width:100%"></div></div>
+                <span class="net up mono" style="font-size:0.9rem">+128.4</span>
+                <div class="right"><div class="fill-buy" style="width:100%"></div></div>
+              </div>
+            </div>
+
+            <div class="section-h" style="margin-top:16px">
+              <h3 style="font-size:0.85rem">近 7 日合計淨額（輔助）</h3>
+            </div>
+            <div class="net-chart" id="net-a2" style="height:100px"></div>
+            <p class="muted" style="font-size:0.75rem;margin:8px 0 0">
+              蝶形看「腿」、小柱看「週趨勢」。缺 buy/sell 的日期自動只顯示淨額柱。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== A3 ========== -->
+    <section class="option" id="a3">
+      <div class="option-tag">
+        <span class="pill">Variant A3</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">堆疊構成 · Stacked Composition</span>
+      </div>
+      <h2>每日堆疊柱（誰貢獻淨額）+ 當日甜甜圈</h2>
+      <p class="desc">
+        合計柱拆成外資／投信／自營色塊，一眼看「誰在主導這天的買超」。點某日，右側甜甜圈放大該日構成比。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：主導單位可視化；與 KPI「其中外資」呼應</li>
+        <li><strong>劣</strong>：正負混雜日堆疊較難畫（賣超單位用反向或抽離）</li>
+        <li><strong>落地</strong>：建議「買超單位向上堆、賣超單位另以空心／下軸」或只堆同號單位</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A · 法人區＝A3</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A3</div>
+            <div class="section-h">
+              <h3>法人構成 · 近 7 日（點選日期）</h3>
+              <span class="chip up">選中 08/08 · 外資主導 75%</span>
+            </div>
+
+            <div class="legend">
+              <span><i style="background:var(--u-foreign)"></i>外資</span>
+              <span><i style="background:var(--u-trust)"></i>投信</span>
+              <span><i style="background:var(--u-dealer-self)"></i>自營自行</span>
+              <span><i style="background:var(--u-dealer-hedge)"></i>自營避險</span>
+              <span><i style="background:var(--u-foreign-d)"></i>外資自營</span>
+            </div>
+
+            <div class="stack-days" id="stack-a3"></div>
+
+            <div class="donut-wrap">
+              <div class="donut">
+                <svg viewBox="0 0 36 36">
+                  <!-- circumference ~ 100 with r=15.9155 -->
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3.5"/>
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--u-foreign)" stroke-width="3.5"
+                    stroke-dasharray="62 38" stroke-dashoffset="0"/>
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--u-trust)" stroke-width="3.5"
+                    stroke-dasharray="12 88" stroke-dashoffset="-62"/>
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--u-dealer-hedge)" stroke-width="3.5"
+                    stroke-dasharray="9.5 90.5" stroke-dashoffset="-74"/>
+                  <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--u-dealer-self)" stroke-width="3.5"
+                    stroke-dasharray="1 99" stroke-dashoffset="-83.5"/>
+                </svg>
+                <div class="center">
+                  <div>
+                    <div class="k">合計</div>
+                    <div class="v up mono">+128</div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style="font-weight:700;margin-bottom:8px">2026-08-08 貢獻比（買超側）</div>
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:0.82rem">
+                  <div style="display:flex;justify-content:space-between"><span class="sec"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--u-foreign);margin-right:6px"></i>外資</span><span class="up mono">+96.2 · 75%</span></div>
+                  <div style="display:flex;justify-content:space-between"><span class="sec"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--u-trust);margin-right:6px"></i>投信</span><span class="up mono">+18.7 · 15%</span></div>
+                  <div style="display:flex;justify-content:space-between"><span class="sec"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--u-dealer-hedge);margin-right:6px"></i>自營避險</span><span class="up mono">+14.7 · 11%</span></div>
+                  <div style="display:flex;justify-content:space-between"><span class="sec"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--u-dealer-self);margin-right:6px"></i>自營自行</span><span class="down mono">−1.2 · 抵銷</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== A4 ========== -->
+    <section class="option" id="a4">
+      <div class="option-tag">
+        <span class="pill">Variant A4</span>
+        <span class="pill soft">多線走勢 · Multi-line</span>
+      </div>
+      <h2>外資／投信／自營／合計 可開關折線</h2>
+      <p class="desc">
+        回答「這兩週誰持續在買」。預設合計 + 外資；可切換投信、自營。下方保留精簡表對齊選中日。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：趨勢比較強；連買／連賣比 spark 更清楚</li>
+        <li><strong>劣</strong>：線一多就糊；手機需預設只開 2 條</li>
+        <li><strong>落地</strong>：重用 LineSeriesChart / MultiLineChart 模式</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A · 法人區＝A4</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A4</div>
+            <div class="section-h">
+              <h3>法人買賣超走勢 · 近 15 日（億）</h3>
+              <span class="stamp">零軸虛線 · 點線對齊日期</span>
+            </div>
+
+            <div class="ml-toggles" id="ml-toggles">
+              <button type="button" class="on" data-u="total">合計</button>
+              <button type="button" class="on" data-u="foreign">外資</button>
+              <button type="button" class="on" data-u="trust">投信</button>
+              <button type="button" data-u="self">自營自行</button>
+              <button type="button" data-u="hedge">自營避險</button>
+            </div>
+
+            <div class="ml-chart">
+              <svg viewBox="0 0 640 180" preserveAspectRatio="none" id="ml-svg">
+                <!-- zero line -->
+                <line x1="0" y1="90" x2="640" y2="90" stroke="rgba(255,255,255,0.15)" stroke-dasharray="4 4"/>
+                <!-- grid soft -->
+                <line x1="0" y1="30" x2="640" y2="30" stroke="rgba(255,255,255,0.04)"/>
+                <line x1="0" y1="150" x2="640" y2="150" stroke="rgba(255,255,255,0.04)"/>
+                <!-- total -->
+                <polyline class="ml-total" fill="none" stroke="#e7ecf5" stroke-width="2.5"
+                  points="0,120 45,130 90,110 135,145 180,155 225,140 270,100 315,95 360,70 405,85 450,60 495,55 540,40 585,35 640,28"/>
+                <!-- foreign -->
+                <polyline class="ml-foreign" fill="none" stroke="var(--u-foreign)" stroke-width="2"
+                  points="0,115 45,125 90,105 135,140 180,150 225,135 270,95 315,90 360,65 405,80 450,55 495,50 540,38 585,32 640,25"/>
+                <!-- trust -->
+                <polyline class="ml-trust" fill="none" stroke="var(--u-trust)" stroke-width="2"
+                  points="0,95 45,92 90,98 135,100 180,105 225,96 270,90 315,88 360,85 405,82 450,80 495,78 540,76 585,74 640,72"/>
+                <!-- self (hidden default via opacity in JS toggles - shown dimmer) -->
+                <polyline class="ml-self" fill="none" stroke="var(--u-dealer-self)" stroke-width="1.5" opacity="0.25"
+                  points="0,88 45,90 90,87 135,92 180,94 225,91 270,89 315,90 360,91 405,92 450,90 495,91 540,93 585,92 640,93"/>
+                <polyline class="ml-hedge" fill="none" stroke="var(--u-dealer-hedge)" stroke-width="1.5" opacity="0.25"
+                  points="0,100 45,98 90,102 135,110 180,108 225,100 270,95 315,94 360,88 405,90 450,86 495,84 540,82 585,80 640,78"/>
+                <!-- hover day marker -->
+                <line x1="640" y1="10" x2="640" y2="170" stroke="rgba(124,140,248,0.45)" stroke-dasharray="3 3"/>
+                <circle cx="640" cy="28" r="4" fill="#e7ecf5"/>
+              </svg>
+            </div>
+
+            <div class="legend" style="margin-top:4px">
+              <span>選中日 08/08 · 合計 <strong class="up">+128.4</strong></span>
+              <span>外資 <strong class="up">+96.2</strong></span>
+              <span>投信 <strong class="up">+18.7</strong></span>
+            </div>
+
+            <div class="a-split" style="margin-top:12px">
+              <div class="glass a-panel" style="padding:10px 12px">
+                <table class="data">
+                  <thead>
+                    <tr><th>日期</th><th class="num">合計</th><th class="num">外資</th><th class="num">投信</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr class="selected"><td>08/08</td><td class="num up">+128.4</td><td class="num up">+96.2</td><td class="num up">+18.7</td></tr>
+                    <tr><td>08/07</td><td class="num up">+42.1</td><td class="num up">+31.0</td><td class="num up">+8.2</td></tr>
+                    <tr><td>08/06</td><td class="num up">+15.8</td><td class="num up">+12.4</td><td class="num up">+4.1</td></tr>
+                    <tr><td>08/05</td><td class="num down">−31.4</td><td class="num down">−28.0</td><td class="num down">−2.5</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="glass a-panel" style="padding:12px">
+                <div class="k muted" style="font-size:0.72rem;font-weight:600">讀圖提示</div>
+                <p class="sec" style="font-size:0.82rem;margin:8px 0 0">
+                  合計線與外資線近乎貼合 → 本波由外資主導。投信線平緩偏多，自營避險在 08/04 後回升。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== A5 ========== -->
+    <section class="option" id="a5">
+      <div class="option-tag">
+        <span class="pill">Variant A5</span>
+        <span class="pill soft">熱力矩陣 · Heat Matrix</span>
+      </div>
+      <h2>單位 × 日期 色塊矩陣（紅買綠賣）</h2>
+      <p class="desc">
+        表格本身就是圖：列＝單位、欄＝日期，色深＝金額大小。適合「掃一遍誰連買、哪天全面賣超」。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：密度高、模式辨識快（連買橫條、全面賣超直欄）</li>
+        <li><strong>劣</strong>：精確數字靠 hover／點選；色弱使用者需搭配數字</li>
+        <li><strong>落地</strong>：色階用絕對值映射，正負只改色相；儲存格可點開當日表</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A · 法人區＝A5</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A5</div>
+            <div class="section-h">
+              <h3>法人熱力 · 近 7 日（億元）</h3>
+              <span class="stamp">色深 = |買賣超| · 點儲存格看數值</span>
+            </div>
+
+            <div style="overflow-x:auto">
+              <table class="heat" id="heat-a5">
+                <thead>
+                  <tr>
+                    <th class="row"></th>
+                    <th>08/01</th><th>08/04</th><th>08/05</th><th>08/06</th><th>08/07</th><th>08/08</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- filled by JS-ish static for clarity -->
+                  <tr>
+                    <th class="row">外資</th>
+                    <td style="background:rgba(0,230,118,0.18);color:var(--down)">−9</td>
+                    <td style="background:rgba(0,230,118,0.55);color:#041">−72</td>
+                    <td style="background:rgba(0,230,118,0.32);color:var(--down)">−28</td>
+                    <td style="background:rgba(255,74,90,0.22);color:var(--up)">+12</td>
+                    <td style="background:rgba(255,74,90,0.35);color:var(--up)">+31</td>
+                    <td style="background:rgba(255,74,90,0.7);color:#fff">+96</td>
+                  </tr>
+                  <tr>
+                    <th class="row">投信</th>
+                    <td style="background:rgba(255,74,90,0.15);color:var(--up)">+3</td>
+                    <td style="background:rgba(0,230,118,0.15);color:var(--down)">−4</td>
+                    <td style="background:rgba(0,230,118,0.12);color:var(--down)">−2</td>
+                    <td style="background:rgba(255,74,90,0.15);color:var(--up)">+4</td>
+                    <td style="background:rgba(255,74,90,0.2);color:var(--up)">+8</td>
+                    <td style="background:rgba(255,74,90,0.32);color:var(--up)">+19</td>
+                  </tr>
+                  <tr>
+                    <th class="row">自營自行</th>
+                    <td style="background:rgba(255,255,255,0.04);color:var(--ink-muted)">0</td>
+                    <td style="background:rgba(0,230,118,0.12);color:var(--down)">−3</td>
+                    <td style="background:rgba(255,74,90,0.1);color:var(--up)">+1</td>
+                    <td style="background:rgba(0,230,118,0.1);color:var(--down)">−1</td>
+                    <td style="background:rgba(0,230,118,0.1);color:var(--down)">−1</td>
+                    <td style="background:rgba(0,230,118,0.12);color:var(--down)">−1</td>
+                  </tr>
+                  <tr>
+                    <th class="row">自營避險</th>
+                    <td style="background:rgba(0,230,118,0.14);color:var(--down)">−5</td>
+                    <td style="background:rgba(0,230,118,0.18);color:var(--down)">−8</td>
+                    <td style="background:rgba(0,230,118,0.12);color:var(--down)">−2</td>
+                    <td style="background:rgba(255,74,90,0.12);color:var(--up)">+1</td>
+                    <td style="background:rgba(255,74,90,0.15);color:var(--up)">+4</td>
+                    <td style="background:rgba(255,74,90,0.28);color:var(--up)">+15</td>
+                  </tr>
+                  <tr>
+                    <th class="row">合計</th>
+                    <td class="total-row" style="background:rgba(0,230,118,0.22);color:var(--down)">−12</td>
+                    <td class="total-row" style="background:rgba(0,230,118,0.55);color:#041">−88</td>
+                    <td class="total-row" style="background:rgba(0,230,118,0.3);color:var(--down)">−31</td>
+                    <td class="total-row" style="background:rgba(255,74,90,0.2);color:var(--up)">+16</td>
+                    <td class="total-row" style="background:rgba(255,74,90,0.35);color:var(--up)">+42</td>
+                    <td class="total-row" style="background:rgba(255,74,90,0.75);color:#fff">+128</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="heat-tip">
+              選中：<strong>外資 · 08/08</strong> → 買賣超 <strong class="up">+96.2 億</strong>
+              （買進 1,240 · 賣出 1,144）。可讀出：08/04 全面偏賣、08/06 起外資翻多並加碼。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== A6 ========== -->
+    <section class="option" id="a6">
+      <div class="option-tag">
+        <span class="pill">Variant A6</span>
+        <span class="pill rec">Recommended</span>
+        <span class="pill soft">指數疊加 · Index Overlay</span>
+      </div>
+      <h2>指數收盤線 + 法人淨額柱 同圖對齊</h2>
+      <p class="desc">
+        操盤台靈魂：把法人柱畫在指數線下方（或共用 X 軸），回答「法人買超那天指數有沒有漲」。
+        與方案 A 上方日 K 可共用 hover 索引。
+      </p>
+      <ul class="pros">
+        <li><strong>優</strong>：因果同屏；與 A 的多圖同步 hover 最搭</li>
+        <li><strong>劣</strong>：雙 Y 軸易誤導（需標單位、弱化柱）</li>
+        <li><strong>落地</strong>：擴充既有 stacked charts 的 hoverIndex；柱用 totalTwd</li>
+      </ul>
+
+      <div class="mock">
+        <div class="mock-bar">
+          <div class="tabs"><span class="tab on">台股</span><span class="tab">美國經濟</span></div>
+          <span>方案 A · 法人區＝A6（與上方日 K 同步 hover）</span>
+        </div>
+        <div class="mock-body">
+          <div data-a-chrome></div>
+
+          <div class="inst-block">
+            <div class="focus">Institutional · A6</div>
+            <div class="section-h">
+              <h3>加權指數 × 三大法人合計 · 近 15 日</h3>
+              <span class="chip up">08/08 · 指數 +186 · 法人 +128 億</span>
+            </div>
+
+            <div class="combo">
+              <svg viewBox="0 0 640 200" preserveAspectRatio="none">
+                <!-- split: top 55% index, bottom 40% bars -->
+                <line x1="0" y1="118" x2="640" y2="118" stroke="rgba(255,255,255,0.08)"/>
+                <!-- index line top area y=15..105 -->
+                <defs>
+                  <linearGradient id="a6fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#7c8cf8" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#7c8cf8" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0,90 L45,88 L90,95 L135,80 L180,78 L225,70 L270,55 L315,58 L360,48 L405,52 L450,40 L495,38 L540,30 L585,28 L640,22 L640,118 L0,118 Z" fill="url(#a6fill)"/>
+                <polyline fill="none" stroke="#7c8cf8" stroke-width="2.2"
+                  points="0,90 45,88 90,95 135,80 180,78 225,70 270,55 315,58 360,48 405,52 450,40 495,38 540,30 585,28 640,22"/>
+                <!-- net bars bottom: zero at y=158 -->
+                <line x1="0" y1="158" x2="640" y2="158" stroke="rgba(255,255,255,0.15)" stroke-dasharray="3 3"/>
+                <!-- bars mock: negative first half, positive later -->
+                <rect x="12" y="158" width="18" height="12" fill="var(--down)" opacity="0.7" rx="2"/>
+                <rect x="54" y="158" width="18" height="28" fill="var(--down)" opacity="0.75" rx="2"/>
+                <rect x="96" y="158" width="18" height="18" fill="var(--down)" opacity="0.7" rx="2"/>
+                <rect x="138" y="158" width="18" height="22" fill="var(--down)" opacity="0.75" rx="2"/>
+                <rect x="180" y="140" width="18" height="18" fill="var(--up)" opacity="0.75" rx="2"/>
+                <rect x="222" y="148" width="18" height="10" fill="var(--up)" opacity="0.7" rx="2"/>
+                <rect x="264" y="158" width="18" height="14" fill="var(--down)" opacity="0.7" rx="2"/>
+                <rect x="306" y="145" width="18" height="13" fill="var(--up)" opacity="0.75" rx="2"/>
+                <rect x="348" y="138" width="18" height="20" fill="var(--up)" opacity="0.8" rx="2"/>
+                <rect x="390" y="142" width="18" height="16" fill="var(--up)" opacity="0.75" rx="2"/>
+                <rect x="432" y="132" width="18" height="26" fill="var(--up)" opacity="0.8" rx="2"/>
+                <rect x="474" y="128" width="18" height="30" fill="var(--up)" opacity="0.85" rx="2"/>
+                <rect x="516" y="120" width="18" height="38" fill="var(--up)" opacity="0.9" rx="2"/>
+                <rect x="558" y="115" width="18" height="43" fill="var(--up)" opacity="0.92" rx="2"/>
+                <rect x="600" y="100" width="22" height="58" fill="var(--up)" opacity="0.95" rx="2"/>
+                <!-- crosshair on last -->
+                <line x1="611" y1="10" x2="611" y2="195" stroke="rgba(124,140,248,0.4)" stroke-dasharray="3 3"/>
+                <circle cx="640" cy="22" r="3.5" fill="#7c8cf8"/>
+                <!-- axis labels -->
+                <text x="4" y="22" fill="#64748b" font-size="9" font-family="Inter,sans-serif">指數</text>
+                <text x="4" y="132" fill="#64748b" font-size="9" font-family="Inter,sans-serif">法人</text>
+              </svg>
+            </div>
+            <div class="combo-note">
+              <span><i class="sw" style="background:#7c8cf8"></i>加權收盤（左軸）</span>
+              <span><i class="sw bar"></i>法人合計淨額（右軸 · 紅買綠賣）</span>
+              <span class="muted">與上方日 K 共用 hover 索引</span>
+            </div>
+
+            <div class="unit-cards">
+              <div class="unit-card">
+                <div class="nm"><i style="background:var(--u-foreign)"></i>外資</div>
+                <div class="vv up mono">+96.2</div>
+              </div>
+              <div class="unit-card">
+                <div class="nm"><i style="background:var(--u-trust)"></i>投信</div>
+                <div class="vv up mono">+18.7</div>
+              </div>
+              <div class="unit-card">
+                <div class="nm"><i style="background:var(--u-dealer-self)"></i>自行</div>
+                <div class="vv down mono">−1.2</div>
+              </div>
+              <div class="unit-card">
+                <div class="nm"><i style="background:var(--u-dealer-hedge)"></i>避險</div>
+                <div class="vv up mono">+14.7</div>
+              </div>
+              <div class="unit-card">
+                <div class="nm"><i style="background:var(--ink)"></i>合計</div>
+                <div class="vv up mono">+128.4</div>
+              </div>
+            </div>
+
+            <p class="muted" style="font-size:0.75rem;margin:12px 0 0">
+              細節表仍可收在下方或點柱展開——圖負責「對齊大盤」，表負責「買進／賣出數字」。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare -->
+    <section class="compare" id="compare">
+      <h2>六變體對照 · 怎麼選</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>變體</th>
+            <th>圖示回答的問題</th>
+            <th>需要 buy/sell 腿？</th>
+            <th>與 A 骨架契合度</th>
+            <th>建議</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>A1 零軸淨額柱</strong></td>
+            <td class="dim">這幾天合計買還是賣？</td>
+            <td class="dim">否</td>
+            <td class="dim">高 · 放底部全寬</td>
+            <td class="dim">預設首選，搭配點日明細表</td>
+          </tr>
+          <tr>
+            <td><strong>A2 買賣蝶形</strong></td>
+            <td class="dim">進出有多兇？淨額是否掩蓋週轉？</td>
+            <td class="dim">是</td>
+            <td class="dim">中 · 當日深潛卡</td>
+            <td class="dim">有腿資料時的進階檢視</td>
+          </tr>
+          <tr>
+            <td><strong>A3 堆疊構成</strong></td>
+            <td class="dim">誰在主導這天的買／賣超？</td>
+            <td class="dim">否（單位淨額即可）</td>
+            <td class="dim">高</td>
+            <td class="dim">與 KPI「其中外資」最強呼應</td>
+          </tr>
+          <tr>
+            <td><strong>A4 多線走勢</strong></td>
+            <td class="dim">誰持續在買超過兩週？</td>
+            <td class="dim">否</td>
+            <td class="dim">中高 · 可替換上方走勢圖區</td>
+            <td class="dim">趨勢分析者友善</td>
+          </tr>
+          <tr>
+            <td><strong>A5 熱力矩陣</strong></td>
+            <td class="dim">哪天全面賣、誰連買？</td>
+            <td class="dim">否</td>
+            <td class="dim">中 · 可取代表</td>
+            <td class="dim">掃描模式；數字精度次之</td>
+          </tr>
+          <tr>
+            <td><strong>A6 指數疊加</strong></td>
+            <td class="dim">法人動作與大盤是否同向？</td>
+            <td class="dim">否</td>
+            <td class="dim">最高 · 與日 K hover 同步</td>
+            <td class="dim">操盤台本體最完整的一版</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="sec" style="margin:14px 0 0;font-size:0.88rem">
+        <strong>推薦組合：</strong>
+        <strong>A6</strong>（主圖：指數×法人）＋ <strong>A1 或 A3</strong>（近 7 日柱／構成）＋ 點日展開現有明細表；
+        若常看週轉，把當日明細改成 <strong>A2 蝶形</strong>。
+        熱力 <strong>A5</strong> 可當「顯示全部」的另一種表模式，不必與柱圖同時常駐。
+      </p>
+    </section>
+
+    <p class="footer-note">
+      <code>scratchpad/tw-market-design-a-institutional-6.html</code>
+      · 骨架＝方案 A · 變體＝三大法人圖示 · 假資料
+    </p>
+  </main>
+
+  <script>
+    // Shared A chrome HTML
+    const chrome = `
+      <div class="a-hero">
+        <div class="glass a-index">
+          <div class="label">加權指數 · TAIEX</div>
+          <div class="value mono">23,418.52</div>
+          <div class="delta up mono">+186.40（+0.80%）</div>
+          <div class="meta-row">
+            <span class="chip">開 23,210</span>
+            <span class="chip">高 23,452</span>
+            <span class="chip">低 23,188</span>
+            <span class="chip">收 23,418</span>
+            <span class="chip">2026-08-08</span>
+          </div>
+          <div class="line-area" style="margin-top:10px">
+            <svg viewBox="0 0 400 64" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="gFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#ff4a5a" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#ff4a5a" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,45 L40,42 L80,48 L120,35 L160,30 L200,32 L240,22 L280,18 L320,24 L360,12 L400,8 L400,64 L0,64 Z" fill="url(#gFill)"/>
+              <path d="M0,45 L40,42 L80,48 L120,35 L160,30 L200,32 L240,22 L280,18 L320,24 L360,12 L400,8" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="a-mini">
+          <div class="glass cell">
+            <div class="k">成交金額</div>
+            <div class="v mono">4,218.6 億</div>
+            <div class="s">近 5 日均 3,980 億</div>
+          </div>
+          <div class="glass cell">
+            <div class="k">三大法人合計</div>
+            <div class="v mono up">+128.4 億</div>
+            <div class="s">連 3 日買超</div>
+          </div>
+          <div class="glass cell">
+            <div class="k">外資</div>
+            <div class="v mono up">+96.2 億</div>
+            <div class="s">主買力道</div>
+          </div>
+          <div class="glass cell">
+            <div class="k">投信</div>
+            <div class="v mono up">+18.7 億</div>
+            <div class="s">自營 −1.2 · 避險 +14.7</div>
+          </div>
+        </div>
+      </div>
+      <div class="a-charts">
+        <div class="glass a-chart-card">
+          <div class="ct">加權指數日 K · 近 30 日</div>
+          <div class="candle-row" data-candles></div>
+        </div>
+        <div class="glass a-chart-card">
+          <div class="ct">每日成交金額（億）</div>
+          <div class="bars" data-bars></div>
+        </div>
+      </div>
+    `;
+
+    document.querySelectorAll('[data-a-chrome]').forEach((el) => {
+      el.innerHTML = chrome;
+    });
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    document.querySelectorAll('[data-candles]').forEach((el) => {
+      for (let i = 0; i < 26; i++) {
+        const up = Math.random() > 0.42;
+        const body = rand(12, 38);
+        const wickTop = rand(4, 14);
+        const wickBot = rand(4, 12);
+        const total = body + wickTop + wickBot;
+        const bottom = rand(0, 100 - total);
+        const d = document.createElement('div');
+        d.className = 'candle ' + (up ? 'up' : 'down');
+        d.innerHTML =
+          '<div class="wick" style="height:' + total + '%;bottom:' + bottom + '%"></div>' +
+          '<div class="body" style="height:' + body + '%;margin-bottom:' + bottom + '%"></div>';
+        el.appendChild(d);
+      }
+    });
+    document.querySelectorAll('[data-bars]').forEach((el) => {
+      for (let i = 0; i < 22; i++) {
+        const b = document.createElement('div');
+        b.className = 'b';
+        b.style.height = rand(30, 100) + '%';
+        el.appendChild(b);
+      }
+    });
+
+    // Net bars data (oldest → newest), billion TWD
+    const netDays = [
+      { d: '08/01', v: -12 },
+      { d: '08/04', v: -88 },
+      { d: '08/05', v: -31 },
+      { d: '08/06', v: 16 },
+      { d: '08/07', v: 42 },
+      { d: '08/08', v: 128 },
+    ];
+    // include a 7th for visual if needed - use 08/03 filler
+    const net7 = [
+      { d: '07/31', v: 9 },
+      ...netDays,
+    ];
+
+    function paintNet(rootId, days, selectedIdx) {
+      const root = document.getElementById(rootId);
+      if (!root) return;
+      const max = Math.max(...days.map((x) => Math.abs(x.v)), 1);
+      let cols = root.querySelector('.cols');
+      if (!cols) {
+        root.innerHTML = '<div class="zero"></div><div class="cols"></div>';
+        cols = root.querySelector('.cols');
+      }
+      cols.innerHTML = '';
+      days.forEach((day, i) => {
+        const col = document.createElement('div');
+        col.className = 'col' + (i === selectedIdx ? ' on' : '');
+        const pct = (Math.abs(day.v) / max) * 46; // % of half
+        const up = day.v >= 0;
+        const barStyle = up
+          ? 'height:' + pct + '%;margin-bottom:50%;align-self:center'
+          : 'height:' + pct + '%;margin-top:50%';
+        // layout: flex column center with bar positioned from zero
+        col.innerHTML =
+          '<div class="bar-wrap" style="display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%;height:100%;position:relative">' +
+            '<div style="position:absolute;left:0;right:0;top:0;bottom:50%;display:flex;align-items:flex-end;justify-content:center">' +
+              (up ? '<div class="bar up" style="height:' + (pct * 2) + '%"></div>' : '') +
+            '</div>' +
+            '<div style="position:absolute;left:0;right:0;top:50%;bottom:0;display:flex;align-items:flex-start;justify-content:center">' +
+              (!up ? '<div class="bar down" style="height:' + (pct * 2) + '%"></div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="lab">' + day.d + '</div>';
+        col.addEventListener('click', () => {
+          root.querySelectorAll('.col').forEach((c) => c.classList.remove('on'));
+          col.classList.add('on');
+        });
+        cols.appendChild(col);
+      });
+    }
+    paintNet('net-a1', net7, net7.length - 1);
+    paintNet('net-a2', net7, net7.length - 1);
+
+    // Stacked composition days
+    const stackRoot = document.getElementById('stack-a3');
+    if (stackRoot) {
+      const days = [
+        { d: '07/31', net: 9, segs: [ { c: 'var(--u-foreign)', h: 40 }, { c: 'var(--u-trust)', h: 30 }, { c: 'var(--u-dealer-hedge)', h: 20 } ] },
+        { d: '08/01', net: -12, segs: [ { c: 'var(--down)', h: 55 }, { c: 'rgba(0,230,118,0.4)', h: 25 } ] },
+        { d: '08/04', net: -88, segs: [ { c: 'var(--down)', h: 70 }, { c: 'rgba(0,230,118,0.45)', h: 20 } ] },
+        { d: '08/05', net: -31, segs: [ { c: 'var(--down)', h: 60 }, { c: 'rgba(0,230,118,0.35)', h: 20 } ] },
+        { d: '08/06', net: 16, segs: [ { c: 'var(--u-foreign)', h: 55 }, { c: 'var(--u-trust)', h: 30 }, { c: 'var(--u-dealer-hedge)', h: 15 } ] },
+        { d: '08/07', net: 42, segs: [ { c: 'var(--u-foreign)', h: 58 }, { c: 'var(--u-trust)', h: 22 }, { c: 'var(--u-dealer-hedge)', h: 14 }, { c: 'var(--u-dealer-self)', h: 6 } ] },
+        { d: '08/08', net: 128, segs: [ { c: 'var(--u-foreign)', h: 62 }, { c: 'var(--u-trust)', h: 15 }, { c: 'var(--u-dealer-hedge)', h: 12 }, { c: 'var(--u-dealer-self)', h: 3 }, { c: 'var(--u-foreign-d)', h: 2 } ] },
+      ];
+      const maxAbs = Math.max(...days.map((x) => Math.abs(x.net)));
+      days.forEach((day, i) => {
+        const el = document.createElement('div');
+        el.className = 'stack-day' + (i === days.length - 1 ? ' on' : '');
+        const h = Math.max(12, (Math.abs(day.net) / maxAbs) * 100);
+        const isUp = day.net >= 0;
+        let segs = '';
+        day.segs.forEach((s) => {
+          segs += '<div class="seg" style="height:' + s.h + '%;background:' + s.c + '"></div>';
+        });
+        el.innerHTML =
+          '<div class="net-lab ' + (isUp ? 'up' : 'down') + ' mono">' + (isUp ? '+' : '') + day.net + '</div>' +
+          '<div class="stack" style="height:' + h + '%;margin-top:auto;opacity:' + (isUp ? '1' : '0.85') + '">' + segs + '</div>' +
+          '<div class="lab">' + day.d + '</div>';
+        el.addEventListener('click', () => {
+          stackRoot.querySelectorAll('.stack-day').forEach((x) => x.classList.remove('on'));
+          el.classList.add('on');
+        });
+        stackRoot.appendChild(el);
+      });
+    }
+
+    // Multi-line toggles
+    const polyMap = {
+      total: '.ml-total',
+      foreign: '.ml-foreign',
+      trust: '.ml-trust',
+      self: '.ml-self',
+      hedge: '.ml-hedge',
+    };
+    document.querySelectorAll('#ml-toggles button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('on');
+        const u = btn.getAttribute('data-u');
+        const poly = document.querySelector(polyMap[u]);
+        if (!poly) return;
+        const on = btn.classList.contains('on');
+        poly.style.opacity = on ? '1' : '0.12';
+        poly.style.strokeWidth = on ? (u === 'total' ? '2.5' : '2') : '1';
+      });
+    });
+
+    // Heat cell click
+    document.querySelectorAll('#heat-a5 td').forEach((td) => {
+      td.addEventListener('click', () => {
+        document.querySelectorAll('#heat-a5 td').forEach((x) => {
+          x.style.outline = '';
+        });
+        td.style.outline = '2px solid rgba(124,140,248,0.8)';
+        const tip = document.querySelector('.heat-tip');
+        if (tip) {
+          const row = td.parentElement.querySelector('.row')?.textContent || '單位';
+          const idx = td.cellIndex;
+          const date = document.querySelectorAll('#heat-a5 thead th')[idx]?.textContent || '';
+          tip.innerHTML = '選中：<strong>' + row + ' · ' + date + '</strong> → 買賣超 <strong>' + td.textContent + ' 億</strong>（示意 · 可接買進／賣出明細）';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

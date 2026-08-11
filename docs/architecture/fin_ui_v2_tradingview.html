@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V2: TradingView Technical Desk - 技術分析與 K 線戰情室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --tv-bg-main: #131722;
+      --tv-bg-panel: #1e222d;
+      --tv-bg-hover: #2a2e39;
+      --tv-border: #2a2e39;
+      --tv-text: #d1d4dc;
+      --tv-text-muted: #787b86;
+      --tv-text-white: #ffffff;
+      --tv-up: #089981;
+      --tv-down: #f23645;
+      --tv-blue: #2962ff;
+      --font-sans: 'Inter', 'Noto Sans TC', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--tv-bg-main);
+      color: var(--tv-text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Navigation Bar */
+    .tv-header {
+      background: var(--tv-bg-panel);
+      border-bottom: 1px solid var(--tv-border);
+      height: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+    }
+    .tv-brand {
+      font-weight: 700;
+      color: var(--tv-blue);
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .tv-tabs {
+      display: flex;
+      gap: 6px;
+      margin-left: 12px;
+    }
+    .tv-tab-btn {
+      background: transparent;
+      border: 1px solid var(--tv-border);
+      color: var(--tv-text-muted);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tv-tab-btn.active {
+      background: var(--tv-blue);
+      color: #fff;
+      border-color: var(--tv-blue);
+    }
+
+    /* View Panels */
+    .tv-view { display: none; flex: 1; overflow: hidden; }
+    .tv-view.active { display: grid; }
+
+    /* Workspace Layout */
+    .tv-workspace {
+      grid-template-columns: 50px 1fr 320px;
+    }
+
+    /* Left Toolbar */
+    .tv-toolbar {
+      background: var(--tv-bg-panel);
+      border-right: 1px solid var(--tv-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 10px;
+      gap: 14px;
+    }
+    .tool-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      color: var(--tv-text-muted);
+      cursor: pointer;
+    }
+    .tool-icon.active { background: var(--tv-bg-hover); color: var(--tv-blue); }
+
+    /* Chart Canvas Area */
+    .tv-chart-area {
+      display: flex;
+      flex-direction: column;
+      background: var(--tv-bg-main);
+      position: relative;
+    }
+    .chart-info-header {
+      padding: 12px 16px;
+      display: flex;
+      gap: 20px;
+      align-items: baseline;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .price-big { font-size: 22px; font-weight: 700; font-family: monospace; }
+    .chart-svg-container { flex: 1; padding: 20px; position: relative; }
+
+    /* Right Dock Panel */
+    .tv-right-dock {
+      background: var(--tv-bg-panel);
+      border-left: 1px solid var(--tv-border);
+      display: flex;
+      flex-direction: column;
+    }
+    .dock-tab-header {
+      display: flex;
+      border-bottom: 1px solid var(--tv-border);
+    }
+    .dock-tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      font-weight: 600;
+      color: var(--tv-text-muted);
+      cursor: pointer;
+    }
+    .dock-tab.active { color: var(--tv-text-white); border-bottom: 2px solid var(--tv-blue); }
+    .dock-content { padding: 16px; flex: 1; overflow-y: auto; }
+
+    .pos-card {
+      background: var(--tv-bg-main);
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .pos-card-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 700; }
+    .up-txt { color: var(--tv-up); }
+    .down-txt { color: var(--tv-down); }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .data-table th, .data-table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--tv-border);
+      text-align: right;
+    }
+    .data-table th:first-child, .data-table td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <div class="tv-header">
+    <div class="tv-brand">📈 TRADINGVIEW PRO DESK</div>
+    
+    <div class="tv-tabs">
+      <button class="tv-tab-btn active" onclick="switchView('pnl')">1. 股票交易與損益狀態</button>
+      <button class="tv-tab-btn" onclick="switchView('market')">2. 盤後台股與美國總經</button>
+      <button class="tv-tab-btn" onclick="switchView('admin')">3. 後台排程運作狀況</button>
+    </div>
+
+    <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+      <span style="color: var(--tv-text-muted);">指標: <b>MA20, MA60, RSI(14)</b></span>
+      <button style="background: var(--tv-blue); color: white; border: none; padding: 6px 14px; border-radius: 4px; font-weight: 600; cursor: pointer;">
+        + 新增交易單
+      </button>
+    </div>
+  </div>
+
+  <!-- VIEW 1: Stock PnL Chart View -->
+  <div id="view-pnl" class="tv-view active tv-workspace">
+    <div class="tv-toolbar">
+      <div class="tool-icon active">┼</div>
+      <div class="tool-icon">╱</div>
+      <div class="tool-icon">☰</div>
+      <div class="tool-icon">Ｔ</div>
+      <div class="tool-icon">📏</div>
+    </div>
+
+    <div class="tv-chart-area">
+      <div class="chart-info-header">
+        <div>
+          <span style="font-weight: 700; font-size: 16px;">2330 台積電</span>
+          <span style="color: var(--tv-text-muted); margin-left: 8px;">TWSE</span>
+        </div>
+        <div class="price-big up-txt">985.00 <span style="font-size: 13px;">+15.00 (+1.55%)</span></div>
+        <div style="color: var(--tv-text-muted); font-size: 11px;">
+          平均成本: NT$ 840.00 | 保本賣價: NT$ 843.50
+        </div>
+      </div>
+
+      <div class="chart-svg-container">
+        <svg width="100%" height="100%" viewBox="0 0 800 380" preserveAspectRatio="none">
+          <line x1="0" y1="100" x2="800" y2="100" stroke="#1f2431" stroke-dasharray="4"/>
+          <line x1="0" y1="200" x2="800" y2="200" stroke="#1f2431" stroke-dasharray="4"/>
+          <line x1="0" y1="300" x2="800" y2="300" stroke="#1f2431" stroke-dasharray="4"/>
+          <path d="M0,280 Q200,240 400,180 T800,120" fill="none" stroke="#2962ff" stroke-width="2"/>
+          <path d="M0,310 Q200,270 400,220 T800,150" fill="none" stroke="#ff9800" stroke-width="1.5"/>
+
+          <line x1="100" y1="220" x2="100" y2="280" stroke="#089981" stroke-width="2"/>
+          <rect x="94" y="230" width="12" height="40" fill="#089981"/>
+          <line x1="180" y1="210" x2="180" y2="270" stroke="#f23645" stroke-width="2"/>
+          <rect x="174" y="220" width="12" height="35" fill="#f23645"/>
+          <line x1="680" y1="100" x2="680" y2="180" stroke="#089981" stroke-width="2"/>
+          <rect x="674" y="110" width="12" height="60" fill="#089981"/>
+
+          <!-- Position Line -->
+          <line x1="0" y1="210" x2="800" y2="210" stroke="#ffb700" stroke-width="1.5" stroke-dasharray="6"/>
+          <text x="10" y="205" fill="#ffb700" font-family="monospace" font-size="11">持倉均價線 NT$ 840.00 (+17.11%)</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="tv-right-dock">
+      <div class="dock-tab-header">
+        <div class="dock-tab active">庫存持倉 (3)</div>
+      </div>
+      <div class="dock-content">
+        <div class="pos-card">
+          <div class="pos-card-header">
+            <span>2330 台積電</span>
+            <span class="up-txt">+17.11%</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; color: var(--tv-text-muted);">
+            <div>股數: <b style="color: var(--tv-text-white);">3,000</b></div>
+            <div>現價: <b style="color: var(--tv-text-white);">985.00</b></div>
+            <div>成本: <b style="color: var(--tv-text-white);">840.00</b></div>
+            <div>未實現: <b class="up-txt">+431,240</b></div>
+          </div>
+        </div>
+        <div class="pos-card">
+          <div class="pos-card-header">
+            <span>2317 鴻海</span>
+            <span class="down-txt">-3.71%</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; color: var(--tv-text-muted);">
+            <div>股數: <b style="color: var(--tv-text-white);">5,000</b></div>
+            <div>現價: <b style="color: var(--tv-text-white);">185.50</b></div>
+            <div>成本: <b style="color: var(--tv-text-white);">192.00</b></div>
+            <div>未實現: <b class="down-txt">-35,820</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW 2: Market & Macro View -->
+  <div id="view-market" class="tv-view" style="padding: 20px; overflow-y: auto;">
+    <h3 style="color: var(--tv-blue); margin-bottom: 16px;">🌐 盤後台股市場、美股與美國總體經濟</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div style="background: var(--tv-bg-panel); border: 1px solid var(--tv-border); padding: 16px; border-radius: 6px;">
+        <h4 style="color: var(--tv-text-white); margin-bottom: 12px;">台股三大法人買賣超 (TWD)</h4>
+        <table class="data-table">
+          <thead>
+            <tr><th>法人單位</th><th>買進金額</th><th>賣出金額</th><th>買賣超</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>外資及陸資</td><td>1,245 億</td><td>1,227 億</td><td class="up-txt">+18.25 億</td></tr>
+            <tr><td>投信</td><td>185 億</td><td>143 億</td><td class="up-txt">+42.10 億</td></tr>
+            <tr><td>自營商</td><td>92 億</td><td>104 億</td><td class="down-txt">-12.40 億</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="background: var(--tv-bg-panel); border: 1px solid var(--tv-border); padding: 16px; border-radius: 6px;">
+        <h4 style="color: var(--tv-text-white); margin-bottom: 12px;">美國 FRED 總體經濟關鍵指標</h4>
+        <table class="data-table">
+          <thead>
+            <tr><th>指標名稱</th><th>最新數值</th><th>年增率 YoY</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Core CPI (核心消費者物價)</td><td>3.3%</td><td class="down-txt">-0.1%</td></tr>
+            <tr><td>Core PCE (核心個人消費支出)</td><td>2.6%</td><td>0.0%</td></tr>
+            <tr><td>Non-Farm Payrolls (非農就業)</td><td>+179K</td><td class="up-txt">+34K</td></tr>
+            <tr><td>USD / TWD 外幣中價</td><td>32.450</td><td class="up-txt">+0.11%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW 3: Admin Scheduled Tasks View -->
+  <div id="view-admin" class="tv-view" style="padding: 20px; overflow-y: auto;">
+    <h3 style="color: var(--tv-blue); margin-bottom: 16px;">⚙️ 後台系統排程與可觀測性日誌</h3>
+    <div style="background: var(--tv-bg-panel); border: 1px solid var(--tv-border); padding: 16px; border-radius: 6px;">
+      <h4 style="color: var(--tv-text-white); margin-bottom: 12px;">Supabase pg_cron & Edge Functions 運作紀錄</h4>
+      <table class="data-table">
+        <thead>
+          <tr><th>排程名稱 (Job Name)</th><th>觸發源</th><th>狀態</th><th>耗時 (ms)</th><th>執行時間</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>twse-chip-batch</td><td>pg_cron</td><td class="up-txt">SUCCESS</td><td>1,240 ms</td><td>18:05:00</td></tr>
+          <tr><td>macro-daily</td><td>pg_cron</td><td class="up-txt">SUCCESS</td><td>420 ms</td><td>06:00:00</td></tr>
+          <tr><td>fx-daily</td><td>pg_cron</td><td class="up-txt">SUCCESS</td><td>310 ms</td><td>06:05:00</td></tr>
+          <tr><td>source-probe-job</td><td>Heartbeat</td><td class="up-txt">SUCCESS (100%)</td><td>120 ms</td><td>Every 15m</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function switchView(viewId) {
+      document.querySelectorAll('.tv-tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tv-view').forEach(view => view.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById('view-' + viewId).classList.add('active');
+    }
+  </script>
+</body>
+</html>

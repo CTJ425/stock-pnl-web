@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三大法人買賣超 - 設計提案</title>
+  <style>
+    :root { --bg: #f8f9fa; --text: #212529; --card: #ffffff; --border: #e9ecef; --link: #2962ff; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #131722; --text: #d1d4dc; --card: #1e222d; --border: #2a2e39; --link: #4f80ff; } }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 40px 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+    h1 { margin-bottom: 10px; }
+    p { color: var(--text); opacity: 0.8; margin-bottom: 30px; }
+    .gallery { display: grid; gap: 20px; }
+    .card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 8px; }
+    .card h3 { margin: 0 0 10px 0; }
+    .card a { color: var(--link); text-decoration: none; font-weight: bold; }
+    .card a:hover { text-decoration: underline; }
+    .desc { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }
+    .tradeoffs { font-size: 13px; opacity: 0.7; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>三大法人買賣超 - 設計提案</h1>
+  <p>為解決原表格在時間序列對比、手機端橫向捲動以及資訊層級不佳的問題，以下提供 6 種不同資訊架構的獨立展示。</p>
+  
+  <div class="gallery">
+    <div class="card">
+      <h3><a href="inst_ui_1_matrix.html">1. 矩陣視圖 (Unit-as-row matrix)</a></h3>
+      <div class="desc"><strong>概念：</strong>將單位作為列、時間作為欄，並加入熱力圖標示強度。解決跨日對比困難的問題，讓外資是否連買連賣一目了然。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>不易在同一個畫面塞入買進/賣出毛額（legs）。</div>
+    </div>
+    
+    <div class="card">
+      <h3><a href="inst_ui_2_diverging_bar.html">2. 發散長條圖 (Diverging bar chart)</a></h3>
+      <div class="desc"><strong>概念：</strong>以每日為一列，中心為 0 軸，左右發散長條圖（紅買綠賣）。解決原始表格缺乏量級感受的問題。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>確切的小數字較難精確閱讀，需要互動式提示框。</div>
+    </div>
+    
+    <div class="card">
+      <h3><a href="inst_ui_3_card_flow.html">3. 卡片流 (Card-per-day flow)</a></h3>
+      <div class="desc"><strong>概念：</strong>將每一天壓縮成一張精簡卡片，水平排列。點擊可展開該日的詳細部位。解決預設展開/收合帶來的資訊雜訊。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>追蹤單一單位橫跨七天的連續趨勢相對困難。</div>
+    </div>
+    
+    <div class="card">
+      <h3><a href="inst_ui_4_master_detail.html">4. 主從分割檢視 (Split master–detail)</a></h3>
+      <div class="desc"><strong>概念：</strong>左側列出所有單位與總結，右側顯示選取單位的完整 7 日明細。解決時間序列難以閱讀，同時又保留了毛額數據。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>需要點擊才能查看不同單位的細節。</div>
+    </div>
+    
+    <div class="card">
+      <h3><a href="inst_ui_5_terminal.html">5. 專業終端視圖 (Terminal dense view)</a></h3>
+      <div class="desc"><strong>概念：</strong>無展開收合，一次攤平所有單位的買賣超數據，採用固定寬度與顏色編碼，適合高頻交易員。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>手機版體驗極差，非常依賴寬螢幕與使用者的掃描閱讀能力。</div>
+    </div>
+    
+    <div class="card">
+      <h3><a href="inst_ui_6_mobile_accordion.html">6. 行動版折疊過濾 (Mobile-first accordion)</a></h3>
+      <div class="desc"><strong>概念：</strong>從 390px 寬度出發，使用頂部標籤過濾單位，下方以單行列表呈現每日數據。解決手機端必須水平捲動的痛點。</div>
+      <div class="tradeoffs"><strong>權衡：</strong>在桌機上無法一次看到多個單位並列比較。</div>
+    </div>
+  </div>
+</body>
+</html>

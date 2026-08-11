@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三大法人 - 主從分割檢視</title>
+  <!--
+    Concept: Split master–detail
+    Fixes: Unit time series is hard to read. Now you select a unit and see its full 7-day history (including legs) on the right.
+    Trade-offs: Requires a click to see a different unit's details. Cannot see all units' legs simultaneously.
+    Cost: Low (standard master-detail layout).
+  -->
+  <style>
+    :root {
+      --tv-bg-main: #ffffff;
+      --tv-bg-panel: #f8f9fa;
+      --tv-bg-hover: #f1f3f5;
+      --tv-border: #e9ecef;
+      --tv-text: #212529;
+      --tv-text-muted: #868e96;
+      --tv-up: #f23645;
+      --tv-down: #089981;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --tv-bg-main: #131722;
+        --tv-bg-panel: #1e222d;
+        --tv-bg-hover: #2a2e39;
+        --tv-border: #2a2e39;
+        --tv-text: #d1d4dc;
+        --tv-text-muted: #787b86;
+      }
+    }
+    body { background: var(--tv-bg-main); color: var(--tv-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 20px; font-size: 14px; }
+    .up { color: var(--tv-up); }
+    .down { color: var(--tv-down); }
+    
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; max-width: 1000px; margin: 0 auto; }
+    @media (max-width: 768px) { .layout { grid-template-columns: 1fr; } }
+    
+    .master-list { background: var(--tv-bg-panel); border: 1px solid var(--tv-border); border-radius: 8px; overflow: hidden; }
+    .unit-item { padding: 16px; border-bottom: 1px solid var(--tv-border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+    .unit-item:last-child { border-bottom: none; }
+    .unit-item:hover { background: var(--tv-bg-hover); }
+    .unit-item.active { background: var(--tv-bg-hover); border-left: 4px solid var(--tv-up); padding-left: 12px; font-weight: bold; }
+    
+    .detail-view { background: var(--tv-bg-panel); border: 1px solid var(--tv-border); border-radius: 8px; padding: 20px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 12px; border-bottom: 1px solid var(--tv-border); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--tv-text-muted); font-weight: normal; }
+  </style>
+</head>
+<body>
+  <div style="max-width: 1000px; margin: 0 auto;">
+    <h2>三大法人買賣超 (主從分割)</h2>
+    <div class="layout" id="app"></div>
+  </div>
+  <script>
+    const UNITS = [
+      { key: 'total', label: '合計 (全市)' },
+      { key: 'foreign', label: '外資' },
+      { key: 'foreignDealer', label: '外資自營商' },
+      { key: 'trust', label: '投信' },
+      { key: 'dealerSelf', label: '自營商(自行)' },
+      { key: 'dealerHedge', label: '自營商(避險)' }
+    ];
+    const MOCK_DATA = [
+      { date: '07/31', foreign: -156.4, foreignDealer: -1.2, trust: 35.6, dealerSelf: -10.5, dealerHedge: -40.2, total: -172.7, buy: 1300, sell: 1472.7 },
+      { date: '08/01', foreign: -200.5, foreignDealer: 0.8, trust: 22.4, dealerSelf: -15.1, dealerHedge: -55.8, total: -248.2, buy: null, sell: null },
+      { date: '08/04', foreign: -450.2, foreignDealer: -5.4, trust: 60.5, dealerSelf: -30.2, dealerHedge: -120.4, total: -545.7, buy: 1800, sell: 2345.7 },
+      { date: '08/05', foreign: 120.5, foreignDealer: 2.1, trust: 45.2, dealerSelf: 8.5, dealerHedge: -15.2, total: 161.1, buy: 1400.8, sell: 1239.7 },
+      { date: '08/06', foreign: 235.8, foreignDealer: -1.5, trust: 15.6, dealerSelf: 22.4, dealerHedge: 18.5, total: 290.8, buy: 1550.4, sell: 1259.6 },
+      { date: '08/07', foreign: -50.4, foreignDealer: 0.5, trust: 10.2, dealerSelf: -5.6, dealerHedge: -12.4, total: -57.7, buy: 1100.0, sell: 1157.7 },
+      { date: '08/08', foreign: 85.2, foreignDealer: 1.2, trust: 28.5, dealerSelf: 12.0, dealerHedge: 5.4, total: 132.3, buy: 1200.0, sell: 1067.7 }
+    ].reverse();
+
+    function renderMasterDetail(activeKey) {
+      let masterHtml = '<div class="master-list" role="listbox" aria-label="單位列表">';
+      UNITS.forEach(u => {
+        let sum = MOCK_DATA.reduce((acc, d) => acc + d[u.key], 0);
+        masterHtml += `<div class="unit-item ${u.key === activeKey ? 'active' : ''}" onclick="renderMasterDetail('${u.key}')" role="option" aria-selected="${u.key === activeKey}" tabindex="0">
+           <div>${u.label}</div>
+           <div class="${sum > 0 ? 'up' : 'down'}">${sum > 0 ? '+' : ''}${sum.toFixed(1)} 億</div>
+        </div>`;
+      });
+      masterHtml += '</div>';
+      
+      let detailHtml = `<div class="detail-view">
+        <h3 style="margin-top:0;">${UNITS.find(u => u.key === activeKey).label} - 近 7 日明細</h3>
+        <table aria-label="詳細數據"><thead><tr><th>日期</th><th>買進</th><th>賣出</th><th>買賣超</th></tr></thead><tbody>`;
+      
+      MOCK_DATA.forEach(d => {
+        let net = d[activeKey];
+        let hasLegs = d.buy !== null;
+        let uBuy = hasLegs ? (Math.abs(net) * 2.5 + (net > 0 ? net : 0)) : null;
+        let uSell = hasLegs ? (Math.abs(net) * 2.5 - (net < 0 ? net : 0)) : null;
+        
+        detailHtml += `<tr>
+          <td>${d.date}</td>
+          <td>${hasLegs ? uBuy.toFixed(1) : '—'}</td>
+          <td>${hasLegs ? uSell.toFixed(1) : '—'}</td>
+          <td class="${net > 0 ? 'up' : 'down'}"><strong>${net > 0 ? '+' : ''}${net.toFixed(1)}</strong></td>
+        </tr>`;
+      });
+      detailHtml += '</tbody></table></div>';
+      
+      document.getElementById('app').innerHTML = masterHtml + detailHtml;
+    }
+    
+    renderMasterDetail('total');
+  </script>
+</body>
+</html>

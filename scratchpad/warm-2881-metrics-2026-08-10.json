@@ -1,0 +1,61 @@
+{
+  "when": "2026-08-10 19:00 Asia/Taipei",
+  "env": "DEV self-hosted korq9tvdz0jd7yblr72p.ivan.lab",
+  "ticker": "2881",
+  "name": "富邦金",
+  "note": "Cold stock: no fundamental/daily object before warm. Authenticated as admin user via magiclink.",
+  "pre": {
+    "fundamental_http": 400,
+    "daily_http": 400
+  },
+  "core": {
+    "client_ms": 859,
+    "server_durationMs": 450,
+    "ok": true,
+    "phase": "core",
+    "dailySynced": 1,
+    "fundamentalSynced": 1,
+    "fundamentalComplete": false,
+    "ymd": "20260807",
+    "storage_after": {
+      "fundamental_http": 200,
+      "daily_http": 200,
+      "months": 1,
+      "quarters": 0,
+      "industry": "金融保險業",
+      "has_valuation": true,
+      "dataDate": "2026-08-07"
+    }
+  },
+  "history": {
+    "client_ms": 26363,
+    "server_durationMs": 26246,
+    "ok": true,
+    "phase": "history",
+    "fundamentalComplete": true,
+    "revenue_months_filled_this_round": 10,
+    "profit_quarters_filled_this_round": 12,
+    "storage_after": {
+      "fundamental_http": 200,
+      "months": 11,
+      "quarters": 12,
+      "industry": "金融保險業",
+      "has_valuation": true
+    }
+  },
+  "totals": {
+    "ttfp_proxy_ms": 859,
+    "full_wait_if_unsplit_ms": 27222,
+    "speedup_ratio_approx": 31.69,
+    "interpretation": "UI can paint valuation/industry/latest month after ~0.86s; full 11m/12q history ready after ~27.2s total."
+  },
+  "constants": {
+    "WARM_BUDGET_MS": 30000,
+    "WARM_ROUND_MONTHS": 4,
+    "WARM_ROUND_QUARTERS": 2,
+    "WARM_DAILY_LIMIT": 30,
+    "REVENUE_WARM_MIN": 6,
+    "REVENUE_TARGET": 12,
+    "PROFIT_TARGET": 12
+  }
+}
