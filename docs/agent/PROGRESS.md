@@ -1,9 +1,52 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.8 探針命中直接觸發抓取；抓取失敗才重探
-- Status: **released to main; DEV Edge on 0.7.8. The follow-up path has NOT yet fired once — see below**
-- Timestamp: 2026-08-11 18:40:00 Asia/Taipei
+- Action: 0.7.9 收工判準改成「資料真的到位」（0.7.8 只看抓取有沒有拋錯）
+- Status: **released to main; DEV + PROD Edge on 0.7.9**
+- Timestamp: 2026-08-11 19:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-11 19:00:00 Asia/Taipei (0.7.9 收工＝資料到位)
+
+User's correction to 0.7.8, and it was right: 「當探針命中之後，也要確保資料有更新才可以算結束」.
+
+**What 0.7.8 got wrong.** It set `follow_up_ok` from whether the follow-up threw. That is the wrong
+question —— a fetch can return perfectly and bring nothing back. `syncMarket` answers `reason:'empty'`
+when upstream is bare; `generate-chips` will rebuild a report from **yesterday's** T86 if today's has
+not landed, and report `ok: true` doing it. Both would have retired the source for the day, closing
+every remaining retry on the strength of a false answer —— the same class of mistake this experiment
+has already made twice (0.7.3's 「端點有資料」 hit rule, and 0.6.1's fake release times).
+
+**The fix is to stop asking the fetch and read the artifact.** `sourceLanded(source, todayYmd, evidence)`
+is pure and per-source, because 「到位」 means something different for each:
+
+| source | evidence | why that one |
+| ---- | ---- | ---- |
+| `bfi82u` | `market/daily.json` session complete | reuses `isMarketSessionReady` —— volume **and** BFI82U with buy |
+| `t86` / `margin` | the chips report's own per-source stamp = today | the report existing proves nothing; the stamp is the date the data belongs to |
+| `borrow` | `borrowHit` —— date moved **past** today | same predicate as the hit itself; borrow carries the day's own quota pre-open |
+| `bwibbu` | valuation file's ROC date = today | the file self-reports it |
+| `mops_*` | rows actually backfilled this round | see below |
+
+`mops_*` is the one source judged on work done rather than data present: monthly revenue and quarterly
+profit are spread across per-ticker history files with no cheap single point to ask. Stated in the code,
+and bounded —— MOPS is probed in four slots a day, so a false negative costs one repeat.
+
+Column renamed `follow_up_ok` → **`data_landed`** (DEV rename was free: it held only nulls). The name
+had to change —— 「follow-up 成功」 is now exactly the claim that would be a lie.
+
+**Verified against today's real DEV artifacts**, which happened to contain the bug's own counter-example:
+the chips report for 20260811 exists, `dataDate: 2026-08-11`, `generate-chips` returns ok —— and its
+`margin` stamp is **null** while `borrow` is still 2026-08-11 (not flipped). Under 0.7.8 both would have
+been retired as done. Feeding the real stamps through `sourceLanded` gives, for all five checkable
+sources, exactly what the probe measured independently:
+
+- `bfi82u` landed ✅ (hit 15:10, today's institutional on disk) · `t86` landed ✅ (hit 16:20, stamp today)
+- `margin` not landed ✅ (window not open) · `borrow` not landed ✅ (probe: 尚未翻日) ·
+  `bwibbu` not landed ✅ (probe: 估值日=1150810≠今日)
+
+Verification: 970/970 vitest, tsc clean, oxlint 0 errors.
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.

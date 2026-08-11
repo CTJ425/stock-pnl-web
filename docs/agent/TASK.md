@@ -61,10 +61,15 @@
 
 ## 📋 Active Tasks
 
-### Task 85: 0.7.8 探針命中直接觸發抓取
-- **Status**: 🔄 **shipped DEV + main; the follow-up path has never actually fired —— must be watched**
+### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
+- **Status**: 🔄 **shipped DEV + main + PROD; one live hit still to be read back**
 - **Agent**: Claude
-- **Timestamp**: 2026-08-11 18:40:00 Asia/Taipei
+- **Timestamp**: 2026-08-11 19:00:00 Asia/Taipei
+
+**0.7.9**: retiring a source now needs `data_landed`, judged by `sourceLanded` reading the artifact's
+own date —— not by whether the fetch threw. Validated against today's real DEV artifacts (the chips
+report for 20260811 has a null `margin` stamp and an unflipped `borrow` while returning ok, which is
+precisely what 0.7.8 would have mis-retired).
 
 1. ~~`PROBE_FOLLOW_UP` / `followUpsFor`; 45s-budgeted follow-up loop in `handleProbe`; note write-back~~ ✅
    (was already in the tree, uncommitted)
@@ -77,11 +82,11 @@
    **must land before the Edge bundle**, else the probe degrades to re-probe + re-fetch every 5 min
 7. ~~Commit + push `dev` (`9d69b58`)~~ ✅ · ~~DEV volume-copy + functions recreate~~ ✅ 18:34 · ~~release
    0.7.8 + merge `main`~~ ✅
-8. **Watch one live round with a hit** —— ⏳ **nothing has triggered a follow-up yet.** Confirm a green
-   cell carries `已觸發 …` in its note and `follow_up_ok = true`. Next chances: `margin` from 20:30,
-   MOPS 21:00/21:05, then tomorrow's 15:00 open.
-9. **PROD Edge** (still the 0.7.4 bundle v41) —— ⏳ needs **the same DDL on cloud first**, then a
-   `--no-verify-jwt` deploy. Note it would jump PROD from 0.7.4 to 0.7.8 in one step.
+8. ~~Landing check `sourceLanded` + `data_landed` column (0.7.9); DEV rename + redeploy~~ ✅ 18:52
+9. **Watch one live round with a hit** —— ⏳ **no follow-up has fired yet.** Confirm a green cell's note
+   reads `… · 已觸發 … · 資料已到位` and `data_landed = true`. Next chances: `margin` from 20:30,
+   MOPS 21:00/21:05, then tomorrow's 15:00 open. This is the only step still unproven in the wild.
+10. **PROD** —— DDL + Edge, see the ship record in `PROGRESS.md`.
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
