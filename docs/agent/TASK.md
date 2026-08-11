@@ -12,7 +12,7 @@
 
 ## 📍 Where the project stands (2026-08-11 19:30)
 
-- **Version 0.7.10 on both branches and both environments.** PROD Edge `stock-report` v42 → **v43**,
+- **Version 0.7.10 on both branches and both environments.** PROD Edge `stock-report` **v43** (sha `d66355f8…`),
   DEV Edge volume-copied at the same commit. Pages current.
 - **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
   retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by

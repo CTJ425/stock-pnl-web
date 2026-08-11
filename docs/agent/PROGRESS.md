@@ -45,6 +45,10 @@ cannot fail are decoration, so this was worth the thirty seconds.
 
 Verification: 979/979 vitest (63 files), tsc clean, oxlint 0 errors.
 
+Shipped to both environments: DEV volume-copy at `565e6ae`; PROD `stock-report` **v42 → v43**
+(sha `568a98da…` → `d66355f8…`, `verify_jwt` still false), anon probe 401, and PROD's own 19:30 cron
+round wrote its ticks normally on the new bundle.
+
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
 
