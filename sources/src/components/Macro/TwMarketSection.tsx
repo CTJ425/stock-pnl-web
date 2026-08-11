@@ -13,7 +13,6 @@ import { ChevronsDownUp, ChevronsUpDown, Minus, Plus, RefreshCw } from 'lucide-r
 import {
   fetchMarketDaily,
   type MarketData,
-  type MarketDay,
   type MarketInstitutionalSide,
 } from '../../services/marketProxy'
 import { CandleChart } from '../Charts/CandleChart'
