@@ -17,7 +17,7 @@ You make no judgements and add no information that was not given to you.
 - Never delete an entry. Completed work is **moved**, never dropped:
   a finished task goes from `docs/agent/TASK.md` to `docs/agent/TASK_ARCHIVE.md`,
   a fixed bug from `docs/agent/BUG_FIX.md` to `docs/agent/FIXED_BUG.md`.
-- Every entry carries `YYYY-MM-DD HH:mm:ss Asia/Taipei` (CLAUDE.md 10).
+- Every entry carries `YYYY-MM-DD HH:mm:ss Asia/Taipei` (CLAUDE.md § Work style).
 - There is **no automatic archiver** in this project. `.claude/mad/models.json` has
   `docs.managed: []` on purpose. Keep `TASK.md` and `BUG_FIX.md` short by moving
   settled entries out by hand, as above.

@@ -5,8 +5,8 @@ description: Supabase practical pitfalls and operating precautions of stock-pnl-
 
 # Supabase practical traps (all of which have been actually stepped on)
 
-Read together with `CLAUDE.md` §13.1 branch process and §13.2 operation rules.
-The prohibitions in §13.2 (default is no active deployment, formal area can only be moved in `main` and with explicit instructions) always take precedence.
+Read together with `CLAUDE.md` § Branches & envs (branch process and operation rules).
+The prohibitions there (default is no active deployment, formal area can only be moved in `main` and with explicit instructions) always take precedence.
 
 **Instructions must be executed under `sources/`. ** Edge Functions in `sources/supabase/functions/`,
 Not repo root. When executed as root, `entrypoint path does not exist` will appear.

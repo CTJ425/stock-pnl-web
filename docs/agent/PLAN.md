@@ -212,7 +212,7 @@ In this round, the `TechnicalTab` placeholder page will be delivered first, and 
 2. `npm run build` (`tsc -b && vite build`) - **cannot be skipped**, `tsc --noEmit` and vitest cannot catch white screen level errors.
 3. `npm run lint`（oxlint）。
 4. UI verification: `/verify` skill uses native mode, but the native mode does not have Supabase and the report entry is hidden. It needs to be bypassed by using temporary `.env.test.local` to point to the dev project (`wqetxuhncvfidqnklyew`). Check items: tab switching, charts not breaking the layout in narrow windows, hover tooltip, PDF still outputting light-colored files under dark themes, old format JSON triggering `generate` fallback.
-5. End-to-end (**requires explicit authorization from the user**, see CLAUDE.md §18): deploy `stock-report` to the dev project, manually trigger `generate-all` with `x-cron-secret`, and confirm that the JSON in the bucket contains 7 `history`.
+5. End-to-end (**requires explicit authorization from the user**, see CLAUDE.md § Branches & envs): deploy `stock-report` to the dev project, manually trigger `generate-all` with `x-cron-secret`, and confirm that the JSON in the bucket contains 7 `history`.
 
 ### I. Risks
 
@@ -365,7 +365,7 @@ Or `http://localhost:11434/v1` must be available.
 - schema demand `user_settings` (`ai_provider` / `ai_base_url` / `ai_model` / `ai_api_key` /
   `ai_updated_at`), see `sources/supabase/schema.sql` for writing method §4.1 —— Use
   `ALTER ... ADD COLUMN IF NOT EXISTS`, because `CREATE TABLE IF NOT EXISTS` does not fill in the fields for the existing environment.
-- **Two zones need to run migration** (explicit authorization from the user is required, CLAUDE.md §14.2).
+- **Two zones need to run migration** (explicit authorization from the user is required, CLAUDE.md § Branches & envs).
 - **No AI paging in native mode** - No Supabase in native mode, settings are nowhere to be saved. The entry rules are consistent with the after-hours report all the way.
 - **The key will still be returned to the browser**: 0.6.0 is a front-end direct connection, and what is saved in the DB is cross-device synchronization, not "the key does not enter the browser".
 - The `user_settings` table, although it exists from the beginning, has never been read or written by the frontend (preferences are all in localStorage).

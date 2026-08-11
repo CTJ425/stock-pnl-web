@@ -23,7 +23,7 @@
     }
   },
   "docs": {
-    "_managed_comment": "Empty on purpose. This project tracks state in docs/agent/ (see CLAUDE.md 4), whose files use section headings archive.py cannot recognise. Archiving is done by hand into TASK_ARCHIVE.md / FIXED_BUG.md.",
+    "_managed_comment": "Empty on purpose. This project tracks state in docs/agent/ (see CLAUDE.md § Memory), whose files use section headings archive.py cannot recognise. Archiving is done by hand into TASK_ARCHIVE.md / FIXED_BUG.md.",
     "max_lines": 100,
     "managed": []
   }

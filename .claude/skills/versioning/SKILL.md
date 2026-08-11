@@ -5,7 +5,7 @@ description: The version number determination rule of stock-pnl-web. Use it when
 
 # Version number specification details
 
-Prerequisite (`CLAUDE.md` §12 has been stated and will not be repeated here): the version number does not have the `v` prefix.
+Prerequisite (stated in `CLAUDE.md` § Versioning): the version number does not have the `v` prefix.
 Keep these synchronized:
 
 - `sources/src/version.ts` → `APP_VERSION` (UI badge)
