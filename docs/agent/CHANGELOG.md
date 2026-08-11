@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.2（2026-08-11）— 盤後稀疏班：T86／BFI 兩班 + 晚間融資借券
+
+#### 功能摘要
+
+- ⏱️ **台股夜班改稀疏固定班**（實驗版，先觀察命中率；**尚未**加深夜補洞）：
+  - **BFI82U／全市場** `market-daily`：台北 **15:30／15:45**（`sync-market`）
+  - **T86 + 融資借券** `stock-report-nightly`：台北 **16:30／16:45**（T86）與 **21:30／21:45**（融資／借券）
+  - body 改 **`generate-chips`**（不再掛密集 `generate-all`），避免 cloud free 單請求串 phase 撞 546
+- 📝 **日 K／營收歷史**（`generate-market-data`／`generate-history`）此版**未掛自動 cron**，管理後台可手動
+- 🖥️ Admin 時間軸 `dueBy`、`describeCron`、ACTION_SCOPE 對齊新班表
+- 🔧 DEV + PROD 已 `cron.alter_job`（保留 CRON_SECRET；secret_len=48）
+
+---
+
 ### 0.7.1（2026-08-11）— 總經台美分頁；三大法人表；BUG-024 融資融券
 
 #### 功能摘要

@@ -66,23 +66,22 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   'generate-chips': {
     title: '盤後 · 籌碼報告',
     cron: 'stock-report-nightly',
-    hint: '全站淨持股台股：T86／融資借券、組報告上傳（較重；與下兩段分開打避免 546）',
+    hint: '16:30／16:45（T86）與 21:30／21:45（融資借券）；與日K／歷史分開打避免 546',
   },
   'generate-market-data': {
     title: '盤後 · 日K／基本面',
-    cron: 'stock-report-nightly',
+    cron: '（手動；0.7.2 未掛自動）',
     hint: 'syncDaily + 估值／產業等（不含 MOPS 長歷史）',
   },
   'generate-history': {
     title: '盤後 · 營收／獲利補齊',
-    cron: 'stock-report-nightly',
-    hint: '一輪月營收+季報補齊（P1；完整 12 個月／季靠多輪排程或再按）',
+    cron: '（手動；0.7.2 未掛自動）',
+    hint: '一輪月營收+季報補齊（P1；完整 12 個月／季靠多輪或再按）',
   },
   'sync-market': {
     title: '台股全市場',
     cron: 'market-daily',
-    hint:
-      '15:00–18:45 每 15 分：FMTQIK + BFI82U → market/daily.json；當日量能+法人買進齊了就短路不重打',
+    hint: '15:30／15:45 兩班：FMTQIK + BFI82U → market/daily.json；齊了就短路',
   },
   'sync-macro': {
     title: '美總經',

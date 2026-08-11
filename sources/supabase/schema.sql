@@ -352,37 +352,19 @@ ON CONFLICT (id) DO UPDATE SET public = true;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 6c. Polling every 15 minutes from 16:00–23:45 on each trading day (Taipei) = UTC 8:00–15:45
+-- 6c. Sparse chips shifts (0.7.2 experiment) — Taipei weekdays
+--       UTC `30,45 8,13 * * 1-5` → Taipei **16:30 / 16:45** (T86) + **21:30 / 21:45** (margin / borrow)
 --
---     ⚠️ 0.6.1 revision: Originally there were three fixed shifts (17:30 / 22:30 / 23:30). The reason for the change is
---     **Those three time points were set based on the perception of "approximately when each data source will be released", and that perception was overturned by actual measurements**.
---     2026-07-27 Three overthrows in one day:
---       1. The note says that T86 is about 15:00–15:30 → the actual measurement 15:42 has not been released yet, and 17:02 has been.
---          (15:00–15:30 is the time window of the BFI82U large-market buying and selling amount statistical table, and the two reports are lumped together.)
---       2. The note says that the coupons can be borrowed from 21:00–22:30 → the actual test date is 17:07, and the coupons will be available on the same day.
---       3. The annotation says "Balance of shares sold by borrowing bonds", but the TWT96U we actually capture is "the number of shares that can be sold by borrowing bonds on the day".
---          The semantics are fundamentally different (see the description of twChips.ts).
---     Conclusion: **Stop guessing release times with a clock**. Change to intensive polling + content judgment and let the data speak for itself.
+--     0.6.1–0.7.1 used dense */15 8-15 (16:00–23:45 every 15m) because release times were unreliable.
+--     0.7.2 thins to four fixed flights to observe hit-rate; late-night catch-up is intentionally omitted.
+--     Action is **generate-chips** (not generate-all): free-tier wall clock — keep market-data / history
+--     as separate HTTP (admin manual in this experiment; may gain their own crons later).
 --
---     Why won’t it explode 32 times a day (actual measured bytes, 2026-07-27):
---       T86 194KB/Margin margin trading 128KB/Borrowing 244KB/Valuation 116KB/Monthly revenue 603KB/Company information 1.32MB
---       The actual external crawling is about 8.7MB every day; Function calls are 704 times/month, and the free quota is 500,000, accounting for 0.14%.
---     The real line of defense is not the quota but these three lines, all implemented in index.ts/pollPlan.ts:
---       1. **Short circuit**: If you have everything you need today, just reply directly without sending any external request.
---       2. **Rewrite Detection**: T86 is updated every 15 minutes starting from 16:00, and the comparison will be repeated every round before finalization.
---          It will freeze only if the content is the same twice in a row. Without this, catching it early will lock the first version into the answer for the day, which is worse than catching it late.
---       3. **Execution limit for the day MAX_RUNS_PER_DAY = 40**: To prevent errors in our own judgment logic
---          (The 0.3.9 burnout amount is exactly this shape), and the final brake on the x-cron-secret outflow.
+--     Short circuit + T86 rewrite detection + MAX_RUNS_PER_DAY still apply inside the function.
 --
---     The pitfall of borrowing bonds (still true): the endpoint does not have a date parameter, and the response is always "the latest".
---     Therefore, use the rwd version (with its own title date) and use the "date declared by the data itself" as the cache key, so that sooner or later there will be no mutual contamination.
---
---     All fall within the same day in Taipei and will not affect taipeiYmd’s judgment. It wouldn’t be bad if you really encounter a more exaggerated delay:
---     The next day's batch will make up for what was missing from the previous day, but the report from that night will be incomplete.
--- ⚠️ The following is the method of **new installation** (unschedule + schedule), which will rewrite the entire command.
---    So both placeholders had to be refilled - that's the cause of BUG-002.
---    **If you just want to change the time, use cron.alter_job instead, which retains the original command without touching the key:**
---      SELECT cron.alter_job(jobid, schedule := '*/15 8-15 * * 1-5')
+-- ⚠️ Live envs: **cron.alter_job** for schedule; replace body action only via targeted UPDATE of command
+--    (do not unschedule+schedule — that rewrites CRON_SECRET placeholders; BUG-002/003).
+--      SELECT cron.alter_job(jobid, schedule := '30,45 8,13 * * 1-5')
 --      FROM cron.job WHERE jobname = 'stock-report-nightly';
 DO $$
 BEGIN
@@ -393,7 +375,7 @@ END $$;
 
 SELECT cron.schedule(
   'stock-report-nightly',
-  '*/15 8-15 * * 1-5',
+  '30,45 8,13 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -401,7 +383,7 @@ SELECT cron.schedule(
                  'Content-Type',  'application/json',
                  'x-cron-secret', '<CRON_SECRET>'
                ),
-    body    := '{"action":"generate-all"}'::jsonb,
+    body    := '{"action":"generate-chips"}'::jsonb,
     -- ⚠️ Must be specified: pg_net’s timeout_milliseconds default is only 5000ms.
     --    However, for the first execution every day, the T86 and margin trading positions of the day must be grasped. The actual measurement takes 10–13 seconds.
     --    (After that, it only takes about 2 seconds to fully hit the cache). Using the default value, net._http_response will be recorded every night
@@ -756,24 +738,14 @@ SELECT cron.schedule(
 --    A short circuit will cause the entire section behind it to not be executed, and this information has nothing to do with the individual stock list.
 --    You should not be tied to the completion status of individual stocks. What is broken down is the schedule, not the function.
 --
---    **Why it starts at 15:00 (Taipei) since 0.6.38**: BFI82U is announced around 15:00–15:30, and the
---    schedule used to start only at 16:00 for fear that an early round would be "a wasted trip".
---    Measured against the code, that fear was overpriced: when nothing new comes back, `syncMarket` finds an
---    unchanged content signature, returns `synced: false` and **does not touch `asOf`** (index.ts) —— so an early
---    round writes nothing and leaves no false "arrived" mark on the admin timeline. The cost is 2 GETs.
---    Every 15 minutes from 15:00 to 18:45 (0.6.46-dev.9; was every 30 minutes): earliest catch wins.
---    After today's FMTQIK row + BFI82U (with buy) are on disk, `syncMarket` short-circuits with
---    **zero external requests** (`reason=skipped`) so denser cron does not hammer TWSE.
+--    **0.7.2 sparse**: Taipei **15:30 / 15:45** only (UTC `30,45 7 * * 1-5`).
+--    Earlier dense 15:00–18:45 was for earliest-catch; this experiment measures whether two flights hit.
+--    Unchanged content still does not touch `asOf`; session-ready short-circuits external requests.
 --
---    ⚠️ **The early round depends on FMTQIK, not only on BFI82U**: today's institutional amount is only fetched
---    when today's row already exists in the merged day list, and that list comes from FMTQIK
---    (`planInstitutionalBackfill` filters `days`). So 15:00 succeeds only when **both** endpoints have published.
---    Check `market/daily.json`'s `asOf` to see which round actually won.
+--    ⚠️ **Depends on FMTQIK + BFI82U**: institutional amount needs today's FMTQIK row first.
+--    Check `market/daily.json`'s `asOf` to see which round won.
 --
---    ⚠️ Same two placeholder mines as in §6c (PROJECT_REF / CRON_SECRET),
---    Be sure to replace before applying, and be sure to run the verification query in §6d after applying.
---    ⚠️ **Only run this section, do not rerun the entire schema.sql**.
---    ⚠️ Live envs: prefer `cron.alter_job(..., schedule := '*/15 7-10 * * 1-5')` to keep command/secret.
+--    ⚠️ Same placeholder mines as §6c. Live: `cron.alter_job` only — do not unschedule+schedule.
 
 DO $$
 BEGIN
@@ -784,9 +756,9 @@ END $$;
 
 SELECT cron.schedule(
   'market-daily',
-  -- Taipei 15:00–18:45 every 15 minutes (UTC 07:00–10:45), weekdays only.
+  -- Taipei 15:30 / 15:45 (UTC 07:30 / 07:45), weekdays only. 0.7.2 sparse experiment.
   -- ⚠️ Already-deployed environments: use cron.alter_job to keep CRON_SECRET in the command.
-  '*/15 7-10 * * 1-5',
+  '30,45 7 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',

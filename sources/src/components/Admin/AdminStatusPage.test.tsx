@@ -16,11 +16,12 @@ const status: AdminStatus = {
     {
       jobid: 10,
       jobname: 'stock-report-nightly',
-      schedule: '*/15 8-15 * * 1-5',
+      // 0.7.2 sparse: T86 16:30/16:45 + margin 21:30/21:45
+      schedule: '30,45 8,13 * * 1-5',
       active: true,
-      action: 'generate-all',
+      action: 'generate-chips',
       targetRef: 'wqetxuhncvfidqnklyew',
-      lastRun: '2026-07-30T15:45:00.094Z',
+      lastRun: '2026-07-30T13:45:00.094Z',
       lastStatus: 'succeeded',
       runsToday: 0,
       failsToday: 0,
@@ -41,12 +42,12 @@ const status: AdminStatus = {
     {
       jobid: 14,
       jobname: 'market-daily',
-      // schema.sql / DEV live: 15:00–18:30 every 30m (not legacy 16/17/18)
-      schedule: '0,30 7-10 * * 1-5',
+      // 0.7.2 sparse: BFI 15:30 / 15:45 only
+      schedule: '30,45 7 * * 1-5',
       active: true,
       action: 'sync-market',
       targetRef: 'wqetxuhncvfidqnklyew',
-      lastRun: '2026-07-30T10:00:00.000Z',
+      lastRun: '2026-07-30T07:45:00.000Z',
       lastStatus: 'succeeded',
       runsToday: 0,
       failsToday: 0,
@@ -92,8 +93,8 @@ const status: AdminStatus = {
   fx: { asOf: '2026-07-31T03:00:02.713Z', count: 8 },
   market: {
     schema: 2,
-    // Taipei 18:00 on the data day (the last market-daily flight) - the timeline is judged to be on time accordingly
-    asOf: '2026-07-30T10:00:00.000Z',
+    // Taipei 15:45 on the data day (0.7.2 last market-daily flight) — on time under sparse dueBy
+    asOf: '2026-07-30T07:45:00.000Z',
     days: 120,
     latestDate: '2026-07-31',
     // It is normal for the legal person to be one day later than the quantity (announced only at 15:00 and supplemented daily)
@@ -132,7 +133,7 @@ describe('AdminStatusPage', () => {
     )
     expect(section.getByText('stock-report-nightly')).toBeTruthy()
     // Scoped since 0.6.40: the timeline legend prints the same sentence, from the same cron
-    expect(section.getByText('週一至週五 16:00–23:45 每 15 分')).toBeTruthy()
+    expect(section.getByText('週一至週五 16:30 / 16:45 / 21:30 / 21:45')).toBeTruthy()
     expect(section.getByText('每日 20:00–次日 02:30 每 30 分')).toBeTruthy()
   })
 
@@ -142,13 +143,11 @@ describe('AdminStatusPage', () => {
     await screen.findByRole('heading', { name: '排程' })
 
     /*
-      The legend used to state "16:00–23:45 每 15 分" as a literal and mention only that batch, so after 0.6.38
-      moved market-daily to 15:00 the page still read as if nothing started before 16:00 —— which is exactly what
-      the user reported. Both schedules are now named, and both come from the cron rows.
+      Both schedules are named, and both come from the cron rows (0.7.2 sparse shifts).
     */
     const legend = container.querySelector('.ast-rule')!
-    expect(legend.textContent).toContain('週一至週五 16:00–23:45 每 15 分')
-    expect(legend.textContent).toContain('週一至週五 15:00–18:30 每 30 分')
+    expect(legend.textContent).toContain('週一至週五 16:30 / 16:45 / 21:30 / 21:45')
+    expect(legend.textContent).toContain('週一至週五 15:30 / 15:45')
     expect(legend.textContent).toContain('三大法人・全市場')
   })
 
@@ -170,7 +169,7 @@ describe('AdminStatusPage', () => {
       screen.getByRole('heading', { name: '台股全市場・量能與三大法人' }).closest('.section')!,
     )
     // The cycle directly translates market-daily's cron, and the front-end does not save a separate copy of the constants.
-    expect(section.getByText('週一至週五 15:00–18:30 每 30 分')).toBeTruthy()
+    expect(section.getByText('週一至週五 15:30 / 15:45')).toBeTruthy()
     expect(section.getByText('2026-07-31')).toBeTruthy() // 最新交易日
     expect(section.getByText('2026-07-30')).toBeTruthy() // 法人只到前一天，正常
     expect(section.getByText('1 天待補')).toBeTruthy()
@@ -205,13 +204,13 @@ describe('AdminStatusPage', () => {
     expect(axis.getByText('T86')).toBeTruthy()
     // The subtitle should indicate that this time is the output of the file, not the time when the legal person's amount is received.
     expect(screen.getByText('BFI82U・檔案產出時間')).toBeTruthy()
-    // 18:00 output, boundary is 18:15 → on time, this column should not be included in "needs attention"
+    // 15:45 market asOf under sparse dueBy → on time; only borrow (+ macro lag) needs attention
     expect(screen.queryByText('有 3 項需要注意')).toBeNull()
   })
 
   /*
-   * 2026-08-05 Actual errors encountered: BFI82U in the whole market uses independent scheduling and captures the data of the day at 16:00.
-   * For individual stocks T86, you have to wait for the 16:30 round. When the base date is tied to an individual stock report, the title stops at the previous day.
+   * 2026-08-05 Actual errors encountered: BFI82U in the whole market uses independent scheduling and captures the data of the day early.
+   * For individual stocks T86, you have to wait for the afternoon chips shifts. When the base date is tied to an individual stock report, the title stops at the previous day.
    * The acquired market-wide column was taken as the starting point at 15:00 of the previous day, and 25 hours was calculated and judged as a delay.
    */
   it('全市場先到手時，整條軸跟著跳到新一輪，個股顯示等待中（0.6.36-dev.2）', async () => {
@@ -221,7 +220,7 @@ describe('AdminStatusPage', () => {
       market: {
         ...status.market!,
         latestInstitutionalDate: '2026-07-31',
-        asOf: '2026-07-31T08:00:04.000Z', // 台北 7/31 16:00，本輪 +1 小時
+        asOf: '2026-07-31T07:45:00.000Z', // 台北 7/31 15:45，稀疏第二班
       },
     })
     render(<AdminStatusPage />)
@@ -231,9 +230,9 @@ describe('AdminStatusPage', () => {
     const rowOf = (label: string) =>
       [...document.querySelectorAll('.ast-row')].find((r) => r.querySelector('b')?.textContent === label)!
 
-    // Whole market: 16:00 arrival → drawn on the axis and not delayed
+    // Whole market: 15:45 arrival → drawn on the axis and not delayed
     const market = rowOf('三大法人・全市場')
-    expect(market.querySelector('.ast-hit-t')?.textContent).toBe('16:00')
+    expect(market.querySelector('.ast-hit-t')?.textContent).toBe('15:45')
     expect(market.querySelector('.ast-pill')?.textContent).not.toBe('延遲')
 
     // Individual stock T86: Still stuck in the previous round → Dots are not drawn with the old timestamp, and it is displayed as waiting.

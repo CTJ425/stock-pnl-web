@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案一：經典三欄深色視圖 (Classic 3-Column Dark)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-dark: #131722;
+      --tv-panel-bg: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-blue: #2962ff;
+      --tv-blue-hover: #1e54e4;
+      --tv-up-red: #f23645;
+      --tv-down-green: #089981;
+      --tv-text-main: #d1d4dc;
+      --tv-text-sub: #787b86;
+      --tv-hover-bg: #2a2e39;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-dark); color: var(--tv-text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Top Control Bar */
+    .tv-header { height: 48px; background: var(--tv-panel-bg); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; user-select: none; }
+    .tv-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #fff; }
+    .tv-brand i { color: var(--tv-blue); }
+    
+    .tv-tools { display: flex; align-items: center; gap: 12px; }
+    .tv-btn-group { display: flex; background: var(--tv-bg-dark); border-radius: 4px; padding: 2px; border: 1px solid var(--tv-border); }
+    .tv-btn { background: transparent; border: none; color: var(--tv-text-sub); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 3px; cursor: pointer; transition: all 0.2s; }
+    .tv-btn.active, .tv-btn:hover { background: var(--tv-hover-bg); color: var(--tv-text-main); }
+    .tv-btn.active { color: var(--tv-blue); }
+
+    /* Workspace 3-Column Layout */
+    .tv-workspace { flex: 1; display: flex; overflow: hidden; }
+
+    /* Left Toolbar Sidebar */
+    .tv-left-bar { width: 46px; background: var(--tv-panel-bg); border-right: 1px solid var(--tv-border); display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 16px; color: var(--tv-text-sub); }
+    .tv-left-icon { width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+    .tv-left-icon:hover, .tv-left-icon.active { background: var(--tv-hover-bg); color: var(--tv-blue); }
+
+    /* Main Chart Center */
+    .tv-main-content { flex: 1; display: flex; flex-direction: column; background: var(--tv-bg-dark); position: relative; }
+    .tv-chart-header { height: 40px; border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--tv-panel-bg); }
+    .tv-ticker-info { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+    .tv-symbol-name { font-weight: 700; color: #fff; font-size: 14px; }
+    .tv-price-tag { font-family: monospace; font-weight: 700; }
+    .tv-price-tag.up { color: var(--tv-up-red); }
+
+    .tv-chart-area { flex: 1; position: relative; padding: 12px; }
+
+    /* Right Watchlist Sidebar */
+    .tv-right-sidebar { width: 340px; background: var(--tv-panel-bg); border-left: 1px solid var(--tv-border); display: flex; flex-direction: column; }
+    .tv-sidebar-title { height: 40px; border-bottom: 1px solid var(--tv-border); display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font-size: 12px; font-weight: 700; color: var(--tv-text-sub); text-transform: uppercase; }
+
+    .tv-watchlist { flex: 1; overflow-y: auto; }
+    .tv-watch-section { border-bottom: 1px solid var(--tv-border); }
+    .tv-watch-sec-title { background: var(--tv-bg-dark); padding: 6px 14px; font-size: 11px; font-weight: 700; color: var(--tv-text-sub); letter-spacing: 0.5px; text-transform: uppercase; }
+
+    .tv-watch-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; transition: background 0.15s; }
+    .tv-watch-row:hover, .tv-watch-row.selected { background: var(--tv-hover-bg); }
+    .tv-watch-sym { font-weight: 700; font-size: 13px; color: #fff; }
+    .tv-watch-sub { font-size: 11px; color: var(--tv-text-sub); }
+    .tv-watch-val { text-align: right; font-family: monospace; font-weight: 700; font-size: 13px; }
+    
+    .badge-chg { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; font-family: monospace; }
+    .badge-chg.up { background: rgba(242, 54, 69, 0.15); color: var(--tv-up-red); }
+    .badge-chg.down { background: rgba(8, 153, 129, 0.15); color: var(--tv-down-green); }
+  </style>
+</head>
+<body>
+
+  <!-- Top Control Bar -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-chart-line fa-lg"></i>
+      <span>TradingView Macro Pro — 台股與美國總經視圖</span>
+      <span style="font-size: 11px; background: var(--tv-blue); color: #fff; padding: 2px 6px; border-radius: 3px; margin-left: 8px;">TV-Style 1</span>
+    </div>
+
+    <div class="tv-tools">
+      <!-- Resolution Toggles -->
+      <div class="tv-btn-group">
+        <button class="tv-btn">1日</button>
+        <button class="tv-btn">1週</button>
+        <button class="tv-btn active">1月</button>
+        <button class="tv-btn">1年</button>
+        <button class="tv-btn">全部</button>
+      </div>
+      <!-- Chart Type Toggles -->
+      <div class="tv-btn-group">
+        <button class="tv-btn active"><i class="fa-solid fa-chart-line"></i> 線圖</button>
+        <button class="tv-btn"><i class="fa-solid fa-chart-column"></i> 直方圖</button>
+        <button class="tv-btn"><i class="fa-solid fa-layer-group"></i> 雙軸疊加</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workspace -->
+  <div class="tv-workspace">
+    
+    <!-- Left Tools -->
+    <div class="tv-left-bar">
+      <div class="tv-left-icon active" title="總經圖表主頁"><i class="fa-solid fa-chart-area"></i></div>
+      <div class="tv-left-icon" title="籌碼面剖析"><i class="fa-solid fa-layer-group"></i></div>
+      <div class="tv-left-icon" title="通膨與利率對比"><i class="fa-solid fa-scale-balanced"></i></div>
+      <div class="tv-left-icon" title="經濟日曆事件"><i class="fa-regular fa-calendar-check"></i></div>
+    </div>
+
+    <!-- Center Chart -->
+    <div class="tv-main-content">
+      <div class="tv-chart-header">
+        <div class="tv-ticker-info">
+          <span class="tv-symbol-name" id="current-symbol">TAIEX 台股加權指數</span>
+          <span class="tv-price-tag up" id="current-val">23,850.20</span>
+          <span class="badge-chg up" id="current-chg">+185.20 (+0.78%)</span>
+        </div>
+        <div style="font-size: 12px; color: var(--tv-text-sub);">
+          <i class="fa-regular fa-clock"></i> 最新盤後資料：2026-08-11
+        </div>
+      </div>
+
+      <div class="tv-chart-area">
+        <canvas id="tvMainChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Watchlist Sidebar -->
+    <div class="tv-right-sidebar">
+      <div class="tv-sidebar-title">
+        <span><i class="fa-solid fa-list-ul"></i> 觀察清單 (WATCHLIST)</span>
+        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer;"></i>
+      </div>
+
+      <div class="tv-watchlist">
+        <!-- Section 1: 台股大盤與籌碼 -->
+        <div class="tv-watch-section">
+          <div class="tv-watch-sec-title">台股大盤與法人籌碼</div>
+          
+          <div class="tv-watch-row selected" onclick="loadSymbol('TAIEX', '台股加權指數', '23,850.20', '+185.20 (+0.78%)', 'up')">
+            <div>
+              <div class="tv-watch-sym">TAIEX 加權指數</div>
+              <div class="tv-watch-sub">成交量 4,120 億</div>
+            </div>
+            <div class="tv-watch-val">
+              <div>23,850.20</div>
+              <span class="badge-chg up">+0.78%</span>
+            </div>
+          </div>
+
+          <div class="tv-watch-row" onclick="loadSymbol('FIN_BUY', '三大法人-外資買賣超', '+98.2 億', '連 3 日買超', 'up')">
+            <div>
+              <div class="tv-watch-sym">外資買賣超</div>
+              <div class="tv-watch-sub">FINANCIAL INSTITUTION</div>
+            </div>
+            <div class="tv-watch-val">
+              <div style="color: var(--tv-up-red);">+98.2 億</div>
+              <span class="badge-chg up">連 3 買</span>
+            </div>
+          </div>
+
+          <div class="tv-watch-row" onclick="loadSymbol('ITC_BUY', '三大法人-投信買賣超', '+51.6 億', '連 12 日買超', 'up')">
+            <div>
+              <div class="tv-watch-sym">投信買賣超</div>
+              <div class="tv-watch-sub">INVESTMENT TRUST</div>
+            </div>
+            <div class="tv-watch-val">
+              <div style="color: var(--tv-up-red);">+51.6 億</div>
+              <span class="badge-chg up">連 12 買</span>
+            </div>
+          </div>
+
+          <div class="tv-watch-row" onclick="loadSymbol('PROP_BUY', '三大法人-自營商買賣超', '-7.0 億', '連 2 日賣超', 'down')">
+            <div>
+              <div class="tv-watch-sym">自營商買賣超</div>
+              <div class="tv-watch-sub">DEALERS</div>
+            </div>
+            <div class="tv-watch-val">
+              <div style="color: var(--tv-down-green);">-7.0 億</div>
+              <span class="badge-chg down">連 2 賣</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: 美國 FRED 總體經濟 -->
+        <div class="tv-watch-section">
+          <div class="tv-watch-sec-title">美國 FRED 關鍵總經</div>
+          
+          <div class="tv-watch-row" onclick="loadSymbol('US_CPI', '美國 CPI 通膨率 (YoY)', '2.60%', '-0.10% 較上月下降', 'down')">
+            <div>
+              <div class="tv-watch-sym">US CPI 年增率</div>
+              <div class="tv-watch-sub">INFLATION RATE</div>
+            </div>
+            <div class="tv-watch-val">
+              <div>2.60%</div>
+              <span class="badge-chg down">-0.10%</span>
+            </div>
+          </div>
+
+          <div class="tv-watch-row" onclick="loadSymbol('US_FED_RATE', '美聯準會基準利率 (Fed Rate)', '4.62%', '目標 4.50-4.75%', 'up')">
+            <div>
+              <div class="tv-watch-sym">Fed Target Rate</div>
+              <div class="tv-watch-sub">INTEREST RATE</div>
+            </div>
+            <div class="tv-watch-val">
+              <div>4.62%</div>
+              <span class="badge-chg up">4.50-4.75%</span>
+            </div>
+          </div>
+
+          <div class="tv-watch-row" onclick="loadSymbol('US_NFP', '美國非農就業人數 (MoM)', '+143 千人', '+20 千人', 'up')">
+            <div>
+              <div class="tv-watch-sym">非農就業人口</div>
+              <div class="tv-watch-sub">PAYROLLS</div>
+            </div>
+            <div class="tv-watch-val">
+              <div>+143K</div>
+              <span class="badge-chg up">+20K</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const ctx = document.getElementById('tvMainChart').getContext('2d');
+    let tvChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['7/25', '7/26', '7/29', '7/30', '7/31', '8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '加權指數 (TAIEX)',
+          data: [23100, 23250, 23050, 23400, 23550, 23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41, 98, 255, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.2,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#787b86', font: { family: 'Trebuchet MS', size: 12 } } },
+          tooltip: {
+            backgroundColor: '#1e222d',
+            titleColor: '#fff',
+            bodyColor: '#d1d4dc',
+            borderColor: '#2a2e39',
+            borderWidth: 1
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+          y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+        }
+      }
+    });
+
+    function loadSymbol(id, title, val, chg, state) {
+      document.querySelectorAll('.tv-watch-row').forEach(row => row.classList.remove('selected'));
+      event.currentTarget.classList.add('selected');
+
+      document.getElementById('current-symbol').innerText = title;
+      document.getElementById('current-val').innerText = val;
+      const chgEl = document.getElementById('current-chg');
+      chgEl.innerText = chg;
+      chgEl.className = `badge-chg ${state}`;
+
+      if(id === 'FIN_BUY') {
+        tvChart.config.type = 'bar';
+        tvChart.data.datasets = [{
+          label: '外資單日買賣超 (億)',
+          data: [-45, 12, -88, 150, 42, -120, -210, 85, 110, 65, 40, 98.2],
+          backgroundColor: (context) => context.raw >= 0 ? '#f23645' : '#089981',
+          borderRadius: 3
+        }];
+      } else if (id === 'US_CPI') {
+        tvChart.config.type = 'line';
+        tvChart.data.datasets = [{
+          label: '美國 CPI 年增率 (%)',
+          data: [3.4, 3.5, 3.4, 3.3, 3.1, 2.9, 2.8, 2.7, 2.7, 2.6],
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          fill: true
+        }];
+      } else {
+        tvChart.config.type = 'line';
+        tvChart.data.datasets = [{
+          label: title,
+          data: [23100, 23250, 23050, 23400, 23550, 23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41, 98, 255, 0.1)',
+          borderWidth: 2,
+          fill: true
+        }];
+      }
+      tvChart.update();
+    }
+  </script>
+</body>
+</html>

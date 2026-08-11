@@ -78,15 +78,14 @@ describe('judgeSource', () => {
     expect(judgeSource(borrow, 18.167, 19)).toBe('late')
   })
 
-  it('全市場法人以 18:15 為界——它的排程一天只有三班，最後一班 18:00（0.6.33）', () => {
+  it('全市場法人以 15:45+grace 為界——0.7.2 稀疏兩班 15:30／15:45', () => {
     const market = TW_CHAIN.find((s) => s.id === 'market')!
-    // 16:15 (Hour 1.25): The line for individual stocks, but the entire market may not have run the second shift at that time - not counting delays
-    expect(judgeSource(market, 1.25, 4)).toBe('ok')
-    expect(judgeSource(market, 3.25, 4)).toBe('ok') // 18:15 剛好在界上
-    expect(judgeSource(market, 3.5, 4)).toBe('late') // 18:30 才產出才算延遲
-    // I haven’t received it yet before 18:15. It’s because I’m waiting, not delayed (I pass this section every evening)
-    expect(judgeSource(market, null, 2)).toBe('idle')
-    expect(judgeSource(market, null, 4)).toBe('late')
+    // dueBy 0.75 + ROUND_GRACE 0.25 → deadline 1.0 (16:00)
+    expect(judgeSource(market, 0.75, 2)).toBe('ok') // 15:45
+    expect(judgeSource(market, 1.0, 2)).toBe('ok') // 16:00 界上
+    expect(judgeSource(market, 1.25, 4)).toBe('late') // 16:15 才到手 → 延遲
+    expect(judgeSource(market, null, 0.5)).toBe('idle')
+    expect(judgeSource(market, null, 1.1)).toBe('late')
   })
 
   it('還沒到寬限截止就沒拿到 → 等待中，不是延遲', () => {
@@ -175,6 +174,13 @@ describe('describeCron', () => {
     expect(describeCron('*/30 8-15 * * 1-5')).toBe('週一至週五 16:00–23:30 每 30 分')
   })
 
+  it('稀疏固定班：分×時列表，逐班列出台北時間（0.7.2）', () => {
+    expect(describeCron('30,45 7 * * 1-5')).toBe('週一至週五 15:30 / 15:45')
+    expect(describeCron('30,45 8,13 * * 1-5')).toBe(
+      '週一至週五 16:30 / 16:45 / 21:30 / 21:45',
+    )
+  })
+
   it('認不得的表達式標記後回傳，不再看起來像正常輸出（0.6.43，AUDIT-05）', () => {
     /*
       Echoing the expression was already the honest choice —— a cron string beats a mistranslated sentence.
@@ -238,14 +244,14 @@ describe('roundBaseYmd（本輪的目標交易日）', () => {
   it('全市場已到手、個股還沒時，基準日跟著跑得快的那個走', () => {
     const base = roundBaseYmd(['2026-08-04', null, '2026-08-04', undefined, '2026-08-05'])
     expect(base).toBe('2026-08-05')
-    // Available at 16:00 in all markets → 1 hour from 8/5 15:00, within dueBy 3
+    // Available at 15:45 in all markets → 0.75h from 8/5 15:00; within sparse deadline 1.0
     const market = TW_CHAIN.find((s) => s.id === 'market')!
-    const h = hoursFromBase('2026-08-05T08:00:04.000Z', base)
-    expect(h).toBeCloseTo(1, 2)
+    const h = hoursFromBase('2026-08-05T07:45:00.000Z', base)
+    expect(h).toBeCloseTo(0.75, 2)
     expect(judgeSource(market, h, 1.3)).toBe('ok')
-    // If the old base date is tied, it will be 25 hours and judged as late - this is the bug that has been fixed.
-    expect(hoursFromBase('2026-08-05T08:00:04.000Z', '2026-08-04')).toBeCloseTo(25, 2)
-    expect(judgeSource(market, 25, 25.3)).toBe('late')
+    // If the old base date is tied, it will be ~25 hours and judged as late - this is the bug that has been fixed.
+    expect(hoursFromBase('2026-08-05T07:45:00.000Z', '2026-08-04')).toBeCloseTo(24.75, 2)
+    expect(judgeSource(market, 24.75, 25.3)).toBe('late')
   })
 
   it('沒有任何有效日期時回空字串（畫面顯示「—」）', () => {
@@ -352,11 +358,13 @@ describe('dayPercent / hourLabel / durationLabel', () => {
 
 describe('describeScope', () => {
   it('每個排程都說得出自己抓什麼', () => {
-    expect(describeScope('generate-all')).toContain('三大法人')
-    expect(describeScope('generate-all')).toContain('淨持股')
+    expect(describeScope('generate-chips')).toContain('T86')
+    expect(describeScope('generate-chips')).toContain('淨持股')
+    expect(describeScope('generate-all')).toContain('phase')
     expect(describeScope('sync-market')).toContain('FMTQIK')
     expect(describeScope('sync-market')).toContain('BFI82U')
     expect(describeScope('sync-market')).toContain('market/daily.json')
+    expect(describeScope('sync-market')).toContain('15:30')
     expect(describeScope('sync-top-tickers')).toBe('')
     expect(describeScope('sync-macro')).toContain('FRED')
     expect(describeScope('sync-fx')).toContain('八個幣對')

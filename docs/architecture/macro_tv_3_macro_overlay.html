@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案三：雙軸指標圖圖疊加與事件標記視圖 (Macro Overlay & Events)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-dark: #131722;
+      --tv-panel-bg: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-blue: #2962ff;
+      --tv-red: #f23645;
+      --tv-green: #089981;
+      --tv-amber: #f59e0b;
+      --tv-purple: #a855f7;
+      --tv-text: #d1d4dc;
+      --tv-text-sub: #787b86;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-dark); color: var(--tv-text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Top Control Bar with Overlay Toggles */
+    .tv-header { height: 52px; background: var(--tv-panel-bg); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .tv-brand { font-weight: 700; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
+    
+    .overlay-controls { display: flex; align-items: center; gap: 16px; font-size: 12px; }
+    .overlay-item { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+    .overlay-item input { accent-color: var(--tv-blue); }
+
+    /* Main Chart Area */
+    .chart-container { flex: 1; position: relative; padding: 16px; }
+    
+    /* Event Markers Legend */
+    .events-bar { height: 42px; background: var(--tv-panel-bg); border-top: 1px solid var(--tv-border); display: flex; align-items: center; gap: 20px; padding: 0 16px; font-size: 12px; }
+    .event-flag { display: flex; align-items: center; gap: 6px; background: var(--tv-bg-dark); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--tv-border); }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header & Overlay Toggles -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-layer-group" style="color: var(--tv-purple);"></i>
+      <span>TradingView Macro Overlay — 多重總經指標長週期疊加對照</span>
+    </div>
+
+    <!-- Dynamic Overlay Checkboxes -->
+    <div class="overlay-controls">
+      <span style="color: var(--tv-text-sub); font-weight: 600;">圖表疊加項目 (OVERLAYS):</span>
+      <label class="overlay-item">
+        <input type="checkbox" checked onchange="toggleDataset(0, this.checked)">
+        <span style="color: var(--tv-blue); font-weight: 700;">■ 加權指數 (左軸 TAIEX)</span>
+      </label>
+      <label class="overlay-item">
+        <input type="checkbox" checked onchange="toggleDataset(1, this.checked)">
+        <span style="color: var(--tv-amber); font-weight: 700;">■ 美國 CPI (右軸1 YoY%)</span>
+      </label>
+      <label class="overlay-item">
+        <input type="checkbox" checked onchange="toggleDataset(2, this.checked)">
+        <span style="color: var(--tv-purple); font-weight: 700;">■ Fed 基準利率 (右軸2 Rate%)</span>
+      </label>
+    </div>
+  </header>
+
+  <!-- Interactive Overlay Chart Area -->
+  <div class="chart-container">
+    <canvas id="overlayChart"></canvas>
+  </div>
+
+  <!-- Bottom Event Timeline Bar -->
+  <div class="events-bar">
+    <span style="color: var(--tv-text-sub); font-weight: 600;"><i class="fa-regular fa-flag"></i> 近期重要事件標記 (EVENT MARKERS):</span>
+    <div class="event-flag">
+      <i class="fa-solid fa-landmark" style="color: var(--tv-amber);"></i>
+      <span>7/31 FOMC 決議不升息</span>
+    </div>
+    <div class="event-flag">
+      <i class="fa-solid fa-receipt" style="color: var(--tv-green);"></i>
+      <span>8/10 CPI 發布 2.60% (降溫)</span>
+    </div>
+    <div class="event-flag">
+      <i class="fa-solid fa-arrows-spin" style="color: var(--tv-blue);"></i>
+      <span>8/11 外資大舉回流 +98 億</span>
+    </div>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('overlayChart').getContext('2d');
+    let overlayChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08'],
+        datasets: [
+          {
+            label: '台股加權指數 (TAIEX)',
+            data: [21800, 22400, 22900, 23200, 23450, 23850],
+            borderColor: '#2962ff',
+            backgroundColor: 'rgba(41,98,255,0.05)',
+            borderWidth: 3,
+            yAxisID: 'y1',
+            fill: true,
+            tension: 0.2
+          },
+          {
+            label: '美國 CPI 年增率 YoY (%)',
+            data: [3.1, 2.9, 2.8, 2.7, 2.7, 2.6],
+            borderColor: '#f59e0b',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            yAxisID: 'y2',
+            tension: 0.2
+          },
+          {
+            label: '美聯準會基準利率 (%)',
+            data: [5.25, 5.25, 5.25, 5.25, 5.0, 4.62],
+            borderColor: '#a855f7',
+            borderWidth: 2,
+            yAxisID: 'y2',
+            stepped: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#787b86', font: { size: 12 } } },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            backgroundColor: '#1e222d',
+            borderColor: '#2a2e39',
+            borderWidth: 1
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+          y1: {
+            type: 'linear',
+            position: 'left',
+            ticks: { color: '#2962ff' },
+            grid: { color: '#2a2e39' },
+            title: { display: true, text: '加權指數點數', color: '#2962ff' }
+          },
+          y2: {
+            type: 'linear',
+            position: 'right',
+            ticks: { color: '#f59e0b' },
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: '百分比 (%)', color: '#f59e0b' }
+          }
+        }
+      }
+    });
+
+    function toggleDataset(index, visible) {
+      overlayChart.setDatasetVisibility(index, visible);
+      overlayChart.update();
+    }
+  </script>
+</body>
+</html>

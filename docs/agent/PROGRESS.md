@@ -1,12 +1,36 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: PROD stock-report v39 (BUG-024)
-- Status: **prod edge deployed**
-- Timestamp: 2026-08-11 10:03:41 Asia/Taipei
+- Action: Sparse cron 0.7.2 (T86/BFI two-shift experiment)
+- Status: **release + cron applied DEV/PROD**
+- Timestamp: 2026-08-11 11:20:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 11:20:00 Asia/Taipei (0.7.2 sparse after-hours cron)
+
+- **Agent**: Grok
+- **Action**: User OK — implement sparse shifts, skip late-night catch-up for now; merge main
+
+### Schedule (Taipei, weekdays)
+| Job | Action | Times |
+| ---- | ---- | ---- |
+| market-daily | sync-market | 15:30 / 15:45 |
+| stock-report-nightly | generate-chips | 16:30 / 16:45 / 21:30 / 21:45 |
+
+### Applied
+- DEV self-hosted + PROD cloud via `cron.alter_job` (secret preserved, len=48)
+- Not scheduled: generate-market-data / generate-history / late-night fill (admin manual)
+- Frontend: dueBy, describeCron sparse branch, labels
+- Version **0.7.2**
+
+### Observe next trading day
+- Did BFI land by 15:45?
+- Did T86 land/freeze by 16:45?
+- Did margin/borrow land by 21:45?
 
 ---
 

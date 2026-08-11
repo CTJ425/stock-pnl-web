@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案六：TradingView 淺色清新特製版 (TradingView Light Theme)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-light: #ffffff;
+      --tv-panel-light: #f8fafc;
+      --tv-border: #e2e8f0;
+      --tv-blue: #2962ff;
+      --tv-up-red: #df2020;
+      --tv-down-green: #10b981;
+      --tv-text: #0f172a;
+      --tv-text-sub: #64748b;
+      --tv-hover: #f1f5f9;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-light); color: var(--tv-text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Top Control Bar */
+    .tv-header { height: 48px; background: var(--tv-panel-light); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .tv-brand { font-weight: 700; font-size: 15px; color: var(--tv-text); display: flex; align-items: center; gap: 8px; }
+    .tv-brand i { color: var(--tv-blue); }
+
+    .workspace { flex: 1; display: flex; overflow: hidden; }
+
+    /* Left Main Chart */
+    .main-area { flex: 1; display: flex; flex-direction: column; background: var(--tv-bg-light); }
+    .chart-header { height: 48px; border-bottom: 1px solid var(--tv-border); background: var(--tv-panel-light); display: flex; justify-content: space-between; align-items: center; padding: 0 16px; }
+    .symbol-title { font-size: 16px; font-weight: 700; color: var(--tv-text); display: flex; align-items: center; gap: 8px; }
+
+    .chart-box { flex: 1; position: relative; padding: 16px; }
+
+    /* Right Watchlist Sidebar */
+    .watchlist-sidebar { width: 340px; background: var(--tv-panel-light); border-left: 1px solid var(--tv-border); display: flex; flex-direction: column; }
+    .sidebar-header { height: 42px; border-bottom: 1px solid var(--tv-border); display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font-size: 12px; font-weight: 700; color: var(--tv-text-sub); }
+
+    .wl-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--tv-border); cursor: pointer; transition: background 0.15s; }
+    .wl-row:hover, .wl-row.active { background: var(--tv-hover); }
+    .wl-sym { font-weight: 700; font-size: 13px; color: var(--tv-text); }
+    .wl-sub { font-size: 11px; color: var(--tv-text-sub); }
+
+    .badge-pill { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: monospace; }
+    .badge-pill.up { background: rgba(223, 32, 32, 0.1); color: var(--tv-up-red); }
+    .badge-pill.down { background: rgba(16, 185, 129, 0.1); color: var(--tv-down-green); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-sun fa-lg"></i>
+      <span>TradingView Light Theme — 淺色高對比專業版</span>
+    </div>
+    <div style="font-size: 12px; color: var(--tv-text-sub);">
+      極致清爽與高明度設計
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- Main Chart -->
+    <div class="main-area">
+      <div class="chart-header">
+        <div class="symbol-title">
+          <i class="fa-solid fa-chart-area" style="color: var(--tv-blue);"></i>
+          <span>TAIEX 加權指數點數與成交量對照</span>
+        </div>
+        <div style="font-family: monospace; font-size: 15px; font-weight: 800; color: var(--tv-up-red);">
+          23,850.20 <span class="badge-pill up">+185.20 (+0.78%)</span>
+        </div>
+      </div>
+
+      <div class="chart-box">
+        <canvas id="lightChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="watchlist-sidebar">
+      <div class="sidebar-header">
+        <span>觀察清單與總經指標 (WATCHLIST)</span>
+        <i class="fa-solid fa-filter"></i>
+      </div>
+
+      <div class="wl-row active">
+        <div><div class="wl-sym">TAIEX 加權指數</div><div class="wl-sub">成交量 4,120 億</div></div>
+        <span class="badge-pill up">+0.78%</span>
+      </div>
+
+      <div class="wl-row">
+        <div><div class="wl-sym">外資單日買賣超</div><div class="wl-sub">FOREIGN BUY/SELL</div></div>
+        <span class="badge-pill up">+98.2 億</span>
+      </div>
+
+      <div class="wl-row">
+        <div><div class="wl-sym">投信單日買賣超</div><div class="wl-sub">INVESTMENT TRUST</div></div>
+        <span class="badge-pill up">+51.6 億</span>
+      </div>
+
+      <div class="wl-row">
+        <div><div class="wl-sym">美國 CPI (YoY)</div><div class="wl-sub">INFLATION RATE</div></div>
+        <span class="badge-pill down">2.60%</span>
+      </div>
+
+      <div class="wl-row">
+        <div><div class="wl-sym">美聯準會利率</div><div class="wl-sub">BENCHMARK RATE</div></div>
+        <span class="badge-pill down">4.62%</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('lightChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '加權指數',
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41, 98, 255, 0.06)',
+          fill: true,
+          borderWidth: 3,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#0f172a', font: { weight: '600' } } } },
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#f1f5f9' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#f1f5f9' } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

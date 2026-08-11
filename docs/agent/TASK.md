@@ -10,11 +10,11 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-11 10:03)
+## 📍 Where the project stands (2026-08-11 11:20)
 
-- **Version 0.7.1** on `dev`/`main` (release). Frontend: macro TW/US tabs + institutional table/spark.
-- **BUG-024** fixed; PROD Edge **stock-report v39** (`verify_jwt=false`, sha `fd12b418…`); DEV volume-copied earlier.
-- Analysis page = **holdings only**; night batch = held tickers only.
+- **Version 0.7.2** on `dev`/`main`. Sparse after-hours: BFI 15:30/45; chips 16:30/45 + 21:30/45 (`generate-chips`).
+- **BUG-024** fixed; PROD Edge **stock-report v39**. Day-K / history phases not on auto cron (manual).
+- Watch next trading day hit-rate before adding late-night catch-up.
 - **Open bugs: none.**
 
 ⚠️ **Environment facts**:

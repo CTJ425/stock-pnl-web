@@ -32,27 +32,26 @@ export interface ChainSpec {
 /**
  * Taiwan stocks after-hours chain. The order is the order of the pictures (in order of publication time).
  *
- * How to get `dueBy`: after the end of the announcement window and the next shift in which the batch is still running after the market closes
- * (Batches are Taipei 16:00–23:45 every 15 minutes). In actual testing, the three major legal entities cannot be caught until the 16:30 round.
- * —— Although 15:00–15:30 has been announced, 16:00 / 16:15 cannot be read in both rounds, so dueBy gives 1.5.
+ * How to get `dueBy` (0.7.2 sparse schedule): last planned shift for that source, with a small grace.
+ * - T86: generate-chips at 16:30 / 16:45 → dueBy 16:45 (1.75h from 15:00)
+ * - BFI82U: market-daily at 15:30 / 15:45 → dueBy 15:45 (0.75h); grace → 16:00
+ * - margin: evening 21:30 / 21:45; announce window still ~21–22h → dueBy 22:00 (7)
+ * - borrow: same evening shifts; announce window can run to ~22:30 → dueBy 22:30 (7.5)
+ * - daily K / fund: not on auto cron in 0.7.2 experiment (admin manual); soft dueBy near old afternoon window
  */
 export const TW_CHAIN: readonly ChainSpec[] = [
   // "Individual stocks" and "whole market" should be marked in the name: both are called the three major legal persons, but one is T86 (each holding, unit stock),
   // One is BFI82U (entire concentrated market, unit yuan). 0.6.33 Previously, only "three major legal persons" were written.
   // Users therefore believe that the entire market has also been monitored.
-  { id: 'institutional', label: '三大法人・個股', hint: 'T86', window: [0, 0.5], dueBy: 1.5 },
+  { id: 'institutional', label: '三大法人・個股', hint: 'T86', window: [0, 0.5], dueBy: 1.75 },
   /*
-    The market-wide row takes its dueBy differently from the other four, and that is not a slip:
-    the others are served by the after-hours batch (16:00–23:45, every 15 minutes), so the round right after the
-    announcement window closes should already have them. The market-wide figures come from the separate
-    `market-daily` schedule —— **Taipei 15:00–18:45 every 15 minutes** (0.6.46-dev.9; was 30m / earlier 16–18).
-    dueBy stays 3h (18:15 with grace): session should be filled well before the window ends; denser cron
-    only retries until `isMarketSessionReady`, then short-circuits.
+    market-daily is sparse since 0.7.2: Taipei **15:30 / 15:45** only (was dense 15:00–18:45).
+    dueBy = last planned shift; if both miss, timeline warns — that is the point of the experiment.
   */
-  { id: 'market', label: '三大法人・全市場', hint: 'BFI82U', window: [0, 0.5], dueBy: 3 },
+  { id: 'market', label: '三大法人・全市場', hint: 'BFI82U', window: [0, 0.5], dueBy: 0.75 },
   { id: 'daily', label: '日 K 線・估值', hint: '每檔持股', window: [1, 1.5], dueBy: 2 },
-  { id: 'margin', label: '融資融券', hint: 'MI_MARGN', window: [6, 7], dueBy: 7.5 },
-  { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 8.75 },
+  { id: 'margin', label: '融資融券', hint: 'MI_MARGN', window: [6, 7], dueBy: 7 },
+  { id: 'borrow', label: '借券賣出', hint: '次一交易日', window: [6, 7.5], dueBy: 7.5 },
 ]
 
 /**
@@ -285,8 +284,14 @@ export function durationLabel(hours: number): string {
  */
 export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
-    '全站淨持股台股：三大法人 T86 / 融資融券 / 借券 + 日 K + 估值 + 月營收 + 獲利能力；' +
-    '並回傳 reportComplete（持股 soft 就緒）。16:00 起與 T86 同窗，非 15:00',
+    '（相容入口）依序 chips → market-data → history，單一 HTTP 有算力預算；線上 cron 自 0.7.2 改打 phase，避免 cloud 546',
+  'generate-chips':
+    '全站淨持股台股籌碼：T86／融資融券／借券、組報告上傳。' +
+    '稀疏班 16:30／16:45（T86）與 21:30／21:45（融資借券）；不與日K／歷史同請求',
+  'generate-market-data':
+    '持股日 K + 估值／產業等（syncDaily + syncFundamental）；0.7.2 實驗版未掛自動 cron，可手動',
+  'generate-history':
+    '一輪月營收+季報補齊；0.7.2 實驗版未掛自動 cron，可手動（完整 12/12 靠多輪）',
   /*
     market-daily / sync-market (0.6.44-dev.3 made the label explicit — ACTION_SCOPE had no
     entry before, so the schedule table showed only the code name). Three TWSE sources,
@@ -295,7 +300,7 @@ export const ACTION_SCOPE: Record<string, string> = {
   'sync-market':
     '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
     'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。' +
-    '15:00–18:45 每 15 分；當日列齊（量能+法人買進）後短路零外部請求',
+    '0.7.2：15:30／15:45 兩班；當日列齊後短路零外部請求',
   probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
   'sync-macro':
     'FRED：核心 CPI / PPI / PCE、FOMC 目標利率區間（DFEDTARU/L）、非農就業、消費者信心',
@@ -388,6 +393,24 @@ export function describeCron(expr: string): string {
     const first = `${p((Number(s[2]) + 8) % 24)}:${p(mins[0])}`
     const last = `${p((Number(s[3]) + 8) % 24)}:${p(mins[mins.length - 1])}`
     return `週一至週五 ${first}–${last} 每 ${mins[1] - mins[0]} 分`
+  }
+  /*
+    Sparse fixed shifts (0.7.2): minute list × hour list, weekdays.
+    - market-daily `30,45 7 * * 1-5` → 15:30 / 15:45
+    - stock-report-nightly `30,45 8,13 * * 1-5` → 16:30 / 16:45 / 21:30 / 21:45
+    List every Taipei clock time; a range would hide the evening gap.
+  */
+  const sparse = /^(\d+(?:,\d+)+)\s+(\d+(?:,\d+)*)\s+\*\s+\*\s+1-5$/.exec(expr)
+  if (sparse) {
+    const mins = sparse[1].split(',').map(Number)
+    const hours = sparse[2].split(',').map(Number)
+    const labels: string[] = []
+    for (const h of hours) {
+      for (const m of mins) {
+        labels.push(`${p((h + 8) % 24)}:${p(m)}`)
+      }
+    }
+    return `週一至週五 ${labels.join(' / ')}`
   }
   return `${UNPARSED_CRON_PREFIX}${expr}`
 }
