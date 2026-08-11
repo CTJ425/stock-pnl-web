@@ -88,6 +88,13 @@
 
 ## 📋 Active Tasks
 
+### Task 86: Model routing made enforceable (replaced the `mad` plugin)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-08-11 21:10:00 Asia/Taipei
+
+Uninstalled `mad` Claude Code plugin. Added routing guard/observe/audit hooks, routing skill, and enforcement rules in CLAUDE.md. Updated agent files. All verification passed; unknown leftover plugin cache noted.
+
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
 - **Status**: 🔄 **shipped everywhere and proven live; only window retuning (step 14) remains**
 - **Agent**: Claude
@@ -118,7 +125,22 @@ precisely what 0.7.8 would have mis-retired).
     the Edge Function directly, so no browser test can reach `handleProbe`. See PROGRESS 0.7.10.
 13. ~~0.7.11: BUG-024, skip requires the data to be on the screen, the two missing crons, edge
     typecheck~~ ✅ —— mechanism observed end to end on DEV; PROD on v44. See PROGRESS 0.7.11.
-14. **Retune the remaining windows** —— ⏳ `t86` / `margin` / `borrow` / MOPS landing times are still
+14. **`mops_profit` on PROD答 `landed=false`，DEV 同版答 `true` —— 尚未查明** —— ⏳
+    Both on v45, so the rule is identical; the difference is data or sampling. Known facts
+    (2026-08-11 21:05, read from the public bucket exactly as the browser does):
+    - PROD holdings `2303` / `2337` / `2344` **do** carry `2026-Q2`, and they sit inside the first 20
+      of the ticker list —— so `readFundamentalSnapshot`'s `max` should have seen Q2 and landed.
+    - `2330` / `2317` are still on `2026-Q1`; `2312` / `2382` have **no fundamental file at all**.
+    - PROD fundamentals are generally days behind (`valuation` 2026-08-06/07) —— expected, since
+      `generate-market-data` had no cron there until tonight.
+    Two candidate explanations, not yet distinguished: (a) `batchTwTickers()` orders differently from
+    the alphabetical list checked by hand, so the 20-ticker sample missed every Q2 holding;
+    (b) `readFundamentalSnapshot` threw (20 storage reads in one round) and returned null, which the
+    rule correctly treats as 「沒有證據」. **The failure direction is safe either way** —— it refuses to
+    retire and retries —— and MOPS only has four slots a day, so the cost is bounded. Resolve by
+    logging the snapshot (`sampled`, and the three maxima) into the tick note on the next hit.
+
+15. **Retune the remaining windows** —— ⏳ `t86` / `margin` / `borrow` / MOPS landing times are still
     un-measured. Now that a hit retires a source only once its data is on screen, a full day of ticks
     gives the real answer; the two new shifts were set from reasoning, not measurement.
 10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
