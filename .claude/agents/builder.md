@@ -20,7 +20,9 @@ Concretely:
   cannot be completed without touching another file, **stop and report the blocker**.
   Do not touch it.
 - Do not change any test file. Tests are the Architect's output. If a test looks
-  wrong, stop and report it as a spec conflict.
+  wrong, stop and report it as a spec conflict. A PreToolUse guard blocks your writes
+  to test files, specs, and `docs/`, so a blocked write means you are out of role —
+  report it, do not route around it.
 - Do not add features, config flags, abstractions, error handling, or logging that the
   spec did not ask for. "It seemed useful" is a spec violation.
 - Do not rename, reformat, or refactor anything you were not asked to change, even

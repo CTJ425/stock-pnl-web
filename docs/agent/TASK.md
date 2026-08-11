@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 20:55:00 Asia/Taipei
+- Timestamp: 2026-08-11 21:00:00 Asia/Taipei
 
 ---
 
@@ -12,8 +12,8 @@
 
 ## 📍 Where the project stands (2026-08-11 19:30)
 
-- **Version 0.7.11 on both branches and both environments.** PROD Edge `stock-report` **v44**
-  (sha `8da3165d…`), DEV Edge volume-copied at the same commit. Pages current.
+- **Version 0.7.12 on both branches and both environments.** DEV Edge volume-copied at the release
+  commit; PROD Edge redeployed on top of v44. Pages current.
 - **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
   retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
   `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
@@ -23,9 +23,12 @@
 - **The hit → fetch → verify wiring is covered by tests** since 0.7.10 (`probeRound.ts`, I/O injected,
   9 cases, mutation-checked). Playwright E2E cannot reach it: pg_cron calls the Edge Function directly
   and the browser only ever reads the resulting rows.
-- ✅ **Proven live 2026-08-11 20:35–20:45**: `bwibbu` hit → follow-up ran → `data_landed=false`
-  (「資料未到位，下輪重試」) → next round hit again → `data_landed=true` → the round after that skipped it.
-  Skip requires the data to have reached the `fundamental/*.json` the UI reads.
+- ✅ **Proven live 2026-08-11 on two independent sources**: `bwibbu` 20:40 and `margin` 20:50 each went
+  hit → fetch → `data_landed=true` → skipped next round. `margin` published on its own and was handled
+  unattended. An earlier `bwibbu` round correctly recorded `data_landed=false`「資料未到位，下輪重試」.
+- ✅ **All seven sources share one standard** (0.7.12): hit = the source published today; retire = what
+  it published is in the artifact the frontend reads. Enforced by an audit test —— empty evidence, and
+  evidence made of the fetch layer's own field names, must both answer 「沒到位」 for every source.
 - ⚠️ **`supabase/functions/` had never been typechecked** —— the root tsconfig only covers `src`.
   `npm run typecheck:edge` now exists and is at 0 errors. **Run it after touching any Edge file**;
   `npm test` and `oxlint` will not catch a missing import there.

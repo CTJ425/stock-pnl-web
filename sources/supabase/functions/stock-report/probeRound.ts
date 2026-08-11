@@ -29,6 +29,8 @@ export interface ProbeTick {
   rows: number | null
   note: string | null
   duration_ms: number
+  /** MOPS 專用：這一次上游發布的資料期別（'YYYY-MM' / 'YYYY-Qn'）。其他來源為 undefined。 */
+  period?: string | null
 }
 
 export interface FollowUpOutcome {
@@ -47,16 +49,12 @@ export interface ProbeRoundDeps {
   /** 跑一支抓取，回傳它的 body（丟例外代表這支失敗）。 */
   runFollowUp(action: ProbeFollowUp): Promise<Record<string, unknown>>
   /**
-   * 抓取**之前**先照一張成品的相片。有些來源（月營收／季報）沒有便宜的絕對判準，
-   * 只能用「這一輪之後畫面上的資料有沒有往前走」來回答，那就需要這張前照。
+   * 抓完之後回頭讀成品，取得「資料到底進來了沒」的證據。
+   *
+   * 收的是**命中的 tick**而不只是來源名稱，因為 MOPS 的判準需要 tick 上帶的 `period`
+   * （上游這次發布的是哪一期）。判準一律是絕對值，所以不需要抓取前的基準相片。
    */
-  readBaseline(hitSources: ProbeSourceId[]): Promise<unknown>
-  /** 抓完之後回頭讀成品，取得「資料到底進來了沒」的證據。 */
-  readEvidence(
-    hitSources: ProbeSourceId[],
-    bodies: Map<ProbeFollowUp, Record<string, unknown>>,
-    baseline: unknown,
-  ): Promise<LandingEvidence>
+  readEvidence(hitTicks: ProbeTick[]): Promise<LandingEvidence>
   /** 把結論寫回該筆 tick。失敗不得讓整輪爆掉——代價只是下一輪重跑。 */
   markTick(source: ProbeSourceId, landed: boolean, note: string): Promise<void>
   /** 一句話摘要一支抓取的成果，寫進 note。 */
@@ -102,9 +100,8 @@ export async function runProbeRound(
     await deps.persistTick(t)
   }
 
-  const hitSources = ticks.filter((t) => t.hit).map((t) => t.source)
-  // Photograph the artifacts before anything fetches —— see readBaseline.
-  const baseline = hitSources.length > 0 ? await deps.readBaseline(hitSources) : null
+  const hitTicks = ticks.filter((t) => t.hit)
+  const hitSources = hitTicks.map((t) => t.source)
   const followUps: FollowUpOutcome[] = []
   const bodies = new Map<ProbeFollowUp, Record<string, unknown>>()
   for (const action of followUpsFor(hitSources)) {
@@ -123,7 +120,7 @@ export async function runProbeRound(
 
   // Ask the artifacts, not the fetches —— see gatherLandingEvidence / sourceLanded.
   const evidence: LandingEvidence =
-    hitSources.length > 0 ? await deps.readEvidence(hitSources, bodies, baseline) : {}
+    hitTicks.length > 0 ? await deps.readEvidence(hitTicks) : {}
 
   const landed: ProbeSourceId[] = []
   for (const t of ticks) {

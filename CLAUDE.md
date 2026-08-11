@@ -38,22 +38,36 @@ Then inspect code you will touch. Do not assume chat has full state.
 ## Work style
 
 - After work: update `TASK.md` / `PROGRESS.md` (and bugs if needed). Significant records: `YYYY-MM-DD HH:mm:ss Asia/Taipei`.
-- Skills (load when relevant): `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
+- Skills (load when relevant): `route`, `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
 
 ## Task routing
 
-Grade a task on three axes — depth of inference required, cost of being wrong, and room for subjective judgement — then hand it to the matching role. Model and effort per role live in `.claude/agents/*.md` frontmatter (mirrored in `.claude/mad/models.json`); do not restate them here.
+**Delegation to the roles below is standing user authorization.** Dispatch them without
+asking first — this overrides any default reluctance to spawn agents. The main session runs
+on the most expensive model in the system, so work that a cheaper role can do correctly
+must not be done here. Model and effort per role live in `.claude/agents/*.md` frontmatter;
+do not restate them here.
 
-| Grade | Role | Fits |
+| Role | Owns | Do not do this in the main session |
 | ---- | ---- | ---- |
-| High | `architect` | Multi-step reasoning, argued trade-offs, complex planning, high-risk changes |
-| Medium | `builder` / `reviewer` | Clear direction but still needs organising — implement from a spec, review against a spec |
-| Low, high-volume | `scout` / `scribe` | Rule-driven, repetitive, has a right answer — codebase mapping, log compression, doc bookkeeping |
+| `scout` | Mapping files/callers/tests, compressing logs and stack traces | More than ~a dozen exploratory Read/Grep calls |
+| `architect` | Specs, failing tests, bug-fix plans, adjudication (main session may do this itself when on Opus) | — |
+| `builder` | Implementing an existing spec | Editing `sources/` for anything bigger than a one-file mechanical change |
+| `reviewer` | Reviewing changed files against a spec | Self-reviewing your own implementation |
+| `scribe` | `docs/agent/` bookkeeping, commit messages | Hand-editing `TASK.md` / `PROGRESS.md` / bug files |
 
-- Grading is a judgement call, not a gate. Each role's `description` states its preconditions (e.g. `builder` needs a spec path); respect them.
-- A subagent starts cold and cannot see the conversation. If briefing it plus its re-reads cost more than doing the work inline, do it inline regardless of grade.
-- Full feature work already runs this loop end-to-end: **`/mad:orchestrate`**.
-- This routes **delegation only**. The main session's model comes from `/model`, not from this file.
+- **The loop is the `route` skill.** Load it for any feature, bug, or `TASK.md` item; it
+  owns lane classification, dispatch order, handoff formats, and escalation.
+- Two limits keep this honest: a dispatch costs 5–15k tokens of fixed overhead, and a
+  measured full loop on a trivial task cost 3.5x doing it inline. Under ~20 minutes of
+  human work, stay in the main session (Lane 0) — that is a routing decision too.
+- Role boundaries are enforced by `.claude/hooks/routing_guard.py`, not by good manners.
+  A blocked write means you are out of role: re-route it, do not work around it.
+  Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
+- Whether routing actually happened is measurable, and the plan does not count as
+  evidence: `python3 .claude/hooks/routing_audit.py`.
+- This routes **delegation only**. The main session's model comes from `/model`, not from
+  this file.
 
 ## Versioning
 

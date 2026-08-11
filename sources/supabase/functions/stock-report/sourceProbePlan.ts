@@ -191,11 +191,15 @@ export interface LandingEvidence {
   }
   /** 前端讀的 `fundamental/*.json` 裡 `valuation.dataDate`（YYYY-MM-DD）。 */
   fundamentalValuationDate?: string | null
+  /** 同一份檔案裡，月營收／季報**目前最新的一期**（'YYYY-MM' / 'YYYY-Qn'）。 */
+  fundamentalRevenueMonth?: string | null
+  fundamentalProfitQuarter?: string | null
   /**
-   * 同一份 `fundamental/*.json` 裡，月營收／季報的最新一期在這一輪**有沒有往前走**。
-   * 比對抓取前後，而不是問 backfill「寫了幾筆」——寫了幾筆不等於畫面上看得到。
+   * 上游這一輪**剛發布**的那一期——也就是「今天該出現在畫面上的」那一期。
+   * 判準是絕對值而不是「有沒有往前走」：後者在資料早就補齊時會永遠答不出「到位」，
+   * 而且它回答的是「有沒有變動」，不是「該有的那一期在不在」。
    */
-  mopsAdvanced?: { revenue?: boolean; profit?: boolean }
+  mopsPublished?: { revenue?: string | null; profit?: string | null }
 }
 
 /**
@@ -208,10 +212,12 @@ export interface LandingEvidence {
  * - `borrow`：沿用 `borrowHit` 的同一條判準——日期**走過**今天才算，因為借券盤中自帶當日額度。
  * - `bwibbu`：**前端讀的那份** `fundamental/*.json` 的 `valuation.dataDate` ＝今天。
  *   不是問抓取函式回報了什麼日期——那只證明「我們抓到了」，不證明「畫面上換了」。
- * - `mops_*`：同一份檔案裡月營收／季報的最新一期在這一輪往前走了。
- *   月營收／季報散在各檔個股的歷史檔裡，沒有便宜的單點可以問「今天該有的那一期到了沒」，
- *   所以退而求其次比對前後——它至少直接回答「畫面上的資料有沒有變新」。
- *   代價有界：MOPS 一天只探 12:00／12:05／21:00／21:05 四槽，最多多跑一輪。
+ * - `mops_*`：**上游剛發布的那一期**（月營收的 `資料年月`／季報的 `年度`+`季別`）已經在那份檔案裡。
+ *   探針本來就要抓 MOPS 才能讀出表日期，順手把「這次發布的是哪一期」一起帶出來，
+ *   判準因此和其他來源同型：都是「上游剛出的那一份，出現在前端讀的東西裡」。
+ *
+ * 七個來源共用同一條標準，只是各自的「那份東西」不同——沒有任何一個是用
+ * 「抓取函式有沒有出錯」或「這輪有沒有做事」來判定的。
  */
 export function sourceLanded(
   source: ProbeSourceId,
@@ -230,10 +236,21 @@ export function sourceLanded(
     case 'bwibbu':
       return normaliseYmd(ev.fundamentalValuationDate) === todayYmd
     case 'mops_revenue':
-      return ev.mopsAdvanced?.revenue === true
+      return atLeast(ev.fundamentalRevenueMonth, ev.mopsPublished?.revenue)
     case 'mops_profit':
-      return ev.mopsAdvanced?.profit === true
+      return atLeast(ev.fundamentalProfitQuarter, ev.mopsPublished?.profit)
   }
+}
+
+/**
+ * 檔案裡的那一期有沒有追上（含）上游剛發布的那一期。
+ *
+ * 用 `>=` 而不是 `===`：backfill 可能早就補到更新的一期（月營收就是這樣——OpenAPI 快照停在六月，
+ * 而畫面上已經有七月），那顯然算到位。缺任何一邊都算沒到位，沒有證據就不收工。
+ */
+function atLeast(have: string | null | undefined, want: string | null | undefined): boolean {
+  if (!have || !want) return false
+  return have >= want
 }
 
 /** 'YYYY-MM-DD' | 'YYYYMMDD' → 'YYYYMMDD'；其餘一律 null，不猜。 */
@@ -265,6 +282,34 @@ export function mopsIssueRocYmd(rows: unknown): string | null {
   if (!Array.isArray(rows) || rows.length === 0) return null
   const v = (rows[0] as Record<string, unknown> | null)?.['出表日期']
   return typeof v === 'string' && /^\d{7}$/.test(v.trim()) ? v.trim() : null
+}
+
+/**
+ * MOPS 這一次**發布的是哪一期**（0.7.12）。
+ *
+ * 探針為了讀出表日期本來就要抓這份表，順手把資料期別一起讀出來，收工判準才能問
+ * 「這一期在不在畫面上」而不是「這一輪有沒有變動」——後者在資料早就補齊時永遠答不出到位。
+ * 整份表共用同一期（實測 1082／336 筆皆然），取第一列即可，與 `mopsIssueRocYmd` 同一個理由。
+ */
+export function mopsRevenuePeriod(rows: unknown): string | null {
+  const v = firstRowField(rows, '資料年月')
+  if (!/^\d{5}$/.test(v ?? '')) return null
+  const s = v as string
+  return `${Number(s.slice(0, 3)) + 1911}-${s.slice(3)}`
+}
+
+/** 季報：`年度` + `季別` → 'YYYY-Qn'。 */
+export function mopsProfitPeriod(rows: unknown): string | null {
+  const y = firstRowField(rows, '年度')
+  const q = firstRowField(rows, '季別')
+  if (!/^\d{2,3}$/.test(y ?? '') || !/^[1-4]$/.test(q ?? '')) return null
+  return `${Number(y) + 1911}-Q${q}`
+}
+
+function firstRowField(rows: unknown, field: string): string | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const v = (rows[0] as Record<string, unknown> | null)?.[field]
+  return v == null ? null : String(v).trim()
 }
 
 /** UI helper: "15:00 沒中" / "15:05 中" */
