@@ -1,9 +1,49 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.9 收工判準改成「資料真的到位」（0.7.8 只看抓取有沒有拋錯）
-- Status: **released to main; DEV + PROD both on 0.7.9 with matching crons. One live hit still unobserved**
-- Timestamp: 2026-08-11 19:00:00 Asia/Taipei
+- Action: 0.7.10 探針編排抽成可測模組（0.7.9 收工判準＝資料真的到位）
+- Status: **released to main; DEV + PROD both on 0.7.10. Hit path now covered by tests, still unseen live**
+- Timestamp: 2026-08-11 19:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-11 19:30:00 Asia/Taipei (0.7.10 讓命中路徑可測)
+
+Answering 「驗證的部分可以透過 E2E 來進行測試嗎?」 —— **no, and the reason matters.**
+
+This project's E2E (`docs/UnitTests/E2E.md`) is Playwright against a real browser. The unverified path
+is `handleProbe` inside the Edge Function, invoked by pg_cron. **The browser never touches it** —— the
+admin console only *reads* `source_probe_tick` afterwards. Playwright could at best assert that a note
+already in the DB renders on screen, which proves nothing about how it got there. The project's own
+doctrine agrees: `INTEGRATION.md` says Edge wiring changes are covered by 「pure unit + DEV ops smoke」,
+and E2E.md lists 「calling 'looked fine once on DEV' unit coverage」 as an anti-pattern.
+
+**The real gap was that `index.ts` has no tests at all** —— 145KB of Deno module that builds a `db`
+client at module scope and calls `Deno.serve` at the bottom, so vitest cannot import it. Every pure
+predicate was covered; the wiring between them was not, which is exactly where 0.7.8 and 0.7.9 went
+wrong. Waiting for TWSE is not a test —— it happens once and protects nothing afterwards.
+
+So the round was extracted into `probeRound.ts` as `runProbeRound(planned, todayYmd, deps)` with all
+I/O injected, leaving `handleProbe` as the adapter that supplies the real clock, DB and network.
+**Behaviour unchanged** —— verified by deploying it to DEV and getting a byte-identical probe response.
+
+Nine tests now cover what previously required luck and a market session:
+
+| Branch | Why it matters |
+| ---- | ---- |
+| hit → mapped fetch runs | the 0.7.8 feature itself |
+| fetch returns cleanly but lands nothing → **not** retired | the 0.7.9 fix; the whole point |
+| fetch throws → not retired | the day's last retry must not close on an exception |
+| three chip sources hit → `generate-chips` once, judged individually | dedupe must not blur per-source verdicts |
+| budget exhausted → deferred to the fixed shift | the 45s guard |
+| tick persisted **before** the fetch | ordering is correctness: a crash must not cost the measurement |
+| retired source not probed | 0.7.7 |
+| empty window does not even query the DB | cheap round stays cheap |
+
+**Mutation-checked**: reverting the rule to 0.7.8's 「did the fetch throw」 fails two of them. Tests that
+cannot fail are decoration, so this was worth the thirty seconds.
+
+Verification: 979/979 vitest (63 files), tsc clean, oxlint 0 errors.
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.

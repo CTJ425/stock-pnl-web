@@ -12,16 +12,19 @@
 
 ## 📍 Where the project stands (2026-08-11 19:30)
 
-- **Version 0.7.9 on both branches and both environments.** PROD Edge `stock-report` **v42**
-  (sha `568a98da…`, `verify_jwt` false), DEV Edge volume-copied at the same commit. Pages current.
+- **Version 0.7.10 on both branches and both environments.** PROD Edge `stock-report` v42 → **v43**,
+  DEV Edge volume-copied at the same commit. Pages current.
 - **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
   retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
   `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
 - **All crons active in both environments**, `market-daily` at Taipei 15:15/15:30/15:45 in both.
   PROD's four writer jobs had been off since the 0.7.3 experiment; restored 2026-08-11 19:2x.
-- ⏳ **Still unproven in the wild: no probe hit has yet triggered a follow-up.** Everything above is
-  unit-tested and checked against real artifacts, but no green cell has run the path end to end.
-  See Task 85 step 9 —— read it back before trusting the mechanism.
+- **The hit → fetch → verify wiring is covered by tests** since 0.7.10 (`probeRound.ts`, I/O injected,
+  9 cases, mutation-checked). Playwright E2E cannot reach it: pg_cron calls the Edge Function directly
+  and the browser only ever reads the resulting rows.
+- ⏳ **Still unseen in the wild: no probe hit has yet triggered a follow-up.** Task 85 step 9. Lower
+  stakes than it was —— regressions are now caught by `npm test` —— but the first live round is still
+  worth reading back.
 - **Open bugs: none.**
 
 <details>
@@ -102,7 +105,10 @@ precisely what 0.7.8 would have mis-retired).
 8. ~~Landing check `sourceLanded` + `data_landed` column (0.7.9); DEV rename + redeploy~~ ✅ 18:52
 9. **Watch one live round with a hit** —— ⏳ **no follow-up has fired yet.** Confirm a green cell's note
    reads `… · 已觸發 … · 資料已到位` and `data_landed = true`. Next chances: `margin` from 20:30,
-   MOPS 21:00/21:05, then tomorrow's 15:00 open. This is the only step still unproven in the wild.
+   MOPS 21:00/21:05, then tomorrow's 15:00 open.
+12. ~~Make the hit path testable without waiting for the market (0.7.10 `probeRound.ts`, 9 cases,
+    mutation-checked)~~ ✅ —— **E2E was the wrong layer**: Playwright drives a browser and pg_cron calls
+    the Edge Function directly, so no browser test can reach `handleProbe`. See PROGRESS 0.7.10.
 10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
     `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
 11. ~~**PROD crons all `active = false`** since the 0.7.3 experiment (0.7.7 only did DEV)~~ ✅ restored
