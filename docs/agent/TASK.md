@@ -86,10 +86,12 @@ precisely what 0.7.8 would have mis-retired).
 9. **Watch one live round with a hit** —— ⏳ **no follow-up has fired yet.** Confirm a green cell's note
    reads `… · 已觸發 … · 資料已到位` and `data_landed = true`. Next chances: `margin` from 20:30,
    MOPS 21:00/21:05, then tomorrow's 15:00 open. This is the only step still unproven in the wild.
-10. **PROD** —— ⛔ **blocked: the `supabase` CLI has no access token in this environment**
-    (`LegacyPlatformAuthRequiredError` on every platform call; `db query --linked` also refused by the
-    sandbox classifier). PROD Edge is therefore still the **0.7.4 bundle (v41)** while `main` is 0.7.9.
-    Exact commands + the mandatory DDL-before-bundle order: ship record in `PROGRESS.md`.
+10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
+    `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
+11. **PROD crons are still all `active = false`** —— ⏳ never restored after the 0.7.3 experiment
+    (0.7.7 only did DEV), and `market-daily` is still on the pre-0.7.7 `30,45 7 * * 1-5`.
+    Under 0.7.9 this removes the **outer retry** the design assumes. Two `cron.alter_job` statements,
+    refused by the sandbox classifier —— see the PROD ship record in `PROGRESS.md`.
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
