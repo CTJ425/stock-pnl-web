@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 19:30:00 Asia/Taipei
+- Timestamp: 2026-08-11 20:55:00 Asia/Taipei
 
 ---
 
@@ -12,20 +12,24 @@
 
 ## 📍 Where the project stands (2026-08-11 19:30)
 
-- **Version 0.7.10 on both branches and both environments.** PROD Edge `stock-report` **v43** (sha `d66355f8…`),
-  DEV Edge volume-copied at the same commit. Pages current.
+- **Version 0.7.11 on both branches and both environments.** PROD Edge `stock-report` **v44**
+  (sha `8da3165d…`), DEV Edge volume-copied at the same commit. Pages current.
 - **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
   retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
   `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
-- **All crons active in both environments**, `market-daily` at Taipei 15:15/15:30/15:45 in both.
-  PROD's four writer jobs had been off since the 0.7.3 experiment; restored 2026-08-11 19:2x.
+- **Seven cron jobs active in both environments** (0.7.11 added `market-data-daily` Taipei 18:00/22:00
+  and `history-daily` Taipei 12:30/21:30 —— 估值 / 月營收 / 季報 previously had **no** schedule at all).
+  The probe is the primary, earlier trigger; the shifts are the outer retry.
 - **The hit → fetch → verify wiring is covered by tests** since 0.7.10 (`probeRound.ts`, I/O injected,
   9 cases, mutation-checked). Playwright E2E cannot reach it: pg_cron calls the Edge Function directly
   and the browser only ever reads the resulting rows.
-- ⏳ **Still unseen in the wild: no probe hit has yet triggered a follow-up.** Task 85 step 9. Lower
-  stakes than it was —— regressions are now caught by `npm test` —— but the first live round is still
-  worth reading back.
-- **Open bugs: BUG-024** —— 估值 BWIBBU 每天存的都是前一個交易日（端點沒有日期參數 + readLatest 當日凍結 + 沒有 cron）。
+- ✅ **Proven live 2026-08-11 20:35–20:45**: `bwibbu` hit → follow-up ran → `data_landed=false`
+  (「資料未到位，下輪重試」) → next round hit again → `data_landed=true` → the round after that skipped it.
+  Skip requires the data to have reached the `fundamental/*.json` the UI reads.
+- ⚠️ **`supabase/functions/` had never been typechecked** —— the root tsconfig only covers `src`.
+  `npm run typecheck:edge` now exists and is at 0 errors. **Run it after touching any Edge file**;
+  `npm test` and `oxlint` will not catch a missing import there.
+- **Open bugs: none.** BUG-024 (估值每天都是前一交易日) fixed in 0.7.11 —— see `FIXED_BUG.md`.
 
 <details>
 <summary>Superseded snapshot (2026-08-11 13:25) —— kept for the 0.7.3/0.7.4 experiment history</summary>
@@ -82,7 +86,7 @@
 ## 📋 Active Tasks
 
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
-- **Status**: 🔄 **shipped DEV + main + PROD (crons restored); one live hit still to be read back**
+- **Status**: 🔄 **shipped everywhere and proven live; only window retuning (step 14) remains**
 - **Agent**: Claude
 - **Timestamp**: 2026-08-11 19:00:00 Asia/Taipei
 
@@ -109,6 +113,11 @@ precisely what 0.7.8 would have mis-retired).
 12. ~~Make the hit path testable without waiting for the market (0.7.10 `probeRound.ts`, 9 cases,
     mutation-checked)~~ ✅ —— **E2E was the wrong layer**: Playwright drives a browser and pg_cron calls
     the Edge Function directly, so no browser test can reach `handleProbe`. See PROGRESS 0.7.10.
+13. ~~0.7.11: BUG-024, skip requires the data to be on the screen, the two missing crons, edge
+    typecheck~~ ✅ —— mechanism observed end to end on DEV; PROD on v44. See PROGRESS 0.7.11.
+14. **Retune the remaining windows** —— ⏳ `t86` / `margin` / `borrow` / MOPS landing times are still
+    un-measured. Now that a hit retires a source only once its data is on screen, a full day of ticks
+    gives the real answer; the two new shifts were set from reasoning, not measurement.
 10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
     `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
 11. ~~**PROD crons all `active = false`** since the 0.7.3 experiment (0.7.7 only did DEV)~~ ✅ restored
