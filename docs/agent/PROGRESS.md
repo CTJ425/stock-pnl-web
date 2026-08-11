@@ -1,12 +1,44 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.5 BUG-025 post-close quote stuck on 「盤中」 for ten minutes
-- Status: **live DEV+PROD**
-- Timestamp: 2026-08-11 13:42:00 Asia/Taipei
+- Action: 0.7.6 三大法人買賣超 UI 改為「單位 × 日期」矩陣
+- Status: **released to main**
+- Timestamp: 2026-08-11 14:50:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 14:50:00 Asia/Taipei (0.7.6 三大法人矩陣)
+
+User asked for a UI/UX rework of 總體經濟 → 台股市場 → 三大法人買賣超（億元）・近 7 個交易日,
+stating the table must stay the主角 and charts the sidekick. Six HTML proposals were written to
+`docs/architecture/` (index: `macro_inst_index.html`); the user picked 方案一 and asked to ship it
+straight to `main`.
+
+The diagnosis was that the axis was wrong, not the styling. The old table was 日期 × 單位 with a
+per-day expand: 「外資這幾天在買還是在賣」 cost seven expands and reading one unit name across seven
+separate blocks, and since only the newest day opened by default, 外資 and 投信 were hidden on the
+other six days. Fully expanded it was 42 rows under a single header.
+
+Transposed to 列＝六個單位 / 欄＝七個交易日 —— 6×7 always visible, **no expand state exists any more**
+(the `expanded` Set, `toggle`, `toggleAll` and `DayTrend` are gone). Days now run oldest → newest, the
+same direction as the three charts on the card; the old table was the only element reading the other way.
+Also added: 7 日累計 column (the old table could not answer this without mental arithmetic), row-relative
+heat tint (外資 moves in hundreds of 億 and 外資自營商 in single digits — a table-wide scale flattens
+every other row), streak moved onto the unit row where it belongs, 買進／賣出 demoted from two permanent
+columns to a metric switch, and the 單位 column frozen for horizontal scroll.
+
+Verification: 963/963 vitest pass (16 of them rewritten for this section), tsc + oxlint + build clean.
+Layout checked in Chromium against the real component markup and the real `index.css` at 1280px and
+390px: page horizontal overflow 0 at both, the table scrolls inside `.table-scroll` (470px of scroll at
+390px), the frozen 單位 cell holds at x=37 when scrolled fully right, and the `color-mix` tint resolves.
+**Not verified**: the logged-in DEV page with live data —— the app is behind Supabase auth and no
+credentials were available in the session. The DEV bundle itself boots with no console or page errors
+and the badge reads the new version.
+
+Frontend only. No Edge Function, Supabase schema or cron change.
 
 ---
 
