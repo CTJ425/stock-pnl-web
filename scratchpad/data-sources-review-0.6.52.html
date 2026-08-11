@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>stock-pnl-web 資料來源與架構 Review（0.6.52）</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --panel2: #243044;
+      --ink: #e7ecf3;
+      --muted: #9aa8bc;
+      --line: #2e3d52;
+      --ok: #3dd68c;
+      --warn: #f5a524;
+      --bad: #f31260;
+      --info: #66aaf9;
+      --accent: #7c8cf8;
+      --openapi: #f5a524;
+      --other: #3dd68c;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2740, transparent),
+                  radial-gradient(900px 500px at 100% 0%, #1b2a22, transparent),
+                  var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    a { color: var(--info); }
+    header {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(10px);
+      background: rgba(15, 20, 25, 0.88);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 20px;
+    }
+    header h1 { margin: 0 0 4px; font-size: 1.25rem; font-weight: 700; }
+    header .meta { color: var(--muted); font-size: 13px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 20px; }
+    nav.toc {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin: 16px 0 28px;
+    }
+    nav.toc a {
+      text-decoration: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    nav.toc a:hover { border-color: var(--accent); color: #fff; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 20px 22px;
+      margin-bottom: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.1rem;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+    h3 { margin: 18px 0 8px; font-size: 0.98rem; color: #d7def0; }
+    p, li { color: #d5dbe6; }
+    .muted { color: var(--muted); }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      vertical-align: middle;
+    }
+    .tag-yes { background: rgba(245,165,36,.18); color: var(--openapi); border: 1px solid rgba(245,165,36,.4); }
+    .tag-no { background: rgba(61,214,140,.12); color: var(--ok); border: 1px solid rgba(61,214,140,.35); }
+    .tag-bad { background: rgba(243,18,96,.15); color: #ff7aa2; border: 1px solid rgba(243,18,96,.35); }
+    .tag-warn { background: rgba(245,165,36,.12); color: var(--warn); border: 1px solid rgba(245,165,36,.35); }
+    .tag-info { background: rgba(102,170,249,.12); color: var(--info); border: 1px solid rgba(102,170,249,.35); }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .card h4 { margin: 0 0 6px; font-size: 14px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 10px 0 4px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #1e2b3f;
+      color: #cdd7e8;
+      font-weight: 600;
+      position: sticky;
+      top: 58px;
+      z-index: 5;
+    }
+    tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+    code, .mono {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: rgba(0,0,0,.25);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .scroll { overflow-x: auto; }
+    .timeline {
+      position: relative;
+      margin: 12px 0 0;
+      padding-left: 18px;
+      border-left: 2px solid var(--line);
+    }
+    .tl-item {
+      position: relative;
+      margin: 0 0 14px;
+      padding: 8px 12px;
+      background: var(--panel2);
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    .tl-item::before {
+      content: "";
+      position: absolute;
+      left: -24px; top: 14px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,140,248,.25);
+    }
+    .tl-item .when {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--info);
+      margin-bottom: 4px;
+    }
+    .callout {
+      border-left: 4px solid var(--warn);
+      background: rgba(245,165,36,.08);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 10px 0;
+    }
+    .callout.bad { border-left-color: var(--bad); background: rgba(243,18,96,.08); }
+    .callout.ok { border-left-color: var(--ok); background: rgba(61,214,140,.08); }
+    .callout.info { border-left-color: var(--info); background: rgba(102,170,249,.08); }
+    ul.compact li { margin: 4px 0; }
+    footer {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 8px 0 28px;
+    }
+    .mermaid-like {
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: pre;
+      overflow-x: auto;
+      background: #0c1017;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #b8c7dc;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap" style="padding-top:0;padding-bottom:0">
+      <h1>stock-pnl-web · 資料來源與架構 Review</h1>
+      <div class="meta">
+        版本 <strong>0.6.52</strong> · 產出 2026-08-10 Asia/Taipei ·
+        基準分支 <code>main</code> · Edge <code>stock-report</code> / <code>stock-price</code> ·
+        目的：大規模 review（OpenAPI 分界、時序、風險、建議）
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc">
+      <a href="#s0">0. 一句話</a>
+      <a href="#s1">1. OpenAPI 是／不是</a>
+      <a href="#s2">2. 功能 × 來源對照</a>
+      <a href="#s3">3. 全站外部來源總表</a>
+      <a href="#s4">4. 資料時序（cron／手動）</a>
+      <a href="#s5">5. 盤後 phase 管線</a>
+      <a href="#s6">6. Storage／快取產物</a>
+      <a href="#s7">7. 已知 BUG 與隱藏問題</a>
+      <a href="#s8">8. 觀察與建議</a>
+      <a href="#s9">9. 驗證 checklist</a>
+    </nav>
+
+    <!-- 0 -->
+    <section id="s0">
+      <h2>0. 一句話總覽</h2>
+      <p>
+        本系統是<strong>前端 SPA（GitHub Pages）+ Supabase（Auth／Postgres／Storage／Edge）</strong>。
+        即時報價與名單多半<strong>即時打外部</strong>；籌碼／基本面／日 K／總經則由
+        <strong>Edge 批次寫入 Storage</strong>，前端再<strong>直接下載 JSON</strong>（不耗 Edge 額度）。
+      </p>
+      <div class="grid-2">
+        <div class="card">
+          <h4><span class="tag tag-yes">OpenAPI</span> openapi.twse.com.tw</h4>
+          <p class="muted" style="margin:0">
+            證交所「機器可讀」REST。雲端 Edge 連線曾出現 <code>Connection reset</code>（0.6.52 已做軟取用／備援）。
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="tag tag-no">非 OpenAPI</span> 其他來源</h4>
+          <p class="muted" style="margin:0">
+            TWSE rwd JSON、MIS 即時、MOPS 月報／季報、Yahoo 日 K／匯率、FRED 總經、TPEx OpenAPI。
+          </p>
+        </div>
+      </div>
+      <div class="callout info">
+        <strong>Review 視角：</strong>「功能好不好」要拆成（1）來源穩不穩、（2）時序對不對、
+        （3）失敗時有沒有短路／沿用舊檔、（4）觀測（cron 60s vs Edge 110s）會不會騙人。
+      </div>
+    </section>
+
+    <!-- 1 -->
+    <section id="s1">
+      <h2>1. openapi.twse.com.tw —— 有用到 vs 沒有用到</h2>
+
+      <h3>1.1 有使用 OpenAPI 的端點</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>OpenAPI 路徑</th>
+              <th>用途（產品功能）</th>
+              <th>誰呼叫</th>
+              <th>寫入何處</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/v1/exchangeReport/MI_INDEX20</code></td>
+              <td>TOP20 成交量前二十（對應官網 mi-stock20.html）</td>
+              <td>Edge <code>syncTopTickers</code>（chips／手動 TOP20）</td>
+              <td><code>meta/top_tickers.json</code></td>
+              <td>0.6.51+；失敗則備援 STOCK_DAY_ALL 或舊檔（0.6.52）</td>
+            </tr>
+            <tr>
+              <td><code>/v1/exchangeReport/STOCK_DAY_ALL</code></td>
+              <td>TOP20 備援（依成交量排前 20）；歷史曾作成交金額 TOP30</td>
+              <td>Edge <code>syncTopTickers</code> fallback</td>
+              <td>同上</td>
+              <td>與 MI_INDEX20 同 host，仍可能 RST</td>
+            </tr>
+            <tr>
+              <td><code>/v1/exchangeReport/STOCK_DAY_AVG_ALL</code></td>
+              <td>台股上市清單／名稱（搜尋、twlist）</td>
+              <td>Edge <code>stock-price</code> action <code>twlist</code>；前端 dev proxy 亦可</td>
+              <td>記憶體／前端快取，非 reports 主檔</td>
+              <td>與 TPEx 合併為全市場代號表</td>
+            </tr>
+            <tr>
+              <td><code>/v1/exchangeReport/BWIBBU_ALL</code></td>
+              <td>本益比／殖利率／股淨比（估值）</td>
+              <td>Edge <code>syncFundamental</code></td>
+              <td><code>fundamental/{ticker}.json</code> + <code>chip_raw_cache</code></td>
+              <td>全市場大檔，當日 cache 後多班短路</td>
+            </tr>
+            <tr>
+              <td><code>/v1/opendata/t187ap05_L</code></td>
+              <td>最新月營收列</td>
+              <td>Edge <code>syncFundamental</code></td>
+              <td>fundamental + chip_raw_cache</td>
+              <td>歷史月份靠 MOPS 另補</td>
+            </tr>
+            <tr>
+              <td><code>/v1/opendata/t187ap03_L</code></td>
+              <td>產業／公司屬性</td>
+              <td>Edge <code>syncFundamental</code></td>
+              <td>fundamental</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><code>/v1/opendata/t187ap17_L</code></td>
+              <td>最新季獲利能力列</td>
+              <td>Edge <code>syncFundamental</code></td>
+              <td>fundamental</td>
+              <td>歷史季報靠 MOPS t163</td>
+            </tr>
+            <tr>
+              <td><code>/v1/exchangeReport/MI_MARGN</code></td>
+              <td>融資融券（無日期、最新餘額備援）</td>
+              <td>Edge chips 路徑</td>
+              <td>chip_raw_cache／報告</td>
+              <td>主路徑用 rwd 有日期版</td>
+            </tr>
+            <tr>
+              <td><code>/v1/SBL/TWT96U</code></td>
+              <td>借券賣出可用餘額（無日期）</td>
+              <td>Edge chips</td>
+              <td>chip_raw_cache／報告</td>
+              <td>有日期版走 rwd TWT96U</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>1.2 明確<strong>不是</strong> openapi.twse.com.tw 的來源</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>來源 host／路徑</th>
+              <th>用途</th>
+              <th>誰呼叫</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/fund/T86</code></td>
+              <td>三大法人買賣超（T86，有日期）</td>
+              <td>Edge chips <code>loadSeries</code></td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN</code></td>
+              <td>融資融券（有日期）</td>
+              <td>Edge chips</td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/marginTrading/TWT96U</code></td>
+              <td>借券（rwd）</td>
+              <td>Edge chips</td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/afterTrading/FMTQIK</code></td>
+              <td>大盤日成交量值</td>
+              <td>Edge <code>sync-market</code></td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST</code></td>
+              <td>加權指數日 K</td>
+              <td>Edge <code>sync-market</code></td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd/zh/fund/BFI82U</code></td>
+              <td>三大法人合計（全市場）</td>
+              <td>Edge <code>sync-market</code></td>
+            </tr>
+            <tr>
+              <td><code>mis.twse.com.tw/stock/api/getStockInfo.jsp</code></td>
+              <td>台股即時／試撮報價</td>
+              <td>Edge <code>stock-price</code> prices</td>
+            </tr>
+            <tr>
+              <td><code>mopsov.twse.com.tw</code> 月報 HTML／季報 ajax</td>
+              <td>月營收歷史、季獲利歷史</td>
+              <td>Edge history / warm</td>
+            </tr>
+            <tr>
+              <td><code>query1.finance.yahoo.com</code></td>
+              <td>日 K（OHLCV）、美股價、匯率、搜尋備援</td>
+              <td>Edge stock-report daily／fx；stock-price</td>
+            </tr>
+            <tr>
+              <td><code>fred.stlouisfed.org</code></td>
+              <td>美總經序列 CSV</td>
+              <td>Edge <code>sync-macro</code></td>
+            </tr>
+            <tr>
+              <td><code>www.tpex.org.tw/openapi/v1/...</code></td>
+              <td>上櫃清單</td>
+              <td>stock-price twlist；前端 dev proxy</td>
+            </tr>
+            <tr>
+              <td>Supabase Storage / Postgres</td>
+              <td>報告、日線、基本面、quota、admin log</td>
+              <td>Edge 寫、前端讀</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <strong>易混淆：</strong><code>mopsov.twse.com.tw</code> 與 <code>mis.twse.com.tw</code> 都是「證交所生態」，
+        但<strong>不是</strong> <code>openapi.twse.com.tw</code> 這條 REST 線。
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section id="s2">
+      <h2>2. 產品功能 × 資料來源（review 主表）</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>功能區塊</th>
+              <th>使用者看到什麼</th>
+              <th>主要來源</th>
+              <th>OpenAPI?</th>
+              <th>更新節奏</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>庫存現價／未實現損益</td>
+              <td>現價、漲跌</td>
+              <td>MIS →（失敗）Yahoo；L1 localStorage + L2 price_cache</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>盤中約 60s TTL；收盤後鎖定邏輯</td>
+            </tr>
+            <tr>
+              <td>個股行情卡</td>
+              <td>開高低、量、試撮、指標摘要</td>
+              <td>MIS 即時 + daily JSON 指標（Yahoo 產的日線）</td>
+              <td><span class="tag tag-no">否</span>（估值摘要用 OpenAPI 寫入的 fundamental 另卡）</td>
+              <td>即時 + 盤後日線</td>
+            </tr>
+            <tr>
+              <td>籌碼（T86／融資／借券）</td>
+              <td>法人、資券、趨勢</td>
+              <td>rwd T86 / MI_MARGN / TWT96U；OpenAPI 備援</td>
+              <td><span class="tag tag-yes">部分備援</span></td>
+              <td>夜班 chips phase／cron generate-all</td>
+            </tr>
+            <tr>
+              <td>基本面估值／產業／最新月季</td>
+              <td>本益比、月營收最新、季獲利最新</td>
+              <td>BWIBBU / t187ap05 / 03 / 17</td>
+              <td><span class="tag tag-yes">是</span></td>
+              <td>market-data phase</td>
+            </tr>
+            <tr>
+              <td>月營收／季獲利歷史圖</td>
+              <td>12 月／12 季</td>
+              <td>MOPS HTML／ajax（非 OpenAPI）</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>history phase 多輪 + warm</td>
+            </tr>
+            <tr>
+              <td>技術面日 K／均線／布林／量／KD</td>
+              <td>圖與表</td>
+              <td>Yahoo chart → <code>daily/{ticker}.json</code></td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>market-data；檔已齊則 skip Yahoo</td>
+            </tr>
+            <tr>
+              <td>TOP20 分頁</td>
+              <td>成交量前 20 名單</td>
+              <td>MI_INDEX20（備援 STOCK_DAY_ALL）</td>
+              <td><span class="tag tag-yes">是</span></td>
+              <td>chips／手動 sync-top-tickers</td>
+            </tr>
+            <tr>
+              <td>台股全市場量能／法人</td>
+              <td>總經頁大盤卡</td>
+              <td>rwd FMTQIK / BFI82U / MI_5MINS_HIST</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>market-daily 15:00–18:45 每 15 分</td>
+            </tr>
+            <tr>
+              <td>美總經</td>
+              <td>CPI 等序列、FOMC 點</td>
+              <td>FRED CSV</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>macro-daily 密集掃描</td>
+            </tr>
+            <tr>
+              <td>匯率</td>
+              <td>TWD 對主要幣</td>
+              <td>Yahoo FX pairs</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>fx-daily 兩班</td>
+            </tr>
+            <tr>
+              <td>代號搜尋／名稱</td>
+              <td>中文反查</td>
+              <td>STOCK_DAY_AVG_ALL + TPEx + Yahoo search</td>
+              <td><span class="tag tag-yes">上市部分是</span></td>
+              <td>on-demand + cache</td>
+            </tr>
+            <tr>
+              <td>PnL／交易／CSV</td>
+              <td>帳本</td>
+              <td>使用者資料（Supabase／localStorage）</td>
+              <td><span class="tag tag-no">否</span></td>
+              <td>使用者操作</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="s3">
+      <h2>3. 全站外部來源總表（依 host）</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>類型</th>
+              <th>模組（程式位置）</th>
+              <th>風險特性</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>openapi.twse.com.tw</code></td>
+              <td>官方 REST</td>
+              <td><code>stock-report</code> fundamental／top；<code>stock-price</code> twlist</td>
+              <td class="tag-warn">雲端 RST／間歇失敗；0.6.52 對 TOP 做軟取用</td>
+            </tr>
+            <tr>
+              <td><code>www.twse.com.tw/rwd</code></td>
+              <td>官網 rwd JSON</td>
+              <td>T86、融資有日期、FMTQIK、BFI82U、加權</td>
+              <td>檔大、時段敏感；chip_raw_cache 減壓</td>
+            </tr>
+            <tr>
+              <td><code>mis.twse.com.tw</code></td>
+              <td>即時報價</td>
+              <td><code>stock-price</code></td>
+              <td>試撮價；失敗退 Yahoo</td>
+            </tr>
+            <tr>
+              <td><code>mopsov.twse.com.tw</code></td>
+              <td>公開資訊觀測站</td>
+              <td>月營收 HTML、季報 ajax</td>
+              <td>big5、檔大、耗時；history 多輪</td>
+            </tr>
+            <tr>
+              <td><code>query1/2.finance.yahoo.com</code></td>
+              <td>Yahoo</td>
+              <td>daily、fx、美股、search 備援</td>
+              <td>與 MIS 量能口徑差；無 tradeTime 時 TTL 策略曾出過問題（已修）</td>
+            </tr>
+            <tr>
+              <td><code>fred.stlouisfed.org</code></td>
+              <td>FRED</td>
+              <td>usMacro</td>
+              <td>需特定 UA；catalog 缺序列要強制重抓（0.6.45）</td>
+            </tr>
+            <tr>
+              <td><code>www.tpex.org.tw</code></td>
+              <td>櫃買 OpenAPI</td>
+              <td>上櫃清單</td>
+              <td>與上市合併</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="s4">
+      <h2>4. 資料時序（台北時間）</h2>
+      <p class="muted">以 <code>schema.sql</code> 預設 cron 為準；正式區若用過 <code>alter_job</code> 以 DB 為準。UTC→台北 +8。</p>
+
+      <h3>4.1 排程總表</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>jobname</th>
+              <th>Cron（UTC）</th>
+              <th>台北時間（約）</th>
+              <th>body action</th>
+              <th>pg_net timeout</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>stock-report-nightly</code></td>
+              <td><code>*/15 8-15 * * 1-5</code></td>
+              <td>週一至五 <strong>16:00–23:45</strong> 每 15 分</td>
+              <td><code>generate-all</code>（內部 chips→market-data→history，預算 ~110s）</td>
+              <td><strong>60s</strong> ⚠️ 低於實際 chips+market</td>
+            </tr>
+            <tr>
+              <td><code>market-daily</code></td>
+              <td><code>*/15 7-10 * * 1-5</code></td>
+              <td>週一至五 <strong>15:00–18:45</strong> 每 15 分</td>
+              <td><code>sync-market</code></td>
+              <td>60s</td>
+            </tr>
+            <tr>
+              <td><code>source-probe</code></td>
+              <td><code>*/15 8-15 * * 1-5</code></td>
+              <td>16:00–23:45 每 15 分</td>
+              <td><code>probe</code></td>
+              <td>60s</td>
+            </tr>
+            <tr>
+              <td><code>macro-daily</code></td>
+              <td><code>*/30 12-18 * * *</code></td>
+              <td>每日 <strong>20:00–02:30</strong> 每 30 分（跨日）</td>
+              <td><code>sync-macro</code></td>
+              <td>60s</td>
+            </tr>
+            <tr>
+              <td><code>fx-daily</code></td>
+              <td><code>0 3,9 * * *</code></td>
+              <td>每日 <strong>11:00、17:00</strong></td>
+              <td><code>sync-fx</code></td>
+              <td>60s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>4.2 交易日時間軸（示意）</h3>
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="when">08:30–09:00 / 13:25–13:30</div>
+          <div>MIS 試撮價；庫存若未標「試撮」可能誤導（AUDIT-01 已修前端標記）。</div>
+        </div>
+        <div class="tl-item">
+          <div class="when">09:00–13:30 盤中</div>
+          <div><code>stock-price</code> MIS 即時；前端 L1/L2 快取。不跑 generate-all（cron 從 16:00）。</div>
+        </div>
+        <div class="tl-item">
+          <div class="when">15:00–18:45</div>
+          <div><code>market-daily</code>：FMTQIK + BFI82U → <code>market/daily.json</code>；齊備後 <code>reason=skipped</code> 零外網。</div>
+        </div>
+        <div class="tl-item">
+          <div class="when">16:00–23:45 每 15 分</div>
+          <div>
+            <code>generate-all</code>：chips（T86／報告／TOP 軟更新）→ market-data（Yahoo 日線 + OpenAPI 基本面）→ history（MOPS）。
+            預算不足則 skip 後段，下輪再補（P1）。
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="when">同窗 source-probe</div>
+          <div>探測估值／借券來源是否變動，寫 <code>source_probe_log</code>，不寫使用者報告。</div>
+        </div>
+        <div class="tl-item">
+          <div class="when">夜間–凌晨 macro；日中 fx</div>
+          <div>與台股 short-circuit 解耦，避免 decideSkip 擋掉總經／匯率。</div>
+        </div>
+      </div>
+
+      <h3>4.3 手動更新（admin-run）時序</h3>
+      <p>前端<strong>每個 job 各一次 HTTP</strong>（0.6.47+），進度條可看卡點。建議順序與夜班一致：</p>
+      <div class="mermaid-like">手動全部執行（示意）
+1 generate-chips        → OpenAPI TOP(軟) + rwd T86…     ~數十秒
+2 generate-market-data  → Yahoo daily + OpenAPI 基本面   有檔則 skip Yahoo
+3 generate-history      → MOPS 一輪（不重打 TOP）        可 ~1–2 分
+4 sync-market           → rwd 全市場                     常 skipped
+5 sync-top-tickers      → force 刷新 MI_INDEX20          可 RST→備援/舊檔
+6 sync-macro / sync-fx / probe
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="s5">
+      <h2>5. 盤後 phase 與 OpenAPI 關係</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Phase / Job</th>
+              <th>OpenAPI?</th>
+              <th>其他外網</th>
+              <th>失敗時策略（0.6.52）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>generate-chips</code></td>
+              <td>TOP 軟更新（MI_INDEX20／備援）</td>
+              <td>rwd T86／融資／借券</td>
+              <td>TOP 失敗沿用舊名單；籌碼本身仍跑持股∪觀察∪（有的）TOP</td>
+            </tr>
+            <tr>
+              <td><code>generate-market-data</code></td>
+              <td>BWIBBU、t187ap*</td>
+              <td>Yahoo daily</td>
+              <td>daily/fundamental 已達資料日 → skip 重寫；Yahoo 空不覆蓋好檔</td>
+            </tr>
+            <tr>
+              <td><code>generate-history</code></td>
+              <td><strong>不再打 TOP</strong>（只讀 Storage）</td>
+              <td>MOPS</td>
+              <td>一輪上限；多輪補滿 12/12</td>
+            </tr>
+            <tr>
+              <td><code>sync-top-tickers</code></td>
+              <td>強制 MI_INDEX20</td>
+              <td>—</td>
+              <td>重試→STOCK_DAY_ALL→舊檔；HTTP 200 + ok 旗標</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout ok">
+        <strong>0.6.52 關鍵修復：</strong>history 不再因 MI_INDEX20 RST 整段 500；
+        這是「OpenAPI 不穩」與「步驟耦合」疊加後的產品故障。
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section id="s6">
+      <h2>6. Storage／DB 產物（資料落地）</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>路徑／表</th>
+              <th>內容</th>
+              <th>生產者</th>
+              <th>消費者</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>reports/{ymd}/{ticker}.json</code></td>
+              <td>籌碼報告</td>
+              <td>chips</td>
+              <td>個股分析籌碼卡</td>
+            </tr>
+            <tr>
+              <td><code>reports/daily/{ticker}.json</code></td>
+              <td>日線 OHLCV</td>
+              <td>market-data / warm</td>
+              <td>技術面、行情指標</td>
+            </tr>
+            <tr>
+              <td><code>reports/fundamental/{ticker}.json</code></td>
+              <td>估值+月季營收獲利</td>
+              <td>market-data / history / warm</td>
+              <td>基本面卡</td>
+            </tr>
+            <tr>
+              <td><code>reports/meta/top_tickers.json</code></td>
+              <td>TOP20 快照（最多 2 日）</td>
+              <td>syncTopTickers</td>
+              <td>TOP20 UI、批次標的</td>
+            </tr>
+            <tr>
+              <td><code>reports/market/daily.json</code></td>
+              <td>大盤+全市場法人</td>
+              <td>sync-market</td>
+              <td>總經台股卡</td>
+            </tr>
+            <tr>
+              <td><code>reports/macro/us.json</code>、<code>fx/twd.json</code></td>
+              <td>總經、匯率</td>
+              <td>sync-macro / sync-fx</td>
+              <td>總經／匯率頁</td>
+            </tr>
+            <tr>
+              <td><code>chip_raw_cache</code></td>
+              <td>T86 等原始大檔 cache</td>
+              <td>Edge</td>
+              <td>同日後續班次</td>
+            </tr>
+            <tr>
+              <td><code>batch_run_log</code> / <code>admin_run_log</code></td>
+              <td>夜班／手動觀測</td>
+              <td>Edge</td>
+              <td>管理後台抓取狀況</td>
+            </tr>
+            <tr>
+              <td><code>price_cache</code> / <code>warm_quota</code></td>
+              <td>報價共享、warm 配額</td>
+              <td>stock-price / stock-report</td>
+              <td>全站報價、防刷</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section id="s7">
+      <h2>7. BUG、隱藏問題、觀測落差（完整 review）</h2>
+
+      <h3>7.1 近期已修（與本次大 review 相關）</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>ID／版</th><th>問題</th><th>狀態</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>BUG-023 / 0.6.47</td>
+              <td>手動「全部執行」單請求逾時 → 空白 non-2xx</td>
+              <td><span class="tag tag-info">FIXED</span> 每 job 一請求 + 進度條 0.6.48</td>
+            </tr>
+            <tr>
+              <td>0.6.49</td>
+              <td>generate-all 巨石 → 雲端 546</td>
+              <td><span class="tag tag-info">FIXED</span> 三 phase；cron 110s 預算</td>
+            </tr>
+            <tr>
+              <td>0.6.50</td>
+              <td>日線重抓／空回覆蓋風險</td>
+              <td><span class="tag tag-info">FIXED</span> skip + 不覆蓋好檔</td>
+            </tr>
+            <tr>
+              <td>0.6.51</td>
+              <td>TOP30 金額 → TOP20 成交量 MI_INDEX20</td>
+              <td><span class="tag tag-info">已上線</span></td>
+            </tr>
+            <tr>
+              <td>0.6.52</td>
+              <td>MI_INDEX20 RST 拖垮 history／TOP 500</td>
+              <td><span class="tag tag-info">FIXED</span> 軟取用 + 備援 + history 不重打 TOP</td>
+            </tr>
+            <tr>
+              <td>BUG-015–022 / AUDIT</td>
+              <td>試撮標記、Yahoo TTL、FX 月尾、T86 fingerprint 等</td>
+              <td>見 <code>FIXED_BUG.md</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>7.2 仍存在或半開的風險（隱藏／架構）</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>嚴重度</th><th>問題</th><th>證據／影響</th><th>建議</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag tag-bad">高</span></td>
+              <td>pg_net <code>timeout_milliseconds=60000</code> ≪ 實際盤後</td>
+              <td>實測 chips ~59s、三 phase ~196s；cron 觀測常「假失敗」</td>
+              <td>拉到 180s+；或 cron 拆三 action</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">高</span></td>
+              <td>cron <code>generate-all</code> 單請求 110s 預算</td>
+              <td>一輪常跑不完 history；依賴多輪 P1</td>
+              <td>與手動同構：分 phase 排程</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-warn">中</span></td>
+              <td>OpenAPI 雲端 RST 仍可能</td>
+              <td>TOP 更新可能停在舊交易日</td>
+              <td>監控 <code>error=fetch_failed_kept_previous</code>；必要時中轉</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-warn">中</span></td>
+              <td><code>batch_run_log</code> 主要在 chips 寫入</td>
+              <td>market-data／history 成果觀測不足</td>
+              <td>phase 級 log 或擴欄位</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-warn">中</span></td>
+              <td>TOP20 進批次 → N 變大再變小</td>
+              <td>曾 ~35 檔；現 ~持股+20，仍重</td>
+              <td>history 可選「僅持股∪觀察」</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-warn">中</span></td>
+              <td>MIS 與 Yahoo 量能口徑差 ~10%</td>
+              <td>即時量 vs 日線量</td>
+              <td>UI 標來源（已有部分 hint）</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-info">低</span></td>
+              <td>手動與 cron 同時跑</td>
+              <td>Storage 競態</td>
+              <td>夜班尖峰少連按</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-info">低</span></td>
+              <td>FOMC／總經「今日已掃」曾跳過新序列</td>
+              <td>0.6.45 已 force catalog</td>
+              <td>新增 FRED id 時回歸測</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-info">低</span></td>
+              <td>前端/Edge 雙部署</td>
+              <td>git push ≠ Edge；易以為已修</td>
+              <td>清單用 <code>functions list</code> sha</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>7.3 設計債（非立即 bug）</h3>
+      <ul class="compact">
+        <li><code>tradeValue</code> 欄位在 TOP20 實際存<strong>成交股數</strong>（相容舊 JSON）—— review 時勿當成交金額。</li>
+        <li>布林中軌 = SMA20，圖上與 MA20 重疊屬正常。</li>
+        <li>DEV self-hosted 與正式雲端<strong>網路環境不同</strong>，正式才是 OpenAPI RST 的主戰場。</li>
+        <li>Edge 無狀態：長任務只能 phase／多輪，不能當 job queue。</li>
+      </ul>
+    </section>
+
+    <!-- 8 -->
+    <section id="s8">
+      <h2>8. 觀察與建議（給大規模 review 用）</h2>
+
+      <h3>8.1 觀察（事實）</h3>
+      <ul class="compact">
+        <li><strong>OpenAPI 只用在：</strong>TOP 名單、基本面估值／最新月季、部分融資借券備援、上市清單。</li>
+        <li><strong>最重的外網：</strong>rwd T86 大檔、MOPS 歷史、Yahoo 日線（標的數 × 是否 skip）。</li>
+        <li><strong>最脆的正式區路徑：</strong>雲端 → openapi.twse.com.tw；已用軟取用緩解，未消失。</li>
+        <li><strong>手動比 cron 可靠：</strong>分 job 各有時間預算；cron 受 60s pg_net + 110s 內建預算雙重限制。</li>
+        <li><strong>資料正確性</strong>多半「多輪收斂」而非「單次完整」——符合 P1。</li>
+      </ul>
+
+      <h3>8.2 建議優先序</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>#</th><th>建議</th><th>目的</th><th>成本</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>正式區 pg_net timeout 調高（≥180s）或分 phase cron</td>
+              <td>觀測真實、少假紅燈</td>
+              <td>低（SQL alter_job）</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>cron 與手動同構：三個 generate-* action</td>
+              <td>history 穩定補到</td>
+              <td>中</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>phase 級寫入 batch_run_log／admin 摘要</td>
+              <td>可解釋「卡在哪」</td>
+              <td>中</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>OpenAPI 失敗率告警（kept_previous 計數）</td>
+              <td>TOP 過期可感知</td>
+              <td>低–中</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>history 可選「不含 TOP、僅持股∪觀察」</td>
+              <td>降 MOPS 成本</td>
+              <td>中</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>文件化「tradeValue=股數」於 SPEC</td>
+              <td>防後續 agent 誤用</td>
+              <td>低</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>Review 時不要做的假設：</strong>
+        「DEV 正常 = 正式正常」、「HTTP 200 = 資料最新」、「cron 失敗 = Edge 沒跑完」、
+        「沒打 OpenAPI = 不依賴證交所」（還有 rwd／MIS／MOPS）。
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section id="s9">
+      <h2>9. 建議驗證 Checklist</h2>
+      <ul class="compact">
+        <li>□ 左下角版本 ≥ <strong>0.6.52</strong>；Edge <code>stock-report</code> ≥ <strong>v37</strong></li>
+        <li>□ TOP20 重新整理：成功或 <code>reused</code>／備援，不應再裸 500 Connect RST</li>
+        <li>□ generate-history 單獨執行：即使 TOP 外網掛，仍應進入 MOPS（有 Storage 名單或至少持股）</li>
+        <li>□ generate-market-data 二次：摘要見 <code>dailySkipped</code> 高、秒數下降</li>
+        <li>□ 技術面：日 K + 均線 + 布林 + KD + 量</li>
+        <li>□ 抓取狀況：手動標「手動」；理解 cron 可能因 60s 顯示失敗但資料已寫</li>
+        <li>□ 週末看 TOP／籌碼資料日停在上交易日屬正常</li>
+      </ul>
+    </section>
+
+    <footer>
+      檔案位置：<code>scratchpad/data-sources-review-0.6.52.html</code> ·
+      由 codebase 靜態 review 產出（非執行時探測正式 DB cron 實值）·
+      若 DB 曾 alter_job，請以正式區 <code>cron.job</code> 覆核時序。
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案四：高密度側邊欄與指標互動視圖 (Watchlist Focus)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-dark: #131722;
+      --tv-panel-bg: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-blue: #2962ff;
+      --tv-up-red: #f23645;
+      --tv-down-green: #089981;
+      --tv-text: #d1d4dc;
+      --tv-text-sub: #787b86;
+      --tv-hover: #2a2e39;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-dark); color: var(--tv-text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    .tv-header { height: 48px; background: var(--tv-panel-bg); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .tv-brand { font-weight: 700; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
+
+    .workspace { flex: 1; display: flex; overflow: hidden; }
+
+    /* Central Main Chart Area */
+    .main-area { flex: 1; display: flex; flex-direction: column; background: var(--tv-bg-dark); }
+    .chart-header { height: 50px; border-bottom: 1px solid var(--tv-border); background: var(--tv-panel-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 16px; }
+    .symbol-title { font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+
+    .chart-box { flex: 1; position: relative; padding: 16px; }
+
+    /* High Density Right Sidebar */
+    .watchlist-sidebar { width: 380px; background: var(--tv-panel-bg); border-left: 1px solid var(--tv-border); display: flex; flex-direction: column; }
+    .sidebar-header { height: 42px; border-bottom: 1px solid var(--tv-border); display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font-size: 12px; font-weight: 700; color: var(--tv-text-sub); }
+
+    .watchlist-body { flex: 1; overflow-y: auto; }
+    .sec-header { background: #161a25; padding: 6px 14px; font-size: 11px; font-weight: 700; color: var(--tv-text-sub); border-bottom: 1px solid var(--tv-border); }
+
+    .wl-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; transition: background 0.15s; }
+    .wl-row:hover, .wl-row.active { background: var(--tv-hover); }
+    .wl-sym { font-weight: 700; font-size: 13px; color: #fff; }
+    .wl-sub { font-size: 11px; color: var(--tv-text-sub); }
+    
+    .badge-pill { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: monospace; }
+    .badge-pill.up { background: rgba(242, 54, 69, 0.15); color: var(--tv-up-red); }
+    .badge-pill.down { background: rgba(8, 153, 129, 0.15); color: var(--tv-down-green); }
+
+    /* Technical Rating Gauge Footer */
+    .rating-footer { height: 48px; background: var(--tv-panel-bg); border-top: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-list-check" style="color: var(--tv-blue);"></i>
+      <span>TradingView Watchlist Focus — 高密度側邊欄與動態指標切換</span>
+    </div>
+    <span style="font-size: 12px; color: var(--tv-text-sub);">點擊右側任一指標即可無縫切換主圖表</span>
+  </header>
+
+  <div class="workspace">
+    
+    <!-- Left Main Chart -->
+    <div class="main-area">
+      <div class="chart-header">
+        <div class="symbol-title">
+          <i class="fa-solid fa-chart-line" style="color: var(--tv-blue);"></i>
+          <span id="active-title">TAIEX 台股加權指數</span>
+        </div>
+        <div style="font-size: 14px; font-weight: 700; font-family: monospace;" id="active-val">
+          23,850.20 <span class="badge-pill up" id="active-chg">+185.20 (+0.78%)</span>
+        </div>
+      </div>
+
+      <div class="chart-box">
+        <canvas id="wlMainChart"></canvas>
+      </div>
+
+      <!-- Footer Rating Bar -->
+      <div class="rating-footer">
+        <span><i class="fa-solid fa-gauge-high" style="color: var(--tv-blue);"></i> 市場綜合技術指標評級：</span>
+        <span style="font-weight: 700; color: var(--tv-up-red);" id="active-rating">強烈買進 (STRONG BUY)</span>
+      </div>
+    </div>
+
+    <!-- Right Dense Watchlist -->
+    <div class="watchlist-sidebar">
+      <div class="sidebar-header">
+        <span>全市場與總經指標矩陣 (10 ITEMS)</span>
+        <i class="fa-solid fa-sliders"></i>
+      </div>
+
+      <div class="watchlist-body">
+        <!-- Section 1 -->
+        <div class="sec-header">台股大盤與籌碼指標</div>
+        
+        <div class="wl-row active" onclick="loadIndicator('TAIEX', 'TAIEX 台股加權指數', '23,850.20', '+0.78%', 'up', '強烈買進 (STRONG BUY)')">
+          <div><div class="wl-sym">TAIEX 加權指數</div><div class="wl-sub">成交量 4,120 億</div></div>
+          <span class="badge-pill up">+0.78%</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('FIN', '外資單日買賣超', '+98.2 億', '連 3 買', 'up', '籌碼偏多 (BULLISH)')">
+          <div><div class="wl-sym">外資買賣超 (FIN)</div><div class="wl-sub">FOREIGN INVESTORS</div></div>
+          <span class="badge-pill up">+98.2 億</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('ITC', '投信單日買賣超', '+51.6 億', '連 12 買', 'up', '持續護盤 (STRONG BUY)')">
+          <div><div class="wl-sym">投信買賣超 (ITC)</div><div class="wl-sub">INVESTMENT TRUST</div></div>
+          <span class="badge-pill up">+51.6 億</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('MARGIN', '融資餘額增減', '+12.4 億', '餘額 3120億', 'up', '散戶信心增強')">
+          <div><div class="wl-sym">融資餘額 (MARGIN)</div><div class="wl-sub">RETAIL LEVERAGE</div></div>
+          <span class="badge-pill up">+12.4 億</span>
+        </div>
+
+        <!-- Section 2 -->
+        <div class="sec-header">美國通膨與聯準會利率</div>
+
+        <div class="wl-row" onclick="loadIndicator('CPI', '美國 CPI 通膨年增率', '2.60%', '-0.10%', 'down', '通膨持續降溫 (COOLING)')">
+          <div><div class="wl-sym">US CPI YoY</div><div class="wl-sub">INFLATION RATE</div></div>
+          <span class="badge-pill down">2.60%</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('CORE_CPI', '美國核心 CPI (Core CPI)', '3.20%', '-0.10%', 'down', '核心通膨微幅下降')">
+          <div><div class="wl-sym">Core CPI YoY</div><div class="wl-sub">EX-FOOD & ENERGY</div></div>
+          <span class="badge-pill down">3.20%</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('FED_RATE', '美聯準會基準利率', '4.62%', '目標 4.50-4.75%', 'down', '降息預期高 (DOVISH)')">
+          <div><div class="wl-sym">Fed Target Rate</div><div class="wl-sub">BENCHMARK RATE</div></div>
+          <span class="badge-pill down">4.62%</span>
+        </div>
+
+        <!-- Section 3 -->
+        <div class="sec-header">美國就業與消費信心</div>
+
+        <div class="wl-row" onclick="loadIndicator('NFP', '非農就業人口 MoM', '+143 千人', '+20 千人', 'up', '就業穩健 (STABLE)')">
+          <div><div class="wl-sym">Non-Farm Payrolls</div><div class="wl-sub">EMPLOYMENT MoM</div></div>
+          <span class="badge-pill up">+143K</span>
+        </div>
+
+        <div class="wl-row" onclick="loadIndicator('UNEMP', '美國失業率 (Unemployment)', '4.10%', '持平', 'down', '勞動市場平穩')">
+          <div><div class="wl-sym">Unemployment Rate</div><div class="wl-sub">LABOR FORCE %</div></div>
+          <span class="badge-pill down">4.10%</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const ctx = document.getElementById('wlMainChart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: 'TAIEX 加權指數',
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41,98,255,0.1)',
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#787b86' } } },
+        scales: {
+          x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+          y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+        }
+      }
+    });
+
+    function loadIndicator(id, title, val, chg, state, rating) {
+      document.querySelectorAll('.wl-row').forEach(r => r.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('active-title').innerText = title;
+      document.getElementById('active-val').innerHTML = `${val} <span class="badge-pill ${state}">${chg}</span>`;
+      document.getElementById('active-rating').innerText = rating;
+
+      if(id === 'FIN') {
+        chart.config.type = 'bar';
+        chart.data.datasets = [{
+          label: '外資單日買賣超 (億)',
+          data: [-120, -210, 85, 110, 65, 40, 98.2],
+          backgroundColor: '#f23645'
+        }];
+      } else if (id === 'CPI') {
+        chart.config.type = 'line';
+        chart.data.datasets = [{
+          label: 'CPI 年增率 (%)',
+          data: [3.1, 2.9, 2.8, 2.7, 2.7, 2.6],
+          borderColor: '#089981',
+          fill: false
+        }];
+      } else {
+        chart.config.type = 'line';
+        chart.data.datasets = [{
+          label: title,
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          fill: true
+        }];
+      }
+      chart.update();
+    }
+  </script>
+</body>
+</html>

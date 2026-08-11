@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三大法人 - 專業終端視圖</title>
+  <!--
+    Concept: Terminal / dense pro view
+    Fixes: Expand/collapse churn. Everything is visible at once in a dense, fixed-width grid.
+    Trade-offs: Terrible on mobile; relies heavily on horizontal space and user's ability to scan walls of numbers.
+    Cost: Low (just a wide, dense table).
+  -->
+  <style>
+    :root {
+      --tv-bg-main: #ffffff;
+      --tv-bg-panel: #f8f9fa;
+      --tv-bg-hover: #f1f3f5;
+      --tv-border: #e9ecef;
+      --tv-text: #212529;
+      --tv-text-muted: #868e96;
+      --tv-up: #f23645;
+      --tv-down: #089981;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --tv-bg-main: #131722;
+        --tv-bg-panel: #1e222d;
+        --tv-bg-hover: #2a2e39;
+        --tv-border: #2a2e39;
+        --tv-text: #d1d4dc;
+        --tv-text-muted: #787b86;
+      }
+    }
+    body { background: var(--tv-bg-main); color: var(--tv-text); font-family: monospace, sans-serif; margin: 0; padding: 16px; font-size: 13px; }
+    .up { color: var(--tv-up); }
+    .down { color: var(--tv-down); }
+    .muted { color: var(--tv-text-muted); }
+    
+    .panel { background: var(--tv-bg-panel); border: 1px solid var(--tv-border); padding: 16px; border-radius: 4px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid var(--tv-border); text-align: right; border-right: 1px solid var(--tv-border); }
+    th:first-child, td:first-child { text-align: left; }
+    td:last-child, th:last-child { border-right: none; }
+    th { color: var(--tv-text-muted); font-weight: normal; background: rgba(134,142,150,0.05); }
+    .group-th { text-align: center; font-weight: bold; color: var(--tv-text); border-bottom: none; }
+    tr:hover { background: var(--tv-bg-hover); }
+  </style>
+</head>
+<body>
+  <h2>三大法人買賣超 (專業終端)</h2>
+  <div class="panel">
+    <table aria-label="高密度數據終端">
+      <thead>
+        <tr>
+          <th rowspan="2">日期</th>
+          <th rowspan="2">合計 (淨)</th>
+          <th colspan="3" class="group-th">外資及陸資</th>
+          <th colspan="3" class="group-th">投信</th>
+          <th colspan="3" class="group-th">自營商 (自行+避險)</th>
+        </tr>
+        <tr>
+          <th>買進</th><th>賣出</th><th>買賣超</th>
+          <th>買進</th><th>賣出</th><th>買賣超</th>
+          <th>買進</th><th>賣出</th><th>買賣超</th>
+        </tr>
+      </thead>
+      <tbody id="app"></tbody>
+    </table>
+  </div>
+  <script>
+    const MOCK_DATA = [
+      { date: '07/31', foreign: -156.4, foreignDealer: -1.2, trust: 35.6, dealerSelf: -10.5, dealerHedge: -40.2, total: -172.7, buy: 1300, sell: 1472.7 },
+      { date: '08/01', foreign: -200.5, foreignDealer: 0.8, trust: 22.4, dealerSelf: -15.1, dealerHedge: -55.8, total: -248.2, buy: null, sell: null },
+      { date: '08/04', foreign: -450.2, foreignDealer: -5.4, trust: 60.5, dealerSelf: -30.2, dealerHedge: -120.4, total: -545.7, buy: 1800, sell: 2345.7 },
+      { date: '08/05', foreign: 120.5, foreignDealer: 2.1, trust: 45.2, dealerSelf: 8.5, dealerHedge: -15.2, total: 161.1, buy: 1400.8, sell: 1239.7 },
+      { date: '08/06', foreign: 235.8, foreignDealer: -1.5, trust: 15.6, dealerSelf: 22.4, dealerHedge: 18.5, total: 290.8, buy: 1550.4, sell: 1259.6 },
+      { date: '08/07', foreign: -50.4, foreignDealer: 0.5, trust: 10.2, dealerSelf: -5.6, dealerHedge: -12.4, total: -57.7, buy: 1100.0, sell: 1157.7 },
+      { date: '08/08', foreign: 85.2, foreignDealer: 1.2, trust: 28.5, dealerSelf: 12.0, dealerHedge: 5.4, total: 132.3, buy: 1200.0, sell: 1067.7 }
+    ].reverse();
+
+    let html = '';
+    MOCK_DATA.forEach(d => {
+      let hasLegs = d.buy !== null;
+      let fNet = d.foreign + d.foreignDealer;
+      let tNet = d.trust;
+      let dNet = d.dealerSelf + d.dealerHedge;
+      
+      html += `<tr>
+        <td>${d.date}</td>
+        <td class="${d.total > 0 ? 'up' : 'down'}" style="font-weight:bold;">${d.total > 0 ? '+' : ''}${d.total.toFixed(1)}</td>
+        
+        <td class="muted">${hasLegs ? (Math.abs(fNet)*2 + (fNet>0?fNet:0)).toFixed(1) : '—'}</td>
+        <td class="muted">${hasLegs ? (Math.abs(fNet)*2 - (fNet<0?fNet:0)).toFixed(1) : '—'}</td>
+        <td class="${fNet > 0 ? 'up' : 'down'}">${fNet > 0 ? '+' : ''}${fNet.toFixed(1)}</td>
+        
+        <td class="muted">${hasLegs ? (Math.abs(tNet)*2 + (tNet>0?tNet:0)).toFixed(1) : '—'}</td>
+        <td class="muted">${hasLegs ? (Math.abs(tNet)*2 - (tNet<0?tNet:0)).toFixed(1) : '—'}</td>
+        <td class="${tNet > 0 ? 'up' : 'down'}">${tNet > 0 ? '+' : ''}${tNet.toFixed(1)}</td>
+        
+        <td class="muted">${hasLegs ? (Math.abs(dNet)*2 + (dNet>0?dNet:0)).toFixed(1) : '—'}</td>
+        <td class="muted">${hasLegs ? (Math.abs(dNet)*2 - (dNet<0?dNet:0)).toFixed(1) : '—'}</td>
+        <td class="${dNet > 0 ? 'up' : 'down'}">${dNet > 0 ? '+' : ''}${dNet.toFixed(1)}</td>
+      </tr>`;
+    });
+    document.getElementById('app').innerHTML = html;
+  </script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>總體經濟 Combo - 方案六：手風琴分區折波圖與數據表 (Accordion Combo View)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #131722;
+      --panel-bg: #1e222d;
+      --border: #2a2e39;
+      --blue: #2962ff;
+      --red: #f23645;
+      --green: #089981;
+      --text: #d1d4dc;
+      --text-sub: #787b86;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text); padding: 20px; min-height: 100vh; display: flex; flex-direction: column; gap: 20px; }
+
+    .header { border-bottom: 1px solid var(--border); padding-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 22px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+
+    /* Accordion Card Container */
+    .acc-card { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .acc-header { background: #161a25; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
+    .acc-title { font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+
+    .acc-content { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .acc-content { grid-template-columns: 1fr; } }
+
+    .chart-box { height: 220px; position: relative; }
+    
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .mini-table th, .mini-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    .mini-table th { color: var(--text-sub); font-weight: 600; background: var(--bg-dark); }
+
+    .up { color: var(--red); font-weight: 700; }
+    .down { color: var(--green); font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <h1><i class="fa-solid fa-list-ul" style="color: var(--blue);"></i> 手風琴分區對照 (折波圖 + 詳細數字表格)</h1>
+    <span style="font-size: 13px; color: var(--text-sub);">Combo 方案六：按模組展開折波圖與數據表格</span>
+  </header>
+
+  <!-- Accordion Section 1: 台股大盤 -->
+  <div class="acc-card">
+    <div class="acc-header" onclick="toggleAcc('acc1')">
+      <div class="acc-title">
+        <i class="fa-solid fa-chart-line" style="color: var(--blue);"></i>
+        <span>第一分區：台股大盤點數與成交量趨勢</span>
+      </div>
+      <div style="font-size: 13px; font-weight: 700; color: var(--red);">
+        最新點數 23,850.20 (+185.20) <i class="fa-solid fa-chevron-down" style="margin-left: 10px;"></i>
+      </div>
+    </div>
+    
+    <div class="acc-content" id="acc1">
+      <div class="chart-box">
+        <canvas id="accChart1"></canvas>
+      </div>
+      <div>
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>最新數據</th>
+              <th>前期比較 (Delta)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>加權指數 (TAIEX)</td><td class="up">23,850.20</td><td class="up">+185.20 (+0.78%)</td></tr>
+            <tr><td>大盤成交量</td><td>4,120 億</td><td class="up">+520 億</td></tr>
+            <tr><td>融資餘額增減</td><td class="up">+12.4 億</td><td>餘額 3,120 億</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Accordion Section 2: 三大法人籌碼 -->
+  <div class="acc-card">
+    <div class="acc-header" onclick="toggleAcc('acc2')">
+      <div class="acc-title">
+        <i class="fa-solid fa-building-columns" style="color: var(--red);"></i>
+        <span>第二分區：三大法人籌碼動向細目</span>
+      </div>
+      <div style="font-size: 13px; font-weight: 700; color: var(--red);">
+        今日法人合計 +142.80 億 <i class="fa-solid fa-chevron-down" style="margin-left: 10px;"></i>
+      </div>
+    </div>
+
+    <div class="acc-content" id="acc2">
+      <div class="chart-box">
+        <canvas id="accChart2"></canvas>
+      </div>
+      <div>
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>法人別</th>
+              <th>今日買賣超</th>
+              <th>連續買賣天數</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>外資及陸資</td><td class="up">+98.20 億</td><td class="up">連續 3 日買超</td></tr>
+            <tr><td>投信</td><td class="up">+51.60 億</td><td class="up">連續 12 日買超</td></tr>
+            <tr><td>自營商</td><td class="down">-7.00 億</td><td class="down">連續 2 日賣超</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const opts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+        y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+      }
+    };
+
+    new Chart(document.getElementById('accChart1'), {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{ label: '加權指數', data: [23400, 23200, 23550, 23680, 23700, 23665, 23850], borderColor: '#2962ff', fill: true, backgroundColor: 'rgba(41,98,255,0.1)' }]
+      },
+      options: opts
+    });
+
+    new Chart(document.getElementById('accChart2'), {
+      type: 'bar',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{ label: '外資買賣超', data: [-120, -210, 85, 110, 65, 40, 98.2], backgroundColor: '#f23645' }]
+      },
+      options: opts
+    });
+
+    function toggleAcc(id) {
+      const el = document.getElementById(id);
+      if(el.style.display === 'none') {
+        el.style.display = 'grid';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>

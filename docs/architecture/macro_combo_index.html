@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>折波圖 + 詳細數字表格 6 大重構提案總覽 (Wave Chart & Numerical Table Combo Showcase)</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --text-sub: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 36px 8%; min-height: 100vh; }
+
+    .header { text-align: center; margin-bottom: 40px; }
+    .header h1 { font-size: 32px; font-weight: 800; color: #38bdf8; margin-bottom: 12px; }
+    .header p { font-size: 16px; color: var(--text-sub); max-width: 760px; margin: 0 auto; line-height: 1.6; }
+
+    /* Concept Grid */
+    .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 48px; }
+
+    .concept-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.3s ease; }
+    .concept-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 12px 30px rgba(56, 189, 248, 0.2); }
+
+    .concept-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 12px; }
+    .tag-1 { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+    .tag-2 { background: rgba(242, 54, 69, 0.2); color: #f23645; }
+    .tag-3 { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+    .tag-4 { background: rgba(8, 153, 129, 0.2); color: #34d399; }
+    .tag-5 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .tag-6 { background: rgba(255, 255, 255, 0.2); color: #ffffff; }
+
+    .concept-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .concept-desc { font-size: 14px; color: var(--text-sub); line-height: 1.5; margin-bottom: 20px; }
+
+    .feature-list { list-style: none; margin-bottom: 24px; font-size: 13px; color: var(--text); }
+    .feature-list li { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .feature-list i { color: #38bdf8; font-size: 12px; }
+
+    .btn-launch { background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; text-align: center; display: block; transition: opacity 0.2s; }
+    .btn-launch:hover { opacity: 0.9; }
+
+    .req-box { background: rgba(56, 189, 248, 0.1); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin-bottom: 40px; }
+    .req-title { font-size: 16px; font-weight: 700; color: #38bdf8; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <h1>折波圖 + 詳細數字表格 6 大融合重構提案</h1>
+    <p>完美結合「動態折波圖 (Line/Wave Chart)」與「精準數字數據表格 (Detailed Numerical Table)」，同時滿足趨勢視覺化與歷史數據精確對照的需求。</p>
+  </header>
+
+  <!-- Requirement Confirmation Box -->
+  <div class="req-box">
+    <div class="req-title"><i class="fa-solid fa-layer-group"></i> 雙效益完美結合 (CHART + TABLE HYBRID DESIGN)</div>
+    <div style="font-size: 14px; color: var(--text);">
+      保留流暢的 <strong>折波圖 (Trend Line / Area Wave)</strong> 讓您迅速掃描長期走勢；同時提供 <strong>詳細數字表格 (Numerical Data Table)</strong> 印證每日點數、三大法人買賣金額、差額與連續天數。
+    </div>
+  </div>
+
+  <!-- 6 Concept Cards Grid -->
+  <div class="concept-grid">
+    
+    <!-- Combo 1 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-1">Combo Option 1</span>
+        <h2 class="concept-title">上下雙區視圖 (Split Table & Chart)</h2>
+        <p class="concept-desc">上半部為大型動態折波圖，下半部為完整的歷史數字表格，表格每列內嵌近 7 日 Sparkline 微型折波圖。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 上半部 320px 高解析度趨勢折波圖</li>
+          <li><i class="fa-solid fa-check"></i> 下半部歷史日期數據表格與差額標籤</li>
+          <li><i class="fa-solid fa-check"></i> 表格單元格內嵌 SVG Sparkline 縮圖</li>
+        </ul>
+      </div>
+      <a href="macro_combo_1_split_table_chart.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 1 原型 (Combo Demo 1)
+      </a>
+    </div>
+
+    <!-- Combo 2 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-2">Combo Option 2</span>
+        <h2 class="concept-title">左右對照視圖 (Side-by-Side View)</h2>
+        <p class="concept-desc">左側 60% 空間放置動態折波圖，右側 40% 空間放置精準數字數據表，方便視線水平快速對照。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 左側可切換指標的 TradingView 樣式折波圖</li>
+          <li><i class="fa-solid fa-check"></i> 右側數據表可切換「台股籌碼」或「美股總經」</li>
+          <li><i class="fa-solid fa-check"></i> 實時漲跌紅綠膠囊與連續買賣天數</li>
+        </ul>
+      </div>
+      <a href="macro_combo_2_side_by_side.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 2 原型 (Combo Demo 2)
+      </a>
+    </div>
+
+    <!-- Combo 3 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-3">Combo Option 3</span>
+        <h2 class="concept-title">表格主導 + 嵌入式迷你折波圖 (Inline Sparklines)</h2>
+        <p class="concept-desc">以詳細數字表格為核心，每一筆指標項目（加權指數、外資、投信、CPI、Fed 利率）直接嵌入 12 期微型折波圖。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 清晰的高密度數字與前後期比較列</li>
+          <li><i class="fa-solid fa-check"></i> 表格列中直接繪製 12 期迷你折波圖</li>
+          <li><i class="fa-solid fa-check"></i> 視覺直覺，可一次閱讀多個指標走勢</li>
+        </ul>
+      </div>
+      <a href="macro_combo_3_inline_spark_table.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 3 原型 (Combo Demo 3)
+      </a>
+    </div>
+
+    <!-- Combo 4 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-4">Combo Option 4</span>
+        <h2 class="concept-title">頁籤連動與同步 Hover 視圖 (Synchronized View)</h2>
+        <p class="concept-desc">頂部提供視圖切換（圖表+表格並排 / 僅圖表 / 僅表格），且當滑鼠滑過圖表點位時，下方表格對應日期自動高亮。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 頂部 Mode Toggles (Both / Chart Only / Table Only)</li>
+          <li><i class="fa-solid fa-check"></i> 雙向 Hover 游標同步聚焦</li>
+          <li><i class="fa-solid fa-check"></i> 極高互動性與精準查驗體驗</li>
+        </ul>
+      </div>
+      <a href="macro_combo_4_tabbed_matrix.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 4 原型 (Combo Demo 4)
+      </a>
+    </div>
+
+    <!-- Combo 5 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-5">Combo Option 5</span>
+        <h2 class="concept-title">專業金融終端矩陣 (Financial Matrix View)</h2>
+        <p class="concept-desc">彭博/TradingView 混合式終端：上半部多軸折波圖（指數 vs 法人），下半部會計級權重數據表格。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 多軸折線圖 (Multi-Axis Wave Chart)</li>
+          <li><i class="fa-solid fa-check"></i> 包含 52 週最高/最低範圍與 %CHG 列</li>
+          <li><i class="fa-solid fa-check"></i> 專業數據密度與等寬字型排版</li>
+        </ul>
+      </div>
+      <a href="macro_combo_5_financial_matrix.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 5 原型 (Combo Demo 5)
+      </a>
+    </div>
+
+    <!-- Combo 6 -->
+    <div class="concept-card">
+      <div>
+        <span class="concept-tag tag-6">Combo Option 6</span>
+        <h2 class="concept-title">手風琴分區對照視圖 (Accordion Combo View)</h2>
+        <p class="concept-desc">按模組（大盤面、法人面、通膨面）切分為手風琴卡片，展開後左側為趨勢折波圖、右側為該分區明細數字表。</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 模組化 Accordion 可摺疊選單</li>
+          <li><i class="fa-solid fa-check"></i> 分區內「左圖右表」獨立對照</li>
+          <li><i class="fa-solid fa-check"></i> 條理分明，適合快速展開感興趣的模組</li>
+        </ul>
+      </div>
+      <a href="macro_combo_6_accordion_detail.html" class="btn-launch" target="_blank">
+        <i class="fa-solid fa-up-right-from-square"></i> 開啟方案 6 原型 (Combo Demo 6)
+      </a>
+    </div>
+
+  </div>
+
+</body>
+</html>

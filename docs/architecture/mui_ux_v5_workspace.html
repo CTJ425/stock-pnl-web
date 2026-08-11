@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MUI UX-05: Tabbed Workspace Matrix - 多工作區矩陣管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --mui-bg: #121212; --mui-surface: #1e1e1e; --mui-primary: #90caf9; --mui-success: #66bb6a; --mui-border: rgba(255,255,255,0.12); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--mui-bg); color: #fff; font-family: 'Roboto', sans-serif; font-size: 13px; }
+    .nav { background: var(--mui-surface); padding: 12px 24px; border-bottom: 1px solid var(--mui-border); display: flex; justify-content: space-between; align-items: center; }
+    .tabs { display: flex; gap: 6px; }
+    .tab { background: transparent; border: 1px solid var(--mui-border); color: #aaa; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+    .tab.active { background: var(--mui-primary); color: #000; font-weight: 700; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .card { background: var(--mui-surface); border: 1px solid var(--mui-border); padding: 20px; border-radius: 10px; margin-bottom: 16px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 10px; border-bottom: 1px solid var(--mui-border); text-align: right; }
+    .table th:first-child, .table td:first-child { text-align: left; }
+    .up { color: var(--mui-success); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div style="color: var(--mui-primary); font-weight: 700;">🗂️ MUI WORKSPACE MATRIX (UX-05)</div>
+    <div class="tabs">
+      <button class="tab active" onclick="sw('pnl')">1. 投資組合與多工作區</button>
+      <button class="tab" onclick="sw('market')">2. 盤後市場與美股總經</button>
+      <button class="tab" onclick="sw('admin')">3. 後台排程監控</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="v-pnl" class="view active">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <span>切換投資組合工作區</span>
+          <b style="color: var(--mui-primary);">當前: 玉山證券帳戶 (手續費 6 折)</b>
+        </div>
+        <table class="table">
+          <thead><tr><th>代碼</th><th>股數</th><th>成本</th><th>現價</th><th>未實現損益</th><th>保本價</th></tr></thead>
+          <tbody>
+            <tr><td>2330 台積電</td><td>3,000</td><td>840.00</td><td>985.00</td><td class="up">+431,240</td><td>843.50</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="v-market" class="view">
+      <div class="card">
+        <h3>盤後數據與美股 FRED 總經</h3>
+        <table class="table">
+          <thead><tr><th>指標</th><th>數據</th></tr></thead>
+          <tbody><tr><td>外資買賣超</td><td class="up">+NT$ 18.25 億</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="v-admin" class="view">
+      <div class="card">
+        <h3>後台排程日誌</h3>
+        <table class="table">
+          <thead><tr><th>Job</th><th>Status</th></tr></thead>
+          <tbody><tr><td>twse-chip-batch</td><td class="up">SUCCESS</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function sw(id) {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('v-' + id).classList.add('active');
+    }
+  </script>
+</body>
+</html>

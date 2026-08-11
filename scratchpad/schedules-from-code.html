@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>stock-pnl-web 排程全圖（以程式／pg_cron 為準）</title>
+<style>
+  :root {
+    --bg: #0c1017;
+    --panel: #151c28;
+    --text: #e8eef7;
+    --muted: #8b9bb0;
+    --border: #2a3548;
+    --mkt: #4fc3f7;
+    --night: #81c784;
+    --macro: #ce93d8;
+    --fx: #ffcc80;
+    --probe: #90a4ae;
+    --warm: #ef9a9a;
+    --price: #80cbc4;
+    --top: #ffd54f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Noto Sans TC", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14.5px;
+  }
+  header {
+    padding: 1.75rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #121a28, var(--bg));
+  }
+  header h1 { margin: 0 0 0.4rem; font-size: 1.4rem; }
+  header p { margin: 0.25rem 0; color: var(--muted); max-width: 72rem; }
+  main { max-width: 76rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.25rem 1.35rem;
+    margin: 1rem 0;
+  }
+  h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+  h3 { margin: 1rem 0 0.45rem; font-size: 0.98rem; color: #c5d4e8; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; vertical-align: top; text-align: left; }
+  th { background: #1a2434; color: #cfe0f5; }
+  code, .mono {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.84em;
+    background: #0a0e14;
+    padding: 0.05em 0.3em;
+    border-radius: 3px;
+  }
+  .svg-wrap {
+    overflow-x: auto;
+    background: #0a0e14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin: 0.6rem 0;
+  }
+  svg text { font-family: "Segoe UI", "Noto Sans TC", system-ui, sans-serif; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.6rem 1.1rem; margin: 0.4rem 0 0; font-size: 0.82rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -1px; }
+  .note {
+    border-left: 3px solid var(--fx);
+    background: #1f1a12;
+    padding: 0.55rem 0.8rem;
+    border-radius: 0 8px 8px 0;
+    margin: 0.6rem 0;
+    color: #e8dcc8;
+    font-size: 0.9rem;
+  }
+  .src { color: var(--muted); font-size: 0.8rem; }
+  ul.tight li { margin: 0.2rem 0; }
+  footer { text-align: center; color: var(--muted); font-size: 0.82rem; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>排程時間 · 順序 · 流程 · 預測</h1>
+  <p>
+    <strong>唯一依據：</strong>DEV <code>cron.job</code> 實測 +
+    <code>sources/supabase/schema.sql</code> +
+    <code>sources/supabase/functions/stock-report/*</code> +
+    <code>stock-price/quoteWindow.ts</code>。
+    不用 CHANGELOG／註解當真相（僅輔助）。
+  </p>
+  <p class="src">
+    DEV cron snapshot：market-daily <code>*/15 7-10 * * 1-5</code> ·
+    stock-report-nightly / source-probe <code>*/15 8-15 * * 1-5</code> ·
+    macro-daily <code>*/30 12-18 * * *</code> · fx-daily <code>0 3,9 * * *</code>
+  </p>
+</header>
+<main>
+
+<section>
+  <h2>0. UTC → 台北 換算（程式慣例）</h2>
+  <p>後台 <code>describeCron</code>：UTC 小時 + 8（固定，無 DST）。pg_cron 存的是 <strong>UTC</strong> schedule。</p>
+  <table>
+    <tr><th>UTC schedule</th><th>台北</th><th>jobname</th><th>action body</th></tr>
+    <tr>
+      <td><code>*/15 7-10 * * 1-5</code></td>
+      <td><strong>週一至五 15:00–18:45 每 15 分</strong></td>
+      <td>market-daily</td>
+      <td><code>{"action":"sync-market"}</code></td>
+    </tr>
+    <tr>
+      <td><code>*/15 8-15 * * 1-5</code></td>
+      <td><strong>週一至五 16:00–23:45 每 15 分</strong></td>
+      <td>stock-report-nightly</td>
+      <td><code>{"action":"generate-all"}</code></td>
+    </tr>
+    <tr>
+      <td><code>*/15 8-15 * * 1-5</code></td>
+      <td>同上</td>
+      <td>source-probe</td>
+      <td><code>{"action":"probe"}</code></td>
+    </tr>
+    <tr>
+      <td><code>*/30 12-18 * * *</code></td>
+      <td><strong>每日 20:00–次日 02:30 每 30 分</strong></td>
+      <td>macro-daily</td>
+      <td><code>{"action":"sync-macro"}</code></td>
+    </tr>
+    <tr>
+      <td><code>0 3,9 * * *</code></td>
+      <td><strong>每日 11:00 / 17:00</strong></td>
+      <td>fx-daily</td>
+      <td><code>{"action":"sync-fx"}</code></td>
+    </tr>
+  </table>
+  <p class="note">
+    <code>sync-top-tickers</code>：<strong>沒有</strong>獨立 <code>cron.job</code>。
+    由 <code>handleGenerateAll</code> 開頭呼叫 <code>syncTopTickers()</code>，或 admin-run / 手動 action。
+  </p>
+</section>
+
+<section>
+  <h2>1. 24h 時間軸（台北）— 誰在何時開火</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 1100 420" width="100%" height="420" role="img" aria-label="24h schedule timeline">
+      <!-- axis -->
+      <line x1="80" y1="50" x2="1060" y2="50" stroke="#2a3548" stroke-width="2"/>
+      <!-- hour ticks 0-24 -->
+      <g fill="#8b9bb0" font-size="10">
+        <text x="80" y="40">00</text>
+        <text x="200" y="40">03</text>
+        <text x="320" y="40">06</text>
+        <text x="440" y="40">09</text>
+        <text x="560" y="40">12</text>
+        <text x="680" y="40">15</text>
+        <text x="800" y="40">18</text>
+        <text x="920" y="40">21</text>
+        <text x="1040" y="40">24</text>
+      </g>
+      <!-- helper: x = 80 + hour/24 * 980 -->
+
+      <!-- market-daily 15:00-18:45 -->
+      <rect x="692.5" y="70" width="153" height="36" rx="6" fill="#0d3a4a" stroke="#4fc3f7"/>
+      <text x="770" y="93" text-anchor="middle" fill="#4fc3f7" font-size="12" font-weight="600">market-daily</text>
+      <text x="770" y="125" text-anchor="middle" fill="#8b9bb0" font-size="10">15:00–18:45 /15m · 平日</text>
+
+      <!-- nightly 16:00-23:45 -->
+      <rect x="733" y="145" width="318" height="36" rx="6" fill="#1b3320" stroke="#81c784"/>
+      <text x="892" y="168" text-anchor="middle" fill="#81c784" font-size="12" font-weight="600">stock-report-nightly = generate-all</text>
+      <text x="892" y="200" text-anchor="middle" fill="#8b9bb0" font-size="10">16:00–23:45 /15m · 平日 · 內含 Top30 刷新</text>
+
+      <!-- probe same window -->
+      <rect x="733" y="215" width="318" height="28" rx="6" fill="#263238" stroke="#90a4ae"/>
+      <text x="892" y="234" text-anchor="middle" fill="#b0bec5" font-size="11">source-probe（同窗，診斷用）</text>
+
+      <!-- macro 20:00-02:30 overnight -->
+      <rect x="898" y="265" width="162" height="32" rx="6" fill="#2a1f33" stroke="#ce93d8"/>
+      <rect x="80" y="265" width="102" height="32" rx="6" fill="#2a1f33" stroke="#ce93d8"/>
+      <text x="980" y="286" text-anchor="middle" fill="#ce93d8" font-size="11">macro 20:00→</text>
+      <text x="130" y="286" text-anchor="middle" fill="#ce93d8" font-size="11">→02:30 /30m</text>
+      <text x="550" y="310" text-anchor="middle" fill="#8b9bb0" font-size="10">macro-daily · 每日（跨午夜）</text>
+
+      <!-- fx 11:00 17:00 -->
+      <circle cx="530" cy="350" r="8" fill="#ffcc80"/>
+      <circle cx="775" cy="350" r="8" fill="#ffcc80"/>
+      <text x="530" y="375" text-anchor="middle" fill="#ffcc80" font-size="11">fx 11:00</text>
+      <text x="775" y="375" text-anchor="middle" fill="#ffcc80" font-size="11">fx 17:00</text>
+      <text x="650" y="400" text-anchor="middle" fill="#8b9bb0" font-size="10">fx-daily · 每日兩點</text>
+
+      <!-- market open ref -->
+      <line x1="428" y1="45" x2="428" y2="390" stroke="#3a4558" stroke-dasharray="3 3"/>
+      <text x="428" y="415" text-anchor="middle" fill="#6a7a90" font-size="9">09:00 開盤參考</text>
+      <line x1="612" y1="45" x2="612" y2="390" stroke="#3a4558" stroke-dasharray="3 3"/>
+      <text x="612" y="415" text-anchor="middle" fill="#6a7a90" font-size="9">13:30 收盤</text>
+    </svg>
+  </div>
+  <p class="legend">
+    <span><i style="background:#4fc3f7"></i>全市場</span>
+    <span><i style="background:#81c784"></i>個股批次</span>
+    <span><i style="background:#ce93d8"></i>美總經</span>
+    <span><i style="background:#ffcc80"></i>匯率</span>
+    <span><i style="background:#90a4ae"></i>probe</span>
+  </p>
+</section>
+
+<section>
+  <h2>2. 交易日下午～夜間：順序與依賴（預測）</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 1100 520" width="100%" height="520" role="img" aria-label="afternoon flow">
+      <defs>
+        <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#8b9bb0"/>
+        </marker>
+      </defs>
+
+      <!-- time labels -->
+      <text x="40" y="30" fill="#8b9bb0" font-size="12">台北</text>
+      <text x="40" y="80" fill="#4fc3f7" font-size="13" font-weight="600">15:00</text>
+      <text x="40" y="200" fill="#81c784" font-size="13" font-weight="600">16:00</text>
+      <text x="40" y="360" fill="#ffcc80" font-size="13" font-weight="600">~21:00</text>
+      <text x="40" y="430" fill="#ce93d8" font-size="13" font-weight="600">20:00+</text>
+
+      <!-- 15:00 market -->
+      <rect x="120" y="50" width="280" height="70" rx="8" fill="#0d3a4a" stroke="#4fc3f7"/>
+      <text x="260" y="78" text-anchor="middle" fill="#e8eef7" font-size="13" font-weight="600">sync-market</text>
+      <text x="260" y="98" text-anchor="middle" fill="#b0d4e8" font-size="11">FMTQIK + MI_5MINS_HIST + BFI82U</text>
+      <text x="260" y="112" text-anchor="middle" fill="#8b9bb0" font-size="10">→ market/daily.json</text>
+
+      <rect x="440" y="55" width="240" height="60" rx="8" fill="#1a2030" stroke="#4fc3f7" stroke-dasharray="4 3"/>
+      <text x="560" y="82" text-anchor="middle" fill="#4fc3f7" font-size="12">isMarketSessionReady?</text>
+      <text x="560" y="100" text-anchor="middle" fill="#8b9bb0" font-size="10">當日量能+法人 buy 齊 → skipped 零請求</text>
+
+      <!-- 16:00 generate-all -->
+      <rect x="120" y="160" width="900" height="170" rx="10" fill="#121a14" stroke="#81c784"/>
+      <text x="140" y="185" fill="#81c784" font-size="13" font-weight="600">generate-all（handleGenerateAll）每 15 分</text>
+
+      <rect x="140" y="200" width="160" height="50" rx="6" fill="#3a3020" stroke="#ffd54f"/>
+      <text x="220" y="222" text-anchor="middle" fill="#ffd54f" font-size="11">syncTopTickers</text>
+      <text x="220" y="238" text-anchor="middle" fill="#8b9bb0" font-size="9">STOCK_DAY_ALL → top30</text>
+
+      <rect x="320" y="200" width="200" height="50" rx="6" fill="#1b3320" stroke="#81c784"/>
+      <text x="420" y="222" text-anchor="middle" fill="#c8e6c9" font-size="11">held ∪ watch ∪ top30</text>
+      <text x="420" y="238" text-anchor="middle" fill="#8b9bb0" font-size="9">batchTwTickers</text>
+
+      <rect x="540" y="200" width="200" height="50" rx="6" fill="#1a2830" stroke="#90a4ae"/>
+      <text x="640" y="222" text-anchor="middle" fill="#cfd8dc" font-size="11">decideSkip（籌碼）</text>
+      <text x="640" y="238" text-anchor="middle" fill="#8b9bb0" font-size="9">T86 freeze ∧ margin 當日</text>
+
+      <path d="M300 225 H318" stroke="#8b9bb0" marker-end="url(#arr)"/>
+      <path d="M520 225 H538" stroke="#8b9bb0" marker-end="url(#arr)"/>
+
+      <rect x="140" y="270" width="200" height="45" rx="6" fill="#1b3320" stroke="#81c784"/>
+      <text x="240" y="290" text-anchor="middle" fill="#c8e6c9" font-size="11">若 !skip：loadSeries</text>
+      <text x="240" y="305" text-anchor="middle" fill="#8b9bb0" font-size="9">T86 + 融資 + 借券 → 報告</text>
+
+      <rect x="360" y="270" width="280" height="45" rx="6" fill="#2a2218" stroke="#ffcc80"/>
+      <text x="500" y="290" text-anchor="middle" fill="#ffe0b2" font-size="11">無論 skip：syncDaily + fundamental</text>
+      <text x="500" y="305" text-anchor="middle" fill="#8b9bb0" font-size="9">+ backfill 月營收／季報（分輪）</text>
+
+      <rect x="660" y="270" width="200" height="45" rx="6" fill="#1a2030" stroke="#ce93d8"/>
+      <text x="760" y="290" text-anchor="middle" fill="#e1bee7" font-size="11">scopes + reportComplete</text>
+      <text x="760" y="305" text-anchor="middle" fill="#8b9bb0" font-size="9">holdings ∧ top30 soft 就緒</text>
+
+      <path d="M640 225 V255 H240 V268" stroke="#8b9bb0" fill="none" stroke-dasharray="3 2"/>
+      <path d="M640 225 V255 H500 V268" stroke="#8b9bb0" fill="none"/>
+      <path d="M640 305 H658" stroke="#8b9bb0" marker-end="url(#arr)"/>
+
+      <!-- 21:00 note -->
+      <rect x="120" y="350" width="500" height="40" rx="6" fill="#2a2418" stroke="#ffcc80"/>
+      <text x="370" y="375" text-anchor="middle" fill="#ffe0b2" font-size="12">
+        融資 MI_MARGN 約此時才常出現 → decideSkip 的 marginToday 才可能 true；報告靠 runSignature 變了才重產
+      </text>
+
+      <!-- macro -->
+      <rect x="120" y="410" width="280" height="45" rx="6" fill="#2a1f33" stroke="#ce93d8"/>
+      <text x="260" y="430" text-anchor="middle" fill="#e1bee7" font-size="12">sync-macro · decideMacroScan</text>
+      <text x="260" y="445" text-anchor="middle" fill="#8b9bb0" font-size="10">FRED；滿意／窗外可 skip 外部</text>
+
+      <rect x="440" y="410" width="200" height="45" rx="6" fill="#2a2410" stroke="#ffcc80"/>
+      <text x="540" y="437" text-anchor="middle" fill="#ffcc80" font-size="12">sync-fx · 日幂等</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>3. 各 job 內部流程（程式路徑）</h2>
+
+  <h3>3.1 <code>sync-market</code> → <code>handleSyncMarket</code> → <code>syncMarket</code></h3>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 1000 160" width="100%" height="160">
+      <rect x="20" y="40" width="140" height="50" rx="6" fill="#0d3a4a" stroke="#4fc3f7"/>
+      <text x="90" y="70" text-anchor="middle" fill="#e8eef7" font-size="12">讀 market/daily.json</text>
+      <path d="M160 65 H190" stroke="#8b9bb0" marker-end="url(#arr)"/>
+      <rect x="190" y="40" width="180" height="50" rx="6" fill="#1a2830" stroke="#4fc3f7"/>
+      <text x="280" y="62" text-anchor="middle" fill="#4fc3f7" font-size="11">isMarketSessionReady</text>
+      <text x="280" y="78" text-anchor="middle" fill="#8b9bb0" font-size="10">當日 value+buy?</text>
+      <path d="M370 50 H410" stroke="#81c784" marker-end="url(#arr)"/>
+      <text x="400" y="40" fill="#81c784" font-size="10">是</text>
+      <rect x="410" y="30" width="140" height="40" rx="6" fill="#1b3320" stroke="#81c784"/>
+      <text x="480" y="55" text-anchor="middle" fill="#c8e6c9" font-size="11">reason=skipped 零請求</text>
+      <path d="M280 90 V115 H410" stroke="#ef9a9a" marker-end="url(#arr)"/>
+      <text x="300" y="110" fill="#ef9a9a" font-size="10">否</text>
+      <rect x="410" y="100" width="360" height="45" rx="6" fill="#2a1a1a" stroke="#ef9a9a"/>
+      <text x="590" y="120" text-anchor="middle" fill="#ffcdd2" font-size="11">FMTQIK 月檔 + MI_5MINS_HIST + BFI82U 日補</text>
+      <text x="590" y="136" text-anchor="middle" fill="#8b9bb0" font-size="10">簽名相同 → unchanged 不寫；變 → upload</text>
+    </svg>
+  </div>
+  <p class="src">來源：<code>twMarket.ts#isMarketSessionReady</code>、<code>index.ts#syncMarket</code></p>
+
+  <h3>3.2 <code>generate-all</code> 籌碼短路 <code>decideSkip</code></h3>
+  <table>
+    <tr><th>條件（pollPlan.ts）</th><th>結果</th></tr>
+    <tr><td><code>runsToday &gt;= MAX_RUNS_PER_DAY (40)</code></td><td>skip reason=<code>run-cap</code></td></tr>
+    <tr><td><code>t86Today ∧ t86Frozen ∧ marginToday</code></td><td>skip reason=<code>complete</code>（籌碼段不 loadSeries）</td></tr>
+    <tr><td>否則</td><td>跑 T86／融資／借券；指紋變則 regenerate 報告</td></tr>
+    <tr><td>skip 之後（現行 handleGenerateAll）</td><td><strong>仍跑</strong> syncDaily / syncFundamental / backfill 月季</td></tr>
+  </table>
+  <p class="note">T86 freeze：連續 <code>T86_STABLE_POLLS=2</code> 次內容指紋相同才 frozen（看內容，不看時鐘）。</p>
+
+  <h3>3.3 <code>sync-macro</code></h3>
+  <p><code>decideMacroScan</code>：當日掃描次數 cap 16；已掃過且指標皆滿足／不在發布窗 → 可不打 FRED；目錄缺系列可 force rebuild。</p>
+
+  <h3>3.4 <code>sync-fx</code></h3>
+  <p>Yahoo 幣對 → <code>fx/twd.json</code>；註解：同台北日成功後再跑成本近乎只讀 Storage（日幂等）。</p>
+
+  <h3>3.5 <code>probe</code></h3>
+  <p>只探測 BWIBBU + 借券 endpoint 日期／指紋 → <code>source_probe_log</code>。<strong>不寫</strong> reports 報告、不寫 chip_raw_cache。</p>
+
+  <h3>3.6 非 cron：on-demand</h3>
+  <table>
+    <tr><th>入口</th><th>觸發</th><th>行為摘要</th></tr>
+    <tr>
+      <td><code>warm</code> phase core/history</td>
+      <td>前端 JWT + warm_quota</td>
+      <td>core：日K+最新基本面；history：MOPS ≤30s；history 不扣第二次額度</td>
+    </tr>
+    <tr>
+      <td><code>generate</code></td>
+      <td>使用者點報告 fallback</td>
+      <td>單檔籌碼即點即產（assertUser）</td>
+    </tr>
+    <tr>
+      <td><code>stock-price</code></td>
+      <td>報價／搜尋</td>
+      <td>MIS／Yahoo；TTL：盤中 60s；確認收盤後鎖到次日 08:25（quoteWindow.ts）</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. 資料產物地圖（誰寫 Storage／SQL）</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 1000 280" width="100%" height="280">
+      <rect x="20" y="20" width="460" height="240" rx="10" fill="#0d1520" stroke="#4fc3f7"/>
+      <text x="250" y="48" text-anchor="middle" fill="#4fc3f7" font-size="14" font-weight="600">Storage bucket reports</text>
+      <text x="40" y="80" fill="#c5d4e8" font-size="12">market/daily.json ← sync-market</text>
+      <text x="40" y="105" fill="#c5d4e8" font-size="12">meta/top_tickers.json ← syncTopTickers (in generate-all)</text>
+      <text x="40" y="130" fill="#c5d4e8" font-size="12">{ymd}/{ticker}.json ← generate-all 籌碼報告</text>
+      <text x="40" y="155" fill="#c5d4e8" font-size="12">daily/{ticker}.json · fundamental/{ticker}.json</text>
+      <text x="40" y="180" fill="#c5d4e8" font-size="12">manifest.json</text>
+      <text x="40" y="205" fill="#c5d4e8" font-size="12">macro/us.json ← sync-macro</text>
+      <text x="40" y="230" fill="#c5d4e8" font-size="12">fx/twd.json ← sync-fx</text>
+
+      <rect x="520" y="20" width="460" height="240" rx="10" fill="#1a1810" stroke="#ffcc80"/>
+      <text x="750" y="48" text-anchor="middle" fill="#ffcc80" font-size="14" font-weight="600">Postgres</text>
+      <text x="540" y="80" fill="#c5d4e8" font-size="12">chip_raw_cache ← T86/margin 等原始檔</text>
+      <text x="540" y="105" fill="#c5d4e8" font-size="12">batch_run_log ← generate-all 每輪</text>
+      <text x="540" y="130" fill="#c5d4e8" font-size="12">source_probe_log ← probe</text>
+      <text x="540" y="155" fill="#c5d4e8" font-size="12">warm_quota ← warm core/full</text>
+      <text x="540" y="180" fill="#c5d4e8" font-size="12">transactions / tw_watchlist ← 名單來源</text>
+      <text x="540" y="205" fill="#c5d4e8" font-size="12">price_cache ← stock-price（獨立）</text>
+      <text x="540" y="230" fill="#c5d4e8" font-size="12">cron.job ← 排程本體</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>5. 預測：一交易日「什麼時候會變綠」（經驗＋程式閘）</h2>
+  <table>
+    <tr><th>產物</th><th>最早可能</th><th>程式「可停手」條件</th><th>仍可能晚於</th></tr>
+    <tr>
+      <td>全市場量能 + 法人（BFI82U）</td>
+      <td>15:00 後某 15 分班</td>
+      <td><code>isMarketSessionReady</code> → market-daily <code>skipped</code></td>
+      <td>FMTQIK／BFI82U 未齊會一直試到 18:45</td>
+    </tr>
+    <tr>
+      <td>個股 T86 報告</td>
+      <td>16:00 起；實測常 16:30 較穩</td>
+      <td>T86 frozen（連 2 次指紋同）</td>
+      <td>改寫仍會重抓至 freeze</td>
+    </tr>
+    <tr>
+      <td>融資進報告</td>
+      <td>約 21:00 後 fingerprint 變 → regenerate</td>
+      <td><code>marginToday</code> 在 cache</td>
+      <td>21:00 前 marginToday=false</td>
+    </tr>
+    <tr>
+      <td>借券進報告</td>
+      <td>晚班 loadBorrow</td>
+      <td>有 borrow 回應</td>
+      <td>與融資類似偏晚</td>
+    </tr>
+    <tr>
+      <td>decideSkip complete</td>
+      <td>T86 freeze <strong>且</strong> margin 當日</td>
+      <td>三條件同時</td>
+      <td>通常 ≥21:00 後才可能</td>
+    </tr>
+    <tr>
+      <td>基本面 soft / reportComplete</td>
+      <td>generate-all 多輪 backfill</td>
+      <td>holdings∪top30 月≥6 且季≥6（或空殼 through）</td>
+      <td>季報貴，可能跨多輪甚至次日</td>
+    </tr>
+    <tr>
+      <td>Top30 名單</td>
+      <td>16:00 第一輪 generate-all</td>
+      <td>同台北日 reuse 檔</td>
+      <td>週末不跑 nightly</td>
+    </tr>
+    <tr>
+      <td>美總經</td>
+      <td>發布後 20:00–02:30 窗內某班</td>
+      <td>decideMacroScan 滿意</td>
+      <td>FRED 延遲／冬令</td>
+    </tr>
+    <tr>
+      <td>匯率</td>
+      <td>11:00 或 17:00</td>
+      <td>當日已成功則再跑很輕</td>
+      <td>—</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 與 on-demand／現價的關係（避免混線）</h2>
+  <div class="svg-wrap">
+    <svg viewBox="0 0 900 200" width="100%" height="200">
+      <rect x="30" y="30" width="250" height="140" rx="8" fill="#1b3320" stroke="#81c784"/>
+      <text x="155" y="60" text-anchor="middle" fill="#81c784" font-size="13" font-weight="600">夜批 / cron</text>
+      <text x="155" y="90" text-anchor="middle" fill="#c5d4e8" font-size="11">market · generate-all</text>
+      <text x="155" y="110" text-anchor="middle" fill="#c5d4e8" font-size="11">macro · fx · probe</text>
+      <text x="155" y="140" text-anchor="middle" fill="#8b9bb0" font-size="10">寫 reports / log</text>
+
+      <rect x="320" y="30" width="250" height="140" rx="8" fill="#3a2020" stroke="#ef9a9a"/>
+      <text x="445" y="60" text-anchor="middle" fill="#ef9a9a" font-size="13" font-weight="600">使用者 warm</text>
+      <text x="445" y="90" text-anchor="middle" fill="#c5d4e8" font-size="11">JWT + warm_quota</text>
+      <text x="445" y="110" text-anchor="middle" fill="#c5d4e8" font-size="11">core / history</text>
+      <text x="445" y="140" text-anchor="middle" fill="#8b9bb0" font-size="10">長尾個股補洞</text>
+
+      <rect x="610" y="30" width="250" height="140" rx="8" fill="#0d3330" stroke="#80cbc4"/>
+      <text x="735" y="60" text-anchor="middle" fill="#80cbc4" font-size="13" font-weight="600">stock-price</text>
+      <text x="735" y="90" text-anchor="middle" fill="#c5d4e8" font-size="11">MIS / Yahoo 現價</text>
+      <text x="735" y="110" text-anchor="middle" fill="#c5d4e8" font-size="11">TTL 08:25–13:30=60s</text>
+      <text x="735" y="140" text-anchor="middle" fill="#8b9bb0" font-size="10">與上兩條獨立</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>7. 關鍵常數（程式）</h2>
+  <table>
+    <tr><th>常數</th><th>值</th><th>檔案</th></tr>
+    <tr><td>MAX_RUNS_PER_DAY</td><td>40</td><td>pollPlan.ts</td></tr>
+    <tr><td>T86_STABLE_POLLS</td><td>2</td><td>pollPlan.ts</td></tr>
+    <tr><td>WARM_BUDGET_MS</td><td>30000</td><td>index.ts</td></tr>
+    <tr><td>WARM_DAILY_LIMIT</td><td>30</td><td>index.ts</td></tr>
+    <tr><td>MAX_MARKET_INST_DAYS</td><td>15</td><td>index.ts</td></tr>
+    <tr><td>MAX_BACKFILL_MONTHS / QUARTERS</td><td>4 / 2</td><td>index.ts</td></tr>
+    <tr><td>MAX_SCANS_PER_DAY (macro)</td><td>16</td><td>macroCalendar.ts</td></tr>
+    <tr><td>TOP_TICKERS_DEFAULT_N / MAX_DAYS</td><td>30 / 2</td><td>topTickers.ts</td></tr>
+    <tr><td>pg_net timeout_milliseconds</td><td>60000</td><td>schema.sql 各 job</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>8. 注意：程式與「感覺」易混點</h2>
+  <ul class="tight">
+    <li><strong>15:00</strong> 只有 <code>market-daily</code>（全市場）。Top30／T86 <strong>不</strong>在 15:00 開。</li>
+    <li><strong>16:00</strong> nightly 第一班；T86 可能仍空，freeze 常更晚。</li>
+    <li><strong>market skipped</strong> ≠ cron 停火；cron 仍到點呼叫，handler 立刻 return。</li>
+    <li><strong>decideSkip complete</strong> 需要 margin 當日，通常晚於 T86 freeze。</li>
+    <li><strong>generate-all skip 籌碼後仍補基本面</strong>（現行 index.ts，勿再用舊印象「整段 return」）。</li>
+    <li><strong>probe</strong> 與 nightly 同 schedule 字串，但是不同 action／產物。</li>
+  </ul>
+</section>
+
+<footer>
+  產生自程式分析 · 檔案
+  <code>scratchpad/schedules-from-code.html</code>
+  · 請用瀏覽器開啟 · DEV cron 若與 schema 漂移，以 <code>SELECT * FROM cron.job</code> 為準
+</footer>
+</main>
+</body>
+</html>

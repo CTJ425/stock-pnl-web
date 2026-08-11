@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView 總體經戰情室 - 方案二：多圖表四格拆分視圖 (4-Pane Split Dashboard)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --tv-bg-dark: #131722;
+      --tv-panel-bg: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-blue: #2962ff;
+      --tv-up-red: #f23645;
+      --tv-down-green: #089981;
+      --tv-text-main: #d1d4dc;
+      --tv-text-sub: #787b86;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif; }
+    body { background-color: var(--tv-bg-dark); color: var(--tv-text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Header & Layout Switcher */
+    .tv-header { height: 48px; background: var(--tv-panel-bg); border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .tv-brand { font-weight: 700; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
+    
+    .layout-selector { display: flex; gap: 6px; background: var(--tv-bg-dark); border: 1px solid var(--tv-border); border-radius: 4px; padding: 3px; }
+    .layout-btn { background: transparent; border: none; color: var(--tv-text-sub); padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 3px; display: flex; align-items: center; gap: 6px; }
+    .layout-btn.active, .layout-btn:hover { background: #2a2e39; color: var(--tv-blue); }
+
+    /* 4-Pane Grid Area */
+    .pane-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; background: var(--tv-border); padding: 2px; }
+    
+    .pane-card { background: var(--tv-panel-bg); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    .pane-card.expanded { grid-column: span 2; grid-row: span 2; z-index: 10; }
+
+    .pane-header { height: 34px; background: #181c27; border-bottom: 1px solid var(--tv-border); display: flex; justify-content: space-between; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 700; }
+    .pane-title { display: flex; align-items: center; gap: 8px; color: #fff; }
+    .pane-tools i { cursor: pointer; color: var(--tv-text-sub); transition: color 0.2s; }
+    .pane-tools i:hover { color: var(--tv-text-main); }
+
+    .pane-body { flex: 1; position: relative; padding: 8px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation & Layout Switcher -->
+  <header class="tv-header">
+    <div class="tv-brand">
+      <i class="fa-solid fa-table-cells-large" style="color: var(--tv-blue);"></i>
+      <span>TradingView 4-Pane Multi-Split — 多圖表拆分對照戰情室</span>
+    </div>
+
+    <!-- Multi-pane Split Switcher -->
+    <div class="layout-selector">
+      <button class="layout-btn active" onclick="setGrid('4')"><i class="fa-solid fa-grip"></i> 4圖切分 (Quad)</button>
+      <button class="layout-btn" onclick="setGrid('2h')"><i class="fa-solid fa-table-columns"></i> 雙圖左右 (2-Col)</button>
+      <button class="layout-btn" onclick="setGrid('2v')"><i class="fa-solid fa-table-rows"></i> 雙圖上下 (2-Row)</button>
+    </div>
+  </header>
+
+  <!-- 4-Pane Grid Workspace -->
+  <div class="pane-grid" id="gridContainer">
+    
+    <!-- Pane 1: 加權指數 -->
+    <div class="pane-card" id="pane-1">
+      <div class="pane-header">
+        <div class="pane-title">
+          <i class="fa-solid fa-chart-line" style="color: var(--tv-blue);"></i>
+          <span>[Pane 1] TAIEX 台股加權指數</span>
+        </div>
+        <div class="pane-tools">
+          <i class="fa-solid fa-expand" onclick="toggleExpand('pane-1')"></i>
+        </div>
+      </div>
+      <div class="pane-body">
+        <canvas id="chart1"></canvas>
+      </div>
+    </div>
+
+    <!-- Pane 2: 三大法人籌碼 -->
+    <div class="pane-card" id="pane-2">
+      <div class="pane-header">
+        <div class="pane-title">
+          <i class="fa-solid fa-building-columns" style="color: #f23645;"></i>
+          <span>[Pane 2] 三大法人買賣超 (外資/投信/自營商)</span>
+        </div>
+        <div class="pane-tools">
+          <i class="fa-solid fa-expand" onclick="toggleExpand('pane-2')"></i>
+        </div>
+      </div>
+      <div class="pane-body">
+        <canvas id="chart2"></canvas>
+      </div>
+    </div>
+
+    <!-- Pane 3: 美國 CPI 通膨率 -->
+    <div class="pane-card" id="pane-3">
+      <div class="pane-header">
+        <div class="pane-title">
+          <i class="fa-solid fa-piggy-bank" style="color: #f59e0b;"></i>
+          <span>[Pane 3] 美國 CPI vs. 核心 CPI (YoY)</span>
+        </div>
+        <div class="pane-tools">
+          <i class="fa-solid fa-expand" onclick="toggleExpand('pane-3')"></i>
+        </div>
+      </div>
+      <div class="pane-body">
+        <canvas id="chart3"></canvas>
+      </div>
+    </div>
+
+    <!-- Pane 4: 聯準會利率 vs 失業率 -->
+    <div class="pane-card" id="pane-4">
+      <div class="pane-header">
+        <div class="pane-title">
+          <i class="fa-solid fa-scale-balanced" style="color: #089981;"></i>
+          <span>[Pane 4] 美聯準會基準利率 vs 失業率</span>
+        </div>
+        <div class="pane-tools">
+          <i class="fa-solid fa-expand" onclick="toggleExpand('pane-4')"></i>
+        </div>
+      </div>
+      <div class="pane-body">
+        <canvas id="chart4"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Common Chart Options
+    const commonOpts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#787b86', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+        y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+      }
+    };
+
+    // Chart 1: TAIEX
+    new Chart(document.getElementById('chart1'), {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '加權指數',
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41,98,255,0.1)',
+          fill: true
+        }]
+      },
+      options: commonOpts
+    });
+
+    // Chart 2: Institutional Chips
+    new Chart(document.getElementById('chart2'), {
+      type: 'bar',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [
+          { label: '外資 (億)', data: [-120, -210, 85, 110, 65, 40, 98.2], backgroundColor: '#f23645' },
+          { label: '投信 (億)', data: [60, 45, 30, 40, 55, 48, 51.6], backgroundColor: '#2962ff' }
+        ]
+      },
+      options: commonOpts
+    });
+
+    // Chart 3: US CPI
+    new Chart(document.getElementById('chart3'), {
+      type: 'line',
+      data: {
+        labels: ['3月', '4月', '5月', '6月', '7月', '8月'],
+        datasets: [
+          { label: 'CPI YoY (%)', data: [3.1, 2.9, 2.8, 2.7, 2.7, 2.6], borderColor: '#f59e0b' },
+          { label: 'Core CPI (%)', data: [3.8, 3.6, 3.5, 3.4, 3.3, 3.2], borderColor: '#ec4899' }
+        ]
+      },
+      options: commonOpts
+    });
+
+    // Chart 4: Fed Rate vs Unemployment
+    new Chart(document.getElementById('chart4'), {
+      type: 'line',
+      data: {
+        labels: ['3月', '4月', '5月', '6月', '7月', '8月'],
+        datasets: [
+          { label: 'Fed Rate (%)', data: [5.25, 5.25, 5.25, 5.25, 5.0, 4.62], borderColor: '#089981' },
+          { label: '失業率 (%)', data: [3.8, 3.9, 4.0, 4.1, 4.1, 4.1], borderColor: '#a855f7', borderDash: [4, 4] }
+        ]
+      },
+      options: commonOpts
+    });
+
+    function toggleExpand(paneId) {
+      const pane = document.getElementById(paneId);
+      pane.classList.toggle('expanded');
+    }
+
+    function setGrid(type) {
+      document.querySelectorAll('.layout-btn').forEach(btn => btn.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      const grid = document.getElementById('gridContainer');
+
+      if(type === '2h') {
+        grid.style.gridTemplateColumns = '1fr 1fr';
+        grid.style.gridTemplateRows = '1fr';
+        document.getElementById('pane-3').style.display = 'none';
+        document.getElementById('pane-4').style.display = 'none';
+      } else if(type === '2v') {
+        grid.style.gridTemplateColumns = '1fr';
+        grid.style.gridTemplateRows = '1fr 1fr';
+        document.getElementById('pane-3').style.display = 'none';
+        document.getElementById('pane-4').style.display = 'none';
+      } else {
+        grid.style.gridTemplateColumns = '1fr 1fr';
+        grid.style.gridTemplateRows = '1fr 1fr';
+        document.getElementById('pane-3').style.display = 'flex';
+        document.getElementById('pane-4').style.display = 'flex';
+      }
+    }
+  </script>
+</body>
+</html>

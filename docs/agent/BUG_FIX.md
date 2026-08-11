@@ -77,51 +77,7 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
-### Bug ID: BUG-024 —— 估值 BWIBBU 每天存進去的都是「前一個交易日」
-- **Description**: The valuation cached under trading day N has, on every day on record, carried day N−1's
-  data. Nothing schedules a re-fetch, and the probe that was supposed to detect this asks an endpoint
-  that cannot answer the question.
-- **Proven by execution** (2026-08-11 19:3x, DEV `chip_raw_cache`):
-
-  | cache key | written | payload's own `Date` |
-  | ---- | ---- | ---- |
-  | 20260811 | 08-11 16:57 | **1150810** |
-  | 20260810 | 08-10 16:30 | **1150807** (08-10 was a Monday) |
-  | 20260807 | 08-07 16:56 | **1150806** |
-
-  Not once is the payload's self-reported date equal to its own cache key.
-- **Root cause —— three things compounding**:
-  1. **The endpoint has no date parameter.** `BWIBBU_ALL_URL` (`openapi.twse.com.tw/v1/exchangeReport/
-     BWIBBU_ALL`) is a snapshot that trails the market by a trading day. Measured 2026-08-11 19:36:
-     OpenAPI returned 1083 rows all dated `1150810`, while the **dated** RWD endpoint
-     `www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=20260811&selectType=ALL` returned
-     `stat: OK`, `date: 20260811`, **1084 rows**. Today's valuation was published; we were asking the
-     wrong surface.
-  2. **`readLatest` freezes the first answer of the day.** Its cache key is the trading day we are
-     building for, so the first fetch wins and every later call that day eats the cache —— even after
-     the mirror catches up. This is the same mechanism `SPEC.md` § Data source probe already documents
-     as the reason the probe experiment exists; nobody had connected it to BWIBBU.
-  3. **Nothing re-runs it.** `generate-market-data` has **no cron** (documented choice in `schema.sql`:
-     phases split for free-tier wall clock, market-data/history left as 「admin manual in this
-     experiment; may gain their own crons later」). Since 0.7.8 the probe follow-up was the de-facto
-     automatic path —— and the bwibbu probe can never fire, see below.
-- **Why the probe never caught it**: `bwibbu`'s hit rule compares the snapshot's self-reported ROC date
-  to today. Because the snapshot always trails, that comparison is false for the whole 17:30–22:00
-  window —— **0 hits in 27 probes on 2026-08-11**. Contrast the other daily sources, whose requests
-  carry the date, which is exactly why they can answer 「今天的出了沒」.
-- **Impact**: valuation (本益比 / 殖利率 / 股價淨值比) shown in the app is one trading day stale, every
-  day. **Not mislabelled** —— `twFundamental.ts` writes `dataDate: rocDate(row.Date)`, so the record
-  carries its true date; the cost is latency and a probe readout that measures the mirror's lag rather
-  than the source's publication time.
-- **Fix (not yet applied)**:
-  1. Point the `bwibbu` probe at the dated RWD endpoint, so its hit rule matches the other four
-     (「請求自帶日期 → 表回來了就是今天的」).
-  2. Give `generate-market-data` and `generate-history` their own crons —— the probe follow-up should
-     not be the only automatic path for 估值 / 月營收 / 季報.
-  3. Optionally move the ingest to the dated endpoint too. Different shape: 8 columns
-     (`證券代號/證券名稱/收盤價/殖利率(%)/股利年度/本益比/股價淨值比/財報年季`) vs the OpenAPI object,
-     so position fields by header text as `twProfitHistory` already does —— do not index blindly.
-- **Status**: OPEN
+There are no open bugs. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
 
 BUG-023 (manual 「全部執行」 opaque non-2xx) fixed in **0.6.47** — see `FIXED_BUG.md`.
 

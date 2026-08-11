@@ -1,14 +1,15 @@
 {
   "name": "sources",
   "private": true,
-  "version": "0.7.11-dev.1",
+  "version": "0.7.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck:edge": "tsc -p tsconfig.edge.json"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

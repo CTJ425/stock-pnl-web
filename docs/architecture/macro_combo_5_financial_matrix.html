@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>總體經濟 Combo - 方案五：金融終端矩陣視圖 (Multi-Axis Wave + High-Density Table)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #0b0e14;
+      --panel-bg: #131722;
+      --border: #2a2e39;
+      --blue: #2962ff;
+      --red: #f23645;
+      --green: #089981;
+      --amber: #f59e0b;
+      --text: #d1d4dc;
+      --text-sub: #787b86;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, monospace; }
+    body { background-color: var(--bg-dark); color: var(--text); padding: 12px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; gap: 12px; font-size: 12px; }
+
+    .header { height: 40px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-weight: 700; }
+    .title { color: #fff; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+
+    .upper-chart { height: 260px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; padding: 12px; position: relative; }
+    .lower-table { flex: 1; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-y: auto; }
+
+    .matrix-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .matrix-table th, .matrix-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    .matrix-table th { color: var(--text-sub); font-weight: 700; text-transform: uppercase; }
+    .matrix-table tr:hover { background: rgba(255,255,255,0.03); }
+
+    .up { color: var(--red); font-weight: 700; }
+    .down { color: var(--green); font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="title">
+      <i class="fa-solid fa-terminal" style="color: var(--amber);"></i>
+      <span>Combo 方案五：專業金融終端 (多軸折波圖 + 高密度權重表格)</span>
+    </div>
+    <span style="color: var(--amber);">BLOOMBERG / TRADINGVIEW STYLE</span>
+  </header>
+
+  <!-- Upper Wave Line Chart -->
+  <div class="upper-chart">
+    <div style="font-size: 11px; color: var(--text-sub); font-weight: 700; margin-bottom: 6px;">
+      [MULTI-AXIS WAVE CHART] 大盤加權指數 vs. 三大法人動向折線圖
+    </div>
+    <div style="height: 220px;">
+      <canvas id="matrixChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Lower Financial Table -->
+  <div class="lower-table">
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th>TICKER / 指標代號</th>
+          <th>指標全銜</th>
+          <th>最新數據 (LAST)</th>
+          <th>前期變動 (CHG)</th>
+          <th>變動率 (%CHG)</th>
+          <th>52週最高 (52W H)</th>
+          <th>52週最低 (52W L)</th>
+          <th>狀態標記</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span style="color: var(--blue); font-weight: 700;">^TWII</span></td>
+          <td>台股加權指數 (TAIEX)</td>
+          <td class="up">23,850.20</td>
+          <td class="up">+185.20</td>
+          <td class="up">+0.78%</td>
+          <td>24,416.00</td>
+          <td>19,662.00</td>
+          <td><span style="color: var(--red);">高檔多頭</span></td>
+        </tr>
+        <tr>
+          <td><span style="color: var(--blue); font-weight: 700;">NET_FIN</span></td>
+          <td>外資單日買賣超</td>
+          <td class="up">+98.20 億</td>
+          <td class="up">+58.20 億</td>
+          <td class="up">+145.5%</td>
+          <td>+450.00 億</td>
+          <td>-680.00 億</td>
+          <td><span style="color: var(--red);">連 3 買</span></td>
+        </tr>
+        <tr>
+          <td><span style="color: var(--blue); font-weight: 700;">NET_ITC</span></td>
+          <td>投信單日買賣超</td>
+          <td class="up">+51.60 億</td>
+          <td class="up">+3.60 億</td>
+          <td class="up">+7.5%</td>
+          <td>+120.00 億</td>
+          <td>-45.00 億</td>
+          <td><span style="color: var(--red);">連 12 買</span></td>
+        </tr>
+        <tr>
+          <td><span style="color: var(--blue); font-weight: 700;">NET_PROP</span></td>
+          <td>自營商單日買賣超</td>
+          <td class="down">-7.00 億</td>
+          <td class="down">-17.00 億</td>
+          <td class="down">-170.0%</td>
+          <td>+85.00 億</td>
+          <td>-120.00 億</td>
+          <td><span style="color: var(--green);">連 2 賣</span></td>
+        </tr>
+        <tr>
+          <td><span style="color: var(--amber); font-weight: 700;">US_CPI</span></td>
+          <td>美國 CPI 年增率 (YoY)</td>
+          <td>2.60%</td>
+          <td class="down">-0.10%</td>
+          <td class="down">-3.7%</td>
+          <td>3.70%</td>
+          <td>2.60%</td>
+          <td><span style="color: var(--green);">創 52週新低</span></td>
+        </tr>
+        <tr>
+          <td><span style="color: var(--amber); font-weight: 700;">FED_RATE</span></td>
+          <td>美聯準會基準利率</td>
+          <td>4.62%</td>
+          <td>0.00</td>
+          <td>0.0%</td>
+          <td>5.50%</td>
+          <td>4.62%</td>
+          <td>降息階段</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('matrixChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['8/01', '8/02', '8/05', '8/06', '8/07', '8/08', '8/11'],
+        datasets: [{
+          label: '加權指數點數 (左軸)',
+          data: [23400, 23200, 23550, 23680, 23700, 23665, 23850],
+          borderColor: '#2962ff',
+          backgroundColor: 'rgba(41,98,255,0.08)',
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } },
+          y: { ticks: { color: '#787b86' }, grid: { color: '#2a2e39' } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

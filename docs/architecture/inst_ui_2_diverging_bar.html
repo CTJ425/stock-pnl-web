@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三大法人 - 發散長條圖</title>
+  <!--
+    Concept: Stacked/diverging bar chart per day
+    Fixes: No magnitude encoding. Provides an instant visual read of net market flow and which unit drove it.
+    Trade-offs: Exact small numbers are hard to read without interaction; lacks gross legs.
+    Cost: High (requires chart library or complex DOM/CSS positioning).
+  -->
+  <style>
+    :root {
+      --tv-bg-main: #ffffff;
+      --tv-bg-panel: #f8f9fa;
+      --tv-bg-hover: #f1f3f5;
+      --tv-border: #e9ecef;
+      --tv-text: #212529;
+      --tv-text-muted: #868e96;
+      --tv-up: #f23645;
+      --tv-down: #089981;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --tv-bg-main: #131722;
+        --tv-bg-panel: #1e222d;
+        --tv-bg-hover: #2a2e39;
+        --tv-border: #2a2e39;
+        --tv-text: #d1d4dc;
+        --tv-text-muted: #787b86;
+      }
+    }
+    body { background: var(--tv-bg-main); color: var(--tv-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 20px; font-size: 14px; overflow-x: hidden; }
+    .up { color: var(--tv-up); }
+    .down { color: var(--tv-down); }
+    .chart-container { max-width: 800px; margin: 20px auto; background: var(--tv-bg-panel); padding: 20px; border-radius: 8px; border: 1px solid var(--tv-border); }
+    .day-row { display: flex; align-items: center; margin-bottom: 16px; height: 32px; }
+    .day-label { width: 60px; font-weight: bold; }
+    .bar-area { flex: 1; position: relative; height: 100%; display: flex; align-items: center; border-left: 1px dashed var(--tv-border); border-right: 1px dashed var(--tv-border); }
+    .zero-line { position: absolute; left: 50%; top: -10px; bottom: -10px; width: 1px; background: var(--tv-text-muted); z-index: 0; }
+    .bar { height: 20px; position: absolute; cursor: pointer; transition: opacity 0.2s; z-index: 1; }
+    .bar:hover { opacity: 0.8; }
+    .bar.pos { background: var(--tv-up); border-left: 1px solid var(--tv-bg-main); }
+    .bar.neg { background: var(--tv-down); border-right: 1px solid var(--tv-bg-main); }
+    .total-label { width: 80px; text-align: right; font-weight: bold; }
+    
+    .bar-foreign { filter: brightness(1); }
+    .bar-trust { filter: brightness(0.7); }
+    .bar-dealerSelf { filter: brightness(1.3); }
+    .bar-dealerHedge { filter: brightness(0.5); }
+    .bar-foreignDealer { filter: brightness(1.5); }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <h2 style="margin-top: 0;">三大法人買賣超 (每日分佈)</h2>
+    <div style="text-align: center; margin-bottom: 20px; color: var(--tv-text-muted);">
+      <span>← 賣超 (綠)</span> | <span style="color: var(--tv-text);">0</span> | <span>買超 (紅) →</span>
+    </div>
+    <div id="app" aria-label="發散長條圖"></div>
+  </div>
+  <script>
+    const UNITS = [
+      { key: 'foreign', label: '外資', cls: 'bar-foreign' },
+      { key: 'trust', label: '投信', cls: 'bar-trust' },
+      { key: 'dealerSelf', label: '自營(自)', cls: 'bar-dealerSelf' },
+      { key: 'dealerHedge', label: '自營(避)', cls: 'bar-dealerHedge' },
+      { key: 'foreignDealer', label: '外資自營', cls: 'bar-foreignDealer' }
+    ];
+    const MOCK_DATA = [
+      { date: '07/31', foreign: -156.4, foreignDealer: -1.2, trust: 35.6, dealerSelf: -10.5, dealerHedge: -40.2, total: -172.7 },
+      { date: '08/01', foreign: -200.5, foreignDealer: 0.8, trust: 22.4, dealerSelf: -15.1, dealerHedge: -55.8, total: -248.2 },
+      { date: '08/04', foreign: -450.2, foreignDealer: -5.4, trust: 60.5, dealerSelf: -30.2, dealerHedge: -120.4, total: -545.7 },
+      { date: '08/05', foreign: 120.5, foreignDealer: 2.1, trust: 45.2, dealerSelf: 8.5, dealerHedge: -15.2, total: 161.1 },
+      { date: '08/06', foreign: 235.8, foreignDealer: -1.5, trust: 15.6, dealerSelf: 22.4, dealerHedge: 18.5, total: 290.8 },
+      { date: '08/07', foreign: -50.4, foreignDealer: 0.5, trust: 10.2, dealerSelf: -5.6, dealerHedge: -12.4, total: -57.7 },
+      { date: '08/08', foreign: 85.2, foreignDealer: 1.2, trust: 28.5, dealerSelf: 12.0, dealerHedge: 5.4, total: 132.3 }
+    ];
+
+    let html = '';
+    MOCK_DATA.forEach(d => {
+      html += `<div class="day-row">
+        <div class="day-label">${d.date}</div>
+        <div class="bar-area">
+          <div class="zero-line"></div>`;
+      let posOffset = 0;
+      let negOffset = 0;
+      UNITS.forEach(u => {
+         let val = d[u.key];
+         if(!val) return;
+         let w = Math.abs(val) / 500 * 40; 
+         if(val > 0) {
+            html += `<div class="bar pos ${u.cls}" style="left: calc(50% + ${posOffset}%); width: ${w}%" title="${u.label}: +${val.toFixed(1)}"></div>`;
+            posOffset += w;
+         } else {
+            html += `<div class="bar neg ${u.cls}" style="right: calc(50% + ${negOffset}%); width: ${w}%" title="${u.label}: ${val.toFixed(1)}"></div>`;
+            negOffset += w;
+         }
+      });
+      html += `</div><div class="total-label ${d.total > 0 ? 'up' : 'down'}">${d.total > 0 ? '+' : ''}${d.total.toFixed(1)}</div></div>`;
+    });
+    document.getElementById('app').innerHTML = html;
+  </script>
+</body>
+</html>

@@ -1,9 +1,73 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.10 探針編排抽成可測模組（0.7.9 收工判準＝資料真的到位）
-- Status: **released to main; DEV + PROD both on 0.7.10. Hit path now covered by tests, still unseen live**
-- Timestamp: 2026-08-11 19:30:00 Asia/Taipei
+- Action: 0.7.11 排程修正 + BUG-024（估值每天都是前一交易日）；命中→抓取→上畫面才收工，全鏈路實測通過
+- Status: **released; DEV + PROD on 0.7.11 with 7 cron jobs each. Mechanism proven live at 20:35–20:45**
+- Timestamp: 2026-08-11 20:50:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-11 20:50:00 Asia/Taipei (0.7.11 排程修正 + BUG-024)
+
+The user's goal: 「用探針觸發是否有最新資料可以抓取，有就呼叫 script 下載；抓到最新值就回報命中，
+**但要等實際資料呈現在畫面中才可以 Skip**」. That last clause is what the rest of this entry is about.
+
+**BUG-024 —— the valuation had been a trading day stale, every day.** Three faults pushing the same
+way, and fixing any two of them would not have helped:
+
+1. `BWIBBU_ALL` carries no date parameter and trails the market by a trading day. At 19:36 it served
+   1083 rows dated `1150810` while `BWIBBU_d?date=20260811` served `stat:OK` / 1084 rows.
+2. `readLatest` keys its cache by the day being built, so the first fetch of the day froze yesterday's
+   numbers under today's key —— four consecutive `chip_raw_cache` rows, none matching its own key.
+3. `generate-market-data` had **no cron**, so nothing re-ran it. Since 0.7.8 the probe follow-up was
+   the only automatic path, and for `bwibbu` it could never fire because of (1): **0 hits in 27 probes**.
+
+Fixed by moving probe *and* ingest to the dated endpoint (normalised by **header text** —— TWSE does
+not guarantee column order and a wrong valuation is silent), and by cutting a second seal found only
+because the first live hit still refused to land: `existing.dataDate >= targetDate` means 「這份是為哪個
+交易日建的」, not 「裡面的估值多新」, so a file built at 16:57 from the stale snapshot was sealed for the
+rest of the day. It now also requires the valuation to match the day actually fetched.
+
+**Skip now means 「使用者看得到」.** `bwibbu` compares the `fundamental/*.json` the frontend reads;
+`mops_*` compares whether that file's newest month/quarter advanced across the round, which needs a
+baseline photographed **before** any fetch runs —— hence `readBaseline` in `probeRound.ts`. Asking the
+fetch what it did only ever proved that we fetched.
+
+Also fixed: the landing check first sampled the bucket's first listing entry, which is `00403A` —— an
+ETF with no valuation at all, so it would have answered 「沒到位」 forever. It now reads the batch
+tickers and takes the max, so an ETF cannot veto a day that did land.
+
+**The missing shifts.** `market-data-daily` (Taipei 18:00/22:00) and `history-daily` (Taipei 12:30/21:30,
+half an hour after each MOPS probe slot) now exist in **both** environments —— created by cloning an
+existing job's command so the embedded CRON_SECRET is carried over without ever being printed. Seven
+jobs each side now. The probe remains the primary and earlier trigger; these are the outer retry.
+`bwibbu`'s probe window also opens at 15:00 instead of 17:30, since the old start was tuned to when the
+lagging mirror caught up —— no longer the question being asked.
+
+### ⚠️ The Edge Functions had never been typechecked
+
+The root `tsconfig` only includes `src`, so **nothing** typechecked `supabase/functions/`. A missing
+`rocDate` import passed `tsc` and `oxlint` clean and reached the DEV container; it would have been a
+runtime crash. Every 「tsc clean」 claimed earlier in this session was true only of the frontend.
+
+Added `npm run typecheck:edge` (`tsconfig.edge.json` + a minimal `Deno` ambient declaration). It is at
+**0 errors**, and it caught a second real defect on its first run: `ProbeTick.note` was typed `string`
+while `probeSource` can return null. Run it alongside `npm test` after touching anything under
+`supabase/functions/`.
+
+### Proven live on DEV, 20:35 → 20:45
+
+| 20260811 | hit | data_landed | note |
+| ---- | ---- | ---- | ---- |
+| 20:35 | ✅ | **false** | 已觸發 generate-market-data · 資料未到位，下輪重試 |
+| 20:40 | ✅ | **true** | 已觸發 generate-market-data · 資料已到位 |
+| next | —— | —— | `bwibbu` in `skipped` —— no probe, no fetch |
+
+That 20:35 row is the whole point: the source had hit, the fetch had run and returned ok, and the
+mechanism still refused to retire it —— because at that moment the data genuinely had not reached the
+file the UI reads. `bwibbu` had never once hit before today.
+
+Verification: 986/986 vitest, app tsc clean, **edge tsc clean**, oxlint 0 errors.
 
 ---
 

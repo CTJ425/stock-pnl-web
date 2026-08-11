@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V5: Modern Retail Neo-Fintech Pro - 現代新銳金融存股交易 (Robinhood / Webull Style)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --neo-bg: #0c0e15;
+      --neo-card: #141824;
+      --neo-border: #1e2436;
+      --neo-cyan: #00f0ff;
+      --neo-green: #00e676;
+      --neo-red: #ff3b5c;
+      --neo-text: #e2e8f0;
+      --neo-muted: #64748b;
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-sans: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--neo-bg);
+      color: var(--neo-text);
+      font-family: var(--font-sans);
+      padding-bottom: 50px;
+    }
+
+    /* Top Nav Bar */
+    .nav {
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--neo-border);
+      background: rgba(12, 14, 21, 0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--neo-cyan);
+    }
+    .neo-tabs { display: flex; gap: 8px; }
+    .n-btn {
+      background: transparent;
+      border: 1px solid var(--neo-border);
+      color: var(--neo-muted);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .n-btn.active {
+      background: var(--neo-cyan);
+      color: #000;
+      border-color: var(--neo-cyan);
+    }
+
+    .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+    .neo-view { display: none; }
+    .neo-view.active { display: block; }
+
+    /* Total Balance Banner */
+    .balance-banner {
+      background: linear-gradient(135deg, #141824 0%, #1c2336 100%);
+      border: 1px solid var(--neo-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .balance-num { font-family: var(--font-display); font-size: 38px; font-weight: 700; color: #fff; }
+
+    .stock-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    .stock-card {
+      background: var(--neo-card);
+      border: 1px solid var(--neo-border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: transform 0.2s;
+    }
+    .stock-card:hover { transform: translateY(-3px); border-color: var(--neo-cyan); }
+    .card-top { display: flex; justify-content: space-between; margin-bottom: 12px; }
+    .ticker { font-family: var(--font-display); font-weight: 700; font-size: 18px; color: #fff; }
+
+    .up { color: var(--neo-green); font-weight: 600; }
+    .down { color: var(--neo-red); font-weight: 600; }
+
+    .table-neo { width: 100%; border-collapse: collapse; }
+    .table-neo th { text-align: right; padding: 10px; border-bottom: 1px solid var(--neo-border); color: var(--neo-muted); }
+    .table-neo th:first-child, .table-neo td:first-child { text-align: left; }
+    .table-neo td { padding: 12px 10px; border-bottom: 1px solid rgba(30,36,54,0.5); text-align: right; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Nav Bar -->
+  <div class="nav">
+    <div class="logo">⚡ NEO-FINTECH PRO</div>
+    <div class="neo-tabs">
+      <button class="n-btn active" onclick="switchNeo('pnl')">1. 我的投資組合與損益</button>
+      <button class="n-btn" onclick="switchNeo('market')">2. 盤後市場與美股總經</button>
+      <button class="n-btn" onclick="switchNeo('admin')">3. 後台排程與服務監控</button>
+    </div>
+    <button style="background: var(--neo-cyan); color: #000; border: none; padding: 8px 18px; border-radius: 20px; font-weight: 700; cursor: pointer;">
+      + 下單交易
+    </button>
+  </div>
+
+  <div class="container">
+    <!-- VIEW 1 -->
+    <div id="neo-pnl" class="neo-view active">
+      <div class="balance-banner">
+        <div>
+          <div style="font-size: 13px; color: var(--neo-muted); text-transform: uppercase;">總投資帳戶資產淨值</div>
+          <div class="balance-num">NT$ 4,852,140</div>
+          <div style="margin-top: 6px;" class="up">▲ +NT$ 412,800 (+9.30%) 未實現收益</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 13px; color: var(--neo-muted);">已實現累積收益</div>
+          <div style="font-size: 22px; font-weight: 700; color: #fff;">+NT$ 852,300</div>
+          <div style="font-size: 12px; color: var(--neo-muted); margin-top: 4px;">歷史交易稅費: NT$ 34,120</div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 16px; color: #fff;">當前持股與保本滑桿 (Holdings & Break-Even)</h3>
+      <div class="stock-grid">
+        <div class="stock-card">
+          <div class="card-top">
+            <div>
+              <div class="ticker">2330 台積電</div>
+              <div style="font-size: 12px; color: var(--neo-muted);">3,000 股 | 均價 840.00</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; font-size: 18px; color: #fff;">985.00</div>
+              <div class="up">+17.11%</div>
+            </div>
+          </div>
+          <div style="background: rgba(0, 240, 255, 0.05); padding: 10px; border-radius: 8px; font-size: 12px;">
+            <div>目標保本賣價: <b style="color: var(--neo-cyan);">NT$ 843.50</b></div>
+            <div>估計未實現損益: <b class="up">+NT$ 431,240</b></div>
+          </div>
+        </div>
+
+        <div class="stock-card">
+          <div class="card-top">
+            <div>
+              <div class="ticker">2317 鴻海</div>
+              <div style="font-size: 12px; color: var(--neo-muted);">5,000 股 | 均價 192.00</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; font-size: 18px; color: #fff;">185.50</div>
+              <div class="down">-3.71%</div>
+            </div>
+          </div>
+          <div style="background: rgba(255, 59, 92, 0.05); padding: 10px; border-radius: 8px; font-size: 12px;">
+            <div>目標保本賣價: <b style="color: var(--neo-cyan);">NT$ 192.80</b></div>
+            <div>估計未實現損益: <b class="down">-NT$ 35,820</b></div>
+          </div>
+        </div>
+
+        <div class="stock-card">
+          <div class="card-top">
+            <div>
+              <div class="ticker">NVDA NVIDIA</div>
+              <div style="font-size: 12px; color: var(--neo-muted);">150 股 | 均價 $105.20</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; font-size: 18px; color: #fff;">$128.40</div>
+              <div class="up">+22.05%</div>
+            </div>
+          </div>
+          <div style="background: rgba(0, 240, 255, 0.05); padding: 10px; border-radius: 8px; font-size: 12px;">
+            <div>目標保本賣價: <b style="color: var(--neo-cyan);">$105.20</b></div>
+            <div>估計未實現損益: <b class="up">+$3,480.00</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2 -->
+    <div id="neo-market" class="neo-view">
+      <div style="background: var(--neo-card); border: 1px solid var(--neo-border); border-radius: 16px; padding: 24px;">
+        <h3 style="margin-bottom: 16px; color: var(--neo-cyan);">🌐 盤後台股籌碼與美國 FRED 總經資訊</h3>
+        <table class="table-neo">
+          <thead>
+            <tr><th>數據源</th><th>指標項目</th><th>數據與漲跌</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>台股盤後</td><td>外資買賣超</td><td class="up">+NT$ 18.25 億</td></tr>
+            <tr><td>台股盤後</td><td>投信買賣超</td><td class="up">+NT$ 42.10 億</td></tr>
+            <tr><td>FRED US</td><td>Core CPI (核心 CPI)</td><td>3.3% (YoY -0.1%)</td></tr>
+            <tr><td>FRED US</td><td>Core PCE (核心 PCE)</td><td>2.6% (YoY 0.0%)</td></tr>
+            <tr><td>FRED US</td><td>Non-Farm Payrolls</td><td class="up">+179K</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 3 -->
+    <div id="neo-admin" class="neo-view">
+      <div style="background: var(--neo-card); border: 1px solid var(--neo-border); border-radius: 16px; padding: 24px;">
+        <h3 style="margin-bottom: 16px; color: var(--neo-cyan);">⚙️ 後台系統排程與 Edge Functions 心跳</h3>
+        <table class="table-neo">
+          <thead>
+            <tr><th>Task Name</th><th>Status</th><th>Duration</th><th>Last Run</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>twse-chip-batch</td><td class="up">SUCCESS</td><td>1,240 ms</td><td>18:05:00</td></tr>
+            <tr><td>macro-daily</td><td class="up">SUCCESS</td><td>420 ms</td><td>06:00:00</td></tr>
+            <tr><td>source-probe-job</td><td class="up">ACTIVE (100%)</td><td>120 ms</td><td>15m 輪詢</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchNeo(viewId) {
+      document.querySelectorAll('.n-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.neo-view').forEach(v => v.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById('neo-' + viewId).classList.add('active');
+    }
+  </script>
+</body>
+</html>

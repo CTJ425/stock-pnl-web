@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>總經頁 · 資料新鮮度 UI 草案</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a222c;
+      --card2: #151c24;
+      --border: #2a3544;
+      --text: #e7edf4;
+      --muted: #8b9aab;
+      --accent: #5b9fd4;
+      --ok: #3d9a6a;
+      --warn: #c9a227;
+      --chip: #243040;
+      --radius: 12px;
+      --font: "Segoe UI", "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 28px 20px 80px;
+    }
+    h1 { font-size: 1.35rem; font-weight: 650; margin: 0 0 8px; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 0 0 10px; color: #c5d4e4; }
+    .lead { color: var(--muted); max-width: 52rem; margin-bottom: 28px; font-size: 0.95rem; }
+    .option {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #121820;
+      padding: 20px 20px 24px;
+      margin-bottom: 36px;
+      max-width: 720px;
+    }
+    .option-tag {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .option-tag .pill {
+      background: #1e3a52;
+      color: #9ec9ea;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .option-tag .pill.rec {
+      background: #1a3d2e;
+      color: #7dcea0;
+    }
+    .pros {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 12px 0 0;
+      padding-left: 1.1rem;
+    }
+    .pros li { margin: 4px 0; }
+
+    /* shared mock chrome */
+    .mock-page {
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+    .mock-nav {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mock-nav strong { color: var(--text); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .card:last-child { margin-bottom: 0; }
+    .head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 12px;
+    }
+    .head h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 650;
+    }
+    .stamp {
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: var(--card2);
+      border: 1px solid var(--border);
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+    .btn {
+      margin-left: auto;
+      font-size: 0.78rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: default;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .chip {
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+    .chip b { font-weight: 600; margin-right: 6px; color: #c5d0dc; }
+    .chip .v { color: #e8b4b4; font-variant-numeric: tabular-nums; }
+    .chip .v.g { color: #9dceb4; }
+    .fake-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .fake-table th {
+      text-align: left;
+      font-weight: 500;
+      padding: 6px 4px;
+      border-bottom: 1px solid var(--border);
+      color: #a8b6c6;
+    }
+    .fake-table td {
+      padding: 7px 4px;
+      border-bottom: 1px solid #1e2833;
+      color: #c5d0dc;
+    }
+    .fake-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .kpi {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .kpi .lbl { font-size: 0.75rem; color: var(--muted); }
+    .kpi .val { font-size: 1.25rem; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi .sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+    /* A: summary strip */
+    .fresh-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .fresh-cell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .fresh-cell .name {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .fresh-cell .main {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+      flex-shrink: 0;
+    }
+    .dot.warn { background: var(--warn); }
+    .fresh-cell .sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    /* B: one shell two sections */
+    .shell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .shell > .head {
+      padding: 14px 18px 0;
+      margin-bottom: 0;
+    }
+    .shell-section {
+      padding: 14px 18px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .shell-section:first-of-type { border-top: none; padding-top: 12px; }
+    .section-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin: 0 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* C: bad single bar (for contrast) */
+    .progress-bar-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 8px;
+    }
+    .bar {
+      height: 10px;
+      background: #243040;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #3d9a6a, #5b9fd4);
+    }
+    .strike {
+      text-decoration: line-through;
+      opacity: 0.55;
+    }
+    .badge-anti {
+      font-size: 0.7rem;
+      color: #e8a0a0;
+      border: 1px solid #5a3030;
+      background: #2a1818;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* D: front clean, admin only note */
+    .admin-hint {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px dashed #3d4a5c;
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: #121820;
+    }
+    .admin-hint code {
+      font-size: 0.85em;
+      color: #a8c4de;
+    }
+
+    @media (max-width: 560px) {
+      .fresh-strip, .kpi-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>總體經濟頁 · 資料新鮮度版面草案</h1>
+  <p class="lead">
+    對照現行：美國總經與台股市場各一張卡、各一條「資料更新於…」。
+    以下 A／B 為可實作方向；C 為不建議的「假合併進度條」；D 為前台極簡、狀態只放後台。
+    <strong>尚未寫入產品 code</strong>，僅供點選偏好。
+  </p>
+
+  <!-- ========== A ========== -->
+  <section class="option" id="opt-a">
+    <div class="option-tag">
+      <span class="pill rec">推薦</span>
+      <span>方案 A · 頁首新鮮度摘要列</span>
+    </div>
+    <h2>兩張內容卡保留，上方加一列「雙源狀態」</h2>
+    <div class="mock-page">
+      <div class="mock-nav">導覽 · <strong>總體經濟</strong></div>
+
+      <div class="fresh-strip" aria-label="資料新鮮度">
+        <div class="fresh-cell">
+          <span class="name">美國總經 · FRED</span>
+          <span class="main"><span class="dot"></span>內容 08-10 09:46</span>
+          <span class="sub">上次檢查 08-10 · 月／會議資料</span>
+        </div>
+        <div class="fresh-cell">
+          <span class="name">台股市場 · 證交所</span>
+          <span class="main"><span class="dot"></span>內容 08-07 18:02</span>
+          <span class="sub">共 120 個交易日 · 日頻盤後</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="head">
+          <h3>美國總體經濟</h3>
+          <span class="stamp">資料更新於 08-10 09:46</span>
+          <button type="button" class="btn">重新整理</button>
+        </div>
+        <div class="chips">
+          <div class="chip"><b>核心 CPI</b><span class="v g">+2.57%</span></div>
+          <div class="chip"><b>FOMC</b><span class="v">3.50–3.75%</span></div>
+          <div class="chip"><b>非農就業 NFP</b><span class="v g">−23 千人</span></div>
+          <div class="chip"><b>消費者信心 UMCSENT</b><span class="v">49.5</span></div>
+        </div>
+        <table class="fake-table">
+          <thead><tr><th>指標</th><th class="num">最新</th><th class="num">期別</th></tr></thead>
+          <tbody>
+            <tr><td>核心 CPI</td><td class="num">+2.57%</td><td class="num">2026 年 06 月</td></tr>
+            <tr><td>非農就業 NFP</td><td class="num">−23 千人</td><td class="num">2026 年 07 月</td></tr>
+            <tr><td>消費者信心 UMCSENT</td><td class="num">49.5</td><td class="num">2026 年 06 月</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="head">
+          <h3>台股市場</h3>
+          <span class="stamp">資料更新於 08-07 18:02（共 120 個交易日）</span>
+          <button type="button" class="btn">重新整理</button>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="lbl">成交金額</div>
+            <div class="val">3,842 億</div>
+            <div class="sub">2026-08-07（最近交易日）</div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">加權指數</div>
+            <div class="val">23,156</div>
+            <div class="sub">+128.4 · +0.56%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="pros">
+      <li>兩套排程語意分開，不會以為 CPI 與加權同一批更新</li>
+      <li>一眼對齊「內容時間 vs 檢查時間」</li>
+      <li>下方卡片可維持現狀，改動面小</li>
+    </ul>
+  </section>
+
+  <!-- ========== B ========== -->
+  <section class="option" id="opt-b">
+    <div class="option-tag">
+      <span class="pill">方案 B</span>
+      <span>同殼兩段 · 共用外框與（可選）一次重新整理</span>
+    </div>
+    <h2>外層一張卡，內部分「美國／台股」兩段，stamp 仍各寫各的</h2>
+    <div class="mock-page">
+      <div class="mock-nav">導覽 · <strong>總體經濟</strong></div>
+      <div class="shell">
+        <div class="head">
+          <h3>市場與總經</h3>
+          <button type="button" class="btn">全部重新整理</button>
+        </div>
+        <div class="shell-section">
+          <div class="section-title">
+            美國總體經濟
+            <span class="stamp">內容 08-10 09:46 · 檢查 08-10</span>
+          </div>
+          <div class="chips">
+            <div class="chip"><b>核心 CPI</b><span class="v g">+2.57%</span></div>
+            <div class="chip"><b>非農就業 NFP</b><span class="v g">−23 千人</span></div>
+            <div class="chip"><b>消費者信心 UMCSENT</b><span class="v">49.5</span></div>
+          </div>
+          <table class="fake-table">
+            <thead><tr><th>指標</th><th class="num">最新</th></tr></thead>
+            <tbody>
+              <tr><td>核心 CPI</td><td class="num">+2.57%</td></tr>
+              <tr><td>FOMC 目標利率</td><td class="num">3.50–3.75%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="shell-section">
+          <div class="section-title">
+            台股市場
+            <span class="stamp">內容 08-07 18:02 · 120 日</span>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="lbl">成交金額</div>
+              <div class="val">3,842 億</div>
+            </div>
+            <div class="kpi">
+              <div class="lbl">加權指數</div>
+              <div class="val">23,156</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="pros">
+      <li>視覺上「同一頁區塊」、減少兩張玻璃卡的割裂感</li>
+      <li>仍保留兩套時間戳，語意正確</li>
+      <li>「全部重新整理」要同時打 macro + market 兩個 API</li>
+    </ul>
+  </section>
+
+  <!-- ========== C anti ========== -->
+  <section class="option" id="opt-c">
+    <div class="option-tag">
+      <span class="pill" style="background:#3d2020;color:#e8a0a0">不建議</span>
+      <span>方案 C · 單一「今日就緒」進度條</span>
+    </div>
+    <h2 class="strike">把兩源揉成一條 2/2 progress</h2>
+    <div class="mock-page">
+      <div class="progress-bar-wrap">
+        <div class="progress-label">
+          <span>今日資料就緒 <span class="badge-anti">易誤導</span></span>
+          <span>2 / 2</span>
+        </div>
+        <div class="bar"><i></i></div>
+        <p style="margin:8px 0 0;font-size:0.75rem;color:var(--muted)">
+          問題：美國月資料多數日子<strong>本來就不會有新期</strong>，條卻顯示「滿了」或「缺一塊」，
+          使用者會以為系統壞了或 CPI 該有 7 月。
+        </p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>…以下內容同現況…</h3></div>
+        <p style="margin:0;font-size:0.85rem;color:var(--muted)">（略）</p>
+      </div>
+    </div>
+    <ul class="pros">
+      <li>看起來「有進度」，但定義不清（就緒＝有檔？有今日期別？排程跑過？）</li>
+      <li>與實際公布節奏衝突，重演「落後 1 期」誤解</li>
+    </ul>
+  </section>
+
+  <!-- ========== D ========== -->
+  <section class="option" id="opt-d">
+    <div class="option-tag">
+      <span class="pill">方案 D</span>
+      <span>前台只留資料日 · 進度全在後台</span>
+    </div>
+    <h2>總經頁更乾淨：只顯示「數字的期別」，不強調系統檢查時間</h2>
+    <div class="mock-page">
+      <div class="mock-nav">導覽 · <strong>總體經濟</strong></div>
+      <div class="card">
+        <div class="head">
+          <h3>美國總體經濟</h3>
+          <button type="button" class="btn">重新整理</button>
+        </div>
+        <div class="chips">
+          <div class="chip"><b>核心 CPI</b><span class="v g">+2.57%</span></div>
+          <div class="chip"><b>非農就業 NFP</b><span class="v g">−23 千人</span></div>
+          <div class="chip"><b>消費者信心 UMCSENT</b><span class="v">49.5</span></div>
+        </div>
+        <table class="fake-table">
+          <thead><tr><th>指標</th><th class="num">最新</th><th class="num">資料期</th></tr></thead>
+          <tbody>
+            <tr><td>核心 CPI</td><td class="num">+2.57%</td><td class="num">2026-06</td></tr>
+            <tr><td>非農就業 NFP</td><td class="num">−23 千人</td><td class="num">2026-07</td></tr>
+            <tr><td>消費者信心 UMCSENT</td><td class="num">49.5</td><td class="num">2026-06</td></tr>
+          </tbody>
+        </table>
+        <p style="margin:10px 0 0;font-size:0.75rem;color:var(--muted)">
+          不顯示「資料更新於／最後檢查」；期別即資料語意。
+        </p>
+      </div>
+      <div class="card">
+        <div class="head">
+          <h3>台股市場</h3>
+          <button type="button" class="btn">重新整理</button>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="lbl">成交金額</div>
+            <div class="val">3,842 億</div>
+            <div class="sub">最近交易日 2026-08-07</div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">加權指數</div>
+            <div class="val">23,156</div>
+            <div class="sub">2026-08-07</div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-hint">
+        管理後台「抓取狀況」才顯示：cron 班次、asOf／checkedAt、peer「落後 N 期」、source probe。
+        前台與後台分工與已拿掉的「落後 1 期」徽章一致。
+      </div>
+    </div>
+    <ul class="pros">
+      <li>最少誤解、最少視覺噪音</li>
+      <li>運維資訊不塞給一般使用者</li>
+      <li>若你需要「一眼知道排程有沒有死」，要開後台（或另做僅管理員可見列）</li>
+    </ul>
+  </section>
+
+  <p class="lead" style="margin-top:8px;margin-bottom:0">
+    檔案位置：<code>scratchpad/macro-freshness-ui-mockups.html</code>
+    · 用瀏覽器直接開啟即可。選定 A／B／D（或混搭）後再實作。
+  </p>
+</body>
+</html>
