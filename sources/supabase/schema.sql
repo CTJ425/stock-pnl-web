@@ -609,11 +609,16 @@ CREATE TABLE IF NOT EXISTS source_probe_tick (
     duration_ms   INT
 );
 
--- 0.7.8: a hit now triggers the matching fetch in the same invocation, and this column records how
---        that fetch went. It is the flag `pendingSources` reads: only `hit AND follow_up_ok` retires a
---        source for the day, so a failed (or never written) follow-up is retried on the next round.
---        NULL therefore means "not fetched yet" and must stay distinguishable from FALSE — no default.
-ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;
+-- 0.7.8: a hit now triggers the matching fetch in the same invocation, and this column records whether
+--        that fetch actually put the data on disk. It is the flag `pendingSources` reads: only
+--        `hit AND data_landed` retires a source for the day, so anything short of that is retried next
+--        round. NULL means "not verified yet" and must stay distinguishable from FALSE — no default.
+--
+--        It is deliberately **not** called follow_up_ok. A fetch can return cleanly and bring nothing:
+--        syncMarket answers reason:'empty' when upstream is bare, and generate-chips will rebuild a
+--        report from yesterday's T86 if today's has not landed. The value here is decided by
+--        `sourceLanded` reading each artifact's own self-reported date — see sourceProbePlan.ts.
+ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS data_landed BOOLEAN;
 
 ALTER TABLE source_probe_tick ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx

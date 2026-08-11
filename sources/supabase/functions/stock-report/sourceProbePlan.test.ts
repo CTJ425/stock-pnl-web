@@ -8,6 +8,7 @@ import {
   minutesFromHhmm,
   mopsIssueRocYmd,
   pendingSources,
+  sourceLanded,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type ProbeSourceId,
@@ -77,11 +78,58 @@ describe('sourceProbePlan', () => {
     ])
   })
 
-  // 命中但抓取失敗的源不算完成，下一輪要再探一次——否則當天就再也沒有第二次機會。
-  it('抓取失敗的源不會被跳過', () => {
+  // 命中但資料沒到位的源不算完成，下一輪要再探一次——否則當天就再也沒有第二次機會。
+  it('資料沒到位的源不會被跳過', () => {
     const planned: ProbeSourceId[] = ['bfi82u', 't86']
-    // bfi82u 命中且 sync-market 成功 → done；t86 命中但 generate-chips 失敗 → 不在 done 裡
+    // bfi82u 命中且資料已到位 → done；t86 命中但資料沒進來 → 不在 done 裡
     expect(pendingSources(planned, ['bfi82u'])).toEqual(['t86'])
+  })
+
+  // 0.7.8: 「收工」的判準是資料真的到位，不是抓取函式有沒有回 200。
+  describe('sourceLanded', () => {
+    const today = '20260811'
+
+    it('bfi82u 看的是當日場次已齊，不是 sync-market 有沒有跑', () => {
+      expect(sourceLanded('bfi82u', today, { marketSessionReady: true })).toBe(true)
+      expect(sourceLanded('bfi82u', today, { marketSessionReady: false })).toBe(false)
+      // 沒有證據就是沒到位——不能因為「抓取沒出錯」就當成到了
+      expect(sourceLanded('bfi82u', today, {})).toBe(false)
+    })
+
+    it('t86／margin 看報告裡該來源自報的日期，昨天的報告不算', () => {
+      expect(sourceLanded('t86', today, { chipStamps: { institutional: '2026-08-11' } })).toBe(true)
+      // generate-chips 在 T86 還沒上架時照樣產得出報告，但那是用昨天的資料做的
+      expect(sourceLanded('t86', today, { chipStamps: { institutional: '2026-08-10' } })).toBe(
+        false,
+      )
+      expect(sourceLanded('margin', today, { chipStamps: { margin: '20260811' } })).toBe(true)
+      expect(sourceLanded('margin', today, { chipStamps: { margin: null } })).toBe(false)
+    })
+
+    it('borrow 沿用 borrowHit：日期要走過今天，等於今天不算', () => {
+      expect(sourceLanded('borrow', today, { chipStamps: { borrow: '2026-08-12' } })).toBe(true)
+      // 盤中借券自帶當日額度，日期＝今天代表還沒翻日
+      expect(sourceLanded('borrow', today, { chipStamps: { borrow: '2026-08-11' } })).toBe(false)
+    })
+
+    it('bwibbu 比對估值檔自報的民國日期', () => {
+      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: '1150811' })).toBe(true)
+      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: '1150810' })).toBe(false)
+      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: null })).toBe(false)
+    })
+
+    it('mops_* 看這輪有沒有真的補進資料', () => {
+      expect(sourceLanded('mops_revenue', today, { mopsFilled: { revenue: 3 } })).toBe(true)
+      expect(sourceLanded('mops_revenue', today, { mopsFilled: { revenue: 0 } })).toBe(false)
+      expect(sourceLanded('mops_profit', today, { mopsFilled: { profit: 1 } })).toBe(true)
+      expect(sourceLanded('mops_profit', today, { mopsFilled: { revenue: 5 } })).toBe(false)
+    })
+
+    it('每個來源在沒有任何證據時一律不算到位', () => {
+      for (const id of PROBE_SOURCE_ORDER) {
+        expect(sourceLanded(id, today, {})).toBe(false)
+      }
+    })
   })
 
   it('每個探針來源都有對應的抓取——漏一個就會變成「量到了但沒人去拿」', () => {

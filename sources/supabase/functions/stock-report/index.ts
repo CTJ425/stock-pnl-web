@@ -181,8 +181,10 @@ import {
   followUpsFor,
   mopsIssueRocYmd,
   pendingSources,
+  sourceLanded,
   sourcesForTaipeiTime,
   ymdToRocYmd,
+  type LandingEvidence,
   type ProbeFollowUp,
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
@@ -2280,12 +2282,13 @@ async function probeSource(
 }
 
 /**
- * Sources that are finished for today —— turned green **and** the fetch that hit triggered came back OK.
+ * Sources that are finished for today —— turned green **and** their data is verifiably on disk.
  *
- * Hit alone is not enough (0.7.8). A source is skipped for the rest of the day, so if a failed
- * follow-up still counted as done, the day would end with 「量到了、卻沒拿回來」 —— the one outcome this
- * whole mechanism exists to prevent. `follow_up_ok = false` (or a row whose write-back never landed)
- * therefore leaves the source pending and the next round retries it.
+ * Hit alone is not enough (0.7.8). A source is skipped for the rest of the day, so if a follow-up that
+ * fetched nothing still counted as done, the day would end with 「量到了、卻沒拿回來」 —— the one outcome
+ * this whole mechanism exists to prevent. `data_landed = false` (or a row whose write-back never landed)
+ * therefore leaves the source pending and the next round retries it. Note it is `data_landed`, not
+ * "the fetch returned 200": see `gatherLandingEvidence`.
  *
  * A missing table or an RLS refusal returns an empty set, which degrades to the old behaviour (probe
  * everything in the window) rather than to "probe nothing" —— the probe going quiet would look exactly
@@ -2300,7 +2303,7 @@ async function readDoneSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId
       .select('source')
       .eq('taipei_ymd', todayYmd)
       .eq('hit', true)
-      .eq('follow_up_ok', true)
+      .eq('data_landed', true)
     if (error || !Array.isArray(data)) return new Set()
     return new Set(data.map((r) => r.source as ProbeSourceId))
   } catch {
@@ -2331,6 +2334,56 @@ async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, u
     case 'generate-history':
       return runGeneratePhase('history')
   }
+}
+
+/**
+ * Read back what the follow-up was supposed to produce.
+ *
+ * The point of this function is that it does **not** ask the fetch how it went. A fetch can return
+ * cleanly and still bring nothing: `syncMarket` answers `reason:'empty'` when upstream gave it nothing,
+ * and `generate-chips` will happily rebuild a report from **yesterday's** T86 if today's has not landed.
+ * Retiring a source on that would close the day's last retry on the strength of a false answer —— the
+ * exact failure this mechanism exists to prevent, one level up.
+ *
+ * So the evidence is the artifact's own self-reported date, gathered here and judged by `sourceLanded`.
+ * Cost is one storage read per family, only on a round that actually hit.
+ */
+async function gatherLandingEvidence(
+  sources: ProbeSourceId[],
+  todayYmd: string,
+  bodies: Map<ProbeFollowUp, Record<string, unknown>>,
+): Promise<LandingEvidence> {
+  const ev: LandingEvidence = {}
+
+  if (sources.includes('bfi82u')) {
+    const file = await downloadJson<MarketFile>('market/daily.json')
+    ev.marketSessionReady = isMarketSessionReady(file?.days ?? [], dashDate(todayYmd))
+  }
+
+  if (sources.some((s) => s === 't86' || s === 'margin' || s === 'borrow')) {
+    const chips = (await latestChipSources()) as { sources?: ReportSources } | null
+    const s = chips?.sources
+    ev.chipStamps = {
+      institutional: s?.institutional?.date ?? null,
+      margin: s?.margin?.date ?? null,
+      borrow: s?.borrow?.date ?? null,
+    }
+  }
+
+  if (sources.includes('bwibbu')) {
+    const body = bodies.get('generate-market-data')
+    ev.bwibbuRocYmd = typeof body?.bwibbuDate === 'string' ? body.bwibbuDate : null
+  }
+
+  if (sources.some((s) => s === 'mops_revenue' || s === 'mops_profit')) {
+    const body = bodies.get('generate-history')
+    ev.mopsFilled = {
+      revenue: Number(body?.revenueBackfilled ?? 0),
+      profit: Number(body?.profitBackfilled ?? 0),
+    }
+  }
+
+  return ev
 }
 
 /** One short line per follow-up —— it has to fit on a tick's note, next to the hit that caused it. */
@@ -2399,8 +2452,10 @@ async function handleProbe(): Promise<Response> {
     counts as done, so a throw, a budget cut-off or a killed invocation all leave the source pending and
     the next round retries it. The fixed schedules stay on as the outer retry.
   */
-  const followUps = followUpsFor(ticks.filter((t) => t.hit).map((t) => t.source))
+  const hitSources = ticks.filter((t) => t.hit).map((t) => t.source)
+  const followUps = followUpsFor(hitSources)
   const followUpResults: Array<{ action: ProbeFollowUp; ok: boolean; note: string }> = []
+  const bodies = new Map<ProbeFollowUp, Record<string, unknown>>()
   const deadline = startedAt + PROBE_FOLLOW_UP_BUDGET_MS
   for (const action of followUps) {
     if (Date.now() > deadline) {
@@ -2409,6 +2464,7 @@ async function handleProbe(): Promise<Response> {
     }
     try {
       const body = await runProbeFollowUp(action)
+      bodies.set(action, body)
       followUpResults.push({ action, ok: true, note: summariseFollowUp(action, body) })
     } catch (e) {
       followUpResults.push({ action, ok: false, note: e instanceof Error ? e.message : String(e) })
@@ -2416,25 +2472,36 @@ async function handleProbe(): Promise<Response> {
   }
 
   /*
-    Write the outcome back onto the tick that caused it. `follow_up_ok` is what `readDoneSourcesToday`
-    reads next round, and `note` is what a human reads: the admin log already prints `note` per tick, so
-    「命中 → 抓了什麼」 ends up on one line in the place someone is already looking, instead of only in an
-    HTTP response nobody keeps.
+    Then ask the artifacts, not the fetches. `ok` above only says the call returned; `landed` says the
+    source's data is actually on disk with today's date on it —— and only `landed` retires the source.
+  */
+  const evidence: LandingEvidence =
+    followUps.length > 0 ? await gatherLandingEvidence(hitSources, todayYmd, bodies) : {}
 
-    A failed write-back leaves `follow_up_ok` null, i.e. not done —— the source gets probed and fetched
+  /*
+    Write the outcome back onto the tick that caused it. `data_landed` is what `readDoneSourcesToday`
+    reads next round, and `note` is what a human reads: the admin log already prints `note` per tick, so
+    「命中 → 抓了什麼 → 資料到了沒」 ends up on one line in the place someone is already looking, instead
+    of only in an HTTP response nobody keeps.
+
+    A failed write-back leaves `data_landed` null, i.e. not done —— the source gets probed and fetched
     again next round. Erring towards a repeat is right: every follow-up short-circuits when the data is
     already in.
   */
+  const landedSources: ProbeSourceId[] = []
   for (const t of ticks) {
     if (!t.hit) continue
     const r = followUpResults.find((f) => f.action === PROBE_FOLLOW_UP[t.source])
     if (!r) continue
+    const landed = r.ok && sourceLanded(t.source, todayYmd, evidence)
+    if (landed) landedSources.push(t.source)
+    const trigger = r.ok ? `已觸發 ${r.action}：${r.note}` : `觸發失敗 ${r.action}：${r.note}`
     try {
       await db
         .from('source_probe_tick')
         .update({
-          follow_up_ok: r.ok,
-          note: `${t.note} · ${r.ok ? '已觸發' : '觸發失敗'} ${r.action}：${r.note}`,
+          data_landed: landed,
+          note: `${t.note} · ${trigger} · ${landed ? '資料已到位' : '資料未到位，下輪重試'}`,
         })
         .eq('taipei_ymd', todayYmd)
         .eq('taipei_time', slot)
@@ -2477,6 +2544,8 @@ async function handleProbe(): Promise<Response> {
     // Reported so a quiet round is readable as "already answered" rather than "the probe stopped working"
     skipped,
     followUps: followUpResults,
+    // Which hits are actually finished —— the ones that will be skipped from the next round on
+    landed: landedSources,
     ticks: ticks.map((t) => ({
       ...t,
       label: PROBE_SOURCE_LABELS[t.source],

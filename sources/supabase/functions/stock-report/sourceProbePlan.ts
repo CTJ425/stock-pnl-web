@@ -99,9 +99,13 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
  * 只是重複同一個已知答案——對 TWSE 多打幾十次沒有意義的請求，後台進度條也會被一排綠格灌爆，
  * 反而看不出「它暗了多久」這件唯一在量的事。
  *
- * 但「不再探」不能只看命中：0.7.8 起命中會直接觸發抓取，若那次抓取失敗而這裡照樣跳過，
+ * 但「不再探」不能只看命中：0.7.8 起命中會直接觸發抓取，若那次抓取沒把資料拿回來而這裡照樣跳過，
  * 這個源當天就再也沒有第二次機會——變成「量到了、卻沒拿回來」，正是這整套機制要避免的事。
- * 所以判斷條件是**命中 + 抓取成功**（`alreadyDone`），抓取失敗的源下一輪會被重探、重試。
+ * 所以判斷條件是**命中 + 資料確實到位**（`alreadyDone`，由 `sourceLanded` 判定），沒到位的下一輪重探、重試。
+ *
+ * 這裡的「到位」刻意不等於「抓取函式沒出錯」。抓取可以完全不拋錯卻什麼都沒帶回來
+ * （`syncMarket` 的 `reason:'empty'`、T86 還沒上架時照樣產得出來的昨日籌碼報告），
+ * 把那種情況記成收工，等於用一個假答案關掉當天所有重試機會。
  *
  * 代價要講清楚：**上游事後修訂會看不到**。這是刻意的取捨——修訂屬於抓取端
  * （`generate-chips` 的 `t86_revisions` 已經在管）的職責，不是探針的。
@@ -164,6 +168,71 @@ export function followUpsFor(hitSources: Iterable<ProbeSourceId>): ProbeFollowUp
     if (action) wanted.add(action)
   }
   return FOLLOW_UP_ORDER.filter((a) => wanted.has(a))
+}
+
+/**
+ * 「這個來源的資料真的進來了嗎」的證據（0.7.8）。
+ *
+ * 每一項都是**讀回成品後**才拿得到的東西，不是抓取函式自己的回報。抓取「有沒有出錯」與資料
+ * 「有沒有到位」是兩件事：`syncMarket` 可以回 `reason:'empty'` 而完全沒拋錯，`generate-chips`
+ * 也可以在 T86 還沒上架時照樣產出一份用昨天資料做的報告。只認前者，等於把「跑完了」當成「拿到了」。
+ */
+export interface LandingEvidence {
+  /** `market/daily.json` 今天的成交量值與三大法人都已在檔（`isMarketSessionReady`）。 */
+  marketSessionReady?: boolean
+  /** 產出的籌碼報告裡各來源自報的資料日期（`ReportSources`，YYYY-MM-DD）。 */
+  chipStamps?: {
+    institutional?: string | null
+    margin?: string | null
+    borrow?: string | null
+  }
+  /** 估值檔（BWIBBU）自報的民國日期，7 碼。 */
+  bwibbuRocYmd?: string | null
+  /** 這一輪 MOPS backfill 實際寫進去幾筆。 */
+  mopsFilled?: { revenue?: number; profit?: number }
+}
+
+/**
+ * 這個來源今天算不算「收工」——命中**且資料確實到位**。
+ *
+ * 判準逐源不同，因為「到位」的證據逐源不同：
+ * - `bfi82u`：`market/daily.json` 的當日場次已齊（量值 + 三大法人）。
+ * - `t86` / `margin`：籌碼報告裡該來源自報的日期＝今天。報告可能是用昨天的資料產的，
+ *   所以要看的是 stamp，不是「報告產出來了沒」。
+ * - `borrow`：沿用 `borrowHit` 的同一條判準——日期**走過**今天才算，因為借券盤中自帶當日額度。
+ * - `bwibbu`：估值檔自報的民國日期＝今天。
+ * - `mops_*`：這一輪確實補進了資料。**這是唯一一個看「有沒有做事」而不是「資料在不在」的來源**——
+ *   月營收／季報散在各檔個股的歷史檔裡，沒有一個便宜的單點可以問「今天的到了沒」。
+ *   代價有界：MOPS 一天只探 12:00／12:05／21:00／21:05 四槽，最多多跑一輪。
+ */
+export function sourceLanded(
+  source: ProbeSourceId,
+  todayYmd: string,
+  ev: LandingEvidence,
+): boolean {
+  switch (source) {
+    case 'bfi82u':
+      return ev.marketSessionReady === true
+    case 't86':
+      return normaliseYmd(ev.chipStamps?.institutional) === todayYmd
+    case 'margin':
+      return normaliseYmd(ev.chipStamps?.margin) === todayYmd
+    case 'borrow':
+      return borrowHit(ev.chipStamps?.borrow ?? null, todayYmd)
+    case 'bwibbu':
+      return !!ev.bwibbuRocYmd && ev.bwibbuRocYmd === ymdToRocYmd(todayYmd)
+    case 'mops_revenue':
+      return (ev.mopsFilled?.revenue ?? 0) > 0
+    case 'mops_profit':
+      return (ev.mopsFilled?.profit ?? 0) > 0
+  }
+}
+
+/** 'YYYY-MM-DD' | 'YYYYMMDD' → 'YYYYMMDD'；其餘一律 null，不猜。 */
+function normaliseYmd(v: string | null | undefined): string | null {
+  if (typeof v !== 'string') return null
+  const compact = v.replace(/-/g, '')
+  return /^\d{8}$/.test(compact) ? compact : null
 }
 
 /**
