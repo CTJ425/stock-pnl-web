@@ -98,6 +98,26 @@ export interface AdminStatus {
     borrow_date?: string
     borrow_rows?: number
   } | null
+  /**
+   * 0.7.3 probe-only experiment: 5-min ticks with hit/miss per source.
+   * `ticks` are oldest→newest for today + yesterday.
+   */
+  probeExperiment?: {
+    mode: string
+    labels: Record<string, string>
+    order: string[]
+    ticks: Array<{
+      taipei_ymd?: string
+      taipei_time?: string
+      source?: string
+      hit?: boolean
+      ok?: boolean
+      data_ymd?: string | null
+      note?: string | null
+      duration_ms?: number | null
+      probed_at?: string
+    }>
+  } | null
   durationMs: number
 }
 
@@ -159,6 +179,7 @@ export async function fetchAdminStatus(): Promise<AdminStatus | null> {
       market: d.market ?? null,
       batch: d.batch ?? null,
       probe: d.probe ?? null,
+      probeExperiment: d.probeExperiment ?? null,
       durationMs: typeof d.durationMs === 'number' ? d.durationMs : 0,
     }
   } catch {

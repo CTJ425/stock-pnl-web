@@ -1,12 +1,21 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Sparse cron 0.7.2 (T86/BFI two-shift experiment)
-- Status: **release + cron applied DEV/PROD**
-- Timestamp: 2026-08-11 11:20:00 Asia/Taipei
+- Action: 0.7.3 probe-only experiment (fixed crons off)
+- Status: **live DEV+PROD**
+- Timestamp: 2026-08-11 12:55:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 12:55:00 Asia/Taipei (0.7.3 probe-only)
+
+- Disabled fixed crons (nightly/market/macro/fx) on DEV+PROD; only `source-probe` `*/5 * * * *`
+- Table `source_probe_tick`; Edge multi-source probe with time windows; admin UI hit/miss chips
+- PROD stock-report redeployed; DEV volume-copy + functions restart
+- **No auto generate** — observe ~2 trading days then restore schedules
 
 ---
 

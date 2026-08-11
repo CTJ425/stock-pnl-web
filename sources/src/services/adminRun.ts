@@ -96,7 +96,7 @@ export const ADMIN_RUN_LABELS: Record<AdminRunJob, { title: string; cron: string
   probe: {
     title: '資料源探測',
     cron: 'source-probe',
-    hint: '估值 / 借券探測（寫 source_probe_log）',
+    hint: '0.7.3：每 5 分多源探針（寫 source_probe_tick 命中／沒中；不寫 reports）',
   },
 }
 

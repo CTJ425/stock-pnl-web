@@ -165,6 +165,7 @@ import {
 } from './fxRates.ts'
 import {
   decideSkip,
+  fingerprint,
   marginSigPart,
   nextT86State,
   rowsFingerprint,
@@ -172,6 +173,13 @@ import {
   t86Fingerprint,
   type T86State,
 } from './pollPlan.ts'
+import {
+  PROBE_SOURCE_LABELS,
+  PROBE_SOURCE_ORDER,
+  sourcesForTaipeiTime,
+  ymdToRocYmd,
+  type ProbeSourceId,
+} from './sourceProbePlan.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -2073,28 +2081,27 @@ async function logBatchRun(row: Record<string, unknown>): Promise<void> {
   }
 }
 
-// ----Data source probe (0.6.3)----
+// ----Data source probe (0.6.3 → 0.7.3 multi-source experiment)----
 
 /**
- * In each round, take a look at "Each source now announces which day it is" and write it into `source_probe_log`.
+ * 0.7.3 experiment: probe selected sources every 5 minutes **inside time windows**
+ * (see sourceProbePlan.ts). Writes `source_probe_tick` (hit/miss) for admin UI.
+ * Does **not** write reports / chip cache / product Storage.
  *
- * **Why should we have a separate path instead of remembering it in the batch**:
- * `batch_run_log.bwibbu_date` looks like it is recording this, but in fact it is recording **fast value**——
- * `readLatest` uses "the day we went to catch" as the cache key. After the first round of catching that day, we will eat the cache all day long.
- * 2026-07-27 Those 12 rounds are all recorded as the same `1150724`, **That is not 12 observations, it is the same one that was read 12 times**;
- * And once the batch is short-circuited, it is completely ignored (three rounds of blanks starting from 23:00 that night). Using it to determine "what time of update" will result in false answers.
- *
- * The probe deliberately does not write to cache, does not write to Storage, and does not touch any state of the batch: it only answers
- * "At this moment, this source says which day it is from and whether the content has changed."
- * The three gates in the batch (including "short circuit = zero external request") are not affected at all and are still verifiable.
- *
- * Only explore `BWIBBU_ALL` (116KB, daily) and borrow coupon `TWT96U` (244KB) - these two are currently the only ones
- * The source of "If you have a cache, you won't look at it all day". T86 and margin trading have been processed by `batch_run_log`
- * `t86_revisions` / `margin_today` Record it truthfully, no need to repeat it.
- * Monthly revenue and company information are updated monthly, so there is no point in checking it every 15 minutes.
- *
- * To stop: `SELECT cron.unschedule('source-probe');` - no need to redeploy.
+ * Hit = HTTP ok AND payload indicates "today's session data is present" (source-specific).
+ * Fixed generate/sync crons are deactivated during the experiment; restore after validation.
  */
+type ProbeTickResult = {
+  source: ProbeSourceId
+  hit: boolean
+  ok: boolean
+  data_ymd: string | null
+  fingerprint: string | null
+  rows: number | null
+  note: string | null
+  duration_ms: number
+}
+
 async function probeOne<T>(
   url: string,
   ok: (v: T) => boolean,
@@ -2116,45 +2123,231 @@ async function probeOne<T>(
   }
 }
 
+function taipeiWeekday(d: Date): boolean {
+  // 0=Sun … 6=Sat in Taipei
+  const t = new Date(d.getTime() + 8 * 60 * 60 * 1000)
+  const day = t.getUTCDay()
+  return day >= 1 && day <= 5
+}
+
+/** Floor HH:mm to 5-minute slot label (15:07 → 15:05) for stable UI grouping */
+function floorToFiveMin(hhmm: string): string {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm)
+  if (!m) return hhmm
+  const h = Number(m[1])
+  const min = Math.floor(Number(m[2]) / 5) * 5
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+
+async function probeSource(
+  id: ProbeSourceId,
+  todayYmd: string,
+): Promise<Omit<ProbeTickResult, 'source'>> {
+  const t0 = Date.now()
+  const fail = (note: string): Omit<ProbeTickResult, 'source'> => ({
+    hit: false,
+    ok: false,
+    data_ymd: null,
+    fingerprint: null,
+    rows: null,
+    note,
+    duration_ms: Date.now() - t0,
+  })
+
+  try {
+    if (id === 't86') {
+      const resp = await fetchJson<T86ResponseShape>(t86Url(todayYmd))
+      const hit = t86Ok(resp)
+      const data = resp.data ?? resp.tables?.[0]?.data ?? []
+      return {
+        hit,
+        ok: resp.stat === 'OK',
+        data_ymd: hit ? todayYmd : null,
+        fingerprint: hit ? t86Fingerprint(resp) : null,
+        rows: Array.isArray(data) ? data.length : null,
+        note: hit ? '當日 T86 有列' : '尚日 T86 尚無資料',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'bfi82u') {
+      const url = bfi82uDayUrl(todayYmd)
+      if (!url) return fail('bad ymd')
+      const raw = await fetchJson<unknown>(url)
+      const inst = parseBfi82u(raw)
+      const hit = !!inst?.buy && inst.buy.totalTwd != null
+      return {
+        hit,
+        ok: !!inst,
+        data_ymd: hit ? todayYmd : null,
+        fingerprint: inst ? fingerprint(inst) : null,
+        rows: inst ? 1 : null,
+        note: hit ? '當日 BFI82U 含買進' : '當日 BFI 尚未齊',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'margin') {
+      const resp = await fetchJson<MarginDatedResponse>(marginDatedUrl(todayYmd))
+      const hit = marginDatedOk(resp)
+      const table = (resp as { data?: unknown[] }).data
+      return {
+        hit,
+        ok: hit || (resp as { stat?: string }).stat === 'OK',
+        data_ymd: hit ? todayYmd : null,
+        fingerprint: hit ? fingerprint(table) : null,
+        rows: Array.isArray(table) ? table.length : null,
+        note: hit ? '當日融資融券有表' : '當日融資尚未公布',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'borrow') {
+      const r = await probeOne<BorrowDatedResponse>(
+        BORROW_DATED_URL,
+        borrowDatedOk,
+        borrowDatedDate,
+        (v) => v.data ?? [],
+      )
+      return {
+        hit: r.ok,
+        ok: r.ok,
+        data_ymd: r.date,
+        fingerprint: r.fp,
+        rows: r.rows,
+        note: r.ok ? '借券端點有資料' : '借券端點無資料',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'bwibbu') {
+      const r = await probeOne<Array<Record<string, string>>>(
+        BWIBBU_ALL_URL,
+        (v) => Array.isArray(v) && v.length > 0,
+        (v) => v[0]?.Date ?? null,
+        (v) => v,
+      )
+      const roc = ymdToRocYmd(todayYmd)
+      const hit = r.ok && !!r.date && !!roc && r.date === roc
+      return {
+        hit,
+        ok: r.ok,
+        data_ymd: r.date,
+        fingerprint: r.fp,
+        rows: r.rows,
+        note: hit ? '估值日=今日' : r.ok ? `估值日=${r.date ?? '?'}≠今日` : '估值抓取失敗',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'mops_revenue') {
+      const r = await probeOne<Array<Record<string, string>>>(
+        T187AP05_URL,
+        (v) => Array.isArray(v) && v.length > 0,
+        () => todayYmd,
+        (v) => v,
+      )
+      return {
+        hit: r.ok,
+        ok: r.ok,
+        data_ymd: r.ok ? todayYmd : null,
+        fingerprint: r.fp,
+        rows: r.rows,
+        note: r.ok ? '月營收彙整可讀' : '月營收彙整失敗',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    if (id === 'mops_profit') {
+      const r = await probeOne<Array<Record<string, string>>>(
+        T187AP17_URL,
+        (v) => Array.isArray(v) && v.length > 0,
+        () => todayYmd,
+        (v) => v,
+      )
+      return {
+        hit: r.ok,
+        ok: r.ok,
+        data_ymd: r.ok ? todayYmd : null,
+        fingerprint: r.fp,
+        rows: r.rows,
+        note: r.ok ? '季報彙整可讀' : '季報彙整失敗',
+        duration_ms: Date.now() - t0,
+      }
+    }
+    return fail('unknown source')
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : String(e))
+  }
+}
+
 async function handleProbe(): Promise<Response> {
   const startedAt = Date.now()
   const now = new Date()
+  const todayYmd = taipeiYmd(now)
+  const rawHhmm = taipeiHhmm(now)
+  const slot = floorToFiveMin(rawHhmm)
+  const weekday = taipeiWeekday(now)
+  const sources = sourcesForTaipeiTime(slot, weekday)
 
-  // The two sources are unrelated to each other and are explored concurrently; if either one fails, only its own set of fields will be null.
-  const [bwibbu, borrow] = await Promise.all([
-    probeOne<Array<Record<string, string>>>(
-      BWIBBU_ALL_URL,
-      (v) => Array.isArray(v) && v.length > 0,
-      (v) => v[0]?.Date ?? null, // 民國 7 碼，例 '1150724'
-      (v) => v,
-    ),
-    probeOne<BorrowDatedResponse>(
-      BORROW_DATED_URL,
-      borrowDatedOk,
-      borrowDatedDate, // rwd 版 title 自帶的日期（＝下一個交易日）
-      (v) => v.data ?? [],
-    ),
-  ])
+  const ticks: ProbeTickResult[] = []
+  // Sequential: keep wall time predictable on free tier
+  for (const id of sources) {
+    const r = await probeSource(id, todayYmd)
+    ticks.push({ source: id, ...r })
+  }
 
-  const row = {
-    taipei_ymd: taipeiYmd(now),
-    taipei_time: taipeiHhmm(now),
-    bwibbu_ok: bwibbu.ok,
-    bwibbu_date: bwibbu.date,
-    bwibbu_fp: bwibbu.fp,
-    bwibbu_rows: bwibbu.rows,
-    borrow_ok: borrow.ok,
-    borrow_date: borrow.date,
-    borrow_fp: borrow.fp,
-    borrow_rows: borrow.rows,
-    duration_ms: Date.now() - startedAt,
+  // Persist ticks (one row per source)
+  for (const t of ticks) {
+    try {
+      await db.from('source_probe_tick').insert({
+        taipei_ymd: todayYmd,
+        taipei_time: slot,
+        source: t.source,
+        hit: t.hit,
+        ok: t.ok,
+        data_ymd: t.data_ymd,
+        fingerprint: t.fingerprint,
+        rows: t.rows,
+        note: t.note,
+        duration_ms: t.duration_ms,
+      })
+    } catch {
+      // table missing or RLS — probe must not crash cron
+    }
   }
-  try {
-    await db.from('source_probe_log').insert(row)
-  } catch {
-    // Observation failure cannot bring down anything; the probe is just an instrument.
+
+  // Legacy source_probe_log: keep last bwibbu/borrow snapshot if those ran
+  const bw = ticks.find((t) => t.source === 'bwibbu')
+  const br = ticks.find((t) => t.source === 'borrow')
+  if (bw || br) {
+    try {
+      await db.from('source_probe_log').insert({
+        taipei_ymd: todayYmd,
+        taipei_time: slot,
+        bwibbu_ok: bw?.ok ?? null,
+        bwibbu_date: bw?.data_ymd ?? null,
+        bwibbu_fp: bw?.fingerprint ?? null,
+        bwibbu_rows: bw?.rows ?? null,
+        borrow_ok: br?.ok ?? null,
+        borrow_date: br?.data_ymd ?? null,
+        borrow_fp: br?.fingerprint ?? null,
+        borrow_rows: br?.rows ?? null,
+        duration_ms: Date.now() - startedAt,
+      })
+    } catch {
+      /* ignore */
+    }
   }
-  return json({ ok: true, ...row })
+
+  return json({
+    ok: true,
+    experiment: '0.7.3-probe-only',
+    taipei_ymd: todayYmd,
+    taipei_time: slot,
+    weekday,
+    sources,
+    ticks: ticks.map((t) => ({
+      ...t,
+      label: PROBE_SOURCE_LABELS[t.source],
+      tickLabel: `${slot.replace(':', '')} ${t.hit ? '中' : '沒中'}`,
+    })),
+    durationMs: Date.now() - startedAt,
+  })
 }
 
 /** The status left by the last execution today; if found (the first run, or the table does not exist), null will be returned*/
@@ -2701,23 +2894,40 @@ async function handleAdminStatus(): Promise<Response> {
   // Each paragraph is independent of each other. If any paragraph fails, the entire page should not be blank. The missing paragraph is represented by null:
   // The items that will be thrown (rpc / readLastRun / direct table lookup) are each linked to .catch(() => null),
   // downloadJson and latestChipSources/storageCoverage themselves swallow exceptions and return null.
-  const [schedules, manifest, macro, fx, lastRun, probe, chip, coverage, market] = await Promise.all([
-    db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
-    downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
-    downloadJson<MacroFile>('macro/us.json'),
-    downloadJson<FxFile>('fx/twd.json'),
-    readLastRun(todayYmd).catch(() => null),
-    db
-      .from('source_probe_log')
-      .select('taipei_ymd, taipei_time, bwibbu_ok, bwibbu_date, bwibbu_rows, borrow_ok, borrow_date, borrow_rows, probed_at')
-      .order('id', { ascending: false })
-      .limit(1)
-      .then((r) => r.data?.[0] ?? null)
-      .catch(() => null),
-    latestChipSources(),
-    storageCoverage(),
-    downloadJson<MarketFile>('market/daily.json'),
-  ])
+  // Last ~2 Taipei calendar days for probe experiment (yyyyMMdd)
+  const ymdDash = dashDate(todayYmd)
+  const d0 = new Date(`${ymdDash}T12:00:00+08:00`)
+  d0.setDate(d0.getDate() - 1)
+  const yestYmd = taipeiYmd(d0)
+
+  const [schedules, manifest, macro, fx, lastRun, probe, probeTicks, chip, coverage, market] =
+    await Promise.all([
+      db.rpc('admin_schedule_status').then((r) => r.data ?? null).catch(() => null),
+      downloadJson<{ ymd?: string; dataDate?: string; generatedAt?: string }>('manifest.json'),
+      downloadJson<MacroFile>('macro/us.json'),
+      downloadJson<FxFile>('fx/twd.json'),
+      readLastRun(todayYmd).catch(() => null),
+      db
+        .from('source_probe_log')
+        .select(
+          'taipei_ymd, taipei_time, bwibbu_ok, bwibbu_date, bwibbu_rows, borrow_ok, borrow_date, borrow_rows, probed_at',
+        )
+        .order('id', { ascending: false })
+        .limit(1)
+        .then((r) => r.data?.[0] ?? null)
+        .catch(() => null),
+      db
+        .from('source_probe_tick')
+        .select('taipei_ymd, taipei_time, source, hit, ok, data_ymd, note, duration_ms, probed_at')
+        .in('taipei_ymd', [todayYmd, yestYmd])
+        .order('id', { ascending: true })
+        .limit(2000)
+        .then((r) => r.data ?? [])
+        .catch(() => [] as unknown[]),
+      latestChipSources(),
+      storageCoverage(),
+      downloadJson<MarketFile>('market/daily.json'),
+    ])
 
   return json({
     ok: true,
@@ -2746,6 +2956,13 @@ async function handleAdminStatus(): Promise<Response> {
     market: marketStatus(market),
     batch: lastRun,
     probe,
+    /** 0.7.3 multi-source probe experiment (hit/miss per 5-min slot) */
+    probeExperiment: {
+      mode: 'probe-only',
+      labels: PROBE_SOURCE_LABELS,
+      order: PROBE_SOURCE_ORDER,
+      ticks: Array.isArray(probeTicks) ? probeTicks : [],
+    },
     durationMs: Date.now() - startedAt,
   })
 }

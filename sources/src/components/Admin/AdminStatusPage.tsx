@@ -110,6 +110,110 @@ function probeRows(probe: AdminStatus['probe']): string {
   return parts.length ? `（${parts.join('、')}）` : ''
 }
 
+/** "15:05" → "1505 中" / "1505 沒中" */
+function tickChipLabel(hhmm: string, hit: boolean): string {
+  return `${hhmm.replace(':', '')} ${hit ? '中' : '沒中'}`
+}
+
+function ProbeExperimentPanel({
+  exp,
+  todayYmd,
+}: {
+  exp: NonNullable<AdminStatus['probeExperiment']>
+  todayYmd: string
+}) {
+  const order = exp.order?.length ? exp.order : Object.keys(exp.labels ?? {})
+  const ticks = Array.isArray(exp.ticks) ? exp.ticks : []
+
+  const byDay = new Map<string, Map<string, Array<{ time: string; hit: boolean; note?: string }>>>()
+  for (const t of ticks) {
+    const ymd = typeof t.taipei_ymd === 'string' ? t.taipei_ymd : ''
+    const src = typeof t.source === 'string' ? t.source : ''
+    const time = typeof t.taipei_time === 'string' ? t.taipei_time : ''
+    if (!ymd || !src || !time) continue
+    if (!byDay.has(ymd)) byDay.set(ymd, new Map())
+    const bySrc = byDay.get(ymd)!
+    if (!bySrc.has(src)) bySrc.set(src, [])
+    const list = bySrc.get(src)!
+    const prev = list.find((x) => x.time === time)
+    if (prev) {
+      prev.hit = t.hit === true
+      prev.note = typeof t.note === 'string' ? t.note : prev.note
+    } else {
+      list.push({
+        time,
+        hit: t.hit === true,
+        note: typeof t.note === 'string' ? t.note : undefined,
+      })
+    }
+  }
+
+  const days = [...byDay.keys()].sort().reverse()
+  if (days.length === 0) {
+    return (
+      <p className="ast-note">
+        尚無探針紀錄。請確認 <code>source-probe</code> 已改為每 5 分、且 Edge 已 deploy；
+        窗外時段（如上午）本就不會寫入。
+      </p>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {days.map((ymd) => {
+        const bySrc = byDay.get(ymd)!
+        const isToday = ymd === todayYmd
+        return (
+          <div key={ymd}>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9rem' }}>
+              {ymd.slice(0, 4)}-{ymd.slice(4, 6)}-{ymd.slice(6, 8)}
+              {isToday ? '（今天）' : '（昨天）'}
+            </div>
+            {order.map((src) => {
+              const list = (bySrc.get(src) ?? []).slice().sort((a, b) => a.time.localeCompare(b.time))
+              if (list.length === 0) return null
+              const label = exp.labels?.[src] ?? src
+              const firstHit = list.find((x) => x.hit)
+              return (
+                <div key={src} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: '0.82rem', marginBottom: 6, color: 'var(--muted, #64748b)' }}>
+                    <strong style={{ color: 'inherit' }}>{label}</strong>
+                    <span style={{ marginLeft: 8 }}>
+                      {firstHit
+                        ? `首次命中 ${firstHit.time}`
+                        : `本窗尚未命中（${list.length} 次探測）`}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {list.map((x) => (
+                      <span
+                        key={x.time}
+                        title={x.note ?? ''}
+                        style={{
+                          fontSize: '0.75rem',
+                          fontFamily: 'ui-monospace, monospace',
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          border: '1px solid',
+                          borderColor: x.hit ? 'rgba(34,197,94,.45)' : 'rgba(148,163,184,.35)',
+                          background: x.hit ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.08)',
+                          color: x.hit ? '#16a34a' : '#64748b',
+                        }}
+                      >
+                        {tickChipLabel(x.time, x.hit)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** 'YYYYMMDD' → 'YYYY-MM-DD' (manifest uses undelimited format)*/
 function dashYmd(ymd: string | undefined): string {
   if (!ymd || ymd.length !== 8) return ''
@@ -491,6 +595,23 @@ export function AdminStatusPage() {
           </p>
         )}
       </div>
+
+      {/* ── 0.7.3 probe-only experiment: 1500 沒中 / 1505 中 ── */}
+      {data.probeExperiment && (
+        <div className="section glass" style={SECTION_PAD}>
+          <div className="rpt-section-head">
+            <h3 className="head-tight">探針實驗・命中時序（0.7.3）</h3>
+            <span className="source-tag section-stamp">
+              {data.probeExperiment.mode}・固定盤後 cron 已停用・每 5 分探測
+            </span>
+          </div>
+          <p className="ast-note" style={{ marginBottom: 12 }}>
+            顯示格式如 <strong>1500 沒中</strong>、<strong>1505 中</strong>（台北時分去掉冒號）。
+            日頻源僅在各自時間窗內探測；月營收／季報僅 12:00／21:00 附近。驗證約兩日後再決定正式班表。
+          </p>
+          <ProbeExperimentPanel exp={data.probeExperiment} todayYmd={data.todayYmd} />
+        </div>
+      )}
 
       {/* ── Macro: the day's shift axis (read the same way as the Taiwan one above) ── */}
       <div className="section glass" style={SECTION_PAD}>
