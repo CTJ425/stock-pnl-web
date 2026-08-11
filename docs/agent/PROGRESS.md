@@ -1,12 +1,54 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.7 探針命中即收工；個股籌碼矩陣＋長條圖移除；DEV 班表恢復
-- Status: **released to main (frontend); PROD Edge still on 0.7.4 v41)**
-- Timestamp: 2026-08-11 15:32:00 Asia/Taipei
+- Action: 0.7.8-dev.1 探針命中直接觸發抓取；抓取失敗才重探
+- Status: **code + tests green in tree; not committed, not deployed (needs DDL + user go-ahead)**
+- Timestamp: 2026-08-11 18:08:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 18:08:00 Asia/Taipei (0.7.8-dev.1 命中即抓取)
+
+Finished the half-written 0.7.8 that was sitting uncommitted in the tree. What was already there:
+`PROBE_FOLLOW_UP` / `followUpsFor` in `sourceProbePlan.ts`, the 45s-budgeted follow-up loop in
+`handleProbe`, and the note write-back. What was **not** there —— and what this round closes —— is the
+half the file's own doc comment had already promised.
+
+**The gap.** `pendingSources`' doc said the skip condition is 「命中 **+** 抓取成功」 and named the
+parameter `alreadyDone`; the code still took `alreadyHit` and `readHitSourcesToday` selected on
+`hit = true` alone. The two comments in the tree contradicted each other outright —— `index.ts` argued
+the opposite case ("this follow-up is the only shot the probe gets, that is why the fixed schedules
+stay on"). Left as it was, a follow-up that threw or ran out of budget would still retire its source
+for the day: 「量到了、卻沒拿回來」, the one outcome the whole mechanism exists to prevent.
+
+**Closed by** a nullable `source_probe_tick.follow_up_ok`, written by the same update that already
+carried the note, and read back by `readDoneSourcesToday` (`hit = true AND follow_up_ok = true`).
+Every failure direction now falls the safe way —— throw, budget cut-off, killed invocation, or a lost
+write-back all leave the column null, so the source stays pending and the next round retries it. The
+repeat is cheap because every follow-up short-circuits when the data is already in (proven 08-11: a
+second `sync-market` returned `skipped`). The fixed schedules stay on as the outer retry.
+
+**Also fixed: the admin paragraph had gone stale in the other direction.** 0.7.7 replaced a hardcoded
+「固定盤後 cron 已停用」 with 「探針本身不會觸發抓取」 —— which 0.7.8 makes false. Rewritten to state
+only what does not depend on what ran: the follow-up outcome is in the tick's note, and a failed fetch
+is retried. Its test now asserts that, plus the standing rule that this panel claims no cron state.
+
+`SPEC.md` § Data source probe still described the 0.6.3 two-source, "touches no batch state" design.
+Added a dated amendment: seven sources (0.7.3), hit retires the source (0.7.7), hit fetches (0.7.8),
+and the explicit note that 0.6.1's 「short circuit = zero external requests」 gate is **no longer
+provable through the probe path** —— traded deliberately.
+
+Verification: 964/964 vitest, tsc clean, oxlint 0 errors (4 pre-existing fast-refresh warnings).
+
+⛔ **Not done, on purpose —— needs the user**:
+1. **DDL first, then Edge.** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;`
+   If the bundle ships before the column exists, the `.eq('follow_up_ok', true)` filter errors, the set
+   comes back empty, and the probe degrades to 「全部照探」 —— it re-probes and re-fetches every 5 minutes.
+   Safe (nothing is silenced, fetches short-circuit) but wasteful; do not leave it in that state.
+2. No commit, no DEV volume-copy, no PROD anything. PROD Edge is still the 0.7.4 bundle (v41).
 
 ---
 

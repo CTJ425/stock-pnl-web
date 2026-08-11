@@ -176,11 +176,14 @@ import {
 import {
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
+  PROBE_FOLLOW_UP,
   borrowHit,
+  followUpsFor,
   mopsIssueRocYmd,
   pendingSources,
   sourcesForTaipeiTime,
   ymdToRocYmd,
+  type ProbeFollowUp,
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
 
@@ -2277,24 +2280,71 @@ async function probeSource(
 }
 
 /**
- * Sources that already turned green today.
+ * Sources that are finished for today —— turned green **and** the fetch that hit triggered came back OK.
+ *
+ * Hit alone is not enough (0.7.8). A source is skipped for the rest of the day, so if a failed
+ * follow-up still counted as done, the day would end with 「量到了、卻沒拿回來」 —— the one outcome this
+ * whole mechanism exists to prevent. `follow_up_ok = false` (or a row whose write-back never landed)
+ * therefore leaves the source pending and the next round retries it.
  *
  * A missing table or an RLS refusal returns an empty set, which degrades to the old behaviour (probe
  * everything in the window) rather than to "probe nothing" —— the probe going quiet would look exactly
- * like a source that never lands, and that is the one reading this experiment must never fake.
+ * like a source that never lands, and that is the one reading this experiment must never fake. The
+ * follow-ups are all short-circuiting (a second `sync-market` in the same session returns `skipped`),
+ * so the cost of that degradation is bounded.
  */
-async function readHitSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId>> {
+async function readDoneSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId>> {
   try {
     const { data, error } = await db
       .from('source_probe_tick')
       .select('source')
       .eq('taipei_ymd', todayYmd)
       .eq('hit', true)
+      .eq('follow_up_ok', true)
     if (error || !Array.isArray(data)) return new Set()
     return new Set(data.map((r) => r.source as ProbeSourceId))
   } catch {
     return new Set()
   }
+}
+
+/**
+ * Wall budget for the fetches a probe round triggers.
+ *
+ * Deliberately under the 60s `timeout_milliseconds` the cron gives this call: an over-run would be
+ * reported as a failed probe, losing the measurement as well as the fetch. Anything that does not fit
+ * is left to the fixed shift, which is what `note: '預算不足'` says.
+ */
+const PROBE_FOLLOW_UP_BUDGET_MS = 45_000
+
+/** Run one follow-up in-process —— same handlers the cron and the admin console call. */
+async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, unknown>> {
+  switch (action) {
+    case 'sync-market': {
+      const resp = await handleSyncMarket()
+      return (await resp.json()) as Record<string, unknown>
+    }
+    case 'generate-chips':
+      return runGeneratePhase('chips')
+    case 'generate-market-data':
+      return runGeneratePhase('market-data')
+    case 'generate-history':
+      return runGeneratePhase('history')
+  }
+}
+
+/** One short line per follow-up —— it has to fit on a tick's note, next to the hit that caused it. */
+function summariseFollowUp(action: ProbeFollowUp, body: Record<string, unknown>): string {
+  if (action === 'sync-market') {
+    return `${String(body.reason ?? '?')}，法人補 ${String(body.institutionalFilled ?? 0)} 天`
+  }
+  if (action === 'generate-chips') {
+    return `產出 ${String(body.generated ?? 0)} 檔`
+  }
+  if (action === 'generate-market-data') {
+    return `日線 ${String(body.dailySynced ?? 0)}／基本面 ${String(body.fundamentalSynced ?? 0)}`
+  }
+  return `月營收 ${String(body.revenueBackfilled ?? 0)}／季報 ${String(body.profitBackfilled ?? 0)}`
 }
 
 async function handleProbe(): Promise<Response> {
@@ -2305,9 +2355,10 @@ async function handleProbe(): Promise<Response> {
   const slot = floorToFiveMin(rawHhmm)
   const weekday = taipeiWeekday(now)
   const planned = sourcesForTaipeiTime(slot, weekday)
-  // 0.7.7: stop asking a source once it has answered today —— see pendingSources.
-  const hitToday = planned.length > 0 ? await readHitSourcesToday(todayYmd) : new Set<ProbeSourceId>()
-  const sources = pendingSources(planned, hitToday)
+  // 0.7.7/0.7.8: stop asking a source once it has answered **and been fetched** —— see pendingSources.
+  const doneToday =
+    planned.length > 0 ? await readDoneSourcesToday(todayYmd) : new Set<ProbeSourceId>()
+  const sources = pendingSources(planned, doneToday)
   const skipped = planned.filter((id) => !sources.includes(id))
 
   const ticks: ProbeTickResult[] = []
@@ -2334,6 +2385,62 @@ async function handleProbe(): Promise<Response> {
       })
     } catch {
       // table missing or RLS — probe must not crash cron
+    }
+  }
+
+  /*
+    A green tick now pulls the data in (0.7.8). Until here the probe was pure observation: it recorded
+    that the source had landed and left the fetching to a fixed shift, so a hit at 15:10 waited for the
+    15:15 flight —— and while the shifts were disabled, waited forever.
+
+    Ordering matters. Ticks are persisted **before** this runs, so the measurement survives even if the
+    fetch throws or the function is killed mid-way. What that order costs —— a tick already marked hit
+    while its fetch has not run —— is paid for by `follow_up_ok`: only a hit whose follow-up came back OK
+    counts as done, so a throw, a budget cut-off or a killed invocation all leave the source pending and
+    the next round retries it. The fixed schedules stay on as the outer retry.
+  */
+  const followUps = followUpsFor(ticks.filter((t) => t.hit).map((t) => t.source))
+  const followUpResults: Array<{ action: ProbeFollowUp; ok: boolean; note: string }> = []
+  const deadline = startedAt + PROBE_FOLLOW_UP_BUDGET_MS
+  for (const action of followUps) {
+    if (Date.now() > deadline) {
+      followUpResults.push({ action, ok: false, note: '預算不足，留給固定班表' })
+      continue
+    }
+    try {
+      const body = await runProbeFollowUp(action)
+      followUpResults.push({ action, ok: true, note: summariseFollowUp(action, body) })
+    } catch (e) {
+      followUpResults.push({ action, ok: false, note: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  /*
+    Write the outcome back onto the tick that caused it. `follow_up_ok` is what `readDoneSourcesToday`
+    reads next round, and `note` is what a human reads: the admin log already prints `note` per tick, so
+    「命中 → 抓了什麼」 ends up on one line in the place someone is already looking, instead of only in an
+    HTTP response nobody keeps.
+
+    A failed write-back leaves `follow_up_ok` null, i.e. not done —— the source gets probed and fetched
+    again next round. Erring towards a repeat is right: every follow-up short-circuits when the data is
+    already in.
+  */
+  for (const t of ticks) {
+    if (!t.hit) continue
+    const r = followUpResults.find((f) => f.action === PROBE_FOLLOW_UP[t.source])
+    if (!r) continue
+    try {
+      await db
+        .from('source_probe_tick')
+        .update({
+          follow_up_ok: r.ok,
+          note: `${t.note} · ${r.ok ? '已觸發' : '觸發失敗'} ${r.action}：${r.note}`,
+        })
+        .eq('taipei_ymd', todayYmd)
+        .eq('taipei_time', slot)
+        .eq('source', t.source)
+    } catch {
+      // never fail the probe over the write-back — a lost one only costs a repeat next round
     }
   }
 
@@ -2369,6 +2476,7 @@ async function handleProbe(): Promise<Response> {
     sources,
     // Reported so a quiet round is readable as "already answered" rather than "the probe stopped working"
     skipped,
+    followUps: followUpResults,
     ticks: ticks.map((t) => ({
       ...t,
       label: PROBE_SOURCE_LABELS[t.source],

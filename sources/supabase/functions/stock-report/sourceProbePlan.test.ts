@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PROBE_FOLLOW_UP,
+  PROBE_SOURCE_ORDER,
   borrowHit,
+  followUpsFor,
   formatProbeTickLabel,
   minutesFromHhmm,
   mopsIssueRocYmd,
   pendingSources,
   sourcesForTaipeiTime,
   ymdToRocYmd,
+  type ProbeSourceId,
 } from './sourceProbePlan'
 
 describe('sourceProbePlan', () => {
@@ -40,6 +44,7 @@ describe('sourceProbePlan', () => {
   })
 
   // 0.7.7: 探針只在量「幾點上架」，答案拿到就不必再問。
+  // 0.7.8: 「拿到答案」= 命中且抓取成功；呼叫端傳進來的是 done，不是 hit。
   it('命中過的源當天不再探，其餘照舊', () => {
     expect(pendingSources(['bfi82u', 't86', 'borrow'], ['bfi82u'])).toEqual(['t86', 'borrow'])
     // 全中 → 這一輪完全不打外部
@@ -50,6 +55,39 @@ describe('sourceProbePlan', () => {
     expect(pendingSources(['bfi82u', 't86', 'borrow'], ['t86'])).toEqual(['bfi82u', 'borrow'])
     // 窗外本來就沒東西可探
     expect(pendingSources([], ['bfi82u'])).toEqual([])
+  })
+
+  // 0.7.8: 命中不再只是記一筆，要真的把對應的抓取叫起來。
+  it('命中之後觸發對應的抓取，一輪多個源會去重', () => {
+    expect(followUpsFor(['bfi82u'])).toEqual(['sync-market'])
+    // 三個都是個股籌碼報告的欄位 → 只跑一次 generate-chips
+    expect(followUpsFor(['t86', 'margin', 'borrow'])).toEqual(['generate-chips'])
+    expect(followUpsFor(['bwibbu'])).toEqual(['generate-market-data'])
+    expect(followUpsFor(['mops_revenue', 'mops_profit'])).toEqual(['generate-history'])
+    // 沒有命中就什麼都不跑
+    expect(followUpsFor([])).toEqual([])
+  })
+
+  it('多個抓取同時要跑時，便宜的先跑（預算不足時長的才留給固定班表）', () => {
+    expect(followUpsFor(['t86', 'bfi82u'])).toEqual(['sync-market', 'generate-chips'])
+    expect(followUpsFor(['margin', 'bwibbu', 'mops_revenue'])).toEqual([
+      'generate-market-data',
+      'generate-history',
+      'generate-chips',
+    ])
+  })
+
+  // 命中但抓取失敗的源不算完成，下一輪要再探一次——否則當天就再也沒有第二次機會。
+  it('抓取失敗的源不會被跳過', () => {
+    const planned: ProbeSourceId[] = ['bfi82u', 't86']
+    // bfi82u 命中且 sync-market 成功 → done；t86 命中但 generate-chips 失敗 → 不在 done 裡
+    expect(pendingSources(planned, ['bfi82u'])).toEqual(['t86'])
+  })
+
+  it('每個探針來源都有對應的抓取——漏一個就會變成「量到了但沒人去拿」', () => {
+    for (const id of PROBE_SOURCE_ORDER) {
+      expect(PROBE_FOLLOW_UP[id]).toBeTruthy()
+    }
   })
 
   it('formatProbeTickLabel', () => {

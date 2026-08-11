@@ -564,14 +564,16 @@ export function AdminStatusPage() {
             日頻源僅在各自時間窗內探測；月營收／季報僅 12:00／21:00 附近。
           </p>
           {/*
-            0.7.7: this line exists because the panel used to claim 「固定盤後 cron 已停用」 —— a hardcoded
+            0.7.7 put a line here because the panel used to claim 「固定盤後 cron 已停用」 —— a hardcoded
             sentence the page cannot actually verify, and one that went stale the moment the schedules were
-            restored. What the reader needs is not the cron state but the fact that a green cell does not
-            move any data: the probe writes only source_probe_tick, on purpose (SPEC §「Data source probe」).
+            restored. 0.7.8 makes the same mistake possible in the other direction: the probe now *does*
+            fetch, so 「探針不會觸發抓取」 became the stale sentence. What is safe to state either way is
+            where the answer is written down —— the per-tick note —— rather than a claim about what ran.
           */}
           <p className="ast-note" style={{ marginBottom: 12 }}>
-            ⚠️ 命中只代表<strong>上游已經有資料</strong>，不代表已經抓回來。實際落地由固定盤後班表負責，
-            探針本身不會觸發抓取——所以「命中了但畫面沒更新」是正常的，要等該來源的班次跑完。
+            ⚠️ 命中代表<strong>上游已經有資料</strong>，0.7.8 起探針會在同一輪直接觸發對應的抓取。
+            抓了什麼、成功與否寫在該次紀錄的備註（展開該列可見）；抓取失敗的來源下一輪會再探一次，
+            固定盤後班表則作為最後的重試。
           </p>
           <ProbeExperimentPanel exp={data.probeExperiment} todayYmd={data.todayYmd} />
         </div>

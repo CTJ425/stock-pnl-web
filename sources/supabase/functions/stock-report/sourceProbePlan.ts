@@ -93,21 +93,77 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
 }
 
 /**
- * 命中之後就不再探這個源（0.7.7）。
+ * 命中**且已經抓回來**之後才不再探這個源（0.7.7 起，0.7.8 補上後半句）。
  *
  * 探針只回答一個問題：**這個源今天幾點上架**。答案一旦拿到就不會再變，之後每 5 分鐘再問一次
  * 只是重複同一個已知答案——對 TWSE 多打幾十次沒有意義的請求，後台進度條也會被一排綠格灌爆，
  * 反而看不出「它暗了多久」這件唯一在量的事。
+ *
+ * 但「不再探」不能只看命中：0.7.8 起命中會直接觸發抓取，若那次抓取失敗而這裡照樣跳過，
+ * 這個源當天就再也沒有第二次機會——變成「量到了、卻沒拿回來」，正是這整套機制要避免的事。
+ * 所以判斷條件是**命中 + 抓取成功**（`alreadyDone`），抓取失敗的源下一輪會被重探、重試。
  *
  * 代價要講清楚：**上游事後修訂會看不到**。這是刻意的取捨——修訂屬於抓取端
  * （`generate-chips` 的 `t86_revisions` 已經在管）的職責，不是探針的。
  */
 export function pendingSources(
   planned: ProbeSourceId[],
-  alreadyHit: Iterable<ProbeSourceId>,
+  alreadyDone: Iterable<ProbeSourceId>,
 ): ProbeSourceId[] {
-  const done = new Set(alreadyHit)
+  const done = new Set(alreadyDone)
   return planned.filter((id) => !done.has(id))
+}
+
+/**
+ * 命中之後要跑哪一支抓取（0.7.8）。
+ *
+ * 探針原本是純觀測：它只寫 `source_probe_tick`，抓資料完全靠固定班表。那代表**量到上游已經上架，
+ * 卻要再等到下一個班次才會去拿**——今天 BFI82U 15:10 就綠了，固定班表 15:15 才動，而在班表被停用
+ * 的那段期間更是永遠不會動。既然探針已經知道「現在有了」，就該由它直接把對應的抓取叫起來。
+ *
+ * 對應關係是「誰消費這個來源」，不是猜的：
+ * - `bfi82u`  → `sync-market`：全市場法人買賣超寫進 `market/daily.json`
+ * - `t86` / `margin` / `borrow` → `generate-chips`：三者都是個股籌碼報告的欄位
+ * - `bwibbu`  → `generate-market-data`：估值走 `syncFundamental`
+ * - `mops_*`  → `generate-history`：月營收／季報走 backfill
+ */
+export type ProbeFollowUp =
+  | 'sync-market'
+  | 'generate-chips'
+  | 'generate-market-data'
+  | 'generate-history'
+
+export const PROBE_FOLLOW_UP: Record<ProbeSourceId, ProbeFollowUp> = {
+  bfi82u: 'sync-market',
+  t86: 'generate-chips',
+  margin: 'generate-chips',
+  borrow: 'generate-chips',
+  bwibbu: 'generate-market-data',
+  mops_revenue: 'generate-history',
+  mops_profit: 'generate-history',
+}
+
+/**
+ * 固定執行順序：便宜的先跑。
+ *
+ * 一輪可能同時有兩個源轉綠（例如 21:00 的 margin 與 bwibbu），而 Edge 的 wall budget 有限——
+ * 先跑短的，長的即使被預算擋下也只是等下一班補，不會反過來讓短的陪葬。
+ */
+const FOLLOW_UP_ORDER: ProbeFollowUp[] = [
+  'sync-market',
+  'generate-market-data',
+  'generate-history',
+  'generate-chips',
+]
+
+/** 這一輪剛轉綠的來源要觸發哪些抓取（去重、固定順序）。 */
+export function followUpsFor(hitSources: Iterable<ProbeSourceId>): ProbeFollowUp[] {
+  const wanted = new Set<ProbeFollowUp>()
+  for (const id of hitSources) {
+    const action = PROBE_FOLLOW_UP[id]
+    if (action) wanted.add(action)
+  }
+  return FOLLOW_UP_ORDER.filter((a) => wanted.has(a))
 }
 
 /**

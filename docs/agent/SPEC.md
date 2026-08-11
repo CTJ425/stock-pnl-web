@@ -250,6 +250,28 @@ And "guessing the release time with fake answers" is the reason for the 0.6.1 re
 - Cost is approximately 11.5MB/day. After getting the answer, `SELECT cron.unschedule('source-probe');` can be stopped.
   No need to redeploy.
 
+#### Amendment — seven sources (0.7.3) and the probe now fetches (0.7.8)
+
+The two bullets above that say **"only two are explored"** and **"does not touch any state of the batch"** are
+history, not current behaviour. Read them as the 0.6.3 design and this block as what runs:
+
+- **Seven sources** since 0.7.3, one row per (5-minute slot × source) in `source_probe_tick`
+  (`source_probe_log` is still written for the legacy admin paragraph). `hit` is **source-specific** —
+  the rule per source is written out in `schema.sql` next to the DDL, because getting it wrong once already
+  produced a day of unusable ticks (0.7.3 → 0.7.4).
+- **A hit retires the source for the day** (0.7.7): the probe measures *when a source lands*, an answer that
+  cannot change, so re-asking only burns TWSE requests and floods the progress bar with green.
+- **A hit triggers the matching fetch in the same invocation** (0.7.8), mapped by `PROBE_FOLLOW_UP`
+  in `sourceProbePlan.ts`. This is the bullet that inverts 0.6.3's "independent path": the probe is no
+  longer pure observation, and the 0.6.1 gate "short circuit = zero external requests" is no longer provable
+  *through the probe path*. It was traded deliberately —— a hit at 15:10 otherwise waits for the 15:15 shift,
+  and waits forever whenever the shifts are off (which is exactly what happened between 0.7.3 and 0.7.7).
+- **Retirement requires the fetch to have succeeded**, not just the hit: `source_probe_tick.follow_up_ok`,
+  read back by `readDoneSourcesToday`. A failed, budget-cut or never-written follow-up leaves the source
+  pending so the next round retries it. The fixed after-hours schedules stay enabled as the outer retry.
+- **Accepted loss**: upstream revisions after the first hit are invisible to the probe. Revisions belong to
+  the ingest side, which already tracks them (`t86_revisions`).
+
 ### Front-end re-catch timing (0.6.2)
 
 The direct consequence of polling is that the report will be updated while the user is watching it. The individual stock analysis page was originally only captured once when the page was opened.

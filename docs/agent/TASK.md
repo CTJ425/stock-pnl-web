@@ -1,8 +1,8 @@
 # Task Backlog & Tracking (TASK.md)
 
-- Agent: Grok
+- Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 10:05:00 Asia/Taipei
+- Timestamp: 2026-08-11 18:08:00 Asia/Taipei
 
 ---
 
@@ -24,6 +24,9 @@
 - **0.7.7: probe stops re-asking a source once it hits that day** (`pendingSources`). DEV Edge deployed
   2026-08-11 15:28 (volume copy + container recreate) and confirmed on the scheduled 15:30 flight.
   ⚠️ **PROD Edge still runs the 0.7.4 bundle (v41)** —— merging `main` ships Pages only.
+- **0.7.8-dev.1: a hit now triggers the fetch itself**, and only a hit whose fetch succeeded retires the
+  source (`follow_up_ok`). Code + tests green **in the working tree only** —— not committed, not deployed.
+  Needs a DDL before the Edge half: see Task 85.
 - PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
 - ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
 - **Open bugs: none.**
@@ -57,6 +60,23 @@
 4. CRON_SECRET is set on Edge + embedded in pg_cron jobs (value not stored in git docs).
 
 ## 📋 Active Tasks
+
+### Task 85: 0.7.8 探針命中直接觸發抓取
+- **Status**: 🔄 **code + tests green in tree; uncommitted, undeployed**
+- **Agent**: Claude
+- **Timestamp**: 2026-08-11 18:08:00 Asia/Taipei
+
+1. ~~`PROBE_FOLLOW_UP` / `followUpsFor`; 45s-budgeted follow-up loop in `handleProbe`; note write-back~~ ✅
+   (was already in the tree, uncommitted)
+2. ~~Close the gap the doc had already promised: retire a source only on **hit + fetch OK**~~ ✅
+   `source_probe_tick.follow_up_ok` + `readDoneSourcesToday`; `pendingSources(planned, alreadyDone)`
+3. ~~Admin paragraph 「探針本身不會觸發抓取」 is now false —— rewritten + test updated~~ ✅
+4. ~~`SPEC.md` amendment (7 sources / hit retires / hit fetches / 0.6.1 gate no longer provable)~~ ✅
+5. ~~Version 0.7.8-dev.1 + CHANGELOG~~ ✅ · ~~964/964 vitest, tsc, oxlint~~ ✅
+6. **DDL on DEV** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;` —— ⏳
+   **must land before the Edge bundle**, else the probe degrades to re-probe + re-fetch every 5 min
+7. **Commit `dev`** —— ⏳ · **DEV volume-copy + functions recreate** —— ⏳ · **watch one live round** —— ⏳
+8. **PROD** (still on the 0.7.4 bundle v41) —— ⏳ explicit go-ahead only
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**

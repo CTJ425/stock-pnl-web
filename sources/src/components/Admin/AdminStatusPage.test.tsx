@@ -382,17 +382,21 @@ describe('AdminStatusPage 探針實驗面板', () => {
     expect(p.getByText('窗口未開')).toBeTruthy()
   })
 
-  it('說明命中不等於已抓取，且不再宣稱「固定盤後 cron 已停用」（0.7.7）', async () => {
+  it('說明命中會觸發抓取、去哪裡看結果，且不宣稱任何 cron 狀態（0.7.8）', async () => {
     render(<AdminStatusPage />)
     const p = await panel()
     /*
-      A green cell means the upstream endpoint has the data, not that anything fetched it —— the probe writes
-      source_probe_tick and nothing else. Without this sentence the panel reads as "hit, therefore updated",
-      which is what sent someone looking for a bug that was not there.
+      This paragraph has now been wrong in both directions: 0.7.7 replaced a hardcoded 「cron 已停用」, and
+      0.7.8 invalidated its replacement 「探針本身不會觸發抓取」. So what is asserted here is the part that
+      does not depend on what ran —— where the outcome is written down (the per-tick note) and that a failed
+      fetch is retried. Without it the panel reads as "hit, therefore updated", which is what sent someone
+      looking for a bug that was not there.
     */
-    expect(p.getByText(/命中只代表/)).toBeTruthy()
-    expect(p.getByText(/探針本身不會觸發抓取/)).toBeTruthy()
-    // The old copy asserted a cron state this page cannot see; it went stale the moment the schedules came back
+    expect(p.getByText(/命中代表/)).toBeTruthy()
+    expect(p.getByText(/直接觸發對應的抓取/)).toBeTruthy()
+    expect(p.getByText(/寫在該次紀錄的備註/)).toBeTruthy()
+    expect(p.getByText(/抓取失敗的來源下一輪會再探一次/)).toBeTruthy()
+    // No claim about a cron state this page cannot see —— that is what went stale in 0.7.7.
     expect(p.queryByText(/已停用/)).toBeNull()
   })
 
