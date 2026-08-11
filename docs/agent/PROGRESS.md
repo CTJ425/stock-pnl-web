@@ -1,12 +1,46 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.6 三大法人買賣超 UI 改為「單位 × 日期」矩陣
-- Status: **released to main**
-- Timestamp: 2026-08-11 14:50:00 Asia/Taipei
+- Action: 0.7.7-dev.1 個股籌碼三大法人改用「法人 × 日期」矩陣
+- Status: **on dev, awaiting release approval**
+- Timestamp: 2026-08-11 15:20:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 15:20:00 Asia/Taipei (0.7.7-dev.1 個股籌碼矩陣)
+
+Applied the 0.7.6 matrix to the per-stock chips table (`ChipsTab.tsx`) at the user's request.
+
+The individual-stock table had the same disease in a different form: rather than an accordion it was a
+**day picker** —— 法人 as rows, 買進／賣出／買賣超／約當張數／連買連賣 as columns, for exactly one
+selected day. 「外資這幾天在買還是在賣」 meant clicking through up to seven days and holding seven
+numbers in your head, and six of the seven days were always one click away. Same fix: 列＝五個法人,
+欄＝N 個交易日. The day picker then had nothing left to do and was removed.
+
+Two things differ from the macro version on purpose:
+- **Cells are 張, not 股.** A single stock's foreign net runs to eight digits in shares (+20,145,000);
+  seven of those side by side is a wall of digits. The exact share count moved to each cell's `title`,
+  so it is demoted rather than dropped.
+- **走勢 header carries no day count.** The macro spark reads 15 days against 7 columns and has to say
+  so; here the spark and the columns are the same 7 days.
+
+The streak deliberately keeps reading the net even when the cells show 買進/賣出 —— a gross leg has no
+direction, so 「連 N 買」 computed from it would be meaningless.
+
+Shared rather than duplicated: `heatStyle` moved into `chipFormat.ts` and the CSS class was renamed
+`.mac-inst-matrix` → `.inst-matrix` (plus `.inst-matrix-cum` / `.inst-metric-seg`). The two tables are
+the same encoding answering the same question at two scopes; two copies would drift.
+
+Verification: 963/963 vitest pass (2 StockDetailPage tests rewritten), tsc + oxlint + build clean.
+Chromium layout check against real markup + real `index.css`: 1280px needs no scrolling, 390px has 0
+page overflow with 405px of in-table scroll, the frozen 法人 column holds when scrolled fully right,
+and the tint resolves. Not verified: the logged-in page with live report data (Supabase auth, no
+credentials in session).
+
+Frontend only. **On `dev`, not released** —— awaiting the user's go-ahead to merge to `main`.
 
 ---
 

@@ -387,7 +387,7 @@ describe('TwMarketSection', () => {
     expect(spark.getAttribute('style')).toMatch(/width:\s*100px/)
     expect(spark.getAttribute('style')).toMatch(/height:\s*36px/)
     // The frozen unit column is what makes horizontal scrolling readable
-    expect(instTable(container).className).toContain('mac-inst-matrix')
+    expect(instTable(container).className).toContain('inst-matrix')
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {

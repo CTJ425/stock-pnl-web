@@ -14,15 +14,18 @@ import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { ChartLegend } from '../Charts/ChartLegend'
 import { CATEGORICAL_COLORS, CHART_COLORS } from '../Charts/chartColors'
+import { SparkCell } from '../Charts/SparkCell'
 import { streakAt } from './chipStreak'
 import {
   chipClass,
   fmtBalanceStreak,
   fmtInt,
   fmtLotsFromShares,
+  fmtLotsPlain,
   fmtSigned,
   fmtTradeStreak,
   fmtUpdatedAt,
+  heatStyle,
   shortDate,
 } from './chipFormat'
 
@@ -53,7 +56,23 @@ const SERIES_OPTIONS: Array<{ key: SeriesKey; label: string }> = [
   ...ROWS.map((r) => ({ key: r.key as SeriesKey, label: r.label })),
 ]
 
-const EMPTY_LEG: ChipLeg = { buy: null, sell: null, net: null }
+/**
+ * Which leg the matrix cells show (0.7.6), mirroring the market-wide table on 總體經濟.
+ *
+ * 買進／賣出 used to be two permanent columns; the number anyone reads is the net. As a switch they cost
+ * one control instead of two columns, which is what leaves room for seven day columns.
+ */
+type ChipMetric = 'net' | 'buy' | 'sell'
+
+const METRICS: ReadonlyArray<{ id: ChipMetric; label: string }> = [
+  { id: 'net', label: '買賣超' },
+  { id: 'buy', label: '買進' },
+  { id: 'sell', label: '賣出' },
+]
+
+/** Spark size in the 走勢 column —— the same as the market-wide matrix, so the two tables read alike. */
+const SPARK_W = 100
+const SPARK_H = 36
 
 /**
  * Block-level data timestamp.
@@ -73,23 +92,89 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
   )
 }
 
+/**
+ * 走勢 column: 「連 N 買／連 N 賣」above the spark.
+ *
+ * The streak describes the **法人**, so it sits on that 法人's row —— it used to be a per-day column read off
+ * whichever day the picker happened to be on.
+ */
+function ChipTrend({ nets, streak }: { nets: Array<number | null>; streak: number }) {
+  // Gaps are dropped rather than zero-filled: a missing day is not a day of no trading, and joining across
+  // it would draw a slope that never happened.
+  const points = nets.filter((v): v is number => v !== null)
+  if (points.length === 0) return <span className="hint">—</span>
+  const last = points[points.length - 1]
+  const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <span
+        className={streak ? chipClass(streak) : 'hint'}
+        style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: streak ? 600 : undefined }}
+      >
+        {fmtTradeStreak(streak)}
+      </span>
+      <SparkCell
+        points={points}
+        color={color}
+        width={SPARK_W}
+        height={SPARK_H}
+        ariaLabel={`近 ${points.length} 個交易日的買賣超走勢`}
+      />
+    </div>
+  )
+}
+
 export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
-  // The table defaults to the latest trading day, but you can look back to any day within 7 days.
-  const [dayIndex, setDayIndex] = useState(lastIndex)
+  const [metric, setMetric] = useState<ChipMetric>('net')
   const [series, setSeries] = useState<SeriesKey>('all')
 
-  const safeIndex = Math.min(Math.max(dayIndex, 0), Math.max(lastIndex, 0))
-  const viewDay = history[safeIndex] ?? null
-  const isLatestDay = safeIndex === lastIndex
-  // When switching to an old date, see the chips on that day; if history is empty, return to the latest value at the top level
-  const viewInst = history.length > 0 ? (viewDay?.institutional ?? null) : institutional
+  /*
+    Columns of the matrix (0.7.6). Normally the 7-day history; when a report carries no history at all it
+    falls back to the single latest day, which is what the day-picker version did in the same situation.
+  */
+  const instDays =
+    history.length > 0
+      ? history
+      : institutional
+        ? [{ date: report.dataDate, institutional }]
+        : []
+  const hasInst = instDays.some((d) => d.institutional)
 
   const labels = history.map((d) => shortDate(d.date))
   /** Transactions of a certain column (legal person) in super sequence, from oldest to newest*/
   const netsOf = (pick: (i: InstitutionalChip) => ChipLeg): Array<number | null> =>
     history.map((d) => (d.institutional ? pick(d.institutional).net : null))
+
+  /*
+    One row per 法人 (0.7.6). Everything a row needs is computed here rather than inside the JSX: the day
+    cells in lots, the row's own maximum for the tint, the N-day sum and the streak.
+
+    Lots (張), not shares: a single stock's foreign net runs to eight digits in shares (+20,145,000), and
+    seven of those side by side is a wall of digits. The exact share count is kept on each cell's `title`,
+    so nothing is actually lost —— it just stops being the thing you have to read first.
+  */
+  const matrixRows = ROWS.map(({ key, label, pick }) => {
+    const legs = instDays.map((d) => (d.institutional ? pick(d.institutional) : null))
+    const values = legs.map((l) => (l === null ? null : (l[metric] ?? null)))
+    const lots = values.map((v) => (v === null ? null : v / 1000))
+    const rowMax = Math.max(0, ...lots.map((v) => (v === null ? 0 : Math.abs(v))))
+    const known = values.filter((v): v is number => v !== null)
+    // Streak and spark read the net regardless of which leg the cells show —— 「連 N 買」 is about direction,
+    // and a gross buy leg has no direction to speak of.
+    const nets = netsOf(pick)
+    return {
+      key,
+      label,
+      values,
+      lots,
+      rowMax,
+      cum: known.length === 0 ? null : known.reduce((a, b) => a + b, 0),
+      streak: streakAt(nets, nets.length - 1),
+      nets,
+    }
+  })
 
   /*
     In side-by-side mode an individual investor type can be switched off (0.6.27, the same interaction the
@@ -157,69 +242,86 @@ export function ChipsTab({ report }: { report: ReportData }) {
             三大法人買賣超
             <SourceTag stamp={report.sources?.institutional} />
           </h3>
-          {history.length > 1 && (
-            <div className="chip-toggle" role="group" aria-label="選擇要看哪一個交易日">
-              {history.map((d, i) => (
-                <button
-                  key={d.date}
-                  type="button"
-                  className={i === safeIndex ? 'chip-btn active' : 'chip-btn'}
-                  onClick={() => setDayIndex(i)}
-                  title={d.date}
-                >
-                  {shortDate(d.date)}
-                  {i === lastIndex && ' 最新'}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="inst-metric-seg" role="group" aria-label="切換金額口徑">
+            {METRICS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={metric === m.id}
+                onClick={() => setMetric(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {viewInst === null ? (
-          <p className="hint">
-            {viewDay ? `${viewDay.date} 查無此股資料。` : '查無此股當日資料。'}
-          </p>
+        {!hasInst ? (
+          <p className="hint">查無此股當日資料。</p>
         ) : (
           <>
+            {/*
+              法人 × 日期 matrix (0.7.6), the same shape as 總體經濟 → 台股市場.
+
+              It replaces 「一次看一天，用上面的日期鈕切換」: answering 「外資這幾天在買還是在賣」 used to mean
+              clicking through up to seven days and remembering each number, and six of the seven days were
+              one click away at all times. All of them are now on screen at once, so the day picker has
+              nothing left to do and is gone.
+            */}
             <div className="table-scroll">
-              <table className="data-table">
+              <table className="data-table inst-matrix" aria-label="三大法人買賣超矩陣">
                 <thead>
                   <tr>
                     <th>法人</th>
-                    <th className="num">買進（股）</th>
-                    <th className="num">賣出（股）</th>
-                    <th className="num">買賣超（股）</th>
-                    <th className="num">約當張數</th>
-                    <th className="num">連買連賣</th>
+                    {instDays.map((d) => (
+                      <th key={d.date} className="num">
+                        {shortDate(d.date)}
+                      </th>
+                    ))}
+                    <th className="num">{instDays.length} 日累計</th>
+                    <th>走勢</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ROWS.map(({ key, label, pick }) => {
-                    const leg = pick(viewInst) ?? EMPTY_LEG
-                    const streak = streakAt(netsOf(pick), safeIndex)
-                    return (
-                      <tr key={key} className={key === 'total' ? 'row-total' : undefined}>
-                        <td>{label}</td>
-                        <td className="num">{fmtInt(leg.buy)}</td>
-                        <td className="num">{fmtInt(leg.sell)}</td>
-                        <td className={`num ${chipClass(leg.net)}`}>{fmtSigned(leg.net)}</td>
-                        <td className={`num ${chipClass(leg.net)}`}>{fmtLotsFromShares(leg.net)}</td>
-                        <td className={`num ${chipClass(streak)}`}>{fmtTradeStreak(streak)}</td>
-                      </tr>
-                    )
-                  })}
+                  {matrixRows.map((r) => (
+                    <tr key={r.key} className={r.key === 'total' ? 'row-total' : undefined}>
+                      <td>{r.label}</td>
+                      {r.lots.map((v, i) => (
+                        <td
+                          key={instDays[i].date}
+                          /* Only the net is signed and coloured —— 買進／賣出 are gross and always positive. */
+                          className={`num ${metric === 'net' ? chipClass(v) : ''}`}
+                          style={metric === 'net' ? heatStyle(v, r.rowMax) : undefined}
+                          title={
+                            r.values[i] === null
+                              ? undefined
+                              : `${instDays[i].date} ${fmtInt(r.values[i])} 股`
+                          }
+                        >
+                          {metric === 'net'
+                            ? fmtLotsFromShares(r.values[i])
+                            : fmtLotsPlain(r.values[i])}
+                        </td>
+                      ))}
+                      <td
+                        className={`num inst-matrix-cum ${metric === 'net' ? chipClass(r.cum) : ''}`}
+                        title={r.cum === null ? undefined : `${fmtSigned(r.cum)} 股`}
+                      >
+                        {metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}
+                      </td>
+                      <td>
+                        <ChipTrend nets={r.nets} streak={r.streak} />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
             <p className="hint">
-              {viewDay && (
-                <>
-                  這是 <strong>{viewDay.date}</strong> 的數字
-                  {isLatestDay ? '（最近交易日）' : '（點上面的日期可切換）'}。
-                </>
-              )}
-              買賣超是買進減掉賣出，紅色代表法人當天買得比賣得多。單位是股，1 張等於 1000 股。
-              「連買連賣」是算到這一天為止連續幾天同方向。
+              數字是<strong>約當張數</strong>（1 張 = 1000 股），滑鼠停在格子上可看確切股數。
+              買賣超是買進減掉賣出，紅色代表法人當天買得比賣得多；底色深淺是該法人自己這幾天的相對強度。
+              「連買連賣」算到最近交易日為止連續幾天同方向，看的一律是買賣超，不隨上方口徑改變。
             </p>
           </>
         )}

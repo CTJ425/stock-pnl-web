@@ -8,7 +8,7 @@
  * Unit trap: The source is **yuan**, and the screen is converted into **billion yuan** (the market's single-day turnover is 885.5 billion,
  * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronsDownUp, ChevronsUpDown, RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
@@ -20,7 +20,7 @@ import { CandleChart } from '../Charts/CandleChart'
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
-import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 
 /** Spark for the institutional 走勢 column (0.7.6: one per unit row, was one per day). */
 const DAY_SPARK_W = 100
@@ -149,20 +149,6 @@ function unitTrend(
     for (let i = values.length - 1; i >= 0 && Math.sign(values[i]) === sign; i--) streak++
   }
   return { points: values.slice(-TREND_DAYS), streak }
-}
-
-/**
- * Cell tint by magnitude, **relative to the largest number in that row**.
- *
- * Row-relative on purpose: 外資 moves in hundreds of 億 and 外資自營商 in single digits. One table-wide
- * scale would leave every row but 外資 and 合計 flat, which says nothing about that unit's own big days ——
- * and "which day was big for this unit" is exactly what the row is for.
- */
-function heatStyle(v: number | null, rowMax: number): CSSProperties | undefined {
-  if (v === null || v === 0 || rowMax === 0) return undefined
-  const pct = (6 + Math.min(1, Math.abs(v) / rowMax) * 30).toFixed(1)
-  const color = v > 0 ? CHART_COLORS.up : CHART_COLORS.down
-  return { background: `color-mix(in srgb, ${color} ${pct}%, transparent)` }
 }
 
 /** Sum of the days that have a number; `null` only when none of them do (≠ a real 0). */
@@ -481,7 +467,7 @@ export function TwMarketSection() {
           三大法人{METRICS.find((m) => m.id === instMetric)!.label}（億元）・近 {instDays.length}{' '}
           個交易日
         </div>
-        <div className="mac-metric-seg" role="group" aria-label="切換金額口徑">
+        <div className="inst-metric-seg" role="group" aria-label="切換金額口徑">
           {METRICS.map((m) => (
             <button
               key={m.id}
@@ -496,7 +482,7 @@ export function TwMarketSection() {
         </div>
       </div>
       <div className="table-scroll" style={{ marginTop: 12 }}>
-        <table className="data-table mac-inst-matrix" aria-label="三大法人買賣超">
+        <table className="data-table inst-matrix" aria-label="三大法人買賣超">
           <thead>
             <tr>
               <th>單位</th>
@@ -526,7 +512,7 @@ export function TwMarketSection() {
                     {instMetric === 'net' ? fmtBillionSigned(v) : fmtBillion(v)}
                   </td>
                 ))}
-                <td className={`num mac-inst-cum ${instMetric === 'net' ? chipClass(r.cum) : ''}`}>
+                <td className={`num inst-matrix-cum ${instMetric === 'net' ? chipClass(r.cum) : ''}`}>
                   {instMetric === 'net' ? fmtBillionSigned(r.cum) : fmtBillion(r.cum)}
                 </td>
                 <td>

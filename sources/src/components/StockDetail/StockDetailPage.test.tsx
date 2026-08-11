@@ -170,46 +170,75 @@ describe('StockDetailPage', () => {
     expect(container.querySelector('.detail-head')!.textContent).not.toContain('資料日期')
   })
 
-  it('三大法人表格顯示買進 / 賣出 / 買賣超與連買連賣', async () => {
+  it('三大法人為 法人×日期 矩陣：每日一欄、附累計與連買連賣（0.7.6）', async () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
-    // The same numbers will also appear on the chart axis labels, so the search is limited to the three major legal entity tables.
-    const instTable = within(screen.getAllByRole('table')[0])
-    const foreignRow = within(instTable.getByText('外資（不含自營）').closest('tr')!)
-    // Foreign leg: buy 6,000 / sell 1,000 / buy and sell over +5,000 / contract +5 lots / buy 2 in a row
-    expect(foreignRow.getByText('6,000')).toBeTruthy()
-    expect(foreignRow.getByText('1,000')).toBeTruthy()
-    expect(foreignRow.getByText('+5,000')).toBeTruthy()
-    expect(foreignRow.getByText('+5')).toBeTruthy()
-    expect(foreignRow.getByText('連 2 買')).toBeTruthy()
-    // The "consecutive increases and consecutive decreases" of margin trading are calculated by the front end based on history: the fixture is +105 / +1 on both days, so they are both consecutive increases of 2
+
+    const table = screen.getByRole('table', { name: '三大法人買賣超矩陣' })
+    expect([...table.querySelectorAll('thead th')].map((e) => e.textContent)).toEqual([
+      '法人',
+      '07/22',
+      '07/23',
+      '2 日累計',
+      '走勢',
+    ])
+    // Five 法人 rows, always —— the day picker that used to sit above the table is gone
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(5)
+    expect(screen.queryByRole('button', { name: /07\/22/ })).toBeNull()
+
+    // 外資 net is +3,000 then +5,000 shares → +3 / +5 lots, 8 lots over the two days, 2 days of buying
+    const foreignRow = within(table).getByText('外資（不含自營）').closest('tr')!
+    expect([...foreignRow.querySelectorAll('td.num')].map((e) => e.textContent)).toEqual([
+      '+3',
+      '+5',
+      '+8',
+    ])
+    expect(foreignRow.textContent).toContain('連 2 買')
+    // The exact share count stays available on the cell rather than being dropped
+    expect(foreignRow.querySelectorAll('td.num')[1].getAttribute('title')).toBe(
+      '2026-07-23 5,000 股',
+    )
+    // 合計 is the last row and keeps its emphasis
+    const rows = [...table.querySelectorAll('tbody tr')]
+    expect(rows[4].textContent).toContain('三大法人合計')
+    expect(rows[4].className).toContain('row-total')
+
+    // The margin table's own streaks are untouched by this change
     const marginTable = within(screen.getAllByRole('table')[1])
     expect(within(marginTable.getByText('融資').closest('tr')!).getByText('連 2 增')).toBeTruthy()
     expect(within(marginTable.getByText('融券').closest('tr')!).getByText('連 2 增')).toBeTruthy()
   })
 
-  it('三大法人表格可切換檢視 7 天中任一天，連買連賣隨之重算', async () => {
+  it('籌碼矩陣：買進／賣出改用口徑切換，連買連賣一律看買賣超（0.7.6）', async () => {
     const user = userEvent.setup()
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
-    const rowOf = (label: string) =>
-      within(within(screen.getAllByRole('table')[0]).getByText(label).closest('tr')!)
-    // Explanatory sentences for the three major legal person blocks (the .hint of the first .rpt-section in the chip section)
-    const caption = () => sec(container, 'chips').querySelector('.rpt-section .hint')!.textContent
+    const table = () => screen.getByRole('table', { name: '三大法人買賣超矩陣' })
+    const foreign = () =>
+      [
+        ...within(table())
+          .getByText('外資（不含自營）')
+          .closest('tr')!
+          .querySelectorAll('td.num'),
+      ].map((e) => e.textContent)
+    const foreignRow = () => within(table()).getByText('外資（不含自營）').closest('tr')!
 
-    // Default to see the latest trading day (07/23): foreign investment net +5,000, 2 consecutive purchases
-    expect(caption()).toContain('2026-07-23')
-    expect(rowOf('外資（不含自營）').getByText('+5,000')).toBeTruthy()
-    expect(rowOf('外資（不含自營）').getByText('連 2 買')).toBeTruthy()
+    expect(foreign()).toEqual(['+3', '+5', '+8'])
 
-    // Cut to the previous day (07/22): net becomes +3,000, and the number of consecutive buying days is reduced to 1
-    await user.click(screen.getByRole('button', { name: /07\/22/ }))
-    expect(caption()).toContain('2026-07-22')
-    expect(rowOf('外資（不含自營）').getByText('+3,000')).toBeTruthy()
-    expect(rowOf('外資（不含自營）').getByText('連 1 買')).toBeTruthy()
+    // 買進: 4,000 / 6,000 shares → 4 / 6 lots, unsigned (a gross leg is never negative)
+    await user.click(screen.getByRole('button', { name: '買進' }))
+    expect(foreign()).toEqual(['4', '6', '10'])
+    expect(foreignRow().querySelectorAll('td.num')[1].className).not.toContain('pnl-')
+    // The streak follows the net, not the displayed leg
+    expect(foreignRow().textContent).toContain('連 2 買')
+
+    await user.click(screen.getByRole('button', { name: '賣出' }))
+    expect(foreign()).toEqual(['1', '1', '2'])
+
+    await user.click(screen.getByRole('button', { name: '買賣超' }))
+    expect(foreign()).toEqual(['+3', '+5', '+8'])
+    expect(foreignRow().querySelectorAll('td.num')[1].className).toContain('pnl-up')
   })
 
   it('圖表預設並排四個法人，並附色塊圖例（身分不只靠顏色）', async () => {
