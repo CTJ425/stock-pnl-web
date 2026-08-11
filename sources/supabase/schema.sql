@@ -358,7 +358,9 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 --     0.6.1–0.7.1 used dense */15 8-15 (16:00–23:45 every 15m) because release times were unreliable.
 --     0.7.2 thins to four fixed flights to observe hit-rate; late-night catch-up is intentionally omitted.
 --     Action is **generate-chips** (not generate-all): free-tier wall clock — keep market-data / history
---     as separate HTTP (admin manual in this experiment; may gain their own crons later).
+--     as separate HTTP. **They got their own crons in 0.7.11** —— see §8d below; leaving them
+--     manual meant 估值 / 月營收 / 季報 had no automatic path at all once the probe experiment
+--     turned the fixed shifts off (BUG-024).
 --
 --     Short circuit + T86 rewrite detection + MAX_RUNS_PER_DAY still apply inside the function.
 --
@@ -623,6 +625,75 @@ ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS data_landed BOOLEAN;
 ALTER TABLE source_probe_tick ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx
     ON source_probe_tick (taipei_ymd, source, id DESC);
+
+-- 8d. market-data / history shifts (0.7.11)
+--
+--     Why they exist: 0.6.49 split `generate-all` into phases and left market-data / history as
+--     "admin manual". That was survivable while `generate-all` still ran; it stopped being
+--     survivable when the 0.7.3 experiment disabled the writer crons, because 估值 / 月營收 / 季報
+--     then had **no automatic path whatsoever** —— which is how BUG-024 (valuation a trading day
+--     stale, every day) went unnoticed for so long.
+--
+--     These are the **outer retry**, not the primary path. Since 0.7.8 the probe triggers the
+--     matching fetch the moment a source lands, which is both earlier and cheaper than a fixed
+--     shift. These shifts exist so that a source whose probe follow-up failed —— or whose window
+--     closed before its data ever landed —— still gets picked up the same day.
+--
+--     ⚠️ Live envs: create these by **cloning an existing job's command** so the embedded
+--     CRON_SECRET is carried over without ever being printed:
+--       SELECT cron.schedule('market-data-daily', '0 10,14 * * 1-5',
+--                replace(command, '"generate-chips"', '"generate-market-data"'))
+--         FROM cron.job WHERE jobname = 'stock-report-nightly';
+--       SELECT cron.schedule('history-daily', '30 4,13 * * 1-5',
+--                replace(command, '"generate-chips"', '"generate-history"'))
+--         FROM cron.job WHERE jobname = 'stock-report-nightly';
+--     Do NOT unschedule+schedule an existing job to change its body (BUG-002/003).
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'market-data-daily') THEN
+    PERFORM cron.unschedule('market-data-daily');
+  END IF;
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'history-daily') THEN
+    PERFORM cron.unschedule('history-daily');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'market-data-daily',
+  -- Taipei 18:00 / 22:00 (UTC 10:00 / 14:00), weekdays. Backstop for 估值 —— the probe's bwibbu
+  -- window is 15:00–22:00 and normally fires far earlier than either of these.
+  '0 10,14 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"generate-market-data"}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'history-daily',
+  -- Taipei 12:30 / 21:30 (UTC 04:30 / 13:30), weekdays —— half an hour after each MOPS probe slot
+  -- (12:00/12:05 and 21:00/21:05), so a failed follow-up is retried while the day is still current.
+  '30 4,13 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"generate-history"}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
 
 -- In the same rhythm as the after-hours batch. ⚠️ There are also two placeholders to be replaced. After applying, you must run the verification of §6d (including "whether the ref of the URL is your own")
 DO $$

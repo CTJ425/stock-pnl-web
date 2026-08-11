@@ -23,6 +23,73 @@
 import { normNum } from './twChips.ts'
 
 export const BWIBBU_ALL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL'
+
+/**
+ * 估值的**帶日期**端點（0.7.11，BUG-024）。
+ *
+ * `BWIBBU_ALL` 沒有日期參數，而且實測**永遠落後一個交易日**：2026-08-11 19:36，它 1083 筆全部
+ * 自報 `1150810`，同一時刻這支帶日期的端點已經 `stat:OK`／`date:20260811`／1084 筆。
+ * 再加上 `readLatest` 以「要建的交易日」為快取鍵、當天第一次抓到什麼就凍結一整天，結果是
+ * **每一天存進去的估值都是前一個交易日的**（`chip_raw_cache` 四天的紀錄無一例外）。
+ *
+ * 換成帶日期的請求之後，「快取鍵」與「內容的日期」在定義上就綁死了，那個凍結不再有害——
+ * 這也是 t86／bfi82u／margin 一直以來能正確回答「今天的出了沒」的原因。
+ */
+export function bwibbuDatedUrl(ymd: string): string | null {
+  if (!/^\d{8}$/.test(ymd)) return null
+  return `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${ymd}&selectType=ALL&response=json`
+}
+
+/** `BWIBBU_d` 的回應（欄位順序不保證，一律用表頭文字定位）。 */
+export interface BwibbuDatedResponse {
+  stat?: unknown
+  date?: unknown
+  fields?: unknown
+  data?: unknown
+}
+
+/**
+ * 把帶日期的 `BWIBBU_d` 轉成與 `BWIBBU_ALL` **相同的物件形狀**，下游 `extractValuation` 完全不用改。
+ *
+ * 欄位用**表頭文字**定位而不是索引——與 `twProfitHistory` 同一條教訓：TWSE 不保證欄序，
+ * 硬接索引是靜默錯值，而估值錯了畫面上不會有任何跡象。
+ * 兩邊的日期語意也對齊：`Date` 一律填成請求的那天的民國 7 碼，因為那正是這份表的資料日。
+ */
+export function normaliseBwibbuDated(
+  res: BwibbuDatedResponse | null,
+  ymd: string,
+): Array<Record<string, string>> | null {
+  if (!res || String(res.stat ?? '') !== 'OK') return null
+  const fields = Array.isArray(res.fields) ? res.fields.map((f) => String(f ?? '').trim()) : []
+  const rows = Array.isArray(res.data) ? res.data : []
+  if (fields.length === 0 || rows.length === 0) return null
+
+  const at = (name: string) => fields.findIndex((f) => f.replace(/\s/g, '').startsWith(name))
+  const iCode = at('證券代號')
+  const iName = at('證券名稱')
+  const iYield = at('殖利率')
+  const iPe = at('本益比')
+  const iPb = at('股價淨值比')
+  // 代號與三個指標缺一不可；缺了就整份不採用，寧可這輪不更新也不要寫進半份對不上的估值
+  if (iCode < 0 || iYield < 0 || iPe < 0 || iPb < 0) return null
+
+  const roc = `${Number(ymd.slice(0, 4)) - 1911}${ymd.slice(4)}`
+  const out: Array<Record<string, string>> = []
+  for (const r of rows) {
+    if (!Array.isArray(r)) continue
+    const code = String(r[iCode] ?? '').trim()
+    if (!code) continue
+    out.push({
+      Date: roc,
+      Code: code,
+      Name: iName >= 0 ? String(r[iName] ?? '').trim() : '',
+      PEratio: String(r[iPe] ?? '').trim(),
+      DividendYield: String(r[iYield] ?? '').trim(),
+      PBratio: String(r[iPb] ?? '').trim(),
+    })
+  }
+  return out.length > 0 ? out : null
+}
 export const T187AP05_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L'
 export const T187AP03_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L'
 /**

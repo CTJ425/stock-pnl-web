@@ -46,7 +46,10 @@ const DAILY_WINDOWS: Record<
 > = {
   bfi82u: { from: 15 * 60, to: 16 * 60 + 30 }, // 15:00–16:30
   t86: { from: 15 * 60 + 30, to: 17 * 60 + 30 }, // 15:30–17:30
-  bwibbu: { from: 17 * 60 + 30, to: 22 * 60 }, // 17:30–22:00
+  // 15:00 起，不是 17:30（0.7.11）：舊窗是配合「沒有日期參數的整包快照幾點追上」而訂的，
+  // 那個問題已由改打帶日期的端點解決（BUG-024）。現在問的是「今天的估值出表了沒」，
+  // 而沒人知道它幾點出——命中即收工，早探的代價只是幾輪請求，晚探的代價是整批估值晚幾小時。
+  bwibbu: { from: 15 * 60, to: 22 * 60 }, // 15:00–22:00
   margin: { from: 20 * 60 + 30, to: 22 * 60 + 30 }, // 20:30–22:30
   // 15:00 起，不是 20:30：借券的命中條件是「title 日期翻到下一個交易日」（見 borrowHit），
   // 而沒人知道它幾點翻。窗若從 20:30 才開，翻日發生在那之前就只會看到一整排「中」——
@@ -186,10 +189,13 @@ export interface LandingEvidence {
     margin?: string | null
     borrow?: string | null
   }
-  /** 估值檔（BWIBBU）自報的民國日期，7 碼。 */
-  bwibbuRocYmd?: string | null
-  /** 這一輪 MOPS backfill 實際寫進去幾筆。 */
-  mopsFilled?: { revenue?: number; profit?: number }
+  /** 前端讀的 `fundamental/*.json` 裡 `valuation.dataDate`（YYYY-MM-DD）。 */
+  fundamentalValuationDate?: string | null
+  /**
+   * 同一份 `fundamental/*.json` 裡，月營收／季報的最新一期在這一輪**有沒有往前走**。
+   * 比對抓取前後，而不是問 backfill「寫了幾筆」——寫了幾筆不等於畫面上看得到。
+   */
+  mopsAdvanced?: { revenue?: boolean; profit?: boolean }
 }
 
 /**
@@ -200,9 +206,11 @@ export interface LandingEvidence {
  * - `t86` / `margin`：籌碼報告裡該來源自報的日期＝今天。報告可能是用昨天的資料產的，
  *   所以要看的是 stamp，不是「報告產出來了沒」。
  * - `borrow`：沿用 `borrowHit` 的同一條判準——日期**走過**今天才算，因為借券盤中自帶當日額度。
- * - `bwibbu`：估值檔自報的民國日期＝今天。
- * - `mops_*`：這一輪確實補進了資料。**這是唯一一個看「有沒有做事」而不是「資料在不在」的來源**——
- *   月營收／季報散在各檔個股的歷史檔裡，沒有一個便宜的單點可以問「今天的到了沒」。
+ * - `bwibbu`：**前端讀的那份** `fundamental/*.json` 的 `valuation.dataDate` ＝今天。
+ *   不是問抓取函式回報了什麼日期——那只證明「我們抓到了」，不證明「畫面上換了」。
+ * - `mops_*`：同一份檔案裡月營收／季報的最新一期在這一輪往前走了。
+ *   月營收／季報散在各檔個股的歷史檔裡，沒有便宜的單點可以問「今天該有的那一期到了沒」，
+ *   所以退而求其次比對前後——它至少直接回答「畫面上的資料有沒有變新」。
  *   代價有界：MOPS 一天只探 12:00／12:05／21:00／21:05 四槽，最多多跑一輪。
  */
 export function sourceLanded(
@@ -220,11 +228,11 @@ export function sourceLanded(
     case 'borrow':
       return borrowHit(ev.chipStamps?.borrow ?? null, todayYmd)
     case 'bwibbu':
-      return !!ev.bwibbuRocYmd && ev.bwibbuRocYmd === ymdToRocYmd(todayYmd)
+      return normaliseYmd(ev.fundamentalValuationDate) === todayYmd
     case 'mops_revenue':
-      return (ev.mopsFilled?.revenue ?? 0) > 0
+      return ev.mopsAdvanced?.revenue === true
     case 'mops_profit':
-      return (ev.mopsFilled?.profit ?? 0) > 0
+      return ev.mopsAdvanced?.profit === true
   }
 }
 

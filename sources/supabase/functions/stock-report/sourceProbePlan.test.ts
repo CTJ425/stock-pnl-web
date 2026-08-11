@@ -21,10 +21,10 @@ describe('sourceProbePlan', () => {
     expect(minutesFromHhmm('bad')).toBeNull()
   })
 
-  it('下午開 BFI／T86 窗，借券窗從 15:00 起（要看得到 title 翻日的那一刻）', () => {
-    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'borrow'])
-    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'borrow'])
-    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'borrow'])
+  it('下午開 BFI／T86 窗；借券與估值窗都從 15:00 起（沒人知道它們幾點出表）', () => {
+    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'bwibbu', 'borrow'])
+    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'bwibbu', 'borrow'])
+    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'bwibbu', 'borrow'])
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
@@ -112,17 +112,20 @@ describe('sourceProbePlan', () => {
       expect(sourceLanded('borrow', today, { chipStamps: { borrow: '2026-08-11' } })).toBe(false)
     })
 
-    it('bwibbu 比對估值檔自報的民國日期', () => {
-      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: '1150811' })).toBe(true)
-      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: '1150810' })).toBe(false)
-      expect(sourceLanded('bwibbu', today, { bwibbuRocYmd: null })).toBe(false)
+    // 0.7.11: 看的是**前端讀的那份檔案**，不是抓取函式回報了什麼。
+    it('bwibbu 比對 fundamental 檔裡的 valuation.dataDate', () => {
+      expect(sourceLanded('bwibbu', today, { fundamentalValuationDate: '2026-08-11' })).toBe(true)
+      // 抓到了但檔案還是昨天的 → 畫面沒換，不算到位
+      expect(sourceLanded('bwibbu', today, { fundamentalValuationDate: '2026-08-10' })).toBe(false)
+      expect(sourceLanded('bwibbu', today, { fundamentalValuationDate: null })).toBe(false)
     })
 
-    it('mops_* 看這輪有沒有真的補進資料', () => {
-      expect(sourceLanded('mops_revenue', today, { mopsFilled: { revenue: 3 } })).toBe(true)
-      expect(sourceLanded('mops_revenue', today, { mopsFilled: { revenue: 0 } })).toBe(false)
-      expect(sourceLanded('mops_profit', today, { mopsFilled: { profit: 1 } })).toBe(true)
-      expect(sourceLanded('mops_profit', today, { mopsFilled: { revenue: 5 } })).toBe(false)
+    it('mops_* 看畫面上的最新一期有沒有往前走', () => {
+      expect(sourceLanded('mops_revenue', today, { mopsAdvanced: { revenue: true } })).toBe(true)
+      expect(sourceLanded('mops_revenue', today, { mopsAdvanced: { revenue: false } })).toBe(false)
+      expect(sourceLanded('mops_profit', today, { mopsAdvanced: { profit: true } })).toBe(true)
+      // 月營收動了不代表季報也動了
+      expect(sourceLanded('mops_profit', today, { mopsAdvanced: { revenue: true } })).toBe(false)
     })
 
     it('每個來源在沒有任何證據時一律不算到位', () => {

@@ -38,6 +38,10 @@ function harness(over: Partial<ProbeRoundDeps> & { hits?: ProbeSourceId[]; evide
       ran.push(a)
       return {}
     },
+    readBaseline: async () => {
+      order.push('baseline')
+      return null
+    },
     readEvidence: async () => {
       order.push('evidence')
       return evidence
@@ -142,6 +146,39 @@ describe('runProbeRound', () => {
     expect(h.order.indexOf('persist:bfi82u')).toBeLessThan(h.order.indexOf('run:sync-market'))
     expect(h.order.indexOf('run:sync-market')).toBeLessThan(h.order.indexOf('evidence'))
     expect(h.order.indexOf('evidence')).toBeLessThan(h.order.indexOf('mark:bfi82u'))
+  })
+
+  /*
+    0.7.11: 「到位」的判準是使用者看得到的那份檔案。基準相片必須在**任何抓取之前**照，
+    否則 mops 的「有沒有往前走」會拿抓完之後的狀態跟自己比，永遠得到「沒動」。
+  */
+  it('基準相片照在抓取之前', async () => {
+    const h = harness({ hits: ['mops_revenue'], evidence: { mopsAdvanced: { revenue: true } } })
+    await runProbeRound(['mops_revenue'], TODAY, h.deps)
+
+    expect(h.order.indexOf('baseline')).toBeLessThan(h.order.indexOf('run:generate-history'))
+    expect(h.order.indexOf('run:generate-history')).toBeLessThan(h.order.indexOf('evidence'))
+  })
+
+  it('估值抓到了但畫面那份檔案沒換 → 不算收工', async () => {
+    const h = harness({
+      hits: ['bwibbu'],
+      // generate-market-data 跑完了、也沒拋錯，但 fundamental 檔的估值日還是昨天
+      evidence: { fundamentalValuationDate: '2026-08-10' },
+    })
+    const r = await runProbeRound(['bwibbu'], TODAY, h.deps)
+
+    expect(h.ran).toEqual(['generate-market-data'])
+    expect(r.landed).toEqual([])
+    expect(h.marked[0].note).toContain('資料未到位，下輪重試')
+  })
+
+  it('估值落到畫面那份檔案上 → 收工', async () => {
+    const h = harness({ hits: ['bwibbu'], evidence: { fundamentalValuationDate: '2026-08-11' } })
+    const r = await runProbeRound(['bwibbu'], TODAY, h.deps)
+
+    expect(r.landed).toEqual(['bwibbu'])
+    expect(h.marked[0].note).toContain('資料已到位')
   })
 
   it('已收工的來源這一輪完全不探，也不會被列入 sources', async () => {

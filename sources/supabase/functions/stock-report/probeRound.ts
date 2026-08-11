@@ -46,10 +46,16 @@ export interface ProbeRoundDeps {
   persistTick(tick: ProbeTick): Promise<void>
   /** 跑一支抓取，回傳它的 body（丟例外代表這支失敗）。 */
   runFollowUp(action: ProbeFollowUp): Promise<Record<string, unknown>>
+  /**
+   * 抓取**之前**先照一張成品的相片。有些來源（月營收／季報）沒有便宜的絕對判準，
+   * 只能用「這一輪之後畫面上的資料有沒有往前走」來回答，那就需要這張前照。
+   */
+  readBaseline(hitSources: ProbeSourceId[]): Promise<unknown>
   /** 抓完之後回頭讀成品，取得「資料到底進來了沒」的證據。 */
   readEvidence(
     hitSources: ProbeSourceId[],
     bodies: Map<ProbeFollowUp, Record<string, unknown>>,
+    baseline: unknown,
   ): Promise<LandingEvidence>
   /** 把結論寫回該筆 tick。失敗不得讓整輪爆掉——代價只是下一輪重跑。 */
   markTick(source: ProbeSourceId, landed: boolean, note: string): Promise<void>
@@ -97,6 +103,8 @@ export async function runProbeRound(
   }
 
   const hitSources = ticks.filter((t) => t.hit).map((t) => t.source)
+  // Photograph the artifacts before anything fetches —— see readBaseline.
+  const baseline = hitSources.length > 0 ? await deps.readBaseline(hitSources) : null
   const followUps: FollowUpOutcome[] = []
   const bodies = new Map<ProbeFollowUp, Record<string, unknown>>()
   for (const action of followUpsFor(hitSources)) {
@@ -115,7 +123,7 @@ export async function runProbeRound(
 
   // Ask the artifacts, not the fetches —— see gatherLandingEvidence / sourceLanded.
   const evidence: LandingEvidence =
-    hitSources.length > 0 ? await deps.readEvidence(hitSources, bodies) : {}
+    hitSources.length > 0 ? await deps.readEvidence(hitSources, bodies, baseline) : {}
 
   const landed: ProbeSourceId[] = []
   for (const t of ticks) {

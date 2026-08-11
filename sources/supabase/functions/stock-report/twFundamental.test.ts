@@ -4,6 +4,8 @@ import {
   extractProfit,
   extractRevenue,
   extractValuation,
+  bwibbuDatedUrl,
+  normaliseBwibbuDated,
   buildFundamentalFile,
   mergeProfitQuarters,
   mergeRevenueMonths,
@@ -474,5 +476,69 @@ describe('twFundamental', () => {
         '2026-05',
       ])
     })
+  })
+})
+
+// 0.7.11 / BUG-024: 估值改用帶日期的端點，欄位一律以表頭文字定位。
+describe('BWIBBU 帶日期端點', () => {
+  const REAL = {
+    stat: 'OK',
+    date: '20260811',
+    fields: ['證券代號', '證券名稱', '收盤價', '殖利率(%)', '股利年度', '本益比', '股價淨值比', '財報年/季'],
+    data: [
+      ['1101', '台泥', '24.65', '3.25', 114, '-', '0.79', '115/1'],
+      ['2330', '台積電', '1100.00', '1.20', 114, '25.10', '7.50', '115/1'],
+    ],
+  }
+
+  it('轉成與 BWIBBU_ALL 相同的形狀，Date 填請求日的民國碼', () => {
+    const rows = normaliseBwibbuDated(REAL, '20260811')!
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toEqual({
+      Date: '1150811',
+      Code: '1101',
+      Name: '台泥',
+      PEratio: '-',
+      DividendYield: '3.25',
+      PBratio: '0.79',
+    })
+    // 下游沿用原本的萃取器，不必改
+    expect(extractValuation(rows, '2330')).toEqual({
+      peRatio: 25.1,
+      dividendYieldPercent: 1.2,
+      pbRatio: 7.5,
+      dataDate: '2026-08-11',
+    })
+    // 虧損股本益比 '-' → null，不是 0
+    expect(extractValuation(rows, '1101')?.peRatio).toBeNull()
+  })
+
+  it('欄序被上游換掉也要拿對值——這正是不用索引的理由', () => {
+    const swapped = {
+      stat: 'OK',
+      fields: ['證券代號', '股價淨值比', '本益比', '殖利率(%)', '證券名稱'],
+      data: [['2330', '7.50', '25.10', '1.20', '台積電']],
+    }
+    expect(extractValuation(normaliseBwibbuDated(swapped, '20260811'), '2330')).toEqual({
+      peRatio: 25.1,
+      dividendYieldPercent: 1.2,
+      pbRatio: 7.5,
+      dataDate: '2026-08-11',
+    })
+  })
+
+  it('沒有資料的日子回 null，不會寫進半份對不上的估值', () => {
+    expect(normaliseBwibbuDated({ stat: '很抱歉，沒有符合條件的資料!' }, '20260811')).toBeNull()
+    expect(normaliseBwibbuDated({ stat: 'OK', fields: [], data: [] }, '20260811')).toBeNull()
+    expect(normaliseBwibbuDated(null, '20260811')).toBeNull()
+    // 少了必要欄位就整份不採用
+    expect(
+      normaliseBwibbuDated({ stat: 'OK', fields: ['證券代號', '證券名稱'], data: [['2330', '台積電']] }, '20260811'),
+    ).toBeNull()
+  })
+
+  it('bwibbuDatedUrl 只接受 8 碼日期', () => {
+    expect(bwibbuDatedUrl('20260811')).toContain('date=20260811')
+    expect(bwibbuDatedUrl('2026-08-11')).toBeNull()
   })
 })

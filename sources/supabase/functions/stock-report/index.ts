@@ -75,7 +75,9 @@ import {
   type DailyFile,
 } from './twDaily.ts'
 import {
-  BWIBBU_ALL_URL,
+  bwibbuDatedUrl,
+  normaliseBwibbuDated,
+  type BwibbuDatedResponse,
   FUNDAMENTAL_SCHEMA,
   T187AP03_URL,
   T187AP05_URL,
@@ -1129,7 +1131,25 @@ async function syncFundamental(
   dataYmd: string,
 ): Promise<{ synced: number; skipped: number; bwibbuDate: string | null }> {
   const targetDate = dashDate(dataYmd)
-  const bwibbu = await readLatest<Array<Record<string, string>>>(dataYmd, 'BWIBBU_ALL', BWIBBU_ALL_URL)
+  /*
+    Valuation now comes from the **dated** endpoint (0.7.11, BUG-024). The undated `BWIBBU_ALL`
+    snapshot trails the market by a trading day, and `readLatest` keys its cache by the day we are
+    building for —— so the first fetch of the day froze yesterday's numbers under today's key, every
+    day, provably (four consecutive `chip_raw_cache` rows, none matching its own key).
+
+    A dated request ties the cache key to the content by construction. A day with nothing published
+    yields null rather than a fallback to the stale snapshot: `buildFundamentalFile` keeps the
+    existing valuation, which carries its own true `dataDate`, so 「還沒出」 stays honest instead of
+    being backfilled with the wrong day's numbers. The cache dataset name is new (`BWIBBU_D`) so the
+    rows poisoned by the old path are never read again.
+  */
+  const bwibbuUrl = bwibbuDatedUrl(dataYmd)
+  const bwibbu = bwibbuUrl
+    ? normaliseBwibbuDated(
+        await readLatest<BwibbuDatedResponse>(dataYmd, 'BWIBBU_D', bwibbuUrl),
+        dataYmd,
+      )
+    : null
   const revenue = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP05_L', T187AP05_URL)
   const company = await readLatest<Array<Record<string, string>>>(dataYmd, 'T187AP03_L', T187AP03_URL)
   // Profitability (0.6.5). The same is the whole-market large stall, go for chip_raw_cache,
@@ -2228,21 +2248,34 @@ async function probeSource(
       }
     }
     if (id === 'bwibbu') {
-      const r = await probeOne<Array<Record<string, string>>>(
-        BWIBBU_ALL_URL,
-        (v) => Array.isArray(v) && v.length > 0,
-        (v) => v[0]?.Date ?? null,
-        (v) => v,
-      )
-      const roc = ymdToRocYmd(todayYmd)
-      const hit = r.ok && !!r.date && !!roc && r.date === roc
+      /*
+        0.7.11 (BUG-024): ask the **dated** endpoint, like t86 / bfi82u / margin already do.
+        The old code read the undated `BWIBBU_ALL` snapshot, which trails by a trading day, so the
+        comparison 「自報日期 == 今天」 was false for the entire 17:30–22:00 window —— 0 hits in 27
+        probes on 2026-08-11, while the dated endpoint had already served that day's table.
+        A dated request carries its own answer: a table comes back ⟺ today's valuation is published.
+      */
+      const url = bwibbuDatedUrl(todayYmd)
+      const r = url
+        ? await probeOne<BwibbuDatedResponse>(
+            url,
+            (v) => String(v?.stat ?? '') === 'OK' && Array.isArray(v?.data) && v.data.length > 0,
+            (v) => (v?.date ? String(v.date) : null),
+            (v) => (Array.isArray(v?.data) ? v.data : []),
+          )
+        : { ok: false, date: null, fp: null, rows: null }
+      const hit = r.ok && r.date === todayYmd
       return {
         hit,
         ok: r.ok,
         data_ymd: r.date,
         fingerprint: r.fp,
         rows: r.rows,
-        note: hit ? '估值日=今日' : r.ok ? `估值日=${r.date ?? '?'}≠今日` : '估值抓取失敗',
+        note: hit
+          ? `估值日=今日（${r.rows ?? '?'} 筆）`
+          : r.ok
+            ? `估值日=${r.date ?? '?'}≠今日`
+            : '當日估值尚未出表',
         duration_ms: Date.now() - t0,
       }
     }
@@ -2349,6 +2382,7 @@ async function gatherLandingEvidence(
   sources: ProbeSourceId[],
   todayYmd: string,
   bodies: Map<ProbeFollowUp, Record<string, unknown>>,
+  baseline: unknown,
 ): Promise<LandingEvidence> {
   const ev: LandingEvidence = {}
 
@@ -2367,20 +2401,71 @@ async function gatherLandingEvidence(
     }
   }
 
-  if (sources.includes('bwibbu')) {
-    const body = bodies.get('generate-market-data')
-    ev.bwibbuRocYmd = typeof body?.bwibbuDate === 'string' ? body.bwibbuDate : null
-  }
-
-  if (sources.some((s) => s === 'mops_revenue' || s === 'mops_profit')) {
-    const body = bodies.get('generate-history')
-    ev.mopsFilled = {
-      revenue: Number(body?.revenueBackfilled ?? 0),
-      profit: Number(body?.profitBackfilled ?? 0),
+  const wantsFundamental = sources.some(
+    (s) => s === 'bwibbu' || s === 'mops_revenue' || s === 'mops_profit',
+  )
+  if (wantsFundamental) {
+    const after = await readFundamentalSnapshot()
+    const before = (baseline ?? null) as FundamentalSnapshot | null
+    ev.fundamentalValuationDate = after?.valuationDate ?? null
+    /*
+      月營收／季報沒有便宜的絕對判準，所以問的是「這一輪之後畫面上的資料有沒有往前走」。
+      `> before` 而不是 `!== before`：往回退不算到位，那是壞掉。
+    */
+    ev.mopsAdvanced = {
+      revenue: advanced(before?.revenueMonth, after?.revenueMonth),
+      profit: advanced(before?.profitQuarter, after?.profitQuarter),
     }
   }
 
   return ev
+}
+
+/** 有沒有往前走。缺任何一邊都算沒有——沒有證據就是沒到位。 */
+function advanced(before: string | null | undefined, after: string | null | undefined): boolean {
+  if (!after) return false
+  if (!before) return true
+  return after > before
+}
+
+/**
+ * 前端實際讀到的那份基本面檔案的關鍵日期。
+ *
+ * 判斷「資料有沒有呈現在畫面上」就必須讀**畫面讀的東西**，不能問抓取函式回報了什麼——
+ * 後者只證明我們抓到了，不證明它落到了使用者會看到的檔案裡。
+ *
+ * 取一檔代表即可（與 `latestChipSources` 同一個取捨）：這幾個來源都是整份全市場一起出，
+ * 一檔到位就是全部到位；為此把上百檔全下載回來只為了看日期並不划算。
+ */
+interface FundamentalSnapshot {
+  ticker: string
+  valuationDate: string | null
+  revenueMonth: string | null
+  profitQuarter: string | null
+}
+
+async function readFundamentalSnapshot(): Promise<FundamentalSnapshot | null> {
+  try {
+    const { data } = await db.storage.from(REPORTS_BUCKET).list('fundamental', { limit: 1 })
+    const first = data?.[0]?.name
+    if (!first) return null
+    const f = await downloadJson<{
+      valuation?: { dataDate?: string | null }
+      revenueMonths?: Array<{ yearMonth?: string }>
+      profitQuarters?: Array<{ yearQuarter?: string }>
+    }>(`fundamental/${first}`)
+    if (!f) return null
+    const months = f.revenueMonths ?? []
+    const quarters = f.profitQuarters ?? []
+    return {
+      ticker: first.replace(/\.json$/, ''),
+      valuationDate: f.valuation?.dataDate ?? null,
+      revenueMonth: months[months.length - 1]?.yearMonth ?? null,
+      profitQuarter: quarters[quarters.length - 1]?.yearQuarter ?? null,
+    }
+  } catch {
+    return null
+  }
 }
 
 /** One short line per follow-up —— it has to fit on a tick's note, next to the hit that caused it. */
@@ -2422,7 +2507,12 @@ async function handleProbe(): Promise<Response> {
     readDoneSources: () => readDoneSourcesToday(todayYmd),
     probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
     runFollowUp: runProbeFollowUp,
-    readEvidence: (hitSources, bodies) => gatherLandingEvidence(hitSources, todayYmd, bodies),
+    readBaseline: (hitSources) =>
+      hitSources.some((x) => x === 'bwibbu' || x === 'mops_revenue' || x === 'mops_profit')
+        ? readFundamentalSnapshot()
+        : Promise.resolve(null),
+    readEvidence: (hitSources, bodies, baseline) =>
+      gatherLandingEvidence(hitSources, todayYmd, bodies, baseline),
     persistTick: async (t) => {
       try {
         await db.from('source_probe_tick').insert({
