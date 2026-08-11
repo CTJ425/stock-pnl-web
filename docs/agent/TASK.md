@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 18:08:00 Asia/Taipei
+- Timestamp: 2026-08-11 19:30:00 Asia/Taipei
 
 ---
 
@@ -10,7 +10,22 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-11 13:25)
+## 📍 Where the project stands (2026-08-11 19:30)
+
+- **Version 0.7.9 on both branches and both environments.** PROD Edge `stock-report` **v42**
+  (sha `568a98da…`, `verify_jwt` false), DEV Edge volume-copied at the same commit. Pages current.
+- **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
+  retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
+  `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
+- **All crons active in both environments**, `market-daily` at Taipei 15:15/15:30/15:45 in both.
+  PROD's four writer jobs had been off since the 0.7.3 experiment; restored 2026-08-11 19:2x.
+- ⏳ **Still unproven in the wild: no probe hit has yet triggered a follow-up.** Everything above is
+  unit-tested and checked against real artifacts, but no green cell has run the path end to end.
+  See Task 85 step 9 —— read it back before trusting the mechanism.
+- **Open bugs: none.**
+
+<details>
+<summary>Superseded snapshot (2026-08-11 13:25) —— kept for the 0.7.3/0.7.4 experiment history</summary>
 
 - **Version 0.7.4**: probe-only experiment continues, but 0.7.3's hit rule was wrong for
   `borrow` / `mops_revenue` / `mops_profit` (all three read 中 from the first probe of every window).
@@ -30,6 +45,8 @@
 - PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
 - ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
 - **Open bugs: none.**
+
+</details>
 
 ### Task 84: 0.7.4 ship
 - **Status**: ✅ shipped DEV+PROD; only the two-day read-out remains

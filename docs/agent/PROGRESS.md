@@ -117,7 +117,7 @@ Order is not optional: bundle-before-column makes `readDoneSourcesToday` error, 
 empty, and the probe re-fetch every 5 minutes. Two further things to check on PROD before assuming this
 works there at all: whether `source_probe_tick` and the `source-probe` cron job even exist on cloud, and
 that PROD's after-hours crons are still on their **untouched** schedules (only DEV was retuned in 0.7.7).
-Both answered above: the table and job exist; the crons are inactive.
+Both answered above: the table and job exist; the writer crons were inactive and have since been restored.
 
 ---
 
