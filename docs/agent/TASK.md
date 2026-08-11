@@ -10,12 +10,12 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-11 10:05)
+## 📍 Where the project stands (2026-08-11 10:03)
 
 - **Version 0.7.1** on `dev`/`main` (release). Frontend: macro TW/US tabs + institutional table/spark.
-- **BUG-024** fixed in repo + DEV Edge (volume-copy). **PROD Edge stock-report still needs authorize deploy** (`--no-verify-jwt`).
+- **BUG-024** fixed; PROD Edge **stock-report v39** (`verify_jwt=false`, sha `fd12b418…`); DEV volume-copied earlier.
 - Analysis page = **holdings only**; night batch = held tickers only.
-- **Open bugs: none** (PROD runtime BUG-024 pending Edge ship).
+- **Open bugs: none.**
 
 ⚠️ **Environment facts**:
 1. **DEV** = self-hosted `korq9tvdz0jd7yblr72p.ivan.lab` at

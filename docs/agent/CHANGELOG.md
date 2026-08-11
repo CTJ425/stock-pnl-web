@@ -10,7 +10,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🎨 **三大法人買賣超**主表：**日期 × 單位 × 買進／賣出／買賣超**；波折圖放大；**「連 N 日買超／賣超」**在圖上方；恢復 **＋／− 展開** 與全部展開／收起（**預設只展開最新交易日**）。
 - 🐛 **BUG-024**：0.7.0 誤刪 `chipReportReady` / `fundamentalSoftReady` 導致 chips phase 500、融資融券整區空白；已還原。
 - 📚 測試 SoT（`docs/UnitTests/`）、skills（testing / verify / ship）、PROGRESS 歸檔。
-- ⚠️ **PROD Edge `stock-report` 需另授權 deploy**（`--no-verify-jwt`）後 BUG-024 才會在雲端生效；前端 Pages 隨 `main` 推送。
+- ✅ PROD Edge `stock-report` **v39** 已 deploy（`--no-verify-jwt`）；BUG-024 雲端生效。前端 Pages 隨 `main` 推送。
 
 ---
 

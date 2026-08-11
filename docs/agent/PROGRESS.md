@@ -1,12 +1,39 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Grok
-- Action: Release 0.7.1 — tests green; merge main
-- Status: **release**
-- Timestamp: 2026-08-11 10:05:00 Asia/Taipei
+- Action: PROD stock-report v39 (BUG-024)
+- Status: **prod edge deployed**
+- Timestamp: 2026-08-11 10:03:41 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 10:03:41 Asia/Taipei (0.7.1 prod Edge BUG-024)
+
+- **Agent**: Grok
+- **Action**: User authorized PROD Edge deploy after 0.7.1 release
+
+### Deploy
+- Project: `kxnxadaghidwumqsqneu` (PROD)
+- Source commit: `e751e3a` (main/dev)
+- `stock-report` **v38 → v39**, `verify_jwt=false` (`--no-verify-jwt`)
+- `ezbr_sha256`: `ea64e25d…` → **`fd12b4181a56602a541f736164ee9532e97e8d12e5e802053083ca4bcf3cab33`**
+- Updated (UTC): 2026-08-11 02:03:24
+
+### Smoke (anon, no CRON_SECRET)
+| action | HTTP | body |
+| ---- | ---- | ---- |
+| sync-top-tickers | **400** | Unknown action (route gone) |
+| warm 2330 | **401** | Unauthorized |
+| unknown-xyz | **400** | Unknown action |
+| generate-chips | **401** | Unauthorized |
+
+### Note
+- BUG-024 helpers now live on PROD runtime (was broken on v38 bundle from 0.7.0 cleanup).
+- Token used only in shell env for this deploy; not written to repo.
+- Nightly/cron with CRON_SECRET still needed for a full chips regenerate; next scheduled after-hours batch should seal margin.
 
 ---
 

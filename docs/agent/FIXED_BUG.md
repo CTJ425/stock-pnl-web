@@ -9,7 +9,7 @@
 ## 🐛 Historical Bug Fixes
 
 ### Bug ID: BUG-024 — 融資／融券 both empty (chips phase 500 after 0.7.0)
-- **Date**: 2026-08-11, fixed in tree (DEV volume-copy); **PROD still broken until Edge redeploy**
+- **Date**: 2026-08-11, fixed in **0.7.1**; PROD Edge **stock-report v39**
 - **Symptom**: 個股籌碼「融資融券」整區空（融資＋融券同掛，因同一 `MarginChip`）；Admin 盤後批次在
   約 20:45 後每輪 500；`batch_run_log` 停在當日 17:00 左右，`margin_today` 永遠看不到 true。
 - **Root Cause**: 0.7.0 holdings-only cleanup **deleted** `chipReportReady` and `fundamentalSoftReady`
@@ -17,9 +17,10 @@
   `chipReportReady is not defined` / `fundamentalSoftReady is not defined` → no `logBatchRun`,
   subsequent crons 500. TWSE `MI_MARGN` itself was fine (DEV cache had 20260810 @ 21:00).
 - **Fix**: restore both helpers in `stock-report/index.ts`. DEV: volume-copy + restart functions +
-  manual `generate-all` → 5 holdings regenerated with margin/short. Watchlist (e.g. 2330) still
-  out of night batch by 0.7.0 design (holdings-only).
-- **Status**: ✅ FIXED on DEV code+runtime; ⏳ PROD Edge deploy needs user authorization.
+  manual `generate-all` → 5 holdings regenerated with margin/short. PROD: deploy v39
+  (`--no-verify-jwt`, sha `fd12b418…`, commit `e751e3a`). Watchlist still out of night batch
+  by 0.7.0 design (holdings-only).
+- **Status**: ✅ FIXED (0.7.1; PROD stock-report v39).
 
 ### Bug ID: BUG-023 — Manual 「全部執行」 showed opaque non-2xx
 - **Date**: 2026-08-10, fixed in **0.6.47**
