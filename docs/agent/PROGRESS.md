@@ -1,12 +1,42 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.7-dev.2 移除個股買賣超長條圖；排查「探針命中但資料不更新」並恢復 DEV 班表
-- Status: **on dev; DEV crons restored, PROD untouched**
-- Timestamp: 2026-08-11 15:20:00 Asia/Taipei
+- Action: 0.7.7 探針命中即收工；個股籌碼矩陣＋長條圖移除；DEV 班表恢復
+- Status: **released to main (frontend); PROD Edge still on 0.7.4 v41)**
+- Timestamp: 2026-08-11 15:32:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 15:32:00 Asia/Taipei (0.7.7 探針命中即收工)
+
+Per user request: once a source hits, stop probing it for the rest of the day.
+
+The waste was visible in today's own ticks —— BFI82U turned green at 15:10 and the old code went on to
+ask it again at 15:15, 15:20 and 15:25, each time getting the same answer. Over a full window that is
+dozens of pointless TWSE requests per source, and the admin progress bar fills with a run of green cells
+that buries the one thing being measured: **how long the source stayed dark**.
+
+The rule is a pure function, `pendingSources(planned, alreadyHit)` in `sourceProbePlan.ts`, with the DB
+read (`readHitSourcesToday`) left in `index.ts`. The failure direction is deliberate: a missing table or
+an RLS refusal yields an empty set, so the probe degrades to "ask everything" rather than "ask nothing"
+—— a silent probe is indistinguishable from a source that never lands, which is the one reading this
+experiment must never fabricate. The response gained a `skipped` field so a quiet round reads as
+"already answered" instead of "the probe broke".
+
+Accepted trade-off, stated in the code: **upstream revisions after the first hit are invisible to the
+probe**. Revisions belong to the ingest side, which already tracks them (`t86_revisions`).
+
+Verified live on DEV after volume-copy + `functions` container recreate:
+- manual fire at 15:25 → `{"sources":["borrow"],"skipped":["bfi82u"]}`
+- the **scheduled** 15:30 flight probed only `t86` + `borrow`; no bfi82u row was written.
+
+Verification: 960/960 vitest, tsc + oxlint clean.
+
+**PROD Edge not deployed** —— `stock-report` there still runs the 0.7.4 bundle (v41). A merge to `main`
+ships Pages only; the Edge half needs a separate, explicitly authorised deploy.
 
 ---
 

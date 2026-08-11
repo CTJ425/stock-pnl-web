@@ -93,6 +93,24 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
 }
 
 /**
+ * 命中之後就不再探這個源（0.7.7）。
+ *
+ * 探針只回答一個問題：**這個源今天幾點上架**。答案一旦拿到就不會再變，之後每 5 分鐘再問一次
+ * 只是重複同一個已知答案——對 TWSE 多打幾十次沒有意義的請求，後台進度條也會被一排綠格灌爆，
+ * 反而看不出「它暗了多久」這件唯一在量的事。
+ *
+ * 代價要講清楚：**上游事後修訂會看不到**。這是刻意的取捨——修訂屬於抓取端
+ * （`generate-chips` 的 `t86_revisions` 已經在管）的職責，不是探針的。
+ */
+export function pendingSources(
+  planned: ProbeSourceId[],
+  alreadyHit: Iterable<ProbeSourceId>,
+): ProbeSourceId[] {
+  const done = new Set(alreadyHit)
+  return planned.filter((id) => !done.has(id))
+}
+
+/**
  * 借券 TWT96U 是否已經換日。
  *
  * `title` 自帶的日期在盤中就是**當天**（「115年08月11日 當日可借券賣出股數」），

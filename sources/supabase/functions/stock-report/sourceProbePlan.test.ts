@@ -4,6 +4,7 @@ import {
   formatProbeTickLabel,
   minutesFromHhmm,
   mopsIssueRocYmd,
+  pendingSources,
   sourcesForTaipeiTime,
   ymdToRocYmd,
 } from './sourceProbePlan'
@@ -36,6 +37,19 @@ describe('sourceProbePlan', () => {
   it('窗外與週末不探日頻', () => {
     expect(sourcesForTaipeiTime('10:00', true)).toEqual([])
     expect(sourcesForTaipeiTime('15:30', false)).toEqual([])
+  })
+
+  // 0.7.7: 探針只在量「幾點上架」，答案拿到就不必再問。
+  it('命中過的源當天不再探，其餘照舊', () => {
+    expect(pendingSources(['bfi82u', 't86', 'borrow'], ['bfi82u'])).toEqual(['t86', 'borrow'])
+    // 全中 → 這一輪完全不打外部
+    expect(pendingSources(['bfi82u', 'borrow'], ['bfi82u', 'borrow'])).toEqual([])
+    // 一個都沒中 → 與改版前一模一樣
+    expect(pendingSources(['bfi82u', 't86'], [])).toEqual(['bfi82u', 't86'])
+    // 順序必須照原計畫，不能被 Set 的走訪順序帶著跑
+    expect(pendingSources(['bfi82u', 't86', 'borrow'], ['t86'])).toEqual(['bfi82u', 'borrow'])
+    // 窗外本來就沒東西可探
+    expect(pendingSources([], ['bfi82u'])).toEqual([])
   })
 
   it('formatProbeTickLabel', () => {

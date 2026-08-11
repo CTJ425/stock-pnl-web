@@ -21,6 +21,9 @@
   `sync-market` retuned to Taipei 15:15/15:30/15:45 (`15,30,45 7 * * 1-5` UTC) —— the probe measured
   BFI82U as 尚未齊 at 15:00/15:05 and green at **15:10**. `source-probe` `*/5 * * * *` stays on.
   **PROD crons not touched** —— needs explicit go-ahead.
+- **0.7.7: probe stops re-asking a source once it hits that day** (`pendingSources`). DEV Edge deployed
+  2026-08-11 15:28 (volume copy + container recreate) and confirmed on the scheduled 15:30 flight.
+  ⚠️ **PROD Edge still runs the 0.7.4 bundle (v41)** —— merging `main` ships Pages only.
 - PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
 - ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
 - **Open bugs: none.**

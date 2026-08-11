@@ -178,6 +178,7 @@ import {
   PROBE_SOURCE_ORDER,
   borrowHit,
   mopsIssueRocYmd,
+  pendingSources,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type ProbeSourceId,
@@ -2275,6 +2276,27 @@ async function probeSource(
   }
 }
 
+/**
+ * Sources that already turned green today.
+ *
+ * A missing table or an RLS refusal returns an empty set, which degrades to the old behaviour (probe
+ * everything in the window) rather than to "probe nothing" —— the probe going quiet would look exactly
+ * like a source that never lands, and that is the one reading this experiment must never fake.
+ */
+async function readHitSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId>> {
+  try {
+    const { data, error } = await db
+      .from('source_probe_tick')
+      .select('source')
+      .eq('taipei_ymd', todayYmd)
+      .eq('hit', true)
+    if (error || !Array.isArray(data)) return new Set()
+    return new Set(data.map((r) => r.source as ProbeSourceId))
+  } catch {
+    return new Set()
+  }
+}
+
 async function handleProbe(): Promise<Response> {
   const startedAt = Date.now()
   const now = new Date()
@@ -2282,7 +2304,11 @@ async function handleProbe(): Promise<Response> {
   const rawHhmm = taipeiHhmm(now)
   const slot = floorToFiveMin(rawHhmm)
   const weekday = taipeiWeekday(now)
-  const sources = sourcesForTaipeiTime(slot, weekday)
+  const planned = sourcesForTaipeiTime(slot, weekday)
+  // 0.7.7: stop asking a source once it has answered today —— see pendingSources.
+  const hitToday = planned.length > 0 ? await readHitSourcesToday(todayYmd) : new Set<ProbeSourceId>()
+  const sources = pendingSources(planned, hitToday)
+  const skipped = planned.filter((id) => !sources.includes(id))
 
   const ticks: ProbeTickResult[] = []
   // Sequential: keep wall time predictable on free tier
@@ -2341,6 +2367,8 @@ async function handleProbe(): Promise<Response> {
     taipei_time: slot,
     weekday,
     sources,
+    // Reported so a quiet round is readable as "already answered" rather than "the probe stopped working"
+    skipped,
     ticks: ticks.map((t) => ({
       ...t,
       label: PROBE_SOURCE_LABELS[t.source],
