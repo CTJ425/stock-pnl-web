@@ -10,6 +10,7 @@
 - [環境架構](#-環境架構)
 - [使用版本](#-使用版本)
 - [使用方式](#-使用方式)
+- [測試](#-測試)
 - [部署方式](#-部署方式)
 - [GitHub Actions 自動部署](#-github-actions-自動部署)
 - [版本紀錄](#-版本紀錄)
@@ -158,9 +159,9 @@ stock-pnl-web/
    npm run dev
    ```
    伺服器預設會運行在 `http://localhost:5173`。
-4. 執行測試（單元測試 + UI 煙霧測試；測試固定以本機模式執行，不受 `.env.local` 影響）：
+4. 執行測試（見下方 [測試](#-測試)）：
    ```bash
-   npm run test
+   npm test
    ```
 5. 進行靜態編譯打包：
    ```bash
@@ -177,6 +178,27 @@ stock-pnl-web/
      VITE_SUPABASE_ANON_KEY=你的Supabase金鑰
      ```
   3. 重新啟動服務 (`npm run dev`)，系統會自動轉換為登入/註冊介面。
+
+---
+
+## 🧪 測試
+
+完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
+Agent 技能：`.claude/skills/testing/SKILL.md`（選層、跑閘門）、`.claude/skills/verify/SKILL.md`（瀏覽器驗證）
+
+| 層級 | 內容 | 怎麼跑 |
+| ---- | ---- | ---- |
+| **Unit + Integration** | Vitest：純邏輯、Edge 純模組、jsdom UI 煙霧（本機模式，不受 `.env.local` 影響） | `cd sources && npm test` |
+| **E2E（選用）** | Playwright 真瀏覽器／版面；無獨立 CI 套件 | 見 `docs/UnitTests/E2E.md`、skill `verify` |
+
+```bash
+cd sources
+npm test                              # 完整閘門（必跑）
+npx vitest run src/utils/pnlEngine.test.ts   # 單一檔
+npm run dev                           # 本機模式 UI，供手動或 Playwright
+```
+
+上線前請確認 `npm test` 全綠。改 Edge 配線後，除單元測試外建議在 **DEV** 再跑一次盤後 `generate-all` 煙霧（見 `supabase-ops` skill）。
 
 ---
 
@@ -244,7 +266,7 @@ Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub 
 
 ## 🗒️ 版本紀錄
 
-完整版本紀錄請見 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+完整版本紀錄請見 [docs/agent/CHANGELOG.md](docs/agent/CHANGELOG.md)。
 
 ---
 

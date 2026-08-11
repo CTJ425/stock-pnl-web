@@ -922,6 +922,37 @@ async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>
   return heldTwTickers()
 }
 
+/**
+ * Whether a chip report file exists for this ticker on dataYmd.
+ *
+ * Used by `evaluateTickerScope` for admin/batch scopes. Dropped by accident in 0.7.0 holdings-only
+ * cleanup while the call site stayed — every chips phase then threw `chipReportReady is not defined`
+ * after uploads, so `logBatchRun` never ran and later cron ticks all 500'd (融資融券 never sealed).
+ */
+async function chipReportReady(dataYmd: string, ticker: string): Promise<boolean> {
+  const file = await downloadJson<unknown>(`${dataYmd}/${ticker}.json`)
+  return file != null
+}
+
+/**
+ * Soft-ready fundamental (batch reportComplete), aligned with frontend PROFIT/REVENUE_WARM_MIN = 6.
+ * Empty shell after a real backfill pass (through markers) counts ready — typical ETF / no MOPS path.
+ * Also dropped in the 0.7.0 holdings-only cleanup (same crash chain as chipReportReady).
+ */
+function fundamentalSoftReady(f: FundamentalFile | null | undefined): boolean {
+  if (!f) return false
+  const months = f.revenueMonths?.length ?? 0
+  const quarters = f.profitQuarters?.length ?? 0
+  if (months >= 6 && quarters >= 6) return true
+  if (
+    months === 0 &&
+    quarters === 0 &&
+    (f.revenueBackfilledThrough != null || f.profitBackfilledThrough != null)
+  ) {
+    return true
+  }
+  return false
+}
 
 async function evaluateTickerScope(
   tickers: Array<{ ticker: string }>,
