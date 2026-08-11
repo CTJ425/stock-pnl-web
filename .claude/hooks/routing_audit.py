@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Answers one question with evidence: did this session actually route, or did Opus do it all?
 
-Reads the session transcripts Claude Code already writes and reports token volume per
-model, split between the main thread and sidechains (subagent turns). A healthy routed
-session shows most output tokens on the cheap models; an all-Opus session shows a single
-model and zero sidechain traffic, which is the failure this whole setup exists to prevent.
+Reads the transcripts Claude Code already writes and reports token volume per model and
+per role. Subagent turns are NOT in the session transcript — they live in
+`<session-id>/subagents/agent-<id>.jsonl`, with the role in the sibling `.meta.json`.
+Reading only the session file reports 100% Opus even when routing worked perfectly, so
+this script reads both.
+
+A healthy routed session shows the bulk of output tokens on the cheap models. One model
+and zero subagent transcripts means nothing was routed, whatever the plan said.
 
 Usage:
   python3 .claude/hooks/routing_audit.py            # latest session
@@ -22,72 +26,83 @@ PROJECT = os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
 
 def transcript_dir() -> str:
-    slug = PROJECT.replace("/", "-")
-    return os.path.join(os.path.expanduser("~"), ".claude", "projects", slug)
+    return os.path.join(os.path.expanduser("~"), ".claude", "projects", PROJECT.replace("/", "-"))
 
 
-def read_session(path: str):
-    """-> {(model, is_sidechain): {in, out, cache_read, turns}}"""
-    stats = defaultdict(lambda: {"in": 0, "out": 0, "cache_read": 0, "turns": 0})
+def tally(path: str):
+    """-> (models -> {out, in, cache_read, turns})"""
+    stats = defaultdict(lambda: {"out": 0, "in": 0, "cache_read": 0, "turns": 0})
     for line in open(path, encoding="utf-8", errors="replace"):
         try:
             row = json.loads(line)
         except Exception:
             continue
         msg = row.get("message")
-        if not isinstance(msg, dict):
+        if not isinstance(msg, dict) or not msg.get("usage"):
             continue
-        usage = msg.get("usage")
-        if not usage:
-            continue
-        key = (msg.get("model") or "unknown", bool(row.get("isSidechain")))
-        s = stats[key]
-        s["in"] += usage.get("input_tokens", 0)
-        s["out"] += usage.get("output_tokens", 0)
-        s["cache_read"] += usage.get("cache_read_input_tokens", 0)
+        u = msg["usage"]
+        s = stats[msg.get("model") or "unknown"]
+        s["out"] += u.get("output_tokens", 0)
+        s["in"] += u.get("input_tokens", 0)
+        s["cache_read"] += u.get("cache_read_input_tokens", 0)
         s["turns"] += 1
     return stats
 
 
-def dispatch_counts():
-    path = os.path.join(PROJECT, ".claude", "routing", "dispatch.jsonl")
-    counts = defaultdict(int)
-    if os.path.exists(path):
-        for line in open(path, encoding="utf-8", errors="replace"):
-            try:
-                row = json.loads(line)
-            except Exception:
-                continue
-            if row.get("event") == "SubagentStart":
-                counts[row.get("agent_type") or "?"] += 1
-    return counts
+def subagent_runs(session_path: str):
+    """-> [(role, path)] for every subagent spawned by this session."""
+    base = session_path[: -len(".jsonl")]
+    runs = []
+    for path in sorted(glob.glob(os.path.join(base, "subagents", "agent-*.jsonl"))):
+        role = "?"
+        try:
+            with open(path[: -len(".jsonl")] + ".meta.json", encoding="utf-8") as fh:
+                role = json.load(fh).get("agentType") or "?"
+        except Exception:
+            pass
+        runs.append((role, path))
+    return runs
 
 
 def report(paths) -> int:
-    total_out = defaultdict(int)
-    for path in paths:
-        stats = read_session(path)
-        if not stats:
-            continue
-        print(f"\n=== {os.path.basename(path)[:8]}  ({os.path.getmtime(path):.0f})")
-        print(f"{'model':<22}{'where':<11}{'turns':>7}{'out':>12}{'in':>12}{'cache_read':>14}")
-        for (model, side), s in sorted(stats.items(), key=lambda kv: -kv[1]["out"]):
-            where = "sidechain" if side else "main"
-            print(f"{model:<22}{where:<11}{s['turns']:>7}{s['out']:>12,}{s['in']:>12,}{s['cache_read']:>14,}")
-            total_out[model] += s["out"]
+    by_model = defaultdict(int)
+    by_role = defaultdict(lambda: {"runs": 0, "out": 0})
+    row = "{:<24}{:<22}{:>7}{:>12}{:>12}{:>14}"
 
-    if not total_out:
+    for session in paths:
+        print(f"\n=== session {os.path.basename(session)[:8]}")
+        print(row.format("role", "model", "turns", "out", "in", "cache_read"))
+        for model, s in sorted(tally(session).items(), key=lambda kv: -kv[1]["out"]):
+            print(row.format("main", model, s["turns"], f"{s['out']:,}", f"{s['in']:,}", f"{s['cache_read']:,}"))
+            by_model[model] += s["out"]
+            by_role["main"]["out"] += s["out"]
+
+        runs = subagent_runs(session)
+        by_role["main"]["runs"] = 1
+        for role, path in runs:
+            for model, s in sorted(tally(path).items(), key=lambda kv: -kv[1]["out"]):
+                print(row.format(role, model, s["turns"], f"{s['out']:,}", f"{s['in']:,}", f"{s['cache_read']:,}"))
+                by_model[model] += s["out"]
+                by_role[role]["out"] += s["out"]
+            by_role[role]["runs"] += 1
+        if not runs:
+            print("  (no subagent transcripts — nothing was routed in this session)")
+
+    grand = sum(by_model.values())
+    if not grand:
         print("No usage found in the selected transcripts.")
         return 1
 
-    grand = sum(total_out.values())
     print("\n--- output tokens by model (the routing verdict) ---")
-    for model, out in sorted(total_out.items(), key=lambda kv: -kv[1]):
-        print(f"{model:<22}{out:>12,}  {out / grand:6.1%}")
+    for model, out in sorted(by_model.items(), key=lambda kv: -kv[1]):
+        print(f"  {model:<28}{out:>10,}  {out / grand:6.1%}")
 
-    counts = dispatch_counts()
-    print("\n--- dispatches recorded by routing_observe.py ---")
-    print("  " + (", ".join(f"{k}={v}" for k, v in sorted(counts.items())) if counts else "none yet"))
+    print("\n--- by role ---")
+    for role, s in sorted(by_role.items(), key=lambda kv: -kv[1]["out"]):
+        print(f"  {role:<28}{s['out']:>10,}  {s['out'] / grand:6.1%}  ({s['runs']} run(s))")
+
+    main_share = by_role["main"]["out"] / grand
+    print(f"\nMain session wrote {main_share:.0%} of all output tokens in this scope.")
     return 0
 
 
