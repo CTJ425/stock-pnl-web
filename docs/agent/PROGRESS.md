@@ -1,12 +1,50 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.7-dev.1 個股籌碼三大法人改用「法人 × 日期」矩陣
-- Status: **on dev, awaiting release approval**
+- Action: 0.7.7-dev.2 移除個股買賣超長條圖；排查「探針命中但資料不更新」並恢復 DEV 班表
+- Status: **on dev; DEV crons restored, PROD untouched**
 - Timestamp: 2026-08-11 15:20:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 15:20:00 Asia/Taipei (0.7.7-dev.2 長條圖移除 + 探針誤判排查)
+
+Two things this round.
+
+**1. Removed the 近 N 日買賣超 bar chart under the per-stock chips table.** Once the matrix shows every
+法人 on every day at once, the chart was drawing the same numbers a second time. Its 法人 switcher and
+clickable legend went with it —— they existed only to work around the chart being able to show one thing
+at a time, which is not a problem the matrix has. Five tests that covered the chart were removed and one
+was rewritten to assert the chips section now holds exactly the two margin line charts.
+
+**2. "BFI82U 顯示命中但資料沒更新" —— no bug in the code.** Root cause: nothing was scheduled to ingest.
+All four writer crons (`generate-chips` / `sync-market` / `sync-macro` / `sync-fx`) have been
+`active = f` since the 0.7.3 probe-only experiment, and `handleProbe` by design writes
+`source_probe_tick` and nothing else —— a hit never triggers a fetch. Proof: firing `sync-market` by
+hand returned `reason:"updated"`, `institutionalFilled:1`, and an immediate second call returned
+`skipped` (session-ready), i.e. the ingestion path was healthy the whole time.
+
+Two secondary findings:
+- The user read the 15:00 slot as the hit. It was not: 15:00 and 15:05 were both 「當日 BFI 尚未齊」 and
+  **15:10** was the first green. That is now the evidence behind the retune.
+- The admin probe panel hardcoded 「固定盤後 cron 已停用」 —— a cron state the page cannot actually
+  observe, and one that turned into a lie the moment the schedules came back. Replaced with the thing
+  the reader actually needs: 命中＝上游有資料，不代表已抓回來.
+
+DEV actions taken (PROD untouched, needs explicit go-ahead):
+- `cron.alter_job` re-enabled jobs 1/3/4/5.
+- `sync-market` retuned `30,45 7 * * 1-5` → `15,30,45 7 * * 1-5` UTC (Taipei 15:15/15:30/15:45), because
+  the probe measured the landing at 15:10. `schema.sql` updated to match.
+- Verified live: the 15:15 flight fired on its own and returned `skipped`, the manual run having already
+  completed today's data.
+
+`t86` / `bwibbu` / `margin` / `borrow` / MOPS windows are still un-measured today; their schedules were
+restored **unchanged** and should be retuned once a full day of ticks exists (TASK 84 step 8).
+
+Verification: 959/959 vitest, tsc + oxlint clean.
 
 ---
 

@@ -557,13 +557,21 @@ export function AdminStatusPage() {
         <div className="section glass" style={SECTION_PAD}>
           <div className="rpt-section-head">
             <h3 className="head-tight">探針實驗・命中時序（0.7.3）</h3>
-            <span className="source-tag section-stamp">
-              {data.probeExperiment.mode}・固定盤後 cron 已停用・每 5 分探測
-            </span>
+            <span className="source-tag section-stamp">每 5 分探測</span>
           </div>
           <p className="ast-note" style={{ marginBottom: 12 }}>
             一源一列，進度條由左到右每格代表一次 5 分鐘探測，綠格＝命中；點該列展開逐次紀錄。
-            日頻源僅在各自時間窗內探測；月營收／季報僅 12:00／21:00 附近。驗證約兩日後再決定正式班表。
+            日頻源僅在各自時間窗內探測；月營收／季報僅 12:00／21:00 附近。
+          </p>
+          {/*
+            0.7.7: this line exists because the panel used to claim 「固定盤後 cron 已停用」 —— a hardcoded
+            sentence the page cannot actually verify, and one that went stale the moment the schedules were
+            restored. What the reader needs is not the cron state but the fact that a green cell does not
+            move any data: the probe writes only source_probe_tick, on purpose (SPEC §「Data source probe」).
+          */}
+          <p className="ast-note" style={{ marginBottom: 12 }}>
+            ⚠️ 命中只代表<strong>上游已經有資料</strong>，不代表已經抓回來。實際落地由固定盤後班表負責，
+            探針本身不會觸發抓取——所以「命中了但畫面沒更新」是正常的，要等該來源的班次跑完。
           </p>
           <ProbeExperimentPanel exp={data.probeExperiment} todayYmd={data.todayYmd} />
         </div>

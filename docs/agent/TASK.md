@@ -6,7 +6,7 @@
 
 ---
 
-> **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md §4.1) ——
+> **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory) ——
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
@@ -16,9 +16,13 @@
   `borrow` / `mops_revenue` / `mops_profit` (all three read 中 from the first probe of every window).
   Fixed — see PROGRESS 0.7.4. **The 0.7.3 ticks for those three sources are not usable data.**
 - Admin probe panel: one row per source + hit progress bar + expandable log. 「排程」table removed.
-- Fixed after-hours crons still **off**; only `source-probe` `*/5 * * * *`.
+- **Fixed after-hours crons restored on DEV 2026-08-11 15:14** (0.7.7). They had been off since 0.7.3
+  and nothing was ingesting: a probe hit only writes `source_probe_tick`, it never triggers a fetch.
+  `sync-market` retuned to Taipei 15:15/15:30/15:45 (`15,30,45 7 * * 1-5` UTC) —— the probe measured
+  BFI82U as 尚未齊 at 15:00/15:05 and green at **15:10**. `source-probe` `*/5 * * * *` stays on.
+  **PROD crons not touched** —— needs explicit go-ahead.
 - PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
-- After validation: restore generate/market/macro/fx schedules.
+- ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
 - **Open bugs: none.**
 
 ### Task 84: 0.7.4 ship
@@ -33,7 +37,10 @@
 5. ~~DEV volume-copy + functions restart + probe fires 200~~ ✅
 6. ~~PROD Edge `stock-report` v40 → **v41** (`--no-verify-jwt`); anon smoke 401/401/400~~ ✅
 7. ~~Merge `main` + push (Pages ships the admin rework)~~ ✅ `ac3911b`
-8. **Read the 15:00–22:45 windows tomorrow** and decide the real schedule —— ⏳
+8. **Read the 15:00–22:45 windows** and decide the real schedule —— 🔄 partial: `bfi82u` answered
+   (2026-08-11 first hit 15:10 → `sync-market` moved to 15:15/15:30/15:45). `t86` / `bwibbu` /
+   `margin` / `borrow` / MOPS windows still un-measured; their schedules were restored unchanged and
+   should be retuned once a full day of ticks is on record.
 
 > Observability lost with the 排程 table: no screen now shows which environment a cron targets
 > (`targetRef`). That column was BUG-003's tripwire. Re-add somewhere if a cron ever misfires again.
@@ -122,7 +129,7 @@
 4. ~~Tests: `warmStock`, `AnalysisPage` search paths, `StockDetailPage` name passthrough~~ ✅
 5. ~~Version / CHANGELOG / SPEC / PROGRESS~~ ✅
 6. **DDL + Edge deploy** —— ✅ **self-hosted DEV** (2026-08-07 15:39); ⏳ **prod** still needs
-   explicit go-ahead (CLAUDE.md §13.2)
+   explicit go-ahead (CLAUDE.md § Branches & envs)
 7. **Push `dev` → verify Pages/test → merge main** —— ⏳ after prod half of 6
 
 ### Task 76: Checks that can only be made during market hours

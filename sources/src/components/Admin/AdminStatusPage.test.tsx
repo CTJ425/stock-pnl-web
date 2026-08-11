@@ -382,6 +382,20 @@ describe('AdminStatusPage 探針實驗面板', () => {
     expect(p.getByText('窗口未開')).toBeTruthy()
   })
 
+  it('說明命中不等於已抓取，且不再宣稱「固定盤後 cron 已停用」（0.7.7）', async () => {
+    render(<AdminStatusPage />)
+    const p = await panel()
+    /*
+      A green cell means the upstream endpoint has the data, not that anything fetched it —— the probe writes
+      source_probe_tick and nothing else. Without this sentence the panel reads as "hit, therefore updated",
+      which is what sent someone looking for a bug that was not there.
+    */
+    expect(p.getByText(/命中只代表/)).toBeTruthy()
+    expect(p.getByText(/探針本身不會觸發抓取/)).toBeTruthy()
+    // The old copy asserted a cron state this page cannot see; it went stale the moment the schedules came back
+    expect(p.queryByText(/已停用/)).toBeNull()
+  })
+
   it('進度條一格一次探測，命中格數與摘要對得上', async () => {
     const { container } = render(<AdminStatusPage />)
     await panel()

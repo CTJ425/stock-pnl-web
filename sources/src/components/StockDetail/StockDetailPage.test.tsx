@@ -241,55 +241,16 @@ describe('StockDetailPage', () => {
     expect(foreignRow().querySelectorAll('td.num')[1].className).toContain('pnl-up')
   })
 
-  it('圖表預設並排四個法人，並附色塊圖例（身分不只靠顏色）', async () => {
+  it('籌碼段只剩融資/融券兩張走勢圖（0.7.7 移除近 N 日買賣超長條圖）', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
-    const legend = within(container.querySelector('.chart-legend-side')! as HTMLElement)
-    for (const label of ['外資（不含自營）', '外資自營商', '投信', '自營商']) {
-      expect(legend.getByText(label)).toBeTruthy()
-    }
-    // The total does not appear in the picture (it is the sum of four items, and drawing it in means double counting)
-    expect(legend.queryByText('三大法人合計')).toBeNull()
-    expect(container.querySelectorAll('.chart-legend-swatch').length).toBe(4)
-    // 2 days × 4 legal persons = 8 bars
-    expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(8)
-  })
-
-  it('切成單一法人時圖例改講紅正綠負（顏色改為表達極性）', async () => {
-    const user = userEvent.setup()
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
-    await screen.findByText('三大法人買賣超')
-    await user.click(screen.getByRole('button', { name: '投信' }))
-    const labels = [...container.querySelectorAll('.chart-legend-label')].map((el) => el.textContent)
-    expect(labels).toEqual(['買超（買比賣多）', '賣超（賣比買多）'])
-    // Single sequence 2 days = 2 bars
-    expect(charts(container, 'chips')[0].querySelectorAll('rect[rx]').length).toBe(2)
-  })
-
-  it('畫出走勢圖（inline SVG，非圖表函式庫）', async () => {
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
-    await screen.findByText('三大法人買賣超')
-    // Chip segment: buying and selling super long bar chart + two line charts of financing/securities lending
-    expect(charts(container, 'chips').length).toBe(3)
+    // The bar chart drew the same numbers the matrix already shows on every 法人 for every day
+    expect(screen.queryByText(/日買賣超$/)).toBeNull()
+    expect(container.querySelector('.chart-with-legend')).toBeNull()
+    expect(charts(container, 'chips').length).toBe(2)
     expect(container.querySelectorAll('polyline').length).toBeGreaterThan(0)
-  })
-
-  it('可切換法人，重畫買賣超長條圖', async () => {
-    const user = userEvent.setup()
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
-    await screen.findByText('三大法人買賣超')
-    const before = charts(container, 'chips')[0]?.innerHTML
-    await user.click(screen.getByRole('button', { name: '投信' }))
-    const after = charts(container, 'chips')[0]?.innerHTML
-    expect(after).not.toBe(before)
   })
 
   it('四段同時在一頁上，順序為 行情 → 籌碼 → 基本面 → 技術面', async () => {
@@ -543,9 +504,11 @@ describe('StockDetailPage', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('格式不符'))
   })
 
-  it('history 只有 2 天時，圖表標題與資料同步（不假裝有 7 天）', async () => {
+  it('history 只有 2 天時，標題與資料同步（不假裝有 7 天）', async () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-    expect(await screen.findByText('近 2 日買賣超')).toBeTruthy()
+    await screen.findByText('三大法人買賣超')
+    // The matrix header counts the same days
+    expect(screen.getByRole('columnheader', { name: '2 日累計' })).toBeTruthy()
     expect(screen.getByText('近 2 日餘額走勢')).toBeTruthy()
   })
 
@@ -890,51 +853,6 @@ describe('StockDetailPage', () => {
 
       expect(screen.getByText('三大法人買賣超')).toBeTruthy()
       expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
-    })
-  })
-
-  describe('法人買賣超圖的圖例可切換（0.6.27）', () => {
-    /** Foreign capital (excluding self-operated) is CATEGORICAL_COLORS[0]; the bar is filled with this color*/
-    const foreignBars = () => document.querySelectorAll('svg rect[fill="#3987e5"]')
-    const yTicks = () =>
-      [...document.querySelectorAll('#sec-chips svg text')]
-        .map((t) => t.textContent ?? '')
-        .filter((t) => /^-?[\d,]+$/.test(t))
-
-    /*
-      Located by title rather than role + name: the institutional toggle .chip-btn above uses the same words, so
-      querying by name would match two buttons (the toggle and the legend).
-    */
-    const legendToggle = (label: string) =>
-      screen.getByTitle(new RegExp(`^(隱藏|顯示)${label.replace(/[()（）]/g, '\\$&')}$`))
-
-    it('點圖例關掉某個法人，縱軸依剩下的重算', async () => {
-      const user = userEvent.setup()
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-      await screen.findByText('三大法人買賣超')
-
-      // Foreign investors bought more than 3,000 to 5,000 shares in a single day, and the other three companies all bought less than 100 shares.
-      expect(foreignBars().length).toBeGreaterThan(0)
-      expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(true)
-
-      await user.click(legendToggle('外資（不含自營）'))
-      expect(foreignBars()).toHaveLength(0)
-      // The magnitudes of the remaining three are two orders of magnitude smaller, and the value range must be narrowed to see the difference between them.
-      expect(yTicks().some((t) => Number(t.replace(/,/g, '')) >= 4000)).toBe(false)
-
-      await user.click(legendToggle('外資（不含自營）'))
-      expect(foreignBars().length).toBeGreaterThan(0)
-    })
-
-    it('最後一個法人不給關（全部關掉只會剩空座標軸）', async () => {
-      const user = userEvent.setup()
-      render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-      await screen.findByText('三大法人買賣超')
-
-      for (const label of ['外資（不含自營）', '外資自營商', '投信']) {
-        await user.click(legendToggle(label))
-      }
-      expect(screen.getByTitle('至少要留一條線').hasAttribute('disabled')).toBe(true)
     })
   })
 

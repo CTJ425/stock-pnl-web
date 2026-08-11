@@ -779,8 +779,10 @@ SELECT cron.schedule(
 --    A short circuit will cause the entire section behind it to not be executed, and this information has nothing to do with the individual stock list.
 --    You should not be tied to the completion status of individual stocks. What is broken down is the schedule, not the function.
 --
---    **0.7.2 sparse**: Taipei **15:30 / 15:45** only (UTC `30,45 7 * * 1-5`).
---    Earlier dense 15:00–18:45 was for earliest-catch; this experiment measures whether two flights hit.
+--    **0.7.7**: Taipei **15:15 / 15:30 / 15:45** (UTC `15,30,45 7 * * 1-5`).
+--    The 0.7.4 probe measured it: on 2026-08-11 BFI82U was still 尚未齊 at 15:00 and 15:05 and turned
+--    green at **15:10**, so the 0.7.2 pair of flights (15:30 / 15:45) did catch it but twenty minutes
+--    late. 15:15 is the earliest slot the evidence supports; the other two stay as retries.
 --    Unchanged content still does not touch `asOf`; session-ready short-circuits external requests.
 --
 --    ⚠️ **Depends on FMTQIK + BFI82U**: institutional amount needs today's FMTQIK row first.
@@ -797,9 +799,9 @@ END $$;
 
 SELECT cron.schedule(
   'market-daily',
-  -- Taipei 15:30 / 15:45 (UTC 07:30 / 07:45), weekdays only. 0.7.2 sparse experiment.
+  -- Taipei 15:15 / 15:30 / 15:45 (UTC 07:15 / 07:30 / 07:45), weekdays only. 0.7.7, probe-tuned.
   -- ⚠️ Already-deployed environments: use cron.alter_job to keep CRON_SECRET in the command.
-  '30,45 7 * * 1-5',
+  '15,30,45 7 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
