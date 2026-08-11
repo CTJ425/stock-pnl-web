@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.8-dev.1 探針命中直接觸發抓取；抓取失敗才重探
-- Status: **code + tests green in tree; not committed, not deployed (needs DDL + user go-ahead)**
-- Timestamp: 2026-08-11 18:08:00 Asia/Taipei
+- Action: 0.7.8 探針命中直接觸發抓取；抓取失敗才重探
+- Status: **released to main; DEV Edge on 0.7.8. The follow-up path has NOT yet fired once — see below**
+- Timestamp: 2026-08-11 18:40:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
@@ -43,12 +43,29 @@ provable through the probe path** —— traded deliberately.
 
 Verification: 964/964 vitest, tsc clean, oxlint 0 errors (4 pre-existing fast-refresh warnings).
 
-⛔ **Not done, on purpose —— needs the user**:
-1. **DDL first, then Edge.** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;`
-   If the bundle ships before the column exists, the `.eq('follow_up_ok', true)` filter errors, the set
-   comes back empty, and the probe degrades to 「全部照探」 —— it re-probes and re-fetches every 5 minutes.
-   Safe (nothing is silenced, fetches short-circuit) but wasteful; do not leave it in that state.
-2. No commit, no DEV volume-copy, no PROD anything. PROD Edge is still the 0.7.4 bundle (v41).
+### Ship record (2026-08-11 18:40)
+
+- **DEV DDL applied 18:33** —— `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;`
+  run through `docker exec stock-pnl-web-dev-db-1`, with an identity column in the same statement.
+  **Order is not optional**: if the bundle ships before the column exists, the `.eq('follow_up_ok', true)`
+  filter errors, the done-set comes back empty, and the probe degrades to 「全部照探」 —— re-probing and
+  re-fetching every 5 minutes. Nothing is silenced (the safe direction) but it is wasteful.
+- **DEV Edge deployed 18:34** —— rsync into `volumes/functions/stock-report/` (`diff -rq` clean against
+  the working tree at `9d69b58`) + `docker compose up -d --force-recreate functions`. The 18:35 cron round
+  ran on the new bundle.
+- **Follow-up budget is not a practical constraint**: measured DEV `generate-chips` at 0.5–3.3s, and the
+  heaviest recent round (34 stocks + daily + fundamental) at 11.7s, against a 45s budget.
+
+⚠️ **The follow-up path has not fired once.** 18:35 had `bwibbu` (估值日=1150810≠今日) and `borrow`
+(尚未翻日) both dark, so nothing triggered. Today's earlier hits —— `bfi82u` 15:10, `t86` 16:20 —— were
+written by the **old** bundle, so their `follow_up_ok` is null and their windows (16:30 / 17:30) are shut
+for the day. The next real chance is the 21:00/21:05 MOPS slots and `margin` from 20:30.
+
+**Released to `main` anyway, at the user's explicit instruction** after that gap was put to them. Recording
+it because it inverts this project's usual order (CLAUDE.md: merge `main` only after DEV verify): the
+mechanism 0.7.8 is *about* —— hit triggers fetch, failed fetch retries —— has never been observed running.
+The first thing the next session should do is read today's / tomorrow's ticks and confirm a green cell
+carries a `已觸發 …` note and `follow_up_ok = true`.
 
 ---
 

@@ -62,9 +62,9 @@
 ## 📋 Active Tasks
 
 ### Task 85: 0.7.8 探針命中直接觸發抓取
-- **Status**: 🔄 **code + tests green in tree; uncommitted, undeployed**
+- **Status**: 🔄 **shipped DEV + main; the follow-up path has never actually fired —— must be watched**
 - **Agent**: Claude
-- **Timestamp**: 2026-08-11 18:08:00 Asia/Taipei
+- **Timestamp**: 2026-08-11 18:40:00 Asia/Taipei
 
 1. ~~`PROBE_FOLLOW_UP` / `followUpsFor`; 45s-budgeted follow-up loop in `handleProbe`; note write-back~~ ✅
    (was already in the tree, uncommitted)
@@ -73,10 +73,15 @@
 3. ~~Admin paragraph 「探針本身不會觸發抓取」 is now false —— rewritten + test updated~~ ✅
 4. ~~`SPEC.md` amendment (7 sources / hit retires / hit fetches / 0.6.1 gate no longer provable)~~ ✅
 5. ~~Version 0.7.8-dev.1 + CHANGELOG~~ ✅ · ~~964/964 vitest, tsc, oxlint~~ ✅
-6. **DDL on DEV** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;` —— ⏳
+6. ~~**DDL on DEV** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;`~~ ✅ 18:33
    **must land before the Edge bundle**, else the probe degrades to re-probe + re-fetch every 5 min
-7. **Commit `dev`** —— ⏳ · **DEV volume-copy + functions recreate** —— ⏳ · **watch one live round** —— ⏳
-8. **PROD** (still on the 0.7.4 bundle v41) —— ⏳ explicit go-ahead only
+7. ~~Commit + push `dev` (`9d69b58`)~~ ✅ · ~~DEV volume-copy + functions recreate~~ ✅ 18:34 · ~~release
+   0.7.8 + merge `main`~~ ✅
+8. **Watch one live round with a hit** —— ⏳ **nothing has triggered a follow-up yet.** Confirm a green
+   cell carries `已觸發 …` in its note and `follow_up_ok = true`. Next chances: `margin` from 20:30,
+   MOPS 21:00/21:05, then tomorrow's 15:00 open.
+9. **PROD Edge** (still the 0.7.4 bundle v41) —— ⏳ needs **the same DDL on cloud first**, then a
+   `--no-verify-jwt` deploy. Note it would jump PROD from 0.7.4 to 0.7.8 in one step.
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
