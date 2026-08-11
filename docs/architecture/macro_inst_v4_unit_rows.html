@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人 UX 方案四：單位為列 + 內嵌 7 日長條（可展開日明細）</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --surface-strong:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+  --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:28px 32px}
+.wrap{max-width:1120px;margin:0 auto}
+.pagehead h1{font-size:20px;font-weight:700}
+.pagehead p{color:var(--ink-2);font-size:13px;margin-top:6px;max-width:840px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:22px}
+.sechead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.sechead h3{font-size:15px;font-weight:650}
+.sub{color:var(--ink-muted);font-size:12px;margin-top:3px}
+.btn{background:var(--surface-strong);border:1px solid var(--border-strong);color:var(--ink-2);border-radius:8px;
+  padding:6px 12px;font:600 12.5px/1 inherit;cursor:pointer}
+.btn:hover{background:rgba(255,255,255,.12);color:var(--ink)}
+
+table{width:100%;border-collapse:collapse;margin-top:14px;font-variant-numeric:tabular-nums}
+th,td{padding:10px 12px;font-size:13px;white-space:nowrap}
+thead th{color:var(--ink-muted);font-weight:600;font-size:11.5px;text-align:right;border-bottom:1px solid var(--border);background:var(--thead)}
+thead th:first-child,thead th.l{text-align:left}
+td{border-bottom:1px solid rgba(255,255,255,.05);text-align:right}
+td:first-child,td.l{text-align:left}
+.up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--ink-muted)}
+
+tr.unit>td{background:rgba(255,255,255,.015)}
+tr.unit:hover>td{background:rgba(255,255,255,.045)}
+tr.unit.total>td{border-top:1px solid var(--border-strong);background:rgba(124,140,248,.08);font-weight:700}
+.toggle{background:transparent;border:1px solid var(--border-strong);color:var(--ink-2);width:20px;height:20px;
+  border-radius:5px;font:600 13px/1 inherit;cursor:pointer;margin-right:9px;vertical-align:-4px}
+.toggle:hover{background:var(--surface-strong);color:var(--ink)}
+.uname{font-weight:600;font-size:13.5px}
+.streak{font-size:11.5px;color:var(--ink-muted);font-weight:400;margin-left:8px}
+
+/* the sidekick: a 7-bar mini chart inside the row, aligned to a shared scale */
+td.spark{width:200px;text-align:left;padding-left:0}
+svg.mini{display:block}
+
+/* nested day rows */
+tr.leg td{background:rgba(0,0,0,.22);font-size:12.5px;color:var(--ink-2);border-bottom:1px solid rgba(255,255,255,.035)}
+tr.leg td:first-child{padding-left:42px;color:var(--ink-muted)}
+tr.leg.head td{color:var(--ink-muted);font-size:11px;letter-spacing:.04em;padding-top:8px;padding-bottom:4px}
+.hint{color:var(--ink-muted);font-size:12px;margin-top:12px;line-height:1.7}
+.note{background:rgba(124,140,248,.08);border:1px solid rgba(124,140,248,.25);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12.5px;color:var(--ink-2);line-height:1.75}
+.note b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pagehead">
+    <h1>方案四 · 單位為列，把展開軸也轉過來</h1>
+    <p>維持「可展開」這個互動，但<b>展開的對象從日期換成單位</b>：預設 6 列（五個單位＋合計），每列直接帶最新一日、7 日累計、連續天數與一張 7 根長條的迷你圖；想看某個單位逐日的買進／賣出，才展開那一列的 7 天。</p>
+  </div>
+
+  <div class="card">
+    <div class="sechead">
+      <div>
+        <h3>三大法人買賣超（億元）· 近 7 個交易日</h3>
+        <div class="sub">2026-07-31 ～ 2026-08-10 · 迷你圖左舊右新，共用比例尺</div>
+      </div>
+      <button class="btn" id="toggleAll">全部展開</button>
+    </div>
+
+    <table id="tbl" aria-label="三大法人各單位近 7 日買賣超"></table>
+
+    <p class="hint">
+      「連 N 日買超／賣超」直接放在單位名稱旁——這是原設計裡藏在日期欄裡的資訊，但它描述的其實是<b>單位</b>，不是日期。<br>
+      展開一列只增加 8 列（表頭＋7 天），最壞情況（六列全開）為 6＋48 列，且每一段都有自己的小標，不像原設計把 42 列平鋪在同一個表頭下。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>解決了什麼：</b>①預設畫面就回答了「這週外資／投信在做什麼」，不必展開；②連續天數與走勢圖從擁擠的日期欄移到它真正描述的主體；③買進／賣出降到第二層，只有真的要查帳時才出現。<br>
+    <b>適合：</b>想保留現有互動骨架、改動幅度最小的漸進式改版。
+  </div>
+</div>
+
+<script>
+const DATES=["07/31","08/03","08/04","08/05","08/06","08/07","08/10"];
+const DOW=["五","一","二","三","四","五","一"];
+const UNITS=[
+  {label:"外資",gross:900,net:[-128.4,212.7,96.2,-47.5,-186.3,58.9,341.6]},
+  {label:"外資自營商",gross:12,net:[3.2,-1.8,0.9,2.1,-4.6,1.4,5.8]},
+  {label:"投信",gross:90,net:[18.6,25.3,12.8,6.4,-8.9,14.2,31.7]},
+  {label:"自營商（自行）",gross:120,net:[-12.5,30.1,-8.3,-15.2,-22.4,6.7,24.9]},
+  {label:"自營商（避險）",gross:180,net:[-24.8,18.4,9.6,-11.7,-35.1,12.3,41.2]}
+];
+const TOTAL={label:"合計",gross:UNITS.reduce((a,u)=>a+u.gross,0),
+  net:DATES.map((_,i)=>UNITS.reduce((a,u)=>a+u.net[i],0))};
+const ROWS=[...UNITS,TOTAL];
+const cls=v=>v>0?"up":v<0?"down":"zero";
+const sgn=v=>(v>0?"+":"")+v.toFixed(1);
+const cum=v=>v.reduce((a,b)=>a+b,0);
+const leg=(u,i,side)=>{const g=u.gross*(1+((i*37)%11-5)/40);return side==="buy"?g+u.net[i]/2:g-u.net[i]/2;};
+function streak(v){const last=v[v.length-1];if(!last)return"";let n=0;
+  for(let i=v.length-1;i>=0&&Math.sign(v[i])===Math.sign(last);i--)n++;
+  return n>=2?`連 ${n} 日${last>0?"買超":"賣超"}`:"";}
+
+const MAX=Math.max(...ROWS.flatMap(r=>r.net.map(Math.abs)));
+function mini(vals,w=190,h=34){
+  const bw=w/vals.length,mid=h/2;
+  return `<svg class="mini" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近 7 日買賣超長條">
+    <line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="rgba(255,255,255,.16)"/>
+    ${vals.map((v,i)=>{const bh=Math.max(1.5,Math.abs(v)/MAX*(mid-2));
+      return `<rect x="${(i*bw+2).toFixed(1)}" y="${(v>=0?mid-bh:mid).toFixed(1)}" width="${(bw-4).toFixed(1)}"
+        height="${bh.toFixed(1)}" rx="1.5" fill="${v>=0?"#ff4a5a":"#00e676"}" opacity=".88"><title>${DATES[i]} ${sgn(v)} 億</title></rect>`}).join("")}
+  </svg>`;
+}
+const open=new Set();
+function render(){
+  document.getElementById("tbl").innerHTML=`
+  <thead><tr>
+    <th class="l">單位</th><th>最新日 (08/10)</th><th>7 日累計</th><th>買超天數</th>
+    <th class="l" style="padding-left:0">近 7 日走勢</th></tr></thead>
+  <tbody>${ROWS.map((u,ri)=>{
+    const last=u.net[u.net.length-1], c=cum(u.net), win=u.net.filter(v=>v>0).length;
+    const isOpen=open.has(ri);
+    const main=`<tr class="unit ${u.label==="合計"?"total":""}">
+      <td class="l"><button class="toggle" data-r="${ri}" aria-expanded="${isOpen}"
+          aria-label="${isOpen?"收合":"展開"} ${u.label} 的逐日明細">${isOpen?"−":"+"}</button>
+        <span class="uname">${u.label}</span><span class="streak">${streak(u.net)}</span></td>
+      <td class="${cls(last)}" style="font-weight:650">${sgn(last)}</td>
+      <td class="${cls(c)}" style="font-weight:650">${sgn(c)}</td>
+      <td>${win} / 7</td>
+      <td class="spark">${mini(u.net)}</td></tr>`;
+    if(!isOpen) return main;
+    const legs=`<tr class="leg head"><td>日期</td><td>買進</td><td>賣出</td><td>買賣超</td><td></td></tr>`+
+      DATES.map((d,i)=>`<tr class="leg"><td>${d}（${DOW[i]}）</td>
+        <td>${leg(u,i,"buy").toFixed(1)}</td><td>${leg(u,i,"sell").toFixed(1)}</td>
+        <td class="${cls(u.net[i])}" style="font-weight:600">${sgn(u.net[i])}</td><td></td></tr>`).reverse().join("");
+    return main+legs;
+  }).join("")}</tbody>`;
+  document.querySelectorAll(".toggle").forEach(b=>b.addEventListener("click",()=>{
+    const r=+b.dataset.r; open.has(r)?open.delete(r):open.add(r); render();
+  }));
+}
+document.getElementById("toggleAll").addEventListener("click",e=>{
+  if(open.size===ROWS.length){open.clear();e.target.textContent="全部展開";}
+  else{ROWS.forEach((_,i)=>open.add(i));e.target.textContent="全部收起";}
+  render();
+});
+render();
+</script>
+</body>
+</html>

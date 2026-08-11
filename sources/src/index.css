@@ -2911,6 +2911,58 @@ a.hmenu-item {
   margin-left: auto;
 }
 
+/* ── Institutional matrix: 單位 × 日期 (0.7.6) ──────────────────────*/
+
+/*
+ * The metric switch (買賣超／買進／賣出). Reuses .btn.btn-sm and only adds the pressed state ——
+ * the card already has .btn buttons and a second button shape here would read as a second kind of control.
+ */
+.mac-metric-seg {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mac-metric-seg .btn[aria-pressed='true'] {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+/*
+ * Seven day columns plus 單位／累計／走勢 overflow a phone, so the unit name is frozen: scrolled sideways,
+ * a row of numbers with no name attached is unreadable. .data-table already scrolls inside .table-scroll.
+ * The background must be opaque — the card behind is glass, and a translucent cell would let the scrolled
+ * numbers show through the frozen column.
+ */
+.mac-inst-matrix th:first-child,
+.mac-inst-matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.mac-inst-matrix thead th:first-child {
+  z-index: 2;
+}
+
+/* The 7-day sum is a different question from the seven days it sums; a rule separates it from them. */
+.mac-inst-matrix .mac-inst-cum {
+  border-left: 1px solid var(--border-strong);
+  font-weight: 600;
+}
+
+.mac-inst-matrix .row-total td {
+  border-top: 1px solid var(--border-strong);
+  font-weight: 650;
+}
+
+/* The row spark sits in a cell, not a card: kill the standalone margin/width of .mac-spark. */
+.mac-inst-matrix .mac-spark {
+  margin-top: 0;
+}
+
 /* ── General economic indicators: chips slimmed down into a row and small characters in the table column (0.6.35)────────*/
 
 /*

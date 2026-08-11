@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人 UX 方案六：摘要優先 / 窄螢幕友善</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --surface-strong:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+  --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:24px}
+.wrap{max-width:520px;margin:0 auto}          /* deliberately phone-width: this案要先在窄螢幕成立 */
+.pagehead h1{font-size:19px;font-weight:700}
+.pagehead p{color:var(--ink-2);font-size:12.5px;margin-top:6px;line-height:1.7}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:18px}
+.sechead{display:flex;justify-content:space-between;align-items:baseline}
+.sechead h3{font-size:14.5px;font-weight:650}
+.sub{color:var(--ink-muted);font-size:11.5px}
+
+/* 1) three KPI tiles answer the question before any table is read */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}
+.kpi{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:11px;padding:11px 11px 9px}
+.kpi .k{font-size:11.5px;color:var(--ink-2)}
+.kpi .v{font-size:17px;font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kpi .v small{font-size:11px;font-weight:600;margin-left:2px}
+.kpi .s{font-size:10.5px;color:var(--ink-muted);margin-top:2px}
+.kpi svg{margin-top:6px;display:block}
+.up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--ink-muted)}
+
+/* 2) the primary table: 4 numeric columns only — what fits a phone without scrolling */
+table{width:100%;border-collapse:collapse;margin-top:14px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 6px;font-size:12.5px;text-align:right;white-space:nowrap}
+th{color:var(--ink-muted);font-weight:600;font-size:11px;border-bottom:1px solid var(--border);background:var(--thead)}
+th:first-child,td:first-child{text-align:left;padding-left:8px}
+td{border-bottom:1px solid rgba(255,255,255,.05)}
+tbody tr:hover td{background:rgba(255,255,255,.035)}
+tr.sum td{border-top:1px solid var(--border-strong);background:rgba(124,140,248,.08);font-weight:700}
+td.d small{color:var(--ink-muted);font-size:10.5px;margin-left:3px}
+td.net{font-weight:650}
+
+/* 3) full six-unit matrix stays available but folded away */
+details{margin-top:12px;border-top:1px dashed var(--border);padding-top:10px}
+summary{cursor:pointer;font-size:12.5px;color:var(--ink-2);font-weight:600;list-style:none;display:flex;justify-content:space-between}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"展開 ▾";color:var(--ink-muted);font-weight:400;font-size:11.5px}
+details[open] summary::after{content:"收起 ▴"}
+.mtx{overflow-x:auto;margin-top:10px}
+.mtx table{min-width:520px}
+.mtx td:first-child,.mtx th:first-child{position:sticky;left:0;background:#101623}
+.hint{color:var(--ink-muted);font-size:11.5px;margin-top:12px;line-height:1.7}
+.note{background:rgba(124,140,248,.08);border:1px solid rgba(124,140,248,.25);border-radius:10px;padding:12px 14px;
+  margin-top:18px;font-size:12px;color:var(--ink-2);line-height:1.75}
+.note b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pagehead">
+    <h1>方案六 · 摘要優先（窄螢幕先成立）</h1>
+    <p>刻意用手機寬度呈現。原設計在窄螢幕上是災難：5 個欄位＋rowSpan 日期欄＋100px 走勢圖，必定橫向捲動。這裡改成<b>先給結論（三張 KPI），再給 4 欄可讀的表，六單位完整矩陣折疊起來備查</b>。</p>
+  </div>
+
+  <div class="card">
+    <div class="sechead">
+      <h3>三大法人買賣超</h3>
+      <span class="sub">近 7 個交易日 · 億元</span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <table id="main" aria-label="近 7 個交易日三大法人買賣超（主要單位）"></table>
+
+    <details>
+      <summary>六個單位完整矩陣（含外資自營商、自營商拆分）</summary>
+      <div class="mtx"><table id="full" aria-label="六個單位完整矩陣"></table></div>
+    </details>
+
+    <p class="hint">
+      主表只留外資、投信、自營商（自行＋避險合併）與合計——這四個數字覆蓋 99% 的閱讀需求，也剛好是一支手機一行放得下的量。<br>
+      拆分後的外資自營商與自營商避險屬於查證用資料，放進折疊區；買進／賣出金額同理，於矩陣中以口徑切換提供。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>解決了什麼：</b>①原設計沒有任何摘要層，使用者得自己從表格推論「這週法人偏多還偏空」；②欄位從 5 減到 4 且無 rowSpan，窄螢幕不再橫捲；③把六單位完整資料留在折疊區，是「降級」不是「刪除」。<br>
+    <b>建議搭配：</b>桌機寬度時，折疊區預設展開並直接使用方案一的矩陣版面——同一份資料、兩種密度。
+  </div>
+</div>
+
+<script>
+const DATES=[["07/31","五"],["08/03","一"],["08/04","二"],["08/05","三"],["08/06","四"],["08/07","五"],["08/10","一"]];
+const U={
+  "外資":[-128.4,212.7,96.2,-47.5,-186.3,58.9,341.6],
+  "外資自營商":[3.2,-1.8,0.9,2.1,-4.6,1.4,5.8],
+  "投信":[18.6,25.3,12.8,6.4,-8.9,14.2,31.7],
+  "自營商（自行）":[-12.5,30.1,-8.3,-15.2,-22.4,6.7,24.9],
+  "自營商（避險）":[-24.8,18.4,9.6,-11.7,-35.1,12.3,41.2]
+};
+const add=(...a)=>a[0].map((_,i)=>a.reduce((s,x)=>s+x[i],0));
+const DEALER=add(U["自營商（自行）"],U["自營商（避險）"]);
+const TOTAL=add(...Object.values(U));
+const cls=v=>v>0?"up":v<0?"down":"zero";
+const sgn=v=>(v>0?"+":"")+v.toFixed(1);
+const cum=v=>v.reduce((a,b)=>a+b,0);
+function streak(v){const l=v[v.length-1];if(!l)return"—";let n=0;
+  for(let i=v.length-1;i>=0&&Math.sign(v[i])===Math.sign(l);i--)n++;
+  return n>=2?`連 ${n} 日${l>0?"買超":"賣超"}`:(l>0?"當日買超":"當日賣超");}
+function spark(v,w=118,h=26){
+  const max=Math.max(...v.map(Math.abs))||1,bw=w/v.length,mid=h/2;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近 7 日走勢">
+    <line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="rgba(255,255,255,.15)"/>
+    ${v.map((x,i)=>{const bh=Math.max(1.5,Math.abs(x)/max*(mid-1.5));
+      return `<rect x="${(i*bw+1.5).toFixed(1)}" y="${(x>=0?mid-bh:mid).toFixed(1)}" width="${(bw-3).toFixed(1)}"
+        height="${bh.toFixed(1)}" rx="1" fill="${x>=0?"#ff4a5a":"#00e676"}" opacity=".9"/>`}).join("")}</svg>`;
+}
+
+document.getElementById("kpis").innerHTML=[["外資",U["外資"]],["投信",U["投信"]],["自營商",DEALER]]
+  .map(([k,v])=>{const c=cum(v);return `<div class="kpi">
+    <div class="k">${k} · 7 日累計</div>
+    <div class="v ${cls(c)}">${sgn(c)}<small>億</small></div>
+    <div class="s">${streak(v)}</div>${spark(v,118,24)}</div>`}).join("");
+
+document.getElementById("main").innerHTML=`
+  <thead><tr><th>日期</th><th>外資</th><th>投信</th><th>自營商</th><th>合計</th></tr></thead>
+  <tbody>${DATES.map(([d,w],i)=>`<tr>
+    <td class="d">${d}<small>${w}</small></td>
+    <td class="net ${cls(U["外資"][i])}">${sgn(U["外資"][i])}</td>
+    <td class="net ${cls(U["投信"][i])}">${sgn(U["投信"][i])}</td>
+    <td class="net ${cls(DEALER[i])}">${sgn(DEALER[i])}</td>
+    <td class="net ${cls(TOTAL[i])}">${sgn(TOTAL[i])}</td></tr>`).reverse().join("")}
+    <tr class="sum"><td>7 日累計</td>
+      ${[U["外資"],U["投信"],DEALER,TOTAL].map(v=>`<td class="${cls(cum(v))}">${sgn(cum(v))}</td>`).join("")}
+    </tr></tbody>`;
+
+const ROWS=[...Object.entries(U),["合計",TOTAL]];
+document.getElementById("full").innerHTML=`
+  <thead><tr><th>單位</th>${DATES.map(([d])=>`<th>${d}</th>`).join("")}<th>累計</th></tr></thead>
+  <tbody>${ROWS.map(([k,v],ri)=>`<tr class="${ri===ROWS.length-1?"sum":""}">
+    <td>${k}</td>${v.map(x=>`<td class="${cls(x)}">${sgn(x)}</td>`).join("")}
+    <td class="${cls(cum(v))}" style="font-weight:650">${sgn(cum(v))}</td></tr>`).join("")}</tbody>`;
+</script>
+</body>
+</html>

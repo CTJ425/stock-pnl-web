@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人 UX 方案一：轉置矩陣（單位 × 日期）</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --surface-strong:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+  --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:28px 32px}
+.wrap{max-width:1180px;margin:0 auto}
+.pagehead{margin-bottom:22px}
+.pagehead h1{font-size:20px;font-weight:700;letter-spacing:.02em}
+.pagehead p{color:var(--ink-2);font-size:13px;margin-top:6px;max-width:820px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;backdrop-filter:blur(12px)}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sechead h3{font-size:15px;font-weight:650}
+.sub{color:var(--ink-muted);font-size:12px;margin-top:3px}
+
+/* metric switch replaces the old per-day accordion */
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:9px;overflow:hidden}
+.seg button{background:transparent;border:0;color:var(--ink-2);font:600 12.5px/1 inherit;padding:7px 13px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--surface-strong);color:var(--ink)}
+
+.table-scroll{overflow-x:auto;margin-top:14px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
+th,td{padding:9px 10px;white-space:nowrap;font-size:13px}
+thead th{background:var(--thead);color:var(--ink-2);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);position:sticky;top:0}
+tbody td{border-bottom:1px solid rgba(255,255,255,.05)}
+th.unit,td.unit{text-align:left;position:sticky;left:0;background:#101623;z-index:2;border-right:1px solid var(--border)}
+thead th.unit{background:#0f1420;z-index:3}
+td.num,th.num{text-align:right}
+tbody tr:hover td{background:rgba(255,255,255,.035)}
+tbody tr:hover td.unit{background:#131a2b}
+.up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--ink-muted)}
+tr.total td{border-top:1px solid var(--border-strong);font-weight:700;background:rgba(124,140,248,.07)}
+tr.total td.unit{background:#141a2c}
+.dow{display:block;font-weight:400;color:var(--ink-muted);font-size:11px;margin-top:2px}
+td.cum{border-left:1px solid var(--border);font-weight:650}
+.streak{font-size:11px;color:var(--ink-muted);display:block;margin-top:2px;font-weight:400}
+.hint{color:var(--ink-muted);font-size:12px;margin-top:12px;line-height:1.7}
+.legend{display:flex;gap:14px;align-items:center;font-size:11.5px;color:var(--ink-muted);margin-top:10px;flex-wrap:wrap}
+.swatch{display:inline-block;width:26px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.note{background:rgba(124,140,248,.08);border:1px solid rgba(124,140,248,.25);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12.5px;color:var(--ink-2);line-height:1.75}
+.note b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pagehead">
+    <h1>方案一 · 轉置矩陣（單位 × 日期）</h1>
+    <p>把原本「日期 × 單位＋展開」的樹狀表整個轉 90°：<b>列＝六個單位，欄＝七個交易日</b>。6×7 一次全部可見，不需要任何展開；買進／賣出改為上方切換，而不是多佔兩個欄位。</p>
+  </div>
+
+  <div class="card">
+    <div class="sechead">
+      <div>
+        <h3>三大法人買賣超（億元）</h3>
+        <div class="sub">近 7 個交易日 · 2026-07-31 ～ 2026-08-10</div>
+      </div>
+      <div class="seg" role="group" aria-label="切換金額口徑">
+        <button data-metric="net" aria-pressed="true">買賣超</button>
+        <button data-metric="buy" aria-pressed="false">買進</button>
+        <button data-metric="sell" aria-pressed="false">賣出</button>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table id="matrix" aria-label="三大法人買賣超矩陣"></table>
+    </div>
+
+    <div class="legend">
+      <span><i class="swatch" style="background:linear-gradient(90deg,rgba(255,74,90,.08),rgba(255,74,90,.42))"></i>買超（紅，越深金額越大）</span>
+      <span><i class="swatch" style="background:linear-gradient(90deg,rgba(0,230,118,.08),rgba(0,230,118,.42))"></i>賣超（綠）</span>
+      <span>底色深淺＝同一列（同一單位）內的相對強度</span>
+    </div>
+
+    <p class="hint">
+      買賣超＝買進金額−賣出金額，紅色為買超。「—」是那天還沒補到，不是沒有進出。<br>
+      最右兩欄是這 7 天的累計與走勢，回答「這一週誰在買」——原本要展開 7 次、心算 7 個數字才拼得出來。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>解決了什麼：</b>①「同一單位跨日比較」從跳著看 7 段變成讀一整列；②沒有展開／收合狀態，也就沒有「預設只開最新一天」造成的資訊被藏；③買進／賣出從常駐欄位降為切換，主畫面只留真正的訊號；④7 日累計是新增的答案，不是原本表格能算出來的。<br>
+    <b>代價：</b>欄數固定 7，若要看 20 日需橫向捲動（首欄已 sticky）。
+  </div>
+</div>
+
+<script>
+const DATA = {
+  dates: [
+    {d:"07/31", dow:"五", taiex:24380.15, chg:-102.30},
+    {d:"08/03", dow:"一", taiex:24688.42, chg:+308.27},
+    {d:"08/04", dow:"二", taiex:24810.06, chg:+121.64},
+    {d:"08/05", dow:"三", taiex:24735.88, chg:-74.18},
+    {d:"08/06", dow:"四", taiex:24402.51, chg:-333.37},
+    {d:"08/07", dow:"五", taiex:24519.73, chg:+117.22},
+    {d:"08/10", dow:"一", taiex:24988.40, chg:+468.67}
+  ],
+  units: [
+    {key:"foreign",   label:"外資",          gross:900, net:[-128.4, 212.7,  96.2, -47.5,-186.3,  58.9, 341.6]},
+    {key:"fdealer",   label:"外資自營商",     gross:12,  net:[   3.2,  -1.8,   0.9,   2.1,  -4.6,   1.4,   5.8]},
+    {key:"trust",     label:"投信",          gross:90,  net:[  18.6,  25.3,  12.8,   6.4,  -8.9,  14.2,  31.7]},
+    {key:"dealerSelf",label:"自營商（自行）", gross:120, net:[ -12.5,  30.1,  -8.3, -15.2, -22.4,   6.7,  24.9]},
+    {key:"dealerHdg", label:"自營商（避險）", gross:180, net:[ -24.8,  18.4,   9.6, -11.7, -35.1,  12.3,  41.2]}
+  ]
+};
+// buy/sell legs derived deterministically from a per-unit typical gross
+const leg = (u,i,side) => {
+  const g = u.gross * (1 + ((i*37)%11 - 5)/40);
+  return side === "buy" ? g + u.net[i]/2 : g - u.net[i]/2;
+};
+const total = DATA.units.reduce((acc,u)=>u.net.map((v,i)=>v+acc[i]), [0,0,0,0,0,0,0]);
+const totalGross = DATA.units.reduce((a,u)=>a+u.gross,0);
+
+const fmt = (v,signed) => v===null ? "—" : (signed && v>0 ? "+" : "") + v.toFixed(1);
+const cls = v => v>0 ? "up" : v<0 ? "down" : "zero";
+const heat = (v,max) => {
+  if(!v || !max) return "";
+  const a = 0.06 + Math.min(1, Math.abs(v)/max) * 0.36;
+  return `background:rgba(${v>0?"255,74,90":"0,230,118"},${a.toFixed(3)})`;
+};
+function streakOf(arr){
+  const last = arr[arr.length-1]; if(!last) return "";
+  let n=0; for(let i=arr.length-1;i>=0 && Math.sign(arr[i])===Math.sign(last);i--) n++;
+  return n>=2 ? `連 ${n} 日${last>0?"買超":"賣超"}` : "";
+}
+function spark(vals,w=84,h=26){
+  const max = Math.max(...vals.map(Math.abs)) || 1, bw = w/vals.length, mid = h/2;
+  const bars = vals.map((v,i)=>{
+    const bh = Math.max(1.5, Math.abs(v)/max*(mid-1));
+    const y = v>=0 ? mid-bh : mid;
+    return `<rect x="${(i*bw+1.2).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw-2.4).toFixed(1)}" height="${bh.toFixed(1)}" rx="1" fill="${v>=0?"#ff4a5a":"#00e676"}" opacity=".9"/>`;
+  }).join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近 7 日走勢">
+    <line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="rgba(255,255,255,.16)" stroke-width="1"/>${bars}</svg>`;
+}
+
+function render(metric){
+  const signed = metric === "net";
+  const rows = DATA.units.map(u=>{
+    const vals = u.net.map((v,i)=> metric==="net" ? v : leg(u,i,metric));
+    const max = Math.max(...vals.map(Math.abs));
+    const cum = vals.reduce((a,b)=>a+b,0);
+    const tds = vals.map(v=>`<td class="num ${signed?cls(v):""}" style="${signed?heat(v,max):""}">${fmt(v,signed)}</td>`).join("");
+    return `<tr>
+      <td class="unit">${u.label}</td>${tds}
+      <td class="num cum ${signed?cls(cum):""}">${fmt(cum,signed)}${signed?`<span class="streak">${streakOf(u.net)}</span>`:""}</td>
+      <td class="num">${spark(vals)}</td></tr>`;
+  }).join("");
+
+  const tvals = metric==="net" ? total
+    : DATA.dates.map((_,i)=>DATA.units.reduce((a,u)=>a+leg(u,i,metric),0));
+  const tmax = Math.max(...tvals.map(Math.abs));
+  const tcum = tvals.reduce((a,b)=>a+b,0);
+  const ttds = tvals.map(v=>`<td class="num ${signed?cls(v):""}" style="${signed?heat(v,tmax):""}">${fmt(v,signed)}</td>`).join("");
+
+  document.getElementById("matrix").innerHTML = `
+    <thead><tr>
+      <th class="unit">單位</th>
+      ${DATA.dates.map(d=>`<th class="num">${d.d}<span class="dow">${d.dow}</span></th>`).join("")}
+      <th class="num">7 日累計</th><th class="num">走勢</th>
+    </tr></thead>
+    <tbody>${rows}
+      <tr class="total"><td class="unit">合計</td>${ttds}
+        <td class="num cum ${signed?cls(tcum):""}">${fmt(tcum,signed)}${signed?`<span class="streak">${streakOf(total)}</span>`:""}</td>
+        <td class="num">${spark(tvals)}</td></tr>
+    </tbody>`;
+}
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed", String(x===b)));
+  render(b.dataset.metric);
+}));
+render("net");
+</script>
+</body>
+</html>

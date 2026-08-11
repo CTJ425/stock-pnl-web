@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人買賣超 UI/UX 重構提案總覽</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --surface-strong:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+  --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.6 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:36px 28px}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:26px;font-weight:750;letter-spacing:.01em}
+.lede{color:var(--ink-2);font-size:14px;margin-top:10px;max-width:820px}
+h2{font-size:16px;font-weight:700;margin:34px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+.diag{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.prob{background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--up);border-radius:10px;padding:13px 15px}
+.prob b{display:block;font-size:13.5px;margin-bottom:4px}
+.prob span{font-size:12.5px;color:var(--ink-2);line-height:1.65}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+a.card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:13px;
+  padding:17px 18px;text-decoration:none;color:inherit;transition:.18s}
+a.card:hover{border-color:var(--accent);background:var(--surface-strong);transform:translateY(-2px)}
+.tag{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em}
+.card h3{font-size:15.5px;font-weight:700;margin:5px 0 7px}
+.card p{font-size:12.5px;color:var(--ink-2);line-height:1.7;flex:1}
+.meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.chip{font-size:10.5px;color:var(--ink-2);background:rgba(255,255,255,.06);border:1px solid var(--border);
+  border-radius:20px;padding:2px 9px}
+.chip.best{color:#c7d0ff;background:rgba(124,140,248,.18);border-color:rgba(124,140,248,.4)}
+
+table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
+th{color:var(--ink-muted);font-weight:600;font-size:11.5px;background:var(--thead);white-space:nowrap}
+td.y{color:var(--down);font-weight:650}
+td.n{color:var(--ink-muted)}
+td.p{color:#fcd34d}
+.rec{background:rgba(124,140,248,.09);border:1px solid rgba(124,140,248,.28);border-radius:11px;padding:15px 17px;margin-top:16px;font-size:13px;color:var(--ink-2);line-height:1.8}
+.rec b{color:var(--ink)}
+code{background:rgba(255,255,255,.07);border-radius:4px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>三大法人買賣超 · UI/UX 重構提案（6 案）</h1>
+  <p class="lede">
+    對象：<code>總體經濟 → 台股市場 → 三大法人買賣超（億元）・近 7 個交易日</code>（<code>sources/src/components/Macro/TwMarketSection.tsx</code>）。
+    共同原則：<b>表格為主、圖形為輔</b>——圖只做量級與方向的輔助編碼，所有數字都能在表格裡直接讀到。
+  </p>
+
+  <h2>現況診斷：問題出在表格的軸選錯了</h2>
+  <div class="diag">
+    <div class="prob"><b>1 · 軸向與問題不符</b><span>現在是「日期 × 單位」樹狀展開。但使用者問的是「外資這幾天在買還是在賣」——這需要跨 7 個展開區塊跳著讀同一個名字的列。</span></div>
+    <div class="prob"><b>2 · 預設藏起主角</b><span>只展開最新一天、且收合時只顯示「合計」。外資與投信這兩個真正被關心的數字，在其餘 6 天預設是看不到的。</span></div>
+    <div class="prob"><b>3 · 全展開＝42 列</b><span>7 天 × 6 單位平鋪在同一個表頭下，沒有分段標題，捲到一半就不知道自己在哪一天。</span></div>
+    <div class="prob"><b>4 · 欄位分配失衡</b><span>買進／賣出佔掉 5 欄中的 2 欄，但真正的訊號是買賣超；相對地「7 日累計」這個關鍵答案完全沒有。</span></div>
+    <div class="prob"><b>5 · 日期欄過載</b><span>rowSpan 的日期格裡塞了展開鈕、日期、連 N 日標籤與 100×36 的走勢圖，破壞表格的掃視節奏。</span></div>
+    <div class="prob"><b>6 · 缺少量級編碼</b><span>所有數字同字級、只用顏色分正負，−4.6 億與 +341.6 億在視覺上等重，看不出哪一天異常。</span></div>
+  </div>
+
+  <h2>六個方案</h2>
+  <div class="grid">
+    <a class="card" href="macro_inst_v1_matrix.html">
+      <span class="tag">方案一</span><h3>轉置矩陣（單位 × 日期）</h3>
+      <p>把表整個轉 90°：列＝六單位、欄＝七日，6×7 一次全見、零展開。底色深淺編碼強度，末兩欄補上 7 日累計與走勢；買進／賣出改為上方口徑切換。</p>
+      <div class="meta"><span class="chip best">推薦主案</span><span class="chip">零互動</span><span class="chip">跨日比較最強</span></div>
+    </a>
+    <a class="card" href="macro_inst_v2_heatbar.html">
+      <span class="tag">方案二</span><h3>格內分向長條矩陣</h3>
+      <p>骨架同方案一，但每格「數字＋以零為中心的長條」，且全表共用同一把尺，量級差距不必心算。異常大的一天會自己從表裡跳出來。</p>
+      <div class="meta"><span class="chip">量級可視化</span><span class="chip">列高 +12px</span></div>
+    </a>
+    <a class="card" href="macro_inst_v3_master_detail.html">
+      <span class="tag">方案三</span><h3>主從式（選日期 → 看單位）</h3>
+      <p>保留以日期為主軸的習慣，但展開／收合換成單選：左表恆為 7 列，右側顯示所選日的六單位買進／賣出／買賣超與成交規模長條。版面高度固定。</p>
+      <div class="meta"><span class="chip">高度不爆炸</span><span class="chip">買賣進出完整</span><span class="chip">鍵盤可操作</span></div>
+    </a>
+    <a class="card" href="macro_inst_v4_unit_rows.html">
+      <span class="tag">方案四</span><h3>單位為列 + 內嵌 7 日長條</h3>
+      <p>保留「可展開」互動，但展開對象從日期換成單位。預設 6 列即答完「這週誰在買」，要查逐日買進／賣出才展開該單位。改動幅度最小。</p>
+      <div class="meta"><span class="chip">漸進式改版</span><span class="chip">複用現有元件</span></div>
+    </a>
+    <a class="card" href="macro_inst_v5_terminal.html">
+      <span class="tag">方案五</span><h3>終端機高密度網格</h3>
+      <p>等寬字體、26px 行高、零展開，把 6 單位 × 7 日 × 三種口徑全部塞進一屏，並加一列 TAIEX 對照。給每天都在看的重度使用者。</p>
+      <div class="meta"><span class="chip">資訊密度最高</span><span class="chip">新手不友善</span><span class="chip">建議做進階模式</span></div>
+    </a>
+    <a class="card" href="macro_inst_v6_summary_first.html">
+      <span class="tag">方案六</span><h3>摘要優先 / 窄螢幕友善</h3>
+      <p>以手機寬度呈現：先三張 KPI 給結論，再給 4 欄不橫捲的表（外資／投信／自營商／合計），六單位完整矩陣折疊備查。</p>
+      <div class="meta"><span class="chip best">行動版必備</span><span class="chip">先給結論</span></div>
+    </a>
+  </div>
+
+  <h2>對照表</h2>
+  <table>
+    <thead><tr><th>能力</th><th>方案一<br>轉置矩陣</th><th>方案二<br>長條矩陣</th><th>方案三<br>主從式</th><th>方案四<br>單位為列</th><th>方案五<br>終端機</th><th>方案六<br>摘要優先</th></tr></thead>
+    <tbody>
+      <tr><td>跨日比較同一單位</td><td class="y">極佳</td><td class="y">極佳</td><td class="n">不行</td><td class="p">迷你圖</td><td class="y">極佳</td><td class="p">主要單位</td></tr>
+      <tr><td>單日看齊全部單位</td><td class="y">佳</td><td class="y">佳</td><td class="y">極佳</td><td class="p">需展開</td><td class="y">佳</td><td class="p">需展開</td></tr>
+      <tr><td>買進／賣出金額</td><td class="p">口徑切換</td><td class="n">未提供</td><td class="y">常駐</td><td class="p">展開後</td><td class="y">ALL 模式</td><td class="p">折疊區</td></tr>
+      <tr><td>7 日累計</td><td class="y">有</td><td class="y">有</td><td class="n">無</td><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+      <tr><td>量級一眼可辨</td><td class="p">底色</td><td class="y">長條</td><td class="p">左表長條</td><td class="p">迷你圖</td><td class="n">純數字</td><td class="p">KPI</td></tr>
+      <tr><td>預設不需互動</td><td class="y">是</td><td class="y">是</td><td class="p">需選日</td><td class="y">是</td><td class="y">是</td><td class="y">是</td></tr>
+      <tr><td>窄螢幕</td><td class="p">首欄凍結橫捲</td><td class="p">橫捲</td><td class="y">上下堆疊</td><td class="y">尚可</td><td class="n">差</td><td class="y">為此設計</td></tr>
+      <tr><td>實作成本</td><td class="y">中</td><td class="y">中</td><td class="p">中高</td><td class="y">低</td><td class="p">中</td><td class="p">中高</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec">
+    <b>建議：以方案一為主案，方案六為其窄螢幕型態。</b>
+    方案一直接解掉診斷中的 1／2／3／4／6，且不需要任何後端改動（<code>market/daily.json</code> 現有欄位已足夠）；
+    方案二可視為方案一的儲存格樣式選項，兩者共用同一份 render 邏輯，不必二選一到底。
+    若希望改動範圍最小、先驗證方向，則從<b>方案四</b>下手——它只是把現有的展開軸反過來，元件幾乎可原地沿用。
+    方案五建議留作日後的「專業模式」開關，不宜作為預設。
+  </div>
+</div>
+</body>
+</html>

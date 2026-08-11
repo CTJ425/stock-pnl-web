@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人 UX 方案二：格內分向長條矩陣</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --border:rgba(255,255,255,.09);
+  --border-strong:rgba(255,255,255,.16); --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:28px 32px}
+.wrap{max-width:1240px;margin:0 auto}
+.pagehead h1{font-size:20px;font-weight:700}
+.pagehead p{color:var(--ink-2);font-size:13px;margin-top:6px;max-width:840px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:22px}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sechead h3{font-size:15px;font-weight:650}
+.sub{color:var(--ink-muted);font-size:12px}
+.scale{font-size:11.5px;color:var(--ink-muted)}
+
+.table-scroll{overflow-x:auto;margin-top:14px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
+th,td{white-space:nowrap}
+thead th{background:var(--thead);color:var(--ink-2);font-weight:600;font-size:12px;padding:8px 8px;border-bottom:1px solid var(--border);text-align:center}
+thead th.unit{text-align:left}
+td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05);text-align:center}
+td.unit,th.unit{position:sticky;left:0;background:#101623;z-index:2;text-align:left;border-right:1px solid var(--border);padding-left:12px;font-size:13px}
+thead th.unit{background:#0f1420;z-index:3}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+tbody tr:hover td.unit{background:#131a2b}
+.dow{display:block;font-weight:400;color:var(--ink-muted);font-size:11px}
+
+/* the cell: number on top, diverging bar underneath — the bar is the sidekick, not the star */
+.cellnum{font-size:12.5px;font-weight:600;line-height:1.25}
+.bar{position:relative;height:7px;margin-top:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden}
+.bar i{position:absolute;top:0;height:100%;display:block}
+.bar::after{content:"";position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:rgba(255,255,255,.18)}
+.up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--ink-muted)}
+
+tr.total td{border-top:1px solid var(--border-strong);background:rgba(124,140,248,.07)}
+tr.total td.unit{background:#141a2c;font-weight:700}
+tr.total .cellnum{font-size:13.5px;font-weight:750}
+td.cum{border-left:1px solid var(--border);background:rgba(255,255,255,.02)}
+tr.total td.cum{background:rgba(124,140,248,.1)}
+.hint{color:var(--ink-muted);font-size:12px;margin-top:12px;line-height:1.7}
+.note{background:rgba(124,140,248,.08);border:1px solid rgba(124,140,248,.25);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12.5px;color:var(--ink-2);line-height:1.75}
+.note b{color:var(--ink)}
+.ctx{display:flex;gap:0;margin-top:16px;border-top:1px dashed var(--border);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pagehead">
+    <h1>方案二 · 格內分向長條矩陣</h1>
+    <p>骨架與方案一相同（單位 × 日期），差別在<b>每一格都是「數字＋一條以零為中心的分向長條」</b>。長條共用整張表的同一把尺，所以 341.6 億的格子看起來就是 5.8 億的 59 倍——量體差距不必心算。</p>
+  </div>
+
+  <div class="card">
+    <div class="sechead">
+      <div>
+        <h3>三大法人買賣超（億元）· 近 7 個交易日</h3>
+        <div class="sub">2026-07-31 ～ 2026-08-10 · 長條為全表共用比例尺</div>
+      </div>
+      <div class="scale" id="scale"></div>
+    </div>
+
+    <div class="table-scroll">
+      <table id="matrix" aria-label="三大法人買賣超矩陣（含格內長條）"></table>
+    </div>
+
+    <p class="hint">
+      每格上方為金額（紅買超／綠賣超），下方長條以格子中線為零點向左右延伸；長度在整張表之間可直接比較。<br>
+      末列「合計」與末欄「7 日累計」同樣附長條，因此「哪一天最兇」與「這週誰最積極」各有一條可掃視的軸線。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>解決了什麼：</b>原表所有數字字級相同、只有顏色分正負，看不出量級差異；改成共用比例尺的長條後，異常大的一天（08/10 合計 +445.2 億）在整張表上一眼跳出來。<br>
+    <b>與方案一的取捨：</b>格子高度約多 12px（7 列 ≈ +84px），換得量級可視化；若螢幕高度吃緊，方案一的純底色熱度較省空間。
+  </div>
+</div>
+
+<script>
+const DATES=[["07/31","五"],["08/03","一"],["08/04","二"],["08/05","三"],["08/06","四"],["08/07","五"],["08/10","一"]];
+const UNITS=[
+  ["外資",[-128.4,212.7,96.2,-47.5,-186.3,58.9,341.6]],
+  ["外資自營商",[3.2,-1.8,0.9,2.1,-4.6,1.4,5.8]],
+  ["投信",[18.6,25.3,12.8,6.4,-8.9,14.2,31.7]],
+  ["自營商（自行）",[-12.5,30.1,-8.3,-15.2,-22.4,6.7,24.9]],
+  ["自營商（避險）",[-24.8,18.4,9.6,-11.7,-35.1,12.3,41.2]]
+];
+const TOTAL=DATES.map((_,i)=>UNITS.reduce((a,[,v])=>a+v[i],0));
+const CUM=v=>v.reduce((a,b)=>a+b,0);
+
+// one shared scale across every cell, so bar length is comparable table-wide
+const MAX=Math.max(...UNITS.flatMap(([,v])=>v.map(Math.abs)), ...TOTAL.map(Math.abs));
+const MAXCUM=Math.max(...UNITS.map(([,v])=>Math.abs(CUM(v))), Math.abs(CUM(TOTAL)));
+
+const cls=v=>v>0?"up":v<0?"down":"zero";
+const fmt=v=>v===null?"—":(v>0?"+":"")+v.toFixed(1);
+function cell(v,max){
+  if(v===null) return `<div class="cellnum zero">—</div><div class="bar"></div>`;
+  const w=Math.min(50, Math.abs(v)/max*50), c=v>0?"var(--up)":"var(--down)";
+  const style=v>0?`left:50%;width:${w}%`:`right:50%;width:${w}%`;
+  return `<div class="cellnum ${cls(v)}">${fmt(v)}</div>
+          <div class="bar"><i style="${style};background:${c};opacity:.85"></i></div>`;
+}
+document.getElementById("scale").textContent=`比例尺：整格寬 = ±${MAX.toFixed(0)} 億`;
+document.getElementById("matrix").innerHTML=`
+  <thead><tr><th class="unit">單位</th>
+    ${DATES.map(([d,w])=>`<th>${d}<span class="dow">${w}</span></th>`).join("")}
+    <th>7 日累計</th></tr></thead>
+  <tbody>
+    ${UNITS.map(([label,v])=>`<tr><td class="unit">${label}</td>
+      ${v.map(x=>`<td>${cell(x,MAX)}</td>`).join("")}
+      <td class="cum">${cell(CUM(v),MAXCUM)}</td></tr>`).join("")}
+    <tr class="total"><td class="unit">合計</td>
+      ${TOTAL.map(x=>`<td>${cell(x,MAX)}</td>`).join("")}
+      <td class="cum">${cell(CUM(TOTAL),MAXCUM)}</td></tr>
+  </tbody>`;
+</script>
+</body>
+</html>

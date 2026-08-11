@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三大法人 UX 方案三：主從式（選日期 → 看單位）</title>
+<style>
+:root{
+  --bg:#0b0f19; --surface:rgba(255,255,255,.045); --surface-strong:rgba(255,255,255,.08);
+  --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+  --ink:#e7ecf5; --ink-2:#9aa6bd; --ink-muted:#64748b;
+  --accent:#7c8cf8; --up:#ff4a5a; --down:#00e676; --thead:rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding:28px 32px}
+.wrap{max-width:1180px;margin:0 auto}
+.pagehead h1{font-size:20px;font-weight:700}
+.pagehead p{color:var(--ink-2);font-size:13px;margin-top:6px;max-width:840px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-top:22px}
+.sechead h3{font-size:15px;font-weight:650}
+.sub{color:var(--ink-muted);font-size:12px;margin-top:3px}
+
+.split{display:grid;grid-template-columns:minmax(340px,1fr) minmax(420px,1.25fr);gap:18px;margin-top:16px}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.pane{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
+.pane-head{padding:10px 14px;background:var(--thead);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--ink-2);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;font-size:13px;white-space:nowrap}
+thead th{color:var(--ink-muted);font-weight:600;font-size:11.5px;text-align:right;border-bottom:1px solid var(--border)}
+thead th:first-child{text-align:left}
+td{border-bottom:1px solid rgba(255,255,255,.05);text-align:right}
+td:first-child{text-align:left}
+.up{color:var(--up)} .down{color:var(--down)} .zero{color:var(--ink-muted)}
+
+/* master list: rows are days, selection replaces the old accordion */
+tr.day{cursor:pointer}
+tr.day:hover td{background:rgba(255,255,255,.04)}
+tr.day[aria-selected="true"] td{background:rgba(124,140,248,.14)}
+tr.day[aria-selected="true"] td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.datecell{display:flex;flex-direction:column;gap:1px}
+.datecell small{color:var(--ink-muted);font-size:11px}
+.minibar{position:relative;height:8px;width:120px;background:rgba(255,255,255,.05);border-radius:2px;display:inline-block;vertical-align:-1px}
+.minibar i{position:absolute;top:0;height:100%}
+.minibar::after{content:"";position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:rgba(255,255,255,.18)}
+
+/* detail pane */
+.detail-head{padding:14px;border-bottom:1px solid var(--border);display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap}
+.big{font-size:26px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:13px;font-weight:600;margin-left:3px}
+.kv{font-size:12px;color:var(--ink-muted)}
+.kv b{display:block;font-size:14px;color:var(--ink);font-weight:650;margin-top:2px}
+.legbar{position:relative;height:9px;width:100%;min-width:130px;background:rgba(255,255,255,.05);border-radius:2px;margin-top:5px;overflow:hidden}
+.legbar i{position:absolute;top:0;height:100%}
+.legbar b{position:absolute;top:0;height:100%;background:rgba(255,255,255,.22)}
+td.legs{text-align:right;min-width:170px}
+.hint{color:var(--ink-muted);font-size:12px;margin-top:12px;line-height:1.7}
+.note{background:rgba(124,140,248,.08);border:1px solid rgba(124,140,248,.25);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12.5px;color:var(--ink-2);line-height:1.75}
+.note b{color:var(--ink)}
+kbd{background:rgba(255,255,255,.09);border:1px solid var(--border-strong);border-radius:4px;padding:1px 5px;font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pagehead">
+    <h1>方案三 · 主從式（選日期 → 看單位）</h1>
+    <p>保留「以日期為主軸」的閱讀習慣，但把 <b>展開／收合換成單選</b>：左表 7 天永遠是 7 列，點一列，右邊換成那天六個單位的完整買進／賣出／買賣超。任何時候版面高度都固定，不會因為「全部展開」暴增成 42 列。</p>
+  </div>
+
+  <div class="card">
+    <div class="sechead">
+      <h3>三大法人買賣超（億元）· 近 7 個交易日</h3>
+      <div class="sub">左：每日合計總覽（點選切換）　右：所選日期的單位明細　<kbd>↑</kbd><kbd>↓</kbd> 可切換</div>
+    </div>
+
+    <div class="split">
+      <div class="pane">
+        <div class="pane-head"><span>每日合計</span><span>2026-07-31 ～ 08-10</span></div>
+        <table id="master" aria-label="每日三大法人合計買賣超"></table>
+      </div>
+      <div class="pane">
+        <div class="pane-head"><span id="detail-title">單位明細</span><span id="detail-tag"></span></div>
+        <div class="detail-head" id="detail-head"></div>
+        <table id="detail" aria-label="所選日期的三大法人單位明細"></table>
+      </div>
+    </div>
+
+    <p class="hint">
+      左表附「加權指數漲跌」是刻意的：法人買賣超要能對照當天大盤才有意義（08/06 合計賣超 257.3 億、指數 −333.37 點）。<br>
+      右表灰底長條為當日買進＋賣出總額（成交規模），彩色段為淨額方向，因此「大進大出但淨額很小」不會被誤讀成「沒在動」。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>解決了什麼：</b>①原設計預設只展開最新一天，其他 6 天的單位明細等於藏起來；改為單選後，看任何一天都是同一個動作、同一個成本。②買進／賣出終於有地方好好呈現（含規模長條），而不必擠在主表裡。<br>
+    <b>代價：</b>無法一眼跨日比較單一單位——那是方案一／二的強項。若使用者主要問「今天誰在買」，此案最直覺。
+  </div>
+</div>
+
+<script>
+const DAYS=[
+ {d:"2026-07-31",w:"週五",taiex:24380.15,chg:-102.30,net:{"外資":-128.4,"外資自營商":3.2,"投信":18.6,"自營商（自行）":-12.5,"自營商（避險）":-24.8}},
+ {d:"2026-08-03",w:"週一",taiex:24688.42,chg:308.27, net:{"外資":212.7,"外資自營商":-1.8,"投信":25.3,"自營商（自行）":30.1,"自營商（避險）":18.4}},
+ {d:"2026-08-04",w:"週二",taiex:24810.06,chg:121.64, net:{"外資":96.2,"外資自營商":0.9,"投信":12.8,"自營商（自行）":-8.3,"自營商（避險）":9.6}},
+ {d:"2026-08-05",w:"週三",taiex:24735.88,chg:-74.18, net:{"外資":-47.5,"外資自營商":2.1,"投信":6.4,"自營商（自行）":-15.2,"自營商（避險）":-11.7}},
+ {d:"2026-08-06",w:"週四",taiex:24402.51,chg:-333.37,net:{"外資":-186.3,"外資自營商":-4.6,"投信":-8.9,"自營商（自行）":-22.4,"自營商（避險）":-35.1}},
+ {d:"2026-08-07",w:"週五",taiex:24519.73,chg:117.22, net:{"外資":58.9,"外資自營商":1.4,"投信":14.2,"自營商（自行）":6.7,"自營商（避險）":12.3}},
+ {d:"2026-08-10",w:"週一",taiex:24988.40,chg:468.67, net:{"外資":341.6,"外資自營商":5.8,"投信":31.7,"自營商（自行）":24.9,"自營商（避險）":41.2}}
+];
+const UNITS=["外資","外資自營商","投信","自營商（自行）","自營商（避險）"];
+const GROSS={"外資":900,"外資自營商":12,"投信":90,"自營商（自行）":120,"自營商（避險）":180};
+const sum=o=>UNITS.reduce((a,u)=>a+o[u],0);
+const cls=v=>v>0?"up":v<0?"down":"zero";
+const sgn=v=>(v>0?"+":"")+v.toFixed(1);
+const MAXDAY=Math.max(...DAYS.map(d=>Math.abs(sum(d.net))));
+
+function minibar(v,max){
+  const w=Math.min(50,Math.abs(v)/max*50), c=v>0?"var(--up)":"var(--down)";
+  return `<span class="minibar"><i style="${v>0?`left:50%;width:${w}%`:`right:50%;width:${w}%`};background:${c};opacity:.85"></i></span>`;
+}
+document.getElementById("master").innerHTML=`
+  <thead><tr><th>日期</th><th>合計買賣超</th><th>強度</th><th>指數漲跌</th></tr></thead>
+  <tbody>${DAYS.map((d,i)=>{const t=sum(d.net);return `
+    <tr class="day" data-i="${i}" aria-selected="${i===DAYS.length-1}" tabindex="0">
+      <td><span class="datecell">${d.d.slice(5)}<small>${d.w}</small></span></td>
+      <td class="${cls(t)}" style="font-weight:650">${sgn(t)} 億</td>
+      <td>${minibar(t,MAXDAY)}</td>
+      <td class="${cls(d.chg)}">${sgn(d.chg)}</td>
+    </tr>`}).join("")}</tbody>`;
+
+function renderDetail(i){
+  const d=DAYS[i], t=sum(d.net);
+  const legOf=u=>{const g=GROSS[u]*(1+((i*37)%11-5)/40);return {buy:g+d.net[u]/2, sell:g-d.net[u]/2};};
+  const maxGross=Math.max(...UNITS.map(u=>{const l=legOf(u);return l.buy+l.sell;}));
+  document.getElementById("detail-title").textContent=`${d.d}（${d.w}）單位明細`;
+  document.getElementById("detail-tag").textContent=`加權指數 ${d.taiex.toFixed(2)}`;
+  document.getElementById("detail-head").innerHTML=`
+    <div><div class="kv">當日合計買賣超</div>
+      <div class="big ${cls(t)}">${sgn(t)}<small>億</small></div></div>
+    <div class="kv">外資<b class="${cls(d.net["外資"])}">${sgn(d.net["外資"])} 億</b></div>
+    <div class="kv">投信<b class="${cls(d.net["投信"])}">${sgn(d.net["投信"])} 億</b></div>
+    <div class="kv">指數漲跌<b class="${cls(d.chg)}">${sgn(d.chg)}</b></div>`;
+  document.getElementById("detail").innerHTML=`
+    <thead><tr><th>單位</th><th>買進</th><th>賣出</th><th>買賣超</th><th style="text-align:right">成交規模／方向</th></tr></thead>
+    <tbody>${UNITS.map(u=>{const l=legOf(u),n=d.net[u],g=l.buy+l.sell;
+      const gw=g/maxGross*100, nw=Math.min(gw,Math.abs(n)/maxGross*100);
+      return `<tr>
+        <td>${u}</td><td>${l.buy.toFixed(1)}</td><td>${l.sell.toFixed(1)}</td>
+        <td class="${cls(n)}" style="font-weight:650">${sgn(n)}</td>
+        <td class="legs"><span class="legbar"><b style="left:0;width:${gw.toFixed(1)}%"></b>
+          <i style="left:0;width:${nw.toFixed(1)}%;background:${n>0?"var(--up)":"var(--down)"}"></i></span></td>
+      </tr>`}).join("")}
+      <tr style="border-top:1px solid var(--border-strong)">
+        <td style="font-weight:700">合計</td>
+        <td>${UNITS.reduce((a,u)=>a+legOf(u).buy,0).toFixed(1)}</td>
+        <td>${UNITS.reduce((a,u)=>a+legOf(u).sell,0).toFixed(1)}</td>
+        <td class="${cls(t)}" style="font-weight:750">${sgn(t)}</td><td></td></tr>
+    </tbody>`;
+}
+function select(i){
+  document.querySelectorAll("tr.day").forEach(r=>r.setAttribute("aria-selected",String(+r.dataset.i===i)));
+  renderDetail(i);
+}
+document.querySelectorAll("tr.day").forEach(r=>{
+  r.addEventListener("click",()=>select(+r.dataset.i));
+  r.addEventListener("keydown",e=>{
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();
+      const n=Math.max(0,Math.min(DAYS.length-1,+r.dataset.i+(e.key==="ArrowDown"?1:-1)));
+      document.querySelector(`tr.day[data-i="${n}"]`).focus(); select(n);}
+    if(e.key==="Enter"||e.key===" "){e.preventDefault();select(+r.dataset.i);}
+  });
+});
+select(DAYS.length-1);
+</script>
+</body>
+</html>
