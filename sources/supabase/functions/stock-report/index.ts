@@ -176,18 +176,15 @@ import {
 import {
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
-  PROBE_FOLLOW_UP,
   borrowHit,
-  followUpsFor,
   mopsIssueRocYmd,
-  pendingSources,
-  sourceLanded,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type LandingEvidence,
   type ProbeFollowUp,
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
+import { runProbeRound } from './probeRound.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -2408,108 +2405,57 @@ async function handleProbe(): Promise<Response> {
   const slot = floorToFiveMin(rawHhmm)
   const weekday = taipeiWeekday(now)
   const planned = sourcesForTaipeiTime(slot, weekday)
-  // 0.7.7/0.7.8: stop asking a source once it has answered **and been fetched** —— see pendingSources.
-  const doneToday =
-    planned.length > 0 ? await readDoneSourcesToday(todayYmd) : new Set<ProbeSourceId>()
-  const sources = pendingSources(planned, doneToday)
-  const skipped = planned.filter((id) => !sources.includes(id))
-
-  const ticks: ProbeTickResult[] = []
-  // Sequential: keep wall time predictable on free tier
-  for (const id of sources) {
-    const r = await probeSource(id, todayYmd)
-    ticks.push({ source: id, ...r })
-  }
-
-  // Persist ticks (one row per source)
-  for (const t of ticks) {
-    try {
-      await db.from('source_probe_tick').insert({
-        taipei_ymd: todayYmd,
-        taipei_time: slot,
-        source: t.source,
-        hit: t.hit,
-        ok: t.ok,
-        data_ymd: t.data_ymd,
-        fingerprint: t.fingerprint,
-        rows: t.rows,
-        note: t.note,
-        duration_ms: t.duration_ms,
-      })
-    } catch {
-      // table missing or RLS — probe must not crash cron
-    }
-  }
 
   /*
-    A green tick now pulls the data in (0.7.8). Until here the probe was pure observation: it recorded
-    that the source had landed and left the fetching to a fixed shift, so a hit at 15:10 waited for the
-    15:15 flight —— and while the shifts were disabled, waited forever.
+    The round itself lives in `probeRound.ts` with its I/O injected, so the part that is easy to get
+    wrong —— hit triggers the right fetch, the right sources get verified, `data_landed` lands on the
+    right row —— is covered by `npm test` instead of waiting for TWSE to publish something.
 
-    Ordering matters. Ticks are persisted **before** this runs, so the measurement survives even if the
-    fetch throws or the function is killed mid-way. What that order costs —— a tick already marked hit
-    while its fetch has not run —— is paid for by `follow_up_ok`: only a hit whose follow-up came back OK
-    counts as done, so a throw, a budget cut-off or a killed invocation all leave the source pending and
-    the next round retries it. The fixed schedules stay on as the outer retry.
+    Everything below is the adapter: real network, real DB, real clock. Note the ordering contract it
+    has to honour, spelled out in runProbeRound: the tick is written **before** the fetch runs, so the
+    measurement survives a crash, and `data_landed` is what distinguishes 「命中了」 from 「拿到了」.
   */
-  const hitSources = ticks.filter((t) => t.hit).map((t) => t.source)
-  const followUps = followUpsFor(hitSources)
-  const followUpResults: Array<{ action: ProbeFollowUp; ok: boolean; note: string }> = []
-  const bodies = new Map<ProbeFollowUp, Record<string, unknown>>()
-  const deadline = startedAt + PROBE_FOLLOW_UP_BUDGET_MS
-  for (const action of followUps) {
-    if (Date.now() > deadline) {
-      followUpResults.push({ action, ok: false, note: '預算不足，留給固定班表' })
-      continue
-    }
-    try {
-      const body = await runProbeFollowUp(action)
-      bodies.set(action, body)
-      followUpResults.push({ action, ok: true, note: summariseFollowUp(action, body) })
-    } catch (e) {
-      followUpResults.push({ action, ok: false, note: e instanceof Error ? e.message : String(e) })
-    }
-  }
-
-  /*
-    Then ask the artifacts, not the fetches. `ok` above only says the call returned; `landed` says the
-    source's data is actually on disk with today's date on it —— and only `landed` retires the source.
-  */
-  const evidence: LandingEvidence =
-    followUps.length > 0 ? await gatherLandingEvidence(hitSources, todayYmd, bodies) : {}
-
-  /*
-    Write the outcome back onto the tick that caused it. `data_landed` is what `readDoneSourcesToday`
-    reads next round, and `note` is what a human reads: the admin log already prints `note` per tick, so
-    「命中 → 抓了什麼 → 資料到了沒」 ends up on one line in the place someone is already looking, instead
-    of only in an HTTP response nobody keeps.
-
-    A failed write-back leaves `data_landed` null, i.e. not done —— the source gets probed and fetched
-    again next round. Erring towards a repeat is right: every follow-up short-circuits when the data is
-    already in.
-  */
-  const landedSources: ProbeSourceId[] = []
-  for (const t of ticks) {
-    if (!t.hit) continue
-    const r = followUpResults.find((f) => f.action === PROBE_FOLLOW_UP[t.source])
-    if (!r) continue
-    const landed = r.ok && sourceLanded(t.source, todayYmd, evidence)
-    if (landed) landedSources.push(t.source)
-    const trigger = r.ok ? `已觸發 ${r.action}：${r.note}` : `觸發失敗 ${r.action}：${r.note}`
-    try {
-      await db
-        .from('source_probe_tick')
-        .update({
-          data_landed: landed,
-          note: `${t.note} · ${trigger} · ${landed ? '資料已到位' : '資料未到位，下輪重試'}`,
+  const { sources, skipped, ticks, followUps, landed } = await runProbeRound(planned, todayYmd, {
+    deadline: startedAt + PROBE_FOLLOW_UP_BUDGET_MS,
+    now: () => Date.now(),
+    summarise: summariseFollowUp,
+    readDoneSources: () => readDoneSourcesToday(todayYmd),
+    probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
+    runFollowUp: runProbeFollowUp,
+    readEvidence: (hitSources, bodies) => gatherLandingEvidence(hitSources, todayYmd, bodies),
+    persistTick: async (t) => {
+      try {
+        await db.from('source_probe_tick').insert({
+          taipei_ymd: todayYmd,
+          taipei_time: slot,
+          source: t.source,
+          hit: t.hit,
+          ok: t.ok,
+          data_ymd: t.data_ymd,
+          fingerprint: t.fingerprint,
+          rows: t.rows,
+          note: t.note,
+          duration_ms: t.duration_ms,
         })
-        .eq('taipei_ymd', todayYmd)
-        .eq('taipei_time', slot)
-        .eq('source', t.source)
-    } catch {
-      // never fail the probe over the write-back — a lost one only costs a repeat next round
-    }
-  }
+      } catch {
+        // table missing or RLS — probe must not crash cron
+      }
+    },
+    markTick: async (source, dataLanded, note) => {
+      try {
+        await db
+          .from('source_probe_tick')
+          .update({ data_landed: dataLanded, note })
+          .eq('taipei_ymd', todayYmd)
+          .eq('taipei_time', slot)
+          .eq('source', source)
+      } catch {
+        // never fail the probe over the write-back — a lost one only costs a repeat next round
+      }
+    },
+  })
+  const followUpResults = followUps
+  const landedSources = landed
 
   // Legacy source_probe_log: keep last bwibbu/borrow snapshot if those ran
   const bw = ticks.find((t) => t.source === 'bwibbu')
