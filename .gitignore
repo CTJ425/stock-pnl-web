@@ -34,3 +34,7 @@ raw/
 /supabase/.branches/
 # Added by code-review-graph
 .code-review-graph/
+
+# Local agent skill installs / design dumps (not product code)
+.agents/
+.gemini/
