@@ -7,6 +7,36 @@
 
 ---
 
+## 📅 Log: 2026-08-11 21:10:00 Asia/Taipei (Task 86: Model routing made enforceable)
+
+Uninstalled the `mad` Claude Code plugin and removed its marketplace registration. Deleted the now-dead `.claude/mad/models.json`. The plugin source repo at /root/dev/mode-routing was not touched.
+
+Added `.claude/hooks/routing_guard.py` — a PreToolUse guard on Write/Edit/NotebookEdit. It reads `agent_type` from the hook payload and enforces role boundaries: main session is asked to confirm before editing `sources/` or a tracking record; architect cannot write production code; builder cannot write tests, specs or docs; scribe is limited to docs/agent/; scout and reviewer cannot write. Escape hatches: ROUTING_MAIN=off, ROUTING_GUARD=off.
+
+Added `.claude/hooks/routing_observe.py` — logs every SubagentStart/SubagentStop to `.claude/routing/dispatch.jsonl`, and nudges the main session after 12 discovery calls (Read/Grep/Glob).
+
+Added `.claude/hooks/routing_audit.py` — reports output tokens per model and per role from the transcripts, as evidence that routing actually happened.
+
+Added `.claude/skills/route/SKILL.md` — the dispatch loop (lane 0/1/2 classification, scout -> spec -> builder -> reviewer -> scribe, escalation rules, handoff formats). Replaces the removed `/mad:orchestrate`.
+
+Rewrote the Task routing section of CLAUDE.md and docs/CLAUDE-tw.md: delegation is now standing authorization, with the role table, the cost limits, and the enforcement/audit commands.
+
+Updated .claude/agents/architect.md, builder.md, scribe.md: removed dead `mad` references and unified the review-failure escalation rule (1st FAIL re-dispatch, 2nd FAIL fix the spec, 3rd FAIL ask the user).
+
+Marked docs/agents/mam/*.md as SUPERSEDED; content was folded into the route skill. Files were not deleted.
+
+Added `.claude/routing/` to .gitignore.
+
+Verification (all passed):
+- `bash .claude/hooks/test_hooks.sh` — 21 passed, 0 failed.
+- Live dispatch of `scout` confirmed it ran on claude-haiku-4-5-20251001 (3,861 output tokens), not Opus, proving agent frontmatter model routing works.
+- Live dispatch of `builder` confirmed settings.json PreToolUse hooks fire inside subagents: a write to a test file was BLOCKED with the guard's message, a write to a production file was ALLOWED. Both probe files were deleted afterwards.
+- `python3 .claude/hooks/routing_audit.py` baseline: the main session wrote 96.4% of all output tokens, which is the problem this work exists to make visible.
+
+Known leftover (recorded as an open note, not a bug): `/root/.claude/plugins/cache/model-routing/` still holds an orphaned model-routing plugin v0.1.0/v0.2.0 that appears to have no copy in the /root/dev/mode-routing git repo. It was deliberately not deleted.
+
+---
+
 ## 📅 Log: 2026-08-11 21:00:00 Asia/Taipei (0.7.12 判準對齊)
 
 One standard for all seven sources: **hit** = the source published today; **retire** = what it published
