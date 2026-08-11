@@ -225,7 +225,7 @@ In this round, the `TechnicalTab` placeholder page will be delivered first, and 
 - `TASK.md` stops at Task 10 (v0.3.6), **After-hours chip report v1 has no TASK entry at all** - v1 summary + this Task 11 needs to be supplemented.
 - `PROGRESS.md` stops at v0.3.6, missing v0.3.7-dev.1 / dev.2.
 - `SPEC.md` does not have a post-market chip report section and still references the moved `docs/database/supabase_schema.sql` (now `sources/supabase/schema.sql`).
-- The version number is changed from `0.3.7-dev.2` to `0.3.7-dev.3` according to CLAUDE.md §17.2, and the three places are synchronized (`sources/src/version.ts` / `sources/package.json` / `README.md`).
+- The version number is changed from `0.3.7-dev.2` to `0.3.7-dev.3` according to CLAUDE.md § Versioning, and the three places are synchronized (`sources/src/version.ts` / `sources/package.json` / `README.md`).
 - `sources/supabase/README.md` needs to update the report JSON structure (no more `html`), new `MI_MARGN_D` dataset, and description of backfill behavior.
 
 ### K. Differences between implementation results and plan (2026-07-25 15:20:00 Asia/Taipei)
