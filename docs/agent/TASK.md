@@ -25,7 +25,7 @@
 - ⏳ **Still unseen in the wild: no probe hit has yet triggered a follow-up.** Task 85 step 9. Lower
   stakes than it was —— regressions are now caught by `npm test` —— but the first live round is still
   worth reading back.
-- **Open bugs: none.**
+- **Open bugs: BUG-024** —— 估值 BWIBBU 每天存的都是前一個交易日（端點沒有日期參數 + readLatest 當日凍結 + 沒有 cron）。
 
 <details>
 <summary>Superseded snapshot (2026-08-11 13:25) —— kept for the 0.7.3/0.7.4 experiment history</summary>
@@ -47,7 +47,7 @@
   Needs a DDL before the Edge half: see Task 85.
 - PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
 - ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
-- **Open bugs: none.**
+- **Open bugs: BUG-024** —— 估值 BWIBBU 每天存的都是前一個交易日（端點沒有日期參數 + readLatest 當日凍結 + 沒有 cron）。
 
 </details>
 
