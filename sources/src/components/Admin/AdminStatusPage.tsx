@@ -12,13 +12,8 @@
  * The decision rules and coordinate calculations are all in `timeline.ts` (pure function, with tests), and are only presented here.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity, RefreshCw, ShieldCheck } from 'lucide-react'
-import {
-  fetchAdminStatus,
-  type AdminStatus,
-  type ScheduleRow,
-  type SourceStamp,
-} from '../../services/adminStatus'
+import { Activity, ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
+import { fetchAdminStatus, type AdminStatus, type SourceStamp } from '../../services/adminStatus'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import {
   TL_SPAN_HOURS,
@@ -27,18 +22,18 @@ import {
   cronHoursTaipei,
   dayPercent,
   describeCron,
-  describeScope,
   durationLabel,
+  groupProbeTicks,
   hourLabel,
   hoursFromBase,
   humanAgo,
-  judgeCron,
   judgeSource,
   nextRun,
   roundBaseYmd,
   taipeiParts,
   tlLabel,
   tlPercent,
+  type ProbeSeries,
   type SourceState,
 } from './timeline'
 import { judgePeriod, latestPeriod, periodsBehind } from '../Macro/macroPeriod'
@@ -100,19 +95,93 @@ function DayRow({
 }
 
 /**
- * A bracketed paragraph for the probe column number. Put the whole paragraph together, do not split it into two conditional expressions——
- * If only one of the items has a value, "(Valuation 1081 column" without the closing bracket will be printed.
+ * One probe = one row: name, hit/miss progress bar, first-hit summary, expandable log.
+ *
+ * The bar is one cell per 5-minute probe in time order, so it is read left-to-right as
+ * "how far into its window did this source stay dark". A percentage would compress away
+ * the only thing being measured here — **when** it turned green, not how often.
  */
-function probeRows(probe: AdminStatus['probe']): string {
-  const parts: string[] = []
-  if (probe?.bwibbu_rows != null) parts.push(`估值 ${probe.bwibbu_rows} 列`)
-  if (probe?.borrow_rows != null) parts.push(`借券 ${probe.borrow_rows} 列`)
-  return parts.length ? `（${parts.join('、')}）` : ''
-}
+function ProbeRow({
+  series,
+  open,
+  onToggle,
+}: {
+  series: ProbeSeries
+  open: boolean
+  onToggle: () => void
+}) {
+  const { ticks, hits, firstHit, label } = series
+  const total = ticks.length
+  const summary = firstHit
+    ? `首次命中 ${firstHit}`
+    : total > 0
+      ? '尚未命中'
+      : '尚未探測'
 
-/** "15:05" → "1505 中" / "1505 沒中" */
-function tickChipLabel(hhmm: string, hit: boolean): string {
-  return `${hhmm.replace(':', '')} ${hit ? '中' : '沒中'}`
+  return (
+    <div className={`apr-row${open ? ' apr-open' : ''}`}>
+      <button
+        type="button"
+        className="apr-head"
+        aria-expanded={open}
+        onClick={onToggle}
+        disabled={total === 0}
+      >
+        <span className="apr-name">{label}</span>
+        <span className="apr-bar" aria-hidden="true">
+          {total === 0 ? (
+            <i className="apr-seg apr-seg-empty" />
+          ) : (
+            ticks.map((t) => (
+              <i
+                key={t.time}
+                className={`apr-seg ${t.hit ? 'apr-seg-hit' : 'apr-seg-miss'}`}
+                title={`${t.time} ${t.hit ? '中' : '沒中'}${t.note ? `・${t.note}` : ''}`}
+              />
+            ))
+          )}
+        </span>
+        <span className="apr-sum">
+          <b>{summary}</b>
+          <span className="ast-sub">{total > 0 ? `${hits} / ${total} 中` : '窗口未開'}</span>
+        </span>
+        <ChevronDown className="apr-caret" size={16} aria-hidden="true" />
+      </button>
+      {open && total > 0 && (
+        <div className="table-scroll apr-log">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>時分</th>
+                <th>命中</th>
+                <th>資料日期</th>
+                <th className="num">列數</th>
+                <th className="num">耗時</th>
+                <th>指紋</th>
+                <th>說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ticks.map((t) => (
+                <tr key={t.time} className={t.hit ? 'apr-hit-row' : undefined}>
+                  <td className="ast-mono">{t.time}</td>
+                  <td className="ast-mono">{t.hit ? '中' : t.ok ? '沒中' : '抓取失敗'}</td>
+                  <td className="ast-mono">{t.dataYmd ?? '—'}</td>
+                  <td className="num">{t.rows ?? '—'}</td>
+                  <td className="num">{t.durationMs != null ? `${t.durationMs} ms` : '—'}</td>
+                  {/* 只印前 8 碼：要看的是「跟上一列一不一樣」，不是雜湊本身 */}
+                  <td className="ast-mono" title={t.fingerprint ?? ''}>
+                    {t.fingerprint ? t.fingerprint.slice(0, 8) : '—'}
+                  </td>
+                  <td>{t.note || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ProbeExperimentPanel({
@@ -122,33 +191,17 @@ function ProbeExperimentPanel({
   exp: NonNullable<AdminStatus['probeExperiment']>
   todayYmd: string
 }) {
-  const order = exp.order?.length ? exp.order : Object.keys(exp.labels ?? {})
-  const ticks = Array.isArray(exp.ticks) ? exp.ticks : []
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
+  const days = useMemo(
+    () =>
+      groupProbeTicks(
+        Array.isArray(exp.ticks) ? exp.ticks : [],
+        exp.order?.length ? exp.order : Object.keys(exp.labels ?? {}),
+        exp.labels ?? {},
+      ),
+    [exp],
+  )
 
-  const byDay = new Map<string, Map<string, Array<{ time: string; hit: boolean; note?: string }>>>()
-  for (const t of ticks) {
-    const ymd = typeof t.taipei_ymd === 'string' ? t.taipei_ymd : ''
-    const src = typeof t.source === 'string' ? t.source : ''
-    const time = typeof t.taipei_time === 'string' ? t.taipei_time : ''
-    if (!ymd || !src || !time) continue
-    if (!byDay.has(ymd)) byDay.set(ymd, new Map())
-    const bySrc = byDay.get(ymd)!
-    if (!bySrc.has(src)) bySrc.set(src, [])
-    const list = bySrc.get(src)!
-    const prev = list.find((x) => x.time === time)
-    if (prev) {
-      prev.hit = t.hit === true
-      prev.note = typeof t.note === 'string' ? t.note : prev.note
-    } else {
-      list.push({
-        time,
-        hit: t.hit === true,
-        note: typeof t.note === 'string' ? t.note : undefined,
-      })
-    }
-  }
-
-  const days = [...byDay.keys()].sort().reverse()
   if (days.length === 0) {
     return (
       <p className="ast-note">
@@ -159,57 +212,32 @@ function ProbeExperimentPanel({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {days.map((ymd) => {
-        const bySrc = byDay.get(ymd)!
-        const isToday = ymd === todayYmd
-        return (
-          <div key={ymd}>
-            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9rem' }}>
-              {ymd.slice(0, 4)}-{ymd.slice(4, 6)}-{ymd.slice(6, 8)}
-              {isToday ? '（今天）' : '（昨天）'}
-            </div>
-            {order.map((src) => {
-              const list = (bySrc.get(src) ?? []).slice().sort((a, b) => a.time.localeCompare(b.time))
-              if (list.length === 0) return null
-              const label = exp.labels?.[src] ?? src
-              const firstHit = list.find((x) => x.hit)
-              return (
-                <div key={src} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: '0.82rem', marginBottom: 6, color: 'var(--muted, #64748b)' }}>
-                    <strong style={{ color: 'inherit' }}>{label}</strong>
-                    <span style={{ marginLeft: 8 }}>
-                      {firstHit
-                        ? `首次命中 ${firstHit.time}`
-                        : `本窗尚未命中（${list.length} 次探測）`}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {list.map((x) => (
-                      <span
-                        key={x.time}
-                        title={x.note ?? ''}
-                        style={{
-                          fontSize: '0.75rem',
-                          fontFamily: 'ui-monospace, monospace',
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          border: '1px solid',
-                          borderColor: x.hit ? 'rgba(34,197,94,.45)' : 'rgba(148,163,184,.35)',
-                          background: x.hit ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.08)',
-                          color: x.hit ? '#16a34a' : '#64748b',
-                        }}
-                      >
-                        {tickChipLabel(x.time, x.hit)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+    <div className="apr-days">
+      {days.map((day) => (
+        <div key={day.ymd}>
+          <div className="apr-day">
+            {dashYmd(day.ymd) || day.ymd}
+            <span className="ast-sub">{day.ymd === todayYmd ? '今天' : '前一日'}</span>
           </div>
-        )
-      })}
+          {day.series.map((s) => {
+            const key = `${day.ymd}|${s.source}`
+            return (
+              <ProbeRow
+                key={key}
+                series={s}
+                open={open.has(key)}
+                onToggle={() =>
+                  setOpen((prev) => {
+                    const next = new Set(prev)
+                    if (!next.delete(key)) next.add(key)
+                    return next
+                  })
+                }
+              />
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -387,11 +415,14 @@ export function AdminStatusPage() {
     )
   }
 
+  /*
+    排程列已隨 0.7.4 的「一源一列」改版移除，這裡也不再把 cron 狀態算進問題數：
+    計數若指向一張看不到的表，使用者無從查證；而 0.7.3 實驗期間四個固定 cron 是
+    **刻意**停用的，judgeCron 會把每一個都判成延遲，那是四個永遠亮著的假警報。
+    留下的兩項（盤後鏈路、總體指標）都還在畫面上，點得下去。
+  */
   const attention =
     chain.filter((c) => c.state === 'late' || c.state === 'warn').length +
-    (data.schedules ?? []).filter(
-      (s) => judgeCron(s.active, s.failsToday, s.lastRun) !== 'ok',
-    ).length +
     macroRows.filter((r) => r.state === 'warn').length
 
   // The fetch cycle is taken directly from pg_cron, without writing another constant on the front end - the two copies will drift sooner or later, and the drift cannot be seen
@@ -521,82 +552,7 @@ export function AdminStatusPage() {
         </div>
       </div>
 
-      {/* ── Schedules ─────────────────────────────────────── */}
-      <div className="section glass" style={SECTION_PAD}>
-        <div className="rpt-section-head">
-          <h3 className="head-tight">排程</h3>
-          <span className="source-tag">
-            pg_cron・時間已換算為台北；「目標」是這個排程實際打的環境
-          </span>
-        </div>
-        <div className="table-scroll" style={{ marginTop: 12 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>排程名稱</th>
-                <th>執行時機</th>
-                <th>動作</th>
-                <th>目標</th>
-                <th className="num">今日</th>
-                <th>最後執行</th>
-                <th>狀態</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.schedules ?? []).map((s: ScheduleRow) => {
-                const st = judgeCron(s.active, s.failsToday, s.lastRun)
-                const scope = describeScope(s.action)
-                return (
-                  <tr key={s.jobid}>
-                    <td>
-                      <b>{s.jobname}</b>
-                      {/* The action code alone does not say which data this shift is responsible for */}
-                      {scope && <span className="ast-scope">{scope}</span>}
-                    </td>
-                    <td className="ast-mono">{describeCron(s.schedule)}</td>
-                    <td className="ast-mono">{s.action ?? '—'}</td>
-                    <td className="ast-mono">{s.targetRef ?? '—'}</td>
-                    <td className="num">
-                      {s.runsToday}
-                      {s.failsToday > 0 && <span className="ast-fail"> / {s.failsToday} 失敗</span>}
-                    </td>
-                    <td className="ast-mono">
-                      {s.lastRun ? fmtUpdatedAt(s.lastRun) : '—'}
-                      {s.lastSource === 'manual' && (
-                        <span className="ast-scope" title="由管理後台「手動更新」觸發">
-                          手動
-                        </span>
-                      )}
-                      {s.lastSource === 'cron' && s.lastRun && (
-                        <span className="ast-scope" title="由 pg_cron 排程觸發">
-                          排程
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <Pill state={st} text={s.active ? undefined : '已停用'} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="ast-note" style={{ marginTop: 10 }}>
-          「今日／最後執行」含排程與後台<strong>手動更新</strong>；手動不會寫入 pg_cron
-          的 job_run_details，但會記在 admin_run_log 並合併顯示。
-        </p>
-        {data.batch && (
-          <p className="ast-note" style={{ marginTop: 6 }}>
-            盤後批次今日第 {data.batch.runsToday ?? 0} 輪
-            {data.probe?.taipei_time && `・探針最後探測 ${data.probe.taipei_time}`}
-            {/* The parenthesised part is assembled as one piece: split into two conditionals it prints an unclosed bracket when only one side exists */}
-            {probeRows(data.probe)}
-          </p>
-        )}
-      </div>
-
-      {/* ── 0.7.3 probe-only experiment: 1500 沒中 / 1505 中 ── */}
+      {/* ── 0.7.3 probe-only experiment: one row per source, expand for the log ── */}
       {data.probeExperiment && (
         <div className="section glass" style={SECTION_PAD}>
           <div className="rpt-section-head">
@@ -606,7 +562,7 @@ export function AdminStatusPage() {
             </span>
           </div>
           <p className="ast-note" style={{ marginBottom: 12 }}>
-            顯示格式如 <strong>1500 沒中</strong>、<strong>1505 中</strong>（台北時分去掉冒號）。
+            一源一列，進度條由左到右每格代表一次 5 分鐘探測，綠格＝命中；點該列展開逐次紀錄。
             日頻源僅在各自時間窗內探測；月營收／季報僅 12:00／21:00 附近。驗證約兩日後再決定正式班表。
           </p>
           <ProbeExperimentPanel exp={data.probeExperiment} todayYmd={data.todayYmd} />

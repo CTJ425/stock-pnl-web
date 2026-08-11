@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 
 const { fetchAdminStatus } = vi.hoisted(() => ({ fetchAdminStatus: vi.fn() }))
 vi.mock('../../services/adminStatus', () => ({ fetchAdminStatus, isAdmin: vi.fn() }))
@@ -125,38 +125,20 @@ describe('AdminStatusPage', () => {
     expect(screen.getByText(/只有管理員帳號看得到/)).toBeTruthy()
   })
 
-  it('排程資訊逐列呈現，cron 表達式換算成台北時間的白話', async () => {
-    fetchAdminStatus.mockResolvedValue(status)
-    render(<AdminStatusPage />)
-    const section = within(
-      (await screen.findByRole('heading', { name: '排程' })).closest('.section')!,
-    )
-    expect(section.getByText('stock-report-nightly')).toBeTruthy()
-    // Scoped since 0.6.40: the timeline legend prints the same sentence, from the same cron
-    expect(section.getByText('週一至週五 16:30 / 16:45 / 21:30 / 21:45')).toBeTruthy()
-    expect(section.getByText('每日 20:00–次日 02:30 每 30 分')).toBeTruthy()
-  })
-
   it('時間軸圖例分開交代兩套排程，且都取自 pg_cron（0.6.40）', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     const { container } = render(<AdminStatusPage />)
-    await screen.findByRole('heading', { name: '排程' })
+    await screen.findByRole('heading', { name: /台股盤後/ })
 
     /*
       Both schedules are named, and both come from the cron rows (0.7.2 sparse shifts).
+      The schedule table itself is gone since 0.7.4 — the legend is now the only place the
+      two cron expressions are spelled out, which is exactly why this test stays.
     */
     const legend = container.querySelector('.ast-rule')!
     expect(legend.textContent).toContain('週一至週五 16:30 / 16:45 / 21:30 / 21:45')
     expect(legend.textContent).toContain('週一至週五 15:30 / 15:45')
     expect(legend.textContent).toContain('三大法人・全市場')
-  })
-
-  it('顯示每個排程實際打的環境——BUG-003 就是測試區的 cron 打到正式區', async () => {
-    fetchAdminStatus.mockResolvedValue(status)
-    render(<AdminStatusPage />)
-    await screen.findByRole('heading', { name: '排程' })
-    // Each schedule column must indicate the target environment, so it is tied to the schedule number of the fixture rather than a hard-coded number.
-    expect(screen.getAllByText('wqetxuhncvfidqnklyew').length).toBe(status.schedules.length)
   })
 
   it('台股全市場：抓取週期取自 pg_cron，三個缺口分開數（0.6.32）', async () => {
@@ -315,14 +297,6 @@ describe('AdminStatusPage', () => {
     expect(screen.getByText('下一筆新數據')).toBeTruthy()
   })
 
-  it('排程列出各自的抓取範圍——光看 action 代號看不出負責哪些資料', async () => {
-    fetchAdminStatus.mockResolvedValue(status)
-    render(<AdminStatusPage />)
-    await screen.findByRole('heading', { name: '排程' })
-    expect(screen.getByText(/淨持股/)).toBeTruthy()
-    expect(screen.getByText(/FRED：核心 CPI/)).toBeTruthy()
-  })
-
   it('下期預計用後端算好的官方公告日，前端不自備行事曆', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
@@ -349,5 +323,127 @@ describe('AdminStatusPage', () => {
     await screen.findByText('匯率與檔案涵蓋')
     expect(screen.getByText('日線檔')).toBeTruthy()
     expect(screen.getAllByText('/ 5').length).toBeGreaterThan(0)
+  })
+})
+
+/*
+  0.7.3 探針實驗的一源一列（0.7.4 改版）。這一組跟上面共用 fixture 但另外掛
+  probeExperiment——排程那張表已經拿掉，這面板現在是後台唯一在講「哪個源幾點到」的地方。
+*/
+describe('AdminStatusPage 探針實驗面板', () => {
+  const tick = (
+    time: string,
+    source: string,
+    hit: boolean,
+    extra: Record<string, unknown> = {},
+  ) => ({ taipei_ymd: '20260731', taipei_time: time, source, hit, ok: true, ...extra })
+
+  const withProbe: AdminStatus = {
+    ...status,
+    probeExperiment: {
+      mode: 'probe-only',
+      labels: {
+        bfi82u: '全市場法人 BFI82U',
+        t86: '個股法人 T86',
+        borrow: '借券賣出',
+      },
+      order: ['bfi82u', 't86', 'borrow'],
+      ticks: [
+        tick('15:00', 'bfi82u', false, { note: '當日 BFI 尚未齊' }),
+        tick('15:05', 'bfi82u', false),
+        tick('15:10', 'bfi82u', true, {
+          data_ymd: '20260731',
+          rows: 1,
+          note: '當日 BFI82U 含買進',
+          duration_ms: 412,
+          fingerprint: 'abcdef0123456789',
+        }),
+        tick('15:30', 't86', false, { note: '當日 T86 尚無資料' }),
+      ],
+    },
+  }
+
+  beforeEach(() => {
+    fetchAdminStatus.mockResolvedValue(withProbe)
+  })
+  afterEach(cleanup)
+
+  const panel = async () =>
+    within((await screen.findByRole('heading', { name: /探針實驗/ })).closest('.section')!)
+
+  it('每個探針各占一列，窗還沒開的也在——少一列會讓「沒探到」看起來像正常', async () => {
+    render(<AdminStatusPage />)
+    const p = await panel()
+    expect(p.getByText('全市場法人 BFI82U')).toBeTruthy()
+    expect(p.getByText('個股法人 T86')).toBeTruthy()
+    // 借券今天一次都沒探到，仍然要有自己的列，並說明窗口未開
+    expect(p.getByText('借券賣出')).toBeTruthy()
+    expect(p.getByText('尚未探測')).toBeTruthy()
+    expect(p.getByText('窗口未開')).toBeTruthy()
+  })
+
+  it('進度條一格一次探測，命中格數與摘要對得上', async () => {
+    const { container } = render(<AdminStatusPage />)
+    await panel()
+    const rows = [...container.querySelectorAll('.apr-row')]
+    const bfi = rows.find((r) => r.textContent?.includes('BFI82U'))!
+    expect(bfi.querySelectorAll('.apr-seg')).toHaveLength(3)
+    expect(bfi.querySelectorAll('.apr-seg-hit')).toHaveLength(1)
+    expect(bfi.textContent).toContain('首次命中 15:10')
+    expect(bfi.textContent).toContain('1 / 3 中')
+  })
+
+  it('尚未命中的源說「尚未命中」而不是留白', async () => {
+    const { container } = render(<AdminStatusPage />)
+    await panel()
+    const t86 = [...container.querySelectorAll('.apr-row')].find((r) =>
+      r.textContent?.includes('個股法人'),
+    )!
+    expect(t86.textContent).toContain('尚未命中')
+    expect(t86.textContent).toContain('0 / 1 中')
+  })
+
+  it('展開後才列出逐次紀錄，收合時不占畫面', async () => {
+    const { container } = render(<AdminStatusPage />)
+    await panel()
+    const bfi = [...container.querySelectorAll('.apr-row')].find((r) =>
+      r.textContent?.includes('BFI82U'),
+    )!
+    expect(bfi.querySelector('.apr-log')).toBeNull()
+
+    fireEvent.click(bfi.querySelector('.apr-head')!)
+    const log = bfi.querySelector('.apr-log')!
+    expect(log.querySelectorAll('tbody tr')).toHaveLength(3)
+    expect(log.textContent).toContain('當日 BFI82U 含買進')
+    expect(log.textContent).toContain('412 ms')
+    // 指紋只印前 8 碼：要看的是跟上一列一不一樣，不是雜湊本身
+    expect(log.textContent).toContain('abcdef01')
+    expect(log.textContent).not.toContain('abcdef0123456789')
+
+    fireEvent.click(bfi.querySelector('.apr-head')!)
+    expect(bfi.querySelector('.apr-log')).toBeNull()
+  })
+
+  it('一次都沒探到的列點不開', async () => {
+    const { container } = render(<AdminStatusPage />)
+    await panel()
+    const borrow = [...container.querySelectorAll('.apr-row')].find((r) =>
+      r.textContent?.includes('借券'),
+    )!
+    const head = borrow.querySelector('.apr-head') as HTMLButtonElement
+    expect(head.disabled).toBe(true)
+    fireEvent.click(head)
+    expect(borrow.querySelector('.apr-log')).toBeNull()
+  })
+
+  it('排程表已移除，問題數不再把刻意停用的 cron 算成延遲', async () => {
+    fetchAdminStatus.mockResolvedValue({
+      ...withProbe,
+      schedules: withProbe.schedules.map((s) => ({ ...s, active: false })),
+    })
+    render(<AdminStatusPage />)
+    await screen.findByRole('heading', { name: /探針實驗/ })
+    expect(screen.queryByRole('heading', { name: '排程' })).toBeNull()
+    expect(screen.queryByText(/有 3 項需要注意/)).toBeNull()
   })
 })

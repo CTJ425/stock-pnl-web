@@ -3158,6 +3158,52 @@ a.hmenu-item {
 /* The estimated date must be clearly seen as an estimate - it is not an official calendar*/
 .ast-est { font-size: 11px; color: var(--ink-muted); }
 
+/* ─────────────────────────────────────────────────────────────
+   探針實驗的一源一列（0.7.3）。前綴 apr-（admin probe row）。
+
+   進度條刻意用「一格＝一次探測」而不是百分比：這裡要看的是**第幾輪翻綠**，
+   百分比會把那個時刻壓成一個比例，正好丟掉唯一要量的東西。
+   ───────────────────────────────────────────────────────────── */
+.apr-days { display: flex; flex-direction: column; gap: 18px; }
+.apr-day {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 6px; font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.apr-day .ast-sub { display: inline; }
+
+.apr-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+.apr-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+
+.apr-head {
+  display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto auto;
+  align-items: center; gap: 12px; width: 100%;
+  padding: 9px 4px; border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit;
+}
+.apr-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.apr-head:disabled { cursor: default; opacity: .62; }
+.apr-head:disabled:hover { background: none; }
+
+.apr-name { font-size: 13px; font-weight: 600; }
+
+/* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
+.apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
+.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 1px; }
+.apr-seg-hit { background: var(--notice-ok-ink); }
+.apr-seg-miss { background: color-mix(in srgb, var(--ink-muted) 26%, transparent); }
+.apr-seg-empty { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
+
+.apr-sum { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.apr-sum b { font-weight: 600; }
+
+.apr-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
+.apr-open .apr-caret { transform: rotate(180deg); }
+
+.apr-log { margin: 0 0 12px; }
+.apr-log .data-table { font-size: 12px; }
+.apr-hit-row td { color: var(--notice-ok-ink); }
+
 @media (max-width: 720px) {
   .ast-next .sep { margin-left: 0; flex-basis: 100%; }
   .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }
@@ -3175,6 +3221,12 @@ a.hmenu-item {
   .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .ast-when { display: inline; font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
   .ast-date { display: inline; margin-top: 0; }
+
+  /* 探針列：手機把「名稱／摘要」疊成兩行，進度條獨占一行才看得出翻綠的位置 */
+  .apr-head { grid-template-columns: 1fr auto; row-gap: 6px; }
+  .apr-bar { grid-column: 1 / -1; order: 3; }
+  .apr-sum { order: 2; }
+  .apr-caret { order: 2; }
 
   /* The legend will squeeze the "judgment criterion is" into a straight row on a narrow screen, so the mobile phone changes it to a single column stack.*/
   .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }

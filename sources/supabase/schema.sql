@@ -575,6 +575,44 @@ CREATE TABLE IF NOT EXISTS source_probe_log (
 ALTER TABLE source_probe_log ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS source_probe_log_ymd_idx ON source_probe_log (taipei_ymd, id DESC);
 
+-- 8b. Multi-source probe ticks (source_probe_tick) —— 0.7.3
+--
+--     One row per (5-minute slot × source). `source_probe_log` above is one row per round with
+--     two hard-coded sources baked into its columns; the 0.7.3 experiment probes seven, so it
+--     needs a long table instead of a wide one. Both are written; the wide one keeps working for
+--     the existing admin paragraph.
+--
+--     `hit` is the whole point of this table and it is **source-specific** — see `sourceProbePlan.ts`:
+--       t86 / bfi82u / margin  the request itself is dated, so a table coming back = today's data
+--       bwibbu                 the file self-reports a ROC date; hit when it equals today
+--       borrow                 hit when the title date has moved **past** today (TWT96U carries the
+--                              day's own quota from pre-open, so "endpoint has data" is always true)
+--       mops_revenue / _profit hit when 出表日期 equals today (both endpoints always return a full
+--                              snapshot, so again "has data" is always true)
+--     The first version of 0.7.3 used "has data" for borrow / MOPS and those three read 中 from the
+--     first probe of every window. That is why the rule is written out here rather than only in code.
+--
+--     Written by the probe with the service role; RLS on with no policy — nothing else reads it
+--     directly (the admin page goes through the Edge Function).
+CREATE TABLE IF NOT EXISTS source_probe_tick (
+    id            BIGSERIAL PRIMARY KEY,
+    probed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    taipei_ymd    TEXT NOT NULL,
+    taipei_time   TEXT NOT NULL,             -- 'HH:mm'，已向下取整到 5 分
+    source        TEXT NOT NULL,             -- ProbeSourceId
+    hit           BOOLEAN NOT NULL,
+    ok            BOOLEAN NOT NULL DEFAULT FALSE,
+    data_ymd      TEXT,                      -- 該源自報的日期（民國或西元，依源而定）
+    fingerprint   TEXT,
+    rows          INT,
+    note          TEXT,
+    duration_ms   INT
+);
+
+ALTER TABLE source_probe_tick ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx
+    ON source_probe_tick (taipei_ymd, source, id DESC);
+
 -- In the same rhythm as the after-hours batch. ⚠️ There are also two placeholders to be replaced. After applying, you must run the verification of §6d (including "whether the ref of the URL is your own")
 DO $$
 BEGIN
@@ -583,9 +621,12 @@ BEGIN
   END IF;
 END $$;
 
+-- 0.7.3 實驗期間改為每 5 分全天候：時間窗判斷搬進 Edge（sourceProbePlan.ts），
+-- 窗外的班次拿到 sources=[]、不發任何外部請求也不寫表。實驗結束後可收成
+-- '*/5 4,7-14 * * 1-5'（UTC；＝台北 12:00 與 15:00–22:55）少掉約一半的空轉。
 SELECT cron.schedule(
   'source-probe',
-  '*/15 8-15 * * 1-5',
+  '*/5 * * * *',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',

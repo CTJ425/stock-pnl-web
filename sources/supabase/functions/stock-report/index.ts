@@ -176,6 +176,8 @@ import {
 import {
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
+  borrowHit,
+  mopsIssueRocYmd,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type ProbeSourceId,
@@ -2165,7 +2167,7 @@ async function probeSource(
         data_ymd: hit ? todayYmd : null,
         fingerprint: hit ? t86Fingerprint(resp) : null,
         rows: Array.isArray(data) ? data.length : null,
-        note: hit ? '當日 T86 有列' : '尚日 T86 尚無資料',
+        note: hit ? '當日 T86 有列' : '當日 T86 尚無資料',
         duration_ms: Date.now() - t0,
       }
     }
@@ -2206,13 +2208,19 @@ async function probeSource(
         borrowDatedDate,
         (v) => v.data ?? [],
       )
+      // 端點盤中就有資料，「有沒有資料」量不到任何事；命中＝日期已翻到下一個交易日。
+      const hit = borrowHit(r.date, todayYmd)
       return {
-        hit: r.ok,
+        hit,
         ok: r.ok,
         data_ymd: r.date,
         fingerprint: r.fp,
         rows: r.rows,
-        note: r.ok ? '借券端點有資料' : '借券端點無資料',
+        note: !r.ok
+          ? '借券端點無資料'
+          : hit
+            ? `借券日=${r.date}（已翻次一交易日）`
+            : `借券日=${r.date ?? '?'}＝當日額度，尚未翻日`,
         duration_ms: Date.now() - t0,
       }
     }
@@ -2235,37 +2243,29 @@ async function probeSource(
         duration_ms: Date.now() - t0,
       }
     }
-    if (id === 'mops_revenue') {
+    // 兩份 MOPS 彙整表同型：端點恆有資料，唯一能分辨新舊的是自報的出表日期。
+    if (id === 'mops_revenue' || id === 'mops_profit') {
+      const isRevenue = id === 'mops_revenue'
       const r = await probeOne<Array<Record<string, string>>>(
-        T187AP05_URL,
+        isRevenue ? T187AP05_URL : T187AP17_URL,
         (v) => Array.isArray(v) && v.length > 0,
-        () => todayYmd,
+        (v) => mopsIssueRocYmd(v),
         (v) => v,
       )
+      const roc = ymdToRocYmd(todayYmd)
+      const hit = r.ok && !!r.date && !!roc && r.date === roc
+      const what = isRevenue ? '月營收' : '季報'
       return {
-        hit: r.ok,
+        hit,
         ok: r.ok,
-        data_ymd: r.ok ? todayYmd : null,
+        data_ymd: r.date,
         fingerprint: r.fp,
         rows: r.rows,
-        note: r.ok ? '月營收彙整可讀' : '月營收彙整失敗',
-        duration_ms: Date.now() - t0,
-      }
-    }
-    if (id === 'mops_profit') {
-      const r = await probeOne<Array<Record<string, string>>>(
-        T187AP17_URL,
-        (v) => Array.isArray(v) && v.length > 0,
-        () => todayYmd,
-        (v) => v,
-      )
-      return {
-        hit: r.ok,
-        ok: r.ok,
-        data_ymd: r.ok ? todayYmd : null,
-        fingerprint: r.fp,
-        rows: r.rows,
-        note: r.ok ? '季報彙整可讀' : '季報彙整失敗',
+        note: !r.ok
+          ? `${what}彙整失敗`
+          : hit
+            ? `${what}出表日=今日（${r.rows ?? '?'} 筆）`
+            : `${what}出表日=${r.date ?? '?'}≠今日`,
         duration_ms: Date.now() - t0,
       }
     }
@@ -2918,7 +2918,9 @@ async function handleAdminStatus(): Promise<Response> {
         .catch(() => null),
       db
         .from('source_probe_tick')
-        .select('taipei_ymd, taipei_time, source, hit, ok, data_ymd, note, duration_ms, probed_at')
+        .select(
+          'taipei_ymd, taipei_time, source, hit, ok, data_ymd, fingerprint, rows, note, duration_ms, probed_at',
+        )
         .in('taipei_ymd', [todayYmd, yestYmd])
         .order('id', { ascending: true })
         .limit(2000)

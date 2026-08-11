@@ -10,13 +10,33 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-11 12:55)
+## 📍 Where the project stands (2026-08-11 13:25)
 
-- **Version 0.7.3** probe-only experiment: fixed after-hours crons **off**; only `source-probe` every 5 min.
-- Admin shows hit/miss chips (e.g. 1500 沒中 / 1505 中). Table `source_probe_tick`.
-- PROD Edge stock-report **v40**. **No auto generate** for ~2 days observation.
+- **Version 0.7.4**: probe-only experiment continues, but 0.7.3's hit rule was wrong for
+  `borrow` / `mops_revenue` / `mops_profit` (all three read 中 from the first probe of every window).
+  Fixed — see PROGRESS 0.7.4. **The 0.7.3 ticks for those three sources are not usable data.**
+- Admin probe panel: one row per source + hit progress bar + expandable log. 「排程」table removed.
+- Fixed after-hours crons still **off**; only `source-probe` `*/5 * * * *`.
+- PROD Edge stock-report **v40** (0.7.3 bundle) — **needs redeploy for the fix**, see Task 84.
 - After validation: restore generate/market/macro/fx schedules.
 - **Open bugs: none.**
+
+### Task 84: 0.7.4 ship
+- **Status**: 🔄 DEV live; PROD Edge + main merge outstanding
+- **Agent**: Claude
+- **Timestamp**: 2026-08-11 13:25:00 Asia/Taipei
+
+1. ~~Fix `borrowHit` / `mopsIssueRocYmd`; widen borrow window to 15:00~~ ✅
+2. ~~`schema.sql`: `source_probe_tick` DDL + real cron expression~~ ✅
+3. ~~Admin: one row per probe, progress bar, expandable log; delete 排程 table~~ ✅
+4. ~~Tests (959 passed) + live-endpoint check of all four predicates~~ ✅
+5. ~~DEV volume-copy + functions restart + probe fires 200~~ ✅
+6. **PROD Edge `stock-report --no-verify-jwt`** —— ⏳ needs `SUPABASE_ACCESS_TOKEN` in shell
+7. **Merge `main` + push** (Pages ships the admin rework) —— ⏳
+8. **Read the 15:00–22:45 windows tomorrow** and decide the real schedule —— ⏳
+
+> Observability lost with the 排程 table: no screen now shows which environment a cron targets
+> (`targetRef`). That column was BUG-003's tripwire. Re-add somewhere if a cron ever misfires again.
 
 ⚠️ **Environment facts**:
 1. **DEV** = self-hosted `korq9tvdz0jd7yblr72p.ivan.lab` at

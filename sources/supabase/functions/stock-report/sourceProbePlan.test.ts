@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  borrowHit,
   formatProbeTickLabel,
   minutesFromHhmm,
+  mopsIssueRocYmd,
   sourcesForTaipeiTime,
   ymdToRocYmd,
 } from './sourceProbePlan'
@@ -13,10 +15,10 @@ describe('sourceProbePlan', () => {
     expect(minutesFromHhmm('bad')).toBeNull()
   })
 
-  it('下午只開 BFI／T86 窗', () => {
-    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u'])
-    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86'])
-    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86'])
+  it('下午開 BFI／T86 窗，借券窗從 15:00 起（要看得到 title 翻日的那一刻）', () => {
+    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'borrow'])
+    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'borrow'])
+    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'borrow'])
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
@@ -43,5 +45,23 @@ describe('sourceProbePlan', () => {
 
   it('ymdToRocYmd', () => {
     expect(ymdToRocYmd('20260811')).toBe('1150811')
+  })
+
+  // 0.7.3 首版把這兩者的命中寫成「端點有沒有資料」，而兩個端點盤中就恆有資料——
+  // 整個實驗窗會全綠，量不到任何落地時間。以下三個案例就是那個錯誤的回歸測試。
+  it('借券：title 還停在今天不算命中，翻到下一個交易日才算', () => {
+    expect(borrowHit('2026-08-11', '20260811')).toBe(false) // 盤中的當日額度
+    expect(borrowHit('2026-08-12', '20260811')).toBe(true)
+    expect(borrowHit('2026-08-14', '20260811')).toBe(true) // 週五收盤 → 下週一
+    expect(borrowHit('2026-08-10', '20260811')).toBe(false) // 反而落後，不是命中
+    expect(borrowHit(null, '20260811')).toBe(false)
+  })
+
+  it('mopsIssueRocYmd 取整份共用的出表日期', () => {
+    expect(mopsIssueRocYmd([{ 出表日期: '1150811', 公司代號: '1213' }])).toBe('1150811')
+    expect(mopsIssueRocYmd([{ 出表日期: ' 1150717 ' }])).toBe('1150717')
+    expect(mopsIssueRocYmd([{ 公司代號: '1101' }])).toBeNull()
+    expect(mopsIssueRocYmd([])).toBeNull()
+    expect(mopsIssueRocYmd(null)).toBeNull()
   })
 })

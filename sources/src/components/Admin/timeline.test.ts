@@ -7,6 +7,7 @@ import {
   describeCron,
   durationLabel,
   describeScope,
+  groupProbeTicks,
   hourLabel,
   nextRun,
   roundBaseYmd,
@@ -374,5 +375,67 @@ describe('describeScope', () => {
   it('不認得的 action 回空字串，畫面就不顯示那一行', () => {
     expect(describeScope('unknown')).toBe('')
     expect(describeScope(null)).toBe('')
+  })
+})
+
+describe('groupProbeTicks', () => {
+  const order = ['bfi82u', 't86', 'margin']
+  const labels = { bfi82u: '全市場法人 BFI82U', t86: '個股法人 T86', margin: '融資融券' }
+
+  const raw = [
+    { taipei_ymd: '20260811', taipei_time: '15:00', source: 'bfi82u', hit: false, ok: true, note: '尚未齊' },
+    { taipei_ymd: '20260811', taipei_time: '15:05', source: 'bfi82u', hit: true, ok: true, data_ymd: '20260811', rows: 1, note: '含買進' },
+    { taipei_ymd: '20260811', taipei_time: '15:10', source: 'bfi82u', hit: true, ok: true, rows: 1 },
+    { taipei_ymd: '20260811', taipei_time: '15:30', source: 't86', hit: false, ok: true },
+    { taipei_ymd: '20260810', taipei_time: '15:00', source: 'bfi82u', hit: true, ok: true },
+  ]
+
+  it('依日分組、日新到舊，每一天都排滿 order 裡的每一個源', () => {
+    const days = groupProbeTicks(raw, order, labels)
+    expect(days.map((d) => d.ymd)).toEqual(['20260811', '20260810'])
+    // 窗還沒開的源也要占位——少一列就會讓「沒探到」讀起來像「一切正常」
+    expect(days[0].series.map((s) => s.source)).toEqual(order)
+    expect(days[0].series[2].ticks).toHaveLength(0)
+    expect(days[0].series[2].label).toBe('融資融券')
+  })
+
+  it('首次命中取時間最早的那一格，不是收到的第一筆', () => {
+    const shuffled = [raw[2], raw[1], raw[0]]
+    const [today] = groupProbeTicks(shuffled, ['bfi82u'], labels)
+    expect(today.series[0].ticks.map((t) => t.time)).toEqual(['15:00', '15:05', '15:10'])
+    expect(today.series[0].firstHit).toBe('15:05')
+    expect(today.series[0].hits).toBe(2)
+  })
+
+  it('同一格重覆寫入時留最後一筆——重跑那次才是要看的觀測', () => {
+    const [day] = groupProbeTicks(
+      [
+        { taipei_ymd: '20260811', taipei_time: '15:00', source: 'bfi82u', hit: false },
+        { taipei_ymd: '20260811', taipei_time: '15:00', source: 'bfi82u', hit: true, note: '重跑後命中' },
+      ],
+      ['bfi82u'],
+      labels,
+    )
+    expect(day.series[0].ticks).toHaveLength(1)
+    expect(day.series[0].ticks[0].hit).toBe(true)
+    expect(day.series[0].ticks[0].note).toBe('重跑後命中')
+  })
+
+  it('缺欄位的列直接略過，不會生出時間為空的格子', () => {
+    const days = groupProbeTicks(
+      [{ taipei_ymd: '20260811', source: 'bfi82u', hit: true }, { taipei_time: '15:00', hit: true }],
+      ['bfi82u'],
+      labels,
+    )
+    expect(days).toEqual([])
+  })
+
+  it('沒有 label 的源退回用 id 當名字，不會印 undefined', () => {
+    const [day] = groupProbeTicks(
+      [{ taipei_ymd: '20260811', taipei_time: '12:00', source: 'mops_revenue', hit: true }],
+      ['mops_revenue'],
+      {},
+    )
+    expect(day.series[0].label).toBe('mops_revenue')
   })
 })

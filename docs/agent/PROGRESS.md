@@ -1,12 +1,69 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Grok
-- Action: 0.7.3 probe-only experiment (fixed crons off)
-- Status: **live DEV+PROD**
-- Timestamp: 2026-08-11 12:55:00 Asia/Taipei
+- Agent: Claude
+- Action: 0.7.4 fix three always-true probe hits; admin "one row per probe"
+- Status: **DEV live; PROD Edge pending token**
+- Timestamp: 2026-08-11 13:25:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
 > When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
+---
+
+## 📅 Log: 2026-08-11 13:25:00 Asia/Taipei (0.7.4 probe hit fix + admin rework)
+
+### The defect 0.7.3 shipped with
+
+Three of the seven probes used `hit = r.ok`, i.e. "HTTP ok and the array is not empty". Measured at
+13:02 Taipei, **before any of their windows opened**:
+
+| source | live payload | 0.7.3 verdict | truth |
+| ---- | ---- | ---- | ---- |
+| `borrow` TWT96U | `stat OK`, 1232 rows, title `115年08月11日` | 中 | the day's own quota, published pre-open |
+| `mops_revenue` t187ap05_L | 1082 rows, 出表日期 `1150717` | 中 | June data, issued 07-17 |
+| `mops_profit` t187ap17_L | 336 rows, 出表日期 `1150811` | 中 | genuinely new today — but for the wrong reason |
+
+Both endpoints always return a full snapshot, so "has data" is true around the clock. The two-day
+observation would have concluded "these three land before their window opens", which is not a finding.
+`t86` / `bfi82u` / `margin` (dated requests) and `bwibbu` (self-reported ROC date) were already correct.
+
+### Fixed
+
+- `borrowHit(dateIso, todayYmd)` — hit only once the title date has moved **past** today. Window
+  widened 20:30→**15:00** so the flip itself is observable rather than already done when the window opens.
+- `mopsIssueRocYmd(rows)` — hit when 出表日期 equals today's ROC date; `data_ymd` now carries the real
+  issue date instead of the probe date.
+- `source_probe_tick` DDL added to `schema.sql` (0.7.3 created it by hand on both DBs only), plus the
+  real `*/5 * * * *` schedule and a note on tightening it to `*/5 4,7-14 * * 1-5` after the experiment.
+- T86 miss note typo 「尚日」→「當日」.
+
+### Verified against live endpoints (13:20, before any window)
+
+`borrow` parsed `2026-08-11` → 沒中 ・ `revenue` 出表 `1150717` ≠ `1150811` → 沒中 ・
+`profit` 出表 `1150811` → **中** (true positive, so the fix is not "everything is now a miss") ・
+`bwibbu` `1150810` → 沒中. Unit + integration suite 959 passed; `tsc -b` clean.
+
+### Admin rework
+
+- Probe panel is now **one row per source**: name, hit/miss progress bar (one cell per 5-minute probe,
+  left to right), first-hit summary, click to expand the per-tick log (time / hit / data date / rows /
+  duration / fingerprint prefix / note). Sources whose window has not opened keep their row.
+- Grouping moved to `timeline.ts` `groupProbeTicks` (pure, tested) per the page's existing convention.
+- **「排程」 table deleted** at user request. Consequences recorded deliberately:
+  - `judgeCron` / `describeScope` in `timeline.ts` are now **unused by any component** (kept, they have
+    their own tests — user chose "keep, drop the references only").
+  - The verdict banner no longer counts cron rows. During the experiment four crons are intentionally
+    `active=false`, which `judgeCron` scores as 延遲 — that was four permanently-lit false alarms
+    pointing at a table that no longer exists.
+  - **Lost observability**: the per-schedule `targetRef` column is gone. That column was BUG-003's
+    tripwire (a DEV cron hitting PROD). Nothing else on screen shows which environment a cron targets.
+- `data.schedules` is still fetched — the timeline axes and legend read the cron expressions from it.
+
+### Deploy
+
+- DEV: volume-copy `index.ts` / `sourceProbePlan.ts` + restart `stock-pnl-web-dev-functions-1`;
+  manual probe fire → HTTP 200, `taipei_time 13:15`, `sources: []` (first window is 15:00 — expected).
+- PROD Edge: **not yet** — `SUPABASE_ACCESS_TOKEN` is not in this shell. User authorized the deploy.
 
 ---
 

@@ -48,7 +48,10 @@ const DAILY_WINDOWS: Record<
   t86: { from: 15 * 60 + 30, to: 17 * 60 + 30 }, // 15:30–17:30
   bwibbu: { from: 17 * 60 + 30, to: 22 * 60 }, // 17:30–22:00
   margin: { from: 20 * 60 + 30, to: 22 * 60 + 30 }, // 20:30–22:30
-  borrow: { from: 20 * 60 + 30, to: 22 * 60 + 45 }, // 20:30–22:45
+  // 15:00 起，不是 20:30：借券的命中條件是「title 日期翻到下一個交易日」（見 borrowHit），
+  // 而沒人知道它幾點翻。窗若從 20:30 才開，翻日發生在那之前就只會看到一整排「中」——
+  // 那正是 0.7.3 首版的毛病。寧可多探幾輪，也不要量到一個永遠為真的答案。
+  borrow: { from: 15 * 60, to: 22 * 60 + 45 }, // 15:00–22:45
 }
 
 /** MOPS: only these HH:mm slots (aligned to every-5-minute cron) */
@@ -87,6 +90,30 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
     out.push('mops_revenue', 'mops_profit')
   }
   return out
+}
+
+/**
+ * 借券 TWT96U 是否已經換日。
+ *
+ * `title` 自帶的日期在盤中就是**當天**（「115年08月11日 當日可借券賣出股數」），
+ * 收盤後才翻成下一個交易日的額度。只看「端點有沒有資料」永遠是有，
+ * 所以命中必須定義成「日期已經走過今天」。
+ */
+export function borrowHit(dateIso: string | null, todayYmd: string): boolean {
+  if (!dateIso || !/^\d{8}$/.test(todayYmd)) return false
+  return dateIso.replace(/-/g, '') > todayYmd
+}
+
+/**
+ * MOPS 彙整表（t187ap05_L 月營收 / t187ap17_L 季報）自報的出表日期，民國 7 碼。
+ *
+ * 這兩份是「整份重出」的快照——實測整份 1082 / 336 筆共用同一個出表日期，
+ * 因此取第一列即可。端點恆有資料，出表日期是唯一能分辨新舊的欄位。
+ */
+export function mopsIssueRocYmd(rows: unknown): string | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const v = (rows[0] as Record<string, unknown> | null)?.['出表日期']
+  return typeof v === 'string' && /^\d{7}$/.test(v.trim()) ? v.trim() : null
 }
 
 /** UI helper: "15:00 沒中" / "15:05 中" */

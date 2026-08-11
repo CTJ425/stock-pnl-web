@@ -414,3 +414,118 @@ export function describeCron(expr: string): string {
   }
   return `${UNPARSED_CRON_PREFIX}${expr}`
 }
+
+/* ─────────────────────────────────────────────────────────────
+   0.7.3 探針實驗：把 source_probe_tick 的散列整成「一源一列」。
+
+   一列的重點不是「現在中了沒」，而是**這一天的窗裡，它是第幾輪翻綠的**——
+   那才是最後要拿來排班表的數字。所以列裡保留完整時序（進度條逐格畫），
+   而不是只留一個 boolean。
+   ───────────────────────────────────────────────────────────── */
+
+/** One probe result at one 5-minute slot. */
+export interface ProbeTick {
+  time: string
+  hit: boolean
+  ok: boolean
+  dataYmd: string | null
+  fingerprint: string | null
+  rows: number | null
+  note: string
+  durationMs: number | null
+}
+
+/** One source's whole day. `firstHit` is null when the window never turned green. */
+export interface ProbeSeries {
+  source: string
+  label: string
+  ticks: ProbeTick[]
+  hits: number
+  firstHit: string | null
+}
+
+export interface ProbeDay {
+  ymd: string
+  series: ProbeSeries[]
+}
+
+/** The raw row shape as it arrives from the Edge Function (every field optional). */
+export interface RawProbeTick {
+  taipei_ymd?: string
+  taipei_time?: string
+  source?: string
+  hit?: boolean
+  ok?: boolean
+  data_ymd?: string | null
+  fingerprint?: string | null
+  rows?: number | null
+  note?: string | null
+  duration_ms?: number | null
+}
+
+function str(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null
+}
+
+function int(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+/**
+ * Group raw ticks into days (newest first) × sources (in `order`).
+ *
+ * Every id in `order` gets a series even with zero ticks — a source whose window has not opened
+ * yet must still occupy its row, otherwise the table silently shrinks and "missing" reads as "fine".
+ * A repeated (day, source, time) keeps the **last** row: the probe writes one row per slot, so a
+ * duplicate means the slot was retried, and the retry is the observation that counts.
+ */
+export function groupProbeTicks(
+  raw: RawProbeTick[],
+  order: string[],
+  labels: Record<string, string>,
+): ProbeDay[] {
+  const byDay = new Map<string, Map<string, Map<string, ProbeTick>>>()
+
+  for (const r of raw) {
+    const ymd = str(r?.taipei_ymd)
+    const source = str(r?.source)
+    const time = str(r?.taipei_time)
+    if (!ymd || !source || !time) continue
+
+    if (!byDay.has(ymd)) byDay.set(ymd, new Map())
+    const bySource = byDay.get(ymd)!
+    if (!bySource.has(source)) bySource.set(source, new Map())
+    bySource.get(source)!.set(time, {
+      time,
+      hit: r.hit === true,
+      ok: r.ok === true,
+      dataYmd: str(r?.data_ymd),
+      fingerprint: str(r?.fingerprint),
+      rows: int(r?.rows),
+      note: str(r?.note) ?? '',
+      durationMs: int(r?.duration_ms),
+    })
+  }
+
+  return [...byDay.keys()]
+    .sort()
+    .reverse()
+    .map((ymd) => {
+      const bySource = byDay.get(ymd)!
+      return {
+        ymd,
+        series: order.map((source) => {
+          const ticks = [...(bySource.get(source)?.values() ?? [])].sort((a, b) =>
+            a.time.localeCompare(b.time),
+          )
+          return {
+            source,
+            label: labels[source] ?? source,
+            ticks,
+            hits: ticks.filter((t) => t.hit).length,
+            firstHit: ticks.find((t) => t.hit)?.time ?? null,
+          }
+        }),
+      }
+    })
+}
