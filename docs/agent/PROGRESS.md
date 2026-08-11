@@ -5,6 +5,9 @@
 - Status: **released to main; DEV + PROD Edge on 0.7.9 (PROD v42). PROD crons still all inactive**
 - Timestamp: 2026-08-11 19:00:00 Asia/Taipei
 
+> **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
+> When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+
 ---
 
 ## 📅 Log: 2026-08-11 19:00:00 Asia/Taipei (0.7.9 收工＝資料到位)
@@ -106,9 +109,7 @@ Order is not optional: bundle-before-column makes `readDoneSourcesToday` error, 
 empty, and the probe re-fetch every 5 minutes. Two further things to check on PROD before assuming this
 works there at all: whether `source_probe_tick` and the `source-probe` cron job even exist on cloud, and
 that PROD's after-hours crons are still on their **untouched** schedules (only DEV was retuned in 0.7.7).
-
-> **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
-> When this file grows past ~400 lines, move entries older than ~2 weeks to the archive.
+Both answered above: the table and job exist; the crons are inactive.
 
 ---
 
