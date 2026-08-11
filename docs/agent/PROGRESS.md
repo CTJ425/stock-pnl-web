@@ -47,7 +47,26 @@ field names (`ok` / `synced` / `generated` / `reason`). A future source cannot q
 Both were in `skipped` on the following round. `margin` was not engineered for —— it published on its
 own at 20:50 and the mechanism handled it unattended, which is the better of the two proofs.
 
+### The deploy gap handed us a natural A/B on the MOPS rule
+
+PROD was still on v44 (0.7.11's relative rule) when its 21:00 slot fired; DEV was already on v45.
+Same source, same minute, same upstream, same follow-up result (`月營收 0／季報 0`):
+
+| env | bundle | rule | verdict |
+| ---- | ---- | ---- | ---- |
+| PROD | v44 | 有沒有往前走 | `data_landed=false` 「資料未到位，下輪重試」 |
+| DEV | v45 | 該期在不在畫面上 | **`data_landed=true` 「資料已到位」** |
+
+Both are faithful to their own rule, and **0.7.12 is the correct answer**: 2026-Q2 was already in the
+fundamental files —— which is precisely *why* the backfill reported 0 —— so the source is done and should
+retire. Under the relative rule it would have re-probed and re-run `generate-history` at every MOPS slot
+for the rest of the day and never retired, because there was nothing left to advance. That is the failure
+mode 「有沒有變動 ≠ 該有的那一期在不在」 describes, caught in the wild within minutes of writing it down.
+
 Verification: 990/990 vitest, app tsc, **edge tsc**, oxlint —— all clean.
+
+Four sources exercised the full chain on DEV tonight: `bwibbu` (landed), `margin` (landed, unattended),
+`mops_profit` (landed), and `mops_revenue` correctly **not** hitting (出表日 1150717 ≠ 今日).
 
 ---
 

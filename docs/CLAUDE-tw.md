@@ -38,21 +38,24 @@
 ## 工作風格 (Work style)
 
 - 工作完成後：更新 `TASK.md` / `PROGRESS.md`（如有需要亦更新 Bug 紀錄）。重要紀錄包含時間戳記：`YYYY-MM-DD HH:mm:ss Asia/Taipei`。
-- Skills（相關時載入）：`testing`、`verify`、`versioning`、`supabase-ops`、`ship`。
+- Skills（相關時載入）：`route`、`testing`、`verify`、`versioning`、`supabase-ops`、`ship`。
 
 ## 任務分派 (Task routing)
 
-依三個軸向為任務評級——需要的推論層數、出錯的代價、主觀取捨的空間——再交給對應的 role。各 role 的模型與 effort 定義在 `.claude/agents/*.md` frontmatter（`.claude/mad/models.json` 為對應設定），切勿在此重複記載。
+**委派給下列 role 屬於常設授權**，不需要每次先問使用者。主 session 跑在全系統最貴的模型上，凡是便宜 role 能正確完成的工作，就不該留在主 session 做。各 role 的模型與 effort 定義在 `.claude/agents/*.md` frontmatter，切勿在此重複記載。
 
-| 難度 | Role | 適用情境 |
+| Role | 負責 | 主 session 不該做 |
 | ---- | ---- | ---- |
-| 高 | `architect` | 多層推論、需論證的取捨、複雜規劃、高風險變更 |
-| 中 | `builder` / `reviewer` | 方向明確但仍需組織能力——依 spec 實作、對照 spec 審查 |
-| 低、高吞吐 | `scout` / `scribe` | 規則明確、量大規律、有標準答案——程式碼探勘、日誌壓縮、文件記錄 |
+| `scout` | 探勘檔案／呼叫者／測試，壓縮日誌與 stack trace | 超過約十餘次的探索性 Read/Grep |
+| `architect` | Spec、失敗測試、修 bug 計畫、裁決（主 session 在 Opus 上時可自行處理） | — |
+| `builder` | 依既有 spec 實作 | 修改 `sources/` 中大於單檔機械性變更的內容 |
+| `reviewer` | 依 spec 審查變更檔案 | 自己審自己的實作 |
+| `scribe` | `docs/agent/` 記錄維護、commit message | 手改 `TASK.md` / `PROGRESS.md` / bug 檔 |
 
-- 評級是主觀判斷，不是強制關卡。各 role 的 `description` 已載明前置條件（例如 `builder` 需要 spec 路徑），務必遵守。
-- Subagent 是冷啟動，看不到本次對話。若「交代任務 + 它重新讀檔」的成本高於直接做，就直接做，與難度無關。
-- 完整功能開發已有現成的端到端流程：**`/mad:orchestrate`**。
+- **流程本體是 `route` skill**：功能開發、修 bug、處理 `TASK.md` 項目時載入它，由它決定 lane 分級、派工順序、handoff 格式與升級規則。
+- 兩條成本紅線讓這件事誠實：一次派工固定成本 5–15k tokens；實測完整 loop 跑瑣碎任務要 3.5 倍 token。人類 20 分鐘內能做完的，留在主 session（Lane 0）——那也是一種 routing 決策。
+- Role 邊界由 `.claude/hooks/routing_guard.py` 強制，不是靠自律。被擋下代表你越界了：重新分派，不要繞過。逃生門：`ROUTING_MAIN=off`、`ROUTING_GUARD=off`。
+- routing 有沒有真的發生是可量測的，計畫不算證據：`python3 .claude/hooks/routing_audit.py`。
 - 這裡分派的**只有委派工作**。主 session 的模型由 `/model` 決定，不是由本檔案決定。
 
 ## 版本控制 (Versioning)

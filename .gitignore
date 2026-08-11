@@ -38,3 +38,6 @@ raw/
 # Local agent skill installs / design dumps (not product code)
 .agents/
 .gemini/
+
+# routing telemetry (local audit state, not source)
+.claude/routing/
