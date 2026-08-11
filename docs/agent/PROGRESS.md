@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Action: 0.7.9 收工判準改成「資料真的到位」（0.7.8 只看抓取有沒有拋錯）
-- Status: **released to main; DEV + PROD Edge on 0.7.9 (PROD v42). PROD crons still all inactive**
+- Status: **released to main; DEV + PROD both on 0.7.9 with matching crons. One live hit still unobserved**
 - Timestamp: 2026-08-11 19:00:00 Asia/Taipei
 
 > **Read only the newest entries at the top.** Older logs: `docs/agent/PROGRESS_ARCHIVE.md`.
@@ -75,14 +75,22 @@ probe still retries itself (a source with `data_landed` false stays pending), bu
 there is no fallback at all. PROD is not starved today —— `batch_run_log` shows manual runs at 10:09 /
 15:34 / 16:58 —— but nothing is *scheduled*.
 
-**Not applied**: the sandbox permission classifier refused `cron.alter_job` twice. Left for the user,
-from `sources/` (`alter_job`, not `cron.schedule` —— it keeps the embedded CRON_SECRET, see schema.sql):
+**Applied 2026-08-11 19:2x** —— the sandbox classifier refused `cron.alter_job` twice, so the user ran
+it. `alter_job`, not `cron.schedule`, because it keeps the embedded CRON_SECRET (schema.sql says so, and
+the verification confirmed it: `has_secret = true` on all five jobs afterwards).
 
-```sql
-SELECT cron.alter_job(jobid, schedule => '15,30,45 7 * * 1-5') FROM cron.job WHERE jobname='market-daily';
-SELECT cron.alter_job(jobid, active => true) FROM cron.job
- WHERE jobname IN ('stock-report-nightly','macro-daily','fx-daily','market-daily');
-```
+PROD cron now matches `schema.sql`:
+
+| jobid | jobname | schedule | active |
+| ---- | ---- | ---- | ---- |
+| 11 | stock-report-nightly | `30,45 8,13 * * 1-5` | ✅ |
+| 12 | source-probe | `*/5 * * * *` | ✅ |
+| 13 | macro-daily | `*/30 12-18 * * *` | ✅ |
+| 14 | fx-daily | `0 3,9 * * *` | ✅ |
+| 15 | market-daily | `15,30,45 7 * * 1-5` (probe-tuned) | ✅ |
+
+Both environments are now on 0.7.9 with the same schedules —— the first time since 0.7.3 that PROD has
+had any scheduled ingestion at all.
 
 ### ⛔ (historical) PROD was blocked on CLI auth (2026-08-11 19:00)
 

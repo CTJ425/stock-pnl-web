@@ -62,7 +62,7 @@
 ## 📋 Active Tasks
 
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
-- **Status**: 🔄 **shipped DEV + main + PROD; one live hit still to be read back**
+- **Status**: 🔄 **shipped DEV + main + PROD (crons restored); one live hit still to be read back**
 - **Agent**: Claude
 - **Timestamp**: 2026-08-11 19:00:00 Asia/Taipei
 
@@ -88,10 +88,9 @@ precisely what 0.7.8 would have mis-retired).
    MOPS 21:00/21:05, then tomorrow's 15:00 open. This is the only step still unproven in the wild.
 10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
     `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
-11. **PROD crons are still all `active = false`** —— ⏳ never restored after the 0.7.3 experiment
-    (0.7.7 only did DEV), and `market-daily` is still on the pre-0.7.7 `30,45 7 * * 1-5`.
-    Under 0.7.9 this removes the **outer retry** the design assumes. Two `cron.alter_job` statements,
-    refused by the sandbox classifier —— see the PROD ship record in `PROGRESS.md`.
+11. ~~**PROD crons all `active = false`** since the 0.7.3 experiment (0.7.7 only did DEV)~~ ✅ restored
+    2026-08-11 19:2x, `market-daily` retuned to `15,30,45 7 * * 1-5`. CRON_SECRET preserved
+    (`alter_job`, verified `has_secret` on all five). Both envs now on 0.7.9 with matching schedules.
 
 ### Task 83: 0.7.0 remove 搜尋個股 + TOP20
 - **Status**: 🔄 **code in tree; tests then commit/push/deploy when authorized**
