@@ -1,3 +1,7 @@
+> **SUPERSEDED 2026-08-11.** Adopted, in a different shape: the workflow now lives in
+> `.claude/skills/route/SKILL.md` and is enforced by hooks rather than by prose.
+> Only `AGENTS_MD_PROPOSAL.md` (Codex portability) remains an open idea.
+
 # Token-Efficient Agent Design
 
 These are proposed files only. They do not replace the current project rules until

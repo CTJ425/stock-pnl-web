@@ -1,9 +1,55 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.11 排程修正 + BUG-024（估值每天都是前一交易日）；命中→抓取→上畫面才收工，全鏈路實測通過
-- Status: **released; DEV + PROD on 0.7.11 with 7 cron jobs each. Mechanism proven live at 20:35–20:45**
-- Timestamp: 2026-08-11 20:50:00 Asia/Taipei
+- Action: 0.7.12 七個來源的判準對齊；0.7.11 排程修正 + BUG-024
+- Status: **released; DEV + PROD on 0.7.12, 7 crons each. Two independent sources proven live tonight**
+- Timestamp: 2026-08-11 21:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-11 21:00:00 Asia/Taipei (0.7.12 判準對齊)
+
+One standard for all seven sources: **hit** = the source published today; **retire** = what it published
+is in the artifact the frontend reads. Nothing is judged by whether a fetch threw, or by whether this
+round happened to do work.
+
+The one source still out of line was MOPS. 0.7.11 judged it by 「這一輪有沒有往前走」, which answers
+*did something change*, not *is the expected period present* —— and answers 「no」 forever once backfill
+has already caught up. The probe has to fetch the MOPS table anyway to read its issue date, so it now
+reads the published period off the same payload (`mopsRevenuePeriod` / `mopsProfitPeriod`) and the rule
+becomes `檔案的最新一期 >= 上游剛發布的那一期`. `>=` rather than `===` because backfill legitimately runs
+ahead: measured tonight, the OpenAPI snapshot still reports 資料年月 11506 (June) while the fundamental
+files already carry 2026-07, fetched by the t21sc03 scraper.
+
+Making every rule absolute paid for itself twice: `readBaseline` disappeared entirely (no before-photo
+is needed when the target is absolute), and `readEvidence` no longer needs the fetch bodies. Fewer
+hooks, less state.
+
+Two defects surfaced while aligning, both caught by tooling rather than by reading:
+
+- **`oxlint`** flagged `period` as computed-but-unused —— it was never attached to the returned tick,
+  so the MOPS target would have been null and the source could never have retired. A functional bug.
+- **`npm run typecheck:edge`** (new in 0.7.11) flagged that `ProbeTickResult` in `index.ts` and
+  `ProbeTick` in `probeRound.ts` were two definitions of the same thing. That duplication is what let
+  `period` go missing. Merged into one.
+
+The alignment is now itself a test: every source must have a follow-up and a landing rule, must answer
+「沒到位」 on empty evidence, and must still answer 「沒到位」 when fed noise made of the fetch layer's own
+field names (`ok` / `synced` / `generated` / `reason`). A future source cannot quietly cross that line.
+
+### Two independent sources proven end to end tonight
+
+| 20260811 | source | hit | data_landed | note |
+| ---- | ---- | ---- | ---- | ---- |
+| 20:40 | `bwibbu` | ✅ | true | 已觸發 generate-market-data · 資料已到位 |
+| 20:50 | `margin` | ✅ | true | 當日融資融券有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位 |
+
+Both were in `skipped` on the following round. `margin` was not engineered for —— it published on its
+own at 20:50 and the mechanism handled it unattended, which is the better of the two proofs.
+
+Verification: 990/990 vitest, app tsc, **edge tsc**, oxlint —— all clean.
+
+---
 
 ---
 

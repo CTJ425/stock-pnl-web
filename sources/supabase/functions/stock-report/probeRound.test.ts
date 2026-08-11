@@ -38,10 +38,6 @@ function harness(over: Partial<ProbeRoundDeps> & { hits?: ProbeSourceId[]; evide
       ran.push(a)
       return {}
     },
-    readBaseline: async () => {
-      order.push('baseline')
-      return null
-    },
     readEvidence: async () => {
       order.push('evidence')
       return evidence
@@ -148,16 +144,27 @@ describe('runProbeRound', () => {
     expect(h.order.indexOf('evidence')).toBeLessThan(h.order.indexOf('mark:bfi82u'))
   })
 
-  /*
-    0.7.11: 「到位」的判準是使用者看得到的那份檔案。基準相片必須在**任何抓取之前**照，
-    否則 mops 的「有沒有往前走」會拿抓完之後的狀態跟自己比，永遠得到「沒動」。
-  */
-  it('基準相片照在抓取之前', async () => {
-    const h = harness({ hits: ['mops_revenue'], evidence: { mopsAdvanced: { revenue: true } } })
-    await runProbeRound(['mops_revenue'], TODAY, h.deps)
+  // 0.7.12: MOPS 的判準也是絕對值——上游剛發布的那一期，出現在畫面讀的檔案裡。
+  it('mops 命中：剛發布的那一期已在畫面上 → 收工', async () => {
+    const h = harness({
+      hits: ['mops_revenue'],
+      evidence: { mopsPublished: { revenue: '2026-07' }, fundamentalRevenueMonth: '2026-07' },
+    })
+    const r = await runProbeRound(['mops_revenue'], TODAY, h.deps)
 
-    expect(h.order.indexOf('baseline')).toBeLessThan(h.order.indexOf('run:generate-history'))
-    expect(h.order.indexOf('run:generate-history')).toBeLessThan(h.order.indexOf('evidence'))
+    expect(h.ran).toEqual(['generate-history'])
+    expect(r.landed).toEqual(['mops_revenue'])
+  })
+
+  it('mops 命中：抓完了但畫面還停在上一期 → 下輪重試', async () => {
+    const h = harness({
+      hits: ['mops_revenue'],
+      evidence: { mopsPublished: { revenue: '2026-07' }, fundamentalRevenueMonth: '2026-06' },
+    })
+    const r = await runProbeRound(['mops_revenue'], TODAY, h.deps)
+
+    expect(r.landed).toEqual([])
+    expect(h.marked[0].note).toContain('資料未到位，下輪重試')
   })
 
   it('估值抓到了但畫面那份檔案沒換 → 不算收工', async () => {

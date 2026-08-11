@@ -7,6 +7,8 @@ import {
   formatProbeTickLabel,
   minutesFromHhmm,
   mopsIssueRocYmd,
+  mopsProfitPeriod,
+  mopsRevenuePeriod,
   pendingSources,
   sourceLanded,
   sourcesForTaipeiTime,
@@ -120,12 +122,51 @@ describe('sourceProbePlan', () => {
       expect(sourceLanded('bwibbu', today, { fundamentalValuationDate: null })).toBe(false)
     })
 
-    it('mops_* 看畫面上的最新一期有沒有往前走', () => {
-      expect(sourceLanded('mops_revenue', today, { mopsAdvanced: { revenue: true } })).toBe(true)
-      expect(sourceLanded('mops_revenue', today, { mopsAdvanced: { revenue: false } })).toBe(false)
-      expect(sourceLanded('mops_profit', today, { mopsAdvanced: { profit: true } })).toBe(true)
-      // 月營收動了不代表季報也動了
-      expect(sourceLanded('mops_profit', today, { mopsAdvanced: { revenue: true } })).toBe(false)
+    it('mops_* 問「上游剛發布的那一期在不在畫面上」，不是「有沒有變動」', () => {
+      const published = { revenue: '2026-07', profit: '2026-Q2' }
+      expect(
+        sourceLanded('mops_revenue', today, {
+          mopsPublished: published,
+          fundamentalRevenueMonth: '2026-07',
+        }),
+      ).toBe(true)
+      // 檔案還停在上一期 → 沒到位
+      expect(
+        sourceLanded('mops_revenue', today, {
+          mopsPublished: published,
+          fundamentalRevenueMonth: '2026-06',
+        }),
+      ).toBe(false)
+      // backfill 早就補到更新的一期也算到位（實測：快照停在六月，畫面已有七月）
+      expect(
+        sourceLanded('mops_revenue', today, {
+          mopsPublished: { revenue: '2026-06' },
+          fundamentalRevenueMonth: '2026-07',
+        }),
+      ).toBe(true)
+      expect(
+        sourceLanded('mops_profit', today, {
+          mopsPublished: published,
+          fundamentalProfitQuarter: '2026-Q2',
+        }),
+      ).toBe(true)
+      expect(
+        sourceLanded('mops_profit', today, {
+          mopsPublished: published,
+          fundamentalProfitQuarter: '2026-Q1',
+        }),
+      ).toBe(false)
+      // 缺任一邊都不收工——沒有證據就不算到位
+      expect(sourceLanded('mops_profit', today, { mopsPublished: published })).toBe(false)
+      expect(sourceLanded('mops_profit', today, { fundamentalProfitQuarter: '2026-Q2' })).toBe(false)
+    })
+
+    it('mops 期別解析：整份表共用同一期，取第一列', () => {
+      expect(mopsRevenuePeriod([{ 資料年月: '11506' }, { 資料年月: '11506' }])).toBe('2026-06')
+      expect(mopsRevenuePeriod([{ 資料年月: 'bad' }])).toBeNull()
+      expect(mopsRevenuePeriod([])).toBeNull()
+      expect(mopsProfitPeriod([{ 年度: 115, 季別: 2 }])).toBe('2026-Q2')
+      expect(mopsProfitPeriod([{ 年度: '115', 季別: '5' }])).toBeNull()
     })
 
     it('每個來源在沒有任何證據時一律不算到位', () => {
@@ -166,5 +207,29 @@ describe('sourceProbePlan', () => {
     expect(mopsIssueRocYmd([{ 公司代號: '1101' }])).toBeNull()
     expect(mopsIssueRocYmd([])).toBeNull()
     expect(mopsIssueRocYmd(null)).toBeNull()
+  })
+})
+
+/*
+  0.7.12 standards audit —— the point of aligning them is that the alignment itself is checkable.
+
+  Every source must obey the same two rules, so that no future source can quietly reintroduce the
+  0.7.8 mistake (「抓取沒出錯 = 收工」) or the BUG-024 mistake (「問一個落後的鏡像」).
+*/
+describe('判準對齊（七個來源共用同一條標準）', () => {
+  it('每個來源都有抓取、都有收工判準，且沒有證據時一律不收工', () => {
+    for (const id of PROBE_SOURCE_ORDER) {
+      expect(PROBE_FOLLOW_UP[id]).toBeTruthy()
+      // 空證據 = 沒有任何理由相信資料在畫面上 → 不得收工
+      expect(sourceLanded(id, '20260811', {})).toBe(false)
+    }
+  })
+
+  it('收工判準只吃「成品的證據」，不吃抓取自己的回報', () => {
+    // 這組證據刻意混入抓取端會回報的欄位名，它們不該有任何影響
+    const noise = { ok: true, synced: 99, generated: 99, reason: 'updated' } as never
+    for (const id of PROBE_SOURCE_ORDER) {
+      expect(sourceLanded(id, '20260811', noise)).toBe(false)
+    }
   })
 })

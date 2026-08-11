@@ -1,3 +1,8 @@
+> **SUPERSEDED 2026-08-11 — NOT IN EFFECT.** The live workflow is the `route` skill
+> (`.claude/skills/route/SKILL.md`), enforced by `.claude/hooks/routing_guard.py`.
+> Kept for the lane rationale only; do not follow the role table or handoff formats
+> below, they disagree with `.claude/agents/*.md`.
+
 # Token-Efficient Default Workflow
 
 ## Goal

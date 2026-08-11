@@ -181,13 +181,15 @@ import {
   PROBE_SOURCE_ORDER,
   borrowHit,
   mopsIssueRocYmd,
+  mopsProfitPeriod,
+  mopsRevenuePeriod,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type LandingEvidence,
   type ProbeFollowUp,
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
-import { runProbeRound } from './probeRound.ts'
+import { runProbeRound, type ProbeTick } from './probeRound.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -2135,35 +2137,32 @@ async function logBatchRun(row: Record<string, unknown>): Promise<void> {
  * Hit = HTTP ok AND payload indicates "today's session data is present" (source-specific).
  * Fixed generate/sync crons are deactivated during the experiment; restore after validation.
  */
-type ProbeTickResult = {
-  source: ProbeSourceId
-  hit: boolean
-  ok: boolean
-  data_ymd: string | null
-  fingerprint: string | null
-  rows: number | null
-  note: string | null
-  duration_ms: number
-}
-
 async function probeOne<T>(
   url: string,
   ok: (v: T) => boolean,
   dateOf: (v: T) => string | null,
   rowsOf: (v: T) => unknown,
-): Promise<{ ok: boolean; date: string | null; fp: string | null; rows: number | null }> {
+): Promise<{
+  ok: boolean
+  date: string | null
+  fp: string | null
+  rows: number | null
+  /** The rows themselves —— MOPS needs to read the published period off them (0.7.12). */
+  raw: unknown
+}> {
   try {
     const resp = await fetchJson<T>(url)
-    if (!ok(resp)) return { ok: false, date: null, fp: null, rows: null }
+    if (!ok(resp)) return { ok: false, date: null, fp: null, rows: null, raw: null }
     const rows = rowsOf(resp)
     return {
       ok: true,
       date: dateOf(resp),
       fp: rowsFingerprint(rows),
       rows: Array.isArray(rows) ? rows.length : null,
+      raw: rows,
     }
   } catch {
-    return { ok: false, date: null, fp: null, rows: null }
+    return { ok: false, date: null, fp: null, rows: null, raw: null }
   }
 }
 
@@ -2186,9 +2185,9 @@ function floorToFiveMin(hhmm: string): string {
 async function probeSource(
   id: ProbeSourceId,
   todayYmd: string,
-): Promise<Omit<ProbeTickResult, 'source'>> {
+): Promise<Omit<ProbeTick, 'source'>> {
   const t0 = Date.now()
-  const fail = (note: string): Omit<ProbeTickResult, 'source'> => ({
+  const fail = (note: string): Omit<ProbeTick, 'source'> => ({
     hit: false,
     ok: false,
     data_ymd: null,
@@ -2282,7 +2281,7 @@ async function probeSource(
             (v) => (v?.date ? String(v.date) : null),
             (v) => (Array.isArray(v?.data) ? v.data : []),
           )
-        : { ok: false, date: null, fp: null, rows: null }
+        : { ok: false, date: null, fp: null, rows: null, raw: null }
       const hit = r.ok && r.date === todayYmd
       return {
         hit,
@@ -2309,6 +2308,8 @@ async function probeSource(
       )
       const roc = ymdToRocYmd(todayYmd)
       const hit = r.ok && !!r.date && !!roc && r.date === roc
+      // 順手記下這次發布的是哪一期——收工判準要問「這一期在不在畫面上」（0.7.12）
+      const period = isRevenue ? mopsRevenuePeriod(r.raw) : mopsProfitPeriod(r.raw)
       const what = isRevenue ? '月營收' : '季報'
       return {
         hit,
@@ -2322,6 +2323,7 @@ async function probeSource(
             ? `${what}出表日=今日（${r.rows ?? '?'} 筆）`
             : `${what}出表日=${r.date ?? '?'}≠今日`,
         duration_ms: Date.now() - t0,
+        period,
       }
     }
     return fail('unknown source')
@@ -2398,11 +2400,10 @@ async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, u
  * Cost is one storage read per family, only on a round that actually hit.
  */
 async function gatherLandingEvidence(
-  sources: ProbeSourceId[],
+  hitTicks: ProbeTick[],
   todayYmd: string,
-  bodies: Map<ProbeFollowUp, Record<string, unknown>>,
-  baseline: unknown,
 ): Promise<LandingEvidence> {
+  const sources = hitTicks.map((t) => t.source)
   const ev: LandingEvidence = {}
 
   if (sources.includes('bfi82u')) {
@@ -2420,31 +2421,19 @@ async function gatherLandingEvidence(
     }
   }
 
-  const wantsFundamental = sources.some(
-    (s) => s === 'bwibbu' || s === 'mops_revenue' || s === 'mops_profit',
-  )
-  if (wantsFundamental) {
-    const after = await readFundamentalSnapshot()
-    const before = (baseline ?? null) as FundamentalSnapshot | null
-    ev.fundamentalValuationDate = after?.valuationDate ?? null
-    /*
-      月營收／季報沒有便宜的絕對判準，所以問的是「這一輪之後畫面上的資料有沒有往前走」。
-      `> before` 而不是 `!== before`：往回退不算到位，那是壞掉。
-    */
-    ev.mopsAdvanced = {
-      revenue: advanced(before?.revenueMonth, after?.revenueMonth),
-      profit: advanced(before?.profitQuarter, after?.profitQuarter),
+  if (sources.some((s) => s === 'bwibbu' || s === 'mops_revenue' || s === 'mops_profit')) {
+    const snap = await readFundamentalSnapshot()
+    ev.fundamentalValuationDate = snap?.valuationDate ?? null
+    ev.fundamentalRevenueMonth = snap?.revenueMonth ?? null
+    ev.fundamentalProfitQuarter = snap?.profitQuarter ?? null
+    // 上游這一輪發布的是哪一期——由探針的 tick 帶過來，不必再打一次 MOPS
+    ev.mopsPublished = {
+      revenue: hitTicks.find((t) => t.source === 'mops_revenue')?.period ?? null,
+      profit: hitTicks.find((t) => t.source === 'mops_profit')?.period ?? null,
     }
   }
 
   return ev
-}
-
-/** 有沒有往前走。缺任何一邊都算沒有——沒有證據就是沒到位。 */
-function advanced(before: string | null | undefined, after: string | null | undefined): boolean {
-  if (!after) return false
-  if (!before) return true
-  return after > before
 }
 
 /**
@@ -2544,12 +2533,7 @@ async function handleProbe(): Promise<Response> {
     readDoneSources: () => readDoneSourcesToday(todayYmd),
     probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
     runFollowUp: runProbeFollowUp,
-    readBaseline: (hitSources) =>
-      hitSources.some((x) => x === 'bwibbu' || x === 'mops_revenue' || x === 'mops_profit')
-        ? readFundamentalSnapshot()
-        : Promise.resolve(null),
-    readEvidence: (hitSources, bodies, baseline) =>
-      gatherLandingEvidence(hitSources, todayYmd, bodies, baseline),
+    readEvidence: (hitTicks) => gatherLandingEvidence(hitTicks, todayYmd),
     persistTick: async (t) => {
       try {
         await db.from('source_probe_tick').insert({

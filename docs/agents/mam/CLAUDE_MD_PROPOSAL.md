@@ -1,3 +1,6 @@
+> **SUPERSEDED 2026-08-11 — NOT IN EFFECT.** `CLAUDE.md` § Task routing was rewritten
+> directly; see it and `.claude/skills/route/SKILL.md`.
+
 # Proposed `CLAUDE.md` Replacement Sections
 
 Keep existing repository, memory, versioning, and environment sections. Replace the
