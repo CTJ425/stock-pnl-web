@@ -2,6 +2,15 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.14（2026-08-12）— App icon 改為手寫 SVG 元件＋修掉 scribe 中斷會吃掉紀錄的問題
+
+- 🎨 **App icon 換成手寫 SVG，一份圖形兩種載體**：新增 `sources/src/components/BrandMark.tsx`（30×30、`viewBox="0 0 96 96"`、`role="img"`），取代 `AppShell` 與 `AuthPage` 裡的 lucide `TrendingUp` 與外層的 `.brand-mark` 漸層方塊（該 CSS 規則已孤兒化並移除）。favicon 另存 `sources/public/favicon.svg`，`index.html` 改為 `type="image/svg+xml"`。**兩份是刻意的**：favicon 在隔離環境算繪，讀不到 App 的 CSS 變數，所以元件保留 `var()` 跟著主題走，favicon 寫死深色主題字面值（`#6366f1`／`#22d3ee`／`#ff4a5a`／`rgba(99, 102, 241, 0.16)`）。
+- 🎨 **四個新的主題 token**：`--svg-main-1`／`--svg-accent`／`--stock-up-bright`／`--svg-bg-glow` 以 `var()` 別名映射到既有的 `--accent-strong`／`--accent-2`／`--up`／`--bg-glow-a`，只在深色 `:root` 定義一次即自動跟隨所有主題。
+- ✅ **瀏覽器實測**：React 19.2.7 的 `useId()` 在 SVG `url(#…)` 內安全——實際跑 Playwright 確認 id 產生為 `_r_0_-p1/-p2/-p3`（純 ASCII），三個漸層全部解析成功，stop 色回傳當下主題的值。舊的兩張 PNG 資產（`favicon.png`、`brand-mark.png`）與 `src/assets/` 目錄一併刪除。
+- 🐞 **BUG-028：`scribe` 撞到 `maxTurns` 會靜默吃掉紀錄**。派工回傳一句看似正常的半句話（「Now let me verify…」），主 session 分不出截斷與完成。實測 7 次派工中，達到 15–17 次 tool call 的 5 次全部截斷，5–8 次的 2 次全部完成。**已造成實際損失**：Task 91 與 Task 92 的 `PROGRESS.md` 紀錄被毀——都是從熱檔剪掉後、還沒寫進 `PROGRESS_ARCHIVE.md` 就被中斷；91 靠 `git show HEAD` 救回，92 從未 commit 只能重建。修法三項（皆在 `.claude/agents/scribe.md`）：`maxTurns` 15 → 30；新增「先寫目的地再刪來源」的搬移順序規則，讓被中斷的最壞結果從「靜默刪除」變成「可見的重複」；新增強制結尾回報區塊（`RECORDED`／`MOVED`／`VERIFY`／`UNFINISHED`），讓截斷變成可偵測。
+- 📊 **成本歸因更正**：先前記錄「主 session 成本被讀進 context 的大圖推高」是錯的。實測八張圖合計 16,069 tokens ＝ **$0.88，佔整場 $20.87 的 4.2%**。main 的 $17.51 其實是三等分：output $5.80（33.1%）、cache read $5.85（33.4%）、cache write $5.86（33.5%）。cache write 高的真正原因是每轉都要寫入新內容（585,535 tokens ÷ 138 轉 ≈ 每轉 4,243）以及本場使用 1 小時 cache TTL（寫入 2× 而非 1.25×）。新結論：**output 佔三分之一且大部分是 thinking，`effort` 是這個專案從未調校過的成本槓桿**。
+- 🔢 **版號**：`version.ts`／`package.json`／`package-lock.json`／`README.md` 徽章皆已同步至 `0.7.14`。
+
 ### 0.7.13（2026-08-12）— 借券翻日死在半路（BUG-026）＋到位判準抽樣未排序（BUG-027）
 
 > 目前狀態：正式 release commit `33c1bd7`（`0.7.13`），`dev`／`main` 已同步推送；GitHub
