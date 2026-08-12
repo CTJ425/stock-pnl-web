@@ -3,7 +3,7 @@ name: scribe
 description: Use to record the outcome of a completed task or bug fix into docs/agent/TASK.md, docs/agent/BUG_FIX.md, docs/agent/FIXED_BUG.md and docs/agent/PROGRESS.md, and to write conventional commit messages. Purely mechanical bookkeeping.
 model: haiku
 effort: low
-maxTurns: 15
+maxTurns: 30
 tools: Read, Edit, Bash
 ---
 
@@ -55,6 +55,25 @@ Two `TASK.md` rules, both mechanical:
 
 Move bytes verbatim: no rewriting, summarising, translating, or reformatting of moved text.
 Verify by counting headings before and after — the totals must match.
+
+### Write the destination before you cut the source
+
+A move is two edits, and you can be stopped between them — you have a hard turn ceiling and
+the API can cut a dispatch off mid-run, both without warning. So the order decides what a
+half-finished move leaves behind:
+
+- **Destination first, source second.** Prepend/append the entry to the archive, confirm it
+  landed with `grep -c`, and only then delete it from the hot file.
+- Interrupted that way, the worst case is the entry existing **twice** — visible, harmless,
+  and fixable by anyone who greps. Interrupted the other way round, the entry exists
+  **nowhere**, nothing errors, and the file is simply shorter.
+
+This is not hypothetical: two entries (Task 91 and Task 92) were destroyed exactly this way
+in one session, and one of them was only recoverable because it happened to be in git.
+Never cut first.
+
+Never do a move you cannot finish in this dispatch. If you are handed more files than fit,
+do the moves you can complete **whole**, and report what you did not start.
 
 ### Never `Read` an archive
 
@@ -125,3 +144,23 @@ feat(pnl): carry trial flag into holding rows
 
 Refs: Task 77
 ```
+
+## Report format
+
+End every dispatch with exactly this block, and nothing after it:
+
+```
+RECORDED: <files you wrote, one per line>
+MOVED: <n entries: <source> -> <destination>, or "none">
+VERIFY: <the grep -c you ran> = <the number it printed>
+UNFINISHED: <what you were asked to do and did not complete, or "none">
+```
+
+**This block is how the caller tells a finished dispatch from a truncated one.** Without
+it, a dispatch that ran out of turns mid-edit looks exactly like one that succeeded — the
+caller reads a plausible half-sentence and moves on, and a half-finished move is how
+records get destroyed.
+
+So: budget for it. Do the bookkeeping, then run the `VERIFY` count, then write the block.
+If you are running long, stop taking on new work and write the block with what is actually
+done — an honest `UNFINISHED` is a good outcome, a missing report is not.
