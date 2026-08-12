@@ -1,8 +1,8 @@
 /** Login/Registration/Forgot Password page (only displayed in Supabase mode; no login required in local mode)*/
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { TrendingUp } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { BrandMark } from '../BrandMark'
 
 type Mode = 'signin' | 'signup' | 'reset'
 
@@ -66,9 +66,7 @@ export function AuthPage() {
     <div className="auth-wrap">
       <div className="glass auth-card">
         <div className="brand">
-          <span className="brand-mark">
-            <TrendingUp size={17} />
-          </span>
+          <BrandMark />
           股票小幫手
         </div>
         <p className="auth-sub">台美股交易紀錄・移動平均成本損益・年度收益總覽</p>

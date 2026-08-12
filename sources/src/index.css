@@ -20,6 +20,10 @@
   --up: #ff4a5a; /* up (red) */
   --down: #00e676; /* down (green) */
   --danger: #f87171;
+  --svg-main-1: var(--accent-strong);
+  --svg-accent: var(--accent-2);
+  --stock-up-bright: var(--up);
+  --svg-bg-glow: var(--bg-glow-a);
   --radius: 14px;
   --radius-sm: 9px;
   /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
@@ -160,17 +164,6 @@ h3 {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.2px;
-}
-
-.brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent-2));
-  color: #fff;
-  flex-shrink: 0;
 }
 
 .header-spacer {
