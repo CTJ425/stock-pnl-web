@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 21:00:00 Asia/Taipei
+- Timestamp: 2026-08-12 12:06:18 Asia/Taipei
 
 ---
 
@@ -10,13 +10,15 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-12 11:00)
+## 📍 Where the project stands (2026-08-12 12:06)
 
 - **Version 0.7.13.** DEV Edge deployed 2026-08-12 10:50 (volume-copy at `ce3c220`, `diff -rq` clean,
   container recreated) and smoke-verified: anon 401/401/400, authenticated `probe` 200 with an empty
   in-window plan at 10:45, and two `generate-chips` calls advancing `runs_today` 1 → 2 — which is what
   proves the new `borrow_data_date` select in `readLastRun` works rather than degrading to `null`.
-  PROD Edge and PROD cron still untouched — see Task 87.
+  PROD Edge is now deployed as `stock-report` v46 (`verify_jwt=false`, `ezbr_sha256`
+  `000ea3b281868aa9…1b878ded`) and smoke-verified; PROD cron still has all 7 jobs and remains
+  unchanged — see Task 87.
 - **DEV cron count: 7 → 5** — `stock-report-nightly` (generate-chips) and `market-daily` (sync-market)
   removed from DEV's `cron.job` on 2026-08-12 (`schema.sql` §8d updated to match). Neither was a
   deliberate part of the probe-triggers-fetch design: 0.7.3 disabled them for the probe-only
@@ -120,10 +122,10 @@
 Uninstalled `mad` Claude Code plugin. Added routing guard/observe/audit hooks, routing skill, and enforcement rules in CLAUDE.md. Updated agent files. All verification passed; unknown leftover plugin cache noted.
 
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
-- **Status**: 🔄 **code fixed, tested and committed to `dev`; DEV cron table already down to 5; Edge
-  deploy of the code + PROD (code and crons) still open**
+- **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
+  already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**
 - **Agent**: Claude
-- **Timestamp**: 2026-08-12 11:00:00 Asia/Taipei
+- **Timestamp**: 2026-08-12 12:06:18 Asia/Taipei
 
 Trigger: reading 2026-08-11's probe ticks on both environments to answer the user's actual question
 (「不要讓 generate-chips 從 15:00 開始跑」) turned up that `generate-chips` does **not** run from 15:00 —
@@ -170,8 +172,9 @@ it ran 15 times, mostly no-ops or manual — and that the real 15:00-start offen
    no ticks before 21:00 and its hit round should reach `data_landed=true` then stop (retired)
    instead of repeating to window close; `batch_run_log` for that slot should read `skipped=f` with a
    non-null `borrow_data_date`
-10. **PROD Edge deploy** — ⏳ separate go-ahead, only after the DEV live proof; verify by `ezbr_sha256`
-    change, not version number (see `supabase-ops` skill)
+10. ~~**PROD Edge deploy**~~ ✅ 2026-08-12 12:02 — `stock-report` v46, `verify_jwt=false`,
+    `ezbr_sha256=000ea3b281868aa9…1b878ded`; anonymous smoke `probe=401`, `admin-status=401`,
+    unknown action `400`. Verified by checksum, not version number.
 11. **Deferred, not forgotten** (see plan Part 4): `market-data-daily` cron — retire once a full day of
     `bwibbu` ticks on the dated endpoint (post-0.7.11) proves the probe catches it inside its window;
     `history-daily` cron — retire only together with widening `MOPS_SLOTS` beyond its current four

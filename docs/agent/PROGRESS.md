@@ -1,9 +1,24 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 87 — BUG-026 / BUG-027, diagnostic note, `borrow` window retune, cron cleanup (0.7.13-dev.1)
-- Status: **0.7.13 shipped; DEV Edge deployed + smoke-verified, DEV cron down to 5. PROD and tonight's ~22:15 borrow proof still open**
-- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
+- Action: Task 87 — BUG-026 / BUG-027, diagnostic note, `borrow` window retune, cron cleanup (0.7.13)
+- Status: **0.7.13 released; both Edges deployed + smoke-verified, DEV cron down to 5; PROD cron and tonight's ~22:15 borrow proof still open**
+- Timestamp: 2026-08-12 12:06:18 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-12 12:06:18 Asia/Taipei (0.7.13 release + PROD Edge deploy)
+
+- Formal release commit: `33c1bd7` (`0.7.13`); `APP_VERSION`, README, `package.json`, and lockfile
+  all contain the official version with no `-dev` suffix. `dev` and `main` are both pushed at this
+  commit and the worktree is clean.
+- GitHub Pages deployment for `main` completed successfully in Actions run
+  `31562082598` (head `33c1bd7`).
+- PROD `stock-report` deployed with `--no-verify-jwt`: version 46, `verify_jwt=false`,
+  `ezbr_sha256=000ea3b281868aa9bd9b7c0f0cb3187e5a15dfa3fcc416d8b2192daf1b878ded`.
+  Anonymous smoke is intact: `probe=401`, `admin-status=401`, unknown action `400`.
+- PROD cron cleanup was not performed; all 7 PROD jobs remain as before. The live borrow landing proof
+  is still pending until the next measured window.
 
 ---
 
@@ -1255,4 +1270,3 @@ Prod Edge already carried the 0.6.46 TOP30 / progressive-warm / admin-run job li
 - Timestamp: 2026-08-09 13:40:00 Asia/Taipei
 
 ---
-

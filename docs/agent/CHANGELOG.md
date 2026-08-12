@@ -4,8 +4,9 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.7.13（2026-08-12）— 借券翻日死在半路（BUG-026）＋到位判準抽樣未排序（BUG-027）
 
-> 目前狀態：commit `ce3c220`（`0.7.13-dev.1`），只在 `dev` 分支，**尚未 push 到 `origin/dev`**，
-> 兩區 Edge 都還在跑 0.7.12。DEV 的 cron 移除是資料庫層操作，已先於程式碼部署完成（見下）。
+> 目前狀態：正式 release commit `33c1bd7`（`0.7.13`），`dev`／`main` 已同步推送；GitHub
+> Pages Actions run `31562082598` 已成功，兩區 Edge 也已部署（PROD `stock-report` v46，
+> `verify_jwt=false`）。DEV 的 cron 移除是資料庫層操作，PROD cron 仍維持原本 7 支（見下）。
 
 - 🐞 **BUG-026**：`decideSkip` 完全沒有借券項，只看 `t86Today && t86Frozen && marginToday`。借券翻到下一個
   交易日要等收盤結算後——實測 DEV／PROD 都在 **22:15**，比其他任何一項都晚——所以從約 21:00 起閘門就答
