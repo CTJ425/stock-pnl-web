@@ -184,6 +184,41 @@ function ProbeRow({
   )
 }
 
+/** `decideMacroScan` 的判準說明，逐一對應 `ScanReason`。 */
+const MACRO_SCAN_REASON: Record<string, string> = {
+  routine: '今天還沒問過 FRED，例行掃一次（FRED 會回頭修訂歷史值）',
+  due: '發布時間已到、該期還沒拿到，且落在掃描窗內',
+  satisfied: '該拿的都拿到了——命中即收工，今天不再問',
+  'outside-window': '還有期別沒拿到，但已超出掃描窗，等明天的例行班',
+  capped: '今天已達掃描次數上限',
+}
+
+/**
+ * 總經的探針決策（0.7.13）。
+ *
+ * 它不在上面那張格子表裡，因為它**沒有** `source_probe_tick` 的列——判準寫在 `sync-macro` 內部的
+ * `decideMacroScan`，由 `macro-daily` 的班表當節拍。把它畫成第七列會謊稱它有 5 分鐘刻度；
+ * 獨立一塊、寫清楚它是同一種機制的另一種接法，才是誠實的呈現。
+ */
+function MacroScanRow({ s }: { s: NonNullable<NonNullable<AdminStatus['probeExperiment']>['macroScan']> }) {
+  return (
+    <div className="ast-note" style={{ marginTop: 12 }}>
+      <strong>總經（FRED）</strong>
+      <span className="source-tag" style={{ marginLeft: 8 }}>
+        {s.scan ? '下一輪會問' : '下一輪不問'}
+      </span>
+      <span style={{ marginLeft: 8 }}>
+        {MACRO_SCAN_REASON[s.reason] ?? s.reason}
+        {s.dueIds.length > 0 && `（${s.dueIds.join('、')}）`}
+      </span>
+      <div style={{ marginTop: 4 }}>
+        今日已問 {s.scansToday} / {s.cap} 次
+        {s.checkedAt && ` · 最後一次 ${new Date(s.checkedAt).toLocaleString('zh-TW')}`}
+      </div>
+    </div>
+  )
+}
+
 function ProbeExperimentPanel({
   exp,
   todayYmd,
@@ -573,9 +608,19 @@ export function AdminStatusPage() {
           <p className="ast-note" style={{ marginBottom: 12 }}>
             ⚠️ 命中代表<strong>上游已經有資料</strong>，0.7.8 起探針會在同一輪直接觸發對應的抓取。
             抓了什麼、成功與否寫在該次紀錄的備註（展開該列可見）；抓取失敗的來源下一輪會再探一次，
-            固定盤後班表則作為最後的重試。
+            直到該來源的時間窗關閉為止。
           </p>
+          {/*
+            0.7.13 removed the two shifts this paragraph used to point at (`stock-report-nightly`,
+            `market-daily`), so 「固定盤後班表則作為最後的重試」 became the next stale sentence in the
+            exact way the note above predicts. Retry is now the probe re-asking inside the window,
+            full stop —— which is also why the borrow window's *back* edge was extended rather than
+            trimmed: there is no shift behind it any more.
+          */}
           <ProbeExperimentPanel exp={data.probeExperiment} todayYmd={data.todayYmd} />
+          {data.probeExperiment.macroScan && (
+            <MacroScanRow s={data.probeExperiment.macroScan} />
+          )}
         </div>
       )}
 

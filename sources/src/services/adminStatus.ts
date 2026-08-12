@@ -117,6 +117,19 @@ export interface AdminStatus {
       duration_ms?: number | null
       probed_at?: string
     }>
+    /**
+     * 0.7.13：總經**不是** `source_probe_tick` 的來源，但它是探針——判準 `decideMacroScan` 寫在
+     * `sync-macro` 裡，用官方發布行事曆決定「這一輪該不該問 FRED」，拿到就當天收工。
+     * 這裡只是把那個決策顯示出來，不搬觸發；`scan` 是「下一輪會不會問」，不是「剛剛問了」。
+     */
+    macroScan?: {
+      scan: boolean
+      reason: string
+      dueIds: string[]
+      scansToday: number
+      cap: number
+      checkedAt: string | null
+    } | null
   } | null
   durationMs: number
 }

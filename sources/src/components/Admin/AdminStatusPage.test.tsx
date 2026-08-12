@@ -464,4 +464,38 @@ describe('AdminStatusPage 探針實驗面板', () => {
     expect(screen.queryByRole('heading', { name: '排程' })).toBeNull()
     expect(screen.queryByText(/有 3 項需要注意/)).toBeNull()
   })
+
+  /*
+    0.7.13：總經也是探針，只是判準（decideMacroScan）住在 sync-macro 裡、由班表當節拍，
+    所以它沒有 source_probe_tick 的列。面板漏掉它的話，macro 看起來就會像「盲目照表操課」，
+    和旁邊那些會等上游發布的來源形成假對比——這一列存在的唯一理由就是消掉那個假對比。
+  */
+  it('總經的探針決策也顯示在同一個面板，且說得出「為什麼不問」', async () => {
+    fetchAdminStatus.mockResolvedValue({
+      ...withProbe,
+      probeExperiment: {
+        ...withProbe.probeExperiment!,
+        macroScan: {
+          scan: false,
+          reason: 'satisfied',
+          dueIds: [],
+          scansToday: 3,
+          cap: 16,
+          checkedAt: '2026-07-31T13:00:00.000Z',
+        },
+      },
+    })
+    render(<AdminStatusPage />)
+    const p = await panel()
+    expect(p.getByText('總經（FRED）')).toBeTruthy()
+    expect(p.getByText('下一輪不問')).toBeTruthy()
+    expect(p.getByText(/命中即收工/)).toBeTruthy()
+    expect(p.getByText(/今日已問 3 \/ 16 次/)).toBeTruthy()
+  })
+
+  it('沒有 macroScan 時不畫那一列（舊 Edge bundle 不該讓面板爆掉）', async () => {
+    render(<AdminStatusPage />)
+    const p = await panel()
+    expect(p.queryByText('總經（FRED）')).toBeNull()
+  })
 })
