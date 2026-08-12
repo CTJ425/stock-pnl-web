@@ -141,17 +141,29 @@ export interface SkipDecision {
  *
  * Margin trading will not be available until after 21:00, so "Today's All" must include it;
  * If you just look at T86 and call it a day, stop at 17:00, you will never be caught doing margin trading that day.
+ *
+ * `borrowLanded` is the same argument one source further out (BUG-026). 借券 flips to the next
+ * trading day only after the close-plus-settlement —— measured 22:15 on both environments on
+ * 2026-08-11, i.e. **later than every other term in this gate**. Judging 「今天做完了」 without it
+ * meant the gate answered `complete` from ~21:00, so when the flip finally arrived the whole chips
+ * phase short-circuited before `loadBorrow` ever ran: 7 hits, 7 × 「產出 0 檔」, borrow never landed
+ * that day. The fixed shifts could not save it either —— the last one runs at 21:45, before the flip.
+ *
+ * Note what this deliberately does **not** do: it does not ask 「有沒有抓過借券」, it asks
+ * 「借券的日期有沒有走過今天」 (`borrowHit`). Those differ exactly on the day the endpoint is up
+ * but has not flipped yet, which is the entire afternoon.
  */
 export function decideSkip(input: {
   t86Today: boolean
   t86Frozen: boolean
   marginToday: boolean
+  borrowLanded: boolean
   runsToday: number
   maxRuns?: number
 }): SkipDecision {
   const maxRuns = input.maxRuns ?? MAX_RUNS_PER_DAY
   if (input.runsToday >= maxRuns) return { skip: true, reason: 'run-cap' }
-  if (input.t86Today && input.t86Frozen && input.marginToday) {
+  if (input.t86Today && input.t86Frozen && input.marginToday && input.borrowLanded) {
     return { skip: true, reason: 'complete' }
   }
   return { skip: false, reason: null }

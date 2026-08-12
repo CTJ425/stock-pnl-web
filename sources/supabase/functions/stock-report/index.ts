@@ -2442,12 +2442,10 @@ async function gatherLandingEvidence(
  * 判斷「資料有沒有呈現在畫面上」就必須讀**畫面讀的東西**，不能問抓取函式回報了什麼——
  * 後者只證明我們抓到了，不證明它落到了使用者會看到的檔案裡。
  *
- * 取一檔代表即可（與 `latestChipSources` 同一個取捨）：這幾個來源都是整份全市場一起出，
- * 一檔到位就是全部到位；為此把上百檔全下載回來只為了看日期並不划算。
+ * 讀的是**全部持股**而不是取樣（BUG-027）：這幾個來源雖然是整份全市場一起出，但個股檔案是
+ * 逐檔補的，ETF 與部分上櫃根本沒有估值或 MOPS 資料，所以「一檔到位＝全部到位」並不成立——
+ * 判準因此取全體的 max。持股是個人部位的規模（實測 PROD 26 檔、DEV 5 檔），全讀得起。
  */
-/** How many holdings files the landing check reads. Small: it runs only on a hit round. */
-const MAX_FUNDAMENTAL_SAMPLE = 20
-
 interface FundamentalSnapshot {
   sampled: number
   valuationDate: string | null
@@ -2466,7 +2464,15 @@ async function readFundamentalSnapshot(): Promise<FundamentalSnapshot | null> {
       `max` across the sample, not the first file: ETFs and TPEx names legitimately carry no valuation,
       and one of them must not veto a day that did land.
     */
-    const tickers = (await batchTwTickers()).slice(0, MAX_FUNDAMENTAL_SAMPLE)
+    /*
+      **All** holdings, not a slice (BUG-027). This used to take the first 20, but `heldTwTickers`
+      queries `transactions` with no ORDER BY —— so *which* 20 survived was whatever row order
+      Postgres happened to return, and the verdict below is a `max` across them. PROD holds 26 TW
+      tickers and DEV holds 5, which is why `mops_profit` answered 「沒到位」 on PROD and 「到位」 on
+      DEV at 21:00 on 2026-08-11 running the *same* v45 bundle: on DEV the cap could never bite.
+      A landing verdict must not depend on an unordered truncation.
+    */
+    const tickers = await batchTwTickers()
     if (tickers.length === 0) return null
     const files = await Promise.all(
       tickers.map(({ ticker }) =>
@@ -2500,6 +2506,14 @@ function summariseFollowUp(action: ProbeFollowUp, body: Record<string, unknown>)
     return `${String(body.reason ?? '?')}，法人補 ${String(body.institutionalFilled ?? 0)} 天`
   }
   if (action === 'generate-chips') {
+    /*
+      Three outcomes, not one number. 「產出 0 檔」 alone cannot distinguish 「閘門根本沒讓它跑」
+      from 「跑了，但沒有東西變」, and that ambiguity is what hid BUG-026 for a whole evening:
+      seven identical 「產出 0 檔」 notes, and the skip was only findable by joining to
+      `batch_run_log`. The body already carries all three flags —— printing them costs nothing.
+    */
+    if (body.chipsSkipped) return `跳過（${String(body.skipReason ?? '?')}）`
+    if (!body.regenerated) return '無變動'
     return `產出 ${String(body.generated ?? 0)} 檔`
   }
   if (action === 'generate-market-data') {
@@ -2617,6 +2631,8 @@ interface LastRun {
   runsToday: number
   t86: T86State | null
   runSig: string | null
+  /** 今天最後一次記到的借券日期。`decideSkip` 用它判斷借券翻日了沒（BUG-026）。 */
+  borrowDataDate: string | null
 }
 
 /**
@@ -2631,7 +2647,9 @@ async function readLastRun(todayYmd: string): Promise<LastRun | null> {
   try {
     const { data, error } = await db
       .from('batch_run_log')
-      .select('runs_today, t86_fingerprint, t86_revisions, t86_unchanged, t86_frozen, run_sig')
+      .select(
+        'runs_today, t86_fingerprint, t86_revisions, t86_unchanged, t86_frozen, run_sig, borrow_data_date',
+      )
       .eq('taipei_ymd', todayYmd)
       .order('id', { ascending: false })
       .limit(1)
@@ -2650,6 +2668,8 @@ async function readLastRun(todayYmd: string): Promise<LastRun | null> {
             }
           : null,
       runSig: typeof data.run_sig === 'string' ? data.run_sig : null,
+      borrowDataDate:
+        typeof data.borrow_data_date === 'string' ? data.borrow_data_date : null,
     }
   } catch {
     return null
@@ -2700,6 +2720,9 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     t86Today: cachedToday.has(`${todayYmd}:T86`),
     t86Frozen: last?.t86?.frozen ?? false,
     marginToday: cachedToday.has(`${todayYmd}:MI_MARGN_D`),
+    // BUG-026：借券翻日比其他兩項都晚，不看它就會在 22:15 真的翻日時把整輪短路掉。
+    // 問的是「日期走過今天沒有」（`borrowHit`），不是「抓過借券沒有」——端點整個下午都有資料。
+    borrowLanded: borrowHit(last?.borrowDataDate ?? null, todayYmd),
     runsToday: last?.runsToday ?? 0,
   })
 
@@ -2711,7 +2734,13 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   let marginOk = false
   let marginToday = cachedToday.has(`${todayYmd}:MI_MARGN_D`)
   let borrowOk = false
-  let borrowDataDate: string | null = null
+  /*
+    Seeded from today's last row, not from null (BUG-026). A skipped round fetches nothing, so
+    logging null here would erase the very date that justified the skip —— and since `decideSkip`
+    reads this column back, the gate would then flip between skip and run every other round.
+    Carrying it forward is what `t86_fingerprint` two lines down already does.
+  */
+  let borrowDataDate: string | null = last?.borrowDataDate ?? null
   let historyDays = 0
   let runSig: string | null = last?.runSig ?? null
   let chipsSkipped = false

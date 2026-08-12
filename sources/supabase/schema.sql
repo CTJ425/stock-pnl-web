@@ -364,37 +364,33 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 --
 --     Short circuit + T86 rewrite detection + MAX_RUNS_PER_DAY still apply inside the function.
 --
--- ⚠️ Live envs: **cron.alter_job** for schedule; replace body action only via targeted UPDATE of command
---    (do not unschedule+schedule — that rewrites CRON_SECRET placeholders; BUG-002/003).
---      SELECT cron.alter_job(jobid, schedule := '30,45 8,13 * * 1-5')
---      FROM cron.job WHERE jobname = 'stock-report-nightly';
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'stock-report-nightly') THEN
-    PERFORM cron.unschedule('stock-report-nightly');
-  END IF;
-END $$;
-
-SELECT cron.schedule(
-  'stock-report-nightly',
-  '30,45 8,13 * * 1-5',
-  $$
-  SELECT net.http_post(
-    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
-    headers := jsonb_build_object(
-                 'Content-Type',  'application/json',
-                 'x-cron-secret', '<CRON_SECRET>'
-               ),
-    body    := '{"action":"generate-chips"}'::jsonb,
-    -- ⚠️ Must be specified: pg_net’s timeout_milliseconds default is only 5000ms.
-    --    However, for the first execution every day, the T86 and margin trading positions of the day must be grasped. The actual measurement takes 10–13 seconds.
-    --    (After that, it only takes about 2 seconds to fully hit the cache). Using the default value, net._http_response will be recorded every night
-    --    Timeout failure with status_code = null makes it indistinguishable between "timeout but actually successful" and "real failure"
-    --    - The batch itself will still run to completion on the server, but you will lose the only server-side signal.
-    timeout_milliseconds := 60000
-  );
-  $$
-);
+-- ❌ REMOVED in 0.7.13 —— `stock-report-nightly` no longer exists in either environment.
+--
+--    The design is: **the probe detects publication and calls the ingest itself**. A fixed shift for
+--    an action the probe already triggers is a second, unaccountable trigger —— `batch_run_log` has no
+--    column saying what caused a run, so 「這一輪是誰叫的」 had to be inferred from the clock.
+--
+--    This job was not a deliberate part of that design. 0.7.3 disabled it (probe-only, as intended);
+--    0.7.7 restored it in an emergency because the probe of that era wrote ticks and **never triggered
+--    a fetch**, so with it off nothing ingested at all; 0.7.8 gave the probe that ability and the job
+--    was simply never withdrawn.
+--
+--    Its stated purpose —— 「outer retry」 —— did not survive measurement. On 2026-08-11 it ran at
+--    21:30/21:45 while 借券 flipped at 22:15: it fired *before* the event it was supposed to back up.
+--    Both passes then went through the **same `decideSkip` gate** as the probe rounds and were skipped
+--    with `reason=complete` (BUG-026). A backstop sharing the broken code path and differing only by
+--    clock is not an independent safety net.
+--
+--    Coverage now: `t86` (15:30–17:30), `margin` (20:30–22:30) and `borrow` (21:00–23:30) probe windows
+--    all map to `generate-chips` via `PROBE_FOLLOW_UP`.
+--
+--    To restore, **clone a surviving job's command** so the embedded CRON_SECRET travels without ever
+--    being printed (the technique 0.7.11 used to create §8d's jobs) —— never `cron.schedule` with a
+--    placeholder, which is BUG-002/003:
+--      SELECT cron.schedule('stock-report-nightly', '30,45 8,13 * * 1-5',
+--             replace(command, '"action":"probe"', '"action":"generate-chips"'))
+--        FROM cron.job WHERE jobname = 'source-probe';
+--
 -- Note: The function is deployed with --no-verify-jwt, so no Authorization is required; batch authorization is controlled by x-cron-secret instead.
 -- If your API Gateway still requires apikey, just add 'apikey', '<ANON_KEY>' to the headers.
 --
@@ -634,19 +630,30 @@ CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx
 --     then had **no automatic path whatsoever** —— which is how BUG-024 (valuation a trading day
 --     stale, every day) went unnoticed for so long.
 --
---     These are the **outer retry**, not the primary path. Since 0.7.8 the probe triggers the
---     matching fetch the moment a source lands, which is both earlier and cheaper than a fixed
---     shift. These shifts exist so that a source whose probe follow-up failed —— or whose window
---     closed before its data ever landed —— still gets picked up the same day.
+--     ⚠️ 0.7.13 —— these two are the **last** fixed shifts for probe-covered actions, and they are
+--     kept on borrowed time, not on the 「outer retry」 argument that used to be written here. That
+--     argument was retired with `stock-report-nightly` and `market-daily` (see §6c): a shift that
+--     runs before the event it backs up, and that goes through the same `decideSkip` gate as the
+--     probe round, is not an independent safety net. Do not reinstate it as a reason.
+--
+--     Each of these survives for a specific, falsifiable reason instead:
+--       `history-daily`      —— `MOPS_SLOTS` is exactly {12:00, 12:05, 21:00, 21:05}: 月營收 / 季報
+--                               get **four probe attempts a day**. A MOPS publication at any other
+--                               hour is invisible to the probe, and this is the only thing that
+--                               would pick it up. Retire it only together with wider MOPS slots.
+--       `market-data-daily`  —— 0.7.11 moved `bwibbu` to the dated endpoint and reopened its window
+--                               to 15:00. There is not yet one full day of ticks proving the probe
+--                               catches it inside that window. Retire it once there is.
 --
 --     ⚠️ Live envs: create these by **cloning an existing job's command** so the embedded
---     CRON_SECRET is carried over without ever being printed:
+--     CRON_SECRET is carried over without ever being printed (`stock-report-nightly` was the donor
+--     until 0.7.13 removed it —— use `source-probe`, which is the one job that can never go away):
 --       SELECT cron.schedule('market-data-daily', '0 10,14 * * 1-5',
---                replace(command, '"generate-chips"', '"generate-market-data"'))
---         FROM cron.job WHERE jobname = 'stock-report-nightly';
+--                replace(command, '"action":"probe"', '"action":"generate-market-data"'))
+--         FROM cron.job WHERE jobname = 'source-probe';
 --       SELECT cron.schedule('history-daily', '30 4,13 * * 1-5',
---                replace(command, '"generate-chips"', '"generate-history"'))
---         FROM cron.job WHERE jobname = 'stock-report-nightly';
+--                replace(command, '"action":"probe"', '"action":"generate-history"'))
+--         FROM cron.job WHERE jobname = 'source-probe';
 --     Do NOT unschedule+schedule an existing job to change its body (BUG-002/003).
 
 DO $$
@@ -872,32 +879,17 @@ SELECT cron.schedule(
 --
 --    ⚠️ Same placeholder mines as §6c. Live: `cron.alter_job` only — do not unschedule+schedule.
 
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'market-daily') THEN
-    PERFORM cron.unschedule('market-daily');
-  END IF;
-END $$;
-
-SELECT cron.schedule(
-  'market-daily',
-  -- Taipei 15:15 / 15:30 / 15:45 (UTC 07:15 / 07:30 / 07:45), weekdays only. 0.7.7, probe-tuned.
-  -- ⚠️ Already-deployed environments: use cron.alter_job to keep CRON_SECRET in the command.
-  '15,30,45 7 * * 1-5',
-  $$
-  SELECT net.http_post(
-    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
-    headers := jsonb_build_object(
-                 'Content-Type',  'application/json',
-                 'x-cron-secret', '<CRON_SECRET>'
-               ),
-    body    := '{"action":"sync-market"}'::jsonb,
-    -- Monthly report + up to 15 daily requests (0.6.32 raised from 5 to cover buy/sell), estimated 5–8 seconds.
-    -- Give 60 seconds to be consistent with other jobs
-    timeout_milliseconds := 60000
-  );
-  $$
-);
+-- ❌ REMOVED in 0.7.13 —— `market-daily` no longer exists in either environment. Same reasoning as
+--    §6c: `bfi82u` probes 15:00–16:30 and maps to `sync-market` through `PROBE_FOLLOW_UP`, so this
+--    shift was firing at 15:15/15:30/15:45 for work the probe had already triggered at 15:10.
+--    The measurement quoted above is exactly the point —— once the probe both *measures* 15:10 and
+--    *acts* on it (0.7.8), a shift tuned to that measurement is duplicating it, not protecting it.
+--
+--    To restore, clone a surviving job's command so CRON_SECRET travels unprinted (never
+--    `cron.schedule` with a placeholder —— BUG-002/003):
+--      SELECT cron.schedule('market-daily', '15,30,45 7 * * 1-5',
+--             replace(command, '"action":"probe"', '"action":"sync-market"'))
+--        FROM cron.job WHERE jobname = 'source-probe';
 
 
 -- 11. Administrator backend: Scheduling status query function (0.6.12)
