@@ -27,7 +27,6 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
-  TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -46,6 +45,7 @@ import { FxPage } from './Fx/FxPage'
 import { AdminConsolePage } from './Admin/AdminConsolePage'
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
+import { BrandMark } from './BrandMark'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
 
@@ -638,9 +638,7 @@ export function AppShell() {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="brand">
-            <span className="brand-mark">
-              <TrendingUp size={17} />
-            </span>
+            <BrandMark />
             <span className="brand-text">股票小幫手</span>
           </div>
 
