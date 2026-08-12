@@ -2,11 +2,84 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-07-31 18:20:00 Asia/Taipei
+- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-026 — `decideSkip` had no borrow term, so a late 借券 flip could never trigger a real run
+- **Found by**: reading 2026-08-11's probe ticks on both environments (not reported by a user).
+- **Description**: `decideSkip` (`pollPlan.ts:154`, pre-fix) retired the chips phase on
+  `t86Today && t86Frozen && marginToday`, with no borrow term at all. 借券 flips to the next trading
+  day only after close-plus-settlement — measured **22:15 on both DEV and PROD** on 2026-08-11, later
+  than every other term in that gate. So from ~21:00 the gate already answered `complete`, and every
+  invocation after that short-circuited **before `loadBorrow` ever ran**.
+- **Proven by execution** (2026-08-11, `source_probe_tick` + `batch_run_log`, identical on both
+  environments):
+
+  | time | `source_probe_tick` note | `batch_run_log` |
+  | ---- | ---- | ---- |
+  | 22:15 / 20 / 25 / 30 / 35 / 40 / 45 | `已觸發 generate-chips：產出 0 檔 · 資料未到位，下輪重試` (×7) | `skipped=t, skip_reason=complete, borrow_ok=f`, duration 144–221ms |
+
+  Seven identical `產出 0 檔` notes gave no hint the gate had short-circuited — the skip was only
+  findable by joining to `batch_run_log`. The two `stock-report-nightly` cron passes at 21:30/21:45
+  went through the **same gate** and were skipped the same way, so there was no outer retry either;
+  borrow ended the day unlanded.
+- **Root cause**: the `complete` branch in `decideSkip` (`pollPlan.ts`) ANDed only
+  `t86Today && t86Frozen && marginToday`. Borrow was never represented, so once the other three terms
+  were true (~21:00) the gate stayed `complete` regardless of what borrow was doing.
+- **Impact**: from ~21:00 onward every `generate-chips` invocation for the rest of the day was a no-op,
+  including the 7 borrow-probe follow-ups at 22:15–22:45 and the two `stock-report-nightly` passes.
+  借券賣出 never landed for 2026-08-11.
+- **Fix** (`pollPlan.ts`, `index.ts`): added `borrowLanded: boolean` to `decideSkip`'s input and ANDed
+  it into the `complete` branch (`run-cap` keeps precedence). Computed at the call site in
+  `runGeneratePhaseChips` as `borrowHit(last?.borrowDataDate ?? null, todayYmd)`, reusing the existing
+  `borrowHit` predicate from `sourceProbePlan.ts` — it already answers exactly this question
+  (「借券的日期有沒有走過今天」, not 「有沒有抓過借券」). `borrow_data_date` added to the `readLastRun`
+  select so the date carries across rounds the same way `t86_fingerprint` already does.
+
+  A second fix travels with this one: `borrowDataDate` is now **seeded from the previous row instead
+  of `null`**. A skipped round fetches nothing, so logging `null` would erase the very date that
+  justified the skip — and since `decideSkip` reads that column back, the gate would then flip between
+  skip and run every other round.
+- **Regression test**: `pollPlan.test.ts` — `borrowLanded:false` with the other three terms true must
+  be `{skip:false}`; the same with `borrowLanded:true` must be `{skip:true, reason:'complete'}`.
+- **Status**: ✅ FIXED in **0.7.13** (`ce3c220` on `dev`, 2026-08-12 10:48). 992/992 vitest,
+  `typecheck:edge` 0 errors, `tsc -b` clean, `oxlint` clean. DEV Edge deployed 10:50 and smoke-verified
+  — two consecutive `generate-chips` calls advanced `runs_today` 1 → 2, which proves the new
+  `borrow_data_date` select in `readLastRun` actually works (a bad select would have returned an
+  error, made `readLastRun` answer `null`, and degraded silently).
+  ⏳ **The live proof is still pending** and must not be claimed until it happens: borrow should show
+  no ticks before 21:00 tonight, and its hit round (~22:15) should reach `data_landed=true` and then
+  stop instead of repeating to window close.
+
+### Bug ID: BUG-027 — `readFundamentalSnapshot` sampled only 20 holdings from an unordered query
+- **Found by**: reading 2026-08-11's probe ticks on both environments; explains the open question
+  recorded in commit `ac3177e` (`mops_profit` answered `landed=false` on PROD and `true` on DEV at
+  21:00, same v45 bundle).
+- **Description**: `readFundamentalSnapshot` (`index.ts`, pre-fix) took
+  `(await batchTwTickers()).slice(0, MAX_FUNDAMENTAL_SAMPLE)` with the cap at 20, and its `max` across
+  that sample decides `data_landed` for `bwibbu`, `mops_revenue` and `mops_profit`. `batchTwTickers` →
+  `heldTwTickers` selects from `transactions` with **no `ORDER BY`**, so which 20 survived was
+  whatever row order Postgres happened to return.
+- **Strongly supported, not replayed**: PROD holds 26 distinct TW tickers (the cap bites); DEV holds 5
+  (the cap can never bite). That is the shape of the `ac3177e` open question and makes the sampling
+  order the supported explanation for it — but the 21:00 row order that day was not captured, so this
+  is inferred from the cap's structural difference between environments, not reproduced. The fix
+  removes the failure mode either way.
+- **Root cause**: an unordered SQL query feeding a truncating `.slice()`, whose result silently
+  decides a three-source landing verdict.
+- **Impact**: on any environment whose holdings exceed the 20-ticker cap (PROD), the landing verdict
+  for `bwibbu` / `mops_revenue` / `mops_profit` rode on arbitrary row order. The failure direction was
+  safe (missing a Q2 holding reads as 「沒有證據」 → retries) but the retries could persist all day for
+  no real reason.
+- **Fix** (`index.ts`): dropped `.slice(0, MAX_FUNDAMENTAL_SAMPLE)`; reads all holdings now. Deleted
+  the now-orphaned `MAX_FUNDAMENTAL_SAMPLE` constant. The `max` reduction and the `catch → null` fail
+  path were left alone — `null` is correctly read as 「沒有證據」 by `sourceLanded`.
+- **Status**: ✅ FIXED in **0.7.13-dev.1** (commit `ce3c220`, 2026-08-12 10:48). Same verification and
+  deploy status as BUG-026 above — no unit test exists for this function (`readFundamentalSnapshot`
+  lives in `index.ts`, which vitest cannot import; see BUG-026 note and Task 87).
 
 ### Bug ID: BUG-024 —— 估值 BWIBBU 每天存進去的都是「前一個交易日」
 - **Description**: The valuation cached under trading day N has, on every day on record, carried day N−1's

@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-11 19:45:00 Asia/Taipei
+- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
 
 ---
 
@@ -77,7 +77,8 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
-There are no open bugs. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
+There are no open bugs. BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample
+decided landing) fixed in **0.7.13** — see `FIXED_BUG.md`. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
 
 BUG-023 (manual 「全部執行」 opaque non-2xx) fixed in **0.6.47** — see `FIXED_BUG.md`.
 

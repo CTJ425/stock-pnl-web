@@ -1,9 +1,187 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.7.12 七個來源的判準對齊；0.7.11 排程修正 + BUG-024
-- Status: **released; DEV + PROD on 0.7.12, 7 crons each. Two independent sources proven live tonight**
-- Timestamp: 2026-08-11 21:00:00 Asia/Taipei
+- Action: Task 87 — BUG-026 / BUG-027, diagnostic note, `borrow` window retune, cron cleanup (0.7.13-dev.1)
+- Status: **0.7.13 shipped; DEV Edge deployed + smoke-verified, DEV cron down to 5. PROD and tonight's ~22:15 borrow proof still open**
+- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-12 11:00:00 Asia/Taipei (Task 87: BUG-026 / BUG-027 + borrow window retune + cron cleanup)
+
+The user's stated goal was narrower than what this turned into: stop `generate-chips` from running
+from 15:00, and consider splitting borrow/margin out of it for easier debugging. Reading 2026-08-11's
+probe ticks on both environments to answer that turned up that the premise needed correcting, and the
+correction pointed at a smaller, sharper fix than a split. Full evidence and root-cause analysis:
+`/root/.claude/plans/wobbly-jumping-lagoon.md`.
+
+### The premise was wrong: `generate-chips` does not run from 15:00
+
+It ran **15 times** on 2026-08-11, and the whole afternoon was one real run:
+
+| time | trigger | result |
+| ---- | ---- | ---- |
+| 09:09, 09:11 | manual | — |
+| 16:20 | `t86` hit | regenerated 5 |
+| 16:30, 16:45 | cron (`stock-report-nightly`) | no-op |
+| 20:50 | `margin` hit | regenerated 5, unattended |
+| 21:30, 21:45 | cron (`stock-report-nightly`) | skipped — `decideSkip` already answered `complete` |
+| 22:15, 22:20, 22:25, 22:30, 22:35, 22:40, 22:45 | `borrow` hit ×7 | **wrongly skipped** (BUG-026, see below) |
+
+What actually runs from 15:00 is the **`borrow` probe** — 102 ticks between 15:00 and 22:45, of which
+95 were pointless TWSE calls, because borrow cannot flip to the next trading day until ~22:15.
+`DAILY_WINDOWS` already gives every source its own window and the cron jobs are independent of how
+many actions exist — splitting `generate-chips` would not have changed when anything runs. See Part 5
+of the plan for the full rejection of the split (margin's surface is woven through too many fields to
+separate safely; there is no write lock; a new action costs five registration sites).
+
+### 2026-08-11 seven-source read-out
+
+| source | window that day | ticks | first hit | follow-up result | landed (DEV) | landed (PROD) |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| `bfi82u` | ~15:00–16:30 (`sync-market` cron 15:15/15:30/15:45) | 6 | 15:10 | `已觸發 sync-market：updated，法人補 1 天` | true | **NULL*** |
+| `t86` | 15:00–22:45 | 12 | 16:20 | `已觸發 generate-chips`, regenerated 5 | true | **NULL*** |
+| `margin` | 15:00–22:45 | 8 | 20:50 | `當日融資融券有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位` | true | not separately itemized this read-out |
+| `borrow` | 15:00–22:45 | 102 | 22:15 (×7 through 22:45) | `已觸發 generate-chips：產出 0 檔 · 資料未到位，下輪重試` ×7 — **the gate had already short-circuited (BUG-026), so this never really ran** | **false, all day** | identical — same 7 hits, same false, same `skipped=t, skip_reason=complete` |
+| `bwibbu` | 15:00–22:00 (dated endpoint deployed same day 20:40; earlier ticks that day still rode the superseded `BWIBBU_ALL` path) | 43 | 20:35 | 20:35 `資料未到位，下輪重試` → 20:40 `已觸發 generate-market-data · 資料已到位` | true (from 20:40) | not separately itemized this read-out |
+| `mops_revenue` | `MOPS_SLOTS` {12:00, 12:05, 21:00, 21:05} | 4 | none — correctly did not hit (出表日 1150717 ≠ 今日) | n/a | n/a (nothing published that day) | same |
+| `mops_profit` | `MOPS_SLOTS` {12:00, 12:05, 21:00, 21:05} | 4 | 21:00 | `已觸發 generate-history` | **true** | **false — BUG-027** |
+
+\* `bfi82u`/`t86` carry `data_landed=NULL` on PROD for 2026-08-11, not `false`. PROD only went
+0.7.4 → 0.7.9 at 19:1x that day, after both of these sources had already hit (15:10 and 16:20), so
+the `data_landed` machinery was not yet live on PROD when they landed. **This is a deployment-timing
+blank, not a live defect** — do not read it as PROD failing to land these sources.
+
+The wasted-call cost, for the five sources with a wide always-on window (MOPS is excluded — it only
+gets 4 fixed slots/day by design, so "wasted" does not apply the same way):
+
+| source | ticks | wasted | useful |
+| ---- | ---- | ---- | ---- |
+| `borrow` | 102 | 95 | 7 |
+| `bwibbu` | 43 | 40 | 3 |
+| `t86` | 12 | 11 | 1 |
+| `margin` | 8 | 7 | 1 |
+| `bfi82u` | 6 | 2 | 4 |
+
+### Root cause 1 — BUG-026: `decideSkip` had no borrow term
+
+`decideSkip` retired the chips phase on `t86Today && t86Frozen && marginToday`, with no borrow term at
+all. 借券 flips to the next trading day only after close-plus-settlement — measured **22:15 on both
+DEV and PROD** — later than every other term in the gate. So from ~21:00 the gate answered `complete`,
+and every invocation after that short-circuited before `loadBorrow` ever ran. Fixed by adding
+`borrowLanded` (via the existing `borrowHit` predicate against `batch_run_log.borrow_data_date`,
+carried across rounds); `borrowDataDate` is now seeded from the previous row instead of `null` so a
+skipped round cannot erase the date that justified the skip. Full writeup: `FIXED_BUG.md` BUG-026.
+
+**Why this took a whole evening to notice**: `summariseFollowUp` collapsed every `generate-chips`
+outcome to `產出 N 檔`, so seven identical `產出 0 檔` notes looked like seven identical no-ops rather
+than seven rounds where the gate refused to even try. Now emits `跳過（reason）` / `無變動` /
+`產出 N 檔` — this alone would have made the 22:15 round self-explaining without joining to
+`batch_run_log`.
+
+### Root cause 2 — BUG-027: the landing sample was 20 unordered rows
+
+`readFundamentalSnapshot` decided `bwibbu` / `mops_revenue` / `mops_profit` landing from
+`.slice(0, 20)` of `batchTwTickers()`, fed by `heldTwTickers()` querying `transactions` with **no
+`ORDER BY`**. PROD holds 26 distinct TW tickers, so the cap could bite; DEV holds 5, so it structurally
+never could. This is the supported explanation for the open question recorded in `ac3177e`
+(`mops_profit` answered `landed=false` on PROD and `true` on DEV at 21:00, same v45 bundle) — stated
+honestly, the 21:00 row order itself was never captured, so this is **strongly supported, not
+replayed**. The fix (read all holdings; delete `MAX_FUNDAMENTAL_SAMPLE`) removes the failure mode
+either way. Full writeup: `FIXED_BUG.md` BUG-027.
+
+### `borrow` probe window retuned — the deliverable Task 85 step 15 was waiting on
+
+`sourceProbePlan.ts`: 15:00–22:45 → **21:00–23:30**. The old 15:00 start existed because "nobody knows
+what time it flips"; now it is measured (22:15, both environments), and the front edge was burning 95
+requests/day for nothing. Front edge keeps 75 minutes of margin (21:00, not 22:00) because there is
+only one day of samples. The back edge was *extended* 22:45 → 23:30, and that half matters more: the
+old window shut at 22:45 while the last fixed shift ran 21:45 — a flip later than 22:45 would have had
+nothing at all to catch it. `t86` / `margin` / `bwibbu` / MOPS windows deliberately left untouched:
+`bwibbu`'s 2026-08-11 ticks came from the pre-0.7.11 superseded `BWIBBU_ALL` path (today's ticks, once
+this deploys, would be the first valid measurement of the dated endpoint); the other three are cheap
+enough that one day of ticks is not enough to narrow them.
+
+### Cron cleanup — the probe-only-trigger design is now actually enforced (DEV)
+
+The stated design is: the probe detects publication and calls the ingest itself. A fixed shift for an
+action the probe already triggers is a second, unaccountable trigger — `batch_run_log` has no column
+recording what caused a run.
+
+| jobname | schedule (Taipei) | action | probe coverage | disposition |
+| ---- | ---- | ---- | ---- | ---- |
+| `source-probe` | every 5 min | `probe` | — | **keep** — this is the mechanism |
+| `stock-report-nightly` | 16:30/16:45, 21:30/21:45 | `generate-chips` | `t86`/`margin`/`borrow` | **removed (DEV)** |
+| `market-daily` | 15:15/15:30/15:45 | `sync-market` | `bfi82u` | **removed (DEV)** |
+| `market-data-daily` | 18:00, 22:00 | `generate-market-data` | `bwibbu` | deferred |
+| `history-daily` | 12:30, 21:30 | `generate-history` | `mops_*` (4 slots/day) | deferred |
+| `macro-daily` | 20:00–02:30 /30min | `sync-macro` | none | **keep permanently** |
+| `fx-daily` | 11:00, 17:00 | `sync-fx` | none | **keep permanently** |
+
+Neither removed job was a deliberate part of the design — 0.7.3 disabled them for the probe-only
+experiment; 0.7.7 restored them in an emergency because that era's probe wrote ticks but never
+triggered a fetch; 0.7.8 gave the probe that ability and they were never withdrawn. Their "outer retry"
+justification (written into `schema.sql` §8d) failed measurement: `stock-report-nightly` ran
+21:30/21:45, *before* the 22:15 borrow flip it was meant to back up, and both passes went through the
+same `decideSkip` gate as the probe rounds and were skipped the same way — a backstop sharing the
+broken code path and differing only by clock is not an independent safety net.
+
+`macro-daily`/`fx-daily` stay permanently: `PROBE_FOLLOW_UP` maps the seven sources onto only four
+actions (`sync-market`/`generate-chips`/`generate-market-data`/`generate-history`) — there is no probe
+source for macro or FX at all, so these two crons are the only trigger that data has. Whether to build
+probes for them or accept them as legitimately schedule-driven (neither has a discrete publish moment
+to detect) is recorded as an open question, not decided here.
+
+`market-data-daily`/`history-daily` are deferred, not removed: `market-data-daily` because 0.7.11 just
+moved `bwibbu` to the dated endpoint and reopened its window to 15:00, and there is not yet one full
+day of ticks proving the probe catches it inside that window; `history-daily` because `MOPS_SLOTS` is
+exactly {12:00, 12:05, 21:00, 21:05} — 月營收/季報 get only four probe attempts a day, and this cron is
+the only thing that would catch a publication outside those slots. Retire it only together with
+widening the MOPS slots.
+
+Executed on DEV: `cron.unschedule('stock-report-nightly')` and `cron.unschedule('market-daily')`;
+`public.admin_schedule_status()` re-checked afterward and returns the 5 remaining rows with `targetRef`
+intact. `schema.sql` §8d updated to match, including deleting the "outer retry" rationale that made
+this drift look intentional to the next reader. **PROD still has all 7 crons — removal there needs
+explicit user go-ahead**, per CLAUDE.md.
+
+### Where this actually stands right now (be precise, do not overclaim)
+
+Verification that passed: 992/992 vitest (two new `decideSkip` cases, six window-boundary cases at
+20:55/21:00/22:15/23:00/23:30/23:35), `npm run typecheck:edge` 0 errors, `tsc -b` clean, `oxlint` 0
+errors (pre-existing react-refresh warnings only), `npm run build` clean.
+
+**DEV Edge deployed 2026-08-12 10:50** — rsync into `volumes/functions/stock-report/` (`diff -rq`
+clean against the working tree), `docker compose up -d --force-recreate functions`, container
+healthy. Live smoke on the new bundle:
+
+| check | result |
+| ---- | ---- |
+| anon `probe` / `admin-status` / no-action | 401 / 401 / 400 — auth intact |
+| authenticated `probe` at 10:45 | 200, `sources: []` — correct, nothing is in-window at that hour |
+| `generate-chips` 1st call | `regenerated=true, generated=5`; `batch_run_log` row carries `borrow_ok=t, borrow_data_date=2026-08-12` |
+| `generate-chips` 2nd call | `runs_today` 1 → 2, `regenerated=false` |
+
+The second call is the one that matters: `runs_today` only advances if `readLastRun` successfully
+read the row back **including the newly added `borrow_data_date` column**. Had that select been
+wrong, supabase-js would have returned an error, `readLastRun` would have answered `null`, and the
+whole thing would have degraded silently. It did not. That second call also returned
+`generated:0, regenerated:false` — precisely the case the old `summariseFollowUp` rendered as
+「產出 0 檔」, indistinguishable from the BUG-026 symptom, and which now renders as 「無變動」.
+
+**What is still open**: the live proof that actually matters — tonight's ~22:15 borrow flip landing
+cleanly and the source retiring instead of repeating to window close — cannot happen before ~22:15
+and must not be claimed until it does. PROD Edge and PROD cron are also still untouched. See Task 87.
+
+### Operational note: a secret was printed to this session's transcript
+
+While inspecting `cron.job` commands to build the table above, a redaction regex failed to match the
+actual header format (`'x-cron-secret', 'VALUE'`, comma-separated, not JSON colon syntax), and the
+**DEV self-hosted `CRON_SECRET` was printed into the session transcript**. PROD's secret was not
+exposed. Recommend rotating the DEV `CRON_SECRET`. Lesson recorded for next time: when inspecting
+`cron.job.command`, select only structural predicates (`command LIKE '%x-cron-secret%'`) or extract
+just the action/url with a narrow `regexp_match` — never select the command text, redacted or
+otherwise.
 
 ---
 
