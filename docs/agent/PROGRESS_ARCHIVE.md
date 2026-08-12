@@ -5,6 +5,45 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-12 14:34:06 Asia/Taipei).
 
+
+## 📅 Log: 2026-08-12 15:14:58 Asia/Taipei (Task 93: Switch app icon to icon_v2, replace in-app brand mark)
+
+Supersedes Task 92. Regenerated favicon from `docs/picture/icon_v2.png` (2592×1662) using Pillow 11.3.0.
+Key finding: source image has fully opaque alpha channel (255 on all 4.3M pixels); background keyed by
+colour using alpha-extraction rule `alpha = clip(max((sat-20)/30, (215-mx)/30), 0, 1)` (keeps saturated
+or dark pixels; checkerboard greys + white key to 0; grey wedge survives via darkness term). Bbox of
+`alpha > 0.25` is `(887, 373, 1727, 1293)`, squared and padded 8% → crop `(810, 336, 1803, 1329)`, side 993.
+Downscaled with `Image.LANCZOS`.
+
+**Files changed:**
+- `sources/public/favicon.png`: 256×256 RGBA, 42.4 KB (regenerated from icon_v2.png)
+- `sources/src/assets/brand-mark.png`: 96×96 RGBA, 11.0 KB (new; extracted and downscaled from same source)
+- `sources/src/components/AppShell.tsx`: navbar brand `<TrendingUp size={17} />` in `<span className="brand-mark">` replaced with `<img src={brandMark} width={17} height={17} alt="股票小幫手" />`; added `import brandMark from '../assets/brand-mark.png'`; lucide-react `TrendingUp` removed (no other use in file)
+- `sources/src/components/Auth/AuthPage.tsx`: same swap in login card brand; added `import brandMark from '../../assets/brand-mark.png'`; `TrendingUp` lucide import removed
+- `sources/index.html` line 5: unchanged — still `<link rel="icon" type="image/png" href="./favicon.png" />`; only the file it points to changed
+
+**Verification (5/5 pass):** Assets read back `(256,256) RGBA (96,96) RGBA` with alpha extrema `(0, 255)`;
+`npx tsc -b --noEmit` exit 0; `npm test -- --run` → 63 test files, 994 tests, all passed;
+`npm run build` exit 0; `dist/favicon.png` present at 42.4 KB. Composited both over dark navy and
+visually confirmed clean transparency (no checkerboard residue).
+
+**No review dispatched** — verification is the gate. No money, auth, persistence, schema, API,
+background job, or price surface touched.
+
+No version bump, no deploy, no Supabase change, not committed.
+
+### Routing cost (session 7b928169, both Task 92 and Task 93)
+
+| Role | Dispatches | USD | Share |
+| --- | ---: | ---: | ---: |
+| main (claude-opus-5) | 60 turns | 4.71 | 70% |
+| builder (claude-sonnet-5) | 3 | 1.05 | 16.8% |
+| scribe (claude-haiku-4-5) | 2 | 0.47 | 7.5% |
+| scout (claude-haiku-4-5) | 2 | 0.33 | 5.3% |
+
+Total **$6.24**. Cost by component: cache_write 35.8%, cache_read 32.2%, output 32.0%. Main averaged 45,504 tokens
+context over 60 turns = $0.079/turn. Note: main's share elevated by three large PNG reads (4.5/4.9 MB + previews)
+into context for crop adjudication — image bytes land in cache_write, inflating that component's share.
 ---
 ## 📅 Log: 2026-08-12 14:53:35 Asia/Taipei (Task 92: Replace emoji favicon with real app icon)
 

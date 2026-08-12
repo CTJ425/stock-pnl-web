@@ -4,6 +4,11 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 ### 0.7.14（2026-08-12）— App icon 改為手寫 SVG 元件＋修掉 scribe 中斷會吃掉紀錄的問題
 
+> 目前狀態：正式 release commit `3f0eaea`（`0.7.14`），`dev`／`main` 都在 `3f0eaea`——本次 fast-forward，
+> 兩支天生同版。GitHub Pages Actions run `31594918544` 已成功；GitHub Release `0.7.14` 已建立（本政策下首個 Release）。
+> 正式站煙霧測試通過：首頁引用 `./favicon.svg`（200, 890B），`favicon.svg` 本身 200、1207B、含字面色 `#6366f1`。
+> 無 Supabase／Edge Function 變更。
+
 - 🎨 **App icon 換成手寫 SVG，一份圖形兩種載體**：新增 `sources/src/components/BrandMark.tsx`（30×30、`viewBox="0 0 96 96"`、`role="img"`），取代 `AppShell` 與 `AuthPage` 裡的 lucide `TrendingUp` 與外層的 `.brand-mark` 漸層方塊（該 CSS 規則已孤兒化並移除）。favicon 另存 `sources/public/favicon.svg`，`index.html` 改為 `type="image/svg+xml"`。**兩份是刻意的**：favicon 在隔離環境算繪，讀不到 App 的 CSS 變數，所以元件保留 `var()` 跟著主題走，favicon 寫死深色主題字面值（`#6366f1`／`#22d3ee`／`#ff4a5a`／`rgba(99, 102, 241, 0.16)`）。
 - 🎨 **四個新的主題 token**：`--svg-main-1`／`--svg-accent`／`--stock-up-bright`／`--svg-bg-glow` 以 `var()` 別名映射到既有的 `--accent-strong`／`--accent-2`／`--up`／`--bg-glow-a`，只在深色 `:root` 定義一次即自動跟隨所有主題。
 - ✅ **瀏覽器實測**：React 19.2.7 的 `useId()` 在 SVG `url(#…)` 內安全——實際跑 Playwright 確認 id 產生為 `_r_0_-p1/-p2/-p3`（純 ASCII），三個漸層全部解析成功，stop 色回傳當下主題的值。舊的兩張 PNG 資產（`favicon.png`、`brand-mark.png`）與 `src/assets/` 目錄一併刪除。
