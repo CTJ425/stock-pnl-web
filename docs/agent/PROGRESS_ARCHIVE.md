@@ -3,7 +3,39 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-12 13:40:45 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-12 14:34:06 Asia/Taipei).
+
+---
+
+## 📅 Log: 2026-08-12 13:40:45 Asia/Taipei (Task 89: Redirect built-in discovery agents to `scout`, fix routing telemetry tracking)
+
+Implemented routing policy to block main session from spawning expensive built-in discovery agents
+(`Explore` and `general-purpose`), routing them to `scout` instead. Measured motivation: since routing
+was installed (commit 74bdf1c, 2026-08-11 21:01), main session wrote 96% of all output tokens; built-in
+agents spent 112k tokens on scout's job (8 `Explore` runs + 1 `general-purpose` run), while `scout` spent
+only 5.9k across 2 real runs.
+
+**Files changed:**
+- `.claude/hooks/routing_guard.py` — new second job on PreToolUse for `Agent|Task` tool names; returns
+  `ask` when subagent_type is `Explore` or `general-purpose` with reason pointing at `scout`. Respects
+  existing `ROUTING_GUARD=off` escape hatch. Docstring updated.
+- `.claude/settings.json` — PreToolUse matcher widened from `Write|Edit|NotebookEdit` to
+  `Write|Edit|NotebookEdit|Agent|Task`.
+- `.claude/hooks/test_hooks.sh` — added `dispatch()` helper plus 6 new test cases covering
+  Explore/general-purpose asked, scout/builder allowed, architect also policed, `ROUTING_GUARD=off`
+  releases.
+- `CLAUDE.md` — scout row in Task routing table now names dispatching Explore/general-purpose as
+  main-session anti-pattern.
+- `.claude/skills/route/SKILL.md` — Step 1 gained paragraph on why not to use built-in discovery agents,
+  citing 112k vs 5.9k token difference.
+- `.gitignore` conflict fixed: `.claude/routing/dispatch.jsonl` and one `state/*.json` were already
+  ignored in `.gitignore` but still tracked in git; both untracked with `git rm --cached` (files remain
+  on disk).
+
+**Verification:** `bash .claude/hooks/test_hooks.sh` → 27 passed, 0 failed (was 21 before the 6 new cases).
+
+**Known caveat:** Settings.json matcher widening only takes effect in sessions started after the change;
+the guard is unverified in live runtime and should be confirmed in the next session.
 
 ---
 

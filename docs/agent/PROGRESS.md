@@ -1,9 +1,56 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 90 — Re-base the routing loop on measured cost instead of token count
-- Status: **✅ Cost-based routing economics implemented; all three guards in place; tests passed 36/36; runtime verification pending for Read guard in live session**
-- Timestamp: 2026-08-12 14:02:05 Asia/Taipei
+- Action: Task 91 — Close the three measured gaps in the routing loop, and commit the routing work to dev
+- Status: **✅ All three gaps closed; routing_observe.py added to SessionStart; scribe.md guards archive reads; architect role deleted; two commits to dev; not pushed**
+- Timestamp: 2026-08-12 14:34:06 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-12 14:34:06 Asia/Taipei (Task 91: Close the three measured gaps in the routing loop)
+
+Closed three measured gaps in the routing dispatch system by implementing SessionStart injection,
+preventing expensive reads of archive files, and removing an unused role. Committed to `dev` in two
+commits: `ea49fca` (cost re-base, Task 89+90 work) and `ab9faf1` (this task). Not pushed. Not merged
+to main. No version bump. No deploy.
+
+**Gap 1 — SessionStart workflow**: `routing_observe.py` now runs as a second SessionStart hook
+(registered in `.claude/settings.json` alongside the existing code-review-graph hook) and injects
+the lane rule, roster, guard descriptions, and live open-item counts from `TASK.md` and `BUG_FIX.md`.
+Verified output: 1,139 characters, currently reporting 10 open tasks and 9 BUG_FIX entries.
+
+**Gap 2 — Archive reads**: `.claude/agents/scribe.md` now forbids Reading `PROGRESS_ARCHIVE.md`,
+`TASK_ARCHIVE.md`, `FIXED_BUG.md`, and `CHANGELOG.md`, and provides anchored alternatives: Edit on
+the `---` header (via heredoc) to prepend, Bash for append, `grep -n` to locate, `sed -n` to inspect.
+Measured problem: across 8 scribe runs and 113 tool calls, `TASK_ARCHIVE.md` was read 11 times,
+`PROGRESS_ARCHIVE.md` 6 times, with 7% call failure rate. Haiku 4.5 averaged ~35 turns per scribe run
+due to archive reads. With `PROGRESS_ARCHIVE.md` at 405KB and Haiku context 200K, forbidden reads
+eliminate both the token spike and the failures.
+
+**Gap 3 — architect deletion**: Removed unused role that duplicated main session and never executed
+in 30 sessions. References removed from `routing_guard.py` (RULES, REASONS, docstring), `test_hooks.sh`,
+`route/SKILL.md` (Step 2 and role description), `CLAUDE.md`, `reviewer.md`, `builder.md`. Roster now
+four: scout, builder, reviewer, scribe.
+
+**Other commits**: `docs/plan/github_documentation_strategy.md` untracked (was cited in `CLAUDE.md`
+but not tracked in git). `.claude/routing/` telemetry files (`dispatch.jsonl` and `state/*.json`)
+untracked to match `.gitignore:43`.
+
+**Verification**: `bash .claude/hooks/test_hooks.sh` → 33 passed, 0 failed (was 36; three architect
+write assertions removed). `grep -rn "Architect\b" .claude/ CLAUDE.md` → no matches. `routing_audit.py`
+still runs.
+
+**Open items to record**:
+1. All three guards and the SessionStart brief remain unverified in live runtime — `.claude/settings.json`
+   changes only take effect in sessions started afterwards. Confirm next session by attempting main-session
+   Read of `docs/agent/PROGRESS_ARCHIVE.md`.
+2. No Lane 1 task has been run end-to-end through brief → builder → test → scribe. `builder` has still
+   never done real work.
+3. `dev` is ahead of `main` by two commits and unpushed.
+
+**Working tree note**: Two external changes appeared during this session, made outside it and deliberately
+excluded from both commits: deletion of four tracked files under `docs/agents/mam/`, and new untracked
+`docs/picture/` containing a 4.7MB PNG. Left as-is for user to decide.
 
 ---
 
@@ -53,38 +100,6 @@ reproduces the cost structure (cache_read 67.9%, output 16.2%, matching measured
 2. Same caveat still stands for the Agent/Task dispatch guard added in Task 89.
 3. No Lane 1 task has yet been run end-to-end through new brief → builder → test → scribe path; builder
    has still never done real work.
-
----
-
-## 📅 Log: 2026-08-12 13:40:45 Asia/Taipei (Task 89: Redirect built-in discovery agents to `scout`, fix routing telemetry tracking)
-
-Implemented routing policy to block main session from spawning expensive built-in discovery agents
-(`Explore` and `general-purpose`), routing them to `scout` instead. Measured motivation: since routing
-was installed (commit 74bdf1c, 2026-08-11 21:01), main session wrote 96% of all output tokens; built-in
-agents spent 112k tokens on scout's job (8 `Explore` runs + 1 `general-purpose` run), while `scout` spent
-only 5.9k across 2 real runs.
-
-**Files changed:**
-- `.claude/hooks/routing_guard.py` — new second job on PreToolUse for `Agent|Task` tool names; returns
-  `ask` when subagent_type is `Explore` or `general-purpose` with reason pointing at `scout`. Respects
-  existing `ROUTING_GUARD=off` escape hatch. Docstring updated.
-- `.claude/settings.json` — PreToolUse matcher widened from `Write|Edit|NotebookEdit` to
-  `Write|Edit|NotebookEdit|Agent|Task`.
-- `.claude/hooks/test_hooks.sh` — added `dispatch()` helper plus 6 new test cases covering
-  Explore/general-purpose asked, scout/builder allowed, architect also policed, `ROUTING_GUARD=off`
-  releases.
-- `CLAUDE.md` — scout row in Task routing table now names dispatching Explore/general-purpose as
-  main-session anti-pattern.
-- `.claude/skills/route/SKILL.md` — Step 1 gained paragraph on why not to use built-in discovery agents,
-  citing 112k vs 5.9k token difference.
-- `.gitignore` conflict fixed: `.claude/routing/dispatch.jsonl` and one `state/*.json` were already
-  ignored in `.gitignore` but still tracked in git; both untracked with `git rm --cached` (files remain
-  on disk).
-
-**Verification:** `bash .claude/hooks/test_hooks.sh` → 27 passed, 0 failed (was 21 before the 6 new cases).
-
-**Known caveat:** Settings.json matcher widening only takes effect in sessions started after the change;
-the guard is unverified in live runtime and should be confirmed in the next session.
 
 ---
 
