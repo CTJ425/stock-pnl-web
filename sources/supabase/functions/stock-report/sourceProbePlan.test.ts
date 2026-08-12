@@ -23,10 +23,10 @@ describe('sourceProbePlan', () => {
     expect(minutesFromHhmm('bad')).toBeNull()
   })
 
-  it('下午開 BFI／T86 窗；借券與估值窗都從 15:00 起（沒人知道它們幾點出表）', () => {
-    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'bwibbu', 'borrow'])
-    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'bwibbu', 'borrow'])
-    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'bwibbu', 'borrow'])
+  it('下午開 BFI／T86 窗；估值窗從 15:00 起（沒人知道它幾點出表），借券此時不探', () => {
+    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'bwibbu'])
+    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'bwibbu'])
+    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'bwibbu'])
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
@@ -39,6 +39,21 @@ describe('sourceProbePlan', () => {
     expect(sourcesForTaipeiTime('21:30', true).sort()).toEqual(
       ['borrow', 'bwibbu', 'margin'].sort(),
     )
+  })
+
+  // 0.7.13：借券窗從 15:00–22:45 收成 21:00–23:30。原本的 15:00 起是因為「沒人知道它幾點翻」，
+  // 現在知道了——2026-08-11 兩個環境實測都是 22:45 前的 22:15。前緣砍掉六小時（一天少約 72 次
+  // 打不到東西的 TWSE 請求），後緣反而延長 45 分鐘：舊窗 22:45 關、最後一班固定班表 21:45，
+  // 翻日只要晚於 22:45 就整天沒有任何人會去撿。
+  it('借券窗收斂到 21:00–23:30：前緣不再從下午開，後緣蓋過實測翻日時間', () => {
+    expect(sourcesForTaipeiTime('20:55', true)).not.toContain('borrow')
+    expect(sourcesForTaipeiTime('21:00', true)).toContain('borrow')
+    // 實測翻日時刻，必須在窗內
+    expect(sourcesForTaipeiTime('22:15', true)).toContain('borrow')
+    // 22:00 之後估值窗已關、22:30 之後融資窗也關，借券要能獨自撐到 23:30
+    expect(sourcesForTaipeiTime('23:00', true)).toEqual(['borrow'])
+    expect(sourcesForTaipeiTime('23:30', true)).toEqual(['borrow'])
+    expect(sourcesForTaipeiTime('23:35', true)).toEqual([])
   })
 
   it('窗外與週末不探日頻', () => {

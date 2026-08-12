@@ -146,12 +146,39 @@ describe('nextT86State', () => {
 })
 
 describe('decideSkip', () => {
-  const base = { t86Today: false, t86Frozen: false, marginToday: false, runsToday: 0 }
+  const base = {
+    t86Today: false,
+    t86Frozen: false,
+    marginToday: false,
+    borrowLanded: false,
+    runsToday: 0,
+  }
 
   it('今天全齊且已定稿 → 短路，這一輪不做任何對外請求', () => {
     expect(
-      decideSkip({ ...base, t86Today: true, t86Frozen: true, marginToday: true }),
+      decideSkip({
+        ...base,
+        t86Today: true,
+        t86Frozen: true,
+        marginToday: true,
+        borrowLanded: true,
+      }),
     ).toEqual({ skip: true, reason: 'complete' })
+  })
+
+  // BUG-026：借券要等收盤結算後才翻日（2026-08-11 兩個環境實測皆為 22:15），比 T86 定稿（~16:30）
+  // 與融資到位（~20:50）都晚。閘門若不含借券，21:00 之後就答 complete，等 22:15 真的翻日時，
+  // 整支 generate-chips 會在 `loadBorrow` 之前就被短路——當天各命中 7 次、7 次都「產出 0 檔」，
+  // 視窗關閉前借券始終沒到位，而最後一班固定班表跑在 21:45，比翻日還早，救不到。
+  it('T86 與融資都到位、但借券還沒翻日 → 不可短路', () => {
+    const d = decideSkip({
+      ...base,
+      t86Today: true,
+      t86Frozen: true,
+      marginToday: true,
+      borrowLanded: false,
+    })
+    expect(d.skip).toBe(false)
   })
 
   it('抓到當天 T86 但尚未定稿 → 不可短路（還要回來看有沒有被改寫）', () => {
