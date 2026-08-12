@@ -2,6 +2,47 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.13（2026-08-12）— 借券翻日死在半路（BUG-026）＋到位判準抽樣未排序（BUG-027）
+
+> 目前狀態：commit `ce3c220`（`0.7.13-dev.1`），只在 `dev` 分支，**尚未 push 到 `origin/dev`**，
+> 兩區 Edge 都還在跑 0.7.12。DEV 的 cron 移除是資料庫層操作，已先於程式碼部署完成（見下）。
+
+- 🐞 **BUG-026**：`decideSkip` 完全沒有借券項，只看 `t86Today && t86Frozen && marginToday`。借券翻到下一個
+  交易日要等收盤結算後——實測 DEV／PROD 都在 **22:15**，比其他任何一項都晚——所以從約 21:00 起閘門就答
+  `complete`，之後每一輪都在 `loadBorrow` 之前被短路。2026-08-11 借券的 7 次探測命中（22:15–22:45）全部
+  被吞掉，整天沒有落地。修法：`decideSkip` 新增 `borrowLanded`，用既有的 `borrowHit` 判準比對
+  `batch_run_log.borrow_data_date`，並讓這個日期改成**沿用上一輪**而不是每輪清成 `null`——否則被跳過的
+  那一輪會把剛剛才成立的日期洗掉，閘門就會一輪跳過一輪不跳過地擺盪。
+- 🐞 **BUG-027**：`readFundamentalSnapshot` 只抽樣 `batchTwTickers()` 的前 20 檔，而它來源的
+  `heldTwTickers` 查 `transactions` **沒有 `ORDER BY`**——抽到哪 20 檔全憑 Postgres 當下的列序，卻用這個
+  抽樣的 `max` 決定 `bwibbu`／`mops_revenue`／`mops_profit` 三個來源收工與否。PROD 持有 26 檔會被這個上限
+  咬到，DEV 只有 5 檔永遠咬不到——這正是 `ac3177e` 記下的懸案（`mops_profit` 同一份 v45 在 PROD 答
+  `landed=false`、DEV 答 `true`）的成因：21:00 當時的實際列序沒有留存，屬於高度支持但非重播的結論，但無論
+  哪種列序，改成讀取**全部持股**都能拿掉這個失敗模式。
+- 🔍 **診斷筆記補齊**：`summariseFollowUp` 對 `generate-chips` 原本無論發生什麼都壓縮成「產出 N 檔」，讓
+  BUG-026 那七輪一模一樣的「產出 0 檔」看起來像正常運作，只能靠回頭比對 `batch_run_log` 才找到閘門被短路。
+  現在改成三段式：`跳過（原因）`／`無變動`／`產出 N 檔`。
+- ⏰ **`borrow` 探測窗收窄＋延後**：15:00–22:45 → **21:00–23:30**。前緣從實測的 22:15 往前留 75 分鐘餘裕
+  （只有一天樣本，不貼著量到的時間收）；後緣則**延長**，這半邊比省請求次數更重要——舊窗 22:45 關，最後一班
+  固定排程跑在 21:45，翻日只要晚於 22:45 當天就沒有任何機制會再撿它。`t86`／`margin`／`bwibbu`／MOPS 的窗
+  刻意不動：前三者一天樣本不足以收窄，`bwibbu` 當天的探測記錄來自 0.7.11 之前被取代的 `BWIBBU_ALL` 路徑，
+  不能代表現在的行為。
+- 🧹 **拿掉兩支多餘的 cron（先做 DEV）**：`stock-report-nightly`（generate-chips）與 `market-daily`
+  （sync-market）。設計本意是「探針量到出表就自己觸發抓取」，一支固定班表去做探針已經會觸發的動作，等於一個
+  沒人追蹤的第二觸發源。這兩支從來不是設計裡刻意留下的——0.7.3 停用它們（探針實驗期），0.7.7 因為那個年代
+  的探針只會寫 tick、不會真的抓取而緊急恢復，0.7.8 讓探針自己會抓取之後，這兩支就一直沒人再撤掉。
+  `stock-report-nightly` 跑在 21:30／21:45，**比它該接住的 22:15 借券翻日還早**，而且兩輪都被跟探針一樣的
+  閘門判定跳過——「最外層重試」這個理由沒有通過實測。`macro-daily`／`fx-daily` 保留：巨集與匯率完全沒有探針
+  來源可以觸發，拿掉就是讓那兩塊資料整個停擺。`market-data-daily`／`history-daily` 暫緩：分別要等一整天
+  `bwibbu` 新窗的觀測，以及 MOPS 探測槽從四個放寬之後才能安全撤掉。
+- 🧪 992/992 vitest（`decideSkip` 借券情境 2 例 + 探測窗邊界 6 例）、`typecheck:edge` 0 error、`tsc -b`
+  clean、`oxlint` clean。
+- ⚠️ **維運事項**：檢查 `cron.job.command` 時，遮罩用的正規表示式沒對上實際的表頭格式
+  （`'x-cron-secret', 'VALUE'`，逗號分隔，不是 JSON 冒號語法），導致 **DEV 的 `CRON_SECRET` 被印進了對話
+  紀錄**（PROD 的沒有外露）。建議輪替 DEV 的 `CRON_SECRET`；以後查 `cron.job.command` 只用結構性條件
+  （如 `command LIKE '%x-cron-secret%'`）或用窄的 `regexp_match` 只取出 action/url，絕不要整段選出 command
+  文字，遮罩過也不要。
+
 ### 0.7.12（2026-08-11）— 七個來源的判準對齊成同一條標準
 
 - 🎯 **一條標準**：命中＝上游今天出表了；收工＝**上游剛出的那一份，出現在前端讀的那個檔案裡**。

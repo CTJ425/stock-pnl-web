@@ -10,29 +10,52 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-11 19:30)
+## 📍 Where the project stands (2026-08-12 11:00)
 
-- **Version 0.7.12 on both branches and both environments.** DEV Edge volume-copied at the release
-  commit; PROD Edge redeployed on top of v44. Pages current.
+- **Version 0.7.13.** DEV Edge deployed 2026-08-12 10:50 (volume-copy at `ce3c220`, `diff -rq` clean,
+  container recreated) and smoke-verified: anon 401/401/400, authenticated `probe` 200 with an empty
+  in-window plan at 10:45, and two `generate-chips` calls advancing `runs_today` 1 → 2 — which is what
+  proves the new `borrow_data_date` select in `readLastRun` works rather than degrading to `null`.
+  PROD Edge and PROD cron still untouched — see Task 87.
+- **DEV cron count: 7 → 5** — `stock-report-nightly` (generate-chips) and `market-daily` (sync-market)
+  removed from DEV's `cron.job` on 2026-08-12 (`schema.sql` §8d updated to match). Neither was a
+  deliberate part of the probe-triggers-fetch design: 0.7.3 disabled them for the probe-only
+  experiment, 0.7.7 restored them in an emergency because that era's probe never triggered a fetch,
+  0.7.8 gave the probe that ability and they were never withdrawn. Measured 2026-08-11:
+  `stock-report-nightly` ran 21:30/21:45, *before* the 22:15 borrow flip it was supposed to back up,
+  and both passes were skipped by the same gate as the probe rounds — the "outer retry" it was kept
+  for did not survive contact with the data. **PROD still has all 7** — removal there needs explicit
+  go-ahead (Task 87 item 7).
+- **The probe-only-trigger design is now actually enforced on DEV**, not just stated intent. The 5
+  remaining DEV jobs: `source-probe` (the mechanism itself), `macro-daily`/`fx-daily` (kept
+  permanently — no probe source exists for macro or FX at all), `market-data-daily`/`history-daily`
+  (kept for now, deferred — see Task 87 item 11 for why each survives).
+- **BUG-026 fixed (0.7.13-dev.1)**: `decideSkip` had no borrow term, so from ~21:00 the gate answered
+  `complete` and every invocation short-circuited before `loadBorrow` ever ran — borrow never landed
+  on 2026-08-11, identically on both environments. Fixed with a `borrowLanded` term; see `FIXED_BUG.md`.
+- **BUG-027 fixed (0.7.13-dev.1)**: `readFundamentalSnapshot` decided `bwibbu`/`mops_revenue`/
+  `mops_profit` landing from an unordered 20-ticker sample — PROD's 26 holdings could hit the cap,
+  DEV's 5 never could. Explains the `ac3177e` open question (below, Task 85 item 14). Fixed by reading
+  all holdings; see `FIXED_BUG.md`.
+- **`borrow` probe window retuned** 15:00–22:45 → 21:00–23:30, now that a full day of ticks
+  (2026-08-11) measured the flip at 22:15 on both environments. `t86`/`margin`/`bwibbu`/MOPS windows
+  deliberately left alone — see Task 87 item 4.
 - **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
   retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
   `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
-- **Seven cron jobs active in both environments** (0.7.11 added `market-data-daily` Taipei 18:00/22:00
-  and `history-daily` Taipei 12:30/21:30 —— 估值 / 月營收 / 季報 previously had **no** schedule at all).
-  The probe is the primary, earlier trigger; the shifts are the outer retry.
 - **The hit → fetch → verify wiring is covered by tests** since 0.7.10 (`probeRound.ts`, I/O injected,
   9 cases, mutation-checked). Playwright E2E cannot reach it: pg_cron calls the Edge Function directly
-  and the browser only ever reads the resulting rows.
-- ✅ **Proven live 2026-08-11 on two independent sources**: `bwibbu` 20:40 and `margin` 20:50 each went
-  hit → fetch → `data_landed=true` → skipped next round. `margin` published on its own and was handled
-  unattended. An earlier `bwibbu` round correctly recorded `data_landed=false`「資料未到位，下輪重試」.
+  and the browser only ever reads the resulting rows. `readFundamentalSnapshot` and `summariseFollowUp`
+  (both touched by 0.7.13) live in `index.ts` and get **no unit test** for the same reason — say so
+  plainly rather than implying coverage.
 - ✅ **All seven sources share one standard** (0.7.12): hit = the source published today; retire = what
   it published is in the artifact the frontend reads. Enforced by an audit test —— empty evidence, and
   evidence made of the fetch layer's own field names, must both answer 「沒到位」 for every source.
 - ⚠️ **`supabase/functions/` had never been typechecked** —— the root tsconfig only covers `src`.
   `npm run typecheck:edge` now exists and is at 0 errors. **Run it after touching any Edge file**;
   `npm test` and `oxlint` will not catch a missing import there.
-- **Open bugs: none.** BUG-024 (估值每天都是前一交易日) fixed in 0.7.11 —— see `FIXED_BUG.md`.
+- **Open bugs: none.** BUG-026/BUG-027 fixed in 0.7.13; BUG-024 (估值每天都是前一交易日) fixed in 0.7.11
+  —— see `FIXED_BUG.md`.
 
 <details>
 <summary>Superseded snapshot (2026-08-11 13:25) —— kept for the 0.7.3/0.7.4 experiment history</summary>
@@ -95,8 +118,77 @@
 
 Uninstalled `mad` Claude Code plugin. Added routing guard/observe/audit hooks, routing skill, and enforcement rules in CLAUDE.md. Updated agent files. All verification passed; unknown leftover plugin cache noted.
 
+### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
+- **Status**: 🔄 **code fixed, tested and committed to `dev`; DEV cron table already down to 5; Edge
+  deploy of the code + PROD (code and crons) still open**
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 11:00:00 Asia/Taipei
+
+Trigger: reading 2026-08-11's probe ticks on both environments to answer the user's actual question
+(「不要讓 generate-chips 從 15:00 開始跑」) turned up that `generate-chips` does **not** run from 15:00 —
+it ran 15 times, mostly no-ops or manual — and that the real 15:00-start offender was the `borrow`
+**probe window**, plus two defects that were hiding inside the "no-op" rounds. Full analysis:
+`/root/.claude/plans/wobbly-jumping-lagoon.md`.
+
+1. ~~**BUG-026**: `decideSkip` gained a `borrowLanded` term (`pollPlan.ts`), computed via `borrowHit`
+   against `borrow_data_date` carried across rounds by `readLastRun`; `borrowDataDate` seeded from the
+   previous row instead of `null` so a skipped round cannot erase the date that justified the skip~~ ✅
+   — see `FIXED_BUG.md`
+2. ~~**BUG-027**: `readFundamentalSnapshot` reads all holdings instead of `.slice(0, 20)` of an
+   unordered query; `MAX_FUNDAMENTAL_SAMPLE` deleted~~ ✅ — see `FIXED_BUG.md`; **resolves item 14
+   below**
+3. ~~Diagnosability: `summariseFollowUp` for `generate-chips` now emits `跳過（reason）` /
+   `無變動` / `產出 N 檔` instead of collapsing every outcome to one number — this is what let
+   BUG-026 hide behind seven identical `產出 0 檔` notes~~ ✅
+4. ~~`borrow` probe window `sourceProbePlan.ts`: 15:00–22:45 → **21:00–23:30** — measured flip is
+   22:15 on both environments; front edge keeps 75 min margin (one day of samples), back edge
+   *extended* past the old 22:45 close because the last fixed shift ran 21:45, before the flip~~ ✅ —
+   **resolves the `borrow` half of item 15 below**. `t86` / `margin` / `bwibbu` / MOPS windows
+   deliberately left untouched — see plan Part 3 (bwibbu's 08-11 ticks came from the superseded
+   `BWIBBU_ALL` path; the other three are cheap and one day is not enough to narrow them)
+5. ~~Tests: `pollPlan.test.ts` two new `decideSkip` cases (`borrowLanded:false`/`true`);
+   `sourceProbePlan.test.ts` window-boundary cases at 20:55/21:00/22:15/23:00/23:30/23:35~~ ✅ —
+   992/992 vitest, `typecheck:edge` 0 errors, `tsc -b` clean, `oxlint` clean
+6. ~~Cron cleanup on **DEV**: `stock-report-nightly` (generate-chips) and `market-daily`
+   (sync-market) `cron.unschedule`d — neither was a deliberate part of the probe-triggers-fetch
+   design (0.7.3 disabled them; 0.7.7 restored them in an emergency because that era's probe never
+   triggered a fetch; 0.7.8 gave the probe that ability and they were never withdrawn). Measured
+   2026-08-11: `stock-report-nightly` ran 21:30/21:45, *before* the 22:15 borrow flip it was meant to
+   back up, and both passes were skipped by the same gate as the probe rounds — the "outer retry"
+   did not hold up. `public.admin_schedule_status()` re-checked afterward: 5 rows, `targetRef`
+   intact~~ ✅ — `schema.sql` §8d updated to drop the "outer retry" rationale and record why each of
+   the remaining five crons is kept
+7. **Cron cleanup on PROD** — ⏳ needs explicit user go-ahead per CLAUDE.md; PROD still has all 7
+8. ~~**DEV Edge deploy** of the changed function files (`pollPlan.ts`, `sourceProbePlan.ts`,
+   `index.ts`)~~ ✅ 2026-08-12 10:50 — rsync into `volumes/functions/stock-report/`, `diff -rq` clean
+   against the working tree, `docker compose up -d --force-recreate functions`, container healthy.
+   Smoke: anon 401/401/400; authenticated `probe` 200 with `sources: []` at 10:45 (correct — nothing
+   in-window at that hour); `generate-chips` ×2 giving `runs_today` 1 → 2 and `regenerated` true then
+   false. **Tonight's read will therefore be against the new bundle, not the old one.**
+9. **Live proof** — ⏳ after tonight's borrow flip (~22:15): `source_probe_tick` `borrow` should show
+   no ticks before 21:00 and its hit round should reach `data_landed=true` then stop (retired)
+   instead of repeating to window close; `batch_run_log` for that slot should read `skipped=f` with a
+   non-null `borrow_data_date`
+10. **PROD Edge deploy** — ⏳ separate go-ahead, only after the DEV live proof; verify by `ezbr_sha256`
+    change, not version number (see `supabase-ops` skill)
+11. **Deferred, not forgotten** (see plan Part 4): `market-data-daily` cron — retire once a full day of
+    `bwibbu` ticks on the dated endpoint (post-0.7.11) proves the probe catches it inside its window;
+    `history-daily` cron — retire only together with widening `MOPS_SLOTS` beyond its current four
+    daily attempts. `macro-daily` / `fx-daily` are **kept, not deferred** — no probe source exists for
+    macro or FX at all (`PROBE_FOLLOW_UP` only maps four actions across the seven sources), so removing
+    them would stop that data cold. Whether to build probes for them or accept them as legitimately
+    schedule-driven is an open question, not a task.
+
+**Operational note, act on this**: while inspecting `cron.job` commands during this task, a
+redaction regex failed to match the actual header format (`'x-cron-secret', 'VALUE'`, comma-separated,
+not JSON colon syntax) and the **DEV self-hosted `CRON_SECRET` was printed into the session
+transcript**. PROD's secret was not exposed. **Recommend rotating the DEV `CRON_SECRET`.** Lesson for
+next time: when inspecting `cron.job.command`, select only structural predicates
+(`command LIKE '%x-cron-secret%'`) or extract just the action/url with a narrow `regexp_match` —
+never select the command text, redacted or otherwise.
+
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
-- **Status**: 🔄 **shipped everywhere and proven live; only window retuning (step 14) remains**
+- **Status**: 🔄 **shipped everywhere and proven live; step 14 resolved, step 15 half-done (see Task 87)**
 - **Agent**: Claude
 - **Timestamp**: 2026-08-11 19:00:00 Asia/Taipei
 
@@ -125,9 +217,16 @@ precisely what 0.7.8 would have mis-retired).
     the Edge Function directly, so no browser test can reach `handleProbe`. See PROGRESS 0.7.10.
 13. ~~0.7.11: BUG-024, skip requires the data to be on the screen, the two missing crons, edge
     typecheck~~ ✅ —— mechanism observed end to end on DEV; PROD on v44. See PROGRESS 0.7.11.
-14. **`mops_profit` on PROD答 `landed=false`，DEV 同版答 `true` —— 尚未查明** —— ⏳
-    Both on v45, so the rule is identical; the difference is data or sampling. Known facts
-    (2026-08-11 21:05, read from the public bucket exactly as the browser does):
+14. ~~`mops_profit` on PROD答 `landed=false`，DEV 同版答 `true` —— 尚未查明~~ ✅ **resolved as BUG-027**
+    (2026-08-12). Both were on v45, so the rule was identical; the difference was sampling.
+    `readFundamentalSnapshot`'s `.slice(0, 20)` of an unordered `batchTwTickers()` query decided the
+    verdict — candidate (a) below was the correct one. PROD holds 26 distinct TW tickers so the
+    20-ticker cap could bite; DEV holds 5 so it structurally never could. The 2026-08-11 21:00 row
+    order itself was never captured, so this is strongly supported rather than replayed — but the fix
+    (read all holdings, `index.ts`) removes the failure mode either way. See `FIXED_BUG.md` BUG-027.
+    <details><summary>original known facts (2026-08-11 21:05), kept for the record</summary>
+
+    Known facts (2026-08-11 21:05, read from the public bucket exactly as the browser does):
     - PROD holdings `2303` / `2337` / `2344` **do** carry `2026-Q2`, and they sit inside the first 20
       of the ticker list —— so `readFundamentalSnapshot`'s `max` should have seen Q2 and landed.
     - `2330` / `2317` are still on `2026-Q1`; `2312` / `2382` have **no fundamental file at all**.
@@ -137,12 +236,14 @@ precisely what 0.7.8 would have mis-retired).
     the alphabetical list checked by hand, so the 20-ticker sample missed every Q2 holding;
     (b) `readFundamentalSnapshot` threw (20 storage reads in one round) and returned null, which the
     rule correctly treats as 「沒有證據」. **The failure direction is safe either way** —— it refuses to
-    retire and retries —— and MOPS only has four slots a day, so the cost is bounded. Resolve by
-    logging the snapshot (`sampled`, and the three maxima) into the tick note on the next hit.
+    retire and retries —— and MOPS only has four slots a day, so the cost is bounded.
+    </details>
 
-15. **Retune the remaining windows** —— ⏳ `t86` / `margin` / `borrow` / MOPS landing times are still
-    un-measured. Now that a hit retires a source only once its data is on screen, a full day of ticks
-    gives the real answer; the two new shifts were set from reasoning, not measurement.
+15. **Retune the remaining windows** —— 🔄 partial. `t86` / `margin` / `bwibbu` / MOPS landing times
+    are still un-measured — one day of ticks is not enough for the first three, and `bwibbu`'s
+    2026-08-11 ticks came from the pre-0.7.11 superseded `BWIBBU_ALL` path so they cannot answer this
+    yet. ~~`borrow` retuned 15:00–22:45 → 21:00–23:30 (0.7.13, measured flip 22:15 on both
+    environments)~~ ✅ — see Task 87 item 4.
 10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
     `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
 11. ~~**PROD crons all `active = false`** since the 0.7.3 experiment (0.7.7 only did DEV)~~ ✅ restored
