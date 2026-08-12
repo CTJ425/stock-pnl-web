@@ -108,6 +108,37 @@
 
 ## 📋 Active Tasks
 
+### Task 95: Measure the per-dispatch context delta from existing transcripts
+- **Status**: 🔄 IN PROGRESS (not started)
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 20:22:24 Asia/Taipei
+
+**Why this task exists.** Routing was adopted in this project on a cost argument. That argument has now been tested on both channels it could work through, and neither supports it:
+
+- *Rate channel*: across 24 sessions, routed sessions cost $0.1454 per main-turn against $0.1333 for all-main sessions. After controlling for context the mean residuals are +0.007 (routed) and −0.005 (all-main) — no separation.
+- *Context channel*: routed sessions carry **more** main context than all-main sessions at the same turn count, not less. Mean context residual against the `ctx ≈ 39,904 + 374.2 × turns` baseline is **+17,449 tokens (routed, n=10)** versus **−12,464 (all-main, n=14)** — a ~30k gap in the wrong direction. The closest natural pairing agrees: `e0b13064` all-main 143 turns / 75,796 ctx / $10.80 and `cb8f1119` all-main 144 turns / 75,269 ctx / $10.80, against `875a7106` routed 147 turns / 80,967 ctx / $11.40.
+
+Both findings are correlational — routed sessions may simply be harder tasks. That is exactly what this task removes.
+
+**The question to answer.** Does one dispatch add or remove net tokens from the main session's context? Both sides are countable from the JSONL transcripts that `.claude/hooks/routing_audit.py` already parses, so this needs **no new sessions**:
+
+- *Cost side*: for each `Agent`/`Task` tool call in a main transcript, the tokens of the dispatch prompt plus the tokens of the returned report — that is exactly what lands in main's context.
+- *Benefit side*: the subagent's own transcript shows what it actually read. That is the material main avoided pulling in.
+- Report the net per dispatch, and the distribution across roles. Sample is every dispatch in the project's history (17 in session `7b928169` alone), not n=1.
+
+**Do not run a live all-main vs routed A/B.** It was considered and rejected on 2026-08-12: two arms of ~40 turns cost roughly $6–12 and yield n=1 per arm, which cannot separate signal from the ±0.05 residual spread already present in the data.
+
+**Measured constants to reuse, not re-derive** (all from `python3 .claude/hooks/routing_audit.py --all`, n=24, total $681.90):
+
+- `$/main-turn = 0.0364 + 0.0539 per 100k context`, R² = **0.846**. Context explains 85% of per-turn cost; routing status explains none.
+- `ctx ≈ 39,904 + 374.2 × turns`, R² = 0.691.
+- Therefore `session cost(T) ≈ 0.0579·T + 0.000202·T²` — **cost is quadratic in session length**, and the quadratic term is context accumulation. Splitting a session into k parts divides that term by k. Worked example: 400 turns in one session ≈ $55.41; the same 400 turns as four 100-turn sessions ≈ $31.21.
+- Regime comparison against the $681.90 actual: capping sessions at 100 turns → −44.5%; Sonnet main alone → −37%; both together → **−65%**. Session capping alone beats switching models, and carries no quality risk.
+- Price ratio Sonnet 5 : Opus 5 = **0.4** at the intro rate (through 2026-08-31) and **0.6** after. The audit's price table is at `.claude/hooks/routing_audit.py` line 33.
+- Untested lever: output is roughly a third of main's cost and most of it is thinking tokens, so `effort` is a cost dial this project has never tuned.
+
+**Session `7b928169` (this one) as the cautionary datum**: it ended at **$70.52** — main $66.47 (94.3%) over **272 turns** at an average context of **291,791 tokens**, i.e. **$0.244 per turn**, about 1.75× the project average of $0.139. It is the second most expensive session in project history. The lesson is the quadratic term, not the routing configuration.
+
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**
