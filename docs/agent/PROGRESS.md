@@ -152,6 +152,19 @@ So the probe-triggers-fetch rule now holds for **every source that has a publica
 the single exception is principled rather than leftover. This closes the open question; do not
 re-open it as 「還有兩支 cron 沒清掉」.
 
+**0.7.13-dev.2 makes that visible instead of only arguable.** The panel listed six sources and
+silently omitted macro, so macro read as blind-scheduled next to sources that visibly wait for
+publication. `admin-status` now returns `probeExperiment.macroScan` —— `decideMacroScan` evaluated
+against the `macro/us.json` it already downloads —— and the panel renders it as its own block, not a
+seventh row (a row would claim 5-minute ticks this source does not have). Measured against DEV's
+live file while building it: `scan=false, reason=satisfied, scansToday=1/16`, i.e. macro had already
+finished for the day and each of `macro-daily`'s remaining ~10 ticks will make **zero external
+requests**. That reading is the entire argument for keeping the cron, and until now there was
+nowhere on the screen to see it.
+
+Deliberately **read-only**: it reports what the next `sync-macro` round would decide. The trigger
+did not move.
+
 `market-data-daily`/`history-daily` are deferred, not removed: `market-data-daily` because 0.7.11 just
 moved `bwibbu` to the dated endpoint and reopened its window to 15:00, and there is not yet one full
 day of ticks proving the probe catches it inside that window; `history-daily` because `MOPS_SLOTS` is

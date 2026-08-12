@@ -184,6 +184,12 @@ it ran 15 times, mostly no-ops or manual — and that the real 15:00-start offen
     (`index.ts:1848`) has no gate because FX has no publication event — a rolling `range=1y` series
     plus a twice-daily BOT CSV means the endpoint always has data, so a probe would ask a question
     that is always true (the 「永遠為真」 trap 0.7.4 fixed for `borrow` and MOPS).
+12. ~~**Make macro's probe decision visible** so the panel stops implying it is blind-scheduled~~ ✅
+    0.7.13-dev.2 — `admin-status` returns `probeExperiment.macroScan` (`decideMacroScan` evaluated
+    against the already-downloaded `macro/us.json`); the panel renders it as its own block, not a
+    seventh row, because this source has no 5-minute ticks to claim. Read-only: the trigger did not
+    move. Verified against DEV's live file: `scan=false, reason=satisfied, scansToday=1/16`.
+    Also fixed the panel sentence 「固定盤後班表則作為最後的重試」, which step 6 had just made false.
 
 **Operational note, act on this**: while inspecting `cron.job` commands during this task, a
 redaction regex failed to match the actual header format (`'x-cron-secret', 'VALUE'`, comma-separated,
