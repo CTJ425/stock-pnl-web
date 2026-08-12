@@ -687,3 +687,11 @@ reads —— at that moment it genuinely had not, because of fault (2). That is 
   2. Modify the Dashboard components and profit and loss calculation logic: remove the "Realized Profit and Loss" and "Cumulative Total Profit and Loss" fields, and adjust the total return rate to only include the "Unrealized Return Rate" of the current position (unrealized profit and loss / total cost of the current position).
 - **Changed Files**: `sources/src/components/Dashboard/`, `sources/src/utils/pnlEngine.ts`
 - **Verification**: Compare securities APP caliber through unit testing and manual testing.
+
+### Bug ID: BUG-028 — `scribe` dispatch returns partial text when hitting maxTurns ceiling
+- **Symptom**: a `scribe` dispatch returns a plausible half-sentence ("Now let me verify…", "Now for Job B…") and looks like a successful result. The caller cannot distinguish it from a completed dispatch.
+- **Root cause**: `maxTurns: 15` in `.claude/agents/scribe.md` was below what a record-plus-roll dispatch actually needs. Hitting the ceiling stops the agent mid-loop and returns its partial text as a normal result — no error is raised.
+- **Evidence**: across 7 dispatches in session 7b928169, all 5 that reached 15–17 tool calls were truncated; both that finished in 5–8 tool calls completed cleanly.
+- **Damage**: the `PROGRESS.md` log entries for **Task 91 and Task 92** were destroyed. Both were cut from the hot file and the dispatch died before writing them to `PROGRESS_ARCHIVE.md`. Task 91 was recoverable from `git show HEAD`; Task 92 had never been committed and had to be reconstructed from facts.
+- **Fix** (all in `.claude/agents/scribe.md`): `maxTurns` raised 15 → 30; a "write the destination before you cut the source" ordering rule added, so an interrupted move leaves a visible duplicate instead of a silent deletion; and a mandatory closing report block (`RECORDED` / `MOVED` / `VERIFY` / `UNFINISHED`) added so a truncated dispatch is detectable by its missing report.
+- **Status**: ✅ FIXED (n/a — agent configuration only, no app version applies).
