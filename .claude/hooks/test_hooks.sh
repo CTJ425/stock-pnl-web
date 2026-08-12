@@ -29,6 +29,28 @@ print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Edit","agent_type"
   fi
 }
 
+# tscheck <label> <expected> <agent_type> <relative path> <body text>
+tscheck() {
+  local label="$1" want="$2" agent="$3" path="$4" body="$5"; shift 5
+  local payload out got
+  payload=$(python3 -c '
+import json,sys
+print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Edit","agent_type":sys.argv[1],
+                  "tool_input":{"file_path":sys.argv[2],"new_string":sys.argv[3]}}))' \
+    "$agent" "$CLAUDE_PROJECT_DIR/$path" "$body")
+  out=$(printf '%s' "$payload" | python3 "$GUARD")
+  if [[ -z "$out" ]]; then
+    got="allow"
+  else
+    got=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["permissionDecision"])')
+  fi
+  if [[ "$got" == "$want" ]]; then
+    pass=$((pass+1)); printf '  ok   %-46s %s\n' "$label" "$got"
+  else
+    fail=$((fail+1)); printf '  FAIL %-46s want=%s got=%s\n' "$label" "$want" "$got"
+  fi
+}
+
 # readcheck <label> <expected> <agent_type> <abs path> <limit|-> [env assignments...]
 readcheck() {
   local label="$1" want="$2" agent="$3" path="$4" limit="$5"; shift 5
@@ -110,7 +132,19 @@ readcheck "main reads a missing file"       allow ""      "$fx/gone.md"  -
 readcheck "ROUTING_READ_KB=0 disables"      allow ""      "$fx/big.md"   -  ROUTING_READ_KB=0
 readcheck "ROUTING_READ_KB=100 raises bar"  allow ""      "$fx/big.md"   -  ROUTING_READ_KB=100
 readcheck "ROUTING_GUARD=off allows read"   allow ""      "$fx/big.md"   -  ROUTING_GUARD=off
+readcheck "scribe reads TASK_ARCHIVE"       deny  scribe  "$CLAUDE_PROJECT_DIR/docs/agent/TASK_ARCHIVE.md" -
+readcheck "scribe reads PROGRESS_ARCHIVE"   deny  scribe  "$CLAUDE_PROJECT_DIR/docs/agent/PROGRESS_ARCHIVE.md" -
+readcheck "scribe reads a hot file"         allow scribe  "$CLAUDE_PROJECT_DIR/docs/agent/PROGRESS.md" -
+readcheck "scout may still read an archive" allow scout   "$CLAUDE_PROJECT_DIR/docs/agent/TASK_ARCHIVE.md" -
 rm -rf "$fx"
+
+past=$(date -d '-1 hour' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S')
+future=$(date -d '+1 hour' '+%Y-%m-%d %H:%M:%S')
+tscheck "future stamp in a record"          deny  scribe  docs/agent/PROGRESS.md "- Timestamp: $future Asia/Taipei"
+tscheck "past stamp in a record"            allow scribe  docs/agent/PROGRESS.md "- Timestamp: $past Asia/Taipei"
+tscheck "record with no stamp at all"       allow scribe  docs/agent/TASK.md     "- **Status**: DONE"
+tscheck "future stamp outside a record"     allow scribe  docs/architecture/n.md "planned for $future"
+tscheck "future stamp blocks main too"      deny  ""      docs/agent/PROGRESS.md "logged $future"
 
 echo "routing_observe.py"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT

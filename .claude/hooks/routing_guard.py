@@ -3,18 +3,20 @@
 
 Three jobs, selected by tool_name.
 
-On Read it polices *what the main session pulls into context*. Replaying context is
-69.6% of this project's measured spend ($387 of $556 on the main session across 30
-sessions, at an average 191k tokens per turn), and a large file read once is re-billed
-on every remaining turn of the session. Bounded reads (`limit` set) are always allowed.
+On Read it polices *what gets pulled into context*. Replaying context is 69.6% of this
+project's measured spend ($387 of $556 on the main session across 30 sessions, at an
+average 191k tokens per turn), and a large file read once is re-billed on every remaining
+turn of the session. Bounded reads (`limit` set) are always allowed. `scribe` is denied
+the archives outright — it writes them but never needs to read them.
 
 On Agent|Task it polices *who gets dispatched*. The built-in discovery agents inherit
 the caller's model, so `Explore` does scout's job at Opus prices — measured at $1.88
 per run against $0.12 for scout.
 
-On Write|Edit|NotebookEdit it polices *what a role may write*. Every hook payload
-carries `agent_type`, so one script can police both the main session and each
-subagent:
+On Write|Edit|NotebookEdit it polices *what a role may write*, and rejects any
+future-dated timestamp written into a tracking record — a record logs what already
+happened, so a future stamp is fabricated. Every hook payload carries `agent_type`, so
+one script can police both the main session and each subagent:
 
   main session  -> writing production code or a tracking record is the exact leak
                    that turns this project into a single Opus session. Escalate to
@@ -31,6 +33,7 @@ Env overrides:
   ROUTING_MAIN=deny|ask|off   main-session severity (default ask)
   ROUTING_READ_KB=<n> main-session large-read threshold in KB (default 32; 0 disables)
 """
+import datetime
 import json
 import os
 import re
@@ -52,6 +55,27 @@ READ_REASON = (
     "remaining turn — context replay is ~70% of this project's measured cost. Two cheaper "
     "paths: dispatch `scout` with a specific question, or re-issue this Read with "
     "`offset`/`limit` for just the part you need."
+)
+
+# scribe writes these but never needs to read them; each is far larger than its context.
+# Prose telling it so was ignored on the first dispatch after the rule landed (4 reads),
+# exactly as the earlier "use sed/awk" preference was. Hence a hook.
+ARCHIVES = {"PROGRESS_ARCHIVE.md", "TASK_ARCHIVE.md", "FIXED_BUG.md", "CHANGELOG.md"}
+ARCHIVE_REASON = (
+    "`scribe` must not read {name} — it is far larger than this role's context and there "
+    "is never a need. Prepend with `Edit` anchored on the file's `---` header line, append "
+    "with a Bash heredoc, locate with `grep -n`, inspect with `sed -n '<range>p'`."
+)
+
+# A record is a log of what already happened, so a future timestamp in one is always a
+# fabrication. Three occurred in three tasks (+50 min, +1 h, +1 h), each surviving a
+# written rule to run `date` instead. Past timestamps stay legal: archives carry them.
+TS_RE = re.compile(r"\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b")
+TS_TOLERANCE_S = 120
+TS_REASON = (
+    "{stamps} is in the future; it is now {now}. A record logs what already happened, so "
+    "a future timestamp is fabricated. Run `date '+%Y-%m-%d %H:%M:%S'` and write what it "
+    "returns — never estimate, and never carry a stamp over from an earlier draft."
 )
 
 # Built-in agents that inherit the caller's model, i.e. do cheap work at Opus prices.
@@ -144,6 +168,10 @@ def main() -> None:
         sys.exit(0)
 
     if payload.get("tool_name") == "Read":
+        target = tool_input.get("file_path")
+        if role == "scribe" and target and os.path.basename(target) in ARCHIVES:
+            respond("deny", "[routing/scribe] " + ARCHIVE_REASON.format(
+                name=os.path.basename(target)))
         # A subagent reading widely is the system working as designed, and a bounded
         # read is the retrieval pattern this guard is trying to encourage.
         if role != "main" or tool_input.get("limit"):
@@ -164,16 +192,28 @@ def main() -> None:
                 name=os.path.basename(target), kb=size // 1024))
         sys.exit(0)
 
-    rules = RULES.get(role)
-    if not rules:
-        sys.exit(0)
-
     target = tool_input.get("file_path")
     if not target:
         sys.exit(0)
 
     project = os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     cls = classify(target, project)
+
+    if cls == "record":
+        body = tool_input.get("new_string") or tool_input.get("content") or ""
+        now = datetime.datetime.now()
+        ahead = [s for s in TS_RE.findall(body)
+                 if (datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+                     - now).total_seconds() > TS_TOLERANCE_S]
+        if ahead:
+            respond("deny", f"[routing/{role}] " + TS_REASON.format(
+                stamps=", ".join(sorted(set(ahead))[:3]),
+                now=now.strftime("%Y-%m-%d %H:%M:%S")))
+
+    rules = RULES.get(role)
+    if not rules:
+        sys.exit(0)
+
     decision = rules.get(cls) or rules.get("*")
     if not decision:
         sys.exit(0)
