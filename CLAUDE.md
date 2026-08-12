@@ -25,6 +25,23 @@ Also: `docs/UnitTests/` (testing SoT), `docs/architecture/`.
 
 **Agent-written docs are English** (see global rule 1).
 
+### Size discipline — roll, don't hope
+
+The hot files are the ones read at session start, so they are the only ones with a size cost.
+There is **no automatic archiver**: rolling happens in the same `scribe` dispatch that records
+the work, at the end of every task.
+
+| Hot file | Cap | Overflow goes to |
+| ---- | ---- | ---- |
+| `PROGRESS.md` | header + **newest 2 log entries** | `PROGRESS_ARCHIVE.md` (prepend, newest-first) |
+| `TASK.md` | open entries only; a `✅` entry is moved out, and inside a live entry the `~~struck~~ ✅` sub-items collapse to one `- **Done**: items …` line | `TASK_ARCHIVE.md` |
+| `BUG_FIX.md` | open bugs only | `FIXED_BUG.md` |
+
+The archives are large **and that is fine** — nothing reads them at session start, so they cost
+nothing until `grep`ped, and `grep`/`git log -S` over local files is the cheapest retrieval this
+project has. Moving them to GitHub Issues/Releases was evaluated and **rejected**; do not re-propose
+it without reading the measured verdict in `docs/plan/github_documentation_strategy.md`.
+
 ## Start of session
 
 Read (on demand, keep context small):
@@ -50,7 +67,7 @@ do not restate them here.
 
 | Role | Owns | Do not do this in the main session |
 | ---- | ---- | ---- |
-| `scout` | Mapping files/callers/tests, compressing logs and stack traces | More than ~a dozen exploratory Read/Grep calls |
+| `scout` | Mapping files/callers/tests, compressing logs and stack traces, reading anything bulky | More than ~a dozen exploratory Read/Grep calls; an unbounded read of a file over 32KB; dispatching the built-in `Explore` / `general-purpose`, which inherit this session's model |
 | `architect` | Specs, failing tests, bug-fix plans, adjudication (main session may do this itself when on Opus) | — |
 | `builder` | Implementing an existing spec | Editing `sources/` for anything bigger than a one-file mechanical change |
 | `reviewer` | Reviewing changed files against a spec | Self-reviewing your own implementation |
@@ -58,9 +75,14 @@ do not restate them here.
 
 - **The loop is the `route` skill.** Load it for any feature, bug, or `TASK.md` item; it
   owns lane classification, dispatch order, handoff formats, and escalation.
-- Two limits keep this honest: a dispatch costs 5–15k tokens of fixed overhead, and a
-  measured full loop on a trivial task cost 3.5x doing it inline. Under ~20 minutes of
-  human work, stay in the main session (Lane 0) — that is a routing decision too.
+- **Cost is context replay, not output.** Measured over 30 sessions: cache read is 69.6%
+  of spend, output only 16%. One main-session turn costs ~$0.13 at the measured 185k
+  average context, against $0.12 for a `scout` dispatch and $0.27 for a `scribe` one — so
+  they break even at 2 and 4 replaced turns respectively. **Route by context footprint,
+  not by task size**: bulk content goes to a subagent even when the task is trivial, and a
+  surgical edit on content already in context stays inline even when the task looks big.
+  A large file read into the main session is re-billed on every later turn of that
+  session, which is why the guard asks before unbounded reads over 32KB.
 - Role boundaries are enforced by `.claude/hooks/routing_guard.py`, not by good manners.
   A blocked write means you are out of role: re-route it, do not work around it.
   Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
@@ -86,3 +108,20 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
 - DEV Edge: **volume copy** into `volumes/functions/` + recreate functions container — not cloud `functions deploy`.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
+
+## This repo is public — where raw logs may go
+
+`github.com/CTJ425/stock-pnl-web` is **PUBLIC**, and `secret_scanning_push_protection` is
+**enabled** on it: a credential committed to a file gets blocked at `git push`. That gate is the
+only thing standing between a pasted log and the world.
+
+- **GitHub Issues / PR comments / Release bodies have no such gate.** They are world-readable the
+  instant they are created, indexed within minutes, and their edit history stays visible. Never
+  paste raw logs, `cron.job.command` text, or Edge Function output into one — root cause + commit
+  SHA + `file:line` only.
+- Raw logs belong in `docs/agent/`, where the push gate covers them. Secrets are written as
+  placeholders there (`<token_urlsafe(32)>`), never as values — keep it that way.
+- Edge logs and `cron.job.command` carry `x-cron-secret` and Supabase keys. When inspecting
+  `cron.job`, select structural predicates (`command LIKE '%x-cron-secret%'`) or a narrow
+  `regexp_match` for the action/url — **never select the command text, redacted or otherwise**
+  (a redaction regex already failed once and printed the DEV `CRON_SECRET` into a transcript).
