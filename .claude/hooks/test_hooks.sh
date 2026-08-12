@@ -79,9 +79,6 @@ expect "main edits production code"        ask   ""          sources/src/App.tsx
 expect "main edits a tracking record"      ask   ""          docs/agent/PROGRESS.md
 expect "main writes a spec"                allow ""          docs/agent/specs/task-77.md
 expect "main edits its own config"         allow ""          .claude/settings.json
-expect "architect writes production code"  deny  architect   sources/src/App.tsx
-expect "architect writes a test"           allow architect   sources/src/App.test.tsx
-expect "architect writes a spec"           allow architect   docs/agent/specs/task-77.md
 expect "builder edits a test"              deny  builder     sources/src/services/warmStock.test.ts
 expect "builder edits production code"     allow builder     sources/src/services/warmStock.ts
 expect "builder edits a record"            deny  builder     docs/agent/TASK.md
@@ -96,7 +93,7 @@ expect "ROUTING_GUARD=off disables all"    allow scout       sources/src/App.tsx
 
 dispatch "main dispatches Explore"         ask   ""          Explore
 dispatch "main dispatches general-purpose" ask   ""          general-purpose
-dispatch "architect dispatches Explore"    ask   architect   Explore
+dispatch "builder dispatches Explore"      ask   builder     Explore
 dispatch "main dispatches scout"           allow ""          scout
 dispatch "main dispatches builder"         allow ""          builder
 dispatch "ROUTING_GUARD=off allows Explore" allow ""         Explore  ROUTING_GUARD=off

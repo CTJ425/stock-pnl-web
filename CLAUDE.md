@@ -65,11 +65,13 @@ on the most expensive model in the system, so work that a cheaper role can do co
 must not be done here. Model and effort per role live in `.claude/agents/*.md` frontmatter;
 do not restate them here.
 
+The main session owns **architecture, specs, failing tests, and adjudication** — that is
+what it runs on the expensive model for. The four roles below are delegation targets.
+
 | Role | Owns | Do not do this in the main session |
 | ---- | ---- | ---- |
 | `scout` | Mapping files/callers/tests, compressing logs and stack traces, reading anything bulky | More than ~a dozen exploratory Read/Grep calls; an unbounded read of a file over 32KB; dispatching the built-in `Explore` / `general-purpose`, which inherit this session's model |
-| `architect` | Specs, failing tests, bug-fix plans, adjudication (main session may do this itself when on Opus) | — |
-| `builder` | Implementing an existing spec | Editing `sources/` for anything bigger than a one-file mechanical change |
+| `builder` | Implementing an existing brief or spec | Editing `sources/` for anything bigger than a one-file mechanical change |
 | `reviewer` | Reviewing changed files against a spec | Self-reviewing your own implementation |
 | `scribe` | `docs/agent/` bookkeeping, commit messages | Hand-editing `TASK.md` / `PROGRESS.md` / bug files |
 

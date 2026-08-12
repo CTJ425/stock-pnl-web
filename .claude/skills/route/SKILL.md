@@ -1,6 +1,6 @@
 ---
 name: route
-description: Run a task through the model-routing loop — classify it into a lane, dispatch scout/architect/builder/reviewer/scribe at their own model tiers, and verify. Use when starting a feature, fixing a bug, working through docs/agent/TASK.md or BUG_FIX.md, or when the user says "route this", "run the next task", or asks why everything is running on Opus.
+description: Run a task through the model-routing loop — classify it into a lane, dispatch scout/builder/reviewer/scribe at their own model tiers, and verify. Use when starting a feature, fixing a bug, working through docs/agent/TASK.md or BUG_FIX.md, or when the user says "route this", "run the next task", or asks why everything is running on Opus.
 ---
 
 # Routing loop
@@ -72,9 +72,8 @@ letting one through; confirm only when you need a tool scout lacks.
 
 ## Step 2 — the builder's input, sized by lane
 
-The main session is on Opus and owns this. Only dispatch `architect` when the main
-session is *not* on the expensive model, or when the task needs a designed test suite you
-do not want to write inline.
+The main session owns this. Specs, failing tests, and adjudication do not get delegated —
+they are the reason this session runs on the expensive model.
 
 **Lane 1 — a brief, in the dispatch prompt. No file.** A spec file for a bounded fix is
 overhead that does not pay for itself, and requiring one is why `docs/agent/specs/` held

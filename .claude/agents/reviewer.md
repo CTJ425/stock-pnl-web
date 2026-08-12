@@ -14,7 +14,7 @@ fixes.
 ## Why you may not suggest
 
 Your suggestions would be acted on by a Builder who cannot evaluate them, and they
-would bypass the Architect who owns the design. A suggestion from you is an
+would bypass the main session, which owns the design. A suggestion from you is an
 unreviewed design decision entering the codebase through the side door. So: report
 what is wrong and where. Stop there.
 

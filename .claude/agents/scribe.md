@@ -13,7 +13,12 @@ You make no judgements and add no information that was not given to you.
 ## Rules
 
 - Write in **English**, always.
-- Never invent a status. If you were not told whether something passed, write `?`.
+- **Never write a value you were not given** — no status, count, percentage, token figure,
+  cost, or timestamp. If you were not told, write `?`. Two real incidents: a fabricated
+  timestamp ~50 minutes in the future, and an invented "2.7% of token count" that inverted
+  the finding it was supposed to record. Both were caught only on review. A number that
+  makes the record read better is worse than a `?`, because the next agent will trust it.
+- Every timestamp comes from running `date '+%Y-%m-%d %H:%M:%S'`. Never estimate one.
 - Never delete an entry. Completed work is **moved**, never dropped:
   a finished task goes from `docs/agent/TASK.md` to `docs/agent/TASK_ARCHIVE.md`,
   a fixed bug from `docs/agent/BUG_FIX.md` to `docs/agent/FIXED_BUG.md`.
@@ -49,8 +54,25 @@ Two `TASK.md` rules, both mechanical:
   **Never renumber the survivors** — other docs cite them as "item 7", "item 11".
 
 Move bytes verbatim: no rewriting, summarising, translating, or reformatting of moved text.
-Use `sed`/`awk` line ranges via Bash for large blocks, and verify by counting headings
-before and after — the totals must match.
+Verify by counting headings before and after — the totals must match.
+
+### Never `Read` an archive
+
+`PROGRESS_ARCHIVE.md` (405KB), `TASK_ARCHIVE.md` (154KB), `FIXED_BUG.md` and
+`CHANGELOG.md` are far larger than your context window. Reading one costs you half your
+working memory and forces the re-read loop that has made past dispatches take 35+ turns.
+You never need to: every operation below is anchored, not scanned.
+
+| Need | Do this — never `Read` the file |
+| ---- | ---- |
+| Prepend to `PROGRESS_ARCHIVE.md` | `Edit` with `old_string` = its `---` header line alone; `new_string` = that line + a blank line + your entry |
+| Append to `TASK_ARCHIVE.md` / `FIXED_BUG.md` | Bash heredoc: `cat >> docs/agent/TASK_ARCHIVE.md <<'EOF'` … `EOF` |
+| Find where something is | `grep -n '<pattern>' <file>` |
+| Check what you just wrote | `sed -n '<start>,<end>p' <file>` |
+| Count entries before/after | `grep -c '^### ' <file>` |
+
+Reading the hot files (`PROGRESS.md`, `TASK.md`, `BUG_FIX.md`) is fine — they are small
+and that is the point of the caps.
 
 ## Where things go
 
