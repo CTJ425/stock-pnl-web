@@ -151,6 +151,7 @@ import {
 } from './usMacro.ts'
 import {
   decideMacroScan,
+  MAX_SCANS_PER_DAY,
   nextReleaseFor,
   RELEASE_CALENDAR,
   taipeiYmdOf,
@@ -2459,18 +2460,16 @@ async function readFundamentalSnapshot(): Promise<FundamentalSnapshot | null> {
       Read the **batch tickers** —— what the user actually holds —— not the first entry in the bucket.
       The first listing entry is alphabetical, which on this bucket is `00403A`, an ETF: it has no
       valuation at all, so judging landing by it would answer 「沒到位」 forever. Learned the hard way
-      on the first live hit (2026-08-11 20:35).
-
-      `max` across the sample, not the first file: ETFs and TPEx names legitimately carry no valuation,
+      on the first live hit (2026-08-11 20:35). For the same reason the verdict below is a `max`
+      across them rather than the first file: ETFs and TPEx names legitimately carry no valuation,
       and one of them must not veto a day that did land.
-    */
-    /*
-      **All** holdings, not a slice (BUG-027). This used to take the first 20, but `heldTwTickers`
+
+      And **all** of them, not a slice (BUG-027). This used to take the first 20, but `heldTwTickers`
       queries `transactions` with no ORDER BY —— so *which* 20 survived was whatever row order
-      Postgres happened to return, and the verdict below is a `max` across them. PROD holds 26 TW
-      tickers and DEV holds 5, which is why `mops_profit` answered 「沒到位」 on PROD and 「到位」 on
-      DEV at 21:00 on 2026-08-11 running the *same* v45 bundle: on DEV the cap could never bite.
-      A landing verdict must not depend on an unordered truncation.
+      Postgres happened to return. PROD holds 26 TW tickers and DEV holds 5, which is why
+      `mops_profit` answered 「沒到位」 on PROD and 「到位」 on DEV at 21:00 on 2026-08-11 running the
+      *same* v45 bundle: on DEV the cap could never bite. A landing verdict must not depend on an
+      unordered truncation.
     */
     const tickers = await batchTwTickers()
     if (tickers.length === 0) return null
@@ -3255,6 +3254,42 @@ async function handleAdminStatus(): Promise<Response> {
       labels: PROBE_SOURCE_LABELS,
       order: PROBE_SOURCE_ORDER,
       ticks: Array.isArray(probeTicks) ? probeTicks : [],
+      /*
+        0.7.13 —— macro is **not** a `source_probe_tick` source, but it is a probe. Its hit rule lives
+        inside `sync-macro` as `decideMacroScan`: the official BLS/BEA release calendar decides
+        「這一輪到底該不該問 FRED」, 「once caught, don't catch」 retires it for the day, and a round that
+        decides not to ask makes zero external requests. That is the same shape as `pendingSources`,
+        just carried by `macro-daily`'s every-30-minute tick instead of `source-probe`'s 5-minute one.
+
+        The panel showed six sources and silently omitted this one, which made macro look
+        schedule-driven-and-blind next to sources that visibly wait for publication. Surfacing the
+        decision here costs nothing: `decideMacroScan` is pure, and `macro/us.json` is already
+        downloaded above for the `macro` block. Deliberately **read-only** —— this reports what the
+        next `sync-macro` round would decide; it does not move the trigger.
+      */
+      macroScan: macro
+        ? (() => {
+            const scansToday =
+              macro.scansToday?.ymd === todayYmd ? (macro.scansToday?.n ?? 0) : 0
+            const d = decideMacroScan({
+              now,
+              indicators: (macro.indicators ?? []).map((i) => ({
+                id: i.id,
+                latestPeriod: i.latest?.period ?? null,
+              })),
+              scansToday,
+              lastScanYmd: macro.scansToday?.ymd ?? null,
+            })
+            return {
+              scan: d.scan,
+              reason: d.reason,
+              dueIds: d.dueIds,
+              scansToday,
+              cap: MAX_SCANS_PER_DAY,
+              checkedAt: macro.checkedAt ?? null,
+            }
+          })()
+        : null,
     },
     durationMs: Date.now() - startedAt,
   })
