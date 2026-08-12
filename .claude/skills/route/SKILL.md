@@ -18,17 +18,39 @@ wrong cost, and how much subjective judgement is involved.
 
 | Lane | Use when | Path |
 | --- | --- | --- |
-| **0 — inline** | Unambiguous, one file, mechanical (typo, copy, version bump, doc edit), touches no money/auth/schema/API/deploy behaviour, and you can name the verification command *before* editing | main session -> verify -> `scribe` if a record is owed |
+| **0 — inline** | The content is **already in context** and the edit is surgical — a typo, a version bump, a one-line fix. Touches no money/auth/schema/API/deploy behaviour, and you can name the verification command *before* editing | main session -> verify -> `scribe` if a record is owed |
 | **1 — bounded** (default) | A clear fix or feature inside known modules | `scout` (if the area is unmapped) -> spec -> `builder` -> `reviewer` -> `scribe` |
 | **2 — elevated risk** | Unknown-cause bug, cross-module change, P&L/holdings/fee/price maths, auth or RLS, schema migration, Edge function, external API, cron/background job, or anything deployed | `scout` -> spec + failing tests -> `builder` -> `reviewer` -> adjudicate -> `scribe` |
 
-Two economic limits on Lane 1/2, both measured, both real:
+### The economics, measured
 
-- **Dispatch overhead is 5–15k tokens** per subagent (fresh system prompt, CLAUDE.md,
-  tool schemas; no shared prompt cache). If a human would finish the task in under
-  ~20 minutes, Lane 0 is cheaper than any dispatch.
-- A full loop on a trivial task measured **3.5x the tokens** of doing it inline. Lanes
-  are a cost decision, not a ceremony.
+**Cost is not token count.** Across this project's first 30 sessions, replaying context
+(cache read) was **69.6% of spend** and output only **16%**. "Delegate the writing to a
+cheap model" therefore optimizes the small half. What costs money is context footprint
+multiplied by turn count.
+
+| Action | Cost | ≈ main turns |
+| --- | ---: | ---: |
+| One main-session turn (at the measured 185k avg context) | $0.131 | 1 |
+| `builder` dispatch | $0.096 | 0.7 |
+| `scout` dispatch | $0.121 | 0.9 |
+| `scribe` dispatch | $0.270 | 2 |
+| `Explore` dispatch (inherits Opus — don't) | $1.879 | 14 |
+
+A dispatch also costs the two main turns that issue it and read its answer (+$0.26).
+**Break-even: `scout` pays for itself once it saves 2 main turns, `scribe` once it saves
+4.** That bar is lower than it sounds — one bookkeeping round or one file-mapping
+question already clears it.
+
+The compounding term is the one to fear: a large file read into the main context is
+re-billed on **every remaining turn of the session**. 100k tokens of archive adds
+~$0.05/turn indefinitely — ~$10 over a 200-turn session — and dilutes attention while it
+does. A PreToolUse guard asks before any unbounded main-session read over 32KB; take the
+`scout` or the `offset`/`limit` it offers rather than confirming past it.
+
+**Route by context footprint, not by task size.** Bulk content goes to a subagent even
+when the task is trivial; a surgical edit on content already in context stays inline even
+when the task looks big.
 
 State the lane in one line before you act. If you pick Lane 0 for a tracked task,
 record why in `docs/agent/PROGRESS.md`.
@@ -43,55 +65,57 @@ token saving in the system.
 If you have made a dozen Read/Grep calls yourself, you are doing scout's work at 5x the
 price; a hook will tell you so.
 
-## Step 2 — spec (main session, or `architect`)
+Do not reach for the built-in `Explore` or `general-purpose` instead. They inherit the
+caller's model, so they do scout's job at Opus prices — the first 9 routed sessions spent
+112k output tokens there against 5.9k on scout. A PreToolUse guard now asks before
+letting one through; confirm only when you need a tool scout lacks.
 
-Write `docs/agent/specs/<task-id>.md`. The main session is on Opus and owns this. Only
-dispatch `architect` when the main session is *not* on the expensive model, or when the
-task needs a designed test suite you do not want to write inline.
+## Step 2 — the builder's input, sized by lane
 
-```markdown
-# <task-id>: <title>
+The main session is on Opus and owns this. Only dispatch `architect` when the main
+session is *not* on the expensive model, or when the task needs a designed test suite you
+do not want to write inline.
 
-## Contract
-- Inputs / outputs / error cases, stated precisely. What must NOT change.
+**Lane 1 — a brief, in the dispatch prompt. No file.** A spec file for a bounded fix is
+overhead that does not pay for itself, and requiring one is why `docs/agent/specs/` held
+exactly one file for the routing system's first day. Five headings, inline:
 
-## Files
-- sources/src/...  (create | modify)   <- exhaustive; builder may touch nothing else
-
-## Test charter
-| Case | Expected outcome | Layer / file |
-
-## Acceptance
-- [ ] Targeted: `npm test -- <file>` (from `sources/`)
-- [ ] Full gate: `<command, or "not required">`
-
-## Non-goals
-- What builder must NOT do.
+```
+Task: <id> — <one line>
+Contract: <inputs / outputs / error cases; what must NOT change>
+Files: sources/src/...   <- exhaustive; you may touch nothing else
+Verify: npm test -- <file>   (from sources/) — not done until this passes
+Non-goals: <what not to do>
 ```
 
-The `## Files` list is what makes builder's scope enforceable — a PreToolUse guard
-already blocks builder from tests, specs, and records, but only the spec bounds which
-production files it may touch.
+**Lane 2 — a spec file plus failing tests.** Write `docs/agent/specs/<task-id>.md` with
+the same five sections expanded, add a `## Test charter` table (`| Case | Expected
+outcome | Layer / file |`), and write the failing tests **before** dispatching. Pass
+builder the spec path and the test path only.
 
-In Lane 2, write the failing tests before dispatching. In Lane 1, name them in the
-charter and let builder write them.
+Either way the `Files` list is what makes builder's scope enforceable — a PreToolUse
+guard already blocks builder from tests, specs, and records, but only this list bounds
+which production files it may touch.
 
 ## Step 3 — build (sonnet)
 
-Dispatch `builder` with **only**: the task id, the spec path, the test path. Do not
-paste the spec contents — builder reads the file. Do not add advice or context; anything
-extra you say competes with the spec.
+Dispatch `builder` with **only** its Step 2 input: the Lane 1 brief, or the Lane 2 spec
+path plus test path. Never paste a spec file's contents — builder reads the file. Do not
+add advice or context; anything extra you say competes with the spec.
 
 Independent tasks go out as parallel `builder` calls in one turn, not sequential rounds.
 
 ## Step 4 — review (sonnet)
 
-Dispatch `reviewer` with the spec path and builder's reported file list. It returns
-`PASS`/`FAIL` and findings, never fixes.
+**The gate for ordinary work is the test passing**, not a second opinion — it is
+verifiable, costs nothing extra, and builder is required to report the command and its
+output. Take that as the pass and go to step 6.
 
-Skip review only in Lane 0. Never skip it when the change touches money, positions,
-fees, prices, auth/RLS, persistence, schema, API contracts, background jobs, or a
-user-visible calculation.
+**Dispatch `reviewer` when the change touches money, positions, fees, prices, auth/RLS,
+persistence, schema, API contracts, background jobs, or a user-visible calculation** —
+there a green test only proves the test agreed with the bug. Pass it the brief or spec
+path and builder's reported file list; it returns `PASS`/`FAIL` and findings, never
+fixes. At ~$0.1–0.3 a run it is cheap insurance exactly where being wrong is expensive.
 
 ## Step 5 — adjudicate (main session only)
 
@@ -127,6 +151,8 @@ python3 .claude/hooks/routing_audit.py          # this session
 python3 .claude/hooks/routing_audit.py --all    # every session in this project
 ```
 
-It reports output tokens per model, split main thread vs sidechain, from the transcripts
-Claude Code already writes. One model and zero sidechain traffic means nothing was
-routed, whatever the plan said. That report is the only proof that counts.
+It reports **cost** per component, per model, and per role — main thread and sidechain —
+from the transcripts Claude Code already writes, plus the main session's average context
+and per-turn cost. Read the per-role split, not the token columns: one model and zero
+sidechain traffic means nothing was routed, whatever the plan said. That report is the
+only proof that counts.

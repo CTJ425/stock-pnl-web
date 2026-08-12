@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
 """PreToolUse guard that makes role boundaries real instead of prompt etiquette.
 
-Registered in .claude/settings.json for Write|Edit|NotebookEdit. Every hook payload
+Three jobs, selected by tool_name.
+
+On Read it polices *what the main session pulls into context*. Replaying context is
+69.6% of this project's measured spend ($387 of $556 on the main session across 30
+sessions, at an average 191k tokens per turn), and a large file read once is re-billed
+on every remaining turn of the session. Bounded reads (`limit` set) are always allowed.
+
+On Agent|Task it polices *who gets dispatched*. The built-in discovery agents inherit
+the caller's model, so `Explore` does scout's job at Opus prices — measured at $1.88
+per run against $0.12 for scout.
+
+On Write|Edit|NotebookEdit it polices *what a role may write*. Every hook payload
 carries `agent_type`, so one script can police both the main session and each
 subagent:
 
@@ -19,6 +30,7 @@ agent that may run in the repo.
 Env overrides:
   ROUTING_GUARD=off   disable entirely
   ROUTING_MAIN=deny|ask|off   main-session severity (default ask)
+  ROUTING_READ_KB=<n> main-session large-read threshold in KB (default 32; 0 disables)
 """
 import json
 import os
@@ -31,6 +43,26 @@ RECORDS = {
     "BUG_FIX.md", "FIXED_BUG.md", "CHANGELOG.md",
 }
 TEST_RE = re.compile(r"\.(test|spec)\.[tj]sx?$")
+
+# A file this big read unbounded costs more than the read: it is re-billed as cache
+# read on every later turn. Sized off sources/src (140 files, median 4.9KB, p90 18KB)
+# so ordinary code stays readable while docs/agent/'s six archives do not.
+READ_KB_DEFAULT = 32
+READ_REASON = (
+    "Reading {name} ({kb}KB) into the main session's context re-bills it on every "
+    "remaining turn — context replay is ~70% of this project's measured cost. Two cheaper "
+    "paths: dispatch `scout` with a specific question, or re-issue this Read with "
+    "`offset`/`limit` for just the part you need."
+)
+
+# Built-in agents that inherit the caller's model, i.e. do cheap work at Opus prices.
+DISCOVERY_AGENTS = {"explore", "general-purpose"}
+DISCOVERY_REASON = (
+    "`{name}` inherits this session's model, so it maps the codebase at the highest rate "
+    "in the system. `scout` is the same job on haiku with a 40-line output ceiling: "
+    "dispatch it with a specific question instead. Confirm only if you need a tool scout "
+    "lacks (Write/Edit/Task)."
+)
 
 # role -> {path class: decision}. "*" applies to every class.
 RULES = {
@@ -109,11 +141,40 @@ def main() -> None:
 
     role = (payload.get("agent_type") or "").strip()
     role = "main" if role.lower() in MAIN_ALIASES else role
+    tool_input = payload.get("tool_input") or {}
+
+    if payload.get("tool_name") in ("Agent", "Task"):
+        spawned = (tool_input.get("subagent_type") or "").strip()
+        if spawned.lower() in DISCOVERY_AGENTS:
+            respond("ask", f"[routing/{role}] " + DISCOVERY_REASON.format(name=spawned))
+        sys.exit(0)
+
+    if payload.get("tool_name") == "Read":
+        # A subagent reading widely is the system working as designed, and a bounded
+        # read is the retrieval pattern this guard is trying to encourage.
+        if role != "main" or tool_input.get("limit"):
+            sys.exit(0)
+        try:
+            limit_kb = int(os.environ.get("ROUTING_READ_KB", READ_KB_DEFAULT))
+        except ValueError:
+            limit_kb = READ_KB_DEFAULT
+        target = tool_input.get("file_path")
+        if limit_kb <= 0 or not target:
+            sys.exit(0)
+        try:
+            size = os.path.getsize(target)
+        except OSError:
+            sys.exit(0)  # unreadable or missing: not this guard's problem
+        if size > limit_kb * 1024:
+            respond("ask", "[routing/main] " + READ_REASON.format(
+                name=os.path.basename(target), kb=size // 1024))
+        sys.exit(0)
+
     rules = RULES.get(role)
     if not rules:
         sys.exit(0)
 
-    target = (payload.get("tool_input") or {}).get("file_path")
+    target = tool_input.get("file_path")
     if not target:
         sys.exit(0)
 

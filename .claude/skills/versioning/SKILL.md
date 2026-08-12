@@ -57,6 +57,29 @@ Examples: target `0.6.48` → first change `0.6.48-dev.1`, second `0.6.48-dev.2`
 3. Finalize `docs/agent/CHANGELOG.md` under that official heading.
 4. Merge to `main`, push (Pages deploys).
 5. **Sync branches**: `git push origin main:dev` (or merge main→dev) so **dev and main show the same `0.6.48`**.
-6. Next feature on `dev`: first versioned change → **`0.6.49-dev.1`**.
+6. **Publish a GitHub Release** for the tag, using that version's `CHANGELOG.md` section as the body
+   (see § GitHub Releases below).
+7. Next feature on `dev`: first versioned change → **`0.6.49-dev.1`**.
+
+---
+
+## GitHub Releases
+
+`docs/agent/CHANGELOG.md` stays the **source of truth** — it is not a hot file (nothing reads it at
+session start), so nothing is moved out of it. The Release is a convenience mirror that makes
+`gh release view 0.7.13` a precise, cheap lookup instead of a grep through 48k characters.
+
+```bash
+gh release create 0.7.13 --title 0.7.13 --notes-file <that version's CHANGELOG section>
+```
+
+- No `v` prefix on the tag — it matches the version string exactly (CLAUDE.md § Versioning).
+- ⚠️ **The repo is public and a Release body has no secret-scanning gate.** Paste only the
+  CHANGELOG section, which is already committed and therefore already passed push protection.
+  Never hand-add logs, `cron.job.command` text, or Edge output to a release body.
+- Only official `x.x.x` releases get one. `-dev.N` never does.
+- **Starts at `0.7.14`.** Versions up to and including `0.7.13` are deliberately **not** backfilled
+  (user decision, 2026-08-12) — `CHANGELOG.md` already covers them and backfilling would publish
+  ~40 releases at once on a public repo. Do not "complete" the history.
 
 Purpose: official and pre-release numbers stay aligned; there is never a gap where main is `0.3.6` while dev already claims `0.3.8` without a release, and dev does not sit on a bare release number mid-work.

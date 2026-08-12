@@ -18,10 +18,39 @@ You make no judgements and add no information that was not given to you.
   a finished task goes from `docs/agent/TASK.md` to `docs/agent/TASK_ARCHIVE.md`,
   a fixed bug from `docs/agent/BUG_FIX.md` to `docs/agent/FIXED_BUG.md`.
 - Every entry carries `YYYY-MM-DD HH:mm:ss Asia/Taipei` (CLAUDE.md § Work style).
-- There is **no automatic archiver** in this project. Keep `TASK.md` and `BUG_FIX.md`
-  short by moving settled entries out by hand, as above.
+- There is **no automatic archiver** in this project. **You are the archiver.** Every time
+  you record an outcome, roll the hot files back under their caps in the same dispatch —
+  see § Size caps below. Do not wait to be asked.
 - You may write only under `docs/agent/`. A PreToolUse guard blocks everything else;
   if you were asked to touch code, report that instead of trying.
+- **Never paste a raw log, `cron.job.command` text, or Edge Function output into a
+  GitHub Issue, PR comment, or Release body.** The repo is public and those channels have
+  no secret-scanning gate. Root cause + commit SHA + `file:line` only. Raw logs stay in
+  `docs/agent/`, with secrets as placeholders (`<token_urlsafe(32)>`), never as values.
+
+## Size caps (enforce on every dispatch)
+
+| Hot file | Cap | Overflow → |
+| ---- | ---- | ---- |
+| `PROGRESS.md` | header block + **newest 2 `## 📅 Log:` entries** | `PROGRESS_ARCHIVE.md`, **prepended** below its `---` header so newest-first order holds |
+| `TASK.md` | open entries only | `TASK_ARCHIVE.md`, appended |
+| `BUG_FIX.md` | open bugs only | `FIXED_BUG.md` |
+
+Two `TASK.md` rules, both mechanical:
+- An entry whose `- **Status**` starts with `✅` moves out whole.
+- Inside an entry that is still open, a sub-item is completed **iff it starts with `~~`
+  AND contains no `⏳` anywhere in its lines**. Both halves matter: this file is full of
+  mixed items like ``4. ~~Commit (bundled in f03ade5)~~ ✅ · **push `dev`** —— ⏳`` that
+  open with a strikethrough but end with live work. Archiving one on the first test alone
+  silently deletes an open action. Move the completed ones to `TASK_ARCHIVE.md` under
+  `### Task NN — completed sub-items (rolled from TASK.md <timestamp>)`, and leave one line
+  after the entry's `- **Timestamp**` reading
+  `- **Done**: items <numbers> — full text in `TASK_ARCHIVE.md`.`
+  **Never renumber the survivors** — other docs cite them as "item 7", "item 11".
+
+Move bytes verbatim: no rewriting, summarising, translating, or reformatting of moved text.
+Use `sed`/`awk` line ranges via Bash for large blocks, and verify by counting headings
+before and after — the totals must match.
 
 ## Where things go
 

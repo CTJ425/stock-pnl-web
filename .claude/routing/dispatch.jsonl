@@ -1,9 +1,0 @@
-{"ts": "2026-08-11T21:01:22+0800", "event": "SubagentStart", "agent_type": "scout", "agent_id": "aea2eda0d4450ebd7", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:02:02+0800", "event": "SubagentStop", "agent_type": "scout", "agent_id": "aea2eda0d4450ebd7", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:04:29+0800", "event": "SubagentStart", "agent_type": "scribe", "agent_id": "a29e0b9280b6d74b9", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:04:44+0800", "event": "SubagentStop", "agent_type": "scribe", "agent_id": "a29e0b9280b6d74b9", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:05:02+0800", "event": "SubagentStart", "agent_type": "builder", "agent_id": "a6a83401526aa8465", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:05:09+0800", "event": "SubagentStop", "agent_type": "builder", "agent_id": "a6a83401526aa8465", "effort": "medium", "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:06:13+0800", "event": "SubagentStop", "agent_type": "", "agent_id": "a0a789ca8ebff3c1e", "effort": "high", "session": "1eb383de-183c-4ec3-aad3-68b8b408dd8c"}
-{"ts": "2026-08-11T21:06:39+0800", "event": "SubagentStart", "agent_type": "scribe", "agent_id": "a572a55fa77a659d5", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}
-{"ts": "2026-08-11T21:07:41+0800", "event": "SubagentStop", "agent_type": "scribe", "agent_id": "a572a55fa77a659d5", "effort": null, "session": "875a7106-2db3-4521-8423-9b14a51cd53e"}

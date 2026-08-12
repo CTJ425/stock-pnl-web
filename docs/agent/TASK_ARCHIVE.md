@@ -1642,3 +1642,140 @@ lifted out into Task 76 before archiving, so nothing pending was buried here.
 - **`Charts/SparkCell.tsx`**: The mini trend line is extracted as a shared component, used by both tables;
   streak determination is kept separate for each (sign vs ascending/descending are two different things).
 
+### Task 86: Model routing made enforceable (replaced the `mad` plugin)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-08-11 21:10:00 Asia/Taipei
+
+Uninstalled `mad` Claude Code plugin. Added routing guard/observe/audit hooks, routing skill, and enforcement rules in CLAUDE.md. Updated agent files. All verification passed; unknown leftover plugin cache noted.
+
+### Task 87 — completed sub-items (rolled from TASK.md 2026-08-12 13:15:22 Asia/Taipei)
+
+1. ~~**BUG-026**: `decideSkip` gained a `borrowLanded` term (`pollPlan.ts`), computed via `borrowHit`
+   against `borrow_data_date` carried across rounds by `readLastRun`; `borrowDataDate` seeded from the
+   previous row instead of `null` so a skipped round cannot erase the date that justified the skip~~ ✅
+   — see `FIXED_BUG.md`
+2. ~~**BUG-027**: `readFundamentalSnapshot` reads all holdings instead of `.slice(0, 20)` of an
+   unordered query; `MAX_FUNDAMENTAL_SAMPLE` deleted~~ ✅ — see `FIXED_BUG.md`; **resolves item 14
+   below**
+3. ~~Diagnosability: `summariseFollowUp` for `generate-chips` now emits `跳過（reason）` /
+   `無變動` / `產出 N 檔` instead of collapsing every outcome to one number — this is what let
+   BUG-026 hide behind seven identical `產出 0 檔` notes~~ ✅
+4. ~~`borrow` probe window `sourceProbePlan.ts`: 15:00–22:45 → **21:00–23:30** — measured flip is
+   22:15 on both environments; front edge keeps 75 min margin (one day of samples), back edge
+   *extended* past the old 22:45 close because the last fixed shift ran 21:45, before the flip~~ ✅ —
+   **resolves the `borrow` half of item 15 below**. `t86` / `margin` / `bwibbu` / MOPS windows
+   deliberately left untouched — see plan Part 3 (bwibbu's 08-11 ticks came from the superseded
+   `BWIBBU_ALL` path; the other three are cheap and one day is not enough to narrow them)
+5. ~~Tests: `pollPlan.test.ts` two new `decideSkip` cases (`borrowLanded:false`/`true`);
+   `sourceProbePlan.test.ts` window-boundary cases at 20:55/21:00/22:15/23:00/23:30/23:35~~ ✅ —
+   992/992 vitest, `typecheck:edge` 0 errors, `tsc -b` clean, `oxlint` clean
+6. ~~Cron cleanup on **DEV**: `stock-report-nightly` (generate-chips) and `market-daily`
+   (sync-market) `cron.unschedule`d — neither was a deliberate part of the probe-triggers-fetch
+   design (0.7.3 disabled them; 0.7.7 restored them in an emergency because that era's probe never
+   triggered a fetch; 0.7.8 gave the probe that ability and they were never withdrawn). Measured
+   2026-08-11: `stock-report-nightly` ran 21:30/21:45, *before* the 22:15 borrow flip it was meant to
+   back up, and both passes were skipped by the same gate as the probe rounds — the "outer retry"
+   did not hold up. `public.admin_schedule_status()` re-checked afterward: 5 rows, `targetRef`
+   intact~~ ✅ — `schema.sql` §8d updated to drop the "outer retry" rationale and record why each of
+   the remaining five crons is kept
+8. ~~**DEV Edge deploy** of the changed function files (`pollPlan.ts`, `sourceProbePlan.ts`,
+   `index.ts`)~~ ✅ 2026-08-12 10:50 — rsync into `volumes/functions/stock-report/`, `diff -rq` clean
+   against the working tree, `docker compose up -d --force-recreate functions`, container healthy.
+   Smoke: anon 401/401/400; authenticated `probe` 200 with `sources: []` at 10:45 (correct — nothing
+   in-window at that hour); `generate-chips` ×2 giving `runs_today` 1 → 2 and `regenerated` true then
+   false. **Tonight's read will therefore be against the new bundle, not the old one.**
+10. ~~**PROD Edge deploy**~~ ✅ 2026-08-12 12:02 — `stock-report` v46, `verify_jwt=false`,
+    `ezbr_sha256=000ea3b281868aa9…1b878ded`; anonymous smoke `probe=401`, `admin-status=401`,
+    unknown action `400`. Verified by checksum, not version number.
+12. ~~**Make macro's probe decision visible** so the panel stops implying it is blind-scheduled~~ ✅
+    0.7.13-dev.2 — `admin-status` returns `probeExperiment.macroScan` (`decideMacroScan` evaluated
+    against the already-downloaded `macro/us.json`); the panel renders it as its own block, not a
+    seventh row, because this source has no 5-minute ticks to claim. Read-only: the trigger did not
+    move. Verified against DEV's live file: `scan=false, reason=satisfied, scansToday=1/16`.
+    Also fixed the panel sentence 「固定盤後班表則作為最後的重試」, which step 6 had just made false.
+
+### Task 85 — completed sub-items (rolled from TASK.md 2026-08-12 13:15:22 Asia/Taipei)
+
+1. ~~`PROBE_FOLLOW_UP` / `followUpsFor`; 45s-budgeted follow-up loop in `handleProbe`; note write-back~~ ✅
+   (was already in the tree, uncommitted)
+2. ~~Close the gap the doc had already promised: retire a source only on **hit + fetch OK**~~ ✅
+   `source_probe_tick.follow_up_ok` + `readDoneSourcesToday`; `pendingSources(planned, alreadyDone)`
+3. ~~Admin paragraph 「探針本身不會觸發抓取」 is now false —— rewritten + test updated~~ ✅
+4. ~~`SPEC.md` amendment (7 sources / hit retires / hit fetches / 0.6.1 gate no longer provable)~~ ✅
+5. ~~Version 0.7.8-dev.1 + CHANGELOG~~ ✅ · ~~964/964 vitest, tsc, oxlint~~ ✅
+6. ~~**DDL on DEV** `ALTER TABLE source_probe_tick ADD COLUMN IF NOT EXISTS follow_up_ok BOOLEAN;`~~ ✅ 18:33
+   **must land before the Edge bundle**, else the probe degrades to re-probe + re-fetch every 5 min
+7. ~~Commit + push `dev` (`9d69b58`)~~ ✅ · ~~DEV volume-copy + functions recreate~~ ✅ 18:34 · ~~release
+   0.7.8 + merge `main`~~ ✅
+8. ~~Landing check `sourceLanded` + `data_landed` column (0.7.9); DEV rename + redeploy~~ ✅ 18:52
+10. ~~**PROD** DDL + Edge~~ ✅ 2026-08-11 19:1x —— `stock-report` **v41 → v42**, sha
+    `9194ae6f…` → `568a98da…`, `verify_jwt` false, anon 401/401/400. PROD went 0.7.4 → 0.7.9.
+11. ~~**PROD crons all `active = false`** since the 0.7.3 experiment (0.7.7 only did DEV)~~ ✅ restored
+    2026-08-11 19:2x, `market-daily` retuned to `15,30,45 7 * * 1-5`. CRON_SECRET preserved
+    (`alter_job`, verified `has_secret` on all five). Both envs now on 0.7.9 with matching schedules.
+12. ~~Make the hit path testable without waiting for the market (0.7.10 `probeRound.ts`, 9 cases,
+    mutation-checked)~~ ✅ —— **E2E was the wrong layer**: Playwright drives a browser and pg_cron calls
+    the Edge Function directly, so no browser test can reach `handleProbe`. See PROGRESS 0.7.10.
+13. ~~0.7.11: BUG-024, skip requires the data to be on the screen, the two missing crons, edge
+    typecheck~~ ✅ —— mechanism observed end to end on DEV; PROD on v44. See PROGRESS 0.7.11.
+14. ~~`mops_profit` on PROD答 `landed=false`，DEV 同版答 `true` —— 尚未查明~~ ✅ **resolved as BUG-027**
+    (2026-08-12). Both were on v45, so the rule was identical; the difference was sampling.
+    `readFundamentalSnapshot`'s `.slice(0, 20)` of an unordered `batchTwTickers()` query decided the
+    verdict — candidate (a) below was the correct one. PROD holds 26 distinct TW tickers so the
+    20-ticker cap could bite; DEV holds 5 so it structurally never could. The 2026-08-11 21:00 row
+    order itself was never captured, so this is strongly supported rather than replayed — but the fix
+    (read all holdings, `index.ts`) removes the failure mode either way. See `FIXED_BUG.md` BUG-027.
+    <details><summary>original known facts (2026-08-11 21:05), kept for the record</summary>
+
+    Known facts (2026-08-11 21:05, read from the public bucket exactly as the browser does):
+    - PROD holdings `2303` / `2337` / `2344` **do** carry `2026-Q2`, and they sit inside the first 20
+      of the ticker list —— so `readFundamentalSnapshot`'s `max` should have seen Q2 and landed.
+    - `2330` / `2317` are still on `2026-Q1`; `2312` / `2382` have **no fundamental file at all**.
+    - PROD fundamentals are generally days behind (`valuation` 2026-08-06/07) —— expected, since
+      `generate-market-data` had no cron there until tonight.
+    Two candidate explanations, not yet distinguished: (a) `batchTwTickers()` orders differently from
+    the alphabetical list checked by hand, so the 20-ticker sample missed every Q2 holding;
+    (b) `readFundamentalSnapshot` threw (20 storage reads in one round) and returned null, which the
+    rule correctly treats as 「沒有證據」. **The failure direction is safe either way** —— it refuses to
+    retire and retries —— and MOPS only has four slots a day, so the cost is bounded.
+    </details>
+
+### Task 88: Docs size discipline + GitHub documentation-strategy verdict
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 13:21:14 Asia/Taipei
+
+Evaluated `docs/plan/github_documentation_strategy.md` (move `docs/agent/` history to GitHub
+Issues + Releases). Verdict: **Issues rejected, Releases adopted**; full reasoning in that file's §5.
+
+- Token premise failed: the archives are never read at session start, so the 413k characters the
+  proposal targeted already cost nothing. The real cost was `PROGRESS.md`, where 82% of a hot file
+  was cold data because "read top only" had no mechanical boundary and no owner.
+- Retrieval would have regressed: `gh search issues` cannot serve the cross-file substring queries
+  (`grep -rn`, `git log -S`) these docs exist for, and `supabase/schema.sql` would not have moved.
+- Security: repo is PUBLIC and `secret_scanning_push_protection` is enabled, but Issue / PR /
+  Release bodies are not covered by that gate — and the proposal specified raw log excerpts, which
+  here carry `x-cron-secret` and Supabase keys.
+- Result: `PROGRESS.md` 69,440 → 16,147 chars (−77%); `TASK.md` 26,262 → 18,399 (−30%); hot files
+  total 101,958 → 40,802 (−60%). No log entries lost. Archives stay local.
+- Rules recorded in `CLAUDE.md` (§ Size discipline, § This repo is public),
+  `.claude/agents/scribe.md` (§ Size caps), `.claude/skills/versioning/SKILL.md`
+  (§ GitHub Releases — official `x.x.x` only, starts at 0.7.14, no backfill), and
+  `docs/plan/github_documentation_strategy.md` §5.
+- No `sources/` code changed, no version bump, no deploy, no GitHub Issue or Release created.
+
+### Task 89: Redirect built-in discovery agents to `scout`, fix routing telemetry tracking
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 13:40:45 Asia/Taipei
+
+Implemented routing policy to block main session from spawning expensive built-in discovery agents (`Explore` and `general-purpose`), routing them to `scout` instead. Added PreToolUse guard in `.claude/hooks/routing_guard.py`, widened `.claude/settings.json` matcher, expanded test suite to 27 cases (was 21), and updated `CLAUDE.md` / `.claude/skills/route/SKILL.md` with measured motivation (112k tokens spent by built-ins on scout's job vs 5.9k by scout itself). Fixed `.gitignore` conflict: `dispatch.jsonl` and one `state/*.json` already ignored but tracked; both untracked with `git rm --cached`. Known caveat: settings matcher takes effect only in new sessions, guard unverified in live runtime.
+
+
+### Task 90: Re-base the routing loop on measured cost instead of token count
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 14:02:05 Asia/Taipei
+
+Rebalanced routing system from token-denominated optimizations to cost-based dispatch decisions. Measured data (30 sessions via `routing_audit.py --all`): cache reads are 98.1% of token count and 69.6% of spend, while output is 0.5% of tokens but 16% of spend — so a token-denominated rule optimizes the cheap half. Old rule ("under 20 minutes of human work, stay inline") optimized the wrong metric and missed major break-even crossovers. New principle: dispatch by context footprint, not task size. Economics: builder costs $0.096/dispatch, scout $0.121, scribe $0.270, Explore $1.879. Scout replaces 2 main-session turns (break-even), scribe replaces 4 (far below old 20-minute threshold). Main session averaged $0.131/turn over 4,435 turns. Files changed: `.claude/hooks/routing_guard.py` (third job on PreToolUse for Read over 32KB with ask + reason), `.claude/settings.json` (matcher widened to include Read), `.claude/hooks/test_hooks.sh` (new readcheck() helper, 36 assertions), `.claude/hooks/routing_audit.py` (cost reporting with Prices table, cache multipliers, component/model/role breakdown), `.claude/skills/route/SKILL.md` (Step 0 economics replaced, Lane 0 criterion changed, Step 2 split by lane, Step 4 test gate updated), `.claude/agents/builder.md` (accepts brief or spec, done = Verify passes), `CLAUDE.md` (replaced stale overhead bullet with cost break-even and context-footprint principle). Verification: `test_hooks.sh` 36/36 passed; `routing_audit.py --all` reproduces cost structure (cache_read 67.9%, output 16.2%). Caveats: (1) settings.json matcher takes effect in new sessions only, Read guard unverified in live runtime; (2) Agent/Task dispatch guard from Task 89 still unverified; (3) no Lane 1 task run end-to-end through brief → builder → test → scribe path, builder still never done real work.

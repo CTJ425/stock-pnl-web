@@ -29,6 +29,51 @@ print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Edit","agent_type"
   fi
 }
 
+# readcheck <label> <expected> <agent_type> <abs path> <limit|-> [env assignments...]
+readcheck() {
+  local label="$1" want="$2" agent="$3" path="$4" limit="$5"; shift 5
+  local payload out got
+  payload=$(python3 -c '
+import json,sys
+ti = {"file_path": sys.argv[2]}
+if sys.argv[3] != "-":
+    ti["limit"] = int(sys.argv[3])
+print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Read","agent_type":sys.argv[1],
+                  "tool_input":ti}))' "$agent" "$path" "$limit")
+  out=$(printf '%s' "$payload" | env "$@" python3 "$GUARD")
+  if [[ -z "$out" ]]; then
+    got="allow"
+  else
+    got=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["permissionDecision"])')
+  fi
+  if [[ "$got" == "$want" ]]; then
+    pass=$((pass+1)); printf '  ok   %-46s %s\n' "$label" "$got"
+  else
+    fail=$((fail+1)); printf '  FAIL %-46s want=%s got=%s\n' "$label" "$want" "$got"
+  fi
+}
+
+# dispatch <label> <expected> <agent_type> <subagent_type> [env assignments...]
+dispatch() {
+  local label="$1" want="$2" agent="$3" spawned="$4"; shift 4
+  local payload out got
+  payload=$(python3 -c '
+import json,sys
+print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Agent","agent_type":sys.argv[1],
+                  "tool_input":{"subagent_type":sys.argv[2],"prompt":"map the report pipeline"}}))' "$agent" "$spawned")
+  out=$(printf '%s' "$payload" | env "$@" python3 "$GUARD")
+  if [[ -z "$out" ]]; then
+    got="allow"
+  else
+    got=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["permissionDecision"])')
+  fi
+  if [[ "$got" == "$want" ]]; then
+    pass=$((pass+1)); printf '  ok   %-46s %s\n' "$label" "$got"
+  else
+    fail=$((fail+1)); printf '  FAIL %-46s want=%s got=%s\n' "$label" "$want" "$got"
+  fi
+}
+
 echo "routing_guard.py"
 expect "main edits production code"        ask   ""          sources/src/App.tsx
 expect "main edits a tracking record"      ask   ""          docs/agent/PROGRESS.md
@@ -48,6 +93,27 @@ expect "unpoliced agent is left alone"     allow general-purpose sources/src/App
 expect "ROUTING_MAIN=off releases main"    allow ""          sources/src/App.tsx  ROUTING_MAIN=off
 expect "ROUTING_MAIN=deny hardens main"    deny  ""          sources/src/App.tsx  ROUTING_MAIN=deny
 expect "ROUTING_GUARD=off disables all"    allow scout       sources/src/App.tsx  ROUTING_GUARD=off
+
+dispatch "main dispatches Explore"         ask   ""          Explore
+dispatch "main dispatches general-purpose" ask   ""          general-purpose
+dispatch "architect dispatches Explore"    ask   architect   Explore
+dispatch "main dispatches scout"           allow ""          scout
+dispatch "main dispatches builder"         allow ""          builder
+dispatch "ROUTING_GUARD=off allows Explore" allow ""         Explore  ROUTING_GUARD=off
+
+fx=$(mktemp -d)
+head -c 40000 /dev/zero | tr '\0' 'x' > "$fx/big.md"
+head -c  1000 /dev/zero | tr '\0' 'x' > "$fx/small.md"
+readcheck "main reads a 39KB file"          ask   ""      "$fx/big.md"   -
+readcheck "main reads it bounded by limit"  allow ""      "$fx/big.md"   40
+readcheck "main reads a small file"         allow ""      "$fx/small.md" -
+readcheck "scout reads a 39KB file"         allow scout   "$fx/big.md"   -
+readcheck "builder reads a 39KB file"       allow builder "$fx/big.md"   -
+readcheck "main reads a missing file"       allow ""      "$fx/gone.md"  -
+readcheck "ROUTING_READ_KB=0 disables"      allow ""      "$fx/big.md"   -  ROUTING_READ_KB=0
+readcheck "ROUTING_READ_KB=100 raises bar"  allow ""      "$fx/big.md"   -  ROUTING_READ_KB=100
+readcheck "ROUTING_GUARD=off allows read"   allow ""      "$fx/big.md"   -  ROUTING_GUARD=off
+rm -rf "$fx"
 
 echo "routing_observe.py"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
