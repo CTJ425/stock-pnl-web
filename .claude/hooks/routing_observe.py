@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Makes routing observable, so "we delegate" is a measurable claim and not a belief.
 
-Two jobs, selected by hook_event_name:
+Three jobs, selected by hook_event_name:
+
+  SessionStart                  -> put the routing rule in context. `route` is a skill,
+      so it only runs if the main session decides to load it, and nothing else prompts
+      that. Prose in CLAUDE.md did not work: `architect` and `reviewer` never ran across
+      30 sessions. A few hundred tokens once per session is the cheapest fix available.
 
   SubagentStart / SubagentStop  -> append one line to .claude/routing/dispatch.jsonl.
       This is the audit trail: which roles actually ran, at what effort, when.
@@ -17,6 +22,7 @@ Env overrides:
 """
 import json
 import os
+import re
 import sys
 import time
 
@@ -44,6 +50,59 @@ def log_dispatch(payload, d: str) -> None:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+BRIEF = """[routing] This project delegates. Before acting on a feature, a bug, or a
+`docs/agent/TASK.md` item, load the `route` skill and state the lane in one line.
+
+- **Cost here is context replay, not output.** Measured over 30 sessions: cache read is
+  69.6% of spend, output 16%. One main-session turn costs ~$0.13 at the measured 185k
+  average context; `scout` $0.12, `builder` $0.10, `scribe` $0.27 per dispatch. They break
+  even at 2-4 replaced turns. **Route by context footprint, not task size** — bulk content
+  goes out even when the task is trivial.
+- **Roster.** This session plans, writes specs, and adjudicates. `scout` (haiku) reads and
+  compresses; `builder` (sonnet) implements; `reviewer` (sonnet) checks risk work;
+  `scribe` (haiku) records. Delegation is pre-authorized — dispatch without asking.
+- **Three PreToolUse guards will ask** before this session edits `sources/` or a
+  `docs/agent/` record, dispatches `Explore`/`general-purpose`, or issues an unbounded
+  Read over 32KB. An `ask` is policy, not an obstacle: take the cheaper path it names.
+- **Open now:** {tasks} task(s) in `TASK.md`, {bugs} entr(y/ies) in `BUG_FIX.md`."""
+
+
+def open_counts(payload) -> tuple:
+    """-> (open TASK.md entries, BUG_FIX.md entries); '?' when unreadable."""
+    project = os.path.abspath(
+        os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd())
+
+    def read(name):
+        try:
+            with open(os.path.join(project, "docs", "agent", name), encoding="utf-8") as fh:
+                return fh.read()
+        except OSError:
+            return None
+
+    tasks = read("TASK.md")
+    if tasks is None:
+        n_tasks = "?"
+    else:
+        n_tasks = 0
+        for block in re.split(r"^### ", tasks, flags=re.M)[1:]:
+            status = re.search(r"^- \*\*Status\*\*:\s*(.*)$", block, re.M)
+            if not status or not status.group(1).lstrip().startswith("✅"):
+                n_tasks += 1
+
+    bugs = read("BUG_FIX.md")
+    # BUG_FIX.md holds only open bugs by construction — fixed ones move to FIXED_BUG.md.
+    n_bugs = "?" if bugs is None else len(re.findall(r"^### ", bugs, flags=re.M))
+    return n_tasks, n_bugs
+
+
+def emit_brief(payload) -> None:
+    tasks, bugs = open_counts(payload)
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "SessionStart",
+        "additionalContext": BRIEF.format(tasks=tasks, bugs=bugs),
+    }}))
+
+
 def count_discovery(payload, d: str) -> int:
     path = os.path.join(d, "state", f"{payload.get('session_id', 'unknown')}.json")
     try:
@@ -66,6 +125,11 @@ def main() -> None:
         sys.exit(0)
 
     event = payload.get("hook_event_name")
+
+    if event == "SessionStart":
+        emit_brief(payload)
+        sys.exit(0)
+
     d = routing_dir(payload)
 
     if event in ("SubagentStart", "SubagentStop"):

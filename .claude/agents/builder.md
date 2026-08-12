@@ -21,7 +21,7 @@ Concretely:
 
 - Modify **only** the files in its `Files` list. If the task cannot be completed without
   touching another file, **stop and report the blocker**. Do not touch it.
-- Do not change any test file. Tests are the Architect's output. If a test looks
+- Do not change any test file. Tests come with the spec. If a test looks
   wrong, stop and report it as a spec conflict. A PreToolUse guard blocks your writes
   to test files, specs, and `docs/`, so a blocked write means you are out of role —
   report it, do not route around it.
@@ -62,4 +62,4 @@ TESTS: <n passed, n failed> — <command you ran>
 BLOCKERS: <empty if none; otherwise the spec conflict, stated in one paragraph>
 ```
 
-Do not summarise your code. Do not paste diffs. The Architect will read the files.
+Do not summarise your code. Do not paste diffs. The caller will read the files.

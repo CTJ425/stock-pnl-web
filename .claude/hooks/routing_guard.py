@@ -19,7 +19,6 @@ subagent:
   main session  -> writing production code or a tracking record is the exact leak
                    that turns this project into a single Opus session. Escalate to
                    the user (ask) instead of letting it happen silently.
-  architect     -> specs and tests only; never production code.
   builder       -> production code only; tests and docs belong to other roles.
   scribe        -> docs/agent/ only.
   scout         -> read-only.
@@ -67,7 +66,6 @@ DISCOVERY_REASON = (
 # role -> {path class: decision}. "*" applies to every class.
 RULES = {
     "main": {"prod": "@main", "record": "@main"},
-    "architect": {"prod": "deny"},
     "builder": {"test": "deny", "doc": "deny", "record": "deny", "spec": "deny"},
     "scribe": {"prod": "deny", "test": "deny", "spec": "deny", "config": "deny"},
     "scout": {"*": "deny"},
@@ -85,13 +83,9 @@ REASONS = {
         "most expensive rate in the system: dispatch `scribe` with the facts, or confirm "
         "this edit is too small to hand off."
     ),
-    ("architect", "prod"): (
-        "Architect writes specs and tests, never production code. Encode the requirement "
-        "as a failing test and let builder implement it."
-    ),
     ("builder", "test"): (
-        "Builder may not change test files. Tests are the architect's output; a test that "
-        "looks wrong is a spec conflict to report, not to edit."
+        "Builder may not change test files. Tests come with the spec; a test that looks "
+        "wrong is a spec conflict to report, not to edit."
     ),
     ("builder", "doc"): "Builder writes production code only. Records belong to scribe.",
     ("builder", "record"): "Builder writes production code only. Records belong to scribe.",
