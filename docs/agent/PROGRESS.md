@@ -126,11 +126,31 @@ justification (written into `schema.sql` §8d) failed measurement: `stock-report
 same `decideSkip` gate as the probe rounds and were skipped the same way — a backstop sharing the
 broken code path and differing only by clock is not an independent safety net.
 
-`macro-daily`/`fx-daily` stay permanently: `PROBE_FOLLOW_UP` maps the seven sources onto only four
-actions (`sync-market`/`generate-chips`/`generate-market-data`/`generate-history`) — there is no probe
-source for macro or FX at all, so these two crons are the only trigger that data has. Whether to build
-probes for them or accept them as legitimately schedule-driven (neither has a discrete publish moment
-to detect) is recorded as an open question, not decided here.
+`macro-daily`/`fx-daily` stay permanently — and the reason is better than 「沒有探針所以刪不掉」,
+which is how this was first written. Reading the two actions settles it, and they settle it
+*differently*:
+
+- **`macro-daily` is already a probe.** `macroCalendar.decideMacroScan` (`macroCalendar.ts:322`)
+  says so in its own docstring —— 「Follow the form of `pollPlan.decideSkip`: make "should you send a
+  request or not" a testable pure function」 —— and implements exactly the probe's semantics against
+  the official BLS/BEA release calendar: 「within the release window and not yet received → scan」 is
+  the hit rule, 「once caught, don't catch」 is retire-on-landing (the same rule as `pendingSources`),
+  and `MAX_SCANS_PER_DAY = 16` is the cap. A round that decides not to ask returns `reason:'skipped'`
+  with **zero external requests**. So the `*/30` cron is not a blind shift —— it is this probe's
+  tick, exactly as `*/5` is `source-probe`'s. Deleting it would delete the probe, not a duplicate
+  trigger. The design goal 「命中才觸發」 is already met here; only the plumbing differs (the decision
+  lives inside the action instead of in `source_probe_tick`).
+- **`fx-daily` is the one genuinely blind schedule, and correctly so.** `syncFx` (`index.ts:1848`)
+  returns `{synced, count, asOf}` —— alone among the four it has **no `reason` field and no gate at
+  all**. That is not an oversight: FX has no publication event to detect. The source is a rolling
+  `interval=1d&range=1y` Yahoo series plus a BOT CSV that is 「updated twice a day, non-real-time」,
+  so the endpoint always has data. Probing it would mean asking a question that is always true ——
+  precisely the 「永遠為真」 trap that 0.7.4 had to fix for `borrow` and MOPS. A schedule is the
+  right trigger for a source with no discrete moment to catch.
+
+So the probe-triggers-fetch rule now holds for **every source that has a publication event**, and
+the single exception is principled rather than leftover. This closes the open question; do not
+re-open it as 「還有兩支 cron 沒清掉」.
 
 `market-data-daily`/`history-daily` are deferred, not removed: `market-data-daily` because 0.7.11 just
 moved `bwibbu` to the dated endpoint and reopened its window to 15:00, and there is not yet one full

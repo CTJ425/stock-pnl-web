@@ -28,7 +28,8 @@
   go-ahead (Task 87 item 7).
 - **The probe-only-trigger design is now actually enforced on DEV**, not just stated intent. The 5
   remaining DEV jobs: `source-probe` (the mechanism itself), `macro-daily`/`fx-daily` (kept
-  permanently — no probe source exists for macro or FX at all), `market-data-daily`/`history-daily`
+  permanently — `macro-daily` is itself a calendar-driven probe, `fx-daily` covers a source with no
+  publication event to probe; see Task 87), `market-data-daily`/`history-daily`
   (kept for now, deferred — see Task 87 item 11 for why each survives).
 - **BUG-026 fixed (0.7.13-dev.1)**: `decideSkip` had no borrow term, so from ~21:00 the gate answered
   `complete` and every invocation short-circuited before `loadBorrow` ever ran — borrow never landed
@@ -174,10 +175,15 @@ it ran 15 times, mostly no-ops or manual — and that the real 15:00-start offen
 11. **Deferred, not forgotten** (see plan Part 4): `market-data-daily` cron — retire once a full day of
     `bwibbu` ticks on the dated endpoint (post-0.7.11) proves the probe catches it inside its window;
     `history-daily` cron — retire only together with widening `MOPS_SLOTS` beyond its current four
-    daily attempts. `macro-daily` / `fx-daily` are **kept, not deferred** — no probe source exists for
-    macro or FX at all (`PROBE_FOLLOW_UP` only maps four actions across the seven sources), so removing
-    them would stop that data cold. Whether to build probes for them or accept them as legitimately
-    schedule-driven is an open question, not a task.
+    daily attempts. `macro-daily` / `fx-daily` are **kept permanently, and this is now settled, not
+    an open question**: `macro-daily` is *already* a probe — `macroCalendar.decideMacroScan`
+    (`macroCalendar.ts:322`) gates on the official BLS/BEA release calendar, retires on
+    「once caught, don't catch」, caps at `MAX_SCANS_PER_DAY = 16`, and returns `reason:'skipped'` with
+    zero external requests otherwise, so the `*/30` cron is that probe's tick exactly as `*/5` is
+    `source-probe`'s. `fx-daily` is the one genuinely blind schedule and correctly so: `syncFx`
+    (`index.ts:1848`) has no gate because FX has no publication event — a rolling `range=1y` series
+    plus a twice-daily BOT CSV means the endpoint always has data, so a probe would ask a question
+    that is always true (the 「永遠為真」 trap 0.7.4 fixed for `borrow` and MOPS).
 
 **Operational note, act on this**: while inspecting `cron.job` commands during this task, a
 redaction regex failed to match the actual header format (`'x-cron-secret', 'VALUE'`, comma-separated,
