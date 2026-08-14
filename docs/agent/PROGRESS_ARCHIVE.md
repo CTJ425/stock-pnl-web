@@ -3,7 +3,21 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 15:00:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 16:45:00 Asia/Taipei).
+
+## 📅 Log: 2026-08-14 15:00:00 Asia/Taipei (Task 108: Redesign StockDetail TechnicalTab Volume table to vertical matrix layout with heat styling and footer sparklines)
+
+Redesigned StockDetail TechnicalTab "每日成交量" table to unified `inst-matrix` format:
+1. **Vertical Matrix Structure (`每日成交量矩陣`)**:
+   - Header: `日期 | 成交量 | 量比 | 收盤價 | 漲跌幅` (5 columns with `inst-matrix` styling).
+   - Rows: Displays visible slice (default 20 rows, expandable to full range) with relative heat styling (`heatStyle`) on volume, volume ratio, and price change percentage (`pnlClass`).
+   - Summary Footer (`tfoot`): Displays `{N} 日統計`, daily average volume + dynamic streak badge (`連 N 日增量` / `連 N 日縮量`) + SVG SparkCell trendline, latest volume ratio + status badge (`量能放大` / `量能常態`) + SparkCell trendline, latest close price + high/low summary + SparkCell trendline, cumulative return + price streak badge (`連 N 日上漲` / `連 N 日下跌`) + SparkCell trendline (total 4 SVG SparkCells).
+2. **Testing (TDD)**:
+   - Created `TechnicalTab.test.tsx` verifying matrix layout, 5-column header, row cells with heat styling, footer streak badges, 4 SparkCells, and expand/collapse button toggle.
+   - Vitest suite: 64 test files / 956 tests 100% passed.
+3. **Verification**:
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
 
 ## 📅 Log: 2026-08-14 14:50:00 Asia/Taipei (Task 107: Redesign StockDetail FundamentalTab Monthly Revenue and Quarterly Profit tables to vertical matrices with YoY & TTM/summary sparklines)
 

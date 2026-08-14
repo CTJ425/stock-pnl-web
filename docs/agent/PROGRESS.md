@@ -1,11 +1,24 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task 109 — Retune probe cycles: bwibbu 17:00–18:30 and bfi82u dual window (15:00–16:30 / 19:30–20:15) with 15:40 condition removed (0.7.17)
-- Status: **✅ Implemented and verified; all 65 test files / 959 tests pass; edge typecheck / build / oxlint clean (0.7.17)**
-- Timestamp: 2026-08-14 15:45:00 Asia/Taipei
+- Action: Task 110 — Deploy Probe War Room Cards in Admin Status Page replacing legacy failure alert banner (0.7.17)
+- Status: **✅ Implemented and verified; all 66 test files / 962 tests pass; build & typecheck clean**
+- Timestamp: 2026-08-14 16:48:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-14 16:48:00 Asia/Taipei (Task 110: Deploy Probe Hit War Room Cards replacing legacy failure banner)
+
+Replaced the legacy alert banner ("有 X 次探針抓取失敗需要注意") with the new interactive **Probe War Room (盤後探針命中戰情室)**:
+1. **Probe War Room Component (`ProbeWarRoom.tsx`)**:
+   - Displays real-time status across all 7 sources (`BFI82U`, `T86`, `BWIBBU`, `MARGIN`, `BORROW`, `MOPS_REV`, `MOPS_PROFIT`).
+   - Cards display: Source name/code & time window, Retirement Badge (`✅ 已退休收工` / `🟢 探測中` / `⏳ 待機中`), Hit Count Progress (`3 / 3 次到位` with visual progress dots), and Hit Timestamps (`15:05`, `15:10`, `15:15 退休`).
+   - Top banner aggregates active summary tags (`已退休 N 源・探測中 N 源・待機中 N 源`), data date, and refresh button.
+2. **Testing & Verification**:
+   - Created `ProbeWarRoom.test.tsx` testing rendering, hit counting, retirement badges, and hit timestamps.
+   - Updated `AdminStatusPage.test.tsx` to assert new War Room cards.
+   - Vitest suite: 66 test files / 962 tests passed 100%.
+   - Build (`tsc -b && vite build`) passed with zero errors.
 
 ## 📅 Log: 2026-08-14 15:45:00 Asia/Taipei (Task 109: Retune probe cycles: bwibbu 17:00–18:30 and bfi82u dual window with 15:40 condition removed)
 
@@ -23,17 +36,3 @@ Optimized probe cycle timings and schedules across TWSE sources:
 4. **Testing & Verification**:
    - Updated unit tests in `sourceProbePlan.test.ts`, `twMarket.test.ts`, `probeRound.test.ts`, and `timeline.test.ts`.
    - All 65 test files / 959 tests passed 100%. `typecheck:edge`, `build`, and `oxlint` clean. Version: `0.7.17`.
-
-## 📅 Log: 2026-08-14 15:00:00 Asia/Taipei (Task 108: Redesign StockDetail TechnicalTab Volume table to vertical matrix layout with heat styling and footer sparklines)
-
-Redesigned StockDetail TechnicalTab "每日成交量" table to unified `inst-matrix` format:
-1. **Vertical Matrix Structure (`每日成交量矩陣`)**:
-   - Header: `日期 | 成交量 | 量比 | 收盤價 | 漲跌幅` (5 columns with `inst-matrix` styling).
-   - Rows: Displays visible slice (default 20 rows, expandable to full range) with relative heat styling (`heatStyle`) on volume, volume ratio, and price change percentage (`pnlClass`).
-   - Summary Footer (`tfoot`): Displays `{N} 日統計`, daily average volume + dynamic streak badge (`連 N 日增量` / `連 N 日縮量`) + SVG SparkCell trendline, latest volume ratio + status badge (`量能放大` / `量能常態`) + SparkCell trendline, latest close price + high/low summary + SparkCell trendline, cumulative return + price streak badge (`連 N 日上漲` / `連 N 日下跌`) + SparkCell trendline (total 4 SVG SparkCells).
-2. **Testing (TDD)**:
-   - Created `TechnicalTab.test.tsx` verifying matrix layout, 5-column header, row cells with heat styling, footer streak badges, 4 SparkCells, and expand/collapse button toggle.
-   - Vitest suite: 64 test files / 956 tests 100% passed.
-3. **Verification**:
-   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
-   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
