@@ -3353,25 +3353,73 @@ a.hmenu-item {
   font-family: var(--font-mono, monospace);
   font-size: 10.5px;
   font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.38);
 }
 .pwr-time-chip.is-retire {
-  background: rgba(99, 102, 241, 0.18);
+  background: rgba(99, 102, 241, 0.22);
   color: #a5b4fc;
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(99, 102, 241, 0.45);
 }
 .pwr-time-chip.is-latest {
-  background: rgba(34, 211, 238, 0.18);
-  color: var(--accent-cyan, #22d3ee);
-  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.22);
+  color: #38bdf8;
+  border-color: rgba(34, 211, 238, 0.45);
 }
 .pwr-times-empty {
   color: var(--ink-muted);
   font-size: 11px;
+}
+
+/* Light theme high-contrast overrides for crisp visibility */
+:root[data-theme='light'] .pwr-time-chip {
+  background: rgba(16, 185, 129, 0.14);
+  color: #065f46;
+  border-color: rgba(5, 150, 105, 0.45);
+  font-weight: 700;
+}
+:root[data-theme='light'] .pwr-time-chip.is-retire {
+  background: rgba(79, 70, 229, 0.12);
+  color: #3730a3;
+  border-color: rgba(79, 70, 229, 0.4);
+  font-weight: 700;
+}
+:root[data-theme='light'] .pwr-time-chip.is-latest {
+  background: rgba(2, 132, 199, 0.14);
+  color: #0369a1;
+  border-color: rgba(2, 132, 199, 0.45);
+  font-weight: 700;
+}
+:root[data-theme='light'] .pwr-status-tag.retired {
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+  border-color: rgba(5, 150, 105, 0.45);
+}
+:root[data-theme='light'] .pwr-status-tag.probing {
+  background: rgba(2, 132, 199, 0.14);
+  color: #075985;
+  border-color: rgba(2, 132, 199, 0.45);
+}
+:root[data-theme='light'] .pwr-status-tag.waiting {
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.2);
+}
+:root[data-theme='light'] .pwr-probing-val {
+  color: #0284c7;
+}
+:root[data-theme='light'] .pwr-retired-val {
+  color: #047857;
+}
+:root[data-theme='light'] .pwr-dot {
+  background: rgba(15, 23, 42, 0.18);
+}
+:root[data-theme='light'] .pwr-dot.hit {
+  background: #059669;
+  box-shadow: 0 0 5px rgba(5, 150, 105, 0.45);
 }
 
 @media (max-width: 720px) {
