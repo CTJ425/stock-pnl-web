@@ -138,10 +138,10 @@ describe('AdminStatusPage', () => {
     expect(screen.getAllByText('/ 5').length).toBeGreaterThan(0)
   })
 
-  it('頂部結論卡片顯示同步正常', async () => {
+  it('頂部呈現盤後探針命中戰情室', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
-    expect(await screen.findByText('所有資料源與排程同步正常')).toBeTruthy()
+    expect(await screen.findByText('⚡ 盤後探針命中戰情室')).toBeTruthy()
   })
 })
 
@@ -287,18 +287,13 @@ describe('AdminStatusPage 排程同步狀態面板', () => {
     expect(p.queryByText('總經（FRED）')).toBeNull()
   })
 
-  it('有探針抓取失敗時頂部提示注意', async () => {
+  it('頂部呈現盤後探針命中戰情室字卡', async () => {
     fetchAdminStatus.mockResolvedValue({
       ...withProbe,
-      probeExperiment: {
-        ...withProbe.probeExperiment!,
-        ticks: [
-          ...withProbe.probeExperiment!.ticks,
-          { taipei_ymd: '20260731', taipei_time: '15:35', source: 't86', hit: false, ok: false, note: '連線逾時' },
-        ],
-      },
+      todayYmd: '20260731',
     })
     render(<AdminStatusPage />)
-    expect(await screen.findByText('有 1 次探針抓取失敗需要注意')).toBeTruthy()
+    expect(await screen.findByText('⚡ 盤後探針命中戰情室')).toBeTruthy()
+    expect(await screen.findByText('全市場三大法人')).toBeTruthy()
   })
 })

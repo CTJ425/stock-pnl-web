@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>後台探針運作大綱 — 6 種設計方案預覽 (stock-pnl-web)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --surface-hover: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-strong: #6366f1;
+      --accent-cyan: #22d3ee;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --up: #ff4a5a;
+      --down: #00e676;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --radius-xs: 5px;
+      --shadow: 0 8px 32px rgba(2, 6, 18, 0.45);
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse at 15% 10%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 60%, rgba(34, 211, 238, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 32px 24px 80px;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    header.preview-header {
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .preview-header h1 {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+    .preview-header p {
+      color: var(--ink-secondary);
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--accent);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+    }
+
+    /* Tab Switcher */
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 32px;
+      position: sticky;
+      top: 16px;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab-btn.active {
+      background: var(--surface-strong);
+      color: #fff;
+      border-color: var(--border-strong);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .tab-btn .num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+    }
+    .tab-btn.active .num {
+      background: var(--accent-strong);
+      color: #fff;
+    }
+
+    /* Design Wrapper & Showcase */
+    .design-card {
+      background: rgba(15, 22, 38, 0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 40px;
+      backdrop-filter: blur(16px);
+      transition: border-color 0.2s;
+    }
+    .design-card:hover {
+      border-color: var(--border-strong);
+    }
+    .design-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .design-title-group h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .design-desc {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      margin-top: 3px;
+    }
+    .design-highlights {
+      display: flex;
+      gap: 6px;
+    }
+    .highlight-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink-secondary);
+      border: 1px solid var(--border);
+    }
+
+    /* Common App Elements */
+    .glass-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+    .btn-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-refresh:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .source-tag {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+      color: var(--ink-secondary);
+    }
+
+    /* =========================================================
+       VERSION 1: TIMELINE PIPELINE FLOW
+       ========================================================= */
+    .v1-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .v1-title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .v1-pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      position: relative;
+    }
+    .v1-pulse-dot::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0; left: 0;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+    .v1-pipeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      position: relative;
+    }
+    .v1-node {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .v1-node:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .v1-node-time {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .v1-node-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+    }
+    .v1-node-action {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .v1-node-rule {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent);
+    }
+
+    /* =========================================================
+       VERSION 2: DUAL-TRACK SYMMETRICAL MATRIX
+       ========================================================= */
+    .v2-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .v2-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 768px) {
+      .v2-grid { grid-template-columns: 1fr; }
+    }
+    .v2-track-card {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+    }
+    .v2-track-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .v2-track-title {
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #fff;
+    }
+    .v2-badge-probe {
+      background: rgba(34, 211, 238, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .v2-badge-cron {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .v2-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .v2-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.025);
+      border-radius: var(--radius-xs);
+    }
+    .v2-item-name {
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .v2-item-time {
+      font-family: var(--font-mono);
+      color: var(--ink-secondary);
+      font-size: 11px;
+    }
+
+    /* =========================================================
+       VERSION 3: EXECUTIVE KPI TILES
+       ========================================================= */
+    .v3-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 860px) {
+      .v3-metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+    .v3-metric-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+    }
+    .v3-metric-val {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .v3-metric-label {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      font-weight: 500;
+    }
+    .v3-metric-sub {
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 4px;
+      font-family: var(--font-mono);
+    }
+    .v3-summary-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    /* =========================================================
+       VERSION 4: TIME-WINDOW RADAR GRID
+       ========================================================= */
+    .v4-windows-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .v4-win-card {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .v4-win-card.active {
+      border-color: var(--accent-emerald);
+      background: rgba(16, 185, 129, 0.05);
+    }
+    .v4-win-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 999px;
+      float: right;
+    }
+    .v4-status-green {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .v4-status-gray {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink-secondary);
+      border: 1px solid var(--border);
+    }
+    .v4-win-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .v4-win-time {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-cyan);
+    }
+    .v4-win-desc {
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    /* =========================================================
+       VERSION 5: COMPACT TECH SPEC BAR
+       ========================================================= */
+    .v5-spec-container {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+    }
+    .v5-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .v5-main-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #fff;
+    }
+    .v5-chips-scroll {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .v5-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      padding: 4px 8px;
+      font-size: 11px;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .v5-chip code {
+      font-family: var(--font-mono);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .v5-chip span.time {
+      font-family: var(--font-mono);
+      color: var(--ink-secondary);
+    }
+
+    /* =========================================================
+       VERSION 6: 4-STEP LIFECYCLE FLOW
+       ========================================================= */
+    .v6-steps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 860px) {
+      .v6-steps-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .v6-steps-grid { grid-template-columns: 1fr; }
+    }
+    .v6-step-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 12px;
+      position: relative;
+    }
+    .v6-step-num {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.08);
+    }
+    .v6-step-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .v6-step-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .v6-step-desc {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header class="preview-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <h1>
+          <span>⚡ 後台探針運作大綱設計提案</span>
+          <span class="tag-badge">6 種版型視覺預覽</span>
+        </h1>
+        <p>替代原先「有 X 次探針抓取失敗需要注意」警示條，改以清晰、專業且具備即時指引性的探針運作大綱呈現。</p>
+      </div>
+      <div style="text-align: right;">
+        <span class="source-tag">專案：stock-pnl-web</span>
+        <div style="font-size: 12px; color: var(--ink-muted); margin-top: 4px;">設計日期：2026-08-14</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Filter Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showDesign('all')"><span class="num">★</span> 全部檢視 (All)</button>
+    <button class="tab-btn" onclick="showDesign('v1')"><span class="num">1</span> 時序管線流動版 (Timeline Pipeline)</button>
+    <button class="tab-btn" onclick="showDesign('v2')"><span class="num">2</span> 雙軌對稱矩陣版 (Dual-Track Matrix)</button>
+    <button class="tab-btn" onclick="showDesign('v3')"><span class="num">3</span> 戰情指標摘要版 (Executive KPI Tiles)</button>
+    <button class="tab-btn" onclick="showDesign('v4')"><span class="num">4</span> 即時時窗雷達版 (Active Window Radar)</button>
+    <button class="tab-btn" onclick="showDesign('v5')"><span class="num">5</span> 極簡技術規格版 (Compact Tech Spec)</button>
+    <button class="tab-btn" onclick="showDesign('v6')"><span class="num">6</span> 4 步驟生命週期版 (Lifecycle Flow)</button>
+  </div>
+
+  <!-- =========================================================
+       VERSION 1: TIMELINE PIPELINE FLOW
+       ========================================================= -->
+  <section class="design-card" id="card-v1">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 1：【時序管線流動版】(Timeline Pipeline Flow)</h2>
+        <div class="design-desc">依照盤後時間序由左至右展開 6 大節點，視覺流暢且最符合交易員看盤習慣。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">時序直覺</span>
+        <span class="highlight-pill">橫向流動感</span>
+        <span class="highlight-pill">高辨識度</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div class="v1-header">
+        <div class="v1-title-area">
+          <div class="v1-pulse-dot"></div>
+          <div>
+            <div style="font-weight: 700; color: #fff; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+              探針全時段運作大綱
+              <span class="source-tag" style="color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);">全天候 5 分鐘巡邏</span>
+            </div>
+            <div style="font-size: 12px; color: var(--ink-secondary); margin-top: 2px;">
+              資料日 2026-08-14・命中即刻觸發・3 次穩定到位收工・定時雙重兜底
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span class="source-tag">更新於 16:30</span>
+          <button class="btn-refresh">🔄 重新整理</button>
+        </div>
+      </div>
+
+      <!-- Pipeline Nodes -->
+      <div class="v1-pipeline">
+        <div class="v1-node">
+          <div class="v1-node-time">12:00 / 17:15 / 21:00</div>
+          <div class="v1-node-name">MOPS 營收季報</div>
+          <div class="v1-node-action">
+            <span>6 個定時槽點</span>
+            <span class="v1-node-rule">1次到位</span>
+          </div>
+        </div>
+
+        <div class="v1-node" style="border-color: var(--accent-cyan); background: rgba(34, 211, 238, 0.05);">
+          <div class="v1-node-time">15:00 – 16:30</div>
+          <div class="v1-node-name">全市場法人 (BFI82U)</div>
+          <div class="v1-node-action">
+            <span>sync-market</span>
+            <span class="v1-node-rule">雙時段覆蓋</span>
+          </div>
+        </div>
+
+        <div class="v1-node">
+          <div class="v1-node-time">15:30 – 17:30</div>
+          <div class="v1-node-name">個股三大法人 (T86)</div>
+          <div class="v1-node-action">
+            <span>generate-chips</span>
+            <span class="v1-node-rule">3次到位</span>
+          </div>
+        </div>
+
+        <div class="v1-node">
+          <div class="v1-node-time">17:00 – 18:30</div>
+          <div class="v1-node-name">個股估值 (BWIBBU)</div>
+          <div class="v1-node-action">
+            <span>market-data</span>
+            <span class="v1-node-rule">3次到位</span>
+          </div>
+        </div>
+
+        <div class="v1-node">
+          <div class="v1-node-time">20:30 – 22:30</div>
+          <div class="v1-node-name">融資融券 (Margin)</div>
+          <div class="v1-node-action">
+            <span>generate-chips</span>
+            <span class="v1-node-rule">3次到位</span>
+          </div>
+        </div>
+
+        <div class="v1-node">
+          <div class="v1-node-time">21:00 – 23:30</div>
+          <div class="v1-node-name">借券賣出 (Borrow)</div>
+          <div class="v1-node-action">
+            <span>generate-chips</span>
+            <span class="v1-node-rule">翻日收工</span>
+          </div>
+        </div>
+
+        <div class="v1-node" style="border-style: dashed;">
+          <div class="v1-node-time" style="color: var(--accent-amber);">20:00 – 02:30</div>
+          <div class="v1-node-name">美國總經 & 兜底</div>
+          <div class="v1-node-action">
+            <span>FRED / 18:00 / 22:00</span>
+            <span class="v1-node-rule" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-amber);">pg_cron</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VERSION 2: DUAL-TRACK SYMMETRICAL MATRIX
+       ========================================================= -->
+  <section class="design-card" id="card-v2">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 2：【雙軌對稱矩陣版】(Dual-Track Symmetrical Matrix)</h2>
+        <div class="design-desc">左側探針主動鏈 vs 右側 pg_cron 備援鏈，完美呈現架構對照，工程感強烈。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">架構嚴謹</span>
+        <span class="highlight-pill">分工對稱</span>
+        <span class="highlight-pill">資訊完備</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div class="v2-top-bar">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 15px;">雙軌資料同步機制架構</div>
+          <div style="font-size: 12px; color: var(--ink-secondary);">資料日 2026-08-14・更新於 16:30 Asia/Taipei</div>
+        </div>
+        <button class="btn-refresh">🔄 重新整理</button>
+      </div>
+
+      <div class="v2-grid">
+        <!-- Left: Probe Track -->
+        <div class="v2-track-card">
+          <div class="v2-track-head">
+            <div class="v2-track-title">
+              <span>⚡ 探針主動驅動鏈 (7 大來源)</span>
+            </div>
+            <span class="v2-badge-probe">每 5 分鐘巡邏・命中即抓</span>
+          </div>
+          <div class="v2-list">
+            <div class="v2-item">
+              <span class="v2-item-name">全市場法人 <code>bfi82u</code></span>
+              <span class="v2-item-time">15:00–16:30 / 19:30–20:15 (初版+鉅額)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">個股三大法人 <code>t86</code></span>
+              <span class="v2-item-time">15:30–17:30 (3次到位)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">個股估值 <code>bwibbu</code></span>
+              <span class="v2-item-time">17:00–18:30 (3次到位)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">融資融券 <code>margin</code></span>
+              <span class="v2-item-time">20:30–22:30 (3次到位)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">借券賣出 <code>borrow</code></span>
+              <span class="v2-item-time">21:00–23:30 (翻日到位)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">MOPS 營收 / 季報彙整</span>
+              <span class="v2-item-time">12:00, 17:15, 21:00 (平日6槽次)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Cron Track -->
+        <div class="v2-track-card">
+          <div class="v2-track-head">
+            <div class="v2-track-title">
+              <span>🛡️ pg_cron 定時排程與兜底 (5 大任務)</span>
+            </div>
+            <span class="v2-badge-cron">定時排班・外層備援</span>
+          </div>
+          <div class="v2-list">
+            <div class="v2-item">
+              <span class="v2-item-name">探針驅動引擎 <code>source-probe</code></span>
+              <span class="v2-item-time">*/5 全天候驅動</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">美國總經掃描 <code>macro-daily</code></span>
+              <span class="v2-item-time">20:00–02:30 每30分 (FRED日曆)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">全球匯率同步 <code>fx-daily</code></span>
+              <span class="v2-item-time">11:00 / 17:00 (紐約匯市收盤)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">估值/日K兜底 <code>market-data-daily</code></span>
+              <span class="v2-item-time">18:00 / 22:00 (夜間防漏備援)</span>
+            </div>
+            <div class="v2-item">
+              <span class="v2-item-name">財報歷史兜底 <code>history-daily</code></span>
+              <span class="v2-item-time">12:30 / 21:30 (雙重確保落地)</span>
+            </div>
+            <div class="v2-item" style="opacity: 0.6;">
+              <span class="v2-item-name">舊固定班表 (nightly/market)</span>
+              <span class="v2-item-time">已於 0.7.13 退休退場</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VERSION 3: EXECUTIVE KPI TILES
+       ========================================================= -->
+  <section class="design-card" id="card-v3">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 3：【戰情指標摘要版】(Executive KPI Tiles)</h2>
+        <div class="design-desc">以管理員頂級 KPI 數字卡片為主體，迅速傳遞核心機制參數與健康狀態。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">戰情室風格</span>
+        <span class="highlight-pill">數字具象化</span>
+        <span class="highlight-pill">極簡俐落</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="font-weight: 700; color: #fff; font-size: 15px;">探針與排程運行指標</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="source-tag">資料日 2026-08-14</span>
+          <button class="btn-refresh">🔄 重新整理</button>
+        </div>
+      </div>
+
+      <div class="v3-metrics">
+        <div class="v3-metric-box">
+          <div class="v3-metric-val">7 <span style="font-size: 12px; color: var(--ink-secondary); font-weight: normal;">大資料源</span></div>
+          <div class="v3-metric-label">主動探測時窗覆蓋</div>
+          <div class="v3-metric-sub">BFI82U / T86 / BWIBBU / Margin...</div>
+        </div>
+
+        <div class="v3-metric-box">
+          <div class="v3-metric-val" style="color: var(--accent-cyan);">5 <span style="font-size: 12px; color: var(--ink-secondary); font-weight: normal;">分鐘</span></div>
+          <div class="v3-metric-label">探針巡邏與即時抓取</div>
+          <div class="v3-metric-sub">命中即刻發送 Edge Action</div>
+        </div>
+
+        <div class="v3-metric-box">
+          <div class="v3-metric-val" style="color: var(--accent-emerald);">3 <span style="font-size: 12px; color: var(--ink-secondary); font-weight: normal;">次到位</span></div>
+          <div class="v3-metric-label">自動收工退休機制</div>
+          <div class="v3-metric-sub">連續穩定確認後停止請求</div>
+        </div>
+
+        <div class="v3-metric-box">
+          <div class="v3-metric-val" style="color: var(--accent-amber);">5 <span style="font-size: 12px; color: var(--ink-secondary); font-weight: normal;">大排程</span></div>
+          <div class="v3-metric-label">pg_cron 兜底與總經鏈</div>
+          <div class="v3-metric-sub">18:00 / 22:00 估值兜底就緒</div>
+        </div>
+      </div>
+
+      <div class="v3-summary-bar">
+        <div style="color: var(--ink-secondary); display: flex; align-items: center; gap: 8px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></span>
+          <strong>運行大綱</strong>：盤後 15:00 至 23:30 依時窗進行自動探測抓取，失敗自動重試直至時窗關閉，夜間由 pg_cron 雙重兜底。
+        </div>
+        <span class="source-tag">狀態良好</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VERSION 4: TIME-WINDOW RADAR GRID
+       ========================================================= -->
+  <section class="design-card" id="card-v4">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 4：【即時時窗雷達版】(Active Window Radar Grid)</h2>
+        <div class="design-desc">依當前時間動態標註「🟢 探測中」、「⏳ 待機中」或「✅ 已收工」，極度具備即時操作感。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">即時動態感知</span>
+        <span class="highlight-pill">時窗卡片化</span>
+        <span class="highlight-pill">狀態清晰</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+            盤後探針時窗即時雷達
+            <span class="tag-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3);">現在時間 16:35</span>
+          </div>
+          <div style="font-size: 12px; color: var(--ink-secondary); margin-top: 2px;">
+            全天候每 5 分鐘巡邏・命中即觸發・3 次到位收工
+          </div>
+        </div>
+        <button class="btn-refresh">🔄 重新整理</button>
+      </div>
+
+      <div class="v4-windows-grid">
+        <div class="v4-win-card">
+          <span class="v4-win-status v4-status-gray">✅ 本日已收工</span>
+          <div class="v4-win-title">全市場法人 (初版)</div>
+          <div class="v4-win-time">15:00 – 16:30</div>
+          <div class="v4-win-desc">三大法人買賣超總金額，已完成 3 次命中收工。</div>
+        </div>
+
+        <div class="v4-win-card active">
+          <span class="v4-win-status v4-status-green">🟢 探測中</span>
+          <div class="v4-win-title">個股三大法人</div>
+          <div class="v4-win-time">15:30 – 17:30</div>
+          <div class="v4-win-desc">個股外資/投信/自營商張數，每 5 分鐘探測發布狀態。</div>
+        </div>
+
+        <div class="v4-win-card">
+          <span class="v4-win-status v4-status-gray">⏳ 17:00 開始</span>
+          <div class="v4-win-title">個股估值 (PE/PB/DY)</div>
+          <div class="v4-win-time">17:00 – 18:30</div>
+          <div class="v4-win-desc">實測官方約 17:15–17:20 出表，命中即更新 fundamental。</div>
+        </div>
+
+        <div class="v4-win-card">
+          <span class="v4-win-status v4-status-gray">⏳ 20:30 開始</span>
+          <div class="v4-win-title">融資融券</div>
+          <div class="v4-win-time">20:30 – 22:30</div>
+          <div class="v4-win-desc">資券增減與使用率，命中觸發個股籌碼更新。</div>
+        </div>
+
+        <div class="v4-win-card">
+          <span class="v4-win-status v4-status-gray">⏳ 21:00 開始</span>
+          <div class="v4-win-title">借券賣出餘額</div>
+          <div class="v4-win-time">21:00 – 23:30</div>
+          <div class="v4-win-desc">後緣延至 23:30 迎接 22:15 翻日，命中後退休。</div>
+        </div>
+
+        <div class="v4-win-card">
+          <span class="v4-win-status v4-status-gray">⏳ 20:00 啟動</span>
+          <div class="v4-win-title">美國總經 & pg_cron 兜底</div>
+          <div class="v4-win-time">20:00 – 02:30</div>
+          <div class="v4-win-desc">FRED 日曆自適應掃描 + 18:00 / 22:00 最外層估值兜底。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VERSION 5: COMPACT TECH SPEC BAR
+       ========================================================= -->
+  <section class="design-card" id="card-v5">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 5：【極簡高密度技術終端版】(Compact Tech Spec Bar)</h2>
+        <div class="design-desc">極致緊湊、佔地面積最小，適合喜歡乾淨介面、高密度代碼規格風格的管理員。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">極小垂直高度</span>
+        <span class="highlight-pill">高密度資訊</span>
+        <span class="highlight-pill">無多餘干擾</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="v5-spec-container">
+      <div class="v5-top-row">
+        <div class="v5-main-title">
+          <span style="color: var(--accent-emerald);">⚡</span>
+          <span>探針與排程機制運作大綱</span>
+          <span class="source-tag">頻率: 5m</span>
+          <span class="source-tag">觸發: 命中即抓</span>
+          <span class="source-tag">收工: 3-hit retire</span>
+          <span class="source-tag" style="color: var(--accent-amber);">兜底: pg_cron</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="source-tag">資料日 2026-08-14・更新於 16:30</span>
+          <button class="btn-refresh" style="padding: 4px 8px;">🔄 重新整理</button>
+        </div>
+      </div>
+
+      <div class="v5-chips-scroll">
+        <div class="v5-chip">
+          <code>BFI82U</code>
+          <span class="time">15:00-16:30 / 19:30-20:15</span>
+          <span style="color: var(--accent-emerald);">●</span>
+        </div>
+        <div class="v5-chip">
+          <code>T86</code>
+          <span class="time">15:30-17:30</span>
+          <span style="color: var(--accent-cyan);">●</span>
+        </div>
+        <div class="v5-chip">
+          <code>BWIBBU</code>
+          <span class="time">17:00-18:30</span>
+        </div>
+        <div class="v5-chip">
+          <code>MARGIN</code>
+          <span class="time">20:30-22:30</span>
+        </div>
+        <div class="v5-chip">
+          <code>BORROW</code>
+          <span class="time">21:00-23:30</span>
+        </div>
+        <div class="v5-chip">
+          <code>MOPS</code>
+          <span class="time">12:00/17:15/21:00</span>
+        </div>
+        <div class="v5-chip" style="border-color: rgba(245, 158, 11, 0.3);">
+          <code style="color: var(--accent-amber);">CRON</code>
+          <span class="time">18:00/22:00 兜底</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VERSION 6: 4-STEP LIFECYCLE FLOW
+       ========================================================= -->
+  <section class="design-card" id="card-v6">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>方案 6：【4 步驟生命週期版】(Operational Lifecycle Guide)</h2>
+        <div class="design-desc">以「巡邏 → 觸發 → 退休 → 兜底」4 大核心行為主軸呈現，具備最強的指引與教學意義。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">流程化指引</span>
+        <span class="highlight-pill">邏輯最透徹</span>
+        <span class="highlight-pill">新手管理員友善</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 15px;">探針完整生命週期大綱 (4-Step Lifecycle)</div>
+          <div style="font-size: 12px; color: var(--ink-secondary); margin-top: 2px;">
+            資料日 2026-08-14・更新於 16:30 Asia/Taipei
+          </div>
+        </div>
+        <button class="btn-refresh">🔄 重新整理</button>
+      </div>
+
+      <div class="v6-steps-grid">
+        <div class="v6-step-box">
+          <span class="v6-step-num">01</span>
+          <span class="v6-step-badge" style="background: rgba(34, 211, 238, 0.15); color: var(--accent-cyan); border: 1px solid rgba(34, 211, 238, 0.3);">
+            🔍 1. 時窗巡邏
+          </span>
+          <div class="v6-step-title">每 5 分鐘探測</div>
+          <div class="v6-step-desc">
+            全天候 <code>source-probe</code> 驅動。7 大來源僅在各自設定的盤後時間窗內發送輕量探測請求。
+          </div>
+        </div>
+
+        <div class="v6-step-box">
+          <span class="v6-step-num">02</span>
+          <span class="v6-step-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3);">
+            ⚡ 2. 命中即抓
+          </span>
+          <div class="v6-step-title">即刻聯動 Edge</div>
+          <div class="v6-step-desc">
+            一旦偵測上游公布（命中），同輪直接觸發 <code>sync-market</code> / <code>generate-chips</code> 抓取。
+          </div>
+        </div>
+
+        <div class="v6-step-box">
+          <span class="v6-step-num">03</span>
+          <span class="v6-step-badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent); border: 1px solid rgba(99, 102, 241, 0.3);">
+            🛑 3. 穩定退休
+          </span>
+          <div class="v6-step-title">3 次到位即收工</div>
+          <div class="v6-step-desc">
+            日頻來源連續 3 次穩定到位、MOPS 1 次到位後即標記退休，當日不再發送多餘請求。
+          </div>
+        </div>
+
+        <div class="v6-step-box">
+          <span class="v6-step-num">04</span>
+          <span class="v6-step-badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3);">
+            🛡️ 4. 排程兜底
+          </span>
+          <div class="v6-step-title">pg_cron 雙重備援</div>
+          <div class="v6-step-desc">
+            夜間 18:00 / 22:00（估值日K）與 12:30 / 21:30（財報）定時補漏，防範上游異常漏缺。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function showDesign(id) {
+    // update buttons
+    const buttons = document.querySelectorAll('.tab-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    // update cards
+    const cards = document.querySelectorAll('.design-card');
+    cards.forEach(card => {
+      if (id === 'all') {
+        card.style.display = 'block';
+      } else {
+        card.style.display = card.id === `card-${id}` ? 'block' : 'none';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
