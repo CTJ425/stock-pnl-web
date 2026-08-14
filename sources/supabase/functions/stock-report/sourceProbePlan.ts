@@ -64,28 +64,25 @@ export function retiredSources(
 }
 
 /** [fromMin, toMin] inclusive, minutes from midnight Taipei */
-type Window = { from: number; to: number }
+export type Window = { from: number; to: number }
 
-const DAILY_WINDOWS: Record<
+export const DAILY_WINDOWS: Record<
   Exclude<ProbeSourceId, 'mops_revenue' | 'mops_profit'>,
-  Window
+  Window | Window[]
 > = {
-  bfi82u: { from: 15 * 60, to: 16 * 60 + 30 }, // 15:00–16:30
+  // bfi82u 雙時段：15:00–16:30（盤後初步，不含鉅額與綜合帳戶）與 19:30–20:15（盤後完整，含鉅額與綜合帳戶）
+  bfi82u: [
+    { from: 15 * 60, to: 16 * 60 + 30 },
+    { from: 19 * 60 + 30, to: 20 * 60 + 15 },
+  ],
   t86: { from: 15 * 60 + 30, to: 17 * 60 + 30 }, // 15:30–17:30
-  // 15:00 起，不是 17:30（0.7.11）：舊窗是配合「沒有日期參數的整包快照幾點追上」而訂的，
-  // 那個問題已由改打帶日期的端點解決（BUG-024）。現在問的是「今天的估值出表了沒」，
-  // 而沒人知道它幾點出——命中即收工，早探的代價只是幾輪請求，晚探的代價是整批估值晚幾小時。
-  bwibbu: { from: 15 * 60, to: 22 * 60 }, // 15:00–22:00
+  // 17:00–18:30（0.7.17）：實測連續多日官方均於 17:15–17:20 出表，前緣留 15 分鐘餘裕從 17:00 開探，
+  // 後緣 18:30 收工，避開 15:00–17:00 約 24 次無效 probe。
+  bwibbu: { from: 17 * 60, to: 18 * 60 + 30 },
   margin: { from: 20 * 60 + 30, to: 22 * 60 + 30 }, // 20:30–22:30
   // 21:00 起（0.7.13），不再是 15:00：舊窗的理由是「沒人知道借券幾點翻日」，那是誠實的——
   // 但 2026-08-11 量到了，DEV 與 PROD 都在 **22:15** 翻，中間 95 次請求全部打在空氣上。
   // 前緣留 75 分鐘的餘裕（21:00）而不是貼著 22:15，因為只有一天的樣本。
-  //
-  // **前緣收窄不會漏掉，後緣收窄會**——這條不對稱是這裡所有視窗的通則，值得寫死在這：
-  // 命中條件量的是**狀態**（日期已經走過今天），不是瞬間事件。翻日一旦發生就整天為真，
-  // 所以窗開得晚只會延後偵測，不會錯過；窗關得早則是當天再也沒有人會去看。
-  // 因此後緣反而**延長**到 23:30：舊窗 22:45 關，而最後一班固定班表跑 21:45，比翻日還早——
-  // 翻日只要晚於 22:45，當天就沒有任何人會去撿它。收窄前緣是省錢，放寬後緣是止血。
   borrow: { from: 21 * 60, to: 23 * 60 + 30 }, // 21:00–23:30
 }
 
@@ -105,6 +102,18 @@ function inWindow(mins: number, w: Window): boolean {
   return mins >= w.from && mins <= w.to
 }
 
+/** 取得特定來源在當前分鐘所屬的活躍視窗（若不在任何視窗內則回傳 null）。 */
+export function getActiveWindow(
+  id: Exclude<ProbeSourceId, 'mops_revenue' | 'mops_profit'>,
+  mins: number,
+): Window | null {
+  const w = DAILY_WINDOWS[id]
+  if (Array.isArray(w)) {
+    return w.find((win) => inWindow(mins, win)) ?? null
+  }
+  return inWindow(mins, w) ? w : null
+}
+
 /**
  * Sources to probe at this Taipei HH:mm on a weekday.
  * Weekends: empty (caller may still skip entirely).
@@ -116,7 +125,11 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
 
   const out: ProbeSourceId[] = []
   for (const id of ['bfi82u', 't86', 'bwibbu', 'margin', 'borrow'] as const) {
-    if (inWindow(mins, DAILY_WINDOWS[id])) out.push(id)
+    const w = DAILY_WINDOWS[id]
+    const matched = Array.isArray(w)
+      ? w.some((win) => inWindow(mins, win))
+      : inWindow(mins, w)
+    if (matched) out.push(id)
   }
   const h = Math.floor(mins / 60)
   const m = mins % 60
@@ -255,11 +268,9 @@ export function sourceLanded(
   source: ProbeSourceId,
   todayYmd: string,
   ev: LandingEvidence,
-  taipeiHhmm?: string,
 ): boolean {
   switch (source) {
     case 'bfi82u':
-      if (taipeiHhmm && taipeiHhmm < '15:40') return false
       return ev.marketSessionReady === true
     case 't86':
       return normaliseYmd(ev.chipStamps?.institutional) === todayYmd

@@ -25,20 +25,18 @@ export const ACTION_SCOPE: Record<string, string> = {
   'generate-all':
     '（相容入口）依序 chips → market-data → history，單一 HTTP 有算力預算；線上 cron 自 0.7.2 改打 phase，避免 cloud 546',
   'generate-chips':
-    '全站淨持股台股籌碼：T86／融資融券／借券、組報告上傳。' +
-    '稀疏班 16:30／16:45（T86）與 21:30／21:45（融資借券）；不與日K／歷史同請求',
+    '全站淨持股台股籌碼：T86／融資融券／借券、組報告上傳。由探針命中時自動觸發，不與日 K／歷史同請求',
   'generate-market-data':
-    '持股日 K + 估值／產業等（syncDaily + syncFundamental）；0.7.2 實驗版未掛自動 cron，可手動',
+    '持股日 K + 估值／產業等（syncDaily + syncFundamental）；由估值探針 bwibbu 命中觸發，並有 18:00 / 22:00 定時備援',
   'generate-history':
-    '一輪月營收+季報補齊；0.7.2 實驗版未掛自動 cron，可手動（完整 12/12 靠多輪）',
+    '月營收+季報補齊；由 MOPS 探針槽點命中觸發，並有 12:30 / 21:30 定時備援',
   'sync-market':
     '全市場（非個股）：FMTQIK 成交量／值／筆數與加權收盤；MI_5MINS_HIST 加權開高低；' +
-    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。' +
-    '0.7.2：15:30／15:45 兩班；當日列齊後短路零外部請求',
-  probe: '只探測估值檔與借券檔是否已更新，不寫報告（供調整排程時參考）',
+    'BFI82U 三大法人買賣超金額（外資／投信／自營，含買賣分開）。寫入 market/daily.json。由探針 bfi82u 監測觸發（15:00–16:30 / 19:30–20:15 雙時段）',
+  probe: '全天候每 5 分鐘驅動資料源探測，在各時窗內偵測上游出表並聯動抓取（探測本身不寫報告）',
   'sync-macro':
-    'FRED：核心 CPI / PPI / PCE、FOMC 目標利率區間（DFEDTARU/L）、非農就業、消費者信心',
-  'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣',
+    'FRED：核心 CPI / PPI / PCE、FOMC 目標利率區間（DFEDTARU/L）、非農就業、消費者信心，依日曆自適應掃描',
+  'sync-fx': 'Yahoo 八個幣對：USD / JPY / EUR / CNY / HKD / GBP / AUD / KRW 對台幣，每日 11:00 / 17:00 同步',
   'backfill-revenue': '公開資訊觀測站的分月營收，補齊個股缺漏的月份',
 }
 

@@ -10,13 +10,14 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-14 15:00)
+## 📍 Where the project stands (2026-08-14 15:45)
 
-- **Version 0.7.16**:
-  - UI: Redesigned Macro "每日成交量" table, StockDetail ChipsTab "三大法人買賣超" table, "融資融券" table, FundamentalTab "月營收" & "獲利能力" tables, and TechnicalTab "每日成交量" table to unified vertical `inst-matrix` layout with streak labels, heat styling & SVG footer sparklines.
-  - Edge & Probe: Expanded `MOPS_SLOTS` with `17:15` and `17:20` probe slots for `mops_revenue` and `mops_profit`. Fixed BFI82U premature freezing via 15:40 threshold.
+- **Version 0.7.17**:
+  - Probe: Narrowed `bwibbu` probe window from `15:00–22:00` to `17:00–18:30` (saving ~24 daily no-op probes).
+  - Probe: Configured `bfi82u` dual windows (`15:00–16:30` and `19:30–20:15`), removed the 15:40 block so each window independently marks landed after 3 hits; `syncMarket` re-polls BFI82U in the evening window for final 19:40 comprehensive and block trades settlement.
+  - UI: `MechanismGuide` and `AdminStatusPage` updated with latest probe schedule descriptions.
 - **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
-- **All tests green**: 64 test files / 956 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint`, Playwright E2E 0 errors.
+- **All tests green**: 65 test files / 959 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
 
 ## 📋 Active Tasks
 

@@ -94,7 +94,7 @@ describe('describeScope', () => {
     expect(describeScope('sync-market')).toContain('FMTQIK')
     expect(describeScope('sync-market')).toContain('BFI82U')
     expect(describeScope('sync-market')).toContain('market/daily.json')
-    expect(describeScope('sync-market')).toContain('15:30')
+    expect(describeScope('sync-market')).toContain('15:00–16:30')
     expect(describeScope('sync-top-tickers')).toBe('')
     expect(describeScope('sync-macro')).toContain('FRED')
     expect(describeScope('sync-fx')).toContain('八個幣對')
