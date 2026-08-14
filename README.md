@@ -2,7 +2,7 @@
 
 > **目前版本：0.7.17**（版本號顯示於畫面左下角徽章）
 
-本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽與年度收益報表。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並升級而來。
+本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
 ## 📖 目錄
 - [專案目的](#-專案目的)
@@ -52,15 +52,23 @@
 
 ### 個股分析（僅 Supabase 模式）
 - **單頁到底**：我的持股 → 籌碼 → 基本面 → 技術面，各一張卡片；頁內以下拉選單切換台股持股。
-- **籌碼**：三大法人、融資融券、借券，可回看 7 個交易日並附近 7 日走勢圖（自繪 SVG，未引入圖表函式庫）。
-- **技術面**：日 K 線 + MA5 / MA20 / MA60、成交量、KD，另有 RSI(14)、MACD 柱等指標摘要。
-- **基本面**：本益比 / 殖利率 / 股價淨值比、近 12 個月月營收與走勢圖、按季獲利能力（毛利率、營益率、稅前 / 稅後純益率）。
+- **垂直矩陣化數據呈現 (`inst-matrix`)**：
+  - **籌碼面**：三大法人買賣超、融資融券、借券賣出 3 張獨立垂直矩陣表格，含相對熱度色彩階調 (`heatStyle`)、表尾合計/均量與自繪 SVG `SparkCell` 迷你走勢折線圖。
+  - **基本面**：
+    - **月營收矩陣**：當月營收、MoM、YoY、累計 YoY，表尾 12 個月總額（自動換算 兆/億/千元）、年增連續月份動態徽章與 4 條 SVG 趨勢折線。
+    - **季報獲利矩陣**：單季營收、YoY、EPS、四率（毛利率、營益率、稅前純益率、稅後純益率），表尾提供 TTM 近 4 季滾動 EPS、各項利潤率均值與 7 條對齊多線圖色彩之 SVG 走勢線。
+  - **技術面**：日 K 線 + MA5 / MA20 / MA60、**每日成交量矩陣**（成交量、量比、收盤價、漲跌幅，表尾 N 日均量、連 N 日增量/縮量徽章與 4 條 SVG 走勢線）、KD(9,3,3)、RSI(14)、MACD 指標摘要。
 - **AI 分析**：需按下按鈕才會呼叫模型；資料為程式算好的指標與籌碼摘要（不含持股、成本與損益），產生後可繼續追問，對話嚴格框在該檔股票的數據內。
 - **下載 PDF**：匯出籌碼＋基本面＋技術面，不含持股數字。
 
 ### 外幣匯率與總體經濟
 - **外幣匯率**：以台幣為本位的 8 種外幣即時中價（最多延遲 10 分鐘），走勢圖可切 3 個月 / 6 個月 / 1 年並同時顯示兩個方向。⚠️ 為市場中價，非銀行牌告匯率。
-- **總體經濟**：核心 CPI、核心 PPI、核心 PCE、非農就業、消費者信心，資料來自美國聖路易聯準銀行 FRED，每日排程更新（有新數字或官方修正舊數字時才會變動）。
+- **總體經濟**：核心 CPI、核心 PPI、核心 PCE、非農就業、失業率、消費者信心、通膨預期等，資料來自美國聖路易聯準銀行 FRED。具備與官方 BLS/BEA 發布行事曆聯動之智能掃描閘門（`decideMacroScan`），該期未發布或已抓取則當日 0 外部請求。
+
+### 管理員後台與盤後戰情室 (Admin Status & Probe War Room)
+- **⚡ 盤後探針命中戰情室**：即時呈現 7 大資料源（BFI82U, T86, BWIBBU, MARGIN, BORROW, MOPS 營收/獲利）之幾點命中、命中次數與目標進度、是否退休收工以及歷次命中時間晶片。
+- **機制圖解與排程狀態**：視覺化呈現全市場量能、法人覆蓋天數、匯率與檔案涵蓋完整度。
+- **系統維運工具**：AI 端點連線檢測、全量手動重跑批次與 AI Prompt 提示詞線上編輯。
 
 ### 其他
 - **每工作區手續費率**：工作區列的 `%` 按鈕可直接設定（支援 `0.0004275` 等折扣費率位數），新增交易與損益估算自動帶入。
@@ -74,7 +82,7 @@
 專案主要包含以下兩個核心部分：
 1. **前端 (Front-end)**:
    - 框架: `React` + `TypeScript` + `Vite` (SPA 單頁應用程式)。
-   - 樣式: `Vanilla CSS` + 全域設計系統（CSS 變數驅動，深 / 淺主題共用一套元件）。
+   - 樣式: `Vanilla CSS` + 全域設計系統（CSS 變數驅動，深 / 淺主題共用一套元件，包含 Inst-Matrix 垂直矩陣與 Glassmorphism）。
    - 狀態管理: React Context (`AuthContext`, `WorkspaceContext`)。
    - 計算引擎: `pnlEngine.ts`（移動平均成本法、精算同構對齊台股手續費/證交稅元以下無條件捨去、ETF 0.1% 優惠與 Dashboard 預扣賣出稅費、浮點誤差防護）。
 2. **後端與服務 (Back-end & BaaS)**:
@@ -84,7 +92,10 @@
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫），`app_settings` 僅 `app_metadata.role = 'admin'` 的帳號可寫。
      - **Edge Functions (Deno)**：`stock-price` 批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價；`stock-report` 產出盤後籌碼、技術面、基本面、新聞、匯率與總經資料。兩者皆繞過瀏覽器 CORS 限制。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
-     - **pg_cron 排程**：盤後每 15 分鐘輪詢批次、資料源探針、`macro-daily`、`fx-daily`。
+     - **精簡 5 大 pg_cron 排程與主動探針巡邏**：
+       - `source-probe`：每 5 分鐘主動巡邏 7 大資料源，命中即抓，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
+       - 精準時窗優化：`BWIBBU` 估值探針縮窄至 `17:00–18:30`；`BFI82U` 支援雙時窗（`15:00–16:30` 與 `19:30–20:15` 盤後鉅額與綜合帳戶結算）；`BORROW` 借券探針調至 `21:00–23:30`。
+       - `macro-daily`、`fx-daily`、`market-data-daily`、`history-daily` 定時維護非日頻數據與歷程。
    - **AI 端點（使用者自備）**：AI 分析由瀏覽器直連 Google Gemini 或 OpenAI 相容端點（Ollama / vLLM 等），專案不內建金鑰、不代付費用。
 
 ### 系統架構圖 (System Architecture)
@@ -97,18 +108,19 @@
 專案目錄結構：
 ```
 stock-pnl-web/
-├── CLAUDE.md             # Agent 操作規則（角色、流程、版本與部署規範）
+├── GEMINI.md / CLAUDE.md # Agent 操作規則（角色、流程、版本與部署規範）
 ├── .github/workflows/    # GitHub Actions 自動部署（deploy.yml）
-├── .claude/skills/       # 本專案的 Claude Code skill（verify：UI 驗證流程）
+├── .gemini/ / .claude/   # 專案技能（testing, verify, supabase-ops, versioning 等）
 ├── docs/
-│   ├── agent/            # Agent 持久化狀態：PLAN / SPEC / PROGRESS / TASK / BUG_FIX / FIXED_BUG
+│   ├── agent/            # Agent 持久化狀態：PROGRESS / TASK / BUG_FIX / FIXED_BUG
 │   ├── architecture/     # 系統設計、移轉計畫、UI 比稿與系統架構圖 (system-architecture.svg)
+│   ├── UnitTests/        # 測試設計、策略與覆蓋率說明
 │   └── sql_cli.md        # 維運用 Supabase SQL 常用查詢
 ├── sources/              # 前端網頁應用程式原始碼 (Vite React TS)
 │   ├── src/
 │   │   ├── components/   # AppShell, Auth, Dashboard, YearlyReport, Transactions,
 │   │   │                 # StockDetail（個股分析／AI 分析）, Fx（匯率）, Macro（總經）,
-│   │   │                 # Charts（自繪 SVG 圖表）, Common（共用 UI）
+│   │   │                 # Admin（後台狀態與戰情室）, Charts（自繪 SVG 圖表）, Common（共用 UI）
 │   │   ├── context/      # AuthContext, WorkspaceContext
 │   │   ├── hooks/        # useStockPrices
 │   │   ├── services/     # supabase client, dataProvider（雙模式儲存實作）,
@@ -116,7 +128,7 @@ stock-pnl-web/
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）,
 │   │   │                 # reportProxy / reportsBucket / warmStock（盤後報告）,
 │   │   │                 # dailyProxy, fundamentalProxy, newsProxy, macroProxy,
-│   │   │                 # fxProxy / fxQuoteProxy（匯率）,
+│   │   │                 # fxProxy / fxQuoteProxy（匯率）, adminStatus,
 │   │   │                 # aiClient / aiSettings / aiChatStore（AI 分析）, reportPdf
 │   │   ├── types/        # models.ts
 │   │   └── utils/        # pnlEngine.ts, holdingRows.ts, indicators.ts,
@@ -184,18 +196,20 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-Agent 技能：`.claude/skills/testing/SKILL.md`（選層、跑閘門）、`.claude/skills/verify/SKILL.md`（瀏覽器驗證）
+目前測試套件規模：**66 個測試檔案、962 項單元與整合測試（100% PASS）**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
-| **Unit + Integration** | Vitest：純邏輯、Edge 純模組、jsdom UI 煙霧（本機模式，不受 `.env.local` 影響） | `cd sources && npm test` |
-| **E2E（選用）** | Playwright 真瀏覽器／版面；無獨立 CI 套件 | 見 `docs/UnitTests/E2E.md`、skill `verify` |
+| **Unit + Integration** | Vitest：純邏輯算力 (pnlEngine)、Edge 純模組、jsdom UI 煙霧（本機模式，不受 `.env.local` 影響） | `cd sources && npm test` |
+| **Edge Typecheck** | TypeScript 對 Edge Functions 獨立嚴格型別檢查 | `cd sources && npm run typecheck:edge` |
+| **E2E（選用）** | Playwright 真瀏覽器／多斷點響應式版面驗證 | 見 `docs/UnitTests/E2E.md`、skill `verify` |
 
 ```bash
 cd sources
-npm test                              # 完整閘門（必跑）
-npx vitest run src/utils/pnlEngine.test.ts   # 單一檔
-npm run dev                           # 本機模式 UI，供手動或 Playwright
+npm test                              # 完整單元測試閘門（66 檔 / 962 tests，必跑）
+npm run typecheck:edge                # Edge Functions 型別檢查
+npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
+npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
 ```
 
 上線前請確認 `npm test` 全綠。改 Edge 配線後，除單元測試外建議在 **DEV** 再跑一次盤後 `generate-all` 煙霧（見 `supabase-ops` skill）。
@@ -209,10 +223,9 @@ npm run dev                           # 本機模式 UI，供手動或 Playwrigh
 
 ### 2. 後端部署 (Supabase)
 1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
-2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取，`app_settings`、`batch_run_log`、`source_probe_log`）、RLS 行級安全策略、`reports` bucket 與 pg_cron 排程。
+2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取，`app_settings`、`batch_run_log`、`source_probe_log`）、RLS 行級安全策略、`reports` bucket 與 5 大 pg_cron 排程。
 3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後報告；二擇一）：
-   - **Dashboard**：Edge Functions → Create a function。`stock-price` 需 `index.ts` 與 `misParse.ts`；`stock-report` 需逐一新增 `sources/supabase/functions/stock-report/` 下的所有 `.ts` 檔（`*.test.ts` 不用上傳）。檔案數量較多，建議改用下方 CLI。**只有 `stock-report` 要關閉 Verify JWT**（見下方說明）。
-   - **CLI**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
+   - **CLI（推薦）**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
      ```bash
      supabase functions deploy stock-price                # 保持 verify_jwt=true（前端帶 anon JWT 呼叫）
      supabase functions deploy stock-report --no-verify-jwt
@@ -246,7 +259,7 @@ Supabase 連線資訊**不進版本控制**，由 GitHub Secrets 於建置階段
 
 | Secret 名稱 | 內容 |
 |---|---|
-| `VITE_SUPABASE_URL` | Supabase 專案 URL |
+| `VITE_SUPABASE_URL` | Supabase 專案 URL（例如 `https://xxxx.supabase.co`） |
 | `VITE_SUPABASE_ANON_KEY` | Supabase publishable (anon) key |
 
 設定位置：GitHub Repo → Settings → Secrets and variables → Actions，或使用 CLI：
@@ -256,7 +269,7 @@ gh secret set VITE_SUPABASE_URL --body "https://xxxx.supabase.co"
 gh secret set VITE_SUPABASE_ANON_KEY --body "sb_publishable_xxxx"
 ```
 
-> 補充：anon key 本來就會隨前端 bundle 公開（Supabase 的設計即是如此，安全性由 RLS 保障）；使用 Secrets 的目的是讓原始碼庫保持乾淨、換 key 時不需改動程式碼。**service role key 絕不可放入前端或任何 Secrets 以外的位置。**
+> 補充：anon key 本來就會隨前端 bundle 公開（Supabase 的設計即是如此，安全性由 RLS 保障）；使用 Secrets 的目的是讓原始碼庫保持乾淨、換 key 時不需改動程式碼。**service role key 絕不可放入前端、GitHub Issues/PR 或任何 Secrets 以外的位置。**
 
 ### 初次啟用 Pages
 
