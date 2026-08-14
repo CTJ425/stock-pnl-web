@@ -3,7 +3,24 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-12 14:34:06 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 09:30:00 Asia/Taipei).
+
+
+## 📅 Log: 2026-08-12 20:08:20 Asia/Taipei (Release 0.7.14)
+
+Released 0.7.14 to `main`; GitHub Pages deployed successfully (Actions run `31594918544`). `dev` and `main` are both at `3f0eaea` — the merge was a fast-forward, so no separate branch-sync push was needed.
+
+Four commits: `551ed71` feat(ui) SVG brand mark · `23399da` fix(agents) scribe truncation · `c3744b0` docs(agent) records + cost correction · `3f0eaea` chore(release) 0.7.14.
+
+Version synced across `version.ts`, `package.json`, `package-lock.json`, `README.md` badge, `CHANGELOG.md`.
+
+Gate before release: 63 test files / 994 tests passed, `npx tsc -b --noEmit` clean, `npm run build` exit 0. Post-deploy smoke on the live site: index references `./favicon.svg` (200, 890B); `favicon.svg` serves 200 / 1207B containing `#6366f1`.
+
+First GitHub Release under the policy in the `versioning` skill (`0.7.13` and earlier deliberately not backfilled).
+
+Not shipped: `docs/picture/icon_v2.png` remains untracked. Nothing in the shipped code derives from it — the final mark is a hand-authored SVG — and it is 4.9 MB in a public repo. Left for the user to decide whether to commit or delete.
+
+No Supabase or Edge Function change.
 
 
 ## 📅 Log: 2026-08-12 15:14:58 Asia/Taipei (Task 93: Switch app icon to icon_v2, replace in-app brand mark)

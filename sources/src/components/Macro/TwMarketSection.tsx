@@ -9,7 +9,7 @@
  * In meta it is 885,506,043,091 - no one reads it that way). The unit of individual stock chips is "share", and the two are not comparable.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronsDownUp, ChevronsUpDown, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import {
   fetchMarketDaily,
   type MarketData,
@@ -22,7 +22,7 @@ import { CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 
-/** Spark for the institutional 走勢 column (0.7.6: one per unit row, was one per day). */
+/** Spark for the institutional and turnover 走勢 column (0.7.6: one per unit row, was one per day). */
 const DAY_SPARK_W = 100
 const DAY_SPARK_H = 36
 
@@ -30,16 +30,12 @@ const DAY_SPARK_H = 36
 const SHOWN_DAYS = 60
 
 /**
- * The trading super of the three major legal persons only looks at the last 7 trading days (0.6.30).
+ * The turnover and institutional trading matrices show the last 7 trading days.
  *
- * Consistent with the chip chart of individual stock analysis (where HISTORY_DAYS = 7) - the two charts ask the same question
- * "Is the legal person buying or selling these days?" If you look at one picture for a week and the other for a season, you will think that you are comparing different things.
- * Volume energy and index can last for one season: those two ask "where is the market?" and require a longer context.
+ * Consistent with the chip chart of individual stock analysis (where HISTORY_DAYS = 7) - the charts ask the same question
+ * "What happened in the market these days?" Volume energy and index can last for one season: those two ask "where is the market?" and require a longer context.
  */
 const INSTITUTIONAL_DAYS = 7
-
-/** How many rows the daily turnover table shows before "顯示全部" —— same 7 as the institutional table it sits above */
-const TURNOVER_ROWS_COLLAPSED = 7
 
 /** Shares → 億股. The file stores raw shares, which run to eleven digits and are unreadable as-is */
 function toBillionShares(shares: number | null | undefined): number | null {
@@ -157,6 +153,92 @@ function sumOrNull(values: ReadonlyArray<number | null>): number | null {
   return known.length === 0 ? null : known.reduce((a, b) => a + b, 0)
 }
 
+/** Average of the days that have a number; `null` only when none do. */
+function calcAvgOrNull(values: ReadonlyArray<number | null>): number | null {
+  const known = values.filter((v): v is number => v !== null)
+  return known.length === 0 ? null : known.reduce((a, b) => a + b, 0) / known.length
+}
+
+function volumeTrendStreak(points: number[]): { label: string | null; color: string } {
+  if (points.length < 2) return { label: null, color: CHART_COLORS.axis }
+  const last = points[points.length - 1]
+  const prev = points[points.length - 2]
+  if (last === prev) return { label: null, color: CHART_COLORS.axis }
+  const isUp = last > prev
+  let streak = 0
+  for (let i = points.length - 1; i >= 1; i--) {
+    if (isUp && points[i] > points[i - 1]) streak++
+    else if (!isUp && points[i] < points[i - 1]) streak++
+    else break
+  }
+  const label = streak >= 2 ? `連 ${streak} 日${isUp ? '增量' : '縮量'}` : null
+  const color = isUp ? CHART_COLORS.up : CHART_COLORS.down
+  return { label, color }
+}
+
+function taiexTrendStreak(days: MarketDay[]): { label: string | null; color: string } {
+  const points = days.map((d) => d.taiex).filter((v): v is number => v !== null)
+  if (points.length < 2) return { label: null, color: CHART_COLORS.axis }
+  const changes = days
+    .map((d) => d.changePoints)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  const lastChange = changes[changes.length - 1]
+  if (lastChange === undefined || lastChange === 0) return { label: null, color: CHART_COLORS.axis }
+  const isUp = lastChange > 0
+  let streak = 0
+  for (let i = changes.length - 1; i >= 0; i--) {
+    if (isUp && changes[i] > 0) streak++
+    else if (!isUp && changes[i] < 0) streak++
+    else break
+  }
+  const label = streak >= 2 ? `連 ${streak} 日${isUp ? '上漲' : '下跌'}` : null
+  const color = isUp ? CHART_COLORS.up : CHART_COLORS.down
+  return { label, color }
+}
+
+function MetricTrend({
+  points,
+  label,
+  labelClass,
+  color,
+  ariaLabel,
+}: {
+  points: number[]
+  label?: string | null
+  labelClass?: string
+  color?: string
+  ariaLabel: string
+}) {
+  if (points.length === 0) {
+    return <span className="hint">—</span>
+  }
+  const defaultColor = CHART_COLORS.axis
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 4,
+      }}
+    >
+      <span
+        className={labelClass ?? (label ? undefined : 'hint')}
+        style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: label ? 600 : undefined }}
+      >
+        {label ?? '—'}
+      </span>
+      <SparkCell
+        points={points}
+        color={color ?? defaultColor}
+        width={DAY_SPARK_W}
+        height={DAY_SPARK_H}
+        ariaLabel={ariaLabel}
+      />
+    </div>
+  )
+}
+
 /**
  * 走勢 column: 「連 N 日買超／賣超」above the spark.
  * The streak describes the **unit**, which is why it sits on the unit's row (0.7.6) and no longer in the date cell.
@@ -207,7 +289,6 @@ export function TwMarketSection() {
     charts consume the same `days` (see candles below).
   */
   const [hover, setHover] = useState<number | null>(null)
-  const [showAllTurnover, setShowAllTurnover] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -246,17 +327,7 @@ export function TwMarketSection() {
 
   const days = market.days.slice(-SHOWN_DAYS)
   const instDays = market.days.slice(-INSTITUTIONAL_DAYS)
-  /*
-    Newest first, opposite to every chart on this card —— see the comment above the institutional table.
-
-    The table reads the **whole file**, not the 60-day slice the charts use (0.6.43, AUDIT-08). `SHOWN_DAYS` exists
-    to keep an X axis readable, which is a chart's problem; a table has no axis to crowd. Before this, 「顯示全部」
-    could only ever reach 60 of the up-to-120 days on file, which is not what "全部" says.
-  */
-  const allTurnoverDays = [...market.days].reverse()
-  const turnoverRows = showAllTurnover
-    ? allTurnoverDays
-    : allTurnoverDays.slice(0, TURNOVER_ROWS_COLLAPSED)
+  const turnoverDays = instDays
   /*
     A candle needs open/high/low/close; missing any one and it is not drawn —— open/high/low come from a
     different source than close, so the last day or two may have close only. **But that day's slot must stay**
@@ -292,6 +363,38 @@ export function TwMarketSection() {
     const rowMax = Math.max(0, ...values.map((v) => (v === null ? 0 : Math.abs(v))))
     return { ...u, values, rowMax, cum: sumOrNull(values), ...unitTrend(days, u.key) }
   })
+
+  // Market turnover matrix data (5 metrics)
+  const turnoverAmountVals = turnoverDays.map((d) => toBillion(d.tradeValueTwd))
+  const turnoverAmountAvg = calcAvgOrNull(turnoverAmountVals)
+  const turnoverAmountPoints = days
+    .map((d) => toBillion(d.tradeValueTwd))
+    .filter((v): v is number => v !== null)
+  const turnoverAmountTrend = volumeTrendStreak(turnoverAmountPoints)
+
+  const turnoverSharesVals = turnoverDays.map((d) => toBillionShares(d.tradeVolumeShares))
+  const turnoverSharesAvg = calcAvgOrNull(turnoverSharesVals)
+  const turnoverSharesPoints = days
+    .map((d) => toBillionShares(d.tradeVolumeShares))
+    .filter((v): v is number => v !== null)
+
+  const turnoverTxnVals = turnoverDays.map((d) => toTenThousand(d.transactions))
+  const turnoverTxnAvg = calcAvgOrNull(turnoverTxnVals)
+  const turnoverTxnPoints = days
+    .map((d) => toTenThousand(d.transactions))
+    .filter((v): v is number => v !== null)
+
+  const taiexVals = turnoverDays.map((d) => d.taiex)
+  const taiexAvg = calcAvgOrNull(taiexVals)
+  const taiexPoints = days.map((d) => d.taiex).filter((v): v is number => v !== null)
+  const taiexTrend = taiexTrendStreak(days)
+
+  const changeVals = turnoverDays.map((d) => d.changePoints)
+  const changeSum = sumOrNull(changeVals)
+  const changePointsList = days
+    .map((d) => d.changePoints)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  const maxAbsChange = Math.max(0, ...changeVals.map((v) => (v === null ? 0 : Math.abs(v))))
 
   // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
   // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
@@ -402,56 +505,151 @@ export function TwMarketSection() {
       />
 
       {/*
-        Daily turnover table (0.6.38). It needs no backend change: `tradeVolumeShares` and `transactions` have been
-        in market/daily.json all along and had simply never been shown —— the chart above only draws the amount.
-
-        Shares and amount are both listed on purpose: they answer different questions. A day can trade fewer shares
-        for more money (2026-07-29 vs 08-05 in the file: 170.5 億股 / 11,492 億 against 132.1 億股 / 12,002 億),
-        which is what a shift towards higher-priced stocks looks like.
+        Daily turnover transposed matrix: 5 metric rows × 7 days (oldest → newest).
+        Amount, shares, and transactions calculate 7-day daily averages; taiex calculates 7-day average close;
+        changePoints calculates 7-day net cumulative change.
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
-        <div className="chart-title">每日成交量・近 {allTurnoverDays.length} 個交易日</div>
-        {allTurnoverDays.length > TURNOVER_ROWS_COLLAPSED && (
-          <button className="btn btn-sm" onClick={() => setShowAllTurnover((v) => !v)}>
-            {showAllTurnover ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-            {showAllTurnover ? `只顯示近 ${TURNOVER_ROWS_COLLAPSED} 日` : `顯示全部 ${allTurnoverDays.length} 日`}
-          </button>
-        )}
+        <div className="chart-title">每日成交量・近 {turnoverDays.length} 個交易日</div>
       </div>
-      <div className="table-scroll">
-        <table className="data-table" aria-label="每日成交量">
+      <div className="table-scroll" style={{ marginTop: 12 }}>
+        <table className="data-table inst-matrix" aria-label="每日成交量">
           <thead>
             <tr>
-              <th>日期</th>
-              <th className="num">成交股數</th>
-              <th className="num">成交金額</th>
-              <th className="num">筆數</th>
-              <th className="num">加權指數</th>
-              <th className="num">漲跌</th>
+              <th>項目</th>
+              {turnoverDays.map((d) => (
+                <th key={d.date} className="num">
+                  {shortDate(d.date)}
+                </th>
+              ))}
+              <th className="num">7 日統計</th>
+              <th>近 {TREND_DAYS} 日走勢</th>
             </tr>
           </thead>
           <tbody>
-            {turnoverRows.map((d) => {
-              const shares = toBillionShares(d.tradeVolumeShares)
-              const txn = toTenThousand(d.transactions)
-              return (
-                <tr key={d.date}>
-                  <td>{d.date}</td>
-                  <td className="num">{shares === null ? '—' : `${shares.toFixed(1)} 億股`}</td>
-                  <td className="num">{fmtBillion(toBillion(d.tradeValueTwd))}</td>
-                  <td className="num">{txn === null ? '—' : `${txn.toFixed(1)} 萬`}</td>
-                  <td className="num">{d.taiex === null ? '—' : d.taiex.toFixed(2)}</td>
-                  <td className={`num ${chipClass(d.changePoints)}`}>
-                    {d.changePoints === null
-                      ? '—'
-                      : `${d.changePoints > 0 ? '+' : ''}${d.changePoints.toFixed(2)}`}
-                  </td>
-                </tr>
-              )
-            })}
+            <tr>
+              <td>成交金額</td>
+              {turnoverAmountVals.map((v, i) => (
+                <td key={turnoverDays[i].date} className="num">
+                  {fmtBillion(v)}
+                </td>
+              ))}
+              <td className="num inst-matrix-cum">{fmtBillion(turnoverAmountAvg)}</td>
+              <td>
+                <MetricTrend
+                  points={turnoverAmountPoints.slice(-TREND_DAYS)}
+                  label={turnoverAmountTrend.label}
+                  labelClass={
+                    turnoverAmountTrend.label
+                      ? chipClass(turnoverAmountTrend.color === CHART_COLORS.up ? 1 : -1)
+                      : undefined
+                  }
+                  color={turnoverAmountTrend.color}
+                  ariaLabel="近 15 個交易日成交金額走勢"
+                />
+              </td>
+            </tr>
+
+            <tr>
+              <td>成交股數</td>
+              {turnoverSharesVals.map((v, i) => (
+                <td key={turnoverDays[i].date} className="num">
+                  {v === null ? '—' : `${v.toFixed(1)} 億股`}
+                </td>
+              ))}
+              <td className="num inst-matrix-cum">
+                {turnoverSharesAvg === null ? '—' : `${turnoverSharesAvg.toFixed(1)} 億股`}
+              </td>
+              <td>
+                <MetricTrend
+                  points={turnoverSharesPoints.slice(-TREND_DAYS)}
+                  color={CHART_COLORS.axis}
+                  ariaLabel="近 15 個交易日成交股數走勢"
+                />
+              </td>
+            </tr>
+
+            <tr>
+              <td>成交筆數</td>
+              {turnoverTxnVals.map((v, i) => (
+                <td key={turnoverDays[i].date} className="num">
+                  {v === null ? '—' : `${v.toFixed(1)} 萬`}
+                </td>
+              ))}
+              <td className="num inst-matrix-cum">
+                {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬`}
+              </td>
+              <td>
+                <MetricTrend
+                  points={turnoverTxnPoints.slice(-TREND_DAYS)}
+                  color={CHART_COLORS.axis}
+                  ariaLabel="近 15 個交易日成交筆數走勢"
+                />
+              </td>
+            </tr>
+
+            <tr>
+              <td>加權指數</td>
+              {taiexVals.map((v, i) => (
+                <td key={turnoverDays[i].date} className="num">
+                  {v === null ? '—' : v.toFixed(2)}
+                </td>
+              ))}
+              <td className="num inst-matrix-cum">
+                {taiexAvg === null ? '—' : taiexAvg.toFixed(2)}
+              </td>
+              <td>
+                <MetricTrend
+                  points={taiexPoints.slice(-TREND_DAYS)}
+                  label={taiexTrend.label}
+                  labelClass={
+                    taiexTrend.label
+                      ? chipClass(taiexTrend.color === CHART_COLORS.up ? 1 : -1)
+                      : undefined
+                  }
+                  color={taiexTrend.color}
+                  ariaLabel="近 15 個交易日加權指數收盤走勢"
+                />
+              </td>
+            </tr>
+
+            <tr>
+              <td>指數漲跌</td>
+              {changeVals.map((v, i) => (
+                <td
+                  key={turnoverDays[i].date}
+                  className={`num ${chipClass(v)}`}
+                  style={heatStyle(v, maxAbsChange)}
+                >
+                  {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}`}
+                </td>
+              ))}
+              <td className={`num inst-matrix-cum ${chipClass(changeSum)}`}>
+                {changeSum === null ? '—' : `${changeSum > 0 ? '+' : ''}${changeSum.toFixed(2)}`}
+              </td>
+              <td>
+                <MetricTrend
+                  points={changePointsList.slice(-TREND_DAYS)}
+                  color={
+                    changePointsList.length > 0
+                      ? changePointsList[changePointsList.length - 1] > 0
+                        ? CHART_COLORS.up
+                        : changePointsList[changePointsList.length - 1] < 0
+                          ? CHART_COLORS.down
+                          : CHART_COLORS.axis
+                      : CHART_COLORS.axis
+                  }
+                  ariaLabel="近 15 個交易日指數漲跌走勢"
+                />
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      <p className="hint" style={{ marginTop: 8 }}>
+        成交金額、股數與筆數之統計欄為 7 日日均值，指數漲跌之統計欄為 7 日累計淨漲跌；底色深淺為單日漲跌之相對強度。走勢欄讀取近 {TREND_DAYS} 個交易日。
+      </p>
 
       {/*
         Institutional matrix (0.7.6). The predecessor was 日期×單位 with a per-day expand: seven expands and

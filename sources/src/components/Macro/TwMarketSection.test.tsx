@@ -112,8 +112,7 @@ describe('TwMarketSection', () => {
     expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
   })
 
-  it('每日成交量表格：股數與金額並列，預設 7 列可展開全部（0.6.38）', async () => {
-    const user = userEvent.setup()
+  it('每日成交量矩陣為 項目×日期：五列固定、七個日期欄，由舊至新排列', async () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
     )
@@ -121,23 +120,70 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
-    expect(turnoverRows(container)).toHaveLength(7)
-    // Newest first, opposite to the charts above
-    expect(turnoverRows(container)[0].textContent).toContain('2026-07-30')
+    const table = container.querySelector<HTMLElement>('table[aria-label="每日成交量"]')!
+    expect(table.classList.contains('inst-matrix')).toBe(true)
 
-    const cells = [...turnoverRows(container)[0].querySelectorAll('td')].map((td) => td.textContent)
-    // 11,000,000,000 shares → 110.0 億股; 8e11 元 → 8000.0 億; 4,000,000 筆 → 400.0 萬
-    expect(cells[1]).toBe('110.0 億股')
-    expect(cells[2]).toBe('8000.0 億')
-    expect(cells[3]).toBe('400.0 萬')
-    expect(cells[5]).toBe('+266.66')
+    // Five metric rows, always
+    expect(turnoverRows(container)).toHaveLength(5)
+    expect(screen.queryByRole('button', { name: /顯示全部/ })).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: /顯示全部 30 日/ }))
-    expect(turnoverRows(container)).toHaveLength(30)
+    const heads = [...table.querySelectorAll('thead th')].map((e) => e.textContent)
+    // 項目 + 7 days + 統計 + 走勢. Oldest → newest, matching the charts above.
+    expect(heads).toEqual([
+      '項目',
+      '07/24',
+      '07/25',
+      '07/26',
+      '07/27',
+      '07/28',
+      '07/29',
+      '07/30',
+      '7 日統計',
+      '近 15 日走勢',
+    ])
+
+    const rows = [...turnoverRows(container)]
+    expect(rows.map((r) => r.querySelector('td')!.textContent)).toEqual([
+      '成交金額',
+      '成交股數',
+      '成交筆數',
+      '加權指數',
+      '指數漲跌',
+    ])
   })
 
-  it('成交股數與筆數缺料時給「—」，不用 0 冒充（0.6.38）', async () => {
-    // Days written before these columns existed read back as undefined, not null
+  it('每日成交量矩陣計算：金額/股數/筆數/指數計算 7 日日均值，漲跌計算 7 日累計淨漲跌', async () => {
+    const days = [
+      day('2026-07-24', 8e11, null),
+      day('2026-07-25', 9e11, null),
+      day('2026-07-26', 1e12, null),
+      day('2026-07-27', 7e11, null),
+      day('2026-07-28', 8e11, null),
+      day('2026-07-29', 8.5e11, null),
+      day('2026-07-30', 8.8e11, null),
+    ]
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    const rows = [...turnoverRows(container)]
+    // First row: 成交金額
+    const amountCells = [...rows[0].querySelectorAll('td')].map((td) => td.textContent)
+    expect(amountCells[0]).toBe('成交金額')
+    expect(amountCells[1]).toBe('8000.0 億') // 07/24
+    expect(amountCells[7]).toBe('8800.0 億') // 07/30
+    // 7 日均量: (8000 + 9000 + 10000 + 7000 + 8000 + 8500 + 8800) / 7 = 8471.4 億
+    expect(amountCells[8]).toBe('8471.4 億')
+
+    // Fifth row: 指數漲跌
+    const changeCells = [...rows[4].querySelectorAll('td')].map((td) => td.textContent)
+    expect(changeCells[0]).toBe('指數漲跌')
+    expect(changeCells[1]).toBe('+266.66')
+    // 7 日累計漲跌: 266.66 * 7 = +1866.62
+    expect(changeCells[8]).toBe('+1866.62')
+  })
+
+  it('成交股數與筆數缺料時給「—」，不用 0 冒充', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-04T08:30:00.000Z',
       days: [{ ...day('2026-08-04', 8e11, null), tradeVolumeShares: null, transactions: null }],
@@ -145,11 +191,15 @@ describe('TwMarketSection', () => {
     const { container } = render(<TwMarketSection />)
     await screen.findByRole('table', { name: '每日成交量' })
 
-    const cells = [...turnoverRows(container)[0].querySelectorAll('td')].map((td) => td.textContent)
-    expect(cells[1]).toBe('—')
-    expect(cells[3]).toBe('—')
-    // The amount is still there, so a missing column must not blank the whole row
-    expect(cells[2]).toBe('8000.0 億')
+    const rows = [...turnoverRows(container)]
+    const sharesCells = [...rows[1].querySelectorAll('td')].map((td) => td.textContent)
+    const txCells = [...rows[2].querySelectorAll('td')].map((td) => td.textContent)
+    expect(sharesCells[0]).toBe('成交股數')
+    expect(sharesCells[1]).toBe('—')
+    expect(sharesCells[2]).toBe('—') // 7 日統計
+    expect(txCells[0]).toBe('成交筆數')
+    expect(txCells[1]).toBe('—')
+    expect(txCells[2]).toBe('—') // 7 日統計
   })
 
   it('矩陣為 單位×日期：六列固定、七個日期欄，沒有任何展開狀態（0.7.6）', async () => {
@@ -388,6 +438,40 @@ describe('TwMarketSection', () => {
     expect(spark.getAttribute('style')).toMatch(/height:\s*36px/)
     // The frozen unit column is what makes horizontal scrolling readable
     expect(instTable(container).className).toContain('inst-matrix')
+  })
+
+  it('走勢欄：每日成交量呈現連 N 日增量/縮量與連 N 日上漲/下跌 Streak 標籤', async () => {
+    const days = [
+      { ...day('2026-08-01', 7e11, null), changePoints: 100 },
+      { ...day('2026-08-02', 8e11, null), changePoints: 150 },
+      { ...day('2026-08-03', 9e11, null), changePoints: 200 },
+    ]
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    const rows = [...turnoverRows(container)]
+    // Amount row has increasing volume: 7e11 -> 8e11 -> 9e11 (3 days)
+    expect(rows[0].textContent).toContain('連 2 日增量')
+    // Taiex row has positive change: all 3 days positive
+    expect(rows[3].textContent).toContain('連 3 日上漲')
+  })
+
+  it('指數漲跌儲存格套用熱力底色與紅綠色彩', async () => {
+    const days = [
+      { ...day('2026-08-01', 8e11, null), changePoints: 100 },
+      { ...day('2026-08-02', 8e11, null), changePoints: -50 },
+    ]
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-02T08:30:00.000Z', days })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    const rows = [...turnoverRows(container)]
+    const changeCells = rows[4].querySelectorAll('td')
+    expect(changeCells[1].className).toContain('pnl-up')
+    expect(changeCells[1].style.backgroundColor).toBeTruthy()
+    expect(changeCells[2].className).toContain('pnl-down')
+    expect(changeCells[2].style.backgroundColor).toBeTruthy()
   })
 
   it('查無資料時顯示空狀態，不是一片空白', async () => {
