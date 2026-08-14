@@ -206,10 +206,45 @@ describe('StockDetailPage', () => {
     expect(table.textContent).toContain('連 2 買')
     expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
 
-    // The margin table's own streaks are untouched by this change
-    const marginTable = within(screen.getAllByRole('table')[1])
-    expect(within(marginTable.getByText('融資').closest('tr')!).getByText('連 2 增')).toBeTruthy()
-    expect(within(marginTable.getByText('融券').closest('tr')!).getByText('連 2 增')).toBeTruthy()
+    // The margin matrix has its own vertical table with streak & sparklines
+    const marginTable = screen.getByRole('table', { name: '融資融券矩陣' })
+    const marginHeaders = [...marginTable.querySelectorAll('thead th')].map((th) => th.textContent)
+    expect(marginHeaders).toEqual([
+      '日期',
+      '融資餘額（張）',
+      '融資增減',
+      '融券餘額（張）',
+      '融券增減',
+      '資券互抵',
+    ])
+    expect(marginTable.querySelectorAll('tbody tr')).toHaveLength(2)
+    expect(marginTable.textContent).toContain('連 2 增')
+    expect(marginTable.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
+  })
+
+  it('融資融券矩陣：支援口徑切換（增減與餘額 / 買進與賣出 / 償還明細）', async () => {
+    const user = userEvent.setup()
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
+    await screen.findByText('三大法人買賣超')
+
+    const marginTable = () => screen.getByRole('table', { name: '融資融券矩陣' })
+
+    // Default summary
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融資餘額（張）')
+
+    // Switch to trading
+    await user.click(screen.getByRole('button', { name: '買進與賣出' }))
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融資買進')
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融券買進（回補）')
+
+    // Switch to redeem
+    await user.click(screen.getByRole('button', { name: '償還明細' }))
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融資現償')
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融券券償')
+
+    // Switch back to summary
+    await user.click(screen.getByRole('button', { name: '增減與餘額' }))
+    expect(marginTable().querySelector('thead')!.textContent).toContain('融資餘額（張）')
   })
 
   it('籌碼矩陣：買進／賣出改用口徑切換，連買連賣一律看買賣超', async () => {

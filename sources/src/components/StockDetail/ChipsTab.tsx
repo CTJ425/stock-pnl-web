@@ -62,6 +62,14 @@ const METRICS: ReadonlyArray<{ id: ChipMetric; label: string }> = [
   { id: 'sell', label: '賣出' },
 ]
 
+type MarginMetric = 'summary' | 'trading' | 'redeem'
+
+const MARGIN_METRICS: ReadonlyArray<{ id: MarginMetric; label: string }> = [
+  { id: 'summary', label: '增減與餘額' },
+  { id: 'trading', label: '買進與賣出' },
+  { id: 'redeem', label: '償還明細' },
+]
+
 const TFOOT_SPARK_W = 76
 const TFOOT_SPARK_H = 20
 
@@ -95,6 +103,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
   const [metric, setMetric] = useState<ChipMetric>('net')
+  const [marginMetric, setMarginMetric] = useState<MarginMetric>('summary')
 
   /*
     Columns of the matrix (0.7.6). Normally the 7-day history; when a report carries no history at all it
@@ -107,6 +116,55 @@ export function ChipsTab({ report }: { report: ReportData }) {
         ? [{ date: report.dataDate, institutional }]
         : []
   const hasInst = instDays.some((d) => d.institutional)
+
+  const marginDays =
+    history.length > 0
+      ? history
+      : margin
+        ? [{ date: report.dataDate, margin }]
+        : []
+  const hasMargin = marginDays.some((d) => d.margin !== null && d.margin !== undefined)
+
+  // Margin series
+  const marginChanges = marginDays.map((d) => d.margin?.marginChange ?? null)
+  const marginTodays = marginDays.map((d) => d.margin?.marginToday ?? null)
+  const shortChanges = marginDays.map((d) => d.margin?.shortChange ?? null)
+  const shortTodays = marginDays.map((d) => d.margin?.shortToday ?? null)
+  const offsets = marginDays.map((d) => d.margin?.offset ?? null)
+
+  const marginBuys = marginDays.map((d) => d.margin?.marginBuy ?? null)
+  const marginSells = marginDays.map((d) => d.margin?.marginSell ?? null)
+  const shortBuys = marginDays.map((d) => d.margin?.shortBuy ?? null)
+  const shortSells = marginDays.map((d) => d.margin?.shortSell ?? null)
+
+  const marginRedeems = marginDays.map((d) => d.margin?.marginRedeem ?? null)
+  const shortRedeems = marginDays.map((d) => d.margin?.shortRedeem ?? null)
+  const marginLimits = marginDays.map((d) => d.margin?.marginLimit ?? null)
+  const shortLimits = marginDays.map((d) => d.margin?.shortLimit ?? null)
+
+  const maxMarginChange = Math.max(0, ...marginChanges.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxShortChange = Math.max(0, ...shortChanges.map((v) => (v === null ? 0 : Math.abs(v))))
+
+  const mStreak = marginStreak(history, 'marginChange', lastIndex)
+  const sStreak = marginStreak(history, 'shortChange', lastIndex)
+
+  const sumOf = (arr: Array<number | null>): number | null => {
+    const nums = arr.filter((v): v is number => v !== null)
+    return nums.length === 0 ? null : nums.reduce((a, b) => a + b, 0)
+  }
+  const latestOf = (arr: Array<number | null>): number | null => {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i] !== null && arr[i] !== undefined) return arr[i]
+    }
+    return null
+  }
+
+  const sparkColorOf = (arr: Array<number | null>): string => {
+    const valid = arr.filter((v): v is number => v !== null)
+    if (valid.length === 0) return CHART_COLORS.axis
+    const last = valid[valid.length - 1]
+    return last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+  }
 
   /** Transactions of a certain column (legal person) in super sequence, from oldest to newest*/
   const netsOf = (pick: (i: InstitutionalChip) => ChipLeg): Array<number | null> =>
@@ -294,11 +352,26 @@ export function ChipsTab({ report }: { report: ReportData }) {
       </section>
 
       <section className="rpt-section">
-        <h3>
-          融資融券
-          <SourceTag stamp={report.sources?.margin} />
-        </h3>
-        {margin === null ? (
+        <div className="rpt-section-head">
+          <h3>
+            融資融券
+            <SourceTag stamp={report.sources?.margin} />
+          </h3>
+          <div className="inst-metric-seg" role="group" aria-label="切換融資融券口徑">
+            {MARGIN_METRICS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={marginMetric === m.id}
+                onClick={() => setMarginMetric(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {!hasMargin ? (
           <p className="hint">
             今日融資融券尚未公布（約 21:00–22:00 才會有），稍晚的排程會自動補上。
             上方的三大法人不受影響 —— 它約 15:00–15:30 就公布了。
@@ -306,49 +379,301 @@ export function ChipsTab({ report }: { report: ReportData }) {
         ) : (
           <>
             <div className="table-scroll">
-              <table className="data-table">
+              <table className="data-table inst-matrix" aria-label="融資融券矩陣">
                 <thead>
-                  <tr>
-                    <th></th>
-                    <th className="num">買進</th>
-                    <th className="num">賣出</th>
-                    <th className="num">償還</th>
-                    <th className="num">今日餘額</th>
-                    <th className="num">較前日</th>
-                    <th className="num">連增連減</th>
-                  </tr>
+                  {marginMetric === 'summary' && (
+                    <tr>
+                      <th>日期</th>
+                      <th className="num">融資餘額（張）</th>
+                      <th className="num">融資增減</th>
+                      <th className="num">融券餘額（張）</th>
+                      <th className="num">融券增減</th>
+                      <th className="num">資券互抵</th>
+                    </tr>
+                  )}
+                  {marginMetric === 'trading' && (
+                    <tr>
+                      <th>日期</th>
+                      <th className="num">融資買進</th>
+                      <th className="num">融資賣出</th>
+                      <th className="num">融券買進（回補）</th>
+                      <th className="num">融券賣出（放空）</th>
+                      <th className="num">資券互抵</th>
+                    </tr>
+                  )}
+                  {marginMetric === 'redeem' && (
+                    <tr>
+                      <th>日期</th>
+                      <th className="num">融資現償</th>
+                      <th className="num">融券券償</th>
+                      <th className="num">融資限額</th>
+                      <th className="num">融券限額</th>
+                      <th className="num">資券互抵</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>融資</td>
-                    <td className="num">{fmtInt(margin.marginBuy)}</td>
-                    <td className="num">{fmtInt(margin.marginSell)}</td>
-                    <td className="num">{fmtInt(margin.marginRedeem)}</td>
-                    <td className="num">{fmtInt(margin.marginToday)}</td>
-                    <td className={`num ${chipClass(margin.marginChange)}`}>{fmtSigned(margin.marginChange)}</td>
-                    <td className={`num ${chipClass(marginStreak(history, 'marginChange', lastIndex))}`}>
-                      {fmtBalanceStreak(marginStreak(history, 'marginChange', lastIndex))}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>融券</td>
-                    <td className="num">{fmtInt(margin.shortBuy)}</td>
-                    <td className="num">{fmtInt(margin.shortSell)}</td>
-                    <td className="num">{fmtInt(margin.shortRedeem)}</td>
-                    <td className="num">{fmtInt(margin.shortToday)}</td>
-                    <td className={`num ${chipClass(margin.shortChange)}`}>{fmtSigned(margin.shortChange)}</td>
-                    <td className={`num ${chipClass(marginStreak(history, 'shortChange', lastIndex))}`}>
-                      {fmtBalanceStreak(marginStreak(history, 'shortChange', lastIndex))}
-                    </td>
-                  </tr>
+                  {[...marginDays].reverse().map((d) => {
+                    const m = d.margin
+                    return (
+                      <tr key={d.date}>
+                        <td>{shortDate(d.date)}</td>
+                        {marginMetric === 'summary' && (
+                          <>
+                            <td className="num">{fmtInt(m?.marginToday)}</td>
+                            <td
+                              className={`num ${chipClass(m?.marginChange)}`}
+                              style={heatStyle(m?.marginChange ?? null, maxMarginChange)}
+                            >
+                              {fmtSigned(m?.marginChange)}
+                            </td>
+                            <td className="num">{fmtInt(m?.shortToday)}</td>
+                            <td
+                              className={`num ${chipClass(m?.shortChange)}`}
+                              style={heatStyle(m?.shortChange ?? null, maxShortChange)}
+                            >
+                              {fmtSigned(m?.shortChange)}
+                            </td>
+                            <td className="num">{fmtInt(m?.offset)}</td>
+                          </>
+                        )}
+                        {marginMetric === 'trading' && (
+                          <>
+                            <td className="num">{fmtInt(m?.marginBuy)}</td>
+                            <td className="num">{fmtInt(m?.marginSell)}</td>
+                            <td className="num">{fmtInt(m?.shortBuy)}</td>
+                            <td className="num">{fmtInt(m?.shortSell)}</td>
+                            <td className="num">{fmtInt(m?.offset)}</td>
+                          </>
+                        )}
+                        {marginMetric === 'redeem' && (
+                          <>
+                            <td className="num">{fmtInt(m?.marginRedeem)}</td>
+                            <td className="num">{fmtInt(m?.shortRedeem)}</td>
+                            <td className="num">{fmtInt(m?.marginLimit)}</td>
+                            <td className="num">{fmtInt(m?.shortLimit)}</td>
+                            <td className="num">{fmtInt(m?.offset)}</td>
+                          </>
+                        )}
+                      </tr>
+                    )
+                  })}
                 </tbody>
+                <tfoot>
+                  <tr className="tfoot-summary">
+                    <td>{marginDays.length} 日統計</td>
+                    {marginMetric === 'summary' && (
+                      <>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(latestOf(marginTodays))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>餘額走勢</span>
+                            <SparkCell
+                              points={marginTodays}
+                              color={CHART_COLORS.up}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融資餘額走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className={`num inst-matrix-cum ${chipClass(sumOf(marginChanges))}`}>
+                          <div>{fmtSigned(sumOf(marginChanges))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span
+                              className={mStreak ? chipClass(mStreak) : 'hint'}
+                              style={{ fontSize: 11, fontWeight: mStreak ? 600 : undefined }}
+                            >
+                              {fmtBalanceStreak(mStreak)}
+                            </span>
+                            <SparkCell
+                              points={marginChanges}
+                              color={sparkColorOf(marginChanges)}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融資增減走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(latestOf(shortTodays))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>餘額走勢</span>
+                            <SparkCell
+                              points={shortTodays}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融券餘額走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className={`num inst-matrix-cum ${chipClass(sumOf(shortChanges))}`}>
+                          <div>{fmtSigned(sumOf(shortChanges))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span
+                              className={sStreak ? chipClass(sStreak) : 'hint'}
+                              style={{ fontSize: 11, fontWeight: sStreak ? 600 : undefined }}
+                            >
+                              {fmtBalanceStreak(sStreak)}
+                            </span>
+                            <SparkCell
+                              points={shortChanges}
+                              color={sparkColorOf(shortChanges)}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融券增減走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(offsets))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <SparkCell
+                              points={offsets}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="資券互抵走勢"
+                            />
+                          </div>
+                        </td>
+                      </>
+                    )}
+                    {marginMetric === 'trading' && (
+                      <>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(marginBuys))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>買進走勢</span>
+                            <SparkCell
+                              points={marginBuys}
+                              color={CHART_COLORS.up}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融資買進走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(marginSells))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>賣出走勢</span>
+                            <SparkCell
+                              points={marginSells}
+                              color={CHART_COLORS.down}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融資賣出走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(shortBuys))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>回補走勢</span>
+                            <SparkCell
+                              points={shortBuys}
+                              color={CHART_COLORS.up}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融券買進回補走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(shortSells))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>放空走勢</span>
+                            <SparkCell
+                              points={shortSells}
+                              color={CHART_COLORS.down}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融券賣出放空走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(offsets))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <SparkCell
+                              points={offsets}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="資券互抵走勢"
+                            />
+                          </div>
+                        </td>
+                      </>
+                    )}
+                    {marginMetric === 'redeem' && (
+                      <>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(marginRedeems))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>現償走勢</span>
+                            <SparkCell
+                              points={marginRedeems}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融資現償走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(shortRedeems))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>券償走勢</span>
+                            <SparkCell
+                              points={shortRedeems}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="融券券償走勢"
+                            />
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(latestOf(marginLimits))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>最新限額</span>
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(latestOf(shortLimits))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>最新限額</span>
+                          </div>
+                        </td>
+                        <td className="num inst-matrix-cum">
+                          <div>{fmtInt(sumOf(offsets))}</div>
+                          <div className="tfoot-cum-trend">
+                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <SparkCell
+                              points={offsets}
+                              color={CHART_COLORS.line}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel="資券互抵走勢"
+                            />
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                </tfoot>
               </table>
             </div>
             <p className="hint">
               這區的數字單位是張（1 張 = 1000 股），和上面法人的股數不同。
               融資是借錢買股票，餘額變多代表看多的人加碼；融券是借股票先賣，
-              所以融券的「賣出」是放空、「買進」是回補。資券互抵 {fmtInt(margin.offset)} 張。
-              {margin.source === 'openapi' && ' 今日改用備援來源，只有餘額、沒有買賣拆項。'}
+              所以融券的「賣出」是放空、「買進」是回補。資券互抵為當日沖銷互抵張數。
+              {margin?.source === 'openapi' && ' 今日改用備援來源，只有餘額、沒有買賣拆項。'}
             </p>
           </>
         )}

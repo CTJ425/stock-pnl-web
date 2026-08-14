@@ -96,6 +96,13 @@ const mockMacro = {
           body: JSON.stringify(mockMacro),
         }),
       )
+      await page.route('**/storage/v1/object/public/reports/fx/daily.json', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ schema: 1, rates: [] }),
+        }),
+      )
       await page.route('**/auth/v1/user', (route) =>
         route.fulfill({
           status: 200,

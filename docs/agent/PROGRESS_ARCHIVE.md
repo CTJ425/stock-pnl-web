@@ -3,9 +3,73 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 13:53:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 15:00:00 Asia/Taipei).
 
-## 📅 Log: 2026-08-14 11:55:00 Asia/Taipei (Task 101: Fix BFI82U premature freezing & probe retirement protection + Reconcile historical market data)
+## 📅 Log: 2026-08-14 14:27:00 Asia/Taipei (Task 106: Redesign StockDetail ChipsTab "融資融券" table to vertical matrix layout with segmented metrics & footer sparklines)
+
+Redesigned StockDetail ChipsTab "三大法人買賣超" table to match Macro's vertical matrix format:
+1. **Vertical Date Matrix (No Rightmost Trend Column)**:
+   - Header: `日期 | 外資（不含自營） | 外資自營商 | 投信 | 自營商 | 三大法人合計` (6 clean columns, no rightmost `走勢` column).
+   - Rows: 7 trading days ordered newest to oldest (`[...instDays].reverse()`).
+   - Summary Footer (`tfoot`): Displays the 7-day cumulative total, dynamic streak labels (`連 N 買` / `連 N 賣`), and 15-day SVG `SparkCell` trendlines with dynamic Red/Green trend colors (`.tfoot-cum-trend`).
+2. **Component & Testing Updates (TDD)**:
+   - `ChipsTab.tsx`: Removed rowspan trend column; added footer sparkline & streak rendering for all 5 institutional units; updated sparkline dimensions (`TFOOT_SPARK_W=76`, `TFOOT_SPARK_H=20`).
+   - `StockDetailPage.test.tsx`: Updated assertions for 6-column header and 5 footer sparklines (34/34 passed).
+   - `StockDetail` suite: 9 test files / 143 tests passed.
+3. **Verification**:
+   - Unit tests: Full vitest suite with 63 files / 951 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified layout on Desktop, Tablet, Mobile with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
+
+## 📅 Log: 2026-08-14 14:21:00 Asia/Taipei (Task 105: Set MOPS probe slots to 17:15 and 17:20 for mops_revenue and mops_profit + Full Verification)
+
+Adjusted MOPS revenue and profit probe slots per user request:
+1. **Set 17:15 & 17:20 Probe Slots (TDD)**:
+   - Updated `sourceProbePlan.ts` `MOPS_SLOTS` to: `new Set(['12:00', '12:05', '17:15', '17:20', '21:00', '21:05'])`.
+   - Updated `sourceProbePlan.test.ts` (TDD) to assert that `sourcesForTaipeiTime('17:15', true)` and `'17:20'` contain `mops_revenue` and `mops_profit` along with active `bwibbu` and `t86`.
+   - Updated `schema.sql` documentation comments.
+   - Hot-reloaded into DEV Supabase Edge runtime container (`stock-pnl-web-dev-functions-1`).
+2. **Comprehensive Verification**:
+   - Unit tests: Full vitest suite with 63 test files / 951 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors).
+   - Smoke test: Live DEV Edge runtime verified responding and serving probe requests. Version: `0.7.16-dev.1`.
+
+## 📅 Log: 2026-08-14 13:53:00 Asia/Taipei (Task 104: Redesign StockDetail ChipsTab "三大法人買賣超" table to vertical matrix matching Macro layout)
+
+Redesigned StockDetail ChipsTab "三大法人買賣超" table to match Macro's vertical matrix format:
+1. **Vertical Date Matrix (No Rightmost Trend Column)**:
+   - Header: `日期 | 外資（不含自營） | 外資自營商 | 投信 | 自營商 | 三大法人合計` (6 clean columns, no rightmost `走勢` column).
+   - Rows: 7 trading days ordered newest to oldest (`[...instDays].reverse()`).
+   - Summary Footer (`tfoot`): Displays the 7-day cumulative total, dynamic streak labels (`連 N 買` / `連 N 賣`), and 15-day SVG `SparkCell` trendlines with dynamic Red/Green trend colors (`.tfoot-cum-trend`).
+2. **Component & Testing Updates (TDD)**:
+   - `ChipsTab.tsx`: Removed rowspan trend column; added footer sparkline & streak rendering for all 5 institutional units; updated sparkline dimensions (`TFOOT_SPARK_W=76`, `TFOOT_SPARK_H=20`).
+   - `StockDetailPage.test.tsx`: Updated assertions for 6-column header and 5 footer sparklines (34/34 passed).
+   - `StockDetail` suite: 9 test files / 143 tests passed.
+3. **Verification**:
+   - Unit tests: Full vitest suite with 63 files / 951 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified layout on Desktop, Tablet, Mobile with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
+
+## 📅 Log: 2026-08-14 13:40:00 Asia/Taipei (Task 102: Redesign Macro "每日成交量" table to vertical matrix format with Day-over-Day DoD heat styling)
+
+Redesigned Macro "每日成交量" table to match "三大法人買賣超" table layout with Day-over-Day (DoD) relative heat styling:
+1. **Vertical Date Matrix & Dynamic Footer Sparklines**:
+   - Header: `日期 | 成交金額（億元） | 成交股數（億股） | 成交筆數（萬筆） | 加權指數 | 指數漲跌` (6 clean columns, no rightmost rowspan trend column).
+   - Rows: 7 trading days ordered newest to oldest (`08/14, 08/13...`).
+   - Summary Footer (`tfoot`): For all volume & index columns (Amount, Shares, Txns, Taiex, Change), displays the 7-day average / cumulative total, dynamic streak labels (`連 N 日增量` / `連 N 日增筆` / `連 N 日上漲` / `7日累計漲跌`), and 15-day SVG `SparkCell` trendlines with matching dynamic Red/Green trend colors.
+2. **Day-over-Day (DoD) Red/Green Coloring & Heat Tinting**:
+   - Compared to previous trading day (`days[i - 1]`):
+     - 成交金額 / 股數 / 筆數 / 加權指數: Increased > 0 $\rightarrow$ Red (`pnl-up` ＋ `heatStyle` relative to 7-day max delta); Decreased < 0 $\rightarrow$ Green (`pnl-down` ＋ `heatStyle`).
+     - 指數漲跌: Point change > 0 $\rightarrow$ Red; Point change < 0 $\rightarrow$ Green.
+3. **Component & Testing Updates (TDD)**:
+   - `TwMarketSection.tsx`: Generalized `metricTrendStreak` to dynamically calculate streak and Red/Green trendline color for Amount, Shares (`增量`/`縮量`), and Transactions (`增筆`/`減筆`).
+   - `TwMarketSection.test.tsx`: Followed TDD (RED $\rightarrow$ GREEN $\rightarrow$ REFACTOR) to assert shares and transactions streak labels and sparkline stroke colors (20/20 passed).
+   - `verify-macro-turnover.cjs`: Verified E2E rendering with 0 console/page errors.
+4. **Verification**:
+   - Unit tests: Full vitest suite with 63 files / 951 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop (1280x800), Tablet (768x1024), and Mobile (390x844) with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
 
 Fixed BFI82U premature freezing and established probe retirement safety:
 1. **Three Lines of Defense**:

@@ -14,13 +14,35 @@ import { CandleChart } from '../Charts/CandleChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
 import { BarSeriesChart } from '../Charts/BarSeriesChart'
 import { ChartLegend } from '../Charts/ChartLegend'
-import { CATEGORICAL_COLORS } from '../Charts/chartColors'
-import { fmtUpdatedAt } from './chipFormat'
+import { SparkCell } from '../Charts/SparkCell'
+import { CATEGORICAL_COLORS, CHART_COLORS } from '../Charts/chartColors'
+import { fmtUpdatedAt, heatStyle } from './chipFormat'
+import { streakAt } from './chipStreak'
 import {
   buildTechnicalView,
   RANGE_LABELS,
   type RangeKey,
 } from './technicalView'
+
+const TFOOT_SPARK_W = 76
+const TFOOT_SPARK_H = 20
+
+function sparkTrendColor(series: Array<number | null>): string {
+  const valid = series.filter((v): v is number => v !== null)
+  if (valid.length === 0) return CHART_COLORS.axis
+  const last = valid[valid.length - 1]
+  return last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+}
+
+function fmtVolumeStreak(s: number): string {
+  if (!s) return '—'
+  return s > 0 ? `連 ${s} 日增量` : `連 ${-s} 日縮量`
+}
+
+function fmtPriceStreak(s: number): string {
+  if (!s) return '—'
+  return s > 0 ? `連 ${s} 日上漲` : `連 ${-s} 日下跌`
+}
 
 const RANGES: RangeKey[] = ['3m', '6m', '1y']
 
@@ -126,7 +148,44 @@ export function TechnicalTab({
   }
 
   const { latest } = view
-  const volumeRows = showAllVolume ? view.volumeRows : view.volumeRows.slice(0, VOLUME_ROWS_COLLAPSED)
+  const volumeRows = showAllVolume
+    ? view.volumeRows
+    : view.volumeRows.slice(0, VOLUME_ROWS_COLLAPSED)
+
+  // Calculations for volume table & footers (chronological: oldest to newest)
+  const chronoRows = [...view.volumeRows].reverse()
+  const volumeSeries = chronoRows.map((r) => r.volume)
+  const maxVolume = Math.max(0, ...volumeSeries)
+  const avgVolume =
+    volumeSeries.length > 0 ? volumeSeries.reduce((a, b) => a + b, 0) / volumeSeries.length : 0
+  const volumeDiffSeries: Array<number | null> = chronoRows.map((r, i) =>
+    i === 0 ? null : r.volume - chronoRows[i - 1].volume,
+  )
+  const volumeStreak = streakAt(volumeDiffSeries, volumeDiffSeries.length - 1)
+
+  const volRatioSeries = chronoRows.map((r) => r.volRatio)
+  const maxVolRatioDiff = Math.max(
+    0,
+    ...volRatioSeries.map((v) => (v !== null ? Math.abs(v - 1.0) : 0)),
+  )
+  const latestVolRatio = view.volumeRows[0]?.volRatio ?? null
+
+  const closeSeries = chronoRows.map((r) => r.close)
+  const latestClose = view.volumeRows[0]?.close ?? 0
+  const maxClose = closeSeries.length > 0 ? Math.max(...closeSeries) : 0
+  const minClose = closeSeries.length > 0 ? Math.min(...closeSeries) : 0
+
+  const changePctSeries = chronoRows.map((r) => r.changePct)
+  const maxAbsChangePct = Math.max(
+    0,
+    ...changePctSeries.map((v) => (v !== null ? Math.abs(v) : 0)),
+  )
+  const priceStreak = streakAt(changePctSeries, changePctSeries.length - 1)
+  const cumChangePct =
+    chronoRows.length > 1 && chronoRows[0].close > 0
+      ? ((chronoRows[chronoRows.length - 1].close - chronoRows[0].close) / chronoRows[0].close) *
+        100
+      : null
 
   return (
     <>
@@ -251,35 +310,116 @@ export function TechnicalTab({
           )}
         </div>
         <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table inst-matrix" aria-label="每日成交量矩陣">
             <thead>
               <tr>
                 <th>日期</th>
                 <th className="num">成交量</th>
                 <th className="num">量比</th>
-                <th className="num">收盤</th>
-                <th className="num">漲跌</th>
+                <th className="num">收盤價</th>
+                <th className="num">漲跌幅</th>
               </tr>
             </thead>
             <tbody>
-              {volumeRows.map((r) => (
-                <tr key={r.date}>
-                  <td>{r.date}</td>
-                  <td className="num">{fmtLots(r.volume)}</td>
-                  {/*
-                    The ratio is what the table gives that the bar chart cannot: the chart shows relative height,
-                    this says "today is N times the 20-day average". Bold from 1.5x —— that is the level worth a look.
-                  */}
-                  <td className="num" style={heavy(r.volRatio) ? { fontWeight: 700 } : undefined}>
-                    {r.volRatio === null ? '—' : `${fmtNum(r.volRatio, 2)} 倍`}
-                  </td>
-                  <td className="num">{fmtPrice(r.close)}</td>
-                  <td className={`num ${pnlClass(r.changePct)}`}>
-                    {r.changePct === null ? '—' : fmtSignedPercent(r.changePct)}
-                  </td>
-                </tr>
-              ))}
+              {volumeRows.map((r) => {
+                const volRatioDiff = r.volRatio !== null ? r.volRatio - 1.0 : null
+                return (
+                  <tr key={r.date}>
+                    <td>{r.date}</td>
+                    <td className="num" style={heatStyle(r.volume, maxVolume)}>
+                      {fmtLots(r.volume)}
+                    </td>
+                    <td
+                      className={`num ${r.volRatio !== null && r.volRatio >= 1 ? 'pnl-up' : 'pnl-down'}`}
+                      style={heatStyle(volRatioDiff, maxVolRatioDiff)}
+                    >
+                      {r.volRatio === null ? '—' : `${fmtNum(r.volRatio, 2)} 倍`}
+                    </td>
+                    <td className="num">{fmtPrice(r.close)}</td>
+                    <td
+                      className={`num ${pnlClass(r.changePct)}`}
+                      style={heatStyle(r.changePct, maxAbsChangePct)}
+                    >
+                      {r.changePct === null ? '—' : fmtSignedPercent(r.changePct)}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
+            <tfoot>
+              <tr className="tfoot-summary">
+                <td>{volumeRows.length} 日統計</td>
+                <td className="num inst-matrix-cum">
+                  <div>日均 {fmtLots(avgVolume)}</div>
+                  <div className="tfoot-cum-trend">
+                    <span
+                      className={volumeStreak ? (volumeStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
+                      style={{ fontSize: 11, fontWeight: volumeStreak ? 600 : undefined }}
+                    >
+                      {fmtVolumeStreak(volumeStreak)}
+                    </span>
+                    <SparkCell
+                      points={volumeSeries}
+                      color={CHART_COLORS.up}
+                      width={TFOOT_SPARK_W}
+                      height={TFOOT_SPARK_H}
+                      ariaLabel="成交量走勢"
+                    />
+                  </div>
+                </td>
+                <td className="num inst-matrix-cum">
+                  <div>最新 {fmtNum(latestVolRatio, 2)} 倍</div>
+                  <div className="tfoot-cum-trend">
+                    <span
+                      className={heavy(latestVolRatio) ? 'pnl-up' : 'hint'}
+                      style={{ fontSize: 11, fontWeight: heavy(latestVolRatio) ? 600 : undefined }}
+                    >
+                      {heavy(latestVolRatio) ? '量能放大' : '量能常態'}
+                    </span>
+                    <SparkCell
+                      points={volRatioSeries}
+                      color={CATEGORICAL_COLORS[0]}
+                      width={TFOOT_SPARK_W}
+                      height={TFOOT_SPARK_H}
+                      ariaLabel="量比走勢"
+                    />
+                  </div>
+                </td>
+                <td className="num inst-matrix-cum">
+                  <div>最新 {fmtPrice(latestClose)}</div>
+                  <div className="tfoot-cum-trend">
+                    <span className="hint" style={{ fontSize: 11 }}>
+                      高 {fmtPrice(maxClose)} / 低 {fmtPrice(minClose)}
+                    </span>
+                    <SparkCell
+                      points={closeSeries}
+                      color={CHART_COLORS.axis}
+                      width={TFOOT_SPARK_W}
+                      height={TFOOT_SPARK_H}
+                      ariaLabel="收盤價走勢"
+                    />
+                  </div>
+                </td>
+                <td className={`num inst-matrix-cum ${cumChangePct !== null ? pnlClass(cumChangePct) : ''}`}>
+                  <div>{cumChangePct !== null ? `累計 ${fmtSignedPercent(cumChangePct)}` : '—'}</div>
+                  <div className="tfoot-cum-trend">
+                    <span
+                      className={priceStreak ? (priceStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
+                      style={{ fontSize: 11, fontWeight: priceStreak ? 600 : undefined }}
+                    >
+                      {fmtPriceStreak(priceStreak)}
+                    </span>
+                    <SparkCell
+                      points={changePctSeries}
+                      color={sparkTrendColor(changePctSeries)}
+                      width={TFOOT_SPARK_W}
+                      height={TFOOT_SPARK_H}
+                      ariaLabel="漲跌幅走勢"
+                    />
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         <p className="hint">

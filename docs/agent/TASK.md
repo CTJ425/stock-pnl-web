@@ -10,13 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-14 13:28)
+## 📍 Where the project stands (2026-08-14 15:00)
 
-- **Version 0.7.16-dev.1**:
-  - UI: Redesigned Macro "每日成交量" table to match "三大法人買賣超" vertical matrix layout (6 clean columns, footer streak badges and 15-day sparklines via `.tfoot-cum-trend`).
-  - Edge & Probe: Fixed BFI82U premature freezing via 15:40 preliminary threshold, 3-hit retirement protection for daily sources, and real amount signature checking. Reconciled historical market data for 2026-08-05 through 2026-08-13.
+- **Version 0.7.16**:
+  - UI: Redesigned Macro "每日成交量" table, StockDetail ChipsTab "三大法人買賣超" table, "融資融券" table, FundamentalTab "月營收" & "獲利能力" tables, and TechnicalTab "每日成交量" table to unified vertical `inst-matrix` layout with streak labels, heat styling & SVG footer sparklines.
+  - Edge & Probe: Expanded `MOPS_SLOTS` with `17:15` and `17:20` probe slots for `mops_revenue` and `mops_profit`. Fixed BFI82U premature freezing via 15:40 threshold.
 - **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
-- **All tests green**: 63 test files / 950 vitest tests 100% passed; Playwright E2E passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
+- **All tests green**: 64 test files / 956 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint`, Playwright E2E 0 errors.
 
 ## 📋 Active Tasks
 

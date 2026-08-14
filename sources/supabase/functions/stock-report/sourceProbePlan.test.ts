@@ -31,6 +31,12 @@ describe('sourceProbePlan', () => {
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
+    expect(sourcesForTaipeiTime('17:15', true).sort()).toEqual(
+      ['bwibbu', 'mops_profit', 'mops_revenue', 't86'].sort(),
+    )
+    expect(sourcesForTaipeiTime('17:20', true).sort()).toEqual(
+      ['bwibbu', 'mops_profit', 'mops_revenue', 't86'].sort(),
+    )
   })
 
   it('晚間融資借券窗（21:00 仍在估值窗內）', () => {

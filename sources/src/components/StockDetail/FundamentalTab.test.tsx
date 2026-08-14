@@ -458,4 +458,69 @@ describe('FundamentalTab', () => {
       expect(labels).toContain('毛利率')
     })
   })
+
+  describe('矩陣表格佈局與走勢圖（0.7.16）', () => {
+    it('月營收表格採用 inst-matrix 樣式，表尾帶統計與 4 張走勢圖', () => {
+      render(<FundamentalTab fundamental={full} loading={false} />)
+      const table = screen.getByRole('table', { name: '月營收矩陣' })
+      expect(table.className).toContain('inst-matrix')
+
+      const headers = [...table.querySelectorAll('thead th')].map((th) => th.textContent)
+      expect(headers).toEqual(['月份', '當月營收（千元）', '月增 (MoM)', '年增 (YoY)', '累計年增'])
+
+      // Footer
+      expect(table.querySelector('tfoot')).toBeTruthy()
+      expect(table.querySelector('tfoot td')?.textContent).toBe('2 個月統計')
+      expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(4)
+      expect(table.textContent).toContain('連 2 月增')
+      expect(table.textContent).toContain('連 2 月年增')
+    })
+
+    it('季報獲利表格採用 inst-matrix 樣式，包含營收年增 YoY 與表尾 7 張走勢圖', () => {
+      const twelveQuarters: ProfitQuarter[] = Array.from({ length: 12 }, (_, i) => {
+        const q = 1 + i
+        return {
+          yearQuarter: `${2023 + Math.floor(q / 4)}-Q${(q % 4) + 1}`,
+          revenueMillionTwd: 500000 + i * 20000,
+          grossMarginPercent: 50 + i,
+          operatingMarginPercent: 40 + i,
+          pretaxMarginPercent: 42 + i,
+          netMarginPercent: 35 + i,
+          epsTwd: 8 + i * 0.5,
+        }
+      })
+
+      render(
+        <FundamentalTab
+          fundamental={{ ...full, profitQuarters: twelveQuarters }}
+          loading={false}
+        />,
+      )
+
+      const table = screen.getByRole('table', { name: '季報獲利能力矩陣' })
+      expect(table.className).toContain('inst-matrix')
+
+      const headers = [...table.querySelectorAll('thead th')].map((th) => th.textContent)
+      expect(headers).toEqual([
+        '季別',
+        '單季營收（百萬元）',
+        '營收年增 (YoY)',
+        '每股盈餘 (EPS)',
+        '毛利率',
+        '營益率',
+        '稅前純益率',
+        '稅後純益率',
+      ])
+
+      // YoY calculation check: 2026-Q1 (index 11, rev 720000) vs 2025-Q1 (index 7, rev 640000) -> +12.50%
+      const rows = table.querySelectorAll('tbody tr')
+      expect(rows[0].textContent).toContain('+12.50%')
+
+      // Footer
+      expect(table.querySelector('tfoot')).toBeTruthy()
+      expect(table.querySelector('tfoot td')?.textContent).toBe('9 季統計')
+      expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(7)
+      expect(table.textContent).toContain('連 8 季年增')
+    })
+  })
 })
