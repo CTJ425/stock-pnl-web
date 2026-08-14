@@ -1,11 +1,22 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task 110 — Deploy Probe War Room Cards in Admin Status Page replacing legacy failure alert banner (0.7.17)
-- Status: **✅ Implemented and verified; all 66 test files / 962 tests pass; build & typecheck clean**
-- Timestamp: 2026-08-14 16:48:00 Asia/Taipei
+- Action: Task 110 (Follow-up) — Fix Probe War Room retirement condition gate & verify full test suite (0.7.17)
+- Status: **✅ Implemented and verified; all 66 test files / 963 tests pass; build & typecheck clean; DEV/main aligned**
+- Timestamp: 2026-08-14 18:00:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-14 18:00:00 Asia/Taipei (Task 110 Follow-up: Fix Probe War Room premature retirement condition & full verification)
+
+1. **Retirement Gate Correction (`ProbeWarRoom.tsx`)**:
+   - Fixed `isRetired` logic in `ProbeWarRoom.tsx` so daily sources (e.g. `T86`, `BFI82U`, `BWIBBU`, `MARGIN`, `BORROW`) strictly require `hitCount >= target` (3 hits) to retire, rather than prematurely marking retired on tick 1 or 2 when the tick note matches `資料已到位`.
+   - Unit tests added in `ProbeWarRoom.test.tsx` asserting 1/3 and 2/3 hits show `🟢 探測中` without `已退休`, and 3/3 hits show `✅ 已退休`.
+2. **Testing & Verification**:
+   - Full Vitest suite: 66 test files / 963 tests passed 100%.
+   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
+   - `oxlint` 0 errors.
+   - Synced `package-lock.json` version to `0.7.17`.
 
 ## 📅 Log: 2026-08-14 16:48:00 Asia/Taipei (Task 110: Deploy Probe Hit War Room Cards replacing legacy failure banner)
 
@@ -19,20 +30,3 @@ Replaced the legacy alert banner ("有 X 次探針抓取失敗需要注意") wit
    - Updated `AdminStatusPage.test.tsx` to assert new War Room cards.
    - Vitest suite: 66 test files / 962 tests passed 100%.
    - Build (`tsc -b && vite build`) passed with zero errors.
-
-## 📅 Log: 2026-08-14 15:45:00 Asia/Taipei (Task 109: Retune probe cycles: bwibbu 17:00–18:30 and bfi82u dual window with 15:40 condition removed)
-
-Optimized probe cycle timings and schedules across TWSE sources:
-1. **Valuation Probe (`bwibbu`) Window Narrowing**:
-   - Window updated from `15:00 – 22:00` to `17:00 – 18:30` (5-min interval, 3 hits to retire).
-   - Analysis of historical probe ticks proved TWSE consistently publishes `BWIBBU_d` between 17:15–17:20, eliminating ~24 daily no-op probes between 15:00–17:00.
-2. **Total Market Institutional Probe (`bfi82u`) Dual Window & 15:40 Gate Removal**:
-   - Expanded to dual-window schedule: `15:00 – 16:30` (afternoon initial release) and `19:30 – 20:15` (evening comprehensive accounts & block trade settlement).
-   - Removed the `< 15:40` gating condition in `sourceLanded` and `isMarketSessionReady`, allowing afternoon data to mark landed immediately on 3 hits.
-   - Updated `syncMarket` to re-fetch today's `BFI82U` during the evening window (`>= 19:30`) to merge final settlement numbers.
-   - Updated `readDoneSourcesToday` to filter landed counts by active window so each window independently requires 3 landed ticks to retire.
-3. **Admin UI & Documentation**:
-   - Updated `MechanismGuide.tsx`, `AdminStatusPage.tsx`, `timeline.ts`, and `schema.sql` comments.
-4. **Testing & Verification**:
-   - Updated unit tests in `sourceProbePlan.test.ts`, `twMarket.test.ts`, `probeRound.test.ts`, and `timeline.test.ts`.
-   - All 65 test files / 959 tests passed 100%. `typecheck:edge`, `build`, and `oxlint` clean. Version: `0.7.17`.

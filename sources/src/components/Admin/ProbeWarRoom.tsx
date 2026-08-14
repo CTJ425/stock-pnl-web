@@ -78,10 +78,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         })
         .filter(Boolean)
 
-      const isRetired =
-        hitCount >= s.target ||
-        sourceTicks.some((t) => t.note?.includes('retire') || t.note?.includes('到位') || t.note?.includes('退休'))
-
+      const isRetired = hitCount >= s.target
       const isProbing = !isRetired && sourceTicks.length > 0
       const isWaiting = !isRetired && sourceTicks.length === 0
 
