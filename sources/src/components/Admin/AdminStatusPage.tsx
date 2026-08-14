@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
 import { fetchAdminStatus, type AdminStatus } from '../../services/adminStatus'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { MechanismGuide } from './MechanismGuide'
 import {
   describeCron,
   groupProbeTicks,
@@ -275,6 +276,9 @@ export function AdminStatusPage() {
         </button>
       </div>
 
+      {/* ── 探針與排程機制運作總覽 ────────────────────────── */}
+      <MechanismGuide />
+
       {/* ── 排程同步狀態 ────────────────────────────────────── */}
       {data.probeExperiment && (
         <div className="section glass" style={SECTION_PAD}>
@@ -303,7 +307,7 @@ export function AdminStatusPage() {
         <div className="rpt-section-head">
           <h3 className="head-tight">台股全市場・量能與三大法人</h3>
           <span className="source-tag">
-            {marketCron ? describeCron(marketCron.schedule) : 'market-daily'}
+            {marketCron ? describeCron(marketCron.schedule) : '探針 bfi82u 驅動'}
           </span>
         </div>
         {!data.market ? (
@@ -368,8 +372,8 @@ export function AdminStatusPage() {
               <b>一天一個請求</b>，歷史逐日回補）
             </p>
             <p className="ast-note" style={{ marginTop: 6 }}>
-              <b>抓取週期</b>：
-              {marketCron ? describeCron(marketCron.schedule) : '排程 market-daily'}
+              <b>抓取機制</b>：
+              {marketCron ? describeCron(marketCron.schedule) : '探針 bfi82u（15:00–16:30 / 19:30–20:15 每 5 分，各時段 3 次到位收工）'}
               。每輪重抓當月量能與加權指數，另補若干個交易日的法人金額。
               量能與法人的日期覆蓋本來就不同步，上方的「待補」不等於異常。
             </p>

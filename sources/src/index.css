@@ -3185,6 +3185,44 @@ a.hmenu-item {
 .apr-log .data-table { font-size: 12px; }
 .apr-hit-row td { color: var(--notice-ok-ink); }
 
+/* ─────────────────────────────────────────────────────────────
+   機制運作總覽對照（管理員後台 MechanismGuide）。前綴 adm-guide-。
+   ───────────────────────────────────────────────────────────── */
+.adm-guide-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 0; border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit;
+}
+.adm-guide-toggle-title {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.adm-guide-toggle-action {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  color: var(--ink-muted); flex: none;
+}
+.adm-guide-toggle-action .apr-caret-open { transform: rotate(180deg); }
+.adm-guide-body { margin-top: 14px; }
+.adm-guide-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px; margin-bottom: 14px;
+}
+.adm-guide-card {
+  padding: 12px 14px; border-radius: var(--radius-md, 8px);
+}
+.adm-guide-card-head {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px;
+}
+.adm-guide-subhead {
+  display: flex; align-items: center; gap: 6px; margin: 12px 0 8px;
+  font-size: 13.5px; font-weight: 600; color: var(--ink-base, inherit);
+}
+.adm-guide-subhead h4 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.adm-guide-table { font-size: 12px; }
+.ast-note-cell {
+  font-size: 11.5px; color: var(--ink-secondary); line-height: 1.5;
+  max-width: 38ch; white-space: normal;
+}
+
 @media (max-width: 720px) {
   .ast-next .sep { margin-left: 0; flex-basis: 100%; }
   .ast-verdict .section-stamp { margin-left: 0; flex-basis: 100%; }

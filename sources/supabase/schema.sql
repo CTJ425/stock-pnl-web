@@ -669,7 +669,7 @@ END $$;
 SELECT cron.schedule(
   'market-data-daily',
   -- Taipei 18:00 / 22:00 (UTC 10:00 / 14:00), weekdays. Backstop for 估值 —— the probe's bwibbu
-  -- window is 15:00–22:00 and normally fires far earlier than either of these.
+  -- window is 17:00–18:30 and normally fires far earlier than either of these.
   '0 10,14 * * 1-5',
   $$
   SELECT net.http_post(

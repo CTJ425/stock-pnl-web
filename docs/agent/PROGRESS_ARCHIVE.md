@@ -5,6 +5,22 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 15:00:00 Asia/Taipei).
 
+## 📅 Log: 2026-08-14 14:50:00 Asia/Taipei (Task 107: Redesign StockDetail FundamentalTab Monthly Revenue and Quarterly Profit tables to vertical matrices with YoY & TTM/summary sparklines)
+
+Redesigned StockDetail FundamentalTab "月營收" and "獲利能力" tables into the unified `inst-matrix` format:
+1. **Monthly Revenue Matrix (`月營收矩陣`)**:
+   - Header: `月份 | 當月營收（千元） | 月增 (MoM) | 年增 (YoY) | 累計年增` (5 columns).
+   - Rows: 12 months ordered newest to oldest with MoM, YoY, and Cumulative YoY signed numbers and `heatStyle` relative heat tinting.
+   - Summary Footer (`tfoot`): 12-month total revenue amount (formatted in 兆/億/千元), latest MoM/YoY rates, streak badges (`連 N 月增`, `連 N 月年增`), and 4 SVG `SparkCell` trendlines with dynamic Red/Green colors.
+2. **Quarterly Financials Matrix (`季報獲利能力矩陣`)**:
+   - Header: `季別 | 單季營收（百萬元） | 營收年增 (YoY) | 每股盈餘 (EPS) | 毛利率 | 營益率 | 稅前純益率 | 稅後純益率` (8 columns with YoY revenue comparison).
+   - Rows: Displays 2024~2026 quarters (using in-memory 2023 data as baseline for exact 2024 YoY calculations) with full `heatStyle` relative heat tinting across all columns (單季營收, 營收年增, EPS, 毛利率, 營益率, 稅前純益率, 稅後純益率) and `chipClass` (漲紅跌綠).
+   - Summary Footer (`tfoot`): 4-quarter total revenue + sparkline, latest quarter YoY rate + `連 N 季年增` streak badge + sparkline, TTM rolling 4-quarter EPS + sparkline, 4-quarter average margin ratios + 4 sparklines matching multi-line chart colors (total 7 sparklines).
+3. **Verification**:
+   - Unit tests: Full vitest suite with 63 test files / 954 tests 100% passed (including new matrix assertions in `FundamentalTab.test.tsx` and `StockDetailPage.test.tsx`).
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
+   - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
+
 ## 📅 Log: 2026-08-14 14:27:00 Asia/Taipei (Task 106: Redesign StockDetail ChipsTab "融資融券" table to vertical matrix layout with segmented metrics & footer sparklines)
 
 Redesigned StockDetail ChipsTab "三大法人買賣超" table to match Macro's vertical matrix format:

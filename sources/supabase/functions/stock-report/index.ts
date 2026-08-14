@@ -178,9 +178,12 @@ import {
   type T86State,
 } from './pollPlan.ts'
 import {
+  DAILY_WINDOWS,
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
   borrowHit,
+  getActiveWindow,
+  minutesFromHhmm,
   mopsIssueRocYmd,
   mopsProfitPeriod,
   mopsRevenuePeriod,
@@ -1532,10 +1535,13 @@ async function syncMarket(now: Date): Promise<{
   const existing = await downloadJson<MarketFile>('market/daily.json')
   const have = existing?.days ?? []
 
-  // Taipei calendar day: once FMTQIK + BFI82U (with buy) for this day are on disk, stop hammering TWSE.
+  // Taipei calendar day: once FMTQIK + BFI82U (with buy) for this day are on disk, skip until evening window.
   const sessionDate = dashDate(taipeiYmd(now))
+  const todayYmd = taipeiYmd(now)
   const slot = taipeiHhmm(now)
-  if (isMarketSessionReady(have, sessionDate, slot)) {
+  const isEvening = slot >= '19:30'
+
+  if (!isEvening && isMarketSessionReady(have, sessionDate)) {
     return {
       synced: false,
       days: have.length,
@@ -1576,9 +1582,15 @@ async function syncMarket(now: Date): Promise<{
 
   let days = mergeMarketDays(have, incoming)
 
-  // Legal person amount: The list to be supplemented is the merged list, so that the new trading days just captured in this round will also be queued to be supplemented.
+  // Legal person amount: The list to be supplemented is the merged list.
+  // In evening window (>= 19:30), ensure today is re-polled for the final 19:40 block trades / comprehensive account update.
+  const backfillList = planInstitutionalBackfill(days, MAX_MARKET_INST_DAYS)
+  if (isEvening && !backfillList.includes(todayYmd)) {
+    backfillList.unshift(todayYmd)
+  }
+
   let institutionalFilled = 0
-  for (const ymd of planInstitutionalBackfill(days, MAX_MARKET_INST_DAYS)) {
+  for (const ymd of backfillList) {
     const url = bfi82uDayUrl(ymd)
     if (!url) continue
     const inst = parseBfi82u(await fetchRwdJson(url))
@@ -2352,18 +2364,32 @@ async function probeSource(
  * follow-ups are all short-circuiting (a second `sync-market` in the same session returns `skipped`),
  * so the cost of that degradation is bounded.
  */
-async function readDoneSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId>> {
+async function readDoneSourcesToday(
+  todayYmd: string,
+  slot?: string,
+): Promise<Set<ProbeSourceId>> {
   try {
     const { data, error } = await db
       .from('source_probe_tick')
-      .select('source')
+      .select('source, taipei_time')
       .eq('taipei_ymd', todayYmd)
       .eq('hit', true)
       .eq('data_landed', true)
     if (error || !Array.isArray(data)) return new Set()
+
+    const mins = slot ? minutesFromHhmm(slot) : null
     const counts: Record<string, number> = {}
     for (const r of data) {
       const src = r.source as ProbeSourceId
+      if (mins != null && src in DAILY_WINDOWS) {
+        const activeWin = getActiveWindow(src as keyof typeof DAILY_WINDOWS, mins)
+        if (activeWin) {
+          const tickMins = r.taipei_time ? minutesFromHhmm(r.taipei_time) : null
+          if (tickMins != null && (tickMins < activeWin.from || tickMins > activeWin.to)) {
+            continue
+          }
+        }
+      }
       counts[src] = (counts[src] ?? 0) + 1
     }
     return retiredSources(counts)
@@ -2412,14 +2438,13 @@ async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, u
 async function gatherLandingEvidence(
   hitTicks: ProbeTick[],
   todayYmd: string,
-  slot?: string,
 ): Promise<LandingEvidence> {
   const sources = hitTicks.map((t) => t.source)
   const ev: LandingEvidence = {}
 
   if (sources.includes('bfi82u')) {
     const file = await downloadJson<MarketFile>('market/daily.json')
-    ev.marketSessionReady = isMarketSessionReady(file?.days ?? [], dashDate(todayYmd), slot)
+    ev.marketSessionReady = isMarketSessionReady(file?.days ?? [], dashDate(todayYmd))
   }
 
   if (sources.some((s) => s === 't86' || s === 'margin' || s === 'borrow')) {
@@ -2556,10 +2581,10 @@ async function handleProbe(): Promise<Response> {
       deadline: startedAt + PROBE_FOLLOW_UP_BUDGET_MS,
       now: () => Date.now(),
       summarise: summariseFollowUp,
-      readDoneSources: () => readDoneSourcesToday(todayYmd),
+      readDoneSources: () => readDoneSourcesToday(todayYmd, slot),
       probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
       runFollowUp: runProbeFollowUp,
-      readEvidence: (hitTicks) => gatherLandingEvidence(hitTicks, todayYmd, slot),
+      readEvidence: (hitTicks) => gatherLandingEvidence(hitTicks, todayYmd),
       persistTick: async (t) => {
       try {
         await db.from('source_probe_tick').insert({

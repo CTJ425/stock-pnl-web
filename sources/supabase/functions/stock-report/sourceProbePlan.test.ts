@@ -5,6 +5,7 @@ import {
   borrowHit,
   followUpsFor,
   formatProbeTickLabel,
+  getActiveWindow,
   minutesFromHhmm,
   mopsIssueRocYmd,
   mopsProfitPeriod,
@@ -24,10 +25,10 @@ describe('sourceProbePlan', () => {
     expect(minutesFromHhmm('bad')).toBeNull()
   })
 
-  it('下午開 BFI／T86 窗；估值窗從 15:00 起（沒人知道它幾點出表），借券此時不探', () => {
-    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u', 'bwibbu'])
-    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86', 'bwibbu'])
-    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86', 'bwibbu'])
+  it('下午開 BFI／T86 窗；估值窗 17:00–18:30，借券此時不探', () => {
+    expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u'])
+    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86'])
+    expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86'])
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
@@ -37,14 +38,26 @@ describe('sourceProbePlan', () => {
     expect(sourcesForTaipeiTime('17:20', true).sort()).toEqual(
       ['bwibbu', 'mops_profit', 'mops_revenue', 't86'].sort(),
     )
+    expect(sourcesForTaipeiTime('18:00', true)).toEqual(['bwibbu'])
+    expect(sourcesForTaipeiTime('18:30', true)).toEqual(['bwibbu'])
+    expect(sourcesForTaipeiTime('18:35', true)).toEqual([])
   })
 
-  it('晚間融資借券窗（21:00 仍在估值窗內）', () => {
+  it('晚間 BFI 完整版第二時窗（19:30–20:15）', () => {
+    expect(sourcesForTaipeiTime('19:25', true)).toEqual([])
+    expect(sourcesForTaipeiTime('19:30', true)).toEqual(['bfi82u'])
+    expect(sourcesForTaipeiTime('20:00', true)).toEqual(['bfi82u'])
+    expect(sourcesForTaipeiTime('20:15', true)).toEqual(['bfi82u'])
+    expect(sourcesForTaipeiTime('20:20', true)).toEqual([])
+  })
+
+  it('晚間融資借券窗（20:30 起融資、21:00 起借券與 MOPS）', () => {
+    expect(sourcesForTaipeiTime('20:30', true)).toEqual(['margin'])
     expect(sourcesForTaipeiTime('21:00', true).sort()).toEqual(
-      ['borrow', 'bwibbu', 'margin', 'mops_profit', 'mops_revenue'].sort(),
+      ['borrow', 'margin', 'mops_profit', 'mops_revenue'].sort(),
     )
     expect(sourcesForTaipeiTime('21:30', true).sort()).toEqual(
-      ['borrow', 'bwibbu', 'margin'].sort(),
+      ['borrow', 'margin'].sort(),
     )
   })
 
@@ -57,7 +70,7 @@ describe('sourceProbePlan', () => {
     expect(sourcesForTaipeiTime('21:00', true)).toContain('borrow')
     // 實測翻日時刻，必須在窗內
     expect(sourcesForTaipeiTime('22:15', true)).toContain('borrow')
-    // 22:00 之後估值窗已關、22:30 之後融資窗也關，借券要能獨自撐到 23:30
+    // 22:30 之後融資窗關，借券要能獨自撐到 23:30
     expect(sourcesForTaipeiTime('23:00', true)).toEqual(['borrow'])
     expect(sourcesForTaipeiTime('23:30', true)).toEqual(['borrow'])
     expect(sourcesForTaipeiTime('23:35', true)).toEqual([])
@@ -258,16 +271,20 @@ describe('判準對齊（七個來源共用同一條標準）', () => {
     expect(retiredSources({})).toEqual(new Set())
   })
 
-  it('BFI82U 在 15:40 之前即使資料在檔也不標記為 landed（等待盤後鉅額結算）', () => {
-    const ev = { marketSessionReady: true }
-    // 15:40 之前：不算 landed
-    expect(sourceLanded('bfi82u', '20260811', ev, '15:10')).toBe(false)
-    expect(sourceLanded('bfi82u', '20260811', ev, '15:35')).toBe(false)
-    // 15:40 之後：正式 landed
-    expect(sourceLanded('bfi82u', '20260811', ev, '15:40')).toBe(true)
-    expect(sourceLanded('bfi82u', '20260811', ev, '16:00')).toBe(true)
-    // 未給時間：預設只看 evidence
-    expect(sourceLanded('bfi82u', '20260811', ev)).toBe(true)
+  it('getActiveWindow 依當前分鐘回傳對應的活躍視窗', () => {
+    // bfi82u 雙時段
+    expect(getActiveWindow('bfi82u', 15 * 60 + 10)).toEqual({ from: 15 * 60, to: 16 * 60 + 30 })
+    expect(getActiveWindow('bfi82u', 17 * 60)).toBeNull()
+    expect(getActiveWindow('bfi82u', 19 * 60 + 40)).toEqual({ from: 19 * 60 + 30, to: 20 * 60 + 15 })
+
+    // bwibbu 單時段
+    expect(getActiveWindow('bwibbu', 17 * 60 + 15)).toEqual({ from: 17 * 60, to: 18 * 60 + 30 })
+    expect(getActiveWindow('bwibbu', 15 * 60 + 30)).toBeNull()
+  })
+
+  it('BFI82U 在 marketSessionReady 為 true 時即標記為 landed（取消 15:40 限制）', () => {
+    expect(sourceLanded('bfi82u', '20260811', { marketSessionReady: true })).toBe(true)
+    expect(sourceLanded('bfi82u', '20260811', { marketSessionReady: false })).toBe(false)
   })
 
   it('收工判準只吃「成品的證據」，不吃抓取自己的回報', () => {
