@@ -64,13 +64,24 @@ describe('runProbeRound', () => {
 
   it('命中就叫起對應的抓取，資料到位才算收工', async () => {
     const h = harness({ hits: ['bfi82u'], evidence: { marketSessionReady: true } })
-    const r = await runProbeRound(['bfi82u'], TODAY, h.deps)
+    const r = await runProbeRound(['bfi82u'], TODAY, h.deps, '15:45')
 
     expect(h.ran).toEqual(['sync-market'])
     expect(r.landed).toEqual(['bfi82u'])
     expect(h.marked[0].landed).toBe(true)
     expect(h.marked[0].note).toContain('已觸發 sync-market')
     expect(h.marked[0].note).toContain('資料已到位')
+  })
+
+  it('BFI82U 15:40 之前初版命中會觸發抓取，但不標記收工（等待鉅額結算）', async () => {
+    const h = harness({ hits: ['bfi82u'], evidence: { marketSessionReady: true } })
+    const r = await runProbeRound(['bfi82u'], TODAY, h.deps, '15:10')
+
+    expect(h.ran).toEqual(['sync-market'])
+    expect(r.landed).toEqual([])
+    expect(h.marked[0].landed).toBe(false)
+    expect(h.marked[0].note).toContain('已觸發 sync-market')
+    expect(h.marked[0].note).toContain('資料未到位，下輪重試')
   })
 
   /*

@@ -153,19 +153,62 @@ const mockMacro = {
       if (await turnoverTable.count() > 0) {
         const rows = await turnoverTable.locator('tbody tr').count()
         console.log(`  Found 每日成交量 table with ${rows} rows.`)
-        if (rows !== 5) {
-          console.error(`  Expected 5 rows, got ${rows}`)
+        if (rows !== 7) {
+          console.error(`  Expected 7 rows, got ${rows}`)
           hasErrors = true
         }
 
         const headers = await turnoverTable.locator('thead th').allTextContents()
         console.log(`  Headers: ${headers.join(' | ')}`)
-        if (headers.length !== 10) {
-          console.error(`  Expected 10 column headers, got ${headers.length}`)
+        if (headers.length !== 7) {
+          console.error(`  Expected 7 column headers, got ${headers.length}`)
+          hasErrors = true
+        }
+
+        const footers = await turnoverTable.locator('tfoot td').allTextContents()
+        console.log(`  Footers: ${footers.join(' | ')}`)
+        if (footers.length !== 7) {
+          console.error(`  Expected 7 footer cells, got ${footers.length}`)
+          hasErrors = true
+        }
+
+        // Verify sparklines in trend stack
+        const turnoverSparks = await turnoverTable.locator('.col-trend-rowspan .mac-spark').count()
+        console.log(`  Found ${turnoverSparks} sparklines in 每日成交量 trend stack.`)
+        if (turnoverSparks !== 5) {
+          console.error(`  Expected 5 sparklines in 每日成交量 trend stack, got ${turnoverSparks}`)
           hasErrors = true
         }
       } else {
         console.error('  Table 每日成交量 not found on page!')
+        hasErrors = true
+      }
+
+      // Check 三大法人買賣超 table
+      const instTable = page.locator('table[aria-label="三大法人買賣超"]')
+      if (await instTable.count() > 0) {
+        const instRows = await instTable.locator('tbody tr').count()
+        console.log(`  Found 三大法人買賣超 table with ${instRows} rows.`)
+        if (instRows !== 7) {
+          console.error(`  Expected 7 rows, got ${instRows}`)
+          hasErrors = true
+        }
+
+        const instHeaders = await instTable.locator('thead th').allTextContents()
+        console.log(`  三大法人 Headers: ${instHeaders.join(' | ')}`)
+        if (instHeaders.length !== 7) {
+          console.error(`  Expected 7 column headers, got ${instHeaders.length}`)
+          hasErrors = true
+        }
+
+        const instSparks = await instTable.locator('tfoot .mac-spark').count()
+        console.log(`  Found ${instSparks} sparklines in 三大法人 footer.`)
+        if (instSparks !== 6) {
+          console.error(`  Expected 6 sparklines in 三大法人 footer, got ${instSparks}`)
+          hasErrors = true
+        }
+      } else {
+        console.error('  Table 三大法人買賣超 not found on page!')
         hasErrors = true
       }
 

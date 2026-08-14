@@ -86,6 +86,7 @@ export async function runProbeRound(
   planned: ProbeSourceId[],
   todayYmd: string,
   deps: ProbeRoundDeps,
+  taipeiHhmm?: string,
 ): Promise<ProbeRoundResult> {
   const done = planned.length > 0 ? await deps.readDoneSources() : new Set<ProbeSourceId>()
   const sources = pendingSources(planned, done)
@@ -127,7 +128,7 @@ export async function runProbeRound(
     if (!t.hit) continue
     const r = followUps.find((f) => f.action === PROBE_FOLLOW_UP[t.source])
     if (!r) continue
-    const ok = r.ok && sourceLanded(t.source, todayYmd, evidence)
+    const ok = r.ok && sourceLanded(t.source, todayYmd, evidence, taipeiHhmm)
     if (ok) landed.push(t.source)
     const trigger = r.ok ? `已觸發 ${r.action}：${r.note}` : `觸發失敗 ${r.action}：${r.note}`
     await deps.markTick(

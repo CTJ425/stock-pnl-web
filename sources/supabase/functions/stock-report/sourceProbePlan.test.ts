@@ -10,6 +10,7 @@ import {
   mopsProfitPeriod,
   mopsRevenuePeriod,
   pendingSources,
+  retiredSources,
   sourceLanded,
   sourcesForTaipeiTime,
   ymdToRocYmd,
@@ -238,6 +239,29 @@ describe('判準對齊（七個來源共用同一條標準）', () => {
       // 空證據 = 沒有任何理由相信資料在畫面上 → 不得收工
       expect(sourceLanded(id, '20260811', {})).toBe(false)
     }
+  })
+
+  it('retiredSources 依各來源所需次數判定收工', () => {
+    // 預設每日來源需 3 次，MOPS 需 1 次
+    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 })).toEqual(
+      new Set(['t86', 'mops_revenue']),
+    )
+    expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 })).toEqual(
+      new Set(['bfi82u', 'margin']),
+    )
+    expect(retiredSources({})).toEqual(new Set())
+  })
+
+  it('BFI82U 在 15:40 之前即使資料在檔也不標記為 landed（等待盤後鉅額結算）', () => {
+    const ev = { marketSessionReady: true }
+    // 15:40 之前：不算 landed
+    expect(sourceLanded('bfi82u', '20260811', ev, '15:10')).toBe(false)
+    expect(sourceLanded('bfi82u', '20260811', ev, '15:35')).toBe(false)
+    // 15:40 之後：正式 landed
+    expect(sourceLanded('bfi82u', '20260811', ev, '15:40')).toBe(true)
+    expect(sourceLanded('bfi82u', '20260811', ev, '16:00')).toBe(true)
+    // 未給時間：預設只看 evidence
+    expect(sourceLanded('bfi82u', '20260811', ev)).toBe(true)
   })
 
   it('收工判準只吃「成品的證據」，不吃抓取自己的回報', () => {

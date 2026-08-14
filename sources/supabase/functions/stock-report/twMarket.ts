@@ -336,12 +336,15 @@ export function planInstitutionalBackfill(
 export function isMarketSessionReady(
   days: MarketDay[] | null | undefined,
   sessionDate: string,
+  taipeiHhmm?: string,
 ): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return false
   const d = (days ?? []).find((x) => x?.date === sessionDate)
   if (!d) return false
   if (d.tradeValueTwd == null) return false
   if (!d.institutional?.buy) return false
+  // 15:40 以前不視為最終 ready，讓後續輪次（如 15:35 盤後鉅額/匯率結算）能順利更新
+  if (taipeiHhmm && taipeiHhmm < '15:40') return false
   return true
 }
 

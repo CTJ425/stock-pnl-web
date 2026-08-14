@@ -336,6 +336,13 @@ describe('isMarketSessionReady', () => {
     }
     expect(isMarketSessionReady([noBuy], '2026-08-07')).toBe(false)
   })
+
+  it('false before 15:40 even when day has buy (allowing 15:35 settlement revisions)', () => {
+    expect(isMarketSessionReady([full('2026-08-07')], '2026-08-07', '15:10')).toBe(false)
+    expect(isMarketSessionReady([full('2026-08-07')], '2026-08-07', '15:35')).toBe(false)
+    expect(isMarketSessionReady([full('2026-08-07')], '2026-08-07', '15:40')).toBe(true)
+    expect(isMarketSessionReady([full('2026-08-07')], '2026-08-07', '16:00')).toBe(true)
+  })
 })
 
 describe('planMarketMonths', () => {

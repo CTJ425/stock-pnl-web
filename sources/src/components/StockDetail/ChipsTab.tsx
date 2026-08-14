@@ -23,7 +23,6 @@ import {
   fmtLotsFromShares,
   fmtLotsPlain,
   fmtSigned,
-  fmtTradeStreak,
   fmtUpdatedAt,
   heatStyle,
   shortDate,
@@ -91,31 +90,7 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
  * The streak describes the **法人**, so it sits on that 法人's row —— it used to be a per-day column read off
  * whichever day the picker happened to be on.
  */
-function ChipTrend({ nets, streak }: { nets: Array<number | null>; streak: number }) {
-  // Gaps are dropped rather than zero-filled: a missing day is not a day of no trading, and joining across
-  // it would draw a slope that never happened.
-  const points = nets.filter((v): v is number => v !== null)
-  if (points.length === 0) return <span className="hint">—</span>
-  const last = points[points.length - 1]
-  const color = last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-      <span
-        className={streak ? chipClass(streak) : 'hint'}
-        style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: streak ? 600 : undefined }}
-      >
-        {fmtTradeStreak(streak)}
-      </span>
-      <SparkCell
-        points={points}
-        color={color}
-        width={SPARK_W}
-        height={SPARK_H}
-        ariaLabel={`近 ${points.length} 個交易日的買賣超走勢`}
-      />
-    </div>
-  )
-}
+
 
 export function ChipsTab({ report }: { report: ReportData }) {
   const { institutional, margin, borrow, history } = report
@@ -218,49 +193,114 @@ export function ChipsTab({ report }: { report: ReportData }) {
               <table className="data-table inst-matrix" aria-label="三大法人買賣超矩陣">
                 <thead>
                   <tr>
-                    <th>法人</th>
-                    {instDays.map((d) => (
-                      <th key={d.date} className="num">
-                        {shortDate(d.date)}
+                    <th>日期</th>
+                    {matrixRows.map((r) => (
+                      <th
+                        key={r.key}
+                        className={`num ${r.key === 'total' ? 'col-total' : ''}`}
+                      >
+                        {r.label}
                       </th>
                     ))}
-                    <th className="num">{instDays.length} 日累計</th>
-                    <th>走勢</th>
+                    <th style={{ borderLeft: '1px solid var(--border-strong)', minWidth: 220 }}>走勢</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {matrixRows.map((r) => (
-                    <tr key={r.key} className={r.key === 'total' ? 'row-total' : undefined}>
-                      <td>{r.label}</td>
-                      {r.lots.map((v, i) => (
-                        <td
-                          key={instDays[i].date}
-                          /* Only the net is signed and coloured —— 買進／賣出 are gross and always positive. */
-                          className={`num ${metric === 'net' ? chipClass(v) : ''}`}
-                          style={metric === 'net' ? heatStyle(v, r.rowMax) : undefined}
-                          title={
-                            r.values[i] === null
-                              ? undefined
-                              : `${instDays[i].date} ${fmtInt(r.values[i])} 股`
-                          }
-                        >
-                          {metric === 'net'
-                            ? fmtLotsFromShares(r.values[i])
-                            : fmtLotsPlain(r.values[i])}
-                        </td>
-                      ))}
+                  {[...instDays].reverse().map((d, dRevIdx) => {
+                    const originalIdx = instDays.length - 1 - dRevIdx
+                    return (
+                      <tr key={d.date}>
+                        <td>{shortDate(d.date)}</td>
+                        {matrixRows.map((r) => {
+                          const v = r.lots[originalIdx]
+                          const shareVal = r.values[originalIdx]
+                          return (
+                            <td
+                              key={r.key}
+                              /* Only the net is signed and coloured —— 買進／賣出 are gross and always positive. */
+                              className={`num ${metric === 'net' ? chipClass(v) : ''} ${
+                                r.key === 'total' ? 'col-total' : ''
+                              }`}
+                              style={metric === 'net' ? heatStyle(v, r.rowMax) : undefined}
+                              title={
+                                shareVal === null
+                                  ? undefined
+                                  : `${d.date} ${fmtInt(shareVal)} 股`
+                              }
+                            >
+                              {metric === 'net'
+                                ? fmtLotsFromShares(shareVal)
+                                : fmtLotsPlain(shareVal)}
+                            </td>
+                          )
+                        })}
+                        {dRevIdx === 0 && (
+                          <td className="col-trend-rowspan" rowSpan={instDays.length}>
+                            <div className="trend-stack">
+                              {matrixRows.map((r) => {
+                                const s = r.streak
+                                const isBuy = s > 0
+                                const label = Math.abs(s) >= 2 ? `連 ${Math.abs(s)} ${isBuy ? '買' : '賣'}` : null
+                                const validNets = r.nets.filter((v): v is number => v !== null)
+                                const lastNet = validNets.length > 0 ? validNets[validNets.length - 1] : null
+                                const sparkColor =
+                                  lastNet !== null && lastNet !== undefined
+                                    ? lastNet > 0
+                                      ? CHART_COLORS.up
+                                      : lastNet < 0
+                                        ? CHART_COLORS.down
+                                        : CHART_COLORS.axis
+                                    : CHART_COLORS.axis
+                                return (
+                                  <div key={r.key} className="trend-item">
+                                    <div className="trend-info">
+                                      <span className="trend-label">{r.label}</span>
+                                      <span
+                                        className={label ? chipClass(s) : 'hint'}
+                                        style={{ fontSize: 11, fontWeight: label ? 600 : undefined }}
+                                      >
+                                        {label ?? '—'}
+                                      </span>
+                                    </div>
+                                    <SparkCell
+                                      points={r.nets}
+                                      color={sparkColor}
+                                      width={SPARK_W}
+                                      height={SPARK_H}
+                                      ariaLabel={`近 ${r.nets.length} 個交易日${r.label}買賣超走勢`}
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="tfoot-summary">
+                    <td>{instDays.length} 日累計</td>
+                    {matrixRows.map((r) => (
                       <td
-                        className={`num inst-matrix-cum ${metric === 'net' ? chipClass(r.cum) : ''}`}
+                        key={r.key}
+                        className={`num inst-matrix-cum ${metric === 'net' ? chipClass(r.cum) : ''} ${
+                          r.key === 'total' ? 'col-total' : ''
+                        }`}
                         title={r.cum === null ? undefined : `${fmtSigned(r.cum)} 股`}
                       >
                         {metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}
                       </td>
-                      <td>
-                        <ChipTrend nets={r.nets} streak={r.streak} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                    ))}
+                    <td style={{ borderLeft: '1px solid var(--border-strong)', textAlign: 'right' }}>
+                      <span className={chipClass(matrixRows.find((r) => r.key === 'total')?.cum ?? null)}>
+                        {instDays.length} 日累計{matrixRows.find((r) => r.key === 'total')?.cum ? (matrixRows.find((r) => r.key === 'total')!.cum! > 0 ? '買超 ' : '賣超 ') : ''}
+                        {fmtLotsPlain(Math.abs(matrixRows.find((r) => r.key === 'total')?.cum ?? 0))}
+                      </span>
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
             <p className="hint">

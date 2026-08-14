@@ -3,7 +3,51 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 09:30:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 11:55:00 Asia/Taipei).
+
+
+## 📅 Log: 2026-08-14 11:15:00 Asia/Taipei (Task 99: Refactor Macro & StockDetail tables to Unified Single Table layout with Full 15-day Sparkline Stack)
+
+Refactored table structures across Macro ("每日成交量", "三大法人買賣超") and Stock Detail ("三大法人買賣超") to a unified, clean Single Table layout:
+1. **Single Table Architecture with Rowspan Trend Column**:
+   - Left Column: Trading Date (sticky frozen column, ordered newest first).
+   - Top Header: Metric items and units.
+   - Middle Columns: Clean tabular numbers with relative heat tint and red/green styling.
+   - Rightmost Column (`col-trend-rowspan`, spanning 7 daily rows): Contains the complete, unbroken stack of all 15-day sparklines (SVG SparkCell) and streak tags.
+   - Summary Footer (`tfoot`): 7-day statistical summary (averages, cumulative net changes, and summary badge).
+2. **Verification & Testing**:
+   - Updated `TwMarketSection.test.tsx` and `StockDetailPage.test.tsx` (53 tests passed). Full vitest suite: 63 files / 946 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile viewports with 0 errors.
+   - Build, edge typecheck, and lint clean (0 errors). Version: 0.7.15-dev.5.
+
+
+## 📅 Log: 2026-08-14 10:08:00 Asia/Taipei (Task 97: Refactor Admin Sync Status page, remove legacy timelines, graduate probe panel)
+
+Refactored the Admin Sync Status page (`AdminStatusPage.tsx`) to streamline system monitoring:
+1. Removed obsolete "台股盤後・這一輪" after-hours timeline and "美國總體經濟・今日班次" shift timeline sections and dead state/hooks.
+2. Formalized "探針實驗・命中時序（0.7.3）" into permanent feature "排程同步狀態" with clean, professional copy and "每 5 分鐘探測與即時抓取" badge.
+3. Cleaned up dead functions in `timeline.ts` and dead CSS in `index.css`.
+4. Tests: Updated `AdminStatusPage.test.tsx` and `timeline.test.ts`. Full test suite: 63 test files / 946 tests 100% passed. Build, lint, and edge typecheck clean.
+5. Version bumped to `0.7.15-dev.3`.
+
+
+## 📅 Log: 2026-08-14 09:30:00 Asia/Taipei (Task 96: Redesign Daily Turnover table on Macro page into transposed matrix style)
+
+Redesigned the "每日成交量" (Daily Turnover) table in `TwMarketSection.tsx` from the legacy vertical 31-day table into a transposed matrix (`.data-table.inst-matrix`), fully matching the UI style of "三大法人買賣超".
+
+**Core changes:**
+1. Direction & Columns: Aligned left-to-right (oldest → newest, 7 trading days), with column headers: `項目 | 7 days | 7 日統計 | 近 15 日走勢`.
+2. 5 Metric Rows: 成交金額 (with 7-day avg & volume streak), 成交股數 (7-day avg), 成交筆數 (7-day avg), 加權指數 (7-day avg close & taiex streak), 指數漲跌 (7-day net cumulative change, heatStyle background & red/green styling).
+3. Visual & RWD: Shared `.inst-matrix` styling with sticky frozen first column on mobile viewport and responsive horizontal scrolling.
+4. Testing (TDD): Updated `TwMarketSection.test.tsx` (19 passed), `MacroPage.test.tsx` + `App.smoke.test.tsx` (35 passed), total suite 63 test files / 997 tests 100% passed.
+5. E2E: Created `sources/scripts/verify-macro-turnover.cjs` testing desktop (1280px), tablet (768px), and mobile (390px) viewports with screenshots verified.
+
+No database or Edge Function change. Committed to `dev` only; `main` untouched.
+
+
+## 📅 Log: 2026-08-12 20:33:25 Asia/Taipei (Task 95: Measure the per-dispatch context delta from existing transcripts)
+
+Task is now complete. Analysis tool `.claude/hooks/dispatch_delta.py` (220 lines, new) joins main-transcript `Agent` tool_use calls to subagent transcripts via `toolUseId` in `<session>/subagents/agent-*.meta.json`, measures cost side (dispatch prompt + report chars, i.e. context footprint) against benefit side (tool_result payloads main avoided pulling in), reports net per dispatch. Sample: all 42 dispatches across 11 sessions, project history.
 
 
 ## 📅 Log: 2026-08-12 20:08:20 Asia/Taipei (Release 0.7.14)
