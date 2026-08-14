@@ -8,6 +8,7 @@ vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
 
 import { TwMarketSection } from './TwMarketSection'
 import type { MarketDay } from '../../services/marketProxy'
+import { CHART_COLORS } from '../Charts/chartColors'
 
 const side = (total: number, foreign: number) => ({
   foreignTwd: foreign,
@@ -408,11 +409,11 @@ describe('TwMarketSection', () => {
     expect(instTable(container).className).toContain('inst-matrix')
   })
 
-  it('走勢欄：每日成交量呈現連 N 日增量/縮量與連 N 日上漲/下跌 Streak 標籤', async () => {
+  it('走勢欄：每日成交量呈現金額/股數/筆數之增減與指數上漲/下跌 Streak 標籤，且折線圖帶有紅綠趨勢色', async () => {
     const days = [
-      { ...day('2026-08-01', 7e11, null), changePoints: 100 },
-      { ...day('2026-08-02', 8e11, null), changePoints: 150 },
-      { ...day('2026-08-03', 9e11, null), changePoints: 200 },
+      { ...day('2026-08-01', 7e11, null), tradeVolumeShares: 10e8, transactions: 20e4, changePoints: 100 },
+      { ...day('2026-08-02', 8e11, null), tradeVolumeShares: 12e8, transactions: 25e4, changePoints: 150 },
+      { ...day('2026-08-03', 9e11, null), tradeVolumeShares: 14e8, transactions: 30e4, changePoints: 200 },
     ]
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-03T08:30:00.000Z', days })
     const { container } = render(<TwMarketSection />)
@@ -422,7 +423,14 @@ describe('TwMarketSection', () => {
     // Taiex row has positive change: all 3 days positive
     expect(table.textContent).toContain('連 3 日上漲')
     expect(table.textContent).toContain('連 2 日增量')
-    expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
+    expect(table.textContent).toContain('連 2 日增筆')
+    const sparks = table.querySelectorAll('tfoot .mac-spark')
+    expect(sparks).toHaveLength(5)
+    const polylineColors = [...sparks].map((s) => s.querySelector('polyline')?.getAttribute('stroke'))
+    expect(polylineColors[0]).toBe(CHART_COLORS.up) // 成交金額
+    expect(polylineColors[1]).toBe(CHART_COLORS.up) // 成交股數
+    expect(polylineColors[2]).toBe(CHART_COLORS.up) // 成交筆數
+    expect(polylineColors[3]).toBe(CHART_COLORS.up) // 加權指數
   })
 
   it('指數漲跌儲存格套用熱力底色與紅綠色彩', async () => {

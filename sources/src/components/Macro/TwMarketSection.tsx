@@ -160,7 +160,11 @@ function calcAvgOrNull(values: ReadonlyArray<number | null>): number | null {
 }
 
 
-function volumeTrendStreak(points: number[]): { label: string | null; color: string } {
+function metricTrendStreak(
+  points: number[],
+  upNoun: string = '增量',
+  downNoun: string = '縮量',
+): { label: string | null; color: string } {
   if (points.length < 2) return { label: null, color: CHART_COLORS.axis }
   const last = points[points.length - 1]
   const prev = points[points.length - 2]
@@ -172,7 +176,7 @@ function volumeTrendStreak(points: number[]): { label: string | null; color: str
     else if (!isUp && points[i] < points[i - 1]) streak++
     else break
   }
-  const label = streak >= 2 ? `連 ${streak} 日${isUp ? '增量' : '縮量'}` : null
+  const label = streak >= 2 ? `連 ${streak} 日${isUp ? upNoun : downNoun}` : null
   const color = isUp ? CHART_COLORS.up : CHART_COLORS.down
   return { label, color }
 }
@@ -292,19 +296,21 @@ export function TwMarketSection() {
   const turnoverAmountPoints = days
     .map((d) => toBillion(d.tradeValueTwd))
     .filter((v): v is number => v !== null)
-  const turnoverAmountTrend = volumeTrendStreak(turnoverAmountPoints)
+  const turnoverAmountTrend = metricTrendStreak(turnoverAmountPoints, '增量', '縮量')
 
   const turnoverSharesVals = turnoverDays.map((d) => toBillionShares(d.tradeVolumeShares))
   const turnoverSharesAvg = calcAvgOrNull(turnoverSharesVals)
   const turnoverSharesPoints = days
     .map((d) => toBillionShares(d.tradeVolumeShares))
     .filter((v): v is number => v !== null)
+  const turnoverSharesTrend = metricTrendStreak(turnoverSharesPoints, '增量', '縮量')
 
   const turnoverTxnVals = turnoverDays.map((d) => toTenThousand(d.transactions))
   const turnoverTxnAvg = calcAvgOrNull(turnoverTxnVals)
   const turnoverTxnPoints = days
     .map((d) => toTenThousand(d.transactions))
     .filter((v): v is number => v !== null)
+  const turnoverTxnTrend = metricTrendStreak(turnoverTxnPoints, '增筆', '減筆')
 
   const taiexVals = turnoverDays.map((d) => d.taiex)
   const taiexAvg = calcAvgOrNull(taiexVals)
@@ -573,12 +579,22 @@ export function TwMarketSection() {
                   {turnoverSharesAvg === null ? '—' : `${turnoverSharesAvg.toFixed(1)} 億股`}
                 </div>
                 <div className="tfoot-cum-trend">
-                  <span className="hint" style={{ fontSize: 11 }}>
-                    —
+                  <span
+                    className={
+                      turnoverSharesTrend.label
+                        ? chipClass(turnoverSharesTrend.color === CHART_COLORS.up ? 1 : -1)
+                        : 'hint'
+                    }
+                    style={{
+                      fontSize: 11,
+                      fontWeight: turnoverSharesTrend.label ? 600 : undefined,
+                    }}
+                  >
+                    {turnoverSharesTrend.label ?? '—'}
                   </span>
                   <SparkCell
                     points={turnoverSharesPoints.slice(-TREND_DAYS)}
-                    color={CHART_COLORS.axis}
+                    color={turnoverSharesTrend.color}
                     width={TFOOT_SPARK_W}
                     height={TFOOT_SPARK_H}
                     ariaLabel="近 15 個交易日成交股數走勢"
@@ -590,12 +606,22 @@ export function TwMarketSection() {
                   {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬`}
                 </div>
                 <div className="tfoot-cum-trend">
-                  <span className="hint" style={{ fontSize: 11 }}>
-                    —
+                  <span
+                    className={
+                      turnoverTxnTrend.label
+                        ? chipClass(turnoverTxnTrend.color === CHART_COLORS.up ? 1 : -1)
+                        : 'hint'
+                    }
+                    style={{
+                      fontSize: 11,
+                      fontWeight: turnoverTxnTrend.label ? 600 : undefined,
+                    }}
+                  >
+                    {turnoverTxnTrend.label ?? '—'}
                   </span>
                   <SparkCell
                     points={turnoverTxnPoints.slice(-TREND_DAYS)}
-                    color={CHART_COLORS.axis}
+                    color={turnoverTxnTrend.color}
                     width={TFOOT_SPARK_W}
                     height={TFOOT_SPARK_H}
                     ariaLabel="近 15 個交易日成交筆數走勢"
