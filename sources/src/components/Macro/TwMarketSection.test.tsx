@@ -444,6 +444,42 @@ describe('TwMarketSection', () => {
     expect(cell0801.style.backgroundColor).toBeTruthy()
   })
 
+  it('成交金額/股數/筆數/指數依據相較前一交易日之增減套用紅綠與熱力底色', async () => {
+    const days = [
+      {
+        ...day('2026-08-01', 7e11, null),
+        tradeVolumeShares: 1e10,
+        transactions: 3e6,
+        taiex: 22000,
+      },
+      {
+        ...day('2026-08-02', 8e11, null), // amount up (+1000億), shares down (-20億股), txns up (+50萬), taiex up (+100)
+        tradeVolumeShares: 8e9,
+        transactions: 3.5e6,
+        taiex: 22100,
+        changePoints: 100,
+      },
+    ]
+    fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-02T08:30:00.000Z', days })
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    const rows = [...turnoverRows(container)]
+    // Row 0 is 08/02
+    const cells0802 = rows[0].querySelectorAll('td')
+    expect(cells0802[1].className).toContain('pnl-up') // 成交金額 +1000億
+    expect(cells0802[1].style.backgroundColor).toBeTruthy()
+
+    expect(cells0802[2].className).toContain('pnl-down') // 成交股數 -20億股
+    expect(cells0802[2].style.backgroundColor).toBeTruthy()
+
+    expect(cells0802[3].className).toContain('pnl-up') // 成交筆數 +50萬
+    expect(cells0802[3].style.backgroundColor).toBeTruthy()
+
+    expect(cells0802[4].className).toContain('pnl-up') // 加權指數 +100
+    expect(cells0802[4].style.backgroundColor).toBeTruthy()
+  })
+
   it('查無資料時顯示空狀態，不是一片空白', async () => {
     fetchMarketDaily.mockResolvedValue(null)
     render(<TwMarketSection />)

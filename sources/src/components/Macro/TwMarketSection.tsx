@@ -318,6 +318,60 @@ export function TwMarketSection() {
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
   const maxAbsChange = Math.max(0, ...changeVals.map((v) => (v === null ? 0 : Math.abs(v))))
 
+  // Market turnover Day-over-Day differences and max relative deltas (for heat styling)
+  const turnoverDiffs = turnoverDays.map((d) => {
+    const dIdx = days.findIndex((item) => item.date === d.date)
+    const prevD = dIdx > 0 ? days[dIdx - 1] : null
+
+    const amount = toBillion(d.tradeValueTwd)
+    const prevAmount = prevD ? toBillion(prevD.tradeValueTwd) : null
+    const amountDiff = amount !== null && prevAmount !== null ? amount - prevAmount : null
+
+    const shares = toBillionShares(d.tradeVolumeShares)
+    const prevShares = prevD ? toBillionShares(prevD.tradeVolumeShares) : null
+    const sharesDiff = shares !== null && prevShares !== null ? shares - prevShares : null
+
+    const txns = toTenThousand(d.transactions)
+    const prevTxns = prevD ? toTenThousand(prevD.transactions) : null
+    const txnsDiff = txns !== null && prevTxns !== null ? txns - prevTxns : null
+
+    const taiexDiff =
+      d.changePoints ??
+      (d.taiex !== null && prevD?.taiex !== null && prevD?.taiex !== undefined
+        ? d.taiex - prevD.taiex
+        : null)
+
+    return {
+      date: d.date,
+      amount,
+      amountDiff,
+      shares,
+      sharesDiff,
+      txns,
+      txnsDiff,
+      taiex: d.taiex,
+      taiexDiff,
+      changePoints: d.changePoints,
+    }
+  })
+
+  const maxAbsAmountDiff = Math.max(
+    0,
+    ...turnoverDiffs.map((r) => (r.amountDiff === null ? 0 : Math.abs(r.amountDiff))),
+  )
+  const maxAbsSharesDiff = Math.max(
+    0,
+    ...turnoverDiffs.map((r) => (r.sharesDiff === null ? 0 : Math.abs(r.sharesDiff))),
+  )
+  const maxAbsTxnDiff = Math.max(
+    0,
+    ...turnoverDiffs.map((r) => (r.txnsDiff === null ? 0 : Math.abs(r.txnsDiff))),
+  )
+  const maxAbsTaiexDiff = Math.max(
+    0,
+    ...turnoverDiffs.map((r) => (r.taiexDiff === null ? 0 : Math.abs(r.taiexDiff))),
+  )
+
   // X-axis: 60 days each grid is about 8px, all labels will be mushy - one label every 10 days (six labels).
   // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
@@ -448,28 +502,43 @@ export function TwMarketSection() {
             </tr>
           </thead>
           <tbody>
-            {[...turnoverDays].reverse().map((d) => {
-              const amount = toBillion(d.tradeValueTwd)
-              const shares = toBillionShares(d.tradeVolumeShares)
-              const txns = toTenThousand(d.transactions)
-              return (
-                <tr key={d.date}>
-                  <td>{shortDate(d.date)}</td>
-                  <td className="num">{fmtBillion(amount)}</td>
-                  <td className="num">{shares === null ? '—' : `${shares.toFixed(1)} 億股`}</td>
-                  <td className="num">{txns === null ? '—' : `${txns.toFixed(1)} 萬`}</td>
-                  <td className="num">{d.taiex === null ? '—' : d.taiex.toFixed(2)}</td>
-                  <td
-                    className={`num ${chipClass(d.changePoints)}`}
-                    style={heatStyle(d.changePoints, maxAbsChange)}
-                  >
-                    {d.changePoints === null
-                      ? '—'
-                      : `${d.changePoints > 0 ? '+' : ''}${d.changePoints.toFixed(2)}`}
-                  </td>
-                </tr>
-              )
-            })}
+            {[...turnoverDiffs].reverse().map((d) => (
+              <tr key={d.date}>
+                <td>{shortDate(d.date)}</td>
+                <td
+                  className={`num ${chipClass(d.amountDiff)}`}
+                  style={heatStyle(d.amountDiff, maxAbsAmountDiff)}
+                >
+                  {fmtBillion(d.amount)}
+                </td>
+                <td
+                  className={`num ${chipClass(d.sharesDiff)}`}
+                  style={heatStyle(d.sharesDiff, maxAbsSharesDiff)}
+                >
+                  {d.shares === null ? '—' : `${d.shares.toFixed(1)} 億股`}
+                </td>
+                <td
+                  className={`num ${chipClass(d.txnsDiff)}`}
+                  style={heatStyle(d.txnsDiff, maxAbsTxnDiff)}
+                >
+                  {d.txns === null ? '—' : `${d.txns.toFixed(1)} 萬`}
+                </td>
+                <td
+                  className={`num ${chipClass(d.taiexDiff)}`}
+                  style={heatStyle(d.taiexDiff, maxAbsTaiexDiff)}
+                >
+                  {d.taiex === null ? '—' : d.taiex.toFixed(2)}
+                </td>
+                <td
+                  className={`num ${chipClass(d.changePoints)}`}
+                  style={heatStyle(d.changePoints, maxAbsChange)}
+                >
+                  {d.changePoints === null
+                    ? '—'
+                    : `${d.changePoints > 0 ? '+' : ''}${d.changePoints.toFixed(2)}`}
+                </td>
+              </tr>
+            ))}
           </tbody>
           <tfoot>
             <tr className="tfoot-summary">
@@ -591,7 +660,7 @@ export function TwMarketSection() {
       </div>
 
       <p className="hint" style={{ marginTop: 8 }}>
-        成交金額、股數與筆數之統計欄為 7 日日均值，指數漲跌之統計欄為 7 日累計淨漲跌；底色深淺為單日漲跌之相對強度。走勢欄讀取近 {TREND_DAYS} 個交易日。
+        底色深淺為各項目相較前一交易日增減之相對強度（紅色為增量／上漲，綠色為縮量／下跌）；成交金額、股數與筆數之統計欄為 7 日日均值，指數漲跌之統計欄為 7 日累計淨漲跌。走勢圖讀取近 {TREND_DAYS} 個交易日。
       </p>
 
       {/*

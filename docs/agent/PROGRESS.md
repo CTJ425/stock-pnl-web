@@ -1,25 +1,29 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task 102 — Redesign Macro "每日成交量" table to vertical matrix format with footer sparklines and streaks (0.7.16-dev.1)
-- Status: **✅ Implemented and verified; all 63 test files / 950 tests pass; Playwright E2E passed; build / typecheck / oxlint clean (0.7.16-dev.1)**
-- Timestamp: 2026-08-14 13:28:00 Asia/Taipei
+- Action: Task 102 — Redesign Macro "每日成交量" table to vertical matrix format with Day-over-Day DoD heat styling (0.7.16-dev.1)
+- Status: **✅ Implemented and verified; all 63 test files / 951 tests pass; Playwright E2E passed; build / typecheck / oxlint clean (0.7.16-dev.1)**
+- Timestamp: 2026-08-14 13:40:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-08-14 13:28:00 Asia/Taipei (Task 102: Redesign Macro "每日成交量" table to vertical matrix format with footer sparklines and streaks)
+## 📅 Log: 2026-08-14 13:40:00 Asia/Taipei (Task 102: Redesign Macro "每日成交量" table to vertical matrix format with Day-over-Day DoD heat styling)
 
-Redesigned Macro "每日成交量" table to match "三大法人買賣超" table layout:
+Redesigned Macro "每日成交量" table to match "三大法人買賣超" table layout with Day-over-Day (DoD) relative heat styling:
 1. **Vertical Date Matrix (No Rightmost Trend Column)**:
    - Header: `日期 | 成交金額（億元） | 成交股數（億股） | 成交筆數（萬筆） | 加權指數 | 指數漲跌` (6 clean columns, no rightmost rowspan trend column).
    - Rows: 7 trading days ordered newest to oldest (`08/14, 08/13...`).
    - Summary Footer (`tfoot`): For each metric column, displays the 7-day average / cumulative total, the streak label (`連 N 日增量` / `連 N 日上漲` / `7日累計漲跌`), and the 15-day SVG `SparkCell` trendline (width: 76, height: 20).
-2. **Component & Testing Updates**:
-   - `TwMarketSection.tsx`: Switched "每日成交量" to vertical matrix layout with footer sparklines and streak tags (`.tfoot-cum-trend`).
-   - `TwMarketSection.test.tsx`: Updated tests to assert 6 headers and 5 footer sparklines (19/19 passed).
-   - `verify-macro-turnover.cjs`: Updated E2E Playwright verification script for 6 headers, 6 footers, and 5 tfoot sparklines.
-3. **Verification**:
-   - Unit tests: Full vitest suite with 63 files / 950 tests 100% passed.
+2. **Day-over-Day (DoD) Red/Green Coloring & Heat Tinting**:
+   - Compared to previous trading day (`days[i - 1]`):
+     - 成交金額 / 股數 / 筆數 / 加權指數: Increased > 0 $\rightarrow$ Red (`pnl-up` ＋ `heatStyle` relative to 7-day max delta); Decreased < 0 $\rightarrow$ Green (`pnl-down` ＋ `heatStyle`).
+     - 指數漲跌: Point change > 0 $\rightarrow$ Red; Point change < 0 $\rightarrow$ Green.
+3. **Component & Testing Updates**:
+   - `TwMarketSection.tsx`: Computed `turnoverDiffs` across all 4 volume/index metrics with max deltas for `heatStyle` mapping.
+   - `TwMarketSection.test.tsx`: Added unit test covering DoD color and heatStyle application across amount/shares/txns/taiex (20/20 passed).
+   - `verify-macro-turnover.cjs`: Verified E2E rendering with 0 console/page errors.
+4. **Verification**:
+   - Unit tests: Full vitest suite with 63 files / 951 tests 100% passed.
    - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop (1280x800), Tablet (768x1024), and Mobile (390x844) with 0 errors.
    - Build, edge typecheck, and oxlint clean (0 errors). Version: `0.7.16-dev.1`.
 
