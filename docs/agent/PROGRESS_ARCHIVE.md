@@ -3,8 +3,23 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 11:55:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 13:28:00 Asia/Taipei).
 
+## 📅 Log: 2026-08-14 11:29:00 Asia/Taipei (Task 100: Redesign Macro "三大法人買賣超" table to vertical date matrix with footer sparklines and streak labels)
+
+Adjusted Macro "三大法人買賣超" table per user request:
+1. **Vertical Date Matrix (No Rightmost Trend Column)**:
+   - Header: `日期 | 外資 | 外資自營商 | 投信 | 自營商（自行） | 自營商（避險） | 合計` (7 clean columns, no rightmost trend column).
+   - Rows: 7 trading days ordered newest to oldest (`08/14, 08/13...`).
+   - Summary Footer (`tfoot`): For each institutional column, displays the 7-day cumulative total, the streak label (`連 N 買` / `連 N 賣`), and the 15-day SVG `SparkCell` trendline.
+2. **Component & CSS Updates**:
+   - `TwMarketSection.tsx`: Clean vertical date layout with institutional footer sparklines and streak tags.
+   - `index.css`: Added `.inst-matrix .tfoot-cum-trend` styling.
+   - `TwMarketSection.test.tsx`: Updated tests to assert 7 headers and 6 footer sparklines.
+3. **Verification**:
+   - Unit tests: `TwMarketSection.test.tsx` (19 passed). Full suite: 63 files / 946 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
+   - Build, edge typecheck, and lint clean (0 errors).
 
 ## 📅 Log: 2026-08-14 11:15:00 Asia/Taipei (Task 99: Refactor Macro & StockDetail tables to Unified Single Table layout with Full 15-day Sparkline Stack)
 
