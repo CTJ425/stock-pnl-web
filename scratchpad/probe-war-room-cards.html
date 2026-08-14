@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>探針命中戰情室字卡 — 3 種設計提案 (stock-pnl-web)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --surface-hover: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-strong: #6366f1;
+      --accent-cyan: #22d3ee;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius: 14px;
+      --radius-sm: 9px;
+      --radius-xs: 5px;
+      --shadow: 0 8px 32px rgba(2, 6, 18, 0.45);
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse at 15% 10%, rgba(99, 102, 241, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 60%, rgba(34, 211, 238, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 32px 24px 80px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header.preview-header {
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .preview-header h1 {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+    .preview-header p {
+      color: var(--ink-secondary);
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--accent);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+    }
+
+    /* Tab Switcher */
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 32px;
+      position: sticky;
+      top: 16px;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab-btn.active {
+      background: var(--surface-strong);
+      color: #fff;
+      border-color: var(--border-strong);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .tab-btn .num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+    .tab-btn.active .num {
+      background: var(--accent-strong);
+      color: #fff;
+    }
+
+    /* Design Wrapper */
+    .design-card {
+      background: rgba(15, 22, 38, 0.75);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 44px;
+      backdrop-filter: blur(16px);
+      transition: border-color 0.2s;
+    }
+    .design-card:hover {
+      border-color: var(--border-strong);
+    }
+    .design-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .design-title-group h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .design-desc {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      margin-top: 3px;
+    }
+    .design-highlights {
+      display: flex;
+      gap: 6px;
+    }
+    .highlight-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink-secondary);
+      border: 1px solid var(--border);
+    }
+
+    /* Common Components */
+    .glass-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .card-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-refresh:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .source-tag {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+      color: var(--ink-secondary);
+    }
+
+    /* Status Badges */
+    .badge-retired {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .badge-probing {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(34, 211, 238, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      animation: probing-glow 2s infinite ease-in-out;
+    }
+    .badge-waiting {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink-secondary);
+      border: 1px solid var(--border);
+    }
+    @keyframes probing-glow {
+      0%, 100% { box-shadow: 0 0 0 rgba(34, 211, 238, 0); }
+      50% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.35); }
+    }
+
+    .hit-time-chip {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .hit-time-chip.latest {
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    /* =========================================================
+       DESIGN 1: WAR ROOM LIVE MATRIX TILES
+       ========================================================= */
+    .d1-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .d1-tile {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .d1-tile:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+    }
+    .d1-tile.retired {
+      border-left: 3px solid var(--accent-emerald);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.03) 0%, rgba(0, 0, 0, 0.4) 100%);
+    }
+    .d1-tile.probing {
+      border-left: 3px solid var(--accent-cyan);
+      border-color: rgba(34, 211, 238, 0.3);
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.05) 0%, rgba(0, 0, 0, 0.4) 100%);
+    }
+    .d1-tile.waiting {
+      border-left: 3px solid rgba(255, 255, 255, 0.2);
+    }
+    .d1-tile-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .d1-source-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .d1-source-code {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-secondary);
+    }
+    .d1-hits-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.025);
+      padding: 8px 10px;
+      border-radius: var(--radius-xs);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .d1-hits-val {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+    .d1-hits-val .target {
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-weight: normal;
+    }
+    .d1-hits-dots {
+      display: flex;
+      gap: 4px;
+    }
+    .d1-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .d1-dot.hit {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+    }
+    .d1-time-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .d1-time-label {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      display: flex;
+      justify-content: space-between;
+    }
+    .d1-time-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    /* =========================================================
+       DESIGN 2: TACTICAL TIMELINE CARDS
+       ========================================================= */
+    .d2-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .d2-row {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: 220px 140px 160px 1fr;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.15s;
+    }
+    .d2-row:hover {
+      background: rgba(255, 255, 255, 0.035);
+      border-color: var(--border-strong);
+    }
+    @media (max-width: 960px) {
+      .d2-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+    }
+    @media (max-width: 600px) {
+      .d2-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+    .d2-name-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .d2-name {
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .d2-window {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-secondary);
+    }
+    .d2-hits-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .d2-hits-num {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .d2-times-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .d2-times-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
+    /* =========================================================
+       DESIGN 3: HUD COCKPIT DECK
+       ========================================================= */
+    .d3-hud-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+    }
+    @media (max-width: 768px) {
+      .d3-hud-summary { grid-template-columns: repeat(2, 1fr); }
+    }
+    .d3-hud-kpi {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .d3-hud-kpi-val {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .d3-hud-kpi-lbl {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .d3-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 12px;
+    }
+    .d3-card {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-family: var(--font-body);
+      position: relative;
+      overflow: hidden;
+    }
+    .d3-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .d3-card.active::before {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+    .d3-card.done::before {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+    .d3-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .d3-source-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .d3-status-led {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .d3-led {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .d3-led.green { background: #10b981; box-shadow: 0 0 8px #10b981; }
+    .d3-led.cyan { background: #22d3ee; box-shadow: 0 0 8px #22d3ee; animation: pulse 1.5s infinite; }
+    .d3-led.amber { background: #f59e0b; }
+    .d3-led.gray { background: #64748b; }
+    
+    .d3-stats-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: var(--radius-xs);
+      margin-bottom: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .d3-timeline-stream {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .d3-stream-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header class="preview-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <h1>
+          <span>🎯 探針命中戰情室字卡提案</span>
+          <span class="tag-badge">幾點命中・命中幾次・是否退休</span>
+        </h1>
+        <p>替換後台頂部警示條，專注於各資料源的「精確命中時間點」、「累計命中次數與目標進度」與「當日退休狀態」。</p>
+      </div>
+      <div style="text-align: right;">
+        <span class="source-tag">情境模擬時間：17:25 (Asia/Taipei)</span>
+        <div style="font-size: 12px; color: var(--ink-muted); margin-top: 4px;">資料日：2026-08-14 (今日)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Filter Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showDesign('all')"><span class="num">★</span> 全部檢視 (All)</button>
+    <button class="tab-btn" onclick="showDesign('d1')"><span class="num">1</span> 獨立戰情字卡網格 (Live Matrix Tiles)</button>
+    <button class="tab-btn" onclick="showDesign('d2')"><span class="num">2</span> 戰情時間軸清單 (Tactical Timeline Rows)</button>
+    <button class="tab-btn" onclick="showDesign('d3')"><span class="num">3</span> 航太戰情平視儀表 (HUD Cockpit Deck)</button>
+  </div>
+
+  <!-- =========================================================
+       DESIGN 1: WAR ROOM LIVE MATRIX TILES
+       ========================================================= -->
+  <section class="design-card" id="card-d1">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>設計方案 1：【獨立戰情字卡網格】(Live Matrix Tiles)</h2>
+        <div class="design-desc">每個資料源獨立成一張精緻字卡，包含退休狀態、3 次到位計數圓點、首末命中時間晶片與時間窗。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">模組化獨立卡片</span>
+        <span class="highlight-pill">命中時間晶片列</span>
+        <span class="highlight-pill">進度圓點直覺</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div class="card-top-bar">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+            <span>⚡ 盤後探針命中戰情室</span>
+            <span class="source-tag" style="color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3);">已退休 4 源・探測中 1 源・待機中 2 源</span>
+          </div>
+          <div style="font-size: 12px; color: var(--ink-secondary); margin-top: 2px;">
+            資料日 2026-08-14・全天候每 5 分鐘巡邏・命中即抓
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="source-tag">更新於 17:25</span>
+          <button class="btn-refresh">🔄 重新整理</button>
+        </div>
+      </div>
+
+      <div class="d1-grid">
+        <!-- 1. BFI82U -->
+        <div class="d1-tile retired">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">全市場法人</div>
+              <div class="d1-source-code">BFI82U・時窗 15:00-16:30</div>
+            </div>
+            <span class="badge-retired">✅ 已退休收工</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val">
+              <span>3</span> <span class="target">/ 3 次命中</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot hit"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>命中時間點</span>
+              <span style="font-family: var(--font-mono); color: var(--ink-muted);">共 3 次</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="hit-time-chip">15:05</span>
+              <span class="hit-time-chip">15:10</span>
+              <span class="hit-time-chip latest">15:15 退休</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. T86 -->
+        <div class="d1-tile retired">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">個股三大法人</div>
+              <div class="d1-source-code">T86・時窗 15:30-17:30</div>
+            </div>
+            <span class="badge-retired">✅ 已退休收工</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val">
+              <span>3</span> <span class="target">/ 3 次命中</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot hit"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>命中時間點</span>
+              <span style="font-family: var(--font-mono); color: var(--ink-muted);">共 3 次</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="hit-time-chip">15:40</span>
+              <span class="hit-time-chip">15:45</span>
+              <span class="hit-time-chip latest">15:50 退休</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. BWIBBU -->
+        <div class="d1-tile probing">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">個股估值 PE/PB</div>
+              <div class="d1-source-code">BWIBBU・時窗 17:00-18:30</div>
+            </div>
+            <span class="badge-probing">🟢 探測中 (2/3)</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val" style="color: var(--accent-cyan);">
+              <span>2</span> <span class="target">/ 3 次命中</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot hit"></span>
+              <span class="d1-dot"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>已命中時間點</span>
+              <span style="font-family: var(--font-mono); color: var(--accent-cyan);">剩 1 次收工</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="hit-time-chip">17:15</span>
+              <span class="hit-time-chip latest">17:20 最新</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. MOPS -->
+        <div class="d1-tile retired">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">MOPS 營收與季報</div>
+              <div class="d1-source-code">MOPS・12:00/17:15/21:00</div>
+            </div>
+            <span class="badge-retired">✅ 槽次命中收工</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val">
+              <span>1</span> <span class="target">/ 1 次到位</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot hit"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>命中槽點時間</span>
+              <span style="font-family: var(--font-mono); color: var(--ink-muted);">17:15 槽次</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="hit-time-chip latest">17:15:08 命中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. MARGIN -->
+        <div class="d1-tile waiting">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">融資融券</div>
+              <div class="d1-source-code">MARGIN・時窗 20:30-22:30</div>
+            </div>
+            <span class="badge-waiting">⏳ 20:30 開始</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val" style="color: var(--ink-muted);">
+              <span>0</span> <span class="target">/ 3 次命中</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot"></span>
+              <span class="d1-dot"></span>
+              <span class="d1-dot"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>預計探測時段</span>
+              <span style="font-family: var(--font-mono); color: var(--ink-muted);">待機中</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="source-tag">尚未進入時窗 (今日未命中)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. BORROW -->
+        <div class="d1-tile waiting">
+          <div class="d1-tile-head">
+            <div>
+              <div class="d1-source-name">借券賣出餘額</div>
+              <div class="d1-source-code">BORROW・時窗 21:00-23:30</div>
+            </div>
+            <span class="badge-waiting">⏳ 21:00 開始</span>
+          </div>
+          <div class="d1-hits-row">
+            <div class="d1-hits-val" style="color: var(--ink-muted);">
+              <span>0</span> <span class="target">/ 3 次命中</span>
+            </div>
+            <div class="d1-hits-dots">
+              <span class="d1-dot"></span>
+              <span class="d1-dot"></span>
+              <span class="d1-dot"></span>
+            </div>
+          </div>
+          <div class="d1-time-section">
+            <div class="d1-time-label">
+              <span>預計探測時段</span>
+              <span style="font-family: var(--font-mono); color: var(--ink-muted);">待機中</span>
+            </div>
+            <div class="d1-time-chips">
+              <span class="source-tag">尚未進入時窗 (今日未命中)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       DESIGN 2: TACTICAL TIMELINE ROWS
+       ========================================================= -->
+  <section class="design-card" id="card-d2">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>設計方案 2：【戰情時間軸清單列】(Tactical Timeline Rows)</h2>
+        <div class="design-desc">水平清單結構，將「來源/時窗」、「命中次數/進度」、「退休狀態」與「精確命中時間串」分欄對齊展示。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">高密度對齊</span>
+        <span class="highlight-pill">易於橫向比較</span>
+        <span class="highlight-pill">時間軌跡完整</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <div class="card-top-bar">
+        <div>
+          <div style="font-weight: 700; color: #fff; font-size: 15px;">探針當日命中與退休追蹤清單</div>
+          <div style="font-size: 12px; color: var(--ink-secondary);">資料日 2026-08-14・以時間序排列各來源命中進度</div>
+        </div>
+        <button class="btn-refresh">🔄 重新整理</button>
+      </div>
+
+      <div class="d2-container">
+        <!-- 1. BFI82U -->
+        <div class="d2-row" style="border-left: 3px solid var(--accent-emerald);">
+          <div class="d2-name-col">
+            <div class="d2-name">
+              <span>全市場三大法人</span>
+              <span class="source-tag">BFI82U</span>
+            </div>
+            <div class="d2-window">時窗 15:00 – 16:30</div>
+          </div>
+          <div class="d2-hits-col">
+            <div class="d2-hits-num" style="color: #6ee7b7;">
+              3 / 3 次
+              <span style="font-size: 11px; font-weight: normal; color: var(--ink-muted);">到位</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-secondary);">命中率 100%</div>
+          </div>
+          <div>
+            <span class="badge-retired">✅ 已退休收工</span>
+          </div>
+          <div class="d2-times-col">
+            <div style="font-size: 11px; color: var(--ink-secondary); margin-bottom: 2px;">命中時間紀錄：</div>
+            <div class="d2-times-list">
+              <span class="hit-time-chip">15:05:12 (首命中)</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="hit-time-chip">15:10:04</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="hit-time-chip latest">15:15:01 (末命中・退休)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. T86 -->
+        <div class="d2-row" style="border-left: 3px solid var(--accent-emerald);">
+          <div class="d2-name-col">
+            <div class="d2-name">
+              <span>個股三大法人</span>
+              <span class="source-tag">T86</span>
+            </div>
+            <div class="d2-window">時窗 15:30 – 17:30</div>
+          </div>
+          <div class="d2-hits-col">
+            <div class="d2-hits-num" style="color: #6ee7b7;">
+              3 / 3 次
+              <span style="font-size: 11px; font-weight: normal; color: var(--ink-muted);">到位</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-secondary);">命中率 100%</div>
+          </div>
+          <div>
+            <span class="badge-retired">✅ 已退休收工</span>
+          </div>
+          <div class="d2-times-col">
+            <div style="font-size: 11px; color: var(--ink-secondary); margin-bottom: 2px;">命中時間紀錄：</div>
+            <div class="d2-times-list">
+              <span class="hit-time-chip">15:40:20 (首命中)</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="hit-time-chip">15:45:15</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="hit-time-chip latest">15:50:08 (末命中・退休)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. BWIBBU -->
+        <div class="d2-row" style="border-left: 3px solid var(--accent-cyan); background: rgba(34, 211, 238, 0.03);">
+          <div class="d2-name-col">
+            <div class="d2-name">
+              <span>個股估值 (PE/PB/DY)</span>
+              <span class="source-tag">BWIBBU</span>
+            </div>
+            <div class="d2-window">時窗 17:00 – 18:30</div>
+          </div>
+          <div class="d2-hits-col">
+            <div class="d2-hits-num" style="color: var(--accent-cyan);">
+              2 / 3 次
+              <span style="font-size: 11px; font-weight: normal; color: var(--accent-cyan);">探測中</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-secondary);">尚需 1 次穩定到位</div>
+          </div>
+          <div>
+            <span class="badge-probing">🟢 探測抓取中</span>
+          </div>
+          <div class="d2-times-col">
+            <div style="font-size: 11px; color: var(--ink-secondary); margin-bottom: 2px;">命中時間紀錄：</div>
+            <div class="d2-times-list">
+              <span class="hit-time-chip">17:15:30 (首命中)</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="hit-time-chip latest">17:20:12 (最新命中)</span>
+              <span style="color: var(--ink-muted);">→</span>
+              <span class="source-tag" style="border-style: dashed; color: var(--accent-cyan);">下一輪 17:30</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. MOPS -->
+        <div class="d2-row" style="border-left: 3px solid var(--accent-emerald);">
+          <div class="d2-name-col">
+            <div class="d2-name">
+              <span>MOPS 營收與季報</span>
+              <span class="source-tag">MOPS</span>
+            </div>
+            <div class="d2-window">槽次 12:00 / 17:15 / 21:00</div>
+          </div>
+          <div class="d2-hits-col">
+            <div class="d2-hits-num" style="color: #6ee7b7;">
+              1 / 1 次
+              <span style="font-size: 11px; font-weight: normal; color: var(--ink-muted);">到位</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-secondary);">槽點命中即收工</div>
+          </div>
+          <div>
+            <span class="badge-retired">✅ 槽次已收工</span>
+          </div>
+          <div class="d2-times-col">
+            <div style="font-size: 11px; color: var(--ink-secondary); margin-bottom: 2px;">命中時間紀錄：</div>
+            <div class="d2-times-list">
+              <span class="hit-time-chip latest">17:15:08 (17:15 槽次命中)</span>
+              <span style="font-size: 11px; color: var(--ink-muted); margin-left: 6px;">下個槽點 21:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. MARGIN & BORROW -->
+        <div class="d2-row" style="border-left: 3px solid rgba(255, 255, 255, 0.15); opacity: 0.85;">
+          <div class="d2-name-col">
+            <div class="d2-name">
+              <span>融資融券 / 借券賣出</span>
+              <span class="source-tag">MARGIN & BORROW</span>
+            </div>
+            <div class="d2-window">時窗 20:30 – 23:30</div>
+          </div>
+          <div class="d2-hits-col">
+            <div class="d2-hits-num" style="color: var(--ink-muted);">
+              0 / 3 次
+            </div>
+            <div style="font-size: 11px; color: var(--ink-secondary);">夜間時窗未開始</div>
+          </div>
+          <div>
+            <span class="badge-waiting">⏳ 待機中 (20:30 啟動)</span>
+          </div>
+          <div class="d2-times-col">
+            <div style="font-size: 11px; color: var(--ink-muted);">今日尚未進入時窗，暫無命中時間紀錄。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       DESIGN 3: HUD COCKPIT DECK
+       ========================================================= -->
+  <section class="design-card" id="card-d3">
+    <div class="design-meta">
+      <div class="design-title-group">
+        <h2>設計方案 3：【航太戰情平視儀表】(HUD Cockpit Deck)</h2>
+        <div class="design-desc">深色戰情室儀表風，頂部聚合「全域命中 KPI」，下方各卡片搭載 LED 狀態指示燈與精確微秒時間戳。</div>
+      </div>
+      <div class="design-highlights">
+        <span class="highlight-pill">HUD 科技感</span>
+        <span class="highlight-pill">LED 即時狀態燈</span>
+        <span class="highlight-pill">精準時間戳</span>
+      </div>
+    </div>
+
+    <!-- Live Component Mockup -->
+    <div class="glass-box">
+      <!-- Top HUD KPI Banner -->
+      <div class="d3-hud-summary">
+        <div class="d3-hud-kpi">
+          <div class="d3-hud-kpi-lbl">RETIRED SOURCES</div>
+          <div class="d3-hud-kpi-val" style="color: #6ee7b7;">4 <span style="font-size: 12px; color: var(--ink-muted);">/ 7 SOURCES</span></div>
+        </div>
+        <div class="d3-hud-kpi">
+          <div class="d3-hud-kpi-lbl">ACTIVE PROBING</div>
+          <div class="d3-hud-kpi-val" style="color: var(--accent-cyan);">1 <span style="font-size: 12px; color: var(--ink-muted);">IN WINDOW</span></div>
+        </div>
+        <div class="d3-hud-kpi">
+          <div class="d3-hud-kpi-lbl">TOTAL HITS TODAY</div>
+          <div class="d3-hud-kpi-val">9 <span style="font-size: 12px; color: var(--ink-muted);">SUCCESS HITS</span></div>
+        </div>
+        <div class="d3-hud-kpi">
+          <div class="d3-hud-kpi-lbl">LATEST HIT TIME</div>
+          <div class="d3-hud-kpi-val" style="color: #a5b4fc; font-size: 18px;">17:20:12 <span style="font-size: 11px; color: var(--ink-muted);">BWIBBU</span></div>
+        </div>
+      </div>
+
+      <!-- HUD Cards Grid -->
+      <div class="d3-grid">
+        <!-- 1. BFI82U -->
+        <div class="d3-card done">
+          <div class="d3-head">
+            <span class="d3-source-title">BFI82U 全市場法人</span>
+            <div class="d3-status-led" style="color: #6ee7b7;">
+              <span class="d3-led green"></span> RETIRED
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: #fff;">3/3 (100%)</strong></div>
+            <div>WINDOW: <span style="color: var(--ink-secondary);">15:00-16:30</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>FIRST HIT</span>
+              <strong style="color: #6ee7b7;">15:05:12</strong>
+            </div>
+            <div class="d3-stream-row">
+              <span>LAST HIT (RETIRE)</span>
+              <strong style="color: #a5b4fc;">15:15:01</strong>
+            </div>
+            <div class="d3-stream-row" style="color: var(--ink-muted);">
+              <span>ACTION</span>
+              <span>sync-market [200 OK]</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. T86 -->
+        <div class="d3-card done">
+          <div class="d3-head">
+            <span class="d3-source-title">T86 個股三大法人</span>
+            <div class="d3-status-led" style="color: #6ee7b7;">
+              <span class="d3-led green"></span> RETIRED
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: #fff;">3/3 (100%)</strong></div>
+            <div>WINDOW: <span style="color: var(--ink-secondary);">15:30-17:30</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>FIRST HIT</span>
+              <strong style="color: #6ee7b7;">15:40:20</strong>
+            </div>
+            <div class="d3-stream-row">
+              <span>LAST HIT (RETIRE)</span>
+              <strong style="color: #a5b4fc;">15:50:08</strong>
+            </div>
+            <div class="d3-stream-row" style="color: var(--ink-muted);">
+              <span>ACTION</span>
+              <span>generate-chips [200 OK]</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. BWIBBU -->
+        <div class="d3-card active">
+          <div class="d3-head">
+            <span class="d3-source-title">BWIBBU 個股估值</span>
+            <div class="d3-status-led" style="color: var(--accent-cyan);">
+              <span class="d3-led cyan"></span> PROBING
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: var(--accent-cyan);">2/3 (PENDING 1)</strong></div>
+            <div>WINDOW: <span style="color: var(--ink-secondary);">17:00-18:30</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>FIRST HIT</span>
+              <strong style="color: #6ee7b7;">17:15:30</strong>
+            </div>
+            <div class="d3-stream-row">
+              <span>LATEST HIT</span>
+              <strong style="color: var(--accent-cyan);">17:20:12</strong>
+            </div>
+            <div class="d3-stream-row" style="color: var(--accent-cyan);">
+              <span>NEXT PROBE</span>
+              <span>17:25:00 (~2m remaining)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. MOPS -->
+        <div class="d3-card done">
+          <div class="d3-head">
+            <span class="d3-source-title">MOPS 營收季報彙整</span>
+            <div class="d3-status-led" style="color: #6ee7b7;">
+              <span class="d3-led green"></span> RETIRED
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: #fff;">1/1 (17:15)</strong></div>
+            <div>SLOTS: <span style="color: var(--ink-secondary);">6 SLOTS/DAY</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>SLOT HIT</span>
+              <strong style="color: #6ee7b7;">17:15:08</strong>
+            </div>
+            <div class="d3-stream-row">
+              <span>NEXT SLOT</span>
+              <span style="color: var(--ink-muted);">21:00:00</span>
+            </div>
+            <div class="d3-stream-row" style="color: var(--ink-muted);">
+              <span>ACTION</span>
+              <span>generate-history [200 OK]</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. MARGIN -->
+        <div class="d3-card">
+          <div class="d3-head">
+            <span class="d3-source-title">MARGIN 融資融券</span>
+            <div class="d3-status-led" style="color: var(--ink-secondary);">
+              <span class="d3-led amber"></span> STANDBY
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: var(--ink-muted);">0/3</strong></div>
+            <div>WINDOW: <span style="color: var(--ink-secondary);">20:30-22:30</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>STATUS</span>
+              <span>WAITING FOR WINDOW</span>
+            </div>
+            <div class="d3-stream-row">
+              <span>START TIME</span>
+              <strong style="color: var(--accent-amber);">20:30:00</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. BORROW -->
+        <div class="d3-card">
+          <div class="d3-head">
+            <span class="d3-source-title">BORROW 借券賣出</span>
+            <div class="d3-status-led" style="color: var(--ink-secondary);">
+              <span class="d3-led amber"></span> STANDBY
+            </div>
+          </div>
+          <div class="d3-stats-bar">
+            <div>HITS: <strong style="color: var(--ink-muted);">0/3</strong></div>
+            <div>WINDOW: <span style="color: var(--ink-secondary);">21:00-23:30</span></div>
+          </div>
+          <div class="d3-timeline-stream">
+            <div class="d3-stream-row">
+              <span>STATUS</span>
+              <span>WAITING FOR WINDOW</span>
+            </div>
+            <div class="d3-stream-row">
+              <span>START TIME</span>
+              <strong style="color: var(--accent-amber);">21:00:00</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  function showDesign(id) {
+    const buttons = document.querySelectorAll('.tab-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    const cards = document.querySelectorAll('.design-card');
+    cards.forEach(card => {
+      if (id === 'all') {
+        card.style.display = 'block';
+      } else {
+        card.style.display = card.id === `card-${id}` ? 'block' : 'none';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

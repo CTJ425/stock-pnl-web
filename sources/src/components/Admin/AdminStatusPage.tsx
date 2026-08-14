@@ -7,10 +7,11 @@
  * 3. 匯率與檔案涵蓋：Yahoo 匯率及各檔持股 daily/ 與 fundamental/ 檔案完整度。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Activity, ChevronDown } from 'lucide-react'
 import { fetchAdminStatus, type AdminStatus } from '../../services/adminStatus'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { MechanismGuide } from './MechanismGuide'
+import { ProbeWarRoom } from './ProbeWarRoom'
 import {
   describeCron,
   groupProbeTicks,
@@ -230,12 +231,6 @@ export function AdminStatusPage() {
   // 抓取全市場排程
   const marketCron = (data?.schedules ?? []).find((s) => s.jobname === 'market-daily') ?? null
 
-  // 檢查探針記錄是否有抓取失敗
-  const probeFails = useMemo(() => {
-    if (!data?.probeExperiment?.ticks) return 0
-    return data.probeExperiment.ticks.filter((t) => t.ok === false).length
-  }, [data])
-
   if (loading && !data) {
     return (
       <div className="section glass" style={SECTION_PAD}>
@@ -260,21 +255,8 @@ export function AdminStatusPage() {
 
   return (
     <>
-      {/* ── Conclusion first ──────────────────────────────── */}
-      <div className="section glass ast-verdict" style={{ padding: '16px 20px' }}>
-        <ShieldCheck size={18} className="ast-verdict-icon" />
-        <h3 className="head-tight">
-          {probeFails === 0 ? '所有資料源與排程同步正常' : `有 ${probeFails} 次探針抓取失敗需要注意`}
-        </h3>
-        <span className="source-tag section-stamp">
-          資料日 {data.chip?.dataDate || dashYmd(data.manifest?.ymd) || '—'}・更新於{' '}
-          {fmtUpdatedAt(data.asOf)}
-        </span>
-        <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'spin' : undefined} />
-          重新整理
-        </button>
-      </div>
+      {/* ── 盤後探針命中戰情室 ────────────────────────────── */}
+      <ProbeWarRoom data={data} loading={loading} onRefresh={() => void load()} />
 
       {/* ── 探針與排程機制運作總覽 ────────────────────────── */}
       <MechanismGuide />
