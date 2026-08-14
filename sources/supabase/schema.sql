@@ -637,8 +637,8 @@ CREATE INDEX IF NOT EXISTS source_probe_tick_ymd_src_idx
 --     probe round, is not an independent safety net. Do not reinstate it as a reason.
 --
 --     Each of these survives for a specific, falsifiable reason instead:
---       `history-daily`      —— `MOPS_SLOTS` is exactly {12:00, 12:05, 21:00, 21:05}: 月營收 / 季報
---                               get **four probe attempts a day**. A MOPS publication at any other
+--       `history-daily`      —— `MOPS_SLOTS` is exactly {12:00, 12:05, 17:15, 17:20, 21:00, 21:05}: 月營收 / 季報
+--                               get **six probe attempts a day**. A MOPS publication at any other
 --                               hour is invisible to the probe, and this is the only thing that
 --                               would pick it up. Retire it only together with wider MOPS slots.
 --       `market-data-daily`  —— 0.7.11 moved `bwibbu` to the dated endpoint and reopened its window

@@ -90,7 +90,7 @@ const DAILY_WINDOWS: Record<
 }
 
 /** MOPS: only these HH:mm slots (aligned to every-5-minute cron) */
-const MOPS_SLOTS = new Set(['12:00', '12:05', '21:00', '21:05'])
+const MOPS_SLOTS = new Set(['12:00', '12:05', '17:15', '17:20', '21:00', '21:05'])
 
 export function minutesFromHhmm(hhmm: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim())

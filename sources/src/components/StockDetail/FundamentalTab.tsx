@@ -17,8 +17,53 @@ import {
 import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
 import { ChartLegend } from '../Charts/ChartLegend'
-import { CATEGORICAL_COLORS } from '../Charts/chartColors'
-import { chipClass, fmtInt, fmtUpdatedAt } from './chipFormat'
+import { SparkCell } from '../Charts/SparkCell'
+import { CATEGORICAL_COLORS, CHART_COLORS } from '../Charts/chartColors'
+import { streakAt } from './chipStreak'
+import { chipClass, fmtInt, fmtUpdatedAt, heatStyle } from './chipFormat'
+
+const TFOOT_SPARK_W = 76
+const TFOOT_SPARK_H = 20
+
+function fmtMonthStreak(s: number): string {
+  if (!s) return '—'
+  return s > 0 ? `連 ${s} 月增` : `連 ${-s} 月減`
+}
+
+function fmtYearStreak(s: number): string {
+  if (!s) return '—'
+  return s > 0 ? `連 ${s} 月年增` : `連 ${-s} 月年減`
+}
+
+function fmtQuarterStreak(s: number): string {
+  if (!s) return '—'
+  return s > 0 ? `連 ${s} 季年增` : `連 ${-s} 季年減`
+}
+
+function fmtRevenueTotal(thousandTwd: number | null): string {
+  if (thousandTwd === null || !Number.isFinite(thousandTwd)) return '—'
+  const yi = thousandTwd / 100_000 // 1 億 = 100,000 千元
+  if (yi >= 10_000) {
+    return `累計 ${(yi / 10_000).toFixed(2)} 兆`
+  }
+  if (yi >= 1) {
+    return `累計 ${yi.toFixed(1)} 億`
+  }
+  return `累計 ${fmtInt(thousandTwd)} 千元`
+}
+
+function sparkTrendColor(series: Array<number | null>): string {
+  const valid = series.filter((v): v is number => v !== null)
+  if (valid.length === 0) return CHART_COLORS.axis
+  const last = valid[valid.length - 1]
+  return last > 0 ? CHART_COLORS.up : last < 0 ? CHART_COLORS.down : CHART_COLORS.axis
+}
+
+function avgOf(arr: Array<number | null | undefined>): number | null {
+  const valid = arr.filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v))
+  if (valid.length === 0) return null
+  return valid.reduce((a, b) => a + b, 0) / valid.length
+}
 
 interface FundamentalTabProps {
   fundamental: FundamentalData | null
@@ -202,6 +247,97 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
     .map((_, i) => i)
     .filter((i) => profitQuarters.length <= 8 || i % 2 === 0)
 
+  // Quarterly Profitability Calculations
+  const epsSeries = profitQuarters.map((q) => q.epsTwd)
+  const grossSeries = profitQuarters.map((q) => q.grossMarginPercent)
+  const operatingSeries = profitQuarters.map((q) => q.operatingMarginPercent)
+  const pretaxSeries = profitQuarters.map((q) => q.pretaxMarginPercent)
+  const netSeries = profitQuarters.map((q) => q.netMarginPercent)
+  const revenueQuarterSeries = profitQuarters.map((q) => q.revenueMillionTwd)
+
+  const quarterMap = new Map(profitQuarters.map((q) => [q.yearQuarter, q]))
+  const revenueQuarterYoYSeries: Array<number | null> = profitQuarters.map((q) => {
+    const [yearStr, qStr] = q.yearQuarter.split('-Q')
+    if (!yearStr || !qStr) return null
+    const prevYearQuarter = `${Number(yearStr) - 1}-Q${qStr}`
+    const prevQuarter = quarterMap.get(prevYearQuarter)
+    if (
+      q.revenueMillionTwd === null ||
+      !prevQuarter ||
+      prevQuarter.revenueMillionTwd === null ||
+      prevQuarter.revenueMillionTwd <= 0
+    ) {
+      return null
+    }
+    return (
+      ((q.revenueMillionTwd - prevQuarter.revenueMillionTwd) / prevQuarter.revenueMillionTwd) *
+      100
+    )
+  })
+  const quarterYoYMap = new Map(
+    profitQuarters.map((q, i) => [q.yearQuarter, revenueQuarterYoYSeries[i]]),
+  )
+  const maxQuarterRevYoY = Math.max(
+    0,
+    ...revenueQuarterYoYSeries.map((v) => (v === null ? 0 : Math.abs(v))),
+  )
+  const quarterRevYoYStreak = streakAt(
+    revenueQuarterYoYSeries,
+    revenueQuarterYoYSeries.length - 1,
+  )
+  const latestQuarterRevYoY =
+    revenueQuarterYoYSeries.length > 0
+      ? revenueQuarterYoYSeries[revenueQuarterYoYSeries.length - 1]
+      : null
+
+  const maxEps = Math.max(0, ...epsSeries.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxQuarterRevenue = Math.max(
+    0,
+    ...revenueQuarterSeries.map((v) => (v === null ? 0 : Math.abs(v))),
+  )
+  const maxGross = Math.max(0, ...grossSeries.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxOperating = Math.max(
+    0,
+    ...operatingSeries.map((v) => (v === null ? 0 : Math.abs(v))),
+  )
+  const maxPretax = Math.max(0, ...pretaxSeries.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxNet = Math.max(0, ...netSeries.map((v) => (v === null ? 0 : Math.abs(v))))
+
+  const displayedQuarters = quarters.filter((q) => q.yearQuarter >= '2024-Q1')
+  const renderQuarters = displayedQuarters.length > 0 ? displayedQuarters : quarters
+
+  const recent4Quarters = profitQuarters.slice(-4)
+  const recent4Eps = recent4Quarters.map((q) => q.epsTwd).filter((v): v is number => v !== null)
+  const ttmEps = recent4Eps.length === 4 ? recent4Eps.reduce((a, b) => a + b, 0) : null
+  const avgGross = avgOf(recent4Quarters.map((q) => q.grossMarginPercent))
+  const avgOperating = avgOf(recent4Quarters.map((q) => q.operatingMarginPercent))
+  const avgPretax = avgOf(recent4Quarters.map((q) => q.pretaxMarginPercent))
+  const avgNet = avgOf(recent4Quarters.map((q) => q.netMarginPercent))
+  const recent4Revenue = recent4Quarters
+    .map((q) => q.revenueMillionTwd)
+    .filter((v): v is number => v !== null)
+  const ttmRevenue = recent4Revenue.length > 0 ? recent4Revenue.reduce((a, b) => a + b, 0) : null
+
+  // Monthly Revenue Calculations
+  const revenueSeries = revenueMonths.map((m) => m.revenueThousandTwd)
+  const momSeries = revenueMonths.map((m) => m.momPercent)
+  const yoySeries = revenueMonths.map((m) => m.yoyPercent)
+  const cumYoySeries = revenueMonths.map((m) => m.cumulativeYoyPercent)
+
+  const maxMom = Math.max(0, ...momSeries.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxYoy = Math.max(0, ...yoySeries.map((v) => (v === null ? 0 : Math.abs(v))))
+  const maxCumYoy = Math.max(0, ...cumYoySeries.map((v) => (v === null ? 0 : Math.abs(v))))
+
+  const validRevenue = revenueSeries.filter((v): v is number => v !== null)
+  const sumRevenue = validRevenue.length > 0 ? validRevenue.reduce((a, b) => a + b, 0) : null
+
+  const momStreakVal = streakAt(momSeries, momSeries.length - 1)
+  const yoyStreakVal = streakAt(yoySeries, yoySeries.length - 1)
+
+  const latestMom = momSeries.length > 0 ? momSeries[momSeries.length - 1] : null
+  const latestYoy = yoySeries.length > 0 ? yoySeries[yoySeries.length - 1] : null
+  const latestCumYoy = cumYoySeries.length > 0 ? cumYoySeries[cumYoySeries.length - 1] : null
+
   return (
     <div>
       <section className="rpt-section">
@@ -332,12 +468,13 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
 
             {quarters.length > 1 && (
               <div className="table-scroll" style={{ marginTop: 12 }}>
-                <table className="data-table">
+                <table className="data-table inst-matrix" aria-label="季報獲利能力矩陣">
                   <thead>
                     <tr>
                       <th>季別</th>
-                      <th className="num">營收（百萬元）</th>
-                      <th className="num">每股盈餘（元）</th>
+                      <th className="num">單季營收（百萬元）</th>
+                      <th className="num">營收年增 (YoY)</th>
+                      <th className="num">每股盈餘 (EPS)</th>
                       <th className="num">毛利率</th>
                       <th className="num">營益率</th>
                       <th className="num">稅前純益率</th>
@@ -345,18 +482,167 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {quarters.map((q) => (
-                      <tr key={q.yearQuarter}>
-                        <td>{q.yearQuarter.replace('-Q', ' 年第 ')} 季</td>
-                        <td className="num">{fmtInt(q.revenueMillionTwd)}</td>
-                        <td className="num">{fmtEps(q.epsTwd)}</td>
-                        <td className="num">{fmtPercent(q.grossMarginPercent)}</td>
-                        <td className="num">{fmtPercent(q.operatingMarginPercent)}</td>
-                        <td className="num">{fmtPercent(q.pretaxMarginPercent)}</td>
-                        <td className="num">{fmtPercent(q.netMarginPercent)}</td>
-                      </tr>
-                    ))}
+                    {renderQuarters.map((q) => {
+                      const yoy = quarterYoYMap.get(q.yearQuarter) ?? null
+                      return (
+                        <tr key={q.yearQuarter}>
+                          <td>{q.yearQuarter.replace('-Q', ' 年第 ')} 季</td>
+                          <td
+                            className="num"
+                            style={heatStyle(q.revenueMillionTwd, maxQuarterRevenue)}
+                          >
+                            {fmtInt(q.revenueMillionTwd)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(yoy)}`}
+                            style={heatStyle(yoy, maxQuarterRevYoY)}
+                          >
+                            {fmtPercent(yoy)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(q.epsTwd)}`}
+                            style={heatStyle(q.epsTwd, maxEps)}
+                          >
+                            {fmtEps(q.epsTwd)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(q.grossMarginPercent)}`}
+                            style={heatStyle(q.grossMarginPercent, maxGross)}
+                          >
+                            {fmtPercent(q.grossMarginPercent)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(q.operatingMarginPercent)}`}
+                            style={heatStyle(q.operatingMarginPercent, maxOperating)}
+                          >
+                            {fmtPercent(q.operatingMarginPercent)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(q.pretaxMarginPercent)}`}
+                            style={heatStyle(q.pretaxMarginPercent, maxPretax)}
+                          >
+                            {fmtPercent(q.pretaxMarginPercent)}
+                          </td>
+                          <td
+                            className={`num ${chipClass(q.netMarginPercent)}`}
+                            style={heatStyle(q.netMarginPercent, maxNet)}
+                          >
+                            {fmtPercent(q.netMarginPercent)}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
+                  <tfoot>
+                    <tr className="tfoot-summary">
+                      <td>{renderQuarters.length} 季統計</td>
+                      <td className="num inst-matrix-cum">
+                        <div>{ttmRevenue !== null ? `近4季 ${fmtInt(ttmRevenue)}` : '—'}</div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>營收走勢</span>
+                          <SparkCell
+                            points={revenueQuarterSeries}
+                            color={CHART_COLORS.up}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="季度營收走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className={`num inst-matrix-cum ${chipClass(latestQuarterRevYoY)}`}>
+                        <div>{fmtPercent(latestQuarterRevYoY)}</div>
+                        <div className="tfoot-cum-trend">
+                          <span
+                            className={quarterRevYoYStreak ? chipClass(quarterRevYoYStreak) : 'hint'}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: quarterRevYoYStreak ? 600 : undefined,
+                            }}
+                          >
+                            {fmtQuarterStreak(quarterRevYoYStreak)}
+                          </span>
+                          <SparkCell
+                            points={revenueQuarterYoYSeries}
+                            color={sparkTrendColor(revenueQuarterYoYSeries)}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="季度營收年增走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className={`num inst-matrix-cum ${ttmEps !== null ? chipClass(ttmEps) : ''}`}>
+                        <div>
+                          {ttmEps !== null
+                            ? `近4季 ${ttmEps.toFixed(2)} 元`
+                            : latestEps
+                              ? fmtEps(latestEps.epsTwd)
+                              : '—'}
+                        </div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>EPS 走勢</span>
+                          <SparkCell
+                            points={epsSeries}
+                            color={sparkTrendColor(epsSeries)}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="每股盈餘走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className="num inst-matrix-cum">
+                        <div>{avgGross !== null ? `近4季均 ${avgGross.toFixed(2)}%` : '—'}</div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>毛利走勢</span>
+                          <SparkCell
+                            points={grossSeries}
+                            color={CATEGORICAL_COLORS[0]}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="毛利率走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className="num inst-matrix-cum">
+                        <div>{avgOperating !== null ? `近4季均 ${avgOperating.toFixed(2)}%` : '—'}</div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>營益走勢</span>
+                          <SparkCell
+                            points={operatingSeries}
+                            color={CATEGORICAL_COLORS[1]}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="營益率走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className="num inst-matrix-cum">
+                        <div>{avgPretax !== null ? `近4季均 ${avgPretax.toFixed(2)}%` : '—'}</div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>稅前走勢</span>
+                          <SparkCell
+                            points={pretaxSeries}
+                            color={CATEGORICAL_COLORS[2]}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="稅前純益率走勢"
+                          />
+                        </div>
+                      </td>
+                      <td className="num inst-matrix-cum">
+                        <div>{avgNet !== null ? `近4季均 ${avgNet.toFixed(2)}%` : '—'}</div>
+                        <div className="tfoot-cum-trend">
+                          <span className="hint" style={{ fontSize: 11 }}>稅後走勢</span>
+                          <SparkCell
+                            points={netSeries}
+                            color={CATEGORICAL_COLORS[3]}
+                            width={TFOOT_SPARK_W}
+                            height={TFOOT_SPARK_H}
+                            ariaLabel="稅後純益率走勢"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -421,13 +707,13 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
             />
 
             <div className="table-scroll" style={{ marginTop: 12 }}>
-            <table className="data-table">
+            <table className="data-table inst-matrix" aria-label="月營收矩陣">
               <thead>
                 <tr>
                   <th>月份</th>
                   <th className="num">當月營收（千元）</th>
-                  <th className="num">月增</th>
-                  <th className="num">年增</th>
+                  <th className="num">月增 (MoM)</th>
+                  <th className="num">年增 (YoY)</th>
                   <th className="num">累計年增</th>
                 </tr>
               </thead>
@@ -436,14 +722,94 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                   <tr key={m.yearMonth}>
                     <td>{fmtYearMonth(m.yearMonth)}</td>
                     <td className="num">{fmtInt(m.revenueThousandTwd)}</td>
-                    <td className={`num ${chipClass(m.momPercent)}`}>{fmtPercent(m.momPercent)}</td>
-                    <td className={`num ${chipClass(m.yoyPercent)}`}>{fmtPercent(m.yoyPercent)}</td>
-                    <td className={`num ${chipClass(m.cumulativeYoyPercent)}`}>
+                    <td
+                      className={`num ${chipClass(m.momPercent)}`}
+                      style={heatStyle(m.momPercent, maxMom)}
+                    >
+                      {fmtPercent(m.momPercent)}
+                    </td>
+                    <td
+                      className={`num ${chipClass(m.yoyPercent)}`}
+                      style={heatStyle(m.yoyPercent, maxYoy)}
+                    >
+                      {fmtPercent(m.yoyPercent)}
+                    </td>
+                    <td
+                      className={`num ${chipClass(m.cumulativeYoyPercent)}`}
+                      style={heatStyle(m.cumulativeYoyPercent, maxCumYoy)}
+                    >
                       {fmtPercent(m.cumulativeYoyPercent)}
                     </td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="tfoot-summary">
+                  <td>{months.length} 個月統計</td>
+                  <td className="num inst-matrix-cum">
+                    <div>{fmtRevenueTotal(sumRevenue)}</div>
+                    <div className="tfoot-cum-trend">
+                      <span className="hint" style={{ fontSize: 11 }}>營收走勢</span>
+                      <SparkCell
+                        points={revenueSeries}
+                        color={CHART_COLORS.up}
+                        width={TFOOT_SPARK_W}
+                        height={TFOOT_SPARK_H}
+                        ariaLabel="近 12 個月月營收走勢"
+                      />
+                    </div>
+                  </td>
+                  <td className={`num inst-matrix-cum ${chipClass(latestMom)}`}>
+                    <div>{fmtPercent(latestMom)}</div>
+                    <div className="tfoot-cum-trend">
+                      <span
+                        className={momStreakVal ? chipClass(momStreakVal) : 'hint'}
+                        style={{ fontSize: 11, fontWeight: momStreakVal ? 600 : undefined }}
+                      >
+                        {fmtMonthStreak(momStreakVal)}
+                      </span>
+                      <SparkCell
+                        points={momSeries}
+                        color={sparkTrendColor(momSeries)}
+                        width={TFOOT_SPARK_W}
+                        height={TFOOT_SPARK_H}
+                        ariaLabel="月增走勢"
+                      />
+                    </div>
+                  </td>
+                  <td className={`num inst-matrix-cum ${chipClass(latestYoy)}`}>
+                    <div>{fmtPercent(latestYoy)}</div>
+                    <div className="tfoot-cum-trend">
+                      <span
+                        className={yoyStreakVal ? chipClass(yoyStreakVal) : 'hint'}
+                        style={{ fontSize: 11, fontWeight: yoyStreakVal ? 600 : undefined }}
+                      >
+                        {fmtYearStreak(yoyStreakVal)}
+                      </span>
+                      <SparkCell
+                        points={yoySeries}
+                        color={sparkTrendColor(yoySeries)}
+                        width={TFOOT_SPARK_W}
+                        height={TFOOT_SPARK_H}
+                        ariaLabel="年增走勢"
+                      />
+                    </div>
+                  </td>
+                  <td className={`num inst-matrix-cum ${chipClass(latestCumYoy)}`}>
+                    <div>{fmtPercent(latestCumYoy)}</div>
+                    <div className="tfoot-cum-trend">
+                      <span className="hint" style={{ fontSize: 11 }}>累計走勢</span>
+                      <SparkCell
+                        points={cumYoySeries}
+                        color={sparkTrendColor(cumYoySeries)}
+                        width={TFOOT_SPARK_W}
+                        height={TFOOT_SPARK_H}
+                        ariaLabel="累計年增走勢"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
             </div>
           </>
