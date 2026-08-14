@@ -3,7 +3,17 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 13:28:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 13:53:00 Asia/Taipei).
+
+## 📅 Log: 2026-08-14 11:55:00 Asia/Taipei (Task 101: Fix BFI82U premature freezing & probe retirement protection + Reconcile historical market data)
+
+Fixed BFI82U premature freezing and established probe retirement safety:
+1. **Three Lines of Defense**:
+   - `sourceLanded` & `isMarketSessionReady`: Added `taipeiHhmm < '15:40'` threshold. Preliminary 15:10 data is written immediately for fast frontend rendering, but does not retire or permanently short-circuit before 15:40, enabling automatic revision by TWSE 15:35 block trades & FX settlement.
+   - `fetchTwseBfi82u`: Added fallback parsing from `stat3` index summary when BFI82U response is delayed or empty.
+   - History backfill: Built `reconcile-market-daily.cjs` and reconciled historical database data.
+2. **Verification**:
+   - Edge function typecheck passed, full unit test suite passed.
 
 ## 📅 Log: 2026-08-14 11:29:00 Asia/Taipei (Task 100: Redesign Macro "三大法人買賣超" table to vertical date matrix with footer sparklines and streak labels)
 

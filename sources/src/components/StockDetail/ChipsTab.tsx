@@ -62,9 +62,8 @@ const METRICS: ReadonlyArray<{ id: ChipMetric; label: string }> = [
   { id: 'sell', label: '賣出' },
 ]
 
-/** Spark size in the 走勢 column —— the same as the market-wide matrix, so the two tables read alike. */
-const SPARK_W = 100
-const SPARK_H = 36
+const TFOOT_SPARK_W = 76
+const TFOOT_SPARK_H = 20
 
 /**
  * Block-level data timestamp.
@@ -202,7 +201,6 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         {r.label}
                       </th>
                     ))}
-                    <th style={{ borderLeft: '1px solid var(--border-strong)', minWidth: 220 }}>走勢</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -234,47 +232,6 @@ export function ChipsTab({ report }: { report: ReportData }) {
                             </td>
                           )
                         })}
-                        {dRevIdx === 0 && (
-                          <td className="col-trend-rowspan" rowSpan={instDays.length}>
-                            <div className="trend-stack">
-                              {matrixRows.map((r) => {
-                                const s = r.streak
-                                const isBuy = s > 0
-                                const label = Math.abs(s) >= 2 ? `連 ${Math.abs(s)} ${isBuy ? '買' : '賣'}` : null
-                                const validNets = r.nets.filter((v): v is number => v !== null)
-                                const lastNet = validNets.length > 0 ? validNets[validNets.length - 1] : null
-                                const sparkColor =
-                                  lastNet !== null && lastNet !== undefined
-                                    ? lastNet > 0
-                                      ? CHART_COLORS.up
-                                      : lastNet < 0
-                                        ? CHART_COLORS.down
-                                        : CHART_COLORS.axis
-                                    : CHART_COLORS.axis
-                                return (
-                                  <div key={r.key} className="trend-item">
-                                    <div className="trend-info">
-                                      <span className="trend-label">{r.label}</span>
-                                      <span
-                                        className={label ? chipClass(s) : 'hint'}
-                                        style={{ fontSize: 11, fontWeight: label ? 600 : undefined }}
-                                      >
-                                        {label ?? '—'}
-                                      </span>
-                                    </div>
-                                    <SparkCell
-                                      points={r.nets}
-                                      color={sparkColor}
-                                      width={SPARK_W}
-                                      height={SPARK_H}
-                                      ariaLabel={`近 ${r.nets.length} 個交易日${r.label}買賣超走勢`}
-                                    />
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </td>
-                        )}
                       </tr>
                     )
                   })}
@@ -282,23 +239,47 @@ export function ChipsTab({ report }: { report: ReportData }) {
                 <tfoot>
                   <tr className="tfoot-summary">
                     <td>{instDays.length} 日累計</td>
-                    {matrixRows.map((r) => (
-                      <td
-                        key={r.key}
-                        className={`num inst-matrix-cum ${metric === 'net' ? chipClass(r.cum) : ''} ${
-                          r.key === 'total' ? 'col-total' : ''
-                        }`}
-                        title={r.cum === null ? undefined : `${fmtSigned(r.cum)} 股`}
-                      >
-                        {metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}
-                      </td>
-                    ))}
-                    <td style={{ borderLeft: '1px solid var(--border-strong)', textAlign: 'right' }}>
-                      <span className={chipClass(matrixRows.find((r) => r.key === 'total')?.cum ?? null)}>
-                        {instDays.length} 日累計{matrixRows.find((r) => r.key === 'total')?.cum ? (matrixRows.find((r) => r.key === 'total')!.cum! > 0 ? '買超 ' : '賣超 ') : ''}
-                        {fmtLotsPlain(Math.abs(matrixRows.find((r) => r.key === 'total')?.cum ?? 0))}
-                      </span>
-                    </td>
+                    {matrixRows.map((r) => {
+                      const s = r.streak
+                      const isBuy = s > 0
+                      const label = Math.abs(s) >= 2 ? `連 ${Math.abs(s)} ${isBuy ? '買' : '賣'}` : null
+                      const validNets = r.nets.filter((v): v is number => v !== null)
+                      const lastNet = validNets.length > 0 ? validNets[validNets.length - 1] : null
+                      const sparkColor =
+                        lastNet !== null && lastNet !== undefined
+                          ? lastNet > 0
+                            ? CHART_COLORS.up
+                            : lastNet < 0
+                              ? CHART_COLORS.down
+                              : CHART_COLORS.axis
+                          : CHART_COLORS.axis
+                      return (
+                        <td
+                          key={r.key}
+                          className={`num inst-matrix-cum ${metric === 'net' ? chipClass(r.cum) : ''} ${
+                            r.key === 'total' ? 'col-total' : ''
+                          }`}
+                          title={r.cum === null ? undefined : `${fmtSigned(r.cum)} 股`}
+                        >
+                          <div>{metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}</div>
+                          <div className="tfoot-cum-trend">
+                            <span
+                              className={label ? chipClass(s) : 'hint'}
+                              style={{ fontSize: 11, fontWeight: label ? 600 : undefined }}
+                            >
+                              {label ?? '—'}
+                            </span>
+                            <SparkCell
+                              points={r.nets}
+                              color={sparkColor}
+                              width={TFOOT_SPARK_W}
+                              height={TFOOT_SPARK_H}
+                              ariaLabel={`近 ${r.nets.length} 個交易日${r.label}買賣超走勢`}
+                            />
+                          </div>
+                        </td>
+                      )
+                    })}
                   </tr>
                 </tfoot>
               </table>
@@ -306,7 +287,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
             <p className="hint">
               數字是<strong>約當張數</strong>（1 張 = 1000 股），滑鼠停在格子上可看確切股數。
               買賣超是買進減掉賣出，紅色代表法人當天買得比賣得多；底色深淺是該法人自己這幾天的相對強度。
-              「連買連賣」算到最近交易日為止連續幾天同方向，看的一律是買賣超，不隨上方口徑改變。
+              走勢圖讀取歷史交易日，走勢圖上方「連買連賣」算到最近交易日為止連續幾天同方向，看的一律是買賣超，不隨上方口徑改變。
             </p>
           </>
         )}

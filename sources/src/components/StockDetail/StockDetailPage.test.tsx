@@ -170,7 +170,7 @@ describe('StockDetailPage', () => {
     expect(container.querySelector('.detail-head')!.textContent).not.toContain('資料日期')
   })
 
-  it('三大法人為 單一表格：日期在左、法人在上方表頭、末欄走勢、附累計與連買連賣', async () => {
+  it('三大法人為 單一表格：日期在左、法人在上方表頭，走勢與統計下沉至頁尾', async () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
@@ -182,7 +182,6 @@ describe('StockDetailPage', () => {
       '投信',
       '自營商',
       '三大法人合計',
-      '走勢',
     ])
     // Two daily rows (newest first: 07/23 then 07/22)
     expect(table.querySelectorAll('tbody tr')).toHaveLength(2)
@@ -199,10 +198,13 @@ describe('StockDetailPage', () => {
     expect(rows[0].querySelectorAll('td.num')[0].getAttribute('title')).toBe('2026-07-23 5,000 股')
 
     // Footer 2 日累計
-    const footCells = [...table.querySelectorAll('tfoot td')].map((td) => td.textContent)
+    const footCells = [...table.querySelectorAll('tfoot td')].map(
+      (td) => td.querySelector('div')?.textContent ?? td.textContent,
+    )
     expect(footCells[0]).toBe('2 日累計')
     expect(footCells[1]).toBe('+8')
     expect(table.textContent).toContain('連 2 買')
+    expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
 
     // The margin table's own streaks are untouched by this change
     const marginTable = within(screen.getAllByRole('table')[1])
@@ -220,7 +222,8 @@ describe('StockDetailPage', () => {
       // 07/22, 07/23, and cumulative in footer
       table().querySelectorAll('tbody tr')[1].querySelectorAll('td.num')[0].textContent,
       table().querySelectorAll('tbody tr')[0].querySelectorAll('td.num')[0].textContent,
-      table().querySelectorAll('tfoot td.num')[0].textContent,
+      table().querySelectorAll('tfoot td.num')[0].querySelector('div')?.textContent ??
+        table().querySelectorAll('tfoot td.num')[0].textContent,
     ]
 
     expect(foreignValues()).toEqual(['+3', '+5', '+8'])
