@@ -59,7 +59,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     const onRefresh = vi.fn()
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={onRefresh} />)
 
-    expect(screen.getByText('⚡ 盤後探針命中戰情室')).toBeTruthy()
+    expect(screen.getByText('盤後探針命中戰情室')).toBeTruthy()
     expect(screen.getByText('全市場三大法人')).toBeTruthy()
     expect(screen.getByText('個股三大法人')).toBeTruthy()
     expect(screen.getByText('個股估值 (PE/PB/DY)')).toBeTruthy()
@@ -70,9 +70,9 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
   it('正確計算已退休、探測中與待機狀態', () => {
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
 
-    // BFI82U reaches 3 hits -> 已退休收工
+    // BFI82U reaches 3 hits -> 已退休
     const bfiCard = screen.getByTestId('pwr-card-bfi82u')
-    expect(bfiCard.textContent).toContain('✅ 已退休收工')
+    expect(bfiCard.textContent).toContain('✅ 已退休')
     expect(bfiCard.textContent).toContain('3/ 3 次到位')
     expect(bfiCard.textContent).toContain('15:05')
     expect(bfiCard.textContent).toContain('15:10')
@@ -94,7 +94,7 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
   it('MOPS 營收 1 次命中即標記槽次收工', () => {
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
     const mopsCard = screen.getByTestId('pwr-card-mops_revenue')
-    expect(mopsCard.textContent).toContain('✅ 槽次命中收工')
+    expect(mopsCard.textContent).toContain('✅ 槽次收工')
     expect(mopsCard.textContent).toContain('1/ 1 次到位')
     expect(mopsCard.textContent).toContain('17:15 退休')
   })

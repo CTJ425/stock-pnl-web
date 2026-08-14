@@ -141,7 +141,7 @@ describe('AdminStatusPage', () => {
   it('頂部呈現盤後探針命中戰情室', async () => {
     fetchAdminStatus.mockResolvedValue(status)
     render(<AdminStatusPage />)
-    expect(await screen.findByText('⚡ 盤後探針命中戰情室')).toBeTruthy()
+    expect(await screen.findByText('盤後探針命中戰情室')).toBeTruthy()
   })
 })
 
@@ -293,7 +293,7 @@ describe('AdminStatusPage 排程同步狀態面板', () => {
       todayYmd: '20260731',
     })
     render(<AdminStatusPage />)
-    expect(await screen.findByText('⚡ 盤後探針命中戰情室')).toBeTruthy()
+    expect(await screen.findByText('盤後探針命中戰情室')).toBeTruthy()
     expect(await screen.findByText('全市場三大法人')).toBeTruthy()
   })
 })
