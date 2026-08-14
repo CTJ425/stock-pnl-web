@@ -1,11 +1,13 @@
 /**
- * Reconcile market/daily.json institutional data against official TWSE BFI82U.
+ * Reconcile market/daily.json institutional data & turnover data against official TWSE.
  *
  * Usage:
  *   node sources/scripts/reconcile-market-daily.cjs --target=dev
  *   node sources/scripts/reconcile-market-daily.cjs --target=prod
  */
 const https = require('https')
+const fs = require('fs')
+const path = require('path')
 
 const PROD_URL = 'https://kxnxadaghidwumqsqneu.supabase.co/storage/v1/object/public/reports/market/daily.json'
 const DEV_URL = 'https://korq9tvdz0jd7yblr72p.ivan.lab/storage/v1/object/public/reports/market/daily.json'
@@ -68,6 +70,37 @@ function parseBfi82u(json) {
   }
 }
 
+function parseFmtqik(json) {
+  const t = json || {}
+  if (t.stat !== 'OK' || !Array.isArray(t.data) || !Array.isArray(t.fields)) return []
+  const iDate = t.fields.indexOf('日期')
+  const iVol = t.fields.indexOf('成交股數')
+  const iVal = t.fields.indexOf('成交金額')
+  const iTx = t.fields.indexOf('成交筆數')
+  const iTaiex = t.fields.indexOf('發行量加權股價指數')
+  const iChg = t.fields.indexOf('漲跌點數')
+  if (iDate < 0 || iVol < 0 || iVal < 0 || iTx < 0 || iTaiex < 0 || iChg < 0) return []
+
+  const out = []
+  for (const row of t.data) {
+    if (!Array.isArray(row)) continue
+    const roc = String(row[iDate] ?? '').trim().split('/')
+    if (roc.length !== 3) continue
+    const year = Number(roc[0]) + 1911
+    const mm = roc[1].padStart(2, '0')
+    const dd = roc[2].padStart(2, '0')
+    out.push({
+      date: `${year}-${mm}-${dd}`,
+      tradeVolumeShares: num(row[iVol]),
+      tradeValueTwd: num(row[iVal]),
+      transactions: num(row[iTx]),
+      taiex: num(row[iTaiex]),
+      changePoints: num(row[iChg]),
+    })
+  }
+  return out
+}
+
 async function fetchJson(url) {
   const agent = new https.Agent({ rejectUnauthorized: false })
   const res = await fetch(url, { agent })
@@ -83,9 +116,34 @@ async function main() {
   const marketFile = await fetchJson(fileUrl)
   console.log(`[Reconcile] Loaded ${marketFile.days.length} days from ${marketFile.asOf}`)
 
+  // 1. Fetch FMTQIK for July and August 2026
+  console.log('[Reconcile] Fetching official FMTQIK for 202607 and 202608...')
+  const fmt07 = parseFmtqik(await fetchJson('https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260701&response=json'))
+  const fmt08 = parseFmtqik(await fetchJson('https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260801&response=json'))
+  const fmtMap = new Map([...fmt07, ...fmt08].map(d => [d.date, d]))
+
   let updatedCount = 0
   for (let i = 0; i < marketFile.days.length; i++) {
     const d = marketFile.days[i]
+    const fmt = fmtMap.get(d.date)
+    if (fmt) {
+      if (
+        d.tradeVolumeShares !== fmt.tradeVolumeShares ||
+        d.tradeValueTwd !== fmt.tradeValueTwd ||
+        d.transactions !== fmt.transactions ||
+        d.taiex !== fmt.taiex ||
+        d.changePoints !== fmt.changePoints
+      ) {
+        console.log(`[Update FMTQIK] ${d.date}: ${d.tradeValueTwd} -> ${fmt.tradeValueTwd}`)
+        d.tradeVolumeShares = fmt.tradeVolumeShares
+        d.tradeValueTwd = fmt.tradeValueTwd
+        d.transactions = fmt.transactions
+        d.taiex = fmt.taiex
+        d.changePoints = fmt.changePoints
+        updatedCount++
+      }
+    }
+
     const ymd = d.date.replace(/-/g, '')
     const bfiUrl = `https://www.twse.com.tw/rwd/zh/fund/BFI82U?dayDate=${ymd}&type=day&response=json`
     
@@ -93,35 +151,29 @@ async function main() {
       const bfiRaw = await fetchJson(bfiUrl)
       const parsed = parseBfi82u(bfiRaw)
       if (!parsed) {
-        console.log(`[Skip] ${d.date}: No BFI82U data (weekend/holiday)`)
         continue
       }
       const before = JSON.stringify(d.institutional)
       const after = JSON.stringify(parsed)
       if (before !== after) {
-        console.log(`[Update] ${d.date}:`)
-        console.log(`  Old: ${before}`)
-        console.log(`  New: ${after}`)
-        marketFile.days[i].institutional = parsed
+        console.log(`[Update BFI82U] ${d.date}:`)
+        d.institutional = parsed
         updatedCount++
-      } else {
-        console.log(`[OK] ${d.date}: Already matches official TWSE`)
       }
     } catch (err) {
       console.error(`[Error] ${d.date}:`, err.message)
     }
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise((r) => setTimeout(r, 200))
   }
 
   marketFile.asOf = new Date().toISOString()
-  console.log(`[Reconcile] Done. Updated ${updatedCount} days.`)
+  console.log(`[Reconcile] Done. Updated ${updatedCount} entries.`)
   
   const outJson = JSON.stringify(marketFile, null, 2)
-  const fs = require('fs')
-  const path = require('path')
   const outPath = path.join(__dirname, `reconciled-market-${target}.json`)
   fs.writeFileSync(outPath, outJson, 'utf8')
   console.log(`[Reconcile] Saved reconciled file to ${outPath}`)
 }
 
 main().catch(console.error)
+
