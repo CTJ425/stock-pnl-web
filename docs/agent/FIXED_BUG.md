@@ -8,6 +8,15 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-028 — `ProbeWarRoom` falsely marked source as retired on first hit due to substring match on tick note
+- **Found by**: Unit testing & code inspection of `ProbeWarRoom.tsx`.
+- **Description**: `ProbeWarRoom` component checked `sourceTicks.some((t) => t.note?.includes('到位'))` which caused daily sources (target: 3 hits) to prematurely show "✅ 已退休" after only 1 hit when the tick note stated "資料已到位".
+- **Root Cause**: Prematurely treating single-tick note strings as source retirement state instead of requiring `hitCount >= s.target`.
+- **Impact**: Admin status page displayed misleading "✅ 已退休" badge for sources on their 1st or 2nd hit instead of "🟢 探測中 (1/3)" or "🟢 探測中 (2/3)".
+- **Fix**: Restricted `isRetired` strictly to `hitCount >= s.target`.
+- **Regression test**: `ProbeWarRoom.test.tsx` asserting 1/3 and 2/3 hits show `🟢 探測中` and only 3/3 hits show `✅ 已退休`.
+- **Status**: ✅ FIXED in **0.7.17** (2026-08-14 18:00:00 Asia/Taipei).
+
 ### Bug ID: BUG-026 — `decideSkip` had no borrow term, so a late 借券 flip could never trigger a real run
 - **Found by**: reading 2026-08-11's probe ticks on both environments (not reported by a user).
 - **Description**: `decideSkip` (`pollPlan.ts:154`, pre-fix) retired the chips phase on

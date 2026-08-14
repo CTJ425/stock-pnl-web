@@ -98,4 +98,115 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(mopsCard.textContent).toContain('1/ 1 次到位')
     expect(mopsCard.textContent).toContain('17:15 退休')
   })
+
+  it('日頻來源第 1 次與第 2 次命中（即使 tick note 含有「資料已到位」）不可過早標記退休，唯有滿 3 次才退休', () => {
+    // 第一次命中：應為 🟢 探測中 (1/3)，晶片顯示「15:35 最新」，不可為「退休」
+    const status1Hit: AdminStatus = {
+      ...baseStatus,
+      probeExperiment: {
+        mode: 'probe-only',
+        labels: {},
+        order: [],
+        ticks: [
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:35',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+        ],
+      },
+    }
+    const { unmount: unmount1 } = render(<ProbeWarRoom data={status1Hit} loading={false} onRefresh={vi.fn()} />)
+    const t86Card1 = screen.getByTestId('pwr-card-t86')
+    expect(t86Card1.textContent).toContain('🟢 探測中 (1/3)')
+    expect(t86Card1.textContent).not.toContain('已退休')
+    expect(t86Card1.textContent).toContain('1/ 3 次命中')
+    expect(t86Card1.textContent).toContain('15:35 最新')
+    expect(t86Card1.textContent).not.toContain('15:35 退休')
+    unmount1()
+
+    // 第二次命中：應為 🟢 探測中 (2/3)，晶片顯示「15:35  15:40 最新」
+    const status2Hits: AdminStatus = {
+      ...baseStatus,
+      probeExperiment: {
+        mode: 'probe-only',
+        labels: {},
+        order: [],
+        ticks: [
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:35',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:40',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+        ],
+      },
+    }
+    const { unmount: unmount2 } = render(<ProbeWarRoom data={status2Hits} loading={false} onRefresh={vi.fn()} />)
+    const t86Card2 = screen.getByTestId('pwr-card-t86')
+    expect(t86Card2.textContent).toContain('🟢 探測中 (2/3)')
+    expect(t86Card2.textContent).not.toContain('已退休')
+    expect(t86Card2.textContent).toContain('2/ 3 次命中')
+    expect(t86Card2.textContent).toContain('15:35')
+    expect(t86Card2.textContent).toContain('15:40 最新')
+    expect(t86Card2.textContent).not.toContain('15:40 退休')
+    unmount2()
+
+    // 第三次命中：滿 3 次到位，右上角顯示「✅ 已退休」，晶片顯示「15:45 退休」
+    const status3Hits: AdminStatus = {
+      ...baseStatus,
+      probeExperiment: {
+        mode: 'probe-only',
+        labels: {},
+        order: [],
+        ticks: [
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:35',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:40',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+          {
+            taipei_ymd: '20260814',
+            taipei_time: '15:45',
+            source: 't86',
+            hit: true,
+            ok: true,
+            note: '當日三大法人有表 · 已觸發 generate-chips：產出 5 檔 · 資料已到位',
+          },
+        ],
+      },
+    }
+    const { unmount: unmount3 } = render(<ProbeWarRoom data={status3Hits} loading={false} onRefresh={vi.fn()} />)
+    const t86Card3 = screen.getByTestId('pwr-card-t86')
+    expect(t86Card3.textContent).toContain('✅ 已退休')
+    expect(t86Card3.textContent).toContain('3/ 3 次到位')
+    expect(t86Card3.textContent).toContain('15:35')
+    expect(t86Card3.textContent).toContain('15:40')
+    expect(t86Card3.textContent).toContain('15:45 退休')
+    unmount3()
+  })
 })

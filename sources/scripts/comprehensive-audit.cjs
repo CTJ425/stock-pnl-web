@@ -1,6 +1,4 @@
 const https = require('https')
-const fs = require('fs')
-const path = require('path')
 
 const PROD_BASE = 'https://kxnxadaghidwumqsqneu.supabase.co/storage/v1/object/public/reports'
 const DEV_BASE = 'https://korq9tvdz0jd7yblr72p.ivan.lab/storage/v1/object/public/reports'
