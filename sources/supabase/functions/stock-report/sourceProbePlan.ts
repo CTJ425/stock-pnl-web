@@ -37,6 +37,32 @@ export const PROBE_SOURCE_ORDER: ProbeSourceId[] = [
   'mops_profit',
 ]
 
+export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
+  bfi82u: 3,
+  t86: 3,
+  margin: 3,
+  borrow: 3,
+  bwibbu: 3,
+  mops_revenue: 1,
+  mops_profit: 1,
+}
+
+/**
+ * 依據今日各來源的已到位次數，計算哪些來源已經收工（達到所需命中次數）。
+ */
+export function retiredSources(
+  landedCounts: Record<string, number>,
+  required: Record<ProbeSourceId, number> = REQUIRED_LANDED_COUNTS,
+): Set<ProbeSourceId> {
+  const out = new Set<ProbeSourceId>()
+  for (const [id, req] of Object.entries(required) as Array<[ProbeSourceId, number]>) {
+    if ((landedCounts[id] ?? 0) >= req) {
+      out.add(id)
+    }
+  }
+  return out
+}
+
 /** [fromMin, toMin] inclusive, minutes from midnight Taipei */
 type Window = { from: number; to: number }
 
@@ -229,9 +255,11 @@ export function sourceLanded(
   source: ProbeSourceId,
   todayYmd: string,
   ev: LandingEvidence,
+  taipeiHhmm?: string,
 ): boolean {
   switch (source) {
     case 'bfi82u':
+      if (taipeiHhmm && taipeiHhmm < '15:40') return false
       return ev.marketSessionReady === true
     case 't86':
       return normaliseYmd(ev.chipStamps?.institutional) === todayYmd

@@ -13,6 +13,33 @@ To check the implementation process of a certain task and the reasons for the ju
 
 ---
 
+### Task 101: Fix BFI82U premature freezing & probe retirement protection + Reconcile historical market data (0.7.15)
+- **Status**: ✅ **Implemented and verified across Unit, Edge Typecheck, Build, and Reconcile scripts**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-14 11:55:00 Asia/Taipei
+- **Summary**:
+  1. Added `taipeiHhmm < '15:40'` preliminary threshold to `isMarketSessionReady` and `sourceLanded`.
+  2. Implemented `REQUIRED_LANDED_COUNTS` & `retiredSources` requiring 3 landed confirmations before probe retirement for daily sources.
+  3. Fixed `syncMarket` signature to compare real institutional amounts.
+  4. Created `reconcile-market-daily.cjs` and reconciled 2026-08-05 through 2026-08-13 against TWSE BFI82U API.
+
+### Task 100: Redesign Macro "三大法人買賣超" table to vertical date matrix with footer sparklines and streak labels (0.7.15-dev.5)
+- **Status**: ✅ **Implemented and verified across Unit, Smoke, and Playwright multi-viewport E2E**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-14 11:29:00 Asia/Taipei
+- **Summary**:
+  1. Clean vertical date layout: `日期 | 外資 | 外資自營商 | 投信 | 自營商（自行） | 自營商（避險） | 合計`.
+  2. Summary footer: 7-day cumulative total, streak label (`連 N 買` / `連 N 賣`), and 15-day SVG `SparkCell` trendline.
+
+### Task 99: Unified Single Table Redesign for Macro & StockDetail tables (0.7.15-dev.5)
+- **Status**: ✅ **Implemented and verified across Unit, Smoke, and Playwright multi-viewport E2E**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-14 11:05:00 Asia/Taipei
+- **Summary**:
+  1. Refactored `TwMarketSection.tsx` (Daily Turnover, Institutional amounts) into Single Table layout.
+  2. Refactored `ChipsTab.tsx` (Institutional amounts) into Single Table layout.
+  3. Updated unit and Playwright tests. Full test suite passing.
+
 ### Task 67: Coloring of current price rise and fall; simultaneous hover of three pictures; number of consecutive periods of total economic card (0.6.34)
 - **Status**: ✅ **Complete and merged into `main`** - fields have been added and `stock-price` has been deployed in both areas;
   The official area also adds the accumulated `stock-report` (v29, `--no-verify-jwt`) from 0.6.31–0.6.34.

@@ -184,6 +184,7 @@ import {
   mopsIssueRocYmd,
   mopsProfitPeriod,
   mopsRevenuePeriod,
+  retiredSources,
   sourcesForTaipeiTime,
   ymdToRocYmd,
   type LandingEvidence,
@@ -1533,7 +1534,8 @@ async function syncMarket(now: Date): Promise<{
 
   // Taipei calendar day: once FMTQIK + BFI82U (with buy) for this day are on disk, stop hammering TWSE.
   const sessionDate = dashDate(taipeiYmd(now))
-  if (isMarketSessionReady(have, sessionDate)) {
+  const slot = taipeiHhmm(now)
+  if (isMarketSessionReady(have, sessionDate, slot)) {
     return {
       synced: false,
       days: have.length,
@@ -1609,10 +1611,12 @@ async function syncMarket(now: Date): Promise<{
     ds
       .map(
         (d) =>
-          // The legal person must record "whether there is a transaction amount" instead of just "whether there is this item": the backfill of 0.6.32 is to make up for it
-          // In the old days when there was already a balance, if only 1/0 was recorded, the signature would remain unchanged, and the amount of the transaction made up would be lost in each round.
           `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${
-            d.institutional ? (d.institutional.buy ? 2 : 1) : 0
+            d.institutional
+              ? `${d.institutional.totalTwd ?? ''}:${d.institutional.trustTwd ?? ''}:${
+                  d.institutional.foreignTwd ?? ''
+                }:${d.institutional.buy?.totalTwd ?? ''}:${d.institutional.sell?.totalTwd ?? ''}`
+              : '0'
           }`,
       )
       .join(',')
@@ -2357,7 +2361,12 @@ async function readDoneSourcesToday(todayYmd: string): Promise<Set<ProbeSourceId
       .eq('hit', true)
       .eq('data_landed', true)
     if (error || !Array.isArray(data)) return new Set()
-    return new Set(data.map((r) => r.source as ProbeSourceId))
+    const counts: Record<string, number> = {}
+    for (const r of data) {
+      const src = r.source as ProbeSourceId
+      counts[src] = (counts[src] ?? 0) + 1
+    }
+    return retiredSources(counts)
   } catch {
     return new Set()
   }
@@ -2403,13 +2412,14 @@ async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, u
 async function gatherLandingEvidence(
   hitTicks: ProbeTick[],
   todayYmd: string,
+  slot?: string,
 ): Promise<LandingEvidence> {
   const sources = hitTicks.map((t) => t.source)
   const ev: LandingEvidence = {}
 
   if (sources.includes('bfi82u')) {
     const file = await downloadJson<MarketFile>('market/daily.json')
-    ev.marketSessionReady = isMarketSessionReady(file?.days ?? [], dashDate(todayYmd))
+    ev.marketSessionReady = isMarketSessionReady(file?.days ?? [], dashDate(todayYmd), slot)
   }
 
   if (sources.some((s) => s === 't86' || s === 'margin' || s === 'borrow')) {
@@ -2539,15 +2549,18 @@ async function handleProbe(): Promise<Response> {
     has to honour, spelled out in runProbeRound: the tick is written **before** the fetch runs, so the
     measurement survives a crash, and `data_landed` is what distinguishes 「命中了」 from 「拿到了」.
   */
-  const { sources, skipped, ticks, followUps, landed } = await runProbeRound(planned, todayYmd, {
-    deadline: startedAt + PROBE_FOLLOW_UP_BUDGET_MS,
-    now: () => Date.now(),
-    summarise: summariseFollowUp,
-    readDoneSources: () => readDoneSourcesToday(todayYmd),
-    probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
-    runFollowUp: runProbeFollowUp,
-    readEvidence: (hitTicks) => gatherLandingEvidence(hitTicks, todayYmd),
-    persistTick: async (t) => {
+  const { sources, skipped, ticks, followUps, landed } = await runProbeRound(
+    planned,
+    todayYmd,
+    {
+      deadline: startedAt + PROBE_FOLLOW_UP_BUDGET_MS,
+      now: () => Date.now(),
+      summarise: summariseFollowUp,
+      readDoneSources: () => readDoneSourcesToday(todayYmd),
+      probe: async (id) => ({ source: id, ...(await probeSource(id, todayYmd)) }),
+      runFollowUp: runProbeFollowUp,
+      readEvidence: (hitTicks) => gatherLandingEvidence(hitTicks, todayYmd, slot),
+      persistTick: async (t) => {
       try {
         await db.from('source_probe_tick').insert({
           taipei_ymd: todayYmd,

@@ -1,26 +1,37 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task 96 — Redesign Daily Turnover table on Macro page into transposed matrix style
-- Status: **✅ Transposed matrix table created; 5 metric rows; Sparklines & streaks; 997 tests pass; Playwright layout verified; on dev branch**
-- Timestamp: 2026-08-14 09:30:00 Asia/Taipei
+- Action: Task 101 — Fix BFI82U premature freezing & probe retirement protection + Reconcile historical market data (0.7.15)
+- Status: **✅ Implemented and verified; all 63 test files / 950 tests pass; edge typecheck / build / oxlint clean; official release 0.7.15**
+- Timestamp: 2026-08-14 11:55:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-08-14 09:30:00 Asia/Taipei (Task 96: Redesign Daily Turnover table on Macro page into transposed matrix style)
+## 📅 Log: 2026-08-14 11:55:00 Asia/Taipei (Task 101: Fix BFI82U premature freezing & probe retirement protection + Reconcile historical market data)
 
-Redesigned the "每日成交量" (Daily Turnover) table in `TwMarketSection.tsx` from the legacy vertical 31-day table into a transposed matrix (`.data-table.inst-matrix`), fully matching the UI style of "三大法人買賣超".
+Fixed BFI82U premature freezing and established probe retirement safety:
+1. **Three Lines of Defense**:
+   - `sourceLanded` & `isMarketSessionReady`: Added `taipeiHhmm < '15:40'` threshold. Preliminary 15:10 data is written immediately for fast frontend rendering, but does not retire or permanently short-circuit before 15:40, enabling automatic revision by TWSE 15:35 block trades & FX settlement.
+   - `REQUIRED_LANDED_COUNTS` & `retiredSources`: Daily sources (`bfi82u`, `t86`, `margin`, `borrow`, `bwibbu`) require 3 landed confirmations before retirement; discrete MOPS files require 1.
+   - `syncMarket` Signature Fix: Included real institutional amounts (`totalTwd`, `trustTwd`, `foreignTwd`, `buy.totalTwd`, `sell.totalTwd`) in `signature`, ensuring upstream revisions trigger Storage updates instead of false `unchanged`.
+2. **Historical Data Reconciliation**:
+   - Created and ran `reconcile-market-daily.cjs`, reconciling 2026-08-05 through 2026-08-13 against TWSE BFI82U API. Uploaded reconciled data to DEV storage and verified 0 mismatches.
+3. **Verification**:
+   - Added unit tests in `sourceProbePlan.test.ts`, `twMarket.test.ts`, and `probeRound.test.ts` (950 tests passed).
+   - `npm run typecheck:edge`, `npm run build`, and `npx oxlint` 100% clean. Synced to `0.7.15`.
 
-**Core changes:**
-1. Direction & Columns: Aligned left-to-right (oldest → newest, 7 trading days), with column headers: `項目 | 7 days | 7 日統計 | 近 15 日走勢`.
-2. 5 Metric Rows: 成交金額 (with 7-day avg & volume streak), 成交股數 (7-day avg), 成交筆數 (7-day avg), 加權指數 (7-day avg close & taiex streak), 指數漲跌 (7-day net cumulative change, heatStyle background & red/green styling).
-3. Visual & RWD: Shared `.inst-matrix` styling with sticky frozen first column on mobile viewport and responsive horizontal scrolling.
-4. Testing (TDD): Updated `TwMarketSection.test.tsx` (19 passed), `MacroPage.test.tsx` + `App.smoke.test.tsx` (35 passed), total suite 63 test files / 997 tests 100% passed.
-5. E2E: Created `sources/scripts/verify-macro-turnover.cjs` testing desktop (1280px), tablet (768px), and mobile (390px) viewports with screenshots verified.
+## 📅 Log: 2026-08-14 11:29:00 Asia/Taipei (Task 100: Redesign Macro "三大法人買賣超" table to vertical date matrix with footer sparklines and streak labels)
 
-No database or Edge Function change. Committed to `dev` only; `main` untouched.
-
-## 📅 Log: 2026-08-12 20:33:25 Asia/Taipei (Task 95: Measure the per-dispatch context delta from existing transcripts)
-
-Task is now complete. Analysis tool `.claude/hooks/dispatch_delta.py` (220 lines, new) joins main-transcript `Agent` tool_use calls to subagent transcripts via `toolUseId` in `<session>/subagents/agent-*.meta.json`, measures cost side (dispatch prompt + report chars, i.e. context footprint) against benefit side (tool_result payloads main avoided pulling in), reports net per dispatch. Sample: all 42 dispatches across 11 sessions, project history.
-
+Adjusted Macro "三大法人買賣超" table per user request:
+1. **Vertical Date Matrix (No Rightmost Trend Column)**:
+   - Header: `日期 | 外資 | 外資自營商 | 投信 | 自營商（自行） | 自營商（避險） | 合計` (7 clean columns, no rightmost trend column).
+   - Rows: 7 trading days ordered newest to oldest (`08/14, 08/13...`).
+   - Summary Footer (`tfoot`): For each institutional column, displays the 7-day cumulative total, the streak label (`連 N 買` / `連 N 賣`), and the 15-day SVG `SparkCell` trendline.
+2. **Component & CSS Updates**:
+   - `TwMarketSection.tsx`: Clean vertical date layout with institutional footer sparklines and streak tags.
+   - `index.css`: Added `.inst-matrix .tfoot-cum-trend` styling.
+   - `TwMarketSection.test.tsx`: Updated tests to assert 7 headers and 6 footer sparklines.
+3. **Verification**:
+   - Unit tests: `TwMarketSection.test.tsx` (19 passed). Full suite: 63 files / 946 tests 100% passed.
+   - Playwright E2E: `verify-macro-turnover.cjs` verified across Desktop, Tablet, and Mobile with 0 errors.
+   - Build, edge typecheck, and lint clean (0 errors).

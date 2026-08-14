@@ -1,8 +1,8 @@
 # Task Backlog & Tracking (TASK.md)
 
-- Agent: Claude
+- Agent: Antigravity
 - Status: ACTIVE
-- Timestamp: 2026-08-12 12:06:18 Asia/Taipei
+- Timestamp: 2026-08-14 11:05:00 Asia/Taipei
 
 ---
 
@@ -10,101 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-12 12:06)
+## 📍 Where the project stands (2026-08-14 11:55)
 
-- **Version 0.7.13.** DEV Edge deployed 2026-08-12 10:50 (volume-copy at `ce3c220`, `diff -rq` clean,
-  container recreated) and smoke-verified: anon 401/401/400, authenticated `probe` 200 with an empty
-  in-window plan at 10:45, and two `generate-chips` calls advancing `runs_today` 1 → 2 — which is what
-  proves the new `borrow_data_date` select in `readLastRun` works rather than degrading to `null`.
-  PROD Edge is now deployed as `stock-report` v46 (`verify_jwt=false`, `ezbr_sha256`
-  `000ea3b281868aa9…1b878ded`) and smoke-verified; PROD cron still has all 7 jobs and remains
-  unchanged — see Task 87.
-- **DEV cron count: 7 → 5** — `stock-report-nightly` (generate-chips) and `market-daily` (sync-market)
-  removed from DEV's `cron.job` on 2026-08-12 (`schema.sql` §8d updated to match). Neither was a
-  deliberate part of the probe-triggers-fetch design: 0.7.3 disabled them for the probe-only
-  experiment, 0.7.7 restored them in an emergency because that era's probe never triggered a fetch,
-  0.7.8 gave the probe that ability and they were never withdrawn. Measured 2026-08-11:
-  `stock-report-nightly` ran 21:30/21:45, *before* the 22:15 borrow flip it was supposed to back up,
-  and both passes were skipped by the same gate as the probe rounds — the "outer retry" it was kept
-  for did not survive contact with the data. **PROD still has all 7** — removal there needs explicit
-  go-ahead (Task 87 item 7).
-- **The probe-only-trigger design is now actually enforced on DEV**, not just stated intent. The 5
-  remaining DEV jobs: `source-probe` (the mechanism itself), `macro-daily`/`fx-daily` (kept
-  permanently — `macro-daily` is itself a calendar-driven probe, `fx-daily` covers a source with no
-  publication event to probe; see Task 87), `market-data-daily`/`history-daily`
-  (kept for now, deferred — see Task 87 item 11 for why each survives).
-- **BUG-026 fixed (0.7.13-dev.1)**: `decideSkip` had no borrow term, so from ~21:00 the gate answered
-  `complete` and every invocation short-circuited before `loadBorrow` ever ran — borrow never landed
-  on 2026-08-11, identically on both environments. Fixed with a `borrowLanded` term; see `FIXED_BUG.md`.
-- **BUG-027 fixed (0.7.13-dev.1)**: `readFundamentalSnapshot` decided `bwibbu`/`mops_revenue`/
-  `mops_profit` landing from an unordered 20-ticker sample — PROD's 26 holdings could hit the cap,
-  DEV's 5 never could. Explains the `ac3177e` open question (below, Task 85 item 14). Fixed by reading
-  all holdings; see `FIXED_BUG.md`.
-- **`borrow` probe window retuned** 15:00–22:45 → 21:00–23:30, now that a full day of ticks
-  (2026-08-11) measured the flip at 22:15 on both environments. `t86`/`margin`/`bwibbu`/MOPS windows
-  deliberately left alone — see Task 87 item 4.
-- **The probe now fetches.** A hit runs the matching ingest in the same invocation, and a source is
-  retired for the day only once its data is **verifiably on disk** (`data_landed`, judged by
-  `sourceLanded` against each artifact's self-reported date —— not by whether the fetch threw).
-- **The hit → fetch → verify wiring is covered by tests** since 0.7.10 (`probeRound.ts`, I/O injected,
-  9 cases, mutation-checked). Playwright E2E cannot reach it: pg_cron calls the Edge Function directly
-  and the browser only ever reads the resulting rows. `readFundamentalSnapshot` and `summariseFollowUp`
-  (both touched by 0.7.13) live in `index.ts` and get **no unit test** for the same reason — say so
-  plainly rather than implying coverage.
-- ✅ **All seven sources share one standard** (0.7.12): hit = the source published today; retire = what
-  it published is in the artifact the frontend reads. Enforced by an audit test —— empty evidence, and
-  evidence made of the fetch layer's own field names, must both answer 「沒到位」 for every source.
-- ⚠️ **`supabase/functions/` had never been typechecked** —— the root tsconfig only covers `src`.
-  `npm run typecheck:edge` now exists and is at 0 errors. **Run it after touching any Edge file**;
-  `npm test` and `oxlint` will not catch a missing import there.
-- **Open bugs: none.** BUG-026/BUG-027 fixed in 0.7.13; BUG-024 (估值每天都是前一交易日) fixed in 0.7.11
-  —— see `FIXED_BUG.md`.
-
-<details>
-<summary>Superseded snapshot (2026-08-11 13:25) —— kept for the 0.7.3/0.7.4 experiment history</summary>
-
-- **Version 0.7.4**: probe-only experiment continues, but 0.7.3's hit rule was wrong for
-  `borrow` / `mops_revenue` / `mops_profit` (all three read 中 from the first probe of every window).
-  Fixed — see PROGRESS 0.7.4. **The 0.7.3 ticks for those three sources are not usable data.**
-- Admin probe panel: one row per source + hit progress bar + expandable log. 「排程」table removed.
-- **Fixed after-hours crons restored on DEV 2026-08-11 15:14** (0.7.7). They had been off since 0.7.3
-  and nothing was ingesting: a probe hit only writes `source_probe_tick`, it never triggers a fetch.
-  `sync-market` retuned to Taipei 15:15/15:30/15:45 (`15,30,45 7 * * 1-5` UTC) —— the probe measured
-  BFI82U as 尚未齊 at 15:00/15:05 and green at **15:10**. `source-probe` `*/5 * * * *` stays on.
-  **PROD crons not touched** —— needs explicit go-ahead.
-- **0.7.7: probe stops re-asking a source once it hits that day** (`pendingSources`). DEV Edge deployed
-  2026-08-11 15:28 (volume copy + container recreate) and confirmed on the scheduled 15:30 flight.
-  ⚠️ **PROD Edge still runs the 0.7.4 bundle (v41)** —— merging `main` ships Pages only.
-- **0.7.8-dev.1: a hit now triggers the fetch itself**, and only a hit whose fetch succeeded retires the
-  source (`follow_up_ok`). Code + tests green **in the working tree only** —— not committed, not deployed.
-  Needs a DDL before the Edge half: see Task 85.
-- PROD Edge stock-report **v41** (0.7.4 bundle, deployed 2026-08-11 13:24).
-- ~~After validation: restore generate/market/macro/fx schedules~~ ✅ DEV only (see above); PROD pending.
-- **Open bugs: BUG-024** —— 估值 BWIBBU 每天存的都是前一個交易日（端點沒有日期參數 + readLatest 當日凍結 + 沒有 cron）。
-
-</details>
-
-### Task 84: 0.7.4 ship
-- **Status**: ✅ shipped DEV+PROD; only the two-day read-out remains
-- **Agent**: Claude
-- **Timestamp**: 2026-08-11 13:25:00 Asia/Taipei
-- **Done**: items 1, 2, 3, 4, 5, 6, 7 — full text in `TASK_ARCHIVE.md`.
-
-8. **Read the 15:00–22:45 windows** and decide the real schedule —— 🔄 partial: `bfi82u` answered
-   (2026-08-11 first hit 15:10 → `sync-market` moved to 15:15/15:30/15:45). `t86` / `bwibbu` /
-   `margin` / `borrow` / MOPS windows still un-measured; their schedules were restored unchanged and
-   should be retuned once a full day of ticks is on record.
-
-> Observability lost with the 排程 table: no screen now shows which environment a cron targets
-> (`targetRef`). That column was BUG-003's tripwire. Re-add somewhere if a cron ever misfires again.
-
-⚠️ **Environment facts**:
-1. **DEV** = self-hosted `korq9tvdz0jd7yblr72p.ivan.lab` at
-   `/root/container/supabase/stock-pnl-web-dev` (not cloud `wqetxuhncvfidqnklyew`).
-2. **PROD** = cloud `kxnxadaghidwumqsqneu` only — never freestyle; needs explicit user go-ahead.
-3. Self-hosted Edge deploy is **volume copy** into `volumes/functions/` + recreate the
-   `functions` container (CLI `supabase functions deploy` does not target this stack).
-4. CRON_SECRET is set on Edge + embedded in pg_cron jobs (value not stored in git docs).
+- **Version 0.7.15 released**:
+  - UI: Redesigned Macro ("每日成交量", "三大法人買賣超") and Stock Detail ("三大法人買賣超") tables into clean Single Table / vertical date matrix layouts with 7-day summary footer sparklines and streak badges.
+  - Edge & Probe: Fixed BFI82U premature freezing via 15:40 preliminary threshold, 3-hit retirement protection for daily sources, and real amount signature checking. Reconciled historical market data for 2026-08-05 through 2026-08-13.
+- **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
+- **All tests green**: 63 test files / 950 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
 
 ## 📋 Active Tasks
 

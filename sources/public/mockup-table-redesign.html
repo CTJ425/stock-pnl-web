@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>總體經濟・三大法人買賣超 直向排版預覽（無右側走勢欄）</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-glow-a: rgba(99, 102, 241, 0.16);
+      --bg-glow-b: rgba(34, 211, 238, 0.1);
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-strong: #6366f1;
+      --accent-2: #22d3ee;
+      --up: #ff4a5a; /* 紅漲 / 買超 */
+      --down: #00e676; /* 綠跌 / 賣超 */
+      --radius: 14px;
+      --radius-sm: 9px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+      --panel: #131a2b;
+      --thead-bg: rgba(255, 255, 255, 0.035);
+      --row-hover: rgba(255, 255, 255, 0.045);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse 60% 40% at 20% 10%, var(--bg-glow-a), transparent),
+        radial-gradient(ellipse 50% 30% at 80% 80%, var(--bg-glow-b), transparent);
+      color: var(--ink);
+      font-family: var(--font-body);
+      padding: 28px 20px 64px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header.preview-header {
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    p.lead {
+      color: var(--ink-secondary);
+      font-size: 13.5px;
+      margin-top: 6px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      margin-bottom: 32px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(2, 6, 18, 0.45);
+    }
+
+    .rpt-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chart-title {
+      font-size: 15.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .inst-metric-seg {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn[aria-pressed="true"] {
+      background: var(--surface-strong);
+      border-color: var(--border-strong);
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* Table styling */
+    .table-scroll {
+      overflow-x: auto;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .data-table th {
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      color: var(--ink-secondary);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-strong);
+      white-space: nowrap;
+      background: var(--thead-bg);
+    }
+
+    .data-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .data-table th.num, .data-table td.num {
+      text-align: right;
+    }
+
+    .data-table tbody tr:hover td {
+      background: var(--row-hover);
+    }
+
+    /* Sticky first col */
+    .sticky-col th:first-child,
+    .sticky-col td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: var(--panel);
+      border-right: 1px solid var(--border-strong);
+      font-weight: 600;
+    }
+    .sticky-col thead th:first-child {
+      z-index: 3;
+    }
+
+    .col-total {
+      border-left: 1px solid var(--border-strong);
+      font-weight: 650;
+    }
+
+    /* 底部 7 日累計統計列 */
+    .tfoot-summary td {
+      background: rgba(255, 255, 255, 0.04);
+      border-top: 1px solid var(--border-strong) !important;
+      font-weight: 650;
+      color: #fff;
+      padding: 12px 14px;
+      vertical-align: top;
+    }
+
+    .tfoot-cum-trend {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    /* Red / Green colors */
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+
+    .tag-up {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 74, 90, 0.15);
+      color: var(--up);
+      font-weight: 600;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .tag-down {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--down);
+      font-weight: 600;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .hint-bar {
+      color: var(--ink-muted);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header class="preview-header">
+    <h1>總體經濟・三大法人買賣超 直向排版預覽 <span class="badge">無右側走勢欄版</span></h1>
+    <p class="lead">依據您的指示：<strong>採用方案一（直向日期表），取消最右側的「近 15 日走勢」欄位，並在底部「7 日累計」列完整展示各法人的 15 日折線圖與連 X 買/賣狀態標籤</strong>。</p>
+  </header>
+
+  <div class="card">
+    <div class="rpt-section-head">
+      <div class="chart-title">三大法人買賣超（億元）・近 7 個交易日</div>
+      <div class="inst-metric-seg" role="group" aria-label="切換金額口徑">
+        <button type="button" class="btn" aria-pressed="true">買賣超</button>
+        <button type="button" class="btn" aria-pressed="false">買進</button>
+        <button type="button" class="btn" aria-pressed="false">賣出</button>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table class="data-table sticky-col" aria-label="三大法人買賣超直向表">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th class="num">外資及陸資</th>
+            <th class="num">外資自營商</th>
+            <th class="num">投信</th>
+            <th class="num">自營商(自行)</th>
+            <th class="num">自營商(避險)</th>
+            <th class="num col-total">三大法人合計</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>08/14</strong></td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.12);">+150.20</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.05);">+3.50</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.14);">+35.80</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.09);">+12.50</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.07);">-8.20</td>
+            <td class="num up col-total" style="background: rgba(255, 74, 90, 0.15);">+190.30</td>
+          </tr>
+          <tr>
+            <td><strong>08/13</strong></td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.08);">-80.50</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.04);">-2.10</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.09);">+21.40</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.05);">-5.10</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.11);">-12.00</td>
+            <td class="num down col-total" style="background: rgba(0, 230, 118, 0.08);">-76.20</td>
+          </tr>
+          <tr>
+            <td><strong>08/12</strong></td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.17);">+210.40</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.07);">+5.20</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.17);">+42.10</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.14);">+18.20</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.06);">+5.30</td>
+            <td class="num up col-total" style="background: rgba(255, 74, 90, 0.19);">+276.00</td>
+          </tr>
+          <tr>
+            <td><strong>08/11</strong></td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.05);">-45.00</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.02);">-1.30</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.08);">+18.30</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.03);">-2.40</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.06);">-6.80</td>
+            <td class="num down col-total" style="background: rgba(0, 230, 118, 0.05);">-35.90</td>
+          </tr>
+          <tr>
+            <td><strong>08/08</strong></td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.08);">+95.60</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.04);">+2.80</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.11);">+28.90</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.07);">+8.10</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.04);">-3.50</td>
+            <td class="num up col-total" style="background: rgba(255, 74, 90, 0.11);">+129.10</td>
+          </tr>
+          <tr>
+            <td><strong>08/07</strong></td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.11);">-120.30</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.06);">-4.20</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.06);">+15.20</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.09);">-11.00</td>
+            <td class="num down" style="background: rgba(0, 230, 118, 0.14);">-15.40</td>
+            <td class="num down col-total" style="background: rgba(0, 230, 118, 0.12);">-131.50</td>
+          </tr>
+          <tr>
+            <td><strong>08/06</strong></td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.14);">+180.10</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.05);">+3.90</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.20);">+50.20</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.16);">+20.50</td>
+            <td class="num up" style="background: rgba(255, 74, 90, 0.08);">+8.60</td>
+            <td class="num up col-total" style="background: rgba(255, 74, 90, 0.18);">+259.40</td>
+          </tr>
+        </tbody>
+        <!-- 底部 7 日累計：在各法人數字下方完整提供該法人的折線圖與連 X 買/賣標籤 -->
+        <tfoot>
+          <tr class="tfoot-summary">
+            <td>7 日累計</td>
+            <!-- 外資及陸資 -->
+            <td class="num">
+              <div class="up" style="font-size:14px;">+390.5 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-up">連 1 買</span>
+                <svg width="88" height="24" viewBox="0 0 88 24">
+                  <polyline points="0,18 14,22 28,16 42,8 56,18 70,20 88,4" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                </svg>
+              </div>
+            </td>
+            <!-- 外資自營商 -->
+            <td class="num">
+              <div class="up" style="font-size:14px;">+7.8 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-up">連 1 買</span>
+                <svg width="88" height="24" viewBox="0 0 88 24">
+                  <polyline points="0,16 14,20 28,14 42,10 56,15 70,18 88,6" fill="none" stroke="#ff4a5a" stroke-width="1.8"/>
+                </svg>
+              </div>
+            </td>
+            <!-- 投信 -->
+            <td class="num">
+              <div class="up" style="font-size:14px;">+211.9 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-up">連 7 買</span>
+                <svg width="88" height="24" viewBox="0 0 88 24">
+                  <polyline points="0,20 14,18 28,14 42,16 56,10 70,12 88,6" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+                </svg>
+              </div>
+            </td>
+            <!-- 自營商(自行) -->
+            <td class="num">
+              <div class="up" style="font-size:14px;">+40.8 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-up">連 1 買</span>
+                <svg width="88" height="24" viewBox="0 0 88 24">
+                  <polyline points="0,18 14,22 28,15 42,19 56,8 70,20 88,10" fill="none" stroke="#ff4a5a" stroke-width="1.8"/>
+                </svg>
+              </div>
+            </td>
+            <!-- 自營商(避險) -->
+            <td class="num">
+              <div class="down" style="font-size:14px;">-32.0 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-down">連 2 賣</span>
+                <svg width="88" height="24" viewBox="0 0 88 24">
+                  <polyline points="0,12 14,20 28,15 42,18 56,10 70,18 88,18" fill="none" stroke="#00e676" stroke-width="1.8"/>
+                </svg>
+              </div>
+            </td>
+            <!-- 三大法人合計 -->
+            <td class="num col-total">
+              <div class="up" style="font-size:15px; font-weight:700;">+611.2 億</div>
+              <div class="tfoot-cum-trend">
+                <span class="tag-up">連 1 買</span>
+                <svg width="96" height="26" viewBox="0 0 96 26">
+                  <polyline points="0,18 16,24 32,18 48,6 64,20 80,10 96,5" fill="none" stroke="#ff4a5a" stroke-width="2.2"/>
+                </svg>
+              </div>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="hint-bar">
+      買賣超＝買進金額−賣出金額，紅色為買超，綠色為賣超，底色深淺是該單位自己這 7 天的相對強度。底部 7 日累計附有近 15 日買賣超走勢折線圖與連續買賣狀態。
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
