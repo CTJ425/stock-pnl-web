@@ -1,7 +1,8 @@
 /**
  * 盤後探針命中戰情室 (Probe War Room)
  *
- * 頂部戰情字卡網格：即時呈現 7 大資料源的幾點命中、命中幾次、是否已退休與時間紀錄。
+ * 採用與全站一致的 standard `.section.glass` 與 `.kpi-grid` / `.glass.kpi` 設計系統。
+ * 即時呈現 7 大資料源的幾點命中、命中幾次、是否已退休與時間紀錄。
  */
 import { useMemo } from 'react'
 import { RefreshCw } from 'lucide-react'
@@ -16,13 +17,13 @@ export interface WarRoomSourceConfig {
 }
 
 export const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
-  { id: 'bfi82u', name: '全市場三大法人', code: 'BFI82U', window: '15:00 – 16:30 / 19:30 – 20:15', target: 3 },
-  { id: 't86', name: '個股三大法人', code: 'T86', window: '15:30 – 17:30', target: 3 },
-  { id: 'bwibbu', name: '個股估值 (PE/PB/DY)', code: 'BWIBBU', window: '17:00 – 18:30', target: 3 },
-  { id: 'margin', name: '融資融券', code: 'MARGIN', window: '20:30 – 22:30', target: 3 },
-  { id: 'borrow', name: '借券賣出餘額', code: 'BORROW', window: '21:00 – 23:30', target: 3 },
-  { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽次)', target: 1 },
-  { id: 'mops_profit', name: 'MOPS 季報獲利彙整', code: 'MOPS_PROFIT', window: '12:00 / 17:15 / 21:00 (平日6槽次)', target: 1 },
+  { id: 'bfi82u', name: '全市場三大法人', code: 'BFI82U', window: '15:00–16:30 / 19:30–20:15', target: 3 },
+  { id: 't86', name: '個股三大法人', code: 'T86', window: '15:30–17:30', target: 3 },
+  { id: 'bwibbu', name: '個股估值 (PE/PB/DY)', code: 'BWIBBU', window: '17:00–18:30', target: 3 },
+  { id: 'margin', name: '融資融券', code: 'MARGIN', window: '20:30–22:30', target: 3 },
+  { id: 'borrow', name: '借券賣出餘額', code: 'BORROW', window: '21:00–23:30', target: 3 },
+  { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 1 },
+  { id: 'mops_profit', name: 'MOPS 季報獲利彙整', code: 'MOPS_PROFIT', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 1 },
 ]
 
 export interface ProbeSourceCardData {
@@ -89,7 +90,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
 
       if (isRetired) {
         statusType = 'retired'
-        statusText = s.target === 1 ? '✅ 槽次命中收工' : '✅ 已退休收工'
+        statusText = s.target === 1 ? '✅ 槽次收工' : '✅ 已退休'
       } else if (isProbing) {
         statusType = 'probing'
         statusText = `🟢 探測中 (${hitCount}/${s.target})`
@@ -119,24 +120,19 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
   const dataDate = data.chip?.dataDate || dashYmd(data.manifest?.ymd) || '—'
 
   return (
-    <div className="section glass pwr-container" style={{ padding: '18px 20px', marginBottom: 20 }}>
-      {/* 頂部戰報抬頭 */}
-      <div className="pwr-top-bar">
-        <div>
-          <div className="pwr-title-row">
-            <h3 className="head-tight pwr-main-title">
-              <span>⚡ 盤後探針命中戰情室</span>
-            </h3>
-            <span className="pwr-summary-tag">
-              已退休 {retiredCount} 源・探測中 {probingCount} 源・待機中 {waitingCount} 源
-            </span>
-          </div>
-          <div className="pwr-subtitle">
-            資料日 {dataDate}・全天候每 5 分鐘巡邏・命中即抓・3次到位退休
-          </div>
+    <div className="section glass" style={{ padding: '18px 20px' }}>
+      {/* 頂部戰報抬頭 (統一採用 rpt-section-head) */}
+      <div className="rpt-section-head">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <h3 className="head-tight">盤後探針命中戰情室</h3>
+          <span className="source-tag">
+            已退休 {retiredCount} 源・探測中 {probingCount} 源・待機中 {waitingCount} 源
+          </span>
         </div>
-        <div className="pwr-actions">
-          <span className="source-tag section-stamp">更新於 {fmtUpdatedAt(data.asOf)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="source-tag section-stamp">
+            資料日 {dataDate}・更新於 {fmtUpdatedAt(data.asOf)}
+          </span>
           <button className="btn btn-sm" onClick={onRefresh} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin' : undefined} />
             重新整理
@@ -144,28 +140,38 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         </div>
       </div>
 
-      {/* 7 大資料源戰情字卡網格 */}
-      <div className="pwr-grid">
+      <p className="ast-note" style={{ marginTop: 6, marginBottom: 14 }}>
+        全天候每 5 分鐘巡邏，命中即觸發抓取，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
+      </p>
+
+      {/* 7 大資料源戰情卡片 (統一採用 .kpi-grid 與 .glass.kpi) */}
+      <div className="kpi-grid pwr-grid">
         {cards.map((card) => {
           const { config, hitCount, target, isRetired, isProbing, hitTimes, statusText, statusType } = card
           return (
-            <div key={config.id} className={`pwr-card ${statusType}`} data-testid={`pwr-card-${config.id}`}>
-              {/* 卡片標題與狀態 */}
-              <div className="pwr-card-head">
-                <div>
-                  <div className="pwr-source-name">{config.name}</div>
-                  <div className="pwr-source-code">
-                    <code>{config.code}</code>・時窗 {config.window}
-                  </div>
-                </div>
-                <span className={`pwr-badge pwr-badge-${statusType}`}>{statusText}</span>
+            <div
+              key={config.id}
+              className={`glass kpi pwr-kpi-card pwr-${statusType}`}
+              data-testid={`pwr-card-${config.id}`}
+            >
+              {/* 卡片標題與狀態 (kpi-label) */}
+              <div className="kpi-label pwr-kpi-label">
+                <span className="pwr-kpi-name">
+                  <b>{config.name}</b>
+                  <code>{config.code}</code>
+                </span>
+                <span className={`source-tag pwr-status-tag ${statusType}`}>{statusText}</span>
               </div>
 
-              {/* 命中計數與進度圓點 */}
-              <div className="pwr-hits-row">
-                <div className={`pwr-hits-val ${isProbing ? 'probing' : ''}`}>
-                  <span>{hitCount}</span>
-                  <span className="target">/ {target} 次{isRetired ? '到位' : '命中'}</span>
+              {/* 命中計數與進度圓點 (kpi-value) */}
+              <div className="kpi-value pwr-kpi-value">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span className={isProbing ? 'pwr-probing-val' : isRetired ? 'pwr-retired-val' : ''}>
+                    {hitCount}
+                  </span>
+                  <span className="ast-unit">
+                    / {target} 次{isRetired ? '到位' : '命中'}
+                  </span>
                 </div>
                 <div className="pwr-hits-dots" aria-label={`命中進度 ${hitCount}/${target}`}>
                   {Array.from({ length: target }).map((_, i) => (
@@ -174,31 +180,33 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
                 </div>
               </div>
 
-              {/* 命中時間點清單 */}
-              <div className="pwr-time-section">
-                <div className="pwr-time-label">
-                  <span>{hitTimes.length > 0 ? '命中時間紀錄' : '預計探測時段'}</span>
-                  {hitTimes.length > 0 && <span className="pwr-hit-count-hint">共 {hitTimes.length} 次</span>}
-                </div>
-                <div className="pwr-time-chips">
+              {/* 命中時間紀錄與時窗 (kpi-sub) */}
+              <div className="kpi-sub pwr-kpi-sub">
+                <div className="pwr-sub-window">時窗：{config.window}</div>
+                <div className="pwr-sub-times">
                   {hitTimes.length > 0 ? (
-                    hitTimes.map((time, idx) => {
-                      const isLast = idx === hitTimes.length - 1
-                      return (
-                        <span
-                          key={idx}
-                          className={`pwr-hit-chip ${isLast && isRetired ? 'retired-chip' : ''} ${
-                            isLast && isProbing ? 'latest-chip' : ''
-                          }`}
-                        >
-                          {time}
-                          {isLast && isRetired ? ' 退休' : ''}
-                          {isLast && isProbing ? ' 最新' : ''}
-                        </span>
-                      )
-                    })
+                    <div className="pwr-times-line">
+                      <span className="pwr-times-prefix">命中：</span>
+                      <span className="pwr-times-chips">
+                        {hitTimes.map((time, idx) => {
+                          const isLast = idx === hitTimes.length - 1
+                          return (
+                            <span
+                              key={idx}
+                              className={`pwr-time-chip ${isLast && isRetired ? 'is-retire' : ''} ${
+                                isLast && isProbing ? 'is-latest' : ''
+                              }`}
+                            >
+                              {time}
+                              {isLast && isRetired ? ' 退休' : ''}
+                              {isLast && isProbing ? ' 最新' : ''}
+                            </span>
+                          )
+                        })}
+                      </span>
+                    </div>
                   ) : (
-                    <span className="source-tag pwr-empty-tag">尚未進入時窗 (今日未命中)</span>
+                    <span className="pwr-times-empty">尚未進入時窗 (今日未命中)</span>
                   )}
                 </div>
               </div>
