@@ -2,7 +2,7 @@
 
 - Agent: Antigravity
 - Status: ACTIVE
-- Timestamp: 2026-08-14 11:05:00 Asia/Taipei
+- Timestamp: 2026-08-14 13:28:00 Asia/Taipei
 
 ---
 
@@ -10,13 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-14 11:55)
+## 📍 Where the project stands (2026-08-14 13:28)
 
-- **Version 0.7.15 released**:
-  - UI: Redesigned Macro ("每日成交量", "三大法人買賣超") and Stock Detail ("三大法人買賣超") tables into clean Single Table / vertical date matrix layouts with 7-day summary footer sparklines and streak badges.
+- **Version 0.7.16-dev.1**:
+  - UI: Redesigned Macro "每日成交量" table to match "三大法人買賣超" vertical matrix layout (6 clean columns, footer streak badges and 15-day sparklines via `.tfoot-cum-trend`).
   - Edge & Probe: Fixed BFI82U premature freezing via 15:40 preliminary threshold, 3-hit retirement protection for daily sources, and real amount signature checking. Reconciled historical market data for 2026-08-05 through 2026-08-13.
 - **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
-- **All tests green**: 63 test files / 950 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
+- **All tests green**: 63 test files / 950 vitest tests 100% passed; Playwright E2E passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
 
 ## 📋 Active Tasks
 

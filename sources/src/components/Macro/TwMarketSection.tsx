@@ -23,8 +23,8 @@ import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 
 /** Spark for the institutional and turnover 走勢 column (0.7.6: one per unit row, was one per day). */
-const DAY_SPARK_W = 100
-const DAY_SPARK_H = 36
+const TFOOT_SPARK_W = 76
+const TFOOT_SPARK_H = 20
 
 /** The trading amount and the market K-line show several trading days. After about one season, you can see the trend without crushing the X-axis.*/
 const SHOWN_DAYS = 60
@@ -430,8 +430,7 @@ export function TwMarketSection() {
         Daily turnover table (single table layout):
         Left column: date (newest first, sticky).
         Columns: 5 metrics.
-        Rightmost column: 15-day trend sparkline & streak in summary footer.
-        Footer: 7-day statistical summary.
+        Footer: 7-day statistical summary with per-column streak badge and 15-day SparkCell trendline.
       */}
       <div className="rpt-section-head" style={{ marginTop: 18 }}>
         <div className="chart-title">每日成交量・近 {turnoverDays.length} 個交易日</div>
@@ -446,13 +445,10 @@ export function TwMarketSection() {
               <th className="num">成交筆數（萬筆）</th>
               <th className="num">加權指數</th>
               <th className="num">指數漲跌</th>
-              <th style={{ borderLeft: '1px solid var(--border-strong)', minWidth: 220 }}>
-                近 {TREND_DAYS} 日走勢
-              </th>
             </tr>
           </thead>
           <tbody>
-            {[...turnoverDays].reverse().map((d, dRevIdx) => {
+            {[...turnoverDays].reverse().map((d) => {
               const amount = toBillion(d.tradeValueTwd)
               const shares = toBillionShares(d.tradeVolumeShares)
               const txns = toTenThousand(d.transactions)
@@ -471,148 +467,123 @@ export function TwMarketSection() {
                       ? '—'
                       : `${d.changePoints > 0 ? '+' : ''}${d.changePoints.toFixed(2)}`}
                   </td>
-                  {dRevIdx === 0 && (
-                    <td className="col-trend-rowspan" rowSpan={turnoverDays.length}>
-                      <div className="trend-stack">
-                        <div className="trend-item">
-                          <div className="trend-info">
-                            <span className="trend-label">成交金額</span>
-                            <span
-                              className={
-                                turnoverAmountTrend.label
-                                  ? chipClass(turnoverAmountTrend.color === CHART_COLORS.up ? 1 : -1)
-                                  : 'hint'
-                              }
-                              style={{
-                                fontSize: 11,
-                                fontWeight: turnoverAmountTrend.label ? 600 : undefined,
-                              }}
-                            >
-                              {turnoverAmountTrend.label ?? '—'}
-                            </span>
-                          </div>
-                          <SparkCell
-                            points={turnoverAmountPoints.slice(-TREND_DAYS)}
-                            color={turnoverAmountTrend.color}
-                            width={DAY_SPARK_W}
-                            height={DAY_SPARK_H}
-                            ariaLabel="近 15 個交易日成交金額走勢"
-                          />
-                        </div>
-                        <div className="trend-item">
-                          <div className="trend-info">
-                            <span className="trend-label">加權指數</span>
-                            <span
-                              className={
-                                taiexTrend.label
-                                  ? chipClass(taiexTrend.color === CHART_COLORS.up ? 1 : -1)
-                                  : 'hint'
-                              }
-                              style={{ fontSize: 11, fontWeight: taiexTrend.label ? 600 : undefined }}
-                            >
-                              {taiexTrend.label ?? '—'}
-                            </span>
-                          </div>
-                          <SparkCell
-                            points={taiexPoints.slice(-TREND_DAYS)}
-                            color={taiexTrend.color}
-                            width={DAY_SPARK_W}
-                            height={DAY_SPARK_H}
-                            ariaLabel="近 15 個交易日加權指數走勢"
-                          />
-                        </div>
-                        <div className="trend-item">
-                          <div className="trend-info">
-                            <span className="trend-label">指數漲跌</span>
-                            <span
-                              className={
-                                taiexTrend.label
-                                  ? chipClass(taiexTrend.color === CHART_COLORS.up ? 1 : -1)
-                                  : 'hint'
-                              }
-                              style={{ fontSize: 11, fontWeight: taiexTrend.label ? 600 : undefined }}
-                            >
-                              {taiexTrend.label ?? '—'}
-                            </span>
-                          </div>
-                          <SparkCell
-                            points={changePointsList.slice(-TREND_DAYS)}
-                            color={
-                              changePointsList.length > 0
-                                ? changePointsList[changePointsList.length - 1] > 0
-                                  ? CHART_COLORS.up
-                                  : changePointsList[changePointsList.length - 1] < 0
-                                    ? CHART_COLORS.down
-                                    : CHART_COLORS.axis
-                                : CHART_COLORS.axis
-                            }
-                            width={DAY_SPARK_W}
-                            height={DAY_SPARK_H}
-                            ariaLabel="近 15 個交易日指數漲跌走勢"
-                          />
-                        </div>
-                        <div className="trend-item">
-                          <div className="trend-info">
-                            <span className="trend-label">成交股數</span>
-                            <span style={{ fontSize: 11, color: 'var(--ink-muted)' }}>
-                              {turnoverSharesVals[turnoverSharesVals.length - 1] !== null
-                                ? `${turnoverSharesVals[turnoverSharesVals.length - 1]!.toFixed(1)} 億股`
-                                : '—'}
-                            </span>
-                          </div>
-                          <SparkCell
-                            points={turnoverSharesPoints.slice(-TREND_DAYS)}
-                            color={CHART_COLORS.axis}
-                            width={DAY_SPARK_W}
-                            height={DAY_SPARK_H}
-                            ariaLabel="近 15 個交易日成交股數走勢"
-                          />
-                        </div>
-                        <div className="trend-item">
-                          <div className="trend-info">
-                            <span className="trend-label">成交筆數</span>
-                            <span style={{ fontSize: 11, color: 'var(--ink-muted)' }}>
-                              {turnoverTxnVals[turnoverTxnVals.length - 1] !== null
-                                ? `${turnoverTxnVals[turnoverTxnVals.length - 1]!.toFixed(1)} 萬`
-                                : '—'}
-                            </span>
-                          </div>
-                          <SparkCell
-                            points={turnoverTxnPoints.slice(-TREND_DAYS)}
-                            color={CHART_COLORS.axis}
-                            width={DAY_SPARK_W}
-                            height={DAY_SPARK_H}
-                            ariaLabel="近 15 個交易日成交筆數走勢"
-                          />
-                        </div>
-                      </div>
-                    </td>
-                  )}
                 </tr>
               )
             })}
           </tbody>
           <tfoot>
             <tr className="tfoot-summary">
-              <td>7 日統計</td>
-              <td className="num inst-matrix-cum">{fmtBillion(turnoverAmountAvg)}</td>
+              <td>{turnoverDays.length} 日統計</td>
               <td className="num inst-matrix-cum">
-                {turnoverSharesAvg === null ? '—' : `${turnoverSharesAvg.toFixed(1)} 億股`}
+                <div>{fmtBillion(turnoverAmountAvg)}</div>
+                <div className="tfoot-cum-trend">
+                  <span
+                    className={
+                      turnoverAmountTrend.label
+                        ? chipClass(turnoverAmountTrend.color === CHART_COLORS.up ? 1 : -1)
+                        : 'hint'
+                    }
+                    style={{
+                      fontSize: 11,
+                      fontWeight: turnoverAmountTrend.label ? 600 : undefined,
+                    }}
+                  >
+                    {turnoverAmountTrend.label ?? '—'}
+                  </span>
+                  <SparkCell
+                    points={turnoverAmountPoints.slice(-TREND_DAYS)}
+                    color={turnoverAmountTrend.color}
+                    width={TFOOT_SPARK_W}
+                    height={TFOOT_SPARK_H}
+                    ariaLabel="近 15 個交易日成交金額走勢"
+                  />
+                </div>
               </td>
               <td className="num inst-matrix-cum">
-                {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬`}
+                <div>
+                  {turnoverSharesAvg === null ? '—' : `${turnoverSharesAvg.toFixed(1)} 億股`}
+                </div>
+                <div className="tfoot-cum-trend">
+                  <span className="hint" style={{ fontSize: 11 }}>
+                    —
+                  </span>
+                  <SparkCell
+                    points={turnoverSharesPoints.slice(-TREND_DAYS)}
+                    color={CHART_COLORS.axis}
+                    width={TFOOT_SPARK_W}
+                    height={TFOOT_SPARK_H}
+                    ariaLabel="近 15 個交易日成交股數走勢"
+                  />
+                </div>
               </td>
               <td className="num inst-matrix-cum">
-                {taiexAvg === null ? '—' : taiexAvg.toFixed(2)}
+                <div>
+                  {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬`}
+                </div>
+                <div className="tfoot-cum-trend">
+                  <span className="hint" style={{ fontSize: 11 }}>
+                    —
+                  </span>
+                  <SparkCell
+                    points={turnoverTxnPoints.slice(-TREND_DAYS)}
+                    color={CHART_COLORS.axis}
+                    width={TFOOT_SPARK_W}
+                    height={TFOOT_SPARK_H}
+                    ariaLabel="近 15 個交易日成交筆數走勢"
+                  />
+                </div>
+              </td>
+              <td className="num inst-matrix-cum">
+                <div>{taiexAvg === null ? '—' : taiexAvg.toFixed(2)}</div>
+                <div className="tfoot-cum-trend">
+                  <span
+                    className={
+                      taiexTrend.label
+                        ? chipClass(taiexTrend.color === CHART_COLORS.up ? 1 : -1)
+                        : 'hint'
+                    }
+                    style={{ fontSize: 11, fontWeight: taiexTrend.label ? 600 : undefined }}
+                  >
+                    {taiexTrend.label ?? '—'}
+                  </span>
+                  <SparkCell
+                    points={taiexPoints.slice(-TREND_DAYS)}
+                    color={taiexTrend.color}
+                    width={TFOOT_SPARK_W}
+                    height={TFOOT_SPARK_H}
+                    ariaLabel="近 15 個交易日加權指數走勢"
+                  />
+                </div>
               </td>
               <td className={`num inst-matrix-cum ${chipClass(changeSum)}`}>
-                {changeSum === null ? '—' : `${changeSum > 0 ? '+' : ''}${changeSum.toFixed(2)}`}
-              </td>
-              <td style={{ borderLeft: '1px solid var(--border-strong)', textAlign: 'right' }}>
-                <span className={chipClass(changeSum)}>
-                  7 日累計{changeSum !== null && changeSum > 0 ? '漲 ' : changeSum !== null && changeSum < 0 ? '跌 ' : ''}
-                  {changeSum !== null ? `${Math.abs(changeSum).toFixed(2)} 點` : '—'}
-                </span>
+                <div>
+                  {changeSum === null ? '—' : `${changeSum > 0 ? '+' : ''}${changeSum.toFixed(2)}`}
+                </div>
+                <div className="tfoot-cum-trend">
+                  <span
+                    className={chipClass(changeSum)}
+                    style={{ fontSize: 11, fontWeight: changeSum !== null ? 600 : undefined }}
+                  >
+                    {changeSum !== null
+                      ? `7日累計${changeSum > 0 ? '漲 ' : changeSum < 0 ? '跌 ' : ''}${Math.abs(changeSum).toFixed(2)}`
+                      : '—'}
+                  </span>
+                  <SparkCell
+                    points={changePointsList.slice(-TREND_DAYS)}
+                    color={
+                      changePointsList.length > 0
+                        ? changePointsList[changePointsList.length - 1] > 0
+                          ? CHART_COLORS.up
+                          : changePointsList[changePointsList.length - 1] < 0
+                            ? CHART_COLORS.down
+                            : CHART_COLORS.axis
+                        : CHART_COLORS.axis
+                    }
+                    width={TFOOT_SPARK_W}
+                    height={TFOOT_SPARK_H}
+                    ariaLabel="近 15 個交易日指數漲跌走勢"
+                  />
+                </div>
               </td>
             </tr>
           </tfoot>
@@ -723,8 +694,8 @@ export function TwMarketSection() {
                       <SparkCell
                         points={sparkPoints}
                         color={sparkColor}
-                        width={76}
-                        height={20}
+                        width={TFOOT_SPARK_W}
+                        height={TFOOT_SPARK_H}
                         ariaLabel={`近 ${sparkPoints.length} 個交易日${u.label}買賣超走勢`}
                       />
                     </div>

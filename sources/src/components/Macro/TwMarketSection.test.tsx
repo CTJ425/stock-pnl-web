@@ -112,7 +112,7 @@ describe('TwMarketSection', () => {
     expect(await screen.findByText('加權指數日 K（近 1 個交易日）')).toBeTruthy()
   })
 
-  it('每日成交量表格為 日期×項目：七個日期列（最新在上）、各項指標欄，最右欄為走勢與統計', async () => {
+  it('每日成交量表格為 日期×項目：七個日期列（最新在上）、五個指標欄，走勢與統計下沉至頁尾', async () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       day(`2026-07-${String(i + 1).padStart(2, '0')}`, 8e11, inst(1e9, 5e8)),
     )
@@ -135,7 +135,6 @@ describe('TwMarketSection', () => {
       '成交筆數（萬筆）',
       '加權指數',
       '指數漲跌',
-      '近 15 日走勢',
     ])
 
     const rows = [...turnoverRows(container)]
@@ -175,9 +174,10 @@ describe('TwMarketSection', () => {
     const footCells = [...table.querySelectorAll('tfoot td')].map((td) => td.textContent)
     expect(footCells[0]).toBe('7 日統計')
     // 7 日均量: (8000 + 9000 + 10000 + 7000 + 8000 + 8500 + 8800) / 7 = 8471.4 億
-    expect(footCells[1]).toBe('8471.4 億')
+    expect(footCells[1]).toContain('8471.4 億')
     // 7 日累計漲跌: 266.66 * 7 = +1866.62
-    expect(footCells[5]).toBe('+1866.62')
+    expect(footCells[5]).toContain('+1866.62')
+    expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
   })
 
   it('成交股數與筆數缺料時給「—」，不用 0 冒充', async () => {
@@ -195,7 +195,7 @@ describe('TwMarketSection', () => {
     expect(cells[3]).toBe('—') // 成交筆數
 
     const footCells = [...container.querySelectorAll('table[aria-label="每日成交量"] tfoot td')].map(
-      (td) => td.textContent,
+      (td) => td.querySelector('div')?.textContent ?? td.textContent,
     )
     expect(footCells[2]).toBe('—') // 7 日統計股數
     expect(footCells[3]).toBe('—') // 7 日統計筆數
@@ -422,6 +422,7 @@ describe('TwMarketSection', () => {
     // Taiex row has positive change: all 3 days positive
     expect(table.textContent).toContain('連 3 日上漲')
     expect(table.textContent).toContain('連 2 日增量')
+    expect(table.querySelectorAll('tfoot .mac-spark')).toHaveLength(5)
   })
 
   it('指數漲跌儲存格套用熱力底色與紅綠色彩', async () => {

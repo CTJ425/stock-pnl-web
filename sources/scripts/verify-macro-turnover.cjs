@@ -160,23 +160,23 @@ const mockMacro = {
 
         const headers = await turnoverTable.locator('thead th').allTextContents()
         console.log(`  Headers: ${headers.join(' | ')}`)
-        if (headers.length !== 7) {
-          console.error(`  Expected 7 column headers, got ${headers.length}`)
+        if (headers.length !== 6) {
+          console.error(`  Expected 6 column headers, got ${headers.length}`)
           hasErrors = true
         }
 
         const footers = await turnoverTable.locator('tfoot td').allTextContents()
         console.log(`  Footers: ${footers.join(' | ')}`)
-        if (footers.length !== 7) {
-          console.error(`  Expected 7 footer cells, got ${footers.length}`)
+        if (footers.length !== 6) {
+          console.error(`  Expected 6 footer cells, got ${footers.length}`)
           hasErrors = true
         }
 
-        // Verify sparklines in trend stack
-        const turnoverSparks = await turnoverTable.locator('.col-trend-rowspan .mac-spark').count()
-        console.log(`  Found ${turnoverSparks} sparklines in 每日成交量 trend stack.`)
+        // Verify sparklines in footer
+        const turnoverSparks = await turnoverTable.locator('tfoot .mac-spark').count()
+        console.log(`  Found ${turnoverSparks} sparklines in 每日成交量 footer.`)
         if (turnoverSparks !== 5) {
-          console.error(`  Expected 5 sparklines in 每日成交量 trend stack, got ${turnoverSparks}`)
+          console.error(`  Expected 5 sparklines in 每日成交量 footer, got ${turnoverSparks}`)
           hasErrors = true
         }
       } else {
