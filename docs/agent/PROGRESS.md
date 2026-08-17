@@ -1,11 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task 111 — Retune T86 probe active window to 16:00–17:00 and release version 0.7.18
-- Status: **✅ Implemented and verified; all 66 test files / 963 tests pass; build & typecheck clean; DEV/main ready to merge**
-- Timestamp: 2026-08-17 16:55:00 Asia/Taipei
+- Action: Task 112 — Backfill all 84 GitHub Releases from CHANGELOG and establish automated release sync workflow
+- Status: **✅ All 84 historical GitHub Releases successfully published and synchronized; automated release CI workflow deployed**
+- Timestamp: 2026-08-17 18:03:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-17 18:03:00 Asia/Taipei (Task 112: Full GitHub Releases backfill & automated workflow sync)
+
+1. **Full Backfill of GitHub Releases (`sources/scripts/sync-github-releases.cjs`)**:
+   - Created sync utility parsing `docs/agent/CHANGELOG.md` across all 84 versions (`0.2` through `0.7.18`).
+   - Matched each historical version to its exact release commit SHA in git history.
+   - Synchronized all 84 releases to GitHub Releases with titles and detailed markdown release notes.
+2. **Automated CI/CD Workflow (`.github/workflows/release.yml`)**:
+   - Configured GitHub Actions workflow triggering on push to `main` (and `workflow_dispatch`).
+   - Automatically synchronizes GitHub Releases whenever a new version is pushed to `main`.
+   - Added `release:sync` and `release:sync:all` npm scripts in `sources/package.json`.
+3. **Skill & Documentation Sync**:
+   - Updated `.claude/skills/versioning/SKILL.md`, `.gemini/skills/versioning/SKILL.md`, `.claude/skills/ship/SKILL.md`, and `.gemini/skills/ship/SKILL.md`.
+   - Full Vitest suite: 66 test files / 963 tests passed 100%.
+   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
 
 ## 📅 Log: 2026-08-17 16:55:00 Asia/Taipei (Task 111: Retune T86 probe active window to 16:00–17:00, sync UI & docs, release 0.7.18)
 
@@ -21,14 +36,3 @@
    - Full Vitest suite: 66 test files / 963 tests passed 100%.
    - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
    - Synchronized `version.ts`, `package.json`, `package-lock.json`, `README.md`, and `CHANGELOG.md` to `0.7.18`.
-
-## 📅 Log: 2026-08-14 18:00:00 Asia/Taipei (Task 110 Follow-up: Fix Probe War Room premature retirement condition & full verification)
-
-1. **Retirement Gate Correction (`ProbeWarRoom.tsx`)**:
-   - Fixed `isRetired` logic in `ProbeWarRoom.tsx` so daily sources (e.g. `T86`, `BFI82U`, `BWIBBU`, `MARGIN`, `BORROW`) strictly require `hitCount >= target` (3 hits) to retire, rather than prematurely marking retired on tick 1 or 2 when the tick note matches `資料已到位`.
-   - Unit tests added in `ProbeWarRoom.test.tsx` asserting 1/3 and 2/3 hits show `🟢 探測中` without `已退休`, and 3/3 hits show `✅ 已退休`.
-2. **Testing & Verification**:
-   - Full Vitest suite: 66 test files / 963 tests passed 100%.
-   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
-   - `oxlint` 0 errors.
-   - Synced `package-lock.json` version to `0.7.17`.

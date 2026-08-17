@@ -1,0 +1,33 @@
+name: Sync GitHub Releases
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "releases"
+  cancel-in-progress: false
+
+jobs:
+  sync-releases:
+    name: Sync Releases from CHANGELOG
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Sync Releases
+        run: node sources/scripts/sync-github-releases.cjs --all
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,7 +3,18 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-17 16:55:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-17 18:03:00 Asia/Taipei).
+
+## 📅 Log: 2026-08-14 18:00:00 Asia/Taipei (Task 110 Follow-up: Fix Probe War Room premature retirement condition & full verification)
+
+1. **Retirement Gate Correction (`ProbeWarRoom.tsx`)**:
+   - Fixed `isRetired` logic in `ProbeWarRoom.tsx` so daily sources (e.g. `T86`, `BFI82U`, `BWIBBU`, `MARGIN`, `BORROW`) strictly require `hitCount >= target` (3 hits) to retire, rather than prematurely marking retired on tick 1 or 2 when the tick note matches `資料已到位`.
+   - Unit tests added in `ProbeWarRoom.test.tsx` asserting 1/3 and 2/3 hits show `🟢 探測中` without `已退休`, and 3/3 hits show `✅ 已退休`.
+2. **Testing & Verification**:
+   - Full Vitest suite: 66 test files / 963 tests passed 100%.
+   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
+   - `oxlint` 0 errors.
+   - Synced `package-lock.json` version to `0.7.17`.
 
 ## 📅 Log: 2026-08-14 16:48:00 Asia/Taipei (Task 110: Deploy Probe Hit War Room Cards replacing legacy failure banner)
 
