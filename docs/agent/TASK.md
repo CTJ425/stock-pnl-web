@@ -10,14 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-14 15:45)
+## 📍 Where the project stands (2026-08-17 16:55)
 
-- **Version 0.7.17**:
-  - Probe: Narrowed `bwibbu` probe window from `15:00–22:00` to `17:00–18:30` (saving ~24 daily no-op probes).
-  - Probe: Configured `bfi82u` dual windows (`15:00–16:30` and `19:30–20:15`), removed the 15:40 block so each window independently marks landed after 3 hits; `syncMarket` re-polls BFI82U in the evening window for final 19:40 comprehensive and block trades settlement.
-  - UI: `MechanismGuide` and `AdminStatusPage` updated with latest probe schedule descriptions.
+- **Version 0.7.18**:
+  - Probe: Narrowed `t86` probe window from `15:30–17:30` to `16:00–17:00` (saving 6 daily no-op probes).
+  - UI: `MechanismGuide` and `ProbeWarRoom` updated with T86 16:00–17:00 window description.
 - **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
-- **All tests green**: 65 test files / 959 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
+- **All tests green**: 66 test files / 963 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
 
 ## 📋 Active Tasks
 

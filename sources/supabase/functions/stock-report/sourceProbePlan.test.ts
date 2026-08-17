@@ -27,16 +27,20 @@ describe('sourceProbePlan', () => {
 
   it('下午開 BFI／T86 窗；估值窗 17:00–18:30，借券此時不探', () => {
     expect(sourcesForTaipeiTime('15:05', true)).toEqual(['bfi82u'])
-    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u', 't86'])
+    expect(sourcesForTaipeiTime('15:30', true)).toEqual(['bfi82u'])
+    expect(sourcesForTaipeiTime('16:00', true)).toEqual(['bfi82u', 't86'])
     expect(sourcesForTaipeiTime('16:45', true)).toEqual(['t86'])
     expect(sourcesForTaipeiTime('12:00', true).sort()).toEqual(
       ['mops_profit', 'mops_revenue'].sort(),
     )
+    expect(sourcesForTaipeiTime('17:00', true).sort()).toEqual(
+      ['bwibbu', 't86'].sort(),
+    )
     expect(sourcesForTaipeiTime('17:15', true).sort()).toEqual(
-      ['bwibbu', 'mops_profit', 'mops_revenue', 't86'].sort(),
+      ['bwibbu', 'mops_profit', 'mops_revenue'].sort(),
     )
     expect(sourcesForTaipeiTime('17:20', true).sort()).toEqual(
-      ['bwibbu', 'mops_profit', 'mops_revenue', 't86'].sort(),
+      ['bwibbu', 'mops_profit', 'mops_revenue'].sort(),
     )
     expect(sourcesForTaipeiTime('18:00', true)).toEqual(['bwibbu'])
     expect(sourcesForTaipeiTime('18:30', true)).toEqual(['bwibbu'])
