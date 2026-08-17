@@ -67,10 +67,19 @@ Examples: target `0.6.48` → first change `0.6.48-dev.1`, second `0.6.48-dev.2`
 
 `docs/agent/CHANGELOG.md` stays the **source of truth** — it is not a hot file (nothing reads it at
 session start), so nothing is moved out of it. The Release is a convenience mirror that makes
-`gh release view 0.7.13` a precise, cheap lookup instead of a grep through 48k characters.
+`gh release view 0.7.18` a precise, cheap lookup instead of a grep through the changelog.
 
+### Automated Synchronization
+- Whenever commits are merged/pushed to `main`, `.github/workflows/release.yml` automatically triggers `npm run release:sync:all` (or `node sources/scripts/sync-github-releases.cjs --all`).
+- Any new version documented in `docs/agent/CHANGELOG.md` is automatically created as a GitHub Release with full release notes and corresponding git tag.
+
+### Manual / Local Synchronization
 ```bash
-gh release create 0.7.13 --title 0.7.13 --notes-file <that version's CHANGELOG section>
+# Sync current version from package.json / CHANGELOG.md
+npm run release:sync
+
+# Sync all versions in CHANGELOG.md
+npm run release:sync:all
 ```
 
 - No `v` prefix on the tag — it matches the version string exactly (CLAUDE.md § Versioning).
@@ -78,8 +87,6 @@ gh release create 0.7.13 --title 0.7.13 --notes-file <that version's CHANGELOG s
   CHANGELOG section, which is already committed and therefore already passed push protection.
   Never hand-add logs, `cron.job.command` text, or Edge output to a release body.
 - Only official `x.x.x` releases get one. `-dev.N` never does.
-- **Starts at `0.7.14`.** Versions up to and including `0.7.13` are deliberately **not** backfilled
-  (user decision, 2026-08-12) — `CHANGELOG.md` already covers them and backfilling would publish
-  ~40 releases at once on a public repo. Do not "complete" the history.
+- All versions (from `0.2` upwards) are backfilled and maintained in sync.
 
 Purpose: official and pre-release numbers stay aligned; there is never a gap where main is `0.3.6` while dev already claims `0.3.8` without a release, and dev does not sit on a bare release number mid-work.

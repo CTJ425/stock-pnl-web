@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
-    "typecheck:edge": "tsc -p tsconfig.edge.json"
+    "typecheck:edge": "tsc -p tsconfig.edge.json",
+    "release:sync": "node scripts/sync-github-releases.cjs",
+    "release:sync:all": "node scripts/sync-github-releases.cjs --all"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
