@@ -38,7 +38,7 @@ const PROBE_SOURCES_CONFIG: ProbeSourceConfig[] = [
   {
     id: 't86',
     name: '個股三大法人',
-    window: '15:30 – 17:30',
+    window: '16:00 – 17:00',
     interval: '每 5 分鐘',
     retirement: '3 次穩定到位',
     action: 'generate-chips',

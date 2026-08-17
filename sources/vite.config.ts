@@ -22,6 +22,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: true,
     // TWSE / TPEx OpenAPI does not open CORS, and the development mode obtains the Taiwan stock list and current price through the dev server agent;
     // The official environment (GitHub Pages) is proxied by Supabase Edge Function (see src/services/priceProxy.ts)
     proxy: {

@@ -3,7 +3,20 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-14 18:00:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-17 16:55:00 Asia/Taipei).
+
+## 📅 Log: 2026-08-14 16:48:00 Asia/Taipei (Task 110: Deploy Probe Hit War Room Cards replacing legacy failure banner)
+
+Replaced the legacy alert banner ("有 X 次探針抓取失敗需要注意") with the new interactive **Probe War Room (盤後探針命中戰情室)**:
+1. **Probe War Room Component (`ProbeWarRoom.tsx`)**:
+   - Displays real-time status across all 7 sources (`BFI82U`, `T86`, `BWIBBU`, `MARGIN`, `BORROW`, `MOPS_REV`, `MOPS_PROFIT`).
+   - Cards display: Source name/code & time window, Retirement Badge (`✅ 已退休收工` / `🟢 探測中` / `⏳ 待機中`), Hit Count Progress (`3 / 3 次到位` with visual progress dots), and Hit Timestamps (`15:05`, `15:10`, `15:15 退休`).
+   - Top banner aggregates active summary tags (`已退休 N 源・探測中 N 源・待機中 N 源`), data date, and refresh button.
+2. **Testing & Verification**:
+   - Created `ProbeWarRoom.test.tsx` testing rendering, hit counting, retirement badges, and hit timestamps.
+   - Updated `AdminStatusPage.test.tsx` to assert new War Room cards.
+   - Vitest suite: 66 test files / 962 tests passed 100%.
+   - Build (`tsc -b && vite build`) passed with zero errors.
 
 ## 📅 Log: 2026-08-14 15:45:00 Asia/Taipei (Task 109: Retune probe cycles: bwibbu 17:00–18:30 and bfi82u dual window with 15:40 condition removed)
 

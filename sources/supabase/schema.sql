@@ -381,7 +381,7 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 --    with `reason=complete` (BUG-026). A backstop sharing the broken code path and differing only by
 --    clock is not an independent safety net.
 --
---    Coverage now: `t86` (15:30–17:30), `margin` (20:30–22:30) and `borrow` (21:00–23:30) probe windows
+--    Coverage now: `t86` (16:00–17:00), `margin` (20:30–22:30) and `borrow` (21:00–23:30) probe windows
 --    all map to `generate-chips` via `PROBE_FOLLOW_UP`.
 --
 --    To restore, **clone a surviving job's command** so the embedded CRON_SECRET travels without ever
