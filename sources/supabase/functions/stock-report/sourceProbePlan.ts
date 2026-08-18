@@ -52,15 +52,46 @@ export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
 }
 
 /**
- * 依據今日各來源的已到位次數，計算哪些來源已經收工（達到所需命中次數）。
+ * 這個來源要不要求「內容已停止變動」才准收工。
+ *
+ * 六個每日來源要求：次數只證明「量到了幾次」，證明不了「上游還會不會再改」——T86 每 15 分鐘
+ * 改一次正是這個洞的實例。MOPS 兩個來源不要求：它們的收工判準（`atLeast`）本身就是期別比較，
+ * 「該期已經出現在畫面上」由構造保證，而它們的目標是單次到位，指紋規則只會把 1 變成 2，沒有收穫。
+ */
+export const REQUIRE_SETTLED_CONTENT: Record<ProbeSourceId, boolean> = {
+  bfi82u: true,
+  t86: true,
+  bwibbu: true,
+  twt38u: true,
+  margin: true,
+  borrow: true,
+  mops_revenue: false,
+  mops_profit: false,
+}
+
+/** 最近兩次到位的指紋是否相同——相同即視為上游已停止改版。 */
+export function contentSettled(fingerprints: Array<string | null | undefined>): boolean {
+  if (fingerprints.length < 2) return false
+  const [a, b] = fingerprints.slice(-2)
+  if (!a || !b) return false
+  return a === b
+}
+
+/**
+ * 依據今日各來源的已到位次數與內容穩定度，計算哪些來源已經收工。
+ *
+ * 次數到了不等於能收工：每日來源另需 `settled[id] === true`（最近兩次到位內容指紋相同）。
+ * `settled` 預設為空物件——沒有穩定證據時，需要穩定證據的來源一律不收工，寧可多探一輪。
  */
 export function retiredSources(
   landedCounts: Record<string, number>,
   required: Record<ProbeSourceId, number> = REQUIRED_LANDED_COUNTS,
+  settled: Record<string, boolean> = {},
 ): Set<ProbeSourceId> {
   const out = new Set<ProbeSourceId>()
   for (const [id, req] of Object.entries(required) as Array<[ProbeSourceId, number]>) {
-    if ((landedCounts[id] ?? 0) >= req) {
+    if ((landedCounts[id] ?? 0) < req) continue
+    if (REQUIRE_SETTLED_CONTENT[id] === false || settled[id] === true) {
       out.add(id)
     }
   }
@@ -117,6 +148,54 @@ export function getActiveWindow(
     return w.find((win) => inWindow(mins, win)) ?? null
   }
   return inWindow(mins, w) ? w : null
+}
+
+export interface LandedTick {
+  source: string
+  taipei_time: string | null
+  fingerprint: string | null
+}
+
+/**
+ * 把今天的到位紀錄整理成「每個來源到位幾次」與「每個來源的內容是否已停止變動」。
+ *
+ * `slotMinutes` 是現在這一輪的分鐘數；當來源有每日視窗時，只有落在**當前活躍視窗**內的
+ * tick 算數——`bfi82u` 一天兩個時段，跨時段累計會讓它提早退休。
+ */
+export function summariseLandedTicks(
+  ticks: LandedTick[],
+  slotMinutes: number | null,
+): { counts: Record<string, number>; settled: Record<string, boolean> } {
+  // DB row order is not guaranteed; sort by tick time so per-source fingerprints are in
+  // time order, which `contentSettled` needs (it reads the last two entries).
+  const sorted = [...ticks].sort(
+    (a, b) =>
+      (a.taipei_time ? minutesFromHhmm(a.taipei_time) ?? 0 : 0) -
+      (b.taipei_time ? minutesFromHhmm(b.taipei_time) ?? 0 : 0),
+  )
+
+  const counts: Record<string, number> = {}
+  const fingerprintsBySource: Record<string, Array<string | null>> = {}
+  for (const r of sorted) {
+    const src = r.source
+    if (slotMinutes != null && src in DAILY_WINDOWS) {
+      const activeWin = getActiveWindow(src as keyof typeof DAILY_WINDOWS, slotMinutes)
+      if (activeWin) {
+        const tickMins = r.taipei_time ? minutesFromHhmm(r.taipei_time) : null
+        if (tickMins != null && (tickMins < activeWin.from || tickMins > activeWin.to)) {
+          continue
+        }
+      }
+    }
+    counts[src] = (counts[src] ?? 0) + 1
+    ;(fingerprintsBySource[src] ??= []).push(r.fingerprint ?? null)
+  }
+
+  const settled: Record<string, boolean> = {}
+  for (const src of Object.keys(fingerprintsBySource)) {
+    settled[src] = contentSettled(fingerprintsBySource[src])
+  }
+  return { counts, settled }
 }
 
 /**
