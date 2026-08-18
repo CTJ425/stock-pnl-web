@@ -2,7 +2,11 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.7.22-dev.1（2026-08-18）— BUG-029：修復 TWT38U 探針自 0.7.19 來從未執行
+### 0.7.22（2026-08-18）— BUG-029：修復 TWT38U 探針自 0.7.19 來從未執行
+
+> 目前狀態：0.7.22 DEV Edge 已於 2026-08-18 21:28 Asia/Taipei 部署（commit 0f8612b），方式為 volume copy + `docker compose up -d --force-recreate functions`。驗證：`source-probe` cron 於 21:45 及 21:50 均回 HTTP 200 並寫入新碼的 `source_probe_tick` 列，無他源迴歸。
+> Bug 足跡確認於部署前：`SELECT count(*) FROM source_probe_tick WHERE source='twt38u'` 全史 0 列；今日 17:00–18:00 窗僅 `bwibbu`（加 17:15/17:20 的 `mops_revenue`）。twt38u 分支因 `handleProbe()` 讀實時鐘無時間覆蓋，迄未端對端驗證；預期首次驗證 2026-08-19 17:00 Asia/Taipei。
+> 部署後 21:30／21:35 兩輪超逾時原因：診斷期間併行手動探測呼叫，非本更動；21:45／21:50 恢復 200；同類超時已於部署前 21:00 出現；與開放 RISK-001 相關。
 
 - 🐞 **BUG-029**：外資買賣超（TWT38U）於 0.7.19 新增為第 8 個探針來源（視窗 17:00–18:00），但在 PROD 與 DEV 上从未執行过任何一次。原因為調度路徑上的兩個獨立缺口：
   1. `sourceProbePlan.ts` 的 `sourcesForTaipeiTime()` 使用硬寫列表 `['bfi82u','t86','bwibbu','margin','borrow']` 漏掉 `'twt38u'`，即便 `DAILY_WINDOWS.twt38u` 已定義、落地目標 3 次已設定、指紋規則已接線、到位判準已實作，調度器仍因列表缺漏而從不發出該源。
