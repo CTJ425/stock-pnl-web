@@ -1,0 +1,4 @@
+{
+  "paths": { "prod": ["sources/"] },
+  "bookkeeping": { "timezone": "Asia/Taipei" }
+}

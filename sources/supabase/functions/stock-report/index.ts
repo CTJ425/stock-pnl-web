@@ -134,6 +134,14 @@ import {
   type MarketFile,
 } from './twMarket.ts'
 import {
+  FOREIGN_TOP_SCHEMA,
+  foreignTopFingerprint,
+  parseForeignTop,
+  twt38uUrl,
+  type ForeignTopFile,
+  type Twt38uResponse,
+} from './twForeignTop.ts'
+import {
   FRED_SERIES,
   macroCatalogIncomplete,
   MACRO_LOOKBACK_MONTHS,
@@ -1657,6 +1665,46 @@ async function syncMarket(now: Date): Promise<{
   }
 }
 
+/**
+ * Output/update market/foreign_top50.json: TWSE TWT38U 外資及陸資買賣超 TOP 50 (0.7.19).
+ *
+ * Runs inside `generate-chips`, not as its own action — three probe sources (`t86`, `margin`,
+ * `borrow`) already re-trigger that phase from 16:00 into the evening, so each run re-fetches
+ * TWT38U and last-write-wins overwrites the snapshot. An upstream revision at any point in the
+ * afternoon or evening is picked up without any new stability machinery (see spec §4).
+ *
+ * Never throws and never overwrites a good snapshot with an empty one — a non-trading day and a
+ * not-yet-published table both parse to null, and both must be no-ops.
+ */
+async function syncForeignTop(
+  ymd: string,
+): Promise<{ synced: boolean; rawDate: string | null; reason: string | null }> {
+  try {
+    const raw = await fetchRwdJson(twt38uUrl(ymd))
+    const parsed = raw ? parseForeignTop(raw as Twt38uResponse) : null
+    if (!parsed) return { synced: false, rawDate: null, reason: 'empty' }
+
+    const existing = await downloadJson<ForeignTopFile>('market/foreign_top50.json')
+    const fingerprint = foreignTopFingerprint(parsed)
+    if (existing?.rawDate === parsed.rawDate && existing?.fingerprint === fingerprint) {
+      return { synced: false, rawDate: parsed.rawDate, reason: 'unchanged' }
+    }
+
+    const ok = await uploadJson('market/foreign_top50.json', {
+      schema: FOREIGN_TOP_SCHEMA,
+      asOf: new Date().toISOString(),
+      date: parsed.date,
+      rawDate: parsed.rawDate,
+      fingerprint,
+      buyTop: parsed.buyTop,
+      sellTop: parsed.sellTop,
+    } satisfies ForeignTopFile)
+    return { synced: ok, rawDate: parsed.rawDate, reason: ok ? null : 'upload-failed' }
+  } catch {
+    return { synced: false, rawDate: null, reason: 'error' }
+  }
+}
+
 // ----U.S. General Economic Indicator (0.6.5)----
 
 /**
@@ -2771,6 +2819,11 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   let marginOk = false
   let marginToday = cachedToday.has(`${todayYmd}:MI_MARGN_D`)
   let borrowOk = false
+  let foreignTop: { synced: boolean; rawDate: string | null; reason: string | null } = {
+    synced: false,
+    rawDate: null,
+    reason: null,
+  }
   /*
     Seeded from today's last row, not from null (BUG-026). A skipped round fetches nothing, so
     logging null here would erase the very date that justified the skip —— and since `decideSkip`
@@ -2841,6 +2894,8 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
         generatedAt: new Date().toISOString(),
       })
     }
+
+    foreignTop = await syncForeignTop(todayYmd)
   }
 
   if (regenerate && seriesDataYmd) {
@@ -2892,6 +2947,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     t86Today,
     t86Revisions: t86State?.revisions ?? last?.t86?.revisions ?? 0,
     t86Frozen: t86State?.frozen ?? last?.t86?.frozen ?? false,
+    foreignTop,
     scopes: {
       holdings: {
         total: holdingsScope.total,

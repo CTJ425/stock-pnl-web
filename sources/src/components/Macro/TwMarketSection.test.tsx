@@ -6,6 +6,14 @@ import userEvent from '@testing-library/user-event'
 const { fetchMarketDaily } = vi.hoisted(() => ({ fetchMarketDaily: vi.fn() }))
 vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
 
+// TwMarketSection mounts <ForeignTopSection />, which fetches its own snapshot. Stub the service
+// boundary so this file keeps testing only TwMarketSection. Without it the section's real
+// fetchForeignTop() runs here, and it stays harmless only because vite.config.ts blanks
+// VITE_SUPABASE_URL for the whole suite — an unrelated setting this file should not depend on.
+const { fetchForeignTop } = vi.hoisted(() => ({ fetchForeignTop: vi.fn() }))
+vi.mock('../../services/foreignTopProxy', () => ({ fetchForeignTop }))
+fetchForeignTop.mockResolvedValue(null)
+
 import { TwMarketSection } from './TwMarketSection'
 import type { MarketDay } from '../../services/marketProxy'
 import { CHART_COLORS } from '../Charts/chartColors'

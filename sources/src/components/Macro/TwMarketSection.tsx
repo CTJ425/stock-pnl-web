@@ -21,6 +21,7 @@ import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
+import { ForeignTopSection } from './ForeignTopSection'
 
 /** Spark for the institutional and turnover 走勢 column (0.7.6: one per unit row, was one per day). */
 const TFOOT_SPARK_W = 76
@@ -383,6 +384,7 @@ export function TwMarketSection() {
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
 
   return (
+    <>
     <div className="section glass" style={{ padding: '18px 20px' }}>
       <div className="rpt-section-head">
         <h3 className="head-tight">台股市場</h3>
@@ -807,5 +809,7 @@ export function TwMarketSection() {
         走勢欄讀的是近 {TREND_DAYS} 個交易日，比表格的 7 欄長，連續天數才不會被表格寬度截斷。
       </p>
     </div>
+    <ForeignTopSection />
+    </>
   )
 }
