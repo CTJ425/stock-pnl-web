@@ -1,11 +1,20 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Antigravity
-- Action: Task 113 — TWSE TWT38U Foreign Investors Top 50 Net Buy/Sell implementation & verification, shipped as 0.7.19-dev.1
-- Status: **✅ IMPLEMENTED & VERIFIED, deployed to dev branch as 0.7.19-dev.1**
-- Timestamp: 2026-08-18 11:45:16 Asia/Taipei
+- Agent: Scribe
+- Action: BUG-028 fix recording — BWIBBU empty-payload cache poisoning, shipped as 0.7.20
+- Status: **✅ RECORDED to FIXED_BUG.md, PROGRESS.md updated, CHANGELOG.md v0.7.20 added**
+- Timestamp: 2026-08-18 15:46:30 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-18 15:46:30 Asia/Taipei (BUG-028: BWIBBU endpoint cache poisoning on unpublished state)
+
+- **Issue**: Dated BWIBBU endpoint returns HTTP 200 with no `data` field before ~17:15 Taipei; `readLatest` cached any non-exception, poisoning the day's valuation cache. PROD saw 0 `bwibbu` landings across 6 trading days (2026-08-10 through 2026-08-17); fundamental files stale for 6 days.
+- **Root cause**: `readLatest` was not guarding cache write; first `generate-market-data` before 17:15 wrote empty payload, then every later run read it back and skipped all fundamental files for the day.
+- **Fix**: `readLatest` gained optional `isValid` predicate; BWIBBU call site passes `bwibbuDatedUsable` (defined in `twFundamental.ts` as mirror of `normaliseBwibbuDated` logic so they cannot drift).
+- **Risk accepted**: Weekend / holiday without usable BWIBBU means re-fetches every round (~30 extra TWSE requests) instead of caching once; chosen over a full day of silently stale valuations.
+- **Tests**: 987 vitest passed (was 984), 3 new tests in `twFundamental.test.ts`, `tsc -p tsconfig.edge.json` 0 errors, `oxlint` 0 errors. Reviewer **PASS**.
+- **Version**: **0.7.20** (official release, no `-dev` suffix).
 
 ## 📅 Log: 2026-08-18 11:45:16 Asia/Taipei (Task 113: TWSE TWT38U Foreign Investors Top 50 Net Buy/Sell implementation & verification)
 
@@ -28,17 +37,3 @@
    - Parser sorts locally, does not rely on TWSE row order (PROPOSED draft's §2.3 claim verified but deliberately not relied on).
    - Probe suite stays at 7 sources (no dedicated `twt38u` source, no new cron, no Admin ProbeWarRoom card).
 
-## 📅 Log: 2026-08-17 18:03:00 Asia/Taipei (Task 112: Full GitHub Releases backfill & automated workflow sync)
-
-1. **Full Backfill of GitHub Releases (`sources/scripts/sync-github-releases.cjs`)**:
-   - Created sync utility parsing `docs/agent/CHANGELOG.md` across all 84 versions (`0.2` through `0.7.18`).
-   - Matched each historical version to its exact release commit SHA in git history.
-   - Synchronized all 84 releases to GitHub Releases with titles and detailed markdown release notes.
-2. **Automated CI/CD Workflow (`.github/workflows/release.yml`)**:
-   - Configured GitHub Actions workflow triggering on push to `main` (and `workflow_dispatch`).
-   - Automatically synchronizes GitHub Releases whenever a new version is pushed to `main`.
-   - Added `release:sync` and `release:sync:all` npm scripts in `sources/package.json`.
-3. **Skill & Documentation Sync**:
-   - Updated `.claude/skills/versioning/SKILL.md`, `.gemini/skills/versioning/SKILL.md`, `.claude/skills/ship/SKILL.md`, and `.gemini/skills/ship/SKILL.md`.
-   - Full Vitest suite: 66 test files / 963 tests passed 100%.
-   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.

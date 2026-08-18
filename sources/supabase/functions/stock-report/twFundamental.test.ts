@@ -5,6 +5,7 @@ import {
   extractRevenue,
   extractValuation,
   bwibbuDatedUrl,
+  bwibbuDatedUsable,
   normaliseBwibbuDated,
   buildFundamentalFile,
   mergeProfitQuarters,
@@ -490,6 +491,38 @@ describe('BWIBBU 帶日期端點', () => {
       ['2330', '台積電', '1100.00', '1.20', 114, '25.10', '7.50', '115/1'],
     ],
   }
+
+  /*
+    BUG-028：發布前的回應會被快取一整天。
+
+    TWSE 在估值出表前對這個端點回的是 **HTTP 200** 加上 `stat:'很抱歉，沒有符合條件的資料!'`，
+    不是錯誤碼。`readLatest` 只在非 2xx 時放棄，所以那份「沒有資料」被寫進當天的 `BWIBBU_D` 快取，
+    之後每一輪都讀到它 —— `freshValuationDay` 恆為 null，`valuationCurrent` 恆為 true，
+    當天所有 fundamental/*.json 全部被跳過。2026-08-17 的 PROD 就是這樣：47 個檔案裡 40 個停在 08-10。
+
+    這個判準就是快取的守門員，與 `loadT86` 用 `t86Ok` 擋住同一類回應是同一件事。
+  */
+  it('尚未發布的回應不可入快取——TWSE 用 200 回「沒有符合條件的資料」', () => {
+    expect(bwibbuDatedUsable({ stat: '很抱歉，沒有符合條件的資料!' }, '20260818')).toBe(false)
+    expect(bwibbuDatedUsable(null, '20260818')).toBe(false)
+    expect(bwibbuDatedUsable({ stat: 'OK', fields: [], data: [] }, '20260818')).toBe(false)
+    expect(bwibbuDatedUsable({}, '20260818')).toBe(false)
+  })
+
+  it('真的有出表才可入快取', () => {
+    expect(bwibbuDatedUsable(REAL, '20260811')).toBe(true)
+  })
+
+  it('可入快取 ⟺ normaliseBwibbuDated 抽得出列，兩者不得各自為政', () => {
+    for (const [resp, ymd] of [
+      [REAL, '20260811'],
+      [{ stat: '很抱歉，沒有符合條件的資料!' }, '20260818'],
+      [{ stat: 'OK', fields: [], data: [] }, '20260818'],
+      [null, '20260818'],
+    ] as const) {
+      expect(bwibbuDatedUsable(resp, ymd)).toBe(normaliseBwibbuDated(resp, ymd) !== null)
+    }
+  })
 
   it('轉成與 BWIBBU_ALL 相同的形狀，Date 填請求日的民國碼', () => {
     const rows = normaliseBwibbuDated(REAL, '20260811')!

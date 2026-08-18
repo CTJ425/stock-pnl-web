@@ -90,6 +90,18 @@ export function normaliseBwibbuDated(
   }
   return out.length > 0 ? out : null
 }
+/**
+ * Is this dated BWIBBU response worth caching for the day? (0.7.19, BUG-028)
+ *
+ * TWSE returns HTTP 200 with `stat:'很抱歉，沒有符合條件的資料!'` before the valuation table
+ * publishes (~17:15 Taipei). `readLatest` only skips the cache write on a non-2xx response, so
+ * that "no data yet" payload used to get frozen into the day's cache. This predicate is defined
+ * in terms of `normaliseBwibbuDated` so the two rules can never drift apart.
+ */
+export function bwibbuDatedUsable(resp: BwibbuDatedResponse | null | undefined, ymd: string): boolean {
+  return normaliseBwibbuDated(resp ?? null, ymd) !== null
+}
+
 export const T187AP05_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L'
 export const T187AP03_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L'
 /**
