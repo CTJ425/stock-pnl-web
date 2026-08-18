@@ -8,13 +8,16 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 > Bug 足跡確認於部署前：`SELECT count(*) FROM source_probe_tick WHERE source='twt38u'` 全史 0 列；今日 17:00–18:00 窗僅 `bwibbu`（加 17:15/17:20 的 `mops_revenue`）。twt38u 分支因 `handleProbe()` 讀實時鐘無時間覆蓋，迄未端對端驗證；預期首次驗證 2026-08-19 17:00 Asia/Taipei。
 > 部署後 21:30／21:35 兩輪超逾時原因：診斷期間併行手動探測呼叫，非本更動；21:45／21:50 恢復 200；同類超時已於部署前 21:00 出現；與開放 RISK-001 相關。
 
-- 🐞 **BUG-029**：外資買賣超（TWT38U）於 0.7.19 新增為第 8 個探針來源（視窗 17:00–18:00），但在 PROD 與 DEV 上从未執行过任何一次。原因為調度路徑上的兩個獨立缺口：
+- 🐞 **BUG-029**：外資買賣超（TWT38U）於 0.7.19 新增為第 8 個探針來源（視窗 17:00–18:00），但在 PROD 與 DEV 上從未執行過任何一次。原因為調度路徑上的兩個獨立缺口：
   1. `sourceProbePlan.ts` 的 `sourcesForTaipeiTime()` 使用硬寫列表 `['bfi82u','t86','bwibbu','margin','borrow']` 漏掉 `'twt38u'`，即便 `DAILY_WINDOWS.twt38u` 已定義、落地目標 3 次已設定、指紋規則已接線、到位判準已實作，調度器仍因列表缺漏而從不發出該源。
   2. `index.ts` 的 `probeSource()` 無 `twt38u` 分支，致使即使調度器發出該源，每 5 分鐘也會落到 `fail('unknown source')` 永不命中永不退休。
 - ✅ **修法**：`sourceProbePlan.ts` 改為從 `Object.keys(DAILY_WINDOWS)` 動態衍生日頻來源列表（避免硬寫列表漏項）；`index.ts` 新增 `twt38u` 分支（抓取、解析、到位判定、指紋計算）；`sourceProbePlan.test.ts` 更新窗口斷言並增加新的邊界測試。
 - 🧪 **驗證**：`npx vitest run supabase/functions/stock-report/` 15 檔 / 352 項全通；`npm run typecheck:edge` 0 errors；`npx oxlint supabase/functions/stock-report/` 0 errors；稽核員二輪（第一輪發現缺口 2，修正後）**PASS**。
 - ⚠️ **接受的風險**：`probeRound.ts:95–98` 無逐源預算檢查。17:00 時三個視窗重疊（`t86` 至 17:00 含、`bwibbu` 與 `twt38u` 始於 17:00），17:15/17:20 四源並排。各抓取 10s 超時，最壞情況逼近 60s Edge Function 限制，已評估認可。
-- ⚠️ **未部署**：修正案為程式碼未提交，PROD 仍運行舊版。TWT38U 探針待邊界函式重部署始能於 PROD 執行。
+- ✅ **PROD 已部署**：
+  - `main` 合併並推送於 commit `5480f05`（`dev` 與 `main` 同步於同一 commit）。
+  - PROD Edge `stock-report` 已部署：version 52 → **53**，`ezbr_sha256` 由 `6b3812f15827bc992c380f60849ae9e2af3b6b5fd182a215b2b7c261c8494436` 變為 `98bb077688b1011ef62fe040e9b67b6ceea04f99d50ae03a507ba4867bdce94d`，`verify_jwt` 維持 `false`。部署來源為乾淨工作區的 `main` @ `5480f05`。
+  - 仍待觀察：PROD 首次 TWT38U 探針預期於 **2026-08-19 17:00 Asia/Taipei**，屆時 `source_probe_tick` 應出現 `source='twt38u'` 的列。
 
 ### 0.7.21（2026-08-18）— 盤後探針退休條件加上「內容已停止變動」，接線改為可測純函式
 
