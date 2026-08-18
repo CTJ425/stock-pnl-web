@@ -1,4 +1,11 @@
 {
-  "paths": { "prod": ["sources/"] },
-  "bookkeeping": { "timezone": "Asia/Taipei" }
+  "paths": {
+    "prod": [
+      "sources/",
+      "README.md"
+    ]
+  },
+  "bookkeeping": {
+    "timezone": "Asia/Taipei"
+  }
 }
