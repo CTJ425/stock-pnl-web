@@ -85,11 +85,11 @@ what it runs on the expensive model for. The four roles below are delegation tar
   surgical edit on content already in context stays inline even when the task looks big.
   A large file read into the main session is re-billed on every later turn of that
   session, which is why the guard asks before unbounded reads over 32KB.
-- Role boundaries are enforced by `.claude/hooks/routing_guard.py`, not by good manners.
+- Role boundaries are enforced by the `route` plugin's guard hook, not by good manners.
   A blocked write means you are out of role: re-route it, do not work around it.
   Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
 - Whether routing actually happened is measurable, and the plan does not count as
-  evidence: `python3 .claude/hooks/routing_audit.py`.
+  evidence: the `/route:audit` skill.
 - This routes **delegation only**. The main session's model comes from `/model`, not from
   this file.
 
