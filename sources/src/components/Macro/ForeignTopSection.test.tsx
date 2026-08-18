@@ -73,4 +73,17 @@ describe('ForeignTopSection', () => {
     expect(await screen.findByText('尚無外資買賣超資料')).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
   })
+
+  // 時間以觀看者的時區呈現，所以斷言格式而不是某個固定時刻，避免測試綁死在 CI 的 TZ 上。
+  it('標頭顯示資料更新時間，沿用其他總經區塊的 section-stamp 慣例', async () => {
+    await mount(data)
+    const stamp = await screen.findByText(/^資料更新於 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    expect(stamp.className).toContain('section-stamp')
+  })
+
+  it('沒有快照時不顯示更新時間，不會出現「資料更新於 —」', async () => {
+    await mount(null)
+    await screen.findByText('尚無外資買賣超資料')
+    expect(screen.queryByText(/資料更新於/)).toBeNull()
+  })
 })

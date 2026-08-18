@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import { fetchForeignTop, type ForeignTopData, type ForeignTopItem } from '../../services/foreignTopProxy'
+import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 
 type Tab = 'buy' | 'sell'
 type Unit = 'lot' | 'share'
@@ -39,6 +40,7 @@ export function ForeignTopSection() {
     <div className="section glass" style={{ padding: '18px 20px', marginTop: 18 }}>
       <div className="rpt-section-head">
         <h3 className="head-tight">外資買賣超 TOP 50</h3>
+        {data && <span className="source-tag section-stamp">資料更新於 {fmtUpdatedAt(data.asOf)}</span>}
         <div className="inst-metric-seg" role="group" aria-label="切換買超賣超">
           <button
             type="button"

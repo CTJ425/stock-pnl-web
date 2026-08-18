@@ -2,6 +2,16 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.23（2026-08-18）— 外資買賣超 TOP 50 區塊新增資料更新時間戳
+
+- 🔤 **資料更新時間戳**：總體經濟 > 台股 的「外資買賣超 TOP 50」區塊頂部新增「資料更新於 YYYY-MM-DD HH:mm」時間戳。
+- ♻️ **複用既有設計**：沿用 `TwMarketSection.tsx` 與 `MacroPage.tsx` 已採用的 `source-tag section-stamp` 樣式與 `fmtUpdatedAt` 時間格式化工具，確保措辭、配置、時區顯示一致；無新 CSS、無新格式化函式。
+- 📊 **資料來源**：使用 `ForeignTopData.asOf` 欄位（由 `foreignTopProxy.ts` 已公開），無需異動後端、Edge Function 或儲存檔案。
+- 🕐 **空態隱藏**：無快照時時間戳隱藏，防止出現「資料更新於 —」。
+- 🧪 **測試**：`ForeignTopSection.test.tsx` 新增 2 個測試案例（含時間戳及其 `section-stamp` 樣式類別之斷言、空態時時間戳缺失之斷言）；時間戳斷言依格式比對而非固定時刻，因 `fmtUpdatedAt` 按檢視者時區渲染。前置條件：改動前該時間戳斷言失敗，改動後通過。
+- ✅ **驗證**：`npx vitest run src/components/Macro/ForeignTopSection.test.tsx` — 6 passed, 0 failed；`npx tsc --noEmit` — 0 errors；`npx oxlint src` — 0 errors。
+- 📝 **稽核**：未派遣。誠實記錄：純展示層變更，有測試於改動前失敗、改動後通過；不涉金錢、身份認證、資料持久化、API 契約、背景工作或控制流。
+
 ### 0.7.22（2026-08-18）— BUG-029：修復 TWT38U 探針自 0.7.19 來從未執行
 
 > 目前狀態：0.7.22 DEV Edge 已於 2026-08-18 21:28 Asia/Taipei 部署（commit 0f8612b），方式為 volume copy + `docker compose up -d --force-recreate functions`。驗證：`source-probe` cron 於 21:45 及 21:50 均回 HTTP 200 並寫入新碼的 `source_probe_tick` 列，無他源迴歸。
