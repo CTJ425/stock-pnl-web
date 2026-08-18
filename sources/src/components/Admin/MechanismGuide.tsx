@@ -54,6 +54,15 @@ const PROBE_SOURCES_CONFIG: ProbeSourceConfig[] = [
     description: '本益比、殖利率、股價淨值比，打帶日期端點更新 fundamental/*.json（實測官方約 17:15–17:20 出表）。',
   },
   {
+    id: 'twt38u',
+    name: '外資買賣超 TOP50',
+    window: '17:00 – 18:00',
+    interval: '每 5 分鐘',
+    retirement: '3 次穩定到位',
+    action: 'generate-chips',
+    description: '外資及陸資買賣超彙總表（TWT38U），於 generate-chips 階段產出 market/foreign_top50.json 的買超／賣超 TOP 50 快照。',
+  },
+  {
     id: 'margin',
     name: '融資融券',
     window: '20:30 – 22:30',
@@ -98,7 +107,7 @@ const CRON_JOBS_CONFIG: CronJobConfig[] = [
     taipeiTime: '每日 每 5 分鐘 (全天候)',
     action: 'probe',
     role: '探針主引擎',
-    description: '驅動 7 大資料源探測，在 Edge 判斷時窗與資料狀態，命中立即聯動抓取。',
+    description: '驅動 8 大資料源探測，在 Edge 判斷時窗與資料狀態，命中立即聯動抓取。',
   },
   {
     jobname: 'macro-daily',
@@ -192,7 +201,7 @@ export function MechanismGuide() {
           {/* 表格 1：資料源探針運作週期 */}
           <div className="adm-guide-subhead">
             <Cpu size={15} />
-            <h4>資料源探針運作週期（7 大來源）</h4>
+            <h4>資料源探針運作週期（8 大來源）</h4>
           </div>
           <div className="table-scroll">
             <table className="data-table adm-guide-table">

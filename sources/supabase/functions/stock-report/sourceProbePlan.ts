@@ -11,6 +11,7 @@ export type ProbeSourceId =
   | 'bfi82u'
   | 't86'
   | 'bwibbu'
+  | 'twt38u'
   | 'margin'
   | 'borrow'
   | 'mops_revenue'
@@ -20,6 +21,7 @@ export const PROBE_SOURCE_LABELS: Record<ProbeSourceId, string> = {
   bfi82u: '全市場法人 BFI82U',
   t86: '個股法人 T86',
   bwibbu: '估值 BWIBBU',
+  twt38u: '外資買賣超 TWT38U',
   margin: '融資融券',
   borrow: '借券賣出',
   mops_revenue: '月營收彙整',
@@ -31,6 +33,7 @@ export const PROBE_SOURCE_ORDER: ProbeSourceId[] = [
   'bfi82u',
   't86',
   'bwibbu',
+  'twt38u',
   'margin',
   'borrow',
   'mops_revenue',
@@ -43,6 +46,7 @@ export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
   margin: 3,
   borrow: 3,
   bwibbu: 3,
+  twt38u: 3,
   mops_revenue: 1,
   mops_profit: 1,
 }
@@ -79,6 +83,7 @@ export const DAILY_WINDOWS: Record<
   // 17:00–18:30（0.7.17）：實測連續多日官方均於 17:15–17:20 出表，前緣留 15 分鐘餘裕從 17:00 開探，
   // 後緣 18:30 收工，避開 15:00–17:00 約 24 次無效 probe。
   bwibbu: { from: 17 * 60, to: 18 * 60 + 30 },
+  twt38u: { from: 17 * 60, to: 18 * 60 }, // 17:00–18:00
   margin: { from: 20 * 60 + 30, to: 22 * 60 + 30 }, // 20:30–22:30
   // 21:00 起（0.7.13），不再是 15:00：舊窗的理由是「沒人知道借券幾點翻日」，那是誠實的——
   // 但 2026-08-11 量到了，DEV 與 PROD 都在 **22:15** 翻，中間 95 次請求全部打在空氣上。
@@ -191,6 +196,7 @@ export const PROBE_FOLLOW_UP: Record<ProbeSourceId, ProbeFollowUp> = {
   margin: 'generate-chips',
   borrow: 'generate-chips',
   bwibbu: 'generate-market-data',
+  twt38u: 'generate-chips',
   mops_revenue: 'generate-history',
   mops_profit: 'generate-history',
 }
@@ -236,6 +242,8 @@ export interface LandingEvidence {
   }
   /** 前端讀的 `fundamental/*.json` 裡 `valuation.dataDate`（YYYY-MM-DD）。 */
   fundamentalValuationDate?: string | null
+  /** `market/foreign_top50.json` 的 `rawDate`（YYYYMMDD / YYYY-MM-DD）。 */
+  foreignTopDate?: string | null
   /** 同一份檔案裡，月營收／季報**目前最新的一期**（'YYYY-MM' / 'YYYY-Qn'）。 */
   fundamentalRevenueMonth?: string | null
   fundamentalProfitQuarter?: string | null
@@ -261,7 +269,7 @@ export interface LandingEvidence {
  *   探針本來就要抓 MOPS 才能讀出表日期，順手把「這次發布的是哪一期」一起帶出來，
  *   判準因此和其他來源同型：都是「上游剛出的那一份，出現在前端讀的東西裡」。
  *
- * 七個來源共用同一條標準，只是各自的「那份東西」不同——沒有任何一個是用
+ * 八個來源共用同一條標準，只是各自的「那份東西」不同——沒有任何一個是用
  * 「抓取函式有沒有出錯」或「這輪有沒有做事」來判定的。
  */
 export function sourceLanded(
@@ -280,6 +288,8 @@ export function sourceLanded(
       return borrowHit(ev.chipStamps?.borrow ?? null, todayYmd)
     case 'bwibbu':
       return normaliseYmd(ev.fundamentalValuationDate) === todayYmd
+    case 'twt38u':
+      return normaliseYmd(ev.foreignTopDate) === todayYmd
     case 'mops_revenue':
       return atLeast(ev.fundamentalRevenueMonth, ev.mopsPublished?.revenue)
     case 'mops_profit':

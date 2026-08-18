@@ -2,7 +2,7 @@
  * 盤後探針命中戰情室 (Probe War Room)
  *
  * 採用與全站一致的 standard `.section.glass` 與 `.kpi-grid` / `.glass.kpi` 設計系統。
- * 即時呈現 7 大資料源的幾點命中、命中幾次、是否已退休與時間紀錄。
+ * 即時呈現 8 大資料源的幾點命中、命中幾次、是否已退休與時間紀錄。
  */
 import { useMemo } from 'react'
 import { RefreshCw } from 'lucide-react'
@@ -20,6 +20,7 @@ export const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
   { id: 'bfi82u', name: '全市場三大法人', code: 'BFI82U', window: '15:00–16:30 / 19:30–20:15', target: 3 },
   { id: 't86', name: '個股三大法人', code: 'T86', window: '16:00–17:00', target: 3 },
   { id: 'bwibbu', name: '個股估值 (PE/PB/DY)', code: 'BWIBBU', window: '17:00–18:30', target: 3 },
+  { id: 'twt38u', name: '外資買賣超 TOP50', code: 'TWT38U', window: '17:00–18:00', target: 3 },
   { id: 'margin', name: '融資融券', code: 'MARGIN', window: '20:30–22:30', target: 3 },
   { id: 'borrow', name: '借券賣出餘額', code: 'BORROW', window: '21:00–23:30', target: 3 },
   { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 1 },
@@ -141,7 +142,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         全天候每 5 分鐘巡邏，命中即觸發抓取，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
       </p>
 
-      {/* 7 大資料源戰情卡片 (統一採用 .kpi-grid 與 .glass.kpi) */}
+      {/* 8 大資料源戰情卡片 (統一採用 .kpi-grid 與 .glass.kpi) */}
       <div className="kpi-grid pwr-grid">
         {cards.map((card) => {
           const { config, hitCount, target, isRetired, isProbing, hitTimes, statusText, statusType } = card
