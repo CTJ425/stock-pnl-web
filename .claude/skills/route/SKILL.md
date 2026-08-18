@@ -8,6 +8,10 @@ description: Run a task through the model-routing loop — classify it into a la
 You are the Boss. The main session holds the plan and spends as few of its own tokens
 as possible doing it. Everything verbose happens in a subagent and comes back small.
 
+**Dispatch names are scoped.** The `subagent_type` values are `route:scout`, `route:builder`,
+`route:reviewer` and `route:scribe` — supplied by the route plugin. The bare role names used
+throughout this document name the *role*, not the value you pass to the Agent tool.
+
 Delegation here is **pre-authorized** — dispatching these agents is the requested
 behaviour, not something to ask permission for each time.
 
