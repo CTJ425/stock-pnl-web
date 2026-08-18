@@ -5,6 +5,22 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-17 18:03:00 Asia/Taipei).
 
+## 📅 Log: 2026-08-17 16:55:00 Asia/Taipei (Task 111: Retune T86 probe active window to 16:00–17:00, sync UI & docs, release 0.7.18)
+
+1. **T86 Probe Window Optimization (`sourceProbePlan.ts`)**:
+   - Narrowed `DAILY_WINDOWS.t86` from `15:30 – 17:30` to **`16:00 – 17:00`** (every 5 mins, 3 hits to retire).
+   - Removed 15:30–16:00 probe attempts where TWSE T86 data is never available, eliminating 6 daily no-op probes.
+2. **Admin UI & Documentation Sync**:
+   - Updated `ProbeWarRoom.tsx` card window label to `16:00–17:00`.
+   - Updated `MechanismGuide.tsx` description table to `16:00 – 17:00`.
+   - Updated `schema.sql` commentary.
+3. **Testing & Version Release (0.7.18)**:
+   - Updated unit tests in `sourceProbePlan.test.ts`.
+   - Full Vitest suite: 66 test files / 963 tests passed 100%.
+   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
+   - Synchronized `version.ts`, `package.json`, `package-lock.json`, `README.md`, and `CHANGELOG.md` to `0.7.18`.
+
+
 ## 📅 Log: 2026-08-14 18:00:00 Asia/Taipei (Task 110 Follow-up: Fix Probe War Room premature retirement condition & full verification)
 
 1. **Retirement Gate Correction (`ProbeWarRoom.tsx`)**:

@@ -1,0 +1,125 @@
+/**
+ * TWSE TWT38U — foreign (and mainland China) investors' TOP 50 net buy / net sell (0.7.19).
+ *
+ * Fetches its own snapshot (no props) so mounting it into `TwMarketSection.tsx` costs one
+ * import plus one JSX line in a file that is already ~800 lines.
+ *
+ * Odd-lot trading makes non-integer lots normal on the 張 (lots) view, so lots keep one decimal
+ * instead of rounding to an integer.
+ */
+import { useEffect, useState } from 'react'
+import { fetchForeignTop, type ForeignTopData, type ForeignTopItem } from '../../services/foreignTopProxy'
+
+type Tab = 'buy' | 'sell'
+type Unit = 'lot' | 'share'
+
+/** Shares → 張, one decimal, thousands separators. 1_234_000 shares → "1,234.0". */
+function fmtLots(shares: number): string {
+  return (shares / 1000).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
+/** Raw shares, thousands separators. */
+function fmtShares(shares: number): string {
+  return Math.round(shares).toLocaleString('en-US')
+}
+
+export function ForeignTopSection() {
+  const [data, setData] = useState<ForeignTopData | null>(null)
+  const [tab, setTab] = useState<Tab>('buy')
+  const [unit, setUnit] = useState<Unit>('lot')
+
+  useEffect(() => {
+    void fetchForeignTop().then(setData)
+  }, [])
+
+  const fmt = unit === 'lot' ? fmtLots : fmtShares
+  const rows: ForeignTopItem[] = data ? (tab === 'buy' ? data.buyTop : data.sellTop) : []
+
+  return (
+    <div className="section glass" style={{ padding: '18px 20px', marginTop: 18 }}>
+      <div className="rpt-section-head">
+        <h3 className="head-tight">外資買賣超 TOP 50</h3>
+        <div className="inst-metric-seg" role="group" aria-label="切換買超賣超">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'buy'}
+            className="btn btn-sm"
+            aria-pressed={tab === 'buy'}
+            onClick={() => setTab('buy')}
+          >
+            買超 TOP 50
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'sell'}
+            className="btn btn-sm"
+            aria-pressed={tab === 'sell'}
+            onClick={() => setTab('sell')}
+          >
+            賣超 TOP 50
+          </button>
+        </div>
+        <div className="inst-metric-seg" role="group" aria-label="切換張股單位">
+          <button
+            type="button"
+            aria-pressed={unit === 'lot'}
+            className="btn btn-sm"
+            onClick={() => setUnit('lot')}
+          >
+            張
+          </button>
+          <button
+            type="button"
+            aria-pressed={unit === 'share'}
+            className="btn btn-sm"
+            onClick={() => setUnit('share')}
+          >
+            股
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="hint" style={{ marginTop: 8 }}>
+          尚無外資買賣超資料
+        </p>
+      ) : (
+        <div className="table-scroll" style={{ marginTop: 12 }}>
+          <table className="data-table" aria-label="外資買賣超 TOP 50">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>代號</th>
+                <th>名稱</th>
+                <th className="num">買賣超</th>
+                <th className="num">買進</th>
+                <th className="num">賣出</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.ticker}>
+                  <td>{i + 1}</td>
+                  <td>{r.ticker}</td>
+                  <td>
+                    {r.name}
+                    {r.block && (
+                      <span className="chip" style={{ marginLeft: 6 }}>
+                        鉅額
+                      </span>
+                    )}
+                  </td>
+                  <td className="num">{fmt(r.net)}</td>
+                  <td className="num">{fmt(r.buy)}</td>
+                  <td className="num">{fmt(r.sell)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}

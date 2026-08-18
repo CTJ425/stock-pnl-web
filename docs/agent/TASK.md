@@ -21,6 +21,19 @@
 
 ## 📋 Active Tasks
 
+### Task 113: TWSE TWT38U Foreign Investors Top 50 Net Buy/Sell
+- **Status**: ✅ **IMPLEMENTED & VERIFIED, pending ship**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-18 11:45:16 Asia/Taipei
+- **Spec**: [`docs/agent/specs/twt38u-foreign-top50.md`](file:///root/dev/stock-pnl-web/docs/agent/specs/twt38u-foreign-top50.md) (revised)
+- **What was built**:
+  - Edge: Parser for TWT38U (`twForeignTop.ts`), `syncForeignTop` called from `runGeneratePhaseChips`; publishes Top 50 net-buy/net-sell snapshot to `market/foreign_top50.json`. Runs inside existing `generate-chips` phase, no new Edge action or cron. Probe suite stays at 7 sources.
+  - Frontend: `ForeignTopSection` mounted in `TwMarketSection` under **總體經濟 > 台股**; new proxy service `foreignTopProxy.ts`.
+  - Tests: 68 test files / 980 vitest tests passed (was 66 / 963); 12 new Edge tests, 4 new Frontend tests.
+  - Live-data verified 6 trading days, matched reference implementation on all 600 ranked rows.
+  - Reviewer: **PASS**; one risk (unmocked boundary) resolved by test stub.
+- **Design note**: TWT38U chosen over T86 despite deriving both sources identically — `selectType=ALLBUT0999` broke top-50 ranking on 4 of 16 days (warrants), while TWT38U 146 KB is cheaper than T86 194 KB, and `generate-chips` retriggers (t86/margin/borrow overlap) so no hole from probe retirement.
+
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**
