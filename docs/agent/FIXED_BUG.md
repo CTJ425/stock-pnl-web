@@ -8,6 +8,34 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-028 — 帶日期的 BWIBBU 端點在「尚未發布」時回 200，被快取一整天，導致當日所有基本面檔案被跳過
+
+- **Symptom (measured on PROD `kxnxadaghidwumqsqneu`)**: 
+  - `source_probe_tick` for `bwibbu`: 2026-08-14 had 42 ticks / 17 hits / **0 landed**; 2026-08-17 had 19 ticks / 15 hits / **0 landed**. The source hit repeatedly and never retired because it never landed.
+  - Tick notes: `17:20 估值日=今日（1083 筆）· 已觸發 generate-market-data：日線 2／基本面 2 · 資料未到位，下輪重試`, then every later round `日線 0／基本面 0`.
+  - Storage: of 47 `fundamental/*.json` objects, **40 were last written 2026-08-10** — valuation data (本益比／殖利率／股價淨值比) had been silently stale for 6 trading days. `fundamental/2609.json`, written 17:08 on 2026-08-17, carried `valuation: null`.
+
+- **Root Cause**: TWSE's `BWIBBU_d` endpoint returns **HTTP 200** with `{"stat":"很抱歉，沒有符合條件的資料!"}` and no `data` before the table publishes (~17:15 Taipei) — verified live. `readLatest` (`index.ts`) cached any response that did not throw, and `fetchJson` only throws on non-2xx. So the first `generate-market-data` run before 17:15 wrote that empty payload into the day's `BWIBBU_D` cache key. Every later run then read it back, so `normaliseBwibbuDated` returned null, `freshValuationDay` was null, `valuationCurrent` was therefore always true, and **every** fundamental file hit the `skipped++; continue` branch for the rest of the day.
+
+- **Two hypotheses investigated and disproved**:
+  1. "PROD Edge is running pre-0.7.15 code." Disproved: `functions list` showed `stock-report` v49 deployed 2026-08-17 16:59.
+  2. "`bwibbu?.[0]?.Date` reads a field the dated endpoint does not have." Disproved: `normaliseBwibbuDated` reshapes the response and fills `Date` from the requested ymd; running the real 1083-row payload through `normaliseBwibbuDated` + `extractValuation` produced correct valuations for 2609 / 3231 / 2330.
+
+- **Fix**: `readLatest` gained an optional validity predicate; the cache write is skipped when it returns false, and the fetched value is still returned. The BWIBBU call site passes the new `bwibbuDatedUsable` from `twFundamental.ts`, which is defined in terms of `normaliseBwibbuDated` so the two cannot drift. This makes `readLatest` consistent with `loadT86`, which already guarded its cache write with `t86Ok`. The other three `readLatest` call sites (MI_MARGN, T187AP05_L, T187AP17_L) pass no predicate and are unchanged.
+
+- **Accepted Risk**: on a weekday market holiday `BWIBBU_D` is never usable, so `readLatest` re-fetches every round instead of caching once — on the order of 30 extra requests to twse.com.tw that day, with no backoff. Accepted deliberately: the alternative is a full day of silently stale valuations, which is the bug itself.
+
+- **No cache purge needed** — `chip_raw_cache` is keyed by day, so the next trading day starts clean. Today (2026-08-18) may still be poisoned and will recover tomorrow.
+
+- **Files changed**:
+  - `sources/supabase/functions/stock-report/twFundamental.ts` (new exported `bwibbuDatedUsable`)
+  - `sources/supabase/functions/stock-report/index.ts` (`readLatest` optional predicate + BWIBBU call site)
+  - `sources/supabase/functions/stock-report/twFundamental.test.ts` (3 new tests)
+
+- **Verification**: `npx vitest run` — 68 files / **987 tests passed** (was 984). `npx tsc -p tsconfig.edge.json` clean, `npm run build` ok, `npx oxlint src supabase` 0 errors. Reviewer verdict **PASS**. Live check: `bwibbuDatedUsable` agreed with `normaliseBwibbuDated` on four real payloads (2 published days true, unpublished day and Sunday false).
+
+- **Status**: ✅ FIXED in **0.7.20** (2026-08-18 15:46:30 Asia/Taipei).
+
 ### Bug ID: BUG-028 — `ProbeWarRoom` falsely marked source as retired on first hit due to substring match on tick note
 - **Found by**: Unit testing & code inspection of `ProbeWarRoom.tsx`.
 - **Description**: `ProbeWarRoom` component checked `sourceTicks.some((t) => t.note?.includes('到位'))` which caused daily sources (target: 3 hits) to prematurely show "✅ 已退休" after only 1 hit when the tick note stated "資料已到位".

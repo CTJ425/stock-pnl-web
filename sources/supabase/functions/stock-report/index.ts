@@ -83,6 +83,7 @@ import {
   T187AP05_URL,
   T187AP17_URL,
   buildFundamentalFile,
+  bwibbuDatedUsable,
   extractIndustry,
   extractProfit,
   extractRevenue,
@@ -355,12 +356,17 @@ async function cachedDayDatasets(candidates: string[]): Promise<Set<string>> {
 }
 
 /** Read the "latest trading day" type whole-market file (without date parameter) and cache it in Postgres based on the parsed date*/
-async function readLatest<T>(ymd: string, dataset: string, url: string): Promise<T | null> {
+async function readLatest<T>(
+  ymd: string,
+  dataset: string,
+  url: string,
+  usable?: (v: T) => boolean,
+): Promise<T | null> {
   const cached = await readCache<T>(ymd, dataset)
   if (cached) return cached
   try {
     const data = await fetchJson<T>(url)
-    await writeCache(ymd, dataset, data)
+    if (!usable || usable(data)) await writeCache(ymd, dataset, data)
     return data
   } catch {
     return null
@@ -1162,7 +1168,9 @@ async function syncFundamental(
   const bwibbuUrl = bwibbuDatedUrl(dataYmd)
   const bwibbu = bwibbuUrl
     ? normaliseBwibbuDated(
-        await readLatest<BwibbuDatedResponse>(dataYmd, 'BWIBBU_D', bwibbuUrl),
+        await readLatest<BwibbuDatedResponse>(dataYmd, 'BWIBBU_D', bwibbuUrl, (v) =>
+          bwibbuDatedUsable(v, dataYmd),
+        ),
         dataYmd,
       )
     : null

@@ -3,7 +3,22 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-17 18:03:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-18 15:46:30 Asia/Taipei).
+
+## 📅 Log: 2026-08-17 18:03:00 Asia/Taipei (Task 112: Full GitHub Releases backfill & automated workflow sync)
+
+1. **Full Backfill of GitHub Releases (`sources/scripts/sync-github-releases.cjs`)**:
+   - Created sync utility parsing `docs/agent/CHANGELOG.md` across all 84 versions (`0.2` through `0.7.18`).
+   - Matched each historical version to its exact release commit SHA in git history.
+   - Synchronized all 84 releases to GitHub Releases with titles and detailed markdown release notes.
+2. **Automated CI/CD Workflow (`.github/workflows/release.yml`)**:
+   - Configured GitHub Actions workflow triggering on push to `main` (and `workflow_dispatch`).
+   - Automatically synchronizes GitHub Releases whenever a new version is pushed to `main`.
+   - Added `release:sync` and `release:sync:all` npm scripts in `sources/package.json`.
+3. **Skill & Documentation Sync**:
+   - Updated `.claude/skills/versioning/SKILL.md`, `.gemini/skills/versioning/SKILL.md`, `.claude/skills/ship/SKILL.md`, and `.gemini/skills/ship/SKILL.md`.
+   - Full Vitest suite: 66 test files / 963 tests passed 100%.
+   - Build (`tsc -b && vite build`) and Edge typecheck (`tsc -p tsconfig.edge.json`) 0 errors.
 
 ## 📅 Log: 2026-08-17 16:55:00 Asia/Taipei (Task 111: Retune T86 probe active window to 16:00–17:00, sync UI & docs, release 0.7.18)
 

@@ -2,6 +2,14 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.20（2026-08-18）— 修復 BWIBBU 帶日期端點在尚未發布時快取中毒，導致當日基本面檔案被跳過
+
+- 🐞 **BUG-028**：帶日期的 BWIBBU 端點（`BWIBBU_d`）在未發布時回傳 HTTP 200 含 `{"stat":"很抱歉，沒有符合條件的資料!"}` 無 `data` 欄位（發布時間約 17:15 台北）。`readLatest` 對任何不拋錯的回應都進行快取，導致當天首次 `generate-market-data` 於 17:15 前執行時，將該空負載寫入該交易日的 BWIBBU_D 快取鍵；之後每輪都讀回空結果，`normaliseBwibbuDated` 回傳 null、`freshValuationDay` 為 null、`valuationCurrent` 因此永遠為真，**當天所有基本面檔案命中 `skipped++; continue` 分支**。
+- 📊 **實測影響（PROD 雲端）**：`source_probe_tick` for `bwibbu` 2026-08-14 有 42 ticks / 17 hits / **0 landed**；2026-08-17 有 19 ticks / 15 hits / **0 landed**。Storage 47 個 `fundamental/*.json` 中**40 個最後寫入時間為 2026-08-10**，估值資料已無聲地過期 6 個交易日；`fundamental/2609.json` 於 2026-08-17 17:08 被寫入時仍攜帶 `valuation: null`。
+- ✅ **修法**：`readLatest` 新增可選的有效性判準參數；快取寫入時若判準回傳假值則跳過寫入，但仍回傳抓取值。BWIBBU 呼叫端傳入新的 `bwibbuDatedUsable`（出自 `twFundamental.ts`，定義與 `normaliseBwibbuDated` 相同避免飄移），與既有的 `loadT86` 用 `t86Ok` 進行快取寫入防護一致。其他三個 `readLatest` 呼叫端（MI_MARGN、T187AP05_L、T187AP17_L）不傳判準，行為不變。
+- ⚠️ **接受的風險**：平日若無法使用當日 BWIBBU_D（如市場假日），`readLatest` 改為每輪重抓而非快取一次，約當天增加 30 次對 twse.com.tw 的請求，無退避；已評估認可：替代方案為整日無聲過期估值，等於 bug 本身。
+- 🧪 **驗證**：`npx vitest run` 68 files / **987 tests passed**（前 984）；`npx tsc -p tsconfig.edge.json` 0 errors、`npm run build` ok、`npx oxlint src supabase` 0 errors。稽核員判定 **PASS**。四份實際回應測試：`bwibbuDatedUsable` 對 `normaliseBwibbuDated` 一致（2 個已發布日回傳真、1 個未發布日與 1 個週日回傳假）。
+
 ### 0.7.19（2026-08-18）— 外資買賣超 TOP 50 快照與探針第 8 來源 twt38u
 
 - 新增 TWSE `TWT38U`（外資及陸資買賣超彙總表）解析，於 `generate-chips` 階段產出 `market/foreign_top50.json`（外資買賣超 TOP 50 買超／賣超快照）。
