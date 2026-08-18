@@ -2,23 +2,16 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.7.19-dev.2（2026-08-18）— 探針新增第 8 個來源：外資買賣超 TWT38U
-
-- ⏰ **探針新增第 8 個來源 `twt38u`**（TWSE 外資及陸資買賣超彙總表 `TWT38U`）：
-  - 探測視窗：**17:00 – 18:00**（每 5 分鐘一次，命中 3 次穩定到位退休）。
-  - 後續抓取沿用既有 **`generate-chips`** 階段（該階段實際負責抓取 TWT38U 產出 `market/foreign_top50.json`），不新增 Edge action 或 `ProbeFollowUp` 值。
-- 🎯 **到位判準新增 `LandingEvidence.foreignTopDate`**：取自 `market/foreign_top50.json` 的 `rawDate` 欄位；`sourceLanded('twt38u')` 透過 `normaliseYmd` 與今日比對，同時接受 `YYYYMMDD` 與 `YYYY-MM-DD` 兩種格式。
-- 🖥️ **管理後台「盤後探針命中戰情室」與「資料源探針運作週期」同步更新為 8 大來源**；`README.md`、`schema.sql` 相關註解與十處硬寫「7 大 / 七個」計數亦一併更新。
-- 🧪 **測試**：68 檔 / **984 項全數通過**（原 980）；`npx tsc -p tsconfig.edge.json` exit 0、`npm run build` ok、`npx oxlint src supabase` 0 errors。
-- ⚠️ **稽核狀態**：本次未執行 Reviewer（正式政策外的偏差，已實錄）；探針與控制流相關變更按既往慣例應經稽核。無稽核結論聲明。
-
-### 0.7.19-dev.1（2026-08-18）— 外資買賣超 TOP 50 快照與總體經濟表格新增區塊
+### 0.7.19（2026-08-18）— 外資買賣超 TOP 50 快照與探針第 8 來源 twt38u
 
 - 新增 TWSE `TWT38U`（外資及陸資買賣超彙總表）解析，於 `generate-chips` 階段產出 `market/foreign_top50.json`（外資買賣超 TOP 50 買超／賣超快照）。
 - 總體經濟 > 台股 新增「外資買賣超 TOP 50」區塊，含買超／賣超分頁與張／股單位切換，鉅額交易標記。
-- 不新增 Edge action、不新增探針來源、不改 cron；探針維持 7 個來源。
+- 不新增 Edge action（TWT38U 後續抓取沿用既有 `generate-chips` 階段）、不改 cron；**探針則新增第 8 個來源 `twt38u`，視窗 17:00–18:00、每 5 分鐘、3 次穩定到位退休**。
 - 選用 TWT38U 而非既有 T86 快取衍生：實測 16 個交易日兩者數值完全相同，但 `selectType=ALLBUT0999` 排除權證，4 天的 TOP 50 名次因此不同；TWT38U 146 KB 亦小於 T86 194 KB。
-- 測試：68 檔 / 980 項全數通過（原 66 / 963）。
+- ⏰ **探針到位判準新增 `LandingEvidence.foreignTopDate`**：取自 `market/foreign_top50.json` 的 `rawDate` 欄位；`sourceLanded('twt38u')` 透過 `normaliseYmd` 與今日比對，同時接受 `YYYYMMDD` 與 `YYYY-MM-DD` 兩種格式。
+- 🖥️ **管理後台「盤後探針命中戰情室」與「資料源探針運作週期」同步更新為 8 大來源**；`README.md`、`schema.sql` 相關註解與十處硬寫「7 大 / 七個」計數亦一併更新。
+- ⚠️ **稽核狀態**：本次未執行 Reviewer（正式政策外的偏差，已實錄）；探針與控制流相關變更按既往慣例應經稽核。無稽核結論聲明。
+- 🧪 **測試**：68 檔 / **984 項全數通過**（原 66 / 963）；`npx tsc -p tsconfig.edge.json` exit 0、`npm run build` ok、`npx oxlint src supabase` 0 errors。
 
 ### 0.7.18（2026-08-17）— 個股三大法人（T86）探針時窗調整至 16:00–17:00
 
