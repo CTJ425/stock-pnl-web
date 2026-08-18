@@ -187,18 +187,19 @@ import {
   type T86State,
 } from './pollPlan.ts'
 import {
-  DAILY_WINDOWS,
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
+  REQUIRED_LANDED_COUNTS,
   borrowHit,
-  getActiveWindow,
   minutesFromHhmm,
   mopsIssueRocYmd,
   mopsProfitPeriod,
   mopsRevenuePeriod,
   retiredSources,
   sourcesForTaipeiTime,
+  summariseLandedTicks,
   ymdToRocYmd,
+  type LandedTick,
   type LandingEvidence,
   type ProbeFollowUp,
   type ProbeSourceId,
@@ -2427,28 +2428,17 @@ async function readDoneSourcesToday(
   try {
     const { data, error } = await db
       .from('source_probe_tick')
-      .select('source, taipei_time')
+      .select('source, taipei_time, fingerprint')
       .eq('taipei_ymd', todayYmd)
       .eq('hit', true)
       .eq('data_landed', true)
     if (error || !Array.isArray(data)) return new Set()
 
-    const mins = slot ? minutesFromHhmm(slot) : null
-    const counts: Record<string, number> = {}
-    for (const r of data) {
-      const src = r.source as ProbeSourceId
-      if (mins != null && src in DAILY_WINDOWS) {
-        const activeWin = getActiveWindow(src as keyof typeof DAILY_WINDOWS, mins)
-        if (activeWin) {
-          const tickMins = r.taipei_time ? minutesFromHhmm(r.taipei_time) : null
-          if (tickMins != null && (tickMins < activeWin.from || tickMins > activeWin.to)) {
-            continue
-          }
-        }
-      }
-      counts[src] = (counts[src] ?? 0) + 1
-    }
-    return retiredSources(counts)
+    const { counts, settled } = summariseLandedTicks(
+      data as LandedTick[],
+      slot ? minutesFromHhmm(slot) : null,
+    )
+    return retiredSources(counts, REQUIRED_LANDED_COUNTS, settled)
   } catch {
     return new Set()
   }

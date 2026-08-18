@@ -3,6 +3,9 @@ import {
   PROBE_FOLLOW_UP,
   PROBE_SOURCE_ORDER,
   REQUIRED_LANDED_COUNTS,
+  REQUIRE_SETTLED_CONTENT,
+  contentSettled,
+  summariseLandedTicks,
   borrowHit,
   followUpsFor,
   formatProbeTickLabel,
@@ -278,14 +281,145 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
   })
 
   it('retiredSources 依各來源所需次數判定收工', () => {
-    // 預設每日來源需 3 次，MOPS 需 1 次
-    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 })).toEqual(
+    // 預設每日來源需 3 次，MOPS 需 1 次；每日來源另需內容已停止變動
+    const settled = { bfi82u: true, t86: true, margin: true, borrow: true }
+    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 }, REQUIRED_LANDED_COUNTS, settled)).toEqual(
       new Set(['t86', 'mops_revenue']),
     )
-    expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 })).toEqual(
+    expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 }, REQUIRED_LANDED_COUNTS, settled)).toEqual(
       new Set(['bfi82u', 'margin']),
     )
     expect(retiredSources({})).toEqual(new Set())
+  })
+
+  /*
+    次數到了不等於可以收工。次數只證明「量到了幾次」，證明不了「上游還會不會再改」——
+    T86 就是每 15 分鐘改一次的實例，`nextT86State` 為此存在。退休一旦提早，當天就再也沒有人回頭看。
+    所以每日來源必須同時滿足：到位次數足夠，且最近兩次到位的內容指紋相同。
+  */
+  it('每日來源：次數到了但內容還在變，不得收工', () => {
+    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, { t86: false })).toEqual(new Set())
+    expect(retiredSources({ t86: 5 }, REQUIRED_LANDED_COUNTS, { t86: false })).toEqual(new Set())
+    // 沒有任何穩定證據時同樣不收工——寧可多探一輪，也不要提早關門
+    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, {})).toEqual(new Set())
+  })
+
+  it('每日來源：次數到了且內容停止變動，才收工', () => {
+    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, { t86: true })).toEqual(
+      new Set(['t86']),
+    )
+    // 內容穩了但次數還不夠，一樣不收工
+    expect(retiredSources({ t86: 2 }, REQUIRED_LANDED_COUNTS, { t86: true })).toEqual(new Set())
+  })
+
+  it('MOPS 兩個來源不看指紋——判準是期別，且只需到位一次', () => {
+    expect(REQUIRE_SETTLED_CONTENT.mops_revenue).toBe(false)
+    expect(REQUIRE_SETTLED_CONTENT.mops_profit).toBe(false)
+    expect(retiredSources({ mops_revenue: 1, mops_profit: 1 }, REQUIRED_LANDED_COUNTS, {})).toEqual(
+      new Set(['mops_revenue', 'mops_profit']),
+    )
+  })
+
+  it('REQUIRE_SETTLED_CONTENT 每個來源都要表態，不得漏列', () => {
+    for (const id of PROBE_SOURCE_ORDER) {
+      expect(typeof REQUIRE_SETTLED_CONTENT[id]).toBe('boolean')
+    }
+    // 六個每日來源一律要求內容停止變動
+    for (const id of ['bfi82u', 't86', 'bwibbu', 'twt38u', 'margin', 'borrow'] as const) {
+      expect(REQUIRE_SETTLED_CONTENT[id]).toBe(true)
+    }
+  })
+
+  /*
+    退休判定的接線本身也要測（reviewer RISK）。純函式測得再好，若「哪些 tick 算數、指紋怎麼排序」
+    這段留在 index.ts 的 DB 讀取裡，恆為 false（整窗打滿）與恆為 true（提早關門）兩種失效
+    都不會被任何測試接住。把它抽成純函式就有守門員。
+  */
+  describe('summariseLandedTicks——把到位紀錄整理成次數與穩定度', () => {
+    const tick = (source: string, taipei_time: string, fingerprint: string | null) => ({
+      source,
+      taipei_time,
+      fingerprint,
+    })
+
+    it('依來源分組計次，並以最近兩次指紋判斷是否停止變動', () => {
+      const r = summariseLandedTicks(
+        [tick('t86', '16:10', 'A'), tick('t86', '16:15', 'A'), tick('margin', '20:50', 'M')],
+        16 * 60 + 15,
+      )
+      expect(r.counts).toEqual({ t86: 2, margin: 1 })
+      expect(r.settled.t86).toBe(true)
+      expect(r.settled.margin).toBe(false) // 只有一次，證據不足
+    })
+
+    it('指紋以時間升冪決定「最近兩次」，不依賴輸入順序', () => {
+      const shuffled = [tick('t86', '16:20', 'B'), tick('t86', '16:10', 'A'), tick('t86', '16:15', 'A')]
+      // 最近兩次是 16:15(A) 與 16:20(B) → 還在變
+      expect(summariseLandedTicks(shuffled, 16 * 60 + 20).settled.t86).toBe(false)
+      const settledInput = [tick('t86', '16:20', 'A'), tick('t86', '16:10', 'B'), tick('t86', '16:15', 'A')]
+      expect(summariseLandedTicks(settledInput, 16 * 60 + 20).settled.t86).toBe(true)
+    })
+
+    it('視窗外的 tick 既不計次也不供指紋——bfi82u 雙時段是實例', () => {
+      const ticks = [
+        tick('bfi82u', '15:05', 'X'),
+        tick('bfi82u', '15:10', 'X'),
+        tick('bfi82u', '15:15', 'X'),
+        tick('bfi82u', '19:30', 'Y'),
+        tick('bfi82u', '19:35', 'Y'),
+      ]
+      // 站在 19:35（第二時段）：只有 19:30/19:35 算數
+      const second = summariseLandedTicks(ticks, 19 * 60 + 35)
+      expect(second.counts.bfi82u).toBe(2)
+      expect(second.settled.bfi82u).toBe(true)
+      // 站在 15:15（第一時段）：只有三筆 15:xx 算數
+      const first = summariseLandedTicks(ticks, 15 * 60 + 15)
+      expect(first.counts.bfi82u).toBe(3)
+    })
+
+    it('沒有時槽時不做視窗過濾，全部算數', () => {
+      const ticks = [tick('bfi82u', '15:05', 'X'), tick('bfi82u', '19:30', 'Y')]
+      expect(summariseLandedTicks(ticks, null).counts.bfi82u).toBe(2)
+      expect(summariseLandedTicks(ticks, null).settled.bfi82u).toBe(false)
+    })
+
+    it('不在 DAILY_WINDOWS 的來源（MOPS）不受視窗過濾', () => {
+      const r = summariseLandedTicks([tick('mops_revenue', '12:00', 'R')], 21 * 60)
+      expect(r.counts.mops_revenue).toBe(1)
+    })
+
+    it('空輸入回空結果，不丟例外', () => {
+      expect(summariseLandedTicks([], 16 * 60)).toEqual({ counts: {}, settled: {} })
+    })
+
+    it('接得住壞資料：時間為 null 的 tick 不得讓整批壞掉', () => {
+      const r = summariseLandedTicks(
+        [{ source: 't86', taipei_time: null, fingerprint: 'A' }, tick('t86', '16:15', 'A')],
+        16 * 60 + 15,
+      )
+      expect(typeof r.counts.t86).toBe('number')
+    })
+  })
+
+  describe('contentSettled——最近兩次到位的指紋是否相同', () => {
+    it('兩次相同即視為停止變動', () => {
+      expect(contentSettled(['a', 'a'])).toBe(true)
+      expect(contentSettled(['a', 'b', 'b'])).toBe(true)
+    })
+
+    it('最後兩次不同就是還在變', () => {
+      expect(contentSettled(['a', 'b'])).toBe(false)
+      expect(contentSettled(['a', 'a', 'b'])).toBe(false)
+    })
+
+    it('證據不足一律回 false，不猜', () => {
+      expect(contentSettled([])).toBe(false)
+      expect(contentSettled(['a'])).toBe(false)
+      expect(contentSettled(['a', null])).toBe(false)
+      expect(contentSettled([null, null])).toBe(false)
+      expect(contentSettled(['', ''])).toBe(false)
+      expect(contentSettled(['a', undefined])).toBe(false)
+    })
   })
 
   it('getActiveWindow 依當前分鐘回傳對應的活躍視窗', () => {

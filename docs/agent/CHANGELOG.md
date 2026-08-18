@@ -2,6 +2,25 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.7.21（2026-08-18）— 盤後探針退休條件加上「內容已停止變動」，接線改為可測純函式
+
+- 🎯 **探針退休判定新增內容穩定度檢查**（Task 114）：
+  - 原本以落地次數判定退休，計數只能證明「量過 N 次」，無法證明「上游不再修訂」。T86 是反例，每日 16:00 之後每 15 分鐘修訂一次，因此有 `nextT86State` 存在。源退休當天再無機制會讀它，提早退休會無聲凍結當日資料。
+  - 新規則：達成落地計數 **且** 內容已停止變動（最後兩次落地 tick 帶同一非空指紋）才退休。
+  - 新增 `REQUIRE_SETTLED_CONTENT` 表：六大日頻來源（`bfi82u`、`t86`、`bwibbu`、`twt38u`、`margin`、`borrow`）設為 true，MOPS 例外設 false（落地判準已是期間比對，目標單次落地，指紋規則只能讓 1 變 2 無益）。
+  - `contentSettled()` 純函式：少於兩筆記錄、或最後兩筆任一為 null/undefined/empty 回傳 false，沒有證據絕不算穩定。
+  - `retiredSources` 新增第三參數 `settled`，默認 `{}`，無穩定證據的日頻源**不會退休**——失敗模式從提早收工變成多探一輪。
+- 📊 **PROD `source_probe_tick` 實測驗證**（2026-08-01 以降）：
+  - 每源每次命中都寫非空指紋，無來源會因穩定度規則挨餓。
+  - 單日內每源指紋高度一致（恰好 1 種），實務上無額外探測成本。
+  - 模擬套用新規則於 19 個真實日：退休時機與舊規則**完全相同**，新規則只在上游真的修訂時才有用。
+- 🧪 **接線改為可測純函式**（Task 114b，Reviewer RISK 結案）：
+  - Reviewer 指出 `readDoneSourcesToday` 內部接線（分組、排序、套用時窗、計算穩定度）完全無測試覆蓋，兩個破壞模式就住在那裡：穩定度永遠假讓每日源探整窗、永遠真讓源提早退休凍結。
+  - 提取為 `summariseLandedTicks(ticks, slotMinutes) -> { counts, settled }` 獨立純函式，7 個新單元測試含 `bfi82u` 雙時段情境（15:00–16:30／19:30–20:15）、輸入順序無關、null 時間戳等。`readDoneSourcesToday` 只負責查詢與委派。
+  - 對比 19 個真實日：**完全無行為差異**。
+- 📝 **檔案異動**：`sourceProbePlan.ts`、`sourceProbePlan.test.ts`（13 個新單元測試，測試先行）、`index.ts`。
+- 🧪 **驗證**：`npx vitest run` 68 檔 / **1001 項全通**（原 987）；`npx tsc -p tsconfig.edge.json` exit 0、`tsc --noEmit` exit 0、`npm run build` ok、`npx oxlint src supabase` 0 errors。稽核員對 Task 114 判定 **PASS**，唯一 RISK 已由 114b 結案。
+
 ### 0.7.20（2026-08-18）— 修復 BWIBBU 帶日期端點在尚未發布時快取中毒，導致當日基本面檔案被跳過
 
 - 🐞 **BUG-028**：帶日期的 BWIBBU 端點（`BWIBBU_d`）在未發布時回傳 HTTP 200 含 `{"stat":"很抱歉，沒有符合條件的資料!"}` 無 `data` 欄位（發布時間約 17:15 台北）。`readLatest` 對任何不拋錯的回應都進行快取，導致當天首次 `generate-market-data` 於 17:15 前執行時，將該空負載寫入該交易日的 BWIBBU_D 快取鍵；之後每輪都讀回空結果，`normaliseBwibbuDated` 回傳 null、`freshValuationDay` 為 null、`valuationCurrent` 因此永遠為真，**當天所有基本面檔案命中 `skipped++; continue` 分支**。
