@@ -2371,6 +2371,24 @@ async function probeSource(
         duration_ms: Date.now() - t0,
       }
     }
+    if (id === 'twt38u') {
+      const raw = await fetchRwdJson(twt38uUrl(todayYmd))
+      const parsed = raw ? parseForeignTop(raw as Twt38uResponse) : null
+      const hit = parsed !== null && parsed.rawDate === todayYmd
+      return {
+        hit,
+        ok: parsed !== null,
+        data_ymd: parsed?.rawDate ?? null,
+        fingerprint: parsed ? foreignTopFingerprint(parsed) : null,
+        rows: parsed ? parsed.buyTop.length + parsed.sellTop.length : null,
+        note: hit
+          ? `外資買賣超日=今日（${parsed ? parsed.buyTop.length + parsed.sellTop.length : '?'} 筆）`
+          : parsed
+            ? `外資買賣超日=${parsed.rawDate}≠今日`
+            : '當日外資買賣超尚未出表',
+        duration_ms: Date.now() - t0,
+      }
+    }
     // 兩份 MOPS 彙整表同型：端點恆有資料，唯一能分辨新舊的是自報的出表日期。
     if (id === 'mops_revenue' || id === 'mops_profit') {
       const isRevenue = id === 'mops_revenue'
