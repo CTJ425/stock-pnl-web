@@ -38,17 +38,32 @@ describe('sourceProbePlan', () => {
       ['mops_profit', 'mops_revenue'].sort(),
     )
     expect(sourcesForTaipeiTime('17:00', true).sort()).toEqual(
-      ['bwibbu', 't86'].sort(),
+      ['bwibbu', 't86', 'twt38u'].sort(),
     )
     expect(sourcesForTaipeiTime('17:15', true).sort()).toEqual(
-      ['bwibbu', 'mops_profit', 'mops_revenue'].sort(),
+      ['bwibbu', 'mops_profit', 'mops_revenue', 'twt38u'].sort(),
     )
     expect(sourcesForTaipeiTime('17:20', true).sort()).toEqual(
-      ['bwibbu', 'mops_profit', 'mops_revenue'].sort(),
+      ['bwibbu', 'mops_profit', 'mops_revenue', 'twt38u'].sort(),
     )
-    expect(sourcesForTaipeiTime('18:00', true)).toEqual(['bwibbu'])
+    expect(sourcesForTaipeiTime('18:00', true).sort()).toEqual(
+      ['bwibbu', 'twt38u'].sort(),
+    )
     expect(sourcesForTaipeiTime('18:30', true)).toEqual(['bwibbu'])
     expect(sourcesForTaipeiTime('18:35', true)).toEqual([])
+  })
+
+  // 0.7.19 起 twt38u 已有 label／window／follow-up／landed 判定，卻沒有被排程器吐出來，
+  // 所以 PROD 從未跑過一次外資買賣超探針（index.ts 的 probeSource 當時也缺對應分支，
+  // 那半邊是 Deno-only、vitest 測不到，只能靠型別檢查與 review 守）。
+  // 這條測試只鎖住純函式這一半：「排程器真的會派 twt38u」。
+  it('twt38u 在 17:00–18:00 窗內會被排程，窗外不會', () => {
+    expect(sourcesForTaipeiTime('16:59', true)).not.toContain('twt38u')
+    expect(sourcesForTaipeiTime('17:00', true)).toContain('twt38u')
+    expect(sourcesForTaipeiTime('17:30', true)).toContain('twt38u')
+    expect(sourcesForTaipeiTime('18:00', true)).toContain('twt38u')
+    expect(sourcesForTaipeiTime('18:05', true)).not.toContain('twt38u')
+    expect(sourcesForTaipeiTime('17:30', false)).toEqual([])
   })
 
   it('晚間 BFI 完整版第二時窗（19:30–20:15）', () => {

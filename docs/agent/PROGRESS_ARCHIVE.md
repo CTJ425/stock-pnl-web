@@ -3,7 +3,18 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
-Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-18 16:10:00 Asia/Taipei).
+Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-18 21:20:00 Asia/Taipei).
+
+## 📅 Log: 2026-08-18 15:46:30 Asia/Taipei (BUG-028: BWIBBU endpoint cache poisoning on unpublished state)
+
+- **Issue**: Dated BWIBBU endpoint returns HTTP 200 with no `data` field before ~17:15 Taipei; `readLatest` cached any non-exception, poisoning the day's valuation cache. PROD saw 0 `bwibbu` landings across 6 trading days (2026-08-10 through 2026-08-17); fundamental files stale for 6 days.
+- **Root cause**: `readLatest` was not guarding cache write; first `generate-market-data` before 17:15 wrote empty payload, then every later run read it back and skipped all fundamental files for the day.
+- **Fix**: `readLatest` gained optional `isValid` predicate; BWIBBU call site passes `bwibbuDatedUsable` (defined in `twFundamental.ts` as mirror of `normaliseBwibbuDated` logic so they cannot drift).
+- **Risk accepted**: Weekend / holiday without usable BWIBBU means re-fetches every round (~30 extra TWSE requests) instead of caching once; chosen over a full day of silently stale valuations.
+- **Tests**: 987 vitest passed (was 984), 3 new tests in `twFundamental.test.ts`, `tsc -p tsconfig.edge.json` 0 errors, `oxlint` 0 errors. Reviewer **PASS**.
+- **Version**: **0.7.20** (official release, no `-dev` suffix).
+
+---
 
 ## 📅 Log: 2026-08-18 11:45:16 Asia/Taipei (Task 113: TWSE TWT38U Foreign Investors Top 50 Net Buy/Sell implementation & verification)
 

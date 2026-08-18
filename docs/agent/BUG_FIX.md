@@ -77,7 +77,17 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
-There are no open bugs. BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample
+### RISK-001 — Probe round timeout: per-source loop has no deadline/budget check
+
+- **Condition**: `sources/supabase/functions/stock-report/probeRound.ts:95–98` contains no per-source deadline or budget check; only the follow-up loop has one.
+- **Trigger**: Since 0.7.22-dev.1, three daily windows now overlap at 17:00 (`t86` ends 17:00 inclusive, `bwibbu` and `twt38u` start at 17:00), and four sources are scheduled together at 17:15/17:20. Each fetch carries a 10s timeout, so the worst-case round duration moved closer to the Edge Function's 60s limit.
+- **Watch**: A probe round that times out mid-loop would leave later sources in that round unprobed for that tick.
+- **Status**: OPEN — accepted at review (BUG-029 fix), not fixed.
+- **Accepted Risk**: Unlikely in normal operation (would require ≥3 sources timeout); acceptable trade-off against the alternative (omitting `twt38u` from probes, which is worse).
+
+---
+
+**Historical notes**: BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample
 decided landing) fixed in **0.7.13** — see `FIXED_BUG.md`. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
 
 BUG-023 (manual 「全部執行」 opaque non-2xx) fixed in **0.6.47** — see `FIXED_BUG.md`.

@@ -8,6 +8,40 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-029 — TWT38U probing never ran since 0.7.19 — two independent gaps in dispatch path
+
+- **Symptom**: TWT38U (外資買賣超) was added as the 8th probe source in 0.7.19 (Task 113b), but probing never executed a single time on PROD or DEV. Window 17:00–18:00 existed, 3-landing target was set, but every day passed with zero landed hits. Task 113b was recorded with `⚠️ Reviewer: NOT RUN`, so the dispatch wiring was never verified.
+
+- **Root Cause — Gap 1**: `sourceProbePlan.ts` function `sourcesForTaipeiTime()` iterated a hardcoded tuple `['bfi82u','t86','bwibbu','margin','borrow']` that omitted `'twt38u'`. Despite `DAILY_WINDOWS.twt38u` being defined, `REQUIRED_LANDED_COUNTS['twt38u'] = 3`, `REQUIRE_SETTLED_CONTENT['twt38u'] = true`, `PROBE_FOLLOW_UP['twt38u']` being wired, and `sourceLanded('twt38u')` being implemented, the scheduler never emitted the source because it was filtered at derivation time.
+
+- **Root Cause — Gap 2**: `probeSource()` in `index.ts` had no branch for `id === 'twt38u'`. Even once the scheduler emitted it, every 5-minute tick would fall through to `fail('unknown source')` and never hit, never retire, re-probing every 5 minutes for the whole window forever.
+
+- **Why test suite stayed green**: `sourceProbePlan.test.ts` assertions locked in the five-source list as correct (assertions at 17:00 and 18:00 expected exactly those five). `index.ts` is Deno-only so no vitest test executes `probeSource()`, leaving Gap 2 undetected.
+
+- **Fix**:
+  1. `sourceProbePlan.ts` — `sourcesForTaipeiTime()` now derives the daily-source list from `Object.keys(DAILY_WINDOWS)` instead of a hardcoded tuple, so adding a source to the windows table can no longer silently skip it.
+  2. `index.ts` — new `if (id === 'twt38u')` branch: `fetchRwdJson(twt38uUrl(todayYmd))` with a null guard, `parseForeignTop`, `hit = parsed !== null && parsed.rawDate === todayYmd`, `fingerprint` via `foreignTopFingerprint`, `rows = buyTop.length + sellTop.length`.
+  3. `sourceProbePlan.test.ts` — window assertions updated to expect `twt38u`, plus new tests locking the 17:00–18:00 boundary and the weekend case.
+
+- **Accepted Risk**: `probeRound.ts:95–98` has no per-source deadline/budget check (only the follow-up loop does). At 17:00 three windows now overlap (`t86` ends 17:00 inclusive, `bwibbu` and `twt38u` start at 17:00); at 17:15/17:20 four sources are scheduled. Each fetch carries a 10s timeout, so worst case moves closer to the 60s Edge Function limit. Accepted deliberately, not fixed.
+
+- **NOT deployed**: Fix is code-only and uncommitted. PROD is still running the old bundle. TWT38U will not probe there until the Edge Function is redeployed. Deployment was not performed (project rule: no deploy without explicit user instruction).
+
+- **Verification**: 
+  - `npx vitest run supabase/functions/stock-report/` — 15 files, 352 tests passed, 0 failed. The 2 new assertions failed before the fix and pass after.
+  - `npm run typecheck:edge` — no errors.
+  - `npx oxlint supabase/functions/stock-report/` — clean.
+  - Reviewer: FAIL on round 1 (found Gap 2 above), PASS on round 2 after fix.
+
+- **Files changed**: 
+  - `sources/supabase/functions/stock-report/sourceProbePlan.ts` (derive from `Object.keys`)
+  - `sources/supabase/functions/stock-report/index.ts` (`twt38u` branch in `probeSource`)
+  - `sources/supabase/functions/stock-report/sourceProbePlan.test.ts` (window assertion updates + new tests)
+
+- **Status**: ✅ FIXED in **0.7.22-dev.1** (2026-08-18 21:20:00 Asia/Taipei).
+
+---
+
 ### Bug ID: BUG-028 — 帶日期的 BWIBBU 端點在「尚未發布」時回 200，被快取一整天，導致當日所有基本面檔案被跳過
 
 - **Symptom (measured on PROD `kxnxadaghidwumqsqneu`)**: 

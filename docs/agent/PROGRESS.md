@@ -1,9 +1,48 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Task 114 + 114b recording — probe retirement on settled content + testable wiring, shipped as 0.7.21
-- Status: **✅ RECORDED to PROGRESS.md, PROGRESS_ARCHIVE.md, CHANGELOG.md, TASK.md**
-- Timestamp: 2026-08-18 16:06:44 Asia/Taipei
+- Action: BUG-029 recording — TWT38U probing dispatch path gaps, fixed in 0.7.22-dev.1
+- Status: **✅ RECORDED to FIXED_BUG.md, CHANGELOG.md, TASK.md, PROGRESS.md**
+- Timestamp: 2026-08-18 21:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-18 21:20:00 Asia/Taipei (BUG-029: TWT38U probing never ran — dispatch path gaps in source list and probe handler)
+
+### Background & Discovery
+
+Task 113b (0.7.19) introduced TWT38U as the 8th probe source with window 17:00–18:00, 3-landing target. It recorded `⚠️ Reviewer: NOT RUN` honestly due to dispatch-path complexity and lack of review. Verification came late: probing never executed a single time on PROD or DEV. Root-cause analysis found two independent gaps:
+
+1. **Gap 1 — Source list omission**: `sourceProbePlan.ts` function `sourcesForTaipeiTime()` iterated a hardcoded tuple `['bfi82u','t86','bwibbu','margin','borrow']` that omitted `'twt38u'`. Despite `DAILY_WINDOWS.twt38u` being defined, landing target set, fingerprint rule wired, and `sourceLanded('twt38u')` implemented, the scheduler never emitted it because derivation started from a second literal list.
+
+2. **Gap 2 — Missing probe handler**: `probeSource()` in `index.ts` had no `if (id === 'twt38u')` branch. Every 5-minute tick would fall through to `fail('unknown source')`, never hit, never retire, re-probing the entire 17:00–18:00 window forever.
+
+### Why Test Suite Stayed Green
+
+- `sourceProbePlan.test.ts` assertions at 17:00 and 18:00 locked the five-source output as correct.
+- `index.ts` is Deno-only, so no vitest test executes `probeSource()`, leaving Gap 2 undetected.
+- Integrated test on real schedule would catch it, but none existed before fix.
+
+### Fix
+
+1. `sourceProbePlan.ts` — `sourcesForTaipeiTime()` now derives from `Object.keys(DAILY_WINDOWS)` instead of hardcoded tuple, so adding a source to the windows table can no longer skip it silently.
+2. `index.ts` — new `if (id === 'twt38u')` branch: `fetchRwdJson(twt38uUrl(todayYmd))` with null guard, `parseForeignTop`, `hit = parsed !== null && parsed.rawDate === todayYmd`, `fingerprint` via `foreignTopFingerprint`, `rows = buyTop.length + sellTop.length`.
+3. `sourceProbePlan.test.ts` — window assertions updated to expect `twt38u`, plus new tests for 17:00–18:00 boundary and weekend case.
+
+### Verification
+
+- `npx vitest run supabase/functions/stock-report/` — 15 files, 352 tests passed, 0 failed. The 2 new assertions failed before fix, pass after.
+- `npm run typecheck:edge` — no errors.
+- `npx oxlint supabase/functions/stock-report/` — clean.
+- Reviewer: FAIL round 1 (found Gap 2), PASS round 2 after fix.
+
+### Accepted Risk
+
+`probeRound.ts:95–98` has no per-source deadline/budget check (only follow-up loop does). At 17:00 three windows now overlap (`t86` ends 17:00 inclusive, `bwibbu` and `twt38u` start at 17:00); at 17:15/17:20 four sources are scheduled. Each fetch carries 10s timeout, worst case moves closer to 60s Edge Function limit. Accepted deliberately, not fixed.
+
+### NOT Done — Must Be Stated Plainly
+
+Fix is **code-only and uncommitted**. PROD is still running the old bundle, so TWT38U still will not probe there until the Edge Function is redeployed. Deployment was not performed (project rule: no deploy without explicit user instruction).
 
 ---
 
@@ -30,12 +69,3 @@
 - **Files changed** (both tasks): `sourceProbePlan.ts`, `sourceProbePlan.test.ts` (13 new tests, TDD), `index.ts`.
 - **Tests**: `npx vitest run` — 68 files / **1001 tests passed** (was 987). `npx tsc -p tsconfig.edge.json` clean, `npx tsc --noEmit` clean, `npm run build` ok, `npx oxlint src supabase` 0 errors.
 - **Reviewer verdict on 114**: **PASS** with one RISK, now closed by 114b.
-
-## 📅 Log: 2026-08-18 15:46:30 Asia/Taipei (BUG-028: BWIBBU endpoint cache poisoning on unpublished state)
-
-- **Issue**: Dated BWIBBU endpoint returns HTTP 200 with no `data` field before ~17:15 Taipei; `readLatest` cached any non-exception, poisoning the day's valuation cache. PROD saw 0 `bwibbu` landings across 6 trading days (2026-08-10 through 2026-08-17); fundamental files stale for 6 days.
-- **Root cause**: `readLatest` was not guarding cache write; first `generate-market-data` before 17:15 wrote empty payload, then every later run read it back and skipped all fundamental files for the day.
-- **Fix**: `readLatest` gained optional `isValid` predicate; BWIBBU call site passes `bwibbuDatedUsable` (defined in `twFundamental.ts` as mirror of `normaliseBwibbuDated` logic so they cannot drift).
-- **Risk accepted**: Weekend / holiday without usable BWIBBU means re-fetches every round (~30 extra TWSE requests) instead of caching once; chosen over a full day of silently stale valuations.
-- **Tests**: 987 vitest passed (was 984), 3 new tests in `twFundamental.test.ts`, `tsc -p tsconfig.edge.json` 0 errors, `oxlint` 0 errors. Reviewer **PASS**.
-- **Version**: **0.7.20** (official release, no `-dev` suffix).

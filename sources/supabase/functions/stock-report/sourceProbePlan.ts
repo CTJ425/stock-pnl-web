@@ -208,7 +208,9 @@ export function sourcesForTaipeiTime(hhmm: string, weekday: boolean): ProbeSourc
   if (mins == null) return []
 
   const out: ProbeSourceId[] = []
-  for (const id of ['bfi82u', 't86', 'bwibbu', 'margin', 'borrow'] as const) {
+  // Derive daily sources from DAILY_WINDOWS' keys (not a second hardcoded list) so a source
+  // added there can't silently miss this loop again — see 'twt38u' bug.
+  for (const id of Object.keys(DAILY_WINDOWS) as Array<keyof typeof DAILY_WINDOWS>) {
     const w = DAILY_WINDOWS[id]
     const matched = Array.isArray(w)
       ? w.some((win) => inWindow(mins, win))

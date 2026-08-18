@@ -57,6 +57,7 @@
   - Probe suite: 7 → **8 sources**; ten "7 大 / 七個" hardcoded counts updated across `ProbeWarRoom.tsx`, `MechanismGuide.tsx`, `sourceProbePlan.ts`, `schema.sql`, `README.md`.
   - Tests: 68 files / **984 vitest tests** passed (was 980); `npx tsc -p tsconfig.edge.json` 0 errors; `npm run build` ok; `npx oxlint src supabase` 0 errors.
   - **⚠️ Reviewer: NOT RUN** — recorded honestly as deviation from project's review policy for probe/control-flow changes. No review verdict claimed.
+  - **Follow-up: BUG-029** — discovered 2026-08-18 that probing never ran since 0.7.19; two dispatch-path gaps (omitted from source list, and missing probe handler). Fixed in 0.7.22-dev.1; see `FIXED_BUG.md`.
 - **Design note (113)**: TWT38U chosen over T86 despite deriving both sources identically — `selectType=ALLBUT0999` broke top-50 ranking on 4 of 16 days (warrants), while TWT38U 146 KB is cheaper than T86 194 KB, and `generate-chips` retriggers (t86/margin/borrow overlap) so no hole from probe retirement.
 
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
