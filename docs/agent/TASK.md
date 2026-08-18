@@ -22,9 +22,9 @@
 ## 📋 Active Tasks
 
 ### Task 113: TWSE TWT38U Foreign Investors Top 50 Net Buy/Sell
-- **Status**: ✅ **SHIPPED (0.7.19-dev.1 + 113b follow-up 0.7.19-dev.2)**
+- **Status**: ✅ **SHIPPED as 0.7.19** (Task 113 completed + Task 113b follow-up merged for official release)
 - **Agent**: Antigravity
-- **Timestamp**: 2026-08-18 11:45:16 Asia/Taipei (113 completed); 2026-08-18 15:26:43 Asia/Taipei (113b shipped)
+- **Timestamp**: 2026-08-18 11:45:16 Asia/Taipei (113 completed); 2026-08-18 15:26:43 Asia/Taipei (113b completed & consolidated to 0.7.19)
 - **Spec**: [`docs/agent/specs/twt38u-foreign-top50.md`](file:///root/dev/stock-pnl-web/docs/agent/specs/twt38u-foreign-top50.md) (revised)
 - **What was built (Task 113)**:
   - Edge: Parser for TWT38U (`twForeignTop.ts`), `syncForeignTop` called from `runGeneratePhaseChips`; publishes Top 50 net-buy/net-sell snapshot to `market/foreign_top50.json`. Runs inside existing `generate-chips` phase, no new Edge action or cron. Probe suite stays at 7 sources.
