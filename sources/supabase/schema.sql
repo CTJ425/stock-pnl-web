@@ -576,7 +576,7 @@ CREATE INDEX IF NOT EXISTS source_probe_log_ymd_idx ON source_probe_log (taipei_
 -- 8b. Multi-source probe ticks (source_probe_tick) —— 0.7.3
 --
 --     One row per (5-minute slot × source). `source_probe_log` above is one row per round with
---     two hard-coded sources baked into its columns; the 0.7.3 experiment probes seven, so it
+--     two hard-coded sources baked into its columns; the 0.7.3 experiment probes eight, so it
 --     needs a long table instead of a wide one. Both are written; the wide one keeps working for
 --     the existing admin paragraph.
 --

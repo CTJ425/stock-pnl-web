@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PROBE_FOLLOW_UP,
   PROBE_SOURCE_ORDER,
+  REQUIRED_LANDED_COUNTS,
   borrowHit,
   followUpsFor,
   formatProbeTickLabel,
@@ -208,6 +209,18 @@ describe('sourceProbePlan', () => {
       expect(mopsProfitPeriod([{ 年度: '115', 季別: '5' }])).toBeNull()
     })
 
+    it('TWT38U 以 foreign_top50 快照的日期為到位證據', () => {
+      expect(sourceLanded('twt38u', today, { foreignTopDate: today })).toBe(true)
+      // 帶破折號的寫法也要認得，和 chipStamps 同型
+      expect(sourceLanded('twt38u', today, { foreignTopDate: '2026-08-11' })).toBe(true)
+    })
+
+    it('TWT38U 快照停在昨天就不算到位——這正是探針還要再探的情況', () => {
+      expect(sourceLanded('twt38u', today, { foreignTopDate: '20260810' })).toBe(false)
+      expect(sourceLanded('twt38u', today, { foreignTopDate: null })).toBe(false)
+      expect(sourceLanded('twt38u', today, {})).toBe(false)
+    })
+
     it('每個來源在沒有任何證據時一律不算到位', () => {
       for (const id of PROBE_SOURCE_ORDER) {
         expect(sourceLanded(id, today, {})).toBe(false)
@@ -255,7 +268,7 @@ describe('sourceProbePlan', () => {
   Every source must obey the same two rules, so that no future source can quietly reintroduce the
   0.7.8 mistake (「抓取沒出錯 = 收工」) or the BUG-024 mistake (「問一個落後的鏡像」).
 */
-describe('判準對齊（七個來源共用同一條標準）', () => {
+describe('判準對齊（八個來源共用同一條標準）', () => {
   it('每個來源都有抓取、都有收工判準，且沒有證據時一律不收工', () => {
     for (const id of PROBE_SOURCE_ORDER) {
       expect(PROBE_FOLLOW_UP[id]).toBeTruthy()
@@ -284,6 +297,25 @@ describe('判準對齊（七個來源共用同一條標準）', () => {
     // bwibbu 單時段
     expect(getActiveWindow('bwibbu', 17 * 60 + 15)).toEqual({ from: 17 * 60, to: 18 * 60 + 30 })
     expect(getActiveWindow('bwibbu', 15 * 60 + 30)).toBeNull()
+
+    // twt38u 單時段 17:00–18:00，與 bwibbu 同時起跑但提早一個半小時收工
+    expect(getActiveWindow('twt38u', 17 * 60)).toEqual({ from: 17 * 60, to: 18 * 60 })
+    expect(getActiveWindow('twt38u', 17 * 60 + 30)).toEqual({ from: 17 * 60, to: 18 * 60 })
+    expect(getActiveWindow('twt38u', 18 * 60)).toEqual({ from: 17 * 60, to: 18 * 60 })
+    expect(getActiveWindow('twt38u', 16 * 60 + 59)).toBeNull()
+    expect(getActiveWindow('twt38u', 18 * 60 + 1)).toBeNull()
+  })
+
+  it('TWT38U 不另開抓取動作，沿用 generate-chips——實際抓 TWT38U 的就是那個階段', () => {
+    expect(PROBE_FOLLOW_UP.twt38u).toBe('generate-chips')
+    expect(followUpsFor(['twt38u'])).toEqual(['generate-chips'])
+    // t86 與 twt38u 同輪轉綠時只跑一次 chips，不重複
+    expect(followUpsFor(['t86', 'twt38u'])).toEqual(['generate-chips'])
+  })
+
+  it('TWT38U 與其他每日來源一樣，需 3 次穩定到位才退休', () => {
+    expect(REQUIRED_LANDED_COUNTS.twt38u).toBe(3)
+    expect(PROBE_SOURCE_ORDER).toContain('twt38u')
   })
 
   it('BFI82U 在 marketSessionReady 為 true 時即標記為 landed（取消 15:40 限制）', () => {

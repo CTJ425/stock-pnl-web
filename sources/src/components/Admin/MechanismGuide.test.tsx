@@ -10,7 +10,7 @@ describe('MechanismGuide', () => {
     render(<MechanismGuide />)
     expect(screen.getByText('探針與排程機制運作總覽')).toBeTruthy()
     expect(screen.getByText('展開機制與週期對照表')).toBeTruthy()
-    expect(screen.queryByText('資料源探針運作週期（7 大來源）')).toBeNull()
+    expect(screen.queryByText('資料源探針運作週期（8 大來源）')).toBeNull()
   })
 
   it('點擊可展開並顯示雙軌架構說明與對照表格', () => {
@@ -19,7 +19,7 @@ describe('MechanismGuide', () => {
     fireEvent.click(toggle)
 
     expect(screen.getByText('收合說明')).toBeTruthy()
-    expect(screen.getByText('資料源探針運作週期（7 大來源）')).toBeTruthy()
+    expect(screen.getByText('資料源探針運作週期（8 大來源）')).toBeTruthy()
     expect(screen.getByText('pg_cron 定時排程與兜底備援（5 大排程）')).toBeTruthy()
 
     // 驗證探針來源都在表中
@@ -41,6 +41,6 @@ describe('MechanismGuide', () => {
 
     fireEvent.click(toggle)
     expect(screen.getByText('展開機制與週期對照表')).toBeTruthy()
-    expect(screen.queryByText('資料源探針運作週期（7 大來源）')).toBeNull()
+    expect(screen.queryByText('資料源探針運作週期（8 大來源）')).toBeNull()
   })
 })

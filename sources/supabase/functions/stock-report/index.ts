@@ -2505,6 +2505,11 @@ async function gatherLandingEvidence(
     }
   }
 
+  if (sources.includes('twt38u')) {
+    const f = await downloadJson<ForeignTopFile>('market/foreign_top50.json')
+    ev.foreignTopDate = f?.rawDate ?? null
+  }
+
   if (sources.some((s) => s === 'bwibbu' || s === 'mops_revenue' || s === 'mops_profit')) {
     const snap = await readFundamentalSnapshot()
     ev.fundamentalValuationDate = snap?.valuationDate ?? null
