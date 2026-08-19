@@ -25,17 +25,6 @@
 
 ## 📋 Active Tasks
 
-### Task 88: 0.8.0 post-release deployment (觀察清單 / 損益試算)
-- **Status**: 🔄 **Code finalized and released 0.8.0-dev; DDL ready; Edge and DB migrations remain open**
-- **Agent**: (awaiting deployment authorization)
-- **Timestamp**: 2026-08-19 11:01:43 Asia/Taipei
-- **Work items**:
-  1. ⏳ **DEV schema migration** — `sources/supabase/schema.sql` 變更（`tw_watchlist` max: 5 → 30；trigger 更名 + dual drop）已於檔案就緒，待執行。
-  2. ⏳ **DEV Edge deploy** — volume copy `stock-report` 函式（白名單邏輯放寬至「持有 ∪ 觀察」；新增 `watchedTwTickers()`、`allowedTwTickers()`；`batchTwTickers()` 改聯集）。
-  3. ⏳ **PROD schema migration** — 執行時同上 DEV（安全性：primary key 與 RLS 無動，只擴展上限和 trigger 名稱）。
-  4. ⏳ **PROD Edge deploy** — 同上 DEV。
-  5. ⏳ **端對端驗證** — (a) 加一檔未持有的台股到觀察清單，確認 Edge 白名單守衛放行；(b) 檢查夜間批次產出該股 `reports/{ymd}/{ticker}.json`。
-
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**

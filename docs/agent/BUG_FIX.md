@@ -81,8 +81,8 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 - **Condition**: 0.8.0 expands `batchTwTickers()` from held-only to held ∪ watched; each stock ~6 external requests; cost per day ≈ (users × avg watched stocks) × 6.
 - **Limit**: `tw_watchlist` max 30 stocks/user is the only brake.
-- **Status**: OPEN — accepted at review (0.8.0), not yet observed in production.
-- **Action after deploy**: Monitor one week of batch runtime. If runtime grows linearly with user base × watched count, switch to "only watched-to-user pairs that have been opened in analysis UI" for batch scope. Alternative would reduce per-day noise.
+- **Status**: OPEN — accepted at review (0.8.0), deployed to PROD 2026-08-19 11:29:34 Asia/Taipei.
+- **Action after deploy**: Monitor one week of batch runtime (starting 2026-08-19). If runtime grows linearly with user base × watched count, switch to "only watched-to-user pairs that have been opened in analysis UI" for batch scope. Alternative would reduce per-day noise.
 
 ### RISK-001 — Probe round timeout: per-source loop has no deadline/budget check
 
