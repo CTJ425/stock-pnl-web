@@ -21,12 +21,14 @@ function fmtLots(shares: number): string {
 export function ForeignTopSection() {
   const [data, setData] = useState<ForeignTopData | null>(null)
   const [tab, setTab] = useState<Tab>('buy')
+  const [limit, setLimit] = useState(10)
 
   useEffect(() => {
     void fetchForeignTop().then(setData)
   }, [])
 
-  const rows: ForeignTopItem[] = data ? (tab === 'buy' ? data.buyTop : data.sellTop) : []
+  const allRows: ForeignTopItem[] = data ? (tab === 'buy' ? data.buyTop : data.sellTop) : []
+  const rows = allRows.slice(0, limit)
 
   return (
     <div className="section glass" style={{ padding: '18px 20px', marginTop: 18 }}>
@@ -55,6 +57,19 @@ export function ForeignTopSection() {
             賣超 TOP 50
           </button>
         </div>
+        <label className="hint" style={{ marginLeft: 12 }}>
+          顯示筆數{' '}
+          <select
+            aria-label="顯示筆數"
+            className="btn btn-sm"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+          >
+            <option value="10">10</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+          </select>
+        </label>
       </div>
 
       {rows.length === 0 ? (
@@ -62,39 +77,37 @@ export function ForeignTopSection() {
           尚無外資買賣超資料
         </p>
       ) : (
-        <div className="table-scroll" style={{ marginTop: 12 }}>
-          <table className="data-table" aria-label="外資買賣超 TOP 50">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>代號</th>
-                <th>名稱</th>
-                <th className="num">買賣超(張)</th>
-                <th className="num">買進</th>
-                <th className="num">賣出</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.ticker}>
-                  <td>{i + 1}</td>
-                  <td>{r.ticker}</td>
-                  <td>
-                    {r.name}
-                    {r.block && (
-                      <span className="chip" style={{ marginLeft: 6 }}>
-                        鉅額
-                      </span>
-                    )}
-                  </td>
-                  <td className="num">{fmtLots(r.net)}</td>
-                  <td className="num">{fmtLots(r.buy)}</td>
-                  <td className="num">{fmtLots(r.sell)}</td>
+        <>
+          <p className="hint" style={{ marginTop: 12 }}>
+            * 代表鉅額
+          </p>
+          <div className="table-scroll" style={{ marginTop: 6 }}>
+            <table className="data-table" aria-label="外資買賣超 TOP 50">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>代號</th>
+                  <th>名稱</th>
+                  <th className="num">買賣超(張)</th>
+                  <th className="num">買進</th>
+                  <th className="num">賣出</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.ticker}>
+                    <td>{i + 1}</td>
+                    <td>{r.ticker}</td>
+                    <td>{r.block ? `${r.name}*` : r.name}</td>
+                    <td className="num">{fmtLots(r.net)}</td>
+                    <td className="num">{fmtLots(r.buy)}</td>
+                    <td className="num">{fmtLots(r.sell)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )
