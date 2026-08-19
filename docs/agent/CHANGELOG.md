@@ -2,6 +2,13 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.8.1（2026-08-19）— 管理觀察面板置入模態框；觀察股報價即時取得
+
+- 🐛 **BUG-030 管理觀察面板位置失效**：`WatchlistPanel` 原為平面 `<section className="glass section">` 置於 `<StockDetailPage>` 之後，因為 StockDetailPage 是全長報告頁，開啟面板時會附加在折線以下，按鈕顯得無反應。修法：將面板封裝入既有共享元件 `sources/src/components/Common/Modal.tsx`，使用其傳送至 `document.body` 的入口、overlay、Esc 關閉與單一關閉按鈕（`aria-label="關閉"`）；移除面板自身的標題與重複關閉鈕。根本原因：jsdom 無版面資訊，1058 個單元測試全數通過而功能不可用；新增迴歸測試斷言面板應為 `role="dialog"` 並傳送至 DOM 外（`container.contains(dialog) === false`、`document.body.contains(dialog) === true`），並於瀏覽器檢查對話框邊界在可視範圍內。
+- 🐛 **BUG-031 觀察股無報價**：`AnalysisPage` 對每檔觀察項傳入 `quote={null}`，原因為 `useStockPrices` 僅涵蓋持股。結果分析頁呈現「行情尚未取得／目前抓不到這檔股票的報價」，新增的損益試算籤無法工作，即本功能存在之因——分析非持股。修法：對選定的觀察項單獨呼叫 `fetchPrices([{ market: 'TPE', ticker }])` 自 `services/priceProxy.ts`，以選定觀察股為鍵，effect 清理時設置 `cancelled` 旗標防止舊項回應覆蓋新選項。失敗時報價留 null，不阻擋渲染。持股報價路徑不變。
+- ✅ **驗證**：`npx vitest run` 72 檔 / **1060 項全通**；`npx tsc --noEmit` 0 errors；`npx tsc -p tsconfig.edge.json` 0 errors；`npx oxlint src supabase` 0 errors；`npm run build` ok；**瀏覽器 E2E（Playwright 對 DEV，新增）** 12/12 步驟通過：進個股分析 → 管理觀察可見 → 面板出現在可視範圍內（y=49, viewport 800）→ 搜尋並加入 1101 → 關閉 → 下拉觀察組出現 1101 → 選取後頁面渲染 → 觀察股取得報價 → 損益試算可開且無 NaN/Infinity → 試算帶入現價 24.2 當預設買進價 → 算出回本價 → 移除 1101 還原 DEV 資料。
+- 📝 **稽核**：派遣 reviewer，2 項 RISK 提出；已接納「選中觀察項後刪除時，檢視回落至他項無訊號」（使用者自刪，回落合理）；**已駁回「工作區切換留下舊工作區觀察清單」**（`tw_watchlist` 僅按 `user_id` 鍵入無 `workspace_id`，schema 備註明言「Per-user, not per-workspace」，故無工作區觀察清單可留下）。
+
 ### 0.8.0（2026-08-19）— 觀察清單：分析非持股個股與損益試算
 
 - 📋 **觀察清單上限提升**：`tw_watchlist` 每人上限由 5 檔提升至 30 檔；`sources/supabase/schema.sql` 內 trigger 更名 `tw_watchlist_max5` → `tw_watchlist_max30`，並於建立前同時 drop 兩個名字以相容既有資料庫；欄位、RLS、CHECK 機制未動。該表自 0.7.0 起休眠，此版本重新啟用。

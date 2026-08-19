@@ -1,10 +1,16 @@
 /**
  * 管理觀察 panel: lists the user's watchlist and lets them search the full TW stock list
  * to add/remove entries. Purely presentational glue over `watchlistService` + `twMarketData`.
+ *
+ * It MUST stay inside `Modal`. In 0.8.0 it was a plain inline <section> rendered after
+ * StockDetailPage — a very long report — so opening it appended the panel far below the
+ * fold and the button looked dead. Modal portals to document.body, so no ancestor's
+ * overflow or backdrop-filter can clip it.
  */
 import { useEffect, useState } from 'react'
 import { WATCHLIST_MAX, addWatch, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
 import { getTwStockList, type TwStockRow } from '../../services/twMarketData'
+import { Modal } from '../Common/Modal'
 
 export function WatchlistPanel({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const [items, setItems] = useState<WatchItem[]>([])
@@ -57,13 +63,7 @@ export function WatchlistPanel({ onClose, onChanged }: { onClose: () => void; on
   }
 
   return (
-    <section className="glass section">
-      <div className="rpt-section-head">
-        <h3>管理觀察</h3>
-        <button type="button" className="btn btn-sm" onClick={onClose}>
-          關閉
-        </button>
-      </div>
+    <Modal title="管理觀察" onClose={onClose}>
 
       {error && <p className="hint">{error}</p>}
 
@@ -123,6 +123,6 @@ export function WatchlistPanel({ onClose, onChanged }: { onClose: () => void; on
           ))}
         </ul>
       )}
-    </section>
+    </Modal>
   )
 }

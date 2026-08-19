@@ -28,16 +28,22 @@ vi.mock('./StockDetailPage', () => ({
   ),
 }))
 
-const { useWorkspace, useStockPrices, listWatchlist } = vi.hoisted(() => ({
+const { useWorkspace, useStockPrices, listWatchlist, fetchPrices } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   useStockPrices: vi.fn(),
   // Annotated so `mockResolvedValue` accepts items — a bare `async () => []` infers never[].
   listWatchlist: vi.fn(
     async (): Promise<Array<{ ticker: string; name: string; sortOrder: number }>> => [],
   ),
+  fetchPrices: vi.fn(async (): Promise<Record<string, { price: number }>> => ({})),
 }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../hooks/useStockPrices', () => ({ useStockPrices }))
+// Partial: other modules still need priceProxy's real helpers (tradeDateLabel, isClosed…).
+vi.mock('../../services/priceProxy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/priceProxy')>()),
+  fetchPrices,
+}))
 vi.mock('../../services/watchlistService', () => ({
   WATCHLIST_MAX: 30,
   listWatchlist,
@@ -95,6 +101,8 @@ describe('AnalysisPage', () => {
     useStockPrices.mockReset()
     listWatchlist.mockReset()
     listWatchlist.mockResolvedValue([])
+    fetchPrices.mockReset()
+    fetchPrices.mockResolvedValue({})
   })
 
   it('不顯示搜尋個股／TOP20 分頁（0.7.0）', () => {
@@ -230,8 +238,36 @@ describe('AnalysisPage', () => {
 
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
     expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
-    // 非持股：沒有股數、沒有成本，也沒有報價
+    // 非持股：沒有股數、沒有成本
     expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+  })
+
+  it('選觀察股會自己抓報價（持股是由 useStockPrices 帶進來的，觀察股沒有）', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    fetchPrices.mockResolvedValue({ 'TPE:2059': { price: 987 } })
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
+
+    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
+    expect(await screen.findByText('987')).toBeTruthy()
+    expect(screen.getByTestId('detail-quote').textContent).toBe('987')
+  })
+
+  it('觀察股抓不到報價時不炸，也不會卡住畫面', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    fetchPrices.mockRejectedValue(new Error('offline'))
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
     expect(screen.getByTestId('detail-quote').textContent).toBe('—')
   })
 

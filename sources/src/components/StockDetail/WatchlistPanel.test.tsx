@@ -173,4 +173,26 @@ describe('WatchlistPanel', () => {
     expect(await screen.findByText(/30/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /加入/ })).toBeNull()
   })
+
+  it('以浮層對話框呈現，並掛在 document.body 之下', async () => {
+    // Shipped broken in 0.8.0: the panel was a plain inline <section> rendered after the
+    // (very long) report page, so clicking 管理觀察 put it far below the fold and looked
+    // like nothing happened. jsdom has no layout, so only placement can be asserted.
+    const { container } = render(<WatchlistPanel onClose={() => {}} onChanged={() => {}} />)
+    await screen.findByText(/還沒有觀察標的/)
+
+    const dialog = screen.getByRole('dialog', { name: '管理觀察' })
+    expect(dialog).toBeTruthy()
+    // Portaled out of the caller's subtree, so an ancestor's backdrop-filter or overflow
+    // cannot clip it.
+    expect(container.contains(dialog)).toBe(false)
+    expect(document.body.contains(dialog)).toBe(true)
+    expect(dialog.closest('.modal-overlay')).toBeTruthy()
+  })
+
+  it('只有一個關閉鈕', async () => {
+    render(<WatchlistPanel onClose={() => {}} onChanged={() => {}} />)
+    await screen.findByText(/還沒有觀察標的/)
+    expect(screen.getAllByRole('button', { name: '關閉' })).toHaveLength(1)
+  })
 })
