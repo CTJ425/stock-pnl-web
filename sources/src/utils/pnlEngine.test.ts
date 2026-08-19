@@ -283,3 +283,34 @@ describe('estimateUnrealized（與 GAS Dashboard 未實現損益公式同構）'
     expect(estimateUnrealized(ledger.holdings[0], 100, 0.001425)).toBeCloseTo(100, 6)
   })
 })
+
+describe('股票名稱：代號佔位名不得覆蓋已知名稱', () => {
+  it('後來只填代號的交易，不覆蓋既有的中文名（0050 案例）', () => {
+    const ledger = computeLedger([
+      tx({ date: '2026-06-10', market: 'TPE', ticker: '0050', name: '元大台灣50', type: 'BUY', price: 100, qty: 1000 }),
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '0050', name: '0050', type: 'BUY', price: 106, qty: 1000 }),
+    ])
+
+    expect(ledger.positions['TPE:0050'].name).toBe('元大台灣50')
+    expect(ledger.yearly[2026].tickers['TPE:0050'].name).toBe('元大台灣50')
+  })
+
+  it('先有代號佔位名、之後才拿到中文名時，名稱會被補上', () => {
+    const ledger = computeLedger([
+      tx({ date: '2026-06-10', market: 'TPE', ticker: '0050', name: '0050', type: 'BUY', price: 100, qty: 1000 }),
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '0050', name: '元大台灣50', type: 'BUY', price: 106, qty: 1000 }),
+    ])
+
+    expect(ledger.positions['TPE:0050'].name).toBe('元大台灣50')
+    expect(ledger.yearly[2026].tickers['TPE:0050'].name).toBe('元大台灣50')
+  })
+
+  it('全部交易都只有代號時，名稱維持代號', () => {
+    const ledger = computeLedger([
+      tx({ date: '2026-06-10', market: 'TPE', ticker: '0050', name: '0050', type: 'BUY', price: 100, qty: 1000 }),
+    ])
+
+    expect(ledger.positions['TPE:0050'].name).toBe('0050')
+    expect(ledger.yearly[2026].tickers['TPE:0050'].name).toBe('0050')
+  })
+})
