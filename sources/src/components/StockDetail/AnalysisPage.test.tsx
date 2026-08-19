@@ -10,15 +10,31 @@ vi.mock('./StockDetailPage', () => ({
     holding,
     quote,
     selector,
+    onSelectTicker,
+    onWatchlistChanged,
   }: {
     ticker: string
     name: string
     holding: { qty: number; price: number | null } | null
     quote?: { price: number | null } | null
     selector?: React.ReactNode
+    onSelectTicker?: (ticker: string, name: string) => void
+    onWatchlistChanged?: () => void
   }) => (
     <div>
       {selector}
+      <button type="button" data-testid="pick-watch" onClick={() => onSelectTicker?.('2059', '川湖')}>
+        從觀察頁籤選 2059
+      </button>
+      <button type="button" data-testid="pick-new-watch" onClick={() => onSelectTicker?.('1101', '台泥')}>
+        從觀察頁籤選一檔剛加入的
+      </button>
+      <button type="button" data-testid="pick-held-watch" onClick={() => onSelectTicker?.('2330', '台積電')}>
+        從觀察頁籤選一檔同時也持有的
+      </button>
+      <button type="button" data-testid="fire-watch-changed" onClick={() => onWatchlistChanged?.()}>
+        通知觀察清單有變動
+      </button>
       <div data-testid="detail-ticker">{ticker}</div>
       <div data-testid="detail-name">{name}</div>
       <div data-testid="detail-qty">{holding?.qty ?? '—'}</div>
@@ -188,7 +204,7 @@ describe('AnalysisPage', () => {
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 
-  it('下拉分成持股與觀察兩組，觀察組排在持股之後', async () => {
+  it('下拉只列持股，不再有觀察分組', async () => {
     const user = userEvent.setup()
     setup(TW_AND_US)
     listWatchlist.mockResolvedValue([
@@ -200,52 +216,31 @@ describe('AnalysisPage', () => {
     await user.click(screen.getByRole('button', { name: /切換個股/ }))
 
     const menu = within(screen.getByRole('menu', { name: '個股清單' }))
-    expect(menu.getByText('持股')).toBeTruthy()
-    expect(menu.getByText('觀察')).toBeTruthy()
+    expect(menu.queryByText('持股')).toBeNull()
+    expect(menu.queryByText('觀察')).toBeNull()
+    // 觀察股一律從「觀察股票」頁籤進入，不出現在這個選單
     expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
       '1802 台玻',
       '2330 台積電',
-      '2059 川湖',
-      '6770 力積電',
     ])
   })
 
-  it('觀察清單為空時不顯示觀察組標題', async () => {
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    render(<AnalysisPage />)
-    await user.click(screen.getByRole('button', { name: /切換個股/ }))
-    expect(within(screen.getByRole('menu', { name: '個股清單' })).queryByText('觀察')).toBeNull()
-  })
-
-  it('選觀察股時帶 ticker 但不帶持股', async () => {
-    const user = userEvent.setup()
-    setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
-    render(<AnalysisPage />)
-    await screen.findByRole('button', { name: /切換個股/ })
-    await user.click(screen.getByRole('button', { name: /切換個股/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
-
-    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
-    expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
-    // 非持股：沒有股數、沒有成本
-    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
-  })
-
-  it('選觀察股會自己抓報價（持股是由 useStockPrices 帶進來的，觀察股沒有）', async () => {
+  it('觀察股票頁籤選一檔後，頁面換成那一檔且不帶持股', async () => {
     const user = userEvent.setup()
     setup(TW_AND_US)
     listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
     fetchPrices.mockResolvedValue({ 'TPE:2059': { price: 987 } })
     render(<AnalysisPage />)
-    await screen.findByRole('button', { name: /切換個股/ })
-    await user.click(screen.getByRole('button', { name: /切換個股/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
+    await screen.findByTestId('detail-ticker')
 
-    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
-    expect(await screen.findByText('987')).toBeTruthy()
+    await user.click(screen.getByTestId('pick-watch'))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
+    expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
+    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+    expect(await screen.findByTestId('detail-quote')).toBeTruthy()
     expect(screen.getByTestId('detail-quote').textContent).toBe('987')
+    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
   })
 
   it('觀察股抓不到報價時不炸，也不會卡住畫面', async () => {
@@ -254,9 +249,9 @@ describe('AnalysisPage', () => {
     listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
     fetchPrices.mockRejectedValue(new Error('offline'))
     render(<AnalysisPage />)
-    await screen.findByRole('button', { name: /切換個股/ })
-    await user.click(screen.getByRole('button', { name: /切換個股/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
+    await screen.findByTestId('detail-ticker')
+
+    await user.click(screen.getByTestId('pick-watch'))
 
     expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
     expect(screen.getByTestId('detail-quote').textContent).toBe('—')
@@ -272,18 +267,16 @@ describe('AnalysisPage', () => {
     expect(screen.queryByText(/目前沒有台股持股/)).toBeNull()
   })
 
-  it('持股與觀察都沒有時才顯示空狀態，並指向庫存總覽', async () => {
+  it('持股與觀察都沒有時，空狀態自帶加入觀察入口（否則新使用者無路可走）', async () => {
     setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
     render(<AnalysisPage />)
 
-    const empty = await screen.findByText(/目前沒有台股持股/)
-    // The add entry point now lives on 庫存總覽, so the empty state points there.
-    expect(empty.closest('.empty-state')?.textContent).toMatch(/庫存總覽/)
-    expect(screen.queryByRole('button', { name: '管理觀察' })).toBeNull()
+    await screen.findByText(/目前沒有台股持股/)
+    expect(screen.getByRole('button', { name: /加入觀察/ })).toBeTruthy()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 
-  it('不再有管理觀察按鈕（觀察清單已移到庫存總覽）', async () => {
+  it('不再有管理觀察按鈕', async () => {
     setup(TW_AND_US)
     render(<AnalysisPage />)
     await screen.findByRole('button', { name: /切換個股/ })
@@ -291,24 +284,74 @@ describe('AnalysisPage', () => {
     expect(screen.queryByRole('button', { name: '管理觀察' })).toBeNull()
   })
 
-  it('同時持有又在觀察的代號只出現一次，且留在持股組', async () => {
-    // The holding entry carries qty / cost / quote; the watch entry carries none of it.
-    // Showing both would offer the user two rows for one stock, one of them strictly worse.
+  it('剛在頁籤裡加入的股票，點下去就要能切換（掛載時的清單沒有它）', async () => {
+    // Regression: AnalysisPage resolved the clicked ticker against a watchlist it read once on
+    // mount, so anything added afterwards silently fell back to the first holding.
     const user = userEvent.setup()
     setup(TW_AND_US)
-    listWatchlist.mockResolvedValue([
-      { ticker: '2330', name: '台積電', sortOrder: 0 },
-      { ticker: '2059', name: '川湖', sortOrder: 1 },
-    ])
+    listWatchlist.mockResolvedValue([])
+    fetchPrices.mockResolvedValue({ 'TPE:1101': { price: 24.05 } })
     render(<AnalysisPage />)
-    await screen.findByRole('button', { name: /切換個股/ })
-    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await screen.findByTestId('detail-ticker')
 
-    const menu = within(screen.getByRole('menu', { name: '個股清單' }))
-    expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
-      '1802 台玻',
-      '2330 台積電',
-      '2059 川湖',
-    ])
+    await user.click(screen.getByTestId('pick-new-watch'))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
+    expect(screen.getByTestId('detail-name').textContent).toBe('台泥')
+    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+  })
+
+  it('同時被持有的觀察股，要以持股身分渲染（帶股數成本）', async () => {
+    // Buying a stock you were watching must not strip its position data: the watch: key path
+    // used to skip the holdings lookup entirely.
+    const user = userEvent.setup()
+    setup(TW_AND_US, { 'TPE:2330': { price: 2350, stale: false } })
+    listWatchlist.mockResolvedValue([{ ticker: '2330', name: '台積電', sortOrder: 0 }])
+    render(<AnalysisPage />)
+    await screen.findByTestId('detail-ticker')
+
+    await user.click(screen.getByTestId('pick-held-watch'))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2330')
+    expect(screen.getByTestId('detail-qty').textContent).not.toBe('—')
+  })
+
+  it('在頁籤裡移除正在看的觀察股後，不再顯示那一檔', async () => {
+    // Two independent copies of the watchlist let a removed stock linger on screen forever.
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    render(<AnalysisPage />)
+    await screen.findByTestId('detail-ticker')
+
+    await user.click(screen.getByTestId('pick-watch'))
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
+
+    listWatchlist.mockResolvedValue([])
+    await user.click(screen.getByTestId('fire-watch-changed'))
+
+    expect(await screen.findByTestId('detail-ticker')).toBeTruthy()
+    expect(screen.getByTestId('detail-ticker').textContent).not.toBe('2059')
+  })
+
+  it('重讀還沒回來時，不能先把剛點的那一檔弄丟', async () => {
+    // pickedWatch is the bridge for a stock added in the tab but not yet in this page's copy.
+    // Clearing it when the reload is DISPATCHED (rather than when it LANDS) lets an unrelated
+    // second watchlist change strip the bridge while the copy is still stale, remounting the
+    // user away from the stock they just picked.
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([])
+    render(<AnalysisPage />)
+    await screen.findByTestId('detail-ticker')
+
+    await user.click(screen.getByTestId('pick-new-watch'))
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
+
+    // an unrelated change fires; its reload never resolves during this test
+    listWatchlist.mockReturnValue(new Promise(() => {}))
+    await user.click(screen.getByTestId('fire-watch-changed'))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
   })
 })

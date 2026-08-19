@@ -8,9 +8,15 @@ import { Inbox, Plus } from 'lucide-react'
 import { WATCHLIST_MAX, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
 import { fetchPrices, type PriceMap } from '../../services/priceProxy'
 import { fmtPrice, fmtSignedPercent, pnlClass } from '../../utils/formatters'
-import { AddWatchModal } from '../StockDetail/AddWatchModal'
+import { AddWatchModal } from './AddWatchModal'
 
-export function WatchSection({ onOpenAnalysis }: { onOpenAnalysis: (ticker: string) => void }) {
+export function WatchTab({
+  onSelectTicker,
+  onChanged,
+}: {
+  onSelectTicker: (ticker: string, name: string) => void
+  onChanged?: () => void
+}) {
   const [items, setItems] = useState<WatchItem[]>([])
   const [prices, setPrices] = useState<PriceMap>({})
   const [showAdd, setShowAdd] = useState(false)
@@ -54,6 +60,7 @@ export function WatchSection({ onOpenAnalysis }: { onOpenAnalysis: (ticker: stri
     try {
       await removeWatch(ticker)
       await load()
+      onChanged?.()
     } finally {
       setRemoving(null)
     }
@@ -119,7 +126,11 @@ export function WatchSection({ onOpenAnalysis }: { onOpenAnalysis: (ticker: stri
                     ? (quote.price - quote.prevClose) / quote.prevClose
                     : null
                 return (
-                  <tr key={item.ticker} onClick={() => onOpenAnalysis(item.ticker)} style={{ cursor: 'pointer' }}>
+                  <tr
+                    key={item.ticker}
+                    onClick={() => onSelectTicker(item.ticker, item.name)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td>{item.ticker}</td>
                     <td>{item.name}</td>
                     <td className="num">{quote ? fmtPrice(quote.price, 'TWD') : '—'}</td>
@@ -151,6 +162,7 @@ export function WatchSection({ onOpenAnalysis }: { onOpenAnalysis: (ticker: stri
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             void load()
+            onChanged?.()
           }}
         />
       )}

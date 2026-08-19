@@ -28,7 +28,7 @@ vi.mock('../StockDetail/AddWatchModal', () => ({
   ),
 }))
 
-import { WatchSection } from './WatchSection'
+import { WatchTab } from './WatchTab'
 
 const quote = (price: number, prevClose: number | null) => ({
   price,
@@ -58,9 +58,9 @@ beforeEach(() => {
   fetchPrices.mockResolvedValue({})
 })
 
-describe('WatchSection', () => {
+describe('WatchTab', () => {
   it('清單為空時仍然渲染，並提供加入入口', async () => {
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     expect(await screen.findByText(/還沒有觀察標的/)).toBeTruthy()
     expect(screen.getByRole('button', { name: /加入觀察/ })).toBeTruthy()
@@ -68,14 +68,14 @@ describe('WatchSection', () => {
 
   it('標題顯示目前數量與上限', async () => {
     listWatchlist.mockResolvedValue(TWO)
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     expect(await screen.findByText('2/30')).toBeTruthy()
   })
 
   it('一次批次取得所有觀察代號的報價', async () => {
     listWatchlist.mockResolvedValue(TWO)
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
     await screen.findByText('台積電')
 
     expect(fetchPrices).toHaveBeenCalledTimes(1)
@@ -91,7 +91,7 @@ describe('WatchSection', () => {
       'TPE:2330': quote(1100, 1000),
       'TPE:2327': quote(95, 100),
     })
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     const row = (await screen.findByText('台積電')).closest('tr')!
     expect(within(row).getByText(/1,100/)).toBeTruthy()
@@ -104,7 +104,7 @@ describe('WatchSection', () => {
   it('抓不到報價時顯示破折號，不出現 NaN', async () => {
     listWatchlist.mockResolvedValue(TWO)
     fetchPrices.mockResolvedValue({})
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     const row = (await screen.findByText('台積電')).closest('tr')!
     expect(row.textContent).toContain('—')
@@ -114,7 +114,7 @@ describe('WatchSection', () => {
   it('沒有昨收時不硬算漲跌', async () => {
     listWatchlist.mockResolvedValue([TWO[0]])
     fetchPrices.mockResolvedValue({ 'TPE:2330': quote(1100, null) })
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     const row = (await screen.findByText('台積電')).closest('tr')!
     expect(within(row).getByText(/1,100/)).toBeTruthy()
@@ -124,7 +124,7 @@ describe('WatchSection', () => {
   it('移除後就地更新，不必重整頁面', async () => {
     listWatchlist.mockResolvedValueOnce(TWO).mockResolvedValue([TWO[0]])
     const user = userEvent.setup()
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
     await screen.findByText('國巨')
 
     await user.click(screen.getByRole('button', { name: '移除 2327 國巨' }))
@@ -134,22 +134,25 @@ describe('WatchSection', () => {
     expect(screen.queryByText('國巨')).toBeNull()
   })
 
-  it('點一列會開啟該檔的個股分析', async () => {
-    const onOpenAnalysis = vi.fn()
+  it('點一列會把代號與名稱一起交出去', async () => {
+    // The name must travel with the click. AnalysisPage loads the watchlist once on mount, so a
+    // stock added inside this tab is absent from its copy; making it resolve the name there left
+    // a freshly added row unclickable.
+    const onSelectTicker = vi.fn()
     listWatchlist.mockResolvedValue(TWO)
     const user = userEvent.setup()
-    render(<WatchSection onOpenAnalysis={onOpenAnalysis} />)
+    render(<WatchTab onSelectTicker={onSelectTicker} />)
 
     await user.click(await screen.findByText('台積電'))
 
-    expect(onOpenAnalysis).toHaveBeenCalledWith('2330')
+    expect(onSelectTicker).toHaveBeenCalledWith('2330', '台積電')
   })
 
   it('已滿 30 檔時停用加入鈕並說明原因', async () => {
     listWatchlist.mockResolvedValue(
       Array.from({ length: 30 }, (_, i) => ({ ticker: String(1000 + i), name: `N${i}`, sortOrder: i })),
     )
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     const add = await screen.findByRole('button', { name: /加入觀察/ })
     expect(add).toHaveProperty('disabled', true)
@@ -158,7 +161,7 @@ describe('WatchSection', () => {
 
   it('按加入會開啟加入對話框，關閉後消失', async () => {
     const user = userEvent.setup()
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
     await screen.findByText(/還沒有觀察標的/)
 
     expect(screen.queryByTestId('add-modal')).toBeNull()
@@ -171,7 +174,7 @@ describe('WatchSection', () => {
 
   it('讀取觀察清單失敗時不炸掉整個庫存總覽', async () => {
     listWatchlist.mockRejectedValue(new Error('boom'))
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     expect(await screen.findByText('觀察中')).toBeTruthy()
     expect(document.body.textContent).not.toMatch(/NaN/)
@@ -182,7 +185,7 @@ describe('WatchSection', () => {
     // list fetch would make a pure pricing hiccup look like an empty watchlist.
     listWatchlist.mockResolvedValue(TWO)
     fetchPrices.mockRejectedValue(new Error('quote source down'))
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
 
     expect(await screen.findByText('台積電')).toBeTruthy()
     expect(screen.getByText('國巨')).toBeTruthy()
@@ -196,7 +199,7 @@ describe('WatchSection', () => {
     let release: () => void = () => {}
     removeWatch.mockImplementation(() => new Promise<void>((res) => { release = res }))
     const user = userEvent.setup()
-    render(<WatchSection onOpenAnalysis={() => {}} />)
+    render(<WatchTab onSelectTicker={() => {}} />)
     await screen.findByText('國巨')
 
     const btn = screen.getByRole('button', { name: '移除 2327 國巨' })
