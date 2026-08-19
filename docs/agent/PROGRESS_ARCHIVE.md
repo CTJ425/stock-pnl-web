@@ -3,6 +3,20 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-08-19 09:39:50 Asia/Taipei (0.7.25 release: Fix computeLedger() stock name overwrite)
+
+- **Release**: Version 0.7.25 official release, finalized.
+- **Fix**: `computeLedger()` now guards name assignments to prevent placeholder values (ticker-only) from overwriting known Chinese names.
+- **Changes**:
+  - `sources/src/utils/pnlEngine.ts` — Two guards added: `if (tx.name && tx.name !== tx.ticker)` before updating `ledger.positions[key].name` (line ~212) and `ledger.yearly[year].tickers[key].name` (line ~236).
+  - Initialization logic preserved: `name: tx.name || tx.ticker` ensures all transactions have a name; if all trades carry only ticker, name remains ticker as expected.
+  - Real case: 0050 bought as "元大台灣50"; a subsequent trade with only ticker "0050" no longer overwrites the Chinese name.
+- **Testing**: New describe block "股票名稱：代號佔位名不得覆蓋已知名稱" with 3 test cases: (1) placeholder-only transaction does not overwrite existing Chinese name (0050 case), (2) placeholder followed by real name gets upgraded (upgrade path), (3) all-ticker scenario maintains ticker as name. All three failed before fix, pass after.
+- **Verification**: `npx vitest run src/utils/pnlEngine.test.ts` — 17 passed, 0 failed. `npx vitest run` (full suite) — 68 files, 1008 tests passed, 0 failed. `npx tsc --noEmit` — 0 errors. `npx oxlint src` — 0 errors (no new violations). `npm run build` — built ok.
+- **Review**: Lane 2, reviewer dispatched. Verdict: PASS with one RISK — upgrade path had no test coverage. RISK closed before commit by adding test case (2); nothing outstanding.
+
+---
+
 ## 📅 Log: 2026-08-19 09:35:10 Asia/Taipei (0.7.24 release: ForeignTopSection quantity display uniform as lots)
 
 - **Release**: Version 0.7.24 official release to `dev`, scheduled merge to `main`.

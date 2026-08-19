@@ -33,3 +33,9 @@ export function mergeTwTickerLists(...lists: Array<readonly BatchTicker[]>): Bat
   }
   return [...map.entries()].map(([ticker, name]) => ({ ticker, name }))
 }
+
+/** Whether `ticker` (trimmed) appears in `allowed` — used for the generate/warm whitelist gate. */
+export function allowsTicker(allowed: readonly BatchTicker[], ticker: string): boolean {
+  const wanted = ticker.trim()
+  return allowed.some((row) => row.ticker === wanted)
+}

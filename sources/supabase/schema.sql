@@ -153,10 +153,11 @@ ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_model;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_api_key;
 ALTER TABLE user_settings DROP COLUMN IF EXISTS ai_updated_at;
 
--- 4.0b Non-holding TW watchlist (0.6.44–0.6.52 UI). Unused since 0.7.0 (search/TOP removed);
--- table kept so existing DEV/PROD DBs do not need a destructive DROP.
---     Max 5 rows per user (trigger). Never meant to hold current positions — the client prunes
---     against ledger holdings (sell-out and buy-in both remove the ticker). Per-user, not per-workspace.
+-- 4.0b Non-holding TW watchlist. Introduced 0.6.44, dormant 0.7.0–0.7.26 (search/TOP removed),
+-- back in use from 0.8.0 as the 觀察清單 page.
+--     Max 30 rows per user (trigger; was 5 while dormant). The cap is the only brake on the nightly
+--     batch, whose scope is holdings ∪ watchlist — see batchTwTickers() in stock-report/index.ts.
+--     Per-user, not per-workspace. May hold a ticker the user also owns; the batch dedupes.
 CREATE TABLE IF NOT EXISTS tw_watchlist (
     user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     ticker     TEXT NOT NULL,
@@ -179,22 +180,25 @@ TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
--- Enforce max 5 on INSERT only (UPDATE of an existing row does not grow the count).
+-- Enforce max 30 on INSERT only (UPDATE of an existing row does not grow the count).
 CREATE OR REPLACE FUNCTION tw_watchlist_enforce_max()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF (SELECT count(*)::int FROM tw_watchlist WHERE user_id = NEW.user_id) >= 5 THEN
-    RAISE EXCEPTION 'tw_watchlist limit is 5'
+  IF (SELECT count(*)::int FROM tw_watchlist WHERE user_id = NEW.user_id) >= 30 THEN
+    RAISE EXCEPTION 'tw_watchlist limit is 30'
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
 END;
 $$;
 
+-- Both names are dropped: DBs provisioned before 0.8.0 carry the max5 trigger, and leaving it
+-- attached would keep enforcing the old limit alongside the new one.
 DROP TRIGGER IF EXISTS tw_watchlist_max5 ON tw_watchlist;
-CREATE TRIGGER tw_watchlist_max5
+DROP TRIGGER IF EXISTS tw_watchlist_max30 ON tw_watchlist;
+CREATE TRIGGER tw_watchlist_max30
   BEFORE INSERT ON tw_watchlist
   FOR EACH ROW
   EXECUTE FUNCTION tw_watchlist_enforce_max();

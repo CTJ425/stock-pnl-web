@@ -37,6 +37,7 @@ import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import { TechnicalTab } from './TechnicalTab'
+import { WhatIfTab } from './WhatIfTab'
 import { useDailySeries } from './useDailySeries'
 import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -55,10 +56,11 @@ interface StockDetailPageProps extends StockDetailTarget {
   selector?: ReactNode
 }
 
-type DetailTab = 'analysis' | 'ai'
+type DetailTab = 'analysis' | 'whatif' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
+  { id: 'whatif', label: '損益試算' },
   { id: 'ai', label: 'AI 分析' },
 ]
 
@@ -362,6 +364,10 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
               <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
             </div>
           </section>
+        </div>
+      ) : tab === 'whatif' ? (
+        <div className="glass detail-body">
+          <WhatIfTab ticker={ticker} currentPrice={quote?.price ?? null} />
         </div>
       ) : (
         <div className="glass detail-body">

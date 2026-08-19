@@ -77,6 +77,13 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
+### RISK-002 — Night batch cost scaling with watched stock count
+
+- **Condition**: 0.8.0 expands `batchTwTickers()` from held-only to held ∪ watched; each stock ~6 external requests; cost per day ≈ (users × avg watched stocks) × 6.
+- **Limit**: `tw_watchlist` max 30 stocks/user is the only brake.
+- **Status**: OPEN — accepted at review (0.8.0), not yet observed in production.
+- **Action after deploy**: Monitor one week of batch runtime. If runtime grows linearly with user base × watched count, switch to "only watched-to-user pairs that have been opened in analysis UI" for batch scope. Alternative would reduce per-day noise.
+
 ### RISK-001 — Probe round timeout: per-source loop has no deadline/budget check
 
 - **Condition**: `sources/supabase/functions/stock-report/probeRound.ts:95–98` contains no per-source deadline or budget check; only the follow-up loop has one.

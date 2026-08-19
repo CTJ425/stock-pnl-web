@@ -28,12 +28,31 @@ vi.mock('./StockDetailPage', () => ({
   ),
 }))
 
-const { useWorkspace, useStockPrices } = vi.hoisted(() => ({
+const { useWorkspace, useStockPrices, listWatchlist } = vi.hoisted(() => ({
   useWorkspace: vi.fn(),
   useStockPrices: vi.fn(),
+  // Annotated so `mockResolvedValue` accepts items — a bare `async () => []` infers never[].
+  listWatchlist: vi.fn(
+    async (): Promise<Array<{ ticker: string; name: string; sortOrder: number }>> => [],
+  ),
 }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../hooks/useStockPrices', () => ({ useStockPrices }))
+vi.mock('../../services/watchlistService', () => ({
+  WATCHLIST_MAX: 30,
+  listWatchlist,
+  addWatch: vi.fn(),
+  removeWatch: vi.fn(),
+}))
+vi.mock('./WatchlistPanel', () => ({
+  WatchlistPanel: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="watchlist-panel">
+      <button type="button" onClick={onClose}>
+        關閉
+      </button>
+    </div>
+  ),
+}))
 
 import { AnalysisPage } from './AnalysisPage'
 import { computeLedger } from '../../utils/pnlEngine'
@@ -74,6 +93,8 @@ describe('AnalysisPage', () => {
     cleanup()
     useWorkspace.mockReset()
     useStockPrices.mockReset()
+    listWatchlist.mockReset()
+    listWatchlist.mockResolvedValue([])
   })
 
   it('不顯示搜尋個股／TOP20 分頁（0.7.0）', () => {
@@ -166,5 +187,104 @@ describe('AnalysisPage', () => {
     render(<AnalysisPage />)
     expect(screen.getByText(/目前沒有台股持股/)).toBeTruthy()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
+  })
+
+  it('下拉分成持股與觀察兩組，觀察組排在持股之後', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([
+      { ticker: '2059', name: '川湖', sortOrder: 0 },
+      { ticker: '6770', name: '力積電', sortOrder: 1 },
+    ])
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+    const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+    expect(menu.getByText('持股')).toBeTruthy()
+    expect(menu.getByText('觀察')).toBeTruthy()
+    expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
+      '1802 台玻',
+      '2330 台積電',
+      '2059 川湖',
+      '6770 力積電',
+    ])
+  })
+
+  it('觀察清單為空時不顯示觀察組標題', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    render(<AnalysisPage />)
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    expect(within(screen.getByRole('menu', { name: '個股清單' })).queryByText('觀察')).toBeNull()
+  })
+
+  it('選觀察股時帶 ticker 但不帶持股', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(await screen.findByRole('menuitemradio', { name: '2059 川湖' }))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
+    expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
+    // 非持股：沒有股數、沒有成本，也沒有報價
+    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+    expect(screen.getByTestId('detail-quote').textContent).toBe('—')
+  })
+
+  it('沒有台股持股但有觀察股時，直接分析第一檔觀察股而不是顯示空狀態', async () => {
+    setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    render(<AnalysisPage />)
+
+    expect(await screen.findByTestId('detail-ticker')).toBeTruthy()
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
+    expect(screen.queryByText(/目前沒有台股持股/)).toBeNull()
+  })
+
+  it('持股與觀察都沒有時才顯示空狀態，且就地提供加入觀察的入口', async () => {
+    setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
+    render(<AnalysisPage />)
+
+    const empty = await screen.findByText(/目前沒有台股持股/)
+    expect(empty.closest('.empty-state')?.textContent).toMatch(/觀察標的/)
+    expect(screen.getByRole('button', { name: '管理觀察' })).toBeTruthy()
+    expect(screen.queryByTestId('detail-ticker')).toBeNull()
+  })
+
+  it('管理觀察按鈕開關面板', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    render(<AnalysisPage />)
+
+    expect(screen.queryByTestId('watchlist-panel')).toBeNull()
+    await user.click(screen.getByRole('button', { name: '管理觀察' }))
+    expect(screen.getByTestId('watchlist-panel')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '關閉' }))
+    expect(screen.queryByTestId('watchlist-panel')).toBeNull()
+  })
+
+  it('同時持有又在觀察的代號只出現一次，且留在持股組', async () => {
+    // The holding entry carries qty / cost / quote; the watch entry carries none of it.
+    // Showing both would offer the user two rows for one stock, one of them strictly worse.
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([
+      { ticker: '2330', name: '台積電', sortOrder: 0 },
+      { ticker: '2059', name: '川湖', sortOrder: 1 },
+    ])
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+    const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+    expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
+      '1802 台玻',
+      '2330 台積電',
+      '2059 川湖',
+    ])
   })
 })

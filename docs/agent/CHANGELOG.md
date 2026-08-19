@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.8.0（2026-08-19）— 觀察清單：分析非持股個股與損益試算
+
+- 📋 **觀察清單上限提升**：`tw_watchlist` 每人上限由 5 檔提升至 30 檔；`sources/supabase/schema.sql` 內 trigger 更名 `tw_watchlist_max5` → `tw_watchlist_max30`，並於建立前同時 drop 兩個名字以相容既有資料庫；欄位、RLS、CHECK 機制未動。該表自 0.7.0 起休眠，此版本重新啟用。
+- 🔐 **Edge Function 白名單放寬**：`stock-report` 的 `generate` 與 `warm` 兩項守衛由「有人持有」放寬為「持有 ∪ 任何人的觀察清單」；新增 `watchedTwTickers()`（service role 掃全站 `tw_watchlist`，只選 ticker、name，錯誤時回 `[]`）、`allowedTwTickers()`（= `mergeTwTickerLists(held, watched)`，持股優先名稱）；`batchTwTickers()` 改回聯集，使觀察股進入夜間批次；新增純函式 `allowsTicker()`；403 訊息改為「僅限持有或已加入觀察清單的台股代號」。
+- 🛠️ **觀察清單服務元件**：新增 `sources/src/services/watchlistService.ts`（`WATCHLIST_MAX = 30`、`WatchItem`、`listWatchlist()` / `addWatch()` / `removeWatch()`）；刻意不併入 `DataProvider` 介面（本機模式不支援）；trigger 擋下時將 Postgres 原文翻成中文，不外洩錯誤。
+- 📱 **觀察清單管理面板**：新增 `sources/src/components/StockDetail/WatchlistPanel.tsx`；「管理觀察」面板列出、移除、以 `getTwStockList()` 搜尋加入（代號前綴不分大小寫、名稱內含）；已加入者不再出現；滿 30 檔時停用搜尋、不渲染加入鈕。
+- 📊 **個股下拉分組**：`sources/src/components/StockDetail/AnalysisPage.tsx` 個股下拉分成「持股」「觀察」兩組（空組不渲染標題），觀察項以 `watch:${ticker}` 為鍵，選中時 `holding` 與 `quote` 皆為 null；同時持有又觀察的代號只出現一次、留在持股組；空狀態改為兩者皆空時才顯示，就地提供「管理觀察」入口。
+- 💰 **損益試算分頁**：新增 `sources/src/components/StockDetail/whatIf.ts` + `WhatIfTab.tsx` + `StockDetailPage.tsx` 修正；第三分頁籤（排在分析內容與 AI 分析之間）；計算複用 `fees.ts` 的 `calculateFee` 與 `breakEvenPrice`，不自寫費用/稅算法；輸入不儲存；費率與最低手續費按目前工作區取用。
+- 🧪 **測試**：`batchTickers.test.ts`（+5）、`watchlistService.test.ts`（新，8）、`WatchlistPanel.test.tsx`（新，13）、`whatIf.test.ts`（新，8）、`WhatIfTab.test.tsx`（新，4）、`AnalysisPage.test.tsx`（+7）、`StockDetailPage.test.tsx`（分頁籤斷言改為三個）。
+- ✅ **驗證**：`npx vitest run` → 1056 passed, 0 failed（0.7.26 時為 1011）；`npx tsc --noEmit` 0 errors；`npx tsc -p tsconfig.edge.json` 0 errors；`npx oxlint src supabase` 0 errors；`npm run build` ok。
+- 📝 **稽核**：Lane 2。主 session 寫規格與全部失敗測試；`route:builder` 實作；`route:reviewer` 派遣三次。Edge 白名單 PASS（兩個可讀性風險已修）；`watchlistService` **FAIL** → `reorderWatch` 整個刪除（upsert 走 INSERT ... ON CONFLICT，Postgres 每列先觸發 BEFORE INSERT trigger，清單滿 30 檔時每次排序都會被上限擋下；本來就沒有排序 UI；同時補 trigger 錯誤翻譯成中文）；UI 與試算 PASS（四個風險全部關閉）。
+- ⚠️ **待執行項**：(1) 主從 schema migration（DDL 於 `schema.sql` 已就緒，待 DEV / PROD 執行）；(2) DEV / PROD Edge 部署；(3) 端對端驗證（加一檔未持有股票，確認守衛放行、隔夜批次產出報告）。
+- 🔍 **開放 RISK**：**RISK-002 夜間批次成本** — 批次範圍由「全站淨持股」變為「全站淨持股 ∪ 全站觀察股」，每檔約 6 次外部請求，成本隨「使用者數 × 觀察檔數」線性成長；30 檔上限是唯一煞車；上線後應觀察一週批次時長，必要時改為「只有被開啟過的觀察股才進批次」。
+
 ### 0.7.26（2026-08-19）— 外資買賣超 TOP 50 區塊新增鉅額星號標示與筆數下拉選單
 
 - ⭐ **鉅額標示改為名稱後綴星號**：原本 `block === true` 的列多掛 `<span className="chip">鉅額</span>` 標籤，改成名稱直接接 `*`（例：`長榮*`），畫面上不再出現「鉅額」字樣。
