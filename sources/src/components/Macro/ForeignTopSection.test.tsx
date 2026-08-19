@@ -21,6 +21,21 @@ const data: ForeignTopData = {
   ],
 }
 
+// 50 筆用來驗證筆數下拉；名稱以序號命名，方便斷言邊界（B10 / B11 / B30 / B31 / B50）。
+const big: ForeignTopData = {
+  date: '2026-08-17',
+  asOf: '2026-08-17T09:20:00.000Z',
+  buyTop: Array.from({ length: 50 }, (_, i) => ({
+    ticker: String(1000 + i),
+    name: `B${String(i + 1).padStart(2, '0')}`,
+    buy: 2_000_000,
+    sell: 1_000_000,
+    net: 1_000_000,
+    block: false,
+  })),
+  sellTop: [],
+}
+
 afterEach(() => {
   cleanup()
   fetchForeignTop.mockReset()
@@ -39,14 +54,14 @@ describe('ForeignTopSection', () => {
   it('預設顯示買超榜，切到賣超分頁後換成賣超榜', async () => {
     const user = await mount(data)
 
-    expect(await screen.findByText('台積電')).toBeTruthy()
+    expect(await screen.findByText('台積電*')).toBeTruthy()
     expect(screen.getByText('鴻海')).toBeTruthy()
     expect(screen.queryByText('力積電')).toBeNull()
 
     await user.click(screen.getByRole('tab', { name: '賣超 TOP 50' }))
 
     expect(await screen.findByText('力積電')).toBeTruthy()
-    expect(screen.queryByText('台積電')).toBeNull()
+    expect(screen.queryByText('台積電*')).toBeNull()
   })
 
   it('數量一律以張顯示，沒有張股切換', async () => {
@@ -66,10 +81,42 @@ describe('ForeignTopSection', () => {
     expect(await screen.findByText('買賣超(張)')).toBeTruthy()
   })
 
-  it('只有鉅額交易的個股才掛鉅額標記', async () => {
+  it('鉅額改以名稱後綴星號標示，不再出現鉅額標籤', async () => {
     await mount(data)
-    await screen.findByText('台積電')
-    expect(screen.getAllByText('鉅額')).toHaveLength(1)
+    expect(await screen.findByText('台積電*')).toBeTruthy()
+    expect(screen.getByText('鴻海')).toBeTruthy()
+    expect(screen.queryByText('鉅額')).toBeNull()
+  })
+
+  it('表格上方說明星號代表鉅額', async () => {
+    await mount(data)
+    await screen.findByText('台積電*')
+    expect(screen.getByText('* 代表鉅額')).toBeTruthy()
+  })
+
+  it('預設只顯示 10 筆，可用下拉選單切換 30 / 50', async () => {
+    const user = await mount(big)
+
+    const rowCount = () => document.querySelectorAll('tbody tr').length
+    await screen.findByText('B01')
+    expect(rowCount()).toBe(10)
+    expect(screen.queryByText('B11')).toBeNull()
+
+    const select = screen.getByLabelText('顯示筆數')
+    await user.selectOptions(select, '30')
+    expect(rowCount()).toBe(30)
+    expect(screen.getByText('B30')).toBeTruthy()
+    expect(screen.queryByText('B31')).toBeNull()
+
+    await user.selectOptions(select, '50')
+    expect(rowCount()).toBe(50)
+    expect(screen.getByText('B50')).toBeTruthy()
+  })
+
+  it('資料少於選定筆數時只顯示既有列，不補空列', async () => {
+    await mount(data)
+    await screen.findByText('台積電*')
+    expect(document.querySelectorAll('tbody tr').length).toBe(2)
   })
 
   it('沒有快照時顯示空狀態且不丟例外', async () => {
