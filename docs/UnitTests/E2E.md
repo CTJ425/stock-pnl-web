@@ -69,6 +69,30 @@ After Edge/cron changes (DEV; PROD only with user authorization):
 
 No secrets in this docs folder.
 
+## Layout is invisible to jsdom — the 0.8.0 lesson
+
+`WatchlistPanel` shipped in 0.8.0 rendering as a plain inline `<section>` appended after
+`StockDetailPage`, a full-length report. The panel existed, so all 1058 unit tests passed;
+on screen it landed far below the fold and the 管理觀察 button looked dead. A user found it
+on PROD.
+
+**jsdom has no layout.** `getByRole(...)` proves a node exists, never that a human can see it.
+Anything whose bug mode is *placement* — overlays, modals, sticky headers, off-screen or
+clipped content, `overflow`/`backdrop-filter` ancestors — needs a real browser measuring a
+bounding box:
+
+```js
+const box = await dialog.boundingBox()
+expect(box.y >= 0 && box.y < viewport.height && box.height > 0)
+```
+
+Component-level companion assertion, cheap and worth having: a modal must be portaled out of
+its caller's subtree, i.e. `container.contains(dialog) === false` and
+`document.body.contains(dialog) === true`.
+
+`scripts/verify-watchlist-e2e.cjs` is the runnable form of this for 觀察清單 (DEV only, mints
+its own session, cleans up the row it adds).
+
 ## Anti-patterns
 
 - Secrets in git  

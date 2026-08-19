@@ -12,6 +12,8 @@ import { useStockPrices } from '../../hooks/useStockPrices'
 import { buildHoldingRows } from '../../utils/holdingRows'
 import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
+import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
+import { positionKey } from '../../types/models'
 import { listWatchlist, type WatchItem } from '../../services/watchlistService'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
@@ -25,6 +27,7 @@ export function AnalysisPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
   const [showWatchlistPanel, setShowWatchlistPanel] = useState(false)
+  const [watchQuote, setWatchQuote] = useState<PriceQuote | null>(null)
 
   function reloadWatchlist() {
     // A watchlist load failure must never blank out the page for a user with holdings.
@@ -73,6 +76,31 @@ export function AnalysisPage() {
   const allEntries = [...holdingEntries, ...watchEntries]
   const selected =
     allEntries.find((e) => e.key === selectedKey) ?? holdingEntries[0] ?? watchEntries[0] ?? null
+
+  const watchTicker = selected?.kind === 'watch' ? selected.ticker : null
+
+  // Watched tickers carry no quote from useStockPrices (holdings-only), so fetch just the
+  // one currently on screen. `cancelled` drops a stale response if the selection moves on
+  // before this fetch resolves.
+  useEffect(() => {
+    if (!watchTicker) {
+      setWatchQuote(null)
+      return
+    }
+    let cancelled = false
+    setWatchQuote(null)
+    fetchPrices([{ market: 'TPE', ticker: watchTicker }])
+      .then((map) => {
+        if (cancelled) return
+        setWatchQuote(map[positionKey('TPE', watchTicker)] ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setWatchQuote(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [watchTicker])
 
   if (!selected) {
     return (
@@ -190,7 +218,7 @@ export function AnalysisPage() {
               }
             : null
         }
-        quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : null}
+        quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : watchQuote}
         selector={selector}
       />
       {showWatchlistPanel && (

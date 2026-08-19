@@ -8,6 +8,36 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-031 — Watched ticker had no quote because `useStockPrices` only covers holdings
+
+- **Symptom**: User added a non-held stock (e.g., 1101) to watchlist. Analysis page showed 「行情尚未取得／目前抓不到這檔股票的報價」. The new P&L simulator tab (introduced in 0.8.0) could not function because it had no price data — exactly the use case the watchlist feature exists for (analyzing stocks not in the portfolio).
+
+- **Root Cause**: `AnalysisPage` passed `quote={null}` for every watched entry because `useStockPrices` hook only fetches holdings. The hook enumerates holdings via the portfolio service and makes a single batch request for their prices, but has no mechanism to extend that fetch to stocks that are watched but not held.
+
+- **Fix**: For the selected watched entry only, invoke `fetchPrices([{ market: 'TPE', ticker }])` from `services/priceProxy.ts`, keyed on the selected watched ticker ID. Set up an effect cleanup `cancelled` flag to prevent a stale response for a previously selected ticker from overwriting data for the current selection. Failure leaves the quote null and never blocks rendering. Holdings' price fetch path remains unchanged.
+
+- **Regression test**: Browser E2E (Playwright): Select a watched non-held ticker → verify `quote` is populated → P&L simulator can compute and display meaningful values (e.g., "回本價 NTD 25.18" for a real 1101 position).
+
+- **Status**: ✅ FIXED in **0.8.1** (2026-08-19 11:58:53 Asia/Taipei).
+
+---
+
+### Bug ID: BUG-030 — 管理觀察 button looked dead because panel rendered far below fold
+
+- **Symptom**: User clicked the 管理觀察 button in the analysis page. Nothing appeared to happen. The component did render, but off-screen: it was appended as a flat `<section>` after the full-length `<StockDetailPage>` report, placing it hundreds of pixels below the viewport, so the click appeared to have no effect.
+
+- **Root Cause**: `WatchlistPanel` was rendered as a plain inline `<section className="glass section">` placed after `<StockDetailPage>` in `AnalysisPage.tsx`. Because `StockDetailPage` is a full-length report page (headers, chip table, analysis content, AI section), adding content after it appends it far below the fold in a typical viewport. The panel had its own internal head and close button, so it did not signal its off-screen state.
+
+- **Why unit tests passed**: jsdom has no layout engine, so bounding box checks are impossible. All 1058 component and integration tests passed while the feature was unusable in the browser. The failure was purely a layout/placement issue invisible to DOM testing.
+
+- **Fix**: Wrap the panel in the existing shared `sources/src/components/Common/Modal.tsx` component, which portals to `document.body`, brings an overlay, Esc-to-close handler, and a single close button with `aria-label="關閉"`. Remove the panel's own head and duplicate close button to avoid redundancy.
+
+- **Regression test**: Browser E2E: Panel must be a `role="dialog"` portaled outside the caller's subtree (`container.contains(dialog) === false && document.body.contains(dialog) === true`); verify dialog bounding box is inside viewport (e.g., y=49 with viewport 800px high).
+
+- **Status**: ✅ FIXED in **0.8.1** (2026-08-19 11:58:53 Asia/Taipei).
+
+---
+
 ### Bug ID: BUG-029 — TWT38U probing never ran since 0.7.19 — two independent gaps in dispatch path
 
 - **Symptom**: TWT38U (外資買賣超) was added as the 8th probe source in 0.7.19 (Task 113b), but probing never executed a single time on PROD or DEV. Window 17:00–18:00 existed, 3-landing target was set, but every day passed with zero landed hits. Task 113b was recorded with `⚠️ Reviewer: NOT RUN`, so the dispatch wiring was never verified.
