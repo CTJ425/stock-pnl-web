@@ -3,6 +3,19 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-08-18 22:12:03 Asia/Taipei (0.7.23 release: ForeignTopSection data update timestamp stamp)
+
+- **Release**: Version 0.7.23 official release to `main` on 2026-08-18, going straight to production.
+- **Feature**: 外資買賣超 TOP 50 section (總體經濟 > 台股) now shows data update time in its header, one line added to `ForeignTopSection.tsx`.
+- **Design**:
+  - Reuses `source-tag section-stamp` convention and `fmtUpdatedAt` helper already used by `TwMarketSection.tsx` and `MacroPage.tsx`, ensuring consistent wording, placement, and time format across sibling sections.
+  - No new CSS, no new formatter.
+  - Value is `ForeignTopData.asOf`, already exposed by `foreignTopProxy.ts`.
+  - Stamp hidden when snapshot is empty (no "資料更新於 —" in empty state).
+- **Testing**: 2 new test cases in `ForeignTopSection.test.tsx` (one asserting stamp and `section-stamp` class, one asserting absence in empty state). Stamp test failed before change, passes after. Time format match by pattern, not fixed instant, per `fmtUpdatedAt` viewer-timezone rendering.
+- **Verification**: `npx vitest run src/components/Macro/ForeignTopSection.test.tsx` — 6 passed, 0 failed; `npx tsc --noEmit` — 0 errors; `npx oxlint src` — 0 errors.
+- **Review**: Not dispatched. Recorded honestly: presentation-only change with passing test (failed before, passes after), touching no money, auth, persistence, API contract, background job, or control flow.
+
 Entries below are **everything older than the two newest logs in `PROGRESS.md`** (last rolled 2026-08-19 ? Asia/Taipei).
 
 ## 📅 Log: 2026-08-18 21:20:00 Asia/Taipei (BUG-029: TWT38U probing never ran — dispatch path gaps in source list and probe handler)

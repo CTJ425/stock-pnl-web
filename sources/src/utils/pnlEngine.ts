@@ -208,7 +208,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       ledger.order.push(key)
     }
     const pos = ledger.positions[key]
-    if (tx.name) pos.name = tx.name
+    // A transaction that carries only the ticker as its name is a placeholder; it must not overwrite a known name.
+    if (tx.name && tx.name !== tx.ticker) pos.name = tx.name
 
     if (!y.tickers[key]) {
       y.tickers[key] = {
@@ -231,7 +232,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       }
     }
     const yt = y.tickers[key]
-    if (tx.name) yt.name = tx.name
+    // A transaction that carries only the ticker as its name is a placeholder; it must not overwrite a known name.
+    if (tx.name && tx.name !== tx.ticker) yt.name = tx.name
 
     y.count++
     y.fees += tx.fee_tax
