@@ -27,11 +27,13 @@ npm run build    # 型別檢查 + 打包（輸出 dist/，可部署 GitHub Pages
 1. 到 [Supabase Console](https://supabase.com) 建立專案。
 2. 在 SQL Editor 執行 `supabase/schema.sql`。
 3. 複製 `.env.example` 為 `.env.local`，填入 Project Settings → API 的 URL 與 anon key。
-4. （建議）部署 Edge Functions（於 `sources/` 目錄，兩者皆需**關閉 Verify JWT**）：
+4. （建議）部署 Edge Functions（於 `sources/` 目錄，**只有 `stock-report` 需要關閉 Verify JWT**）：
    ```bash
-   supabase functions deploy stock-price  --no-verify-jwt   # 現價 / 搜尋代理
+   supabase functions deploy stock-price                    # 現價 / 搜尋代理（維持 verify_jwt=true）
    supabase functions deploy stock-report --no-verify-jwt   # 盤後籌碼報告
    ```
+   > `stock-price` 由前端帶 anon JWT 呼叫，關掉驗證會變成誰都能打的公開端點（Edge Function 額度濫用）；
+   > `stock-report` 一定要關，因為 pg_cron 是帶 `CRON_SECRET`、不帶 JWT 呼叫，設成 true 盤後批次會全數 401。
    > `stock-report` 為多檔函數；Dashboard GUI 部署與常見問題見 [`supabase/README.md`](supabase/README.md)。
 5. 部署到 GitHub Pages 前，把 Supabase Auth 的 Site URL / Redirect URLs 設為 Pages 網址。
 
