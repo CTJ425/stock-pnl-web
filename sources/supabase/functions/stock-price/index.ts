@@ -7,7 +7,11 @@
  * The entire site within TTL shares the same quote (for Taiwan stocks, please see the time period rules of quoteWindow.ts, and for US stocks, 10 minutes).
  * The same stock does not make repeated requests to external APIs.
  * Deployment method (need to install Supabase CLI and log in):
- *   supabase functions deploy stock-price --no-verify-jwt
+ *   supabase functions deploy stock-price
+ *   Keep the default verify_jwt=true: the front end calls this with an anon JWT.
+ *   Deploying with --no-verify-jwt turns the quote endpoint into a public one that
+ *   anybody can call (Edge Function quota abuse). Only stock-report uses
+ *   --no-verify-jwt, because pg_cron calls it with x-cron-secret and no JWT.
  *
  * interface:
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
