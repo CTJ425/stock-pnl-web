@@ -11,6 +11,19 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 115: 0.8.0 post-release deployment (觀察清單 / 損益試算)
+- **Status**: ✅ **SHIPPED — DEV & PROD deployed 2026-08-19 11:29:34 Asia/Taipei; merged to main**
+- **Agent**: Scribe (deployment recording)
+- **Timestamp**: 2026-08-19 11:29:34 Asia/Taipei (completion)
+- **Work items**:
+  1. ✅ **DEV schema migration** — Applied via `docker exec`. Trigger renamed `tw_watchlist_max5` → `tw_watchlist_max30`, cap 5 → 30, 2 rows preserved. `batch_run_log = 142`.
+  2. ✅ **DEV Edge deploy** — Volume copy `index.ts` + `batchTickers.ts`, `docker compose up -d --force-recreate functions`. Verified in container: `allowedTwTickers` appears 5x, new 403 string appears 2x.
+  3. ✅ **PROD schema migration** — Applied via Supabase Management API (explicit project ref `kxnxadaghidwumqsqneu`). Trigger renamed, cap 5 → 30, 0 rows. `batch_run_log = 441`.
+  4. ✅ **PROD Edge deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/`. Version 53 → 54. `verify_jwt` remains **false**.
+  5. ✅ **End-to-end verification** — DEV: signed-in user called `generate` with 3 tickers: `2327` (watched, not held) → 200, `1101` (neither) → 403, `2059` (held) → 200. Unauthenticated → 401. Pre-0.8.0 code would have rejected the watched-only path; now it's allowed. PROD `tw_watchlist` empty; watched-ticker allow path verified on DEV (identical bundle) but not re-exercised on PROD. Chips expected empty until nightly batch runs.
+
+---
+
 ### Task 114 / 114b: 探針退休條件加上「內容已停止變動」，並把退休接線抽成可測純函式
 - **Status**: ✅ **SHIPPED (0.7.21)**
 - **Timestamp**: 2026-08-18 16:06:44 Asia/Taipei

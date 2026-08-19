@@ -7,6 +7,29 @@
 
 ---
 
+## 📅 Log: 2026-08-19 11:29:34 Asia/Taipei (0.8.0 post-release deployment — watchlist and P&L simulator)
+
+- **Deployment**: Version 0.8.0 schema and Edge functions deployed to DEV and PROD; merged `dev` → `main`.
+- **What was deployed**:
+  - Schema: `tw_watchlist` max cap 5 → 30, trigger renamed `tw_watchlist_max5` → `tw_watchlist_max30` with compatible dual drop.
+  - Edge (`stock-report`): Whitelist logic expanded from "held only" to "held ∪ watched"; new functions `watchedTwTickers()`, `allowedTwTickers()`; `batchTwTickers()` returns union; 403 message updated to "僅限持有或已加入觀察清單的台股代號".
+- **Deployment sequence**:
+  1. **DEV schema migration** — Applied via `docker exec stock-pnl-web-dev-db-1 psql`. Before: `tw_watchlist_max5`, cap 5, 2 rows. After: `tw_watchlist_max30`, cap 30, 2 rows preserved. DEV identity confirmed: `batch_run_log = 142`.
+  2. **DEV Edge deploy** — Volume copy `index.ts` + `batchTickers.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`, then `docker compose up -d --force-recreate functions`. Confirmed in container: `allowedTwTickers` appears 5 times, new 403 guard string appears twice.
+  3. **DEV end-to-end verification** — Called `generate` action (signed-in user):
+     - Ticker `2327` (on watchlist, held by nobody): **HTTP 200**, produced report `20260818_2327_…`. Pre-0.8.0 code returned 403 for this path.
+     - Ticker `1101` (neither held nor watched): **HTTP 403** with new message, confirming whitelist widened without becoming open.
+     - Ticker `2059` (held): **HTTP 200**, no regression on existing path.
+     - Unauthenticated call: **401**, confirming `assertUser` still runs before whitelist check.
+  4. **PROD schema migration** — Applied via Supabase Management API with explicit project ref `kxnxadaghidwumqsqneu`. Before: `tw_watchlist_max5`, cap 5, 0 rows. After: `tw_watchlist_max30`, cap 30, 0 rows. PROD identity confirmed: `batch_run_log = 441`.
+  5. **PROD Edge deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/`. Version 53 → **54**; `ezbr_sha256` changed; `verify_jwt` remains **false** (unchanged, correct for after-hours cron). PROD unauthenticated call returned 401, confirming function is live.
+  6. **Merge to main** — Fast-forward `ab03d9d..cbbdba0`, pushed. Both `dev` and `main` now at `cbbdba0`; Pages deploys 0.8.0.
+- **What was NOT proven on PROD**: The watched-ticker allow path verified end-to-end on DEV (identical bundle), but not re-exercised on PROD because `tw_watchlist` is empty and requires a signed-in browser session. First real PROD exercise happens when a user adds a watched ticker.
+- **Expected behavior**: Watched ticker's chips remain empty until the nightly batch runs — this is expected, not a fault.
+- **Commit**: `cbbdba0` (0.8.0).
+
+---
+
 ## 📅 Log: 2026-08-19 11:01:43 Asia/Taipei (0.8.0 release: 觀察清單與損益試算)
 
 - **Release**: Version 0.8.0 official release, finalized.
@@ -22,24 +45,3 @@
 - **Verification**: `npx vitest run` → 1056 passed, 0 failed（0.7.26 時為 1011）。`npx tsc --noEmit` 0 errors。`npx tsc -p tsconfig.edge.json` 0 errors。`npx oxlint src supabase` 0 errors。`npm run build` ok。
 - **Routing**: Lane 2. 主 session 寫規格與全部失敗測試；`route:builder` 實作；`route:reviewer` 派遣三次。Edge 白名單 PASS（可讀性風險修正）；`watchlistService` **FAIL** → `reorderWatch` 整個刪除（upsert 走 INSERT ... ON CONFLICT，Postgres 每列先觸發 BEFORE INSERT trigger，滿 30 檔時每次排序都會被上限擋下；本來就沒有排序 UI；同時補 trigger 錯誤翻譯）；UI 與試算 PASS（四個風險全關）。
 - **Unfinished**: (1) DEV / PROD schema migration（DDL 已就緒）；(2) DEV / PROD Edge 部署；(3) 端對端驗證（加未持有股票、確認守衛放行、確認隔夜批次產出報告）。
-
----
-
-## 📅 Log: 2026-08-19 09:54:30 Asia/Taipei (0.7.26 release: ForeignTopSection 鉅額星號、筆數下拉、說明文字)
-
-- **Release**: Version 0.7.26 official release, finalized.
-- **Feature**: 外資買賣超 TOP 50 (總體經濟 > 台股) 區塊三項更新：(1) 鉅額標示改為名稱後綴星號（例 `長榮*`），不再出現「鉅額」標籤；(2) 表格上方新增「* 代表鉅額」說明文字（`hint` 樣式）放在 `.table-scroll` 外；(3) 新增筆數下拉選單（10 / 30 / 50，預設 10）同時套用買超賣超兩分頁。
-- **Changes**:
-  - `sources/src/components/Macro/ForeignTopSection.tsx` — 三個變更點：
-    - 鉅額標示：移除 `block === true` 時渲染的 `<span className="chip">鉅額</span>`，改為在名稱後接 `*`（以 ternary operator 在 JSX 內拼接）。
-    - 說明文字：新增 `<div className="hint">* 代表鉅額</div>` 置於 `.table-scroll` 之外。
-    - 筆數下拉：新增 `select` 元素（`aria-label="顯示筆數"`），與現有 `rowCount` 狀態繫結，同時套用兩分頁；`.slice(0, rowCount)` 渲染既有列，資料不足時不補空列。
-  - 未動：買超/賣超分頁邏輯、`資料更新於` 時間戳、空狀態、欄位標題、`fmtLots()` 格式。
-- **Testing**: `sources/src/components/Macro/ForeignTopSection.test.tsx` 改寫 5 項失敗測試 + 新增 4 項案例，共 10 通過：
-  - (新) 「鉅額改以名稱後綴星號標示，不再出現鉅額標籤」— 斷言星號在名稱後、無 chip 元素。
-  - (新) 「表格上方說明星號代表鉅額」— 斷言 `* 代表鉅額` 文字存在、有 `hint` 樣式。
-  - (新) 「預設只顯示 10 筆，可用下拉選單切換 30 / 50」— 初始 10 列，選擇 30 → 30 列，選擇 50 → 50 列（以 50 筆 fixture 驗證邊界）。
-  - (新) 「資料少於選定筆數時只顯示既有列，不補空列」— fixture 15 筆時選擇 30，僅顯示 15 列。
-  - (改) 既有買超/賣超分頁測試改以 `台積電*` 斷言，確保星號出現。
-- **Verification**: `npx vitest run src/components/Macro/ForeignTopSection.test.tsx` — 10 passed, 0 failed (改動前 5 failed). `npx vitest run` (full suite) — 68 files, 1011 tests passed, 0 failed. `npx tsc --noEmit` — 0 errors. `npx oxlint src` — 0 errors (only pre-existing react/only-export-components warnings). `npm run build` — built ok.
-- **Routing**: Lane 1. 主 session 寫失敗測試 → `route:builder` 實作 → 主 session 覆核 diff 並把說明文字移出 `.table-scroll`。Reviewer 未派遣，理由：純展示層變更，測試改動前失敗、改動後通過，不涉持久化、授權、對外介面契約、無聲計算或控制流。
