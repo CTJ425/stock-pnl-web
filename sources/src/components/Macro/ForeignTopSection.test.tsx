@@ -49,17 +49,21 @@ describe('ForeignTopSection', () => {
     expect(screen.queryByText('台積電')).toBeNull()
   })
 
-  it('單位切換：預設張數，切到股數顯示原始股數', async () => {
-    const user = await mount(data)
+  it('數量一律以張顯示，沒有張股切換', async () => {
+    await mount(data)
 
-    // 1,234,000 股 = 1,234.0 張
+    // 1,234,000 股 = 1,234.0 張；買進 3,000,000 股 = 3,000.0 張
     expect(await screen.findByText('1,234.0')).toBeTruthy()
+    expect(screen.getByText('3,000.0')).toBeTruthy()
     expect(screen.queryByText('1,234,000')).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: '股' }))
+    expect(screen.queryByRole('button', { name: '股' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '張' })).toBeNull()
+  })
 
-    expect(await screen.findByText('1,234,000')).toBeTruthy()
-    expect(screen.queryByText('1,234.0')).toBeNull()
+  it('買賣超欄位標題標示單位為張', async () => {
+    await mount(data)
+    expect(await screen.findByText('買賣超(張)')).toBeTruthy()
   })
 
   it('只有鉅額交易的個股才掛鉅額標記', async () => {
