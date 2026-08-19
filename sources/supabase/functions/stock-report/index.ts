@@ -31,7 +31,9 @@
  *       generate-all will also run once every round. This entrance is for those who "don't want to wait for the schedule".
  *
  * `generate` and `warm` require a signed-in user (`assertUser`) and the ticker must appear in
- * `heldTwTickers()` (0.7.0 restored holdings whitelist after removing full-market search / TOP20).
+ * `allowedTwTickers()` — holdings ∪ every user's `tw_watchlist` (0.8.0; 0.7.0 had restored a
+ * holdings-only whitelist after removing full-market search / TOP20). The same set is the nightly
+ * batch scope, so a watched ticker gets its reports built like a held one.
  * `warm` additionally charges `WARM_DAILY_LIMIT` via `take_warm_quota`. Deployed with
  * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
@@ -55,6 +57,7 @@ import {
   type MarginDatedResponse,
   type T86ResponseShape,
 } from './twChips.ts'
+import { allowsTicker, mergeTwTickerLists } from './batchTickers.ts'
 import {
   buildReport,
   dashDate,
@@ -805,9 +808,9 @@ async function handleGenerate(
    */
   const auth = await assertUser(req)
   if (auth instanceof Response) return auth
-  const held = await heldTwTickers()
-  if (!held.some((h) => h.ticker === ticker)) {
-    return json({ error: '僅限有人持有的台股代號' }, 403)
+  const allowed = await allowedTwTickers()
+  if (!allowsTicker(allowed, ticker)) {
+    return json({ error: '僅限持有或已加入觀察清單的台股代號' }, 403)
   }
 
   const series = await loadSeries([ticker], new Date())
@@ -955,9 +958,27 @@ async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>>
     .map(([ticker, v]) => ({ ticker, name: v.name }))
 }
 
-/** Night batch / backfill scope: holdings only (0.7.0 — no watchlist / TOP). */
+/** All users' watchlist tickers (service role scan tw_watchlist; cross-user deduplication). */
+async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  const { data, error } = await db.from('tw_watchlist').select('ticker, name')
+  if (error || !data) return []
+  const acc = new Map<string, string>()
+  for (const row of data) {
+    const ticker = String(row.ticker ?? '').trim()
+    if (!TICKER_RE.test(ticker)) continue
+    if (!acc.has(ticker)) acc.set(ticker, String(row.name ?? '').trim())
+  }
+  return [...acc.entries()].map(([ticker, name]) => ({ ticker, name }))
+}
+
+/** Whitelist for `generate`/`warm` and the night batch: holdings ∪ watchlist. */
+async function allowedTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
+  return mergeTwTickerLists(await heldTwTickers(), await watchedTwTickers())
+}
+
+/** Night batch / backfill scope: holdings ∪ watchlist. */
 async function batchTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  return heldTwTickers()
+  return allowedTwTickers()
 }
 
 /**
@@ -2033,9 +2054,9 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
 
   const auth = await assertUser(req)
   if (auth instanceof Response) return auth
-  const heldForWarm = await heldTwTickers()
-  if (!heldForWarm.some((h) => h.ticker === ticker)) {
-    return json({ error: '僅限有人持有的台股代號' }, 403)
+  const allowedForWarm = await allowedTwTickers()
+  if (!allowsTicker(allowedForWarm, ticker)) {
+    return json({ error: '僅限持有或已加入觀察清單的台股代號' }, 403)
   }
 
   const phase = parseWarmPhase(body.phase)
