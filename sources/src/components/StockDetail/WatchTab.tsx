@@ -69,9 +69,9 @@ export function WatchTab({
   const atMax = items.length >= WATCHLIST_MAX
 
   return (
-    <div className="section">
-      <div className="section-title">
-        <h2>觀察中</h2>
+    <div className="rpt-section">
+      <div className="rpt-section-head">
+        <h3>觀察中</h3>
         <div className="toolbar">
           <span className="hint">{`${items.length}/${WATCHLIST_MAX}`}</span>
           {atMax && <span className="hint">已達上限，請先移除其他標的</span>}

@@ -3,6 +3,22 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+---
+
+## 📅 Log: 2026-08-19 11:58:53 Asia/Taipei (0.8.1 bugfix — management panel placement and watched stock pricing)
+
+- **Release**: Version 0.8.1 bugfix on 0.8.0 (Frontend only).
+- **What was fixed**:
+  - **BUG-030 — 管理觀察 button looked dead**: `WatchlistPanel` was rendered as a flat inline section after `<StockDetailPage>`, placing it far below the fold. Fix: wrap in `Modal.tsx` (portals to `document.body`, brings overlay, Esc handler, single close button). Root cause: jsdom has no layout, so all 1058 unit tests passed while the feature was unusable in browser.
+  - **BUG-031 — watched ticker had no quote**: `AnalysisPage` passed `quote={null}` for every watch entry because `useStockPrices` only covers holdings. Fix: for the selected watched entry, fetch `fetchPrices([{ market: 'TPE', ticker }])` from `priceProxy.ts`, with `cancelled` flag in effect cleanup to prevent stale responses from overwriting. Failure leaves quote null, never blocks rendering.
+- **Correction recorded**: Earlier claim that "chips stay empty until nightly batch" was incorrect — chips appear immediately because `reportProxy` falls back to Edge `generate` action when batch file is missing; browser console 400 is expected and handled.
+- **Testing**: Unit tests: `npx vitest run` → 72 files, **1060 passed**, 0 failed. Types/lint/build: `npx tsc --noEmit` 0 errors; `npx tsc -p tsconfig.edge.json` 0 errors; `npx oxlint src supabase` 0 errors; `npm run build` ok. **Browser E2E (Playwright against DEV, new)** — 12/12 steps: 進個股分析 → 管理觀察可見 → 面板出現在可視範圍內 (y=49, viewport 800) → 搜尋並加入 1101 → 關閉 → 下拉觀察組出現 1101 → 選取後頁面渲染 → 觀察股取得報價 → 損益試算可開且無 NaN/Infinity → 試算帶入現價 24.2 當預設買進價 → 算出回本價 → 移除 1101 還原 DEV 資料。
+- **Reviewer verdict**: Lane 1. Two RISKs raised: (1) **Accepted** — watched entry deleted while viewing falls back to another without signalling; user removed it themselves, fallback is reasonable. (2) **Rejected as incorrect** — workspace switch could leave stale watchlist; `tw_watchlist` keyed by `user_id` only, schema says "Per-user, not per-workspace", no per-workspace watchlist exists to go stale.
+- **Unfinished**: None — complete release.
+- **Commit**: `cbbdba0` (0.8.0, version files bumped for 0.8.1).
+
+---
+
 ## 📅 Log: 2026-08-19 11:29:34 Asia/Taipei (0.8.0 post-release deployment — watchlist and P&L simulator)
 
 - **Deployment**: Version 0.8.0 schema and Edge functions deployed to DEV and PROD; merged `dev` → `main`.

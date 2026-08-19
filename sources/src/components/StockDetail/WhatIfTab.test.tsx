@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 
 const { getFeeRate, getMinFee, useWorkspace } = vi.hoisted(() => ({
   getFeeRate: vi.fn(() => 0.001425),
@@ -11,6 +11,9 @@ vi.mock('../../utils/settings', () => ({ getFeeRate, getMinFee }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 
 import { WhatIfTab } from './WhatIfTab'
+
+/** A watched stock: no holding, so no average cost and no held quantity. */
+const watched = { avgCost: null, heldQty: null }
 
 beforeEach(() => {
   cleanup()
@@ -23,7 +26,7 @@ describe('WhatIfTab 費率取用', () => {
   // TransactionForm). An unscoped read here would silently price the estimate with the
   // global rate while the workspace has its own.
   it('費率與最低手續費都按目前工作區取用', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={100} />)
+    render(<WhatIfTab ticker="2330" currentPrice={100} {...watched} />)
 
     expect(getFeeRate).toHaveBeenCalledWith('ws-1')
     expect(getMinFee).toHaveBeenCalledWith(expect.any(String), 'ws-1')
@@ -31,74 +34,143 @@ describe('WhatIfTab 費率取用', () => {
 
   it('沒有選定工作區時不丟例外', () => {
     useWorkspace.mockReturnValue({ current: null })
-    expect(() => render(<WhatIfTab ticker="2330" currentPrice={100} />)).not.toThrow()
+    expect(() =>
+      render(<WhatIfTab ticker="2330" currentPrice={100} {...watched} />),
+    ).not.toThrow()
   })
 
-  it('整股用 whole 級距，零股用 odd 級距', async () => {
-    const { rerender } = render(<WhatIfTab ticker="2330" currentPrice={100} />)
-    // 預設 1000 股是整股
+  it('整股用 whole 級距，零股用 odd 級距', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={100} {...watched} />)
+    // 預設 1 張 = 1000 股，是整股
     expect(getMinFee).toHaveBeenCalledWith('whole', 'ws-1')
 
     getMinFee.mockClear()
-    const box = screen.getByLabelText('股數') as HTMLInputElement
-    const { fireEvent } = await import('@testing-library/react')
-    fireEvent.change(box, { target: { value: '500' } })
-    rerender(<WhatIfTab ticker="2330" currentPrice={100} />)
+    // 換成「股」再填 500，才是零股
+    fireEvent.change(screen.getByLabelText('單位'), { target: { value: '股' } })
+    fireEvent.change(screen.getByLabelText('股數'), { target: { value: '500' } })
 
     expect(getMinFee).toHaveBeenCalledWith('odd', 'ws-1')
   })
 })
 
-describe('WhatIfTab 賣出價', () => {
-  it('賣出價是可見的輸入，預設帶現價', async () => {
-    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+describe('WhatIfTab 預設值：庫存股用平均成本，觀察股用現價', () => {
+  it('觀察股票：買進價預設帶現價，且說明來源是現價', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={24.2} {...watched} />)
 
-    const sell = screen.getByLabelText('賣出價') as HTMLInputElement
-    expect(sell.value).toBe('24.2')
-    // 0.8.0 隱形假設「以現價賣出」，畫面上完全沒說，數字因此讀起來像壞掉。
-    expect(screen.getByText(/現價 24\.2/)).toBeTruthy()
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('24.2')
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('24.2')
+    expect(screen.getByText(/買進價預設為現價\s*24\.2/)).toBeTruthy()
   })
 
-  it('改賣出價，主數字跟著變', async () => {
-    const { fireEvent } = await import('@testing-library/react')
-    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+  it('庫存個股：買進價預設帶平均成本，不是現價', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={512.34} heldQty={2000} />)
 
-    const before = screen.getByTestId('whatif-pnl').textContent
-    fireEvent.change(screen.getByLabelText('賣出價'), { target: { value: '30' } })
-    const after = screen.getByTestId('whatif-pnl').textContent
-
-    expect(after).not.toBe(before)
-    expect(after).toMatch(/\+/)
+    // 這是本次需求的核心：庫存股要用「我的成本」起算，不是市價
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('512.34')
+    // 賣出價仍是現價 —— 「現在賣掉會怎樣」
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('600')
+    expect(screen.getByText(/買進價預設為平均成本\s*512\.34/)).toBeTruthy()
   })
 
-  it('沒有現價時三個輸入都可填，填完就算得出來', async () => {
-    const { fireEvent } = await import('@testing-library/react')
-    const { container } = render(<WhatIfTab ticker="2330" currentPrice={null} />)
+  it('庫存個股：整張持股預設用「張」，股數換算成張數', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={500} heldQty={3000} />)
 
-    expect((screen.getByLabelText('賣出價') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('單位') as HTMLSelectElement).value).toBe('張')
+    expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('3')
+  })
+
+  it('庫存個股：零股持股預設用「股」，不硬湊成張', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={500} heldQty={1500} />)
+
+    expect((screen.getByLabelText('單位') as HTMLSelectElement).value).toBe('股')
+    expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('1500')
+  })
+
+  it('沒有現價時輸入都可填，填完就算得出來，過程不出現 NaN', () => {
+    const { container } = render(
+      <WhatIfTab ticker="2330" currentPrice={null} {...watched} />,
+    )
+
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('')
     expect(container.textContent).not.toMatch(/NaN|Infinity/)
 
-    fireEvent.change(screen.getByLabelText('假想買進價'), { target: { value: '100' } })
-    fireEvent.change(screen.getByLabelText('賣出價'), { target: { value: '110' } })
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('賣出價格'), { target: { value: '110' } })
 
     expect(screen.getByTestId('whatif-pnl').textContent).toMatch(/\+/)
   })
+})
 
-  it('損益與報酬率是唯二的主數字，其餘明細收在小字', async () => {
-    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+describe('WhatIfTab 單位切換', () => {
+  it('「1 張」與「1000 股」算出同一個損益', () => {
+    const { unmount } = render(
+      <WhatIfTab ticker="2330" currentPrice={110} {...watched} />,
+    )
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+    const byLot = screen.getByTestId('whatif-pnl').textContent
+    unmount()
+
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('單位'), { target: { value: '股' } })
+    fireEvent.change(screen.getByLabelText('股數'), { target: { value: '1000' } })
+
+    expect(screen.getByTestId('whatif-pnl').textContent).toBe(byLot)
+  })
+
+  it('切換單位不會偷改使用者已經填好的數字', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+
+    fireEvent.change(screen.getByLabelText('股數'), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText('單位'), { target: { value: '股' } })
+
+    // TransactionForm 會就地換算，這裡刻意不換 —— 這是試算沙盒，改使用者正在打的字很煩人
+    expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('7')
+  })
+})
+
+describe('WhatIfTab 畫面只留四個數字', () => {
+  it('損益、報酬率、費用合計各一行，且費用是扣掉的', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
 
     expect(screen.getByTestId('whatif-pnl')).toBeTruthy()
     expect(screen.getByTestId('whatif-roi')).toBeTruthy()
-    // 明細仍在，但不是主角
-    const detail = screen.getByTestId('whatif-detail').textContent || ''
-    for (const label of ['成本', '賣出可得', '手續費', '證交稅', '回本價']) {
-      expect(detail).toContain(label)
-    }
+
+    const fees = screen.getByTestId('whatif-fees').textContent || ''
+    expect(fees).toMatch(/含手續費與證交稅/)
+    expect(fees).toMatch(/-/)
   })
 
-  it('輸入不合法時給提示而不是 NaN', async () => {
-    const { fireEvent } = await import('@testing-library/react')
-    const { container } = render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+  it('損益是淨利：低於不計費用的純價差', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    // 1 張，純價差 (110-100)*1000 = 10,000；扣掉買賣手續費與證交稅後必須更少
+    const pnl = Number(
+      (screen.getByTestId('whatif-pnl').textContent || '').replace(/[^\d.-]/g, ''),
+    )
+    expect(pnl).toBeGreaterThan(0)
+    expect(pnl).toBeLessThan(10000)
+  })
+
+  it('成本、賣出可得、回本價已從畫面移除', () => {
+    const { container } = render(
+      <WhatIfTab ticker="2330" currentPrice={110} {...watched} />,
+    )
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    const text = container.textContent || ''
+    for (const gone of ['成本 ', '賣出可得', '回本價']) {
+      expect(text).not.toContain(gone)
+    }
+    expect(screen.queryByTestId('whatif-detail')).toBeNull()
+  })
+
+  it('輸入不合法時給提示而不是 NaN', () => {
+    const { container } = render(
+      <WhatIfTab ticker="2330" currentPrice={24.2} {...watched} />,
+    )
 
     fireEvent.change(screen.getByLabelText('股數'), { target: { value: '0' } })
 
