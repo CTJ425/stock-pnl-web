@@ -615,9 +615,6 @@ export function AppShell() {
   const [showAddTx, setShowAddTx] = useState(false)
   const [admin, setAdmin] = useState(false)
   const narrow = useNarrowScreen()
-  // Set when a watched row on 庫存總覽 is clicked; AnalysisPage consumes it once and it is
-  // cleared right away so returning to 個股分析 later does not silently re-select an old stock.
-  const [pendingAnalysisTicker, setPendingAnalysisTicker] = useState<string | null>(null)
 
   // Administrator entrance: It is determined that auth needs to be made once, so it is added asynchronously. If you make a mistake, there will only be one less menu item.
   // Does not affect any existing functions (the real control is on the Edge Function side)
@@ -635,12 +632,6 @@ export function AppShell() {
   useEffect(() => {
     if (view === 'admin' && !admin) setView('dashboard')
   }, [admin, view])
-
-  // The pending ticker is handed to AnalysisPage for its current visit only; clear it once the
-  // user leaves so a later, unrelated visit to 個股分析 does not silently re-select an old stock.
-  useEffect(() => {
-    if (view !== 'analysis' && pendingAnalysisTicker !== null) setPendingAnalysisTicker(null)
-  }, [view, pendingAnalysisTicker])
 
   return (
     <>
@@ -673,15 +664,8 @@ export function AppShell() {
           <div className="glass empty-state section">載入中…</div>
         ) : (
           <>
-            {view === 'dashboard' && (
-              <DashboardPage
-                onOpenAnalysis={(ticker) => {
-                  setPendingAnalysisTicker(ticker)
-                  setView('analysis')
-                }}
-              />
-            )}
-            {view === 'analysis' && <AnalysisPage initialTicker={pendingAnalysisTicker ?? undefined} />}
+            {view === 'dashboard' && <DashboardPage />}
+            {view === 'analysis' && <AnalysisPage />}
             {view === 'macro' && <MacroPage />}
             {view === 'fx' && <FxPage />}
             {view === 'yearly' && <YearlyPage />}

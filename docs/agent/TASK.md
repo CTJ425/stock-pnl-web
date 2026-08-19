@@ -25,15 +25,19 @@
 
 ## 📋 Active Tasks
 
-### Task 116: 0.9.0 觀察清單 UX overhaul（資訊架構調整）
-- **Status**: ⏳ **Release recorded; DEV commit ready; PROD merge pending user approval**
+### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤）
+- **Status**: ⏳ **Design revised, records updated; DEV commit ready; PROD merge pending user approval**
 - **Agent**: Scribe
-- **Timestamp**: 2026-08-19 14:04:06 Asia/Taipei
+- **Timestamp**: 2026-08-19 15:17:34 Asia/Taipei
 - **Done**:
-  1. ✅ Changelog entry (0.9.0 in `docs/agent/CHANGELOG.md`)
-  2. ✅ Progress log entry (2026-08-19 14:04:06 in `docs/agent/PROGRESS.md`)
-  3. ✅ Roll oldest entry from PROGRESS.md to `PROGRESS_ARCHIVE.md`
-  4. ✅ Task tracking record (this entry)
+  1. ✅ Initial 0.9.0 (庫存總覽 placement) rejected after user review
+  2. ✅ Design revised: watchlist moved to `個股分析` tab 4 (分析內容 / 損益試算 / AI 分析 / **觀察股票**), y≈207 (no scroll in 800px)
+  3. ✅ Stock picker reverted to holdings-only; entry points deliberately separate
+  4. ✅ Five defects found and fixed during verification; root causes recorded
+  5. ✅ Changelog entry rewritten to describe revised design + process lesson (design answer wrongly promoted to placement decision)
+  6. ✅ Progress log entry updated (status, design rationale, defect analysis, reviewer verdict FAIL→PASS)
+  7. ✅ Task tracking record (this entry)
+  8. ✅ Verification: 73 files, 1073 passed; E2E 10/10; build/type/lint 0 errors
 - **Unfinished**:
   1. ⏳ **PROD deploy**: Merge `dev` → `main` to trigger Pages deployment; user go-ahead required per CLAUDE.md § Branches & envs.
 

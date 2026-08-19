@@ -328,13 +328,13 @@ describe('StockDetailPage', () => {
     expect(screen.getByText('三大法人買賣超')).toBeTruthy()
   })
 
-  it('三個分頁籤：分析內容、損益試算、AI 分析', async () => {
+  it('四個分頁籤：分析內容、損益試算、AI 分析、觀察股票', async () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
     const tabs = [...container.querySelectorAll('.subtabs .subtab')].map((el) => el.textContent)
-    expect(tabs).toEqual(['分析內容', '損益試算', 'AI 分析'])
+    expect(tabs).toEqual(['分析內容', '損益試算', 'AI 分析', '觀察股票'])
   })
 
   it('技術面畫日 K／均線／布林，指標摘要在行情卡（0.6.51）', async () => {

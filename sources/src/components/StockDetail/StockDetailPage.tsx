@@ -38,6 +38,7 @@ import { FundamentalTab } from './FundamentalTab'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import { TechnicalTab } from './TechnicalTab'
 import { WhatIfTab } from './WhatIfTab'
+import { WatchTab } from './WatchTab'
 import { useDailySeries } from './useDailySeries'
 import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -54,14 +55,19 @@ export interface StockDetailTarget {
 interface StockDetailPageProps extends StockDetailTarget {
   /** The control items on the left side of the top of the page (AnalysisPage passes in the drop-down menu for switching stocks)*/
   selector?: ReactNode
+  /** Fired when a row in the 觀察股票 tab is clicked. Carries both the ticker and its display name. */
+  onSelectTicker?: (ticker: string, name: string) => void
+  /** Fired after the 觀察股票 tab successfully adds or removes a watched ticker. */
+  onWatchlistChanged?: () => void
 }
 
-type DetailTab = 'analysis' | 'whatif' | 'ai'
+type DetailTab = 'analysis' | 'whatif' | 'ai' | 'watch'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
   { id: 'whatif', label: '損益試算' },
   { id: 'ai', label: 'AI 分析' },
+  { id: 'watch', label: '觀察股票' },
 ]
 
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
@@ -75,7 +81,15 @@ function CardHead({ title, meta }: { title: string; meta?: string }) {
   )
 }
 
-export function StockDetailPage({ ticker, name, holding, quote, selector }: StockDetailPageProps) {
+export function StockDetailPage({
+  ticker,
+  name,
+  holding,
+  quote,
+  selector,
+  onSelectTicker,
+  onWatchlistChanged,
+}: StockDetailPageProps) {
   const [tab, setTab] = useState<DetailTab>('analysis')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
@@ -369,10 +383,12 @@ export function StockDetailPage({ ticker, name, holding, quote, selector }: Stoc
         <div className="glass detail-body">
           <WhatIfTab ticker={ticker} currentPrice={quote?.price ?? null} />
         </div>
-      ) : (
+      ) : tab === 'ai' ? (
         <div className="glass detail-body">
           <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
         </div>
+      ) : (
+        <WatchTab onSelectTicker={(t, n) => onSelectTicker?.(t, n)} onChanged={onWatchlistChanged} />
       )}
     </div>
   )

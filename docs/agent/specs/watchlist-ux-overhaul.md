@@ -20,7 +20,8 @@ Putting the section on 庫存總覽 costs no nav cell and still makes it first-c
 
 | Item | Decision |
 | ---- | ---- |
-| Watchlist home | 庫存總覽, a `觀察中` section directly under `Active 持股` |
+| Watchlist home | **個股分析**, a 4th inner tab named `觀察股票` beside 分析內容 / 損益試算 / AI 分析 |
+| Stock picker | **holdings only.** The 觀察 group is removed from the dropdown; watched stocks are reached only from the 觀察股票 tab |
 | 管理觀察 as a concept | **Removed.** Add = a search-only modal; remove = `×` on the row |
 | Watched rows | Show 現價 and 漲跌, like holdings |
 | What-if layout | One sentence with three inline inputs + one pair of headline numbers |
@@ -28,18 +29,34 @@ Putting the section on 庫存總覽 costs no nav cell and still makes it first-c
 
 ## Contract
 
-### 1. `庫存總覽` — new `觀察中` section
+### 1. `觀察股票` tab inside 個股分析
 
-- Renders directly after the `Active 持股` section, same `.section` / `.section-title` markup as
-  its siblings so the two read as equals.
+**Revision (user, after seeing 0.9.0 on dev).** The 庫存總覽 placement was never the user's choice —
+they asked twice for 個股分析, and the main session turned their answer about *status* ("跟持股平起
+平坐") into a decision about *location*. Corrected: the watchlist is the 4th tab of the stock detail
+tab strip, and 庫存總覽 goes back to exactly what it was before 0.9.0.
+
+- `StockDetailPage`'s `TABS` becomes 分析內容 / 損益試算 / AI 分析 / **觀察股票**.
+- The tab renders the list, the count and the add entry — same table content as before.
 - Title: `觀察中` plus the count as `N/30` (`WATCHLIST_MAX`), and a `＋ 加入觀察` button.
 - Columns: 代號, 名稱, 現價, 漲跌, and a `×` remove control per row.
 - Quotes: ONE batched `fetchPrices` call for all watched tickers (`{ market: 'TPE', ticker }`).
   A ticker with no quote shows `—`, never a spinner that never ends and never `NaN`.
-- Row click navigates to 個股分析 with that ticker selected. Wiring: `AppShell` owns a
-  `pendingAnalysisTicker` state, passes `onOpenAnalysis(ticker)` down to `DashboardPage` and the
-  resulting initial ticker to `AnalysisPage`. There is no router in this app, so this is the only
-  way to cross pages.
+- Row click selects that ticker as the page's current stock. Wiring: `StockDetailPage` takes an
+  `onSelectTicker(ticker, name)` prop and `AnalysisPage` handles it. `AnalysisPage` keys
+  `StockDetailPage` by the selection, so picking a watched stock remounts it and lands on
+  分析內容 — which is the point of the click.
+- Because the picker no longer lists watched stocks, `AnalysisPage` still needs the watchlist to
+  RESOLVE a selection (name, and whether the key is valid) — it just does not render it in the menu.
+- **Selection resolution order** (both halves of it were review BLOCKERs before they were pinned
+  here): matching holding **by ticker** → matching entry in the loaded watchlist → the
+  `{ticker, name}` handed over by the tab → first holding → first watched → null.
+  - Holdings win regardless of the key's prefix: a stock you hold is a holding, and the watchlist
+    is only how you found it. Resolving a `watch:` key without checking holdings stripped qty and
+    cost from a stock the user had bought after watching it.
+  - `WatchTab` reports every successful add and remove upward (`onChanged`), `AnalysisPage`
+    re-reads the list and clears the handed-over entry. Two unsynchronised copies let a removed
+    stock stay on screen indefinitely.
 - `×` calls `removeWatch(ticker)` and refreshes the section in place. No confirm dialog — it is
   reversible in two clicks and a confirm on every row is worse.
 - Empty state: `還沒有觀察標的` + the same `＋ 加入觀察` button. The section always renders, so the
@@ -84,16 +101,22 @@ Layout, in this order:
 
 ### 4. `AnalysisPage`
 
-- The `管理觀察` button is removed; the picker keeps its 持股 / 觀察 groups unchanged.
-- The both-empty state points the user to 庫存總覽 instead of offering a button that no longer exists.
+- The `管理觀察` button stays removed.
+- **The picker lists holdings only** — no 持股 / 觀察 group headers, back to a flat list. A watched
+  stock can still be the current selection (its name shows on the trigger); it is simply not
+  reachable from the menu.
+- With no TW holding at all, the page must still render so the 觀察股票 tab is reachable — the
+  empty state may no longer be a dead end.
 
 ## Files
 
 | File | Action |
 | ---- | ---- |
-| `sources/src/components/Dashboard/WatchSection.tsx` | new |
-| `sources/src/components/Dashboard/DashboardPage.tsx` | mount the section, accept `onOpenAnalysis` |
-| `sources/src/components/AppShell.tsx` | hold the pending ticker; wire 庫存總覽 → 個股分析 |
+| `sources/src/components/StockDetail/WatchTab.tsx` | new (was `Dashboard/WatchSection.tsx`) |
+| `sources/src/components/StockDetail/StockDetailPage.tsx` | 4th tab + `onSelectTicker` |
+| `sources/src/components/Dashboard/WatchSection.tsx` | delete |
+| `sources/src/components/Dashboard/DashboardPage.tsx` | revert to pre-0.9.0 |
+| `sources/src/components/AppShell.tsx` | revert to pre-0.9.0 |
 | `sources/src/components/StockDetail/AddWatchModal.tsx` | new (replaces WatchlistPanel) |
 | `sources/src/components/StockDetail/WatchlistPanel.tsx` | delete (with its test) |
 | `sources/src/components/StockDetail/WhatIfTab.tsx` | rewrite the layout |

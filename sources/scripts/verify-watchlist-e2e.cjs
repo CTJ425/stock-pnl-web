@@ -7,8 +7,8 @@
  * component test can see that. Only a real browser can, which is what this script does:
  * it asserts the dialog's bounding box is inside the viewport, not merely that it exists.
  *
- * 0.9.0 moved the watchlist to 庫存總覽 as a first-class section, so this walks the new
- * journey: dashboard → 加入觀察 → row → 個股分析 → 損益試算 → remove.
+ * The watchlist lives in 個股分析 as the 觀察股票 tab, so this walks that journey:
+ * 個股分析 → 觀察股票 tab → 加入觀察 → row → 分析內容 → 損益試算 → remove.
  *
  * Run against DEV only. It writes to `tw_watchlist` and removes what it adds.
  *
@@ -97,6 +97,10 @@ async function main() {
   const ref = new URL(supabaseUrl).hostname.split('.')[0]
   const session = mintSession(devEnv)
 
+  // Idempotent start: a crashed earlier run can leave the test ticker on the watchlist, and then
+  // the add step fails for a reason that has nothing to do with the code under test.
+  psql(`DELETE FROM tw_watchlist WHERE ticker = '${TICKER}';`)
+
   const browser = await chromium.launch()
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ignoreHTTPSErrors: true })
   const page = await ctx.newPage()
@@ -106,14 +110,22 @@ async function main() {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
 
-  // 1. The watchlist now lives on 庫存總覽 and is visible without opening anything.
-  await page.getByRole('button', { name: '庫存總覽' }).first().click()
-  await page.waitForTimeout(2500)
-  const section = page.getByText('觀察中', { exact: true }).first()
-  await section.waitFor({ state: 'visible', timeout: 15000 })
-  const sectionBox = await section.boundingBox()
-  if (sectionBox && sectionBox.height > 0) ok('庫存總覽出現「觀察中」區塊', `y=${Math.round(sectionBox.y)}`)
-  else bad('庫存總覽出現「觀察中」區塊')
+  // 1. The watchlist is the 4th tab of 個股分析.
+  await page.getByRole('button', { name: '個股分析' }).first().click()
+  await page.waitForTimeout(3000)
+  const watchTab = page.getByRole('button', { name: '觀察股票' }).first()
+  await watchTab.waitFor({ state: 'visible', timeout: 15000 })
+  await watchTab.click()
+  await page.waitForTimeout(1500)
+  const heading = page.getByText('觀察中', { exact: true }).first()
+  await heading.waitFor({ state: 'visible', timeout: 10000 })
+  const headBox = await heading.boundingBox()
+  const vp0 = page.viewportSize()
+  if (headBox && headBox.y >= 0 && headBox.y < vp0.height) {
+    ok('觀察股票頁籤內容在可視範圍內', `y=${Math.round(headBox.y)} viewport=${vp0.height}`)
+  } else {
+    bad('觀察股票頁籤內容在可視範圍內', JSON.stringify(headBox))
+  }
 
   // 2. Add, through a modal that must land inside the viewport.
   const addBtn = page.getByRole('button', { name: /加入觀察/ }).first()
@@ -131,10 +143,9 @@ async function main() {
 
   await page.getByLabel('搜尋股票').fill(TICKER)
   // Wait for the result, not for a fixed delay: on a cold localStorage cache getTwStockList()
-  // fetches the whole TW listing, which takes seconds. A fixed 1.2s wait made this script fail
-  // on first run and pass on the second — a flaky verifier is worse than none, because people
-  // learn to ignore it.
-  const hit = page.getByRole('button', { name: new RegExp(`加入 ${TICKER}`) }).first()
+  // fetches the whole TW listing, which takes seconds. A fixed wait made this script fail on
+  // first run and pass on the second — a flaky verifier is worse than none.
+  const hit = page.getByRole('button', { name: new RegExp(`^加入 ${TICKER} `) }).first()
   await hit.waitFor({ state: 'visible', timeout: 25000 }).catch(() => {})
   if (await hit.count()) {
     await hit.click()
@@ -144,20 +155,27 @@ async function main() {
     bad(`加入觀察標的 ${TICKER}`, '搜尋不到，可能已持有或已在清單中')
   }
 
-  // 3. The new row shows up on the dashboard, with a price.
-  const row = page.locator('tr', { hasText: TICKER }).first()
+  // 3. The row shows up in the tab, priced.
+  const row = page.locator('tr').filter({ has: page.getByRole('button', { name: new RegExp(`^移除 ${TICKER} `) }) }).first()
   await row.waitFor({ state: 'visible', timeout: 10000 })
   const rowText = (await row.textContent()) || ''
   if (/NaN|Infinity/.test(rowText)) bad('觀察列數字正常', rowText.slice(0, 80))
   else ok('觀察列數字正常', rowText.replace(/\s+/g, ' ').trim().slice(0, 60))
 
-  // 4. Clicking the row crosses into 個股分析 with that ticker selected.
+  // 4. Clicking the row makes it the current stock and lands on 分析內容.
+  //
+  // Assert on the picker trigger, NOT on the whole page text. An earlier version of this check
+  // did the latter and passed while the page had not switched at all — the watchlist itself
+  // prints the ticker, so `body.includes(TICKER)` is true either way. That weak assertion hid a
+  // real regression where a freshly added row could not be selected.
+  const triggerBefore = (await page.getByRole('button', { name: /切換個股/ }).first().textContent()) || ''
   await row.click()
   await page.waitForTimeout(6000)
-  const afterJump = (await page.locator('body').textContent()) || ''
-  if (afterJump.includes(TICKER)) ok('點列進入個股分析並選定該檔')
-  else bad('點列進入個股分析並選定該檔')
-  if (/行情尚未取得|抓不到這檔股票的報價/.test(afterJump)) bad('觀察股取得報價', '仍顯示「行情尚未取得」')
+  const triggerAfter = (await page.getByRole('button', { name: /切換個股/ }).first().textContent()) || ''
+  if (triggerAfter.includes(TICKER)) ok('點列後換成該檔個股', triggerAfter.trim())
+  else bad('點列後換成該檔個股', `trigger 仍是 ${triggerAfter.trim()}（原本 ${triggerBefore.trim()}）`)
+  const afterPick = (await page.locator('body').textContent()) || ''
+  if (/行情尚未取得|抓不到這檔股票的報價/.test(afterPick)) bad('觀察股取得報價', '仍顯示「行情尚未取得」')
   else ok('觀察股取得報價')
 
   // 5. The what-if tab must show its sell price, not assume one silently.
@@ -177,10 +195,10 @@ async function main() {
     else bad('提高賣出價後損益轉正', raised.trim())
   }
 
-  // 6. Clean up on the dashboard row, where removing now lives.
-  await page.getByRole('button', { name: '庫存總覽' }).first().click()
-  await page.waitForTimeout(2500)
-  const remove = page.getByRole('button', { name: new RegExp(`移除 ${TICKER}`) }).first()
+  // 6. Clean up back in the tab.
+  await page.getByRole('button', { name: '觀察股票' }).first().click()
+  await page.waitForTimeout(2000)
+  const remove = page.getByRole('button', { name: new RegExp(`^移除 ${TICKER} `) }).first()
   if (await remove.count()) {
     await remove.click()
     await page.waitForTimeout(1500)

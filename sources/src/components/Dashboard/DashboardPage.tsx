@@ -23,7 +23,6 @@ import {
 import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
-import { WatchSection } from './WatchSection'
 
 /** Description of each field (shown by the "?" icon in the header). Written for people who are unfamiliar with stocks: short sentences, vernacular, no formulas.*/
 const HELP = {
@@ -180,7 +179,7 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
   )
 }
 
-export function DashboardPage({ onOpenAnalysis }: { onOpenAnalysis?: (ticker: string) => void } = {}) {
+export function DashboardPage() {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
   const { prices, loading, refreshedAt, refresh } = useStockPrices(holdings)
@@ -362,8 +361,6 @@ export function DashboardPage({ onOpenAnalysis }: { onOpenAnalysis?: (ticker: st
           </>
         )}
       </div>
-
-      <WatchSection onOpenAnalysis={onOpenAnalysis ?? (() => {})} />
     </>
   )
 }
