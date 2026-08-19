@@ -49,13 +49,60 @@ describe('WhatIfTab 費率取用', () => {
   })
 })
 
-describe('WhatIfTab 沒有報價時', () => {
-  // A newly watched ticker has no quote until the nightly batch runs, so this is the
-  // first thing such a user sees. It must read as "not yet", not as broken.
-  it('currentPrice 為 null 時顯示提示，不出現 NaN 或 Infinity', () => {
-    const { container } = render(<WhatIfTab ticker="2059" currentPrice={null} />)
+describe('WhatIfTab 賣出價', () => {
+  it('賣出價是可見的輸入，預設帶現價', async () => {
+    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+
+    const sell = screen.getByLabelText('賣出價') as HTMLInputElement
+    expect(sell.value).toBe('24.2')
+    // 0.8.0 隱形假設「以現價賣出」，畫面上完全沒說，數字因此讀起來像壞掉。
+    expect(screen.getByText(/現價 24\.2/)).toBeTruthy()
+  })
+
+  it('改賣出價，主數字跟著變', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+
+    const before = screen.getByTestId('whatif-pnl').textContent
+    fireEvent.change(screen.getByLabelText('賣出價'), { target: { value: '30' } })
+    const after = screen.getByTestId('whatif-pnl').textContent
+
+    expect(after).not.toBe(before)
+    expect(after).toMatch(/\+/)
+  })
+
+  it('沒有現價時三個輸入都可填，填完就算得出來', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    const { container } = render(<WhatIfTab ticker="2330" currentPrice={null} />)
+
+    expect((screen.getByLabelText('賣出價') as HTMLInputElement).value).toBe('')
+    expect(container.textContent).not.toMatch(/NaN|Infinity/)
+
+    fireEvent.change(screen.getByLabelText('假想買進價'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('賣出價'), { target: { value: '110' } })
+
+    expect(screen.getByTestId('whatif-pnl').textContent).toMatch(/\+/)
+  })
+
+  it('損益與報酬率是唯二的主數字，其餘明細收在小字', async () => {
+    render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+
+    expect(screen.getByTestId('whatif-pnl')).toBeTruthy()
+    expect(screen.getByTestId('whatif-roi')).toBeTruthy()
+    // 明細仍在，但不是主角
+    const detail = screen.getByTestId('whatif-detail').textContent || ''
+    for (const label of ['成本', '賣出可得', '手續費', '證交稅', '回本價']) {
+      expect(detail).toContain(label)
+    }
+  })
+
+  it('輸入不合法時給提示而不是 NaN', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    const { container } = render(<WhatIfTab ticker="2330" currentPrice={24.2} />)
+
+    fireEvent.change(screen.getByLabelText('股數'), { target: { value: '0' } })
 
     expect(container.textContent).not.toMatch(/NaN|Infinity/)
-    expect(screen.getByLabelText('假想買進價')).toHaveProperty('value', '')
+    expect(screen.queryByTestId('whatif-pnl')).toBeNull()
   })
 })

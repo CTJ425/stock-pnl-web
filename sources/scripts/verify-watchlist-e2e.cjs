@@ -1,11 +1,14 @@
 /**
- * Browser E2E for the 觀察清單 feature (0.8.0 / 0.8.1) — DEV only.
+ * Browser E2E for the 觀察清單 feature — DEV only.
  *
  * Why this exists: 0.8.0 shipped with the 管理觀察 button apparently dead. Every one of the
  * 1058 unit tests passed, because the panel *was* rendered — just as a plain inline section
  * appended below a very long report page, far off screen. jsdom has no layout, so no
  * component test can see that. Only a real browser can, which is what this script does:
  * it asserts the dialog's bounding box is inside the viewport, not merely that it exists.
+ *
+ * 0.9.0 moved the watchlist to 庫存總覽 as a first-class section, so this walks the new
+ * journey: dashboard → 加入觀察 → row → 個股分析 → 損益試算 → remove.
  *
  * Run against DEV only. It writes to `tw_watchlist` and removes what it adds.
  *
@@ -103,70 +106,80 @@ async function main() {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
 
-  await page.getByRole('button', { name: '個股分析' }).first().click()
+  // 1. The watchlist now lives on 庫存總覽 and is visible without opening anything.
+  await page.getByRole('button', { name: '庫存總覽' }).first().click()
   await page.waitForTimeout(2500)
-  ok('進入個股分析')
+  const section = page.getByText('觀察中', { exact: true }).first()
+  await section.waitFor({ state: 'visible', timeout: 15000 })
+  const sectionBox = await section.boundingBox()
+  if (sectionBox && sectionBox.height > 0) ok('庫存總覽出現「觀察中」區塊', `y=${Math.round(sectionBox.y)}`)
+  else bad('庫存總覽出現「觀察中」區塊')
 
-  const manage = page.getByRole('button', { name: '管理觀察' }).first()
-  await manage.waitFor({ state: 'visible', timeout: 15000 })
-  ok('〔管理觀察〕按鈕可見')
-
-  await manage.click()
-  const dialog = page.getByRole('dialog', { name: '管理觀察' })
+  // 2. Add, through a modal that must land inside the viewport.
+  const addBtn = page.getByRole('button', { name: /加入觀察/ }).first()
+  await addBtn.waitFor({ state: 'visible', timeout: 10000 })
+  await addBtn.click()
+  const dialog = page.getByRole('dialog', { name: /加入觀察/ })
   await dialog.waitFor({ state: 'visible', timeout: 8000 })
   const box = await dialog.boundingBox()
   const vp = page.viewportSize()
-  // THE 0.8.0 regression: rendered, but off screen.
   if (box && box.y >= 0 && box.y < vp.height && box.height > 0) {
-    ok('面板出現在可視範圍內', `y=${Math.round(box.y)} h=${Math.round(box.height)} viewport=${vp.height}`)
+    ok('加入對話框在可視範圍內', `y=${Math.round(box.y)} h=${Math.round(box.height)} viewport=${vp.height}`)
   } else {
-    bad('面板出現在可視範圍內', JSON.stringify(box))
+    bad('加入對話框在可視範圍內', JSON.stringify(box))
   }
 
   await page.getByLabel('搜尋股票').fill(TICKER)
-  await page.waitForTimeout(1200)
-  const add = page.getByRole('button', { name: new RegExp(`加入 ${TICKER}`) }).first()
-  if (await add.count()) {
-    await add.click()
-    await page.waitForTimeout(1800)
+  // Wait for the result, not for a fixed delay: on a cold localStorage cache getTwStockList()
+  // fetches the whole TW listing, which takes seconds. A fixed 1.2s wait made this script fail
+  // on first run and pass on the second — a flaky verifier is worse than none, because people
+  // learn to ignore it.
+  const hit = page.getByRole('button', { name: new RegExp(`加入 ${TICKER}`) }).first()
+  await hit.waitFor({ state: 'visible', timeout: 25000 }).catch(() => {})
+  if (await hit.count()) {
+    await hit.click()
+    await page.waitForTimeout(2000)
     ok(`加入觀察標的 ${TICKER}`)
   } else {
     bad(`加入觀察標的 ${TICKER}`, '搜尋不到，可能已持有或已在清單中')
   }
 
-  await dialog.getByRole('button', { name: '關閉' }).click()
-  await page.waitForTimeout(800)
-  if (!(await page.getByRole('dialog', { name: '管理觀察' }).count())) ok('關閉面板')
-  else bad('關閉面板')
+  // 3. The new row shows up on the dashboard, with a price.
+  const row = page.locator('tr', { hasText: TICKER }).first()
+  await row.waitFor({ state: 'visible', timeout: 10000 })
+  const rowText = (await row.textContent()) || ''
+  if (/NaN|Infinity/.test(rowText)) bad('觀察列數字正常', rowText.slice(0, 80))
+  else ok('觀察列數字正常', rowText.replace(/\s+/g, ' ').trim().slice(0, 60))
 
-  await page.getByRole('button', { name: /切換個股/ }).first().click()
-  await page.waitForTimeout(900)
-  const menuText = (await page.getByRole('menu', { name: '個股清單' }).textContent()) || ''
-  if (menuText.includes('觀察') && menuText.includes(TICKER)) ok('下拉「觀察」組出現該檔')
-  else bad('下拉「觀察」組出現該檔', menuText.slice(0, 120))
-
-  await page.getByRole('menuitemradio', { name: new RegExp(TICKER) }).first().click()
+  // 4. Clicking the row crosses into 個股分析 with that ticker selected.
+  await row.click()
   await page.waitForTimeout(6000)
-
-  const afterSelect = (await page.locator('body').textContent()) || ''
-  // 0.8.1: watched tickers used to get quote={null} and showed 「行情尚未取得」.
-  if (/行情尚未取得|抓不到這檔股票的報價/.test(afterSelect)) bad('觀察股取得報價', '仍顯示「行情尚未取得」')
+  const afterJump = (await page.locator('body').textContent()) || ''
+  if (afterJump.includes(TICKER)) ok('點列進入個股分析並選定該檔')
+  else bad('點列進入個股分析並選定該檔')
+  if (/行情尚未取得|抓不到這檔股票的報價/.test(afterJump)) bad('觀察股取得報價', '仍顯示「行情尚未取得」')
   else ok('觀察股取得報價')
 
+  // 5. The what-if tab must show its sell price, not assume one silently.
   await page.getByRole('button', { name: '損益試算' }).first().click()
   await page.waitForTimeout(1500)
   const whatIfText = (await page.locator('body').textContent()) || ''
   if (!/NaN|Infinity/.test(whatIfText)) ok('損益試算無 NaN/Infinity')
   else bad('損益試算無 NaN/Infinity')
-  const buyValue = await page.getByLabel('假想買進價').inputValue().catch(() => '')
-  if (buyValue && Number(buyValue) > 0) ok('試算帶入現價當預設買進價', `= ${buyValue}`)
-  else bad('試算帶入現價當預設買進價', `value="${buyValue}"`)
-  if (/回本價/.test(whatIfText)) ok('試算算出結果（出現回本價）')
-  else bad('試算算出結果（出現回本價）')
+  const sellValue = await page.getByLabel('賣出價').inputValue().catch(() => null)
+  if (sellValue !== null && Number(sellValue) > 0) ok('賣出價是可見輸入且帶入現價', `= ${sellValue}`)
+  else bad('賣出價是可見輸入且帶入現價', `value=${JSON.stringify(sellValue)}`)
+  if (sellValue) {
+    await page.getByLabel('賣出價').fill((Number(sellValue) * 1.2).toFixed(2))
+    await page.waitForTimeout(600)
+    const raised = (await page.locator('[data-testid="whatif-pnl"]').textContent().catch(() => '')) || ''
+    if (raised.includes('+')) ok('提高賣出價後損益轉正', raised.trim())
+    else bad('提高賣出價後損益轉正', raised.trim())
+  }
 
-  // Always clean up: this script must leave the DEV watchlist as it found it.
-  await page.getByRole('button', { name: '管理觀察' }).first().click()
-  await page.waitForTimeout(1500)
+  // 6. Clean up on the dashboard row, where removing now lives.
+  await page.getByRole('button', { name: '庫存總覽' }).first().click()
+  await page.waitForTimeout(2500)
   const remove = page.getByRole('button', { name: new RegExp(`移除 ${TICKER}`) }).first()
   if (await remove.count()) {
     await remove.click()

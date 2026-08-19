@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.0（2026-08-19）— 觀察清單 UX 重構：第一級公民化與庫存概覽整合
+
+- 📐 **資訊架構重組**：分析發現 0.8.0 版 panel 在另一頁按鈕後方、損益試算難讀、無法發現、不符應用風格等四項問題，根本原因為設計決策（避免擠壓 320px 行動裝置底欄而埋藏功能）違反架構——觀察股應與持股等級相同、住在持股之處。
+- 📊 **庫存總覽新增觀察中區塊**：直接置於「Active 持股」下方，同表格式（代號 / 名稱 / 現價 / 漲跌）加 × 按鈕；計數 N/30；空狀態亦渲染；一次批次 `fetchPrices` 呼叫全部觀察項；`colgroup`（12/34/22/22/10）使 5 欄表與上方 10 欄持股表相關聯。
+- 🗑️ **WatchlistPanel.tsx 刪除**：管理觀察不再獨立檢視。加入改以 `AddWatchModal`（使用共享 `Modal`、計數列在本體、應用既有 `search-box`/`search-input` 樣式）；移除在列上操作。
+- 💹 **損益試算分頁重寫**：賣出價改為可見輸入框、預設帶入現價、提示「預設：現價 X」；僅損益與報酬率為標題大小，成本 / 賣出所得 / 手續費 / 證交稅 / 回本價縮成小字明細行。前版出場價隱形（「買 24.2 / 賣 24.2 / 虧 140」讀起來故障），現已明確。算法不變：仍用 `calculateFee` / `breakEvenPrice`。
+- 🎯 **個股分析頁變更**：移除管理觀察按鈕；空狀態指向庫存總覽；新增選填 `initialTicker` 參數。`AppShell` 擁有 `pendingAnalysisTicker`，拉觀察列直達分析。
+- 🧪 **測試**：`npx vitest run` 73 檔 / **1072 項全通**；`npx tsc --noEmit` 0 errors；`npx tsc -p tsconfig.edge.json` 0 errors；`npx oxlint src supabase` 0 errors；`npm run build` ok；**瀏覽器 E2E 端對端（Playwright 對 DEV、新寫）10/10**：庫存總覽觀察中區塊 → 加入對話框（y=59, 800px viewport）→ 加入 1101 → 列顯示 NT$24.05 -0.21% → 點列跳個股分析並選定 → 損益試算賣出價帶入 24.05 → 拉高賣出價後損益轉正 +NT$4,649 → 移除還原。DEV 資料每執行還原。
+- 📝 **稽核**：派遣 reviewer，**PASS**；2 項 RISK 開啟、提交前均已結案：(1) `load()` 一次 try/catch 包列表與報價，報價失敗會清空已取得清單→分拆獨立 catch、報價失敗僅降級價格欄為「—」、已補測試；(2) × 無防重按——雙擊發兩次刪除和交疊重載、順序顛倒會閃爍舊快照→補防重按設 `removing` 旗標禁按鈕、已補測試。流程課題記錄：E2E 腳本等固定 1200ms 打字後，冷 `getTwStockList()` 快取時首跑失敗、二跑過→改等結果元素（至多 25s），隨機失敗驗證器比無驗證還差。
+- 🤝 **已接納取捨，非缺陷**：觀察中區塊在 1440×900 螢幕上 y≈806，即有五檔持股時折線下方。置於持股上方判為更差。
+- ⚙️ **未改動**：無 schema 變更、無 Edge 部署、無 migration。
+- 📋 **參考規格**：`docs/agent/specs/watchlist-ux-overhaul.md`。
+
 ### 0.8.1（2026-08-19）— 管理觀察面板置入模態框；觀察股報價即時取得
 
 - 🐛 **BUG-030 管理觀察面板位置失效**：`WatchlistPanel` 原為平面 `<section className="glass section">` 置於 `<StockDetailPage>` 之後，因為 StockDetailPage 是全長報告頁，開啟面板時會附加在折線以下，按鈕顯得無反應。修法：將面板封裝入既有共享元件 `sources/src/components/Common/Modal.tsx`，使用其傳送至 `document.body` 的入口、overlay、Esc 關閉與單一關閉按鈕（`aria-label="關閉"`）；移除面板自身的標題與重複關閉鈕。根本原因：jsdom 無版面資訊，1058 個單元測試全數通過而功能不可用；新增迴歸測試斷言面板應為 `role="dialog"` 並傳送至 DOM 外（`container.contains(dialog) === false`、`document.body.contains(dialog) === true`），並於瀏覽器檢查對話框邊界在可視範圍內。

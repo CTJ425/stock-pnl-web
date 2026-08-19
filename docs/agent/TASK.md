@@ -25,6 +25,18 @@
 
 ## 📋 Active Tasks
 
+### Task 116: 0.9.0 觀察清單 UX overhaul（資訊架構調整）
+- **Status**: ⏳ **Release recorded; DEV commit ready; PROD merge pending user approval**
+- **Agent**: Scribe
+- **Timestamp**: 2026-08-19 14:04:06 Asia/Taipei
+- **Done**:
+  1. ✅ Changelog entry (0.9.0 in `docs/agent/CHANGELOG.md`)
+  2. ✅ Progress log entry (2026-08-19 14:04:06 in `docs/agent/PROGRESS.md`)
+  3. ✅ Roll oldest entry from PROGRESS.md to `PROGRESS_ARCHIVE.md`
+  4. ✅ Task tracking record (this entry)
+- **Unfinished**:
+  1. ⏳ **PROD deploy**: Merge `dev` → `main` to trigger Pages deployment; user go-ahead required per CLAUDE.md § Branches & envs.
+
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**

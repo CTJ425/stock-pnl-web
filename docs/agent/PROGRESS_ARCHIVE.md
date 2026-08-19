@@ -3,6 +3,29 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-08-19 11:29:34 Asia/Taipei (0.8.0 post-release deployment — watchlist and P&L simulator)
+
+- **Deployment**: Version 0.8.0 schema and Edge functions deployed to DEV and PROD; merged `dev` → `main`.
+- **What was deployed**:
+  - Schema: `tw_watchlist` max cap 5 → 30, trigger renamed `tw_watchlist_max5` → `tw_watchlist_max30` with compatible dual drop.
+  - Edge (`stock-report`): Whitelist logic expanded from "held only" to "held ∪ watched"; new functions `watchedTwTickers()`, `allowedTwTickers()`; `batchTwTickers()` returns union; 403 message updated to "僅限持有或已加入觀察清單的台股代號".
+- **Deployment sequence**:
+  1. **DEV schema migration** — Applied via `docker exec stock-pnl-web-dev-db-1 psql`. Before: `tw_watchlist_max5`, cap 5, 2 rows. After: `tw_watchlist_max30`, cap 30, 2 rows preserved. DEV identity confirmed: `batch_run_log = 142`.
+  2. **DEV Edge deploy** — Volume copy `index.ts` + `batchTickers.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`, then `docker compose up -d --force-recreate functions`. Confirmed in container: `allowedTwTickers` appears 5 times, new 403 guard string appears twice.
+  3. **DEV end-to-end verification** — Called `generate` action (signed-in user):
+     - Ticker `2327` (on watchlist, held by nobody): **HTTP 200**, produced report `20260818_2327_…`. Pre-0.8.0 code returned 403 for this path.
+     - Ticker `1101` (neither held nor watched): **HTTP 403** with new message, confirming whitelist widened without becoming open.
+     - Ticker `2059` (held): **HTTP 200**, no regression on existing path.
+     - Unauthenticated call: **401**, confirming `assertUser` still runs before whitelist check.
+  4. **PROD schema migration** — Applied via Supabase Management API with explicit project ref `kxnxadaghidwumqsqneu`. Before: `tw_watchlist_max5`, cap 5, 0 rows. After: `tw_watchlist_max30`, cap 30, 0 rows. PROD identity confirmed: `batch_run_log = 441`.
+  5. **PROD Edge deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/`. Version 53 → **54**; `ezbr_sha256` changed; `verify_jwt` remains **false** (unchanged, correct for after-hours cron). PROD unauthenticated call returned 401, confirming function is live.
+  6. **Merge to main** — Fast-forward `ab03d9d..cbbdba0`, pushed. Both `dev` and `main` now at `cbbdba0`; Pages deploys 0.8.0.
+- **What was NOT proven on PROD**: The watched-ticker allow path verified end-to-end on DEV (identical bundle), but not re-exercised on PROD because `tw_watchlist` is empty and requires a signed-in browser session. First real PROD exercise happens when a user adds a watched ticker.
+- **Correction**: ~~Watched ticker's chips remain empty until the nightly batch runs~~ **Chips appear immediately** — when the published batch file is missing, `reportProxy` falls back to the Edge `generate` action, which is now open to watched tickers (not just holdings). The browser console shows 400 on the missing file read; this is expected and handled, not a fault. Users do not need to wait for the nightly batch.
+- **Commit**: `cbbdba0` (0.8.0).
+
+---
+
 ## 📅 Log: 2026-08-19 11:01:43 Asia/Taipei (0.8.0 release: 觀察清單與損益試算)
 
 - **Release**: Version 0.8.0 official release, finalized.
