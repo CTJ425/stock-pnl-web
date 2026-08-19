@@ -1,5 +1,5 @@
 /**
- * 損益試算 (what-if): "what if I had bought this ticker at X" calculator, sold at today's quote.
+ * 損益試算 (what-if): "what if I had bought this ticker at X and sold at Y" calculator.
  *
  * State lives only in this component — the inputs are deliberately not persisted to
  * localStorage, Supabase, or any store, so this tab never reflects or affects real
@@ -18,16 +18,16 @@ interface WhatIfTabProps {
 
 export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
   const { current } = useWorkspace()
-  const [buyPrice, setBuyPrice] = useState(
-    currentPrice !== null && currentPrice > 0 ? String(currentPrice) : '',
-  )
+  const hasQuote = currentPrice !== null && currentPrice > 0
+  const [buyPrice, setBuyPrice] = useState(hasQuote ? String(currentPrice) : '')
   const [qty, setQty] = useState('1000')
+  // Sell price is now a real, visible input — the exit price used to be an invisible
+  // assumption (silently the current quote), so the result read as a broken number.
+  const [sellPrice, setSellPrice] = useState(hasQuote ? String(currentPrice) : '')
 
   const buyPriceNum = Number(buyPrice)
   const qtyNum = Number(qty)
-  // Sell price is the current quote, not a third input — the tab answers "what if I had
-  // bought at X, given today's price", not a fully independent buy/sell scenario.
-  const priceNum = currentPrice ?? NaN
+  const sellPriceNum = Number(sellPrice)
 
   // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
   // TransactionForm): an unscoped read would price the estimate with the global rate
@@ -41,14 +41,15 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
     ticker,
     buyPrice: buyPriceNum,
     qty: qtyNum,
-    price: priceNum,
+    price: sellPriceNum,
     feeRate,
     minFee,
   })
 
   return (
     <div className="rpt-section">
-      <div className="field-row">
+      <div className="field-row whatif-sentence">
+        <span>若我在</span>
         <div className="field">
           <label htmlFor="whatif-buy-price">假想買進價</label>
           <input
@@ -60,6 +61,7 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
             onChange={(e) => setBuyPrice(e.target.value)}
           />
         </div>
+        <span>買進</span>
         <div className="field">
           <label htmlFor="whatif-qty">股數</label>
           <input
@@ -71,41 +73,53 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
             onChange={(e) => setQty(e.target.value)}
           />
         </div>
+        <span>股，並在</span>
+        <div className="field">
+          <label htmlFor="whatif-sell-price">賣出價</label>
+          <input
+            id="whatif-sell-price"
+            type="number"
+            step="0.01"
+            min="0"
+            value={sellPrice}
+            onChange={(e) => setSellPrice(e.target.value)}
+          />
+        </div>
+        <span>賣出</span>
       </div>
+      {hasQuote && <div className="hint">預設：現價 {currentPrice}</div>}
 
       {result ? (
-        <div className="rpt-cards">
-          <div className="rpt-card">
-            <div className="k">成本（含買進手續費）</div>
-            <div className="v">{fmtMoney(result.cost, 'TWD')}</div>
+        <>
+          <div className="whatif-headline">
+            <div>
+              <div className="whatif-headline-label">損益</div>
+              <div
+                className={`whatif-headline-value ${pnlClass(result.pnl)}`}
+                data-testid="whatif-pnl"
+              >
+                {fmtSignedMoney(result.pnl, 'TWD')}
+              </div>
+            </div>
+            <div>
+              <div className="whatif-headline-label">報酬率</div>
+              <div
+                className={`whatif-headline-value ${pnlClass(result.roi)}`}
+                data-testid="whatif-roi"
+              >
+                {fmtPercent(result.roi)}
+              </div>
+            </div>
           </div>
-          <div className="rpt-card">
-            <div className="k">買進手續費</div>
-            <div className="v">{fmtMoney(result.buyFee, 'TWD')}</div>
+          <div className="hint" data-testid="whatif-detail">
+            成本 {fmtMoney(result.cost, 'TWD')} · 賣出可得 {fmtMoney(result.proceeds, 'TWD')}
+            <br />
+            手續費 {fmtMoney(result.buyFee, 'TWD')}＋{fmtMoney(result.sellFeeTax, 'TWD')}（含證交稅） ·
+            回本價 {fmtMoney(result.breakEven, 'TWD', 2)}
           </div>
-          <div className="rpt-card">
-            <div className="k">賣出手續費＋證交稅</div>
-            <div className="v">{fmtMoney(result.sellFeeTax, 'TWD')}</div>
-          </div>
-          <div className="rpt-card">
-            <div className="k">賣出可得</div>
-            <div className="v">{fmtMoney(result.proceeds, 'TWD')}</div>
-          </div>
-          <div className="rpt-card">
-            <div className="k">損益</div>
-            <div className={`v ${pnlClass(result.pnl)}`}>{fmtSignedMoney(result.pnl, 'TWD')}</div>
-          </div>
-          <div className="rpt-card">
-            <div className="k">報酬率</div>
-            <div className={`v ${pnlClass(result.roi)}`}>{fmtPercent(result.roi)}</div>
-          </div>
-          <div className="rpt-card">
-            <div className="k">回本價</div>
-            <div className="v">{fmtMoney(result.breakEven, 'TWD', 2)}</div>
-          </div>
-        </div>
+        </>
       ) : (
-        <div className="hint">請輸入大於 0 的假想買進價與股數（並確認目前股價已取得）。</div>
+        <div className="hint">請輸入大於 0 的假想買進價、股數與賣出價。</div>
       )}
 
       <p className="hint">此為試算工具，不會影響持股或任何損益報表。</p>

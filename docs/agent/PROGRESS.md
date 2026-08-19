@@ -1,9 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.8.1 bugfix release recording
+- Action: 0.9.0 release recording
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-19 11:58:53 Asia/Taipei
+- Timestamp: 2026-08-19 14:04:06 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-19 14:04:06 Asia/Taipei (0.9.0 release — watchlist UX overhaul; information architecture)
+
+- **Release**: Version 0.9.0 on `dev` branch, pending user approval to merge `dev` → `main` for PROD deployment.
+- **Scope**: Frontend only. No schema changes, no Edge function changes, no migration required.
+- **Root cause**: After 0.8.1 was shipped to PROD, user reported four interconnected UX problems: (1) the panel looked half-finished; (2) 損益試算 was unreadable; (3) the entry point was undiscoverable; (4) none of it matched the rest of the app. Analysis revealed the common cause: the 0.8.0 placement decision (buried behind a button on another page to avoid squeezing the 320px mobile bottom bar) violated information architecture — a watched stock should be a first-class citizen equal to a holding, living where holdings live.
+- **What changed** (matches spec: `docs/agent/specs/watchlist-ux-overhaul.md`):
+  1. **庫存總覽 gains 觀察中 section** — directly under `Active 持股`, same section/table markup: 代號 / 名稱 / 現價 / 漲跌 + `×` per row; count as `N/30`; `＋ 加入觀察` button; renders when empty; one batched `fetchPrices` call for all watched tickers; `colgroup` (12/34/22/22/10) keeps 5-column table visually related to 10-column holdings table above.
+  2. **WatchlistPanel.tsx deleted** — `管理觀察` as a separate view is gone. Adding via `AddWatchModal` (shared `Modal`, count in body, project's `search-box`/`search-input` styling). Removing happens on the row.
+  3. **WhatIfTab rewritten** — 賣出價 now a visible input defaulting to live quote, with `預設：現價 X` hint. Only 損益 and 報酬率 are headline; cost / proceeds / fees / tax / break-even collapse to small-text detail line. Exit price was invisible before, which is why "買 24.2 / 賣 24.2 / 虧 140" looked broken. Math unchanged: `calculateFee` / `breakEvenPrice`.
+  4. **AnalysisPage changes** — loses 管理觀察 button; empty state points to 庫存總覽; new optional `initialTicker` parameter. `AppShell` owns `pendingAnalysisTicker`, wires watched-row click through to 個股分析.
+- **Testing**: `npx vitest run` → 73 files, **1072 passed**, 0 failed. `npx tsc --noEmit` 0 errors; `npx tsc -p tsconfig.edge.json` 0 errors; `npx oxlint src supabase` 0 errors; `npm run build` ok. Browser E2E (`sources/scripts/verify-watchlist-e2e.cjs`, rewritten for new journey, **10/10** against DEV): 庫存總覽 觀察中 區塊 → 加入對話框 (y=59 in 800px viewport) → 加入 1101 → 列顯示 `NT$24.05 -0.21%` → 點列跳個股分析並選定 → 損益試算賣出價帶入 24.05 → 拉高賣出價後損益轉正 `+NT$4,649` → 移除還原. DEV data restored every run.
+- **Reviewer verdict** (route:reviewer **PASS**, two RISKs, both CLOSED before commit): (1) `load()` wrapped list fetch and price fetch in one try/catch; a quote failure would have emptied a watchlist that had loaded fine. **Fix**: split into two independent catches; price failure now degrades only price cells to `—`. Test added. (2) `×` had no in-flight guard; double click fired two removes and overlapping reloads that could commit out of order and flash stale snapshot. **Fix**: added `removing` guard disabling button. Test added. **Process lesson recorded**: E2E script waited fixed 1200ms after typing, failed on cold `getTwStockList()` cache on first run, passed on second. Now waits for result element (up to 25s); a verifier that fails randomly is worse than none.
+- **Known trade-off, NOT a defect**: 觀察中 section sits at y≈806 on 1440×900 screen, just below fold with five holdings. Moving above 持股 was judged worse.
+- **Unfinished**: PROD deploy — awaiting user go-ahead to merge to `main` and deploy Pages.
+- **Commit**: Not yet (awaiting merge approval).
 
 ---
 
@@ -18,26 +36,3 @@
 - **Reviewer verdict**: Lane 1. Two RISKs raised: (1) **Accepted** — watched entry deleted while viewing falls back to another without signalling; user removed it themselves, fallback is reasonable. (2) **Rejected as incorrect** — workspace switch could leave stale watchlist; `tw_watchlist` keyed by `user_id` only, schema says "Per-user, not per-workspace", no per-workspace watchlist exists to go stale.
 - **Unfinished**: None — complete release.
 - **Commit**: `cbbdba0` (0.8.0, version files bumped for 0.8.1).
-
----
-
-## 📅 Log: 2026-08-19 11:29:34 Asia/Taipei (0.8.0 post-release deployment — watchlist and P&L simulator)
-
-- **Deployment**: Version 0.8.0 schema and Edge functions deployed to DEV and PROD; merged `dev` → `main`.
-- **What was deployed**:
-  - Schema: `tw_watchlist` max cap 5 → 30, trigger renamed `tw_watchlist_max5` → `tw_watchlist_max30` with compatible dual drop.
-  - Edge (`stock-report`): Whitelist logic expanded from "held only" to "held ∪ watched"; new functions `watchedTwTickers()`, `allowedTwTickers()`; `batchTwTickers()` returns union; 403 message updated to "僅限持有或已加入觀察清單的台股代號".
-- **Deployment sequence**:
-  1. **DEV schema migration** — Applied via `docker exec stock-pnl-web-dev-db-1 psql`. Before: `tw_watchlist_max5`, cap 5, 2 rows. After: `tw_watchlist_max30`, cap 30, 2 rows preserved. DEV identity confirmed: `batch_run_log = 142`.
-  2. **DEV Edge deploy** — Volume copy `index.ts` + `batchTickers.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`, then `docker compose up -d --force-recreate functions`. Confirmed in container: `allowedTwTickers` appears 5 times, new 403 guard string appears twice.
-  3. **DEV end-to-end verification** — Called `generate` action (signed-in user):
-     - Ticker `2327` (on watchlist, held by nobody): **HTTP 200**, produced report `20260818_2327_…`. Pre-0.8.0 code returned 403 for this path.
-     - Ticker `1101` (neither held nor watched): **HTTP 403** with new message, confirming whitelist widened without becoming open.
-     - Ticker `2059` (held): **HTTP 200**, no regression on existing path.
-     - Unauthenticated call: **401**, confirming `assertUser` still runs before whitelist check.
-  4. **PROD schema migration** — Applied via Supabase Management API with explicit project ref `kxnxadaghidwumqsqneu`. Before: `tw_watchlist_max5`, cap 5, 0 rows. After: `tw_watchlist_max30`, cap 30, 0 rows. PROD identity confirmed: `batch_run_log = 441`.
-  5. **PROD Edge deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/`. Version 53 → **54**; `ezbr_sha256` changed; `verify_jwt` remains **false** (unchanged, correct for after-hours cron). PROD unauthenticated call returned 401, confirming function is live.
-  6. **Merge to main** — Fast-forward `ab03d9d..cbbdba0`, pushed. Both `dev` and `main` now at `cbbdba0`; Pages deploys 0.8.0.
-- **What was NOT proven on PROD**: The watched-ticker allow path verified end-to-end on DEV (identical bundle), but not re-exercised on PROD because `tw_watchlist` is empty and requires a signed-in browser session. First real PROD exercise happens when a user adds a watched ticker.
-- **Correction**: ~~Watched ticker's chips remain empty until the nightly batch runs~~ **Chips appear immediately** — when the published batch file is missing, `reportProxy` falls back to the Edge `generate` action, which is now open to watched tickers (not just holdings). The browser console shows 400 on the missing file read; this is expected and handled, not a fault. Users do not need to wait for the nightly batch.
-- **Commit**: `cbbdba0` (0.8.0).

@@ -17,16 +17,18 @@ import { positionKey } from '../../types/models'
 import { listWatchlist, type WatchItem } from '../../services/watchlistService'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
-import { WatchlistPanel } from './WatchlistPanel'
 
-export function AnalysisPage() {
+interface AnalysisPageProps {
+  initialTicker?: string
+}
+
+export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
   const { prices } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
-  const [showWatchlistPanel, setShowWatchlistPanel] = useState(false)
   const [watchQuote, setWatchQuote] = useState<PriceQuote | null>(null)
 
   function reloadWatchlist() {
@@ -74,8 +76,15 @@ export function AnalysisPage() {
   // Sold-out or workspace change may drop the selected key — fall back to the first
   // holding, then the first watched entry.
   const allEntries = [...holdingEntries, ...watchEntries]
+  const initialEntry = initialTicker
+    ? allEntries.find((e) => e.ticker === initialTicker)
+    : undefined
   const selected =
-    allEntries.find((e) => e.key === selectedKey) ?? holdingEntries[0] ?? watchEntries[0] ?? null
+    allEntries.find((e) => e.key === selectedKey) ??
+    initialEntry ??
+    holdingEntries[0] ??
+    watchEntries[0] ??
+    null
 
   const watchTicker = selected?.kind === 'watch' ? selected.ticker : null
 
@@ -111,23 +120,9 @@ export function AnalysisPage() {
           </div>
           <div>目前沒有台股持股，沒有可以分析的個股。</div>
           <div className="hint" style={{ marginTop: 6 }}>
-            盤後籌碼資料只涵蓋上市台股。到「交易紀錄」新增一筆台股買入，或按下方按鈕加入一檔觀察標的。
+            盤後籌碼資料只涵蓋上市台股。到「交易紀錄」新增一筆台股買入，或到「庫存總覽」加入一檔觀察標的。
           </div>
-          <button
-            type="button"
-            className="btn"
-            style={{ marginTop: 12 }}
-            onClick={() => setShowWatchlistPanel(true)}
-          >
-            管理觀察
-          </button>
         </div>
-        {showWatchlistPanel && (
-          <WatchlistPanel
-            onClose={() => setShowWatchlistPanel(false)}
-            onChanged={reloadWatchlist}
-          />
-        )}
       </div>
     )
   }
@@ -195,9 +190,6 @@ export function AnalysisPage() {
           </>
         )}
       </HeaderMenu>
-      <button type="button" className="btn" onClick={() => setShowWatchlistPanel(true)}>
-        管理觀察
-      </button>
     </div>
   )
 
@@ -221,12 +213,6 @@ export function AnalysisPage() {
         quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : watchQuote}
         selector={selector}
       />
-      {showWatchlistPanel && (
-        <WatchlistPanel
-          onClose={() => setShowWatchlistPanel(false)}
-          onChanged={reloadWatchlist}
-        />
-      )}
     </>
   )
 }

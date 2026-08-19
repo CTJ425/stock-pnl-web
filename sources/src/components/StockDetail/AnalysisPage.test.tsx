@@ -50,15 +50,6 @@ vi.mock('../../services/watchlistService', () => ({
   addWatch: vi.fn(),
   removeWatch: vi.fn(),
 }))
-vi.mock('./WatchlistPanel', () => ({
-  WatchlistPanel: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="watchlist-panel">
-      <button type="button" onClick={onClose}>
-        關閉
-      </button>
-    </div>
-  ),
-}))
 
 import { AnalysisPage } from './AnalysisPage'
 import { computeLedger } from '../../utils/pnlEngine'
@@ -281,26 +272,23 @@ describe('AnalysisPage', () => {
     expect(screen.queryByText(/目前沒有台股持股/)).toBeNull()
   })
 
-  it('持股與觀察都沒有時才顯示空狀態，且就地提供加入觀察的入口', async () => {
+  it('持股與觀察都沒有時才顯示空狀態，並指向庫存總覽', async () => {
     setup([tx({ market: 'US', ticker: 'AAPL', name: 'Apple Inc.' })])
     render(<AnalysisPage />)
 
     const empty = await screen.findByText(/目前沒有台股持股/)
-    expect(empty.closest('.empty-state')?.textContent).toMatch(/觀察標的/)
-    expect(screen.getByRole('button', { name: '管理觀察' })).toBeTruthy()
+    // The add entry point now lives on 庫存總覽, so the empty state points there.
+    expect(empty.closest('.empty-state')?.textContent).toMatch(/庫存總覽/)
+    expect(screen.queryByRole('button', { name: '管理觀察' })).toBeNull()
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 
-  it('管理觀察按鈕開關面板', async () => {
-    const user = userEvent.setup()
+  it('不再有管理觀察按鈕（觀察清單已移到庫存總覽）', async () => {
     setup(TW_AND_US)
     render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
 
-    expect(screen.queryByTestId('watchlist-panel')).toBeNull()
-    await user.click(screen.getByRole('button', { name: '管理觀察' }))
-    expect(screen.getByTestId('watchlist-panel')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '關閉' }))
-    expect(screen.queryByTestId('watchlist-panel')).toBeNull()
+    expect(screen.queryByRole('button', { name: '管理觀察' })).toBeNull()
   })
 
   it('同時持有又在觀察的代號只出現一次，且留在持股組', async () => {
