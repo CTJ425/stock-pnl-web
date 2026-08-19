@@ -11,16 +11,33 @@ import { fmtMoney, fmtPercent, fmtSignedMoney, pnlClass } from '../../utils/form
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { useWorkspace } from '../../context/WorkspaceContext'
 
+type Unit = '張' | '股'
+
 interface WhatIfTabProps {
   ticker: string
   currentPrice: number | null
+  /** Set for a held stock, null for a watched one. Fee-inclusive average cost. */
+  avgCost: number | null
+  /** Set for a held stock, null for a watched one. Shares currently held. */
+  heldQty: number | null
 }
 
-export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
+export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
   const hasQuote = currentPrice !== null && currentPrice > 0
-  const [buyPrice, setBuyPrice] = useState(hasQuote ? String(currentPrice) : '')
-  const [qty, setQty] = useState('1000')
+  const isHeld = avgCost !== null
+
+  const [buyPrice, setBuyPrice] = useState(
+    isHeld ? avgCost.toFixed(2) : hasQuote ? String(currentPrice) : ''
+  )
+  const [unit, setUnit] = useState<Unit>(
+    isHeld && heldQty !== null && heldQty % 1000 !== 0 ? '股' : '張'
+  )
+  const [qty, setQty] = useState(
+    isHeld && heldQty !== null
+      ? String(heldQty % 1000 === 0 ? heldQty / 1000 : heldQty)
+      : '1'
+  )
   // Sell price is now a real, visible input — the exit price used to be an invisible
   // assumption (silently the current quote), so the result read as a broken number.
   const [sellPrice, setSellPrice] = useState(hasQuote ? String(currentPrice) : '')
@@ -28,19 +45,23 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
   const buyPriceNum = Number(buyPrice)
   const qtyNum = Number(qty)
   const sellPriceNum = Number(sellPrice)
+  // The input is a sandbox and stays in whatever unit the user typed it in; only the
+  // derived share count switches with the unit selector, so an in-place rewrite never
+  // fights the user mid-typing (unlike TransactionForm, which does rewrite in place).
+  const shares = unit === '張' ? qtyNum * 1000 : qtyNum
 
   // Scoped to the workspace like every other caller (AnalysisPage, DashboardPage,
   // TransactionForm): an unscoped read would price the estimate with the global rate
   // while the workspace has its own, and the difference would be invisible.
   const feeRate = getFeeRate(current?.id)
   // Whole-lot vs odd-lot minimum fee follows the entered qty, same rule as the transaction form.
-  const minFeeUnit = qtyNum > 0 && qtyNum % 1000 === 0 ? 'whole' : 'odd'
+  const minFeeUnit = shares > 0 && shares % 1000 === 0 ? 'whole' : 'odd'
   const minFee = getMinFee(minFeeUnit, current?.id)
 
   const result = whatIf({
     ticker,
     buyPrice: buyPriceNum,
-    qty: qtyNum,
+    qty: shares,
     price: sellPriceNum,
     feeRate,
     minFee,
@@ -51,7 +72,7 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
       <div className="field-row whatif-sentence">
         <span>若我在</span>
         <div className="field">
-          <label htmlFor="whatif-buy-price">假想買進價</label>
+          <label htmlFor="whatif-buy-price">買進價格</label>
           <input
             id="whatif-buy-price"
             type="number"
@@ -73,9 +94,21 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
             onChange={(e) => setQty(e.target.value)}
           />
         </div>
-        <span>股，並在</span>
         <div className="field">
-          <label htmlFor="whatif-sell-price">賣出價</label>
+          <label htmlFor="whatif-unit">單位</label>
+          <select
+            id="whatif-unit"
+            className="narrow"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value as Unit)}
+          >
+            <option value="張">張</option>
+            <option value="股">股</option>
+          </select>
+        </div>
+        <span>，並在</span>
+        <div className="field">
+          <label htmlFor="whatif-sell-price">賣出價格</label>
           <input
             id="whatif-sell-price"
             type="number"
@@ -87,7 +120,6 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
         </div>
         <span>賣出</span>
       </div>
-      {hasQuote && <div className="hint">預設：現價 {currentPrice}</div>}
 
       {result ? (
         <>
@@ -111,17 +143,21 @@ export function WhatIfTab({ ticker, currentPrice }: WhatIfTabProps) {
               </div>
             </div>
           </div>
-          <div className="hint" data-testid="whatif-detail">
-            成本 {fmtMoney(result.cost, 'TWD')} · 賣出可得 {fmtMoney(result.proceeds, 'TWD')}
-            <br />
-            手續費 {fmtMoney(result.buyFee, 'TWD')}＋{fmtMoney(result.sellFeeTax, 'TWD')}（含證交稅） ·
-            回本價 {fmtMoney(result.breakEven, 'TWD', 2)}
+          <div className="hint" data-testid="whatif-fees">
+            含手續費與證交稅 -{fmtMoney(result.buyFee + result.sellFeeTax, 'TWD')}
           </div>
         </>
       ) : (
-        <div className="hint">請輸入大於 0 的假想買進價、股數與賣出價。</div>
+        <div className="hint">請輸入大於 0 的買進價格、股數與賣出價格。</div>
       )}
 
+      {hasQuote && (
+        <div className="hint">
+          {isHeld
+            ? `買進價預設為平均成本 ${avgCost.toFixed(2)}`
+            : `買進價預設為現價 ${currentPrice}`}
+        </div>
+      )}
       <p className="hint">此為試算工具，不會影響持股或任何損益報表。</p>
     </div>
   )

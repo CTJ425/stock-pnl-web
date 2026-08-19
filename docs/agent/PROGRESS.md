@@ -1,9 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.0 release recording
+- Action: 0.9.1-dev.1 completion recording
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-19 14:04:06 Asia/Taipei
+- Timestamp: 2026-08-19 16:22:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-19 16:22:00 Asia/Taipei (0.9.1-dev.1 — simplify 損益試算 and style 觀察股票 card)
+
+- **Release**: Version 0.9.1-dev.1 on `dev` branch (frontend only, no deployment yet).
+- **Scope**: Two cosmetic and UX clarity changes in the 個股分析 tab strip. No schema changes, no Edge function changes, no migration required.
+- **What changed** (matches spec: `docs/agent/specs/whatif-simplify-and-watch-card.md`):
+  1. **觀察股票 tab now has glass card wrapping** — `StockDetailPage.tsx:391` was mounting `<WatchTab/>` bare while 損益試算 and AI 分析 siblings had `<div className="glass detail-body">` wrapper. Added same wrapper. `WatchTab.tsx:72-76` replaced dashboard-legacy heading pattern (`.section` / `.section-title` / `<h2>`) with StockDetail pattern (`.rpt-section` / `.rpt-section-head` / `<h3>`). Visual consistency achieved; no button changes.
+  2. **損益試算 reduced to four numbers** — Removed 成本 / 賣出可得 / 手續費拆項 / 回本價 detail rows. Screen now shows: 損益 and 報酬率 (headline size), followed by `含手續費與證交稅 -X` (small line). Calculation unchanged (`whatIf.ts`, `utils/fees.ts`, `utils/pnlEngine.ts` untouched); `cost`, `proceeds`, `breakEven` still returned, just not rendered.
+  3. **Default values and unit selector** — `WhatIfTab` new props `avgCost` / `heldQty`. Held stock defaults: 買進價格 = fee-inclusive `avgCost` (matches 庫存總覽 未實現損益, not raw trade price), qty = held shares (張 if divisible by 1000, else 股). Watched stock defaults: 買進價格 = live quote, qty = 1 張. 賣出價格 always defaults to live quote. New張/股 unit selector; does not rewrite typed buy price in place, only updates share count.
+  4. **Decision record** — Net P&L includes brokerage and tax, with fee total shown on small line (user decision). Held stock's default buy price is fee-inclusive `avgCost` so result reconciles with 庫存總覽 (user decision).
+- **Testing**: `npx vitest run` → 73 files, **1079 passed** (0.9.0 had 1073), 0 failed. `WhatIfTab.test.tsx` rewritten to 14 tests. `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok.
+- **Reviewer verdict**: route:reviewer **PASS**, no findings.
+- **Verification gap**: Browser E2E not run — `AppShell.tsx:103` filters 個股分析 out of local mode as Supabase-only tab, so local Playwright cannot reach either 觀察股票 or 損益試算 tabs. DEV login not available. Gap recorded as open task 117.
+- **Unfinished**: Browser verification (Task 117, open).
+- **Commit**: (Not created by Scribe; main session handling.)
 
 ---
 
@@ -29,17 +46,3 @@
 - **Reviewer verdict**: route:reviewer **FAIL** then **PASS** after fixes. Two BLOCKERs (defects 3, 4) and one RISK (defect 5) found during round-trip review, all closed before final commit. **Process lesson**: E2E script waited fixed 1200ms after typing; on cold `getTwStockList()` cache, failed first run, passed second. Now waits for result element (up to 25s); random failure is worse than no verification.
 - **Unfinished**: PROD deploy — awaiting user go-ahead to merge to `main` and deploy Pages.
 - **Commit**: Ready (awaiting merge approval).
-
----
-
-## 📅 Log: 2026-08-19 11:58:53 Asia/Taipei (0.8.1 bugfix — management panel placement and watched stock pricing)
-
-- **Release**: Version 0.8.1 bugfix on 0.8.0 (Frontend only).
-- **What was fixed**:
-  - **BUG-030 — 管理觀察 button looked dead**: `WatchlistPanel` was rendered as a flat inline section after `<StockDetailPage>`, placing it far below the fold. Fix: wrap in `Modal.tsx` (portals to `document.body`, brings overlay, Esc handler, single close button). Root cause: jsdom has no layout, so all 1058 unit tests passed while the feature was unusable in browser.
-  - **BUG-031 — watched ticker had no quote**: `AnalysisPage` passed `quote={null}` for every watch entry because `useStockPrices` only covers holdings. Fix: for the selected watched entry, fetch `fetchPrices([{ market: 'TPE', ticker }])` from `priceProxy.ts`, with `cancelled` flag in effect cleanup to prevent stale responses from overwriting. Failure leaves quote null, never blocks rendering.
-- **Correction recorded**: Earlier claim that "chips stay empty until nightly batch" was incorrect — chips appear immediately because `reportProxy` falls back to Edge `generate` action when batch file is missing; browser console 400 is expected and handled.
-- **Testing**: Unit tests: `npx vitest run` → 72 files, **1060 passed**, 0 failed. Types/lint/build: `npx tsc --noEmit` 0 errors; `npx tsc -p tsconfig.edge.json` 0 errors; `npx oxlint src supabase` 0 errors; `npm run build` ok. **Browser E2E (Playwright against DEV, new)** — 12/12 steps: 進個股分析 → 管理觀察可見 → 面板出現在可視範圍內 (y=49, viewport 800) → 搜尋並加入 1101 → 關閉 → 下拉觀察組出現 1101 → 選取後頁面渲染 → 觀察股取得報價 → 損益試算可開且無 NaN/Infinity → 試算帶入現價 24.2 當預設買進價 → 算出回本價 → 移除 1101 還原 DEV 資料。
-- **Reviewer verdict**: Lane 1. Two RISKs raised: (1) **Accepted** — watched entry deleted while viewing falls back to another without signalling; user removed it themselves, fallback is reasonable. (2) **Rejected as incorrect** — workspace switch could leave stale watchlist; `tw_watchlist` keyed by `user_id` only, schema says "Per-user, not per-workspace", no per-workspace watchlist exists to go stale.
-- **Unfinished**: None — complete release.
-- **Commit**: `cbbdba0` (0.8.0, version files bumped for 0.8.1).

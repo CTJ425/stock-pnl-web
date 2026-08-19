@@ -381,14 +381,21 @@ export function StockDetailPage({
         </div>
       ) : tab === 'whatif' ? (
         <div className="glass detail-body">
-          <WhatIfTab ticker={ticker} currentPrice={quote?.price ?? null} />
+          <WhatIfTab
+            ticker={ticker}
+            currentPrice={quote?.price ?? null}
+            avgCost={holding?.avgCost ?? null}
+            heldQty={holding?.qty ?? null}
+          />
         </div>
       ) : tab === 'ai' ? (
         <div className="glass detail-body">
           <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
         </div>
       ) : (
-        <WatchTab onSelectTicker={(t, n) => onSelectTicker?.(t, n)} onChanged={onWatchlistChanged} />
+        <div className="glass detail-body">
+          <WatchTab onSelectTicker={(t, n) => onSelectTicker?.(t, n)} onChanged={onWatchlistChanged} />
+        </div>
       )}
     </div>
   )

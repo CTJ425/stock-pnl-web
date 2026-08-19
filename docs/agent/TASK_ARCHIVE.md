@@ -11,6 +11,24 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 117: 0.9.1-dev.1 — simplify 損益試算 and style 觀察股票 card
+- **Status**: ✅ **COMPLETED — frontend-only change, testing & review passed; browser E2E deferred as Task 118 open item**
+- **Agent**: Builder (implementation) + Reviewer (PASS verdict)
+- **Timestamp**: 2026-08-19 16:22:00 Asia/Taipei (completion)
+- **Spec**: `docs/agent/specs/whatif-simplify-and-watch-card.md`
+- **Work items**:
+  1. ✅ **Change A — 觀察股票 tab card styling** — `StockDetailPage.tsx:391` wrapped `<WatchTab/>` in `<div className="glass detail-body">` (matching siblings). `WatchTab.tsx:72-76` replaced dashboard legacy pattern (`.section` / `.section-title` / `<h2>`) with StockDetail pattern (`.rpt-section` / `.rpt-section-head` / `<h3>`). No button changes.
+  2. ✅ **Change B — 損益試算 simplified to four numbers** — Removed 成本 / 賣出可得 / 手續費拆項 / 回本價 detail rows. Screen now shows: 損益 and 報酬率 headline, plus `含手續費與證交稅 -X` small line. Calculation unchanged (`whatIf.ts`, `utils/fees.ts`, `utils/pnlEngine.ts` untouched); `cost`, `proceeds`, `breakEven` still returned, not rendered.
+  3. ✅ **New default values & unit selector** — `WhatIfTab` new props `avgCost` / `heldQty`. Held stock: 買進價格 defaults to fee-inclusive `avgCost` (matches 庫存總覽 未實現損益), qty defaults to held shares (張 if divisible by 1000, else 股). Watched stock: 買進價格 defaults to live quote, qty defaults to 1 張. 賣出價格 always defaults to live quote. New張/股 unit selector; updates share count without rewriting typed buy price.
+  4. ✅ **Decision record** — P&L is net of brokerage and tax, fee total shown on small line (user decision). Held stock default buy price is fee-inclusive `avgCost`, not raw traded price, so result reconciles with 庫存總覽 (user decision).
+  5. ✅ **Testing** — `npx vitest run` → 73 files, **1079 passed** (0.9.0: 1073), 0 failed. `WhatIfTab.test.tsx` rewritten to 14 tests. `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok.
+  6. ✅ **Review** — route:reviewer **PASS**, no findings.
+- **Files changed**: `StockDetailPage.tsx`, `WatchTab.tsx`, `WhatIfTab.tsx`, `WhatIfTab.test.tsx`, `version.ts`, `package.json`, `package-lock.json`, `README.md` (version bump).
+- **Unfinished**: Browser E2E verification deferred to Task 118 (local mode lacks Supabase; DEV login unavailable). Frontend fully tested and reviewed. Deployment: on `dev` branch, not deployed anywhere yet.
+- **Commit**: (Handled by main session; not created by Scribe.)
+
+---
+
 ### Task 115: 0.8.0 post-release deployment (觀察清單 / 損益試算)
 - **Status**: ✅ **SHIPPED — DEV & PROD deployed 2026-08-19 11:29:34 Asia/Taipei; merged to main**
 - **Agent**: Scribe (deployment recording)
