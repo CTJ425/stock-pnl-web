@@ -80,7 +80,57 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
   const anchor = anchorsOnAvgCost ? Math.round(avgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
   const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost })
 
+  // Derived from the rows sellLadder actually returned, never from a re-guess of the mode:
+  // sellLadder's own guard can fall back to Mode 1 (e.g. a held penny stock whose round
+  // grid collapses), and the heading must not claim a Mode 2 window the table doesn't have.
+  const hasCurrentRow = ladder.some((row) => row.kind === 'current' && row.relative !== 0)
+  const heading = anchorsOnAvgCost
+    ? hasCurrentRow
+      ? '賣出階梯 · 涵蓋均價與現價'
+      : '賣出階梯 · 持有均價 ±10%'
+    : '賣出階梯 · 現價 ±10%'
+
+  // Summary strip: one item per mark that actually exists, each priced by its own whatIf
+  // call — never interpolated from a ladder row, since a mark can sit outside whichever
+  // window the ladder happens to use.
+  const markPnl = (price: number) => whatIf({ ...whatIfInput, price })?.pnl ?? 0
+  const showMarks = result !== null && (hasQuote || anchorsOnAvgCost)
+  const markItems = showMarks
+    ? [
+        ...(hasQuote
+          ? [
+              {
+                kind: 'current' as const,
+                label: '現價',
+                price: currentPrice as number,
+                relative: (currentPrice as number) / anchor - 1,
+                pnl: markPnl(currentPrice as number),
+              },
+            ]
+          : []),
+        ...(anchorsOnAvgCost
+          ? [
+              {
+                kind: 'avgCost' as const,
+                label: '持有均價',
+                price: anchor,
+                relative: null,
+                pnl: markPnl(anchor),
+              },
+            ]
+          : []),
+        {
+          kind: 'breakEven' as const,
+          label: '回本',
+          price: result!.breakEven,
+          relative: result!.breakEven / anchor - 1,
+          pnl: markPnl(result!.breakEven),
+        },
+      ]
+    : []
+
   const pick = (row: LadderRow) => setSellPrice(String(row.price))
+  const pickPrice = (price: number) => setSellPrice(String(price))
   const onRowKeyDown = (row: LadderRow) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -90,9 +140,33 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
 
   return (
     <div className="rpt-section">
+      {markItems.length > 0 && (
+        <div className="whatif-marks" data-testid="whatif-marks">
+          {markItems.map((item) => (
+            <button
+              key={item.kind}
+              type="button"
+              className={`whatif-mark whatif-mark--${item.kind}`}
+              data-testid="whatif-mark"
+              data-kind={item.kind}
+              onClick={() => pickPrice(item.price)}
+            >
+              <span className="whatif-mark-label">{item.label}</span>
+              <span className="whatif-mark-price">{fmtMoney(item.price, 'TWD', 2)}</span>
+              <span className="whatif-mark-relative">
+                {item.relative === null ? '—' : fmtSignedPercent(item.relative)}
+              </span>
+              <span className={`whatif-mark-pnl ${pnlClass(item.pnl)}`}>
+                {fmtSignedMoney(item.pnl, 'TWD')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {ladder.length > 0 && (
         <>
-          <h3>{anchorsOnAvgCost ? '賣出階梯 · 持有均價 ±10%' : '賣出階梯 · 現價 ±10%'}</h3>
+          <h3>{heading}</h3>
           <div className="table-scroll">
             <table className="data-table whatif-ladder" data-testid="whatif-ladder">
               <thead>

@@ -82,6 +82,21 @@ export interface LadderMarks {
 
 const LADDER_STEPS = [-0.1, -0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1]
 
+/** Candidate step multipliers, tried smallest first (Renard-ish "round price" grid). */
+const STEP_MULTIPLIERS = [1, 2, 2.5, 5, 10]
+
+/**
+ * Round-price step size for a `[lo, hi]window: about 12 steps across the window, snapped
+ * up to the first "nice" multiplier so grid lines land on round prices, never finer than
+ * the TWSE 0.01 tick.
+ */
+function stepSize(lo: number, hi: number): number {
+  const raw = (hi - lo) / 12
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const step = STEP_MULTIPLIERS.find((m) => m * mag >= raw)! * mag
+  return Math.max(step, 0.01)
+}
+
 /**
  * Nine price steps around `input.price` (±10%, 2.5% apart) plus, when they fall inside
  * that window, marked rows for break-even (always computed from `input`) and the caller-
@@ -89,6 +104,11 @@ const LADDER_STEPS = [-0.1, -0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1]
  * itself — the anchor is always `input.price`, chosen by the caller. Rows are ordered
  * highest price first (+10% on top). Each row's pnl/roi/proceeds/sellFeeTax is a fresh
  * `whatIf` call at that row's price — the ladder never interpolates fees.
+ *
+ * When `marks.avgCost` is a real holding (> 0), the window switches to a union that
+ * always covers the anchor, the average cost, and the live quote, laid out on a round-
+ * price grid instead of fixed 2.5% steps — see `stepSize`. A watched stock (no avgCost)
+ * keeps the fixed ±10% / 2.5% ladder unchanged.
  */
 export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[] {
   const base = whatIf(input)
@@ -114,11 +134,43 @@ export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[]
   // step and dedupe below can't merge them.
   const snap = (v: number) => Math.round(v * 100) / 100
 
-  const stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step'))
+  const avgCostForWindow = marks?.avgCost != null && marks.avgCost > 0 ? marks.avgCost : null
+  const currentForWindow =
+    marks?.currentPrice != null && Number.isFinite(marks.currentPrice) && marks.currentPrice > 0
+      ? marks.currentPrice
+      : null
+
+  let stepRows: LadderRow[]
+  let windowLo: number | null = null
+  let windowHi: number | null = null
+  if (avgCostForWindow != null) {
+    const lo = Math.min(anchor, avgCostForWindow, currentForWindow ?? Infinity) * 0.9
+    const hi = Math.max(anchor, avgCostForWindow, currentForWindow ?? -Infinity) * 1.1
+    const step = stepSize(lo, hi)
+    const start = Math.ceil(lo / step)
+    const end = Math.floor(hi / step)
+    const prices: number[] = []
+    for (let i = start; i <= end; i++) prices.push(snap(i * step))
+    stepRows = prices.map((p) => rowFor(p, 'step'))
+    if (stepRows.length >= 2) {
+      windowLo = lo
+      windowHi = hi
+    }
+  } else {
+    stepRows = []
+  }
+
+  if (stepRows.length < 2) {
+    stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step'))
+    windowLo = null
+    windowHi = null
+  }
 
   const rows = [...stepRows]
-  const minStepPrice = stepRows[0].price
-  const maxStepPrice = stepRows[stepRows.length - 1].price
+  // Mode 2's grid rounds inward (ceil/floor), so the window itself — not the grid extremes
+  // — is the correct test: an outermost mark can legitimately sit outside the grid's own rows.
+  const minStepPrice = windowLo ?? Math.min(...stepRows.map((r) => r.price))
+  const maxStepPrice = windowHi ?? Math.max(...stepRows.map((r) => r.price))
   const inWindow = (price: number) =>
     Number.isFinite(price) && price > 0 && price >= minStepPrice && price <= maxStepPrice
 

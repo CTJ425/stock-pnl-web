@@ -603,6 +603,60 @@ table.data-table {
   border: 1px solid var(--accent-strong);
 }
 
+/* Summary strip (Task 121): 現價 / 持有均價 / 回本 as clickable cards above the ladder. */
+.whatif-marks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.whatif-mark {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.whatif-mark:focus-visible,
+.whatif-mark:hover {
+  border-color: var(--accent-strong);
+  background: var(--row-hover);
+}
+
+.whatif-mark-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.whatif-mark-price {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.whatif-mark-relative,
+.whatif-mark-pnl {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 560px) {
+  .whatif-mark {
+    flex-basis: 100%;
+    padding: 6px 10px;
+  }
+}
+
 /* Shared-row grid: a row is three sibling cells (key / buy / sell) in DOM order, so the
    grid auto-placement lines up every row without either side laying itself out. */
 .whatif-ledger {
