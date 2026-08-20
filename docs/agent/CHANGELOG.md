@@ -2,36 +2,18 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.9.3-dev.3（2026-08-20）— 賣出階梯現價聚簇設計：動態窗口改為固定窗 + 聚簇
+### 0.9.3（2026-08-20）— 賣出階梯均價錨點與現價聚簇：損益試算分頁 UI 精化完稿
 
-> **設計聚焦**：使用者回饋均價與現價差太多時版面跑掉，故改為主階梯固定（持有均價 ±10%、九檔 2.5%）、現價落外時另成聚簇（±2.5%/±5%/±7.5% 共七筆），兩簇間以分隔列隔開，消除 dev.2 的動態窗口與漂亮價格格線。
+> **功能擴張**：賣出階梯以持有均價為錨點（±10% 九檔 2.5%），現價偏離時另成聚簇（±2.5%/±5%/±7.5%）；兩簇間分隔列隔開；階梯上方摘要列（現價/均價/回本）可點擊帶入賣出價。觀察股票加入對話框改為 Material 風格，自寫 CSS 無新元件庫。中途試驗「聯集窗口 + 漂亮價格格線」因使用者回報版面不穩而移除，改用固定窗口搭現價簇。
 
-- 💹 **階梯二分群設計** — 主階梯回歸「持有均價 ±10% / 九檔 2.5% 級距」；`LadderRow` 新增 `group: 'anchor' | 'quote'`；現價超出窗口時另成聚簇（±2.5% / ±5% / ±7.5% 共七列），落回主窗口的重複列丟棄；兩簇間插 `whatif-ladder-gap` 分隔列（非價格、非可點、`colSpan={5}`）。
-- 🗑️ **移除 dev.2 的聯集窗口與漂亮價格格線** — `stepSize`、`STEP_MULTIPLIERS`、fallback、`windowLo`/`windowHi` 整段刪除無死碼；版面穩定性復原。
-- 📊 **標題與摘要行** — 標題回到「賣出階梯 · 持有均價 ±10%」或「賣出階梯 · 現價 ±10%」；摘要列（現價／均價／回本）與點擊帶入行為維持不變；觀察股行為與 0.9.1 完全相同。
+- 📍 **賣出階梯均價錨點**（Task 119）— `sellLadder()` 新增可選 `marks` 參數（`{ currentPrice?, avgCost? }`），所有九檔改為 `kind: 'step'`；現價/回本/均價標記列動態插入（視窗內才出現）；新增 `LadderKind: 'avgCost'`；優先級 `current:3 > avgCost:2 > breakEven:1 > step:0`；所有標記價格舍入至 0.01 格點。`WhatIfTab` 錨點改為持有均價（設定且 > 0），標題與相對欄隨之切換；`LADDER_TAG` 新增 `avgCost: '均價'`。
+- 💹 **階梯二分群與聚簇設計**（Task 122）— 主階梯固定「持有均價 ±10%」；現價超出時另成聚簇（±2.5% / ±5% / ±7.5% 共七列），落回主窗口者丟棄；兩簇間插 `whatif-ladder-gap` 分隔列（非價格、非可點、`colSpan={5}`）。`LadderRow` 新增 `group: 'anchor' | 'quote'`。標題回到「賣出階梯 · 持有均價 ±10%」或「賣出階梯 · 現價 ±10%」；摘要列（現價／均價／回本）各顯示價格、相對均價 %、該價賣出的損益，可點擊帶入賣出價。觀察股（無持股）行為與 0.9.1 完全相同。
+- 🎨 **加入觀察股票 Modal 改為 Material 觀感**（Task 120）— `.watch-results` / `.watch-result-item` / `.watch-result-symbol` / `.watch-result-name` 新類別，沿用 `.suggestion-item` 視覺語言；48px 觸控高度、focus 重點色底線、modal 疊層陰影（`var(--shadow-card)`），僅用既有 custom property（`--accent`、`--accent-strong`、`--ink-secondary`、`--border`、`--shadow-card`），無新色彩字面值。刻意省略市場標籤（本表每列皆台股）。
+- 🔧 **設計迭代與取捨記錄** — 中途試驗「聯集窗口 + 漂亮價格格線」（dev.2，Task 121）：動態窗口涵蓋均價與現價、級距改為 1/2/2.5/5/10 × 10^k、摘要列新增價格/相對%/損益。Reviewer 發現兩項 FAIL 皆在提交前修正（標記舍入為 0.01、標題由實際渲染推導）。使用者回報均價與現價差太多時版面跑掉，故全段移除聯集窗與漂亮格線，改為固定窗口搭現價簇（dev.3 消除 `stepSize`、`STEP_MULTIPLIERS` 等死碼）。此取捨說明了最終方案為何選了固定窗加現價簇而非動態設計。
 - ✅ **測試** — `npx vitest run` 73 檔 / **1111 項全通**；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors (5 個既有 only-export-components 警告)；`npm run build` ok。
-- 📝 **參考規格** — Task 122、`docs/agent/specs/122-ladder-quote-cluster.md`；`route:reviewer` 對程式碼無缺陷，唯一 FAIL 為「測試檔未申報」，主 session 駁回（測試由主 session 預寫，git diff 證實 builder 未動）。此誤判為第二次出現，需優化檢查點。
-- ⚙️ **未改動** — 無 schema、無 Edge、無 migration。前端專用，dev 分支。
-
-### 0.9.3-dev.2（2026-08-20）— 賣出階梯聯集窗口 + 漂亮價格格線（已被 dev.3 取代）
-
-> **設計迭代（中間版本）**：階梯窗口改為同時涵蓋持有均價與現價（`min(均價, 現價) × 0.9` ～ `max(均價, 現價) × 1.1`），級距改用「漂亮價格」格線。版本號保留供紀錄，功能已完全移除。
-
-- 📍 **聯集窗口與漂亮價格** — 動態窗口涵蓋均價與現價，級距改為 1/2/2.5/5/10 × 10^k（約 12 階，最細 0.01）；摘要列新增現價／均價／回本，各顯價格、相對均價 %、該價賣出損益，可點擊帶入。
-- 🔧 **修復 FAIL 項目** — Reviewer 判 FAIL 兩項，皆在提交前修掉：(1) 標記用格線極值判斷，而格線往內取整，均價 91／現價 250 時均價整列消失 → 改用窗口 `[lo, hi]` 判斷；(2) 標題重新猜測模式，低價股退回固定級距時標題說謊 → 改由實際渲染推導。
-- 🗑️ **被 dev.3 取代** — 使用者回饋版面跑掉，故本版本聯集窗與漂亮格線完全移除，改用兩簇設計（見 dev.3）。dev.3 消除所有死碼（`stepSize`、`STEP_MULTIPLIERS` 等）。
-- 📝 **參考規格** — Task 121、`docs/agent/specs/121-ladder-union-window.md`。
-
-### 0.9.3-dev.1（2026-08-20）— 賣出階梯均價錨點 + 觀察股票 Modal 設計精化
-
-> **功能穩化與使用者交互改善**：賣出階梯新增持有均價作為錨點選項，在成本分析上提供更直觀的對標；觀察股票加入對話框以 Material Design 風格精化，視覺層次與交互反饋更為明確。
-
-- 📍 **賣出階梯均價錨點** — `sources/src/components/StockDetail/whatIf.ts` `sellLadder()` 新增可選 `marks` 參數（`{ currentPrice?, avgCost? }`），所有九檔改為 `kind: 'step'`，現價/回本/均價標記列改由視窗判定動態插入；新增 `LadderKind: 'avgCost'`；優先級調整為 `current:3 > avgCost:2 > breakEven:1 > step:0`；所有標記價格先舍入至 0.01 格點再做視窗檢驗，與階梯價格使用相同格點。
-- 📊 **WhatIfTab 均價切換** — `sources/src/components/StockDetail/WhatIfTab.tsx` 錨點改為持有均價（設定且 > 0，舍入至 0.01 格點），否則回到原先的 `currentPrice ?? buyPriceNum`；標題與相對欄標頭隨之切換（「賣出階梯 · 持有均價 ±10%」/ 「相對均價」或「現價」版本）；破零線由 `row.relative === 0` 驅動；新增 `LADDER_TAG: { avgCost: '均價' }`。
-- 🎨 **觀察股票 Modal 視覺精化** — `sources/src/components/StockDetail/AddWatchModal.tsx` 結果列新增實體類名（`.watch-results`, `.watch-result-item`, `.watch-result-symbol`, `.watch-result-name`）；`sources/src/index.css` 新增 `.watch-results*` 規則族，搜尋框聚焦時顯示下邊框強調（僅複用既有自訂屬性 `--accent`, `--accent-strong`, `--ink-secondary`, `--border`, `--shadow-card`，無新色彩字面值）；模態框陰影改用 `var(--shadow-card)` 分層；觸控目標 48px，hover/active/`:focus-visible` 狀態完備；刻意省略 TwStockRow 的市場標籤（本表無市場欄位，每列皆為台股，現有測試斷言精確文字）。
-- ✅ **測試** — `npx vitest run` 73 檔 / **1100 項全通**；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors；`npm run build` ok。
 - ⚠️ **已知議題（保留 OPEN bug）** — 均價為含費平均成本，而 `whatIf()` 又加一次手續費（重複計算），致回本列坐標高 ~0.14%；錨點改為均價後更顯著；需用戶決策（改用原價或不加手續費），非本次範圍。
-- 📝 **參考規格** — Task 119、Task 120、`docs/agent/specs/119-ladder-anchor-avgcost.md`；`route:reviewer` **PASS** 後修正一項實際阻礙（標記列舍入為 0.01）。
+- 📝 **參考規格** — Task 119、Task 120、Task 121、Task 122、`docs/agent/specs/119-ladder-anchor-avgcost.md`、`121-ladder-union-window.md`、`122-ladder-quote-cluster.md`。
+- ⚙️ **未改動** — 無 schema、無 Edge、無 migration。前端專用。
 
 ### 0.9.2（2026-08-20）— 損益試算賣出階梯列序反轉：由高而低
 
