@@ -272,7 +272,7 @@ describe('sellLadder 錨點與標記：以持有均價展開，現價與回本�
   })
 })
 
-describe('sellLadder 動態窗口：有持股時同時涵蓋均價與現價', () => {
+describe('sellLadder 現價簇：現價在均價 ±10% 之外時另成一簇', () => {
   const base = {
     ticker: '2330',
     buyPrice: 100,
@@ -281,82 +281,54 @@ describe('sellLadder 動態窗口：有持股時同時涵蓋均價與現價', ()
     feeRate: RATE,
     minFee: MIN_FEE,
   }
-  const steps = (rows: ReturnType<typeof sellLadder>) => rows.filter((r) => r.kind === 'step')
-  /** 兩位小數的整除判斷，避開浮點誤差 */
-  const isMultipleOf = (price: number, step: number) =>
-    Math.round(price * 100) % Math.round(step * 100) === 0
+  const groupOf = (rows: ReturnType<typeof sellLadder>, g: 'anchor' | 'quote') =>
+    rows.filter((r) => r.group === g)
 
-  it('現價高於均價時，窗口往上長到現價，級距取齊漂亮價格', () => {
+  it('主階梯維持均價 ±10% 九檔，現價另成上下三筆', () => {
     const rows = sellLadder(base, { currentPrice: 130, avgCost: 100 })
-    const prices = steps(rows).map((r) => r.price)
+    const anchorRows = groupOf(rows, 'anchor')
+    const quoteRows = groupOf(rows, 'quote')
 
-    expect(prices.every((p) => isMultipleOf(p, 5))).toBe(true)
-    expect(Math.min(...prices)).toBe(90)
-    expect(Math.max(...prices)).toBe(140)
-    expect(rows.filter((r) => r.kind === 'current')).toHaveLength(1)
-    expect(rows.filter((r) => r.kind === 'avgCost')).toHaveLength(1)
-    expect(rows.filter((r) => r.kind === 'breakEven')).toHaveLength(1)
+    expect(Math.max(...anchorRows.map((r) => r.price))).toBe(110)
+    expect(Math.min(...anchorRows.map((r) => r.price))).toBe(90)
+    expect(quoteRows.map((r) => r.price)).toEqual([
+      139.75, 136.5, 133.25, 130, 126.75, 123.5, 120.25,
+    ])
+    expect(quoteRows.filter((r) => r.kind === 'current')).toHaveLength(1)
+    expect(rows.length).toBeLessThanOrEqual(18)
   })
 
-  it('現價低於均價時，窗口往下長到現價', () => {
-    const rows = sellLadder(base, { currentPrice: 80, avgCost: 100 })
-    const cur = rows.filter((r) => r.kind === 'current')
+  it('現價落在 ±10% 內就不另開一簇', () => {
+    const rows = sellLadder(base, { currentPrice: 105, avgCost: 100 })
 
-    expect(cur).toHaveLength(1)
-    expect(cur[0].price).toBe(80)
-    expect(Math.min(...steps(rows).map((r) => r.price))).toBeLessThanOrEqual(80)
+    expect(groupOf(rows, 'quote')).toHaveLength(0)
+    expect(rows.every((r) => r.group === 'anchor')).toBe(true)
+    expect(rows.filter((r) => r.kind === 'current')[0].price).toBe(105)
   })
 
-  it('現價離很遠也一定看得到，均價也還在', () => {
-    const rows = sellLadder(base, { currentPrice: 300, avgCost: 100 })
+  it('現價只差一點時，簇裡落回主窗口的那幾筆要丟掉', () => {
+    const rows = sellLadder(base, { currentPrice: 112, avgCost: 100 })
 
-    expect(rows.filter((r) => r.kind === 'current')).toHaveLength(1)
-    expect(rows.filter((r) => r.kind === 'avgCost')).toHaveLength(1)
+    // 112 的 -7.5% / -5% / -2.5% 是 103.6 / 106.4 / 109.2，主階梯已經涵蓋
+    expect(groupOf(rows, 'quote').map((r) => r.price)).toEqual([120.4, 117.6, 114.8, 112])
     expect(new Set(rows.map((r) => r.price)).size).toBe(rows.length)
   })
 
-  it('低價股的級距跟著縮小', () => {
-    const rows = sellLadder({ ...base, buyPrice: 24.2, price: 24.2 }, {
-      currentPrice: 25,
-      avgCost: 24.2,
-    })
+  it('現價遠低於均價時，簇排在主階梯下面，順序仍由高到低', () => {
+    const rows = sellLadder(base, { currentPrice: 60, avgCost: 100 })
+    const quoteRows = groupOf(rows, 'quote')
 
-    expect(steps(rows).every((r) => isMultipleOf(r.price, 0.5))).toBe(true)
+    expect(quoteRows).toHaveLength(7)
+    expect(Math.max(...quoteRows.map((r) => r.price))).toBeLessThan(90)
+    expect(rows.map((r) => r.price)).toEqual(
+      [...rows].map((r) => r.price).sort((a, b) => b - a),
+    )
   })
 
-  it('級距不會細過 0.01 這個最小跳動', () => {
-    const rows = sellLadder({ ...base, buyPrice: 0.35, price: 0.35 }, {
-      currentPrice: 0.36,
-      avgCost: 0.35,
-    })
-    const prices = rows.map((r) => r.price)
-
-    expect(steps(rows).every((r) => isMultipleOf(r.price, 0.01))).toBe(true)
-    expect(new Set(prices).size).toBe(prices.length)
-  })
-
-  it('格線往內取整時，落在格線外的均價與現價還是留在表上', () => {
-    // 均價 91、現價 250：步進 20，格線從 100 起跳，91 不在任何一階上
-    const rows = sellLadder({ ...base, buyPrice: 91, price: 91 }, {
-      currentPrice: 250,
-      avgCost: 91,
-    })
-    const avg = rows.filter((r) => r.kind === 'avgCost')
-    const cur = rows.filter((r) => r.kind === 'current')
-
-    expect(avg).toHaveLength(1)
-    expect(avg[0].price).toBe(91)
-    expect(cur).toHaveLength(1)
-    expect(cur[0].price).toBe(250)
-    // 均價比最低的格線還低，就排在表尾
-    expect(Math.min(...rows.map((r) => r.price))).toBe(91)
-  })
-
-  it('沒有均價就維持九檔 2.5% 級距', () => {
+  it('沒有持股就不會有現價簇', () => {
     const rows = sellLadder({ ...base, price: 110 }, { currentPrice: 110 })
 
-    expect(steps(rows).map((r) => r.price)).toEqual([
-      121, 118.25, 115.5, 112.75, 107.25, 104.5, 101.75, 99,
-    ])
+    expect(rows.every((r) => r.group === 'anchor')).toBe(true)
+    expect(rows.filter((r) => r.kind === 'step')).toHaveLength(8)
   })
 })

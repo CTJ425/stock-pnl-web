@@ -593,6 +593,14 @@ table.data-table {
   font-weight: 600;
 }
 
+.whatif-ladder-gap td {
+  padding: 4px 8px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 12px;
+  background: var(--row-hover);
+}
+
 .whatif-ladder-tag {
   margin-left: 6px;
   padding: 1px 6px;

@@ -5,6 +5,19 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-20 10:55:00 Asia/Taipei (0.9.2 — 損益試算賣出階梯列序反轉：由高而低)
+
+- **Release**: Version 0.9.2 on `dev` branch (frontend only, no deployment yet).
+- **Scope**: Single-line behaviour change: sell ladder row order reversed from ascending (−10% on top) to descending (+10% on top, highest price first). No schema changes, no Edge function changes, no migration required.
+- **What changed**:
+  1. **Row order reversed in `sellLadder()`** — `sources/src/components/StockDetail/whatIf.ts:116` final sort changed from `rows.sort((a, b) => a.price - b.price)` to `rows.sort((a, b) => b.price - a.price)`. JSDoc above function now states rows are ordered highest price first. No other logic touched: steps, break-even insertion, deduplication (keeps most specific `kind`), per-row `whatIf()` recomputation all unchanged.
+  2. **Test expectations updated** — `whatIf.test.ts` and `WhatIfTab.test.tsx` adjusted for descending order (step price array, `rows[0].relative` is now +0.1, sorted-order assertion uses `b - a`).
+- **Testing**: `npx vitest run` → 73 files, **1090 passed**, 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors; `npm run build` ok.
+- **Verification**: All tests green; visual intent: highest sell price reads first, matching user workflow and intuition about sale sequence.
+- **Unfinished**: None — complete release.
+
+---
+
 ## 📅 Log: 2026-08-20 10:31:21 Asia/Taipei (0.9.1 — 損益試算分頁重構：賣出階梯與三欄對帳單，觀察股票卡片風格)
 
 - **Release**: Version 0.9.1 on `main` branch (Pages publishes automatically on push).

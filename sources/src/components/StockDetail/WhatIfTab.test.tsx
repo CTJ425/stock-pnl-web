@@ -158,7 +158,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={100} heldQty={1000} />)
 
     const table = screen.getByTestId('whatif-ladder').textContent || ''
-    expect(screen.getByText(/賣出階梯 · 涵蓋均價與現價/)).toBeTruthy()
+    expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
     expect(screen.getByText('相對均價')).toBeTruthy()
     expect(table).toContain('均價')
     expect(table).toContain('現價')
@@ -211,12 +211,31 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
   })
 
-  it('低價股的格線收斂到剩一階時，標題不會謊稱涵蓋兩個價', () => {
-    // 0.05 元股：±10% 只有 0.045~0.055，圓整格線收不出兩階
+  it('低價股的階梯不會塌成一列', () => {
+    // 0.05 元股：±10% 只有 0.045~0.055，四捨五入後仍要留得下兩列
     render(<WhatIfTab ticker="2330" currentPrice={0.05} avgCost={0.05} heldQty={1000} />)
 
     expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
     expect(screen.getAllByTestId('whatif-ladder-row').length).toBeGreaterThan(1)
+  })
+
+  it('現價在均價 ±10% 之外時，另成一簇並插一條分隔列', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={130} avgCost={100} heldQty={1000} />)
+
+    const gaps = screen.getAllByTestId('whatif-ladder-gap')
+    expect(gaps).toHaveLength(1)
+    // 分隔列不是價格列，也不能被點
+    expect(gaps[0].getAttribute('data-testid')).toBe('whatif-ladder-gap')
+    expect(gaps[0].hasAttribute('tabindex')).toBe(false)
+    expect(
+      screen.getAllByTestId('whatif-ladder-row').filter((r) => r.dataset.kind === 'current'),
+    ).toHaveLength(1)
+  })
+
+  it('現價落在均價 ±10% 內時沒有分隔列', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={105} avgCost={100} heldQty={1000} />)
+
+    expect(screen.queryAllByTestId('whatif-ladder-gap')).toHaveLength(0)
   })
 
   it('觀察股票沒有均價，階梯維持以現價展開', () => {

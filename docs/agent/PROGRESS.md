@@ -1,9 +1,22 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.3-dev.1 and 0.9.2 releases recorded
+- Action: 0.9.3-dev.2 and dev.3 releases recorded; dev.2 superceded by dev.3
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-20 11:21:23 Asia/Taipei
+- Timestamp: 2026-08-20 13:03:55 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-20 13:03:55 Asia/Taipei (0.9.3-dev.2 + dev.3 — 賣出階梯聯集窗口迭代及現價聚簇設計定稿)
+
+- **Release**: Two iterations on `dev` branch (Task 121 dev.2, Task 122 dev.3); frontend only, no deployment yet.
+- **Scope**: Iterative refinement of sell ladder UI design in response to user feedback on price divergence causing layout instability.
+- **What changed** (Task 121 & 122):
+  1. **dev.2 (intermediate, superseded)** — Dynamic union window covering both average cost and current price; step grid changed to "pretty prices" (1/2/2.5/5/10 × 10^k, ~12 steps); summary marks row with price/relative%/P&L. Two FAIL items from reviewer (mark row rounding, title consistency) fixed before submission. User feedback: unstable when cost and price diverge significantly.
+  2. **dev.3 (current, active)** — Fixed-window design: main ladder anchored to ±10% average cost (nine 2.5% steps); current price cluster (±2.5%/±5%/±7.5%, seven rows) when outside window; gap divider between clusters; all dev.2 union window and pretty-price logic removed (dead-code cleanup verified). Title reverts to 「賣出階梯 · 持有均價 ±10%」 or by context. Mark summary and click-to-input behaviour unchanged. Watch stocks (no average cost) identical to 0.9.1.
+- **Testing**: `npx vitest run` → 73 files, **1111 passed**, 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors (5 pre-existing only-export-components); `npm run build` ok.
+- **Review**: `route:reviewer` found one false-positive FAIL (tests undeclared by builder); main session confirmed tests pre-written before builder dispatch; PASS on code quality (no defects on dead-code cleanup, cluster boundaries, deduplication, gap row, watch stock parity, per-row computation, CSS).
+- **Unfinished**: None — both versions complete. Awaiting user visual check on DEV before merge to main.
 
 ---
 
@@ -19,15 +32,4 @@
 - **Unfinished**: None — both tasks complete. Awaiting user visual check on DEV before any merge to main.
 
 ---
-
-## 📅 Log: 2026-08-20 10:55:00 Asia/Taipei (0.9.2 — 損益試算賣出階梯列序反轉：由高而低)
-
-- **Release**: Version 0.9.2 on `dev` branch (frontend only, no deployment yet).
-- **Scope**: Single-line behaviour change: sell ladder row order reversed from ascending (−10% on top) to descending (+10% on top, highest price first). No schema changes, no Edge function changes, no migration required.
-- **What changed**:
-  1. **Row order reversed in `sellLadder()`** — `sources/src/components/StockDetail/whatIf.ts:116` final sort changed from `rows.sort((a, b) => a.price - b.price)` to `rows.sort((a, b) => b.price - a.price)`. JSDoc above function now states rows are ordered highest price first. No other logic touched: steps, break-even insertion, deduplication (keeps most specific `kind`), per-row `whatIf()` recomputation all unchanged.
-  2. **Test expectations updated** — `whatIf.test.ts` and `WhatIfTab.test.tsx` adjusted for descending order (step price array, `rows[0].relative` is now +0.1, sorted-order assertion uses `b - a`).
-- **Testing**: `npx vitest run` → 73 files, **1090 passed**, 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors; `npm run build` ok.
-- **Verification**: All tests green; visual intent: highest sell price reads first, matching user workflow and intuition about sale sequence.
-- **Unfinished**: None — complete release.
 
