@@ -1,15 +1,15 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.1-dev.3 completion recording & verification
+- Action: 0.9.1 release to main branch
 - Status: **✅ RECORDED**
 - Timestamp: 2026-08-20 10:31:21 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-08-20 10:31:21 Asia/Taipei (0.9.1-dev.3 — 損益試算 對帳單改為三欄共用列版面)
+## 📅 Log: 2026-08-20 10:31:21 Asia/Taipei (0.9.1 — 損益試算分頁重構：賣出階梯與三欄對帳單，觀察股票卡片風格)
 
-- **Release**: Version 0.9.1-dev.3 on `dev` branch (frontend only, no deployment yet).
+- **Release**: Version 0.9.1 on `main` branch (Pages publishes automatically on push).
 - **Scope**: Layout restructuring of the 損益試算 ledger. No schema changes, no Edge function changes, no migration required.
 - **What changed** (Task 118):
   1. **Ledger CSS grid rewrite** — `WhatIfTab.tsx` ledger renders as single CSS grid with three columns (項目 / 買進 · 假設 / 賣出 · 試算) and one shared row per line item (價格 / 股數 / 價金 / 費用 / 小計). Previously two side-by-side columns: left column's 股數 is input + 單位 select (~62px tall), right column's 股數 text-only (~26px). From 價金 downward the sides sat ~36px out of step. Grid layout ensures cells in same row are same height (Δtop = 0px, Δheight = 0px).

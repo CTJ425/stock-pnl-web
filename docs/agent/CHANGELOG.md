@@ -2,42 +2,22 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.9.1-dev.3（2026-08-20）— 損益試算 對帳單改為三欄共用列版面
+### 0.9.1（2026-08-20）— 損益試算分頁重構：賣出階梯與三欄對帳單，觀察股票卡片風格
 
-> **版面最佳化**：0.9.1-dev.2 交付後進行實際瀏覽器量測，發現對帳單左右欄對齐失真（Δtop ≠ 0px）；本版本改為單一 CSS grid 共用列版，確保同列高度相等。
+> **功能擴張與視覺一致**：0.9.0 後經試算 UX 一輪迭代，先簡化至四數字（損益/報酬率）與卡片風格，復以賣出階梯與對帳單擴張詳情，最後修正對帳單版面對齊。成果：損益試算分頁為卡片化籤頁，含可點選賣出階梯（-10%~+10% 九檔 + 自動回本價）與三欄共用列對帳單（買進/賣出/結算）；觀察股票籤頁同格卡片化。
 
-- 📊 **對帳單三欄共用列重構** — `WhatIfTab.tsx` 對帳單由二側欄改為三欄 grid（項目 / 買進 · 假設 / 賣出 · 試算），共用列結構（價格／股數／價金／費用／小計）。原：買進側 股數 為輸入 + 單位 select（~62px 高），賣出側 股數 為純文字（~26px 高），從 價金 往下錯開 ~36px。新：同列儲存格強制相等高度，實測 Δtop = 0px、Δheight = 0px（jsdom 無法測量，故原版看不見缺陷）。
-- ♿ **無障礙名稱保留** — 舊 `<label>` 元素移除，列標題名列、input 攜 `aria-label`（`買進價格`、`股數`、`單位`、`賣出價格`），既有測試 selector 不變。
-- 📐 **響應式無斷點** — `index.css` `.whatif-ledger` grid 保持三欄至全寬度；560px 以下縮小內距、字級、列鍵寬，毋須崩潰至單欄（會摧毀此次改的對齐）。
-- ✅ **測試**：`npx vitest run` 73 檔 / **1090 項全通**（原 1089）；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors；`npm run build` ok；**瀏覽器 E2E 10/10**。實測佈局（1280×900 / 390×844）：全 6 列 Δtop = 0px、Δheight = 0px、body 水平溢位 0px。
-- 📋 **參考規格**：Task 118.
-- ⚙️ **未改動**：`whatIf()` 計算、Edge 部署、migration。
+- 📍 **觀察股票籤頁卡片化** — `StockDetailPage.tsx:391` 補 `<div className="glass detail-body">` 包裹，與損益試算及 AI 分析籤同格；`WatchTab.tsx:72-76` 改用 `.rpt-section` / `.rpt-section-head` / `<h3>` 格式（脫離 Dashboard 遺構）。
+- 💹 **新增 `sellLadder()` 純函式** — `sources/src/components/StockDetail/whatIf.ts` 九檔階梯：現價 ±10% / ±7.5% / ±5% / ±2.5% / 0%，自動求出回本價（如果落在窗口內），按賣出價排序，去除重複價格（2 位小數舍入、NT$0.40 以下小錨點會重合）。每列重新計算 `whatIf()` 無插值；`kind` 優先度：`current` > `breakEven` > `step`。
+- 📊 **損益試算分頁重構為階梯 + 對帳單** — 上部階梯表（欄位 賣出價 / 相對現價 / 損益 / 報酬率 / 實收）可點選寫入賣出價；現價列標記「現價」、回本列標記「回本」。下部對帳單（二欄布局，買進假設 / 賣出試算 / 結算列）恢復詳細數字（投入成本、實收、回本價），計算原法不變（`whatIf()` / `fees.ts` / `pnlEngine.ts` 未動）。
+- 🎨 **樣式與版面** — `.whatif-ladder` 與 `.whatif-ledger` 復用既有 `.data-table` / `.table-scroll` 系統及自訂屬性；對帳單在 720px 以下收縮為單欄；行可點選需有互動視覺（`cursor: pointer` + hover）。對帳單改為單一 CSS grid 共用列結構（項目 / 買進 · 假設 / 賣出 · 試算），確保同列高度相等（Δtop = 0px、Δheight = 0px）；560px 以下縮小內距、字級、列鍵寬，毋須崩潰至單欄。無新色彩字面值、無條形圖。
+- 🎯 **預設值與單位選擇器** — `WhatIfTab` 新增 `avgCost` / `heldQty` props；持股預設買進價為費費內 `avgCost`、數量為持有張數或股數；觀察股預設買進價為現價、數量為 1 張；賣出價皆預設現價。新增張/股單位切換器，不改寫已輸入值，僅更新衍生股數。
+- ♿ **無障礙保留** — 列標題名列、input 攜 `aria-label`（`買進價格`、`股數`、`單位`、`賣出價格`），既有測試 selector 不變。
+- 🔍 **決策記錄** — 損益淨額包含手續費與證交稅，以小行列示總費用（使用者決策）；持股預設買進價為費費內 `avgCost`，使試算與庫存總覽的未實現損益相容（使用者決策）。
+- ✅ **測試** — `npx vitest run` 73 檔 / **1090 項全通**；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors；`npm run build` ok；**瀏覽器 E2E `scripts/verify-watchlist-e2e.cjs` 10/10**；實測佈局（1280×900 / 390×844）：全 6 列 Δtop = 0px、Δheight = 0px、body 水平溢位 0px。複審：`route:reviewer` **PASS**，真實 RISK 一項（sub-NT$0.40 小錨點重複價格造成 React key 重複）已修、缺失測試已補、誤算已駁回。
+- 📝 **參考規格** — Task 118、`docs/agent/specs/117-whatif-ladder-ledger.md`。
+- ⚙️ **未改動** — `whatIf()` 簽名及計費演算法、工作區手續費率、沙盒限制（不動 localStorage 與 Supabase）；無 schema 變更、無 Edge 部署、無 migration；完全前端。
+- ⚠️ **已知議題（記為 OPEN bug）** — 持股預設購入價為含費平均成本，而 `whatIf()` 又加一次手續費（重複計算），導致投入成本虛高 ~0.14%；該表唯一新增了這兩個欄，故現在可見，但非本任務範圍（需要分開決策：改用原價或不加手續費）。
 
-### 0.9.1-dev.2（2026-08-20）— 損益試算賣出階梯與對帳單
-
-> **功能擴張**：0.9.1-dev.1 交付後，使用者要求恢復損益試算的詳細數字（投入成本、實收、回本價），並增加「現價±10% 賣出階梯」以便快速試算各檔位損益。本版本改為分頁式對帳單呈現，上方為可點選的階梯表、下方為買/賣/結算三行帳目。
-
-- 💹 **新增 `sellLadder()` 純函式** `sources/src/components/StockDetail/whatIf.ts` — 九檔階梯：現價 ±10% / ±7.5% / ±5% / ±2.5% / 0%，自動求出回本價（如果落在窗口內），按賣出價排序，去除重複價格（2 位小數舍入、NT$0.40 以下小錨點會重合）。每列重新計算 `whatIf()` 無插值；`kind` 優先度：`current` > `breakEven` > `step`。
-- 📊 **WhatIfTab 版面重構** — 句式表單改為階梯表 + 對帳單。階梯表（上）：欄位 賣出價 / 相對現價 / 損益 / 報酬率 / 實收，可點選行寫入賣出價；現價列標記「現價」、回本列標記「回本」。對帳單（下）：二欄布局，買進假設（買進價／股數／價金／手續費／投入成本）、賣出試算（賣出價／股數／價金／手續費＋證交稅／實收）、結算列（損益／報酬率／回本價）。
-- 🎨 **樣式** — `.whatif-ladder` 與 `.whatif-ledger` 復用既有 `.data-table` / `.table-scroll` 系統及自訂屬性；對帳單在 720px 以下收縮為單欄；行可點選需有互動視覺（`cursor: pointer` + hover）；無新色彩字面值、無條形圖。
-- ✅ **測試**：`npx vitest run` 73 檔 / **1089 項全通**（原 1073）；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors；`npm run build` ok。複審：`route:reviewer` **PASS**，真實 RISK 一項（sub-NT$0.40 小錨點重複價格造成 React key 重複）已修、缺失測試已補、誤算已駁回。
-- 📝 **參考規格**：`docs/agent/specs/117-whatif-ladder-ledger.md`。
-- ⚙️ **未改動**：`whatIf()` 簽名及計費演算法、工作區手續費率、沙盒限制（不動 localStorage 與 Supabase）。
-- ⚠️ **已知議題（記為 OPEN bug）**：持股預設購入價為含費平均成本，而 `whatIf()` 又加一次手續費（重複計算），導致投入成本虛高 ~0.14%；該表唯一新增了這兩個欄，故現在可見，但非本任務範圍（需要分開決策：改用原價或不加手續費）。
-
-### 0.9.1-dev.1（2026-08-19）— 損益試算簡化與觀察股票卡片風格
-
-> **設計更新**：0.9.0 交付後進行視覺一致性檢查，發現觀察股票籤頁無卡片包裹、損益試算展示過多細節；本版本收斂為設計規格。
-
-- 📍 **觀察股票籤頁卡片化**：`StockDetailPage.tsx:391` 補 `<div className="glass detail-body">` 包裹，與損益試算及 AI 分析籤同格；`WatchTab.tsx:72-76` 改用 `.rpt-section` / `.rpt-section-head` / `<h3>` 格式（脫離 Dashboard 遺構）。未動加入觀察按鈕：`btn btn-sm` 為全應用統一工具列鍵。
-- 💰 **損益試算簡化至四數字**：移除成本 / 賣出可得 / 手續費拆項 / 回本價行。現只顯損益、報酬率，含手續費與證交稅的費用小行。計算未變（`whatIf.ts`、`utils/fees.ts`、`utils/pnlEngine.ts` 未動）；`cost`、`proceeds`、`breakEven` 仍回傳，僅不渲染。
-- 🎯 **預設值與單位選擇器**：`WhatIfTab` 新增 `avgCost` / `heldQty` props；持股預設買進價為費費內 `avgCost`、數量為持有張數或股數；觀察股預設買進價為現價、數量為 1 張；賣出價皆預設現價。新增張/股單位切換器，不改寫已輸入值，僅更新衍生股數。
-- 🔍 **決策記錄**：損益淨額包含手續費與證交稅，以小行列示總費用（使用者決策）；持股預設買進價為費費內 `avgCost`，使試算與庫存總覽的未實現損益相容，而非原始交易價（`rawAvgCost`）（使用者決策）。
-- 🧪 **測試**：`npx vitest run` 73 檔 / **1073 項全通**（原 1073）；`WhatIfTab.test.tsx` 改寫 14 項。`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors。
-- ✅ **稽核**：派遣 reviewer，**PASS**；無異議。
-- ⚠️ **驗證缺口**：瀏覽器 E2E 未執行。`AppShell.tsx:103` 本機模式濾除個股分析（Supabase 限定籤），故本機 Playwright 無法觸及觀察股票籤或損益試算籤；DEV 登入未可得。
-- 📝 **參考規格**：`docs/agent/specs/whatif-simplify-and-watch-card.md`。
-- ⚙️ **未改動**：無 schema 變更、無 Edge 部署、無 migration；完全前端。
 
 ### 0.9.0（2026-08-19）— 觀察清單 UX 重構：個股分析第四籤頁面 + 設計決策透明化
 
