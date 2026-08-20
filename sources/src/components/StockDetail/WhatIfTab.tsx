@@ -5,10 +5,18 @@
  * localStorage, Supabase, or any store, so this tab never reflects or affects real
  * holdings / P&L reports. It is a sandbox, not a form.
  */
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { whatIf, sellLadder } from './whatIf'
 import type { LadderRow } from './whatIf'
-import { fmtMoney, fmtPercent, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
+import {
+  fmtMoney,
+  fmtPercent,
+  fmtQty,
+  fmtSignedMoney,
+  fmtSignedPercent,
+  pnlClass,
+  roundPrice,
+} from '../../utils/formatters'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { useWorkspace } from '../../context/WorkspaceContext'
 
@@ -19,20 +27,29 @@ interface WhatIfTabProps {
   currentPrice: number | null
   /** Set for a held stock, null for a watched one. Fee-exclusive average traded price. */
   rawAvgCost: number | null
+  /** Set for a held stock, null for a watched one. Fee-inclusive average cost (庫存總覽's own cost basis). */
+  avgCost?: number | null
   /** Set for a held stock, null for a watched one. Shares currently held. */
   heldQty: number | null
 }
 
 const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本', avgCost: '均價' }
 
-export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfTabProps) {
+export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
   const hasQuote = currentPrice !== null && currentPrice > 0
   const isHeld = rawAvgCost !== null
+  // The real fee this holding actually paid is only known when the caller also has
+  // avgCost (庫存總覽's fee-inclusive cost basis) — some callers (and older test
+  // fixtures) only pass rawAvgCost, so this stays a separate, narrower condition.
+  const hasRealCost = rawAvgCost !== null && rawAvgCost > 0 && avgCost !== null
 
   const [buyPrice, setBuyPrice] = useState(
-    isHeld ? rawAvgCost.toFixed(2) : hasQuote ? String(currentPrice) : ''
+    isHeld ? roundPrice(rawAvgCost).toFixed(2) : hasQuote ? String(currentPrice) : ''
   )
+  // Once the user edits the buy price, the simulation switches from "exact cost basis"
+  // to "the holding's real fee rate applied to whatever price is typed" (contract B).
+  const [buyPriceEdited, setBuyPriceEdited] = useState(false)
   const [unit, setUnit] = useState<Unit>(
     isHeld && heldQty !== null && heldQty % 1000 !== 0 ? '股' : '張'
   )
@@ -44,6 +61,18 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
   // Sell price is now a real, visible input — the exit price used to be an invisible
   // assumption (silently the current quote), so the result read as a broken number.
   const [sellPrice, setSellPrice] = useState(hasQuote ? String(currentPrice) : '')
+
+  // The same ticker can be held in different workspaces with different cost bases.
+  // Switching workspace changes these props without remounting the component, so the
+  // buy price / qty / unit must re-seed the same way a fresh mount would — a later user
+  // edit still sticks because this only fires when the holding identity itself changes.
+  useEffect(() => {
+    setBuyPrice(isHeld ? roundPrice(rawAvgCost).toFixed(2) : hasQuote ? String(currentPrice) : '')
+    setBuyPriceEdited(false)
+    setUnit(isHeld && heldQty !== null && heldQty % 1000 !== 0 ? '股' : '張')
+    setQty(isHeld && heldQty !== null ? String(heldQty % 1000 === 0 ? heldQty / 1000 : heldQty) : '1')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, rawAvgCost, avgCost, heldQty])
 
   const buyPriceNum = Number(buyPrice)
   const qtyNum = Number(qty)
@@ -61,13 +90,25 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
   const minFeeUnit = shares > 0 && shares % 1000 === 0 ? 'whole' : 'odd'
   const minFee = getMinFee(minFeeUnit, current?.id)
 
+  // Buy price untouched on a held stock with a known real cost: use the exact unrounded
+  // rawAvgCost and the fee actually embedded in avgCost, so 投入成本 lands on exactly
+  // shares * avgCost. Once edited, fall back to the holding's real fee *rate* applied to
+  // whatever the user typed — never the workspace's configured rate.
+  const effectiveBuyPrice = hasRealCost && !buyPriceEdited ? rawAvgCost : buyPriceNum
+  const buyFeeOverride = hasRealCost
+    ? buyPriceEdited
+      ? Math.round(buyPriceNum * shares * ((avgCost - rawAvgCost) / rawAvgCost))
+      : (avgCost - rawAvgCost) * shares
+    : undefined
+
   const whatIfInput = {
     ticker,
-    buyPrice: buyPriceNum,
+    buyPrice: effectiveBuyPrice,
     qty: shares,
     price: sellPriceNum,
     feeRate,
     minFee,
+    buyFee: buyFeeOverride,
   }
 
   const result = whatIf(whatIfInput)
@@ -77,7 +118,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
   const anchorsOnAvgCost = rawAvgCost !== null && rawAvgCost > 0
   // Snapped to the same 0.01 grid sellLadder uses for its rows, so the anchor row's
   // relative is exactly 0 instead of a sub-cent residual that renders as -0.00%.
-  const anchor = anchorsOnAvgCost ? Math.round(rawAvgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
+  const anchor = anchorsOnAvgCost ? roundPrice(rawAvgCost) : (currentPrice ?? buyPriceNum)
   const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost: rawAvgCost })
 
   const heading = anchorsOnAvgCost ? '賣出階梯 · 持有均價 ±10%' : '賣出階梯 · 現價 ±10%'
@@ -218,6 +259,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
 
         <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">價格</div>
         <div className="whatif-ledger-cell">
+          <div className="whatif-ledger-sublabel">{isHeld ? '成交均價（未含費）' : '買進價'}</div>
           <div className="field">
             <input
               type="number"
@@ -225,11 +267,17 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
               min="0"
               aria-label="買進價格"
               value={buyPrice}
-              onChange={(e) => setBuyPrice(e.target.value)}
+              onChange={(e) => {
+                setBuyPriceEdited(true)
+                setBuyPrice(e.target.value)
+              }}
             />
           </div>
         </div>
         <div className="whatif-ledger-cell">
+          {hasQuote && (
+            <div className="whatif-ledger-sublabel">現價 {(currentPrice as number).toFixed(2)}</div>
+          )}
           <div className="field">
             <input
               type="number"
@@ -275,7 +323,10 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
         <div className="whatif-ledger-cell">{fmtMoney(sellPriceNum * shares, 'TWD')}</div>
 
         <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">費用</div>
-        <div className="whatif-ledger-cell">{fmtMoney(result?.buyFee ?? null, 'TWD')}</div>
+        <div className="whatif-ledger-cell">
+          <div className="whatif-ledger-sublabel">{isHeld ? '實付手續費' : '手續費'}</div>
+          {fmtMoney(result?.buyFee ?? null, 'TWD')}
+        </div>
         <div className="whatif-ledger-cell">{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</div>
 
         <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">小計</div>
@@ -326,7 +377,9 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfT
       {hasQuote && (
         <div className="hint">
           {isHeld
-            ? `買進價預設為成交均價 ${rawAvgCost.toFixed(2)}（未含手續費）`
+            ? hasRealCost
+              ? '買進價＝持股買進金額 ÷ 股數（未含手續費）；手續費採實際持股平均費用。持股歸零後重新起算。'
+              : `買進價預設為成交均價 ${roundPrice(rawAvgCost).toFixed(2)}（未含手續費）`
             : `買進價預設為現價 ${currentPrice}`}
         </div>
       )}

@@ -25,6 +25,19 @@
 
 ## 📋 Active Tasks
 
+### Task 124: 0.9.5-dev.1 損益試算成本基數精確度修正（真實部位驗證）
+- **Status**: 🔄 **code fixed & tested; awaiting user verification on real PROD position (0050, 玉山)**
+- **Agent**: Builder + Reviewer + Scribe
+- **Timestamp**: 2026-08-20 14:41:35 CST
+- **Done**:
+  1. ✅ Three genuine defects fixed: (1) price rounding precision (104.225 → 104.23); (2) buy fee no longer recalculated from workspace config; (3) ledger labels state cost basis and actual fee.
+  2. ✅ Tests written and passing: `formatters.test.ts` (rounding), `whatIf.test.ts` & `WhatIfTab.test.tsx` (fee override, parity with 庫存總覽, seed, labels).
+  3. ✅ All verification run: 74 files / 1125 tests pass; TypeScript & oxlint 0 errors; build ok.
+  4. ✅ Reviewer (route:reviewer) **PASS**, three RISKS fixed (snap rounding, workspace re-seed, buyFee bounds).
+  5. ✅ CHANGELOG.md, TASK.md, PROGRESS.md updated; version 0.9.5-dev.1 set in source.
+- **Unfinished**:
+  1. ⏳ **User verification**: Compare 損益試算 against 庫存總覽 on the real PROD position (0050, 玉山證卷 workspace: 4,000 shares, 現價 103.80); confirm 投入成本、損益、手續費 precision matches.
+
 ### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤）
 - **Status**: ⏳ **Design revised, records updated; DEV commit ready; PROD merge pending user approval**
 - **Agent**: Scribe

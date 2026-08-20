@@ -5,6 +5,17 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-20 13:47:54 Asia/Taipei (0.9.4 official release — BUG-032 修正：買進費用重複計算)
+
+- **Release**: Version 0.9.4 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
+- **Scope**: Bug fix release. Single change: BUG-032 (Task 123) — held stock buy fee was counted twice in P&L simulator. Fix applied: held stock 買進價 now defaults to fee-exclusive `rawAvgCost` instead of fee-inclusive `avgCost`; fee counted exactly once in `whatIf()`.
+- **What shipped**: WhatIfTab, StockDetailPage, AnalysisPage, and related tests updated to use `rawAvgCost` prop. (1) `WhatIfTab.tsx` — 買進價 default changed to `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`); used in `isHeld` check, ladder anchor, avgCost mark, and marks strip. Hint text: 「買進價預設為成交均價 <price>（未含手續費）」. (2) `StockDetailPage.tsx` — `StockDetailPageProps` gains `rawAvgCost?: number | null` (defaults null), forwarded to `WhatIfTab`. (3) `AnalysisPage.tsx` — passes `selected.row.holding.rawAvgCost`. (4) `WhatIfTab.test.tsx` — two new test cases verify fee counted once and hint text accuracy.
+- **What was not changed**: `pnlEngine.ts`, `fees.ts`, `whatIf()` signature/math, 庫存總覽, 年度報告, `estimateUnrealized`, `ReportHolding` / `reportProxy.ts`. Pure frontend fix, no schema, no Edge, no migration.
+- **Testing**: `npx vitest run` → 73 files / **1113 tests**, all pass. `npx tsc --noEmit` → 0 errors. `npx oxlint src` → 0 errors (5 pre-existing only-export-components). `npm run build` → ok. Frontend only — no Supabase, no Edge, no schema.
+- **Unfinished**: None — 0.9.4 complete and live.
+
+---
+
 ## 📅 Log: 2026-08-20 13:15:00 Asia/Taipei (0.9.3 release finalized — 賣出階梯均價錨點與現價聚簇 + Modal Material 化)
 
 - **Release**: Version 0.9.3 finalized and recorded; ready to ship to `main`.

@@ -102,6 +102,32 @@ describe('whatIf', () => {
   })
 })
 
+describe('whatIf 買進手續費可由呼叫端指定', () => {
+  const base = {
+    ticker: '2330',
+    buyPrice: 104.225,
+    qty: 4000,
+    price: 103.8,
+    feeRate: RATE,
+    minFee: MIN_FEE,
+  }
+
+  it('給了 buyFee 就照用，不再依費率重算', () => {
+    const r = whatIf({ ...base, buyFee: 592 })!
+
+    expect(r.buyFee).toBe(592)
+    expect(r.cost).toBeCloseTo(104.225 * 4000 + 592, 6)
+  })
+
+  it('沒給 buyFee 時行為不變', () => {
+    const r = whatIf(base)!
+    const withZeroOverrideAbsent = whatIf({ ...base, buyFee: undefined })!
+
+    expect(r.buyFee).toBe(withZeroOverrideAbsent.buyFee)
+    expect(r.buyFee).toBeGreaterThan(0)
+  })
+})
+
 describe('sellLadder', () => {
   const base = {
     ticker: '2330',
@@ -269,6 +295,35 @@ describe('sellLadder 錨點與標記：以持有均價展開，現價與回本�
       expect(rows.filter((r) => r.kind === 'step')).toHaveLength(9)
       expect(rows.filter((r) => r.kind === 'breakEven')).toHaveLength(1)
     }
+  })
+})
+
+describe('sellLadder 與 whatIf 的防呆', () => {
+  const base = {
+    ticker: '0056',
+    buyPrice: 0.145,
+    qty: 100000,
+    price: 0.15,
+    feeRate: RATE,
+    minFee: MIN_FEE,
+  }
+
+  it('均價踩到二進位進位陷阱時，仍與錨點合成同一列', () => {
+    // 0.145 的二進位值低於 .5 邊界，Math.round(0.145*100) 會給 14 而不是 15
+    const rows = sellLadder(base, { avgCost: 0.145 })
+    const avg = rows.filter((r) => r.kind === 'avgCost')
+
+    expect(avg).toHaveLength(1)
+    expect(avg[0].price).toBe(0.15)
+    expect(avg[0].relative).toBe(0)
+    expect(new Set(rows.map((r) => r.price)).size).toBe(rows.length)
+  })
+
+  it('買進手續費覆寫不會是負數', () => {
+    const r = whatIf({ ...base, buyPrice: 100, qty: 1000, price: 110, buyFee: -50 })!
+
+    expect(r.buyFee).toBe(0)
+    expect(r.cost).toBe(100000)
   })
 })
 

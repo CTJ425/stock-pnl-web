@@ -2,6 +2,17 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.5-dev.1（2026-08-20）— 損益試算成本基數精確度修正：舍入、費用、透明標籤
+
+> **精確性修正**：損益試算分頁對比庫存總覽真實台股部位發現三項缺陷，皆已修正。買進價舍入達到經紀商級精度（104.225 → 104.23）；買進費用不再由工作區設定重算；帳單標籤明確標示成本基數與實付手續費。
+
+- 💰 **買進價舍入精確度** — `0.9.4` 時庫存總覽用 `fmtPrice`（Intl, 四捨五入）舍入為 104.23，損益試算用 `.toFixed(2)` 得 104.22；源因：`416900 / 4000 = 104.225` 其二進制值為 `104.224999999999994`。新增 `roundPrice()` 輔助函式（`sources/src/utils/formatters.ts`，`Math.round((value + Number.EPSILON) * 100) / 100`），供種子與階梯共用；`sellLadder()` 內之舊 `snap` 函式已改用 `roundPrice`。測試覆蓋 0.145 / 1.005 / 104.225 / 8888.885 / 12345.675 等二進制陷阱值。
+- 🔧 **買進費用不再重新計算** — `0.9.4` 雖改用無費均價種子，但 `whatIf()` 仍以工作區設定費率重算手續費，導致實測玉山 0050 部位相差 NT$2（真實 592 vs 試算 594）。`whatIf()` 新增選填 `buyFee` 覆寫；`WhatIfTab` 供入實付手續費（`(avgCost - rawAvgCost) * shares`），使投入成本與損益完全與庫存總覽同步（−3,298 元精度相等）。編輯買進價時回到工作區費率；觸發條件已加嚴（`buyFee` 不為正數時作 0）。
+- 📊 **帳單標籤與透明性** — 買進側現標示「成交均價（未含費）」與「實付手續費」，hint 說明來源；賣出側顯示「現價」；用戶清楚知道每個數字來自何處。
+- ✅ **測試** — `npx vitest run` 74 檔 / **1125 項全通**；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors（5 個既有 only-export-components 警告）；`npm run build` ok。新測試檔 `sources/src/utils/formatters.test.ts`；`whatIf.test.ts` 與 `WhatIfTab.test.tsx` 新增舍入、費用覆寫、投入成本對等、編輯後費率、標籤等測案。
+- 📝 **規格與評審** — Task 124、`docs/agent/specs/124-whatif-real-cost-basis.md`。`route:reviewer` **PASS**，三項 RISK 已修（snap 改用 `roundPrice`、workspace 切換重種、`buyFee` 嚴格非正數檢查）；規格 `roundPrice` 公式已更正（舊公式對 0.145 返回 0.14，誤）。
+- ⚙️ **未改動** — `pnlEngine.ts`、`fees.ts`、庫存總覽、年度報告、Edge；前端專用。
+
 ### 0.9.4（2026-08-20）— BUG-032 修正：買進費用重複計算
 
 > **缺陷修正**：損益試算分頁持股預設買進價改用未含手續費的成交均價，手續費改為僅計算一次，使投入成本與回本列座標精確。
