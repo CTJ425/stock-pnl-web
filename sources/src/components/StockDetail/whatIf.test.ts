@@ -122,7 +122,7 @@ describe('sellLadder', () => {
   })
 
   it('錨點那一列標成 current，相對現價為 0', () => {
-    const rows = sellLadder(base)
+    const rows = sellLadder(base, { currentPrice: base.price })
     const current = rows.filter((r) => r.kind === 'current')
 
     expect(current).toHaveLength(1)
@@ -164,7 +164,9 @@ describe('sellLadder', () => {
   it('價格不重複：低價股四捨五入後仍是唯一的一列', () => {
     // anchor * 0.025 掉到 0.01 網格以下時，−10% 與 −7.5% 會捨進同一個價格
     for (const anchor of [0.35, 1.2, 24.2, 110, 1085]) {
-      const rows = sellLadder({ ...base, buyPrice: anchor, price: anchor })
+      const rows = sellLadder({ ...base, buyPrice: anchor, price: anchor }, {
+        currentPrice: anchor,
+      })
       const prices = rows.map((r) => r.price)
 
       expect(new Set(prices).size).toBe(prices.length)
@@ -186,5 +188,85 @@ describe('sellLadder', () => {
     expect(sellLadder({ ...base, qty: 0 })).toEqual([])
     expect(sellLadder({ ...base, price: 0 })).toEqual([])
     expect(sellLadder({ ...base, buyPrice: -1 })).toEqual([])
+  })
+})
+
+describe('sellLadder 錨點與標記：以持有均價展開，現價與回本變成標記列', () => {
+  const base = {
+    ticker: '2330',
+    buyPrice: 100,
+    qty: 1000,
+    price: 110,
+    feeRate: RATE,
+    minFee: MIN_FEE,
+  }
+  /** 持有均價 100 當錨點，現價 104 落在窗口內但不在任何一階上。 */
+  const onAvgCost = { ...base, price: 100 }
+
+  it('錨點是持有均價時，均價那一列標成 avgCost', () => {
+    const rows = sellLadder(onAvgCost, { currentPrice: 104, avgCost: 100 })
+    const avg = rows.filter((r) => r.kind === 'avgCost')
+
+    expect(avg).toHaveLength(1)
+    expect(avg[0].price).toBe(100)
+    expect(avg[0].relative).toBe(0)
+    expect(rows.filter((r) => r.kind !== 'step').map((r) => r.kind).sort()).toEqual(
+      ['avgCost', 'breakEven', 'current'],
+    )
+  })
+
+  it('現價落在窗口內就自成一列，價格就是現價本身', () => {
+    const rows = sellLadder(onAvgCost, { currentPrice: 104, avgCost: 100 })
+    const cur = rows.filter((r) => r.kind === 'current')
+
+    expect(cur).toHaveLength(1)
+    expect(cur[0].price).toBe(104)
+    expect(cur[0].pnl).toBe(whatIf({ ...onAvgCost, price: 104 })!.pnl)
+  })
+
+  it('現價落在均價 ±10% 之外就不插入，階梯不硬拉', () => {
+    const rows = sellLadder(onAvgCost, { currentPrice: 200, avgCost: 100 })
+
+    expect(rows.some((r) => r.kind === 'current')).toBe(false)
+    expect(Math.max(...rows.map((r) => r.price))).toBe(110)
+  })
+
+  it('現價與均價同價時只留一列，標成 current', () => {
+    const rows = sellLadder(onAvgCost, { currentPrice: 100, avgCost: 100 })
+    const atAnchor = rows.filter((r) => r.price === 100)
+
+    expect(atAnchor).toHaveLength(1)
+    expect(atAnchor[0].kind).toBe('current')
+  })
+
+  it('標記價格照樣落在 0.01 網格上，均價不整齊也不會多出一列', () => {
+    // 真實均價是 pos.cost / pos.qty，幾乎不可能剛好兩位小數
+    const avgCost = 512.923
+    const anchor = Math.round(avgCost * 100) / 100
+    const rows = sellLadder({ ...base, buyPrice: avgCost, price: anchor }, { avgCost })
+    const prices = rows.map((r) => r.price)
+    const atAnchor = rows.filter((r) => r.price === anchor)
+
+    expect(new Set(prices).size).toBe(prices.length)
+    expect(atAnchor).toHaveLength(1)
+    expect(atAnchor[0].kind).toBe('avgCost')
+    expect(atAnchor[0].relative).toBe(0)
+  })
+
+  it('現價標記也要進位到 0.01', () => {
+    const rows = sellLadder(onAvgCost, { currentPrice: 104.5678, avgCost: 100 })
+    const cur = rows.filter((r) => r.kind === 'current')
+
+    expect(cur).toHaveLength(1)
+    expect(cur[0].price).toBe(104.57)
+  })
+
+  it('沒有給標記就只有九階加回本，不會冒出現價列', () => {
+    for (const rows of [sellLadder(base), sellLadder(base, { currentPrice: null, avgCost: null })]) {
+      expect(rows.filter((r) => r.kind === 'current')).toHaveLength(0)
+      expect(rows.filter((r) => r.kind === 'avgCost')).toHaveLength(0)
+      expect(rows.filter((r) => r.kind === 'step')).toHaveLength(9)
+      expect(rows.filter((r) => r.kind === 'breakEven')).toHaveLength(1)
+    }
   })
 })

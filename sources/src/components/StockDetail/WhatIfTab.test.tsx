@@ -154,6 +154,45 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     expect(pnl).toBeLessThan(10000)
   })
 
+  it('有持股時階梯以持有均價展開，均價／現價／回本三列都在', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={100} heldQty={1000} />)
+
+    const table = screen.getByTestId('whatif-ladder').textContent || ''
+    expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
+    expect(screen.getByText('相對均價')).toBeTruthy()
+    expect(table).toContain('均價')
+    expect(table).toContain('現價')
+    expect(table).toContain('回本')
+
+    const kinds = screen
+      .getAllByTestId('whatif-ladder-row')
+      .map((r) => r.dataset.kind)
+    expect(kinds.filter((k) => k === 'avgCost')).toHaveLength(1)
+    expect(kinds.filter((k) => k === 'current')).toHaveLength(1)
+  })
+
+  it('均價不整齊時階梯不會出現兩列一樣的價格', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={520} avgCost={512.923} heldQty={1000} />)
+
+    const rows = screen.getAllByTestId('whatif-ladder-row')
+    // 只取價格文字，標籤（均價／現價／回本）另在 span 裡，不能拿來當區別
+    const shown = rows.map((r) => r.querySelector('td')?.firstChild?.textContent || '')
+    const avg = rows.filter((r) => r.dataset.kind === 'avgCost')
+
+    expect(new Set(shown).size).toBe(shown.length)
+    expect(avg).toHaveLength(1)
+    // 均價就是錨點，相對欄應該是破折號而不是 -0.00%
+    expect(avg[0].querySelectorAll('td')[1].textContent).toBe('—')
+  })
+
+  it('觀察股票沒有均價，階梯維持以現價展開', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+
+    expect(screen.getByText(/賣出階梯 · 現價 ±10%/)).toBeTruthy()
+    expect(screen.getByText('相對現價')).toBeTruthy()
+    expect(screen.getByTestId('whatif-ladder').textContent || '').not.toContain('均價')
+  })
+
   it('賣出階梯攤開現價 ±10%，並標出現價與回本兩列', () => {
     render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
     fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })

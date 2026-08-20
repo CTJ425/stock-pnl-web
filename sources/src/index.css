@@ -588,6 +588,11 @@ table.data-table {
   background: color-mix(in srgb, var(--accent-strong) 12%, transparent);
 }
 
+.whatif-ladder-row--avgCost td {
+  background: var(--row-hover);
+  font-weight: 600;
+}
+
 .whatif-ladder-tag {
   margin-left: 6px;
   padding: 1px 6px;
@@ -1091,6 +1096,76 @@ input[type='date']::-webkit-calendar-picker-indicator {
   font-size: 12.5px;
 }
 
+.modal-body .search-box {
+  display: flex;
+  width: 100%;
+}
+
+.modal-body .search-box .search-input {
+  width: 100%;
+}
+
+.modal-body .search-box .search-input:focus {
+  width: 100%;
+  border-color: var(--accent-strong);
+  box-shadow: 0 2px 0 0 var(--accent-strong);
+}
+
+/* ---------- Watch search results (same visual family as .suggestion-item) ---------- */
+.watch-results {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.watch-results li + li {
+  border-top: 1px solid var(--border);
+}
+
+.watch-result-item {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.watch-result-item:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.watch-result-item:active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.watch-result-item:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.watch-result-symbol {
+  font-weight: 600;
+}
+
+.watch-result-name {
+  color: var(--ink-secondary);
+}
+
 /* ---------- Modal ---------- */
 .modal-overlay {
   position: fixed;
@@ -1113,7 +1188,8 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: var(--modal-bg);
   border: 1px solid var(--border-strong);
   border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(2, 6, 18, 0.7);
+  /* Layered elevation (Material-style) instead of a flat border reading as the modal's only depth cue.*/
+  box-shadow: var(--shadow-card), 0 24px 64px rgba(2, 6, 18, 0.7);
   animation: pop-in 0.2s ease;
 }
 

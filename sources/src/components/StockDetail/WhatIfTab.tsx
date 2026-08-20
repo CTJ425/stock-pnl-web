@@ -23,7 +23,7 @@ interface WhatIfTabProps {
   heldQty: number | null
 }
 
-const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本' }
+const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本', avgCost: '均價' }
 
 export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
@@ -71,10 +71,14 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
   }
 
   const result = whatIf(whatIfInput)
-  // The ladder anchors on the live quote, never on the sell-price input, so it keeps its
-  // 「現價 ±10%」 promise instead of jumping every time the user types a sell price.
-  const anchor = currentPrice ?? buyPriceNum
-  const ladder = sellLadder({ ...whatIfInput, price: anchor })
+  // The ladder anchors on the holding average cost when there is one, never on the
+  // sell-price input — it keeps its ±10% promise instead of jumping every time the user
+  // types a sell price.
+  const anchorsOnAvgCost = avgCost !== null && avgCost > 0
+  // Snapped to the same 0.01 grid sellLadder uses for its rows, so the anchor row's
+  // relative is exactly 0 instead of a sub-cent residual that renders as -0.00%.
+  const anchor = anchorsOnAvgCost ? Math.round(avgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
+  const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost })
 
   const pick = (row: LadderRow) => setSellPrice(String(row.price))
   const onRowKeyDown = (row: LadderRow) => (e: React.KeyboardEvent) => {
@@ -88,13 +92,13 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
     <div className="rpt-section">
       {ladder.length > 0 && (
         <>
-          <h3>賣出階梯 · 現價 ±10%</h3>
+          <h3>{anchorsOnAvgCost ? '賣出階梯 · 持有均價 ±10%' : '賣出階梯 · 現價 ±10%'}</h3>
           <div className="table-scroll">
             <table className="data-table whatif-ladder" data-testid="whatif-ladder">
               <thead>
                 <tr>
                   <th>賣出價</th>
-                  <th className="num">相對現價</th>
+                  <th className="num">{anchorsOnAvgCost ? '相對均價' : '相對現價'}</th>
                   <th className="num">損益</th>
                   <th className="num">報酬率</th>
                   <th className="num">實收</th>
@@ -118,7 +122,7 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
                       )}
                     </td>
                     <td className="num">
-                      {row.kind === 'current' ? '—' : fmtSignedPercent(row.relative)}
+                      {row.relative === 0 ? '—' : fmtSignedPercent(row.relative)}
                     </td>
                     <td className={`num ${pnlClass(row.pnl)}`}>{fmtSignedMoney(row.pnl, 'TWD')}</td>
                     <td className={`num ${pnlClass(row.roi)}`}>{fmtSignedPercent(row.roi)}</td>

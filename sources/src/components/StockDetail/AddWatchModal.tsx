@@ -61,11 +61,16 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
       </div>
       {addError && <p>{addError}</p>}
       {loadError && <p>{loadError}</p>}
-      <ul>
+      <ul className="watch-results">
         {results.map((row) => (
           <li key={row.symbol}>
-            <button type="button" aria-label={`加入 ${row.symbol} ${row.name}`} onClick={() => handleAdd(row)}>
-              {row.symbol} {row.name}
+            <button
+              type="button"
+              className="watch-result-item"
+              aria-label={`加入 ${row.symbol} ${row.name}`}
+              onClick={() => handleAdd(row)}
+            >
+              <span className="watch-result-symbol">{row.symbol}</span> <span className="watch-result-name">{row.name}</span>
             </button>
           </li>
         ))}
