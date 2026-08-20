@@ -17,21 +17,21 @@ type Unit = '張' | '股'
 interface WhatIfTabProps {
   ticker: string
   currentPrice: number | null
-  /** Set for a held stock, null for a watched one. Fee-inclusive average cost. */
-  avgCost: number | null
+  /** Set for a held stock, null for a watched one. Fee-exclusive average traded price. */
+  rawAvgCost: number | null
   /** Set for a held stock, null for a watched one. Shares currently held. */
   heldQty: number | null
 }
 
 const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本', avgCost: '均價' }
 
-export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabProps) {
+export function WhatIfTab({ ticker, currentPrice, rawAvgCost, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
   const hasQuote = currentPrice !== null && currentPrice > 0
-  const isHeld = avgCost !== null
+  const isHeld = rawAvgCost !== null
 
   const [buyPrice, setBuyPrice] = useState(
-    isHeld ? avgCost.toFixed(2) : hasQuote ? String(currentPrice) : ''
+    isHeld ? rawAvgCost.toFixed(2) : hasQuote ? String(currentPrice) : ''
   )
   const [unit, setUnit] = useState<Unit>(
     isHeld && heldQty !== null && heldQty % 1000 !== 0 ? '股' : '張'
@@ -74,11 +74,11 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
   // The ladder anchors on the holding average cost when there is one, never on the
   // sell-price input — it keeps its ±10% promise instead of jumping every time the user
   // types a sell price.
-  const anchorsOnAvgCost = avgCost !== null && avgCost > 0
+  const anchorsOnAvgCost = rawAvgCost !== null && rawAvgCost > 0
   // Snapped to the same 0.01 grid sellLadder uses for its rows, so the anchor row's
   // relative is exactly 0 instead of a sub-cent residual that renders as -0.00%.
-  const anchor = anchorsOnAvgCost ? Math.round(avgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
-  const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost })
+  const anchor = anchorsOnAvgCost ? Math.round(rawAvgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
+  const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost: rawAvgCost })
 
   const heading = anchorsOnAvgCost ? '賣出階梯 · 持有均價 ±10%' : '賣出階梯 · 現價 ±10%'
 
@@ -326,7 +326,7 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
       {hasQuote && (
         <div className="hint">
           {isHeld
-            ? `買進價預設為平均成本 ${avgCost.toFixed(2)}`
+            ? `買進價預設為成交均價 ${rawAvgCost.toFixed(2)}（未含手續費）`
             : `買進價預設為現價 ${currentPrice}`}
         </div>
       )}

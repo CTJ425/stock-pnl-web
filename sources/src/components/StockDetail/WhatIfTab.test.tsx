@@ -13,7 +13,7 @@ vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 import { WhatIfTab } from './WhatIfTab'
 
 /** A watched stock: no holding, so no average cost and no held quantity. */
-const watched = { avgCost: null, heldQty: null }
+const watched = { rawAvgCost: null, heldQty: null }
 
 beforeEach(() => {
   cleanup()
@@ -63,24 +63,24 @@ describe('WhatIfTab 預設值：庫存股用平均成本，觀察股用現價', 
   })
 
   it('庫存個股：買進價預設帶平均成本，不是現價', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={512.34} heldQty={2000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={600} rawAvgCost={512.34} heldQty={2000} />)
 
     // 這是本次需求的核心：庫存股要用「我的成本」起算，不是市價
     expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('512.34')
     // 賣出價仍是現價 —— 「現在賣掉會怎樣」
     expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('600')
-    expect(screen.getByText(/買進價預設為平均成本\s*512\.34/)).toBeTruthy()
+    expect(screen.getByText(/買進價預設為成交均價\s*512\.34（未含手續費）/)).toBeTruthy()
   })
 
   it('庫存個股：整張持股預設用「張」，股數換算成張數', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={500} heldQty={3000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={600} rawAvgCost={500} heldQty={3000} />)
 
     expect((screen.getByLabelText('單位') as HTMLSelectElement).value).toBe('張')
     expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('3')
   })
 
   it('庫存個股：零股持股預設用「股」，不硬湊成張', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={600} avgCost={500} heldQty={1500} />)
+    render(<WhatIfTab ticker="2330" currentPrice={600} rawAvgCost={500} heldQty={1500} />)
 
     expect((screen.getByLabelText('單位') as HTMLSelectElement).value).toBe('股')
     expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('1500')
@@ -155,7 +155,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   })
 
   it('有持股時階梯以持有均價展開，均價／現價／回本三列都在', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={100} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={110} rawAvgCost={100} heldQty={1000} />)
 
     const table = screen.getByTestId('whatif-ladder').textContent || ''
     expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
@@ -172,7 +172,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   })
 
   it('均價不整齊時階梯不會出現兩列一樣的價格', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={520} avgCost={512.923} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={520} rawAvgCost={512.923} heldQty={1000} />)
 
     const rows = screen.getAllByTestId('whatif-ladder-row')
     // 只取價格文字，標籤（均價／現價／回本）另在 span 裡，不能拿來當區別
@@ -186,7 +186,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   })
 
   it('摘要列永遠列出現價、持有均價與回本，點了就帶進賣出價', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={130} avgCost={100} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={130} rawAvgCost={100} heldQty={1000} />)
 
     const marks = screen.getAllByTestId('whatif-mark')
     expect(marks.map((m) => m.dataset.kind)).toEqual(['current', 'avgCost', 'breakEven'])
@@ -206,21 +206,40 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   })
 
   it('現價等於均價時標題退回持有均價 ±10%', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={110} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={110} rawAvgCost={110} heldQty={1000} />)
 
     expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
   })
 
+  it('買進價用未含費的成交均價，手續費只算一次', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} rawAvgCost={100} heldQty={1000} />)
+
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('100.00')
+
+    const cost = Number(
+      (screen.getByTestId('whatif-cost').textContent || '').replace(/[^\d.-]/g, ''),
+    )
+    // 價金 100,000 加一次 0.1425% 手續費約 142.5；算兩次會變成約 285
+    expect(cost - 100000).toBeGreaterThan(0)
+    expect(cost - 100000).toBeLessThanOrEqual(150)
+  })
+
+  it('提示說明買進價來自未含費的成交均價', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} rawAvgCost={100} heldQty={1000} />)
+
+    expect(screen.getByText(/買進價預設為成交均價 100.00（未含手續費）/)).toBeTruthy()
+  })
+
   it('低價股的階梯不會塌成一列', () => {
     // 0.05 元股：±10% 只有 0.045~0.055，四捨五入後仍要留得下兩列
-    render(<WhatIfTab ticker="2330" currentPrice={0.05} avgCost={0.05} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={0.05} rawAvgCost={0.05} heldQty={1000} />)
 
     expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
     expect(screen.getAllByTestId('whatif-ladder-row').length).toBeGreaterThan(1)
   })
 
   it('現價在均價 ±10% 之外時，另成一簇並插一條分隔列', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={130} avgCost={100} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={130} rawAvgCost={100} heldQty={1000} />)
 
     const gaps = screen.getAllByTestId('whatif-ladder-gap')
     expect(gaps).toHaveLength(1)
@@ -233,7 +252,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   })
 
   it('現價落在均價 ±10% 內時沒有分隔列', () => {
-    render(<WhatIfTab ticker="2330" currentPrice={105} avgCost={100} heldQty={1000} />)
+    render(<WhatIfTab ticker="2330" currentPrice={105} rawAvgCost={100} heldQty={1000} />)
 
     expect(screen.queryAllByTestId('whatif-ladder-gap')).toHaveLength(0)
   })
