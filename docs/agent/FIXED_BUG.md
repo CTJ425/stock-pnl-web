@@ -8,6 +8,28 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-035 — `twt38u` content fingerprint was raw table text, not a hash
+
+- **Symptom**: `foreignTopFingerprint()` in `sources/supabase/functions/stock-report/twForeignTop.ts` joined every buyTop/sellTop cell with U+001F and returned that string directly. Measured on DEV `source_probe_tick`: roughly 10KB per row.
+
+- **Root Cause**: The value is persisted in two places — `source_probe_tick.fingerprint` on every probe round, and `market/foreign_top50.json` in Storage as that file's idempotency key (`index.ts` `syncForeignTop` compares `existing?.fingerprint === fingerprint`). Every other probe source already stores the short `<length>:<djb2>` form produced by `fingerprint()` in `pollPlan.ts`. This was an inconsistency and a storage cost, not a correctness bug — equality comparison worked either way.
+
+- **Fix**: `foreignTopFingerprint()` now returns `fingerprint(cells.join(UNIT_SEP))`. The U+001F separator still applies before hashing, so the AUDIT-04 concatenation-collision property is preserved. `twForeignTop.ts` gained one import from `./pollPlan.ts`.
+
+- **Test change**: The old test asserted the fingerprint string contained U+001F, which is unobservable once hashed. It was replaced with a behavioural assertion that `['12','3']` and `['1','23']` produce different fingerprints, plus a new assertion that the fingerprint matches the short hash form.
+
+- **Expected one-time side effect, already documented in the changelog**: After deploy, the first `syncForeignTop` comparison sees the old raw-format fingerprint in `market/foreign_top50.json` and re-uploads once. Self-healing. `source_probe_tick` only compares within a single day's window, so it is unaffected from the next day.
+
+- **Files changed**:
+  - `sources/supabase/functions/stock-report/twForeignTop.ts` (use `fingerprint()` on result)
+  - `sources/supabase/functions/stock-report/twForeignTop.test.ts` (test changed from content assertion to collision detection + format assertion)
+
+- **Verification**: `npx vitest run supabase/functions/stock-report/` — 366 tests passed, 0 failed. `npm test` — 75 files, 1136 tests passed. `npx tsc --noEmit` and `npm run typecheck:edge` — clean.
+
+- **Status**: ✅ FIXED in **0.9.7** (2026-08-20 20:45:00 Asia/Taipei).
+
+---
+
 ### Bug ID: BUG-033 — Margin probe fingerprint was always a constant (empty string hash)
 
 - **Symptom**: `source_probe_tick.fingerprint` for source `margin` was always `0:45h` (the fingerprint of an empty string). Verified on DEV: every margin row on 2026-08-18 and 2026-08-19 carried `0:45h`.

@@ -14,6 +14,8 @@
  * locally.
  */
 
+import { fingerprint } from './pollPlan.ts'
+
 export const FOREIGN_TOP_SCHEMA = 1
 export const FOREIGN_TOP_LIMIT = 50
 
@@ -108,6 +110,12 @@ export function parseForeignTop(resp: Twt38uResponse, limit = FOREIGN_TOP_LIMIT)
 /**
  * Content fingerprint over the ranked rows, cells joined with U+001F (unit separator) rather
  * than concatenation — a plain join would let `['12','3']` and `['1','23']` collide (AUDIT-04).
+ *
+ * The joined string is then hashed (0.9.7). Returning it raw made this column roughly 10KB per
+ * row: it is persisted twice — into `source_probe_tick.fingerprint` on every probe round, and
+ * into `market/foreign_top50.json` as that file's idempotency key — and every other source
+ * already stores the short `<length>:<djb2>` form. The separator still does its job because it
+ * is applied before hashing.
  */
 const UNIT_SEP = String.fromCharCode(31)
 
@@ -115,5 +123,5 @@ export function foreignTopFingerprint(p: ForeignTopParsed): string {
   const cells: (string | number | boolean)[] = []
   for (const x of p.buyTop) cells.push(x.ticker, x.name, x.buy, x.sell, x.net, x.block)
   for (const x of p.sellTop) cells.push(x.ticker, x.name, x.buy, x.sell, x.net, x.block)
-  return cells.join(UNIT_SEP)
+  return fingerprint(cells.join(UNIT_SEP))
 }

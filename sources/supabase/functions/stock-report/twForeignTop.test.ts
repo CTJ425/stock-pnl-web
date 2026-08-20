@@ -228,10 +228,32 @@ describe('foreignTopFingerprint', () => {
     expect(foreignTopFingerprint(moved)).not.toBe(foreignTopFingerprint(base))
   })
 
-  it('欄位以 U+001F 分隔，避免 AUDIT-04 的黏合碰撞', () => {
+  it('欄位分隔仍在，AUDIT-04 的黏合碰撞不得復活', () => {
     // 用空字串接會讓 ['12','3'] 與 ['1','23'] 都變成 '123'，兩筆不同的資料共用一個指紋。
-    // 直接驗分隔符存在，比兩個「剛好不撞」的樣本更能守住這件事。
-    const p = parseForeignTop(resp([row('1101', 500), row('1102', -500)]))!
-    expect(foreignTopFingerprint(p)).toContain(String.fromCharCode(31))
+    // 指紋改成雜湊之後分隔符不再看得見，所以改用行為驗證：這兩筆必須得到不同的指紋。
+    const item = (ticker: string, name: string) => ({
+      ticker,
+      name,
+      buy: 0,
+      sell: 0,
+      net: 0,
+      block: false,
+    })
+    const mk = (ticker: string, name: string) => ({
+      rawDate: '20260820',
+      date: '2026-08-20',
+      buyTop: [item(ticker, name)],
+      sellTop: [],
+    })
+    expect(foreignTopFingerprint(mk('12', '3'))).not.toBe(foreignTopFingerprint(mk('1', '23')))
+  })
+
+  it('是雜湊而不是整份表原文——這一欄會存進 source_probe_tick 與 Storage', () => {
+    // 0.9.7 前這裡回傳的是全部欄位接起來的原文，實測約 10KB／列，把 source_probe_tick
+    // 與 market/foreign_top50.json 都撐大，也與其他來源的指紋格式不一致。
+    const p = parseForeignTop(REAL)!
+    const fp = foreignTopFingerprint(p)
+    expect(fp).toMatch(/^\d+:[0-9a-z]+$/)
+    expect(fp.length).toBeLessThan(32)
   })
 })
