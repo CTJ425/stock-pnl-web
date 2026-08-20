@@ -158,7 +158,7 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={100} heldQty={1000} />)
 
     const table = screen.getByTestId('whatif-ladder').textContent || ''
-    expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
+    expect(screen.getByText(/賣出階梯 · 涵蓋均價與現價/)).toBeTruthy()
     expect(screen.getByText('相對均價')).toBeTruthy()
     expect(table).toContain('均價')
     expect(table).toContain('現價')
@@ -183,6 +183,40 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     expect(avg).toHaveLength(1)
     // 均價就是錨點，相對欄應該是破折號而不是 -0.00%
     expect(avg[0].querySelectorAll('td')[1].textContent).toBe('—')
+  })
+
+  it('摘要列永遠列出現價、持有均價與回本，點了就帶進賣出價', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={130} avgCost={100} heldQty={1000} />)
+
+    const marks = screen.getAllByTestId('whatif-mark')
+    expect(marks.map((m) => m.dataset.kind)).toEqual(['current', 'avgCost', 'breakEven'])
+    // 現價離均價 +30%，舊的 ±10% 窗口看不到它
+    expect(marks[0].textContent).toContain('130.00')
+    expect(marks[0].textContent).toContain('+30.0')
+
+    fireEvent.click(marks[0])
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('130')
+  })
+
+  it('觀察股票的摘要列只有現價與回本', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+
+    const marks = screen.getAllByTestId('whatif-mark')
+    expect(marks.map((m) => m.dataset.kind)).toEqual(['current', 'breakEven'])
+  })
+
+  it('現價等於均價時標題退回持有均價 ±10%', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} avgCost={110} heldQty={1000} />)
+
+    expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
+  })
+
+  it('低價股的格線收斂到剩一階時，標題不會謊稱涵蓋兩個價', () => {
+    // 0.05 元股：±10% 只有 0.045~0.055，圓整格線收不出兩階
+    render(<WhatIfTab ticker="2330" currentPrice={0.05} avgCost={0.05} heldQty={1000} />)
+
+    expect(screen.getByText(/賣出階梯 · 持有均價 ±10%/)).toBeTruthy()
+    expect(screen.getAllByTestId('whatif-ladder-row').length).toBeGreaterThan(1)
   })
 
   it('觀察股票沒有均價，階梯維持以現價展開', () => {
