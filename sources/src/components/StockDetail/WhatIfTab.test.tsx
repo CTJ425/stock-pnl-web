@@ -177,8 +177,8 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
       .map((r) => r.textContent)
     fireEvent.click(screen.getAllByTestId('whatif-ladder-row')[0])
 
-    // −10% 那一列：110 * 0.9 = 99
-    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('99')
+    // +10% 那一列：110 * 1.1 = 121
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('121')
     // 標題承諾的是「現價 ±10%」，所以錨點是報價，不是使用者打的賣出價
     expect(
       screen.getAllByTestId('whatif-ladder-row').map((r) => r.textContent),

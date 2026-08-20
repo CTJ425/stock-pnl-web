@@ -78,9 +78,9 @@ const LADDER_STEPS = [-0.1, -0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1]
 
 /**
  * Nine price steps around `input.price` (±10%, 2.5% apart) plus, when it falls inside
- * that window and does not already coincide with a step, the break-even price. Each
- * row's pnl/roi/proceeds/sellFeeTax is a fresh `whatIf` call at that row's price — the
- * ladder never interpolates fees.
+ * that window and does not already coincide with a step, the break-even price. Rows are
+ * ordered highest price first (+10% on top). Each row's pnl/roi/proceeds/sellFeeTax is a
+ * fresh `whatIf` call at that row's price — the ladder never interpolates fees.
  */
 export function sellLadder(input: WhatIfInput): LadderRow[] {
   const base = whatIf(input)
@@ -113,7 +113,7 @@ export function sellLadder(input: WhatIfInput): LadderRow[] {
     rows.push(rowFor(breakEven, 'breakEven'))
   }
 
-  rows.sort((a, b) => a.price - b.price)
+  rows.sort((a, b) => b.price - a.price)
 
   // Rounding to 2 decimals can collapse adjacent steps onto the same price once the
   // anchor is small (anchor * 0.025 under the 0.01 grid). Merge those into one row,
