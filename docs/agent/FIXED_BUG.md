@@ -24,7 +24,7 @@
 
 - **Verification**: `npx vitest run` → 73 files / **1113 tests**, all pass. `npx tsc --noEmit` → 0 errors. `npx oxlint src` → 0 errors (5 pre-existing only-export-components warnings). `npm run build` → ok. Review: `route:reviewer` **PASS**, zero findings — end-to-end fee-exclusive path verified, no other `Holding.avgCost` consumers changed, new prop optional, watched stocks behave as before.
 
-- **Status**: ✅ FIXED in **0.9.4-dev.1** (2026-08-20 13:42:49 Asia/Taipei).
+- **Status**: ✅ FIXED in **0.9.4** (2026-08-20 13:42:49 Asia/Taipei).
 
 ---
 

@@ -7,6 +7,17 @@
 
 ---
 
+## 📅 Log: 2026-08-20 13:47:54 Asia/Taipei (0.9.4 official release — BUG-032 修正：買進費用重複計算)
+
+- **Release**: Version 0.9.4 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
+- **Scope**: Bug fix release. Single change: BUG-032 (Task 123) — held stock buy fee was counted twice in P&L simulator. Fix applied: held stock 買進價 now defaults to fee-exclusive `rawAvgCost` instead of fee-inclusive `avgCost`; fee counted exactly once in `whatIf()`.
+- **What shipped**: WhatIfTab, StockDetailPage, AnalysisPage, and related tests updated to use `rawAvgCost` prop. (1) `WhatIfTab.tsx` — 買進價 default changed to `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`); used in `isHeld` check, ladder anchor, avgCost mark, and marks strip. Hint text: 「買進價預設為成交均價 <price>（未含手續費）」. (2) `StockDetailPage.tsx` — `StockDetailPageProps` gains `rawAvgCost?: number | null` (defaults null), forwarded to `WhatIfTab`. (3) `AnalysisPage.tsx` — passes `selected.row.holding.rawAvgCost`. (4) `WhatIfTab.test.tsx` — two new test cases verify fee counted once and hint text accuracy.
+- **What was not changed**: `pnlEngine.ts`, `fees.ts`, `whatIf()` signature/math, 庫存總覽, 年度報告, `estimateUnrealized`, `ReportHolding` / `reportProxy.ts`. Pure frontend fix, no schema, no Edge, no migration.
+- **Testing**: `npx vitest run` → 73 files / **1113 tests**, all pass. `npx tsc --noEmit` → 0 errors. `npx oxlint src` → 0 errors (5 pre-existing only-export-components). `npm run build` → ok. Frontend only — no Supabase, no Edge, no schema.
+- **Unfinished**: None — 0.9.4 complete and live.
+
+---
+
 ## 📅 Log: 2026-08-20 13:42:49 Asia/Taipei (Task 123 — BUG-032 修正：買進費用重複計算 fix recorded, version 0.9.4-dev.1)
 
 - **Task**: Task 123 (spec: `docs/agent/specs/123-bug032-raw-avg-cost.md`)
@@ -16,16 +27,4 @@
 - **Verification verified**: Unit tests (1113 passed), TypeScript (0 errors), oxlint (0 errors), build (ok). Reviewer (route:reviewer) **PASS**, zero findings on end-to-end path, no other Holding.avgCost consumers affected, new prop optional, watched stocks behaviour unchanged.
 - **Records finalized**: Destination writes (FIXED_BUG.md, CHANGELOG.md, TASK_ARCHIVE.md) completed; source writes (BUG_FIX.md entry deletion) completed; PROGRESS.md updated (this entry added, header updated, oldest entry rolled to archive). All grep counts verified.
 - **Unfinished**: None — Task 123 complete.
-
----
-
-## 📅 Log: 2026-08-20 13:15:00 Asia/Taipei (0.9.3 release finalized — 賣出階梯均價錨點與現價聚簇 + Modal Material 化)
-
-- **Release**: Version 0.9.3 finalized and recorded; ready to ship to `main`.
-- **Scope**: Official release consolidating four completed tasks (119, 120, 121, 122) covering sell ladder average cost anchoring, price clustering, summary marks, and Material Design modal styling.
-- **What shipped**: (1) Sell ladder now anchors to holding average cost (±10%, nine 2.5% steps); mark rows (current price, average cost, break-even) inserted dynamically when falling inside window; all prices snapped to 0.01 grid. (2) When current price falls outside window, a secondary cluster (±2.5%/±5%/±7.5%) is rendered with non-clickable gap divider (`whatif-ladder-gap`) between. `LadderRow` gains `group: 'anchor' | 'quote'`. (3) Summary mark row above ladder showing price, relative %, P&L at each mark price, clickable to input sell price. (4) Watch modal (`AddWatchModal.tsx`) gains semantic classes (`.watch-results*` family) and Material styling: 48px touch targets, hover/active/focus-visible states, full-width accent underline on search focus, using only existing custom properties (no new color literals, no component library). Watch stocks (without average cost) behave identically to 0.9.1.
-- **Process note**: Development proceeded through two iterations (dev.1, dev.2, dev.3). Task 121 (dev.2: union window + pretty price grid) was superseded after user feedback; entire design removed in dev.3 and replaced with fixed window + quote clustering approach.
-- **Testing**: `npx vitest run` → 73 files, **1111 passed**. `npx tsc --noEmit` clean; `npx oxlint src` 0 errors (5 pre-existing only-export-components); `npm run build` ok.
-- **Records finalized**: CHANGELOG.md consolidated three dev sections into one 0.9.3 entry; TASK.md cleaned (119, 120, 121, 122 moved to TASK_ARCHIVE.md); PROGRESS.md this entry added; BUG_FIX.md verified (fee-inclusive avgCost double-count remains open, needs user decision).
-
 

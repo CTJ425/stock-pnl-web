@@ -11,7 +11,7 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
-### Task 123: BUG-032 修正 — 持股買進費用重複計算（0.9.4-dev.1）
+### Task 123: BUG-032 修正 — 持股買進費用重複計算（0.9.4）
 - **Status**: ✅ **Fixed and recorded**
 - **Agent**: Claude (main session)
 - **Timestamp**: 2026-08-20 13:42:49 Asia/Taipei
