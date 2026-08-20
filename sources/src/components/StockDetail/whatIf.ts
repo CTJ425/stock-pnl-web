@@ -68,6 +68,8 @@ export interface LadderRow {
   /** price / anchor - 1. The anchor is `input.price`. */
   relative: number
   kind: LadderKind
+  /** 'anchor' for the main ±10% ladder around `input.price`, 'quote' for the live-quote cluster. */
+  group: 'anchor' | 'quote'
   pnl: number
   roi: number
   proceeds: number
@@ -82,20 +84,8 @@ export interface LadderMarks {
 
 const LADDER_STEPS = [-0.1, -0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1]
 
-/** Candidate step multipliers, tried smallest first (Renard-ish "round price" grid). */
-const STEP_MULTIPLIERS = [1, 2, 2.5, 5, 10]
-
-/**
- * Round-price step size for a `[lo, hi]window: about 12 steps across the window, snapped
- * up to the first "nice" multiplier so grid lines land on round prices, never finer than
- * the TWSE 0.01 tick.
- */
-function stepSize(lo: number, hi: number): number {
-  const raw = (hi - lo) / 12
-  const mag = 10 ** Math.floor(Math.log10(raw))
-  const step = STEP_MULTIPLIERS.find((m) => m * mag >= raw)! * mag
-  return Math.max(step, 0.01)
-}
+/** Steps for the quote cluster, ±7.5% / 5% steps around the live quote. */
+const QUOTE_CLUSTER_STEPS = [-0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075]
 
 /**
  * Nine price steps around `input.price` (±10%, 2.5% apart) plus, when they fall inside
@@ -105,22 +95,23 @@ function stepSize(lo: number, hi: number): number {
  * highest price first (+10% on top). Each row's pnl/roi/proceeds/sellFeeTax is a fresh
  * `whatIf` call at that row's price — the ladder never interpolates fees.
  *
- * When `marks.avgCost` is a real holding (> 0), the window switches to a union that
- * always covers the anchor, the average cost, and the live quote, laid out on a round-
- * price grid instead of fixed 2.5% steps — see `stepSize`. A watched stock (no avgCost)
- * keeps the fixed ±10% / 2.5% ladder unchanged.
+ * When `marks.avgCost` is a real holding (> 0) and the live quote falls outside the main
+ * ±10% window, the quote gets its own small cluster (`group: 'quote'`) instead of
+ * stretching the main window to cover it. A watched stock (no avgCost) never gets a
+ * cluster — its ladder is the fixed ±10% / 2.5% steps unchanged.
  */
 export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[] {
   const base = whatIf(input)
   if (!base) return []
 
   const anchor = input.price
-  const rowFor = (price: number, kind: LadderKind): LadderRow => {
+  const rowFor = (price: number, kind: LadderKind, group: 'anchor' | 'quote'): LadderRow => {
     const r = whatIf({ ...input, price })!
     return {
       price,
       relative: price / anchor - 1,
       kind,
+      group,
       pnl: r.pnl,
       roi: r.roi,
       proceeds: r.proceeds,
@@ -134,52 +125,33 @@ export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[]
   // step and dedupe below can't merge them.
   const snap = (v: number) => Math.round(v * 100) / 100
 
-  const avgCostForWindow = marks?.avgCost != null && marks.avgCost > 0 ? marks.avgCost : null
-  const currentForWindow =
-    marks?.currentPrice != null && Number.isFinite(marks.currentPrice) && marks.currentPrice > 0
-      ? marks.currentPrice
-      : null
-
-  let stepRows: LadderRow[]
-  let windowLo: number | null = null
-  let windowHi: number | null = null
-  if (avgCostForWindow != null) {
-    const lo = Math.min(anchor, avgCostForWindow, currentForWindow ?? Infinity) * 0.9
-    const hi = Math.max(anchor, avgCostForWindow, currentForWindow ?? -Infinity) * 1.1
-    const step = stepSize(lo, hi)
-    const start = Math.ceil(lo / step)
-    const end = Math.floor(hi / step)
-    const prices: number[] = []
-    for (let i = start; i <= end; i++) prices.push(snap(i * step))
-    stepRows = prices.map((p) => rowFor(p, 'step'))
-    if (stepRows.length >= 2) {
-      windowLo = lo
-      windowHi = hi
-    }
-  } else {
-    stepRows = []
-  }
-
-  if (stepRows.length < 2) {
-    stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step'))
-    windowLo = null
-    windowHi = null
-  }
+  const stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step', 'anchor'))
 
   const rows = [...stepRows]
-  // Mode 2's grid rounds inward (ceil/floor), so the window itself — not the grid extremes
-  // — is the correct test: an outermost mark can legitimately sit outside the grid's own rows.
-  const minStepPrice = windowLo ?? Math.min(...stepRows.map((r) => r.price))
-  const maxStepPrice = windowHi ?? Math.max(...stepRows.map((r) => r.price))
+  const minStepPrice = Math.min(...stepRows.map((r) => r.price))
+  const maxStepPrice = Math.max(...stepRows.map((r) => r.price))
   const inWindow = (price: number) =>
     Number.isFinite(price) && price > 0 && price >= minStepPrice && price <= maxStepPrice
 
   const breakEvenSnapped = snap(base.breakEven)
-  if (inWindow(breakEvenSnapped)) rows.push(rowFor(breakEvenSnapped, 'breakEven'))
+  if (inWindow(breakEvenSnapped)) rows.push(rowFor(breakEvenSnapped, 'breakEven', 'anchor'))
   const avgCostMark = marks?.avgCost != null ? snap(marks.avgCost) : null
-  if (avgCostMark != null && inWindow(avgCostMark)) rows.push(rowFor(avgCostMark, 'avgCost'))
+  if (avgCostMark != null && inWindow(avgCostMark)) rows.push(rowFor(avgCostMark, 'avgCost', 'anchor'))
   const currentMark = marks?.currentPrice != null ? snap(marks.currentPrice) : null
-  if (currentMark != null && inWindow(currentMark)) rows.push(rowFor(currentMark, 'current'))
+  if (currentMark != null && inWindow(currentMark)) rows.push(rowFor(currentMark, 'current', 'anchor'))
+
+  // Quote cluster: only for a real holding, only when the live quote lands outside the
+  // main ±10% window — otherwise it is already covered by the currentMark row above.
+  const hasHolding = marks?.avgCost != null && marks.avgCost > 0
+  const quote = marks?.currentPrice
+  const hasQuote = quote != null && Number.isFinite(quote) && quote > 0
+  if (hasHolding && hasQuote && !inWindow(snap(quote))) {
+    for (const p of QUOTE_CLUSTER_STEPS) {
+      const price = snap(quote * (1 + p))
+      if (inWindow(price)) continue
+      rows.push(rowFor(price, p === 0 ? 'current' : 'step', 'quote'))
+    }
+  }
 
   rows.sort((a, b) => b.price - a.price)
 

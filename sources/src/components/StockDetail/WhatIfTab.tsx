@@ -5,7 +5,7 @@
  * localStorage, Supabase, or any store, so this tab never reflects or affects real
  * holdings / P&L reports. It is a sandbox, not a form.
  */
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { whatIf, sellLadder } from './whatIf'
 import type { LadderRow } from './whatIf'
 import { fmtMoney, fmtPercent, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
@@ -80,15 +80,7 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
   const anchor = anchorsOnAvgCost ? Math.round(avgCost * 100) / 100 : (currentPrice ?? buyPriceNum)
   const ladder = sellLadder({ ...whatIfInput, price: anchor }, { currentPrice, avgCost })
 
-  // Derived from the rows sellLadder actually returned, never from a re-guess of the mode:
-  // sellLadder's own guard can fall back to Mode 1 (e.g. a held penny stock whose round
-  // grid collapses), and the heading must not claim a Mode 2 window the table doesn't have.
-  const hasCurrentRow = ladder.some((row) => row.kind === 'current' && row.relative !== 0)
-  const heading = anchorsOnAvgCost
-    ? hasCurrentRow
-      ? '賣出階梯 · 涵蓋均價與現價'
-      : '賣出階梯 · 持有均價 ±10%'
-    : '賣出階梯 · 現價 ±10%'
+  const heading = anchorsOnAvgCost ? '賣出階梯 · 持有均價 ±10%' : '賣出階梯 · 現價 ±10%'
 
   // Summary strip: one item per mark that actually exists, each priced by its own whatIf
   // call — never interpolated from a ladder row, since a mark can sit outside whichever
@@ -179,30 +171,39 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
                 </tr>
               </thead>
               <tbody>
-                {ladder.map((row) => (
-                  <tr
-                    key={row.price}
-                    className={`whatif-ladder-row whatif-ladder-row--${row.kind}`}
-                    data-testid="whatif-ladder-row"
-                    data-kind={row.kind}
-                    tabIndex={0}
-                    onClick={() => pick(row)}
-                    onKeyDown={onRowKeyDown(row)}
-                  >
-                    <td>
-                      {fmtMoney(row.price, 'TWD', 2)}
-                      {LADDER_TAG[row.kind] && (
-                        <span className="whatif-ladder-tag">{LADDER_TAG[row.kind]}</span>
+                {ladder.map((row, i) => {
+                  const showGap = i > 0 && ladder[i - 1].group !== row.group
+                  return (
+                    <Fragment key={row.price}>
+                      {showGap && (
+                        <tr className="whatif-ladder-gap" data-testid="whatif-ladder-gap">
+                          <td colSpan={5}>現價附近</td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="num">
-                      {row.relative === 0 ? '—' : fmtSignedPercent(row.relative)}
-                    </td>
-                    <td className={`num ${pnlClass(row.pnl)}`}>{fmtSignedMoney(row.pnl, 'TWD')}</td>
-                    <td className={`num ${pnlClass(row.roi)}`}>{fmtSignedPercent(row.roi)}</td>
-                    <td className="num">{fmtMoney(row.proceeds, 'TWD')}</td>
-                  </tr>
-                ))}
+                      <tr
+                        className={`whatif-ladder-row whatif-ladder-row--${row.kind}`}
+                        data-testid="whatif-ladder-row"
+                        data-kind={row.kind}
+                        tabIndex={0}
+                        onClick={() => pick(row)}
+                        onKeyDown={onRowKeyDown(row)}
+                      >
+                        <td>
+                          {fmtMoney(row.price, 'TWD', 2)}
+                          {LADDER_TAG[row.kind] && (
+                            <span className="whatif-ladder-tag">{LADDER_TAG[row.kind]}</span>
+                          )}
+                        </td>
+                        <td className="num">
+                          {row.relative === 0 ? '—' : fmtSignedPercent(row.relative)}
+                        </td>
+                        <td className={`num ${pnlClass(row.pnl)}`}>{fmtSignedMoney(row.pnl, 'TWD')}</td>
+                        <td className={`num ${pnlClass(row.roi)}`}>{fmtSignedPercent(row.roi)}</td>
+                        <td className="num">{fmtMoney(row.proceeds, 'TWD')}</td>
+                      </tr>
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>

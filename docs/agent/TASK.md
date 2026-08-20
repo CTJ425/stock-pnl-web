@@ -61,6 +61,26 @@
 - **Spec**: `docs/agent/specs/119-ladder-anchor-avgcost.md`
 - **Unfinished**: None — awaiting user visual check on DEV.
 
+### Task 121: 賣出階梯聯集窗口 + 漂亮價格格線（0.9.3-dev.2，已被 dev.3 取代）
+- **Status**: ✅ **Completed and superseded by Task 122; code removed in dev.3**
+- **Agent**: Builder + Reviewer
+- **Timestamp**: 2026-08-20 13:03:55 Asia/Taipei
+- **What was done**: Dynamic window covering both average cost and current price (`min(均價, 現價) × 0.9` ～ `max(均價, 現價) × 1.1`). Step grid changed to "pretty prices" (1/2/2.5/5/10 × 10^k, ~12 steps, finest 0.01). Summary mark row added above ladder showing current price / average cost / break-even, each with price, relative %, and P&L at that price, clickable to input price.
+- **Testing**: Intermediate version; full test suite via dev.3 verification.
+- **Design resolution**: User feedback: version unstable when average cost and current price diverge significantly. Entire union window and pretty price grid removed in dev.3, replaced with fixed window + quote clustering approach.
+- **Spec**: `docs/agent/specs/121-ladder-union-window.md`
+- **Unfinished**: None — recorded for history; functionality moved to dev.3.
+
+### Task 122: 賣出階梯現價聚簇設計：動態窗口改為固定窗 + 聚簇（0.9.3-dev.3）
+- **Status**: 🔄 **on DEV, awaiting the user's visual check**
+- **Agent**: Builder + Reviewer
+- **Timestamp**: 2026-08-20 13:03:55 Asia/Taipei
+- **What was done**: Main ladder fixed at holding average cost ±10%, nine steps 2.5% apart. Current price cluster added when price falls outside window: ±2.5% / ±5% / ±7.5% (seven rows total). Removed all dead code from dev.2 (union window logic, pretty price grid, fallback). Gap divider row (non-clickable, `colSpan={5}`) inserted between clusters. `LadderRow` gains `group: 'anchor' | 'quote'`. Title reverts to 「賣出階梯 · 持有均價 ±10%」or 「賣出階梯 · 現價 ±10%」. Summary marks and click-to-input behaviour unchanged. Watch stocks (no average cost) behave identically to 0.9.1.
+- **Testing**: 73 files, **1111 passed**. TypeScript clean, oxlint clean, build ok. No new dependencies.
+- **Known issue recorded**: None new.
+- **Spec**: `docs/agent/specs/122-ladder-quote-cluster.md`
+- **Unfinished**: None — awaiting user visual check on DEV.
+
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**
