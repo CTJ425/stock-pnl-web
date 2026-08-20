@@ -11,6 +11,23 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 124: 0.9.5 損益試算成本基數精確度修正（真實部位驗證）
+- **Status**: ✅ **Shipped in 0.9.5**
+- **Agent**: Builder + Reviewer + Scribe
+- **Timestamp**: 2026-08-20 15:07:12 CST
+- **What was done**: Three genuine defects on real PROD position fixed: (1) price rounding precision (104.225 → 104.23, binary trap fix with `roundPrice()` helper); (2) buy fee no longer recalculated from workspace config (added optional `buyFee` override to `whatIf()`, WhatIfTab supplies real fee); (3) ledger labels state cost basis and actual fee (買進側 shows 成交均價（未含費）& 實付手續費, 賣出側 shows 現價).
+  - Files changed: `sources/src/utils/formatters.ts` (new `roundPrice`), `sources/src/components/StockDetail/whatIf.ts` (buyFee override, snap fix), `WhatIfTab.tsx` (seed re-keyed, labels), `StockDetailPage.tsx`, `AnalysisPage.tsx`, `sources/src/index.css`.
+  - Tests added: `sources/src/utils/formatters.test.ts` (rounding trap values); `whatIf.test.ts` & `WhatIfTab.test.tsx` gained 104.23 seed, 417,492 cost parity, −3,298 P&L match, edited-price fee rate, label test cases.
+  - E2E coverage gap closed: (1) `sources/src/components/StockDetail/AnalysisPage.whatif.test.tsx` (jsdom, real prop chain against reference position — 4,000 shares @ 104.3730 avgCost, quote 103.80); (2) `sources/scripts/verify-whatif-e2e.cjs` (Playwright, cross-checks 賣出價 = 現價 case).
+- **Testing**: `npx vitest run` → 75 files / **1127 tests** all pass. `npx tsc --noEmit` 0 errors. `npx oxlint src` 0 errors (5 pre-existing only-export-components). `npm run build` ok. E2E `verify-whatif-e2e.cjs` against DEV → **PASS**; `verify-watchlist-e2e.cjs` → **10/10 PASS** (no regression). Frontend only — no Supabase, no Edge, no schema, no migration.
+- **Verification outcome**: Investigation found **no code defect** in prior dev.1. The ~1,582 P&L discrepancy came from user reporting from workspace `測試區1` (no 0050 holding), which correctly falls back to watched-stock behaviour. Verified on running DEV app (version 0.9.5-dev.1, workspace `SNAP正式區`, ticker 0050): 投入成本 NT$417,492 = 庫存總覽, 損益 -NT$3,298 = 庫存總覽's 未實現淨損益.
+- **What did NOT change**: `pnlEngine.ts`, `fees.ts`, `whatIf()` signature/math, 庫存總覽, 年度報告, Edge; pure frontend.
+- **Known issues**: None new.
+- **Spec**: `docs/agent/specs/124-whatif-real-cost-basis.md`
+- **Unfinished**: None — 0.9.5 complete and shipped.
+
+---
+
 ### Task 123: BUG-032 修正 — 持股買進費用重複計算（0.9.4）
 - **Status**: ✅ **Fixed and recorded**
 - **Agent**: Claude (main session)

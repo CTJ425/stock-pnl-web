@@ -1,9 +1,22 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Task 124 verification outcome recorded; investigation found no code defect, E2E coverage added
-- Status: **✅ VERIFIED**
-- Timestamp: 2026-08-20 14:59:05 CST
+- Action: 0.9.5 official release finalized; records updated; Task 124 moved to archive
+- Status: **✅ 0.9.5 SHIPPED**
+- Timestamp: 2026-08-20 15:07:12 CST
+
+---
+
+## 📅 Log: 2026-08-20 15:07:12 CST (0.9.5 official release — 損益試算成本基數精確度修正：舍入、費用、透明標籤)
+
+- **Release**: Version 0.9.5 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
+- **Scope**: Official release consolidating precision fixes for P&L simulator cost basis, confirmed via extended E2E verification (75 files / 1127 tests pass, E2E scripts cross-check).
+- **What shipped**: (1) 買進價 rounding precision: 104.225's binary trap fixed with `roundPrice()` helper using `Math.round((value + Number.EPSILON) * 100) / 100`, used by both seed and ladder pricing. (2) 買進費用 no longer recalculated from workspace config: `whatIf()` gains optional `buyFee` override, WhatIfTab supplies real fee, achieving exact parity with 庫存總覽 (−3,298 on reference position). (3) 帳單標籤 transparency: buy side shows 成交均價（未含費）& 實付手續費; sell side shows 現價; sources stated in hints.
+- **E2E coverage added**: Two new test artefacts closed gaps in prior dev.1 (75 files, 1127 tests vs 74/1125): (1) `sources/src/components/StockDetail/AnalysisPage.whatif.test.tsx` (jsdom) — real prop chain holding → StockDetailPage → WhatIfTab against reference position; (2) `sources/scripts/verify-whatif-e2e.cjs` (Playwright) — cross-checks sell price = quote case, credentials from env vars only.
+- **Testing verified**: `npx vitest run` → 75 files / **1127 tests** all pass; `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok. E2E `verify-whatif-e2e.cjs` against DEV → **PASS**; `verify-watchlist-e2e.cjs` → **10/10 PASS** (no regression).
+- **Durable finding**: CSV import is **append, not replace**, with **no duplicate detection** (`sources/src/services/dataProvider.ts:116` / `:204`). Re-importing the same export file to the same workspace creates new transaction entries for every row. This is not a bug — it is correct behaviour for an append operation — but users may misinterpret duplicate line items as account discrepancies. Present user's concern has been resolved; no code changes made to this behaviour.
+- **Records finalized**: CHANGELOG.md retitled 0.9.5-dev.1 → 0.9.5, updated test counts (75/1127), added two new test artefact bullets. TASK.md moved Task 124 to TASK_ARCHIVE.md (marked ✅). PROGRESS.md header updated; this entry added; oldest entry (2026-08-20 14:41:35) rolled to archive. All files match (grep verified).
+- **Unfinished**: None — 0.9.5 complete and live.
 
 ---
 
@@ -17,18 +30,4 @@
 - **Full verification run**: `npx vitest run` → 75 files / **1127 tests** all pass; `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok. E2E `node scripts/verify-whatif-e2e.cjs` against DEV → **PASS** (庫存總覽 417,492 / -3,298 ＝ 損益試算 417,492 / -3,298, 階梯 11 列、摘要 3 項). `node scripts/verify-watchlist-e2e.cjs` against DEV → **10/10 passed** (no regression in existing watchlist E2E). No production code changed by verification step; no Supabase, no Edge, no schema.
 - **Records finalized**: PROGRESS.md updated (this entry added, header updated, oldest entry rolled to archive); TASK.md updated (Task 124 marked 📋 verified on DEV with E2E coverage); `docs/UnitTests/E2E.md` updated (new `verify-whatif-e2e.cjs` script added to E2E list).
 - **Conclusion**: 0.9.5-dev.1 is correct; no code fix needed. DEV workspace confusion resolved; user can now verify on their own PROD holding by switching workspace and confirming 損益試算 values match 庫存總覽.
-
----
-
-## 📅 Log: 2026-08-20 14:41:35 CST (Task 124 0.9.5-dev.1 損益試算成本基數精確度修正 recorded)
-
-- **Task**: Task 124 (spec: `docs/agent/specs/124-whatif-real-cost-basis.md`)
-- **Scope**: Three genuine defects on real PROD position (0050, 玉山証券 workspace: 4,000 shares, `rawCost` 416,900 → `rawAvgCost` 104.2250, `cost` 417,492 → `avgCost` 104.3730, quote 103.80).
-- **What was fixed**: (1) 買進價 rounding: 104.225's binary trap → new `roundPrice()` helper (`Math.round((value + Number.EPSILON) * 100) / 100`), used by both seed and ladder; (2) buy fee recalculation: `whatIf()` gains optional `buyFee` override, WhatIfTab supplies real fee, so 投入成本 exact match 庫存總覽 (−3,298 exact parity on reference position); (3) ledger labels: buy side shows 成交均價（未含費）& 實付手續費, source in hint, sell side shows 現價.
-- **Files changed**: `sources/src/utils/formatters.ts` (new `roundPrice`), `sources/src/components/StockDetail/whatIf.ts` (buyFee override, snap fix), `WhatIfTab.tsx` (seed re-keyed, labels), `StockDetailPage.tsx`, `AnalysisPage.tsx`, `sources/src/index.css`.
-- **Tests added**: `sources/src/utils/formatters.test.ts` (rounding trap values); `whatIf.test.ts` & `WhatIfTab.test.tsx` gained 104.23 seed, 417,492 cost parity, −3,298 P&L match, edited-price fee rate, and label test cases.
-- **Verification**: `npx vitest run` 74 files / **1125 tests** all pass; `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors (5 pre-existing); `npm run build` ok. Frontend only — no Supabase, no Edge, no schema, no migration.
-- **Reviewer verdict**: `route:reviewer` **PASS** with three RISKS fixed pre-delivery: (1) `sellLadder` snap now uses `roundPrice`, not local `Math.round`; (2) WhatIfTab re-seeds on `[ticker, rawAvgCost, avgCost, heldQty]` to sync on workspace switch; (3) `buyFee` clamped to 0 when not finite or not > 0. Spec formula (`roundPrice`) also corrected — old formula returned 0.14 for 0.145, verified fix across 0.145 / 1.005 / 104.225 / 8888.885 / 12345.675.
-- **Records finalized**: CHANGELOG.md gained 0.9.5-dev.1 section (7 bullets, house style); Task 124 added to TASK.md as 🔄 (awaiting user's real-position check); this PROGRESS entry added.
-- **Unfinished**: User verification on real PROD position (0050, 玉山) — compare 損益試算 against 庫存總覽 for precision match (投入成本、損益、手續費).
 
