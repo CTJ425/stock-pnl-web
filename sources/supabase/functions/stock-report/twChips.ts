@@ -14,6 +14,8 @@
  * The over-the-counter (TPEx) stock-by-stock endpoint is currently not supported, and the corresponding block mark is missing when there is no data.
  */
 
+import { rowsFingerprint } from './pollPlan.ts'
+
 export const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
@@ -255,7 +257,7 @@ const MARGIN_IDX = {
 } as const
 
 /** The rwd response may contain multiple tables (large market total / stock-by-stock summary); the first column of the stock-by-stock table is "code"*/
-function marginTable(resp: MarginDatedResponse): { fields: string[]; data: string[][] } | null {
+export function marginTable(resp: MarginDatedResponse): { fields: string[]; data: string[][] } | null {
   for (const t of resp.tables ?? []) {
     const fields = t.fields ?? []
     const data = t.data ?? []
@@ -300,6 +302,19 @@ export function extractMarginDated(resp: MarginDatedResponse, ticker: string): M
 /** rwd Whether the margin trading response is available (for index.ts to decide whether to cache/fallback)*/
 export function marginDatedOk(resp: MarginDatedResponse): boolean {
   return marginTable(resp) !== null
+}
+
+/**
+ * Content fingerprint of the per-stock margin table, for the probe's content-settled retire gate.
+ *
+ * Only `marginTable(resp).data` counts: the market-total table (`tables[0]`) is a different shape
+ * and must not affect the result, and row order is unstable across TWSE polls (same reason as
+ * `t86Fingerprint`) so `rowsFingerprint` sorts before hashing.
+ */
+export function marginDatedFingerprint(resp: MarginDatedResponse): string | null {
+  const table = marginTable(resp)
+  if (!table) return null
+  return rowsFingerprint(table.data)
 }
 
 interface SblRow {

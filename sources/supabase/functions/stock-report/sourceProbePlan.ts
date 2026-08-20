@@ -40,6 +40,17 @@ export const PROBE_SOURCE_ORDER: ProbeSourceId[] = [
   'mops_profit',
 ]
 
+/**
+ * 每個來源要收工，所需的「尾端連續相同指紋次數」（0.9.6）。
+ *
+ * 六個每日來源要 3：次數只證明「量到了幾次」，證明不了「上游還會不會再改」——尾端連續正是
+ * 用來抓這件事的證據，任何一次內容變動都會把計數歸零重新累積。MOPS 兩個來源要 1：它們的
+ * 收工判準（`atLeast`）本身就是期別比較，「該期已經出現在畫面上」由構造保證，尾端連續 1
+ * 天生滿足，等於保留舊行為「一到位就收工」。
+ *
+ * 數字不因這次改版而變：DEV `batch_run_log` 實測 2026-08-12～08-19，T86 一天最多改版一次，
+ * 且落在 t86 探針視窗（16:00–17:00）之外，提高次數攔不到它，只會多打沒有意義的請求。
+ */
 export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
   bfi82u: 3,
   t86: 3,
@@ -52,48 +63,37 @@ export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
 }
 
 /**
- * 這個來源要不要求「內容已停止變動」才准收工。
+ * 尾端連續相同指紋的長度（0.9.6）。
  *
- * 六個每日來源要求：次數只證明「量到了幾次」，證明不了「上游還會不會再改」——T86 每 15 分鐘
- * 改一次正是這個洞的實例。MOPS 兩個來源不要求：它們的收工判準（`atLeast`）本身就是期別比較，
- * 「該期已經出現在畫面上」由構造保證，而它們的目標是單次到位，指紋規則只會把 1 變成 2，沒有收穫。
+ * 空陣列為 0；最後一筆永遠算 1；往前延伸的條件是相鄰兩筆**都非空且相等**——null／undefined／
+ * 空字串都無法證明「跟前一筆一樣」，遇到就停在那裡。任何一次內容變動都會把計數截斷，
+ * 逼著收工判準重新累積證據，而不是只看最後兩筆、把更早的改版證據丟掉。
  */
-export const REQUIRE_SETTLED_CONTENT: Record<ProbeSourceId, boolean> = {
-  bfi82u: true,
-  t86: true,
-  bwibbu: true,
-  twt38u: true,
-  margin: true,
-  borrow: true,
-  mops_revenue: false,
-  mops_profit: false,
-}
-
-/** 最近兩次到位的指紋是否相同——相同即視為上游已停止改版。 */
-export function contentSettled(fingerprints: Array<string | null | undefined>): boolean {
-  if (fingerprints.length < 2) return false
-  const [a, b] = fingerprints.slice(-2)
-  if (!a || !b) return false
-  return a === b
+export function trailingRun(fingerprints: Array<string | null | undefined>): number {
+  if (fingerprints.length === 0) return 0
+  let run = 1
+  for (let i = fingerprints.length - 1; i > 0; i--) {
+    const cur = fingerprints[i]
+    const prev = fingerprints[i - 1]
+    if (!cur || !prev || cur !== prev) break
+    run++
+  }
+  return run
 }
 
 /**
- * 依據今日各來源的已到位次數與內容穩定度，計算哪些來源已經收工。
+ * 依據今日各來源的尾端連續到位次數，計算哪些來源已經收工。
  *
- * 次數到了不等於能收工：每日來源另需 `settled[id] === true`（最近兩次到位內容指紋相同）。
- * `settled` 預設為空物件——沒有穩定證據時，需要穩定證據的來源一律不收工，寧可多探一輪。
+ * 收工條件就是次數本身：`counts[id] ?? 0` 達到 `required[id]` 即收工，不再另外查一個
+ * settled 旗標——尾端連續次數已經把「內容還在不在動」算進去了。
  */
 export function retiredSources(
-  landedCounts: Record<string, number>,
+  counts: Record<string, number>,
   required: Record<ProbeSourceId, number> = REQUIRED_LANDED_COUNTS,
-  settled: Record<string, boolean> = {},
 ): Set<ProbeSourceId> {
   const out = new Set<ProbeSourceId>()
   for (const [id, req] of Object.entries(required) as Array<[ProbeSourceId, number]>) {
-    if ((landedCounts[id] ?? 0) < req) continue
-    if (REQUIRE_SETTLED_CONTENT[id] === false || settled[id] === true) {
-      out.add(id)
-    }
+    if ((counts[id] ?? 0) >= req) out.add(id)
   }
   return out
 }
@@ -157,7 +157,7 @@ export interface LandedTick {
 }
 
 /**
- * 把今天的到位紀錄整理成「每個來源到位幾次」與「每個來源的內容是否已停止變動」。
+ * 把今天的到位紀錄整理成「每個來源尾端連續到位幾次」。
  *
  * `slotMinutes` 是現在這一輪的分鐘數；當來源有每日視窗時，只有落在**當前活躍視窗**內的
  * tick 算數——`bfi82u` 一天兩個時段，跨時段累計會讓它提早退休。
@@ -165,16 +165,15 @@ export interface LandedTick {
 export function summariseLandedTicks(
   ticks: LandedTick[],
   slotMinutes: number | null,
-): { counts: Record<string, number>; settled: Record<string, boolean> } {
+): { counts: Record<string, number> } {
   // DB row order is not guaranteed; sort by tick time so per-source fingerprints are in
-  // time order, which `contentSettled` needs (it reads the last two entries).
+  // time order, which `trailingRun` needs (it walks backwards from the end).
   const sorted = [...ticks].sort(
     (a, b) =>
       (a.taipei_time ? minutesFromHhmm(a.taipei_time) ?? 0 : 0) -
       (b.taipei_time ? minutesFromHhmm(b.taipei_time) ?? 0 : 0),
   )
 
-  const counts: Record<string, number> = {}
   const fingerprintsBySource: Record<string, Array<string | null>> = {}
   for (const r of sorted) {
     const src = r.source
@@ -187,15 +186,14 @@ export function summariseLandedTicks(
         }
       }
     }
-    counts[src] = (counts[src] ?? 0) + 1
     ;(fingerprintsBySource[src] ??= []).push(r.fingerprint ?? null)
   }
 
-  const settled: Record<string, boolean> = {}
+  const counts: Record<string, number> = {}
   for (const src of Object.keys(fingerprintsBySource)) {
-    settled[src] = contentSettled(fingerprintsBySource[src])
+    counts[src] = trailingRun(fingerprintsBySource[src])
   }
-  return { counts, settled }
+  return { counts }
 }
 
 /**

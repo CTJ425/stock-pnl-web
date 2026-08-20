@@ -1,9 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.5 official release finalized; records updated; Task 124 moved to archive
-- Status: **✅ 0.9.5 SHIPPED**
-- Timestamp: 2026-08-20 15:07:12 CST
+- Action: Version 0.9.6 probe fixes recorded (BUG-033 + retire gate rewrite); tracking files updated; version bump staged
+- Status: **✅ 0.9.6 RECORDED**
+- Timestamp: 2026-08-20 17:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-20 17:55:00 Asia/Taipei (Version 0.9.6 probe system fixes — margin fingerprint constant, retire gate rewritten)
+
+- **Release**: Version 0.9.6 fixes two independent probe defects affecting `source_probe_tick` correctness and retirement logic.
+- **Change 1 (BUG-033)**: Margin probe fingerprint was always `0:45h` (empty string hash). Root cause: `probeSource` read from `(resp as { data? }).data`, but `MarginDatedResponse` has no `data` field (rows under `tables[]`). Fix: new `marginDatedFingerprint()` in `twChips.ts` using existing `marginTable()` helper. Impact: content-settled gate now functions; `rows` count now accurate.
+- **Change 2 (BUG-034)**: Retire gate had two holes: `A → B → B` would retire despite `A → B` proving upstream was revising; `contentSettled` lost all intermediate revisions. Fix: rewrite to trailing-run rule: `counts[id]` = length of identical-fingerprint run (new `trailingRun` in `sourceProbePlan.ts`); `retiredSources` checks `counts[id] >= required[id]`. Any content change resets run to 1.
+- **Files changed**: `twChips.ts` (new exported functions), `index.ts` (margin branch rewrite), `sourceProbePlan.ts` (new `trailingRun`), test files (365 tests passed).
+- **Version bump**: `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` set to 0.9.6.
+- **Verification**: `npx vitest run supabase/functions/stock-report/` → 365 tests passed, 0 failed. `npm test` → 75 files, 1135 tests passed. `npx tsc --noEmit` clean. Reviewer (both changes): **PASS**, no findings.
+- **Deployment status**: DEV Edge **deployed** 2026-08-20 17:55 Asia/Taipei by volume copy into `volumes/functions/stock-report/` plus `docker compose up -d --force-recreate functions`; `diff -rq` clean. PROD Edge **not deployed and not authorized**. A `main` push deploys Pages only, never an Edge Function, so this fix is not live in PROD until `supabase functions deploy stock-report` is run with explicit approval.
+- **Records finalized**: CHANGELOG.md gained 0.9.6 entry (Traditional Chinese, house style). FIXED_BUG.md gained BUG-033 and BUG-034 entries with full resolution. PROGRESS_ARCHIVE.md gained oldest PROGRESS entry (14:59:05). PROGRESS.md header updated; this entry added; oldest entry moved to archive. All files match.
+- **Unfinished**: None — 0.9.6 recording complete.
 
 ---
 
@@ -17,17 +31,4 @@
 - **Durable finding**: CSV import is **append, not replace**, with **no duplicate detection** (`sources/src/services/dataProvider.ts:116` / `:204`). Re-importing the same export file to the same workspace creates new transaction entries for every row. This is not a bug — it is correct behaviour for an append operation — but users may misinterpret duplicate line items as account discrepancies. Present user's concern has been resolved; no code changes made to this behaviour.
 - **Records finalized**: CHANGELOG.md retitled 0.9.5-dev.1 → 0.9.5, updated test counts (75/1127), added two new test artefact bullets. TASK.md moved Task 124 to TASK_ARCHIVE.md (marked ✅). PROGRESS.md header updated; this entry added; oldest entry (2026-08-20 14:41:35) rolled to archive. All files match (grep verified).
 - **Unfinished**: None — 0.9.5 complete and live.
-
----
-
-## 📅 Log: 2026-08-20 14:59:05 CST (Task 124 損益試算 verification outcome — no defect, E2E coverage added)
-
-- **Task**: Task 124 (spec: `docs/agent/specs/124-whatif-real-cost-basis.md`)
-- **Investigation**: User reported 損益試算 損益 showed ~1,582 instead of matching 庫存總覽 after 0.9.5-dev.1 release. Code review found **no defect** — the discrepancy came from DEV app's default workspace after login being `測試區1`, which does not hold ticker 0050. With no holding, the tab correctly falls back to watched-stock behaviour (buy price seeded from quote), so P&L is three fees only — the ~1,582 signature.
-- **Root cause**: User reported from workspace `測試區1` (no holding); correct workspace is `SNAP正式區` (holds 9 transactions for 0050, reducing to 4,000 shares, rawCost 416,900 → rawAvgCost 104.2250, cost 417,492 → avgCost 104.3730).
-- **Verification on running DEV app** (`http://10.8.22.99:5173`, version badge `0.9.5-dev.1`): workspace `SNAP正式區`, ticker 0050 — 買進價格 104.23 (matches seed), 股數 4 張, 賣出價格 103.8 (current quote), 投入成本 NT$417,492 (matches 庫存總覽), 損益 -NT$3,298 (matches 庫存總覽's 未實現淨損益 for same holding). 賣出階梯 11 列、摘要列 3 項 both render correctly.
-- **E2E coverage gap closed**: `AnalysisPage.test.tsx` mocked `StockDetailPage` away, so the holding → `StockDetailPage` → `WhatIfTab` prop chain had no test at all. Two additions: (1) `sources/src/components/StockDetail/AnalysisPage.whatif.test.tsx` (new, jsdom) — renders the real chain against the reference position (4,000 shares @ 104.3730 avgCost, quote 103.80) and asserts 買進價格 `104.23`, 投入成本 `417,492`, 損益 `-3,298`; (2) `sources/scripts/verify-whatif-e2e.cjs` (new, Playwright) — cross-checks 賣出價 = 現價 case: tab's 投入成本 / 損益 must equal 庫存總覽's 投入成本 / 未實現淨損益, ladder and marks strip render. Credentials read from `APP_USER` / `APP_PASS` environment variables at run time, never stored in file. Usage: `BASE_URL=… WORKSPACE=… TICKER=… node scripts/verify-whatif-e2e.cjs`.
-- **Full verification run**: `npx vitest run` → 75 files / **1127 tests** all pass; `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok. E2E `node scripts/verify-whatif-e2e.cjs` against DEV → **PASS** (庫存總覽 417,492 / -3,298 ＝ 損益試算 417,492 / -3,298, 階梯 11 列、摘要 3 項). `node scripts/verify-watchlist-e2e.cjs` against DEV → **10/10 passed** (no regression in existing watchlist E2E). No production code changed by verification step; no Supabase, no Edge, no schema.
-- **Records finalized**: PROGRESS.md updated (this entry added, header updated, oldest entry rolled to archive); TASK.md updated (Task 124 marked 📋 verified on DEV with E2E coverage); `docs/UnitTests/E2E.md` updated (new `verify-whatif-e2e.cjs` script added to E2E list).
-- **Conclusion**: 0.9.5-dev.1 is correct; no code fix needed. DEV workspace confusion resolved; user can now verify on their own PROD holding by switching workspace and confirming 損益試算 values match 庫存總覽.
 

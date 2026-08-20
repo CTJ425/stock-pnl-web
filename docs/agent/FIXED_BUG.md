@@ -1,12 +1,55 @@
 # Fixed Bugs History (FIXED_BUG.md)
 
-- Agent: Claude
+- Agent: Scribe
 - Status: ACTIVE
-- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
+- Timestamp: 2026-08-20 17:55:00 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### Bug ID: BUG-033 — Margin probe fingerprint was always a constant (empty string hash)
+
+- **Symptom**: `source_probe_tick.fingerprint` for source `margin` was always `0:45h` (the fingerprint of an empty string). Verified on DEV: every margin row on 2026-08-18 and 2026-08-19 carried `0:45h`.
+
+- **Root Cause**: `probeSource` in `sources/supabase/functions/stock-report/index.ts`, the `id === 'margin'` branch read `(resp as { data?: unknown[] }).data`, but `MarginDatedResponse` has no top-level `data` field — its rows live under `tables[]`. `fingerprint(undefined)` therefore returned the empty-string fingerprint on every round.
+
+- **Impact**: The probe's content-settled retire gate was dead code for `margin` — it compared `0:45h` to `0:45h` and always said "settled". `rows` was also always null for that source, hiding the actual per-stock row count.
+
+- **Fix**: Added exported `marginDatedFingerprint()` function in `sources/supabase/functions/stock-report/twChips.ts`, built on the existing `marginTable()` helper (now exported) plus `rowsFingerprint` from `pollPlan.ts`, so row order does not count as a revision and the market-total table `tables[0]` does not affect the result. `index.ts` uses it, and `rows` now reports the real per-stock row count.
+
+- **Files changed**:
+  - `sources/supabase/functions/stock-report/twChips.ts` (new exported `marginDatedFingerprint` and `marginTable`)
+  - `sources/supabase/functions/stock-report/index.ts` (use new `marginDatedFingerprint` in margin branch)
+  - `sources/supabase/functions/stock-report/twChips.test.ts` (new tests for fingerprint)
+
+- **Verification**: `npx vitest run supabase/functions/stock-report/` — 365 tests passed, 0 failed. `npx tsc --noEmit` clean. Reviewer: **PASS**, no findings.
+
+- **Status**: ✅ FIXED in **0.9.6** (2026-08-20 17:55:00 Asia/Taipei).
+
+---
+
+### Bug ID: BUG-034 — Probe retire gate had two independent holes in its logic (open-ended revision history + transient run trap)
+
+- **Symptom**: The old rule retired a source when total landed count ≥ `REQUIRED_LANDED_COUNTS[id]` AND (`REQUIRE_SETTLED_CONTENT[id] === false` OR the last two fingerprints were equal). Two failure modes: (1) `A → B → B` would retire immediately even though `A → B` proved the upstream was still revising; (2) `contentSettled` read only the last two entries, losing track of all intermediate revisions.
+
+- **Root Cause**: The retire logic gate mixed two incompatible ideas: a count threshold (`REQUIRED_LANDED_COUNTS`) and a content-settlement gate (`contentSettled` reading only the last two fingerprints). A stale re-fetch (returning fingerprint B) would read as "settled" even though the session was B → C → B in full.
+
+- **Impact**: Sources could be retired while their upstream was still revising. Later follow-up rounds would re-probe a source marked retired, breaking the retry loop's assumption of monotonic progress.
+
+- **Fix**: Rewrite the rule to trailing-run counting. `counts[id]` now holds the length of the trailing run of identical fingerprints (new exported `trailingRun` function in `sourceProbePlan.ts`). `retiredSources(counts, required)` checks only `counts[id] >= required[id]`. Any content change resets the counter to 1. Deleted `REQUIRE_SETTLED_CONTENT` and `contentSettled` — MOPS needs a run of 1 (trivially satisfied), so its old "retire on first landing regardless of fingerprint" behaviour is preserved.
+
+- **`REQUIRED_LANDED_COUNTS` values unchanged**: Measured reason recorded to dispute the code comment claiming "T86 revises every 15 minutes". DEV `batch_run_log` for 2026-08-12..08-19 shows T86 revises **at most once per day**, and the revision lands between roughly 17:00 and 20:45 — outside t86's 16:00–17:00 probe window. Raising the count would catch nothing. The revision is instead picked up by later follow-up rounds, which re-fetch T86 and reset `t86_frozen` via `nextT86State`.
+
+- **Files changed**:
+  - `sources/supabase/functions/stock-report/sourceProbePlan.ts` (new exported `trailingRun` function)
+  - `sources/supabase/functions/stock-report/sourceProbePlan.test.ts` (new tests for trailing run)
+
+- **Verification**: `npx vitest run supabase/functions/stock-report/` — 365 tests passed, 0 failed. `npx tsc --noEmit` clean. Reviewer: **PASS**, no findings.
+
+- **Status**: ✅ FIXED in **0.9.6** (2026-08-20 17:55:00 Asia/Taipei).
+
+---
 
 ### Bug ID: BUG-032 — Held stock buy fee counted twice in P&L simulator
 
