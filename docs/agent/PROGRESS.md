@@ -1,9 +1,21 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.3-dev.2 and dev.3 releases recorded; dev.2 superceded by dev.3
+- Action: Task 123 BUG-032 fix recorded; moved to FIXED_BUG.md, added to CHANGELOG.md, Task and PROGRESS entries updated
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-20 13:03:55 Asia/Taipei
+- Timestamp: 2026-08-20 13:42:49 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-20 13:42:49 Asia/Taipei (Task 123 — BUG-032 修正：買進費用重複計算 fix recorded, version 0.9.4-dev.1)
+
+- **Task**: Task 123 (spec: `docs/agent/specs/123-bug032-raw-avg-cost.md`)
+- **Scope**: Bug fix for WhatIfTab held stock simulator — buy fee was counted twice (fee-inclusive avgCost seed + fee added by whatIf).
+- **What was recorded**: BUG-032 entry moved from BUG_FIX.md to FIXED_BUG.md with full resolution details (root cause, files changed, verification results). CHANGELOG.md gained 0.9.4-dev.1 section (4 bullets: fee fix, test coverage, references, non-changes). Task 123 added to TASK_ARCHIVE.md as ✅ complete. All files' version stamps (version.ts, package.json, README.md, package-lock.json) set by main session to 0.9.4-dev.1.
+- **Resolution chosen**: Use raw traded price (option 1) — replace `avgCost` prop with `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`) throughout WhatIfTab, StockDetailPage, AnalysisPage, and tests. Fee counted exactly once now. Change is plumbing only; no maths changes.
+- **Verification verified**: Unit tests (1113 passed), TypeScript (0 errors), oxlint (0 errors), build (ok). Reviewer (route:reviewer) **PASS**, zero findings on end-to-end path, no other Holding.avgCost consumers affected, new prop optional, watched stocks behaviour unchanged.
+- **Records finalized**: Destination writes (FIXED_BUG.md, CHANGELOG.md, TASK_ARCHIVE.md) completed; source writes (BUG_FIX.md entry deletion) completed; PROGRESS.md updated (this entry added, header updated, oldest entry rolled to archive). All grep counts verified.
+- **Unfinished**: None — Task 123 complete.
 
 ---
 
@@ -15,18 +27,5 @@
 - **Process note**: Development proceeded through two iterations (dev.1, dev.2, dev.3). Task 121 (dev.2: union window + pretty price grid) was superseded after user feedback; entire design removed in dev.3 and replaced with fixed window + quote clustering approach.
 - **Testing**: `npx vitest run` → 73 files, **1111 passed**. `npx tsc --noEmit` clean; `npx oxlint src` 0 errors (5 pre-existing only-export-components); `npm run build` ok.
 - **Records finalized**: CHANGELOG.md consolidated three dev sections into one 0.9.3 entry; TASK.md cleaned (119, 120, 121, 122 moved to TASK_ARCHIVE.md); PROGRESS.md this entry added; BUG_FIX.md verified (fee-inclusive avgCost double-count remains open, needs user decision).
-
----
-
-## 📅 Log: 2026-08-20 13:03:55 Asia/Taipei (0.9.3-dev.2 + dev.3 — 賣出階梯聯集窗口迭代及現價聚簇設計定稿)
-
-- **Release**: Two iterations on `dev` branch (Task 121 dev.2, Task 122 dev.3); frontend only, no deployment yet.
-- **Scope**: Iterative refinement of sell ladder UI design in response to user feedback on price divergence causing layout instability.
-- **What changed** (Task 121 & 122):
-  1. **dev.2 (intermediate, superseded)** — Dynamic union window covering both average cost and current price; step grid changed to "pretty prices" (1/2/2.5/5/10 × 10^k, ~12 steps); summary marks row with price/relative%/P&L. Two FAIL items from reviewer (mark row rounding, title consistency) fixed before submission. User feedback: unstable when cost and price diverge significantly.
-  2. **dev.3 (current, active)** — Fixed-window design: main ladder anchored to ±10% average cost (nine 2.5% steps); current price cluster (±2.5%/±5%/±7.5%, seven rows) when outside window; gap divider between clusters; all dev.2 union window and pretty-price logic removed (dead-code cleanup verified). Title reverts to 「賣出階梯 · 持有均價 ±10%」 or by context. Mark summary and click-to-input behaviour unchanged. Watch stocks (no average cost) identical to 0.9.1.
-- **Testing**: `npx vitest run` → 73 files, **1111 passed**, 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors (5 pre-existing only-export-components); `npm run build` ok.
-- **Review**: `route:reviewer` found one false-positive FAIL (tests undeclared by builder); main session confirmed tests pre-written before builder dispatch; PASS on code quality (no defects on dead-code cleanup, cluster boundaries, deduplication, gap row, watch stock parity, per-row computation, CSS).
-- **Unfinished**: None — both versions complete. Awaiting user visual check on DEV before merge to main.
 
 

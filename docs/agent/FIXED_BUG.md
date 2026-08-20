@@ -8,6 +8,26 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-032 — Held stock buy fee counted twice in P&L simulator
+
+- **Symptom**: When simulating what-if scenarios for held stocks, the 買進價 defaulted to `avgCost` (fee-inclusive average cost). The `whatIf()` function then added `buyFee` again, inflating 投入成本 by ~0.14% (measured NT$4,276 excess on a ~NT$3M position). The cost breakdown in 對帳單 showed the overstated number; the P&L was correct (both based on same `whatIf()` call) but the cost line was wrong.
+
+- **Root Cause**: `WhatIfTab` defaulted held stock's 買進價 to `avgCost` (fee-inclusive, from 庫存總覽). The `whatIf()` function then added `buyFee` again during entry cost computation. Pre-existing behaviour; made visible in 0.9.1-dev.2 because 對帳單 now shows 投入成本 and 手續費 explicitly (0.9.1-dev.1 showed only headline P&L).
+
+- **Fix (chosen option)**: Use the raw traded price (fee-exclusive) as the default 買進價. Specifically: replace `avgCost` prop with `rawAvgCost` throughout (source: `Holding.rawAvgCost`, computed as `pos.rawCost / pos.qty`, where `pos.rawCost` accumulates only `tx.price * tx.qty` without fees). The fee is now counted exactly once in `whatIf()`. Files changed:
+  - `sources/src/components/StockDetail/WhatIfTab.tsx` — `avgCost` prop renamed to `rawAvgCost: number | null`; used for 買進價格 default, `isHeld` check, ladder anchor, avgCost mark, and marks strip. Hint text now reads `買進價預設為成交均價 <price>（未含手續費）`.
+  - `sources/src/components/StockDetail/StockDetailPage.tsx` — `StockDetailPageProps` gains `rawAvgCost?: number | null` (defaults to `null`), forwarded to `WhatIfTab`.
+  - `sources/src/components/StockDetail/AnalysisPage.tsx` — passes `selected.row.holding.rawAvgCost` through that dedicated prop.
+  - `sources/src/components/StockDetail/WhatIfTab.test.tsx` — prop renamed throughout; two new test cases added: `買進價用未含費的成交均價，手續費只算一次` (asserts 投入成本 − 價金 ≤ 150 on 100k position, verifying only one 0.1425% fee) and `提示說明買進價來自未含費的成交均價`.
+
+- **What was deliberately not changed**: `pnlEngine.ts`, `fees.ts`, `whatIf()` maths, 庫存總覽 / `DashboardPage`, `YearlyPage`, `estimateUnrealized`, and `ReportHolding` / `reportProxy.ts` (report Edge payload type not widened).
+
+- **Verification**: `npx vitest run` → 73 files / **1113 tests**, all pass. `npx tsc --noEmit` → 0 errors. `npx oxlint src` → 0 errors (5 pre-existing only-export-components warnings). `npm run build` → ok. Review: `route:reviewer` **PASS**, zero findings — end-to-end fee-exclusive path verified, no other `Holding.avgCost` consumers changed, new prop optional, watched stocks behave as before.
+
+- **Status**: ✅ FIXED in **0.9.4-dev.1** (2026-08-20 13:42:49 Asia/Taipei).
+
+---
+
 ### Bug ID: BUG-031 — Watched ticker had no quote because `useStockPrices` only covers holdings
 
 - **Symptom**: User added a non-held stock (e.g., 1101) to watchlist. Analysis page showed 「行情尚未取得／目前抓不到這檔股票的報價」. The new P&L simulator tab (introduced in 0.8.0) could not function because it had no price data — exactly the use case the watchlist feature exists for (analyzing stocks not in the portfolio).

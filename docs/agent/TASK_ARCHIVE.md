@@ -11,6 +11,23 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 123: BUG-032 修正 — 持股買進費用重複計算（0.9.4-dev.1）
+- **Status**: ✅ **Fixed and recorded**
+- **Agent**: Claude (main session)
+- **Timestamp**: 2026-08-20 13:42:49 Asia/Taipei
+- **What was done**: WhatIfTab defaulted held stock 買進價 to `avgCost` (fee-inclusive), and `whatIf()` added fee again, overstating 投入成本 by ~0.14%. Fix: change all `avgCost` references to `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`). 
+  - `WhatIfTab.tsx` — renamed prop to `rawAvgCost: number | null`; used in 買進價格 default, `isHeld` check, ladder anchor, avgCost mark, and marks strip. Hint: 「買進價預設為成交均價 <price>（未含手續費）」.
+  - `StockDetailPage.tsx` — `StockDetailPageProps` gains `rawAvgCost?: number | null` (defaults null), forwarded to `WhatIfTab`.
+  - `AnalysisPage.tsx` — passes `selected.row.holding.rawAvgCost`.
+  - `WhatIfTab.test.tsx` — prop renamed throughout; two new test cases: fee counted once (投入成本 − 價金 ≤ 150 on 100k), and hint text verifies fee-exclusive source.
+- **Testing**: `npx vitest run` → 73 files / **1113 tests**, all pass. `npx tsc --noEmit` 0 errors. `npx oxlint src` 0 errors (5 pre-existing only-export-components). `npm run build` ok. Reviewer (route:reviewer) **PASS**, zero findings.
+- **What did NOT change**: `pnlEngine.ts`, `fees.ts`, `whatIf()` signature/math, 庫存總覽, `DashboardPage`, `YearlyPage`, `estimateUnrealized`, `ReportHolding` / `reportProxy.ts`.
+- **Known issues**: None new.
+- **Spec**: `docs/agent/specs/123-bug032-raw-avg-cost.md`
+- **Unfinished**: None — complete fix.
+
+---
+
 ### Task 122: 賣出階梯現價聚簇設計：動態窗口改為固定窗 + 聚簇（0.9.3）
 - **Status**: ✅ **Shipped as 0.9.3**
 - **Agent**: Builder + Reviewer

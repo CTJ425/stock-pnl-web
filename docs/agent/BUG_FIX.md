@@ -77,15 +77,6 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
-### BUG-032 — Held stock buy fee counted twice in P&L simulator
-
-- **Condition**: `WhatIfTab` defaults held stock's 買進價 to `avgCost` (fee-inclusive average cost from 庫存總覽). The `whatIf()` function then adds `buyFee` again when computing the entry cost, inflating 投入成本 by ~0.14% (measured on a real 3-lot 2330 position: NT$4,276 excess out of ~NT$3M).
-- **Root cause**: Pre-existing behaviour (`avgCost` defaults + `whatIf()` adds fee). Made visible in 0.9.1-dev.2 because the 對帳單 now shows 投入成本 and 手續費 explicitly, whereas 0.9.1-dev.1 showed only headline P&L and aggregate fee.
-- **Impact**: User sees 投入成本 overstated; the P&L number (損益) is correct (it's based on the same `whatIf()` call) but the cost breakdown is wrong. Affects all held stock trials.
-- **Status**: OPEN — deliberately deferred from Task 117 non-goals; needs a product decision: (1) change default to raw `avgCost` without double-fee, or (2) keep fee-inclusive default but tell `whatIf()` not to add fee again for held positions.
-- **Affected version**: 0.9.1-dev.2 onward (tab visible; cost/fee visible).
-- **Visibility enhancement**: 0.9.3-dev.1 anchors the sell ladder on average cost (formerly current price), making the cost-basis error in the 對帳單 more prominent when the held position's cost differs significantly from current price.
-
 ### RISK-002 — Night batch cost scaling with watched stock count
 
 - **Condition**: 0.8.0 expands `batchTwTickers()` from held-only to held ∪ watched; each stock ~6 external requests; cost per day ≈ (users × avg watched stocks) × 6.

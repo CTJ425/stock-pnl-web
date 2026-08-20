@@ -2,6 +2,15 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.4-dev.1（2026-08-20）— BUG-032 修正：買進費用重複計算
+
+> **缺陷修正**：損益試算分頁持股預設買進價改用未含手續費的成交均價，手續費改為僅計算一次，使投入成本與回本列座標精確。
+
+- 🔧 **費用計算修正** — `WhatIfTab` 持股預設買進價從費含平均成本（`avgCost`）改為費用獨立平均成本（`rawAvgCost`，計為 `pos.rawCost / pos.qty`，其中 `pos.rawCost` 僅累計 `tx.price × tx.qty`，未含手續費）；`whatIf()` 函式由此只計算一次手續費，解除重複計算（原先虛高 ~0.14%，實測 NT$3M 2330 持股多計 NT$4,276）。`WhatIfTab.tsx` 入參重新命名為 `rawAvgCost: number | null`；`StockDetailPage.tsx` 與 `AnalysisPage.tsx` 經由新入參轉發；測試新增兩組（驗證費用精確度與提示文字）。
+- ✅ **測試** — `npx vitest run` 73 檔 / **1113 項全通**；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors（5 個既有 only-export-components 警告）；`npm run build` ok。複審：`route:reviewer` **PASS**，零缺陷。
+- 📝 **規格** — Task 123、`docs/agent/specs/123-bug032-raw-avg-cost.md`。
+- ⚙️ **未改動** — `whatIf()` 簽名及演算法、庫存總覽、`pnlEngine.ts`、`fees.ts`、報告 Edge payload 型別；純前端修正。
+
 ### 0.9.3（2026-08-20）— 賣出階梯均價錨點與現價聚簇：損益試算分頁 UI 精化完稿
 
 > **功能擴張**：賣出階梯以持有均價為錨點（±10% 九檔 2.5%），現價偏離時另成聚簇（±2.5%/±5%/±7.5%）；兩簇間分隔列隔開；階梯上方摘要列（現價/均價/回本）可點擊帶入賣出價。觀察股票加入對話框改為 Material 風格，自寫 CSS 無新元件庫。中途試驗「聯集窗口 + 漂亮價格格線」因使用者回報版面不穩而移除，改用固定窗口搭現價簇。
