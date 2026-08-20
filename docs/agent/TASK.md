@@ -25,17 +25,6 @@
 
 ## 📋 Active Tasks
 
-### Task 124: 0.9.5-dev.1 損益試算成本基數精確度修正（真實部位驗證）
-- **Status**: 📋 **verified on DEV with E2E coverage; no code defect found**
-- **Agent**: Builder + Reviewer + Scribe
-- **Timestamp**: 2026-08-20 14:59:05 CST
-- **Done**:
-  1. ✅ Three genuine defects fixed: (1) price rounding precision (104.225 → 104.23); (2) buy fee no longer recalculated from workspace config; (3) ledger labels state cost basis and actual fee.
-  2. ✅ Tests written and passing: `formatters.test.ts` (rounding), `whatIf.test.ts` & `WhatIfTab.test.tsx` (fee override, parity with 庫存總覽, seed, labels).
-  3. ✅ All verification run: 74 files / 1125 tests pass; TypeScript & oxlint 0 errors; build ok.
-  4. ✅ Reviewer (route:reviewer) **PASS**, three RISKS fixed (snap rounding, workspace re-seed, buyFee bounds).
-  5. ✅ CHANGELOG.md, TASK.md, PROGRESS.md updated; version 0.9.5-dev.1 set in source.
-  6. ✅ **Verification outcome**: Investigation found **no code defect**; the ~1,582 P&L discrepancy came from user reporting from workspace `測試區1` (no 0050 holding), which correctly falls back to watched-stock behaviour. Verified on running DEV app (version 0.9.5-dev.1, workspace `SNAP正式區`, ticker 0050): 投入成本 NT$417,492 = 庫存總覽, 損益 -NT$3,298 = 庫存總覽's 未實現淨損益. E2E coverage gap closed with two new test artefacts: `AnalysisPage.whatif.test.tsx` (jsdom, real prop chain against reference position) and `verify-whatif-e2e.cjs` (Playwright, cross-checks tab vs 庫存總覽 at sell price = quote).
 
 ### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤）
 - **Status**: ⏳ **Design revised, records updated; DEV commit ready; PROD merge pending user approval**
