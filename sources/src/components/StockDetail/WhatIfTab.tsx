@@ -6,8 +6,9 @@
  * holdings / P&L reports. It is a sandbox, not a form.
  */
 import { useState } from 'react'
-import { whatIf } from './whatIf'
-import { fmtMoney, fmtPercent, fmtSignedMoney, pnlClass } from '../../utils/formatters'
+import { whatIf, sellLadder } from './whatIf'
+import type { LadderRow } from './whatIf'
+import { fmtMoney, fmtPercent, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { useWorkspace } from '../../context/WorkspaceContext'
 
@@ -21,6 +22,8 @@ interface WhatIfTabProps {
   /** Set for a held stock, null for a watched one. Shares currently held. */
   heldQty: number | null
 }
+
+const LADDER_TAG: Record<string, string> = { current: '現價', breakEven: '回本' }
 
 export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabProps) {
   const { current } = useWorkspace()
@@ -58,72 +61,167 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
   const minFeeUnit = shares > 0 && shares % 1000 === 0 ? 'whole' : 'odd'
   const minFee = getMinFee(minFeeUnit, current?.id)
 
-  const result = whatIf({
+  const whatIfInput = {
     ticker,
     buyPrice: buyPriceNum,
     qty: shares,
     price: sellPriceNum,
     feeRate,
     minFee,
-  })
+  }
+
+  const result = whatIf(whatIfInput)
+  // The ladder anchors on the live quote, never on the sell-price input, so it keeps its
+  // 「現價 ±10%」 promise instead of jumping every time the user types a sell price.
+  const anchor = currentPrice ?? buyPriceNum
+  const ladder = sellLadder({ ...whatIfInput, price: anchor })
+
+  const pick = (row: LadderRow) => setSellPrice(String(row.price))
+  const onRowKeyDown = (row: LadderRow) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      pick(row)
+    }
+  }
 
   return (
     <div className="rpt-section">
-      <div className="field-row whatif-sentence">
-        <span>若我在</span>
-        <div className="field">
-          <label htmlFor="whatif-buy-price">買進價格</label>
-          <input
-            id="whatif-buy-price"
-            type="number"
-            step="0.01"
-            min="0"
-            value={buyPrice}
-            onChange={(e) => setBuyPrice(e.target.value)}
-          />
-        </div>
-        <span>買進</span>
-        <div className="field">
-          <label htmlFor="whatif-qty">股數</label>
-          <input
-            id="whatif-qty"
-            type="number"
-            step="1"
-            min="0"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="whatif-unit">單位</label>
-          <select
-            id="whatif-unit"
-            className="narrow"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as Unit)}
-          >
-            <option value="張">張</option>
-            <option value="股">股</option>
-          </select>
-        </div>
-        <span>，並在</span>
-        <div className="field">
-          <label htmlFor="whatif-sell-price">賣出價格</label>
-          <input
-            id="whatif-sell-price"
-            type="number"
-            step="0.01"
-            min="0"
-            value={sellPrice}
-            onChange={(e) => setSellPrice(e.target.value)}
-          />
-        </div>
-        <span>賣出</span>
-      </div>
-
-      {result ? (
+      {ladder.length > 0 && (
         <>
-          <div className="whatif-headline">
+          <h3>賣出階梯 · 現價 ±10%</h3>
+          <div className="table-scroll">
+            <table className="data-table whatif-ladder" data-testid="whatif-ladder">
+              <thead>
+                <tr>
+                  <th>賣出價</th>
+                  <th className="num">相對現價</th>
+                  <th className="num">損益</th>
+                  <th className="num">報酬率</th>
+                  <th className="num">實收</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ladder.map((row) => (
+                  <tr
+                    key={row.price}
+                    className={`whatif-ladder-row whatif-ladder-row--${row.kind}`}
+                    data-testid="whatif-ladder-row"
+                    data-kind={row.kind}
+                    tabIndex={0}
+                    onClick={() => pick(row)}
+                    onKeyDown={onRowKeyDown(row)}
+                  >
+                    <td>
+                      {fmtMoney(row.price, 'TWD', 2)}
+                      {LADDER_TAG[row.kind] && (
+                        <span className="whatif-ladder-tag">{LADDER_TAG[row.kind]}</span>
+                      )}
+                    </td>
+                    <td className="num">
+                      {row.kind === 'current' ? '—' : fmtSignedPercent(row.relative)}
+                    </td>
+                    <td className={`num ${pnlClass(row.pnl)}`}>{fmtSignedMoney(row.pnl, 'TWD')}</td>
+                    <td className={`num ${pnlClass(row.roi)}`}>{fmtSignedPercent(row.roi)}</td>
+                    <td className="num">{fmtMoney(row.proceeds, 'TWD')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <h3>對帳單 · 自訂賣出價</h3>
+      <div className="whatif-ledger">
+        <div className="whatif-ledger-col">
+          <div className="whatif-ledger-heading">買進 · 假設</div>
+          <div className="field">
+            <label htmlFor="whatif-buy-price">買進價格</label>
+            <input
+              id="whatif-buy-price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={buyPrice}
+              onChange={(e) => setBuyPrice(e.target.value)}
+            />
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="whatif-qty">股數</label>
+              <input
+                id="whatif-qty"
+                type="number"
+                step="1"
+                min="0"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="whatif-unit">單位</label>
+              <select
+                id="whatif-unit"
+                className="narrow"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value as Unit)}
+              >
+                <option value="張">張</option>
+                <option value="股">股</option>
+              </select>
+            </div>
+          </div>
+          <dl className="whatif-ledger-rows">
+            <div>
+              <dt>價金</dt>
+              <dd>{fmtMoney(buyPriceNum * shares, 'TWD')}</dd>
+            </div>
+            <div>
+              <dt>手續費</dt>
+              <dd>{fmtMoney(result?.buyFee ?? null, 'TWD')}</dd>
+            </div>
+            <div>
+              <dt>投入成本</dt>
+              <dd data-testid="whatif-cost">{fmtMoney(result?.cost ?? null, 'TWD')}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="whatif-ledger-col">
+          <div className="whatif-ledger-heading">賣出 · 試算</div>
+          <div className="field">
+            <label htmlFor="whatif-sell-price">賣出價格</label>
+            <input
+              id="whatif-sell-price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={sellPrice}
+              onChange={(e) => setSellPrice(e.target.value)}
+            />
+          </div>
+          <dl className="whatif-ledger-rows">
+            <div>
+              <dt>股數</dt>
+              <dd>{fmtQty(shares)}</dd>
+            </div>
+            <div>
+              <dt>價金</dt>
+              <dd>{fmtMoney(sellPriceNum * shares, 'TWD')}</dd>
+            </div>
+            <div>
+              <dt>手續費 + 證交稅</dt>
+              <dd>{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</dd>
+            </div>
+            <div>
+              <dt>實收</dt>
+              <dd data-testid="whatif-proceeds">{fmtMoney(result?.proceeds ?? null, 'TWD')}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {result && (
+          <div className="whatif-ledger-settle">
             <div>
               <div className="whatif-headline-label">損益</div>
               <div
@@ -142,13 +240,21 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
                 {fmtPercent(result.roi)}
               </div>
             </div>
+            <div>
+              <div className="whatif-headline-label">回本價</div>
+              <div className="whatif-headline-value" data-testid="whatif-breakeven">
+                {fmtMoney(result.breakEven, 'TWD', 2)}
+              </div>
+            </div>
           </div>
-          <div className="hint" data-testid="whatif-fees">
-            含手續費與證交稅 -{fmtMoney(result.buyFee + result.sellFeeTax, 'TWD')}
-          </div>
-        </>
-      ) : (
-        <div className="hint">請輸入大於 0 的買進價格、股數與賣出價格。</div>
+        )}
+      </div>
+
+      {!result && <div className="hint">請輸入大於 0 的買進價格、股數與賣出價格。</div>}
+      {result && (
+        <div className="hint" data-testid="whatif-fees">
+          含手續費與證交稅 -{fmtMoney(result.buyFee + result.sellFeeTax, 'TWD')}
+        </div>
       )}
 
       {hasQuote && (

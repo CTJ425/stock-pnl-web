@@ -2,6 +2,18 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.1-dev.2（2026-08-20）— 損益試算賣出階梯與對帳單
+
+> **功能擴張**：0.9.1-dev.1 交付後，使用者要求恢復損益試算的詳細數字（投入成本、實收、回本價），並增加「現價±10% 賣出階梯」以便快速試算各檔位損益。本版本改為分頁式對帳單呈現，上方為可點選的階梯表、下方為買/賣/結算三行帳目。
+
+- 💹 **新增 `sellLadder()` 純函式** `sources/src/components/StockDetail/whatIf.ts` — 九檔階梯：現價 ±10% / ±7.5% / ±5% / ±2.5% / 0%，自動求出回本價（如果落在窗口內），按賣出價排序，去除重複價格（2 位小數舍入、NT$0.40 以下小錨點會重合）。每列重新計算 `whatIf()` 無插值；`kind` 優先度：`current` > `breakEven` > `step`。
+- 📊 **WhatIfTab 版面重構** — 句式表單改為階梯表 + 對帳單。階梯表（上）：欄位 賣出價 / 相對現價 / 損益 / 報酬率 / 實收，可點選行寫入賣出價；現價列標記「現價」、回本列標記「回本」。對帳單（下）：二欄布局，買進假設（買進價／股數／價金／手續費／投入成本）、賣出試算（賣出價／股數／價金／手續費＋證交稅／實收）、結算列（損益／報酬率／回本價）。
+- 🎨 **樣式** — `.whatif-ladder` 與 `.whatif-ledger` 復用既有 `.data-table` / `.table-scroll` 系統及自訂屬性；對帳單在 720px 以下收縮為單欄；行可點選需有互動視覺（`cursor: pointer` + hover）；無新色彩字面值、無條形圖。
+- ✅ **測試**：`npx vitest run` 73 檔 / **1089 項全通**（原 1073）；`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors；`npm run build` ok。複審：`route:reviewer` **PASS**，真實 RISK 一項（sub-NT$0.40 小錨點重複價格造成 React key 重複）已修、缺失測試已補、誤算已駁回。
+- 📝 **參考規格**：`docs/agent/specs/117-whatif-ladder-ledger.md`。
+- ⚙️ **未改動**：`whatIf()` 簽名及計費演算法、工作區手續費率、沙盒限制（不動 localStorage 與 Supabase）。
+- ⚠️ **已知議題（記為 OPEN bug）**：持股預設購入價為含費平均成本，而 `whatIf()` 又加一次手續費（重複計算），導致投入成本虛高 ~0.14%；該表唯一新增了這兩個欄，故現在可見，但非本任務範圍（需要分開決策：改用原價或不加手續費）。
+
 ### 0.9.1-dev.1（2026-08-19）— 損益試算簡化與觀察股票卡片風格
 
 > **設計更新**：0.9.0 交付後進行視覺一致性檢查，發現觀察股票籤頁無卡片包裹、損益試算展示過多細節；本版本收斂為設計規格。
@@ -10,7 +22,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 💰 **損益試算簡化至四數字**：移除成本 / 賣出可得 / 手續費拆項 / 回本價行。現只顯損益、報酬率，含手續費與證交稅的費用小行。計算未變（`whatIf.ts`、`utils/fees.ts`、`utils/pnlEngine.ts` 未動）；`cost`、`proceeds`、`breakEven` 仍回傳，僅不渲染。
 - 🎯 **預設值與單位選擇器**：`WhatIfTab` 新增 `avgCost` / `heldQty` props；持股預設買進價為費費內 `avgCost`、數量為持有張數或股數；觀察股預設買進價為現價、數量為 1 張；賣出價皆預設現價。新增張/股單位切換器，不改寫已輸入值，僅更新衍生股數。
 - 🔍 **決策記錄**：損益淨額包含手續費與證交稅，以小行列示總費用（使用者決策）；持股預設買進價為費費內 `avgCost`，使試算與庫存總覽的未實現損益相容，而非原始交易價（`rawAvgCost`）（使用者決策）。
-- 🧪 **測試**：`npx vitest run` 73 檔 / **1079 項全通**（原 1073）；`WhatIfTab.test.tsx` 改寫 14 項。`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors。
+- 🧪 **測試**：`npx vitest run` 73 檔 / **1073 項全通**（原 1073）；`WhatIfTab.test.tsx` 改寫 14 項。`npx tsc --noEmit` 0 errors；`npx oxlint src` 0 errors。
 - ✅ **稽核**：派遣 reviewer，**PASS**；無異議。
 - ⚠️ **驗證缺口**：瀏覽器 E2E 未執行。`AppShell.tsx:103` 本機模式濾除個股分析（Supabase 限定籤），故本機 Playwright 無法觸及觀察股票籤或損益試算籤；DEV 登入未可得。
 - 📝 **參考規格**：`docs/agent/specs/whatif-simplify-and-watch-card.md`。

@@ -129,7 +129,7 @@ describe('WhatIfTab 單位切換', () => {
   })
 })
 
-describe('WhatIfTab 畫面只留四個數字', () => {
+describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
   it('損益、報酬率、費用合計各一行，且費用是扣掉的', () => {
     render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
     fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
@@ -154,20 +154,55 @@ describe('WhatIfTab 畫面只留四個數字', () => {
     expect(pnl).toBeLessThan(10000)
   })
 
-  it('成本、賣出可得、回本價已從畫面移除', () => {
+  it('賣出階梯攤開現價 ±10%，並標出現價與回本兩列', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    const rows = screen.getAllByTestId('whatif-ladder-row')
+    expect(rows).toHaveLength(10)
+    expect(rows.filter((r) => r.dataset.kind === 'current')).toHaveLength(1)
+    expect(rows.filter((r) => r.dataset.kind === 'breakEven')).toHaveLength(1)
+
+    const table = screen.getByTestId('whatif-ladder').textContent || ''
+    expect(table).toContain('現價')
+    expect(table).toContain('回本')
+  })
+
+  it('點階梯任一列就把那個價格帶進賣出價，階梯本身不跟著跑', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    const before = screen
+      .getAllByTestId('whatif-ladder-row')
+      .map((r) => r.textContent)
+    fireEvent.click(screen.getAllByTestId('whatif-ladder-row')[0])
+
+    // −10% 那一列：110 * 0.9 = 99
+    expect((screen.getByLabelText('賣出價格') as HTMLInputElement).value).toBe('99')
+    // 標題承諾的是「現價 ±10%」，所以錨點是報價，不是使用者打的賣出價
+    expect(
+      screen.getAllByTestId('whatif-ladder-row').map((r) => r.textContent),
+    ).toEqual(before)
+  })
+
+  it('對帳單把投入成本、實收與回本價攤在檯面上', () => {
     const { container } = render(
       <WhatIfTab ticker="2330" currentPrice={110} {...watched} />,
     )
     fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
 
+    expect(screen.getByTestId('whatif-cost')).toBeTruthy()
+    expect(screen.getByTestId('whatif-proceeds')).toBeTruthy()
+    expect(screen.getByTestId('whatif-breakeven')).toBeTruthy()
+
     const text = container.textContent || ''
-    for (const gone of ['成本 ', '賣出可得', '回本價']) {
-      expect(text).not.toContain(gone)
+    for (const shown of ['投入成本', '實收', '回本']) {
+      expect(text).toContain(shown)
     }
-    expect(screen.queryByTestId('whatif-detail')).toBeNull()
+    expect(text).not.toMatch(/NaN|Infinity/)
   })
 
-  it('輸入不合法時給提示而不是 NaN', () => {
+  it('輸入不合法時給提示而不是 NaN，階梯與對帳單一起收起來', () => {
     const { container } = render(
       <WhatIfTab ticker="2330" currentPrice={24.2} {...watched} />,
     )
@@ -176,5 +211,6 @@ describe('WhatIfTab 畫面只留四個數字', () => {
 
     expect(container.textContent).not.toMatch(/NaN|Infinity/)
     expect(screen.queryByTestId('whatif-pnl')).toBeNull()
+    expect(screen.queryByTestId('whatif-ladder')).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { whatIf } from './whatIf'
+import { whatIf, sellLadder } from './whatIf'
 import { breakEvenPrice, calculateFee } from '../../utils/fees'
 
 const RATE = 0.001425
@@ -99,5 +99,92 @@ describe('whatIf', () => {
     expect(got.cost).toBe(100_000)
     // 證交稅仍要付
     expect(got.sellFeeTax).toBe(330)
+  })
+})
+
+describe('sellLadder', () => {
+  const base = {
+    ticker: '2330',
+    buyPrice: 100,
+    qty: 1000,
+    price: 110,
+    feeRate: RATE,
+    minFee: MIN_FEE,
+  }
+
+  it('以錨點為中心展開 ±10%，共九個級距', () => {
+    const steps = sellLadder(base).filter((r) => r.kind !== 'breakEven')
+
+    expect(steps).toHaveLength(9)
+    expect(steps.map((r) => r.price)).toEqual([
+      99, 101.75, 104.5, 107.25, 110, 112.75, 115.5, 118.25, 121,
+    ])
+  })
+
+  it('錨點那一列標成 current，相對現價為 0', () => {
+    const rows = sellLadder(base)
+    const current = rows.filter((r) => r.kind === 'current')
+
+    expect(current).toHaveLength(1)
+    expect(current[0].price).toBe(110)
+    expect(current[0].relative).toBe(0)
+    expect(rows[0].relative).toBeCloseTo(-0.1, 10)
+  })
+
+  it('回本價插在排序後的位置，而且真的不賠', () => {
+    const rows = sellLadder(base)
+    const be = rows.filter((r) => r.kind === 'breakEven')
+
+    expect(be).toHaveLength(1)
+    expect(be[0].price).toBe(whatIf(base)!.breakEven)
+    expect(be[0].pnl).toBeGreaterThanOrEqual(0)
+    expect(rows.map((r) => r.price)).toEqual(
+      [...rows].map((r) => r.price).sort((a, b) => a - b),
+    )
+  })
+
+  it('回本價落在 ±10% 之外就不插入，階梯不硬拉', () => {
+    // 買在 200、現價 110：回本價遠高於 +10% 的 121
+    const rows = sellLadder({ ...base, buyPrice: 200 })
+
+    expect(rows).toHaveLength(9)
+    expect(rows.some((r) => r.kind === 'breakEven')).toBe(false)
+  })
+
+  it('每一列都是 whatIf 逐列實算，不是線性外插', () => {
+    for (const row of sellLadder(base)) {
+      const one = whatIf({ ...base, price: row.price })!
+      expect(row.pnl).toBe(one.pnl)
+      expect(row.roi).toBe(one.roi)
+      expect(row.proceeds).toBe(one.proceeds)
+      expect(row.sellFeeTax).toBe(one.sellFeeTax)
+    }
+  })
+
+  it('價格不重複：低價股四捨五入後仍是唯一的一列', () => {
+    // anchor * 0.025 掉到 0.01 網格以下時，−10% 與 −7.5% 會捨進同一個價格
+    for (const anchor of [0.35, 1.2, 24.2, 110, 1085]) {
+      const rows = sellLadder({ ...base, buyPrice: anchor, price: anchor })
+      const prices = rows.map((r) => r.price)
+
+      expect(new Set(prices).size).toBe(prices.length)
+      expect(rows.filter((r) => r.kind === 'current')).toHaveLength(1)
+    }
+  })
+
+  it('回本價剛好落在某一階時不另插一列', () => {
+    // 反解出「回本價正好等於錨點」的買進價：此時回本列與現價列同價
+    const anchor = 110
+    const rows = sellLadder({ ...base, buyPrice: 109, price: anchor })
+    const atAnchor = rows.filter((r) => r.price === anchor)
+
+    expect(atAnchor).toHaveLength(1)
+    expect(rows.map((r) => r.price)).toEqual([...new Set(rows.map((r) => r.price))])
+  })
+
+  it('輸入不合法時回傳空陣列，不丟例外', () => {
+    expect(sellLadder({ ...base, qty: 0 })).toEqual([])
+    expect(sellLadder({ ...base, price: 0 })).toEqual([])
+    expect(sellLadder({ ...base, buyPrice: -1 })).toEqual([])
   })
 })

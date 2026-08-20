@@ -41,6 +41,17 @@
 - **Unfinished**:
   1. ⏳ **PROD deploy**: Merge `dev` → `main` to trigger Pages deployment; user go-ahead required per CLAUDE.md § Branches & envs.
 
+### Task 117: 0.9.1-dev.2 損益試算賣出階梯 & 對帳單（Task 118 prerequisite）
+- **Status**: ✅ **Complete — recorded, committed, ready to ship**
+- **Agent**: Builder + Reviewer
+- **Timestamp**: 2026-08-20 10:18:35 Asia/Taipei
+- **What was done**: `WhatIfTab` layout rewritten from sentence form to two-part (ladder table on top, ledger below). New pure function `sellLadder()` in `whatIf.ts` generates nine steps at ±10% / ±2.5% apart (anchored to live quote, never user input). Ladder rows clickable to write price to sell input. Ledger shows three sections: buy assumption (price / qty / amount / fee / cost), sell trial (price / qty / amount / fee+tax / proceeds), settlement (pnl / roi / break-even price). Current row tagged 現價, break-even tagged 回本. Sub-NT$0.40 anchor rounding deduplicates price rows.
+- **Testing**: 73 files, **1089 passed** (0.9.1-dev.1 had 1073). Reviewer PASS. Real RISK found and fixed (duplicate ladder prices causing React key collisions on small anchors). One missing test added; one miscount dismissed.
+- **Non-goals preserved**: `whatIf()` signature and math untouched; tab sandbox (no storage/Supabase); workspace-scoped fees.
+- **Known issue recorded**: BUG-032 held-stock buy fee counted twice (pre-existing, newly visible in ledger). Deferred as needs product decision.
+- **Spec**: `docs/agent/specs/117-whatif-ladder-ledger.md`
+- **Unfinished**: None — complete release.
+
 ### Task 118: 0.9.1-dev.1 browser E2E verification (觀察股票 tab + 損益試算 tab)
 - **Status**: ⏳ **Open — deferred due to local mode limitation; awaiting DEV environment access**
 - **Agent**: TBD (route:scout or route:builder to handle)
