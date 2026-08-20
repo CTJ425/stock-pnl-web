@@ -10,7 +10,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🗜️ **`foreignTopFingerprint()` 改為回傳雜湊** — 原本把 buyTop／sellTop 每一格用 U+001F 接成一長串後直接回傳。該值同時寫入 `source_probe_tick.fingerprint`（每一輪探測一列）與 Storage 的 `market/foreign_top50.json`（當作該檔的冪等鍵），因此原文形式是雙倍成本，也與其他所有來源的 `<長度>:<djb2>` 短格式不一致。改為在 join 之後過 `pollPlan.ts` 的 `fingerprint()`。U+001F 分隔仍在 join 階段生效，AUDIT-04 的黏合碰撞不會復活。
 - 🧪 **測試改為行為驗證** — 舊測試直接斷言指紋字串「含有 U+001F」，雜湊化之後分隔符不再看得見。改成斷言 `['12','3']` 與 `['1','23']` 兩筆必須得到不同指紋（真正要守的性質），並新增一項斷言指紋為短雜湊格式。`npx vitest run supabase/functions/stock-report/` 366 項全通；`npm test` 75 檔 1136 項全通；`npx tsc --noEmit` 與 `npm run typecheck:edge` 乾淨。
 - ♻️ **一次性副作用（預期內）** — 格式改變會讓 `market/foreign_top50.json` 既有的舊格式指紋在部署後第一次比對時判為「已變動」，因而多上傳一次。之後自癒。`source_probe_tick` 只在當日視窗內比對，隔日重新開始，不受影響。
-- 🚀 **部署** — DEV Edge 已部署。**PROD Edge 未部署**：Supabase CLI 的 access token 已失效（`functions list` 回 401），需要重新登入後才能推。
+- 🚀 **部署** — DEV Edge 與 **PROD Edge 皆已部署**。PROD 以 `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` 自 `main` @ `9db87d3` 推送，`ezbr_sha256` 由 `420050a1…` 變為 `f776a7a0…`（依 `supabase-ops` 規則以雜湊為證，不看版號），`verify_jwt` 維持 `false`。
 
 ### 0.9.6（2026-08-20）— 探針退休判準修正：融資指紋失效、判準改為尾端連續
 
@@ -22,8 +22,9 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 📊 **退休判準改為「尾端連續相同指紋」** — 舊判準是「到位總次數 ≥ `REQUIRED_LANDED_COUNTS[id]` 且（該來源不要求內容穩定，或最後兩筆指紋相同）」，有兩個洞：`A → B → B` 就退休，但 `A → B` 剛剛才證明上游還在改；而 `contentSettled` 只讀最後兩筆，更早的改版證據完全不看。新判準把 `counts[id]` 改成**尾端連續相同指紋的長度**（新增 `trailingRun`），`retiredSources` 只需比對 `counts[id] >= required[id]`——任何一次內容變動都把計數歸零重新累積。`REQUIRE_SETTLED_CONTENT` 與 `contentSettled` 一併刪除：MOPS 兩源只需連續 1 次，天生滿足，舊的「一到位就退休」行為原樣保留。
 - 📈 **次數維持 3（每日來源）／ 1（MOPS），這是實測後的決定** — 原本考慮把每日來源從 3 提到 4，實測後放棄。DEV `batch_run_log` 2026-08-12～08-19 顯示 T86 **一天最多改版一次**，且改版落在 17:00–20:45 之間，在 t86 探針視窗（16:00–17:00）**之外**——提高次數攔不到它，只會多打無效請求。這同時推翻了原始碼註解宣稱的「T86 每 15 分鐘改一次」。那次改版實際上由後續其他來源的 follow-up 接住：每一次 chips 執行都會重抓 T86 並經 `nextT86State` 重設 `t86_frozen`（`index.ts:2911`），而 `decideSkip` 要到借券翻日（約 22:15）才會短路。
 - ✅ **測試** — `npx vitest run supabase/functions/stock-report/` 365 項全通；`npm test` 75 檔 1135 項全通；`npx tsc --noEmit` 與 `npm run typecheck:edge` 皆乾淨。`AnalysisPage.whatif.test.tsx` 有 2 項既有的 unhandled rejection（`warmStockCore` mock 回傳 undefined），與本次變更的檔案無關。
-- 🚀 **部署** — DEV Edge 已以 volume copy 部署並重建 functions 容器，`diff -rq` 無差異。**PROD Edge 未部署**：推 `main` 只會部署 GitHub Pages，不會部署 Edge Function，本修正要在 PROD 生效必須另外執行 `supabase functions deploy stock-report`。
-- ⚠️ **已知但未修** — `twt38u` 的 `fingerprint` 存的是整份表的原文而非雜湊（約 10KB／列），與其他來源不一致，會撐大 `source_probe_tick`。本次未動，另案處理。
+- 🚀 **部署** — DEV Edge 以 volume copy 部署並重建 functions 容器，`diff -rq` 無差異；**PROD Edge 已隨 0.9.7 一併部署**（同一份 bundle，`ezbr_sha256` `f776a7a0…`）。注意推 `main` 只部署 GitHub Pages，不會部署 Edge Function，兩者是獨立的動作。
+- ✅ **DEV 端對端驗證（2026-08-20 20:45–21:00）** — `margin` 於 20:45／20:50／20:55 連續三輪到位且指紋皆為 `174457:1s4vqtw`，21:00 那輪不再出現 margin 列，即退休生效。同時證明 BUG-033 已修：指紋是真雜湊而非 `0:45h`，`rows` 回報 1295 而非 null。
+- ⚠️ **已知但未修** — `twt38u` 的 `fingerprint` 存的是整份表的原文而非雜湊（約 10KB／列），與其他來源不一致，會撐大 `source_probe_tick`。本次未動，已於 **0.9.7** 修正。
 - ⚙️ **未改動** — `REQUIRED_LANDED_COUNTS` 的值、`DAILY_WINDOWS`、`MOPS_SLOTS`、`PROBE_FOLLOW_UP`、`sourceLanded`、`probeRound.ts`；前端完全未動。
 
 ### 0.9.5（2026-08-20）— 損益試算成本基數精確度修正：舍入、費用、透明標籤
