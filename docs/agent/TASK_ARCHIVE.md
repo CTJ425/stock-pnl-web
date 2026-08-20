@@ -11,6 +11,23 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 118: 0.9.1-dev.3 — 損益試算 對帳單改為三欄共用列版面
+- **Status**: ✅ **Complete — verified, ready to finalize and ship to main**
+- **Agent**: Scribe (recording verification)
+- **Timestamp**: 2026-08-20 10:31:21 Asia/Taipei
+- **What was done**: Layout restructuring of the 損益試算 ledger from two misaligned side-by-side columns to a single CSS grid.
+  1. **WhatIfTab.tsx**: Ledger now renders as single CSS grid with three columns (項目 / 買進 · 假設 / 賣出 · 試算) and one shared row per line item (價格 / 股數 / 價金 / 費用 / 小計). Cells in the same row are necessarily the same height, ensuring 價金 always faces 價金 and all six rows align at Δtop = 0px and Δheight = 0px between 買進 and 賣出 sections.
+  2. **Per-input `<label>` elements removed**; row-key cell names the row and controls carry `aria-label` (`買進價格`, `股數`, `單位`, `賣出價格`), so accessible names and all existing test selectors remain unchanged.
+  3. **index.css**: `.whatif-ledger` rewritten for CSS grid layout. Grid maintains three columns at every width — under 560px the padding, font-size and key-column width shrink instead of collapsing to one column, because collapsing would destroy the alignment the change exists to create.
+  4. **No calculation changed**: `whatIf()` and `sellLadder()` signatures untouched; all fee/tax logic preserved.
+- **Testing**: 
+  - `npm test` (from `sources/`): 73 files / **1090 passed**, 0 failed (includes `App.smoke.test.tsx`)
+  - `npx tsc --noEmit`: clean
+  - `npx oxlint`: 0 errors
+  - Browser E2E `node scripts/verify-watchlist-e2e.cjs` against DEV: **10/10 passed**
+  - Real-browser layout measurement (1280×900 and 390×844): all 6 ledger rows report Δtop = 0px and Δheight = 0px between 買進 and 賣出 cells, body horizontal overflow 0px. This measurement cannot be made in jsdom and is the reason the bug existed.
+- **Unfinished**: None — complete release.
+
 ### Task 117: 0.9.1-dev.1 — simplify 損益試算 and style 觀察股票 card
 - **Status**: ✅ **COMPLETED — frontend-only change, testing & review passed; browser E2E deferred as Task 118 open item**
 - **Agent**: Builder (implementation) + Reviewer (PASS verdict)

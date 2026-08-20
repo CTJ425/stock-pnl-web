@@ -1,26 +1,24 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.1-dev.1 completion recording
+- Action: 0.9.1-dev.3 completion recording & verification
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-19 16:22:00 Asia/Taipei
+- Timestamp: 2026-08-20 10:31:21 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-08-19 16:22:00 Asia/Taipei (0.9.1-dev.1 — simplify 損益試算 and style 觀察股票 card)
+## 📅 Log: 2026-08-20 10:31:21 Asia/Taipei (0.9.1-dev.3 — 損益試算 對帳單改為三欄共用列版面)
 
-- **Release**: Version 0.9.1-dev.1 on `dev` branch (frontend only, no deployment yet).
-- **Scope**: Two cosmetic and UX clarity changes in the 個股分析 tab strip. No schema changes, no Edge function changes, no migration required.
-- **What changed** (matches spec: `docs/agent/specs/whatif-simplify-and-watch-card.md`):
-  1. **觀察股票 tab now has glass card wrapping** — `StockDetailPage.tsx:391` was mounting `<WatchTab/>` bare while 損益試算 and AI 分析 siblings had `<div className="glass detail-body">` wrapper. Added same wrapper. `WatchTab.tsx:72-76` replaced dashboard-legacy heading pattern (`.section` / `.section-title` / `<h2>`) with StockDetail pattern (`.rpt-section` / `.rpt-section-head` / `<h3>`). Visual consistency achieved; no button changes.
-  2. **損益試算 reduced to four numbers** — Removed 成本 / 賣出可得 / 手續費拆項 / 回本價 detail rows. Screen now shows: 損益 and 報酬率 (headline size), followed by `含手續費與證交稅 -X` (small line). Calculation unchanged (`whatIf.ts`, `utils/fees.ts`, `utils/pnlEngine.ts` untouched); `cost`, `proceeds`, `breakEven` still returned, just not rendered.
-  3. **Default values and unit selector** — `WhatIfTab` new props `avgCost` / `heldQty`. Held stock defaults: 買進價格 = fee-inclusive `avgCost` (matches 庫存總覽 未實現損益, not raw trade price), qty = held shares (張 if divisible by 1000, else 股). Watched stock defaults: 買進價格 = live quote, qty = 1 張. 賣出價格 always defaults to live quote. New張/股 unit selector; does not rewrite typed buy price in place, only updates share count.
-  4. **Decision record** — Net P&L includes brokerage and tax, with fee total shown on small line (user decision). Held stock's default buy price is fee-inclusive `avgCost` so result reconciles with 庫存總覽 (user decision).
-- **Testing**: `npx vitest run` → 73 files, **1073 passed** (0.9.0 had 1073), 0 failed. `WhatIfTab.test.tsx` rewritten to 14 tests. `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok.
-- **Reviewer verdict**: route:reviewer **PASS**, no findings.
-- **Verification gap**: Browser E2E not run — `AppShell.tsx:103` filters 個股分析 out of local mode as Supabase-only tab, so local Playwright cannot reach either 觀察股票 or 損益試算 tabs. DEV login not available. Gap recorded as open task 117.
-- **Unfinished**: Browser verification (Task 117, open).
-- **Commit**: (Not created by Scribe; main session handling.)
+- **Release**: Version 0.9.1-dev.3 on `dev` branch (frontend only, no deployment yet).
+- **Scope**: Layout restructuring of the 損益試算 ledger. No schema changes, no Edge function changes, no migration required.
+- **What changed** (Task 118):
+  1. **Ledger CSS grid rewrite** — `WhatIfTab.tsx` ledger renders as single CSS grid with three columns (項目 / 買進 · 假設 / 賣出 · 試算) and one shared row per line item (價格 / 股數 / 價金 / 費用 / 小計). Previously two side-by-side columns: left column's 股數 is input + 單位 select (~62px tall), right column's 股數 text-only (~26px). From 價金 downward the sides sat ~36px out of step. Grid layout ensures cells in same row are same height (Δtop = 0px, Δheight = 0px).
+  2. **Accessibility preserved** — Per-input `<label>` elements removed; row-key cell names row and controls carry `aria-label` (`買進價格`, `股數`, `單位`, `賣出價格`). Test selectors unchanged.
+  3. **Responsive without breakpoint** — `index.css` `.whatif-ledger` stays three columns at every width. Under 560px: padding, font-size and key-column width shrink instead of collapsing, preserving the alignment that motivated the change.
+- **Testing**: `npx vitest run` → 73 files, **1090 passed** (0.9.1-dev.2 had 1089), 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors; `npm run build` ok.
+- **Browser verification** — `node scripts/verify-watchlist-e2e.cjs` against DEV: **10/10 passed**. Real-browser layout measurement (1280×900 and 390×844): all 6 ledger rows report Δtop = 0px and Δheight = 0px between 買進 and 賣出 cells, body horizontal overflow 0px (jsdom cannot measure this; the bug was invisible to unit tests).
+- **Unfinished**: None — complete release. About to finalize as official `0.9.1` and merge to `main`; release/finalization commit is separate.
+- **Task record**: Task 118 moved to `TASK_ARCHIVE.md`.
 
 ---
 

@@ -598,53 +598,61 @@ table.data-table {
   border: 1px solid var(--accent-strong);
 }
 
+/* Shared-row grid: a row is three sibling cells (key / buy / sell) in DOM order, so the
+   grid auto-placement lines up every row without either side laying itself out. */
 .whatif-ledger {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(88px, auto) 1fr 1fr;
   margin-top: 4px;
 }
 
-.whatif-ledger-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.whatif-ledger-cell {
+  padding: 10px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Key column (1st of every 3 cells) */
+.whatif-ledger-cell:nth-child(3n + 1) {
+  text-align: left;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+/* Sell column (3rd of every 3 cells): divider against the buy column */
+.whatif-ledger-cell:nth-child(3n) {
+  border-left: 1px solid var(--border);
+}
+
+/* Last row: no bottom rule, the 結算 strip closes it off instead */
+.whatif-ledger-cell:nth-last-child(-n + 3) {
+  border-bottom: none;
+}
+
+.whatif-ledger-cell .field {
+  margin-bottom: 0;
+}
+
+.whatif-ledger-cell input[type='number'] {
+  text-align: right;
 }
 
 .whatif-ledger-heading {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-secondary);
-}
-
-.whatif-ledger-rows {
-  margin: 0;
-}
-
-.whatif-ledger-rows > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-.whatif-ledger-rows dt {
-  color: var(--ink-muted);
-}
-
-.whatif-ledger-rows dd {
-  margin: 0;
-  font-weight: 600;
+  text-align: right;
 }
 
 .whatif-ledger-settle {
-  grid-column: 1 / -1;
   display: flex;
   gap: 32px;
   flex-wrap: wrap;
   padding-top: 12px;
+  margin-top: 12px;
   border-top: 1px solid var(--border-strong);
 }
 
@@ -660,9 +668,17 @@ table.data-table {
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 560px) {
+  /* Stay three columns — collapsing to one would destroy the row alignment
+     this grid exists to create. Shrink padding/font/key-width instead. */
   .whatif-ledger {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(60px, auto) 1fr 1fr;
+  }
+
+  .whatif-ledger-cell {
+    padding: 7px 6px;
+    min-height: 36px;
+    font-size: 13px;
   }
 }
 

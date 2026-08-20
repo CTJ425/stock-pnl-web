@@ -52,18 +52,6 @@
 - **Spec**: `docs/agent/specs/117-whatif-ladder-ledger.md`
 - **Unfinished**: None — complete release.
 
-### Task 118: 0.9.1-dev.1 browser E2E verification (觀察股票 tab + 損益試算 tab)
-- **Status**: ⏳ **Open — deferred due to local mode limitation; awaiting DEV environment access**
-- **Agent**: TBD (route:scout or route:builder to handle)
-- **Timestamp**: 2026-08-19 16:22:00 Asia/Taipei
-- **What to verify**: Browser E2E for 0.9.1-dev.1 changes (both tabs in 個股分析):
-  1. **觀察股票 tab** — Verify card styling matches siblings (glass detail-body wrapper, rpt-section / rpt-section-head pattern, <h3> heading). Confirm 觀察中 heading and toolbar layout, plus 加入觀察 button and 顯示筆數 hint render correctly.
-  2. **損益試算 tab for held stock** — Select a held stock, verify: (a) 買進價格 defaults to fee-inclusive `avgCost` (not raw trade price), (b) 股數 defaults to held qty in張/股 per divisibility, (c) 賣出價格 defaults to live quote, (d) Display shows only 損益 and 報酬率 (headline), plus `含手續費與證交稅 -X` fee line, (e) all other detail rows (成本 / 賣出可得 / 手續費拆項 / 回本價) are gone, (f) unit selector張/股 works without rewriting buy price.
-  3. **損益試算 tab for watched stock** — Select a watched stock, verify: (a) 買進價格 defaults to live quote, (b) 股數 defaults to 1 張, (c) 賣出價格 defaults to live quote, (d) Display matches held stock format (損益 / 報酬率 headline + fee line).
-  4. **試算計算** — Verify P&L calculation reflects actual fee/tax math (unchanged from 0.9.0); cross-check against manual calculation.
-- **Why deferred**: `AppShell.tsx:103` filters 個股分析 out of local mode (Supabase-only tab). Local Playwright runs cannot reach either 觀察股票 or 損益試算 tabs. Need DEV environment with Supabase access and logged-in session to run browser test.
-- **Blockers to resolution**: Requires DEV login and Supabase connectivity; local test infrastructure cannot reach these tabs.
-
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
   already down to 5; PROD cron cleanup and tonight's live borrow proof remain open**

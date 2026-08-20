@@ -185,6 +185,18 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     ).toEqual(before)
   })
 
+  it('對帳單是一張共用列的表：同一列的買進與賣出必然對齊', () => {
+    render(<WhatIfTab ticker="2330" currentPrice={110} {...watched} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    // 兩欄各自排版時，左欄的股數是輸入框、右欄只是一行字，價金以下整段錯開。
+    // 共用列的結構讓每個項目只出現一次，買進與賣出各是那一列的一格。
+    const keys = screen
+      .getAllByTestId('whatif-ledger-key')
+      .map((el) => el.textContent)
+    expect(keys).toEqual(['價格', '股數', '價金', '費用', '小計'])
+  })
+
   it('對帳單把投入成本、實收與回本價攤在檯面上', () => {
     const { container } = render(
       <WhatIfTab ticker="2330" currentPrice={110} {...watched} />,
