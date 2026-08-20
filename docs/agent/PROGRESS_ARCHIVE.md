@@ -5,6 +5,23 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-19 16:22:00 Asia/Taipei (0.9.1-dev.1 — simplify 損益試算 and style 觀察股票 card)
+
+- **Release**: Version 0.9.1-dev.1 on `dev` branch (frontend only, no deployment yet).
+- **Scope**: Two cosmetic and UX clarity changes in the 個股分析 tab strip. No schema changes, no Edge function changes, no migration required.
+- **What changed** (matches spec: `docs/agent/specs/whatif-simplify-and-watch-card.md`):
+  1. **觀察股票 tab now has glass card wrapping** — `StockDetailPage.tsx:391` was mounting `<WatchTab/>` bare while 損益試算 and AI 分析 siblings had `<div className="glass detail-body">` wrapper. Added same wrapper. `WatchTab.tsx:72-76` replaced dashboard-legacy heading pattern (`.section` / `.section-title` / `<h2>`) with StockDetail pattern (`.rpt-section` / `.rpt-section-head` / `<h3>`). Visual consistency achieved; no button changes.
+  2. **損益試算 reduced to four numbers** — Removed 成本 / 賣出可得 / 手續費拆項 / 回本價 detail rows. Screen now shows: 損益 and 報酬率 (headline size), followed by `含手續費與證交稅 -X` (small line). Calculation unchanged (`whatIf.ts`, `utils/fees.ts`, `utils/pnlEngine.ts` untouched); `cost`, `proceeds`, `breakEven` still returned, just not rendered.
+  3. **Default values and unit selector** — `WhatIfTab` new props `avgCost` / `heldQty`. Held stock defaults: 買進價格 = fee-inclusive `avgCost` (matches 庫存總覽 未實現損益, not raw trade price), qty = held shares (張 if divisible by 1000, else 股). Watched stock defaults: 買進價格 = live quote, qty = 1 張. 賣出價格 always defaults to live quote. New張/股 unit selector; does not rewrite typed buy price in place, only updates share count.
+  4. **Decision record** — Net P&L includes brokerage and tax, with fee total shown on small line (user decision). Held stock's default buy price is fee-inclusive `avgCost` so result reconciles with 庫存總覽 (user decision).
+- **Testing**: `npx vitest run` → 73 files, **1073 passed** (0.9.0 had 1073), 0 failed. `WhatIfTab.test.tsx` rewritten to 14 tests. `npx tsc --noEmit` 0 errors; `npx oxlint src` 0 errors; `npm run build` ok.
+- **Reviewer verdict**: route:reviewer **PASS**, no findings.
+- **Verification gap**: Browser E2E not run — `AppShell.tsx:103` filters 個股分析 out of local mode as Supabase-only tab, so local Playwright cannot reach either 觀察股票 or 損益試算 tabs. DEV login not available. Gap recorded as open task 117.
+- **Unfinished**: Browser verification (Task 117, open).
+- **Commit**: (Not created by Scribe; main session handling.)
+
+---
+
 ## 📅 Log: 2026-08-19 15:17:34 Asia/Taipei (0.9.0 release — watchlist UX overhaul, design revised)
 
 - **Release**: Version 0.9.0 on `dev` branch (design revised after review), pending user approval to merge `dev` → `main` for PROD deployment.

@@ -133,36 +133,53 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
 
       <h3>對帳單 · 自訂賣出價</h3>
       <div className="whatif-ledger">
-        <div className="whatif-ledger-col">
-          <div className="whatif-ledger-heading">買進 · 假設</div>
+        <div className="whatif-ledger-cell" />
+        <div className="whatif-ledger-cell whatif-ledger-heading">買進 · 假設</div>
+        <div className="whatif-ledger-cell whatif-ledger-heading">賣出 · 試算</div>
+
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">價格</div>
+        <div className="whatif-ledger-cell">
           <div className="field">
-            <label htmlFor="whatif-buy-price">買進價格</label>
             <input
-              id="whatif-buy-price"
               type="number"
               step="0.01"
               min="0"
+              aria-label="買進價格"
               value={buyPrice}
               onChange={(e) => setBuyPrice(e.target.value)}
             />
           </div>
+        </div>
+        <div className="whatif-ledger-cell">
+          <div className="field">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              aria-label="賣出價格"
+              value={sellPrice}
+              onChange={(e) => setSellPrice(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">股數</div>
+        <div className="whatif-ledger-cell">
           <div className="field-row">
             <div className="field">
-              <label htmlFor="whatif-qty">股數</label>
               <input
-                id="whatif-qty"
                 type="number"
                 step="1"
                 min="0"
+                aria-label="股數"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
               />
             </div>
             <div className="field">
-              <label htmlFor="whatif-unit">單位</label>
               <select
-                id="whatif-unit"
                 className="narrow"
+                aria-label="單位"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value as Unit)}
               >
@@ -171,84 +188,54 @@ export function WhatIfTab({ ticker, currentPrice, avgCost, heldQty }: WhatIfTabP
               </select>
             </div>
           </div>
-          <dl className="whatif-ledger-rows">
-            <div>
-              <dt>價金</dt>
-              <dd>{fmtMoney(buyPriceNum * shares, 'TWD')}</dd>
-            </div>
-            <div>
-              <dt>手續費</dt>
-              <dd>{fmtMoney(result?.buyFee ?? null, 'TWD')}</dd>
-            </div>
-            <div>
-              <dt>投入成本</dt>
-              <dd data-testid="whatif-cost">{fmtMoney(result?.cost ?? null, 'TWD')}</dd>
-            </div>
-          </dl>
         </div>
+        <div className="whatif-ledger-cell">{fmtQty(shares)} 股</div>
 
-        <div className="whatif-ledger-col">
-          <div className="whatif-ledger-heading">賣出 · 試算</div>
-          <div className="field">
-            <label htmlFor="whatif-sell-price">賣出價格</label>
-            <input
-              id="whatif-sell-price"
-              type="number"
-              step="0.01"
-              min="0"
-              value={sellPrice}
-              onChange={(e) => setSellPrice(e.target.value)}
-            />
-          </div>
-          <dl className="whatif-ledger-rows">
-            <div>
-              <dt>股數</dt>
-              <dd>{fmtQty(shares)}</dd>
-            </div>
-            <div>
-              <dt>價金</dt>
-              <dd>{fmtMoney(sellPriceNum * shares, 'TWD')}</dd>
-            </div>
-            <div>
-              <dt>手續費 + 證交稅</dt>
-              <dd>{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</dd>
-            </div>
-            <div>
-              <dt>實收</dt>
-              <dd data-testid="whatif-proceeds">{fmtMoney(result?.proceeds ?? null, 'TWD')}</dd>
-            </div>
-          </dl>
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">價金</div>
+        <div className="whatif-ledger-cell">{fmtMoney(buyPriceNum * shares, 'TWD')}</div>
+        <div className="whatif-ledger-cell">{fmtMoney(sellPriceNum * shares, 'TWD')}</div>
+
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">費用</div>
+        <div className="whatif-ledger-cell">{fmtMoney(result?.buyFee ?? null, 'TWD')}</div>
+        <div className="whatif-ledger-cell">{fmtMoney(result?.sellFeeTax ?? null, 'TWD')}</div>
+
+        <div className="whatif-ledger-cell" data-testid="whatif-ledger-key">小計</div>
+        <div className="whatif-ledger-cell">
+          投入成本 <span data-testid="whatif-cost">{fmtMoney(result?.cost ?? null, 'TWD')}</span>
         </div>
-
-        {result && (
-          <div className="whatif-ledger-settle">
-            <div>
-              <div className="whatif-headline-label">損益</div>
-              <div
-                className={`whatif-headline-value ${pnlClass(result.pnl)}`}
-                data-testid="whatif-pnl"
-              >
-                {fmtSignedMoney(result.pnl, 'TWD')}
-              </div>
-            </div>
-            <div>
-              <div className="whatif-headline-label">報酬率</div>
-              <div
-                className={`whatif-headline-value ${pnlClass(result.roi)}`}
-                data-testid="whatif-roi"
-              >
-                {fmtPercent(result.roi)}
-              </div>
-            </div>
-            <div>
-              <div className="whatif-headline-label">回本價</div>
-              <div className="whatif-headline-value" data-testid="whatif-breakeven">
-                {fmtMoney(result.breakEven, 'TWD', 2)}
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="whatif-ledger-cell">
+          實收 <span data-testid="whatif-proceeds">{fmtMoney(result?.proceeds ?? null, 'TWD')}</span>
+        </div>
       </div>
+
+      {result && (
+        <div className="whatif-ledger-settle">
+          <div>
+            <div className="whatif-headline-label">損益</div>
+            <div
+              className={`whatif-headline-value ${pnlClass(result.pnl)}`}
+              data-testid="whatif-pnl"
+            >
+              {fmtSignedMoney(result.pnl, 'TWD')}
+            </div>
+          </div>
+          <div>
+            <div className="whatif-headline-label">報酬率</div>
+            <div
+              className={`whatif-headline-value ${pnlClass(result.roi)}`}
+              data-testid="whatif-roi"
+            >
+              {fmtPercent(result.roi)}
+            </div>
+          </div>
+          <div>
+            <div className="whatif-headline-label">回本價</div>
+            <div className="whatif-headline-value" data-testid="whatif-breakeven">
+              {fmtMoney(result.breakEven, 'TWD', 2)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!result && <div className="hint">請輸入大於 0 的買進價格、股數與賣出價格。</div>}
       {result && (
