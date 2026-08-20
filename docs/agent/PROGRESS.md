@@ -1,9 +1,22 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.1 release to main branch
+- Action: 0.9.2 release recorded
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-20 10:31:21 Asia/Taipei
+- Timestamp: 2026-08-20 10:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-20 10:55:00 Asia/Taipei (0.9.2 — 損益試算賣出階梯列序反轉：由高而低)
+
+- **Release**: Version 0.9.2 on `dev` branch (frontend only, no deployment yet).
+- **Scope**: Single-line behaviour change: sell ladder row order reversed from ascending (−10% on top) to descending (+10% on top, highest price first). No schema changes, no Edge function changes, no migration required.
+- **What changed**:
+  1. **Row order reversed in `sellLadder()`** — `sources/src/components/StockDetail/whatIf.ts:116` final sort changed from `rows.sort((a, b) => a.price - b.price)` to `rows.sort((a, b) => b.price - a.price)`. JSDoc above function now states rows are ordered highest price first. No other logic touched: steps, break-even insertion, deduplication (keeps most specific `kind`), per-row `whatIf()` recomputation all unchanged.
+  2. **Test expectations updated** — `whatIf.test.ts` and `WhatIfTab.test.tsx` adjusted for descending order (step price array, `rows[0].relative` is now +0.1, sorted-order assertion uses `b - a`).
+- **Testing**: `npx vitest run` → 73 files, **1090 passed**, 0 failed. `npx tsc --noEmit` clean; `npx oxlint` 0 errors; `npm run build` ok.
+- **Verification**: All tests green; visual intent: highest sell price reads first, matching user workflow and intuition about sale sequence.
+- **Unfinished**: None — complete release.
 
 ---
 
@@ -19,21 +32,4 @@
 - **Browser verification** — `node scripts/verify-watchlist-e2e.cjs` against DEV: **10/10 passed**. Real-browser layout measurement (1280×900 and 390×844): all 6 ledger rows report Δtop = 0px and Δheight = 0px between 買進 and 賣出 cells, body horizontal overflow 0px (jsdom cannot measure this; the bug was invisible to unit tests).
 - **Unfinished**: None — complete release. About to finalize as official `0.9.1` and merge to `main`; release/finalization commit is separate.
 - **Task record**: Task 118 moved to `TASK_ARCHIVE.md`.
-
----
-
-## 📅 Log: 2026-08-20 10:12:46 Asia/Taipei (0.9.1-dev.2 — sell ladder + editable-price ledger)
-
-- **Release**: Version 0.9.1-dev.2 on `dev` branch (frontend only, no deployment yet).
-- **Scope**: Extension of 0.9.1-dev.1: replaces 損益試算 tab's sentence-style form with a two-part layout (ladder on top, ledger below). No schema changes, no Edge function changes, no migration required.
-- **What changed** (matches spec: `docs/agent/specs/117-whatif-ladder-ledger.md`):
-  1. **New pure function `sellLadder()`** in `sources/src/components/StockDetail/whatIf.ts` — Nine steps at ±10% / 2.5% apart (prices: -10%, -7.5%, -5%, -2.5%, 0%, +2.5%, +5%, +7.5%, +10%) anchored on the live quote, never the user's sell-price input. Break-even price inserted at sorted position when it falls in window. Every row computes fresh `pnl` / `roi` / `proceeds` / `sellFeeTax` via `whatIf()` call, no interpolation. Duplicate prices collapse (same 2-decimal anchor ±2.5% rounds together for small anchors <NT$0.40); kind precedence: `current` > `breakEven` > `step`.
-  2. **WhatIfTab.tsx rebuilt** — Ladder table on top (columns: 賣出價 / 相對現價 / 損益 / 報酬率 / 實收), scrollable with `.table-scroll` / `.data-table whatif-ladder`. Clicking a row writes price to 賣出價 input; ladder stays anchored to live quote. Current row tagged 現價, break-even row tagged 回本. Two-column 對帳單 (ledger) below: 買進 section (price / qty / amount / fee / cost), 賣出 section (price / qty / amount / fee+tax / proceeds), 結算 row (pnl / roi / break-even price).
-  3. **CSS in `index.css`** — `.whatif-ladder` / `.whatif-ledger` reuse existing `.data-table` / `.table-scroll` system and custom properties; ledger collapses to one column under 720px. Clickable rows have `cursor: pointer` and hover state. No new colour literals, no bars or heat maps.
-  4. **Spec compliance** — Preserved: `whatIf()` signature and maths, tab sandbox (no storage/Supabase), workspace-scoped fee rates. Non-goal: did not fix double-counted buy fee for held stocks (pre-existing, separate decision, now visible in 對帳單).
-- **Testing**: `npx vitest run` → 73 files, **1089 passed** (0.9.1-dev.1 had 1073), 0 failed. `npx tsc --noEmit` clean; `npm run build` clean; `npx oxlint` 0 errors (4 pre-existing warnings).
-- **Reviewer verdict**: route:reviewer **PASS**. One real RISK found and fixed (duplicate ladder prices / React keys on sub-NT$0.40 anchors), one missing test added, one miscount dismissed.
-- **Process note**: Subagent added `@astryxdesign/core` + `@astryxdesign/theme-neutral` to `package.json` and 50 lines of jsdom polyfills to `sources/src/test/setup.ts`, none requested or imported. All reverted before commit; version bump only.
-- **Unfinished**: None — complete release. Deployment: on `dev` branch, not deployed anywhere yet.
-- **Commit**: Ready for Scribe recording.
 

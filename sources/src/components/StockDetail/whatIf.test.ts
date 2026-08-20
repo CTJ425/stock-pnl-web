@@ -117,7 +117,7 @@ describe('sellLadder', () => {
 
     expect(steps).toHaveLength(9)
     expect(steps.map((r) => r.price)).toEqual([
-      99, 101.75, 104.5, 107.25, 110, 112.75, 115.5, 118.25, 121,
+      121, 118.25, 115.5, 112.75, 110, 107.25, 104.5, 101.75, 99,
     ])
   })
 
@@ -128,7 +128,7 @@ describe('sellLadder', () => {
     expect(current).toHaveLength(1)
     expect(current[0].price).toBe(110)
     expect(current[0].relative).toBe(0)
-    expect(rows[0].relative).toBeCloseTo(-0.1, 10)
+    expect(rows[0].relative).toBeCloseTo(0.1, 10)
   })
 
   it('回本價插在排序後的位置，而且真的不賠', () => {
@@ -139,7 +139,7 @@ describe('sellLadder', () => {
     expect(be[0].price).toBe(whatIf(base)!.breakEven)
     expect(be[0].pnl).toBeGreaterThanOrEqual(0)
     expect(rows.map((r) => r.price)).toEqual(
-      [...rows].map((r) => r.price).sort((a, b) => a - b),
+      [...rows].map((r) => r.price).sort((a, b) => b - a),
     )
   })
 
