@@ -5,6 +5,18 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-20 13:42:49 Asia/Taipei (Task 123 — BUG-032 修正：買進費用重複計算 fix recorded, version 0.9.4-dev.1)
+
+- **Task**: Task 123 (spec: `docs/agent/specs/123-bug032-raw-avg-cost.md`)
+- **Scope**: Bug fix for WhatIfTab held stock simulator — buy fee was counted twice (fee-inclusive avgCost seed + fee added by whatIf).
+- **What was recorded**: BUG-032 entry moved from BUG_FIX.md to FIXED_BUG.md with full resolution details (root cause, files changed, verification results). CHANGELOG.md gained 0.9.4-dev.1 section (4 bullets: fee fix, test coverage, references, non-changes). Task 123 added to TASK_ARCHIVE.md as ✅ complete. All files' version stamps (version.ts, package.json, README.md, package-lock.json) set by main session to 0.9.4-dev.1.
+- **Resolution chosen**: Use raw traded price (option 1) — replace `avgCost` prop with `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`) throughout WhatIfTab, StockDetailPage, AnalysisPage, and tests. Fee counted exactly once now. Change is plumbing only; no maths changes.
+- **Verification verified**: Unit tests (1113 passed), TypeScript (0 errors), oxlint (0 errors), build (ok). Reviewer (route:reviewer) **PASS**, zero findings on end-to-end path, no other Holding.avgCost consumers affected, new prop optional, watched stocks behaviour unchanged.
+- **Records finalized**: Destination writes (FIXED_BUG.md, CHANGELOG.md, TASK_ARCHIVE.md) completed; source writes (BUG_FIX.md entry deletion) completed; PROGRESS.md updated (this entry added, header updated, oldest entry rolled to archive). All grep counts verified.
+- **Unfinished**: None — Task 123 complete.
+
+---
+
 ## 📅 Log: 2026-08-20 13:47:54 Asia/Taipei (0.9.4 official release — BUG-032 修正：買進費用重複計算)
 
 - **Release**: Version 0.9.4 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.

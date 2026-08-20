@@ -93,6 +93,25 @@ its caller's subtree, i.e. `container.contains(dialog) === false` and
 `scripts/verify-watchlist-e2e.cjs` is the runnable form of this for 觀察清單 (DEV only, mints
 its own session, cleans up the row it adds).
 
+## Cross-screen agreement — `verify-whatif-e2e.cjs`
+
+Some invariants only exist *between* two screens, where no single component test can see them:
+損益試算 and 庫存總覽 must report the same money for the same holding. `scripts/verify-whatif-e2e.cjs`
+asserts that at 賣出價 = 現價, the tab's 投入成本 / 損益 equal the dashboard's 投入成本 /
+未實現淨損益, and that the ladder and the marks strip actually render.
+
+It compares the two screens rather than hard-coded numbers, so it stays valid as prices move.
+
+```bash
+BASE_URL=http://host:5173 WORKSPACE=<name> TICKER=0050 \
+  APP_USER=… APP_PASS=… node scripts/verify-whatif-e2e.cjs
+```
+
+Credentials are read from the environment only and must never be written into the script, a
+config file, or `docs/`. `WORKSPACE` matters: a ticker held in another workspace is not held in
+this one, and the tab then correctly behaves like a watched stock — which is a real source of
+"the numbers disagree" reports.
+
 ## Anti-patterns
 
 - Secrets in git  
