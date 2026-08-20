@@ -41,16 +41,25 @@
 - **Unfinished**:
   1. ⏳ **PROD deploy**: Merge `dev` → `main` to trigger Pages deployment; user go-ahead required per CLAUDE.md § Branches & envs.
 
-### Task 117: 0.9.1-dev.2 損益試算賣出階梯 & 對帳單（Task 118 prerequisite）
-- **Status**: ✅ **Complete — recorded, committed, ready to ship**
+### Task 120: 加入觀察股票 modal 的 Material 化
+- **Status**: 🔄 **on DEV, awaiting the user's visual check**
 - **Agent**: Builder + Reviewer
-- **Timestamp**: 2026-08-20 10:18:35 Asia/Taipei
-- **What was done**: `WhatIfTab` layout rewritten from sentence form to two-part (ladder table on top, ledger below). New pure function `sellLadder()` in `whatIf.ts` generates nine steps at ±10% / ±2.5% apart (anchored to live quote, never user input). Ladder rows clickable to write price to sell input. Ledger shows three sections: buy assumption (price / qty / amount / fee / cost), sell trial (price / qty / amount / fee+tax / proceeds), settlement (pnl / roi / break-even price). Current row tagged 現價, break-even tagged 回本. Sub-NT$0.40 anchor rounding deduplicates price rows.
-- **Testing**: 73 files, **1089 passed** (0.9.1-dev.1 had 1073). Reviewer PASS. Real RISK found and fixed (duplicate ladder prices causing React key collisions on small anchors). One missing test added; one miscount dismissed.
-- **Non-goals preserved**: `whatIf()` signature and math untouched; tab sandbox (no storage/Supabase); workspace-scoped fees.
-- **Known issue recorded**: BUG-032 held-stock buy fee counted twice (pre-existing, newly visible in ledger). Deferred as needs product decision.
-- **Spec**: `docs/agent/specs/117-whatif-ladder-ledger.md`
-- **Unfinished**: None — complete release.
+- **Timestamp**: 2026-08-20 11:21:23 Asia/Taipei
+- **What was done**: `AddWatchModal.tsx` result list gains semantic classes (`.watch-results`, `.watch-result-item`, `.watch-result-symbol`, `.watch-result-name`). `index.css` new `.watch-results*` rules styled in MUI aesthetic: 48px touch targets, hover/active/`:focus-visible` states, full-width accent underline on focus, only using existing custom properties (`--accent`, `--accent-strong`, `--ink-secondary`, `--border`, `--shadow-card`). Modal box-shadow revised to `var(--shadow-card)`. Market tag deliberately omitted: `TwStockRow` has no market field (all rows are TW-listed by construction), existing test asserts exact button text.
+- **Testing**: 73 files, **1100 passed**. TypeScript clean, oxlint clean, build ok. No new dependency.
+- **Known issue recorded**: None.
+- **Spec**: Inline brief (MUI design style, no component library added).
+- **Unfinished**: None — awaiting user visual check on DEV.
+
+### Task 119: 賣出階梯改以持有均價為錨點
+- **Status**: 🔄 **on DEV, awaiting the user's visual check**
+- **Agent**: Builder + Reviewer
+- **Timestamp**: 2026-08-20 11:21:23 Asia/Taipei
+- **What was done**: `sellLadder(input, marks?)` gains optional `LadderMarks` (`{ currentPrice?, avgCost? }`). All nine steps are `kind: 'step'`; break-even, 現價, and 均價 inserted as marked rows when they fall inside ±10% window. `LadderKind` gains `'avgCost'`. Dedupe rank: `current:3 > avgCost:2 > breakEven:1 > step:0`. All mark prices snapped to 0.01 grid before window check, matching step prices. `WhatIfTab` anchor is holding average cost when set and > 0 (snapped to 0.01 grid), else previous `currentPrice ?? buyPriceNum`. Heading switches between 「賣出階梯 · 持有均價 ±10%」 and 「賣出階梯 · 現價 ±10%」; relative column header follows (相對均價 / 相對現價); dash driven by `row.relative === 0`; `LADDER_TAG` gains `avgCost: '均價'`. `index.css` new `.whatif-ladder-row--avgCost td` rule reusing `var(--row-hover)`, no new colour literals.
+- **Testing**: 73 files, **1100 passed**. Seven new test cases in `whatIf.test.ts` (including non-grid avgCost 512.923) and three in `WhatIfTab.test.tsx`. Round 1 reviewer FAIL fixed: mark rows were unrounded, causing two rows to display same NT$512.92. Fixed by snapping marks to 0.01 grid; three new failing tests added and now pass. Reviewer's second finding (builder edited tests) rejected: tests written by main session before dispatch.
+- **Known issue recorded**: `avgCost` is fee-inclusive while `whatIf()` adds buy fee again, so break-even row sits ~0.14% high. Anchoring on average cost makes it more visible. Needs user decision (use raw traded price, or stop adding buy fee in this path). Pre-existing issue, not a regression.
+- **Spec**: `docs/agent/specs/119-ladder-anchor-avgcost.md`
+- **Unfinished**: None — awaiting user visual check on DEV.
 
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table

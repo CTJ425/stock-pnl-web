@@ -60,7 +60,7 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
   return { buyFee, cost, sellFeeTax, proceeds, pnl, roi, breakEven }
 }
 
-export type LadderKind = 'step' | 'current' | 'breakEven'
+export type LadderKind = 'step' | 'current' | 'breakEven' | 'avgCost'
 
 export interface LadderRow {
   /** Sell price, rounded to 2 decimals. */
@@ -74,15 +74,23 @@ export interface LadderRow {
   sellFeeTax: number
 }
 
+/** Marks the caller wants overlaid on the ladder. Absent/null/0 marks are simply dropped. */
+export interface LadderMarks {
+  currentPrice?: number | null
+  avgCost?: number | null
+}
+
 const LADDER_STEPS = [-0.1, -0.075, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1]
 
 /**
- * Nine price steps around `input.price` (±10%, 2.5% apart) plus, when it falls inside
- * that window and does not already coincide with a step, the break-even price. Rows are
- * ordered highest price first (+10% on top). Each row's pnl/roi/proceeds/sellFeeTax is a
- * fresh `whatIf` call at that row's price — the ladder never interpolates fees.
+ * Nine price steps around `input.price` (±10%, 2.5% apart) plus, when they fall inside
+ * that window, marked rows for break-even (always computed from `input`) and the caller-
+ * supplied `currentPrice` / `avgCost`. `sellLadder` never reads `avgCost` off `input`
+ * itself — the anchor is always `input.price`, chosen by the caller. Rows are ordered
+ * highest price first (+10% on top). Each row's pnl/roi/proceeds/sellFeeTax is a fresh
+ * `whatIf` call at that row's price — the ladder never interpolates fees.
  */
-export function sellLadder(input: WhatIfInput): LadderRow[] {
+export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[] {
   const base = whatIf(input)
   if (!base) return []
 
@@ -100,25 +108,32 @@ export function sellLadder(input: WhatIfInput): LadderRow[] {
     }
   }
 
-  const stepRows = LADDER_STEPS.map((p) =>
-    rowFor(Math.round(anchor * (1 + p) * 100) / 100, p === 0 ? 'current' : 'step'),
-  )
+  // Every row's price must satisfy LadderRow.price's "rounded to 2 decimals" invariant,
+  // so mark prices are snapped to the same 0.01 grid as step prices before the window
+  // check — otherwise a raw avgCost like 512.923 never equality-matches its own 512.92
+  // step and dedupe below can't merge them.
+  const snap = (v: number) => Math.round(v * 100) / 100
+
+  const stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step'))
 
   const rows = [...stepRows]
   const minStepPrice = stepRows[0].price
   const maxStepPrice = stepRows[stepRows.length - 1].price
-  const breakEven = base.breakEven
-  const hasExactStep = stepRows.some((r) => r.price === breakEven)
-  if (breakEven >= minStepPrice && breakEven <= maxStepPrice && !hasExactStep) {
-    rows.push(rowFor(breakEven, 'breakEven'))
-  }
+  const inWindow = (price: number) =>
+    Number.isFinite(price) && price > 0 && price >= minStepPrice && price <= maxStepPrice
+
+  const breakEvenSnapped = snap(base.breakEven)
+  if (inWindow(breakEvenSnapped)) rows.push(rowFor(breakEvenSnapped, 'breakEven'))
+  const avgCostMark = marks?.avgCost != null ? snap(marks.avgCost) : null
+  if (avgCostMark != null && inWindow(avgCostMark)) rows.push(rowFor(avgCostMark, 'avgCost'))
+  const currentMark = marks?.currentPrice != null ? snap(marks.currentPrice) : null
+  if (currentMark != null && inWindow(currentMark)) rows.push(rowFor(currentMark, 'current'))
 
   rows.sort((a, b) => b.price - a.price)
 
-  // Rounding to 2 decimals can collapse adjacent steps onto the same price once the
-  // anchor is small (anchor * 0.025 under the 0.01 grid). Merge those into one row,
-  // keeping the most specific kind: current > breakEven > step.
-  const kindRank: Record<LadderKind, number> = { current: 2, breakEven: 1, step: 0 }
+  // Rounding to 2 decimals, or two marks landing on the same price, can collapse rows
+  // onto the same price. Merge those, keeping the most specific kind.
+  const kindRank: Record<LadderKind, number> = { current: 3, avgCost: 2, breakEven: 1, step: 0 }
   const deduped: LadderRow[] = []
   for (const row of rows) {
     const prev = deduped[deduped.length - 1]
