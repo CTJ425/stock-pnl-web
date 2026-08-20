@@ -31,6 +31,15 @@ export function fmtPrice(value: number | null | undefined, currency: Currency): 
   return fmtMoney(value, currency, 2)
 }
 
+/**
+ * Decimal half-up rounding to 2 decimals, immune to the binary-representation trap:
+ * 416900 / 4000 === 104.224999999999994 in IEEE-754, so a naive `.toFixed(2)` rounds
+ * down to 104.22 instead of the 104.23 a decimal calculator (and 庫存總覽's `fmtPrice`) gives.
+ */
+export function roundPrice(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
 export function fmtPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—'
   return `${(value * 100).toFixed(2)}%`

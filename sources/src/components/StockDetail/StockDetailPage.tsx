@@ -55,6 +55,8 @@ export interface StockDetailTarget {
 interface StockDetailPageProps extends StockDetailTarget {
   /** Fee-exclusive average traded price, for seeding 損益試算's buy price. Null for a watched stock. */
   rawAvgCost?: number | null
+  /** Fee-inclusive average cost (庫存總覽's own cost basis), for 損益試算's real fee override. Null for a watched stock. */
+  avgCost?: number | null
   /** The control items on the left side of the top of the page (AnalysisPage passes in the drop-down menu for switching stocks)*/
   selector?: ReactNode
   /** Fired when a row in the 觀察股票 tab is clicked. Carries both the ticker and its display name. */
@@ -89,6 +91,7 @@ export function StockDetailPage({
   holding,
   quote,
   rawAvgCost = null,
+  avgCost = null,
   selector,
   onSelectTicker,
   onWatchlistChanged,
@@ -388,6 +391,7 @@ export function StockDetailPage({
             ticker={ticker}
             currentPrice={quote?.price ?? null}
             rawAvgCost={rawAvgCost}
+            avgCost={avgCost}
             heldQty={holding?.qty ?? null}
           />
         </div>

@@ -230,6 +230,64 @@ describe('WhatIfTab 畫面結構：階梯在上、對帳單在下', () => {
     expect(screen.getByText(/買進價預設為成交均價 100.00（未含手續費）/)).toBeTruthy()
   })
 
+  /** PROD 0050 實測部位：4,000 股，rawCost 416,900、cost 417,492，現價 103.80 */
+  const zero50 = { rawAvgCost: 416900 / 4000, avgCost: 417492 / 4000, heldQty: 4000 }
+  const num = (testid: string) =>
+    Number((screen.getByTestId(testid).textContent || '').replace(/[^\d.-]/g, ''))
+
+  it('買進價與庫存總覽同一套進位：104.225 顯示 104.23', () => {
+    render(<WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />)
+
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('104.23')
+  })
+
+  it('投入成本就是持股的實際成本，不重算手續費', () => {
+    render(<WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />)
+
+    // 4,000 × 104.3730 = 417,492，含實付買進手續費 592
+    expect(num('whatif-cost')).toBe(417492)
+  })
+
+  it('賣出價等於現價時，損益與庫存總覽的未實現損益一致', () => {
+    render(<WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />)
+
+    // 415,200 − 賣出手續費 591 − 證交稅 415 − 417,492
+    expect(num('whatif-pnl')).toBe(-3298)
+  })
+
+  it('使用者改買進價時，手續費沿用這檔持股的實際費率', () => {
+    render(<WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />)
+    fireEvent.change(screen.getByLabelText('買進價格'), { target: { value: '100' } })
+
+    // 實際費率 (104.3730 − 104.2250) / 104.2250 ≈ 0.142%，100 × 4,000 × 0.142% ≈ 568
+    const cost = num('whatif-cost')
+    expect(cost - 400000).toBeGreaterThan(540)
+    expect(cost - 400000).toBeLessThan(600)
+  })
+
+  it('對帳單標明買進價未含費，並列出現價', () => {
+    render(<WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />)
+
+    expect(screen.getByText('成交均價（未含費）')).toBeTruthy()
+    expect(screen.getByText('實付手續費')).toBeTruthy()
+    expect(screen.getByText(/現價 103.80/)).toBeTruthy()
+  })
+
+  it('換到另一個工作區的同一檔股票時，輸入框跟著換成新的持股成本', () => {
+    const { rerender } = render(
+      <WhatIfTab ticker="0050" currentPrice={103.8} {...zero50} />,
+    )
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('104.23')
+
+    // 同一檔股票、同一個元件，但持股換成另一個工作區的部位
+    rerender(
+      <WhatIfTab ticker="0050" currentPrice={103.8} rawAvgCost={90.5} avgCost={90.63} heldQty={2000} />,
+    )
+
+    expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('90.50')
+    expect((screen.getByLabelText('股數') as HTMLInputElement).value).toBe('2')
+  })
+
   it('低價股的階梯不會塌成一列', () => {
     // 0.05 元股：±10% 只有 0.045~0.055，四捨五入後仍要留得下兩列
     render(<WhatIfTab ticker="2330" currentPrice={0.05} rawAvgCost={0.05} heldQty={1000} />)

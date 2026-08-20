@@ -6,6 +6,7 @@
  * what-if is out of scope here.
  */
 import { calculateFee, breakEvenPrice } from '../../utils/fees'
+import { roundPrice } from '../../utils/formatters'
 import type { Holding } from '../../utils/pnlEngine'
 
 export interface WhatIfInput {
@@ -15,6 +16,8 @@ export interface WhatIfInput {
   price: number
   feeRate: number
   minFee?: number
+  /** When supplied, used verbatim as the buy fee instead of recomputing from feeRate/minFee. */
+  buyFee?: number
 }
 
 export interface WhatIfResult {
@@ -33,7 +36,12 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
   if (!(Number.isFinite(qty) && qty > 0)) return null
   if (!(Number.isFinite(price) && price > 0)) return null
 
-  const buyFee = calculateFee({ market: 'TPE', txType: 'BUY', price: buyPrice, qty, feeRate, minFee })
+  const buyFee =
+    input.buyFee !== undefined
+      ? Number.isFinite(input.buyFee) && input.buyFee > 0
+        ? input.buyFee
+        : 0
+      : calculateFee({ market: 'TPE', txType: 'BUY', price: buyPrice, qty, feeRate, minFee })
   const cost = buyPrice * qty + buyFee
   const sellFeeTax = calculateFee({ market: 'TPE', txType: 'SELL', price, qty, feeRate, ticker, minFee })
   const proceeds = price * qty - sellFeeTax
@@ -123,7 +131,7 @@ export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[]
   // so mark prices are snapped to the same 0.01 grid as step prices before the window
   // check — otherwise a raw avgCost like 512.923 never equality-matches its own 512.92
   // step and dedupe below can't merge them.
-  const snap = (v: number) => Math.round(v * 100) / 100
+  const snap = roundPrice
 
   const stepRows = LADDER_STEPS.map((p) => rowFor(snap(anchor * (1 + p)), 'step', 'anchor'))
 

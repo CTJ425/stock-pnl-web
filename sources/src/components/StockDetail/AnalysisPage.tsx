@@ -222,6 +222,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
             : null
         }
         rawAvgCost={selected.kind === 'holding' ? selected.row.holding.rawAvgCost : null}
+        avgCost={selected.kind === 'holding' ? selected.row.holding.avgCost : null}
         quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : watchQuote}
         selector={selector}
         onSelectTicker={(ticker, name) => {

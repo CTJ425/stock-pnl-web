@@ -703,6 +703,13 @@ table.data-table {
   margin-bottom: 0;
 }
 
+/* Sub-label naming the number below it (成交均價（未含費）／實付手續費／現價 …) */
+.whatif-ledger-sublabel {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
 .whatif-ledger-cell input[type='number'] {
   text-align: right;
 }
