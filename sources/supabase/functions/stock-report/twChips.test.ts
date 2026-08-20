@@ -5,6 +5,7 @@ import {
   extractMargin,
   extractMarginDated,
   marginDatedOk,
+  marginDatedFingerprint,
   marginDatedUrl,
   extractBorrow,
   extractBorrowDated,
@@ -249,5 +250,44 @@ describe('extractBorrow', () => {
     expect(extractBorrow(rows, '2303')?.availableVolume).toBe(100267)
     expect(extractBorrow(rows, '006201')?.availableVolume).toBe(82503)
     expect(extractBorrow(rows, '9999')).toBeNull()
+  })
+})
+
+describe('marginDatedFingerprint（探針退休用的內容指紋）', () => {
+  it('逐股表內容不同時，指紋必須不同', () => {
+    const changed = {
+      ...MARGIN_RESP,
+      tables: [
+        MARGIN_RESP.tables[0],
+        { fields: MARGIN_FIELDS, data: [[...MARGIN_ROW_2330.slice(0, 2), '999', ...MARGIN_ROW_2330.slice(3)]] },
+      ],
+    }
+    expect(marginDatedFingerprint(changed)).not.toBe(marginDatedFingerprint(MARGIN_RESP))
+  })
+
+  it('欄序不穩定不算改版：列順序調換視為同一份內容', () => {
+    const row9999 = ['9999', '測試', ...MARGIN_ROW_2330.slice(2)]
+    const a = { ...MARGIN_RESP, tables: [MARGIN_RESP.tables[0], { fields: MARGIN_FIELDS, data: [MARGIN_ROW_2330, row9999] }] }
+    const b = { ...MARGIN_RESP, tables: [MARGIN_RESP.tables[0], { fields: MARGIN_FIELDS, data: [row9999, MARGIN_ROW_2330] }] }
+    expect(marginDatedFingerprint(a)).toBe(marginDatedFingerprint(b))
+  })
+
+  it('不得是空內容的常數指紋（0.9.6 前的 bug：永遠 0:45h）', () => {
+    expect(marginDatedFingerprint(MARGIN_RESP)).not.toBe('0:45h')
+  })
+
+  it('大盤合計表變動不算逐股資料改版', () => {
+    const totalsChanged = {
+      ...MARGIN_RESP,
+      tables: [
+        { fields: ['項目', '買進', '賣出'], data: [['融資(交易單位)', '77', '88']] },
+        MARGIN_RESP.tables[1],
+      ],
+    }
+    expect(marginDatedFingerprint(totalsChanged)).toBe(marginDatedFingerprint(MARGIN_RESP))
+  })
+
+  it('不可用的回應回 null（呼叫端已用 marginDatedOk 擋掉，這裡只保證不丟例外）', () => {
+    expect(marginDatedFingerprint({ tables: [] })).toBeNull()
   })
 })

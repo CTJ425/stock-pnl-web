@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.6（2026-08-20）— 探針退休判準修正：融資指紋失效、判準改為尾端連續
+
+> **這一版修的是「探針太早收工」**。盤後探針每 5 分鐘問一次上游，滿足退休條件後當天就不再問。
+> 兩個缺陷讓它比預期更早關門：融資融券的內容指紋是一個常數，等於完全沒有把關；而通用判準
+> 只讀最後兩筆指紋，把中間每一次改版的證據都丟掉。兩項皆已斷根。
+
+- 🔧 **融資融券指紋恆為常數（BUG-033）** — `probeSource` 的 `margin` 分支讀 `(resp as { data?: unknown[] }).data`，但 `MarginDatedResponse` 沒有頂層 `data`，列在 `tables[]` 底下。`fingerprint(undefined)` 因此每一輪都回傳空字串的指紋 `0:45h`（DEV 20260818、20260819 全部的 margin 列都是這個值）。後果：內容穩定度判準拿 `0:45h` 比對 `0:45h`，恆為「已穩定」，等同沒有把關；`rows` 也永遠是 null。修法為在 `twChips.ts` 新增 `marginDatedFingerprint()`，建立在既有的 `marginTable()` 與 `pollPlan.ts` 的 `rowsFingerprint` 之上，因此列序變動不算改版、大盤合計表 `tables[0]` 不影響結果；`index.ts` 改用它，`rows` 改報真實的逐股列數。
+- 📊 **退休判準改為「尾端連續相同指紋」** — 舊判準是「到位總次數 ≥ `REQUIRED_LANDED_COUNTS[id]` 且（該來源不要求內容穩定，或最後兩筆指紋相同）」，有兩個洞：`A → B → B` 就退休，但 `A → B` 剛剛才證明上游還在改；而 `contentSettled` 只讀最後兩筆，更早的改版證據完全不看。新判準把 `counts[id]` 改成**尾端連續相同指紋的長度**（新增 `trailingRun`），`retiredSources` 只需比對 `counts[id] >= required[id]`——任何一次內容變動都把計數歸零重新累積。`REQUIRE_SETTLED_CONTENT` 與 `contentSettled` 一併刪除：MOPS 兩源只需連續 1 次，天生滿足，舊的「一到位就退休」行為原樣保留。
+- 📈 **次數維持 3（每日來源）／ 1（MOPS），這是實測後的決定** — 原本考慮把每日來源從 3 提到 4，實測後放棄。DEV `batch_run_log` 2026-08-12～08-19 顯示 T86 **一天最多改版一次**，且改版落在 17:00–20:45 之間，在 t86 探針視窗（16:00–17:00）**之外**——提高次數攔不到它，只會多打無效請求。這同時推翻了原始碼註解宣稱的「T86 每 15 分鐘改一次」。那次改版實際上由後續其他來源的 follow-up 接住：每一次 chips 執行都會重抓 T86 並經 `nextT86State` 重設 `t86_frozen`（`index.ts:2911`），而 `decideSkip` 要到借券翻日（約 22:15）才會短路。
+- ✅ **測試** — `npx vitest run supabase/functions/stock-report/` 365 項全通；`npm test` 75 檔 1135 項全通；`npx tsc --noEmit` 與 `npm run typecheck:edge` 皆乾淨。`AnalysisPage.whatif.test.tsx` 有 2 項既有的 unhandled rejection（`warmStockCore` mock 回傳 undefined），與本次變更的檔案無關。
+- 🚀 **部署** — DEV Edge 已以 volume copy 部署並重建 functions 容器，`diff -rq` 無差異。**PROD Edge 未部署**：推 `main` 只會部署 GitHub Pages，不會部署 Edge Function，本修正要在 PROD 生效必須另外執行 `supabase functions deploy stock-report`。
+- ⚠️ **已知但未修** — `twt38u` 的 `fingerprint` 存的是整份表的原文而非雜湊（約 10KB／列），與其他來源不一致，會撐大 `source_probe_tick`。本次未動，另案處理。
+- ⚙️ **未改動** — `REQUIRED_LANDED_COUNTS` 的值、`DAILY_WINDOWS`、`MOPS_SLOTS`、`PROBE_FOLLOW_UP`、`sourceLanded`、`probeRound.ts`；前端完全未動。
+
 ### 0.9.5（2026-08-20）— 損益試算成本基數精確度修正：舍入、費用、透明標籤
 
 > **精確性修正**：損益試算分頁對比庫存總覽真實台股部位發現三項缺陷，皆已修正。買進價舍入達到經紀商級精度（104.225 → 104.23）；買進費用不再由工作區設定重算；帳單標籤明確標示成本基數與實付手續費。

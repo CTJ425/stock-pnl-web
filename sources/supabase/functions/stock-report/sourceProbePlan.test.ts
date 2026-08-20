@@ -3,8 +3,8 @@ import {
   PROBE_FOLLOW_UP,
   PROBE_SOURCE_ORDER,
   REQUIRED_LANDED_COUNTS,
-  REQUIRE_SETTLED_CONTENT,
-  contentSettled,
+
+  trailingRun,
   summariseLandedTicks,
   borrowHit,
   followUpsFor,
@@ -295,53 +295,41 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     }
   })
 
-  it('retiredSources 依各來源所需次數判定收工', () => {
-    // 預設每日來源需 3 次，MOPS 需 1 次；每日來源另需內容已停止變動
-    const settled = { bfi82u: true, t86: true, margin: true, borrow: true }
-    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 }, REQUIRED_LANDED_COUNTS, settled)).toEqual(
+  /*
+    退休判準（0.9.6）：**尾端連續相同指紋的長度** ≥ 該來源所需次數。
+
+    舊判準是「總到位次數 ≥ N 且最近兩次指紋相同」，它有兩個洞：
+    1. `A → B → B` 就退休——B 只穩了一輪，而 `A → B` 剛剛才證明上游還在改。
+    2. 只讀最後兩筆，前面每一次改版的證據都被丟掉。
+    改成尾端連續之後，任何一次內容變動都會把計數歸零，重新累積。
+
+    N 維持 3（每日來源）／1（MOPS）。提高 N 沒有意義：DEV `batch_run_log` 實測
+    2026-08-12～08-19，T86 一天最多改版一次，且發生在 17:00–20:45 之間，
+    落在 t86 探針視窗（16:00–17:00）之外——多探 5 分鐘攔不到它。
+  */
+  it('retiredSources 依各來源所需的「尾端連續次數」判定收工', () => {
+    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 })).toEqual(
       new Set(['t86', 'mops_revenue']),
     )
-    expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 }, REQUIRED_LANDED_COUNTS, settled)).toEqual(
+    expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 })).toEqual(
       new Set(['bfi82u', 'margin']),
     )
     expect(retiredSources({})).toEqual(new Set())
   })
 
-  /*
-    次數到了不等於可以收工。次數只證明「量到了幾次」，證明不了「上游還會不會再改」——
-    T86 就是每 15 分鐘改一次的實例，`nextT86State` 為此存在。退休一旦提早，當天就再也沒有人回頭看。
-    所以每日來源必須同時滿足：到位次數足夠，且最近兩次到位的內容指紋相同。
-  */
-  it('每日來源：次數到了但內容還在變，不得收工', () => {
-    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, { t86: false })).toEqual(new Set())
-    expect(retiredSources({ t86: 5 }, REQUIRED_LANDED_COUNTS, { t86: false })).toEqual(new Set())
-    // 沒有任何穩定證據時同樣不收工——寧可多探一輪，也不要提早關門
-    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, {})).toEqual(new Set())
-  })
-
-  it('每日來源：次數到了且內容停止變動，才收工', () => {
-    expect(retiredSources({ t86: 3 }, REQUIRED_LANDED_COUNTS, { t86: true })).toEqual(
-      new Set(['t86']),
-    )
-    // 內容穩了但次數還不夠，一樣不收工
-    expect(retiredSources({ t86: 2 }, REQUIRED_LANDED_COUNTS, { t86: true })).toEqual(new Set())
-  })
-
-  it('MOPS 兩個來源不看指紋——判準是期別，且只需到位一次', () => {
-    expect(REQUIRE_SETTLED_CONTENT.mops_revenue).toBe(false)
-    expect(REQUIRE_SETTLED_CONTENT.mops_profit).toBe(false)
-    expect(retiredSources({ mops_revenue: 1, mops_profit: 1 }, REQUIRED_LANDED_COUNTS, {})).toEqual(
+  it('MOPS 只需尾端連續 1 次——判準是期別，指紋不參與', () => {
+    expect(retiredSources({ mops_revenue: 1, mops_profit: 1 })).toEqual(
       new Set(['mops_revenue', 'mops_profit']),
     )
   })
 
-  it('REQUIRE_SETTLED_CONTENT 每個來源都要表態，不得漏列', () => {
+  it('REQUIRED_LANDED_COUNTS 每個來源都要表態，不得漏列', () => {
     for (const id of PROBE_SOURCE_ORDER) {
-      expect(typeof REQUIRE_SETTLED_CONTENT[id]).toBe('boolean')
+      expect(typeof REQUIRED_LANDED_COUNTS[id]).toBe('number')
+      expect(REQUIRED_LANDED_COUNTS[id]).toBeGreaterThan(0)
     }
-    // 六個每日來源一律要求內容停止變動
     for (const id of ['bfi82u', 't86', 'bwibbu', 'twt38u', 'margin', 'borrow'] as const) {
-      expect(REQUIRE_SETTLED_CONTENT[id]).toBe(true)
+      expect(REQUIRED_LANDED_COUNTS[id]).toBe(3)
     }
   })
 
@@ -350,29 +338,59 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     這段留在 index.ts 的 DB 讀取裡，恆為 false（整窗打滿）與恆為 true（提早關門）兩種失效
     都不會被任何測試接住。把它抽成純函式就有守門員。
   */
-  describe('summariseLandedTicks——把到位紀錄整理成次數與穩定度', () => {
+  describe('summariseLandedTicks——把到位紀錄整理成尾端連續次數', () => {
     const tick = (source: string, taipei_time: string, fingerprint: string | null) => ({
       source,
       taipei_time,
       fingerprint,
     })
 
-    it('依來源分組計次，並以最近兩次指紋判斷是否停止變動', () => {
+    it('依來源分組，計的是尾端連續相同指紋的長度', () => {
       const r = summariseLandedTicks(
         [tick('t86', '16:10', 'A'), tick('t86', '16:15', 'A'), tick('margin', '20:50', 'M')],
         16 * 60 + 15,
       )
       expect(r.counts).toEqual({ t86: 2, margin: 1 })
-      expect(r.settled.t86).toBe(true)
-      expect(r.settled.margin).toBe(false) // 只有一次，證據不足
     })
 
-    it('指紋以時間升冪決定「最近兩次」，不依賴輸入順序', () => {
+    it('內容一變就歸零：A → B → B 只算 2，不得收工', () => {
+      const ticks = [tick('t86', '16:10', 'A'), tick('t86', '16:15', 'B'), tick('t86', '16:20', 'B')]
+      const r = summariseLandedTicks(ticks, 16 * 60 + 20)
+      expect(r.counts.t86).toBe(2)
+      expect(retiredSources(r.counts)).toEqual(new Set())
+    })
+
+    it('歸零後重新累積：B → B → B 才收工', () => {
+      const ticks = [
+        tick('t86', '16:05', 'A'),
+        tick('t86', '16:10', 'B'),
+        tick('t86', '16:15', 'B'),
+        tick('t86', '16:20', 'B'),
+      ]
+      const r = summariseLandedTicks(ticks, 16 * 60 + 20)
+      expect(r.counts.t86).toBe(3)
+      expect(retiredSources(r.counts)).toEqual(new Set(['t86']))
+    })
+
+    it('未命中不參與：中間沒有到位紀錄不會打斷連續', () => {
+      // 未命中的輪次根本不會出現在輸入裡（呼叫端只讀 hit + data_landed 的列）
+      const ticks = [tick('t86', '16:05', 'A'), tick('t86', '16:20', 'A'), tick('t86', '16:40', 'A')]
+      expect(summariseLandedTicks(ticks, 16 * 60 + 40).counts.t86).toBe(3)
+    })
+
+    it('指紋以時間升冪決定尾端，不依賴輸入順序', () => {
       const shuffled = [tick('t86', '16:20', 'B'), tick('t86', '16:10', 'A'), tick('t86', '16:15', 'A')]
-      // 最近兩次是 16:15(A) 與 16:20(B) → 還在變
-      expect(summariseLandedTicks(shuffled, 16 * 60 + 20).settled.t86).toBe(false)
+      expect(summariseLandedTicks(shuffled, 16 * 60 + 20).counts.t86).toBe(1)
       const settledInput = [tick('t86', '16:20', 'A'), tick('t86', '16:10', 'B'), tick('t86', '16:15', 'A')]
-      expect(summariseLandedTicks(settledInput, 16 * 60 + 20).settled.t86).toBe(true)
+      expect(summariseLandedTicks(settledInput, 16 * 60 + 20).counts.t86).toBe(2)
+    })
+
+    it('null 指紋無法證明穩定：尾端只算它自己一筆', () => {
+      const ticks = [tick('t86', '16:10', null), tick('t86', '16:15', null)]
+      expect(summariseLandedTicks(ticks, 16 * 60 + 15).counts.t86).toBe(1)
+      // MOPS 只需 1 次，所以 null 指紋不會擋住它——維持舊行為
+      const mops = summariseLandedTicks([tick('mops_revenue', '12:00', null)], 12 * 60)
+      expect(retiredSources(mops.counts)).toEqual(new Set(['mops_revenue']))
     })
 
     it('視窗外的 tick 既不計次也不供指紋——bfi82u 雙時段是實例', () => {
@@ -383,19 +401,15 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
         tick('bfi82u', '19:30', 'Y'),
         tick('bfi82u', '19:35', 'Y'),
       ]
-      // 站在 19:35（第二時段）：只有 19:30/19:35 算數
-      const second = summariseLandedTicks(ticks, 19 * 60 + 35)
-      expect(second.counts.bfi82u).toBe(2)
-      expect(second.settled.bfi82u).toBe(true)
+      // 站在 19:35（第二時段）：只有 19:30/19:35 算數，X 不得延續 Y 的連續數
+      expect(summariseLandedTicks(ticks, 19 * 60 + 35).counts.bfi82u).toBe(2)
       // 站在 15:15（第一時段）：只有三筆 15:xx 算數
-      const first = summariseLandedTicks(ticks, 15 * 60 + 15)
-      expect(first.counts.bfi82u).toBe(3)
+      expect(summariseLandedTicks(ticks, 15 * 60 + 15).counts.bfi82u).toBe(3)
     })
 
     it('沒有時槽時不做視窗過濾，全部算數', () => {
       const ticks = [tick('bfi82u', '15:05', 'X'), tick('bfi82u', '19:30', 'Y')]
-      expect(summariseLandedTicks(ticks, null).counts.bfi82u).toBe(2)
-      expect(summariseLandedTicks(ticks, null).settled.bfi82u).toBe(false)
+      expect(summariseLandedTicks(ticks, null).counts.bfi82u).toBe(1)
     })
 
     it('不在 DAILY_WINDOWS 的來源（MOPS）不受視窗過濾', () => {
@@ -404,7 +418,7 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     })
 
     it('空輸入回空結果，不丟例外', () => {
-      expect(summariseLandedTicks([], 16 * 60)).toEqual({ counts: {}, settled: {} })
+      expect(summariseLandedTicks([], 16 * 60)).toEqual({ counts: {} })
     })
 
     it('接得住壞資料：時間為 null 的 tick 不得讓整批壞掉', () => {
@@ -416,26 +430,31 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     })
   })
 
-  describe('contentSettled——最近兩次到位的指紋是否相同', () => {
-    it('兩次相同即視為停止變動', () => {
-      expect(contentSettled(['a', 'a'])).toBe(true)
-      expect(contentSettled(['a', 'b', 'b'])).toBe(true)
+  describe('trailingRun——尾端連續相同指紋的長度', () => {
+    it('連續相同就累加', () => {
+      expect(trailingRun(['a', 'a', 'a'])).toBe(3)
+      expect(trailingRun(['x', 'a', 'a'])).toBe(2)
     })
 
-    it('最後兩次不同就是還在變', () => {
-      expect(contentSettled(['a', 'b'])).toBe(false)
-      expect(contentSettled(['a', 'a', 'b'])).toBe(false)
+    it('一變就歸零，只算尾端那一段', () => {
+      expect(trailingRun(['a', 'a', 'b'])).toBe(1)
+      expect(trailingRun(['a', 'b'])).toBe(1)
     })
 
-    it('證據不足一律回 false，不猜', () => {
-      expect(contentSettled([])).toBe(false)
-      expect(contentSettled(['a'])).toBe(false)
-      expect(contentSettled(['a', null])).toBe(false)
-      expect(contentSettled([null, null])).toBe(false)
-      expect(contentSettled(['', ''])).toBe(false)
-      expect(contentSettled(['a', undefined])).toBe(false)
+    it('空輸入為 0；單筆為 1', () => {
+      expect(trailingRun([])).toBe(0)
+      expect(trailingRun(['a'])).toBe(1)
+    })
+
+    it('null / 空字串無法證明相同——尾端停在它自己', () => {
+      expect(trailingRun([null, null])).toBe(1)
+      expect(trailingRun(['a', null])).toBe(1)
+      expect(trailingRun(['', ''])).toBe(1)
+      expect(trailingRun(['a', undefined])).toBe(1)
+      expect(trailingRun([null, 'a', 'a'])).toBe(2)
     })
   })
+
 
   it('getActiveWindow 依當前分鐘回傳對應的活躍視窗', () => {
     // bfi82u 雙時段

@@ -44,6 +44,8 @@ import {
   t86Url,
   marginDatedUrl,
   marginDatedOk,
+  marginDatedFingerprint,
+  marginTable,
   MI_MARGN_URL,
   BORROW_DATED_URL,
   borrowDatedOk,
@@ -2326,13 +2328,13 @@ async function probeSource(
     if (id === 'margin') {
       const resp = await fetchJson<MarginDatedResponse>(marginDatedUrl(todayYmd))
       const hit = marginDatedOk(resp)
-      const table = (resp as { data?: unknown[] }).data
+      const table = marginTable(resp)
       return {
         hit,
         ok: hit || (resp as { stat?: string }).stat === 'OK',
         data_ymd: hit ? todayYmd : null,
-        fingerprint: hit ? fingerprint(table) : null,
-        rows: Array.isArray(table) ? table.length : null,
+        fingerprint: hit ? marginDatedFingerprint(resp) : null,
+        rows: table ? table.data.length : null,
         note: hit ? '當日融資融券有表' : '當日融資尚未公布',
         duration_ms: Date.now() - t0,
       }
@@ -2473,11 +2475,11 @@ async function readDoneSourcesToday(
       .eq('data_landed', true)
     if (error || !Array.isArray(data)) return new Set()
 
-    const { counts, settled } = summariseLandedTicks(
+    const { counts } = summariseLandedTicks(
       data as LandedTick[],
       slot ? minutesFromHhmm(slot) : null,
     )
-    return retiredSources(counts, REQUIRED_LANDED_COUNTS, settled)
+    return retiredSources(counts, REQUIRED_LANDED_COUNTS)
   } catch {
     return new Set()
   }
