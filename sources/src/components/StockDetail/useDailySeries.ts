@@ -78,10 +78,14 @@ export function useDailySeries(
     if (!series || !freshThrough || series.lastDate >= freshThrough) return
     let alive = true
     void (async () => {
-      const warmed = await warmStockCore(ticker, name)
-      if (!alive || warmed.dailySynced === 0) return
-      const s = await fetchDailySeries(ticker)
-      if (alive && s) setSeries(s)
+      try {
+        const warmed = await warmStockCore(ticker, name)
+        if (!alive || warmed.dailySynced === 0) return
+        const s = await fetchDailySeries(ticker)
+        if (alive && s) setSeries(s)
+      } catch {
+        // Background top-up only; a failure just leaves the previous series on screen.
+      }
     })()
     return () => {
       alive = false
