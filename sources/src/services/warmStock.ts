@@ -111,6 +111,7 @@ async function invokeWarm(
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
       body: { action: 'warm', ticker, name: name ?? '', phase },
+      timeout: 45_000, // server WARM_BUDGET_MS = 30_000, plus headroom
     })
     if (error || !data || typeof data !== 'object') return { ...FAILED, phase }
     return parseWarmResult(data as Record<string, unknown>, phase)

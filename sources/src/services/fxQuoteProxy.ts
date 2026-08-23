@@ -82,6 +82,7 @@ export async function fetchFxQuotes(codes: string[], force = false): Promise<FxQ
   try {
     const { data, error } = await supabase.functions.invoke('stock-price', {
       body: { action: 'fx', codes: missing },
+      timeout: 15_000,
     })
     if (error) return cached
 

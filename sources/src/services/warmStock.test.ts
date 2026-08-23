@@ -57,12 +57,12 @@ describe('warmStock (progressive)', () => {
       phase: 'full',
     })
     expect(invoke).toHaveBeenCalledTimes(2)
-    expect(invoke).toHaveBeenNthCalledWith(1, 'stock-report', {
+    expect(invoke).toHaveBeenNthCalledWith(1, 'stock-report', expect.objectContaining({
       body: { action: 'warm', ticker: '2330', name: '台積電', phase: 'core' },
-    })
-    expect(invoke).toHaveBeenNthCalledWith(2, 'stock-report', {
+    }))
+    expect(invoke).toHaveBeenNthCalledWith(2, 'stock-report', expect.objectContaining({
       body: { action: 'warm', ticker: '2330', name: '台積電', phase: 'history' },
-    })
+    }))
   })
 
   it('skips history when core reports complete', async () => {
@@ -166,9 +166,9 @@ describe('warmStockCore', () => {
       backfilled: 0,
       phase: 'core',
     })
-    expect(invoke).toHaveBeenCalledWith('stock-report', {
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
       body: { action: 'warm', ticker: '2609', name: '陽明', phase: 'core' },
-    })
+    }))
   })
 
   it('併發呼叫共用同一個 promise', async () => {
@@ -202,8 +202,8 @@ describe('warmStockHistory', () => {
     const r = await warmStockHistory('2330')
     expect(r.backfilled).toBe(2)
     expect(r.phase).toBe('history')
-    expect(invoke).toHaveBeenCalledWith('stock-report', {
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
       body: { action: 'warm', ticker: '2330', name: '', phase: 'history' },
-    })
+    }))
   })
 })

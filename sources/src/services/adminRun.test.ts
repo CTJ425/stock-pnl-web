@@ -32,9 +32,9 @@ describe('runAdminJobs', () => {
     expect(r.ok).toBe(true)
     expect(invoke).toHaveBeenCalledTimes(ADMIN_RUN_JOBS.length)
     for (const job of ADMIN_RUN_JOBS) {
-      expect(invoke).toHaveBeenCalledWith('stock-report', {
+      expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
         body: { action: 'admin-run', jobs: [job] },
-      })
+      }))
     }
     if (r.ok) {
       expect(r.data.jobs).toEqual([...ADMIN_RUN_JOBS])
@@ -63,9 +63,9 @@ describe('runAdminJobs', () => {
       expect(r.data.results['sync-market']?.httpStatus).toBe(200)
     }
     expect(invoke).toHaveBeenCalledTimes(1)
-    expect(invoke).toHaveBeenCalledWith('stock-report', {
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
       body: { action: 'admin-run', jobs: ['sync-market'] },
-    })
+    }))
   })
 
   it('單一 job 的 Edge error 字串（200 包體）轉成失敗訊息', async () => {

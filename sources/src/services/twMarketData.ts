@@ -118,6 +118,7 @@ async function fetchViaEdge(): Promise<TwStockRow[]> {
   try {
     const { data, error } = await supabase.functions.invoke<EdgeTwListResponse>('stock-price', {
       body: { action: 'twlist' },
+      timeout: 20_000,
     })
     if (error || !Array.isArray(data?.rows)) return []
     return data.rows

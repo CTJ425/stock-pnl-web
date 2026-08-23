@@ -144,6 +144,7 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, Res
   try {
     const { data, error } = await supabase.functions.invoke<EdgePriceResponse>('stock-price', {
       body: { action: 'prices', symbols: items },
+      timeout: 15_000,
     })
     if (error || !data?.prices) return resolved
     for (const [key, quote] of Object.entries(data.prices)) {

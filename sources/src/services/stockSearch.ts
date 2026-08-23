@@ -66,6 +66,7 @@ async function searchViaEdge(query: string): Promise<StockSearchResult[]> {
   try {
     const { data, error } = await supabase.functions.invoke<EdgeSearchResponse>('stock-price', {
       body: { action: 'search', query },
+      timeout: 15_000,
     })
     if (error || !Array.isArray(data?.results)) return []
     return data.results
