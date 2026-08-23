@@ -23,8 +23,17 @@ const {
   generateReport: vi.fn(async () => null),
   fetchDailySeries: vi.fn(async () => null),
   fetchFundamental: vi.fn(async () => null),
-  warmStockCore: vi.fn(async () => undefined),
-  warmStockHistory: vi.fn(async () => undefined),
+  // Must be a full WarmResult, not undefined: StockDetailPage's warm effect reads
+  // `core.ok` / `core.fundamentalComplete` straight off the result, and the effect body is an
+  // async IIFE with no catch — so `undefined` here throws and leaks an unhandled rejection
+  // that fails the whole vitest run while every test still reports as passing.
+  // `ok + fundamentalComplete` is the quiet no-op: core is done, history is never reached.
+  warmStockCore: vi.fn(async () => ({
+    ok: true, dailySynced: 0, fundamentalSynced: 0, fundamentalComplete: true, backfilled: 0, phase: 'core',
+  })),
+  warmStockHistory: vi.fn(async () => ({
+    ok: true, dailySynced: 0, fundamentalSynced: 0, fundamentalComplete: true, backfilled: 0, phase: 'history',
+  })),
   getFeeRate: vi.fn(() => 0.001425),
   getMinFee: vi.fn(() => 20),
 }))
