@@ -148,6 +148,11 @@ export function floorSafe(value: number): number {
   return Math.floor(Math.round(value * 1e6) / 1e6)
 }
 
+// Plain string comparison; `tx_date` (YYYY-MM-DD) and `created_at` (ISO timestamp) both sort
+// correctly with `<`/`>`, and this avoids locale-aware collation (localeCompare can treat '-'
+// as ignorable punctuation under some ICU locales).
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
 export function computeLedger(transactions: Transaction[]): Ledger {
   const ledger: Ledger = {
     positions: {},
@@ -163,10 +168,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
   const txs = transactions
     .filter((tx) => tx.qty > 0 && (tx.tx_type === 'BUY' || tx.tx_type === 'SELL'))
     .slice()
-    .sort(
-      (a, b) =>
-        a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
-    )
+    .sort((a, b) => cmp(a.tx_date, b.tx_date) || cmp(a.created_at, b.created_at))
 
   for (const tx of txs) {
     const year = Number(tx.tx_date.slice(0, 4))

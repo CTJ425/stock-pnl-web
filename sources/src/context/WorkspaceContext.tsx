@@ -159,9 +159,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!currentId) throw new Error('尚未選擇工作區')
       // Snapshot which TPE tickers already have net holdings — first buy of a code warms data.
       const heldBefore = new Set(
-        computeLedger(transactions)
-          .holdings.filter((h) => h.market === 'TPE' && h.qty > 0)
-          .map((h) => h.ticker),
+        ledger.holdings.filter((h) => h.market === 'TPE' && h.qty > 0).map((h) => h.ticker),
       )
       const created = await provider.addTransactions(currentId, txs)
       setTransactions((prev) => [...prev, ...created])
@@ -173,7 +171,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         void prefetchStockData(tx.ticker, tx.name)
       }
     },
-    [provider, currentId, transactions],
+    [provider, currentId, ledger],
   )
 
   const updateTransaction = useCallback(
