@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Version 0.9.7 fingerprint fix recorded (BUG-035); FIXED_BUG.md updated; PROGRESS entries rolled
-- Status: **✅ 0.9.7 RECORDED**
-- Timestamp: 2026-08-20 20:45:00 Asia/Taipei
+- Action: Full codebase audit (4 priority levels); P0 test gate fixed, P1 Edge timeouts added, P2 frontend invoke timeouts + effect error handling, P3 correctness/performance details; PROGRESS entries rolled
+- Status: **✅ AUDIT RECORDED**
+- Timestamp: 2026-08-23 18:52:37 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-23 18:52:37 Asia/Taipei (Full codebase audit + fixes: 4 priority levels, timeouts, test gate, effect error handling)
+
+- **Scope**: Read-only audit of project for logic errors, bugs and optimisation opportunities, followed by fixes at four priority levels. Each finding traced to `file:line` and verified.
+- **P0 — Test gate was red**: `npx vitest run` exited 1 while summary reported "1136 passed". Root cause: `src/components/StockDetail/AnalysisPage.whatif.test.tsx` mocks `warmStockCore` / `warmStockHistory` returned `undefined` instead of `WarmResult`; `StockDetailPage.tsx:233` reads `core.ok` off result inside async IIFE with no catch, escaped as unhandled rejection. Fixed by returning full `WarmResult` from both mocks. Impact: exit 0, no unhandled rejections.
+- **P1 — Edge Function fetch timeouts** (5 of 11 sites had none): Added `signal: AbortSignal.timeout(...)` to `stock-report/twChips.ts` `fetchJson` (15s) and 4 sites in `stock-price/index.ts` (10s each), matching idiom at other 6 sites. All 10 `fetchJson` callers already inside try/catch or `Promise.allSettled` treating throw as "source unavailable", so no new exception propagation — only behavioural change is wait now bounded. Trigger for RISK-001 is now concrete: untimed `fetchJson` in probe follow-ups has 15s timeout.
+- **P2-1 — Frontend Edge invokes had no timeout**: `supabase.functions.invoke` has no default timeout, hung function left UI spinning forever. Added `timeout` to all 10 invoke sites (9 services), sized against server budgets: 15s interactive (priceProxy, stockSearch, fxQuoteProxy), 20s (twMarketData, adminStatus, adminUsers ×2), 45s warmStock, 60s reportProxy, 150s adminRun. New contract test `src/services/invokeTimeout.test.ts` scans every service file, fails if any invoke lacks timeout. Nine existing assertions in `adminRun.test.ts`, `fxQuoteProxy.test.ts`, `warmStock.test.ts` relaxed to `expect.objectContaining`.
+- **P2-2 — Four async effect IIFEs had no catch**: `StockDetailPage.tsx:210` (fundamental/warm), `AiTab.tsx:86` (AI settings), `StockDetailPage.tsx:179`, `useDailySeries.ts:80` would strand loading flag or leak unhandled rejection. Defence in depth: services currently swallow failures, so not live bugs today. Added try/catch to all four. New test `src/components/StockDetail/effectErrorHandling.test.tsx` forces rejection so guard is real.
+- **P3 — Correctness & performance**: (1) `WorkspaceContext.tsx` `addTransactions` now reuses memoized `ledger` instead of recomputing whole ledger for `heldBefore`. (2) `pnlEngine.ts` transaction sort now plain `<`/`>` instead of `localeCompare` (locale-aware collation on every compare; identical ordering for ISO strings). (3) `fees.ts` `breakEvenPrice` returns `0` if search fails to converge, instead of non-break-even price. (4) `fees.ts` `FeeInput` doc states contract: supply `taxRate` or `ticker` else 0.3% general rate applied silently (wrong for ETFs). (5) `timeline.ts` extracted all seven hardcoded `+ 8` UTC→Taipei conversions to `TAIPEI_UTC_OFFSET_HOURS`.
+- **Testing verified**: `npx vitest run` from `sources/` — 77 files / **1148 tests**, exit 0, no Errors line (was exit 1 / 1136). `npx oxlint` — exit 0, 5 pre-existing `only-export-components` warnings. `npm run typecheck:edge` — exit 0.
+- **Reviews completed**: P1 (Edge fetch): reviewer PASS, blast radius traced caller-by-caller. P3 (money maths): reviewer PASS with 2 RISKs. RISK A (timeline.ts mixed state, 4 sites literal) accepted and FIXED immediately. RISK B (`pnlEngine.ts` `cmp` ≡ `localeCompare` while all `created_at` use consistent ISO) adjudicated non-regression, no live bug.
+- **Files changed**: `sources/src/components/StockDetail/{StockDetailPage.tsx,AiTab.tsx,useDailySeries.ts,AnalysisPage.whatif.test.tsx}`, `sources/src/components/Admin/timeline.ts`, `sources/src/context/WorkspaceContext.tsx`, `sources/src/utils/{pnlEngine.ts,fees.ts}`, `sources/src/services/{priceProxy,stockSearch,fxQuoteProxy,twMarketData,adminStatus,adminUsers,warmStock,reportProxy,adminRun}.ts` + 3 test relaxations, `sources/supabase/functions/stock-price/index.ts`, `sources/supabase/functions/stock-report/twChips.ts`. Added: `sources/src/services/invokeTimeout.test.ts`, `sources/src/components/StockDetail/effectErrorHandling.test.tsx`.
+- **Records finalized**: TASK.md gains two new OPEN entries (CI gate workflow, RISK-001 trigger mechanism). BUG_FIX.md RISK-001 updated with trigger mechanism. PROGRESS.md header updated; this entry added; 0.9.6 entry rolled to PROGRESS_ARCHIVE.md.
+- **Unfinished**: None — audit and fixes complete; no commit made (bookkeeping only per instructions).
 
 ---
 
@@ -19,20 +35,6 @@
 - **DEV end-to-end verification of the new retire gate (2026-08-20 20:45-21:00)**: `margin` landed on three consecutive rounds (20:45 / 20:50 / 20:55) with the identical fingerprint `174457:1s4vqtw`, and no `margin` row was written at 21:00 — the trailing run of 3 retired it. The same rows also prove BUG-033 fixed: the fingerprint is a real hash rather than the constant `0:45h`, and `rows` reports 1295 instead of null.
 - **Records finalized**: FIXED_BUG.md gained BUG-035 entry (prepended, newest-first). PROGRESS.md header updated; this entry added; oldest entry (2026-08-20 15:07:12) rolled to PROGRESS_ARCHIVE.md. All files match.
 - **Unfinished**: None — 0.9.7 recording complete.
-
----
-
-## 📅 Log: 2026-08-20 17:55:00 Asia/Taipei (Version 0.9.6 probe system fixes — margin fingerprint constant, retire gate rewritten)
-
-- **Release**: Version 0.9.6 fixes two independent probe defects affecting `source_probe_tick` correctness and retirement logic.
-- **Change 1 (BUG-033)**: Margin probe fingerprint was always `0:45h` (empty string hash). Root cause: `probeSource` read from `(resp as { data? }).data`, but `MarginDatedResponse` has no `data` field (rows under `tables[]`). Fix: new `marginDatedFingerprint()` in `twChips.ts` using existing `marginTable()` helper. Impact: content-settled gate now functions; `rows` count now accurate.
-- **Change 2 (BUG-034)**: Retire gate had two holes: `A → B → B` would retire despite `A → B` proving upstream was revising; `contentSettled` lost all intermediate revisions. Fix: rewrite to trailing-run rule: `counts[id]` = length of identical-fingerprint run (new `trailingRun` in `sourceProbePlan.ts`); `retiredSources` checks `counts[id] >= required[id]`. Any content change resets run to 1.
-- **Files changed**: `twChips.ts` (new exported functions), `index.ts` (margin branch rewrite), `sourceProbePlan.ts` (new `trailingRun`), test files (365 tests passed).
-- **Version bump**: `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` set to 0.9.6.
-- **Verification**: `npx vitest run supabase/functions/stock-report/` → 365 tests passed, 0 failed. `npm test` → 75 files, 1135 tests passed. `npx tsc --noEmit` clean. Reviewer (both changes): **PASS**, no findings.
-- **Deployment status**: DEV Edge **deployed** 2026-08-20 17:55 Asia/Taipei by volume copy into `volumes/functions/stock-report/` plus `docker compose up -d --force-recreate functions`; `diff -rq` clean. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei together with 0.9.7 in one bundle (`ezbr_sha256` `f776a7a0...`); see the 0.9.7 entry above. A `main` push deploys Pages only, never an Edge Function — the two are separate actions.
-- **Records finalized**: CHANGELOG.md gained 0.9.6 entry (Traditional Chinese, house style). FIXED_BUG.md gained BUG-033 and BUG-034 entries with full resolution. PROGRESS_ARCHIVE.md gained oldest PROGRESS entry (14:59:05). PROGRESS.md header updated; this entry added; oldest entry moved to archive. All files match.
-- **Unfinished**: None — 0.9.6 recording complete.
 
 ---
 
