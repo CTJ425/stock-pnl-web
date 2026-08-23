@@ -178,6 +178,13 @@ precisely what 0.7.8 would have mis-retired).
 4. **Trial-matching UI** —— ⏳ confirm 「試撮」 badge on dashboard + 「預估」 on quote card in an auction window
    (08:30–09:00 or 13:25–13:30). Needs a browser; data half is MIS `ip=1`.
 
+### Task 128: CI workflow must gate deployments on test/lint/typecheck (discovered in audit 2026-08-23)
+- **Status**: ⏳ **OPEN — User deferred; CI gate not added this round**
+- **Agent**: Scribe
+- **Timestamp**: 2026-08-23 18:52:37 Asia/Taipei
+- **Finding**: `.github/workflows/deploy.yml` runs only `npm ci` → `npm run build` → deploy to GitHub Pages; no `npm test`, `npm run lint`, or `npm run typecheck:edge`. A push to `main` deploys to production with zero automated verification. The P0 finding from this audit (test summary said "all passed", but exit code was 1) is exactly the failure mode a local-only gate misses.
+- **User decision**: Explicitly chose NOT to add CI gate in this round. Recording as open task, not as a deferred decision to revisit unprompted.
+
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**
 - **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
