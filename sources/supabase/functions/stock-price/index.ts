@@ -122,7 +122,7 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
   try {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
-      { headers: { 'User-Agent': UA, Accept: 'application/json' } },
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
     )
     if (!res.ok) return null
     const data = await res.json()
@@ -165,6 +165,7 @@ async function fetchMisPrices(tickers: string[]): Promise<Map<string, Quote>> {
             Accept: 'application/json',
             Referer: 'https://mis.twse.com.tw/stock/index.jsp',
           },
+          signal: AbortSignal.timeout(10_000),
         },
       )
       if (!res.ok) continue
@@ -348,7 +349,7 @@ async function handleSearch(query: string): Promise<Response> {
   try {
     const res = await fetch(
       `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}`,
-      { headers: { 'User-Agent': UA, Accept: 'application/json' } },
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
     )
     if (!res.ok) return json({ results: [] })
     const data = await res.json()
@@ -385,7 +386,10 @@ function listNumber(value: unknown): number | null {
 /** Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response */
 async function handleTwList(): Promise<Response> {
   const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
-    const res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA } })
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': UA },
+      signal: AbortSignal.timeout(10_000),
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as Array<Record<string, unknown>>
   }
