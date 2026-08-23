@@ -17,8 +17,14 @@ export interface FeeInput {
   price: number
   qty: number
   feeRate: number
-  /** Securities tax rate for selling Taiwan stocks; if not provided, it will be automatically determined based on the code (0.1% starting with ETF 00, and 0.3% for the rest)*/
+  /**
+   * Securities tax rate for selling Taiwan stocks; if not provided, it will be automatically determined based on the code (0.1% starting with ETF 00, and 0.3% for the rest).
+   * Contract: a SELL must supply `taxRate` or `ticker`. Supplying neither falls back to the 0.3% general-stock
+   * rate, which is wrong for ETFs. All current SELL callers satisfy this (`fees.ts:63`, `fees.ts:89` and
+   * `TransactionForm.tsx:108` pass `taxRate`; `whatIf.ts:46` passes `ticker`).
+   */
   taxRate?: number
+  /** See `taxRate` doc above for the SELL contract this field is part of. */
   ticker?: string
   /** Minimum handling fee for Taiwan stocks (yuan); not applicable when feeRate is 0 (no commission)*/
   minFee?: number
@@ -96,6 +102,9 @@ export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: numbe
   for (let i = 0; i < 1000 && !isBreakEven(price); i++) {
     price = Math.round(price * 100 + 1) / 100
   }
+  // Non-convergence returns the same "no answer" sentinel as an empty position, rather than a price
+  // that is not actually break-even (would lose money).
+  if (!isBreakEven(price)) return 0
   for (let i = 0; i < 1000; i++) {
     const lower = Math.round(price * 100 - 1) / 100
     if (!(lower > 0) || !isBreakEven(lower)) break
