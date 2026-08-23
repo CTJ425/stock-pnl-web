@@ -61,22 +61,24 @@ export function judgeCron(
  * cron 表達式 → 白話（並將 UTC 換成台北時間）。
  */
 export const UNPARSED_CRON_PREFIX = '未解析的排程 '
+/** Cron expressions are stored in UTC; Taiwan is UTC+8 year-round (no DST since 1979). */
+const TAIPEI_UTC_OFFSET_HOURS = 8
 export function describeCron(expr: string): string {
   const p = (n: number) => String(n).padStart(2, '0')
   const lastMinute = (step: number) => (step > 0 && step < 60 ? 60 - step : 0)
 
   const w = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
   if (w) {
-    const from = (Number(w[2]) + 8) % 24
-    const to = (Number(w[3]) + 8) % 24
+    const from = (Number(w[2]) + TAIPEI_UTC_OFFSET_HOURS) % 24
+    const to = (Number(w[3]) + TAIPEI_UTC_OFFSET_HOURS) % 24
     return `週一至週五 ${p(from)}:00–${p(to)}:${p(lastMinute(Number(w[1])))} 每 ${w[1]} 分`
   }
 
   const dw = /^\*\/(\d+)\s+(\d+)-(\d+)\s+\*\s+\*\s+\*$/.exec(expr)
   if (dw) {
     const step = Number(dw[1])
-    const from = (Number(dw[2]) + 8) % 24
-    const toTotal = Number(dw[3]) + 8
+    const from = (Number(dw[2]) + TAIPEI_UTC_OFFSET_HOURS) % 24
+    const toTotal = Number(dw[3]) + TAIPEI_UTC_OFFSET_HOURS
     const end = `${p(toTotal % 24)}:${p(lastMinute(step))}`
     return `每日 ${p(from)}:00–${toTotal >= 24 ? '次日 ' : ''}${end} 每 ${step} 分`
   }
@@ -85,7 +87,7 @@ export function describeCron(expr: string): string {
   if (d) {
     const hours = d[1]
       .split(',')
-      .map((h) => `${String((Number(h) + 8) % 24).padStart(2, '0')}:00`)
+      .map((h) => `${String((Number(h) + TAIPEI_UTC_OFFSET_HOURS) % 24).padStart(2, '0')}:00`)
       .join(' / ')
     return `每日 ${hours}`
   }
@@ -95,15 +97,15 @@ export function describeCron(expr: string): string {
     const from = Number(r[1])
     const to = Number(r[2])
     const hours: string[] = []
-    for (let h = from; h <= to; h++) hours.push(`${String((h + 8) % 24).padStart(2, '0')}:00`)
+    for (let h = from; h <= to; h++) hours.push(`${String((h + TAIPEI_UTC_OFFSET_HOURS) % 24).padStart(2, '0')}:00`)
     return `週一至週五 ${hours.join(' / ')}`
   }
 
   const s = /^(\d+(?:,\d+)+)\s+(\d+)-(\d+)\s+\*\s+\*\s+1-5$/.exec(expr)
   if (s) {
     const mins = s[1].split(',').map(Number).sort((a, b) => a - b)
-    const first = `${p((Number(s[2]) + 8) % 24)}:${p(mins[0])}`
-    const last = `${p((Number(s[3]) + 8) % 24)}:${p(mins[mins.length - 1])}`
+    const first = `${p((Number(s[2]) + TAIPEI_UTC_OFFSET_HOURS) % 24)}:${p(mins[0])}`
+    const last = `${p((Number(s[3]) + TAIPEI_UTC_OFFSET_HOURS) % 24)}:${p(mins[mins.length - 1])}`
     return `週一至週五 ${first}–${last} 每 ${mins[1] - mins[0]} 分`
   }
 
@@ -114,7 +116,7 @@ export function describeCron(expr: string): string {
     const labels: string[] = []
     for (const h of hours) {
       for (const m of mins) {
-        labels.push(`${p((h + 8) % 24)}:${p(m)}`)
+        labels.push(`${p((h + TAIPEI_UTC_OFFSET_HOURS) % 24)}:${p(m)}`)
       }
     }
     return `週一至週五 ${labels.join(' / ')}`
