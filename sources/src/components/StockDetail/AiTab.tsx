@@ -84,12 +84,16 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     let alive = true
     setSettingsLoading(true)
     ;(async () => {
-      const [s, admin, ps] = await Promise.all([loadAiSettings(), isAiAdmin(), loadAiPrompts()])
-      if (alive) {
-        setSettings(s)
-        setIsAdmin(admin)
-        setPrompts(ps)
-        setSettingsLoading(false)
+      try {
+        const [s, admin, ps] = await Promise.all([loadAiSettings(), isAiAdmin(), loadAiPrompts()])
+        if (alive) {
+          setSettings(s)
+          setIsAdmin(admin)
+          setPrompts(ps)
+          setSettingsLoading(false)
+        }
+      } catch {
+        if (alive) setSettingsLoading(false)
       }
     })()
     return () => {

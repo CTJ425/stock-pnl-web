@@ -177,15 +177,19 @@ export function StockDetailPage({
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void (async () => {
-        const stored = await fetchStoredReport(ticker)
-        if (stored) {
-          // Only change generatedAt if it really changes: if it doesn’t change, don’t change state.
-          // Otherwise, it will be redrawn every time you switch back to the foreground, and the scroll position and expanded state will be washed away.
-          setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
+        try {
+          const stored = await fetchStoredReport(ticker)
+          if (stored) {
+            // Only change generatedAt if it really changes: if it doesn’t change, don’t change state.
+            // Otherwise, it will be redrawn every time you switch back to the foreground, and the scroll position and expanded state will be washed away.
+            setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
+          }
+          const f = await fetchFundamental(ticker)
+          // Also setState only when a copy is actually changed (than asOf, that's when we write the file)
+          if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
+        } catch {
+          // Background refresh only; a failure just leaves the previous data on screen.
         }
-        const f = await fetchFundamental(ticker)
-        // Also setState only when a copy is actually changed (than asOf, that's when we write the file)
-        if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
       })()
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -208,57 +212,61 @@ export function StockDetailPage({
     setFundLoading(true)
     setFundamental(null)
     ;(async () => {
-      let f = await fetchFundamental(ticker)
-      if (!alive) return
-
-      // Paint Storage snapshot right away so partial files are usable while warm runs.
-      if (f) {
-        setFundamental(f)
-        setFundLoading(false)
-      }
-
-      const wantCore = needsCoreWarm(f)
-      const wantHistory = !f || needsHistoryWarm(f)
-      if (!wantCore && !wantHistory) {
-        if (alive) setFundLoading(false)
-        return
-      }
-
-      let coreComplete = false
-      let coreOk = false
-
-      if (wantCore) {
-        const core = await warmStockCore(ticker, name)
+      try {
+        let f = await fetchFundamental(ticker)
         if (!alive) return
-        coreOk = core.ok
-        coreComplete = core.fundamentalComplete
-        if (core.fundamentalSynced > 0 || core.backfilled > 0) {
-          f = (await fetchFundamental(ticker)) ?? f
-          if (alive) {
-            setFundamental(f)
-            setFundLoading(false)
-          }
-        } else if (alive && !f) {
+
+        // Paint Storage snapshot right away so partial files are usable while warm runs.
+        if (f) {
+          setFundamental(f)
           setFundLoading(false)
         }
-      }
 
-      // History: skip when core proved unknown/ETF (complete). Otherwise run if soft history
-      // need, or core said incomplete, or sealed-core path still has a thin file.
-      const skipHistory = wantCore && coreOk && coreComplete
-      const shouldHistory =
-        !skipHistory &&
-        (wantHistory || (wantCore && coreOk && !coreComplete) || Boolean(f && needsHistoryWarm(f)))
-      if (shouldHistory) {
-        const hist = await warmStockHistory(ticker, name)
-        if (!alive) return
-        if (hist.backfilled > 0 || hist.fundamentalSynced > 0) {
-          f = (await fetchFundamental(ticker)) ?? f
-          if (alive) setFundamental(f)
+        const wantCore = needsCoreWarm(f)
+        const wantHistory = !f || needsHistoryWarm(f)
+        if (!wantCore && !wantHistory) {
+          if (alive) setFundLoading(false)
+          return
         }
-      }
 
-      if (alive) setFundLoading(false)
+        let coreComplete = false
+        let coreOk = false
+
+        if (wantCore) {
+          const core = await warmStockCore(ticker, name)
+          if (!alive) return
+          coreOk = core.ok
+          coreComplete = core.fundamentalComplete
+          if (core.fundamentalSynced > 0 || core.backfilled > 0) {
+            f = (await fetchFundamental(ticker)) ?? f
+            if (alive) {
+              setFundamental(f)
+              setFundLoading(false)
+            }
+          } else if (alive && !f) {
+            setFundLoading(false)
+          }
+        }
+
+        // History: skip when core proved unknown/ETF (complete). Otherwise run if soft history
+        // need, or core said incomplete, or sealed-core path still has a thin file.
+        const skipHistory = wantCore && coreOk && coreComplete
+        const shouldHistory =
+          !skipHistory &&
+          (wantHistory || (wantCore && coreOk && !coreComplete) || Boolean(f && needsHistoryWarm(f)))
+        if (shouldHistory) {
+          const hist = await warmStockHistory(ticker, name)
+          if (!alive) return
+          if (hist.backfilled > 0 || hist.fundamentalSynced > 0) {
+            f = (await fetchFundamental(ticker)) ?? f
+            if (alive) setFundamental(f)
+          }
+        }
+
+        if (alive) setFundLoading(false)
+      } catch {
+        if (alive) setFundLoading(false)
+      }
     })()
     return () => {
       alive = false
