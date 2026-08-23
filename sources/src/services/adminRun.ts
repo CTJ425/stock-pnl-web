@@ -204,6 +204,7 @@ async function invokeOneJob(job: AdminRunJob): Promise<OneJobOk | OneJobErr> {
   const t0 = Date.now()
   const { data, error } = await supabase.functions.invoke('stock-report', {
     body: { action: 'admin-run', jobs: [job] },
+    timeout: 150_000, // server GENERATE_ALL_BUDGET_MS = 110_000, plus headroom
   })
   const durationMs = Date.now() - t0
 

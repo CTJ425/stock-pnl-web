@@ -159,6 +159,7 @@ export async function fetchAdminStatus(): Promise<AdminStatus | null> {
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
       body: { action: 'admin-status' },
+      timeout: 20_000,
     })
     if (error || !data || (data as { ok?: boolean }).ok !== true) return null
     const d = data as Partial<AdminStatus>

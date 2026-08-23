@@ -30,6 +30,7 @@ export async function fetchAdminUsers(): Promise<AdminUser[] | null> {
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
       body: { action: 'admin-users' },
+      timeout: 20_000,
     })
     if (error || !data || (data as { ok?: boolean }).ok !== true) return null
     const rows = (data as { users?: unknown }).users
@@ -61,6 +62,7 @@ export async function setUserAdmin(userId: string, admin: boolean): Promise<stri
   try {
     const { data, error } = await supabase.functions.invoke('stock-report', {
       body: { action: 'admin-set-role', userId, admin },
+      timeout: 20_000,
     })
     if (error) return (await httpErrorMessage(error)) ?? error.message
     const res = data as { ok?: boolean; error?: string } | null

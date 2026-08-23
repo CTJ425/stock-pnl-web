@@ -155,6 +155,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
   }
   const { data, error } = await supabase.functions.invoke<GenerateReportResponse>('stock-report', {
     body: { action: 'generate', ...input },
+    timeout: 60_000, // on-demand report generation
   })
   if (error) {
     throw new Error(error.message || '產生報告失敗')

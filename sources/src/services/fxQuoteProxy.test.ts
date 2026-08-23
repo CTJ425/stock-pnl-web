@@ -66,9 +66,9 @@ describe('fetchFxQuotes', () => {
   it('命中：呼叫 stock-price 的 fx action 並帶幣別代號', async () => {
     invoke.mockResolvedValue(ok({ USD: { price: 32.478, asOf: now() } }))
     const q = await fetchFxQuotes(['USD'])
-    expect(invoke).toHaveBeenCalledWith('stock-price', {
+    expect(invoke).toHaveBeenCalledWith('stock-price', expect.objectContaining({
       body: { action: 'fx', codes: ['USD'] },
-    })
+    }))
     expect(q.USD.price).toBe(32.478)
   })
 
@@ -93,9 +93,9 @@ describe('fetchFxQuotes', () => {
     invoke.mockResolvedValue(ok({ JPY: { price: 0.1961, asOf: now() } }))
 
     const q = await fetchFxQuotes(['USD', 'JPY'])
-    expect(invoke).toHaveBeenCalledWith('stock-price', {
+    expect(invoke).toHaveBeenCalledWith('stock-price', expect.objectContaining({
       body: { action: 'fx', codes: ['JPY'] },
-    })
+    }))
     expect(q.USD.price).toBe(32.4) // 沿用快取
     expect(q.JPY.price).toBe(0.1961) // 已更新
   })
@@ -105,9 +105,9 @@ describe('fetchFxQuotes', () => {
     invoke.mockResolvedValue(ok({ USD: { price: 32.5, asOf: now() } }))
 
     const q = await fetchFxQuotes(['USD'], true)
-    expect(invoke).toHaveBeenCalledWith('stock-price', {
+    expect(invoke).toHaveBeenCalledWith('stock-price', expect.objectContaining({
       body: { action: 'fx', codes: ['USD'] },
-    })
+    }))
     expect(q.USD.price).toBe(32.5)
   })
 
