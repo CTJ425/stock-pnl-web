@@ -401,7 +401,10 @@ export function extractBorrowDated(resp: BorrowDatedResponse, ticker: string): B
 }
 
 export async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA } })
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json', 'User-Agent': UA },
+    signal: AbortSignal.timeout(15_000),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
   return (await res.json()) as T
 }
