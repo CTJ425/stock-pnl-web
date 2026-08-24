@@ -32,7 +32,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const { prices } = useStockPrices(holdings)
   const feeRate = getFeeRate(current?.id)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  // Remembers what WatchTab handed over (ticker + name) so a stock added to the watchlist after
+  // Remembers what WatchSection handed over (ticker + name) so a stock added to the watchlist after
   // mount still resolves — the loaded `watchlist` copy below is not refreshed on every click.
   const [pickedWatch, setPickedWatch] = useState<{ ticker: string; name: string } | null>(null)
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])

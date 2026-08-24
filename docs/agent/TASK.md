@@ -10,12 +10,12 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-19 11:01)
+## 📍 Where the project stands (2026-08-24 11:37)
 
-- **Version 0.8.0**:
-  - Code: Finalized. Features: 觀察清單 (max 30 檔/人)、損益試算分頁、Edge 白名單放寬。Tests: 1056 passed (1011 → 1056).
-  - Schema: `tw_watchlist` DDL 已在 `schema.sql` 完成；trigger 更名與相容性 drop 已就緒。
-  - Unfinished: (1) DEV schema migration、(2) PROD schema migration、(3) DEV Edge 部署、(4) PROD Edge 部署、(5) 端對端驗證。
+- **Version 0.9.9**:
+  - Code: Finalized. Features: 儀表板觀察清單區塊（圖卡/條列雙視圖、localStorage 記憶、N/30 容量）、設計翻轉完稿（初稿庫存總覽駁回 → 0.9.0 發布個股分析 tab 4 → 0.9.9 儀表板）、死碼清理。Tests: 1145 passed (77 files, −3 from 0.9.8's 1148 via +10 WatchSection −13 WatchTab).
+  - Schema: No changes in 0.9.9.
+  - Unfinished: (1) PROD merge (dev → main) — **in progress by user**; (2) Deferred design variants scheduled for later.
 - **Version 0.7.26**:
   - Releases: All 84 versions (`0.2` to `0.7.18`) backfilled to GitHub Releases; `.github/workflows/release.yml` created for automatic release sync on push to `main`.
   - Probe: Narrowed `t86` probe window from `15:30–17:30` to `16:00–17:00` (saving 6 daily no-op probes).
@@ -26,21 +26,18 @@
 ## 📋 Active Tasks
 
 
-### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤）
-- **Status**: ⏳ **Design revised, records updated; DEV commit ready; PROD merge pending user approval**
-- **Agent**: Scribe
-- **Timestamp**: 2026-08-19 15:17:34 Asia/Taipei
-- **Done**:
-  1. ✅ Initial 0.9.0 (庫存總覽 placement) rejected after user review
-  2. ✅ Design revised: watchlist moved to `個股分析` tab 4 (分析內容 / 損益試算 / AI 分析 / **觀察股票**), y≈207 (no scroll in 800px)
-  3. ✅ Stock picker reverted to holdings-only; entry points deliberately separate
-  4. ✅ Five defects found and fixed during verification; root causes recorded
-  5. ✅ Changelog entry rewritten to describe revised design + process lesson (design answer wrongly promoted to placement decision)
-  6. ✅ Progress log entry updated (status, design rationale, defect analysis, reviewer verdict FAIL→PASS)
-  7. ✅ Task tracking record (this entry)
-  8. ✅ Verification: 73 files, 1073 passed; E2E 10/10; build/type/lint 0 errors
-- **Unfinished**:
-  1. ⏳ **PROD deploy**: Merge `dev` → `main` to trigger Pages deployment; user go-ahead required per CLAUDE.md § Branches & envs.
+### Task 125: Deferred watchlist card design variants (Sparkline / Chips & PE / Range Bar)
+- **Status**: ⏳ **OPEN — Design documented, implementation deferred by scope**
+- **Agent**: —
+- **Timestamp**: 2026-08-24 11:37:39 Asia/Taipei
+- **What is this**: During 0.9.9 implementation, three advanced card variants were designed but deferred due to scope constraints (basic card 股代 / 股名 / 價格 / % 變化 shipped; richer variants held for later).
+- **Three variants documented in** `docs/architecture/watchlist_6_design_variants.md` **+ .html**:
+  1. **Sparkline card** — 7-day price trend miniature line chart, visual at-a-glance trend without numbers.
+  2. **Chips & PE card** — Institutional flow badges (籌碼) with buying/selling icons, P/E badge, 機構法人 buy/sell flow indicator.
+  3. **Range Bar card** — Intraday high/low range bar (open/close markers), today's trading envelope without historical context.
+- **Scope decision**: All three variants add complexity (data fetch, rendering, state management, testing) without changing core watchlist UX. Ship basic card first, validate user interaction, then evaluate demand for variants.
+- **Next step**: When scheduling variants, start with design finalization (existing docs are draft), then estimate implementation effort, decide priority relative to other features.
+- **Unfinished**: Everything (design validation to implementation).
 
 ### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop the two redundant crons (0.7.13)
 - **Status**: 🔄 **code fixed, tested, released as 0.7.13, and deployed to both Edges; DEV cron table
