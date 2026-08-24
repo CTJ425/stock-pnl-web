@@ -11,6 +11,24 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 132: Admin backup restore (0.9.12)
+- **Status**: ✅ **Released 0.9.12** (commits 6bf057f / e6ca8e3 / a4306e7, both branches synced)
+- **Agent**: Builder
+- **Timestamp**: 2026-08-24 20:13:32 CST
+- **What was this**: Implement admin console backup restore feature with preview and apply actions.
+- **Implementation**:
+  - **Two separate actions on `stock-report`**: `admin-backup-restore` for preview mode and apply mode
+  - **Restore strategy**: Additive-only via upsert with `ignoreDuplicates` per table key (id for workspaces/transactions, user_id for user_settings)
+  - **Cross-account protection**: `parseBackupDocument` compares document's user_id against validated path UUID to block cross-account writes
+  - **Insert order**: Enforced as workspaces → transactions → user_settings
+  - **Partial restore disclosure**: `restoreFailureMessage` names which rows already landed, safe to re-run
+  - **No cross-table transaction**: Three separate writes; half-finished restore leaves named rows that can be re-applied
+- **Testing**: npm test exit 0; tsc --noEmit exit 0; tsc -p tsconfig.edge.json exit 0; npm run build exit 0; oxlint 5 pre-existing warnings
+- **DEV disaster drill**: Three real transactions deleted, preview reported 62/59/3 rows missing and wrote nothing; apply restored them; FULL-TABLE checksum matched pre-deletion exactly. Re-run reported zero missing. Two tampered documents (user_id changes) both refused with expected messages, left no trace.
+- **PROD verification**: `stock-report` v57 deployed (ezbr_sha256 changed); verify_jwt=false; schema unchanged; 401 for unauthenticated; five malformed paths refused; read-only previews for both accounts reported no missing rows; row counts unchanged post-restore (110 transactions, 5 workspaces).
+- **Deployment**: Pages + cloud functions (stock-report v57).
+- **Unfinished**: None — released 0.9.12.
+
 ### Task 131: PROD deploy of the backup feature (0.9.11)
 - **Status**: ✅ **PROD deployed 2026-08-24** (version 0.9.11, project `kxnxadaghidwumqsqneu`)
 - **Agent**: Scribe
