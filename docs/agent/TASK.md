@@ -182,7 +182,7 @@ precisely what 0.7.8 would have mis-retired).
 - **Status**: ⏳ **OPEN — User deferred; CI gate not added this round**
 - **Agent**: Scribe
 - **Timestamp**: 2026-08-23 18:52:37 Asia/Taipei
-- **Finding**: `.github/workflows/deploy.yml` runs only `npm ci` → `npm run build` → deploy to GitHub Pages; no `npm test`, `npm run lint`, or `npm run typecheck:edge`. A push to `main` deploys to production with zero automated verification. The P0 finding from this audit (test summary said "all passed", but exit code was 1) is exactly the failure mode a local-only gate misses.
+- **Finding**: `.github/workflows/deploy.yml` runs only `npm ci` → `npm run build` → deploy to GitHub Pages; no `npm test`, `npm run lint`, or `npm run typecheck:edge`. A push to `main` deploys to production while CI type-checks via the build but runs no tests and no lint. The P0 finding from this audit (test summary said "all passed", but exit code was 1) is exactly the failure mode a test gate misses.
 - **User decision**: Explicitly chose NOT to add CI gate in this round. Recording as open task, not as a deferred decision to revisit unprompted.
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
