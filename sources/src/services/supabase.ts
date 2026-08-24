@@ -12,6 +12,9 @@ export const isSupabaseConfigured: boolean = Boolean(
   url && anonKey && !url.startsWith('YOUR_') && !anonKey.startsWith('YOUR_'),
 )
 
+/** Public base URL for turning root-relative backend URLs (e.g. signed storage links) absolute. */
+export const supabaseUrl: string = (url ?? '').replace(/\/$/, '')
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url!, anonKey!)
   : null

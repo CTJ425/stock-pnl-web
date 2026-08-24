@@ -2,20 +2,41 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.9.11（2026-08-24）— 交易紀錄每日自動備份至 Supabase Storage（第一階段）
+### 0.9.11（2026-08-24）— 交易紀錄每日自動備份，與管理者專屬的備份後台
 
-> 新增排程備份：每日台北時間 02:00，逐一帳號將交易紀錄匯出成 JSON 存入**私有** Storage bucket，每個帳號最多保留最近 7 份。第二階段（管理者後台狀態頁與專屬下載）記於 `TASK.md` Task 130，本版不含。
+> 兩階段一次交付。第一階段：每日台北時間 02:00，逐一帳號將資料匯出成 JSON 存入**私有** Storage bucket，每個帳號最多保留最近 7 份。第二階段：管理後台新增「備份」頁，列出每個帳號的備份狀況，並提供**只有管理員**能取得的短效下載連結。一般使用者無法下載自己的備份。
+
+#### 第一階段 — 每日備份
 
 - 🗄️ **私有 bucket `backups`**（`sources/supabase/schema.sql` 第 12 節）— 以 `public = false` 建立，且 `ON CONFLICT` 時強制寫回 `false`。**刻意不共用既有 `reports` bucket**：後者是 `public = true` 的公開盤後報表桶，交易紀錄放進去等同對外公開。
 - ⏱️ **排程 `backup-daily`** — pg_cron `0 18 * * *`（UTC 18:00 ＝ 台北 02:00），經 `net.http_post` 帶 `x-cron-secret` 呼叫 Edge Function；避開既有盤後報表排程（最晚 21:45）的資源競爭。
-- 🧩 **Edge Function `backup-transactions`**（`sources/supabase/functions/backup-transactions/`）— `index.ts` 負責 I/O（cron secret 驗證 → service_role → `listUsers` → 逐帳號查詢／上傳／裁切／寫 log），純邏輯抽到 `backupPlan.ts` 以便單元測試，與 `stock-report` 的模組切分方式一致。
+- 🧩 **Edge Function `backup-transactions`** — `index.ts` 負責 I/O（cron secret 驗證 → service_role → `listUsers` → 逐帳號查詢／上傳／裁切／寫 log），純邏輯抽到 `backupPlan.ts` 以便單元測試，與 `stock-report` 的模組切分方式一致。
 - 📦 **備份內容與路徑** — `backups/{user_id}/{YYYY-MM-DD}.json`，含該帳號的 `workspaces`、`transactions`、`user_settings` **全欄位**（`id`、`created_at` 一併保留，確保能原樣寫回資料庫）。上傳使用 `upsert: true`，同日重跑覆蓋而非報錯。排序固定（交易依 `tx_date` → `id`），使每日檔案可直接 diff。
 - 🔁 **保留策略是「留最新 7 份」，不是「刪 7 天前」** — 若排程連續數日失效，後者會把僅存的舊備份一併清光；前者保證任何情況下帳號手上都還有可用備份。`list()` 明確帶 `{ limit: 1000 }`，避免 Storage 預設 100 筆分頁導致裁切永久卡住。
 - 📋 **`backup_run_log`** — 每帳號每次執行寫一列（筆數、位元組、物件路徑、裁切數、狀態、錯誤訊息）。啟用 RLS 且**只有** `app_metadata.role = 'admin'` 可 SELECT，無 INSERT policy（僅 service_role 寫入），沿用 `app_settings` 既有的管理者判定式。
 - 🛡️ **單一帳號失敗不中斷整批** — 該帳號記為 `status = 'error'` 後繼續下一個，回應仍為 200 並附 `failed` 計數；裁切失敗只記入該列 `error`，不影響已成功的備份本身。
-- ✅ **測試驗證** — `backupPlan.test.ts` 新增 17 條單元測試（先紅後綠）；全套 `npm test` 78 檔 / **1164 測試** exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0。
-- ⚠️ **已知限制**（皆為刻意取捨，非缺陷）— `listUsers` 上限 1000 帳號，沿用 `stock-report/index.ts:3531` 既有做法，超過須改分頁；`backup_run_log` 寫入失敗不重試。
-- 🚀 **部署** — DEV 已於 2026-08-24 16:57 Asia/Taipei 部署並驗證完畢（volume copy + schema section 12 執行完成，所有整合測試通過）。PROD 未部署，需 `main` 分支、明確用戶授權、`supabase functions deploy backup-transactions --no-verify-jwt`，及 schema section 12 執行。
+
+#### 第二階段 — 管理者備份後台
+
+- 🧭 **推翻 Task 130 的「新建一支 Edge Function」設計** — 本專案所有管理功能一律走既有 `stock-report` 的 `body.action`，由該函式內的 `assertAdmin` 把關（`adminStatus.ts`、`adminUsers.ts` 皆然）。另開一支函式等於多一個 PROD 部署目標，其 `verify_jwt` 設定會各自漂移，卻換不到任何好處。改為新增 `admin-backups`、`admin-backup-url` 兩個 action。
+- 🔐 **路徑驗證就是防穿越的閘門**（`sources/supabase/functions/stock-report/backupAdmin.ts`）— `createSignedUrl` 會對送進去的任何路徑簽名，所以未驗證的路徑等同任意物件讀取。`isValidBackupPath` 只放行 `<uuid>/<YYYY-MM-DD>.json` 的完整比對，`..`、絕對路徑、多層目錄、第二副檔名、尾端換行一律拒絕，且在碰到 Storage **之前**就擋下。
+- 🖥️ **管理後台第六頁「備份」**（`sources/src/components/Admin/BackupsSection.tsx`）— 每個帳號一列，顯示備份份數、最新備份日、總大小與最近一次執行狀態（失敗時直接帶出錯誤訊息）；展開該列列出所有備份檔，各自有下載按鈕。沒有備份的帳號一樣列出，不會捏造日期。**未新增任何 CSS**，全部沿用既有 `adm-*` / `data-table` 樣式。
+- ⏳ **下載連結是 60 秒短效簽名網址** — 不在瀏覽器暴露 service role，也不產生永久公開網址；bucket 維持私有，未新增任何 Storage RLS policy。畫面明寫連結短效且僅管理員可取得。
+- 🌐 **簽名網址改回傳相對路徑** — Edge Function 的 client 建立自**容器內部**的 `SUPABASE_URL`，自架環境下 `createSignedUrl` 會吐出 `http://kong:8000/...` 這種瀏覽器無法解析的主機名。改由後端回傳 root-relative 路徑，前端用它已知的公開網址組合。此問題單元測試抓不到，是 DEV 實機驗證時才浮現。
+
+#### 一併修正
+
+- ⏲️ **RISK-001：探針迴圈補上預算檢查**（`sources/supabase/functions/stock-report/probeRound.ts`）— 原本只有抓取迴圈有預算判斷，探測迴圈完全沒有；三個時窗在 17:00 重疊、四個來源排在 17:15/17:20，每次抓取各帶 10 秒逾時，最壞情況會讓函式在迴圈中間被 60 秒上限砍掉，後面的來源**無聲消失**。新增選填的 `probeDeadline`（`PROBE_BUDGET_MS = 30_000`）與 `deferred` 結果欄位：預算用完就不再開新來源，已開始的那一支絕不中斷。`deferred`（沒輪到）與 `skipped`（今天已收工）語意分開；不給 `probeDeadline` 時行為完全不變。此修正**不採用**當初被否決的替代方案（把 `twt38u` 移出探針）。
+
+#### 驗證
+
+- ✅ **測試** — 新增四個測試檔：`backupPlan.test.ts` 17 條、`backupAdmin.test.ts` 13 條、`adminBackups.test.ts` 12 條、`BackupsSection.test.tsx` 9 條，另於 `probeRound.test.ts` 增補 5 條（該檔 13 → 18）。全套 `npm test` 由 0.9.10 的 77 檔 / 1147 測試成長為 **81 檔 / 1204 測試**，exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0；`npx oxlint` 5 個既有 only-export-components 警告，無新增。
+- 🔬 **DEV 實機驗證**（自架環境）— 認證四路徑（無密鑰 401／錯密鑰 401／GET 405／正確 POST 200）；實跑回 `{"accounts":1,"ok":1,"failed":0}`，log 記錄的 62 交易／2 工作區與資料表完全相符，記錄的位元組數與 Storage 物件大小一致；保留裁切以 8 個假舊檔加 1 個誘餌實測，留最新 7、刪最舊 2、誘餌未被碰、當日檔 upsert 不重複；管理端以真實 admin JWT 取得清單，五種惡意路徑全部 400，簽名網址下載回 200 / 20510 bytes 且竄改簽名回 400；RLS 實證：anon 讀 `backup_run_log` 回 `[]`、公開 URL 取備份檔回 400、anon 列舉 bucket 回 `[]`。
+- ⚠️ **已知限制**（皆為刻意取捨，非缺陷）— `listUsers` 上限 1000 帳號，沿用 `stock-report/index.ts` 既有做法，超過須改分頁；`backup_run_log` 寫入失敗不重試；本版不含還原流程，備份檔格式保證可原樣寫回，但沒有自動還原的介面。
+
+#### 部署
+
+- 🚀 **DEV 已部署並驗證完畢**（2026-08-24）。**PROD 尚未部署**，且推送 `main` 只會部署 GitHub Pages、**不會**部署 Edge Function。PROD 上線需要三個步驟：於雲端資料庫執行 schema 第 12 節（bucket／資料表／RLS／cron）、`supabase functions deploy backup-transactions --no-verify-jwt`、`supabase functions deploy stock-report --no-verify-jwt`。**`--no-verify-jwt` 不可省略**，漏掉會讓 cron 全部 401。在這三步完成之前，PROD 的管理後台「備份」頁會讀不到資料，且不會產生任何備份。
 
 ### 0.9.10（2026-08-24）— 個股分析選單重新納入觀察股票：持股／觀察分組
 
