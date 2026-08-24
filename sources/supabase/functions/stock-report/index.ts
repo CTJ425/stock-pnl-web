@@ -210,7 +210,13 @@ import {
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
 import { runProbeRound, type ProbeTick } from './probeRound.ts'
-import { isValidBackupPath, summarizeAccountBackups } from './backupAdmin.ts'
+import {
+  isValidBackupPath,
+  parseBackupDocument,
+  restoreFailureMessage,
+  rowsToInsert,
+  summarizeAccountBackups,
+} from './backupAdmin.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -587,8 +593,10 @@ interface GenerateReportRequestBody {
   jobs?: string[] | 'all'
   /** Singular alias for a one-job admin-run */
   job?: string
-  /** admin-backup-url: the storage object path to sign, `<uuid>/<YYYY-MM-DD>.json` */
+  /** admin-backup-url / admin-backup-restore: the storage object path, `<uuid>/<YYYY-MM-DD>.json` */
   path?: string
+  /** admin-backup-restore: false/omitted = preview only, true = actually write the missing rows */
+  apply?: boolean
 }
 
 /** warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default). */
@@ -3672,6 +3680,78 @@ async function handleAdminBackupUrl(body: GenerateReportRequestBody): Promise<Re
   return json({ ok: true, url: relativeUrl, expiresIn: 60 })
 }
 
+/** Key field per table for the additive restore below — matches the primary/unique key each table's schema actually uses. */
+const BACKUP_TABLE_KEYS: Record<'workspaces' | 'transactions' | 'user_settings', string> = {
+  workspaces: 'id',
+  transactions: 'id',
+  user_settings: 'user_id',
+}
+
+/**
+ * Restore the missing rows of one backup file back into the account it belongs to
+ * (task: backup-restore).
+ *
+ * Additive only: a row whose key already exists is left untouched, and `apply !== true` never
+ * writes anything — it only reports what an apply would do. `parseBackupDocument` is the safety
+ * gate: it aborts before any read of "what's missing" if the file's account does not match the
+ * path, or if a single row inside it belongs to someone else.
+ */
+async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promise<Response> {
+  const path = typeof body.path === 'string' ? body.path : ''
+  if (!isValidBackupPath(path)) return json({ error: '備份路徑格式不正確' }, 400)
+  const apply = body.apply === true
+
+  const expectedUserId = path.split('/')[0]
+  const { data: fileData, error: downloadError } = await db.storage.from(BACKUPS_BUCKET).download(path)
+  if (downloadError || !fileData) return json({ error: '找不到備份檔' }, 404)
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(await fileData.text())
+  } catch {
+    return json({ error: '備份檔格式無法辨識' }, 400)
+  }
+
+  const parsed = parseBackupDocument(raw, expectedUserId)
+  if (!parsed.ok) return json({ error: parsed.error }, 400)
+  const { doc } = parsed
+
+  // Parents before children: transactions has a composite FK (workspace_id, user_id) onto
+  // workspaces, so inserting in any other order fails.
+  const tableOrder: (keyof typeof BACKUP_TABLE_KEYS)[] = ['workspaces', 'transactions', 'user_settings']
+  const tables: Record<string, { inFile: number; present: number; missing: number }> = {}
+  // No transaction spans the three writes below, so a later failure can leave earlier
+  // tables already committed. Track what actually landed so the error message is honest.
+  const writtenSoFar: Array<{ table: string; count: number }> = []
+
+  for (const name of tableOrder) {
+    const keyField = BACKUP_TABLE_KEYS[name]
+    const fileRows = doc.tables[name]
+    const { data: existingRows, error: existingError } = await db
+      .from(name)
+      .select(keyField)
+      .eq('user_id', expectedUserId)
+    if (existingError) return json({ error: existingError.message }, 500)
+    const existingKeys = (existingRows ?? []).map((r) => String((r as Record<string, unknown>)[keyField]))
+    const toInsert = rowsToInsert(fileRows, existingKeys, keyField)
+
+    let missing = toInsert.length
+    if (apply && toInsert.length > 0) {
+      const { data: inserted, error: insertError } = await db
+        .from(name)
+        .upsert(toInsert, { onConflict: keyField, ignoreDuplicates: true })
+        .select(keyField)
+      if (insertError) return json({ error: restoreFailureMessage(writtenSoFar, insertError.message) }, 500)
+      missing = inserted?.length ?? 0
+      writtenSoFar.push({ table: name, count: missing })
+    }
+
+    tables[name] = { inFile: fileRows.length, present: existingKeys.length, missing }
+  }
+
+  return json({ ok: true, applied: apply, backupDate: doc.backup_date, tables })
+}
+
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -3990,6 +4070,12 @@ Deno.serve(async (req) => {
     const denied = await assertAdmin(req)
     if (denied) return denied
     return handleAdminBackupUrl(body)
+  }
+
+  if (body.action === 'admin-backup-restore') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminBackupRestore(body)
   }
 
   // Manual batch trigger from the admin console (0.6.44-dev.2).

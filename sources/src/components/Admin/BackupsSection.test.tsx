@@ -2,11 +2,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
-const { fetchAdminBackups, requestBackupUrl } = vi.hoisted(() => ({
+const { fetchAdminBackups, requestBackupUrl, previewBackupRestore, applyBackupRestore } = vi.hoisted(() => ({
   fetchAdminBackups: vi.fn(),
   requestBackupUrl: vi.fn(),
+  previewBackupRestore: vi.fn(),
+  applyBackupRestore: vi.fn(),
 }))
-vi.mock('../../services/adminBackups', () => ({ fetchAdminBackups, requestBackupUrl }))
+vi.mock('../../services/adminBackups', () => ({
+  fetchAdminBackups,
+  requestBackupUrl,
+  previewBackupRestore,
+  applyBackupRestore,
+}))
 
 import { BackupsSection } from './BackupsSection'
 import type { AccountBackups } from '../../services/adminBackups'
@@ -38,11 +45,29 @@ const rows: AccountBackups[] = [
   },
 ]
 
+const preview = {
+  applied: false,
+  backupDate: '2026-08-24',
+  tables: {
+    workspaces: { inFile: 2, present: 2, missing: 0 },
+    transactions: { inFile: 62, present: 10, missing: 52 },
+    user_settings: { inFile: 1, present: 1, missing: 0 },
+  },
+}
+
+async function openFirstFile() {
+  await screen.findByText('a@example.com')
+  fireEvent.click(screen.getByRole('button', { name: /a@example\.com/ }))
+  await screen.findByText('2026-08-24.json')
+}
+
 describe('BackupsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fetchAdminBackups.mockResolvedValue(rows)
     requestBackupUrl.mockResolvedValue({ url: 'https://signed.example/x' })
+    previewBackupRestore.mockResolvedValue(preview)
+    applyBackupRestore.mockResolvedValue({ ...preview, applied: true })
   })
   afterEach(cleanup)
 
@@ -133,5 +158,90 @@ describe('BackupsSection', () => {
     render(<BackupsSection />)
     const row = (await screen.findByText('a@example.com')).closest('tr')!
     expect(within(row).getByText(/upload failed/)).toBeTruthy()
+  })
+})
+
+describe('BackupsSection 還原', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchAdminBackups.mockResolvedValue(rows)
+    requestBackupUrl.mockResolvedValue({ url: 'https://signed.example/x' })
+    previewBackupRestore.mockResolvedValue(preview)
+    applyBackupRestore.mockResolvedValue({ ...preview, applied: true })
+  })
+  afterEach(cleanup)
+
+  it('第一次點還原只做預覽，絕對不寫入', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    await waitFor(() => expect(previewBackupRestore).toHaveBeenCalledWith(`${UID}/2026-08-24.json`))
+    expect(applyBackupRestore).not.toHaveBeenCalled()
+  })
+
+  it('預覽要逐表列出「檔案／已存在／將新增」的數字', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    expect(await screen.findByText(/52/)).toBeTruthy()
+    expect(screen.getByText(/62/)).toBeTruthy()
+  })
+
+  it('畫面必須寫明還原不會覆蓋或刪除現有資料', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    expect(await screen.findByText(/不會覆蓋或刪除/)).toBeTruthy()
+  })
+
+  it('按下確認還原才真的寫入', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    fireEvent.click(await screen.findByRole('button', { name: /確認還原/ }))
+    await waitFor(() => expect(applyBackupRestore).toHaveBeenCalledWith(`${UID}/2026-08-24.json`))
+  })
+
+  it('取消就關掉確認區塊，且沒有寫入', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    fireEvent.click(await screen.findByRole('button', { name: /取消/ }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /確認還原/ })).toBeNull())
+    expect(applyBackupRestore).not.toHaveBeenCalled()
+  })
+
+  it('沒有缺漏時說明資料完整，並停用確認鈕', async () => {
+    previewBackupRestore.mockResolvedValue({
+      ...preview,
+      tables: {
+        workspaces: { inFile: 2, present: 2, missing: 0 },
+        transactions: { inFile: 62, present: 62, missing: 0 },
+        user_settings: { inFile: 1, present: 1, missing: 0 },
+      },
+    })
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    expect(await screen.findByText(/資料完整/)).toBeTruthy()
+    expect((await screen.findByRole('button', { name: /確認還原/ })).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('預覽被後端拒絕時顯示理由，且不出現確認鈕', async () => {
+    previewBackupRestore.mockResolvedValue({ error: '備份檔的帳號與路徑不符' })
+    render(<BackupsSection />)
+    await openFirstFile()
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    expect(await screen.findByText('備份檔的帳號與路徑不符')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /確認還原/ })).toBeNull()
+  })
+
+  it('還原成功後重新抓一次清單', async () => {
+    render(<BackupsSection />)
+    await openFirstFile()
+    expect(fetchAdminBackups).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getAllByRole('button', { name: /還原/ })[0])
+    fireEvent.click(await screen.findByRole('button', { name: /確認還原/ }))
+    await waitFor(() => expect(fetchAdminBackups).toHaveBeenCalledTimes(2))
   })
 })

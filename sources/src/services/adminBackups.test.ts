@@ -6,7 +6,12 @@ vi.mock('./supabase', () => ({
   supabaseUrl: 'https://supabase.example',
 }))
 
-import { fetchAdminBackups, requestBackupUrl } from './adminBackups'
+import {
+  applyBackupRestore,
+  fetchAdminBackups,
+  previewBackupRestore,
+  requestBackupUrl,
+} from './adminBackups'
 
 const UID = '0754d012-7a86-477f-8009-f81531281caf'
 
@@ -151,4 +156,62 @@ describe('requestBackupUrl', () => {
     expect(await requestBackupUrl(`${UID}/2026-08-24.json`)).toEqual({ url: 'https://signed.example/x' })
   })
 
+})
+
+describe('previewBackupRestore / applyBackupRestore', () => {
+  beforeEach(() => {
+    invoke.mockReset()
+  })
+
+  const result = {
+    ok: true,
+    applied: false,
+    backupDate: '2026-08-24',
+    tables: {
+      workspaces: { inFile: 2, present: 2, missing: 0 },
+      transactions: { inFile: 62, present: 10, missing: 52 },
+      user_settings: { inFile: 1, present: 1, missing: 0 },
+    },
+  }
+
+  it('預覽帶 apply: false，絕對不能寫入', async () => {
+    invoke.mockResolvedValue({ data: result, error: null })
+    await previewBackupRestore(`${UID}/2026-08-24.json`)
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
+      body: { action: 'admin-backup-restore', path: `${UID}/2026-08-24.json`, apply: false },
+    }))
+  })
+
+  it('實際執行帶 apply: true', async () => {
+    invoke.mockResolvedValue({ data: { ...result, applied: true }, error: null })
+    const res = await applyBackupRestore(`${UID}/2026-08-24.json`)
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
+      body: { action: 'admin-backup-restore', path: `${UID}/2026-08-24.json`, apply: true },
+    }))
+    expect('applied' in res && res.applied).toBe(true)
+  })
+
+  it('解析每個資料表的三個數字', async () => {
+    invoke.mockResolvedValue({ data: result, error: null })
+    const res = await previewBackupRestore(`${UID}/2026-08-24.json`)
+    expect('tables' in res && res.tables.transactions).toEqual({ inFile: 62, present: 10, missing: 52 })
+    expect('tables' in res && res.tables.workspaces.missing).toBe(0)
+  })
+
+  it('後端的拒絕理由要原樣傳到畫面', async () => {
+    invoke.mockResolvedValue({ data: { ok: false, error: '備份檔的帳號與路徑不符' }, error: null })
+    expect(await previewBackupRestore(`${UID}/2026-08-24.json`)).toEqual({ error: '備份檔的帳號與路徑不符' })
+  })
+
+  it('非 2xx 時從 error.context 取出訊息', async () => {
+    const context = new Response(JSON.stringify({ error: '找不到備份檔' }), { status: 404 })
+    invoke.mockResolvedValue({ data: null, error: Object.assign(new Error('non-2xx'), { context }) })
+    expect(await applyBackupRestore(`${UID}/2026-01-01.json`)).toEqual({ error: '找不到備份檔' })
+  })
+
+  it('例外時仍回一句話而不是丟出去', async () => {
+    invoke.mockImplementation(() => Promise.reject(new Error('network down')))
+    const res = await applyBackupRestore(`${UID}/2026-08-24.json`)
+    expect('error' in res && res.error.length > 0).toBe(true)
+  })
 })
