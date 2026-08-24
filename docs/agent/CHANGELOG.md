@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.8（2026-08-24）— 全專案體檢：測試閘門轉綠、網路等待全面設上限
+
+> 本次為專案完整體檢：測試閘門修復（exit 0）、Edge Function 與前端 service 呼叫逾時全面設上限、非同步 effect 錯誤處理補齊，及損益、效能、建置三個面向的修正。
+
+- 🧪 **測試閘門修復（P0）** — `npx vitest run` exit 1 但摘要顯示「1136 passed」。根本原因：`AnalysisPage.whatif.test.tsx` 的 `warmStockCore` 與 `warmStockHistory` mock 回傳 `undefined` 而非 `WarmResult`；`StockDetailPage.tsx:233` 讀 `core.ok` 在無 catch 的 async IIFE 內拋錯，逸出成 unhandled rejection（vitest 另計在 `Errors` 行）。修正後 77 檔 / 1148 測試 exit 0、無 unhandled rejection。
+- 🕐 **Edge Function 抓取逾時（P1）** — 11 個 fetch 中 5 個無上限，含 `twChips.ts` 的共用 `fetchJson`（夜間籌碼批次與所有探針 follow-up 都走這條）。補上 `AbortSignal.timeout`（`fetchJson` 15 秒、`stock-price` 四處各 10 秒）。`fetchJson` 的 10 個呼叫端本來就都在 try/catch 內把例外當「來源不可用」降級，因此無新例外傳播、只是等待不再無上限。收斂 RISK-001 的觸發面。
+- 🌐 **前端 Edge 呼叫逾時（P2）** — `supabase.functions.invoke` 無預設逾時，Edge Function 卡住時畫面無限轉圈。10 個呼叫點全補 `timeout`，數值對齊伺服器自身預算（warm 45 秒對 `WARM_BUDGET_MS` 30 秒、adminRun 150 秒對 `GENERATE_ALL_BUDGET_MS` 110 秒）。新增契約測試掃描所有 service，缺一即失敗。
+- ⚡ **非同步 effect 錯誤處理（P2）** — `StockDetailPage`、`AiTab`、`useDailySeries` 共四個 useEffect 內的 async IIFE 無 catch，拒絕會讓載入狀態卡死。已補上；屬防禦縱深——現況各 service 都自行吞錯回傳 sentinel，尚無法觸發。
+- 💰 **損益與效能（P3）** — `breakEvenPrice` 無解時改回傳 `0` 哨兵值；`FeeInput` 補 SELL 契約說明（須提供 `taxRate` 或 `ticker`，否則靜默套用 0.3% 一般股稅率）；`WorkspaceContext` 交易時不再重複計算整份 ledger；`pnlEngine` 交易排序改用字串比較取代 `localeCompare`；`timeline.ts` 七處 `+ 8` 時區換算抽成具名常數。
+- 🔧 **建置修正** — 契約測試原本使用 `node:fs`，但 `tsconfig.app.json` 只帶 `vite/client` 型別，讓 `tsc -b` 失敗並弄壞 Pages 部署（vitest 因 esbuild 不做型別檢查而照樣通過）。改用 Vite 的 `import.meta.glob` raw 匯入。
+- ✅ **測試驗證** — `npx vitest run` 77 檔 / 1148 測試 exit 0；`npx tsc --noEmit` 與 `npm run typecheck:edge` 乾淨；`npm run build` 通過。
+- 🚀 **部署** — 本版的 Edge Function 修正（`stock-price`、`stock-report/twChips`）需另行部署 Edge Function 才會生效；推送 `main` 只會部署 GitHub Pages 前端。
+
 ### 0.9.7（2026-08-20）— 外資買賣超指紋改為雜湊
 
 > 承 0.9.6 的「已知但未修」。`twt38u`（外資及陸資買賣超）的內容指紋回傳的是整份表接起來的**原文**
