@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: backup-transactions phase 1 deployed and verified on DEV; CHANGELOG.md 0.9.11 bullet finalized
+- Action: 0.9.11 shipped to both environments; backup-transactions phase 2 completed; RISK-001 closed
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-24 16:57:07 Asia/Taipei
+- Timestamp: 2026-08-24 17:35:44 CST
+
+---
+
+## 📅 Log: 2026-08-24 17:35:44 CST (0.9.11 shipped to dev and main; backup-transactions phase 2 complete; PROD deploy open)
+
+- **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, GitHub Pages deploy succeeded.
+- **Task 130 phase 2 completion**: Admin console sixth panel 備份 (restore/download UI). Frontend service `adminBackups.ts`, backend pure logic `stock-report/backupAdmin.ts`, two new `stock-report` actions `admin-backups` (list backup status per account) and `admin-backup-url` (return signed download URL), both protected by existing `assertAdmin`. Individual users cannot download their own backups (admin-only access per user decision).
+- **Decision reversal recorded**: Original Task 130 spec proposed a new Edge Function for admin operations. Implementation instead added actions to existing `stock-report` because: (1) all admin calls already route through it, (2) a second function would add a PROD deploy target whose `verify_jwt` setting could drift. Decision and rationale recorded in `docs/agent/specs/backup-admin-console.md` to prevent re-implementation of rejected design in future.
+- **Signed URL defect found and fixed**: `createSignedUrl` returned root-relative URLs (`/storage/v1/...`). Browser client (built from container-internal `SUPABASE_URL`) interpreted these as `http://kong:8000/...` on self-hosted DEV. Made URLs absolute. Unit tests could not catch this; DEV live verification did (valid signed link downloaded real 20510-byte backup; tampered signature returned 400).
+- **RISK-001 closed**: Probe round timeout (per-source loop deadline/budget). Fixed by adding optional `probeDeadline` to `probeRound.ts`, `deferred` result field (distinct from `skipped`), and `PROBE_BUDGET_MS = 30_000` in `index.ts`. Probe loop defers a source before starting it once budget is gone, never interrupts in-flight probe. See `FIXED_BUG.md`.
+- **Verification**: `npm test` 81 files / 1204 tests exit 0; `tsc --noEmit` exit 0; `tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `oxlint` 5 pre-existing warnings, no new ones. DEV live checks: anon and non-admin rejected 401; five malformed paths returned 400; valid signed link downloaded real 20510-byte backup; tampered signature returned 400.
+- **Review outcomes**: Phase 2 implementation PASS with one RISK (undefined CSS class `adm-toggle-row`, fixed by using existing `link-btn` class). RISK-001 + signed-URL review returned FAIL on scope technicality: flagged two test files as outside builders' Files list. Main session wrote those tests before dispatch (documented Lane 2 flow); builders did not touch them. Adjudicated PASS on substance; no correctness defect found.
+- **Pre-existing limitation (out of scope)**: Probe follow-up starting before 45s `PROBE_FOLLOW_UP_BUDGET_MS` deadline has no cap on its own execution time. Recorded in PROGRESS for next agent.
+- **PROD deployment**: GitHub Pages (main branch) deployed. Cloud database and Edge Functions not deployed — see new Task 131 in TASK.md for PROD checklist. Until complete: PROD produces no backups, admin 備份 panel reads empty.
+- **Records finalized**: Task 130 moved to TASK_ARCHIVE.md marked done (0.9.11). New Task 131 added to TASK.md (PROD deploy, OPEN). RISK-001 moved to FIXED_BUG.md. This 0.9.11 entry added to PROGRESS.md.
+- **Unfinished**: None — 0.9.11 recording complete. PROD deployment awaits explicit user authorization.
 
 ---
 
@@ -27,20 +43,4 @@
 - **Records finalized**: Oldest PROGRESS entry (2026-08-24 13:33:13 analysis-picker-watch-group) moved to PROGRESS_ARCHIVE.md. This new entry added to PROGRESS.md. CHANGELOG.md 0.9.11 updated. Operational note appended to BUG_FIX.md. No further entries moved.
 - **Unfinished**: None — backup-transactions DEV deployment & verification recorded.
 
----
-
-## 📅 Log: 2026-08-24 16:44:44 Asia/Taipei (backup-transactions phase 1 completed — daily per-account backup to Supabase Storage)
-
-- **Task**: backup-transactions phase 1 — Implement daily per-account backup of transaction records to Supabase Storage (private `backups` bucket).
-- **Outcome**: 4 new files + 1 schema modification landed. Edge Function `backup-transactions/index.ts` is cron-triggered at 18:00 Taipei (02:00 UTC), x-cron-secret gated, performs per-account dump of workspaces/transactions/user_settings to JSON, uploads to `backups/<user_id>/<YYYY-MM-DD>.json` with upsert, prunes to newest 7 objects, logs one `backup_run_log` row per account. Pure logic split into `backupPlan.ts` (taipeiYmd, backupObjectPath, buildBackupPayload, prunablePaths, rowCounts).
-- **Files changed**: NEW `sources/supabase/functions/backup-transactions/index.ts`, NEW `sources/supabase/functions/backup-transactions/backupPlan.ts`, NEW `sources/supabase/functions/backup-transactions/backupPlan.test.ts`, NEW `docs/agent/specs/backup-transactions.md`, MODIFIED `sources/supabase/schema.sql` section 12 (private `backups` bucket, `backup_run_log` table + admin-only SELECT RLS, run_date index, pg_cron `backup-daily` at '0 18 * * *').
-- **Testing**: `npx vitest run supabase/functions/backup-transactions/backupPlan.test.ts` — 17 passed, exit 0. `npx tsc --noEmit -p tsconfig.edge.json` — exit 0.
-- **Review**: **PASS with one RISK, then fixed**. Risk was: (1) schema.sql not re-runnable → added DROP POLICY IF EXISTS; (2) Storage list() default 100-limit could truncate retention → explicit { limit: 1000 }; (3) bytes via String.length → TextEncoder.
-- **Known limitations (accepted, not bugs)**: listUsers capped at 1000 (matches `stock-report/index.ts:3531`); retention keeps newest 7 dated objects not "older than 7 days" (deliberate — outage cannot wipe backups); backup_run_log insert failures not retried.
-- **Deployment**: Not deployed. DEV needs SQL section 12 run + function volume-copy + container recreate; PROD only after DEV verify + explicit user OK.
-- **Phase 2 (OPEN task)**: Admin backend listing backup status + admin-only download path (second Edge Function, verify_jwt=true, checks app_metadata.role === 'admin', signed URL for private `backups` bucket; individual users cannot download per user decision). UI in `sources/src/components/Admin/`.
-- **Records finalized**: This entry added to PROGRESS.md. New OPEN task 130 added to TASK.md for phase 2. Oldest PROGRESS entry (0.9.9 / 11:37:39) rolled to PROGRESS_ARCHIVE.md. BUG_FIX.md unchanged (no new bugs; known limitations accepted).
-- **Unfinished**: None — backup-transactions phase 1 recording complete.
-
----
 
