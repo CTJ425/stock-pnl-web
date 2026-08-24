@@ -15,7 +15,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🛡️ **單一帳號失敗不中斷整批** — 該帳號記為 `status = 'error'` 後繼續下一個，回應仍為 200 並附 `failed` 計數；裁切失敗只記入該列 `error`，不影響已成功的備份本身。
 - ✅ **測試驗證** — `backupPlan.test.ts` 新增 17 條單元測試（先紅後綠）；全套 `npm test` 78 檔 / **1164 測試** exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0。
 - ⚠️ **已知限制**（皆為刻意取捨，非缺陷）— `listUsers` 上限 1000 帳號，沿用 `stock-report/index.ts:3531` 既有做法，超過須改分頁；`backup_run_log` 寫入失敗不重試。
-- 🚀 **部署** — 本版異動 `sources/supabase/functions/`，**推送 `main` 不會部署 Edge Function**，須另行部署；且 schema 第 12 節 SQL 需手動執行（bucket、資料表、RLS、cron 各一次）。
+- 🚀 **部署** — DEV 已於 2026-08-24 16:57 Asia/Taipei 部署並驗證完畢（volume copy + schema section 12 執行完成，所有整合測試通過）。PROD 未部署，需 `main` 分支、明確用戶授權、`supabase functions deploy backup-transactions --no-verify-jwt`，及 schema section 12 執行。
 
 ### 0.9.10（2026-08-24）— 個股分析選單重新納入觀察股票：持股／觀察分組
 
