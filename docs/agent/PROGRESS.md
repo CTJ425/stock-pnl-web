@@ -1,9 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Full codebase audit (4 priority levels); P0 test gate fixed, P1 Edge timeouts added, P2 frontend invoke timeouts + effect error handling, P3 correctness/performance details; PROGRESS entries rolled
-- Status: **✅ AUDIT RECORDED**
-- Timestamp: 2026-08-23 18:52:37 Asia/Taipei
+- Action: Release 0.9.9 recording — watchlist redesigned to Dashboard WatchSection (double view modes, localStorage persistence); design reversal tracked; Task 116 completed; deferred design variants documented
+- Status: **✅ 0.9.9 RECORDED**
+- Timestamp: 2026-08-24 11:37:39 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-24 11:37:39 Asia/Taipei (Release 0.9.9 — Dashboard watchlist redesign, design reversal recorded, Task 116 completed)
+
+- **Release**: Version 0.9.9 finalizes watchlist feature (commit `3f25ed7`). Task 116 (watchlist UX redesign, 0.9.0 → 0.9.9) **complete and closed**. Design reversal tracked as implementation narrative: initial 0.9.0 placement (庫存總覽) rejected; revised to 個股分析 tab 4 (0.9.0 → 0.9.8); final placement on Dashboard WatchSection (0.9.9).
+- **Feature**: New `WatchSection` block on Dashboard, below Active Holdings. Displays watchlist with 「N/30」 capacity badge. Two view modes — minimalist card grid (圖卡) and table list (條列) — toggled in toolbar; choice persists in localStorage. Each entry shows current price and % change, colour-coded up/down (紅漲綠跌). Add via 「加入觀察」 button (opens `AddWatchModal`), remove via × button. Clicking card/row navigates to 個股分析.
+- **Design reversal headline**: `StockDetailPage.tsx` TABS removed 「觀察股票」 (was tab 4); now has 3 entries (分析內容 / 損益試算 / AI 分析). Watchlist entry point consolidated on Dashboard. Props `onSelectTicker` / `onWatchlistChanged` kept for API compatibility.
+- **Cross-component wiring**: `AppShell.tsx` gains `analysisTicker` state; `DashboardPage` `onSelectTicker` callback sets it and switches view to `analysis`; `AnalysisPage` takes new `initialTicker` prop.
+- **CSS**: ~117 new lines in `sources/src/index.css` — `.watchlist-card-grid` (auto-fill grid, min 230px), `.watchlist-card` (+hover lift), `.watchlist-card-head/-ticker/-name/-price/-change/-del`, `.view-toggle-group` / `.view-toggle-btn` (pill toggle, active state uses accent-strong).
+- **Tests**: new `WatchSection.test.tsx`, 10 cases — empty state, N/30 badge, batch price fetch, card view render (price/% /colour), mode toggle + localStorage, card click fires `onSelectTicker`, table row click fires `onSelectTicker`, delete flow, capacity enforcement at 30/30, add button opens `AddWatchModal`. `StockDetailPage.test.tsx` adapted for 3-tab layout. Deleted `WatchTab.test.tsx` (13 cases). Total: 77 files / **1145 tests**, down from 77 / 1148 (net: +10 WatchSection − 13 WatchTab = −3).
+- **Design docs added**: `docs/architecture/watchlist_dashboard_redesign.md` (+ .html) and `docs/architecture/watchlist_6_design_variants.md` (+ .html). Three richer card variants (Sparkline 7-day trend, Chips & PE institutional flows, Range Bar intraday high/low) documented as prepared design work for later versions — deferred by scope, not by defect.
+- **Dead code cleanup**: `WatchTab.tsx` and `WatchTab.test.tsx` deleted (no production import remaining, only test file referenced it). Comment in `AnalysisPage.tsx:35` updated (`WatchTab` → `WatchSection`). No CSS impact (only used shared generic classes).
+- **Verification**: `npx vitest run` — 77 files / 1145 tests, exit 0, no Errors line. `npx tsc --noEmit` — exit 0. `npm run typecheck:edge` — exit 0. `npm run build` — exit 0. `npx oxlint` — exit 0, 5 pre-existing warnings.
+- **Deployment**: No `sources/supabase/functions/` file changed — **no Edge Function deploy needed**. Frontend only; `main` push deploys Pages.
+- **Records finalized**: CHANGELOG.md gained 0.9.9 entry (Traditional Chinese, house style). TASK.md header updated to 0.9.9 / 1145 tests; Task 116 moved to TASK_ARCHIVE.md; new OPEN entry for deferred card variants. PROGRESS.md header updated; this entry added; oldest entry (0.9.7, 2026-08-20 20:45:00) rolled to PROGRESS_ARCHIVE.md.
+- **Unfinished**: None — 0.9.9 recording complete. All tracking docs synchronized. No commit made per Scribe role (bookkeeping only).
 
 ---
 
@@ -21,21 +38,6 @@
 - **Records finalized**: TASK.md gains two new OPEN entries (CI gate workflow, RISK-001 trigger mechanism). BUG_FIX.md RISK-001 updated with trigger mechanism. PROGRESS.md header updated; this entry added; 0.9.6 entry rolled to PROGRESS_ARCHIVE.md.
 - **Build breakage (found during ship checklist)**: `sources/src/services/invokeTimeout.test.ts` uses `node:fs` but `tsconfig.app.json` only includes `vite/client` types, breaking `tsc -b` and Pages deploy (vitest's esbuild skips type-check, hiding the error locally). Fixed by using Vite's `import.meta.glob` raw import instead — same test logic, zero config change.
 - **Unfinished**: None — audit and fixes complete; no commit made (bookkeeping only per instructions).
-
----
-
-## 📅 Log: 2026-08-20 20:45:00 Asia/Taipei (Version 0.9.7 foreign top fingerprint — from raw text to hash)
-
-- **Release**: Version 0.9.7 fixes one probe storage efficiency issue (BUG-035), previously flagged as "known but not fixed" in 0.9.6 changelog.
-- **Change (BUG-035)**: `twt38u` (foreign top 50) content fingerprint was raw table text joined with U+001F, stored as-is in two places (`source_probe_tick.fingerprint` and `market/foreign_top50.json` idempotency key), totalling ~10KB per row per day × 2 locations. Every other probe source uses the short `<length>:<djb2>` hash form from `pollPlan.ts` `fingerprint()`. Fix: `foreignTopFingerprint()` in `twForeignTop.ts` now returns `fingerprint(cells.join(UNIT_SEP))`, preserving the U+001F collision-detection property from AUDIT-04. This was an inconsistency and storage cost, not a correctness bug.
-- **Test change**: Old test asserted the fingerprint string contained U+001F (unobservable once hashed). Replaced with behavioural assertion that `['12','3']` and `['1','23']` produce different fingerprints, plus format assertion that fingerprint matches the short hash form.
-- **Expected one-time side effect, already documented in changelog**: On first deploy, `syncForeignTop` sees old raw-format fingerprint in `market/foreign_top50.json`, re-uploads once, then self-heals. `source_probe_tick` compares only within a day's window, unaffected from the next day onward.
-- **Files changed**: `twForeignTop.ts` (import + one-line fix), `twForeignTop.test.ts` (test refactored).
-- **Verification**: `npx vitest run supabase/functions/stock-report/` → 366 tests passed, 0 failed. `npm test` → 75 files, 1136 tests passed. `npx tsc --noEmit` clean. `npm run typecheck:edge` clean.
-- **Deployment status**: DEV Edge **deployed** 2026-08-20 20:45 Asia/Taipei by volume copy plus `docker compose up -d --force-recreate functions`. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from a clean `main` @ `9db87d3`, carrying 0.9.6 and 0.9.7 in one bundle. Evidence is the hash, not the version number: `ezbr_sha256` went `420050a1...` -> `f776a7a0...` (version 54 -> 55), and `verify_jwt` is still `false` so the pg_cron calls do not 401. `stock-price` untouched (v18, sha unchanged). A `main` push deploys Pages only and never an Edge Function — the two are separate actions.
-- **DEV end-to-end verification of the new retire gate (2026-08-20 20:45-21:00)**: `margin` landed on three consecutive rounds (20:45 / 20:50 / 20:55) with the identical fingerprint `174457:1s4vqtw`, and no `margin` row was written at 21:00 — the trailing run of 3 retired it. The same rows also prove BUG-033 fixed: the fingerprint is a real hash rather than the constant `0:45h`, and `rows` reports 1295 instead of null.
-- **Records finalized**: FIXED_BUG.md gained BUG-035 entry (prepended, newest-first). PROGRESS.md header updated; this entry added; oldest entry (2026-08-20 15:07:12) rolled to PROGRESS_ARCHIVE.md. All files match.
-- **Unfinished**: None — 0.9.7 recording complete.
 
 ---
 

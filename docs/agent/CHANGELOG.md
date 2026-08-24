@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.9（2026-08-24）— 觀察清單重新配置到儀表板：雙視圖、容量追蹤、個股導航
+
+> 設計翻轉：承 0.9.0 在個股分析第四籤置放觀察清單後，本版將其移回儀表板（庫存總覽下方新增 WatchSection），移除個股分析的「觀察股票」籤標。新增卡片/列表雙視圖切換（localStorage 記憶切換狀態），容量徽章 N/30，實時股價與漲跌百分比（色碼紅綠），加入按鈕開啟新增觀察對話框，各條目點擊導航至個股分析。
+
+- 📍 **設計決策**（Task 116 完稿）— 觀察清單初稿置於庫存總覽（0.9.0 開發期間遭駁回）、改置個股分析第四籤（0.9.0 發布版本）、今移至儀表板 WatchSection（0.9.9）。本版確認最終配置：儀表板為主要進入點，個股分析專注三核心籤標（分析內容 / 損益試算 / AI 分析），「觀察股票」籤標予以移除。
+- 🎨 **儀表板 WatchSection 實現**（新檔 `WatchSection.tsx`）— 自動排版卡片網格（最小 230px，auto-fill）；卡片顯示股代 / 股名 / 現價 / 漲跌%（紅漲綠跌色碼）；容量徽章 N/30；點擊卡片導至個股分析；× 按鈕快速移除；卡片 hover 時柔和提升。圖卡/條列雙視圖可在工具列切換；CSS 新增三個類別（`.watchlist-card-grid`、`.watchlist-card`、`.view-toggle-group`），合計~117 行新增於 `sources/src/index.css`。
+- 🔄 **雙視圖切換與持久化**（localStorage）— 工具列新增「圖卡/條列」切換按鈕（Material pill 樣式，active 狀態用 accent-strong）；使用者選擇在 localStorage 記憶，下次造訪恢復上次選項；無新元件庫、CSS 自寫。
+- 🔌 **組件連接**（`AppShell.tsx` 新增 `analysisTicker` 狀態）— `DashboardPage` 的 `onSelectTicker` 回呼設定 `analysisTicker` 並切換檢視至 analysis；`AnalysisPage` 新增 `initialTicker` prop 接收初值；`StockDetailPage` 保留 `onSelectTicker` / `onWatchlistChanged` props 為 API 相容性（籤標已移除，prop 呼叫端不變）。
+- 🧹 **籤標移除後清除死碼** — 0.9.0 把 `WatchSection.tsx` 移至 `StockDetail/WatchTab.tsx`，0.9.9 移除該籤標但未刪檔案。`WatchTab.tsx` 與 `WatchTab.test.tsx`（13 測案）已刪除，`AnalysisPage.tsx:35` 的過時註解已更新。CSS 純粹用既有通用類別，無新增。
+- 📊 **測試涵蓋**（`WatchSection.test.tsx`）— 10 測案：空列表、容量徽章、批量股價取得、卡片預設渲染（價格/% /色碼）、視圖模式切換 + localStorage 記憶、卡片點擊觸發 `onSelectTicker`、列表列點擊觸發 `onSelectTicker`、刪除流程（`removeWatch` + 重載 + `onChanged`）、容量已滿 30/30（新增按鈕禁用 + 提示）、新增按鈕開啟 `AddWatchModal`。`StockDetailPage.test.tsx` 適配三籤版面。
+- 📐 **設計文件**（已備妥）— `docs/architecture/watchlist_dashboard_redesign.md` (含 .html) 與 `docs/architecture/watchlist_6_design_variants.md` (含 .html) 記錄設計過程與三個未實現變體（Sparkline 7 日趨勢、機構籌碼晶片、日內高低區間條）。本版發運基礎卡片（股代 / 股名 / 價格 / % 變化）；三個進階變體保留為後續版本設計成果。
+- ✅ **測試驗證** — `npx vitest run` 77 檔 / **1145 測試** exit 0、無 Errors 行（0.9.8 為 77 檔 / 1148）；`npx tsc --noEmit` exit 0；`npm run typecheck:edge` exit 0；`npm run build` ok；`npx oxlint` exit 0（5 個既有 only-export-components 警告）。
+- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；推送 `main` 由 GitHub Pages 部署前端即可。
+
 ### 0.9.8（2026-08-24）— 全專案體檢：測試閘門轉綠、網路等待全面設上限
 
 > 本次為專案完整體檢：測試閘門修復（exit 0）、Edge Function 與前端 service 呼叫逾時全面設上限、非同步 effect 錯誤處理補齊，及損益、效能、建置三個面向的修正。

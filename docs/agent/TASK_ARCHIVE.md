@@ -11,6 +11,22 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤；最終移至儀表板）
+- **Status**: ✅ **Shipped in 0.9.9**
+- **Agent**: Scribe + User
+- **Timestamp**: 2026-08-24 11:37:39 Asia/Taipei
+- **What was done**: Task 116 three-stage design journey completed.
+  - **Stage 1 (0.9.0, rejected)**: Watchlist initially placed on Dashboard (庫存總覽).
+  - **Stage 2 (0.9.0 revised → 0.9.8)**: Design revised to place watchlist as tab 4 in 個股分析 (分析內容 / 損益試算 / AI 分析 / **觀察股票**), y≈207 (no scroll at 800px). Stock picker reverted to holdings-only; entry points deliberately separate. Five defects found during verification and fixed; root causes recorded in prior PROGRESS entries.
+  - **Stage 3 (0.9.9, finalized)**: Watchlist placement reversed once more — moved from 個股分析 tab 4 to new Dashboard WatchSection (below Active Holdings). Tab 4 removed; `StockDetailPage` TABS now has 3 entries (分析內容 / 損益試算 / AI 分析). Props `onSelectTicker` / `onWatchlistChanged` kept for API compatibility.
+- **Release 0.9.9 implementation**: WatchSection shows capacity badge (N/30), dual view modes (card grid 圖卡 and table list 條列) with localStorage persistence, real-time price and % change (color-coded up/down), add button opening `AddWatchModal`, remove button (×) per card/row, click-to-navigate to 個股分析. `AppShell.tsx` gains `analysisTicker` state; `DashboardPage` `onSelectTicker` sets it and switches to analysis view; `AnalysisPage` takes new `initialTicker` prop. CSS: ~117 new lines (grid, card hover, toggle styles). Tests: new `WatchSection.test.tsx` (10 cases), `StockDetailPage.test.tsx` adapted for 3 tabs.
+- **Testing**: `npx vitest run` 78 files / 1158 tests all pass, exit 0. `npx tsc --noEmit`, `npm run typecheck:edge`, `npm run build`, `npx oxlint` all clean.
+- **Design docs**: `docs/architecture/watchlist_dashboard_redesign.md` + .html (design decisions and iteration history), `docs/architecture/watchlist_6_design_variants.md` + .html (three deferred variants: Sparkline 7-day trend, Chips & PE institutional flows, Range Bar intraday high/low — documented as prepared design work, deferred by scope not defect).
+- **Records finalized**: CHANGELOG.md gained 0.9.9 entry (Traditional Chinese, house style). PROGRESS.md header and oldest entry (0.9.7) rolled to archive. TASK.md header updated to 0.9.9 / 1158 tests. Task 116 marked complete and archived. New OPEN entry added for deferred card design variants. All files synchronized.
+- **Unfinished**: None — Task 116 complete and shipped in 0.9.9.
+
+---
+
 ### Task 124: 0.9.5 損益試算成本基數精確度修正（真實部位驗證）
 - **Status**: ✅ **Shipped in 0.9.5**
 - **Agent**: Builder + Reviewer + Scribe
