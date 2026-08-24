@@ -63,11 +63,21 @@ export interface ProbeRoundDeps {
   now(): number
   /** 抓取的 wall budget 截止時間（毫秒，絕對值）。 */
   deadline: number
+  /**
+   * 探測迴圈自己的 wall budget 截止時間（毫秒，絕對值），選填。
+   *
+   * 跟 `deadline` 分開，是因為兩者是不同階段的預算：`deadline` 是**抓取**（follow-up）的預算，
+   * 在探測迴圈跑完之後才開始消耗；如果共用同一個 deadline，等探測迴圈跑到一半才發現預算，
+   * 抓取階段能用的時間就被探測階段偷走了，兩個階段互相污染。不給值時行為完全不變。
+   */
+  probeDeadline?: number
 }
 
 export interface ProbeRoundResult {
   sources: ProbeSourceId[]
   skipped: ProbeSourceId[]
+  /** 有預算但還沒輪到、被留給下一輪或固定班表的來源——跟「今天已收工」的 skipped 是兩件事。 */
+  deferred: ProbeSourceId[]
   ticks: ProbeTick[]
   followUps: FollowUpOutcome[]
   landed: ProbeSourceId[]
@@ -93,7 +103,13 @@ export async function runProbeRound(
 
   // Sequential: keep wall time predictable on free tier
   const ticks: ProbeTick[] = []
+  const deferred: ProbeSourceId[] = []
   for (const id of sources) {
+    // Checked *before* starting a source — once a fetch is in flight it runs to completion.
+    if (deps.probeDeadline !== undefined && deps.now() > deps.probeDeadline) {
+      deferred.push(id)
+      continue
+    }
     ticks.push(await deps.probe(id))
   }
   for (const t of ticks) {
@@ -137,5 +153,5 @@ export async function runProbeRound(
     )
   }
 
-  return { sources, skipped, ticks, followUps, landed }
+  return { sources, skipped, deferred, ticks, followUps, landed }
 }

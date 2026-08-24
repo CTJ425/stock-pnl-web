@@ -210,6 +210,7 @@ import {
   type ProbeSourceId,
 } from './sourceProbePlan.ts'
 import { runProbeRound, type ProbeTick } from './probeRound.ts'
+import { isValidBackupPath, summarizeAccountBackups } from './backupAdmin.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -586,6 +587,8 @@ interface GenerateReportRequestBody {
   jobs?: string[] | 'all'
   /** Singular alias for a one-job admin-run */
   job?: string
+  /** admin-backup-url: the storage object path to sign, `<uuid>/<YYYY-MM-DD>.json` */
+  path?: string
 }
 
 /** warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default). */
@@ -2494,6 +2497,16 @@ async function readDoneSourcesToday(
  */
 const PROBE_FOLLOW_UP_BUDGET_MS = 45_000
 
+/**
+ * Wall budget for *starting* new sources in the probe loop itself.
+ *
+ * Each probe fetch carries its own 10s timeout and the Edge Function is killed at 60s total, so
+ * probing must stop opening new sources well before 60s: 30s leaves ~30s for the persist writes
+ * and the follow-up budget (`PROBE_FOLLOW_UP_BUDGET_MS`) that runs after the loop. A source that
+ * has already started is never interrupted — this only gates the *next* one.
+ */
+const PROBE_BUDGET_MS = 30_000
+
 /** Run one follow-up in-process —— same handlers the cron and the admin console call. */
 async function runProbeFollowUp(action: ProbeFollowUp): Promise<Record<string, unknown>> {
   switch (action) {
@@ -2666,11 +2679,12 @@ async function handleProbe(): Promise<Response> {
     has to honour, spelled out in runProbeRound: the tick is written **before** the fetch runs, so the
     measurement survives a crash, and `data_landed` is what distinguishes 「命中了」 from 「拿到了」.
   */
-  const { sources, skipped, ticks, followUps, landed } = await runProbeRound(
+  const { sources, skipped, deferred, ticks, followUps, landed } = await runProbeRound(
     planned,
     todayYmd,
     {
       deadline: startedAt + PROBE_FOLLOW_UP_BUDGET_MS,
+      probeDeadline: startedAt + PROBE_BUDGET_MS,
       now: () => Date.now(),
       summarise: summariseFollowUp,
       readDoneSources: () => readDoneSourcesToday(todayYmd, slot),
@@ -2743,6 +2757,8 @@ async function handleProbe(): Promise<Response> {
     sources,
     // Reported so a quiet round is readable as "already answered" rather than "the probe stopped working"
     skipped,
+    // Had budget but didn't get a turn this round — distinct from skipped; the fixed shift still covers them
+    deferred,
     followUps: followUpResults,
     // Which hits are actually finished —— the ones that will be skipped from the next round on
     landed: landedSources,
@@ -3581,6 +3597,81 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
   return json({ ok: true, userId, admin: makeAdmin })
 }
 
+const BACKUPS_BUCKET = 'backups'
+
+/**
+ * Admin backup console (task 130, phase 2): per-account summary of `backups` storage objects
+ * plus the newest `backup_run_log` row, so an admin can see who is/isn't getting backed up
+ * without opening the Supabase dashboard.
+ *
+ * Same service-role client as everywhere else in this file — the `backups` bucket is private,
+ * only service_role can list it, and there is no self-service download path for ordinary users.
+ */
+async function handleAdminBackups(): Promise<Response> {
+  const { data: usersData, error: usersError } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  if (usersError) return json({ error: usersError.message }, 500)
+  const users = usersData?.users ?? []
+
+  const { data: runRows, error: runError } = await db
+    .from('backup_run_log')
+    .select('user_id, run_date, status, error, transaction_count')
+    .order('run_date', { ascending: false })
+  if (runError) return json({ error: runError.message }, 500)
+
+  // Rows are newest-first, so the first row seen per user_id is that account's newest run.
+  const lastRunByUser = new Map<string, { runDate: string; status: string; error: string | null; transactionCount: number }>()
+  for (const r of runRows ?? []) {
+    const uid = r.user_id as string
+    if (lastRunByUser.has(uid)) continue
+    lastRunByUser.set(uid, {
+      runDate: r.run_date as string,
+      status: r.status as string,
+      error: (r.error as string | null) ?? null,
+      transactionCount: (r.transaction_count as number | null) ?? 0,
+    })
+  }
+
+  const accounts = await Promise.all(
+    users.map(async (u) => {
+      const { data: objects } = await db.storage.from(BACKUPS_BUCKET).list(u.id, { limit: 1000 })
+      const summary = summarizeAccountBackups(
+        u.id,
+        u.email ?? '',
+        (objects ?? []).map((o) => ({
+          name: o.name,
+          size: (o.metadata as { size?: number } | null)?.size ?? 0,
+          createdAt: o.created_at ?? null,
+        })),
+      )
+      return { ...summary, lastRun: lastRunByUser.get(u.id) ?? null }
+    }),
+  )
+
+  return json({ ok: true, accounts })
+}
+
+/**
+ * Mint a short-lived signed URL for one backup object (task 130, phase 2).
+ *
+ * `isValidBackupPath` must pass before the path reaches Storage: `createSignedUrl` will happily
+ * sign whatever path it is given, so an unvalidated path here is an arbitrary-object read for
+ * anyone who can reach this action (i.e. any admin — still narrower than "anyone").
+ */
+async function handleAdminBackupUrl(body: GenerateReportRequestBody): Promise<Response> {
+  const path = typeof body.path === 'string' ? body.path : ''
+  if (!isValidBackupPath(path)) return json({ error: '備份路徑格式不正確' }, 400)
+
+  const { data, error } = await db.storage.from(BACKUPS_BUCKET).createSignedUrl(path, 60)
+  if (error || !data) return json({ error: '找不到備份檔' }, 404)
+  // This client is built from the container-internal SUPABASE_URL, so `signedUrl` may be an
+  // absolute URL on an internal hostname (e.g. `http://kong:8000`) that no browser can resolve.
+  // Strip it down to path + query; the browser knows the public origin and re-attaches it.
+  const relativeUrl = data.signedUrl.startsWith('http')
+    ? data.signedUrl.slice(new URL(data.signedUrl).origin.length)
+    : data.signedUrl
+  return json({ ok: true, url: relativeUrl, expiresIn: 60 })
+}
+
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -3887,6 +3978,18 @@ Deno.serve(async (req) => {
     const denied = await assertAdmin(req)
     if (denied) return denied
     return handleAdminSetRole(req, body)
+  }
+
+  if (body.action === 'admin-backups') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminBackups()
+  }
+
+  if (body.action === 'admin-backup-url') {
+    const denied = await assertAdmin(req)
+    if (denied) return denied
+    return handleAdminBackupUrl(body)
   }
 
   // Manual batch trigger from the admin console (0.6.44-dev.2).

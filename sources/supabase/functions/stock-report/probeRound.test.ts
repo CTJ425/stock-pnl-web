@@ -206,4 +206,81 @@ describe('runProbeRound', () => {
     expect(r.sources).toEqual([])
     expect(h.order).toEqual([])
   })
+
+  /*
+    RISK-001: the probe loop had no budget check at all — only the follow-up loop did. Three daily
+    windows now overlap at 17:00 and four sources are scheduled together at 17:15/17:20, each fetch
+    carrying a 10s timeout, so a slow round could be killed by the Edge Function's 60s limit *inside*
+    the loop. Being killed mid-loop loses the later sources silently; deferring them on purpose does
+    not, and the fixed shift still covers them.
+  */
+  it('探測預算用完就不再開新的來源，剩下的列為 deferred', async () => {
+    const h = harness({ probeDeadline: 100, now: () => 999 })
+    const r = await runProbeRound(['bwibbu', 'borrow', 'twt38u'], TODAY, h.deps)
+
+    expect(h.order).toEqual([])
+    expect(r.deferred).toEqual(['bwibbu', 'borrow', 'twt38u'])
+    expect(r.ticks).toEqual([])
+    expect(h.persisted).toEqual([])
+    expect(h.ran).toEqual([])
+  })
+
+  it('預算是在每個來源開始前檢查，已經開始的那一支不會被打斷', async () => {
+    let clock = 0
+    const h = harness({
+      probeDeadline: 50,
+      now: () => clock,
+      // The first probe overruns the budget; the second must never start.
+      probe: async (id) => {
+        clock += 80
+        return { source: id, hit: false, ok: true, data_ymd: null, fingerprint: null, rows: null, note: 'n', duration_ms: 1 }
+      },
+    })
+    const r = await runProbeRound(['bwibbu', 'borrow'], TODAY, h.deps)
+
+    expect(r.ticks.map((t) => t.source)).toEqual(['bwibbu'])
+    expect(r.deferred).toEqual(['borrow'])
+    expect(h.persisted.map((t) => t.source)).toEqual(['bwibbu'])
+  })
+
+  it('deferred 不是 skipped —— 今天已收工和預算不足是兩件事', async () => {
+    const h = harness({
+      probeDeadline: 50,
+      now: () => 999,
+      readDoneSources: async () => new Set<ProbeSourceId>(['bwibbu']),
+    })
+    const r = await runProbeRound(['bwibbu', 'borrow'], TODAY, h.deps)
+
+    expect(r.skipped).toEqual(['bwibbu'])
+    expect(r.deferred).toEqual(['borrow'])
+  })
+
+  it('沒給探測預算時行為完全不變（既有呼叫端不受影響）', async () => {
+    const h = harness({ hits: ['bfi82u'], evidence: { marketSessionReady: true } })
+    const r = await runProbeRound(['bfi82u'], TODAY, h.deps)
+
+    expect(r.deferred).toEqual([])
+    expect(r.ticks.map((t) => t.source)).toEqual(['bfi82u'])
+    expect(h.ran).toEqual(['sync-market'])
+  })
+
+  it('先探到的命中照樣觸發抓取，不因為後面的來源被延後而取消', async () => {
+    let clock = 0
+    const h = harness({
+      hits: ['bfi82u'],
+      evidence: { marketSessionReady: true },
+      probeDeadline: 50,
+      now: () => clock,
+      probe: async (id) => {
+        clock += 80
+        return { source: id, hit: id === 'bfi82u', ok: true, data_ymd: null, fingerprint: null, rows: null, note: 'n', duration_ms: 1 }
+      },
+    })
+    const r = await runProbeRound(['bfi82u', 'borrow'], TODAY, h.deps)
+
+    expect(r.deferred).toEqual(['borrow'])
+    expect(h.ran).toEqual(['sync-market'])
+    expect(r.landed).toEqual(['bfi82u'])
+  })
+
 })
