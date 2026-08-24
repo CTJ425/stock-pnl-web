@@ -3709,3 +3709,120 @@ a.hmenu-item {
   .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
   .ast-rule { line-height: 1.6; }
 }
+
+/* ---------- Watchlist Block (Dashboard Minimalist Cards & View Switcher) ---------- */
+.watchlist-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.watchlist-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 110px;
+}
+
+.watchlist-card:hover {
+  transform: translateY(-2px);
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.watchlist-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.watchlist-card-ticker {
+  font-family: var(--font-mono, monospace);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+}
+
+.watchlist-card-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.watchlist-card-price {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.3px;
+  margin: 6px 0 2px;
+}
+
+.watchlist-card-change {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.watchlist-card-del {
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+
+.watchlist-card-del:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--danger);
+}
+
+.view-toggle-group {
+  display: inline-flex;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.12s ease;
+}
+
+.view-toggle-btn.active {
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 600;
+}
+
+.view-toggle-btn:hover:not(.active) {
+  color: var(--ink);
+}

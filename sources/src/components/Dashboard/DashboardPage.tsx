@@ -6,7 +6,7 @@
  * - Asynchronous loading of the current price background: the skeleton screen is displayed during loading; when the current price cannot be captured, the market value / unrealized profit and loss are left blank
  * - Unrealized gains and losses on Taiwan stocks are "net" values: withholding selling fees and securities taxes (estimateUnrealized)
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
@@ -23,6 +23,7 @@ import {
 import { getFeeRate } from '../../utils/settings'
 import { displayStockName } from '../../services/usStockNames'
 import { HelpTh } from '../Common/HelpTh'
+import { WatchSection } from './WatchSection'
 
 /** Description of each field (shown by the "?" icon in the header). Written for people who are unfamiliar with stocks: short sentences, vernacular, no formulas.*/
 const HELP = {
@@ -179,11 +180,21 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
   )
 }
 
-export function DashboardPage() {
+export function DashboardPage({
+  onSelectTicker,
+}: {
+  onSelectTicker?: (ticker: string, name: string) => void
+} = {}) {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
   const { prices, loading, refreshedAt, refresh } = useStockPrices(holdings)
+  const [refreshKey, setRefreshKey] = useState(0)
   const feeRate = getFeeRate(current?.id)
+
+  const handleRefresh = () => {
+    refresh()
+    setRefreshKey((k) => k + 1)
+  }
 
   const rows = useMemo(
     () => buildHoldingRows(holdings, prices, feeRate, current?.id),
@@ -326,7 +337,7 @@ export function DashboardPage() {
                 現價更新於 {refreshedAt.toLocaleTimeString('zh-TW', { hour12: false })}
               </span>
             )}
-            <button className="btn btn-sm" onClick={refresh} disabled={loading}>
+            <button className="btn btn-sm" onClick={handleRefresh} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spin' : undefined} />
               {loading ? '更新中…' : '重新整理現價'}
             </button>
@@ -361,6 +372,8 @@ export function DashboardPage() {
           </>
         )}
       </div>
+
+      <WatchSection refreshTrigger={refreshKey} onSelectTicker={onSelectTicker ?? (() => {})} />
     </>
   )
 }

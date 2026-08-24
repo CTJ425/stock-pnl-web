@@ -612,6 +612,7 @@ export function AppShell() {
   const { recovery } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
   const [view, setView] = useState<View>('dashboard')
+  const [analysisTicker, setAnalysisTicker] = useState<string | undefined>(undefined)
   const [showAddTx, setShowAddTx] = useState(false)
   const [admin, setAdmin] = useState(false)
   const narrow = useNarrowScreen()
@@ -664,8 +665,15 @@ export function AppShell() {
           <div className="glass empty-state section">載入中…</div>
         ) : (
           <>
-            {view === 'dashboard' && <DashboardPage />}
-            {view === 'analysis' && <AnalysisPage />}
+            {view === 'dashboard' && (
+              <DashboardPage
+                onSelectTicker={(ticker) => {
+                  setAnalysisTicker(ticker)
+                  setView('analysis')
+                }}
+              />
+            )}
+            {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
             {view === 'macro' && <MacroPage />}
             {view === 'fx' && <FxPage />}
             {view === 'yearly' && <YearlyPage />}
