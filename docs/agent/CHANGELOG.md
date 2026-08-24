@@ -36,7 +36,10 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 
 #### 部署
 
-- 🚀 **DEV 已部署並驗證完畢**（2026-08-24）。**PROD 尚未部署**，且推送 `main` 只會部署 GitHub Pages、**不會**部署 Edge Function。PROD 上線需要三個步驟：於雲端資料庫執行 schema 第 12 節（bucket／資料表／RLS／cron）、`supabase functions deploy backup-transactions --no-verify-jwt`、`supabase functions deploy stock-report --no-verify-jwt`。**`--no-verify-jwt` 不可省略**，漏掉會讓 cron 全部 401。在這三步完成之前，PROD 的管理後台「備份」頁會讀不到資料，且不會產生任何備份。
+- 🚀 **DEV 與 PROD 皆已部署並驗證完畢**（2026-08-24）。PROD（`kxnxadaghidwumqsqneu`）執行內容：schema 第 12 節（`backups` bucket `public=false`、`backup_run_log` + admin-only RLS、`run_date` 索引、`backup-daily` cron `0 18 * * *`）、`supabase functions deploy backup-transactions --no-verify-jwt`、`supabase functions deploy stock-report --no-verify-jwt`。兩支函式的 `verify_jwt` 皆確認為 `false`，`ezbr_sha256` 亦確認為新雜湊（版本號本身不算證據）；`stock-price` 未受影響，維持 `verify_jwt=true`。
+- 🔑 **cron 的 `x-cron-secret` 由資料庫端自既有 job 抽出後直接組進新指令**，明文未經過任何用戶端，也未寫入任何檔案。
+- 🔬 **PROD 實機驗證** — 認證路徑：無密鑰 401／錯密鑰 401／GET 405；`admin-backups`、`admin-backup-url` 無授權皆 401。由資料庫端觸發一次實跑後，兩個帳號皆 `status = ok`，記錄的 57 + 53 = **110 筆交易**、4 + 1 = **5 個工作區**，與部署前盤點的資料表計數完全相符；Storage 兩個物件路徑格式正確、`application/json`、大小與 log 記錄的位元組數一致。存取控制實證：公開 URL 取備份檔回 **400**，anon 讀 `backup_run_log` 回 `[]`、anon 列舉 bucket 回 `[]`，而 `transactions` 端點仍正常回 200（RLS 未誤傷正常功能）。
+- 📅 **首次自動排程** — `backup-daily` 於每日台北 02:00 執行。
 
 ### 0.9.10（2026-08-24）— 個股分析選單重新納入觀察股票：持股／觀察分組
 
