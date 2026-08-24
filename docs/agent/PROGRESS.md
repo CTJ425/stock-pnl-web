@@ -21,6 +21,18 @@
 - **Records finalized**: Task 130 moved to TASK_ARCHIVE.md marked done (0.9.11). New Task 131 added to TASK.md (PROD deploy, OPEN). RISK-001 moved to FIXED_BUG.md. This 0.9.11 entry added to PROGRESS.md.
 - **Unfinished**: None — 0.9.11 recording complete. PROD deployment awaits explicit user authorization.
 
+## PROD Deploy
+
+- **Deployment executed 2026-08-24 17:48:50 CST** against cloud database project `kxnxadaghidwumqsqneu`:
+  1. **Schema section 12** applied: `backups` bucket `public=false`, `backup_run_log` table RLS + admin-only SELECT, run_date index, `backup-daily` cron at '0 18 * * *'.
+  2. **Edge Function `backup-transactions`** deployed with `supabase functions deploy backup-transactions --no-verify-jwt`; verified `verify_jwt=false`.
+  3. **Edge Function `stock-report`** deployed with `supabase functions deploy stock-report --no-verify-jwt`; verified `verify_jwt=false`. Function `stock-price` untouched at `verify_jwt=true`.
+- **Cron secret handling** (technique for reuse): x-cron-secret extracted server-side from existing job's command, formatted directly into new job. Plaintext never reached client or any file.
+- **Database identity trap** (supabase-ops hazard): `supabase db query` defaults LOCAL; `--linked` required for cloud. First attempt hit ECONNREFUSED on 127.0.0.1:54322 (self-hosted default), the target-misidentification failure mode.
+- **PROD verification**: No secret 401, wrong secret 401, GET 405; `admin-backups` and `admin-backup-url` both 401 without auth. Server-triggered run status=ok for both accounts: 57+53=110 transactions, 4+1=5 workspaces, exactly matching pre-deploy counts. Two storage objects at correct path, `application/json`, sizes matching logged bytes. Public URL returns 400; anon reads `backup_run_log` as []; anon lists bucket as []; ordinary `transactions` endpoint still 200 (RLS did not break normal use).
+- **API key validation**: Local sources/.env holds DEV anon key; testing PROD with it returns "Invalid API key". PROD anon key sourced from `supabase projects api-keys --project-ref`.
+- **Cron schedule**: `backup-daily` runs daily at Taipei 02:00 from now on.
+
 ---
 
 ## 📅 Log: 2026-08-24 16:57:07 Asia/Taipei (backup-transactions phase 1 deployed & verified on DEV — self-hosted https://korq9tvdz0jd7yblr72p.ivan.lab)

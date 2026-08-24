@@ -11,6 +11,28 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 131: PROD deploy of the backup feature (0.9.11)
+- **Status**: ✅ **PROD deployed 2026-08-24** (version 0.9.11, project `kxnxadaghidwumqsqneu`)
+- **Agent**: Scribe
+- **Timestamp**: 2026-08-24 17:48:50 CST
+- **What was this**: Complete PROD deployment of backup-transactions feature. GitHub Pages (main branch) already deployed; cloud database and Edge Functions were the remaining targets.
+- **Deployment executed (in order)**:
+  1. **Schema section 12** — Applied to cloud database `kxnxadaghidwumqsqneu`: `backups` bucket created with `public=false`, `backup_run_log` table with RLS enabled and admin-only SELECT policy, run_date index, pg_cron job `backup-daily` scheduled at '0 18 * * *' (Taipei time, i.e., 10:18 UTC).
+  2. **Edge Function `backup-transactions`** — Deployed to `kxnxadaghidwumqsqneu` with `supabase functions deploy backup-transactions --no-verify-jwt`. Verified `verify_jwt=false` in deployed function metadata (new ezbr_sha256 hash recorded).
+  3. **Edge Function `stock-report`** — Deployed to `kxnxadaghidwumqsqneu` with `supabase functions deploy stock-report --no-verify-jwt`. Verified `verify_jwt=false` in deployed function metadata (new ezbr_sha256 hash recorded). Function `stock-price` left untouched; confirmed `verify_jwt=true` at current hash.
+- **Operational notes**:
+  - Cron secret (`x-cron-secret`) extraction: plaintext never reached client or file. Extracted server-side from existing cron job's command text, formatted directly into new job. Technique documented for reuse.
+  - Database identity trap: `supabase db query` defaults to LOCAL database; `--linked` flag required to target cloud. First attempt hit ECONNREFUSED on 127.0.0.1:54322 (self-hosted default port), which is the target-misidentification failure mode warned in supabase-ops skill.
+- **PROD verification completed**:
+  - Auth: no secret → 401; wrong secret → 401; GET valid secret → 405 (method not allowed); `admin-backups` and `admin-backup-url` without auth both → 401.
+  - Server-side triggered run: status=ok for both accounts, logged 57+53=110 transactions, 4+1=5 workspaces. Counts exactly matched pre-deploy `transactions` and `workspaces` table row counts.
+  - Storage: two backup objects created at correct path `backups/<user_id>/<YYYY-MM-DD>.json`, content-type `application/json`, byte sizes matching logged counts.
+  - RLS enforcement: Public storage URL returns 400; anon listing `backups` bucket returns []; anon reading `backup_run_log` via PostgREST returns []; storage.objects RLS enforced, no policies written for public access.
+  - Regression check: ordinary `transactions` endpoint still returns 200 with full data, confirming RLS did not break normal user access.
+  - API key validation: local sources/.env holds DEV anon key; testing PROD with DEV key returns "Invalid API key" (as expected). PROD anon key sourced from `supabase projects api-keys --project-ref`.
+- **Cron schedule**: `backup-daily` runs daily at Taipei 02:00 (18:00 UTC previous day) from this deployment onward.
+- **Unfinished**: None — PROD deployment completed and verified.
+
 ### Task 130: backup-transactions phase 2 — Admin backend restore + download path
 - **Status**: ✅ **Shipped in 0.9.11** (commit 8003b6a)
 - **Agent**: Builder + Reviewer
