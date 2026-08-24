@@ -1024,3 +1024,70 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_schedule_status() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.admin_schedule_status() FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_schedule_status() TO service_role;
+
+
+-- 12. Daily transaction backup to Storage (phase 1)
+--
+--    Every day at Taipei 02:00, backup-transactions (pg_cron `backup-daily`) writes one JSON
+--    object per auth account into the `backups` bucket, keeps the newest 7 dated objects per
+--    account, and records the outcome of every account here. Admin UI / download endpoint are
+--    phase 2 and are not part of this section.
+
+-- ⚠️ Must stay PRIVATE, unlike `reports`: this bucket holds full transaction/workspace rows
+-- for every account, not shared market data. `public = false` keeps it out of reach without a
+-- service-role key or a signed URL (neither exists yet in phase 1).
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('backups', 'backups', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
+CREATE TABLE IF NOT EXISTS backup_run_log (
+    id                BIGSERIAL PRIMARY KEY,
+    run_date          DATE NOT NULL,
+    user_id           UUID NOT NULL,
+    workspace_count   INT NOT NULL DEFAULT 0,
+    transaction_count INT NOT NULL DEFAULT 0,
+    settings_count    INT NOT NULL DEFAULT 0,
+    bytes             INT NOT NULL DEFAULT 0,
+    object_path       TEXT,
+    pruned            INT NOT NULL DEFAULT 0,
+    status            TEXT NOT NULL, -- 'ok' | 'error'
+    error             TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE backup_run_log ENABLE ROW LEVEL SECURITY;
+
+-- Admins only, same predicate as app_settings (see §4). No INSERT policy — only service role
+-- (Edge Function) writes rows.
+DROP POLICY IF EXISTS "Admins can read backup run log" ON backup_run_log;
+CREATE POLICY "Admins can read backup run log"
+ON backup_run_log FOR SELECT
+TO authenticated
+USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE INDEX IF NOT EXISTS backup_run_log_run_date_idx
+  ON backup_run_log (run_date DESC);
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'backup-daily') THEN
+    PERFORM cron.unschedule('backup-daily');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'backup-daily',
+  -- Taipei 02:00 daily (UTC 18:00).
+  '0 18 * * *',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/backup-transactions',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
