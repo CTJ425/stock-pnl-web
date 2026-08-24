@@ -7,6 +7,20 @@
 
 ---
 
+## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
+
+- **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Pages deploy succeeded.
+- **Feature: backup restore** answers the gap the user found — downloaded JSON had no consumer. Restore is additive-only, never deletes or overwrites; first click only previews.
+- **Design decision**: Account a backup may write into is taken from validated object path, never from the document itself — checking document against itself would be circular.
+- **Three-table writes**: Workspaces → transactions → user_settings. No transaction across tables; half-finished restore names what already landed and is safe to re-run. Recorded as accepted trade-off, not defect.
+- **Review outcome**: Implementation PASS with one RISK (partial-apply state not disclosed), fixed by adding `restoreFailureMessage`.
+- **Verification**: npm test 81 files / 1234 tests exit 0; tsc --noEmit exit 0; tsc -p tsconfig.edge.json exit 0; npm run build exit 0; oxlint 5 pre-existing warnings.
+- **DEV disaster drill**: Three real transactions deleted, preview reported 62/59/3 rows missing and wrote nothing, apply restored them, FULL-TABLE checksum matched pre-deletion exactly (every column, not just row count). Re-run reported zero missing. Two tampered documents (user_id changes in document and in one row) both refused with expected messages, left no trace.
+- **PROD deploy**: `stock-report` v56 → v57 (ezbr_sha256 changed, verify_jwt=false unchanged); `stock-price` and `backup-transactions` hashes unchanged; no schema change. Verified without restoring: 401 for unauthenticated and garbage-bearer calls; five malformed paths refused by our gate; read-only previews for both accounts reported no missing rows; PROD row counts unchanged (110 transactions, 5 workspaces).
+- **WAF note**: A `../../etc/passwd` probe against PROD never reached our code — Cloudflare's WAF blocked it and returned HTML block page. Testing our own path gate on PROD requires payloads that do not trip the WAF.
+- **Records finalized**: Release 0.9.12 added to PROGRESS.md. Oldest entry (backup-transactions phase 1, 2026-08-24 16:57:07) moved to PROGRESS_ARCHIVE.md to keep hot file at header + 2 newest entries.
+- **Unfinished**: None — 0.9.12 shipped and verified.
+
 ## 📅 Log: 2026-08-24 17:35:44 CST (0.9.11 shipped to dev and main; backup-transactions phase 2 complete; PROD deploy open)
 
 - **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, GitHub Pages deploy succeeded.
@@ -34,25 +48,3 @@
 - **Cron schedule**: `backup-daily` runs daily at Taipei 02:00 from now on.
 
 ---
-
-## 📅 Log: 2026-08-24 16:57:07 Asia/Taipei (backup-transactions phase 1 deployed & verified on DEV — self-hosted https://korq9tvdz0jd7yblr72p.ivan.lab)
-
-- **Deployment action**: Version 0.9.11-dev.1 (commit 4c70ad6, pushed to origin/dev) deployed to DEV self-hosted Supabase environment.
-- **DEV deployment steps completed**:
-  - Function volume-copied to `volumes/functions/backup-transactions/` (index.ts + backupPlan.ts), functions container force-recreated.
-  - Schema section 12 applied: `backups` bucket created with `public=false`, `backup_run_log` table with RLS enabled, admin-only SELECT policy, run_date index, pg_cron job `backup-daily` scheduled at '0 18 * * *'.
-  - No router changes needed: DEV runs `FUNCTIONS_VERIFY_JWT=false` globally, so hardcoded stock-report skip list did not require updates. **PROD note**: cloud deployment will require `supabase functions deploy backup-transactions --no-verify-jwt`, same as stock-report.
-- **DEV verification evidence (all passed)**:
-  - Auth: no secret → 401; wrong secret → 401; GET valid secret → 405; POST valid secret → 200.
-  - Live backup run returned `{"backup_date":"2026-08-24","accounts":1,"ok":1,"failed":0}`.
-  - backup_run_log row: workspace_count 2, transaction_count 62, settings_count 0, bytes 20510, pruned 0, status ok — exact match to live tables.
-  - Storage object: `backups/<user_id>/2026-08-24.json`, 20510 bytes, mimetype application/json, size matches logged byte count.
-  - Payload verified: version 1, 12 transaction columns, sorted by tx_date ascending.
-  - Retention integration test: seeded 8 dummy dated objects + 1 decoy `notes.txt`; function re-run kept newest 7 dated objects, deleted 2 oldest (pruned=2), left `notes.txt` untouched, upserted same-day real backup; all dummies and decoy removed; bucket now holds only the one real backup.
-  - Access control verified: anon reading `backup_run_log` via PostgREST returns []; public storage URL returns HTTP 400; anon listing bucket returns []; storage.objects RLS enforced with zero policies, only service_role can read.
-- **Operational finding** (doc hazard, not bug): supabase-ops skill's project-identity heuristic is stale. It states "batch_run_log: official area 2 / test area 0", but DEV now has 211 rows and can no longer distinguish environments by this criterion; would give false confidence. This deployment used explicit `docker compose exec` against self-hosted compose file, where target is unambiguous by construction. Recommend future ops leverage explicit compose paths, not environment heuristics.
-- **Still open**: (1) CHANGELOG.md 0.9.11 deployment bullet finalized in this dispatch. (2) PROD (cloud kxnxadaghidwumqsqneu) not deployed; requires `main` branch, explicit user OK, `supabase functions deploy backup-transactions --no-verify-jwt`, schema section 12 execution. (3) Task 130 (phase 2: admin status page + download) remains open, untouched.
-- **Records finalized**: Oldest PROGRESS entry (2026-08-24 13:33:13 analysis-picker-watch-group) moved to PROGRESS_ARCHIVE.md. This new entry added to PROGRESS.md. CHANGELOG.md 0.9.11 updated. Operational note appended to BUG_FIX.md. No further entries moved.
-- **Unfinished**: None — backup-transactions DEV deployment & verification recorded.
-
-
