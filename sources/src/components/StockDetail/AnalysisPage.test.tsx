@@ -204,7 +204,7 @@ describe('AnalysisPage', () => {
     expect(screen.queryByTestId('detail-ticker')).toBeNull()
   })
 
-  it('下拉只列持股，不再有觀察分組', async () => {
+  it('下拉分組列出持股與觀察，持股在前', async () => {
     const user = userEvent.setup()
     setup(TW_AND_US)
     listWatchlist.mockResolvedValue([
@@ -216,13 +216,54 @@ describe('AnalysisPage', () => {
     await user.click(screen.getByRole('button', { name: /切換個股/ }))
 
     const menu = within(screen.getByRole('menu', { name: '個股清單' }))
-    expect(menu.queryByText('持股')).toBeNull()
+    expect(menu.getByText('持股')).toBeTruthy()
+    expect(menu.getByText('觀察')).toBeTruthy()
+    expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
+      '1802 台玻',
+      '2330 台積電',
+      '2059 川湖',
+      '6770 力積電',
+    ])
+  })
+
+  it('同一檔同時在持股與觀察名單時，選單只出現一次且算持股', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US, { 'TPE:2330': { price: 2350, stale: false } })
+    listWatchlist.mockResolvedValue([{ ticker: '2330', name: '台積電', sortOrder: 0 }])
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+    const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+    // 觀察分組整組消失：唯一的觀察標的已經是持股了
     expect(menu.queryByText('觀察')).toBeNull()
-    // 觀察股一律從「觀察股票」頁籤進入，不出現在這個選單
     expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
       '1802 台玻',
       '2330 台積電',
     ])
+
+    await user.click(menu.getByRole('menuitemradio', { name: '2330 台積電' }))
+    // 走持股那條路徑才有股數與 useStockPrices 的報價
+    expect(screen.getByTestId('detail-qty').textContent).toBe('1000')
+    expect(screen.getByTestId('detail-price').textContent).toBe('2350')
+  })
+
+  it('從選單點觀察股，頁面換成那一檔且不帶持股', async () => {
+    const user = userEvent.setup()
+    setup(TW_AND_US)
+    listWatchlist.mockResolvedValue([{ ticker: '2059', name: '川湖', sortOrder: 0 }])
+    fetchPrices.mockResolvedValue({ 'TPE:2059': { price: 987 } })
+    render(<AnalysisPage />)
+    await screen.findByRole('button', { name: /切換個股/ })
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    await user.click(screen.getByRole('menuitemradio', { name: '2059 川湖' }))
+
+    expect(screen.getByTestId('detail-ticker').textContent).toBe('2059')
+    expect(screen.getByTestId('detail-name').textContent).toBe('川湖')
+    expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+    expect(await screen.findByTestId('detail-quote')).toBeTruthy()
+    expect(screen.getByTestId('detail-quote').textContent).toBe('987')
+    expect(fetchPrices).toHaveBeenCalledWith([{ market: 'TPE', ticker: '2059' }])
   })
 
   it('觀察股票頁籤選一檔後，頁面換成那一檔且不帶持股', async () => {

@@ -164,3 +164,19 @@ feature that passed 1058 tests and did not work — see `docs/UnitTests/E2E.md`.
 - No reorder / drag-and-drop.
 - No change to the fee, tax or break-even maths.
 - No new nav tab.
+
+## Revision — 2026-08-24 13:37:35 Asia/Taipei (task `analysis-picker-watch-group`)
+
+**The "Stock picker: holdings only" decision above is REVERSED.** The user asked for watched
+stocks back in the 切換個股 dropdown, because the 觀察股票 tab was the only way to reach them.
+
+Current behaviour, in `sources/src/components/StockDetail/AnalysisPage.tsx`:
+
+- The menu renders two groups — `持股` then `觀察` — each behind a `.hmenu-head` heading, with a
+  `.hmenu-sep` between them. A group and its heading render only when that group is non-empty.
+- Watched entries use key `watch:${ticker}`, the same format `watchByTicker()` produces, so a
+  menu click resolves through the unchanged selection-resolution order recorded above.
+- The held-wins dedupe is unchanged: a watched ticker that is also held appears once, as a holding.
+- The 觀察股票 tab still works as a second way in; nothing about it changed.
+
+Do not restore the holdings-only picker from the decision table above.
