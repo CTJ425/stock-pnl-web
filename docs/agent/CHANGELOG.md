@@ -2,6 +2,21 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.11（2026-08-24）— 交易紀錄每日自動備份至 Supabase Storage（第一階段）
+
+> 新增排程備份：每日台北時間 02:00，逐一帳號將交易紀錄匯出成 JSON 存入**私有** Storage bucket，每個帳號最多保留最近 7 份。第二階段（管理者後台狀態頁與專屬下載）記於 `TASK.md` Task 130，本版不含。
+
+- 🗄️ **私有 bucket `backups`**（`sources/supabase/schema.sql` 第 12 節）— 以 `public = false` 建立，且 `ON CONFLICT` 時強制寫回 `false`。**刻意不共用既有 `reports` bucket**：後者是 `public = true` 的公開盤後報表桶，交易紀錄放進去等同對外公開。
+- ⏱️ **排程 `backup-daily`** — pg_cron `0 18 * * *`（UTC 18:00 ＝ 台北 02:00），經 `net.http_post` 帶 `x-cron-secret` 呼叫 Edge Function；避開既有盤後報表排程（最晚 21:45）的資源競爭。
+- 🧩 **Edge Function `backup-transactions`**（`sources/supabase/functions/backup-transactions/`）— `index.ts` 負責 I/O（cron secret 驗證 → service_role → `listUsers` → 逐帳號查詢／上傳／裁切／寫 log），純邏輯抽到 `backupPlan.ts` 以便單元測試，與 `stock-report` 的模組切分方式一致。
+- 📦 **備份內容與路徑** — `backups/{user_id}/{YYYY-MM-DD}.json`，含該帳號的 `workspaces`、`transactions`、`user_settings` **全欄位**（`id`、`created_at` 一併保留，確保能原樣寫回資料庫）。上傳使用 `upsert: true`，同日重跑覆蓋而非報錯。排序固定（交易依 `tx_date` → `id`），使每日檔案可直接 diff。
+- 🔁 **保留策略是「留最新 7 份」，不是「刪 7 天前」** — 若排程連續數日失效，後者會把僅存的舊備份一併清光；前者保證任何情況下帳號手上都還有可用備份。`list()` 明確帶 `{ limit: 1000 }`，避免 Storage 預設 100 筆分頁導致裁切永久卡住。
+- 📋 **`backup_run_log`** — 每帳號每次執行寫一列（筆數、位元組、物件路徑、裁切數、狀態、錯誤訊息）。啟用 RLS 且**只有** `app_metadata.role = 'admin'` 可 SELECT，無 INSERT policy（僅 service_role 寫入），沿用 `app_settings` 既有的管理者判定式。
+- 🛡️ **單一帳號失敗不中斷整批** — 該帳號記為 `status = 'error'` 後繼續下一個，回應仍為 200 並附 `failed` 計數；裁切失敗只記入該列 `error`，不影響已成功的備份本身。
+- ✅ **測試驗證** — `backupPlan.test.ts` 新增 17 條單元測試（先紅後綠）；全套 `npm test` 78 檔 / **1164 測試** exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0。
+- ⚠️ **已知限制**（皆為刻意取捨，非缺陷）— `listUsers` 上限 1000 帳號，沿用 `stock-report/index.ts:3531` 既有做法，超過須改分頁；`backup_run_log` 寫入失敗不重試。
+- 🚀 **部署** — 本版異動 `sources/supabase/functions/`，**推送 `main` 不會部署 Edge Function**，須另行部署；且 schema 第 12 節 SQL 需手動執行（bucket、資料表、RLS、cron 各一次）。
+
 ### 0.9.10（2026-08-24）— 個股分析選單重新納入觀察股票：持股／觀察分組
 
 > 推翻 `watchlist-ux-overhaul` spec 的「選單只列持股」決定。0.9.0 起觀察中的股票只能從「觀察股票」籤標進入，0.9.9 移除該籤標後改由儀表板 WatchSection 導航，但「切換個股」選單始終看不到觀察標的。本版把觀察分組加回選單。

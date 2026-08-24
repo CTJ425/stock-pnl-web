@@ -199,6 +199,19 @@ precisely what 0.7.8 would have mis-retired).
 - **Finding**: `.github/workflows/deploy.yml` runs only `npm ci` → `npm run build` → deploy to GitHub Pages; no `npm test`, `npm run lint`, or `npm run typecheck:edge`. A push to `main` deploys to production while CI type-checks via the build but runs no tests and no lint. The P0 finding from this audit (test summary said "all passed", but exit code was 1) is exactly the failure mode a test gate misses.
 - **User decision**: Explicitly chose NOT to add CI gate in this round. Recording as open task, not as a deferred decision to revisit unprompted.
 
+### Task 130: backup-transactions phase 2 — Admin backend restore + download path
+- **Status**: ⏳ **OPEN**
+- **Agent**: —
+- **Timestamp**: 2026-08-24 16:44:44 Asia/Taipei
+- **What is this**: Implement admin backend listing backup status and admin-only download path for transaction backups (phase 2 of 2).
+- **Phase 1 (completed)**: Daily per-account backup to `backups/<user_id>/<YYYY-MM-DD>.json` (Edge Function `backup-transactions/index.ts`, schema section 12 with `backup_run_log` table, spec at `docs/agent/specs/backup-transactions.md`).
+- **Phase 2 scope**:
+  1. **Admin section** — Dashboard listing backup status per account: count of backups, newest backup date, total size
+  2. **Download path** — New Edge Function with `verify_jwt=true` that checks caller's `app_metadata.role === 'admin'` and returns signed URL for private `backups` bucket. Individual users cannot download their own backups (per user decision, admin-only access).
+  3. **UI** — New section in `sources/src/components/Admin/`, adjacent to existing admin tools
+- **Lane**: 2 (Edge Function + schema query) if listing requires aggregation; possibly Lane 1 if straightforward.
+- **Unfinished**: Everything (architecture through implementation and DEV/PROD deploy).
+
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**
 - **Timestamp**: 2026-07-31 17:55:00 Asia/Taipei
