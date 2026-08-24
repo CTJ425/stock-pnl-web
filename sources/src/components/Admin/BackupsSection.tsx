@@ -12,7 +12,21 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ChevronRight, Info, RefreshCw } from 'lucide-react'
-import { fetchAdminBackups, requestBackupUrl, type AccountBackups, type BackupFile } from '../../services/adminBackups'
+import {
+  applyBackupRestore,
+  fetchAdminBackups,
+  previewBackupRestore,
+  requestBackupUrl,
+  type AccountBackups,
+  type BackupFile,
+  type RestoreResult,
+} from '../../services/adminBackups'
+
+const RESTORE_TABLE_LABELS: Record<keyof RestoreResult['tables'], string> = {
+  workspaces: '投資組合',
+  transactions: '交易紀錄',
+  user_settings: '使用者設定',
+}
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -26,11 +40,19 @@ function statusLabel(run: AccountBackups['lastRun']): string {
   return `${run.runDate}・失敗：${run.error ?? '未知錯誤'}`
 }
 
+interface RestoreState {
+  path: string
+  result: RestoreResult | null
+  error: string
+  applying: boolean
+}
+
 export function BackupsSection() {
   const [accounts, setAccounts] = useState<AccountBackups[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string>('')
   const [err, setErr] = useState('')
+  const [restore, setRestore] = useState<RestoreState | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,6 +72,33 @@ export function BackupsSection() {
       return
     }
     window.open(res.url, '_blank', 'noopener')
+  }
+
+  async function startRestore(userId: string, file: BackupFile) {
+    const path = `${userId}/${file.name}`
+    setRestore({ path, result: null, error: '', applying: false })
+    const res = await previewBackupRestore(path)
+    if ('error' in res) {
+      setRestore({ path, result: null, error: res.error, applying: false })
+      return
+    }
+    setRestore({ path, result: res, error: '', applying: false })
+  }
+
+  function cancelRestore() {
+    setRestore(null)
+  }
+
+  async function confirmRestore() {
+    if (!restore) return
+    setRestore({ ...restore, applying: true })
+    const res = await applyBackupRestore(restore.path)
+    if ('error' in res) {
+      setRestore({ ...restore, error: res.error, applying: false })
+      return
+    }
+    setRestore(null)
+    await load()
   }
 
   const totalFiles = accounts?.reduce((sum, a) => sum + a.fileCount, 0) ?? 0
@@ -140,22 +189,91 @@ export function BackupsSection() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {a.files.map((f) => (
-                                    <tr key={f.name}>
-                                      <td>{f.name}</td>
-                                      <td className="ast-mono">{formatBytes(f.size)}</td>
-                                      <td className="ast-mono">{f.createdAt ?? '—'}</td>
-                                      <td>
-                                        <button
-                                          type="button"
-                                          className="btn btn-sm"
-                                          onClick={() => void download(a.userId, f)}
-                                        >
-                                          下載
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {a.files.map((f) => {
+                                    const path = `${a.userId}/${f.name}`
+                                    const isRestoring = restore?.path === path
+                                    return (
+                                      <Fragment key={f.name}>
+                                        <tr>
+                                          <td>{f.name}</td>
+                                          <td className="ast-mono">{formatBytes(f.size)}</td>
+                                          <td className="ast-mono">{f.createdAt ?? '—'}</td>
+                                          <td>
+                                            <button
+                                              type="button"
+                                              className="btn btn-sm"
+                                              onClick={() => void download(a.userId, f)}
+                                            >
+                                              下載
+                                            </button>{' '}
+                                            <button
+                                              type="button"
+                                              className="btn btn-sm"
+                                              onClick={() => void startRestore(a.userId, f)}
+                                            >
+                                              還原
+                                            </button>
+                                          </td>
+                                        </tr>
+                                        {isRestoring && (
+                                          <tr>
+                                            <td colSpan={4}>
+                                              {restore.error ? (
+                                                <div
+                                                  className="notice notice-warn"
+                                                  style={{ padding: '8px 12px', fontSize: 13 }}
+                                                >
+                                                  <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                                                  {restore.error}
+                                                </div>
+                                              ) : !restore.result ? (
+                                                <p className="hint">正在計算需要補回的資料…</p>
+                                              ) : (
+                                                (() => {
+                                                  const result = restore.result
+                                                  const allComplete = (
+                                                    Object.keys(RESTORE_TABLE_LABELS) as (keyof RestoreResult['tables'])[]
+                                                  ).every((key) => result.tables[key].missing === 0)
+                                                  return (
+                                                    <div>
+                                                      <ul style={{ margin: '4px 0' }}>
+                                                        {(
+                                                          Object.keys(RESTORE_TABLE_LABELS) as (keyof RestoreResult['tables'])[]
+                                                        ).map((key) => {
+                                                          const stat = result.tables[key]
+                                                          return (
+                                                            <li key={key}>
+                                                              {RESTORE_TABLE_LABELS[key]}：檔案 {stat.inFile} 筆 / 已存在{' '}
+                                                              {stat.present} 筆 / 將新增 {stat.missing} 筆
+                                                            </li>
+                                                          )
+                                                        })}
+                                                      </ul>
+                                                      <p className="hint">
+                                                        還原只會補回缺少的資料，不會覆蓋或刪除現有資料。
+                                                      </p>
+                                                      {allComplete && <p className="hint">目前資料完整，沒有需要補回的項目</p>}
+                                                      <button
+                                                        type="button"
+                                                        className="btn btn-sm"
+                                                        disabled={allComplete || restore.applying}
+                                                        onClick={() => void confirmRestore()}
+                                                      >
+                                                        確認還原
+                                                      </button>{' '}
+                                                      <button type="button" className="btn btn-sm" onClick={cancelRestore}>
+                                                        取消
+                                                      </button>
+                                                    </div>
+                                                  )
+                                                })()
+                                              )}
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </Fragment>
+                                    )
+                                  })}
                                 </tbody>
                               </table>
                             )}

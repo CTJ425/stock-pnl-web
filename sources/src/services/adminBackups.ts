@@ -104,6 +104,61 @@ export async function requestBackupUrl(path: string): Promise<{ url: string } | 
   }
 }
 
+export interface RestoreTableStat {
+  inFile: number
+  present: number
+  missing: number
+}
+
+export interface RestoreResult {
+  applied: boolean
+  backupDate: string
+  tables: { workspaces: RestoreTableStat; transactions: RestoreTableStat; user_settings: RestoreTableStat }
+}
+
+function parseTableStat(raw: unknown): RestoreTableStat {
+  const s = raw as Partial<RestoreTableStat> | null | undefined
+  return {
+    inFile: typeof s?.inFile === 'number' ? s.inFile : 0,
+    present: typeof s?.present === 'number' ? s.present : 0,
+    missing: typeof s?.missing === 'number' ? s.missing : 0,
+  }
+}
+
+async function invokeBackupRestore(path: string, apply: boolean): Promise<RestoreResult | { error: string }> {
+  if (!supabase) return { error: 'Supabase 未設定' }
+  try {
+    const { data, error } = await supabase.functions.invoke('stock-report', {
+      body: { action: 'admin-backup-restore', path, apply },
+      timeout: 20_000,
+    })
+    if (error) return { error: (await httpErrorMessage(error)) ?? error.message }
+    const res = data as { ok?: boolean; applied?: boolean; backupDate?: string; tables?: Record<string, unknown>; error?: string } | null
+    if (!res || res.ok !== true) return { error: res?.error ?? '還原失敗' }
+    return {
+      applied: res.applied === true,
+      backupDate: typeof res.backupDate === 'string' ? res.backupDate : '',
+      tables: {
+        workspaces: parseTableStat(res.tables?.workspaces),
+        transactions: parseTableStat(res.tables?.transactions),
+        user_settings: parseTableStat(res.tables?.user_settings),
+      },
+    }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : '還原失敗' }
+  }
+}
+
+/** Preview only — computes what a restore would write, never writes. */
+export function previewBackupRestore(path: string): Promise<RestoreResult | { error: string }> {
+  return invokeBackupRestore(path, false)
+}
+
+/** Actually inserts the missing rows (additive only — see backupAdmin.ts). */
+export function applyBackupRestore(path: string): Promise<RestoreResult | { error: string }> {
+  return invokeBackupRestore(path, true)
+}
+
 /** Same dig-out-the-real-message helper as `adminUsers.ts:83`. */
 async function httpErrorMessage(error: unknown): Promise<string | null> {
   const ctx = (error as { context?: unknown })?.context

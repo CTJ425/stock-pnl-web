@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isValidBackupPath, summarizeAccountBackups, type BackupObject } from './backupAdmin'
+import {
+  isValidBackupPath,
+  parseBackupDocument,
+  restoreFailureMessage,
+  rowsToInsert,
+  summarizeAccountBackups,
+  type BackupObject,
+} from './backupAdmin'
 
 const UID = '0754d012-7a86-477f-8009-f81531281caf'
 
@@ -108,5 +115,140 @@ describe('summarizeAccountBackups', () => {
     ])
     expect(s.totalBytes).toBe(10)
     expect(s.files[0].size).toBe(0)
+  })
+})
+
+describe('parseBackupDocument', () => {
+  const doc = (over: Record<string, unknown> = {}) => ({
+    version: 1,
+    user_id: UID,
+    backup_date: '2026-08-24',
+    exported_at: '2026-08-23T18:00:00.000Z',
+    tables: {
+      workspaces: [{ id: 'ws-1', user_id: UID }],
+      transactions: [{ id: 'tx-1', user_id: UID }],
+      user_settings: [{ user_id: UID }],
+    },
+    ...over,
+  })
+
+  it('accepts a well-formed document for the expected account', () => {
+    const r = parseBackupDocument(doc(), UID)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.doc.tables.transactions).toHaveLength(1)
+  })
+
+  it('rejects anything that is not an object with tables', () => {
+    for (const bad of [null, 'x', 42, [], {}, { version: 1 }]) {
+      const r = parseBackupDocument(bad, UID)
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.error).toBe('備份檔格式無法辨識')
+    }
+  })
+
+  it('rejects an unsupported version', () => {
+    const r = parseBackupDocument(doc({ version: 2 }), UID)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toBe('備份檔版本不支援')
+  })
+
+  it('names the table that is missing or malformed', () => {
+    const r = parseBackupDocument(
+      doc({ tables: { workspaces: [], transactions: 'nope', user_settings: [] } }),
+      UID,
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toBe('備份檔缺少資料表：transactions')
+  })
+
+  /* The whole reason this function exists: a file must never be able to write into another account. */
+  it('rejects a document whose account does not match the path', () => {
+    const other = '11111111-2222-3333-4444-555555555555'
+    const r = parseBackupDocument(doc(), other)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toBe('備份檔的帳號與路徑不符')
+  })
+
+  it('rejects a document with even one row belonging to someone else', () => {
+    const tampered = doc({
+      tables: {
+        workspaces: [{ id: 'ws-1', user_id: UID }],
+        transactions: [
+          { id: 'tx-1', user_id: UID },
+          { id: 'tx-2', user_id: '11111111-2222-3333-4444-555555555555' },
+        ],
+        user_settings: [],
+      },
+    })
+    const r = parseBackupDocument(tampered, UID)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toBe('備份檔內有不屬於該帳號的資料列')
+  })
+
+  it('accepts empty tables — an account with no data is still a valid backup', () => {
+    const empty = doc({ tables: { workspaces: [], transactions: [], user_settings: [] } })
+    expect(parseBackupDocument(empty, UID).ok).toBe(true)
+  })
+})
+
+describe('rowsToInsert', () => {
+  it('keeps only the rows whose key is absent, in file order', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    expect(rowsToInsert(rows, ['b'], 'id')).toEqual([{ id: 'a' }, { id: 'c' }])
+  })
+
+  it('returns nothing when everything is already present — restore must be a no-op', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }]
+    expect(rowsToInsert(rows, ['a', 'b'], 'id')).toEqual([])
+  })
+
+  it('honours a different key field, because user_settings is keyed by user_id', () => {
+    const rows = [{ user_id: 'u-1' }, { user_id: 'u-2' }]
+    expect(rowsToInsert(rows, ['u-1'], 'user_id')).toEqual([{ user_id: 'u-2' }])
+  })
+
+  it('treats an empty existing set as "insert everything"', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }]
+    expect(rowsToInsert(rows, [], 'id')).toEqual(rows)
+  })
+
+  it('skips a row missing the key field rather than inserting a keyless row', () => {
+    const rows = [{ id: 'a' }, { name: 'no key' }, { id: 'c' }]
+    expect(rowsToInsert(rows, [], 'id')).toEqual([{ id: 'a' }, { id: 'c' }])
+  })
+})
+
+/*
+  A restore is several separate writes with no transaction across them, so it can stop half way.
+  The reviewer's point: returning a bare Postgres error leaves the admin believing nothing happened
+  when workspaces rows are already in. The message has to say what landed.
+*/
+describe('restoreFailureMessage', () => {
+  it('says plainly when nothing was written', () => {
+    expect(restoreFailureMessage([], '連線中斷')).toBe('還原失敗：連線中斷。尚未寫入任何資料。')
+  })
+
+  it('names what already landed so the admin knows the state is partial', () => {
+    expect(restoreFailureMessage([{ table: 'workspaces', count: 2 }], '違反外鍵')).toBe(
+      '還原失敗：違反外鍵。已寫入 workspaces 2 筆，請重新預覽確認目前狀態。',
+    )
+  })
+
+  it('lists every table that landed', () => {
+    expect(
+      restoreFailureMessage(
+        [
+          { table: 'workspaces', count: 2 },
+          { table: 'transactions', count: 51 },
+        ],
+        '逾時',
+      ),
+    ).toBe('還原失敗：逾時。已寫入 workspaces 2 筆、transactions 51 筆，請重新預覽確認目前狀態。')
+  })
+
+  it('ignores tables that wrote nothing', () => {
+    expect(restoreFailureMessage([{ table: 'workspaces', count: 0 }], '逾時')).toBe(
+      '還原失敗：逾時。尚未寫入任何資料。',
+    )
   })
 })

@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.12（2026-08-24）— 後台一鍵還原：只補回缺少的資料
+
+> 承 0.9.11 的備份與下載，補上讀備份檔的那一端。管理員在「備份」頁點任一備份檔的「還原」，先看到逐表的預覽（檔案幾筆／已存在幾筆／將新增幾筆），確認後才寫入。
+
+- 🔒 **還原是純新增，永不刪除或覆蓋** — 三張表各自以自己的主鍵（`workspaces`／`transactions` 用 `id`，`user_settings` 用 `user_id`）做 `upsert(..., { ignoreDuplicates: true })`。備份之後才編輯過的資料列會原封不動保留；整條路徑沒有任何 DELETE 或 UPDATE。
+- 🛡️ **跨帳號寫入在解析階段就被擋死**（`backupAdmin.ts` 的 `parseBackupDocument`）— 比對的基準 `user_id` 取自**已驗證的物件路徑**，不是取自備份檔本身（取自檔案的話這個檢查會變成循環論證、形同虛設）。文件層的 `user_id` 不符、或**任何一列**的 `user_id` 不符，都在讀寫任何一張表之前中止。
+- 👀 **預覽與寫入是兩次呼叫** — `apply !== true` 的分支在碰到任何 insert 之前就回傳；畫面上第一次點「還原」只會預覽，只有「確認還原」會寫入。沒有缺漏時直接說明資料完整並停用確認鈕。
+- 🔗 **先父後子** — `workspaces` → `transactions` → `user_settings`。`transactions` 對 `workspaces` 有複合外鍵 `(workspace_id, user_id)`，順序反了會失敗。
+- 🧾 **半途失敗要說實話**（`restoreFailureMessage`）— 三張表是三次獨立寫入、之間沒有交易保護，所以可能寫到一半才失敗。原本只回傳一句原始的 Postgres 錯誤，管理員會誤以為什麼都沒發生。現在改回傳「已寫入 workspaces 2 筆、transactions 51 筆，請重新預覽確認目前狀態」。還原本身冪等，重跑即可補完。
+- ✅ **測試** — 新增 26 條（`backupAdmin` 12＋4、`adminBackups` 6、`BackupsSection` 8）。全套 `npm test` **81 檔 / 1234 測試** exit 0；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0；`npx oxlint` 5 個既有警告，無新增。
+- 🔬 **DEV 災難演練**（真實刪除後還原）— 刪掉 3 筆指定交易後，預覽準確回報「檔案 62／現存 59／將補回 3」且**未寫入任何資料**（仍 59 筆）；執行還原後回到 62 筆，且**整表 checksum 與刪除前完全相同**（逐欄位一致，不只是筆數對）。重跑預覽回報 0 缺漏（冪等）。竄改測試：改掉文件 `user_id` → `備份檔的帳號與路徑不符`；只改**單一列**的 `user_id` → `備份檔內有不屬於該帳號的資料列`；兩者皆未寫入任何資料，事後確認無汙染列。
+- 🚀 **部署** — DEV 已部署驗證。**PROD 尚未部署**（本版仍在 `dev`）；上線需 `supabase functions deploy stock-report --no-verify-jwt`，`backup-transactions` 本版未異動、不需重新部署。無 schema 異動。
+
 ### 0.9.11（2026-08-24）— 交易紀錄每日自動備份，與管理者專屬的備份後台
 
 > 兩階段一次交付。第一階段：每日台北時間 02:00，逐一帳號將資料匯出成 JSON 存入**私有** Storage bucket，每個帳號最多保留最近 7 份。第二階段：管理後台新增「備份」頁，列出每個帳號的備份狀況，並提供**只有管理員**能取得的短效下載連結。一般使用者無法下載自己的備份。
