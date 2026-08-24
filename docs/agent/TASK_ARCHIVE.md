@@ -11,6 +11,27 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 130: backup-transactions phase 2 — Admin backend restore + download path
+- **Status**: ✅ **Shipped in 0.9.11** (commit 8003b6a)
+- **Agent**: Builder + Reviewer
+- **Timestamp**: 2026-08-24 17:35:44 CST
+- **What is this**: Implement admin backend listing backup status and admin-only download path for transaction backups (phase 2 of 2).
+- **Phase 1 (completed in 0.9.11)**: Daily per-account backup to `backups/<user_id>/<YYYY-MM-DD>.json` (Edge Function `backup-transactions/index.ts`, schema section 12 with `backup_run_log` table, spec at `docs/agent/specs/backup-transactions.md`).
+- **Phase 2 completion (0.9.11)**: 
+  - **Admin console sixth panel** 備份 (restore/download UI)
+  - **Service** `adminBackups.ts` (frontend state management)
+  - **Pure logic** `stock-report/backupAdmin.ts` (backend export/download logic)
+  - **Two new stock-report actions**: `admin-backups` (list backup status) and `admin-backup-url` (return signed download URL), both behind existing `assertAdmin` gate
+  - **Decision reversal**: Originally Task 130 spec called for a new Edge Function; implementation added actions to existing `stock-report` instead. Rationale: all admin calls already route through `stock-report`, and a second function would add a PROD deploy target whose `verify_jwt` setting could drift. Recorded in `docs/agent/specs/backup-admin-console.md`.
+  - **Signed URL fix**: Signed URLs returned root-relative; browser client built from container-internal `SUPABASE_URL`, so `createSignedUrl` produced `http://kong:8000/...` on self-hosted. Fixed by making URLs absolute. Unit tests could not catch this; DEV verification did.
+- **Testing**: `npm test` 81 files / 1204 tests exit 0; `tsc --noEmit` exit 0; `tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `oxlint` 5 pre-existing warnings, no new ones. DEV live verification: anon/non-admin rejected with 401; five malformed paths returned 400; valid signed link downloaded real 20510-byte backup; tampered signature returned 400.
+- **Review outcome**: Phase 2 implementation PASS with one RISK (undefined CSS class `adm-toggle-row`, fixed by using existing `link-btn`). RISK-001 + signed-URL review returned FAIL on scope technicality: flagged two test files as outside builders' Files list. Main session wrote those tests before dispatch (documented Lane 2 flow); builders did not touch them. Adjudicated PASS on substance; no correctness defect found.
+- **Records finalized**: PROGRESS.md gained 0.9.11 entry with full narrative; RISK-001 closed to FIXED_BUG.md. Task 130 moved to TASK_ARCHIVE.md. New PROD deploy task added to TASK.md.
+- **Known limitation (pre-existing, out of scope)**: Probe follow-up starting before 45s `PROBE_FOLLOW_UP_BUDGET_MS` deadline has no cap on its own execution time.
+- **Unfinished**: None — phase 2 complete and shipped in 0.9.11. PROD deployment remains a separate open task.
+
+---
+
 ### Task 116: 0.9.0 觀察清單 UX 重構（設計迭代：從庫存總覽移至個股分析第四籤；最終移至儀表板）
 - **Status**: ✅ **Shipped in 0.9.9**
 - **Agent**: Scribe + User

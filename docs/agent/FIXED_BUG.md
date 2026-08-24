@@ -8,6 +8,25 @@
 
 ## 🐛 Historical Bug Fixes
 
+### RISK-001 — Probe round timeout: per-source loop has no deadline/budget check
+
+- **Condition**: `sources/supabase/functions/stock-report/probeRound.ts:95–98` contained no per-source deadline or budget check; only the follow-up loop had one. Since 0.7.22-dev.1, three daily windows overlap at 17:00 (`t86` ends 16:00 inclusive, `bwibbu` and `twt38u` start at 17:00), and four sources scheduled together at 17:15/17:20. Each fetch carries 10s timeout.
+
+- **Risk accepted at review**: Unlikely in normal operation (would require ≥3 sources timeout); acceptable trade-off against the alternative (omitting `twt38u` from probes, which is worse).
+
+- **Fix (0.9.11, commit 8003b6a)**: `probeRound.ts` gained optional `probeDeadline` dependency (arrival time + budget in ms). Probe loop now defers a source before starting it once the budget is gone, never interrupts an in-flight probe. New result field `deferred` stays distinct from `skipped`. `index.ts` adds `PROBE_BUDGET_MS = 30_000` (30 seconds). Pattern: check budget before loop iteration, defer if exhausted, continue only if time remains.
+
+- **Files changed**:
+  - `sources/supabase/functions/stock-report/probeRound.ts` (optional `probeDeadline` param, `deferred` result field, budget check in main loop)
+  - `sources/supabase/functions/stock-report/index.ts` (added `PROBE_BUDGET_MS = 30_000`, compute `probeDeadline`, pass to `probeRound()`)
+  - `sources/supabase/functions/stock-report/probeRound.test.ts` (new test cases for budget exhaustion and defer behavior)
+
+- **Alternative not taken**: Dropping `twt38u` from probes (rejected per original acceptance decision — reduction in coverage is worse than the bounded timeout risk).
+
+- **Verification**: `npx vitest run supabase/functions/stock-report/` — probeRound tests exit 0. No probe round timeout observed in DEV under normal load (30s budget caps worst-case round at 30s total, well below Edge 60s limit).
+
+- **Status**: ✅ FIXED in **0.9.11** (commit 8003b6a, 2026-08-24).
+
 ### Bug ID: BUG-035 — `twt38u` content fingerprint was raw table text, not a hash
 
 - **Symptom**: `foreignTopFingerprint()` in `sources/supabase/functions/stock-report/twForeignTop.ts` joined every buyTop/sellTop cell with U+001F and returned that string directly. Measured on DEV `source_probe_tick`: roughly 10KB per row.

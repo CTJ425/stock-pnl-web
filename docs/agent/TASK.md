@@ -199,18 +199,18 @@ precisely what 0.7.8 would have mis-retired).
 - **Finding**: `.github/workflows/deploy.yml` runs only `npm ci` → `npm run build` → deploy to GitHub Pages; no `npm test`, `npm run lint`, or `npm run typecheck:edge`. A push to `main` deploys to production while CI type-checks via the build but runs no tests and no lint. The P0 finding from this audit (test summary said "all passed", but exit code was 1) is exactly the failure mode a test gate misses.
 - **User decision**: Explicitly chose NOT to add CI gate in this round. Recording as open task, not as a deferred decision to revisit unprompted.
 
-### Task 130: backup-transactions phase 2 — Admin backend restore + download path
+### Task 131: PROD deploy of the backup feature (0.9.11)
 - **Status**: ⏳ **OPEN**
 - **Agent**: —
-- **Timestamp**: 2026-08-24 16:44:44 Asia/Taipei
-- **What is this**: Implement admin backend listing backup status and admin-only download path for transaction backups (phase 2 of 2).
-- **Phase 1 (completed)**: Daily per-account backup to `backups/<user_id>/<YYYY-MM-DD>.json` (Edge Function `backup-transactions/index.ts`, schema section 12 with `backup_run_log` table, spec at `docs/agent/specs/backup-transactions.md`).
-- **Phase 2 scope**:
-  1. **Admin section** — Dashboard listing backup status per account: count of backups, newest backup date, total size
-  2. **Download path** — New Edge Function with `verify_jwt=true` that checks caller's `app_metadata.role === 'admin'` and returns signed URL for private `backups` bucket. Individual users cannot download their own backups (per user decision, admin-only access).
-  3. **UI** — New section in `sources/src/components/Admin/`, adjacent to existing admin tools
-- **Lane**: 2 (Edge Function + schema query) if listing requires aggregation; possibly Lane 1 if straightforward.
-- **Unfinished**: Everything (architecture through implementation and DEV/PROD deploy).
+- **Timestamp**: 2026-08-24 17:35:44 CST
+- **What is this**: Complete PROD deployment of backup-transactions feature. GitHub Pages (main branch) is deployed; cloud database and Edge Functions remain.
+- **Deployment checklist (in order)**:
+  1. **Schema section 12** — Run against cloud database `kxnxadaghidwumqsqneu` to create `backups` bucket (public=false), `backup_run_log` table (RLS + admin-only SELECT), run_date index, pg_cron job `backup-daily` at '0 18 * * *'
+  2. **Edge Function `backup-transactions`** — `supabase functions deploy backup-transactions --no-verify-jwt` (cloud project `kxnxadaghidwumqsqneu`). The `--no-verify-jwt` flag is required because cron triggers must not be blocked by JWT verification; omitting it makes all cron calls return 401.
+  3. **Edge Function `stock-report`** — `supabase functions deploy stock-report --no-verify-jwt` (cloud project `kxnxadaghidwumqsqneu`). Same rationale: cron calls must not be blocked.
+- **Until complete**: PROD produces no backups, admin 備份 panel reads empty, `backup_run_log` and `backups` bucket do not exist.
+- **Success criteria**: `backup-daily` cron runs at 18:00 Taipei, writes one `backup_run_log` row per account with transaction count, signs backup files, prunes to newest 7 per account; admin panel shows backup status and download links.
+- **Unfinished**: All (awaiting explicit user authorization and execution).
 
 ### Task 47: Refresh next year's release calendar every December (recurring)
 - **Status**: 🔁 **Recurring**
