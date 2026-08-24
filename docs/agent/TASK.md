@@ -26,6 +26,23 @@
 ## 📋 Active Tasks
 
 
+### Task 129: ETF constituents in 個股分析 (deferred after investigation)
+- **Status**: ⏳ **OPEN — Investigated, deferred; research documented**
+- **Agent**: Scribe
+- **Timestamp**: 2026-08-24 13:33:13 Asia/Taipei
+- **What is this**: Explore adding ETF constituent holdings display to 個股分析 page, showing what a selected ETF owns.
+- **Investigation outcome**:
+  - **Taiwan Stock Exchange has NO official ETF constituent API.** `openapi.twse.com.tw/v1` has two ETF-related endpoints: `/opendata/t187ap47_L` (fund master data — fund code, tracking index, whether it holds foreign constituents, establishment/listing dates) and `/ETFReport/ETFRank` (monthly regular-savings account counts). Neither provides holdings detail.
+  - **Daily PCF (實物申購買回清單) published by each issuer, not TWSE.** TWSE ETF section only links out to issuer sites.
+  - **Three candidate data sources if this is built later**:
+    1. **MoneyDJ** — uniform URL pattern `https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=<ticker>.tw`, server-rendered HTML; verified working for 0050. Gives ticker / weight % / shares held / as-of date. One parser covers all TW ETFs, but it is a third-party site and breaks on redesign.
+    2. **Per-issuer PCF pages** (元大 / 國泰 / 富邦 / 群益 / 統一 …) — most authoritative, but needs 10+ parsers plus a ticker→issuer mapping table.
+    3. **Paid APIs** — TEJ "ETF 持股(日)" — authoritative but requires subscription.
+  - **ETF detection** — no new data needed: `sources/src/utils/fees.ts:59` already infers ETF from ticker starting with `00`; authoritative list available at `t187ap47_L`.
+  - **Data layer constraint** — No per-ticker metadata table exists in schema; building this feature requires: new table (holdings index) + new Edge Function proxy (browser CORS blocked) + caching strategy. Pattern exists (`supabase/functions/stock-price/` and `supabase/functions/stock-report/`). Lane classification: **Lane 2 (backend, schema, Edge)**.
+- **Next step**: If user decides to build this, start with data source validation (which MoneyDJ parser is robust enough, or evaluate issuer pages), then design schema, then Edge Function.
+- **Unfinished**: Everything (architecture through implementation).
+
 ### Task 125: Deferred watchlist card design variants (Sparkline / Chips & PE / Range Bar)
 - **Status**: ⏳ **OPEN — Design documented, implementation deferred by scope**
 - **Agent**: —

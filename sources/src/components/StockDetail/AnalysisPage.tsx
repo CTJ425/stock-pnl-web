@@ -1,10 +1,9 @@
 /**
  * Individual stock analysis page: which held or watched Taiwan stock to inspect.
  *
- * The stock picker lists TW holdings only (watchlist-ux-overhaul spec, revision). A watched
- * stock can still be the current selection — reached via the 觀察股票 tab inside StockDetailPage,
- * never via this menu — so the watchlist is still loaded here, purely to resolve that selection's
- * name and validity.
+ * The stock picker lists both TW holdings (持股) and watched stocks (觀察), each under its
+ * own heading. A watched stock can also be reached as the current selection via the 觀察股票
+ * tab inside StockDetailPage, without going through this menu.
  * TWSE after-hours chips cover listed TW only, so the picker stays TW-only.
  * Holding figures share `buildHoldingRows` with the inventory overview.
  */
@@ -90,17 +89,21 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   // resolves to that holding entry instead, so the same stock never appears twice.
   const heldTickers = new Set(holdingEntries.map((e) => e.ticker))
   const availableWatch = watchlist.filter((w) => !heldTickers.has(w.ticker))
-  const watchByTicker = (ticker: string): Entry | null => {
-    const w = availableWatch.find((x) => x.ticker === ticker)
-    return w ? { kind: 'watch', key: `watch:${w.ticker}`, ticker: w.ticker, name: w.name } : null
-  }
+  const watchEntries: Entry[] = availableWatch.map((w) => ({
+    kind: 'watch',
+    key: `watch:${w.ticker}`,
+    ticker: w.ticker,
+    name: w.name,
+  }))
+  const watchByTicker = (ticker: string): Entry | null =>
+    watchEntries.find((e) => e.ticker === ticker) ?? null
 
   // A ticker that is held is a holding, full stop — the watchlist is only how you found it.
   // So a `watch:` key is resolved against holdings FIRST, by ticker, before falling through to
   // the watchlist / pickedWatch bridge. Fall back order (this expression, then below): holding →
-  // loaded watchlist → pickedWatch bridge → first holding → first watched. Watched entries are
-  // not in the menu (picker is holdings-only), but they can still be the current selection via
-  // the 觀察股票 tab.
+  // loaded watchlist → pickedWatch bridge → first holding → first watched. Watched entries also
+  // appear in the menu's 觀察 group, and can still be reached as the current selection via the
+  // 觀察股票 tab.
   const selectedFromKey = selectedKey
     ? selectedKey.startsWith('watch:')
       ? (holdingEntries.find((e) => e.ticker === selectedKey.slice('watch:'.length)) ??
@@ -113,10 +116,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
   const initialEntry = initialTicker
     ? (holdingEntries.find((e) => e.ticker === initialTicker) ?? watchByTicker(initialTicker))
     : null
-  const firstWatchEntry: Entry | null = availableWatch[0]
-    ? { kind: 'watch', key: `watch:${availableWatch[0].ticker}`, ticker: availableWatch[0].ticker, name: availableWatch[0].name }
-    : null
-  const selected = selectedFromKey ?? initialEntry ?? holdingEntries[0] ?? firstWatchEntry ?? null
+  const selected = selectedFromKey ?? initialEntry ?? holdingEntries[0] ?? watchEntries[0] ?? null
 
   const watchTicker = selected?.kind === 'watch' ? selected.ticker : null
 
@@ -188,8 +188,8 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
         menuLabel="個股清單"
         popClass="hmenu-pop-left hmenu-pop-scroll"
       >
-        {(close) =>
-          holdingEntries.map((e) => (
+        {(close) => {
+          const item = (e: Entry) => (
             <button
               key={e.key}
               type="button"
@@ -204,8 +204,25 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
               <Check size={14} className="hmenu-check" aria-hidden="true" />
               <span>{label(e)}</span>
             </button>
-          ))
-        }
+          )
+          return (
+            <>
+              {holdingEntries.length > 0 && (
+                <>
+                  <div className="hmenu-head">持股</div>
+                  {holdingEntries.map(item)}
+                </>
+              )}
+              {holdingEntries.length > 0 && watchEntries.length > 0 && <div className="hmenu-sep" />}
+              {watchEntries.length > 0 && (
+                <>
+                  <div className="hmenu-head">觀察</div>
+                  {watchEntries.map(item)}
+                </>
+              )}
+            </>
+          )
+        }}
       </HeaderMenu>
     </div>
   )

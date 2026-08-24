@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.10（2026-08-24）— 個股分析選單重新納入觀察股票：持股／觀察分組
+
+> 推翻 `watchlist-ux-overhaul` spec 的「選單只列持股」決定。0.9.0 起觀察中的股票只能從「觀察股票」籤標進入，0.9.9 移除該籤標後改由儀表板 WatchSection 導航，但「切換個股」選單始終看不到觀察標的。本版把觀察分組加回選單。
+
+- 🔁 **推翻既有設計決定**（`docs/agent/specs/watchlist-ux-overhaul.md`）— 該 spec 明文記載「Stock picker: holdings only，觀察分組自下拉移除」，並於 `f106f43` 實作。本版依使用者要求反轉，spec 已附加 Revision 段落註明不得回退，避免後續依舊 spec 再次移除。
+- 🎯 **選單分組**（`sources/src/components/StockDetail/AnalysisPage.tsx`）— 「切換個股」下拉改為 `持股` 與 `觀察` 兩段，各自帶標題、之間一條分隔線；任一組為空則整組（含標題）不渲染。樣式沿用既有 `.hmenu-head` / `.hmenu-sep` 通用類別，**CSS 零新增**。
+- ♻️ **資料流本來就齊備，只補渲染** — `listWatchlist()` 載入與重載、`Entry` union 的 `kind: 'watch'`、觀察股單檔報價 `fetchPrices([{ market: 'TPE', ticker }])`、選取解析與 fallback 鏈皆已存在，唯一缺口是選單只映射 `holdingEntries`。本版新增 `watchEntries` 一份清單，同時供選單、`watchByTicker()` 與 fallback 使用，並移除重複的 `firstWatchEntry` 建構。
+- 🔒 **去重語意不變** — 同一檔同時在持股與觀察名單時只出現一次，且走持股路徑（帶股數、成本、`useStockPrices` 報價）；`heldTickers` / `availableWatch` 邏輯未動。選單維持台股 only（TWSE 盤後籌碼只涵蓋上市台股）。
+- 📊 **測試** — `AnalysisPage.test.tsx` 改寫「下拉只列持股，不再有觀察分組」為「下拉分組列出持股與觀察，持股在前」，並新增兩測案：持股與觀察重複時選單只出現一次且算持股、從選單點觀察股後不帶持股且顯示單檔報價。其中 2 條先紅後綠。
+- ✅ **測試驗證** — `npx vitest run` 77 檔 / **1147 測試** exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npm run typecheck:edge` exit 0；`npm run build` ok；`npx oxlint` 5 個既有 only-export-components 警告，無新增。
+- 🔍 **調查併記：證交所沒有 ETF 成分股 API**（Task 129，本版不實作）— `openapi.twse.com.tw/v1` 全站僅兩支 ETF 端點：`/opendata/t187ap47_L`（基金基本資料彙總表）與 `/ETFReport/ETFRank`（定期定額戶數月報），皆無持股明細；每日 PCF 依規定由各投信自行公布，證交所 ETF 專區只導向發行人網站。候選來源與代價已記於 `TASK.md`。
+- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；推送 `main` 由 GitHub Pages 部署前端即可。
+
 ### 0.9.9（2026-08-24）— 觀察清單重新配置到儀表板：雙視圖、容量追蹤、個股導航
 
 > 設計翻轉：承 0.9.0 在個股分析第四籤置放觀察清單後，本版將其移回儀表板（庫存總覽下方新增 WatchSection），移除個股分析的「觀察股票」籤標。新增卡片/列表雙視圖切換（localStorage 記憶切換狀態），容量徽章 N/30，實時股價與漲跌百分比（色碼紅綠），加入按鈕開啟新增觀察對話框，各條目點擊導航至個股分析。

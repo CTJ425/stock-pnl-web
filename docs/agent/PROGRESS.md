@@ -1,9 +1,24 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Release 0.9.9 recording — watchlist redesigned to Dashboard WatchSection (double view modes, localStorage persistence); design reversal tracked; Task 116 completed; deferred design variants documented
-- Status: **✅ 0.9.9 RECORDED**
-- Timestamp: 2026-08-24 11:37:39 Asia/Taipei
+- Action: Task analysis-picker-watch-group completed — 個股分析 stock picker lists watched stocks again (持股 / 觀察 groups with separator); reversal note appended to spec
+- Status: **✅ RECORDED**
+- Timestamp: 2026-08-24 13:33:13 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-24 13:33:13 Asia/Taipei (Task completed: analysis-picker-watch-group — stock picker watchlist restored)
+
+- **Task**: analysis-picker-watch-group — Restore watched stocks listing in 個股分析 stock picker dropdown.
+- **Outcome**: The picker now displays watched stocks grouped under `觀察` below `持股`, separated with existing `.hmenu-head` / `.hmenu-sep` classes (no new CSS). Held tickers override watched duplicates, so no stock appears twice. Selection resolution order preserved: holdings win, then watchlist, then fallback.
+- **Files changed**: `sources/src/components/StockDetail/AnalysisPage.tsx` (render holdings + watched groups), `sources/src/components/StockDetail/AnalysisPage.test.tsx` (new test case for grouped picker render).
+- **Testing**: AnalysisPage 21 tests passed. Full suite: 77 files / 1147 tests passed, exit 0. `tsc --noEmit -p tsconfig.app.json` exit 0 — no regressions.
+- **Review**: Skipped per policy — a previously failing test (picker without watched stocks) now passes, and changes touch no persistence, auth, API boundary, or calculation. Proof: git diff shows only selector logic and test assert, no fee/math/schema changes.
+- **Lane**: 1 (bounded — selector reordering only).
+- **Version**: NOT bumped, no commit made (bookkeeping only per Scribe role).
+- **Spec revision**: `docs/agent/specs/watchlist-ux-overhaul.md` line 24 recorded "Stock picker: **holdings only.**" and line 49-50 repeated this constraint. Appended dated revision note stating the holdings-only picker decision was reversed by this task; watched stocks now appear in picker grouped as `觀察`, so a later agent does not restore the old behaviour. Original text unchanged, revision note added.
+- **Records finalized**: This entry added to PROGRESS.md. New open task added to TASK.md for ETF constituents investigation. Spec revision note written. No entries moved this dispatch.
+- **Unfinished**: None — analysis-picker-watch-group recorded complete.
 
 ---
 
@@ -21,23 +36,6 @@
 - **Deployment**: No `sources/supabase/functions/` file changed — **no Edge Function deploy needed**. Frontend only; `main` push deploys Pages.
 - **Records finalized**: CHANGELOG.md gained 0.9.9 entry (Traditional Chinese, house style). TASK.md header updated to 0.9.9 / 1145 tests; Task 116 moved to TASK_ARCHIVE.md; new OPEN entry for deferred card variants. PROGRESS.md header updated; this entry added; oldest entry (0.9.7, 2026-08-20 20:45:00) rolled to PROGRESS_ARCHIVE.md.
 - **Unfinished**: None — 0.9.9 recording complete. All tracking docs synchronized. No commit made per Scribe role (bookkeeping only).
-
----
-
-## 📅 Log: 2026-08-23 18:52:37 Asia/Taipei (Full codebase audit + fixes: 4 priority levels, timeouts, test gate, effect error handling)
-
-- **Scope**: Read-only audit of project for logic errors, bugs and optimisation opportunities, followed by fixes at four priority levels. Each finding traced to `file:line` and verified.
-- **P0 — Test gate was red**: `npx vitest run` exited 1 while summary reported "1136 passed". Root cause: `src/components/StockDetail/AnalysisPage.whatif.test.tsx` mocks `warmStockCore` / `warmStockHistory` returned `undefined` instead of `WarmResult`; `StockDetailPage.tsx:233` reads `core.ok` off result inside async IIFE with no catch, escaped as unhandled rejection. Fixed by returning full `WarmResult` from both mocks. Impact: exit 0, no unhandled rejections.
-- **P1 — Edge Function fetch timeouts** (5 of 11 sites had none): Added `signal: AbortSignal.timeout(...)` to `stock-report/twChips.ts` `fetchJson` (15s) and 4 sites in `stock-price/index.ts` (10s each), matching idiom at other 6 sites. All 10 `fetchJson` callers already inside try/catch or `Promise.allSettled` treating throw as "source unavailable", so no new exception propagation — only behavioural change is wait now bounded. Trigger for RISK-001 is now concrete: untimed `fetchJson` in probe follow-ups has 15s timeout.
-- **P2-1 — Frontend Edge invokes had no timeout**: `supabase.functions.invoke` has no default timeout, hung function left UI spinning forever. Added `timeout` to all 10 invoke sites (9 services), sized against server budgets: 15s interactive (priceProxy, stockSearch, fxQuoteProxy), 20s (twMarketData, adminStatus, adminUsers ×2), 45s warmStock, 60s reportProxy, 150s adminRun. New contract test `src/services/invokeTimeout.test.ts` scans every service file, fails if any invoke lacks timeout. Nine existing assertions in `adminRun.test.ts`, `fxQuoteProxy.test.ts`, `warmStock.test.ts` relaxed to `expect.objectContaining`.
-- **P2-2 — Four async effect IIFEs had no catch**: `StockDetailPage.tsx:210` (fundamental/warm), `AiTab.tsx:86` (AI settings), `StockDetailPage.tsx:179`, `useDailySeries.ts:80` would strand loading flag or leak unhandled rejection. Defence in depth: services currently swallow failures, so not live bugs today. Added try/catch to all four. New test `src/components/StockDetail/effectErrorHandling.test.tsx` forces rejection so guard is real.
-- **P3 — Correctness & performance**: (1) `WorkspaceContext.tsx` `addTransactions` now reuses memoized `ledger` instead of recomputing whole ledger for `heldBefore`. (2) `pnlEngine.ts` transaction sort now plain `<`/`>` instead of `localeCompare` (locale-aware collation on every compare; identical ordering for ISO strings). (3) `fees.ts` `breakEvenPrice` returns `0` if search fails to converge, instead of non-break-even price. (4) `fees.ts` `FeeInput` doc states contract: supply `taxRate` or `ticker` else 0.3% general rate applied silently (wrong for ETFs). (5) `timeline.ts` extracted all seven hardcoded `+ 8` UTC→Taipei conversions to `TAIPEI_UTC_OFFSET_HOURS`.
-- **Testing verified**: `npx vitest run` from `sources/` — 77 files / **1148 tests**, exit 0, no Errors line (was exit 1 / 1136). `npx oxlint` — exit 0, 5 pre-existing `only-export-components` warnings. `npm run typecheck:edge` — exit 0.
-- **Reviews completed**: P1 (Edge fetch): reviewer PASS, blast radius traced caller-by-caller. P3 (money maths): reviewer PASS with 2 RISKs. RISK A (timeline.ts mixed state, 4 sites literal) accepted and FIXED immediately. RISK B (`pnlEngine.ts` `cmp` ≡ `localeCompare` while all `created_at` use consistent ISO) adjudicated non-regression, no live bug.
-- **Files changed**: `sources/src/components/StockDetail/{StockDetailPage.tsx,AiTab.tsx,useDailySeries.ts,AnalysisPage.whatif.test.tsx}`, `sources/src/components/Admin/timeline.ts`, `sources/src/context/WorkspaceContext.tsx`, `sources/src/utils/{pnlEngine.ts,fees.ts}`, `sources/src/services/{priceProxy,stockSearch,fxQuoteProxy,twMarketData,adminStatus,adminUsers,warmStock,reportProxy,adminRun}.ts` + 3 test relaxations, `sources/supabase/functions/stock-price/index.ts`, `sources/supabase/functions/stock-report/twChips.ts`. Added: `sources/src/services/invokeTimeout.test.ts`, `sources/src/components/StockDetail/effectErrorHandling.test.tsx`.
-- **Records finalized**: TASK.md gains two new OPEN entries (CI gate workflow, RISK-001 trigger mechanism). BUG_FIX.md RISK-001 updated with trigger mechanism. PROGRESS.md header updated; this entry added; 0.9.6 entry rolled to PROGRESS_ARCHIVE.md.
-- **Build breakage (found during ship checklist)**: `sources/src/services/invokeTimeout.test.ts` uses `node:fs` but `tsconfig.app.json` only includes `vite/client` types, breaking `tsc -b` and Pages deploy (vitest's esbuild skips type-check, hiding the error locally). Fixed by using Vite's `import.meta.glob` raw import instead — same test logic, zero config change.
-- **Unfinished**: None — audit and fixes complete; no commit made (bookkeeping only per instructions).
 
 ---
 
