@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>庫存總覽「觀察股票」6 種全新獨立 Block 設計展示</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* =========================================================
+     * STOCK-PNL-WEB DESIGN SYSTEM TOKENS & 6-DESIGN SUITE
+     * ========================================================= */
+    :root {
+      --bg: #0b0f19;
+      --bg-glow-a: rgba(99, 102, 241, 0.16);
+      --bg-glow-b: rgba(34, 211, 238, 0.1);
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-strong: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #e7ecf5;
+      --ink-secondary: #9aa6bd;
+      --ink-muted: #64748b;
+      --accent: #7c8cf8;
+      --accent-strong: #6366f1;
+      --accent-2: #22d3ee;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --up: #ff4a5a; /* 台股紅漲 */
+      --up-bg: rgba(255, 74, 90, 0.12);
+      --up-glow: rgba(255, 74, 90, 0.25);
+      --down: #00e676; /* 台股綠跌 */
+      --down-bg: rgba(0, 230, 118, 0.12);
+      --down-glow: rgba(0, 230, 118, 0.25);
+      --danger: #f87171;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+      --header-bg: rgba(11, 15, 25, 0.85);
+      --panel: #131a2b;
+      --modal-bg: rgba(19, 26, 43, 0.97);
+      --card-hover: rgba(255, 255, 255, 0.075);
+    }
+
+    :root[data-theme='light'] {
+      --bg: #eef2f9;
+      --bg-glow-a: rgba(99, 102, 241, 0.12);
+      --bg-glow-b: rgba(34, 211, 238, 0.1);
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-strong: rgba(255, 255, 255, 0.92);
+      --border: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.16);
+      --ink: #17202f;
+      --ink-secondary: #4a586e;
+      --ink-muted: #7b8698;
+      --accent: #5b6cf0;
+      --accent-strong: #4f46e5;
+      --accent-2: #0284c7;
+      --accent-glow: rgba(79, 70, 229, 0.2);
+      --up: #dc2f3f;
+      --up-bg: rgba(220, 47, 63, 0.1);
+      --up-glow: rgba(220, 47, 63, 0.2);
+      --down: #059654;
+      --down-bg: rgba(5, 150, 84, 0.1);
+      --down-glow: rgba(5, 150, 84, 0.2);
+      --danger: #dc2626;
+      --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.08);
+      --header-bg: rgba(240, 244, 250, 0.9);
+      --panel: #ffffff;
+      --modal-bg: rgba(255, 255, 255, 0.98);
+      --card-hover: rgba(255, 255, 255, 0.96);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
+        radial-gradient(900px 480px at -10% 30%, var(--bg-glow-b), transparent 55%);
+      background-attachment: fixed;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      line-height: 1.55;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =========================================================
+     * TOP CONTROL SUITE (6-DESIGN SWITCHER BAR)
+     * ========================================================= */
+    .control-suite {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: #0d1322;
+      border-bottom: 2px solid #38bdf8;
+      padding: 12px 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .suite-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .suite-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .suite-badge {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      color: #090d16;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .suite-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .design-nav-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 900px) {
+      .design-nav-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .design-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #94a3b8;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: all 0.15s ease;
+    }
+    .design-btn .d-num {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 11px;
+      color: #38bdf8;
+    }
+    .design-btn .d-name {
+      font-weight: 600;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .design-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.28);
+      color: #fff;
+    }
+    .design-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(99, 102, 241, 0.25));
+      border-color: #38bdf8;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+    }
+    .design-btn.active .d-name {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* Concept Description Banner */
+    .concept-banner {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 12px 18px;
+      margin: 20px auto 0;
+      max-width: 1180px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .concept-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .concept-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .concept-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .concept-desc {
+      font-size: 12.5px;
+      color: var(--ink-secondary);
+    }
+    .concept-view-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface-strong);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+    }
+
+    /* =========================================================
+     * BASE CONTAINER & COMMON COMPONENT STYLES
+     * ========================================================= */
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 16px 20px 80px;
+    }
+    .glass {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-card);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-strong);
+      color: var(--ink);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: var(--border-strong);
+      border-color: rgba(255,255,255,0.25);
+    }
+    .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-strong), #4338ca);
+      border-color: var(--accent-strong);
+      color: #fff;
+    }
+    .btn-primary:hover { box-shadow: 0 4px 14px var(--accent-glow); }
+    .pnl-up { color: var(--up) !important; }
+    .pnl-down { color: var(--down) !important; }
+    .pnl-neutral { color: var(--ink-secondary) !important; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-count {
+      background: var(--surface-strong);
+      border: 1px solid var(--border-strong);
+      color: var(--ink-secondary);
+    }
+    .badge-up { background: var(--up-bg); color: var(--up); border: 1px solid rgba(255, 74, 90, 0.25); }
+    .badge-down { background: var(--down-bg); color: var(--down); border: 1px solid rgba(0, 230, 118, 0.25); }
+
+    /* Top Active Holdings Minimalist Header */
+    .mini-holdings-summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .holding-kpi-group {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .holding-kpi-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .holding-kpi-item .lbl { font-size: 11.5px; color: var(--ink-secondary); }
+    .holding-kpi-item .val { font-family: var(--font-display); font-size: 17px; font-weight: 700; }
+
+    /* =========================================================
+     * DESIGN VARIANT 1: MODERN BENTO GRID (現代 Bento 網格)
+     * ========================================================= */
+    .v1-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 16px;
+    }
+    .v1-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+    .v1-card:hover {
+      transform: translateY(-3px);
+      background: var(--card-hover);
+      border-color: var(--accent);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+    .v1-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .v1-ticker { font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--ink); }
+    .v1-name { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+    .v1-price-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+    .v1-price { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
+
+    /* =========================================================
+     * DESIGN VARIANT 2: TRADER QUANT & MOMENTUM (量化動能終端)
+     * ========================================================= */
+    .v2-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+      gap: 14px;
+    }
+    .v2-card {
+      background: #0d1424;
+      border: 1px solid #1e293b;
+      border-left: 3px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .v2-card.up { border-left-color: var(--up); }
+    .v2-card.down { border-left-color: var(--down); }
+    .v2-card:hover {
+      background: #131c31;
+      border-color: #38bdf8;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .v2-meter {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 8px 0;
+    }
+    .v2-track {
+      height: 4px;
+      background: #1e293b;
+      border-radius: 2px;
+      position: relative;
+    }
+    .v2-fill {
+      height: 100%;
+      border-radius: 2px;
+    }
+    .v2-pills {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .v2-pill {
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #94a3b8;
+    }
+
+    /* =========================================================
+     * DESIGN VARIANT 3: MINIMALIST CLEAN SLATE (瑞士極簡流)
+     * ========================================================= */
+    .v3-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .v3-card {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .v3-card:hover {
+      background: var(--surface-strong);
+      border-color: var(--ink-secondary);
+    }
+    .v3-big-price {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 800;
+      margin: 6px 0 2px;
+      letter-spacing: -0.5px;
+    }
+
+    /* =========================================================
+     * DESIGN VARIANT 4: MASTER-DETAIL SPLIT VIEW (主從即時畫布)
+     * ========================================================= */
+    .v4-split-layout {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .v4-split-layout { grid-template-columns: 1fr; }
+    }
+    .v4-list-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+    .v4-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .v4-item:hover, .v4-item.selected {
+      background: var(--surface-strong);
+      border-color: var(--accent);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .v4-detail-panel {
+      background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8));
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* =========================================================
+     * DESIGN VARIANT 5: HEATMAP & CHIP TILES (熱力磚塊與籌碼)
+     * ========================================================= */
+    .v5-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .v5-tile {
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid transparent;
+    }
+    .v5-tile.heat-up {
+      background: linear-gradient(135deg, rgba(255, 74, 90, 0.18), rgba(255, 74, 90, 0.05));
+      border-color: rgba(255, 74, 90, 0.35);
+    }
+    .v5-tile.heat-down {
+      background: linear-gradient(135deg, rgba(0, 230, 118, 0.18), rgba(0, 230, 118, 0.05));
+      border-color: rgba(0, 230, 118, 0.35);
+    }
+    .v5-tile:hover {
+      transform: scale(1.02);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .v5-chip-bar {
+      display: flex;
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 10px 0 6px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* =========================================================
+     * DESIGN VARIANT 6: INTERACTIVE ACCORDION & TABS (多維折疊抽屜)
+     * ========================================================= */
+    .v6-accordion-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .v6-accordion-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .v6-accordion-item.expanded {
+      border-color: var(--accent);
+      background: var(--surface-strong);
+    }
+    .v6-acc-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .v6-acc-body {
+      padding: 0 18px 16px;
+      display: none;
+      border-top: 1px dashed var(--border);
+      padding-top: 12px;
+      font-size: 12.5px;
+    }
+    .v6-accordion-item.expanded .v6-acc-body {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    /* =========================================================
+     * UNIFIED TABLE STYLES ACROSS ALL DESIGNS
+     * ========================================================= */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .data-table th {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--ink-secondary);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .data-table th.num, .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr.clickable-row { cursor: pointer; transition: background 0.12s; }
+    .data-table tr.clickable-row:hover { background: var(--card-hover); }
+
+    /* =========================================================
+     * DRILLDOWN SIMULATION MODAL (個股分析)
+     * ========================================================= */
+    .drilldown-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 14, 0.82);
+      backdrop-filter: blur(16px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .drilldown-modal.active { display: flex; animation: fadeIn 0.2s ease; }
+    .d-box {
+      width: 100%;
+      max-width: 960px;
+      max-height: 90vh;
+      background: var(--panel);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .d-head {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+    }
+    .d-body { padding: 24px; overflow-y: auto; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== TOP 6-DESIGN CONTROL SUITE ==================== -->
+  <div class="control-suite">
+    <div class="suite-header">
+      <div class="suite-title">
+        <span class="suite-badge">設計提案展示</span>
+        <span>庫存總覽「觀察股票」獨立 Block —— 6 種不同設計方案</span>
+      </div>
+      <div class="suite-actions">
+        <button class="btn btn-sm" onclick="toggleTheme()">🌓 切換深/淺色</button>
+      </div>
+    </div>
+
+    <!-- 6 Design Buttons -->
+    <div class="design-nav-grid">
+      <button class="design-btn active" id="dbtn-1" onclick="switchDesign(1)">
+        <span class="d-num">方案 1</span>
+        <span class="d-name">現代 Bento 網格</span>
+      </button>
+      <button class="design-btn" id="dbtn-2" onclick="switchDesign(2)">
+        <span class="d-num">方案 2</span>
+        <span class="d-name">量化動能看板</span>
+      </button>
+      <button class="design-btn" id="dbtn-3" onclick="switchDesign(3)">
+        <span class="d-num">方案 3</span>
+        <span class="d-name">瑞士極簡清爽流</span>
+      </button>
+      <button class="design-btn" id="dbtn-4" onclick="switchDesign(4)">
+        <span class="d-num">方案 4</span>
+        <span class="d-name">主從分割畫布</span>
+      </button>
+      <button class="design-btn" id="dbtn-5" onclick="switchDesign(5)">
+        <span class="d-num">方案 5</span>
+        <span class="d-name">熱力磚塊與籌碼</span>
+      </button>
+      <button class="design-btn" id="dbtn-6" onclick="switchDesign(6)">
+        <span class="d-num">方案 6</span>
+        <span class="d-name">多維折疊抽屜</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Concept Banner -->
+  <div class="concept-banner" id="concept-banner">
+    <div class="concept-info">
+      <span class="concept-tag" id="banner-tag">方案 1 · 現代 Bento 網格</span>
+      <div class="concept-title" id="banner-title">Modern Bento Grid & Modular Sparkline</div>
+      <div class="concept-desc" id="banner-desc">大字體報價、7日漸層微走勢 Sparkline 折線圖、籌碼標籤，兼具視覺平衡感與高易讀性。</div>
+    </div>
+    <div class="concept-view-ctrl" id="view-mode-ctrl">
+      <button class="btn btn-sm btn-primary" id="vbtn-cards" onclick="setViewMode('cards')">⊞ 圖卡模式</button>
+      <button class="btn btn-sm" id="vbtn-table" onclick="setViewMode('table')">☷ 條列模式</button>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN PAGE CONTAINER ==================== -->
+  <main class="container">
+
+    <!-- 庫存總覽頂部：Active 持股快速摘要（營造真實上下文） -->
+    <div class="mini-holdings-summary">
+      <div class="holding-kpi-group">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">💼</span>
+          <strong style="font-size: 14px;">Active 持股概況</strong>
+        </div>
+        <div class="holding-kpi-item">
+          <span class="lbl">持倉市值 (TWD)</span>
+          <span class="val">$1,854,200</span>
+        </div>
+        <div class="holding-kpi-item">
+          <span class="lbl">未實現淨損益</span>
+          <span class="val pnl-up">+$434,200 (+30.5%)</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 12px; color: var(--ink-muted);">現價同步於 13:30:00</span>
+      </div>
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- DYNAMIC WATCHLIST BLOCK (由 JS 切換渲染 6 種不同設計) -->
+    <!-- ========================================================================= -->
+    <div id="design-canvas-area">
+      <!-- Injected by renderCurrentDesign() -->
+    </div>
+
+  </main>
+
+
+  <!-- ==================== DRILLDOWN MODAL (個股分析模擬畫面) ==================== -->
+  <div class="drilldown-modal" id="dd-modal">
+    <div class="d-box">
+      <div class="d-head">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: var(--font-mono); font-weight: 700; font-size: 16px; background: var(--surface-strong); padding: 4px 10px; border-radius: 6px;" id="modal-ticker">2330</span>
+          <h2 style="font-size: 18px; font-weight: 700;" id="modal-name">台積電</h2>
+          <span class="badge badge-up" id="modal-badge">+2.18%</span>
+        </div>
+        <button class="btn btn-sm" onclick="closeDrilldown()">✕ 關閉 (返回庫存總覽)</button>
+      </div>
+      <div class="d-body">
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+          <button class="btn btn-sm btn-primary">📊 分析內容 (行情/籌碼/基本面/技術面)</button>
+          <button class="btn btn-sm">🧮 損益試算</button>
+          <button class="btn btn-sm">✨ AI 深度分析</button>
+        </div>
+        <div class="glass" style="padding: 20px;">
+          <h4 style="font-size: 15px; margin-bottom: 12px;">🎯 盤後籌碼與法人買賣超摘要</h4>
+          <p style="color: var(--ink-secondary); line-height: 1.7; font-size: 13px;">
+            點擊觀察股票成功跳轉至個股分析！此處完整呈現三大法人連續買賣超、融資券變化、本益比河流圖、歷史月營收以及技術均線多空指標。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    const mockWatchlist = [
+      { ticker: '2308', name: '台達電', industry: '電子零組件', price: 398.50, change: 8.50, pct: 2.18, vol: '14,230張', foreign: '+2,150張', pe: '24.1x', low: 391.0, high: 402.0, trend: [382, 385, 380, 388, 392, 390, 398.5] },
+      { ticker: '2382', name: '廣達', industry: 'AI伺服器', price: 278.00, change: -3.50, pct: -1.24, vol: '22,450張', foreign: '-1,420張', pe: '18.2x', low: 275.5, high: 283.0, trend: [290, 288, 285, 286, 282, 281.5, 278] },
+      { ticker: '3008', name: '大立光', industry: '光電光學', price: 2740.00, change: 45.00, pct: 1.67, vol: '820張', foreign: '+140張', pe: '16.5x', low: 2700.0, high: 2760.0, trend: [2650, 2680, 2670, 2710, 2700, 2695, 2740] },
+      { ticker: '3293', name: '鈊象', industry: '遊戲軟體', price: 1045.00, change: 25.00, pct: 2.45, vol: '3,110張', foreign: '+480張', pe: '26.8x', low: 1025.0, high: 1060.0, trend: [980, 995, 1010, 1005, 1020, 1020, 1045] },
+      { ticker: '2603', name: '長榮', industry: '航運海運', price: 182.50, change: -1.00, pct: -0.54, vol: '18,900張', foreign: '+560張', pe: '5.2x', low: 181.0, high: 185.0, trend: [178, 180, 182, 184, 185, 183.5, 182.5] },
+      { ticker: '6669', name: '緯穎', industry: '雲端運算', price: 2180.00, change: 65.00, pct: 3.07, vol: '2,400張', foreign: '+890張', pe: '21.4x', low: 2120.0, high: 2200.0, trend: [2050, 2080, 2100, 2130, 2110, 2115, 2180] }
+    ];
+
+    let currentDesign = 1;
+    let currentViewMode = 'cards'; // 'cards' | 'table'
+    let selectedV4Ticker = mockWatchlist[0].ticker;
+
+    const designMeta = {
+      1: { tag: '方案 1 · 現代 Bento 網格', title: 'Modern Bento Grid & Modular Sparkline', desc: '大字體報價、7日漸層微走勢 Sparkline 折線圖、籌碼標籤，兼具現代感與視覺平衡。' },
+      2: { tag: '方案 2 · 量化動能看板', title: 'Trader Quant & Momentum Matrix', desc: '交易員量化風：當日振幅進度指針、今日量能比與多空燈號，資料密度最高。' },
+      3: { tag: '方案 3 · 瑞士極簡清爽流', title: 'Minimalist Clean Slate & Pure Typography', desc: '極簡主義，零視覺負擔，超大報價數字配細緻底線色彩，極度清爽無干擾。' },
+      4: { tag: '方案 4 · 主從分割畫布', title: 'Master-Detail Split View & Live Peek', desc: '左側清單切換、右側即時展示籌碼摘要卡，不需跳轉即可快速逐檔檢視。' },
+      5: { tag: '方案 5 · 熱力磚塊與籌碼', title: 'Visual Heatmap & Sentiment Chip Tiles', desc: '根據漲跌幅強度動態調整背景光暈，直觀呈現市場黑馬與法人資金流向。' },
+      6: { tag: '方案 6 · 多維折疊抽屜', title: 'Interactive Accordion & Multi-View Tabs', desc: '抽屜式行內展開，支援在總覽直接切換走勢/籌碼分頁，操作自由度極高。' }
+    };
+
+    function switchDesign(num) {
+      currentDesign = num;
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById(`dbtn-${i}`).classList.toggle('active', i === num);
+      }
+      const meta = designMeta[num];
+      document.getElementById('banner-tag').textContent = meta.tag;
+      document.getElementById('banner-title').textContent = meta.title;
+      document.getElementById('banner-desc').textContent = meta.desc;
+
+      // Disable view mode switch for Split view (design 4) as it has its own dual structure
+      document.getElementById('view-mode-ctrl').style.display = num === 4 ? 'none' : 'flex';
+
+      renderCurrentDesign();
+    }
+
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      document.getElementById('vbtn-cards').className = mode === 'cards' ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+      document.getElementById('vbtn-table').className = mode === 'table' ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+      renderCurrentDesign();
+    }
+
+    function renderCurrentDesign() {
+      const canvas = document.getElementById('design-canvas-area');
+      
+      // Common Block Header Template
+      const blockHeader = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">👁️</span>
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--ink);">觀察股票清單</h3>
+            <span class="badge badge-count">${mockWatchlist.length}/30</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="alert('開啟加入觀察股票視窗')">+ 加入觀察標的</button>
+        </div>
+      `;
+
+      if (currentDesign === 4) {
+        // Master-Detail View
+        canvas.innerHTML = blockHeader + renderDesign4();
+        return;
+      }
+
+      if (currentViewMode === 'table') {
+        canvas.innerHTML = blockHeader + renderCommonTable();
+      } else {
+        switch (currentDesign) {
+          case 1: canvas.innerHTML = blockHeader + renderDesign1(); break;
+          case 2: canvas.innerHTML = blockHeader + renderDesign2(); break;
+          case 3: canvas.innerHTML = blockHeader + renderDesign3(); break;
+          case 5: canvas.innerHTML = blockHeader + renderDesign5(); break;
+          case 6: canvas.innerHTML = blockHeader + renderDesign6(); break;
+        }
+      }
+    }
+
+    // ==================== RENDERING TEMPLATES ====================
+
+    // Common Table Mode
+    function renderCommonTable() {
+      const rows = mockWatchlist.map(s => {
+        const isUp = s.change >= 0;
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        const sign = isUp ? '+' : '';
+        return `
+          <tr class="clickable-row" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+            <td><strong>${s.ticker}</strong></td>
+            <td>
+              <strong>${s.name}</strong>
+              <span style="font-size: 11px; color: var(--ink-muted); margin-left: 6px;">${s.industry}</span>
+            </td>
+            <td class="num ${pnl}"><strong>$${s.price.toFixed(2)}</strong></td>
+            <td class="num ${pnl}">${sign}${s.change.toFixed(2)} (${sign}${s.pct}%)</td>
+            <td>${renderSparkSvg(s.trend, isUp, 90, 20)}</td>
+            <td class="num">${s.vol}</td>
+            <td style="text-align: center;">
+              <button class="btn btn-sm" style="padding: 2px 8px;" onclick="event.stopPropagation(); openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">分析 ➔</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <div class="glass" style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>代號</th>
+                <th>名稱 / 產業</th>
+                <th class="num">最新現價</th>
+                <th class="num">今日漲跌</th>
+                <th>7日走勢</th>
+                <th class="num">成交量</th>
+                <th style="text-align: center;">操作</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Design 1: Bento Grid
+    function renderDesign1() {
+      const cards = mockWatchlist.map(s => {
+        const isUp = s.change >= 0;
+        const sign = isUp ? '+' : '';
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        const badge = isUp ? 'badge-up' : 'badge-down';
+        return `
+          <div class="v1-card" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+            <div>
+              <div class="v1-card-top">
+                <div>
+                  <span class="v1-ticker">${s.ticker}</span>
+                  <div class="v1-name">${s.name}</div>
+                </div>
+                <span class="badge ${badge}">${sign}${s.pct}%</span>
+              </div>
+              <div class="v1-price-row">
+                <div class="v1-price ${pnl}">$${s.price.toFixed(2)}</div>
+                <div style="font-size: 11px; color: var(--ink-muted);">量: ${s.vol}</div>
+              </div>
+              ${renderSparkSvg(s.trend, isUp, 230, 30)}
+            </div>
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-muted);">
+              <span>外資 ${s.foreign}</span>
+              <span style="color: var(--accent);">點擊深入分析 →</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="v1-card-grid">${cards}</div>`;
+    }
+
+    // Design 2: Trader Quant
+    function renderDesign2() {
+      const cards = mockWatchlist.map(s => {
+        const isUp = s.change >= 0;
+        const sign = isUp ? '+' : '';
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        const rangePct = Math.min(100, Math.max(0, ((s.price - s.low) / (s.high - s.low)) * 100));
+        return `
+          <div class="v2-card ${isUp ? 'up' : 'down'}" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div>
+                <strong style="font-family: var(--font-mono); color: #fff;">${s.ticker}</strong>
+                <span style="font-weight: 600; color: #cbd5e1; margin-left: 6px;">${s.name}</span>
+              </div>
+              <div class="${pnl}" style="font-family: var(--font-mono); font-weight: 700;">${sign}${s.change.toFixed(2)} (${sign}${s.pct}%)</div>
+            </div>
+            <div style="font-size: 24px; font-family: var(--font-display); font-weight: 700; color: #fff; margin: 4px 0;">$${s.price.toFixed(2)}</div>
+            <div class="v2-meter">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; color: #64748b;">
+                <span>L $${s.low}</span>
+                <span>當日振幅指針</span>
+                <span>H $${s.high}</span>
+              </div>
+              <div class="v2-track">
+                <div class="v2-fill" style="width: ${rangePct}%; background: ${isUp ? 'var(--up)' : 'var(--down)'};"></div>
+              </div>
+            </div>
+            <div class="v2-pills">
+              <span class="v2-pill">PE ${s.pe}</span>
+              <span class="v2-pill">外資 ${s.foreign}</span>
+              <span class="v2-pill">量 ${s.vol}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="v2-card-grid">${cards}</div>`;
+    }
+
+    // Design 3: Minimalist
+    function renderDesign3() {
+      const cards = mockWatchlist.map(s => {
+        const isUp = s.change >= 0;
+        const sign = isUp ? '+' : '';
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        return `
+          <div class="v3-card" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="font-family: var(--font-mono); font-weight: 700; color: var(--ink-secondary);">${s.ticker}</span>
+              <span style="font-size: 12px; color: var(--ink-muted);">${s.industry}</span>
+            </div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--ink);">${s.name}</div>
+            <div class="v3-big-price ${pnl}">$${s.price.toFixed(2)}</div>
+            <div style="font-size: 12px; font-weight: 600;" class="${pnl}">
+              ${sign}${s.change.toFixed(2)} (${sign}${s.pct}%)
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="v3-card-grid">${cards}</div>`;
+    }
+
+    // Design 4: Master-Detail Split View
+    function renderDesign4() {
+      const selected = mockWatchlist.find(s => s.ticker === selectedV4Ticker) || mockWatchlist[0];
+      const isUp = selected.change >= 0;
+      const sign = isUp ? '+' : '';
+      const pnl = isUp ? 'pnl-up' : 'pnl-down';
+
+      const listItems = mockWatchlist.map(s => {
+        const isSelected = s.ticker === selected.ticker;
+        const itemUp = s.change >= 0;
+        const itemPnl = itemUp ? 'pnl-up' : 'pnl-down';
+        const itemSign = itemUp ? '+' : '';
+        return `
+          <div class="v4-item ${isSelected ? 'selected' : ''}" onclick="selectV4('${s.ticker}')">
+            <div>
+              <span style="font-family: var(--font-mono); font-weight: 700;">${s.ticker}</span>
+              <strong style="margin-left: 6px;">${s.name}</strong>
+              <div style="font-size: 11px; color: var(--ink-muted);">${s.industry}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; font-family: var(--font-display); font-size: 15px;">$${s.price.toFixed(2)}</div>
+              <div class="${itemPnl}" style="font-size: 11.5px; font-weight: 600;">${itemSign}${s.pct}%</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="v4-split-layout">
+          <div class="v4-list-container">
+            ${listItems}
+          </div>
+          <div class="v4-detail-panel">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <span class="badge badge-tag">${selected.industry}</span>
+                  <h3 style="font-size: 20px; font-weight: 700; margin-top: 4px;">${selected.ticker} ${selected.name}</h3>
+                </div>
+                <div style="text-align: right;">
+                  <div class="v3-big-price ${pnl}" style="margin: 0; font-size: 26px;">$${selected.price.toFixed(2)}</div>
+                  <div class="${pnl}" style="font-weight: 700;">${sign}${selected.change.toFixed(2)} (${sign}${selected.pct}%)</div>
+                </div>
+              </div>
+
+              <div style="margin: 16px 0;">
+                <div style="font-size: 12px; color: var(--ink-secondary); margin-bottom: 6px;">7日趨勢走勢</div>
+                ${renderSparkSvg(selected.trend, isUp, 320, 45)}
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; font-size: 12.5px;">
+                <div>外資買賣超: <strong class="${pnl}">${selected.foreign}</strong></div>
+                <div>本益比 (PE): <strong>${selected.pe}</strong></div>
+                <div>成交總量: <strong>${selected.vol}</strong></div>
+                <div>當日最高: <strong>$${selected.high}</strong></div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="margin-top: 16px; justify-content: center; width: 100%;" onclick="openDrilldown('${selected.ticker}', '${selected.name}', '${sign}${selected.pct}%')">
+              進入「${selected.name}」完整個股分析 ➔
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function selectV4(ticker) {
+      selectedV4Ticker = ticker;
+      renderCurrentDesign();
+    }
+
+    // Design 5: Heatmap Tiles
+    function renderDesign5() {
+      const tiles = mockWatchlist.map(s => {
+        const isUp = s.change >= 0;
+        const sign = isUp ? '+' : '';
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        const heatClass = isUp ? 'heat-up' : 'heat-down';
+        return `
+          <div class="v5-tile ${heatClass}" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="font-family: var(--font-mono); font-weight: 700;">${s.ticker}</span>
+              <span class="${pnl}" style="font-weight: 700; font-size: 14px;">${sign}${s.pct}%</span>
+            </div>
+            <div style="font-size: 15px; font-weight: 700; color: #fff;">${s.name}</div>
+            <div style="font-size: 24px; font-family: var(--font-display); font-weight: 800; margin: 4px 0;">$${s.price.toFixed(2)}</div>
+            <div class="v5-chip-bar">
+              <div style="width: 70%; background: ${isUp ? 'var(--up)' : 'var(--down)'};"></div>
+              <div style="width: 30%; background: var(--accent);"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-secondary);">
+              <span>法人買超力道</span>
+              <span>${s.vol}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="v5-grid">${tiles}</div>`;
+    }
+
+    // Design 6: Accordion Multi-View
+    function renderDesign6() {
+      const items = mockWatchlist.map((s, idx) => {
+        const isUp = s.change >= 0;
+        const sign = isUp ? '+' : '';
+        const pnl = isUp ? 'pnl-up' : 'pnl-down';
+        const isFirst = idx === 0;
+        return `
+          <div class="v6-accordion-item ${isFirst ? 'expanded' : ''}" id="v6-item-${s.ticker}">
+            <div class="v6-acc-header" onclick="toggleV6('${s.ticker}')">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span style="font-family: var(--font-mono); font-weight: 700;">${s.ticker}</span>
+                <strong style="font-size: 14px;">${s.name}</strong>
+                <span class="badge badge-tag">${s.industry}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="font-family: var(--font-display); font-size: 17px; font-weight: 700;">$${s.price.toFixed(2)}</span>
+                <span class="${pnl}" style="font-weight: 700; width: 80px; text-align: right;">${sign}${s.pct}%</span>
+                <span style="font-size: 12px; color: var(--ink-muted);">▼</span>
+              </div>
+            </div>
+            <div class="v6-acc-body">
+              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: center;">
+                <div>
+                  <div style="margin-bottom: 6px; color: var(--ink-secondary);">7日股價走勢微預覽：</div>
+                  ${renderSparkSvg(s.trend, isUp, 380, 32)}
+                </div>
+                <div style="text-align: right;">
+                  <button class="btn btn-sm btn-primary" onclick="openDrilldown('${s.ticker}', '${s.name}', '${sign}${s.pct}%')">
+                    開啟個股深度報告 ➔
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="v6-accordion-list">${items}</div>`;
+    }
+
+    function toggleV6(ticker) {
+      const item = document.getElementById(`v6-item-${ticker}`);
+      item.classList.toggle('expanded');
+    }
+
+    function renderSparkSvg(points, isUp, width, height) {
+      if (!points) return '';
+      const min = Math.min(...points);
+      const max = Math.max(...points);
+      const range = max - min || 1;
+      const pad = 2;
+      const color = isUp ? 'var(--up)' : 'var(--down)';
+      const coords = points.map((p, i) => {
+        const x = (i / (points.length - 1)) * (width - pad * 2) + pad;
+        const y = height - pad - ((p - min) / range) * (height - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+
+      return `
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="overflow: visible;">
+          <polyline fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="${coords}" />
+        </svg>
+      `;
+    }
+
+    // Modal Handlers
+    function openDrilldown(ticker, name, pct) {
+      document.getElementById('modal-ticker').textContent = ticker;
+      document.getElementById('modal-name').textContent = name;
+      const badge = document.getElementById('modal-badge');
+      badge.textContent = pct;
+      badge.className = pct.startsWith('+') ? 'badge badge-up' : 'badge badge-down';
+      document.getElementById('dd-modal').classList.add('active');
+    }
+
+    function closeDrilldown() {
+      document.getElementById('dd-modal').classList.remove('active');
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+    }
+
+    // Initial render
+    switchDesign(1);
+  </script>
+</body>
+</html>

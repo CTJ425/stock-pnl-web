@@ -38,7 +38,6 @@ import { FundamentalTab } from './FundamentalTab'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import { TechnicalTab } from './TechnicalTab'
 import { WhatIfTab } from './WhatIfTab'
-import { WatchTab } from './WatchTab'
 import { useDailySeries } from './useDailySeries'
 import { buildTechnicalView } from './technicalView'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -59,19 +58,18 @@ interface StockDetailPageProps extends StockDetailTarget {
   avgCost?: number | null
   /** The control items on the left side of the top of the page (AnalysisPage passes in the drop-down menu for switching stocks)*/
   selector?: ReactNode
-  /** Fired when a row in the 觀察股票 tab is clicked. Carries both the ticker and its display name. */
+  /** Fired when a row in a watchlist component is clicked. */
   onSelectTicker?: (ticker: string, name: string) => void
-  /** Fired after the 觀察股票 tab successfully adds or removes a watched ticker. */
+  /** Fired after a watchlist component successfully adds or removes a watched ticker. */
   onWatchlistChanged?: () => void
 }
 
-type DetailTab = 'analysis' | 'whatif' | 'ai' | 'watch'
+type DetailTab = 'analysis' | 'whatif' | 'ai'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
   { id: 'whatif', label: '損益試算' },
   { id: 'ai', label: 'AI 分析' },
-  { id: 'watch', label: '觀察股票' },
 ]
 
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
@@ -93,8 +91,6 @@ export function StockDetailPage({
   rawAvgCost = null,
   avgCost = null,
   selector,
-  onSelectTicker,
-  onWatchlistChanged,
 }: StockDetailPageProps) {
   const [tab, setTab] = useState<DetailTab>('analysis')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -403,13 +399,9 @@ export function StockDetailPage({
             heldQty={holding?.qty ?? null}
           />
         </div>
-      ) : tab === 'ai' ? (
-        <div className="glass detail-body">
-          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
-        </div>
       ) : (
         <div className="glass detail-body">
-          <WatchTab onSelectTicker={(t, n) => onSelectTicker?.(t, n)} onChanged={onWatchlistChanged} />
+          <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
         </div>
       )}
     </div>

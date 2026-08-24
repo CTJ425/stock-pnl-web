@@ -61,6 +61,12 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
     reloadWatchlist()
   }, [])
 
+  useEffect(() => {
+    if (initialTicker) {
+      setSelectedKey(`watch:${initialTicker}`)
+    }
+  }, [initialTicker])
+
   const twRows = useMemo(
     () =>
       buildHoldingRows(holdings, prices, feeRate, current?.id).filter(
@@ -230,8 +236,6 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
           setSelectedKey(`watch:${ticker}`)
         }}
         onWatchlistChanged={() => {
-          // A fresh list is authoritative; pickedWatch only bridges "added in the tab" to
-          // "present in my copy" and must not outlive the reload, or a removed ticker survives.
           reloadWatchlist(true)
         }}
       />
