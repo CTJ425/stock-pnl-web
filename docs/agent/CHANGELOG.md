@@ -13,7 +13,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🧾 **半途失敗要說實話**（`restoreFailureMessage`）— 三張表是三次獨立寫入、之間沒有交易保護，所以可能寫到一半才失敗。原本只回傳一句原始的 Postgres 錯誤，管理員會誤以為什麼都沒發生。現在改回傳「已寫入 workspaces 2 筆、transactions 51 筆，請重新預覽確認目前狀態」。還原本身冪等，重跑即可補完。
 - ✅ **測試** — 新增 26 條（`backupAdmin` 12＋4、`adminBackups` 6、`BackupsSection` 8）。全套 `npm test` **81 檔 / 1234 測試** exit 0；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0；`npx oxlint` 5 個既有警告，無新增。
 - 🔬 **DEV 災難演練**（真實刪除後還原）— 刪掉 3 筆指定交易後，預覽準確回報「檔案 62／現存 59／將補回 3」且**未寫入任何資料**（仍 59 筆）；執行還原後回到 62 筆，且**整表 checksum 與刪除前完全相同**（逐欄位一致，不只是筆數對）。重跑預覽回報 0 缺漏（冪等）。竄改測試：改掉文件 `user_id` → `備份檔的帳號與路徑不符`；只改**單一列**的 `user_id` → `備份檔內有不屬於該帳號的資料列`；兩者皆未寫入任何資料，事後確認無汙染列。
-- 🚀 **部署** — DEV 已部署並完成上述災難演練。**本版無 schema 異動**，PROD 上線只需 `supabase functions deploy stock-report --no-verify-jwt` 一步；`backup-transactions` 本版未異動，不需重新部署。推送 `main` 只部署 GitHub Pages、不會部署 Edge Function，因此在該指令執行完成之前，PROD 後台的「還原」按鈕會回報找不到動作。
+- 🚀 **部署** — DEV 與 PROD 皆已部署驗證（2026-08-24）。本版**無 schema 異動**，PROD 只需 `supabase functions deploy stock-report --no-verify-jwt` 一步；`stock-report` 由 v56 → v57、`ezbr_sha256` 確認更換，`verify_jwt` 維持 `false`，`stock-price` 與 `backup-transactions` 雜湊完全未動。PROD 驗證：`admin-backup-restore` 無授權／垃圾憑證皆 401；五種畸形路徑（非 uuid 前綴、單位數月份、第二副檔名、多層目錄、純檔名）全部回 `備份路徑格式不正確`；兩個帳號的唯讀預覽皆回報 `applied=false` 且無缺漏（53/53/0、57/57/0），事後確認 PROD 資料列數未變（110 筆交易、5 個工作區）。**PROD 上未執行任何實際還原。**
 
 ### 0.9.11（2026-08-24）— 交易紀錄每日自動備份，與管理者專屬的備份後台
 
