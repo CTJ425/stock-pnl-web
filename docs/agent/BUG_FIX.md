@@ -94,6 +94,17 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ---
 
+## 📝 Operational Notes
+
+### Project-identity heuristic in `supabase-ops` skill is stale
+
+- **Finding**: The `supabase-ops` skill's project-identity distinguishing heuristic states "batch_run_log: official area 2 / test area 0", used to infer which environment is live. As of 2026-08-24, DEV self-hosted has 211 rows in batch_run_log, so the count no longer reliably distinguishes DEV (test) from PROD (official).
+- **Impact**: Agents relying on this heuristic would give false confidence about the target environment. Not a bug in the skill itself, but the distinguishing criterion has eroded.
+- **Mitigation**: When operating on Supabase environments, use explicit paths for disambiguation. DEV operations on self-hosted should reference the compose file path directly; PROD operations on cloud should reference the explicit project ID (kxnxadaghidwumqsqneu). Do not rely on count-based heuristics that can drift over time.
+- **Discovered**: During backup-transactions phase 1 DEV deployment, 2026-08-24.
+
+---
+
 **Historical notes**: BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample
 decided landing) fixed in **0.7.13** — see `FIXED_BUG.md`. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
 

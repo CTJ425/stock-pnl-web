@@ -5,6 +5,21 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-24 13:33:13 Asia/Taipei (Task completed: analysis-picker-watch-group — stock picker watchlist restored)
+
+- **Task**: analysis-picker-watch-group — Restore watched stocks listing in 個股分析 stock picker dropdown.
+- **Outcome**: The picker now displays watched stocks grouped under `觀察` below `持股`, separated with existing `.hmenu-head` / `.hmenu-sep` classes (no new CSS). Held tickers override watched duplicates, so no stock appears twice. Selection resolution order preserved: holdings win, then watchlist, then fallback.
+- **Files changed**: `sources/src/components/StockDetail/AnalysisPage.tsx` (render holdings + watched groups), `sources/src/components/StockDetail/AnalysisPage.test.tsx` (new test case for grouped picker render).
+- **Testing**: AnalysisPage 21 tests passed. Full suite: 77 files / 1147 tests passed, exit 0. `tsc --noEmit -p tsconfig.app.json` exit 0 — no regressions.
+- **Review**: Skipped per policy — a previously failing test (picker without watched stocks) now passes, and changes touch no persistence, auth, API boundary, or calculation. Proof: git diff shows only selector logic and test assert, no fee/math/schema changes.
+- **Lane**: 1 (bounded — selector reordering only).
+- **Version**: NOT bumped, no commit made (bookkeeping only per Scribe role).
+- **Spec revision**: `docs/agent/specs/watchlist-ux-overhaul.md` line 24 recorded "Stock picker: **holdings only.**" and line 49-50 repeated this constraint. Appended dated revision note stating the holdings-only picker decision was reversed by this task; watched stocks now appear in picker grouped as `觀察`, so a later agent does not restore the old behaviour. Original text unchanged, revision note added.
+- **Records finalized**: This entry added to PROGRESS.md. New open task added to TASK.md for ETF constituents investigation. Spec revision note written. No entries moved this dispatch.
+- **Unfinished**: None — analysis-picker-watch-group recorded complete.
+
+---
+
 ## 📅 Log: 2026-08-24 11:37:39 Asia/Taipei (Release 0.9.9 — Dashboard watchlist redesign, design reversal recorded, Task 116 completed)
 
 - **Release**: Version 0.9.9 finalizes watchlist feature (commit `3f25ed7`). Task 116 (watchlist UX redesign, 0.9.0 → 0.9.9) **complete and closed**. Design reversal tracked as implementation narrative: initial 0.9.0 placement (庫存總覽) rejected; revised to 個股分析 tab 4 (0.9.0 → 0.9.8); final placement on Dashboard WatchSection (0.9.9).
