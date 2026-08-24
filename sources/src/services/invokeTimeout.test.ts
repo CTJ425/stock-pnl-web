@@ -15,11 +15,15 @@
  * service would mean standing up nine different mock fixtures to re-prove the same one line.
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const SERVICES_DIR = dirname(fileURLToPath(import.meta.url))
+// Vite's raw glob rather than node:fs — this file is type-checked by `tsconfig.app.json`, which
+// carries only `vite/client` types, so a `node:*` import breaks `npm run build` (and with it the
+// Pages deploy) while vitest itself still passes.
+const MODULES = import.meta.glob('./*.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
 
 /**
  * Comments out, so that prose mentioning `functions.invoke` (several of these files document the
@@ -52,9 +56,9 @@ function invokeOptionBlocks(source: string): string[] {
   return blocks
 }
 
-const sources = readdirSync(SERVICES_DIR)
-  .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-  .map((f) => ({ file: f, src: readFileSync(join(SERVICES_DIR, f), 'utf-8') }))
+const sources: Array<{ file: string; src: string }> = Object.entries(MODULES)
+  .filter(([path]) => !path.endsWith('.test.ts'))
+  .map(([path, src]) => ({ file: path.replace('./', ''), src }))
   .filter(({ src }) => invokeOptionBlocks(src).length > 0)
 
 describe('Edge invoke timeout contract', () => {
