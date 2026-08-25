@@ -81,6 +81,31 @@ export function prunablePaths(names: string[], keepDays: number): string[] {
   return sorted.slice(keepDays)
 }
 
+/**
+ * A human-readable reason for a failed step.
+ *
+ * `String(err)` is not enough: PostgREST returns a **plain object**
+ * (`{ message, code, details, hint }`), not an Error, so stringifying it yields the literal
+ * "[object Object]" — which is exactly what backup_run_log recorded on 2026-08-25 instead of
+ * the 401 that caused the failure. Storage and network errors do extend Error and keep working.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const o = err as Record<string, unknown>
+    const parts = [o.message, o.code, o.details, o.hint]
+      .filter((v) => typeof v === 'string' && v.length > 0)
+      .map((v) => v as string)
+    if (parts.length > 0) return parts.join(' | ')
+    try {
+      return JSON.stringify(err)
+    } catch {
+      return String(err)
+    }
+  }
+  return String(err)
+}
+
 export function rowCounts(tables: BackupTables): {
   workspaces: number
   transactions: number

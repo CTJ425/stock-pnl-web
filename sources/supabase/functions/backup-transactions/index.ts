@@ -13,6 +13,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
   backupObjectPath,
   buildBackupPayload,
+  describeError,
   prunablePaths,
   rowCounts,
   taipeiYmd,
@@ -21,6 +22,12 @@ import {
 
 const BACKUPS_BUCKET = 'backups'
 const KEEP_DAYS = 7
+
+// One transient 401 on a single PostgREST call lost a whole account's backup on 2026-08-25
+// (the two sibling requests in the same Promise.all returned 200). Nothing retried it and the
+// next chance was 24 hours later, so an account is now re-attempted before it is declared failed.
+const MAX_ATTEMPTS = 3
+const RETRY_DELAY_MS = 500
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution
 // environment. Service role bypasses RLS — required to read every account's rows and to write
@@ -117,7 +124,7 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
         row.pruned = toDelete.length
       }
     } catch (pruneErr) {
-      row.error = pruneErr instanceof Error ? pruneErr.message : String(pruneErr)
+      row.error = describeError(pruneErr)
     }
 
     return row
@@ -132,9 +139,29 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
       object_path: null,
       pruned: 0,
       status: 'error',
-      error: err instanceof Error ? err.message : String(err),
+      error: describeError(err),
     }
   }
+}
+
+/**
+ * Retries the whole account only when it failed. A prune-only failure returns `status='ok'` and
+ * is not retried — the object is already uploaded, and re-uploading it would not fix the prune.
+ */
+async function backupAccountWithRetry(
+  userId: string,
+  backupDate: string,
+  exportedAt: Date,
+): Promise<BackupLogRow> {
+  let row = await backupAccount(userId, backupDate, exportedAt)
+  let attempts = 1
+  while (row.status === 'error' && attempts < MAX_ATTEMPTS) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempts))
+    row = await backupAccount(userId, backupDate, exportedAt)
+    attempts++
+  }
+  if (row.status === 'error') row.error = `${row.error} (failed ${attempts} attempts)`
+  return row
 }
 
 async function handleBackup(): Promise<Response> {
@@ -149,10 +176,14 @@ async function handleBackup(): Promise<Response> {
   let ok = 0
   let failed = 0
   for (const user of users) {
-    const row = await backupAccount(user.id, backupDate, exportedAt)
+    const row = await backupAccountWithRetry(user.id, backupDate, exportedAt)
     if (row.status === 'ok') ok++
     else failed++
-    await db.from('backup_run_log').insert(row)
+    // A dropped log row makes the account look like it was never attempted, which reads as a
+    // scheduling problem rather than a backup problem. Nothing can be written about it but the
+    // function log, so at least put it there.
+    const { error: logError } = await db.from('backup_run_log').insert(row)
+    if (logError) console.error('backup_run_log insert failed', user.id, describeError(logError))
   }
 
   return json({ backup_date: backupDate, accounts: users.length, ok, failed })

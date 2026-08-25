@@ -34,9 +34,13 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`
 }
 
+// A prune failure keeps `status='ok'` on purpose — the backup itself was uploaded — but it still
+// writes `error`. Showing only the status would drop that message on the floor.
 function statusLabel(run: AccountBackups['lastRun']): string {
   if (!run) return '尚無備份紀錄'
-  if (run.status === 'ok') return `${run.runDate}・成功`
+  if (run.status === 'ok') {
+    return run.error ? `${run.runDate}・成功（清理舊檔失敗：${run.error}）` : `${run.runDate}・成功`
+  }
   return `${run.runDate}・失敗：${run.error ?? '未知錯誤'}`
 }
 

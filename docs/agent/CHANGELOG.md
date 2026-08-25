@@ -2,6 +2,16 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.13（2026-08-25）— 一次 401 就讓整天的備份消失
+
+> 每日備份跑到某個帳號時失敗，`backup_run_log` 只留下一行 `[object Object]`。查 `edge_logs` 才看到真正原因：同一個 `Promise.all` 同一毫秒發出的三個請求裡，`GET /rest/v1/workspaces` 被回 **401**，另外兩個都是 200。不是資料問題、不是權限問題，是閘道認證層的一次性拒絕 —— 而程式沒有任何重試，一個請求失敗就讓那個帳號整天沒有備份。
+
+- 🔁 **失敗的帳號會重試**（`backup-transactions/index.ts`）— 整個帳號最多嘗試 3 次，間隔 500ms／1000ms。只有 `status='error'` 才重試；只是清理舊檔失敗（`status='ok'`）不重試，因為檔案已經上傳，重跑也修不好清理。最後仍失敗時，訊息會標注 `(failed N attempts)`。
+- 🐛 **錯誤訊息不再是 `[object Object]`**（`backupPlan.ts` 的 `describeError`）— PostgREST 的錯誤是**純物件**不是 `Error`，原本的 `err instanceof Error ? err.message : String(err)` 對它一律產出 `[object Object]`。也就是說，唯一該說明失敗原因的欄位，剛好在最常見的那一類錯誤上必然無效。現在會取出 `message`／`code`／`details`／`hint`，取不到才退回 JSON。
+- 👀 **清理舊檔的錯誤不再被畫面吃掉**（`BackupsSection.tsx` 的 `statusLabel`）— 清理失敗是刻意保留 `status='ok'` 的（備份本身已成功），但 `error` 有寫入；而畫面只在 `status==='error'` 時顯示訊息，等於把那段錯誤丟掉。現在 `ok` 帶 `error` 會顯示成「成功（清理舊檔失敗：…）」。
+- 🧾 **`backup_run_log` 寫入失敗至少留在函式日誌** — 原本 `insert(row)` 的回傳完全沒檢查，log 掉了會讓那個帳號看起來像「從沒被執行」，方向會被誤導成排程問題。
+- ✅ **測試** — 新增 6 條（`describeError` 4、`BackupsSection` 1、既有狀態測試補強）。全套 `npm test` **81 檔 / 1239 測試** exit 0；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0；`npm run build` exit 0；`npx oxlint` 5 個既有警告，無新增。
+
 ### 0.9.12（2026-08-24）— 後台一鍵還原：只補回缺少的資料
 
 > 承 0.9.11 的備份與下載，補上讀備份檔的那一端。管理員在「備份」頁點任一備份檔的「還原」，先看到逐表的預覽（檔案幾筆／已存在幾筆／將新增幾筆），確認後才寫入。
