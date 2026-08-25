@@ -2,7 +2,7 @@
 name: builder
 description: Use to implement a task that already has a written spec and failing tests, or to apply a bug-fix plan. Requires a spec file path. Never invoke without one.
 model: sonnet
-effort: medium
+effort: high
 maxTurns: 60
 tools: Read, Glob, Grep, Write, Edit, Bash
 ---
