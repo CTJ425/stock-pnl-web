@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Task quote-yahoo-a UI redesign completed & verified (Top banner, Darker chart badge, 2-day Institutional cards under chart, Section tabs, PDF removal, 2 read-only subagent reviews PASS, 1291 tests passed)
+- Action: Direct navigation from Holdings Overview to Stock Analysis (0.9.18) implemented, tested, and verified on DEV (84 test files / 1295 tests passed)
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-25 17:36:00 Asia/Taipei
+- Timestamp: 2026-08-25 18:12:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-25 18:12:00 Asia/Taipei (Holdings Table: Direct Click-to-Analyze for Taiwan Stocks, 0.9.18; 1295 tests PASS)
+
+- **Feature Implemented**:
+  1. **Direct Click-to-Analyze for Taiwan Stock Holdings** (`DashboardPage.tsx`):
+     - Wired `onSelectTicker` prop to `<HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} />`.
+     - Clickable `<tr>` rows for Taiwan stocks with `cursor: pointer` style and `title="點擊查看個股分析"`.
+     - US stocks remain non-clickable (standard cursor, no title, no action) as Stock Analysis focuses on Taiwan market chips/fundamentals/technical data.
+  2. **Safe Mode / Offline Guard** (`AppShell.tsx`):
+     - Guarded `onSelectTicker` in `AppShell.tsx` with `isReportConfigured` so local/offline mode gracefully leaves rows non-interactive.
+  3. **Unit Tests Added** (`DashboardPage.test.tsx`):
+     - Verified clicking Taiwan stock rows triggers `onSelectTicker` with `(ticker, name)`.
+     - Verified US stock rows do not trigger `onSelectTicker`.
+     - Verified offline / undefined `onSelectTicker` handling and empty state display.
+- **Verification & Test Suite**:
+  - Full Vitest suite: **84 test files / 1295 tests passed** (100% PASS), exit 0.
+  - Linter & Typecheck: `npm run lint` (0 errors), `npm run typecheck:edge` (0 errors), `npm run build` (`tsc -b && vite build` exit 0).
+- **Files Modified**:
+  - `sources/src/components/Dashboard/DashboardPage.tsx`
+  - `sources/src/components/AppShell.tsx`
+  - `sources/src/components/Dashboard/DashboardPage.test.tsx` (new)
+  - `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` (bumped to 0.9.18)
 
 ---
 
@@ -32,21 +56,3 @@
   - `sources/src/index.css`
   - `docs/agent/PROGRESS.md`
 
----
-
-## 📅 Log: 2026-08-25 17:05:00 Asia/Taipei (Task quote-yahoo-a: intraday chart + Yahoo-style quote header; code complete & verified, 1294 tests PASS)
-
-- **Task quote-yahoo-a completion**: Yahoo-style quote redesign + intraday chart for 個股分析 page. Branch `feat/quote-yahoo-a` cut from `dev` at commit fad5ee2. Spec: `docs/agent/specs/quote-yahoo-a.md` (revisions 2, 3, 4 applied).
-- **T1 (intraday data path)**: New pure module `supabase/functions/stock-price/intradayParse.ts` — parser for Yahoo Finance v8 chart payload (IntradaySeries / IntradayPoint types); null close carry-forward, null volume → 0, leading null closes dropped. New action `intraday` in `stock-price/index.ts` — `POST { action: 'intraday', symbol: { market: 'TPE'|'US', ticker }, range: '1d'|'5d' }` → `{ series: IntradaySeries | null }`. Reuses `yahooSymbols()` with .TW→.TWO fallback; returns `{ series: null, 200 }` on failure/unknown ticker. Client `src/services/intradayProxy.ts` with 60s in-memory cache.
-- **T2 (UI rebuild)**: `IntradayChart.tsx` with stacked price (220px) + volume (70px) frames sharing hover crosshair, symmetric prevClose baseline, cumulative VWAP line, 1d/5d range tabs. `QuoteTab.tsx` with Yahoo header, 8-cell stats grid (volume, open, high, low, prevClose, vwap, change %, amplitude), right rail sidebar (.quote-layout) holding 我的持股 (.quote-aside-private, hidden in PDF export via `.report-surface`), 指標摘要, and 成交金額/估值.
-- **Verification & Review**:
-  - `code_reviewer` Subagent dispatched: **PASS** across data pipeline, UI tokens, error handling, edge cases, and PDF privacy.
-  - Vitest Unit & Integration suite: **83 files / 1294 tests passed**, exit 0.
-  - Build & Typecheck: `npm run lint` (`oxlint`) exit 0, `npm run typecheck:edge` exit 0, `npm run build` (`tsc -b && vite build`) exit 0.
-  - E2E / Smoke: `App.smoke.test.tsx` passed, `sources/scripts/verify-quote-intraday-e2e.cjs` Playwright multi-viewport checks passed.
-- **Open items**:
-  1. DEV Edge function deployed & verified on self-hosted supabase (`stock-price`).
-  2. PROD Edge Function deployment (`stock-price`) on cloud when authorized.
-  3. Merge `feat/quote-yahoo-a` to `dev`.
-
----

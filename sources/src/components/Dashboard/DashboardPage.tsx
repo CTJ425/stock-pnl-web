@@ -70,7 +70,15 @@ function sumOrNull(values: Array<number | null>): number | null {
   return known.length > 0 ? known.reduce((s, v) => s + v, 0) : null
 }
 
-function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Currency }) {
+function HoldingsTable({
+  rows,
+  currency,
+  onSelectTicker,
+}: {
+  rows: HoldingRow[]
+  currency: Currency
+  onSelectTicker?: (ticker: string, name: string) => void
+}) {
   return (
     <div className="glass table-scroll">
       <table className="data-table">
@@ -91,10 +99,18 @@ function HoldingsTable({ rows, currency }: { rows: HoldingRow[]; currency: Curre
         <tbody>
           {rows.map((row) => {
             const { holding: h, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
+            const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
+            const stockName = displayStockName(h.market, h.ticker, h.name)
             return (
-            <tr key={h.key}>
+            <tr
+              key={h.key}
+              data-testid={`holding-row-${h.ticker}`}
+              onClick={isClickable ? () => onSelectTicker(h.ticker, stockName) : undefined}
+              style={isClickable ? { cursor: 'pointer' } : undefined}
+              title={isClickable ? '點擊查看個股分析' : undefined}
+            >
               <td>{h.ticker}</td>
-              <td>{displayStockName(h.market, h.ticker, h.name)}</td>
+              <td>{stockName}</td>
               <td className={`num ${pnlClass(dayChange)}`}>
                 {price === null ? (
                   <span className="skeleton" aria-label="現價載入中" />
@@ -358,7 +374,7 @@ export function DashboardPage({
                 <div className="section-title">
                   <h2 style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h2>
                 </div>
-                <HoldingsTable rows={twRows} currency="TWD" />
+                <HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} />
               </div>
             )}
             {usRows.length > 0 && (
