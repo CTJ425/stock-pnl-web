@@ -159,6 +159,16 @@ describe('BackupsSection', () => {
     const row = (await screen.findByText('a@example.com')).closest('tr')!
     expect(within(row).getByText(/upload failed/)).toBeTruthy()
   })
+
+  it('成功但帶有清理錯誤時，錯誤訊息不可以被吃掉', async () => {
+    fetchAdminBackups.mockResolvedValue([
+      { ...rows[0], lastRun: { runDate: '2026-08-24', status: 'ok', error: 'prune blew up', transactionCount: 62 } },
+    ])
+    render(<BackupsSection />)
+    const row = (await screen.findByText('a@example.com')).closest('tr')!
+    expect(within(row).getByText(/prune blew up/)).toBeTruthy()
+    expect(within(row).getByText(/成功/)).toBeTruthy()
+  })
 })
 
 describe('BackupsSection 還原', () => {

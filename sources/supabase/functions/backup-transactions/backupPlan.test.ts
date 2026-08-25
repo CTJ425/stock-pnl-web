@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   backupObjectPath,
   buildBackupPayload,
+  describeError,
   prunablePaths,
   rowCounts,
   taipeiYmd,
@@ -155,5 +156,31 @@ describe('rowCounts', () => {
       user_settings: [{ user_id: 'u-1' }],
     }
     expect(rowCounts(tables)).toEqual({ workspaces: 2, transactions: 1, user_settings: 1 })
+  })
+})
+
+describe('describeError', () => {
+  it('keeps the message of a real Error, as Storage and network errors are Errors', () => {
+    expect(describeError(new Error('upload failed'))).toBe('upload failed')
+  })
+
+  // The 2026-08-25 regression: PostgREST errors are plain objects, so String() produced
+  // "[object Object]" and the 401 that actually broke the backup was never recorded.
+  it('reads a PostgREST error object instead of stringifying it to [object Object]', () => {
+    const postgrest = { message: 'Invalid authentication credentials', code: 'PGRST301', details: null, hint: null }
+    const out = describeError(postgrest)
+    expect(out).not.toBe('[object Object]')
+    expect(out).toContain('Invalid authentication credentials')
+    expect(out).toContain('PGRST301')
+  })
+
+  it('falls back to JSON for an object with no recognisable fields', () => {
+    expect(describeError({ weird: 1 })).toBe('{"weird":1}')
+  })
+
+  it('handles values that are neither Error nor object', () => {
+    expect(describeError('boom')).toBe('boom')
+    expect(describeError(null)).toBe('null')
+    expect(describeError(undefined)).toBe('undefined')
   })
 })
