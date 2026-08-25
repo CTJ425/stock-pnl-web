@@ -33,6 +33,14 @@ describe('MechanismGuide', () => {
     }
   })
 
+  it('MOPS 兩列的退休條件是「不退休 (六槽全跑)」——命中不提早收工（Task 133）', () => {
+    render(<MechanismGuide />)
+    fireEvent.click(screen.getByRole('button', { name: /探針與排程機制運作總覽/ }))
+
+    expect(screen.getAllByText('不退休 (六槽全跑)').length).toBe(2)
+    expect(screen.queryByText('1 次到位 (期別 ≥ 上游)')).toBeNull()
+  })
+
   it('再次點擊可收合', () => {
     render(<MechanismGuide />)
     const toggle = screen.getByRole('button', { name: /探針與排程機制運作總覽/ })

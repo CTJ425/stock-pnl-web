@@ -5,6 +5,20 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
+
+- **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Pages deploy succeeded.
+- **Feature: backup restore** answers the gap the user found — downloaded JSON had no consumer. Restore is additive-only, never deletes or overwrites; first click only previews.
+- **Design decision**: Account a backup may write into is taken from validated object path, never from the document itself — checking document against itself would be circular.
+- **Three-table writes**: Workspaces → transactions → user_settings. No transaction across tables; half-finished restore names what already landed and is safe to re-run. Recorded as accepted trade-off, not defect.
+- **Review outcome**: Implementation PASS with one RISK (partial-apply state not disclosed), fixed by adding `restoreFailureMessage`.
+- **Verification**: npm test 81 files / 1234 tests exit 0; tsc --noEmit exit 0; tsc -p tsconfig.edge.json exit 0; npm run build exit 0; oxlint 5 pre-existing warnings.
+- **DEV disaster drill**: Three real transactions deleted, preview reported 62/59/3 rows missing and wrote nothing, apply restored them, FULL-TABLE checksum matched pre-deletion exactly (every column, not just row count). Re-run reported zero missing. Two tampered documents (user_id changes in document and in one row) both refused with expected messages, left no trace.
+- **PROD deploy**: `stock-report` v56 → v57 (ezbr_sha256 changed, verify_jwt=false unchanged); `stock-price` and `backup-transactions` hashes unchanged; no schema change. Verified without restoring: 401 for unauthenticated and garbage-bearer calls; five malformed paths refused our gate; read-only previews for both accounts reported no missing rows; PROD row counts unchanged (110 transactions, 5 workspaces).
+- **WAF note**: A `../../etc/passwd` probe against PROD never reached our code — Cloudflare's WAF blocked it and returned HTML block page. Testing our own path gate on PROD requires payloads that do not trip the WAF.
+- **Records finalized**: Release 0.9.12 added to PROGRESS.md. Oldest entry (backup-transactions phase 1, 2026-08-24 16:57:07) moved to PROGRESS_ARCHIVE.md to keep hot file at header + 2 newest entries.
+- **Unfinished**: None — 0.9.12 shipped and verified.
+
 ## 📅 Log: 2026-08-24 17:35:44 CST (0.9.11 shipped to dev and main; backup-transactions phase 2 complete; PROD deploy open)
 
 - **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, GitHub Pages deploy succeeded.

@@ -44,9 +44,14 @@ export const PROBE_SOURCE_ORDER: ProbeSourceId[] = [
  * 每個來源要收工，所需的「尾端連續相同指紋次數」（0.9.6）。
  *
  * 六個每日來源要 3：次數只證明「量到了幾次」，證明不了「上游還會不會再改」——尾端連續正是
- * 用來抓這件事的證據，任何一次內容變動都會把計數歸零重新累積。MOPS 兩個來源要 1：它們的
- * 收工判準（`atLeast`）本身就是期別比較，「該期已經出現在畫面上」由構造保證，尾端連續 1
- * 天生滿足，等於保留舊行為「一到位就收工」。
+ * 用來抓這件事的證據，任何一次內容變動都會把計數歸零重新累積。
+ *
+ * MOPS 兩個來源是 `Infinity`：永不收工（Task 133）。MOPS 彙整表整天會隨申報家數重出，
+ * 第一次出表不是當天最後一版，但 `sourceLanded` 的判準是 `atLeast`（檔案期別 >= 上游期別）
+ * ——只要當天第一槽就已經有那一期，就會判定到位，若照舊給 1 次就收工，剩下五槽永遠不會跑，
+ * 看不到同一天稍後更大份的重出。實測（DEV `source_probe_tick`，2026-08-17～08-24）：
+ * `mops_profit` 每天只有 12:00 一筆，六個 `MOPS_SLOTS` 只用到第一個。`retiredSources()` 比較
+ * `counts[id] >= required[id]`，`Infinity` 永遠比不過，六個槽點因此每天全跑。
  *
  * 數字不因這次改版而變：DEV `batch_run_log` 實測 2026-08-12～08-19，T86 一天最多改版一次，
  * 且落在 t86 探針視窗（16:00–17:00）之外，提高次數攔不到它，只會多打沒有意義的請求。
@@ -58,8 +63,8 @@ export const REQUIRED_LANDED_COUNTS: Record<ProbeSourceId, number> = {
   borrow: 3,
   bwibbu: 3,
   twt38u: 3,
-  mops_revenue: 1,
-  mops_profit: 1,
+  mops_revenue: Number.POSITIVE_INFINITY,
+  mops_profit: Number.POSITIVE_INFINITY,
 }
 
 /**
