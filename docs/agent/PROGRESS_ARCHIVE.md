@@ -5,6 +5,23 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-25 17:05:00 Asia/Taipei (Task quote-yahoo-a: intraday chart + Yahoo-style quote header; code complete & verified, 1294 tests PASS)
+
+- **Task quote-yahoo-a completion**: Yahoo-style quote redesign + intraday chart for 個股分析 page. Branch `feat/quote-yahoo-a` cut from `dev` at commit fad5ee2. Spec: `docs/agent/specs/quote-yahoo-a.md` (revisions 2, 3, 4 applied).
+- **T1 (intraday data path)**: New pure module `supabase/functions/stock-price/intradayParse.ts` — parser for Yahoo Finance v8 chart payload (IntradaySeries / IntradayPoint types); null close carry-forward, null volume → 0, leading null closes dropped. New action `intraday` in `stock-price/index.ts` — `POST { action: 'intraday', symbol: { market: 'TPE'|'US', ticker }, range: '1d'|'5d' }` → `{ series: IntradaySeries | null }`. Reuses `yahooSymbols()` with .TW→.TWO fallback; returns `{ series: null, 200 }` on failure/unknown ticker. Client `src/services/intradayProxy.ts` with 60s in-memory cache.
+- **T2 (UI rebuild)**: `IntradayChart.tsx` with stacked price (220px) + volume (70px) frames sharing hover crosshair, symmetric prevClose baseline, cumulative VWAP line, 1d/5d range tabs. `QuoteTab.tsx` with Yahoo header, 8-cell stats grid (volume, open, high, low, prevClose, vwap, change %, amplitude), right rail sidebar (.quote-layout) holding 我的持股 (.quote-aside-private, hidden in PDF export via `.report-surface`), 指標摘要, and 成交金額/估值.
+- **Verification & Review**:
+  - `code_reviewer` Subagent dispatched: **PASS** across data pipeline, UI tokens, error handling, edge cases, and PDF privacy.
+  - Vitest Unit & Integration suite: **83 files / 1294 tests passed**, exit 0.
+  - Build & Typecheck: `npm run lint` (`oxlint`) exit 0, `npm run typecheck:edge` exit 0, `npm run build` (`tsc -b && vite build`) exit 0.
+  - E2E / Smoke: `App.smoke.test.tsx` passed, `sources/scripts/verify-quote-intraday-e2e.cjs` Playwright multi-viewport checks passed.
+- **Open items**:
+  1. DEV Edge function deployed & verified on self-hosted supabase (`stock-price`).
+  2. PROD Edge Function deployment (`stock-price`) on cloud when authorized.
+  3. Merge `feat/quote-yahoo-a` to `dev`.
+
+---
+
 ## 📅 Log: 2026-08-25 14:05:00 Asia/Taipei (BUG-038 watchlist search: 28k-row list, 27k warrants, no sort/cap → DOM freeze)
 
 - **Bug discovered and fixed**: `AddWatchModal` stock search on a 28,272-row list (1,094 real stocks + 27,043 warrants). User types `2330` — on intermediate keystroke `2`, search hits 8,115 warrants and forces `results.map()` to render 40,000 DOM nodes in full re-render on every keystroke. Browser locks and drops subsequent key events. Root cause: no sort and no render cap; data served in source order (warrants sort before stocks by ticker).

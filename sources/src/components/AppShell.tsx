@@ -667,10 +667,14 @@ export function AppShell() {
           <>
             {view === 'dashboard' && (
               <DashboardPage
-                onSelectTicker={(ticker) => {
-                  setAnalysisTicker(ticker)
-                  setView('analysis')
-                }}
+                onSelectTicker={
+                  isReportConfigured
+                    ? (ticker) => {
+                        setAnalysisTicker(ticker)
+                        setView('analysis')
+                      }
+                    : undefined
+                }
               />
             )}
             {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
