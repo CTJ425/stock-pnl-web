@@ -8,6 +8,36 @@
 
 ## 🐛 Historical Bug Fixes
 
+### BUG-038 — AddWatchModal: keyword `2` → 8,115 hits → 4 万 DOM nodes → browser freeze + lost keystrokes
+
+- **Condition**: `AddWatchModal` stock search on a 28,272-row watchlist. User types `2330` (stock code). At the intermediate state `2`, the search hits 8,115 rows, forcing `results.map()` to render 8,115 `<li>` + `<button>` pairs (~40,000 DOM nodes) and re-create them on every keystroke. Browser locks up and drops subsequent key events.
+
+- **Root Cause**: The 28,272-row list is composed of 1,094 listed/OTC stocks and 27,043 6-digit warrants. `AddWatchModal` applied no sort and no render cap; it passed rows directly from the data source in numeric order by ticker. Warrant codes (3–4 digits + 2 check digits = `03xxx–09xxx`) naturally sort before stock codes (`2xxx–9xxx`), making stocks appear far down the result list.
+
+- **Evidence**: Search text "聯發科" (MediaTek) matches 231 items; the actual stock 2454 ranks #230 (last). Search "台積" (TSMC) matches 960 items; 2330 ranks #959 (last). Single keystroke `2` alone matches 8,115 warrants (all starting with `2`), forcing full DOM render.
+
+- **Two symptoms, one root cause**:
+  1. **Unresponsive input** — render lock from DOM thrash on partial typed codes. Name search survived because the first character narrowed scope drastically; code search did not.
+  2. **Warrants before stocks** — same query on code hits warrants first (by sort order), pushing the stock far down. User sees warrant #1 when searching for a stock, defeating the point of watching.
+
+- **Fix (0.9.16)**: `AddWatchModal.tsx` sorts results after matching and caps render to 50. Sort order: (1) security type (4-digit code `^\d{4}$` = 0, 5–6 digit with `00` prefix = 1, else = 2), (2) match quality (code exact = 0, code prefix = 1, name exact = 2, name prefix = 3, name substring = 4), (3) ticker. Warrants sort to the tail but remain searchable. When results exceed 50, list footer shows "還有 N 筆，請輸入更完整的關鍵字" (new `.watch-results-more` style).
+
+- **Observed behaviour after deploy**:
+  - "聯發科" → first result is 2454 (stock).
+  - "台積" → first result is 2330 (stock).
+  - Typing `2` alone renders exactly 50 nodes (no freeze).
+
+- **Files changed**:
+  - `sources/src/components/StockDetail/AddWatchModal.tsx` (sort + 50-item cap + remainder message)
+  - `sources/src/index.css` (new `.watch-results-more` style)
+  - `sources/src/components/StockDetail/AddWatchModal.test.tsx` (fixture expanded to 7 rows: 2 warrants 03xxx, 1 ETF 00878, 4 stocks; 3 new test cases: warrant sort order, code-exact priority, 50-cap + remainder text; 2 cases went red→green)
+
+- **Tests**: Full suite `npm test` from `sources/` = 81 files / 1247 tests passed, exit 0. `npx tsc --noEmit` exit 0. `npm run build` exit 0.
+
+- **Status**: ✅ FIXED in **0.9.16** (commit TBD).
+
+---
+
 ### BUG-037 — PROD `borrow` never lands; cached payload off by one trading day
 
 - **Condition**: `borrow` source in stock-report probe. Root cause proven by reading code and PROD data.

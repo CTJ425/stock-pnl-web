@@ -1,11 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Task 133 probe code completed and tested; PROD deployment and new finding recorded
+- Action: BUG-038 watchlist search completed and tested; version 0.9.16 recorded
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-25 11:33:57 Asia/Taipei
+- Timestamp: 2026-08-25 14:05:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-25 14:05:00 Asia/Taipei (BUG-038 watchlist search: 28k-row list, 27k warrants, no sort/cap → DOM freeze)
+
+- **Bug discovered and fixed**: `AddWatchModal` stock search on a 28,272-row list (1,094 real stocks + 27,043 warrants). User types `2330` — on intermediate keystroke `2`, search hits 8,115 warrants and forces `results.map()` to render 40,000 DOM nodes in full re-render on every keystroke. Browser locks and drops subsequent key events. Root cause: no sort and no render cap; data served in source order (warrants sort before stocks by ticker).
+- **Two symptoms, one cause**: (1) Unresponsive input — DOM thrash on partial typed codes. (2) Warrants beat stocks in sort order — search "聯發科" hits 231 items, actual stock 2454 ranks #230 (last).
+- **Fix**: `AddWatchModal.tsx` sorts results after matching and caps render to 50. Sort order: security type (4-digit `^\d{4}$` = 0, 5–6 digit `00*` = 1, else = 2) → match quality (code exact = 0, code prefix = 1, name exact = 2, name prefix = 3, name substring = 4) → ticker. Warrants stay searchable, sort to tail. Results >50 show "還有 N 筆，請輸入更完整的關鍵字" (new `.watch-results-more` style in `sources/src/index.css`).
+- **Expected behaviour after deploy**: "聯發科" → first result is 2454. "台積" → first result is 2330. Typing `2` renders 50 nodes (no freeze).
+- **Files changed**: `sources/src/components/StockDetail/AddWatchModal.tsx`, `sources/src/index.css`, `sources/src/components/StockDetail/AddWatchModal.test.tsx`.
+- **Tests**: Fixture expanded to 7 rows (2 warrants 03xxx, 1 ETF 00878, 4 stocks). 3 new test cases: warrant sort order, code-exact priority, 50-cap + remainder text; 2 cases went red→green. Full suite: `npm test` 81 files / 1247 tests exit 0. `npx tsc --noEmit` exit 0. `npm run build` exit 0.
+- **Version bumped to 0.9.16**: `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` line 3.
+- **Records finalized**: BUG-038 added to `FIXED_BUG.md`. CHANGELOG.md 0.9.16 section prepended. This entry added to PROGRESS.md.
+- **Commit message**: `fix(watchlist): rank search results and cap the rendered list (0.9.16)`. Root cause: no sort/cap over 28k-row list (27k warrants). Fix: sort by security type + match quality + ticker, render cap 50 + remainder text.
 
 ## 📅 Log: 2026-08-25 11:33:57 Asia/Taipei (Task 133: MOPS probe sources never retire; code complete, deployment open)
 
@@ -19,15 +31,6 @@
 - **New finding recorded**: PROD `borrow` probe on 2026-08-24 logged 31 ticks / 13 hits / 0 landed (never satisfies `sourceLanded`, never retires, probes full 21:00–23:30 window daily, fires `generate-chips` 13×). Added as new open finding to BUG_FIX.md; not investigated, no owner decision yet.
 - **Unfinished**: Edge Function deployment to DEV and PROD.
 
-## 📅 Log: 2026-08-25 10:16:08 Asia/Taipei (BUG-036 backup cron 401; four defects fixed in 0.9.13)
-
-- **Bug discovered**: 2026-08-25 02:00 Asia/Taipei backup-daily cron, one account, one of three simultaneous PostgREST requests returned 401 (`GET /rest/v1/workspaces`) while the other two (transactions, user_settings) returned 200. Same service-role client, same API key. No retry logic, so entire account's backup skipped; `backup_run_log` recorded `status='error'` with message `[object Object]` because PostgREST errors are plain objects, not `Error` instances.
-- **Root cause**: three separate defects: (1) no `describeError()` for PostgREST plain objects (2) no retry on transient failures (3) no log verification of `backup_run_log` insert result (4) admin UI showed prune failures as bare success.
-- **Four defects fixed in 0.9.13 (commit 84502c6)**:
-  1. `sources/supabase/functions/backup-transactions/backupPlan.ts` — new `describeError()` function handles plain-object errors and serializes for logging.
-  2. `sources/supabase/functions/backup-transactions/index.ts` — retry failed accounts up to 3 attempts (500ms/1000ms backoff); prune-only failure stays `status='ok'`, not retried.
-  3. `sources/supabase/functions/backup-transactions/index.ts` — check and log insert result to catch dropped rows.
-  4. `src/components/Admin/BackupsSection.tsx` — `statusLabel` now shows error text on `ok` row; prune failures visible.
 - **Tests**: `backupPlan.test.ts` +4 cases for `describeError()`; `BackupsSection.test.tsx` +1 case. Total: `npm test` 81 files / 1239 tests exit 0.
 - **Verification**: `npm test` exit 0; `npx tsc --noEmit` exit 0; `npx tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `npx oxlint` 5 pre-existing warnings, no new.
 - **Deployed**: code on both `dev` and `main` (commit 84502c6, version 0.9.13). Pages deploy covers admin UI. **Edge Function `backup-transactions` on PROD not deployed** — awaits explicit authorization.
