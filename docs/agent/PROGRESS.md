@@ -22,6 +22,10 @@
 - **Verification & Test Suite**:
   - Full Vitest suite: **83 test files / 1291 tests passed**, exit 0.
   - Linter & Typecheck: `npm run lint` (0 errors), `npm run typecheck:edge` (0 errors), `npm run build` (`tsc -b && vite build` exit 0).
+- **Deployment Status**:
+  - DEV Edge Function (`stock-price`): Volume copied and container restarted.
+  - PROD Edge Function (`stock-price`): Deployed via Supabase CLI (active, version 20, SHA `bac85eb3edcf...`).
+  - Remote Branches: Pushed `dev` and `main` to `origin` (triggered Cloudflare Pages build).
 - **Files Modified**:
   - `sources/src/components/StockDetail/QuoteTab.tsx` & `QuoteTab.test.tsx`
   - `sources/src/components/StockDetail/StockDetailPage.tsx` & `StockDetailPage.test.tsx`
