@@ -8,6 +8,39 @@
 
 ## 🐛 Historical Bug Fixes
 
+### BUG-037 — PROD `borrow` never lands; cached payload off by one trading day
+
+- **Condition**: `borrow` source in stock-report probe. Root cause proven by reading code and PROD data.
+
+- **Root Cause**: Two predicates answered the same question one day apart:
+  - `readBorrowCacheFrom` (`index.ts`, formerly line 745) judged a cached borrow payload fresh with `.gte('ymd', minYmd)` — i.e. `ymd >= tradeYmd`.
+  - `borrowHit` (`sourceProbePlan.ts:404-407`) requires `date > tradeYmd`, because the TWT96U endpoint serves TODAY's quota intraday and only flips to the next trading day after the close.
+
+- **Consequence**: An earlier same-day `generate-chips` (fired by a t86 / margin / twt38u hit) cached the pre-flip payload under `ymd = today`. After the ~22:15-22:30 flip, the probe hit and fired `generate-chips` again, but `loadBorrow(todayYmd)` was served from the pre-flip cache and never re-called the endpoint. The report's `sources.borrow.date` stayed at today and `sourceLanded('borrow')` was false forever.
+
+- **Evidence from PROD**:
+  - `source_probe_tick`, source `borrow`, 2026-08-11 to 2026-08-24: 373 ticks / 126 hits / 0 landed. Never landed once.
+  - 2026-08-24: 21:00–22:25 `借券日=2026-08-24＝當日額度，尚未翻日` (no hit); 22:30–23:30, 13 rounds of `借券日=2026-08-25（已翻次一交易日） · 已觸發 generate-chips：無變動 · 資料未到位，下輪重試`.
+  - `chip_raw_cache` dataset `SBL_D`: the newest row is `ymd=20260824`, written 08-24 11:00 Taipei (earlier days likewise 09:17 / 11:00 / 16:30 / 16:05 / 14:30 — all pre-flip). No row at `ymd=20260825`, proving the post-flip payload was never fetched or cached.
+
+- **Fix**:
+  - `sourceProbePlan.ts`: new exported `borrowCacheUsable(cachedYmd, tradeYmd)` that delegates to `borrowHit` — one rule, deliberately not a second comparison.
+  - `index.ts` `readBorrowCacheFrom` (now ~736–762): dropped the `.gte('ymd', minYmd)` filter, selects the newest `SBL_D` row, and returns null unless `borrowCacheUsable(String(data.ymd), minYmd)`.
+  - Everything else unchanged: `loadBorrow`'s post-cache fetch, `writeCache` keying, the no-argument `loadBorrow()` call site.
+  - Verified: `chip_raw_cache.ymd` is `text` and 8 characters wide, so descending order sorts chronologically. No other caller reads `SBL_D` with a range predicate (the only other uses are an exact-key `readCache` and `writeCache`).
+
+- **Tests**: 1 new test in `sourceProbePlan.test.ts` covering the exact BUG-037 case plus an equivalence table proving `borrowCacheUsable` and `borrowHit` are the same rule. Full suite `npm test -- --run` from `sources/` = 81 files / 1244 tests passed, exit 0. `npm run typecheck:edge` exit 0.
+
+- **Expected behaviour after deploy**: The first post-flip round fetches once and caches under the next trading day, the report's borrow stamp moves past today, `borrow` lands and then retires after its trailing run of 3 — replacing the current 13 post-flip rounds with 3.
+
+- **Residual risk**: `index.ts` has no vitest coverage, so the deployed half is gated only by typecheck:edge and review.
+
+- **Reviewer verdict**: PASS, no findings.
+
+- **Status**: ✅ Code complete (not deployed). Files changed: `sourceProbePlan.ts`, `sourceProbePlan.test.ts`, `index.ts`. No version bump yet, no commit yet.
+
+---
+
 ### BUG-036 — Backup cron transient 401 on one PostgREST request; no retry; error logged as [object Object]
 
 - **Condition**: 2026-08-25 02:00 Asia/Taipei backup-daily cron run. `Promise.all` issued three PostgREST requests in the same millisecond: `GET /rest/v1/workspaces`, `GET /rest/v1/transactions`, `GET /rest/v1/user_settings`. Same service-role client, same API key. One request (`workspaces`) returned 401 while the other two returned 200. Transient gateway auth rejection, not a data/RLS/permission problem — same account succeeded the previous day.

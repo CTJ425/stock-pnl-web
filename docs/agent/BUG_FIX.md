@@ -84,14 +84,6 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 - **Status**: OPEN — accepted at review (0.8.0), deployed to PROD 2026-08-19 11:29:34 Asia/Taipei.
 - **Action after deploy**: Monitor one week of batch runtime (starting 2026-08-19). If runtime grows linearly with user base × watched count, switch to "only watched-to-user pairs that have been opened in analysis UI" for batch scope. Alternative would reduce per-day noise.
 
-### BUG-037 — PROD `borrow` never lands, always probes full window
-
-- **Landing criterion**: `sourceLanded('borrow')` calls `borrowHit(ev.chipStamps?.borrow, todayYmd)` at `sourceProbePlan.ts:371-372`. The borrow stamp in the generated chips report must be strictly LATER than today (`dateIso.replace(/-/g,'') > todayYmd`).
-- **Measured on PROD 2026-08-24**: `source_probe_tick` for `borrow` shows 31 ticks / 13 hits / 0 landed (window 21:00–23:30). All 13 hits failed to land.
-- **Consequence**: `borrow` does not retire. Probes continue through the full 21:00–23:30 window every day. Fires `generate-chips` on all 13 hits.
-- **Root cause**: NOT investigated. The open question is why the chips report's borrow stamp never moves past today.
-- **Status**: OPEN — discovered during Task 133 audit (2026-08-25); no owner decision yet.
-
 ---
 
 ## 📝 Operational Notes

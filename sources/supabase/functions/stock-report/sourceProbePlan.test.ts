@@ -7,6 +7,7 @@ import {
   trailingRun,
   summariseLandedTicks,
   borrowHit,
+  borrowCacheUsable,
   followUpsFor,
   formatProbeTickLabel,
   getActiveWindow,
@@ -269,6 +270,31 @@ describe('sourceProbePlan', () => {
     expect(borrowHit('2026-08-14', '20260811')).toBe(true) // 週五收盤 → 下週一
     expect(borrowHit('2026-08-10', '20260811')).toBe(false) // 反而落後，不是命中
     expect(borrowHit(null, '20260811')).toBe(false)
+  })
+
+  /*
+    BUG-037：借券在 PROD 從 2026-08-11 到 08-24 共 373 次 tick、126 次命中、**0 次到位**。
+
+    原因是同一個問題被兩條差一天的判準回答：`readBorrowCacheFrom` 用 `ymd >= 交易日` 判斷
+    快取新不新鮮，而 `borrowHit` 要的是 `> 交易日`。盤中先有一輪 generate-chips 把「當日額度」
+    那份以 `ymd=今天` 寫進快取，22:30 翻日之後 `gte` 認為它還新鮮，端點再也不會被打，
+    報告的 borrow stamp 永遠停在今天，到位判準恆為 false。
+
+    修法是讓兩邊共用同一條判準，所以這裡除了逐案驗證，還要驗「它就是 borrowHit」。
+  */
+  it('借券快取可用性與命中判準是同一條規則——差一天就是 BUG-037', () => {
+    // BUG-037 的正案例：盤中那份（=交易日）不可以被當成報告要的那份
+    expect(borrowCacheUsable('20260824', '20260824')).toBe(false)
+    // 翻日之後那份才是報告要的
+    expect(borrowCacheUsable('20260825', '20260824')).toBe(true)
+    expect(borrowCacheUsable('20260823', '20260824')).toBe(false)
+    expect(borrowCacheUsable('2026-08-25', '20260824')).toBe(true)
+    expect(borrowCacheUsable(null, '20260824')).toBe(false)
+
+    // 兩條判準不得再各自漂移
+    for (const cached of ['20260823', '20260824', '20260825', '2026-08-25', null]) {
+      expect(borrowCacheUsable(cached, '20260824')).toBe(borrowHit(cached, '20260824'))
+    }
   })
 
   it('mopsIssueRocYmd 取整份共用的出表日期', () => {

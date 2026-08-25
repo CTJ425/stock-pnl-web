@@ -2,6 +2,17 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.15（2026-08-25）— 借券從來沒有到位過，因為兩條判準差了一天
+
+> `borrow` 在 PROD 從 2026-08-11 到 08-24 累積 **373 次 tick、126 次命中、0 次到位**。探針每天都正確量到 22:15–22:30 的翻日、每次都觸發 `generate-chips`，然後每次都記下「資料未到位，下輪重試」，把 21:00–23:30 整個時窗打好打滿。原因不在探針，也不在端點：**同一個問題被兩條差一天的判準回答**。快取用 `ymd >= 交易日` 判斷新不新鮮，落地判準 `borrowHit` 要的卻是 `> 交易日`。
+
+- 🐛 **根因**（`index.ts` 的 `readBorrowCacheFrom`）— 借券端點沒有日期參數，永遠回「最新的那份」：盤中自報**當日**額度，收盤後才翻成下一個交易日。當天稍早的一輪 `generate-chips`（由 t86／融資／外資買賣超命中觸發）會把盤中那份以 `ymd=今天` 寫進 `chip_raw_cache`。翻日之後探針命中、再次觸發 `generate-chips`，但 `loadBorrow(todayYmd)` 的 `.gte('ymd', minYmd)` 認定那筆盤中快取仍然新鮮，**端點再也不會被打**，報告的 `sources.borrow.date` 永遠停在今天，`sourceLanded('borrow')` 因此恆為 false。
+- 🔍 **證據**（PROD `chip_raw_cache`，dataset `SBL_D`）— 最新一列是 `ymd=20260824`，寫入時間 **08-24 11:00**（更早幾天分別是 09:17／11:00／16:30／16:05／14:30，全部在盤中）。而**沒有任何一列是 `20260825`** —— 翻日後的 payload 從來沒有被抓回來過，連快取都不存在。
+- 🔧 **修法：一條規則，不是兩條**（`sourceProbePlan.ts`）— 新增 `borrowCacheUsable(cachedYmd, tradeYmd)`，其實作就是 `borrowHit`，刻意不重寫第二個比較式。`readBorrowCacheFrom` 拿掉 `.gte()`，改成撈最新一列再交給它判斷，快取問題與落地問題從此不可能各自漂移。
+- 📉 **順帶省下的請求** — 修好之後借券會在翻日第一輪就到位，再兩輪穩定即退休：今晚那 13 輪重複的 `generate-chips` 會變成 3 輪。
+- ⚠️ **殘餘風險** — `index.ts` 是 Deno-only、**沒有任何 vitest 覆蓋**，這一半只有 `typecheck:edge` 與 review 兩道關。純函式那一半有新測試鎖住（含 `borrowCacheUsable` 與 `borrowHit` 的等價表）。
+- 🧪 **測試** — 新增 1 條（BUG-037 正案例 + 等價表）。全套 `npm test` **81 檔 / 1244 測試** exit 0；`npm run typecheck:edge` exit 0。reviewer PASS，零 finding。
+
 ### 0.9.14（2026-08-25）— MOPS 探針一命中就收工，六個槽點只用掉第一個
 
 > 排程表上寫得清清楚楚：月營收與季報彙整每個平日有 12:00、12:05、17:15、17:20、21:00、21:05 六個槽點。實際上 PROD 的 `mops_profit` 每天只有 **12:00 一筆** tick。原因不在排程，在退休條件：`REQUIRED_LANDED_COUNTS` 給 MOPS 的值是 1，而 MOPS 的到位判準 `atLeast`（檔案期別 ≥ 上游期別）只要檔案已經有那一期就成立 —— 於是當天第一槽必定判定到位並收工，剩下五槽永遠不會跑。而 MOPS 彙整表整天會隨申報家數重出，第一次出表根本不是當天最後一版。
