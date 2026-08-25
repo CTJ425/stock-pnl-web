@@ -303,24 +303,41 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     2. 只讀最後兩筆，前面每一次改版的證據都被丟掉。
     改成尾端連續之後，任何一次內容變動都會把計數歸零，重新累積。
 
-    N 維持 3（每日來源）／1（MOPS）。提高 N 沒有意義：DEV `batch_run_log` 實測
+    N 維持 3（每日來源）；MOPS 兩源改為 Infinity（Task 133，見下一則測試）。
+    每日來源提高 N 沒有意義：DEV `batch_run_log` 實測
     2026-08-12～08-19，T86 一天最多改版一次，且發生在 17:00–20:45 之間，
     落在 t86 探針視窗（16:00–17:00）之外——多探 5 分鐘攔不到它。
   */
   it('retiredSources 依各來源所需的「尾端連續次數」判定收工', () => {
-    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 })).toEqual(
-      new Set(['t86', 'mops_revenue']),
-    )
+    expect(retiredSources({ bfi82u: 2, t86: 3, mops_revenue: 1 })).toEqual(new Set(['t86']))
     expect(retiredSources({ bfi82u: 3, margin: 3, borrow: 2 })).toEqual(
       new Set(['bfi82u', 'margin']),
     )
     expect(retiredSources({})).toEqual(new Set())
   })
 
-  it('MOPS 只需尾端連續 1 次——判準是期別，指紋不參與', () => {
-    expect(retiredSources({ mops_revenue: 1, mops_profit: 1 })).toEqual(
-      new Set(['mops_revenue', 'mops_profit']),
-    )
+  /*
+    MOPS 兩源永不退休（Task 133）。舊規則給它們 1，而 `sourceLanded` 的判準是
+    `atLeast(檔案期別 >= 上游期別)`——檔案只要已經有那一期就算到位，於是公布日 12:00 第一槽
+    必定收工，後面五槽全部不跑。DEV `source_probe_tick` 2026-08-17～08-24 實測：`mops_profit`
+    每天只有 12:00 一筆。
+
+    但 MOPS 彙整表整天會隨申報家數重出，第一次出表不是當天最後一版。因此六個槽點要全跑，
+    退休次數設為 Infinity——`retiredSources` 的 `counts >= required` 永遠不成立。
+  */
+  it('MOPS 永不退休——命中不提早收工，六個槽點每天全跑', () => {
+    expect(REQUIRED_LANDED_COUNTS.mops_revenue).toBe(Number.POSITIVE_INFINITY)
+    expect(REQUIRED_LANDED_COUNTS.mops_profit).toBe(Number.POSITIVE_INFINITY)
+    expect(retiredSources({ mops_revenue: 1, mops_profit: 1 })).toEqual(new Set())
+    expect(retiredSources({ mops_revenue: 6, mops_profit: 99 })).toEqual(new Set())
+  })
+
+  it('MOPS 不退休不影響排程：六個槽點仍然各排一次兩個 MOPS 來源', () => {
+    for (const slot of ['12:00', '12:05', '17:15', '17:20', '21:00', '21:05']) {
+      const planned = sourcesForTaipeiTime(slot, true)
+      expect(planned).toContain('mops_revenue')
+      expect(planned).toContain('mops_profit')
+    }
   })
 
   it('REQUIRED_LANDED_COUNTS 每個來源都要表態，不得漏列', () => {
@@ -388,9 +405,9 @@ describe('判準對齊（八個來源共用同一條標準）', () => {
     it('null 指紋無法證明穩定：尾端只算它自己一筆', () => {
       const ticks = [tick('t86', '16:10', null), tick('t86', '16:15', null)]
       expect(summariseLandedTicks(ticks, 16 * 60 + 15).counts.t86).toBe(1)
-      // MOPS 只需 1 次，所以 null 指紋不會擋住它——維持舊行為
+      // MOPS 永不退休（Task 133）：指紋是不是 null 都不影響——它根本不走退休這條路
       const mops = summariseLandedTicks([tick('mops_revenue', '12:00', null)], 12 * 60)
-      expect(retiredSources(mops.counts)).toEqual(new Set(['mops_revenue']))
+      expect(retiredSources(mops.counts)).toEqual(new Set())
     })
 
     it('視窗外的 tick 既不計次也不供指紋——bfi82u 雙時段是實例', () => {

@@ -14,6 +14,8 @@ export interface WarRoomSourceConfig {
   code: string
   window: string
   target: number
+  /** MOPS 兩源永不退休（Task 133）：命中不收工，平日六槽全跑。 */
+  neverRetires?: boolean
 }
 
 export const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
@@ -23,13 +25,15 @@ export const WAR_ROOM_SOURCES: WarRoomSourceConfig[] = [
   { id: 'twt38u', name: '外資買賣超 TOP50', code: 'TWT38U', window: '17:00–18:00', target: 3 },
   { id: 'margin', name: '融資融券', code: 'MARGIN', window: '20:30–22:30', target: 3 },
   { id: 'borrow', name: '借券賣出餘額', code: 'BORROW', window: '21:00–23:30', target: 3 },
-  { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 1 },
-  { id: 'mops_profit', name: 'MOPS 季報獲利彙整', code: 'MOPS_PROFIT', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 1 },
+  { id: 'mops_revenue', name: 'MOPS 月營收彙整', code: 'MOPS_REV', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 6, neverRetires: true },
+  { id: 'mops_profit', name: 'MOPS 季報獲利彙整', code: 'MOPS_PROFIT', window: '12:00 / 17:15 / 21:00 (平日6槽)', target: 6, neverRetires: true },
 ]
 
 export interface ProbeSourceCardData {
   config: WarRoomSourceConfig
   hitCount: number
+  /** 進度分子：一般來源是命中次數，`neverRetires` 來源是今日已跑的槽數。 */
+  progressCount: number
   target: number
   isRetired: boolean
   isProbing: boolean
@@ -79,16 +83,35 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         })
         .filter(Boolean)
 
-      const isRetired = hitCount >= s.target
-      const isProbing = !isRetired && sourceTicks.length > 0
-      const isWaiting = !isRetired && sourceTicks.length === 0
+      // neverRetires（MOPS）的分子是「今日已跑的槽數」，不是命中次數——命中不收工，
+      // 六槽全跑才是唯一在量的事；一般來源仍以命中次數計。
+      const progressCount = s.neverRetires ? sourceTicks.length : hitCount
+      const isRetired = s.neverRetires ? false : hitCount >= s.target
+      const slotsDone = s.neverRetires && progressCount >= s.target
+      const isProbing = s.neverRetires
+        ? progressCount > 0 && !slotsDone
+        : !isRetired && sourceTicks.length > 0
+      const isWaiting = s.neverRetires
+        ? progressCount === 0
+        : !isRetired && sourceTicks.length === 0
 
       let statusType: 'retired' | 'probing' | 'waiting' = 'waiting'
       let statusText = '⏳ 待機中'
 
-      if (isRetired) {
+      if (s.neverRetires) {
+        if (slotsDone) {
+          statusType = 'retired'
+          statusText = '✅ 六槽跑完'
+        } else if (isProbing) {
+          statusType = 'probing'
+          statusText = `🟢 探測中 (${progressCount}/${s.target} 槽)`
+        } else {
+          statusType = 'waiting'
+          statusText = '⏳ 待機中'
+        }
+      } else if (isRetired) {
         statusType = 'retired'
-        statusText = s.target === 1 ? '✅ 槽次收工' : '✅ 已退休'
+        statusText = '✅ 已退休'
       } else if (isProbing) {
         statusType = 'probing'
         statusText = `🟢 探測中 (${hitCount}/${s.target})`
@@ -100,6 +123,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
       return {
         config: s,
         hitCount,
+        progressCount,
         target: s.target,
         isRetired,
         isProbing,
@@ -124,7 +148,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <h3 className="head-tight">盤後探針命中戰情室</h3>
           <span className="source-tag">
-            已退休 {retiredCount} 源・探測中 {probingCount} 源・待機中 {waitingCount} 源
+            收工 {retiredCount} 源・探測中 {probingCount} 源・待機中 {waitingCount} 源
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -139,13 +163,14 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
       </div>
 
       <p className="ast-note" style={{ marginTop: 6, marginBottom: 14 }}>
-        全天候每 5 分鐘巡邏，命中即觸發抓取，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
+        全天候每 5 分鐘巡邏，命中即觸發抓取，3 次穩定到位自動退休收工（MOPS 兩源不退休，平日六槽全跑）。
       </p>
 
       {/* 8 大資料源戰情卡片 (統一採用 .kpi-grid 與 .glass.kpi) */}
       <div className="kpi-grid pwr-grid">
         {cards.map((card) => {
-          const { config, hitCount, target, isRetired, isProbing, hitTimes, statusText, statusType } = card
+          const { config, progressCount, target, isRetired, isProbing, hitTimes, statusText, statusType } = card
+          const neverRetires = config.neverRetires === true
           return (
             <div
               key={config.id}
@@ -165,15 +190,18 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
               <div className="kpi-value pwr-kpi-value">
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                   <span className={isProbing ? 'pwr-probing-val' : isRetired ? 'pwr-retired-val' : ''}>
-                    {hitCount}
+                    {progressCount}
                   </span>
                   <span className="ast-unit">
-                    / {target} 次{isRetired ? '到位' : '命中'}
+                    {neverRetires ? `/ ${target} 槽` : `/ ${target} 次${isRetired ? '到位' : '命中'}`}
                   </span>
                 </div>
-                <div className="pwr-hits-dots" aria-label={`命中進度 ${hitCount}/${target}`}>
+                <div
+                  className="pwr-hits-dots"
+                  aria-label={neverRetires ? `槽次進度 ${progressCount}/${target}` : `命中進度 ${progressCount}/${target}`}
+                >
                   {Array.from({ length: target }).map((_, i) => (
-                    <span key={i} className={`pwr-dot ${i < hitCount ? 'hit' : ''}`} />
+                    <span key={i} className={`pwr-dot ${i < progressCount ? 'hit' : ''}`} />
                   ))}
                 </div>
               </div>

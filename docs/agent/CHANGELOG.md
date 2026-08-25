@@ -2,6 +2,18 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.14（2026-08-25）— MOPS 探針一命中就收工，六個槽點只用掉第一個
+
+> 排程表上寫得清清楚楚：月營收與季報彙整每個平日有 12:00、12:05、17:15、17:20、21:00、21:05 六個槽點。實際上 PROD 的 `mops_profit` 每天只有 **12:00 一筆** tick。原因不在排程，在退休條件：`REQUIRED_LANDED_COUNTS` 給 MOPS 的值是 1，而 MOPS 的到位判準 `atLeast`（檔案期別 ≥ 上游期別）只要檔案已經有那一期就成立 —— 於是當天第一槽必定判定到位並收工，剩下五槽永遠不會跑。而 MOPS 彙整表整天會隨申報家數重出，第一次出表根本不是當天最後一版。
+
+- 🔁 **MOPS 兩源永不退休**（`sourceProbePlan.ts`）— `REQUIRED_LANDED_COUNTS.mops_revenue` 與 `.mops_profit` 改為 `Number.POSITIVE_INFINITY`。`retiredSources()` 比較的是 `counts[id] >= required[id]`，無限大永遠比不過，六個 `MOPS_SLOTS` 因此每個平日全跑。`retiredSources()` 本身、`trailingRun()`、`summariseLandedTicks()`、`sourceLanded()` 一行未動。
+- ✅ **六個每日來源維持原規則** — `bfi82u` / `t86` / `bwibbu` / `twt38u` / `margin` / `borrow` 仍是 3：命中 1 次 + 連續 2 次指紋無異動才退休，中途任何一次內容變動就歸零重算。PROD 2026-08-24 實測相符：`t86` 6 ticks / 3 到位、`bwibbu` 6/3、`margin` 7/3、`twt38u` 3/3、`bfi82u` 8/6（雙時段各 3）。
+- 📊 **證據**（PROD `source_probe_tick` 2026-08-13～08-24）— `mops_profit` 在 08-17、08-19、08-20、08-21、08-24 都只有 12:00 一筆；08-14 與 08-18 有 3 筆（前兩次命中但未到位才會續探）；08-13 是 4 筆 / 0 到位。DEV 完全一致。
+- 🖥️ **戰情室不再謊報收工**（`ProbeWarRoom.tsx`）— MOPS 卡片的分子改成「今日已跑的槽數」、分母 6，狀態只有 `⏳ 待機中` / `🟢 探測中 (n/6 槽)` / `✅ 六槽跑完`，永不出現「退休」「收工」。抬頭統計由「已退休 N 源」改為「收工 N 源」，一個詞同時涵蓋退休與六槽跑完。
+- 📖 **機制說明表同步**（`MechanismGuide.tsx`）— MOPS 兩列的退休條件由「1 次到位 (期別 ≥ 上游)」改為「不退休 (六槽全跑)」。
+- ⚖️ **刻意接受的代價** — 公布日一次命中會在六個槽點各觸發一次 `generate-history`，而不是只有一次。這在既有量級之內：`borrow` 在 PROD 一天觸發 `generate-chips` 13 次，`bfi82u` 觸發 `sync-market` 6 次。
+- 🧪 **測試** — 新增／改寫 6 條（`sourceProbePlan` 3、`ProbeWarRoom` 3、`MechanismGuide` 1）。全套 `npm test` **81 檔 / 1243 測試** exit 0；`npx tsc --noEmit` exit 0；`npx tsc --noEmit -p tsconfig.edge.json` exit 0；`npm run lint` 5 個既有警告，無新增。reviewer PASS，零 finding。
+
 ### 0.9.13（2026-08-25）— 一次 401 就讓整天的備份消失
 
 > 每日備份跑到某個帳號時失敗，`backup_run_log` 只留下一行 `[object Object]`。查 `edge_logs` 才看到真正原因：同一個 `Promise.all` 同一毫秒發出的三個請求裡，`GET /rest/v1/workspaces` 被回 **401**，另外兩個都是 200。不是資料問題、不是權限問題，是閘道認證層的一次性拒絕 —— 而程式沒有任何重試，一個請求失敗就讓那個帳號整天沒有備份。

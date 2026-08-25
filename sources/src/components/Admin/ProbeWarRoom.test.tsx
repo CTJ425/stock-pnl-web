@@ -67,6 +67,11 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(screen.getByText('借券賣出餘額')).toBeTruthy()
   })
 
+  it('抬頭統計用「收工」一詞，同時涵蓋退休與六槽跑完（Task 133）', () => {
+    render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
+    expect(screen.getByText(/收工 1 源・探測中 2 源・待機中 5 源/)).toBeTruthy()
+  })
+
   it('正確計算已退休、探測中與待機狀態', () => {
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
 
@@ -91,12 +96,47 @@ describe('ProbeWarRoom (盤後探針命中戰情室)', () => {
     expect(marginCard.textContent).toContain('尚未進入時窗 (今日未命中)')
   })
 
-  it('MOPS 營收 1 次命中即標記槽次收工', () => {
+  /*
+    MOPS 兩源永不退休（Task 133）：命中不收工，平日六個槽點全跑。
+    卡片的進度分子因此是「今日已跑的槽數」，不是命中次數——命中次數在不退休的來源上
+    不再是任何判準，拿它當分子會讓「跑了幾槽」這件唯一在量的事看不出來。
+  */
+  it('MOPS 命中不退休：顯示槽次進度，卡片不得出現退休／收工字樣', () => {
     render(<ProbeWarRoom data={baseStatus} loading={false} onRefresh={vi.fn()} />)
     const mopsCard = screen.getByTestId('pwr-card-mops_revenue')
-    expect(mopsCard.textContent).toContain('✅ 槽次收工')
-    expect(mopsCard.textContent).toContain('1/ 1 次到位')
-    expect(mopsCard.textContent).toContain('17:15 退休')
+    expect(mopsCard.textContent).toContain('🟢 探測中 (1/6 槽)')
+    expect(mopsCard.textContent).toContain('1/ 6 槽')
+    expect(mopsCard.textContent).not.toContain('退休')
+    expect(mopsCard.textContent).not.toContain('收工')
+
+    // 今日尚未跑到任何槽 -> 待機中
+    const profitCard = screen.getByTestId('pwr-card-mops_profit')
+    expect(profitCard.textContent).toContain('⏳ 待機中')
+    expect(profitCard.textContent).toContain('0/ 6 槽')
+  })
+
+  it('MOPS 六槽跑完標記「六槽跑完」，而不是退休，也不再標「最新」', () => {
+    const sixSlots: AdminStatus = {
+      ...baseStatus,
+      probeExperiment: {
+        mode: 'probe-only',
+        labels: {},
+        order: [],
+        ticks: ['12:00', '12:05', '17:15', '17:20', '21:00', '21:05'].map((t) => ({
+          taipei_ymd: '20260814',
+          taipei_time: t,
+          source: 'mops_profit',
+          hit: true,
+          ok: true,
+        })),
+      },
+    }
+    render(<ProbeWarRoom data={sixSlots} loading={false} onRefresh={vi.fn()} />)
+    const profitCard = screen.getByTestId('pwr-card-mops_profit')
+    expect(profitCard.textContent).toContain('✅ 六槽跑完')
+    expect(profitCard.textContent).toContain('6/ 6 槽')
+    expect(profitCard.textContent).not.toContain('退休')
+    expect(profitCard.textContent).not.toContain('最新')
   })
 
   it('日頻來源第 1 次與第 2 次命中（即使 tick note 含有「資料已到位」）不可過早標記退休，唯有滿 3 次才退休', () => {

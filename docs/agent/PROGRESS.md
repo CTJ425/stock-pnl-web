@@ -1,11 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: BUG-036 fix recorded in FIXED_BUG.md; Task 132 open items recorded; PROD deploy and recovery pending
+- Action: Task 133 probe code completed and tested; PROD deployment and new finding recorded
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-25 10:16:08 Asia/Taipei
+- Timestamp: 2026-08-25 11:33:57 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-25 11:33:57 Asia/Taipei (Task 133: MOPS probe sources never retire; code complete, deployment open)
+
+- **Task 133 completion**: MOPS sources now probe all six daily slots, never retiring. Root cause: `REQUIRED_LANDED_COUNTS` set both MOPS sources to 1, so they retired on first landing at 12:00 slot. The MOPS aggregate tables re-issue throughout the day as companies file, so a source stopping after first landing misses later, larger issues.
+- **Fix implemented**: `REQUIRED_LANDED_COUNTS.mops_revenue` and `.mops_profit` now set to `Number.POSITIVE_INFINITY`. `retiredSources()` compares `counts[id] >= required[id]`, so infinite requirement is never met — both sources probe all six slots every weekday. Daily sources (t86, bwibbu, margin, twt38u, bfi82u, borrow) keep existing `REQUIRED_LANDED_COUNTS = 3` and trailing-run retirement rule.
+- **Files changed** (production code): `sources/supabase/functions/stock-report/sourceProbePlan.ts`, `sources/src/components/Admin/ProbeWarRoom.tsx`, `sources/src/components/Admin/MechanismGuide.tsx`.
+- **UI updates**: MOPS cards now show `n/6 槽` progress (slots probed, not hits or landings); states flow `⏳ 待機中` → `🟢 探測中 (n/6 槽)` → `✅ 六槽跑完` (never `退休`). Daily source cards unchanged (still `n/3 次到位` → `✅ 已退休`). Summary tag `已退休 N 源` becomes `收工 N 源` (unifies retirement and 六槽跑完). MechanismGuide MOPS rows updated to show `不退休 (六槽全跑)`.
+- **Verification**: From `sources/`: `npm test -- sourceProbePlan.test.ts ProbeWarRoom.test.tsx MechanismGuide.test.tsx` — all test cases pass. Full suite: `npm test -- --run` exit 0 (81 files / 1243 tests passed). `npm run lint` and `npm run typecheck:edge` exit 0.
+- **Accepted cost** (trade-off, not risk): On a MOPS publication day, a hit now fires `generate-history` on each of six slots instead of once. Within existing envelope: `borrow` fires `generate-chips` 13× on a PROD day; `bfi82u` fires `sync-market` 6×.
+- **Deployment status**: Code complete and tested. **Not deployed to PROD or DEV Edge** — awaits explicit user authorization.
+- **New finding recorded**: PROD `borrow` probe on 2026-08-24 logged 31 ticks / 13 hits / 0 landed (never satisfies `sourceLanded`, never retires, probes full 21:00–23:30 window daily, fires `generate-chips` 13×). Added as new open finding to BUG_FIX.md; not investigated, no owner decision yet.
+- **Unfinished**: Edge Function deployment to DEV and PROD.
 
 ## 📅 Log: 2026-08-25 10:16:08 Asia/Taipei (BUG-036 backup cron 401; four defects fixed in 0.9.13)
 
@@ -21,19 +33,5 @@
 - **Deployed**: code on both `dev` and `main` (commit 84502c6, version 0.9.13). Pages deploy covers admin UI. **Edge Function `backup-transactions` on PROD not deployed** — awaits explicit authorization.
 - **Open work recorded in Task 132**: (1) PROD Edge deploy (2) DEV Edge redeploy (3) affected account manual re-run (4) CRON_SECRET rotation (exposed in transcript during postgres_logs query, seven PROD cron jobs embed it).
 - **Unfinished**: All four PROD/DEV/recovery/security items above.
-
-## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
-
-- **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Pages deploy succeeded.
-- **Feature: backup restore** answers the gap the user found — downloaded JSON had no consumer. Restore is additive-only, never deletes or overwrites; first click only previews.
-- **Design decision**: Account a backup may write into is taken from validated object path, never from the document itself — checking document against itself would be circular.
-- **Three-table writes**: Workspaces → transactions → user_settings. No transaction across tables; half-finished restore names what already landed and is safe to re-run. Recorded as accepted trade-off, not defect.
-- **Review outcome**: Implementation PASS with one RISK (partial-apply state not disclosed), fixed by adding `restoreFailureMessage`.
-- **Verification**: npm test 81 files / 1234 tests exit 0; tsc --noEmit exit 0; tsc -p tsconfig.edge.json exit 0; npm run build exit 0; oxlint 5 pre-existing warnings.
-- **DEV disaster drill**: Three real transactions deleted, preview reported 62/59/3 rows missing and wrote nothing, apply restored them, FULL-TABLE checksum matched pre-deletion exactly (every column, not just row count). Re-run reported zero missing. Two tampered documents (user_id changes in document and in one row) both refused with expected messages, left no trace.
-- **PROD deploy**: `stock-report` v56 → v57 (ezbr_sha256 changed, verify_jwt=false unchanged); `stock-price` and `backup-transactions` hashes unchanged; no schema change. Verified without restoring: 401 for unauthenticated and garbage-bearer calls; five malformed paths refused by our gate; read-only previews for both accounts reported no missing rows; PROD row counts unchanged (110 transactions, 5 workspaces).
-- **WAF note**: A `../../etc/passwd` probe against PROD never reached our code — Cloudflare's WAF blocked it and returned HTML block page. Testing our own path gate on PROD requires payloads that do not trip the WAF.
-- **Records finalized**: Release 0.9.12 added to PROGRESS.md. Oldest entry (backup-transactions phase 1, 2026-08-24 16:57:07) moved to PROGRESS_ARCHIVE.md to keep hot file at header + 2 newest entries.
-- **Unfinished**: None — 0.9.12 shipped and verified.
 
 ---

@@ -85,18 +85,18 @@ const PROBE_SOURCES_CONFIG: ProbeSourceConfig[] = [
     name: 'MOPS 月營收彙整',
     window: '12:00, 12:05, 17:15, 17:20, 21:00, 21:05',
     interval: '平日 6 個槽點',
-    retirement: '1 次到位 (期別 ≥ 上游)',
+    retirement: '不退休 (六槽全跑)',
     action: 'generate-history',
-    description: '公開資訊觀測站月營收快照彙整表，自動補齊歷史月營收。',
+    description: '公開資訊觀測站月營收快照彙整表，自動補齊歷史月營收。彙整表整天隨申報家數重出，命中不會提早收工，平日六個槽點全跑。',
   },
   {
     id: 'mops_profit',
     name: 'MOPS 季報獲利彙整',
     window: '12:00, 12:05, 17:15, 17:20, 21:00, 21:05',
     interval: '平日 6 個槽點',
-    retirement: '1 次到位 (期別 ≥ 上游)',
+    retirement: '不退休 (六槽全跑)',
     action: 'generate-history',
-    description: '公開資訊觀測站季報財務報表彙整表，自動補齊歷史獲利能力。',
+    description: '公開資訊觀測站季報財務報表彙整表，自動補齊歷史獲利能力。彙整表整天隨申報家數重出，命中不會提早收工，平日六個槽點全跑。',
   },
 ]
 

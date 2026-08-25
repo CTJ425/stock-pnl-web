@@ -25,6 +25,29 @@
 
 ## 📋 Active Tasks
 
+### Task 133: MOPS probe sources never retire (six slots a day) — 0.9.14
+- **Status**: ⏳ **OPEN — Code complete and tested; deployment pending**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 11:33:57 Asia/Taipei
+- **What is this**: MOPS sources now probe all six daily slots and never retire. Root cause: `REQUIRED_LANDED_COUNTS` set both to 1, so they retired on first landing at 12:00. MOPS aggregate tables re-issue throughout the day as companies file; retiring on first landing misses later, larger data. Spec: `docs/agent/specs/mops-probe-never-retires.md`.
+- **Done**:
+  1. ~~Production code~~ ✅ `sources/supabase/functions/stock-report/sourceProbePlan.ts` (REQUIRED_LANDED_COUNTS.mops_* → Number.POSITIVE_INFINITY)
+  2. ~~Production UI~~ ✅ `sources/src/components/Admin/ProbeWarRoom.tsx` (neverRetires card states: 待機中 / 探測中 (n/6 槽) / 六槽跑完)
+  3. ~~Production UI~~ ✅ `sources/src/components/Admin/MechanismGuide.tsx` (MOPS rows: 不退休 (六槽全跑))
+  4. ~~Tests~~ ✅ `sources/supabase/functions/stock-report/sourceProbePlan.test.ts` (retiredSources, REQUIRED_LANDED_COUNTS.mops_*, daily sources still retire at 3)
+  5. ~~Tests~~ ✅ `sources/src/components/Admin/ProbeWarRoom.test.tsx` (MOPS card states at 0/1/6 ticks; daily card unchanged; summary tag 收工)
+  6. ~~Tests~~ ✅ `sources/src/components/Admin/MechanismGuide.test.tsx` (guide rows show 不退休 (六槽全跑))
+  7. ~~Test suite~~ ✅ `npm test -- --run` from sources/ = 81 files / 1243 tests passed, exit 0
+  8. ~~Lint and type check~~ ✅ `npm run lint` exit 0; `npm run typecheck:edge` exit 0; `npm test` includes `tsc --noEmit` exit 0
+  9. ~~Reviewer verdict~~ ✅ PASS, no findings, no accepted RISKs
+- **Open items**:
+  1. **DEV Edge volume-copy deploy** — copy `sources/supabase/functions/stock-report/` to `volumes/functions/` and recreate functions container.
+  2. **PROD Edge Function deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/` (the flag is mandatory for this function on cloud — see `supabase-ops`). Confirm with the `ezbr_sha256` change from `functions list`, not the version number.
+  3. ~~CHANGELOG 0.9.14 entry~~ ✅ written 2026-08-25.
+  4. **Merge to main** — after PROD Edge deploy verification.
+- **Accepted cost** (trade-off, not risk): On a MOPS publication day, a hit now fires `generate-history` on each of six slots instead of once. Within envelope: `borrow` fires `generate-chips` 13× on PROD day; `bfi82u` fires `sync-market` 6×.
+- **Unfinished**: All four open items above (DEV Edge, PROD Edge, CHANGELOG, merge).
+
 ### Task 132: BUG-036 fix deployment and affected account recovery (0.9.13)
 - **Status**: ⏳ **OPEN — Fix implemented and verified; deployment and recovery pending**
 - **Agent**: —
