@@ -2,11 +2,33 @@
 
 - Agent: Scribe
 - Status: ACTIVE
-- Timestamp: 2026-08-20 17:55:00 Asia/Taipei
+- Timestamp: 2026-08-25 10:16:08 Asia/Taipei
 
 ---
 
 ## 🐛 Historical Bug Fixes
+
+### BUG-036 — Backup cron transient 401 on one PostgREST request; no retry; error logged as [object Object]
+
+- **Condition**: 2026-08-25 02:00 Asia/Taipei backup-daily cron run. `Promise.all` issued three PostgREST requests in the same millisecond: `GET /rest/v1/workspaces`, `GET /rest/v1/transactions`, `GET /rest/v1/user_settings`. Same service-role client, same API key. One request (`workspaces`) returned 401 while the other two returned 200. Transient gateway auth rejection, not a data/RLS/permission problem — same account succeeded the previous day.
+
+- **Impact**: One failed request caused the entire account's backup to be skipped. No retry, so that account had no `2026-08-25.json` backup object. `backup_run_log` recorded `status='error'` with the literal message `[object Object]` because PostgREST errors are plain objects, not `Error` instances, and `String(err)` produces the placeholder string.
+
+- **Four defects fixed (0.9.13, commit 84502c6)**:
+  1. `sources/supabase/functions/backup-transactions/backupPlan.ts` — new `describeError()` function. Handles plain-object errors from PostgREST and serializes them for logging instead of producing `[object Object]`.
+  2. `sources/supabase/functions/backup-transactions/index.ts` — added retry logic for failed accounts (up to 3 attempts, 500ms/1000ms backoff). Prune-only failure keeps `status='ok'` and is not retried.
+  3. `sources/supabase/functions/backup-transactions/index.ts` — now checks and logs the `backup_run_log` insert result. Dropped row would have made an account look never-attempted.
+  4. `src/components/Admin/BackupsSection.tsx` — `statusLabel` now shows error text on an `ok` row, so prune failures are no longer displayed as bare success.
+
+- **Tests changed**:
+  - `sources/supabase/functions/backup-transactions/backupPlan.test.ts` — added 4 test cases for `describeError()`.
+  - `src/components/Admin/BackupsSection.test.tsx` — added 1 test case.
+
+- **Verification**: `npm test` 81 files / 1239 tests exit 0; `npx tsc --noEmit` exit 0; `npx tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `npx oxlint` 5 pre-existing warnings, no new ones.
+
+- **Status**: ✅ FIXED in **0.9.13** (commit 84502c6, both dev and main, 2026-08-25). **PROD Edge Function `backup-transactions` not yet deployed** — awaiting explicit user authorization.
+
+---
 
 ### RISK-001 — Probe round timeout: per-source loop has no deadline/budget check
 
