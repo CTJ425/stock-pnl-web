@@ -25,6 +25,17 @@
 
 ## 📋 Active Tasks
 
+### Task 132: BUG-036 fix deployment and affected account recovery (0.9.13)
+- **Status**: ⏳ **OPEN — Fix implemented and verified; deployment and recovery pending**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 10:16:08 Asia/Taipei
+- **What is this**: BUG-036 (transient 401 on PostgREST, no retry, [object Object] logging) fixed in 0.9.13 commit 84502c6. Four defects corrected in backup-transactions Edge Function and admin UI; all tests pass. PROD Edge Function deployment and recovery of affected account's missing backup remain open.
+- **Open items**:
+  1. **PROD Edge Function deploy** — `supabase functions deploy backup-transactions --project-ref kxnxadaghidwumqsqneu` must be run to move PROD from old code (no retry, [object Object] logging) to fixed code (retry up to 3×, proper error messages). Pages deploy to `main` covers admin UI display only.
+  2. **DEV Edge Function redeploy** — volume copy `sources/supabase/functions/backup-transactions/` to `volumes/functions/` and recreate functions container.
+  3. **Affected account manual re-run** — account that failed on 2026-08-25 02:00 has no `2026-08-25.json` backup object. Manual trigger for that date once PROD Edge deploy completes.
+  4. **Security: CRON_SECRET rotation** — PROD `CRON_SECRET` exposed in plaintext in agent transcript on 2026-08-25 during postgres_logs query (`event_message` of `cron job 18 starting:` contains full command with `x-cron-secret` header). Seven PROD cron jobs (jobid 12–18) embed this secret. Rotation pending.
+- **Unfinished**: All four items above.
 
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**

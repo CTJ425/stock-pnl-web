@@ -1,11 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.11 shipped to both environments; backup-transactions phase 2 completed; RISK-001 closed
+- Action: BUG-036 fix recorded in FIXED_BUG.md; Task 132 open items recorded; PROD deploy and recovery pending
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-24 17:35:44 CST
+- Timestamp: 2026-08-25 10:16:08 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-08-25 10:16:08 Asia/Taipei (BUG-036 backup cron 401; four defects fixed in 0.9.13)
+
+- **Bug discovered**: 2026-08-25 02:00 Asia/Taipei backup-daily cron, one account, one of three simultaneous PostgREST requests returned 401 (`GET /rest/v1/workspaces`) while the other two (transactions, user_settings) returned 200. Same service-role client, same API key. No retry logic, so entire account's backup skipped; `backup_run_log` recorded `status='error'` with message `[object Object]` because PostgREST errors are plain objects, not `Error` instances.
+- **Root cause**: three separate defects: (1) no `describeError()` for PostgREST plain objects (2) no retry on transient failures (3) no log verification of `backup_run_log` insert result (4) admin UI showed prune failures as bare success.
+- **Four defects fixed in 0.9.13 (commit 84502c6)**:
+  1. `sources/supabase/functions/backup-transactions/backupPlan.ts` — new `describeError()` function handles plain-object errors and serializes for logging.
+  2. `sources/supabase/functions/backup-transactions/index.ts` — retry failed accounts up to 3 attempts (500ms/1000ms backoff); prune-only failure stays `status='ok'`, not retried.
+  3. `sources/supabase/functions/backup-transactions/index.ts` — check and log insert result to catch dropped rows.
+  4. `src/components/Admin/BackupsSection.tsx` — `statusLabel` now shows error text on `ok` row; prune failures visible.
+- **Tests**: `backupPlan.test.ts` +4 cases for `describeError()`; `BackupsSection.test.tsx` +1 case. Total: `npm test` 81 files / 1239 tests exit 0.
+- **Verification**: `npm test` exit 0; `npx tsc --noEmit` exit 0; `npx tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `npx oxlint` 5 pre-existing warnings, no new.
+- **Deployed**: code on both `dev` and `main` (commit 84502c6, version 0.9.13). Pages deploy covers admin UI. **Edge Function `backup-transactions` on PROD not deployed** — awaits explicit authorization.
+- **Open work recorded in Task 132**: (1) PROD Edge deploy (2) DEV Edge redeploy (3) affected account manual re-run (4) CRON_SECRET rotation (exposed in transcript during postgres_logs query, seven PROD cron jobs embed it).
+- **Unfinished**: All four PROD/DEV/recovery/security items above.
 
 ## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
 
@@ -20,31 +35,5 @@
 - **WAF note**: A `../../etc/passwd` probe against PROD never reached our code — Cloudflare's WAF blocked it and returned HTML block page. Testing our own path gate on PROD requires payloads that do not trip the WAF.
 - **Records finalized**: Release 0.9.12 added to PROGRESS.md. Oldest entry (backup-transactions phase 1, 2026-08-24 16:57:07) moved to PROGRESS_ARCHIVE.md to keep hot file at header + 2 newest entries.
 - **Unfinished**: None — 0.9.12 shipped and verified.
-
-## 📅 Log: 2026-08-24 17:35:44 CST (0.9.11 shipped to dev and main; backup-transactions phase 2 complete; PROD deploy open)
-
-- **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, GitHub Pages deploy succeeded.
-- **Task 130 phase 2 completion**: Admin console sixth panel 備份 (restore/download UI). Frontend service `adminBackups.ts`, backend pure logic `stock-report/backupAdmin.ts`, two new `stock-report` actions `admin-backups` (list backup status per account) and `admin-backup-url` (return signed download URL), both protected by existing `assertAdmin`. Individual users cannot download their own backups (admin-only access per user decision).
-- **Decision reversal recorded**: Original Task 130 spec proposed a new Edge Function for admin operations. Implementation instead added actions to existing `stock-report` because: (1) all admin calls already route through it, (2) a second function would add a PROD deploy target whose `verify_jwt` setting could drift. Decision and rationale recorded in `docs/agent/specs/backup-admin-console.md` to prevent re-implementation of rejected design in future.
-- **Signed URL defect found and fixed**: `createSignedUrl` returned root-relative URLs (`/storage/v1/...`). Browser client (built from container-internal `SUPABASE_URL`) interpreted these as `http://kong:8000/...` on self-hosted DEV. Made URLs absolute. Unit tests could not catch this; DEV live verification did (valid signed link downloaded real 20510-byte backup; tampered signature returned 400).
-- **RISK-001 closed**: Probe round timeout (per-source loop deadline/budget). Fixed by adding optional `probeDeadline` to `probeRound.ts`, `deferred` result field (distinct from `skipped`), and `PROBE_BUDGET_MS = 30_000` in `index.ts`. Probe loop defers a source before starting it once budget is gone, never interrupts in-flight probe. See `FIXED_BUG.md`.
-- **Verification**: `npm test` 81 files / 1204 tests exit 0; `tsc --noEmit` exit 0; `tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `oxlint` 5 pre-existing warnings, no new ones. DEV live checks: anon and non-admin rejected 401; five malformed paths returned 400; valid signed link downloaded real 20510-byte backup; tampered signature returned 400.
-- **Review outcomes**: Phase 2 implementation PASS with one RISK (undefined CSS class `adm-toggle-row`, fixed by using existing `link-btn` class). RISK-001 + signed-URL review returned FAIL on scope technicality: flagged two test files as outside builders' Files list. Main session wrote those tests before dispatch (documented Lane 2 flow); builders did not touch them. Adjudicated PASS on substance; no correctness defect found.
-- **Pre-existing limitation (out of scope)**: Probe follow-up starting before 45s `PROBE_FOLLOW_UP_BUDGET_MS` deadline has no cap on its own execution time. Recorded in PROGRESS for next agent.
-- **PROD deployment**: GitHub Pages (main branch) deployed. Cloud database and Edge Functions not deployed — see new Task 131 in TASK.md for PROD checklist. Until complete: PROD produces no backups, admin 備份 panel reads empty.
-- **Records finalized**: Task 130 moved to TASK_ARCHIVE.md marked done (0.9.11). New Task 131 added to TASK.md (PROD deploy, OPEN). RISK-001 moved to FIXED_BUG.md. This 0.9.11 entry added to PROGRESS.md.
-- **Unfinished**: None — 0.9.11 recording complete. PROD deployment awaits explicit user authorization.
-
-## PROD Deploy
-
-- **Deployment executed 2026-08-24 17:48:50 CST** against cloud database project `kxnxadaghidwumqsqneu`:
-  1. **Schema section 12** applied: `backups` bucket `public=false`, `backup_run_log` table RLS + admin-only SELECT, run_date index, `backup-daily` cron at '0 18 * * *'.
-  2. **Edge Function `backup-transactions`** deployed with `supabase functions deploy backup-transactions --no-verify-jwt`; verified `verify_jwt=false`.
-  3. **Edge Function `stock-report`** deployed with `supabase functions deploy stock-report --no-verify-jwt`; verified `verify_jwt=false`. Function `stock-price` untouched at `verify_jwt=true`.
-- **Cron secret handling** (technique for reuse): x-cron-secret extracted server-side from existing job's command, formatted directly into new job. Plaintext never reached client or any file.
-- **Database identity trap** (supabase-ops hazard): `supabase db query` defaults LOCAL; `--linked` required for cloud. First attempt hit ECONNREFUSED on 127.0.0.1:54322 (self-hosted default), the target-misidentification failure mode.
-- **PROD verification**: No secret 401, wrong secret 401, GET 405; `admin-backups` and `admin-backup-url` both 401 without auth. Server-triggered run status=ok for both accounts: 57+53=110 transactions, 4+1=5 workspaces, exactly matching pre-deploy counts. Two storage objects at correct path, `application/json`, sizes matching logged bytes. Public URL returns 400; anon reads `backup_run_log` as []; anon lists bucket as []; ordinary `transactions` endpoint still 200 (RLS did not break normal use).
-- **API key validation**: Local sources/.env holds DEV anon key; testing PROD with it returns "Invalid API key". PROD anon key sourced from `supabase projects api-keys --project-ref`.
-- **Cron schedule**: `backup-daily` runs daily at Taipei 02:00 from now on.
 
 ---
