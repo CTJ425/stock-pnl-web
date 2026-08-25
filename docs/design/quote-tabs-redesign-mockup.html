@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>個股分析改版提案 — 行情置頂 + 下方頁籤模式 (籌碼/基本/技術)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99,102,241,.16);
+  --bg-glow-b: rgba(34,211,238,.10);
+  --surface: rgba(255,255,255,.045);
+  --surface-strong: rgba(255,255,255,.08);
+  --border: rgba(255,255,255,.09);
+  --border-strong: rgba(255,255,255,.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --accent-strong: #6366f1;
+  --accent-2: #22d3ee;
+  --up: #ff4a5a;
+  --down: #00e676;
+  --panel: #131a2b;
+  --thead-bg: rgba(255,255,255,.03);
+  --row-alt: rgba(255,255,255,.02);
+  --shadow-card: 0 8px 32px rgba(2,6,18,.45);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --font-display: 'Outfit','Noto Sans TC',sans-serif;
+  --font-body: 'Inter','Noto Sans TC','Microsoft JhengHei',sans-serif;
+}
+
+[data-theme="light"] {
+  --bg: #eef2f9;
+  --bg-glow-a: rgba(99,102,241,.12);
+  --bg-glow-b: rgba(34,211,238,.10);
+  --surface: rgba(255,255,255,.66);
+  --surface-strong: rgba(255,255,255,.92);
+  --border: rgba(15,23,42,.08);
+  --border-strong: rgba(15,23,42,.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --accent-strong: #4f46e5;
+  --panel: #ffffff;
+  --thead-bg: rgba(15,23,42,.035);
+  --row-alt: rgba(15,23,42,.02);
+  --shadow-card: 0 8px 28px rgba(15,23,42,.10);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(900px 520px at 12% -8%,var(--bg-glow-a),transparent 60%),
+    radial-gradient(760px 480px at 92% 4%,var(--bg-glow-b),transparent 62%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 32px 20px 80px;
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.container { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+/* Control banner */
+.control-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 12px 20px;
+}
+.control-bar h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 10px; }
+.tag { font-size: 12px; background: var(--accent-strong); color: #fff; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+.theme-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Stock Page Header */
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.title-group { display: flex; align-items: baseline; gap: 10px; }
+.title-group h2 { font-size: 24px; margin: 0; font-weight: 700; }
+.title-group .badge {
+  font-size: 13px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: var(--ink-secondary);
+}
+.actions { display: flex; gap: 8px; align-items: center; }
+.btn {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { border-color: var(--accent); }
+
+/* Main subtabs */
+.main-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.main-tab {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  position: relative;
+}
+.main-tab.active { color: var(--accent); }
+.main-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* Glass Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(16px);
+  padding: 24px;
+}
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+.card-head h3 { font-size: 17px; font-weight: 700; color: var(--ink); }
+.card-meta { font-size: 13px; color: var(--ink-muted); }
+
+/* ============================================================
+   Top Quote Banner (Full Width above the columns)
+   This ensures Big Price spans top, and "我的持股" aligns with 8-stats grid!
+   ============================================================ */
+.quote-top-banner {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+}
+.m-quote-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.m-quote-head h2 { font-size: 26px; font-weight: 700; }
+.m-quote-head .code { font-size: 16px; color: var(--ink-muted); }
+
+.m-price { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.m-price .big { font-size: 34px; font-weight: 700; font-family: var(--font-display); }
+.m-price .delta { font-size: 20px; font-weight: 600; }
+.m-price .stamp {
+  font-size: 13px;
+  color: var(--ink-muted);
+  background: var(--surface-strong);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.pnl-up { color: var(--up); }
+.pnl-down { color: var(--down); }
+
+/* 2-Column Content Layout below the Big Price Banner */
+.quote-grid-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .quote-grid-body { grid-template-columns: 1fr; }
+}
+
+/* 8-Cell Stats Grid */
+.m-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+@media (max-width: 560px) {
+  .m-stats { grid-template-columns: repeat(2, 1fr); }
+}
+.stat-box {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.stat-box .k { font-size: 12px; color: var(--ink-muted); margin-bottom: 2px; }
+.stat-box .v { font-size: 15px; font-weight: 600; }
+
+/* Intraday Chart Section with Time Remark */
+.chart-section {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.chart-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.range-tabs {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.range-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.range-btn.active {
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Feature 1: Date & Time Remark next to chart */
+.chart-time-badge {
+  font-size: 12px;
+  color: var(--accent-2);
+  background: rgba(34,211,238,.08);
+  border: 1px solid rgba(34,211,238,.25);
+  padding: 3px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+.chart-time-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  display: inline-block;
+}
+
+/* SVG Chart Mockup */
+.chart-svg-wrap {
+  width: 100%;
+  height: 240px;
+  position: relative;
+}
+svg { width: 100%; height: 100%; overflow: visible; }
+
+/* Feature: Institutional Investors 2-Day Cards under Chart */
+.institutional-block {
+  margin-top: 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.inst-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.inst-header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inst-header .inst-meta {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.inst-days-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .inst-days-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.inst-day-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.inst-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.inst-day-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inst-day-tag {
+  font-size: 11px;
+  background: rgba(99,102,241,.15);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.inst-day-total {
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+.inst-legs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.inst-leg-cell {
+  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(255,255,255,.04);
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.inst-leg-k {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+.inst-leg-v {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Aside Right Rail (Feature 2: Aligned exactly with stats grid) */
+.quote-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.holding-card {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.holding-card h4 {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-bottom: 8px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.holding-badge {
+  font-size: 11px;
+  background: rgba(99,102,241,.15);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.holding-pnl-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.holding-pnl-row .big { font-size: 22px; font-weight: 700; font-family: var(--font-display); }
+.holding-pnl-row .roi { font-size: 14px; font-weight: 600; }
+.holding-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.mini-cell .k { font-size: 11px; color: var(--ink-muted); }
+.mini-cell .v { font-size: 13px; font-weight: 600; }
+
+.tech-summary-box {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.tech-summary-box h4 { font-size: 13px; color: var(--ink-secondary); margin-bottom: 10px; font-weight: 600; }
+.tech-list { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.tech-item { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: 4px; }
+.tech-item .k { color: var(--ink-muted); }
+.tech-item .v { font-weight: 600; }
+
+/* Visual alignment guide marker for demonstration */
+.align-guide-banner {
+  font-size: 12px;
+  background: rgba(99,102,241,.1);
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ============================================================
+   Feature 3: Chips / Fundamental / Technical as Tabs below Quote
+   ============================================================ */
+.section-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-tabs-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  padding: 6px;
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.sec-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all .2s ease;
+}
+.sec-tab-btn:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+.sec-tab-btn.active {
+  background: var(--accent-strong);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(99,102,241,.35);
+}
+.sec-tab-btn .badge-pill {
+  font-size: 11px;
+  background: rgba(255,255,255,.18);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.tab-pane {
+  display: none;
+  animation: fadeIn .25s ease-in-out;
+}
+.tab-pane.active { display: block; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Content mockup for subtab panels */
+.mock-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 10px;
+}
+.mock-table th, .mock-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.mock-table th:first-child, .mock-table td:first-child { text-align: left; }
+.mock-table th { background: var(--thead-bg); color: var(--ink-muted); font-weight: 600; }
+
+.pill-info {
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.6;
+  margin-top: 12px;
+  background: var(--surface-strong);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header Control Bar -->
+  <div class="control-bar">
+    <h1>
+      個股分析改版示意圖
+      <span class="tag">排版對齊修正版</span>
+    </h1>
+    <button class="theme-btn" onclick="toggleTheme()">🌓 切換深色 / 淺色模式</button>
+  </div>
+
+  <!-- Page Head (PDF Button Removed) -->
+  <div class="page-head">
+    <div class="title-group">
+      <h2>2330 台積電</h2>
+      <span class="badge">半導體業</span>
+    </div>
+    <div class="actions">
+      <!-- PDF Button completely removed -->
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+        重新整理
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Subtabs -->
+  <nav class="main-tabs">
+    <button class="main-tab active">分析內容</button>
+    <button class="main-tab">損益試算</button>
+    <button class="main-tab">AI 分析</button>
+  </nav>
+
+  <!-- ==================== SECTION 1: 行情 (MARKET) - ALWAYS PINNED ON TOP ==================== -->
+  <section class="card" aria-label="行情">
+    <div class="card-head">
+      <h3>行情</h3>
+      <div class="card-meta">8/25 · 已收盤 · 13:30:00</div>
+    </div>
+
+    <!-- 1. TOP HEADER BANNER: Stock Name & Big Price line spanning across full top -->
+    <div class="quote-top-banner">
+      <div class="m-quote-head">
+        <h2>台積電</h2>
+        <span class="code">2330</span>
+      </div>
+      <div class="m-price">
+        <span class="big pnl-up num">NT$2,405.00</span>
+        <span class="delta pnl-up num">▲ 85.00　+3.66%</span>
+        <span class="stamp">8/25 · 收盤 · 13:30:00</span>
+      </div>
+    </div>
+
+    <!-- Alignment indicator note -->
+    <div class="align-guide-banner">
+      <span>📐 <b>對齊規則</b>：大價格行跨頂部橫幅；下方左側「成交量、開盤等 8 格」與右側「我的持股概況」頂端水平持平對齊。</span>
+    </div>
+
+    <!-- 2. TWO-COLUMN BODY: Left Stats & Chart, Right Holdings & Indicators -->
+    <div class="quote-grid-body">
+      
+      <!-- Left Column -->
+      <div class="quote-left-col">
+        <!-- 8-Cell Stats Grid (Aligned with right-side 我的持股) -->
+        <div class="m-stats">
+          <div class="stat-box"><div class="k">成交量</div><div class="v num">31,851 張</div></div>
+          <div class="stat-box"><div class="k">開盤</div><div class="v num">NT$2,385.00</div></div>
+          <div class="stat-box"><div class="k">最高</div><div class="v num">NT$2,415.00</div></div>
+          <div class="stat-box"><div class="k">最低</div><div class="v num">NT$2,370.00</div></div>
+          <div class="stat-box"><div class="k">昨收</div><div class="v num">NT$2,320.00</div></div>
+          <div class="stat-box"><div class="k">均價</div><div class="v num">NT$2,406.25</div></div>
+          <div class="stat-box"><div class="k">漲跌幅</div><div class="v pnl-up num">+3.66%</div></div>
+          <div class="stat-box"><div class="k">振幅</div><div class="v num">1.94%</div></div>
+        </div>
+
+        <!-- Chart with Feature 1: Explicit Date / Time Annotation -->
+        <div class="chart-section">
+          <div class="chart-top-bar">
+            <div class="range-tabs">
+              <button class="range-btn active">一日</button>
+              <button class="range-btn">五日</button>
+            </div>
+            <!-- Feature 1: 當日時間標記備註 -->
+            <div class="chart-time-badge">
+              <span>2026-08-25 當日分時走勢（最後撮合 13:30:00）</span>
+            </div>
+          </div>
+
+          <!-- Chart Visual Simulation -->
+          <div class="chart-svg-wrap">
+            <svg viewBox="0 0 600 240" preserveAspectRatio="none">
+              <!-- Grid & Baseline -->
+              <line x1="50" y1="30" x2="590" y2="30" stroke="rgba(138,148,163,0.15)" stroke-dasharray="3 3"/>
+              <line x1="50" y1="100" x2="590" y2="100" stroke="rgba(138,148,163,0.3)" stroke-dasharray="3 3"/>
+              <line x1="50" y1="170" x2="590" y2="170" stroke="rgba(138,148,163,0.15)" stroke-dasharray="3 3"/>
+              
+              <!-- Y Axis labels -->
+              <text x="42" y="34" font-size="10" fill="#8a94a3" text-anchor="end">2,415</text>
+              <text x="42" y="104" font-size="10" fill="#8a94a3" text-anchor="end">昨收 2,320</text>
+              <text x="42" y="174" font-size="10" fill="#8a94a3" text-anchor="end">2,370</text>
+              
+              <!-- Price Area Fill (Red/Up) -->
+              <defs>
+                <linearGradient id="upGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#ff4a5a" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#ff4a5a" stop-opacity="0.02"/>
+                </linearGradient>
+              </defs>
+              <polygon points="50,100 50,70 120,60 200,85 280,45 360,55 450,40 540,50 590,45 590,100" fill="url(#upGrad)"/>
+              
+              <!-- Price Line -->
+              <polyline points="50,70 120,60 200,85 280,45 360,55 450,40 540,50 590,45" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+              
+              <!-- VWAP Line -->
+              <polyline points="50,72 120,68 200,75 280,60 360,58 450,52 540,50 590,48" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="2 2"/>
+              
+              <!-- Volume Bars at Bottom -->
+              <rect x="70" y="195" width="6" height="35" fill="#ff4a5a" opacity="0.6"/>
+              <rect x="140" y="210" width="6" height="20" fill="#00e676" opacity="0.6"/>
+              <rect x="210" y="190" width="6" height="40" fill="#ff4a5a" opacity="0.6"/>
+              <rect x="290" y="180" width="6" height="50" fill="#ff4a5a" opacity="0.6"/>
+              <rect x="370" y="200" width="6" height="30" fill="#ff4a5a" opacity="0.6"/>
+              <rect x="460" y="175" width="6" height="55" fill="#ff4a5a" opacity="0.6"/>
+              <rect x="550" y="170" width="6" height="60" fill="#ff4a5a" opacity="0.6"/>
+
+              <!-- Time axis -->
+              <text x="50" y="238" font-size="10" fill="#8a94a3">09:00</text>
+              <text x="180" y="238" font-size="10" fill="#8a94a3">10:00</text>
+              <text x="310" y="238" font-size="10" fill="#8a94a3">11:00</text>
+              <text x="440" y="238" font-size="10" fill="#8a94a3">12:00</text>
+              <text x="570" y="238" font-size="10" fill="#8a94a3">13:30</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Feature: 三大法人買賣超字卡（最近兩日） -->
+        <div class="institutional-block">
+          <div class="inst-header">
+            <h4>
+              <span>三大法人買賣超動向</span>
+              <span class="inst-tag" style="font-size: 11px; background: rgba(34, 211, 238, 0.12); color: var(--accent-2); padding: 1px 6px; border-radius: 4px;">近 2 交易日</span>
+            </h4>
+            <span class="inst-meta">單位：張（每日約 15:30 公布）</span>
+          </div>
+
+          <div class="inst-days-grid">
+            <!-- Day 1: 08/25 (最新/今日) -->
+            <div class="inst-day-card">
+              <div class="inst-day-head">
+                <div class="inst-day-title">
+                  <span>08/25 (二)</span>
+                  <span class="inst-day-tag">最新</span>
+                </div>
+                <div class="inst-day-total pnl-up num">
+                  <span style="font-size: 11px; color: var(--ink-muted); font-weight: normal; margin-right: 4px;">合計</span>
+                  +12,450 張
+                </div>
+              </div>
+              <div class="inst-legs-grid">
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">外資</div>
+                  <div class="inst-leg-v pnl-up num">+8,320</div>
+                </div>
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">投信</div>
+                  <div class="inst-leg-v pnl-up num">+2,850</div>
+                </div>
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">自營商</div>
+                  <div class="inst-leg-v pnl-up num">+1,280</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Day 2: 08/22 (前一交易日) -->
+            <div class="inst-day-card">
+              <div class="inst-day-head">
+                <div class="inst-day-title">
+                  <span>08/22 (五)</span>
+                  <span class="inst-day-tag" style="background: rgba(255,255,255,0.06); color: var(--ink-muted);">前日</span>
+                </div>
+                <div class="inst-day-total pnl-down num">
+                  <span style="font-size: 11px; color: var(--ink-muted); font-weight: normal; margin-right: 4px;">合計</span>
+                  -3,120 張
+                </div>
+              </div>
+              <div class="inst-legs-grid">
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">外資</div>
+                  <div class="inst-leg-v pnl-down num">-4,500</div>
+                </div>
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">投信</div>
+                  <div class="inst-leg-v pnl-up num">+1,200</div>
+                </div>
+                <div class="inst-leg-cell">
+                  <div class="inst-leg-k">自營商</div>
+                  <div class="inst-leg-v pnl-up num">+180</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column (Starts at stats grid level, strictly under Big Price) -->
+      <aside class="quote-aside">
+        <!-- 我的持股 (Aligned with stats grid) -->
+        <div class="holding-card">
+          <h4>
+            我的持股概況
+            <span class="holding-badge">持有中</span>
+          </h4>
+          <div class="holding-pnl-row">
+            <span class="big pnl-up num">+NT$58,500</span>
+            <span class="roi pnl-up num">+19.40%</span>
+          </div>
+          <div class="holding-mini-grid">
+            <div class="mini-cell"><div class="k">持有</div><div class="v num">3,000 股</div></div>
+            <div class="mini-cell"><div class="k">成本</div><div class="v num">NT$100.50</div></div>
+            <div class="mini-cell"><div class="k">市值</div><div class="v num">7,215,000</div></div>
+            <div class="mini-cell"><div class="k">今日損益</div><div class="v pnl-up num">+NT$255,000</div></div>
+          </div>
+        </div>
+
+        <!-- 指標摘要 (保留在右側) -->
+        <div class="tech-summary-box">
+          <h4>指標摘要（2026-08-22 盤後）</h4>
+          <div class="tech-list">
+            <div class="tech-item"><span class="k">均線 (5/20/60)</span><span class="v num">2,380 / 2,340 / 2,290</span></div>
+            <div class="tech-item"><span class="k">KD (9, 3, 3)</span><span class="v num">82.5 ／ 78.1</span></div>
+            <div class="tech-item"><span class="k">布林 (上/中/下)</span><span class="v num">2,420 / 2,340 / 2,260</span></div>
+            <div class="tech-item"><span class="k">RSI(14)</span><span class="v num">68.4</span></div>
+            <div class="tech-item"><span class="k">MACD 柱</span><span class="v pnl-up num">+12.4</span></div>
+            <div class="tech-item"><span class="k">量比 (對20日)</span><span class="v num">1.45 倍</span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ==================== FEATURE 3: 下方頁籤模式 (籌碼 / 基本面 / 技術面) ==================== -->
+  <div class="section-tabs-container">
+    
+    <!-- Tab Controls -->
+    <div class="section-tabs-header">
+      <button class="sec-tab-btn active" onclick="switchSectionTab('chips')">
+        <span>📊 籌碼分析</span>
+        <span class="badge-pill">三大法人 · 融資券</span>
+      </button>
+      <button class="sec-tab-btn" onclick="switchSectionTab('fundamental')">
+        <span>🏢 基本面</span>
+        <span class="badge-pill">營收 · 獲利</span>
+      </button>
+      <button class="sec-tab-btn" onclick="switchSectionTab('technical')">
+        <span>📈 技術面</span>
+        <span class="badge-pill">日K · 均線 · 指標</span>
+      </button>
+    </div>
+
+    <!-- Tab 1: 籌碼分析 (預設開啟或點選展開) -->
+    <div id="pane-chips" class="tab-pane active">
+      <section class="card">
+        <div class="card-head">
+          <h3>三大法人買賣超與融資融券</h3>
+          <div class="card-meta">資料日期 2026-08-25 · 更新於 17:40</div>
+        </div>
+
+        <table class="mock-table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>外資 (張)</th>
+              <th>投信 (張)</th>
+              <th>自營商 (張)</th>
+              <th>合計 (張)</th>
+              <th>融資餘額</th>
+              <th>融券餘額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>08/25</td>
+              <td class="pnl-up num">+12,540</td>
+              <td class="pnl-up num">+1,200</td>
+              <td class="pnl-down num">-450</td>
+              <td class="pnl-up num">+13,290</td>
+              <td class="num">31,928 (+105)</td>
+              <td class="num">99 (+13)</td>
+            </tr>
+            <tr>
+              <td>08/24</td>
+              <td class="pnl-up num">+8,200</td>
+              <td class="pnl-up num">+950</td>
+              <td class="pnl-up num">+120</td>
+              <td class="pnl-up num">+9,270</td>
+              <td class="num">31,823 (+50)</td>
+              <td class="num">86 (+2)</td>
+            </tr>
+            <tr>
+              <td>08/23</td>
+              <td class="pnl-down num">-3,100</td>
+              <td class="pnl-up num">+400</td>
+              <td class="pnl-down num">-200</td>
+              <td class="pnl-down num">-2,900</td>
+              <td class="num">31,773 (-12)</td>
+              <td class="num">84 (-5)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="pill-info">
+          💡 <b>籌碼解讀重點</b>：外資連續 2 日買超，今日合計買超逾 1.3 萬張；融資微幅增加，籌碼結構健康偏多。
+        </div>
+      </section>
+    </div>
+
+    <!-- Tab 2: 基本面 -->
+    <div id="pane-fundamental" class="tab-pane">
+      <section class="card">
+        <div class="card-head">
+          <h3>基本面財務與月營收</h3>
+          <div class="card-meta">2026 年 Q2 財報 · 7 月營收</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+          <div class="stat-box"><div class="k">毛利率</div><div class="v pnl-up num">54.2%</div></div>
+          <div class="stat-box"><div class="k">營業利益率</div><div class="v pnl-up num">42.8%</div></div>
+          <div class="stat-box"><div class="k">最新 EPS</div><div class="v num">NT$9.85</div></div>
+        </div>
+
+        <table class="mock-table">
+          <thead>
+            <tr>
+              <th>營收月份</th>
+              <th>單月營收 (億)</th>
+              <th>月增率 (MoM)</th>
+              <th>年增率 (YoY)</th>
+              <th>累計營收 (億)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026/07</td>
+              <td class="num">2,569.5</td>
+              <td class="pnl-up num">+23.6%</td>
+              <td class="pnl-up num">+44.7%</td>
+              <td class="num">15,230.8</td>
+            </tr>
+            <tr>
+              <td>2026/06</td>
+              <td class="num">2,078.7</td>
+              <td class="pnl-down num">-9.5%</td>
+              <td class="pnl-up num">+32.9%</td>
+              <td class="num">12,661.3</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- Tab 3: 技術面 -->
+    <div id="pane-technical" class="tab-pane">
+      <section class="card">
+        <div class="card-head">
+          <h3>日 K 線與技術指標走勢</h3>
+          <div class="card-meta">日 K · 均線 · 布林通道 · KD · RSI</div>
+        </div>
+
+        <div style="background: var(--surface-strong); border: 1px dashed var(--border-strong); border-radius: 8px; height: 180px; display: flex; align-items: center; justify-content: center; color: var(--ink-secondary);">
+          📊 [此處渲染日 K 線、成交量與 KD / MACD 完整技術指標圖]
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+}
+
+function switchSectionTab(tabId) {
+  // Update buttons
+  document.querySelectorAll('.sec-tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  // Update panes
+  document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+  const targetPane = document.getElementById('pane-' + tabId);
+  if (targetPane) targetPane.classList.add('active');
+}
+</script>
+
+</body>
+</html>

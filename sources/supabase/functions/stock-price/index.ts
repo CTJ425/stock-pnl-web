@@ -29,9 +29,15 @@
  *   POST { action: 'twlist' }
  *     → { rows: [{ symbol, name, close }] } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
  *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup)
+ *   POST { action: 'intraday', symbol: { market: 'TPE'|'US', ticker: string }, range?: '1d'|'5d' }
+ *     → { series: IntradaySeries | null } (Yahoo chart v8 intraday bars; range defaults to '1d'.
+ *       Tries each yahooSymbols() candidate in turn and returns the first that parses;
+ *       null series on a 200 when every candidate fails — an unknown ticker is not an error.
+ *       No price_cache write: the series is large and per-range, caching is the client's job.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
+import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
 import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 
 interface SymbolItem {
@@ -560,6 +566,29 @@ async function handleFx(codes: unknown): Promise<Response> {
   return json({ quotes })
 }
 
+/**
+ * Intraday chart bars for one symbol (Yahoo chart v8). No price_cache write — the series
+ * is large and per-range, caching is the client's job (see intradayProxy.ts).
+ */
+async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise<Response> {
+  const interval = intradayInterval(range)
+  for (const yahooSymbol of yahooSymbols(symbol)) {
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
+        { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const series = parseYahooChart(data, range)
+      if (series !== null) return json({ series })
+    } catch {
+      // Falls through to the next symbol candidate; every candidate failing is a normal "no data" answer.
+    }
+  }
+  return json({ series: null })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -568,7 +597,14 @@ Deno.serve(async (req) => {
     return json({ error: 'Method not allowed' }, 405)
   }
 
-  let body: { action?: string; symbols?: SymbolItem[]; query?: string; codes?: string[] }
+  let body: {
+    action?: string
+    symbols?: SymbolItem[]
+    query?: string
+    codes?: string[]
+    symbol?: SymbolItem
+    range?: string
+  }
   try {
     body = await req.json()
   } catch {
@@ -588,6 +624,11 @@ Deno.serve(async (req) => {
 
   if (body.action === 'twlist') {
     return handleTwList()
+  }
+  if (body.action === 'intraday' && body.symbol && typeof body.symbol === 'object') {
+    const range = body.range ?? '1d'
+    if (range !== '1d' && range !== '5d') return json({ error: 'range 需為 1d 或 5d' }, 400)
+    return handleIntraday(body.symbol, range)
   }
   return json({ error: 'Unknown action' }, 400)
 })

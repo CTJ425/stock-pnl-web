@@ -19,9 +19,9 @@
  * Fundamentals are loaded once at this layer and distributed to three places (the industry badge of the title, the fundamentals section, and AI analysis).
  * Independent from chip reporting, failure of either does not affect the other.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AlertTriangle, Download, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import {
   fetchStoredReport,
   generateReport,
@@ -31,7 +31,6 @@ import {
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
 import { needsCoreWarm, needsHistoryWarm } from '../../services/needsFundamentalBackfill'
 import { warmStockCore, warmStockHistory } from '../../services/warmStock'
-import { downloadBlob, generatePdfBlob } from '../../services/reportPdf'
 import { AiTab } from './AiTab'
 import { ChipsTab } from './ChipsTab'
 import { FundamentalTab } from './FundamentalTab'
@@ -65,11 +64,18 @@ interface StockDetailPageProps extends StockDetailTarget {
 }
 
 type DetailTab = 'analysis' | 'whatif' | 'ai'
+type AnalysisSectionTab = 'chips' | 'fundamental' | 'technical'
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'analysis', label: '分析內容' },
   { id: 'whatif', label: '損益試算' },
   { id: 'ai', label: 'AI 分析' },
+]
+
+const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string }> = [
+  { id: 'chips', label: '籌碼分析', meta: '三大法人 · 融資融券' },
+  { id: 'fundamental', label: '基本面', meta: '估值 · 獲利能力 · 月營收' },
+  { id: 'technical', label: '技術面', meta: '日 K · 均線 · 布林 · 成交量 · KD' },
 ]
 
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
@@ -93,18 +99,14 @@ export function StockDetailPage({
   selector,
 }: StockDetailPageProps) {
   const [tab, setTab] = useState<DetailTab>('analysis')
+  const [activeSection, setActiveSection] = useState<AnalysisSectionTab>('chips')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
   const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
   const [fundLoading, setFundLoading] = useState(true)
   // +1 when the user clicks "Refresh" to string in the dependencies of each loaded effect to force a refetch.
-  // It is needed because: reports and fundamentals are only captured once when the page is opened (ticker changes), and batches are captured after the opening
-  // The data will be updated while the user is looking at it - without this button, you would have to reload the entire page to see the new information.
   const [reloadKey, setReloadKey] = useState(0)
-  const [pdfBusy, setPdfBusy] = useState(false)
-  const [pdfNote, setPdfNote] = useState('')
-  const surfaceRef = useRef<HTMLDivElement>(null)
 
   /*
     The daily series is loaded here rather than inside the technical section (0.6.38): since the indicator
@@ -118,25 +120,25 @@ export function StockDetailPage({
     report?.dataDate,
     name,
   )
-  const technicalLatest = useMemo(
-    () => (dailySeries ? (buildTechnicalView(dailySeries.rows, '3m')?.latest ?? null) : null),
-    [dailySeries],
-  )
+  const technicalLatest = useMemo(() => {
+    if (!dailySeries || dailySeries.rows.length === 0) return null
+    return buildTechnicalView(dailySeries.rows, '3m')?.latest ?? null
+  }, [dailySeries])
 
   useEffect(() => {
     let alive = true
     setStatus('loading')
+    setErrMsg('')
     setReport(null)
     ;(async () => {
       try {
-        // Storage-first: Shared report for after-hours scheduled production (quick, no need to type TWSE)
         const stored = await fetchStoredReport(ticker)
-        if (alive && stored) {
+        if (!alive) return
+        if (stored) {
           setReport(stored)
           setStatus('ready')
           return
         }
-        // Fallback: Click to deliver when the delivery is not scheduled (not in the list/not yet produced on the day/old format)
         const fresh = await generateReport({ market: 'TPE', ticker, name, holding })
         if (alive) {
           setReport(fresh)
@@ -152,23 +154,9 @@ export function StockDetailPage({
     return () => {
       alive = false
     }
-    // Holding is not included in the dependency: the current holding context when opening the page is enough to avoid duplication caused by refreshing the current price.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, name, reloadKey])
 
-  // Check whether the comparison report has been changed when switching back to the foreground after pagination (0.6.2).
-  //
-  // The above effect is only captured once when the page is opened. In the three-shift era, it was only updated three times a day, which was pretty usable;
-  // After 0.6.1, the batch is changed to 16:00–23:45 and polling every 15 minutes. **The report will be updated while the user is watching**.
-  // If it is turned on, it will always stop at the snapshot of the moment when the page is opened - what actually happened: the batch of 20:15 has written the report for the day,
-  // The tab opened before 20:15 still displays the chips of the previous trading day.
-  //
-  // The method follows the visibilitychange of useStockPrices without opening another timer:
-  // The timer of background paging will be throttled by the browser, and switching back to the foreground is the time when the user wants to see the data.
-  //
-  // The fundamentals starting from 0.6.8 are also compared together. After merging four paragraphs into one page, "Only the chips will update themselves"
-  // The asymmetry has changed from invisible to visible to the naked eye - on the same picture, the chips jumped to today, but the monthly revenue stayed at yesterday.
-  // The technical side is not dealt with here: it is managed by its own effect, and the daily line only changes once a day.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
@@ -176,15 +164,11 @@ export function StockDetailPage({
         try {
           const stored = await fetchStoredReport(ticker)
           if (stored) {
-            // Only change generatedAt if it really changes: if it doesn’t change, don’t change state.
-            // Otherwise, it will be redrawn every time you switch back to the foreground, and the scroll position and expanded state will be washed away.
             setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
           }
           const f = await fetchFundamental(ticker)
-          // Also setState only when a copy is actually changed (than asOf, that's when we write the file)
           if (f) setFundamental((prev) => (prev && f.asOf !== prev.asOf ? f : prev))
         } catch {
-          // Background refresh only; a failure just leaves the previous data on screen.
         }
       })()
     }
@@ -192,17 +176,6 @@ export function StockDetailPage({
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [ticker])
 
-  /*
-    Fundamentals load independently of the chip report.
-
-    Progressive warm (0.6.46-dev.4+) with phase split (0.6.46-dev.6):
-    1. Storage-first — paint immediately when a file exists.
-    2. needsCoreWarm → warmStockCore only (quota). Skipped when months+quarters already exist
-       so reopening a stock with full months / thin quarters does not burn quota.
-    3. needsHistoryWarm (months < 6 or quarters < 6) or core incomplete → warmStockHistory
-       (no second quota). Fixes thin quarterly history after revenue-first budget.
-    4. ETF / unknownTicker: core complete=true → no history.
-  */
   useEffect(() => {
     let alive = true
     setFundLoading(true)
@@ -211,23 +184,18 @@ export function StockDetailPage({
       try {
         let f = await fetchFundamental(ticker)
         if (!alive) return
-
-        // Paint Storage snapshot right away so partial files are usable while warm runs.
         if (f) {
           setFundamental(f)
           setFundLoading(false)
         }
-
         const wantCore = needsCoreWarm(f)
         const wantHistory = !f || needsHistoryWarm(f)
         if (!wantCore && !wantHistory) {
           if (alive) setFundLoading(false)
           return
         }
-
         let coreComplete = false
         let coreOk = false
-
         if (wantCore) {
           const core = await warmStockCore(ticker, name)
           if (!alive) return
@@ -243,9 +211,6 @@ export function StockDetailPage({
             setFundLoading(false)
           }
         }
-
-        // History: skip when core proved unknown/ETF (complete). Otherwise run if soft history
-        // need, or core said incomplete, or sealed-core path still has a thin file.
         const skipHistory = wantCore && coreOk && coreComplete
         const shouldHistory =
           !skipHistory &&
@@ -258,7 +223,6 @@ export function StockDetailPage({
             if (alive) setFundamental(f)
           }
         }
-
         if (alive) setFundLoading(false)
       } catch {
         if (alive) setFundLoading(false)
@@ -269,28 +233,8 @@ export function StockDetailPage({
     }
   }, [ticker, name, reloadKey])
 
-  async function handleDownload() {
-    if (!surfaceRef.current) return
-    setPdfBusy(true)
-    setPdfNote('')
-    try {
-      const blob = await generatePdfBlob(surfaceRef.current)
-      // The file name is no longer called "After-hours chips": 0.6.8 The starting range is chips + fundamentals + technicals.
-      downloadBlob(blob, `個股分析-${ticker}-${report?.dataDate ?? ''}.pdf`)
-    } catch {
-      setPdfNote('PDF 產生失敗，請再試一次。')
-    } finally {
-      setPdfBusy(false)
-    }
-  }
-
   return (
     <div className="section">
-      {/*
-        With a selector (AnalysisPage): column of subtabs + a stable row
-        [menu tools | stock title | actions]. Search-only controls sit under that row so
-        switching holdings does not shove the title around.
-      */}
       <div className={selector ? 'detail-head detail-head-analysis' : 'detail-head'}>
         {selector}
         <div className="detail-title">
@@ -312,17 +256,6 @@ export function StockDetailPage({
           <RefreshCw size={14} className={status === 'loading' || fundLoading ? 'spin' : undefined} />
           重新整理
         </button>
-        {/*
-          Since 0.6.8 this is no longer tied to a "chips tab" (that tab no longer exists); export is available as
-          soon as the chip report has loaded. The capture range is chips + fundamentals + technicals,
-          **excluding holdings** (see where surfaceRef is mounted).
-        */}
-        {status === 'ready' && tab === 'analysis' && (
-          <button className="btn btn-sm" onClick={() => void handleDownload()} disabled={pdfBusy}>
-            <Download size={14} className={pdfBusy ? 'spin' : undefined} />
-            {pdfBusy ? '產生 PDF 中…' : '下載 PDF'}
-          </button>
-        )}
       </div>
 
       <nav className="subtabs" aria-label="個股分析分頁">
@@ -338,56 +271,77 @@ export function StockDetailPage({
         ))}
       </nav>
 
-      {pdfNote && <div className="detail-note">{pdfNote}</div>}
-
       {tab === 'analysis' ? (
-        /*
-          The order is the user's (行情 → 籌碼 → 基本面 → 技術面). Do not rearrange it.
-          Since 0.6.36 the first section is the quote (public market data) and all four sit inside surfaceRef, so
-          all four go into the PDF; before that the first section was holdings, excluded from export because it
-          is personal data —— which is why there used to be an extra wrapper here.
-        */
-        <div className="detail-stack" ref={surfaceRef}>
+        <div className="detail-stack">
           <section className="glass detail-card" aria-labelledby="sec-quote">
             <CardHead title="行情" meta={quoteMeta(quote)} />
             <div id="sec-quote">
-              <QuoteTab quote={quote} latest={technicalLatest} />
+              <QuoteTab
+                quote={quote}
+                latest={technicalLatest}
+                ticker={ticker}
+                name={name}
+                holding={holding}
+                history={report?.history ?? null}
+              />
             </div>
           </section>
 
-          <section className="glass detail-card" aria-labelledby="sec-chips">
-            <CardHead title="籌碼" meta="三大法人 · 融資融券" />
-            <div id="sec-chips">
-              {/* Chip loading / errors only affect this card; the other three sections render as usual */}
-              {status === 'loading' && (
-                <div className="empty-state" style={{ padding: 32 }}>
-                  <RefreshCw size={28} className="spin" />
-                  <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+          <div className="section-tabs-container">
+            <div className="section-tabs-header" role="tablist" aria-label="分析面向切換">
+              {SECTION_TABS.map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeSection === st.id}
+                  className={`sec-tab-btn ${activeSection === st.id ? 'active' : ''}`}
+                  onClick={() => setActiveSection(st.id)}
+                >
+                  <span>{st.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {activeSection === 'chips' && (
+              <section className="glass detail-card" aria-labelledby="sec-chips">
+                <CardHead title="籌碼" meta="三大法人 · 融資融券" />
+                <div id="sec-chips">
+                  {status === 'loading' && (
+                    <div className="empty-state" style={{ padding: 32 }}>
+                      <RefreshCw size={28} className="spin" />
+                      <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+                    </div>
+                  )}
+                  {status === 'error' && (
+                    <div className="notice notice-warn" role="alert">
+                      <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                      {errMsg}
+                    </div>
+                  )}
+                  {status === 'ready' && report && <ChipsTab report={report} />}
                 </div>
-              )}
-              {status === 'error' && (
-                <div className="notice notice-warn" role="alert">
-                  <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                  {errMsg}
+              </section>
+            )}
+
+            {activeSection === 'fundamental' && (
+              <section className="glass detail-card" aria-labelledby="sec-fundamental">
+                <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
+                <div id="sec-fundamental">
+                  <FundamentalTab fundamental={fundamental} loading={fundLoading} />
                 </div>
-              )}
-              {status === 'ready' && report && <ChipsTab report={report} />}
-            </div>
-          </section>
+              </section>
+            )}
 
-          <section className="glass detail-card" aria-labelledby="sec-fundamental">
-            <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
-            <div id="sec-fundamental">
-              <FundamentalTab fundamental={fundamental} loading={fundLoading} />
-            </div>
-          </section>
-
-          <section className="glass detail-card" aria-labelledby="sec-technical">
-            <CardHead title="技術面" meta="日 K · 均線 · 布林 · 成交量 · KD" />
-            <div id="sec-technical">
-              <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
-            </div>
-          </section>
+            {activeSection === 'technical' && (
+              <section className="glass detail-card" aria-labelledby="sec-technical">
+                <CardHead title="技術面" meta="日 K · 均線 · 布林 · 成交量 · KD" />
+                <div id="sec-technical">
+                  <TechnicalTab ticker={ticker} status={dailyStatus} series={dailySeries} />
+                </div>
+              </section>
+            )}
+          </div>
         </div>
       ) : tab === 'whatif' ? (
         <div className="glass detail-body">
