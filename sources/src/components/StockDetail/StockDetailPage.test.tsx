@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Replace the network layer with mock: what is tested here is the layout and paging switching, not the crawling logic
 const {
   fetchStoredReport, generateReport, fetchDailySeries, fetchFundamental,
   warmStockCore, warmStockHistory,
-  generatePdfBlob, downloadBlob,
 } = vi.hoisted(() => ({
   fetchStoredReport: vi.fn(),
   generateReport: vi.fn(),
@@ -15,8 +14,6 @@ const {
   fetchFundamental: vi.fn(),
   warmStockCore: vi.fn(),
   warmStockHistory: vi.fn(),
-  generatePdfBlob: vi.fn(),
-  downloadBlob: vi.fn(),
 }))
 vi.mock('../../services/reportProxy', () => ({
   isReportConfigured: true,
@@ -26,8 +23,6 @@ vi.mock('../../services/reportProxy', () => ({
 vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
-// html2canvas cannot run in jsdom, and the test here is "capturing what the current DOM looks like"
-vi.mock('../../services/reportPdf', () => ({ generatePdfBlob, downloadBlob }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -113,9 +108,6 @@ describe('StockDetailPage', () => {
     fetchFundamental.mockReset()
     warmStockCore.mockReset()
     warmStockHistory.mockReset()
-    generatePdfBlob.mockReset()
-    downloadBlob.mockReset()
-    generatePdfBlob.mockResolvedValue(new Blob(['pdf']))
     fetchStoredReport.mockResolvedValue(report)
     // Default is no daily line / no fundamentals (the batch has not been run yet); overwrite the required cases by yourself
     fetchDailySeries.mockResolvedValue(null)
@@ -290,42 +282,30 @@ describe('StockDetailPage', () => {
     expect(container.querySelectorAll('polyline').length).toBeGreaterThan(0)
   })
 
-  it('四段同時在一頁上，順序為 行情 → 籌碼 → 基本面 → 技術面', async () => {
+  it('行情置頂，下方以頁籤切換 籌碼 / 基本面 / 技術面', async () => {
+    const user = userEvent.setup()
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
 
-    const ids = [...container.querySelectorAll('[id^="sec-"]')].map((el) => el.id)
-    expect(ids).toEqual(['sec-quote', 'sec-chips', 'sec-fundamental', 'sec-technical'])
-    // Card titles are also in the same order.
-    const titles = [...container.querySelectorAll('.card-head h3')].map((el) => el.textContent)
-    expect(titles).toEqual(['行情', '籌碼', '基本面', '技術面'])
-  })
+    // 行情永遠在畫面上
+    expect(sec(container, 'quote')).toBeTruthy()
+    expect(sec(container, 'quote').querySelector('.quote-aside-private')).toBeTruthy()
 
-  it('行情與技術面各自渲染，不必再切分頁', async () => {
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
-    await screen.findByText('三大法人買賣超')
+    // 預設為籌碼分析
+    expect(sec(container, 'chips')).toBeTruthy()
+    expect(screen.queryByText('基本面資料尚未產生')).toBeNull()
 
-    const q = within(sec(container, 'quote'))
-    // 0.6.38: the inner「今日行情」heading is gone —— the card head already says 行情
-    expect(q.queryByText('今日行情')).toBeNull()
-    expect(q.getByText('31,851 張')).toBeTruthy() // 成交量
-    // The box after closing is called "Today's Close" instead of "Deal", and the card title indicates the transaction date and status.
-    expect(q.getByText('今收')).toBeTruthy()
-    expect(container.querySelector('#sec-quote')?.previousElementSibling?.textContent).toContain(
-      '8/5 · 已收盤 · 13:30:00',
-    )
+    // 切換至基本面
+    await user.click(screen.getByRole('tab', { name: '基本面' }))
+    expect(sec(container, 'fundamental')).toBeTruthy()
+    expect(screen.queryByText('三大法人買賣超')).toBeNull()
 
-    // The shareholding figures no longer appear on the screen (since 0.6.36, this page only talks about market data)
-    expect(screen.queryByText('持股概況')).toBeNull()
-    expect(screen.queryByText('+NT$58,500')).toBeNull()
-
-    // The technical aspect (fixture has no daily line) shows its own empty state and does not affect the other three segments.
-    expect(await within(sec(container, 'technical')).findByText(/這檔還沒有歷史股價/)).toBeTruthy()
-    expect(screen.getByText('三大法人買賣超')).toBeTruthy()
+    // 切換至技術面
+    await user.click(screen.getByRole('tab', { name: '技術面' }))
+    expect(sec(container, 'technical')).toBeTruthy()
+    expect(screen.queryByText('基本面資料尚未產生')).toBeNull()
   })
 
   it('三個分頁籤：分析內容、損益試算、AI 分析', async () => {
@@ -337,7 +317,25 @@ describe('StockDetailPage', () => {
     expect(tabs).toEqual(['分析內容', '損益試算', 'AI 分析'])
   })
 
+  it('行情卡片中包含三大法人買賣超動向 2 日卡片', async () => {
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
+    )
+    await screen.findByText('三大法人買賣超動向')
+    const quoteSec = sec(container, 'quote')
+    expect(quoteSec.querySelector('.institutional-block')).toBeTruthy()
+    expect(quoteSec.textContent).toContain('三大法人買賣超動向')
+    expect(quoteSec.textContent).toContain('近 2 交易日')
+    const cards = quoteSec.querySelectorAll('.inst-day-card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0].querySelector('.inst-day-title')!.textContent).toBe('07/23')
+    expect(cards[0].querySelector('.inst-day-tag')!.textContent).toBe('最新')
+    expect(cards[1].querySelector('.inst-day-title')!.textContent).toBe('07/22')
+    expect(cards[1].querySelector('.inst-day-tag')!.textContent).toBe('前日')
+  })
+
   it('技術面畫日 K／均線／布林，指標摘要在行情卡（0.6.51）', async () => {
+    const user = userEvent.setup()
     const rows = Array.from({ length: 80 }, (_, i) => {
       const date = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -361,6 +359,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '技術面' }))
 
     await screen.findByText(/日 K · 均線 · 布林通道/)
     // daily K + volume + KD
@@ -396,6 +395,8 @@ describe('StockDetailPage', () => {
     const { container } = render(
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
+    await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '技術面' }))
     await screen.findByText(/日 K · 均線 · 布林通道/)
 
     const heads = [...sec(container, 'technical').querySelectorAll('.rpt-section h3')].map(
@@ -441,6 +442,7 @@ describe('StockDetailPage', () => {
       <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
     )
     await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '技術面' }))
     await screen.findByText(/日 K · 均線 · 布林通道/)
 
     await user.click(screen.getByRole('button', { name: '近 3 月' }))
@@ -487,27 +489,10 @@ describe('StockDetailPage', () => {
     expect(sec(container, 'chips').querySelectorAll('.source-tag')).toHaveLength(0)
   })
 
-  it('PDF 擷取範圍含四段，且不含任何持股數字（個資不進匯出檔）', async () => {
-    const { container } = render(
-      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
-    )
+  it('PDF 功能已完全拔除，畫面上沒有下載 PDF 按鈕', async () => {
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
-    expect(screen.getByRole('button', { name: /下載 PDF/ })).toBeTruthy()
-
-    /*
-      The shared report has never contained personal data. Before 0.6.35 that was enforced by keeping holdings
-      outside surfaceRef; since 0.6.36 that card is the quote (public market data) and all four sections are in
-      the export range —— what guards it now is that no holding figure appears on screen at all, and this test
-      pins the latter.
-    */
-    const stacks = container.querySelectorAll('.detail-stack')
-    const captured = stacks[stacks.length - 1]
-    expect(captured.querySelector('#sec-quote')).toBeTruthy()
-    expect(captured.querySelector('#sec-chips')).toBeTruthy()
-    expect(captured.querySelector('#sec-fundamental')).toBeTruthy()
-    expect(captured.querySelector('#sec-technical')).toBeTruthy()
-    expect(captured.textContent).not.toContain('+NT$58,500') // 未實現損益
-    expect(captured.textContent).not.toContain('持股概況')
+    expect(screen.queryByRole('button', { name: /下載 PDF/ })).toBeNull()
   })
 
   it('AI 分析仍是獨立分頁，切過去後長頁四段都不在畫面上', async () => {
@@ -562,6 +547,7 @@ describe('StockDetailPage', () => {
   })
 
   it('應包含「基本面」分頁籤；有資料時顯示估值，無資料時顯示尚未產生', async () => {
+    const user = userEvent.setup()
     fetchFundamental.mockResolvedValue({
       ticker: '2330',
       asOf: '2026-07-27T09:31:00.000Z',
@@ -579,10 +565,15 @@ describe('StockDetailPage', () => {
       notes: [],
     })
 
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
+    const { container } = render(
+      <StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />,
+    )
     await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '基本面' }))
 
-    expect(screen.getByText('31.59')).toBeTruthy()
+    // 0.9.17: 本益比 now also appears in the 行情 card's rail, so a page-wide getByText('31.59')
+    // matches twice. Scope it to the section this test is actually about.
+    expect(within(sec(container, 'fundamental')).getByText('31.59')).toBeTruthy()
     expect(screen.getByText('估值指標')).toBeTruthy()
   })
 
@@ -681,12 +672,14 @@ describe('StockDetailPage', () => {
       phase: 'history',
     })
 
+    const user = userEvent.setup()
     const { container } = render(<StockDetailPage ticker="2609" name="陽明" holding={holding} quote={quote} />)
 
     // Storage paints first (industry badge) before warm finishes
     await screen.findByText('航運業')
     expect(warmStockCore).toHaveBeenCalledWith('2609', '陽明')
     await waitFor(() => expect(warmStockHistory).toHaveBeenCalledWith('2609', '陽明'))
+    await user.click(screen.getByRole('tab', { name: '基本面' }))
     await waitFor(() =>
       expect(container.querySelectorAll('#sec-fundamental .data-table tbody tr').length).toBe(12),
     )
@@ -694,8 +687,8 @@ describe('StockDetailPage', () => {
 
   it('月營收已夠長且季報已達 soft min 時不再 warm（其餘交給夜批）', async () => {
     const month = (yearMonth: string) => ({
-      yearMonth,
       revenueThousandTwd: 1,
+      yearMonth,
       momPercent: null,
       yoyPercent: null,
       cumulativeYoyPercent: null,
@@ -806,6 +799,7 @@ describe('StockDetailPage', () => {
   })
 
   it('warm 產不出基本面（例如 ETF）時不重讀，維持空狀態', async () => {
+    const user = userEvent.setup()
     warmStockCore.mockResolvedValue({
       ok: true,
       dailySynced: 1,
@@ -817,6 +811,7 @@ describe('StockDetailPage', () => {
 
     render(<StockDetailPage ticker="0050" name="元大台灣50" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '基本面' }))
 
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     // I only read it once: If the warm return has no output, you should not call Storage again.
@@ -825,8 +820,10 @@ describe('StockDetailPage', () => {
   })
 
   it('查無基本面時標題不出現 badge、分頁顯示空狀態', async () => {
+    const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
+    await user.click(screen.getByRole('tab', { name: '基本面' }))
 
     expect(screen.getByText('基本面資料尚未產生')).toBeTruthy()
     expect(screen.queryByText('半導體業')).toBeNull()
@@ -891,32 +888,5 @@ describe('StockDetailPage', () => {
       expect(screen.getByText('三大法人買賣超')).toBeTruthy()
       expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
     })
-  })
-
-  /*
-    0.6.23 briefly made the tables collapsible; a collapsed block is not in the DOM, so exporting produced a PDF
-    with the table missing. After 0.6.24 removed collapsing, the capture range is simply "whatever is on screen"
-    —— this test holds that line, and incidentally checks that the expand/restore logic added for collapsing left
-    nothing behind.
-  */
-  it('匯出 PDF：擷取的是報價＋籌碼＋基本面＋技術面四段', async () => {
-    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
-    await screen.findByText('三大法人買賣超')
-
-    fireEvent.click(screen.getByRole('button', { name: /下載 PDF/ }))
-    await waitFor(() => expect(generatePdfBlob).toHaveBeenCalled())
-
-    const surface = generatePdfBlob.mock.calls[0][0] as HTMLElement
-    expect(surface.querySelector('#sec-quote')).toBeTruthy()
-    expect(surface.querySelector('#sec-chips')).toBeTruthy()
-    expect(surface.querySelector('#sec-fundamental')).toBeTruthy()
-    expect(surface.querySelector('#sec-technical')).toBeTruthy()
-    expect(within(surface).getByText('三大法人買賣超')).toBeTruthy()
-    // The shared report does not contain personal information: the quotation is public information, and the shareholding figures no longer appear on the entire page.
-    expect(surface.textContent).not.toContain('持股概況')
-
-    await waitFor(() =>
-      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), '個股分析-2330-2026-07-23.pdf'),
-    )
   })
 })

@@ -60,6 +60,22 @@
   4. **Security: CRON_SECRET rotation** — PROD `CRON_SECRET` exposed in plaintext in agent transcript on 2026-08-25 during postgres_logs query (`event_message` of `cron job 18 starting:` contains full command with `x-cron-secret` header). Seven PROD cron jobs (jobid 12–18) embed this secret. Rotation pending.
 - **Unfinished**: All four items above.
 
+### quote-yahoo-a: Yahoo-style quote header + intraday chart — code complete, deployment pending
+- **Status**: ⏳ **OPEN — Code complete and tested; Edge Function deploy + data source work pending**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 15:41:49 CST
+- **What is this**: Yahoo-style quote tab redesign with new IntradayChart for 個股分析 page. Branch `feat/quote-yahoo-a` (cut from `dev` at fad5ee2). Implementation complete: 83 files / 1276 tests passed, T1 PASS, T2 PASS. Full implementation details in PROGRESS.md.
+- **Done** (implementation recorded in PROGRESS.md):
+  1. ~~T1: intraday data path~~ ✅ intradayParse module (Yahoo v8 parser, null close carry-forward, null volume → 0), stock-price action, client proxy (60s cache)
+  2. ~~T2: UI rebuild~~ ✅ IntradayChart (price/volume stacked frames, 一日/五日 range), QuoteTab (Yahoo header + 7-cell stats), StockDetailPage wiring, new CSS classes
+  3. ~~Tests~~ ✅ 83 files / 1276 tests passed, exit 0; trial price marker restored (預估 when `quote.trial=true`)
+  4. ~~Reviewer verdicts~~ ✅ T1 PASS (no findings); T2 PASS (one RISK fixed: trial marker)
+- **Open items**:
+  1. **DEV: `stock-price` deployed and verified, 2026-08-25** — Volume copy of `index.ts` + new `intradayParse.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-price/`, then `docker compose up -d --force-recreate functions`. Container healthy. Verified against live DEV endpoint: `2330` 1d returns 271 points with prevClose 2375; unknown ticker `9999` returns `{"series":null}` at HTTP 200 (not a 500); invalid `range` returns HTTP 400; OTC `6488` resolves through the `.TW`→`.TWO` fallback to `6488.TWO` for 5d/5m. **Note**: that same copy also carried to DEV three `AbortSignal.timeout(10_000)` fetch hardenings that were already committed on `dev` but had never reached the DEV container (it was stopped at the 2026-08-14 build). **Gotcha**: `cp` is aliased to `cp -i` in this environment and a plain `cp -f` still prompts and silently copies nothing — use `/bin/cp -f`. A file that "looks copied" is the failure mode. **PROD**: still not deployed, requires `main` + explicit user authorization per CLAUDE.md.
+  2. **Stats grid omits 均價 / 成交金額 / 昨量** — design mockup (`docs/design/quote-redesign-mockups.html`) shows three additional cells; `PriceQuote` has no data source for them today. Shipped with 7 cells (成交量/開盤/最高/最低/昨收/漲跌幅/振幅); omission is deliberate, not a defect. Needs data source decision (schema / batch service) before implementation.
+- **Scope decisions** (documented in spec, do not revisit): No 五檔 (MIS fields unparsed). Four stacked sections stay stacked, not tabs. Range: 一日/五日 only.
+- **Unfinished**: Edge Function deployment to DEV/PROD; stats grid columns (require schema/data source work).
+
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**
 - **Agent**: Scribe

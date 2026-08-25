@@ -2544,6 +2544,457 @@ a.hmenu-item {
   margin-top: 2px;
 }
 
+/* ---------- Yahoo-style quote header + statistics grid (0.9.17, quote-yahoo-a T2) ----------
+ * Ported from docs/design/quote-redesign-mockups.html 方案 A, using only tokens already defined
+ * above (no new colour literals): --up/--down via .pnl-* on the value spans, --border/--row-alt
+ * for the grid lines, --ink* for text.
+ */
+.m-quote-head {
+  margin-bottom: 10px;
+}
+
+.m-sym {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.m-sym h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.m-sym .code {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.m-price {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.m-price .big {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-price .delta {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 4px;
+}
+
+/* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */
+.trial-marker {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  padding-bottom: 6px;
+}
+
+.m-price .stamp {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  padding-bottom: 6px;
+}
+
+/* Bordered Yahoo-style stats grid: unlike .rpt-cards (gapped floating cards), the cells here
+   share one continuous border, so .rpt-card is overridden flat when nested here. */
+.m-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.m-stats .rpt-card {
+  flex: initial;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 11px;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--row-alt);
+}
+
+.m-stats .rpt-card .k {
+  font-size: 11px;
+}
+
+.m-stats .rpt-card .v {
+  font-size: 12.5px;
+  margin-top: 0;
+}
+
+@media (max-width: 560px) {
+  .m-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 走勢圖 card header (range switch) — same visual language as .subtabs but pill-shaped like
+   .chip-btn, since these buttons switch a data range rather than a page tab. */
+.m-card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.m-card-h h4 {
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.m-range {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.m-range button {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-secondary);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.m-range button:hover {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.m-range button[aria-pressed='true'] {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- Card-level layout: quote header + chart left, sidebar right (revision 4) ----------
+ * `.chart-wrap`'s own 760px cap (above) is app-wide and stays; this only releases it inside the
+ * quote card so the chart can fill the wider left column instead of leaving dead space beside it.
+ * Revision 4 promotes what was a chart-only rail (revision 3's `.intraday-layout`/`.intraday-rail`)
+ * to a card-level sidebar carrying holdings + 指標摘要 + 成交金額/估值, matching 方案 A.
+ */
+.quote-top-banner {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.quote-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.quote-layout .chart-wrap {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  .quote-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quote-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quote-aside-private {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.quote-aside-private h4 {
+  font-size: 13px;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.holding-pnl {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.holding-pnl-big {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-roi {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+
+.holding-cell .k {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.holding-cell .v {
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+.m-chart-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-time-badge {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+/* ---------- Institutional Investors (三大法人買賣超) 2-day cards ---------- */
+.institutional-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.inst-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.inst-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inst-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inst-header-badge {
+  font-size: 11px;
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.inst-header-note {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.inst-days-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.inst-day-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inst-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inst-day-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inst-day-tag {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.inst-day-tag.is-latest {
+  color: var(--accent);
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.inst-day-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.inst-total-label {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.inst-total-val {
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inst-legs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.inst-leg-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inst-leg-k {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.inst-leg-v {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .inst-days-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.section-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-tabs-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 4px;
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.sec-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.sec-tab-btn:hover {
+  color: var(--ink);
+  background: var(--surface-strong);
+}
+
+.sec-tab-btn.active {
+  background: var(--accent-strong);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.intraday-block {
+  margin-bottom: 24px;
+}
+
+.intraday-empty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.intraday-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .rpt-notes {
   font-size: 12px;
   color: var(--ink-muted);
