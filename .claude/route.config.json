@@ -5,6 +5,10 @@
       "README.md"
     ]
   },
+  "models": {
+    "builder": "sonnet",
+    "reviewer": "sonnet"
+  },
   "bookkeeping": {
     "timezone": "Asia/Taipei"
   }

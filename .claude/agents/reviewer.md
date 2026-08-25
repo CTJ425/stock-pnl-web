@@ -2,7 +2,7 @@
 name: reviewer
 description: Use to review code a Builder has just produced against its spec. Requires both the spec path and the changed file list. Returns findings only, never fixes.
 model: sonnet
-effort: medium
+effort: high
 maxTurns: 25
 tools: Read, Glob, Grep, Bash
 disallowedTools: Write, Edit
