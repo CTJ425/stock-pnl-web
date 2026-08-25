@@ -412,6 +412,17 @@ export function borrowHit(dateIso: string | null, todayYmd: string): boolean {
 }
 
 /**
+ * 快取的借券資料能不能用，跟「借券有沒有落地」是同一條規則——刻意不重寫第二個比較式。
+ *
+ * BUG-037：舊版快取用 `ymd >= tradeYmd`，比 `borrowHit` 的 `>` 少一步，翻日前的當日額度
+ * 就會被誤判成可用；翻日後 `loadBorrow` 拿到那筆舊快取就不再重打端點，
+ * `sourceLanded('borrow')` 因此永遠是 false。
+ */
+export function borrowCacheUsable(cachedYmd: string | null, tradeYmd: string): boolean {
+  return borrowHit(cachedYmd, tradeYmd)
+}
+
+/**
  * MOPS 彙整表（t187ap05_L 月營收 / t187ap17_L 季報）自報的出表日期，民國 7 碼。
  *
  * 這兩份是「整份重出」的快照——實測整份 1082 / 336 筆共用同一個出表日期，

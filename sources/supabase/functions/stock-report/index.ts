@@ -195,6 +195,7 @@ import {
   PROBE_SOURCE_LABELS,
   PROBE_SOURCE_ORDER,
   REQUIRED_LANDED_COUNTS,
+  borrowCacheUsable,
   borrowHit,
   minutesFromHhmm,
   mopsIssueRocYmd,
@@ -732,7 +733,13 @@ function assembleOne(opts: {
   })
 }
 
-/** Get the latest borrowing cache in "date >= minYmd"; if the search fails, null is returned (see the description of loadBorrow)*/
+/**
+ * 取最新一筆借券快取；只有 `borrowCacheUsable` 判定可用才回傳，否則 null（見 loadBorrow 的說明）。
+ *
+ * BUG-037：舊版用 `.gte('ymd', minYmd)` 篩快取，比落地判準 `borrowHit`（`>`）少一步，
+ * 翻日前的當日額度會被誤判成可用，翻日後就再也不重打端點。改成撈最新一筆，交給
+ * `borrowCacheUsable` 用同一條規則判斷可不可用。
+ */
 async function readBorrowCacheFrom(
   minYmd: string,
 ): Promise<{ resp: BorrowDatedResponse; date: string } | null> {
@@ -741,11 +748,11 @@ async function readBorrowCacheFrom(
       .from('chip_raw_cache')
       .select('ymd, payload')
       .eq('dataset', 'SBL_D')
-      .gte('ymd', minYmd)
       .order('ymd', { ascending: false })
       .limit(1)
       .maybeSingle()
     if (error || !data?.payload) return null
+    if (!borrowCacheUsable(String(data.ymd), minYmd)) return null
     const resp = data.payload as BorrowDatedResponse
     if (!borrowDatedOk(resp)) return null
     return { resp, date: borrowDatedDate(resp) ?? dashDate(String(data.ymd)) }
