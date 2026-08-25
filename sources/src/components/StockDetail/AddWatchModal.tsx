@@ -10,6 +10,24 @@ interface AddWatchModalProps {
   onAdded: () => void
 }
 
+const RESULT_CAP = 50
+
+function kindRank(symbol: string): number {
+  if (/^\d{4}$/.test(symbol)) return 0
+  if (symbol.length === 5 || (symbol.length === 6 && symbol.startsWith('00'))) return 1
+  return 2
+}
+
+function matchRank(row: TwStockRow, q: string): number {
+  const symbol = row.symbol.toLowerCase()
+  const name = row.name.toLowerCase()
+  if (symbol === q) return 0
+  if (symbol.startsWith(q)) return 1
+  if (name === q) return 2
+  if (name.startsWith(q)) return 3
+  return 4
+}
+
 export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps) {
   const [query, setQuery] = useState('')
   const [list, setList] = useState<TwStockRow[]>([])
@@ -23,13 +41,22 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
   }, [])
 
   const q = query.trim().toLowerCase()
-  const results = q
-    ? list.filter(
-        (row) =>
-          !watched.includes(row.symbol) &&
-          (row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q)),
-      )
+  const matches = q
+    ? [...list]
+        .filter(
+          (row) =>
+            !watched.includes(row.symbol) &&
+            (row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q)),
+        )
+        .sort((a, b) => {
+          const kind = kindRank(a.symbol) - kindRank(b.symbol)
+          if (kind !== 0) return kind
+          const match = matchRank(a, q) - matchRank(b, q)
+          if (match !== 0) return match
+          return a.symbol.localeCompare(b.symbol)
+        })
     : []
+  const results = matches.slice(0, RESULT_CAP)
 
   async function handleAdd(row: TwStockRow) {
     setAddError(null)
@@ -75,6 +102,9 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
           </li>
         ))}
       </ul>
+      {matches.length > RESULT_CAP && (
+        <p className="watch-results-more">還有 {matches.length - RESULT_CAP} 筆，請輸入更完整的關鍵字</p>
+      )}
     </Modal>
   )
 }

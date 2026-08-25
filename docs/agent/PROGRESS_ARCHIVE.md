@@ -5,6 +5,16 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-25 10:16:08 Asia/Taipei (BUG-036 backup cron 401; four defects fixed in 0.9.13)
+
+- **Bug discovered**: 2026-08-25 02:00 Asia/Taipei backup-daily cron, one account, one of three simultaneous PostgREST requests returned 401 (`GET /rest/v1/workspaces`) while the other two (transactions, user_settings) returned 200. Same service-role client, same API key. No retry logic, so entire account's backup skipped; `backup_run_log` recorded `status='error'` with message `[object Object]` because PostgREST errors are plain objects, not `Error` instances.
+- **Root cause**: three separate defects: (1) no `describeError()` for PostgREST plain objects (2) no retry on transient failures (3) no log verification of `backup_run_log` insert result (4) admin UI showed prune failures as bare success.
+- **Four defects fixed in 0.9.13 (commit 84502c6)**:
+  1. `sources/supabase/functions/backup-transactions/backupPlan.ts` — new `describeError()` function handles plain-object errors and serializes for logging.
+  2. `sources/supabase/functions/backup-transactions/index.ts` — retry failed accounts up to 3 attempts (500ms/1000ms backoff); prune-only failure stays `status='ok'`, not retried.
+  3. `sources/supabase/functions/backup-transactions/index.ts` — check and log insert result to catch dropped rows.
+  4. `src/components/Admin/BackupsSection.tsx` — `statusLabel` now shows error text on `ok` row; prune failures visible.
+
 ## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
 
 - **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Pages deploy succeeded.
