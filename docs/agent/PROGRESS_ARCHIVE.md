@@ -5,6 +5,30 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-25 18:12:00 Asia/Taipei (Holdings Table: Direct Click-to-Analyze for Taiwan Stocks, 0.9.18; 1295 tests PASS)
+
+- **Feature Implemented**:
+  1. **Direct Click-to-Analyze for Taiwan Stock Holdings** (`DashboardPage.tsx`):
+     - Wired `onSelectTicker` prop to `<HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} />`.
+     - Clickable `<tr>` rows for Taiwan stocks with `cursor: pointer` style and `title="點擊查看個股分析"`.
+     - US stocks remain non-clickable (standard cursor, no title, no action) as Stock Analysis focuses on Taiwan market chips/fundamentals/technical data.
+  2. **Safe Mode / Offline Guard** (`AppShell.tsx`):
+     - Guarded `onSelectTicker` in `AppShell.tsx` with `isReportConfigured` so local/offline mode gracefully leaves rows non-interactive.
+  3. **Unit Tests Added** (`DashboardPage.test.tsx`):
+     - Verified clicking Taiwan stock rows triggers `onSelectTicker` with `(ticker, name)`.
+     - Verified US stock rows do not trigger `onSelectTicker`.
+     - Verified offline / undefined `onSelectTicker` handling and empty state display.
+- **Verification & Test Suite**:
+  - Full Vitest suite: **84 test files / 1295 tests passed** (100% PASS), exit 0.
+  - Linter & Typecheck: `npm run lint` (0 errors), `npm run typecheck:edge` (0 errors), `npm run build` (`tsc -b && vite build` exit 0).
+- **Files Modified**:
+  - `sources/src/components/Dashboard/DashboardPage.tsx`
+  - `sources/src/components/AppShell.tsx`
+  - `sources/src/components/Dashboard/DashboardPage.test.tsx` (new)
+  - `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` (bumped to 0.9.18)
+
+---
+
 ## 📅 Log: 2026-08-25 17:36:00 Asia/Taipei (Stock Detail: 2-Day Institutional Cards Under Chart, Darker Chart Badge; Dual Read-Only Subagent Review PASS, 1291 tests PASS)
 
 - **User Requirements Implemented**:

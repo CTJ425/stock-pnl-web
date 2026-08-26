@@ -109,10 +109,11 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 ### Supabase personal access token exposed in transcript (2026-08-26)
 
 - **Status**: OPEN — requires revocation in Supabase console.
-- **Exposure**: A Supabase personal access token was pasted into a session transcript on 2026-08-26 and must be revoked.
-- **Risk**: Supabase personal access tokens grant full management access to every project in the account (Management API, CLI for functions, database, secrets, project settings). Revocation is the required action.
-- **Action required**: Revoke the token in the Supabase console (Settings → Access Tokens).
+- **Exposure**: A Supabase personal access token was pasted into a session transcript on 2026-08-26 and was used again on 2026-08-26 to deploy the 0.9.19 PROD Edge Function (`stock-price`). Revocation is required.
+- **Risk**: Supabase personal access tokens grant full management access to every project in the account (Management API, CLI for functions, database, secrets, project settings). Token has been actively used for privileged operations (function deployment). Revocation is the required action.
+- **Action required**: Revoke the token in the Supabase console (Settings → Access Tokens). This action is the user's responsibility.
 - **Discovered**: 2026-08-26.
+- **Used for deployment**: 2026-08-26 (`supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`).
 
 ---
 

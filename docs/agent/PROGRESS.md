@@ -1,9 +1,38 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: Full DEV+PROD verification scan; PROD cron cleanup; DEV backup-transactions redeploy
+- Action: 0.9.19 release and deployment recorded (當日大盤 panel in 總體經濟 > 台股); DEV+PROD deployed and verified
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-26 14:35:00 Asia/Taipei
+- Timestamp: 2026-08-26 17:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-26 17:05:00 Asia/Taipei (0.9.19 Release: 當日大盤 Panel in 總體經濟 > 台股; DEV+PROD Deployed)
+
+- **Feature Released**:
+  1. **當日大盤 Panel** at the top of 總體經濟 > 台股, reusing IntradayChart component (`TwIndexToday.tsx`).
+  2. Shows intraday OHLC data, volume, and price change visualization for Taiwan Index (^TWII).
+  3. Integrated into `TwMarketSection.tsx` workflow.
+
+- **Route Completed**: Spec → failing tests (main session) → builder → reviewer → main-session adjudication → release → deploy both environments.
+
+- **Test & Quality Verification**:
+  - Full Vitest suite: **85 test files / 1313 tests passed** (100% PASS), exit 0.
+  - Linter: `npm run lint` exit 0.
+  - Typecheck: `npm run typecheck:edge` exit 0.
+  - Build: `npm run build` exit 0.
+  - Reviewer: PASS with one RISK fixed (`pnlClass(changePct)` instead of `pnlClass(change)` in TwIndexToday.tsx; harmless while `prevClose` > 0, which is always true for index, but was a slip rather than trade-off).
+  - Edge `index.ts` diff: doc comment + widened `SymbolItem['market']` to include `'IDX'` — zero runtime change.
+
+- **Deployment Completed**:
+  1. **DEV Edge** (`stock-price`): Volume copy with `/bin/cp -f` into `volumes/functions/stock-price/`, then `docker compose up -d --force-recreate functions`; healthy in ~9s. `diff -rq` all files identical.
+  2. **PROD Edge** (`stock-price`): `supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`, no `--no-verify-jwt`. Version 20 → 21, ezbr_sha256 changed from `bac85eb3edcf1fc7` to `a1a7920dddf42417` (proof new code landed).
+  3. **Live Behaviour Verified**: `^TWII` returns dayOpen/dayHigh/dayLow from OHLC arrays. Stock path `2330.TW` unchanged (271 points, prevClose=2400, interval=1m, point keys t/c/v).
+  4. **GitHub Pages**: Deploy run 32948412913 succeeded; served bundle reports 0.9.19.
+
+- **Files Changed**: 17 total (+666/−48) — `sources/supabase/functions/stock-price/intradayParse.ts`, `sources/supabase/functions/stock-price/index.ts`, `sources/src/services/intradayProxy.ts`, `sources/src/components/StockDetail/IntradayChart.tsx`, `sources/src/components/Macro/TwIndexToday.tsx` (new), `sources/src/components/Macro/TwMarketSection.tsx`, `sources/src/index.css`, plus four test files and version/README/CHANGELOG set.
+
+- **Commits**: `7dae025` (feature, 0.9.19-dev.1) and `329fb95` (chore(release): 0.9.19). Branches: `dev`, `main`, `origin/dev`, `origin/main` all at `329fb95`.
 
 ---
 
@@ -22,28 +51,4 @@
   1. **PROD cron cleanup (user-authorised)**: `cron.unschedule(11)` "stock-report-nightly" and `cron.unschedule(15)` "market-daily". Both returned true. PROD cron now 6 jobs, matching DEV's 6. Verified by re-query with batch_run_log identity field (565).
   2. **DEV Edge backup-transactions redeployed**: Copied `index.ts` and `backupPlan.ts` into `volumes/functions/backup-transactions/` with `/bin/cp -f`, then `docker compose up -d --force-recreate functions`. Container healthy in ~9s. Boot verified by POST with wrong `x-cron-secret`: HTTP 401 Unauthorized, no compile errors.
 - **Files Modified**: Only `docs/agent/` bookkeeping files (PROGRESS.md, TASK.md, BUG_FIX.md, archives).
-
----
-
-## 📅 Log: 2026-08-25 18:12:00 Asia/Taipei (Holdings Table: Direct Click-to-Analyze for Taiwan Stocks, 0.9.18; 1295 tests PASS)
-
-- **Feature Implemented**:
-  1. **Direct Click-to-Analyze for Taiwan Stock Holdings** (`DashboardPage.tsx`):
-     - Wired `onSelectTicker` prop to `<HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} />`.
-     - Clickable `<tr>` rows for Taiwan stocks with `cursor: pointer` style and `title="點擊查看個股分析"`.
-     - US stocks remain non-clickable (standard cursor, no title, no action) as Stock Analysis focuses on Taiwan market chips/fundamentals/technical data.
-  2. **Safe Mode / Offline Guard** (`AppShell.tsx`):
-     - Guarded `onSelectTicker` in `AppShell.tsx` with `isReportConfigured` so local/offline mode gracefully leaves rows non-interactive.
-  3. **Unit Tests Added** (`DashboardPage.test.tsx`):
-     - Verified clicking Taiwan stock rows triggers `onSelectTicker` with `(ticker, name)`.
-     - Verified US stock rows do not trigger `onSelectTicker`.
-     - Verified offline / undefined `onSelectTicker` handling and empty state display.
-- **Verification & Test Suite**:
-  - Full Vitest suite: **84 test files / 1295 tests passed** (100% PASS), exit 0.
-  - Linter & Typecheck: `npm run lint` (0 errors), `npm run typecheck:edge` (0 errors), `npm run build` (`tsc -b && vite build` exit 0).
-- **Files Modified**:
-  - `sources/src/components/Dashboard/DashboardPage.tsx`
-  - `sources/src/components/AppShell.tsx`
-  - `sources/src/components/Dashboard/DashboardPage.test.tsx` (new)
-  - `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` (bumped to 0.9.18)
 
