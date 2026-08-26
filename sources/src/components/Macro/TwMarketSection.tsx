@@ -22,6 +22,7 @@ import { CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 import { ForeignTopSection } from './ForeignTopSection'
+import { TwIndexToday } from './TwIndexToday'
 
 /** Spark for the institutional and turnover 走勢 column (0.7.6: one per unit row, was one per day). */
 const TFOOT_SPARK_W = 76
@@ -398,6 +399,8 @@ export function TwMarketSection() {
           重新整理
         </button>
       </div>
+
+      <TwIndexToday />
 
       <div className="kpi-grid" style={{ marginTop: 14 }}>
         <div className="glass kpi">

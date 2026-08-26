@@ -163,3 +163,62 @@ describe('finalVwap', () => {
     expect(finalVwap([])).toBeNull()
   })
 })
+
+/**
+ * `showVolume`, added in 0.9.19 so the TAIEX panel can reuse this chart.
+ *
+ * Yahoo reports no volume at all for an index: on the real `^TWII` response of 2026-08-26,
+ * `meta.regularMarketVolume` was 0 and every one of the 271 bars had volume 0, for both the
+ * 1d/1m and the 5d/5m windows. Left on, the lower frame is a dead strip of zero-height bars,
+ * so the panel turns it off rather than drawing an empty axis.
+ */
+describe('IntradayChart — showVolume', () => {
+  beforeEach(cleanup)
+
+  // ChartFrame exposes its label as an SVG <title>, not an aria-label attribute
+  // (chartFrame.tsx:176), so the volume sub-chart is identified by that title's text.
+  const volumeFrames = () =>
+    [...document.querySelectorAll('svg title')].filter((t) =>
+      (t.textContent ?? '').includes('成交量'),
+    )
+
+  it('預設仍然畫出成交量副圖，個股不受影響', () => {
+    render(<IntradayChart series={real()} loading={false} range="1d" onRangeChange={vi.fn()} />)
+
+    expect(volumeFrames().length).toBe(1)
+    expectNoNaN()
+  })
+
+  it('showVolume={false} 時不畫成交量副圖，價格圖照常', () => {
+    render(
+      <IntradayChart
+        series={real()}
+        loading={false}
+        range="1d"
+        onRangeChange={vi.fn()}
+        showVolume={false}
+      />,
+    )
+
+    expect(volumeFrames().length).toBe(0)
+    // Not a vacuous pass: the price frame is still on screen and still finite.
+    expect(document.querySelectorAll('svg').length).toBeGreaterThan(0)
+    expectNoNaN()
+  })
+
+  it('成交量全為零時，關掉副圖不會影響價格線的座標', () => {
+    const flat = seriesOf(REAL_CLOSE, REAL_CLOSE.map(() => 0))
+    render(
+      <IntradayChart
+        series={flat}
+        loading={false}
+        range="1d"
+        onRangeChange={vi.fn()}
+        showVolume={false}
+      />,
+    )
+
+    expect(volumeFrames().length).toBe(0)
+    expectNoNaN()
+  })
+})

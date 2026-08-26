@@ -1,7 +1,7 @@
 {
   "name": "sources",
   "private": true,
-  "version": "0.9.18",
+  "version": "0.9.19-dev.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

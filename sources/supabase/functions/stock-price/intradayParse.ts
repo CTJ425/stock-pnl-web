@@ -34,6 +34,12 @@ export interface IntradaySeries {
   /** `meta.chartPreviousClose`, else `meta.previousClose`, else null */
   prevClose: number | null
   points: IntradayPoint[]
+  /** First non-null `quote.open`; null when the array is absent or all null. */
+  dayOpen?: number | null
+  /** Max of non-null `quote.high`; null when absent. */
+  dayHigh?: number | null
+  /** Min of non-null `quote.low`; null when absent. */
+  dayLow?: number | null
 }
 
 export function intradayInterval(range: IntradayRange): IntradayInterval {
@@ -64,7 +70,7 @@ export function parseYahooChart(json: unknown, range: IntradayRange): IntradaySe
 
   if (!Array.isArray(result.timestamp)) return null
   const quote = result.indicators?.quote?.[0] as
-    | { close?: unknown[]; volume?: unknown[] }
+    | { close?: unknown[]; volume?: unknown[]; open?: unknown[]; high?: unknown[]; low?: unknown[] }
     | undefined
   if (!quote || typeof quote !== 'object') return null
 
@@ -97,11 +103,39 @@ export function parseYahooChart(json: unknown, range: IntradayRange): IntradaySe
 
   const symbol = typeof meta.symbol === 'string' && meta.symbol !== '' ? meta.symbol : ''
 
+  const opens = Array.isArray(quote.open) ? quote.open : []
+  const highs = Array.isArray(quote.high) ? quote.high : []
+  const lows = Array.isArray(quote.low) ? quote.low : []
+
+  let dayOpen: number | null = null
+  for (const raw of opens) {
+    const v = toFiniteNumber(raw)
+    if (v !== null) {
+      dayOpen = v
+      break
+    }
+  }
+
+  let dayHigh: number | null = null
+  for (const raw of highs) {
+    const v = toFiniteNumber(raw)
+    if (v !== null) dayHigh = dayHigh === null ? v : Math.max(dayHigh, v)
+  }
+
+  let dayLow: number | null = null
+  for (const raw of lows) {
+    const v = toFiniteNumber(raw)
+    if (v !== null) dayLow = dayLow === null ? v : Math.min(dayLow, v)
+  }
+
   return {
     symbol,
     range,
     interval: intradayInterval(range),
     prevClose,
     points,
+    dayOpen,
+    dayHigh,
+    dayLow,
   }
 }

@@ -8,7 +8,7 @@ import { isSupabaseConfigured, supabase } from './supabase'
 import type { IntradayRange, IntradaySeries } from '../../supabase/functions/stock-price/intradayParse'
 
 export interface IntradayRequestItem {
-  market: 'TPE' | 'US'
+  market: 'TPE' | 'US' | 'IDX'
   ticker: string
 }
 
