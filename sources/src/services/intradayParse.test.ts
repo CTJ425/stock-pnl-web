@@ -27,10 +27,19 @@ const chart = (result: unknown[], error: unknown = null) => ({ chart: { result, 
 const day = (opts: {
   close: Array<number | null>
   volume?: Array<number | null>
+  open?: Array<number | null>
+  high?: Array<number | null>
+  low?: Array<number | null>
   meta?: Record<string, unknown>
   timestamp?: Array<number | null>
 }) => {
   const n = opts.close.length
+  // Only attach the OHLC arrays a case actually supplies: a payload without them is the
+  // shape every pre-0.9.19 fixture has, and it must keep parsing.
+  const ohlc: Record<string, Array<number | null>> = {}
+  if (opts.open) ohlc.open = opts.open
+  if (opts.high) ohlc.high = opts.high
+  if (opts.low) ohlc.low = opts.low
   return chart([
     {
       meta: { symbol: '2330.TW', chartPreviousClose: 2375, ...opts.meta },
@@ -40,6 +49,7 @@ const day = (opts: {
           {
             close: opts.close,
             volume: opts.volume ?? Array.from({ length: n }, () => 1000),
+            ...ohlc,
           },
         ],
       },
@@ -167,5 +177,104 @@ describe('parseYahooChart', () => {
     expect(parseYahooChart(null, '1d')).toBeNull()
     expect(parseYahooChart('nope', '1d')).toBeNull()
     expect(parseYahooChart({}, '1d')).toBeNull()
+  })
+})
+
+/**
+ * Day open / high / low, added in 0.9.19 for the TAIEX panel in 總體經濟 > 台股.
+ *
+ * They exist because the close series is not a safe substitute. Measured against the real
+ * `^TWII` response on 2026-08-26: the low derived from closes was 44979.04 while Yahoo's own
+ * `regularMarketDayLow` was 44925.84 — off by 53.2 points — and the first close (45044.20) is
+ * not the session open (45157.64). `max(quote.high)` and `min(quote.low)` matched the meta
+ * values exactly, so the OHLC arrays are the source and `meta` is not consulted.
+ */
+describe('parseYahooChart — day open/high/low', () => {
+  it('reads the day open, high and low from the OHLC arrays', () => {
+    const series = parseYahooChart(
+      day({
+        close: [2360, 2365, 2370],
+        open: [2358, 2364, 2369],
+        high: [2372, 2366, 2371],
+        low: [2340, 2361, 2368],
+      }),
+      '1d',
+    ) as IntradaySeries
+
+    expect(series.dayOpen).toBe(2358)
+    expect(series.dayHigh).toBe(2372)
+    expect(series.dayLow).toBe(2340)
+  })
+
+  it('follows the OHLC arrays even when the close series disagrees', () => {
+    const series = parseYahooChart(
+      day({
+        close: [2360, 2365, 2370],
+        open: [2358, 2364, 2369],
+        high: [2372, 2366, 2371],
+        low: [2340, 2361, 2368],
+      }),
+      '1d',
+    ) as IntradaySeries
+
+    const closes = series.points.map((p) => p.c)
+    // The whole point of the field: the true extremes sit outside the close series.
+    expect(series.dayHigh).toBeGreaterThan(Math.max(...closes))
+    expect(series.dayLow).toBeLessThan(Math.min(...closes))
+    expect(series.dayOpen).not.toBe(closes[0])
+  })
+
+  it('reports null for all three when the payload carries no OHLC arrays', () => {
+    const series = parseYahooChart(day({ close: [2360, 2365] }), '1d') as IntradaySeries
+
+    expect(series.dayOpen).toBeNull()
+    expect(series.dayHigh).toBeNull()
+    expect(series.dayLow).toBeNull()
+    // The stock path must not regress: the bars are still there.
+    expect(series.points).toHaveLength(2)
+    expect(series.prevClose).toBe(2375)
+  })
+
+  it('skips the nulls Yahoo pads the OHLC arrays with', () => {
+    const series = parseYahooChart(
+      day({
+        close: [2360, 2365, 2370],
+        open: [null, 2364, 2369],
+        high: [null, 2366, 2371],
+        low: [null, 2361, 2368],
+      }),
+      '1d',
+    ) as IntradaySeries
+
+    expect(series.dayOpen).toBe(2364)
+    expect(series.dayHigh).toBe(2371)
+    expect(series.dayLow).toBe(2361)
+  })
+
+  it('reports a null open but still computes high and low when every open is null', () => {
+    const series = parseYahooChart(
+      day({
+        close: [2360, 2365],
+        open: [null, null],
+        high: [2372, 2366],
+        low: [2340, 2361],
+      }),
+      '1d',
+    ) as IntradaySeries
+
+    expect(series.dayOpen).toBeNull()
+    expect(series.dayHigh).toBe(2372)
+    expect(series.dayLow).toBe(2340)
+  })
+
+  it('spans the whole window for a five-day request', () => {
+    const series = parseYahooChart(
+      day({ close: [2360, 2365], high: [2400, 2380], low: [2300, 2350] }),
+      '5d',
+    ) as IntradaySeries
+
+    expect(series.range).toBe('5d')
+    expect(series.dayHigh).toBe(2400)
+    expect(series.dayLow).toBe(2300)
   })
 })

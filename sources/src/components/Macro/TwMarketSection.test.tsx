@@ -14,6 +14,13 @@ const { fetchForeignTop } = vi.hoisted(() => ({ fetchForeignTop: vi.fn() }))
 vi.mock('../../services/foreignTopProxy', () => ({ fetchForeignTop }))
 fetchForeignTop.mockResolvedValue(null)
 
+// Since 0.9.19 TwMarketSection also mounts <TwIndexToday />, which fetches its own intraday
+// series. Stub that boundary for the same reason as the one above: this file tests
+// TwMarketSection, and it must not depend on the suite blanking VITE_SUPABASE_URL.
+const { fetchIntraday } = vi.hoisted(() => ({ fetchIntraday: vi.fn() }))
+vi.mock('../../services/intradayProxy', () => ({ fetchIntraday }))
+fetchIntraday.mockResolvedValue(null)
+
 import { TwMarketSection } from './TwMarketSection'
 import type { MarketDay } from '../../services/marketProxy'
 import { CHART_COLORS } from '../Charts/chartColors'
@@ -500,5 +507,68 @@ describe('TwMarketSection', () => {
     fetchMarketDaily.mockResolvedValue(null)
     render(<TwMarketSection />)
     await waitFor(() => expect(screen.getByText(/市場資料尚未產生/)).toBeTruthy())
+  })
+})
+
+/**
+ * The 當日大盤 panel (0.9.19) sits above everything already on the tab. The order carries
+ * meaning: the panel describes today, while the KPI cards and the candle chart describe the
+ * latest complete trading day — and today's row only lands in market/daily.json about 90
+ * minutes after the close (measured 2026-08-26: asOf 15:00 for a 13:30 close). Newest first
+ * is what stops the two timeframes from reading as one.
+ */
+describe('TwMarketSection — 當日大盤 panel', () => {
+  afterEach(() => {
+    cleanup()
+    fetchMarketDaily.mockReset()
+    fetchIntraday.mockReset()
+  })
+
+  const intraday = () => ({
+    symbol: '^TWII',
+    range: '1d' as const,
+    interval: '1m' as const,
+    prevClose: 45169.46,
+    dayOpen: 45157.64,
+    dayHigh: 45878.39,
+    dayLow: 44925.84,
+    points: [
+      { t: 1787702400, c: 45044.2, v: 0 },
+      { t: 1787702460, c: 45832.62, v: 0 },
+    ],
+  })
+
+  it('把當日大盤區塊排在既有市場指標之前', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-26T07:00:00.000Z',
+      days: [
+        day('2026-08-25', 8.1e11, instFull(5.2e10, 3.1e10)),
+        day('2026-08-26', 8.36e11, instFull(5.93e10, 3.65e10)),
+      ],
+    })
+    fetchIntraday.mockResolvedValue(intraday())
+
+    const { container } = render(<TwMarketSection />)
+
+    const panel = await screen.findByTestId('tw-index-today')
+    const firstKpi = container.querySelector('.kpi-value')!
+    expect(firstKpi).toBeTruthy()
+
+    // Node.compareDocumentPosition: bit 4 means the argument follows the receiver.
+    expect(panel.compareDocumentPosition(firstKpi) & 4).toBeTruthy()
+  })
+
+  it('當日大盤取不到資料時，既有區塊照常顯示', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-26T07:00:00.000Z',
+      days: [day('2026-08-26', 8.36e11, instFull(5.93e10, 3.65e10))],
+    })
+    fetchIntraday.mockResolvedValue(null)
+
+    const { container } = render(<TwMarketSection />)
+    await screen.findByRole('table', { name: '每日成交量' })
+
+    expect(container.querySelectorAll('.kpi-value').length).toBeGreaterThan(0)
+    expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
   })
 })

@@ -105,6 +105,8 @@ export interface IntradayChartProps {
   range: IntradayRange
   onRangeChange: (range: IntradayRange) => void
   tradeDate?: string | null
+  /** Render the volume sub-chart. Default true. */
+  showVolume?: boolean
 }
 
 export function IntradayChart({
@@ -113,6 +115,7 @@ export function IntradayChart({
   range,
   onRangeChange,
   tradeDate = null,
+  showVolume = true,
 }: IntradayChartProps) {
   const [hover, setHover] = useState<number | null>(null)
   const clipId = useId().replace(/:/g, '')
@@ -214,7 +217,7 @@ export function IntradayChart({
       ) : (
         <>
           <ChartFrame
-            height={220}
+            height={showVolume ? 220 : 290}
             domain={domain}
             labels={labels}
             labelIndices={labelIndices}
@@ -308,42 +311,44 @@ export function IntradayChart({
             }}
           </ChartFrame>
 
-          <ChartFrame
-            height={70}
-            domain={volumeDomain}
-            labels={labels}
-            labelIndices={labelIndices}
-            ariaLabel={`${ariaLabel}，成交量`}
-            hoverIndex={hover}
-            onHover={setHover}
-          >
-            {(geo) => {
-              const zeroY = geo.y(0)
-              const barW = Math.max(geo.bandWidth * 0.7, 1)
-              return (
-                <>
-                  {points.map((p, i) => {
-                    const prev = i === 0 ? (prevClose ?? p.c) : points[i - 1].c
-                    const color = p.c >= prev ? CHART_COLORS.up : CHART_COLORS.down
-                    const value = p.v / 1000
-                    const y = geo.y(value)
-                    const h = Math.max(zeroY - y, 1)
-                    return (
-                      <rect
-                        key={`vol-${i}`}
-                        x={geo.bandCenter(i) - barW / 2}
-                        y={Math.min(y, zeroY)}
-                        width={barW}
-                        height={h}
-                        fill={color}
-                        opacity={geo.hover === null || geo.hover === i ? 0.5 : 0.25}
-                      />
-                    )
-                  })}
-                </>
-              )
-            }}
-          </ChartFrame>
+          {showVolume && (
+            <ChartFrame
+              height={70}
+              domain={volumeDomain}
+              labels={labels}
+              labelIndices={labelIndices}
+              ariaLabel={`${ariaLabel}，成交量`}
+              hoverIndex={hover}
+              onHover={setHover}
+            >
+              {(geo) => {
+                const zeroY = geo.y(0)
+                const barW = Math.max(geo.bandWidth * 0.7, 1)
+                return (
+                  <>
+                    {points.map((p, i) => {
+                      const prev = i === 0 ? (prevClose ?? p.c) : points[i - 1].c
+                      const color = p.c >= prev ? CHART_COLORS.up : CHART_COLORS.down
+                      const value = p.v / 1000
+                      const y = geo.y(value)
+                      const h = Math.max(zeroY - y, 1)
+                      return (
+                        <rect
+                          key={`vol-${i}`}
+                          x={geo.bandCenter(i) - barW / 2}
+                          y={Math.min(y, zeroY)}
+                          width={barW}
+                          height={h}
+                          fill={color}
+                          opacity={geo.hover === null || geo.hover === i ? 0.5 : 0.25}
+                        />
+                      )
+                    })}
+                  </>
+                )
+              }}
+            </ChartFrame>
+          )}
         </>
       )}
     </div>

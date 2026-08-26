@@ -2995,6 +2995,28 @@ a.hmenu-item {
   gap: 8px;
 }
 
+/* 當日大盤 panel (0.9.19) — 總體經濟 > 台股, above the existing KPI grid.
+   Layout mirrors docs/design/taiex-intraday-panel-mockup.html, on existing tokens/classes only:
+   .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
+   value, .m-range for the range toggle, .m-stats/.rpt-card for the six stat cells. */
+.tw-index-today {
+  margin-bottom: 22px;
+}
+
+.tw-index-range {
+  margin-bottom: 10px;
+}
+
+.tw-index-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 560px) {
+  .tw-index-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .rpt-notes {
   font-size: 12px;
   color: var(--ink-muted);

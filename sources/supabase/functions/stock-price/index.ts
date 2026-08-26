@@ -29,11 +29,14 @@
  *   POST { action: 'twlist' }
  *     → { rows: [{ symbol, name, close }] } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
  *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup)
- *   POST { action: 'intraday', symbol: { market: 'TPE'|'US', ticker: string }, range?: '1d'|'5d' }
+ *   POST { action: 'intraday', symbol: { market: 'TPE'|'US'|'IDX', ticker: string }, range?: '1d'|'5d' }
  *     → { series: IntradaySeries | null } (Yahoo chart v8 intraday bars; range defaults to '1d'.
  *       Tries each yahooSymbols() candidate in turn and returns the first that parses;
  *       null series on a 200 when every candidate fails — an unknown ticker is not an error.
- *       No price_cache write: the series is large and per-range, caching is the client's job.)
+ *       No price_cache write: the series is large and per-range, caching is the client's job.
+ *       'IDX' (e.g. ^TWII) needs no special handling: yahooSymbols() returns the ticker
+ *       verbatim for any market other than 'TPE', and IntradaySeries carries dayOpen/dayHigh/
+ *       dayLow — read from the OHLC arrays, not meta — for the panel in 總體經濟 > 台股, 0.9.19.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
@@ -41,7 +44,7 @@ import { intradayInterval, parseYahooChart, type IntradayRange } from './intrada
 import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 
 interface SymbolItem {
-  market: 'TPE' | 'US'
+  market: 'TPE' | 'US' | 'IDX'
   ticker: string
 }
 

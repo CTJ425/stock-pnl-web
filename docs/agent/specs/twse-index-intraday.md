@@ -1,8 +1,9 @@
 # Spec — TAIEX intraday panel in 總體經濟 > 台股
 
-- Status: DRAFT — awaiting go-ahead to implement
+- Status: READY — failing tests written, awaiting implementation
 - Lane: 2 (Edge Function change + external API + two deploy targets)
 - Author: main session, 2026-08-26
+- Mockup: `docs/design/taiex-intraday-panel-mockup.html`
 
 ## Task
 
@@ -84,6 +85,23 @@ full height. No other prop or behaviour changes.
 - `series === null` renders the section with an empty-state message, never a crash and
   never a zero. `prevClose === null` renders the change cells as `—` in neutral colour,
   matching how the stock quote card already refuses to guess a baseline.
+
+**DOM contract** — the tests address these hooks, so they are part of the interface:
+
+| `data-testid` | Holds |
+| --- | --- |
+| `tw-index-today` | the section root |
+| `tw-index-value` | the index level |
+| `tw-index-open` / `-high` / `-low` / `-prev-close` | the four raw cells |
+| `tw-index-change` / `-change-pct` | the two derived cells |
+| `tw-index-empty` | the empty state; must be absent when a series is present |
+
+Colour comes from `pnlClass()` (`utils/formatters.ts:74`), so an up value carries `pnl-up`
+and a down value `pnl-down`; a null change must carry neither. Cell text may use any
+thousands separator — the tests strip separators before comparing.
+
+The existing KPI markup keeps its current classes; the ordering test locates it through
+`.kpi-value`, so no `data-testid` is added to markup that already works.
 
 ## Files
 
