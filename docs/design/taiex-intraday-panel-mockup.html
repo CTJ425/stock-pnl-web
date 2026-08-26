@@ -1,0 +1,513 @@
+<title>當日大盤面板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+<style>
+/* ── Tokens lifted verbatim from sources/src/index.css ─────────────────────
+   The app is dark-first, so the bare :root carries the dark set and the light
+   set is applied for an explicit light choice or a light OS preference.       */
+:root {
+  --bg: #0b0f19;
+  --bg-glow-a: rgba(99, 102, 241, 0.16);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e7ecf5;
+  --ink-secondary: #9aa6bd;
+  --ink-muted: #64748b;
+  --accent: #7c8cf8;
+  --accent-strong: #6366f1;
+  --accent-2: #22d3ee;
+  --up: #ff4a5a;
+  --down: #00e676;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
+  --row-alt: rgba(255, 255, 255, 0.02);
+  --thead-bg: rgba(255, 255, 255, 0.03);
+  --grid: rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #eef2f9;
+    --bg-glow-a: rgba(99, 102, 241, 0.12);
+    --bg-glow-b: rgba(34, 211, 238, 0.1);
+    --surface: rgba(255, 255, 255, 0.66);
+    --surface-strong: rgba(255, 255, 255, 0.9);
+    --border: rgba(15, 23, 42, 0.08);
+    --border-strong: rgba(15, 23, 42, 0.16);
+    --ink: #17202f;
+    --ink-secondary: #4a586e;
+    --ink-muted: #7b8698;
+    --accent: #5b6cf0;
+    --accent-strong: #4f46e5;
+    --up: #dc2f3f;
+    --down: #059654;
+    --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.08);
+    --row-alt: rgba(15, 23, 42, 0.02);
+    --thead-bg: rgba(15, 23, 42, 0.03);
+    --grid: rgba(15, 23, 42, 0.07);
+  }
+}
+:root[data-theme='light'] {
+  --bg: #eef2f9;
+  --bg-glow-a: rgba(99, 102, 241, 0.12);
+  --bg-glow-b: rgba(34, 211, 238, 0.1);
+  --surface: rgba(255, 255, 255, 0.66);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --ink: #17202f;
+  --ink-secondary: #4a586e;
+  --ink-muted: #7b8698;
+  --accent: #5b6cf0;
+  --accent-strong: #4f46e5;
+  --up: #dc2f3f;
+  --down: #059654;
+  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.08);
+  --row-alt: rgba(15, 23, 42, 0.02);
+  --thead-bg: rgba(15, 23, 42, 0.03);
+  --grid: rgba(15, 23, 42, 0.07);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(900px 480px at -10% 30%, var(--bg-glow-b), transparent 55%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+
+/* ── Review toolbar — deliberately not part of the app ───────────────────── */
+.review {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px dashed var(--border-strong);
+  background: var(--thead-bg);
+}
+.review .tag {
+  font-family: var(--font-display); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-muted);
+  margin-right: auto;
+}
+.review button {
+  appearance: none; font: inherit; font-size: 12px; cursor: pointer;
+  color: var(--ink-secondary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.review button:hover { color: var(--ink); border-color: var(--border-strong); }
+.review button[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
+.review button:focus-visible,
+.subtab:focus-visible,
+.rangebtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── App frame ───────────────────────────────────────────────────────────── */
+.app { max-width: 1080px; margin: 0 auto; padding: 0 20px 64px; }
+.crumb {
+  font-size: 12px; color: var(--ink-muted); padding: 18px 0 10px;
+  display: flex; align-items: center; gap: 7px;
+}
+.crumb b { color: var(--ink-secondary); font-weight: 500; }
+
+.subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.subtab {
+  appearance: none; border: none; background: transparent; color: var(--ink-secondary);
+  font: inherit; font-weight: 500; padding: 8px 14px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .18s ease, border-color .18s ease;
+}
+.subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.section { margin-top: 22px; position: relative; }
+.glass {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow-card);
+}
+.section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.section-title h2 { font-size: 16px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.section-title .hint { color: var(--ink-muted); font-size: 12px; }
+
+/* origin chips, toggled from the review bar */
+.chip {
+  position: absolute; top: -9px; right: 12px; z-index: 2;
+  font-family: var(--font-display); font-size: 10px; font-weight: 600;
+  letter-spacing: .07em; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--ink-muted);
+  opacity: 0; transition: opacity .2s ease;
+}
+.chip.is-new { color: var(--accent); border-color: var(--accent); }
+body.mark .chip { opacity: 1; }
+body.mark #newBlock > .glass { outline: 1px dashed var(--accent); outline-offset: 3px; }
+
+/* ── The new panel ───────────────────────────────────────────────────────── */
+.panel { padding: 18px 20px 14px; }
+.phead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pname { display: flex; align-items: center; gap: 9px; }
+.pname h2 { font-size: 17px; }
+.badge {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  padding: 2px 8px; border-radius: 6px;
+  color: var(--accent); background: var(--surface-strong); border: 1px solid var(--border);
+}
+.chart-time-badge {
+  font-size: 12px; color: var(--ink-secondary); background: var(--surface-strong);
+  border: 1px solid var(--border); padding: 2px 8px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+}
+.hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 10px 0 4px; }
+.hero .val {
+  font-family: var(--font-display); font-size: clamp(34px, 6vw, 46px);
+  font-weight: 700; line-height: 1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hero .chg { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--ink-secondary); }
+
+.ranges { display: flex; gap: 4px; margin: 12px 0 6px; }
+.rangebtn {
+  appearance: none; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+  color: var(--ink-secondary); background: transparent;
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 14px;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.rangebtn[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); background: var(--surface-strong); }
+
+.chartwrap { position: relative; margin-top: 4px; }
+.chartwrap svg { display: block; width: 100%; height: 250px; }
+.ylab {
+  position: absolute; right: 2px; transform: translateY(-50%);
+  font-size: 10.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+  background: var(--bg); padding: 0 3px; pointer-events: none;
+}
+.xrow { position: relative; height: 16px; margin-top: 4px; }
+.xlab {
+  position: absolute; transform: translateX(-50%); white-space: nowrap;
+  font-size: 10.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+@keyframes ping { 0% { r: 3.5; opacity: .55; } 100% { r: 11; opacity: 0; } }
+.pingring { animation: ping 1.9s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pingring { animation: none; opacity: 0; } }
+
+/* stats grid — same construction as .m-stats in the app */
+.m-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--border); border-left: 1px solid var(--border);
+  border-radius: var(--radius-sm); overflow: hidden; margin-top: 14px;
+}
+.m-stats .cell {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; background: var(--row-alt);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.m-stats .k { font-size: 11px; color: var(--ink-muted); }
+.m-stats .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.note { font-size: 11.5px; color: var(--ink-muted); margin-top: 9px; }
+
+/* ── Existing blocks below ───────────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.kpi { padding: 16px 18px; position: relative; overflow: hidden; }
+.kpi::before {
+  content: ''; position: absolute; inset: 0 auto auto 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent-2), transparent);
+  opacity: .7;
+}
+.kpi .k { font-size: 11px; color: var(--ink-muted); }
+.kpi .v { font-family: var(--font-display); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.kpi .s { font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+.pad { padding: 16px 18px; }
+.stub {
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: 14px 16px; color: var(--ink-muted); font-size: 12.5px;
+}
+footer { max-width: 1080px; margin: 0 auto; padding: 8px 20px 40px; color: var(--ink-muted); font-size: 11.5px; }
+footer code { font-size: 11px; color: var(--ink-secondary); }
+
+@media (max-width: 620px) {
+  .m-stats { grid-template-columns: repeat(2, 1fr); }
+  .app { padding: 0 14px 48px; }
+  .panel { padding: 15px 15px 12px; }
+}
+</style>
+
+<div class="review">
+  <span class="tag">設計稿 · 資料為 2026-08-26 實際盤中數字</span>
+  <button type="button" id="markBtn" aria-pressed="true">標示新增區塊</button>
+  <button type="button" id="themeBtn" aria-pressed="false">切換淺色</button>
+</div>
+
+<div class="app">
+  <div class="crumb">總體經濟 <span aria-hidden="true">›</span> <b>台股</b></div>
+
+  <div class="subtabs" role="tablist" aria-label="總體經濟分類">
+    <button type="button" role="tab" class="subtab active" aria-selected="true">台股</button>
+    <button type="button" role="tab" class="subtab" aria-selected="false">美國經濟</button>
+  </div>
+
+  <!-- ───────────── NEW ───────────── -->
+  <section class="section" id="newBlock" aria-labelledby="newHead">
+    <span class="chip is-new">新增</span>
+    <div class="glass panel">
+      <div class="phead">
+        <div class="pname">
+          <h2 id="newHead">加權指數</h2>
+          <span class="badge">當日</span>
+        </div>
+        <span class="chart-time-badge"><span id="asOf">—</span> 更新</span>
+      </div>
+
+      <div class="hero">
+        <span class="val" id="heroVal">—</span>
+        <span class="chg" id="heroChg">—</span>
+      </div>
+
+      <div class="ranges" role="group" aria-label="區間">
+        <button type="button" class="rangebtn" data-range="d1" aria-pressed="true">1日</button>
+        <button type="button" class="rangebtn" data-range="d5" aria-pressed="false">5日</button>
+      </div>
+
+      <div class="chartwrap" id="chartWrap">
+        <svg id="chart" viewBox="0 0 1000 250" preserveAspectRatio="none" role="img"
+             aria-label="加權指數分時走勢，昨收為基準線"></svg>
+      </div>
+      <div class="xrow" id="xrow"></div>
+
+      <div class="m-stats" id="stats"></div>
+      <p class="note" id="statNote"></p>
+    </div>
+  </section>
+
+  <!-- ───────────── EXISTING ───────────── -->
+  <section class="section" aria-label="最近交易日指標">
+    <span class="chip">既有</span>
+    <div class="section-title">
+      <h2>市場指標</h2>
+      <span class="hint" id="kpiDate">—</span>
+    </div>
+    <div class="kpi-grid" id="kpis"></div>
+  </section>
+
+  <section class="section" aria-label="加權指數日線">
+    <span class="chip">既有</span>
+    <div class="glass pad">
+      <div class="section-title">
+        <h2>加權指數日線</h2>
+        <span class="hint">近 30 個交易日</span>
+      </div>
+      <svg id="candles" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img"
+           aria-label="加權指數近 30 日 K 線" style="display:block;width:100%;height:200px"></svg>
+      <div class="section-title" style="margin:16px 0 8px">
+        <h2 style="font-size:14px">成交金額</h2>
+        <span class="hint">億元</span>
+      </div>
+      <svg id="turnover" viewBox="0 0 1000 80" preserveAspectRatio="none" role="img"
+           aria-label="每日成交金額" style="display:block;width:100%;height:74px"></svg>
+    </div>
+  </section>
+
+  <section class="section" aria-label="法人與成交統計表">
+    <span class="chip">既有</span>
+    <div class="glass pad">
+      <div class="stub">三大法人買賣超表 · 成交統計表 —— 維持現狀，此稿不更動</div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  走勢與開高低昨收來自 Yahoo chart v8 <code>^TWII</code>；市場指標與日線來自
+  <code>reports/market/daily.json</code>。當日格刻意不放成交金額 —— Yahoo 對指數不提供，
+  它留在下方「市場指標」並標明是最近交易日。
+</footer>
+
+<script>
+const D={"d1":{"c":[45044.2,44984.52,45045.6,45129.97,45134.27,45188.06,45188.25,45074.22,45114.61,45120.64,45120.41,45146.31,45180.29,45163.28,45113.13,45151.49,45156.29,45144.98,45124.52,45124.07,45097.85,45069.29,45094.92,45041.77,45027.85,44979.04,45046.64,45065.51,45104.02,45160.4,45122.72,45152.46,45226.06,45239.32,45243.12,45282.23,45280.38,45242.28,45269.33,45275.14,45265.3,45250.17,45314.93,45303.98,45305.25,45314.76,45314.06,45277.94,45220.01,45253.11,45252.06,45244.63,45245.04,45298.59,45356.62,45409.43,45421.61,45395.87,45443.18,45439.23,45447.73,45456.92,45374.55,45334.71,45360.8,45352.48,45337.86,45300.71,45340.76,45306.41,45330.16,45344.79,45400.69,45400.46,45399.2,45434.67,45432.31,45429.82,45419.09,45451.63,45481.72,45485.18,45488.17,45508.78,45502.31,45539.33,45524.66,45514.04,45529.2,45532.85,45547.86,45613.36,45608.7,45633.01,45606.26,45637.36,45596.81,45590.83,45618.18,45625.31,45667.68,45679.28,45682.41,45692.02,45707.61,45731.99,45719.58,45704.57,45703.26,45708.07,45748.38,45704.02,45703.71,45737.81,45694.6,45689.24,45696.42,45757.65,45758.0,45714.02,45746.36,45707.17,45706.23,45702.98,45744.05,45755.43,45759.59,45758.37,45763.72,45765.04,45760.61,45719.31,45760.47,45769.71,45819.07,45815.07,45816.6,45811.8,45809.41,45800.18,45802.08,45801.09,45799.24,45742.75,45765.32,45772.77,45767.62,45768.8,45757.85,45717.13,45765.13,45769.46,45754.28,45773.57,45766.02,45771.42,45784.38,45792.68,45795.41,45796.21,45790.35,45777.71,45772.93,45768.56,45766.27,45769.16,45776.84,45778.53,45790.36,45787.53,45794.21,45791.96,45814.8,45804.6,45813.29,45807.43,45806.86,45807.88,45812.16,45812.4,45806.26,45808.36,45798.78,45791.66,45799.02,45798.67,45796.73,45800.35,45810.19,45805.84,45812.51,45808.06,45854.35,45846.04,45805.96,45818.79,45816.4,45817.66,45849.94,45812.23,45807.18,45813.51,45823.63,45814.9,45804.34,45805.56,45796.13,45790.26,45792.15,45797.76,45768.91,45824.89,45826.68,45822.83,45815.44,45860.33,45831.22,45830.46,45833.08,45833.72,45830.83,45836.11,45873.59,45843.29,45837.21,45834.38,45838.78,45834.53,45836.32,45838.35,45832.86,45828.99,45825.73,45833.06,45831.88,45838.18,45827.09,45827.42,45828.72,45832.26,45839.02,45840.3,45834.02,45838.79,45851.98,45865.02,45848.84,45872.07,45862.23,45864.92,45866.0,45857.47,45854.47,45854.12,45859.07,45859.79,45855.95,45865.04,45855.17,45866.48,45833.46,45834.25,45832.46,45790.82,45839.96,45839.03,45839.03,45839.03,45839.03,45839.03,45832.62],"labels":[[0.0,"09:00"],[22.222,"10:00"],[44.444,"11:00"],[66.667,"12:00"],[88.889,"13:00"],[100.0,"13:30"]]},"d5":{"c":[45090.86,44931.34,44917.8,44918.61,44797.01,44722.15,44636.89,44713.71,44747.99,44682.91,44691.87,44694.77,44820.03,44767.74,44739.31,44653.51,44594.75,44669.06,44719.5,44654.1,44649.24,44601.13,44472.57,44570.96,44651.5,44639.49,44637.63,44626.31,44609.11,44594.19,44560.75,44491.53,44573.81,44581.19,44588.55,44602.83,44631.81,44677.5,44749.61,44805.87,44817.91,44768.88,44744.04,44777.17,44746.33,44692.08,44711.18,44753.41,44765.57,44759.17,44793.65,44797.02,44896.22,44855.9,44787.46,44694.18,44832.33,44957.38,44881.58,44956.93,44985.65,44953.35,45011.37,45095.82,45047.95,44951.69,44999.42,45112.33,45059.15,45088.09,45123.17,45124.06,45199.34,45153.07,45108.89,45173.1,45247.34,45227.57,45220.79,45180.44,45138.33,45075.06,45084.65,45116.5,45166.13,45115.3,44996.96,45027.63,44943.47,45030.95,45040.81,45105.49,45044.39,45085.55,45068.77,45038.58,45080.94,45077.86,45089.1,45100.03,45084.64,45040.37,45127.76,45113.4,45126.57,45130.85,45118.54,45160.72,45272.7,45192.34,45220.64,45285.32,45216.07,45277.72,45190.88,45232.56,45345.43,45258.05,45221.02,44982.54,45009.29,44960.65,45111.92,45046.54,45045.31,45102.3,45129.43,45135.48,45131.76,45098.6,45093.43,45145.9,45161.94,45107.37,45098.52,45061.71,45022.63,45009.15,45010.41,45014.34,45004.75,44991.18,44971.21,45006.86,44969.92,44972.66,45019.51,44996.34,44989.89,44990.69,44958.76,44982.09,44979.09,44987.16,45029.31,44959.11,44910.1,44924.76,44884.0,44845.75,44761.88,44770.07,44407.39,44428.28,44453.86,44414.37,44297.12,44264.45,44247.0,44443.67,44371.83,44409.74,44500.5,44398.22,44372.69,44312.75,44354.24,44402.61,44387.97,44363.76,44389.83,44401.16,44383.03,44272.79,44228.91,44215.2,44313.74,44388.76,44349.91,44366.77,44340.78,44447.29,44511.33,44488.02,44497.24,44430.21,44392.11,44403.29,44473.88,44511.75,44583.29,44624.18,44630.28,44643.15,44749.45,44748.6,44770.88,44746.89,44722.48,44785.86,44911.81,44872.63,44904.68,44940.12,45043.98,45002.91,45134.27,45120.64,45113.13,45124.07,45027.85,45160.4,45243.12,45275.14,45305.25,45253.11,45356.62,45439.23,45360.8,45306.41,45399.2,45451.63,45502.31,45532.85,45606.26,45625.31,45707.61,45708.07,45694.6,45714.02,45744.05,45765.04,45819.07,45800.18,45765.32,45717.13,45766.02,45796.21,45766.27,45787.53,45813.29,45812.4,45799.02,45805.84,45805.96,45812.23,45804.34,45797.76,45815.44,45833.72,45837.21,45838.35,45831.88,45832.26,45851.98,45864.92,45859.07,45866.48,45839.96,45839.03,45832.62],"labels":[[0.0,"08/20"],[20.0,"08/21"],[40.0,"08/24"],[60.0,"08/25"],[80.0,"08/26"]]},"prev":45169.46,"open":45157.64,"high":45878.39,"low":44925.84,"asOf":"13:33","candles":[["07-16",45511.98,45855.02,44970.64,45624.98,933180942503],["07-17",45234.08,45234.08,42671.27,42671.27,1333156652944],["07-20",42793.15,43084.51,41967.75,42449.7,1041457434398],["07-21",42566.93,44232.87,42566.93,44232.87,866251695004],["07-22",44513.75,45323.75,44513.75,44825.78,1025958396323],["07-23",44899.04,45089.82,44340.76,44850.81,930612067733],["07-24",44769.39,44769.39,43607.4,43654.84,827129512226],["07-27",43585.92,43686.15,42969.48,43634.19,747647200740],["07-28",43221.93,43221.93,41565,41603.36,872574999972],["07-29",41491.48,41698.39,39384.85,40039.18,1149185294964],["07-30",40048.94,41155.42,39404.65,39933.3,1146937829185],["07-31",41610.41,43214.36,41610.41,43119.75,887732405136],["08-03",42780.42,43784.19,42780.42,43386.41,885506043091],["08-04",43092.49,43912.77,42895.81,43360.66,1087045875836],["08-05",43809.83,44980.31,43809.83,44611.6,1200212510521],["08-06",44487.94,44601.24,44024.32,44396.7,974054973424],["08-07",44450.19,44827.13,43941.56,44225.91,850815189087],["08-10",44540.71,45219.4,44540.71,44928.76,880440723750],["08-11",44883.9,45195.41,44652.06,45120.72,902052207533],["08-12",45175.7,45529.48,45175.7,45518.07,892659784922],["08-13",45676.54,46216.41,45676.54,46021.48,1104024642159],["08-14",46103.81,46402.6,45798.31,45811.01,1109746702006],["08-17",45841.17,46189.3,45765.07,45857.27,981055134845],["08-18",45922.4,46064.09,45225.42,45308.68,1007881760816],["08-19",45071.34,45071.34,44308.71,44719.35,890269743542],["08-20",44942.01,45160.05,44446.36,44933.74,834412514041],["08-21",44923.34,45254.84,44583.87,45224.29,754905335886],["08-24",45240.3,45362.3,44761.88,44762.32,656280679689],["08-25",44728.36,45169.46,44210.31,45169.46,724258445490],["08-26",45157.64,45878.39,44925.84,45832.62,836243796302]],"kpi":{"tradeValueTwd":836243796302,"taiex":45832.62,"changePoints":663.16,"instTotal":59387214887,"instForeign":36598312109,"date":"2026-08-26"}};
+
+const nf = (n, d = 2) => n === null || n === undefined || !isFinite(n)
+  ? '—' : n.toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+const oku = (v) => nf(v / 1e8, 0);
+const sign = (v) => (v > 0 ? '+' : '');
+const dirClass = (v) => (v === null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat');
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+let range = 'd1';
+
+function drawChart() {
+  const s = D[range], closes = s.c, prev = D.prev;
+  const svg = document.getElementById('chart');
+  const W = 1000, H = 250;
+  let lo = Math.min(prev, ...closes), hi = Math.max(prev, ...closes);
+  const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad;
+  const X = (i) => (i * W) / (closes.length - 1);
+  const Y = (v) => H - ((v - lo) * H) / (hi - lo);
+  const baseY = Y(prev);
+  const last = closes[closes.length - 1];
+  const upNow = last >= prev;
+  const stroke = upNow ? cssVar('--up') : cssVar('--down');
+
+  const line = closes.map((c, i) => `${X(i).toFixed(2)},${Y(c).toFixed(2)}`).join(' ');
+  const area = `M0,${Y(closes[0]).toFixed(2)} ` +
+    closes.map((c, i) => `L${X(i).toFixed(2)},${Y(c).toFixed(2)}`).join(' ') +
+    ` L${W},${baseY.toFixed(2)} L0,${baseY.toFixed(2)} Z`;
+
+  svg.innerHTML = `
+    <defs>
+      <clipPath id="clipUp"><rect x="0" y="0" width="${W}" height="${Math.max(0, baseY)}"/></clipPath>
+      <clipPath id="clipDown"><rect x="0" y="${baseY}" width="${W}" height="${Math.max(0, H - baseY)}"/></clipPath>
+      <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${cssVar('--up')}" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="${cssVar('--up')}" stop-opacity="0.02"/>
+      </linearGradient>
+      <linearGradient id="gDown" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stop-color="${cssVar('--down')}" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="${cssVar('--down')}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <path d="${area}" fill="url(#gUp)" clip-path="url(#clipUp)"/>
+    <path d="${area}" fill="url(#gDown)" clip-path="url(#clipDown)"/>
+    <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${cssVar('--ink-muted')}"
+          stroke-width="1" stroke-dasharray="5 5" vector-effect="non-scaling-stroke"/>
+    <polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="1.6"
+              stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle class="pingring" cx="${X(closes.length - 1)}" cy="${Y(last)}" r="3.5" fill="${stroke}"/>
+    <circle cx="${X(closes.length - 1)}" cy="${Y(last)}" r="3" fill="${stroke}"
+            vector-effect="non-scaling-stroke"/>`;
+
+  document.querySelectorAll('.ylab').forEach((e) => e.remove());
+  const wrap = document.getElementById('chartWrap');
+  [[prev, '昨收 ' + nf(prev)], [hi - pad, nf(hi - pad)], [lo + pad, nf(lo + pad)]]
+    .forEach(([v, text]) => {
+      const el = document.createElement('span');
+      el.className = 'ylab';
+      el.style.top = ((Y(v) / H) * 100).toFixed(2) + '%';
+      el.textContent = text;
+      wrap.appendChild(el);
+    });
+
+  const xrow = document.getElementById('xrow');
+  xrow.innerHTML = s.labels
+    .map(([pct, t]) => `<span class="xlab" style="left:${Math.min(98, Math.max(2, pct))}%">${t}</span>`)
+    .join('');
+}
+
+function drawStats() {
+  const last = D.d1.c[D.d1.c.length - 1], prev = D.prev;
+  const chg = prev === null ? null : last - prev;
+  const pct = prev === null ? null : (chg / prev) * 100;
+  const cells = [
+    ['開盤', nf(D.open), ''],
+    ['最高', nf(D.high), ''],
+    ['最低', nf(D.low), ''],
+    ['昨收', nf(prev), ''],
+    ['漲跌點數', chg === null ? '—' : sign(chg) + nf(chg), dirClass(chg)],
+    ['漲跌幅', pct === null ? '—' : sign(pct) + nf(pct) + '%', dirClass(pct)],
+  ];
+  document.getElementById('stats').innerHTML = cells
+    .map(([k, v, c]) => `<div class="cell"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`)
+    .join('');
+
+  document.getElementById('heroVal').textContent = nf(last);
+  const hc = document.getElementById('heroChg');
+  hc.className = 'chg ' + dirClass(chg);
+  hc.textContent = chg === null ? '—' : `${sign(chg)}${nf(chg)}　${sign(pct)}${nf(pct)}%`;
+  document.getElementById('asOf').textContent = D.asOf;
+  document.getElementById('statNote').textContent =
+    '最高與最低取自逐分 OHLC，不是收盤價序列的極值 —— 兩者在今日相差 53.2 點。';
+}
+
+function drawKpis() {
+  const k = D.kpi;
+  document.getElementById('kpiDate').textContent = k.date + '（最近交易日）';
+  const items = [
+    ['成交金額', oku(k.tradeValueTwd) + ' 億', ''],
+    ['加權指數', nf(k.taiex), sign(k.changePoints) + nf(k.changePoints) + ' 點'],
+    ['三大法人買賣超', sign(k.instTotal) + oku(k.instTotal) + ' 億', ''],
+    ['其中外資', sign(k.instForeign) + oku(k.instForeign) + ' 億', ''],
+  ];
+  document.getElementById('kpis').innerHTML = items
+    .map(([kk, v, s], i) => {
+      const cls = i === 1 ? dirClass(k.changePoints) : i >= 2 ? dirClass(k.instTotal) : '';
+      return `<div class="glass kpi"><div class="k">${kk}</div>
+        <div class="v ${cls}">${v}</div><div class="s ${cls}">${s}</div></div>`;
+    })
+    .join('');
+}
+
+function drawCandles() {
+  const cs = D.candles, W = 1000, H = 220;
+  const lo0 = Math.min(...cs.map((c) => c[3])), hi0 = Math.max(...cs.map((c) => c[2]));
+  const pad = (hi0 - lo0) * 0.08, lo = lo0 - pad, hi = hi0 + pad;
+  const Y = (v) => H - ((v - lo) * H) / (hi - lo);
+  const step = W / cs.length, bw = Math.max(3, step * 0.56);
+  const up = cssVar('--up'), down = cssVar('--down'), grid = cssVar('--grid');
+  let out = '';
+  for (let g = 1; g < 4; g++) {
+    const y = (H * g) / 4;
+    out += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${grid}" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  }
+  cs.forEach((c, i) => {
+    const [, o, h, l, cl] = c;
+    const x = i * step + step / 2, col = cl >= o ? up : down;
+    const yo = Y(o), yc = Y(cl);
+    out += `<line x1="${x}" y1="${Y(h)}" x2="${x}" y2="${Y(l)}" stroke="${col}" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+    out += `<rect x="${x - bw / 2}" y="${Math.min(yo, yc)}" width="${bw}" height="${Math.max(1.5, Math.abs(yc - yo))}" fill="${col}"/>`;
+  });
+  document.getElementById('candles').innerHTML = out;
+
+  const tv = cs.map((c) => c[5]), tmax = Math.max(...tv), HT = 80;
+  document.getElementById('turnover').innerHTML = cs
+    .map((c, i) => {
+      const x = i * step + step / 2, h = (c[5] / tmax) * (HT - 6);
+      const col = c[4] >= c[1] ? up : down;
+      return `<rect x="${x - bw / 2}" y="${HT - h}" width="${bw}" height="${h}" fill="${col}" opacity="0.55"/>`;
+    })
+    .join('');
+}
+
+function renderAll() { drawChart(); drawStats(); drawKpis(); drawCandles(); }
+
+document.querySelectorAll('.rangebtn').forEach((b) =>
+  b.addEventListener('click', () => {
+    range = b.dataset.range;
+    document.querySelectorAll('.rangebtn').forEach((x) =>
+      x.setAttribute('aria-pressed', String(x === b)));
+    drawChart();
+  }));
+
+const markBtn = document.getElementById('markBtn');
+document.body.classList.add('mark');
+markBtn.addEventListener('click', () => {
+  const on = document.body.classList.toggle('mark');
+  markBtn.setAttribute('aria-pressed', String(on));
+});
+
+const themeBtn = document.getElementById('themeBtn');
+themeBtn.addEventListener('click', () => {
+  const root = document.documentElement;
+  const nowLight = root.getAttribute('data-theme') !== 'light';
+  root.setAttribute('data-theme', nowLight ? 'light' : 'dark');
+  themeBtn.setAttribute('aria-pressed', String(nowLight));
+  themeBtn.textContent = nowLight ? '切換深色' : '切換淺色';
+  renderAll();
+});
+
+let t;
+window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(drawChart, 120); });
+renderAll();
+</script>
