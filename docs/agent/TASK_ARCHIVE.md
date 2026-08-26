@@ -2122,3 +2122,78 @@ Both findings are correlational — routed sessions may simply be harder tasks. 
 - Untested lever: output is roughly a third of main's cost and most of it is thinking tokens, so `effort` is a cost dial this project has never tuned.
 
 **Session `7b928169` (this one) as the cautionary datum**: it ended at **$70.52** — main $66.47 (94.3%) over **272 turns** at an average context of **291,791 tokens**, i.e. **$0.244 per turn**, about 1.75× the project average of $0.139. It is the second most expensive session in project history. The lesson is the quadratic term, not the routing configuration.
+
+### Task 133: MOPS probe sources never retire (six slots a day) — 0.9.14
+- **Status**: ✅ **Shipped in 0.9.14, deployed to both DEV and PROD, proven live**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 11:33:57 Asia/Taipei
+- **What was done**: MOPS sources now probe all six daily slots and never retire. Changed `REQUIRED_LANDED_COUNTS.mops_*` from 1 to `Number.POSITIVE_INFINITY` in `sourceProbePlan.ts`. Updated `ProbeWarRoom.tsx` and `MechanismGuide.tsx` UI to show six-slot probe behavior. Tests verified (81 files / 1243 tests passed). DEV Edge and PROD Edge `stock-report` deployed; PROD version 60 as of 2026-08-25 11:59:46. Branch merged to main (ancestor of commit 50967e5).
+- **Live proof obtained**: PROD 2026-08-24 showed 1 tick (retired on first landing at 12:00); 2026-08-25 showed 6 ticks spanning 12:00–21:05, all six slots. DEV shows identical transition. Retired on first landing hypothesis disproven; six-slot behavior confirmed.
+- **Unfinished**: None — task complete and deployed.
+
+### Task 134: BUG-036 fix deployment and affected account recovery (0.9.13)
+- **Status**: ✅ **Fix deployed to PROD and DEV, affected account recovered. CRON_SECRET rotation deferred to BUG_FIX.md**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 10:16:08 Asia/Taipei
+- **What was done**: BUG-036 (transient 401 on PostgREST, no retry, [object Object] logging) fixed in 0.9.13 commit 84502c6. PROD Edge `backup-transactions` deployed 2026-08-25 10:56:36 (v3, sha 32d4facac1f755db). DEV Edge redeployed 2026-08-26 (volume copy + container restart). Affected account manual re-run succeeded 2026-08-25 10:57; transaction restored with object_path written. Both accounts healthy as of 2026-08-26 02:00.
+- **Open item carried to BUG_FIX.md**: Security CRON_SECRET rotation (PROD secret exposed in transcript 2026-08-25; DEV secret exposed in earlier session; both require rotation). Tracked separately as open security work.
+- **Unfinished**: CRON_SECRET rotation only (moved to BUG_FIX.md).
+
+### quote-yahoo-a: Yahoo-style quote header + intraday chart (0.9.17)
+- **Status**: ✅ **Code shipped in 0.9.17, Edge Functions deployed to both DEV and PROD**
+- **Agent**: —
+- **Timestamp**: 2026-08-25 15:41:49 CST
+- **What was done**: Yahoo-style quote tab redesign with IntradayChart for 個股分析. Branch `feat/quote-yahoo-a` merged to dev and main (commit 11516cd). T1 intraday data path (intradayParse module, stock-price action) deployed to DEV (volume copy 2026-08-25, container restart) and PROD (Edge v20, sha bac85eb3edcf1fc7, deployed 2026-08-25 17:52:35). T2 UI rebuild (IntradayChart, QuoteTab, StockDetailPage) deployed to GitHub Pages via main branch. Tests: 83 files / 1276 tests passed.
+- **Data-source item remaining**: Stats grid omits 均價 / 成交金額 / 昨量. Design shows three additional cells, but `PriceQuote` has no data source today. Shipped with 7 cells (成交量/開盤/最高/最低/昨收/漲跌幅/振幅). Needs data source decision (schema / batch service) before implementing the three omitted cells. Kept as a short open entry in TASK.md noting the data-source dependency, not a defect.
+- **Unfinished**: Stats grid columns (data source work only, not code).
+
+### Task 87: BUG-026 / BUG-027 + retune the `borrow` probe window + drop two redundant crons (0.7.13)
+- **Status**: ✅ **Shipped in 0.7.13, deployed to both environments, live proof obtained, PROD cron cleanup completed**
+- **Agent**: Claude
+- **Timestamp**: 2026-08-12 12:06:18 Asia/Taipei
+- **What was done**: BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample) fixed in 0.7.13. Borrow probe window retuned from 15:00–22:45 to 21:00–23:30 (measured flip 2026-08-25 22:15 on both environments: 0 landed → 3 landed). PROD cron cleanup authorized and completed 2026-08-26: `cron.unschedule(11)` "stock-report-nightly" and `cron.unschedule(15)` "market-daily" both returned true. PROD cron now 6 jobs, matching DEV's 6. Verified by re-query with batch_run_log identity field (565).
+- **Live proof**: PROD 2026-08-24 borrow window showed 31 ticks / 13 hits / 0 landed (21:00–23:30); 2026-08-25 showed 19 ticks / 3 hits / 3 landed (21:00–22:30). DEV shows identical transition.
+- **Unfinished**: None — task complete and PROD cron cleanup done.
+
+### Task 83: 0.7.0 remove 搜尋個股 + TOP20
+- **Status**: ✅ **Code in tree, all sub-items complete**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 17:04:08 Asia/Taipei
+- **What was done**: Items 1–6 all complete. No sub-item is outstanding; entry archived as fully done.
+- **Unfinished**: None.
+
+### Task 81: Progressive warm core → history (0.6.46-dev.4–dev.6)
+- **Status**: ✅ **Shipped, merged to main**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 19:15:00 Asia/Taipei
+- **What was done**: Items 1–5 complete. Code pushed to dev and main.
+- **Unfinished**: None — code shipped.
+
+### Task 80: FOMC meeting points (0.6.46-dev.2)
+- **Status**: ✅ **Shipped, merged to main**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-10 09:47:00 Asia/Taipei
+- **What was done**: Items 1–3 complete, commit bundled in f03ade5. Code pushed to dev and main.
+- **Unfinished**: None — code shipped.
+
+### Task 79: Prefetch + night batch for new / watched stocks (0.6.46-dev.1)
+- **Status**: ✅ **Shipped, merged to main**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-09 13:40:00 Asia/Taipei
+- **What was done**: Items 1–5 complete, commit bundled in f03ade5. Code pushed to dev and main.
+- **Unfinished**: None — code shipped.
+
+### Task 78: Watchlist sub-tabs + early monthly revenue (0.6.44-dev.6)
+- **Status**: ✅ **Shipped, merged to main**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-07 17:10:00 Asia/Taipei
+- **What was done**: Items 1–7 complete. Schema deployed to PROD DDL, Edge deployed, frontend pushed to GitHub Pages.
+- **Unfinished**: None — task complete and shipped.
+
+### Task 77: Ship 0.6.44 (full-market analysis search)
+- **Status**: ✅ **Shipped, merged to main, all 14 PROD DDL tables verified**
+- **Agent**: Grok
+- **Timestamp**: 2026-08-07 15:39:33 Asia/Taipei
+- **What was done**: Items 1–7 complete. Frontend search box and non-holding path deployed via GitHub Pages. Edge `stock-report` and schema `warm_quota` table + `take_warm_quota` function deployed to PROD. All 14 public tables present and identical to DEV set as of 2026-08-26.
+- **Unfinished**: None — task complete and shipped.
+

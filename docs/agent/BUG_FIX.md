@@ -81,19 +81,48 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 - **Condition**: 0.8.0 expands `batchTwTickers()` from held-only to held ∪ watched; each stock ~6 external requests; cost per day ≈ (users × avg watched stocks) × 6.
 - **Limit**: `tw_watchlist` max 30 stocks/user is the only brake.
-- **Status**: OPEN — accepted at review (0.8.0), deployed to PROD 2026-08-19 11:29:34 Asia/Taipei.
-- **Action after deploy**: Monitor one week of batch runtime (starting 2026-08-19). If runtime grows linearly with user base × watched count, switch to "only watched-to-user pairs that have been opened in analysis UI" for batch scope. Alternative would reduce per-day noise.
+- **Status**: OPEN — observation week completed, scaling hypothesis not exercise; revised trigger applied.
+- **Observation week (2026-08-18..2026-08-26)**:
+  - Daily batch total runtime peaked at 283.7 s on 2026-08-20, fell to 162.1 s on 2026-08-25 after the 0.9.15 borrow fix cut redundant rounds.
+  - Mean per-run duration rose from ~4.3 s (2026-08-12) to 10.1 s (2026-08-25), roughly double.
+  - Scaling hypothesis NOT exercised: PROD user base unchanged (2 users, 1 with a watchlist), 8 watched rows, 58 stock_names.
+  - Per-run growth (4.3s → 10.1s) is therefore NOT attributable to users × watched count.
+- **Revised trigger**: Revisit RISK-002 if user growth or watchlist growth occurs, not on calendar. Current per-run baseline (10.1 s post-borrow-fix) is the new reference point.
+- **Action on growth**: If user count or avg watched per user rises, monitor subsequent week of batch runtime and compare against 10.1 s baseline.
 
 ---
 
 ## 📝 Operational Notes
 
+### DEV CRON_SECRET rotation (exposed in earlier session)
+
+- **Status**: OPEN — deferred, user decided to record instead of rotate immediately.
+- **Exposure**: DEV `CRON_SECRET` exposed in plaintext in session transcript on 2026-08-25. `/root/container/supabase/stock-pnl-web-dev/.env` still has mtime 2026-08-07 15:37 (unchanged since before exposure).
+- **Rotation requirements** (when user authorizes):
+  1. Generate new `CRON_SECRET` value.
+  2. Update DEV `.env` at `/root/container/supabase/stock-pnl-web-dev/.env`.
+  3. Recreate the functions container: `docker compose up -d --force-recreate functions` (from compose directory).
+  4. Update the `x-cron-secret` header in all 6 DEV cron jobs using `alter_job(jobid, ...)` — update the `command` text to embed the new secret.
+  5. Verify by re-hashing the updated commands, not by "no error" message.
+- **Discovered**: Task 134, carried to BUG_FIX.md 2026-08-26.
+
+### Supabase personal access token exposed in transcript (2026-08-26)
+
+- **Status**: OPEN — requires revocation in Supabase console.
+- **Exposure**: A Supabase personal access token was pasted into a session transcript on 2026-08-26 and must be revoked.
+- **Risk**: Supabase personal access tokens grant full management access to every project in the account (Management API, CLI for functions, database, secrets, project settings). Revocation is the required action.
+- **Action required**: Revoke the token in the Supabase console (Settings → Access Tokens).
+- **Discovered**: 2026-08-26.
+
+---
+
 ### Project-identity heuristic in `supabase-ops` skill is stale
 
-- **Finding**: The `supabase-ops` skill's project-identity distinguishing heuristic states "batch_run_log: official area 2 / test area 0", used to infer which environment is live. As of 2026-08-24, DEV self-hosted has 211 rows in batch_run_log, so the count no longer reliably distinguishes DEV (test) from PROD (official).
-- **Impact**: Agents relying on this heuristic would give false confidence about the target environment. Not a bug in the skill itself, but the distinguishing criterion has eroded.
-- **Mitigation**: When operating on Supabase environments, use explicit paths for disambiguation. DEV operations on self-hosted should reference the compose file path directly; PROD operations on cloud should reference the explicit project ID (kxnxadaghidwumqsqneu). Do not rely on count-based heuristics that can drift over time.
-- **Discovered**: During backup-transactions phase 1 DEV deployment, 2026-08-24.
+- **Finding**: The `supabase-ops` skill's project-identity distinguishing heuristic states "batch_run_log: official area 2 / test area 0", used to infer which environment is live. As of 2026-08-26, DEV self-hosted has 242 rows in batch_run_log, and PROD has 565 rows. The count no longer reliably distinguishes DEV (test) from PROD (official) — both are growing with daily probe activity.
+- **Cron.job row counts**: Both DEV and PROD have 6 jobs as of 2026-08-26 (after PROD cron cleanup), so this count also no longer distinguishes them.
+- **Impact**: Agents relying on count-based heuristics would give false confidence about the target environment. Not a bug in the skill itself, but the distinguishing criteria have eroded.
+- **Mitigation**: When operating on Supabase environments, use explicit paths for disambiguation. DEV operations on self-hosted should reference the compose file path directly (`/root/container/supabase/stock-pnl-web-dev/`); PROD operations on cloud should reference the explicit project ID (`kxnxadaghidwumqsqneu`). Do not rely on count-based heuristics that can drift over time.
+- **Updated**: 2026-08-26; original finding 2026-08-24.
 
 ---
 
