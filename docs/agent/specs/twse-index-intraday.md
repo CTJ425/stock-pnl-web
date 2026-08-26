@@ -1,9 +1,28 @@
 # Spec — TAIEX intraday panel in 總體經濟 > 台股
 
-- Status: READY — failing tests written, awaiting implementation
+- Status: **SHIPPED** as 0.9.19 on 2026-08-26 — both Edge environments deployed and verified
 - Lane: 2 (Edge Function change + external API + two deploy targets)
 - Author: main session, 2026-08-26
 - Mockup: `docs/design/taiex-intraday-panel-mockup.html`
+- Commits: `7dae025` (feature), `329fb95` (release)
+
+## Outcome
+
+Implemented as specified, with two deviations worth knowing before touching this code again:
+
+1. `dayOpen` / `dayHigh` / `dayLow` are typed **optional** (`dayOpen?: number | null`), not
+   required as the contract block below shows. Pre-existing `IntradaySeries` literals in
+   `QuoteTab.test.tsx` and `IntradayChart.test.tsx` omit them, and making the fields required
+   fails `tsc -b` on files outside this spec's `## Files` list. Runtime behaviour is unaffected:
+   `parseYahooChart` always sets all three. Accepted at review.
+2. The 漲跌幅 cell originally coloured itself from `pnlClass(change)` instead of
+   `pnlClass(changePct)`. Found at review, fixed before the commit.
+
+Deployment proof, since a version number alone proves nothing here: PROD `stock-price` went
+v20 → v21 **and** `ezbr_sha256` changed `bac85eb3edcf1fc7` → `a1a7920dddf42417`. Live checks on
+both environments returned `dayLow` below every close in the series — the OHLC arrays are the
+source — while `2330.TW` still returned 271 points, `prevClose=2400`, `interval=1m` and point
+keys `t/c/v`.
 
 ## Task
 

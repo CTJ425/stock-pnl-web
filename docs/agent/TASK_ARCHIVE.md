@@ -11,6 +11,14 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 0.9.19: 當日大盤 Panel in 總體經濟 > 台股 (0.9.19)
+- **Status**: ✅ **Released 0.9.19** (commits 7dae025 / 329fb95, DEV+PROD deployed and verified)
+- **Spec**: `docs/agent/specs/twse-index-intraday.md`
+- **Mockup**: `docs/design/taiex-intraday-panel-mockup.html`
+- **Details**: Intraday chart panel reusing IntradayChart component, showing OHLC data and volume for Taiwan Index (^TWII) in 總體經濟 > 台股 view. Reviewer PASS. 85 test files / 1313 tests passed.
+
+---
+
 ### Task 132: Admin backup restore (0.9.12)
 - **Status**: ✅ **Released 0.9.12** (commits 6bf057f / e6ca8e3 / a4306e7, both branches synced)
 - **Agent**: Builder
