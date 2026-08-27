@@ -538,7 +538,7 @@ describe('TwMarketSection — 當日大盤 panel', () => {
     ],
   })
 
-  it('把當日大盤區塊排在既有市場指標之前', async () => {
+  it('KPI 卡整併進當日大盤面板，頁面上不再有獨立的 kpi-grid', async () => {
     fetchMarketDaily.mockResolvedValue({
       asOf: '2026-08-26T07:00:00.000Z',
       days: [
@@ -551,11 +551,12 @@ describe('TwMarketSection — 當日大盤 panel', () => {
     const { container } = render(<TwMarketSection />)
 
     const panel = await screen.findByTestId('tw-index-today')
-    const firstKpi = container.querySelector('.kpi-value')!
-    expect(firstKpi).toBeTruthy()
+    expect(container.querySelector('.kpi-grid')).toBeNull()
 
-    // Node.compareDocumentPosition: bit 4 means the argument follows the receiver.
-    expect(panel.compareDocumentPosition(firstKpi) & 4).toBeTruthy()
+    // The three surviving KPI values moved inside the panel rather than disappearing.
+    const kpis = [...container.querySelectorAll('.kpi-value')]
+    expect(kpis.length).toBeGreaterThan(0)
+    expect(kpis.every((e) => panel.contains(e))).toBe(true)
   })
 
   it('當日大盤取不到資料時，既有區塊照常顯示', async () => {

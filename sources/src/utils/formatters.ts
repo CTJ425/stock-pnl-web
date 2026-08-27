@@ -75,3 +75,24 @@ export function pnlClass(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value) || value === 0) return 'pnl-flat'
   return value > 0 ? 'pnl-up' : 'pnl-down'
 }
+
+/**
+ * 元 → 億元. Returns null for a missing value rather than pretending it is 0.
+ *
+ * These three live here, not in TwMarketSection.tsx, because TwIndexToday.tsx also needs them:
+ * importing them from the section created a TwMarketSection ↔ TwIndexToday cycle, which resolved
+ * under vitest and Vite today but is the kind of module-init ordering that breaks silently later.
+ */
+export function toBillion(twd: number | null | undefined): number | null {
+  return typeof twd === 'number' && Number.isFinite(twd) ? twd / 1e8 : null
+}
+
+/** 億元, one decimal, signed — buying/selling direction has to be readable at a glance. */
+export function fmtBillionSigned(v: number | null): string {
+  if (v === null) return '—'
+  return `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`
+}
+
+export function fmtBillion(v: number | null): string {
+  return v === null ? '—' : `${v.toFixed(1)} 億`
+}
