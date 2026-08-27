@@ -21,6 +21,7 @@ import { LineSeriesChart } from '../Charts/LineSeriesChart'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
+import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 import { ForeignTopSection } from './ForeignTopSection'
 import { TwIndexToday } from './TwIndexToday'
 
@@ -47,21 +48,6 @@ function toBillionShares(shares: number | null | undefined): number | null {
 /** Transaction count → 萬筆 */
 function toTenThousand(n: number | null | undefined): number | null {
   return typeof n === 'number' && Number.isFinite(n) ? n / 1e4 : null
-}
-
-/** Yuan → billion yuan. Returns null if the value is missing (do not pretend to be 0)*/
-function toBillion(twd: number | null | undefined): number | null {
-  return typeof twd === 'number' && Number.isFinite(twd) ? twd / 1e8 : null
-}
-
-/** 100 million yuan, one decimal place; with plus or minus sign (you need to be able to see the direction when buying and selling super)*/
-function fmtBillionSigned(v: number | null): string {
-  if (v === null) return '—'
-  return `${v > 0 ? '+' : ''}${v.toFixed(1)} 億`
-}
-
-function fmtBillion(v: number | null): string {
-  return v === null ? '—' : `${v.toFixed(1)} 億`
 }
 
 /** 'YYYY-MM-DD' → 'MM/DD' (the X-axis grid is only about 8px, so there is no need to fit the year)*/
@@ -400,42 +386,20 @@ export function TwMarketSection() {
         </button>
       </div>
 
-      <TwIndexToday />
-
-      <div className="kpi-grid" style={{ marginTop: 14 }}>
-        <div className="glass kpi">
-          <div className="kpi-label">成交金額</div>
-          <div className="kpi-value">{fmtBillion(toBillion(latest?.tradeValueTwd))}</div>
-          <div className="kpi-sub">{latest ? `${latest.date}（最近交易日）` : '—'}</div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">加權指數</div>
-          <div className="kpi-value">{latest?.taiex?.toLocaleString('en-US') ?? '—'}</div>
-          <div className={`kpi-sub ${chipClass(latest?.changePoints ?? null)}`}>
-            {latest?.changePoints === null || latest?.changePoints === undefined
-              ? '—'
-              : `${latest.changePoints > 0 ? '+' : ''}${latest.changePoints.toFixed(2)} 點`}
-          </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">三大法人買賣超</div>
-          <div className={`kpi-value ${chipClass(latestInst?.institutional?.totalTwd ?? null)}`}>
-            {fmtBillionSigned(toBillion(latestInst?.institutional?.totalTwd))}
-          </div>
-          <div className="kpi-sub">
-            {latestInst ? `${latestInst.date} 全市場合計` : '尚未補到法人金額'}
-          </div>
-        </div>
-        <div className="glass kpi">
-          <div className="kpi-label">其中外資</div>
-          <div className={`kpi-value ${chipClass(latestInst?.institutional?.foreignTwd ?? null)}`}>
-            {fmtBillionSigned(toBillion(latestInst?.institutional?.foreignTwd))}
-          </div>
-          <div className="kpi-sub">
-            投信 {fmtBillionSigned(toBillion(latestInst?.institutional?.trustTwd))}
-          </div>
-        </div>
-      </div>
+      <TwIndexToday
+        closeStats={
+          latest === null
+            ? null
+            : {
+                date: latest.date,
+                tradeValueTwd: latest.tradeValueTwd,
+                instDate: latestInst?.date ?? null,
+                instTotalTwd: latestInst?.institutional?.totalTwd ?? null,
+                instForeignTwd: latestInst?.institutional?.foreignTwd ?? null,
+                instTrustTwd: latestInst?.institutional?.trustTwd ?? null,
+              }
+        }
+      />
 
       {/*
         Three charts stacked top to bottom sharing one hover index (0.6.34; in 0.6.33 the candles and the index

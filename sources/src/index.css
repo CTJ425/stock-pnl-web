@@ -2995,16 +2995,12 @@ a.hmenu-item {
   gap: 8px;
 }
 
-/* 當日大盤 panel (0.9.19) — 總體經濟 > 台股, above the existing KPI grid.
+/* 當日大盤 panel (0.9.19; layout reworked 0.9.20) — 總體經濟 > 台股, above the daily charts.
    Layout mirrors docs/design/taiex-intraday-panel-mockup.html, on existing tokens/classes only:
    .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
-   value, .m-range for the range toggle, .m-stats/.rpt-card for the six stat cells. */
+   value, .m-stats/.rpt-card for the six stat cells, IntradayChart's own range toggle for 一日/五日. */
 .tw-index-today {
   margin-bottom: 22px;
-}
-
-.tw-index-range {
-  margin-bottom: 10px;
 }
 
 .tw-index-stats {
@@ -3015,6 +3011,44 @@ a.hmenu-item {
   .tw-index-stats {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Stats band (0.9.20): 當日 row above 收盤統計 row, each with its own caption on the left —
+   the two rows can legitimately describe different days (institutional money lands ~15:00). */
+.tw-index-band {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.tw-index-band-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.tw-index-band-caption {
+  flex: 0 0 auto;
+  width: 56px;
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.tw-index-band-row .m-stats {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
+
+.tw-index-close-stats .kpi {
+  padding: 7px 11px;
+}
+
+.tw-index-close-stats .kpi-value {
+  font-size: 15px;
+  margin-top: 0;
 }
 
 .rpt-notes {
