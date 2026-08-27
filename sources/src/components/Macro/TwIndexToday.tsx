@@ -8,7 +8,8 @@
  * Day open/high/low come from `IntradaySeries.dayOpen/dayHigh/dayLow` — measured against the
  * real `^TWII` response, the close series alone is off by tens of points (see intradayParse.ts).
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { IntradayChart } from '../StockDetail/IntradayChart'
 import { fetchIntraday } from '../../services/intradayProxy'
 import { fmtBillion, fmtBillionSigned, pnlClass, toBillion } from '../../utils/formatters'
@@ -28,8 +29,23 @@ export interface TwIndexCloseStats {
   instTrustTwd: number | null
 }
 
+export interface TwMarketInstDay {
+  date: string
+  totalTwd: number | null
+  foreignTwd: number | null
+  trustTwd: number | null
+  dealerTwd: number | null
+}
+
 function fmt2(v: number): string {
   return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' })
+
+function shortDate(date: string): string {
+  const m = date.match(/^\d{4}-(\d{2})-(\d{2})$/)
+  return m ? `${m[1]}/${m[2]}` : date
 }
 
 /** Raw stat cell: '—' for a value the day has not produced yet, never a guessed 0. */
@@ -62,23 +78,38 @@ function Cell({
   )
 }
 
-export function TwIndexToday({ closeStats }: { closeStats: TwIndexCloseStats | null }) {
+export function TwIndexToday({
+  closeStats,
+  recentInstDays,
+  onRefresh,
+}: {
+  closeStats: TwIndexCloseStats | null
+  recentInstDays?: TwMarketInstDay[] | null
+  onRefresh?: () => void
+}) {
   const [range, setRange] = useState<IntradayRange>('1d')
   const [series, setSeries] = useState<IntradaySeries | null>(null)
   const [loading, setLoading] = useState(true)
+  const reqId = useRef(0)
+
+  const load = useCallback(() => {
+    const id = ++reqId.current
+    setLoading(true)
+    fetchIntraday({ market: 'IDX', ticker: '^TWII' }, range)
+      .then((s) => {
+        if (reqId.current !== id) return
+        setSeries(s)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (reqId.current !== id) return
+        setLoading(false)
+      })
+  }, [range])
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    fetchIntraday({ market: 'IDX', ticker: '^TWII' }, range).then((s) => {
-      if (cancelled) return
-      setSeries(s)
-      setLoading(false)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [range])
+    load()
+  }, [load])
 
   const points = series?.points ?? []
   const last = points.length > 0 ? points[points.length - 1].c : null
@@ -86,14 +117,31 @@ export function TwIndexToday({ closeStats }: { closeStats: TwIndexCloseStats | n
   const change = last !== null && prevClose !== null ? last - prevClose : null
   const changePct =
     change !== null && prevClose !== null && prevClose !== 0 ? (change / prevClose) * 100 : null
+  const sessionDate =
+    series?.points && series.points.length > 0
+      ? dayFmt.format(new Date(series.points[series.points.length - 1].t * 1000))
+      : null
+  const hasAside = Boolean(recentInstDays && recentInstDays.length > 0)
 
   return (
-    <div className="section glass panel tw-index-today" data-testid="tw-index-today">
+    <div className="section glass tw-index-today" data-testid="tw-index-today">
       <div className="m-card-h">
         <div className="m-chart-title-group">
           <h3>加權指數</h3>
-          <span className="badge">當日</span>
+          <span className="badge">{sessionDate === null ? '當日' : `${sessionDate} 當日`}</span>
         </div>
+        <button
+          className="btn btn-sm"
+          onClick={() => {
+            load()
+            onRefresh?.()
+          }}
+          disabled={loading}
+          aria-label="重新整理加權指數"
+        >
+          <RefreshCw size={14} className={loading ? 'spin' : undefined} />
+          重新整理
+        </button>
       </div>
 
       {series === null && (
@@ -199,15 +247,79 @@ export function TwIndexToday({ closeStats }: { closeStats: TwIndexCloseStats | n
         )}
       </div>
 
-      {series !== null && (
-        <IntradayChart
-          series={series}
-          loading={loading}
-          range={range}
-          onRangeChange={setRange}
-          showVolume={false}
-        />
-      )}
+      <div className={`tw-index-chart-layout${hasAside ? ' has-aside' : ''}`}>
+        <div className="tw-index-chart-main">
+          {series !== null && (
+            <IntradayChart
+              series={series}
+              loading={loading}
+              range={range}
+              onRangeChange={setRange}
+              showVolume={false}
+              tradeDate={sessionDate}
+            />
+          )}
+        </div>
+
+        {recentInstDays && recentInstDays.length > 0 && (
+          <aside className="tw-index-inst-aside">
+            <div className="institutional-block" style={{ marginTop: 0 }}>
+              <div className="inst-header">
+                <div className="inst-header-left">
+                  <span className="inst-header-title">三大法人買賣超動向</span>
+                  <span className="inst-header-badge">近 2 交易日</span>
+                </div>
+                <span className="inst-header-note">單位：億元</span>
+              </div>
+              <div className="inst-days-grid tw-index-inst-days">
+                {recentInstDays.map((d, idx) => {
+                  const isLatest = idx === 0
+                  const tagLabel = isLatest ? '最新' : '前日'
+
+                  return (
+                    <div key={d.date} className="inst-day-card">
+                      <div className="inst-day-head">
+                        <span className="inst-day-title">{shortDate(d.date)}</span>
+                        <span className={`inst-day-tag ${isLatest ? 'is-latest' : ''}`}>
+                          {tagLabel}
+                        </span>
+                      </div>
+
+                      <div className="inst-day-total">
+                        <span className="inst-total-label">三大法人合計</span>
+                        <span className={`inst-total-val ${pnlClass(d.totalTwd)}`}>
+                          {fmtBillionSigned(toBillion(d.totalTwd))}
+                        </span>
+                      </div>
+
+                      <div className="inst-legs-grid">
+                        <div className="inst-leg-cell">
+                          <div className="inst-leg-k">外資</div>
+                          <div className={`inst-leg-v ${pnlClass(d.foreignTwd)}`}>
+                            {fmtBillionSigned(toBillion(d.foreignTwd))}
+                          </div>
+                        </div>
+                        <div className="inst-leg-cell">
+                          <div className="inst-leg-k">投信</div>
+                          <div className={`inst-leg-v ${pnlClass(d.trustTwd)}`}>
+                            {fmtBillionSigned(toBillion(d.trustTwd))}
+                          </div>
+                        </div>
+                        <div className="inst-leg-cell">
+                          <div className="inst-leg-k">自營商</div>
+                          <div className={`inst-leg-v ${pnlClass(d.dealerTwd)}`}>
+                            {fmtBillionSigned(toBillion(d.dealerTwd))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </aside>
+        )}
+      </div>
     </div>
   )
 }

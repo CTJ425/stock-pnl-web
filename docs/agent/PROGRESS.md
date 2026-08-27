@@ -1,9 +1,44 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Scribe
-- Action: 0.9.19 release and deployment recorded (當日大盤 panel in 總體經濟 > 台股); DEV+PROD deployed and verified
+- Action: 0.9.21 release recorded (當日大盤面板完善：重新整理按鈕、日期徽章、法人側欄、六項缺陷修復)
 - Status: **✅ RECORDED**
-- Timestamp: 2026-08-26 17:05:00 Asia/Taipei
+- Timestamp: 2026-08-27 11:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-08-27 11:20:00 Asia/Taipei (0.9.21 Release: 當日大盤面板完善; Bookkeeping Only)
+
+- **Release**: Version 0.9.21 — follow-up to 0.9.20 當日大盤 panel.
+- **Features Added**:
+  1. Panel's own refresh control (`重新整理` button) with request-id staleness guard.
+  2. Dated badge reading session date from last intraday point (not first), falls back to `當日` with `null` sessionDate when no data.
+  3. 三大法人 aside fed from parent's `market.json`; refresh button syncs both intraday series and parent data via new `onRefresh` prop.
+  4. Chart layout reserves aside column only when data exists (`.has-aside` modifier), eliminating 300px blank strip.
+
+- **Defects Fixed** (from review round 1):
+  1. Missing `.catch` on fetch left `loading` stuck true forever; button now disabled, icon spinning permanently on failure. Added catch handler; deliberately does NOT clear series, preserves last good numbers on screen.
+  2. 自營商 half-sum bug: only count when BOTH legs present, display `—` when incomplete (standing rule: "'—' for a value the day has not produced yet").
+  3. Intraday points list in ascending order (oldest to newest); date badge now reads last point instead of first (five-day range showed five-day-old date). No points → `當日` text, `sessionDate: null`.
+  4. Chart unnecessarily reserves 300px aside space even when no institutional data; now conditional on actual aside render.
+  5. Lower button now has distinct accessible name (`aria-label="重新整理台股市場歷史資料"`) so screen reader can tell the two refresh controls apart.
+  6. Inline padding on panel root removed (duplicate); CSS class rule supplies it; TwMarketSection chart block re-indented (whitespace-only); section heading: 台股市場歷史走勢與成交量.
+
+- **Test & Quality**:
+  - Full Vitest suite: **85 test files / 1330 tests passed** (100% PASS), exit 0.
+  - Linter: `npm run lint` 12 warnings (identical set, no new).
+  - Typecheck: `npm run typecheck:edge` exit 0.
+  - Build: `npm run build` exit 0.
+  - Reviewer: FAIL round 1 (blocker: missing `.catch`; risk: half-sum 自營商), sent back to builder. PASS round 2 (only finding: tighten new failure test to compare stat value rather than cell presence; already fixed).
+
+- **Files Changed**:
+  - Production: `TwIndexToday.tsx`, `TwMarketSection.tsx`, `index.css`
+  - Tests: `TwIndexToday.test.tsx`, `TwMarketSection.test.tsx`
+  - Bookkeeping: `version.ts`, `README.md`, `CHANGELOG.md`, `PROGRESS.md`
+
+- **Edge Deploy**: Not required — pure frontend change, data contract unchanged.
+
+- **Status**: Bookkeeping only; no git commit, push, or merge performed.
 
 ---
 
@@ -35,20 +70,4 @@
 - **Commits**: `7dae025` (feature, 0.9.19-dev.1) and `329fb95` (chore(release): 0.9.19). Branches: `dev`, `main`, `origin/dev`, `origin/main` all at `329fb95`.
 
 ---
-
-## 📅 Log: 2026-08-26 14:35:00 Asia/Taipei (DEV+PROD Verification Scan; PROD Cron Cleanup; DEV backup-transactions Redeploy)
-
-- **Verification Scope**:
-  1. **PROD Edge Functions**: All three current, deploy timestamps later than last source commit. `backup-transactions` v3 (sha 32d4facac1f755db, deployed 2026-08-25 10:56:36), `stock-report` v60 (sha ad41843daa7bf5f3, deployed 2026-08-25 11:59:46), `stock-price` v20 (sha bac85eb3edcf1fc7, deployed 2026-08-25 17:52:35).
-  2. **DEV Edge volume**: `stock-price` and `stock-report` byte-identical to repo; `backup-transactions` stale (dated 2026-08-24 16:53, missing describeError and backupAccountWithRetry).
-  3. **BUG-036 (PostgREST 401) status**: Fully closed on PROD. Affected account recovered 2026-08-25 10:57 after manual re-run post-deploy. Both accounts healthy as of 2026-08-26 02:00.
-  4. **0.9.15 borrow retune proof**: PROD 20260824 (31 ticks / 13 hits / 0 landed) → 20260825 (19 ticks / 3 hits / 3 landed); DEV shows identical transition.
-  5. **0.9.14 MOPS probe fix proof**: PROD 20260824 (1 tick, retired on first landing) → 20260825 (6 ticks spanning 12:00-21:05, all six slots); DEV identical.
-  6. **PROD DDL**: All 14 public tables present and identical to DEV set.
-  7. **0.9.18 live**: GitHub Pages Actions runs 32836339050/32836339007 succeeded; served bundle reports 0.9.18, click-to-analyze feature present.
-  8. **Probe landing windows**: mops_profit 12:00; bfi82u 15:05-19:40; t86 16:05-16:45; twt38u 17:00-17:10; bwibbu 17:05-17:35; margin 20:45-21:00; borrow 22:15-23:30. Measured 2026-08-18..2026-08-26 (data Task 85 was waiting for).
-- **Changes Made**:
-  1. **PROD cron cleanup (user-authorised)**: `cron.unschedule(11)` "stock-report-nightly" and `cron.unschedule(15)` "market-daily". Both returned true. PROD cron now 6 jobs, matching DEV's 6. Verified by re-query with batch_run_log identity field (565).
-  2. **DEV Edge backup-transactions redeployed**: Copied `index.ts` and `backupPlan.ts` into `volumes/functions/backup-transactions/` with `/bin/cp -f`, then `docker compose up -d --force-recreate functions`. Container healthy in ~9s. Boot verified by POST with wrong `x-cron-secret`: HTTP 401 Unauthorized, no compile errors.
-- **Files Modified**: Only `docs/agent/` bookkeeping files (PROGRESS.md, TASK.md, BUG_FIX.md, archives).
 
