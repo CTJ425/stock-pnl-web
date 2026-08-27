@@ -139,6 +139,18 @@ describe('TwIndexToday', () => {
     )
   })
 
+  it('點擊重新整理按鈕會重新觸發 fetchIntraday', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    show()
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-open')).toBeTruthy())
+    const initialCalls = fetchIntraday.mock.calls.length
+
+    const refreshBtn = screen.getByRole('button', { name: /重新整理/ })
+    await userEvent.click(refreshBtn)
+
+    await waitFor(() => expect(fetchIntraday.mock.calls.length).toBe(initialCalls + 1))
+  })
 })
 
 /**
@@ -234,5 +246,158 @@ describe('TwIndexToday — 版面與收盤統計整併', () => {
     expect(screen.getByTestId('tw-index-open')).toBeTruthy()
     expect(container.querySelectorAll('.kpi-value')).toHaveLength(0)
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
+  })
+
+  it('加權指數標題旁 badge 標明實際交易日期與當日字樣', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    render(<TwIndexToday closeStats={closeStats()} />)
+
+    // T0 = 1787702400 is 2026-08-26 in Asia/Taipei
+    await waitFor(() => {
+      expect(screen.getByText('2026-08-26 當日')).toBeTruthy()
+    })
+  })
+
+  it('走勢圖旁三大法人近 2 交易日買賣超動向正確渲染', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    const recentInstDays = [
+      {
+        date: '2026-08-26',
+        totalTwd: 59_387_214_887,
+        foreignTwd: 36_598_312_109,
+        trustTwd: 4_855_180_879,
+        dealerTwd: 17_933_721_899,
+      },
+      {
+        date: '2026-08-25',
+        totalTwd: -5_340_000_000,
+        foreignTwd: -790_000_000,
+        trustTwd: -4_610_000_000,
+        dealerTwd: 60_000_000,
+      },
+    ]
+
+    const { container } = render(
+      <TwIndexToday closeStats={closeStats()} recentInstDays={recentInstDays} />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('三大法人買賣超動向')).toBeTruthy()
+    })
+
+    const cards = container.querySelectorAll('.inst-day-card')
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0] as HTMLElement).getByText('08/26')).toBeTruthy()
+    expect(within(cards[0] as HTMLElement).getByText('最新')).toBeTruthy()
+    expect(within(cards[0] as HTMLElement).getByText('+593.9 億')).toBeTruthy()
+    expect(within(cards[0] as HTMLElement).getByText('+366.0 億')).toBeTruthy()
+
+    expect(within(cards[1] as HTMLElement).getByText('08/25')).toBeTruthy()
+    expect(within(cards[1] as HTMLElement).getByText('前日')).toBeTruthy()
+    expect(within(cards[1] as HTMLElement).getByText('-53.4 億')).toBeTruthy()
+  })
+
+  /**
+   * The badge names the session the chart is showing. `points` is ascending, so in the
+   * 五日 range `points[0]` is the OLDEST day — reading the date from there made the badge
+   * claim a session five days stale.
+   */
+  it('badge 取序列最後一點的日期，跨日序列不會顯示最舊那天', async () => {
+    fetchIntraday.mockResolvedValue(
+      series({
+        range: '5d',
+        points: [
+          { t: T0 - 86_400 * 2, c: 44_800, v: 0 },
+          { t: T0, c: 45_832.62, v: 0 },
+        ],
+      }),
+    )
+    render(<TwIndexToday closeStats={closeStats()} />)
+
+    await waitFor(() => expect(screen.getByText('2026-08-26 當日')).toBeTruthy())
+    expect(screen.queryByText('2026-08-24 當日')).toBeNull()
+  })
+
+  it('序列沒有任何點時 badge 只寫「當日」，不宣告一個交易日', async () => {
+    fetchIntraday.mockResolvedValue(series({ points: [] }))
+    const { container } = render(<TwIndexToday closeStats={closeStats()} />)
+
+    await waitFor(() => expect(container.querySelector('.badge')).toBeTruthy())
+    expect(container.querySelector('.badge')?.textContent).toBe('當日')
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2} 當日/)
+  })
+
+  /**
+   * The panel shows the 三大法人 aside, whose data comes from the parent's market.json.
+   * Its own 重新整理 must refresh both, or the aside silently stays stale.
+   */
+  it('面板的重新整理同時重抓盤中序列與父層的市場資料', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    const onRefresh = vi.fn()
+    render(<TwIndexToday closeStats={closeStats()} onRefresh={onRefresh} />)
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-open')).toBeTruthy())
+    const initialCalls = fetchIntraday.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: /重新整理/ }))
+
+    await waitFor(() => expect(fetchIntraday.mock.calls.length).toBe(initialCalls + 1))
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  /** Without the aside the grid must not reserve its 300px column. */
+  it('沒有三大法人側欄時圖表區不保留側欄的欄位', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    const { container } = render(<TwIndexToday closeStats={closeStats()} />)
+
+    await waitFor(() => expect(container.querySelector('.tw-index-chart-layout')).toBeTruthy())
+    expect(container.querySelector('.tw-index-inst-aside')).toBeNull()
+    expect(container.querySelector('.tw-index-chart-layout')?.classList.contains('has-aside')).toBe(
+      false,
+    )
+  })
+
+  it('有三大法人側欄時圖表區標記 has-aside', async () => {
+    fetchIntraday.mockResolvedValue(series())
+    const { container } = render(
+      <TwIndexToday
+        closeStats={closeStats()}
+        recentInstDays={[
+          {
+            date: '2026-08-26',
+            totalTwd: 59_387_214_887,
+            foreignTwd: 36_598_312_109,
+            trustTwd: 4_855_180_879,
+            dealerTwd: 17_933_721_899,
+          },
+        ]}
+      />,
+    )
+
+    await waitFor(() => expect(container.querySelector('.tw-index-inst-aside')).toBeTruthy())
+    expect(container.querySelector('.tw-index-chart-layout')?.classList.contains('has-aside')).toBe(
+      true,
+    )
+  })
+
+  /**
+   * Without a `.catch` subject to the same staleness guard, a rejected fetch never clears
+   * `loading` — the 重新整理 button stays disabled and the icon spins forever.
+   */
+  it('盤中請求失敗時解除 loading，重新整理鈕不會永久停用', async () => {
+    fetchIntraday.mockResolvedValueOnce(series())
+    render(<TwIndexToday closeStats={closeStats()} />)
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-open')).toBeTruthy())
+
+    fetchIntraday.mockRejectedValueOnce(new Error('network down'))
+    const btn = screen.getByRole('button', { name: /重新整理/ }) as HTMLButtonElement
+    await userEvent.click(btn)
+
+    await waitFor(() => expect(btn.disabled).toBe(false))
+    // A failed refresh must leave the last good series on screen, not blank the panel.
+    // Assert the VALUE, not the cell: `tw-index-open` renders unconditionally and shows '—'
+    // when `series` is null, so a presence check would pass even if .catch cleared the series.
+    expect(statNum('tw-index-open')).toBeCloseTo(45157.64, 2)
   })
 })

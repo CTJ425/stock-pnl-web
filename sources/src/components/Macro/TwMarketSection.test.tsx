@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -571,5 +571,58 @@ describe('TwMarketSection — 當日大盤 panel', () => {
 
     expect(container.querySelectorAll('.kpi-value').length).toBeGreaterThan(0)
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/)
+  })
+})
+
+/**
+ * 自營商 in the panel's aside is the sum of the self and hedge legs. `market/daily.json` can
+ * land one leg before the other, and this project's rule — stated in TwIndexToday.tsx — is
+ * "'—' for a value the day has not produced yet, never a guessed 0". Summing a single leg
+ * would print a confident wrong 自營商 number instead of admitting the gap.
+ */
+describe('TwMarketSection — 側欄自營商合計', () => {
+  // An earlier describe's afterEach resets the shared fetchIntraday mock, which drops the
+  // module-level mockResolvedValue and makes TwIndexToday's load() call .then() on undefined.
+  beforeEach(() => {
+    fetchIntraday.mockResolvedValue(null)
+  })
+
+  afterEach(() => {
+    cleanup()
+    fetchMarketDaily.mockReset()
+  })
+
+  const dealerCell = (c: HTMLElement) => {
+    const card = c.querySelector<HTMLElement>('.inst-day-card')!
+    const cells = [...card.querySelectorAll<HTMLElement>('.inst-leg-cell')]
+    const dealer = cells.find((el) => el.querySelector('.inst-leg-k')?.textContent === '自營商')!
+    return dealer.querySelector('.inst-leg-v')?.textContent
+  }
+
+  const withDealer = (self: number | null, hedge: number | null) => ({
+    asOf: '2026-08-04T08:30:00.000Z',
+    days: [
+      day('2026-08-04', 8e11, {
+        ...inst(1e10, 5e9),
+        dealerSelfTwd: self,
+        dealerHedgeTwd: hedge,
+      }),
+    ],
+  })
+
+  it('兩腳都落地時才相加', async () => {
+    fetchMarketDaily.mockResolvedValue(withDealer(-1e8, -2e8))
+    const { container } = render(<TwMarketSection />)
+
+    await waitFor(() => expect(container.querySelector('.inst-day-card')).toBeTruthy())
+    expect(dealerCell(container)).toBe('-3.0 億')
+  })
+
+  it('只有一腳落地時顯示「—」，不把缺的那腳當 0', async () => {
+    fetchMarketDaily.mockResolvedValue(withDealer(-1e8, null))
+    const { container } = render(<TwMarketSection />)
+
+    await waitFor(() => expect(container.querySelector('.inst-day-card')).toBeTruthy())
+    expect(dealerCell(container)).toBe('—')
   })
 })

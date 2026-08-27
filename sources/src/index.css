@@ -3000,7 +3000,7 @@ a.hmenu-item {
    .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
    value, .m-stats/.rpt-card for the six stat cells, IntradayChart's own range toggle for 一日/五日. */
 .tw-index-today {
-  margin-bottom: 22px;
+  padding: 18px 20px;
 }
 
 .tw-index-stats {
@@ -3044,11 +3044,74 @@ a.hmenu-item {
 
 .tw-index-close-stats .kpi {
   padding: 7px 11px;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--row-alt);
+}
+
+.tw-index-close-stats .kpi::before {
+  display: none;
+}
+
+.tw-index-close-stats .kpi-label {
+  font-size: 11px;
 }
 
 .tw-index-close-stats .kpi-value {
   font-size: 15px;
   margin-top: 0;
+}
+
+.tw-index-close-stats .kpi-sub {
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+/* Layout next to intraday chart in TwIndexToday */
+.tw-index-chart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.tw-index-chart-layout.has-aside {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.tw-index-chart-main {
+  min-width: 0;
+}
+
+.tw-index-chart-layout .chart-wrap {
+  max-width: none;
+}
+
+.tw-index-inst-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tw-index-inst-days {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .tw-index-chart-layout.has-aside {
+    grid-template-columns: 1fr;
+  }
+  .tw-index-inst-days {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .tw-index-inst-days {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rpt-notes {
