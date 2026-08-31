@@ -5,6 +5,30 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-31 09:36:46 Asia/Taipei (Task 130: DEV deploy and manual verification — ALL PASS)
+
+- **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
+- **Status**: ✅ **DEV VERIFICATION COMPLETE** — Manual testing completed on self-hosted DEV (`korq9tvdz0jd7yblr72p`). Merge to `main` and PROD Edge deploy pending explicit user authorization.
+- **DEV Edge Deploy Method**:
+  - Forced volume copy of `sources/supabase/functions/stock-report/*.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`
+  - Container restart: `docker restart stock-pnl-web-dev-functions-1`
+  - Landing verified: md5 match on `index.ts`, `report.ts`, `twChips.ts` between repo and volume; `grep -c maxUpstreamDays = 3` in deployed copy; container healthy, no module-load errors
+- **Manual DEV Verification — ALL 9 PASS**:
+  1. Bad ticker `!!bad` with `phase:'chips'` → HTTP 400 `ticker 格式不正確` (unauthenticated). Pre-validation, no data leak. ✅
+  2. Valid ticker, anon key only → HTTP 401 Unauthorized. Service-role key also 401 (no real user JWT). ✅
+  3. Authenticated user, ticker not in holdings/watchlist → HTTP 403 `僅限持有或已加入觀察清單的台股代號`. Tickers `1802/2609/2356/3037/2615/00981A` correctly excluded (net_qty=0). ✅
+  4. Buy-path ordering: `addTransactions()` awaited before `prefetchStockData()` — ownership gate runs on new position. ✅
+  5. End-to-end write: added `2454` to watchlist, `phase:'chips'` returned HTTP 200 `{daysWritten:7, daysFetchedUpstream:1, durationMs:1169}`. Seven files written for 20260820–20260828. ✅
+  6. Idempotence gate: second identical call returned HTTP 200 `{daysWritten:0, daysFetchedUpstream:0, skipped:'already-present', durationMs:17}`. ✅
+  7. Manifest untouched: `manifest.json` `updated_at` stayed 2026-08-28 14:25:01Z (chips path does not write manifest). ✅
+  8. Content check: `20260828/2454.json` structurally identical to cron-generated `20260828/2330.json` — schema 3, real institutional numbers. ✅
+  9. RISK-003 confirmed: history grows 1,2,3,4,5,6 across six older dates; only newest file (20260828) has full 7-day history and no "回補中" note. Borrow present only on newest (loadBorrow has no date param). ✅
+- **RISK-003 Update**: Confirmed by observation on DEV. Marked in BUG_FIX.md as "confirmed, still accepted, still no user-visible impact".
+- **DEV State Restored**: Test watchlist row `2454` deleted, all seven test report files deleted via storage API. DEV data back to pre-test state.
+- **Pending**: Merge to `main` and PROD Edge deploy (explicit user authorization required). Spec: `docs/agent/specs/130-new-symbol-chip-warm.md`
+
+---
+
 ## 📅 Log: 2026-08-30 23:15:34 Asia/Taipei (Task 130: Auto chip warm for newly added symbol — Code complete)
 
 - **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
@@ -66,7 +90,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
   1. **DEV Edge** (`stock-price`): Volume copy with `/bin/cp -f` into `volumes/functions/stock-price/`, then `docker compose up -d --force-recreate functions`; healthy in ~9s. `diff -rq` all files identical.
   2. **PROD Edge** (`stock-price`): `supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`, no `--no-verify-jwt`. Version 20 → 21, ezbr_sha256 changed from `bac85eb3edcf1fc7` to `a1a7920dddf42417` (proof new code landed).
   3. **Live Behaviour Verified**: `^TWII` returns dayOpen/dayHigh/dayLow from OHLC arrays. Stock path `2330.TW` unchanged (271 points, prevClose=2400, interval=1m, point keys t/c/v).
-  4. **GitHub Pages**: Deploy run 32948412913 succeeded; served bundle reports 0.9.19.
+  4. **前端部署**: Deploy run 32948412913 succeeded; served bundle reports 0.9.19.
 
 - **Files Changed**: 17 total (+666/−48) — `sources/supabase/functions/stock-price/intradayParse.ts`, `sources/supabase/functions/stock-price/index.ts`, `sources/src/services/intradayProxy.ts`, `sources/src/components/StockDetail/IntradayChart.tsx`, `sources/src/components/Macro/TwIndexToday.tsx` (new), `sources/src/components/Macro/TwMarketSection.tsx`, `sources/src/index.css`, plus four test files and version/README/CHANGELOG set.
 
@@ -83,7 +107,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
   4. **0.9.15 borrow retune proof**: PROD 20260824 (31 ticks / 13 hits / 0 landed) → 20260825 (19 ticks / 3 hits / 3 landed); DEV shows identical transition.
   5. **0.9.14 MOPS probe fix proof**: PROD 20260824 (1 tick, retired on first landing) → 20260825 (6 ticks spanning 12:00-21:05, all six slots); DEV identical.
   6. **PROD DDL**: All 14 public tables present and identical to DEV set.
-  7. **0.9.18 live**: GitHub Pages Actions runs 32836339050/32836339007 succeeded; served bundle reports 0.9.18, click-to-analyze feature present.
+  7. **0.9.18 live**: 前端部署 Actions runs 32836339050/32836339007 succeeded; served bundle reports 0.9.18, click-to-analyze feature present.
   8. **Probe landing windows**: mops_profit 12:00; bfi82u 15:05-19:40; t86 16:05-16:45; twt38u 17:00-17:10; bwibbu 17:05-17:35; margin 20:45-21:00; borrow 22:15-23:30. Measured 2026-08-18..2026-08-26 (data Task 85 was waiting for).
 - **Changes Made**:
   1. **PROD cron cleanup (user-authorised)**: `cron.unschedule(11)` "stock-report-nightly" and `cron.unschedule(15)` "market-daily". Both returned true. PROD cron now 6 jobs, matching DEV's 6. Verified by re-query with batch_run_log identity field (565).
@@ -133,7 +157,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Deployment Status**:
   - DEV Edge Function (`stock-price`): Volume copied and container restarted.
   - PROD Edge Function (`stock-price`): Deployed via Supabase CLI (active, version 20, SHA `bac85eb3edcf...`).
-  - Remote Branches: Pushed `dev` and `main` to `origin` (triggered GitHub Pages deploy).
+  - Remote Branches: Pushed `dev` and `main` to `origin` (triggered front-end deployment).
 - **Files Modified**:
   - `sources/src/components/StockDetail/QuoteTab.tsx` & `QuoteTab.test.tsx`
   - `sources/src/components/StockDetail/StockDetailPage.tsx` & `StockDetailPage.test.tsx`
@@ -197,7 +221,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ## 📅 Log: 2026-08-24 20:13:32 CST (0.9.12 shipped to dev and main; backup restore feature released)
 
-- **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Pages deploy succeeded.
+- **Release 0.9.12**: Shipped to both `dev` and `main` branches (identical at commit a4306e7). GitHub Release 0.9.12 published, body force-synced after PROD deploy to state real deployment status. Front-end deploy succeeded.
 - **Feature: backup restore** answers the gap the user found — downloaded JSON had no consumer. Restore is additive-only, never deletes or overwrites; first click only previews.
 - **Design decision**: Account a backup may write into is taken from validated object path, never from the document itself — checking document against itself would be circular.
 - **Three-table writes**: Workspaces → transactions → user_settings. No transaction across tables; half-finished restore names what already landed and is safe to re-run. Recorded as accepted trade-off, not defect.
@@ -211,7 +235,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ## 📅 Log: 2026-08-24 17:35:44 CST (0.9.11 shipped to dev and main; backup-transactions phase 2 complete; PROD deploy open)
 
-- **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, GitHub Pages deploy succeeded.
+- **Release 0.9.11**: Shipped to both `dev` (commit 8003b6a) and `main` (fast-forward, identical). GitHub Release 0.9.11 published, front-end deployment succeeded.
 - **Task 130 phase 2 completion**: Admin console sixth panel 備份 (restore/download UI). Frontend service `adminBackups.ts`, backend pure logic `stock-report/backupAdmin.ts`, two new `stock-report` actions `admin-backups` (list backup status per account) and `admin-backup-url` (return signed download URL), both protected by existing `assertAdmin`. Individual users cannot download their own backups (admin-only access per user decision).
 - **Decision reversal recorded**: Original Task 130 spec proposed a new Edge Function for admin operations. Implementation instead added actions to existing `stock-report` because: (1) all admin calls already route through it, (2) a second function would add a PROD deploy target whose `verify_jwt` setting could drift. Decision and rationale recorded in `docs/agent/specs/backup-admin-console.md` to prevent re-implementation of rejected design in future.
 - **Signed URL defect found and fixed**: `createSignedUrl` returned root-relative URLs (`/storage/v1/...`). Browser client (built from container-internal `SUPABASE_URL`) interpreted these as `http://kong:8000/...` on self-hosted DEV. Made URLs absolute. Unit tests could not catch this; DEV live verification did (valid signed link downloaded real 20510-byte backup; tampered signature returned 400).
@@ -219,7 +243,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Verification**: `npm test` 81 files / 1204 tests exit 0; `tsc --noEmit` exit 0; `tsc --noEmit -p tsconfig.edge.json` exit 0; `npm run build` exit 0; `oxlint` 5 pre-existing warnings, no new ones. DEV live checks: anon and non-admin rejected 401; five malformed paths returned 400; valid signed link downloaded real 20510-byte backup; tampered signature returned 400.
 - **Review outcomes**: Phase 2 implementation PASS with one RISK (undefined CSS class `adm-toggle-row`, fixed by using existing `link-btn` class). RISK-001 + signed-URL review returned FAIL on scope technicality: flagged two test files as outside builders' Files list. Main session wrote those tests before dispatch (documented Lane 2 flow); builders did not touch them. Adjudicated PASS on substance; no correctness defect found.
 - **Pre-existing limitation (out of scope)**: Probe follow-up starting before 45s `PROBE_FOLLOW_UP_BUDGET_MS` deadline has no cap on its own execution time. Recorded in PROGRESS for next agent.
-- **PROD deployment**: GitHub Pages (main branch) deployed. Cloud database and Edge Functions not deployed — see new Task 131 in TASK.md for PROD checklist. Until complete: PROD produces no backups, admin 備份 panel reads empty.
+- **PROD deployment**: Frontend deployed. Cloud database and Edge Functions not deployed — see new Task 131 in TASK.md for PROD checklist. Until complete: PROD produces no backups, admin 備份 panel reads empty.
 - **Records finalized**: Task 130 moved to TASK_ARCHIVE.md marked done (0.9.11). New Task 131 added to TASK.md (PROD deploy, OPEN). RISK-001 moved to FIXED_BUG.md. This 0.9.11 entry added to PROGRESS.md.
 - **Unfinished**: None — 0.9.11 recording complete. PROD deployment awaits explicit user authorization.
 
@@ -300,7 +324,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Design docs added**: `docs/architecture/watchlist_dashboard_redesign.md` (+ .html) and `docs/architecture/watchlist_6_design_variants.md` (+ .html). Three richer card variants (Sparkline 7-day trend, Chips & PE institutional flows, Range Bar intraday high/low) documented as prepared design work for later versions — deferred by scope, not by defect.
 - **Dead code cleanup**: `WatchTab.tsx` and `WatchTab.test.tsx` deleted (no production import remaining, only test file referenced it). Comment in `AnalysisPage.tsx:35` updated (`WatchTab` → `WatchSection`). No CSS impact (only used shared generic classes).
 - **Verification**: `npx vitest run` — 77 files / 1145 tests, exit 0, no Errors line. `npx tsc --noEmit` — exit 0. `npm run typecheck:edge` — exit 0. `npm run build` — exit 0. `npx oxlint` — exit 0, 5 pre-existing warnings.
-- **Deployment**: No `sources/supabase/functions/` file changed — **no Edge Function deploy needed**. Frontend only; `main` push deploys Pages.
+- **Deployment**: No `sources/supabase/functions/` file changed — **no Edge Function deploy needed**. Frontend only.
 - **Records finalized**: CHANGELOG.md gained 0.9.9 entry (Traditional Chinese, house style). TASK.md header updated to 0.9.9 / 1145 tests; Task 116 moved to TASK_ARCHIVE.md; new OPEN entry for deferred card variants. PROGRESS.md header updated; this entry added; oldest entry (0.9.7, 2026-08-20 20:45:00) rolled to PROGRESS_ARCHIVE.md.
 - **Unfinished**: None — 0.9.9 recording complete. All tracking docs synchronized. No commit made per Scribe role (bookkeeping only).
 
@@ -318,7 +342,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Reviews completed**: P1 (Edge fetch): reviewer PASS, blast radius traced caller-by-caller. P3 (money maths): reviewer PASS with 2 RISKs. RISK A (timeline.ts mixed state, 4 sites literal) accepted and FIXED immediately. RISK B (`pnlEngine.ts` `cmp` ≡ `localeCompare` while all `created_at` use consistent ISO) adjudicated non-regression, no live bug.
 - **Files changed**: `sources/src/components/StockDetail/{StockDetailPage.tsx,AiTab.tsx,useDailySeries.ts,AnalysisPage.whatif.test.tsx}`, `sources/src/components/Admin/timeline.ts`, `sources/src/context/WorkspaceContext.tsx`, `sources/src/utils/{pnlEngine.ts,fees.ts}`, `sources/src/services/{priceProxy,stockSearch,fxQuoteProxy,twMarketData,adminStatus,adminUsers,warmStock,reportProxy,adminRun}.ts` + 3 test relaxations, `sources/supabase/functions/stock-price/index.ts`, `sources/supabase/functions/stock-report/twChips.ts`. Added: `sources/src/services/invokeTimeout.test.ts`, `sources/src/components/StockDetail/effectErrorHandling.test.tsx`.
 - **Records finalized**: TASK.md gains two new OPEN entries (CI gate workflow, RISK-001 trigger mechanism). BUG_FIX.md RISK-001 updated with trigger mechanism. PROGRESS.md header updated; this entry added; 0.9.6 entry rolled to PROGRESS_ARCHIVE.md.
-- **Build breakage (found during ship checklist)**: `sources/src/services/invokeTimeout.test.ts` uses `node:fs` but `tsconfig.app.json` only includes `vite/client` types, breaking `tsc -b` and Pages deploy (vitest's esbuild skips type-check, hiding the error locally). Fixed by using Vite's `import.meta.glob` raw import instead — same test logic, zero config change.
+- **Build breakage (found during ship checklist)**: `sources/src/services/invokeTimeout.test.ts` uses `node:fs` but `tsconfig.app.json` only includes `vite/client` types, breaking `tsc -b` and the front-end deploy (vitest's esbuild skips type-check, hiding the error locally). Fixed by using Vite's `import.meta.glob` raw import instead — same test logic, zero config change.
 - **Unfinished**: None — audit and fixes complete; no commit made (bookkeeping only per instructions).
 
 ---
@@ -331,7 +355,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Expected one-time side effect, already documented in changelog**: On first deploy, `syncForeignTop` sees old raw-format fingerprint in `market/foreign_top50.json`, re-uploads once, then self-heals. `source_probe_tick` compares only within a day's window, unaffected from the next day onward.
 - **Files changed**: `twForeignTop.ts` (import + one-line fix), `twForeignTop.test.ts` (test refactored).
 - **Verification**: `npx vitest run supabase/functions/stock-report/` → 366 tests passed, 0 failed. `npm test` → 75 files, 1136 tests passed. `npx tsc --noEmit` clean. `npm run typecheck:edge` clean.
-- **Deployment status**: DEV Edge **deployed** 2026-08-20 20:45 Asia/Taipei by volume copy plus `docker compose up -d --force-recreate functions`. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from a clean `main` @ `9db87d3`, carrying 0.9.6 and 0.9.7 in one bundle. Evidence is the hash, not the version number: `ezbr_sha256` went `420050a1...` -> `f776a7a0...` (version 54 -> 55), and `verify_jwt` is still `false` so the pg_cron calls do not 401. `stock-price` untouched (v18, sha unchanged). A `main` push deploys Pages only and never an Edge Function — the two are separate actions.
+- **Deployment status**: DEV Edge **deployed** 2026-08-20 20:45 Asia/Taipei by volume copy plus `docker compose up -d --force-recreate functions`. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from a clean `main` @ `9db87d3`, carrying 0.9.6 and 0.9.7 in one bundle. Evidence is the hash, not the version number: `ezbr_sha256` went `420050a1...` -> `f776a7a0...` (version 54 -> 55), and `verify_jwt` is still `false` so the pg_cron calls do not 401. `stock-price` untouched (v18, sha unchanged). A `main` push never deploys an Edge Function — the two are separate actions.
 - **DEV end-to-end verification of the new retire gate (2026-08-20 20:45-21:00)**: `margin` landed on three consecutive rounds (20:45 / 20:50 / 20:55) with the identical fingerprint `174457:1s4vqtw`, and no `margin` row was written at 21:00 — the trailing run of 3 retired it. The same rows also prove BUG-033 fixed: the fingerprint is a real hash rather than the constant `0:45h`, and `rows` reports 1295 instead of null.
 - **Records finalized**: FIXED_BUG.md gained BUG-035 entry (prepended, newest-first). PROGRESS.md header updated; this entry added; oldest entry (2026-08-20 15:07:12) rolled to PROGRESS_ARCHIVE.md. All files match.
 - **Unfinished**: None — 0.9.7 recording complete.
@@ -346,7 +370,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 - **Files changed**: `twChips.ts` (new exported functions), `index.ts` (margin branch rewrite), `sourceProbePlan.ts` (new `trailingRun`), test files (365 tests passed).
 - **Version bump**: `sources/src/version.ts`, `sources/package.json`, `sources/package-lock.json`, `README.md` set to 0.9.6.
 - **Verification**: `npx vitest run supabase/functions/stock-report/` → 365 tests passed, 0 failed. `npm test` → 75 files, 1135 tests passed. `npx tsc --noEmit` clean. Reviewer (both changes): **PASS**, no findings.
-- **Deployment status**: DEV Edge **deployed** 2026-08-20 17:55 Asia/Taipei by volume copy into `volumes/functions/stock-report/` plus `docker compose up -d --force-recreate functions`; `diff -rq` clean. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei together with 0.9.7 in one bundle (`ezbr_sha256` `f776a7a0...`); see the 0.9.7 entry above. A `main` push deploys Pages only, never an Edge Function — the two are separate actions.
+- **Deployment status**: DEV Edge **deployed** 2026-08-20 17:55 Asia/Taipei by volume copy into `volumes/functions/stock-report/` plus `docker compose up -d --force-recreate functions`; `diff -rq` clean. PROD Edge **deployed** 2026-08-20 21:05 Asia/Taipei together with 0.9.7 in one bundle (`ezbr_sha256` `f776a7a0...`); see the 0.9.7 entry above. A `main` push never deploys an Edge Function — the two are separate actions.
 - **Records finalized**: CHANGELOG.md gained 0.9.6 entry (Traditional Chinese, house style). FIXED_BUG.md gained BUG-033 and BUG-034 entries with full resolution. PROGRESS_ARCHIVE.md gained oldest PROGRESS entry (14:59:05). PROGRESS.md header updated; this entry added; oldest entry moved to archive. All files match.
 - **Unfinished**: None — 0.9.6 recording complete.
 
@@ -354,7 +378,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ## 📅 Log: 2026-08-20 15:07:12 CST (0.9.5 official release — 損益試算成本基數精確度修正：舍入、費用、透明標籤)
 
-- **Release**: Version 0.9.5 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
+- **Release**: Version 0.9.5 shipped to `main` branch; front-end deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
 - **Scope**: Official release consolidating precision fixes for P&L simulator cost basis, confirmed via extended E2E verification (75 files / 1127 tests pass, E2E scripts cross-check).
 - **What shipped**: (1) 買進價 rounding precision: 104.225's binary trap fixed with `roundPrice()` helper using `Math.round((value + Number.EPSILON) * 100) / 100`, used by both seed and ladder pricing. (2) 買進費用 no longer recalculated from workspace config: `whatIf()` gains optional `buyFee` override, WhatIfTab supplies real fee, achieving exact parity with 庫存總覽 (−3,298 on reference position). (3) 帳單標籤 transparency: buy side shows 成交均價（未含費）& 實付手續費; sell side shows 現價; sources stated in hints.
 - **E2E coverage added**: Two new test artefacts closed gaps in prior dev.1 (75 files, 1127 tests vs 74/1125): (1) `sources/src/components/StockDetail/AnalysisPage.whatif.test.tsx` (jsdom) — real prop chain holding → StockDetailPage → WhatIfTab against reference position; (2) `sources/scripts/verify-whatif-e2e.cjs` (Playwright) — cross-checks sell price = quote case, credentials from env vars only.
@@ -406,7 +430,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ## 📅 Log: 2026-08-20 13:47:54 Asia/Taipei (0.9.4 official release — BUG-032 修正：買進費用重複計算)
 
-- **Release**: Version 0.9.4 shipped to `main` branch; GitHub Pages deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
+- **Release**: Version 0.9.4 shipped to `main` branch; front-end deployment automatically triggered by `main` push; official GitHub Release created by `.github/workflows/release.yml`.
 - **Scope**: Bug fix release. Single change: BUG-032 (Task 123) — held stock buy fee was counted twice in P&L simulator. Fix applied: held stock 買進價 now defaults to fee-exclusive `rawAvgCost` instead of fee-inclusive `avgCost`; fee counted exactly once in `whatIf()`.
 - **What shipped**: WhatIfTab, StockDetailPage, AnalysisPage, and related tests updated to use `rawAvgCost` prop. (1) `WhatIfTab.tsx` — 買進價 default changed to `rawAvgCost` (fee-exclusive `pos.rawCost / pos.qty`); used in `isHeld` check, ladder anchor, avgCost mark, and marks strip. Hint text: 「買進價預設為成交均價 <price>（未含手續費）」. (2) `StockDetailPage.tsx` — `StockDetailPageProps` gains `rawAvgCost?: number | null` (defaults null), forwarded to `WhatIfTab`. (3) `AnalysisPage.tsx` — passes `selected.row.holding.rawAvgCost`. (4) `WhatIfTab.test.tsx` — two new test cases verify fee counted once and hint text accuracy.
 - **What was not changed**: `pnlEngine.ts`, `fees.ts`, `whatIf()` signature/math, 庫存總覽, 年度報告, `estimateUnrealized`, `ReportHolding` / `reportProxy.ts`. Pure frontend fix, no schema, no Edge, no migration.
@@ -467,7 +491,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ## 📅 Log: 2026-08-20 10:31:21 Asia/Taipei (0.9.1 — 損益試算分頁重構：賣出階梯與三欄對帳單，觀察股票卡片風格)
 
-- **Release**: Version 0.9.1 on `main` branch (Pages publishes automatically on push).
+- **Release**: Version 0.9.1 on `main` branch (the front end publishes automatically on push).
 - **Scope**: Layout restructuring of the 損益試算 ledger. No schema changes, no Edge function changes, no migration required.
 - **What changed** (Task 118):
   1. **Ledger CSS grid rewrite** — `WhatIfTab.tsx` ledger renders as single CSS grid with three columns (項目 / 買進 · 假設 / 賣出 · 試算) and one shared row per line item (價格 / 股數 / 價金 / 費用 / 小計). Previously two side-by-side columns: left column's 股數 is input + 單位 select (~62px tall), right column's 股數 text-only (~26px). From 價金 downward the sides sat ~36px out of step. Grid layout ensures cells in same row are same height (Δtop = 0px, Δheight = 0px).
@@ -534,7 +558,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
   6. Verification script quality: regex `加入 1101` also matched `1101B 台泥乙特` (anchored); script didn't delete test ticker before starting, prior crash made next run fail for unrelated reason (delete at start now).
 - **Testing**: `npx vitest run` → 73 files, **1073 passed**, 0 failed. `npx tsc --noEmit` 0 errors; `npx tsc -p tsconfig.edge.json` 0 errors; `npx oxlint src supabase` 0 errors; `npm run build` ok. Browser E2E (`sources/scripts/verify-watchlist-e2e.cjs`, rewritten, **10/10** against DEV): 個股分析 → 觀察股票 tab → 加入對話框 (y≈59 in 800px viewport) → 加入 1101 → row shows `NT$24.05 -0.21%` → click row switches picker trigger to `1101 台泥` → 損益試算 defaults 賣出價 to 24.05 → raise to flip P&L to `+NT$4,649` → remove restores DEV data.
 - **Reviewer verdict**: route:reviewer **FAIL** then **PASS** after fixes. Two BLOCKERs (defects 3, 4) and one RISK (defect 5) found during round-trip review, all closed before final commit. **Process lesson**: E2E script waited fixed 1200ms after typing; on cold `getTwStockList()` cache, failed first run, passed second. Now waits for result element (up to 25s); random failure is worse than no verification.
-- **Unfinished**: PROD deploy — awaiting user go-ahead to merge to `main` and deploy Pages.
+- **Unfinished**: PROD deploy — awaiting user go-ahead to merge to `main`.
 - **Commit**: Ready (awaiting merge approval).
 
 ---
@@ -569,7 +593,7 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
      - Unauthenticated call: **401**, confirming `assertUser` still runs before whitelist check.
   4. **PROD schema migration** — Applied via Supabase Management API with explicit project ref `kxnxadaghidwumqsqneu`. Before: `tw_watchlist_max5`, cap 5, 0 rows. After: `tw_watchlist_max30`, cap 30, 0 rows. PROD identity confirmed: `batch_run_log = 441`.
   5. **PROD Edge deploy** — `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` from `sources/`. Version 53 → **54**; `ezbr_sha256` changed; `verify_jwt` remains **false** (unchanged, correct for after-hours cron). PROD unauthenticated call returned 401, confirming function is live.
-  6. **Merge to main** — Fast-forward `ab03d9d..cbbdba0`, pushed. Both `dev` and `main` now at `cbbdba0`; Pages deploys 0.8.0.
+  6. **Merge to main** — Fast-forward `ab03d9d..cbbdba0`, pushed. Both `dev` and `main` now at `cbbdba0`; Front-end deploys 0.8.0.
 - **What was NOT proven on PROD**: The watched-ticker allow path verified end-to-end on DEV (identical bundle), but not re-exercised on PROD because `tw_watchlist` is empty and requires a signed-in browser session. First real PROD exercise happens when a user adds a watched ticker.
 - **Correction**: ~~Watched ticker's chips remain empty until the nightly batch runs~~ **Chips appear immediately** — when the published batch file is missing, `reportProxy` falls back to the Edge `generate` action, which is now open to watched tickers (not just holdings). The browser console shows 400 on the missing file read; this is expected and handled, not a fault. Users do not need to wait for the nightly batch.
 - **Commit**: `cbbdba0` (0.8.0).
@@ -991,7 +1015,7 @@ Task is now complete. Analysis tool `.claude/hooks/dispatch_delta.py` (220 lines
 
 ## 📅 Log: 2026-08-12 20:08:20 Asia/Taipei (Release 0.7.14)
 
-Released 0.7.14 to `main`; GitHub Pages deployed successfully (Actions run `31594918544`). `dev` and `main` are both at `3f0eaea` — the merge was a fast-forward, so no separate branch-sync push was needed.
+Released 0.7.14 to `main`; front-end deployment completed successfully (Actions run `31594918544`). `dev` and `main` are both at `3f0eaea` — the merge was a fast-forward, so no separate branch-sync push was needed.
 
 Four commits: `551ed71` feat(ui) SVG brand mark · `23399da` fix(agents) scribe truncation · `c3744b0` docs(agent) records + cost correction · `3f0eaea` chore(release) 0.7.14.
 
@@ -1073,7 +1097,7 @@ Supersedes Tasks 92 and 93 — the PNG icon pipeline they built is now deleted.
 Replaced the placeholder emoji favicon in `sources/index.html` with a real 256×256 PNG app icon. Superseded later the same day by Task 94, which replaced the whole PNG pipeline with a hand-authored SVG.
 
 **Files changed:**
-- `sources/index.html` line 5 — inline `data:image/svg+xml` 📈 emoji link replaced with `<link rel="icon" type="image/png" href="./favicon.png" />`. The relative href is required by `base: './'` in `sources/vite.config.ts` for the GitHub Pages sub-path.
+- `sources/index.html` line 5 — inline `data:image/svg+xml` 📈 emoji link replaced with `<link rel="icon" type="image/png" href="./favicon.png" />`. The relative href is required by `base: './'` in `sources/vite.config.ts` for the deployment sub-path.
 - `sources/public/favicon.png` — new, 256×256 RGB, 68,573 bytes, generated from `docs/picture/Gemini_Generated_Image_mfrb2fmfrb2fmfrb.png` (2816×1536).
 
 **How the asset was made:** Pillow 11.3.0, installed into system python3.9 during the task — ImageMagick and sharp are not available on this machine. The crop was detected programmatically rather than hardcoded: bbox of pixels with any RGB channel < 220 was `(886, 248, 1929, 1323)`, squared around its centre with 2% padding to `(859, 237, 1956, 1334)`, then downscaled with `Image.LANCZOS`. Threshold 220 rather than 235 because the near-white background's noise floor sits at 236–249. The one-off generation script was left in the session scratchpad, not committed.
@@ -1277,7 +1301,7 @@ No `sources/` code changed. No version bump. No deploy. No GitHub Issue/Release 
 - Formal release commit: `33c1bd7` (`0.7.13`); `APP_VERSION`, README, `package.json`, and lockfile
   all contain the official version with no `-dev` suffix. `dev` and `main` are both pushed at this
   commit and the worktree is clean.
-- GitHub Pages deployment for `main` completed successfully in Actions run
+- front-end deployment for `main` completed successfully in Actions run
   `31562082598` (head `33c1bd7`).
 - PROD `stock-report` deployed with `--no-verify-jwt`: version 46, `verify_jwt=false`,
   `ezbr_sha256=000ea3b281868aa9bd9b7c0f0cb3187e5a15dfa3fcc416d8b2192daf1b878ded`.
@@ -1794,7 +1818,7 @@ true here, and the skill's existing note about `functions download` failing the 
 the whole platform path is unauthenticated now, not just download.) `supabase db query --linked` was
 additionally refused by the sandbox's permission classifier.
 
-So **PROD still runs the 0.7.4 Edge bundle (v41)** while `main` is at 0.7.9. Pages is current; Edge is
+So **PROD still runs the 0.7.4 Edge bundle (v41)** while `main` is at 0.7.9. The front end is current; Edge is
 five versions behind. To finish, the user runs, from `sources/`:
 
 ```bash
@@ -1899,7 +1923,7 @@ Verified live on DEV after volume-copy + `functions` container recreate:
 Verification: 960/960 vitest, tsc + oxlint clean.
 
 **PROD Edge not deployed** —— `stock-report` there still runs the 0.7.4 bundle (v41). A merge to `main`
-ships Pages only; the Edge half needs a separate, explicitly authorised deploy.
+ships the front end only; the Edge half needs a separate, explicitly authorised deploy.
 
 ---
 
@@ -2030,7 +2054,7 @@ Full detail and the two rewritten regression tests: `FIXED_BUG.md` BUG-025.
 - PROD `kxnxadaghidwumqsqneu`: `stock-price` **v17 → v18**, `verify_jwt=true` **preserved**
   (no `--no-verify-jwt` — this one is user-facing), sha `17fc299c81a8d91e…`, 05:39:31 UTC.
   Anon smoke → 401. `stock-report` untouched at v41.
-- Pages ships the frontend half on the `main` push.
+- The front end ships on the `main` push.
 
 ---
 
@@ -2093,7 +2117,7 @@ observation would have concluded "these three land before their window opens", w
   updated 2026-08-11 05:24:33 UTC.
   Anon smoke: `probe` **401**, `generate-chips` **401**, `unknown-xyz` **400** — gate intact.
   Token supplied in chat and used only in the deploy shell env; **user should rotate it**.
-- `main` and `dev` both at `ac3911b`; Pages ships the admin rework on the `main` push.
+- `main` and `dev` both at `ac3911b`; The front end ships the admin rework on the `main` push.
 - **Not verified from here**: PROD's own `cron.job` rows (no DB credentials in this shell). 0.7.3
   recorded them as set; confirm on the admin page that `source-probe` is the only active one.
 
@@ -2164,7 +2188,7 @@ observation would have concluded "these three land before their window opens", w
 - Verified `dev`: `npm test` 942 passed; `tsc --noEmit` clean; working tree clean (scratchpad untracked only)
 - Commits vs main: macro TW/US tabs + institutional table/spark (dev.1–3) + BUG-024 stock-report helpers + docs/skills
 - Version finalized **0.7.1**; CHANGELOG official entry; push `dev` → merge `main` → sync `main:dev`
-- **Not** deploying PROD Edge (needs explicit authorize); Pages ships frontend on main push
+- **Not** deploying PROD Edge (needs explicit authorize); the front end ships on main push
 
 ---
 
@@ -2322,7 +2346,7 @@ observation would have concluded "these three land before their window opens", w
 ### Open
 - Run frontend tests
 - Deploy Edge `stock-report --no-verify-jwt` only when authorized
-- Push / Pages when authorized
+- Push when authorized
 
 ---
 
@@ -2338,7 +2362,7 @@ observation would have concluded "these three land before their window opens", w
 - P1: history = one backfill round only
 
 ### Ship
-- Frontend **0.6.49** Pages success (`60cc525` after test-id fix)
+- Frontend **0.6.49** front-end deploy success (`60cc525` after test-id fix)
 - Prod Edge **stock-report v34** `verify_jwt=false` sha `e0168beb…` (was v33)
 - Smoke: `generate-chips|market-data|history` → 401 Unauthorized (route present)
 - DEV: volume-copy + functions recreate; generate-chips → 401
@@ -2359,7 +2383,7 @@ observation would have concluded "these three land before their window opens", w
   next target `-dev.1`; only release commit drops `-dev`
 
 ### Ship
-- Frontend-only **0.6.48** → main / Pages
+- Frontend-only **0.6.48** → main
 
 ---
 
@@ -2390,7 +2414,7 @@ observation would have concluded "these three land before their window opens", w
 ### Conclusion
 Prod Edge already carried the 0.6.46 TOP30 / progressive-warm / admin-run job list
 (v33 updated 2026-08-10 06:46 UTC). The opaque non-2xx on 「全部執行」 was the
-**frontend multi-job single request** issue fixed in 0.6.47 Pages, not missing Edge code.
+**frontend multi-job single request** issue fixed in 0.6.47 front end, not missing Edge code.
 
 ---
 
@@ -2409,7 +2433,7 @@ Prod Edge already carried the 0.6.46 TOP30 / progressive-warm / admin-run job li
 - Frontend-only; no Edge redeploy required for this fix
 
 ### Ship
-- Version **0.6.47**; commit on `dev` → merge `main` → push (Pages)
+- Version **0.6.47**; commit on `dev` → merge `main` → push
 
 ---
 
@@ -2631,7 +2655,7 @@ Prod Edge already carried the 0.6.46 TOP30 / progressive-warm / admin-run job li
 
 ### Git
 - Commit `13126fa` on `dev`: watchlist, early revenue, soft warm (0.6.44-dev.7)
-- `git push origin dev` — done (Pages will pick up frontend)
+- `git push origin dev` — done (the front end deploys on push)
 
 ### DEV `backfill-profit`
 - Multiple rounds with 180s pg_net timeout; HTTP 200, `filled` decreasing over rounds
@@ -2681,7 +2705,7 @@ Version **0.6.44-dev.7**.
 
 ### Not done
 - Prod DDL / Edge deploy (needs explicit go-ahead)
-- Frontend Pages still needs git push of 0.6.44-dev.6 UI for subtabs
+- The front end still needs git push of 0.6.44-dev.6 UI for subtabs
 
 ---
 
@@ -2853,7 +2877,7 @@ stale daily re-warm, schema DDL). This session finished the release surface and 
 
 1. Apply `warm_quota` + `take_warm_quota` DDL on test then prod.
 2. Deploy `stock-report` with `--no-verify-jwt` to test, smoke, then prod.
-3. Push / Pages verify / merge to main when (1)(2) are green.
+3. Push / front-end verify / merge to main when (1)(2) are green.
 
 ### Completed Tasks
 - [x] Tests green (893 across 57 files after +3 for 0.6.44 paths).
@@ -3018,7 +3042,7 @@ Neither had been observed in the wild; both were cheap enough that waiting for a
 ### The deploy trap, for the second time in two days
 
 `quoteWindow.ts` and `pollPlan.ts` are Edge Function code. **A git push does not ship them.** The frontend half of
-the retry bound is live with Pages; the server half and the fingerprint fix are not, and need
+the retry bound is live on the front end; the server half and the fingerprint fix are not, and need
 `supabase functions deploy` with the user's explicit go-ahead. Task 75 carries the commands, the current shas, and
 the one-off effect to expect on the `stock-report` side.
 
@@ -3267,7 +3291,7 @@ in sync in all three places, tests and build were green, so the gap was invisibl
 ### The deploy that was never done — now done
 
 0.6.37 fixes BUG-011 in `quoteWindow.ts`, a file that exists **twice** — once for the browser, once for the
-Edge Function. Pushing to `main` shipped the browser half through Pages, which made the bug look fixed.
+Edge Function. Pushing to `main` shipped the browser half through the front-end deploy, which made the bug look fixed.
 It was not: a read-only `functions list` at 20:51 showed prod `stock-price` **v14** and dev **v10** carrying
 the *same* `ezbr_sha256 00ce1004…`, the 0.6.36 build, while the 0.6.37 commit is timestamped 17:06 — after both
 deploys. Every device whose local cache expired was still getting a locked snapshot from the server.
@@ -3325,7 +3349,7 @@ it carries 1377 TWSE records and **6488 is absent** (TPEx), and its `TradeVolume
 
 ### Deploy order mattered
 
-Merging to `main` fires GitHub Pages immediately, but production Supabase was still
+Merging to `main` fires the front-end deploy immediately, but production Supabase was still
 on the old Edge Function with no new `price_cache` columns. Pushing first would have
 put the live site in a state where every quote-card cell reads "—".
 
@@ -3577,7 +3601,7 @@ with no translation risk at all.
 - **Action**: dev → main 快轉合併並部署正式區
 
 **正式區先前停在 0.6.30 的程式碼**，所以這次一口氣要補 0.6.31–0.6.34 的後端異動。
-順序刻意是「先後端、後推 main」—— push 到 `main` 會立刻觸發 Pages，
+順序刻意是「先後端、後推 main」—— push 到 `main` 會立刻觸發前端部署，
 前端上線時後端若還沒補，畫面會整排平盤色。
 
 | 項目 | 正式區處置 |
@@ -4550,7 +4574,7 @@ SELECT (SELECT (regexp_match(command, 'https://([a-z]+)\.supabase\.co'))[1] FROM
   `admin-users` / `admin-set-role` 回 401（被 `assertAdmin` 擋下），
   不存在的 action 回 400 `Unknown action` —— 兩者不同即證明新 action 已被辨識。
 - **正式區**：先把 0.6.19 定版併入 `main` 並 push（§13.2：正式區只在 `main` 上動；
-  Pages 部署 run 30880978398 success），才執行同一組操作 ——
+  前端部署 run 30880978398 success），才執行同一組操作 ——
   欄位已加（身分檢查回 `kxnxadaghidwumqsqneu`）、
   `functions deploy stock-report --no-verify-jwt` 完成、
   `functions download` 逐檔比對 **11 個檔全部與 `main` 相同**、端點探測結果與測試區一致。
@@ -4702,7 +4726,7 @@ BUG-008 那次 vintage 就同時改了兩期）→ 發布窗內且未取得就�
 
 ### ✅ 正式區部署與覆驗（2026-07-31 18:00）
 
-0.6.15 已 ff-merge 進 `main`、Pages 部署成功；兩區 Edge Function 皆已部署。
+0.6.15 已 ff-merge 進 `main`、前端部署成功；兩區 Edge Function 皆已部署。
 正式區連打三次：`unchanged`(2883ms) / `skipped`(403ms) / `skipped`(171ms)，
 與測試區行為一致。
 
@@ -4830,11 +4854,11 @@ CPI 月中、PPI 月中、PCE 月底），FRED 沒有發布日 API。畫面標�
 
 ### ✅ 正式區上線覆驗（2026-07-31 14:55）
 
-0.6.13 已在 `main`，GitHub Pages 部署成功（33 秒）。**本次無後端變更**
+0.6.13 已在 `main`，前端部署成功（33 秒）。**本次無後端變更**
 （`git diff 846ffaa..f0d9fa3 -- sources/supabase/` 為空），故未重新部署 Edge Function；
 仍以 `functions download` 確認正式區 10 檔與 `main` 一致。
 
-1. **線上 bundle 內容檢查**：抓 GitHub Pages 的 `index-*.js`，確認含
+1. **線上 bundle 內容檢查**：抓線上前端的 `index-*.js`，確認含
    `0.6.13` / `今日班次` / `美東發布` / `下次抓取` / `推估`，且
    **`個股新聞` 與 `新聞檔` 皆已不存在**。
 2. **以正式區資料實地渲染**：`.env.local` 暫時指向正式區 + 正式區 admin session，
@@ -4911,7 +4935,7 @@ CPI 月中、PPI 月中、PCE 月底），FRED 沒有發布日 API。畫面標�
 
 ### ✅ 正式區部署與覆驗（2026-07-31 13:55）
 
-0.6.12 已 ff-merge 進 `main` 並 push（GitHub Pages 部署成功，33 秒）。
+0.6.12 已 ff-merge 進 `main` 並 push（前端部署成功，33 秒）。
 
 1. **link 正式區時帶身分檢查**（`supabase-ops` skill 的對策）：
    查詢同時撈 `cron.job` 的目標 ref，確認為 `kxnxadaghidwumqsqneu`（自己）才繼續 ——
@@ -5056,7 +5080,7 @@ BEA 美東 8:30 發布 ＝ 夏令 12:30 UTC，FRED 匯入更晚，13:00 那班�
 
 ### ✅ 正式區線上覆驗（2026-07-31 12:41）
 
-0.6.11 已 ff-merge 進 `main` 並 push（GitHub Pages 部署成功，37 秒）。
+0.6.11 已 ff-merge 進 `main` 並 push（前端部署成功，37 秒）。
 `functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt` 後，
 `functions download` 逐檔比對 10 個 `.ts` 全部與 `main` 一致。
 
@@ -5417,7 +5441,7 @@ Playwright 跑過 1440px / 375px × 明暗兩主題 × 五個情境全部點過�
 
 ### 上線順序（刻意的）
 
-**先部署正式區後端，再 push `main`。** 反過來的話 Pages 一上線就會有使用者
+**先部署正式區後端，再 push `main`。** 反過來的話 前端一上線就會有使用者
 看到空的匯率頁 —— 前端已經在呼叫、後端還沒有資料。
 
 ### 正式區（`kxnxadaghidwumqsqneu`）
@@ -5440,7 +5464,7 @@ regex 匹配不到、`seen` 為 NULL。**那道防呆正確地拒絕在無法確
 修正跳脫為 `\.` 後才成功。這正是 §13.3 那條規則存在的價值 ——
 若當初只寫「先查一次再寫一次」，這種情況會直接寫進去。
 
-### GitHub Pages
+### 前端部署
 
 `git push origin main` → workflow `30427677872` **success（36 秒）**。
 線上 bundle 覆驗：版本字串 `0.6.7`、含「外幣匯率」分頁、含
@@ -5498,7 +5522,7 @@ CLI 原本 `linked` 在**正式區**（`supabase projects list` 顯示 `kxnxadag
 ### 重整到底部導覽列之上（rebase，2026-07-29 10:40）
 
 推 `dev` 時才發現遠端已經有另一批 0.6.6 工作（Task 33 手機底部導覽列），
-而且**已經定版並 push 到 `main`**（GitHub Pages 已上線）。兩件事撞在一起：
+而且**已經定版並 push 到 `main`**（前端已上線）。兩件事撞在一起：
 
 1. **版號撞號**：雙方都用了 0.6.6-dev.1。0.6.6 已被 Task 33 定版佔用，
    本功能改為 **0.6.7-dev.1**。
@@ -5525,7 +5549,7 @@ rebase 後重跑：553 tests 全綠、`npm run build` 綠、lint 無新增警告
 
 ### 下一步
 
-正式區與 `main` 尚未動，等使用者決定是否上線（push `main` 會立刻觸發 GitHub Pages）。
+正式區與 `main` 尚未動，等使用者決定是否上線（push `main` 會立刻觸發前端部署）。
 
 ---
 
@@ -5660,7 +5684,7 @@ containing block**。頁首裡的 `<nav>` 就算設 `position: fixed; bottom: 0`
 
 ### 🚧 Next Steps
 
-1. **`git push origin main`** —— 會觸發 `deploy.yml`，GitHub Pages 立即上線（尚未執行）。
+1. **`git push origin main`** —— 會觸發 `deploy.yml`，前端立即上線（尚未執行）。
    一併 `git push origin dev` 讓遠端兩分支同步。
 2. 上線後**用真手機看安全區**（桌機瀏覽器的 `env(safe-area-inset-bottom)` 恆為 0，
    iPhone 的 home indicator 那條只有實機看得到）。
@@ -5709,7 +5733,7 @@ containing block**。頁首裡的 `<nav>` 就算設 `position: fixed; bottom: 0`
 
 **程式碼稽核**：`functions download` 逐檔比對，正式區線上 **9/9 檔與 `main` 一致**。
 
-**GitHub Pages**：run 30347350372 **success**（40s）。
+**前端部署**：run 30347350372 **success**（40s）。
 
 ### 仍未做
 
@@ -6053,7 +6077,7 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS revenue_backfilled INT;
 - `functions download` 逐檔比對：正式區線上 **8/8 檔與 `main` 位元組一致**。
 - 正式區兩個 cron job：ref = `kxnxadaghidwumqsqneu`（自己）、密鑰長度 48、
   schedule `*/15 8-15 * * 1-5`、active —— **未受本次異動影響**。
-- GitHub Pages：`Deploy React App to GitHub Pages` run 30325714234 **success**（40s）。
+- 前端部署：workflow run 30325714234 **success**（40s）。
 - `main` 與 `dev` 同為 `770e574`，兩分支一致（§13.1）。
 
 ---
@@ -6774,7 +6798,7 @@ Function 呼叫 **704 次/月**，免費額度 500,000，佔 0.14%。
   **不看版本號推論**（§13.3）。正式區比 `main`、測試區比 `dev`（本次兩者同 commit）。
 - 資料表存在性：用**公開 anon key** 打 REST。缺表回 `PGRST205 / 404`，
   有表但被 RLS 擋回 `200 []` —— 兩者可區分，足以判斷 schema 有沒有套。
-  正式區的 anon key 直接取自 GitHub Pages 的 bundle（本來就是公開資訊）。
+  正式區的 anon key 直接取自 前端 bundle（本來就是公開資訊）。
 - 產出檔：公開 bucket 逐個 HTTP 探測 `20260724/<t>.json`、`daily|fundamental|news/<t>.json`。
   （`object/list` 需要 policy，anon 一律回 `[]`，不能拿來判斷「沒有檔案」。）
 
@@ -7311,7 +7335,7 @@ UI 在顯示時會乘 100（`TechnicalTab.tsx:240`），但 agy 把原始值直�
 
 ### 稽核結果（公開 URL 探測，未異動任何環境）
 
-`git push origin main` 已完成 —— `origin/main` = `origin/dev` = `dbf662d`（0.5.0），前端已上 Pages。
+`git push origin main` 已完成 —— `origin/main` = `origin/dev` = `dbf662d`（0.5.0），前端已上線。
 
 | | `manifest.json` | 20260724 報告 | `daily/*.json` |
 | ---- | ---- | ---- | ---- |
@@ -7402,7 +7426,7 @@ end $$;
 
 ### 待辦（下一個 Agent 接手）
 
-- [ ] `git push origin main` 尚未執行。**推上去會觸發 GitHub Pages 自動部署**
+- [ ] `git push origin main` 尚未執行。**推上去會觸發前端自動部署**
       （`deploy.yml` 的 trigger 是 `push: branches: [main]`），前端 K 線 UI 即上線。
       後端已就緒，可以直接推。
 
@@ -7498,7 +7522,7 @@ end $$;
 - `manifest.json` 停在 `20260724` 是**正確的**：7/24 是週五，7/25、7/26 為週末，
   排程 `1-5` 本就不跑。查到日期落後時先確認星期，別誤判為故障。
 - 0.4.1 只改前端（`reportProxy.ts`），**不含任何 Edge Function 異動**，
-  故該版無需部署後端，走 GitHub Pages 即可。
+  故該版無需部署後端，走前端部署即可。
 - 使用者的 `supabase link` 執行在 `/home/ivan/`（家目錄）而非 `sources/`，
   link 狀態落在 `/home/ivan/supabase/.temp/`。因此 `supabase db query --linked`
   必須在 `/home/ivan/` 下執行；其餘指令改帶 `--project-ref` 明確指定，較不易出錯。
@@ -7738,7 +7762,7 @@ Storage-first 全數判為未命中、即點即產也被擋，整個分頁不可
 
 ### 1. `generate` 端點的濫用防護
 **問題**（實測確認）：函數以 `--no-verify-jwt` 部署（夜間 cron 只帶 `x-cron-secret`），
-不帶任何 key 也回 200；而專案網址就在 GitHub Pages 的公開 bundle 裡
+不帶任何 key 也回 200；而專案網址就在 公開前端 bundle 裡
 （實測線上站台的 `assets/index-*.js` 含 `https://kxnxadaghidwumqsqneu.supabase.co`，repo 為 PUBLIC）。
 
 **這不是資料安全問題**，而是額度問題：
@@ -7799,7 +7823,7 @@ Storage-first 全數判為未命中、即點即產也被擋，整個分頁不可
 - **Agent**: Claude
 - **Action**: 修正夜間排程的 pg_net 逾時 (0.3.8-dev.2)
 - **Status**: COMPLETED
-- **起因**: 使用者要求分析「免費 Supabase + GitHub Pages 的隱藏問題」，盤點時實測發現此問題
+- **起因**: 使用者要求分析「免費 Supabase + 靜態託管的隱藏問題」，盤點時實測發現此問題
 
 ### 問題
 `schema.sql` §6c 的 `net.http_post` 沒指定 `timeout_milliseconds`，而 pg_net 的**預設值是 5000ms**
@@ -7827,14 +7851,14 @@ Storage-first 全數判為未命中、即點即產也被擋，整個分頁不可
 
 ### 同時盤點到、但**未**在本輪處理的免費方案議題
 - **`stock-report` 的 `generate` 是完全公開端點**：實測不帶任何 key 也回 200
-  （函數以 `--no-verify-jwt` 部署，且專案 URL 就在 GitHub Pages 的公開 bundle 裡）。
+  （函數以 `--no-verify-jwt` 部署，且專案 URL 就在 公開前端 bundle 裡）。
   `generate-all` 有 `CRON_SECRET` 保護，只有 `generate` 是開的。
 - **可觀測性**：dev.1 移除服務狀態後，排程失敗不會有任何地方顯示（症狀只是開頁變慢）。
 - **免費方案**：每組織 2 個 active 專案（**已用滿**）、7 天無活動自動暫停、無 PITR/備份保障
   （`transactions` 是唯一不可重建的資料，建議定期 CSV 匯出）。
 - **實測後確認不是問題**：dev 全庫 13MB、`chip_raw_cache` 含 TOAST 僅 1.68MB
   （22 筆、原始 JSON 3.99MB 壓到 1.45MB，遠低於 PLAN 當初估的 15–25MB）；
-  前端 bundle 508KB + 動態載入的 PDF 函式庫，對 Pages 頻寬無感；
+  前端 bundle 508KB + 動態載入的 PDF 函式庫，對前端託管頻寬無感；
   Storage bucket 匿名無法列舉（400），但直接猜路徑可探測「全體持有哪些代號」（無股數、無個資）。
 
 ---
@@ -7908,7 +7932,7 @@ Storage-first 全數判為未命中、即點即產也被擋，整個分頁不可
 與 v0.3.6 的 schema 差異只有第 5、6 段（第 1–4 段未變動），故**只套這兩段**，不在有真實資料的庫上重跑既有表。
 
 ### 部署順序刻意先後端、後 git
-`.github/workflows/deploy.yml` 是 **push 到 `main` 就觸發 Pages 部署**。若先合併，
+`.github/workflows/deploy.yml` 是 **push 到 `main` 就觸發前端部署**。若先合併，
 線上會有一段「分析」按鈕點了就失敗的空窗（前端已上線但正式區沒有 `stock-report`）。
 故順序為：正式區後端就緒 → 驗證 → 才合併推 main。
 
@@ -8379,7 +8403,7 @@ dev 專案原本沒有 `reports` bucket、沒有 `CRON_SECRET`，代表 dev.2 �
 - [x] `YearlyPage.tsx` + `index.css`: 三層縮排改固定 32px 一層（`.cell-tree` flex 排版），無展開鈕的列以 `.toggle-slot` 空槽補位，圖示/文字垂直對齊。
 - [x] `index.css`: 年度表格加 `.table-scroll-y`（max-height 480px 垂直捲動 + sticky 表頭，底色 `--panel`）。
 - [x] 逐筆賣出明細分隔符「@」改為「｜」。
-- [x] Playwright 目測驗證對齊/捲動/釘選表頭，`npm run build` 與 85/85 測試通過，Pages 部署成功。
+- [x] Playwright 目測驗證對齊/捲動/釘選表頭，`npm run build` 與 85/85 測試通過，前端部署成功。
 
 ---
 

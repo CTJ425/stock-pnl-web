@@ -106,7 +106,7 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 | PROD | `main` | cloud `kxnxadaghidwumqsqneu` |
 | DEV | `dev` | self-hosted `https://korq9tvdz0jd7yblr72p.ivan.lab` (compose under `/root/container/supabase/stock-pnl-web-dev`) |
 
-- **Always commit to `dev` first**; merge `main` only after DEV verify. `main` push deploys Pages.
+- **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
 - DEV Edge: **volume copy** into `volumes/functions/` + recreate functions container — not cloud `functions deploy`.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.

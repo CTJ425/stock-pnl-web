@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest'
 
 // Vite's raw glob rather than node:fs — this file is type-checked by `tsconfig.app.json`, which
 // carries only `vite/client` types, so a `node:*` import breaks `npm run build` (and with it the
-// Pages deploy) while vitest itself still passes.
+// front-end deploy) while vitest itself still passes.
 const MODULES = import.meta.glob('./*.ts', {
   query: '?raw',
   import: 'default',

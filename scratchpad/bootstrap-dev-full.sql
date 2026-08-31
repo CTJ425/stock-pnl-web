@@ -239,7 +239,7 @@ ALTER TABLE chip_raw_cache ENABLE ROW LEVEL SECURITY;
 --
 --     Until 0.6.44 the `warm` / `generate` actions of stock-report only accepted codes that somebody
 --     already held (`heldTwTickers()`). That was an anti-abuse ceiling, not a privacy rule: the
---     function is deployed --no-verify-jwt and its URL ships inside the public GitHub Pages bundle,
+--     function is deployed --no-verify-jwt and its URL ships inside the public front-end bundle,
 --     so the whitelist was what stopped a stranger from using us to hammer TWSE / MOPS.
 --
 --     The individual stock analysis page can now search the whole market, so that ceiling is gone.

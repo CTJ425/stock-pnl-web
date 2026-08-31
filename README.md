@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.21**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.22**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -11,8 +11,7 @@
 - [使用版本](#-使用版本)
 - [使用方式](#-使用方式)
 - [測試](#-測試)
-- [部署方式](#-部署方式)
-- [GitHub Actions 自動部署](#-github-actions-自動部署)
+- [初始化與部署](#-初始化與部署)
 - [版本紀錄](#-版本紀錄)
 - [注意事項](#-注意事項)
 
@@ -109,7 +108,7 @@
 ```
 stock-pnl-web/
 ├── GEMINI.md / CLAUDE.md # Agent 操作規則（角色、流程、版本與部署規範）
-├── .github/workflows/    # GitHub Actions 自動部署（deploy.yml）
+├── .github/workflows/    # release.yml（CHANGELOG 同步至 GitHub Releases）
 ├── .gemini/ / .claude/   # 專案技能（testing, verify, supabase-ops, versioning 等）
 ├── docs/
 │   ├── agent/            # Agent 持久化狀態：PROGRESS / TASK / BUG_FIX / FIXED_BUG
@@ -196,7 +195,7 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-目前測試套件規模：**66 個測試檔案、962 項單元與整合測試（100% PASS）**。
+目前測試套件規模：**85 個測試檔案、1345 項單元與整合測試（100% PASS）**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
@@ -206,7 +205,7 @@ stock-pnl-web/
 
 ```bash
 cd sources
-npm test                              # 完整單元測試閘門（66 檔 / 962 tests，必跑）
+npm test                              # 完整單元測試閘門（85 檔 / 1345 tests，必跑）
 npm run typecheck:edge                # Edge Functions 型別檢查
 npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
 npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
@@ -216,66 +215,272 @@ npm run dev                           # 本機模式 UI，供手動或 Playwrigh
 
 ---
 
-## 📦 部署方式
+## 📦 初始化與部署
 
-### 1. 前端部署 (GitHub Pages)
-前端已在 `sources/vite.config.ts` 設定 `base: './'` 以相容子目錄，push 到 `main` 即由 GitHub Actions 自動打包部署（詳見下一節）。
+> 本章是**從零開始**的完整步驟。DEV 與 PROD 各做一次，兩者互不影響。
+> 每一步都提供 **WebUI（Supabase Dashboard）** 與 **CLI** 兩種做法，擇一即可。
+> 後端的深入說明（資料來源、報告結構、排程設計）見 [`sources/supabase/README.md`](sources/supabase/README.md)。
 
-### 2. 後端部署 (Supabase)
-1. **建立專案**：在 [Supabase Console](https://supabase.com) 註冊並新建專案。
-2. **執行 SQL 初始化**：進入專案的 SQL Editor，複製並執行 `sources/supabase/schema.sql`，這會建立所需的資料表（含 `price_cache`、`stock_names`、`chip_raw_cache` 共用快取，`app_settings`、`batch_run_log`、`source_probe_log`）、RLS 行級安全策略、`reports` bucket 與 5 大 pg_cron 排程。
-3. **部署 Edge Functions**（`stock-price` 現價代理、`stock-report` 盤後報告；二擇一）：
-   - **CLI（推薦）**：在本地安裝 Supabase CLI 並登入後，於 `sources/` 目錄執行：
-     ```bash
-     supabase functions deploy stock-price                # 保持 verify_jwt=true（前端帶 anon JWT 呼叫）
-     supabase functions deploy stock-report --no-verify-jwt
-     ```
-   - ⚠️ **`stock-report` 一定要帶 `--no-verify-jwt`**：pg_cron 是帶 `CRON_SECRET` 呼叫、不帶 JWT，被重設成 `true` 的話盤後批次會全數 401。`stock-price` 反之要維持預設的 `verify_jwt=true`，否則就成了誰都能呼叫的公開端點（Edge Function 額度濫用風險）。
-   - 詳細步驟、驗證方式與常見問題見 [`sources/supabase/README.md`](sources/supabase/README.md)。
-4. **設定身份驗證 Redirect URL**：
-   在 Supabase 控制台的 Auth -> URL Configuration 中，將 Site URL 和 Redirect URLs 設定為您 GitHub Pages 的部署網址，確保登入/註冊重導正常運作。
-5. **（建議）關閉信箱驗證或設定自訂 SMTP**：
-   Supabase 內建郵件服務每小時僅能寄出約 2 封驗證信，僅供開發測試。小規模自用可於 Auth → Sign In / Providers → Email 關閉 Confirm email，或改由 Console → Authentication → Users 手動建立帳號（勾選 Auto Confirm User）。
+### 前置需求
+
+| 項目 | 版本 | 必要性 |
+|---|---|---|
+| Node.js | 24 以上 | 必要 |
+| Supabase 專案 | Free 方案即可 | Supabase 模式必要；本機模式不需要 |
+| Supabase CLI | 2.x | 選用 — 走 WebUI 可略過 |
 
 ---
 
-## ⚙️ GitHub Actions 自動部署
-
-workflow 定義於 `.github/workflows/deploy.yml`，流程如下：
-
-```
-push 到 main
-   └─> actions/checkout 取出原始碼
-   └─> actions/setup-node（Node 24，npm 快取鎖定 sources/package-lock.json）
-   └─> npm ci（於 sources/ 安裝依賴）
-   └─> npm run build（tsc 型別檢查 + vite build，注入 Supabase 環境變數）
-   └─> actions/upload-pages-artifact（打包 sources/dist）
-   └─> actions/deploy-pages（發佈到 GitHub Pages）
-```
-
-### 環境變數與 Secrets
-
-Supabase 連線資訊**不進版本控制**，由 GitHub Secrets 於建置階段注入：
-
-| Secret 名稱 | 內容 |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase 專案 URL（例如 `https://xxxx.supabase.co`） |
-| `VITE_SUPABASE_ANON_KEY` | Supabase publishable (anon) key |
-
-設定位置：GitHub Repo → Settings → Secrets and variables → Actions，或使用 CLI：
+### 步驟 0：取得原始碼
 
 ```bash
-gh secret set VITE_SUPABASE_URL --body "https://xxxx.supabase.co"
-gh secret set VITE_SUPABASE_ANON_KEY --body "sb_publishable_xxxx"
+git clone https://github.com/CTJ425/stock-pnl-web.git
+cd stock-pnl-web/sources
+npm install
 ```
 
-> 補充：anon key 本來就會隨前端 bundle 公開（Supabase 的設計即是如此，安全性由 RLS 保障）；使用 Secrets 的目的是讓原始碼庫保持乾淨、換 key 時不需改動程式碼。**service role key 絕不可放入前端、GitHub Issues/PR 或任何 Secrets 以外的位置。**
+此時**不設定任何環境變數**就可以先跑起來：
 
-### 初次啟用 Pages
+```bash
+npm run dev
+```
 
-Repo → Settings → Pages → Build and deployment → Source 選擇 **GitHub Actions**，之後每次 push 到 `main` 即自動部署。
+系統會以**本機模式**啟動，資料存在瀏覽器 `localStorage`，免登入。
+若你只想試用，到這裡就結束了。要多人使用或要盤後自動排程，才需要繼續下面的步驟。
 
 ---
+
+### 步驟 1：建立 Supabase 專案
+
+**WebUI**：登入 [Supabase Console](https://supabase.com) → **New project**。
+
+建好後取得三個值，後面每一步都會用到：
+
+| 值 | 位置 | 用途 |
+|---|---|---|
+| Project Reference ID | Settings → General | 替換 SQL 佔位符、CLI 綁定 |
+| Project URL | Settings → API | 前端 `.env.local` |
+| anon / publishable key | Settings → API | 前端 `.env.local` |
+
+> `service_role key` 也在同一頁。**它只能留在後端**，絕不可放進前端、Git 或任何公開位置。
+
+---
+
+### 步驟 2：產生批次密鑰 `CRON_SECRET`
+
+盤後排程以這把密鑰呼叫 Edge Function。自己產生一組長隨機字串：
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**先把它記在安全的地方。** 步驟 3 與步驟 4 要填入**同一個值**，兩邊不一致排程就會全數 401。
+
+---
+
+### 步驟 3：套用資料庫綱要
+
+`sources/supabase/schema.sql` 會建立全部資料表、RLS 政策、兩個 Storage bucket、`pg_cron` 與 `pg_net` 擴充，以及 6 個排程。
+
+⚠️ **執行前必須替換兩個佔位符，共 18 處：**
+
+| 佔位符 | 出現次數 | 換成 |
+|---|---|---|
+| `<PROJECT_REF>` | 8 | 步驟 1 的 Project Reference ID |
+| `<CRON_SECRET>` | 10 | 步驟 2 產生的密鑰 |
+
+⚠️ **`cron.schedule` 對沒替換的佔位符照單全收。「SQL 執行成功」不等於「值填對了」。** 正式區就曾因此整段時間排程從未真正執行（BUG-002）。步驟 6 的覆驗查詢是唯一能證明填對的方法。
+
+#### 做法 A：WebUI
+
+1. 用編輯器打開 `sources/supabase/schema.sql`，全域取代兩個佔位符，另存為暫存檔。
+2. Supabase Dashboard → **SQL Editor** → **New query**。
+3. 貼上替換後的全文 → **Run**。
+4. 刪除該暫存檔，它含有明文密鑰。
+
+#### 做法 B：CLI
+
+```bash
+cd sources
+
+# 1. 產生替換後的暫存檔（不要覆蓋原檔，也不要 commit）
+sed -e 's/<PROJECT_REF>/你的ref/g' -e 's/<CRON_SECRET>/你的密鑰/g' \
+    supabase/schema.sql > /tmp/schema.applied.sql
+
+# 2. 套用（連線字串見 Dashboard → Settings → Database）
+psql "<你的資料庫連線字串>" -f /tmp/schema.applied.sql
+
+# 3. 用完立刻刪除，它含有明文密鑰
+rm /tmp/schema.applied.sql
+```
+
+> ⚠️ `schema.sql` **不是冪等的**。重跑會把排程的 command 重設回佔位符。
+> 已上線後若只想改排程時間，請用 `cron.alter_job` — 它保留原本的 command，密鑰碰都不用碰。
+
+---
+
+### 步驟 4：設定 Edge Function 密鑰
+
+`SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase 自動注入，**不用設**。只需手動設一個。
+
+**WebUI**：Dashboard → Edge Functions → **Secrets** → 新增 `CRON_SECRET`，值同步驟 2。
+
+**CLI**：
+
+```bash
+cd sources
+supabase link --project-ref <你的-project-ref>
+supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
+```
+
+---
+
+### 步驟 5：部署三支 Edge Functions
+
+⚠️ **三支的 JWT 設定各不相同，設錯會出事：**
+
+| 函數 | JWT 驗證 | CLI 旗標 | 設錯的後果 |
+|---|---|---|---|
+| `stock-price` | **開啟**（預設） | 不加旗標 | 關掉 → 變成任何人都能呼叫的公開端點，Edge 額度遭濫用 |
+| `stock-report` | **關閉** | `--no-verify-jwt` | 沒關 → 盤後排程全數 401 |
+| `backup-transactions` | **關閉** | `--no-verify-jwt` | 沒關 → 每日備份全數 401 |
+
+`stock-report` 與 `backup-transactions` 不靠 JWT，它們驗的是 `x-cron-secret` 標頭。
+
+#### 做法 A：WebUI
+
+Dashboard → Edge Functions → **Create a function**。名稱必須與資料夾**完全相同**（前端以函數名呼叫，改名就對不上），然後把該資料夾下的 `.ts` 檔逐一貼上。
+
+- `*.test.ts` 是單元測試，**不要上傳**。
+- `stock-report` 有 10 個 `.ts` 檔，逐檔貼很容易漏。**多檔函數建議改用 CLI。**
+
+#### 做法 B：CLI（推薦）
+
+```bash
+cd sources
+supabase functions deploy stock-price                          # 維持 verify_jwt=true
+supabase functions deploy stock-report --no-verify-jwt
+supabase functions deploy backup-transactions --no-verify-jwt
+```
+
+CLI 會自動打包整個資料夾，不必逐檔貼。
+
+---
+
+### 步驟 6：覆驗排程（不可略過）
+
+確認佔位符真的被換掉：
+
+```sql
+SELECT jobname, schedule, active,
+       command LIKE '%<PROJECT_REF>%' AS ref_not_replaced,
+       command LIKE '%<CRON_SECRET>%' AS secret_not_replaced
+FROM cron.job ORDER BY jobname;
+```
+
+兩個布林欄位**都必須是 `false`**。任一為 `true`，代表該排程永遠不會成功。
+
+⚠️ **不要 SELECT `command` 欄位本身** — 它含有明文 `x-cron-secret`，印出來等於外洩。
+
+應出現的 6 個排程：
+
+| jobname | schedule | 用途 |
+|---|---|---|
+| `market-data-daily` | `0 10,14 * * 1-5` | 盤後估值資料 |
+| `history-daily` | `30 4,13 * * 1-5` | 月營收歷史回補 |
+| `source-probe` | `*/5 * * * *` | 資料源輪詢 |
+| `macro-daily` | `*/30 12-18 * * *` | 美國總經 |
+| `fx-daily` | `0 3,9 * * *` | 匯率 |
+| `backup-daily` | `0 18 * * *` | 每日備份（台北 02:00） |
+
+再手動觸發一次，確認密鑰與 JWT 設定正確：
+
+```bash
+curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
+  -H 'Content-Type: application/json' \
+  -H 'x-cron-secret: <你的密鑰>' \
+  -d '{"action":"sync-fx"}'
+```
+
+回 `401` 代表密鑰兩邊不一致，或 `stock-report` 沒關 JWT 驗證。
+
+---
+
+### 步驟 7：設定 Auth
+
+**WebUI**：Dashboard → Authentication → **URL Configuration** → 把 Site URL 與 Redirect URLs 設為前端實際網址。
+
+> **建議關閉信箱驗證。** Supabase 內建郵件服務每小時僅約 2 封，只夠開發測試。
+> 於 Authentication → Sign In / Providers → Email 關閉 **Confirm email**；
+> 或於 Authentication → Users 手動建立帳號並勾選 **Auto Confirm User**。
+
+---
+
+### 步驟 8：建立第一個帳號並升級為管理員
+
+管理員後台（抓取狀況、戰情室、備份管理）需要 `admin` 角色。
+
+1. 先從前端註冊，或在 Dashboard → Authentication → Users 建立帳號。
+2. 於 SQL Editor 執行：
+
+```sql
+UPDATE auth.users
+SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+WHERE email = '你的信箱';
+```
+
+3. **必須重新登入。** 角色寫在 JWT 內，舊的 token 不會自動更新。
+
+---
+
+### 步驟 9：設定前端並建置
+
+在 `sources/` 建立 `.env.local`：
+
+```env
+VITE_SUPABASE_URL=https://<你的-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<你的 anon key>
+```
+
+```bash
+cd sources
+npm run dev      # 開發：畫面應改為登入／註冊介面
+npm run build    # 產出靜態檔於 sources/dist/
+```
+
+`vite.config.ts` 已設 `base: './'`，`dist/` 可放在任何靜態主機的任何子路徑下。
+**PROD 部署目標目前尚未設定** — 本專案不再使用自動部署 workflow。
+
+> `.env.local` 已列入 `.gitignore`，不會進版控。
+
+---
+
+### 步驟 10：驗收清單
+
+| # | 檢查 | 通過條件 |
+|---|---|---|
+| 1 | 前端啟動 | 出現登入／註冊介面，不是本機模式 |
+| 2 | 註冊並登入 | 進得了 Dashboard |
+| 3 | 新增一筆台股交易 | 庫存出現該筆，且抓得到現價 → `stock-price` 正常 |
+| 4 | 個股「分析」→ 籌碼分頁 | 有內容 → `stock-report` 正常 |
+| 5 | 管理員後台 | 使用者選單看得到入口 → `admin` 角色生效 |
+| 6 | `cron.job` 覆驗查詢 | 6 個排程，兩個布林欄位皆 `false` |
+| 7 | Storage | 出現 `reports`（公開）與 `backups`（私有）兩個 bucket |
+
+---
+
+### 常見初始化錯誤
+
+| 症狀 | 原因 |
+|---|---|
+| 畫面沒有登入介面 | `.env.local` 未建立或值填錯，系統退回本機模式 |
+| `relation ... does not exist` | `schema.sql` 尚未執行 |
+| 排程從不執行、`reports` 是空的 | 佔位符沒替換 — 跑步驟 6 的覆驗查詢 |
+| 盤後批次全數 401 | `stock-report` 沒帶 `--no-verify-jwt`，或 `CRON_SECRET` 兩邊不一致 |
+| 每日備份全數 401 | `backup-transactions` 沒帶 `--no-verify-jwt` |
+| 前端呼叫 `stock-price` 回 401 | 未登入就呼叫；Supabase 模式須登入後使用 |
+| 管理員後台看不到 | 升級 SQL 執行後沒有重新登入 |
+| 部署時 import `./xxx.ts` 失敗 | WebUI 逐檔貼時漏檔 — 改用 CLI 部署 |
 
 ## 🗒️ 版本紀錄
 

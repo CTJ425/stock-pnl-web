@@ -5,7 +5,7 @@
 Real browser against:
 
 1. **Native/local mode** — Vite, no Supabase env (default for agents)  
-2. **Supabase mode** — DEV (`korq9tvdz0jd7yblr72p.ivan.lab`) or PROD Pages + real session  
+2. **Supabase mode** — DEV (`korq9tvdz0jd7yblr72p.ivan.lab`) or PROD front end + real session  
 
 **No** `npm run e2e` and **no** Playwright CI suite today. E2E is opt-in:
 
