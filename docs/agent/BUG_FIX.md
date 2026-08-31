@@ -81,10 +81,11 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 - **Where**: `sources/supabase/functions/stock-report/index.ts:2135` (note text from `assembleOne` at `index.ts:698-701`)
 - **What**: For the 6 non-latest days the chips backfill writes (Task 130 new `phase: 'chips'`), `daySeries.incomplete` is true by construction. Each past-date `reports/{ymd}/{ticker}.json` embeds the note "歷史資料回補中…走勢圖會逐日補齊". The nightly `generate-chips` only ever rewrites `{series.dataYmd}/{ticker}.json`, so the note never clears.
+- **Confirmed by Observation**: DEV manual test on 2026-08-31, Task 130 manual DEV verification item 7. The generated `20260828/2454.json` carries the note; only the newest file (manifest.ymd) has the full 7-day history and no note.
 - **Impact Today**: None. `reportProxy.ts:178-180` only ever fetches `manifest.ymd`, so no consumer reads a past-date report.
 - **Future Risk**: Becomes a real defect if any future feature reads a report by a specific past `ymd`.
 - **Decision**: Accepted, not fixed. The note is semantically defensible — a report for 7 days ago genuinely has a thin history window.
-- **Status**: OPEN (low severity)
+- **Status**: OPEN (low severity, confirmed)
 - **Introduced**: Task 130 (2026-08-30)
 
 ---
