@@ -12,7 +12,7 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 ---
 
 ### Task 139: Workspace fee rate persistence (Supabase)
-- **Status**: ✅ **RELEASED 0.9.24-dev.2** (DEV verified 2026-08-31, PROD schema pending)
+- **Status**: ✅ **RELEASED 0.9.24** (DEV verified 2026-08-31, PROD schema pending)
 - **Spec**: `docs/agent/specs/fee-rate-persistence.md`
 - **Timestamp**: 2026-08-31 18:35:00 Asia/Taipei
 - **What was this**: Move workspace fee rate from `localStorage` to `workspaces.fee_rate` column, with sync logic to handle cache/remote reconciliation.
