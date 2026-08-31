@@ -5,6 +5,25 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-30 23:15:34 Asia/Taipei (Task 130: Auto chip warm for newly added symbol — Code complete)
+
+- **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
+- **Status**: ✅ **CODE COMPLETE** — Not yet deployed to DEV, not yet committed to git.
+- **Implementation**: New `phase: 'chips'` on `stock-report` warm action. Reuses `chip_raw_cache` (whole-market TWSE payload) unfiltered, so a warm cache means ZERO upstream calls. New `maxUpstreamDays` option on `loadSeries` caps user-triggered path at 2 upstream fetches. Idempotence gate skips work when `reports/{ymd}/{ticker}.json` already exists. Chips path does not write `manifest.json`.
+- **Files Changed**: 
+  - `warmStock.ts` (new `warmStockChips`)
+  - `prefetchStockData.ts`
+  - `watchlistService.ts` (`addWatch` triggers prefetch)
+  - `stock-report/index.ts`
+  - Three matching `.test.ts` files (10 new tests)
+- **Testing**: 85 files / 1345 tests passed, exit 0; `npm run lint` exit 0; `npm run typecheck:edge` exit 0.
+- **Reviewer Verdict**: PASS with one accepted RISK.
+- **RISK to Record**: Historical chip report files keep a permanent "回補中" note (low-severity, accepted). See BUG_FIX.md.
+- **Pending**: DEV deployment, manual DEV verification (add symbol, check reports/{ymd}/{ticker}.json, confirm skip on re-add, nightly generate-chips unchanged). See spec § Coverage gap.
+- **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
+
+---
+
 ## 📅 Log: 2026-08-27 14:10:56 Asia/Taipei (Probe retire-gate re-verified on DEV and PROD — no regression)
 
 - **Question Raised**: Does a probe still retire too early after it finds new data? Expected rule: 1 landed hit plus 2 more ticks with an unchanged fingerprint (trailing run of 3); any content change resets the run to 1.
