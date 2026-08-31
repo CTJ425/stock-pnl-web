@@ -14,6 +14,7 @@
  * candidate row before conflict resolution, so `tw_watchlist_enforce_max` would reject every
  * reorder once the list is at its cap. Do not re-add it as an upsert.
  */
+import { prefetchStockData } from './prefetchStockData'
 import { supabase } from './supabase'
 
 // Mirrors the `tw_watchlist_enforce_max` trigger in `sources/supabase/schema.sql`.
@@ -69,6 +70,10 @@ export async function addWatch(ticker: string, name: string): Promise<void> {
     }
     throw new Error(`加入觀察清單失敗：${error.message}`)
   }
+
+  // Task 130: warm chip/fundamental data for a newly added symbol. Best-effort only —
+  // a prefetch failure must never fail the watchlist insert that already succeeded.
+  Promise.resolve(prefetchStockData(ticker, name)).catch(() => {})
 }
 
 export async function removeWatch(ticker: string): Promise<void> {

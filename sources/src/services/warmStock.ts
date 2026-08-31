@@ -69,6 +69,24 @@ const attemptedHistory = new Set<string>()
 const lastCore = new Map<string, WarmResult>()
 const lastHistory = new Map<string, WarmResult>()
 
+/**
+ * Chip backfill (三大法人 / 融資券 / 借券) for a newly added symbol (Task 130).
+ * Separate result shape from `WarmResult` — the server slices the already-cached
+ * whole-market payload for one ticker, so there is no daily/fundamental count here.
+ */
+export interface WarmChipsResult {
+  ok: boolean
+  daysWritten: number
+  /** True when the reports for the latest ymd already existed; not a failure. */
+  skipped?: boolean
+}
+
+const FAILED_CHIPS: WarmChipsResult = { ok: false, daysWritten: 0 }
+
+const inflightChips = new Map<string, Promise<WarmChipsResult>>()
+const attemptedChips = new Set<string>()
+const lastChips = new Map<string, WarmChipsResult>()
+
 /** For testing: clear the deduplication status of this module*/
 export function resetWarmState(): void {
   inflightCore.clear()
@@ -77,6 +95,9 @@ export function resetWarmState(): void {
   attemptedHistory.clear()
   lastCore.clear()
   lastHistory.clear()
+  inflightChips.clear()
+  attemptedChips.clear()
+  lastChips.clear()
 }
 
 function parseWarmResult(data: Record<string, unknown>, phase: WarmPhase): WarmResult {
@@ -204,4 +225,56 @@ export async function warmStock(ticker: string, name?: string): Promise<WarmResu
     backfilled: core.backfilled + hist.backfilled,
     phase: 'full',
   }
+}
+
+function parseChipsResult(data: Record<string, unknown>): WarmChipsResult {
+  return {
+    ok: data.ok === true,
+    daysWritten: typeof data.daysWritten === 'number' ? data.daysWritten : 0,
+    skipped: data.skipped === 'already-present' ? true : undefined,
+  }
+}
+
+async function invokeWarmChips(ticker: string, name: string | undefined): Promise<WarmChipsResult> {
+  if (!supabase) return FAILED_CHIPS
+  try {
+    const { data, error } = await supabase.functions.invoke('stock-report', {
+      body: { action: 'warm', ticker, name: name ?? '', phase: 'chips' },
+      timeout: 45_000,
+    })
+    if (error || !data || typeof data !== 'object') return FAILED_CHIPS
+    return parseChipsResult(data as Record<string, unknown>)
+  } catch {
+    return FAILED_CHIPS
+  }
+}
+
+/**
+ * Chip backfill for a newly added symbol. Sealed per ticker for the rest of the session
+ * (same style as `warmStockCore`) so a re-render or a second `addWatch` cannot burn a
+ * second invocation.
+ */
+export async function warmStockChips(ticker: string, name?: string): Promise<WarmChipsResult> {
+  if (!supabase) return FAILED_CHIPS
+
+  const pending = inflightChips.get(ticker)
+  if (pending) return pending
+  if (attemptedChips.has(ticker)) {
+    return lastChips.get(ticker) ?? FAILED_CHIPS
+  }
+
+  attemptedChips.add(ticker)
+
+  const task = (async (): Promise<WarmChipsResult> => {
+    try {
+      const result = await invokeWarmChips(ticker, name)
+      lastChips.set(ticker, result)
+      return result
+    } finally {
+      inflightChips.delete(ticker)
+    }
+  })()
+
+  inflightChips.set(ticker, task)
+  return task
 }

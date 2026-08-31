@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.22-dev.1（2026-08-31）— 全新代號自動補齊三大法人資料
+
+> 過去新增一檔從未記錄過的股票後，三大法人／融資券／借券資料要等隔天夜間 `generate-all` 排程才會出現；加入觀察股更是完全不觸發任何抓取。本版讓兩條新增路徑都即時補齊最近 7 個交易日的籌碼資料。關鍵在於 `chip_raw_cache` 存的是未過濾的全市場原始回應，因此快取命中時對外呼叫次數為零。
+
+- 🆕 **`warm` 動作新增 `phase: 'chips'`**（`stock-report/index.ts`）— 接受單一代號，重用 `loadSeries([ticker], ...)` 產出最近 7 個交易日的 `reports/{ymd}/{ticker}.json`。冪等閘門先檢查最新交易日的報表檔是否已存在，存在則回傳 `skipped: 'already-present'` 且不做任何後續呼叫。此路徑不寫 `manifest.json`（manifest 只記日期、不記代號清單，新增代號的報表檔不需要更新它）。
+- ⏱️ **`loadSeries` 新增 `maxUpstreamDays` 上限** — 使用者觸發的路徑壓在 2 天，避免新增股票變成打 TWSE 的槓桿。快取冷時寫得到多少算多少，其餘交回夜間排程完成。呼叫端省略此參數時行為與先前完全一致，夜間 `generate-chips` 不受影響。
+- 🔌 **`warmStockChips()`**（`services/warmStock.ts`）— 新增 client 端封裝，含 session 內同代號去重封印，`resetWarmState()` 一併清除。Edge 回傳的 `skipped: 'already-present'` 對應為布林值，且視為 `ok: true` 而非失敗；invoke 出錯時回傳失敗值而不丟出例外。
+- 🛒 **買進路徑追加觸發**（`services/prefetchStockData.ts`）— 籌碼補齊與基本面補齊互相獨立。基本面已足夠的代號仍會補籌碼，因為兩者的缺漏條件不同。
+- 👀 **觀察股路徑首次觸發**（`services/watchlistService.ts`）— `addWatch()` 在寫入成功後才呼叫 `prefetchStockData()`。容量上限擋下、寫入失敗、代號格式不合法三條路徑均不觸發。prefetch 失敗不會讓 `addWatch()` 失敗。
+- ⚠️ **已知並接受的 RISK-003** — 籌碼補齊寫出的 6 個非最新日報表檔，其 `incomplete` 旗標為 true，會嵌入「歷史資料回補中」註記且永不清除（夜間排程只重寫當日檔）。目前無消費端會讀取指定過去日期的報表（`reportProxy.ts` 只讀 `manifest.ymd`），故無使用者可見影響。語意上該註記亦屬正確——7 天前那份報表的歷史視窗確實只有 1 天資料。
+- 🧪 **測試** — 新增 10 個測試（實作前確認紅燈 exit 1）。全套 **85 檔 / 1345 測試通過**，exit 0；`npm run lint`、`npm run typecheck:edge`、`npx tsc --noEmit` 均 exit 0。Reviewer PASS。
+- 📋 **覆蓋缺口** — 本 repo 無 `stock-report/index.ts` action dispatch 的測試骨架，Edge 端 `phase: 'chips'` handler 與 `maxUpstreamDays` 上限僅由 `typecheck:edge` 覆蓋，需手動 DEV 驗證。
+- 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`。
+
 ### 0.9.21（2026-08-27）— 當日大盤面板完善：重新整理按鈕、日期徽章、三大法人側欄、與六項缺陷修復
 
 > 0.9.20 版將統計帶移至走勢圖上方；0.9.21 版針對該面板深度打磨。新增面板專屬重新整理按鈕、日期徽章、法人買賣超側欄，並於審查過程中發現並修正六項缺陷：徽章在五日區間誤讀最舊日期、請求競態覆蓋新資料、失敗請求讓加載狀態卡住、無側欄時仍預留 300px 欄寬、面板重新整理不會更新側欄資料、自營商只到一條腿就當 0 求和。測試全數通過，無 Edge 部署。

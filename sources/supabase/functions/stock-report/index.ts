@@ -10,12 +10,14 @@
  * interface:
  *   POST { action: 'generate', market: 'TPE', ticker: string, name: string, holding?: HoldingContext }
  *     → { reportId, generatedAt, dataDate, data } (chips are generated immediately with one click, used for front-end fallback)
- *   POST { action: 'warm', ticker: string, name?: string, phase?: 'core' | 'history' | 'full' }
+ *   POST { action: 'warm', ticker: string, name?: string, phase?: 'core' | 'history' | 'full' | 'chips' }
  *     → { ok, ticker, ymd, dailySynced, fundamentalSynced, fundamentalComplete, phase, ... }
  *       Instant production for a single symbol (0.6.0-dev.7). From 0.6.46-dev.4 the caller may
  *       split work: `core` = daily + latest fundamental only (fast first paint); `history` = MOPS
  *       revenue/profit backfill (no second quota charge; requires an existing fundamental file);
  *       `full` (default) = core then history in one request (legacy / background prefetch).
+ *       `chips` (Task 130) = 三大法人/融資券/借券 backfill for a newly added symbol; no quota,
+ *       no manifest write — see handleWarmChips.
  *   POST { action: 'generate-all' } header: x-cron-secret (after-hours pg_cron trigger)
  *     → Orchestrates phases chips → market-data → history under GENERATE_ALL_BUDGET_MS (0.6.49).
  *       May skip later phases when wall time is short; next cron tick continues. P1: history is one
@@ -247,6 +249,12 @@ const HISTORY_DAYS = 7
 const LOOKBACK_DAYS = 14
 /** A single call can capture up to a few missing days; the Edge Function has a wall-clock upper limit, and the missing days are scheduled to be filled in every other day.*/
 const MAX_BACKFILL_DAYS = 5
+/**
+ * `warm` phase `chips` (Task 130): cap on dates allowed to trigger an upstream TWSE fetch
+ * in one call. Small on purpose — a warm cache costs zero upstream calls (single-ticker
+ * slice of the already-cached whole-market payload); this only bounds a cold-cache first add.
+ */
+const CHIPS_MAX_UPSTREAM_DAYS = 2
 /**
  * Monthly revenue history replenishment: a single call can be captured for up to several months.
  * There are two copies of listing + listing in a month, each about 400KB, the same reason as MAX_BACKFILL_DAYS——
@@ -503,6 +511,12 @@ export interface SeriesResult {
   marginYmds: string[]
   /** rwd Whether the entire batch of margin trading is unavailable (the caller falls back to OpenAPI accordingly)*/
   marginDatedFailed: boolean
+  /**
+   * How many candidate dates actually consumed the upstream fetch budget this call
+   * (Task 130). Optional — only populated by `loadSeries`; callers that do not care
+   * about it (nightly phases) can ignore it.
+   */
+  upstreamFetched?: number
 }
 
 /**
@@ -516,11 +530,12 @@ export interface SeriesResult {
 async function loadSeries(
   tickers: string[],
   now: Date,
-  opts?: { refreshT86Ymd?: string },
+  opts?: { refreshT86Ymd?: string; maxUpstreamDays?: number },
 ): Promise<SeriesResult> {
   const candidates = tradingDateCandidates(now, LOOKBACK_DAYS - 1).filter((d) => !isWeekendYmd(d))
   const cached = await cachedDayDatasets(candidates)
-  let fetchBudget = MAX_BACKFILL_DAYS
+  const initialBudget = opts?.maxUpstreamDays ?? MAX_BACKFILL_DAYS
+  let fetchBudget = initialBudget
   const collected: DaySlice[] = []
   const marginYmdSet = new Set<string>()
 
@@ -569,6 +584,7 @@ async function loadSeries(
     incomplete: days.length < HISTORY_DAYS,
     marginYmds,
     marginDatedFailed: days.length > 0 && marginYmds.length === 0,
+    upstreamFetched: initialBudget - fetchBudget,
   }
 }
 
@@ -600,12 +616,15 @@ interface GenerateReportRequestBody {
   apply?: boolean
 }
 
-/** warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default). */
-type WarmPhase = 'core' | 'history' | 'full'
+/**
+ * warm phase: core = fast daily+latest; history = MOPS backfill; full = both (default);
+ * chips = 三大法人/融資券/借券 backfill for a newly added symbol (Task 130).
+ */
+type WarmPhase = 'core' | 'history' | 'full' | 'chips'
 
 function parseWarmPhase(raw: unknown): WarmPhase {
   const s = String(raw ?? 'full').trim().toLowerCase()
-  if (s === 'core' || s === 'history' || s === 'full') return s
+  if (s === 'core' || s === 'history' || s === 'full' || s === 'chips') return s
   return 'full'
 }
 
@@ -2066,6 +2085,84 @@ async function warmDataYmd(): Promise<string> {
  *    stray history call on a full stock costs two Storage reads. Thin files without a prior core still cost
  *    MOPS if they already exist from the night batch; session seal on the frontend is the main throttle.
  */
+/**
+ * `phase=chips` (Task 130): 三大法人/融資券/借券 backfill for a symbol just added to
+ * holdings/watchlist. `chip_raw_cache` holds the FULL whole-market payload already, so a
+ * warm cache costs zero upstream calls — this only slices one ticker out of it and writes
+ * per-day report files. Idempotent: returns immediately once the latest ymd's report
+ * already exists for this ticker. Does not touch `manifest.json` or the daily
+ * `WARM_DAILY_LIMIT` quota (that quota only meters the OHLC/fundamental warm path).
+ */
+async function handleWarmChips(
+  ticker: string,
+  name: string,
+  now: Date,
+  started: number,
+): Promise<Response> {
+  const ymd = await warmDataYmd()
+  const existing = ymd ? await downloadJson<unknown>(`${ymd}/${ticker}.json`) : null
+  if (existing) {
+    return json({
+      ok: true,
+      ticker,
+      phase: 'chips',
+      daysWritten: 0,
+      daysFetchedUpstream: 0,
+      skipped: 'already-present',
+      durationMs: Date.now() - started,
+    })
+  }
+
+  const series = await loadSeries([ticker], now, { maxUpstreamDays: CHIPS_MAX_UPSTREAM_DAYS })
+  const marginFallbackRows = await loadMarginFallback(
+    series.dataYmd,
+    series.marginDatedFailed || series.days.length === 0,
+  )
+  const borrow = await loadBorrow(series.dataYmd)
+  const marginYmdSet = new Set(series.marginYmds)
+
+  // One report file per trading day (up to HISTORY_DAYS), each windowed to what was known
+  // as of that day — borrow/margin-fallback data is "latest only", so it only applies to
+  // the newest day in the window.
+  let daysWritten = 0
+  for (let i = 0; i < series.days.length; i++) {
+    const day = series.days[i]
+    const isLatest = i === series.days.length - 1
+    const windowDays = series.days.slice(0, i + 1)
+    const daySeries: SeriesResult = {
+      days: windowDays,
+      dataYmd: day.ymd,
+      incomplete: windowDays.length < HISTORY_DAYS,
+      marginYmds: windowDays.map((d) => d.ymd).filter((y) => marginYmdSet.has(y)),
+      marginDatedFailed: windowDays.length > 0 && !windowDays.some((d) => marginYmdSet.has(d.ymd)),
+    }
+    const data = assembleOne({
+      ticker,
+      name,
+      holding: null,
+      series: daySeries,
+      marginFallbackRows: isLatest ? marginFallbackRows : null,
+      borrow: isLatest ? borrow : { resp: null, date: null, fallbackRows: null },
+    })
+    const okUp = await uploadJson(`${day.ymd}/${ticker}.json`, {
+      ticker,
+      dataDate: data.dataDate,
+      generatedAt: data.generatedAt,
+      data,
+    })
+    if (okUp) daysWritten++
+  }
+
+  return json({
+    ok: true,
+    ticker,
+    phase: 'chips',
+    daysWritten,
+    daysFetchedUpstream: series.upstreamFetched ?? 0,
+    durationMs: Date.now() - started,
+  })
+}
+
 async function handleWarm(req: Request, body: GenerateReportRequestBody): Promise<Response> {
   const ticker = String(body.ticker ?? '').trim()
   if (!TICKER_RE.test(ticker)) {
@@ -2083,6 +2180,11 @@ async function handleWarm(req: Request, body: GenerateReportRequestBody): Promis
   const now = new Date()
   const name = String(body.name ?? '').trim().slice(0, 40)
   const started = Date.now()
+
+  // Chip backfill for a newly added symbol — no quota, no manifest write (Task 130).
+  if (phase === 'chips') {
+    return handleWarmChips(ticker, name, now, started)
+  }
 
   // History is the second half of a progressive warm: quota was charged on core (or full).
   if (phase === 'history') {
