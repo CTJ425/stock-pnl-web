@@ -29,6 +29,8 @@ export interface AuthState {
   updatePassword: (password: string) => Promise<string | null>
   /** Skip this prompt to set a new password*/
   dismissRecovery: () => void
+  /** Change password from inside the account: re-authenticates with the current password first. Returns an error message, null on success.*/
+  changePassword: (currentPassword: string, newPassword: string) => Promise<string | null>
   signOut: () => Promise<void>
 }
 
@@ -110,6 +112,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const dismissRecovery = useCallback(() => setRecovery(false), [])
 
+  // Supabase lets any live session change the password with no proof of the old one, so
+  // re-authenticating with the current password is the whole point of this feature.
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!supabase || !user) return null
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      })
+      if (reauthError) return '目前密碼不正確'
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      return error ? error.message : null
+    },
+    [user],
+  )
+
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
   }, [])
@@ -125,9 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       updatePassword,
       dismissRecovery,
+      changePassword,
       signOut,
     }),
-    [user, loading, recovery, signIn, signUp, resetPassword, updatePassword, dismissRecovery, signOut],
+    [
+      user,
+      loading,
+      recovery,
+      signIn,
+      signUp,
+      resetPassword,
+      updatePassword,
+      dismissRecovery,
+      changePassword,
+      signOut,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

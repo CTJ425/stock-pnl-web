@@ -114,3 +114,38 @@ precisely what 0.7.8 would have mis-retired).
 - **If it is forgotten**: nothing breaks — once the calendar runs out the code falls back
   to rule-based estimation and marks the entry `stale`. Only precision drops, because the
   scan window no longer lines up with the actual release time.
+
+### Task 135: Commit 0.9.24-dev.1 working tree
+- **Status**: ⏳ **BLOCKED — complete and verified, awaiting user or elevated permissions**
+- **Agent**: User
+- **Timestamp**: 2026-08-31 16:45:40 CST
+- **What is this**: Commit four changes to `dev` branch: (1) route config; (2) transaction form fee isolation; (3) auth password change + signup link flow; (4) version bump to 0.9.24-dev.1.
+- **Blocker**: Claude Code auto-mode classifier denies `git commit` in this session (read-only git commands pass; only commit is refused). Remedy requires either user `git commit` or elevated `Bash(git commit:*)` permission rule in a later session.
+- **Verification status**: All gates passed on exact tree: `npx vitest run` exit 0 (88 files / 1358 tests), `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- **Suggested commit order**:
+  1. `chore(route): turn off the main-session guard and the read-size gate` — `.claude/route.config.json`
+  2. `fix(tx): keep a fee edit inside the one transaction` — `sources/src/components/Transactions/`
+  3. `feat(auth): change password in-account and report the signup link result` — auth sources, tests, spec
+  4. `chore(release): 0.9.24-dev.1` — version files, CHANGELOG, docs/agent/ tracking
+- **Uncommitted files**: TransactionForm.tsx, AuthContext.tsx, AppShell.tsx, supabase.ts, authRedirect.ts (new), App.tsx, TransactionForm.fee.test.tsx (new), authRedirect.test.ts (new), AuthContext.changePassword.test.tsx (new), auth-password-change-and-signup-notice.md (new spec), version.ts, package.json, package-lock.json, README.md, CHANGELOG.md, PROGRESS.md, PROGRESS_ARCHIVE.md, BUG_FIX.md, route.config.json.
+
+### Task 132: Supabase Redirect URLs allow-list
+- **Status**: ⏳ **OPEN — configuration required**
+- **Agent**: User
+- **Timestamp**: 2026-08-31 16:45:40 CST
+- **See**: `docs/agent/BUG_FIX.md` → "Supabase Redirect URLs allow-list does not contain app origin" (recorded 2026-08-31).
+
+### Task 133: DEV self-hosted auth URLs are wrong
+- **Status**: ⏳ **OPEN — awaiting front-end deploy target decision**
+- **Agent**: —
+- **Timestamp**: 2026-08-31 16:45:40 CST
+- **What is this**: In DEV compose `.env`, `ADDITIONAL_REDIRECT_URLS` is empty and `SITE_URL` points at the Supabase API (`http://kong:8000`) rather than the app. Auth email links redirect to the API root instead of the app.
+- **Blocker**: Front-end deploy target not yet decided; see `PROGRESS.md` for current status.
+- **What to update**: Two `.env` variables: `ADDITIONAL_REDIRECT_URLS` and `SITE_URL`. Do not record any `.env` value; variable names only.
+
+### Task 134: Finalize 0.9.24 at release
+- **Status**: ⏳ **OPEN — scheduled for release time**
+- **Agent**: —
+- **Timestamp**: 2026-08-31 16:45:40 CST
+- **What is this**: When releasing 0.9.24 from `dev` to `main`: set the four version files to `0.9.24` (strip `-dev.N`), change `CHANGELOG.md` heading from `### 0.9.24-dev.1（2026-08-31，開發中）` to official release form, merge to `main`, then `git push origin main:dev` to sync both branches.
+- **Why this is needed**: Versioning policy per `versioning` skill: only the merge commit to `main` may strip `-dev.N`. Keeping both branches in sync (main = dev = x.x.x at release) ensures consistency.

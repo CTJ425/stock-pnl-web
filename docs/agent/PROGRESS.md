@@ -7,6 +7,32 @@
 
 ---
 
+## 📅 Log: 2026-08-31 16:27:23 Asia/Taipei (Fee fields fix, auth features, signup link confirmation)
+
+- **Status**: ✅ **COMPLETED**
+- **Work Summary**: Five improvements: two transaction fee bugs fixed, change password feature added, signup confirmation link issue resolved.
+- **1. Transaction form fee fields no longer write to workspace default**:
+  - Bug: `手續費率` and `最低手續費` inputs called `setFeeRate` / `setMinFee` from `utils/settings` in their `onChange`, writing edits back to the workspace default.
+  - Fix: Both persistence calls removed. Form seeds from workspace default but keeps edits isolated to that transaction.
+  - Workspace default remains owned by `AppShell.tsx:425-448` fee dialog, which also offers batch recalculation.
+- **2. Regression fixed: manually typed `最低手續費` destroyed on `張`/`零股` switch**:
+  - Cause: Re-seeding `useEffect` destroyed the typed value on every unit switch.
+  - Fix: Form maintains per-unit `useRef` record; re-seeds from it. `workspaceId` change still clears and re-seeds from workspace default.
+- **3. `手續費率` field hint now lists reference rates**: `原價 0.001425`, `6.5 折 0.00092625`, `3 折 0.0004275` — notes value applies to this transaction only.
+- **4. Change password feature implemented**:
+  - New `changePassword(currentPassword, newPassword)` in `AuthContext`.
+  - Re-authenticates with `signInWithPassword` before `updateUser` (prevents passwordless change; wrong current password returns `目前密碼不正確`).
+  - UI: `變更密碼` menu item in `AppShell.tsx`, gated by `!isLocal`, opens `ChangePasswordModal`.
+  - Modal stays open on success with fields cleared and submit disabled (revised spec: hiding confirmation is worse).
+- **5. Signup confirmation link now shows result**:
+  - Root cause: `signUp` sets `emailRedirectTo` → Supabase verifies and redirects with `#access_token=...&type=signup`. Client's default options consumed and cleared the hash during async init. No callback route or notice left user seeing nothing while already verified (login worked).
+  - Fix: `authRedirect.ts` exports `parseAuthRedirectHash`. `supabase.ts` computes `initialAuthNotice` from `window.location.hash` **before** `createClient`. `App.tsx` renders dismissible banner above `AuthPage` and `AppShell` branches. Expired link leaves user logged out.
+  - Open item: Supabase Redirect URLs allow-list does not contain app origin (user action required, see BUG_FIX.md).
+- **Files changed**: `TransactionForm.tsx`, `AuthContext.tsx`, `AppShell.tsx`, `supabase.ts`, `authRedirect.ts` (new), `App.tsx`, `.claude/route.config.json`
+- **Test files added**: `TransactionForm.fee.test.tsx` (F1-F5), `authRedirect.test.ts` (R1-R5), `AuthContext.changePassword.test.tsx` (C1-C3)
+- **Verification** ✅ **ALL PASS**: `npx vitest run` exit 0 (88 files / 1358 tests, up from 85/1345), `npx tsc --noEmit` exit 0, `npm run build` exit 0
+- **Review verdicts**: Fee changes PASS with one RISK (Item 2 fixed). Auth changes adjudicated after spec revision (modal stays open instead of closing).
+
 ## 📅 Log: 2026-08-31 15:09:49 Asia/Taipei (Post-release cleanup: GitHub Pages removal, documentation updates)
 
 - **Status**: ✅ **COMPLETED**
@@ -32,28 +58,5 @@
   - Test suite: 66 files / 962 tests → 85 files / 1345 tests.
 - **Correction recorded**: Early scout report claimed all three Edge Functions deploy with `--no-verify-jwt`. **Incorrect.** `sources/supabase/functions/stock-price/index.ts:11-12` requires `verify_jwt=true` (deploying with `--no-verify-jwt` would expose the quote endpoint publicly). README documents the correct per-function setting.
 - **Verification**: `npm run build` exit 0. `npm test` exit 0 — 85 files / 1345 tests passed.
-
-## 📅 Log: 2026-08-31 10:06:22 Asia/Taipei (Task 130: Release 0.9.22 to PROD — Edge deployed, smoke tests pass)
-
-- **Task**: 130 — Auto chip warm for newly added symbol (chips backfill).
-- **Status**: ✅ **PROD RELEASED** — Version 0.9.22, commit ea750a0, all smoke tests pass.
-- **Release Gate Results** (all exit 0):
-  - `npm test`: 85 files / 1345 tests
-  - `npx tsc --noEmit`
-  - `npm run typecheck:edge`
-  - `npm run build`
-- **Merge to main**: `dev` → `main` fast-forward, pushed `b0f0de3..ea750a0`.
-- **PROD Edge Deploy**: `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt`
-  - `stock-report` version: 61 (up from prior)
-  - `ezbr_sha256`: `1e0924a33035722307d3b481682510cd1485c460e07cbfa6769d3635da026b39`
-  - `updated_at`: 2026-08-31 10:04:26 +08
-  - Note: pre-deploy hash not captured (user auto-mode classifier blocked the command); post-deploy verified by fresh timestamp + version bump.
-- **PROD Smoke Tests** ✅ **ALL PASS** (identical results to DEV build):
-  1. Bad ticker `!!bad` + `phase:'chips'` → HTTP 400 `ticker 格式不正確` (pre-auth validation, no data leak)
-  2. Valid ticker, anon key only → HTTP 401 Unauthorized (service-role also 401; requires real user JWT)
-  3. Unknown action → HTTP 400 `Unknown action` (no 500)
-- **Interim Risk CLOSED**: Between `main` push and Edge deploy, PROD ran new frontend against old Edge. Old `parseWarmPhase` (b0f0de3:606-610) fell back to `'full'` for unknown phase, so new symbols fired two full warms (no crash, but quota waste). New Edge now deployed. **Lesson recorded**: when a release touches `sources/supabase/functions/`, deploy Edge immediately after `main` push.
-- **Risk-003 Status**: Still open and accepted in BUG_FIX.md — do not close.
-- **Full Track Record**: DEV code complete (2026-08-30 23:15:34), DEV verified (2026-08-31 09:36:46), PROD released (2026-08-31 10:06:22 Asia/Taipei).
 
 ---
