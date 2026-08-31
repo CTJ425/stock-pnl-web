@@ -12,9 +12,9 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 ---
 
 ### Task 130: Auto chip warm for a newly added symbol
-- **Status**: ✅ **CODE COMPLETE** (DEV deployment and manual DEV verification pending)
+- **Status**: ✅ **DEV VERIFIED** (Merge to main and PROD deploy pending user authorization)
 - **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
-- **Timestamp**: 2026-08-30 23:15:34 Asia/Taipei
+- **Timestamp**: 2026-08-30 23:15:34 Asia/Taipei (Code complete); Updated 2026-08-31 09:36:46 Asia/Taipei (DEV verified)
 - **What was this**: Implement automatic chip data backfill (三大法人/融資券/借券) for newly added symbols, up to 7 trading days, triggered immediately on add instead of waiting for nightly `generate-chips`.
 - **Implementation**:
   - New `phase: 'chips'` on `stock-report` warm action
@@ -25,12 +25,19 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
   - Client methods: `warmStockChips()` (new), `prefetchStockData()` updated, `addWatch()` triggers prefetch
 - **Files Changed**: `warmStock.ts`, `prefetchStockData.ts`, `watchlistService.ts`, `stock-report/index.ts`, plus 3 `.test.ts` files (10 new tests)
 - **Testing**: 85 files / 1345 tests passed, exit 0; lint and typecheck:edge all pass
-- **Reviewer Verdict**: PASS with one accepted RISK (see BUG_FIX.md entry below)
-- **Pending Manual DEV Verification**:
-  1. Add a symbol not in any holding or watchlist
-  2. Confirm `reports/{ymd}/{ticker}.json` appears for recent trading days
-  3. Confirm second add returns `skipped: 'already-present'`
-  4. Confirm nightly `generate-chips` output unchanged
+- **Reviewer Verdict**: PASS with one accepted RISK (see BUG_FIX.md RISK-003)
+- **DEV Deployment & Manual Verification** ✅ **DONE**:
+  1. ✅ Bad ticker validation runs before auth → HTTP 400 (no data leak)
+  2. ✅ Unauthenticated + service-role key → HTTP 401 (requires real user JWT)
+  3. ✅ Ticker not in holdings/watchlist → HTTP 403 (net_qty=0 tickers correctly excluded)
+  4. ✅ Buy-path ordering: `addTransactions()` awaited before prefetch (position exists on auth gate)
+  5. ✅ End-to-end write: added `2454`, `phase:'chips'` returned 200 with 7 files, 1 upstream fetch
+  6. ✅ Idempotence gate: second call returned 200 with `skipped:'already-present'`
+  7. ✅ Manifest untouched: `updated_at` unchanged (chips path does not write manifest)
+  8. ✅ Content identical to cron-generated file (schema 3, institutional data, borrow)
+  9. ✅ RISK-003 confirmed: history note on 6 older files, only newest (manifest.ymd) complete; borrow only on newest
+  10. ✅ DEV state restored: test data deleted, watchlist back to 6 rows
+  - **Details**: See `PROGRESS.md` entry 2026-08-31 09:36:46 Asia/Taipei
 
 ---
 

@@ -7,6 +7,30 @@
 
 ---
 
+## 📅 Log: 2026-08-31 09:36:46 Asia/Taipei (Task 130: DEV deploy and manual verification — ALL PASS)
+
+- **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
+- **Status**: ✅ **DEV VERIFICATION COMPLETE** — Manual testing completed on self-hosted DEV (`korq9tvdz0jd7yblr72p`). Merge to `main` and PROD Edge deploy pending explicit user authorization.
+- **DEV Edge Deploy Method**:
+  - Forced volume copy of `sources/supabase/functions/stock-report/*.ts` into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`
+  - Container restart: `docker restart stock-pnl-web-dev-functions-1`
+  - Landing verified: md5 match on `index.ts`, `report.ts`, `twChips.ts` between repo and volume; `grep -c maxUpstreamDays = 3` in deployed copy; container healthy, no module-load errors
+- **Manual DEV Verification — ALL 9 PASS**:
+  1. Bad ticker `!!bad` with `phase:'chips'` → HTTP 400 `ticker 格式不正確` (unauthenticated). Pre-validation, no data leak. ✅
+  2. Valid ticker, anon key only → HTTP 401 Unauthorized. Service-role key also 401 (no real user JWT). ✅
+  3. Authenticated user, ticker not in holdings/watchlist → HTTP 403 `僅限持有或已加入觀察清單的台股代號`. Tickers `1802/2609/2356/3037/2615/00981A` correctly excluded (net_qty=0). ✅
+  4. Buy-path ordering: `addTransactions()` awaited before `prefetchStockData()` — ownership gate runs on new position. ✅
+  5. End-to-end write: added `2454` to watchlist, `phase:'chips'` returned HTTP 200 `{daysWritten:7, daysFetchedUpstream:1, durationMs:1169}`. Seven files written for 20260820–20260828. ✅
+  6. Idempotence gate: second identical call returned HTTP 200 `{daysWritten:0, daysFetchedUpstream:0, skipped:'already-present', durationMs:17}`. ✅
+  7. Manifest untouched: `manifest.json` `updated_at` stayed 2026-08-28 14:25:01Z (chips path does not write manifest). ✅
+  8. Content check: `20260828/2454.json` structurally identical to cron-generated `20260828/2330.json` — schema 3, real institutional numbers. ✅
+  9. RISK-003 confirmed: history grows 1,2,3,4,5,6 across six older dates; only newest file (20260828) has full 7-day history and no "回補中" note. Borrow present only on newest (loadBorrow has no date param). ✅
+- **RISK-003 Update**: Confirmed by observation on DEV. Marked in BUG_FIX.md as "confirmed, still accepted, still no user-visible impact".
+- **DEV State Restored**: Test watchlist row `2454` deleted, all seven test report files deleted via storage API. DEV data back to pre-test state.
+- **Pending**: Merge to `main` and PROD Edge deploy (explicit user authorization required). Spec: `docs/agent/specs/130-new-symbol-chip-warm.md`
+
+---
+
 ## 📅 Log: 2026-08-30 23:15:34 Asia/Taipei (Task 130: Auto chip warm for newly added symbol — Code complete)
 
 - **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
@@ -24,23 +48,3 @@
 - **Pending**: DEV deployment, manual DEV verification (add symbol, check reports/{ymd}/{ticker}.json, confirm skip on re-add, nightly generate-chips unchanged). See spec § Coverage gap.
 - **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
 
----
-
-## 📅 Log: 2026-08-27 14:10:56 Asia/Taipei (Probe retire-gate re-verified on DEV and PROD — no regression)
-
-- **Question Raised**: Does a probe still retire too early after it finds new data? Expected rule: 1 landed hit plus 2 more ticks with an unchanged fingerprint (trailing run of 3); any content change resets the run to 1.
-
-- **Verdict**: The rule is correct in code and in live data. No code change made.
-
-- **Code Location**: `sources/supabase/functions/stock-report/sourceProbePlan.ts` — REQUIRED_LANDED_COUNTS (L59-68), trailingRun (L77-87), retiredSources (L95-104), summariseLandedTicks (L182-195). Non-landed ticks contribute no fingerprint, so they cannot retire a source.
-
-- **Prior Fixes Confirmed**: BUG-034 (0.9.6, 2026-08-20) and Task 133 (0.9.14, 2026-08-25) still in place.
-
-- **Live Evidence (2026-08-26)**:
-  - **Decisive Case**: `borrow` shows 21 consecutive ticks with identical fingerprint (hit=false) that did NOT retire; content changed at 22:40 (PROD) / 22:45 (DEV), then exactly 2 more ticks ran and source stopped.
-  - **PROD Per-Source Counts** (ticks/hits): t86 5/3, bwibbu 5/3, twt38u 3/3, margin 6/3, borrow 23/3, bfi82u 7/6 (two windows). DEV matches.
-  - **Background**: mops_revenue and mops_profit never retire by design.
-
-- **Open Observation (not a confirmed defect)**: bfi82u hit 6 times across its 15:00 and 19:30 windows with the same fingerprint. Commit 911c490 added the second window deliberately. Flagged for a later decision; not filed as a bug.
-
-- **Verification Method**: DEV via `docker exec stock-pnl-web-dev-db-1 psql`; PROD via Supabase Management API query endpoint. Do not use `supabase db query --linked`.
