@@ -15,7 +15,7 @@
 
 - **Frontend**: React 18, TypeScript, Vite, TailwindCSS / Custom CSS
 - **Backend / Database**: Supabase (PostgreSQL, Row Level Security, Edge Functions)
-- **Deployment**: GitHub Pages (SPA static bundle) + Supabase Edge Functions
+- **Deployment**: static hosting (SPA static bundle) + Supabase Edge Functions
 - **State & Storage**:
   - Local mode: LocalStorage (no need to log in, instant experience)
   - Cloud mode: Supabase Auth + Database (sync across devices)

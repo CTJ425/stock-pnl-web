@@ -9,7 +9,7 @@
 npm install
 npm run dev      # 開發伺服器（http://localhost:5173）
 npm run test     # 單元測試 + UI 煙霧測試（vitest）
-npm run build    # 型別檢查 + 打包（輸出 dist/，可部署 GitHub Pages）
+npm run build    # 型別檢查 + 打包（輸出 dist/）
 ```
 
 ## 兩種運作模式
@@ -35,7 +35,7 @@ npm run build    # 型別檢查 + 打包（輸出 dist/，可部署 GitHub Pages
    > `stock-price` 由前端帶 anon JWT 呼叫，關掉驗證會變成誰都能打的公開端點（Edge Function 額度濫用）；
    > `stock-report` 一定要關，因為 pg_cron 是帶 `CRON_SECRET`、不帶 JWT 呼叫，設成 true 盤後批次會全數 401。
    > `stock-report` 為多檔函數；Dashboard GUI 部署與常見問題見 [`supabase/README.md`](supabase/README.md)。
-5. 部署到 GitHub Pages 前，把 Supabase Auth 的 Site URL / Redirect URLs 設為 Pages 網址。
+5. 部署前端前，把 Supabase Auth 的 Site URL / Redirect URLs 設為實際部署後的網址。
 
 ## 專案結構
 

@@ -8,8 +8,8 @@
 
 ## 🎯 Short-term Goals (short-term goals)
 
-1. **GitHub Pages automated deployment**
-   - Set up GitHub Actions workflow so that `main` / `dev` branch commits are automatically built and deployed to GitHub Pages.
+1. **Automated front-end deployment**
+   - Set up GitHub Actions workflow so that `main` / `dev` branch commits are automatically built and deployed to static hosting.
 2. **Supabase back-end environment connection and deployment**
    - Execute SQL Schema in Supabase SQL Editor.
    - Deploy Edge Function `stock-price` for Taiwan/US stock real-time quotation and search for agents.
@@ -396,7 +396,7 @@ Traditional Chinese, short vernacular sentences, no formulas, 3-5 paragraphs; **
 - `AbortController` times out **30 seconds**.
 - The error is classified as `auth`(401/403) / `rate-limit`(429) / `server`(5xx) / `timeout` / `network` / `bad-response`,
   Each gives a corresponding message in vernacular Chinese. The message of `network` should mention **CORS**: ol​​lama needs to be set
-  `OLLAMA_ORIGINS`, otherwise typing local endpoints from the domain of GitHub Pages will be blocked by the browser.
+  `OLLAMA_ORIGINS`, otherwise typing local endpoints from the deployed site domain will be blocked by the browser.
 - **No automatic retry** (AI calls cost money, silent retry will make the user pay twice), only give a "Retry" button.
 - **The first version does not stream**, it will be sent back once; the button will display "Interpreting... (up to 30 seconds)" when running.
   Streaming is left to user requirements - both support SSE, but the two sets of parsing formats are different. Whether it is worth it depends on the actual experience.
@@ -421,7 +421,7 @@ The one I changed to is the unchanged `TechnicalTab`, with the smallest change a
 
 ### M7. Risk
 
-1. **Browser blocks local endpoint**: Open `http://localhost:11434` from the Pages domain of `https://`,
+1. **Browser blocks local endpoint**: Open `http://localhost:11434` from the deployed site domain of `https://`,
    In addition to ollama's own CORS (`OLLAMA_ORIGINS`), you may also encounter browser restrictions on private network requests.
    The fallback route that fails to work in actual testing: use `npm run dev` locally, or wait for the 0.6.1 proxy (but the proxy cannot connect to your localhost,
    The proxy only solves the cloud provider's CORS and key issues). This** must be verified on the actual machine before being written into the README**.

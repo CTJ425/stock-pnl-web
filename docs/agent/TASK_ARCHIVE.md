@@ -64,14 +64,14 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 - **Testing**: npm test exit 0; tsc --noEmit exit 0; tsc -p tsconfig.edge.json exit 0; npm run build exit 0; oxlint 5 pre-existing warnings
 - **DEV disaster drill**: Three real transactions deleted, preview reported 62/59/3 rows missing and wrote nothing; apply restored them; FULL-TABLE checksum matched pre-deletion exactly. Re-run reported zero missing. Two tampered documents (user_id changes) both refused with expected messages, left no trace.
 - **PROD verification**: `stock-report` v57 deployed (ezbr_sha256 changed); verify_jwt=false; schema unchanged; 401 for unauthenticated; five malformed paths refused; read-only previews for both accounts reported no missing rows; row counts unchanged post-restore (110 transactions, 5 workspaces).
-- **Deployment**: Pages + cloud functions (stock-report v57).
+- **Deployment**: front end + cloud functions (stock-report v57).
 - **Unfinished**: None — released 0.9.12.
 
 ### Task 131: PROD deploy of the backup feature (0.9.11)
 - **Status**: ✅ **PROD deployed 2026-08-24** (version 0.9.11, project `kxnxadaghidwumqsqneu`)
 - **Agent**: Scribe
 - **Timestamp**: 2026-08-24 17:48:50 CST
-- **What was this**: Complete PROD deployment of backup-transactions feature. GitHub Pages (main branch) already deployed; cloud database and Edge Functions were the remaining targets.
+- **What was this**: Complete PROD deployment of backup-transactions feature. Frontend already deployed; cloud database and Edge Functions were the remaining targets.
 - **Deployment executed (in order)**:
   1. **Schema section 12** — Applied to cloud database `kxnxadaghidwumqsqneu`: `backups` bucket created with `public=false`, `backup_run_log` table with RLS enabled and admin-only SELECT policy, run_date index, pg_cron job `backup-daily` scheduled at '0 18 * * *' (Taipei time, i.e., 10:18 UTC).
   2. **Edge Function `backup-transactions`** — Deployed to `kxnxadaghidwumqsqneu` with `supabase functions deploy backup-transactions --no-verify-jwt`. Verified `verify_jwt=false` in deployed function metadata (new ezbr_sha256 hash recorded).
@@ -349,7 +349,7 @@ To check the implementation process of a certain task and the reasons for the ju
   (Test area wqetxuhncvfidqnklyew, official area kxnxadaghidwumqsqneu v13), all verified by actual use.
   The official area is also supplemented with `stock-report` (v29, `--no-verify-jwt`) that stopped at 0.6.30.
   **The order is "ALTER first, then deploy the function, and finally push main"** - in turn, the cache will fail to write the entire batch.
-  Or let the front-end of Pages run in front of the back-end (the whole row of the screen is flat).
+  Or let the front end run in front of the back-end (the whole row of the screen is flat).
 
 ### Task 66: Taiwan stock market card sorting; all market legal persons enter the background timeline (0.6.33)
 - **Status**: ✅ **Complete** - Pure front-end, Edge Function does not need to be redeployed
@@ -687,7 +687,7 @@ To check the implementation process of a certain task and the reasons for the ju
     `functions deploy stock-report --no-verify-jwt` is completed, and `functions download` compares the 11 files file by file.
     Endpoint detection: `admin-users` / `admin-set-role` both return 401 (blocked by `assertAdmin`),
     The non-existent action returns 400 - proving that the new code is indeed online.
-  - Official area: Final version 0.6.19, merge into `main` and execute after push (Pages deployment success) ——
+  - Official area: Final version 0.6.19, merge into `main` and execute after push (front-end deployment success) ——
     Two columns have been added (identity check returns `kxnxadaghidwumqsqneu`), `functions deploy --no-verify-jwt` completed,
     `functions download` compares files step by step. All 11 files are the same as `main`, and the endpoint detection results are consistent with the test area.
 - **Verification**: `npm test` 759/759, `npm run lint` 3 existing warnings, `npm run build` passed.
@@ -696,7 +696,7 @@ To check the implementation process of a certain task and the reasons for the ju
   The return shape, but the actual behavior cannot be verified until it is deployed to the test area.
 
 ### Task 48: Code Simplification (0.6.18)
-- **Status**: ✅ **Complete** - Final version 0.6.18 merged into `main` and pushed (triggering Pages deployment); no Supabase environment has been touched
+- **Status**: ✅ **Complete** - Final version 0.6.18 merged into `main` and pushed (triggering front-end deployment); no Supabase environment has been touched
 - **⚠️ Unverified**: The user chooses to skip the visual confirmation of "Actually opening a crawl status page in the test area".
   The jsdom test can verify the DOM structure, but cannot verify the CSS positioning, and the shift axis (`DayRow`) is the only change with screen output this time.
   If the shift axis layout is abnormal after the official area is launched, the first thing to look at is the `DayRow` of `AdminStatusPage.tsx`.
@@ -916,7 +916,7 @@ To check the implementation process of a certain task and the reasons for the ju
   The magnification is changed to `pdfScaleFor` which is automatically adjusted according to the area to avoid the canvas upper limit of iOS Safari.
 - **a11y**: The chart changes to roving tabindex, and the number of tabs on the whole page is 213~765 → **24**.
 - 596 tests green, build green, lint no new warnings. Pure front-end changes, **Supabase does not need to be changed in either area**.
-- Merged into `main` and pushed, GitHub Pages deployed; `main` aligned with `dev`.
+- Merged into `main` and pushed; `main` aligned with `dev`.
 
 ### Task 35: Change the line chart to Google Finance style (0.6.8)
 - **Status**: ✅ **Available with 0.6.8**
@@ -951,7 +951,7 @@ To check the implementation process of a certain task and the reasons for the ju
 - **Moving together**: The floating button is moved up to clear the navigation bar; the version badge is changed back to the file flow to follow the footer of the page.
 - **Deleted easily**: `.ws-select select` / `.user-email` which cannot select any element after dev.3 is dead CSS.
   And the `@media (max-width: 400px)` pagination squeeze is no longer needed.
-- **To-do**: ① `git push origin main` (**will trigger automatic deployment of Pages**) and `git push origin dev`
+- **To-do**: ① `git push origin main` (**will trigger automatic front-end deployment**) and `git push origin dev`
   → ② After going online, **use a real mobile phone to view the safe zone** (the inset of the desktop browser is always 0).
 - Follow the user instructions to enter `main` directly, skip the test area and verify this level first (pure front-end layout changes).
 - Pure front-end changes, **Supabase does not need to be changed in either area**.
@@ -987,7 +987,7 @@ To check the implementation process of a certain task and the reasons for the ju
   - [x] `functions download` file-by-file diff 10/10 consistent; front-end read real Storage passed the actual test
 - **Formal Area (Completed on 2026-07-29)**:
   - [x] According to §12.3, finalized version `0.6.7` with suffix removed and README version record finalized
-  - [x] Merge into `main` and push (GitHub Pages has been deployed)
+  - [x] Merge into `main` and push
   - [x] Deploy official area `stock-report --no-verify-jwt` and `stock-price`
   - [x] Formal zone creation cron `fx-daily` + trigger `sync-fx` + `functions download` verification
   - [x] After merging, `git push origin main:dev` makes the two branches consistent
@@ -999,7 +999,7 @@ To check the implementation process of a certain task and the reasons for the ju
   Six frames is still loose at 320px.
 
 ### Task 32: The right side of the top page converges into two menus (0.6.5-dev.3)
-- **Status**: ✅ **Both areas have been online and verified** (0.6.5 final version, Pages has been deployed)
+- **Status**: ✅ **Both areas have been online and verified** (0.6.5 final version, the front end has been deployed)
 - **Agent**: Claude
 - **Timestamp**: 2026-07-28 19:40:00 Asia/Taipei
 - The user selected R4 after design review at the top of the page. 8 controls on the right → 2 menus.
@@ -1637,10 +1637,10 @@ The historical accumulated handling fee KPI on the annual income page is deduced
 - **Allowed Changes**: `docs/`
 - **Verification**: The `docs/agent/` directory is created and contains complete documentation, and the `docs/architecture/` and `docs/database/` files are located.
 
-### Task 2: GitHub Pages CI/CD automated construction
+### Task 2: Front-end CI/CD automated construction
 - **Status**: TODO
 - **Allowed Changes**: `.github/workflows/`
-- **Acceptance Criteria**: Commit to `main` automatically triggers build and produces a static website to GitHub Pages.
+- **Acceptance Criteria**: Commit to `main` automatically triggers build and produces a static website.
 
 ### Task 3: Supabase backend online and Edge Function deployment
 - **Status**: TODO
@@ -2181,7 +2181,7 @@ Both findings are correlational — routed sessions may simply be harder tasks. 
 - **Status**: ✅ **Code shipped in 0.9.17, Edge Functions deployed to both DEV and PROD**
 - **Agent**: —
 - **Timestamp**: 2026-08-25 15:41:49 CST
-- **What was done**: Yahoo-style quote tab redesign with IntradayChart for 個股分析. Branch `feat/quote-yahoo-a` merged to dev and main (commit 11516cd). T1 intraday data path (intradayParse module, stock-price action) deployed to DEV (volume copy 2026-08-25, container restart) and PROD (Edge v20, sha bac85eb3edcf1fc7, deployed 2026-08-25 17:52:35). T2 UI rebuild (IntradayChart, QuoteTab, StockDetailPage) deployed to GitHub Pages via main branch. Tests: 83 files / 1276 tests passed.
+- **What was done**: Yahoo-style quote tab redesign with IntradayChart for 個股分析. Branch `feat/quote-yahoo-a` merged to dev and main (commit 11516cd). T1 intraday data path (intradayParse module, stock-price action) deployed to DEV (volume copy 2026-08-25, container restart) and PROD (Edge v20, sha bac85eb3edcf1fc7, deployed 2026-08-25 17:52:35). T2 UI rebuild (IntradayChart, QuoteTab, StockDetailPage) deployed via main branch. Tests: 83 files / 1276 tests passed.
 - **Data-source item remaining**: Stats grid omits 均價 / 成交金額 / 昨量. Design shows three additional cells, but `PriceQuote` has no data source today. Shipped with 7 cells (成交量/開盤/最高/最低/昨收/漲跌幅/振幅). Needs data source decision (schema / batch service) before implementing the three omitted cells. Kept as a short open entry in TASK.md noting the data-source dependency, not a defect.
 - **Unfinished**: Stats grid columns (data source work only, not code).
 
@@ -2225,13 +2225,13 @@ Both findings are correlational — routed sessions may simply be harder tasks. 
 - **Status**: ✅ **Shipped, merged to main**
 - **Agent**: Grok
 - **Timestamp**: 2026-08-07 17:10:00 Asia/Taipei
-- **What was done**: Items 1–7 complete. Schema deployed to PROD DDL, Edge deployed, frontend pushed to GitHub Pages.
+- **What was done**: Items 1–7 complete. Schema deployed to PROD DDL, Edge deployed, frontend deployment completed.
 - **Unfinished**: None — task complete and shipped.
 
 ### Task 77: Ship 0.6.44 (full-market analysis search)
 - **Status**: ✅ **Shipped, merged to main, all 14 PROD DDL tables verified**
 - **Agent**: Grok
 - **Timestamp**: 2026-08-07 15:39:33 Asia/Taipei
-- **What was done**: Items 1–7 complete. Frontend search box and non-holding path deployed via GitHub Pages. Edge `stock-report` and schema `warm_quota` table + `take_warm_quota` function deployed to PROD. All 14 public tables present and identical to DEV set as of 2026-08-26.
+- **What was done**: Items 1–7 complete. Frontend search box and non-holding path deployed. Edge `stock-report` and schema `warm_quota` table + `take_warm_quota` function deployed to PROD. All 14 public tables present and identical to DEV set as of 2026-08-26.
 - **Unfinished**: None — task complete and shipped.
 

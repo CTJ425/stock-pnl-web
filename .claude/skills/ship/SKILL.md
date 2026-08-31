@@ -14,7 +14,7 @@ description: Test, version bump, commit, deploy to dev, verify, then main
    `main` is pushed becomes the permanent public Release body, fixable only by hand:
    `node scripts/sync-github-releases.cjs --version <x.y.z> --force`. This happened to 0.7.22.
 7. Only after DEV is good and the user authorizes: merge/release to **main** and smoke again (pushing
-   to `main` automatically deploys Pages and triggers the Release sync above).
-8. **A `main` push deploys Pages only — never an Edge Function.** If the change touches
+   to `main` triggers the Release sync above).
+8. **A `main` push never deploys an Edge Function.** If the change touches
    `sources/supabase/functions/`, deploy it separately (skill `supabase-ops`) or the fix is not live.
 9. Report a short summary in Traditional Chinese.

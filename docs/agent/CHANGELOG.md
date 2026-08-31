@@ -16,7 +16,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🔬 **DEV 實測（2026-08-31）** — 以真實使用者 JWT 對自架 DEV 驗證：首次補齊回 `{daysWritten: 7, daysFetchedUpstream: 1}`、1.17 秒，寫出 `20260820`–`20260828` 共 7 個報表檔；第二次同樣呼叫回 `skipped: "already-present"`、0 次抓取、17 毫秒。對外抓取 1 次未觸及上限 2。`manifest.json` 的 `updated_at` 全程未變。產出檔案與排程產生的同日檔案結構一致（schema 3、外資買賣超、融資券、借券齊全）。測試用資料已還原。
 - 🔎 **權限閘門的既有行為** — `warm` 沿用 `allowedTwTickers()`（持股 ∪ 觀察清單）。`heldTwTickers()` 只認 `net > 0`，因此已清倉的代號會回 403，需加入觀察清單才可補齊。此為 0.8.0（`cbbdba0`）既有行為，非本版變更。買進路徑順序正確：`WorkspaceContext.tsx` 先 `await addTransactions()` 才 `void prefetchStockData()`，閘門查詢時新部位已存在。
 - 📋 **覆蓋缺口** — 本 repo 無 `stock-report/index.ts` action dispatch 的測試骨架，Edge 端 `phase: 'chips'` handler 與 `maxUpstreamDays` 上限僅由 `typecheck:edge` 覆蓋，需手動 DEV 驗證。
-- 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`；`main` 的 push 只部署 Pages，Edge 必須另外部署，且 `stock-report` 一律帶 `--no-verify-jwt`（該函式以 `CRON_SECRET` 供 pg_cron 呼叫，不走 JWT）。
+- 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`；`main` 的 push 只部署前端，Edge 必須另外部署，且 `stock-report` 一律帶 `--no-verify-jwt`（該函式以 `CRON_SECRET` 供 pg_cron 呼叫，不走 JWT）。
 
 ### 0.9.21（2026-08-27）— 當日大盤面板完善：重新整理按鈕、日期徽章、三大法人側欄、與六項缺陷修復
 
@@ -181,7 +181,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 📊 **測試** — `AnalysisPage.test.tsx` 改寫「下拉只列持股，不再有觀察分組」為「下拉分組列出持股與觀察，持股在前」，並新增兩測案：持股與觀察重複時選單只出現一次且算持股、從選單點觀察股後不帶持股且顯示單檔報價。其中 2 條先紅後綠。
 - ✅ **測試驗證** — `npx vitest run` 77 檔 / **1147 測試** exit 0、無 Errors 行；`npx tsc --noEmit` exit 0；`npm run typecheck:edge` exit 0；`npm run build` ok；`npx oxlint` 5 個既有 only-export-components 警告，無新增。
 - 🔍 **調查併記：證交所沒有 ETF 成分股 API**（Task 129，本版不實作）— `openapi.twse.com.tw/v1` 全站僅兩支 ETF 端點：`/opendata/t187ap47_L`（基金基本資料彙總表）與 `/ETFReport/ETFRank`（定期定額戶數月報），皆無持股明細；每日 PCF 依規定由各投信自行公布，證交所 ETF 專區只導向發行人網站。候選來源與代價已記於 `TASK.md`。
-- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；推送 `main` 由 GitHub Pages 部署前端即可。
+- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；前端部署已停用。
 
 ### 0.9.9（2026-08-24）— 觀察清單重新配置到儀表板：雙視圖、容量追蹤、個股導航
 
@@ -195,7 +195,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 📊 **測試涵蓋**（`WatchSection.test.tsx`）— 10 測案：空列表、容量徽章、批量股價取得、卡片預設渲染（價格/% /色碼）、視圖模式切換 + localStorage 記憶、卡片點擊觸發 `onSelectTicker`、列表列點擊觸發 `onSelectTicker`、刪除流程（`removeWatch` + 重載 + `onChanged`）、容量已滿 30/30（新增按鈕禁用 + 提示）、新增按鈕開啟 `AddWatchModal`。`StockDetailPage.test.tsx` 適配三籤版面。
 - 📐 **設計文件**（已備妥）— `docs/architecture/watchlist_dashboard_redesign.md` (含 .html) 與 `docs/architecture/watchlist_6_design_variants.md` (含 .html) 記錄設計過程與三個未實現變體（Sparkline 7 日趨勢、機構籌碼晶片、日內高低區間條）。本版發運基礎卡片（股代 / 股名 / 價格 / % 變化）；三個進階變體保留為後續版本設計成果。
 - ✅ **測試驗證** — `npx vitest run` 77 檔 / **1145 測試** exit 0、無 Errors 行（0.9.8 為 77 檔 / 1148）；`npx tsc --noEmit` exit 0；`npm run typecheck:edge` exit 0；`npm run build` ok；`npx oxlint` exit 0（5 個既有 only-export-components 警告）。
-- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；推送 `main` 由 GitHub Pages 部署前端即可。
+- 🚀 **部署** — 本版無 `sources/supabase/functions/` 異動，**不需部署 Edge Function**；前端部署已停用。
 
 ### 0.9.8（2026-08-24）— 全專案體檢：測試閘門轉綠、網路等待全面設上限
 
@@ -206,9 +206,9 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🌐 **前端 Edge 呼叫逾時（P2）** — `supabase.functions.invoke` 無預設逾時，Edge Function 卡住時畫面無限轉圈。10 個呼叫點全補 `timeout`，數值對齊伺服器自身預算（warm 45 秒對 `WARM_BUDGET_MS` 30 秒、adminRun 150 秒對 `GENERATE_ALL_BUDGET_MS` 110 秒）。新增契約測試掃描所有 service，缺一即失敗。
 - ⚡ **非同步 effect 錯誤處理（P2）** — `StockDetailPage`、`AiTab`、`useDailySeries` 共四個 useEffect 內的 async IIFE 無 catch，拒絕會讓載入狀態卡死。已補上；屬防禦縱深——現況各 service 都自行吞錯回傳 sentinel，尚無法觸發。
 - 💰 **損益與效能（P3）** — `breakEvenPrice` 無解時改回傳 `0` 哨兵值；`FeeInput` 補 SELL 契約說明（須提供 `taxRate` 或 `ticker`，否則靜默套用 0.3% 一般股稅率）；`WorkspaceContext` 交易時不再重複計算整份 ledger；`pnlEngine` 交易排序改用字串比較取代 `localeCompare`；`timeline.ts` 七處 `+ 8` 時區換算抽成具名常數。
-- 🔧 **建置修正** — 契約測試原本使用 `node:fs`，但 `tsconfig.app.json` 只帶 `vite/client` 型別，讓 `tsc -b` 失敗並弄壞 Pages 部署（vitest 因 esbuild 不做型別檢查而照樣通過）。改用 Vite 的 `import.meta.glob` raw 匯入。
+- 🔧 **建置修正** — 契約測試原本使用 `node:fs`，但 `tsconfig.app.json` 只帶 `vite/client` 型別，讓 `tsc -b` 失敗（vitest 因 esbuild 不做型別檢查而照樣通過）。改用 Vite 的 `import.meta.glob` raw 匯入。
 - ✅ **測試驗證** — `npx vitest run` 77 檔 / 1148 測試 exit 0；`npx tsc --noEmit` 與 `npm run typecheck:edge` 乾淨；`npm run build` 通過。
-- 🚀 **部署** — 本版的 Edge Function 修正（`stock-price`、`stock-report/twChips`）需另行部署 Edge Function 才會生效；推送 `main` 只會部署 GitHub Pages 前端。
+- 🚀 **部署** — 本版的 Edge Function 修正（`stock-price`、`stock-report/twChips`）需另行部署 Edge Function 才會生效；前端部署已停用。
 
 ### 0.9.7（2026-08-20）— 外資買賣超指紋改為雜湊
 
@@ -230,7 +230,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 📊 **退休判準改為「尾端連續相同指紋」** — 舊判準是「到位總次數 ≥ `REQUIRED_LANDED_COUNTS[id]` 且（該來源不要求內容穩定，或最後兩筆指紋相同）」，有兩個洞：`A → B → B` 就退休，但 `A → B` 剛剛才證明上游還在改；而 `contentSettled` 只讀最後兩筆，更早的改版證據完全不看。新判準把 `counts[id]` 改成**尾端連續相同指紋的長度**（新增 `trailingRun`），`retiredSources` 只需比對 `counts[id] >= required[id]`——任何一次內容變動都把計數歸零重新累積。`REQUIRE_SETTLED_CONTENT` 與 `contentSettled` 一併刪除：MOPS 兩源只需連續 1 次，天生滿足，舊的「一到位就退休」行為原樣保留。
 - 📈 **次數維持 3（每日來源）／ 1（MOPS），這是實測後的決定** — 原本考慮把每日來源從 3 提到 4，實測後放棄。DEV `batch_run_log` 2026-08-12～08-19 顯示 T86 **一天最多改版一次**，且改版落在 17:00–20:45 之間，在 t86 探針視窗（16:00–17:00）**之外**——提高次數攔不到它，只會多打無效請求。這同時推翻了原始碼註解宣稱的「T86 每 15 分鐘改一次」。那次改版實際上由後續其他來源的 follow-up 接住：每一次 chips 執行都會重抓 T86 並經 `nextT86State` 重設 `t86_frozen`（`index.ts:2911`），而 `decideSkip` 要到借券翻日（約 22:15）才會短路。
 - ✅ **測試** — `npx vitest run supabase/functions/stock-report/` 365 項全通；`npm test` 75 檔 1135 項全通；`npx tsc --noEmit` 與 `npm run typecheck:edge` 皆乾淨。`AnalysisPage.whatif.test.tsx` 有 2 項既有的 unhandled rejection（`warmStockCore` mock 回傳 undefined），與本次變更的檔案無關。
-- 🚀 **部署** — DEV Edge 以 volume copy 部署並重建 functions 容器，`diff -rq` 無差異；**PROD Edge 已隨 0.9.7 一併部署**（同一份 bundle，`ezbr_sha256` `f776a7a0…`）。注意推 `main` 只部署 GitHub Pages，不會部署 Edge Function，兩者是獨立的動作。
+- 🚀 **部署** — DEV Edge 以 volume copy 部署並重建 functions 容器，`diff -rq` 無差異；**PROD Edge 已隨 0.9.7 一併部署**（同一份 bundle，`ezbr_sha256` `f776a7a0…`）。前端部署已停用；Edge Function 部署為獨立的動作。
 - ✅ **DEV 端對端驗證（2026-08-20 20:45–21:00）** — `margin` 於 20:45／20:50／20:55 連續三輪到位且指紋皆為 `174457:1s4vqtw`，21:00 那輪不再出現 margin 列，即退休生效。同時證明 BUG-033 已修：指紋是真雜湊而非 `0:45h`，`rows` 回報 1295 而非 null。
 - ⚠️ **已知但未修** — `twt38u` 的 `fingerprint` 存的是整份表的原文而非雜湊（約 10KB／列），與其他來源不一致，會撐大 `source_probe_tick`。本次未動，已於 **0.9.7** 修正。
 - ⚙️ **未改動** — `REQUIRED_LANDED_COUNTS` 的值、`DAILY_WINDOWS`、`MOPS_SLOTS`、`PROBE_FOLLOW_UP`、`sourceLanded`、`probeRound.ts`；前端完全未動。
@@ -499,7 +499,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 ### 0.7.14（2026-08-12）— App icon 改為手寫 SVG 元件＋修掉 scribe 中斷會吃掉紀錄的問題
 
 > 目前狀態：正式 release commit `3f0eaea`（`0.7.14`），`dev`／`main` 都在 `3f0eaea`——本次 fast-forward，
-> 兩支天生同版。GitHub Pages Actions run `31594918544` 已成功；GitHub Release `0.7.14` 已建立（本政策下首個 Release）。
+> 兩支天生同版。GitHub Release `0.7.14` 已建立（本政策下首個 Release）。
 > 正式站煙霧測試通過：首頁引用 `./favicon.svg`（200, 890B），`favicon.svg` 本身 200、1207B、含字面色 `#6366f1`。
 > 無 Supabase／Edge Function 變更。
 
@@ -513,7 +513,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 ### 0.7.13（2026-08-12）— 借券翻日死在半路（BUG-026）＋到位判準抽樣未排序（BUG-027）
 
 > 目前狀態：正式 release commit `33c1bd7`（`0.7.13`），`dev`／`main` 已同步推送；GitHub
-> Pages Actions run `31562082598` 已成功，兩區 Edge 也已部署（PROD `stock-report` v46，
+> 前端部署 Actions run `31562082598` 已成功，兩區 Edge 也已部署（PROD `stock-report` v46，
 > `verify_jwt=false`）。DEV 的 cron 移除是資料庫層操作，PROD cron 仍維持原本 7 支（見下）。
 
 - 🐞 **BUG-026**：`decideSkip` 完全沒有借券項，只看 `t86Today && t86Frozen && marginToday`。借券翻到下一個
@@ -791,7 +791,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🎨 **三大法人買賣超**主表：**日期 × 單位 × 買進／賣出／買賣超**；波折圖放大；**「連 N 日買超／賣超」**在圖上方；恢復 **＋／− 展開** 與全部展開／收起（**預設只展開最新交易日**）。
 - 🐛 **BUG-024**：0.7.0 誤刪 `chipReportReady` / `fundamentalSoftReady` 導致 chips phase 500、融資融券整區空白；已還原。
 - 📚 測試 SoT（`docs/UnitTests/`）、skills（testing / verify / ship）、PROGRESS 歸檔。
-- ✅ PROD Edge `stock-report` **v39** 已 deploy（`--no-verify-jwt`）；BUG-024 雲端生效。前端 Pages 隨 `main` 推送。
+- ✅ PROD Edge `stock-report` **v39** 已 deploy（`--no-verify-jwt`）；BUG-024 雲端生效。前端隨 `main` 推送。
 
 ---
 
@@ -804,7 +804,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🔐 `generate` / `warm` **恢復持股白名單**（`heldTwTickers`）+ 登入把關；`warm_quota` 仍作第二層上限。
 - ✅ **保留** 0.6.44 以降與兩功能無關的修訂：progressive warm、generate 三 phase、手動更新／進度條、FOMC、月營收早申報、daily/fund skip、日 K／布林、BUG-023 等。
 - 📦 DB：`tw_watchlist` / `warm_quota` **不強制 DROP**（既有環境免破壞性 migration；code 不再讀觀察清單）。
-- ⚠️ 需 deploy `stock-report --no-verify-jwt`；前端推送後 Pages 生效。
+- ⚠️ 需 deploy `stock-report --no-verify-jwt`；前端推送後前端生效。
 
 ---
 
@@ -851,7 +851,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
   - cron 的 `generate-all` 在約 **110s** 預算內依序跑，時間不夠就 **跳過後段**（下輪再補，P1）。
   - 管理後台改為三個手動 job（各一次 HTTP／各有算力預算），進度條可看出卡在哪段。
 - 📝 **P1**：history 仍是一輪月營收+季報上限；完整 12/12 靠夜班多輪，不要求手動一次補滿。
-- ⚠️ **需 deploy** `stock-report --no-verify-jwt`（正式／DEV）；前端推 `main` 上 Pages。
+- ⚠️ **需 deploy** `stock-report --no-verify-jwt`（正式／DEV）；前端推 `main` 上線。
 - 原因：雲端 Edge 546 compute（本機 self-hosted 較不易重現）。
 
 ---
@@ -864,7 +864,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
   每項狀態（等待／執行中／完成／失敗）、HTTP、耗時與摘要，方便看出卡在哪一步。
 - 📝 **版號規則**：`dev` 開發中一律 `x.x.x-dev.N`；**只有正式 release commit** 才去掉 `-dev`；
   release 後 `dev`／`main` 版號必須一致（見 `versioning` skill / CLAUDE.md §12）。
-- ⚠️ **僅前端**；推 `main` 後 Pages 生效，不必 redeploy Edge。
+- ⚠️ **僅前端**；推 `main` 後前端生效，不必 redeploy Edge。
 
 ---
 
@@ -876,7 +876,7 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
   先前伺服器端依序跑完 `generate-all` 等全部項目，容易超過平台約 150 秒上限，
   瀏覽器只看到 `Edge Function returned a non-2xx status code`（常見 HTTP 504）。
   現改為**每個 job 各打一次**，各自獨立時間預算；逾時訊息也會帶 status／提示。
-- ⚠️ **僅前端**：推 `main` 後 GitHub Pages 生效；**不必**為此 redeploy Edge。
+- ⚠️ **僅前端**：**不必**為此 redeploy Edge。前端部署已停用。
   （正式區 `stock-report` 若仍落後 0.6.46 的 TOP30 action，單獨跑「TOP30 名單」
   仍可能 400，那是另一件 deploy 缺口。）
 
@@ -1718,7 +1718,7 @@ bucket，前端直接下載。**沒有新增資料表**，也不必管保留期 
 
 **盤後報告端點的濫用防護**
 - `stock-report` 為了讓夜間 cron 進得來，是以 `--no-verify-jwt` 部署的公開端點，
-  而專案網址就在 GitHub Pages 的公開 bundle 裡 —— 任何人都能無限次呼叫 `generate`。
+  專案網址曾暴露在公開 bundle 裡 —— 任何人都能無限次呼叫 `generate`。
 - 改為**只接受目前確實持有的台股代號**（非持股一律回 403）。攻擊者最多只能打這幾檔，
   而它們的當日資料早已被夜間批次快取，因此**無法逼這個專案去大量抓 TWSE**，
   只剩單純的 DB 讀取。前端不受影響（下拉選單本來就只列自己的持股）。
@@ -1802,7 +1802,7 @@ bucket，前端直接下載。**沒有新增資料表**，也不必管保留期 
 ### 0.2.4（2026-07-20）
 - **庫存總覽新增「投入成本」欄**：目前持股當初投入的金額（平均買入成本 × 持有股數，含買進手續費），也就是「現在還壓在裡面」的錢；已賣出的部分不計入。欄位順序為「持有股數 → 投入成本 → 平均買入成本」，先看總額再看單價。金額同樣採「含費 / 未含費」雙行。
 - 計算引擎未變動：數字取自既有的持股部位成本（`cost` / `rawCost`）。
-- **CI**：GitHub Actions 的 Pages actions 升版（checkout / setup-node v7、upload-pages-artifact / deploy-pages v5），build 用的 Node 由 20 升至 24，解除 Node 20 runtime 淘汰警告。
+- **CI**：Build 用的 Node 由 20 升至 24，解除 Node 20 runtime 淘汰警告。
 
 ### 0.2.3（2026-07-20）
 - **台股現價改用證交所 MIS 即時行情**：原本台股報價來自 Yahoo Finance（本身延遲 15–20 分鐘），改為直接取用證交所 MIS 即時行情，Yahoo 降為失敗時的備援；美股維持 Yahoo。

@@ -481,7 +481,7 @@ reads —— at that moment it genuinely had not, because of fault (2). That is 
   body often not `{ error: string }`, so supabase-js only showed
   `Edge Function returned a non-2xx status code`. Confirmed path: 全部執行.
 - **Fix**: `runAdminJobs` invokes **one job per request** and aggregates results;
-  504/non-JSON errors surface status + hint. Frontend only (Pages deploy).
+  504/non-JSON errors surface status + hint. Frontend only.
 - **Status**: ✅ FIXED (0.6.47).
 
 ### Bug ID: BUG-019 — An unparsed cron looked like intended output (AUDIT-05)

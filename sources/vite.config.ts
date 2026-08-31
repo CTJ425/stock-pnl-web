@@ -2,7 +2,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// base: './' enables the packaged resources to use relative paths and can be deployed in GitHub Pages sub-paths
+// base: './' makes packaged resources use relative paths, so the build works under any sub-path hosting
 export default defineConfig({
   plugins: [react()],
   base: './',
@@ -24,7 +24,7 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     // TWSE / TPEx OpenAPI does not open CORS, and the development mode obtains the Taiwan stock list and current price through the dev server agent;
-    // The official environment (GitHub Pages) is proxied by Supabase Edge Function (see src/services/priceProxy.ts)
+    // The deployed build is proxied by Supabase Edge Function (see src/services/priceProxy.ts)
     proxy: {
       '/api/twse': {
         target: 'https://openapi.twse.com.tw',

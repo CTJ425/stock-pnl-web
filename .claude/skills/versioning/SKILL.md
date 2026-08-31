@@ -55,7 +55,7 @@ Examples: target `0.6.48` → first change `0.6.48-dev.1`, second `0.6.48-dev.2`
 1. Confirm the target official number (e.g. work was `0.6.48-dev.3` → release **`0.6.48`**).
 2. Set `version.ts` / `package.json` / lock / README badge to **`0.6.48`** (no `-dev`).
 3. Finalize `docs/agent/CHANGELOG.md` under that official heading.
-4. Merge to `main`, push (Pages deploys).
+4. Merge to `main`, push.
 5. **Sync branches**: `git push origin main:dev` (or merge main→dev) so **dev and main show the same `0.6.48`**.
 6. **Publish a GitHub Release** for the tag, using that version's `CHANGELOG.md` section as the body
    (see § GitHub Releases below).

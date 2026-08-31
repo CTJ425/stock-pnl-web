@@ -1,6 +1,6 @@
 # Stock trading and inventory management system (Web version) system design document
 
-This document plans to port and upgrade the stock management tool originally based on Google Apps Script (GAS) into a modern single-page web application (SPA) based on **React (Vite + TypeScript)**, **Supabase (Database & Auth & Edge Functions)** and deployed on **GitHub Pages**.
+This document plans to port and upgrade the stock management tool originally based on Google Apps Script (GAS) into a modern single-page web application (SPA) based on **React (Vite + TypeScript)**, **Supabase (Database & Auth & Edge Functions)** and deployed on **static hosting**.
 
 > 📌 **2026-07-16 Decision Update**: This document has been revised based on the discussion conclusions - the front end adopts **TypeScript**, the current price is changed to **Supabase Edge Function agent**, **CSV import/export** (including the relocation of old spreadsheet data) is included in the early scope, and the database Schema adds CHECK constraints and workspace ownership consistency verification.
 
@@ -8,18 +8,18 @@ This document plans to port and upgrade the stock management tool originally bas
 
 ## 🏗️ System architecture and technical feasibility assessment
 
-### 1. Deployment architecture: GitHub Pages (front-end static hosting)
-* **Feasibility**: **High**. GitHub Pages offers free and extremely fast static web hosting. Since React/Vite projects are built as static HTML, JS, and CSS files, they are very suitable for deployment here.
-* **Development environment and construction**: Use Vite as the packaging tool, and configure `base: './'` or `base: '/<repository-name>/'` to be perfectly compatible with the sub-path of GitHub Pages.
-* **SPA Routing Notes**: Since it is deployed in a sub-path and GitHub Pages does not support server-side rewrite, the front-end routing uses **HashRouter** (or single-page paging switching, without using router) to avoid 404 when rewriting.
-* **Auth Redirect URL**: The Site URL / Redirect URLs of Supabase Auth need to be set to the official URL of GitHub Pages, otherwise the registration confirmation letter and OAuth redirection will fail.
+### 1. Deployment architecture: front-end static hosting
+* **Feasibility**: **High**. Static hosting offers free and extremely fast delivery. Since React/Vite projects are built as static HTML, JS, and CSS files, they are very suitable for deployment here.
+* **Development environment and construction**: Use Vite as the packaging tool, and configure `base: './'` or `base: '/<repository-name>/'` to be perfectly compatible with sub-path hosting.
+* **SPA Routing Notes**: Since it is deployed in a sub-path and static hosting does not support server-side rewrite, the front-end routing uses **HashRouter** (or single-page paging switching, without using router) to avoid 404 when rewriting.
+* **Auth Redirect URL**: The Site URL / Redirect URLs of Supabase Auth need to be set to the deployed site URL, otherwise the registration confirmation letter and OAuth redirection will fail.
 
 ### 2. Backend and database: Supabase (BaaS)
 * **Feasibility**: **High**. Supabase provides a PostgreSQL database, GoTrue authentication (Auth), and row level security (RLS).
 * **Multi-user isolation**:
   - Through Supabase Auth, users can register/log in using their email address and password.
   - After turning on RLS, establish the following security policy: Each transaction record is bound to the workspace (Workspace) with `user_id`, and users can only read and write data that meets `auth.uid() = user_id`. This ensures 100% data privacy and security.
-* **Client connection**: The front end directly uses `@supabase/supabase-js` to make API calls, without the need to write additional Node.js back-end services, which is very suitable for GitHub Pages static websites.
+* **Client connection**: The front end directly uses `@supabase/supabase-js` to make API calls, without the need to write additional Node.js back-end services, which is very suitable for static websites.
 
 ### 3. Current price API acquisition plan (Supabase Edge Function current price agent)
 The browser front-end is restricted by the same-origin policy (CORS), and the public CORS Proxy is unstable and has privacy concerns. Therefore, we do not rely on the public Proxy and adopt the following strategy instead:
@@ -249,7 +249,7 @@ In order to provide users with the ultimate visual feast (WOW factor), we will u
 ### Phase 5: Self-test code review and deployment
 * **Job content**:
   1. The self-test program code is safe, confirming that no sensitive information (API Key, password) has been leaked, and confirming that Supabase RLS is safe.
-  2. Configure GitHub Actions to automatically package and deploy to GitHub Pages (`vite.config.ts` sets the `base` subpath).
-  3. Set the Site URL / Redirect URLs of Supabase Auth to the GitHub Pages URL; confirm that the front-end routing (HashRouter or single page switching) does not reorganize 404.
+  2. Configure CI to automatically package and deploy to static hosting (`vite.config.ts` sets the `base` subpath).
+  3. Set the Site URL / Redirect URLs of Supabase Auth to the deployed site URL; confirm that the front-end routing (HashRouter or single page switching) does not reorganize 404.
 * **Verification method**:
-  - Open an incognito window and access the GitHub Pages URL to test the complete registration, login, accounting, CSV import and reporting process.
+  - Open an incognito window and access the deployed site URL to test the complete registration, login, accounting, CSV import and reporting process.

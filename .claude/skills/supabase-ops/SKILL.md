@@ -45,7 +45,7 @@ supabase functions list --project-ref <ref>   # read ezbr_sha256, not just versi
 - Its limit: a hash says *whether* the bundle differs, never *what* is inside it. It is only evidence when you deploy
   from a working tree you know is clean and at a known commit —— record that commit alongside the sha.
 
-**A `git push` does not deploy an Edge Function.** Pushing to `main` fires GitHub Pages, so a fix that lives in
+**A `git push` does not deploy an Edge Function.** Pushing to `main` only updates the repository, so a fix that lives in
 `sources/supabase/functions/` looks shipped while the server still runs the old code. `quoteWindow.ts` is the sharp
 case: the browser imports the Edge copy across directories, so one file change is **two** deploy targets, and only one
 of them travels with git. After any commit that touches `sources/supabase/functions/`, check `functions list` before
