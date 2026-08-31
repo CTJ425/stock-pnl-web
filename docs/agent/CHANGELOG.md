@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.23（2026-08-31）— 移除 GitHub Pages、README 改寫為初始化手冊、修正註冊確認信重導
+
+> PROD Supabase 專案於本日遭刪除，資料永久遺失，DEV 與 PROD 均重建為全新環境。本版配合該情況把 GitHub Pages 完全移除，並把 README 的「部署方式」改寫為一份可逐步執行的初始化手冊，每一步同時提供 WebUI 與 CLI 兩種做法。另修正註冊確認信重導至 `localhost:3000` 的缺陷。
+
+- 🗑️ **GitHub Pages 完全移除** — 線上站台以 GitHub API 停用（`DELETE /repos/CTJ425/stock-pnl-web/pages`，現回 404）；`.github/workflows/deploy.yml` 已刪除（commit `3634dca`）。`.github/workflows/release.yml` 保留，它是 GitHub Releases 同步，與 Pages 無關。
+- 🧹 **全 repo 引用清除（含歷史歸檔）** — 依使用者要求連同 `PROGRESS_ARCHIVE.md` / `TASK_ARCHIVE.md` / `CHANGELOG.md` 的歷史記述一併處理。供應商名稱一律改為中性用語（前端部署／靜態託管／front-end deployment／static hosting）。未虛構替代託管商，PROD 部署目標目前為未設定狀態。`sources/src/components/AppShell.tsx` 未更動，該處的 "Pages" 指應用程式分頁而非 GitHub Pages。
+- 📘 **README 改寫為初始化手冊** — 刪除「GitHub Actions 自動部署」與「環境變數與 Secrets」兩節；「部署方式」改為「初始化與部署」，含步驟 0–10：clone → 建立 Supabase 專案 → 產生 `CRON_SECRET` → 套用 schema（18 處佔位符替換）→ 設定 Edge 密鑰 → 部署 3 支 Edge Functions → 覆驗排程 → Auth 設定 → 升級管理員 → 前端建置 → 驗收清單 → 常見初始化錯誤。每一步皆列 WebUI 與 CLI 兩種做法。
+- 🔧 **`sources/supabase/README.md` 更正** — 該文件停留在 2 支函數與過期檔案清單，走 WebUI 逐檔貼會導致函數 import 失敗。更正為 3 支（補上 `backup-transactions`）、`stock-price` 2→4 檔、`stock-report` 10→17 檔，並移除已刪除的 `twNews.ts`。
+- 🔐 **逐函數 JWT 設定明確記載** — `stock-price` 必須維持 `verify_jwt=true`（`stock-price/index.ts:11-12`），帶 `--no-verify-jwt` 會讓報價端點對外公開；`stock-report` 與 `backup-transactions` 則必須帶 `--no-verify-jwt`，因為 pg_cron 以 `x-cron-secret` 呼叫、不帶 JWT。此處曾有一份 scout 回報稱三支皆應關閉 JWT，經查證為誤，已排除。
+- 🐛 **註冊確認信重導修正**（`context/AuthContext.tsx`）— `signUp` 未帶 `emailRedirectTo`，Supabase 因此回頭採用專案的 Site URL，而新專案的出廠值是 `http://localhost:3000`；本專案 Vite 服務於 5173，確認連結落在無服務的埠。改為比照同檔案既有的 `resetPasswordForEmail`，由 `window.location.origin + window.location.pathname` 取得實際來源，三個環境毋須各自修改 Site URL。
+- 🧪 **測試** — 全套 **85 檔 / 1345 測試通過**，exit 0；`npm run build` exit 0。本版未新增測試：`AuthContext.tsx` 目前無測試骨架，為兩行變更建立骨架超出本次範圍。
+- 🚀 **不需要 Edge 部署** — `sources/supabase/functions/` 內無程式碼變更（僅該目錄的 README 文件更動）。
+
 ### 0.9.22（2026-08-31）— 全新代號自動補齊三大法人資料
 
 > 過去新增一檔從未記錄過的股票後，三大法人／融資券／借券資料要等隔天夜間 `generate-all` 排程才會出現；加入觀察股更是完全不觸發任何抓取。本版讓兩條新增路徑都即時補齊最近 7 個交易日的籌碼資料。關鍵在於 `chip_raw_cache` 存的是未過濾的全市場原始回應，因此快取命中時對外呼叫次數為零。
