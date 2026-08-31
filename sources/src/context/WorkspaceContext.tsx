@@ -21,6 +21,7 @@ import type { DataProvider } from '../services/dataProvider'
 import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
 import { isSupabaseConfigured } from '../services/supabase'
 import { prefetchStockData } from '../services/prefetchStockData'
+import { syncWorkspaceFees, saveWorkspaceFeeRate } from '../services/feeSettings'
 import { useAuth } from './AuthContext'
 
 const CURRENT_WS_KEY = 'stock-pnl-web/current-workspace'
@@ -43,6 +44,7 @@ export interface WorkspaceState {
   updateTransaction: (id: string, patch: NewTransaction) => Promise<void>
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions: (ids: string[]) => Promise<void>
+  setWorkspaceFeeRate: (id: string, rate: number) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -89,6 +91,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const ws = await provider.createWorkspace(DEFAULT_WS_NAME)
         list = [ws]
       }
+      if (cancelled) return
+      // Reconcile the fee-rate row against the localStorage cache before the first render
+      // that has a workspace id, so readers of getFeeRate see the reconciled value.
+      await syncWorkspaceFees(list, provider)
       if (cancelled) return
       setWorkspaces(list)
       // When the memorized workspace cannot be found (including '__all__' in the old version of the overview mode), return to the first workspace
@@ -200,6 +206,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const setWorkspaceFeeRate = useCallback(
+    async (id: string, rate: number) => {
+      await saveWorkspaceFeeRate(provider, id, rate)
+      setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, fee_rate: rate } : w)))
+    },
+    [provider],
+  )
+
   const value = useMemo<WorkspaceState>(
     () => ({
       workspaces,
@@ -215,6 +229,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addTransactions,
       updateTransaction,
       deleteTransactions,
+      setWorkspaceFeeRate,
     }),
     [
       workspaces,
@@ -230,6 +245,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addTransactions,
       updateTransaction,
       deleteTransactions,
+      setWorkspaceFeeRate,
     ],
   )
 

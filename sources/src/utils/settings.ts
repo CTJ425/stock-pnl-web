@@ -74,6 +74,15 @@ export function setFeeRate(rate: number, workspaceId?: string): void {
   }
 }
 
+/** The stored rate, or null when the user never set one. Unlike getFeeRate, no default. */
+export function getStoredFeeRate(workspaceId?: string): number | null {
+  if (workspaceId) {
+    const wsRate = readRate(`${FEE_RATE_KEY}/${workspaceId}`)
+    if (wsRate !== null) return wsRate
+  }
+  return readRate(FEE_RATE_KEY)
+}
+
 function readMinFee(key: string): number | null {
   try {
     const raw = localStorage.getItem(key)

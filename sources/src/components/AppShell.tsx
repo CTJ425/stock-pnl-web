@@ -32,7 +32,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { ThemePref } from '../utils/settings'
-import { applyTheme, getFeeRate, getThemePref, setFeeRate, setThemePref } from '../utils/settings'
+import { applyTheme, getFeeRate, getThemePref, setThemePref } from '../utils/settings'
 import { DashboardPage } from './Dashboard/DashboardPage'
 import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
@@ -513,6 +513,7 @@ function WorkspaceControls() {
     createWorkspace,
     renameWorkspace,
     deleteWorkspace,
+    setWorkspaceFeeRate,
   } = useWorkspace()
   const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
@@ -542,7 +543,7 @@ function WorkspaceControls() {
       if (!Number.isFinite(rate) || rate < 0 || rate >= 1) return
       if (current) {
         const changed = rate !== getFeeRate(current.id)
-        setFeeRate(rate, current.id)
+        await setWorkspaceFeeRate(current.id, rate)
         // When the rates change, batch recalculation will be carried out for simultaneous adjustment of historical records (can be checked or cancelled)
         if (changed) setShowRecalc(true)
       }

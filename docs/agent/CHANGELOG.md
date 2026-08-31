@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.24-dev.2（2026-08-31，開發中）— 手續費率改存 Supabase，換瀏覽器不再回到預設值
+
+> `utils/settings.ts` 的手續費存在 `localStorage`，換裝置或無痕視窗就讀不到，回退到預設值 0.001425。改為以 `workspaces` 新增可為 NULL 的 `fee_rate` 欄位作為真實來源，`localStorage` 降為快取；新增純函式 `planFeeSync()` 實現同步規則（遠端優先、推送本機、預設值兜底）；`syncWorkspaceFees()` 在工作區列表渲染前執行，使用者第一次見到的值已對帳。
+
+- 🐛 **手續費率只存在瀏覽器，換裝置就遺失** — `utils/settings.ts` 的 `getFeeRate`/`setFeeRate` 只寫 `localStorage`，所以無痕視窗或新瀏覽器讀不到，退回 `DEFAULT_FEE_RATE` 0.001425。`schema.sql` 雖有 `user_settings.default_fee_rate` 欄位，但前端從未讀寫它，而且它是每使用者一份，裝不下每工作區一份的設定。改為在 `workspaces` 新增可為 NULL 的 `fee_rate` 欄位當作真實來源，`localStorage` 降為快取。
+- 🔧 **同步規則** — 新增純函式 `utils/feeSync.ts` 的 `planFeeSync`：資料列有效值優先寫回快取（adopt-remote）；資料列為 NULL 而快取有值時，把快取值升上資料列（push-local，等於舊使用者的一次性遷移）；兩邊都沒有才用預設值。費率 `0` 視為有效設定，不算未設定。
+- 🔧 **同步時機** — `context/WorkspaceContext.tsx` 在 `setWorkspaces` 之前 `await syncWorkspaceFees(...)`，讓第一次帶著工作區 id 的渲染就讀到已對帳的值。`getFeeRate` 維持同步、簽名不變，六個呼叫端一行都沒改。
+- 🛡️ **部署安全網** — `SupabaseProvider.listWorkspaces` 先以含 `fee_rate` 的欄位查詢，失敗就退回舊欄位重試一次。PostgREST 對未知欄位會整筆查詢失敗，若程式先上線而 `schema.sql` 尚未套用，登入會全面失敗。`createWorkspace` 刻意不重試——insert 可能已經寫入，重試會建出重複工作區。
+- 🗄️ **DEV 資料庫已套用** — `workspaces.fee_rate NUMERIC` 加上 `workspaces_fee_rate_range` 檢查約束，並已 `NOTIFY pgrst, 'reload schema'`。REST 以 `select=...,fee_rate` 回應 HTTP 200 驗證通過。**PROD 尚未套用**，需人工執行（見 BUG-041）。
+- 🧪 **測試** — 新增 3 個測試檔共 19 個測試（實作前確認紅燈）：`utils/feeSync.test.ts`（S1–S8 與 `isValidFeeRate`）、`services/feeSettings.test.ts`（F1–F6）、`services/dataProvider.workspaces.test.ts`（D1–D4）。全套 **91 檔 / 1377 測試通過**，exit 0；`npx tsc --noEmit` 與 `npm run build` 均 exit 0。
+- 📋 **未納入範圍** — 最低手續費未一併持久化：`utils/settings.ts` 的 `setMinFee` 目前沒有任何呼叫端，沒有值可存。`user_settings.default_fee_rate` 維持未使用。
+- 🚀 **不需要 Edge 部署** — `sources/supabase/functions/` 無變更。
+- 📌 **附記** — `docs/agent/specs/` 新增 Task 136 / 137 / 138 規格 3 份（另一個代理人撰寫、已文件化但未實作）。
+
 ### 0.9.24-dev.1（2026-08-31，開發中）— 帳號內變更密碼、註冊驗證結果提示、手續費不再連動全域
 
 > 三件互相獨立的工作。手續費欄位過去把單筆交易的輸入寫回工作區預設值，等於改一筆就改了全部；註冊驗證信的連結雖然驗證成功，畫面上卻沒有任何回饋；另新增帳號內變更密碼，並強制以舊密碼重新驗證。

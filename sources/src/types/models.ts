@@ -8,6 +8,7 @@ export interface Workspace {
   id: string
   name: string
   created_at: string
+  fee_rate?: number | null
 }
 
 export interface Transaction {

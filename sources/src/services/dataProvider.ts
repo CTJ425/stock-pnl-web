@@ -20,6 +20,8 @@ export interface DataProvider {
   updateTransaction(id: string, patch: NewTransaction): Promise<void>
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions(ids: string[]): Promise<void>
+  /** Persist the workspace's fee rate (source of truth; localStorage is the cache)*/
+  setWorkspaceFeeRate(id: string, rate: number): Promise<void>
 }
 
 /* =========================================================
@@ -142,6 +144,15 @@ export class LocalProvider implements DataProvider {
     store.transactions = store.transactions.filter((t) => !removed.has(t.id))
     writeStore(store)
   }
+
+  async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {
+    const store = readStore()
+    const ws = store.workspaces.find((w) => w.id === id)
+    if (ws) {
+      ws.fee_rate = rate
+      writeStore(store)
+    }
+  }
 }
 
 /* =========================================================
@@ -153,6 +164,10 @@ function client() {
   return supabase
 }
 
+const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate'
+/** Without fee_rate, for a database that has not run that part of schema.sql. */
+const WORKSPACE_COLUMNS_LEGACY = 'id, name, created_at'
+
 async function currentUserId(): Promise<string> {
   const { data, error } = await client().auth.getUser()
   if (error || !data.user) throw new Error('尚未登入')
@@ -163,10 +178,18 @@ export class SupabaseProvider implements DataProvider {
   async listWorkspaces(): Promise<Workspace[]> {
     const { data, error } = await client()
       .from('workspaces')
-      .select('id, name, created_at')
+      .select(WORKSPACE_COLUMNS)
       .order('created_at', { ascending: true })
-    if (error) throw new Error(`載入工作區失敗：${error.message}`)
-    return (data ?? []) as Workspace[]
+    if (!error) return (data ?? []) as Workspace[]
+
+    // The database may not have run the fee_rate part of schema.sql yet. PostgREST rejects
+    // the whole query for an unknown column, so retry once without it rather than break login.
+    const retry = await client()
+      .from('workspaces')
+      .select(WORKSPACE_COLUMNS_LEGACY)
+      .order('created_at', { ascending: true })
+    if (retry.error) throw new Error(`載入工作區失敗：${retry.error.message}`)
+    return (retry.data ?? []) as Workspace[]
   }
 
   async createWorkspace(name: string): Promise<Workspace> {
@@ -174,7 +197,7 @@ export class SupabaseProvider implements DataProvider {
     const { data, error } = await client()
       .from('workspaces')
       .insert({ name, user_id: userId })
-      .select('id, name, created_at')
+      .select(WORKSPACE_COLUMNS_LEGACY)
       .single()
     if (error) throw new Error(`建立工作區失敗：${error.message}`)
     return data as Workspace
@@ -220,5 +243,10 @@ export class SupabaseProvider implements DataProvider {
   async deleteTransactions(ids: string[]): Promise<void> {
     const { error } = await client().from('transactions').delete().in('id', ids)
     if (error) throw new Error(`刪除交易失敗：${error.message}`)
+  }
+
+  async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {
+    const { error } = await client().from('workspaces').update({ fee_rate: rate }).eq('id', id)
+    if (error) throw new Error(`儲存手續費率失敗：${error.message}`)
   }
 }
