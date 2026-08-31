@@ -5,6 +5,56 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-27 14:10:56 Asia/Taipei (Probe retire-gate re-verified on DEV and PROD — no regression)
+
+- **Question Raised**: Does a probe still retire too early after it finds new data? Expected rule: 1 landed hit plus 2 more ticks with an unchanged fingerprint (trailing run of 3); any content change resets the run to 1.
+
+- **Verdict**: The rule is correct in code and in live data. No code change made.
+
+- **Code Location**: `sources/supabase/functions/stock-report/sourceProbePlan.ts` — REQUIRED_LANDED_COUNTS (L59-68), trailingRun (L77-87), retiredSources (L95-104), summariseLandedTicks (L182-195). Non-landed ticks contribute no fingerprint, so they cannot retire a source.
+
+- **Prior Fixes Confirmed**: BUG-034 (0.9.6, 2026-08-20) and Task 133 (0.9.14, 2026-08-25) still in place.
+
+- **Live Evidence (2026-08-26)**:
+  - **Decisive Case**: `borrow` shows 21 consecutive ticks with identical fingerprint (hit=false) that did NOT retire; content changed at 22:40 (PROD) / 22:45 (DEV), then exactly 2 more ticks ran and source stopped.
+  - **PROD Per-Source Counts** (ticks/hits): t86 5/3, bwibbu 5/3, twt38u 3/3, margin 6/3, borrow 23/3, bfi82u 7/6 (two windows). DEV matches.
+  - **Background**: mops_revenue and mops_profit never retire by design.
+
+- **Open Observation (not a confirmed defect)**: bfi82u hit 6 times across its 15:00 and 19:30 windows with the same fingerprint. Commit 911c490 added the second window deliberately. Flagged for a later decision; not filed as a bug.
+
+- **Verification Method**: DEV via `docker exec stock-pnl-web-dev-db-1 psql`; PROD via Supabase Management API query endpoint. Do not use `supabase db query --linked`.
+
+---
+
+## 📅 Log: 2026-08-26 17:05:00 Asia/Taipei (0.9.19 Release: 當日大盤 Panel in 總體經濟 > 台股; DEV+PROD Deployed)
+
+- **Feature Released**:
+  1. **當日大盤 Panel** at the top of 總體經濟 > 台股, reusing IntradayChart component (`TwIndexToday.tsx`).
+  2. Shows intraday OHLC data, volume, and price change visualization for Taiwan Index (^TWII).
+  3. Integrated into `TwMarketSection.tsx` workflow.
+
+- **Route Completed**: Spec → failing tests (main session) → builder → reviewer → main-session adjudication → release → deploy both environments.
+
+- **Test & Quality Verification**:
+  - Full Vitest suite: **85 test files / 1313 tests passed** (100% PASS), exit 0.
+  - Linter: `npm run lint` exit 0.
+  - Typecheck: `npm run typecheck:edge` exit 0.
+  - Build: `npm run build` exit 0.
+  - Reviewer: PASS with one RISK fixed (`pnlClass(changePct)` instead of `pnlClass(change)` in TwIndexToday.tsx; harmless while `prevClose` > 0, which is always true for index, but was a slip rather than trade-off).
+  - Edge `index.ts` diff: doc comment + widened `SymbolItem['market']` to include `'IDX'` — zero runtime change.
+
+- **Deployment Completed**:
+  1. **DEV Edge** (`stock-price`): Volume copy with `/bin/cp -f` into `volumes/functions/stock-price/`, then `docker compose up -d --force-recreate functions`; healthy in ~9s. `diff -rq` all files identical.
+  2. **PROD Edge** (`stock-price`): `supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`, no `--no-verify-jwt`. Version 20 → 21, ezbr_sha256 changed from `bac85eb3edcf1fc7` to `a1a7920dddf42417` (proof new code landed).
+  3. **Live Behaviour Verified**: `^TWII` returns dayOpen/dayHigh/dayLow from OHLC arrays. Stock path `2330.TW` unchanged (271 points, prevClose=2400, interval=1m, point keys t/c/v).
+  4. **GitHub Pages**: Deploy run 32948412913 succeeded; served bundle reports 0.9.19.
+
+- **Files Changed**: 17 total (+666/−48) — `sources/supabase/functions/stock-price/intradayParse.ts`, `sources/supabase/functions/stock-price/index.ts`, `sources/src/services/intradayProxy.ts`, `sources/src/components/StockDetail/IntradayChart.tsx`, `sources/src/components/Macro/TwIndexToday.tsx` (new), `sources/src/components/Macro/TwMarketSection.tsx`, `sources/src/index.css`, plus four test files and version/README/CHANGELOG set.
+
+- **Commits**: `7dae025` (feature, 0.9.19-dev.1) and `329fb95` (chore(release): 0.9.19). Branches: `dev`, `main`, `origin/dev`, `origin/main` all at `329fb95`.
+
+---
+
 ## 📅 Log: 2026-08-26 14:35:00 Asia/Taipei (DEV+PROD Verification Scan; PROD Cron Cleanup; DEV backup-transactions Redeploy)
 
 - **Verification Scope**:

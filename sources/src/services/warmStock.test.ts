@@ -6,7 +6,13 @@ vi.mock('./supabase', () => ({
   supabase: { functions: { invoke } },
 }))
 
-import { warmStock, warmStockCore, warmStockHistory, resetWarmState } from './warmStock'
+import {
+  warmStock,
+  warmStockCore,
+  warmStockHistory,
+  warmStockChips,
+  resetWarmState,
+} from './warmStock'
 
 const ok = (
   daily: number,
@@ -205,5 +211,79 @@ describe('warmStockHistory', () => {
     expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
       body: { action: 'warm', ticker: '2330', name: '', phase: 'history' },
     }))
+  })
+})
+
+describe('warmStockChips (Task 130)', () => {
+  beforeEach(() => {
+    invoke.mockReset()
+    resetWarmState()
+  })
+
+  const okChips = (daysWritten: number, skipped = false) => ({
+    data: {
+      ok: true,
+      ticker: '2059',
+      phase: 'chips',
+      daysWritten,
+      daysFetchedUpstream: 0,
+      skipped: skipped ? 'already-present' : undefined,
+    },
+    error: null,
+  })
+
+  it('以 phase: chips 呼叫', async () => {
+    invoke.mockResolvedValue(okChips(7))
+    const r = await warmStockChips('2059', '川湖')
+    expect(r).toMatchObject({ ok: true, daysWritten: 7 })
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
+      body: { action: 'warm', ticker: '2059', name: '川湖', phase: 'chips' },
+    }))
+  })
+
+  it('省略名稱時送出空字串——與其他 phase 一致', async () => {
+    invoke.mockResolvedValue(okChips(7))
+    await warmStockChips('2059')
+    expect(invoke).toHaveBeenCalledWith('stock-report', expect.objectContaining({
+      body: { action: 'warm', ticker: '2059', name: '', phase: 'chips' },
+    }))
+  })
+
+  it('已補齊時回傳 skipped，不視為失敗', async () => {
+    invoke.mockResolvedValue(okChips(0, true))
+    const r = await warmStockChips('2059')
+    expect(r.ok).toBe(true)
+    expect(r.skipped).toBe(true)
+    expect(r.daysWritten).toBe(0)
+  })
+
+  it('同一 session 同代號只送出一次——額度安全', async () => {
+    invoke.mockResolvedValue(okChips(7))
+    await warmStockChips('2059')
+    await warmStockChips('2059')
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('resetWarmState 會清掉 chips 封印', async () => {
+    invoke.mockResolvedValue(okChips(7))
+    await warmStockChips('2059')
+    resetWarmState()
+    await warmStockChips('2059')
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('不同代號各自獨立', async () => {
+    invoke.mockResolvedValue(okChips(7))
+    await warmStockChips('2059')
+    await warmStockChips('2330')
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('回錯誤或丟例外時回失敗值，且不丟出', async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: '403' } })
+    expect(await warmStockChips('9999')).toMatchObject({ ok: false, daysWritten: 0 })
+
+    invoke.mockRejectedValue(new Error('network'))
+    expect(await warmStockChips('8888')).toMatchObject({ ok: false, daysWritten: 0 })
   })
 })

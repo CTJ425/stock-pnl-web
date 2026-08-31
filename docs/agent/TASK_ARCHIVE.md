@@ -11,6 +11,29 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 130: Auto chip warm for a newly added symbol
+- **Status**: ✅ **CODE COMPLETE** (DEV deployment and manual DEV verification pending)
+- **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
+- **Timestamp**: 2026-08-30 23:15:34 Asia/Taipei
+- **What was this**: Implement automatic chip data backfill (三大法人/融資券/借券) for newly added symbols, up to 7 trading days, triggered immediately on add instead of waiting for nightly `generate-chips`.
+- **Implementation**:
+  - New `phase: 'chips'` on `stock-report` warm action
+  - Reuses `chip_raw_cache` (whole-market TWSE payload); warm cache = ZERO upstream calls
+  - New `maxUpstreamDays` option caps user-triggered path at 2 upstream fetches
+  - Idempotence gate: skip if `reports/{ymd}/{ticker}.json` already exists
+  - Chips path does not write `manifest.json`
+  - Client methods: `warmStockChips()` (new), `prefetchStockData()` updated, `addWatch()` triggers prefetch
+- **Files Changed**: `warmStock.ts`, `prefetchStockData.ts`, `watchlistService.ts`, `stock-report/index.ts`, plus 3 `.test.ts` files (10 new tests)
+- **Testing**: 85 files / 1345 tests passed, exit 0; lint and typecheck:edge all pass
+- **Reviewer Verdict**: PASS with one accepted RISK (see BUG_FIX.md entry below)
+- **Pending Manual DEV Verification**:
+  1. Add a symbol not in any holding or watchlist
+  2. Confirm `reports/{ymd}/{ticker}.json` appears for recent trading days
+  3. Confirm second add returns `skipped: 'already-present'`
+  4. Confirm nightly `generate-chips` output unchanged
+
+---
+
 ### Task 0.9.19: 當日大盤 Panel in 總體經濟 > 台股 (0.9.19)
 - **Status**: ✅ **Released 0.9.19** (commits 7dae025 / 329fb95, DEV+PROD deployed and verified)
 - **Spec**: `docs/agent/specs/twse-index-intraday.md`

@@ -10,7 +10,7 @@
  */
 import { fetchFundamental } from './fundamentalProxy'
 import { needsCoreWarm, needsHistoryWarm } from './needsFundamentalBackfill'
-import { warmStock, warmStockHistory } from './warmStock'
+import { warmStock, warmStockChips, warmStockHistory } from './warmStock'
 
 /**
  * Warm chip daily + fundamentals if missing or thin.
@@ -23,12 +23,17 @@ export async function prefetchStockData(ticker: string, name?: string): Promise<
     const f = await fetchFundamental(code)
     if (!f || needsCoreWarm(f)) {
       await warmStock(code, name)
-      return
-    }
-    if (needsHistoryWarm(f)) {
+    } else if (needsHistoryWarm(f)) {
       await warmStockHistory(code, name)
     }
   } catch {
     // Background best-effort — analysis page can still warm on open.
+  }
+  // 三大法人 / 融資券 / 借券 backfill (Task 130) — independent of the fundamental path above,
+  // and must not let a chip failure surface as a prefetch failure.
+  try {
+    await warmStockChips(code, name)
+  } catch {
+    // Background best-effort.
   }
 }

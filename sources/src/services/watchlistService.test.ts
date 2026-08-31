@@ -47,7 +47,12 @@ vi.mock('./supabase', () => ({
   supabase: { from, auth: { getUser } },
 }))
 
+vi.mock('./prefetchStockData', () => ({ prefetchStockData: vi.fn() }))
+
+import { prefetchStockData } from './prefetchStockData'
 import { WATCHLIST_MAX, addWatch, listWatchlist, removeWatch } from './watchlistService'
+
+const prefetchMock = vi.mocked(prefetchStockData)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -141,5 +146,52 @@ describe('資料庫上限錯誤', () => {
     await expect(addWatch('2059', '川湖')).rejects.toThrow(
       new RegExp(`觀察清單最多只能有 ${WATCHLIST_MAX} 檔`),
     )
+  })
+})
+
+describe('addWatch 觸發資料補齊 (Task 130)', () => {
+  beforeEach(() => {
+    prefetchMock.mockReset()
+    prefetchMock.mockResolvedValue(undefined)
+  })
+
+  it('新增成功後補齊該代號的法人與價格資料', async () => {
+    setResult({
+      data: [{ ticker: '2330', name: '台積電', sort_order: 0 }],
+      error: null,
+    })
+
+    await addWatch('2059', '川湖')
+
+    expect(prefetchMock).toHaveBeenCalledWith('2059', '川湖')
+  })
+
+  it('清單已滿而擋下時不補齊', async () => {
+    setResult({
+      data: Array.from({ length: WATCHLIST_MAX }, (_, i) => ({
+        ticker: String(1000 + i),
+        name: `N${i}`,
+        sort_order: i,
+      })),
+      error: null,
+    })
+
+    await expect(addWatch('2059', '川湖')).rejects.toThrow()
+    expect(prefetchMock).not.toHaveBeenCalled()
+  })
+
+  it('寫入失敗時不補齊', async () => {
+    setResults([
+      { data: [], error: null },
+      { data: null, error: { message: 'tw_watchlist limit is 30' } },
+    ])
+
+    await expect(addWatch('2059', '川湖')).rejects.toThrow()
+    expect(prefetchMock).not.toHaveBeenCalled()
+  })
+
+  it('代號不合法時不補齊', async () => {
+    await expect(addWatch('!!', 'x')).rejects.toThrow()
+    expect(prefetchMock).not.toHaveBeenCalled()
   })
 })
