@@ -79,7 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string) => {
     if (!supabase) return null
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    // Send the confirmation link back to the current site. Without this option Supabase falls
+    // back to the project's Site URL, which is `http://localhost:3000` on a new project.
+    const emailRedirectTo = window.location.origin + window.location.pathname
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo },
+    })
     if (error) return error.message
     // If mailbox verification is enabled for the project, there will be no session immediately after registration.
     if (!data.session) return '註冊成功！請至信箱點擊驗證連結後再登入。'
