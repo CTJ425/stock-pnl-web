@@ -11,6 +11,25 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 139: Workspace fee rate persistence (Supabase)
+- **Status**: ✅ **RELEASED 0.9.24-dev.2** (DEV verified 2026-08-31, PROD schema pending)
+- **Spec**: `docs/agent/specs/fee-rate-persistence.md`
+- **Timestamp**: 2026-08-31 18:35:00 Asia/Taipei
+- **What was this**: Move workspace fee rate from `localStorage` to `workspaces.fee_rate` column, with sync logic to handle cache/remote reconciliation.
+- **Implementation**: New `utils/feeSync.ts` with `planFeeSync()` rule engine; `WorkspaceContext.tsx` calls `syncWorkspaceFees()` before rendering; `SupabaseProvider.listWorkspaces()` retries on missing column; 19 new tests across 3 files; all 91 files / 1377 tests pass.
+- **Schema**: DEV applied and verified (`workspaces.fee_rate NUMERIC` + range check). PROD pending (BUG-041).
+- **Review verdicts**: Lane 2 routing (scout spec → failing tests → builder 2 rounds → reviewer 2× PASS → adjudicate). No Edge deployment needed.
+- **Files Changed**: `context/WorkspaceContext.tsx`, `services/dataProvider.ts`, `utils/feeSync.ts` (new), `utils/settings.ts`, plus 3 test files (19 new tests).
+- **Testing**: 91 files / 1377 tests passed, exit 0; `npx tsc --noEmit` and `npm run build` both exit 0.
+- **Reviewer Verdict**: PASS (2 rounds)
+- **DEV Deployment & Verification** ✅ **DONE**:
+  - Schema applied with 2 new constraints
+  - REST API confirms `fee_rate` column in responses
+  - Sync function passes all 19 unit + integration tests
+  - No new errors in `sources/supabase/functions/`
+
+---
+
 ### Task 130: Auto chip warm for a newly added symbol
 - **Status**: ✅ **PROD RELEASED** (0.9.22, commit ea750a0, 2026-08-31 10:06:22 Asia/Taipei)
 - **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`

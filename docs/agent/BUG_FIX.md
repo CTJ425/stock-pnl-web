@@ -161,12 +161,75 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
 `batch_run_log` directly. Nothing is pending from it.
 
 
-If you find a new bug, please record it here:
+### BUG-033 — TransactionForm edit mode auto-recalculates fee on mount and batch recalculation breaks day-trading taxes
 
-```markdown
-### Bug ID: BUG-XXX
-- Description: 
-- Root Cause:
-- Impact:
-- Status: OPEN
-```
+- **Where**: `sources/src/components/Transactions/TransactionForm.tsx:109-125` and `sources/src/utils/fees.ts:62-81`
+- **What**:
+  1. Opening the edit modal immediately triggers the auto-recalculate `useEffect`, overwriting `initial.fee_tax` with a newly computed rate (assuming default 0.3% tax), forcing the user to see `"已依目前費率重算；原本是 X 還原原紀錄"`.
+  2. `proposeFeeCorrections` blindly applies 0.3% tax to non-ETF sales, doubling the tax for day-trading (0.15% tax) transactions. `RecalcFeesModal` defaults to select-all, risking accidental destruction of day-trade records.
+- **Impact**: Confusing UX during manual editing (appears as if edits fail to save); risk of data corruption when batch recalculating fees on workspaces with day trades.
+- **Status**: OPEN (Task 137, spec in `docs/agent/specs/137-daytrade-and-fee-form-fixes.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-034 — `fmtPercent` IEEE-754 binary floating-point representation rounds down on `.005%` boundaries
+- **Where**: `sources/src/utils/formatters.ts:43-46`
+- **What**: `(value * 100).toFixed(2)` rounds down values like `0.01005` to `1.00%` and `0.07005` to `7.00%` due to binary floating point imprecision.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-035 — `sellTaxRate` misses TDR (`91xx`) and REITs (`01xx`) statutory 0.1% tax rate
+- **Where**: `sources/src/utils/pnlEngine.ts:141-144`
+- **What**: Only `00` ETF prefix is checked for 0.1% tax; TDRs (`91xx`) and REITs (`01xx`) default to 0.3%, overcharging tax by 2x.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-036 — `computeLedger` misattributes day-trading brokerage fees to tax in summary
+- **Where**: `sources/src/utils/pnlEngine.ts:246-253`
+- **What**: For day-trade sells with 0.15% tax, 0.3% tax estimate exceeds `fee_tax`, so `feesBrokerage` is recorded as 0.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-037 — `parseNumber` fails on accounting parentheses negative format `(1,000)`
+- **Where**: `sources/src/utils/csv.ts:89-94`
+- **What**: Stripping `$` and `,` leaves `(1000)` which `Number(...)` evaluates to `NaN`.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-038 — `breakEvenPrice` returns 0 for zero-cost holdings without factoring in minimum sell fees
+- **Where**: `sources/src/utils/fees.ts:89-92`
+- **What**: When `cost === 0` (e.g. stock dividend), breakeven returns 0 rather than the price needed to cover the 20 TWD minimum sell fee.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-039 — Full position liquidation leaves floating-point epsilon residue in `pos.cost`
+- **Where**: `sources/src/utils/pnlEngine.ts:284-293`
+- **What**: Floating-point subtraction on 100% position sell can leave `1e-14` residue, polluting future re-buys.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-040 — `AccountsSection.tsx` allows self-revocation of admin rights without confirmation
+- **Where**: `sources/src/components/Admin/AccountsSection.tsx:33-43`
+- **What**: An admin toggling their own switch immediately revokes their admin status without a confirmation prompt.
+- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
+- **Discovered**: 2026-08-31
+
+### BUG-041 — PROD Supabase 尚未有 `workspaces.fee_rate` 欄位
+- **Where**: `sources/supabase/schema.sql` section 1
+- **What**: The branch merged to `main` reads `workspaces.fee_rate` in `SupabaseProvider.listWorkspaces`; code falls back to legacy column list so the app keeps working. However, fee rate will not persist across browsers on PROD until the schema runs. Action required: execute on the PROD Supabase project: `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;` / `ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;` / `ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));` / `NOTIFY pgrst, 'reload schema';`
+- **Reason it is open**: This session has no PROD access token (`supabase projects list` returns `LegacyPlatformAuthRequiredError`). Blocking action must be performed by user.
+- **Status**: OPEN
+- **Discovered**: 2026-08-31
+
+### BUG-042 — `listWorkspaces` 的退回重試會吞掉第一次的錯誤訊息
+- **Where**: `sources/src/services/dataProvider.ts:183-191`
+- **What**: When the retry succeeds (or a second error occurs), the first query's error is discarded. A real cause like missing column-level grant on `fee_rate` leaves no trace; `fee_rate` reads fail silently every time without diagnostic output.
+- **Status**: ACCEPTED RISK — the project's production source contains no `console.warn` / `console.error` at all, so adding one would break existing style. Reviewer verdict: PASS.
+- **Discovered**: 2026-08-31
+
+### BUG-043 — `LocalProvider.setWorkspaceFeeRate` 對未知 id 靜默成功
+- **Where**: `sources/src/services/dataProvider.ts:148-155`
+- **What**: `setWorkspaceFeeRate(id, rate)` resolves without writing when `id` matches no workspace, so caller believes the rate was persisted.
+- **Status**: ACCEPTED RISK — identical to existing `LocalProvider.renameWorkspace` pattern at the same file, so it is project style and not a regression. Reviewer verdict: PASS.
+- **Discovered**: 2026-08-31
+
+

@@ -149,3 +149,30 @@ precisely what 0.7.8 would have mis-retired).
 - **Timestamp**: 2026-08-31 16:45:40 CST
 - **What is this**: When releasing 0.9.24 from `dev` to `main`: set the four version files to `0.9.24` (strip `-dev.N`), change `CHANGELOG.md` heading from `### 0.9.24-dev.1（2026-08-31，開發中）` to official release form, merge to `main`, then `git push origin main:dev` to sync both branches.
 - **Why this is needed**: Versioning policy per `versioning` skill: only the merge commit to `main` may strip `-dev.N`. Keeping both branches in sync (main = dev = x.x.x at release) ensures consistency.
+
+### Task 136: Lot-Based Unrealized P&L Calculation (Align with Brokerage App)
+- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-31 17:41:00 Asia/Taipei
+- **What is this**: Align Taiwan stock unrealized net P&L and ROI calculation with Taiwanese brokerage mobile apps (Yuanta, Cathay, Fubon, etc.) by switching from aggregate holding fee/tax estimation to per-lot open tax lot (未沖銷庫存明細) summation.
+- **Specification**: Detailed problem breakdown, math comparison, data structure, FIFO matching rules, and test cases documented in `docs/agent/specs/136-lot-based-unrealized-pnl.md`.
+- **Target files**: `sources/src/utils/pnlEngine.ts`, `sources/src/utils/holdingRows.ts`, and corresponding vitest test suites.
+
+### Task 137: Day-Trading Tax Recognition & Transaction Form Edit Parity
+- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-31 18:03:00 Asia/Taipei
+- **What is this**: Fix edit modal initial auto-recalculate mount overwrite, harden batch fee recalculation against day-trading tax corruption (0.15% tax rate), and establish automatic day-trade detection heuristics.
+- **Specification**: Documented in `docs/agent/specs/137-daytrade-and-fee-form-fixes.md` and `docs/agent/BUG_FIX.md` (BUG-033).
+- **Target files**: `sources/src/components/Transactions/TransactionForm.tsx`, `sources/src/utils/fees.ts`, `sources/src/components/Transactions/RecalcFeesModal.tsx`.
+
+### Task 138: Codebase Deep Audit Remediation (Precision, TDR/REITs Tax, CSV, Liquidation)
+- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-08-31 18:08:00 Asia/Taipei
+- **What is this**: Address findings from codebase deep audit across formatters (`fmtPercent`), tax rates (TDR/REITs 0.1%), ledger summary day-trade split, CSV accounting format parsing, and liquidation float residue.
+- **Specification**: Documented in `docs/agent/specs/138-codebase-deep-audit-findings.md` and `docs/agent/BUG_FIX.md` (BUG-034 through BUG-040).
+- **Target files**: `sources/src/utils/formatters.ts`, `sources/src/utils/pnlEngine.ts`, `sources/src/utils/csv.ts`, `sources/src/utils/fees.ts`, `sources/src/components/Admin/AccountsSection.tsx`.
+
+
+

@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS workspaces (
     UNIQUE (id, user_id)
 );
 
+-- Per-workspace default handling fee rate. NULL means the user never set one here;
+-- localStorage stays the read-path cache and this column is the source of truth.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range
+    CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
+
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own workspaces" ON workspaces;
