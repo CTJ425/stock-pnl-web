@@ -2,7 +2,7 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.9.22-dev.1（2026-08-31）— 全新代號自動補齊三大法人資料
+### 0.9.22（2026-08-31）— 全新代號自動補齊三大法人資料
 
 > 過去新增一檔從未記錄過的股票後，三大法人／融資券／借券資料要等隔天夜間 `generate-all` 排程才會出現；加入觀察股更是完全不觸發任何抓取。本版讓兩條新增路徑都即時補齊最近 7 個交易日的籌碼資料。關鍵在於 `chip_raw_cache` 存的是未過濾的全市場原始回應，因此快取命中時對外呼叫次數為零。
 
@@ -13,8 +13,10 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 👀 **觀察股路徑首次觸發**（`services/watchlistService.ts`）— `addWatch()` 在寫入成功後才呼叫 `prefetchStockData()`。容量上限擋下、寫入失敗、代號格式不合法三條路徑均不觸發。prefetch 失敗不會讓 `addWatch()` 失敗。
 - ⚠️ **已知並接受的 RISK-003** — 籌碼補齊寫出的 6 個非最新日報表檔，其 `incomplete` 旗標為 true，會嵌入「歷史資料回補中」註記且永不清除（夜間排程只重寫當日檔）。目前無消費端會讀取指定過去日期的報表（`reportProxy.ts` 只讀 `manifest.ymd`），故無使用者可見影響。語意上該註記亦屬正確——7 天前那份報表的歷史視窗確實只有 1 天資料。
 - 🧪 **測試** — 新增 10 個測試（實作前確認紅燈 exit 1）。全套 **85 檔 / 1345 測試通過**，exit 0；`npm run lint`、`npm run typecheck:edge`、`npx tsc --noEmit` 均 exit 0。Reviewer PASS。
+- 🔬 **DEV 實測（2026-08-31）** — 以真實使用者 JWT 對自架 DEV 驗證：首次補齊回 `{daysWritten: 7, daysFetchedUpstream: 1}`、1.17 秒，寫出 `20260820`–`20260828` 共 7 個報表檔；第二次同樣呼叫回 `skipped: "already-present"`、0 次抓取、17 毫秒。對外抓取 1 次未觸及上限 2。`manifest.json` 的 `updated_at` 全程未變。產出檔案與排程產生的同日檔案結構一致（schema 3、外資買賣超、融資券、借券齊全）。測試用資料已還原。
+- 🔎 **權限閘門的既有行為** — `warm` 沿用 `allowedTwTickers()`（持股 ∪ 觀察清單）。`heldTwTickers()` 只認 `net > 0`，因此已清倉的代號會回 403，需加入觀察清單才可補齊。此為 0.8.0（`cbbdba0`）既有行為，非本版變更。買進路徑順序正確：`WorkspaceContext.tsx` 先 `await addTransactions()` 才 `void prefetchStockData()`，閘門查詢時新部位已存在。
 - 📋 **覆蓋缺口** — 本 repo 無 `stock-report/index.ts` action dispatch 的測試骨架，Edge 端 `phase: 'chips'` handler 與 `maxUpstreamDays` 上限僅由 `typecheck:edge` 覆蓋，需手動 DEV 驗證。
-- 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`。
+- 🚀 **需要 Edge 部署** — 改動含 `sources/supabase/functions/stock-report/index.ts`；`main` 的 push 只部署 Pages，Edge 必須另外部署，且 `stock-report` 一律帶 `--no-verify-jwt`（該函式以 `CRON_SECRET` 供 pg_cron 呼叫，不走 JWT）。
 
 ### 0.9.21（2026-08-27）— 當日大盤面板完善：重新整理按鈕、日期徽章、三大法人側欄、與六項缺陷修復
 
