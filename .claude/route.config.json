@@ -11,5 +11,9 @@
   },
   "bookkeeping": {
     "timezone": "Asia/Taipei"
+  },
+  "guard": {
+    "mainSeverity": "off",
+    "readKB": 0
   }
 }

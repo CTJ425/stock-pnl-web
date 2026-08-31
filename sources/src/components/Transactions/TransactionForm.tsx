@@ -14,12 +14,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxType } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
 import { sellTaxRate } from '../../utils/pnlEngine'
-import {
-  getFeeRate,
-  getMinFee,
-  setFeeRate as persistFeeRate,
-  setMinFee as persistMinFee,
-} from '../../utils/settings'
+import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
 import { isSupabaseConfigured } from '../../services/supabase'
@@ -63,7 +58,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     setFeeRate(String(getFeeRate(workspaceId)))
   }, [workspaceId])
   useEffect(() => {
-    setMinFee(String(getMinFee(minFeeUnit, workspaceId)))
+    // A different workspace has different defaults, so drop any values typed under the previous one.
+    if (minFeeWorkspaceRef.current !== workspaceId) {
+      minFeeTyped.current = {}
+      minFeeWorkspaceRef.current = workspaceId
+      setMinFee(String(getMinFee(minFeeUnit, workspaceId)))
+      return
+    }
+    const typed = minFeeTyped.current[minFeeUnit]
+    setMinFee(typed !== undefined ? typed : String(getMinFee(minFeeUnit, workspaceId)))
   }, [workspaceId, minFeeUnit])
   const [taxRate, setTaxRate] = useState(() =>
     initial ? String(sellTaxRate(initial.ticker)) : '0.003',
@@ -75,6 +78,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
+  // Per-unit record of user-typed 最低手續費, so a value typed under one unit survives switching to the other and back.
+  const minFeeTyped = useRef<Partial<Record<'whole' | 'odd', string>>>({})
+  const minFeeWorkspaceRef = useRef(workspaceId)
   // In edit mode, the original codename is considered to have been reverse-checked to avoid overwriting the user-defined name when out of focus.
   const lastSearchedTicker = useRef(initial?.ticker ?? '')
   const searchSeq = useRef(0)
@@ -390,12 +396,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             value={feeRate}
             onChange={(e) => {
               setFeeRate(e.target.value)
-              const rate = parseFloat(e.target.value)
-              if (Number.isFinite(rate)) persistFeeRate(rate, workspaceId)
             }}
           />
-          <div className="field-hint">
-            台股標準是 0.001425；填了會記成「{current?.name ?? '目前'}」工作區的預設值
+          <div className="field-hint" data-testid="fee-rate-hint">
+            原價 0.001425、6.5 折 0.00092625、3 折 0.0004275；只套用在這筆交易，不會更動工作區的預設值
           </div>
         </div>
         {market === 'TPE' && (
@@ -408,9 +412,8 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               min="0"
               value={minFee}
               onChange={(e) => {
+                minFeeTyped.current[minFeeUnit] = e.target.value
                 setMinFee(e.target.value)
-                const val = parseFloat(e.target.value)
-                if (Number.isFinite(val)) persistMinFee(minFeeUnit, val, workspaceId)
               }}
             />
             <div className="field-hint">

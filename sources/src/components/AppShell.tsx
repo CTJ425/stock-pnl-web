@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Globe,
   HardDrive,
+  KeyRound,
   Layers,
   LayoutDashboard,
   LineChart,
@@ -275,6 +276,94 @@ function RecoveryPasswordModal() {
   )
 }
 
+/** Change password from inside the account: re-authenticates with the current password first (see AuthContext.changePassword). */
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const { changePassword } = useAuth()
+  const [current, setCurrent] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    setError(null)
+    if (!current) {
+      setError('請輸入目前密碼')
+      return
+    }
+    if (password.length < 6) {
+      setError('新密碼至少需要 6 個字元')
+      return
+    }
+    if (password !== confirm) {
+      setError('兩次輸入的密碼不一致')
+      return
+    }
+    setBusy(true)
+    try {
+      const err = await changePassword(current, password)
+      if (err) setError(err)
+      else {
+        // Keep the modal open so the confirmation is actually seen; clear the fields and lock
+        // the button so a second submit cannot fail against the password that just changed.
+        setDone(true)
+        setCurrent('')
+        setPassword('')
+        setConfirm('')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="變更密碼" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)}>
+        {error && <div className="notice notice-error">{error}</div>}
+        {done && <div className="notice notice-ok">密碼已變更</div>}
+        <div className="field">
+          <label htmlFor="current-password">目前密碼</label>
+          <input
+            id="current-password"
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="change-new-password">新密碼</label>
+          <input
+            id="change-new-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            placeholder="至少 6 個字元"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="change-confirm-password">確認新密碼</label>
+          <input
+            id="change-confirm-password"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            placeholder="再輸入一次新密碼"
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy || done}>
+          {busy ? '儲存中…' : '變更密碼'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
 
 /**
  * User menu: appearance switching, management background, source code, identity, logout.
@@ -291,6 +380,7 @@ function RecoveryPasswordModal() {
 function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => void }) {
   const { mode, user, signOut } = useAuth()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
   useEffect(() => {
     applyTheme(pref)
@@ -317,84 +407,101 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
   const isLocal = mode === 'local'
 
   return (
-    <HeaderMenu
-      triggerLabel={isLocal ? '本機模式選單' : `帳號選單（${email}）`}
-      triggerClass={isLocal ? 'badge hmenu-badge' : 'hmenu-avatar'}
-      triggerContent={
-        isLocal ? (
-          <>
-            <HardDrive size={12} />
-            本機模式
-          </>
-        ) : (
-          initials
-        )
-      }
-      menuLabel="帳號與外觀"
-    >
-      {(close) => (
-        <>
-          <div className="hmenu-head">
-            {isLocal ? '資料儲存於此瀏覽器，未連線 Supabase' : email}
-          </div>
-          <div className="hmenu-sep" />
-          <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
-            <ThemeIcon size={14} />
-            <span>外觀：{THEME_LABEL[pref]}</span>
-          </button>
-          <div className="hmenu-sep" />
-          {/*
-            Hiding the admin console is **housekeeping in the interface, not a security boundary** —— the real
-            gate is `assertAdmin` in the Edge Function plus RLS on the tables (anything the frontend hides can
-            be summoned by editing one line of JS). Bypassing this check to open the console only earns a 403
-            and a page with no data in it.
-          */}
-          {admin && (
-            <button
-              type="button"
-              role="menuitem"
-              className="hmenu-item hmenu-item-admin"
-              onClick={() => {
-                close()
-                onOpenAdmin()
-              }}
-            >
-              <ShieldCheck size={14} />
-              <span>管理後台</span>
-            </button>
-          )}
-          <a
-            role="menuitem"
-            className="hmenu-item"
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={close}
-          >
-            <GithubMark />
-            <span>原始碼</span>
-            <ExternalLink size={12} className="hmenu-item-ext" />
-          </a>
-          {!isLocal && (
+    <>
+      <HeaderMenu
+        triggerLabel={isLocal ? '本機模式選單' : `帳號選單（${email}）`}
+        triggerClass={isLocal ? 'badge hmenu-badge' : 'hmenu-avatar'}
+        triggerContent={
+          isLocal ? (
             <>
-              <div className="hmenu-sep" />
+              <HardDrive size={12} />
+              本機模式
+            </>
+          ) : (
+            initials
+          )
+        }
+        menuLabel="帳號與外觀"
+      >
+        {(close) => (
+          <>
+            <div className="hmenu-head">
+              {isLocal ? '資料儲存於此瀏覽器，未連線 Supabase' : email}
+            </div>
+            <div className="hmenu-sep" />
+            <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
+              <ThemeIcon size={14} />
+              <span>外觀：{THEME_LABEL[pref]}</span>
+            </button>
+            <div className="hmenu-sep" />
+            {/*
+              Hiding the admin console is **housekeeping in the interface, not a security boundary** —— the real
+              gate is `assertAdmin` in the Edge Function plus RLS on the tables (anything the frontend hides can
+              be summoned by editing one line of JS). Bypassing this check to open the console only earns a 403
+              and a page with no data in it.
+            */}
+            {admin && (
               <button
                 type="button"
                 role="menuitem"
-                className="hmenu-item"
+                className="hmenu-item hmenu-item-admin"
                 onClick={() => {
                   close()
-                  void signOut()
+                  onOpenAdmin()
                 }}
               >
-                <LogOut size={14} />
-                <span>登出</span>
+                <ShieldCheck size={14} />
+                <span>管理後台</span>
               </button>
-            </>
-          )}
-        </>
+            )}
+            <a
+              role="menuitem"
+              className="hmenu-item"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={close}
+            >
+              <GithubMark />
+              <span>原始碼</span>
+              <ExternalLink size={12} className="hmenu-item-ext" />
+            </a>
+            {!isLocal && (
+              <>
+                <div className="hmenu-sep" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="hmenu-item"
+                  onClick={() => {
+                    close()
+                    setShowChangePassword(true)
+                  }}
+                >
+                  <KeyRound size={14} />
+                  <span>變更密碼</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="hmenu-item"
+                  onClick={() => {
+                    close()
+                    void signOut()
+                  }}
+                >
+                  <LogOut size={14} />
+                  <span>登出</span>
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </HeaderMenu>
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
       )}
-    </HeaderMenu>
+    </>
   )
 }
 

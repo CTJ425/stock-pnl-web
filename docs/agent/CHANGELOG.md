@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.24-dev.1（2026-08-31，開發中）— 帳號內變更密碼、註冊驗證結果提示、手續費不再連動全域
+
+> 三件互相獨立的工作。手續費欄位過去把單筆交易的輸入寫回工作區預設值，等於改一筆就改了全部；註冊驗證信的連結雖然驗證成功，畫面上卻沒有任何回饋；另新增帳號內變更密碼，並強制以舊密碼重新驗證。
+
+- 🐛 **手續費欄位不再連動全域預設**（`components/Transactions/TransactionForm.tsx`）— `手續費率` 與 `最低手續費` 兩個輸入框在 `onChange` 內呼叫 `utils/settings` 的 `setFeeRate` / `setMinFee`，所以替單筆交易調整費率會靜默改掉整個工作區的預設值，之後每一筆新交易都套到改過的值。兩處寫回已移除。全域預設仍由 `AppShell.tsx` 的工作區手續費對話框負責，該處另提供歷史紀錄批次重算，因此未損失任何能力。
+- 🩹 **修正上一項衍生的資料遺失** — 寫回移除後，手動輸入的最低手續費不再有第二份副本，而 re-seed 的 `useEffect` 會在每次 `張`／`零股` 切換時覆蓋它。表單改為以 `useRef` 依單位保留使用者輸入過的值，切回原單位即還原；切換工作區時仍清空該記錄並重新帶入該工作區的預設值。此缺陷由 reviewer 在 PASS 判定中以 RISK 提出，於同一輪修掉。
+- 💡 **手續費率提示改列可複製的費率** — 原提示寫「填了會記成工作區的預設值」，該行為已不存在。改列 `原價 0.001425`、`6.5 折 0.00092625`、`3 折 0.0004275`，並註明只套用在這筆交易。
+- 🔐 **帳號內變更密碼**（`context/AuthContext.tsx`、`components/AppShell.tsx`）— 使用者選單新增「變更密碼」，本機模式隱藏。新增的 `changePassword()` **先以舊密碼呼叫 `signInWithPassword` 重新驗證**，因為 Supabase 允許任何存活的 session 直接 `updateUser({ password })`，不需要任何舊密碼的證明；舊密碼錯誤回傳「目前密碼不正確」且不會進到 `updateUser`。經查證 `auth-js`：重新驗證失敗時它在 `_saveSession` 與 `_notifyAllSubscribers` 之前就回傳，所以輸錯舊密碼不會破壞現有 session。成功後保留 modal 顯示「密碼已變更」、清空欄位並鎖住送出鍵——關閉 modal 會讓使用者看不到確認訊息，而未鎖住的送出鍵會拿已變更的密碼去重新驗證而失敗。
+- 🐛 **註冊驗證連結沒有任何結果提示**（新增 `services/authRedirect.ts`、`services/supabase.ts`、`App.tsx`）— 0.9.23 補上的 `emailRedirectTo` 讓 Supabase 驗證帳號後導回本站，網址帶 `#access_token=...&type=signup`。但 client 以預設選項建立，等同 `detectSessionInUrl: true` 與 `flowType: 'implicit'`，auth-js 在非同步初始化期間就把該 hash 吃掉並清除。專案沒有 callback 路由也沒有任何提示，使用者因此什麼都沒看到，而帳號其實早已在伺服器端驗證完成——這正是「沒有成功畫面但可以正常登入」的原因。新增 `parseAuthRedirectHash()`；`services/supabase.ts` 在 `createClient` **之前**算出 `initialAuthNotice`；`App.tsx` 在登入前與登入後兩個分支上方都渲染可關閉的橫幅，因為連結過期時使用者是登出狀態。
+- 🧪 **測試** — 新增 3 個測試檔共 13 個測試（實作前確認紅燈）：`TransactionForm.fee.test.tsx`（F1–F5）、`authRedirect.test.ts`（R1–R5）、`AuthContext.changePassword.test.tsx`（C1–C3）。全套 **88 檔 / 1358 測試通過**，exit 0；`npx tsc --noEmit` 與 `npm run build` 均 exit 0。
+- ⚠️ **仍需 Supabase 端設定，已記入 `BUG_FIX.md`** — 專案的 Redirect URLs 允許清單未含 App 的 origin，GoTrue 因此拒絕 `redirect_to` 並改用 `SITE_URL`。DEV 自架的 `ADDITIONAL_REDIRECT_URLS` 為空，且 `SITE_URL` 指向 Supabase API 自身而非 App。此設定無法由本次工作階段變更（環境內無 Supabase 存取權杖），需由使用者於 Dashboard 補上。
+- 🚀 **不需要 Edge 部署** — `sources/supabase/functions/` 無變更。
+
 ### 0.9.23（2026-08-31）— 移除 GitHub Pages、README 改寫為初始化手冊、修正註冊確認信重導
 
 > PROD Supabase 專案於本日遭刪除，資料永久遺失，DEV 與 PROD 均重建為全新環境。本版配合該情況把 GitHub Pages 完全移除，並把 README 的「部署方式」改寫為一份可逐步執行的初始化手冊，每一步同時提供 WebUI 與 CLI 兩種做法。另修正註冊確認信重導至 `localhost:3000` 的缺陷。
