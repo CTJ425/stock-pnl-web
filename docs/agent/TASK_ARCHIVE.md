@@ -12,9 +12,9 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 ---
 
 ### Task 130: Auto chip warm for a newly added symbol
-- **Status**: ✅ **DEV VERIFIED** (Merge to main and PROD deploy pending user authorization)
+- **Status**: ✅ **PROD RELEASED** (0.9.22, commit ea750a0, 2026-08-31 10:06:22 Asia/Taipei)
 - **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
-- **Timestamp**: 2026-08-30 23:15:34 Asia/Taipei (Code complete); Updated 2026-08-31 09:36:46 Asia/Taipei (DEV verified)
+- **Timestamp**: 2026-08-30 23:15:34 Asia/Taipei (Code complete); 2026-08-31 09:36:46 Asia/Taipei (DEV verified); 2026-08-31 10:06:22 Asia/Taipei (PROD released)
 - **What was this**: Implement automatic chip data backfill (三大法人/融資券/借券) for newly added symbols, up to 7 trading days, triggered immediately on add instead of waiting for nightly `generate-chips`.
 - **Implementation**:
   - New `phase: 'chips'` on `stock-report` warm action

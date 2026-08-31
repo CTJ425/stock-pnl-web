@@ -7,6 +7,29 @@
 
 ---
 
+## 📅 Log: 2026-08-31 10:06:22 Asia/Taipei (Task 130: Release 0.9.22 to PROD — Edge deployed, smoke tests pass)
+
+- **Task**: 130 — Auto chip warm for newly added symbol (chips backfill).
+- **Status**: ✅ **PROD RELEASED** — Version 0.9.22, commit ea750a0, all smoke tests pass.
+- **Release Gate Results** (all exit 0):
+  - `npm test`: 85 files / 1345 tests
+  - `npx tsc --noEmit`
+  - `npm run typecheck:edge`
+  - `npm run build`
+- **Merge to main**: `dev` → `main` fast-forward, pushed `b0f0de3..ea750a0`.
+- **PROD Edge Deploy**: `supabase functions deploy stock-report --project-ref kxnxadaghidwumqsqneu --no-verify-jwt`
+  - `stock-report` version: 61 (up from prior)
+  - `ezbr_sha256`: `1e0924a33035722307d3b481682510cd1485c460e07cbfa6769d3635da026b39`
+  - `updated_at`: 2026-08-31 10:04:26 +08
+  - Note: pre-deploy hash not captured (user auto-mode classifier blocked the command); post-deploy verified by fresh timestamp + version bump.
+- **PROD Smoke Tests** ✅ **ALL PASS** (identical results to DEV build):
+  1. Bad ticker `!!bad` + `phase:'chips'` → HTTP 400 `ticker 格式不正確` (pre-auth validation, no data leak)
+  2. Valid ticker, anon key only → HTTP 401 Unauthorized (service-role also 401; requires real user JWT)
+  3. Unknown action → HTTP 400 `Unknown action` (no 500)
+- **Interim Risk CLOSED**: Between `main` push and Edge deploy, PROD ran new frontend against old Edge. Old `parseWarmPhase` (b0f0de3:606-610) fell back to `'full'` for unknown phase, so new symbols fired two full warms (no crash, but quota waste). New Edge now deployed. **Lesson recorded**: when a release touches `sources/supabase/functions/`, deploy Edge immediately after `main` push.
+- **Risk-003 Status**: Still open and accepted in BUG_FIX.md — do not close.
+- **Full Track Record**: DEV code complete (2026-08-30 23:15:34), DEV verified (2026-08-31 09:36:46), PROD released (2026-08-31 10:06:22 Asia/Taipei).
+
 ## 📅 Log: 2026-08-31 09:36:46 Asia/Taipei (Task 130: DEV deploy and manual verification — ALL PASS)
 
 - **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
@@ -30,21 +53,3 @@
 - **Pending**: Merge to `main` and PROD Edge deploy (explicit user authorization required). Spec: `docs/agent/specs/130-new-symbol-chip-warm.md`
 
 ---
-
-## 📅 Log: 2026-08-30 23:15:34 Asia/Taipei (Task 130: Auto chip warm for newly added symbol — Code complete)
-
-- **Task**: 130 — Auto chip warm for a newly added symbol (chips backfill for up to 7 trading days on first add).
-- **Status**: ✅ **CODE COMPLETE** — Not yet deployed to DEV, not yet committed to git.
-- **Implementation**: New `phase: 'chips'` on `stock-report` warm action. Reuses `chip_raw_cache` (whole-market TWSE payload) unfiltered, so a warm cache means ZERO upstream calls. New `maxUpstreamDays` option on `loadSeries` caps user-triggered path at 2 upstream fetches. Idempotence gate skips work when `reports/{ymd}/{ticker}.json` already exists. Chips path does not write `manifest.json`.
-- **Files Changed**: 
-  - `warmStock.ts` (new `warmStockChips`)
-  - `prefetchStockData.ts`
-  - `watchlistService.ts` (`addWatch` triggers prefetch)
-  - `stock-report/index.ts`
-  - Three matching `.test.ts` files (10 new tests)
-- **Testing**: 85 files / 1345 tests passed, exit 0; `npm run lint` exit 0; `npm run typecheck:edge` exit 0.
-- **Reviewer Verdict**: PASS with one accepted RISK.
-- **RISK to Record**: Historical chip report files keep a permanent "回補中" note (low-severity, accepted). See BUG_FIX.md.
-- **Pending**: DEV deployment, manual DEV verification (add symbol, check reports/{ymd}/{ticker}.json, confirm skip on re-add, nightly generate-chips unchanged). See spec § Coverage gap.
-- **Spec**: `docs/agent/specs/130-new-symbol-chip-warm.md`
-
