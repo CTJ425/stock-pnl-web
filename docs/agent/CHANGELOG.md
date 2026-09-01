@@ -2,6 +2,15 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.27-dev.2（2026-09-01）— 圖示系統統一：AppIcon 元件、六階尺寸 token 與核心頁面收斂
+
+- 🎨 **統一圖示元件 `AppIcon`**（`components/Common/AppIcon.tsx`）— 新增共用圖示封裝，把尺寸與線寬綁定為六個設計 token（`xs` 12px/2.0、`sm` 14px/1.75、`md` 16px/1.75、`lg` 20px/1.5、`xl` 24px/1.5、`2xl` 32px/1.25），並保留數字逃生門供尚未收斂的呼叫端使用。同組數值另以 `--icon-xs` … `--icon-2xl` 寫入 `index.css`，由測試斷言兩份來源一致，避免日後漂移。
+- 📉 **元件簽章依實測改用 `icon: LucideIcon`** — 設計藍圖原提案的 `name: keyof typeof Icons` 需要 `import * as Icons from 'lucide-react'`，會關閉 tree-shaking。實測結果：命名空間匯入使 bundle 由 750.56 kB（gzip 217.10 kB）膨脹到 1368.73 kB（gzip 370.49 kB），為了 57 個實際使用的圖示付出 +153 kB gzip；改採元件傳值後僅 +0.03 kB。此決策與量測數據記錄於 `docs/agent/specs/icon-system.md`，勿回退。
+- 🔤 **算繪中的 Emoji 向量化**（`MechanismGuide.tsx`、`RecalcFeesModal.tsx`、`HelpTip.tsx`）— 將 💡、⚠️ 與欄位說明按鈕的純文字 `?` 換成 `Lightbulb`、`AlertTriangle`、`HelpCircle` 向量圖示，消除各作業系統 Emoji 字型不一致造成的基線偏移與視覺斷層。`.help-tip` 同步移除自繪的圓形邊框，改由 `HelpCircle` 自身提供圓形，避免圓中圓；新增 `.icon-inline` 工具類處理行內圖示的基線對齊。
+- 🔍 **範圍以實測程式碼為準，非依藍圖清單** — 藍圖列出 9 個待替換符號，實際比對後其中 8 個位於字串或註解內（▲▼ 在樣板字串、✅🟢🎉🗑️✉️ 在 `statusText`／`setNotice`／`setMessage` 狀態字串、其餘 ⚠️ 在程式碼註解與送往模型的提示字串），改動需要先變更資料形狀，本次不納入。藍圖建議的 `color="var(--warn)"` 亦已確認該 CSS 變數不存在，改為繼承周圍文字色。
+- 🎯 **核心頁面收斂 25 個呼叫端**（`AppShell.tsx` 14 處、`TransactionsPage.tsx` 10 處、`SortableTh.tsx` 1 處）— 全部改由 `AppIcon` 依 token 指定尺寸，三檔已無任何原始像素值。全專案 128 個圖示實例中有 41% 原本不對應任何 token，本次收斂採「靠向最近 token、等距時取較小者」規則，因此 `TransactionsPage` 兩個空狀態圖示由 36px 縮為 32px、`AppShell` 新增按鈕由 17px 縮為 16px，且 25 個圖示線寬由 lucide 預設的 2 改為 token 值。
+- 🧪 **完整驗證** — 單元測試 99 檔 / 1512 個測試 100% 通過 exit 0（新增 5 個測試檔：`AppIcon`、`HelpTip`、`SortableTh` 算繪測試，以及 `emojiFree`、`iconTokens` 兩個原始碼守衛），`npm run build` exit 0，bundle 751.43 kB / gzip 217.44 kB（相對基準線 +0.87 kB，即新增的向量圖示）。
+
 ### 0.9.27-dev.1（2026-09-01）— 個別交易手續費率持久化、歷史紀錄智慧反推與編輯費率對齊
 
 - 💾 **交易手續費率欄位擴充**（`schema.sql`、`models.ts`、`dataProvider.ts`）— 在 `transactions` 資料表新增 `fee_rate NUMERIC` 欄位（NULL 代表建立時尚未記錄費率的舊歷史資料），並具備 `CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1))` 約束。資料層維持舊版 Schema 降級防禦（若資料庫尚未遷移，寫入與讀取自動退回 legacy 欄位不中斷服務）。

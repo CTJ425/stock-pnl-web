@@ -40,6 +40,7 @@ import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
 import { HeaderMenu } from './Common/HeaderMenu'
+import { AppIcon } from './Common/AppIcon'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
 import { MacroPage } from './Macro/MacroPage'
 import { FxPage } from './Fx/FxPage'
@@ -414,7 +415,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
         triggerContent={
           isLocal ? (
             <>
-              <HardDrive size={12} />
+              <AppIcon icon={HardDrive} size="xs" />
               本機模式
             </>
           ) : (
@@ -430,7 +431,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
             </div>
             <div className="hmenu-sep" />
             <button type="button" role="menuitem" className="hmenu-item" onClick={cycleTheme}>
-              <ThemeIcon size={14} />
+              <AppIcon icon={ThemeIcon} size="sm" />
               <span>外觀：{THEME_LABEL[pref]}</span>
             </button>
             <div className="hmenu-sep" />
@@ -450,7 +451,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
                   onOpenAdmin()
                 }}
               >
-                <ShieldCheck size={14} />
+                <AppIcon icon={ShieldCheck} size="sm" />
                 <span>管理後台</span>
               </button>
             )}
@@ -464,7 +465,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
             >
               <GithubMark />
               <span>原始碼</span>
-              <ExternalLink size={12} className="hmenu-item-ext" />
+              <AppIcon icon={ExternalLink} size="xs" className="hmenu-item-ext" />
             </a>
             {!isLocal && (
               <>
@@ -478,7 +479,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
                     setShowChangePassword(true)
                   }}
                 >
-                  <KeyRound size={14} />
+                  <AppIcon icon={KeyRound} size="sm" />
                   <span>變更密碼</span>
                 </button>
                 <button
@@ -490,7 +491,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
                     void signOut()
                   }}
                 >
-                  <LogOut size={14} />
+                  <AppIcon icon={LogOut} size="sm" />
                   <span>登出</span>
                 </button>
               </>
@@ -581,9 +582,9 @@ function WorkspaceControls() {
         triggerClass="hmenu-ws"
         triggerContent={
           <>
-            <Layers size={14} />
+            <AppIcon icon={Layers} size="sm" />
             <span className="hmenu-ws-name">{current?.name ?? '未選擇'}</span>
-            <ChevronDown size={12} className="hmenu-caret" />
+            <AppIcon icon={ChevronDown} size="xs" className="hmenu-caret" />
           </>
         }
         menuLabel="工作區選單"
@@ -602,7 +603,7 @@ function WorkspaceControls() {
                   close()
                 }}
               >
-                <Check size={14} className="hmenu-check" aria-hidden="true" />
+                <AppIcon icon={Check} size="sm" className="hmenu-check" aria-hidden="true" />
                 <span>{w.name}</span>
               </button>
             ))}
@@ -616,7 +617,7 @@ function WorkspaceControls() {
                 openCreate()
               }}
             >
-              <Plus size={14} />
+              <AppIcon icon={Plus} size="sm" />
               <span>新增工作區</span>
             </button>
             <button
@@ -628,7 +629,7 @@ function WorkspaceControls() {
                 openRename()
               }}
             >
-              <Pencil size={14} />
+              <AppIcon icon={Pencil} size="sm" />
               <span>重新命名</span>
             </button>
             <button
@@ -640,7 +641,7 @@ function WorkspaceControls() {
                 openFee()
               }}
             >
-              <Percent size={14} />
+              <AppIcon icon={Percent} size="sm" />
               <span>預設手續費率</span>
             </button>
             <div className="hmenu-sep" />
@@ -653,7 +654,7 @@ function WorkspaceControls() {
                 void handleDelete()
               }}
             >
-              <Trash2 size={14} />
+              <AppIcon icon={Trash2} size="sm" />
               <span>刪除工作區</span>
             </button>
           </>
@@ -808,7 +809,7 @@ export function AppShell() {
       {/* Global "add transaction": available from any tab; the modal is mounted at the shell level so a content reload cannot drop it */}
       {!loading && (
         <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
-          <ListPlus size={17} />
+          <AppIcon icon={ListPlus} size="md" />
           新增交易
         </button>
       )}

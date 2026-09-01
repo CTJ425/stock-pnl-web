@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { HelpCircle } from 'lucide-react'
+import { AppIcon } from './AppIcon'
 
 interface HelpTipProps {
   /** Field description content*/
@@ -84,7 +86,7 @@ export function HelpTip({ text, label }: HelpTipProps) {
           else show()
         }}
       >
-        ?
+        <AppIcon icon={HelpCircle} size="sm" />
       </button>
       {pos &&
         createPortal(
