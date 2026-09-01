@@ -862,6 +862,18 @@ async function handleGenerate(
   const borrow = await loadBorrow()
   const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, borrow })
 
+  if (series.dataYmd) {
+    const sharedData = holding
+      ? assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
+      : data
+    await uploadJson(`${series.dataYmd}/${ticker}.json`, {
+      ticker,
+      dataDate: sharedData.dataDate,
+      generatedAt: sharedData.generatedAt,
+      data: sharedData,
+    })
+  }
+
   const reportId = makeReportId(series.dataYmd, ticker)
   return json({ reportId, generatedAt: data.generatedAt, dataDate: data.dataDate, data })
 }
