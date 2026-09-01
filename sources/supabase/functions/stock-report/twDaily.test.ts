@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   dailyUrl,
   extractDaily,
+  isTwMarketClosed,
   tradingDateOf,
   yahooDailySymbols,
   type ChartResponse,
@@ -112,6 +113,66 @@ describe('extractDaily', () => {
   })
 })
 
+describe('isTwMarketClosed', () => {
+  it('台北時間 13:30 以前判定為盤中未結算（false）', () => {
+    // 10:30 Taipei = 02:30 UTC
+    expect(isTwMarketClosed(new Date('2026-09-01T02:30:00.000Z'))).toBe(false)
+    // 13:29:59 Taipei = 05:29:59 UTC
+    expect(isTwMarketClosed(new Date('2026-09-01T05:29:59.000Z'))).toBe(false)
+  })
+
+  it('台北時間 13:30:00 起判定為已收盤（true）', () => {
+    // 13:30:00 Taipei = 05:30:00 UTC
+    expect(isTwMarketClosed(new Date('2026-09-01T05:30:00.000Z'))).toBe(true)
+    // 15:30 Taipei = 07:30 UTC
+    expect(isTwMarketClosed(new Date('2026-09-01T07:30:00.000Z'))).toBe(true)
+    // 21:00 Taipei = 13:00 UTC
+    expect(isTwMarketClosed(new Date('2026-09-01T13:00:00.000Z'))).toBe(true)
+  })
+})
+
+describe('extractDaily 盤中即時 Bar 過濾', () => {
+  const WITH_TODAY: ChartResponse = {
+    chart: {
+      result: [
+        {
+          meta: { gmtoffset: 28800, symbol: '0050.TW', regularMarketTime: 1788231019 },
+          timestamp: [1788138000, 1788224400], // 2026-08-31 (01:00Z), 2026-09-01 (01:00Z)
+          indicators: {
+            quote: [
+              {
+                open: [105.6, 106.5],
+                high: [106.25, 108.35],
+                low: [105.0, 106.5],
+                close: [106.25, 108.2],
+                volume: [63750315, 50936305],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  }
+
+  it('盤中時段（10:50 台北時間）應過濾當日未收盤 Bar，維持在前一交易日', () => {
+    const morningTime = new Date('2026-09-01T02:50:00.000Z') // 10:50 Taipei
+    const rows = extractDaily(WITH_TODAY, { now: morningTime })
+    expect(rows).toHaveLength(1)
+    expect(rows[0][0]).toBe('2026-08-31')
+    expect(rows[0][5]).toBe(63750315)
+  })
+
+  it('收盤後時段（13:35 台北時間）應包含當日完整收盤 Bar', () => {
+    const afterCloseTime = new Date('2026-09-01T05:35:00.000Z') // 13:35 Taipei
+    const rows = extractDaily(WITH_TODAY, { now: afterCloseTime })
+    expect(rows).toHaveLength(2)
+    expect(rows[0][0]).toBe('2026-08-31')
+    expect(rows[1][0]).toBe('2026-09-01')
+    expect(rows[1][4]).toBe(108.2)
+    expect(rows[1][5]).toBe(50936305)
+  })
+})
+
 describe('dailyUrl / yahooDailySymbols', () => {
   it('一次取一年日線', () => {
     expect(dailyUrl('2330.TW')).toBe(
@@ -123,3 +184,4 @@ describe('dailyUrl / yahooDailySymbols', () => {
     expect(yahooDailySymbols('2330')).toEqual(['2330.TW', '2330.TWO'])
   })
 })
+

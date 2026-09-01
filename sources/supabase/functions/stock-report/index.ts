@@ -77,6 +77,8 @@ import {
   DAILY_SCHEMA,
   dailyUrl,
   extractDaily,
+  isTwMarketClosed,
+  tradingDateOf,
   yahooDailySymbols,
   type ChartResponse,
   type DailyFile,
@@ -1140,7 +1142,14 @@ async function syncDaily(
     try {
       const existing = await downloadJson<DailyFile>(`daily/${ticker}.json`)
       if (existing && existing.schema === DAILY_SCHEMA) {
-        if (existing.lastDate >= targetDate) {
+        // 自癒防禦（0.9.26-dev.2）：若 existing 是在 targetDate 當天 13:30 收盤前過早寫入的（可能帶有盤中半截量），且目前已收盤，則不跳過，強制重抓收盤結算資料
+        const writtenBeforeClose =
+          existing.asOf &&
+          tradingDateOf(Math.floor(new Date(existing.asOf).getTime() / 1000), 28800) === targetDate &&
+          !isTwMarketClosed(new Date(existing.asOf))
+        const wasPremature = existing.lastDate === targetDate && writtenBeforeClose && isTwMarketClosed()
+
+        if (existing.lastDate >= targetDate && !wasPremature) {
           skipped++
           continue
         }

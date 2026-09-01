@@ -8,6 +8,17 @@
 
 ## 🐛 Historical Bug Fixes
 
+### BUG-042 — Yahoo intraday rolling daily bar leaks into technical series before market close
+
+- **Where**: `sources/supabase/functions/stock-report/twDaily.ts:107-130` and `sources/supabase/functions/stock-report/index.ts:1141-1146`
+- **What**: During market hours (09:00–13:30), Yahoo Finance Chart API attaches an in-progress rolling daily bar with partial morning volume and live price. When on-demand `warmStockCore` ran during the morning, `extractDaily` accepted this bar as a finalized daily candle and wrote it to `daily/{ticker}.json`. The "每日成交量" table prematurely showed today's date with a tiny fraction of full volume (e.g. 0050 at 10:50 AM showed 50,936 shares instead of 110,682,831), causing severely distorted volume ratio (0.1x), false "heavy contraction" streaks, and fake closing prices. Additionally, `lastDate` prematurely matching `targetDate` blocked subsequent `syncDaily` runs from updating with real closing bars.
+- **Fix**: Added `isTwMarketClosed()` to `twDaily.ts`. `extractDaily()` skips today's in-progress bar when called before 13:30 Taipei time, ensuring daily series stays pinned to the last fully closed trading day. Added self-healing in `syncDaily` (`index.ts`) so that if a file was prematurely recorded before 13:30 on the target date, it is re-synced upon subsequent runs after 13:30.
+- **Tests**: Added tests for `isTwMarketClosed` and `extractDaily` morning filtering vs post-close inclusion in `twDaily.test.ts`. 1456 vitest tests passing.
+- **Status**: ✅ FIXED in **0.9.26-dev.2**
+- **Fixed**: 2026-09-01 15:45:00 Asia/Taipei
+
+---
+
 ### OPS-001 — Every cron job on both Supabase projects carried unsubstituted placeholders
 
 - **Where**: `cron.job` on cloud projects `hrilemueiqyaoiwnkeuu` (PROD) and `zyebvayngwrqzoaicbwd` (cloud DEV)
