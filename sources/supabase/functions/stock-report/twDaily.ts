@@ -101,16 +101,40 @@ function num(v: unknown): number | null {
 }
 
 /**
+ * 判斷指定時間點台股普通交易是否已收盤（13:30 撮合完成）。
+ * 台北時間（UTC+8）13:30 以前為盤中未結算狀態。
+ */
+export function isTwMarketClosed(now: Date = new Date()): boolean {
+  const t = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  const h = t.getUTCHours()
+  const m = t.getUTCMinutes()
+  return h * 60 + m >= 13 * 60 + 30
+}
+
+export interface ExtractDailyOptions {
+  now?: Date
+}
+
+/**
  * Extract the daily series (from old to new) from the chart response.
  * If the structure does not match or there is no valid data, an empty array will be returned, and the caller will try the next symbol accordingly.
+ *
+ * 盤中過濾（0.9.26-dev.2）：
+ * Yahoo Finance 在盤中時段（09:00～13:30）會在日線末端附加當日未收盤的即時滾動 Bar。
+ * 此 Bar 僅帶有盤中累積成交量與即時成交價，若納入日線會導致「每日成交量」在盤中提早出現且量能大幅偏低（半截量）。
+ * 故若該根 Bar 的交易日等於今天，且當前台北時間尚未收盤（< 13:30），予以剔除，日線維持在上一交易日。
  */
-export function extractDaily(resp: ChartResponse): DailyRow[] {
+export function extractDaily(resp: ChartResponse, opts?: ExtractDailyOptions): DailyRow[] {
   const result = resp?.chart?.result?.[0]
   const ts = result?.timestamp
   const q = result?.indicators?.quote?.[0]
   if (!Array.isArray(ts) || !q) return []
 
-  const offset = num(result?.meta?.gmtoffset) ?? 0
+  const offset = num(result?.meta?.gmtoffset) ?? 28800
+  const now = opts?.now ?? new Date()
+  const todayYmd = tradingDateOf(Math.floor(now.getTime() / 1000), offset)
+  const closed = isTwMarketClosed(now)
+
   const rows: DailyRow[] = []
   for (let i = 0; i < ts.length; i++) {
     const close = num(q.close?.[i])
@@ -121,7 +145,12 @@ export function extractDaily(resp: ChartResponse): DailyRow[] {
     const low = num(q.low?.[i])
     const volume = num(q.volume?.[i])
     if (open === null || high === null || low === null) continue
-    rows.push([tradingDateOf(ts[i], offset), open, high, low, close, volume ?? 0])
+
+    const date = tradingDateOf(ts[i], offset)
+    // 盤中未收盤時，剔除當日（或未來）尚未結算的滾動 Bar
+    if (date >= todayYmd && !closed) continue
+
+    rows.push([date, open, high, low, close, volume ?? 0])
   }
   // Yahoo's replies are originally from old to new, but the sorting cost is extremely low and the wrong order will make every moving average wrong.
   rows.sort((a, b) => a[0].localeCompare(b[0]))

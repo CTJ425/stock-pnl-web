@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: TransactionForm improvements (nature defaults to SPOT, sell holdings dropdown quick pick)
+- Action: Fix Yahoo intraday in-progress daily bar leakage before market close (BUG-042)
 - Status: **✅ RECORDED**
-- Timestamp: 2026-09-01 15:06:00 Asia/Taipei
+- Timestamp: 2026-09-01 15:45:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-01 15:45:00 Asia/Taipei (0.9.26-dev.2 — Fix Yahoo intraday daily bar leak in twDaily & self-healing syncDaily, BUG-042)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.26-dev.1` → **`0.9.26-dev.2`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Intraday Bar Filter in `twDaily.ts`**: Added `isTwMarketClosed()` utility to verify if Taipei market has passed 13:30 close. `extractDaily()` skips today's (or future) in-progress rolling bar when called before market close (< 13:30). Keeps technical daily series and "每日成交量" table pinned to the last fully settled trading day during market hours.
+  2. **Self-healing Cache in `syncDaily`**: Added check in `syncDaily` (`stock-report/index.ts`) for premature daily files written before close on `targetDate`. If an existing file was recorded before 13:30 on the target day, it is no longer skipped when `syncDaily` runs post-close, ensuring complete closing bars overwrite any partial morning snapshot.
+  3. **Tests**: Added unit test coverage for `isTwMarketClosed` and `extractDaily` intraday filtering vs post-close inclusion in `twDaily.test.ts`. Full test suite: 94 files / 1456 tests 100% passed; `npx tsc --noEmit` and `npm run build` exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1456 tests, exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
 
 ---
 
@@ -21,30 +37,6 @@
 - `npx vitest run` — 94 files / 1452 tests, exit 0
 - `npx tsc --noEmit` — exit 0
 - `npm run build` — exit 0
-
----
-
-## 📅 Log: 2026-09-01 (recurrence prevention + route plugin 0.9.1)
-
-- **Status**: ✅ **COMPLETED**
-- **Version**: stock-pnl-web stays at `0.9.25` (no app code changed); `route` plugin `0.9.0` → `0.9.1`.
-
-### 1. The cron defect can no longer ship silently
-- Root cause of the recurrence: the check existed only as a comment in `schema.sql` §6d asking a human to run a query. See OPS-001.
-- `schema.sql` §6e is now a hard gate — applying the script with a surviving placeholder aborts instead of creating broken jobs.
-- New `sources/supabase/verify.sql`: `verify_setup()` returns a 10-row report, `assert_setup_ok()` raises unless everything passes. Proven to have teeth by planting a placeholder job on DEV and watching all three detection paths fire.
-- Two checks still need a human eye and say so in the report: `cron target host` (uniformity is checkable, correctness is not) and `cron http (recent)` (401 vs 200 is the only proof the secret matches the Edge Function).
-
-### 2. Dispatch rules moved to the plugin's own repository
-- The session's earlier fixes went into `stock-pnl-web/.claude/agents/`, which are the **bare-name** agents. The agents actually dispatched are `route:*`, which come from the `route` plugin. `/root/dev/Model-Routing` is that plugin's source, and its copies are byte-identical to the installed ones.
-- General rules moved upstream and released as `route` 0.9.1: scribe composes no prose a human will read and takes at most two tracking files per dispatch; Step 4 says reviewer has no Bash so briefs must paste builder's VERIFY/TESTS/LINT lines; Step 2 gains four pre-dispatch checks; Step 5 says the main session reads the diff itself where a wrong answer is silent.
-- Project-specific rules stay in `stock-pnl-web/CLAUDE.md`: the `npm run build` verify command, the `cp -i` alias, and the local-vs-scoped reviewer tool difference.
-- Correction worth keeping: `route:reviewer`'s own definition already said "you do not run commands". The five wasted findings were caused by briefs that contradicted it, not by the agent.
-
-### Verification
-- stock-pnl-web: `npx vitest run` 93 files / 1450 tests exit 0; `npm run build` exit 0
-- Model-Routing: `python3 -m pytest -q` 212 passed
-- DEV database: `SELECT assert_setup_ok()` returns `ok`
 
 ---
 
