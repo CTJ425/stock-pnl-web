@@ -133,8 +133,7 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 | Env | Branch | Supabase |
 | ---- | ---- | ---- |
 | PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
-| DEV | `dev` | self-hosted `https://korq9tvdz0jd7yblr72p.ivan.lab` (compose under `/root/container/supabase/stock-pnl-web-dev`) |
-| DEV (cloud) | `dev` | **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` currently points at |
+| DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
 **Both cloud projects were recreated on 2026-08-31.** The refs this file used to name —
 `kxnxadaghidwumqsqneu` and `cahmfrhacyvrrlsaatkm` — are **deleted**; any call against them
