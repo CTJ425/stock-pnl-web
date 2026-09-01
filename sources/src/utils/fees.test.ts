@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
-import { breakEvenPrice, calculateFee, DEFAULT_FEE_RATE, proposeFeeCorrections } from './fees'
+import { breakEvenPrice, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
 
 describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
   it('台股買入：手續費元以下無條件捨去', () => {
@@ -284,5 +284,99 @@ describe('proposeFeeCorrections 尊重明確的交易性質（Task 137 §C）', 
     const out = proposeFeeCorrections([t], opts)
     expect(out).toHaveLength(1)
     expect(out[0].newFee).toBe(413)
+  })
+})
+
+describe('inferFeeRate 歷史交易手續費率反推', () => {
+  it('買進台股（標準原價 0.001425）精準反推', () => {
+    // 500 * 1000 = 500,000; floor(500000 * 0.001425) = 712
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 712 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0.001425)
+  })
+
+  it('買進台股（3 折 0.0004275）精準反推', () => {
+    // 500 * 1000 = 500,000; floor(500000 * 0.0004275) = 213
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 213 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0.0004275)
+  })
+
+  it('買進台股（2.8 折 0.000399）精準反推', () => {
+    // 500 * 1000 = 500,000; floor(500000 * 0.000399) = 199
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 199 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0.000399)
+  })
+
+  it('賣出台股（含證交稅）正確扣除稅金後反推費率', () => {
+    // 2344 SELL 188.5 * 1000 = 188,500; tax = floor(188500 * 0.003) = 565
+    // 3 折 fee = floor(188500 * 0.0004275) = 80; fee_tax = 645
+    const tx = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 645 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0.0004275)
+  })
+
+  it('當沖賣出台股（減半證交稅）正確扣除稅金後反推費率', () => {
+    // 2344 DAY_TRADE SELL 188.5 * 1000 = 188,500; half tax = 282; fee = 80; total = 362
+    const tx = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 362, nature: 'DAY_TRADE' })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0.0004275)
+  })
+
+  it('最低手續費限制時（fee=20），避免反推畸高費率而回退預設費率', () => {
+    // 10 * 100 = 1,000; fee = 20 (最低消費), 20 / 1000 = 0.02 (2%)
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 10, qty: 100, fee: 20 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(DEFAULT_FEE_RATE)
+  })
+
+  it('零手續費交易回傳 0', () => {
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 0 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBe(0)
+  })
+
+  it('美股交易依金額比例反推費率', () => {
+    const tx = txOf({ market: 'US', ticker: 'AAPL', type: 'BUY', price: 200, qty: 10, fee: 2.85 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 1 })).toBeCloseTo(0.001425, 4)
+  })
+
+  it('自訂零股最低手續費（5）時，避免反推畸高費率而回退預設費率（BUG-046）', () => {
+    // 10 * 100 = 1,000; fee = 5（自訂零股最低消費）。5 / 1,000 = 0.005，是法定費率的 3.5 倍
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 100, qty: 10, fee: 5 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 5 })).toBe(DEFAULT_FEE_RATE)
+  })
+
+  it('手續費恰等於自訂低消但比值仍合理時，還原比值而非回退預設費率（BUG-046）', () => {
+    // 30 * 1000 = 30,000; fee = 15。15 剛好等於自訂整股低消，但 15/30000 = 0.0005 未超過法定
+    // 費率，代表這筆有可能根本沒被低消夾住（calculateFee 只在 minFee > fee 時才夾）。回退
+    // 0.001425 會高估 2.85 倍；還原 0.0005 在兩種解讀下都是較接近的估計。
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 30, qty: 1000, fee: 15 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 15, odd: 1 })).toBe(0.0005)
+  })
+
+  it('低消夾住而比值被墊高時，由費率上限守衛接住（BUG-046）', () => {
+    // 100 * 10 = 1,000; fee = 5（自訂零股低消夾住的結果）。5/1000 = 0.005 是法定費率的 3.5 倍，
+    // 被夾住的手續費必然把比值墊高，所以上限守衛就足以接住，不需要額外比對低消數值。
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 100, qty: 10, fee: 5 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 20, odd: 5 })).toBe(DEFAULT_FEE_RATE)
+  })
+
+  it('低消數值巧合但費率可還原時不被吞掉（reviewer 反例）', () => {
+    // 1000 * 100 = 100,000; 真實費率 0.00015 未被夾住（15 > 15 為假），fee = 15 只是巧合等於低消。
+    const tx = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 1000, qty: 100, fee: 15 })
+    expect(inferFeeRate(tx, DEFAULT_FEE_RATE, { whole: 15, odd: 1 })).toBe(0.00015)
+  })
+
+  it('任何台股交易反推出的費率都不會超過 DEFAULT_FEE_RATE（BUG-046）', () => {
+    const prices = [1, 10, 30, 100, 500, 1000, 2415]
+    const qtys = [1, 10, 50, 100, 1000, 5000]
+    const minFees = { whole: 20, odd: 1 }
+    for (const price of prices) {
+      for (const qty of qtys) {
+        const gross = price * qty
+        const feeCandidates = [0, 1, 5, 15, 20, Math.round(gross * 0.01), Math.round(gross * 0.05)]
+        for (const fee of feeCandidates) {
+          const buy = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price, qty, fee })
+          expect(inferFeeRate(buy, DEFAULT_FEE_RATE, minFees)).toBeLessThanOrEqual(DEFAULT_FEE_RATE)
+          const sell = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price, qty, fee })
+          expect(inferFeeRate(sell, DEFAULT_FEE_RATE, minFees)).toBeLessThanOrEqual(DEFAULT_FEE_RATE)
+        }
+      }
+    }
   })
 })

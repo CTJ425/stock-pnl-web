@@ -13,7 +13,7 @@ import { Loader2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
-import { calculateFee } from '../../utils/fees'
+import { calculateFee, inferFeeRate } from '../../utils/fees'
 import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRate, getMinFee } from '../../utils/settings'
@@ -52,14 +52,25 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [qty, setQty] = useState(initial ? String(initial.qty) : '')
   // Edit mode displays the original number of shares in "odd shares" to avoid ambiguity in lot/odd share conversions
   const [unit, setUnit] = useState<Unit>(initial ? '零股' : '張')
-  const [feeRate, setFeeRate] = useState(() => String(getFeeRate(workspaceId)))
+  const [feeRate, setFeeRate] = useState(() => {
+    if (initial?.fee_rate !== undefined && initial.fee_rate !== null) {
+      return String(initial.fee_rate)
+    }
+    const defaultRate = getFeeRate(workspaceId)
+    if (initial) {
+      const minFees = { whole: getMinFee('whole', workspaceId), odd: getMinFee('odd', workspaceId) }
+      return String(inferFeeRate(initial, defaultRate, minFees))
+    }
+    return String(defaultRate)
+  })
   const minFeeUnit = unit === '張' ? 'whole' : 'odd'
   const [minFee, setMinFee] = useState(() => String(getMinFee(minFeeUnit, workspaceId)))
 
   // When switching workspaces/whole shares or odd units, the corresponding memorized rates and minimum handling fees are brought in
   useEffect(() => {
+    if (isEdit) return
     setFeeRate(String(getFeeRate(workspaceId)))
-  }, [workspaceId])
+  }, [workspaceId, isEdit])
   useEffect(() => {
     // A different workspace has different defaults, so drop any values typed under the previous one.
     if (minFeeWorkspaceRef.current !== workspaceId) {
@@ -293,6 +304,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         name: name.trim() || cleanTicker,
         tx_type: txType,
         tx_nature: market === 'TPE' ? nature : undefined,
+        fee_rate: feeRate !== '' && !Number.isNaN(parseFloat(feeRate)) ? parseFloat(feeRate) : undefined,
         price: p,
         qty: shares,
         fee_tax: feeVal,

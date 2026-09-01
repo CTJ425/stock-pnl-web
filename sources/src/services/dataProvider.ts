@@ -169,14 +169,57 @@ const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate'
 const WORKSPACE_COLUMNS_LEGACY = 'id, name, created_at'
 
 const TX_COLUMNS =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
+/** Without fee_rate only, for a database that has tx_nature but has not run the fee_rate part of schema.sql. */
+const TX_COLUMNS_WITHOUT_FEE_RATE =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, created_at'
-/** Without tx_nature, for a database that has not run that part of schema.sql. */
+/** Without tx_nature only, for a database that has fee_rate but has not run the tx_nature part of schema.sql. */
+const TX_COLUMNS_WITHOUT_TX_NATURE =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, fee_rate, created_at'
+/** Without tx_nature and fee_rate, for a database that has not run that part of schema.sql. */
 const TX_COLUMNS_LEGACY =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at'
 
-/** Strips tx_nature entirely (key absent, not undefined) for a legacy-schema retry. */
-function withoutTxNature<T extends Record<string, unknown>>(row: T): Omit<T, 'tx_nature'> {
-  const { tx_nature: _tx_nature, ...rest } = row
+type NewTxColumn = 'tx_nature' | 'fee_rate'
+/** null: nothing dropped (full column set). 'both': neither new column present. */
+type TxDegrade = NewTxColumn | 'both' | null
+
+/**
+ * Names the new column a 42703 / PGRST204 error refers to, or null when it names neither.
+ * `fee_rate` is checked first because a message can theoretically name both (it does not in
+ * practice — Postgres/PostgREST report one undefined column per error).
+ */
+function missingTxColumn(error: { message?: string | null } | null): NewTxColumn | null {
+  const message = error?.message ?? ''
+  if (message.includes('fee_rate')) return 'fee_rate'
+  if (message.includes('tx_nature')) return 'tx_nature'
+  return null
+}
+
+/**
+ * Union of the literal column-list strings, not the widened `string` — Supabase's `.select()`
+ * overload resolution needs the literal to type the response, otherwise it falls back to a
+ * generic `GenericStringError[]` shape.
+ */
+type TxColumnList = typeof TX_COLUMNS | typeof TX_COLUMNS_WITHOUT_FEE_RATE | typeof TX_COLUMNS_WITHOUT_TX_NATURE | typeof TX_COLUMNS_LEGACY
+
+/** Select column list to use for a given degrade step. */
+function txColumnsFor(degrade: TxDegrade): TxColumnList {
+  if (degrade === null) return TX_COLUMNS
+  if (degrade === 'fee_rate') return TX_COLUMNS_WITHOUT_FEE_RATE
+  if (degrade === 'tx_nature') return TX_COLUMNS_WITHOUT_TX_NATURE
+  return TX_COLUMNS_LEGACY
+}
+
+/** Strips just the column named by `degrade` from a row (or both, for 'both'). No-op for null. */
+function stripTxRow<T extends Record<string, unknown>>(row: T, degrade: TxDegrade): Record<string, unknown> {
+  if (degrade === null) return row
+  if (degrade === 'both') {
+    const { tx_nature: _tx_nature, fee_rate: _fee_rate, ...rest } = row
+    return rest
+  }
+  const rest = { ...row }
+  delete rest[degrade]
   return rest
 }
 
@@ -189,6 +232,29 @@ function withoutTxNature<T extends Record<string, unknown>>(row: T): Omit<T, 'tx
 function isMissingColumnError(error: { code?: string | null; message?: string | null } | null): boolean {
   if (!error) return false
   return error.code === '42703' || error.code === 'PGRST204'
+}
+
+interface TxOpResult {
+  data: unknown
+  error: { code?: string | null; message?: string | null } | null
+}
+
+/**
+ * Runs `run` with the full column set, then degrades once to drop only the column the error
+ * names (keeping the other new column). If that retry also fails with a missing-column error —
+ * the database has neither column — allows exactly one further retry dropping both. At most 3
+ * attempts total. A 42703/PGRST204 means the statement was rejected before any write, so this
+ * chain cannot duplicate rows; any other error returns immediately without a further attempt.
+ */
+async function withTxColumnDegrade<R extends TxOpResult>(run: (degrade: TxDegrade) => PromiseLike<R>): Promise<R> {
+  const first = await run(null)
+  if (!first.error || !isMissingColumnError(first.error)) return first
+
+  const missing = missingTxColumn(first.error)
+  const second = await run(missing === null ? 'both' : missing)
+  if (!second.error || missing === null || !isMissingColumnError(second.error)) return second
+
+  return run('both')
 }
 
 async function currentUserId(): Promise<string> {
@@ -237,58 +303,48 @@ export class SupabaseProvider implements DataProvider {
   }
 
   async listTransactions(workspaceId: string): Promise<Transaction[]> {
-    const { data, error } = await client()
-      .from('transactions')
-      .select(TX_COLUMNS)
-      .eq('workspace_id', workspaceId)
-      .order('tx_date', { ascending: true })
-      .order('created_at', { ascending: true })
-    if (!error) return (data ?? []) as Transaction[]
-    if (!isMissingColumnError(error)) throw new Error(`載入交易紀錄失敗：${error.message}`)
-
-    // The database may not have run the tx_nature part of schema.sql yet. PostgREST rejects
-    // the whole query for an unknown column, so retry once without it rather than break the list.
-    const retry = await client()
-      .from('transactions')
-      .select(TX_COLUMNS_LEGACY)
-      .eq('workspace_id', workspaceId)
-      .order('tx_date', { ascending: true })
-      .order('created_at', { ascending: true })
-    if (retry.error) throw new Error(`載入交易紀錄失敗：${retry.error.message}`)
-    return (retry.data ?? []) as Transaction[]
+    // The database may not have run the tx_nature/fee_rate part of schema.sql yet. PostgREST
+    // rejects the whole query for an unknown column, so degrade to only the column that error
+    // actually names rather than drop both and lose the one the database does have.
+    const result = await withTxColumnDegrade((degrade) =>
+      client()
+        .from('transactions')
+        .select(txColumnsFor(degrade) as typeof TX_COLUMNS)
+        .eq('workspace_id', workspaceId)
+        .order('tx_date', { ascending: true })
+        .order('created_at', { ascending: true }),
+    )
+    if (result.error) throw new Error(`載入交易紀錄失敗：${result.error.message}`)
+    return (result.data ?? []) as Transaction[]
   }
 
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
     const userId = await currentUserId()
     const rows = txs.map((tx) => ({ ...tx, workspace_id: workspaceId, user_id: userId }))
-    const { data, error } = await client().from('transactions').insert(rows).select(TX_COLUMNS)
-    if (!error) return (data ?? []) as Transaction[]
-    if (!isMissingColumnError(error)) throw new Error(`寫入交易失敗：${error.message}`)
-
-    // Same degrade as listTransactions: an unknown tx_nature column rejects the whole insert,
-    // so retry once with it stripped from every row rather than fail the write. Anything else is
-    // not retried — an INSERT is not idempotent, so a blind retry after a dropped response would
+    // Same degrade as listTransactions: an unknown tx_nature/fee_rate column rejects the whole
+    // insert, so retry with only the named column stripped from every row. Anything else is not
+    // retried — an INSERT is not idempotent, so a blind retry after a dropped response would
     // write the rows twice.
-    const retry = await client()
-      .from('transactions')
-      .insert(rows.map(withoutTxNature))
-      .select(TX_COLUMNS_LEGACY)
-    if (retry.error) throw new Error(`寫入交易失敗：${retry.error.message}`)
-    return (retry.data ?? []) as Transaction[]
+    const result = await withTxColumnDegrade((degrade) =>
+      client()
+        .from('transactions')
+        .insert(rows.map((row) => stripTxRow(row, degrade)))
+        .select(txColumnsFor(degrade) as typeof TX_COLUMNS),
+    )
+    if (result.error) throw new Error(`寫入交易失敗：${result.error.message}`)
+    return (result.data ?? []) as Transaction[]
   }
 
   async updateTransaction(id: string, patch: NewTransaction): Promise<void> {
-    const { error } = await client().from('transactions').update(patch).eq('id', id)
-    if (!error) return
-    if (!isMissingColumnError(error)) throw new Error(`更新交易失敗：${error.message}`)
-
-    // Same degrade: an unknown tx_nature column rejects the whole update, so retry once
-    // with it stripped from the patch rather than fail the edit.
-    const retry = await client()
-      .from('transactions')
-      .update(withoutTxNature(patch))
-      .eq('id', id)
-    if (retry.error) throw new Error(`更新交易失敗：${retry.error.message}`)
+    // Same degrade: an unknown tx_nature/fee_rate column rejects the whole update, so retry
+    // with only the named column stripped from the patch rather than lose the other one too.
+    const result = await withTxColumnDegrade((degrade) =>
+      client()
+        .from('transactions')
+        .update(stripTxRow(patch, degrade))
+        .eq('id', id),
+    )
+    if (result.error) throw new Error(`更新交易失敗：${result.error.message}`)
   }
 
   async deleteTransactions(ids: string[]): Promise<void> {

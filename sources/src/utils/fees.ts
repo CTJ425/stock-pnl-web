@@ -6,10 +6,85 @@
  */
 import type { Market, Transaction, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { floorSafe, sellTaxRate } from './pnlEngine'
+import { floorSafe, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 /** The legal standard handling fee for Taiwan stocks is 0.1425%*/
 export const DEFAULT_FEE_RATE = 0.001425
+
+/** Common Taiwan broker fee rates (discounts on statutory rate 0.001425) */
+export const COMMON_FEE_RATES = [
+  0.001425, // 1.0 (原價)
+  0.00092625, // 6.5 折
+  0.000855, // 6.0 折
+  0.0007125, // 5.0 折
+  0.00057, // 4.0 折
+  0.0005415, // 3.8 折
+  0.0004275, // 3.0 折
+  0.000399, // 2.8 折
+  0.00035625, // 2.5 折
+  0.000285, // 2.0 折
+  0.00021375, // 1.5 折
+  0.0001425, // 1.0 折
+  0, // 0 免手續費
+]
+
+/**
+ * Infers the historical brokerage fee rate from an existing transaction record when fee_rate was not explicitly stored.
+ * Returns defaultRate if the fee rate cannot be reliably deduced (e.g. zero gross amount or minimum-fee clamp).
+ */
+export function inferFeeRate(
+  tx: Pick<Transaction, 'price' | 'qty' | 'fee_tax' | 'tx_type' | 'market' | 'ticker'> &
+    Pick<Partial<Transaction>, 'tx_nature'>,
+  defaultRate: number,
+  minFees: { whole: number; odd: number },
+): number {
+  if (tx.market === 'US') {
+    const gross = tx.price * tx.qty
+    if (gross <= 0) return defaultRate
+    if (tx.fee_tax === 0) return 0
+    return Number((tx.fee_tax / gross).toFixed(6))
+  }
+
+  const gross = tx.price * tx.qty
+  if (gross <= 0) return defaultRate
+
+  const { fee } = splitFeeTax(tx)
+  if (fee === 0 && tx.fee_tax === 0) return 0
+  if (fee < 0) return defaultRate
+
+  // If the fee equals the workspace's minimum fee (whole lot or odd lot) and the calculated fee
+  // at defaultRate would be lower than fee, it was clamped by minimum fee. Fall back to
+  // defaultRate to avoid a distorted high percentage.
+  if ((fee === minFees.whole || fee === minFees.odd) && gross * defaultRate < fee) {
+    return defaultRate
+  }
+
+  // Check if workspace defaultRate matches exactly
+  if (Math.floor(gross * defaultRate) === fee) {
+    return defaultRate
+  }
+
+  // Check common discount rates
+  for (const candidate of COMMON_FEE_RATES) {
+    if (Math.floor(gross * candidate) === fee) {
+      return candidate
+    }
+  }
+
+  // Otherwise calculate ratio
+  const ratio = fee / gross
+  if (ratio > DEFAULT_FEE_RATE) {
+    // A TW broker only discounts below the statutory rate; anything above it is impossible.
+    // This is also the only guard a minimum-fee clamp needs: a clamp raises the recorded fee
+    // above what the real rate would produce, so it always inflates fee/gross. Comparing `fee`
+    // against the minimum-fee values here instead would be wrong — an unclamped fee can equal
+    // a minimum fee by coincidence (`calculateFee` clamps only when `minFee > fee`), and
+    // discarding that recoverable rate overestimates it by up to an order of magnitude.
+    return defaultRate
+  }
+
+  return Number(ratio.toFixed(8))
+}
 
 export interface FeeInput {
   market: Market

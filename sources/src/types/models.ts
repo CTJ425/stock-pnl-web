@@ -36,6 +36,11 @@ export interface Transaction {
    * the ledger then falls back to inferring the nature from `fee_tax`.
    */
   tx_nature?: TxNature | null
+  /**
+   * Optional handling fee rate for this transaction. Absent/null for rows written before the column
+   * existed. When editing legacy rows, the UI infers or preserves the rate.
+   */
+  fee_rate?: number | null
   created_at: string
 }
 

@@ -48,11 +48,17 @@ vi.mock('./supabase', () => ({
 import { SupabaseProvider } from './dataProvider'
 
 const FULL =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
+const WITHOUT_FEE_RATE =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, created_at'
+const WITHOUT_TX_NATURE =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, fee_rate, created_at'
 const LEGACY =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at'
 
-const missingColumn = { code: '42703', message: 'column transactions.tx_nature does not exist' }
+const missingColumn = { code: '42703', message: 'column transactions.fee_rate does not exist' }
+const missingTxNatureColumn = { code: '42703', message: 'column transactions.tx_nature does not exist' }
+const missingUnnamedColumn = { code: '42703', message: 'column transactions.unknown_thing does not exist' }
 
 const newTx: NewTransaction = {
   tx_date: '2026-08-18',
@@ -64,6 +70,7 @@ const newTx: NewTransaction = {
   qty: 1000,
   fee_tax: 362,
   tx_nature: 'DAY_TRADE',
+  fee_rate: 0.0004275,
 }
 
 beforeEach(() => {
@@ -80,12 +87,12 @@ describe('SupabaseProvider.listTransactions', () => {
     expect(selects).toEqual([FULL])
   })
 
-  it('T2 retries without tx_nature when the column does not exist yet', async () => {
-    const legacyRows = [{ id: 't1', fee_tax: 362 }]
-    setResults([{ data: null, error: missingColumn }, { data: legacyRows, error: null }])
+  it('T2 retries keeping tx_nature when only fee_rate is missing', async () => {
+    const rows = [{ id: 't1', fee_tax: 362 }]
+    setResults([{ data: null, error: missingColumn }, { data: rows, error: null }])
     const got = await new SupabaseProvider().listTransactions('w1')
-    expect(selects).toEqual([FULL, LEGACY])
-    expect(got).toEqual(legacyRows)
+    expect(selects).toEqual([FULL, WITHOUT_FEE_RATE])
+    expect(got).toEqual(rows)
   })
 
   it('T3 throws when the retry also fails', async () => {
@@ -98,7 +105,7 @@ describe('SupabaseProvider.listTransactions', () => {
 })
 
 describe('SupabaseProvider.addTransactions', () => {
-  it('T4 sends tx_nature, then retries with it stripped when the column is missing', async () => {
+  it('T4 error names fee_rate only: retry payload keeps tx_nature, drops fee_rate', async () => {
     setResults([{ data: null, error: missingColumn }, { data: [], error: null }])
     await new SupabaseProvider().addTransactions('w1', [newTx])
 
@@ -106,12 +113,51 @@ describe('SupabaseProvider.addTransactions', () => {
     const first = (payloads[0] as Record<string, unknown>[])[0]
     const second = (payloads[1] as Record<string, unknown>[])[0]
     expect(first.tx_nature).toBe('DAY_TRADE')
-    expect('tx_nature' in second).toBe(false)
+    expect(first.fee_rate).toBe(0.0004275)
+    expect(second.tx_nature).toBe('DAY_TRADE')
+    expect('fee_rate' in second).toBe(false)
     // The retry must keep every other field, and must not lose the workspace/user keys
     expect(second.fee_tax).toBe(362)
     expect(second.workspace_id).toBe('w1')
     expect(second.user_id).toBe('u1')
+    expect(selects).toEqual([FULL, WITHOUT_FEE_RATE])
+  })
+
+  it('T4b error names tx_nature only: retry payload keeps fee_rate, drops tx_nature', async () => {
+    setResults([{ data: null, error: missingTxNatureColumn }, { data: [], error: null }])
+    await new SupabaseProvider().addTransactions('w1', [newTx])
+
+    expect(payloads).toHaveLength(2)
+    const second = (payloads[1] as Record<string, unknown>[])[0]
+    expect('tx_nature' in second).toBe(false)
+    expect(second.fee_rate).toBe(0.0004275)
+    expect(selects).toEqual([FULL, WITHOUT_TX_NATURE])
+  })
+
+  it('T4c error names neither column: retry drops both (fallback unchanged)', async () => {
+    setResults([{ data: null, error: missingUnnamedColumn }, { data: [], error: null }])
+    await new SupabaseProvider().addTransactions('w1', [newTx])
+
+    expect(payloads).toHaveLength(2)
+    const second = (payloads[1] as Record<string, unknown>[])[0]
+    expect('tx_nature' in second).toBe(false)
+    expect('fee_rate' in second).toBe(false)
     expect(selects).toEqual([FULL, LEGACY])
+  })
+
+  it('T4d first retry also 42703: exactly one further retry dropping both, no third attempt', async () => {
+    setResults([
+      { data: null, error: missingColumn },
+      { data: null, error: missingTxNatureColumn },
+      { data: [], error: null },
+    ])
+    await new SupabaseProvider().addTransactions('w1', [newTx])
+
+    expect(payloads).toHaveLength(3)
+    const third = (payloads[2] as Record<string, unknown>[])[0]
+    expect('tx_nature' in third).toBe(false)
+    expect('fee_rate' in third).toBe(false)
+    expect(selects).toEqual([FULL, WITHOUT_FEE_RATE, LEGACY])
   })
 
   it('T5 does not retry when the first insert succeeds', async () => {
@@ -150,24 +196,26 @@ describe('退回重試只能由「欄位不存在」觸發', () => {
     setResults([
       {
         data: null,
-        error: { code: 'PGRST204', message: "Could not find the 'tx_nature' column of 'transactions' in the schema cache" },
+        error: { code: 'PGRST204', message: "Could not find the 'fee_rate' column of 'transactions' in the schema cache" },
       },
       { data: [], error: null },
     ])
     await new SupabaseProvider().addTransactions('w1', [newTx])
     expect(payloads).toHaveLength(2)
-    expect('tx_nature' in (payloads[1] as Record<string, unknown>[])[0]).toBe(false)
+    expect('fee_rate' in (payloads[1] as Record<string, unknown>[])[0]).toBe(false)
   })
 })
 
 describe('SupabaseProvider.updateTransaction', () => {
-  it('T6 retries with tx_nature stripped when the column is missing', async () => {
+  it('T6 error names fee_rate only: patch keeps tx_nature', async () => {
     setResults([{ data: null, error: missingColumn }, { data: null, error: null }])
     await new SupabaseProvider().updateTransaction('t1', newTx)
 
     expect(payloads).toHaveLength(2)
     expect((payloads[0] as Record<string, unknown>).tx_nature).toBe('DAY_TRADE')
-    expect('tx_nature' in (payloads[1] as Record<string, unknown>)).toBe(false)
+    expect((payloads[0] as Record<string, unknown>).fee_rate).toBe(0.0004275)
+    expect((payloads[1] as Record<string, unknown>).tx_nature).toBe('DAY_TRADE')
+    expect('fee_rate' in (payloads[1] as Record<string, unknown>)).toBe(false)
     expect((payloads[1] as Record<string, unknown>).fee_tax).toBe(362)
   })
 

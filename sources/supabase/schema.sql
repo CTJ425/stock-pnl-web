@@ -61,6 +61,13 @@ ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
     CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
 
+-- Per-transaction handling fee rate (0.9.27). NULL means the transaction was recorded before
+-- the column existed (legacy data); when editing legacy data, the app will infer or preserve the rate.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_fee_rate_range;
+ALTER TABLE transactions ADD CONSTRAINT transactions_fee_rate_range
+    CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
+
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own transactions" ON transactions;
