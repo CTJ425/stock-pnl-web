@@ -21,6 +21,8 @@ export interface OpenLot {
   cost: number
   /** price * qty, reduced proportionally on a partial sell */
   rawCost: number
+  /** Historical transaction fee rate if specified, used for per-lot unrealized selling fee estimation */
+  feeRate?: number | null
 }
 
 export interface Position {
@@ -311,7 +313,15 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       pos.rawCost += gross
       pos.qty += tx.qty
       pos.buyCostTotal += totalCost
-      pos.openLots.push({ txId: tx.id, date: tx.tx_date, qty: tx.qty, price: tx.price, cost: totalCost, rawCost: gross })
+      pos.openLots.push({
+        txId: tx.id,
+        date: tx.tx_date,
+        qty: tx.qty,
+        price: tx.price,
+        cost: totalCost,
+        rawCost: gross,
+        feeRate: tx.fee_rate,
+      })
     } else {
       ledger.summary.sellCount++
       const gross = tx.price * tx.qty
@@ -435,14 +445,15 @@ export function estimateUnrealized(
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
     // A hand-built Holding may not carry openLots; fall back to treating it as one lot.
-    const lotQtys = Array.isArray(holding.openLots) && holding.openLots.length > 0
-      ? holding.openLots.map((l) => l.qty)
-      : [holding.qty]
+    const lots = Array.isArray(holding.openLots) && holding.openLots.length > 0
+      ? holding.openLots
+      : [{ qty: holding.qty, feeRate }]
     let fee = 0
     let tax = 0
-    for (const q of lotQtys) {
-      const lotVal = price * q
-      fee += floorSafe(lotVal * feeRate)
+    for (const lot of lots) {
+      const lotVal = price * lot.qty
+      const effectiveFeeRate = lot.feeRate !== undefined && lot.feeRate !== null ? lot.feeRate : feeRate
+      fee += floorSafe(lotVal * effectiveFeeRate)
       tax += floorSafe(lotVal * sellTaxRate(holding.ticker))
     }
     if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
