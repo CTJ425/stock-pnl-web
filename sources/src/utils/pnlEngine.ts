@@ -204,6 +204,52 @@ export function splitFeeTax(
   return { fee: tx.fee_tax - tax, tax }
 }
 
+const COMMON_FEE_RATES = [
+  0.001425, // 1.0 (原價)
+  0.00092625, // 6.5 折
+  0.000855, // 6.0 折
+  0.0007125, // 5.0 折
+  0.00057, // 4.0 折
+  0.0005415, // 3.8 折
+  0.0004275, // 3.0 折
+  0.000399, // 2.8 折
+  0.00035625, // 2.5 折
+  0.000285, // 2.0 折
+  0.00021375, // 1.5 折
+  0.0001425, // 1.0 折
+  0,
+]
+
+/**
+ * Infers the transaction fee rate from a transaction record if not explicitly provided.
+ */
+export function inferTxFeeRate(
+  tx: Pick<Transaction, 'tx_type' | 'market' | 'ticker' | 'price' | 'qty' | 'fee_tax'> &
+    Pick<Partial<Transaction>, 'fee_rate' | 'tx_nature'>,
+): number | null {
+  if (tx.fee_rate !== undefined && tx.fee_rate !== null) return tx.fee_rate
+  const gross = tx.price * tx.qty
+  if (gross <= 0) return null
+  if (tx.market === 'US') {
+    if (tx.fee_tax === 0) return 0
+    return Number((tx.fee_tax / gross).toFixed(6))
+  }
+  const fee = tx.tx_type === 'BUY' ? tx.fee_tax : splitFeeTax(tx).fee
+  if (fee === 0 && tx.fee_tax === 0) return 0
+  if (fee <= 0) return null
+
+  for (const candidate of COMMON_FEE_RATES) {
+    if (Math.floor(gross * candidate) === fee) {
+      return candidate
+    }
+  }
+  const ratio = fee / gross
+  if (ratio <= 0.001425) {
+    return ratio
+  }
+  return null
+}
+
 export function computeLedger(transactions: Transaction[]): Ledger {
   const ledger: Ledger = {
     positions: {},
@@ -320,7 +366,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         price: tx.price,
         cost: totalCost,
         rawCost: gross,
-        feeRate: tx.fee_rate,
+        feeRate: inferTxFeeRate(tx),
       })
     } else {
       ledger.summary.sellCount++
