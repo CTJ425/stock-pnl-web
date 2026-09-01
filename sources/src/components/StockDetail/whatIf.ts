@@ -60,6 +60,7 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
     rawCost: buyPrice * qty,
     buyCostTotal: cost,
     realized: 0,
+    openLots: [], // breakEvenPrice never reads lots, only avgCost
     avgCost: cost / qty,
     rawAvgCost: buyPrice,
   }

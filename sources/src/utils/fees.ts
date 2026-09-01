@@ -66,6 +66,20 @@ export function proposeFeeCorrections(
   const out: FeeCorrection[] = []
   for (const tx of transactions) {
     if (tx.market !== 'TPE' || !(tx.price > 0) || !(tx.qty > 0)) continue
+    // Day-trade detection (Task 137, revised 2026-09-01): same-date buy/sell matching was
+    // measured against two real broker exports and gives 12 false positives out of 14
+    // same-day round trips (only 2 are actual day trades), so it is not used. Instead a
+    // suspected 現股當沖 sell is one whose recorded total cannot even cover the standard
+    // tax, AND whose residual after the halved tax exactly matches the expected fee.
+    if (tx.tx_type === 'SELL') {
+      const gross = tx.price * tx.qty
+      const rate = sellTaxRate(tx.ticker)
+      const stdTax = floorSafe(gross * rate)
+      const halfTax = floorSafe((gross * rate) / 2)
+      const minFee = tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd
+      const expFee = Math.max(minFee, floorSafe(gross * opts.feeRate))
+      if (tx.fee_tax < stdTax && tx.fee_tax - halfTax === expFee) continue
+    }
     const newFee = calculateFee({
       market: tx.market,
       txType: tx.tx_type,
@@ -88,7 +102,9 @@ export function proposeFeeCorrections(
  */
 export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: number): number {
   const { qty, cost, market, ticker } = holding
-  if (!(qty > 0) || !(cost > 0)) return 0
+  // A zero-cost holding (e.g. all-stock-dividend position) is still valid; only reject a
+  // missing position or a non-numeric/negative cost (NaN >= 0 is false, so NaN still returns 0).
+  if (!(qty > 0) || !(cost >= 0)) return 0
   const taxRate = market === 'TPE' ? sellTaxRate(ticker) : 0
 
   const isBreakEven = (p: number) =>

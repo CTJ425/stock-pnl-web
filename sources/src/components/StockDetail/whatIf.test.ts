@@ -71,6 +71,8 @@ describe('whatIf', () => {
           realized: 0,
           avgCost: got.cost / 1_000,
           rawAvgCost: 100,
+          // breakEvenPrice 不看未沖銷批次；比照 whatIf.ts 的合成部位給空陣列
+          openLots: [],
         },
         RATE,
         MIN_FEE,

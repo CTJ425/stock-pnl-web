@@ -115,20 +115,6 @@ precisely what 0.7.8 would have mis-retired).
   to rule-based estimation and marks the entry `stale`. Only precision drops, because the
   scan window no longer lines up with the actual release time.
 
-### Task 135: Commit 0.9.24-dev.1 working tree
-- **Status**: ⏳ **BLOCKED — complete and verified, awaiting user or elevated permissions**
-- **Agent**: User
-- **Timestamp**: 2026-08-31 16:45:40 CST
-- **What is this**: Commit four changes to `dev` branch: (1) route config; (2) transaction form fee isolation; (3) auth password change + signup link flow; (4) version bump to 0.9.24-dev.1.
-- **Blocker**: Claude Code auto-mode classifier denies `git commit` in this session (read-only git commands pass; only commit is refused). Remedy requires either user `git commit` or elevated `Bash(git commit:*)` permission rule in a later session.
-- **Verification status**: All gates passed on exact tree: `npx vitest run` exit 0 (88 files / 1358 tests), `npx tsc --noEmit` exit 0, `npm run build` exit 0.
-- **Suggested commit order**:
-  1. `chore(route): turn off the main-session guard and the read-size gate` — `.claude/route.config.json`
-  2. `fix(tx): keep a fee edit inside the one transaction` — `sources/src/components/Transactions/`
-  3. `feat(auth): change password in-account and report the signup link result` — auth sources, tests, spec
-  4. `chore(release): 0.9.24-dev.1` — version files, CHANGELOG, docs/agent/ tracking
-- **Uncommitted files**: TransactionForm.tsx, AuthContext.tsx, AppShell.tsx, supabase.ts, authRedirect.ts (new), App.tsx, TransactionForm.fee.test.tsx (new), authRedirect.test.ts (new), AuthContext.changePassword.test.tsx (new), auth-password-change-and-signup-notice.md (new spec), version.ts, package.json, package-lock.json, README.md, CHANGELOG.md, PROGRESS.md, PROGRESS_ARCHIVE.md, BUG_FIX.md, route.config.json.
-
 ### Task 132: Supabase Redirect URLs allow-list
 - **Status**: ⏳ **OPEN — configuration required**
 - **Agent**: User
@@ -143,36 +129,20 @@ precisely what 0.7.8 would have mis-retired).
 - **Blocker**: Front-end deploy target not yet decided; see `PROGRESS.md` for current status.
 - **What to update**: Two `.env` variables: `ADDITIONAL_REDIRECT_URLS` and `SITE_URL`. Do not record any `.env` value; variable names only.
 
-### Task 134: Finalize 0.9.24 at release
-- **Status**: ⏳ **OPEN — scheduled for release time**
-- **Agent**: —
-- **Timestamp**: 2026-08-31 16:45:40 CST
-- **What is this**: When releasing 0.9.24 from `dev` to `main`: set the four version files to `0.9.24` (strip `-dev.N`), change `CHANGELOG.md` heading from `### 0.9.24-dev.1（2026-08-31，開發中）` to official release form, merge to `main`, then `git push origin main:dev` to sync both branches.
-- **Why this is needed**: Versioning policy per `versioning` skill: only the merge commit to `main` may strip `-dev.N`. Keeping both branches in sync (main = dev = x.x.x at release) ensures consistency.
+### Task 139: CSV schema extension for transaction nature
+- **Status**: ⏳ **OPEN — design and specification deferred**
+- **What is this**: Extend CSV import schema with optional `交易性質` column (SPOT / DAY_TRADE / MARGIN) and separate `手續費` and `證交稅` columns (currently combined into one). Backward compatible with legacy single `費稅` column.
+- **Why deferred this session**: Requires new persisted transaction field in Supabase (`transactions.trading_nature`), therefore a schema migration. PROD schema changes blocked by BUG-041.
+- **Target files**: `sources/src/utils/csv.ts`, `sources/supabase/schema.sql`, Supabase migration script.
+- **Next step**: After BUG-041 (PROD schema access restored), design the migration and transaction field constraints.
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
 
-### Task 136: Lot-Based Unrealized P&L Calculation (Align with Brokerage App)
-- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
-- **Agent**: Antigravity
-- **Timestamp**: 2026-08-31 17:41:00 Asia/Taipei
-- **What is this**: Align Taiwan stock unrealized net P&L and ROI calculation with Taiwanese brokerage mobile apps (Yuanta, Cathay, Fubon, etc.) by switching from aggregate holding fee/tax estimation to per-lot open tax lot (未沖銷庫存明細) summation.
-- **Specification**: Detailed problem breakdown, math comparison, data structure, FIFO matching rules, and test cases documented in `docs/agent/specs/136-lot-based-unrealized-pnl.md`.
-- **Target files**: `sources/src/utils/pnlEngine.ts`, `sources/src/utils/holdingRows.ts`, and corresponding vitest test suites.
-
-### Task 137: Day-Trading Tax Recognition & Transaction Form Edit Parity
-- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
-- **Agent**: Antigravity
-- **Timestamp**: 2026-08-31 18:03:00 Asia/Taipei
-- **What is this**: Fix edit modal initial auto-recalculate mount overwrite, harden batch fee recalculation against day-trading tax corruption (0.15% tax rate), and establish automatic day-trade detection heuristics.
-- **Specification**: Documented in `docs/agent/specs/137-daytrade-and-fee-form-fixes.md` and `docs/agent/BUG_FIX.md` (BUG-033).
-- **Target files**: `sources/src/components/Transactions/TransactionForm.tsx`, `sources/src/utils/fees.ts`, `sources/src/components/Transactions/RecalcFeesModal.tsx`.
-
-### Task 138: Codebase Deep Audit Remediation (Precision, TDR/REITs Tax, CSV, Liquidation)
-- **Status**: ⏳ **OPEN — Spec documented, implementation deferred (do not execute yet)**
-- **Agent**: Antigravity
-- **Timestamp**: 2026-08-31 18:08:00 Asia/Taipei
-- **What is this**: Address findings from codebase deep audit across formatters (`fmtPercent`), tax rates (TDR/REITs 0.1%), ledger summary day-trade split, CSV accounting format parsing, and liquidation float residue.
-- **Specification**: Documented in `docs/agent/specs/138-codebase-deep-audit-findings.md` and `docs/agent/BUG_FIX.md` (BUG-034 through BUG-040).
-- **Target files**: `sources/src/utils/formatters.ts`, `sources/src/utils/pnlEngine.ts`, `sources/src/utils/csv.ts`, `sources/src/utils/fees.ts`, `sources/src/components/Admin/AccountsSection.tsx`.
-
-
+### Task 140: Review two anomalous transactions found in real broker exports
+- **Status**: ⏳ **OPEN — awaiting user verification**
+- **What is this**: Batch recalculation on committed exports proposed corrections for exactly two rows; both look like genuine broker record anomalies rather than tool errors. Needs user verification against broker statements.
+  1. `2026-06-05 2891`: recorded 3,932 TWD, computed 722 TWD (excess 3,210, fits no known tax rate)
+  2. `2026-06-23 00685L`: recorded 459 TWD (full 0.001425 fee rate), while every other row in that file uses 3折 0.0004275 rate
+- **Evidence**: Both rows present in `docs/` broker export files; anomalies consistent across multiple parse/compute runs.
+- **Next step**: User to cross-check against broker confirmation statements and transaction history.
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
 

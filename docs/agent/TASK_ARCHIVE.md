@@ -11,6 +11,48 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 138: Codebase Deep Audit Remediation
+- **Status**: ✅ **COMPLETED** (2026-09-01)
+- **What was this**: Fix seven bugs from codebase audit: fmtPercent rounding, TDR/REIT tax rates, day-trade brokerage fee attribution, accounting format parsing, zero-cost breakeven, and full liquidation residue.
+- **Implementation**: Items 1–6 completed; Item 7 (BUG-040) withdrawn as false premise (admin self-revocation already guarded server-side).
+- **Testing**: 92 files / 1416 tests passed, exit 0; `npx tsc --noEmit` and `npm run build` both exit 0.
+- **Files Changed**: `formatters.ts`, `pnlEngine.ts`, `csv.ts`, `fees.ts`, plus 3 test files (15 new tests).
+- **Reviewer Verdict**: PASS (formatters/csv PASS with 2 RISKs fixed; pnlEngine FAIL→fixed; fees/form PASS with 1 RISK fixed).
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
+
+### Task 137: Day-Trading Tax Recognition & Transaction Form Edit Parity
+- **Status**: ✅ **COMPLETED** (2026-09-01, §C deferred)
+- **What was this**: Fix day-trade tax corruption in batch recalculation, form mount auto-recalculate, and establish day-trade detection heuristics.
+- **Completed**: Form edit mode now compares initial vs current values (survives React StrictMode); day-trade detection rule `fee_tax < floor(gross × sellTaxRate) AND fee_tax - halfTax = max(minFee, floor(gross × feeRate))`; tax ladder in ledger (standard if covered, half-tax if not, recorded if neither); batch recalculation defaults to no selections (operator chooses); 106 broker CSV rows validated.
+- **Deferred**: §C (CSV columns for transaction nature and itemized fees) requires Supabase migration, blocked by BUG-041.
+- **Testing**: 15 new tests in pnlEngine/fees/form, all passing.
+- **Files Changed**: `pnlEngine.ts`, `fees.ts`, `TransactionForm.tsx`, `RecalcFeesModal.tsx`, plus 2 test files.
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
+
+### Task 136: Lot-Based Unrealized P&L Calculation
+- **Status**: ✅ **COMPLETED** (2026-09-01)
+- **What was this**: Align Taiwan stock unrealized P&L with brokerage apps by switching from aggregate fee/tax to per-lot summation.
+- **Implementation**: `Position`/`Holding` carry `openLots: OpenLot[]`; `computeLedger` appends per BUY, consumes per SELL (FIFO); `estimateUnrealized` floors per-lot min fee and tax. Cost term remains aggregate moving average (preserves ROI sync with realized P&L).
+- **Validation**: Reference case (0050, 4 lots 2000/1000/1000/2000, cost 625,188, price 106.25): 10,770 vs 10,767 (3 TWD gap to broker app).
+- **Testing**: 15 new tests with real broker exports, all passing.
+- **Files Changed**: `pnlEngine.ts`, `holdingRows.ts`, `whatIf.ts`, plus 1 test file.
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
+
+### Task 135: Commit 0.9.24-dev.1 working tree
+- **Status**: ✅ **COMPLETED** (commit ebe2925 exists and is pushed to dev)
+- **What was this**: Commit version bump, route config, transaction form fee isolation, auth password change, and signup link confirmation.
+- **Blocker at recording**: Claude Code permission denied git commit; user executed manually.
+- **Verification status**: All gates passed: `npx vitest run` exit 0 (88 files / 1358 tests), `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- **Files committed**: TransactionForm.tsx, AuthContext.tsx, AppShell.tsx, supabase.ts, authRedirect.ts (new), App.tsx, version.ts, package.json, package-lock.json, README.md, CHANGELOG.md, PROGRESS.md, PROGRESS_ARCHIVE.md, BUG_FIX.md, route.config.json, plus 3 new test files.
+- **Timestamp**: 2026-08-31 16:45:40 CST (recorded); 2026-09-01 09:39:42 Asia/Taipei (completion confirmed)
+
+### Task 134: Finalize 0.9.24 at release
+- **Status**: ✅ **COMPLETED** (0.9.24 released, dev and main synchronized at ebe2925)
+- **What was this**: Release 0.9.24 from dev to main by stripping -dev.N, merging, and syncing branches.
+- **Implementation**: Version files set to 0.9.24 (bare), CHANGELOG.md heading changed to official form, merged to main, both branches synchronized.
+- **Verification**: `dev`, `main`, `origin/dev`, and `origin/main` all point to ebe2925; version files carry bare 0.9.24.
+- **Timestamp**: 2026-08-31 16:45:40 CST (recorded); 2026-09-01 09:39:42 Asia/Taipei (completion confirmed)
+
 ### Task 139: Workspace fee rate persistence (Supabase)
 - **Status**: ✅ **RELEASED 0.9.24** (DEV verified 2026-08-31, PROD schema pending)
 - **Spec**: `docs/agent/specs/fee-rate-persistence.md`

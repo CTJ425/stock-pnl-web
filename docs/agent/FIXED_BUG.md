@@ -8,6 +8,84 @@
 
 ## 🐛 Historical Bug Fixes
 
+### BUG-039 — Full position liquidation leaves floating-point epsilon residue in `pos.cost`
+
+- **Where**: `sources/src/utils/pnlEngine.ts:284-293`
+- **What**: Floating-point subtraction on 100% position sell can leave `1e-14` residue, polluting future re-buys.
+- **Fix**: `computeLedger` now zeroes `cost`, `rawCost`, and `openLots` when `qty` reaches 0, preventing residue propagation.
+- **Tests**: New test case verifies zero-quantity position has zero cost and empty lots array.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-038 — `breakEvenPrice` returns 0 for zero-cost holdings without factoring in minimum sell fees
+
+- **Where**: `sources/src/utils/fees.ts:89-92`
+- **What**: When `cost === 0` (e.g. stock dividend), breakeven returns 0 rather than the price needed to cover the 20 TWD minimum sell fee.
+- **Fix**: Guard now admits `cost === 0` and still rejects NaN and negative cost. When `cost === 0` and `minFee > 0`, returns the price needed to cover minFee. When `minFee === undefined` (non-TWD holdings), still returns 0 as no answer.
+- **Tests**: New test cases for zero-cost with defined minFee and for undefined minFee.
+- **Residual**: Guard does not distinguish true zero from "no answer" sentinel when both `cost === 0` and `minFee === undefined` — reachable through non-TWD zero-dividend holdings, rendered by `DashboardPage.tsx`. Pre-existing; new RISK recorded.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-037 — `parseNumber` fails on accounting parentheses negative format `(1,000)`
+
+- **Where**: `sources/src/utils/csv.ts:89-94`
+- **What**: Stripping `$` and `,` leaves `(1000)` which `Number(...)` evaluates to `NaN`.
+- **Fix**: Parser now checks for parentheses pair `(...)`, extracts sign, strips parentheses and commas, then applies sign.
+- **Impact**: None observable — helper is module-private; all three callers reject negative values, so the row is rejected either way.
+- **Tests**: New test case for accounting format.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-036 — `computeLedger` misattributes day-trading brokerage fees to tax in summary
+
+- **Where**: `sources/src/utils/pnlEngine.ts:246-253`
+- **What**: For day-trade sells with 0.15% tax, 0.3% tax estimate exceeds `fee_tax`, so `feesBrokerage` is recorded as 0.
+- **Fix**: Tax ladder applied: standard tax when record covers it, half-tax (現股當沖) if not, recorded amount as fallback. Each branch checks if the applied rate is valid before routing to tax or brokerage.
+- **Tests**: New test case with day-trade sell validates correct tax ladder behavior.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-035 — `sellTaxRate` misses TDR (`91xx`) and REITs (`01xx`) statutory 0.1% tax rate
+
+- **Where**: `sources/src/utils/pnlEngine.ts:141-144`
+- **What**: Only `00` ETF prefix is checked for 0.1% tax; TDRs (`91xx`) and REITs (`01xx`) default to 0.3%, overcharging tax by 2x.
+- **Fix**: `sellTaxRate` now returns 0.001 for both `91xx` (TDR) and `01xxx` (REIT). Bond-ETF exemption (`9910`/`9945`) still checked first for 0.003.
+- **Tests**: New test cases for TDR, REIT, and bond-ETF verification.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-034 — `fmtPercent` IEEE-754 binary floating-point representation rounds down on `.005%` boundaries
+
+- **Where**: `sources/src/utils/formatters.ts:43-46`
+- **What**: `(value * 100).toFixed(2)` rounds down values like `0.01005` to `1.00%` and `0.07005` to `7.00%` due to binary floating point imprecision.
+- **Fix**: Rounding changed to Decimal half-up on the magnitude with sign reapplied afterwards. `Math.round` breaks ties toward +Infinity; Decimal half-up is symmetric. Guard also expanded from `Number.isNaN` to `!Number.isFinite`, so `Infinity` now renders as `—`.
+- **Tests**: New test cases for boundary values and negative values.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
+### BUG-033 — TransactionForm edit mode auto-recalculates fee on mount and batch recalculation breaks day-trading taxes
+
+- **Where**: `sources/src/components/Transactions/TransactionForm.tsx:109-125` and `sources/src/utils/fees.ts:62-81`
+- **What**:
+  1. Opening the edit modal immediately triggers the auto-recalculate `useEffect`, overwriting `initial.fee_tax` with a newly computed rate (assuming default 0.3% tax), forcing the user to see `"已依目前費率重算；原本是 X 還原原紀錄"`.
+  2. `proposeFeeCorrections` blindly applies 0.3% tax to non-ETF sales, doubling the tax for day-trading (0.15% tax) transactions. `RecalcFeesModal` defaults to select-all, risking accidental destruction of day-trade records.
+- **Fix**:
+  1. Form now compares initial values against current input values instead of skipping the first effect run (the skip flag does not survive React StrictMode). Effect does not trigger when inputs match initial values.
+  2. `proposeFeeCorrections` checks the day-trade condition: `fee_tax < floorSafe(gross × sellTaxRate) AND fee_tax - halfTax === max(minFee, floorSafe(gross × feeRate))`. When true, row is excluded from corrections (risk of corruption).
+  3. `RecalcFeesModal` defaults to all rows unchecked; user must explicitly select rows to recalculate.
+- **Day-trade detection rule**: Validated against 106 rows from real broker exports. Same-date buy/sell matching was rejected: 14 rows are same-day round trips but only 2 are actual day trades, giving 12 false positives. Current rule has zero false positives on the test set.
+- **Tests**: New test file `realExports.test.ts` runs 106 broker CSV rows through parse → ledger → fee-corrections pipeline. Form tests verify edit mount does not recalculate when inputs match initial.
+- **Status**: ✅ FIXED in **0.9.25-dev.1** (commit TBD)
+
+---
+
 ### BUG-038 — AddWatchModal: keyword `2` → 8,115 hits → 4 万 DOM nodes → browser freeze + lost keystrokes
 
 - **Condition**: `AddWatchModal` stock search on a 28,272-row watchlist. User types `2330` (stock code). At the intermediate state `2`, the search hits 8,115 rows, forcing `results.map()` to render 8,115 `<li>` + `<button>` pairs (~40,000 DOM nodes) and re-create them on every keystroke. Browser locks up and drops subsequent key events.

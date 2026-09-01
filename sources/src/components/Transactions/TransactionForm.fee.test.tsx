@@ -4,6 +4,7 @@
  * but an edit belongs to that one transaction. The form must not write the value back
  * into the workspace default — the workspace fee dialog owns that value.
  */
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -93,5 +94,84 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     expect((form.getByLabelText('最低手續費') as HTMLInputElement).value).toBe('20')
     await user.selectOptions(form.getByLabelText('股數單位'), '零股')
     expect((form.getByLabelText('最低手續費') as HTMLInputElement).value).toBe('1')
+  })
+
+  /**
+   * 建一筆現股當沖賣出後重開編輯，回傳編輯視窗。
+   * `strict` 為 true 時整個 App 包在 StrictMode 下 —— 正式進入點 main.tsx 就是這樣掛的，
+   * 而 StrictMode 會把 effect 的 setup 跑兩次，用「跳過第一次」的旗標擋不住第二次。
+   */
+  async function editSavedDayTradeFee(strict: boolean) {
+    const user = userEvent.setup()
+    render(<App />, strict ? { wrapper: StrictMode } : undefined)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    await user.type(form.getByLabelText(/股票代號/), '2344')
+    await user.type(form.getByLabelText('股票名稱'), '華邦電')
+    await user.selectOptions(form.getByLabelText('股數單位'), '零股')
+    await user.type(form.getByLabelText('交易單價'), '188.5')
+    await user.type(form.getByLabelText('交易股數'), '1000')
+    const rate = form.getByLabelText('手續費率')
+    await user.clear(rate)
+    await user.type(rate, '0.0004275')
+    const tax = form.getByLabelText('證交稅率')
+    await user.clear(tax)
+    await user.type(tax, '0.0015')
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('362')
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    return within(dialog)
+  }
+
+  it('F6: 編輯既有交易時，載入當下不得依現行費率覆蓋原本的手續費 / 稅金', async () => {
+    const form = await editSavedDayTradeFee(false)
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('362')
+    expect(form.queryByText(/已依目前費率重算/)).toBeNull()
+  })
+
+  it('F6b: StrictMode 下 effect 跑兩次，原紀錄同樣不得被覆蓋', async () => {
+    const form = await editSavedDayTradeFee(true)
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('362')
+    expect(form.queryByText(/已依目前費率重算/)).toBeNull()
+  })
+
+  it('F7: 編輯模式下使用者改動單價後，手續費才重新計算', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.type(form.getByLabelText(/股票代號/), '2330')
+    await user.type(form.getByLabelText('股票名稱'), '台積電')
+    await user.type(form.getByLabelText('交易單價'), '500')
+    await user.type(form.getByLabelText('交易股數'), '1')
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+    // 買進 500 × 1000 股，原價費率 → floor(500000*0.001425) = 712
+    const fee = form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement
+    expect(fee.value).toBe('712')
+
+    const price = form.getByLabelText('交易單價')
+    await user.clear(price)
+    await user.type(price, '600')
+    // floor(600000*0.001425) = 855
+    expect(fee.value).toBe('855')
   })
 })

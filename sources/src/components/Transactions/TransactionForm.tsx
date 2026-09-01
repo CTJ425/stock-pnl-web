@@ -78,6 +78,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
+  // In edit mode the saved fee/tax stands until the user changes a core input.
+  // A "skip the first run" flag is not enough: StrictMode invokes an effect twice on
+  // mount (main.tsx wraps App), and the second pass would consume the flag and overwrite
+  // anyway. Comparing the inputs against their initial values gives the same answer
+  // however many times the effect runs. Cleared for good on the first real change, so
+  // typing a value back to its original still recalculates.
+  const untouchedFeeSig = useRef<string | null>(
+    initial ? [price, qty, unit, feeRate, taxRate, minFee, market, txType].join('|') : null,
+  )
   // Per-unit record of user-typed 最低手續費, so a value typed under one unit survives switching to the other and back.
   const minFeeTyped = useRef<Partial<Record<'whole' | 'odd', string>>>({})
   const minFeeWorkspaceRef = useRef(workspaceId)
@@ -104,9 +113,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   )
 
   // Automatic conversion of handling fees (recalculated when enabled and dependent on changes; users can still manually modify field values).
-  // Edit mode is also calculated: the handling fee for old data may be logged in incorrectly, and will be re-estimated based on the current rate when it is turned on.
+  // Edit mode no longer re-estimates on open: the initial mount keeps `initial.fee_tax` as-is,
+  // and recalculation only kicks in once the user actually changes a core input below.
   // "Restore original record" is provided below the field to change it back to the original value.
   useEffect(() => {
+    const sig = [price, qty, unit, feeRate, taxRate, minFee, market, txType].join('|')
+    if (untouchedFeeSig.current !== null) {
+      if (untouchedFeeSig.current === sig) return
+      untouchedFeeSig.current = null
+    }
     const p = parseFloat(price) || 0
     const shares = getActualShares()
     const rate = parseFloat(feeRate) || 0

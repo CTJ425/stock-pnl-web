@@ -79,6 +79,12 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
 
       {error && <div className="notice notice-error">{error}</div>}
 
+      {proposals.length > 0 && (
+        <div className="field-hint" style={{ marginBottom: 12 }}>
+          ⚠️ 賣出提案含預估證交稅，現股當沖紀錄請勿勾選。
+        </div>
+      )}
+
       {proposals.length === 0 ? (
         <div className="empty-state" style={{ padding: '28px 0' }}>
           <CheckCircle2 size={28} style={{ marginBottom: 8 }} />

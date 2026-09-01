@@ -160,58 +160,27 @@ The 2026-07-28 look-back on BUG-004 (32-round day, 16:00–17:00 rounds, short-c
 the scheduler has been reworked several times since, most recently in 0.6.32, and the timeline now reads from
 `batch_run_log` directly. Nothing is pending from it.
 
+---
 
-### BUG-033 — TransactionForm edit mode auto-recalculates fee on mount and batch recalculation breaks day-trading taxes
+## 🐛 BUG-040 — WITHDRAWN (2026-09-01)
 
-- **Where**: `sources/src/components/Transactions/TransactionForm.tsx:109-125` and `sources/src/utils/fees.ts:62-81`
-- **What**:
-  1. Opening the edit modal immediately triggers the auto-recalculate `useEffect`, overwriting `initial.fee_tax` with a newly computed rate (assuming default 0.3% tax), forcing the user to see `"已依目前費率重算；原本是 X 還原原紀錄"`.
-  2. `proposeFeeCorrections` blindly applies 0.3% tax to non-ETF sales, doubling the tax for day-trading (0.15% tax) transactions. `RecalcFeesModal` defaults to select-all, risking accidental destruction of day-trade records.
-- **Impact**: Confusing UX during manual editing (appears as if edits fail to save); risk of data corruption when batch recalculating fees on workspaces with day trades.
-- **Status**: OPEN (Task 137, spec in `docs/agent/specs/137-daytrade-and-fee-form-fixes.md`)
-- **Discovered**: 2026-08-31
+- **Finding**: "Admin self-revocation without confirmation" — premise is false.
+- **Investigation**: `handleAdminSetRole` in `sources/supabase/functions/stock-report/index.ts:3700-3702` refuses self-revocation server-side (`if (userId === targetUserId && !targetIsAdmin) throw`). `setUserAdmin` in `AuthContext.tsx` unwraps that error message. `AccountsSection.test.tsx` already pins the UI behaviour (button stays enabled and unchanged on error).
+- **Conclusion**: No code change needed. Existing test already covers the guard. Entry withdrawn from open bug list.
 
-### BUG-034 — `fmtPercent` IEEE-754 binary floating-point representation rounds down on `.005%` boundaries
-- **Where**: `sources/src/utils/formatters.ts:43-46`
-- **What**: `(value * 100).toFixed(2)` rounds down values like `0.01005` to `1.00%` and `0.07005` to `7.00%` due to binary floating point imprecision.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
+---
 
-### BUG-035 — `sellTaxRate` misses TDR (`91xx`) and REITs (`01xx`) statutory 0.1% tax rate
-- **Where**: `sources/src/utils/pnlEngine.ts:141-144`
-- **What**: Only `00` ETF prefix is checked for 0.1% tax; TDRs (`91xx`) and REITs (`01xx`) default to 0.3%, overcharging tax by 2x.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
+## ⚠️ RISK — `breakEvenPrice` returns 0 for zero-cost holdings when `minFee` is undefined
 
-### BUG-036 — `computeLedger` misattributes day-trading brokerage fees to tax in summary
-- **Where**: `sources/src/utils/pnlEngine.ts:246-253`
-- **What**: For day-trade sells with 0.15% tax, 0.3% tax estimate exceeds `fee_tax`, so `feesBrokerage` is recorded as 0.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
+- **Where**: `sources/src/utils/fees.ts:89-92` (after BUG-038 fix)
+- **Condition**: `cost === 0` AND `minFee === undefined`
+- **Consequence**: Return value is 0, which is also the documented "no answer" sentinel for the function. Cannot distinguish a real zero break-even from a failure.
+- **Reachability**: Possible for non-TWD holdings through `sources/src/utils/holdingRows.ts` (minFee is undefined for non-TWD); rendered by `DashboardPage.tsx`.
+- **Severity**: Low. No marker error. Row still renders; formula is just 0.
+- **Status**: Pre-existing, not introduced by this session. BUG-038 fix did not change this case.
+- **Discovered**: 2026-09-01, after BUG-038 fix
 
-### BUG-037 — `parseNumber` fails on accounting parentheses negative format `(1,000)`
-- **Where**: `sources/src/utils/csv.ts:89-94`
-- **What**: Stripping `$` and `,` leaves `(1000)` which `Number(...)` evaluates to `NaN`.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
-
-### BUG-038 — `breakEvenPrice` returns 0 for zero-cost holdings without factoring in minimum sell fees
-- **Where**: `sources/src/utils/fees.ts:89-92`
-- **What**: When `cost === 0` (e.g. stock dividend), breakeven returns 0 rather than the price needed to cover the 20 TWD minimum sell fee.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
-
-### BUG-039 — Full position liquidation leaves floating-point epsilon residue in `pos.cost`
-- **Where**: `sources/src/utils/pnlEngine.ts:284-293`
-- **What**: Floating-point subtraction on 100% position sell can leave `1e-14` residue, polluting future re-buys.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
-
-### BUG-040 — `AccountsSection.tsx` allows self-revocation of admin rights without confirmation
-- **Where**: `sources/src/components/Admin/AccountsSection.tsx:33-43`
-- **What**: An admin toggling their own switch immediately revokes their admin status without a confirmation prompt.
-- **Status**: OPEN (Task 138, spec in `docs/agent/specs/138-codebase-deep-audit-findings.md`)
-- **Discovered**: 2026-08-31
+---
 
 ### BUG-041 — PROD Supabase 尚未有 `workspaces.fee_rate` 欄位
 - **Where**: `sources/supabase/schema.sql` section 1

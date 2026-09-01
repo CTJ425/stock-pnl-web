@@ -12,6 +12,17 @@
 import type { Currency, Market, Transaction } from '../types/models'
 import { marketCurrency, positionKey } from '../types/models'
 
+export interface OpenLot {
+  txId: string
+  date: string
+  qty: number
+  price: number
+  /** price * qty + buy fee, reduced proportionally on a partial sell */
+  cost: number
+  /** price * qty, reduced proportionally on a partial sell */
+  rawCost: number
+}
+
 export interface Position {
   key: string
   ticker: string
@@ -28,6 +39,8 @@ export interface Position {
   buyCostTotal: number
   /** Cumulative realized gains and losses*/
   realized: number
+  /** FIFO lots not yet fully sold, oldest first */
+  openLots: OpenLot[]
 }
 
 export interface Holding extends Position {
@@ -140,7 +153,9 @@ export interface Ledger {
  */
 export function sellTaxRate(ticker: string): number {
   if (/^00\d+B$/i.test(ticker)) return 0
-  return ticker.startsWith('00') ? 0.001 : 0.003
+  // TDR (91xx) and REITs (01xxx[T]) also get the 0.1% ETF rate.
+  if (ticker.startsWith('00') || ticker.startsWith('91') || /^01\d{3}[A-Z]?$/i.test(ticker)) return 0.001
+  return 0.003
 }
 
 /** First correct the binary floating point error (for example, 114 is mistakenly stored as 113.99999999999999) and then round it to the nearest dollar.*/
@@ -206,6 +221,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         rawCost: 0,
         buyCostTotal: 0,
         realized: 0,
+        openLots: [],
       }
       ledger.order.push(key)
     }
@@ -243,10 +259,18 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     yt.fees += tx.fee_tax
 
     // Estimating based on the tax rate, the error in manual adjustment or on-the-spot tax refund will fall on the handling fee
-    const estTax =
-      tx.tx_type === 'SELL' && tx.market === 'TPE'
-        ? Math.min(floorSafe(tx.price * tx.qty * sellTaxRate(tx.ticker)), tx.fee_tax)
-        : 0
+    let estTax = 0
+    if (tx.tx_type === 'SELL' && tx.market === 'TPE') {
+      const gross0 = tx.price * tx.qty
+      const stdTax = floorSafe(gross0 * sellTaxRate(tx.ticker))
+      if (tx.fee_tax >= stdTax) {
+        estTax = stdTax
+      } else {
+        // 現股當沖減半: day-trade sells get half the standard tax rate
+        const halfTax = floorSafe((gross0 * sellTaxRate(tx.ticker)) / 2)
+        estTax = tx.fee_tax >= halfTax ? halfTax : tx.fee_tax
+      }
+    }
     ledger.summary.feesTax += estTax
     ledger.summary.feesBrokerage += tx.fee_tax - estTax
     y.feesTax += estTax
@@ -264,6 +288,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       pos.rawCost += gross
       pos.qty += tx.qty
       pos.buyCostTotal += totalCost
+      pos.openLots.push({ txId: tx.id, date: tx.tx_date, qty: tx.qty, price: tx.price, cost: totalCost, rawCost: gross })
     } else {
       ledger.summary.sellCount++
       const gross = tx.price * tx.qty
@@ -293,6 +318,30 @@ export function computeLedger(transactions: Transaction[]): Ledger {
       pos.qty -= matchedQty
       pos.realized += realized
       yt.realized += realized
+
+      // Consume open lots FIFO for the matched quantity.
+      let remaining = matchedQty
+      while (remaining > 0 && pos.openLots.length > 0) {
+        const lot = pos.openLots[0]
+        if (lot.qty <= remaining) {
+          remaining -= lot.qty
+          pos.openLots.shift()
+        } else {
+          const ratio = remaining / lot.qty
+          lot.cost -= lot.cost * ratio
+          lot.rawCost -= lot.rawCost * ratio
+          lot.qty -= remaining
+          remaining = 0
+        }
+      }
+
+      // Moving-average subtraction leaves a tiny float residue (~1e-11) that would
+      // permanently pollute the average cost on the next buy; zero it out explicitly.
+      if (pos.qty === 0) {
+        pos.cost = 0
+        pos.rawCost = 0
+        pos.openLots = []
+      }
 
       yt.sells.push({
         txId: tx.id,
@@ -332,7 +381,14 @@ export function computeLedger(transactions: Transaction[]): Ledger {
   ledger.holdings = ledger.order
     .map((key) => ledger.positions[key])
     .filter((pos) => pos.qty > 0)
-    .map((pos) => ({ ...pos, avgCost: pos.cost / pos.qty, rawAvgCost: pos.rawCost / pos.qty }))
+    // Copy the lots: the spread is shallow, and a Holding sharing this array would let a
+    // consumer mutate ledger.positions through it. Every other field is a scalar.
+    .map((pos) => ({
+      ...pos,
+      openLots: pos.openLots.map((l) => ({ ...l })),
+      avgCost: pos.cost / pos.qty,
+      rawAvgCost: pos.rawCost / pos.qty,
+    }))
     .sort((a, b) => {
       if (a.currency !== b.currency) return a.currency === 'TWD' ? -1 : 1
       return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0
@@ -355,11 +411,19 @@ export function estimateUnrealized(
 ): number {
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
-    let fee = floorSafe(mktVal * feeRate)
+    // A hand-built Holding may not carry openLots; fall back to treating it as one lot.
+    const lotQtys = Array.isArray(holding.openLots) && holding.openLots.length > 0
+      ? holding.openLots.map((l) => l.qty)
+      : [holding.qty]
+    let fee = 0
+    let tax = 0
+    for (const q of lotQtys) {
+      const lotVal = price * q
+      fee += floorSafe(lotVal * feeRate)
+      tax += floorSafe(lotVal * sellTaxRate(holding.ticker))
+    }
     if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
-    return Math.round(
-      mktVal - holding.qty * holding.avgCost - fee - floorSafe(mktVal * sellTaxRate(holding.ticker)),
-    )
+    return Math.round(mktVal - holding.qty * holding.avgCost - fee - tax)
   }
   return mktVal - holding.qty * holding.avgCost
 }
