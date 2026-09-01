@@ -5,8 +5,9 @@
  * - U.S. stocks are not included in the batch recalculation (the charging structures of each brokerage vary greatly)
  */
 import { useMemo, useState } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { AppIcon } from '../Common/AppIcon'
 import { Modal } from '../Common/Modal'
 import { proposeFeeCorrections } from '../../utils/fees'
 import { getFeeRate, getMinFee } from '../../utils/settings'
@@ -81,7 +82,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
 
       {proposals.length > 0 && (
         <div className="field-hint" style={{ marginBottom: 12 }}>
-          ⚠️ 賣出提案含預估證交稅，現股當沖紀錄請勿勾選。
+          <AppIcon icon={AlertTriangle} size="sm" className="icon-inline" /> 賣出提案含預估證交稅，現股當沖紀錄請勿勾選。
         </div>
       )}
 

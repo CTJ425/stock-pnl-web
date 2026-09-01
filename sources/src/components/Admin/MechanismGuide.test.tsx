@@ -51,4 +51,11 @@ describe('MechanismGuide', () => {
     expect(screen.getByText('展開機制與週期對照表')).toBeTruthy()
     expect(screen.queryByText('資料源探針運作週期（8 大來源）')).toBeNull()
   })
+
+  it('renders the architecture hint with a vector bulb, not an emoji', () => {
+    const { container } = render(<MechanismGuide />)
+    fireEvent.click(screen.getByRole('button', { name: /探針與排程機制運作總覽/ }))
+    expect(container.querySelector('svg.lucide-lightbulb')).not.toBeNull()
+    expect(container.textContent).not.toContain('💡')
+  })
 })

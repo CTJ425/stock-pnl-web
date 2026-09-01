@@ -26,6 +26,12 @@
   --svg-bg-glow: var(--bg-glow-a);
   --radius: 14px;
   --radius-sm: 9px;
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+  --icon-xl: 24px;
+  --icon-2xl: 32px;
   /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
   --bottom-nav-h: 54px;
   --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
@@ -812,21 +818,22 @@ table.data-table {
   width: 14px;
   height: 14px;
   padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1;
   cursor: help;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .help-tip:hover,
 .help-tip:focus-visible {
   color: var(--accent);
-  border-color: var(--accent);
+}
+
+.icon-inline {
+  vertical-align: -0.15em;
 }
 
 .help-bubble {
