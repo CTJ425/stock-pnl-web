@@ -212,4 +212,105 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     await user.selectOptions(form.getByLabelText('交易市場'), 'US')
     expect(form.queryByLabelText('交易性質')).toBeNull()
   })
+
+  it('F10: 儲存自訂手續費率後，重開編輯表單完整保留該費率', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.type(form.getByLabelText(/股票代號/), '2330')
+    await user.type(form.getByLabelText('股票名稱'), '台積電')
+    await user.type(form.getByLabelText('交易單價'), '500')
+    await user.type(form.getByLabelText('交易股數'), '1')
+    const rate = form.getByLabelText('手續費率')
+    await user.clear(rate)
+    await user.type(rate, '0.0004275') // 3 折
+    // 500 * 1000 * 0.0004275 = 213.75 -> 213
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('213')
+
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.0004275')
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('213')
+  })
+
+  it('F11: 編輯自訂費率交易時，修改單價依自訂費率重算（而非全域費率）', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.type(form.getByLabelText(/股票代號/), '2330')
+    await user.type(form.getByLabelText('股票名稱'), '台積電')
+    await user.type(form.getByLabelText('交易單價'), '500')
+    await user.type(form.getByLabelText('交易股數'), '1')
+    const rate = form.getByLabelText('手續費率')
+    await user.clear(rate)
+    await user.type(rate, '0.0004275') // 3 折
+
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+
+    // 修改單價為 600
+    const price = form.getByLabelText('交易單價')
+    await user.clear(price)
+    await user.type(price, '600')
+
+    // 600 * 1000 * 0.0004275 = 256.5 -> 256（若被全域 0.001425 覆蓋會是 855）
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('256')
+  })
+
+  it('F12: 手動編輯手續費率為 0.00092625（6.5折）並儲存後，再次開啟編輯依然保留 0.00092625', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    // 新增標準費率交易（單價 100，1 張）
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.type(form.getByLabelText(/股票代號/), '2330')
+    await user.type(form.getByLabelText('股票名稱'), '台積電')
+    await user.type(form.getByLabelText('交易單價'), '100')
+    await user.type(form.getByLabelText('交易股數'), '1')
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    // 第一次編輯：將手續費率修改為 0.00092625（6.5折）
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+    const rateInput = form.getByLabelText('手續費率')
+    await user.clear(rateInput)
+    await user.type(rateInput, '0.00092625')
+    // 100 * 1000 * 0.00092625 = 92.625 -> 92
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('92')
+    await user.click(form.getByRole('button', { name: '儲存變更' }))
+
+    // 第二次編輯：驗證再次開啟時，手續費率精確為 0.00092625，手續費依然為 92
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+    expect((form.getByLabelText('手續費率') as HTMLInputElement).value).toBe('0.00092625')
+    expect((form.getByLabelText(/手續費 \/ 稅金/) as HTMLInputElement).value).toBe('92')
+  })
 })

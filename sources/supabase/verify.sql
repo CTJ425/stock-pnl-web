@@ -56,7 +56,8 @@ BEGIN
   RETURN QUERY
   WITH want(tbl, col) AS (
     VALUES ('workspaces','fee_rate'),      -- 0.9.24, task 135
-           ('transactions','tx_nature')    -- 0.9.25, task 137 §C
+           ('transactions','tx_nature'),   -- 0.9.25, task 137 §C
+           ('transactions','fee_rate')     -- 0.9.27, fee_rate persistence
   ), missing AS (
     SELECT string_agg(tbl || '.' || col, ', ' ORDER BY tbl, col) AS m FROM want w
      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns c
