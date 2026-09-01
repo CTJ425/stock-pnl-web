@@ -11,7 +11,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
-import type { Market, NewTransaction, Transaction, TxType } from '../../types/models'
+import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
+import { TX_NATURE_LABEL } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRate, getMinFee } from '../../utils/settings'
@@ -43,6 +44,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [date, setDate] = useState(initial?.tx_date ?? todayStr)
   const [market, setMarket] = useState<Market>(initial?.market ?? 'TPE')
   const [txType, setTxType] = useState<TxType>(initial?.tx_type ?? 'BUY')
+  const [nature, setNature] = useState<TxNature | ''>(initial?.tx_nature ?? '')
   const [ticker, setTicker] = useState(initial?.ticker ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [price, setPrice] = useState(initial ? String(initial.price) : '')
@@ -243,6 +245,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         ticker: cleanTicker,
         name: name.trim() || cleanTicker,
         tx_type: txType,
+        tx_nature: nature || undefined,
         price: p,
         qty: shares,
         fee_tax: feeVal,
@@ -303,6 +306,29 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             <option value="SELL">賣出</option>
           </select>
         </div>
+        {market === 'TPE' && (
+          <div className="field">
+            <label htmlFor="tx-nature">交易性質</label>
+            <select
+              id="tx-nature"
+              value={nature}
+              onChange={(e) => {
+                const next = e.target.value as TxNature | ''
+                setNature(next)
+                // 當沖 is what a user sets the tax rate preset to by hand today; keep it in sync.
+                if (next === 'DAY_TRADE') {
+                  taxRateManual.current = true
+                  setTaxRate('0.0015')
+                }
+              }}
+            >
+              <option value="">未指定</option>
+              <option value="SPOT">{TX_NATURE_LABEL.SPOT}</option>
+              <option value="DAY_TRADE">{TX_NATURE_LABEL.DAY_TRADE}</option>
+              <option value="MARGIN">{TX_NATURE_LABEL.MARGIN}</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="field">

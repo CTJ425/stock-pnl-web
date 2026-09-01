@@ -168,6 +168,29 @@ const WORKSPACE_COLUMNS = 'id, name, created_at, fee_rate'
 /** Without fee_rate, for a database that has not run that part of schema.sql. */
 const WORKSPACE_COLUMNS_LEGACY = 'id, name, created_at'
 
+const TX_COLUMNS =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, created_at'
+/** Without tx_nature, for a database that has not run that part of schema.sql. */
+const TX_COLUMNS_LEGACY =
+  'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at'
+
+/** Strips tx_nature entirely (key absent, not undefined) for a legacy-schema retry. */
+function withoutTxNature<T extends Record<string, unknown>>(row: T): Omit<T, 'tx_nature'> {
+  const { tx_nature: _tx_nature, ...rest } = row
+  return rest
+}
+
+/**
+ * The only error class a legacy-schema retry can fix. Postgres reports an undefined column as
+ * 42703 on reads; PostgREST reports it as PGRST204 on writes, where the column is missing from
+ * its schema cache. Retrying anything else is wrong — an INSERT is not idempotent, so a blind
+ * retry after a dropped response writes the rows twice.
+ */
+function isMissingColumnError(error: { code?: string | null; message?: string | null } | null): boolean {
+  if (!error) return false
+  return error.code === '42703' || error.code === 'PGRST204'
+}
+
 async function currentUserId(): Promise<string> {
   const { data, error } = await client().auth.getUser()
   if (error || !data.user) throw new Error('尚未登入')
@@ -216,28 +239,56 @@ export class SupabaseProvider implements DataProvider {
   async listTransactions(workspaceId: string): Promise<Transaction[]> {
     const { data, error } = await client()
       .from('transactions')
-      .select('id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at')
+      .select(TX_COLUMNS)
       .eq('workspace_id', workspaceId)
       .order('tx_date', { ascending: true })
       .order('created_at', { ascending: true })
-    if (error) throw new Error(`載入交易紀錄失敗：${error.message}`)
-    return (data ?? []) as Transaction[]
+    if (!error) return (data ?? []) as Transaction[]
+    if (!isMissingColumnError(error)) throw new Error(`載入交易紀錄失敗：${error.message}`)
+
+    // The database may not have run the tx_nature part of schema.sql yet. PostgREST rejects
+    // the whole query for an unknown column, so retry once without it rather than break the list.
+    const retry = await client()
+      .from('transactions')
+      .select(TX_COLUMNS_LEGACY)
+      .eq('workspace_id', workspaceId)
+      .order('tx_date', { ascending: true })
+      .order('created_at', { ascending: true })
+    if (retry.error) throw new Error(`載入交易紀錄失敗：${retry.error.message}`)
+    return (retry.data ?? []) as Transaction[]
   }
 
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
     const userId = await currentUserId()
     const rows = txs.map((tx) => ({ ...tx, workspace_id: workspaceId, user_id: userId }))
-    const { data, error } = await client()
+    const { data, error } = await client().from('transactions').insert(rows).select(TX_COLUMNS)
+    if (!error) return (data ?? []) as Transaction[]
+    if (!isMissingColumnError(error)) throw new Error(`寫入交易失敗：${error.message}`)
+
+    // Same degrade as listTransactions: an unknown tx_nature column rejects the whole insert,
+    // so retry once with it stripped from every row rather than fail the write. Anything else is
+    // not retried — an INSERT is not idempotent, so a blind retry after a dropped response would
+    // write the rows twice.
+    const retry = await client()
       .from('transactions')
-      .insert(rows)
-      .select('id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at')
-    if (error) throw new Error(`寫入交易失敗：${error.message}`)
-    return (data ?? []) as Transaction[]
+      .insert(rows.map(withoutTxNature))
+      .select(TX_COLUMNS_LEGACY)
+    if (retry.error) throw new Error(`寫入交易失敗：${retry.error.message}`)
+    return (retry.data ?? []) as Transaction[]
   }
 
   async updateTransaction(id: string, patch: NewTransaction): Promise<void> {
     const { error } = await client().from('transactions').update(patch).eq('id', id)
-    if (error) throw new Error(`更新交易失敗：${error.message}`)
+    if (!error) return
+    if (!isMissingColumnError(error)) throw new Error(`更新交易失敗：${error.message}`)
+
+    // Same degrade: an unknown tx_nature column rejects the whole update, so retry once
+    // with it stripped from the patch rather than fail the edit.
+    const retry = await client()
+      .from('transactions')
+      .update(withoutTxNature(patch))
+      .eq('id', id)
+    if (retry.error) throw new Error(`更新交易失敗：${retry.error.message}`)
   }
 
   async deleteTransactions(ids: string[]): Promise<void> {

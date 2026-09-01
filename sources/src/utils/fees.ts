@@ -72,6 +72,8 @@ export function proposeFeeCorrections(
     // suspected 現股當沖 sell is one whose recorded total cannot even cover the standard
     // tax, AND whose residual after the halved tax exactly matches the expected fee.
     if (tx.tx_type === 'SELL') {
+      // An explicit DAY_TRADE label is trusted directly, skipping the inference test below.
+      if (tx.tx_nature === 'DAY_TRADE') continue
       const gross = tx.price * tx.qty
       const rate = sellTaxRate(tx.ticker)
       const stdTax = floorSafe(gross * rate)

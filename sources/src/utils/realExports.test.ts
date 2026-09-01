@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseTransactionsCsv } from './csv'
 import { computeLedger, sellTaxRate, floorSafe } from './pnlEngine'
 import { proposeFeeCorrections } from './fees'
+import { transactionsToCsv } from './csv'
 import type { Transaction } from '../types/models'
 
 // ?raw keeps this inside Vite's transform, so the app tsconfig needs no node types
@@ -60,6 +61,40 @@ describe('真實匯出檔端到端', () => {
     // 玉山全是一般稅率且金額都對，不該提出任何更動
     expect(proposeFeeCorrections(esun, { feeRate: 0.001425, minFeeWhole: 20, minFeeOdd: 1 })
       .map((p) => `${p.tx.tx_date} ${p.tx.ticker} ${p.tx.fee_tax}->${p.newFee}`)).toEqual([])
+  })
+
+  it('新格式匯出再匯入：106 筆真實紀錄的金額與性質都不失真', () => {
+    for (const [name, txs] of [['ronlin', ronlin], ['esun', esun]] as const) {
+      const back = parseTransactionsCsv(transactionsToCsv(txs))
+      expect(back.errors, name).toEqual([])
+      expect(back.rows, name).toHaveLength(txs.length)
+      for (let i = 0; i < txs.length; i++) {
+        const a = txs[i]
+        const b = back.rows[i]
+        expect(b.fee_tax, `${name} ${a.tx_date} ${a.ticker}`).toBe(a.fee_tax)
+        expect(b.price, `${name} ${a.tx_date} ${a.ticker}`).toBe(a.price)
+        expect(b.qty, `${name} ${a.tx_date} ${a.ticker}`).toBe(a.qty)
+        expect(b.ticker, `${name} ${a.tx_date}`).toBe(a.ticker)
+        expect(b.tx_type, `${name} ${a.tx_date} ${a.ticker}`).toBe(a.tx_type)
+      }
+      // 這兩份檔案沒有交易性質欄位，往返後仍不得憑空生出標記
+      expect(back.rows.every((r) => r.tx_nature === undefined), name).toBe(true)
+    }
+  })
+
+  it('匯出的分項手續費與證交稅，每一筆都加得回原本的總額', () => {
+    for (const [name, txs] of [['ronlin', ronlin], ['esun', esun]] as const) {
+      const lines = transactionsToCsv(txs).trim().split('\r\n').slice(1)
+      expect(lines, name).toHaveLength(txs.length)
+      lines.forEach((line, i) => {
+        const cells = line.split(',')
+        const [fee, tax, total] = cells.slice(-3).map(Number)
+        expect(fee + tax, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBe(total)
+        expect(total, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBe(txs[i].fee_tax)
+        expect(fee, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBeGreaterThanOrEqual(0)
+        expect(tax, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBeGreaterThanOrEqual(0)
+      })
+    }
   })
 
   it('未沖銷批次數量總和等於持股數', () => {

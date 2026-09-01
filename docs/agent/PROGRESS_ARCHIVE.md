@@ -5,6 +5,26 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-08-31 18:35:00 Asia/Taipei (Workspace fee rate persistence to Supabase)
+
+- **Status**: ✅ **COMPLETED (DEV verified, PROD pending schema)**
+- **Task**: Task 135 — `Workspace fee rate persistence (Supabase)`
+- **Routing**: Lane 2 (schema + Edge) — scout mapped spec + failing tests → builder (2 rounds) → reviewer (2× PASS) → adjudicate
+- **Work Summary**: Moved persistent fee rate storage from `localStorage` to `workspaces.fee_rate` column, implementing sync logic for cache/remote reconciliation.
+- **Key Changes**:
+  - New `utils/feeSync.ts`: pure function `planFeeSync()` with three-way reconciliation (adopt-remote, push-local, default fallback).
+  - `WorkspaceContext.tsx`: calls `syncWorkspaceFees()` before `setWorkspaces()` renders, ensuring first view has synced values.
+  - `SupabaseProvider.listWorkspaces()`: queries with `fee_rate` column, retries with legacy column list if schema not deployed yet (fail-safe for staggered rollout).
+  - No signature changes; six callsites of `getFeeRate()` require zero edits.
+- **Schema (DEV)**: Applied and verified — `workspaces.fee_rate NUMERIC` + range check, PostgREST confirms HTTP 200 with `fee_rate` in response.
+- **Schema (PROD)**: Pending — blocked by no access token. Recorded as BUG-041, requires manual execution (three ALTER statements + schema reload).
+- **Tests**: 19 new across 3 files (`utils/feeSync.test.ts`, `services/feeSettings.test.ts`, `services/dataProvider.workspaces.test.ts`). Full suite: 91 files / 1377 tests, exit 0; `tsc --noEmit` and `npm run build` both exit 0.
+- **Risks Accepted** (BUG-042, BUG-043): Silent fallback error swallowing, pattern-matching existing `LocalProvider` style.
+- **Edge Deployment**: Not needed — no Edge Function changes.
+- **Files Changed**: 5 source + 3 test, plus CHANGELOG.md, TASK.md, BUG_FIX.md recorded.
+
+---
+
 ## 📅 Log: 2026-08-31 16:27:23 Asia/Taipei (Fee fields fix, auth features, signup link confirmation)
 
 - **Status**: ✅ **COMPLETED**

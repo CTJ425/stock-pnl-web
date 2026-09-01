@@ -130,3 +130,114 @@ equals the expected fee, i.e.
 **§C (CSV schema enhancement) is not implemented here.** A `交易性質` / `type_nature` column
 needs a new persisted transaction field, which needs a Supabase migration. PROD schema changes
 are blocked (see BUG-041). §C stays open as a separate task.
+
+---
+
+## Revision 2026-09-01 (2) — §C is IN scope after all
+
+The previous revision put §C out of scope, reasoning that a persisted trading-nature field
+needs a Supabase migration and PROD schema changes are blocked by BUG-041. **That was the
+wrong call**: the project already has a precedent for shipping a new column ahead of the PROD
+migration — `workspaces.fee_rate` (Task 135) — and the read path there degrades instead of
+breaking. §C follows that precedent.
+
+Only the PROD migration itself stays with the user, exactly as BUG-041 already does.
+
+### C.1 Field name and values
+
+The spec body names the field `type_nature`. **Use `tx_nature`** instead: this table's columns
+are `tx_date`, `tx_type`, `tx_nature` reads as one of that family, and `type_nature` sitting
+next to `tx_type` invites confusion.
+
+```ts
+export type TxNature = 'SPOT' | 'DAY_TRADE' | 'MARGIN'
+tx_nature?: TxNature | null      // on Transaction, optional like Workspace.fee_rate
+```
+
+`null` / absent means **unknown**, not 現股. Rows written before the column existed, and every
+row on PROD until the migration runs, are unknown. The ledger must keep inferring for those.
+
+### C.2 Migration (mirrors the fee_rate precedent in schema.sql:19-22)
+
+```sql
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
+    CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
+```
+
+Applied to DEV in this task. **PROD is the user's to run**, like BUG-041.
+
+### C.3 Provider must degrade, not break
+
+PostgREST rejects the whole query for an unknown column, so all three transaction paths need
+the `listWorkspaces` treatment:
+
+| Path | Failure without a fallback | Required behaviour |
+| --- | --- | --- |
+| `listTransactions` | every transaction list breaks on PROD | retry once with the legacy column list |
+| `addTransactions` | `insert` spreads `tx_nature` into the row → write fails | retry once with `tx_nature` stripped |
+| `updateTransaction` | `update(patch)` carries `tx_nature` → edit fails | retry once with `tx_nature` stripped |
+
+### C.4 Explicit label beats inference — but only in the safe direction
+
+`computeLedger` and `proposeFeeCorrections` currently infer 當沖 from the recorded `fee_tax`
+(see the previous revision). With a label present:
+
+- `tx_nature === 'DAY_TRADE'` on a TPE SELL → use the halved tax directly, no inference.
+- **Anything else — `SPOT`, `MARGIN`, `null`, absent — keeps the existing inference ladder.**
+
+An explicit `SPOT` must NOT force the standard rate. Doing so would re-open BUG-036: a
+mislabelled row whose `fee_tax` cannot cover the standard tax would have its brokerage fee
+crushed to 0 again. A label may only add information, never re-introduce that failure.
+
+`MARGIN` changes no calculation; the app does not model margin interest. It is carried so a
+CSV round-trip does not lose it.
+
+### C.5 CSV columns
+
+Export emits the Chinese label, matching how `交易類型` already exports 買入/賣出 through
+`TX_TYPE_LABEL`. Import accepts the Chinese label **and** the code, case-insensitively.
+
+New header, with the legacy combined column kept for compatibility:
+
+```
+交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,手續費 / 稅金
+```
+
+Import rules:
+
+1. **Column matching order matters.** The existing map uses
+   `header.findIndex((h) => h.includes('手續費'))`, and `'手續費'.includes('手續費')` is true,
+   so a split `手續費` column collides with the legacy combined one. Resolve `手續費` and
+   `證交稅` by **exact** `indexOf` first; use the split pair only when BOTH are present;
+   otherwise fall back to the existing `includes` match for the combined column.
+2. Split mode writes `fee_tax = 手續費 + 證交稅`. There is no separate persisted fee and tax —
+   this task does not split the stored field.
+3. An unrecognised `交易性質` value is a row error with the existing per-row reporting, not a
+   silent drop.
+4. A file with no `交易性質` column imports exactly as it does today.
+
+Round-trip requirement: `parseTransactionsCsv(transactionsToCsv(txs))` must preserve
+`tx_nature`, including `undefined`/`null` staying absent.
+
+### C.6 Form
+
+The transaction form gets a `交易性質` selector, shown for TPE only. A stored field with no way
+to set it is not a finished feature. Selecting 當沖 also sets the securities tax rate preset to
+`0.0015`, which is what a user does by hand today — the preset list already carries that value.
+
+### Test charter (additions)
+
+| Case | Expected outcome | Layer / file |
+| :--- | :--- | :--- |
+| Import split `手續費` + `證交稅` | `fee_tax` is their sum | `csv.test.ts` |
+| Import legacy combined column only | unchanged from today | `csv.test.ts` |
+| Import `交易性質` as 當沖 and as `DAY_TRADE` | both give `tx_nature: 'DAY_TRADE'` | `csv.test.ts` |
+| Import an unknown 交易性質 | row error naming 交易性質, other rows still import | `csv.test.ts` |
+| Export then import | `tx_nature` survives; absent stays absent | `csv.test.ts` |
+| `tx_nature: 'DAY_TRADE'` sell whose `fee_tax` covers the standard tax | halved tax used anyway | `pnlEngine.test.ts` |
+| `tx_nature: 'SPOT'` sell whose numbers look like a day trade | inference ladder still applies | `pnlEngine.test.ts` |
+| `tx_nature: 'DAY_TRADE'` in batch recalculation | no proposal | `fees.test.ts` |
+| `listTransactions` when the column is missing | retries with the legacy list | `dataProvider.transactions.test.ts` |
+| `addTransactions` / `updateTransaction` when the column is missing | retries with `tx_nature` stripped | `dataProvider.transactions.test.ts` |

@@ -129,14 +129,6 @@ precisely what 0.7.8 would have mis-retired).
 - **Blocker**: Front-end deploy target not yet decided; see `PROGRESS.md` for current status.
 - **What to update**: Two `.env` variables: `ADDITIONAL_REDIRECT_URLS` and `SITE_URL`. Do not record any `.env` value; variable names only.
 
-### Task 139: CSV schema extension for transaction nature
-- **Status**: ⏳ **OPEN — design and specification deferred**
-- **What is this**: Extend CSV import schema with optional `交易性質` column (SPOT / DAY_TRADE / MARGIN) and separate `手續費` and `證交稅` columns (currently combined into one). Backward compatible with legacy single `費稅` column.
-- **Why deferred this session**: Requires new persisted transaction field in Supabase (`transactions.trading_nature`), therefore a schema migration. PROD schema changes blocked by BUG-041.
-- **Target files**: `sources/src/utils/csv.ts`, `sources/supabase/schema.sql`, Supabase migration script.
-- **Next step**: After BUG-041 (PROD schema access restored), design the migration and transaction field constraints.
-- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
-
 ### Task 140: Review two anomalous transactions found in real broker exports
 - **Status**: ⏳ **OPEN — awaiting user verification**
 - **What is this**: Batch recalculation on committed exports proposed corrections for exactly two rows; both look like genuine broker record anomalies rather than tool errors. Needs user verification against broker statements.

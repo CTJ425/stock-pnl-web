@@ -168,6 +168,40 @@ export function floorSafe(value: number): number {
 // as ignorable punctuation under some ICU locales).
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
+/**
+ * Split a transaction's recorded `fee_tax` into brokerage fee and securities tax.
+ * `tx_nature === 'DAY_TRADE'` is trusted directly (halved tax rate, no inference). Any other
+ * value — including an explicit 'SPOT' — falls through to the inference ladder: a mislabelled
+ * row whose fee_tax cannot cover the standard tax must not have its brokerage fee forced to 0
+ * (BUG-036).
+ */
+export function splitFeeTax(
+  // `ticker` is required on purpose: sellTaxRate('') answers 0.3%, so an optional ticker would
+  // silently overtax every ETF, TDR and REIT by three times. Let the compiler catch a caller
+  // that forgets it instead.
+  tx: Pick<Transaction, 'tx_type' | 'market' | 'ticker' | 'price' | 'qty' | 'fee_tax'> &
+    Pick<Partial<Transaction>, 'tx_nature'>,
+): { fee: number; tax: number } {
+  const ticker = tx.ticker
+  let tax = 0
+  if (tx.tx_type === 'SELL' && tx.market === 'TPE') {
+    const gross = tx.price * tx.qty
+    if (tx.tx_nature === 'DAY_TRADE') {
+      tax = Math.min(floorSafe((gross * sellTaxRate(ticker)) / 2), tx.fee_tax)
+    } else {
+      const stdTax = floorSafe(gross * sellTaxRate(ticker))
+      if (tx.fee_tax >= stdTax) {
+        tax = stdTax
+      } else {
+        // 現股當沖減半: day-trade sells get half the standard tax rate
+        const halfTax = floorSafe((gross * sellTaxRate(ticker)) / 2)
+        tax = tx.fee_tax >= halfTax ? halfTax : tx.fee_tax
+      }
+    }
+  }
+  return { fee: tx.fee_tax - tax, tax }
+}
+
 export function computeLedger(transactions: Transaction[]): Ledger {
   const ledger: Ledger = {
     positions: {},
@@ -259,18 +293,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     yt.fees += tx.fee_tax
 
     // Estimating based on the tax rate, the error in manual adjustment or on-the-spot tax refund will fall on the handling fee
-    let estTax = 0
-    if (tx.tx_type === 'SELL' && tx.market === 'TPE') {
-      const gross0 = tx.price * tx.qty
-      const stdTax = floorSafe(gross0 * sellTaxRate(tx.ticker))
-      if (tx.fee_tax >= stdTax) {
-        estTax = stdTax
-      } else {
-        // 現股當沖減半: day-trade sells get half the standard tax rate
-        const halfTax = floorSafe((gross0 * sellTaxRate(tx.ticker)) / 2)
-        estTax = tx.fee_tax >= halfTax ? halfTax : tx.fee_tax
-      }
-    }
+    const estTax = splitFeeTax(tx).tax
     ledger.summary.feesTax += estTax
     ledger.summary.feesBrokerage += tx.fee_tax - estTax
     y.feesTax += estTax

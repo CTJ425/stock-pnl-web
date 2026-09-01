@@ -77,6 +77,20 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 
 ## 🐛 Currently Active / Open Bugs
 
+### RISK-004 — `addTransactions` silently drops `tx_nature` on pre-migration database
+
+- **Where**: `sources/src/services/dataProvider.ts:174-188` (retry path in `SupabaseProvider.addTransactions`)
+- **What**: When `tx_nature` column is missing (PROD before BUG-041 SQL runs), `addTransactions` retries with schema that omits the field. Retry succeeds and returns success, so caller believes the label was persisted. User sees "save" succeed, then finds the label gone on reopen.
+- **Confirmed by Review**: Task 139 code review before landing.
+- **Impact Today**: None. PROD schema change blocked by BUG-041; DEV has the column.
+- **User Experience**: User picks 當沖, sees save succeed, reopens and finds label lost. But ledger inference (fee/tax split via `splitFeeTax`) still produces correct tax numbers because `DAY_TRADE` → halved tax is both the explicit inference and the fallback when label absent.
+- **Mitigation**: Same property that `workspaces.fee_rate` shipped with in Task 135: explicit label lost until PROD migration runs, but numbers stay correct.
+- **Decision**: Accepted, not fixed. No code change.
+- **Status**: OPEN (low severity, accepted)
+- **Introduced**: Task 139 (2026-09-01)
+
+---
+
 ### RISK-003 — Historical chip report files keep permanent "回補中" note
 
 - **Where**: `sources/supabase/functions/stock-report/index.ts:2135` (note text from `assembleOne` at `index.ts:698-701`)
@@ -182,12 +196,27 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
 
 ---
 
-### BUG-041 — PROD Supabase 尚未有 `workspaces.fee_rate` 欄位
-- **Where**: `sources/supabase/schema.sql` section 1
-- **What**: The branch merged to `main` reads `workspaces.fee_rate` in `SupabaseProvider.listWorkspaces`; code falls back to legacy column list so the app keeps working. However, fee rate will not persist across browsers on PROD until the schema runs. Action required: execute on the PROD Supabase project: `ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;` / `ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;` / `ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));` / `NOTIFY pgrst, 'reload schema';`
+### BUG-041 — PROD Supabase schema pending: `workspaces.fee_rate` and `transactions.tx_nature`
+- **Where**: `sources/supabase/schema.sql` sections 1 and 5
+- **What**: Two pending PROD schema changes:
+  1. **Fee rate persistence (Task 135)**: `workspaces.fee_rate` column. App falls back to legacy column list and keeps working without it, but fee rate does not persist across browsers until migration runs.
+  2. **Transaction nature (Task 139)**: `transactions.tx_nature` column. App retries with schema omitting the field and keeps working, but user's explicit nature label is lost until migration runs (though tax/fee numbers stay correct via inference).
+- **Action required**: Execute on the PROD Supabase project:
+  ```sql
+  ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;
+  ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;
+  ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
+  
+  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
+  ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
+  ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
+      CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
+  
+  NOTIFY pgrst, 'reload schema';
+  ```
 - **Reason it is open**: This session has no PROD access token (`supabase projects list` returns `LegacyPlatformAuthRequiredError`). Blocking action must be performed by user.
 - **Status**: OPEN
-- **Discovered**: 2026-08-31
+- **Discovered**: 2026-08-31 (fee_rate); 2026-09-01 (tx_nature)
 
 ### BUG-042 — `listWorkspaces` 的退回重試會吞掉第一次的錯誤訊息
 - **Where**: `sources/src/services/dataProvider.ts:183-191`
