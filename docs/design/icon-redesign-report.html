@@ -1,0 +1,2362 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock P&L Web — 專案圖示全量盤點與重構設計報告</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --bg-alt: #0e1424;
+      --surface: rgba(255, 255, 255, 0.045);
+      --surface-hover: rgba(255, 255, 255, 0.075);
+      --surface-strong: rgba(255, 255, 255, 0.1);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --ink: #e6edf8;
+      --ink-secondary: #94a3b8;
+      --ink-muted: #64748b;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --accent-light: #818cf8;
+      --cyan: #06b6d4;
+      --up: #ff4a5a;
+      --down: #10b981;
+      --warn: #f59e0b;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-alt: #ffffff;
+      --surface: rgba(15, 23, 42, 0.035);
+      --surface-hover: rgba(15, 23, 42, 0.06);
+      --surface-strong: rgba(15, 23, 42, 0.08);
+      --border: rgba(15, 23, 42, 0.09);
+      --border-strong: rgba(15, 23, 42, 0.18);
+      --ink: #0f172a;
+      --ink-secondary: #475569;
+      --ink-muted: #94a3b8;
+      --accent: #4f46e5;
+      --accent-glow: rgba(79, 70, 229, 0.15);
+      --accent-light: #6366f1;
+      --shadow: 0 10px 30px -10px rgba(0,0,0,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-body);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    header.top-header {
+      background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title h1 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .branch-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--surface-strong);
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-light);
+    }
+    .branch-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .theme-toggle, .tab-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover, .tab-btn:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Metrics Bar */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .metric-card {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--cyan));
+      opacity: 0.8;
+    }
+    .metric-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .metric-value {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--ink-muted);
+    }
+
+    /* Section Tabs */
+    .view-tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      max-width: 440px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 10px 16px 10px 40px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .search-box input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .search-box svg {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-muted);
+      pointer-events: none;
+    }
+
+    .size-toggle-group {
+      display: flex;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 3px;
+      gap: 3px;
+    }
+    .size-btn {
+      background: transparent;
+      border: none;
+      color: var(--ink-secondary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      transition: all 0.2s;
+    }
+    .size-btn.active {
+      background: var(--surface-strong);
+      color: var(--ink);
+    }
+
+    /* Category Filter */
+    .filter-pills {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 24px;
+    }
+    .pill-btn {
+      white-space: nowrap;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .pill-btn:hover {
+      border-color: var(--border-strong);
+      color: var(--ink);
+    }
+    .pill-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .pill-count {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+    }
+
+    /* Icon Grid */
+    .icons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .icon-card {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      transition: all 0.2s;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .icon-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .icon-preview-box {
+      width: 52px;
+      height: 52px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+      transition: all 0.2s;
+    }
+    .icon-card:hover .icon-preview-box {
+      background: var(--accent-glow);
+      color: var(--accent-light);
+      border-color: var(--accent);
+    }
+    .cat-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--surface-strong);
+      color: var(--ink-secondary);
+      font-weight: 500;
+    }
+    .icon-name-wrap {
+      margin-bottom: 8px;
+    }
+    .icon-name {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .icon-zh {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      margin-top: 2px;
+    }
+    .icon-desc {
+      font-size: 12px;
+      color: var(--ink-muted);
+      line-height: 1.45;
+      margin-bottom: 12px;
+      flex-grow: 1;
+    }
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--ink-secondary);
+    }
+    .usage-count-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--surface);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    /* Modal Drawer for details */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .drawer {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: 100%;
+      max-width: 520px;
+      background: var(--bg-alt);
+      border-left: 1px solid var(--border-strong);
+      z-index: 201;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -10px 0 40px rgba(0,0,0,0.5);
+    }
+    .drawer.open {
+      transform: translateX(0);
+    }
+    .drawer-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .drawer-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .drawer-close {
+      background: transparent;
+      border: none;
+      color: var(--ink-muted);
+      cursor: pointer;
+      font-size: 20px;
+    }
+    .detail-section {
+      margin-bottom: 24px;
+    }
+    .detail-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .code-snippet {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink);
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+    .snippet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .snippet-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .snippet-file {
+      color: var(--accent-light);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .snippet-code {
+      color: var(--ink-secondary);
+      word-break: break-all;
+    }
+
+    /* Tab Contents */
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Diagnosis / Architecture Callout */
+    .callout-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .callout-card {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      position: relative;
+    }
+    .callout-card.warn {
+      border-left: 4px solid var(--warn);
+    }
+    .callout-card.accent {
+      border-left: 4px solid var(--accent);
+    }
+    .callout-card.cyan {
+      border-left: 4px solid var(--cyan);
+    }
+    .callout-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .callout-desc {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      line-height: 1.6;
+    }
+
+    /* Blueprint Table */
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .token-table th, .token-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+    }
+    .token-table th {
+      background: var(--surface);
+      color: var(--ink-muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .token-table tr:last-child td {
+      border-bottom: none;
+    }
+    .token-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 2px 8px;
+      background: var(--surface-strong);
+      border-radius: 4px;
+      color: var(--cyan);
+    }
+
+    /* Worktree Info Box */
+    .worktree-box {
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(6,182,212,0.1));
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .worktree-text h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+    .worktree-text p {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="top-header">
+    <div class="header-inner">
+      <div class="brand-title">
+        <span style="display:flex; align-items:center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 96 96" fill="none"><circle cx="48" cy="48" r="40" fill="rgba(99,102,241,0.2)"/><rect x="14" y="44" width="16" height="38" rx="8" fill="#6366f1"/><rect x="38" y="30" width="18" height="52" rx="9" fill="#22d3ee"/><rect x="64" y="16" width="18" height="66" rx="9" fill="#ff4a5a"/><path d="M54 26L73 14L82 32" stroke="#ff4a5a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div>
+          <h1>Stock P&L Web — 圖示全量盤點與重構藍圖</h1>
+          <div style="font-size: 12px; color: var(--ink-muted);">Icon Inventory & Redesign Proposal Report</div>
+        </div>
+        <div class="branch-badge">
+          <span class="dot"></span>
+          <span>feat/icon-redesign</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle" onclick="toggleTheme()">
+          <span id="theme-icon">🌙</span>
+          <span id="theme-text">切換主題</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Worktree Callout -->
+    <div class="worktree-box">
+      <div class="worktree-text">
+        <h3>🌱 獨立工作樹 (Git Worktree) 已成功就緒</h3>
+        <p>分支：feat/icon-redesign &nbsp;|&nbsp; 目錄：/root/dev/stock-pnl-web-icons</p>
+      </div>
+      <div>
+        <span style="font-size: 12px; color: var(--accent-light); background: var(--surface-strong); padding: 6px 12px; border-radius: 6px; font-family: var(--font-mono);">
+          HEAD @ e120041
+        </span>
+      </div>
+    </div>
+
+    <!-- Metrics Bar -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Lucide 向量圖示</div>
+        <div class="metric-value">57 <span class="metric-sub">種獨立圖形</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">自訂向量與品牌</div>
+        <div class="metric-value">3 <span class="metric-sub">組 (Logo, Favicon, Github)</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">文字符號與 Emoji</div>
+        <div class="metric-value">9 <span class="metric-sub">處狀態字元</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">前端使用檔案</div>
+        <div class="metric-value">28 <span class="metric-sub">個 TSX/TS 組件</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">現行尺寸分佈</div>
+        <div class="metric-value">12 <span class="metric-sub">種 (11px 至 36px)</span></div>
+      </div>
+    </div>
+
+    <!-- Main Navigation Tabs -->
+    <div class="view-tabs">
+      <button class="tab-btn active" onclick="switchView('gallery')">🖼️ 圖示陳列館 (Visual Catalog)</button>
+      <button class="tab-btn" onclick="switchView('diagnosis')">🔍 現狀診斷與四大痛點 (Audit Findings)</button>
+      <button class="tab-btn" onclick="switchView('blueprint')">📐 重構設計規範與 Tokens (Design System)</button>
+      <button class="tab-btn" onclick="switchView('emojis')">🔤 符號與 Emoji 向量化 (Emoji Replacement)</button>
+    </div>
+
+    <!-- VIEW 1: Visual Catalog -->
+    <div id="view-gallery" class="tab-content active">
+      
+      <!-- Filter & Controls -->
+      <div class="controls-bar">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input type="text" id="searchInput" placeholder="搜尋圖示名稱、中文意義、檔案名稱..." oninput="filterIcons()" />
+        </div>
+
+        <div class="size-toggle-group">
+          <button class="size-btn" onclick="setPreviewSize(16, this)">16px</button>
+          <button class="size-btn" onclick="setPreviewSize(20, this)">20px</button>
+          <button class="size-btn active" onclick="setPreviewSize(24, this)">24px</button>
+          <button class="size-btn" onclick="setPreviewSize(32, this)">32px</button>
+        </div>
+      </div>
+
+      <!-- Category Filter Pills -->
+      <div class="filter-pills">
+        
+          <button class="pill-btn active" data-cat="all" onclick="filterCategory('all', this)">
+            <span>全部項目</span>
+            <span class="pill-count">60</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="nav" onclick="filterCategory('nav', this)">
+            <span>導航分頁</span>
+            <span class="pill-count">6</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="action" onclick="filterCategory('action', this)">
+            <span>操作按鈕</span>
+            <span class="pill-count">13</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="view" onclick="filterCategory('view', this)">
+            <span>視圖與表格</span>
+            <span class="pill-count">10</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="sys" onclick="filterCategory('sys', this)">
+            <span>系統與後台</span>
+            <span class="pill-count">11</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="theme" onclick="filterCategory('theme', this)">
+            <span>主題與品牌</span>
+            <span class="pill-count">9</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="ai" onclick="filterCategory('ai', this)">
+            <span>AI 與通訊</span>
+            <span class="pill-count">4</span>
+          </button>
+        
+          <button class="pill-btn " data-cat="status" onclick="filterCategory('status', this)">
+            <span>狀態與空狀態</span>
+            <span class="pill-count">7</span>
+          </button>
+        
+      </div>
+
+      <!-- Icon Cards Grid -->
+      <div class="icons-grid" id="iconsGrid">
+        <!-- Render Custom SVGs first -->
+        
+          <div class="icon-card" data-cat="theme" data-name="brandmark 應用程式官方 logo / 品牌標誌" onclick="showCustomDetail('BrandMark')">
+            <div class="card-top">
+              <div class="icon-preview-box svg-preview">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 96 96" fill="none"><circle cx="48" cy="48" r="40" fill="rgba(99,102,241,0.2)"/><rect x="14" y="44" width="16" height="38" rx="8" fill="#6366f1"/><rect x="38" y="30" width="18" height="52" rx="9" fill="#22d3ee"/><rect x="64" y="16" width="18" height="66" rx="9" fill="#ff4a5a"/><path d="M54 26L73 14L82 32" stroke="#ff4a5a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <span class="cat-tag">自訂向量</span>
+            </div>
+            <div class="icon-name-wrap">
+              <div class="icon-name">BrandMark</div>
+              <div class="icon-zh">應用程式官方 Logo / 品牌標誌</div>
+            </div>
+            <div class="icon-desc">包含背景微光暈、三根漸層柱狀體（紫色/青色/紅色）與紅色上升折線箭頭，象徵台股多頭與資產累積。</div>
+            <div class="card-footer">
+              <span>自訂 React SVG 組件</span>
+              <span class="usage-count-badge">官方識別</span>
+            </div>
+          </div>
+        
+          <div class="icon-card" data-cat="theme" data-name="favicon.svg 瀏覽器分頁圖示 (browser tab icon)" onclick="showCustomDetail('favicon.svg')">
+            <div class="card-top">
+              <div class="icon-preview-box svg-preview">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 96 96" fill="none"><circle cx="48" cy="48" r="40" fill="rgba(99,102,241,0.2)"/><rect x="14" y="44" width="16" height="38" rx="8" fill="#6366f1"/><rect x="38" y="30" width="18" height="52" rx="9" fill="#22d3ee"/><rect x="64" y="16" width="18" height="66" rx="9" fill="#ff4a5a"/><path d="M54 26L73 14L82 32" stroke="#ff4a5a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <span class="cat-tag">自訂向量</span>
+            </div>
+            <div class="icon-name-wrap">
+              <div class="icon-name">favicon.svg</div>
+              <div class="icon-zh">瀏覽器分頁圖示 (Browser Tab Icon)</div>
+            </div>
+            <div class="icon-desc">與 BrandMark 一致的柱狀圖加上升趨勢線，在瀏覽器分頁籤極小尺寸 (16x16 / 32x32) 下渲染。</div>
+            <div class="card-footer">
+              <span>靜態 SVG 圖檔</span>
+              <span class="usage-count-badge">官方識別</span>
+            </div>
+          </div>
+        
+          <div class="icon-card" data-cat="theme" data-name="githubmark github 外部原始碼導向" onclick="showCustomDetail('GithubMark')">
+            <div class="card-top">
+              <div class="icon-preview-box svg-preview">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" /></svg>
+              </div>
+              <span class="cat-tag">自訂向量</span>
+            </div>
+            <div class="icon-name-wrap">
+              <div class="icon-name">GithubMark</div>
+              <div class="icon-zh">GitHub 外部原始碼導向</div>
+            </div>
+            <div class="icon-desc">由於 Lucide 1.x 移除了所有品牌圖示，專案在 AppShell 內手寫了官方 GitHub Logo 向量路徑。</div>
+            <div class="card-footer">
+              <span>組件內聯 (Inline) SVG</span>
+              <span class="usage-count-badge">官方識別</span>
+            </div>
+          </div>
+        
+
+        <!-- Render Lucide Icons -->
+        
+            <div class="icon-card" data-cat="sys" data-name="activity 系統活動 / 探針狀態 components/admin/adminconsolepage.tsx components/admin/adminstatuspage.tsx" onclick="showIconDetail('Activity')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-activity" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Activity</div>
+                <div class="icon-zh">系統活動 / 探針狀態</div>
+              </div>
+              <div class="icon-desc">後台「抓取狀況」分頁、排程心跳監控。</div>
+              <div class="card-footer">
+                <span>後台監控分頁 / 心跳</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="alerttriangle 警告提示 / 錯誤告警 components/admin/accountssection.tsx components/admin/aiconnectionsection.tsx components/admin/backupssection.tsx components/admin/backupssection.tsx components/admin/manualrunsection.tsx components/admin/promptssection.tsx components/dashboard/dashboardpage.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/stockdetailpage.tsx components/stockdetail/technicaltab.tsx" onclick="showIconDetail('AlertTriangle')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-triangle-alert" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">AlertTriangle</div>
+                <div class="icon-zh">警告提示 / 錯誤告警</div>
+              </div>
+              <div class="icon-desc">使用達 9 個檔案，用於 API 錯誤、資料缺失、未配置提示。</div>
+              <div class="card-footer">
+                <span>全域警告提示</span>
+                <span class="usage-count-badge">11 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="arrowdown 降冪排序 (descending) components/common/sortableth.tsx" onclick="showIconDetail('ArrowDown')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down" aria-hidden="true"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ArrowDown</div>
+                <div class="icon-zh">降冪排序 (Descending)</div>
+              </div>
+              <div class="icon-desc">SortableTh 表頭降冪排序活躍指示。</div>
+              <div class="card-footer">
+                <span>數據表欄位排序</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="arrowrightleft 外幣匯率 / 貨幣兌換 components/appshell.tsx components/appshell.tsx components/fx/fxpage.tsx" onclick="showIconDetail('ArrowRightLeft')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right-left" aria-hidden="true"><path d="m16 3 4 4-4 4"></path><path d="M20 7H4"></path><path d="m8 21-4-4 4-4"></path><path d="M4 17h16"></path></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ArrowRightLeft</div>
+                <div class="icon-zh">外幣匯率 / 貨幣兌換</div>
+              </div>
+              <div class="icon-desc">匯率頁面導航與空狀態，表示多幣別（台幣/美金）換算流向。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab / 空狀態</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="arrowup 升冪排序 (ascending) components/common/sortableth.tsx" onclick="showIconDetail('ArrowUp')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ArrowUp</div>
+                <div class="icon-zh">升冪排序 (Ascending)</div>
+              </div>
+              <div class="icon-desc">SortableTh 表頭升冪排序活躍指示。</div>
+              <div class="card-footer">
+                <span>數據表欄位排序</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="arrowupdown 預設可排序指示 components/common/sortableth.tsx" onclick="showIconDetail('ArrowUpDown')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-down" aria-hidden="true"><path d="m21 16-4 4-4-4"></path><path d="M17 20V4"></path><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ArrowUpDown</div>
+                <div class="icon-zh">預設可排序指示</div>
+              </div>
+              <div class="icon-desc">SortableTh 表頭未排序時的預設狀態指示。</div>
+              <div class="card-footer">
+                <span>數據表欄位排序提示</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="ai" data-name="bot ai 智慧助理 components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx" onclick="showIconDetail('Bot')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
+                </div>
+                <span class="cat-tag">AI 與通訊</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Bot</div>
+                <div class="icon-zh">AI 智慧助理</div>
+              </div>
+              <div class="icon-desc">個股分析 AI Tab 助手頭像、對話卡片、分析按鈕。</div>
+              <div class="card-footer">
+                <span>AI 核心形象標識</span>
+                <span class="usage-count-badge">4 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="calculator 重新試算手續費 components/transactions/transactionspage.tsx" onclick="showIconDetail('Calculator')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calculator" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"></rect><line x1="8" x2="16" y1="6" y2="6"></line><line x1="16" x2="16" y1="14" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Calculator</div>
+                <div class="icon-zh">重新試算手續費</div>
+              </div>
+              <div class="icon-desc">交易清單頂部「重算手續費」功能按鈕。</div>
+              <div class="card-footer">
+                <span>特殊計算工具按鈕</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="calendarrange 年度收益 / 期間跨度 components/appshell.tsx components/appshell.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('CalendarRange')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-range" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M16 2v4"></path><path d="M3 10h18"></path><path d="M8 2v4"></path><path d="M17 14h-6"></path><path d="M13 18H7"></path><path d="M7 14h.01"></path><path d="M17 18h.01"></path></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">CalendarRange</div>
+                <div class="icon-zh">年度收益 / 期間跨度</div>
+              </div>
+              <div class="icon-desc">頂部主導航列代表年度收益，也是空狀態大圖示。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab / 空狀態</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="check 勾選 / 成功選取 components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx components/appshell.tsx components/appshell.tsx components/stockdetail/analysispage.tsx" onclick="showIconDetail('Check')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Check</div>
+                <div class="icon-zh">勾選 / 成功選取</div>
+              </div>
+              <div class="icon-desc">選單目前項目勾選標記、手動排程成功狀態。</div>
+              <div class="card-footer">
+                <span>選單狀態 / 成功指示</span>
+                <span class="usage-count-badge">5 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="checkcircle 成功驗證 / 狀態正常 components/admin/aiconnectionsection.tsx components/admin/promptssection.tsx" onclick="showIconDetail('CheckCircle')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check-big" aria-hidden="true"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">CheckCircle</div>
+                <div class="icon-zh">成功驗證 / 狀態正常</div>
+              </div>
+              <div class="icon-desc">AI 連線驗證成功、提示詞儲存成功標示。</div>
+              <div class="card-footer">
+                <span>成功反饋標籤</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="checkcircle2 計算完成反饋 components/transactions/recalcfeesmodal.tsx" onclick="showIconDetail('CheckCircle2')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">CheckCircle2</div>
+                <div class="icon-zh">計算完成反饋</div>
+              </div>
+              <div class="icon-desc">手續費重新試算完成後的彈窗大圖示。</div>
+              <div class="card-footer">
+                <span>彈窗完成 Hero</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="chevrondown 向下展開選單 / 摺疊 components/admin/adminstatuspage.tsx components/admin/mechanismguide.tsx components/appshell.tsx components/appshell.tsx components/stockdetail/analysispage.tsx" onclick="showIconDetail('ChevronDown')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ChevronDown</div>
+                <div class="icon-zh">向下展開選單 / 摺疊</div>
+              </div>
+              <div class="icon-desc">下拉選單 Caret 展開指示、區塊收合箭頭。</div>
+              <div class="card-footer">
+                <span>選單下拉 Caret</span>
+                <span class="usage-count-badge">5 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="chevronleft 返回上一頁 components/admin/adminconsolepage.tsx" onclick="showIconDetail('ChevronLeft')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ChevronLeft</div>
+                <div class="icon-zh">返回上一頁</div>
+              </div>
+              <div class="icon-desc">管理後台返回主儀表板導航。</div>
+              <div class="card-footer">
+                <span>導航返回箭頭</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="chevronright 項目深入 / 詳情指示 components/admin/backupssection.tsx" onclick="showIconDetail('ChevronRight')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ChevronRight</div>
+                <div class="icon-zh">項目深入 / 詳情指示</div>
+              </div>
+              <div class="icon-desc">資料庫備份歷程深入箭頭。</div>
+              <div class="card-footer">
+                <span>列表行右側指示</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="chevronsdownup 全部折疊 (collapse all) components/macro/macropage.tsx components/stockdetail/technicaltab.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('ChevronsDownUp')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevrons-down-up" aria-hidden="true"><path d="m7 20 5-5 5 5"></path><path d="m7 4 5 5 5-5"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ChevronsDownUp</div>
+                <div class="icon-zh">全部折疊 (Collapse All)</div>
+              </div>
+              <div class="icon-desc">總經指標、技術面成交量、年度報表的「全部折疊」按鈕。</div>
+              <div class="card-footer">
+                <span>批次視圖折疊控制</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="chevronsupdown 全部展開 (expand all) components/macro/macropage.tsx components/stockdetail/technicaltab.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('ChevronsUpDown')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevrons-up-down" aria-hidden="true"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ChevronsUpDown</div>
+                <div class="icon-zh">全部展開 (Expand All)</div>
+              </div>
+              <div class="icon-desc">總經指標、技術面成交量、年度報表的「全部展開」按鈕。</div>
+              <div class="card-footer">
+                <span>批次視圖展開控制</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="cpu 處理核心 / edge 運算 components/admin/mechanismguide.tsx" onclick="showIconDetail('Cpu')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cpu" aria-hidden="true"><path d="M12 20v2"></path><path d="M12 2v2"></path><path d="M17 20v2"></path><path d="M17 2v2"></path><path d="M2 12h2"></path><path d="M2 17h2"></path><path d="M2 7h2"></path><path d="M20 12h2"></path><path d="M20 17h2"></path><path d="M20 7h2"></path><path d="M7 20v2"></path><path d="M7 2v2"></path><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="8" y="8" width="8" height="8" rx="1"></rect></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Cpu</div>
+                <div class="icon-zh">處理核心 / Edge 運算</div>
+              </div>
+              <div class="icon-desc">機制說明中代表 Edge Functions 與背景運算節點。</div>
+              <div class="card-footer">
+                <span>架構圖解說明</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="database 資料庫 / 備份管理 components/admin/adminconsolepage.tsx" onclick="showIconDetail('Database')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-database" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5V19A9 3 0 0 0 21 19V5"></path><path d="M3 12A9 3 0 0 0 21 12"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Database</div>
+                <div class="icon-zh">資料庫 / 備份管理</div>
+              </div>
+              <div class="icon-desc">後台「備份」分頁，代表 Supabase 資料庫快照。</div>
+              <div class="card-footer">
+                <span>管理員後台分頁</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="download 匯出備份 (csv) components/transactions/transactionspage.tsx" onclick="showIconDetail('Download')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Download</div>
+                <div class="icon-zh">匯出備份 (CSV)</div>
+              </div>
+              <div class="icon-desc">交易紀錄清單頂部匯出 CSV 按鈕。</div>
+              <div class="card-footer">
+                <span>資料匯出操作</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="externallink 開新視窗 / 外部連結 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('ExternalLink')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ExternalLink</div>
+                <div class="icon-zh">開新視窗 / 外部連結</div>
+              </div>
+              <div class="icon-desc">選單中 GitHub 原始碼、外部報表跳轉小圖示。</div>
+              <div class="card-footer">
+                <span>外部導向指示</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="ai" data-name="filetext 提示詞範本 / 檔案 components/admin/adminconsolepage.tsx components/admin/promptssection.tsx components/admin/promptssection.tsx" onclick="showIconDetail('FileText')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+                </div>
+                <span class="cat-tag">AI 與通訊</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">FileText</div>
+                <div class="icon-zh">提示詞範本 / 檔案</div>
+              </div>
+              <div class="icon-desc">管理後台提示詞範本列表圖示。</div>
+              <div class="card-footer">
+                <span>文檔範本標籤</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="fileup 選擇 / 拖曳檔案 components/transactions/csvimportmodal.tsx" onclick="showIconDetail('FileUp')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-up" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M12 12v6"></path><path d="m15 15-3-3-3 3"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">FileUp</div>
+                <div class="icon-zh">選擇 / 拖曳檔案</div>
+              </div>
+              <div class="icon-desc">CSV 匯入彈窗內部檔案選取區域圖示。</div>
+              <div class="card-footer">
+                <span>拖曳上傳輔助指示</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="globe 總體經濟 / 全球視野 components/appshell.tsx components/appshell.tsx components/macro/macropage.tsx" onclick="showIconDetail('Globe')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Globe</div>
+                <div class="icon-zh">總體經濟 / 全球視野</div>
+              </div>
+              <div class="icon-desc">總經大盤與國際指標頁面導航，以及總經資料空狀態。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab / 空狀態</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="harddrive 本機快取 / 離線模式 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('HardDrive')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hard-drive" aria-hidden="true"><path d="M10 16h.01"></path><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><path d="M21.946 12.013H2.054"></path><path d="M6 16h.01"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">HardDrive</div>
+                <div class="icon-zh">本機快取 / 離線模式</div>
+              </div>
+              <div class="icon-desc">標註當前系統處於 LocalStorage 原生離線模式。</div>
+              <div class="card-footer">
+                <span>存儲狀態標籤</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="ai" data-name="helpcircle 原理解析 / 說明指南 components/admin/mechanismguide.tsx" onclick="showIconDetail('HelpCircle')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-question-mark" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+                </div>
+                <span class="cat-tag">AI 與通訊</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">HelpCircle</div>
+                <div class="icon-zh">原理解析 / 說明指南</div>
+              </div>
+              <div class="icon-desc">機制指南中的核心問題解說圖示。</div>
+              <div class="card-footer">
+                <span>說明中心引導</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="inbox 空資料狀態 (empty state) components/dashboard/dashboardpage.tsx components/dashboard/watchsection.tsx components/stockdetail/analysispage.tsx components/stockdetail/quotetab.tsx" onclick="showIconDetail('Inbox')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-inbox" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Inbox</div>
+                <div class="icon-zh">空資料狀態 (Empty State)</div>
+              </div>
+              <div class="icon-desc">觀察名單無個股、交易無資料、個股無報表的核心空狀態圖示。</div>
+              <div class="card-footer">
+                <span>全域空狀態插圖</span>
+                <span class="usage-count-badge">4 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="info 說明資訊 / 輔助提示 components/admin/accountssection.tsx components/admin/accountssection.tsx components/admin/backupssection.tsx components/admin/manualrunsection.tsx" onclick="showIconDetail('Info')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Info</div>
+                <div class="icon-zh">說明資訊 / 輔助提示</div>
+              </div>
+              <div class="icon-desc">後台各區塊輔助說明提示條。</div>
+              <div class="card-footer">
+                <span>輔助提示訊息</span>
+                <span class="usage-count-badge">4 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="keyround api 金鑰 / ai 連線 components/admin/adminconsolepage.tsx components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('KeyRound')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key-round" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">KeyRound</div>
+                <div class="icon-zh">API 金鑰 / AI 連線</div>
+              </div>
+              <div class="icon-desc">管理員選單「AI 連線」、金鑰配置輸入入口。</div>
+              <div class="card-footer">
+                <span>設定導航 / 憑證設定</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="layers 多工作區切換 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('Layers')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Layers</div>
+                <div class="icon-zh">多工作區切換</div>
+              </div>
+              <div class="icon-desc">頂部 Workspace 切換選單觸發按鈕圖示。</div>
+              <div class="card-footer">
+                <span>工作區切換器</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="layoutdashboard 庫存總覽 components/appshell.tsx components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('LayoutDashboard')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-dashboard" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">LayoutDashboard</div>
+                <div class="icon-zh">庫存總覽</div>
+              </div>
+              <div class="icon-desc">頂部主導航列與手機底部導航列的主分頁圖示，象徵資產總覽看板。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="layoutgrid 觀察清單卡片視圖 components/dashboard/watchsection.tsx" onclick="showIconDetail('LayoutGrid')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-grid" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">LayoutGrid</div>
+                <div class="icon-zh">觀察清單卡片視圖</div>
+              </div>
+              <div class="icon-desc">儀表板觀察名單切換為網格卡片佈局。</div>
+              <div class="card-footer">
+                <span>視圖切換器</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="linechart 個股分析 / 走勢圖 components/appshell.tsx components/appshell.tsx components/stockdetail/technicaltab.tsx" onclick="showIconDetail('LineChart')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chart-line" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">LineChart</div>
+                <div class="icon-zh">個股分析 / 走勢圖</div>
+              </div>
+              <div class="icon-desc">頂部主導航、技術面分析分頁頂部，代表技術走勢與個股診斷。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab / 區塊標題</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="view" data-name="list 觀察清單條列視圖 components/dashboard/watchsection.tsx" onclick="showIconDetail('List')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list" aria-hidden="true"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg>
+                </div>
+                <span class="cat-tag">視圖與表格</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">List</div>
+                <div class="icon-zh">觀察清單條列視圖</div>
+              </div>
+              <div class="icon-desc">儀表板觀察名單切換為條列清單佈局。</div>
+              <div class="card-footer">
+                <span>視圖切換器</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="listplus 快速記帳 / 新增記錄 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('ListPlus')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list-plus" aria-hidden="true"><path d="M16 5H3"></path><path d="M11 12H3"></path><path d="M16 19H3"></path><path d="M18 9v6"></path><path d="M21 12h-6"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ListPlus</div>
+                <div class="icon-zh">快速記帳 / 新增記錄</div>
+              </div>
+              <div class="icon-desc">右上方常駐全域快速新增交易按鈕。</div>
+              <div class="card-footer">
+                <span>全域高頻 CTA</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="loader2 載入旋轉中 (loading) components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx components/transactions/transactionform.tsx" onclick="showIconDetail('Loader2')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-circle" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Loader2</div>
+                <div class="icon-zh">載入旋轉中 (Loading)</div>
+              </div>
+              <div class="icon-desc">手動排程執行中、新增交易送出中的 spin 動態圖示。</div>
+              <div class="card-footer">
+                <span>非同步載入狀態</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="lock 唯讀保護 / 系統鎖定 components/admin/promptssection.tsx" onclick="showIconDetail('Lock')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Lock</div>
+                <div class="icon-zh">唯讀保護 / 系統鎖定</div>
+              </div>
+              <div class="icon-desc">系統預設提示詞範本的唯讀鎖定標記。</div>
+              <div class="card-footer">
+                <span>安全權限狀態指示</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="logout 登出系統 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('LogOut')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out" aria-hidden="true"><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">LogOut</div>
+                <div class="icon-zh">登出系統</div>
+              </div>
+              <div class="icon-desc">使用者下拉選單最下方的登出操作。</div>
+              <div class="card-footer">
+                <span>帳號操作項目</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="ai" data-name="messagesquare 提示詞 / 意見反饋 components/admin/promptssection.tsx components/stockdetail/aitab.tsx" onclick="showIconDetail('MessageSquare')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <span class="cat-tag">AI 與通訊</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">MessageSquare</div>
+                <div class="icon-zh">提示詞 / 意見反饋</div>
+              </div>
+              <div class="icon-desc">提示詞管理庫、對話訊息輸入入口。</div>
+              <div class="card-footer">
+                <span>對話與提示詞</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="minus 收合 / 折疊項目 components/macro/macropage.tsx components/yearlyreport/yearlypage.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('Minus')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minus" aria-hidden="true"><path d="M5 12h14"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Minus</div>
+                <div class="icon-zh">收合 / 折疊項目</div>
+              </div>
+              <div class="icon-desc">總經指標項目、年度收益月份的收合狀態。</div>
+              <div class="card-footer">
+                <span>折疊觸發按鈕</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="monitor 跟隨系統 (system mode) components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('Monitor')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" x2="16" y1="21" y2="21"></line><line x1="12" x2="12" y1="17" y2="21"></line></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Monitor</div>
+                <div class="icon-zh">跟隨系統 (System Mode)</div>
+              </div>
+              <div class="icon-desc">主題選單「跟隨系統」預設選項。</div>
+              <div class="card-footer">
+                <span>主題切換選單</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="moon 深色外觀 (dark mode) components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('Moon')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Moon</div>
+                <div class="icon-zh">深色外觀 (Dark Mode)</div>
+              </div>
+              <div class="icon-desc">主題選單中的「深色」選項圖示。</div>
+              <div class="card-footer">
+                <span>主題切換選單</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="nav" data-name="notebookpen 交易紀錄 / 記帳本 components/appshell.tsx components/appshell.tsx components/transactions/transactionspage.tsx" onclick="showIconDetail('NotebookPen')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-notebook-pen" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"></path><path d="M2 6h4"></path><path d="M2 10h4"></path><path d="M2 14h4"></path><path d="M2 18h4"></path><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"></path></svg>
+                </div>
+                <span class="cat-tag">導航分頁</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">NotebookPen</div>
+                <div class="icon-zh">交易紀錄 / 記帳本</div>
+              </div>
+              <div class="icon-desc">頂部主導航列與交易紀錄空狀態大圖示，象徵交易帳簿記帳。</div>
+              <div class="card-footer">
+                <span>主要導航 Tab / 空狀態</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="pencil 編輯交易紀錄 components/appshell.tsx components/appshell.tsx components/transactions/transactionspage.tsx" onclick="showIconDetail('Pencil')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Pencil</div>
+                <div class="icon-zh">編輯交易紀錄</div>
+              </div>
+              <div class="icon-desc">交易紀錄行項目編輯按鈕、快速編輯浮層。</div>
+              <div class="card-footer">
+                <span>列表行操作按鈕</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="percent 折讓成數 / 費率設定 components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('Percent')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-percent" aria-hidden="true"><line x1="19" x2="5" y1="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Percent</div>
+                <div class="icon-zh">折讓成數 / 費率設定</div>
+              </div>
+              <div class="icon-desc">使用者選單中的券商手續費折讓設定。</div>
+              <div class="card-footer">
+                <span>交易偏好設定</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="play 手動觸發排程 components/admin/adminconsolepage.tsx components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx" onclick="showIconDetail('Play')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Play</div>
+                <div class="icon-zh">手動觸發排程</div>
+              </div>
+              <div class="icon-desc">後台控制台各類 Probe 排程的手動觸發按鈕。</div>
+              <div class="card-footer">
+                <span>後台維運操作</span>
+                <span class="usage-count-badge">4 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="plus 新增 / 展開項目 components/appshell.tsx components/appshell.tsx components/dashboard/watchsection.tsx components/macro/macropage.tsx components/stockdetail/analysispage.tsx components/yearlyreport/yearlypage.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('Plus')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Plus</div>
+                <div class="icon-zh">新增 / 展開項目</div>
+              </div>
+              <div class="icon-desc">新增自選股、新增交易、展開總經指標卡、年度月份展開等。</div>
+              <div class="card-footer">
+                <span>核心操作按鈕 / 展開觸發</span>
+                <span class="usage-count-badge">7 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="radio 即時廣播 / 訊號發射 components/admin/mechanismguide.tsx" onclick="showIconDetail('Radio')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-radio" aria-hidden="true"><path d="M16.247 7.761a6 6 0 0 1 0 8.478"></path><path d="M19.075 4.933a10 10 0 0 1 0 14.134"></path><path d="M4.925 19.067a10 10 0 0 1 0-14.134"></path><path d="M7.753 16.239a6 6 0 0 1 0-8.478"></path><circle cx="12" cy="12" r="2"></circle></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Radio</div>
+                <div class="icon-zh">即時廣播 / 訊號發射</div>
+              </div>
+              <div class="icon-desc">探針實時監聽盤後公開數據源的廣播訊號。</div>
+              <div class="card-footer">
+                <span>數據探測訊號</span>
+                <span class="usage-count-badge">1 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="refreshcw 重新整理 / 同步資料 components/admin/accountssection.tsx components/admin/backupssection.tsx components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx components/admin/manualrunsection.tsx components/admin/probewarroom.tsx components/dashboard/dashboardpage.tsx components/fx/fxpage.tsx components/fx/fxpage.tsx components/macro/macropage.tsx components/macro/macropage.tsx components/macro/twindextoday.tsx components/macro/twmarketsection.tsx components/macro/twmarketsection.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/aitab.tsx components/stockdetail/fundamentaltab.tsx components/stockdetail/stockdetailpage.tsx components/stockdetail/stockdetailpage.tsx components/stockdetail/technicaltab.tsx" onclick="showIconDetail('RefreshCw')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">RefreshCw</div>
+                <div class="icon-zh">重新整理 / 同步資料</div>
+              </div>
+              <div class="icon-desc">專案中使用頻率最高（13 個檔案），包含大盤、報表、後台排程刷新。</div>
+              <div class="card-footer">
+                <span>全局資料同步按鈕</span>
+                <span class="usage-count-badge">23 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="status" data-name="search 搜尋股票 / 交易篩選 components/stockdetail/addwatchmodal.tsx components/transactions/transactionspage.tsx components/transactions/transactionspage.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('Search')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+                </div>
+                <span class="cat-tag">狀態與空狀態</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Search</div>
+                <div class="icon-zh">搜尋股票 / 交易篩選</div>
+              </div>
+              <div class="icon-desc">新增自選股搜尋框、交易紀錄過濾框、年度篩選框。</div>
+              <div class="card-footer">
+                <span>搜尋輸入前綴</span>
+                <span class="usage-count-badge">4 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="shieldcheck 安全憑證 / 管理員徽章 components/appshell.tsx components/appshell.tsx components/stockdetail/aitab.tsx" onclick="showIconDetail('ShieldCheck')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-check" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">ShieldCheck</div>
+                <div class="icon-zh">安全憑證 / 管理員徽章</div>
+              </div>
+              <div class="icon-desc">右上角管理員身分徽記、AI 隱私保護保證。</div>
+              <div class="card-footer">
+                <span>信任與安全徽章</span>
+                <span class="usage-count-badge">3 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="theme" data-name="sun 淺色外觀 (light mode) components/appshell.tsx components/appshell.tsx" onclick="showIconDetail('Sun')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+                </div>
+                <span class="cat-tag">主題與品牌</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Sun</div>
+                <div class="icon-zh">淺色外觀 (Light Mode)</div>
+              </div>
+              <div class="icon-desc">主題選單中的「淺色」選項圖示。</div>
+              <div class="card-footer">
+                <span>主題切換選單</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="timer 定時排程 / 班表時鐘 components/admin/mechanismguide.tsx components/admin/mechanismguide.tsx" onclick="showIconDetail('Timer')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-timer" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"></line><line x1="12" x2="15" y1="14" y2="11"></line><circle cx="12" cy="14" r="8"></circle></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Timer</div>
+                <div class="icon-zh">定時排程 / 班表時鐘</div>
+              </div>
+              <div class="icon-desc">探針命中時段與自動定時器排程指示。</div>
+              <div class="card-footer">
+                <span>時間監控標籤</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="trash2 刪除項目 components/admin/aiconnectionsection.tsx components/appshell.tsx components/appshell.tsx components/transactions/transactionspage.tsx components/transactions/transactionspage.tsx" onclick="showIconDetail('Trash2')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2 lucide-trash-2" aria-hidden="true"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Trash2</div>
+                <div class="icon-zh">刪除項目</div>
+              </div>
+              <div class="icon-desc">刪除單筆/批次交易紀錄、移除 AI 連線金鑰。</div>
+              <div class="card-footer">
+                <span>破壞性操作按鈕</span>
+                <span class="usage-count-badge">5 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="upload 匯入檔案 (csv) components/transactions/csvimportmodal.tsx components/transactions/transactionspage.tsx" onclick="showIconDetail('Upload')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload" aria-hidden="true"><path d="M12 3v12"></path><path d="m17 8-5-5-5 5"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Upload</div>
+                <div class="icon-zh">匯入檔案 (CSV)</div>
+              </div>
+              <div class="icon-desc">匯入券商交易 CSV 彈窗主要觸發按鈕。</div>
+              <div class="card-footer">
+                <span>資料匯入操作</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="sys" data-name="users 帳號管理 / 權限分配 components/admin/adminconsolepage.tsx components/admin/adminconsolepage.tsx" onclick="showIconDetail('Users')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                </div>
+                <span class="cat-tag">系統與後台</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">Users</div>
+                <div class="icon-zh">帳號管理 / 權限分配</div>
+              </div>
+              <div class="icon-desc">後台控制台「帳號」管理分頁。</div>
+              <div class="card-footer">
+                <span>管理員後台分頁</span>
+                <span class="usage-count-badge">2 處使用</span>
+              </div>
+            </div>
+          
+            <div class="icon-card" data-cat="action" data-name="x 關閉彈窗 / 清除搜尋 components/admin/manualrunsection.tsx components/common/modal.tsx components/common/modal.tsx components/transactions/transactionspage.tsx components/yearlyreport/yearlypage.tsx" onclick="showIconDetail('X')">
+              <div class="card-top">
+                <div class="icon-preview-box svg-preview">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </div>
+                <span class="cat-tag">操作按鈕</span>
+              </div>
+              <div class="icon-name-wrap">
+                <div class="icon-name">X</div>
+                <div class="icon-zh">關閉彈窗 / 清除搜尋</div>
+              </div>
+              <div class="icon-desc">Modal 右上角關閉按鈕、搜尋框快速清空按鈕。</div>
+              <div class="card-footer">
+                <span>取消 / 關閉 / 重置</span>
+                <span class="usage-count-badge">5 處使用</span>
+              </div>
+            </div>
+          
+      </div>
+    </div>
+
+    <!-- VIEW 2: Audit Findings -->
+    <div id="view-diagnosis" class="tab-content">
+      <div class="callout-grid">
+        <div class="callout-card warn">
+          <div class="callout-title">⚠️ 痛點 1：尺寸碎片化（12 種零散尺寸）</div>
+          <div class="callout-desc">
+            目前全專案在各組件中任意手動傳入 <code>size={11}</code>、<code>size={12}</code>、<code>size={13}</code>、<code>size={14}</code>、<code>size={15}</code>、<code>size={16}</code>、<code>size={17}</code>、<code>size={18}</code>、<code>size={28}</code>、<code>size={30}</code>、<code>size={32}</code>、<code>size={36}</code>。<br><br>
+            <strong>後果：</strong>按鈕內的圖示與字體比例失衡，小尺寸（11-13px）在標準 24px 網格下邊界半像素渲染導致線條發虛。
+          </div>
+        </div>
+
+        <div class="callout-card accent">
+          <div class="callout-title">🔤 痛點 2：Unicode Emoji 與向量圖示混用</div>
+          <div class="callout-desc">
+            在 <code>ProbeWarRoom</code> 中使用 <code>🟢 探測中</code>、<code>✅ 已退休</code>；交易紀錄通知使用 <code>🎉 成功新增</code>、<code>🗑️ 已刪除</code>；警語使用 <code>⚠️</code>；股價漲跌使用 <code>▲</code>、<code>▼</code>。<br><br>
+            <strong>後果：</strong>Emoji 在 Windows、macOS、Linux、iOS 渲染出的形狀與顏色天差地遠，無法配合網站的深淺主題換色，顯得像業餘拼湊。
+          </div>
+        </div>
+
+        <div class="callout-card cyan">
+          <div class="callout-title">🧩 痛點 3：缺乏統一的 Icon 設計系統層</div>
+          <div class="callout-desc">
+            所有 28 個前端組件都是直接 <code>import { ... } from 'lucide-react'</code>。若未來想要全站升級自訂金融圖示庫、加上 Micro-fill 雙色調、或是統一行為（如預設 <code>aria-hidden="true"</code>），需要逐一修改 120+ 處代碼。<br><br>
+            <strong>解法：</strong>封裝 <code>&lt;AppIcon name="..." size="..." /&gt;</code> 統一入口。
+          </div>
+        </div>
+
+        <div class="callout-card accent">
+          <div class="callout-title">📈 痛點 4：缺乏金融專屬的視覺語彙</div>
+          <div class="callout-desc">
+            目前多數圖示使用通用線條。金融看盤與損益系統的核心在於<strong>「漲跌清晰、權重分明、資料密集」</strong>。<br><br>
+            <strong>建議：</strong>針對大盤指數、持股分析、試算器、籌碼流向引入微漸層（Red/Green Fin-Accent）與發光指示點。
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-card" style="margin-top: 24px;">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">📊 現行尺寸分佈統計</h3>
+        <table class="token-table">
+          <thead>
+            <tr>
+              <th>尺寸 (Pixel)</th>
+              <th>出現頻率</th>
+              <th>主要代表組件與情境</th>
+              <th>規範化收斂建議</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="token-tag">11px ~ 13px</span></td>
+              <td>約 32 處</td>
+              <td>表頭排序箭頭 (12)、選單 Caret (12)、折疊 Minus/Plus (13)、狀態標籤 (12)</td>
+              <td>收斂為標準 <strong>Token: <code>xs (12px)</code></strong></td>
+            </tr>
+            <tr>
+              <td><span class="token-tag">14px ~ 15px</span></td>
+              <td>約 48 處</td>
+              <td>選單按鈕 (14)、搜尋前綴 (15)、CSV 上傳/匯出按鈕 (15)、刪除圖示 (14)</td>
+              <td>收斂為標準 <strong>Token: <code>sm (14px)</code></strong> 與 <strong><code>md (16px)</code></strong></td>
+            </tr>
+            <tr>
+              <td><span class="token-tag">16px ~ 18px</span></td>
+              <td>約 22 處</td>
+              <td>主要導航 Tab (15/18)、AI Bot 標題 (18)、關閉按鈕 (18)</td>
+              <td>收斂為標準 <strong>Token: <code>lg (20px)</code></strong></td>
+            </tr>
+            <tr>
+              <td><span class="token-tag">28px ~ 36px</span></td>
+              <td>約 16 處</td>
+              <td>空狀態 (36)、大圖表分析 (32)、載入等待 (28)</td>
+              <td>收斂為標準 <strong>Token: <code>xl (32px)</code></strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 3: Design Blueprint -->
+    <div id="view-blueprint" class="tab-content">
+      <div style="margin-bottom: 24px;">
+        <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">📐 圖示系統重構設計指南 (Icon System Blueprint)</h2>
+        <p style="color: var(--ink-secondary); font-size: 14px;">在 <code>feat/icon-redesign</code> 分支上的架構實作方針與元件規格標準。</p>
+      </div>
+
+      <div class="metric-card" style="margin-bottom: 24px;">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">1. 尺寸階層定義 (Size Tokens)</h3>
+        <table class="token-table">
+          <thead>
+            <tr>
+              <th>Token 名稱</th>
+              <th>像素值 (px)</th>
+              <th>筆觸粗細 (strokeWidth)</th>
+              <th>適用使用情境</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>--icon-xs</code></td>
+              <td><strong>12px</strong></td>
+              <td>2.0px</td>
+              <td>表格欄位升降冪排序 (SortableTh)、微型狀態指示點、行內標籤</td>
+            </tr>
+            <tr>
+              <td><code>--icon-sm</code></td>
+              <td><strong>14px</strong></td>
+              <td>1.75px</td>
+              <td>次級功能按鈕、下拉選單項目、輔助標籤、搜尋框清除 X</td>
+            </tr>
+            <tr>
+              <td><code>--icon-md</code></td>
+              <td><strong>16px</strong></td>
+              <td>1.75px</td>
+              <td>主要操作按鈕 (CTA)、搜尋前綴圖示、表單輸入框前綴</td>
+            </tr>
+            <tr>
+              <td><code>--icon-lg</code></td>
+              <td><strong>20px</strong></td>
+              <td>1.5px</td>
+              <td>頂部主要分頁導航、手機底部導航欄、模態框標題</td>
+            </tr>
+            <tr>
+              <td><code>--icon-xl</code></td>
+              <td><strong>24px</strong></td>
+              <td>1.5px</td>
+              <td>功能卡片強調圖示、重點操作入口、浮動操作按鈕</td>
+            </tr>
+            <tr>
+              <td><code>--icon-2xl</code></td>
+              <td><strong>32px</strong></td>
+              <td>1.25px</td>
+              <td>空狀態 (Empty State) 插圖、大成就/完成反饋徽章</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="metric-card" style="margin-bottom: 24px;">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">2. 統一封裝元件提案：<code>&lt;AppIcon /&gt;</code></h3>
+        <div class="code-snippet">
+<span style="color:#64748b;">// sources/src/components/Common/AppIcon.tsx</span>
+<span style="color:#818cf8;">import</span> { FC, SVGProps } <span style="color:#818cf8;">from</span> <span style="color:#10b981;">'react'</span>;
+<span style="color:#818cf8;">import</span> * <span style="color:#818cf8;">as</span> Icons <span style="color:#818cf8;">from</span> <span style="color:#10b981;">'lucide-react'</span>;
+
+<span style="color:#818cf8;">export type</span> IconSizeToken = <span style="color:#10b981;">'xs'</span> | <span style="color:#10b981;">'sm'</span> | <span style="color:#10b981;">'md'</span> | <span style="color:#10b981;">'lg'</span> | <span style="color:#10b981;">'xl'</span> | <span style="color:#10b981;">'2xl'</span>;
+
+<span style="color:#818cf8;">const</span> SIZE_MAP: Record&lt;IconSizeToken, { size: number; strokeWidth: number }&gt; = {
+  xs:   { size: 12, strokeWidth: 2.0 },
+  sm:   { size: 14, strokeWidth: 1.75 },
+  md:   { size: 16, strokeWidth: 1.75 },
+  lg:   { size: 20, strokeWidth: 1.5 },
+  xl:   { size: 24, strokeWidth: 1.5 },
+  '2xl':{ size: 32, strokeWidth: 1.25 },
+};
+
+<span style="color:#818cf8;">export interface</span> AppIconProps <span style="color:#818cf8;">extends</span> Omit&lt;SVGProps&lt;SVGSVGElement&gt;, <span style="color:#10b981;">'size'</span>&gt; {
+  name: <span style="color:#818cf8;">keyof typeof</span> Icons;
+  size?: IconSizeToken | number;
+  className?: string;
+}
+
+<span style="color:#818cf8;">export const</span> AppIcon: FC&lt;AppIconProps&gt; = ({ name, size = <span style="color:#10b981;">'md'</span>, className, ...props }) =&gt; {
+  <span style="color:#818cf8;">const</span> IconComp = Icons[name] <span style="color:#818cf8;">as</span> FC&lt;any&gt;;
+  <span style="color:#818cf8;">if</span> (!IconComp) <span style="color:#818cf8;">return null</span>;
+  <span style="color:#818cf8;">const</span> config = <span style="color:#818cf8;">typeof</span> size === <span style="color:#10b981;">'string'</span> ? SIZE_MAP[size] : { size, strokeWidth: 1.75 };
+  
+  <span style="color:#818cf8;">return</span> (
+    &lt;IconComp
+      size={config.size}
+      strokeWidth={config.strokeWidth}
+      aria-hidden=<span style="color:#10b981;">"true"</span>
+      focusable=<span style="color:#10b981;">"false"</span>
+      className={[`app-icon app-icon-${size}`, className].filter(Boolean).join(<span style="color:#10b981;">' '</span>)}
+      {...props}
+    /&gt;
+  );
+};
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">3. 實作重構路線圖 (Roadmap)</h3>
+        <ol style="padding-left: 20px; color: var(--ink-secondary); font-size: 14px; line-height: 1.8;">
+          <li><strong>Phase 1: 基礎架構就緒</strong> — 在 <code>feat/icon-redesign</code> 工作樹下建立 <code>AppIcon</code> 元件與 CSS Token。</li>
+          <li><strong>Phase 2: Emoji 向量化替換</strong> — 替換 <code>▲ / ▼</code>, <code>🟢 / ✅</code>, <code>⚠️</code>, <code>? (HelpTip)</code>。</li>
+          <li><strong>Phase 3: 核心分頁尺寸收斂</strong> — 逐步遷移 <code>AppShell.tsx</code>, <code>TransactionsPage.tsx</code>, <code>SortableTh.tsx</code>。</li>
+          <li><strong>Phase 4: 金融專屬樣式昇華</strong> — 為漲跌箭頭、Logo、空狀態導入高階微質感設計。</li>
+          <li><strong>Phase 5: 測試套件全面綠燈</strong> — 跑 Vitest 1400+ 測試與 Playwright E2E，確認無 regression。</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- VIEW 4: Emoji Replacement -->
+    <div id="view-emojis" class="tab-content">
+      <div style="margin-bottom: 24px;">
+        <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">🔤 特殊字元與 Emoji 向量化對照表</h2>
+        <p style="color: var(--ink-secondary); font-size: 14px;">將專案中現存的系統 Emoji 與文字字元替換為統一向量元件，以保證跨系統渲染的專業一致性。</p>
+      </div>
+
+      <table class="token-table">
+        <thead>
+          <tr>
+            <th>現有符號</th>
+            <th>功能 / 語意</th>
+            <th>現存位置</th>
+            <th>現況問題</th>
+            <th>推薦替換之向量圖示方案</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">▲ / ▼</td>
+              <td style="font-weight: 600; color: var(--ink);">股價漲跌指標</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">FxPage.tsx, TwIndexToday.tsx, QuoteTab.tsx</td>
+              <td style="color: var(--ink-secondary);">純文字三角符號在不同字體下基線偏移且大小不均，建議替換為幾何向量三角組件。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                <code>&lt;TrendingUp size="sm" /&gt;</code> 或填色幾何三角
+                
+                
+                
+                
+                
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">🟢</td>
+              <td style="font-weight: 600; color: var(--ink);">探測中 (Probing)</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">ProbeWarRoom.tsx:107</td>
+              <td style="color: var(--ink-secondary);">各作業系統綠點飽和度與尺寸不同，應改為統一 CSS 脈衝狀態圓點 <StatusDot />。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                <code>&lt;StatusDot variant="live" pulse /&gt;</code>
+                
+                
+                
+                
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">✅</td>
+              <td style="font-weight: 600; color: var(--ink);">已完成 / 已退休</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">ProbeWarRoom.tsx:114, TransactionsPage.tsx:146</td>
+              <td style="color: var(--ink-secondary);">Emoji 在 Windows 上自帶粗黑邊，在 macOS 上為漸層立體，破壞暗色專業介面統一性。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                <code>&lt;CheckCircle2 size="sm" color="var(--down)" /&gt;</code>
+                
+                
+                
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">🎉</td>
+              <td style="font-weight: 600; color: var(--ink);">新增成功祝賀</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">TransactionForm.tsx:267</td>
+              <td style="color: var(--ink-secondary);">拉炮 Emoji 視覺干擾過重，可替換為簡約的 Sparkles 向量圖示。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                <code>&lt;Sparkles size="sm" color="var(--accent)" /&gt;</code>
+                
+                
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">🗑️</td>
+              <td style="font-weight: 600; color: var(--ink);">批次刪除通知</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">TransactionsPage.tsx:205</td>
+              <td style="color: var(--ink-secondary);">與 Lucide 的 Trash2 圖示語意重複但樣式脫節，應統一為向量圖示。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                
+                <code>&lt;Trash2 size="sm" /&gt;</code>
+                
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">⚠️</td>
+              <td style="font-weight: 600; color: var(--ink);">警示提醒</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">RecalcFeesModal.tsx:84, FxPage.tsx:348, aiPayload.ts:370</td>
+              <td style="color: var(--ink-secondary);">系統已有 AlertTriangle 圖示，此處混用 Emoji 造成視覺斷層。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                
+                
+                <code>&lt;AlertTriangle size="sm" color="var(--warn)" /&gt;</code>
+                
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">✉️</td>
+              <td style="font-weight: 600; color: var(--ink);">密碼信件已寄達</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">AuthPage.tsx:56</td>
+              <td style="color: var(--ink-secondary);">建議封裝為標準 MailCheck 向量圖示。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                
+                
+                
+                <code>&lt;MailCheck size="sm" /&gt;</code>
+                
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">💡</td>
+              <td style="font-weight: 600; color: var(--ink);">架構設計小撇步</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">MechanismGuide.tsx:284</td>
+              <td style="color: var(--ink-secondary);">可改為簡約極簡燈泡 Lightbulb 向量圖示。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                
+                
+                
+                
+                <code>&lt;Lightbulb size="sm" /&gt;</code>
+                
+              </td>
+            </tr>
+          
+            <tr>
+              <td style="font-size: 18px; font-weight: 700; text-align: center;">?</td>
+              <td style="font-weight: 600; color: var(--ink);">欄位說明按鈕</td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-light);">HelpTip.tsx:87</td>
+              <td style="color: var(--ink-secondary);">以純文字字元 "?" 置於圓形按鈕內，字體不居中且缺乏圖示精緻感，應改用 HelpCircle。</td>
+              <td style="color: var(--cyan); font-weight: 500;">
+                
+                
+                
+                
+                
+                
+                
+                
+                <code>&lt;HelpCircle size="xs" /&gt;</code>
+              </td>
+            </tr>
+          
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- Detail Drawer -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div class="drawer" id="detailDrawer">
+    <div class="drawer-header">
+      <div style="display:flex; align-items:center; gap: 12px;">
+        <div class="icon-preview-box" id="drawerIconBox"></div>
+        <div>
+          <h3 id="drawerTitle" style="font-size: 18px; font-weight: 700;"></h3>
+          <div id="drawerZh" style="font-size: 13px; color: var(--ink-secondary);"></div>
+        </div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="detail-section">
+        <div class="detail-title">業務定位與用途</div>
+        <div id="drawerDesc" style="font-size: 13px; color: var(--ink); line-height: 1.6;"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">重新設計與優化方向</div>
+        <div id="drawerRedesign" style="font-size: 13px; color: var(--cyan); line-height: 1.6;"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">專案代碼引用處 (<span id="drawerUsageCount">0</span>)</div>
+        <div class="snippet-list" id="drawerSnippets"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const usageData = {"Activity":[{"file":"components/Admin/AdminConsolePage.tsx","line":27,"size":null,"snippet":"{ id: 'status', label: '抓取狀況', icon: Activity },"},{"file":"components/Admin/AdminStatusPage.tsx","line":399,"size":13,"snippet":"<Activity size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />"}],"AlertTriangle":[{"file":"components/Admin/AccountsSection.tsx","line":62,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/AiConnectionSection.tsx","line":176,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/BackupsSection.tsx","line":125,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/BackupsSection.tsx","line":230,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/ManualRunSection.tsx","line":417,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/PromptsSection.tsx","line":163,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Dashboard/DashboardPage.tsx","line":238,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/StockDetail/AiTab.tsx","line":281,"size":18,"snippet":"<AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />"},{"file":"components/StockDetail/AiTab.tsx","line":363,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/StockDetail/StockDetailPage.tsx","line":318,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/StockDetail/TechnicalTab.tsx","line":126,"size":14,"snippet":"<AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"}],"ArrowDown":[{"file":"components/Common/SortableTh.tsx","line":39,"size":null,"snippet":"const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown"}],"ArrowRightLeft":[{"file":"components/AppShell.tsx","line":9,"size":null,"snippet":"ArrowRightLeft,"},{"file":"components/AppShell.tsx","line":88,"size":null,"snippet":"{ id: 'fx', label: '外幣匯率', short: '匯率', group: 'market', icon: ArrowRightLeft },"},{"file":"components/Fx/FxPage.tsx","line":291,"size":36,"snippet":"<ArrowRightLeft size={36} />"}],"ArrowUp":[{"file":"components/Common/SortableTh.tsx","line":39,"size":null,"snippet":"const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown"}],"ArrowUpDown":[{"file":"components/Common/SortableTh.tsx","line":39,"size":null,"snippet":"const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown"}],"Bot":[{"file":"components/StockDetail/AiTab.tsx","line":205,"size":18,"snippet":"<Bot size={18} />"},{"file":"components/StockDetail/AiTab.tsx","line":230,"size":14,"snippet":"<Bot size={14} />"},{"file":"components/StockDetail/AiTab.tsx","line":243,"size":36,"snippet":"<Bot size={36} style={{ opacity: 0.5, marginBottom: 12 }} />"},{"file":"components/StockDetail/AiTab.tsx","line":300,"size":16,"snippet":"<Bot size={16} />"}],"Calculator":[{"file":"components/Transactions/TransactionsPage.tsx","line":252,"size":15,"snippet":"<Calculator size={15} />"}],"CalendarRange":[{"file":"components/AppShell.tsx","line":10,"size":null,"snippet":"CalendarRange,"},{"file":"components/AppShell.tsx","line":85,"size":null,"snippet":"{ id: 'yearly', label: '年度收益', short: '年度', group: 'holding', icon: CalendarRange },"},{"file":"components/YearlyReport/YearlyPage.tsx","line":414,"size":36,"snippet":"<CalendarRange size={36} />"}],"Check":[{"file":"components/Admin/ManualRunSection.tsx","line":310,"size":14,"snippet":"<Check size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/ManualRunSection.tsx","line":393,"size":12,"snippet":"{st === 'ok' && <Check size={12} />}"},{"file":"components/AppShell.tsx","line":11,"size":null,"snippet":"Check,"},{"file":"components/AppShell.tsx","line":605,"size":14,"snippet":"<Check size={14} className=\"hmenu-check\" aria-hidden=\"true\" />"},{"file":"components/StockDetail/AnalysisPage.tsx","line":204,"size":14,"snippet":"<Check size={14} className=\"hmenu-check\" aria-hidden=\"true\" />"}],"CheckCircle":[{"file":"components/Admin/AiConnectionSection.tsx","line":182,"size":14,"snippet":"<CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"},{"file":"components/Admin/PromptsSection.tsx","line":169,"size":14,"snippet":"<CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"}],"CheckCircle2":[{"file":"components/Transactions/RecalcFeesModal.tsx","line":90,"size":28,"snippet":"<CheckCircle2 size={28} style={{ marginBottom: 8 }} />"}],"ChevronDown":[{"file":"components/Admin/AdminStatusPage.tsx","line":78,"size":16,"snippet":"<ChevronDown className=\"apr-caret\" size={16} aria-hidden=\"true\" />"},{"file":"components/Admin/MechanismGuide.tsx","line":164,"size":null,"snippet":"<ChevronDown"},{"file":"components/AppShell.tsx","line":12,"size":null,"snippet":"ChevronDown,"},{"file":"components/AppShell.tsx","line":586,"size":12,"snippet":"<ChevronDown size={12} className=\"hmenu-caret\" />"},{"file":"components/StockDetail/AnalysisPage.tsx","line":185,"size":12,"snippet":"<ChevronDown size={12} className=\"hmenu-caret\" />"}],"ChevronLeft":[{"file":"components/Admin/AdminConsolePage.tsx","line":41,"size":14,"snippet":"<ChevronLeft size={14} />"}],"ChevronRight":[{"file":"components/Admin/BackupsSection.tsx","line":164,"size":null,"snippet":"<ChevronRight"}],"ChevronsDownUp":[{"file":"components/Macro/MacroPage.tsx","line":362,"size":14,"snippet":"{allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"},{"file":"components/StockDetail/TechnicalTab.tsx","line":307,"size":14,"snippet":"{showAllVolume ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"},{"file":"components/YearlyReport/YearlyPage.tsx","line":230,"size":14,"snippet":"{allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"}],"ChevronsUpDown":[{"file":"components/Macro/MacroPage.tsx","line":362,"size":14,"snippet":"{allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"},{"file":"components/StockDetail/TechnicalTab.tsx","line":307,"size":14,"snippet":"{showAllVolume ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"},{"file":"components/YearlyReport/YearlyPage.tsx","line":230,"size":14,"snippet":"{allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}"}],"Cpu":[{"file":"components/Admin/MechanismGuide.tsx","line":203,"size":15,"snippet":"<Cpu size={15} />"}],"Database":[{"file":"components/Admin/AdminConsolePage.tsx","line":31,"size":null,"snippet":"{ id: 'backups', label: '備份', icon: Database },"}],"Download":[{"file":"components/Transactions/TransactionsPage.tsx","line":260,"size":15,"snippet":"<Download size={15} />"}],"ExternalLink":[{"file":"components/AppShell.tsx","line":13,"size":null,"snippet":"ExternalLink,"},{"file":"components/AppShell.tsx","line":467,"size":12,"snippet":"<ExternalLink size={12} className=\"hmenu-item-ext\" />"}],"FileText":[{"file":"components/Admin/AdminConsolePage.tsx","line":30,"size":null,"snippet":"{ id: 'prompts', label: '提示詞', icon: FileText },"},{"file":"components/Admin/PromptsSection.tsx","line":33,"size":null,"snippet":"icon: typeof FileText"},{"file":"components/Admin/PromptsSection.tsx","line":41,"size":null,"snippet":"icon: FileText,"}],"FileUp":[{"file":"components/Transactions/CsvImportModal.tsx","line":56,"size":15,"snippet":"<FileUp size={15} />"}],"Globe":[{"file":"components/AppShell.tsx","line":14,"size":null,"snippet":"Globe,"},{"file":"components/AppShell.tsx","line":87,"size":null,"snippet":"{ id: 'macro', label: '總體經濟', short: '總經', group: 'market', icon: Globe },"},{"file":"components/Macro/MacroPage.tsx","line":283,"size":36,"snippet":"<Globe size={36} />"}],"HardDrive":[{"file":"components/AppShell.tsx","line":15,"size":null,"snippet":"HardDrive,"},{"file":"components/AppShell.tsx","line":417,"size":12,"snippet":"<HardDrive size={12} />"}],"HelpCircle":[{"file":"components/Admin/MechanismGuide.tsx","line":158,"size":18,"snippet":"<HelpCircle size={18} className=\"ast-verdict-icon\" />"}],"Inbox":[{"file":"components/Dashboard/DashboardPage.tsx","line":366,"size":36,"snippet":"<Inbox size={36} />"},{"file":"components/Dashboard/WatchSection.tsx","line":176,"size":36,"snippet":"<Inbox size={36} />"},{"file":"components/StockDetail/AnalysisPage.tsx","line":151,"size":36,"snippet":"<Inbox size={36} />"},{"file":"components/StockDetail/QuoteTab.tsx","line":155,"size":32,"snippet":"<Inbox size={32} />"}],"Info":[{"file":"components/Admin/AccountsSection.tsx","line":115,"size":13,"snippet":"<Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />"},{"file":"components/Admin/AccountsSection.tsx","line":120,"size":13,"snippet":"<Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />"},{"file":"components/Admin/BackupsSection.tsx","line":295,"size":13,"snippet":"<Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />"},{"file":"components/Admin/ManualRunSection.tsx","line":180,"size":14,"snippet":"<Info size={14} style={{ verticalAlign: -2, marginRight: 6 }} />"}],"KeyRound":[{"file":"components/Admin/AdminConsolePage.tsx","line":29,"size":null,"snippet":"{ id: 'ai', label: 'AI 連線', icon: KeyRound },"},{"file":"components/AppShell.tsx","line":16,"size":null,"snippet":"KeyRound,"},{"file":"components/AppShell.tsx","line":481,"size":14,"snippet":"<KeyRound size={14} />"}],"Layers":[{"file":"components/AppShell.tsx","line":17,"size":null,"snippet":"Layers,"},{"file":"components/AppShell.tsx","line":584,"size":14,"snippet":"<Layers size={14} />"}],"LayoutDashboard":[{"file":"components/AppShell.tsx","line":18,"size":null,"snippet":"LayoutDashboard,"},{"file":"components/AppShell.tsx","line":81,"size":null,"snippet":"icon: typeof LayoutDashboard"},{"file":"components/AppShell.tsx","line":83,"size":null,"snippet":"{ id: 'dashboard', label: '庫存總覽', short: '總覽', group: 'holding', icon: LayoutDashboard },"}],"LayoutGrid":[{"file":"components/Dashboard/WatchSection.tsx","line":147,"size":13,"snippet":"<LayoutGrid size={13} />"}],"LineChart":[{"file":"components/AppShell.tsx","line":19,"size":null,"snippet":"LineChart,"},{"file":"components/AppShell.tsx","line":84,"size":null,"snippet":"{ id: 'analysis', label: '個股分析', short: '分析', group: 'holding', icon: LineChart },"},{"file":"components/StockDetail/TechnicalTab.tsx","line":139,"size":32,"snippet":"<LineChart size={32} />"}],"List":[{"file":"components/Dashboard/WatchSection.tsx","line":157,"size":13,"snippet":"<List size={13} />"}],"ListPlus":[{"file":"components/AppShell.tsx","line":20,"size":null,"snippet":"ListPlus,"},{"file":"components/AppShell.tsx","line":811,"size":17,"snippet":"<ListPlus size={17} />"}],"Loader2":[{"file":"components/Admin/ManualRunSection.tsx","line":296,"size":null,"snippet":"<Loader2"},{"file":"components/Admin/ManualRunSection.tsx","line":392,"size":12,"snippet":"{st === 'running' && <Loader2 size={12} className=\"spin\" />}"},{"file":"components/Transactions/TransactionForm.tsx","line":349,"size":11,"snippet":"<Loader2 size={11} className=\"spin\" style={{ verticalAlign: -1, marginRight: 4 }} />"}],"Lock":[{"file":"components/Admin/PromptsSection.tsx","line":155,"size":13,"snippet":"<Lock size={13} />"}],"LogOut":[{"file":"components/AppShell.tsx","line":21,"size":null,"snippet":"LogOut,"},{"file":"components/AppShell.tsx","line":493,"size":14,"snippet":"<LogOut size={14} />"}],"MessageSquare":[{"file":"components/Admin/PromptsSection.tsx","line":49,"size":null,"snippet":"icon: MessageSquare,"},{"file":"components/StockDetail/AiTab.tsx","line":318,"size":16,"snippet":"<MessageSquare size={16} />"}],"Minus":[{"file":"components/Macro/MacroPage.tsx","line":211,"size":13,"snippet":"{open ? <Minus size={13} /> : <Plus size={13} />}"},{"file":"components/YearlyReport/YearlyPage.tsx","line":304,"size":13,"snippet":"{isOpen ? <Minus size={13} /> : <Plus size={13} />}"},{"file":"components/YearlyReport/YearlyPage.tsx","line":342,"size":13,"snippet":"{isTickerOpen ? <Minus size={13} /> : <Plus size={13} />}"}],"Monitor":[{"file":"components/AppShell.tsx","line":22,"size":null,"snippet":"Monitor,"},{"file":"components/AppShell.tsx","line":404,"size":null,"snippet":"const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun"}],"Moon":[{"file":"components/AppShell.tsx","line":23,"size":null,"snippet":"Moon,"},{"file":"components/AppShell.tsx","line":404,"size":null,"snippet":"const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun"}],"NotebookPen":[{"file":"components/AppShell.tsx","line":24,"size":null,"snippet":"NotebookPen,"},{"file":"components/AppShell.tsx","line":86,"size":null,"snippet":"{ id: 'transactions', label: '交易紀錄', short: '紀錄', group: 'holding', icon: NotebookPen },"},{"file":"components/Transactions/TransactionsPage.tsx","line":273,"size":36,"snippet":"<NotebookPen size={36} />"}],"Pencil":[{"file":"components/AppShell.tsx","line":25,"size":null,"snippet":"Pencil,"},{"file":"components/AppShell.tsx","line":631,"size":14,"snippet":"<Pencil size={14} />"},{"file":"components/Transactions/TransactionsPage.tsx","line":356,"size":14,"snippet":"<Pencil size={14} />"}],"Percent":[{"file":"components/AppShell.tsx","line":26,"size":null,"snippet":"Percent,"},{"file":"components/AppShell.tsx","line":643,"size":14,"snippet":"<Percent size={14} />"}],"Play":[{"file":"components/Admin/AdminConsolePage.tsx","line":28,"size":null,"snippet":"{ id: 'run', label: '手動更新', icon: Play },"},{"file":"components/Admin/ManualRunSection.tsx","line":242,"size":13,"snippet":"{busy ? <RefreshCw size={13} className=\"spin\" /> : <Play size={13} />}"},{"file":"components/Admin/ManualRunSection.tsx","line":260,"size":14,"snippet":"{busy ? <RefreshCw size={14} className=\"spin\" /> : <Play size={14} />}"},{"file":"components/Admin/ManualRunSection.tsx","line":270,"size":14,"snippet":"{busy ? <RefreshCw size={14} className=\"spin\" /> : <Play size={14} />}"}],"Plus":[{"file":"components/AppShell.tsx","line":27,"size":null,"snippet":"Plus,"},{"file":"components/AppShell.tsx","line":619,"size":14,"snippet":"<Plus size={14} />"},{"file":"components/Dashboard/WatchSection.tsx","line":167,"size":14,"snippet":"<Plus size={14} />"},{"file":"components/Macro/MacroPage.tsx","line":211,"size":13,"snippet":"{open ? <Minus size={13} /> : <Plus size={13} />}"},{"file":"components/StockDetail/AnalysisPage.tsx","line":158,"size":14,"snippet":"<Plus size={14} />"},{"file":"components/YearlyReport/YearlyPage.tsx","line":304,"size":13,"snippet":"{isOpen ? <Minus size={13} /> : <Plus size={13} />}"},{"file":"components/YearlyReport/YearlyPage.tsx","line":342,"size":13,"snippet":"{isTickerOpen ? <Minus size={13} /> : <Plus size={13} />}"}],"Radio":[{"file":"components/Admin/MechanismGuide.tsx","line":178,"size":16,"snippet":"<Radio size={16} className=\"text-accent\" />"}],"RefreshCw":[{"file":"components/Admin/AccountsSection.tsx","line":55,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Admin/BackupsSection.tsx","line":118,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Admin/ManualRunSection.tsx","line":242,"size":13,"snippet":"{busy ? <RefreshCw size={13} className=\"spin\" /> : <Play size={13} />}"},{"file":"components/Admin/ManualRunSection.tsx","line":260,"size":14,"snippet":"{busy ? <RefreshCw size={14} className=\"spin\" /> : <Play size={14} />}"},{"file":"components/Admin/ManualRunSection.tsx","line":270,"size":14,"snippet":"{busy ? <RefreshCw size={14} className=\"spin\" /> : <Play size={14} />}"},{"file":"components/Admin/ProbeWarRoom.tsx","line":159,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Dashboard/DashboardPage.tsx","line":357,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Fx/FxPage.tsx","line":281,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"},{"file":"components/Fx/FxPage.tsx","line":321,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Macro/MacroPage.tsx","line":273,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"},{"file":"components/Macro/MacroPage.tsx","line":331,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Macro/TwIndexToday.tsx","line":142,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/Macro/TwMarketSection.tsx","line":222,"size":24,"snippet":"<RefreshCw size={24} className=\"spin\" />"},{"file":"components/Macro/TwMarketSection.tsx","line":422,"size":14,"snippet":"<RefreshCw size={14} className={loading ? 'spin' : undefined} />"},{"file":"components/StockDetail/AiTab.tsx","line":192,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"},{"file":"components/StockDetail/AiTab.tsx","line":225,"size":14,"snippet":"<RefreshCw size={14} className=\"spin\" />"},{"file":"components/StockDetail/AiTab.tsx","line":271,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" style={{ marginBottom: 12, color: 'var(--primary)' }} />"},{"file":"components/StockDetail/AiTab.tsx","line":289,"size":14,"snippet":"<RefreshCw size={14} />"},{"file":"components/StockDetail/AiTab.tsx","line":353,"size":13,"snippet":"<RefreshCw size={13} className=\"spin\" style={{ verticalAlign: -2 }} /> 思考中…（最長{' '}"},{"file":"components/StockDetail/FundamentalTab.tsx","line":206,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"},{"file":"components/StockDetail/StockDetailPage.tsx","line":256,"size":14,"snippet":"<RefreshCw size={14} className={status === 'loading' || fundLoading ? 'spin' : undefined} />"},{"file":"components/StockDetail/StockDetailPage.tsx","line":312,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"},{"file":"components/StockDetail/TechnicalTab.tsx","line":115,"size":28,"snippet":"<RefreshCw size={28} className=\"spin\" />"}],"Search":[{"file":"components/StockDetail/AddWatchModal.tsx","line":78,"size":15,"snippet":"<Search size={15} className=\"search-icon\" />"},{"file":"components/Transactions/TransactionsPage.tsx","line":220,"size":15,"snippet":"<Search size={15} className=\"search-icon\" />"},{"file":"components/Transactions/TransactionsPage.tsx","line":282,"size":36,"snippet":"<Search size={36} />"},{"file":"components/YearlyReport/YearlyPage.tsx","line":456,"size":15,"snippet":"<Search size={15} className=\"search-icon\" />"}],"ShieldCheck":[{"file":"components/AppShell.tsx","line":28,"size":null,"snippet":"ShieldCheck,"},{"file":"components/AppShell.tsx","line":453,"size":14,"snippet":"<ShieldCheck size={14} />"},{"file":"components/StockDetail/AiTab.tsx","line":261,"size":14,"snippet":"<ShieldCheck size={14} />"}],"Sun":[{"file":"components/AppShell.tsx","line":29,"size":null,"snippet":"Sun,"},{"file":"components/AppShell.tsx","line":404,"size":null,"snippet":"const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun"}],"Timer":[{"file":"components/Admin/MechanismGuide.tsx","line":190,"size":16,"snippet":"<Timer size={16} className=\"text-accent\" />"},{"file":"components/Admin/MechanismGuide.tsx","line":245,"size":15,"snippet":"<Timer size={15} />"}],"Trash2":[{"file":"components/Admin/AiConnectionSection.tsx","line":198,"size":14,"snippet":"<Trash2 size={14} />"},{"file":"components/AppShell.tsx","line":30,"size":null,"snippet":"Trash2,"},{"file":"components/AppShell.tsx","line":656,"size":14,"snippet":"<Trash2 size={14} />"},{"file":"components/Transactions/TransactionsPage.tsx","line":215,"size":15,"snippet":"<Trash2 size={15} />"},{"file":"components/Transactions/TransactionsPage.tsx","line":364,"size":14,"snippet":"<Trash2 size={14} />"}],"Upload":[{"file":"components/Transactions/CsvImportModal.tsx","line":146,"size":15,"snippet":"<Upload size={15} />"},{"file":"components/Transactions/TransactionsPage.tsx","line":256,"size":15,"snippet":"<Upload size={15} />"}],"Users":[{"file":"components/Admin/AdminConsolePage.tsx","line":25,"size":null,"snippet":"const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = ["},{"file":"components/Admin/AdminConsolePage.tsx","line":26,"size":null,"snippet":"{ id: 'accounts', label: '帳號', icon: Users },"}],"X":[{"file":"components/Admin/ManualRunSection.tsx","line":394,"size":12,"snippet":"{st === 'fail' && <X size={12} />}"},{"file":"components/Common/Modal.tsx","line":11,"size":null,"snippet":"/** Anti-accidental touch for form pop-up windows: Clicking on the blank space of the mask will not close it (you can only press X or Esc)*/"},{"file":"components/Common/Modal.tsx","line":37,"size":18,"snippet":"<X size={18} />"},{"file":"components/Transactions/TransactionsPage.tsx","line":236,"size":14,"snippet":"<X size={14} />"},{"file":"components/YearlyReport/YearlyPage.tsx","line":472,"size":14,"snippet":"<X size={14} />"}]};
+    const metaData = {"LayoutDashboard":{"cat":"nav","zh":"庫存總覽","desc":"頂部主導航列與手機底部導航列的主分頁圖示，象徵資產總覽看板。","role":"主要導航 Tab","redesign":"可微調為更現代的四宮格卡片或不對稱看板幾何，加入選中狀態的微發光/填色。"},"LineChart":{"cat":"nav","zh":"個股分析 / 走勢圖","desc":"頂部主導航、技術面分析分頁頂部，代表技術走勢與個股診斷。","role":"主要導航 Tab / 區塊標題","redesign":"線條折點可微平滑化，或與蠟燭 K 線圖標搭配，增強金融專業辨識度。"},"CalendarRange":{"cat":"nav","zh":"年度收益 / 期間跨度","desc":"頂部主導航列代表年度收益，也是空狀態大圖示。","role":"主要導航 Tab / 空狀態","redesign":"目前雙格日曆線條稍顯繁複，可優化為極簡日曆 + 成長柱狀微標籤。"},"NotebookPen":{"cat":"nav","zh":"交易紀錄 / 記帳本","desc":"頂部主導航列與交易紀錄空狀態大圖示，象徵交易帳簿記帳。","role":"主要導航 Tab / 空狀態","redesign":"線條在 15px 時筆尖細節不易辨識，建議簡化為純粹帳簿 Receipt/Ledger 造型。"},"Globe":{"cat":"nav","zh":"總體經濟 / 全球視野","desc":"總經大盤與國際指標頁面導航，以及總經資料空狀態。","role":"主要導航 Tab / 空狀態","redesign":"經緯線在 15px 時稍微密擠，建議精簡為簡約雙緯線，或金融大盤天際線。"},"ArrowRightLeft":{"cat":"nav","zh":"外幣匯率 / 貨幣兌換","desc":"匯率頁面導航與空狀態，表示多幣別（台幣/美金）換算流向。","role":"主要導航 Tab / 空狀態","redesign":"雙箭頭造型經典，可改為帶圓弧平滑倒角的流暢箭頭，提升流暢感。"},"Plus":{"cat":"action","zh":"新增 / 展開項目","desc":"新增自選股、新增交易、展開總經指標卡、年度月份展開等。","role":"核心操作按鈕 / 展開觸發","redesign":"線條端點需與 Minus 嚴格統一，可提供圓形微背景以提高點擊熱區可見度。"},"Minus":{"cat":"action","zh":"收合 / 折疊項目","desc":"總經指標項目、年度收益月份的收合狀態。","role":"折疊觸發按鈕","redesign":"與 Plus 成對設計，寬度與筆觸必須 100% 幾何對齊。"},"Pencil":{"cat":"action","zh":"編輯交易紀錄","desc":"交易紀錄行項目編輯按鈕、快速編輯浮層。","role":"列表行操作按鈕","redesign":"現有鉛筆斜角稍大，可微調為更現代的線框筆尖或平直設計。"},"Trash2":{"cat":"action","zh":"刪除項目","desc":"刪除單筆/批次交易紀錄、移除 AI 連線金鑰。","role":"破壞性操作按鈕","redesign":"桶蓋與桶身分離的比例可更俐落，危險操作時可支援 hover 紅色微動態。"},"RefreshCw":{"cat":"action","zh":"重新整理 / 同步資料","desc":"專案中使用頻率最高（13 個檔案），包含大盤、報表、後台排程刷新。","role":"全局資料同步按鈕","redesign":"可統一 spin 動畫時的旋轉中心點，避免在不同瀏覽器下產生抖動；建議統一旋轉箭頭切角。"},"Upload":{"cat":"action","zh":"匯入檔案 (CSV)","desc":"匯入券商交易 CSV 彈窗主要觸發按鈕。","role":"資料匯入操作","redesign":"與 FileUp 語意有部分重疊，建議在按鈕中固定使用 Upload，拖曳區使用 FileUp。"},"Download":{"cat":"action","zh":"匯出備份 (CSV)","desc":"交易紀錄清單頂部匯出 CSV 按鈕。","role":"資料匯出操作","redesign":"托盤式底座與向下箭頭，需與 Upload 形成完全對稱的視覺配對。"},"FileUp":{"cat":"action","zh":"選擇 / 拖曳檔案","desc":"CSV 匯入彈窗內部檔案選取區域圖示。","role":"拖曳上傳輔助指示","redesign":"虛線框內的上傳箭頭，可結合檔案卡片微動態，增加上傳引導感。"},"Calculator":{"cat":"action","zh":"重新試算手續費","desc":"交易清單頂部「重算手續費」功能按鈕。","role":"特殊計算工具按鈕","redesign":"按鍵九宮格細節在 15px 下過於細碎，可設計為簡化版金融計算符號（+ − × ÷ 幾何）。"},"ListPlus":{"cat":"action","zh":"快速記帳 / 新增記錄","desc":"右上方常駐全域快速新增交易按鈕。","role":"全域高頻 CTA","redesign":"可加強視覺權重，設計為自帶漸層背景或 Accent 填充的高對比 CTA 標識。"},"Play":{"cat":"action","zh":"手動觸發排程","desc":"後台控制台各類 Probe 排程的手動觸發按鈕。","role":"後台維運操作","redesign":"三角形實心/空心需與暫停/重置對應，可增加執行中脈衝光暈。"},"X":{"cat":"action","zh":"關閉彈窗 / 清除搜尋","desc":"Modal 右上角關閉按鈕、搜尋框快速清空按鈕。","role":"取消 / 關閉 / 重置","redesign":"交叉線端點圓角需與整體設計系統 (border-radius: 9px/14px) 保持一致。"},"Check":{"cat":"action","zh":"勾選 / 成功選取","desc":"選單目前項目勾選標記、手動排程成功狀態。","role":"選單狀態 / 成功指示","redesign":"可微調打勾彎折角度為 90 度俐落折角，提升金融終端科技感。"},"LayoutGrid":{"cat":"view","zh":"觀察清單卡片視圖","desc":"儀表板觀察名單切換為網格卡片佈局。","role":"視圖切換器","redesign":"與 List 成對出現，四格方塊需與主題邊框弧度完全對齊。"},"List":{"cat":"view","zh":"觀察清單條列視圖","desc":"儀表板觀察名單切換為條列清單佈局。","role":"視圖切換器","redesign":"三條等長橫線，左右留白需精確對準 LayoutGrid 外框尺寸。"},"ArrowUp":{"cat":"view","zh":"升冪排序 (Ascending)","desc":"SortableTh 表頭升冪排序活躍指示。","role":"數據表欄位排序","redesign":"現有箭頭長度在 12px 表頭偏長，建議縮短箭桿或改為微三角形 indicator。"},"ArrowDown":{"cat":"view","zh":"降冪排序 (Descending)","desc":"SortableTh 表頭降冪排序活躍指示。","role":"數據表欄位排序","redesign":"與 ArrowUp 保持完美鏡像，確保點擊切換時無佈局位移 (CLS)。"},"ArrowUpDown":{"cat":"view","zh":"預設可排序指示","desc":"SortableTh 表頭未排序時的預設狀態指示。","role":"數據表欄位排序提示","redesign":"上下雙箭頭在 12px 時過於擁擠，可考慮更簡約的上下折角線或雙三角形。"},"ChevronsDownUp":{"cat":"view","zh":"全部折疊 (Collapse All)","desc":"總經指標、技術面成交量、年度報表的「全部折疊」按鈕。","role":"批次視圖折疊控制","redesign":"雙向箭頭視覺衝擊稍大，可優化為對向微折角，增加現代感。"},"ChevronsUpDown":{"cat":"view","zh":"全部展開 (Expand All)","desc":"總經指標、技術面成交量、年度報表的「全部展開」按鈕。","role":"批次視圖展開控制","redesign":"與 ChevronsDownUp 成對切換，確保展開/折疊語意直覺流暢。"},"ChevronDown":{"cat":"view","zh":"向下展開選單 / 摺疊","desc":"下拉選單 Caret 展開指示、區塊收合箭頭。","role":"選單下拉 Caret","redesign":"12px 下標準 90 度角，建議採用平滑圓角線條，與文字基線垂直對齊。"},"ChevronLeft":{"cat":"view","zh":"返回上一頁","desc":"管理後台返回主儀表板導航。","role":"導航返回箭頭","redesign":"左向單箭頭，需保證在手機觸控下的安全邊距。"},"ChevronRight":{"cat":"view","zh":"項目深入 / 詳情指示","desc":"資料庫備份歷程深入箭頭。","role":"列表行右側指示","redesign":"典型 iOS/macOS 列表 disclosure indicator 風格，弱化顏色對比。"},"Activity":{"cat":"sys","zh":"系統活動 / 探針狀態","desc":"後台「抓取狀況」分頁、排程心跳監控。","role":"後台監控分頁 / 心跳","redesign":"心電圖波形線，可增加平滑發光微動態以象徵即時運行中狀態。"},"Users":{"cat":"sys","zh":"帳號管理 / 權限分配","desc":"後台控制台「帳號」管理分頁。","role":"管理員後台分頁","redesign":"雙人頭剪影，可微調為簡約扁平人像，提高小尺寸可讀性。"},"Database":{"cat":"sys","zh":"資料庫 / 備份管理","desc":"後台「備份」分頁，代表 Supabase 資料庫快照。","role":"管理員後台分頁","redesign":"多層圓柱磁碟造型，可將間距稍微加大以防在 14px 縮小下黏連。"},"KeyRound":{"cat":"sys","zh":"API 金鑰 / AI 連線","desc":"管理員選單「AI 連線」、金鑰配置輸入入口。","role":"設定導航 / 憑證設定","redesign":"鑰匙齒可更幾何化，象徵現代安全 Token 與 API Key。"},"Lock":{"cat":"sys","zh":"唯讀保護 / 系統鎖定","desc":"系統預設提示詞範本的唯讀鎖定標記。","role":"安全權限狀態指示","redesign":"鎖頭形狀建議閉合圓潤，明確傳達「不可覆寫」的保護意涵。"},"ShieldCheck":{"cat":"sys","zh":"安全憑證 / 管理員徽章","desc":"右上角管理員身分徽記、AI 隱私保護保證。","role":"信任與安全徽章","redesign":"盾牌中內嵌勾選，可使用雙色微填色強調尊榮感與安全性。"},"HardDrive":{"cat":"sys","zh":"本機快取 / 離線模式","desc":"標註當前系統處於 LocalStorage 原生離線模式。","role":"存儲狀態標籤","redesign":"現代伺服器機架/硬碟造型，在 12px 下需要極度簡化的輪廓。"},"Cpu":{"cat":"sys","zh":"處理核心 / Edge 運算","desc":"機制說明中代表 Edge Functions 與背景運算節點。","role":"架構圖解說明","redesign":"晶片接腳可保持緊湊，中央運算核心可帶細微亮點。"},"Timer":{"cat":"sys","zh":"定時排程 / 班表時鐘","desc":"探針命中時段與自動定時器排程指示。","role":"時間監控標籤","redesign":"碼表按鈕造型，需與一般 Clock 區隔，明確代表「定時任務」。"},"Radio":{"cat":"sys","zh":"即時廣播 / 訊號發射","desc":"探針實時監聽盤後公開數據源的廣播訊號。","role":"數據探測訊號","redesign":"發射天線波紋，可賦予科技感的高頻脈衝視覺隱喻。"},"LogOut":{"cat":"sys","zh":"登出系統","desc":"使用者下拉選單最下方的登出操作。","role":"帳號操作項目","redesign":"箭頭離開門框的經典意象，注意箭頭與矩形框的比例平衡。"},"Sun":{"cat":"theme","zh":"淺色外觀 (Light Mode)","desc":"主題選單中的「淺色」選項圖示。","role":"主題切換選單","redesign":"八道光芒可做長短交錯或圓點光暈，營造柔和日照感。"},"Moon":{"cat":"theme","zh":"深色外觀 (Dark Mode)","desc":"主題選單中的「深色」選項圖示。","role":"主題切換選單","redesign":"月牙弧度需優雅，可微調內凹半徑以展現高階暗黑質感。"},"Monitor":{"cat":"theme","zh":"跟隨系統 (System Mode)","desc":"主題選單「跟隨系統」預設選項。","role":"主題切換選單","redesign":"螢幕底座簡約化，象徵跨裝置與作業系統自適應。"},"ExternalLink":{"cat":"theme","zh":"開新視窗 / 外部連結","desc":"選單中 GitHub 原始碼、外部報表跳轉小圖示。","role":"外部導向指示","redesign":"斜右上 45 度箭頭加方框，12px 需保持線條清晰不黏合。"},"Percent":{"cat":"theme","zh":"折讓成數 / 費率設定","desc":"使用者選單中的券商手續費折讓設定。","role":"交易偏好設定","redesign":"斜線與雙圓圈，可適度加大圈間距以增進辨識。"},"Layers":{"cat":"theme","zh":"多工作區切換","desc":"頂部 Workspace 切換選單觸發按鈕圖示。","role":"工作區切換器","redesign":"三層堆疊圖層，代表不同投資帳戶與資料集隔離。"},"Bot":{"cat":"ai","zh":"AI 智慧助理","desc":"個股分析 AI Tab 助手頭像、對話卡片、分析按鈕。","role":"AI 核心形象標識","redesign":"現有天線機器人較偏復古，可重繪為現代幾何 Sparkle 閃光或流線型智體。"},"MessageSquare":{"cat":"ai","zh":"提示詞 / 意見反饋","desc":"提示詞管理庫、對話訊息輸入入口。","role":"對話與提示詞","redesign":"圓角氣泡對話框，可加入簡約微輸入點 (dots) 表達交談中。"},"FileText":{"cat":"ai","zh":"提示詞範本 / 檔案","desc":"管理後台提示詞範本列表圖示。","role":"文檔範本標籤","redesign":"折角文件內含橫線文字，展現標準 Prompt 規範感。"},"HelpCircle":{"cat":"ai","zh":"原理解析 / 說明指南","desc":"機制指南中的核心問題解說圖示。","role":"說明中心引導","redesign":"外圓包覆問號，可與表頭純文字 ? 的 HelpTip 整合為一體化組件。"},"AlertTriangle":{"cat":"status","zh":"警告提示 / 錯誤告警","desc":"使用達 9 個檔案，用於 API 錯誤、資料缺失、未配置提示。","role":"全域警告提示","redesign":"三角警示形狀，可支援填色/描邊雙狀態，內部感嘆號圓點垂直對齊。"},"Info":{"cat":"status","zh":"說明資訊 / 輔助提示","desc":"後台各區塊輔助說明提示條。","role":"輔助提示訊息","redesign":"圓形小 i 圖示，與 AlertTriangle、CheckCircle 保持同系列規格。"},"CheckCircle":{"cat":"status","zh":"成功驗證 / 狀態正常","desc":"AI 連線驗證成功、提示詞儲存成功標示。","role":"成功反饋標籤","redesign":"打勾穿出圓環或內嵌圓環需固定統一，確保視覺安心感。"},"CheckCircle2":{"cat":"status","zh":"計算完成反饋","desc":"手續費重新試算完成後的彈窗大圖示。","role":"彈窗完成 Hero","redesign":"與 CheckCircle 存在兩套相似圖示，應直接合併為同一標準元件。"},"Loader2":{"cat":"status","zh":"載入旋轉中 (Loading)","desc":"手動排程執行中、新增交易送出中的 spin 動態圖示。","role":"非同步載入狀態","redesign":"半弧缺口旋轉，可替換為平滑漸變弧度或四段金融頻率雷達。"},"Inbox":{"cat":"status","zh":"空資料狀態 (Empty State)","desc":"觀察名單無個股、交易無資料、個股無報表的核心空狀態圖示。","role":"全域空狀態插圖","redesign":"現有收件匣造型偏郵件感，建議針對金融場景重繪「空帳本/雷達無訊號」插畫。"},"Search":{"cat":"status","zh":"搜尋股票 / 交易篩選","desc":"新增自選股搜尋框、交易紀錄過濾框、年度篩選框。","role":"搜尋輸入前綴","redesign":"45 度手柄放大鏡，需精準置中於輸入框中，避免上下偏移。"}};
+    const svgData = {"Activity":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-activity\" aria-hidden=\"true\"><path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\"></path></svg>","AlertTriangle":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-triangle-alert\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path></svg>","ArrowDown":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-arrow-down\" aria-hidden=\"true\"><path d=\"M12 5v14\"></path><path d=\"m19 12-7 7-7-7\"></path></svg>","ArrowRightLeft":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-arrow-right-left\" aria-hidden=\"true\"><path d=\"m16 3 4 4-4 4\"></path><path d=\"M20 7H4\"></path><path d=\"m8 21-4-4 4-4\"></path><path d=\"M4 17h16\"></path></svg>","ArrowUp":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-arrow-up\" aria-hidden=\"true\"><path d=\"m5 12 7-7 7 7\"></path><path d=\"M12 19V5\"></path></svg>","ArrowUpDown":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-arrow-up-down\" aria-hidden=\"true\"><path d=\"m21 16-4 4-4-4\"></path><path d=\"M17 20V4\"></path><path d=\"m3 8 4-4 4 4\"></path><path d=\"M7 4v16\"></path></svg>","Bot":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-bot\" aria-hidden=\"true\"><path d=\"M12 8V4H8\"></path><rect width=\"16\" height=\"12\" x=\"4\" y=\"8\" rx=\"2\"></rect><path d=\"M2 14h2\"></path><path d=\"M20 14h2\"></path><path d=\"M15 13v2\"></path><path d=\"M9 13v2\"></path></svg>","Calculator":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-calculator\" aria-hidden=\"true\"><rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\"></rect><line x1=\"8\" x2=\"16\" y1=\"6\" y2=\"6\"></line><line x1=\"16\" x2=\"16\" y1=\"14\" y2=\"18\"></line><path d=\"M16 10h.01\"></path><path d=\"M12 10h.01\"></path><path d=\"M8 10h.01\"></path><path d=\"M12 14h.01\"></path><path d=\"M8 14h.01\"></path><path d=\"M12 18h.01\"></path><path d=\"M8 18h.01\"></path></svg>","CalendarRange":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-calendar-range\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"></rect><path d=\"M16 2v4\"></path><path d=\"M3 10h18\"></path><path d=\"M8 2v4\"></path><path d=\"M17 14h-6\"></path><path d=\"M13 18H7\"></path><path d=\"M7 14h.01\"></path><path d=\"M17 18h.01\"></path></svg>","Check":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-check\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg>","CheckCircle":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-circle-check-big\" aria-hidden=\"true\"><path d=\"M21.801 10A10 10 0 1 1 17 3.335\"></path><path d=\"m9 11 3 3L22 4\"></path></svg>","CheckCircle2":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-circle-check\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"m9 12 2 2 4-4\"></path></svg>","ChevronDown":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevron-down\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"></path></svg>","ChevronLeft":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevron-left\" aria-hidden=\"true\"><path d=\"m15 18-6-6 6-6\"></path></svg>","ChevronRight":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevron-right\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"></path></svg>","ChevronsDownUp":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevrons-down-up\" aria-hidden=\"true\"><path d=\"m7 20 5-5 5 5\"></path><path d=\"m7 4 5 5 5-5\"></path></svg>","ChevronsUpDown":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevrons-up-down\" aria-hidden=\"true\"><path d=\"m7 15 5 5 5-5\"></path><path d=\"m7 9 5-5 5 5\"></path></svg>","Cpu":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-cpu\" aria-hidden=\"true\"><path d=\"M12 20v2\"></path><path d=\"M12 2v2\"></path><path d=\"M17 20v2\"></path><path d=\"M17 2v2\"></path><path d=\"M2 12h2\"></path><path d=\"M2 17h2\"></path><path d=\"M2 7h2\"></path><path d=\"M20 12h2\"></path><path d=\"M20 17h2\"></path><path d=\"M20 7h2\"></path><path d=\"M7 20v2\"></path><path d=\"M7 2v2\"></path><rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"></rect><rect x=\"8\" y=\"8\" width=\"8\" height=\"8\" rx=\"1\"></rect></svg>","Database":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-database\" aria-hidden=\"true\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"></ellipse><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"></path><path d=\"M3 12A9 3 0 0 0 21 12\"></path></svg>","Download":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-download\" aria-hidden=\"true\"><path d=\"M12 15V3\"></path><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path><path d=\"m7 10 5 5 5-5\"></path></svg>","ExternalLink":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-external-link\" aria-hidden=\"true\"><path d=\"M15 3h6v6\"></path><path d=\"M10 14 21 3\"></path><path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"></path></svg>","FileText":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-file-text\" aria-hidden=\"true\"><path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"></path><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"></path><path d=\"M10 9H8\"></path><path d=\"M16 13H8\"></path><path d=\"M16 17H8\"></path></svg>","FileUp":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-file-up\" aria-hidden=\"true\"><path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"></path><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"></path><path d=\"M12 12v6\"></path><path d=\"m15 15-3-3-3 3\"></path></svg>","Globe":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-globe\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\"></path><path d=\"M2 12h20\"></path></svg>","HardDrive":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-hard-drive\" aria-hidden=\"true\"><path d=\"M10 16h.01\"></path><path d=\"M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path><path d=\"M21.946 12.013H2.054\"></path><path d=\"M6 16h.01\"></path></svg>","HelpCircle":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-circle-question-mark\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"></path><path d=\"M12 17h.01\"></path></svg>","Inbox":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-inbox\" aria-hidden=\"true\"><polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path></svg>","Info":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-info\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path></svg>","KeyRound":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-key-round\" aria-hidden=\"true\"><path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle></svg>","Layers":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-layers\" aria-hidden=\"true\"><path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\"></path><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\"></path><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\"></path></svg>","LayoutDashboard":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-layout-dashboard\" aria-hidden=\"true\"><rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"></rect><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"></rect></svg>","LayoutGrid":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-layout-grid\" aria-hidden=\"true\"><rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"></rect><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"></rect><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"></rect></svg>","LineChart":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chart-line\" aria-hidden=\"true\"><path d=\"M3 3v16a2 2 0 0 0 2 2h16\"></path><path d=\"m19 9-5 5-4-4-3 3\"></path></svg>","List":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-list\" aria-hidden=\"true\"><path d=\"M3 5h.01\"></path><path d=\"M3 12h.01\"></path><path d=\"M3 19h.01\"></path><path d=\"M8 5h13\"></path><path d=\"M8 12h13\"></path><path d=\"M8 19h13\"></path></svg>","ListPlus":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-list-plus\" aria-hidden=\"true\"><path d=\"M16 5H3\"></path><path d=\"M11 12H3\"></path><path d=\"M16 19H3\"></path><path d=\"M18 9v6\"></path><path d=\"M21 12h-6\"></path></svg>","Loader2":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-loader-circle\" aria-hidden=\"true\"><path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path></svg>","Lock":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-lock\" aria-hidden=\"true\"><rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg>","LogOut":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-log-out\" aria-hidden=\"true\"><path d=\"m16 17 5-5-5-5\"></path><path d=\"M21 12H9\"></path><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path></svg>","MessageSquare":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-message-square\" aria-hidden=\"true\"><path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\"></path></svg>","Minus":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-minus\" aria-hidden=\"true\"><path d=\"M5 12h14\"></path></svg>","Monitor":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-monitor\" aria-hidden=\"true\"><rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\"></rect><line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\"></line><line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\"></line></svg>","Moon":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-moon\" aria-hidden=\"true\"><path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"></path></svg>","NotebookPen":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-notebook-pen\" aria-hidden=\"true\"><path d=\"M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4\"></path><path d=\"M2 6h4\"></path><path d=\"M2 10h4\"></path><path d=\"M2 14h4\"></path><path d=\"M2 18h4\"></path><path d=\"M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z\"></path></svg>","Pencil":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-pencil\" aria-hidden=\"true\"><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"></path><path d=\"m15 5 4 4\"></path></svg>","Percent":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-percent\" aria-hidden=\"true\"><line x1=\"19\" x2=\"5\" y1=\"5\" y2=\"19\"></line><circle cx=\"6.5\" cy=\"6.5\" r=\"2.5\"></circle><circle cx=\"17.5\" cy=\"17.5\" r=\"2.5\"></circle></svg>","Play":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-play\" aria-hidden=\"true\"><path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\"></path></svg>","Plus":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-plus\" aria-hidden=\"true\"><path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path></svg>","Radio":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-radio\" aria-hidden=\"true\"><path d=\"M16.247 7.761a6 6 0 0 1 0 8.478\"></path><path d=\"M19.075 4.933a10 10 0 0 1 0 14.134\"></path><path d=\"M4.925 19.067a10 10 0 0 1 0-14.134\"></path><path d=\"M7.753 16.239a6 6 0 0 1 0-8.478\"></path><circle cx=\"12\" cy=\"12\" r=\"2\"></circle></svg>","RefreshCw":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-refresh-cw\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"></path><path d=\"M21 3v5h-5\"></path><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"></path><path d=\"M8 16H3v5\"></path></svg>","Search":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-search\" aria-hidden=\"true\"><path d=\"m21 21-4.34-4.34\"></path><circle cx=\"11\" cy=\"11\" r=\"8\"></circle></svg>","ShieldCheck":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-shield-check\" aria-hidden=\"true\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"></path><path d=\"m9 12 2 2 4-4\"></path></svg>","Sun":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-sun\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M12 2v2\"></path><path d=\"M12 20v2\"></path><path d=\"m4.93 4.93 1.41 1.41\"></path><path d=\"m17.66 17.66 1.41 1.41\"></path><path d=\"M2 12h2\"></path><path d=\"M20 12h2\"></path><path d=\"m6.34 17.66-1.41 1.41\"></path><path d=\"m19.07 4.93-1.41 1.41\"></path></svg>","Timer":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-timer\" aria-hidden=\"true\"><line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\"></line><line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\"></line><circle cx=\"12\" cy=\"14\" r=\"8\"></circle></svg>","Trash2":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-trash2 lucide-trash-2\" aria-hidden=\"true\"><path d=\"M10 11v6\"></path><path d=\"M14 11v6\"></path><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"></path><path d=\"M3 6h18\"></path><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path></svg>","Upload":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-upload\" aria-hidden=\"true\"><path d=\"M12 3v12\"></path><path d=\"m17 8-5-5-5 5\"></path><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path></svg>","Users":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-users\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"></path><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"></path><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle></svg>","X":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-x\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg>"};
+    const customData = [{"name":"BrandMark","file":"sources/src/components/BrandMark.tsx","role":"應用程式官方 Logo / 品牌標誌","type":"自訂 React SVG 組件","code":"<BrandMark />","desc":"包含背景微光暈、三根漸層柱狀體（紫色/青色/紅色）與紅色上升折線箭頭，象徵台股多頭與資產累積。","svg":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 96 96\" fill=\"none\"><circle cx=\"48\" cy=\"48\" r=\"40\" fill=\"rgba(99,102,241,0.2)\"/><rect x=\"14\" y=\"44\" width=\"16\" height=\"38\" rx=\"8\" fill=\"#6366f1\"/><rect x=\"38\" y=\"30\" width=\"18\" height=\"52\" rx=\"9\" fill=\"#22d3ee\"/><rect x=\"64\" y=\"16\" width=\"18\" height=\"66\" rx=\"9\" fill=\"#ff4a5a\"/><path d=\"M54 26L73 14L82 32\" stroke=\"#ff4a5a\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"},{"name":"favicon.svg","file":"sources/public/favicon.svg","role":"瀏覽器分頁圖示 (Browser Tab Icon)","type":"靜態 SVG 圖檔","code":"<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />","desc":"與 BrandMark 一致的柱狀圖加上升趨勢線，在瀏覽器分頁籤極小尺寸 (16x16 / 32x32) 下渲染。","svg":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 96 96\" fill=\"none\"><circle cx=\"48\" cy=\"48\" r=\"40\" fill=\"rgba(99,102,241,0.2)\"/><rect x=\"14\" y=\"44\" width=\"16\" height=\"38\" rx=\"8\" fill=\"#6366f1\"/><rect x=\"38\" y=\"30\" width=\"18\" height=\"52\" rx=\"9\" fill=\"#22d3ee\"/><rect x=\"64\" y=\"16\" width=\"18\" height=\"66\" rx=\"9\" fill=\"#ff4a5a\"/><path d=\"M54 26L73 14L82 32\" stroke=\"#ff4a5a\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"},{"name":"GithubMark","file":"sources/src/components/AppShell.tsx:187","role":"GitHub 外部原始碼導向","type":"組件內聯 (Inline) SVG","code":"<GithubMark size={14} />","desc":"由於 Lucide 1.x 移除了所有品牌圖示，專案在 AppShell 內手寫了官方 GitHub Logo 向量路徑。","svg":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12\" /></svg>"}];
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const cur = html.getAttribute('data-theme');
+      const next = cur === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+      document.getElementById('theme-icon').textContent = next === 'light' ? '☀️' : '🌙';
+      document.getElementById('theme-text').textContent = next === 'light' ? '淺色外觀' : '深色外觀';
+    }
+
+    function switchView(tabId) {
+      document.querySelectorAll('.view-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById('view-' + tabId).classList.add('active');
+    }
+
+    let activeCat = 'all';
+    let searchQuery = '';
+
+    function filterCategory(catId, btn) {
+      activeCat = catId;
+      document.querySelectorAll('.filter-pills .pill-btn').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilter();
+    }
+
+    function filterIcons() {
+      searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+      applyFilter();
+    }
+
+    function applyFilter() {
+      const cards = document.querySelectorAll('.icons-grid .icon-card');
+      cards.forEach(card => {
+        const cat = card.getAttribute('data-cat');
+        const name = card.getAttribute('data-name');
+
+        const catMatch = (activeCat === 'all' || cat === activeCat);
+        const searchMatch = (!searchQuery || name.includes(searchQuery));
+
+        if (catMatch && searchMatch) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function setPreviewSize(sz, btn) {
+      document.querySelectorAll('.size-toggle-group .size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      document.querySelectorAll('.svg-preview svg').forEach(svg => {
+        svg.setAttribute('width', sz);
+        svg.setAttribute('height', sz);
+      });
+    }
+
+    function showIconDetail(name) {
+      const meta = metaData[name] || {};
+      const usages = usageData[name] || [];
+      const svg = svgData[name] || '';
+
+      document.getElementById('drawerIconBox').innerHTML = svg;
+      document.getElementById('drawerTitle').textContent = name;
+      document.getElementById('drawerZh').textContent = meta.zh || '';
+      document.getElementById('drawerDesc').textContent = meta.desc || '暫無描述';
+      document.getElementById('drawerRedesign').textContent = meta.redesign || '維持統一風格。';
+      document.getElementById('drawerUsageCount').textContent = usages.length;
+
+      const snippetsWrap = document.getElementById('drawerSnippets');
+      snippetsWrap.innerHTML = usages.length > 0 ? usages.map(u => `
+        <div class="snippet-item">
+          <div class="snippet-file">${u.file}:${u.line} ${u.size ? `[size=${u.size}]` : ''}</div>
+          <div class="snippet-code">${escapeHtml(u.snippet)}</div>
+        </div>
+      `).join('') : '<div style="font-size:12px; color:var(--ink-muted);">無直接使用</div>';
+
+      document.getElementById('drawerOverlay').classList.add('open');
+      document.getElementById('detailDrawer').classList.add('open');
+    }
+
+    function showCustomDetail(name) {
+      const item = customData.find(c => c.name === name);
+      if (!item) return;
+
+      document.getElementById('drawerIconBox').innerHTML = item.svg;
+      document.getElementById('drawerTitle').textContent = item.name;
+      document.getElementById('drawerZh').textContent = item.role;
+      document.getElementById('drawerDesc').textContent = item.desc;
+      document.getElementById('drawerRedesign').textContent = '與主品牌標準色彩（var(--accent), var(--up), var(--down)）精密聯動，保持向量流暢感。';
+      document.getElementById('drawerUsageCount').textContent = '1';
+
+      const snippetsWrap = document.getElementById('drawerSnippets');
+      snippetsWrap.innerHTML = `
+        <div class="snippet-item">
+          <div class="snippet-file">${item.file}</div>
+          <div class="snippet-code">${escapeHtml(item.code)}</div>
+        </div>
+      `;
+
+      document.getElementById('drawerOverlay').classList.add('open');
+      document.getElementById('detailDrawer').classList.add('open');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerOverlay').classList.remove('open');
+      document.getElementById('detailDrawer').classList.remove('open');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
