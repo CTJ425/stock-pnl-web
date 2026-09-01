@@ -5,6 +5,7 @@
 ```
 supabase/
 ├── schema.sql                    # 資料庫綱要 DDL（含 RLS），貼到 SQL Editor 執行
+├── verify.sql                    # 驗收檢查：建立/重建/還原資料庫後**必跑**
 └── functions/
     ├── stock-price/              # Edge Function：現價 / 搜尋 / 匯率報價代理（4 檔）
     ├── stock-report/             # Edge Function：盤後籌碼、技術面、基本面、匯率、總經（多檔）
@@ -106,10 +107,17 @@ supabase functions deploy backup-transactions --no-verify-jwt
    ```
    （或 Dashboard → Edge Functions → stock-report → Secrets）
 2. **重跑 `schema.sql`**：第 6 段會建立 `reports` bucket、啟用 `pg_cron` / `pg_net`、並排定每交易日 **16:00–23:45 每 15 分鐘**（台北，＝ UTC 8:00–15:45）呼叫 `generate-all`。執行前把 SQL 內兩個佔位符換掉：`<PROJECT_REF>`（專案 ref）、`<CRON_SECRET>`（與上一步相同）。
-   **套用完一定要跑 §6d 的覆驗查詢**：`cron.schedule` 對沒替換的佔位符照收不誤，
-   「SQL 執行成功」不等於「值填對了」——正式區就曾因此整段時間批次從沒靠 cron 跑起來過（BUG-002）。
    **只是要改時間**的話用 `cron.alter_job`，它保留原本的 command，密鑰碰都不用碰。
-3. **手動驗證一次**（不必等排程）：
+3. **執行 `verify.sql`，然後 `SELECT assert_setup_ok();`** —— 這一步不可略過。
+   `cron.schedule` 會照單全收 `<PROJECT_REF>` 與 `<CRON_SECRET>` 這種字串，
+   所以**「SQL 執行成功」從來就不是證據**。schema.sql 第 6e 段現在會在佔位符沒替換時
+   直接中止；`assert_setup_ok()` 則是同一道關卡，隨時可以重跑。
+   `SELECT * FROM verify_setup();` 會列出十項檢查，其中兩項需要你用眼睛確認：
+   `cron target host` 印出排程實際呼叫的主機（必須是這個環境），
+   `cron http (recent)` 是密鑰與 Edge Function 相符的**唯一**證據（不符會是 401）。
+   這件事以前只寫在 §6d 的註解裡要人工覆驗，結果同一個缺陷發生了三次：
+   2026-08-31 兩個專案重建後，12 個排程一次都沒跑成功過（OPS-001）。
+4. **手動驗證一次**（不必等排程）：
    ```bash
    curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
      -H 'Content-Type: application/json' -H 'x-cron-secret: <CRON_SECRET>' \

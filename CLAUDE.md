@@ -146,11 +146,17 @@ returns `404 Resource has been removed`. `sources/.env` may still point at a dea
 error killed it before `net.http_post` queued anything, and once that was fixed the Edge
 Function answered 401. After any project recreation, check both:
 
+**Do not check this by eye — run the verifier.** `schema.sql` now ends with a hard gate
+that aborts if a placeholder survives, and `sources/supabase/verify.sql` installs the same
+check as something you can re-run:
+
 ```sql
-SELECT count(*) FILTER (WHERE command LIKE '%<PROJECT_REF>%')  AS bad_url,
-       count(*) FILTER (WHERE command LIKE '%''<CRON_SECRET>''%') AS bad_secret
-FROM   cron.job;   -- both must be 0; never select the command text itself
+SELECT * FROM verify_setup();   -- 10 checks: schema, migrations, cron, secret shape, RLS
+SELECT assert_setup_ok();       -- raises unless all of them pass
 ```
+
+A written checklist for this already existed in `schema.sql` §6d and did not prevent three
+recurrences. Details and the two checks that still need a human eye: **`supabase-ops`** skill.
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
