@@ -7,13 +7,14 @@
  * - Passing in initial is the "edit mode": the existing transaction content is brought in, and the fields are not cleared after success;
  *   When the handling fee is turned on, it will be re-estimated based on the current rate (the old data may be logged in incorrectly), and the original record can be restored with one click.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
 import { calculateFee } from '../../utils/fees'
+import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import type { StockSearchResult } from '../../services/stockSearch'
@@ -38,13 +39,13 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormProps) {
-  const { current } = useWorkspace()
+  const { current, ledger } = useWorkspace()
   const workspaceId = current?.id
   const isEdit = Boolean(initial)
   const [date, setDate] = useState(initial?.tx_date ?? todayStr)
   const [market, setMarket] = useState<Market>(initial?.market ?? 'TPE')
   const [txType, setTxType] = useState<TxType>(initial?.tx_type ?? 'BUY')
-  const [nature, setNature] = useState<TxNature | ''>(initial?.tx_nature ?? '')
+  const [nature, setNature] = useState<TxNature>(initial?.tx_nature ?? 'SPOT')
   const [ticker, setTicker] = useState(initial?.ticker ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [price, setPrice] = useState(initial ? String(initial.price) : '')
@@ -80,6 +81,45 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
+
+  const activeHoldings = useMemo(
+    () => ledger.holdings.filter((h) => h.qty > 0 && h.market === market),
+    [ledger.holdings, market],
+  )
+  const isSpotSell = txType === 'SELL' && (market !== 'TPE' || nature === 'SPOT')
+
+  const [showTickerHoldings, setShowTickerHoldings] = useState(false)
+  const [showNameHoldings, setShowNameHoldings] = useState(false)
+  const tickerFieldRef = useRef<HTMLDivElement | null>(null)
+  const nameFieldRef = useRef<HTMLDivElement | null>(null)
+
+  const filteredTickerHoldings = useMemo(() => {
+    const q = ticker.trim().toUpperCase()
+    if (!q) return activeHoldings
+    return activeHoldings.filter(
+      (h) => h.ticker.toUpperCase().includes(q) || h.name.includes(ticker.trim()),
+    )
+  }, [activeHoldings, ticker])
+
+  const filteredNameHoldings = useMemo(() => {
+    const q = name.trim()
+    if (!q) return activeHoldings
+    return activeHoldings.filter(
+      (h) => h.name.includes(q) || h.ticker.toUpperCase().includes(q.toUpperCase()),
+    )
+  }, [activeHoldings, name])
+
+  const pickHolding = (item: Holding) => {
+    setName(item.name)
+    setTicker(item.ticker)
+    if (item.market !== market) handleMarketChange(item.market)
+    lastSearchedTicker.current = item.ticker
+    updateTaxRateAuto(item.ticker)
+    setShowTickerHoldings(false)
+    setShowNameHoldings(false)
+    setSuggestions(null)
+  }
+
   // In edit mode the saved fee/tax stands until the user changes a core input.
   // A "skip the first run" flag is not enough: StrictMode invokes an effect twice on
   // mount (main.tsx wraps App), and the second pass would consume the flag and overwrite
@@ -96,7 +136,6 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const lastSearchedTicker = useRef(initial?.ticker ?? '')
   const searchSeq = useRef(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const suggestionsRef = useRef<HTMLDivElement | null>(null)
 
   const getActualShares = useCallback((): number => {
     const val = parseFloat(qty) || 0
@@ -144,6 +183,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {
     setMarket(next)
+    setShowTickerHoldings(false)
+    setShowNameHoldings(false)
+    setSuggestions(null)
     if (next === 'US' && unit === '張') {
       convertUnit('零股')
     }
@@ -207,10 +249,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     setSuggestions(null)
   }
 
-  // Collapse drop-down when clicking elsewhere in the form
+  // Collapse drop-downs when clicking elsewhere in the form
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (tickerFieldRef.current && !tickerFieldRef.current.contains(target)) {
+        setShowTickerHoldings(false)
+      }
+      if (nameFieldRef.current && !nameFieldRef.current.contains(target)) {
+        setShowNameHoldings(false)
         setSuggestions(null)
       }
     }
@@ -245,7 +292,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         ticker: cleanTicker,
         name: name.trim() || cleanTicker,
         tx_type: txType,
-        tx_nature: nature || undefined,
+        tx_nature: market === 'TPE' ? nature : undefined,
         price: p,
         qty: shares,
         fee_tax: feeVal,
@@ -261,6 +308,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       setPrice('')
       setQty('')
       setFee('0')
+      setNature('SPOT')
+      setShowTickerHoldings(false)
+      setShowNameHoldings(false)
       lastSearchedTicker.current = ''
       taxRateManual.current = false
       setTaxRate('0.003')
@@ -301,7 +351,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         </div>
         <div className="field">
           <label htmlFor="tx-type">交易類型</label>
-          <select id="tx-type" value={txType} onChange={(e) => setTxType(e.target.value as TxType)}>
+          <select
+            id="tx-type"
+            value={txType}
+            onChange={(e) => {
+              const next = e.target.value as TxType
+              setTxType(next)
+              setShowTickerHoldings(false)
+              setShowNameHoldings(false)
+              setSuggestions(null)
+            }}
+          >
             <option value="BUY">買入</option>
             <option value="SELL">賣出</option>
           </select>
@@ -313,8 +373,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               id="tx-nature"
               value={nature}
               onChange={(e) => {
-                const next = e.target.value as TxNature | ''
+                const next = e.target.value as TxNature
                 setNature(next)
+                setShowTickerHoldings(false)
+                setShowNameHoldings(false)
                 // 當沖 is what a user sets the tax rate preset to by hand today; keep it in sync.
                 if (next === 'DAY_TRADE') {
                   taxRateManual.current = true
@@ -322,7 +384,6 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 }
               }}
             >
-              <option value="">未指定</option>
               <option value="SPOT">{TX_NATURE_LABEL.SPOT}</option>
               <option value="DAY_TRADE">{TX_NATURE_LABEL.DAY_TRADE}</option>
               <option value="MARGIN">{TX_NATURE_LABEL.MARGIN}</option>
@@ -331,19 +392,56 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         )}
       </div>
 
-      <div className="field">
+      <div className="field" ref={tickerFieldRef}>
         <label htmlFor="tx-ticker">股票代號（台股 2330 / 美股 AAPL）</label>
         <input
           id="tx-ticker"
           value={ticker}
           autoComplete="off"
-          placeholder="輸入代號會自動帶出名稱"
+          placeholder={isSpotSell ? '點選或輸入代號（將列出庫存持股）' : '輸入代號會自動帶出名稱'}
+          onFocus={() => {
+            if (isSpotSell) setShowTickerHoldings(true)
+          }}
+          onClick={() => {
+            if (isSpotSell) setShowTickerHoldings(true)
+          }}
           onChange={(e) => {
             setTicker(e.target.value)
             updateTaxRateAuto(e.target.value)
+            if (isSpotSell) setShowTickerHoldings(true)
           }}
-          onBlur={handleTickerBlur}
+          onBlur={() => {
+            setShowTickerHoldings(false)
+            handleTickerBlur()
+          }}
         />
+        {isSpotSell && showTickerHoldings && (
+          <div className="suggestions" data-testid="ticker-holdings-dropdown">
+            {filteredTickerHoldings.length === 0 ? (
+              <div className="suggestion-empty">
+                {activeHoldings.length === 0 ? '目前帳戶無持股' : '庫存中無匹配代號'}
+              </div>
+            ) : (
+              filteredTickerHoldings.map((item) => (
+                <div
+                  key={item.key}
+                  className="suggestion-item"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    pickHolding(item)
+                  }}
+                >
+                  <span>
+                    <strong>{item.ticker}</strong> {item.name}
+                  </span>
+                  <span className="market-tag">
+                    庫存 {item.qty.toLocaleString()} 股
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
         {lookingUp && (
           <div className="field-hint">
             <Loader2 size={11} className="spin" style={{ verticalAlign: -1, marginRight: 4 }} />
@@ -352,16 +450,59 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         )}
       </div>
 
-      <div className="field" ref={suggestionsRef}>
+      <div className="field" ref={nameFieldRef}>
         <label htmlFor="tx-name">股票名稱</label>
         <input
           id="tx-name"
           value={name}
           autoComplete="off"
-          placeholder="輸入中文名稱可模糊搜尋（如：台積）"
-          onChange={(e) => handleNameInput(e.target.value)}
+          placeholder={isSpotSell ? '點選或輸入名稱（將列出庫存持股）' : '輸入中文名稱可模糊搜尋（如：台積）'}
+          onFocus={() => {
+            if (isSpotSell) setShowNameHoldings(true)
+          }}
+          onClick={() => {
+            if (isSpotSell) setShowNameHoldings(true)
+          }}
+          onChange={(e) => {
+            if (isSpotSell) {
+              setName(e.target.value)
+              setShowNameHoldings(true)
+            } else {
+              handleNameInput(e.target.value)
+            }
+          }}
+          onBlur={() => {
+            setShowNameHoldings(false)
+          }}
         />
-        {suggestions !== null && (
+        {isSpotSell && showNameHoldings && (
+          <div className="suggestions" data-testid="name-holdings-dropdown">
+            {filteredNameHoldings.length === 0 ? (
+              <div className="suggestion-empty">
+                {activeHoldings.length === 0 ? '目前帳戶無持股' : '庫存中無匹配股票'}
+              </div>
+            ) : (
+              filteredNameHoldings.map((item) => (
+                <div
+                  key={item.key}
+                  className="suggestion-item"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    pickHolding(item)
+                  }}
+                >
+                  <span>
+                    <strong>{item.ticker}</strong> {item.name}
+                  </span>
+                  <span className="market-tag">
+                    庫存 {item.qty.toLocaleString()} 股
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        {!isSpotSell && suggestions !== null && (
           <div className="suggestions">
             {suggestions.length === 0 ? (
               <div className="suggestion-empty">
@@ -373,7 +514,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 <div
                   key={`${item.market}:${item.symbol}`}
                   className="suggestion-item"
-                  onClick={() => pickSuggestion(item)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    pickSuggestion(item)
+                  }}
                 >
                   <span>
                     {item.name}（{item.symbol}）
