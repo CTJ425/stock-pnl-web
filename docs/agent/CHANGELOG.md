@@ -2,24 +2,18 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
-### 0.9.26-dev.3（2026-09-01）— 個股籌碼分析快取持久化與重複執行根因修復
+### 0.9.26（2026-09-01）— 個股籌碼報表持久化、Session 快取加速、盤中日 K 過濾與交易性質預設現股
 
 - 💾 **即時運算自動落盤快取**（`stock-report/index.ts`）— 過去 `handleGenerate`（即點即產端點）產出報表後僅回傳 JSON，未寫入 Storage，導致非夜間批次範圍個股每次切換皆需重新調用 Edge Function 運算。現修正為產出後自動將公開籌碼報表（`holding: null`）寫入 Storage `{series.dataYmd}/{ticker}.json`，當日後續查詢直接命中 Storage-first，大幅減少 Edge Function 運算開銷。
 - ⚡ **前端 Session 記憶體快取與 SWR 機制**（`reportProxy.ts`）— 由於 `reportsBucket.ts` 使用 `no-store` 防止瀏覽器快取舊資料，導致同工作階段頻繁切換個股時反覆發送 Storage 網路請求。於 `reportProxy.ts` 引入輕量 Session In-Memory Cache（報表 5 分鐘 TTL、Manifest 1 分鐘 TTL），切換個股達毫秒級秒開；使用者點擊「重新整理」按鈕時則傳入 `forceRefresh: true` 繞過快取強制重抓。
-- 🧪 **測試覆蓋** — `reportProxy.test.ts` 新增記憶體快取命中、`forceRefresh: true` 強制重抓、`generateReport` 回寫快取以及 `clearReportCache` 等單元測試；`StockDetailPage.test.tsx` 34 項測試全數通過；全套 94 檔測試檔案、1457 個測試 100% 通過。
-
-### 0.9.26-dev.2（2026-09-01）— 修復 Yahoo 盤中未結算日 K Bar 提早洩漏至技術面與成交量表格 (BUG-042)
-
 - 🐛 **剔除盤中未結算即時 Bar**（BUG-042）— `twDaily.ts` 新增 `isTwMarketClosed()` 判斷；`extractDaily()` 在台北時間 13:30 收盤前，會主動過濾 Yahoo Finance 附帶的當日盤中即時滾動 Bar。避免使用者在盤中開啟個股頁面時，將未定型的盤中即時價與半截成交量（例如開盤一小時的 1.5 萬張）誤當作當日日 K 棒儲存並顯示在「每日成交量」表格中。
 - 🛡️ **未收盤寫入自癒防禦** — `syncDaily` 在比對 `existing.lastDate >= targetDate` 時，新增收盤狀態與寫入時點檢查：若現有檔案是在當天 13:30 前過早產生的（帶有盤中半截量），收盤後會強制重新向 Yahoo 抓取完整收盤日 K 棒並覆蓋，徹底修復快取提早鎖定導致收盤後未更新的問題。
-- 🧪 **測試覆蓋** — `twDaily.test.ts` 新增 `isTwMarketClosed` 盤中與收盤時段判斷、`extractDaily` 盤中（10:50）過濾與盤後（13:35）保留等測試用例，全套 94 檔測試檔案、1456 個測試 100% 通過。
-
-### 0.9.26-dev.1（2026-09-01）— 新增交易交易性質預設現股、賣出時持股快速選單
-
 - 🎯 **交易性質預設與選項優化** — 在新增交易表單中，移除台股「未指定」選項，預設值直接設為「現股」（`SPOT`），符合絕大多數日常交易情境，並簡化使用者操作步驟。
 - 📦 **賣出持股自動快選** — 交易類型切換為「賣出」且交易性質為現股（`SPOT`）時，點選或聚焦「股票代號」與「股票名稱」欄位會自動列出當前工作區內持有的有效股票清單（含代號、名稱與庫存股數），點選即可一鍵帶入代號、名稱並自動套用證交稅率。
 - ⚡ **非現股交易不受限** — 交易性質切換為非現股（如「當沖」或「融資/融券」）時，不強制顯示持股選單，維持自由輸入與代碼反查／模糊搜尋，方便先賣後買或信用交易記帳。
-- 🧪 **測試覆蓋** — 新增 `TransactionForm.features.test.tsx` 鎖定預設性質與賣出庫存快選互動，全套 94 檔測試檔案、1452 個測試全數通過，`npx tsc --noEmit` exit 0。
+- 📚 **文件與排程盤點更新** — 全面校對並同步過期文件與環境設定：更新 `GEMINI.md` 與 `docs/CLAUDE-tw.md` 之 Supabase PROD 專案參照至現行 `hrilemueiqyaoiwnkeuu`；同步 `README.md`、`TASK.md` 與後台 `MechanismGuide.tsx` 之排程總覽至 6 大 pg_cron 排程（補入 `backup-daily` 備份排程）；更新 `SPEC.md` 前端技術棧至 React 19。
+- 🧪 **測試覆蓋** — 全套 94 檔測試檔案、1457 個測試 100% 通過；`npm run typecheck:edge`、`npx tsc --noEmit` 與 `npm run build` 均 exit 0。
+
 
 ### 0.9.25（2026-09-01）— 逐批未實現損益、當沖稅金拆分、交易性質欄位
 

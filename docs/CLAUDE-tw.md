@@ -68,8 +68,9 @@
 
 | 環境 | 分支 | Supabase |
 | ---- | ---- | ---- |
-| PROD (正式) | `main` | 雲端 `kxnxadaghidwumqsqneu` |
+| PROD (正式) | `main` | 雲端 **`hrilemueiqyaoiwnkeuu`**（專案「Stock-Pnl-Web」） |
 | DEV (測試) | `dev` | 自建 Docker `https://korq9tvdz0jd7yblr72p.ivan.lab`（compose 位於 `/root/container/supabase/stock-pnl-web-dev`） |
+| DEV (雲端) | `dev` | 雲端 **`zyebvayngwrqzoaicbwd`**（專案「Stock-Pnl-Web-Dev」） |
 
 - **務必先 commit 至 `dev`**；在 DEV 環境驗證無誤後才合併至 `main`。`main` 的 push 會自動部署前端。
 - 除非使用者要求，否則**切勿**部署 / 變更 Supabase 環境。正式環境 Edge 部署僅限在 `main` 分支且收到明確指令。

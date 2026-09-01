@@ -20,15 +20,15 @@ describe('MechanismGuide', () => {
 
     expect(screen.getByText('收合說明')).toBeTruthy()
     expect(screen.getByText('資料源探針運作週期（8 大來源）')).toBeTruthy()
-    expect(screen.getByText('pg_cron 定時排程與兜底備援（5 大排程）')).toBeTruthy()
+    expect(screen.getByText('pg_cron 定時排程與兜底備援（6 大排程）')).toBeTruthy()
 
     // 驗證探針來源都在表中
     for (const id of ['bfi82u', 't86', 'bwibbu', 'margin', 'borrow', 'mops_revenue', 'mops_profit']) {
       expect(screen.getByText(id)).toBeTruthy()
     }
 
-    // 驗證 5 大排程都在表中
-    for (const job of ['source-probe', 'macro-daily', 'fx-daily', 'market-data-daily', 'history-daily']) {
+    // 驗證 6 大排程都在表中
+    for (const job of ['source-probe', 'macro-daily', 'fx-daily', 'market-data-daily', 'history-daily', 'backup-daily']) {
       expect(screen.getAllByText(job).length).toBeGreaterThan(0)
     }
   })

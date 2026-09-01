@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.26-dev.3**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.26**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -91,11 +91,12 @@
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫），`app_settings` 僅 `app_metadata.role = 'admin'` 的帳號可寫。
      - **Edge Functions (Deno)**：`stock-price` 批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價；`stock-report` 產出盤後籌碼、技術面、基本面、新聞、匯率與總經資料。兩者皆繞過瀏覽器 CORS 限制。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
-     - **精簡 5 大 pg_cron 排程與主動探針巡邏**：
+     - **精簡 6 大 pg_cron 排程與主動探針巡邏**：
        - `source-probe`：每 5 分鐘主動巡邏 8 大資料源，命中即抓，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
        - 精準時窗優化：`BWIBBU` 估值探針縮窄至 `17:00–18:30`；`BFI82U` 支援雙時窗（`15:00–16:30` 與 `19:30–20:15` 盤後鉅額與綜合帳戶結算）；`BORROW` 借券探針調至 `21:00–23:30`。
        - `macro-daily`、`fx-daily`、`market-data-daily`、`history-daily` 定時維護非日頻數據與歷程。
-   - **AI 端點（使用者自備）**：AI 分析由瀏覽器直連 Google Gemini 或 OpenAI 相容端點（Ollama / vLLM 等），專案不內建金鑰、不代付費用。
+       - `backup-daily`：每日凌晨 02:00 (Asia/Taipei) 自動備份全站使用者交易紀錄至 Storage。
+     - **AI 端點（使用者自備）**：AI 分析由瀏覽器直連 Google Gemini 或 OpenAI 相容端點（Ollama / vLLM 等），專案不內建金鑰、不代付費用。
 
 ### 系統架構圖 (System Architecture)
 

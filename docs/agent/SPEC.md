@@ -13,7 +13,7 @@
 
 ## 🛠️Technology Stack
 
-- **Frontend**: React 18, TypeScript, Vite, TailwindCSS / Custom CSS
+- **Frontend**: React 19, TypeScript, Vite, Vanilla CSS / Custom CSS Variables
 - **Backend / Database**: Supabase (PostgreSQL, Row Level Security, Edge Functions)
 - **Deployment**: static hosting (SPA static bundle) + Supabase Edge Functions
 - **State & Storage**:
