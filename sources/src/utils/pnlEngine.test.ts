@@ -571,3 +571,47 @@ describe('splitFeeTax — 匯出用的費用拆分（Task 137 §C）', () => {
     expect(splitFeeTax({ tx_type: 'SELL', market: 'US', ticker: 'AAPL', price: 180, qty: 10, fee_tax: 1 })).toEqual({ fee: 1, tax: 0 })
   })
 })
+
+describe('inferTxFeeRate — 歷史紀錄手續費率自動推導', () => {
+  it('00685L 牌告 0.1425% (459元) 自動推導為 0.001425 並正確估算未實現損益 -28,295', () => {
+    const ledger = computeLedger([
+      tx({
+        date: '2026-06-23',
+        market: 'TPE',
+        ticker: '00685L',
+        name: '群益臺灣加權正2',
+        type: 'BUY',
+        price: 13.44,
+        qty: 24000,
+        fee: 459, // 歷史交易無 fee_rate 欄位
+      }),
+    ])
+
+    const h = ledger.holdings[0]
+    expect(h.openLots[0].feeRate).toBe(0.001425)
+
+    // 全域工作區設為 3 折 (0.0004275)，但 00685L 應優先使用推導出的 0.001425 牌告費率
+    const unrealized = estimateUnrealized(h, 12.31, 0.0004275)
+    expect(unrealized).toBe(-28295)
+    const roi = unrealized / h.cost
+    expect(roi).toBeCloseTo(-0.087595, 4) // -8.76%
+  })
+
+  it('3 折交易 (137元) 自動推導為 0.0004275', () => {
+    const ledger = computeLedger([
+      tx({
+        date: '2026-06-23',
+        market: 'TPE',
+        ticker: '00685L',
+        type: 'BUY',
+        price: 13.44,
+        qty: 24000,
+        fee: 137,
+      }),
+    ])
+
+    const h = ledger.holdings[0]
+    expect(h.openLots[0].feeRate).toBe(0.0004275)
+  })
+})
+
