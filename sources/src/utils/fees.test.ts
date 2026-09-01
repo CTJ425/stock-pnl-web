@@ -85,6 +85,8 @@ function holdingOf(input: Partial<Holding> & Pick<Holding, 'ticker' | 'market' |
     realized: 0,
     avgCost: input.cost / input.qty,
     rawAvgCost: input.cost / input.qty,
+    // breakEvenPrice 不看未沖銷批次；合成部位給空陣列即可
+    openLots: [],
     ...input,
   }
 }
@@ -194,5 +196,69 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
   it('美股不納入批次重算', () => {
     const us = txOf({ market: 'US', ticker: 'AAPL', type: 'BUY', price: 100, qty: 10, fee: 999 })
     expect(proposeFeeCorrections([us], opts)).toHaveLength(0)
+  })
+})
+
+describe('proposeFeeCorrections 不覆蓋當沖賣出（Task 137）', () => {
+  // Ronlin 匯出檔的實際費率（3 折）
+  const opts = { feeRate: 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
+
+  it('當沖賣出不提案，避免被改成兩倍證交稅', () => {
+    // 2344 2026-08-18：362 = 減半稅 282 + 手續費 80；一般稅率會算成 645（多課 283）
+    const a = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 362 })
+    // 2303 2026-08-24：237 = 減半稅 185 + 手續費 52；一般稅率會算成 422
+    const b = txOf({ market: 'TPE', ticker: '2303', type: 'SELL', price: 123.5, qty: 1000, fee: 237 })
+    expect(proposeFeeCorrections([a, b], opts)).toEqual([])
+  })
+
+  it('當日進出但課一般稅率者不算當沖，記錯仍要提案', () => {
+    // 2330 2026-05-20 當日進出，413 = 一般稅 362 + 手續費 51 —— 只用「同日買賣」判斷會誤殺
+    const correct = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 2415, qty: 50, fee: 413 })
+    expect(proposeFeeCorrections([correct], opts)).toEqual([])
+
+    const wrong = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 2415, qty: 50, fee: 400 })
+    const out = proposeFeeCorrections([wrong], opts)
+    expect(out).toHaveLength(1)
+    expect(out[0].newFee).toBe(413)
+  })
+
+  it('ETF 賣出漏記費用仍會提案，不因金額低於一般稅而被當成當沖', () => {
+    // 0050 正確值 147。記成 0 時金額確實低於一般稅 310，
+    // 但殘差對不上手續費，所以不是當沖 —— 用固定 0.003 當門檻會把每一筆 ETF 都放過
+    const zero = txOf({ market: 'TPE', ticker: '0050', type: 'SELL', price: 103.5, qty: 1000, fee: 0 })
+    const out = proposeFeeCorrections([zero], opts)
+    expect(out).toHaveLength(1)
+    expect(out[0].newFee).toBe(147)
+  })
+
+  it('買進不套用當沖判定', () => {
+    const buy = txOf({ market: 'TPE', ticker: '2344', type: 'BUY', price: 187.5, qty: 1000, fee: 10 })
+    const out = proposeFeeCorrections([buy], opts)
+    expect(out).toHaveLength(1)
+    expect(out[0].newFee).toBe(80)
+  })
+})
+
+describe('breakEvenPrice 零成本持股（BUG-038）', () => {
+  it('成本 0（全數來自股票股利）仍算得出覆蓋手續費與證交稅的最低價', () => {
+    const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 1000, cost: 0 })
+    const p = breakEvenPrice(h, DEFAULT_FEE_RATE, 20)
+    expect(p).toBe(0.02)
+    const fee = calculateFee({
+      market: 'TPE', txType: 'SELL', price: p, qty: 1000,
+      feeRate: DEFAULT_FEE_RATE, ticker: '0050', minFee: 20,
+    })
+    expect(p * 1000 - fee).toBeGreaterThanOrEqual(0)
+    // 再低一檔就不保本
+    const lowerFee = calculateFee({
+      market: 'TPE', txType: 'SELL', price: 0.01, qty: 1000,
+      feeRate: DEFAULT_FEE_RATE, ticker: '0050', minFee: 20,
+    })
+    expect(0.01 * 1000 - lowerFee).toBeLessThan(0)
+  })
+
+  it('沒有部位（qty 0）仍回傳 0', () => {
+    const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 0, cost: 0 })
+    expect(breakEvenPrice(h, DEFAULT_FEE_RATE, 20)).toBe(0)
   })
 })

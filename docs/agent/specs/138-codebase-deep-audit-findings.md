@@ -83,3 +83,44 @@ Following the investigation into unrealized P&L lot-based rounding and day-tradi
 | Full liquidation then re-buy | Position cost has 0 residue before re-buy | `pnlEngine.test.ts` |
 | CSV `(1,500)` amount | Parsed as `-1500` | `csv.test.ts` |
 | Admin self-toggle | Prompts confirmation before execution | `AccountsSection.test.tsx` |
+
+---
+
+## Revision 2026-09-01 — two findings withdrawn after verification
+
+### §7 / BUG-040 (admin self-revocation) — **withdrawn, the premise is false**
+
+The finding says an admin "immediately revokes their admin status without a confirmation prompt".
+The revocation cannot happen. `handleAdminSetRole` in
+`sources/supabase/functions/stock-report/index.ts:3700-3702` refuses it server-side:
+
+```
+if (!makeAdmin && caller.data.user?.id === userId) {
+  return json({ error: '不能取消自己的管理員權限' }, 400)
+}
+```
+
+`setUserAdmin` in `sources/src/services/adminUsers.ts` unwraps that message out of the
+`FunctionsHttpError` body, and `AccountsSection` sends first and only repaints on success, so the
+switch does not move. The behaviour is already pinned by the existing test
+`sources/src/components/Admin/AccountsSection.test.tsx` — "後端拒絕時顯示它給的理由，且畫面不得改變".
+
+No code change. A confirmation modal in front of an action that always fails would be worse than
+what is there now. Close BUG-040 as invalid.
+
+### §5 / BUG-037 (accounting parentheses) — fixed, but **no user-visible change**
+
+`parseNumber` is module-private and has exactly three callers inside `parseTransactionsCsv`:
+`交易單價`, `交易股數` and `手續費 / 稅金`. All three reject a negative value:
+
+| Column | Guard | Before the fix | After the fix |
+| --- | --- | --- | --- |
+| price | `!Number.isFinite(price) \|\| price < 0` | `NaN` → rejected | `-500` → rejected |
+| qty | `!Number.isFinite(qty) \|\| qty <= 0` | `NaN` → rejected | `-1000` → rejected |
+| fee | `!Number.isFinite(feeTax) \|\| feeTax < 0` | `NaN` → rejected | `-1500` → rejected |
+
+The row is rejected with the same message either way, so no test can distinguish the two versions
+through the public API. The fix went in because the helper is now correct for any future caller,
+not because it repairs an observable defect. The tests added to `utils/csv.test.ts` are regression
+guards, not red-to-green tests — they passed before the change as well. Record BUG-037 as fixed
+with impact "none observable".

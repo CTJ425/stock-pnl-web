@@ -87,10 +87,15 @@ export function parseTxDate(value: string): string | null {
 }
 
 function parseNumber(value: string): number {
+  // Accounting negative form, e.g. "(1,000)", must be detected before stripping parens
+  const isParenNeg = /^\(.*\)$/.test(value.trim())
   // Tolerate possible currency symbols and thousandths in Google Sheets exports
-  const cleaned = value.replace(/(NT\$|US\$|\$|,|\s)/g, '')
+  const cleaned = value.replace(/(NT\$|US\$|\$|,|\s|\(|\))/g, '')
   if (cleaned === '') return NaN
-  return Number(cleaned)
+  const num = Number(cleaned)
+  // Negate the magnitude, not the parsed value: "(-500)" carries both markers and would
+  // otherwise flip to +500 and pass the `>= 0` column checks instead of being rejected.
+  return isParenNeg ? -Math.abs(num) : num
 }
 
 function parseTxType(value: string): TxType | null {

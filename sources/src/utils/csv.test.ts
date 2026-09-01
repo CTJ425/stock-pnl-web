@@ -151,3 +151,37 @@ describe('transactionsToCsv → parseTransactionsCsv 往返', () => {
     expect(result.rows).toHaveLength(1)
   })
 })
+
+describe('parseNumber 會計負數括號格式（BUG-037）', () => {
+  const head = '交易日期,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金'
+
+  it('括號金額視為負數，因此被三個數值欄位一致地拒絕，而不是變成 NaN', () => {
+    const csv = [head, '2024/01/10,TPE:2330,台積電,買入,500,1000,"(1,500)"'].join('\n')
+    const result = parseTransactionsCsv(csv)
+    expect(result.rows).toHaveLength(0)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].message).toContain('手續費')
+  })
+
+  it('括號單價同樣被拒絕', () => {
+    const csv = [head, '2024/01/10,TPE:2330,台積電,買入,"(500)",1000,712'].join('\n')
+    const result = parseTransactionsCsv(csv)
+    expect(result.rows).toHaveLength(0)
+    expect(result.errors[0].message).toContain('交易單價')
+  })
+
+  it('括號內已帶負號屬格式錯誤，不得被兩次取負變成正數', () => {
+    // "(-500)" 若先判括號再取負，會得到 +500 並通過 price >= 0 檢查，把錯誤資料靜靜收進來
+    const csv = [head, '2024/01/10,TPE:2330,台積電,買入,"(-500)",1000,712'].join('\n')
+    const result = parseTransactionsCsv(csv)
+    expect(result.rows).toHaveLength(0)
+    expect(result.errors[0].message).toContain('交易單價')
+  })
+
+  it('非括號的正常數值不受影響', () => {
+    const csv = [head, '2024/01/10,TPE:2330,台積電,買入,"NT$500.00","1,000","1,500"'].join('\n')
+    const result = parseTransactionsCsv(csv)
+    expect(result.errors).toHaveLength(0)
+    expect(result.rows[0].fee_tax).toBe(1500)
+  })
+})

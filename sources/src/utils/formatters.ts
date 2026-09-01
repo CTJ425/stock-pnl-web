@@ -41,8 +41,14 @@ export function roundPrice(value: number): number {
 }
 
 export function fmtPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return '—'
-  return `${(value * 100).toFixed(2)}%`
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
+  // Decimal half-up rounding, immune to the IEEE-754 trap (see roundPrice above).
+  // Round the magnitude, then reapply the sign: Math.round breaks ties toward +Infinity,
+  // so -1.005 would otherwise land on -1.00 while +1.005 lands on +1.01.
+  const scaled = value * 100
+  const sign = scaled < 0 ? -1 : 1
+  const pct = (sign * Math.round((Math.abs(scaled) + Number.EPSILON) * 100)) / 100
+  return `${pct.toFixed(2)}%`
 }
 
 /** Profit and loss amount: Positive values ​​are marked with a + sign (increases and decreases are not identified solely by color)*/
