@@ -8,6 +8,18 @@
 
 ## 🐛 Historical Bug Fixes
 
+### OPS-001 — Every cron job on both Supabase projects carried unsubstituted placeholders
+
+- **Where**: `cron.job` on cloud projects `hrilemueiqyaoiwnkeuu` (PROD) and `zyebvayngwrqzoaicbwd` (cloud DEV)
+- **What**: Both projects were recreated on 2026-08-31 from setup SQL whose placeholders were never substituted. All 12 jobs (6 per project) carried the literal `<PROJECT_REF>` in the target URL **and** the literal `<CRON_SECRET>` in the `x-cron-secret` header. Result: **zero successful runs from creation until 2026-09-01**. The probe, the nightly batch, the FX and macro syncs and the daily backup had never run once.
+- **Why it read as two separate faults**: the bad URL made `net.http_post` fail before queuing anything, so `cron.job_run_details.status` was `failed` and `net._http_response` was empty. Fixing the URL exposed the second fault underneath: the request now reached the Edge Function, which answered **401** because `x-cron-secret` did not match `CRON_SECRET`.
+- **Fix**: in-place `cron.alter_job(jobid, command := replace(command, ...))` for the URL; then a freshly generated 43-character secret written to both sides per project — `supabase secrets set CRON_SECRET=...` and the same value substituted into the cron commands. The secret value was never printed and never left the database or the CLI.
+- **Verification**: cron-side secret re-hashed with `sha256` and compared against the hash `supabase secrets list` reports — MATCH on both projects, 43 characters, one distinct value across all 6 jobs. End to end: `net._http_response` shows **401 at 13:30** (before) and **200 at 13:35** (after), and `cron.job_run_details` turned `succeeded`. No `source_probe_tick` row at 13:35 is correct — that time falls in no source's `DAILY_WINDOWS` slot.
+- **Follow-up**: after any project recreation, check both placeholders. The query is in `CLAUDE.md` § Branches & envs. Never select the command text itself.
+- **Fixed**: 2026-09-01 13:35:00 Asia/Taipei
+
+---
+
 ### BUG-039 — Full position liquidation leaves floating-point epsilon residue in `pos.cost`
 
 - **Where**: `sources/src/utils/pnlEngine.ts:284-293`

@@ -93,6 +93,35 @@ what it runs on the expensive model for. The four roles below are delegation tar
 - This routes **delegation only**. The main session's model comes from `/model`, not from
   this file.
 
+### Dispatch discipline — measured on 2026-09-01, all seven cost real rework
+
+- **The Verify line is `npm run build`, never `npx tsc --noEmit`.** The latter does not
+  type-check test files here, so three builders reported exit 0 while the build was red.
+- **`route:reviewer` has no Bash** (the local `reviewer` in `.claude/agents/` does). Asking
+  the scoped one to run a command earns five identical "verification gap" findings and
+  nothing else. **Paste the test output you already have into the brief.**
+- **Scribe composes nothing a human will read.** It runs on haiku; asked to turn notes into
+  prose it produced wrong file attributions, an invented API, and a change that never
+  happened — twice. Hand it verbatim text to paste. It keeps the file surgery, which is the
+  part that actually replaces main-session turns. Cost check: 1.4k tokens of verbatim Opus
+  output is ~$0.03, one sixth of a single main turn; one correction round-trip is five.
+- **At most two tracking files per scribe dispatch.** A seven-section brief drove it into
+  its 30-turn cap three times, then into a rate limit.
+- **Prove the brief before dispatching**: compile the failing test against the proposed
+  signature. A test you cannot type is a spec error — that is how `splitFeeTax` shipped
+  without the `ticker` it needs and cost three rounds.
+- **Validate any classification rule against real data before it enters a spec**, and record
+  the counts there. "Same-day buy and sell means 當沖" scored 12 false positives out of 14
+  on the two broker exports in `docs/`; catching that before dispatch saved a whole cycle.
+  A spec must also state the **negative** case — what the code may not do, and why.
+- **For money code the main session reads the diff itself.** Tests and reviewers missed both
+  of the silent-money defects here (a non-idempotent INSERT retry that would duplicate
+  transactions, and an optional `ticker` that would overtax every ETF threefold). Context
+  replay is the cost; for code that computes money it is worth paying, for bookkeeping it is
+  not.
+- **`cp` is aliased to `cp -i`.** Use `command cp -f`, and never background a command that
+  can block on a prompt — one did, for 33 minutes.
+
 ## Versioning
 
 No `v` prefix. `main` = `x.x.x`; `dev` unfinished = `x.x.x-dev.N`.
@@ -103,8 +132,25 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 
 | Env | Branch | Supabase |
 | ---- | ---- | ---- |
-| PROD | `main` | cloud `kxnxadaghidwumqsqneu` |
+| PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
 | DEV | `dev` | self-hosted `https://korq9tvdz0jd7yblr72p.ivan.lab` (compose under `/root/container/supabase/stock-pnl-web-dev`) |
+| DEV (cloud) | `dev` | **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` currently points at |
+
+**Both cloud projects were recreated on 2026-08-31.** The refs this file used to name —
+`kxnxadaghidwumqsqneu` and `cahmfrhacyvrrlsaatkm` — are **deleted**; any call against them
+returns `404 Resource has been removed`. `sources/.env` may still point at a dead one.
+
+**The recreation was done from setup SQL whose placeholders were never substituted.** Every
+`cron.job` on both projects carried the literal `<PROJECT_REF>` in its URL *and* the literal
+`<CRON_SECRET>` in its header, so every job failed from creation until 2026-09-01: the URL
+error killed it before `net.http_post` queued anything, and once that was fixed the Edge
+Function answered 401. After any project recreation, check both:
+
+```sql
+SELECT count(*) FILTER (WHERE command LIKE '%<PROJECT_REF>%')  AS bad_url,
+       count(*) FILTER (WHERE command LIKE '%''<CRON_SECRET>''%') AS bad_secret
+FROM   cron.job;   -- both must be 0; never select the command text itself
+```
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
