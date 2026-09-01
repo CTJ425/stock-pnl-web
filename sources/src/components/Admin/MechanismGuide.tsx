@@ -4,8 +4,7 @@
  * 供管理員清楚比較「探針主動偵測（命中即抓取）」與「定時排程（總經、匯率與兜底備援）」的運作週期與分工。
  */
 import { useState } from 'react'
-import { ChevronDown, Cpu, HelpCircle, Lightbulb, Radio, Timer } from 'lucide-react'
-import { AppIcon } from '../Common/AppIcon'
+import { ChevronDown, Cpu, HelpCircle, Radio, Timer } from 'lucide-react'
 
 export interface ProbeSourceConfig {
   id: string
@@ -290,7 +289,7 @@ export function MechanismGuide() {
           </div>
 
           <div className="ast-note" style={{ marginTop: 12 }}>
-            <AppIcon icon={Lightbulb} size="sm" className="icon-inline" /> <strong>架構優化提示</strong>：原固定班表 <code>stock-report-nightly</code>（抓籌碼）與{' '}
+            💡 <strong>架構優化提示</strong>：原固定班表 <code>stock-report-nightly</code>（抓籌碼）與{' '}
             <code>market-daily</code>（抓大盤）已於 0.7.13 退場，由探針命中時自帶觸發取代，免除盲跑浪費。
           </div>
         </div>
