@@ -4,7 +4,7 @@
  * The "Profit and Loss/Income and Expenses" column is the same as column H in the GAS version: buy = -(unit price × number of shares + expenses), sell = unit price × number of shares - expenses.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Download, NotebookPen, Pencil, Search, Trash2, Upload, X } from 'lucide-react'
+import { Calculator, Download, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -16,6 +16,7 @@ import { SortableTh, nextSort } from '../Common/SortableTh'
 import { Modal } from '../Common/Modal'
 import { CsvImportModal } from './CsvImportModal'
 import { RecalcFeesModal } from './RecalcFeesModal'
+import { StockSplitModal } from './StockSplitModal'
 import { TransactionForm } from './TransactionForm'
 import { filterTransactions } from './txSearch'
 
@@ -96,6 +97,7 @@ export function TransactionsPage() {
   } = useWorkspace()
   const [showImport, setShowImport] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
+  const [showSplit, setShowSplit] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
@@ -245,6 +247,15 @@ export function TransactionsPage() {
         <div className="spacer" />
         <button
           className="btn"
+          title="股票分割或反向分割（併股）換算"
+          onClick={() => setShowSplit(true)}
+          disabled={transactions.every((tx) => tx.tx_type !== 'BUY')}
+        >
+          <Scissors size={15} />
+          股票分割換算
+        </button>
+        <button
+          className="btn"
           title="依目前費率重算所有台股交易的手續費"
           onClick={() => setShowRecalc(true)}
           disabled={transactions.length === 0}
@@ -379,6 +390,13 @@ export function TransactionsPage() {
       )}
 
       {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}
+
+      {showSplit && (
+        <StockSplitModal
+          onClose={() => setShowSplit(false)}
+          onSuccess={(msg) => setNotice(msg)}
+        />
+      )}
 
       {editTx && (
         <Modal title="編輯交易紀錄" onClose={() => setEditTx(null)} disableBackdropClose>

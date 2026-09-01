@@ -42,7 +42,7 @@ function tx(p: Partial<Transaction>): Transaction {
 const holdingsOf = (txs: Transaction[]) => computeLedger(txs).holdings
 
 describe('buildHoldingRows', () => {
-  it('有現價時算出市值、未實現淨損益與報酬率', () => {
+  it('有現價時算出市值、參考淨值 (netMktVal)、未實現淨損益與報酬率', () => {
     const holdings = holdingsOf([tx({ price: 100, qty: 1000, fee_tax: 142 })])
     const [row] = buildHoldingRows(holdings, { 'TPE:2330': quote(120) }, 0.001425)
     expect(row.mktVal).toBe(120000)
@@ -51,13 +51,18 @@ describe('buildHoldingRows', () => {
     expect(row.unrealized!).toBeLessThan(row.rawUnrealized!)
     expect(row.roi).toBeCloseTo(row.unrealized! / row.holding.cost, 10)
     expect(row.priceStale).toBe(false)
+    // 參考淨值 = cost + unrealized = mktVal - sellFee - sellTax
+    expect(row.netMktVal).not.toBeNull()
+    expect(row.netMktVal).toBe(row.holding.cost + row.unrealized!)
+    expect(row.netMktVal!).toBeLessThan(row.mktVal!)
   })
 
-  it('無現價時市值 / 未實現 / 報酬率皆為 null（不以 0 冒充）', () => {
+  it('無現價時市值 / 參考淨值 / 未實現 / 報酬率皆為 null（不以 0 冒充）', () => {
     const holdings = holdingsOf([tx({})])
     const [row] = buildHoldingRows(holdings, {}, 0.001425)
     expect(row.price).toBeNull()
     expect(row.mktVal).toBeNull()
+    expect(row.netMktVal).toBeNull()
     expect(row.unrealized).toBeNull()
     expect(row.rawUnrealized).toBeNull()
     expect(row.roi).toBeNull()

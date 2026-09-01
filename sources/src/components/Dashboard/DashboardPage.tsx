@@ -35,7 +35,8 @@ const HELP = {
   avgCost:
     '每股平均買進的價格，含買進手續費，也就是每股實際付出的錢。下方「未含費」是不含手續費的價格。',
   cost: '你現在還投在這檔股票上的錢，含買進手續費。已經賣掉的部分不算在內。',
-  breakEven: '賣在這個價格剛好不賺不賠（手續費和稅已經算進去）。賣得比它高才真的有賺。',
+  breakEven:
+    '賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）。賣得比它高才真的有賺。',
   mktVal: '這些股票現在值多少錢。抓不到股價時顯示「—」。',
   unrealized:
     '如果現在全部賣掉，大概會賺或賠多少。「淨」代表手續費和稅都已經算進去（美股不含賣出費用）。下方「未含費」是不扣任何費用的價差，會比實際好看一點。',
@@ -164,11 +165,27 @@ function HoldingsTable({
               </td>
               <td
                 className={`num ${price !== null ? pnlClass(price - breakEven) : ''}`}
-                title="賣在這個價格剛好不賺不賠"
+                title="賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）"
               >
                 {fmtPrice(breakEven, currency)}
               </td>
-              <td className="num">{mktVal === null ? '—' : fmtMoney(mktVal, currency)}</td>
+              <td className="num">
+                {mktVal === null ? (
+                  '—'
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600 }}>{fmtMoney(mktVal, currency)}</div>
+                    {row.netMktVal !== null && (
+                      <div
+                        style={{ fontSize: 11, opacity: 0.65, color: 'var(--ink-muted)' }}
+                        title="若以現價全數賣出，扣除手續費與證交稅後的預估實收金額"
+                      >
+                        淨收 {fmtMoney(row.netMktVal, currency)}
+                      </div>
+                    )}
+                  </>
+                )}
+              </td>
               <td className={`num ${pnlClass(unrealized)}`}>
                 {unrealized === null ? (
                   '—'

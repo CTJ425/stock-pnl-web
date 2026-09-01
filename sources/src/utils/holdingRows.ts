@@ -33,6 +33,11 @@ export interface HoldingRow {
    */
   trial: boolean
   mktVal: number | null
+  /**
+   * Reference net market value (estimated net proceeds): mktVal − sellFee − sellTax = cost + unrealized.
+   * Null if price is missing or unrealized is null.
+   */
+  netMktVal: number | null
   unrealized: number | null
   /** Pure price difference before any fees: market value − cost before fees, isomorphic to rawRealized annual return*/
   rawUnrealized: number | null
@@ -56,6 +61,7 @@ export function buildHoldingRows(
     const minFee =
       h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
     const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
+    const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
     const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
     // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
     const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
@@ -70,6 +76,7 @@ export function buildHoldingRows(
       closed: isClosed(quote),
       trial: quote?.trial ?? false,
       mktVal,
+      netMktVal,
       unrealized,
       rawUnrealized,
       roi,

@@ -187,6 +187,10 @@ export function QuoteTab({
   // Both derived from the quote already on screen, so they cannot disagree with it (see the file header
   // on why 損益/報酬率 below are the opposite: taken verbatim, never recomputed).
   const marketValue = holding ? holding.qty * quote.price : null
+  const netMktVal =
+    holding && holding.unrealized !== null
+      ? holding.qty * holding.avgCost + holding.unrealized
+      : null
   const todayPnl =
     holding && quote.prevClose !== null ? holding.qty * (quote.price - quote.prevClose) : null
 
@@ -328,7 +332,16 @@ export function QuoteTab({
                 </div>
                 <div className="holding-cell">
                   <div className="k">市值</div>
-                  <div className="v">{fmtInt(marketValue)}</div>
+                  <div
+                    className="v"
+                    title={
+                      netMktVal !== null
+                        ? `若以現價全數賣出，扣除手續費與證交稅後的預估實收金額：約 NT$ ${fmtInt(netMktVal)}`
+                        : undefined
+                    }
+                  >
+                    {fmtInt(marketValue)}
+                  </div>
                 </div>
                 <div className="holding-cell">
                   <div className="k">今日</div>
