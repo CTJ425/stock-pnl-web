@@ -45,9 +45,16 @@ ORDER BY taipei_time DESC, source;
 SELECT count(*) FROM source_probe_tick WHERE source = '<id>';
 ```
 
-Run them against DEV with `docker exec stock-pnl-web-dev-db-1 psql -U postgres -d postgres`.
-Do **not** reach for `supabase db query --linked` — it resolves against the current working
-directory and has silently written to PROD before (see `supabase-ops`).
+Run them against DEV with `supabase db query --linked`, from `sources/`.
+
+**Corrected 2026-09-01.** This section used to say `docker exec stock-pnl-web-dev-db-1 psql …`
+and to avoid `db query --linked`. That is wrong now: DEV is the cloud project
+`zyebvayngwrqzoaicbwd` (`sources/.env`'s `VITE_SUPABASE_URL`), and the docker container is an
+unrelated local stack that answers every probe query plausibly while telling you nothing about
+DEV. The `--linked` cwd trap is real — it resolves against the current working directory and has
+silently written to PROD before (see `supabase-ops`) — so defend against it the way `supabase-ops`
+prescribes: `cd sources/` first, and put an identity value in the same query, e.g.
+`SELECT (SELECT count(*) FROM cron.job) AS identity_6, …` (6 on DEV).
 
 ## A source that never fires: check both halves of the dispatch path
 
@@ -90,9 +97,12 @@ verified inside its own `DAILY_WINDOWS` slot, on a weekday. Plan the check for t
 
 ## Deploying a probe fix
 
-- **DEV**: volume copy into `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/`
-  then `docker compose up -d --force-recreate functions` from the compose dir. `cp` is interactive
-  here — use `command cp -f`, and re-run `diff -rq` afterwards to prove the copy landed.
+- **DEV**: `supabase functions deploy stock-report --project-ref zyebvayngwrqzoaicbwd --no-verify-jwt`
+  from `sources/`. **Corrected 2026-09-01** — this used to be a volume copy into
+  `/root/container/supabase/stock-pnl-web-dev/volumes/functions/stock-report/` plus a container
+  recreate. DEV Edge now runs in the cloud (`functions list` shows 3 ACTIVE there), so the volume
+  copy updates nothing the app calls. Prove the deploy landed by re-reading `ezbr_sha256` from
+  `functions list`, not by the version number (see `supabase-ops`).
 - **PROD**: `supabase functions deploy stock-report --project-ref <ref> --no-verify-jwt` from
   `sources/`. Confirm with the `ezbr_sha256` change from `functions list`, not the version number.
 - `git push` does **not** deploy an Edge Function.

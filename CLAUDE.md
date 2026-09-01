@@ -159,7 +159,12 @@ recurrences. Details and the two checks that still need a human eye: **`supabase
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
-- DEV Edge: **volume copy** into `volumes/functions/` + recreate functions container — not cloud `functions deploy`.
+- **DEV is cloud, not local docker** (verified 2026-09-01). `sources/.env` points at
+  `https://zyebvayngwrqzoaicbwd.supabase.co`; DEV Edge runs there (`functions list` shows 3 ACTIVE).
+  DEV DDL goes through `supabase db query --linked` from `sources/`, always with an identity value
+  in the same query (`(SELECT count(*) FROM cron.job)` = 6 on DEV). A local docker stack
+  (`stock-pnl-web-dev-db-1`) still runs on this host and answers every check plausibly, but the app
+  never talks to it — a DDL applied there has no effect on DEV.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
 
 ## This repo is public — where raw logs may go

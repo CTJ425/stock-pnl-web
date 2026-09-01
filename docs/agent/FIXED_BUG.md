@@ -6,6 +6,29 @@
 
 ---
 
+### BUG-044: `transactions.fee_rate` was in schema.sql but never applied to the real DEV database
+- **Status**: ✅ FIXED — 2026-09-01
+- **Found**: 2026-09-01, main-session diff review of 0.9.27-dev.1
+- **Impact**: The 0.9.27 fee rate feature silently degraded to the legacy write path. Combined with BUG-045, every write also cleared `tx_nature`.
+- **Root cause**: `schema.sql` carried the DDL but it was never run against the database the app actually uses — the cloud project `zyebvayngwrqzoaicbwd` named in `sources/.env`'s `VITE_SUPABASE_URL`. A local docker Supabase stack (`stock-pnl-web-dev-db-1`) also runs on this host and answers every check plausibly, but it is unrelated to the deployed app; an earlier fix attempt was applied there by mistake and had no effect on DEV.
+- **Fix**: Ran the `fee_rate` DDL block against `zyebvayngwrqzoaicbwd` with `supabase db query --linked`, then `NOTIFY pgrst, 'reload schema'`. `SELECT * FROM verify_setup()` returned 10/10 PASS and `assert_setup_ok()` returned `ok`.
+- **Follow-up**: PROD still needs the same DDL — tracked as BUG-044-P in `BUG_FIX.md`.
+
+### BUG-045: legacy-schema degrade cleared `tx_nature` when only `fee_rate` was missing
+- **Status**: ✅ FIXED — 2026-09-01, commit `46985f6`
+- **Found**: 2026-09-01, main-session diff review of 0.9.27-dev.1
+- **Impact**: Money. On a database with `tx_nature` but without `fee_rate` — the PROD state — `addTransactions` and `updateTransaction` wrote `tx_nature = NULL`. `splitFeeTax` then lost the declared day-trade branch and split the securities tax wrongly.
+- **Root cause**: `dataProvider.ts` `withoutNewColumns` stripped both new columns for any missing-column error, and the retry selected `TX_COLUMNS_LEGACY`, which holds neither. Regression against 0.9.26, which stripped `tx_nature` only.
+- **Fix**: `missingTxColumn()` reads the column name out of the error message; `withTxColumnDegrade()` drops only that column, keeping the other. Bounded at 3 attempts, gated on 42703/PGRST204 at every step so a non-idempotent INSERT is never blindly retried. Covered by tests T4, T4b, T4c, T4d and T6.
+
+### BUG-046: `inferFeeRate` returned an inflated rate when the workspace minimum fee was customized
+- **Status**: ✅ FIXED — 2026-09-01, commit `46985f6`
+- **Found**: 2026-09-01, main-session diff review of 0.9.27-dev.1
+- **Impact**: Money. Measured: odd-lot minimum fee 5, gross 1,000, `fee_tax` 5 inferred 0.005 — 3.5x the statutory rate. Editing the quantity to 1000 shares then computed a fee of 500 against a correct 142. The value passed the `fee_rate < 1` constraint and was written to the database.
+- **Root cause**: `fees.ts` defaulted the `minFee` parameter to 1 and the only caller never passed it, so the clamp test compared against the literals 20 and 1. The ratio cap was 0.05, roughly 35x the statutory 0.001425.
+- **Fix**: `inferFeeRate` now takes a required `minFees: { whole, odd }` — no default, so it cannot become dead code again — and caps the ratio at `DEFAULT_FEE_RATE`.
+- **Note**: A second minimum-fee check added during implementation was removed after `route:reviewer` found it discarded recoverable rates: an **unclamped** fee can equal a minimum fee by coincidence, because `calculateFee` clamps only when `minFee > fee`. Measured: gross 100,000, `fee_tax` 15, minimum fee 15, real rate `0.00015` forced to `0.001425`. A clamp always inflates `fee / gross`, so the ratio cap covers the clamp case on its own.
+
 ## 🐛 Historical Bug Fixes
 
 ### BUG-042 — Yahoo intraday rolling daily bar leaks into technical series before market close
