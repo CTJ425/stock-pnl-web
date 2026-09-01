@@ -8,8 +8,9 @@
  *    - The transaction type is "Buy/Sell" in Chinese → converted to 'BUY' / 'SELL'
  * 2. CSV exported by this application (one more column "Market", code without prefix)
  */
-import type { Market, NewTransaction, Transaction, TxType } from '../types/models'
-import { TX_TYPE_LABEL } from '../types/models'
+import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../types/models'
+import { TX_NATURE_LABEL, TX_TYPE_LABEL } from '../types/models'
+import { splitFeeTax } from './pnlEngine'
 
 export interface CsvRowError {
   /** Column number in the original file (1-based, including header)*/
@@ -105,6 +106,17 @@ function parseTxType(value: string): TxType | null {
   return null
 }
 
+/** Accepts the Chinese label and the code (case-insensitively); empty stays absent, not an error*/
+function parseTxNature(value: string): TxNature | null {
+  const trimmed = value.trim()
+  if (trimmed === '現股') return 'SPOT'
+  if (trimmed === '當沖') return 'DAY_TRADE'
+  if (trimmed === '融資') return 'MARGIN'
+  const v = trimmed.toUpperCase()
+  if (v === 'SPOT' || v === 'DAY_TRADE' || v === 'MARGIN') return v
+  return null
+}
+
 /** Taiwan stock code format (3-6 digits, with an English suffix) for heuristic judgment when there is no market information*/
 const TW_TICKER_RE = /^\d{3,6}[A-Z]?$/
 
@@ -160,15 +172,24 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
     }
   }
 
+  // Split fee/tax columns must match exactly: `'手續費'.includes('手續費')` is true, so the
+  // legacy `includes()` match below would otherwise swallow the split column as the combined total.
+  const feeSplitCol = header.indexOf('手續費')
+  const taxSplitCol = header.indexOf('證交稅')
+  const splitMode = feeSplitCol >= 0 && taxSplitCol >= 0
+
   const col = {
     date: header.indexOf('交易日期'),
     market: header.indexOf('市場'),
     ticker: header.indexOf('股票代號'),
     name: header.indexOf('股票名稱'),
     type: header.indexOf('交易類型'),
+    nature: header.indexOf('交易性質'),
     price: header.indexOf('交易單價'),
     qty: header.indexOf('交易股數'),
-    fee: header.findIndex((h) => h.includes('手續費')),
+    fee: splitMode ? -1 : header.findIndex((h) => h.includes('手續費')),
+    feeSplit: feeSplitCol,
+    taxSplit: taxSplitCol,
   }
   if (col.date < 0 || col.ticker < 0 || col.type < 0 || col.price < 0 || col.qty < 0) {
     result.errors.push({
@@ -218,12 +239,47 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
     }
 
     let feeTax = 0
-    const feeRaw = at(col.fee).trim()
-    if (feeRaw !== '') {
-      feeTax = parseNumber(feeRaw)
-      if (!Number.isFinite(feeTax) || feeTax < 0) {
-        result.errors.push({ line, message: `手續費 / 稅金無效：「${feeRaw}」` })
-        continue
+    if (splitMode) {
+      let fee = 0
+      const feeRaw = at(col.feeSplit).trim()
+      if (feeRaw !== '') {
+        fee = parseNumber(feeRaw)
+        if (!Number.isFinite(fee) || fee < 0) {
+          result.errors.push({ line, message: `手續費無效：「${feeRaw}」` })
+          continue
+        }
+      }
+      let tax = 0
+      const taxRaw = at(col.taxSplit).trim()
+      if (taxRaw !== '') {
+        tax = parseNumber(taxRaw)
+        if (!Number.isFinite(tax) || tax < 0) {
+          result.errors.push({ line, message: `證交稅無效：「${taxRaw}」` })
+          continue
+        }
+      }
+      feeTax = fee + tax
+    } else {
+      const feeRaw = at(col.fee).trim()
+      if (feeRaw !== '') {
+        feeTax = parseNumber(feeRaw)
+        if (!Number.isFinite(feeTax) || feeTax < 0) {
+          result.errors.push({ line, message: `手續費 / 稅金無效：「${feeRaw}」` })
+          continue
+        }
+      }
+    }
+
+    let txNature: TxNature | undefined
+    if (col.nature >= 0) {
+      const natureRaw = at(col.nature).trim()
+      if (natureRaw !== '') {
+        const parsed = parseTxNature(natureRaw)
+        if (!parsed) {
+          result.errors.push({ line, message: `交易性質無法辨識：「${natureRaw}」` })
+          continue
+        }
+        txNature = parsed
       }
     }
 
@@ -236,6 +292,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
       price,
       qty,
       fee_tax: feeTax,
+      ...(txNature !== undefined ? { tx_nature: txNature } : {}),
     })
   }
 
@@ -249,9 +306,22 @@ function csvField(value: string): string {
 
 /** Export to CSV (including BOM for Excel to correctly recognize UTF-8; transaction type is output in Chinese and can be re-imported)*/
 export function transactionsToCsv(txs: Transaction[]): string {
-  const header = ['交易日期', '市場', '股票代號', '股票名稱', '交易類型', '交易單價', '交易股數', '手續費 / 稅金']
+  const header = [
+    '交易日期',
+    '市場',
+    '股票代號',
+    '股票名稱',
+    '交易類型',
+    '交易性質',
+    '交易單價',
+    '交易股數',
+    '手續費',
+    '證交稅',
+    '手續費 / 稅金',
+  ]
   const lines = [header.join(',')]
   for (const tx of txs) {
+    const { fee, tax } = splitFeeTax(tx)
     lines.push(
       [
         tx.tx_date,
@@ -259,8 +329,11 @@ export function transactionsToCsv(txs: Transaction[]): string {
         tx.ticker,
         csvField(tx.name),
         TX_TYPE_LABEL[tx.tx_type],
+        tx.tx_nature ? TX_NATURE_LABEL[tx.tx_nature] : '',
         String(tx.price),
         String(tx.qty),
+        String(fee),
+        String(tax),
         String(tx.fee_tax),
       ].join(','),
     )

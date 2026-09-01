@@ -174,4 +174,42 @@ describe('TransactionForm 手續費欄位不連動全域預設', () => {
     // floor(600000*0.001425) = 855
     expect(fee.value).toBe('855')
   })
+
+  it('F8: 選「當沖」會帶入減半證交稅率，存檔後重開編輯仍記得', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('本機模式')
+    await user.click(screen.getByRole('button', { name: /交易紀錄/ }))
+
+    await user.click(await screen.findByRole('button', { name: /新增交易/ }))
+    let dialog = await screen.findByRole('dialog', { name: '新增交易紀錄' })
+    let form = within(dialog)
+    await user.selectOptions(form.getByLabelText('交易類型'), 'SELL')
+    await user.type(form.getByLabelText(/股票代號/), '2344')
+    await user.type(form.getByLabelText('股票名稱'), '華邦電')
+    await user.selectOptions(form.getByLabelText('股數單位'), '零股')
+    await user.type(form.getByLabelText('交易單價'), '188.5')
+    await user.type(form.getByLabelText('交易股數'), '1000')
+
+    // 選了當沖，證交稅率就該是減半的 0.0015 —— 這是使用者本來要手動改的那一步
+    await user.selectOptions(form.getByLabelText('交易性質'), 'DAY_TRADE')
+    expect((form.getByLabelText('證交稅率') as HTMLInputElement).value).toBe('0.0015')
+
+    await user.click(form.getByRole('button', { name: '確認送出' }))
+    await form.findByText(/成功新增交易紀錄/)
+    await user.click(form.getByRole('button', { name: '關閉' }))
+
+    await user.click(await screen.findByRole('button', { name: '編輯這筆交易' }))
+    dialog = await screen.findByRole('dialog', { name: '編輯交易紀錄' })
+    form = within(dialog)
+    expect((form.getByLabelText('交易性質') as HTMLSelectElement).value).toBe('DAY_TRADE')
+  })
+
+  it('F9: 美股沒有交易性質欄位', async () => {
+    const user = userEvent.setup()
+    const form = await openNewTransactionForm(user)
+    expect(form.getByLabelText('交易性質')).toBeTruthy()
+    await user.selectOptions(form.getByLabelText('交易市場'), 'US')
+    expect(form.queryByLabelText('交易性質')).toBeNull()
+  })
 })

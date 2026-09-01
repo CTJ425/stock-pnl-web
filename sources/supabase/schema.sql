@@ -54,6 +54,13 @@ CREATE INDEX IF NOT EXISTS idx_tx_workspace ON transactions(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(tx_date ASC);
 
+-- Trading nature (現股/當沖/融資). NULL means unknown, not 現股: rows written before this
+-- column existed, and every row on PROD until this migration runs, must keep inferring.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
+    CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
+
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can manage their own transactions" ON transactions;

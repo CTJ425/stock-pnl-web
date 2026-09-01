@@ -185,3 +185,104 @@ describe('parseNumber 會計負數括號格式（BUG-037）', () => {
     expect(result.rows[0].fee_tax).toBe(1500)
   })
 })
+
+
+describe('交易性質與分項費用欄位（Task 137 §C）', () => {
+  const SPLIT = '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅'
+
+  it('分項手續費與證交稅相加寫回 fee_tax', () => {
+    const csv = [SPLIT, '2026-08-18,TPE,2344,華邦電,賣出,當沖,188.5,1000,80,282'].join('\n')
+    const r = parseTransactionsCsv(csv)
+    expect(r.errors).toEqual([])
+    expect(r.rows[0].fee_tax).toBe(362)
+    expect(r.rows[0].tx_nature).toBe('DAY_TRADE')
+  })
+
+  it('交易性質接受中文標籤與英文代碼', () => {
+    const csv = [
+      SPLIT,
+      '2026-08-18,TPE,2344,華邦電,賣出,當沖,188.5,1000,80,282',
+      '2026-08-19,TPE,2330,台積電,買入,DAY_TRADE,1000,1000,142,0',
+      '2026-08-20,TPE,2330,台積電,買入,現股,1000,1000,142,0',
+      '2026-08-21,TPE,2330,台積電,買入,MARGIN,1000,1000,142,0',
+    ].join('\n')
+    const r = parseTransactionsCsv(csv)
+    expect(r.errors).toEqual([])
+    expect(r.rows.map((x) => x.tx_nature)).toEqual(['DAY_TRADE', 'DAY_TRADE', 'SPOT', 'MARGIN'])
+  })
+
+  it('無法辨識的交易性質逐列回報，其餘列照常匯入', () => {
+    const csv = [
+      SPLIT,
+      '2026-08-18,TPE,2344,華邦電,賣出,期貨,188.5,1000,80,282',
+      '2026-08-19,TPE,2330,台積電,買入,現股,1000,1000,142,0',
+    ].join('\n')
+    const r = parseTransactionsCsv(csv)
+    expect(r.rows).toHaveLength(1)
+    expect(r.errors).toHaveLength(1)
+    expect(r.errors[0].line).toBe(2)
+    expect(r.errors[0].message).toContain('交易性質')
+  })
+
+  it('沒有交易性質欄位的檔案，行為與現在完全相同', () => {
+    const csv = [
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金',
+      '2026-08-18,TPE,2344,華邦電,賣出,188.5,1000,362',
+    ].join('\n')
+    const r = parseTransactionsCsv(csv)
+    expect(r.errors).toEqual([])
+    expect(r.rows[0].fee_tax).toBe(362)
+    expect(r.rows[0].tx_nature).toBeUndefined()
+  })
+
+  it('只有合併欄位時不得被分項比對搶走：手續費 / 稅金 仍是總額', () => {
+    // header.findIndex(h => h.includes('手續費')) 對「手續費」與「手續費 / 稅金」都成立，
+    // 分項欄位必須用精確比對且兩欄同時存在才算數
+    const csv = [
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金',
+      '2026-05-20,TPE,2330,台積電,賣出,2415,50,413',
+    ].join('\n')
+    expect(parseTransactionsCsv(csv).rows[0].fee_tax).toBe(413)
+  })
+
+  it('匯出的表頭同時帶分項欄位與舊的合併欄位', () => {
+    const header = transactionsToCsv([]).replace('\uFEFF', '').split('\r\n')[0]
+    expect(header).toBe(
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,手續費 / 稅金',
+    )
+  })
+
+  it('匯出再匯入：交易性質保留，未標記者維持不存在', () => {
+    const txs: Transaction[] = [
+      {
+        id: '1', workspace_id: 'w', tx_date: '2026-08-18', market: 'TPE', ticker: '2344',
+        name: '華邦電', tx_type: 'SELL', price: 188.5, qty: 1000, fee_tax: 362,
+        tx_nature: 'DAY_TRADE', created_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: '2', workspace_id: 'w', tx_date: '2026-05-20', market: 'TPE', ticker: '2330',
+        name: '台積電', tx_type: 'SELL', price: 2415, qty: 50, fee_tax: 413,
+        created_at: '2026-01-01T00:00:01Z',
+      },
+    ]
+    const r = parseTransactionsCsv(transactionsToCsv(txs))
+    expect(r.errors).toEqual([])
+    expect(r.rows[0].tx_nature).toBe('DAY_TRADE')
+    expect(r.rows[0].fee_tax).toBe(362)
+    expect(r.rows[1].tx_nature).toBeUndefined()
+    expect(r.rows[1].fee_tax).toBe(413)
+  })
+
+  it('匯出的分項金額相加等於原本的 fee_tax', () => {
+    const txs: Transaction[] = [
+      {
+        id: '1', workspace_id: 'w', tx_date: '2026-08-18', market: 'TPE', ticker: '2344',
+        name: '華邦電', tx_type: 'SELL', price: 188.5, qty: 1000, fee_tax: 362,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    const cells = transactionsToCsv(txs).trim().split('\r\n')[1].split(',')
+    // 手續費 80、證交稅 282（減半稅率）、合併欄位 362
+    expect(cells.slice(-3)).toEqual(['80', '282', '362'])
+  })
+})

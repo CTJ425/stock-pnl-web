@@ -11,6 +11,17 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 139: CSV schema extension for transaction nature
+- **Status**: ✅ **COMPLETED** (2026-09-01)
+- **What was this**: Extend CSV import schema with optional `交易性質` column (SPOT / DAY_TRADE / MARGIN) and separate `手續費` and `證交稅` columns. Backward compatible with legacy single `費稅` column.
+- **Implementation**: Schema `transactions.tx_nature TEXT` plus CHECK constraint allowing NULL / SPOT / DAY_TRADE / MARGIN, added to `sources/supabase/schema.sql`. Model: `TxNature` type + `TX_NATURE_LABEL` map (現股 / 當沖 / 融資). Provider: `listTransactions`, `addTransactions`, `updateTransaction` each retry once on missing-column errors only (schema-safe, INSERT-safe). Calculations: new exported `splitFeeTax` centralizes fee/tax split; explicit `DAY_TRADE` label trusted directly (halved tax, no inference); NULL/SPOT/MARGIN/absent keep inference ladder; explicit `SPOT` never forces standard rate (no BUG-036 regression); `proposeFeeCorrections` skips `DAY_TRADE` sells. CSV: export emits `交易性質` plus split `手續費`/`證交稅` columns, keeps legacy column; import accepts Chinese labels and codes, sums split columns into `fee_tax`, reports unrecognized nature as per-row error, behaves as before without new columns. Form: `交易性質` selector shown for TPE only; selecting 當沖 sets securities tax rate to 0.0015.
+- **Testing**: 93 files / 1448 tests passed, exit 0. Two main-session catches before review: provider retry originally fired on ANY error (would duplicate transactions on INSERT failure); `splitFeeTax` took optional `ticker` with fallback (would silently overtax ETF/TDR/REIT 3×). Both fixed: retry narrowed to missing-column errors; `ticker` now required so compiler catches callers that omit it.
+- **DEV Deployment**: Schema applied and verified (`tx_nature` column exists, CHECK constraint tested and rejected invalid value, PostgREST returns HTTP 200 for `select=id,tx_nature` after schema reload). PROD pending, tracked under BUG-041.
+- **Reviewer Verdicts**: Calculations PASS with no findings; data layer PASS WITH RISK (dropped-label risk on pre-migration database accepted; ledger inference still produces correct tax split).
+- **Known Risk**: On pre-migration database (PROD before BUG-041 SQL runs), `addTransactions` silently drops `tx_nature`; retry strips field and returns success, so user sees save succeed but finds label gone on reopen. Severity low; ledger inference still correct.
+- **Files Changed**: `services/dataProvider.ts`, `sources/supabase/schema.sql`, `utils/fees.ts`, `csv.ts`, `TransactionForm.tsx`, plus 7 test files.
+- **Timestamp**: 2026-09-01 10:17:41 Asia/Taipei
+
 ### Task 138: Codebase Deep Audit Remediation
 - **Status**: ✅ **COMPLETED** (2026-09-01)
 - **What was this**: Fix seven bugs from codebase audit: fmtPercent rounding, TDR/REIT tax rates, day-trade brokerage fee attribution, accounting format parsing, zero-cost breakeven, and full liquidation residue.
@@ -21,13 +32,13 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 - **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
 
 ### Task 137: Day-Trading Tax Recognition & Transaction Form Edit Parity
-- **Status**: ✅ **COMPLETED** (2026-09-01, §C deferred)
-- **What was this**: Fix day-trade tax corruption in batch recalculation, form mount auto-recalculate, and establish day-trade detection heuristics.
-- **Completed**: Form edit mode now compares initial vs current values (survives React StrictMode); day-trade detection rule `fee_tax < floor(gross × sellTaxRate) AND fee_tax - halfTax = max(minFee, floor(gross × feeRate))`; tax ladder in ledger (standard if covered, half-tax if not, recorded if neither); batch recalculation defaults to no selections (operator chooses); 106 broker CSV rows validated.
-- **Deferred**: §C (CSV columns for transaction nature and itemized fees) requires Supabase migration, blocked by BUG-041.
-- **Testing**: 15 new tests in pnlEngine/fees/form, all passing.
-- **Files Changed**: `pnlEngine.ts`, `fees.ts`, `TransactionForm.tsx`, `RecalcFeesModal.tsx`, plus 2 test files.
-- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
+- **Status**: ✅ **COMPLETED** (2026-09-01, §C fully implemented)
+- **What was this**: Fix day-trade tax corruption in batch recalculation, form mount auto-recalculate, establish day-trade detection heuristics, and extend CSV schema with transaction nature field.
+- **Completed**: Form edit mode now compares initial vs current values (survives React StrictMode); day-trade detection rule `fee_tax < floor(gross × sellTaxRate) AND fee_tax - halfTax = max(minFee, floor(gross × feeRate))`; tax ladder in ledger (standard if covered, half-tax if not, recorded if neither); batch recalculation defaults to no selections (operator chooses); 106 broker CSV rows validated. **§C now complete**: schema `transactions.tx_nature TEXT` with CHECK constraint (NULL / SPOT / DAY_TRADE / MARGIN); model `TxNature`; provider retry on missing-column errors only (schema-safe, INSERT-safe); `splitFeeTax` centralizes fee/tax split with explicit-label-only rule; CSV export/import with backward compatibility; form selector for TPE only.
+- **Testing**: Original 15 new tests + §C implementation adds 32 more (schema, provider retry, splitFeeTax, CSV, form selector); 93 files / 1448 tests, all passing.
+- **Files Changed**: `pnlEngine.ts`, `fees.ts`, `TransactionForm.tsx`, `RecalcFeesModal.tsx`, `services/dataProvider.ts`, `sources/supabase/schema.sql`, `csv.ts`, plus 7 test files.
+- **DEV Deployment**: Schema applied and verified. PROD pending (BUG-041).
+- **Timestamp**: 2026-09-01 10:17:41 Asia/Taipei
 
 ### Task 136: Lot-Based Unrealized P&L Calculation
 - **Status**: ✅ **COMPLETED** (2026-09-01)

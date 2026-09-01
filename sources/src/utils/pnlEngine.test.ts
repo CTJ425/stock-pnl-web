@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Market, Transaction, TxType } from '../types/models'
+import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { computeLedger, estimateUnrealized, sellTaxRate } from './pnlEngine'
+import { computeLedger, estimateUnrealized, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 let seq = 0
 function tx(input: {
@@ -13,6 +13,7 @@ function tx(input: {
   price: number
   qty: number
   fee?: number
+  nature?: TxNature
 }): Transaction {
   seq++
   return {
@@ -26,6 +27,7 @@ function tx(input: {
     price: input.price,
     qty: input.qty,
     fee_tax: input.fee ?? 0,
+    tx_nature: input.nature,
     created_at: `2026-01-01T00:00:00.${String(seq).padStart(3, '0')}Z`,
   }
 }
@@ -504,5 +506,68 @@ describe('estimateUnrealized 逐批計算賣出成本（Task 136）', () => {
       tx({ date: '2026-06-03', market: 'US', ticker: 'AAPL', type: 'BUY', price: 180, qty: 10, fee: 1 }),
     ]).holdings[0]
     expect(estimateUnrealized(h, 200, 0.001425, 20)).toBeCloseTo(199, 9)
+  })
+})
+
+
+describe('明確的交易性質優先於推測（Task 137 §C）', () => {
+  it('標記為當沖時直接用減半稅，即使金額足以覆蓋一般稅', () => {
+    // fee_tax 700 高於一般稅 565，光看數字會判成一般交易；標記說了是當沖，就以標記為準
+    const ledger = computeLedger([
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '2344', type: 'BUY', price: 187.5, qty: 1000, fee: 80 }),
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 700, nature: 'DAY_TRADE' }),
+    ])
+    expect(ledger.summary.feesTax).toBe(282)
+    expect(ledger.summary.feesBrokerage).toBe(80 + 418)
+  })
+
+  it('標記為現股不得讓手續費被歸零：仍走推測階梯', () => {
+    // 這是真實的當沖紀錄（362 = 282 + 80）被誤標成現股。
+    // 若讓標記強制一般稅率，estTax 會被 Math.min 壓成 362、手續費歸零 —— BUG-036 重演
+    const ledger = computeLedger([
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '2344', type: 'BUY', price: 187.5, qty: 1000, fee: 80 }),
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 362, nature: 'SPOT' }),
+    ])
+    expect(ledger.summary.feesTax).toBe(282)
+    expect(ledger.summary.feesBrokerage).toBe(160)
+  })
+
+  it('融資標記不改變任何計算', () => {
+    const ledger = computeLedger([
+      tx({ date: '2026-05-20', market: 'TPE', ticker: '2330', type: 'BUY', price: 2170, qty: 50, fee: 46, nature: 'MARGIN' }),
+      tx({ date: '2026-05-20', market: 'TPE', ticker: '2330', type: 'SELL', price: 2415, qty: 50, fee: 413, nature: 'MARGIN' }),
+    ])
+    expect(ledger.summary.feesTax).toBe(362)
+    expect(ledger.summary.feesBrokerage).toBe(97)
+  })
+
+  it('沒有標記時與現行推測結果完全相同', () => {
+    const withoutLabel = computeLedger([
+      tx({ date: '2026-08-18', market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 362 }),
+    ])
+    expect(withoutLabel.summary.feesTax).toBe(282)
+    expect(withoutLabel.summary.feesBrokerage).toBe(80)
+  })
+})
+
+describe('splitFeeTax — 匯出用的費用拆分（Task 137 §C）', () => {
+  it('買進全額算手續費，證交稅 0', () => {
+    expect(splitFeeTax({ tx_type: 'BUY', market: 'TPE', ticker: '2344', price: 187.5, qty: 1000, fee_tax: 80 })).toEqual({ fee: 80, tax: 0 })
+  })
+
+  it('一般賣出依標準稅率拆分', () => {
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2330', price: 2415, qty: 50, fee_tax: 413 })).toEqual({ fee: 51, tax: 362 })
+  })
+
+  it('當沖賣出依減半稅率拆分', () => {
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 362 })).toEqual({ fee: 80, tax: 282 })
+  })
+
+  it('標記為當沖時以標記為準', () => {
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 700, tx_nature: 'DAY_TRADE' })).toEqual({ fee: 418, tax: 282 })
+  })
+
+  it('美股沒有證交稅', () => {
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'US', ticker: 'AAPL', price: 180, qty: 10, fee_tax: 1 })).toEqual({ fee: 1, tax: 0 })
   })
 })

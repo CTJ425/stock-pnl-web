@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
-import type { Transaction, TxType } from '../types/models'
+import type { Transaction, TxNature, TxType } from '../types/models'
 import { breakEvenPrice, calculateFee, DEFAULT_FEE_RATE, proposeFeeCorrections } from './fees'
 
 describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
@@ -145,6 +145,7 @@ function txOf(input: {
   price: number
   qty: number
   fee: number
+  nature?: TxNature
 }): Transaction {
   txSeq++
   return {
@@ -158,6 +159,7 @@ function txOf(input: {
     price: input.price,
     qty: input.qty,
     fee_tax: input.fee,
+    tx_nature: input.nature,
     created_at: '2024-01-01T00:00:00Z',
   }
 }
@@ -260,5 +262,27 @@ describe('breakEvenPrice 零成本持股（BUG-038）', () => {
   it('沒有部位（qty 0）仍回傳 0', () => {
     const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 0, cost: 0 })
     expect(breakEvenPrice(h, DEFAULT_FEE_RATE, 20)).toBe(0)
+  })
+})
+
+
+describe('proposeFeeCorrections 尊重明確的交易性質（Task 137 §C）', () => {
+  const opts = { feeRate: 0.0004275, minFeeWhole: 20, minFeeOdd: 1 }
+
+  it('標記為當沖者不提案，即使金額高到推測會判成一般交易', () => {
+    const t = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 700, nature: 'DAY_TRADE' })
+    expect(proposeFeeCorrections([t], opts)).toEqual([])
+  })
+
+  it('標記為現股但數字是當沖者，仍由推測擋下', () => {
+    const t = txOf({ market: 'TPE', ticker: '2344', type: 'SELL', price: 188.5, qty: 1000, fee: 362, nature: 'SPOT' })
+    expect(proposeFeeCorrections([t], opts)).toEqual([])
+  })
+
+  it('標記為現股且金額確實記錯者，照常提案', () => {
+    const t = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 2415, qty: 50, fee: 400, nature: 'SPOT' })
+    const out = proposeFeeCorrections([t], opts)
+    expect(out).toHaveLength(1)
+    expect(out[0].newFee).toBe(413)
   })
 })

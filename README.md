@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.25-dev.1**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.25-dev.2**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -416,20 +416,63 @@ curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report' \
 
 ---
 
-### 步驟 8：建立第一個帳號並升級為管理員
+### 步驟 8：建立帳號並指定為管理員（Admin）
 
-管理員後台（抓取狀況、戰情室、備份管理）需要 `admin` 角色。
+管理員後台（抓取狀況、戰情室、備份管理、帳號管理）需要 `admin` 角色權限（`app_metadata.role = 'admin'`）。
 
-1. 先從前端註冊，或在 Dashboard → Authentication → Users 建立帳號。
-2. 於 SQL Editor 執行：
+#### 1. 建立帳號
 
-```sql
-UPDATE auth.users
-SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
-WHERE email = '你的信箱';
-```
+先從前端註冊，或在 Supabase Dashboard → **Authentication** → **Users** 點擊 **Add user** 建立帳號。
 
-3. **必須重新登入。** 角色寫在 JWT 內，舊的 token 不會自動更新。
+#### 2. 指定特定帳號為管理員
+
+##### 做法 A：WebUI
+
+- **方法 1：透過 Supabase Dashboard (WebUI) SQL Editor（推薦初次設定）**
+  1. 登入 Supabase Dashboard，進入專案。
+  2. 點選左側選單 **SQL Editor** → 點擊 **New query**。
+  3. 執行以下 SQL 更新指定帳號的 `raw_app_meta_data`：
+     ```sql
+     UPDATE auth.users
+     SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+     WHERE email = '<目標信箱>';
+     ```
+     > 💡 若欲以使用者 ID 指定，可改為：
+     > `WHERE id = '<目標使用者UUID>';`（可於 Authentication → Users 清單中查詢複製）。
+
+- **方法 2：透過本專案前端管理介面 (WebUI)**
+  若系統中**已有至少一位管理員**帳號：
+  1. 以管理員身分登入前端應用程式。
+  2. 點選導覽列或選單進入 **管理員後台** → 切換至 **帳號** 分頁。
+  3. 列表中會列出所有已註冊帳號，直接在該列點擊 **管理員** 按鈕切換狀態即可（後端 Edge Function 會透過 Admin API 安全更新 `app_metadata`）。
+
+##### 做法 B：Supabase CLI
+
+若習慣在終端機操作，可透過 Supabase CLI 或 `psql` 執行更新：
+
+- **遠端專案（已透過 `supabase link` 綁定專案）：**
+  ```bash
+  cd sources
+  supabase db query --linked "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
+  ```
+
+- **本機開發環境（使用 `supabase start`）：**
+  ```bash
+  cd sources
+  supabase db query --local "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
+  ```
+
+- **使用 `psql` 直連資料庫：**
+  ```bash
+  psql "<你的資料庫連線字串>" -c "UPDATE auth.users SET raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{\"role\":\"admin\"}'::jsonb WHERE email = '<目標信箱>';"
+  ```
+
+#### 3. ⚠️ 重要注意事項與資安守則
+
+1. **必須重新登入生效**：角色權限記錄在 JWT Token（`app_metadata`）中，資料庫更新後舊 Token 不會自動刷新。指定為管理員後，該帳號**必須登出並重新登入**，管理員後台選單與各項特權功能才會生效。
+2. **防範機敏資料外洩（嚴禁寫死在文件或指令）**：
+   - 本儲存庫為公開專案（Public Repo），受 GitHub Secret Scanning Push Protection 保護。
+   - 文件與指令腳本中**切勿寫死或外傳真實信箱、使用者 UUID、資料庫連線字串或 Service Role Key**，請一律使用 `<目標信箱>`、`<目標使用者UUID>` 與 `<你的資料庫連線字串>` 等佔位符替代。
 
 ---
 
