@@ -1,6 +1,5 @@
 /** Clickable sorting header: displays the current sorting direction, click to switch ascending/descending power; additional field descriptions can be attached*/
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
-import { AppIcon } from './AppIcon'
 import { HelpTip } from './HelpTip'
 
 export interface SortState<K extends string> {
@@ -41,7 +40,7 @@ export function SortableTh<K extends string>({
   const btn = (
     <button type="button" className="th-sort-btn" onClick={() => onSort(sortKey)}>
       {label}
-      <AppIcon icon={Icon} size="xs" className={active ? 'sort-ind active' : 'sort-ind'} />
+      <Icon size={12} className={active ? 'sort-ind active' : 'sort-ind'} />
     </button>
   )
   return (

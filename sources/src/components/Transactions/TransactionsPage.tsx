@@ -5,7 +5,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Calculator, Download, NotebookPen, Pencil, Search, Trash2, Upload, X } from 'lucide-react'
-import { AppIcon } from '../Common/AppIcon'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -213,12 +212,12 @@ export function TransactionsPage() {
       <div className="section toolbar">
         {visibleSelectedCount > 0 && (
           <button className="btn btn-danger" onClick={() => void handleDeleteSelected()}>
-            <AppIcon icon={Trash2} size="sm" />
+            <Trash2 size={15} />
             刪除選取（{visibleSelectedCount}）
           </button>
         )}
         <div className="search-box">
-          <AppIcon icon={Search} size="sm" className="search-icon" />
+          <Search size={15} className="search-icon" />
           <input
             type="text"
             value={searchQuery}
@@ -234,7 +233,7 @@ export function TransactionsPage() {
               aria-label="清除搜尋"
               onClick={() => setSearchQuery('')}
             >
-              <AppIcon icon={X} size="sm" />
+              <X size={14} />
             </button>
           )}
         </div>
@@ -250,15 +249,15 @@ export function TransactionsPage() {
           onClick={() => setShowRecalc(true)}
           disabled={transactions.length === 0}
         >
-          <AppIcon icon={Calculator} size="sm" />
+          <Calculator size={15} />
           重算手續費
         </button>
         <button className="btn" onClick={() => setShowImport(true)}>
-          <AppIcon icon={Upload} size="sm" />
+          <Upload size={15} />
           匯入 CSV
         </button>
         <button className="btn" onClick={handleExport} disabled={transactions.length === 0}>
-          <AppIcon icon={Download} size="sm" />
+          <Download size={15} />
           匯出 CSV
         </button>
       </div>
@@ -271,7 +270,7 @@ export function TransactionsPage() {
         {transactions.length === 0 ? (
           <div className="glass empty-state">
             <div className="empty-icon">
-              <AppIcon icon={NotebookPen} size="2xl" />
+              <NotebookPen size={36} />
             </div>
             <div>
               尚無交易紀錄。點右下角「新增交易」記下第一筆，或用「匯入 CSV」把舊試算表的資料搬過來。
@@ -280,7 +279,7 @@ export function TransactionsPage() {
         ) : sorted.length === 0 ? (
           <div className="glass empty-state">
             <div className="empty-icon">
-              <AppIcon icon={Search} size="2xl" />
+              <Search size={36} />
             </div>
             <div>找不到符合「{searchQuery.trim()}」的交易。</div>
             <div style={{ marginTop: 12 }}>
@@ -354,7 +353,7 @@ export function TransactionsPage() {
                             aria-label="編輯這筆交易"
                             onClick={() => setEditTx(tx)}
                           >
-                            <AppIcon icon={Pencil} size="sm" />
+                            <Pencil size={14} />
                           </button>
                           <button
                             className="btn btn-sm btn-danger btn-icon"
@@ -362,7 +361,7 @@ export function TransactionsPage() {
                             aria-label="刪除這筆交易"
                             onClick={() => void handleDelete(tx)}
                           >
-                            <AppIcon icon={Trash2} size="sm" />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
