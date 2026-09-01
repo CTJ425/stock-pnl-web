@@ -69,10 +69,10 @@
 | 環境 | 分支 | Supabase |
 | ---- | ---- | ---- |
 | PROD (正式) | `main` | 雲端 **`hrilemueiqyaoiwnkeuu`**（專案「Stock-Pnl-Web」） |
-| DEV (測試) | `dev` | 自建 Docker `https://korq9tvdz0jd7yblr72p.ivan.lab`（compose 位於 `/root/container/supabase/stock-pnl-web-dev`） |
-| DEV (雲端) | `dev` | 雲端 **`zyebvayngwrqzoaicbwd`**（專案「Stock-Pnl-Web-Dev」） |
+| DEV (測試) | `dev` | 雲端 **`zyebvayngwrqzoaicbwd`**（專案「Stock-Pnl-Web-Dev」）— `supabase link` 指向 |
 
 - **務必先 commit 至 `dev`**；在 DEV 環境驗證無誤後才合併至 `main`。`main` 的 push 會自動部署前端。
-- 除非使用者要求，否則**切勿**部署 / 變更 Supabase 環境。正式環境 Edge 部署僅限在 `main` 分支且收到明確指令。
-- DEV 環境 Edge 部署：將檔案 **volume copy** 至 `volumes/functions/` + 重新建立 functions 容器 — 而非使用雲端 `functions deploy`。
+- PROD 與 DEV 皆為 Supabase 雲端專案（無 Docker 環境）。
+- Edge Functions 部署：`supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`。
 - 唯讀查詢可自由執行。操作坑洞（含 `stock-report` 於雲端需加 `--no-verify-jwt`）參見：**`supabase-ops`** skill。
+

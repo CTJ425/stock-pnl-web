@@ -104,12 +104,11 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 | Env | Branch | Supabase |
 | ---- | ---- | ---- |
 | PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
-| DEV | `dev` | self-hosted `https://korq9tvdz0jd7yblr72p.ivan.lab` (compose under `/root/container/supabase/stock-pnl-web-dev`) |
-| DEV (cloud) | `dev` | **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
+| DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** (project "Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
-- Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
-- DEV Edge: **volume copy** into `volumes/functions/` + recreate functions container — not cloud `functions deploy`.
+- Both PROD and DEV are Supabase Cloud projects (no Docker environment).
+- Edge Functions deployment: `supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
 
 ## This repo is public — where raw logs may go
