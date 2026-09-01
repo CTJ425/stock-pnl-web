@@ -88,6 +88,7 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 - **Decision**: Accepted, not fixed. No code change.
 - **Status**: OPEN (low severity, accepted)
 - **Introduced**: Task 139 (2026-09-01)
+- **Scope**: Applies to both cloud projects until the BUG-041 migrations run; the self-hosted DEV database already has the column.
 
 ---
 
@@ -141,6 +142,14 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 - **Action required**: Revoke the token in the Supabase console (Settings → Access Tokens). This action is the user's responsibility.
 - **Discovered**: 2026-08-26.
 - **Used for deployment**: 2026-08-26 (`supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`).
+
+### Supabase personal access token exposed in transcript (2026-09-01)
+
+- **What**: The user pasted a Supabase personal access token into the conversation to authorise the cron diagnosis. It is now in the session transcript.
+- **Action required**: rotate it in the Supabase dashboard. This is the **third** such exposure recorded in this file, after the DEV `CRON_SECRET` (2026-08-25) and an earlier personal access token (2026-08-26).
+- **Handling during this session**: used only as an environment variable, never echoed, never written to any file in the repo.
+- **Status**: OPEN — user action
+- **Recorded**: 2026-09-01 13:37:25 Asia/Taipei
 
 ---
 
@@ -201,11 +210,12 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
 - **What**: Two pending PROD schema changes:
   1. **Fee rate persistence (Task 135)**: `workspaces.fee_rate` column. App falls back to legacy column list and keeps working without it, but fee rate does not persist across browsers until migration runs.
   2. **Transaction nature (Task 139)**: `transactions.tx_nature` column. App retries with schema omitting the field and keeps working, but user's explicit nature label is lost until migration runs (though tax/fee numbers stay correct via inference).
-- **Action required**: Execute on the PROD Supabase project:
+- **Action required**: Execute on the PROD Supabase project (`hrilemueiqyaoiwnkeuu`):
   ```sql
   ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;
   ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;
-  ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
+  ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range
+      CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
   
   ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
   ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
@@ -214,7 +224,7 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
   
   NOTIFY pgrst, 'reload schema';
   ```
-- **Reason it is open**: This session has no PROD access token (`supabase projects list` returns `LegacyPlatformAuthRequiredError`). Blocking action must be performed by user.
+- **Reason it is open**: an access token is now available and the DEV self-hosted database has both columns, but the two PROD/cloud migrations were **blocked by the session's permission classifier** when attempted on 2026-09-01, not by missing credentials. They must be run by the user, or re-attempted with an explicit approval. Nothing breaks meanwhile: `SupabaseProvider` retries every transaction and workspace query against the legacy column list, so the app keeps working without either column.
 - **Status**: OPEN
 - **Discovered**: 2026-08-31 (fee_rate); 2026-09-01 (tx_nature)
 
