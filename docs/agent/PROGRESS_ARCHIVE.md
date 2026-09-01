@@ -3,6 +3,24 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-09-01 16:15:00 Asia/Taipei (0.9.26-dev.3 — Persist on-demand chip reports to Storage & add frontend session in-memory cache)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.26-dev.2` → **`0.9.26-dev.3`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Storage Persistence for On-Demand Generation (`stock-report/index.ts`)**: `handleGenerate` now automatically uploads the public shared report (`{series.dataYmd}/{ticker}.json`, `holding: null`) into Supabase Storage upon generation. Non-batch stocks requested on demand will subsequently hit Storage-first, eliminating redundant Edge Function executions on subsequent views during the same trading day.
+  2. **Frontend Session In-Memory Cache (`reportProxy.ts`)**: Introduced a lightweight in-memory cache (`reportCache` with 5-minute TTL, `cachedManifest` with 1-minute TTL) and `FetchStoredReportOptions.forceRefresh` parameter. Switching between stock tabs within a session no longer issues duplicate network requests.
+  3. **StockDetailPage Cache Invalidation (`StockDetailPage.tsx`)**: Passing `{ forceRefresh: reloadKey > 0 }` to `fetchStoredReport` ensures manual user refresh or visibility restoration reliably gets updated reports without getting blocked by stale memory cache.
+  4. **Tests**: Added unit tests in `reportProxy.test.ts` covering memory cache hits, `forceRefresh` bypass, `generateReport` cache population, and `clearReportCache`. Full test suite: 94 files / 1457 tests 100% passed; `npm run typecheck:edge`, `npx tsc --noEmit`, and `npm run build` all exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1457 tests, exit 0
+- `npm run typecheck:edge` — exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
+
+---
+
 ## 📅 Log: 2026-09-01 15:45:00 Asia/Taipei (0.9.26-dev.2 — Fix Yahoo intraday daily bar leak in twDaily & self-healing syncDaily, BUG-042)
 
 - **Status**: ✅ **COMPLETED**

@@ -6,6 +6,14 @@
 
 ---
 
+## BUG-044-P: `transactions.fee_rate` not yet applied on PROD
+
+- **Status**: 🔴 **OPEN**
+- **Found**: 2026-09-01, follow-up to BUG-044
+- **Impact**: PROD (`hrilemueiqyaoiwnkeuu`) has `tx_nature` but not `fee_rate`. Reads and writes fall back to the legacy column set, so the 0.9.27 per-transaction fee rate is not stored there. The `tx_nature` data loss that made this urgent is fixed in code (BUG-045), so this is now a missing-feature issue, not a corruption risk.
+- **Fix**: After `main` carries 0.9.27, link to `hrilemueiqyaoiwnkeuu` and run the `fee_rate` block of `sources/supabase/schema.sql` with `supabase db query --linked`, then `NOTIFY pgrst, 'reload schema'` and `SELECT * FROM verify_setup()`. Record the 10 check results here.
+- **Blocked on**: explicit user instruction. CLAUDE.md § Branches & envs forbids touching PROD Supabase without one.
+
 > **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
 > environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
 > of what the audit found and why each mattered.

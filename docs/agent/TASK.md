@@ -10,13 +10,14 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-01 16:30)
+## 📍 Where the project stands (2026-09-01 20:19)
 
-- **Version 0.9.26**:
-  - Code: Finalized. Features: 持續持久化按需產生的個股籌碼報表至 Storage、前端 Session 記憶體快取加速、盤中即時日 K 避免污染日線指標、賣出預設現股與持股自動帶入、交易紀錄備份與排程文件對齊。
-  - Schema: `workspaces.fee_rate` 與 `transactions.tx_nature` 於 DEV 就位（PROD 待 Migration）。
+- **Version 0.9.27-dev.1** — committed to `dev` as `46985f6`:
+  - Code: per-transaction fee rate persistence (`fee_rate`), inference for legacy rows, and edit-form parity. Includes the main-session review fixes for two money defects (BUG-045, BUG-046) and the reviewer's finding on the fix itself. Spec: `docs/agent/specs/139-fee-rate-review-fixes.md`.
+  - Schema: `workspaces.fee_rate`, `transactions.tx_nature`, `transactions.fee_rate` **applied and verified on DEV** (cloud project `zyebvayngwrqzoaicbwd`, `verify_setup()` 10/10 PASS, `assert_setup_ok()` = `ok`, 2026-09-01). PROD still pending — BUG-044-P.
+- **DEV is the cloud project `zyebvayngwrqzoaicbwd`, not the local docker stack.** `sources/.env` points there and DEV Edge runs there (3 ACTIVE functions). DDL goes through `supabase db query --linked` from `sources/`, with an identity value in the same query. The local `stock-pnl-web-dev-db-1` container answers plausibly but the app never talks to it.
 - **DEV cron count: 6**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`, `backup-daily`.
-- **All tests green**: 94 test files / 1457 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
+- **All tests green**: 94 test files / **1476** vitest tests 100% passed, exit 0; `npm run build` exit 0. Playwright E2E passes with the REST API stubbed — it does not reach a database.
 
 ## 📋 Active Tasks
 
