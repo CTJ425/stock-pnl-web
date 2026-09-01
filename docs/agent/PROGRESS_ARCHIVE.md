@@ -3,6 +3,22 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-09-01 15:45:00 Asia/Taipei (0.9.26-dev.2 — Fix Yahoo intraday daily bar leak in twDaily & self-healing syncDaily, BUG-042)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.26-dev.1` → **`0.9.26-dev.2`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Intraday Bar Filter in `twDaily.ts`**: Added `isTwMarketClosed()` utility to verify if Taipei market has passed 13:30 close. `extractDaily()` skips today's (or future) in-progress rolling bar when called before market close (< 13:30). Keeps technical daily series and "每日成交量" table pinned to the last fully settled trading day during market hours.
+  2. **Self-healing Cache in `syncDaily`**: Added check in `syncDaily` (`stock-report/index.ts`) for premature daily files written before close on `targetDate`. If an existing file was recorded before 13:30 on the target day, it is no longer skipped when `syncDaily` runs post-close, ensuring complete closing bars overwrite any partial morning snapshot.
+  3. **Tests**: Added unit test coverage for `isTwMarketClosed` and `extractDaily` intraday filtering vs post-close inclusion in `twDaily.test.ts`. Full test suite: 94 files / 1456 tests 100% passed; `npx tsc --noEmit` and `npm run build` exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1456 tests, exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
+
+---
+
 ## 📅 Log: 2026-09-01 15:06:00 Asia/Taipei (0.9.26-dev.1 — TransactionForm SPOT default & sell holdings auto-complete)
 
 - **Status**: ✅ **COMPLETED**

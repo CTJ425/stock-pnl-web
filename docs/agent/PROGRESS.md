@@ -1,9 +1,34 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: Persist on-demand chip reports to Storage & add frontend session in-memory cache
+- Action: Release 0.9.26 & documentation synchronization across codebase
 - Status: **✅ RECORDED**
-- Timestamp: 2026-09-01 16:15:00 Asia/Taipei
+- Timestamp: 2026-09-01 16:30:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-01 16:30:00 Asia/Taipei (0.9.26 — Release 0.9.26 & Comprehensive Documentation Sync)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.26-dev.3` → **`0.9.26`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Documentation and Reference Cleanup**:
+     - Synchronized PROD Supabase project ref in `GEMINI.md` and `docs/CLAUDE-tw.md` to `hrilemueiqyaoiwnkeuu`, adding DEV cloud ref `zyebvayngwrqzoaicbwd`.
+     - Updated `README.md`, `TASK.md`, and `MechanismGuide.tsx` from 5 cron jobs to 6 cron jobs, adding `backup-daily` (daily transaction backup at 02:00 Asia/Taipei).
+     - Updated `SPEC.md` tech stack from React 18 / TailwindCSS to React 19 / Vanilla CSS design system.
+     - Updated `TASK.md` "Where the project stands" to current version `0.9.26` and 94 test files / 1457 tests.
+  2. **Release Finalization (0.9.26)**:
+     - Consolidated pre-release logs into official `0.9.26` entry in `CHANGELOG.md`.
+     - Stripped `-dev.3` across all version manifests to finalize release.
+  3. **Verification**:
+     - `npx vitest run` — 94 files / 1457 tests 100% passed.
+     - `npm run typecheck:edge`, `npx tsc --noEmit`, and `npm run build` exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1457 tests, exit 0
+- `npm run typecheck:edge` — exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
 
 ---
 
@@ -25,19 +50,4 @@
 
 ---
 
-## 📅 Log: 2026-09-01 15:45:00 Asia/Taipei (0.9.26-dev.2 — Fix Yahoo intraday daily bar leak in twDaily & self-healing syncDaily, BUG-042)
-
-- **Status**: ✅ **COMPLETED**
-- **Version**: `0.9.26-dev.1` → **`0.9.26-dev.2`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
-- **Work**:
-  1. **Intraday Bar Filter in `twDaily.ts`**: Added `isTwMarketClosed()` utility to verify if Taipei market has passed 13:30 close. `extractDaily()` skips today's (or future) in-progress rolling bar when called before market close (< 13:30). Keeps technical daily series and "每日成交量" table pinned to the last fully settled trading day during market hours.
-  2. **Self-healing Cache in `syncDaily`**: Added check in `syncDaily` (`stock-report/index.ts`) for premature daily files written before close on `targetDate`. If an existing file was recorded before 13:30 on the target day, it is no longer skipped when `syncDaily` runs post-close, ensuring complete closing bars overwrite any partial morning snapshot.
-  3. **Tests**: Added unit test coverage for `isTwMarketClosed` and `extractDaily` intraday filtering vs post-close inclusion in `twDaily.test.ts`. Full test suite: 94 files / 1456 tests 100% passed; `npx tsc --noEmit` and `npm run build` exit 0.
-
-### Verification
-- `npx vitest run` — 94 files / 1456 tests, exit 0
-- `npx tsc --noEmit` — exit 0
-- `npm run build` — exit 0
-
----
 

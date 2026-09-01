@@ -10,18 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-08-24 11:37)
+## 📍 Where the project stands (2026-09-01 16:30)
 
-- **Version 0.9.9**:
-  - Code: Finalized. Features: 儀表板觀察清單區塊（圖卡/條列雙視圖、localStorage 記憶、N/30 容量）、設計翻轉完稿（初稿庫存總覽駁回 → 0.9.0 發布個股分析 tab 4 → 0.9.9 儀表板）、死碼清理。Tests: 1145 passed (77 files, −3 from 0.9.8's 1148 via +10 WatchSection −13 WatchTab).
-  - Schema: No changes in 0.9.9.
-  - Unfinished: (1) PROD merge (dev → main) — **in progress by user**; (2) Deferred design variants scheduled for later.
-- **Version 0.7.26**:
-  - Releases: All 84 versions (`0.2` to `0.7.18`) backfilled to GitHub Releases; `.github/workflows/release.yml` created for automatic release sync on push to `main`.
-  - Probe: Narrowed `t86` probe window from `15:30–17:30` to `16:00–17:00` (saving 6 daily no-op probes).
-  - UI: `MechanismGuide` and `ProbeWarRoom` updated with T86 16:00–17:00 window description.
-- **DEV cron count: 5**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`.
-- **All tests green**: 66 test files / 963 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
+- **Version 0.9.26**:
+  - Code: Finalized. Features: 持續持久化按需產生的個股籌碼報表至 Storage、前端 Session 記憶體快取加速、盤中即時日 K 避免污染日線指標、賣出預設現股與持股自動帶入、交易紀錄備份與排程文件對齊。
+  - Schema: `workspaces.fee_rate` 與 `transactions.tx_nature` 於 DEV 就位（PROD 待 Migration）。
+- **DEV cron count: 6**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`, `backup-daily`.
+- **All tests green**: 94 test files / 1457 vitest tests 100% passed; `typecheck:edge`, `build`, `oxlint` 0 errors.
 
 ## 📋 Active Tasks
 

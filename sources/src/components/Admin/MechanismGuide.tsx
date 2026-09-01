@@ -141,6 +141,14 @@ const CRON_JOBS_CONFIG: CronJobConfig[] = [
     role: '營收/季報最外層兜底',
     description: 'MOPS 探測槽次後半小時進行補齊重試，雙重確保歷史財報資料落地。',
   },
+  {
+    jobname: 'backup-daily',
+    cron: '0 18 * * *',
+    taipeiTime: '每日 02:00 (1 班)',
+    action: 'backup-transactions',
+    role: '交易紀錄定時備援',
+    description: '每日凌晨自動備份全站使用者的交易紀錄至 Supabase Storage (backups bucket)。',
+  },
 ]
 
 export function MechanismGuide() {
@@ -243,7 +251,7 @@ export function MechanismGuide() {
           {/* 表格 2：pg_cron 定時排程 */}
           <div className="adm-guide-subhead" style={{ marginTop: 20 }}>
             <Timer size={15} />
-            <h4>pg_cron 定時排程與兜底備援（5 大排程）</h4>
+            <h4>pg_cron 定時排程與兜底備援（6 大排程）</h4>
           </div>
           <div className="table-scroll">
             <table className="data-table adm-guide-table">
