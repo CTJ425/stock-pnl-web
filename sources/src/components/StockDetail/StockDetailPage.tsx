@@ -132,7 +132,7 @@ export function StockDetailPage({
     setReport(null)
     ;(async () => {
       try {
-        const stored = await fetchStoredReport(ticker)
+        const stored = await fetchStoredReport(ticker, { forceRefresh: reloadKey > 0 })
         if (!alive) return
         if (stored) {
           setReport(stored)
@@ -162,7 +162,7 @@ export function StockDetailPage({
       if (document.visibilityState !== 'visible') return
       void (async () => {
         try {
-          const stored = await fetchStoredReport(ticker)
+          const stored = await fetchStoredReport(ticker, { forceRefresh: true })
           if (stored) {
             setReport((prev) => (prev && stored.generatedAt !== prev.generatedAt ? stored : prev))
           }

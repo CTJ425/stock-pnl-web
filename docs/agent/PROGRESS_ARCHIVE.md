@@ -3,6 +3,23 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+## 📅 Log: 2026-09-01 15:06:00 Asia/Taipei (0.9.26-dev.1 — TransactionForm SPOT default & sell holdings auto-complete)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.25` → **`0.9.26-dev.1`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Transaction Nature Optimization**: Removed "未指定" option in `TransactionForm.tsx` for TPE market; defaulted `nature` to `SPOT` (現股). Reset to `SPOT` after successful submission.
+  2. **Holdings Auto-complete on Sell**: When `txType === 'SELL'` and `(market !== 'TPE' || nature === 'SPOT')`, clicking/focusing either `tx-ticker` or `tx-name` displays an active holdings dropdown list for the workspace, showing ticker, name, and current available shares. Clicking an item populates both fields and recalculates tax rate.
+  3. **Non-SPOT Sell Flexibility**: When nature is not `SPOT` (e.g. `DAY_TRADE` or `MARGIN`), holdings dropdown is suppressed and standard stock search / direct entry is maintained.
+  4. **Tests**: Added `sources/src/components/Transactions/TransactionForm.features.test.tsx`. Full test suite: 94 files / 1452 tests 100% passed; `npx tsc --noEmit` and `npm run build` exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1452 tests, exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
+
+---
+
 ## 📅 Log: 2026-09-01 (recurrence prevention + route plugin 0.9.1)
 
 - **Status**: ✅ **COMPLETED**

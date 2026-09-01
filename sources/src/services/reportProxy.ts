@@ -148,6 +148,29 @@ function isSupportedReport(d: unknown): d is ReportData {
   return typeof r.schema === 'number' && r.schema >= MIN_REPORT_SCHEMA && Array.isArray(r.history)
 }
 
+// ---- In-memory session cache for reports and manifest ----
+
+export const REPORT_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+export const MANIFEST_CACHE_TTL_MS = 60 * 1000 // 1 minute
+
+interface CachedReportEntry {
+  data: ReportData
+  fetchedAt: number
+}
+
+const reportCache = new Map<string, CachedReportEntry>()
+let cachedManifest: { ymd: string; fetchedAt: number } | null = null
+
+export interface FetchStoredReportOptions {
+  forceRefresh?: boolean
+}
+
+/** Clear all in-memory cached reports and manifest (used in tests or on manual cache reset) */
+export function clearReportCache(): void {
+  reportCache.clear()
+  cachedManifest = null
+}
+
 /** Immediate delivery: fallback when delivery is not scheduled (not in the holding list/has not yet been delivered on the day), slower but available*/
 export async function generateReport(input: GenerateReportInput): Promise<ReportData> {
   if (!isSupabaseConfigured || !supabase) {
@@ -163,6 +186,7 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
   if (!isSupportedReport(data?.data)) {
     throw new Error('伺服器回傳的報告格式不符，請稍後再試')
   }
+  reportCache.set(input.ticker, { data: data.data, fetchedAt: Date.now() })
   return data.data
 }
 
@@ -172,11 +196,38 @@ export async function generateReport(input: GenerateReportInput): Promise<Report
  * Read the shared report of the after-hours scheduled production (excluding individual shareholdings, the shareholding profile is rendered by the front end).
  * First read the manifest to get the latest transaction date, and then read {ymd}/{ticker}.json.
  * If the result is not found or the format is not schema 2, null will be returned, and the caller's fallback will be generated immediately.
+ * In-memory caching avoids repeated downloads during navigation within the same session.
  */
-export async function fetchStoredReport(ticker: string): Promise<ReportData | null> {
+export async function fetchStoredReport(
+  ticker: string,
+  options?: FetchStoredReportOptions,
+): Promise<ReportData | null> {
   if (!isSupabaseConfigured || !supabase) return null
-  const manifest = await downloadReportsJson<{ ymd: string }>('manifest.json')
-  if (!manifest?.ymd) return null
-  const stored = await downloadReportsJson<{ data?: unknown }>(`${manifest.ymd}/${ticker}.json`)
-  return isSupportedReport(stored?.data) ? stored.data : null
+  const now = Date.now()
+  const force = options?.forceRefresh ?? false
+
+  if (!force) {
+    const cached = reportCache.get(ticker)
+    if (cached && now - cached.fetchedAt < REPORT_CACHE_TTL_MS) {
+      return cached.data
+    }
+  }
+
+  let ymd =
+    cachedManifest && !force && now - cachedManifest.fetchedAt < MANIFEST_CACHE_TTL_MS
+      ? cachedManifest.ymd
+      : null
+
+  if (!ymd) {
+    const manifest = await downloadReportsJson<{ ymd: string }>('manifest.json')
+    if (!manifest?.ymd) return null
+    ymd = manifest.ymd
+    cachedManifest = { ymd, fetchedAt: now }
+  }
+
+  const stored = await downloadReportsJson<{ data?: unknown }>(`${ymd}/${ticker}.json`)
+  if (!isSupportedReport(stored?.data)) return null
+
+  reportCache.set(ticker, { data: stored.data, fetchedAt: now })
+  return stored.data
 }

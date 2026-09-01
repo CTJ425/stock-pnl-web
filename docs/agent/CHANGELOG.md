@@ -2,6 +2,12 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.26-dev.3（2026-09-01）— 個股籌碼分析快取持久化與重複執行根因修復
+
+- 💾 **即時運算自動落盤快取**（`stock-report/index.ts`）— 過去 `handleGenerate`（即點即產端點）產出報表後僅回傳 JSON，未寫入 Storage，導致非夜間批次範圍個股每次切換皆需重新調用 Edge Function 運算。現修正為產出後自動將公開籌碼報表（`holding: null`）寫入 Storage `{series.dataYmd}/{ticker}.json`，當日後續查詢直接命中 Storage-first，大幅減少 Edge Function 運算開銷。
+- ⚡ **前端 Session 記憶體快取與 SWR 機制**（`reportProxy.ts`）— 由於 `reportsBucket.ts` 使用 `no-store` 防止瀏覽器快取舊資料，導致同工作階段頻繁切換個股時反覆發送 Storage 網路請求。於 `reportProxy.ts` 引入輕量 Session In-Memory Cache（報表 5 分鐘 TTL、Manifest 1 分鐘 TTL），切換個股達毫秒級秒開；使用者點擊「重新整理」按鈕時則傳入 `forceRefresh: true` 繞過快取強制重抓。
+- 🧪 **測試覆蓋** — `reportProxy.test.ts` 新增記憶體快取命中、`forceRefresh: true` 強制重抓、`generateReport` 回寫快取以及 `clearReportCache` 等單元測試；`StockDetailPage.test.tsx` 34 項測試全數通過；全套 94 檔測試檔案、1457 個測試 100% 通過。
+
 ### 0.9.26-dev.2（2026-09-01）— 修復 Yahoo 盤中未結算日 K Bar 提早洩漏至技術面與成交量表格 (BUG-042)
 
 - 🐛 **剔除盤中未結算即時 Bar**（BUG-042）— `twDaily.ts` 新增 `isTwMarketClosed()` 判斷；`extractDaily()` 在台北時間 13:30 收盤前，會主動過濾 Yahoo Finance 附帶的當日盤中即時滾動 Bar。避免使用者在盤中開啟個股頁面時，將未定型的盤中即時價與半截成交量（例如開盤一小時的 1.5 萬張）誤當作當日日 K 棒儲存並顯示在「每日成交量」表格中。

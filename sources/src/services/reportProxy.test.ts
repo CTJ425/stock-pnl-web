@@ -27,7 +27,12 @@ vi.stubGlobal('fetch', async (url: string) => {
   return new Response(await data.text(), { status: 200 })
 })
 
-import { fetchStoredReport, generateReport, type ReportData } from './reportProxy'
+import {
+  clearReportCache,
+  fetchStoredReport,
+  generateReport,
+  type ReportData,
+} from './reportProxy'
 
 const blobOf = (obj: unknown) => ({ data: new Blob([JSON.stringify(obj)]), error: null })
 const notFound = { data: null, error: { message: 'Not found' } }
@@ -49,7 +54,10 @@ const reportData = {
 } as unknown as ReportData
 
 describe('fetchStoredReport（Storage-first）', () => {
-  beforeEach(() => storageDownload.mockReset())
+  beforeEach(() => {
+    storageDownload.mockReset()
+    clearReportCache()
+  })
 
   it('命中：先讀 manifest 取 ymd，再讀 {ymd}/{ticker}.json', async () => {
     storageDownload.mockImplementation((path: string) => {
@@ -61,6 +69,28 @@ describe('fetchStoredReport（Storage-first）', () => {
     const r = await fetchStoredReport('2330')
     expect(r?.dataDate).toBe('2026-07-24')
     expect(r?.history).toHaveLength(1)
+  })
+
+  it('記憶體快取命中：同 session 第二次讀取不發出 Storage request', async () => {
+    storageDownload.mockImplementation((path: string) => {
+      if (path === 'manifest.json') return Promise.resolve(blobOf({ ymd: '20260724' }))
+      if (path === '20260724/2330.json')
+        return Promise.resolve(blobOf({ ticker: '2330', dataDate: '2026-07-24', data: reportData }))
+      return Promise.resolve(notFound)
+    })
+    const r1 = await fetchStoredReport('2330')
+    expect(r1?.ticker).toBe('2330')
+    expect(storageDownload).toHaveBeenCalledTimes(2) // manifest + 2330.json
+
+    // 第二次呼叫直接命中記憶體快取
+    const r2 = await fetchStoredReport('2330')
+    expect(r2?.ticker).toBe('2330')
+    expect(storageDownload).toHaveBeenCalledTimes(2)
+
+    // forceRefresh: true 強制繞過快取重抓
+    const r3 = await fetchStoredReport('2330', { forceRefresh: true })
+    expect(r3?.ticker).toBe('2330')
+    expect(storageDownload).toHaveBeenCalledTimes(4) // + manifest + 2330.json
   })
 
   it('無 manifest → null（呼叫端會 fallback 即點即產）', async () => {
@@ -88,6 +118,7 @@ describe('fetchStoredReport（Storage-first）', () => {
     expect(r).not.toBeNull()
     expect(r!.schema).toBe(3)
 
+    clearReportCache()
     // Future upgrades will also require the same fee
     storageDownload.mockImplementation((path: string) =>
       Promise.resolve(
@@ -111,9 +142,13 @@ describe('fetchStoredReport（Storage-first）', () => {
 })
 
 describe('generateReport（即點即產 fallback）', () => {
-  beforeEach(() => functionsInvoke.mockReset())
+  beforeEach(() => {
+    functionsInvoke.mockReset()
+    storageDownload.mockReset()
+    clearReportCache()
+  })
 
-  it('回傳結構化 data', async () => {
+  it('回傳結構化 data 並寫入記憶體快取', async () => {
     functionsInvoke.mockResolvedValue({
       data: { reportId: 'r1', generatedAt: 't', dataDate: '2026-07-24', data: reportData },
       error: null,
@@ -121,6 +156,11 @@ describe('generateReport（即點即產 fallback）', () => {
     const d = await generateReport({ market: 'TPE', ticker: '2330', name: '台積電' })
     expect(d.ticker).toBe('2330')
     expect(d.schema).toBe(2)
+
+    // generate 後續呼叫 fetchStoredReport 應直接命中記憶體快取
+    const cached = await fetchStoredReport('2330')
+    expect(cached?.ticker).toBe('2330')
+    expect(storageDownload).not.toHaveBeenCalled()
   })
 
   it('Edge Function 回錯誤時丟出訊息', async () => {
