@@ -1105,3 +1105,65 @@ SELECT cron.schedule(
   );
   $$
 );
+
+
+-- =========================================================
+-- 6e. HARD GATE — this script FAILS if a placeholder survived
+-- =========================================================
+--
+--   §6d asks a human to run a review query and read it. That did not work: the same
+--   defect shipped in 2026-07 (BUG-002 / BUG-003) and again on 2026-08-31, when both
+--   cloud projects were recreated and every one of their 12 cron jobs kept the literal
+--   `<PROJECT_REF>` and `<CRON_SECRET>`. They had never run once (OPS-001).
+--
+--   `cron.schedule` accepts a placeholder string happily, so "the SQL succeeded" proves
+--   nothing. This block converts that silent success into a loud failure at apply time.
+--   It runs after every cron.schedule above, so applying schema.sql with placeholders
+--   still in place now aborts the transaction instead of leaving broken jobs behind.
+--
+--   Run `sources/supabase/verify.sql` afterwards for the checks this block cannot make.
+
+DO $$
+DECLARE
+  bad_url    int;
+  bad_secret int;
+  refs       int;
+  secrets    int;
+  short_key  int;
+BEGIN
+  SELECT count(*) INTO bad_url    FROM cron.job WHERE command LIKE '%<PROJECT_REF>%';
+  SELECT count(*) INTO bad_secret FROM cron.job WHERE command LIKE '%''<CRON_SECRET>''%';
+
+  IF bad_url > 0 OR bad_secret > 0 THEN
+    RAISE EXCEPTION
+      'schema.sql aborted: % cron job(s) still contain <PROJECT_REF> and % still contain <CRON_SECRET>. '
+      'Substitute both placeholders in section 6 and re-run. cron.schedule accepts them silently, '
+      'which is why this gate exists.', bad_url, bad_secret;
+  END IF;
+
+  -- BUG-003 variant: the jobs were substituted, but with ANOTHER project's ref, so this
+  -- database kept calling that project's function. Every job must name the same host.
+  -- Matched generically: a self-hosted deployment is not on supabase.co.
+  SELECT count(DISTINCT (regexp_match(command, 'https://([^/'']+)'))[1])
+    INTO refs FROM cron.job WHERE command LIKE '%https://%';
+  IF refs > 1 THEN
+    RAISE EXCEPTION
+      'schema.sql aborted: cron jobs point at % different hosts. '
+      'They must all target this deployment.', refs;
+  END IF;
+
+  -- One secret, shared by every job, and never 13 characters (the length of '<CRON_SECRET>').
+  SELECT count(DISTINCT (regexp_match(command, $q$'x-cron-secret',\s*'([^']*)'$q$))[1]),
+         count(*) FILTER (
+           WHERE length((regexp_match(command, $q$'x-cron-secret',\s*'([^']*)'$q$))[1]) = 13)
+    INTO secrets, short_key
+  FROM cron.job WHERE command LIKE '%x-cron-secret%';
+
+  IF secrets > 1 THEN
+    RAISE EXCEPTION 'schema.sql aborted: cron jobs carry % different x-cron-secret values.', secrets;
+  END IF;
+  IF short_key > 0 THEN
+    RAISE EXCEPTION 'schema.sql aborted: % cron job(s) carry a 13-character secret, '
+                    'the length of the placeholder.', short_key;
+  END IF;
+END $$;

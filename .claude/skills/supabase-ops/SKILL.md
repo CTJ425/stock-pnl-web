@@ -82,3 +82,37 @@ Therefore, to manually trigger `generate-all`, the user must execute it himself.
 
 **`manifest.json` If the date lags behind, first confirm the day of the week. ** cron is `1-5`, and it doesn’t run on weekends.
 Seeing the date stop on Friday over the weekend is correct and not a glitch.
+
+## After any project is created, recreated, restored or migrated: run the verifier
+
+`sources/supabase/verify.sql` installs two functions. Run them; do not eyeball a query.
+
+```sql
+\i verify.sql                  -- or paste the file into the SQL Editor
+SELECT * FROM verify_setup();  -- report: tables, migration columns, extensions,
+                               -- bucket, cron jobs, placeholders, target host,
+                               -- secret shape, recent HTTP status, RLS
+SELECT assert_setup_ok();      -- raises unless every check passes
+```
+
+**Why this replaced a checklist.** `schema.sql` §6d has carried a written review since
+BUG-002, telling a human to run a query and read the result. The same defect still shipped
+three times, most recently on 2026-08-31: both cloud projects were recreated and all 12
+cron jobs kept the literal `<PROJECT_REF>` **and** `<CRON_SECRET>`, so nothing ran until
+2026-09-01 (OPS-001). `cron.schedule` accepts a placeholder happily — **"the SQL succeeded"
+has never been evidence.** `schema.sql` now ends with a hard gate that aborts on a
+surviving placeholder, and `assert_setup_ok()` is the same gate you can re-run any time.
+
+Two things the database cannot decide for itself, so check them by eye in the report:
+
+- **`cron target host`** prints the host every job calls. Confirm it is *this* deployment.
+  A single wrong-but-consistent host passes the uniformity check and is exactly BUG-003.
+- **`cron http (recent)`** is the only proof the cron secret matches the Edge Function's
+  `CRON_SECRET`; a mismatch shows as 401. `net._http_response` keeps ~6 hours, so run it
+  shortly after a cron round. `UNKNOWN` means no round has landed yet, not that it passed.
+
+**Rotating `CRON_SECRET` is always two writes.** `supabase secrets set CRON_SECRET=...`
+changes the Edge side only; the cron commands still carry the old value and start
+answering 401. Change both in the same session, then re-hash to prove they match:
+`encode(sha256(convert_to(<the value in the command>,'UTF8')),'hex')` must equal the hash
+`supabase secrets list` prints. Never print either value.

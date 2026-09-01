@@ -7,6 +7,30 @@
 
 ---
 
+## 📅 Log: 2026-09-01 (recurrence prevention + route plugin 0.9.1)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: stock-pnl-web stays at `0.9.25` (no app code changed); `route` plugin `0.9.0` → `0.9.1`.
+
+### 1. The cron defect can no longer ship silently
+- Root cause of the recurrence: the check existed only as a comment in `schema.sql` §6d asking a human to run a query. See OPS-001.
+- `schema.sql` §6e is now a hard gate — applying the script with a surviving placeholder aborts instead of creating broken jobs.
+- New `sources/supabase/verify.sql`: `verify_setup()` returns a 10-row report, `assert_setup_ok()` raises unless everything passes. Proven to have teeth by planting a placeholder job on DEV and watching all three detection paths fire.
+- Two checks still need a human eye and say so in the report: `cron target host` (uniformity is checkable, correctness is not) and `cron http (recent)` (401 vs 200 is the only proof the secret matches the Edge Function).
+
+### 2. Dispatch rules moved to the plugin's own repository
+- The session's earlier fixes went into `stock-pnl-web/.claude/agents/`, which are the **bare-name** agents. The agents actually dispatched are `route:*`, which come from the `route` plugin. `/root/dev/Model-Routing` is that plugin's source, and its copies are byte-identical to the installed ones.
+- General rules moved upstream and released as `route` 0.9.1: scribe composes no prose a human will read and takes at most two tracking files per dispatch; Step 4 says reviewer has no Bash so briefs must paste builder's VERIFY/TESTS/LINT lines; Step 2 gains four pre-dispatch checks; Step 5 says the main session reads the diff itself where a wrong answer is silent.
+- Project-specific rules stay in `stock-pnl-web/CLAUDE.md`: the `npm run build` verify command, the `cp -i` alias, and the local-vs-scoped reviewer tool difference.
+- Correction worth keeping: `route:reviewer`'s own definition already said "you do not run commands". The five wasted findings were caused by briefs that contradicted it, not by the agent.
+
+### Verification
+- stock-pnl-web: `npx vitest run` 93 files / 1450 tests exit 0; `npm run build` exit 0
+- Model-Routing: `python3 -m pytest -q` 212 passed
+- DEV database: `SELECT assert_setup_ok()` returns `ok`
+
+---
+
 ## 📅 Log: 2026-09-01 13:37:25 Asia/Taipei (0.9.25 release — task 137 §C, cron repair, dispatch rules)
 
 - **Status**: ✅ **COMPLETED**
@@ -35,25 +59,5 @@
 - `npx vitest run` — 93 files / 1450 tests, exit 0
 - `npm run build` — exit 0
 - Cron: `cron.job_run_details` `succeeded`, `net._http_response` 200 on both projects
-
----
-
-## 📅 Log: 2026-09-01 10:17:41 Asia/Taipei (Transaction nature field and fee/tax split CSV)
-
-- **Status**: ✅ **COMPLETED (DEV verified, PROD pending)**
-- **Task Completed**: Task 137 §C (Transaction Nature CSV Extension, full completion)
-- **Routing**: 1 scout → 4 builders (data layer, calculations, form, CSV) → 2 reviewers → main-session adjudication
-- **Bugs/Risks**: New RISK-004 (dropped label on pre-migration database, severity low, accepted).
-- **Work Summary**:
-  - Schema: `transactions.tx_nature TEXT` with CHECK constraint (NULL / SPOT / DAY_TRADE / MARGIN) added to `sources/supabase/schema.sql`.
-  - Provider: Retry on missing-column errors only (`42703` or `PGRST204`); other errors throw immediately (INSERT is not idempotent).
-  - Calculations: `splitFeeTax` centralizes fee/tax split; explicit label only adds information (no forced SPOT rate per BUG-036).
-  - CSV: Export emits `交易性質` and split `手續費`/`證交稅` columns, keeps legacy column. Import accepts labels/codes, sums split columns, reports unrecognized nature per-row.
-  - Form: `交易性質` selector for TPE only; selecting 當沖 sets securities tax rate to 0.0015.
-- **Tests**: 93 files / 1450 tests, all passing, exit 0. Two main-session catches before review: provider retry originally on ANY error (would duplicate transactions); `splitFeeTax` had optional `ticker` with fallback (would overtax ETF/TDR/REIT 3×). Both fixed.
-- **DEV Deployment**: Schema applied and verified. PROD pending (BUG-041).
-- **Reviewer Verdicts**: Calculations PASS with no findings; data layer PASS WITH RISK (dropped-label risk accepted; ledger inference still correct).
-- **Files Changed**: `services/dataProvider.ts`, `sources/supabase/schema.sql`, `utils/fees.ts`, `csv.ts`, `TransactionForm.tsx`, plus 7 test files.
-- **Edge Deployment**: Not needed.
 
 ---

@@ -5,6 +5,26 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-01 10:17:41 Asia/Taipei (Transaction nature field and fee/tax split CSV)
+
+- **Status**: ✅ **COMPLETED (DEV verified, PROD pending)**
+- **Task Completed**: Task 137 §C (Transaction Nature CSV Extension, full completion)
+- **Routing**: 1 scout → 4 builders (data layer, calculations, form, CSV) → 2 reviewers → main-session adjudication
+- **Bugs/Risks**: New RISK-004 (dropped label on pre-migration database, severity low, accepted).
+- **Work Summary**:
+  - Schema: `transactions.tx_nature TEXT` with CHECK constraint (NULL / SPOT / DAY_TRADE / MARGIN) added to `sources/supabase/schema.sql`.
+  - Provider: Retry on missing-column errors only (`42703` or `PGRST204`); other errors throw immediately (INSERT is not idempotent).
+  - Calculations: `splitFeeTax` centralizes fee/tax split; explicit label only adds information (no forced SPOT rate per BUG-036).
+  - CSV: Export emits `交易性質` and split `手續費`/`證交稅` columns, keeps legacy column. Import accepts labels/codes, sums split columns, reports unrecognized nature per-row.
+  - Form: `交易性質` selector for TPE only; selecting 當沖 sets securities tax rate to 0.0015.
+- **Tests**: 93 files / 1450 tests, all passing, exit 0. Two main-session catches before review: provider retry originally on ANY error (would duplicate transactions); `splitFeeTax` had optional `ticker` with fallback (would overtax ETF/TDR/REIT 3×). Both fixed.
+- **DEV Deployment**: Schema applied and verified. PROD pending (BUG-041).
+- **Reviewer Verdicts**: Calculations PASS with no findings; data layer PASS WITH RISK (dropped-label risk accepted; ledger inference still correct).
+- **Files Changed**: `services/dataProvider.ts`, `sources/supabase/schema.sql`, `utils/fees.ts`, `csv.ts`, `TransactionForm.tsx`, plus 7 test files.
+- **Edge Deployment**: Not needed.
+
+---
+
 ## 📅 Log: 2026-09-01 09:39:42 Asia/Taipei (Lot-based unrealized P&L, day-trading tax, codebase audit fixes)
 
 - **Status**: ✅ **COMPLETED (not deployed)**
