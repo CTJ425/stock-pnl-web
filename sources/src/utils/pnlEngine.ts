@@ -235,7 +235,6 @@ export function inferTxFeeRate(
     return Number((tx.fee_tax / gross).toFixed(6))
   }
   const fee = tx.tx_type === 'BUY' ? tx.fee_tax : splitFeeTax(tx).fee
-  if (fee === 0 && tx.fee_tax === 0) return 0
   if (fee <= 0) return null
 
   for (const candidate of COMMON_FEE_RATES) {
