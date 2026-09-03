@@ -10,6 +10,7 @@ import { Inbox, LayoutGrid, List, Plus } from 'lucide-react'
 import { WATCHLIST_MAX, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
 import { fetchPrices, type PriceMap } from '../../services/priceProxy'
 import { fmtPrice, fmtSignedPercent, pnlClass } from '../../utils/formatters'
+import { getStockCategory } from '../../utils/stockCategory'
 import { AddWatchModal } from '../StockDetail/AddWatchModal'
 
 const STORAGE_VIEW_KEY = 'stock_watchlist_view_mode'
@@ -185,6 +186,7 @@ export function WatchSection({
               quote && quote.prevClose !== null && quote.prevClose !== 0
                 ? (quote.price - quote.prevClose) / quote.prevClose
                 : null
+            const category = getStockCategory(item.ticker, item.name)
             return (
               <div
                 key={item.ticker}
@@ -193,7 +195,13 @@ export function WatchSection({
                 onClick={() => onSelectTicker(item.ticker, item.name)}
               >
                 <div className="watchlist-card-head">
-                  <span className="watchlist-card-ticker">{item.ticker}</span>
+                  <div className="watchlist-card-meta">
+                    <span className="watchlist-card-ticker">{item.ticker}</span>
+                    <span className="watchlist-card-name" title={item.name}>
+                      {item.name}
+                    </span>
+                    {category && <span className="watchlist-card-badge">{category}</span>}
+                  </div>
                   <button
                     type="button"
                     className="watchlist-card-del"
@@ -207,18 +215,19 @@ export function WatchSection({
                     ×
                   </button>
                 </div>
-                <div className="watchlist-card-name">{item.name}</div>
-                <div className={`watchlist-card-price ${pnlClass(pct)}`}>
-                  {initialLoading && !quote ? (
-                    <span className="skeleton" style={{ width: 80, height: 26, display: 'inline-block' }} />
-                  ) : quote ? (
-                    fmtPrice(quote.price, 'TWD')
-                  ) : (
-                    '—'
-                  )}
-                </div>
-                <div className={`watchlist-card-change ${pnlClass(pct)}`}>
-                  {pct === null ? (initialLoading ? '—' : '—') : fmtSignedPercent(pct)}
+                <div className="watchlist-card-body">
+                  <div className={`watchlist-card-price ${pnlClass(pct)}`}>
+                    {initialLoading && !quote ? (
+                      <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
+                    ) : quote ? (
+                      fmtPrice(quote.price, 'TWD')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                  <div className={`watchlist-card-change ${pnlClass(pct)}`}>
+                    {pct === null ? '—' : fmtSignedPercent(pct)}
+                  </div>
                 </div>
               </div>
             )
@@ -250,6 +259,7 @@ export function WatchSection({
                   quote && quote.prevClose !== null && quote.prevClose !== 0
                     ? (quote.price - quote.prevClose) / quote.prevClose
                     : null
+                const category = getStockCategory(item.ticker, item.name)
                 return (
                   <tr
                     key={item.ticker}
@@ -258,7 +268,12 @@ export function WatchSection({
                     style={{ cursor: 'pointer' }}
                   >
                     <td>{item.ticker}</td>
-                    <td>{item.name}</td>
+                    <td>
+                      <div className="watchlist-table-name-cell">
+                        <span>{item.name}</span>
+                        {category && <span className="watchlist-card-badge">{category}</span>}
+                      </div>
+                    </td>
                     <td className="num">
                       {initialLoading && !quote ? (
                         <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />

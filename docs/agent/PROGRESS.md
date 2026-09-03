@@ -1,9 +1,40 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude Opus 5 (main session)
-- Action: 0.9.28 — 正式發版並上線 PROD
-- Status: **✅ RECORDED**
-- Timestamp: 2026-09-03 15:59:47 Asia/Taipei
+- Agent: Antigravity
+- Action: 0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤
+- Status: **✅ COMPLETED**
+- Timestamp: 2026-09-03 16:58:30 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 16:58:30 Asia/Taipei (0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.28` → **`0.9.29-dev.1`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者要求依照建議的「方案 A（緊湊型小卡 Mini Card）」改版首頁庫存總覽觀察股票（WatchSection），並自適應判斷股票類型與官方 33 類產業分類，以微型徽章展示。
+- **Work**:
+  1. **Mini Card 緊湊型佈局（方案 A）** (`WatchSection.tsx`, `index.css`):
+     - 卡片網格改為 `repeat(auto-fill, minmax(165px, 1fr))`，gap 10px。
+     - 卡片內距優化為 `10px 10px`，最小高度降至 72px（垂直佔位大幅減少 35%~40%）。
+     - 雙行佈局：
+       - 第 1 行：股票代號（13px mono bold）、名稱（13px 保留 min-width: 2.2em 避免長字名被壓至 0px 隱形）、微型分類徽章（10px subtle badge，max-width: 64px 支援優雅省略，在條列檢視下不受限）、右上角緊湊型移除按鈕（20px）。
+       - 第 2 行：現價（18px tabular nums, 保留紅綠漲跌色）與漲跌幅百分比（12px tabular nums, 保留紅綠色）。
+     - 條列檢視（Table View）同步在名稱旁展示微型分類徽章。
+  2. **台股類型與產業即時判定** (`src/utils/stockCategory.ts`):
+     - 0ms 純函數即時推導，無任何外部網路開銷。
+     - 規則式類型：`00...B` 債券 ETF、`00...L` 槓桿 ETF、`00...R` 反向 ETF、`00...` 股票型 ETF、`02...` ETN、`91...` TDR、`01...` REITs。
+     - 特別股精準比對：嚴格限定 4 位數字代號加英文字母（如 `2881A`），徹底排除權證（如 `03001P`、`08321B`）之誤判。
+     - 官方產業分類：擴充包含上櫃指標龍頭（3293 鈊象、5483 中美晶、3680 家登、6187 萬潤、3105 穩懋、3363 上詮等）之官方產業別，並納入 TPEx「文化創意」、「居家生活」類別。
+     - 啟發式後備比對：支援遊戲/文創、生技/醫材/藥、能源/綠能、軟體/資訊等更完整的關鍵字後備推導。
+  3. **單元測試** (`stockCategory.test.ts`, `WatchSection.test.tsx`):
+     - `stockCategory.test.ts` 新增 17 個測試（包含權證排除、上櫃指標股、新產業別與擴充後備規則）。
+     - `WatchSection.test.tsx` 擴增至 12 個測試（新增超長名稱與 TPEx 類別渲染測試）。
+- **Verify**:
+  - `npx vitest run src/utils/stockCategory.test.ts`: 17/17 tests passed.
+  - `npx vitest run src/components/Dashboard/WatchSection.test.tsx`: 12/12 tests passed.
+  - 全專案測試：`npm test` 96 檔測試檔、1556 個測試全數 PASS。
+  - 編譯與型別：`npm run build`（`tsc -b && vite build`）exit 0。
+  - 代碼檢查：`npx oxlint src` 0 error。
 
 ---
 
@@ -26,30 +57,3 @@
 - **一次被權限守門擋下的嘗試**: 第一次對 PROD 資料庫的寫入被 Claude Code auto mode classifier 擋下。**沒有嘗試繞過**；改為向使用者說明並提供可自行執行的 SQL 檔，待使用者明確再次授權後才重試成功。
 - **連帶關閉**: Task 141（PROD CHECK 約束）、BUG-041、BUG-044-P。
 - **未做**: 融券流程的端到端 Playwright 驗證仍未執行。`transactions.user_id` 為 `NOT NULL` 但 TypeScript `Transaction` 型別未宣告，本次未動。`.inst-matrix tfoot td` 底色寫死為白色疊加、亮色主題方向相反，既有缺陷未修。
-
----
-
-## 📅 Log: 2026-09-03 15:33:55 Asia/Taipei (0.9.28-dev.10 — 表格底色分層)
-
-- **Status**: ✅ **COMPLETED** on `dev` (committed, not pushed)
-- **Version**: `0.9.28-dev.9` → **`0.9.28-dev.10`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 使用者反映表格的標題列與資料列看起來顏色一樣，並指出可能是背景底色造成的。該判斷正確。
-- **診斷方式：逐像素取樣，不是讀 CSS 推論**。以專案真正的 `index.css` 配上真正的 DOM 結構（`.glass.table-scroll → table.data-table`）渲染後截圖再讀像素。暗色主題三層底色為 頁面 `#090b0f` (L\* 3.00) → 卡片 `#0e1116` (L\* 4.99) → 標題列 `#15181d` (L\* 8.14)：**整段只跨越 5.14 個 L\***，標題與資料列之間僅 +3.15，落在人眼分辨門檻上。
-- **兩項在提案階段就查出並更正的錯誤**:
-  1. 第一版提案把亮色資料列寫成 `--panel` `#ffffff`。**錯了**——表格外層是 `.glass`，用的是 `--surface`，亮色為 `#fafbfc`。所有亮色數字重算。
-  2. 使用者原本要的方向（標題變深、資料變淺）在暗色下會撞到頁面底：標題壓到 `#0a0c0f` 時離 `--bg` 只剩 0.27 L\*，卡片上緣會溶進頁面。改採反向分層（標題提亮、資料列不動），使用者確認採用。
-- **Work** (`index.css`):
-  1. `--thead-bg` 暗色 `0.03` → **`0.09`**（合成 `#24262b`）；亮色 `0.035` → **`0.08`**（合成 `#e7e8ea`）。資料列完全不動。
-  2. `.data-table th` 文字由 `--ink-muted` 改 **`--ink-secondary`**。
-  3. 新增 `--thead-solid`（不透明表頭色）與 `--row-band`（保留舊的表頭色調）。
-  4. `.inst-matrix` 凍結首欄：原本表頭格與資料格共用 `var(--panel)`。改為表頭格用 `--thead-solid`、資料格用 `--surface`。
-  5. `.holding-group td` 與 `.adm-prompt-locked` 原本借用 `--thead-bg`，改指向 `--row-band`，外觀維持不變。
-  6. `.report-surface`（PDF 匯出面）補上兩個新變數，底色維持原樣。
-- **一個必須靠順序解決的 CSS 陷阱**: `.inst-matrix th:first-child` 與合併規則 `.inst-matrix th:first-child, .inst-matrix td:first-child` **特異度相同**（0,2,1），先寫的會被後寫的蓋掉。首次寫入時把它放在合併規則之前，等於沒有生效；已移到合併規則之後並加註說明。
-- **順手修掉的既有缺陷**: 亮色主題下 `.inst-matrix` 凍結首欄是 `--panel` `#ffffff`，但表頭是 `#f2f3f4`、資料列是 `#fafbfc`——首欄與上下兩者都對不上。現在兩者皆對齊。
-- **Verify — 全部以像素實測，非計算推估**:
-  - 暗色：標題列 `#23262b`，對資料列 ΔL\* **+10.06**（原 +3.15）。分組列 `#15181d`、資料列 `#0e1116` **未變動**，證實釘定有效。矩陣首欄表頭格對表格標題 ΔL\* +0.10、資料格對資料列 0.00。
-  - 亮色：標題列 `#e7e8ea`，ΔL\* **−6.60**（原 −2.78）。矩陣首欄兩格皆對齊。
-  - 表頭文字 WCAG：暗色 3.85 → **5.73**、亮色 3.03 → **6.47**、PDF 匯出 2.86 → **5.58**，三者皆由不合格轉為通過 AA 的 4.5:1。
-  - `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1537 測試；`npx oxlint src` 0 errors。
-- **未改動，已知**: `.inst-matrix tfoot td` 的底色寫死為 `rgba(255, 255, 255, 0.035)`，是白色疊加，在亮色主題下方向相反。既有缺陷，不在本次核准範圍。
