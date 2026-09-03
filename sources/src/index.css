@@ -4638,3 +4638,47 @@ a.hmenu-item {
 .view-toggle-btn:hover:not(.active) {
   color: var(--ink);
 }
+
+/* ---------- Watchlist Grouping & Filter Chips ---------- */
+.watchlist-filter-chips {
+  margin-bottom: 12px;
+}
+
+.watchlist-cards-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.watchlist-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.watchlist-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.watchlist-group-row {
+  background: var(--surface-subtle, rgba(255, 255, 255, 0.02));
+}
+
+.watchlist-group-cell {
+  padding: 6px 10px !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.watchlist-group-cell .badge-count {
+  margin-left: 6px;
+}
+

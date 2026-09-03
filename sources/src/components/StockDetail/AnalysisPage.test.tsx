@@ -51,7 +51,7 @@ const { useWorkspace, useStockPrices, listWatchlist, fetchPrices } = vi.hoisted(
   listWatchlist: vi.fn(
     async (): Promise<Array<{ ticker: string; name: string; sortOrder: number }>> => [],
   ),
-  fetchPrices: vi.fn(async (): Promise<Record<string, { price: number }>> => ({})),
+  fetchPrices: vi.fn(async (): Promise<Record<string, { price: number; industry?: string | null }>> => ({})),
 }))
 vi.mock('../../context/WorkspaceContext', () => ({ useWorkspace }))
 vi.mock('../../hooks/useStockPrices', () => ({ useStockPrices }))
@@ -394,5 +394,120 @@ describe('AnalysisPage', () => {
     await user.click(screen.getByTestId('fire-watch-changed'))
 
     expect(screen.getByTestId('detail-ticker').textContent).toBe('1101')
+  })
+
+  describe('下拉選單觀察股依產業自動分組 (Auto-Grouping in HeaderMenu)', () => {
+    it('單一觀察股或各產業僅 1 檔時不觸發分組，顯示預設「觀察」標題', async () => {
+      const user = userEvent.setup()
+      setup(TW_AND_US)
+      listWatchlist.mockResolvedValue([
+        { ticker: '2603', name: '長榮', sortOrder: 0 },
+        { ticker: '2059', name: '川湖', sortOrder: 1 },
+      ])
+      render(<AnalysisPage />)
+      await screen.findByRole('button', { name: /切換個股/ })
+      await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+      const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+      expect(menu.getByText('觀察')).toBeTruthy()
+      expect(menu.queryByText(/觀察 ──/)).toBeNull()
+      expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
+        '1802 台玻',
+        '2330 台積電',
+        '2603 長榮',
+        '2059 川湖',
+      ])
+    })
+
+    it('同產業 >= 2 檔時自動聚合為「觀察 ── 產業名」分組', async () => {
+      const user = userEvent.setup()
+      setup(TW_AND_US)
+      listWatchlist.mockResolvedValue([
+        { ticker: '2603', name: '長榮', sortOrder: 0 },
+        { ticker: '2609', name: '陽明', sortOrder: 1 },
+      ])
+      render(<AnalysisPage />)
+      await screen.findByRole('button', { name: /切換個股/ })
+      await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+      const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+      expect(menu.getByText('持股')).toBeTruthy()
+      expect(menu.getByText('觀察 ── 航運業')).toBeTruthy()
+      expect(menu.queryByText(/^觀察$/)).toBeNull()
+      expect(menu.getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual([
+        '1802 台玻',
+        '2330 台積電',
+        '2603 長榮',
+        '2609 陽明',
+      ])
+    })
+
+    it('多產業聚合與單一產業標的自動歸入「觀察 ── 其他」', async () => {
+      const user = userEvent.setup()
+      setup(TW_AND_US)
+      listWatchlist.mockResolvedValue([
+        { ticker: '2603', name: '長榮', sortOrder: 0 },
+        { ticker: '2609', name: '陽明', sortOrder: 1 },
+        { ticker: '2454', name: '聯發科', sortOrder: 2 },
+        { ticker: '3034', name: '聯詠', sortOrder: 3 },
+        { ticker: '1101', name: '台泥', sortOrder: 4 },
+      ])
+      render(<AnalysisPage />)
+      await screen.findByRole('button', { name: /切換個股/ })
+      await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+      const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+      expect(menu.getByText('觀察 ── 航運業')).toBeTruthy()
+      expect(menu.getByText('觀察 ── 半導體業')).toBeTruthy()
+      expect(menu.getByText('觀察 ── 其他')).toBeTruthy()
+
+      const items = menu.getAllByRole('menuitemradio').map((o) => o.textContent)
+      expect(items).toContain('2603 長榮')
+      expect(items).toContain('2609 陽明')
+      expect(items).toContain('2454 聯發科')
+      expect(items).toContain('3034 聯詠')
+      expect(items).toContain('1101 台泥')
+    })
+
+    it('點選產業分組選單中的觀察股，成功切換個股內容', async () => {
+      const user = userEvent.setup()
+      setup(TW_AND_US)
+      listWatchlist.mockResolvedValue([
+        { ticker: '2603', name: '長榮', sortOrder: 0 },
+        { ticker: '2609', name: '陽明', sortOrder: 1 },
+      ])
+      fetchPrices.mockResolvedValue({ 'TPE:2609': { price: 68.5 } })
+      render(<AnalysisPage />)
+      await screen.findByRole('button', { name: /切換個股/ })
+      await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+      // 點擊「2609 陽明」
+      await user.click(screen.getByRole('menuitemradio', { name: '2609 陽明' }))
+
+      expect(screen.getByTestId('detail-ticker').textContent).toBe('2609')
+      expect(screen.getByTestId('detail-name').textContent).toBe('陽明')
+      expect(screen.getByTestId('detail-qty').textContent).toBe('—')
+      expect(await screen.findByTestId('detail-quote')).toBeTruthy()
+      expect(screen.getByTestId('detail-quote').textContent).toBe('68.5')
+    })
+
+    it('電腦週邊個股（廣達 + 英業達）在選單中正確聚合成「觀察 ── 電腦及週邊設備業」', async () => {
+      const user = userEvent.setup()
+      setup(TW_AND_US)
+      listWatchlist.mockResolvedValue([
+        { ticker: '2382', name: '廣達', sortOrder: 0 },
+        { ticker: '2356', name: '英業達', sortOrder: 1 },
+      ])
+      // 當前聚焦廣達，帶有即時報價產業別，英業達尚未有報價（退階靜態電腦週邊）
+      fetchPrices.mockResolvedValue({ 'TPE:2382': { price: 290, industry: '電腦及週邊設備業' } })
+      render(<AnalysisPage initialTicker="2382" />)
+      await screen.findByRole('button', { name: /切換個股/ })
+      await user.click(screen.getByRole('button', { name: /切換個股/ }))
+
+      const menu = within(screen.getByRole('menu', { name: '個股清單' }))
+      expect(menu.getByText('觀察 ── 電腦及週邊設備業')).toBeTruthy()
+      expect(menu.getByRole('menuitemradio', { name: '2382 廣達' })).toBeTruthy()
+      expect(menu.getByRole('menuitemradio', { name: '2356 英業達' })).toBeTruthy()
+    })
   })
 })

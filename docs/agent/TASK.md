@@ -10,11 +10,11 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-03 17:50)
+## 📍 Where the project stands (2026-09-03 19:15)
 
-- **Version 0.9.29-dev.2 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
-  - Implemented: TWSE MIS 即時行情產業別資料流直通、個股行情抬頭 `.quote-badge` 產業分類徽章、收盤無成交價格修復 (BUG-045)、手寫字典誤植修復 (BUG-046: 2208 台船修正為航運業、5701 劍湖山新增為觀光餐旅)。
-  - Verification on `dev`: 96 test files / **1574** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+- **Version 0.9.29-dev.3 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
+  - Implemented: 觀察股票同產業自動群組聚合 (Auto-Grouping, `stockGrouping.ts`)、庫存總覽快速篩選膠囊 (Filter Chips, `WatchSection.tsx`)、條列模式分組列 (`watchlist-group-row`)、個股分析頂部切換選單產業分組 (`AnalysisPage.tsx`)。
+  - Verification on `dev`: 97 test files / **1599** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
 - **Version 0.9.28 — released and live on PROD.** `main` sits on `a1a26da` and is pushed. GitHub Release `0.9.28` exists and is marked Latest.
   - Shipped: 融券做空 (Task 141), intraday day-trade short-first matching, the cold-visual redesign, the font/size realignment to the PROD baseline, the short-only dashboard and 籌碼分析 fixes, and the table contrast pass.
 - **The PROD schema gap is closed.** `transactions.tx_nature` (CHECK includes `SHORT`), `transactions.fee_rate` and `workspaces.fee_rate` now exist on **both** cloud projects. Applied to PROD 2026-09-03; 110 existing transactions were not rewritten. Full DDL kept in `docs/agent/prod-0.9.28-migration.sql`. This closed Task 141, BUG-041 and BUG-044-P.

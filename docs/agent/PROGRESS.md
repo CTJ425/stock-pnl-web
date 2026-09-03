@@ -1,9 +1,38 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: 0.9.29-dev.2 — MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復 (BUG-045, BUG-046)
+- Action: 0.9.29-dev.3 — 觀察股票同產業自動群組聚合、膠囊篩選與分析頁選單分組
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-03 17:50:00 Asia/Taipei
+- Timestamp: 2026-09-03 19:15:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 19:15:00 Asia/Taipei (0.9.29-dev.3 — 觀察股票同產業自動群組聚合、膠囊篩選與分析頁選單分組)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.29-dev.2` → **`0.9.29-dev.3`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者需求「讓相同產業的股票變成一個group，例如一開始只有長榮，但後來又觀察陽明這時候會自行形成一個group，方便使用者依照產業別選擇個股資訊」。
+- **Work**:
+  1. **核心自動分組邏輯 (`stockGrouping.ts`)**:
+     - `groupWatchItems`：依據 `getStockCategory` 解析出的官方/推導產業別進行計數；當同產業標的數 $\ge 2$ 時，自動聚合成獨立產業族群（如「航運業 (2)」）；單一標的、未分類者以及官方「其他」類別個股自然歸入「其他」，徹底杜絕「其他業 (2)」與「其他 (1)」雙重重複分組。若無任何族群 $\ge 2$，不觸發分組。
+     - `getGroupCategoryName`：建立 `CANONICAL_INDUSTRY_MAP`，完整涵蓋 33 大官方產業標準與常見異構別名（電腦週邊／電腦及週邊設備業、化學／化學工業、建材營造、觀光餐旅等），保證報價載入前後產業名稱完全一致，防止族群分裂。ETF/ETN/特別股等資產類型保留原有名稱。
+  2. **庫存總覽分組檢視與快速篩選膠囊 (`WatchSection.tsx`, `index.css`)**:
+     - 膠囊列（Filter Chips）：當存在 $\ge 2$ 群組時，在頂部動態渲染「全部 (N)」、「產業 (M)」、「其他 (K)」切換按鈕，點選後即時過濾卡片/表格列。
+     - 圖卡模式：依群組顯示分組標題與計數標籤（`watchlist-group-title`）。
+     - 條列模式：以分組標題列（`watchlist-group-row`）清晰劃分各產業。
+     - 狀態持久與自適應解構：切換圖卡/條列模式保留當前篩選狀態；標的移除致產業數量 $< 2$ 時自動解構回復扁平檢視。
+     - 篩選崩潰防護：在「其他」篩選狀態下若刪除最後一檔其他標的，`activeFilter` 安全退階為「全部 (N)」並自動同步重設 `filter` state，徹底消除畫面全空之 Fatal Bug。
+  3. **個股分析頂部切換選單產業分組 (`AnalysisPage.tsx`)**:
+     - 頂部「切換個股」下拉選單（`HeaderMenu`）中的觀察股票區塊，依據相同產業自動分組顯示（如「觀察 ── 航運業」、「觀察 ── 電腦及週邊設備業」、「觀察 ── 其他」），且不同標的切換時群組穩定不跳躍。
+  4. **單元測試 (`stockGrouping.test.ts`, `WatchSection.test.tsx`, `AnalysisPage.test.tsx`)**:
+     - `stockGrouping.test.ts`：13 個測試覆蓋空清單、單一股票不分組、多檔不同產業不分組、$\ge 2$ 檔自動聚合、多產業與其他群組、即時報價產業別支援、規範化別名對齊、官方「其他」類別防護、30 檔混合多元資產邊界。
+     - `WatchSection.test.tsx`：新增 7 個測試覆蓋單一股票不觸發分組、2 檔同產業聚合與膠囊、多產業篩選切換、條列模式分組列與模式切換保留狀態、刪除股票後自動解構、刪除最後一檔其他標的退階防護、跨資料來源電腦週邊聚合。
+     - `AnalysisPage.test.tsx`：新增 5 個測試覆蓋單一股票維持「觀察」標題、$\ge 2$ 檔聚合為「觀察 ── 產業名」、多產業聚合與其他分組、分組選單切換個股、異構報價電腦週邊選單聚合。
+- **Verify**:
+  - `npm test`：97 檔測試檔、**1599** 個測試全數 PASS（0 失敗）。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
 
 ---
 
@@ -36,34 +65,3 @@
   - `npm run build`：tsc -b && vite build exit 0。
   - `npx oxlint src`：0 errors。
 - **連帶關閉**: Task 143、BUG-045、BUG-046。
-
----
-
-## 📅 Log: 2026-09-03 16:58:30 Asia/Taipei (0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤)
-
-- **Status**: ✅ **COMPLETED** on `dev`
-- **Version**: `0.9.28` → **`0.9.29-dev.1`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 使用者要求依照建議的「方案 A（緊湊型小卡 Mini Card）」改版首頁庫存總覽觀察股票（WatchSection），並自適應判斷股票類型與官方 33 類產業分類，以微型徽章展示。
-- **Work**:
-  1. **Mini Card 緊湊型佈局（方案 A）** (`WatchSection.tsx`, `index.css`):
-     - 卡片網格改為 `repeat(auto-fill, minmax(165px, 1fr))`，gap 10px。
-     - 卡片內距優化為 `10px 10px`，最小高度降至 72px（垂直佔位大幅減少 35%~40%）。
-     - 雙行佈局：
-       - 第 1 行：股票代號（13px mono bold）、名稱（13px 保留 min-width: 2.2em 避免長字名被壓至 0px 隱形）、微型分類徽章（10px subtle badge，max-width: 64px 支援優雅省略，在條列檢視下不受限）、右上角緊湊型移除按鈕（20px）。
-       - 第 2 行：現價（18px tabular nums, 保留紅綠漲跌色）與漲跌幅百分比（12px tabular nums, 保留紅綠色）。
-     - 條列檢視（Table View）同步在名稱旁展示微型分類徽章。
-  2. **台股類型與產業即時判定** (`src/utils/stockCategory.ts`):
-     - 0ms 純函數即時推導，無任何外部網路開銷。
-     - 規則式類型：`00...B` 債券 ETF、`00...L` 槓桿 ETF、`00...R` 反向 ETF、`00...` 股票型 ETF、`02...` ETN、`91...` TDR、`01...` REITs。
-     - 特別股精準比對：嚴格限定 4 位數字代號加英文字母（如 `2881A`），徹底排除權證（如 `03001P`、`08321B`）之誤判。
-     - 官方產業分類：擴充包含上櫃指標龍頭（3293 鈊象、5483 中美晶、3680 家登、6187 萬潤、3105 穩懋、3363 上詮等）之官方產業別，並納入 TPEx「文化創意」、「居家生活」類別。
-     - 啟發式後備比對：支援遊戲/文創、生技/醫材/藥、能源/綠能、軟體/資訊等更完整的關鍵字後備推導。
-  3. **單元測試** (`stockCategory.test.ts`, `WatchSection.test.tsx`):
-     - `stockCategory.test.ts` 新增 17 個測試（包含權證排除、上櫃指標股、新產業別與擴充後備規則）。
-     - `WatchSection.test.tsx` 擴增至 12 個測試（新增超長名稱與 TPEx 類別渲染測試）。
-- **Verify**:
-  - `npx vitest run src/utils/stockCategory.test.ts`: 17/17 tests passed.
-  - `npx vitest run src/components/Dashboard/WatchSection.test.tsx`: 12/12 tests passed.
-  - 全專案測試：`npm test` 96 檔測試檔、1556 個測試全數 PASS。
-  - 編譯與型別：`npm run build`（`tsc -b && vite build`）exit 0。
-  - 代碼檢查：`npx oxlint src` 0 error。

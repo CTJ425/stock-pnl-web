@@ -7,7 +7,7 @@
  * TWSE after-hours chips cover listed TW only, so the picker stays TW-only.
  * Holding figures share `buildHoldingRows` with the inventory overview.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, Inbox, Plus } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
@@ -17,6 +17,7 @@ import { displayStockName } from '../../services/usStockNames'
 import { fetchPrices, type PriceQuote } from '../../services/priceProxy'
 import { positionKey } from '../../types/models'
 import { listWatchlist, type WatchItem } from '../../services/watchlistService'
+import { groupWatchItems } from '../../utils/stockGrouping'
 import { HeaderMenu } from '../Common/HeaderMenu'
 import { StockDetailPage } from './StockDetailPage'
 import { AddWatchModal } from './AddWatchModal'
@@ -120,6 +121,15 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
 
   const watchTicker = selected?.kind === 'watch' ? selected.ticker : null
 
+  const watchGrouping = useMemo(() => {
+    return groupWatchItems(watchEntries, (e) => {
+      if (watchQuote && watchTicker === e.ticker && watchQuote.industry) {
+        return watchQuote.industry
+      }
+      return prices[`TPE:${e.ticker}`]?.industry
+    })
+  }, [watchEntries, watchQuote, watchTicker, prices])
+
   // Watched tickers carry no quote from useStockPrices (holdings-only), so fetch just the
   // one currently on screen. `cancelled` drops a stale response if the selection moves on
   // before this fetch resolves.
@@ -216,8 +226,20 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
               {holdingEntries.length > 0 && watchEntries.length > 0 && <div className="hmenu-sep" />}
               {watchEntries.length > 0 && (
                 <>
-                  <div className="hmenu-head">觀察</div>
-                  {watchEntries.map(item)}
+                  {!watchGrouping.hasGroups ? (
+                    <>
+                      <div className="hmenu-head">觀察</div>
+                      {watchEntries.map(item)}
+                    </>
+                  ) : (
+                    watchGrouping.groups.map((group, idx) => (
+                      <Fragment key={group.key}>
+                        {idx > 0 && <div className="hmenu-sep" />}
+                        <div className="hmenu-head">{`觀察 ── ${group.name}`}</div>
+                        {group.items.map(item)}
+                      </Fragment>
+                    ))
+                  )}
                 </>
               )}
             </>
