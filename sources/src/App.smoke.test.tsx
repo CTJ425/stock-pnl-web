@@ -199,7 +199,9 @@ describe('App（本機模式煙霧測試）', () => {
 
     // Transaction Record Form
     expect(await screen.findByText('台積電')).toBeTruthy()
-    expect(screen.getByText('買入')).toBeTruthy()
+    // Task 142: the 類型 cell is one chip carrying nature + side. TransactionForm writes
+    // tx_nature 'SPOT' for every TPE row (TransactionForm.tsx:320), so a TPE BUY reads 現股買.
+    expect(screen.getByText('現股買')).toBeTruthy()
     expect(screen.getByText('1,000')).toBeTruthy()
 
     // Dashboard: Holdings and average price (500712 / 1000 = 500.712 → NT$500.71)

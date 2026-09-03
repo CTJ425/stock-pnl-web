@@ -3,6 +3,110 @@
 Older progress entries moved from `PROGRESS.md` to keep the hot file small for agents.
 **Do not load this file on every session** — only when investigating history.
 
+---
+
+## 📅 Log: 2026-09-03 10:20:00 Asia/Taipei (0.9.28-dev.3 — 持股表冷處理 Task 142)
+
+- **Status**: ✅ **COMPLETED** on `dev` (uncommitted)
+- **Version**: `0.9.28-dev.2` → **`0.9.28-dev.3`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Spec**: `docs/agent/specs/task-142-cold-holdings-redesign.md`
+- **Lane**: 2 (elevated risk). scout → spec + 13 failing tests → builder → reviewer → adjudicate → scribe.
+- **Work**:
+  1. **持股表改成方向分組** (`DashboardPage.tsx`): 「方向」欄與整個 `<tfoot>` 刪除，連同 `totals-long` / `totals-short` / `totals-net` 三個 testid。多單、空單各成一段，段首列帶檔數、小計市值、小計未實現，報酬率格留白。沒有空單時不渲染任何段首列。`holding-row-{ticker}` 與 `holding-row-{ticker}-SHORT` 兩個 testid 未改動。
+  2. **淨額搬到市場抬頭** (`DashboardPage.tsx`): 兩塊 `market-panel` 抽成單一 `MarketPanel` 元件，`market-grid` 台美股並排的版面保留。有空單時主數字是「淨額市值」並畫比例曝險條；沒有空單時是「持倉市值」，不畫條也不畫圖例。美股永遠走後者 — `models.ts:6` 註明 `TxNature` 是台股交易性質，`SHORT` 只存在於台股。
+  3. **色塊取代線框** (`index.css`): 新增 `--steel` / `--steel-tint` / `--steel-on` / `--ochre` / `--ochre-tint`，深淺主題各一份。紅綠只標漲跌，鋼藍標空方與信用交易，琥珀標當沖，三組不同欄位。保留 token（`--radius`、`--shadow-card`、`backdrop-filter`、`--accent`、`--up`、`--down`）一行未動。
+  4. **交易類型合併成單一色塊** (`TransactionsPage.tsx`): 新增具名匯出 `txChipClass` / `txChipLabel`。`tx_nature` 為 null 代表未知而非現股，此時只顯示「買入／賣出」並用中性色塊；`TransactionForm.tsx:320` 對美股一律不寫 `tx_nature`，這條路徑在真實資料上是活的。
+  5. **現金收支欄不再上漲跌色** (`TransactionsPage.tsx`): `cashFlow` 只算 `單價 × 股數 ∓ 費稅`，買進恆負、賣出恆正，舊的 `pnlClass(flow)` 因此把每一筆買進染綠、每一筆賣出染紅。整欄改中性，欄名由「損益 / 收支」正名為「現金收支」。
+- **Reviewer 判定**: PASS，兩個 RISK。兩個同源：一條腿全無報價時被當成 0，會印出看起來合理的錯誤淨額，並讓曝險條變成 100/0 的單段條（違反 spec C2 負向條件）。**兩個都已修掉，不是接受**：`legsKnown = longMkt !== null && shortMkt !== null`，任一腿未知則淨額為 null 且不渲染曝險條。新增 T14 回歸測試。
+- **Builder 回報的衝突**: `App.smoke.test.tsx:201` 斷言舊的純文字「買入」。`TransactionForm.tsx:320` 對台股一律寫入 `tx_nature: 'SPOT'`，該格改版後是「現股買」。測試檔由主 session 更新。
+- **驗證**: `npm run build` exit 0；`npx vitest run` exit 0，95 檔 **1530** 測試（基準 1518）。Playwright 雙主題截圖確認台美股並排、曝險條、分組小計、鋼藍空單列、四種交易色塊皆正確。
+- **未做**: 全站拆毛玻璃（`--radius` / `--shadow-card` / `backdrop-filter` / `--accent`）刻意不在此次範圍，屬於全站改動，另開任務。`YearlyPage.tsx` 未改動。
+
+---
+
+## 📅 Log: 2026-09-02 21:47:31 Asia/Taipei (0.9.28-dev.2 — 融券做空 Task 141)
+
+- **Status**: ✅ **COMPLETED** on `dev` (uncommitted)
+- **Version**: `0.9.28-dev.1` → **`0.9.28-dev.2`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Specs**: `docs/agent/specs/task-141-short-selling.md` (Stage A), `docs/agent/specs/task-141-short-selling-stage-b.md` (Stage B)
+- **Work**:
+  1. **Stage A — engine** (`models.ts`, `pnlEngine.ts`, `fees.ts`): `TxNature` gained `'SHORT'`. `Position` gained four required fields `shortQty` / `shortProceeds` / `shortRawProceeds` / `shortLots`. `computeLedger` opens a short lot on `SHORT`+SELL and FIFO-covers on `SHORT`+BUY. A short open books no amount fields; only the cover books `sellAmt` / `costBasis` / `realized`, and never `buyAmt`. Over-cover opens a long lot plus a warning. `splitFeeTax` returns a third component `borrow`; `LedgerSummary` gained `feesBorrow`. `BORROW_FEE_RATE = 0.0008` lives in `pnlEngine.ts` because `fees.ts` already imports from it. New exports `estimateUnrealizedShort` and `breakEvenPriceShort`.
+  2. **Defect found while reviewing the engine**: the day-trade candidate filter widened to every same-day opposite-side trade in its fallback branch, so a `SHORT` leg was swallowed by day-trade matching and the short position was never opened. `candidateSells` / `candidateBuys` now exclude `tx_nature === 'SHORT'`. Two regression tests.
+  3. **Stage B — UI/IO** (`holdingRows.ts`, `DashboardPage.tsx`, `TransactionForm.tsx`, `csv.ts`, `index.css`): `buildHoldingRows` became `flatMap` and emits a LONG and a SHORT row with distinct `rowKey`. Dashboard gained a 方向 column and a three-row `<tfoot>` (多頭市值／空頭市值／淨曝險, TWD rows only). Form gained the 融券 option, full-rate tax on selection, borrow fee in the auto-calculated fee, and a 空單快選 dropdown for covers. CSV round-trips 融券.
+  4. **Two BLOCKERs from the Stage B reviewer, both fixed**: `DashboardPage.tsx` summed `mktVal` over LONG and SHORT rows into the 持倉市值 KPI, and summed `holding.cost` once per row so a two-leg position double-counted its cost. Both KPIs now use LONG rows only; unrealized stays per-row because long + short is the correct total. Two tests added.
+  5. **Schema** (`schema.sql`): `transactions_tx_nature_check` allows `'SHORT'`. **DDL not applied to DEV or PROD** — until it runs, a 融券 row is rejected by the CHECK constraint.
+- **Verification**:
+  - `npx vitest run` — 95 files / **1518** tests passed, exit 0
+  - `npm run build` — `tsc -b && vite build` exit 0
+  - `npx oxlint src` — 0 errors
+  - Reviewer Stage A: PASS, no findings. Reviewer Stage B: FAIL with 2 BLOCKERs, both fixed and re-verified.
+- **Assumptions recorded**: borrow fee 0.08%; margin deposit (~90%) is capital tied up and never enters P&L; 資券當沖 does not get the halved day-trade tax.
+
+---
+
+## 📅 Log: 2026-09-02 00:13:00 Asia/Taipei (0.9.28-dev.1 — Intraday day-trade short-first matching, Plan A)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.27` → **`0.9.28-dev.1`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Intraday Day-Trade Matching (`pnlEngine.ts`)**: In `computeLedger`, grouped transactions by trading date (`tx_date`) and implemented priority matching for intraday day-trade transactions (`tx_nature === 'DAY_TRADE'`).
+     - **Short-First Realization**: When a user sells short first and buys to cover later on the same day, day-trade buys and sells pair against each other directly, realizing `revenue - buyCost` (with 0.15% halved tax and fees deducted).
+     - **Inventory Zeroing**: The matched position completely clears within the day with 0 remaining custody shares and no oversold warning.
+     - **Custody Isolation**: Intraday day-trades settle independently without consuming, averaging, or mutating prior-day long-term holding cost bases (`openLots` and `avgCost` remain untouched).
+     - **Partial Cover**: Handles partial covers seamlessly, settling matched shares and routing residual shares to standard moving-average / oversold handling.
+  2. **Unit Tests (`pnlEngine.test.ts`)**: Added comprehensive test cases covering pure short-first day trading, mixed long-term holding with day-trade shorting, and partial cover.
+  3. **Playwright E2E Verification (`verify-daytrade-short-e2e.cjs`)**: Added dedicated end-to-end browser test validating full user flow (Form sell with 0.15% tax auto-set -> Form buy cover -> database persistence -> Dashboard 0 shares -> Yearly +5,665 PnL).
+- **Verification**:
+  - `npx vitest run` — 95 files / **1490** tests 100% passed (exit 0)
+  - `npm run build` — `tsc -b && vite build` exit 0
+  - `npm run lint` — `oxlint` 0 errors
+  - `node scripts/verify-daytrade-short-e2e.cjs` — **Playwright E2E Day-Trade Short Matching PASSED 100%**
+
+---
+
+## 📅 Log: 2026-09-01 20:19:41 Asia/Taipei (0.9.27-dev.1 — per-transaction fee_rate persistence + review fixes)
+
+- **Status**: ✅ **COMPLETED** — commit `46985f6` on `dev`
+- **Version**: `0.9.26` → **`0.9.27-dev.1`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Schema (`schema.sql`, `verify.sql`)**: Added `transactions.fee_rate NUMERIC` with `CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1))`. Added `('transactions','fee_rate')` to `verify_setup()`.
+  2. **Data layer (`models.ts`, `dataProvider.ts`)**: Added `fee_rate?: number | null` to `Transaction`. `TX_COLUMNS` now carries `fee_rate`. The legacy-schema degrade strips **only the column the error names**, via `missingTxColumn()` + `withTxColumnDegrade()`, bounded at 3 attempts and gated on 42703/PGRST204 at every step.
+  3. **Rate inference (`fees.ts`)**: Added `COMMON_FEE_RATES` and `inferFeeRate`, which recovers the historical rate from `(fee_tax - tax) / (price * qty)` for rows with `fee_rate` NULL. Takes the workspace minimum fees as a required argument; caps the inferred ratio at the statutory `DEFAULT_FEE_RATE`.
+  4. **Form parity (`TransactionForm.tsx`)**: Edit mode uses `initial.fee_rate` when present, otherwise `inferFeeRate`, instead of overwriting with the workspace default. Passes both workspace minimum fees to `inferFeeRate`.
+- **Verification**:
+  - `npm run build` — exit 0
+  - `npx vitest run` — 94 files / **1476** tests, exit 0 (exit code checked, not the summary line)
+  - `SELECT * FROM verify_setup()` on DEV `zyebvayngwrqzoaicbwd` — 10/10 PASS; `assert_setup_ok()` — `ok`
+  - `node scripts/verify-fee-rate-e2e.cjs` — exit 0 (Chromium, **every `**/rest/v1/**` call stubbed; no database involved**)
+
+
+---
+
+## 📅 Log: 2026-09-01 16:30:00 Asia/Taipei (0.9.26 — Release 0.9.26 & Comprehensive Documentation Sync)
+
+- **Status**: ✅ **COMPLETED**
+- **Version**: `0.9.26-dev.3` → **`0.9.26`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Work**:
+  1. **Documentation and Reference Cleanup**:
+     - Synchronized PROD Supabase project ref in `GEMINI.md` and `docs/CLAUDE-tw.md` to `hrilemueiqyaoiwnkeuu`, adding DEV cloud ref `zyebvayngwrqzoaicbwd`.
+     - Updated `README.md`, `TASK.md`, and `MechanismGuide.tsx` from 5 cron jobs to 6 cron jobs, adding `backup-daily` (daily transaction backup at 02:00 Asia/Taipei).
+     - Updated `SPEC.md` tech stack from React 18 / TailwindCSS to React 19 / Vanilla CSS design system.
+     - Updated `TASK.md` "Where the project stands" to current version `0.9.26` and 94 test files / 1457 tests.
+  2. **Release Finalization (0.9.26)**:
+     - Consolidated pre-release logs into official `0.9.26` entry in `CHANGELOG.md`.
+     - Stripped `-dev.3` across all version manifests to finalize release.
+  3. **Verification**:
+     - `npx vitest run` — 94 files / 1457 tests 100% passed.
+     - `npm run typecheck:edge`, `npx tsc --noEmit`, and `npm run build` exit 0.
+
+### Verification
+- `npx vitest run` — 94 files / 1457 tests, exit 0
+- `npm run typecheck:edge` — exit 0
+- `npx tsc --noEmit` — exit 0
+- `npm run build` — exit 0
+
+---
+
 ## 📅 Log: 2026-09-01 16:15:00 Asia/Taipei (0.9.26-dev.3 — Persist on-demand chip reports to Storage & add frontend session in-memory cache)
 
 - **Status**: ✅ **COMPLETED**

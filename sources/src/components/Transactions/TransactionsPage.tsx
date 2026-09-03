@@ -6,11 +6,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Calculator, Download, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
-import type { NewTransaction, Transaction } from '../../types/models'
-import { MARKET_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
+import type { NewTransaction, Transaction, TxNature } from '../../types/models'
+import { MARKET_LABEL, TX_NATURE_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 import { transactionsToCsv } from '../../utils/csv'
-import { fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../../utils/formatters'
+import { fmtPrice, fmtQty, fmtSignedMoney } from '../../utils/formatters'
 import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
 import { Modal } from '../Common/Modal'
@@ -23,6 +23,29 @@ import { filterTransactions } from './txSearch'
 function cashFlow(tx: Transaction): number {
   const gross = tx.price * tx.qty
   return tx.tx_type === 'BUY' ? -(gross + tx.fee_tax) : gross - tx.fee_tax
+}
+
+/** Chip colour for the 類型 cell (Task 142 C4): direction/nature hues only, never the price up/down ones. */
+export function txChipClass(nature?: TxNature | null): string {
+  switch (nature) {
+    case 'DAY_TRADE':
+      return 'tx-chip-day'
+    case 'MARGIN':
+      return 'tx-chip-margin'
+    case 'SHORT':
+      return 'tx-chip-short'
+    default:
+      return 'tx-chip-spot'
+  }
+}
+
+/**
+ * `tx_nature` is optional and nullable; absent means *unknown*, not 現股 (models.ts). When it is
+ * null the chip falls back to the plain BUY/SELL label instead of claiming a nature it does not know.
+ */
+export function txChipLabel(tx: Transaction): string {
+  if (!tx.tx_nature) return TX_TYPE_LABEL[tx.tx_type]
+  return `${TX_NATURE_LABEL[tx.tx_nature]}${tx.tx_type === 'BUY' ? '買' : '賣'}`
 }
 
 type TxSortKey =
@@ -320,7 +343,7 @@ export function TransactionsPage() {
                   <SortableTh label="單價" sortKey="price" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="股數" sortKey="qty" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="手續費 / 稅金" sortKey="fee_tax" sort={sort} onSort={handleSort} numeric />
-                  <SortableTh label="損益 / 收支" sortKey="flow" sort={sort} onSort={handleSort} numeric />
+                  <SortableTh label="現金收支" sortKey="flow" sort={sort} onSort={handleSort} numeric />
                   <th aria-label="操作" />
                 </tr>
               </thead>
@@ -347,13 +370,15 @@ export function TransactionsPage() {
                       >
                         {displayStockName(tx.market, tx.ticker, tx.name)}
                       </td>
-                      <td>{TX_TYPE_LABEL[tx.tx_type]}</td>
+                      <td>
+                        <span className={`tx-chip ${txChipClass(tx.tx_nature)}`}>{txChipLabel(tx)}</span>
+                      </td>
                       <td className="num">{fmtPrice(tx.price, currency)}</td>
                       <td className="num">{fmtQty(tx.qty)}</td>
                       <td className="num">
                         {tx.fee_tax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                       </td>
-                      <td className={`num ${pnlClass(flow)}`}>
+                      <td className="num">
                         {fmtSignedMoney(flow, currency, currency === 'TWD' ? 0 : 2)}
                       </td>
                       <td className="num">
