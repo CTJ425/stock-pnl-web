@@ -3,6 +3,46 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../../App'
+import type { Transaction } from '../../types/models'
+import { txChipClass, txChipLabel } from './TransactionsPage'
+
+// Task 142: the 類型 cell became one colour-coded chip, and the cash-flow column lost its colour.
+describe('TransactionsPage 類型色塊 (Task 142)', () => {
+  const base: Transaction = {
+    id: 'tx1',
+    workspace_id: 'ws-1',
+    tx_date: '2026-09-02',
+    market: 'TPE',
+    ticker: '2330',
+    name: '台積電',
+    tx_type: 'BUY',
+    price: 1000,
+    qty: 1000,
+    fee_tax: 1425,
+    created_at: '2026-09-02T00:00:00Z',
+  }
+
+  it('T11: 四種交易性質各自對應一個色塊與一個標籤', () => {
+    expect(txChipLabel({ ...base, tx_nature: 'SPOT' })).toBe('現股買')
+    expect(txChipClass('SPOT')).toBe('tx-chip-spot')
+
+    expect(txChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'DAY_TRADE' })).toBe('當沖賣')
+    expect(txChipClass('DAY_TRADE')).toBe('tx-chip-day')
+
+    expect(txChipLabel({ ...base, tx_nature: 'MARGIN' })).toBe('融資買')
+    expect(txChipClass('MARGIN')).toBe('tx-chip-margin')
+
+    expect(txChipLabel({ ...base, tx_type: 'SELL', tx_nature: 'SHORT' })).toBe('融券賣')
+    expect(txChipClass('SHORT')).toBe('tx-chip-short')
+  })
+
+  it('T12: tx_nature 為 null 代表未知，不得冒充現股', () => {
+    expect(txChipLabel({ ...base, tx_nature: null })).toBe('買入')
+    expect(txChipLabel({ ...base, tx_type: 'SELL' })).toBe('賣出')
+    expect(txChipClass(null)).toBe('tx-chip-spot')
+    expect(txChipClass(undefined)).toBe('tx-chip-spot')
+  })
+})
 
 async function setupAppWithTwoTransactions(user: ReturnType<typeof userEvent.setup>) {
   render(<App />)
@@ -41,6 +81,16 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
   beforeEach(() => {
     cleanup()
     window.localStorage.clear()
+  })
+
+  it('T13: 現金收支欄不上漲跌色，欄名不再宣稱損益', async () => {
+    const user = userEvent.setup()
+    await setupAppWithTwoTransactions(user)
+
+    // 兩筆都是買入，改版前兩個 flow 儲存格都會帶 pnl-down。
+    expect(document.querySelectorAll('.data-table .pnl-up, .data-table .pnl-down').length).toBe(0)
+    expect(screen.getByText('現金收支')).toBeTruthy()
+    expect(screen.queryByText('損益 / 收支')).toBeNull()
   })
 
   it('I1: 輸入「台積」即時過濾表格並顯示筆數提示', async () => {

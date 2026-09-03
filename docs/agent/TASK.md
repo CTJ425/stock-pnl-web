@@ -10,16 +10,44 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-01 20:19)
+## 📍 Where the project stands (2026-09-02 21:47)
 
-- **Version 0.9.27-dev.1** — committed to `dev` as `46985f6`:
-  - Code: per-transaction fee rate persistence (`fee_rate`), inference for legacy rows, and edit-form parity. Includes the main-session review fixes for two money defects (BUG-045, BUG-046) and the reviewer's finding on the fix itself. Spec: `docs/agent/specs/139-fee-rate-review-fixes.md`.
-  - Schema: `workspaces.fee_rate`, `transactions.tx_nature`, `transactions.fee_rate` **applied and verified on DEV** (cloud project `zyebvayngwrqzoaicbwd`, `verify_setup()` 10/10 PASS, `assert_setup_ok()` = `ok`, 2026-09-01). PROD still pending — BUG-044-P.
+- **Version 0.9.28-dev.2** — on `dev`, uncommitted:
+  - Code: 融券做空 (Task 141). `pnlEngine.ts` carries an independent short position (`shortQty` / `shortProceeds` / `shortRawProceeds` / `shortLots`, all required) alongside the long one; the long path is unchanged. Borrow fee 0.08% via `BORROW_FEE_RATE` in `pnlEngine.ts`. Dashboard shows long and short rows with a 方向 column and a three-row TWD subtotal. Form and CSV carry the 融券 label.
+  - Verification: 95 test files / **1518** vitest tests passed, exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+  - **Blocked on a DDL you have not approved**: `schema.sql` allows `tx_nature = 'SHORT'`, but the CHECK constraint on DEV (`zyebvayngwrqzoaicbwd`) and PROD (`hrilemueiqyaoiwnkeuu`) still lists only `SPOT, DAY_TRADE, MARGIN`. Saving a 融券 transaction fails until the constraint is replaced on each project.
+  - Earlier: intraday day-trade short-first matching (0.9.28-dev.1). Schema `workspaces.fee_rate`, `transactions.tx_nature`, `transactions.fee_rate` applied and verified on DEV; PROD still pending — BUG-044-P.
 - **DEV is the cloud project `zyebvayngwrqzoaicbwd`, not the local docker stack.** `sources/.env` points there and DEV Edge runs there (3 ACTIVE functions). DDL goes through `supabase db query --linked` from `sources/`, with an identity value in the same query. The local `stock-pnl-web-dev-db-1` container answers plausibly but the app never talks to it.
 - **DEV cron count: 6**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`, `backup-daily`.
-- **All tests green**: 94 test files / **1476** vitest tests 100% passed, exit 0; `npm run build` exit 0. Playwright E2E passes with the REST API stubbed — it does not reach a database.
 
 ## 📋 Active Tasks
+
+### Task 141: 融券做空 — PROD 的 tx_nature CHECK 約束尚未加入 'SHORT'
+- **Status**: ⏳ **OPEN — DEV done, PROD awaiting `main` + explicit approval**
+- **Agent**: —
+- **Timestamp**: 2026-09-02 22:24:00 Asia/Taipei
+- **DEV (`zyebvayngwrqzoaicbwd`) — ✅ APPLIED 2026-09-02 22:22**: the constraint now reads
+  `CHECK (tx_nature IS NULL OR tx_nature = ANY (ARRAY['SPOT','DAY_TRADE','MARGIN','SHORT']))`.
+  Verified three ways, not by "the SQL succeeded": a 融券 INSERT was accepted, a `'BOGUS'`
+  value was still rejected by `check_violation`, and the whole probe rolled back leaving
+  `count(*) WHERE tx_nature='SHORT'` at 0. `SELECT assert_setup_ok()` returns `ok`.
+- **The write carried its own abort guard**, per the `supabase-ops` rule that `db query --linked`
+  follows cwd rather than the project you think: the DDL sat inside a `DO` block that raised
+  unless `cron.job` carried the DEV project ref. `projects list` confirmed `linked: true` on
+  `zyebvayngwrqzoaicbwd` and `linked: false` on PROD before the write. `cron.job` count alone
+  is not an identity check here — both projects have 6.
+- **PROD (`hrilemueiqyaoiwnkeuu`) — still pending.** Same DDL:
+  ```sql
+  ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
+  ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
+      CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN', 'SHORT'));
+  ```
+  Run it only on `main` with explicit user approval, and only after BUG-044-P adds the
+  `tx_nature` / `fee_rate` columns there.
+- **Noted while probing**: `transactions` carries a `user_id NOT NULL` column that the
+  TypeScript `Transaction` type does not declare. Existing inserts work, so the app supplies
+  it somewhere; nothing in Task 141 changed it. Worth confirming before any future raw INSERT.
+- **Unfinished**: the PROD DDL; an end-to-end Playwright run for the 融券 flow on DEV.
 
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**

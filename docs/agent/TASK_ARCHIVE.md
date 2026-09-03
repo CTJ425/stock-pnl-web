@@ -11,6 +11,25 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 143: 全站冷處理 — 拆毛玻璃、換字體、鋼藍取代紫
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-03 10:45:00 Asia/Taipei
+- **Spec**: docs/agent/specs/task-143-cold-visual-pass.md
+- **Version**: 0.9.28-dev.4 → 0.9.28-dev.5
+- **Files**: `sources/index.html`, `sources/src/index.css`, `sources/src/components/Dashboard/DashboardPage.tsx`
+- **Verify**: `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1530 測試（數量未下降）；深淺主題截圖驗證
+- **Follow-up**: 0.9.28-dev.5 修正市場抬頭六處未實作項目；dev.4 宣稱的底部齊平因 CSS 優先權對撞而未生效
+
+### Task 142: 持股表冷處理 — 方向分組小計、淨額上移抬頭、色塊取代線框
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-03 10:20:00 Asia/Taipei
+- **Spec**: docs/agent/specs/task-142-cold-holdings-redesign.md
+- **Version**: 0.9.28-dev.3
+- **Files**: `sources/src/index.css`, `sources/src/components/Dashboard/DashboardPage.tsx`, `sources/src/components/Transactions/TransactionsPage.tsx`, `sources/src/components/Dashboard/DashboardPage.test.tsx`, `sources/src/components/Transactions/TransactionsPage.test.tsx`, `sources/src/App.smoke.test.tsx`
+- **Verify**: `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1530 測試（基準 1518）
+
 ### Task 139: CSV schema extension for transaction nature
 - **Status**: ✅ **COMPLETED** (2026-09-01)
 - **What was this**: Extend CSV import schema with optional `交易性質` column (SPOT / DAY_TRADE / MARGIN) and separate `手續費` and `證交稅` columns. Backward compatible with legacy single `費稅` column.

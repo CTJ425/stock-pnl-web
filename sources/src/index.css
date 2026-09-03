@@ -4,41 +4,43 @@
  * The profit and loss color matching is based on Taiwan’s market reading habits: red up / green down
  * ========================================================= */
 :root {
-  --bg: #0b0f19;
-  --bg-glow-a: rgba(99, 102, 241, 0.16);
-  --bg-glow-b: rgba(34, 211, 238, 0.1);
-  --surface: rgba(255, 255, 255, 0.045);
-  --surface-strong: rgba(255, 255, 255, 0.08);
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --ink: #e7ecf5;
-  --ink-secondary: #9aa6bd;
-  --ink-muted: #64748b;
-  --accent: #7c8cf8;
-  --accent-strong: #6366f1;
-  --accent-2: #22d3ee;
-  --up: #ff4a5a; /* up (red) */
-  --down: #00e676; /* down (green) */
+  --bg: #090b0f;
+  --bg-glow-a: transparent;
+  --bg-glow-b: transparent;
+  --surface: #0e1116;
+  --surface-strong: #141922;
+  --border: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --ink: #dfe4ea;
+  --ink-secondary: #96a0ad;
+  --ink-muted: #6b7684;
+  --accent: #74a6c0;
+  --accent-strong: #5b8fa8;
+  --accent-2: #74a6c0;
+  --up: #ff5364; /* up (red) */
+  --down: #21c88a; /* down (green) */
   --danger: #f87171;
   --svg-main-1: var(--accent-strong);
   --svg-accent: var(--accent-2);
   --stock-up-bright: var(--up);
   --svg-bg-glow: var(--bg-glow-a);
-  --radius: 14px;
-  --radius-sm: 9px;
+  --radius: 2px;
+  --radius-sm: 2px;
   /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
   --bottom-nav-h: 54px;
-  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
-  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-  --shadow-card: 0 8px 32px rgba(2, 6, 18, 0.45);
-  --panel: #131a2b;
-  --modal-bg: rgba(19, 26, 43, 0.96);
-  --header-bg: rgba(11, 15, 25, 0.72);
+  --font-display: 'Archivo', 'Noto Sans TC', system-ui, sans-serif;
+  --font-body: 'Archivo', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  --font-num: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-card: none;
+  --panel: #0e1116;
+  --modal-bg: #0e1116;
+  --header-bg: #090b0f;
   --overlay: rgba(4, 7, 14, 0.66);
   --input-bg: rgba(255, 255, 255, 0.05);
   --thead-bg: rgba(255, 255, 255, 0.03);
-  --row-hover: rgba(255, 255, 255, 0.035);
-  --row-alt: rgba(255, 255, 255, 0.02);
+  --row-hover: rgba(255, 255, 255, 0.04);
+  --row-alt: transparent;
+  --rule-hair: rgba(255, 255, 255, 0.045);
   --btn-hover-bg: rgba(255, 255, 255, 0.12);
   --btn-hover-border: rgba(255, 255, 255, 0.28);
   --scroll-thumb: rgba(255, 255, 255, 0.14);
@@ -49,33 +51,40 @@
   --notice-warn-ink: #fcd34d;
   --badge-warn-ink: #fbbf24;
   --date-invert: 0.7;
+  --steel: #74a6c0;
+  --steel-tint: rgba(116, 166, 192, 0.2);
+  --steel-on: #0b0e13;
+  --ochre: #d6a742;
+  --ochre-tint: rgba(214, 167, 66, 0.2);
 }
 
 :root[data-theme='light'] {
-  --bg: #eef2f9;
-  --bg-glow-a: rgba(99, 102, 241, 0.12);
-  --bg-glow-b: rgba(34, 211, 238, 0.1);
-  --surface: rgba(255, 255, 255, 0.66);
-  --surface-strong: rgba(255, 255, 255, 0.9);
-  --border: rgba(15, 23, 42, 0.08);
-  --border-strong: rgba(15, 23, 42, 0.16);
-  --ink: #17202f;
-  --ink-secondary: #4a586e;
-  --ink-muted: #7b8698;
-  --accent: #5b6cf0;
-  --accent-strong: #4f46e5;
-  --up: #dc2f3f;
-  --down: #059654;
+  --bg: #eff0f3;
+  --bg-glow-a: transparent;
+  --bg-glow-b: transparent;
+  --surface: #fafbfc;
+  --surface-strong: #ffffff;
+  --border: rgba(15, 19, 25, 0.14);
+  --border-strong: rgba(15, 19, 25, 0.22);
+  --ink: #0f1319;
+  --ink-secondary: #48525f;
+  --ink-muted: #838d9a;
+  --accent: #2f6484;
+  --accent-strong: #245065;
+  --accent-2: #2f6484;
+  --up: #bf2233;
+  --down: #0c6f4b;
   --danger: #dc2626;
-  --shadow-card: 0 8px 28px rgba(15, 23, 42, 0.08);
+  --shadow-card: none;
   --panel: #ffffff;
-  --modal-bg: rgba(255, 255, 255, 0.97);
-  --header-bg: rgba(240, 244, 250, 0.8);
+  --modal-bg: #ffffff;
+  --header-bg: #eff0f3;
   --overlay: rgba(15, 23, 42, 0.35);
   --input-bg: rgba(255, 255, 255, 0.85);
-  --thead-bg: rgba(15, 23, 42, 0.03);
-  --row-hover: rgba(15, 23, 42, 0.04);
-  --row-alt: rgba(15, 23, 42, 0.02);
+  --thead-bg: rgba(15, 19, 25, 0.035);
+  --row-hover: rgba(15, 19, 25, 0.035);
+  --row-alt: transparent;
+  --rule-hair: rgba(15, 19, 25, 0.045);
   --btn-hover-bg: rgba(15, 23, 42, 0.06);
   --btn-hover-border: rgba(15, 23, 42, 0.28);
   --scroll-thumb: rgba(15, 23, 42, 0.22);
@@ -86,6 +95,11 @@
   --notice-warn-ink: #a16207;
   --badge-warn-ink: #92400e;
   --date-invert: 0.35;
+  --steel: #2f6484;
+  --steel-tint: rgba(47, 100, 132, 0.14);
+  --steel-on: #fafbfc;
+  --ochre: #8a5e12;
+  --ochre-tint: rgba(138, 94, 18, 0.15);
 }
 
 * {
@@ -140,8 +154,6 @@ h3 {
   position: sticky;
   top: 0;
   z-index: 50;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
   background: var(--header-bg);
   border-bottom: 1px solid var(--border);
 }
@@ -185,18 +197,19 @@ h3 {
   padding: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 2px;
 }
 
 .tab {
   appearance: none;
   border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--ink-secondary);
+  color: var(--ink-muted);
   font: inherit;
   font-weight: 500;
   padding: 7px 16px;
-  border-radius: 9px;
+  border-radius: 2px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -209,9 +222,9 @@ h3 {
 }
 
 .tab.active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-strong), #4f46e5);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  color: var(--ink);
+  background: transparent;
+  border-bottom: 2px solid var(--ink);
 }
 
 /*
@@ -254,8 +267,6 @@ h3 {
   height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
   padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
   background: var(--header-bg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--border);
 }
 
@@ -268,7 +279,7 @@ h3 {
   padding: 4px 2px;
   font-size: 11px;
   line-height: 1.25;
-  border-radius: 10px;
+  border-radius: 2px;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -297,8 +308,6 @@ h3 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow-card);
 }
 
@@ -315,8 +324,11 @@ h3 {
 }
 
 .section-title h2 {
-  font-size: 16px;
-  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -324,7 +336,8 @@ h3 {
 
 .section-title .hint {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 11px;
+  font-family: var(--font-num);
 }
 
 /* ---------- KPI big character poster ----------*/
@@ -340,16 +353,6 @@ h3 {
   overflow: hidden;
 }
 
-.kpi::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-strong), var(--accent-2), transparent);
-  opacity: 0.7;
-}
-
 .kpi .kpi-label {
   color: var(--ink-secondary);
   font-size: 12.5px;
@@ -360,7 +363,7 @@ h3 {
 
 .kpi .kpi-value {
   margin-top: 6px;
-  font-family: var(--font-display);
+  font-family: var(--font-num);
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -371,6 +374,8 @@ h3 {
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 11.5px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
@@ -381,27 +386,22 @@ h3 {
 }
 
 .market-panel {
-  padding: 14px 16px 16px;
+  padding: 15px 20px 0;
   position: relative;
   overflow: hidden;
-}
-
-.market-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-strong), var(--accent-2), transparent);
-  opacity: 0.7;
+  display: flex;
+  flex-direction: column;
 }
 
 .market-panel .panel-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+
+/* The hero label sits at the right end of the head row, not above the number. */
+.market-panel .panel-head .kpi-label {
+  margin-left: auto;
 }
 
 .market-panel .panel-head h3 {
@@ -417,6 +417,10 @@ h3 {
   padding-top: 12px;
 }
 
+.market-panel .metric-hero {
+  padding-top: 2px;
+}
+
 .market-panel .kpi-label {
   color: var(--ink-secondary);
   font-size: 12.5px;
@@ -427,15 +431,17 @@ h3 {
 
 .market-panel .kpi-value {
   margin-top: 4px;
-  font-family: var(--font-display);
+  font-family: var(--font-num);
   font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 .market-panel .metric-hero .kpi-value {
-  font-size: 22px;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
 }
 
 .market-panel .metric-row {
@@ -455,6 +461,69 @@ h3 {
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 11px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Exposure bar (Task 142): long vs. short market value within one market ----------*/
+.exposure-bar {
+  display: flex;
+  height: 8px;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.exposure-seg-long {
+  background: var(--ink);
+}
+
+.exposure-seg-short {
+  background: var(--steel);
+}
+
+.exposure-key {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+
+.exposure-sw {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+}
+
+.exposure-sw-long {
+  background: var(--ink);
+}
+
+.exposure-sw-short {
+  background: var(--steel);
+}
+
+.market-note {
+  margin-top: 13px;
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+}
+
+.market-panel .market-foot {
+  margin: auto -20px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.market-panel .market-foot .metric {
+  padding: 0 20px 14px;
+}
+
+.market-panel .market-foot .metric + .metric {
+  border-left: 1px solid var(--border);
 }
 
 /* ---------- Profit and loss color (red rises, green falls; values ​​are always signed, not just color) ----------*/
@@ -468,6 +537,29 @@ h3 {
 
 .pnl-flat {
   color: var(--ink-secondary);
+}
+
+/* Direction pill on the holdings table (Task 141): 台股慣例 red = up = long, green = down = short. */
+.dir-long,
+.dir-short {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.dir-long {
+  color: var(--up);
+  background: color-mix(in srgb, var(--up) 12%, transparent);
+}
+
+.dir-short {
+  color: var(--down);
+  background: color-mix(in srgb, var(--down) 12%, transparent);
 }
 
 /* ---------- sheet ----------*/
@@ -486,21 +578,38 @@ table.data-table {
 
 .data-table th {
   text-align: left;
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.4px;
-  color: var(--ink-secondary);
-  padding: 11px 9px;
-  border-bottom: 1px solid var(--border-strong);
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
   background: var(--thead-bg);
 }
 
 .data-table td {
-  padding: 10px 9px;
-  border-bottom: 1px solid var(--border);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--rule-hair);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.data-table .num {
+  font-family: var(--font-num);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The secondary lines inside a numeric cell (未含費 …, 淨收 …) are prose, not a column that
+ * has to align. Monospace at 11px made them wide enough to push the 10-column holdings
+ * table past its frame, so they stay in the proportional face.
+ */
+.data-table .num > div:not(.row-actions) {
+  font-family: var(--font-body);
+  font-size: 10.5px;
 }
 
 .data-table th:first-child,
@@ -569,6 +678,54 @@ table.data-table {
   text-align: right;
 }
 
+/* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
+.holding-group td {
+  background: var(--thead-bg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.holding-group-short .holding-group-label {
+  color: var(--steel);
+}
+
+.row-short td {
+  background: var(--steel-tint);
+}
+
+.row-short td:first-child {
+  box-shadow: inset 3px 0 0 var(--steel);
+}
+
+.tx-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: none;
+}
+
+.tx-chip-spot {
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+}
+
+.tx-chip-day {
+  color: var(--ochre);
+  background: var(--ochre-tint);
+}
+
+.tx-chip-margin {
+  color: var(--steel);
+  background: var(--steel-tint);
+}
+
+.tx-chip-short {
+  color: var(--steel-on);
+  background: var(--steel);
+}
+
 /* ---------- 損益試算: sell ladder + ledger (Task 117) ----------*/
 .whatif-ladder-row {
   cursor: pointer;
@@ -626,7 +783,7 @@ table.data-table {
   gap: 2px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 2px;
   background: var(--surface);
   text-align: left;
   cursor: pointer;
@@ -834,10 +991,8 @@ table.data-table {
   z-index: 120;
   padding: 9px 12px;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   background: var(--surface-strong);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow-card);
   color: var(--ink-secondary);
   font-size: 12px;
@@ -911,7 +1066,7 @@ table.data-table {
   color: var(--ink-secondary);
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: 2px;
   cursor: pointer;
   display: inline-grid;
   place-items: center;
@@ -934,7 +1089,7 @@ table.data-table {
   font: inherit;
   font-weight: 500;
   padding: 8px 14px;
-  border-radius: 10px;
+  border-radius: 2px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -959,14 +1114,14 @@ table.data-table {
 
 .btn-primary {
   border: none;
-  background: linear-gradient(135deg, var(--accent-strong), #4f46e5);
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  background: var(--accent-strong);
+  color: var(--steel-on);
+  box-shadow: none;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #7477f5, #5a50ec);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+  background: var(--accent);
+  box-shadow: none;
 }
 
 .btn-danger {
@@ -985,7 +1140,7 @@ table.data-table {
 .btn-sm {
   padding: 5px 10px;
   font-size: 12.5px;
-  border-radius: 8px;
+  border-radius: 2px;
 }
 
 /* Global "Add Transaction" floating button*/
@@ -997,7 +1152,7 @@ table.data-table {
   border-radius: 999px;
   padding: 13px 22px;
   font-size: 14.5px;
-  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.45);
+  box-shadow: none;
 }
 
 /* Fixed version mark in lower left corner*/
@@ -1012,8 +1167,6 @@ table.data-table {
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   pointer-events: none;
   user-select: none;
 }
@@ -1041,7 +1194,7 @@ table.data-table {
   color: var(--ink);
   background: var(--input-bg);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1124,7 +1277,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   right: 0;
   background: var(--panel);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   max-height: 220px;
   overflow-y: auto;
   box-shadow: 0 12px 32px rgba(2, 6, 18, 0.6);
@@ -1155,7 +1308,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 2px;
   padding: 1px 7px;
 }
 
@@ -1188,7 +1341,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   max-height: 280px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 2px;
 }
 
 .watch-results li + li {
@@ -1247,8 +1400,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
   inset: 0;
   z-index: 100;
   background: var(--overlay);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1262,7 +1413,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   max-width: 460px;
   background: var(--modal-bg);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: 2px;
   /* Layered elevation (Material-style) instead of a flat border reading as the modal's only depth cue.*/
   box-shadow: var(--shadow-card), 0 24px 64px rgba(2, 6, 18, 0.7);
   animation: pop-in 0.2s ease;
@@ -1294,7 +1445,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink-muted);
   cursor: pointer;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: 2px;
   display: grid;
   place-items: center;
 }
@@ -1309,7 +1460,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   display: inline-block;
   width: 72px;
   height: 14px;
-  border-radius: 6px;
+  border-radius: 2px;
   background: linear-gradient(
     90deg,
     var(--skeleton-a) 25%,
@@ -1466,7 +1617,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 2px;
 }
 
 .stock-search input::placeholder {
@@ -1491,7 +1642,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   padding: 7px 10px 7px 12px;
   cursor: pointer;
   display: inline-flex;
@@ -1528,8 +1679,8 @@ input[type='date']::-webkit-calendar-picker-indicator {
   flex: 0 0 auto;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent-2));
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--steel-on);
   font: inherit;
   font-size: 11.5px;
   font-weight: 700;
@@ -1558,7 +1709,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 5px;
   background: var(--panel);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: 2px;
   box-shadow: var(--shadow-card);
 }
 
@@ -1601,7 +1752,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   width: 100%;
   text-align: left;
   padding: 8px 11px;
-  border-radius: 8px;
+  border-radius: 2px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1694,7 +1845,7 @@ a.hmenu-item {
   color: var(--ink);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   padding: 7px 28px 7px 32px;
   outline: none;
   width: 190px;
@@ -1716,7 +1867,7 @@ a.hmenu-item {
   color: var(--ink-muted);
   cursor: pointer;
   padding: 3px;
-  border-radius: 6px;
+  border-radius: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1823,7 +1974,7 @@ a.hmenu-item {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb);
-  border-radius: 8px;
+  border-radius: 2px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
@@ -2791,7 +2942,7 @@ a.hmenu-item {
   background: var(--surface-strong);
   border: 1px solid var(--border);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: 2px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3155,8 +3306,6 @@ a.hmenu-item {
   --accent: #4f46e5;
   background: #ffffff;
   color: #1a1d24;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow: none;
 }
 
@@ -3206,7 +3355,7 @@ a.hmenu-item {
 
 .ai-card {
   padding: 20px;
-  border-radius: 12px;
+  border-radius: 2px;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
@@ -3238,7 +3387,7 @@ a.hmenu-item {
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 2px;
   padding: 8px 12px;
   outline: none;
   width: 100%;
@@ -3267,7 +3416,7 @@ a.hmenu-item {
   font-size: 14px;
   color: var(--ink);
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 2px;
   /* Use tokens instead of hard-written dark overlays - hard-written rgba(0,0,0,.12) in light themes will become a turbid gray block*/
   background: var(--surface);
   border: 1px solid var(--border);
@@ -3314,7 +3463,7 @@ a.hmenu-item {
   line-height: 1.7;
   font-size: 14px;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: 2px;
   background: var(--surface-2);
   /* Long URLs or long strings without whitespace must not fill the page*/
   overflow-wrap: anywhere;
@@ -3347,7 +3496,7 @@ a.hmenu-item {
 
 .ai-error {
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 2px;
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(220, 38, 38, 0.3);
   color: var(--down);
@@ -3442,7 +3591,7 @@ a.hmenu-item {
   align-items: center;
   gap: 9px;
   padding: 9px 11px;
-  border-radius: 10px;
+  border-radius: 2px;
   font: inherit;
   font-size: 13.5px;
   color: var(--ink-secondary);
@@ -3565,7 +3714,7 @@ a.hmenu-item {
 }
 
 .adm-toggle.on {
-  background: linear-gradient(135deg, var(--accent-strong), #4f46e5);
+  background: var(--accent-strong);
   border-color: transparent;
 }
 
@@ -3599,7 +3748,7 @@ a.hmenu-item {
   appearance: none;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 10px;
+  border-radius: 2px;
   padding: 10px 11px;
   cursor: pointer;
   text-align: left;
@@ -3664,7 +3813,7 @@ a.hmenu-item {
   background: var(--input-bg);
   border: 1px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 10px;
+  border-radius: 2px;
   padding: 10px 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -3680,7 +3829,7 @@ a.hmenu-item {
 .adm-prompt-locked {
   margin-top: 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: 10px;
+  border-radius: 2px;
   padding: 11px 13px;
   background: var(--thead-bg);
 }
@@ -4383,7 +4532,7 @@ a.hmenu-item {
   border: none;
   color: var(--ink-muted);
   padding: 3px 8px;
-  border-radius: 5px;
+  border-radius: 2px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;

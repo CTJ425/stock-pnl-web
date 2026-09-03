@@ -80,32 +80,24 @@ function HoldingsTable({
   currency: Currency
   onSelectTicker?: (ticker: string, name: string) => void
 }) {
-  return (
-    <div className="glass table-scroll">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <HelpTh label="代號" help={HELP.ticker} />
-            <HelpTh label="名稱" help={HELP.name} />
-            <HelpTh label="現價" help={HELP.price} numeric />
-            <HelpTh label="持有股數" help={HELP.qty} numeric />
-            <HelpTh label="投入成本" help={HELP.cost} numeric />
-            <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
-            <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
-            <HelpTh label="目前市值" help={HELP.mktVal} numeric />
-            <HelpTh label="未實現淨損益" help={HELP.unrealized} numeric />
-            <HelpTh label="未實現報酬率" help={HELP.roi} numeric />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const { holding: h, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
-            const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
-            const stockName = displayStockName(h.market, h.ticker, h.name)
-            return (
+  const longRows = rows.filter((r) => r.direction === 'LONG')
+  const shortRows = rows.filter((r) => r.direction === 'SHORT')
+  const hasShort = shortRows.length > 0
+  const longMkt = sumOrNull(longRows.map((r) => r.mktVal))
+  const shortMkt = sumOrNull(shortRows.map((r) => r.mktVal))
+  const longUnreal = sumOrNull(longRows.map((r) => r.unrealized))
+  const shortUnreal = sumOrNull(shortRows.map((r) => r.unrealized))
+
+  const renderRow = (row: HoldingRow) => {
+    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
+    const isShort = direction === 'SHORT'
+    const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
+    const stockName = displayStockName(h.market, h.ticker, h.name)
+    return (
             <tr
-              key={h.key}
-              data-testid={`holding-row-${h.ticker}`}
+              key={row.rowKey}
+              data-testid={isShort ? `holding-row-${h.ticker}-SHORT` : `holding-row-${h.ticker}`}
+              className={isShort ? 'row-short' : undefined}
               onClick={isClickable ? () => onSelectTicker(h.ticker, stockName) : undefined}
               style={isClickable ? { cursor: 'pointer' } : undefined}
               title={isClickable ? '點擊查看個股分析' : undefined}
@@ -150,22 +142,38 @@ function HoldingsTable({
                   </>
                 )}
               </td>
-              <td className="num">{fmtQty(h.qty)}</td>
+              <td className={`num ${isShort ? pnlClass(rowQty) : ''}`}>{fmtQty(rowQty)}</td>
               <td className="num">
-                <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
-                <div style={{ fontSize: 11, opacity: 0.65 }} title="不含買進手續費的金額">
-                  未含費 {fmtMoney(h.rawCost, currency)}
-                </div>
+                {isShort ? (
+                  '—'
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
+                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不含買進手續費的金額">
+                      未含費 {fmtMoney(h.rawCost, currency)}
+                    </div>
+                  </>
+                )}
               </td>
               <td className="num">
-                <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
-                <div style={{ fontSize: 11, opacity: 0.65 }} title="不含手續費的價格">
-                  未含費 {fmtPrice(h.rawAvgCost, currency)}
-                </div>
+                {isShort ? (
+                  '—'
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
+                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不含手續費的價格">
+                      未含費 {fmtPrice(h.rawAvgCost, currency)}
+                    </div>
+                  </>
+                )}
               </td>
               <td
                 className={`num ${price !== null ? pnlClass(price - breakEven) : ''}`}
-                title="賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）"
+                title={
+                  isShort
+                    ? '低於此價才獲利'
+                    : '賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）'
+                }
               >
                 {fmtPrice(breakEven, currency)}
               </td>
@@ -205,10 +213,184 @@ function HoldingsTable({
               </td>
               <td className={`num ${pnlClass(roi)}`}>{roi === null ? '—' : fmtSignedPercent(roi)}</td>
             </tr>
-            )
-          })}
+    )
+  }
+
+  return (
+    <div className="glass table-scroll">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <HelpTh label="代號" help={HELP.ticker} />
+            <HelpTh label="名稱" help={HELP.name} />
+            <HelpTh label="現價" help={HELP.price} numeric />
+            <HelpTh label="持有股數" help={HELP.qty} numeric />
+            <HelpTh label="投入成本" help={HELP.cost} numeric />
+            <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
+            <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
+            <HelpTh label="目前市值" help={HELP.mktVal} numeric />
+            <HelpTh label="未實現淨損益" help={HELP.unrealized} numeric />
+            <HelpTh label="未實現報酬率" help={HELP.roi} numeric />
+          </tr>
+        </thead>
+        <tbody>
+          {hasShort ? (
+            <>
+              {longRows.length > 0 && (
+                <>
+                  <tr className="holding-group holding-group-long" data-testid="holding-group-LONG">
+                    <td colSpan={7}>
+                      <span className="holding-group-label">多單・{longRows.length} 檔</span>
+                    </td>
+                    <td className="num" data-testid="holding-group-LONG-mktval">
+                      {fmtMoney(longMkt, currency)}
+                    </td>
+                    <td className={`num ${pnlClass(longUnreal)}`}>
+                      {longUnreal === null ? '—' : fmtSignedMoney(longUnreal, currency)}
+                    </td>
+                    <td></td>
+                  </tr>
+                  {longRows.map(renderRow)}
+                </>
+              )}
+              {shortRows.length > 0 && (
+                <>
+                  <tr className="holding-group holding-group-short" data-testid="holding-group-SHORT">
+                    <td colSpan={7}>
+                      <span className="holding-group-label">空單・{shortRows.length} 檔</span>
+                    </td>
+                    <td className="num" data-testid="holding-group-SHORT-mktval">
+                      {fmtMoney(shortMkt, currency)}
+                    </td>
+                    <td className={`num ${pnlClass(shortUnreal)}`}>
+                      {shortUnreal === null ? '—' : fmtSignedMoney(shortUnreal, currency)}
+                    </td>
+                    <td></td>
+                  </tr>
+                  {shortRows.map(renderRow)}
+                </>
+              )}
+            </>
+          ) : (
+            rows.map(renderRow)
+          )}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function MarketPanel({
+  flag,
+  title,
+  currency,
+  testPrefix,
+  rows,
+  shortRows,
+  longMkt,
+  shortMkt,
+  cost,
+  rawCost,
+  unreal,
+  unrealRaw,
+}: {
+  flag: string
+  title: string
+  currency: Currency
+  testPrefix: 'tw' | 'us'
+  rows: HoldingRow[]
+  shortRows: HoldingRow[]
+  longMkt: number | null
+  shortMkt: number | null
+  cost: number | null
+  rawCost: number | null
+  unreal: number | null
+  unrealRaw: number | null
+}) {
+  const hasShort = shortRows.length > 0
+  // 兩條腿都要有值，淨額才成立。把未載入的一腿當成 0 會印出一個看起來合理但錯誤的淨額，
+  // 而且會讓曝險條變成 100/0 的單段條 — spec C2 的負向條件明文禁止。任一腿未知就整組不顯示。
+  const legsKnown = longMkt !== null && shortMkt !== null
+  const netMkt = hasShort ? (legsKnown ? longMkt - shortMkt : null) : longMkt
+  const heroLabel = hasShort ? '淨額市值' : '持倉市值'
+
+  return (
+    <div className="glass market-panel">
+      <div className="panel-head">
+        <h3>
+          {flag} {title}
+        </h3>
+        <span className="ccy">{currency}</span>
+        <span className="kpi-label">{heroLabel}</span>
+      </div>
+      <div className="metric metric-hero">
+        <div className="kpi-value" data-testid={`${testPrefix}-mktval`}>
+          {rows.length === 0 ? (
+            fmtMoney(0, currency)
+          ) : netMkt === null ? (
+            <span className="skeleton" style={{ width: 120, height: 22 }} />
+          ) : hasShort ? (
+            // 淨額是多空相減，可能為負，所以帶正負號；沒有空單時是單純的持倉市值，不帶號。
+            fmtSignedMoney(netMkt, currency)
+          ) : (
+            fmtMoney(netMkt, currency)
+          )}
+        </div>
+      </div>
+      {hasShort && legsKnown && (
+        <>
+          <div className="exposure-bar" data-testid={`${testPrefix}-exposure`}>
+            <div className="exposure-seg-long" style={{ flexGrow: longMkt, flexBasis: 0 }} />
+            <div className="exposure-seg-short" style={{ flexGrow: shortMkt, flexBasis: 0 }} />
+          </div>
+          <div className="exposure-key">
+            <span className="exposure-sw exposure-sw-long" />
+            多單 <span data-testid={`${testPrefix}-long-mktval`}>{fmtMoney(longMkt, currency)}</span>
+            <span className="exposure-sw exposure-sw-short" />
+            空單 <span data-testid={`${testPrefix}-short-mktval`}>{fmtMoney(shortMkt, currency)}</span>
+          </div>
+        </>
+      )}
+      {!hasShort && rows.length > 0 && <div className="market-note">{rows.length} 檔 · 全部多單</div>}
+      <div className="metric-row market-foot">
+        <div className="metric">
+          <div className="kpi-label" title="包含買入時的手續費">
+            投入總成本
+          </div>
+          <div className="kpi-value" data-testid={`${testPrefix}-cost`}>
+            {rows.length === 0 ? (
+              fmtMoney(0, currency)
+            ) : cost === null ? (
+              <span className="skeleton" style={{ width: 90, height: 22 }} />
+            ) : (
+              fmtMoney(cost, currency)
+            )}
+          </div>
+          <div className="kpi-sub" title="只算股價，不含買入手續費">
+            未含費 {rows.length === 0 ? fmtMoney(0, currency) : rawCost === null ? '—' : fmtMoney(rawCost, currency)}
+          </div>
+        </div>
+        <div className="metric">
+          <div
+            className="kpi-label"
+            title={currency === 'TWD' ? '手續費和證交稅都已經扣掉了' : '已扣買入手續費；美股沒有預扣賣出費用'}
+          >
+            未實現淨損益
+          </div>
+          <div className={`kpi-value ${pnlClass(unreal)}`}>
+            {rows.length === 0 ? (
+              fmtMoney(0, currency)
+            ) : unreal === null ? (
+              <span className="skeleton" style={{ width: 90, height: 22 }} />
+            ) : (
+              fmtSignedMoney(unreal, currency)
+            )}
+          </div>
+          <div className="kpi-sub" title={currency === 'TWD' ? '不扣任何手續費和稅的價差' : '不扣任何手續費的價差'}>
+            未含費 {rows.length === 0 ? fmtMoney(0, currency) : unrealRaw === null ? '—' : fmtSignedMoney(unrealRaw, currency)}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -236,15 +418,25 @@ export function DashboardPage({
   const twRows = rows.filter((r) => r.holding.currency === 'TWD')
   const usRows = rows.filter((r) => r.holding.currency === 'USD')
 
-  const twMkt = sumOrNull(twRows.map((r) => r.mktVal))
-  const twCost = sumOrNull(twRows.map((r) => r.holding.cost))
-  const twRawCost = sumOrNull(twRows.map((r) => r.holding.rawCost))
+  // 持倉市值與投入成本只算多頭列。一個 Holding 若同時有波段持股與融券空單會產出兩列，
+  // 兩列共用同一個 holding 物件：逐列加總 holding.cost 會把同一檔的成本算兩次，而把空單的
+  // 買回成本加進持倉市值則是把資產與負債相加。未實現損益相反，多空兩列相加才是總損益。
+  const twLongRows = twRows.filter((r) => r.direction === 'LONG')
+  const usLongRows = usRows.filter((r) => r.direction === 'LONG')
+  const twShortRows = twRows.filter((r) => r.direction === 'SHORT')
+  const usShortRows = usRows.filter((r) => r.direction === 'SHORT')
+
+  const twMkt = sumOrNull(twLongRows.map((r) => r.mktVal))
+  const twShortMkt = twShortRows.length === 0 ? null : sumOrNull(twShortRows.map((r) => r.mktVal))
+  const twCost = sumOrNull(twLongRows.map((r) => r.holding.cost))
+  const twRawCost = sumOrNull(twLongRows.map((r) => r.holding.rawCost))
   const twUnreal = sumOrNull(twRows.map((r) => r.unrealized))
   const twUnrealRaw = sumOrNull(twRows.map((r) => r.rawUnrealized))
 
-  const usMkt = sumOrNull(usRows.map((r) => r.mktVal))
-  const usCost = sumOrNull(usRows.map((r) => r.holding.cost))
-  const usRawCost = sumOrNull(usRows.map((r) => r.holding.rawCost))
+  const usMkt = sumOrNull(usLongRows.map((r) => r.mktVal))
+  const usShortMkt = usShortRows.length === 0 ? null : sumOrNull(usShortRows.map((r) => r.mktVal))
+  const usCost = sumOrNull(usLongRows.map((r) => r.holding.cost))
+  const usRawCost = sumOrNull(usLongRows.map((r) => r.holding.rawCost))
   const usUnreal = sumOrNull(usRows.map((r) => r.unrealized))
   const usUnrealRaw = sumOrNull(usRows.map((r) => r.rawUnrealized))
 
@@ -253,7 +445,7 @@ export function DashboardPage({
       {ledger.warnings.length > 0 && (
         <div className="notice notice-warn section" role="alert">
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-          發現 {ledger.warnings.length} 筆資料異常（如超賣），已以持有股數為上限計算：
+          發現 {ledger.warnings.length} 筆資料異常（如超賣、超額回補）：
           {ledger.warnings.slice(0, 3).map((w) => (
             <div key={w} style={{ marginTop: 4 }}>・{w}</div>
           ))}
@@ -262,103 +454,34 @@ export function DashboardPage({
       )}
 
       <div className="section market-grid">
-        <div className="glass market-panel">
-          <div className="panel-head">
-            <h3>🇹🇼 台股</h3>
-            <span className="ccy">TWD</span>
-          </div>
-          <div className="metric metric-hero">
-            <div className="kpi-label">持倉市值</div>
-            <div className="kpi-value">
-              {twRows.length === 0
-                ? fmtMoney(0, 'TWD')
-                : twMkt === null
-                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
-                  : fmtMoney(twMkt, 'TWD')}
-            </div>
-          </div>
-          <div className="metric-row">
-            <div className="metric">
-              <div className="kpi-label" title="包含買入時的手續費">
-                投入總成本
-              </div>
-              <div className="kpi-value">
-                {twRows.length === 0
-                  ? fmtMoney(0, 'TWD')
-                  : twCost === null
-                    ? <span className="skeleton" style={{ width: 90, height: 22 }} />
-                    : fmtMoney(twCost, 'TWD')}
-              </div>
-              <div className="kpi-sub" title="只算股價，不含買入手續費">
-                未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twRawCost === null ? '—' : fmtMoney(twRawCost, 'TWD')}
-              </div>
-            </div>
-            <div className="metric">
-              <div className="kpi-label" title="手續費和證交稅都已經扣掉了">
-                未實現淨損益
-              </div>
-              <div className={`kpi-value ${pnlClass(twUnreal)}`}>
-                {twRows.length === 0
-                  ? fmtMoney(0, 'TWD')
-                  : twUnreal === null
-                    ? <span className="skeleton" style={{ width: 90, height: 22 }} />
-                    : fmtSignedMoney(twUnreal, 'TWD')}
-              </div>
-              <div className="kpi-sub" title="不扣任何手續費和稅的價差">
-                未含費 {twRows.length === 0 ? fmtMoney(0, 'TWD') : twUnrealRaw === null ? '—' : fmtSignedMoney(twUnrealRaw, 'TWD')}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass market-panel">
-          <div className="panel-head">
-            <h3>🇺🇸 美股</h3>
-            <span className="ccy">USD</span>
-          </div>
-          <div className="metric metric-hero">
-            <div className="kpi-label">持倉市值</div>
-            <div className="kpi-value">
-              {usRows.length === 0
-                ? fmtMoney(0, 'USD')
-                : usMkt === null
-                  ? <span className="skeleton" style={{ width: 120, height: 22 }} />
-                  : fmtMoney(usMkt, 'USD', 2)}
-            </div>
-          </div>
-          <div className="metric-row">
-            <div className="metric">
-              <div className="kpi-label" title="包含買入時的手續費">
-                投入總成本
-              </div>
-              <div className="kpi-value">
-                {usRows.length === 0
-                  ? fmtMoney(0, 'USD')
-                  : usCost === null
-                    ? <span className="skeleton" style={{ width: 90, height: 22 }} />
-                    : fmtMoney(usCost, 'USD', 2)}
-              </div>
-              <div className="kpi-sub" title="只算股價，不含買入手續費">
-                未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usRawCost === null ? '—' : fmtMoney(usRawCost, 'USD', 2)}
-              </div>
-            </div>
-            <div className="metric">
-              <div className="kpi-label" title="已扣買入手續費；美股沒有預扣賣出費用">
-                未實現淨損益
-              </div>
-              <div className={`kpi-value ${pnlClass(usUnreal)}`}>
-                {usRows.length === 0
-                  ? fmtMoney(0, 'USD')
-                  : usUnreal === null
-                    ? <span className="skeleton" style={{ width: 90, height: 22 }} />
-                    : fmtSignedMoney(usUnreal, 'USD')}
-              </div>
-              <div className="kpi-sub" title="不扣任何手續費的價差">
-                未含費 {usRows.length === 0 ? fmtMoney(0, 'USD') : usUnrealRaw === null ? '—' : fmtSignedMoney(usUnrealRaw, 'USD')}
-              </div>
-            </div>
-          </div>
-        </div>
+        <MarketPanel
+          flag="🇹🇼"
+          title="台股"
+          currency="TWD"
+          testPrefix="tw"
+          rows={twRows}
+          shortRows={twShortRows}
+          longMkt={twMkt}
+          shortMkt={twShortMkt}
+          cost={twCost}
+          rawCost={twRawCost}
+          unreal={twUnreal}
+          unrealRaw={twUnrealRaw}
+        />
+        <MarketPanel
+          flag="🇺🇸"
+          title="美股"
+          currency="USD"
+          testPrefix="us"
+          rows={usRows}
+          shortRows={usShortRows}
+          longMkt={usMkt}
+          shortMkt={usShortMkt}
+          cost={usCost}
+          rawCost={usRawCost}
+          unreal={usUnreal}
+          unrealRaw={usUnrealRaw}
+        />
       </div>
 
       <div className="section">
