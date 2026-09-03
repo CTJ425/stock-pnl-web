@@ -344,10 +344,17 @@ function MarketPanel({
             <div className="exposure-seg-short" style={{ flexGrow: shortMkt, flexBasis: 0 }} />
           </div>
           <div className="exposure-key">
-            <span className="exposure-sw exposure-sw-long" />
-            多單 <span data-testid={`${testPrefix}-long-mktval`}>{fmtMoney(longMkt, currency)}</span>
-            <span className="exposure-sw exposure-sw-short" />
-            空單 <span data-testid={`${testPrefix}-short-mktval`}>{fmtMoney(shortMkt, currency)}</span>
+            {/* 色塊、標籤與數字必須成組，否則色塊在視覺上不屬於它的標籤。 */}
+            <span className="exposure-legend">
+              <span className="exposure-sw exposure-sw-long" />
+              多單
+              <span data-testid={`${testPrefix}-long-mktval`}>{fmtMoney(longMkt, currency)}</span>
+            </span>
+            <span className="exposure-legend">
+              <span className="exposure-sw exposure-sw-short" />
+              空單
+              <span data-testid={`${testPrefix}-short-mktval`}>{fmtMoney(shortMkt, currency)}</span>
+            </span>
           </div>
         </>
       )}
