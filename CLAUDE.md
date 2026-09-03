@@ -42,6 +42,36 @@ nothing until `grep`ped, and `grep`/`git log -S` over local files is the cheapes
 project has. Moving them to GitHub Issues/Releases was evaluated and **rejected**; do not re-propose
 it without reading the measured verdict in `docs/plan/github_documentation_strategy.md`.
 
+### Entry shapes, and the sub-item test that must not be shortened
+
+Match the entries already in each file — they are the specification. The shapes in use:
+
+```markdown
+docs/agent/TASK.md — under `## 📋 Active Tasks`
+### Task 77: Short imperative title
+- **Status**: 🔄 IN PROGRESS | ✅ DONE | 🔁 Recurring
+- **Agent**: Claude
+- **Timestamp**: 2026-08-07 14:30:00 Asia/Taipei
+- **Spec**: docs/agent/specs/task-77.md
+
+docs/agent/FIXED_BUG.md — newest first under `## 🐛 Historical Bug Fixes`
+### Bug ID: BUG-023 — One-line symptom
+- **Date**: 2026-08-07, fixed in 0.6.44
+- **Root Cause**: … / **Fix**: … / **Status**: ✅ FIXED (0.6.44)
+
+docs/agent/PROGRESS.md — newest entry at the top, right after the header block
+## 📅 Log: 2026-08-07 14:30:00 Asia/Taipei (Task 77, 0.6.44)
+```
+
+Rolling a live `TASK.md` entry's sub-items has two conditions and **both** matter: a sub-item is
+complete **iff it starts with `~~` AND carries no `⏳` anywhere in its lines**. This file is full of
+items like ``4. ~~Commit (bundled in f03ade5)~~ ✅ · **push `dev`** —— ⏳`` that open struck through
+and end with live work; testing the strikethrough alone silently deletes an open action. Completed
+ones go to `TASK_ARCHIVE.md` under `### Task NN — completed sub-items (rolled from TASK.md
+<timestamp>)`, and the entry keeps one line after its `- **Timestamp**` reading
+``- **Done**: items <numbers> — full text in `TASK_ARCHIVE.md`.`` **Never renumber the survivors** —
+other documents cite them as "item 7", "item 11".
+
 ## Start of session
 
 Read (on demand, keep context small):
