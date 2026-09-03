@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMisChannels,
   parseMisResponse,
+  toIndustry,
+  MIS_INDUSTRY_MAP,
   type MisQuote,
 } from '../../supabase/functions/stock-price/misParse.ts'
 
@@ -18,6 +20,7 @@ const q = (partial: Pick<MisQuote, 'ticker' | 'price' | 'prevClose'>): MisQuote 
   tradeDate: null,
   tradeTime: null,
   trial: false,
+  industry: null,
   ...partial,
 })
 
@@ -160,6 +163,7 @@ describe('parseMisResponse', () => {
         tradeDate: '20260805',
         tradeTime: '13:30:00',
         trial: false,
+        industry: null,
       },
     ])
   })
@@ -186,5 +190,132 @@ describe('parseMisResponse', () => {
     expect(quote.tradeDate).toBeNull()
     expect(quote.tradeTime).toBeNull()
     expect(quote.volume).toBeNull()
+  })
+
+  it('解析官方產業代碼 row.i 映射為中文產業名稱（33大類）', () => {
+    const data = {
+      msgArray: [
+        { c: '2330', z: '605.00', i: '24' }, // 半導體業
+        { c: '2603', z: '180.00', i: '15' }, // 航運業
+        { c: '2701', z: '30.00', i: '16' },  // 觀光餐旅
+        { c: '3293', z: '800.00', i: '32' }, // 文化創意業
+        { c: '6806', z: '50.00', i: '35' },  // 綠能環保
+        { c: '1101', z: '32.00', i: '1' },   // 水泥工業 (單碼補零)
+        { c: '0050', z: '180.00', i: '00' }, // ETF (非33大類，為 null)
+        { c: '9999', z: '10.00', i: '-' },   // 無效產業代碼為 null
+      ],
+    }
+    const quotes = parseMisResponse(data)
+    expect(quotes.find((q) => q.ticker === '2330')?.industry).toBe('半導體業')
+    expect(quotes.find((q) => q.ticker === '2603')?.industry).toBe('航運業')
+    expect(quotes.find((q) => q.ticker === '2701')?.industry).toBe('觀光餐旅')
+    expect(quotes.find((q) => q.ticker === '3293')?.industry).toBe('文化創意業')
+    expect(quotes.find((q) => q.ticker === '6806')?.industry).toBe('綠能環保')
+    expect(quotes.find((q) => q.ticker === '1101')?.industry).toBe('水泥工業')
+    expect(quotes.find((q) => q.ticker === '0050')?.industry).toBeNull()
+    expect(quotes.find((q) => q.ticker === '9999')?.industry).toBeNull()
+  })
+
+  // BUG-045: 收盤最後一盤無成交（z: '-'）時，嚴禁退階取委買價 b[0]，必須回傳 null，讓系統切換 Yahoo 後備
+  describe('BUG-045 收盤無撮合成交不退階委買價', () => {
+    it('收盤後（t >= 13:30:00）若 z 為 "-"，不退委買價 b[0]，整筆忽略交由 Yahoo 接管', () => {
+      const data = {
+        msgArray: [
+          {
+            c: '5701',
+            z: '-',
+            b: '4.19_4.18_4.17_',
+            y: '4.24',
+            t: '13:30:00',
+            d: '20260903',
+          },
+        ],
+      }
+      expect(parseMisResponse(data)).toEqual([])
+    })
+
+    it('收盤後（t > 13:30:00，如盤後零股/定價 14:30:00）若 z 為 "-"，同樣不退委買價', () => {
+      const data = {
+        msgArray: [
+          {
+            c: '5701',
+            z: '-',
+            b: '4.19_4.18_4.17_',
+            y: '4.24',
+            t: '14:30:00',
+            d: '20260903',
+          },
+        ],
+      }
+      expect(parseMisResponse(data)).toEqual([])
+    })
+
+    it('盤中撮合時間（t < 13:30:00）若 z 為 "-"，仍正常退階買一價以供盤中估值', () => {
+      const data = {
+        msgArray: [
+          {
+            c: '5701',
+            z: '-',
+            b: '4.19_4.18_',
+            y: '4.24',
+            t: '11:00:00',
+            d: '20260903',
+          },
+        ],
+      }
+      const quotes = parseMisResponse(data)
+      expect(quotes).toHaveLength(1)
+      expect(quotes[0].price).toBe(4.19)
+    })
+
+    it('若 t 為無效或空值但 ot >= 13:30:00，仍正確辨識收盤無成交而不退委買價', () => {
+      const data = {
+        msgArray: [
+          {
+            c: '5701',
+            z: '-',
+            b: '4.19_4.18_',
+            y: '4.24',
+            t: '-',
+            ot: '14:30:00',
+            d: '20260903',
+          },
+        ],
+      }
+      expect(parseMisResponse(data)).toEqual([])
+    })
+  })
+
+  describe('toIndustry 產業代碼轉換函式', () => {
+    it('覆蓋全部 33 大類官方產業代碼映射', () => {
+      expect(Object.keys(MIS_INDUSTRY_MAP).length).toBeGreaterThanOrEqual(33)
+      expect(toIndustry('01')).toBe('水泥工業')
+      expect(toIndustry('15')).toBe('航運業')
+      expect(toIndustry('16')).toBe('觀光餐旅')
+      expect(toIndustry('24')).toBe('半導體業')
+      expect(toIndustry('38')).toBe('居家生活')
+    })
+
+    it('支援單位數自動補零與數字型別', () => {
+      expect(toIndustry('5')).toBe('電機機械')
+      expect(toIndustry(5)).toBe('電機機械')
+      expect(toIndustry(24)).toBe('半導體業')
+    })
+
+    it('直接傳入繁體中文產業名稱時能原樣保留', () => {
+      expect(toIndustry('航運業')).toBe('航運業')
+      expect(toIndustry('半導體業')).toBe('半導體業')
+    })
+
+    it('邊界與無效輸入回傳 null', () => {
+      expect(toIndustry(null)).toBeNull()
+      expect(toIndustry(undefined)).toBeNull()
+      expect(toIndustry('')).toBeNull()
+      expect(toIndustry('   ')).toBeNull()
+      expect(toIndustry('-')).toBeNull()
+      expect(toIndustry('00')).toBeNull()
+      expect(toIndustry('99')).toBeNull()
+      expect(toIndustry('INVALID')).toBeNull()
+    })
   })
 })

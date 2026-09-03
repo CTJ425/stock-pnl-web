@@ -34,6 +34,8 @@ export interface MisQuote {
   tradeTime: string | null
   /** Whether it is the trial trading stage (`ip` === '1'): At this time, z is the estimated trial trading price, not the transaction price*/
   trial: boolean
+  /** Official TWSE/TPEx industry name parsed from `row.i` (e.g. '半導體業', '航運業', '觀光餐旅') */
+  industry: string | null
 }
 
 /** Each file attempts to list (tse_) and over-the-counter (otc_) channels at the same time, MIS will automatically ignore the invalid ones.*/
@@ -85,16 +87,73 @@ function toTradeTime(value: unknown): string | null {
   return /^\d{2}:\d{2}:\d{2}$/.test(s) ? s : null
 }
 
+/** TWSE/TPEx 33 official industry categories map */
+export const MIS_INDUSTRY_MAP: Record<string, string> = {
+  '01': '水泥工業',
+  '02': '食品工業',
+  '03': '塑膠工業',
+  '04': '紡織纖維',
+  '05': '電機機械',
+  '06': '電器電纜',
+  '08': '玻璃陶瓷',
+  '09': '造紙工業',
+  '10': '鋼鐵工業',
+  '11': '橡膠工業',
+  '12': '汽車工業',
+  '14': '建材營造',
+  '15': '航運業',
+  '16': '觀光餐旅',
+  '17': '金融保險',
+  '18': '貿易百貨',
+  '19': '綜合',
+  '20': '其他',
+  '21': '化學工業',
+  '22': '生技醫療',
+  '23': '油電燃氣',
+  '24': '半導體業',
+  '25': '電腦及週邊設備業',
+  '26': '光電業',
+  '27': '通信網路業',
+  '28': '電子零組件業',
+  '29': '電子通路業',
+  '30': '資訊服務業',
+  '31': '其他電子業',
+  '32': '文化創意業',
+  '33': '農業科技業',
+  '34': '電子商務業',
+  '35': '綠能環保',
+  '36': '數位雲端',
+  '37': '運動休閒',
+  '38': '居家生活',
+}
+
+export function toIndustry(value: unknown): string | null {
+  const s = String(value ?? '').trim()
+  if (!s || s === '-') return null
+  const code = s.padStart(2, '0')
+  if (MIS_INDUSTRY_MAP[code]) return MIS_INDUSTRY_MAP[code]
+  if (Object.values(MIS_INDUSTRY_MAP).includes(s)) return s
+  return null
+}
+
 /**
  * The transaction price is reduced: z (transaction) → b first level (buy one) → y (yesterday’s closing, including after-hours / no transaction yet).
  *
  * The measured z is often '-' (the snapshot of this endpoint does not necessarily have the last traded price), so buying one price is the norm rather than the exception.
  * The step back to buy one (rather than sell one or mid-price) is deliberate: the market value / unrealized profit and loss semantics on this page are
  * "How much can you get back if you sell them all now?" Buying one is the actual selling price that can be transacted. The estimate is conservative rather than optimistic.
+ *
+ * BUG-045: When the market has reached closing (t >= '13:30:00') and there is no trade (z is '-'),
+ * NEVER fall back to bid order b[0] (which locks incorrect bid prices into cache after hours).
+ * Instead return null so index.ts falls back to Yahoo Finance to get the real official close.
  */
 function pickPrice(row: Record<string, unknown>): number | null {
   const last = toPrice(row.z)
   if (last !== null) return last
+  const tradeTime = toTradeTime(row.t) ?? toTradeTime(row.ot)
+  if (tradeTime !== null && tradeTime >= '13:30:00') {
+    return null
+  }
   const firstBid = toPrice(String(row.b ?? '').split('_')[0])
   if (firstBid !== null) return firstBid
   return toPrice(row.y)
@@ -129,6 +188,7 @@ export function parseMisResponse(data: unknown): MisQuote[] {
       tradeDate: toTradeDate(row.d),
       tradeTime: toTradeTime(row.t),
       trial: String(row.ip ?? '').trim() === '1',
+      industry: toIndustry(row.i),
     })
   }
   return quotes

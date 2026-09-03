@@ -10,11 +10,11 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-03 17:00)
+## 📍 Where the project stands (2026-09-03 17:50)
 
-- **Version 0.9.29-dev.1 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
-  - Implemented: 觀察股票緊湊型小卡 Mini Card（方案 A，寬度 minmax(165px, 1fr)、高約 72px、雙行資訊佈局）與台股 0ms 規則式標籤 + 33 類產業分類即時判定（`stockCategory.ts`）。
-  - Verification on `dev`: 96 test files / **1556** vitest tests, exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+- **Version 0.9.29-dev.2 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
+  - Implemented: TWSE MIS 即時行情產業別資料流直通、個股行情抬頭 `.quote-badge` 產業分類徽章、收盤無成交價格修復 (BUG-045)、手寫字典誤植修復 (BUG-046: 2208 台船修正為航運業、5701 劍湖山新增為觀光餐旅)。
+  - Verification on `dev`: 96 test files / **1574** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
 - **Version 0.9.28 — released and live on PROD.** `main` sits on `a1a26da` and is pushed. GitHub Release `0.9.28` exists and is marked Latest.
   - Shipped: 融券做空 (Task 141), intraday day-trade short-first matching, the cold-visual redesign, the font/size realignment to the PROD baseline, the short-only dashboard and 籌碼分析 fixes, and the table contrast pass.
 - **The PROD schema gap is closed.** `transactions.tx_nature` (CHECK includes `SHORT`), `transactions.fee_rate` and `workspaces.fee_rate` now exist on **both** cloud projects. Applied to PROD 2026-09-03; 110 existing transactions were not rewritten. Full DDL kept in `docs/agent/prod-0.9.28-migration.sql`. This closed Task 141, BUG-041 and BUG-044-P.
@@ -26,14 +26,6 @@
 - **Known and not done**: the end-to-end Playwright run for the 融券 flow; `transactions.user_id` is `NOT NULL` but undeclared in the TypeScript `Transaction` type; `.inst-matrix tfoot td` hardcodes a white overlay that is inverted under the light theme.
 
 ## 📋 Active Tasks
-
-### Task 143: 觀察股票產業分類全面自動化（TWSE/TPEx OpenAPI）與收盤無成交價格修復 (BUG-045, BUG-046)
-- **Status**: ⏳ **OPEN — Investigated, awaiting implementation**
-- **Agent**: Antigravity
-- **Timestamp**: 2026-09-03 17:35:00 Asia/Taipei
-- **What is this**: 
-  1. **BUG-045**: 修復 `misParse.ts` 在收盤後（`t >= '13:30:00'`）無撮合成交（`z === '-'`）時誤退階取委買價 `b[0]` 的缺陷，改為回傳 null 自然由 Yahoo Finance 後備線路接管，避免 5701 劍湖山等收盤無成交之冷門股價格被掛單價竄改並鎖入快取。
-  2. **BUG-046**: 廢除前端手寫 677 檔字典 `COMMON_STOCK_INDUSTRIES`（涵蓋率低且有人為誤植如 2208 台船被誤寫為汽車）。改由證交所 (`t187ap03_L`) 與櫃買中心 (`mopsfin_t187ap03_O`) 官方 OpenAPI 自動獲取全市場 1,984 檔普通股之 33 大官方產業分類，實現 100% 正確與全自動化。
 
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**

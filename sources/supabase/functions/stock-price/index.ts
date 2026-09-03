@@ -71,6 +71,8 @@ interface Quote {
   tradeTime: string | null
   /** Whether it is in the trial stage (only provided by MIS) */
   trial: boolean
+  /** Industry category name (TWSE MIS) */
+  industry: string | null
 }
 
 /** US stock DB cache validity period; Taiwan stock change is determined by quoteWindow.ts based on time period (locked to 08:25 the next day after closing) */
@@ -155,6 +157,7 @@ async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
       tradeDate: null,
       tradeTime: null,
       trial: false,
+      industry: null,
     }
   } catch {
     return null
@@ -240,6 +243,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
         tradeDate: cachedText(row.trade_date),
         tradeTime,
         trial: row.trial === true,
+        industry: null,
         asOf: new Date(at).toISOString(),
       }
     }

@@ -2,6 +2,17 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.29-dev.2（2026-09-03）— MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復 (BUG-045, BUG-046)
+
+- 🌐 **MIS 即時產業別資料流與官方對照**（`misParse.ts`、`stock-price/index.ts`、`priceProxy.ts`）—
+  - 在 Edge Function `stock-price` 中解析 TWSE MIS 即時行情 `row.i` 官方產業代碼，透過 33 大官方產業字典對照表映射成中文產業名稱（如 `15` 航運業、`16` 觀光餐旅、`24` 半導體業、`32` 文化創意業、`35` 綠能環保等）。
+  - `MisQuote`、`Quote` 與前端 `PriceQuote` 介面擴充 `industry?: string | null`，零額外網路請求隨報價即時帶入。
+- 🐛 **修復收盤無成交誤取委買價異常（BUG-045）**（`misParse.ts`）— 收盤最後一盤（`t >= '13:30:00'`）無成交（`z === '-'`）時，`pickPrice` 嚴禁退階取委買價 `b[0]`，改為回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路取得真實收盤價（如 5701 劍湖山真實收盤價 4.30 元，避免錯誤鎖入委買價 4.19 元）。
+- 🏷️ **個股分析行情區塊產業別顯示與字典修正（BUG-046）**（`QuoteTab.tsx`、`WatchSection.tsx`、`stockCategory.ts`、`index.css`）—
+  - 個股分析行情卡片頂部抬頭新增微型產業分類徽章（`.quote-badge`），優先顯示即時報價產業名稱，無報價時自動後備至規則與字典判定。
+  - 觀察股票（WatchSection）卡片與條列模式同步支援 `quote?.industry` 優先顯示。
+  - 修正手寫字典誤植：2208 台船修正為「航運業」、新增 5701 劍湖山為「觀光餐旅」。
+
 ### 0.9.29-dev.1（2026-09-03）— 觀察股票緊湊型小卡與自適應產業分類標籤
 
 - 🗂️ **觀察股票緊湊型小卡（方案 A）**（`WatchSection.tsx`、`index.css`）— 網格改為 `repeat(auto-fill, minmax(165px, 1fr))`，卡片內距緊湊化（`10px 12px`），卡片高度壓縮至 ~72px（減少約 35%~40% 垂直佔位）。

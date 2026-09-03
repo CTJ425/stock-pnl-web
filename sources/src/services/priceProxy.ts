@@ -36,6 +36,8 @@ export interface PriceQuote {
   tradeTime: string | null
   /** Whether the current price grab is in the trial trading stage (at this time, the price is the estimated trial trading price, not the transaction price)*/
   trial: boolean
+  /** Official TWSE/TPEx industry name (e.g. '半導體業', '航運業') */
+  industry?: string | null
   /** Get time (ISO)*/
   asOf: string
   source: 'edge' | 'twse' | 'cache'
@@ -119,6 +121,7 @@ interface EdgeQuote {
   tradeDate?: string | null
   tradeTime?: string | null
   trial?: boolean
+  industry?: string | null
   asOf?: string
 }
 
@@ -164,6 +167,7 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, Res
           tradeDate: edgeText(quote.tradeDate),
           tradeTime: edgeText(quote.tradeTime),
           trial: quote.trial === true,
+          industry: edgeText(quote.industry),
           asOf,
         })
       }
@@ -240,6 +244,7 @@ export async function fetchPrices(
       tradeDate: null,
       tradeTime: null,
       trial: false,
+      industry: null,
       asOf: now,
       source: 'twse',
       stale: false,

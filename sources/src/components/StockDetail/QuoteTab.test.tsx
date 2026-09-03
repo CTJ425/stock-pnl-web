@@ -356,6 +356,20 @@ describe('QuoteTab', () => {
     expect(cards[0].querySelector('.inst-day-tag')!.textContent).toBe('最新')
     expect(cards[0].querySelector('.inst-total-val')!.textContent).toBe('+4,500 張')
   })
+
+  it('行情抬頭處顯示即時產業別徽章（優先取 quote.industry）', () => {
+    const { container } = show({ ...closedQuote, industry: '半導體業' })
+    const badge = container.querySelector('.quote-top-banner .quote-badge')
+    expect(badge).toBeTruthy()
+    expect(badge?.textContent).toBe('半導體業')
+  })
+
+  it('若 quote.industry 未抵達，行情抬頭處由 getStockCategory 規則與字典後備提供標籤', () => {
+    const { container } = show({ ...closedQuote, industry: null })
+    const badge = container.querySelector('.quote-top-banner .quote-badge')
+    expect(badge).toBeTruthy()
+    expect(badge?.textContent).toBe('半導體')
+  })
 })
 
 describe('quoteMeta', () => {

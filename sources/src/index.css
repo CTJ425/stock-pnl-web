@@ -2737,6 +2737,13 @@ a.hmenu-item {
   font-variant-numeric: tabular-nums;
 }
 
+.quote-badge {
+  max-width: none;
+  font-size: 11px;
+  padding: 2px 6px;
+  align-self: center;
+}
+
 .m-price {
   display: flex;
   align-items: flex-end;

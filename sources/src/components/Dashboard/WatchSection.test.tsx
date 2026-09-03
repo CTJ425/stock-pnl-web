@@ -234,5 +234,29 @@ describe('WatchSection (Dashboard)', () => {
     expect(within(card2).getByText('鈊象電子遊戲旗艦')).toBeTruthy()
     expect(within(card2).getByText('文化創意')).toBeTruthy()
   })
+
+  it('優先採用 quote.industry 即時官方產業分類', async () => {
+    const items = [
+      { ticker: '2330', name: '台積電', sortOrder: 0 },
+      { ticker: '2208', name: '台船', sortOrder: 1 },
+      { ticker: '5701', name: '劍湖山', sortOrder: 2 },
+    ]
+    listWatchlist.mockResolvedValue(items)
+    fetchPrices.mockResolvedValue({
+      'TPE:2330': { ...quote(1100, 1000), industry: '半導體業' },
+      'TPE:2208': { ...quote(25, 24), industry: '航運業' },
+      'TPE:5701': { ...quote(4.3, 4.24), industry: '觀光餐旅' },
+    })
+    render(<WatchSection onSelectTicker={() => {}} />)
+
+    const card2330 = await screen.findByTestId('watch-card-2330')
+    expect(within(card2330).getByText('半導體業')).toBeTruthy()
+
+    const card2208 = screen.getByTestId('watch-card-2208')
+    expect(within(card2208).getByText('航運業')).toBeTruthy()
+
+    const card5701 = screen.getByTestId('watch-card-5701')
+    expect(within(card5701).getByText('觀光餐旅')).toBeTruthy()
+  })
 })
 

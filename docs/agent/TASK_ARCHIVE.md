@@ -11,6 +11,18 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 143: 觀察股票產業分類全面自動化（MIS 即時資料流）與收盤無成交價格修復 (BUG-045, BUG-046)
+- **Status**: ✅ **DONE** — closed 2026-09-03 17:50:00 Asia/Taipei in 0.9.29-dev.2
+- **Agent**: Antigravity
+- **What was done**:
+  1. **BUG-045**: `misParse.ts` 收盤（`t >= '13:30:00'`）無成交（`z === '-'`）時，`pickPrice` 絕不退階取買一掛單 `b[0]`，改為回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路接管，精確取得 5701 劍湖山真實收盤價 4.30 元（避免鎖入委買價 4.19 元）。
+  2. **BUG-046 & MIS 產業流**: 
+     - Edge Function `stock-price/misParse.ts` 解析 TWSE MIS `row.i` 官方產業代碼，建立 33 大官方產業字典對照表，在零額外網路請求下將產業名稱即時送達前端。
+     - 前端 `priceProxy.ts` 擴充 `industry?: string | null`。
+     - `QuoteTab.tsx` 行情抬頭處新增 `.quote-badge` 產業分類徽章。
+     - `WatchSection.tsx` 與 `stockCategory.ts` 優先採用即時 `quote?.industry`，並修正 2208 台船為「航運業」、補充 5701 劍湖山為「觀光餐旅」。
+- **Verification**: 96 檔測試 / 1574 vitest 測試全數通過（新增 18 個單元測試），`npm run typecheck:edge` 通過，`npm run build` 通過，`npx oxlint src` 0 errors。
+
 ### Task 141: 融券做空 — PROD 的 tx_nature CHECK 約束尚未加入 'SHORT'
 - **Status**: ✅ **DONE** — closed 2026-09-03 15:59:47 Asia/Taipei with the 0.9.28 release
 - **Agent**: Claude Opus 5 (main session)
