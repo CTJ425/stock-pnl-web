@@ -36,7 +36,11 @@
   --header-bg: #090b0f;
   --overlay: rgba(4, 7, 14, 0.66);
   --input-bg: rgba(255, 255, 255, 0.05);
-  --thead-bg: rgba(255, 255, 255, 0.03);
+  /* 表頭比卡片亮一階。往下壓會撞到 --bg #090b0f（實測只差 0.27 L*），卡片上緣會溶進
+     頁面，所以分層往上做。--row-band 保留舊的 0.03，給分組列等借用表頭色的元件沿用。 */
+  --thead-bg: rgba(255, 255, 255, 0.09);
+  --thead-solid: #24262b;
+  --row-band: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 255, 255, 0.04);
   --row-alt: transparent;
   --rule-hair: rgba(255, 255, 255, 0.045);
@@ -80,7 +84,9 @@
   --header-bg: #eff0f3;
   --overlay: rgba(15, 23, 42, 0.35);
   --input-bg: rgba(255, 255, 255, 0.85);
-  --thead-bg: rgba(15, 19, 25, 0.035);
+  --thead-bg: rgba(15, 19, 25, 0.08);
+  --thead-solid: #e7e8ea;
+  --row-band: rgba(15, 19, 25, 0.035);
   --row-hover: rgba(15, 19, 25, 0.035);
   --row-alt: transparent;
   --rule-hair: rgba(15, 19, 25, 0.045);
@@ -590,7 +596,7 @@ table.data-table {
   font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   padding: 11px 8px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -688,7 +694,7 @@ table.data-table {
 
 /* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
 .holding-group td {
-  background: var(--thead-bg);
+  background: var(--row-band);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.4px;
@@ -3309,6 +3315,8 @@ a.hmenu-item {
   --up: #d21f3c;
   --down: #12864e;
   --thead-bg: #f6f7f9;
+  --thead-solid: #f6f7f9;
+  --row-band: #f6f7f9;
   --row-hover: transparent;
   --row-alt: #f6f7f9;
   --accent: #4f46e5;
@@ -3839,7 +3847,7 @@ a.hmenu-item {
   border: 1px dashed var(--border-strong);
   border-radius: 2px;
   padding: 11px 13px;
-  background: var(--thead-bg);
+  background: var(--row-band);
 }
 
 .adm-prompt-locked b {
@@ -3927,8 +3935,15 @@ a.hmenu-item {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--panel);
+  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列，
+     不能共用 --panel —— 亮色的 --panel 是 #ffffff，資料列卻是 --surface #fafbfc。 */
+  background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+/* 同特異度，必須排在合併規則之後才生效：首欄的表頭格跟表頭走，不跟資料列走。 */
+.inst-matrix th:first-child {
+  background: var(--thead-solid);
 }
 
 .inst-matrix thead th:first-child {
