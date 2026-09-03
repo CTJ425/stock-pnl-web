@@ -356,4 +356,37 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     // 951,425；逐列加總會變成 1,902,850
     expect(num(screen.getByTestId('tw-cost'))).toBe(951_425)
   })
+
+  it('有手續費折讓時，未實現報酬率欄位雙行直顯券商 APP 牌告口徑', () => {
+    const discountedTx: Transaction = {
+      id: 'tx-2303',
+      workspace_id: 'ws-1',
+      tx_date: '2026-08-01',
+      market: 'TPE',
+      ticker: '2303',
+      name: '聯電',
+      tx_type: 'BUY',
+      price: 135.5,
+      qty: 1000,
+      fee_tax: 58,
+      created_at: '2026-08-01T00:00:00Z',
+    }
+    useWorkspace.mockReturnValue({
+      ledger: computeLedger([discountedTx]),
+      current: { id: 'ws-1', name: '主要工作區' },
+      loading: false,
+      error: null,
+    })
+    useStockPrices.mockReturnValue({
+      prices: {
+        'TPE:2303': { price: 125, prevClose: 126, asOf: '', source: 'twse', stale: false, trial: false },
+      },
+      loading: false,
+      refreshedAt: new Date('2026-08-25T10:00:00Z'),
+      refresh: vi.fn(),
+    })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const row = screen.getByTestId('holding-row-2303')
+    expect(row.textContent).toContain('券商')
+  })
 })

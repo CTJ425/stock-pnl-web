@@ -1,9 +1,34 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: 0.9.30-dev.1 — 觀察股票圖卡迷你緊湊化微調
+- Action: 0.9.30-dev.2 — 未實現報酬率雙行直顯券商 APP 牌告口徑 (方案 1)
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-03 22:06:00 Asia/Taipei
+- Timestamp: 2026-09-03 22:55:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 22:55:00 Asia/Taipei (0.9.30-dev.2 — 未實現報酬率雙行直顯券商 APP 牌告口徑)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.30-dev.1` → **`0.9.30-dev.2`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者回饋「聯電 app 是 -7.86% 但專案是 -7.76%」，確認為券商「月退制」未折讓預扣與專案實質折讓扣除產生的 0.10% 差額。依使用者指示實施方案 1：直接雙行呈現，免滑鼠懸停一眼對帳。
+- **Work**:
+  1. **核心計算 (`holdingRows.ts`, `pnlEngine.ts`)**:
+     - `HoldingRow` 擴充 `brokerRoi: number | null` 欄位。
+     - `estimateUnrealized` 支援 `overrideFeeRate?: boolean`，當計算券商口徑時，全批次強制套用台灣法定牌告未折讓費率（0.1425%），算出 1:1 吻合券商 APP 月退制的報酬率（`brokerRoi`）。
+     - 同步支援多頭（LONG）與空單（SHORT）。
+  2. **UI 雙行直顯 (`DashboardPage.tsx`, `QuoteTab.tsx`)**:
+     - 庫存總覽「未實現報酬率」欄位：主標（粗體）顯示實質淨報酬率（`-7.76%`），副標（11px 灰字）直顯 `券商 -7.86%`，免滑鼠懸停一眼核對。
+     - 自適應防呆：當無折讓或兩者四捨五入後相同時，副標自動隱藏。
+     - 個股分析持股概況（`QuoteTab.tsx`）同步在報酬率旁顯示 `(券商 XX%)`。
+  3. **測試與型別**:
+     - `holdingRows.test.ts`：驗證折讓下 `brokerRoi` 比 `roi` 低約 0.10% 之券商口徑。
+     - `DashboardPage.test.tsx`：驗證折讓時儲存格直顯「券商」標記。
+- **Verify**:
+  - `npm test`：97 檔測試檔全數 PASS。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
 
 ---
 
@@ -27,27 +52,3 @@
   - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
   - `npm run build`：tsc -b && vite build exit 0。
   - `npx oxlint src`：0 errors。
-
----
-
-## 📅 Log: 2026-09-03 20:00:00 Asia/Taipei (0.9.29 正式版發布 — 部署 Edge Function 至 PROD、全庫資安查驗與分支合併發布)
-
-- **Status**: ✅ **COMPLETED** (ready to merge `dev` into `main`)
-- **Version**: `0.9.29-dev.3` → **`0.9.29`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 發布 0.9.29 正式版本並部署至 Supabase PROD 正式區。
-- **Work & Security (CIA)**:
-  1. **機密性 (Confidentiality) ── 零憑證外洩防護**:
-     - 全庫 git diff 與 commit 歷程全面掃描，確認零敏感資訊（無使用者 access token `sbp_...`、無 service_role 金鑰、無 `CRON_SECRET` 明文）。
-     - 本專案 GitHub PUBLIC 公開倉庫安全防護通過。
-  2. **完整性 (Integrity) ── 代碼質量與型別防護**:
-     - `npm test`：97 檔測試檔、**1599** 個單元測試全數 PASS（0 失敗）。
-     - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
-     - `npm run build`：生產環境建置成功 exit 0。
-     - `npx oxlint src`：0 error。
-     - Edge Function `stock-price` 維持 `verify_jwt: true` 預設權限保護。
-  3. **可用性 (Availability) ── 正式環境部署與端點實測**:
-     - 成功部署 `stock-price` 至 PROD 正式區 (`hrilemueiqyaoiwnkeuu`)。
-     - 稽核雙環境一致性：PROD 與 DEV 之 `stock-price` 版本皆為 v3，`ezbr_sha256` 雜湊值皆為 `3ef2700b97ccad33d712c6359d1056a2c0a9fbc08a5ceb6a1b25a402b64c1621`，完全一致。
-     - 正式區端點實測：向 PROD `stock-price` 發送台股即時報價請求（2330 台積電、2603 長榮），正確回傳即時行情與 `industry`（半導體業、航運業）；未攜帶 JWT 時精確回傳 401 Unauthorized。
-  4. **版本同步與發布流程**:
-     - 同步版本號至 0.9.29，整合 CHANGELOG 0.9.29 正式紀錄，歸檔 PROGRESS.md 歷史項目至 PROGRESS_ARCHIVE.md。

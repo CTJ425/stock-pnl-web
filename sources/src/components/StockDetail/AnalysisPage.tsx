@@ -263,6 +263,7 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
                 price: selected.row.price,
                 unrealized: selected.row.unrealized,
                 roi: selected.row.roi,
+                brokerRoi: selected.row.brokerRoi,
               }
             : null
         }

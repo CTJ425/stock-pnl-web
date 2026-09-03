@@ -817,6 +817,7 @@ export function estimateUnrealized(
   price: number,
   feeRate: number,
   minFee?: number,
+  overrideFeeRate?: boolean,
 ): number {
   const mktVal = price * holding.qty
   if (holding.currency === 'TWD') {
@@ -828,7 +829,11 @@ export function estimateUnrealized(
     let tax = 0
     for (const lot of lots) {
       const lotVal = price * lot.qty
-      const effectiveFeeRate = lot.feeRate !== undefined && lot.feeRate !== null ? lot.feeRate : feeRate
+      const effectiveFeeRate = overrideFeeRate
+        ? feeRate
+        : lot.feeRate !== undefined && lot.feeRate !== null
+          ? lot.feeRate
+          : feeRate
       fee += floorSafe(lotVal * effectiveFeeRate)
       tax += floorSafe(lotVal * sellTaxRate(holding.ticker))
     }

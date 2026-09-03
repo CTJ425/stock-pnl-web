@@ -40,7 +40,7 @@ const HELP = {
   mktVal: '這些股票現在值多少錢。抓不到股價時顯示「—」。',
   unrealized:
     '如果現在全部賣掉，大概會賺或賠多少。「淨」代表手續費和稅都已經算進去（美股不含賣出費用）。下方「未含費」是不扣任何費用的價差，會比實際好看一點。',
-  roi: '這些持股目前賺賠的百分比。只看手上還有的部分；已經賣掉的請看「年度收益」頁。',
+  roi: '這些持股目前賺賠的百分比。主標為實質淨報酬率（反映設定的折讓）；下方「券商」為依牌告未折讓預扣之報酬率，方便對齊手機 APP 口徑。只看手上還有的部分；已經賣掉的請看「年度收益」頁。',
 } as const
 
 /**
@@ -89,7 +89,7 @@ function HoldingsTable({
   const shortUnreal = sumOrNull(shortRows.map((r) => r.unrealized))
 
   const renderRow = (row: HoldingRow) => {
-    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, breakEven } = row
+    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, brokerRoi, breakEven } = row
     const isShort = direction === 'SHORT'
     const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
     const stockName = displayStockName(h.market, h.ticker, h.name)
@@ -230,7 +230,23 @@ function HoldingsTable({
                   </>
                 )}
               </td>
-              <td className={`num ${pnlClass(roi)}`}>{roi === null ? '—' : fmtSignedPercent(roi)}</td>
+              <td className={`num ${pnlClass(roi)}`}>
+                {roi === null ? (
+                  '—'
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600 }}>{fmtSignedPercent(roi)}</div>
+                    {brokerRoi !== null && fmtSignedPercent(brokerRoi) !== fmtSignedPercent(roi) && (
+                      <div
+                        style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                        title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
+                      >
+                        券商 {fmtSignedPercent(brokerRoi)}
+                      </div>
+                    )}
+                  </>
+                )}
+              </td>
             </tr>
     )
   }
