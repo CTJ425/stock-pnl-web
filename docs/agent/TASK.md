@@ -27,6 +27,14 @@
 
 ## 📋 Active Tasks
 
+### Task 143: 觀察股票產業分類全面自動化（TWSE/TPEx OpenAPI）與收盤無成交價格修復 (BUG-045, BUG-046)
+- **Status**: ⏳ **OPEN — Investigated, awaiting implementation**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-09-03 17:35:00 Asia/Taipei
+- **What is this**: 
+  1. **BUG-045**: 修復 `misParse.ts` 在收盤後（`t >= '13:30:00'`）無撮合成交（`z === '-'`）時誤退階取委買價 `b[0]` 的缺陷，改為回傳 null 自然由 Yahoo Finance 後備線路接管，避免 5701 劍湖山等收盤無成交之冷門股價格被掛單價竄改並鎖入快取。
+  2. **BUG-046**: 廢除前端手寫 677 檔字典 `COMMON_STOCK_INDUSTRIES`（涵蓋率低且有人為誤植如 2208 台船被誤寫為汽車）。改由證交所 (`t187ap03_L`) 與櫃買中心 (`mopsfin_t187ap03_O`) 官方 OpenAPI 自動獲取全市場 1,984 檔普通股之 33 大官方產業分類，實現 100% 正確與全自動化。
+
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**
 - **Agent**: Scribe
