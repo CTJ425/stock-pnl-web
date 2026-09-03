@@ -89,7 +89,7 @@ function HoldingsTable({
   const shortUnreal = sumOrNull(shortRows.map((r) => r.unrealized))
 
   const renderRow = (row: HoldingRow) => {
-    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, rawUnrealized, roi, brokerRoi, breakEven } = row
+    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, brokerUnrealized, rawUnrealized, roi, brokerRoi, breakEven } = row
     const isShort = direction === 'SHORT'
     const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
     const stockName = displayStockName(h.market, h.ticker, h.name)
@@ -219,13 +219,22 @@ function HoldingsTable({
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtSignedMoney(unrealized, currency)}</div>
-                    {rawUnrealized !== null && (
+                    {brokerUnrealized !== null && brokerUnrealized !== unrealized ? (
                       <div
                         style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
-                        title="不扣任何手續費和稅的價差"
+                        title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
                       >
-                        未含費 {fmtSignedMoney(rawUnrealized, currency)}
+                        券商 {fmtSignedMoney(brokerUnrealized, currency)}
                       </div>
+                    ) : (
+                      rawUnrealized !== null && (
+                        <div
+                          style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                          title="不扣任何手續費和稅的價差"
+                        >
+                          未含費 {fmtSignedMoney(rawUnrealized, currency)}
+                        </div>
+                      )
                     )}
                   </>
                 )}

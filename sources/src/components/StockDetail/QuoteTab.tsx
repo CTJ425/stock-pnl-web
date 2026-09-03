@@ -320,6 +320,16 @@ export function QuoteTab({
               <div className="holding-pnl">
                 <span className={`holding-pnl-big ${pnlClass(holding.unrealized)}`}>
                   {fmtSignedMoney(holding.unrealized, 'TWD')}
+                  {holding.brokerUnrealized !== undefined &&
+                    holding.brokerUnrealized !== null &&
+                    holding.brokerUnrealized !== holding.unrealized && (
+                      <span
+                        style={{ fontSize: 13, opacity: 0.75, fontWeight: 500, marginLeft: 6 }}
+                        title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
+                      >
+                        (券商 {fmtSignedMoney(holding.brokerUnrealized, 'TWD')})
+                      </span>
+                    )}
                 </span>
                 <span className={`holding-roi ${pnlClass(holding.roi)}`}>
                   {holding.roi === null ? '—' : fmtSignedPercent(holding.roi)}

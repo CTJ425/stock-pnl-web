@@ -387,6 +387,7 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     })
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     const row = screen.getByTestId('holding-row-2303')
-    expect(row.textContent).toContain('券商')
+    expect(row.textContent).toContain('券商 -NT$11,111')
+    expect(row.textContent).toContain('券商 -8.20%')
   })
 })
