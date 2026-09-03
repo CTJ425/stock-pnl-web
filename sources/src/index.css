@@ -4468,21 +4468,21 @@ a.hmenu-item {
 /* ---------- Watchlist Block (Dashboard Minimalist Cards & View Switcher) ---------- */
 .watchlist-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 8px;
 }
 
 .watchlist-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 10px;
+  border-radius: var(--radius-sm, 6px);
+  padding: 7px 8px;
   cursor: pointer;
   transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 72px;
+  min-height: 58px;
 }
 
 .watchlist-card:hover {
@@ -4496,14 +4496,14 @@ a.hmenu-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .watchlist-card-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   overflow: hidden;
   flex: 1;
@@ -4511,14 +4511,14 @@ a.hmenu-item {
 
 .watchlist-card-ticker {
   font-family: var(--font-mono, monospace);
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--ink-secondary);
   flex-shrink: 0;
 }
 
 .watchlist-card-name {
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--ink);
   overflow: hidden;
@@ -4531,44 +4531,44 @@ a.hmenu-item {
 .watchlist-card-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
-  padding: 1px 4px;
-  border-radius: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
   background: var(--surface-strong);
   border: 1px solid var(--border);
   color: var(--ink-muted);
   white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
-  max-width: 64px;
+  max-width: 48px;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .watchlist-card-body {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .watchlist-card-price {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .watchlist-card-change {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
@@ -4576,14 +4576,14 @@ a.hmenu-item {
   background: transparent;
   border: none;
   color: var(--ink-muted);
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
