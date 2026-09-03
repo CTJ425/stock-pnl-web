@@ -66,6 +66,10 @@ describe('buildHoldingRows', () => {
     const [row] = buildHoldingRows(holdings, { 'TPE:2303': quote(125) }, 0.0004275)
     expect(row.roi).not.toBeNull()
     expect(row.brokerRoi).not.toBeNull()
+    expect(row.brokerUnrealized).not.toBeNull()
+    // 專案淨損益高於券商 APP 未折讓損益（券商 APP 牌告手續費 178 元 vs 3 折 53 元，多扣 125 元）
+    expect(row.unrealized!).toBeGreaterThan(row.brokerUnrealized!)
+    expect(row.unrealized! - row.brokerUnrealized!).toBe(125)
     // 專案淨報酬率高於券商 APP 未折讓報酬率（券商 APP 多扣約 0.10% 賣出手續費）
     expect(row.roi!).toBeGreaterThan(row.brokerRoi!)
     const diff = (row.roi! - row.brokerRoi!) * 100

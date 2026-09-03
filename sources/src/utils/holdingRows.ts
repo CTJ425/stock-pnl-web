@@ -44,6 +44,8 @@ export interface HoldingRow {
    */
   netMktVal: number | null
   unrealized: number | null
+  /** Standard broker app unrealized P&L using official undiscounted fee rate (0.001425 for TWD), aligning with monthly rebate mode (月退制) */
+  brokerUnrealized: number | null
   /** Pure price difference before any fees: market value − cost before fees, isomorphic to rawRealized annual return*/
   rawUnrealized: number | null
   /** Unrealized rate of return (unrealized ÷ current position cost); null if there is no current price*/
@@ -105,6 +107,7 @@ export function buildHoldingRows(
         mktVal,
         netMktVal,
         unrealized,
+        brokerUnrealized: standardUnrealized,
         rawUnrealized,
         roi,
         brokerRoi,
@@ -145,6 +148,7 @@ export function buildHoldingRows(
         mktVal,
         netMktVal: null,
         unrealized,
+        brokerUnrealized: standardUnrealized,
         rawUnrealized,
         roi,
         brokerRoi,

@@ -28,6 +28,7 @@ export interface ReportHolding {
   avgCost: number
   price: number | null
   unrealized: number | null
+  brokerUnrealized?: number | null
   roi: number | null
   brokerRoi?: number | null
 }
