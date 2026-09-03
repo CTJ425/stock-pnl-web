@@ -144,8 +144,19 @@ function HoldingsTable({
               </td>
               <td className={`num ${isShort ? pnlClass(rowQty) : ''}`}>{fmtQty(rowQty)}</td>
               <td className="num">
+                {/*
+                  空單沒有「投入成本」，它的對應項是建倉時收到的錢。原本印「—」，等於看不到
+                  自己在幾塊放空、收了多少，而那正是判斷要不要回補時唯一需要的數字。
+                */}
                 {isShort ? (
-                  '—'
+                  <>
+                    <div style={{ fontWeight: 600 }} title="融券賣出實際收到的錢（已扣手續費、證交稅與借券費）">
+                      {fmtMoney(h.shortProceeds, currency)}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不扣任何費用的賣出價金">
+                      賣出・未含費 {fmtMoney(h.shortRawProceeds, currency)}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
@@ -157,7 +168,15 @@ function HoldingsTable({
               </td>
               <td className="num">
                 {isShort ? (
-                  '—'
+                  <>
+                    <div style={{ fontWeight: 600 }} title="建倉時的平均賣出價，已扣手續費、證交稅與借券費">
+                      {fmtPrice(h.shortQty > 0 ? h.shortProceeds / h.shortQty : 0, currency)}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不扣任何費用的成交均價">
+                      賣出・未含費{' '}
+                      {fmtPrice(h.shortQty > 0 ? h.shortRawProceeds / h.shortQty : 0, currency)}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
@@ -312,6 +331,11 @@ function MarketPanel({
   // 而且會讓曝險條變成 100/0 的單段條 — spec C2 的負向條件明文禁止。任一腿未知就整組不顯示。
   const legsKnown = longMkt !== null && shortMkt !== null
   const netMkt = hasShort ? (legsKnown ? longMkt - shortMkt : null) : longMkt
+  /*
+   * 曝險尺永遠顯示，沒有空單時空方段為 0（使用者要求）。唯一的例外是「有空單但整條腿抓不到
+   * 報價」—— 那時候 0 是未知不是零，畫出來的比例會是假的。
+   */
+  const showExposure = hasShort ? legsKnown : longMkt !== null
   const heroLabel = hasShort ? '淨額市值' : '持倉市值'
 
   return (
@@ -337,11 +361,11 @@ function MarketPanel({
           )}
         </div>
       </div>
-      {hasShort && legsKnown && (
+      {showExposure && (
         <>
           <div className="exposure-bar" data-testid={`${testPrefix}-exposure`}>
-            <div className="exposure-seg-long" style={{ flexGrow: longMkt, flexBasis: 0 }} />
-            <div className="exposure-seg-short" style={{ flexGrow: shortMkt, flexBasis: 0 }} />
+            <div className="exposure-seg-long" style={{ flexGrow: longMkt ?? 0, flexBasis: 0 }} />
+            <div className="exposure-seg-short" style={{ flexGrow: shortMkt ?? 0, flexBasis: 0 }} />
           </div>
           <div className="exposure-key">
             {/* 色塊、標籤與數字必須成組，否則色塊在視覺上不屬於它的標籤。 */}
@@ -353,12 +377,16 @@ function MarketPanel({
             <span className="exposure-legend">
               <span className="exposure-sw exposure-sw-short" />
               空單
-              <span data-testid={`${testPrefix}-short-mktval`}>{fmtMoney(shortMkt, currency)}</span>
+              <span data-testid={`${testPrefix}-short-mktval`}>
+                {fmtMoney(hasShort ? shortMkt : 0, currency)}
+              </span>
             </span>
           </div>
         </>
       )}
-      {!hasShort && rows.length > 0 && <div className="market-note">{rows.length} 檔 · 全部多單</div>}
+      {!hasShort && rows.length > 0 && !showExposure && (
+        <div className="market-note">{rows.length} 檔 · 全部多單</div>
+      )}
       <div className="metric-row market-foot">
         <div className="metric">
           <div className="kpi-label" title="包含買入時的手續費">

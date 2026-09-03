@@ -72,10 +72,11 @@ describe('DashboardPage', () => {
   })
 
   // Task 142: with no SHORT rows the panel and the table both drop their short-side furniture.
-  it('T3 沒有空單時不畫曝險條，主數字改叫持倉市值', () => {
+  it('T3 沒有空單時仍然畫曝險條，空方為 0，主數字改叫持倉市值', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     const toNum = (el: HTMLElement) => Number(el.textContent!.replace(/[^0-9.-]/g, ''))
-    expect(screen.queryByTestId('tw-exposure')).toBeNull()
+    expect(screen.getByTestId('tw-exposure')).toBeTruthy()
+    expect(toNum(screen.getByTestId('tw-short-mktval'))).toBe(0)
     expect(screen.queryByText('淨額市值')).toBeNull()
     // 2330 多單 1000 × 1000 = 1,000,000
     expect(toNum(screen.getByTestId('tw-mktval'))).toBe(1_000_000)
@@ -200,10 +201,10 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     expect(num(screen.getByTestId('tw-short-mktval'))).toBe(95_000)
   })
 
-  it('T4 美股面板永遠沒有曝險條（美股沒有融券）', () => {
+  it('T4 美股面板也有曝險條，但空方恆為 0（美股沒有融券）', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    expect(screen.queryByTestId('us-exposure')).toBeNull()
-    expect(screen.queryByTestId('us-short-mktval')).toBeNull()
+    expect(screen.getByTestId('us-exposure')).toBeTruthy()
+    expect(num(screen.getByTestId('us-short-mktval'))).toBe(0)
   })
 
   it('T5 持股表不再有表尾三行', () => {
@@ -241,6 +242,20 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     expect(screen.queryByTestId('tw-exposure')).toBeNull()
     expect(screen.getByTestId('tw-mktval').textContent).not.toMatch(/[0-9]/)
+  })
+
+  it('T15 空單列看得到建倉價與賣出實收，不再印「—」', () => {
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const row = screen.getByTestId('holding-row-2603-SHORT')
+    // 2603 融券賣出 1000 股 @100，費稅 522 → 實收 99,478；未含費價金 100,000
+    expect(row.textContent).toContain('99,478')
+    expect(row.textContent).toContain('100,000')
+    // 建倉均價：含費實收 99.48 / 未含費成交 100.00 —— 這是「我在幾塊放空」的答案
+    expect(row.textContent).toContain('99.48')
+    expect(row.textContent).toContain('100.00')
+    expect(row.textContent).toContain('賣出・未含費')
+    // 舊行為是兩欄都印 '—'
+    expect(row.textContent).not.toContain('—')
   })
 
   it('T8 空單列帶 row-short，多頭列不帶', () => {

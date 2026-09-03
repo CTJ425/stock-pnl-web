@@ -28,9 +28,9 @@
   --radius-sm: 2px;
   /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
   --bottom-nav-h: 54px;
-  --font-display: 'Archivo', 'Noto Sans TC', system-ui, sans-serif;
-  --font-body: 'Archivo', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
-  --font-num: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Roboto', 'Noto Sans TC', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Roboto', 'Noto Sans TC', 'Helvetica Neue', Arial, 'Microsoft JhengHei', sans-serif;
+  --font-num: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --shadow-card: none;
   --panel: #0e1116;
   --modal-bg: #0e1116;
@@ -592,14 +592,14 @@ table.data-table {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--ink-muted);
-  padding: 11px 10px;
+  padding: 11px 8px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   background: var(--thead-bg);
 }
 
 .data-table td {
-  padding: 9px 10px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--rule-hair);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
