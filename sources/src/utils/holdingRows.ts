@@ -7,7 +7,7 @@
  */
 import type { Holding } from './pnlEngine'
 import { estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
-import { breakEvenPrice, breakEvenPriceShort } from './fees'
+import { breakEvenPrice, breakEvenPriceShort, DEFAULT_FEE_RATE } from './fees'
 import { getMinFee } from './settings'
 import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
 
@@ -48,6 +48,8 @@ export interface HoldingRow {
   rawUnrealized: number | null
   /** Unrealized rate of return (unrealized ÷ current position cost); null if there is no current price*/
   roi: number | null
+  /** Standard broker app ROI using official undiscounted fee rate (0.001425 for TWD), aligning with monthly rebate mode (月退制) */
+  brokerRoi: number | null
   /** Capital-guaranteed selling price: Sell the entire amount at this price (minus handling fees/certificate tax) without losing money*/
   breakEven: number
 }
@@ -80,6 +82,14 @@ export function buildHoldingRows(
       const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
       // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
       const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
+      // Standard broker fee rate (0.001425 for TWD) to align with broker app monthly rebate pre-deduction
+      const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
+      const standardUnrealized =
+        price !== null && h.currency === 'TWD'
+          ? estimateUnrealized(h, price, standardFeeRate, minFee, true)
+          : null
+      const brokerRoi =
+        standardUnrealized !== null && h.cost !== 0 ? standardUnrealized / h.cost : null
       const breakEven = breakEvenPrice(h, feeRate, minFee)
       rows.push({
         rowKey: `${h.key}:LONG`,
@@ -97,6 +107,7 @@ export function buildHoldingRows(
         unrealized,
         rawUnrealized,
         roi,
+        brokerRoi,
         breakEven,
       })
     }
@@ -110,6 +121,15 @@ export function buildHoldingRows(
       const unrealized = price !== null ? estimateUnrealizedShort(h, price, feeRate, minFee) : null
       const rawUnrealized = price !== null ? h.shortRawProceeds - price * h.shortQty : null
       const roi = unrealized !== null && h.shortProceeds !== 0 ? unrealized / h.shortProceeds : null
+      const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
+      const standardUnrealized =
+        price !== null && h.currency === 'TWD'
+          ? estimateUnrealizedShort(h, price, standardFeeRate, minFee)
+          : null
+      const brokerRoi =
+        standardUnrealized !== null && h.shortProceeds !== 0
+          ? standardUnrealized / h.shortProceeds
+          : null
       const breakEven = breakEvenPriceShort(h, feeRate, minFee)
       rows.push({
         rowKey: `${h.key}:SHORT`,
@@ -127,6 +147,7 @@ export function buildHoldingRows(
         unrealized,
         rawUnrealized,
         roi,
+        brokerRoi,
         breakEven,
       })
     }

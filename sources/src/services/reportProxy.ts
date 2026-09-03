@@ -29,6 +29,7 @@ export interface ReportHolding {
   price: number | null
   unrealized: number | null
   roi: number | null
+  brokerRoi?: number | null
 }
 
 /** Buy / sell / buy and sell super three-piece set; if the source is missing the split item, it will be null*/

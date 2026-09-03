@@ -323,6 +323,16 @@ export function QuoteTab({
                 </span>
                 <span className={`holding-roi ${pnlClass(holding.roi)}`}>
                   {holding.roi === null ? '—' : fmtSignedPercent(holding.roi)}
+                  {holding.brokerRoi !== undefined &&
+                    holding.brokerRoi !== null &&
+                    fmtSignedPercent(holding.brokerRoi) !== fmtSignedPercent(holding.roi) && (
+                      <span
+                        style={{ fontSize: 11, opacity: 0.75, fontWeight: 400, marginLeft: 6 }}
+                        title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
+                      >
+                        (券商 {fmtSignedPercent(holding.brokerRoi)})
+                      </span>
+                    )}
                 </span>
               </div>
               <div className="holding-grid">

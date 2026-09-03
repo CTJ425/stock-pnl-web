@@ -55,6 +55,22 @@ describe('buildHoldingRows', () => {
     expect(row.netMktVal).not.toBeNull()
     expect(row.netMktVal).toBe(row.holding.cost + row.unrealized!)
     expect(row.netMktVal!).toBeLessThan(row.mktVal!)
+    // 牌告費率時 brokerRoi 等於 roi
+    expect(row.brokerRoi).toBeCloseTo(row.roi!, 10)
+  })
+
+  it('有手續費折讓（如 3 折）時，brokerRoi 依牌告 0.1425% 預扣計算，精確反映券商 APP 口徑差額', () => {
+    // 買進 1000 股 @135.5，現價 125 (如聯電 2303)
+    const holdings = holdingsOf([tx({ ticker: '2303', name: '聯電', price: 135.5, qty: 1000, fee_tax: 58 })])
+    // 設定 3 折 (0.0004275)
+    const [row] = buildHoldingRows(holdings, { 'TPE:2303': quote(125) }, 0.0004275)
+    expect(row.roi).not.toBeNull()
+    expect(row.brokerRoi).not.toBeNull()
+    // 專案淨報酬率高於券商 APP 未折讓報酬率（券商 APP 多扣約 0.10% 賣出手續費）
+    expect(row.roi!).toBeGreaterThan(row.brokerRoi!)
+    const diff = (row.roi! - row.brokerRoi!) * 100
+    // 0.1425% - 0.04275% = 0.09975% ≈ 0.10%
+    expect(diff).toBeCloseTo(0.10, 1)
   })
 
   it('無現價時市值 / 參考淨值 / 未實現 / 報酬率皆為 null（不以 0 冒充）', () => {
