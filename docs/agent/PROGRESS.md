@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: 0.9.29-dev.3 — 觀察股票同產業自動群組聚合、膠囊篩選與分析頁選單分組
+- Action: 0.9.29 正式版發布 — 觀察股票同產業自動群組聚合、緊湊型小卡、MIS 即時產業別與收盤無成交價格修復 (BUG-045, BUG-046)
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-03 19:15:00 Asia/Taipei
+- Timestamp: 2026-09-03 20:00:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 20:00:00 Asia/Taipei (0.9.29 正式版發布 — 部署 Edge Function 至 PROD、全庫資安查驗與分支合併發布)
+
+- **Status**: ✅ **COMPLETED** (ready to merge `dev` into `main`)
+- **Version**: `0.9.29-dev.3` → **`0.9.29`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 發布 0.9.29 正式版本並部署至 Supabase PROD 正式區。
+- **Work & Security (CIA)**:
+  1. **機密性 (Confidentiality) ── 零憑證外洩防護**:
+     - 全庫 git diff 與 commit 歷程全面掃描，確認零敏感資訊（無使用者 access token `sbp_...`、無 service_role 金鑰、無 `CRON_SECRET` 明文）。
+     - 本專案 GitHub PUBLIC 公開倉庫安全防護通過。
+  2. **完整性 (Integrity) ── 代碼質量與型別防護**:
+     - `npm test`：97 檔測試檔、**1599** 個單元測試全數 PASS（0 失敗）。
+     - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+     - `npm run build`：生產環境建置成功 exit 0。
+     - `npx oxlint src`：0 error。
+     - Edge Function `stock-price` 維持 `verify_jwt: true` 預設權限保護。
+  3. **可用性 (Availability) ── 正式環境部署與端點實測**:
+     - 成功部署 `stock-price` 至 PROD 正式區 (`hrilemueiqyaoiwnkeuu`)。
+     - 稽核雙環境一致性：PROD 與 DEV 之 `stock-price` 版本皆為 v3，`ezbr_sha256` 雜湊值皆為 `3ef2700b97ccad33d712c6359d1056a2c0a9fbc08a5ceb6a1b25a402b64c1621`，完全一致。
+     - 正式區端點實測：向 PROD `stock-price` 發送台股即時報價請求（2330 台積電、2603 長榮），正確回傳即時行情與 `industry`（半導體業、航運業）；未攜帶 JWT 時精確回傳 401 Unauthorized。
+  4. **版本同步與發布流程**:
+     - 同步版本號至 0.9.29，整合 CHANGELOG 0.9.29 正式紀錄，歸檔 PROGRESS.md 歷史項目至 PROGRESS_ARCHIVE.md。
 
 ---
 
@@ -33,35 +57,3 @@
   - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
   - `npm run build`：tsc -b && vite build exit 0。
   - `npx oxlint src`：0 errors。
-
----
-
-## 📅 Log: 2026-09-03 17:50:00 Asia/Taipei (0.9.29-dev.2 — MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復)
-
-- **Status**: ✅ **COMPLETED** on `dev`
-- **Version**: `0.9.29-dev.1` → **`0.9.29-dev.2`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 使用者同意將產業資訊直接從 MIS 即時行情資料流帶出，並要求在個股分析「行情」區塊補上產業別顯示，同時解決收盤無成交價格異常（BUG-045）與字典誤植（BUG-046）。
-- **Work**:
-  1. **Edge Function `stock-price` (`misParse.ts`, `index.ts`)**:
-     - 在 `misParse.ts` 中解析 MIS 原始欄位 `row.i`（官方產業代碼，如 `15` 航運、`16` 觀光餐旅、`24` 半導體），透過 33 大官方產業字典對照表映射成中文產業名稱。
-     - `MisQuote` 與 `Quote` 介面新增 `industry: string | null`，`fetchYahooPrice` 及 DB cache 讀取回傳 `industry: null`。
-     - **修復 BUG-045**：收盤時（`t >= '13:30:00'`）若 `z === '-'`（無當盤撮合成交），`pickPrice` 絕不可退階取 `b[0]`（買一委買價），直接回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路接管，精確取得 5701 劍湖山真實收盤價 4.30 元（避免鎖入委買價 4.19 元並被收盤鎖定）。
-  2. **前端型別與行情介面 (`priceProxy.ts`, `QuoteTab.tsx`, `WatchSection.tsx`, `stockCategory.ts`, `index.css`)**:
-     - `priceProxy.ts`：`PriceQuote` 與 `EdgeQuote` 介面新增 `industry?: string | null`，`fetchFromEdge` 解析文字帶入。
-     - `QuoteTab.tsx`：行情頂部抬頭（`.m-quote-head`）新增 `.quote-badge` 產業微型徽章，優先取 `quote.industry`，未抵達時自動由 `getStockCategory(ticker, name)` 提供後備。
-     - `index.css`：新增 `.quote-badge` 樣式（取消 64px 截斷限制、置中對齊）。
-     - `WatchSection.tsx` 與 `stockCategory.ts`：
-       - `getStockCategory` 函式簽章擴充第 3 參數 `industry?: string | null` 並優先採用。
-       - 觀察股票卡片與條列檢視優先傳入 `quote?.industry`。
-       - 修正 `COMMON_STOCK_INDUSTRIES` 靜態字典：將 2208 台船從汽車修正為「航運業」、新增 5701 劍湖山為「觀光餐旅」。
-  3. **單元測試 (`misParse.test.ts`, `stockCategory.test.ts`, `QuoteTab.test.tsx`, `WatchSection.test.tsx`)**:
-     - `misParse.test.ts`：新增官方產業代碼對照、`toIndustry` 型別與邊界轉換、收盤無成交回傳空陣列（BUG-045，含 `t` 與 `ot` 雙重守衛）、盤中仍退階買一價測試（24/24 通過）。
-     - `stockCategory.test.ts`：新增 2208 台船修正測試、5701 劍湖山測試、即時 `industry` 參數優先級、空代號防護、`'-'`/`'--'` 佔位符過濾與空白修剪測試（23/23 通過）。
-     - `QuoteTab.test.tsx`：新增即時 `quote.industry` 徽章渲染測試與無報價後備推導測試（26/26 通過）。
-     - `WatchSection.test.tsx`：新增優先採用 `quote.industry` 測試（13/13 通過）。
-- **Verify**:
-  - `npm test`：96 檔測試檔、**1574** 個測試全數 PASS（0 失敗）。
-  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
-  - `npm run build`：tsc -b && vite build exit 0。
-  - `npx oxlint src`：0 errors。
-- **連帶關閉**: Task 143、BUG-045、BUG-046。
