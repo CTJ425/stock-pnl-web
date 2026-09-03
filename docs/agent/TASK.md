@@ -10,11 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-03 16:0x)
+## 📍 Where the project stands (2026-09-03 17:00)
 
-- **Version 0.9.28 — released and live.** `main` and `dev` both sit on `a1a26da` and are pushed; no `-dev` suffix remains anywhere. GitHub Release `0.9.28` exists and is marked Latest.
+- **Version 0.9.29-dev.1 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
+  - Implemented: 觀察股票緊湊型小卡 Mini Card（方案 A，寬度 minmax(165px, 1fr)、高約 72px、雙行資訊佈局）與台股 0ms 規則式標籤 + 33 類產業分類即時判定（`stockCategory.ts`）。
+  - Verification on `dev`: 96 test files / **1556** vitest tests, exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+- **Version 0.9.28 — released and live on PROD.** `main` sits on `a1a26da` and is pushed. GitHub Release `0.9.28` exists and is marked Latest.
   - Shipped: 融券做空 (Task 141), intraday day-trade short-first matching, the cold-visual redesign, the font/size realignment to the PROD baseline, the short-only dashboard and 籌碼分析 fixes, and the table contrast pass.
-  - Verification at release: 95 test files / **1537** vitest tests, exit 0; `npm run build` exit 0; `npm run typecheck:edge` exit 0; `npx oxlint src` 0 errors.
 - **The PROD schema gap is closed.** `transactions.tx_nature` (CHECK includes `SHORT`), `transactions.fee_rate` and `workspaces.fee_rate` now exist on **both** cloud projects. Applied to PROD 2026-09-03; 110 existing transactions were not rewritten. Full DDL kept in `docs/agent/prod-0.9.28-migration.sql`. This closed Task 141, BUG-041 and BUG-044-P.
   - **It closed the gap, not the risk.** Both projects were recreated on 2026-08-31 from un-migrated schema and silently lost these columns; nothing surfaced it for three days, because `dataProvider.ts` retries without the missing column and reports success. Re-check the columns after any project recreation — see `RISK-004` in `BUG_FIX.md`.
 - **Edge Functions**: `stock-report` is **v4** on both projects and both carry the same `ezbr_sha256` `1d2ba453…266a794f23`, which is what proves they run the same bundle. `verify_jwt` must stay `false` on `stock-report` — set it to `true` and the whole after-hours cron batch answers 401. `stock-price` (v2) and `backup-transactions` (v2) were not part of this release.

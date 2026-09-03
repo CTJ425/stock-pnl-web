@@ -96,16 +96,18 @@ describe('WatchSection (Dashboard)', () => {
 
     const card = await screen.findByTestId('watch-card-2330')
     expect(within(card).getByText('台積電')).toBeTruthy()
+    expect(within(card).getByText('半導體')).toBeTruthy()
     expect(within(card).getByText(/1,100/)).toBeTruthy()
     expect(within(card).getByText(/\+10\.00%/)).toBeTruthy()
 
     const card2 = screen.getByTestId('watch-card-2327')
     expect(within(card2).getByText('國巨')).toBeTruthy()
+    expect(within(card2).getByText('電子零組件')).toBeTruthy()
     expect(within(card2).getByText(/95/)).toBeTruthy()
     expect(within(card2).getByText(/-5\.00%/)).toBeTruthy()
   })
 
-  it('可切換為條列模式並記憶在 localStorage', async () => {
+  it('可切換為條列模式並記憶在 localStorage，且顯示分類徽章', async () => {
     const user = userEvent.setup()
     listWatchlist.mockResolvedValue(TWO)
     fetchPrices.mockResolvedValue({
@@ -119,7 +121,9 @@ describe('WatchSection (Dashboard)', () => {
     await user.click(tableBtn)
 
     expect(screen.getByTestId('watchlist-table')).toBeTruthy()
-    expect(screen.getByTestId('watch-row-2330')).toBeTruthy()
+    const row = screen.getByTestId('watch-row-2330')
+    expect(row).toBeTruthy()
+    expect(within(row).getByText('半導體')).toBeTruthy()
     expect(localStorage.getItem('stock_watchlist_view_mode')).toBe('table')
   })
 
@@ -189,4 +193,46 @@ describe('WatchSection (Dashboard)', () => {
 
     expect(screen.getByTestId('add-modal')).toBeTruthy()
   })
+
+  it('正確在卡片顯示 ETF 分類徽章（債券 ETF、股票型 ETF）', async () => {
+    const etfList = [
+      { ticker: '00679B', name: '元大美債20年', sortOrder: 0 },
+      { ticker: '0050', name: '元大台灣50', sortOrder: 1 },
+    ]
+    listWatchlist.mockResolvedValue(etfList)
+    fetchPrices.mockResolvedValue({
+      'TPE:00679B': quote(29.5, 30.0),
+      'TPE:0050': quote(180, 175),
+    })
+    render(<WatchSection onSelectTicker={() => {}} />)
+
+    const bondCard = await screen.findByTestId('watch-card-00679B')
+    expect(within(bondCard).getByText('債券 ETF')).toBeTruthy()
+
+    const equityCard = screen.getByTestId('watch-card-0050')
+    expect(within(equityCard).getByText('股票型 ETF')).toBeTruthy()
+  })
+
+  it('正確處理超長股票名稱與 TPEx 分類標籤，且保留 title 與階層', async () => {
+    const longNameItem = [
+      { ticker: '00679B', name: '元大美債20年正2長期特別', sortOrder: 0 },
+      { ticker: '3293', name: '鈊象電子遊戲旗艦', sortOrder: 1 },
+    ]
+    listWatchlist.mockResolvedValue(longNameItem)
+    fetchPrices.mockResolvedValue({
+      'TPE:00679B': quote(29.5, 30.0),
+      'TPE:3293': quote(1050, 1000),
+    })
+    render(<WatchSection onSelectTicker={() => {}} />)
+
+    const card = await screen.findByTestId('watch-card-00679B')
+    const nameEl = within(card).getByText('元大美債20年正2長期特別')
+    expect(nameEl.getAttribute('title')).toBe('元大美債20年正2長期特別')
+    expect(within(card).getByText('債券 ETF')).toBeTruthy()
+
+    const card2 = screen.getByTestId('watch-card-3293')
+    expect(within(card2).getByText('鈊象電子遊戲旗艦')).toBeTruthy()
+    expect(within(card2).getByText('文化創意')).toBeTruthy()
+  })
 })
+
