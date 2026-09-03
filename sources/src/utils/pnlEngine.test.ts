@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { computeLedger, estimateUnrealized, sellTaxRate, splitFeeTax } from './pnlEngine'
+import { computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 let seq = 0
 function tx(input: {
@@ -487,6 +487,7 @@ describe('estimateUnrealized 逐批計算賣出成本（Task 136）', () => {
       key: 'TPE:0050', ticker: '0050', name: '元大台灣50', market: 'TPE', currency: 'TWD',
       qty: 6000, cost: 625188, rawCost: 623300, buyCostTotal: 625188, realized: 0,
       avgCost: 625188 / 6000, rawAvgCost: 623300 / 6000, openLots: [],
+      shortQty: 0, shortProceeds: 0, shortRawProceeds: 0, shortLots: [],
     }
     expect(estimateUnrealized(h, 106.25, 0.001425, 20)).toBe(10767)
     // 同樣的部位改由 computeLedger 帶出四個批次時，逐批捨去會少扣 3 元
@@ -552,23 +553,23 @@ describe('明確的交易性質優先於推測（Task 137 §C）', () => {
 
 describe('splitFeeTax — 匯出用的費用拆分（Task 137 §C）', () => {
   it('買進全額算手續費，證交稅 0', () => {
-    expect(splitFeeTax({ tx_type: 'BUY', market: 'TPE', ticker: '2344', price: 187.5, qty: 1000, fee_tax: 80 })).toEqual({ fee: 80, tax: 0 })
+    expect(splitFeeTax({ tx_type: 'BUY', market: 'TPE', ticker: '2344', price: 187.5, qty: 1000, fee_tax: 80 })).toEqual({ fee: 80, tax: 0, borrow: 0 })
   })
 
   it('一般賣出依標準稅率拆分', () => {
-    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2330', price: 2415, qty: 50, fee_tax: 413 })).toEqual({ fee: 51, tax: 362 })
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2330', price: 2415, qty: 50, fee_tax: 413 })).toEqual({ fee: 51, tax: 362, borrow: 0 })
   })
 
   it('當沖賣出依減半稅率拆分', () => {
-    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 362 })).toEqual({ fee: 80, tax: 282 })
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 362 })).toEqual({ fee: 80, tax: 282, borrow: 0 })
   })
 
   it('標記為當沖時以標記為準', () => {
-    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 700, tx_nature: 'DAY_TRADE' })).toEqual({ fee: 418, tax: 282 })
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'TPE', ticker: '2344', price: 188.5, qty: 1000, fee_tax: 700, tx_nature: 'DAY_TRADE' })).toEqual({ fee: 418, tax: 282, borrow: 0 })
   })
 
   it('美股沒有證交稅', () => {
-    expect(splitFeeTax({ tx_type: 'SELL', market: 'US', ticker: 'AAPL', price: 180, qty: 10, fee_tax: 1 })).toEqual({ fee: 1, tax: 0 })
+    expect(splitFeeTax({ tx_type: 'SELL', market: 'US', ticker: 'AAPL', price: 180, qty: 10, fee_tax: 1 })).toEqual({ fee: 1, tax: 0, borrow: 0 })
   })
 })
 
@@ -615,3 +616,255 @@ describe('inferTxFeeRate — 歷史紀錄手續費率自動推導', () => {
   })
 })
 
+describe('當日放空 / 當沖先賣後買撮合（Day-Trade Short-First Matching, Plan A）', () => {
+  it('當日先賣後買（當沖放空平倉）：損益正確計算，庫存歸零，無超賣警告', () => {
+    // 09:10 賣出 1000 股 @ 1000（當沖，fee_tax = 1425 費 + 1500 減半稅 = 2925，實收 997,075）
+    // 13:20 買入 1000 股 @ 990（當沖，fee_tax = 1410 費，總成本 991,410）
+    // 損益 = 997,075 - 991,410 = +5,665
+    const sellTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 1000, qty: 1000, fee: 2925, nature: 'DAY_TRADE' })
+    const buyTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 990, qty: 1000, fee: 1410, nature: 'DAY_TRADE' })
+
+    // Note: sellTx is created before buyTx (seq of sell < seq of buy)
+    const ledger = computeLedger([sellTx, buyTx])
+
+    expect(ledger.warnings).toHaveLength(0) // No oversold warning!
+    expect(ledger.holdings).toHaveLength(0) // Position fully closed!
+
+    const pos = ledger.positions['TPE:2330']
+    expect(pos.qty).toBe(0)
+    expect(pos.cost).toBe(0)
+    expect(pos.realized).toBe(5665)
+
+    const y = ledger.yearly[2026]
+    expect(y.realizedTw).toBe(5665)
+    expect(y.buyAmt).toBe(991410)
+    expect(y.sellAmt).toBe(997075)
+    expect(y.costBasis).toBe(991410)
+
+    const yt = y.tickers['TPE:2330']
+    expect(yt.realized).toBe(5665)
+    expect(yt.sells).toHaveLength(1)
+    expect(yt.sells[0].realized).toBe(5665)
+    expect(yt.sells[0].costBasis).toBe(991410)
+    expect(yt.sells[0].oversold).toBe(false)
+  })
+
+  it('既有波段持股 + 當日當沖先賣後買：當沖獨立結算，原波段持股成本不受污染', () => {
+    // 歷史持有：2026-08-01 買進 1000 股 @ 800，手續費 1140（成本 801,140，均價 801.14）
+    // 2026-09-01 09:10 賣出 1000 股 @ 1000（當沖，實收 997,075）
+    // 2026-09-01 13:20 買入 1000 股 @ 990（當沖，成本 991,410）
+    const holdTx = tx({ date: '2026-08-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 800, qty: 1000, fee: 1140, nature: 'SPOT' })
+    const sellTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 1000, qty: 1000, fee: 2925, nature: 'DAY_TRADE' })
+    const buyTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 990, qty: 1000, fee: 1410, nature: 'DAY_TRADE' })
+
+    const ledger = computeLedger([holdTx, sellTx, buyTx])
+
+    expect(ledger.warnings).toHaveLength(0)
+    expect(ledger.holdings).toHaveLength(1)
+
+    const h = ledger.holdings[0]
+    expect(h.qty).toBe(1000)
+    // 原有 800 元持股成本完全保留！未被當沖均化或吃掉
+    expect(h.cost).toBe(801140)
+    expect(h.avgCost).toBe(801.14)
+    expect(h.openLots).toHaveLength(1)
+    expect(h.openLots[0].price).toBe(800)
+
+    const y2026 = ledger.yearly[2026]
+    expect(y2026.realizedTw).toBe(5665)
+  })
+
+  it('當日當沖放空部分回補：已回補部分結算當沖，未回補部分依庫存/超賣處理', () => {
+    // 09:10 賣出 1000 股 @ 1000（當沖，實收 997,075）
+    // 13:20 買回 600 股 @ 990（當沖，成本 594,846 = 594000 + 846）
+    // 600 股當沖實收 = 997075 * 0.6 = 598245, 成本 = 594846 -> 損益 = +3399
+    // 剩餘 400 股無庫存 -> 產生超賣警告
+    const sellTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 1000, qty: 1000, fee: 2925, nature: 'DAY_TRADE' })
+    const buyTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 990, qty: 600, fee: 846, nature: 'DAY_TRADE' })
+
+    const ledger = computeLedger([sellTx, buyTx])
+    expect(ledger.warnings).toHaveLength(1)
+    expect(ledger.warnings[0]).toContain('超賣')
+    expect(ledger.holdings).toHaveLength(0)
+    expect(ledger.yearly[2026].realizedTw).toBe(598245 - 594846 + (997075 * 0.4 - 0))
+  })
+})
+
+
+
+describe('融券做空（Short selling, Task 141 Stage A）', () => {
+  // 2603 一般股 0.3%。1000 股 @100：手續費 142 + 證交稅 300 + 借券費 80 = 522
+  const OPEN_FEE_TAX = 522
+  const OPEN_PROCEEDS = 100_000 - OPEN_FEE_TAX // 99478
+  // 1000 股 @95 回補：手續費 135，回補不課證交稅
+  const COVER_FEE = 135
+  const COVER_COST = 95_000 + COVER_FEE // 95135
+
+  const short = (input: { date: string; type: TxType; price: number; qty: number; fee: number }) =>
+    tx({ market: 'TPE', ticker: '2603', name: '長榮', nature: 'SHORT', ...input })
+
+  it('splitFeeTax 對融券賣出拆出借券費', () => {
+    expect(
+      splitFeeTax({
+        tx_type: 'SELL', market: 'TPE', ticker: '2603',
+        price: 100, qty: 1000, fee_tax: OPEN_FEE_TAX, tx_nature: 'SHORT',
+      }),
+    ).toEqual({ fee: 142, tax: 300, borrow: 80 })
+  })
+
+  it('非融券賣出的 borrow 一律為 0', () => {
+    expect(
+      splitFeeTax({
+        tx_type: 'SELL', market: 'TPE', ticker: '2603',
+        price: 100, qty: 1000, fee_tax: 442, tx_nature: 'SPOT',
+      }),
+    ).toEqual({ fee: 142, tax: 300, borrow: 0 })
+  })
+
+  it('ETF 融券賣出用 0.1% 稅率，借券費照收', () => {
+    // 200000 × 0.001425 = 285；稅 200；借券費 160
+    expect(
+      splitFeeTax({
+        tx_type: 'SELL', market: 'TPE', ticker: '0050',
+        price: 200, qty: 1000, fee_tax: 645, tx_nature: 'SHORT',
+      }),
+    ).toEqual({ fee: 285, tax: 200, borrow: 160 })
+  })
+
+  it('只建倉：空單進持股表，不動多頭欄位，不記入年度賣出金額', () => {
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(1000)
+    expect(pos.shortProceeds).toBe(OPEN_PROCEEDS)
+    expect(pos.shortRawProceeds).toBe(100_000)
+    expect(pos.qty).toBe(0)
+    expect(pos.cost).toBe(0)
+    expect(ledger.warnings).toHaveLength(0)
+    expect(ledger.holdings).toHaveLength(1)
+    // qty 為 0 的純空單部位，avgCost 不得為 NaN
+    expect(ledger.holdings[0].avgCost).toBe(0)
+    // 建倉不記入年度賣出金額，否則年度報表的總賣出金額會被灌水
+    expect(ledger.yearly[2026].sellAmt).toBe(0)
+    expect(ledger.yearly[2026].sellGross).toBe(0)
+    expect(ledger.yearly[2026].realizedTw).toBe(0)
+  })
+
+  it('隔日回補：實現損益 = 賣出淨收 − 回補成本，金額記在回補當年', () => {
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+      short({ date: '2026-03-03', type: 'BUY', price: 95, qty: 1000, fee: COVER_FEE }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(0)
+    expect(pos.shortLots).toHaveLength(0)
+    expect(pos.shortProceeds).toBe(0)
+    expect(pos.realized).toBe(OPEN_PROCEEDS - COVER_COST) // 4343
+    expect(ledger.warnings).toHaveLength(0)
+    expect(ledger.holdings).toHaveLength(0)
+
+    const y = ledger.yearly[2026]
+    expect(y.realizedTw).toBe(OPEN_PROCEEDS - COVER_COST)
+    expect(y.sellAmt).toBe(OPEN_PROCEEDS)
+    expect(y.costBasis).toBe(COVER_COST)
+    // 回補是平倉，不是進貨；計入 buyAmt 會與 costBasis 重複計算
+    expect(y.buyAmt).toBe(0)
+  })
+
+  it('同日建倉又回補仍用全額證交稅，不走當沖路徑', () => {
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+      short({ date: '2026-03-02', type: 'BUY', price: 95, qty: 1000, fee: COVER_FEE }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(0)
+    expect(pos.realized).toBe(OPEN_PROCEEDS - COVER_COST)
+    expect(ledger.warnings).toHaveLength(0)
+  })
+
+  it('部分回補：已回補部分結算，剩餘空單維持', () => {
+    // 2000 股 @100：手續費 285 + 稅 600 + 借券費 160 = 1045；淨收 198955
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 2000, fee: 1045 }),
+      short({ date: '2026-03-03', type: 'BUY', price: 95, qty: 1000, fee: COVER_FEE }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(1000)
+    expect(pos.shortProceeds).toBeCloseTo(99_477.5, 6)
+    expect(pos.realized).toBeCloseTo(99_477.5 - COVER_COST, 6) // 4342.5
+    expect(ledger.warnings).toHaveLength(0)
+  })
+
+  it('超補：多買的部分視為現股買進並發警告', () => {
+    // 1500 股 @95 = 142500，手續費 floor(142500 × 0.001425) = 203
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+      short({ date: '2026-03-03', type: 'BUY', price: 95, qty: 1500, fee: 203 }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(0)
+    expect(pos.qty).toBe(500)
+    expect(pos.cost).toBeCloseTo((142_500 + 203) * (500 / 1500), 6) // 47567.667
+    expect(pos.realized).toBeCloseTo(OPEN_PROCEEDS - (142_500 + 203) * (1000 / 1500), 6)
+    expect(ledger.warnings).toHaveLength(1)
+    expect(ledger.warnings[0]).toContain('超出部分視為現股買進')
+  })
+
+  it('波段持股不被空單吃掉，也不觸發超賣警告', () => {
+    // 1000 股 @90 買進，手續費 floor(90000 × 0.001425) = 128
+    const ledger = computeLedger([
+      tx({ date: '2026-03-01', market: 'TPE', ticker: '2603', name: '長榮', type: 'BUY', price: 90, qty: 1000, fee: 128, nature: 'SPOT' }),
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.qty).toBe(1000)
+    expect(pos.cost).toBe(90_128)
+    expect(pos.openLots).toHaveLength(1)
+    expect(pos.shortQty).toBe(1000)
+    expect(ledger.warnings).toHaveLength(0)
+    expect(ledger.holdings).toHaveLength(1)
+    expect(ledger.holdings[0].avgCost).toBeCloseTo(90.128, 6)
+  })
+
+  it('同日有當沖買進時，融券賣出不得被當沖撮合吃掉', () => {
+    // 當沖買進 1000 @90（當日沒有對應的當沖賣出），同日另有融券賣出 1000 @100。
+    // 當沖撮合的候選清單在 fallback 時不得把融券賣出算進去。
+    const ledger = computeLedger([
+      tx({ date: '2026-03-02', market: 'TPE', ticker: '2603', name: '長榮', type: 'BUY', price: 90, qty: 1000, fee: 128, nature: 'DAY_TRADE' }),
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(1000)
+    expect(pos.shortProceeds).toBe(OPEN_PROCEEDS)
+    // 沒被沖銷的當沖買進留成一般部位
+    expect(pos.qty).toBe(1000)
+    expect(pos.cost).toBe(90_128)
+    expect(pos.realized).toBe(0)
+  })
+
+  it('同日有當沖賣出時，融券回補不得被當沖撮合吃掉', () => {
+    // 當沖賣出 1000 @105（當日沒有對應的當沖買進），同日另有融券回補 1000 @95。
+    const ledger = computeLedger([
+      tx({ date: '2026-03-01', market: 'TPE', ticker: '2603', name: '長榮', type: 'BUY', price: 90, qty: 1000, fee: 128, nature: 'SPOT' }),
+      short({ date: '2026-03-01', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+      tx({ date: '2026-03-02', market: 'TPE', ticker: '2603', name: '長榮', type: 'SELL', price: 105, qty: 1000, fee: 306, nature: 'DAY_TRADE' }),
+      short({ date: '2026-03-02', type: 'BUY', price: 95, qty: 1000, fee: COVER_FEE }),
+    ])
+    const pos = ledger.positions['TPE:2603']
+    expect(pos.shortQty).toBe(0)
+    expect(pos.qty).toBe(0)
+    // 當沖賣出對到波段持股：(105000 − 306) − 90128 = 14566；融券回補：99478 − 95135 = 4343
+    expect(pos.realized).toBe(14_566 + (OPEN_PROCEEDS - COVER_COST))
+    expect(ledger.warnings).toHaveLength(0)
+  })
+
+  it('estimateUnrealizedShort：回補只算手續費，不算證交稅', () => {
+    const ledger = computeLedger([
+      short({ date: '2026-03-02', type: 'SELL', price: 100, qty: 1000, fee: OPEN_FEE_TAX }),
+    ])
+    expect(estimateUnrealizedShort(ledger.holdings[0], 95, 0.001425, 20)).toBe(
+      OPEN_PROCEEDS - 95_000 - COVER_FEE,
+    )
+  })
+})

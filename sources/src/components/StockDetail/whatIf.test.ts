@@ -73,6 +73,10 @@ describe('whatIf', () => {
           rawAvgCost: 100,
           // breakEvenPrice 不看未沖銷批次；比照 whatIf.ts 的合成部位給空陣列
           openLots: [],
+          shortQty: 0,
+          shortProceeds: 0,
+          shortRawProceeds: 0,
+          shortLots: [],
         },
         RATE,
         MIN_FEE,

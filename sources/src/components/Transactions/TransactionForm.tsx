@@ -98,6 +98,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     [ledger.holdings, market],
   )
   const isSpotSell = txType === 'SELL' && (market !== 'TPE' || nature === 'SPOT')
+  const isShortCover = txType === 'BUY' && market === 'TPE' && nature === 'SHORT'
+  const activeShorts = useMemo(
+    () => ledger.holdings.filter((h) => h.shortQty > 0 && h.market === market),
+    [ledger.holdings, market],
+  )
 
   const [showTickerHoldings, setShowTickerHoldings] = useState(false)
   const [showNameHoldings, setShowNameHoldings] = useState(false)
@@ -111,6 +116,14 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       (h) => h.ticker.toUpperCase().includes(q) || h.name.includes(ticker.trim()),
     )
   }, [activeHoldings, ticker])
+
+  const filteredTickerShorts = useMemo(() => {
+    const q = ticker.trim().toUpperCase()
+    if (!q) return activeShorts
+    return activeShorts.filter(
+      (h) => h.ticker.toUpperCase().includes(q) || h.name.includes(ticker.trim()),
+    )
+  }, [activeShorts, ticker])
 
   const filteredNameHoldings = useMemo(() => {
     const q = name.trim()
@@ -138,7 +151,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // however many times the effect runs. Cleared for good on the first real change, so
   // typing a value back to its original still recalculates.
   const untouchedFeeSig = useRef<string | null>(
-    initial ? [price, qty, unit, feeRate, taxRate, minFee, market, txType].join('|') : null,
+    initial ? [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature].join('|') : null,
   )
   // Per-unit record of user-typed 最低手續費, so a value typed under one unit survives switching to the other and back.
   const minFeeTyped = useRef<Partial<Record<'whole' | 'odd', string>>>({})
@@ -169,7 +182,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   // and recalculation only kicks in once the user actually changes a core input below.
   // "Restore original record" is provided below the field to change it back to the original value.
   useEffect(() => {
-    const sig = [price, qty, unit, feeRate, taxRate, minFee, market, txType].join('|')
+    const sig = [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature].join('|')
     if (untouchedFeeSig.current !== null) {
       if (untouchedFeeSig.current === sig) return
       untouchedFeeSig.current = null
@@ -186,10 +199,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         feeRate: rate,
         taxRate: parseFloat(taxRate) || 0,
         minFee: market === 'TPE' ? parseFloat(minFee) || 0 : undefined,
+        nature: market === 'TPE' ? nature : undefined,
       })
       setFee(String(calculated))
     }
-  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, getActualShares])
+  }, [price, qty, unit, feeRate, taxRate, minFee, market, txType, nature, getActualShares])
 
   // Market Switch: U.S. Stocks Mandate “Odd Lot” Units
   const handleMarketChange = (next: Market) => {
@@ -393,12 +407,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 if (next === 'DAY_TRADE') {
                   taxRateManual.current = true
                   setTaxRate('0.0015')
+                } else if (next === 'SHORT') {
+                  // 融券賣出付全額證交稅，資券當沖不適用減半
+                  taxRateManual.current = false
+                  updateTaxRateAuto(ticker)
                 }
               }}
             >
               <option value="SPOT">{TX_NATURE_LABEL.SPOT}</option>
               <option value="DAY_TRADE">{TX_NATURE_LABEL.DAY_TRADE}</option>
               <option value="MARGIN">{TX_NATURE_LABEL.MARGIN}</option>
+              <option value="SHORT">{TX_NATURE_LABEL.SHORT}</option>
             </select>
           </div>
         )}
@@ -412,15 +431,15 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           autoComplete="off"
           placeholder={isSpotSell ? '點選或輸入代號（將列出庫存持股）' : '輸入代號會自動帶出名稱'}
           onFocus={() => {
-            if (isSpotSell) setShowTickerHoldings(true)
+            if (isSpotSell || isShortCover) setShowTickerHoldings(true)
           }}
           onClick={() => {
-            if (isSpotSell) setShowTickerHoldings(true)
+            if (isSpotSell || isShortCover) setShowTickerHoldings(true)
           }}
           onChange={(e) => {
             setTicker(e.target.value)
             updateTaxRateAuto(e.target.value)
-            if (isSpotSell) setShowTickerHoldings(true)
+            if (isSpotSell || isShortCover) setShowTickerHoldings(true)
           }}
           onBlur={() => {
             setShowTickerHoldings(false)
@@ -448,6 +467,33 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                   </span>
                   <span className="market-tag">
                     庫存 {item.qty.toLocaleString()} 股
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        {isShortCover && showTickerHoldings && (
+          <div className="suggestions" data-testid="ticker-shorts-dropdown">
+            {filteredTickerShorts.length === 0 ? (
+              <div className="suggestion-empty">
+                {activeShorts.length === 0 ? '目前帳戶無空單' : '空單中無匹配代號'}
+              </div>
+            ) : (
+              filteredTickerShorts.map((item) => (
+                <div
+                  key={item.key}
+                  className="suggestion-item"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    pickHolding(item)
+                  }}
+                >
+                  <span>
+                    <strong>{item.ticker}</strong> {item.name}
+                  </span>
+                  <span className="market-tag">
+                    空單 {item.shortQty.toLocaleString()} 股
                   </span>
                 </div>
               ))

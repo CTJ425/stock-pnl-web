@@ -61,6 +61,10 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
     buyCostTotal: cost,
     realized: 0,
     openLots: [], // breakEvenPrice never reads lots, only avgCost
+    shortQty: 0, // long-only what-if; breakEvenPrice never reads the short leg
+    shortProceeds: 0,
+    shortRawProceeds: 0,
+    shortLots: [],
     avgCost: cost / qty,
     rawAvgCost: buyPrice,
   }

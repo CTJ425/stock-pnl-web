@@ -25,6 +25,17 @@ export interface OpenLot {
   feeRate?: number | null
 }
 
+export interface ShortLot {
+  txId: string
+  date: string
+  qty: number
+  price: number
+  /** price*qty − sell fee − tax − borrow fee; reduced proportionally on a partial cover */
+  proceeds: number
+  /** price*qty; reduced proportionally on a partial cover */
+  rawProceeds: number
+}
+
 export interface Position {
   key: string
   ticker: string
@@ -43,6 +54,18 @@ export interface Position {
   realized: number
   /** FIFO lots not yet fully sold, oldest first */
   openLots: OpenLot[]
+  /**
+   * Number of shares currently sold short (融券). Required on purpose, like `splitFeeTax`'s
+   * `ticker`: an optional money field reads as 0 when a caller forgets it, and a forgotten
+   * short leg is silent. Let the compiler catch the caller instead.
+   */
+  shortQty: number
+  /** Net proceeds of the open short shares, fee/tax/borrow deducted */
+  shortProceeds: number
+  /** Gross proceeds (price*qty) of the open short shares */
+  shortRawProceeds: number
+  /** FIFO lots of open short sells, oldest first */
+  shortLots: ShortLot[]
 }
 
 export interface Holding extends Position {
@@ -128,6 +151,8 @@ export interface LedgerSummary {
   feesBrokerage: number
   /** Estimation of historical accumulated securities tax: For selling Taiwan stocks, sellTaxRate is deduced (floorSafe (transaction price × tax rate), the upper limit is fee_tax); for buying and US stocks, it is 0*/
   feesTax: number
+  /** Estimation of historical accumulated borrow fee (借券費), charged on a SHORT sell only*/
+  feesBorrow: number
   /** Historical cumulative number of transactions*/
   count: number
   /** Historical cumulative number of purchases*/
@@ -165,17 +190,22 @@ export function floorSafe(value: number): number {
   return Math.floor(Math.round(value * 1e6) / 1e6)
 }
 
+/** 借券費（融券手續費）率, charged on a SHORT sell only. */
+export const BORROW_FEE_RATE = 0.0008
+
 // Plain string comparison; `tx_date` (YYYY-MM-DD) and `created_at` (ISO timestamp) both sort
 // correctly with `<`/`>`, and this avoids locale-aware collation (localeCompare can treat '-'
 // as ignorable punctuation under some ICU locales).
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
- * Split a transaction's recorded `fee_tax` into brokerage fee and securities tax.
- * `tx_nature === 'DAY_TRADE'` is trusted directly (halved tax rate, no inference). Any other
- * value — including an explicit 'SPOT' — falls through to the inference ladder: a mislabelled
- * row whose fee_tax cannot cover the standard tax must not have its brokerage fee forced to 0
- * (BUG-036).
+ * Split a transaction's recorded `fee_tax` into brokerage fee, securities tax and (for a
+ * SHORT sell) borrow fee.
+ * `tx_nature === 'DAY_TRADE'` is trusted directly (halved tax rate, no inference).
+ * `tx_nature === 'SHORT'` is trusted directly too (full tax rate, never halved, plus borrow
+ * fee). Any other value — including an explicit 'SPOT' — falls through to the inference
+ * ladder: a mislabelled row whose fee_tax cannot cover the standard tax must not have its
+ * brokerage fee forced to 0 (BUG-036).
  */
 export function splitFeeTax(
   // `ticker` is required on purpose: sellTaxRate('') answers 0.3%, so an optional ticker would
@@ -183,12 +213,27 @@ export function splitFeeTax(
   // that forgets it instead.
   tx: Pick<Transaction, 'tx_type' | 'market' | 'ticker' | 'price' | 'qty' | 'fee_tax'> &
     Pick<Partial<Transaction>, 'tx_nature'>,
-): { fee: number; tax: number } {
+): { fee: number; tax: number; borrow: number } {
   const ticker = tx.ticker
   let tax = 0
+  let borrow = 0
   if (tx.tx_type === 'SELL' && tx.market === 'TPE') {
     const gross = tx.price * tx.qty
-    if (tx.tx_nature === 'DAY_TRADE') {
+    if (tx.tx_nature === 'SHORT') {
+      // 資券當沖 does not get the halved day-trade tax: a SHORT sell always pays full rate.
+      const stdTax = floorSafe(gross * sellTaxRate(ticker))
+      const stdBorrow = floorSafe(gross * BORROW_FEE_RATE)
+      if (tx.fee_tax >= stdTax + stdBorrow) {
+        tax = stdTax
+        borrow = stdBorrow
+      } else if (tx.fee_tax >= stdTax) {
+        tax = stdTax
+        borrow = tx.fee_tax - stdTax
+      } else {
+        tax = tx.fee_tax
+        borrow = 0
+      }
+    } else if (tx.tx_nature === 'DAY_TRADE') {
       tax = Math.min(floorSafe((gross * sellTaxRate(ticker)) / 2), tx.fee_tax)
     } else {
       const stdTax = floorSafe(gross * sellTaxRate(ticker))
@@ -201,7 +246,7 @@ export function splitFeeTax(
       }
     }
   }
-  return { fee: tx.fee_tax - tax, tax }
+  return { fee: tx.fee_tax - tax - borrow, tax, borrow }
 }
 
 const COMMON_FEE_RATES = [
@@ -256,7 +301,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     holdings: [],
     yearly: {},
     years: [],
-    summary: { realizedTw: 0, realizedUs: 0, fees: 0, feesBrokerage: 0, feesTax: 0, count: 0, buyCount: 0, sellCount: 0 },
+    summary: { realizedTw: 0, realizedUs: 0, fees: 0, feesBrokerage: 0, feesTax: 0, feesBorrow: 0, count: 0, buyCount: 0, sellCount: 0 },
     warnings: [],
   }
 
@@ -266,10 +311,22 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     .slice()
     .sort((a, b) => cmp(a.tx_date, b.tx_date) || cmp(a.created_at, b.created_at))
 
+  // Group transactions by trading date
+  const dateMap = new Map<string, Transaction[]>()
   for (const tx of txs) {
-    const year = Number(tx.tx_date.slice(0, 4))
-    const currency = marketCurrency(tx.market)
-    const key = positionKey(tx.market, tx.ticker)
+    let group = dateMap.get(tx.tx_date)
+    if (!group) {
+      group = []
+      dateMap.set(tx.tx_date, group)
+    }
+    group.push(tx)
+  }
+
+  const sortedDates = Array.from(dateMap.keys()).sort(cmp)
+
+  for (const date of sortedDates) {
+    const dayTxs = dateMap.get(date)!
+    const year = Number(date.slice(0, 4))
 
     if (!ledger.yearly[year]) {
       ledger.yearly[year] = {
@@ -290,155 +347,428 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     }
     const y = ledger.yearly[year]
 
-    if (!ledger.positions[key]) {
-      ledger.positions[key] = {
-        key,
-        ticker: tx.ticker,
-        name: tx.name || tx.ticker,
-        market: tx.market,
-        currency,
-        qty: 0,
-        cost: 0,
-        rawCost: 0,
-        buyCostTotal: 0,
-        realized: 0,
-        openLots: [],
+    // Group dayTxs by ticker key
+    const tickerGroups = new Map<string, Transaction[]>()
+    for (const tx of dayTxs) {
+      const key = positionKey(tx.market, tx.ticker)
+      let list = tickerGroups.get(key)
+      if (!list) {
+        list = []
+        tickerGroups.set(key, list)
       }
-      ledger.order.push(key)
+      list.push(tx)
     }
-    const pos = ledger.positions[key]
-    // A transaction that carries only the ticker as its name is a placeholder; it must not overwrite a known name.
-    if (tx.name && tx.name !== tx.ticker) pos.name = tx.name
 
-    if (!y.tickers[key]) {
-      y.tickers[key] = {
-        key,
-        ticker: tx.ticker,
-        name: tx.name || tx.ticker,
-        market: tx.market,
-        currency,
-        buyAmt: 0,
-        buyGross: 0,
-        sellAmt: 0,
-        sellGross: 0,
-        costBasis: 0,
-        rawCostBasis: 0,
-        realized: 0,
-        fees: 0,
-        feesTax: 0,
-        count: 0,
-        sells: [],
+    for (const [key, groupTxs] of tickerGroups.entries()) {
+      const sampleTx = groupTxs[0]
+      const currency = marketCurrency(sampleTx.market)
+
+      if (!ledger.positions[key]) {
+        ledger.positions[key] = {
+          key,
+          ticker: sampleTx.ticker,
+          name: sampleTx.name || sampleTx.ticker,
+          market: sampleTx.market,
+          currency,
+          qty: 0,
+          cost: 0,
+          rawCost: 0,
+          buyCostTotal: 0,
+          realized: 0,
+          openLots: [],
+          shortQty: 0,
+          shortProceeds: 0,
+          shortRawProceeds: 0,
+          shortLots: [],
+        }
+        ledger.order.push(key)
       }
-    }
-    const yt = y.tickers[key]
-    // A transaction that carries only the ticker as its name is a placeholder; it must not overwrite a known name.
-    if (tx.name && tx.name !== tx.ticker) yt.name = tx.name
+      const pos = ledger.positions[key]
 
-    y.count++
-    y.fees += tx.fee_tax
-    yt.count++
-    yt.fees += tx.fee_tax
-
-    // Estimating based on the tax rate, the error in manual adjustment or on-the-spot tax refund will fall on the handling fee
-    const estTax = splitFeeTax(tx).tax
-    ledger.summary.feesTax += estTax
-    ledger.summary.feesBrokerage += tx.fee_tax - estTax
-    y.feesTax += estTax
-    yt.feesTax += estTax
-
-    if (tx.tx_type === 'BUY') {
-      ledger.summary.buyCount++
-      const gross = tx.price * tx.qty
-      const totalCost = gross + tx.fee_tax // 手續費計入成本
-      y.buyAmt += totalCost
-      y.buyGross += gross
-      yt.buyAmt += totalCost
-      yt.buyGross += gross
-      pos.cost += totalCost
-      pos.rawCost += gross
-      pos.qty += tx.qty
-      pos.buyCostTotal += totalCost
-      pos.openLots.push({
-        txId: tx.id,
-        date: tx.tx_date,
-        qty: tx.qty,
-        price: tx.price,
-        cost: totalCost,
-        rawCost: gross,
-        feeRate: inferTxFeeRate(tx),
-      })
-    } else {
-      ledger.summary.sellCount++
-      const gross = tx.price * tx.qty
-      const revenue = gross - tx.fee_tax
-      y.sellAmt += revenue
-      y.sellGross += gross
-      yt.sellAmt += revenue
-      yt.sellGross += gross
-
-      const avgCost = pos.qty > 0 ? pos.cost / pos.qty : 0
-      const avgRawCost = pos.qty > 0 ? pos.rawCost / pos.qty : 0
-      const matchedQty = Math.min(tx.qty, pos.qty)
-      if (matchedQty < tx.qty) {
-        ledger.warnings.push(
-          `${tx.tx_date} ${tx.ticker} 賣出 ${tx.qty} 股，但當時持有僅 ${pos.qty} 股（超賣部分成本以 0 計算）`,
-        )
+      if (!y.tickers[key]) {
+        y.tickers[key] = {
+          key,
+          ticker: sampleTx.ticker,
+          name: sampleTx.name || sampleTx.ticker,
+          market: sampleTx.market,
+          currency,
+          buyAmt: 0,
+          buyGross: 0,
+          sellAmt: 0,
+          sellGross: 0,
+          costBasis: 0,
+          rawCostBasis: 0,
+          realized: 0,
+          fees: 0,
+          feesTax: 0,
+          count: 0,
+          sells: [],
+        }
       }
-      const costBasis = avgCost * matchedQty
-      const rawCostBasis = avgRawCost * matchedQty
-      const realized = revenue - costBasis
-      y.costBasis += costBasis
-      y.rawCostBasis += rawCostBasis
-      yt.costBasis += costBasis
-      yt.rawCostBasis += rawCostBasis
-      pos.cost -= costBasis
-      pos.rawCost -= rawCostBasis
-      pos.qty -= matchedQty
-      pos.realized += realized
-      yt.realized += realized
+      const yt = y.tickers[key]
 
-      // Consume open lots FIFO for the matched quantity.
-      let remaining = matchedQty
-      while (remaining > 0 && pos.openLots.length > 0) {
-        const lot = pos.openLots[0]
-        if (lot.qty <= remaining) {
-          remaining -= lot.qty
-          pos.openLots.shift()
-        } else {
-          const ratio = remaining / lot.qty
-          lot.cost -= lot.cost * ratio
-          lot.rawCost -= lot.rawCost * ratio
-          lot.qty -= remaining
-          remaining = 0
+      for (const tx of groupTxs) {
+        // A transaction that carries only the ticker as its name is a placeholder; it must not overwrite a known name.
+        if (tx.name && tx.name !== tx.ticker) {
+          pos.name = tx.name
+          yt.name = tx.name
         }
       }
 
-      // Moving-average subtraction leaves a tiny float residue (~1e-11) that would
-      // permanently pollute the average cost on the next buy; zero it out explicitly.
-      if (pos.qty === 0) {
-        pos.cost = 0
-        pos.rawCost = 0
-        pos.openLots = []
+      // Check if there are DAY_TRADE transactions on this date for this ticker
+      const dtSells = groupTxs.filter((t) => t.tx_type === 'SELL' && t.tx_nature === 'DAY_TRADE')
+      const dtBuys = groupTxs.filter((t) => t.tx_type === 'BUY' && t.tx_nature === 'DAY_TRADE')
+
+      // Identify candidates for day-trade pairing
+      // The fallback widens the candidate list to every same-day trade of the opposite
+      // side, so a SHORT leg must be excluded explicitly: a 融券 sell paired off here would
+      // never open the short position, and a 融券 cover would realize against the wrong leg.
+      const candidateSells = dtSells.length > 0
+        ? dtSells
+        : (dtBuys.length > 0 ? groupTxs.filter((t) => t.tx_type === 'SELL' && t.tx_nature !== 'SHORT') : [])
+      const candidateBuys = dtBuys.length > 0
+        ? dtBuys
+        : (dtSells.length > 0 ? groupTxs.filter((t) => t.tx_type === 'BUY' && t.tx_nature !== 'SHORT') : [])
+
+      const remBuyMap = new Map<string, { tx: Transaction; remQty: number }>()
+      for (const b of candidateBuys) {
+        remBuyMap.set(b.id, { tx: b, remQty: b.qty })
+      }
+      const remSellMap = new Map<string, { tx: Transaction; remQty: number }>()
+      for (const s of candidateSells) {
+        remSellMap.set(s.id, { tx: s, remQty: s.qty })
       }
 
-      yt.sells.push({
-        txId: tx.id,
-        date: tx.tx_date,
-        qty: tx.qty,
-        price: tx.price,
-        sellAmt: revenue,
-        sellGross: gross,
-        costBasis,
-        rawCostBasis,
-        realized,
-        fees: tx.fee_tax,
-        feesTax: estTax,
-        avgCost,
-        oversold: matchedQty < tx.qty,
-      })
+      const countedTxIds = new Set<string>()
+      const countTx = (t: Transaction) => {
+        if (!countedTxIds.has(t.id)) {
+          countedTxIds.add(t.id)
+          y.count++
+          yt.count++
+          if (t.tx_type === 'BUY') ledger.summary.buyCount++
+          else ledger.summary.sellCount++
+        }
+      }
 
-      if (currency === 'TWD') y.realizedTw += realized
-      else y.realizedUs += realized
+      // Pair day trades FIFO
+      for (const s of candidateSells) {
+        const sEntry = remSellMap.get(s.id)!
+        if (sEntry.remQty <= 0) continue
+
+        for (const b of candidateBuys) {
+          const bEntry = remBuyMap.get(b.id)!
+          if (bEntry.remQty <= 0) continue
+          if (sEntry.remQty <= 0) break
+
+          const matchedQty = Math.min(sEntry.remQty, bEntry.remQty)
+          sEntry.remQty -= matchedQty
+          bEntry.remQty -= matchedQty
+
+          countTx(b)
+          countTx(s)
+
+          const buyRatio = matchedQty / b.qty
+          const buyGross = b.price * matchedQty
+          const buyFee = b.fee_tax * buyRatio
+          const buyTotalCost = buyGross + buyFee
+
+          const sellRatio = matchedQty / s.qty
+          const sellGross = s.price * matchedQty
+          const sellFeeTax = s.fee_tax * sellRatio
+          const estTax = splitFeeTax(s).tax * sellRatio
+          const sellRevenue = sellGross - sellFeeTax
+
+          const costBasis = buyTotalCost
+          const rawCostBasis = buyGross
+          const realized = sellRevenue - costBasis
+          const avgCost = costBasis / matchedQty
+
+          y.buyAmt += buyTotalCost
+          y.buyGross += buyGross
+          y.sellAmt += sellRevenue
+          y.sellGross += sellGross
+          y.costBasis += costBasis
+          y.rawCostBasis += rawCostBasis
+          y.fees += buyFee + sellFeeTax
+          y.feesTax += estTax
+
+          yt.buyAmt += buyTotalCost
+          yt.buyGross += buyGross
+          yt.sellAmt += sellRevenue
+          yt.sellGross += sellGross
+          yt.costBasis += costBasis
+          yt.rawCostBasis += rawCostBasis
+          yt.realized += realized
+          yt.fees += buyFee + sellFeeTax
+          yt.feesTax += estTax
+
+          pos.buyCostTotal += buyTotalCost
+          pos.realized += realized
+
+          ledger.summary.feesTax += estTax
+          ledger.summary.feesBrokerage += (buyFee + sellFeeTax - estTax)
+
+          if (currency === 'TWD') y.realizedTw += realized
+          else y.realizedUs += realized
+
+          yt.sells.push({
+            txId: s.id,
+            date: s.tx_date,
+            qty: matchedQty,
+            price: s.price,
+            sellAmt: sellRevenue,
+            sellGross,
+            costBasis,
+            rawCostBasis,
+            realized,
+            fees: sellFeeTax,
+            feesTax: estTax,
+            avgCost,
+            oversold: false,
+          })
+        }
+      }
+
+      // Process remaining un-matched or regular spot transactions in their original chronological order
+      for (const tx of groupTxs) {
+        let effQty = tx.qty
+        let effFeeTax = tx.fee_tax
+
+        if (tx.tx_type === 'BUY' && remBuyMap.has(tx.id)) {
+          effQty = remBuyMap.get(tx.id)!.remQty
+          effFeeTax = tx.qty > 0 ? tx.fee_tax * (effQty / tx.qty) : 0
+        } else if (tx.tx_type === 'SELL' && remSellMap.has(tx.id)) {
+          effQty = remSellMap.get(tx.id)!.remQty
+          effFeeTax = tx.qty > 0 ? tx.fee_tax * (effQty / tx.qty) : 0
+        }
+
+        if (effQty <= 0) continue
+
+        countTx(tx)
+        y.fees += effFeeTax
+        yt.fees += effFeeTax
+
+        const { tax: estTax, borrow: estBorrow } = splitFeeTax({ ...tx, qty: effQty, fee_tax: effFeeTax })
+        ledger.summary.feesTax += estTax
+        ledger.summary.feesBorrow += estBorrow
+        ledger.summary.feesBrokerage += effFeeTax - estTax - estBorrow
+        y.feesTax += estTax
+        yt.feesTax += estTax
+
+        if (tx.tx_nature === 'SHORT' && tx.tx_type === 'SELL') {
+          // Open a short position: proceeds and gross are tracked separately from the long
+          // side, and never touch y.sellAmt / y.sellGross / y.costBasis — nothing realized yet.
+          const gross = tx.price * effQty
+          const proceeds = gross - effFeeTax
+          pos.shortQty += effQty
+          pos.shortProceeds += proceeds
+          pos.shortRawProceeds += gross
+          pos.shortLots.push({
+            txId: tx.id,
+            date: tx.tx_date,
+            qty: effQty,
+            price: tx.price,
+            proceeds,
+            rawProceeds: gross,
+          })
+        } else if (tx.tx_nature === 'SHORT' && tx.tx_type === 'BUY') {
+          // Cover a short position (FIFO against shortLots). Never touches y.buyAmt/buyGross —
+          // this is the cost basis of the realization, not an acquisition.
+          const gross = tx.price * effQty
+          const coverTotal = gross + effFeeTax
+          const matchedQty = Math.min(effQty, pos.shortQty)
+          const ratio = effQty > 0 ? matchedQty / effQty : 0
+          const coverCost = coverTotal * ratio
+
+          let remaining = matchedQty
+          let proceedsBasis = 0
+          let rawProceedsBasis = 0
+          while (remaining > 0 && pos.shortLots.length > 0) {
+            const lot = pos.shortLots[0]
+            if (lot.qty <= remaining) {
+              proceedsBasis += lot.proceeds
+              rawProceedsBasis += lot.rawProceeds
+              remaining -= lot.qty
+              pos.shortLots.shift()
+            } else {
+              const lotRatio = remaining / lot.qty
+              const consumedProceeds = lot.proceeds * lotRatio
+              const consumedRaw = lot.rawProceeds * lotRatio
+              proceedsBasis += consumedProceeds
+              rawProceedsBasis += consumedRaw
+              lot.proceeds -= consumedProceeds
+              lot.rawProceeds -= consumedRaw
+              lot.qty -= remaining
+              remaining = 0
+            }
+          }
+
+          const realized = proceedsBasis - coverCost
+          const rawCoverGross = gross * ratio
+
+          pos.shortQty -= matchedQty
+          pos.shortProceeds -= proceedsBasis
+          pos.shortRawProceeds -= rawProceedsBasis
+          pos.realized += realized
+
+          y.sellAmt += proceedsBasis
+          y.sellGross += rawProceedsBasis
+          y.costBasis += coverCost
+          y.rawCostBasis += rawCoverGross
+          yt.sellAmt += proceedsBasis
+          yt.sellGross += rawProceedsBasis
+          yt.costBasis += coverCost
+          yt.rawCostBasis += rawCoverGross
+          yt.realized += realized
+
+          if (currency === 'TWD') y.realizedTw += realized
+          else y.realizedUs += realized
+
+          yt.sells.push({
+            txId: tx.id,
+            date: tx.tx_date,
+            qty: matchedQty,
+            price: tx.price,
+            sellAmt: proceedsBasis,
+            sellGross: rawProceedsBasis,
+            costBasis: coverCost,
+            rawCostBasis: rawCoverGross,
+            realized,
+            fees: effFeeTax * ratio,
+            feesTax: 0,
+            avgCost: matchedQty > 0 ? coverCost / matchedQty : 0,
+            oversold: false,
+          })
+
+          // Explicit zeroing (BUG-039 rule): proportional subtraction leaves float residue
+          // that would pollute the next short open.
+          if (pos.shortQty === 0) {
+            pos.shortProceeds = 0
+            pos.shortRawProceeds = 0
+            pos.shortLots = []
+          }
+
+          // Over-cover: the excess shares open a long lot, the same path a BUY already takes.
+          if (effQty > matchedQty) {
+            const excessQty = effQty - matchedQty
+            const excessRatio = excessQty / effQty
+            const excessFeeTax = effFeeTax * excessRatio
+            const excessGross = tx.price * excessQty
+            const excessTotalCost = excessGross + excessFeeTax
+            y.buyAmt += excessTotalCost
+            y.buyGross += excessGross
+            yt.buyAmt += excessTotalCost
+            yt.buyGross += excessGross
+            pos.cost += excessTotalCost
+            pos.rawCost += excessGross
+            pos.qty += excessQty
+            pos.buyCostTotal += excessTotalCost
+            pos.openLots.push({
+              txId: tx.id,
+              date: tx.tx_date,
+              qty: excessQty,
+              price: tx.price,
+              cost: excessTotalCost,
+              rawCost: excessGross,
+              feeRate: inferTxFeeRate(tx),
+            })
+            ledger.warnings.push(
+              `${tx.tx_date} ${tx.ticker} 回補 ${effQty} 股，但當時空單僅 ${matchedQty} 股（超出部分視為現股買進）`,
+            )
+          }
+        } else if (tx.tx_type === 'BUY') {
+          const gross = tx.price * effQty
+          const totalCost = gross + effFeeTax // 手續費計入成本
+          y.buyAmt += totalCost
+          y.buyGross += gross
+          yt.buyAmt += totalCost
+          yt.buyGross += gross
+          pos.cost += totalCost
+          pos.rawCost += gross
+          pos.qty += effQty
+          pos.buyCostTotal += totalCost
+          pos.openLots.push({
+            txId: tx.id,
+            date: tx.tx_date,
+            qty: effQty,
+            price: tx.price,
+            cost: totalCost,
+            rawCost: gross,
+            feeRate: inferTxFeeRate(tx),
+          })
+        } else {
+          const gross = tx.price * effQty
+          const revenue = gross - effFeeTax
+          y.sellAmt += revenue
+          y.sellGross += gross
+          yt.sellAmt += revenue
+          yt.sellGross += gross
+
+          const avgCost = pos.qty > 0 ? pos.cost / pos.qty : 0
+          const avgRawCost = pos.qty > 0 ? pos.rawCost / pos.qty : 0
+          const matchedQty = Math.min(effQty, pos.qty)
+          if (matchedQty < effQty) {
+            ledger.warnings.push(
+              `${tx.tx_date} ${tx.ticker} 賣出 ${effQty} 股，但當時持有僅 ${pos.qty} 股（超賣部分成本以 0 計算）`,
+            )
+          }
+          const costBasis = avgCost * matchedQty
+          const rawCostBasis = avgRawCost * matchedQty
+          const realized = revenue - costBasis
+          y.costBasis += costBasis
+          y.rawCostBasis += rawCostBasis
+          yt.costBasis += costBasis
+          yt.rawCostBasis += rawCostBasis
+          pos.cost -= costBasis
+          pos.rawCost -= rawCostBasis
+          pos.qty -= matchedQty
+          pos.realized += realized
+          yt.realized += realized
+
+          // Consume open lots FIFO for the matched quantity.
+          let remaining = matchedQty
+          while (remaining > 0 && pos.openLots.length > 0) {
+            const lot = pos.openLots[0]
+            if (lot.qty <= remaining) {
+              remaining -= lot.qty
+              pos.openLots.shift()
+            } else {
+              const ratio = remaining / lot.qty
+              lot.cost -= lot.cost * ratio
+              lot.rawCost -= lot.rawCost * ratio
+              lot.qty -= remaining
+              remaining = 0
+            }
+          }
+
+          // Moving-average subtraction leaves a tiny float residue (~1e-11) that would
+          // permanently pollute the average cost on the next buy; zero it out explicitly.
+          if (pos.qty === 0) {
+            pos.cost = 0
+            pos.rawCost = 0
+            pos.openLots = []
+          }
+
+          yt.sells.push({
+            txId: tx.id,
+            date: tx.tx_date,
+            qty: effQty,
+            price: tx.price,
+            sellAmt: revenue,
+            sellGross: gross,
+            costBasis,
+            rawCostBasis,
+            realized,
+            fees: effFeeTax,
+            feesTax: estTax,
+            avgCost,
+            oversold: matchedQty < effQty,
+          })
+
+          if (currency === 'TWD') y.realizedTw += realized
+          else y.realizedUs += realized
+        }
+      }
     }
   }
 
@@ -458,14 +788,15 @@ export function computeLedger(transactions: Transaction[]): Ledger {
 
   ledger.holdings = ledger.order
     .map((key) => ledger.positions[key])
-    .filter((pos) => pos.qty > 0)
+    .filter((pos) => pos.qty > 0 || pos.shortQty > 0)
     // Copy the lots: the spread is shallow, and a Holding sharing this array would let a
     // consumer mutate ledger.positions through it. Every other field is a scalar.
     .map((pos) => ({
       ...pos,
       openLots: pos.openLots.map((l) => ({ ...l })),
-      avgCost: pos.cost / pos.qty,
-      rawAvgCost: pos.rawCost / pos.qty,
+      shortLots: pos.shortLots.map((l) => ({ ...l })),
+      avgCost: pos.qty > 0 ? pos.cost / pos.qty : 0,
+      rawAvgCost: pos.qty > 0 ? pos.rawCost / pos.qty : 0,
     }))
     .sort((a, b) => {
       if (a.currency !== b.currency) return a.currency === 'TWD' ? -1 : 1
@@ -505,4 +836,26 @@ export function estimateUnrealized(
     return Math.round(mktVal - holding.qty * holding.avgCost - fee - tax)
   }
   return mktVal - holding.qty * holding.avgCost
+}
+
+/**
+ * Unrealized P&L of an open short leg at `price`. A cover pays a brokerage fee and no tax,
+ * so this is proceeds − (price*shortQty + coverFee). Falling price raises the result.
+ */
+export function estimateUnrealizedShort(
+  holding: Holding,
+  price: number,
+  feeRate: number,
+  minFee?: number,
+): number {
+  const shortQty = holding.shortQty
+  if (!(shortQty > 0)) return 0
+  const shortProceeds = holding.shortProceeds
+  const coverVal = price * shortQty
+  let fee = floorSafe(coverVal * feeRate)
+  if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
+  if (holding.currency === 'TWD') {
+    return Math.round(shortProceeds - coverVal - fee)
+  }
+  return shortProceeds - coverVal
 }

@@ -187,6 +187,33 @@ describe('parseNumber 會計負數括號格式（BUG-037）', () => {
 })
 
 
+describe('交易性質 融券（Task 141 Stage B）', () => {
+  it('匯入接受「融券」與 SHORT 兩種寫法', () => {
+    const csv = [
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費 / 稅金',
+      '2026-03-02,台股,2603,長榮,賣出,融券,100,1000,522',
+      '2026-03-03,台股,2603,長榮,買入,SHORT,95,1000,135',
+    ].join('\n')
+    const res = parseTransactionsCsv(csv)
+    expect(res.errors).toHaveLength(0)
+    expect(res.rows).toHaveLength(2)
+    expect(res.rows[0].tx_nature).toBe('SHORT')
+    expect(res.rows[1].tx_nature).toBe('SHORT')
+  })
+
+  it('匯出寫成「融券」，再匯入回來仍是 SHORT', () => {
+    const out = transactionsToCsv([
+      {
+        id: 't1', workspace_id: 'ws', tx_date: '2026-03-02', market: 'TPE',
+        ticker: '2603', name: '長榮', tx_type: 'SELL', price: 100, qty: 1000,
+        fee_tax: 522, tx_nature: 'SHORT', created_at: '2026-03-02T01:00:00.000Z',
+      },
+    ])
+    expect(out).toContain('融券')
+    expect(parseTransactionsCsv(out).rows[0].tx_nature).toBe('SHORT')
+  })
+})
+
 describe('交易性質與分項費用欄位（Task 137 §C）', () => {
   const SPLIT = '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅'
 

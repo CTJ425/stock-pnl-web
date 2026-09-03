@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
-import { breakEvenPrice, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
+import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
 
 describe('calculateFee（與 GAS Sidebar calculateFee 同構）', () => {
   it('台股買入：手續費元以下無條件捨去', () => {
@@ -87,6 +87,10 @@ function holdingOf(input: Partial<Holding> & Pick<Holding, 'ticker' | 'market' |
     rawAvgCost: input.cost / input.qty,
     // breakEvenPrice 不看未沖銷批次；合成部位給空陣列即可
     openLots: [],
+    shortQty: 0,
+    shortProceeds: 0,
+    shortRawProceeds: 0,
+    shortLots: [],
     ...input,
   }
 }
@@ -378,5 +382,62 @@ describe('inferFeeRate 歷史交易手續費率反推', () => {
         }
       }
     }
+  })
+})
+
+describe('融券費用（Task 141 Stage A）', () => {
+  const shortHolding = {
+    key: 'TPE:2603', ticker: '2603', name: '長榮', market: 'TPE', currency: 'TWD',
+    qty: 0, cost: 0, rawCost: 0, buyCostTotal: 0, realized: 0, openLots: [],
+    shortQty: 1000, shortProceeds: 99_478, shortRawProceeds: 100_000, shortLots: [],
+    avgCost: 0, rawAvgCost: 0,
+  } as Holding
+
+  it('calculateFee 對融券賣出加收借券費 0.08%', () => {
+    // 手續費 142 + 證交稅 300 + 借券費 80
+    expect(
+      calculateFee({
+        market: 'TPE', txType: 'SELL', price: 100, qty: 1000,
+        feeRate: DEFAULT_FEE_RATE, ticker: '2603', nature: 'SHORT',
+      }),
+    ).toBe(522)
+  })
+
+  it('未標記融券則不收借券費', () => {
+    expect(
+      calculateFee({
+        market: 'TPE', txType: 'SELL', price: 100, qty: 1000,
+        feeRate: DEFAULT_FEE_RATE, ticker: '2603',
+      }),
+    ).toBe(442)
+  })
+
+  it('融券買進（回補）不收借券費也不收證交稅', () => {
+    // 95000 × 0.001425 = 135.375 → 135
+    expect(
+      calculateFee({
+        market: 'TPE', txType: 'BUY', price: 95, qty: 1000,
+        feeRate: DEFAULT_FEE_RATE, ticker: '2603', nature: 'SHORT',
+      }),
+    ).toBe(135)
+  })
+
+  it('breakEvenPriceShort 回傳的價位剛好損益兩平，再高一檔就虧', () => {
+    const pnlAt = (price: number) =>
+      shortHolding.shortProceeds -
+      (price * shortHolding.shortQty +
+        calculateFee({
+          market: 'TPE', txType: 'BUY', price, qty: shortHolding.shortQty,
+          feeRate: DEFAULT_FEE_RATE, minFee: 20,
+        }))
+
+    const p = breakEvenPriceShort(shortHolding, DEFAULT_FEE_RATE, 20)
+    expect(p).toBeGreaterThan(0)
+    expect(pnlAt(p)).toBeGreaterThanOrEqual(0)
+    expect(pnlAt(Math.round((p + 0.01) * 100) / 100)).toBeLessThan(0)
+  })
+
+  it('沒有空單時 breakEvenPriceShort 回傳 0', () => {
+    expect(breakEvenPriceShort({ ...shortHolding, shortQty: 0 }, DEFAULT_FEE_RATE, 20)).toBe(0)
   })
 })
