@@ -6,14 +6,6 @@
 
 ---
 
-## BUG-044-P: `transactions.fee_rate` not yet applied on PROD
-
-- **Status**: 🔴 **OPEN**
-- **Found**: 2026-09-01, follow-up to BUG-044
-- **Impact**: PROD (`hrilemueiqyaoiwnkeuu`) has `tx_nature` but not `fee_rate`. Reads and writes fall back to the legacy column set, so the 0.9.27 per-transaction fee rate is not stored there. The `tx_nature` data loss that made this urgent is fixed in code (BUG-045), so this is now a missing-feature issue, not a corruption risk.
-- **Fix**: After `main` carries 0.9.27, link to `hrilemueiqyaoiwnkeuu` and run the `fee_rate` block of `sources/supabase/schema.sql` with `supabase db query --linked`, then `NOTIFY pgrst, 'reload schema'` and `SELECT * FROM verify_setup()`. Record the 10 check results here.
-- **Blocked on**: explicit user instruction. CLAUDE.md § Branches & envs forbids touching PROD Supabase without one.
-
 > **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
 > environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
 > of what the audit found and why each mattered.
@@ -88,15 +80,15 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 ### RISK-004 — `addTransactions` silently drops `tx_nature` on pre-migration database
 
 - **Where**: `sources/src/services/dataProvider.ts:174-188` (retry path in `SupabaseProvider.addTransactions`)
-- **What**: When `tx_nature` column is missing (PROD before BUG-041 SQL runs), `addTransactions` retries with schema that omits the field. Retry succeeds and returns success, so caller believes the label was persisted. User sees "save" succeed, then finds the label gone on reopen.
+- **What**: When the `tx_nature` column is missing, `addTransactions` retries with a schema that omits the field. The retry succeeds and returns success, so the caller believes the label was persisted. User sees "save" succeed, then finds the label gone on reopen.
 - **Confirmed by Review**: Task 139 code review before landing.
-- **Impact Today**: None. PROD schema change blocked by BUG-041; DEV has the column.
+- **Impact Today**: None. Both cloud projects have carried the column since 2026-09-03 — see BUG-041 and BUG-044-P in `FIXED_BUG.md`, closed with the 0.9.28 release.
 - **User Experience**: User picks 當沖, sees save succeed, reopens and finds label lost. But ledger inference (fee/tax split via `splitFeeTax`) still produces correct tax numbers because `DAY_TRADE` → halved tax is both the explicit inference and the fallback when label absent.
 - **Mitigation**: Same property that `workspaces.fee_rate` shipped with in Task 135: explicit label lost until PROD migration runs, but numbers stay correct.
 - **Decision**: Accepted, not fixed. No code change.
 - **Status**: OPEN (low severity, accepted)
 - **Introduced**: Task 139 (2026-09-01)
-- **Scope**: Applies to both cloud projects until the BUG-041 migrations run; the self-hosted DEV database already has the column.
+- **Scope**: Dormant while a project carries `tx_nature` — but **this risk is not one-time**. It re-arms every time a project is created or recreated from un-migrated schema, which is exactly what happened on 2026-08-31: both cloud projects were recreated and silently lost the column, and nothing surfaced it until 2026-09-03. Treat it as a standing post-recreation check, not a closed question.
 
 ---
 
@@ -212,29 +204,6 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
 - **Discovered**: 2026-09-01, after BUG-038 fix
 
 ---
-
-### BUG-041 — PROD Supabase schema pending: `workspaces.fee_rate` and `transactions.tx_nature`
-- **Where**: `sources/supabase/schema.sql` sections 1 and 5
-- **What**: Two pending PROD schema changes:
-  1. **Fee rate persistence (Task 135)**: `workspaces.fee_rate` column. App falls back to legacy column list and keeps working without it, but fee rate does not persist across browsers until migration runs.
-  2. **Transaction nature (Task 139)**: `transactions.tx_nature` column. App retries with schema omitting the field and keeps working, but user's explicit nature label is lost until migration runs (though tax/fee numbers stay correct via inference).
-- **Action required**: Execute on the PROD Supabase project (`hrilemueiqyaoiwnkeuu`):
-  ```sql
-  ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS fee_rate NUMERIC;
-  ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_fee_rate_range;
-  ALTER TABLE workspaces ADD CONSTRAINT workspaces_fee_rate_range
-      CHECK (fee_rate IS NULL OR (fee_rate >= 0 AND fee_rate < 1));
-  
-  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
-  ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
-  ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
-      CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
-  
-  NOTIFY pgrst, 'reload schema';
-  ```
-- **Reason it is open**: an access token is now available and the DEV self-hosted database has both columns, but the two PROD/cloud migrations were **blocked by the session's permission classifier** when attempted on 2026-09-01, not by missing credentials. They must be run by the user, or re-attempted with an explicit approval. Nothing breaks meanwhile: `SupabaseProvider` retries every transaction and workspace query against the legacy column list, so the app keeps working without either column.
-- **Status**: OPEN
-- **Discovered**: 2026-08-31 (fee_rate); 2026-09-01 (tx_nature)
 
 ### BUG-042 — `listWorkspaces` 的退回重試會吞掉第一次的錯誤訊息
 - **Where**: `sources/src/services/dataProvider.ts:183-191`
