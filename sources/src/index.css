@@ -484,9 +484,18 @@ h3 {
 .exposure-key {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 8px;
   font-size: 11.5px;
+}
+
+/* One legend entry: swatch, label and value read as a single group. */
+.exposure-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-secondary);
 }
 
 .exposure-sw {
