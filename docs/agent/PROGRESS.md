@@ -26,9 +26,15 @@
   - `netOpenTickers` 融券兩例：規則改回 `net > 0` 後 `expected [] to deeply equal [{ ticker: '2303', name: '聯電' }]`。
 - **Verify**: `npm run build` exit 0；`npm run typecheck:edge` exit 0；`npx vitest run` exit 0，95 檔 **1537** 測試（1532 → 1537，新增 T16 與 5 個 `netOpenTickers`）；`npx oxlint src` 0 errors。
 - **未做，需使用者決定**:
-  - **Edge Function 未部署到 DEV**，所以籌碼分析的修正尚未生效。DEV 目前仍是 `stock-report` v3（2026-09-01 16:49）。
   - `AnalysisPage.tsx:239` 對只有空單的標的送出 `{ qty: 0, avgCost: 0 }`（`pnlEngine` 在 `qty === 0` 時 `avgCost` 回 0），使 `StockDetailPage.tsx:353` 的 `heldQty` 為 0，影響損益試算。另一個缺陷，本次未修。
   - PROGRESS.md 缺 0.9.28-dev.6 與 dev.7 的紀錄，本次未回填。
+- **DEV Edge 已於 2026-09-03 14:24:25 Asia/Taipei 部署**：`stock-report` v3 → **v4**，
+  `ezbr_sha256` 由 `28350abe…c71cea4` 變為 `1d2ba453…266a794f23`，`verify_jwt` 維持 `false`
+  （設成 true 會讓盤後批次全部 401）。以 `--project-ref` 部署，未動 `supabase link` 的全域狀態。
+  部署自 commit `b73b8c6`，工作樹僅有一個與本函式無關的未追蹤檔。
+  **雜湊只證明 bundle 有變，不證明變成什麼**，所以另外抓下線上 bundle 逐字確認：
+  `netOpenTickers` 出現 5 次、`v.net !== 0` 出現 2 次、舊的 `v.net > 0` **0 次**；
+  對照 v3 舊 bundle 為 `v.net > 0` 2 次、`netOpenTickers` 0 次。
 
 ---
 
