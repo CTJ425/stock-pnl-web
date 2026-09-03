@@ -10,16 +10,15 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-03 19:15)
+## 📍 Where the project stands (2026-09-03 20:00)
 
-- **Version 0.9.29-dev.3 — in development on `dev`.** PROD sits on `0.9.28` (`a1a26da`).
-  - Implemented: 觀察股票同產業自動群組聚合 (Auto-Grouping, `stockGrouping.ts`)、庫存總覽快速篩選膠囊 (Filter Chips, `WatchSection.tsx`)、條列模式分組列 (`watchlist-group-row`)、個股分析頂部切換選單產業分組 (`AnalysisPage.tsx`)。
-  - Verification on `dev`: 97 test files / **1599** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
-- **Version 0.9.28 — released and live on PROD.** `main` sits on `a1a26da` and is pushed. GitHub Release `0.9.28` exists and is marked Latest.
-  - Shipped: 融券做空 (Task 141), intraday day-trade short-first matching, the cold-visual redesign, the font/size realignment to the PROD baseline, the short-only dashboard and 籌碼分析 fixes, and the table contrast pass.
+- **Version 0.9.29 — released and live on PROD.** `main` and `dev` are synchronized at `0.9.29`.
+  - Implemented: 觀察股票同產業自動群組聚合 (Auto-Grouping, `stockGrouping.ts`)、庫存總覽快速篩選膠囊 (Filter Chips, `WatchSection.tsx`)、條列模式分組列 (`watchlist-group-row`)、個股分析頂部切換選單產業分組 (`AnalysisPage.tsx`)、緊湊型雙行小卡 (`WatchSection.tsx`)、MIS 即時 33 大官方產業別代碼資料流 (`misParse.ts` / `stock-price/index.ts`)、個股分析行情卡產業標籤 (`QuoteTab.tsx`)，以及收盤無成交價格修復與字典校正 (BUG-045, BUG-046)。
+  - Verification: 97 test files / **1599** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+  - Edge Functions: `stock-price` is **v3** on both projects and both carry the same `ezbr_sha256` `3ef2700b97ccad33d712c6359d1056a2c0a9fbc08a5ceb6a1b25a402b64c1621` with `verify_jwt: true`. `stock-report` is **v4** on both (`1d2ba453…266a794f23`, `verify_jwt: false`).
+- **Version 0.9.28 — prior release.**
 - **The PROD schema gap is closed.** `transactions.tx_nature` (CHECK includes `SHORT`), `transactions.fee_rate` and `workspaces.fee_rate` now exist on **both** cloud projects. Applied to PROD 2026-09-03; 110 existing transactions were not rewritten. Full DDL kept in `docs/agent/prod-0.9.28-migration.sql`. This closed Task 141, BUG-041 and BUG-044-P.
   - **It closed the gap, not the risk.** Both projects were recreated on 2026-08-31 from un-migrated schema and silently lost these columns; nothing surfaced it for three days, because `dataProvider.ts` retries without the missing column and reports success. Re-check the columns after any project recreation — see `RISK-004` in `BUG_FIX.md`.
-- **Edge Functions**: `stock-report` is **v4** on both projects and both carry the same `ezbr_sha256` `1d2ba453…266a794f23`, which is what proves they run the same bundle. `verify_jwt` must stay `false` on `stock-report` — set it to `true` and the whole after-hours cron batch answers 401. `stock-price` (v2) and `backup-transactions` (v2) were not part of this release.
 - **DEV is the cloud project `zyebvayngwrqzoaicbwd`, not the local docker stack.** `sources/.env` points there and DEV Edge runs there (3 ACTIVE functions). The local `stock-pnl-web-dev-db-1` container answers plausibly but the app never talks to it.
 - **`supabase link` was left pointing at neither project** after this release: both showed `linked: false`. DDL went through the Management API (`POST /v1/projects/{ref}/database/query`), which names the project in the URL and so does not depend on cwd the way `db query --linked` does. Prefer it for any single-project write.
 - **DEV cron count: 6**: `source-probe`, `macro-daily`, `fx-daily`, `market-data-daily`, `history-daily`, `backup-daily`. The count is **6 on PROD too**, so it cannot identify a project — use `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%<ref>%')`.

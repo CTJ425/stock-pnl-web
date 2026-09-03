@@ -5,6 +5,38 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-03 17:50:00 Asia/Taipei (0.9.29-dev.2 — MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.29-dev.1` → **`0.9.29-dev.2`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者同意將產業資訊直接從 MIS 即時行情資料流帶出，並要求在個股分析「行情」區塊補上產業別顯示，同時解決收盤無成交價格異常（BUG-045）與字典誤植（BUG-046）。
+- **Work**:
+  1. **Edge Function `stock-price` (`misParse.ts`, `index.ts`)**:
+     - 在 `misParse.ts` 中解析 MIS 原始欄位 `row.i`（官方產業代碼，如 `15` 航運、`16` 觀光餐旅、`24` 半導體），透過 33 大官方產業字典對照表映射成中文產業名稱。
+     - `MisQuote` 與 `Quote` 介面新增 `industry: string | null`，`fetchYahooPrice` 及 DB cache 讀取回傳 `industry: null`。
+     - **修復 BUG-045**：收盤時（`t >= '13:30:00'`）若 `z === '-'`（無當盤撮合成交），`pickPrice` 絕不可退階取 `b[0]`（買一委買價），直接回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路接管，精確取得 5701 劍湖山真實收盤價 4.30 元（避免鎖入委買價 4.19 元並被收盤鎖定）。
+  2. **前端型別與行情介面 (`priceProxy.ts`, `QuoteTab.tsx`, `WatchSection.tsx`, `stockCategory.ts`, `index.css`)**:
+     - `priceProxy.ts`：`PriceQuote` 與 `EdgeQuote` 介面新增 `industry?: string | null`，`fetchFromEdge` 解析文字帶入。
+     - `QuoteTab.tsx`：行情頂部抬頭（`.m-quote-head`）新增 `.quote-badge` 產業微型徽章，優先取 `quote.industry`，未抵達時自動由 `getStockCategory(ticker, name)` 提供後備。
+     - `index.css`：新增 `.quote-badge` 樣式（取消 64px 截斷限制、置中對齊）。
+     - `WatchSection.tsx` 與 `stockCategory.ts`：
+       - `getStockCategory` 函式簽章擴充第 3 參數 `industry?: string | null` 並優先採用。
+       - 觀察股票卡片與條列檢視優先傳入 `quote?.industry`。
+       - 修正 `COMMON_STOCK_INDUSTRIES` 靜態字典：將 2208 台船從汽車修正為「航運業」、新增 5701 劍湖山為「觀光餐旅」。
+  3. **單元測試 (`misParse.test.ts`, `stockCategory.test.ts`, `QuoteTab.test.tsx`, `WatchSection.test.tsx`)**:
+     - `misParse.test.ts`：新增官方產業代碼對照、`toIndustry` 型別與邊界轉換、收盤無成交回傳空陣列（BUG-045，含 `t` 與 `ot` 雙重守衛）、盤中仍退階買一價測試（24/24 通過）。
+     - `stockCategory.test.ts`：新增 2208 台船修正測試、5701 劍湖山測試、即時 `industry` 參數優先級、空代號防護、`'-'`/`'--'` 佔位符過濾與空白修剪測試（23/23 通過）。
+     - `QuoteTab.test.tsx`：新增即時 `quote.industry` 徽章渲染測試與無報價後備推導測試（26/26 通過）。
+     - `WatchSection.test.tsx`：新增優先採用 `quote.industry` 測試（13/13 通過）。
+- **Verify**:
+  - `npm test`：96 檔測試檔、**1574** 個測試全數 PASS（0 失敗）。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
+- **連帶關閉**: Task 143、BUG-045、BUG-046。
+
+---
+
 ## 📅 Log: 2026-09-03 16:58:30 Asia/Taipei (0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤)
 
 - **Status**: ✅ **COMPLETED** on `dev`
