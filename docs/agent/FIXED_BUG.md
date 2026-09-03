@@ -7,7 +7,7 @@
 ---
 
 ### BUG-047: 籌碼分析 answered 403 for a ticker held only as a 融券 short
-- **Status**: ✅ FIXED (0.9.28-dev.8) — code only; the DEV Edge Function is **not yet redeployed**
+- **Status**: ✅ FIXED (0.9.28-dev.8) — deployed to DEV as `stock-report` v4 on 2026-09-03 14:24:25 Asia/Taipei
 - **Date**: 2026-09-03, found by the user on DEV
 - **Symptom**: With only a short position on a TW ticker, opening 籌碼分析 failed with `Edge Function returned a non-2xx status code`.
 - **Impact**: 籌碼分析, and the nightly pre-generated report, were unreachable for every 融券-only ticker. Long positions were never affected, which is why it stayed hidden until 融券 shipped in 0.9.28-dev.1.
@@ -16,7 +16,7 @@
 - **Fix**: Moved the open-position rule into `netOpenTickers()` in `batchTickers.ts` — the file whose header says pure helpers live there so they stay unit-testable — and changed the test to `net !== 0`. `heldTwTickers()` now delegates to it. The whitelist is an anti-scraping ceiling, not an accounting rule: a non-zero net means the user really traded that ticker, on either side.
 - **Deliberate negative**: `tx_nature` is **not** read here, although it would split the long and short legs exactly. PROD has no `tx_nature` column yet (BUG-044-P); selecting a missing column makes the query error, `heldTwTickers()` returns `[]`, and every ticker 403s. Do not add it until BUG-044-P lands.
 - **Tests**: 5 cases on `netOpenTickers` in `batchTickers.test.ts`, proven real — restoring `net > 0` fails the two 融券 cases with `expected [] to deeply equal [{ ticker: '2303', name: '聯電' }]`.
-- **Follow-up**: redeploy `stock-report` to DEV; `AnalysisPage.tsx:239` still sends `{ qty: 0, avgCost: 0 }` for a short-only holding, so `heldQty` reaches 損益試算 as 0.
+- **Follow-up**: PROD is untouched and still runs the old rule — it needs the same deploy on `main` with explicit approval. `AnalysisPage.tsx:239` still sends `{ qty: 0, avgCost: 0 }` for a short-only holding, so `heldQty` reaches 損益試算 as 0.
 
 ### BUG-048: 只有空單時，台股總覽的主數字、曝險尺與成本全部變成骨架灰條
 - **Status**: ✅ FIXED (0.9.28-dev.8)
