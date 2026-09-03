@@ -159,3 +159,28 @@ from the transcripts Claude Code already writes, plus the main session's average
 and per-turn cost. Read the per-role split, not the token columns: one model and zero
 sidechain traffic means nothing was routed, whatever the plan said. That report is the
 only proof that counts.
+
+### Dispatch discipline — measured on 2026-09-01, all seven cost real rework
+
+- **`route:reviewer` has no Bash** (this project has no local `reviewer` agent). Asking
+  the scoped one to run a command earns five identical "verification gap" findings and
+  nothing else. **Paste the test output you already have into the brief.**
+- **Scribe composes nothing a human will read.** It runs on haiku; asked to turn notes into
+  prose it produced wrong file attributions, an invented API, and a change that never
+  happened — twice. Hand it verbatim text to paste. It keeps the file surgery, which is the
+  part that actually replaces main-session turns. Cost check: 1.4k tokens of verbatim Opus
+  output is ~$0.03, one sixth of a single main turn; one correction round-trip is five.
+- **At most two tracking files per scribe dispatch.** A seven-section brief drove it into
+  its 30-turn cap three times, then into a rate limit.
+- **Prove the brief before dispatching**: compile the failing test against the proposed
+  signature. A test you cannot type is a spec error — that is how `splitFeeTax` shipped
+  without the `ticker` it needs and cost three rounds.
+- **Validate any classification rule against real data before it enters a spec**, and record
+  the counts there. "Same-day buy and sell means 當沖" scored 12 false positives out of 14
+  on the two broker exports in `docs/`; catching that before dispatch saved a whole cycle.
+  A spec must also state the **negative** case — what the code may not do, and why.
+- **For money code the main session reads the diff itself.** Tests and reviewers missed both
+  of the silent-money defects here (a non-idempotent INSERT retry that would duplicate
+  transactions, and an optional `ticker` that would overtax every ETF threefold). Context
+  replay is the cost; for code that computes money it is worth paying, for bookkeeping it is
+  not.
