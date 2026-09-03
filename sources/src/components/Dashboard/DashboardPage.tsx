@@ -461,17 +461,20 @@ export function DashboardPage({
   const twShortRows = twRows.filter((r) => r.direction === 'SHORT')
   const usShortRows = usRows.filter((r) => r.direction === 'SHORT')
 
-  const twMkt = sumOrNull(twLongRows.map((r) => r.mktVal))
+  // 沒有多單時多方腿是 0，不是未知。sumOrNull 對空陣列回傳 null，而 null 在
+  // MarketPanel 裡代表「報價還沒到」——只有空單的面板因此整組畫成骨架條，主數字、
+  // 曝險尺與成本全部不顯示。零與未知必須在這裡就分開。
+  const twMkt = twLongRows.length === 0 ? 0 : sumOrNull(twLongRows.map((r) => r.mktVal))
   const twShortMkt = twShortRows.length === 0 ? null : sumOrNull(twShortRows.map((r) => r.mktVal))
-  const twCost = sumOrNull(twLongRows.map((r) => r.holding.cost))
-  const twRawCost = sumOrNull(twLongRows.map((r) => r.holding.rawCost))
+  const twCost = twLongRows.length === 0 ? 0 : sumOrNull(twLongRows.map((r) => r.holding.cost))
+  const twRawCost = twLongRows.length === 0 ? 0 : sumOrNull(twLongRows.map((r) => r.holding.rawCost))
   const twUnreal = sumOrNull(twRows.map((r) => r.unrealized))
   const twUnrealRaw = sumOrNull(twRows.map((r) => r.rawUnrealized))
 
-  const usMkt = sumOrNull(usLongRows.map((r) => r.mktVal))
+  const usMkt = usLongRows.length === 0 ? 0 : sumOrNull(usLongRows.map((r) => r.mktVal))
   const usShortMkt = usShortRows.length === 0 ? null : sumOrNull(usShortRows.map((r) => r.mktVal))
-  const usCost = sumOrNull(usLongRows.map((r) => r.holding.cost))
-  const usRawCost = sumOrNull(usLongRows.map((r) => r.holding.rawCost))
+  const usCost = usLongRows.length === 0 ? 0 : sumOrNull(usLongRows.map((r) => r.holding.cost))
+  const usRawCost = usLongRows.length === 0 ? 0 : sumOrNull(usLongRows.map((r) => r.holding.rawCost))
   const usUnreal = sumOrNull(usRows.map((r) => r.unrealized))
   const usUnrealRaw = sumOrNull(usRows.map((r) => r.rawUnrealized))
 

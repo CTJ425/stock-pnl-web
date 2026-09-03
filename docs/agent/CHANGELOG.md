@@ -2,6 +2,27 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.28-dev.8（2026-09-03）— 字體對齊正式區、只有空單時的總覽與籌碼分析
+
+- 🔤 **字體改回正式區實際使用的 Outfit + Inter**（`index.html`、`index.css`）—— dev.7 的
+  「字體改回 Roboto」是誤植：git 歷史顯示初版就是 Outfit + Inter，這個專案從未用過 Roboto。
+  Playwright 同時量測 DEV 與 `https://stock-pnl-web.pages.dev/` 才確認清楚。`--font-num`
+  一併移除（正式區沒有這個變數），10 處引用改為 `var(--font-body)`。修改後兩邊載入的字檔
+  完全相同。
+- 🧮 **只有空單時台股總覽不再整片空白**（`DashboardPage.tsx`）—— `sumOrNull` 對空陣列回傳
+  `null`，而 `null` 在面板裡的意思是「報價還沒到」。沒有多單時多方腿被當成未知而不是 0，
+  主數字、曝險尺與投入總成本全部畫成骨架灰條。改為在來源處把「零」與「未知」分開，
+  投入總成本只算多單，沒有多單就顯示 $0。
+- 🔓 **只有空單時點籌碼分析不再報錯**（`batchTickers.ts`、`stock-report/index.ts`）——
+  白名單用「買進 − 賣出 > 0」判定持有，融券先賣後買、淨額必為負，所以只有空單的代號
+  永遠不在白名單，Edge Function 回 403，前端顯示
+  `Edge Function returned a non-2xx status code`。判定改為 `net !== 0`，並把這條規則抽成
+  `netOpenTickers()` 以便單元測試。**刻意不讀 `tx_nature`**：正式區還沒有那個欄位，
+  select 不存在的欄位會讓白名單整個變空。
+- ⚠️ **此版的 Edge Function 尚未部署**，籌碼分析的修正要重新部署 `stock-report` 後才生效。
+- ✅ 測試 1532 → 1537（新增 T16 只有空單的總覽，與 5 個 `netOpenTickers`）。
+  `npm run build`、`npm run typecheck:edge`、`npx vitest run` 皆 exit 0。
+
 ### 0.9.28-dev.7（2026-09-03）— 曝險尺常駐、空單看得到建倉價、字體改回 Roboto
 
 - 📊 **曝險尺永遠顯示**（`DashboardPage.tsx`）— 沒有空單時空方段為 0，不再整條收掉。

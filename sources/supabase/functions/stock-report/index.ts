@@ -61,7 +61,7 @@ import {
   type MarginDatedResponse,
   type T86ResponseShape,
 } from './twChips.ts'
-import { allowsTicker, mergeTwTickerLists } from './batchTickers.ts'
+import { allowsTicker, mergeTwTickerLists, netOpenTickers } from './batchTickers.ts'
 import {
   buildReport,
   dashDate,
@@ -990,25 +990,18 @@ function ymdMinusDays(ymd: string, days: number): string {
   return `${dt.getUTCFullYear()}${p(dt.getUTCMonth() + 1)}${p(dt.getUTCDate())}`
 }
 
-/** The Taiwan stock code of all users' "net holdings (buy − sell > 0)" (service role scan transactions; cross-user deduplication)*/
+/**
+ * The Taiwan stock code of every user's open position (service role scan transactions;
+ * cross-user deduplication). The open/closed rule, and why it counts a 融券 short, live with
+ * `netOpenTickers` in batchTickers.ts so they can be unit-tested.
+ */
 async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
   const { data, error } = await db
     .from('transactions')
     .select('ticker, name, tx_type, qty')
     .eq('market', 'TPE')
   if (error || !data) return []
-  const acc = new Map<string, { net: number; name: string }>()
-  for (const row of data) {
-    const ticker = String(row.ticker ?? '').trim()
-    if (!TICKER_RE.test(ticker)) continue
-    const qty = Number(row.qty) || 0
-    const delta = row.tx_type === 'BUY' ? qty : -qty
-    const prev = acc.get(ticker) ?? { net: 0, name: '' }
-    acc.set(ticker, { net: prev.net + delta, name: String(row.name ?? '').trim() || prev.name })
-  }
-  return [...acc.entries()]
-    .filter(([, v]) => v.net > 0)
-    .map(([ticker, v]) => ({ ticker, name: v.name }))
+  return netOpenTickers(data)
 }
 
 /** All users' watchlist tickers (service role scan tw_watchlist; cross-user deduplication). */
