@@ -258,6 +258,26 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     expect(row.textContent).not.toContain('—')
   })
 
+  it('T16 台股只有空單時，總覽照樣出得來：淨額為負、曝險尺全空方、成本 0', () => {
+    // 沒有多單時 twLongRows 是空的。sumOrNull 對空陣列回傳 null，而 null 在面板裡代表
+    // 「報價還沒到」——舊行為把整個台股面板畫成骨架灰條，主數字、曝險尺與成本都不顯示。
+    useWorkspace.mockReturnValue({
+      ledger: computeLedger([SHORT_TX]),
+      current: { id: 'ws-1', name: '主要工作區' },
+      loading: false,
+      error: null,
+    })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    // 多方 0 − 空方 95,000 → 淨額 −95,000
+    expect(num(screen.getByTestId('tw-mktval'))).toBe(-95_000)
+    expect(screen.getByTestId('tw-exposure')).toBeTruthy()
+    expect(num(screen.getByTestId('tw-long-mktval'))).toBe(0)
+    expect(num(screen.getByTestId('tw-short-mktval'))).toBe(95_000)
+    // 投入總成本只算多單，沒有多單就是 0，不是骨架條
+    expect(num(screen.getByTestId('tw-cost'))).toBe(0)
+    expect(screen.getByTestId('tw-cost').querySelector('.skeleton')).toBeNull()
+  })
+
   it('T8 空單列帶 row-short，多頭列不帶', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
     expect(screen.getByTestId('holding-row-2603-SHORT').className).toContain('row-short')

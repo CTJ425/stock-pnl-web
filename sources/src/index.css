@@ -28,9 +28,8 @@
   --radius-sm: 2px;
   /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
   --bottom-nav-h: 54px;
-  --font-display: 'Roboto', 'Noto Sans TC', 'Helvetica Neue', Arial, sans-serif;
-  --font-body: 'Roboto', 'Noto Sans TC', 'Helvetica Neue', Arial, 'Microsoft JhengHei', sans-serif;
-  --font-num: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   --shadow-card: none;
   --panel: #0e1116;
   --modal-bg: #0e1116;
@@ -337,7 +336,7 @@ h3 {
 .section-title .hint {
   color: var(--ink-muted);
   font-size: 11px;
-  font-family: var(--font-num);
+  font-family: var(--font-body);
 }
 
 /* ---------- KPI big character poster ----------*/
@@ -363,7 +362,7 @@ h3 {
 
 .kpi .kpi-value {
   margin-top: 6px;
-  font-family: var(--font-num);
+  font-family: var(--font-body);
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -374,7 +373,7 @@ h3 {
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 11.5px;
-  font-family: var(--font-num);
+  font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
 
@@ -431,7 +430,7 @@ h3 {
 
 .market-panel .kpi-value {
   margin-top: 4px;
-  font-family: var(--font-num);
+  font-family: var(--font-body);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -461,7 +460,7 @@ h3 {
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 11px;
-  font-family: var(--font-num);
+  font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
 
@@ -606,7 +605,7 @@ table.data-table {
 }
 
 .data-table .num {
-  font-family: var(--font-num);
+  font-family: var(--font-body);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }

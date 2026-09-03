@@ -6,6 +6,26 @@
 
 ---
 
+### BUG-047: 籌碼分析 answered 403 for a ticker held only as a 融券 short
+- **Status**: ✅ FIXED (0.9.28-dev.8) — code only; the DEV Edge Function is **not yet redeployed**
+- **Date**: 2026-09-03, found by the user on DEV
+- **Symptom**: With only a short position on a TW ticker, opening 籌碼分析 failed with `Edge Function returned a non-2xx status code`.
+- **Impact**: 籌碼分析, and the nightly pre-generated report, were unreachable for every 融券-only ticker. Long positions were never affected, which is why it stayed hidden until 融券 shipped in 0.9.28-dev.1.
+- **Root cause**: `heldTwTickers()` in `supabase/functions/stock-report/index.ts` built the anti-scraping whitelist from `net = BUY − SELL` and kept only `net > 0`. A 融券 position opens with a SELL and closes with a BUY, so a short-only ticker nets negative and fell out of the whitelist. `generate` then returned 403 `僅限持有或已加入觀察清單的台股代號`. The same list feeds the nightly batch, so no stored report existed either and the front end's Storage-first read fell straight through to the failing call.
+- **Evidence (DEV, `zyebvayngwrqzoaicbwd`, verified with the user's short-lived access token)**: the deployed `stock-report` v3 bundle contains `select('ticker, name, tx_type, qty')`, `filter(([, v]) => v.net > 0)` and that 403 string; DEV data shows `8033` at net −5000 and `2303` at net −1000, both `in_whitelist = false`. The query carried `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%')` as the project-identity guard, which returned true.
+- **Fix**: Moved the open-position rule into `netOpenTickers()` in `batchTickers.ts` — the file whose header says pure helpers live there so they stay unit-testable — and changed the test to `net !== 0`. `heldTwTickers()` now delegates to it. The whitelist is an anti-scraping ceiling, not an accounting rule: a non-zero net means the user really traded that ticker, on either side.
+- **Deliberate negative**: `tx_nature` is **not** read here, although it would split the long and short legs exactly. PROD has no `tx_nature` column yet (BUG-044-P); selecting a missing column makes the query error, `heldTwTickers()` returns `[]`, and every ticker 403s. Do not add it until BUG-044-P lands.
+- **Tests**: 5 cases on `netOpenTickers` in `batchTickers.test.ts`, proven real — restoring `net > 0` fails the two 融券 cases with `expected [] to deeply equal [{ ticker: '2303', name: '聯電' }]`.
+- **Follow-up**: redeploy `stock-report` to DEV; `AnalysisPage.tsx:239` still sends `{ qty: 0, avgCost: 0 }` for a short-only holding, so `heldQty` reaches 損益試算 as 0.
+
+### BUG-048: 只有空單時，台股總覽的主數字、曝險尺與成本全部變成骨架灰條
+- **Status**: ✅ FIXED (0.9.28-dev.8)
+- **Date**: 2026-09-03, found by the user on DEV
+- **Symptom**: With only a short position, the 台股 market panel showed permanent grey skeleton bars instead of numbers.
+- **Root cause**: `sumOrNull()` returns `null` for an empty array, but `null` in `MarketPanel` means "the quote has not arrived". With no long rows the long leg became *unknown* rather than *zero*, so `legsKnown` was false, `netMkt` was null, and the hero value, the exposure bar and 投入總成本 all rendered as skeletons.
+- **Fix**: Separated zero from unknown at the source in `DashboardPage.tsx` — `twLongRows.length === 0 ? 0 : sumOrNull(...)`, and the same for `twCost`, `twRawCost` and the three US counterparts. The user chose to keep 投入總成本 long-only, so it reads $0 when there is no long position.
+- **Tests**: `T16` in `DashboardPage.test.tsx`, proven real — without the fix it reports `expected +0 to be -95000`.
+
 ### BUG-044: `transactions.fee_rate` was in schema.sql but never applied to the real DEV database
 - **Status**: ✅ FIXED — 2026-09-01
 - **Found**: 2026-09-01, main-session diff review of 0.9.27-dev.1
