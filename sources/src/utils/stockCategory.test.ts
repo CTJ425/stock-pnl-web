@@ -87,11 +87,17 @@ describe('stockCategory', () => {
       expect(getStockCategory('6691')).toBe('其他電子') // 洋基工程
     })
 
-    it('maps shipping stocks', () => {
+    it('maps shipping stocks including 2208 台船 (BUG-046 fix)', () => {
       expect(getStockCategory('2603')).toBe('航運')
       expect(getStockCategory('2609')).toBe('航運')
       expect(getStockCategory('2615')).toBe('航運')
       expect(getStockCategory('2618')).toBe('航運')
+      expect(getStockCategory('2208')).toBe('航運業') // 台船
+    })
+
+    it('maps tourism stocks including 5701 劍湖山 (BUG-046 fix)', () => {
+      expect(getStockCategory('2701')).toBe('觀光餐旅')
+      expect(getStockCategory('5701')).toBe('觀光餐旅') // 劍湖山
     })
 
     it('maps finance / insurance stocks', () => {
@@ -127,6 +133,36 @@ describe('stockCategory', () => {
       expect(getStockCategory('9992', '某某綠能')).toBe('綠能環保')
       expect(getStockCategory('9991', '某某軟體')).toBe('資訊服務')
       expect(getStockCategory('9990', '某某醫材')).toBe('生技醫療')
+    })
+  })
+
+  describe('Industry argument priority from live quote', () => {
+    it('prioritizes live quote industry over dictionary / rule-based', () => {
+      expect(getStockCategory('2330', '台積電', '半導體業')).toBe('半導體業')
+      expect(getStockCategory('2208', '台船', '航運業')).toBe('航運業')
+      expect(getStockCategory('5701', '劍湖山', '觀光餐旅')).toBe('觀光餐旅')
+      expect(getStockCategory('9999', '未知股', '綠能環保')).toBe('綠能環保')
+    })
+
+    it('falls back to rules/dictionary when industry is null, undefined, or empty', () => {
+      expect(getStockCategory('0050', '元大台灣50', null)).toBe('股票型 ETF')
+      expect(getStockCategory('00679B', '元大美債20年', undefined)).toBe('債券 ETF')
+      expect(getStockCategory('2208', '台船', '')).toBe('航運業')
+      expect(getStockCategory('5701', '劍湖山', null)).toBe('觀光餐旅')
+    })
+
+    it('ignores placeholder industry values like "-" or "--"', () => {
+      expect(getStockCategory('2330', '台積電', '-')).toBe('半導體')
+      expect(getStockCategory('2330', '台積電', '--')).toBe('半導體')
+    })
+
+    it('trims whitespace around industry', () => {
+      expect(getStockCategory('2330', '台積電', '  半導體業  ')).toBe('半導體業')
+    })
+
+    it('returns null if ticker is empty even if industry is provided', () => {
+      expect(getStockCategory('', '台積電', '半導體業')).toBeNull()
+      expect(getStockCategory('   ', '台積電', '半導體業')).toBeNull()
     })
   })
 

@@ -1,9 +1,41 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: 0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤
+- Action: 0.9.29-dev.2 — MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復 (BUG-045, BUG-046)
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-03 16:58:30 Asia/Taipei
+- Timestamp: 2026-09-03 17:50:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 17:50:00 Asia/Taipei (0.9.29-dev.2 — MIS 即時產業別資料流、個股行情產業標籤與收盤無成交價格修復)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.29-dev.1` → **`0.9.29-dev.2`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者同意將產業資訊直接從 MIS 即時行情資料流帶出，並要求在個股分析「行情」區塊補上產業別顯示，同時解決收盤無成交價格異常（BUG-045）與字典誤植（BUG-046）。
+- **Work**:
+  1. **Edge Function `stock-price` (`misParse.ts`, `index.ts`)**:
+     - 在 `misParse.ts` 中解析 MIS 原始欄位 `row.i`（官方產業代碼，如 `15` 航運、`16` 觀光餐旅、`24` 半導體），透過 33 大官方產業字典對照表映射成中文產業名稱。
+     - `MisQuote` 與 `Quote` 介面新增 `industry: string | null`，`fetchYahooPrice` 及 DB cache 讀取回傳 `industry: null`。
+     - **修復 BUG-045**：收盤時（`t >= '13:30:00'`）若 `z === '-'`（無當盤撮合成交），`pickPrice` 絕不可退階取 `b[0]`（買一委買價），直接回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路接管，精確取得 5701 劍湖山真實收盤價 4.30 元（避免鎖入委買價 4.19 元並被收盤鎖定）。
+  2. **前端型別與行情介面 (`priceProxy.ts`, `QuoteTab.tsx`, `WatchSection.tsx`, `stockCategory.ts`, `index.css`)**:
+     - `priceProxy.ts`：`PriceQuote` 與 `EdgeQuote` 介面新增 `industry?: string | null`，`fetchFromEdge` 解析文字帶入。
+     - `QuoteTab.tsx`：行情頂部抬頭（`.m-quote-head`）新增 `.quote-badge` 產業微型徽章，優先取 `quote.industry`，未抵達時自動由 `getStockCategory(ticker, name)` 提供後備。
+     - `index.css`：新增 `.quote-badge` 樣式（取消 64px 截斷限制、置中對齊）。
+     - `WatchSection.tsx` 與 `stockCategory.ts`：
+       - `getStockCategory` 函式簽章擴充第 3 參數 `industry?: string | null` 並優先採用。
+       - 觀察股票卡片與條列檢視優先傳入 `quote?.industry`。
+       - 修正 `COMMON_STOCK_INDUSTRIES` 靜態字典：將 2208 台船從汽車修正為「航運業」、新增 5701 劍湖山為「觀光餐旅」。
+  3. **單元測試 (`misParse.test.ts`, `stockCategory.test.ts`, `QuoteTab.test.tsx`, `WatchSection.test.tsx`)**:
+     - `misParse.test.ts`：新增官方產業代碼對照、`toIndustry` 型別與邊界轉換、收盤無成交回傳空陣列（BUG-045，含 `t` 與 `ot` 雙重守衛）、盤中仍退階買一價測試（24/24 通過）。
+     - `stockCategory.test.ts`：新增 2208 台船修正測試、5701 劍湖山測試、即時 `industry` 參數優先級、空代號防護、`'-'`/`'--'` 佔位符過濾與空白修剪測試（23/23 通過）。
+     - `QuoteTab.test.tsx`：新增即時 `quote.industry` 徽章渲染測試與無報價後備推導測試（26/26 通過）。
+     - `WatchSection.test.tsx`：新增優先採用 `quote.industry` 測試（13/13 通過）。
+- **Verify**:
+  - `npm test`：96 檔測試檔、**1574** 個測試全數 PASS（0 失敗）。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
+- **連帶關閉**: Task 143、BUG-045、BUG-046。
 
 ---
 
@@ -35,25 +67,3 @@
   - 全專案測試：`npm test` 96 檔測試檔、1556 個測試全數 PASS。
   - 編譯與型別：`npm run build`（`tsc -b && vite build`）exit 0。
   - 代碼檢查：`npx oxlint src` 0 error。
-
----
-
-## 📅 Log: 2026-09-03 15:59:47 Asia/Taipei (0.9.28 — 正式發版並上線 PROD)
-
-- **Status**: ✅ **RELEASED** — `main` 與 `dev` 皆為 `a1a26da`，已推送
-- **Version**: `0.9.28-dev.10` → **`0.9.28`**（去掉 `-dev`，四處檔案同步；CHANGELOG 的十個 `dev.N` 段落收斂成單一 `0.9.28` 段落，比照 `0.9.27` 的既有慣例）
-- **緣由**: 使用者授權合併到 `main` 並正式上線。
-- **上線順序刻意如此，不可對調**: 先資料庫、再前端、最後 Edge。`dataProvider.ts` 遇到 `42703` / `PGRST204` 會去掉欄位重試，所以缺欄位不會讓 PROD 掛掉——但融券賣出會**靜默**失去 `tx_nature`、被記成普通賣出，損益算錯且沒有任何錯誤訊息。若前端先上，就會開一段無聲錯帳的空窗。
-- **Work**:
-  1. **PROD 資料庫遷移**（`hrilemueiqyaoiwnkeuu`）: `transactions.tx_nature`（CHECK 含 `SHORT`）、`transactions.fee_rate`、`workspaces.fee_rate`。DDL 逐字取自 `schema.sql`，包在帶專案身分守衛的 `DO` 區塊裡，隨後 `NOTIFY pgrst, 'reload schema'`。全文留存於 `docs/agent/prod-0.9.28-migration.sql`。
-  2. **合併**: `main` 快轉到 `dev`（`origin/main` 是 `dev` 的祖先，無分歧），推送 `main` 與 `dev`，兩分支同版。
-  3. **PROD Edge**: `stock-report` v3 → **v4**，帶 `--no-verify-jwt`，以 `--project-ref` 部署，未動 `supabase link` 全域狀態。
-- **Verify — 每一項都查結果，不採信「指令成功」**:
-  - **資料庫**: 三個欄位皆存在且可為 NULL；CHECK 含 `SHORT`；`count(*), count(tx_nature), count(fee_rate)` 回傳 `110, 0, 0`——110 筆既有交易一筆未被改寫。
-  - **Edge**: `ezbr_sha256` 由 `28350abe…c71cea4` 變為 `1d2ba453…266a794f23`，`verify_jwt` 維持 `false`。雜湊只證明 bundle 有變，故另抓線上 bundle 逐字確認：`netOpenTickers` 5 次、`v.net !== 0` 2 次、舊的 `v.net > 0` **0 次**。**新 sha 與 DEV 完全相同**，依 `supabase-ops` 的判準即證明兩區跑同一份 bundle。
-  - **前端**: Playwright 載入 `https://stock-pnl-web.pages.dev/`——版號徽章 `0.9.28`、字族 `Inter`、`--thead-bg` 為 `#0f131914`（即新的 `rgba(15,19,25,0.08)`），**零 console error、零 4xx/5xx**。線上 bundle 含 `0.9.28` 且無 `0.9.27` 殘留。
-  - **Release**: GitHub Actions `Sync GitHub Releases` 成功，Release `0.9.28` 已建立並標為 Latest。
-  - 發版前 gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、`npx vitest run` exit 0（95 檔 1537 測試）、`npx oxlint src` 0 error。
-- **一次被權限守門擋下的嘗試**: 第一次對 PROD 資料庫的寫入被 Claude Code auto mode classifier 擋下。**沒有嘗試繞過**；改為向使用者說明並提供可自行執行的 SQL 檔，待使用者明確再次授權後才重試成功。
-- **連帶關閉**: Task 141（PROD CHECK 約束）、BUG-041、BUG-044-P。
-- **未做**: 融券流程的端到端 Playwright 驗證仍未執行。`transactions.user_id` 為 `NOT NULL` 但 TypeScript `Transaction` 型別未宣告，本次未動。`.inst-matrix tfoot td` 底色寫死為白色疊加、亮色主題方向相反，既有缺陷未修。

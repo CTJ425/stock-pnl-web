@@ -6,6 +6,25 @@
 
 ---
 
+### BUG-045 — 收盤撮合無成交時 misParse 誤取委買價 b[0] 充當收盤價並阻斷 Yahoo 後備
+- **Status**: ✅ FIXED (0.9.29-dev.2) — 2026-09-03 17:50:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-price/misParse.ts`
+- **What**: 當收盤最後一盤（`t >= '13:30:00'`）買賣未交集時，MIS 回傳 `z: "-"`。`misParse` 退階取買一掛單 `b[0]` 作為現價，並帶有 `13:30:00`，觸發 `quoteWindow.ts` 的 BUG-011 收盤鎖定機制，將未成交委買價鎖進資料庫至次日 08:25。且因未標記解析失敗，系統跳過了 Yahoo Finance 後備（實測 5701 劍湖山官方收盤價 4.30 元上漲 +1.41%，全站卻顯示委買價 4.19 元下跌 -1.18%）。
+- **Fix**: 當 `t >= '13:30:00'` 且 `z === '-'` 時，嚴禁退階至委買價，直接回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路取得真實收盤價 4.30。
+- **Verification**: 單元測試 `misParse.test.ts` 覆蓋收盤撮合無成交（`13:30:00` 及 `14:30:00`）回傳空陣列交由 Yahoo 接管，盤中正常退階。
+
+### BUG-046 — 產業分類手寫字典覆蓋率不足且有人為誤植（如 2208 台船誤植為汽車）
+- **Status**: ✅ FIXED (0.9.29-dev.2) — 2026-09-03 17:50:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-price/misParse.ts`、`sources/src/utils/stockCategory.ts`
+- **What**: 
+  1. 靜態字典 `COMMON_STOCK_INDUSTRIES` 僅收錄 677 檔，上櫃觀光餐旅（57xx）收錄數為 0，導致 5701 劍湖山無分類。
+  2. 人工建檔誤植：將 22xx 普遍視為汽車，誤將 2208 台船（台灣國際造船）標記為「汽車」，而證交所官方產業代碼為 15（航運業）。
+- **Fix**: 
+  1. 在 Edge Function `misParse.ts` 提取 MIS 即時行情 `row.i` 官方產業代碼，以 33 大官方產業字典映射成中文名稱並透過報價資料流直通前端。
+  2. 前端 `WatchSection.tsx` 與 `QuoteTab.tsx` 優先採用即時 `quote.industry`。
+  3. 修正靜態字典中 2208 台船為「航運業」，補充 5701 劍湖山為「觀光餐旅」。
+- **Verification**: 單元測試 `misParse.test.ts`、`stockCategory.test.ts`、`QuoteTab.test.tsx`、`WatchSection.test.tsx` 全數通過。
+
 ### BUG-041 — PROD Supabase schema pending: `workspaces.fee_rate` and `transactions.tx_nature`
 - **Status**: ✅ FIXED (0.9.28) — applied to PROD 2026-09-03 15:5x Asia/Taipei
 - **Root cause**: `schema.sql` carried the DDL but it was never run against `hrilemueiqyaoiwnkeuu`. The app kept working because `dataProvider.ts` retries on `42703` / `PGRST204` with the column dropped, so the gap stayed invisible.

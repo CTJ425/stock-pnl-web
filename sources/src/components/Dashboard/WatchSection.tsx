@@ -186,7 +186,7 @@ export function WatchSection({
               quote && quote.prevClose !== null && quote.prevClose !== 0
                 ? (quote.price - quote.prevClose) / quote.prevClose
                 : null
-            const category = getStockCategory(item.ticker, item.name)
+            const category = getStockCategory(item.ticker, item.name, quote?.industry)
             return (
               <div
                 key={item.ticker}
@@ -259,7 +259,7 @@ export function WatchSection({
                   quote && quote.prevClose !== null && quote.prevClose !== 0
                     ? (quote.price - quote.prevClose) / quote.prevClose
                     : null
-                const category = getStockCategory(item.ticker, item.name)
+                const category = getStockCategory(item.ticker, item.name, quote?.industry)
                 return (
                   <tr
                     key={item.ticker}

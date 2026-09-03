@@ -213,7 +213,6 @@ export const COMMON_STOCK_INDUSTRIES: Record<string, string> = {
   '2204': '汽車',
   '2206': '汽車',
   '2207': '汽車',
-  '2208': '汽車',
   '2227': '汽車',
   '2228': '汽車',
   '2231': '汽車',
@@ -254,6 +253,7 @@ export const COMMON_STOCK_INDUSTRIES: Record<string, string> = {
   '5534': '建材營造',
 
   // 航運
+  '2208': '航運業',
   '2603': '航運',
   '2605': '航運',
   '2606': '航運',
@@ -297,6 +297,7 @@ export const COMMON_STOCK_INDUSTRIES: Record<string, string> = {
   '2753': '觀光餐旅',
   '2754': '觀光餐旅',
   '2755': '觀光餐旅',
+  '5701': '觀光餐旅',
 
   // 金融保險
   '2801': '金融保險',
@@ -766,11 +767,25 @@ export const COMMON_STOCK_INDUSTRIES: Record<string, string> = {
 
 /**
  * Identify stock category / industry badge.
- * Returns a short label (e.g. '半導體', '債券 ETF', '特別股') or null if unknown.
+ * Prioritizes quote?.industry (live official TWSE/TPEx stream).
+ * If industry is not yet available, resolves via rule-based ETF / ETN / TDR / REITs / Preferred stock,
+ * followed by common stock dictionary, and finally company name heuristic fallback.
+ * Returns a short label (e.g. '半導體業', '債券 ETF', '特別股') or null if unknown.
  */
-export function getStockCategory(ticker: string, name?: string): string | null {
+export function getStockCategory(
+  ticker: string,
+  name?: string,
+  industry?: string | null,
+): string | null {
   const t = ticker.trim().toUpperCase()
   if (!t) return null
+
+  if (industry) {
+    const trimmed = industry.trim()
+    if (trimmed && trimmed !== '-' && trimmed !== '--') {
+      return trimmed
+    }
+  }
 
   // 1. Taiwan ETF rules: all start with '00'
   if (t.startsWith('00')) {

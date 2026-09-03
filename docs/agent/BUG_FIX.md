@@ -217,21 +217,5 @@ the scheduler has been reworked several times since, most recently in 0.6.32, an
 - **Status**: ACCEPTED RISK — identical to existing `LocalProvider.renameWorkspace` pattern at the same file, so it is project style and not a regression. Reviewer verdict: PASS.
 - **Discovered**: 2026-08-31
 
-### BUG-045 — 收盤撮合無成交時 misParse 誤取委買價 b[0] 充當收盤價並阻斷 Yahoo 後備
-- **Where**: `sources/supabase/functions/stock-price/misParse.ts:95-101`
-- **What**: 當收盤最後一盤（`t >= '13:30:00'`）買賣未交集時，MIS 回傳 `z: "-"`。`misParse` 退階取買一掛單 `b[0]` 作為現價，並帶有 `13:30:00`，觸發 `quoteWindow.ts` 的 BUG-011 收盤鎖定機制，將未成交委買價鎖進資料庫至次日 08:25。且因未標記解析失敗，系統跳過了 Yahoo Finance 後備（實測 5701 劍湖山官方收盤價 4.30 元上漲 +1.41%，全站卻顯示委買價 4.19 元下跌 -1.18%）。
-- **Fix**: 當 `t >= '13:30:00'` 且 `z === '-'` 時，嚴禁退階至委買價，應直接回傳 `null`，使 Edge Function 自然切換至 Yahoo Finance 後備線路。
-- **Status**: ⏳ OPEN
-- **Discovered**: 2026-09-03
-
-### BUG-046 — 產業分類手寫字典覆蓋率不足且有人為誤植（如 2208 台船誤植為汽車）
-- **Where**: `sources/src/utils/stockCategory.ts`
-- **What**: 
-  1. 靜態字典 `COMMON_STOCK_INDUSTRIES` 僅收錄 677 檔（涵蓋率約 34%），上櫃觀光餐旅（57xx）收錄數為 0，導致 5701 劍湖山無分類。
-  2. 人工建檔誤植：將 22xx 普遍視為汽車，誤將 2208 台船（台灣國際造船）標記為「汽車」，而證交所官方 OpenAPI 產業代碼為 15（航運業）。
-- **Fix**: 廢除手寫字典維護，改由 TWSE (`t187ap03_L`) 與 TPEx (`mopsfin_t187ap03_O`) 官方 OpenAPI 自動生成全市場 1,984 檔官方權威產業分類字典，或由 Edge Function `twlist` 端點整合輸出。
-- **Status**: ⏳ OPEN
-- **Discovered**: 2026-09-03
-
 
 

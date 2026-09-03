@@ -31,6 +31,7 @@ import { fetchIntraday } from '../../services/intradayProxy'
 import { fmtPercent, fmtPrice, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
 import { IntradayChart, finalVwap } from './IntradayChart'
+import { getStockCategory } from '../../utils/stockCategory'
 import type { TechnicalView } from './technicalView'
 import type { IntradayRange, IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
 import type { ChipDay, ReportHolding } from '../../services/reportProxy'
@@ -199,12 +200,15 @@ export function QuoteTab({
     .slice(-2)
     .reverse()
 
+  const category = getStockCategory(ticker, name, quote.industry)
+
   return (
     <>
       <div className="quote-top-banner">
-        <div className="m-quote-head">
+        <div className="m-quote-head m-sym">
           <h2>{name}</h2>
           <span className="code">{ticker}</span>
+          {category && <span className="watchlist-card-badge quote-badge">{category}</span>}
         </div>
         <div className="m-price">
           <span className={`big ${pnlClass(dayChange)}`}>{fmtPrice(quote.price, 'TWD')}</span>
