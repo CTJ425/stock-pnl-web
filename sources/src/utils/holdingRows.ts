@@ -6,12 +6,17 @@
  * Writing one on each side is bound to run out of time, here is a single source.
  */
 import type { Holding } from './pnlEngine'
-import { estimateUnrealized } from './pnlEngine'
-import { breakEvenPrice } from './fees'
+import { estimateUnrealized, estimateUnrealizedShort } from './pnlEngine'
+import { breakEvenPrice, breakEvenPriceShort } from './fees'
 import { getMinFee } from './settings'
 import { isClosed, tradeDateLabel, type PriceMap } from '../services/priceProxy'
 
 export interface HoldingRow {
+  /** Unique per row: a position with both legs emits two rows. `${holding.key}:${direction}` */
+  rowKey: string
+  direction: 'LONG' | 'SHORT'
+  /** Shares for this row. Negative on a SHORT row, so the UI reads one field. */
+  rowQty: number
   holding: Holding
   price: number | null
   priceStale: boolean
@@ -53,34 +58,79 @@ export function buildHoldingRows(
   feeRate: number,
   workspaceId?: string,
 ): HoldingRow[] {
-  return holdings.map((h) => {
+  return holdings.flatMap((h) => {
     const quote = prices[h.key]
     const price = quote?.price ?? null
-    const mktVal = price !== null ? price * h.qty : null
-    // Taiwan stocks apply the minimum handling fee for whole shares/fractional shares according to the shareholding size; there is no lower limit for US stocks
-    const minFee =
-      h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
-    const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
-    const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
-    const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
-    // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
-    const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
-    const breakEven = breakEvenPrice(h, feeRate, minFee)
     const prevClose = quote?.prevClose ?? null
-    return {
-      holding: h,
-      price,
-      priceStale: quote?.stale ?? false,
-      dayChange: price !== null && prevClose !== null ? price - prevClose : null,
-      tradeDay: tradeDateLabel(quote?.tradeDate),
-      closed: isClosed(quote),
-      trial: quote?.trial ?? false,
-      mktVal,
-      netMktVal,
-      unrealized,
-      rawUnrealized,
-      roi,
-      breakEven,
+    const priceStale = quote?.stale ?? false
+    const dayChange = price !== null && prevClose !== null ? price - prevClose : null
+    const tradeDay = tradeDateLabel(quote?.tradeDate)
+    const closed = isClosed(quote)
+    const trial = quote?.trial ?? false
+
+    const rows: HoldingRow[] = []
+
+    if (h.qty > 0) {
+      const mktVal = price !== null ? price * h.qty : null
+      // Taiwan stocks apply the minimum handling fee for whole shares/fractional shares according to the shareholding size; there is no lower limit for US stocks
+      const minFee =
+        h.currency === 'TWD' ? getMinFee(h.qty >= 1000 ? 'whole' : 'odd', workspaceId) : undefined
+      const unrealized = price !== null ? estimateUnrealized(h, price, feeRate, minFee) : null
+      const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
+      const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
+      // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
+      const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
+      const breakEven = breakEvenPrice(h, feeRate, minFee)
+      rows.push({
+        rowKey: `${h.key}:LONG`,
+        direction: 'LONG',
+        rowQty: h.qty,
+        holding: h,
+        price,
+        priceStale,
+        dayChange,
+        tradeDay,
+        closed,
+        trial,
+        mktVal,
+        netMktVal,
+        unrealized,
+        rawUnrealized,
+        roi,
+        breakEven,
+      })
     }
+
+    if (h.shortQty > 0) {
+      const minFee =
+        h.currency === 'TWD'
+          ? getMinFee(h.shortQty >= 1000 ? 'whole' : 'odd', workspaceId)
+          : undefined
+      const mktVal = price !== null ? price * h.shortQty : null
+      const unrealized = price !== null ? estimateUnrealizedShort(h, price, feeRate, minFee) : null
+      const rawUnrealized = price !== null ? h.shortRawProceeds - price * h.shortQty : null
+      const roi = unrealized !== null && h.shortProceeds !== 0 ? unrealized / h.shortProceeds : null
+      const breakEven = breakEvenPriceShort(h, feeRate, minFee)
+      rows.push({
+        rowKey: `${h.key}:SHORT`,
+        direction: 'SHORT',
+        rowQty: -h.shortQty,
+        holding: h,
+        price,
+        priceStale,
+        dayChange,
+        tradeDay,
+        closed,
+        trial,
+        mktVal,
+        netMktVal: null,
+        unrealized,
+        rawUnrealized,
+        roi,
+        breakEven,
+      })
+    }
+
+    return rows
   })
 }

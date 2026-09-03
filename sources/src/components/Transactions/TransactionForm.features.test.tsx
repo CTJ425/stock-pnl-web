@@ -26,10 +26,10 @@ describe('TransactionForm 新增交易表單改善測試', () => {
     const natureSelect = form.getByLabelText('交易性質') as HTMLSelectElement
     expect(natureSelect.value).toBe('SPOT')
 
-    // 確認選項中沒有「未指定」，且包含現股、當沖、融資
+    // 確認選項中沒有「未指定」，且包含現股、當沖、融資、融券（Task 141）
     const options = Array.from(natureSelect.options).map((o) => o.text)
     expect(options).not.toContain('未指定')
-    expect(options).toEqual(['現股', '當沖', '融資'])
+    expect(options).toEqual(['現股', '當沖', '融資', '融券'])
   })
 
   it('2. 賣出時點選代號或名稱，可自動顯示現股庫存清單供選取；非現股（如當沖）不強制顯示庫存', async () => {

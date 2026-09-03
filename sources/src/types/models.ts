@@ -4,10 +4,11 @@ export type Market = 'TPE' | 'US'
 export type TxType = 'BUY' | 'SELL'
 /**
  * Trading nature of a Taiwan-market transaction (task 137 §C).
- * `DAY_TRADE` (現股當沖) halves the securities transaction tax; the other two do not
- * change any calculation and are carried so a CSV round-trip does not lose the label.
+ * `DAY_TRADE` (現股當沖) halves the securities transaction tax; `SHORT` (融券) changes
+ * the ledger path (see `computeLedger`), it is not a label-only value. The other two do
+ * not change any calculation and are carried so a CSV round-trip does not lose the label.
  */
-export type TxNature = 'SPOT' | 'DAY_TRADE' | 'MARGIN'
+export type TxNature = 'SPOT' | 'DAY_TRADE' | 'MARGIN' | 'SHORT'
 export type Currency = 'TWD' | 'USD'
 
 export interface Workspace {
@@ -65,6 +66,7 @@ export const TX_NATURE_LABEL: Record<TxNature, string> = {
   SPOT: '現股',
   DAY_TRADE: '當沖',
   MARGIN: '融資',
+  SHORT: '融券',
 }
 
 export const MARKET_LABEL: Record<Market, string> = {

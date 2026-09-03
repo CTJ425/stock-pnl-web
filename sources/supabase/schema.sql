@@ -54,12 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_tx_workspace ON transactions(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(tx_date ASC);
 
--- Trading nature (現股/當沖/融資). NULL means unknown, not 現股: rows written before this
+-- Trading nature (現股/當沖/融資/融券). NULL means unknown, not 現股: rows written before this
 -- column existed, and every row on PROD until this migration runs, must keep inferring.
+-- 'SHORT' (融券, task 141) was added on 2026-09-02 and, unlike the other three, changes the
+-- ledger path: computeLedger opens a short position instead of consuming holdings.
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
-    CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN'));
+    CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN', 'SHORT'));
 
 -- Per-transaction handling fee rate (0.9.27). NULL means the transaction was recorded before
 -- the column existed (legacy data); when editing legacy data, the app will infer or preserve the rate.

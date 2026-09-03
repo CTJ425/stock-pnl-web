@@ -4,9 +4,9 @@
  *   Pay tax on selling additional certificates (also rounded to the nearest dollar)
  * - US stocks: round to two decimal places
  */
-import type { Market, Transaction, TxType } from '../types/models'
+import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { floorSafe, sellTaxRate, splitFeeTax } from './pnlEngine'
+import { BORROW_FEE_RATE, floorSafe, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 /** The legal standard handling fee for Taiwan stocks is 0.1425%*/
 export const DEFAULT_FEE_RATE = 0.001425
@@ -103,6 +103,8 @@ export interface FeeInput {
   ticker?: string
   /** Minimum handling fee for Taiwan stocks (yuan); not applicable when feeRate is 0 (no commission)*/
   minFee?: number
+  /** Trading nature; a SHORT sell also pays the borrow fee (借券費), see BORROW_FEE_RATE. */
+  nature?: TxNature | null
 }
 
 export function calculateFee(input: FeeInput): number {
@@ -116,6 +118,7 @@ export function calculateFee(input: FeeInput): number {
     if (txType === 'SELL') {
       const taxRate = input.taxRate ?? sellTaxRate(input.ticker ?? '')
       fee += floorSafe(amount * taxRate)
+      if (input.nature === 'SHORT') fee += floorSafe(amount * BORROW_FEE_RATE)
     }
     return fee
   }
@@ -202,6 +205,41 @@ export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: numbe
     const lower = Math.round(price * 100 - 1) / 100
     if (!(lower > 0) || !isBreakEven(lower)) break
     price = lower
+  }
+  return price
+}
+
+/**
+ * Cover price at which an open short breaks even. Below it the short is profitable.
+ * Mirrors `breakEvenPrice`'s structure, but the predicate is decreasing in price (a higher
+ * cover price costs more), so the closed-form seed starts high and steps down to convergence.
+ */
+export function breakEvenPriceShort(
+  holding: Holding, feeRate: number, minFee?: number,
+): number {
+  const { market } = holding
+  const shortQty = holding.shortQty ?? 0
+  const shortProceeds = holding.shortProceeds ?? 0
+  if (!(shortQty > 0)) return 0
+
+  const isProfitable = (p: number) =>
+    shortProceeds -
+      (p * shortQty + calculateFee({ market, txType: 'BUY', price: p, qty: shortQty, feeRate, minFee })) >=
+    0
+
+  const byRate = shortProceeds / (shortQty * (1 + feeRate))
+  const byMinFee = feeRate > 0 && minFee !== undefined ? (shortProceeds - minFee) / shortQty : byRate
+  let price = Math.ceil(Math.min(byRate, byMinFee) * 100) / 100
+
+  for (let i = 0; i < 1000 && price > 0 && !isProfitable(price); i++) {
+    price = Math.round(price * 100 - 1) / 100
+  }
+  // Non-convergence returns the same "no answer" sentinel a breakeven price cannot reach.
+  if (!(price > 0) || !isProfitable(price)) return 0
+  for (let i = 0; i < 1000; i++) {
+    const higher = Math.round(price * 100 + 1) / 100
+    if (!isProfitable(higher)) break
+    price = higher
   }
   return price
 }

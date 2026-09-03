@@ -126,3 +126,60 @@ describe('buildHoldingRows', () => {
     expect(buildHoldingRows([], {}, 0.001425)).toEqual([])
   })
 })
+
+describe('buildHoldingRows — 融券空單（Task 141 Stage B）', () => {
+  // 2603 一般股。1000 股 @100 融券賣出：手續費 142 + 稅 300 + 借券費 80 = 522；淨收 99478
+  const openShort = () =>
+    tx({ ticker: '2603', name: '長榮', tx_type: 'SELL', price: 100, qty: 1000, fee_tax: 522, tx_nature: 'SHORT' })
+
+  it('純空單只產出一列 SHORT，市值是買回成本，未實現在價跌時為正', () => {
+    const rows = buildHoldingRows(holdingsOf([openShort()]), { 'TPE:2603': quote(95) }, 0.001425)
+    expect(rows).toHaveLength(1)
+    const r = rows[0]
+    expect(r.direction).toBe('SHORT')
+    expect(r.rowKey).toBe('TPE:2603:SHORT')
+    expect(r.rowQty).toBe(-1000)
+    expect(r.mktVal).toBe(95_000)
+    expect(r.netMktVal).toBeNull()
+    // 99478 − (95000 + 手續費 135) = 4343
+    expect(r.unrealized).toBe(4343)
+    expect(r.rawUnrealized).toBe(100_000 - 95_000)
+    expect(r.roi).toBeCloseTo(4343 / 99_478, 9)
+    expect(r.breakEven).toBeGreaterThan(0)
+  })
+
+  it('同一檔同時有波段持股與空單時產出兩列，多頭列的數字不變', () => {
+    const rows = buildHoldingRows(
+      holdingsOf([
+        tx({ tx_date: '2026-03-01', ticker: '2603', name: '長榮', tx_type: 'BUY', price: 90, qty: 1000, fee_tax: 128 }),
+        openShort(),
+      ]),
+      { 'TPE:2603': quote(95) },
+      0.001425,
+    )
+    expect(rows.map((r) => r.direction)).toEqual(['LONG', 'SHORT'])
+    expect(rows[0].rowQty).toBe(1000)
+    expect(rows[0].rowKey).toBe('TPE:2603:LONG')
+    expect(rows[0].mktVal).toBe(95_000)
+    expect(rows[1].rowQty).toBe(-1000)
+    // 兩列的 rowKey 必須相異，否則 React 會重複 key
+    expect(rows[0].rowKey).not.toBe(rows[1].rowKey)
+  })
+
+  it('沒有現價時空單列的金額欄位為 null，方向與股數仍要有', () => {
+    const rows = buildHoldingRows(holdingsOf([openShort()]), {}, 0.001425)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].direction).toBe('SHORT')
+    expect(rows[0].rowQty).toBe(-1000)
+    expect(rows[0].mktVal).toBeNull()
+    expect(rows[0].unrealized).toBeNull()
+    expect(rows[0].roi).toBeNull()
+  })
+
+  it('既有的純多頭部位仍然只產出一列 LONG', () => {
+    const rows = buildHoldingRows(holdingsOf([tx({})]), { 'TPE:2330': quote(110) }, 0.001425)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].direction).toBe('LONG')
+    expect(rows[0].rowQty).toBe(1000)
+  })
+})

@@ -112,8 +112,9 @@ function parseTxNature(value: string): TxNature | null {
   if (trimmed === '現股') return 'SPOT'
   if (trimmed === '當沖') return 'DAY_TRADE'
   if (trimmed === '融資') return 'MARGIN'
+  if (trimmed === '融券') return 'SHORT'
   const v = trimmed.toUpperCase()
-  if (v === 'SPOT' || v === 'DAY_TRADE' || v === 'MARGIN') return v
+  if (v === 'SPOT' || v === 'DAY_TRADE' || v === 'MARGIN' || v === 'SHORT') return v
   return null
 }
 
