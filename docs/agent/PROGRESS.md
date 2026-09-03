@@ -1,9 +1,31 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude Opus 5 (main session)
-- Action: 0.9.28-dev.10 — 表格底色分層
+- Action: 0.9.28 — 正式發版並上線 PROD
 - Status: **✅ RECORDED**
-- Timestamp: 2026-09-03 15:33:55 Asia/Taipei
+- Timestamp: 2026-09-03 15:59:47 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 15:59:47 Asia/Taipei (0.9.28 — 正式發版並上線 PROD)
+
+- **Status**: ✅ **RELEASED** — `main` 與 `dev` 皆為 `a1a26da`，已推送
+- **Version**: `0.9.28-dev.10` → **`0.9.28`**（去掉 `-dev`，四處檔案同步；CHANGELOG 的十個 `dev.N` 段落收斂成單一 `0.9.28` 段落，比照 `0.9.27` 的既有慣例）
+- **緣由**: 使用者授權合併到 `main` 並正式上線。
+- **上線順序刻意如此，不可對調**: 先資料庫、再前端、最後 Edge。`dataProvider.ts` 遇到 `42703` / `PGRST204` 會去掉欄位重試，所以缺欄位不會讓 PROD 掛掉——但融券賣出會**靜默**失去 `tx_nature`、被記成普通賣出，損益算錯且沒有任何錯誤訊息。若前端先上，就會開一段無聲錯帳的空窗。
+- **Work**:
+  1. **PROD 資料庫遷移**（`hrilemueiqyaoiwnkeuu`）: `transactions.tx_nature`（CHECK 含 `SHORT`）、`transactions.fee_rate`、`workspaces.fee_rate`。DDL 逐字取自 `schema.sql`，包在帶專案身分守衛的 `DO` 區塊裡，隨後 `NOTIFY pgrst, 'reload schema'`。全文留存於 `docs/agent/prod-0.9.28-migration.sql`。
+  2. **合併**: `main` 快轉到 `dev`（`origin/main` 是 `dev` 的祖先，無分歧），推送 `main` 與 `dev`，兩分支同版。
+  3. **PROD Edge**: `stock-report` v3 → **v4**，帶 `--no-verify-jwt`，以 `--project-ref` 部署，未動 `supabase link` 全域狀態。
+- **Verify — 每一項都查結果，不採信「指令成功」**:
+  - **資料庫**: 三個欄位皆存在且可為 NULL；CHECK 含 `SHORT`；`count(*), count(tx_nature), count(fee_rate)` 回傳 `110, 0, 0`——110 筆既有交易一筆未被改寫。
+  - **Edge**: `ezbr_sha256` 由 `28350abe…c71cea4` 變為 `1d2ba453…266a794f23`，`verify_jwt` 維持 `false`。雜湊只證明 bundle 有變，故另抓線上 bundle 逐字確認：`netOpenTickers` 5 次、`v.net !== 0` 2 次、舊的 `v.net > 0` **0 次**。**新 sha 與 DEV 完全相同**，依 `supabase-ops` 的判準即證明兩區跑同一份 bundle。
+  - **前端**: Playwright 載入 `https://stock-pnl-web.pages.dev/`——版號徽章 `0.9.28`、字族 `Inter`、`--thead-bg` 為 `#0f131914`（即新的 `rgba(15,19,25,0.08)`），**零 console error、零 4xx/5xx**。線上 bundle 含 `0.9.28` 且無 `0.9.27` 殘留。
+  - **Release**: GitHub Actions `Sync GitHub Releases` 成功，Release `0.9.28` 已建立並標為 Latest。
+  - 發版前 gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、`npx vitest run` exit 0（95 檔 1537 測試）、`npx oxlint src` 0 error。
+- **一次被權限守門擋下的嘗試**: 第一次對 PROD 資料庫的寫入被 Claude Code auto mode classifier 擋下。**沒有嘗試繞過**；改為向使用者說明並提供可自行執行的 SQL 檔，待使用者明確再次授權後才重試成功。
+- **連帶關閉**: Task 141（PROD CHECK 約束）、BUG-041、BUG-044-P。
+- **未做**: 融券流程的端到端 Playwright 驗證仍未執行。`transactions.user_id` 為 `NOT NULL` 但 TypeScript `Transaction` 型別未宣告，本次未動。`.inst-matrix tfoot td` 底色寫死為白色疊加、亮色主題方向相反，既有缺陷未修。
 
 ---
 
@@ -31,27 +53,3 @@
   - 表頭文字 WCAG：暗色 3.85 → **5.73**、亮色 3.03 → **6.47**、PDF 匯出 2.86 → **5.58**，三者皆由不合格轉為通過 AA 的 4.5:1。
   - `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1537 測試；`npx oxlint src` 0 errors。
 - **未改動，已知**: `.inst-matrix tfoot td` 的底色寫死為 `rgba(255, 255, 255, 0.035)`，是白色疊加，在亮色主題下方向相反。既有缺陷，不在本次核准範圍。
-
----
-
-## 📅 Log: 2026-09-03 14:51:14 Asia/Taipei (0.9.28-dev.9 — 字級對齊正式區)
-
-- **Status**: ✅ **COMPLETED** on `dev` (committed, not pushed)
-- **Version**: `0.9.28-dev.8` → **`0.9.28-dev.9`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: dev.8 只對齊了字族（Outfit + Inter），使用者接著要求字級也與正式區一致。
-- **先量再改**: 把 `main` 與 `dev` 的 `index.css` 各自解析成「選擇器 → font-size」對照表比對，並統計兩邊 `.tsx` 的內嵌 `fontSize`。結果比預期小得多：
-  - `body` 基準字級兩邊都是 `14px`。
-  - 內嵌 `fontSize` 幾乎相同（main 89 處 / dev 91 處，值分佈只差兩個 `fontSize: 11`）。
-  - **共同選擇器中只有 4 條字級不同**，全部來自 0.9.28-dev.5「冷處理改版」與 dev.7。
-  - 另有 7 條是 dev 新元件（`.exposure-key`、`.dir-long`、`.holding-group td` 等），正式區沒有對應規則，無法比對。
-- **Work** (`index.css`，四條規則，使用者選定全部還原):
-  1. `.section-title h2`：11px → **16px**
-  2. `.section-title .hint`：11px → **12px**
-  3. `.data-table th`：10.5px → **12px**
-  4. `.market-panel .metric-hero .kpi-value`：30px → **22px**
-- **一項查證後確認無需改動的地方**: `DashboardPage.tsx:553`／`561` 與 `YearlyPage.tsx:227` 的 `<h2 style={{ fontSize: 14 }}>` 會蓋過 `.section-title h2`。查 `main` 後確認這三處的內嵌值**與正式區完全相同**，本來就已對齊，因此不動。CSS 的 16px 只作用在沒有內嵌覆寫的區塊標題上。
-- **Verify**:
-  - 靜態：重跑同一份解析比對，共同選擇器字級差異由 4 條降為 **0 條**。
-  - 動態：Playwright 以相同 viewport（1280×900）分別載入 `http://10.8.22.99:5173/` 與 `https://stock-pnl-web.pages.dev/`，統計所有可見文字節點的「字級|字重|字族」分佈，兩邊**完全相同**（20px/700/Outfit ×1、14px/400/Inter ×7、13px/400/Inter ×4、12.5px/500/Inter ×2、11px/400/Inter ×1 等）。
-  - `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1537 測試。
-- **範圍限制（誠實記錄）**: 動態比對只涵蓋登入頁，因為量測沒有登入憑證。登入後的頁面靠上述靜態比對涵蓋，那份比對是整份 `index.css` 的全量對照，不是抽樣。

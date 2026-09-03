@@ -5,6 +5,30 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-03 14:51:14 Asia/Taipei (0.9.28-dev.9 — 字級對齊正式區)
+
+- **Status**: ✅ **COMPLETED** on `dev` (committed, not pushed)
+- **Version**: `0.9.28-dev.8` → **`0.9.28-dev.9`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: dev.8 只對齊了字族（Outfit + Inter），使用者接著要求字級也與正式區一致。
+- **先量再改**: 把 `main` 與 `dev` 的 `index.css` 各自解析成「選擇器 → font-size」對照表比對，並統計兩邊 `.tsx` 的內嵌 `fontSize`。結果比預期小得多：
+  - `body` 基準字級兩邊都是 `14px`。
+  - 內嵌 `fontSize` 幾乎相同（main 89 處 / dev 91 處，值分佈只差兩個 `fontSize: 11`）。
+  - **共同選擇器中只有 4 條字級不同**，全部來自 0.9.28-dev.5「冷處理改版」與 dev.7。
+  - 另有 7 條是 dev 新元件（`.exposure-key`、`.dir-long`、`.holding-group td` 等），正式區沒有對應規則，無法比對。
+- **Work** (`index.css`，四條規則，使用者選定全部還原):
+  1. `.section-title h2`：11px → **16px**
+  2. `.section-title .hint`：11px → **12px**
+  3. `.data-table th`：10.5px → **12px**
+  4. `.market-panel .metric-hero .kpi-value`：30px → **22px**
+- **一項查證後確認無需改動的地方**: `DashboardPage.tsx:553`／`561` 與 `YearlyPage.tsx:227` 的 `<h2 style={{ fontSize: 14 }}>` 會蓋過 `.section-title h2`。查 `main` 後確認這三處的內嵌值**與正式區完全相同**，本來就已對齊，因此不動。CSS 的 16px 只作用在沒有內嵌覆寫的區塊標題上。
+- **Verify**:
+  - 靜態：重跑同一份解析比對，共同選擇器字級差異由 4 條降為 **0 條**。
+  - 動態：Playwright 以相同 viewport（1280×900）分別載入 `http://10.8.22.99:5173/` 與 `https://stock-pnl-web.pages.dev/`，統計所有可見文字節點的「字級|字重|字族」分佈，兩邊**完全相同**（20px/700/Outfit ×1、14px/400/Inter ×7、13px/400/Inter ×4、12.5px/500/Inter ×2、11px/400/Inter ×1 等）。
+  - `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1537 測試。
+- **範圍限制（誠實記錄）**: 動態比對只涵蓋登入頁，因為量測沒有登入憑證。登入後的頁面靠上述靜態比對涵蓋，那份比對是整份 `index.css` 的全量對照，不是抽樣。
+
+---
+
 ## 📅 Log: 2026-09-03 14:10:17 Asia/Taipei (0.9.28-dev.8 — 字體對齊 PROD、只有空單時的總覽與籌碼分析)
 
 - **Status**: ✅ **COMPLETED** on `dev` (committed, not pushed)

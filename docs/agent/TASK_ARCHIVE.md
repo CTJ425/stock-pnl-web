@@ -11,6 +11,29 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 141: 融券做空 — PROD 的 tx_nature CHECK 約束尚未加入 'SHORT'
+- **Status**: ✅ **DONE** — closed 2026-09-03 15:59:47 Asia/Taipei with the 0.9.28 release
+- **Agent**: Claude Opus 5 (main session)
+- **PROD (`hrilemueiqyaoiwnkeuu`) — ✅ APPLIED 2026-09-03**: the constraint now reads
+  `CHECK (tx_nature IS NULL OR tx_nature = ANY (ARRAY['SPOT','DAY_TRADE','MARGIN','SHORT']))`,
+  and `transactions.tx_nature` / `transactions.fee_rate` / `workspaces.fee_rate` all exist and are
+  nullable. Applied together with BUG-041 and BUG-044-P in one migration, whose full text is kept in
+  `docs/agent/prod-0.9.28-migration.sql`.
+- **The write carried a project-identity guard**, as the DEV one did: the DDL sat inside a `DO` block
+  that raised unless `cron.job` carried the PROD project ref. The `cron.job` row count is 6 on both
+  projects, so it cannot identify one.
+- **Verified by result, not by "the SQL succeeded"**: `information_schema.columns` returned all three
+  columns; `pg_constraint` returned the CHECK with `SHORT` in it; and
+  `SELECT count(*), count(tx_nature), count(fee_rate) FROM transactions` returned `110, 0, 0`,
+  proving 110 existing rows exist and none was rewritten.
+- **Ordering mattered**: the DDL was applied *before* the 0.9.28 frontend reached PROD. `dataProvider.ts`
+  retries on `42703` / `PGRST204` with the column dropped, so a missing column never breaks PROD outright
+  — but a 融券 SELL would silently lose its `tx_nature`, be recorded as a plain sell, and compute the
+  wrong P&L with no error shown.
+- **Remaining from the original entry**: the end-to-end Playwright run for the 融券 flow on DEV was not
+  performed. `transactions.user_id` is still `NOT NULL` and undeclared in the TypeScript `Transaction`
+  type; existing inserts work, so the app supplies it somewhere. Both are unchanged by this closure.
+
 ### Task 143: 全站冷處理 — 拆毛玻璃、換字體、鋼藍取代紫
 - **Status**: ✅ DONE
 - **Agent**: Claude

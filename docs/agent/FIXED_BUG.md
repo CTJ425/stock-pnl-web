@@ -6,6 +6,17 @@
 
 ---
 
+### BUG-041 — PROD Supabase schema pending: `workspaces.fee_rate` and `transactions.tx_nature`
+- **Status**: ✅ FIXED (0.9.28) — applied to PROD 2026-09-03 15:5x Asia/Taipei
+- **Root cause**: `schema.sql` carried the DDL but it was never run against `hrilemueiqyaoiwnkeuu`. The app kept working because `dataProvider.ts` retries on `42703` / `PGRST204` with the column dropped, so the gap stayed invisible.
+- **Fix**: Ran the `workspaces.fee_rate` and `transactions.tx_nature` blocks verbatim from `sources/supabase/schema.sql`, inside a `DO` block carrying a project-identity guard (`EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%hrilemueiqyaoiwnkeuu%')` — the `cron.job` row count is 6 on both projects and cannot identify one). Followed by `NOTIFY pgrst, 'reload schema'`. Full text kept in `docs/agent/prod-0.9.28-migration.sql`.
+- **Verification**: `information_schema.columns` returns `workspaces.fee_rate`, `transactions.tx_nature` and `transactions.fee_rate`, all nullable; `transactions_tx_nature_check` reads `CHECK (tx_nature IS NULL OR tx_nature = ANY (ARRAY['SPOT','DAY_TRADE','MARGIN','SHORT']))`. `SELECT count(*), count(tx_nature), count(fee_rate) FROM transactions` returned `110, 0, 0` — 110 existing rows, none rewritten.
+
+### BUG-044-P: `transactions.fee_rate` not yet applied on PROD
+- **Status**: ✅ FIXED (0.9.28) — applied to PROD 2026-09-03 15:5x Asia/Taipei, in the same migration as BUG-041
+- **One correction to this entry's own description**: it claimed PROD "has `tx_nature` but not `fee_rate`". **That was wrong by the time it was closed.** A direct `information_schema` query on 2026-09-03 showed PROD had *neither* column. The likely reason is the 2026-08-31 recreation of both cloud projects, which reset PROD to the un-migrated schema after this entry was written.
+- **Fix and verification**: see BUG-041 above — one migration covered all three columns.
+
 ### BUG-047: 籌碼分析 answered 403 for a ticker held only as a 融券 short
 - **Status**: ✅ FIXED (0.9.28-dev.8) — deployed to DEV as `stock-report` v4 on 2026-09-03 14:24:25 Asia/Taipei
 - **Date**: 2026-09-03, found by the user on DEV
