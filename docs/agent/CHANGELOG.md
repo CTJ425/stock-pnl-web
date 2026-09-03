@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.28-dev.9（2026-09-03）— 字級對齊正式區
+
+- 🔠 **四條字級還原成正式區的值**（`index.css`）—— dev.8 只對齊了字族，字級還沒。
+  先把兩邊的 `index.css` 解析成「選擇器 → font-size」對照表全量比對，結果差異比預期小：
+  `body` 基準兩邊都是 14px，內嵌 `fontSize` 幾乎相同，**共同選擇器中只有 4 條不同**——
+  `.section-title h2`（11 → 16px）、`.section-title .hint`（11 → 12px）、
+  `.data-table th`（10.5 → 12px）、`.market-panel .metric-hero .kpi-value`（30 → 22px）。
+  四條都來自 dev.5 冷處理改版與 dev.7，本次全部還原。
+- 🔎 **查證後確認無需改動**：`DashboardPage.tsx` 與 `YearlyPage.tsx` 的
+  `<h2 style={{ fontSize: 14 }}>` 內嵌值與正式區完全相同，本來就已對齊。
+- ✅ 驗證：靜態比對的字級差異由 4 條降為 0 條；Playwright 以相同 viewport 量測兩站，
+  可見文字的字級／字重／字族分佈完全相同。`npm run build`、`npx vitest run` 皆 exit 0，
+  測試數維持 1537。
+
 ### 0.9.28-dev.8（2026-09-03）— 字體對齊正式區、只有空單時的總覽與籌碼分析
 
 - 🔤 **字體改回正式區實際使用的 Outfit + Inter**（`index.html`、`index.css`）—— dev.7 的

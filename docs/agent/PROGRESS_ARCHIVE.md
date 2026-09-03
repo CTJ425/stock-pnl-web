@@ -5,6 +5,24 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-03 10:57:00 Asia/Taipei (0.9.28-dev.5 — 修正市場抬頭 Task 143 續)
+
+- **Status**: ✅ **COMPLETED** on `dev` (uncommitted)
+- **Version**: `0.9.28-dev.4` → **`0.9.28-dev.5`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
+- **Spec**: `docs/agent/specs/task-143-cold-visual-pass.md`
+- **緣由**: 使用者指出市場抬頭的「主數字 + 曝險尺」與核准的 artifact 差很多。逐項比對後屬實，共六處未實作。
+- **一項必須更正的先前陳述**: 0.9.28-dev.4 的記錄寫「底部欄位用 `margin-top: auto` 推到底，兩塊面板永遠齊平」。**該句為誤。** `.market-panel .metric-row { margin-top: 12px }`（優先權 0,2,0）壓過 `.market-foot { margin-top: auto }`（0,1,0），auto 從未生效，兩塊面板底部並未齊平。
+- **Work**:
+  1. **主數字標籤移到抬頭列右端** (`DashboardPage.tsx`、`index.css`): 原本「淨額市值」自成一行並壓在分隔線下方；現與「台股 TWD」同一行、`margin-left: auto` 靠右。抬頭下方的 `border-bottom` 移除。
+  2. **淨額帶正負號** (`DashboardPage.tsx`): 有空單時改用 `fmtSignedMoney`，因為多空相減可能為負；沒有空單時是持倉市值，維持不帶號。
+  3. **底部欄位真的推到底** (`index.css`): `.market-foot` 提升為 `.market-panel .market-foot`（同優先權且在後），改滿版出血（左右 `-20px`）、上方分隔線、兩欄之間中線。
+  4. **用語對齊設計** (`DashboardPage.tsx`): 曝險尺圖例與表格分組標題由「多方 / 空方」改為「多單 / 空單」。
+  5. **面板內距** (`index.css`): `14px 16px 16px` → `15px 20px 0`。
+- **驗證（用量測，不用目視）**: Playwright 讀 bounding box — 兩塊面板 `footBottom` 皆 **317px**（齊平）；持股表 `scrollWidth - clientWidth` = **0px**（不再溢出）；`tw-mktval` 文字為 `+NT$6,686,000`（帶號）；`.market-panel .panel-head .kpi-label` 存在（標籤在抬頭列）。`npm run build` exit 0；`npx vitest run` exit 0，95 檔 **1530** 測試，數量未下降。
+- **教訓**: 上一輪用目視判讀截圖，把「看起來差不多」當成齊平。CSS 優先權對撞不會報錯，只會安靜地失效，必須量。
+
+---
+
 ## 📅 Log: 2026-09-03 10:45:00 Asia/Taipei (0.9.28-dev.4 — 全站冷處理 Task 143)
 
 - **Status**: ✅ **COMPLETED** on `dev` (uncommitted)

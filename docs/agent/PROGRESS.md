@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude Opus 5 (main session)
-- Action: 0.9.28-dev.8 — 字體對齊 PROD、只有空單時的總覽與籌碼分析
+- Action: 0.9.28-dev.9 — 字級對齊正式區
 - Status: **✅ RECORDED**
-- Timestamp: 2026-09-03 14:10:17 Asia/Taipei
+- Timestamp: 2026-09-03 14:51:14 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-03 14:51:14 Asia/Taipei (0.9.28-dev.9 — 字級對齊正式區)
+
+- **Status**: ✅ **COMPLETED** on `dev` (committed, not pushed)
+- **Version**: `0.9.28-dev.8` → **`0.9.28-dev.9`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: dev.8 只對齊了字族（Outfit + Inter），使用者接著要求字級也與正式區一致。
+- **先量再改**: 把 `main` 與 `dev` 的 `index.css` 各自解析成「選擇器 → font-size」對照表比對，並統計兩邊 `.tsx` 的內嵌 `fontSize`。結果比預期小得多：
+  - `body` 基準字級兩邊都是 `14px`。
+  - 內嵌 `fontSize` 幾乎相同（main 89 處 / dev 91 處，值分佈只差兩個 `fontSize: 11`）。
+  - **共同選擇器中只有 4 條字級不同**，全部來自 0.9.28-dev.5「冷處理改版」與 dev.7。
+  - 另有 7 條是 dev 新元件（`.exposure-key`、`.dir-long`、`.holding-group td` 等），正式區沒有對應規則，無法比對。
+- **Work** (`index.css`，四條規則，使用者選定全部還原):
+  1. `.section-title h2`：11px → **16px**
+  2. `.section-title .hint`：11px → **12px**
+  3. `.data-table th`：10.5px → **12px**
+  4. `.market-panel .metric-hero .kpi-value`：30px → **22px**
+- **一項查證後確認無需改動的地方**: `DashboardPage.tsx:553`／`561` 與 `YearlyPage.tsx:227` 的 `<h2 style={{ fontSize: 14 }}>` 會蓋過 `.section-title h2`。查 `main` 後確認這三處的內嵌值**與正式區完全相同**，本來就已對齊，因此不動。CSS 的 16px 只作用在沒有內嵌覆寫的區塊標題上。
+- **Verify**:
+  - 靜態：重跑同一份解析比對，共同選擇器字級差異由 4 條降為 **0 條**。
+  - 動態：Playwright 以相同 viewport（1280×900）分別載入 `http://10.8.22.99:5173/` 與 `https://stock-pnl-web.pages.dev/`，統計所有可見文字節點的「字級|字重|字族」分佈，兩邊**完全相同**（20px/700/Outfit ×1、14px/400/Inter ×7、13px/400/Inter ×4、12.5px/500/Inter ×2、11px/400/Inter ×1 等）。
+  - `npm run build` exit 0；`npx vitest run` exit 0，95 檔 1537 測試。
+- **範圍限制（誠實記錄）**: 動態比對只涵蓋登入頁，因為量測沒有登入憑證。登入後的頁面靠上述靜態比對涵蓋，那份比對是整份 `index.css` 的全量對照，不是抽樣。
 
 ---
 
@@ -35,22 +59,3 @@
   **雜湊只證明 bundle 有變，不證明變成什麼**，所以另外抓下線上 bundle 逐字確認：
   `netOpenTickers` 出現 5 次、`v.net !== 0` 出現 2 次、舊的 `v.net > 0` **0 次**；
   對照 v3 舊 bundle 為 `v.net > 0` 2 次、`netOpenTickers` 0 次。
-
----
-
-## 📅 Log: 2026-09-03 10:57:00 Asia/Taipei (0.9.28-dev.5 — 修正市場抬頭 Task 143 續)
-
-- **Status**: ✅ **COMPLETED** on `dev` (uncommitted)
-- **Version**: `0.9.28-dev.4` → **`0.9.28-dev.5`** (`version.ts`, `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md` synchronized)
-- **Spec**: `docs/agent/specs/task-143-cold-visual-pass.md`
-- **緣由**: 使用者指出市場抬頭的「主數字 + 曝險尺」與核准的 artifact 差很多。逐項比對後屬實，共六處未實作。
-- **一項必須更正的先前陳述**: 0.9.28-dev.4 的記錄寫「底部欄位用 `margin-top: auto` 推到底，兩塊面板永遠齊平」。**該句為誤。** `.market-panel .metric-row { margin-top: 12px }`（優先權 0,2,0）壓過 `.market-foot { margin-top: auto }`（0,1,0），auto 從未生效，兩塊面板底部並未齊平。
-- **Work**:
-  1. **主數字標籤移到抬頭列右端** (`DashboardPage.tsx`、`index.css`): 原本「淨額市值」自成一行並壓在分隔線下方；現與「台股 TWD」同一行、`margin-left: auto` 靠右。抬頭下方的 `border-bottom` 移除。
-  2. **淨額帶正負號** (`DashboardPage.tsx`): 有空單時改用 `fmtSignedMoney`，因為多空相減可能為負；沒有空單時是持倉市值，維持不帶號。
-  3. **底部欄位真的推到底** (`index.css`): `.market-foot` 提升為 `.market-panel .market-foot`（同優先權且在後），改滿版出血（左右 `-20px`）、上方分隔線、兩欄之間中線。
-  4. **用語對齊設計** (`DashboardPage.tsx`): 曝險尺圖例與表格分組標題由「多方 / 空方」改為「多單 / 空單」。
-  5. **面板內距** (`index.css`): `14px 16px 16px` → `15px 20px 0`。
-- **驗證（用量測，不用目視）**: Playwright 讀 bounding box — 兩塊面板 `footBottom` 皆 **317px**（齊平）；持股表 `scrollWidth - clientWidth` = **0px**（不再溢出）；`tw-mktval` 文字為 `+NT$6,686,000`（帶號）；`.market-panel .panel-head .kpi-label` 存在（標籤在抬頭列）。`npm run build` exit 0；`npx vitest run` exit 0，95 檔 **1530** 測試，數量未下降。
-- **教訓**: 上一輪用目視判讀截圖，把「看起來差不多」當成齊平。CSS 優先權對撞不會報錯，只會安靜地失效，必須量。
-
