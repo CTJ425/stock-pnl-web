@@ -25,52 +25,8 @@ Also: `docs/UnitTests/` (testing SoT), `docs/architecture/`.
 
 **Agent-written docs are English** (see global rule 1).
 
-### Size discipline — roll, don't hope
-
-The hot files are the ones read at session start, so they are the only ones with a size cost.
-There is **no automatic archiver**: rolling happens in the same `scribe` dispatch that records
-the work, at the end of every task.
-
-| Hot file | Cap | Overflow goes to |
-| ---- | ---- | ---- |
-| `PROGRESS.md` | header + **newest 2 log entries** | `PROGRESS_ARCHIVE.md` (prepend, newest-first) |
-| `TASK.md` | open entries only; a `✅` entry is moved out, and inside a live entry the `~~struck~~ ✅` sub-items collapse to one `- **Done**: items …` line | `TASK_ARCHIVE.md` |
-| `BUG_FIX.md` | open bugs only | `FIXED_BUG.md` |
-
-The archives are large **and that is fine** — nothing reads them at session start, so they cost
-nothing until `grep`ped, and `grep`/`git log -S` over local files is the cheapest retrieval this
-project has. Moving them to GitHub Issues/Releases was evaluated and **rejected**; do not re-propose
-it without reading the measured verdict in `docs/plan/github_documentation_strategy.md`.
-
-### Entry shapes, and the sub-item test that must not be shortened
-
-Match the entries already in each file — they are the specification. The shapes in use:
-
-```markdown
-docs/agent/TASK.md — under `## 📋 Active Tasks`
-### Task 77: Short imperative title
-- **Status**: 🔄 IN PROGRESS | ✅ DONE | 🔁 Recurring
-- **Agent**: Claude
-- **Timestamp**: 2026-08-07 14:30:00 Asia/Taipei
-- **Spec**: docs/agent/specs/task-77.md
-
-docs/agent/FIXED_BUG.md — newest first under `## 🐛 Historical Bug Fixes`
-### Bug ID: BUG-023 — One-line symptom
-- **Date**: 2026-08-07, fixed in 0.6.44
-- **Root Cause**: … / **Fix**: … / **Status**: ✅ FIXED (0.6.44)
-
-docs/agent/PROGRESS.md — newest entry at the top, right after the header block
-## 📅 Log: 2026-08-07 14:30:00 Asia/Taipei (Task 77, 0.6.44)
-```
-
-Rolling a live `TASK.md` entry's sub-items has two conditions and **both** matter: a sub-item is
-complete **iff it starts with `~~` AND carries no `⏳` anywhere in its lines**. This file is full of
-items like ``4. ~~Commit (bundled in f03ade5)~~ ✅ · **push `dev`** —— ⏳`` that open struck through
-and end with live work; testing the strikethrough alone silently deletes an open action. Completed
-ones go to `TASK_ARCHIVE.md` under `### Task NN — completed sub-items (rolled from TASK.md
-<timestamp>)`, and the entry keeps one line after its `- **Timestamp**` reading
-``- **Done**: items <numbers> — full text in `TASK_ARCHIVE.md`.`` **Never renumber the survivors** —
-other documents cite them as "item 7", "item 11".
+Rolling rules (size caps, archive destinations), entry shapes, and the sub-item
+completion test: **`bookkeeping`** skill. Load it before you compose a `scribe` brief.
 
 ## Start of session
 
@@ -92,7 +48,7 @@ Then inspect code you will touch. Do not assume chat has full state.
 **Delegation to the roles below is standing user authorization.** Dispatch them without
 asking first — this overrides any default reluctance to spawn agents. The main session runs
 on the most expensive model in the system, so work that a cheaper role can do correctly
-must not be done here. Model and effort per role live in `.claude/agents/*.md` frontmatter;
+must not be done here. Model and effort per role live in `.claude/route.config.json`;
 do not restate them here.
 
 The main session owns **architecture, specs, failing tests, and adjudication** — that is
@@ -114,7 +70,7 @@ what it runs on the expensive model for. The four roles below are delegation tar
   not by task size**: bulk content goes to a subagent even when the task is trivial, and a
   surgical edit on content already in context stays inline even when the task looks big.
   A large file read into the main session is re-billed on every later turn of that
-  session, which is why the guard asks before unbounded reads over 32KB.
+  session, which is why the guard asks before unbounded reads (`guard.readKB` in `.claude/route.config.json`).
 - Role boundaries are enforced by the `route` plugin's guard hook, not by good manners.
   A blocked write means you are out of role: re-route it, do not work around it.
   Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
@@ -123,32 +79,14 @@ what it runs on the expensive model for. The four roles below are delegation tar
 - This routes **delegation only**. The main session's model comes from `/model`, not from
   this file.
 
-### Dispatch discipline — measured on 2026-09-01, all seven cost real rework
+### Dispatch discipline
+
+Seven measured rules for writing a brief (reviewer tooling, scribe scope, spec proof,
+money-code review): the **`route`** skill. Two of them are not dispatch-specific and
+apply to any command you run here:
 
 - **The Verify line is `npm run build`, never `npx tsc --noEmit`.** The latter does not
   type-check test files here, so three builders reported exit 0 while the build was red.
-- **`route:reviewer` has no Bash** (the local `reviewer` in `.claude/agents/` does). Asking
-  the scoped one to run a command earns five identical "verification gap" findings and
-  nothing else. **Paste the test output you already have into the brief.**
-- **Scribe composes nothing a human will read.** It runs on haiku; asked to turn notes into
-  prose it produced wrong file attributions, an invented API, and a change that never
-  happened — twice. Hand it verbatim text to paste. It keeps the file surgery, which is the
-  part that actually replaces main-session turns. Cost check: 1.4k tokens of verbatim Opus
-  output is ~$0.03, one sixth of a single main turn; one correction round-trip is five.
-- **At most two tracking files per scribe dispatch.** A seven-section brief drove it into
-  its 30-turn cap three times, then into a rate limit.
-- **Prove the brief before dispatching**: compile the failing test against the proposed
-  signature. A test you cannot type is a spec error — that is how `splitFeeTax` shipped
-  without the `ticker` it needs and cost three rounds.
-- **Validate any classification rule against real data before it enters a spec**, and record
-  the counts there. "Same-day buy and sell means 當沖" scored 12 false positives out of 14
-  on the two broker exports in `docs/`; catching that before dispatch saved a whole cycle.
-  A spec must also state the **negative** case — what the code may not do, and why.
-- **For money code the main session reads the diff itself.** Tests and reviewers missed both
-  of the silent-money defects here (a non-idempotent INSERT retry that would duplicate
-  transactions, and an optional `ticker` that would overtax every ETF threefold). Context
-  replay is the cost; for code that computes money it is worth paying, for bookkeeping it is
-  not.
 - **`cp` is aliased to `cp -i`.** Use `command cp -f`, and never background a command that
   can block on a prompt — one did, for 33 minutes.
 
@@ -165,27 +103,11 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 | PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
 | DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
-**Both cloud projects were recreated on 2026-08-31.** The refs this file used to name —
-`kxnxadaghidwumqsqneu` and `cahmfrhacyvrrlsaatkm` — are **deleted**; any call against them
-returns `404 Resource has been removed`. `sources/.env` may still point at a dead one.
-
-**The recreation was done from setup SQL whose placeholders were never substituted.** Every
-`cron.job` on both projects carried the literal `<PROJECT_REF>` in its URL *and* the literal
-`<CRON_SECRET>` in its header, so every job failed from creation until 2026-09-01: the URL
-error killed it before `net.http_post` queued anything, and once that was fixed the Edge
-Function answered 401. After any project recreation, check both:
-
-**Do not check this by eye — run the verifier.** `schema.sql` now ends with a hard gate
-that aborts if a placeholder survives, and `sources/supabase/verify.sql` installs the same
-check as something you can re-run:
-
-```sql
-SELECT * FROM verify_setup();   -- 10 checks: schema, migrations, cron, secret shape, RLS
-SELECT assert_setup_ok();       -- raises unless all of them pass
-```
-
-A written checklist for this already existed in `schema.sql` §6d and did not prevent three
-recurrences. Details and the two checks that still need a human eye: **`supabase-ops`** skill.
+Both cloud projects were recreated on 2026-08-31, from setup SQL whose placeholders were
+never substituted. Any older ref returns `404 Resource has been removed`, and `sources/.env`
+may still point at a dead one. Do not check this by eye — run `verify_setup()`.
+The full failure story, the verifier, and the two checks that still need a human eye:
+**`supabase-ops`** skill.
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
