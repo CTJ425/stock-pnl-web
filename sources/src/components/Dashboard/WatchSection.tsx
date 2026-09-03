@@ -5,12 +5,13 @@
  * - View mode preference is persisted in localStorage.
  * - Clicking a stock card or table row triggers navigation to its individual stock analysis.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Inbox, LayoutGrid, List, Plus } from 'lucide-react'
 import { WATCHLIST_MAX, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
 import { fetchPrices, type PriceMap } from '../../services/priceProxy'
 import { fmtPrice, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getStockCategory } from '../../utils/stockCategory'
+import { groupWatchItems } from '../../utils/stockGrouping'
 import { AddWatchModal } from '../StockDetail/AddWatchModal'
 
 const STORAGE_VIEW_KEY = 'stock_watchlist_view_mode'
@@ -126,6 +127,44 @@ export function WatchSection({
     }
   }
 
+  const [filter, setFilter] = useState<string>('all')
+
+  const grouping = useMemo(() => {
+    return groupWatchItems(items, (item) => prices[`TPE:${item.ticker}`]?.industry)
+  }, [items, prices])
+
+  const activeFilter = useMemo(() => {
+    if (filter === 'all') return 'all'
+    if (filter === '__other__' && grouping.otherCount > 0) return '__other__'
+    if (grouping.clusteredGroupNames.includes(filter)) return filter
+    return 'all'
+  }, [filter, grouping.clusteredGroupNames, grouping.otherCount])
+
+  useEffect(() => {
+    if (filter !== 'all') {
+      const isValidOther = filter === '__other__' && grouping.otherCount > 0
+      const isValidClustered = grouping.clusteredGroupNames.includes(filter)
+      if (!isValidOther && !isValidClustered) {
+        setFilter('all')
+      }
+    }
+  }, [filter, grouping.clusteredGroupNames, grouping.otherCount])
+
+  const displayedGroups = useMemo(() => {
+    if (!grouping.hasGroups) {
+      return [{ key: 'all', name: '', isClustered: false, items }]
+    }
+    if (activeFilter === 'all') {
+      return grouping.groups
+    }
+    if (activeFilter === '__other__') {
+      const otherGroup = grouping.groups.find((g) => g.key === '__other__')
+      return otherGroup ? [otherGroup] : []
+    }
+    const match = grouping.groups.find((g) => g.key === activeFilter)
+    return match ? [match] : []
+  }, [grouping, activeFilter, items])
+
   const atMax = items.length >= WATCHLIST_MAX
 
   return (
@@ -178,132 +217,197 @@ export function WatchSection({
           </div>
           <div>還沒有觀察標的。加入後會在這裡看到現價和漲跌。</div>
         </div>
-      ) : viewMode === 'cards' ? (
-        <div className="watchlist-card-grid" data-testid="watchlist-cards">
-          {items.map((item) => {
-            const quote = prices[`TPE:${item.ticker}`]
-            const pct =
-              quote && quote.prevClose !== null && quote.prevClose !== 0
-                ? (quote.price - quote.prevClose) / quote.prevClose
-                : null
-            const category = getStockCategory(item.ticker, item.name, quote?.industry)
-            return (
-              <div
-                key={item.ticker}
-                className="watchlist-card"
-                data-testid={`watch-card-${item.ticker}`}
-                onClick={() => onSelectTicker(item.ticker, item.name)}
-              >
-                <div className="watchlist-card-head">
-                  <div className="watchlist-card-meta">
-                    <span className="watchlist-card-ticker">{item.ticker}</span>
-                    <span className="watchlist-card-name" title={item.name}>
-                      {item.name}
-                    </span>
-                    {category && <span className="watchlist-card-badge">{category}</span>}
-                  </div>
-                  <button
-                    type="button"
-                    className="watchlist-card-del"
-                    aria-label={`移除 ${item.ticker} ${item.name}`}
-                    disabled={removing !== null}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void handleRemove(item.ticker)
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="watchlist-card-body">
-                  <div className={`watchlist-card-price ${pnlClass(pct)}`}>
-                    {initialLoading && !quote ? (
-                      <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
-                    ) : quote ? (
-                      fmtPrice(quote.price, 'TWD')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                  <div className={`watchlist-card-change ${pnlClass(pct)}`}>
-                    {pct === null ? '—' : fmtSignedPercent(pct)}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
       ) : (
-        <div className="glass table-scroll" data-testid="watchlist-table">
-          <table className="data-table">
-            <colgroup>
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '8%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>代號</th>
-                <th>名稱</th>
-                <th className="num">現價</th>
-                <th className="num">漲跌</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const quote = prices[`TPE:${item.ticker}`]
-                const pct =
-                  quote && quote.prevClose !== null && quote.prevClose !== 0
-                    ? (quote.price - quote.prevClose) / quote.prevClose
-                    : null
-                const category = getStockCategory(item.ticker, item.name, quote?.industry)
+        <>
+          {grouping.hasGroups && (
+            <div className="chip-toggle watchlist-filter-chips" role="group" aria-label="產業快速篩選">
+              <button
+                type="button"
+                className={activeFilter === 'all' ? 'chip-btn active' : 'chip-btn'}
+                onClick={() => setFilter('all')}
+                data-testid="filter-chip-all"
+              >
+                {`全部 (${items.length})`}
+              </button>
+              {grouping.clusteredGroupNames.map((gName) => {
+                const count = grouping.groupCounts.get(gName) ?? 0
                 return (
-                  <tr
-                    key={item.ticker}
-                    data-testid={`watch-row-${item.ticker}`}
-                    onClick={() => onSelectTicker(item.ticker, item.name)}
-                    style={{ cursor: 'pointer' }}
+                  <button
+                    key={gName}
+                    type="button"
+                    className={activeFilter === gName ? 'chip-btn active' : 'chip-btn'}
+                    onClick={() => setFilter(gName)}
+                    data-testid={`filter-chip-${gName}`}
                   >
-                    <td>{item.ticker}</td>
-                    <td>
-                      <div className="watchlist-table-name-cell">
-                        <span>{item.name}</span>
-                        {category && <span className="watchlist-card-badge">{category}</span>}
-                      </div>
-                    </td>
-                    <td className="num">
-                      {initialLoading && !quote ? (
-                        <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
-                      ) : quote ? (
-                        fmtPrice(quote.price, 'TWD')
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className={`num ${pnlClass(pct)}`}>{pct === null ? '—' : fmtSignedPercent(pct)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        aria-label={`移除 ${item.ticker} ${item.name}`}
-                        disabled={removing !== null}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void handleRemove(item.ticker)
-                        }}
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
+                    {`${gName} (${count})`}
+                  </button>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
+              {grouping.otherCount > 0 && (
+                <button
+                  type="button"
+                  className={activeFilter === '__other__' ? 'chip-btn active' : 'chip-btn'}
+                  onClick={() => setFilter('__other__')}
+                  data-testid="filter-chip-other"
+                >
+                  {`其他 (${grouping.otherCount})`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {viewMode === 'cards' ? (
+            <div className="watchlist-cards-wrap" data-testid="watchlist-cards">
+              {displayedGroups.map((group) => (
+                <div key={group.key} className="watchlist-group-section" data-testid={`watch-group-${group.key}`}>
+                  {grouping.hasGroups && (
+                    <div className="watchlist-group-title">
+                      <span>{group.name}</span>
+                      <span className="badge badge-count">{group.items.length}</span>
+                    </div>
+                  )}
+                  <div className="watchlist-card-grid">
+                    {group.items.map((item) => {
+                      const quote = prices[`TPE:${item.ticker}`]
+                      const pct =
+                        quote && quote.prevClose !== null && quote.prevClose !== 0
+                          ? (quote.price - quote.prevClose) / quote.prevClose
+                          : null
+                      const category = getStockCategory(item.ticker, item.name, quote?.industry)
+                      return (
+                        <div
+                          key={item.ticker}
+                          className="watchlist-card"
+                          data-testid={`watch-card-${item.ticker}`}
+                          onClick={() => onSelectTicker(item.ticker, item.name)}
+                        >
+                          <div className="watchlist-card-head">
+                            <div className="watchlist-card-meta">
+                              <span className="watchlist-card-ticker">{item.ticker}</span>
+                              <span className="watchlist-card-name" title={item.name}>
+                                {item.name}
+                              </span>
+                              {category && <span className="watchlist-card-badge">{category}</span>}
+                            </div>
+                            <button
+                              type="button"
+                              className="watchlist-card-del"
+                              aria-label={`移除 ${item.ticker} ${item.name}`}
+                              disabled={removing !== null}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleRemove(item.ticker)
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className="watchlist-card-body">
+                            <div className={`watchlist-card-price ${pnlClass(pct)}`}>
+                              {initialLoading && !quote ? (
+                                <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
+                              ) : quote ? (
+                                fmtPrice(quote.price, 'TWD')
+                              ) : (
+                                '—'
+                              )}
+                            </div>
+                            <div className={`watchlist-card-change ${pnlClass(pct)}`}>
+                              {pct === null ? '—' : fmtSignedPercent(pct)}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="glass table-scroll" data-testid="watchlist-table">
+              <table className="data-table">
+                <colgroup>
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '35%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '8%' }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>代號</th>
+                    <th>名稱</th>
+                    <th className="num">現價</th>
+                    <th className="num">漲跌</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedGroups.map((group) => (
+                    <Fragment key={group.key}>
+                      {grouping.hasGroups && (
+                        <tr className="watchlist-group-row" data-testid={`watch-group-row-${group.key}`}>
+                          <td colSpan={5} className="watchlist-group-cell">
+                            <span>{group.name}</span>
+                            <span className="badge badge-count">{group.items.length}</span>
+                          </td>
+                        </tr>
+                      )}
+                      {group.items.map((item) => {
+                        const quote = prices[`TPE:${item.ticker}`]
+                        const pct =
+                          quote && quote.prevClose !== null && quote.prevClose !== 0
+                            ? (quote.price - quote.prevClose) / quote.prevClose
+                            : null
+                        const category = getStockCategory(item.ticker, item.name, quote?.industry)
+                        return (
+                          <tr
+                            key={item.ticker}
+                            data-testid={`watch-row-${item.ticker}`}
+                            onClick={() => onSelectTicker(item.ticker, item.name)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <td>{item.ticker}</td>
+                            <td>
+                              <div className="watchlist-table-name-cell">
+                                <span>{item.name}</span>
+                                {category && <span className="watchlist-card-badge">{category}</span>}
+                              </div>
+                            </td>
+                            <td className="num">
+                              {initialLoading && !quote ? (
+                                <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
+                              ) : quote ? (
+                                fmtPrice(quote.price, 'TWD')
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className={`num ${pnlClass(pct)}`}>{pct === null ? '—' : fmtSignedPercent(pct)}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                aria-label={`移除 ${item.ticker} ${item.name}`}
+                                disabled={removing !== null}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  void handleRemove(item.ticker)
+                                }}
+                              >
+                                ×
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {showAdd && (

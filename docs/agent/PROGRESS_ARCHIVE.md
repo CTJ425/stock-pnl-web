@@ -5,6 +5,37 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-03 16:58:30 Asia/Taipei (0.9.29-dev.1 — 觀察股票緊湊型小卡與自適應產業分類標籤)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.28` → **`0.9.29-dev.1`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者要求依照建議的「方案 A（緊湊型小卡 Mini Card）」改版首頁庫存總覽觀察股票（WatchSection），並自適應判斷股票類型與官方 33 類產業分類，以微型徽章展示。
+- **Work**:
+  1. **Mini Card 緊湊型佈局（方案 A）** (`WatchSection.tsx`, `index.css`):
+     - 卡片網格改為 `repeat(auto-fill, minmax(165px, 1fr))`，gap 10px。
+     - 卡片內距優化為 `10px 10px`，最小高度降至 72px（垂直佔位大幅減少 35%~40%）。
+     - 雙行佈局：
+       - 第 1 行：股票代號（13px mono bold）、名稱（13px 保留 min-width: 2.2em 避免長字名被壓至 0px 隱形）、微型分類徽章（10px subtle badge，max-width: 64px 支援優雅省略，在條列檢視下不受限）、右上角緊湊型移除按鈕（20px）。
+       - 第 2 行：現價（18px tabular nums, 保留紅綠漲跌色）與漲跌幅百分比（12px tabular nums, 保留紅綠色）。
+     - 條列檢視（Table View）同步在名稱旁展示微型分類徽章。
+  2. **台股類型與產業即時判定** (`src/utils/stockCategory.ts`):
+     - 0ms 純函數即時推導，無任何外部網路開銷。
+     - 規則式類型：`00...B` 債券 ETF、`00...L` 槓桿 ETF、`00...R` 反向 ETF、`00...` 股票型 ETF、`02...` ETN、`91...` TDR、`01...` REITs。
+     - 特別股精準比對：嚴格限定 4 位數字代號加英文字母（如 `2881A`），徹底排除權證（如 `03001P`、`08321B`）之誤判。
+     - 官方產業分類：擴充包含上櫃指標龍頭（3293 鈊象、5483 中美晶、3680 家登、6187 萬潤、3105 穩懋、3363 上詮等）之官方產業別，並納入 TPEx「文化創意」、「居家生活」類別。
+     - 啟發式後備比對：支援遊戲/文創、生技/醫材/藥、能源/綠能、軟體/資訊等更完整的關鍵字後備推導。
+  3. **單元測試** (`stockCategory.test.ts`, `WatchSection.test.tsx`):
+     - `stockCategory.test.ts` 新增 17 個測試（包含權證排除、上櫃指標股、新產業別與擴充後備規則）。
+     - `WatchSection.test.tsx` 擴增至 12 個測試（新增超長名稱與 TPEx 類別渲染測試）。
+- **Verify**:
+  - `npx vitest run src/utils/stockCategory.test.ts`: 17/17 tests passed.
+  - `npx vitest run src/components/Dashboard/WatchSection.test.tsx`: 12/12 tests passed.
+  - 全專案測試：`npm test` 96 檔測試檔、1556 個測試全數 PASS。
+  - 編譯與型別：`npm run build`（`tsc -b && vite build`）exit 0。
+  - 代碼檢查：`npx oxlint src` 0 error。
+
+---
+
 ## 📅 Log: 2026-09-03 15:59:47 Asia/Taipei (0.9.28 — 正式發版並上線 PROD)
 
 - **Status**: ✅ **RELEASED** — `main` 與 `dev` 皆為 `a1a26da`，已推送
