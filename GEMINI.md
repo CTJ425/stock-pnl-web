@@ -23,7 +23,7 @@ Persist important state here so the next agent does not need chat history.
 
 Also: `docs/UnitTests/` (testing SoT), `docs/architecture/`.
 
-**Agent-written docs are English** (see global rule 1).
+**Agent-written internal docs are English** (see global rule 1). Exceptions: user-facing copy such as `docs/agent/CHANGELOG.md`, `README.md`, and UI strings must be in Traditional Chinese (繁體中文).
 
 ### Size discipline — roll, don't hope
 
@@ -55,15 +55,14 @@ Then inspect code you will touch. Do not assume chat has full state.
 ## Work style
 
 - After work: update `TASK.md` / `PROGRESS.md` (and bugs if needed). Significant records: `YYYY-MM-DD HH:mm:ss Asia/Taipei`.
-- Skills (load when relevant from `.gemini/skills/`): `route`, `testing`, `verify`, `versioning`, `supabase-ops`, `ship`.
+- Skills (load when relevant from `.gemini/skills/` or `.claude/skills/`): `route`, `testing`, `verify`, `versioning`, `supabase-ops`, `ship`, `bookkeeping`.
 
 ## Task routing
 
 **Delegation to the roles below is standing user authorization.** Dispatch them without
 asking first — this overrides any default reluctance to spawn agents. The main session runs
 on the most expensive model in the system, so work that a cheaper role can do correctly
-must not be done here. Model and effort per role live in `.claude/agents/*.md` (or `.gemini/` equivalent) frontmatter;
-do not restate them here.
+must not be done here. Model and effort per role live in agent configurations; do not restate them here.
 
 The main session owns **architecture, specs, failing tests, and adjudication** — that is
 what it runs on the expensive model for. The four roles below are delegation targets.
@@ -85,19 +84,33 @@ what it runs on the expensive model for. The four roles below are delegation tar
   surgical edit on content already in context stays inline even when the task looks big.
   A large file read into the main session is re-billed on every later turn of that
   session, which is why the guard asks before unbounded reads over 32KB.
-- Role boundaries are enforced by `.claude/hooks/routing_guard.py` (or environment equivalent), not by good manners.
-  A blocked write means you are out of role: re-route it, do not work around it.
-  Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
-- Whether routing actually happened is measurable, and the plan does not count as
-  evidence: `python3 .claude/hooks/routing_audit.py`.
+- Role boundaries must be respected: delegate bulk research to `scout` (or `DeepInvestigator`), implementation to `builder` (or `DeepCoder`), review to `reviewer`, and documentation to `scribe`.
+- **The Verify command is `npm run build`, never `npx tsc --noEmit`.** The latter does not type-check test files in this project, which previously caused builds to break silently.
+- **`cp` is aliased to `cp -i` in Linux shells.** Use `command cp -f`, and never background a command that can block on an interactive prompt.
 - This routes **delegation only**. The main session's model comes from `/model`, not from
   this file.
 
-## Versioning
+## Versioning & Shipping (Mandatory Skills)
 
-No `v` prefix. `main` = `x.x.x`; `dev` unfinished = `x.x.x-dev.N`.
+**每次版本異動與推送都必須使用 `versioning` 與 `ship` 等相關 skill 來符合規定 (Every version change and push MUST strictly follow the `versioning` and `ship` skills):**
 
-Which files to sync and how to pick the next number: **`versioning`** skill.
+### 1. Versioning (`versioning` skill)
+- No `v` prefix. `main` = `x.x.x`; `dev` unfinished work = `x.x.x-dev.N`.
+- Any non-release work on `dev` must bump to the next sequential `x.x.x-dev.N`.
+- **Strict 5-File Synchronization**: Every version update MUST synchronize all 5 files in the same turn/commit:
+  1. `sources/src/version.ts` → `APP_VERSION` (UI badge in lower left corner)
+  2. `sources/package.json` → `version`
+  3. `sources/package-lock.json` → `version`
+  4. `README.md` → version badge line only (`> **目前版本：x.x.x...**`)
+  5. `docs/agent/CHANGELOG.md` → version history entry written in Traditional Chinese
+
+### 2. Shipping & Verification (`ship` skill)
+- **Always verify before commit/push**:
+  1. Full test suite: `npm test` from `sources/`.
+  2. Production build check: `npm run build` (`tsc -b && vite build`) from `sources/` (never rely only on `npx tsc --noEmit`).
+- **Always commit and push to `dev` first**; verify on DEV Cloud before considering release.
+- **Never push or merge to `main` without explicit user request and authorization.**
+- Official releases (`x.x.x` on `main`) automatically deploy Pages and trigger GitHub Releases sync.
 
 ## Branches & envs
 

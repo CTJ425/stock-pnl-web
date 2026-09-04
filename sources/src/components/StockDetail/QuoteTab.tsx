@@ -208,7 +208,7 @@ export function QuoteTab({
         <div className="m-quote-head m-sym">
           <h2>{name}</h2>
           <span className="code">{ticker}</span>
-          {category && <span className="watchlist-card-badge quote-badge">{category}</span>}
+          {category && <span className="quote-badge">{category}</span>}
         </div>
         <div className="m-price">
           <span className={`big ${pnlClass(dayChange)}`}>{fmtPrice(quote.price, 'TWD')}</span>

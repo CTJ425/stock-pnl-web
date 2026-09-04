@@ -219,13 +219,20 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     expect(screen.queryByText('方向')).toBeNull()
   })
 
-  it('T7 分組標題列帶檔數與小計市值', () => {
+  it('T7 分組標題列僅帶檔數，不顯示小計市值與未實現損益，且橫跨全表格欄位', () => {
     render(<DashboardPage onSelectTicker={vi.fn()} />)
-    expect(screen.getByTestId('holding-group-LONG')).toBeTruthy()
-    expect(screen.getByTestId('holding-group-SHORT')).toBeTruthy()
-    // 台股多單只有 2330 一檔；空單只有 2603 一檔
-    expect(num(screen.getByTestId('holding-group-LONG-mktval'))).toBe(1_000_000)
-    expect(num(screen.getByTestId('holding-group-SHORT-mktval'))).toBe(95_000)
+    const longGroup = screen.getByTestId('holding-group-LONG')
+    const shortGroup = screen.getByTestId('holding-group-SHORT')
+    expect(longGroup).toBeTruthy()
+    expect(shortGroup).toBeTruthy()
+    expect(longGroup.textContent).toContain('多單・1 檔')
+    expect(shortGroup.textContent).toContain('空單・1 檔')
+    expect(screen.queryByTestId('holding-group-LONG-mktval')).toBeNull()
+    expect(screen.queryByTestId('holding-group-SHORT-mktval')).toBeNull()
+    expect(longGroup.querySelectorAll('td')).toHaveLength(1)
+    expect(shortGroup.querySelectorAll('td')).toHaveLength(1)
+    expect(longGroup.querySelector('td')?.getAttribute('colspan')).toBe('10')
+    expect(shortGroup.querySelector('td')?.getAttribute('colspan')).toBe('10')
   })
 
   it('T14 只有一條腿有價格時，淨額不成立：不顯示數字也不畫曝險條', () => {
@@ -256,6 +263,18 @@ describe('DashboardPage — 融券空單（Task 141 Stage B）', () => {
     expect(row.textContent).toContain('賣出・未含費')
     // 舊行為是兩欄都印 '—'
     expect(row.textContent).not.toContain('—')
+  })
+
+  it('空單多行數值單元格之副標籤不帶 inline fontSize', () => {
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const row = screen.getByTestId('holding-row-2603-SHORT')
+    const secondaryDivs = Array.from(
+      row.querySelectorAll('td.num > div:not(:first-child)')
+    ) as HTMLElement[]
+    expect(secondaryDivs.length).toBeGreaterThanOrEqual(2)
+    for (const div of secondaryDivs) {
+      expect(div.style.fontSize).toBe('')
+    }
   })
 
   it('T16 台股只有空單時，總覽照樣出得來：淨額為負、曝險尺全空方、成本 0', () => {
@@ -390,4 +409,44 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
     expect(row.textContent).toContain('券商 -NT$11,111')
     expect(row.textContent).toContain('券商 -8.20%')
   })
+
+  it('多行數值單元格之副標籤不帶 inline fontSize，由 index.css 統一控制', () => {
+    const discountedTx: Transaction = {
+      id: 'tx-2303',
+      workspace_id: 'ws-1',
+      tx_date: '2026-08-01',
+      market: 'TPE',
+      ticker: '2303',
+      name: '聯電',
+      tx_type: 'BUY',
+      price: 135.5,
+      qty: 1000,
+      fee_tax: 58,
+      created_at: '2026-08-01T00:00:00Z',
+    }
+    useWorkspace.mockReturnValue({
+      ledger: computeLedger([discountedTx]),
+      current: { id: 'ws-1', name: '主要工作區' },
+      loading: false,
+      error: null,
+    })
+    useStockPrices.mockReturnValue({
+      prices: {
+        'TPE:2303': { price: 125, prevClose: 126, asOf: '', source: 'twse', stale: false, trial: false },
+      },
+      loading: false,
+      refreshedAt: new Date('2026-08-25T10:00:00Z'),
+      refresh: vi.fn(),
+    })
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const row = screen.getByTestId('holding-row-2303')
+    const secondaryDivs = Array.from(
+      row.querySelectorAll('td.num > div:not(:first-child)')
+    ) as HTMLElement[]
+    expect(secondaryDivs.length).toBeGreaterThanOrEqual(5)
+    for (const div of secondaryDivs) {
+      expect(div.style.fontSize).toBe('')
+    }
+  })
 })
+
