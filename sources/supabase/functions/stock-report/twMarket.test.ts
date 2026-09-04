@@ -11,7 +11,9 @@ import {
   planMarketMonths,
   rocSlashDate,
   taiexHistMonthUrl,
+  marketDaysSignature,
   type MarketDay,
+  type MarketInstitutionalSide,
 } from './twMarket'
 
 /** Taken verbatim from actual response to rwd/zh/afterTrading/FMTQIK on 2026-08-04 (truncated to two columns)*/
@@ -388,5 +390,115 @@ describe('planMarketMonths', () => {
   it('用台北時間判斷月份（UTC 的月初凌晨會落在上個月）', () => {
     // UTC 2026-07-31 17:00 = Taipei 2026-08-01 01:00 → This month is August
     expect(planMarketMonths(new Date('2026-07-31T17:00:00Z'), [])).toEqual(['202608', '202607'])
+  })
+})
+
+
+/**
+ * `syncMarket` in `index.ts` decides whether to rewrite `market/daily.json` by comparing a content
+ * fingerprint of the merged days against the stored ones. Its own comment says 「Compare content,
+ * not length」, and the round re-fetches the current month every time precisely so a TWSE correction
+ * lands. But the fingerprint only covered `date`, `tradeValueTwd`, `taiexOpen` and five of the
+ * institutional amounts, so a correction to any other field — the closing 加權指數 among them —
+ * compared equal, the write was skipped, and the corrected value never left memory.
+ *
+ * A fingerprint that misses a field is not a smaller fingerprint; it is a silent data-loss bug. The
+ * test therefore walks every field rather than pinning a string: adding a field to `MarketDay`
+ * without adding it here is what let this happen once already.
+ */
+describe('marketDaysSignature', () => {
+  const side = (n: number): MarketInstitutionalSide => ({
+    foreignTwd: n,
+    foreignDealerTwd: n + 1,
+    trustTwd: n + 2,
+    dealerSelfTwd: n + 3,
+    dealerHedgeTwd: n + 4,
+    totalTwd: n + 5,
+  })
+
+  const base = (): MarketDay => ({
+    date: '2026-08-04',
+    tradeVolumeShares: 11340636777,
+    tradeValueTwd: 1087045875836,
+    transactions: 4751347,
+    taiex: 43360.66,
+    changePoints: -25.75,
+    taiexOpen: 43380.1,
+    taiexHigh: 43420.5,
+    taiexLow: 43310.2,
+    institutional: { ...side(100), buy: side(200), sell: side(300) },
+  })
+
+  it('相同內容給出相同指紋', () => {
+    expect(marketDaysSignature([base()])).toBe(marketDaysSignature([base()]))
+  })
+
+  const topLevel: Array<keyof MarketDay> = [
+    'date',
+    'tradeVolumeShares',
+    'tradeValueTwd',
+    'transactions',
+    'taiex',
+    'changePoints',
+    'taiexOpen',
+    'taiexHigh',
+    'taiexLow',
+  ]
+
+  it.each(topLevel)('每日欄位 %s 改變就改變指紋', (field) => {
+    const before = marketDaysSignature([base()])
+    const day = base()
+    ;(day as unknown as Record<string, unknown>)[field] = field === 'date' ? '2026-08-05' : 1
+    expect(marketDaysSignature([day])).not.toBe(before)
+  })
+
+  const sideFields: Array<keyof MarketInstitutionalSide> = [
+    'foreignTwd',
+    'foreignDealerTwd',
+    'trustTwd',
+    'dealerSelfTwd',
+    'dealerHedgeTwd',
+    'totalTwd',
+  ]
+
+  it.each(sideFields)('三大法人差額欄位 %s 改變就改變指紋', (field) => {
+    const before = marketDaysSignature([base()])
+    const day = base()
+    ;(day.institutional as unknown as Record<string, unknown>)[field] = -1
+    expect(marketDaysSignature([day])).not.toBe(before)
+  })
+
+  it.each(sideFields)('三大法人買進欄位 %s 改變就改變指紋', (field) => {
+    const before = marketDaysSignature([base()])
+    const day = base()
+    ;(day.institutional!.buy as unknown as Record<string, unknown>)[field] = -1
+    expect(marketDaysSignature([day])).not.toBe(before)
+  })
+
+  it.each(sideFields)('三大法人賣出欄位 %s 改變就改變指紋', (field) => {
+    const before = marketDaysSignature([base()])
+    const day = base()
+    ;(day.institutional!.sell as unknown as Record<string, unknown>)[field] = -1
+    expect(marketDaysSignature([day])).not.toBe(before)
+  })
+
+  it('法人資料從無到有、buy/sell 從 null 補上，都改變指紋', () => {
+    const before = marketDaysSignature([base()])
+    const noInst = base()
+    noInst.institutional = null
+    expect(marketDaysSignature([noInst])).not.toBe(before)
+
+    const noBuy = base()
+    noBuy.institutional!.buy = null
+    expect(marketDaysSignature([noBuy])).not.toBe(before)
+
+    const noSell = base()
+    noSell.institutional!.sell = null
+    expect(marketDaysSignature([noSell])).not.toBe(before)
+  })
+
+  it('天數不同給出不同指紋', () => {
+    expect(marketDaysSignature([base(), base()])).not.toBe(marketDaysSignature([base()]))
+    expect(marketDaysSignature([])).not.toBe(marketDaysSignature([base()]))
   })
 })

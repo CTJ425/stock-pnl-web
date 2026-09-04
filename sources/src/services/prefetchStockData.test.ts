@@ -125,7 +125,7 @@ describe('prefetchStockData — 法人補齊 (Task 130)', () => {
       backfilled: 0,
       phase: 'history',
     })
-    chipsMock.mockResolvedValue({ ok: true, daysWritten: 7 })
+    chipsMock.mockResolvedValue({ ok: true, daysWritten: 7, daysFailed: 0 })
   })
 
   it('全新代號：法人資料一併補齊', async () => {

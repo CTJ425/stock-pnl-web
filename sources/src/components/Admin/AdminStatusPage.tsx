@@ -26,6 +26,11 @@ function agoLabel(iso: string): string {
   return humanAgo(Date.now() - Date.parse(iso))
 }
 
+/** `null`/`undefined` 代表該次 Storage 查詢本身失敗，不是「目錄是空的」，兩者不可用 `?? 0` 混為一談 */
+function coverageLabel(v: number | null | undefined): string | number {
+  return v == null ? '—' : v
+}
+
 /**
  * 一源一列：名稱、命中/未命中進度條、首次命中摘要、可展開的明細表。
  *
@@ -381,16 +386,16 @@ export function AdminStatusPage() {
           <div className="glass kpi">
             <div className="kpi-label">日線檔</div>
             <div className="kpi-value">
-              {data.coverage.daily ?? 0}
-              <span className="ast-unit"> / {data.coverage.held ?? 0}</span>
+              {coverageLabel(data.coverage.daily)}
+              <span className="ast-unit"> / {coverageLabel(data.coverage.held)}</span>
             </div>
             <div className="kpi-sub">daily/{'{代號}'}.json</div>
           </div>
           <div className="glass kpi">
             <div className="kpi-label">基本面檔</div>
             <div className="kpi-value">
-              {data.coverage.fundamental ?? 0}
-              <span className="ast-unit"> / {data.coverage.held ?? 0}</span>
+              {coverageLabel(data.coverage.fundamental)}
+              <span className="ast-unit"> / {coverageLabel(data.coverage.held)}</span>
             </div>
             <div className="kpi-sub">含月營收與獲利能力</div>
           </div>

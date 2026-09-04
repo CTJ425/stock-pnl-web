@@ -232,6 +232,22 @@ describe('warmStockChips (Task 130)', () => {
     error: null,
   })
 
+  /**
+   * BUG-058 gave the Edge's per-day loop a try/catch and a `daysFailed` count. The client contract
+   * has to carry it, or a partially-failed backfill reads here as a fully successful one.
+   */
+  it('把 Edge 回報的 daysFailed 帶回來，缺欄位時視為 0', async () => {
+    invoke.mockResolvedValue({
+      data: { ok: true, ticker: '2059', phase: 'chips', daysWritten: 5, daysFailed: 2 },
+      error: null,
+    })
+    expect(await warmStockChips('2059', '川湖')).toMatchObject({ daysWritten: 5, daysFailed: 2 })
+
+    resetWarmState()
+    invoke.mockResolvedValue(okChips(7))
+    expect(await warmStockChips('2059', '川湖')).toMatchObject({ daysWritten: 7, daysFailed: 0 })
+  })
+
   it('以 phase: chips 呼叫', async () => {
     invoke.mockResolvedValue(okChips(7))
     const r = await warmStockChips('2059', '川湖')

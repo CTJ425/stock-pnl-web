@@ -66,8 +66,11 @@ export interface AdminStatus {
       borrow: SourceStamp | null
     } | null
   } | null
-  /** The number of files and the number of holding files in each Storage directory are used to calculate "how many files are there in N files"*/
-  coverage: { daily?: number; fundamental?: number; held?: number }
+  /**
+   * The number of files and the number of holding files in each Storage directory are used to calculate "how many files are there in N files".
+   * `null` means the Storage `list()` lookup itself failed — distinct from a genuinely empty directory (0 files).
+   */
+  coverage: { daily?: number | null; fundamental?: number | null; held?: number | null }
   macro: { asOf: string; checkedAt: string | null; indicators: AdminMacroIndicator[] } | null
   fx: { asOf: string; count: number } | null
   /**

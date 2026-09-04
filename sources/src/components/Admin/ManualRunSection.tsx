@@ -41,6 +41,9 @@ function summarizeBody(body: unknown): string {
   if (Array.isArray(o.failedTickers) && o.failedTickers.length) {
     bits.push(`failedTickers=${o.failedTickers.join(',')}`)
   }
+  // A failed batch_run_log insert used to be invisible: the row simply never appeared. The phase
+  // now reports why, and this is the screen that reads it.
+  if (typeof o.logError === 'string' && o.logError) bits.push(`logError=${o.logError}`)
   if (typeof o.dailySynced === 'number') bits.push(`dailySynced=${o.dailySynced}`)
   if (typeof o.dailySkipped === 'number') bits.push(`dailySkipped=${o.dailySkipped}`)
   if (typeof o.fundamentalSynced === 'number') bits.push(`fundSynced=${o.fundamentalSynced}`)
