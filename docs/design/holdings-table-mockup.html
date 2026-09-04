@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>庫存總覽持股表格 — 改版設計範本與字級建議</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+<style>
+/* =========================================================
+ * 原生系統色彩變數（完全對齊 stock-pnl-web 設計規範）
+ * ========================================================= */
+:root {
+  --bg: #090b0f;
+  --surface: #0e1116;
+  --surface-strong: #141922;
+  --border: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --ink: #dfe4ea;
+  --ink-secondary: #96a0ad;
+  --ink-muted: #6b7684;
+  --accent: #74a6c0;
+  --accent-strong: #5b8fa8;
+  --accent-2: #74a6c0;
+  --up: #ff5364; /* 台股紅漲 */
+  --down: #21c88a; /* 台股綠跌 */
+  --thead-bg: rgba(255, 255, 255, 0.09);
+  --row-band: rgba(255, 255, 255, 0.03);
+  --row-hover: rgba(255, 255, 255, 0.05);
+  --rule-hair: rgba(255, 255, 255, 0.06);
+  --steel: #74a6c0;
+  --steel-tint: rgba(116, 166, 192, 0.15);
+  --steel-on: #0b0e13;
+  --radius: 4px;
+  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+  --font-body: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-theme="light"] {
+  --bg: #eff0f3;
+  --surface: #fafbfc;
+  --surface-strong: #ffffff;
+  --border: rgba(15, 19, 25, 0.14);
+  --border-strong: rgba(15, 19, 25, 0.22);
+  --ink: #0f1319;
+  --ink-secondary: #48525f;
+  --ink-muted: #838d9a;
+  --accent: #2f6484;
+  --accent-strong: #245065;
+  --accent-2: #2f6484;
+  --up: #bf2233;
+  --down: #0c6f4b;
+  --thead-bg: rgba(15, 19, 25, 0.08);
+  --row-band: rgba(15, 19, 25, 0.035);
+  --row-hover: rgba(15, 19, 25, 0.045);
+  --rule-hair: rgba(15, 19, 25, 0.06);
+  --steel: #2f6484;
+  --steel-tint: rgba(47, 100, 132, 0.12);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 32px 24px 64px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* 頂部導航與控制面板 */
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title-area h1 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.title-area p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+}
+
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-group {
+  display: inline-flex;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.btn-tab {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-body);
+}
+
+.btn-tab:hover {
+  color: var(--ink);
+}
+
+.btn-tab.active {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-theme {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* 上方 Summary 卡片 (用來展示：既然這裡有完整小計，表格就免放小計數字) */
+.market-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+
+.panel-head .ccy {
+  font-size: 11px;
+  background: var(--surface-strong);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--ink-secondary);
+  border: 1px solid var(--border);
+}
+
+.panel-head .kpi-label {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-left: auto;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 1fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.metric-hero .kpi-value {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.exposure-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exposure-bar {
+  display: flex;
+  height: 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.exposure-seg-long {
+  background: var(--up);
+  flex-grow: 1715000;
+}
+
+.exposure-seg-short {
+  background: var(--steel);
+  flex-grow: 95000;
+}
+
+.exposure-key {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.exposure-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exposure-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.exposure-sw-long { background: var(--up); }
+.exposure-sw-short { background: var(--steel); }
+
+.kpi-mini .label {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+
+.kpi-mini .val {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+
+.kpi-mini .sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+  margin-top: 2px;
+}
+
+/* 表格容器 */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+/* =========================================================
+ * 方案 A：黃金平衡款（13px / 11px，完全無下方滑動捲軸）
+ * ========================================================= */
+.scheme-recommended {
+  --th-size: 12px;
+  --th-pad: 9px 7px;
+  --td-pad: 9px 7px;
+  --cell-size: 13px;
+  --num-size: 13px;
+  --sub-size: 11px;
+  --group-size: 12px;
+  --group-pad: 8px 10px;
+}
+
+/* =========================================================
+ * 方案 B：上一版微大款（14px / 11.5px，字體稍大）
+ * ========================================================= */
+.scheme-14px {
+  --th-size: 13px;
+  --th-pad: 11px 9px;
+  --td-pad: 11px 9px;
+  --cell-size: 14px;
+  --num-size: 14px;
+  --sub-size: 11.5px;
+  --group-size: 13px;
+  --group-pad: 10px 12px;
+}
+
+/* =========================================================
+ * 方案 C：原始偏小款（12.5px / 10.5px，舊版對照組）
+ * ========================================================= */
+.scheme-current {
+  --th-size: 12px;
+  --th-pad: 11px 8px;
+  --td-pad: 9px 8px;
+  --cell-size: 13.5px;
+  --num-size: 12.5px;
+  --sub-size: 10.5px;
+  --group-size: 11px;
+  --group-pad: 9px 8px;
+}
+
+/* 通用表格樣式套用 CSS 變數 */
+.data-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--th-size);
+  letter-spacing: 0.02em;
+  color: var(--ink-secondary);
+  padding: var(--th-pad);
+  border-bottom: 1px solid var(--border);
+  background: var(--thead-bg);
+}
+
+.data-table td {
+  padding: var(--td-pad);
+  border-bottom: 1px solid var(--rule-hair);
+  font-size: var(--cell-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th.num,
+.data-table td.num {
+  text-align: right;
+}
+
+.data-table .num {
+  font-size: var(--num-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table .num > div:not(.row-actions) {
+  font-size: var(--sub-size);
+  color: var(--ink-muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.data-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.data-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.ticker-cell {
+  font-family: var(--font-display);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tx-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 3px;
+  line-height: 1.2;
+}
+
+.tx-chip-spot {
+  color: var(--ink-secondary);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+}
+
+.tx-chip-margin {
+  color: var(--steel);
+  background: var(--steel-tint);
+}
+
+.tx-chip-short {
+  color: #ffffff;
+  background: var(--steel);
+}
+
+/* 漲跌顏色 */
+.pos { color: var(--up); }
+.neg { color: var(--down); }
+.num.pos { color: var(--up); }
+.num.neg { color: var(--down); }
+
+/* 空單列微底色 */
+.row-short td {
+  background: var(--steel-tint);
+}
+.row-short td:first-child {
+  box-shadow: inset 3px 0 0 var(--steel);
+}
+
+/* 1. 建議方案：全新全寬分隔標題（ColSpan 10，移除小計數字） */
+.group-header-clean td {
+  background: var(--row-band);
+  padding: var(--group-pad) !important;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.group-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--group-size);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.group-badge-long {
+  color: var(--up);
+}
+
+.group-badge-short {
+  color: var(--steel);
+}
+
+.group-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-secondary);
+  font-weight: 500;
+}
+
+.group-note {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+/* 2. 現行版本的分組列（舊版帶有小計數字，未填滿） */
+.holding-group-legacy td {
+  background: var(--row-band);
+  font-size: var(--group-size);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding: var(--group-pad);
+}
+
+.holding-group-legacy .holding-group-label {
+  text-transform: uppercase;
+}
+.holding-group-legacy.holding-group-short .holding-group-label {
+  color: var(--steel);
+}
+
+/* 比較分析與說明卡片 */
+.analysis-box {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.card-info {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.card-info h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-info ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+}
+
+.card-info li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.highlight-tag {
+  display: inline-block;
+  background: rgba(116, 166, 192, 0.2);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- 頂部標題與即時切換控制器 -->
+  <header class="top-header">
+    <div class="title-area">
+      <h1>庫存總覽持股表格 — 改版設計範本與字級建議</h1>
+      <p>針對「移除多單/空單後方重複的市值與損益」與「微幅調大字體提升閱讀舒適度」進行即時效果對比。</p>
+    </div>
+
+    <div class="controls-bar">
+      <!-- 方案切換 -->
+      <div class="btn-group">
+        <button class="btn-tab active" onclick="switchScheme('recommended')">✨ 黃金平衡款 (13px / 11px・零橫向滑動)</button>
+        <button class="btn-tab" onclick="switchScheme('14px')">上一版微大款 (14px / 11.5px)</button>
+        <button class="btn-tab" onclick="switchScheme('current')">舊版原尺寸 (12.5px / 10.5px)</button>
+      </div>
+
+      <!-- 主題切換 -->
+      <button class="btn-theme" onclick="toggleTheme()" id="themeBtn">🌓 切換淺色</button>
+    </div>
+  </header>
+
+  <!-- 上方 Summary 面板（印證使用者的痛點：這裡已經有一目了然的總計數據） -->
+  <section class="market-panel">
+    <div class="panel-head">
+      <h3>🇹🇼 台股持倉</h3>
+      <span class="ccy">TWD</span>
+      <span class="kpi-label">持倉淨額市值</span>
+    </div>
+    <div class="summary-grid">
+      <div class="metric-hero">
+        <div class="kpi-value">$1,620,000</div>
+      </div>
+      <div class="exposure-wrapper">
+        <div class="exposure-bar">
+          <div class="exposure-seg-long" title="多單 $1,715,000"></div>
+          <div class="exposure-seg-short" title="空單 $95,000"></div>
+        </div>
+        <div class="exposure-key">
+          <span class="exposure-legend">
+            <span class="exposure-sw exposure-sw-long"></span>
+            多單 <strong>$1,715,000</strong>
+          </span>
+          <span class="exposure-legend">
+            <span class="exposure-sw exposure-sw-short"></span>
+            空單 <strong>$95,000</strong>
+          </span>
+        </div>
+      </div>
+      <div class="kpi-mini">
+        <div class="label">投入總成本</div>
+        <div class="val">$1,510,000</div>
+        <div class="sub">未含費 $1,507,850</div>
+      </div>
+      <div class="kpi-mini">
+        <div class="label">未實現淨損益</div>
+        <div class="val pos">+$105,420</div>
+        <div class="sub pos">+6.98% (券商 +$106,800)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 持股總覽表格主體 -->
+  <section class="table-scroll">
+    <table class="data-table scheme-recommended" id="holdingsTable">
+      <thead>
+        <tr>
+          <th>代號</th>
+          <th>名稱</th>
+          <th class="num">現價</th>
+          <th class="num">持有股數</th>
+          <th class="num">投入成本</th>
+          <th class="num">平均買入成本</th>
+          <th class="num">保本賣出價</th>
+          <th class="num">目前市值</th>
+          <th class="num">未實現淨損益</th>
+          <th class="num">未實現報酬率</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- ================= 多單分組 ================= -->
+        <!-- 建議方案：乾淨通欄分隔標籤（預設啟用） -->
+        <tr class="group-header-clean group-clean-long" id="longGroupClean">
+          <td colspan="10">
+            <span class="group-badge group-badge-long">
+              <span>▲ 多單</span>
+              <span class="group-pill">2 檔</span>
+              <span class="group-note">※ 已移除後方重複小計，回歸純粹的章節分組</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- 現行舊版分組列（包含市值與未實現損益） -->
+        <tr class="holding-group-legacy holding-group-long" id="longGroupLegacy" style="display: none;">
+          <td colspan="7">
+            <span class="holding-group-label">多單・2 檔</span>
+          </td>
+          <td class="num">$1,715,000</td>
+          <td class="num pos">+$114,920</td>
+          <td></td>
+        </tr>
+
+        <!-- 多單 第 1 檔：2330 台積電 -->
+        <tr>
+          <td>
+            <div class="ticker-cell">
+              <span>2330</span>
+              <span class="tx-chip tx-chip-spot">現股</span>
+            </div>
+          </td>
+          <td style="font-weight: 500;">台積電</td>
+          <td class="num">
+            <div style="font-weight: 600;">1,005.00</div>
+          </td>
+          <td class="num">1,000</td>
+          <td class="num">
+            <div style="font-weight: 600;">$950,000</div>
+            <div>未含費 $948,646</div>
+          </td>
+          <td class="num">
+            <div style="font-weight: 600;">950.00</div>
+            <div>未含費 948.65</div>
+          </td>
+          <td class="num">954.21</td>
+          <td class="num">
+            <div style="font-weight: 600;">$1,005,000</div>
+            <div>淨收 $1,000,548</div>
+          </td>
+          <td class="num pos">
+            <div style="font-weight: 600;">+$50,548</div>
+            <div>券商 +$51,200</div>
+          </td>
+          <td class="num pos">
+            <div style="font-weight: 600;">+5.32%</div>
+            <div>券商 +5.39%</div>
+          </td>
+        </tr>
+
+        <!-- 多單 第 2 檔：2454 聯發科 -->
+        <tr>
+          <td>
+            <div class="ticker-cell">
+              <span>2454</span>
+              <span class="tx-chip tx-chip-margin">融資</span>
+            </div>
+          </td>
+          <td style="font-weight: 500;">聯發科</td>
+          <td class="num">
+            <div style="font-weight: 600;">1,420.00</div>
+          </td>
+          <td class="num">500</td>
+          <td class="num">
+            <div style="font-weight: 600;">$560,000</div>
+            <div>未含費 $559,204</div>
+          </td>
+          <td class="num">
+            <div style="font-weight: 600;">1,120.00</div>
+            <div>未含費 1,118.41</div>
+          </td>
+          <td class="num">1,124.97</td>
+          <td class="num">
+            <div style="font-weight: 600;">$710,000</div>
+            <div>淨收 $706,854</div>
+          </td>
+          <td class="num pos">
+            <div style="font-weight: 600;">+$64,372</div>
+            <div>券商 +$65,100</div>
+          </td>
+          <td class="num pos">
+            <div style="font-weight: 600;">+11.50%</div>
+            <div>券商 +11.63%</div>
+          </td>
+        </tr>
+
+        <!-- ================= 空單分組 ================= -->
+        <!-- 建議方案：乾淨通欄分隔標籤（預設啟用） -->
+        <tr class="group-header-clean group-clean-short" id="shortGroupClean">
+          <td colspan="10">
+            <span class="group-badge group-badge-short">
+              <span>▼ 空單</span>
+              <span class="group-pill">1 檔</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- 現行舊版空單分組列 -->
+        <tr class="holding-group-legacy holding-group-short" id="shortGroupLegacy" style="display: none;">
+          <td colspan="7">
+            <span class="holding-group-label">空單・1 檔</span>
+          </td>
+          <td class="num">$95,000</td>
+          <td class="num neg">-$9,500</td>
+          <td></td>
+        </tr>
+
+        <!-- 空單 第 1 檔：2603 長榮 -->
+        <tr class="row-short">
+          <td>
+            <div class="ticker-cell">
+              <span>2603</span>
+              <span class="tx-chip tx-chip-short">融券</span>
+            </div>
+          </td>
+          <td style="font-weight: 500;">長榮</td>
+          <td class="num">
+            <div style="font-weight: 600;">190.00</div>
+          </td>
+          <td class="num neg">500</td>
+          <td class="num">
+            <div style="font-weight: 600;">$85,500</div>
+            <div>賣出·未含費 $85,800</div>
+          </td>
+          <td class="num">
+            <div style="font-weight: 600;">171.00</div>
+            <div>賣出·未含費 171.60</div>
+          </td>
+          <td class="num">170.25</td>
+          <td class="num">
+            <div style="font-weight: 600;">$95,000</div>
+            <div>回補成本 $95,432</div>
+          </td>
+          <td class="num neg">
+            <div style="font-weight: 600;">-$9,500</div>
+            <div>券商 -$9,620</div>
+          </td>
+          <td class="num neg">
+            <div style="font-weight: 600;">-11.11%</div>
+            <div>券商 -11.25%</div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 改版重點分析與尺寸建議 -->
+  <section class="analysis-box">
+    <div class="card-info">
+      <h3>🎯 1. 移除分組列市值與損益（效益分析）</h3>
+      <ul>
+        <li><strong>徹底解除視覺干擾</strong>：原本在分組列第 8、9 欄掛著兩組數字，既非全欄加總、又缺乏對應表頭，閱讀時視線容易被這兩個浮空數字打斷。</li>
+        <li><strong>資訊不重複（DRY 原則）</strong>：表格正上方的 <code>MarketPanel</code> 已經有清楚的「多單市值」、「空單市值」曝險尺與「總未實現損益」，分組列重複計算只會徒增視覺負擔。</li>
+        <li><strong>通欄標籤（<code>colspan="10"</code>）更易識別</strong>：改為區塊分隔標題後，多空分段一目了然，並能容納更清楚的 Badge（例如「▲ 多單 2 檔」）。</li>
+      </ul>
+    </div>
+
+    <div class="card-info">
+      <h3>📏 2. 字級大小微調方案（黃金尺寸對照）</h3>
+      <ul>
+        <li><strong>現行痛點</strong>：數值 <code>12.5px</code>、次級資訊（淨收/未含費）僅 <code>10.5px</code>，在 2K / 4K 或一般筆電螢幕下非常吃力。但若盲目擴大到 16px，10 欄表格會嚴重橫向溢出。</li>
+        <li><strong>建議微調（+1px ~ +1.5px 階梯微升）</strong>：
+          <br>• <strong>表格主數值 / 股名</strong>：<code>12.5px → 14px</code> <span class="highlight-tag">黃金舒適尺寸</span>
+          <br>• <strong>次級資訊（未含費/淨收/券商）</strong>：<code>10.5px → 11.5px</code> <span class="highlight-tag">不再瞇眼</span>
+          <br>• <strong>表頭欄位名稱</strong>：<code>12px → 13px</code>
+          <br>• <strong>垂直內距（Padding）</strong>：<code>9px → 11px</code>（提升行間呼吸感，保持橫向緊湊）</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<script>
+// 切換方案
+function switchScheme(scheme) {
+  const table = document.getElementById('holdingsTable');
+  const tabs = document.querySelectorAll('.btn-tab');
+  
+  // 更新按鈕樣式
+  tabs.forEach(tab => tab.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // 切換表格 class
+  table.className = 'data-table scheme-' + scheme;
+
+  // 控制分組列的顯示（建議方案使用全新通欄分隔，現行版本還原舊版帶小計）
+  const longClean = document.getElementById('longGroupClean');
+  const shortClean = document.getElementById('shortGroupClean');
+  const longLegacy = document.getElementById('longGroupLegacy');
+  const shortLegacy = document.getElementById('shortGroupLegacy');
+
+  if (scheme === 'current') {
+    longClean.style.display = 'none';
+    shortClean.style.display = 'none';
+    longLegacy.style.display = 'table-row';
+    shortLegacy.style.display = 'table-row';
+  } else {
+    longClean.style.display = 'table-row';
+    shortClean.style.display = 'table-row';
+    longLegacy.style.display = 'none';
+    shortLegacy.style.display = 'none';
+  }
+}
+
+// 切換深色 / 淺色主題
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.getElementById('themeBtn');
+  if (html.getAttribute('data-theme') === 'light') {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = '🌓 切換淺色';
+  } else {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = '🌓 切換深色';
+  }
+}
+</script>
+
+</body>
+</html>

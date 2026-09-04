@@ -83,10 +83,6 @@ function HoldingsTable({
   const longRows = rows.filter((r) => r.direction === 'LONG')
   const shortRows = rows.filter((r) => r.direction === 'SHORT')
   const hasShort = shortRows.length > 0
-  const longMkt = sumOrNull(longRows.map((r) => r.mktVal))
-  const shortMkt = sumOrNull(shortRows.map((r) => r.mktVal))
-  const longUnreal = sumOrNull(longRows.map((r) => r.unrealized))
-  const shortUnreal = sumOrNull(shortRows.map((r) => r.unrealized))
 
   const renderRow = (row: HoldingRow) => {
     const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, brokerUnrealized, rawUnrealized, roi, brokerRoi, breakEven } = row
@@ -153,14 +149,14 @@ function HoldingsTable({
                     <div style={{ fontWeight: 600 }} title="融券賣出實際收到的錢（已扣手續費、證交稅與借券費）">
                       {fmtMoney(h.shortProceeds, currency)}
                     </div>
-                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不扣任何費用的賣出價金">
+                    <div style={{ opacity: 0.65 }} title="不扣任何費用的賣出價金">
                       賣出・未含費 {fmtMoney(h.shortRawProceeds, currency)}
                     </div>
                   </>
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtMoney(h.cost, currency)}</div>
-                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不含買進手續費的金額">
+                    <div style={{ opacity: 0.65 }} title="不含買進手續費的金額">
                       未含費 {fmtMoney(h.rawCost, currency)}
                     </div>
                   </>
@@ -172,7 +168,7 @@ function HoldingsTable({
                     <div style={{ fontWeight: 600 }} title="建倉時的平均賣出價，已扣手續費、證交稅與借券費">
                       {fmtPrice(h.shortQty > 0 ? h.shortProceeds / h.shortQty : 0, currency)}
                     </div>
-                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不扣任何費用的成交均價">
+                    <div style={{ opacity: 0.65 }} title="不扣任何費用的成交均價">
                       賣出・未含費{' '}
                       {fmtPrice(h.shortQty > 0 ? h.shortRawProceeds / h.shortQty : 0, currency)}
                     </div>
@@ -180,7 +176,7 @@ function HoldingsTable({
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtPrice(h.avgCost, currency)}</div>
-                    <div style={{ fontSize: 11, opacity: 0.65 }} title="不含手續費的價格">
+                    <div style={{ opacity: 0.65 }} title="不含手續費的價格">
                       未含費 {fmtPrice(h.rawAvgCost, currency)}
                     </div>
                   </>
@@ -204,7 +200,7 @@ function HoldingsTable({
                     <div style={{ fontWeight: 600 }}>{fmtMoney(mktVal, currency)}</div>
                     {row.netMktVal !== null && (
                       <div
-                        style={{ fontSize: 11, opacity: 0.65, color: 'var(--ink-muted)' }}
+                        style={{ opacity: 0.65, color: 'var(--ink-muted)' }}
                         title="若以現價全數賣出，扣除手續費與證交稅後的預估實收金額"
                       >
                         淨收 {fmtMoney(row.netMktVal, currency)}
@@ -221,7 +217,7 @@ function HoldingsTable({
                     <div style={{ fontWeight: 600 }}>{fmtSignedMoney(unrealized, currency)}</div>
                     {brokerUnrealized !== null && brokerUnrealized !== unrealized ? (
                       <div
-                        style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                        style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
                         title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
                       >
                         券商 {fmtSignedMoney(brokerUnrealized, currency)}
@@ -229,7 +225,7 @@ function HoldingsTable({
                     ) : (
                       rawUnrealized !== null && (
                         <div
-                          style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                          style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
                           title="不扣任何手續費和稅的價差"
                         >
                           未含費 {fmtSignedMoney(rawUnrealized, currency)}
@@ -247,7 +243,7 @@ function HoldingsTable({
                     <div style={{ fontWeight: 600 }}>{fmtSignedPercent(roi)}</div>
                     {brokerRoi !== null && fmtSignedPercent(brokerRoi) !== fmtSignedPercent(roi) && (
                       <div
-                        style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                        style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
                         title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
                       >
                         券商 {fmtSignedPercent(brokerRoi)}
@@ -283,16 +279,9 @@ function HoldingsTable({
               {longRows.length > 0 && (
                 <>
                   <tr className="holding-group holding-group-long" data-testid="holding-group-LONG">
-                    <td colSpan={7}>
+                    <td colSpan={10}>
                       <span className="holding-group-label">多單・{longRows.length} 檔</span>
                     </td>
-                    <td className="num" data-testid="holding-group-LONG-mktval">
-                      {fmtMoney(longMkt, currency)}
-                    </td>
-                    <td className={`num ${pnlClass(longUnreal)}`}>
-                      {longUnreal === null ? '—' : fmtSignedMoney(longUnreal, currency)}
-                    </td>
-                    <td></td>
                   </tr>
                   {longRows.map(renderRow)}
                 </>
@@ -300,16 +289,9 @@ function HoldingsTable({
               {shortRows.length > 0 && (
                 <>
                   <tr className="holding-group holding-group-short" data-testid="holding-group-SHORT">
-                    <td colSpan={7}>
+                    <td colSpan={10}>
                       <span className="holding-group-label">空單・{shortRows.length} 檔</span>
                     </td>
-                    <td className="num" data-testid="holding-group-SHORT-mktval">
-                      {fmtMoney(shortMkt, currency)}
-                    </td>
-                    <td className={`num ${pnlClass(shortUnreal)}`}>
-                      {shortUnreal === null ? '—' : fmtSignedMoney(shortUnreal, currency)}
-                    </td>
-                    <td></td>
                   </tr>
                   {shortRows.map(renderRow)}
                 </>

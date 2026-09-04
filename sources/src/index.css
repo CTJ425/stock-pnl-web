@@ -586,8 +586,8 @@ h3 {
 table.data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
-  min-width: 720px;
+  font-size: 13px;
+  min-width: 0;
 }
 
 .data-table th {
@@ -597,14 +597,15 @@ table.data-table {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--ink-secondary);
-  padding: 11px 8px;
+  padding: 9px 7px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   background: var(--thead-bg);
 }
 
 .data-table td {
-  padding: 9px 8px;
+  font-size: 13px;
+  padding: 9px 7px;
   border-bottom: 1px solid var(--rule-hair);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -612,8 +613,12 @@ table.data-table {
 
 .data-table .num {
   font-family: var(--font-body);
-  font-size: 12.5px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+.data-table .num > div:first-child {
+  font-size: 13px;
 }
 
 /*
@@ -621,19 +626,20 @@ table.data-table {
  * has to align. Monospace at 11px made them wide enough to push the 10-column holdings
  * table past its frame, so they stay in the proportional face.
  */
-.data-table .num > div:not(.row-actions) {
+.data-table .num > div:not(:first-child):not(.row-actions),
+.data-table .cell-sub {
   font-family: var(--font-body);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .data-table th:first-child,
 .data-table td:first-child {
-  padding-left: 14px;
+  padding-left: 10px;
 }
 
 .data-table th:last-child,
 .data-table td:last-child {
-  padding-right: 14px;
+  padding-right: 10px;
 }
 
 /* Text that is too long (such as stock names) is truncated. See the title prompt for the complete content.*/
@@ -644,17 +650,33 @@ table.data-table {
 }
 
 /* When the window is narrow, further compress it to prevent horizontal scrolling in the same-width table of transaction records.*/
-@media (max-width: 1279px) {
+@media (max-width: 1120px) {
   table.data-table {
     font-size: 12px;
   }
 
-  .data-table th {
-    padding: 10px 5px;
+  .data-table th,
+  .data-table td {
+    padding: 8px 5px;
+    font-size: 12px;
   }
 
-  .data-table td {
-    padding: 9px 5px;
+  .data-table .num,
+  .data-table .num > div:first-child {
+    font-size: 12px;
+  }
+
+  .data-table .num > div:not(:first-child):not(.row-actions),
+  .data-table .cell-sub {
+    font-size: 10px;
+  }
+
+  .th-head .th-plain {
+    padding: 8px 0 8px 5px;
+  }
+
+  .th-head {
+    padding-right: 5px;
   }
 
   .cell-ellipsis {
@@ -695,10 +717,11 @@ table.data-table {
 /* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
 .holding-group td {
   background: var(--row-band);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
+  padding: 8px 10px;
 }
 
 .holding-group-short .holding-group-label {
@@ -958,7 +981,7 @@ table.data-table {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding-right: 9px;
+  padding-right: 7px;
 }
 
 .th-head .th-sort-btn {
@@ -968,7 +991,7 @@ table.data-table {
 
 /* Unsortable header text (aligned with the padding of the sort button)*/
 .th-head .th-plain {
-  padding: 11px 0 11px 9px;
+  padding: 9px 0 9px 7px;
   white-space: nowrap;
 }
 
@@ -1746,7 +1769,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-head {
   padding: 7px 11px 8px;
   font-size: 12px;
-  color: var(--ink-muted);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -2272,6 +2297,17 @@ a.hmenu-item {
   color: var(--ink);
 }
 
+.detail-title .badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 2.5px 9px;
+  color: var(--ink);
+  border-color: var(--border-strong);
+  background: var(--surface-strong);
+  letter-spacing: 0.02em;
+}
+
 .detail-title .hint {
   display: block;
   font-size: 12px;
@@ -2737,11 +2773,25 @@ a.hmenu-item {
   font-variant-numeric: tabular-nums;
 }
 
+.m-sym .quote-badge,
 .quote-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  white-space: nowrap;
   max-width: none;
-  font-size: 11px;
-  padding: 2px 6px;
+  overflow: visible;
+  text-overflow: clip;
   align-self: center;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
 }
 
 .m-price {
@@ -4531,20 +4581,20 @@ a.hmenu-item {
 .watchlist-card-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 500;
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: 3px;
   background: var(--surface-strong);
-  border: 1px solid var(--border);
-  color: var(--ink-muted);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-secondary);
   white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
-  max-width: 48px;
+  max-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .watchlist-card-body {
@@ -4603,6 +4653,10 @@ a.hmenu-item {
 .watchlist-table-name-cell .watchlist-card-badge {
   max-width: none;
   flex-shrink: 0;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  color: var(--ink-secondary);
+  border-color: var(--border-strong);
 }
 
 .view-toggle-group {

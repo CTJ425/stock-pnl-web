@@ -5,6 +5,97 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-04 10:35:00 Asia/Taipei (庫存總覽持股表格分組列小計移除與字級階梯微調)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.30-dev.3` → **`0.9.30-dev.4`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者指示：「關於庫存總覽的持股表格我想要異動 1. 多單 2檔 後面的市值 未實現損益 我不要，因為總攬的部分我從上方的summary觀察即可，然後目前字體好像都太小，又不想太大，先給我一個建議與範本 /boost 好，知道你的方案先改一版」。
+- **Work**:
+  1. **移除分組小計與通欄章節化 (`DashboardPage.tsx`)**:
+     - 移除分組列 (`holding-group-long` / `holding-group-short`) 後方市值與未實現損益數字。
+     - 標題儲存格調整為 `colSpan={10}` 通欄跨滿，多空標籤清晰分界，不再與上方 Summary 卡片重複呈現。
+     - 移除各多行單元格內硬編碼之 `style={{ fontSize: 11 }}`，交由 CSS 統一管理階層。
+  2. **字級微升階梯調整 (`index.css`)**:
+     - 表頭 `th`: 12px → 13px。
+     - 表格單元格 `td`: 13.5px → 14px，padding 調整為 11px 9px 提升垂直行高呼吸感。
+     - 數值主字 `.data-table .num` 與第一行主數值 `.num > div:first-child`: 12.5px → 14px。
+     - 數值次級資訊（未含費、淨收、券商說明）`.num > div:not(:first-child)` 與 `.cell-sub`: 10.5px → 11.5px。
+     - 分組標題列 `.holding-group td`: 11px → 13px。
+  3. **單元測試補強 (`DashboardPage.test.tsx`)**:
+     - 更新 `T7`：驗證 `holding-group-LONG` 與 `holding-group-SHORT` 不再含有小計 testId，且驗證每行僅有 1 個 `td` 且 `colspan="10"`。
+- **Verify**:
+  - `npm test`：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
+  - `npm run build`：tsc -b && vite build exit 0。
+
+---
+
+## 📅 Log: 2026-09-03 23:48:00 Asia/Taipei (DEV 實境全功能 E2E 自動化測試與完整 HTML 報告交付)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **緣由**: 使用者指示：「/goal 請實際在dev測試區做所有e2e的設計，包含模擬買賣 不同的手續費 當沖 目前有的功能都要測試，除了後台之外 10.8.22.99:5317 且請用 /boost輔助測試 且用html給我報告」。
+- **Work**:
+  1. **建構主 E2E 整合測試架構 (`sources/scripts/run-all-e2e.cjs`)**:
+     - 涵蓋 7 大核心套件、16 項測試情境、35 個驗證步驟（模擬買賣、手續費折讓雙行口徑、當沖平倉、融券雙向多空、觀察清單迷你聚合、個股法人動向、年度收益總體經濟）。
+     - 測試執行實機環境：`http://10.8.22.99:5317/`。
+  2. **高階互動式 HTML 測試報告生成**:
+     - 產出自包含（Self-contained）高質感報告：`sources/e2e-report.html` 與 Artifact `e2e-report.html`。
+     - 包含 KPI 儀表板（總案例 16、通過 16、失敗 0、成功率 100%、總耗時 33.04s）、摺疊手風琴、逐步耗時與狀態明細，以及關鍵驗證步驟之 Base64 實境截圖。
+- **Verify**:
+  - `node scripts/run-all-e2e.cjs`：**16 Passed / 0 Failed (100% PASS)**，耗時 33.04s。
+  - `npm test`：97 檔測試檔 / **1,601** 項單元測試全數 PASS。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
+
+---
+
+## 📅 Log: 2026-09-03 23:13:00 Asia/Taipei (0.9.30-dev.3 — 未實現損益金額同步雙行直顯券商 APP 牌告口徑)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.30-dev.2` → **`0.9.30-dev.3`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者回饋聯電持股損益 APP 顯示 -10,610 元但網頁端顯示 -10,485 元，差額精準為 125 元（即現價 125 元下牌告手續費 178 元 vs 3 折 53 元之差額）。將「未實現損益」金額同步升級為雙行直顯，直接標記券商 APP 牌告損益。
+- **Work**:
+  1. **核心計算 (`holdingRows.ts`)**:
+     - `HoldingRow` 擴充 `brokerUnrealized: number | null` 欄位，將標準牌告預扣損益 `standardUnrealized` 帶出。
+  2. **UI 雙行直顯 (`DashboardPage.tsx`, `QuoteTab.tsx`, `reportProxy.ts`, `AnalysisPage.tsx`)**:
+     - 庫存總覽「未實現損益」欄位：主標（粗體）顯示實質淨損益（`-NT$10,485`），副標（11px 灰字）直顯 `券商 -NT$10,610`。
+     - 個股分析持股概況（`QuoteTab.tsx`）同步在未實現損益後方標註 `(券商 -NT$XX)`。
+  3. **測試**:
+     - `holdingRows.test.ts`：實測驗證聯電 2303 損益差額精確為 125 元。
+     - `DashboardPage.test.tsx`：驗證折讓時儲存格直顯 `券商 -NT$11,111` 與 `券商 -8.20%`。
+- **Verify**:
+  - `npm test`：97 檔測試檔全數 PASS。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
+
+---
+
+## 📅 Log: 2026-09-03 22:55:00 Asia/Taipei (0.9.30-dev.2 — 未實現報酬率雙行直顯券商 APP 牌告口徑)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.30-dev.1` → **`0.9.30-dev.2`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者回饋「聯電 app 是 -7.86% 但專案是 -7.76%」，確認為券商「月退制」未折讓預扣與專案實質折讓扣除產生的 0.10% 差額。依使用者指示實施方案 1：直接雙行呈現，免滑鼠懸停一眼對帳。
+- **Work**:
+  1. **核心計算 (`holdingRows.ts`, `pnlEngine.ts`)**:
+     - `HoldingRow` 擴充 `brokerRoi: number | null` 欄位。
+     - `estimateUnrealized` 支援 `overrideFeeRate?: boolean`，當計算券商口徑時，全批次強制套用台灣法定牌告未折讓費率（0.1425%），算出 1:1 吻合券商 APP 月退制的報酬率（`brokerRoi`）。
+     - 同步支援多頭（LONG）與空單（SHORT）。
+  2. **UI 雙行直顯 (`DashboardPage.tsx`, `QuoteTab.tsx`)**:
+     - 庫存總覽「未實現報酬率」欄位：主標（粗體）顯示實質淨報酬率（`-7.76%`），副標（11px 灰字）直顯 `券商 -7.86%`，免滑鼠懸停一眼核對。
+     - 自適應防呆：當無折讓或兩者四捨五入後相同時，副標自動隱藏。
+     - 個股分析持股概況（`QuoteTab.tsx`）同步在報酬率旁顯示 `(券商 XX%)`。
+  3. **測試與型別**:
+     - `holdingRows.test.ts`：驗證折讓下 `brokerRoi` 比 `roi` 低約 0.10% 之券商口徑。
+     - `DashboardPage.test.tsx`：驗證折讓時儲存格直顯「券商」標記。
+- **Verify**:
+  - `npm test`：97 檔測試檔全數 PASS。
+  - `npm run typecheck:edge`：tsc -p tsconfig.edge.json exit 0。
+  - `npm run build`：tsc -b && vite build exit 0。
+  - `npx oxlint src`：0 errors。
+
+---
+
 ## 📅 Log: 2026-09-03 22:06:00 Asia/Taipei (0.9.30-dev.1 — 觀察股票圖卡迷你緊湊化微調)
 
 - **Status**: ✅ **COMPLETED** on `dev`
