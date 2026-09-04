@@ -2,7 +2,25 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
+- Timestamp: 2026-09-04 20:08:47 Asia/Taipei
+
+---
+
+## 🔍 Codebase audit 2026-09-04 (follow-up) — `stock-report/index.ts` 未覆蓋範圍
+
+前一次稽核在 4,236 行的 `stock-report/index.ts` 中只逐行讀了約 900 行，並在
+「未覆蓋範圍」記下三段未展開：1200-2280、3400-3760、3900-3925。本次以兩個
+平行 read-only 審查把 1200-2290 與 3400-3930 完整讀完，補上該缺口。
+
+**結果：5 項可證明的缺陷，全部於 0.9.33 修正**（`FIXED_BUG.md` BUG-057 … BUG-061）。
+授權面另有一項明確的陰性結論：`admin-status` / `admin-users` / `admin-set-role` /
+`admin-backups` / `admin-backup-url` / `admin-backup-restore` 六個 handler 全數在
+dispatch 層由 `assertAdmin` 把關，`backfill-*` / `sync-*` 走 `assertCronSecret`，
+兩種機制沒有交叉錯配，**未發現授權繞過路徑**。
+
+審查另主動查證並駁回一項既有疑慮：`handleAdminStatus` 直接回傳
+`source_probe_tick.fingerprint` 曾被記為會外洩 `twt38u` 的原始表格內容，但現行
+`twt38u` 分支已改用 `foreignTopFingerprint()`（長度 + djb2 雜湊），該疑慮不成立。
 
 ---
 
@@ -84,6 +102,7 @@ reviewer claim (a `chip_raw_cache` upsert missing `onConflict`) was **rejected**
 `supabase/functions/stock-report/index.ts` 共 4211 行，本次僅targeted 讀取約 900 行，
 約 1200-2280、3400-3760、3900-3925 三段未展開。該段落已用 grep 掃過
 （未檢查的 `.error`、`||` 對數值欄位、未包覆的 `JSON.parse`）且無命中，但 grep 不能取代控制流閱讀。
+**已於 0.9.33 補讀完畢**：1200-2290 與 3400-3930 兩段已完整逐行讀過，發現 5 項缺陷（見上方 follow-up 稽核段落）。3900-3925 落在後者範圍內。
 
 > **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
 > environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
@@ -242,6 +261,16 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 - **Handling during this session**: used only as an environment variable, never echoed, never written to any file in the repo.
 - **Status**: OPEN — user action
 - **Recorded**: 2026-09-01 13:37:25 Asia/Taipei
+
+---
+
+### Supabase personal access token exposed in transcript (2026-09-04)
+
+- **What**: The user pasted a Supabase personal access token into the `/goal` message to authorise the DEV and PROD Edge deployment. It is now in the session transcript.
+- **Action required**: rotate it in the Supabase dashboard (Account → Access Tokens). This is the **fourth** such exposure recorded in this file, after the DEV `CRON_SECRET` (2026-08-25) and two earlier personal access tokens (2026-08-26, 2026-09-01). Four in eleven days is a pattern, not an accident: the working method that keeps producing it is pasting the secret into the conversation instead of running `supabase login` in the terminal. Prefer `! supabase login` in the Claude Code prompt — the CLI reads the token from its own interactive input and it never enters the transcript.
+- **Handling during this session**: passed once to `supabase login --token`, which stores it under the CLI's own config outside the repository. Never echoed, never written to any file in the repository, never used in a query or a log line. Rotation is still required — the transcript is the exposure, not the storage.
+- **Status**: OPEN — user action
+- **Recorded**: 2026-09-04 19:45:00 Asia/Taipei
 
 ---
 
