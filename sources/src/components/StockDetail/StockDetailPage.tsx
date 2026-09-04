@@ -274,7 +274,7 @@ export function StockDetailPage({
       {tab === 'analysis' ? (
         <div className="detail-stack">
           <section className="glass detail-card" aria-labelledby="sec-quote">
-            <CardHead title="行情" meta={quoteMeta(quote)} />
+            <CardHead title="行情" meta={quoteMeta(quote, 'TPE')} />
             <div id="sec-quote">
               <QuoteTab
                 quote={quote}

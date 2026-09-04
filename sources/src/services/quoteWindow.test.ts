@@ -99,3 +99,56 @@ describe('twMaxTtlMs（DB 粗篩的下界）', () => {
     expect(twMaxTtlMs(taipei('2026-08-06', '03:00:00'))).toBe(5 * HOUR + 25 * MIN)
   })
 })
+
+/**
+ * BUG-050: a TW quote fetched after the settle window is that day's final available price, even when
+ * the source cannot report a matching time (Yahoo fallback returns none) or the last match predates
+ * 13:30 (a thin ticker with no closing-auction trade). 0.6.42 refetched such a row every ten minutes
+ * all night and never showed it as settled.
+ *
+ * The third argument is the fetch time of the cached row. It must stay optional: without it the
+ * 0.6.42 retry behaviour is unchanged, and a row fetched *before* 14:00 must still never lock —
+ * that row can be an intraday snapshot, which is the defect BUG-011 was about.
+ */
+describe('twQuoteTtlMs — 沉澱窗之後抓到的報價鎖定 (BUG-050)', () => {
+  it('未帶 fetchedAt 時維持 0.6.42 的十分鐘退避', () => {
+    expect(twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), null)).toBe(RETRY)
+    expect(twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), '11:30:00')).toBe(RETRY)
+  })
+
+  it('沉澱窗之後抓到的報價鎖到隔天 08:25，即使來源沒有撮合時間', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), null, taipei('2026-08-05', '14:30:00')),
+    ).toBe(17 * HOUR + 25 * MIN)
+  })
+
+  it('冷門股最後撮合早於 13:30，收盤後抓到一樣鎖定', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), '11:30:00', taipei('2026-08-05', '14:05:00')),
+    ).toBe(17 * HOUR + 25 * MIN)
+  })
+
+  it('盤中抓到的快照不鎖定 —— 這正是 BUG-011 的原始缺陷', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-05', '15:00:00'), null, taipei('2026-08-05', '13:00:00')),
+    ).toBe(RETRY)
+  })
+
+  it('13:30–14:00 沉澱窗仍以 60 秒輪詢，不因 fetchedAt 提前鎖定', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-05', '13:45:00'), null, taipei('2026-08-05', '13:45:00')),
+    ).toBe(MIN)
+  })
+
+  it('午夜之後抓到的報價算到當天早上的 08:25', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-06', '02:00:00'), null, taipei('2026-08-05', '14:05:00')),
+    ).toBe(6 * HOUR + 25 * MIN)
+  })
+
+  it('凌晨（08:25 前）抓到的報價同樣視為收盤後', () => {
+    expect(
+      twQuoteTtlMs(taipei('2026-08-06', '03:00:00'), null, taipei('2026-08-06', '02:00:00')),
+    ).toBe(5 * HOUR + 25 * MIN)
+  })
+})

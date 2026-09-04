@@ -35,6 +35,12 @@ function summarizeBody(body: unknown): string {
   }
   if (typeof o.synced === 'boolean') bits.push(o.synced ? 'synced' : 'unchanged')
   if (typeof o.generated === 'number') bits.push(`generated=${o.generated}`)
+  // AUDIT-12: the chips phase now survives one bad ticker instead of aborting the round. That is a
+  // silent recovery unless the count reaches the one screen an operator reads.
+  if (typeof o.failed === 'number' && o.failed > 0) bits.push(`failed=${o.failed}`)
+  if (Array.isArray(o.failedTickers) && o.failedTickers.length) {
+    bits.push(`failedTickers=${o.failedTickers.join(',')}`)
+  }
   if (typeof o.dailySynced === 'number') bits.push(`dailySynced=${o.dailySynced}`)
   if (typeof o.dailySkipped === 'number') bits.push(`dailySkipped=${o.dailySkipped}`)
   if (typeof o.fundamentalSynced === 'number') bits.push(`fundSynced=${o.fundamentalSynced}`)

@@ -47,6 +47,8 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
     if (busy) return
     setBusy(true)
     setError(null)
+    const total = checked.size
+    let done = 0
     try {
       for (const { tx, newFee } of proposals) {
         if (!checked.has(tx.id)) continue
@@ -60,10 +62,12 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
           qty: tx.qty,
           fee_tax: newFee,
         })
+        done += 1
       }
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新失敗，請稍後再試')
+      const message = err instanceof Error ? err.message : '更新失敗，請稍後再試'
+      setError(`已完成 ${done} 筆，第 ${done + 1} 筆更新失敗：${message}。其餘 ${total - done} 筆未變更，請重新開啟精靈續做。`)
     } finally {
       setBusy(false)
     }

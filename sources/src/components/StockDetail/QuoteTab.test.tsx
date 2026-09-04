@@ -189,8 +189,20 @@ describe('QuoteTab', () => {
     expect(container.querySelector('.m-price .stamp')?.textContent).toContain('收盤')
 
     cleanup()
-    const intraday = show({ ...closedQuote, tradeTime: '11:05:23' })
+    // BUG-050: the card infers the close from the fetch time when the matching time cannot prove it,
+    // so an intraday case must carry an intraday `asOf` too — 03:05:23Z is Taipei 11:05.
+    const intraday = show({
+      ...closedQuote,
+      tradeTime: '11:05:23',
+      asOf: '2026-08-05T03:05:23.000Z',
+    })
     expect(intraday.container.querySelector('.m-price .stamp')?.textContent).toContain('盤中')
+
+    cleanup()
+    // The same 11:05 match, refetched at Taipei 15:30: after the settle window no further price can
+    // arrive, so this thin ticker is closed even though its matching time never reached 13:30.
+    const thin = show({ ...closedQuote, tradeTime: '11:05:23' })
+    expect(thin.container.querySelector('.m-price .stamp')?.textContent).toContain('收盤')
   })
 
   it('沒有昨收就不判漲跌：漲跌顯示「—」且不上色', () => {

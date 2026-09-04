@@ -2,9 +2,88 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-08-12 11:00:00 Asia/Taipei
+- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
 
 ---
+
+## 🔍 Codebase audit 2026-09-04 — six fixed in 0.9.32-dev.1, one accepted
+
+Triggered by BUG-049. Three parallel read-only reviews covered `supabase/functions/`, `src/services/` +
+`src/utils/` + `src/types/`, and `src/components/` + `src/context/`. **No code was touched.** Ranked by what
+it costs if it bites. The main session verified each entry below by reading the cited lines; one further
+reviewer claim (a `chip_raw_cache` upsert missing `onConflict`) was **rejected** — `chip_raw_cache_pkey` is
+`PRIMARY KEY (ymd, dataset)`, so the default upsert target is correct.
+
+> **六項已修，一項判定為可接受風險。** AUDIT-09、11、12、13、14、15 於 0.9.32-dev.1 修正
+> （`FIXED_BUG.md` BUG-051 … BUG-056）。**AUDIT-10 不改程式**：「2.500」在台美股都可能是合法的
+> 2.5 元，加規則拒絕它會擋掉正常匯入；多組點號如「1.234.567」目前已是 `NaN` 會報錯，真正的破口
+> 只有「單組三位數」這種本質上無法區分小數與千分位的形式。台灣券商匯出使用逗號千分位，不會觸發。
+> 使用者於 2026-09-04 確認此方向。下列清單保留為稽核發現的紀錄與各項為何重要的說明。
+
+### AUDIT-09 — 反向分割可產生 0 股但保留原手續費的買入紀錄，永久墊高平均成本
+- **Proven by reading**: `StockSplitModal.tsx:112` `newQty = Math.round(tx.qty / ratio)` 沒有下限檢查；
+  `:119` 只有在 `tx.fee_tax === 0 && autoFillZeroFee` 時才重算手續費，原本非 0 的 `fee_tax` 原封不動帶過；
+  `:164` `handleConfirm` 的守門只有 `busy || previewItems.length === 0 || !isValidRatio`，沒有擋 `newQty === 0`。
+- **Proven by reading**: `pnlEngine.ts` BUY 分支 `pos.cost += totalCost` 且 `totalCost = tx.price * effQty + effFeeTax`。
+  `effQty` 為 0 而 `effFeeTax` 非 0 時，`pos.cost` 增加但 `pos.qty` 不變。
+- **Failure scenario**: 持有 3 股的零股，做 10 併 1 反向分割。`Math.round(3/10) = 0`，預覽欄位顯示 0 但不擋確認。
+  確認後該標的的平均買入成本與保本賣出價被幽靈手續費墊高，直到整個部位全數賣出才歸零。
+- **Severity**: HIGH（靜默的金額錯誤）
+
+### AUDIT-10 — CSV 匯入把「以點為千分位」的數字少算 1000 倍且不報錯
+- **Proven by reading**: `csv.ts:93` 的清理正規式只移除 `NT$ US$ $ , 空白 ( )`，不處理點號千分位；
+  `:95` 直接 `Number(cleaned)`。
+- **Failure scenario**: 交易單價欄位為 `"2.500"`（某些地區匯出代表 2500）解析為 `2.5`，是有限正數，
+  通過 `price > 0` 驗證，不產生 `CsvRowError`。該筆交易金額少算 1000 倍，靜默污染移動平均成本。
+- **Severity**: MEDIUM（台灣券商匯出用逗號千分位，觸發需特定來源檔）
+
+### AUDIT-11 — 批次更新（分割換算、手續費重算）中途失敗沒有回滾，留下混合狀態
+- **Proven by reading**: `StockSplitModal.tsx:168-181` 與 `RecalcFeesModal.tsx:51-63` 都是
+  `for (const item of previewItems) { await updateTransaction(...) }` 包在單一 `try` 內，
+  失敗處理只有 `catch (err) { setError(...) }`。
+- **Failure scenario**: 20 筆分割換算做到第 8 筆時網路中斷。前 7 筆已是分割後數量與價格，後 13 筆仍是分割前，
+  同一標的的 `qty` / `cost` 混用兩種股數基準，畫面只顯示一句「更新失敗」，不指出哪幾筆已套用。
+- **Severity**: MEDIUM
+
+### AUDIT-12 — `assembleOne` 拋錯會中斷整個 chips 產生階段
+- **Proven by reading**: `supabase/functions/stock-report/index.ts:3071` 的迴圈本體直接呼叫 `assembleOne`，
+  沒有逐筆 `try/catch`；`uploadJson` 自己吞例外，`assembleOne` 不會。
+- **Failure scenario**: 一檔標的的資料形狀超出 `assembleOne` 的防禦，例外往上傳到 `handleGenerateAll` 的
+  `try/catch`，該輪迴圈中止，排在它後面的標的與後續 phase 這一輪都拿不到報告。
+- **Mitigation in place**: 5 分鐘後的下一次 cron 會自我修復，因此是可用性/延遲風險，不是資料損毀。
+- **Severity**: MEDIUM
+
+### AUDIT-13 — `assertCronSecret` 用一般字串比較，非固定時間比較
+- **Proven by reading**: `supabase/functions/stock-report/index.ts:899-903`
+  `if (!expected || got !== expected) return json({ error: 'Unauthorized' }, 401)`。
+- **Failure scenario**: 理論上可對公開的 `--no-verify-jwt` 端點做時序側通道量測，逐位元組縮小 `CRON_SECRET`。
+  在 HTTPS 與 Deno 網路抖動下實際可利用性低，但比較本身未加固。
+- **Severity**: LOW
+
+### AUDIT-14 — 盤中走勢圖的漲跌百分比未防除以 0
+- **Proven by reading**: `IntradayChart.tsx:50-52` `const p = (change / base) * 100` 沒有 `base === 0` 檢查；
+  `:181` `pct(change, prevClose as number)` 只擋 `null`，不擋 `0`。
+- **Proven by reading**: 同一份程式庫的 `DashboardPage.tsx:57`、`QuoteTab.tsx:169`、`WatchSection.tsx:273`
+  在相同計算上都明確寫了 `prevClose !== null && prevClose !== 0`，可見團隊知道 0 是真實會出現的資料狀態。
+- **Failure scenario**: MIS 報價回傳 `prevClose: 0` 時，tooltip 直接印出 `漲跌 +123.00 (Infinity%)` 或 `(NaN%)`。
+- **Severity**: LOW（僅顯示，不影響帳務）
+
+### AUDIT-15 — `parseTxDate` 的正規式沒有錨定結尾，會靜默誤讀日期
+- **Proven by reading**: `csv.ts:72` `/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/` 只錨定開頭，尾端多餘字元被丟棄。
+- **Failure scenario**: 日期欄位誤打成 `"2024/01/105"` 時，`\d{1,2}` 貪婪取到 `10`，剩下的 `5` 被忽略，
+  解析為 `2024-01-10` 而不是拒絕，靜默把交易記到錯誤日期。
+- **Severity**: LOW
+
+### 檢查過但未發現缺陷的類別
+- Edge Functions：單位換算（匯率、籌碼股數 vs 金額、千元 vs 百萬元）、時區與日界（Asia/Taipei、DST）、
+  外部 API 回應的 null 防禦、`JSON.parse` 例外包覆、秘密外洩到 log 或回應主體。
+- services / utils：快取 TTL 與快取鍵碰撞、`||` 誤用於可為 0 的數值、浮點誤差外漏到顯示金額。
+- components：受控輸入吞值、陣列索引當 key、非同步回應覆蓋較新狀態（皆已用序號或 cancelled 旗標處理）。
+
+### 未覆蓋範圍
+`supabase/functions/stock-report/index.ts` 共 4211 行，本次僅targeted 讀取約 900 行，
+約 1200-2280、3400-3760、3900-3925 三段未展開。該段落已用 grep 掃過
+（未檢查的 `.error`、`||` 對數值欄位、未包覆的 `JSON.parse`）且無命中，但 grep 不能取代控制流閱讀。
 
 > **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
 > environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
@@ -76,6 +155,19 @@ A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pol
 ---
 
 ## 🐛 Currently Active / Open Bugs
+
+### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
+
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（chips phase 的逐檔迴圈，`if (okUp) generated++`）
+- **What**: `uploadJson` 內建自己的 `try/catch`，失敗時不拋例外而是回傳 `false`。因此 Storage 上傳失敗的標的不會進入 BUG-053 新增的 `catch`，既不計入 `generated` 也不計入 `failed`，`generated + failed` 可能小於 `tickers.length`。
+- **Confirmed by Review**: `route:reviewer`，2026-09-04，BUG-050 與 AUDIT 修正的審查。
+- **Impact Today**: 低。運維者看到的是偏低的 `generated`，不是錯誤的數字；隔 5 分鐘的下一次 cron 會重跑並自我修復。
+- **Scope**: 此缺口在 BUG-053 之前就存在，不是本次修正造成的。BUG-053 只處理 `assembleOne` 拋例外的路徑。
+- **Decision**: 本次不修。要正確計數必須改動 `uploadJson` 的回傳約定，影響面遠大於這個顯示問題。
+- **Status**: OPEN（低嚴重度，已確認）
+- **Discovered**: 2026-09-04
+
+---
 
 ### RISK-004 — `addTransactions` silently drops `tx_nature` on pre-migration database
 

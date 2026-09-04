@@ -79,8 +79,8 @@ interface Quote {
 const CACHE_TTL_US_MS = 10 * 60 * 1000
 
 /** The cache validity period of this key at this moment. Taiwan stocks will last for more than ten hours after the market closes, and the lower bound for coarse screening must follow it. */
-function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null): number {
-  return key.startsWith('TPE:') ? twQuoteTtlMs(now, tradeTime) : CACHE_TTL_US_MS
+function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null, fetchedAt: Date | null): number {
+  return key.startsWith('TPE:') ? twQuoteTtlMs(now, tradeTime, fetchedAt) : CACHE_TTL_US_MS
 }
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
@@ -230,7 +230,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
       const price = Number(row.price)
       const at = Date.parse(String(row.updated_at))
       const tradeTime = cachedText(row.trade_time)
-      const ttl = cacheTtlMsFor(key, now, tradeTime)
+      const ttl = cacheTtlMsFor(key, now, tradeTime, Number.isFinite(at) ? new Date(at) : null)
       if (!Number.isFinite(price) || price <= 0) continue
       if (!Number.isFinite(at) || nowMs - at >= ttl) continue
       prices[key] = {

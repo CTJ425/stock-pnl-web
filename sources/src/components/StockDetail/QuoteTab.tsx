@@ -27,6 +27,7 @@
 import { useEffect, useState } from 'react'
 import { Inbox } from 'lucide-react'
 import { isClosed, tradeDateLabel, type PriceQuote } from '../../services/priceProxy'
+import type { Market } from '../../types/models'
 import { fetchIntraday } from '../../services/intradayProxy'
 import { fmtPercent, fmtPrice, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
@@ -44,10 +45,10 @@ function fmtNum(v: number | null | undefined, digits = 2): string {
 }
 
 /** The status on the right side of the card title: when was the quotation and whether it was cached*/
-export function quoteMeta(quote: PriceQuote | null): string {
+export function quoteMeta(quote: PriceQuote | null, market?: Market): string {
   if (!quote) return '尚未取得'
   const day = tradeDateLabel(quote.tradeDate)
-  const state = quote.trial ? '試撮中' : isClosed(quote) ? '已收盤' : '盤中'
+  const state = quote.trial ? '試撮中' : isClosed(quote, market) ? '已收盤' : '盤中'
   const parts = [day, state, quote.tradeTime].filter((s): s is string => !!s)
   return quote.stale ? `${parts.join(' · ')} · 快取` : parts.join(' · ')
 }
@@ -163,7 +164,7 @@ export function QuoteTab({
     )
   }
 
-  const closed = isClosed(quote)
+  const closed = isClosed(quote, 'TPE')
   // It will not be colored (flat color) when there are missing items in yesterday's collection. The principle is the same as the current price column in the inventory overview: do not use the current price as a benchmark.
   const dayChange = quote.prevClose === null ? null : quote.price - quote.prevClose
   const dayChangePct = quote.prevClose === null || quote.prevClose === 0 ? null : dayChange! / quote.prevClose

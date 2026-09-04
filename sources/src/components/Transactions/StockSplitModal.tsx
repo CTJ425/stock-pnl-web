@@ -148,6 +148,9 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
     })
   }, [matchingTxs, isValidRatio, splitType, ratio, autoFillZeroFee, workspaceFeeRate, minFees.whole, minFees.odd])
 
+  // Count preview items whose converted quantity rounds down to 0 shares (AUDIT-09)
+  const zeroQtyCount = useMemo(() => previewItems.filter((item) => item.newQty === 0).length, [previewItems])
+
   // Aggregate stats
   const currency = selectedTickerInfo ? marketCurrency(selectedTickerInfo.market) : 'TWD'
   const totalQtyBefore = matchingTxs.reduce((s, tx) => s + tx.qty, 0)
@@ -161,9 +164,10 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const avgPriceAfter = totalQtyAfter > 0 ? totalGrossAfter / totalQtyAfter : 0
 
   const handleConfirm = async () => {
-    if (busy || previewItems.length === 0 || !isValidRatio) return
+    if (busy || previewItems.length === 0 || !isValidRatio || zeroQtyCount > 0) return
     setBusy(true)
     setError(null)
+    let done = 0
     try {
       for (const item of previewItems) {
         await updateTransaction(item.tx.id, {
@@ -178,6 +182,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
           tx_nature: item.tx.tx_nature,
           fee_rate: item.feeRate,
         })
+        done += 1
       }
       const stockDisplayName = selectedTickerInfo
         ? `${selectedTickerInfo.ticker} ${displayStockName(selectedTickerInfo.market, selectedTickerInfo.ticker, selectedTickerInfo.name)}`
@@ -188,7 +193,11 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
       }
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '分割換算更新失敗，請稍後再試')
+      const message = err instanceof Error ? err.message : '分割換算更新失敗，請稍後再試'
+      const total = previewItems.length
+      setError(
+        `已完成 ${done} 筆，第 ${done + 1} 筆更新失敗：${message}。其餘 ${total - done} 筆未變更，請重新開啟精靈續做。`,
+      )
     } finally {
       setBusy(false)
     }
@@ -345,6 +354,12 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
             <div className="notice notice-warn">請輸入大於 0 的有效分割比例數字。</div>
           ) : (
             <>
+              {zeroQtyCount > 0 && (
+                <div className="notice notice-error" role="alert">
+                  ⚠️ 此比例下有 {zeroQtyCount} 筆紀錄的股數會變成 0
+                  股，但原手續費仍會保留，永久墊高該標的的平均成本。請改用較小的併股比例，或先個別調整這幾筆紀錄。
+                </div>
+              )}
               <div
                 className="split-preview-card"
                 style={{
@@ -467,7 +482,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                 type="button"
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
-                disabled={busy || previewItems.length === 0 || !isValidRatio}
+                disabled={busy || previewItems.length === 0 || !isValidRatio || zeroQtyCount > 0}
                 onClick={() => void handleConfirm()}
               >
                 <CheckCircle2 size={16} />

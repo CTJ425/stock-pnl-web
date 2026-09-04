@@ -52,6 +52,16 @@ function pct(change: number, base: number): string {
   return `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`
 }
 
+/**
+ * AUDIT-14: `prevClose` can arrive as 0 from a MIS response, and dividing by it prints
+ * 「漲跌 +123.00 (Infinity%)」in the tooltip. Null and 0 both mean "no usable baseline".
+ */
+export function changeLabel(close: number, prevClose: number | null): string | null {
+  if (prevClose === null || prevClose === 0) return null
+  const change = close - prevClose
+  return `漲跌 ${change >= 0 ? '+' : ''}${fmt2(change)} (${pct(change, prevClose)})`
+}
+
 /** Cumulative VWAP (均價): running sum(c·v) / running sum(v); null until the first traded bar. */
 function vwapSeries(points: IntradayPoint[]): Array<number | null> {
   let pv = 0
@@ -172,14 +182,11 @@ export function IntradayChart({
   const tooltipFor = (i: number): string | null => {
     const p = points[i]
     if (!p) return null
-    const change = prevClose === null ? null : p.c - prevClose
     const v = vwap[i]
     return [
       `時間 ${hourMinute(p.t).label}`,
       `成交 ${fmt2(p.c)}`,
-      change === null
-        ? null
-        : `漲跌 ${change >= 0 ? '+' : ''}${fmt2(change)} (${pct(change, prevClose as number)})`,
+      changeLabel(p.c, prevClose),
       v === null ? null : `均價 ${fmt2(v)}`,
       `單量 ${Math.round(p.v / 1000).toLocaleString('en-US')}`,
     ]

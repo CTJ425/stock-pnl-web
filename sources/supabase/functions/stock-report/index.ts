@@ -62,6 +62,7 @@ import {
   type T86ResponseShape,
 } from './twChips.ts'
 import { allowsTicker, mergeTwTickerLists, netOpenTickers } from './batchTickers.ts'
+import { secretsMatch } from './cronSecret.ts'
 import {
   buildReport,
   dashDate,
@@ -899,7 +900,7 @@ const CACHE_RETAIN_DAYS = LOOKBACK_DAYS
 function assertCronSecret(req: Request): Response | null {
   const expected = Deno.env.get('CRON_SECRET') ?? ''
   const got = req.headers.get('x-cron-secret') ?? ''
-  if (!expected || got !== expected) return json({ error: 'Unauthorized' }, 401)
+  if (!expected || !secretsMatch(got, expected)) return json({ error: 'Unauthorized' }, 401)
   return null
 }
 
@@ -2784,6 +2785,11 @@ function summariseFollowUp(action: ProbeFollowUp, body: Record<string, unknown>)
     */
     if (body.chipsSkipped) return `跳過（${String(body.skipReason ?? '?')}）`
     if (!body.regenerated) return '無變動'
+    const failedCount = Number(body.failed ?? 0)
+    if (failedCount > 0) {
+      const which = Array.isArray(body.failedTickers) ? body.failedTickers.join('/') : ''
+      return `產出 ${String(body.generated ?? 0)} 檔，失敗 ${String(failedCount)} 檔${which ? `（${which}）` : ''}`
+    }
     return `產出 ${String(body.generated ?? 0)} 檔`
   }
   if (action === 'generate-market-data') {
@@ -3003,6 +3009,15 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   })
 
   let generated = 0
+  let failed = 0
+  /*
+   * AUDIT-12 follow-up: `failed` alone tells an operator that something broke but not what, and this
+   * file carries no `console.*` anywhere, so a log line would be the only one in 4,200 lines. The
+   * ticker list travels in the response body instead, which is where `summariseFollowUp` and the
+   * admin console already read this phase's numbers from. Capped so one systemic failure cannot
+   * turn every `batch_run_log` row into a wall of symbols.
+   */
+  const failedTickers: string[] = []
   let regenerate = false
   let seriesDataYmd: string | null = null
   let t86Today = false
@@ -3069,14 +3084,20 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
 
     if (regenerate) {
       for (const { ticker, name } of tickers) {
-        const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
-        const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
-          ticker,
-          dataDate: data.dataDate,
-          generatedAt: data.generatedAt,
-          data,
-        })
-        if (okUp) generated++
+        try {
+          const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
+          const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
+            ticker,
+            dataDate: data.dataDate,
+            generatedAt: data.generatedAt,
+            data,
+          })
+          if (okUp) generated++
+        } catch {
+          failed++
+          if (failedTickers.length < 10) failedTickers.push(ticker)
+          continue
+        }
       }
 
       await uploadJson('manifest.json', {
@@ -3118,6 +3139,8 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     regenerated: regenerate,
     history_days: historyDays,
     generated,
+    failed,
+    failed_tickers: failedTickers,
     daily_synced: 0,
     fundamental_synced: 0,
     revenue_backfilled: 0,
@@ -3130,6 +3153,8 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     ok: true,
     ymd: seriesDataYmd,
     generated,
+    failed,
+    failedTickers,
     regenerated: regenerate,
     chipsSkipped,
     skipReason,
