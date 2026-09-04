@@ -1,71 +1,50 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Antigravity
-- Action: Release 0.9.30 (個股分析產業標籤清晰度優化、持股表格黃金比例與券商口徑對齊)
+- Agent: Claude
+- Action: BUG-050 修正 + 2026-09-04 稽核六項修正 (0.9.32-dev.1)
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-04 14:50:00 Asia/Taipei
+- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-04 14:50:00 Asia/Taipei (Release 0.9.30 正式版本發布與合併 main)
+## 📅 Log: 2026-09-04 19:09:19 Asia/Taipei (BUG-050 修正、2026-09-04 稽核六項修正、0.9.32-dev.1)
 
-- **Status**: ✅ **COMPLETED** on `main` and `dev`
-- **Version**: `0.9.30-dev.6` → **`0.9.30`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 5 檔嚴格同步)
-- **緣由**: 使用者指示：「/goal 先把這個版本push到dev，然後合併到main，且確保資安與機敏資料都無外洩才准異動」。
-- **資安與機敏資料審查 (Security & Secret Audit)**:
-  - 嚴格比對 `origin/main..HEAD` 異動差異與工作區檔案，針對 `ghp_`、`eyJ`、`sbp_`、`service_role`、`token`、`secret` 等 pattern 進行全文掃描。
-  - 確認除 E2E 測試用 mock token (`mock-access-token-e2e`) 與截圖 Base64 外，零真實憑證、密鑰或機敏資訊外洩。
-  - GitHub Push Protection 驗證無任何阻擋。
-- **Version 0.9.30 涵蓋重點 (Scope)**:
-  1. **個股分析股票產業別顯示字級與清晰度優化 (`QuoteTab.tsx`, `index.css`)**:
-     - 解耦 `.watchlist-card-badge`，產業徽章字級提升至 12.5px，色彩提升至最高對比 `var(--ink)`，消除截斷與模糊。
-     - 標題列 `.detail-title .badge` 提升至 12px，下拉選單產業分類醒目加粗。
-  2. **庫存總覽持股表格黃金比例字級與消除橫向捲軸 (`index.css`)**:
-     - 13px/12px/11px 甜蜜點字級與緊湊 padding，在 1140px 容器下全 10 欄一眼綜覽，水平滾動徹底消除 (0px 溢出)。
-  3. **庫存總覽持股表格分組列通欄純章節化 (`DashboardPage.tsx`)**:
-     - 移除多空小計，標題橫跨全欄位 `colSpan={10}`，段落層次清晰。
-  4. **未實現損益金額與報酬率雙行直顯券商 APP 牌告口徑 (`holdingRows.ts`, `DashboardPage.tsx`, `QuoteTab.tsx`)**:
-     - 主標實質淨損益與報酬率，副標依 0.1425% 原價直顯券商數字，1:1 對齊手機 APP。
-  5. **觀察股票小卡迷你極簡緊湊化 (`index.css`)**:
-     - 網格縮窄至 136px，高度壓減 20%，大幅釋放儀表板空間。
-  6. **DEV 實境全功能 E2E 整合測試 suite 與高質感報告 (`run-all-e2e.cjs`)**:
-     - 7 大套件、16 項情境、35 個驗證步驟全數 PASS (100%)。
-- **Verify**:
-  - 單元測試：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
-  - 生產建置：`npm run build` (`tsc -b && vite build`) 產出 dist，exit 0。
-  - Edge 型別檢查：`npm run typecheck:edge` exit 0。
-  - 代碼風格檢查：`npx oxlint src` 0 errors。
+- **Status**: ✅ **COMPLETED**（尚未 commit，等待使用者指示）
+- **Version**: `0.9.31` → **`0.9.32-dev.1`**（`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 5 檔同步）
+- **緣由**: 使用者指示「請 git diff 與交接文件完成未完成的 BUG_FIX」。工作區的 `git diff` 顯示 2026-09-04 稽核新增了 AUDIT-09…15 七項未修發現，`PROGRESS.md` 明載「AUDIT-09…15 全部未修，等待使用者指示」，另有 BUG-050 為 OPEN。其餘 RISK-002/003/004、BUG-042/043 皆已標記為 Accepted，不在範圍。
+- **範圍決策（使用者於 2026-09-04 確認）**:
+  - **AUDIT-10 不改程式**，記為可接受風險。「2.500」在台美股都可能是合法的 2.5 元，加規則拒絕會擋掉正常匯入；多組點號「1.234.567」目前已是 `NaN` 會報錯。
+  - **BUG-050 不納入盤後 `oz` / `ot`**，維持 13:30 收盤價，與 0.9.30 已對齊的券商 APP 牌告口徑一致。只做該報告的第 1、2 點。
+- **BUG-050 根因（已證實）**: `isClosed()` 要求撮合時間達 `13:30:00`。Yahoo 後備從不回傳 `tradeTime`；冷門股最後一盤無成交時撮合時間停在 13:30 之前。兩者畫面整晚顯示「盤中」，且 `twQuoteTtlMs` 把它們歸為未定案，整晚每十分鐘重抓同一個數字且永不收斂。
+- **BUG-050 修正**: 新增 `twIsAfterClose(at)` 判斷台北時刻是否落在「當天不可能再產生新價格」的區間；`twQuoteTtlMs()` 新增第三參數 `fetchedAt`，收盤後才抓到的列鎖到隔天 08:25；`isClosed(quote, market)` 新增市場參數，只對台股以 `quote.asOf` 套用同一推論。**刻意保留**：`fetchedAt` 缺漏或仍在盤中時維持十分鐘退避，鎖定盤中快照正是 BUG-011 的原始缺陷。
+- **其餘六項**: AUDIT-09（分割 0 股三道關卡）、AUDIT-11（批次失敗回報進度）、AUDIT-12（逐檔 try/catch 並回報失敗代號）、AUDIT-13（`CRON_SECRET` 固定時間比較）、AUDIT-14（漲跌百分比防除以 0）、AUDIT-15（日期正規式錨定結尾）。詳見 `FIXED_BUG.md` BUG-051…BUG-056。
+- **路由**: 3 個 `route:builder` 平行實作（檔案清單互斥），主 session 先寫 12 個失敗測試作為契約。BUG-050 builder 回報 `VERIFY: BLOCKED`，指出一支既有測試（`priceProxy.test.ts` 的 `沉澱窗結束後（14:00 起）才退回十分鐘退避`）與新規則衝突。主 session 裁決：該測試編碼的是 BUG-050 之前的行為，已被取代；改寫為兩個案例，分別釘住「盤中抓到的列仍退避」與「收盤後抓到的列鎖定」。
+- **Review**: `route:reviewer` 判定 **PASS**，三項 RISK。RISK-1（失敗無診斷資訊）與 RISK-3（管理台未顯示 `failed`）已於本版一併修正 —— 失敗的股票代號（最多 10 檔）隨回應主體回傳，`summariseFollowUp` 與 `ManualRunSection.summarizeBody` 都會顯示；不加 `console.*` 是因為該檔 4,200 行沒有任何一行 log。RISK-2（`uploadJson` 回傳 `false` 的標的兩邊都不計數）為既有缺口，列為 `BUG_FIX.md` RISK-005。
+- **Verify**: `npm run build`（`tsc -b && vite build`）exit 0；`npx vitest run` **99 檔 / 1,637 項全數通過**，exit 0（新增 24 項測試，含新檔 `RecalcFeesModal.test.tsx`、`cronSecret.test.ts`；改寫 2 個被本版取代的既有案例）。
+- **未做**: 未 commit、未 push、未部署任何 Edge Function、未動 Supabase。**BUG-050 與 AUDIT-12/13 的 Edge 端修正需要部署後才會在 DEV／PROD 生效**，等待使用者指示。
 
 ---
 
-## 📅 Log: 2026-09-04 14:38:00 Asia/Taipei (個股分析股票產業別顯示字級與清晰度優化)
+## 📅 Log: 2026-09-04 15:30:39 CST (BUG-049 修正、0.9.31 發布、全庫稽核)
 
-- **Status**: ✅ **COMPLETED** on `dev`
-- **Version**: `0.9.30-dev.5` → **`0.9.30-dev.6`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 使用者指示：「在個股分析，股票的產業別有些顯示會太小與模糊，先改善這個問題」。
-- **根本原因診斷 (First Principles Root Cause Analysis)**:
-  1. 個股分析行情卡片 `QuoteTab.tsx` 原標籤帶有 `class="watchlist-card-badge quote-badge"`。
-  2. 由於 CSS 順序與相同特異性 (0, 1, 0)，位在檔案後方的 `.watchlist-card-badge` 樣式覆蓋了前面定義的 `.quote-badge`。
-  3. 導致其被強制套用 `font-size: 9px`、`max-width: 48px`、`overflow: hidden`、`padding: 0 3px`，以及暗淡灰色 `color: var(--ink-muted)`（在淺色主題對比度低至 2.8:1）。
-  4. 8 字長產業別（如「電腦及週邊設備業」）被截斷為省略號，繁體中文字筆畫在 9px 低對比下嚴重模糊失真。
-  5. 頂部標題列 `.detail-title .badge` 預設字級僅 11.5px 且顏色為次級墨色，在標題旁邊對比度亦不足。
-- **Work**:
-  1. **重構與解耦行情卡片產業徽章 (`QuoteTab.tsx`, `index.css`)**:
-     - `QuoteTab.tsx` 移除 `watchlist-card-badge` 耦合，僅使用 `.quote-badge`。
-     - `.quote-badge` 規格提升：字級提升至 **12.5px**（與旁邊 13px 代碼 `.code` 形成平衡），邊距 `2px 8px`，解除 `max-width: 48px` 限制，完整平整呈現長產業名。
-     - 文字色彩提升為最高清晰度 `var(--ink)`（深色模式 `#dfe4ea` 對比度 >12:1，淺色模式 `#0f1319` 對比度 >16:1），邊框使用 `var(--border-strong)`，消除模糊毛邊。
-     - 增加 `.m-sym .quote-badge` 雙重特異性守護與 `-webkit-font-smoothing: antialiased`、`letter-spacing: 0.02em`。
-  2. **同步優化個股分析標題列產業標籤 (`index.css`)**:
-     - 為 `.detail-title .badge` 建立專屬規則，字級提升至 **12px**，文字色彩改用 `var(--ink)`，邊框使用 `var(--border-strong)`，上下層次與行情卡片維持一致。
-  3. **個股切換選單產業分組標題銳利化 (`index.css`)**:
-     - `.hmenu-head` 由 `var(--ink-muted)` 調整為 `var(--ink-secondary)`，並設定 `font-weight: 600`，使下拉選單中「觀察 ── 電腦及週邊設備業」等分類醒目分明。
-  4. **觀看清單小卡徽章基礎對比度修復 (`index.css`)**:
-     - `.watchlist-card-badge` 色彩由 `--ink-muted` 提升至 `--ink-secondary`，寬度上限由 48px 增至 56px；條列表格徽章提升至 10.5px。
-- **Verify**:
-  - JSDOM 計算樣式檢測：`.quote-badge` fontSize: 12.5px, maxWidth: none, color: var(--ink), padding: 2px 8px；`.detail-title .badge` fontSize: 12px, color: var(--ink)。
-  - Playwright 深淺雙色截圖實測驗證（`analysis-badge-dark.png` / `analysis-badge-light.png`）：廣達、台積電、元大台灣50 產業標籤清晰無截斷、筆畫分明。
-  - 單元測試：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
-  - `npm run build`：`tsc -b && vite build` 順利產出 dist，exit 0。
-  - `npm run typecheck:edge`：exit 0。
-  - `npm run lint`：0 errors。
+- **Status**: ✅ **COMPLETED** on `main` and `dev`（兩端同為 `8ee8c01`）
+- **Version**: `0.9.30` → `0.9.31-dev.1` → **`0.9.31`**
+- **緣由**: 使用者回報 PROD 顯示「2026-04-28 3037 賣出 50 股，但當時持有僅 0 股」，但確認資料應無異常。
+- **根因（已證實）**: 匯入批次為所有列寫入同一個 `created_at`。`dataProvider.ts` 與 `pnlEngine.ts` 都只用
+  `tx_date` + `created_at` 排序，兩鍵相等時沒有決勝鍵。PostgreSQL 排序不穩定，同一個
+  `ORDER BY tx_date, created_at` 在兩種查詢寫法下對同一張 PROD 表回傳相反的順序；`Array.sort` 是穩定排序，
+  保留 SELL 在 BUY 之前的錯誤順序，引擎於是在買進入帳前處理賣出。
+- **修正**: `pnlEngine.ts` 新增並匯出 `compareTxOrder()`（兩鍵相等時開倉腿優先、再以 `id` 決勝）；
+  `computeLedger()`、`TransactionsPage.tsx` 的列表排序與 CSV 匯出、`dataProvider.ts` 的兩個 provider 全部改用它；
+  Supabase 查詢另追加 `.order('id')`。
+- **實測影響**: 以 PROD 111 筆真實交易重跑引擎，修正前該次載入全站已實現 878,583，修正後 299,807，虛增 578,776 元。
+  3037 由 250 股／成本 223,316／已實現 45,548 修正為 200 股／成本 181,257／已實現 3,489。
+  15 組同日買賣配對中 14 組暴露於同一缺陷。修正後原序／反序／亂序三種輸入結果完全一致且無任何警告。
+- **驗證**: `npm run build` 綠燈；`npx vitest run` 1609 passed / 97 files / exit 0（含 6 個新測試）。
+- **Review**: `route:reviewer` 判定 PASS，兩項 RISK。RISK-1（數量不對等的 DAY_TRADE 群組排序改變）已列為
+  accepted RISK 記於 `FIXED_BUG.md` BUG-049；RISK-2（列表與匯出排序與引擎不一致）已於同一版修正。
+- **稽核**: 三個平行 read-only 審查覆蓋 `supabase/functions/`、`src/services/` + `src/utils/` + `src/types/`、
+  `src/components/` + `src/context/`。7 項開放發現記於 `BUG_FIX.md` AUDIT-09…15，未動任何程式碼。
+  其中 1 項審查主張（`chip_raw_cache` upsert 缺 `onConflict`）經主 session 查證 PROD 後駁回。
+- **未做**: AUDIT-09…15 全部未修，等待使用者指示。無 Supabase 或 Edge Function 異動，未部署。
 

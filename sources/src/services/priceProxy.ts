@@ -13,7 +13,7 @@ import type { Market } from '../types/models'
 import { positionKey } from '../types/models'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { getTwStockList } from './twMarketData'
-import { twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
+import { twIsAfterClose, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
 
 export interface PriceQuote {
   price: number
@@ -59,9 +59,18 @@ const CLOSE_TIME = '13:30:00'
 /**
  * Is this quote the final closing value for that day?
  * The quotation card for individual stock analysis and the tooltip for the inventory overview must be expressed in other words accordingly ("closing price" rather than "current price").
+ *
+ * BUG-050: a matching time at or after 13:30 is sufficient but not necessary. The Yahoo fallback never
+ * reports one, and a thin ticker's last match can predate 13:30 with no closing-auction trade — both
+ * printed 「盤中」 all evening. When `market` is known (TW-only: US quotes never fall silent this way),
+ * fall back to inferring the close from the quote's own fetch time on the Taipei clock.
  */
-export function isClosed(quote: PriceQuote | null | undefined): boolean {
-  return !!quote && quote.tradeTime !== null && quote.tradeTime >= CLOSE_TIME
+export function isClosed(quote: PriceQuote | null | undefined, market?: Market): boolean {
+  if (!quote) return false
+  if (quote.tradeTime !== null && quote.tradeTime >= CLOSE_TIME) return true
+  if (market !== 'TPE') return false
+  const at = Date.parse(quote.asOf)
+  return Number.isFinite(at) && twIsAfterClose(new Date(at))
 }
 
 /** Trading day 'YYYYMMDD' → 'M/D'; returns null if the format does not match or does not exist (US stocks/recovery path)*/
@@ -81,9 +90,9 @@ const CACHE_TTL_US_MS = 10 * 60 * 1000
  * After the Taiwan stock market closes at 13:30, it will be locked all the way until 08:25 the next day before trial trading. During this period, all polling will hit the cache and no request will be sent (0.6.36).
  */
 export function cacheTtlMs(key: string, quote?: PriceQuote): number {
-  return key.startsWith('TPE:')
-    ? twQuoteTtlMs(new Date(), quote?.tradeTime ?? null)
-    : CACHE_TTL_US_MS
+  if (!key.startsWith('TPE:')) return CACHE_TTL_US_MS
+  const fetchedAt = quote?.asOf ? new Date(quote.asOf) : null
+  return twQuoteTtlMs(new Date(), quote?.tradeTime ?? null, fetchedAt && Number.isFinite(fetchedAt.getTime()) ? fetchedAt : null)
 }
 
 export function isFresh(key: string, quote: PriceQuote | undefined, now: number): quote is PriceQuote {

@@ -373,4 +373,115 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(screen.getByText('請輸入大於 0 的有效分割比例數字。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /確認套用分割換算/ })).toBeNull()
   })
+
+  /**
+   * AUDIT-09: `Math.round(tx.qty / ratio)` has no floor, and the confirm gate only checks the ratio
+   * and the preview length. A 3-share odd lot under a 10-to-1 reverse split becomes 0 shares while
+   * its non-zero fee is carried over untouched. `pnlEngine` then adds that fee to `pos.cost` with no
+   * matching `pos.qty`, so the average cost and the break-even price stay inflated until the whole
+   * position is sold. Nothing throws and no number on screen is marked wrong.
+   */
+  it('反向分割算出 0 股時擋下確認，不寫入任何一筆 (AUDIT-09)', async () => {
+    const user = userEvent.setup()
+    const oddLot: Transaction = {
+      id: 'tx-odd',
+      workspace_id: 'ws-1',
+      tx_date: '2026-02-10',
+      market: 'TPE',
+      ticker: '2454',
+      name: '聯發科',
+      tx_type: 'BUY',
+      price: 1200,
+      qty: 3,
+      fee_tax: 20,
+      created_at: '2026-02-10T00:00:00Z',
+    }
+
+    useWorkspace.mockReturnValue({
+      transactions: [oddLot],
+      updateTransaction,
+      current: { id: 'ws-1', name: '預設工作區' },
+    })
+
+    render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+
+    const splitTypeSelect = screen.getByRole('combobox', { name: '分割類型' })
+    await user.selectOptions(splitTypeSelect, 'reverse')
+
+    const ratioInput = screen.getByRole('spinbutton', { name: '分割比例' })
+    fireEvent.change(ratioInput, { target: { value: '10' } })
+
+    expect(screen.getByText(/股數會變成 0 股/)).toBeTruthy()
+
+    const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ }) as HTMLButtonElement
+    expect(confirmBtn.disabled).toBe(true)
+
+    await user.click(confirmBtn)
+    expect(updateTransaction).not.toHaveBeenCalled()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  /**
+   * AUDIT-11: the loop awaits one `updateTransaction` per row inside a single `try`. A failure part
+   * way through leaves the earlier rows converted and the rest untouched, so one ticker holds two
+   * share bases at once. The message said only 「更新失敗」. There is no transaction API to roll back
+   * with, so the requirement is that the message states exactly how far the batch got.
+   */
+  it('中途失敗時回報已完成筆數與未變更筆數 (AUDIT-11)', async () => {
+    const user = userEvent.setup()
+    const txs: Transaction[] = [
+      {
+        id: 'tx-a',
+        workspace_id: 'ws-1',
+        tx_date: '2026-01-10',
+        market: 'TPE',
+        ticker: '2330',
+        name: '台積電',
+        tx_type: 'BUY',
+        price: 1000,
+        qty: 1000,
+        fee_tax: 1425,
+        created_at: '2026-01-10T00:00:00Z',
+      },
+      {
+        id: 'tx-b',
+        workspace_id: 'ws-1',
+        tx_date: '2026-01-11',
+        market: 'TPE',
+        ticker: '2330',
+        name: '台積電',
+        tx_type: 'BUY',
+        price: 1100,
+        qty: 2000,
+        fee_tax: 3135,
+        created_at: '2026-01-11T00:00:00Z',
+      },
+    ]
+
+    updateTransaction
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('network down'))
+
+    useWorkspace.mockReturnValue({
+      transactions: txs,
+      updateTransaction,
+      current: { id: 'ws-1', name: '預設工作區' },
+    })
+
+    render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+
+    const ratioInput = screen.getByRole('spinbutton', { name: '分割比例' })
+    fireEvent.change(ratioInput, { target: { value: '2' } })
+
+    const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ })
+    await user.click(confirmBtn)
+
+    expect(updateTransaction).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText(/已完成 1 筆，第 2 筆更新失敗/)).toBeTruthy()
+    expect(screen.getByText(/其餘 1 筆未變更/)).toBeTruthy()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
 })

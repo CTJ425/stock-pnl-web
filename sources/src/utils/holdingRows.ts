@@ -69,7 +69,7 @@ export function buildHoldingRows(
     const priceStale = quote?.stale ?? false
     const dayChange = price !== null && prevClose !== null ? price - prevClose : null
     const tradeDay = tradeDateLabel(quote?.tradeDate)
-    const closed = isClosed(quote)
+    const closed = isClosed(quote, h.market)
     const trial = quote?.trial ?? false
 
     const rows: HoldingRow[] = []

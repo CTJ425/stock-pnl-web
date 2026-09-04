@@ -104,11 +104,26 @@ describe('isFresh', () => {
     expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:29:30Z'))).toBe(true)
   })
 
-  it('沉澱窗結束後（14:00 起）才退回十分鐘退避', () => {
+  /*
+   * BUG-050 split this case in two. The ten-minute backoff belongs to a row fetched *inside* the
+   * session: that row can still be an intraday snapshot, and locking one is BUG-011. A row fetched
+   * after 14:00 is the day's final available price even when the source cannot prove it —— a thin
+   * ticker with no closing-auction trade keeps `13:29:58` for ever —— so that row locks like a
+   * settled close instead of refetching the same number every ten minutes until the next morning.
+   */
+  it('沉澱窗結束後（14:00 起）：盤中抓到的列退回十分鐘退避', () => {
     vi.setSystemTime(new Date('2026-07-20T08:00:00Z')) // Taipei 16:00
-    const pending = quote('2026-07-20T07:58:00Z', false, '13:29:58')
-    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T08:00:00Z'))).toBe(true)
-    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T08:09:00Z'))).toBe(false)
+    const pending = quote('2026-07-20T05:29:00Z', false, '13:29:58') // 台北 13:29 抓的
+    expect(cacheTtlMs('TPE:2330', pending)).toBe(10 * 60 * 1000)
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:38:00Z'))).toBe(true)
+    expect(isFresh('TPE:2330', pending, Date.parse('2026-07-20T05:40:00Z'))).toBe(false)
+  })
+
+  it('沉澱窗結束後（14:00 起）：收盤後才抓到的列鎖到隔天 08:25（BUG-050）', () => {
+    vi.setSystemTime(new Date('2026-07-20T08:00:00Z')) // Taipei 16:00
+    const late = quote('2026-07-20T07:58:00Z', false, '13:29:58') // 台北 15:58 抓的
+    expect(cacheTtlMs('TPE:2330', late)).toBe((16 * 60 + 25) * 60 * 1000)
+    expect(isFresh('TPE:2330', late, Date.parse('2026-07-20T08:09:00Z'))).toBe(true)
   })
 })
 
@@ -125,5 +140,51 @@ describe('isClosed / tradeDateLabel', () => {
     expect(tradeDateLabel('20261231')).toBe('12/31')
     expect(tradeDateLabel('2026-08-05')).toBeNull()
     expect(tradeDateLabel(null)).toBeNull()
+  })
+})
+
+/**
+ * BUG-050: `isClosed` used to require a matching time at or after 13:30. Two real TW sources never
+ * satisfy that: the Yahoo fallback reports no matching time at all, and a thin ticker with no
+ * closing-auction trade keeps an earlier one. Both made the quote card print 「盤中」 all evening.
+ *
+ * The inference reads the quote's own fetch time on the Taipei clock, so it needs the market: the
+ * US session runs while Taipei is past 14:00, and inferring a close there would be wrong.
+ */
+describe('isClosed — 收盤後推論 (BUG-050)', () => {
+  /** Taipei 14:05 — after the 14:00 settle window */
+  const AFTER_SETTLE = '2026-08-05T06:05:00.000Z'
+  /** Taipei 11:00 — inside the session */
+  const INTRADAY = '2026-08-05T03:00:00.000Z'
+  /** Taipei 22:00 — the US session is open, the TW one closed hours ago */
+  const US_SESSION = '2026-08-05T14:00:00.000Z'
+
+  it('撮合時間到 13:30 仍然直接判定已收盤', () => {
+    expect(isClosed(quote(INTRADAY, false, '13:30:00'))).toBe(true)
+  })
+
+  it('沒有指定市場時維持原行為，不做推論', () => {
+    expect(isClosed(quote(AFTER_SETTLE, false, null))).toBe(false)
+  })
+
+  it('台股：沉澱窗之後抓到的報價沒有撮合時間也算已收盤', () => {
+    expect(isClosed(quote(AFTER_SETTLE, false, null), 'TPE')).toBe(true)
+  })
+
+  it('台股：冷門股最後撮合早於 13:30，收盤後抓到一樣算已收盤', () => {
+    expect(isClosed(quote(AFTER_SETTLE, false, '11:30:00'), 'TPE')).toBe(true)
+  })
+
+  it('台股：盤中抓到的報價仍然是盤中', () => {
+    expect(isClosed(quote(INTRADAY, false, null), 'TPE')).toBe(false)
+  })
+
+  it('美股不套用台北時鐘的推論', () => {
+    expect(isClosed(quote(US_SESSION, false, null), 'US')).toBe(false)
+  })
+
+  it('沒有報價時為 false', () => {
+    expect(isClosed(null, 'TPE')).toBe(false)
+    expect(isClosed(undefined, 'TPE')).toBe(false)
   })
 })

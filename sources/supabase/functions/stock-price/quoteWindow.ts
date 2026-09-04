@@ -60,6 +60,20 @@ function taipeiMsOfDay(now: Date): number {
 }
 
 /**
+ * Is `at` a Taipei moment where the TW market can produce no new price today —— at or after the
+ * 14:00 settle-window end, or before the 08:25 resume time (BUG-050)?
+ */
+export function twIsAfterClose(at: Date): boolean {
+  const t = taipeiMsOfDay(at)
+  return t >= SETTLE_END_MS || t < RESUME_MS
+}
+
+/** Milliseconds until the next 08:25 Taipei resume, from a Taipei time-of-day `t` (ms since 00:00). */
+function msUntilResume(t: number): number {
+  return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
+}
+
+/**
  * The cache validity period of Taiwan stock quotes.
  *
  * - 08:25–13:30 (trial and intraday): 60 seconds, consistent with immediate needs before closing
@@ -75,16 +89,23 @@ function taipeiMsOfDay(now: Date): number {
  *   Such a quote keeps being retried rather than locked —— but on a **10-minute** interval since 0.6.42, not every
  *   minute (AUDIT-02): the fallback path never reports a matching time, so an outage used to mean all-night
  *   per-minute polling with no cap. Retrying still replaces the row the moment a settled quote appears.
+ * @param fetchedAt The cache row's own fetch time (0.9.32, BUG-050). When the matching time cannot prove the
+ *   quote settled, a fetch time after the 14:00 settle window still proves it: the TW market can produce no
+ *   later price that day, so this is the day's final available quote. It is still not locked just because it
+ *   is old — omitting `fetchedAt`, or a `fetchedAt` still inside the session, must keep the 10-minute retry:
+ *   such a row can be an intraday snapshot, and locking it is the exact defect BUG-011 was about.
  */
-export function twQuoteTtlMs(now: Date, tradeTime?: string | null): number {
+export function twQuoteTtlMs(now: Date, tradeTime?: string | null, fetchedAt?: Date | null): number {
   const t = taipeiMsOfDay(now)
   if (t >= RESUME_MS && t < CLOSE_MS) return POLL_MS
   if (tradeTime == null || tradeTime < CLOSE_TIME_TEXT) {
     // 13:30–14:00 的沉澱窗：收盤撮合馬上就會落地，這時退避十分鐘等於把盤中價停在畫面上
-    return t >= CLOSE_MS && t < SETTLE_END_MS ? POLL_MS : UNSETTLED_RETRY_MS
+    if (t >= CLOSE_MS && t < SETTLE_END_MS) return POLL_MS
+    if (fetchedAt != null && twIsAfterClose(fetchedAt)) return msUntilResume(t)
+    return UNSETTLED_RETRY_MS
   }
   // After closing, it will be pushed back to 08:25 tomorrow; in the early morning (t < RESUME_MS), it will be 08:25 today
-  return t < RESUME_MS ? RESUME_MS - t : DAY_MS - t + RESUME_MS
+  return msUntilResume(t)
 }
 
 /**

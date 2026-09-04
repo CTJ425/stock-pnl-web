@@ -2,9 +2,63 @@
 
 - Agent: Scribe
 - Status: ACTIVE
-- Timestamp: 2026-08-25 10:16:08 Asia/Taipei
+- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
 
 ---
+
+### BUG-050 — 台股收盤後部分標的停在盤中價或狀態標記停在「盤中」
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-price/quoteWindow.ts`、`sources/src/services/priceProxy.ts`、`sources/src/utils/holdingRows.ts`、`sources/src/components/StockDetail/QuoteTab.tsx`、`sources/src/components/StockDetail/StockDetailPage.tsx`、`sources/supabase/functions/stock-price/index.ts`
+- **Root Cause**: `isClosed()` 要求撮合時間達 `13:30:00` 才算收盤定案，但有兩種台股報價來源無法滿足這個條件。其一，BUG-045 修正後收盤無成交會改走 Yahoo 後備，而 Yahoo 從不回傳 `tradeTime`，`isClosed` 永遠為 false。其二，冷門股在最後一盤沒有成交時，MIS 回傳的撮合時間停在 13:30 之前（例如 `13:29:58`），同樣不滿足條件。兩種情況畫面都整晚顯示「盤中」。同一個判斷也決定快取 TTL：`twQuoteTtlMs` 把這類報價歸為未定案，套用 0.6.42 的十分鐘退避，於是整晚每十分鐘重抓同一個數字且永遠不會收斂。
+- **Fix**: 新增 `twIsAfterClose(at)`，判斷某個台北時刻是否落在「當天不可能再產生新價格」的區間（14:00 沉澱窗結束之後，或 08:25 開盤前）。`twQuoteTtlMs()` 新增第三個參數 `fetchedAt`：撮合時間無法證明已定案時，改以這一列是什麼時候抓的來判斷，收盤後才抓到的列鎖到隔天 08:25。`isClosed(quote, market)` 新增市場參數，只對台股以 `quote.asOf` 套用同一個推論。Edge 端 `cacheTtlMsFor()` 把 `price_cache` 列的 `updated_at` 當作抓取時間傳入。
+- **刻意不變的部分**: 省略 `fetchedAt`、或 `fetchedAt` 仍在盤中（08:25–14:00）時，一律維持 0.6.42 的十分鐘退避。盤中抓到的列可能只是盤中快照，鎖定它正是 BUG-011 的原始缺陷。`isClosed` 未帶市場參數時也不做任何推論，呼叫端行為完全不變；美股時段落在台北 14:00 之後，若不分市場就會誤判為已收盤。
+- **產品決策**: 盤後定價／零股（14:30，MIS 的 `oz` / `ot` 欄位）**不納入**報價。盤後定價交易本來就以收盤價成交，券商 APP 牌告與庫存估值也都用 13:30 收盤價，與 0.9.30 已對齊的券商口徑一致。使用者於 2026-09-04 確認此方向。
+- **Verification**: `quoteWindow.test.ts` 新增 7 個案例涵蓋鎖定與不鎖定的邊界；`priceProxy.test.ts` 新增 `isClosed` 推論的 7 個案例；`QuoteTab.test.tsx`、`priceProxy.test.ts` 各有 1 個既有案例被本次行為取代並改寫。全套 99 檔 / 1,637 項通過，`npm run build` 綠燈。
+
+### BUG-051 — 反向分割可產生 0 股但保留原手續費的買入紀錄，永久墊高平均成本（AUDIT-09）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/src/components/Transactions/StockSplitModal.tsx`
+- **Root Cause**: `newQty = Math.round(tx.qty / ratio)` 沒有下限檢查，`handleConfirm` 的守門只看 `busy`、`previewItems.length`、`isValidRatio`。持有 3 股的零股做 10 併 1 時 `Math.round(3/10)` 為 0，而原本非 0 的 `fee_tax` 原封不動帶過（只有 `tx.fee_tax === 0 && autoFillZeroFee` 時才重算）。`pnlEngine` 的 BUY 分支 `pos.cost += tx.price * effQty + effFeeTax`，`effQty` 為 0 而 `effFeeTax` 非 0 時 `pos.cost` 增加但 `pos.qty` 不變。
+- **Impact**: 該標的的平均買入成本與保本賣出價被幽靈手續費墊高，直到整個部位全數賣出才歸零。沒有例外、沒有錯誤標記，是靜默的金額錯誤。
+- **Fix**: 由 `previewItems` 即時算出 `zeroQtyCount`，三道關卡同時到位 —— 顯示警告區塊、把 `zeroQtyCount > 0` 加入確認按鈕的 `disabled` 條件、`handleConfirm` 在任何 `updateTransaction` 之前提前返回。
+- **Verification**: `StockSplitModal.test.tsx` 新增案例：3 股零股做 10 併 1 時警告出現、按鈕停用、`updateTransaction` 未被呼叫。
+
+### BUG-052 — 批次更新（分割換算、手續費重算）中途失敗沒有回報進度（AUDIT-11）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/src/components/Transactions/StockSplitModal.tsx`、`sources/src/components/Transactions/RecalcFeesModal.tsx`
+- **Root Cause**: 兩處都是 `for (const item of previewItems) { await updateTransaction(...) }` 包在單一 `try` 內，失敗處理只有 `catch (err) { setError(...) }`。20 筆分割換算做到第 8 筆時網路中斷，前 7 筆已是分割後數量與價格、後 13 筆仍是分割前，同一標的的 `qty` / `cost` 混用兩種股數基準，畫面只顯示一句「更新失敗」。
+- **Fix**: 兩處都改為計數已寫入筆數，`catch` 組出「已完成 N 筆，第 N+1 筆更新失敗：…。其餘 M 筆未變更，請重新開啟精靈續做。」`RecalcFeesModal` 的總數只計勾選筆數，未勾選而被 `continue` 略過的列不計入。
+- **刻意不做的部分**: 不做回滾。專案沒有交易 API 可用，誠實告知已套用的範圍就是本次的全部需求。
+- **Verification**: `StockSplitModal.test.tsx` 與新檔 `RecalcFeesModal.test.tsx` 各有一個案例：第 2 筆 reject 時訊息同時含「已完成 1 筆，第 2 筆更新失敗」與「其餘 1 筆未變更」，且 `onSuccess` / `onClose` 均未被呼叫。
+
+### BUG-053 — `assembleOne` 拋錯會中斷整個 chips 產生階段（AUDIT-12）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`、`sources/src/components/Admin/ManualRunSection.tsx`
+- **Root Cause**: 逐檔迴圈直接呼叫 `assembleOne`，沒有逐筆 `try/catch`。`uploadJson` 自己吞例外，`assembleOne` 不會。一檔標的的資料形狀超出防禦時，例外往上傳到 `handleGenerateAll`，該輪迴圈中止，排在它後面的標的與後續 phase 這一輪都拿不到報告。
+- **Fix**: 逐檔 `try/catch`，失敗計入 `failed` 並把股票代號（最多 10 檔）收進 `failedTickers` 一併回傳。`summariseFollowUp` 在有失敗時顯示「產出 N 檔，失敗 M 檔（代號）」，管理台的 `summarizeBody` 也會印出 `failed=` 與 `failedTickers=`。
+- **為何不加 log**: `stock-report/index.ts` 全檔 4,200 行沒有任何 `console.*`，加一行會是唯一的例外。診斷資訊改走回應主體，那正是這個 phase 的其他數字既有的去處。
+- **Verification**: 無單元測試（Deno Edge 進入點無法在 vitest 匯入）；由 `route:reviewer` 逐行審查，並以 `npm run build` 型別檢查。
+
+### BUG-054 — `assertCronSecret` 用一般字串比較，非固定時間比較（AUDIT-13）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: 新增 `sources/supabase/functions/stock-report/cronSecret.ts`、`sources/supabase/functions/stock-report/index.ts`
+- **Root Cause**: `if (!expected || got !== expected)` 的 `!==` 在第一個相異位元組就返回。理論上可對公開的 `--no-verify-jwt` 端點做時序側通道量測，逐位元組縮小 `CRON_SECRET`。
+- **Fix**: 新增 `secretsMatch(got, expected)`，兩邊以 `TextEncoder` 編碼後累加 `diff |= a[i] ^ b[i]`，長度差也折進 `diff`，沒有提前返回。`assertCronSecret` 的 `!expected` 短路完全保留，`CRON_SECRET` 未設定時仍然一律 401。
+- **Verification**: 新檔 `cronSecret.test.ts` 5 個案例（相同、首位元組差異、末位元組差異、長度差異、多位元組字元）。固定時間性質是實作的性質，測試無法直接觀察，由 `route:reviewer` 確認無提前返回。
+
+### BUG-055 — 盤中走勢圖的漲跌百分比未防除以 0（AUDIT-14）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/src/components/StockDetail/IntradayChart.tsx`
+- **Root Cause**: tooltip 的 `pct(change, prevClose as number)` 只擋 `null`、不擋 `0`。MIS 回傳 `prevClose: 0` 時 tooltip 直接印出「漲跌 +123.00 (Infinity%)」或「(NaN%)」。同一份程式庫的 `DashboardPage.tsx`、`QuoteTab.tsx`、`WatchSection.tsx` 在相同計算上都寫了 `prevClose !== null && prevClose !== 0`，可見團隊知道 0 是真實會出現的資料狀態。
+- **Fix**: 抽出並匯出純函式 `changeLabel(close, prevClose)`，昨收為 `null` 或 `0` 時回傳 `null`，其餘情況產生與原本逐字元相同的字串；`tooltipFor` 沿用既有的濾除 `null` 邏輯。
+- **Verification**: `IntradayChart.test.tsx` 新增 2 個案例，涵蓋正常昨收與昨收為 0 / null。
+
+### BUG-056 — `parseTxDate` 的正規式沒有錨定結尾，會靜默誤讀日期（AUDIT-15）
+- **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
+- **Where**: `sources/src/utils/csv.ts`
+- **Root Cause**: `/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/` 只錨定開頭，尾端多餘字元被丟棄。`2024/01/105` 的 `\d{1,2}` 貪婪取到 `10`，剩下的 `5` 被忽略，解析為 `2024-01-10` 而不是拒絕，靜默把交易記到錯誤日期。
+- **Fix**: 改為 `/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[\sT].*)?$/`，錨定結尾同時保留「日期後接時間」的匯出格式。
+- **Verification**: `csv.test.ts` 新增 2 個案例：拒絕 `2024/01/105`、`2026-07-155`、`2026/07/15abc`；仍接受 `2026/07/15 09:30:00`、`2026-07-15T09:30:00Z`。
 
 ### BUG-045 — 收盤撮合無成交時 misParse 誤取委買價 b[0] 充當收盤價並阻斷 Yahoo 後備
 - **Status**: ✅ FIXED (0.9.29-dev.2) — 2026-09-03 17:50:00 Asia/Taipei

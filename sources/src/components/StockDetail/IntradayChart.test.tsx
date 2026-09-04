@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { IntradayChart, finalVwap } from './IntradayChart'
+import { IntradayChart, changeLabel, finalVwap } from './IntradayChart'
 import type {
   IntradayPoint,
   IntradaySeries,
@@ -220,5 +220,24 @@ describe('IntradayChart — showVolume', () => {
 
     expect(volumeFrames().length).toBe(0)
     expectNoNaN()
+  })
+})
+
+/**
+ * AUDIT-14: the tooltip divided by `prevClose` with no guard, so a MIS response carrying
+ * `prevClose: 0` printed 「漲跌 +123.00 (Infinity%)」. Every other component that does this same
+ * arithmetic (DashboardPage, QuoteTab, WatchSection) already tests `prevClose !== null && !== 0`,
+ * so 0 is a data state the project knows it receives.
+ */
+describe('changeLabel（走勢圖 tooltip 的漲跌標籤，AUDIT-14）', () => {
+  it('昨收正常時輸出漲跌金額與百分比', () => {
+    expect(changeLabel(101, 100)).toBe('漲跌 +1.00 (+1.00%)')
+    expect(changeLabel(99, 100)).toBe('漲跌 -1.00 (-1.00%)')
+    expect(changeLabel(100, 100)).toBe('漲跌 +0.00 (+0.00%)')
+  })
+
+  it('昨收為 0 或缺漏時不輸出標籤，不印出 Infinity 或 NaN', () => {
+    expect(changeLabel(101, 0)).toBeNull()
+    expect(changeLabel(101, null)).toBeNull()
   })
 })

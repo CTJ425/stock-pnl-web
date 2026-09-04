@@ -313,3 +313,21 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
     expect(cells.slice(-3)).toEqual(['80', '282', '362'])
   })
 })
+
+/**
+ * AUDIT-15: the pattern only anchored its start, so trailing characters were dropped instead of
+ * rejected. `2024/01/105` parsed as 2024-01-10 and wrote the transaction to the wrong day with no
+ * error. Dates that carry a time are a real export shape, so they must keep parsing.
+ */
+describe('parseTxDate — 結尾錨定 (AUDIT-15)', () => {
+  it('拒絕日期後面還黏著數字的欄位', () => {
+    expect(parseTxDate('2024/01/105')).toBeNull()
+    expect(parseTxDate('2026-07-155')).toBeNull()
+    expect(parseTxDate('2026/07/15abc')).toBeNull()
+  })
+
+  it('仍接受日期後面接時間的匯出格式', () => {
+    expect(parseTxDate('2026/07/15 09:30:00')).toBe('2026-07-15')
+    expect(parseTxDate('2026-07-15T09:30:00Z')).toBe('2026-07-15')
+  })
+})

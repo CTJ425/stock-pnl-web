@@ -70,7 +70,7 @@ export function parseCsv(text: string): string[][] {
 
 /** Supports 2026/07/15, 2026-07-15 (including zero padding and date validity check), returns YYYY-MM-DD*/
 export function parseTxDate(value: string): string | null {
-  const m = value.trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)
+  const m = value.trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[\sT].*)?$/)
   if (!m) return null
   const [, y, mo, d] = m
   const year = Number(y)
