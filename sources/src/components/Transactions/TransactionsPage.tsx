@@ -10,6 +10,7 @@ import type { NewTransaction, Transaction, TxNature } from '../../types/models'
 import { MARKET_LABEL, TX_NATURE_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
 import { displayStockName } from '../../services/usStockNames'
 import { transactionsToCsv } from '../../utils/csv'
+import { compareTxOrder } from '../../utils/pnlEngine'
 import { fmtPrice, fmtQty, fmtSignedMoney } from '../../utils/formatters'
 import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
@@ -76,7 +77,7 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
   let d = 0
   switch (key) {
     case 'tx_date':
-      return a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at)
+      return compareTxOrder(a, b)
     case 'market':
       d = a.market.localeCompare(b.market)
       break
@@ -106,8 +107,8 @@ function compareTx(a: Transaction, b: Transaction, key: TxSortKey): number {
       d = cashFlow(a) - cashFlow(b)
       break
   }
-  // If the values ​​are the same, the date will be sorted from newer to older, and then the creation time will be the order.
-  return d || b.tx_date.localeCompare(a.tx_date) || b.created_at.localeCompare(a.created_at)
+  // If the values ​​are the same, fall back to the engine order, descending.
+  return d || -compareTxOrder(a, b)
 }
 
 export function TransactionsPage() {
@@ -175,10 +176,7 @@ export function TransactionsPage() {
     const csv = transactionsToCsv(
       transactions
         .slice()
-        .sort(
-          (a, b) =>
-            a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
-        ),
+        .sort(compareTxOrder),
     )
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)

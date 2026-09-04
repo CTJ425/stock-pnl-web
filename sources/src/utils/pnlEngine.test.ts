@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, splitFeeTax } from './pnlEngine'
+import { compareTxOrder, computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, splitFeeTax } from './pnlEngine'
 
 let seq = 0
 function tx(input: {
@@ -866,5 +866,69 @@ describe('融券做空（Short selling, Task 141 Stage A）', () => {
     expect(estimateUnrealizedShort(ledger.holdings[0], 95, 0.001425, 20)).toBe(
       OPEN_PROCEEDS - 95_000 - COVER_FEE,
     )
+  })
+})
+
+describe('BUG-049 同日同 created_at 的排序決勝：開倉腿必須先於平倉腿', () => {
+  // A bulk CSV import writes one created_at for every row, so tx_date and created_at both
+  // tie. PostgreSQL's sort is not stable, so PostgREST can return the SELL first;
+  // Array.sort is stable and preserves that order. The engine must break the tie itself.
+  const SAME = '2026-09-01T02:50:16.337075Z'
+
+  it('賣出排在買進之前時，不得誤判超賣', () => {
+    const sell = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'SELL', price: 915, qty: 50, fee: 202 }), created_at: SAME }
+    const buy = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'BUY', price: 840, qty: 50, fee: 59 }), created_at: SAME }
+
+    const ledger = computeLedger([sell, buy])
+
+    // Cost = 840*50+59 = 42,059; revenue = 915*50-202 = 45,548; realized = 3,489
+    expect(ledger.warnings).toEqual([])
+    expect(ledger.holdings).toHaveLength(0)
+    expect(ledger.summary.realizedTw).toBeCloseTo(3489, 6)
+  })
+
+  it('相同順序下的結果與買進排在前面時完全一致', () => {
+    const mk = () => [
+      { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'SELL', price: 915, qty: 50, fee: 202 }), created_at: SAME },
+      { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'BUY', price: 840, qty: 50, fee: 59 }), created_at: SAME },
+    ]
+    const [s, b] = mk()
+    const sellFirst = computeLedger([s, b])
+    const [s2, b2] = mk()
+    const buyFirst = computeLedger([b2, s2])
+
+    expect(sellFirst.summary.realizedTw).toBeCloseTo(buyFirst.summary.realizedTw, 6)
+    expect(sellFirst.warnings).toEqual(buyFirst.warnings)
+  })
+
+  it('融券：回補排在放空之前時，不得誤判超額回補', () => {
+    const cover = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '2303', type: 'BUY', price: 90, qty: 1000, nature: 'SHORT' }), created_at: SAME }
+    const open = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '2303', type: 'SELL', price: 100, qty: 1000, nature: 'SHORT' }), created_at: SAME }
+
+    const ledger = computeLedger([cover, open])
+
+    expect(ledger.warnings).toEqual([])
+    expect(ledger.holdings).toHaveLength(0)
+    expect(ledger.summary.realizedTw).toBeCloseTo(10000, 6)
+  })
+})
+
+describe('BUG-049 compareTxOrder：列表與匯出共用引擎的排序規則', () => {
+  const SAME = '2026-09-01T02:50:16.337075Z'
+  const sell = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'SELL', price: 915, qty: 50 }), id: 'zzz', created_at: SAME }
+  const buy = { ...tx({ date: '2026-04-28', market: 'TPE', ticker: '3037', type: 'BUY', price: 840, qty: 50 }), id: 'aaa', created_at: SAME }
+
+  it('同日同 created_at 時，開倉腿排在前面', () => {
+    expect([sell, buy].slice().sort(compareTxOrder).map((t) => t.tx_type)).toEqual(['BUY', 'SELL'])
+  })
+
+  it('日期不同時，仍以日期為主', () => {
+    const older = { ...tx({ date: '2026-04-27', market: 'TPE', ticker: '3037', type: 'SELL', price: 900, qty: 10 }), id: 'zzz', created_at: SAME }
+    expect([buy, older].slice().sort(compareTxOrder)[0].tx_date).toBe('2026-04-27')
+  })
+
+  it('同側時以 id 收尾，結果穩定', () => {
+    const b2 = { ...buy, id: 'bbb' }
+    expect([b2, buy].slice().sort(compareTxOrder).map((t) => t.id)).toEqual(['aaa', 'bbb'])
   })
 })

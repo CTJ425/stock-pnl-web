@@ -198,6 +198,25 @@ export const BORROW_FEE_RATE = 0.0008
 // as ignorable punctuation under some ICU locales).
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
+// BUG-049: when `tx_date` and `created_at` both tie (a single bulk import writes one
+// created_at for every row), the opening leg must sort before the closing leg so the
+// engine never sees a sell/cover before the position exists.
+const isOpenLeg = (tx: Transaction) =>
+  tx.tx_nature === 'SHORT' ? tx.tx_type === 'SELL' : tx.tx_type === 'BUY'
+
+/**
+ * BUG-049 follow-up: the canonical transaction order, shared by `computeLedger` and any UI
+ * (list sort, CSV export) that must agree with the engine's own processing order.
+ */
+export function compareTxOrder(a: Transaction, b: Transaction): number {
+  return (
+    cmp(a.tx_date, b.tx_date) ||
+    cmp(a.created_at, b.created_at) ||
+    Number(isOpenLeg(b)) - Number(isOpenLeg(a)) ||
+    cmp(a.id, b.id)
+  )
+}
+
 /**
  * Split a transaction's recorded `fee_tax` into brokerage fee, securities tax and (for a
  * SHORT sell) borrow fee.
@@ -309,7 +328,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
   const txs = transactions
     .filter((tx) => tx.qty > 0 && (tx.tx_type === 'BUY' || tx.tx_type === 'SELL'))
     .slice()
-    .sort((a, b) => cmp(a.tx_date, b.tx_date) || cmp(a.created_at, b.created_at))
+    .sort(compareTxOrder)
 
   // Group transactions by trading date
   const dateMap = new Map<string, Transaction[]>()
