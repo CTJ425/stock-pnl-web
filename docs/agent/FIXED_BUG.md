@@ -81,6 +81,15 @@
 
 ## 🐛 Historical Bug Fixes
 
+### Bug ID: BUG-049 — 同日買賣排序不定，造成假性超賣警告與已實現損益虛增
+- **Date**: 2026-09-04, fixed in 0.9.31
+- **Symptom**: 前端顯示「2026-04-28 3037 賣出 50 股，但當時持有僅 0 股（超賣部分成本以 0 計算）」，但 DB 內買進與賣出兩筆都存在且數量相符。重新整理後警告的標的會改變。
+- **Root Cause**: 批次匯入為所有列寫入同一個 `created_at`。`dataProvider.ts` 與 `pnlEngine.ts` 都只用 `tx_date` + `created_at` 排序，兩鍵相等時沒有決勝鍵。PostgreSQL 的排序不穩定，可回傳 SELL 在 BUY 之前；`Array.sort` 是穩定排序，保留該順序。引擎因此在買進入帳前處理賣出，`pos.qty` 為 0，觸發超賣警告並以成本 0 計算。`tx_nature` 為 null，當沖配對區塊不會啟動，這是正確行為（`fee_tax = 202` 為全額 0.003 證交稅，證明是兩筆現股）。
+- **Fix**: `pnlEngine.ts` 新增並匯出 `compareTxOrder()`，在兩鍵相等時以「開倉腿優先」再以 `id` 決勝；`computeLedger()`、`TransactionsPage.tsx` 的列表排序與 CSV 匯出全部改用它；`dataProvider.ts` 的 Supabase 查詢追加 `.order('id')`。
+- **Evidence**: 以 PROD 111 筆真實交易重跑引擎，原序／反序／亂序三種輸入的結果完全一致且無任何警告。修正前全站已實現 878,583，修正後 299,807。
+- **Accepted RISK**: 當同日同 `created_at` 的交易群組屬於「數量不對等的 DAY_TRADE」時，新的決定性順序會改變哪一腿留給一般處理路徑，進而改變該日的成本基礎。此情境在修正前本來就是不確定的，修正後至少可重現。目前資料無此案例，未加測試。
+- **Status**: ✅ FIXED (0.9.31)
+
 ### BUG-042 — Yahoo intraday rolling daily bar leaks into technical series before market close
 
 - **Where**: `sources/supabase/functions/stock-report/twDaily.ts:107-130` and `sources/supabase/functions/stock-report/index.ts:1141-1146`

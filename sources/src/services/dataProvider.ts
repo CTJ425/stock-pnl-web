@@ -5,6 +5,7 @@
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
 import type { NewTransaction, Transaction, Workspace } from '../types/models'
+import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 
 export interface DataProvider {
@@ -107,12 +108,11 @@ export class LocalProvider implements DataProvider {
   }
 
   async listTransactions(workspaceId: string): Promise<Transaction[]> {
+    // BUG-049: share the engine's comparator so local mode and Supabase mode can never
+    // disagree on the order of two transactions whose tx_date and created_at both tie.
     return readStore()
       .transactions.filter((t) => t.workspace_id === workspaceId)
-      .sort(
-        (a, b) =>
-          a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at),
-      )
+      .sort(compareTxOrder)
   }
 
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
@@ -312,7 +312,8 @@ export class SupabaseProvider implements DataProvider {
         .select(txColumnsFor(degrade) as typeof TX_COLUMNS)
         .eq('workspace_id', workspaceId)
         .order('tx_date', { ascending: true })
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }),
     )
     if (result.error) throw new Error(`載入交易紀錄失敗：${result.error.message}`)
     return (result.data ?? []) as Transaction[]
