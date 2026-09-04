@@ -1,9 +1,36 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: BUG-050 修正 + 2026-09-04 稽核六項修正 (0.9.32-dev.1)
+- Action: 0.9.32 發布與雙環境部署 + 補讀稽核與 0.9.33
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
+- Timestamp: 2026-09-04 20:10:51 CST
+
+---
+
+## 📅 Log: 2026-09-04 20:11:46 CST (0.9.32 發布與雙環境部署、補讀稽核與 0.9.33)
+
+- **Status**: ✅ **COMPLETED** —— 已提交、已合併 `main`、DEV 與 PROD Edge 均已部署並驗證
+- **Version**: `0.9.32-dev.1` → **`0.9.32`** → **`0.9.33`**（`main` 與 `dev` 同為 `25510fe`）
+- **緣由**: 使用者指示「commit 到 dev 然後 main 跟 dev 的 supabase 都要先調整……直接合併到 main，然後再查看看還有沒有甚麼 bug 或是問題，然後直接調整」。
+
+### 發布與部署
+- **0.9.32**：BUG-050 與 2026-09-04 稽核六項修正。`dev` → `main` 快轉合併，GitHub Release 由 `.github/workflows/release.yml` 自動建立。
+- **Edge 部署（兩環境）**：`stock-price` 與 `stock-report` 部署到 DEV `zyebvayngwrqzoaicbwd` 與 PROD `hrilemueiqyaoiwnkeuu`。以 `ezbr_sha256` 證實新程式碼確實上線，兩環境同一份 bundle，`verify_jwt` 分別維持 `true` / `false`。0.9.33 只動 `stock-report`，故只重新部署該 function（兩環境 v6，`9ad5501c…`）。
+- **AUDIT-13 的實機驗證**：`secretsMatch` 改了 `CRON_SECRET` 的比較方式，若有缺陷會讓兩環境的排程全部 401。**在部署 PROD 之前先確認 DEV 部署後的 cron 輪次回傳 200**，PROD 部署後同樣確認。DEV 11:30/11:45/11:50 UTC、PROD 11:40 UTC 皆為 200，DEV 近一小時 13 次全數 200。
+- **`verify_setup()`**：DEV 十項全 PASS。**PROD 原本沒有安裝這個驗證器**（`verify.sql` 只裝在 DEV），已補裝後執行，十項全 PASS，`cron target host` 正確指向 `hrilemueiqyaoiwnkeuu.supabase.co`。
+- **未做的 Supabase 變更**：`batch_run_log` 加欄位的 DDL 被自動模式的分類器擋下。沒有繞過，改用不需要 schema 變更的修法（見 BUG-062）。
+
+### 補讀稽核與 0.9.33
+- **範圍**：`BUG_FIX.md` 記載 `stock-report/index.ts` 共 4,236 行中僅約 900 行被逐行讀過。本次以兩個平行 read-only 審查把 1200-2290 與 3400-3930 共約 1,465 行完整讀完。
+- **結果**：5 項可證明的缺陷（1 HIGH / 3 MEDIUM / 1 LOW），加上主 session 自行發現的 1 項回歸，全部修正，記於 `FIXED_BUG.md` BUG-057 … BUG-062。
+- **授權面陰性結論**：六個 admin handler 全數在 dispatch 層由 `assertAdmin` 把關，`backfill-*` / `sync-*` 走 `assertCronSecret`，兩種機制無交叉錯配，**未發現繞過路徑**。
+- **BUG-062（自行引入的回歸）**：0.9.32 把 `failed` / `failed_tickers` 加進要 INSERT 進 `batch_run_log` 的列，該表沒有這兩個欄位。PostgREST 只要有一個未知欄位就退回整列，而 `logBatchRun` 完全不檢查回傳值，於是每晚的觀測列會靜默消失。**`npm run build` 抓不到，是 `npm run typecheck:edge` 加上逐欄比對資料庫欄位才發現的**。實際未遺失資料：兩環境 `batch_run_log` 最新列（DEV 09:10 UTC）都早於 0.9.32 的部署時間（11:21 UTC），修正於 12:07 UTC 部署完成，早於下一個寫入視窗（約 13:30 UTC）1.4 小時。
+- **Review**: `route:reviewer` 對 0.9.32 與 0.9.33 各判一次 **PASS**。0.9.32 三項 RISK 中兩項當版修正、一項列為 `BUG_FIX.md` RISK-005；0.9.33 兩項 RISK（分頁未排序、`daysFailed` 無人讀取）皆於同版修正。
+- **Verify**: `npm run build`、`npm run typecheck:edge`、`npm run lint` 全部 exit 0；`npx vitest run` 99 檔 / **1,668** 項通過，exit 0。
+- **一次偶發**: 六次全套執行中有一次出現 `Errors 1 error`（Unhandled Error），該次與 `npm run build` 同在一個 shell 呼叫內。其餘五次乾淨且 exit 0，判定為資源競爭，未追。
+
+### 需要使用者處理
+- **Supabase personal access token 已在對話中外洩**，請至 Supabase Dashboard → Account → Access Tokens 撤銷並重建。這是十一天內第四次同類外洩，已記於 `BUG_FIX.md` Operational Notes，含避免再犯的作法。
 
 ---
 
@@ -22,29 +49,4 @@
 - **Review**: `route:reviewer` 判定 **PASS**，三項 RISK。RISK-1（失敗無診斷資訊）與 RISK-3（管理台未顯示 `failed`）已於本版一併修正 —— 失敗的股票代號（最多 10 檔）隨回應主體回傳，`summariseFollowUp` 與 `ManualRunSection.summarizeBody` 都會顯示；不加 `console.*` 是因為該檔 4,200 行沒有任何一行 log。RISK-2（`uploadJson` 回傳 `false` 的標的兩邊都不計數）為既有缺口，列為 `BUG_FIX.md` RISK-005。
 - **Verify**: `npm run build`（`tsc -b && vite build`）exit 0；`npx vitest run` **99 檔 / 1,637 項全數通過**，exit 0（新增 24 項測試，含新檔 `RecalcFeesModal.test.tsx`、`cronSecret.test.ts`；改寫 2 個被本版取代的既有案例）。
 - **未做**: 未 commit、未 push、未部署任何 Edge Function、未動 Supabase。**BUG-050 與 AUDIT-12/13 的 Edge 端修正需要部署後才會在 DEV／PROD 生效**，等待使用者指示。
-
----
-
-## 📅 Log: 2026-09-04 15:30:39 CST (BUG-049 修正、0.9.31 發布、全庫稽核)
-
-- **Status**: ✅ **COMPLETED** on `main` and `dev`（兩端同為 `8ee8c01`）
-- **Version**: `0.9.30` → `0.9.31-dev.1` → **`0.9.31`**
-- **緣由**: 使用者回報 PROD 顯示「2026-04-28 3037 賣出 50 股，但當時持有僅 0 股」，但確認資料應無異常。
-- **根因（已證實）**: 匯入批次為所有列寫入同一個 `created_at`。`dataProvider.ts` 與 `pnlEngine.ts` 都只用
-  `tx_date` + `created_at` 排序，兩鍵相等時沒有決勝鍵。PostgreSQL 排序不穩定，同一個
-  `ORDER BY tx_date, created_at` 在兩種查詢寫法下對同一張 PROD 表回傳相反的順序；`Array.sort` 是穩定排序，
-  保留 SELL 在 BUY 之前的錯誤順序，引擎於是在買進入帳前處理賣出。
-- **修正**: `pnlEngine.ts` 新增並匯出 `compareTxOrder()`（兩鍵相等時開倉腿優先、再以 `id` 決勝）；
-  `computeLedger()`、`TransactionsPage.tsx` 的列表排序與 CSV 匯出、`dataProvider.ts` 的兩個 provider 全部改用它；
-  Supabase 查詢另追加 `.order('id')`。
-- **實測影響**: 以 PROD 111 筆真實交易重跑引擎，修正前該次載入全站已實現 878,583，修正後 299,807，虛增 578,776 元。
-  3037 由 250 股／成本 223,316／已實現 45,548 修正為 200 股／成本 181,257／已實現 3,489。
-  15 組同日買賣配對中 14 組暴露於同一缺陷。修正後原序／反序／亂序三種輸入結果完全一致且無任何警告。
-- **驗證**: `npm run build` 綠燈；`npx vitest run` 1609 passed / 97 files / exit 0（含 6 個新測試）。
-- **Review**: `route:reviewer` 判定 PASS，兩項 RISK。RISK-1（數量不對等的 DAY_TRADE 群組排序改變）已列為
-  accepted RISK 記於 `FIXED_BUG.md` BUG-049；RISK-2（列表與匯出排序與引擎不一致）已於同一版修正。
-- **稽核**: 三個平行 read-only 審查覆蓋 `supabase/functions/`、`src/services/` + `src/utils/` + `src/types/`、
-  `src/components/` + `src/context/`。7 項開放發現記於 `BUG_FIX.md` AUDIT-09…15，未動任何程式碼。
-  其中 1 項審查主張（`chip_raw_cache` upsert 缺 `onConflict`）經主 session 查證 PROD 後駁回。
-- **未做**: AUDIT-09…15 全部未修，等待使用者指示。無 Supabase 或 Edge Function 異動，未部署。
 

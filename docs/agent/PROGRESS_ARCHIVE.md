@@ -5,6 +5,31 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-04 15:30:39 CST (BUG-049 修正、0.9.31 發布、全庫稽核)
+
+- **Status**: ✅ **COMPLETED** on `main` and `dev`（兩端同為 `8ee8c01`）
+- **Version**: `0.9.30` → `0.9.31-dev.1` → **`0.9.31`**
+- **緣由**: 使用者回報 PROD 顯示「2026-04-28 3037 賣出 50 股，但當時持有僅 0 股」，但確認資料應無異常。
+- **根因（已證實）**: 匯入批次為所有列寫入同一個 `created_at`。`dataProvider.ts` 與 `pnlEngine.ts` 都只用
+  `tx_date` + `created_at` 排序，兩鍵相等時沒有決勝鍵。PostgreSQL 排序不穩定，同一個
+  `ORDER BY tx_date, created_at` 在兩種查詢寫法下對同一張 PROD 表回傳相反的順序；`Array.sort` 是穩定排序，
+  保留 SELL 在 BUY 之前的錯誤順序，引擎於是在買進入帳前處理賣出。
+- **修正**: `pnlEngine.ts` 新增並匯出 `compareTxOrder()`（兩鍵相等時開倉腿優先、再以 `id` 決勝）；
+  `computeLedger()`、`TransactionsPage.tsx` 的列表排序與 CSV 匯出、`dataProvider.ts` 的兩個 provider 全部改用它；
+  Supabase 查詢另追加 `.order('id')`。
+- **實測影響**: 以 PROD 111 筆真實交易重跑引擎，修正前該次載入全站已實現 878,583，修正後 299,807，虛增 578,776 元。
+  3037 由 250 股／成本 223,316／已實現 45,548 修正為 200 股／成本 181,257／已實現 3,489。
+  15 組同日買賣配對中 14 組暴露於同一缺陷。修正後原序／反序／亂序三種輸入結果完全一致且無任何警告。
+- **驗證**: `npm run build` 綠燈；`npx vitest run` 1609 passed / 97 files / exit 0（含 6 個新測試）。
+- **Review**: `route:reviewer` 判定 PASS，兩項 RISK。RISK-1（數量不對等的 DAY_TRADE 群組排序改變）已列為
+  accepted RISK 記於 `FIXED_BUG.md` BUG-049；RISK-2（列表與匯出排序與引擎不一致）已於同一版修正。
+- **稽核**: 三個平行 read-only 審查覆蓋 `supabase/functions/`、`src/services/` + `src/utils/` + `src/types/`、
+  `src/components/` + `src/context/`。7 項開放發現記於 `BUG_FIX.md` AUDIT-09…15，未動任何程式碼。
+  其中 1 項審查主張（`chip_raw_cache` upsert 缺 `onConflict`）經主 session 查證 PROD 後駁回。
+- **未做**: AUDIT-09…15 全部未修，等待使用者指示。無 Supabase 或 Edge Function 異動，未部署。
+
+---
+
 ## 📅 Log: 2026-09-04 14:50:00 Asia/Taipei (Release 0.9.30 正式版本發布與合併 main)
 
 - **Status**: ✅ **COMPLETED** on `main` and `dev`

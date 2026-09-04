@@ -2,9 +2,60 @@
 
 - Agent: Scribe
 - Status: ACTIVE
-- Timestamp: 2026-09-04 19:09:19 Asia/Taipei
+- Timestamp: 2026-09-04 20:07:41 Asia/Taipei
 
 ---
+
+### BUG-057 — `market/daily.json` 的內容指紋漏比對六個欄位，TWSE 訂正被靜默丟棄
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`syncMarket`）、`sources/supabase/functions/stock-report/twMarket.ts`
+- **Root Cause**: `syncMarket` 以內容指紋決定是否重寫 `market/daily.json`，指紋只涵蓋 `date`、`tradeValueTwd`、`taiexOpen` 與五個法人金額。`MarketDay` 有 10 個欄位：加權指數收盤 `taiex`、`changePoints`、`tradeVolumeShares`、`transactions`、`taiexHigh`、`taiexLow` 全部不在指紋內，`MarketInstitutionalSide` 的 `foreignDealerTwd` / `dealerSelfTwd` / `dealerHedgeTwd` 以及 `buy` / `sell` 底下的 `trustTwd` / `foreignTwd` 也不在。
+- **Impact**: 該函式的註解本身說明「每一輪都重抓當月，順便修正」—— TWSE 對已發布資料的訂正正是它要處理的常態。訂正落在未涵蓋的欄位時，`signature(days) === signature(have)` 判定相等、`reason: 'unchanged'` 直接返回，`uploadJson` 不被呼叫，訂正值只存在於本輪記憶體，`market/daily.json` 永久保留錯誤值，直到某個有被涵蓋的欄位剛好也改變為止。大盤日 K 顯示錯誤，無例外、無標記。
+- **Fix**: 指紋抽到 `twMarket.ts` 成為 `marketDaysSignature(days)`，涵蓋 `MarketDay`、`MarketInstitutional` 與 `buy` / `sell` 兩個 `MarketInstitutionalSide` 的每一個欄位，並區分 `null`、`0` 與物件缺席。
+- **Verification**: `twMarket.test.ts` 新增 30 個案例，逐欄位走訪而非釘住字串 —— 因為「新增欄位卻忘了加進指紋」正是本缺陷的成因。
+- **Discovered**: 2026-09-04，`stock-report/index.ts` 未覆蓋範圍的補讀稽核（1200-2290 段）。
+
+### BUG-058 — `handleWarmChips` 重複 AUDIT-12 的缺陷，單日失敗中斷整次回補
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`handleWarmChips`）
+- **Root Cause**: 逐日迴圈直接呼叫 `assembleOne`，沒有逐筆 `try/catch`。同一檔案的姐妹呼叫點（chips phase）已於 BUG-053 補上同型守衛，此處遺漏。
+- **Impact**: 使用者新增觀察清單或持股時觸發的即時回補，若視窗內任一天的資料形狀造成 `assembleOne` 拋錯，例外一路往上拋到 `Deno.serve` handler，前端收到裸的 500，拿不到 `daysWritten`，也無從得知是哪一天出錯。
+- **Fix**: 逐日 `try/catch`，失敗計入 `daysFailed` 並 `continue`，`daysFailed` 隨回應回傳。
+- **Discovered**: 同上。
+
+### BUG-059 — 備份還原預覽在帳號超過 1000 筆交易時把既有列誤判為缺漏
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`handleAdminBackupRestore`）
+- **Root Cause**: `db.from(name).select(keyField).eq('user_id', ...)` 沒有分頁，PostgREST 的 `max_rows` 為 1000（`sources/supabase/config.toml`）。既有列數超過 1000 時 `existingKeys` 被靜默截斷。
+- **Impact**: 帳號已有 1500 筆交易、備份檔也含這 1500 筆時，`apply=false` 的預覽會顯示約 500 筆「缺漏」，實際一筆都不缺。真正寫入時因 `ignoreDuplicates: true` 不會寫壞資料，但管理員據以決策的數字是錯的。
+- **Fix**: 新增 `pagedSelect` helper，以 `.range()` 分頁直到某頁筆數少於一頁上限，並在中途出錯時回傳錯誤而非把部分結果當成功。
+- **Discovered**: 2026-09-04，補讀稽核（3400-3930 段）。
+
+### BUG-060 — `handleAdminBackups` 每個帳號取到的「最新備份紀錄」不具決定性
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`handleAdminBackups`）
+- **Root Cause**: 查詢只用 `.order('run_date', { ascending: false })`。`run_date` 是 `DATE`（日粒度），該表沒有 `(user_id, run_date)` 唯一鍵，也沒有次要排序鍵。程式碼假設「第一筆看到的即最新」。
+- **Impact**: 某帳號當日排程備份失敗、管理員手動重跑成功時，同一 `run_date` 會有兩列。PostgREST 對兩列的回傳順序未被保證，管理主控台可能持續顯示已修復的失敗，或反向掩蓋一個真正持續失敗的帳號。
+- **Fix**: 追加 `.order('id', { ascending: false })`（`id` 是 `BIGSERIAL PRIMARY KEY`，為全序），並改走 BUG-059 的分頁 helper。
+- **Discovered**: 同上。
+
+### BUG-061 — Storage `list()` 失敗與「目錄本來就是空的」在管理台無法區分
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`storageCoverage`）、`sources/src/services/adminStatus.ts`、`sources/src/components/Admin/AdminStatusPage.tsx`
+- **Root Cause**: `db.storage.from(...).list()` 失敗時回傳 `{ data: null, error }` 而不拋錯，`(data ?? []).filter(...).length` 靜默算出 `0`；前端再以 `?? 0` 渲染。
+- **Impact**: `REPORTS_BUCKET` 的 `daily` 目錄因暫時性 Storage API 錯誤 list 失敗時，管理台顯示「日線檔 0」，運維者會誤判為「昨晚批次完全沒寫入」，而非「這次查詢失敗」。
+- **Fix**: `storageCoverage` 改回傳 `Record<string, number | null>`，查詢失敗填 `null`；型別一路放寬到前端，`AdminStatusPage` 以 `coverageLabel` helper 渲染 `—`，不再用 `?? 0`。
+- **Discovered**: 同上。
+
+### BUG-062 — 0.9.32 的 `failed` 欄位寫進沒有該欄位的 `batch_run_log`，會靜默清空每晚觀測列
+- **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`logBatchRun` 與 chips phase 的呼叫點）、`sources/src/components/Admin/ManualRunSection.tsx`
+- **Root Cause**: BUG-053 的修正把 `failed` 與 `failed_tickers` 加進傳給 `logBatchRun` 的物件。該物件會被 INSERT 進 `batch_run_log`，而該表沒有這兩個欄位（`sources/supabase/schema.sql`）。PostgREST 只要有一個未知欄位就退回整列。`logBatchRun` 完全不檢查回傳值，於是每晚的觀測列會消失且任何畫面都不會顯示原因。
+- **Introduced**: 0.9.32（2026-09-04），本次工作階段自行引入，並已部署到 DEV 與 PROD。
+- **Impact (actual)**: 無資料遺失。DEV 與 PROD 的 `batch_run_log` 最新列時間都早於 0.9.32 的部署時間（11:21 UTC），在下一個寫入視窗（約 13:30 UTC）之前就已修正並重新部署。
+- **Fix**: 從 `logBatchRun` 的列移除這兩個欄位（兩者仍隨該 phase 的 HTTP 回應回傳，`summariseFollowUp` 與管理台都讀得到），並改寫 `logBatchRun` 回傳失敗原因而非 `void`；chips phase 把它以 `logError` 放進回應，`ManualRunSection.summarizeBody` 顯示它。「觀測失敗不得拖垮批次」的性質保留。
+- **Root cause of the invisibility**: `logBatchRun` 原本 `await db.from('batch_run_log').insert(row)` 後完全不檢查結果。supabase-js 對錯誤回傳 `{ error }` 而不拋例外，所以連 `catch` 都不會進去。這才是缺陷得以隱形的原因，已一併修正。
+- **Verification**: 以腳本逐一比對 `logBatchRun` 列的 25 個鍵與 `batch_run_log` 的實際欄位清單，零缺漏。
 
 ### BUG-050 — 台股收盤後部分標的停在盤中價或狀態標記停在「盤中」
 - **Status**: ✅ FIXED (0.9.32-dev.1) — 2026-09-04 19:09:19 Asia/Taipei
