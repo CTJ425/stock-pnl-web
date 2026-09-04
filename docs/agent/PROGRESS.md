@@ -1,9 +1,40 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Antigravity
-- Action: 個股分析股票產業別顯示字級與清晰度優化
+- Action: Release 0.9.30 (個股分析產業標籤清晰度優化、持股表格黃金比例與券商口徑對齊)
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-04 14:38:00 Asia/Taipei
+- Timestamp: 2026-09-04 14:50:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-04 14:50:00 Asia/Taipei (Release 0.9.30 正式版本發布與合併 main)
+
+- **Status**: ✅ **COMPLETED** on `main` and `dev`
+- **Version**: `0.9.30-dev.6` → **`0.9.30`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 5 檔嚴格同步)
+- **緣由**: 使用者指示：「/goal 先把這個版本push到dev，然後合併到main，且確保資安與機敏資料都無外洩才准異動」。
+- **資安與機敏資料審查 (Security & Secret Audit)**:
+  - 嚴格比對 `origin/main..HEAD` 異動差異與工作區檔案，針對 `ghp_`、`eyJ`、`sbp_`、`service_role`、`token`、`secret` 等 pattern 進行全文掃描。
+  - 確認除 E2E 測試用 mock token (`mock-access-token-e2e`) 與截圖 Base64 外，零真實憑證、密鑰或機敏資訊外洩。
+  - GitHub Push Protection 驗證無任何阻擋。
+- **Version 0.9.30 涵蓋重點 (Scope)**:
+  1. **個股分析股票產業別顯示字級與清晰度優化 (`QuoteTab.tsx`, `index.css`)**:
+     - 解耦 `.watchlist-card-badge`，產業徽章字級提升至 12.5px，色彩提升至最高對比 `var(--ink)`，消除截斷與模糊。
+     - 標題列 `.detail-title .badge` 提升至 12px，下拉選單產業分類醒目加粗。
+  2. **庫存總覽持股表格黃金比例字級與消除橫向捲軸 (`index.css`)**:
+     - 13px/12px/11px 甜蜜點字級與緊湊 padding，在 1140px 容器下全 10 欄一眼綜覽，水平滾動徹底消除 (0px 溢出)。
+  3. **庫存總覽持股表格分組列通欄純章節化 (`DashboardPage.tsx`)**:
+     - 移除多空小計，標題橫跨全欄位 `colSpan={10}`，段落層次清晰。
+  4. **未實現損益金額與報酬率雙行直顯券商 APP 牌告口徑 (`holdingRows.ts`, `DashboardPage.tsx`, `QuoteTab.tsx`)**:
+     - 主標實質淨損益與報酬率，副標依 0.1425% 原價直顯券商數字，1:1 對齊手機 APP。
+  5. **觀察股票小卡迷你極簡緊湊化 (`index.css`)**:
+     - 網格縮窄至 136px，高度壓減 20%，大幅釋放儀表板空間。
+  6. **DEV 實境全功能 E2E 整合測試 suite 與高質感報告 (`run-all-e2e.cjs`)**:
+     - 7 大套件、16 項情境、35 個驗證步驟全數 PASS (100%)。
+- **Verify**:
+  - 單元測試：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
+  - 生產建置：`npm run build` (`tsc -b && vite build`) 產出 dist，exit 0。
+  - Edge 型別檢查：`npm run typecheck:edge` exit 0。
+  - 代碼風格檢查：`npx oxlint src` 0 errors。
 
 ---
 
@@ -37,29 +68,4 @@
   - `npm run build`：`tsc -b && vite build` 順利產出 dist，exit 0。
   - `npm run typecheck:edge`：exit 0。
   - `npm run lint`：0 errors。
-
----
-
-## 📅 Log: 2026-09-04 10:55:00 Asia/Taipei (庫存總覽持股表格黃金比例字級與消除橫向捲軸優化)
-
-- **Status**: ✅ **COMPLETED** on `dev`
-- **Version**: `0.9.30-dev.4` → **`0.9.30-dev.5`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
-- **緣由**: 使用者回饋：「不過自己好像還是有點大，表格我不想要有下方滑動就可以看到完整的部分，再幫我調整一版看看」。
-- **Work**:
-  1. **字級微調至黃金比例甜蜜點 (`index.css`)**:
-     - 解決前版 14px 偏大問題，將表格單元格 `td` 與數值主字 `.num` 定位至 **13px**。
-     - 表頭 `th` 定位至 **12px**，副標文字（未含費、淨收、券商說明）維持 **11px**，清晰好讀且不佔多餘版面。
-     - 分組標題列 `.holding-group td` 微調至 **12px**。
-  2. **內距壓縮與釋放寬度冗餘，徹底消除橫向捲軸 (`index.css`)**:
-     - 表頭 `th` 與單元格 `td` padding 微調至 `9px 7px`，首末欄左右內距縮減為 `10px`。
-     - 表頭說明圖示 `.th-head` 與 `.th-plain` 左右內距由 9px 收緊至 7px，使 10 欄總寬度穩定在 1,060px~1,090px 之間。
-     - 在內容容器最大寬度 1,140px 下，完全無須橫向滾動即可一眼綜覽全部 10 欄（包含最右側未實現淨損益與未實現報酬率）。
-  3. **響應式自適應防護 (`index.css`)**:
-     - 加入 `@media (max-width: 1120px)` 智慧微縮（主字 12px、次字 10px、padding 8px 5px），即便在 1024px 筆電或半螢幕視窗下，亦能維持零滾動條。
-  4. **設計範本同步更新 (`docs/design/holdings-table-mockup.html`)**:
-     - 容器對齊真實 1180px 規範，切換按鈕提供「✨ 黃金平衡款 (13px / 11px・零橫向滑動)」、「上一版微大款 (14px / 11.5px)」與「舊版原尺寸 (12.5px / 10.5px)」即時對照。
-- **Verify**:
-  - Playwright 多視窗寬度檢測（1024px、1080px、1120px、1140px、1180px、1280px、1366px、1440px、1920px）：全解析度 `hasScroll: false`，水平溢出為 0px。
-  - `npm test`：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
-  - `npm run build`：`tsc -b && vite build` 順利產出 dist，exit 0。
 

@@ -5,6 +5,31 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-04 10:55:00 Asia/Taipei (庫存總覽持股表格黃金比例字級與消除橫向捲軸優化)
+
+- **Status**: ✅ **COMPLETED** on `dev`
+- **Version**: `0.9.30-dev.4` → **`0.9.30-dev.5`** (`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 已同步)
+- **緣由**: 使用者回饋：「不過自己好像還是有點大，表格我不想要有下方滑動就可以看到完整的部分，再幫我調整一版看看」。
+- **Work**:
+  1. **字級微調至黃金比例甜蜜點 (`index.css`)**:
+     - 解決前版 14px 偏大問題，將表格單元格 `td` 與數值主字 `.num` 定位至 **13px**。
+     - 表頭 `th` 定位至 **12px**，副標文字（未含費、淨收、券商說明）維持 **11px**，清晰好讀且不佔多餘版面。
+     - 分組標題列 `.holding-group td` 微調至 **12px**。
+  2. **內距壓縮與釋放寬度冗餘，徹底消除橫向捲軸 (`index.css`)**:
+     - 表頭 `th` 與單元格 `td` padding 微調至 `9px 7px`，首末欄左右內距縮減為 `10px`。
+     - 表頭說明圖示 `.th-head` 與 `.th-plain` 左右內距由 9px 收緊至 7px，使 10 欄總寬度穩定在 1,060px~1,090px 之間。
+     - 在內容容器最大寬度 1,140px 下，完全無須橫向滾動即可一眼綜覽全部 10 欄（包含最右側未實現淨損益與未實現報酬率）。
+  3. **響應式自適應防護 (`index.css`)**:
+     - 加入 `@media (max-width: 1120px)` 智慧微縮（主字 12px、次字 10px、padding 8px 5px），即便在 1024px 筆電或半螢幕視窗下，亦能維持零滾動條。
+  4. **設計範本同步更新 (`docs/design/holdings-table-mockup.html`)**:
+     - 容器對齊真實 1180px 規範，切換按鈕提供「✨ 黃金平衡款 (13px / 11px・零橫向滑動)」、「上一版微大款 (14px / 11.5px)」與「舊版原尺寸 (12.5px / 10.5px)」即時對照。
+- **Verify**:
+  - Playwright 多視窗寬度檢測（1024px、1080px、1120px、1140px、1180px、1280px、1366px、1440px、1920px）：全解析度 `hasScroll: false`，水平溢出為 0px。
+  - `npm test`：97 檔測試檔 / **1,603** 項單元測試全數 PASS。
+  - `npm run build`：`tsc -b && vite build` 順利產出 dist，exit 0。
+
+---
+
 ## 📅 Log: 2026-09-04 10:35:00 Asia/Taipei (庫存總覽持股表格分組列小計移除與字級階梯微調)
 
 - **Status**: ✅ **COMPLETED** on `dev`
