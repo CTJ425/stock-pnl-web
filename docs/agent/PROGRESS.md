@@ -1,9 +1,40 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: 0.9.32 發布與雙環境部署 + 補讀稽核與 0.9.33
+- Agent: Antigravity
+- Action: 全庫深度審查稽核（BUG-063..BUG-071 & OPT-1..5）與交接文件歸檔
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-04 20:10:51 CST
+- Timestamp: 2026-09-04 23:05:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-04 23:05:00 Asia/Taipei (全庫深度審查稽核、BUG-063..BUG-071、交接文件歸檔)
+
+- **Status**: ✅ **COMPLETED** —— 全庫審查完成，已完成逆向質疑與獨立驗證，交接文件與規格歸檔完畢
+- **Version**: `0.9.33`（未異動版本，純審查與交接歸檔）
+- **緣由**: 使用者指示「幫我掃描一下整個codebase，抓一下有哪些BUG和可以優化的部分，並且和我說有那些」，隨後指示「先幫我把相關資訊寫進交接文件」。
+
+### 稽核成果與重大校正
+- **審查範圍**: 涵蓋前端 `sources/src/`（`pnlEngine.ts`、`fees.ts`、`csv.ts`、各 UI Modal/Page）與後端 `sources/supabase/`（`stock-report`、`backup-transactions`、`stock-price`、共用模組）。
+- **校正前次誤區**:
+  - **駁回 BUG-8 盲目加 deps 建議**: `StockSplitModal.tsx` 的 `minFees` 是每次 render 新建的物件實字，若盲目加入 `useMemo` deps 會導致每次按鍵均觸發全量重算。已給予穩定 memo 物件之正確處置方案。
+  - **校正 BUG-4 更新欄位宣稱**: PostgREST HTTP PATCH 不會洗掉未傳入欄位；但確認 `proposeFeeCorrections` 漏算 0.08% 借券費會導致確認後借券費被實質覆蓋遺失，且更新時未同步寫入 `fee_rate`。
+  - **校正 OPT-1 首屏 Chunk 歸因**: `reportPdf.ts` 早已實作動態 `import()` 按需載入；795 KB 巨型 chunk 主要成因為 `AdminConsolePage`、`MacroPage`、`FxPage` 的靜態引用。
+- **全新發現**:
+  - **BUG-063 (P0)**: CSV 匯出未包含借券費，匯入時 `splitMode` 以 `fee + tax` 覆蓋，融券借券費永久遺失。
+  - **BUG-064 (P0)**: 批次手續費重算漏傳 `nature: tx.tx_nature`，借券費被覆蓋抹除且未寫入 `fee_rate`。
+  - **BUG-065 (P0)**: 股票分割換算未隔離融券（SHORT），融券回補被當現股買進分割，未平倉融券賣出被遺漏。
+  - **BUG-066 (P1)**: PostgREST `max_rows = 1000` 截斷 7 處關鍵查詢（前端交易載入、備份轉儲、全站持股/觀察清單、用戶走訪、探針查詢、還原計數）。
+  - **BUG-067 (P1)**: `AnalysisPage.tsx` 資券雙開時使用 `r.holding.key` 產生重複 Key，且永遠無法選取融券空單。
+  - **BUG-068 (P1)**: `AnalysisPage.tsx` 純融券部位傳遞 `qty: 0, avgCost: 0` 導致 What-If 試算鎖死。
+  - **BUG-069 (P1)**: `stock-report` 全數失敗仍上傳 `manifest.json` 引發全站 404。
+  - **BUG-070 (P2)**: `backup-transactions` 金鑰時序攻擊弱比對。
+  - **BUG-071 (P2)**: `YearlyPage.tsx` 當沖拆分重複 Key 與融券回補標籤顛倒。
+  - **OPT-1..5**: 包含 `AppShell.tsx` 路由級 `React.lazy()` 代碼分割、`IntradayChart.tsx` 穩定空陣列 reference、淺色主題白色遮罩反白修復、`price_cache` 命中補齊 `industry` 避免 UI 閃爍、以及 `breakEvenPrice` 消除 Sentinel 0 重構為 `number | null`。
+- **文件歸檔**:
+  - 新增規格檔：`docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`（包含詳細行號、失敗情境、重構方案與三階段 Roadmap）。
+  - 更新任務檔：`docs/agent/TASK.md`（新增 Task 145）。
+  - 更新缺陷檔：`docs/agent/BUG_FIX.md`（記錄 BUG-063..BUG-071）。
+  - 更新進度檔：`docs/agent/PROGRESS.md`（滾動舊紀錄至 `PROGRESS_ARCHIVE.md`，維持最多 2 筆熱紀錄）。
 
 ---
 
@@ -31,22 +62,3 @@
 
 ### 需要使用者處理
 - **Supabase personal access token 已在對話中外洩**，請至 Supabase Dashboard → Account → Access Tokens 撤銷並重建。這是十一天內第四次同類外洩，已記於 `BUG_FIX.md` Operational Notes，含避免再犯的作法。
-
----
-
-## 📅 Log: 2026-09-04 19:09:19 Asia/Taipei (BUG-050 修正、2026-09-04 稽核六項修正、0.9.32-dev.1)
-
-- **Status**: ✅ **COMPLETED**（尚未 commit，等待使用者指示）
-- **Version**: `0.9.31` → **`0.9.32-dev.1`**（`version.ts`、`package.json`、`package-lock.json`、`README.md`、`CHANGELOG.md` 5 檔同步）
-- **緣由**: 使用者指示「請 git diff 與交接文件完成未完成的 BUG_FIX」。工作區的 `git diff` 顯示 2026-09-04 稽核新增了 AUDIT-09…15 七項未修發現，`PROGRESS.md` 明載「AUDIT-09…15 全部未修，等待使用者指示」，另有 BUG-050 為 OPEN。其餘 RISK-002/003/004、BUG-042/043 皆已標記為 Accepted，不在範圍。
-- **範圍決策（使用者於 2026-09-04 確認）**:
-  - **AUDIT-10 不改程式**，記為可接受風險。「2.500」在台美股都可能是合法的 2.5 元，加規則拒絕會擋掉正常匯入；多組點號「1.234.567」目前已是 `NaN` 會報錯。
-  - **BUG-050 不納入盤後 `oz` / `ot`**，維持 13:30 收盤價，與 0.9.30 已對齊的券商 APP 牌告口徑一致。只做該報告的第 1、2 點。
-- **BUG-050 根因（已證實）**: `isClosed()` 要求撮合時間達 `13:30:00`。Yahoo 後備從不回傳 `tradeTime`；冷門股最後一盤無成交時撮合時間停在 13:30 之前。兩者畫面整晚顯示「盤中」，且 `twQuoteTtlMs` 把它們歸為未定案，整晚每十分鐘重抓同一個數字且永不收斂。
-- **BUG-050 修正**: 新增 `twIsAfterClose(at)` 判斷台北時刻是否落在「當天不可能再產生新價格」的區間；`twQuoteTtlMs()` 新增第三參數 `fetchedAt`，收盤後才抓到的列鎖到隔天 08:25；`isClosed(quote, market)` 新增市場參數，只對台股以 `quote.asOf` 套用同一推論。**刻意保留**：`fetchedAt` 缺漏或仍在盤中時維持十分鐘退避，鎖定盤中快照正是 BUG-011 的原始缺陷。
-- **其餘六項**: AUDIT-09（分割 0 股三道關卡）、AUDIT-11（批次失敗回報進度）、AUDIT-12（逐檔 try/catch 並回報失敗代號）、AUDIT-13（`CRON_SECRET` 固定時間比較）、AUDIT-14（漲跌百分比防除以 0）、AUDIT-15（日期正規式錨定結尾）。詳見 `FIXED_BUG.md` BUG-051…BUG-056。
-- **路由**: 3 個 `route:builder` 平行實作（檔案清單互斥），主 session 先寫 12 個失敗測試作為契約。BUG-050 builder 回報 `VERIFY: BLOCKED`，指出一支既有測試（`priceProxy.test.ts` 的 `沉澱窗結束後（14:00 起）才退回十分鐘退避`）與新規則衝突。主 session 裁決：該測試編碼的是 BUG-050 之前的行為，已被取代；改寫為兩個案例，分別釘住「盤中抓到的列仍退避」與「收盤後抓到的列鎖定」。
-- **Review**: `route:reviewer` 判定 **PASS**，三項 RISK。RISK-1（失敗無診斷資訊）與 RISK-3（管理台未顯示 `failed`）已於本版一併修正 —— 失敗的股票代號（最多 10 檔）隨回應主體回傳，`summariseFollowUp` 與 `ManualRunSection.summarizeBody` 都會顯示；不加 `console.*` 是因為該檔 4,200 行沒有任何一行 log。RISK-2（`uploadJson` 回傳 `false` 的標的兩邊都不計數）為既有缺口，列為 `BUG_FIX.md` RISK-005。
-- **Verify**: `npm run build`（`tsc -b && vite build`）exit 0；`npx vitest run` **99 檔 / 1,637 項全數通過**，exit 0（新增 24 項測試，含新檔 `RecalcFeesModal.test.tsx`、`cronSecret.test.ts`；改寫 2 個被本版取代的既有案例）。
-- **未做**: 未 commit、未 push、未部署任何 Edge Function、未動 Supabase。**BUG-050 與 AUDIT-12/13 的 Edge 端修正需要部署後才會在 DEV／PROD 生效**，等待使用者指示。
-

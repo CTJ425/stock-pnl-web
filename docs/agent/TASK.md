@@ -2,7 +2,7 @@
 
 - Agent: Antigravity
 - Status: ACTIVE
-- Timestamp: 2026-09-04 16:30:00 Asia/Taipei
+- Timestamp: 2026-09-04 23:05:00 Asia/Taipei
 
 ---
 
@@ -25,6 +25,17 @@
 - **Known and not done**: the end-to-end Playwright run for the 融券 flow; `transactions.user_id` is `NOT NULL` but undeclared in the TypeScript `Transaction` type; `.inst-matrix tfoot td` hardcodes a white overlay that is inverted under the light theme.
 
 ## 📋 Active Tasks
+
+### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
+- **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-09-04 23:05:00 Asia/Taipei
+- **Spec**: `docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`
+- **What is this**: Comprehensive audit across calculation engines, Edge Functions, data parsers, and UI components:
+  1. **P0 Data & Calculation Integrity**: Fix CSV export/import losing borrow fee (`csv.ts:262, 325`), `proposeFeeCorrections` omitting borrow fee on short sales and leaving `fee_rate` desynced (`fees.ts:163`, `RecalcFeesModal.tsx:55`), and `StockSplitModal` miscalculating short-cover buys and ignoring short sells (`StockSplitModal.tsx:50`).
+  2. **P1 Capacity & Availability**: Address PostgREST 1000-row silent query truncation across 7 locations (`dataProvider.ts:312`, `backup-transactions`, `stock-report`); fix `AnalysisPage.tsx:84` rowKey collision preventing selection of short positions; fix pure short position passing `qty: 0` to What-If tab; guard `stock-report` manifest publication on complete batch failure (`index.ts:3111`).
+  3. **P2 & Optimizations**: Timing-safe comparison in `backup-transactions`; duplicate key & sell label fix in `YearlyPage.tsx`; route-level `React.lazy()` code splitting for `AdminConsolePage`, `MacroPage`, and `FxPage` in `AppShell.tsx`; memo stabilization in `IntradayChart.tsx`.
+- **Roadmap**: Ready for implementation in 3 phases per `Spec 145`.
 
 ### Task 144: Admin Enhancements, Execution Logs, Resource Usage & Multi-Target Backups
 - **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 144)**

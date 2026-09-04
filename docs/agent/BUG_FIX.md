@@ -2,178 +2,93 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-04 20:08:47 Asia/Taipei
+- Timestamp: 2026-09-04 23:45:00 Asia/Taipei
 
 ---
 
-## 🔍 Codebase audit 2026-09-04 (follow-up) — `stock-report/index.ts` 未覆蓋範圍
+## 🔍 Codebase audit 2026-09-04 (deep sweep) — P0 defects, pagination gaps & UI anomalies
 
-前一次稽核在 4,236 行的 `stock-report/index.ts` 中只逐行讀了約 900 行，並在
-「未覆蓋範圍」記下三段未展開：1200-2280、3400-3760、3900-3925。本次以兩個
-平行 read-only 審查把 1200-2290 與 3400-3930 完整讀完，補上該缺口。
+A comprehensive audit covering `sources/src/` (engines, components, utils) and `sources/supabase/` (Edge functions).
+Documented in detail in `docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`.
 
-**結果：5 項可證明的缺陷，全部於 0.9.33 修正**（`FIXED_BUG.md` BUG-057 … BUG-061）。
-授權面另有一項明確的陰性結論：`admin-status` / `admin-users` / `admin-set-role` /
-`admin-backups` / `admin-backup-url` / `admin-backup-restore` 六個 handler 全數在
-dispatch 層由 `assertAdmin` 把關，`backfill-*` / `sync-*` 走 `assertCronSecret`，
-兩種機制沒有交叉錯配，**未發現授權繞過路徑**。
+### BUG-063 — CSV 匯出後再匯入導致融券借券費永久遺失
+- **Location**: `sources/src/utils/csv.ts:262, 325` & `sources/src/utils/pnlEngine.ts:268`
+- **Root Cause**: `splitFeeTax` 扣除 `borrow`，將手續費填為 `tx.fee_tax - tax - borrow`。CSV 沒有獨立借券費欄位，匯入時 `splitMode` 以 `fee + tax` 覆蓋 `fee_tax`，借券費永久遺失。
+- **Severity**: P0（帳務金額靜默失真）
+- **Status**: OPEN
 
-審查另主動查證並駁回一項既有疑慮：`handleAdminStatus` 直接回傳
-`source_probe_tick.fingerprint` 曾被記為會外洩 `twt38u` 的原始表格內容，但現行
-`twt38u` 分支已改用 `foreignTopFingerprint()`（長度 + djb2 雜湊），該疑慮不成立。
+### BUG-064 — 批次重算手續費漏算融券借券費，且未同步更新折讓率
+- **Location**: `sources/src/utils/fees.ts:163-171` & `sources/src/components/Transactions/RecalcFeesModal.tsx:55-64`
+- **Root Cause**: `proposeFeeCorrections` 呼叫 `calculateFee` 時漏傳 `nature: tx.tx_nature`，融券賣出被當成一般現股賣出而未計入借券費，精靈誤判不符並提示覆蓋。更新時未將 `fee_rate` 寫入，導致折讓率欄位脫鉤。
+- **Severity**: P0（融券帳務損毀）
+- **Status**: OPEN
 
----
+### BUG-065 — 股票分割換算未隔離融券交易，造成部位失衡
+- **Location**: `sources/src/components/Transactions/StockSplitModal.tsx:49-65, 178-184`
+- **Root Cause**: 以 `tx_type === 'BUY'` 篩選交易時未排除 `tx_nature === 'SHORT'`，融券回補買進被誤當現股買進進行分割計算；未平倉融券賣出空單未受支援，分割後導致資券失衡。
+- **Severity**: P0（計算錯誤）
+- **Status**: OPEN
 
-## 🔍 Codebase audit 2026-09-04 — six fixed in 0.9.32-dev.1, one accepted
+### BUG-066 — PostgREST 預設 1000 筆上限造成跨模組靜默截斷（7 處）
+- **Location**:
+  1. `sources/src/services/dataProvider.ts:312` (`listTransactions` 無分頁)
+  2. `sources/supabase/functions/backup-transactions/index.ts:72` (`backupAccount` 備份查詢未分頁)
+  3. `sources/supabase/functions/stock-report/index.ts:1003` (`heldTwTickers` 跨用戶全表無分頁)
+  4. `sources/supabase/functions/stock-report/index.ts:1011` (`watchedTwTickers` 觀察名單超過 1000 筆截斷)
+  5. `sources/supabase/functions/backup-transactions/index.ts:172` & `stock-report/index.ts:3809` (`listUsers` 未多頁走訪)
+  6. `sources/supabase/functions/stock-report/index.ts:3538` (`source_probe_tick` 寫死 `.limit(2000)` 仍受 1000 上限截斷)
+  7. `sources/supabase/functions/stock-report/index.ts:3947` (備份還原寫入回傳筆數截斷)
+- **Root Cause**: PostgREST 伺服器端強制上限 `max_rows = 1000`，無分頁循環的查詢超過 1000 筆時尾端資料靜默遺失。
+- **Severity**: P1（系統容量與資料完整性）
+- **已完成的部分（0.9.33）**: 7 處中的 2 處已修 —— `stock-report/index.ts` 的 `handleAdminBackupRestore`（既有列查詢）與 `handleAdminBackups`（`backup_run_log` 查詢），皆改走新增的 `pagedSelect` helper 並以 key 排序後分頁（`.range()` 是 OFFSET/LIMIT，沒有 `ORDER BY` 就不保證跨頁列序一致）。紀錄見 `FIXED_BUG.md` BUG-059、BUG-060。**實作此項時請直接重用 `pagedSelect`，並先確認剩下 5 處是哪幾處，不要重做已完成的兩處。**
+- **Status**: OPEN
 
-Triggered by BUG-049. Three parallel read-only reviews covered `supabase/functions/`, `src/services/` +
-`src/utils/` + `src/types/`, and `src/components/` + `src/context/`. **No code was touched.** Ranked by what
-it costs if it bites. The main session verified each entry below by reading the cited lines; one further
-reviewer claim (a `chip_raw_cache` upsert missing `onConflict`) was **rejected** — `chip_raw_cache_pkey` is
-`PRIMARY KEY (ymd, dataset)`, so the default upsert target is correct.
+### BUG-067 — 個股分析下拉選單重複 Key，導致融券空單永遠無法被選取
+- **Location**: `sources/src/components/StockDetail/AnalysisPage.tsx:84, 115, 204`
+- **Root Cause**: `holdingEntries` 誤用 `r.holding.key`（兩者同為 `'TPE:2330'`）而非唯一的 `r.rowKey`。導致 Duplicate Key 警告且 `find` 永遠命中第一筆多單，融券空單持股無法切換。
+- **Severity**: P1（功能阻斷）
+- **Status**: OPEN
 
-> **六項已修，一項判定為可接受風險。** AUDIT-09、11、12、13、14、15 於 0.9.32-dev.1 修正
-> （`FIXED_BUG.md` BUG-051 … BUG-056）。**AUDIT-10 不改程式**：「2.500」在台美股都可能是合法的
-> 2.5 元，加規則拒絕它會擋掉正常匯入；多組點號如「1.234.567」目前已是 `NaN` 會報錯，真正的破口
-> 只有「單組三位數」這種本質上無法區分小數與千分位的形式。台灣券商匯出使用逗號千分位，不會觸發。
-> 使用者於 2026-09-04 確認此方向。下列清單保留為稽核發現的紀錄與各項為何重要的說明。
+### BUG-068 — 個股分析傳入純融券部位導致 What-If 試算鎖死
+- **Location**: `sources/src/components/StockDetail/AnalysisPage.tsx:258`
+- **Root Cause**: 純融券部位 `qty = 0, avgCost = 0`（股數存於 `shortQty`），傳入 What-If 試算造成預設股數與成本歸零。
+- **Severity**: P1（功能異常）
+- **Status**: OPEN
 
-### AUDIT-09 — 反向分割可產生 0 股但保留原手續費的買入紀錄，永久墊高平均成本
-- **Proven by reading**: `StockSplitModal.tsx:112` `newQty = Math.round(tx.qty / ratio)` 沒有下限檢查；
-  `:119` 只有在 `tx.fee_tax === 0 && autoFillZeroFee` 時才重算手續費，原本非 0 的 `fee_tax` 原封不動帶過；
-  `:164` `handleConfirm` 的守門只有 `busy || previewItems.length === 0 || !isValidRatio`，沒有擋 `newQty === 0`。
-- **Proven by reading**: `pnlEngine.ts` BUY 分支 `pos.cost += totalCost` 且 `totalCost = tx.price * effQty + effFeeTax`。
-  `effQty` 為 0 而 `effFeeTax` 非 0 時，`pos.cost` 增加但 `pos.qty` 不變。
-- **Failure scenario**: 持有 3 股的零股，做 10 併 1 反向分割。`Math.round(3/10) = 0`，預覽欄位顯示 0 但不擋確認。
-  確認後該標的的平均買入成本與保本賣出價被幽靈手續費墊高，直到整個部位全數賣出才歸零。
-- **Severity**: HIGH（靜默的金額錯誤）
+### BUG-069 — 每日報表全數失敗時仍上傳 `manifest.json` 引發全站 404
+- **Location**: `sources/supabase/functions/stock-report/index.ts:3111`
+- **Root Cause**: 在 `handleGenerateAll` 中無條件上傳 `reports/manifest.json`，當 `generated === 0` 且全數失敗時將前端導向空目錄。應加上 `if (generated > 0)` 守衛。
+- **Severity**: P1（可用性風險）
+- **Status**: OPEN
 
-### AUDIT-10 — CSV 匯入把「以點為千分位」的數字少算 1000 倍且不報錯
-- **Proven by reading**: `csv.ts:93` 的清理正規式只移除 `NT$ US$ $ , 空白 ( )`，不處理點號千分位；
-  `:95` 直接 `Number(cleaned)`。
-- **Failure scenario**: 交易單價欄位為 `"2.500"`（某些地區匯出代表 2500）解析為 `2.5`，是有限正數，
-  通過 `price > 0` 驗證，不產生 `CsvRowError`。該筆交易金額少算 1000 倍，靜默污染移動平均成本。
-- **Severity**: MEDIUM（台灣券商匯出用逗號千分位，觸發需特定來源檔）
+### BUG-070 — `backup-transactions` 定時觸發金鑰比對存在時序攻擊風險
+- **Location**: `sources/supabase/functions/backup-transactions/index.ts:51`
+- **Root Cause**: 使用字串 `got !== expected` 比較，未對齊 `cronSecret.ts` 的 `secretsMatch` 常數時間比較。
+- **Severity**: P2（安全性加固）
+- **可直接重用的實作（0.9.33）**: `stock-report` 的同型問題已於 0.9.32 修正，固定時間比較函式位於 `sources/supabase/functions/stock-report/cronSecret.ts`（`secretsMatch`），並有 `cronSecret.test.ts` 五個案例覆蓋。紀錄見 `FIXED_BUG.md` BUG-054。`backup-transactions` 請重用同一份實作，並保留「`CRON_SECRET` 未設定時一律 401」的短路。
+- **Status**: OPEN
 
-### AUDIT-11 — 批次更新（分割換算、手續費重算）中途失敗沒有回滾，留下混合狀態
-- **Proven by reading**: `StockSplitModal.tsx:168-181` 與 `RecalcFeesModal.tsx:51-63` 都是
-  `for (const item of previewItems) { await updateTransaction(...) }` 包在單一 `try` 內，
-  失敗處理只有 `catch (err) { setError(...) }`。
-- **Failure scenario**: 20 筆分割換算做到第 8 筆時網路中斷。前 7 筆已是分割後數量與價格，後 13 筆仍是分割前，
-  同一標的的 `qty` / `cost` 混用兩種股數基準，畫面只顯示一句「更新失敗」，不指出哪幾筆已套用。
-- **Severity**: MEDIUM
-
-### AUDIT-12 — `assembleOne` 拋錯會中斷整個 chips 產生階段
-- **Proven by reading**: `supabase/functions/stock-report/index.ts:3071` 的迴圈本體直接呼叫 `assembleOne`，
-  沒有逐筆 `try/catch`；`uploadJson` 自己吞例外，`assembleOne` 不會。
-- **Failure scenario**: 一檔標的的資料形狀超出 `assembleOne` 的防禦，例外往上傳到 `handleGenerateAll` 的
-  `try/catch`，該輪迴圈中止，排在它後面的標的與後續 phase 這一輪都拿不到報告。
-- **Mitigation in place**: 5 分鐘後的下一次 cron 會自我修復，因此是可用性/延遲風險，不是資料損毀。
-- **Severity**: MEDIUM
-
-### AUDIT-13 — `assertCronSecret` 用一般字串比較，非固定時間比較
-- **Proven by reading**: `supabase/functions/stock-report/index.ts:899-903`
-  `if (!expected || got !== expected) return json({ error: 'Unauthorized' }, 401)`。
-- **Failure scenario**: 理論上可對公開的 `--no-verify-jwt` 端點做時序側通道量測，逐位元組縮小 `CRON_SECRET`。
-  在 HTTPS 與 Deno 網路抖動下實際可利用性低，但比較本身未加固。
-- **Severity**: LOW
-
-### AUDIT-14 — 盤中走勢圖的漲跌百分比未防除以 0
-- **Proven by reading**: `IntradayChart.tsx:50-52` `const p = (change / base) * 100` 沒有 `base === 0` 檢查；
-  `:181` `pct(change, prevClose as number)` 只擋 `null`，不擋 `0`。
-- **Proven by reading**: 同一份程式庫的 `DashboardPage.tsx:57`、`QuoteTab.tsx:169`、`WatchSection.tsx:273`
-  在相同計算上都明確寫了 `prevClose !== null && prevClose !== 0`，可見團隊知道 0 是真實會出現的資料狀態。
-- **Failure scenario**: MIS 報價回傳 `prevClose: 0` 時，tooltip 直接印出 `漲跌 +123.00 (Infinity%)` 或 `(NaN%)`。
-- **Severity**: LOW（僅顯示，不影響帳務）
-
-### AUDIT-15 — `parseTxDate` 的正規式沒有錨定結尾，會靜默誤讀日期
-- **Proven by reading**: `csv.ts:72` `/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/` 只錨定開頭，尾端多餘字元被丟棄。
-- **Failure scenario**: 日期欄位誤打成 `"2024/01/105"` 時，`\d{1,2}` 貪婪取到 `10`，剩下的 `5` 被忽略，
-  解析為 `2024-01-10` 而不是拒絕，靜默把交易記到錯誤日期。
-- **Severity**: LOW
-
-### 檢查過但未發現缺陷的類別
-- Edge Functions：單位換算（匯率、籌碼股數 vs 金額、千元 vs 百萬元）、時區與日界（Asia/Taipei、DST）、
-  外部 API 回應的 null 防禦、`JSON.parse` 例外包覆、秘密外洩到 log 或回應主體。
-- services / utils：快取 TTL 與快取鍵碰撞、`||` 誤用於可為 0 的數值、浮點誤差外漏到顯示金額。
-- components：受控輸入吞值、陣列索引當 key、非同步回應覆蓋較新狀態（皆已用序號或 cancelled 旗標處理）。
-
-### 未覆蓋範圍
-`supabase/functions/stock-report/index.ts` 共 4211 行，本次僅targeted 讀取約 900 行，
-約 1200-2280、3400-3760、3900-3925 三段未展開。該段落已用 grep 掃過
-（未檢查的 `.error`、`||` 對數值欄位、未包覆的 `JSON.parse`）且無命中，但 grep 不能取代控制流閱讀。
-**已於 0.9.33 補讀完畢**：1200-2290 與 3400-3930 兩段已完整逐行讀過，發現 5 項缺陷（見上方 follow-up 稽核段落）。3900-3925 落在後者範圍內。
-
-> **All eight are done.** AUDIT-01 … 04 in 0.6.42 (`FIXED_BUG.md` BUG-015 … BUG-018, Edge halves deployed to both
-> environments 2026-08-06 01:2x), AUDIT-05 … 08 in 0.6.43 (BUG-019 … BUG-022). The list below is kept as the record
-> of what the audit found and why each mattered.
-
-## 🔍 Codebase audit 2026-08-06 —— findings only, nothing changed
-
-A read-through of the core logic (`pnlEngine`, `fees`, `csv`, `priceProxy`, `pollPlan`, `twChips`, `macroCalendar`,
-`fxConvert`, the two Edge Functions and the admin page) looking for defects and for values that are written to drift.
-**No code was touched.** Ranked by what it costs if it bites; each entry states what is proven and what is inferred.
-
-### AUDIT-01 — The trial-matching price is shown as 現價 with no marker outside the quote card
-- **Proven by reading**: `priceProxy.ts` carries `trial` on every quote (set from MIS `ip`), `QuoteTab` is its **only**
-  consumer, and `buildHoldingRows` never reads it —— the dashboard's 現價 column and 未實現淨損益 take `quote.price`.
-- **Why it matters**: during 08:30–09:00 and 13:25–13:30, MIS's `z` is the **indicative auction price**. Nothing was
-  traded at it. For that hour the dashboard prints a P&L computed from a price that does not exist yet, and says
-  nothing about it —— while the quote card one page away labels the very same number 「試撮中」.
-- **Not yet observed in the wild**: this is a reading of the code, not a report. Task 69 item 2 (watch a trial window)
-  would confirm it on screen.
-- **Cheapest fix if wanted**: carry `trial` into `HoldingRow` and mark the cell, the same way `stale` already is.
-
-### AUDIT-02 — The Yahoo fallback silently defeats the after-close lock, and nothing caps it
-- **Proven by reading**: the Yahoo path in `stock-price/index.ts` always returns `tradeTime: null`, and since 0.6.37
-  `twQuoteTtlMs` treats a missing matching time as "not settled" → 60-second TTL **at any hour**.
-- **Consequence**: while MIS is unavailable, every TW quote refetches once a minute all night, for every user, with
-  no backoff and no daily cap. 0.6.37 accepted this deliberately ("an abnormal state should keep retrying") but the
-  retry is unbounded, and the state is invisible on screen.
-- **Second-order**: the two sources disagree on volume by about 10% (measured 2026-08-05 on 2330: MIS 31,851 張 vs
-  35,214 張 from the daily batch, which is the Yahoo-calibre figure). A fallback therefore shifts a displayed number
-  by ~10% with no source marker.
-
-### AUDIT-03 — `sliceByRange` loses 1–3 days whenever the series ends on a 29th–31st
-- **Proven by execution**: `fxConvert.ts` does `d.setUTCMonth(d.getUTCMonth() - months)`, which overflows on
-  month-end dates. Verified with node: `2026-05-31` minus 3 months gives **2026-03-03** (not 02-28), and
-  `2026-03-31` minus 1 month also gives **2026-03-03**.
-- **Impact**: the FX range picker quietly returns a window short by up to three days. Invisible —— the chart just
-  starts a little later than the label claims.
-
-### AUDIT-04 — The T86 fingerprint joins cells with an empty string
-- **Proven by execution**: `pollPlan.ts` `sortedRows` uses `row.join('')`, and `['12','3'].join('')` equals
-  `['1','23'].join('')`. Two different rows can produce the same string.
-- **Why it matters more than it looks**: this fingerprint is the gate that decides whether today's T86 is **finalised**
-  (`nextT86State` freezes after N identical polls). A collision means a real revision reads as "unchanged".
-- **Probability is low** (fixed-arity numeric columns) but the fix is one character —— a separator that cannot occur
-  in the data.
-
-### AUDIT-05 — `describeCron`'s silent fall-through is a defect generator
-- Two bugs in one evening (BUG-012, BUG-014) had the same shape: a cron shape with no branch falls through to
-  `return expr`, and a raw cron string on screen looks like a deliberate rendering rather than a failure.
-- **Suggestion, not a bug**: make the fallback self-announcing (e.g. prefix 「未解析」) so the next unmatched shape is
-  obvious the moment it appears, instead of waiting for a user to notice that a time looks wrong.
-
-### AUDIT-06 — `writeStore` is the one unguarded localStorage write
-- `dataProvider.ts` writes the local-mode ledger with no `try`, while `priceProxy` / `twMarketData` / `aiChatStore`
-  all guard theirs. A quota or private-mode failure throws out of the save path with no message.
-- **Arguably correct to fail loudly** for user data —— silently dropping a transaction would be worse. What is wrong
-  is that it fails *unhandled*: the user sees nothing.
-
-### AUDIT-07 — `shiftPeriod` breaks for negative period arithmetic
-- `macroCalendar.ts` computes `total % 12` on `y * 12 + m - 1 + n`. JavaScript's `%` keeps the sign, so a negative
-  total yields a negative month. Unreachable at today's years; a trap for whoever first calls it with a large
-  negative `n`.
-
-### AUDIT-08 — 「顯示全部」 on the new market volume table cannot reach the whole file
-- `SHOWN_DAYS = 60` slices the days before the table sees them, while `market/daily.json` keeps up to
-  `MARKET_DAYS_CAP = 120`. The button names the number it will show, so nothing lies —— but 「全部」 means "all 60 of
-  the 60 I was given", not "everything on file". Introduced by me in 0.6.38.
+### BUG-071 — 年度報告當沖拆分記錄 Duplicate Key 與融券回補標籤顛倒
+- **Location**: `sources/src/components/YearlyReport/YearlyPage.tsx:373, 377` & `sources/src/utils/pnlEngine.ts:534, 772`
+- **Root Cause**: 當沖拆分賣出推入相同 `txId` 導致 `<tr key={sell.txId}>` 噴警告；line 377 寫死「賣出」，融券回補顯示顛倒。
+- **Severity**: P2（顯示與主控台錯誤）
+- **Status**: OPEN
 
 ---
 
 ## 🐛 Currently Active / Open Bugs
+
+### AUDIT-10 — CSV 匯入把「以點為千分位」的數字少算 1000 倍且不報錯
+
+- **Where**: `sources/src/utils/csv.ts`（`parseNumber`）
+- **Proven by reading**: 清理正規式只移除 `NT$ US$ $ , 空白 ( )`，不處理點號千分位，之後直接 `Number(cleaned)`。
+- **Failure scenario**: 交易單價欄位為 `"2.500"`（某些地區匯出代表 2500）解析為 `2.5`，是有限正數，通過 `price > 0` 驗證，不產生 `CsvRowError`。該筆交易金額少算 1000 倍，靜默污染移動平均成本。
+- **Severity**: MEDIUM（台灣券商匯出用逗號千分位，觸發需特定來源檔）
+- **Decision**: 使用者於 2026-09-04 決定**不改程式**，記為可接受風險。「2.500」在台股與美股都可能是合法的 2.5 元，加規則拒絕它會擋掉正常匯入；多組點號如「1.234.567」目前已是 `NaN` 會報錯，真正的破口只有「單組三位數」這種本質上無法區分小數與千分位的形式。
+- **Status**: OPEN（已接受，不修）
+- **Discovered**: 2026-09-04 全庫稽核。同批的其餘六項（AUDIT-09、11、12、13、14、15）已於 0.9.32 修正，紀錄見 `FIXED_BUG.md` BUG-051 … BUG-056，稽核全文已歸檔至 `FIXED_BUG.md` 末段。
+
+---
 
 ### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
 
@@ -303,14 +218,6 @@ BUG-011 (the after-close lock froze an intraday snapshot) was fixed as 0.6.37, d
 The 2026-07-28 look-back on BUG-004 (32-round day, 16:00–17:00 rounds, short-circuit ratio) is obsolete:
 the scheduler has been reworked several times since, most recently in 0.6.32, and the timeline now reads from
 `batch_run_log` directly. Nothing is pending from it.
-
----
-
-## 🐛 BUG-040 — WITHDRAWN (2026-09-01)
-
-- **Finding**: "Admin self-revocation without confirmation" — premise is false.
-- **Investigation**: `handleAdminSetRole` in `sources/supabase/functions/stock-report/index.ts:3700-3702` refuses self-revocation server-side (`if (userId === targetUserId && !targetIsAdmin) throw`). `setUserAdmin` in `AuthContext.tsx` unwraps that error message. `AccountsSection.test.tsx` already pins the UI behaviour (button stays enabled and unchanged on error).
-- **Conclusion**: No code change needed. Existing test already covers the guard. Entry withdrawn from open bug list.
 
 ---
 
