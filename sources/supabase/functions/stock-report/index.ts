@@ -133,6 +133,7 @@ import {
   bfi82uDayUrl,
   fmtqikMonthUrl,
   isMarketSessionReady,
+  marketDaysSignature,
   mergeInstitutional,
   mergeMarketDays,
   parseBfi82u,
@@ -1709,22 +1710,12 @@ async function syncMarket(now: Date): Promise<{
   /*
     Compare content, not length: when only some days had their institutional amounts filled in, the day count
     does not move —— judging by length would treat a real update as nothing happening and skip the write
-    (the same pit as EPS in backfillProfit).
+    (the same pit as EPS in backfillProfit). AUDIT-2026-09-04 #1: the fingerprint used to cover only
+    date/tradeValueTwd/taiexOpen and three institutional amounts, so a TWSE correction to any other
+    field — the closing 加權指數 among them — compared equal and the write was silently skipped. Every
+    new `MarketDay` field must be added to `marketDaysSignature` (in twMarket.ts) and to its test.
   */
-  const signature = (ds: MarketDay[]) =>
-    ds
-      .map(
-        (d) =>
-          `${d.date}:${d.tradeValueTwd ?? ''}:${d.taiexOpen ?? ''}:${
-            d.institutional
-              ? `${d.institutional.totalTwd ?? ''}:${d.institutional.trustTwd ?? ''}:${
-                  d.institutional.foreignTwd ?? ''
-                }:${d.institutional.buy?.totalTwd ?? ''}:${d.institutional.sell?.totalTwd ?? ''}`
-              : '0'
-          }`,
-      )
-      .join(',')
-  if (signature(days) === signature(have)) {
+  if (marketDaysSignature(days) === marketDaysSignature(have)) {
     return {
       synced: false,
       days: days.length,
@@ -2140,6 +2131,7 @@ async function handleWarmChips(
   // as of that day — borrow/margin-fallback data is "latest only", so it only applies to
   // the newest day in the window.
   let daysWritten = 0
+  let daysFailed = 0
   for (let i = 0; i < series.days.length; i++) {
     const day = series.days[i]
     const isLatest = i === series.days.length - 1
@@ -2151,21 +2143,26 @@ async function handleWarmChips(
       marginYmds: windowDays.map((d) => d.ymd).filter((y) => marginYmdSet.has(y)),
       marginDatedFailed: windowDays.length > 0 && !windowDays.some((d) => marginYmdSet.has(d.ymd)),
     }
-    const data = assembleOne({
-      ticker,
-      name,
-      holding: null,
-      series: daySeries,
-      marginFallbackRows: isLatest ? marginFallbackRows : null,
-      borrow: isLatest ? borrow : { resp: null, date: null, fallbackRows: null },
-    })
-    const okUp = await uploadJson(`${day.ymd}/${ticker}.json`, {
-      ticker,
-      dataDate: data.dataDate,
-      generatedAt: data.generatedAt,
-      data,
-    })
-    if (okUp) daysWritten++
+    try {
+      const data = assembleOne({
+        ticker,
+        name,
+        holding: null,
+        series: daySeries,
+        marginFallbackRows: isLatest ? marginFallbackRows : null,
+        borrow: isLatest ? borrow : { resp: null, date: null, fallbackRows: null },
+      })
+      const okUp = await uploadJson(`${day.ymd}/${ticker}.json`, {
+        ticker,
+        dataDate: data.dataDate,
+        generatedAt: data.generatedAt,
+        data,
+      })
+      if (okUp) daysWritten++
+    } catch {
+      daysFailed++
+      continue
+    }
   }
 
   return json({
@@ -2173,6 +2170,7 @@ async function handleWarmChips(
     ticker,
     phase: 'chips',
     daysWritten,
+    daysFailed,
     daysFetchedUpstream: series.upstreamFetched ?? 0,
     durationMs: Date.now() - started,
   })
@@ -2351,11 +2349,21 @@ function taipeiHhmm(d: Date): string {
  * For the reason of existence, see schema.sql §7: pg_net’s response only keeps 6 hours, chip_raw_cache only remembers the success time.
  * Neither of them can answer "Whether that day's data arrived when that class ran?", and that is the only fact needed to fine-tune the cron schedule.
  */
-async function logBatchRun(row: Record<string, unknown>): Promise<void> {
+/**
+ * Write the nightly observation row. Returns the failure reason, or null on success.
+ *
+ * Observation failure must never bring the batch down —— that property is why this is wrapped, and
+ * it stays. But it must not be **silent** either. 0.9.32 added two fields to the row that
+ * `batch_run_log` has no columns for; PostgREST rejects the whole insert for one unknown column,
+ * and because the result was dropped on the floor here, every nightly row would have vanished with
+ * nothing on any screen to say so. The caller now puts the reason in its own response.
+ */
+async function logBatchRun(row: Record<string, unknown>): Promise<string | null> {
   try {
-    await db.from('batch_run_log').insert(row)
-  } catch {
-    // Observation failure cannot bring down the batch
+    const { error } = await db.from('batch_run_log').insert(row)
+    return error ? error.message : null
+  } catch (e) {
+    return e instanceof Error ? e.message : 'batch_run_log insert failed'
   }
 }
 
@@ -3118,7 +3126,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   const holdingsScope = await evaluateTickerScope(personalList, seriesDataYmd)
 
   // Nightly observation row: chips phase owns the primary batch_run_log write.
-  await logBatchRun({
+  const logError = await logBatchRun({
     taipei_ymd: todayYmd,
     taipei_time: taipeiHhmm(now),
     runs_today: (last?.runsToday ?? 0) + 1,
@@ -3139,8 +3147,11 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     regenerated: regenerate,
     history_days: historyDays,
     generated,
-    failed,
-    failed_tickers: failedTickers,
+    // `failed` / `failedTickers` are deliberately NOT written here. `batch_run_log` has no such
+    // columns (see `schema.sql`), PostgREST rejects the whole row for an unknown column, and
+    // `logBatchRun` ignores the result — so adding them silently destroyed every nightly
+    // observation row. They travel in this phase's HTTP response instead, which is where
+    // `summariseFollowUp` and the admin console already read this phase's numbers from.
     daily_synced: 0,
     fundamental_synced: 0,
     revenue_backfilled: 0,
@@ -3155,6 +3166,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     generated,
     failed,
     failedTickers,
+    logError,
     regenerated: regenerate,
     chipsSkipped,
     skipReason,
@@ -3662,19 +3674,22 @@ async function latestChipSources(): Promise<unknown> {
  * Just count the quantity, do not download the content - download 18 JSONs file by file just to see the timestamp.
  * This will change the endpoint from 2 seconds to more than ten seconds, and the only thing on the screen is the numerator and denominator.
  */
-async function storageCoverage(): Promise<Record<string, number>> {
+async function storageCoverage(): Promise<Record<string, number | null>> {
   const dirs = ['daily', 'fundamental']
-  const out: Record<string, number> = {}
+  const out: Record<string, number | null> = {}
   await Promise.all(
     dirs.map(async (d) => {
-      const { data } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
-      out[d] = (data ?? []).filter((f) => f.name.endsWith('.json')).length
+      // `list()` fails without throwing — { data: null, error }. Reading only `data` turned a failed
+      // lookup into "0 files", which an operator cannot tell apart from a genuinely empty directory
+      // (AUDIT-2026-09-04 #5). `null` here means "lookup failed", not "empty".
+      const { data, error } = await db.storage.from(REPORTS_BUCKET).list(d, { limit: 1000 })
+      out[d] = error ? null : (data ?? []).filter((f) => f.name.endsWith('.json')).length
     }),
   )
   try {
     out.held = (await heldTwTickers()).length
   } catch {
-    out.held = 0
+    out.held = null
   }
   return out
 }
@@ -3753,6 +3768,33 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
   return json({ ok: true, userId, admin: makeAdmin })
 }
 
+/**
+ * PostgREST caps a single response at `max_rows` (1000, see `supabase/config.toml`). A select that
+ * can plausibly return more rows than that needs explicit paging, or rows past the cap are silently
+ * dropped (AUDIT-2026-09-04 #3: this under-counted `existingKeys` for accounts past 1000
+ * `transactions`, so the backup-restore preview reported existing rows as missing).
+ *
+ * `build` must return a fresh, fully-specified query (including any `.order()`) for the given
+ * `[from, to]` range — a supabase-js query builder cannot be re-awaited after use, so each page
+ * needs its own builder call.
+ */
+async function pagedSelect<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const rows: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await build(from, from + pageSize - 1)
+    if (error) return { data: rows, error }
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < pageSize) break
+    from += pageSize
+  }
+  return { data: rows, error: null }
+}
+
 const BACKUPS_BUCKET = 'backups'
 
 /**
@@ -3768,13 +3810,20 @@ async function handleAdminBackups(): Promise<Response> {
   if (usersError) return json({ error: usersError.message }, 500)
   const users = usersData?.users ?? []
 
-  const { data: runRows, error: runError } = await db
-    .from('backup_run_log')
-    .select('user_id, run_date, status, error, transaction_count')
-    .order('run_date', { ascending: false })
+  const { data: runRows, error: runError } = await pagedSelect<Record<string, unknown>>((from, to) =>
+    db
+      .from('backup_run_log')
+      .select('user_id, run_date, status, error, transaction_count')
+      .order('run_date', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  )
   if (runError) return json({ error: runError.message }, 500)
 
-  // Rows are newest-first, so the first row seen per user_id is that account's newest run.
+  // Rows are newest-first: `run_date` is a DATE with no (user_id, run_date) unique key, so a
+  // failed scheduled run plus a successful manual re-run can land two rows on the same date —
+  // `id` (BIGSERIAL PRIMARY KEY) is the tiebreak that makes the ordering a total order, so the
+  // first row seen per user_id is unambiguously that account's newest run.
   const lastRunByUser = new Map<string, { runDate: string; status: string; error: string | null; transactionCount: number }>()
   for (const r of runRows ?? []) {
     const uid = r.user_id as string
@@ -3875,10 +3924,17 @@ async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promis
   for (const name of tableOrder) {
     const keyField = BACKUP_TABLE_KEYS[name]
     const fileRows = doc.tables[name]
-    const { data: existingRows, error: existingError } = await db
-      .from(name)
-      .select(keyField)
-      .eq('user_id', expectedUserId)
+    // `.range()` is OFFSET/LIMIT, and Postgres guarantees no row order across separate queries
+    // without an ORDER BY —— so an unordered paged read can repeat or skip a row between pages,
+    // which is exactly the >1000-row case this paging exists to get right. Order by the key.
+    const { data: existingRows, error: existingError } = await pagedSelect((from, to) =>
+      db
+        .from(name)
+        .select(keyField)
+        .eq('user_id', expectedUserId)
+        .order(keyField, { ascending: true })
+        .range(from, to),
+    )
     if (existingError) return json({ error: existingError.message }, 500)
     const existingKeys = (existingRows ?? []).map((r) => String((r as Record<string, unknown>)[keyField]))
     const toInsert = rowsToInsert(fileRows, existingKeys, keyField)

@@ -77,11 +77,17 @@ const lastHistory = new Map<string, WarmResult>()
 export interface WarmChipsResult {
   ok: boolean
   daysWritten: number
+  /**
+   * Days the Edge skipped because `assembleOne` threw for them (BUG-058). No screen reads this
+   * yet — neither does `daysWritten` — but the client contract must carry what the Edge reports,
+   * or the next reader of this type will not know the count exists.
+   */
+  daysFailed: number
   /** True when the reports for the latest ymd already existed; not a failure. */
   skipped?: boolean
 }
 
-const FAILED_CHIPS: WarmChipsResult = { ok: false, daysWritten: 0 }
+const FAILED_CHIPS: WarmChipsResult = { ok: false, daysWritten: 0, daysFailed: 0 }
 
 const inflightChips = new Map<string, Promise<WarmChipsResult>>()
 const attemptedChips = new Set<string>()
@@ -231,6 +237,7 @@ function parseChipsResult(data: Record<string, unknown>): WarmChipsResult {
   return {
     ok: data.ok === true,
     daysWritten: typeof data.daysWritten === 'number' ? data.daysWritten : 0,
+    daysFailed: typeof data.daysFailed === 'number' ? data.daysFailed : 0,
     skipped: data.skipped === 'already-present' ? true : undefined,
   }
 }

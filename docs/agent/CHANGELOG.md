@@ -2,6 +2,38 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.33（2026-09-04）— 補讀 `stock-report/index.ts` 未覆蓋範圍的六項修正
+
+> 上一次稽核在 4,236 行的 `stock-report/index.ts` 中只逐行讀了約 900 行，並把三段未展開的範圍記在
+> `BUG_FIX.md` 的「未覆蓋範圍」。本版把 1200-2290 與 3400-3930 共約 1,465 行完整讀完，補上該缺口。
+> 授權面另有一項明確的陰性結論：六個 admin handler 全數在 dispatch 層由 `assertAdmin` 把關，
+> `backfill-*` / `sync-*` 走 `assertCronSecret`，兩種機制沒有交叉錯配，未發現繞過路徑。
+
+- 🐛 **大盤日線的內容指紋漏比對六個欄位（BUG-057，HIGH）**（`twMarket.ts`、`stock-report/index.ts`）—
+  `syncMarket` 以內容指紋決定是否重寫 `market/daily.json`，但指紋只涵蓋 `MarketDay` 十個欄位中的三個。
+  加權指數收盤 `taiex`、漲跌點數、成交股數、成交筆數、最高、最低全部不在內。該函式每一輪重抓當月正是為了
+  接住 TWSE 的訂正，訂正落在未涵蓋欄位時卻被判定為「無變動」而不寫檔，錯誤值永久留在 `market/daily.json`。
+  指紋抽成 `marketDaysSignature()`，涵蓋每一層的每一個欄位並區分 `null`、`0` 與物件缺席。
+- 🐛 **單日失敗中斷整次籌碼回補（BUG-058）**（`stock-report/index.ts`）— `handleWarmChips` 的逐日迴圈
+  重複了 AUDIT-12 的缺陷。改為逐日 `try/catch`、計入 `daysFailed` 並續做；`warmStock.ts` 的 client 契約同步。
+- 🐛 **備份還原預覽超過 1000 筆時誤判缺漏（BUG-059）**（`stock-report/index.ts`）— PostgREST 的
+  `max_rows` 為 1000，未分頁的查詢讓既有列被靜默截斷，預覽把已存在的列報成缺漏。新增 `pagedSelect`
+  helper，並以 key 排序後分頁 —— `.range()` 是 OFFSET/LIMIT，沒有 `ORDER BY` 就不保證跨頁列序一致。
+- 🐛 **管理台「最新備份紀錄」排序不具決定性（BUG-060）**（`stock-report/index.ts`）— `run_date` 是日粒度
+  且無唯一鍵，同一天的失敗與重跑成功兩列順序未定。追加 `id` 為次要排序鍵。
+- 🐛 **Storage 查詢失敗顯示成「0 檔」（BUG-061）**（`stock-report/index.ts`、`adminStatus.ts`、`AdminStatusPage.tsx`）—
+  `list()` 失敗回傳 `{ data: null, error }` 而不拋錯，運維者看到「日線檔 0」會誤判為批次沒寫入。
+  改為回傳 `null` 並在管理台顯示 `—`。
+- 🐛 **修正 0.9.32 引入的回歸（BUG-062）**（`stock-report/index.ts`、`ManualRunSection.tsx`）—
+  0.9.32 把 `failed` / `failed_tickers` 加進要 INSERT 進 `batch_run_log` 的列，但該表沒有這兩個欄位。
+  PostgREST 只要有一個未知欄位就退回整列，而 `logBatchRun` 完全不檢查回傳值，於是每晚的觀測列會靜默消失。
+  **實際未造成資料遺失**：兩個環境的最新觀測列都早於 0.9.32 的部署時間，在下一個寫入視窗之前就已修好並重新部署。
+  兩個欄位改為只走 HTTP 回應（`summariseFollowUp` 與管理台照樣看得到），`logBatchRun` 改為回傳失敗原因，
+  chips phase 以 `logError` 回報，管理台顯示它。
+- ✅ **測試**：新增 31 個測試（30 個逐欄位走訪指紋、1 個 `daysFailed` 契約）；全套 99 檔 / 1,668 項通過。
+  `npm run build`、`npm run typecheck:edge`、`npm run lint` 全部 exit 0。
+- 🔍 **Review**：`route:reviewer` 判定 PASS，兩項 RISK（分頁未排序、`daysFailed` 無人讀取），皆已於本版修正。
+
 ### 0.9.32（2026-09-04）— 收盤後報價定案判定，與 2026-09-04 稽核的六項修正
 
 > 兩件事在同一版：其一，台股收盤後有兩種報價來源無法自證已定案 —— Yahoo 後備從不回傳撮合時間，冷門股沒有收盤撮合則把撮合時間停在 13:30 之前 —— 畫面因此整晚顯示「盤中」，快取也整晚每十分鐘重抓同一個數字。其二，2026-09-04 全庫稽核列出的七項發現，六項在本版修掉，一項判定為可接受風險不動程式。

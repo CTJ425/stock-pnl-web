@@ -275,6 +275,50 @@ export function mergeInstitutional(
   }
 }
 
+/** `null`/absent → `null`; keeps the six amounts in a fixed order so JSON.stringify does not merge two different shapes into one string.*/
+function institutionalSideArray(s: MarketInstitutionalSide | null | undefined): unknown[] | null {
+  if (!s) return null
+  return [s.foreignTwd, s.foreignDealerTwd, s.trustTwd, s.dealerSelfTwd, s.dealerHedgeTwd, s.totalTwd]
+}
+
+/**
+ * Content fingerprint for `syncMarket`'s unchanged-check. Covers EVERY field of `MarketDay`, of
+ * `MarketInstitutional`, and of both `MarketInstitutionalSide` values under `buy` / `sell` — a
+ * fingerprint that omits a field is silent data loss (see `syncMarket`'s comment and the
+ * `marketDaysSignature` describe block in `twMarket.test.ts`, which is the exact contract).
+ *
+ * Built with `JSON.stringify` on a fixed-shape tuple rather than manual string concatenation:
+ * `JSON.stringify` already tells `null` apart from `0` and from a missing key, so there is no
+ * separator scheme to get wrong.
+ */
+export function marketDaysSignature(days: MarketDay[]): string {
+  return JSON.stringify(
+    days.map((d) => [
+      d.date,
+      d.tradeVolumeShares,
+      d.tradeValueTwd,
+      d.transactions,
+      d.taiex,
+      d.changePoints,
+      d.taiexOpen,
+      d.taiexHigh,
+      d.taiexLow,
+      d.institutional
+        ? [
+            d.institutional.foreignTwd,
+            d.institutional.foreignDealerTwd,
+            d.institutional.trustTwd,
+            d.institutional.dealerSelfTwd,
+            d.institutional.dealerHedgeTwd,
+            d.institutional.totalTwd,
+            institutionalSideArray(d.institutional.buy),
+            institutionalSideArray(d.institutional.sell),
+          ]
+        : null,
+    ]),
+  )
+}
+
 export function mergeMarketDays(
   prev: MarketDay[] | null | undefined,
   incoming: MarketDay[] | null | undefined,
