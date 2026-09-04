@@ -2,7 +2,7 @@
 
 - Agent: Antigravity
 - Status: ACTIVE
-- Timestamp: 2026-08-14 13:28:00 Asia/Taipei
+- Timestamp: 2026-09-04 16:30:00 Asia/Taipei
 
 ---
 
@@ -25,6 +25,21 @@
 - **Known and not done**: the end-to-end Playwright run for the 融券 flow; `transactions.user_id` is `NOT NULL` but undeclared in the TypeScript `Transaction` type; `.inst-matrix tfoot td` hardcodes a white overlay that is inverted under the light theme.
 
 ## 📋 Active Tasks
+
+### Task 144: Admin Enhancements, Execution Logs, Resource Usage & Multi-Target Backups
+- **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 144)**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-09-04 16:30:00 Asia/Taipei
+- **Spec**: `docs/agent/specs/144-admin-enhancements-and-backups.md`
+- **What is this**: 4 interrelated system feature additions requested by user:
+  1. **Uniform Account Icon**: Replace header email initials with a uniform user icon (`lucide-react` `<User />`).
+  2. **Admin Cron & Probe Execution Logs**: Add detailed execution log viewer in Admin Console for `cron.job_run_details`, `source_probe_tick` anomalies, and batch run errors.
+  3. **Supabase Cloud Usage & Limit Monitor**: Expose database size, storage usage, and plan thresholds (Free 500MB DB / 1GB Storage) directly in the Admin Console.
+  4. **Multi-Target Backups**: Add Cloudflare R2 (S3-compatible, zero egress) offsite backup target in `backup-transactions` and provide local backup download/export options (bulk admin download, user self-service JSON export, and local backup script).
+- **Scope & Work Breakdown**:
+  - **Lane 1 (Frontend)**: Header account avatar icon (`AppShell.tsx`), Admin Console Logs UI (`AdminStatusPage.tsx`), Resource usage gauges (`AdminConsolePage.tsx` / `AdminStatusPage.tsx`), User self-service JSON export button (`UserSettingsModal.tsx` / `TransactionsPage.tsx`).
+  - **Lane 2 (Backend & RPC)**: RPC functions `admin_get_recent_logs()` and `admin_usage_metrics()` in `schema.sql`, Edge Function actions in `stock-report/index.ts` (`admin-logs`), R2 dual-upload integration in `backup-transactions/index.ts` with graceful fallback when R2 credentials are unset.
+- **Unfinished**: Implementation across all 4 phases.
 
 ### Task 129: ETF constituents in 個股分析 (deferred after investigation)
 - **Status**: ⏳ **OPEN — Investigated, deferred; research documented**
