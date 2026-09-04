@@ -10,13 +10,13 @@
 > This file must be loaded in every session. Before archiving, it had 38.6K tokens, of which 90% were completion history.
 > For detailed implementation history, always refer to `PROGRESS.md`, which is the proper place for narratives.
 
-## 📍 Where the project stands (2026-09-03 20:00)
+## 📍 Where the project stands (2026-09-04 14:50)
 
-- **Version 0.9.29 — released and live on PROD.** `main` and `dev` are synchronized at `0.9.29`.
-  - Implemented: 觀察股票同產業自動群組聚合 (Auto-Grouping, `stockGrouping.ts`)、庫存總覽快速篩選膠囊 (Filter Chips, `WatchSection.tsx`)、條列模式分組列 (`watchlist-group-row`)、個股分析頂部切換選單產業分組 (`AnalysisPage.tsx`)、緊湊型雙行小卡 (`WatchSection.tsx`)、MIS 即時 33 大官方產業別代碼資料流 (`misParse.ts` / `stock-price/index.ts`)、個股分析行情卡產業標籤 (`QuoteTab.tsx`)，以及收盤無成交價格修復與字典校正 (BUG-045, BUG-046)。
-  - Verification: 97 test files / **1599** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
+- **Version 0.9.30 — released and live on PROD.** `main` and `dev` are synchronized at `0.9.30`.
+  - Implemented: 個股分析股票產業標籤清晰度與字級優化（解耦 `.watchlist-card-badge` 樣式覆蓋，升至 12.5px 高對比）、庫存總覽持股表格黃金比例字級與完全消除橫向滾動條（13px/12px/11px 甜蜜點，全解析度 0px 水平溢出）、分組列通欄純章節化（移除市值損益重複小計）、未實現損益與報酬率雙行直顯券商 APP 牌告口徑（月退制法定牌告對齊）、觀察股票迷你緊湊小卡（高度降 20%，網格 136px）、DEV 全功能 E2E 自動化整合測試 suite 與高質感自包含 HTML 報告。
+  - Verification: 97 test files / **1,603** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint src` 0 errors.
   - Edge Functions: `stock-price` is **v3** on both projects and both carry the same `ezbr_sha256` `3ef2700b97ccad33d712c6359d1056a2c0a9fbc08a5ceb6a1b25a402b64c1621` with `verify_jwt: true`. `stock-report` is **v4** on both (`1d2ba453…266a794f23`, `verify_jwt: false`).
-- **Version 0.9.28 — prior release.**
+- **Version 0.9.29 — prior release.**
 - **The PROD schema gap is closed.** `transactions.tx_nature` (CHECK includes `SHORT`), `transactions.fee_rate` and `workspaces.fee_rate` now exist on **both** cloud projects. Applied to PROD 2026-09-03; 110 existing transactions were not rewritten. Full DDL kept in `docs/agent/prod-0.9.28-migration.sql`. This closed Task 141, BUG-041 and BUG-044-P.
   - **It closed the gap, not the risk.** Both projects were recreated on 2026-08-31 from un-migrated schema and silently lost these columns; nothing surfaced it for three days, because `dataProvider.ts` retries without the missing column and reports success. Re-check the columns after any project recreation — see `RISK-004` in `BUG_FIX.md`.
 - **DEV is the cloud project `zyebvayngwrqzoaicbwd`, not the local docker stack.** `sources/.env` points there and DEV Edge runs there (3 ACTIVE functions). The local `stock-pnl-web-dev-db-1` container answers plausibly but the app never talks to it.
