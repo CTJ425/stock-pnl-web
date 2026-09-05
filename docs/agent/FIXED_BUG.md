@@ -2,9 +2,93 @@
 
 - Agent: Scribe
 - Status: ACTIVE
-- Timestamp: 2026-09-04 23:45:00 Asia/Taipei
+- Timestamp: 2026-09-05
 
 ---
+
+### BUG-063 — CSV 匯出後再匯入導致融券借券費永久遺失
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/utils/csv.ts`
+- **Root Cause**: 匯出以 `const { fee, tax } = splitFeeTax(tx)` 丟棄第三個回傳值 `borrow`，表頭也沒有對應欄位；匯入的 split mode 以 `feeTax = fee + tax` 重建。
+- **Impact**: 一次匯出再匯入，融券賣出的 `fee_tax` 縮水，實收金額被高估、已實現損益虛增。每個欄位都解析成功、每個數字都合理，完全無聲。
+- **Fix**: 匯出新增 `借券費` 欄並寫入 `borrow`；匯入以相同的 `header.indexOf` 精確比對偵測選填的該欄並併入加總。**沒有該欄的券商匯出檔行為完全不變** —— split mode 存在的理由就是那些檔案。
+- **Verification**: `csv.test.ts` 新增往返案例（融券 5225 元、現股 4425 元、無借券費欄的券商檔）；`realExports.test.ts` 的 106 筆真實券商紀錄改為驗證三項相加恆等於總額。
+
+### BUG-064 — 批次重算手續費漏算融券借券費，且未同步更新折讓率
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/utils/fees.ts`、`sources/src/components/Transactions/RecalcFeesModal.tsx`
+- **Root Cause**: `calculateFee` 依 `input.nature === 'SHORT'` 加計借券費，但 `proposeFeeCorrections` 呼叫時從未傳 `nature`。`RecalcFeesModal` 的 `updateTransaction` 也沒有寫回 `fee_rate`。
+- **Impact**: 正確記錄的融券賣出被判定為與費率不符而提報；使用者一旦採納，這個「修正手續費」的精靈反而把 `fee_tax` 改成缺少借券費的數字 —— 它本身成了破壞帳務的來源。
+- **Fix**: 補傳 `nature: tx.tx_nature`，並補上 `fee_rate: feeRate`。現股當沖的推斷區塊未動。
+- **Verification**: `fees.test.ts` 新增兩案例（融券賣出重算為 420 含借券費、正確紀錄不被提報；融券回補維持一般買進 40）。
+
+### BUG-065 — 股票分割換算未隔離融券交易，造成部位失衡
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/components/Transactions/StockSplitModal.tsx`
+- **Root Cause**: `buyTickers` 與 `matchingTxs` 都只用 `tx_type === 'BUY'` 篩選。融券回補是帶 `SHORT` 的 BUY，被當成現股買進換算；而它對應的未平倉融券賣出腿是 SELL，根本不在精靈範圍內。
+- **Fix**: 兩處都排除 `tx_nature === 'SHORT'`。**排除只是一半** —— 分割同樣會改變空單股數而本精靈無法代勞，因此該標的有任何融券交易時顯示明確警告（不擋確認）。AUDIT-09 的 0 股防呆完整保留。
+- **Verification**: `StockSplitModal.test.tsx` 新增兩案例（融券不納入換算並顯示警告；只有融券的標的完全不出現在清單）。
+
+### BUG-066 — PostgREST 預設 1000 筆上限造成跨模組靜默截斷（7 處）
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/services/dataProvider.ts`、`sources/supabase/functions/backup-transactions/index.ts`、`sources/supabase/functions/stock-report/index.ts`
+- **Impact（依現實門檻排序）**: 最嚴重的是 `listTransactions` —— 門檻是**單一 workspace 的交易筆數**，與使用者人數無關，一名活躍交易者數年即可觸及；一旦觸發，庫存、平均成本、已實現損益全部依不完整的交易序列計算，且沒有任何錯誤。其餘為備份不完整、白名單漏股、管理台數字失真。
+- **Fix**: 七處全部改為 `.range()` 分頁並補上穩定的總排序鍵（`.range()` 是 OFFSET/LIMIT，沒有 `ORDER BY` 就不保證跨頁列序一致）。`listTransactions` 的欄位降級重試只在第一頁決定一次、後續頁沿用。備份還原的寫入改為 1000 筆分批 upsert 並加總實際回傳數，`writtenSoFar` 在中途失敗時只記錄已成功的批次。
+- **成因更正**: `listUsers` 兩處**不是** PostgREST `max_rows` 問題，而是 GoTrue Admin API 自身的 `page`/`perPage` 分頁；依其語意改為迴圈續抓。原報告的歸因錯誤，照它實作會白做工。
+- **證據更正**: 原報告引 `sources/supabase/config.toml` 證明雲端行為，但該檔管的是 `supabase start` 的本機堆疊。雲端 Max Rows 是專案 API 設定（文件記載預設同為 1000），兩個專案的實際值未查證。
+- **Verification**: `dataProvider.transactions.test.ts` 新增 T1b（1000+200 筆分頁抓完）與 T1c（未滿一頁不多送請求）。Edge 端無測試（Deno 進入點無法在 vitest 匯入），由 `route:reviewer` 逐處審查。
+
+### BUG-067 — 個股分析下拉選單重複 Key，導致融券空單永遠無法被選取
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/components/StockDetail/AnalysisPage.tsx`
+- **Root Cause**: 同一檔同時有多頭與融券時，`buildHoldingRows` 產生兩列且**共用同一個 `holding` 物件**，`holding.key` 因此相同。選單以 `holding.key` 為 key，造成 React 重複 key，且 `.find` 永遠命中先被 push 的多頭列。
+- **Fix**: 改用唯一的 `rowKey`，並在融券列的標籤加上可辨識的標記 —— 兩個文字相同的選項就算 key 修好了也一樣無法使用。
+- **Verification**: `AnalysisPage.test.tsx` 新增案例（兩選項文字相異、含「融券」、點選後 `aria-checked` 確實移轉）。
+
+### BUG-068 — 個股分析傳入純融券部位導致 What-If 預設值失真
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/components/StockDetail/AnalysisPage.tsx`
+- **Root Cause**: 純融券部位的 `avgCost` / `rawAvgCost` 在 `pnlEngine` 中算成 `0` 而非 `null`，`WhatIfTab` 的 `isHeld = rawAvgCost !== null` 因此為真，用 0 當買進價與股數預填，兩個 `> 0` 守門同時失敗，首屏全空。
+- **措辭更正**: 原報告稱「鎖死」誇大。兩個輸入框都沒有 `disabled`，手動輸入非零值即恢復。實為初始預設值失真、首屏空白。
+- **Fix**: 選中列方向為 `SHORT`（含純融券）時，`rawAvgCost` / `avgCost` 兩個 prop 一律傳 `null`，讓該頁走「未持有」的合理預設（股數 1、買進價＝現價）。
+- **Verification**: `AnalysisPage.test.tsx` 新增純融券與一般多頭兩個對照案例。
+
+### BUG-069 — 每日報表全數失敗時仍上傳 `manifest.json` 引發全站 404
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/supabase/functions/stock-report/index.ts`
+- **Root Cause**: 逐檔迴圈之後無條件（在 `if (regenerate)` 內）上傳 `manifest.json`，沒有檢查是否真的產出了東西。全數失敗時 `generated === 0`，manifest 仍推進到一個沒有任何報告檔的 ymd，而前端只讀 `manifest.ymd`，於是全站 404。
+- **可觸發性由本專案自行引入**: 0.9.32 的 BUG-053 加上逐筆 `try/catch` 之前，`assembleOne` 拋錯會讓例外衝出迴圈，manifest 根本不會被寫入。該修正本身仍是對的（整輪中止更糟），但它把本缺陷從不可達變成可達。
+- **措辭更正**: 原報告稱「無條件上傳」不正確 —— 它在 `if (regenerate)` 內，缺的是 `generated > 0` 守衛。
+- **Fix**: 加上 `generated > 0` 守衛，並以 `manifestSkipped` 旗標隨回應回傳，`summariseFollowUp` 會顯示。
+
+### BUG-070 — `backup-transactions` 定時觸發金鑰比對存在時序攻擊風險
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: 新增 `sources/supabase/functions/backup-transactions/cronSecret.ts`、`sources/supabase/functions/backup-transactions/index.ts`
+- **Root Cause**: `assertCronSecret` 仍是 `got !== expected`，在第一個相異位元組就返回。
+- **Fix**: **Edge 以目錄為單位打包，無法跨目錄 import**，故把 `stock-report/cronSecret.ts` 的 `secretsMatch` 逐字複製到該目錄後引用。`!expected` 短路完整保留，`CRON_SECRET` 未設定時仍一律 401。
+- **附帶清理**: 原註解寫「Same shape as stock-report/index.ts:848」，內容與行號都已過時（該函式已改用 `secretsMatch`，實際位置約 901 行），改為指向 `cronSecret.ts` 而非會再次漂移的行號。
+
+### BUG-071 — 年度報告當沖拆分記錄 Duplicate Key 與融券回補標籤顛倒
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/utils/pnlEngine.ts`、`sources/src/components/YearlyReport/YearlyPage.tsx`
+- **Root Cause**: (a) 一筆交易可產生多列 `SellDetail` —— 當沖配對迴圈每配對一筆買進就 push 一次，殘餘量還會落入一般賣出分支再 push 一次，`txId` 因此不是鍵。(b) `SellDetail` 沒有任何欄位能區分現股賣出與融券回補，兩個分支都 push 進同一個 `yt.sells`，畫面只能硬編碼「賣出」，於是把買進動作標成賣出。
+- **Fix**: 新增 `legId`（`${txId}#${yt.sells.length}`，同一陣列內單調遞增故唯一）與 `kind: 'SELL' | 'SHORT_COVER'`，三個 push 點全部設值；`YearlyPage` 改以 `legId` 為 key，融券回補顯示「回補」。**未動任何金額、成本基礎或已實現損益的運算。**
+- **Verification**: `pnlEngine.test.ts` 新增兩案例。其中重複 `txId` 的情境**用專案既有的當沖超賣測試資料即可重現**（賣 1000 對買 600），而該既有測試只斷言 `warnings` 與 `realizedTw`，從未檢查 `txId` 唯一性。
+
+### BUG-072 — `handleAdminStatus` 把分頁中途失敗的部分資料當成完整結果
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（`handleAdminStatus` 的 `source_probe_tick` 讀取）
+- **Root Cause**: `pagedSelect` 在分頁中途失敗時回傳 `{ data: 已抓到的列, error }`，而呼叫端寫成 `.then((r) => r.data)`，完全沒有檢查 `r.error`。管理台於是把被截斷的清單當成完整結果顯示 —— 正是分頁工作要消除的缺陷，在呼叫端被重新引入。
+- **Introduced**: 0.9.34 本身（BUG-066 的實作），由 `route:reviewer` 在合併前攔下。
+- **Fix**: 改為 `.then((r) => (r.error ? [] : r.data))`，讓中途失敗與拋例外的 `.catch` 得到相同結果。同檔其餘三處 `pagedSelect` 呼叫端經查都已正確檢查 `error`。
+
+### BUG-073 — 選到融券列時股數與均價仍取自共用的多頭腿
+- **Status**: ✅ FIXED (0.9.34) — 2026-09-05
+- **Where**: `sources/src/components/StockDetail/AnalysisPage.tsx`
+- **Root Cause**: 個股卡片的 `qty` 與 `avgCost` 讀 `selected.row.holding`（該標的共用的 Position，即多頭腿），而 `unrealized` / `roi` / `brokerRoi` 讀 `selected.row`（選中的那一列）。同一檔同時有多空時，畫面會把多頭的股數與均價，和空單的損益並排顯示。「是否已持有」的判斷也用 `holding.qty > 0`，只要該檔有多頭腿就為真。
+- **Introduced**: 這個接縫本身早已存在，但**BUG-067 讓融券列首次可被選取，才使它變得可達** —— 與 BUG-069 是同一種模式：修好一個缺陷，讓另一個原本到不了的缺陷浮現。由 `route:reviewer` 在合併前攔下。
+- **Fix**: 一律依**選中列自身的方向**判斷。`qty` 取 `Math.abs(rowQty)`；融券列的 `avgCost` 改用 `shortProceeds / shortQty`（即該列 `roi` 本來就在除的分母，卡片因此內部一致）並防除以零；`rawAvgCost` / `avgCost` 兩個 prop 在方向為 `SHORT` 時一律傳 `null`。
+- **Verification**: `AnalysisPage.test.tsx` 新增案例：同檔多空並存時，切到融券列後股數必須是空單的 500 而非多頭的 2000，且不得再冒充已持有。
 
 ### BUG-057 — `market/daily.json` 的內容指紋漏比對六個欄位，TWSE 訂正被靜默丟棄
 - **Status**: ✅ FIXED (0.9.33) — 2026-09-04 20:10:00 Asia/Taipei
