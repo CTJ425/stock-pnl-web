@@ -2,6 +2,47 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.34（2026-09-05）— 融券帳務三項 P0、PostgREST 分頁七處，與深度稽核九項修正
+
+> 2026-09-04 深度稽核列出的九項發現先前只被歸檔、未經查證。本版逐條核對程式碼後全部修正：
+> 七項完全成立、兩項部分成立、無一被駁回。查證同時修正了原報告的四處錯誤主張，紀錄在
+> `BUG_FIX.md` 各條目的「查證」欄。
+
+- 🐛 **CSV 來回遺失融券借券費（BUG-063，P0）**（`csv.ts`）— 匯出只寫 `splitFeeTax` 的 `fee` 與 `tax`、
+  丟棄 `borrow`，匯入又以 `fee + tax` 重建 `fee_tax`。一次匯出再匯入，融券賣出的實收金額被高估、
+  已實現損益虛增，而且每個欄位都解析成功、每個數字都合理，完全無聲。新增 `借券費` 欄；
+  沒有該欄的券商匯出檔行為完全不變。
+- 🐛 **批次重算把融券當現股（BUG-064，P0）**（`fees.ts`、`RecalcFeesModal.tsx`）—
+  `calculateFee` 依 `nature === 'SHORT'` 加計借券費，但 `proposeFeeCorrections` 從未傳 `nature`。
+  正確的融券紀錄因此被判定為錯誤，使用者一旦採納提案，這個「修正手續費」的精靈反而把它改壞。
+  同時補上遺漏的 `fee_rate` 寫回。
+- 🐛 **分割換算未隔離融券（BUG-065，P0）**（`StockSplitModal.tsx`）— 融券回補是帶 `SHORT` 的 BUY，
+  被當成現股買進換算，而它對應的未平倉賣出腿根本不在範圍內。改為排除，並在該標的有融券交易時
+  明確警告 —— 分割同樣會改變空單股數，本精靈無法代勞。
+- 🐛 **PostgREST 1000 筆靜默截斷（BUG-066，七處）**（`dataProvider.ts`、兩支 Edge Function）—
+  `listTransactions` 的門檻是**單一 workspace 的交易筆數**，與使用者人數無關，一名活躍交易者數年
+  即可觸及；觸發後損益與庫存依不完整的交易序列計算。七處全部改為分頁並補上穩定排序鍵。
+  其中 `listUsers` 兩處的成因是 GoTrue Admin API 自身分頁，**與 PostgREST 無關**，依其語意分別修正。
+- 🐛 **個股分析選不到融券空單（BUG-067）**（`AnalysisPage.tsx`）— 多空兩列共用同一個 `holding`
+  物件，選單卻以 `holding.key` 為 key，造成重複 key 且 `.find` 永遠命中多頭列。改用唯一的 `rowKey`
+  並標示融券。
+- 🐛 **純融券部位冒充已持有（BUG-068）**（`AnalysisPage.tsx`）— `avgCost` 算成 `0` 而非 `null`，
+  `WhatIfTab` 的 `rawAvgCost !== null` 因此為真，用 0 當買進價與股數預填，首屏全空。
+- 🐛 **全數失敗仍推進 manifest（BUG-069）**（`stock-report/index.ts`）— 補上 `generated > 0` 守衛與
+  `manifestSkipped` 旗標。**這個缺陷是 0.9.32 的 BUG-053 修正讓它變得可觸發的**：加上逐筆
+  `try/catch` 之前，例外會中止整輪，manifest 根本不會被寫入。
+- 🔒 **`backup-transactions` 改用固定時間比較（BUG-070）**（新增該目錄的 `cronSecret.ts`）—
+  Edge 以目錄為單位打包，無法跨目錄 import，故複製 `secretsMatch`。
+- 🐛 **年度報告重複 Key 與融券回補標籤顛倒（BUG-071）**（`pnlEngine.ts`、`YearlyPage.tsx`）—
+  一筆交易可拆成多列 `SellDetail`（當沖配對 + 殘餘走一般賣出），`txId` 不是鍵；且沒有欄位能區分
+  現股賣出與融券回補，畫面把買進動作標成「賣出」。新增 `legId` 與 `kind`，**未動任何金額運算**。
+- 🐛 **修正審查發現的兩個 BLOCKER** — `handleAdminStatus` 的 `pagedSelect` 呼叫端忽略 `r.error`，
+  會把分頁中途失敗的**部分資料**當成完整結果；以及 BUG-067 讓融券列首次可被選取後暴露的介面接縫：
+  股數與均價取自共用的多頭腿，損益與報酬率取自選中的那一列，同檔有多空時畫面數字自相矛盾。
+- ✅ **測試**：新增 15 個案例；全套 99 檔 / **1,684** 項通過。
+  `npm run build`、`npm run typecheck:edge`、`npm run lint` 全部 exit 0。
+- 🔍 **Review**：`route:reviewer` 判定 FAIL 並指出上述兩個 BLOCKER，兩者皆已於本版修正。
+
 ### 0.9.33（2026-09-04）— 補讀 `stock-report/index.ts` 未覆蓋範圍的六項修正
 
 > 上一次稽核在 4,236 行的 `stock-report/index.ts` 中只逐行讀了約 900 行，並把三段未展開的範圍記在

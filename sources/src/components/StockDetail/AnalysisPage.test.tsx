@@ -8,6 +8,7 @@ vi.mock('./StockDetailPage', () => ({
     ticker,
     name,
     holding,
+    rawAvgCost,
     quote,
     selector,
     onSelectTicker,
@@ -16,6 +17,7 @@ vi.mock('./StockDetailPage', () => ({
     ticker: string
     name: string
     holding: { qty: number; price: number | null } | null
+    rawAvgCost?: number | null
     quote?: { price: number | null } | null
     selector?: React.ReactNode
     onSelectTicker?: (ticker: string, name: string) => void
@@ -38,6 +40,7 @@ vi.mock('./StockDetailPage', () => ({
       <div data-testid="detail-ticker">{ticker}</div>
       <div data-testid="detail-name">{name}</div>
       <div data-testid="detail-qty">{holding?.qty ?? '—'}</div>
+      <div data-testid="detail-raw-avgcost">{rawAvgCost === null || rawAvgCost === undefined ? '—' : rawAvgCost}</div>
       <div data-testid="detail-price">{holding?.price ?? '—'}</div>
       <div data-testid="detail-quote">{quote?.price ?? '—'}</div>
     </div>
@@ -510,4 +513,105 @@ describe('AnalysisPage', () => {
       expect(menu.getByRole('menuitemradio', { name: '2356 英業達' })).toBeTruthy()
     })
   })
+
+  /**
+   * BUG-067: `buildHoldingRows` emits two rows for a ticker that has both a long position and an
+   * open short, and both rows share the same `holding` object — so `holding.key` is identical for
+   * the two. `AnalysisPage` keyed its menu entries on `holding.key` instead of the unique `rowKey`,
+   * which gave React two children with the same key and made `.find(e => e.key === selectedKey)`
+   * always return the first (long) one. The short row could be clicked but never became current.
+   *
+   * Two identical labels would still be unusable even with distinct keys, so the short entry has
+   * to say so. Making the whole detail page short-aware is a separate, larger change (see BUG-068).
+   */
+  it('同一檔同時有多頭與融券空單時，兩個選項可分辨且都能選取 (BUG-067)', async () => {
+    const user = userEvent.setup()
+    setup([
+      tx({ ticker: '2330', name: '台積電', tx_type: 'BUY', price: 1000, qty: 2000, fee_tax: 2850 }),
+      tx({ ticker: '2330', name: '台積電', tx_type: 'SELL', price: 1100, qty: 500, fee_tax: 2871, tx_nature: 'SHORT' }),
+    ])
+    render(<AnalysisPage />)
+
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    const items = screen.getAllByRole('menuitemradio')
+    const forTsmc = items.filter((el) => (el.textContent ?? '').includes('2330'))
+    expect(forTsmc).toHaveLength(2)
+
+    // 兩個選項的文字必須不同，否則使用者無從分辨要點哪一個
+    const labels = forTsmc.map((el) => el.textContent ?? '')
+    expect(new Set(labels).size).toBe(2)
+    expect(labels.some((l) => l.includes('融券'))).toBe(true)
+
+    // 一開始是多頭那筆為 current；點空單那筆之後，current 必須移過去
+    const shortItem = forTsmc.find((el) => (el.textContent ?? '').includes('融券'))!
+    expect(shortItem.getAttribute('aria-checked')).toBe('false')
+    await user.click(shortItem)
+
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    const after = screen
+      .getAllByRole('menuitemradio')
+      .find((el) => (el.textContent ?? '').includes('融券'))!
+    expect(after.getAttribute('aria-checked')).toBe('true')
+  })
+
+
+  /**
+   * BUG-068: a pure short position has `qty = 0` and `avgCost`/`rawAvgCost` computed as `0` rather
+   * than `null` (its size lives in `shortQty`). `WhatIfTab` decides 「已持有」 with
+   * `isHeld = rawAvgCost !== null`, and `0 !== null`, so it took the held path and seeded the form
+   * with a buy price of 0 and a quantity of 0 — both of which fail `whatIf()`'s `> 0` guards, so
+   * the first view is blank. That is worse than the not-held default (quantity 1, buy price =
+   * current price), which is what a position this tab cannot model should fall back to.
+   *
+   * The inputs are not disabled, so the user can type their way out — this is a wrong default,
+   * not a lock-up, and the fix is to stop claiming the position is held.
+   */
+  it('純融券部位不冒充已持有，rawAvgCost 傳 null (BUG-068)', () => {
+    setup([
+      tx({ ticker: '2603', name: '長榮', tx_type: 'SELL', price: 100, qty: 1000, fee_tax: 522, tx_nature: 'SHORT' }),
+    ])
+    render(<AnalysisPage />)
+    expect(screen.getByTestId('detail-raw-avgcost').textContent).toBe('—')
+  })
+
+  it('一般多頭部位仍照常傳出 rawAvgCost', () => {
+    setup([tx({ ticker: '2330', name: '台積電', tx_type: 'BUY', price: 100, qty: 1000, fee_tax: 20 })])
+    render(<AnalysisPage />)
+    expect(screen.getByTestId('detail-raw-avgcost').textContent).not.toBe('—')
+  })
+
+
+  /**
+   * Follow-up to BUG-067/BUG-068. Making the short row selectable exposed a seam that was
+   * unreachable before: `qty`/`avgCost` were read off the shared `holding` object (the LONG leg)
+   * while `unrealized`/`roi` came from the selected row (the SHORT leg). On a ticker holding both,
+   * the card then showed the long position's share count beside the short position's P&L.
+   *
+   * The 「已持有」 seed for What-If is decided the same wrong way: `holding.qty > 0` is true for the
+   * ticker whenever a long leg exists, so selecting the short row still handed What-If the long
+   * leg's average cost.
+   */
+  it('同檔同時有多空時，選到融券列的股數與成本不得取自多頭列 (BUG-067 後續)', async () => {
+    const user = userEvent.setup()
+    setup([
+      tx({ ticker: '2330', name: '台積電', tx_type: 'BUY', price: 1000, qty: 2000, fee_tax: 2850 }),
+      tx({ ticker: '2330', name: '台積電', tx_type: 'SELL', price: 1100, qty: 500, fee_tax: 2871, tx_nature: 'SHORT' }),
+    ])
+    render(<AnalysisPage />)
+
+    // 預設是多頭列：股數 2000，且是已持有
+    expect(screen.getByTestId('detail-qty').textContent).toBe('2000')
+    expect(screen.getByTestId('detail-raw-avgcost').textContent).not.toBe('—')
+
+    await user.click(screen.getByRole('button', { name: /切換個股/ }))
+    const shortItem = screen
+      .getAllByRole('menuitemradio')
+      .find((el) => (el.textContent ?? '').includes('融券'))!
+    await user.click(shortItem)
+
+    // 切到融券列後，股數必須是空單的 500，且不得再冒充已持有
+    expect(screen.getByTestId('detail-qty').textContent).toBe('500')
+    expect(screen.getByTestId('detail-raw-avgcost').textContent).toBe('—')
+  })
+
 })

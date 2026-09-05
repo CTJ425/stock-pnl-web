@@ -692,6 +692,43 @@ describe('當日放空 / 當沖先賣後買撮合（Day-Trade Short-First Matchi
 
 
 
+/**
+ * BUG-071: `YearlyPage` renders one `<tr key={sell.txId}>` per `SellDetail`, and it labels every
+ * one of them 「賣出」. Neither holds.
+ *
+ * (a) One transaction can produce several `SellDetail` rows — the day-trade matcher pushes one per
+ *     matched buy, and any residual falls through to the ordinary sell branch and pushes again —
+ *     so `txId` is not a key. The fixture below is the project's own oversold day-trade case.
+ * (b) A 融券回補 is a BUY that closes a short, and it lands in the same `yt.sells` array as an
+ *     ordinary sell with nothing on the record to tell them apart, so the screen calls a buy a sell.
+ */
+describe('SellDetail 的唯一鍵與方向標記 (BUG-071)', () => {
+  it('同一筆交易拆成多列時，每列有唯一的 legId', () => {
+    const sellTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 1000, qty: 1000, fee: 2925, nature: 'DAY_TRADE' })
+    const buyTx = tx({ date: '2026-09-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 990, qty: 600, fee: 846, nature: 'DAY_TRADE' })
+
+    const sells = computeLedger([sellTx, buyTx]).yearly[2026].tickers['TPE:2330'].sells
+    // 同一個 txId 出現兩次：當沖配對 600 股，剩餘 400 股走一般賣出分支
+    expect(sells.filter((s) => s.txId === sellTx.id)).toHaveLength(2)
+    const legIds = sells.map((s) => s.legId)
+    expect(new Set(legIds).size).toBe(legIds.length)
+    expect(legIds.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+  })
+
+  it('融券回補標記為 SHORT_COVER，現股賣出標記為 SELL', () => {
+    const openShort = tx({ date: '2026-03-01', market: 'TPE', ticker: '2603', type: 'SELL', price: 100, qty: 1000, fee: 522, nature: 'SHORT' })
+    const cover = tx({ date: '2026-04-01', market: 'TPE', ticker: '2603', type: 'BUY', price: 95, qty: 1000, fee: 135, nature: 'SHORT' })
+    const spotBuy = tx({ date: '2026-05-01', market: 'TPE', ticker: '2330', type: 'BUY', price: 1000, qty: 1000, fee: 1425 })
+    const spotSell = tx({ date: '2026-06-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 1100, qty: 1000, fee: 4867 })
+
+    const y = computeLedger([openShort, cover, spotBuy, spotSell]).yearly[2026]
+    const coverLeg = y.tickers['TPE:2603'].sells.find((s) => s.txId === cover.id)
+    const sellLeg = y.tickers['TPE:2330'].sells.find((s) => s.txId === spotSell.id)
+    expect(coverLeg?.kind).toBe('SHORT_COVER')
+    expect(sellLeg?.kind).toBe('SELL')
+  })
+})
+
 describe('融券做空（Short selling, Task 141 Stage A）', () => {
   // 2603 一般股 0.3%。1000 股 @100：手續費 142 + 證交稅 300 + 借券費 80 = 522
   const OPEN_FEE_TAX = 522

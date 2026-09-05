@@ -17,8 +17,10 @@ import {
   prunablePaths,
   rowCounts,
   taipeiYmd,
+  type BackupRow,
   type BackupTables,
 } from './backupPlan.ts'
+import { secretsMatch } from './cronSecret.ts'
 
 const BACKUPS_BUCKET = 'backups'
 const KEEP_DAYS = 7
@@ -44,11 +46,11 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-// Same shape as stock-report/index.ts:848 — shared secret between pg_cron and this function.
+// Same shape as stock-report/cronSecret.ts — shared secret between pg_cron and this function.
 function assertCronSecret(req: Request): Response | null {
   const expected = Deno.env.get('CRON_SECRET') ?? ''
   const got = req.headers.get('x-cron-secret') ?? ''
-  if (!expected || got !== expected) return json({ error: 'Unauthorized' }, 401)
+  if (!expected || !secretsMatch(got, expected)) return json({ error: 'Unauthorized' }, 401)
   return null
 }
 
@@ -65,11 +67,38 @@ interface BackupLogRow {
   error: string | null
 }
 
+/**
+ * PostgREST caps a single response at `max_rows` (1000, see `supabase/config.toml`). Same shape
+ * as `pagedSelect` in stock-report/index.ts — this function cannot import from that directory,
+ * an Edge function bundles only its own directory, so it is copied rather than shared.
+ */
+async function pagedSelect<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const rows: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await build(from, from + pageSize - 1)
+    if (error) return { data: rows, error }
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < pageSize) break
+    from += pageSize
+  }
+  return { data: rows, error: null }
+}
+
 async function backupAccount(userId: string, backupDate: string, exportedAt: Date): Promise<BackupLogRow> {
   try {
+    // `.range()` is OFFSET/LIMIT, and Postgres guarantees no row order across separate queries
+    // without an ORDER BY, so order by `id` before paging — otherwise a page boundary can repeat
+    // or skip a row.
     const [workspaces, transactions, userSettings] = await Promise.all([
       db.from('workspaces').select('*').eq('user_id', userId),
-      db.from('transactions').select('*').eq('user_id', userId),
+      pagedSelect<BackupRow>((from, to) =>
+        db.from('transactions').select('*').eq('user_id', userId).order('id', { ascending: true }).range(from, to),
+      ),
       db.from('user_settings').select('*').eq('user_id', userId),
     ])
     if (workspaces.error) throw workspaces.error
@@ -168,10 +197,18 @@ async function handleBackup(): Promise<Response> {
   const exportedAt = new Date()
   const backupDate = taipeiYmd(exportedAt)
 
-  // perPage upper limit 1000 — same cap already used at stock-report/index.ts:3531.
-  const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) return json({ error: error.message }, 500)
-  const users = data?.users ?? []
+  // `listUsers` is a GoTrue Admin API with its own page/perPage, independent of PostgREST's
+  // max_rows — hardcoding page: 1 silently dropped every account past perPage (BUG-066). Loop
+  // upward until a page comes back short. perPage upper limit is 1000.
+  const perPage = 1000
+  const users: { id: string }[] = []
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
+    if (error) return json({ error: error.message }, 500)
+    const batch = data?.users ?? []
+    users.push(...batch)
+    if (batch.length < perPage) break
+  }
 
   let ok = 0
   let failed = 0

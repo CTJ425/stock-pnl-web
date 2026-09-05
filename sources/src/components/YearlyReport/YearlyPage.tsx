@@ -370,11 +370,11 @@ function YearRows({
               </tr>
               {isTickerOpen &&
                 yt.sells.map((sell) => (
-                  <tr key={sell.txId} className="detail-row sell-row">
+                  <tr key={sell.legId} className="detail-row sell-row">
                     <td title={`當時平均成本 ${sell.avgCost.toFixed(2)}`}>
                       {/* Aligned to where the parent's ticker text starts (32 = 22px icon + 10px gap) */}
                       <div className="cell-tree" style={{ paddingLeft: 32 }}>
-                        {sell.date}　賣出 {fmtQty(sell.qty)} 股 ｜ {sell.price}
+                        {sell.date}　{sell.kind === 'SHORT_COVER' ? '回補' : '賣出'} {fmtQty(sell.qty)} 股 ｜ {sell.price}
                         {sell.oversold && (
                           <span className="badge" style={{ marginLeft: 6 }} title="賣出股數超過持有股數，超出的部分成本以 0 計算">
                             超賣

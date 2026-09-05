@@ -484,4 +484,93 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+
+  /**
+   * BUG-065: the wizard selects rows by `tx_type === 'BUY'` alone. A 融券回補 (short cover) is
+   * stored as a BUY with `tx_nature: 'SHORT'`, so it was converted as though it were a spot buy,
+   * while the open 融券賣出 leg it belongs to — a SELL — was never in scope at all. The position
+   * ends up with one leg on the post-split share basis and the other on the pre-split one.
+   *
+   * Excluding the short rows is only half the fix: a split changes the share count of the short
+   * position too, and this wizard cannot convert it. So the user has to be told, not just spared.
+   */
+  it('融券交易不納入換算，且明確警告需自行處理 (BUG-065)', async () => {
+    const user = userEvent.setup()
+    const spotBuy: Transaction = {
+      id: 'tx-spot',
+      workspace_id: 'ws-1',
+      tx_date: '2026-01-10',
+      market: 'TPE',
+      ticker: '2330',
+      name: '台積電',
+      tx_type: 'BUY',
+      price: 1000,
+      qty: 1000,
+      fee_tax: 1425,
+      tx_nature: 'SPOT',
+      created_at: '2026-01-10T00:00:00Z',
+    }
+    const shortCover: Transaction = {
+      ...spotBuy,
+      id: 'tx-cover',
+      tx_date: '2026-02-10',
+      qty: 500,
+      fee_tax: 712,
+      tx_nature: 'SHORT',
+    }
+    const shortSell: Transaction = {
+      ...spotBuy,
+      id: 'tx-short-sell',
+      tx_date: '2026-02-01',
+      tx_type: 'SELL',
+      qty: 500,
+      fee_tax: 2925,
+      tx_nature: 'SHORT',
+    }
+
+    useWorkspace.mockReturnValue({
+      transactions: [spotBuy, shortCover, shortSell],
+      updateTransaction,
+      current: { id: 'ws-1', name: '預設工作區' },
+    })
+
+    render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+
+    const ratioInput = screen.getByRole('spinbutton', { name: '分割比例' })
+    fireEvent.change(ratioInput, { target: { value: '2' } })
+
+    expect(screen.getByText(/融券交易無法自動換算/)).toBeTruthy()
+
+    const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 1 筆紀錄）/ })
+    await user.click(confirmBtn)
+
+    expect(updateTransaction).toHaveBeenCalledTimes(1)
+    expect(updateTransaction).toHaveBeenCalledWith('tx-spot', expect.objectContaining({ qty: 2000, price: 500 }))
+  })
+
+  it('只有融券交易的標的完全不出現在換算清單中 (BUG-065)', () => {
+    const shortOnly: Transaction = {
+      id: 'tx-only-cover',
+      workspace_id: 'ws-1',
+      tx_date: '2026-02-10',
+      market: 'TPE',
+      ticker: '2454',
+      name: '聯發科',
+      tx_type: 'BUY',
+      price: 1200,
+      qty: 1000,
+      fee_tax: 1710,
+      tx_nature: 'SHORT',
+      created_at: '2026-02-10T00:00:00Z',
+    }
+    useWorkspace.mockReturnValue({
+      transactions: [shortOnly],
+      updateTransaction,
+      current: { id: 'ws-1', name: '預設工作區' },
+    })
+
+    render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+    expect(screen.queryByRole('combobox', { name: '選擇換算標的' })).toBeNull()
+  })
+
 })

@@ -81,9 +81,14 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
 
   const holdingEntries: Entry[] = twRows.map((r) => ({
     kind: 'holding',
-    key: r.holding.key,
+    // `holding.key` is shared by a ticker's long and short row; `rowKey` (`${holding.key}:${direction}`)
+    // is what makes the two menu entries distinct and both selectable (BUG-067).
+    key: r.rowKey,
     ticker: r.holding.ticker,
-    name: displayStockName(r.holding.market, r.holding.ticker, r.holding.name),
+    name:
+      r.direction === 'SHORT'
+        ? `${displayStockName(r.holding.market, r.holding.ticker, r.holding.name)}（融券）`
+        : displayStockName(r.holding.market, r.holding.ticker, r.holding.name),
     row: r,
   }))
   // A held ticker already carries qty/cost/quote via holdingEntries; a watched selection
@@ -258,8 +263,13 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
         holding={
           selected.kind === 'holding'
             ? {
-                qty: selected.row.holding.qty,
-                avgCost: selected.row.holding.avgCost,
+                qty: Math.abs(selected.row.rowQty),
+                avgCost:
+                  selected.row.direction === 'SHORT'
+                    ? selected.row.holding.shortQty > 0
+                      ? selected.row.holding.shortProceeds / selected.row.holding.shortQty
+                      : 0
+                    : selected.row.holding.avgCost,
                 price: selected.row.price,
                 unrealized: selected.row.unrealized,
                 brokerUnrealized: selected.row.brokerUnrealized,
@@ -268,8 +278,23 @@ export function AnalysisPage({ initialTicker }: AnalysisPageProps = {}) {
               }
             : null
         }
-        rawAvgCost={selected.kind === 'holding' ? selected.row.holding.rawAvgCost : null}
-        avgCost={selected.kind === 'holding' ? selected.row.holding.avgCost : null}
+        // A pure short (`qty === 0`) has avgCost/rawAvgCost computed as 0, not null, and `0 !==
+        // null` would make WhatIfTab treat it as an already-held long (BUG-068). A SHORT row must
+        // also seed null — What-If must not treat an open short as an already-held long either.
+        rawAvgCost={
+          selected.kind === 'holding' &&
+          selected.row.direction === 'LONG' &&
+          selected.row.holding.qty > 0
+            ? selected.row.holding.rawAvgCost
+            : null
+        }
+        avgCost={
+          selected.kind === 'holding' &&
+          selected.row.direction === 'LONG' &&
+          selected.row.holding.qty > 0
+            ? selected.row.holding.avgCost
+            : null
+        }
         quote={selected.kind === 'holding' ? prices[selected.row.holding.key] ?? null : watchQuote}
         selector={selector}
         onSelectTicker={(ticker, name) => {
