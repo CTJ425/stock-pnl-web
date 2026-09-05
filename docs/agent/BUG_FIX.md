@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-04 23:45:00 Asia/Taipei
+- Timestamp: 2026-09-05 Asia/Taipei
 
 ---
 
@@ -184,7 +184,7 @@ Documented in detail in `docs/agent/specs/145-codebase-bugs-and-optimizations-au
 - **What**: The user pasted a Supabase personal access token into the `/goal` message to authorise the DEV and PROD Edge deployment. It is now in the session transcript.
 - **Action required**: rotate it in the Supabase dashboard (Account → Access Tokens). This is the **fourth** such exposure recorded in this file, after the DEV `CRON_SECRET` (2026-08-25) and two earlier personal access tokens (2026-08-26, 2026-09-01). Four in eleven days is a pattern, not an accident: the working method that keeps producing it is pasting the secret into the conversation instead of running `supabase login` in the terminal. Prefer `! supabase login` in the Claude Code prompt — the CLI reads the token from its own interactive input and it never enters the transcript.
 - **Handling during this session**: passed once to `supabase login --token`, which stores it under the CLI's own config outside the repository. Never echoed, never written to any file in the repository, never used in a query or a log line. Rotation is still required — the transcript is the exposure, not the storage.
-- **Status**: OPEN — user action
+- **Status**: ✅ REVOKED — verified 2026-09-05. `supabase functions list` returned `401 Unauthorized` on both project refs with this token still in the CLI config, which is positive proof it no longer works.
 - **Recorded**: 2026-09-04 19:45:00 Asia/Taipei
 
 ---
@@ -196,6 +196,17 @@ Documented in detail in `docs/agent/specs/145-codebase-bugs-and-optimizations-au
 - **Impact**: Agents relying on count-based heuristics would give false confidence about the target environment. Not a bug in the skill itself, but the distinguishing criteria have eroded.
 - **Mitigation**: When operating on Supabase environments, use explicit paths for disambiguation. DEV operations on self-hosted should reference the compose file path directly (`/root/container/supabase/stock-pnl-web-dev/`); PROD operations on cloud should reference the explicit project ID (`kxnxadaghidwumqsqneu`). Do not rely on count-based heuristics that can drift over time.
 - **Updated**: 2026-08-26; original finding 2026-08-24.
+
+### Supabase personal access token exposed in transcript (2026-09-05)
+
+- **What**: A fifth Supabase personal access token was pasted into the conversation, in the same message that said 「supabase的不授權給你」. The instruction and the paste contradict each other.
+- **Handling during this session**: **the token was not used at all.** No `supabase login`, no query, no deploy. The instruction was read as "do not use this one", and the read-only checks in that turn ran against the CLI's existing (by then already revoked) login, which returned 401.
+- **Action required**: revoke it. It is exposed by the paste itself, whether or not anything used it.
+- **The pattern is now five in twelve days** (DEV `CRON_SECRET` 2026-08-25; personal access tokens 2026-08-26, 2026-09-01, 2026-09-04, 2026-09-05). Recording each one has not changed the outcome, because the cause is the working method, not forgetfulness: the secret is typed into the chat instead of into the CLI. The one change that ends it is `! supabase login` typed at the Claude Code prompt —— the CLI reads the token from its own input and it never enters the transcript. Nothing else on this list needs to change.
+- **Status**: OPEN — user action
+- **Recorded**: 2026-09-05 Asia/Taipei
+
+---
 
 ### Supabase Redirect URLs allow-list does not contain app origin
 
