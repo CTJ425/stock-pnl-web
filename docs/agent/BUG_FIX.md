@@ -138,6 +138,17 @@
 
 ---
 
+### Supabase personal access token exposed in transcript (2026-09-05, 第六次)
+
+- **What**: 第六個 Supabase personal access token 被貼進對話。使用者同時說明「TOKEN 都有設定 EXPIRES」，並明確授權本次使用。
+- **Handling**: 已用於 0.9.34 的 DEV 與 PROD Edge 部署（`supabase login --token`，CLI 自行保存於 repo 之外）。從未回顯、未寫入任何檔案、未出現在查詢或 log 中。
+- **Action required**: 仍建議部署完成後撤銷 —— 有效期限縮短了暴露窗口，但沒有消除暴露本身；token 一旦進入對話記錄就是外洩。
+- **前一次的教訓仍然成立**: 這是十二天內第六次。唯一能終結這個模式的作法是在提示字元輸入 `! supabase login`，由 CLI 自行讀取，token 完全不進入對話記錄。設定有效期限是好的補償控制，但不是替代品。
+- **Status**: OPEN — user action（建議撤銷）
+- **Recorded**: 2026-09-05
+
+---
+
 ### Supabase Redirect URLs allow-list does not contain app origin
 
 - **Status**: OPEN — requires Supabase console configuration.
