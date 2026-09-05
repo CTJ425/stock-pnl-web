@@ -82,17 +82,22 @@ describe('真實匯出檔端到端', () => {
     }
   })
 
-  it('匯出的分項手續費與證交稅，每一筆都加得回原本的總額', () => {
+  // BUG-063 added a 借券費 column between 證交稅 and the combined total, because `splitFeeTax`
+  // peels a borrow fee off a 融券 sell and the export had nowhere to put it. The identity these
+  // real broker files are here to guard is unchanged — it just has three components now, not two.
+  it('匯出的分項手續費、證交稅與借券費，每一筆都加得回原本的總額', () => {
     for (const [name, txs] of [['ronlin', ronlin], ['esun', esun]] as const) {
       const lines = transactionsToCsv(txs).trim().split('\r\n').slice(1)
       expect(lines, name).toHaveLength(txs.length)
       lines.forEach((line, i) => {
         const cells = line.split(',')
-        const [fee, tax, total] = cells.slice(-3).map(Number)
-        expect(fee + tax, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBe(total)
-        expect(total, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBe(txs[i].fee_tax)
-        expect(fee, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBeGreaterThanOrEqual(0)
-        expect(tax, `${name} ${txs[i].tx_date} ${txs[i].ticker}`).toBeGreaterThanOrEqual(0)
+        const [fee, tax, borrow, total] = cells.slice(-4).map(Number)
+        const where = `${name} ${txs[i].tx_date} ${txs[i].ticker}`
+        expect(fee + tax + borrow, where).toBe(total)
+        expect(total, where).toBe(txs[i].fee_tax)
+        expect(fee, where).toBeGreaterThanOrEqual(0)
+        expect(tax, where).toBeGreaterThanOrEqual(0)
+        expect(borrow, where).toBeGreaterThanOrEqual(0)
       })
     }
   })

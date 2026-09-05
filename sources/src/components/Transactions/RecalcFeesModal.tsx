@@ -61,6 +61,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
           price: tx.price,
           qty: tx.qty,
           fee_tax: newFee,
+          fee_rate: feeRate,
         })
         done += 1
       }

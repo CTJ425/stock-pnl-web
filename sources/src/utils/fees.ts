@@ -168,6 +168,7 @@ export function proposeFeeCorrections(
       feeRate: opts.feeRate,
       taxRate: sellTaxRate(tx.ticker),
       minFee: tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd,
+      nature: tx.tx_nature,
     })
     if (newFee !== tx.fee_tax) out.push({ tx, newFee })
   }

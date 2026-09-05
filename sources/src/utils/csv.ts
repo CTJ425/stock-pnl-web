@@ -177,6 +177,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
   // legacy `includes()` match below would otherwise swallow the split column as the combined total.
   const feeSplitCol = header.indexOf('手續費')
   const taxSplitCol = header.indexOf('證交稅')
+  const borrowSplitCol = header.indexOf('借券費')
   const splitMode = feeSplitCol >= 0 && taxSplitCol >= 0
 
   const col = {
@@ -191,6 +192,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
     fee: splitMode ? -1 : header.findIndex((h) => h.includes('手續費')),
     feeSplit: feeSplitCol,
     taxSplit: taxSplitCol,
+    borrowSplit: borrowSplitCol,
   }
   if (col.date < 0 || col.ticker < 0 || col.type < 0 || col.price < 0 || col.qty < 0) {
     result.errors.push({
@@ -259,7 +261,18 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
           continue
         }
       }
-      feeTax = fee + tax
+      let borrow = 0
+      if (col.borrowSplit >= 0) {
+        const borrowRaw = at(col.borrowSplit).trim()
+        if (borrowRaw !== '') {
+          borrow = parseNumber(borrowRaw)
+          if (!Number.isFinite(borrow) || borrow < 0) {
+            result.errors.push({ line, message: `借券費無效：「${borrowRaw}」` })
+            continue
+          }
+        }
+      }
+      feeTax = fee + tax + borrow
     } else {
       const feeRaw = at(col.fee).trim()
       if (feeRaw !== '') {
@@ -318,11 +331,12 @@ export function transactionsToCsv(txs: Transaction[]): string {
     '交易股數',
     '手續費',
     '證交稅',
+    '借券費',
     '手續費 / 稅金',
   ]
   const lines = [header.join(',')]
   for (const tx of txs) {
-    const { fee, tax } = splitFeeTax(tx)
+    const { fee, tax, borrow } = splitFeeTax(tx)
     lines.push(
       [
         tx.tx_date,
@@ -335,6 +349,7 @@ export function transactionsToCsv(txs: Transaction[]): string {
         String(tx.qty),
         String(fee),
         String(tax),
+        String(borrow),
         String(tx.fee_tax),
       ].join(','),
     )

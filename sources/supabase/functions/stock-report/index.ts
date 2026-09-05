@@ -998,17 +998,33 @@ function ymdMinusDays(ymd: string, days: number): string {
  * `netOpenTickers` in batchTickers.ts so they can be unit-tested.
  */
 async function heldTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const { data, error } = await db
-    .from('transactions')
-    .select('ticker, name, tx_type, qty')
-    .eq('market', 'TPE')
+  // BUG-066: this scans every user's transactions with no paging, so it silently truncated
+  // past PostgREST's max_rows (1000). `id` (UUID PRIMARY KEY) is a total order to page on.
+  const { data, error } = await pagedSelect<{ ticker: string; name: string; tx_type: string; qty: number }>(
+    (from, to) =>
+      db
+        .from('transactions')
+        .select('ticker, name, tx_type, qty')
+        .eq('market', 'TPE')
+        .order('id', { ascending: true })
+        .range(from, to),
+  )
   if (error || !data) return []
   return netOpenTickers(data)
 }
 
 /** All users' watchlist tickers (service role scan tw_watchlist; cross-user deduplication). */
 async function watchedTwTickers(): Promise<Array<{ ticker: string; name: string }>> {
-  const { data, error } = await db.from('tw_watchlist').select('ticker, name')
+  // BUG-066: same unpaged-scan issue as heldTwTickers. tw_watchlist has no `id` column — its
+  // primary key is (user_id, ticker), which is still a total order to page on.
+  const { data, error } = await pagedSelect<{ ticker: string; name: string }>((from, to) =>
+    db
+      .from('tw_watchlist')
+      .select('ticker, name')
+      .order('user_id', { ascending: true })
+      .order('ticker', { ascending: true })
+      .range(from, to),
+  )
   if (error || !data) return []
   const acc = new Map<string, string>()
   for (const row of data) {
@@ -2796,7 +2812,10 @@ function summariseFollowUp(action: ProbeFollowUp, body: Record<string, unknown>)
     const failedCount = Number(body.failed ?? 0)
     if (failedCount > 0) {
       const which = Array.isArray(body.failedTickers) ? body.failedTickers.join('/') : ''
-      return `產出 ${String(body.generated ?? 0)} 檔，失敗 ${String(failedCount)} 檔${which ? `（${which}）` : ''}`
+      // BUG-069: every ticker failing (generated === 0) skips the manifest write on purpose — say
+      // so, or an all-failed round reads the same as a partial one that still advanced the day.
+      const manifestNote = body.manifestSkipped ? '，manifest 未更新' : ''
+      return `產出 ${String(body.generated ?? 0)} 檔，失敗 ${String(failedCount)} 檔${which ? `（${which}）` : ''}${manifestNote}`
     }
     return `產出 ${String(body.generated ?? 0)} 檔`
   }
@@ -3049,6 +3068,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   let runSig: string | null = last?.runSig ?? null
   let chipsSkipped = false
   let skipReason: string | null = null
+  let manifestSkipped = false
 
   if (skip.skip) {
     chipsSkipped = true
@@ -3108,11 +3128,21 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
         }
       }
 
-      await uploadJson('manifest.json', {
-        ymd: series.dataYmd,
-        dataDate: dashDate(series.dataYmd),
-        generatedAt: new Date().toISOString(),
-      })
+      // BUG-069: 0.9.32 (BUG-053) wrapped the per-ticker loop above in its own try/catch so one
+      // ticker's failure no longer aborts the phase — before that, a throw here meant this line
+      // was never reached at all. That made it reachable for every ticker to fail while
+      // `regenerate` stays true: `generated` is then 0, but the manifest still advanced to a
+      // `ymd` whose directory holds no report files, and the front end (which only ever fetches
+      // `manifest.ymd`) 404s across the board. Only advance the manifest when something landed.
+      if (generated > 0) {
+        await uploadJson('manifest.json', {
+          ymd: series.dataYmd,
+          dataDate: dashDate(series.dataYmd),
+          generatedAt: new Date().toISOString(),
+        })
+      } else {
+        manifestSkipped = true
+      }
     }
 
     foreignTop = await syncForeignTop(todayYmd)
@@ -3166,6 +3196,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     generated,
     failed,
     failedTickers,
+    manifestSkipped,
     logError,
     regenerated: regenerate,
     chipsSkipped,
@@ -3528,15 +3559,20 @@ async function handleAdminStatus(): Promise<Response> {
         .limit(1)
         .then((r) => r.data?.[0] ?? null)
         .catch(() => null),
-      db
-        .from('source_probe_tick')
-        .select(
-          'taipei_ymd, taipei_time, source, hit, ok, data_ymd, fingerprint, rows, note, duration_ms, probed_at',
-        )
-        .in('taipei_ymd', [todayYmd, yestYmd])
-        .order('id', { ascending: true })
-        .limit(2000)
-        .then((r) => r.data ?? [])
+      // BUG-066: `.limit(2000)` here is dead — PostgREST's server-side max_rows (1000) caps the
+      // response before a client-side `.limit()` above it can have any effect, so this used to
+      // read as though the cap had been raised when it hadn't. Page through pagedSelect instead.
+      pagedSelect<Record<string, unknown>>((from, to) =>
+        db
+          .from('source_probe_tick')
+          .select(
+            'taipei_ymd, taipei_time, source, hit, ok, data_ymd, fingerprint, rows, note, duration_ms, probed_at',
+          )
+          .in('taipei_ymd', [todayYmd, yestYmd])
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
+        .then((r) => (r.error ? [] : r.data))
         .catch(() => [] as unknown[]),
       latestChipSources(),
       storageCoverage(),
@@ -3806,9 +3842,18 @@ const BACKUPS_BUCKET = 'backups'
  * only service_role can list it, and there is no self-service download path for ordinary users.
  */
 async function handleAdminBackups(): Promise<Response> {
-  const { data: usersData, error: usersError } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (usersError) return json({ error: usersError.message }, 500)
-  const users = usersData?.users ?? []
+  // `listUsers` is a GoTrue Admin API with its own page/perPage, independent of PostgREST's
+  // max_rows — hardcoding page: 1 silently dropped every account past perPage (BUG-066). Loop
+  // upward until a page comes back short.
+  const perPage = 1000
+  const users: { id: string; email?: string | null }[] = []
+  for (let page = 1; ; page++) {
+    const { data: usersData, error: usersError } = await db.auth.admin.listUsers({ page, perPage })
+    if (usersError) return json({ error: usersError.message }, 500)
+    const batch = usersData?.users ?? []
+    users.push(...batch)
+    if (batch.length < perPage) break
+  }
 
   const { data: runRows, error: runError } = await pagedSelect<Record<string, unknown>>((from, to) =>
     db
@@ -3941,12 +3986,26 @@ async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promis
 
     let missing = toInsert.length
     if (apply && toInsert.length > 0) {
-      const { data: inserted, error: insertError } = await db
-        .from(name)
-        .upsert(toInsert, { onConflict: keyField, ignoreDuplicates: true })
-        .select(keyField)
-      if (insertError) return json({ error: restoreFailureMessage(writtenSoFar, insertError.message) }, 500)
-      missing = inserted?.length ?? 0
+      // BUG-066: `.upsert(...).select()` writes every row, but its RETURNING payload is capped
+      // at max_rows (1000) same as any select — a restore past that many rows under-reported
+      // `missing` even though every row landed. Chunk the write so each batch's RETURNING stays
+      // under the cap, and sum the batches.
+      const UPSERT_BATCH = 1000
+      let written = 0
+      for (let i = 0; i < toInsert.length; i += UPSERT_BATCH) {
+        const batch = toInsert.slice(i, i + UPSERT_BATCH)
+        const { data: inserted, error: insertError } = await db
+          .from(name)
+          .upsert(batch, { onConflict: keyField, ignoreDuplicates: true })
+          .select(keyField)
+        if (insertError) {
+          // A failure on a later batch must still report what the earlier batches committed.
+          if (written > 0) writtenSoFar.push({ table: name, count: written })
+          return json({ error: restoreFailureMessage(writtenSoFar, insertError.message) }, 500)
+        }
+        written += inserted?.length ?? 0
+      }
+      missing = written
       writtenSoFar.push({ table: name, count: missing })
     }
 

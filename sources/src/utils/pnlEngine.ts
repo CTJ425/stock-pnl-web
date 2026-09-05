@@ -76,6 +76,10 @@ export interface Holding extends Position {
 }
 
 export interface SellDetail {
+  /** Unique across the whole `sells` array: `${txId}#${n}`, one transaction can push several legs */
+  legId: string
+  /** 'SHORT_COVER' only for the 融券回補 branch (a BUY that closes a short); 'SELL' otherwise */
+  kind: 'SELL' | 'SHORT_COVER'
   txId: string
   date: string        // tx_date YYYY-MM-DD
   qty: number
@@ -531,6 +535,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           else y.realizedUs += realized
 
           yt.sells.push({
+            legId: `${s.id}#${yt.sells.length}`,
+            kind: 'SELL',
             txId: s.id,
             date: s.tx_date,
             qty: matchedQty,
@@ -644,6 +650,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           else y.realizedUs += realized
 
           yt.sells.push({
+            legId: `${tx.id}#${yt.sells.length}`,
+            kind: 'SHORT_COVER',
             txId: tx.id,
             date: tx.tx_date,
             qty: matchedQty,
@@ -769,6 +777,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           }
 
           yt.sells.push({
+            legId: `${tx.id}#${yt.sells.length}`,
+            kind: 'SELL',
             txId: tx.id,
             date: tx.tx_date,
             qty: effQty,

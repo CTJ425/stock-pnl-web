@@ -49,7 +49,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const buyTickers = useMemo(() => {
     const map = new Map<string, { market: Market; ticker: string; name: string }>()
     for (const tx of transactions) {
-      if (tx.tx_type === 'BUY') {
+      if (tx.tx_type === 'BUY' && tx.tx_nature !== 'SHORT') {
         const key = positionKey(tx.market, tx.ticker)
         if (!map.has(key)) {
           map.set(key, { market: tx.market, ticker: tx.ticker, name: tx.name })
@@ -92,12 +92,23 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
           tx.market === market &&
           tx.ticker === ticker &&
           tx.tx_type === 'BUY' &&
+          tx.tx_nature !== 'SHORT' &&
           (!cutoffDate || tx.tx_date <= cutoffDate),
       )
       .sort((a, b) => a.tx_date.localeCompare(b.tx_date) || a.created_at.localeCompare(b.created_at))
   }, [transactions, selectedKey, cutoffDate])
 
   const hasZeroFeeTx = useMemo(() => matchingTxs.some((tx) => tx.fee_tax === 0), [matchingTxs])
+
+  // Count 融券 transactions (either direction) for the selected ticker: the wizard only converts
+  // spot BUY rows, so a short position's share count is left unconverted and must be flagged.
+  const shortTxCount = useMemo(() => {
+    if (!selectedKey) return 0
+    const [market, ticker] = selectedKey.split(':')
+    return transactions.filter(
+      (tx) => tx.market === market && tx.ticker === ticker && tx.tx_nature === 'SHORT',
+    ).length
+  }, [transactions, selectedKey])
 
   // Build live preview items
   const previewItems: PreviewItem[] = useMemo(() => {
@@ -344,6 +355,12 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               </div>
             )}
           </div>
+
+          {shortTxCount > 0 && (
+            <div className="notice notice-warn" role="alert">
+              ⚠️ 此標的另有 {shortTxCount} 筆融券交易無法自動換算（本精靈只處理現股買進）。分割後請自行調整融券部位，否則資券兩邊的股數基準會不一致。
+            </div>
+          )}
 
           {/* Step 3: Live Preview Card */}
           {matchingTxs.length === 0 ? (

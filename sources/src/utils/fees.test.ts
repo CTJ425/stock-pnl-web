@@ -199,6 +199,32 @@ describe('proposeFeeCorrections（批次重算手續費）', () => {
     expect(out[0].newFee).toBe(1)
   })
 
+  /**
+   * BUG-064: `calculateFee` adds the borrow fee for a 融券 sell (`nature === 'SHORT'`), but
+   * `proposeFeeCorrections` never passes `nature`, so the wizard re-prices a short sell as if it
+   * were a spot sell. A correctly recorded short sell is then reported as wrong and, if the user
+   * accepts the proposal, its `fee_tax` is overwritten with a figure missing the borrow fee —
+   * the wizard whose job is to fix fees becomes the thing that breaks them.
+   *
+   * 2330 融券賣出 1,000 股 @ 100 → gross 100,000.
+   *   fee    = max(floor(100,000 × 0.0004), 20) =  40
+   *   tax    = floor(100,000 × 0.003)           = 300
+   *   borrow = floor(100,000 × 0.0008)          =  80
+   *   correct fee_tax                           = 420
+   */
+  it('融券賣出的重算值含借券費，且正確紀錄不被提報 (BUG-064)', () => {
+    const shortWrong = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 100, qty: 1000, fee: 0, nature: 'SHORT' })
+    const shortRight = txOf({ market: 'TPE', ticker: '2330', type: 'SELL', price: 100, qty: 1000, fee: 420, nature: 'SHORT' })
+    const out = proposeFeeCorrections([shortWrong, shortRight], opts)
+    expect(out.find((c) => c.tx.id === shortWrong.id)?.newFee).toBe(420)
+    expect(out.find((c) => c.tx.id === shortRight.id)).toBeUndefined()
+  })
+
+  it('融券買進（回補）沒有證交稅與借券費，維持一般買進計算 (BUG-064)', () => {
+    const cover = txOf({ market: 'TPE', ticker: '2330', type: 'BUY', price: 100, qty: 1000, fee: 0, nature: 'SHORT' })
+    expect(proposeFeeCorrections([cover], opts)[0].newFee).toBe(40)
+  })
+
   it('美股不納入批次重算', () => {
     const us = txOf({ market: 'US', ticker: 'AAPL', type: 'BUY', price: 100, qty: 10, fee: 999 })
     expect(proposeFeeCorrections([us], opts)).toHaveLength(0)

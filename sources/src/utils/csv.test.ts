@@ -272,10 +272,12 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
     expect(parseTransactionsCsv(csv).rows[0].fee_tax).toBe(413)
   })
 
+  // BUG-063 added 借券費 between 證交稅 and the combined column: `splitFeeTax` peels a borrow fee
+  // off a 融券 sell, and without a column for it one export-and-reimport round silently dropped it.
   it('匯出的表頭同時帶分項欄位與舊的合併欄位', () => {
     const header = transactionsToCsv([]).replace('\uFEFF', '').split('\r\n')[0]
     expect(header).toBe(
-      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,手續費 / 稅金',
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易性質,交易單價,交易股數,手續費,證交稅,借券費,手續費 / 稅金',
     )
   })
 
@@ -309,8 +311,23 @@ describe('交易性質與分項費用欄位（Task 137 §C）', () => {
       },
     ]
     const cells = transactionsToCsv(txs).trim().split('\r\n')[1].split(',')
-    // 手續費 80、證交稅 282（減半稅率）、合併欄位 362
-    expect(cells.slice(-3)).toEqual(['80', '282', '362'])
+    // 手續費 80、證交稅 282（減半稅率）、借券費 0（非融券）、合併欄位 362
+    expect(cells.slice(-4)).toEqual(['80', '282', '0', '362'])
+  })
+
+  // The same identity, on the row that motivated BUG-063: for a 融券 sell the three split
+  // components must still add up to the stored total, which they could not before 借券費 existed.
+  it('融券賣出的分項金額相加同樣等於原本的 fee_tax (BUG-063)', () => {
+    const txs: Transaction[] = [
+      {
+        id: '1', workspace_id: 'w', tx_date: '2026-08-18', market: 'TPE', ticker: '2330',
+        name: '台積電', tx_type: 'SELL', price: 1000, qty: 1000, fee_tax: 5225,
+        tx_nature: 'SHORT', created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    const cells = transactionsToCsv(txs).trim().split('\r\n')[1].split(',')
+    expect(cells.slice(-4)).toEqual(['1425', '3000', '800', '5225'])
+    expect(1425 + 3000 + 800).toBe(5225)
   })
 })
 
@@ -329,5 +346,62 @@ describe('parseTxDate — 結尾錨定 (AUDIT-15)', () => {
   it('仍接受日期後面接時間的匯出格式', () => {
     expect(parseTxDate('2026/07/15 09:30:00')).toBe('2026-07-15')
     expect(parseTxDate('2026-07-15T09:30:00Z')).toBe('2026-07-15')
+  })
+})
+
+
+/**
+ * BUG-063: the export writes 手續費 / 證交稅 / 手續費 · 稅金 but never the 借券費 that
+ * `splitFeeTax` peels off a 融券 sell, and the import's split mode rebuilds `fee_tax` as
+ * `fee + tax`. One export-and-reimport round therefore drops the borrow fee from the stored
+ * total, which raises the recorded net proceeds and inflates realised P&L — silently, because
+ * every field still parses and every value is a plausible number.
+ *
+ * Reference numbers: 2330 融券賣出 1,000 股 @ 1,000 → gross 1,000,000.
+ *   fee   = floor(1,000,000 × 0.001425) = 1,425
+ *   tax   = floor(1,000,000 × 0.003)    = 3,000
+ *   borrow= floor(1,000,000 × 0.0008)   =   800
+ *   fee_tax total                       = 5,225
+ */
+describe('CSV 往返保留融券借券費 (BUG-063)', () => {
+  const shortSell: Transaction = {
+    id: 's1',
+    workspace_id: 'w',
+    tx_date: '2024-03-01',
+    market: 'TPE',
+    ticker: '2330',
+    name: '台積電',
+    tx_type: 'SELL',
+    qty: 1000,
+    price: 1000,
+    fee_tax: 5225,
+    tx_nature: 'SHORT',
+    created_at: '2024-03-01T00:00:00Z',
+  }
+
+  it('融券賣出往返後 fee_tax 不變', () => {
+    const csv = transactionsToCsv([shortSell])
+    const parsed = parseTransactionsCsv(csv)
+    expect(parsed.errors).toEqual([])
+    expect(parsed.rows).toHaveLength(1)
+    expect(parsed.rows[0].fee_tax).toBe(5225)
+    expect(parsed.rows[0].tx_nature).toBe('SHORT')
+  })
+
+  it('現股賣出沒有借券費，往返一樣不變', () => {
+    const spotSell: Transaction = { ...shortSell, id: 's2', tx_nature: 'SPOT', fee_tax: 4425 }
+    const parsed = parseTransactionsCsv(transactionsToCsv([spotSell]))
+    expect(parsed.errors).toEqual([])
+    expect(parsed.rows[0].fee_tax).toBe(4425)
+  })
+
+  it('券商匯出（只有手續費與證交稅、沒有借券費欄）仍以兩欄相加，行為不變', () => {
+    const csv = [
+      '交易日期,市場,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費,證交稅',
+      '2024-03-01,TPE,2330,台積電,賣出,1000,1000,1425,3000',
+    ].join('\r\n')
+    const parsed = parseTransactionsCsv(csv)
+    expect(parsed.errors).toEqual([])
+    expect(parsed.rows[0].fee_tax).toBe(4425)
   })
 })

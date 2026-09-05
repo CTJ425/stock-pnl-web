@@ -14,7 +14,7 @@ const { from, selects, payloads, setResults } = vi.hoisted(() => {
   const take = () => (queue.length > 1 ? queue.shift() : queue[0])
   const make = (): unknown => {
     const q: Record<string, unknown> = {}
-    for (const k of ['delete', 'order', 'eq', 'single', 'in']) {
+    for (const k of ['delete', 'order', 'eq', 'single', 'in', 'range']) {
       q[k] = vi.fn(() => q)
     }
     q.select = vi.fn((cols: string) => {
@@ -84,6 +84,35 @@ describe('SupabaseProvider.listTransactions', () => {
   it('T1 asks for tx_nature and returns the rows in one query', async () => {
     setResults([{ data: [], error: null }])
     await new SupabaseProvider().listTransactions('w1')
+    expect(selects).toEqual([FULL])
+  })
+
+  /**
+   * BUG-066: PostgREST caps a response at `max_rows` (1000 by default, and that is the value this
+   * project runs with), and `listTransactions` had no paging loop. A workspace past that many
+   * transactions silently lost every row after the first page, so the ledger — holdings, average
+   * cost, realised P&L — was computed from a truncated history with no error anywhere.
+   *
+   * The threshold is per workspace, not per user, so one active trader reaches it on their own.
+   */
+  it('T1b 超過一頁時分頁抓完，不靜默截斷 (BUG-066)', async () => {
+    const row = (i: number) => ({ id: `t${i}`, fee_tax: 0 })
+    const page1 = Array.from({ length: 1000 }, (_, i) => row(i))
+    const page2 = Array.from({ length: 200 }, (_, i) => row(1000 + i))
+    setResults([
+      { data: page1, error: null },
+      { data: page2, error: null },
+    ])
+    const got = await new SupabaseProvider().listTransactions('w1')
+    expect(got).toHaveLength(1200)
+    expect(got[0].id).toBe('t0')
+    expect(got[1199].id).toBe('t1199')
+  })
+
+  it('T1c 未滿一頁就停止，不多送一次請求 (BUG-066)', async () => {
+    setResults([{ data: [{ id: 't1', fee_tax: 0 }], error: null }])
+    const got = await new SupabaseProvider().listTransactions('w1')
+    expect(got).toHaveLength(1)
     expect(selects).toEqual([FULL])
   })
 

@@ -303,20 +303,42 @@ export class SupabaseProvider implements DataProvider {
   }
 
   async listTransactions(workspaceId: string): Promise<Transaction[]> {
-    // The database may not have run the tx_nature/fee_rate part of schema.sql yet. PostgREST
-    // rejects the whole query for an unknown column, so degrade to only the column that error
-    // actually names rather than drop both and lose the one the database does have.
-    const result = await withTxColumnDegrade((degrade) =>
+    // BUG-066: PostgREST caps a response at `max_rows` (1000), so a workspace past that many
+    // transactions silently lost every row past the first page. Page with .range() until a
+    // page comes back short.
+    const PAGE = 1000
+    const selectPage = (degrade: TxDegrade, from: number) =>
       client()
         .from('transactions')
         .select(txColumnsFor(degrade) as typeof TX_COLUMNS)
         .eq('workspace_id', workspaceId)
         .order('tx_date', { ascending: true })
         .order('created_at', { ascending: true })
-        .order('id', { ascending: true }),
-    )
-    if (result.error) throw new Error(`載入交易紀錄失敗：${result.error.message}`)
-    return (result.data ?? []) as Transaction[]
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1)
+
+    // The database may not have run the tx_nature/fee_rate part of schema.sql yet. PostgREST
+    // rejects the whole query for an unknown column, so degrade to only the column that error
+    // actually names rather than drop both and lose the one the database does have. That
+    // decision only needs to be made once, on the first page — every later page reuses
+    // whichever column list the first page settled on.
+    let settledDegrade: TxDegrade = null
+    const first = await withTxColumnDegrade((degrade) => {
+      settledDegrade = degrade
+      return selectPage(degrade, 0)
+    })
+    if (first.error) throw new Error(`載入交易紀錄失敗：${first.error.message}`)
+    const rows = (first.data ?? []) as Transaction[]
+    if (rows.length < PAGE) return rows
+
+    for (let from = PAGE; ; from += PAGE) {
+      const result = await selectPage(settledDegrade, from)
+      if (result.error) throw new Error(`載入交易紀錄失敗：${result.error.message}`)
+      const page = (result.data ?? []) as Transaction[]
+      rows.push(...page)
+      if (page.length < PAGE) break
+    }
+    return rows
   }
 
   async addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]> {
