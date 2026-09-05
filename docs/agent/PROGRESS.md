@@ -1,15 +1,15 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 深度稽核九項查證與修正、0.9.34 發布（Edge 待部署）
-- Status: **✅ COMPLETED**（Edge 部署待授權）
+- Action: 深度稽核九項查證與修正、0.9.34 發布與雙環境部署
+- Status: **✅ COMPLETED**
 - Timestamp: 2026-09-05 09:22:10 Asia/Taipei
 
 ---
 
 ## 📅 Log: 2026-09-05 09:21:54 Asia/Taipei (深度稽核九項查證與修正、0.9.34 發布)
 
-- **Status**: ✅ **COMPLETED**（已合併 `main`）／⚠️ **Edge 尚未部署 —— 缺授權**
+- **Status**: ✅ **COMPLETED** —— 已合併 `main`，DEV 與 PROD Edge 均已部署並驗證
 - **Version**: `0.9.33` → **`0.9.34`**（`main` 與 `dev` 同為 `2799991`）
 - **緣由**: 使用者先問「有確認過 Antigravity 找出的 BUG 都屬實嗎」，接著指示「依查證屬實的部分修復、驗證並直接部署合併」。
 
@@ -38,15 +38,22 @@ BUG-068「鎖死」誇大（輸入框未 disabled）；BUG-069「無條件上傳
 `npm run build`、`npm run typecheck:edge`、`npm run lint` 全部 exit 0；
 `npx vitest run` 99 檔 / **1,684** 項通過（新增 15 項）。
 
-### ⚠️ 未完成：Edge Function 尚未部署
-`stock-report`、`backup-transactions`（新增 `cronSecret.ts`）、`dataProvider` 以外的 Edge 端修正
-**都還沒上線**。舊 access token 已被撤銷（`functions list` 兩個 project ref 皆回 401），
-使用者於 2026-09-05 提供的新 token 明示「不授權給你」，因此完全未使用。部署需要使用者授權：
-在提示字元輸入 `! supabase login`（token 不會進入對話記錄），再執行
-`supabase functions deploy stock-report --no-verify-jwt --project-ref <ref>` 與
-`supabase functions deploy backup-transactions --no-verify-jwt --project-ref <ref>`，兩個環境各一次。
-**部署後務必確認下一輪 cron 回 200** —— BUG-070 改了 `backup-transactions` 的 `CRON_SECRET` 比對方式。
+### Edge Function 部署（2026-09-05 01:26–01:41 UTC）
+使用者於本輪明確授權新 token 後完成。**DEV 先行，確認部署後的 cron 回 200 才推 PROD** ——
+BUG-070 改動了 `backup-transactions` 的 `CRON_SECRET` 比對方式，若有缺陷會讓兩環境的備份排程全部 401。
 
+| Function | 版本 | Hash | verify_jwt |
+| --- | --- | --- | --- |
+| `stock-report` | v6 → **v7** | `9ad5501c…` → `c4a1f053…` | false ✓ |
+| `backup-transactions` | v2 → **v3** | `32d4fac…` → `7c05cd47…` | false ✓ |
+| `stock-price` | v4（0.9.34 未動，未重新部署） | `9609330f…` | true ✓ |
+
+兩環境部署後三個 function 的 `ezbr_sha256` 完全一致。
+- **DEV** 01:30 UTC 回 200，部署後零非-200。
+- **PROD** 01:40 UTC 回 200，部署後零非-200；`verify_setup()` 十項全 PASS，`cron target host` 正確。
+- 查詢完畢後 link 已還原回 DEV。
+
+**0.9.34 至此完整上線**：程式碼、`main`、GitHub Release、兩環境 Edge 全部到位。
 ---
 
 ## 📅 Log: 2026-09-04 23:05:00 Asia/Taipei (全庫深度審查稽核、BUG-063..BUG-071、交接文件歸檔)
