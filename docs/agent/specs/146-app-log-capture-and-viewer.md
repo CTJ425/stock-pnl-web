@@ -100,8 +100,11 @@ export function logClient(
 - Fire and forget. It returns `void` and never throws.
 - It is a no-op when `supabase` is `null`, or when no session exists (RLS would reject the row).
 - It sets `source = 'web'`, `user_id` from the session, `app_version` from `APP_VERSION` (`sources/src/version.ts`).
-- **Dedupe:** it drops a repeat of the same `action + message` inside 60 seconds. A render loop must
-  not write thousands of rows.
+- **Dedupe:** it drops a repeat of the same `action + message` inside **5 minutes**. A render loop
+  must not write thousands of rows. The window must stay longer than any poll interval that
+  reaches a log site: the app has two 60 s price-poll loops (`useStockPrices.ts`,
+  `WatchSection.tsx`), and a 60 s window deduped nothing against them — consecutive polls land
+  exactly one window apart, so a sustained outage wrote one row per minute per open tab.
 - It calls `redactDetail()` before the insert.
 
 ### 3.4 Redaction — `redactDetail()`
@@ -153,12 +156,16 @@ Phase 1 — capture on the edge, plus the viewer:
 - `sources/src/index.css` (or the file that holds the `adm-*` rules) — panel styles
 
 Phase 2 — capture in the browser:
-- `sources/src/components/ErrorBoundary.tsx` — new
-- `sources/src/main.tsx` — wrap `App`
-- the service functions that currently `catch` then `return null`
+- `sources/src/components/ErrorBoundary.tsx` — new; the app had none
+- `sources/src/main.tsx` — wrap `App`, inside `StrictMode`
+- the 14 silent `catch` blocks, mapped 2026-09-06:
+  `aiChatStore.ts` (4), `feeSettings.ts` (2), `priceProxy.ts` (4), `reportsBucket.ts` (1),
+  `twMarketData.ts` (3). `appLog.ts` is exempt — logging from its own catch is recursion.
 
 Phase 3 — capture on accounting writes:
-- the transaction write path in `sources/src/services/dataProvider.ts`
+- `sources/src/services/dataProvider.ts` — `addTransactions`, `updateTransaction`,
+  `deleteTransactions`. These three already **throw**; they do not swallow. The change records
+  the failure and leaves the throw exactly as it is, because every caller depends on it.
 
 ---
 
@@ -202,11 +209,23 @@ After DDL: `NOTIFY pgrst, 'reload schema';`
 | `logClient` with no supabase client | no throw, no insert | unit / `appLog.test.ts` |
 | `logClient` with no session | no insert | unit / `appLog.test.ts` |
 | `logClient` when the insert rejects | no throw | unit / `appLog.test.ts` |
-| `logClient` repeats inside 60 s | second call inserts nothing | unit / `appLog.test.ts` |
-| `logClient` repeats after 60 s | second call inserts | unit / `appLog.test.ts` |
+| `logClient` repeats inside the dedupe window | second call inserts nothing | unit / `appLog.test.ts` |
+| `logClient` repeats after the dedupe window | second call inserts | unit / `appLog.test.ts` |
+| ErrorBoundary catches a non-Error throw | fallback shown, message is `'null'`, no second throw | component / `ErrorBoundary.test.tsx` |
 | `fetchAppLogs` on a non-ok response | returns `[]`, no throw | unit / `appLog.test.ts` |
 | `fetchAppLogs` on a malformed row | drops the row, keeps the valid rows | unit / `appLog.test.ts` |
-| ErrorBoundary catches a render throw | shows fallback, calls `logClient` once | component / `ErrorBoundary.test.tsx` (Phase 2) |
+| ErrorBoundary renders children when nothing throws | children visible, no log | component / `ErrorBoundary.test.tsx` |
+| ErrorBoundary catches a render throw | fallback shown instead of a blank page | component / `ErrorBoundary.test.tsx` |
+| ErrorBoundary records the throw | `logClient('error','render',…)` with a stack | component / `ErrorBoundary.test.tsx` |
+| ErrorBoundary offers a way out | a 重新載入 button exists | component / `ErrorBoundary.test.tsx` |
+| every catch in the five service files records | `logClient` present in each block | structural / `catchLogging.test.ts` |
+| the scanner still finds all 14 catch blocks | counts match | structural / `catchLogging.test.ts` |
+| `appLog.ts` catches stay silent | no `logClient` in its own catch | structural / `catchLogging.test.ts` |
+| `addTransactions` fails | logs once, still throws 寫入交易失敗 | unit / `dataProvider.txLogging.test.ts` |
+| `updateTransaction` fails | logs once, still throws 更新交易失敗 | unit / `dataProvider.txLogging.test.ts` |
+| `deleteTransactions` fails | logs once, still throws 刪除交易失敗 | unit / `dataProvider.txLogging.test.ts` |
+| a failed write records the code, not the row | `detail.code` set, no ticker in `detail` | unit / `dataProvider.txLogging.test.ts` |
+| a successful write | logs nothing | unit / `dataProvider.txLogging.test.ts` |
 
 ---
 

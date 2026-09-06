@@ -7,6 +7,27 @@
 
 ---
 
+## 📅 Log: 2026-09-06 16:21:13 Asia/Taipei (Task 146, 0.9.35-dev.2)
+
+**Spec 146 Phases 2 and 3 — the capture layer now has something feeding it.**
+
+Phase 1 built the table, the Edge capture and the admin panel. Nothing in the browser wrote to it yet. This entry closes that: the app's first ErrorBoundary, the 14 silent `catch` blocks in five service files, and the three transaction write methods.
+
+**The transaction write path does not swallow — it throws.** `addTransactions`, `updateTransaction` and `deleteTransactions` already threw on failure, and every caller depends on that throw. The change records the PostgREST code and leaves the throw byte-for-byte identical: same message, same type, same condition. `detail` carries `code` only, never the row. The main session read that diff itself rather than delegating it, because a silent change there is a money bug.
+
+**Two defects the reviewer caught, both in the new error handling itself:**
+
+1. **`ErrorBoundary` read `error.message` with no type narrowing.** React passes the thrown value through unchanged, and `throw null` is legal. Reading `.message` off `null` throws a second time inside the outermost boundary, where no ancestor can catch it — reproducing the exact blank, unrecorded page the component exists to prevent. Now narrowed with `error instanceof Error`, with a test that throws `null`.
+2. **The dedupe window matched the poll interval, so it deduped nothing.** `DEDUPE_MS` was 60 s; the app has two 60 s price-poll loops (`useStockPrices.ts`, `WatchSection.tsx`) that reach these log sites. Consecutive polls land exactly one window apart, so a sustained outage wrote one row per minute per open tab. The window is now 5 minutes, and the spec states the rule: it must stay longer than any poll interval that reaches a log site.
+
+**Two accepted risks, recorded as RISK-006 and RISK-007 in `BUG_FIX.md`**: seven `action` values name module-private functions rather than public entry points, and `syncWorkspaceFees`'s catch sits inside a loop over workspaces.
+
+**A third defect was in the failing tests this session wrote, and only `npm run build` could see it.** `JSX.Element` used bare no longer resolves under `@types/react@19` (the namespace moved under `React`), and a test component that always throws infers `never`, which stops being a valid JSX component (TS2786). Both builders correctly reported the red build and refused to edit the test files; the main session fixed them. `npx vitest run` was green throughout, because esbuild does not type-check.
+
+**Verification**: `npx vitest run` 103 files / **1731** tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict PASS with four RISKs; two fixed, two accepted and recorded.
+
+---
+
 ## 📅 Log: 2026-09-06 15:46:21 Asia/Taipei (Task 146, 0.9.35-dev.1)
 
 **Spec 146 Phase 1 — the `app_log` capture layer and the admin "執行記錄" panel.**
@@ -26,54 +47,3 @@ The starting fact, from a codebase scout: nothing recorded causes. `stock-report
 **Verification**: `npx vitest run` 100 files / 1710 tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict FAIL on the first pass (two BLOCKERs, both real), PASS after the fix.
 
 **Not done**: Phase 2 (ErrorBoundary and service-level capture), Phase 3 (transaction write path), and the DEV Edge deploy. Edge-side capture exists in source only.
-
----
-
-## 📅 Log: 2026-09-05 09:21:54 Asia/Taipei (深度稽核九項查證與修正、0.9.34 發布)
-
-- **Status**: ✅ **COMPLETED** —— 已合併 `main`，DEV 與 PROD Edge 均已部署並驗證
-- **Version**: `0.9.33` → **`0.9.34`**（`main` 與 `dev` 同為 `2799991`）
-- **緣由**: 使用者先問「有確認過 Antigravity 找出的 BUG 都屬實嗎」，接著指示「依查證屬實的部分修復、驗證並直接部署合併」。
-
-### 查證（先於修復）
-九項深度稽核發現先前只被歸檔、未經查證。逐條核對後：**七項完全成立、兩項部分成立、無一被駁回**。
-同時修正原報告四處錯誤主張：BUG-066 第 5 處成因實為 GoTrue Admin API 分頁而非 PostgREST `max_rows`
-（照原歸因實作會白做工）；BUG-066 引用 `config.toml` 作為雲端證據但該檔管的是本機堆疊；
-BUG-068「鎖死」誇大（輸入框未 disabled）；BUG-069「無條件上傳」不正確（在 `if (regenerate)` 內）。
-
-### 修復
-三波 builder，主 session 先寫 15 個失敗測試作為契約。三項 P0 都是融券帳務的靜默金額錯誤。
-`route:reviewer` 判定 **FAIL** 並攔下兩個 BLOCKER，皆於同版修正並各自補測試：
-- **BUG-072**：`handleAdminStatus` 的 `pagedSelect` 呼叫端忽略 `r.error`，把分頁中途失敗的部分資料
-  當成完整結果 —— 正是分頁工作要消除的缺陷，在呼叫端被重新引入。由 0.9.34 自身引入。
-- **BUG-073**：BUG-067 讓融券列首次可被選取後，暴露出股數與均價取自共用多頭腿、損益取自選中列的
-  接縫，同檔有多空時畫面數字自相矛盾。
-
-### 兩個由本專案自身修正引入的缺陷（模式相同，值得記住）
-- **BUG-069** 的可觸發性來自 0.9.32 的 BUG-053：加上逐筆 `try/catch` 之前，例外會中止整輪，
-  manifest 根本不會被寫入。
-- **BUG-073** 的可達性來自本版的 BUG-067。
-兩者都是「修好一個缺陷，讓另一個原本到不了的缺陷浮現」。修正本身都沒錯，但**修好一個可達性問題時，
-要一併檢查它讓什麼變得可達**。
-
-### Verify
-`npm run build`、`npm run typecheck:edge`、`npm run lint` 全部 exit 0；
-`npx vitest run` 99 檔 / **1,684** 項通過（新增 15 項）。
-
-### Edge Function 部署（2026-09-05 01:26–01:41 UTC）
-使用者於本輪明確授權新 token 後完成。**DEV 先行，確認部署後的 cron 回 200 才推 PROD** ——
-BUG-070 改動了 `backup-transactions` 的 `CRON_SECRET` 比對方式，若有缺陷會讓兩環境的備份排程全部 401。
-
-| Function | 版本 | Hash | verify_jwt |
-| --- | --- | --- | --- |
-| `stock-report` | v6 → **v7** | `9ad5501c…` → `c4a1f053…` | false ✓ |
-| `backup-transactions` | v2 → **v3** | `32d4fac…` → `7c05cd47…` | false ✓ |
-| `stock-price` | v4（0.9.34 未動，未重新部署） | `9609330f…` | true ✓ |
-
-兩環境部署後三個 function 的 `ezbr_sha256` 完全一致。
-- **DEV** 01:30 UTC 回 200，部署後零非-200。
-- **PROD** 01:40 UTC 回 200，部署後零非-200；`verify_setup()` 十項全 PASS，`cron target host` 正確。
-- 查詢完畢後 link 已還原回 DEV。
-
-**0.9.34 至此完整上線**：程式碼、`main`、GitHub Release、兩環境 Edge 全部到位。
-

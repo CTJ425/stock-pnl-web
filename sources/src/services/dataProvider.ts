@@ -7,6 +7,7 @@
 import type { NewTransaction, Transaction, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
+import { logClient } from './appLog'
 
 export interface DataProvider {
   listWorkspaces(): Promise<Workspace[]>
@@ -354,7 +355,10 @@ export class SupabaseProvider implements DataProvider {
         .insert(rows.map((row) => stripTxRow(row, degrade)))
         .select(txColumnsFor(degrade) as typeof TX_COLUMNS),
     )
-    if (result.error) throw new Error(`寫入交易失敗：${result.error.message}`)
+    if (result.error) {
+      logClient('error', 'addTransactions', result.error.message, { code: result.error.code })
+      throw new Error(`寫入交易失敗：${result.error.message}`)
+    }
     return (result.data ?? []) as Transaction[]
   }
 
@@ -367,12 +371,18 @@ export class SupabaseProvider implements DataProvider {
         .update(stripTxRow(patch, degrade))
         .eq('id', id),
     )
-    if (result.error) throw new Error(`更新交易失敗：${result.error.message}`)
+    if (result.error) {
+      logClient('error', 'updateTransaction', result.error.message, { code: result.error.code })
+      throw new Error(`更新交易失敗：${result.error.message}`)
+    }
   }
 
   async deleteTransactions(ids: string[]): Promise<void> {
     const { error } = await client().from('transactions').delete().in('id', ids)
-    if (error) throw new Error(`刪除交易失敗：${error.message}`)
+    if (error) {
+      logClient('error', 'deleteTransactions', error.message, { code: error.code })
+      throw new Error(`刪除交易失敗：${error.message}`)
+    }
   }
 
   async setWorkspaceFeeRate(id: string, rate: number): Promise<void> {

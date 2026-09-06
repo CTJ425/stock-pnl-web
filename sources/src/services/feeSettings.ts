@@ -6,6 +6,7 @@ import type { Workspace } from '../types/models'
 import type { DataProvider } from './dataProvider'
 import { getStoredFeeRate, setFeeRate } from '../utils/settings'
 import { planFeeSync } from '../utils/feeSync'
+import { logClient } from './appLog'
 
 /** Reconciles every workspace's row against the cache. Never rejects — this runs on login. */
 export async function syncWorkspaceFees(list: Workspace[], provider: DataProvider): Promise<void> {
@@ -17,7 +18,8 @@ export async function syncWorkspaceFees(list: Workspace[], provider: DataProvide
     } else if (action.kind === 'push-local') {
       try {
         await provider.setWorkspaceFeeRate(ws.id, action.rate)
-      } catch {
+      } catch (err) {
+        logClient('error', 'syncWorkspaceFees', err instanceof Error ? err.message : String(err), {})
         // A write failure must not block login; the cache still has the rate.
       }
     }
@@ -33,7 +35,8 @@ export async function saveWorkspaceFeeRate(
   setFeeRate(rate, workspaceId)
   try {
     await provider.setWorkspaceFeeRate(workspaceId, rate)
-  } catch {
+  } catch (err) {
+    logClient('error', 'saveWorkspaceFeeRate', err instanceof Error ? err.message : String(err), {})
     // Swallow: the cache already has the new rate.
   }
 }

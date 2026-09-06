@@ -1613,6 +1613,14 @@ input[type='date']::-webkit-calendar-picker-indicator {
   text-decoration: underline;
 }
 
+.error-fallback {
+  text-align: center;
+}
+
+.error-fallback-btn {
+  margin: 4px auto 0;
+}
+
 /* ---------- Menu frame (common to the top work area and individual stock switching for individual stock analysis) ----------*/
 .ws-select {
   display: flex;

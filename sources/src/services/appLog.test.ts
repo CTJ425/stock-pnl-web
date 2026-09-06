@@ -131,23 +131,23 @@ describe('logClient', () => {
     expect(insert).not.toHaveBeenCalled()
   })
 
-  it('drops a repeat of the same action and message inside 60 seconds', async () => {
+  it('drops a repeat of the same action and message inside the dedupe window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-06T00:00:00Z'))
     logClient('error', 'render', 'same')
     await vi.waitFor(() => expect(insert).toHaveBeenCalledTimes(1))
-    vi.setSystemTime(new Date('2026-09-06T00:00:59Z'))
+    vi.setSystemTime(new Date('2026-09-06T00:04:59Z'))
     logClient('error', 'render', 'same')
     await vi.advanceTimersByTimeAsync(5)
     expect(insert).toHaveBeenCalledTimes(1)
   })
 
-  it('writes the same event again after 60 seconds', async () => {
+  it('writes the same event again after the dedupe window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-06T00:00:00Z'))
     logClient('error', 'render', 'same')
     await vi.waitFor(() => expect(insert).toHaveBeenCalledTimes(1))
-    vi.setSystemTime(new Date('2026-09-06T00:01:01Z'))
+    vi.setSystemTime(new Date('2026-09-06T00:05:01Z'))
     logClient('error', 'render', 'same')
     await vi.waitFor(() => expect(insert).toHaveBeenCalledTimes(2))
   })

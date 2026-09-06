@@ -13,6 +13,7 @@
  * Use with "Taiwan Stock Current Price Reserve".
  */
 import { isSupabaseConfigured, supabase } from './supabase'
+import { logClient } from './appLog'
 
 const DEV = import.meta.env.DEV
 const TWSE_URL = DEV
@@ -44,7 +45,8 @@ function readCache(): TwStockRow[] | null {
     const parsed = JSON.parse(raw) as CacheShape
     if (!Array.isArray(parsed.rows) || Date.now() - parsed.at > CACHE_TTL_MS) return null
     return parsed.rows
-  } catch {
+  } catch (err) {
+    logClient('warn', 'readCache', err instanceof Error ? err.message : String(err), {})
     return null
   }
 }
@@ -52,7 +54,8 @@ function readCache(): TwStockRow[] | null {
 function writeCache(rows: TwStockRow[]): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows } satisfies CacheShape))
-  } catch {
+  } catch (err) {
+    logClient('warn', 'writeCache', err instanceof Error ? err.message : String(err), {})
     // If the capacity exceeds the capacity, the cache will be abandoned directly, and the functions will not be affected.
   }
 }
@@ -128,7 +131,8 @@ async function fetchViaEdge(): Promise<TwStockRow[]> {
         close: typeof r.close === 'number' && r.close > 0 ? r.close : null,
       }))
       .filter((r) => r.symbol && r.name)
-  } catch {
+  } catch (err) {
+    logClient('error', 'fetchViaEdge', err instanceof Error ? err.message : String(err), {})
     return []
   }
 }

@@ -27,9 +27,9 @@
 ## 📋 Active Tasks
 
 ### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
-- **Status**: 🔄 **IN PROGRESS — Phase 1 done, Phases 2–3 open**
+- **Status**: ✅ **DONE — all three phases shipped in 0.9.35-dev.2**
 - **Agent**: Claude
-- **Timestamp**: 2026-09-06 15:46:21 Asia/Taipei
+- **Timestamp**: 2026-09-06 16:21:13 Asia/Taipei
 - **Spec**: `docs/agent/specs/146-app-log-capture-and-viewer.md`
 - **What is this**: The project could not show what went wrong at run time. Edge Functions emit no `console.log`; the web app has no ErrorBoundary and its services `catch` then `return null`; the four existing log tables record scheduled-job outcomes, never causes. This task adds the missing capture layer — one `app_log` table written by all three layers — plus the admin panel that reads it.
 - **Phase 1 — DONE (0.9.35-dev.1)**:
@@ -38,9 +38,9 @@
   3. Outermost-catch capture in `stock-report`, `stock-price` and `backup-transactions`, plus the new `app-logs` action gated by `assertAdmin`.
   4. `sources/src/services/appLog.ts` — `logClient()`, `fetchAppLogs()`, 25 unit tests.
   5. `sources/src/components/Admin/LogsSection.tsx` and the `logs` panel entry in `AdminConsolePage.tsx`.
-- **Phase 2 — OPEN**: front-end ErrorBoundary, and changing the services that currently `catch` then `return null` to record before they return.
-- **Phase 3 — OPEN**: capture on the transaction write path in `dataProvider.ts`.
-- **Not deployed**: the three Edge Functions are changed in source only. DEV Edge deploy is not done, so edge-side capture does not run yet.
+- **Phase 2 — DONE (0.9.35-dev.2)**: the app's first ErrorBoundary (`components/ErrorBoundary.tsx`, wired in `main.tsx` inside `StrictMode`), and `logClient` added to all 14 silent `catch` blocks in `aiChatStore.ts` (4), `feeSettings.ts` (2), `priceProxy.ts` (4), `reportsBucket.ts` (1) and `twMarketData.ts` (3). Return values and control flow unchanged. `appLog.ts` stays exempt — logging from its own catch is recursion. Pinned by `catchLogging.test.ts`.
+- **Phase 3 — DONE (0.9.35-dev.2)**: `addTransactions`, `updateTransaction` and `deleteTransactions` in `dataProvider.ts` record the PostgREST code, then throw exactly as before. Pinned by `dataProvider.txLogging.test.ts`.
+- **Deployed to DEV 2026-09-06**: `stock-report` v8, `stock-price` v5, `backup-transactions` v4, all three `ezbr_sha256` changed, `verify_jwt` preserved (`false`/`true`/`false`). Live checks: `app-logs` returns 401 with no credential and 401 with the anon key alone; a POST body of literal `null` returns 400 instead of no response. PROD is untouched.
 - **Relationship to Task 144**: Spec 144 Feature 2 specifies a viewer over data that already exists (`cron.job_run_details`, `source_probe_tick`, `batch_run_log`, `admin_run_log`). It shares the `logs` panel built here and must add tabs to `LogsSection.tsx` rather than a second panel.
 
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)

@@ -21,6 +21,7 @@
  * Follow the way `twMarketData.ts` handles localStorage.
  */
 import type { AiMessage } from './aiClient'
+import { logClient } from './appLog'
 
 /** Staging structure version. If the shape is changed, the version will be upgraded, and the old one will be discarded directly (there is no compatibility baggage for temporary data)*/
 export const CHAT_STORE_SCHEMA = 1
@@ -43,7 +44,8 @@ function safeSession(): Storage | null {
   try {
     // Accessing sessionStorage itself may throw (some privacy settings), so even access must be wrapped
     return typeof sessionStorage === 'undefined' ? null : sessionStorage
-  } catch {
+  } catch (err) {
+    logClient('error', 'safeSession', err instanceof Error ? err.message : String(err), {})
     return null
   }
 }
@@ -66,7 +68,8 @@ export function loadChat(ticker: string): StoredChat | null {
         typeof m.content === 'string',
     )
     return { ...d, messages }
-  } catch {
+  } catch (err) {
+    logClient('error', 'loadChat', err instanceof Error ? err.message : String(err), {})
     return null
   }
 }
@@ -84,7 +87,8 @@ export function saveChat(ticker: string, analysis: string, messages: AiMessage[]
       savedAt: new Date().toISOString(),
     }
     store.setItem(chatKey(ticker), JSON.stringify(payload))
-  } catch {
+  } catch (err) {
+    logClient('error', 'saveChat', err instanceof Error ? err.message : String(err), {})
     // Capacity is exhausted or disabled: it does not affect current use, but will disappear after splitting pages.
   }
 }
@@ -95,7 +99,8 @@ export function clearChat(ticker: string): void {
   if (!store) return
   try {
     store.removeItem(chatKey(ticker))
-  } catch {
+  } catch (err) {
+    logClient('error', 'clearChat', err instanceof Error ? err.message : String(err), {})
     // Same as above
   }
 }

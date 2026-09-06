@@ -20,6 +20,30 @@
 
 ---
 
+### RISK-006 — 7 個 `action` 名稱指向模組私有函式，而非公開進入點
+
+- **Where**: `sources/src/services/aiChatStore.ts:48`、`priceProxy.ts:121,188,206`、`twMarketData.ts:49,58,135`
+- **What**: Spec 146 要求 `logClient` 的 `action` 使用「所在的 exported 函式名稱」。實際落在 `safeSession`、`writePriceCache`、`fetchFromEdge`、`fetchTwFallback`、`readCache`、`writeCache`、`fetchViaEdge` 這 7 個模組私有函式上，它們在模組公開介面上看不到。
+- **Confirmed by Review**: `route:reviewer`，2026-09-06，Spec 146 Phase 2／3 審查。
+- **Impact Today**: 低。這些名稱在專案內唯一且可 grep，對排查而言比公開包裝函式更精確——它直接指出失敗發生在快取讀取、快取寫入，還是 Edge 取數。
+- **Decision**: 本次不改。若日後 `app_log` 要依公開操作聚合統計，再引入一個獨立的 `operation` 欄位，不要改動 `action` 的語意。
+- **Status**: OPEN（低嚴重度，已確認）
+- **Discovered**: 2026-09-06
+
+---
+
+### RISK-007 — `syncWorkspaceFees` 的 catch 位於迴圈內，每次登入每個 workspace 各記一列
+
+- **Where**: `sources/src/services/feeSettings.ts:19-24`，呼叫端 `sources/src/context/WorkspaceContext.tsx:97`
+- **What**: 該 catch 在 workspace 清單的 `for` 迴圈內。使用者若有多個 workspace 同時失敗，每次登入每個 workspace 各寫一列 `app_log`。
+- **Confirmed by Review**: `route:reviewer`，2026-09-06，Spec 146 Phase 2／3 審查。
+- **Impact Today**: 低。筆數受 workspace 數量限制，且每次登入才觸發一輪，與輪詢迴圈不同，不會持續累積。`logClient` 的 5 分鐘去重亦會吸收同一次登入內的重複訊息。
+- **Decision**: 本次不改。要改成「整輪失敗記一列」必須改動 `syncWorkspaceFees` 的迴圈結構，代價高於這個筆數問題。
+- **Status**: OPEN（低嚴重度，已確認）
+- **Discovered**: 2026-09-06
+
+---
+
 ### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
 
 - **Where**: `sources/supabase/functions/stock-report/index.ts`（chips phase 的逐檔迴圈，`if (okUp) generated++`）
