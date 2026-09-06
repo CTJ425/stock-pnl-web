@@ -27,7 +27,8 @@
 ## 📋 Active Tasks
 
 ### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
-- **Status**: ✅ **DONE — all three phases shipped in 0.9.35-dev.2**
+- **Status**: ✅ **DONE — released as 0.9.35, verified live on DEV**
+- **Live DEV verification (2026-09-06)**: a real Edge exception landed in `app_log` with its stack and nothing else in `detail`; `app-logs` returned 401 with no credential and 401 with the anon key alone; a POST body of literal `null` returned 400; the RLS policy allowed the user's own `web` row and denied a `RETURNING` insert, an `edge` row, another user's row, and any `SELECT`; the app booted against DEV with no console or page errors. **Not verified**: the admin panel UI and a browser-originated log write — both need an admin login this session did not have.
 - **Agent**: Claude
 - **Timestamp**: 2026-09-06 16:21:13 Asia/Taipei
 - **Spec**: `docs/agent/specs/146-app-log-capture-and-viewer.md`

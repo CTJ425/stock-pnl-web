@@ -5,6 +5,28 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-06 15:46:21 Asia/Taipei (Task 146, 0.9.35-dev.1)
+
+**Spec 146 Phase 1 — the `app_log` capture layer and the admin "執行記錄" panel.**
+
+The starting fact, from a codebase scout: nothing recorded causes. `stock-report/index.ts` had no `console.log` at all — an exception became an HTTP status and a response body nobody kept. The web services `catch` and `return null`, so a failure rendered an empty state. The four existing log tables (`batch_run_log`, `source_probe_log`, `source_probe_tick`, `admin_run_log`) store flags, durations and skip reasons. Spec 144 Feature 2 was already specified over exactly those four tables, which is why it could never have shown a front-end error: the data did not exist. Spec 146 adds the capture, and shares one panel with Spec 144.
+
+**Applied to DEV** through `supabase db query --linked` with the `EXISTS (... command LIKE '%zyebvayngwrqzoaicbwd%')` identity guard inside the write. Verified on DEV: `is_dev=true`, table present, RLS on, `policies=1`, `select_policies=0`, `idx=4`, RPC present, `service_role` EXECUTE true, `authenticated` EXECUTE false, `cron_jobs=7`, `prune_job=1`. **DEV cron job count is now 7, not 6** — `CLAUDE.md` and older PROGRESS entries name 6. The count was never a valid identity check; the `EXISTS` predicate on the project ref is.
+
+**Three defects found during the build, none of which any green gate could see:**
+
+1. **`try { return promise }` does not catch a rejection.** The first version of the outermost catch covered 3 of 20 dispatch branches in `stock-report` and 0 of 5 in `stock-price`; the rest returned an unawaited promise whose rejection escaped the `try`. `npm run build` and `npm run typecheck:edge` were both green. All 24 handler returns are now `return await`.
+2. **A POST body of the literal JSON value `null` produced no response at all.** `null` is valid JSON, so the parse `catch` never fires; `body.action` then throws a `TypeError`, and the new outermost catch threw a second time reading the same `body.action`, escaping `Deno.serve`. Reachable with no credential. Before this task's catch existed the same input produced an empty 500 — the new error handling made it strictly worse until the guard was added after the parse in both functions. Found by `reviewer`.
+3. **`fetchAppLogs` omitted `timeout` on `functions.invoke`**, breaking the project's structural contract in `src/services/invokeTimeout.test.ts`. `supabase-js` has no default, so a hung Edge Function leaves the spinner turning forever. Now 20 s.
+
+**Redaction is a key allowlist, not a denylist**, at every depth including inside arrays, with `stack` truncated to 2000 characters, other strings to 500, and arrays capped at 20 elements. The array cap exists because `app_log.detail` has no size CHECK in the database: `pg_column_size` is not immutable and does not belong in a CHECK constraint. A denylist fails open, and this project already has a precedent — a redaction regex once printed the DEV `CRON_SECRET` into a transcript.
+
+**Verification**: `npx vitest run` 100 files / 1710 tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict FAIL on the first pass (two BLOCKERs, both real), PASS after the fix.
+
+**Not done**: Phase 2 (ErrorBoundary and service-level capture), Phase 3 (transaction write path), and the DEV Edge deploy. Edge-side capture exists in source only.
+
+---
+
 ## 📅 Log: 2026-09-05 09:21:54 Asia/Taipei (深度稽核九項查證與修正、0.9.34 發布)
 
 - **Status**: ✅ **COMPLETED** —— 已合併 `main`，DEV 與 PROD Edge 均已部署並驗證
