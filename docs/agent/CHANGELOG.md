@@ -2,6 +2,43 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.35-dev.1（2026-09-06）— 全域錯誤記錄 `app_log`：捕捉層與後台檢視頁
+
+> 既有的 `batch_run_log` / `source_probe_log` / `source_probe_tick` / `admin_run_log` 只記錄排程的
+> **結果**——旗標、耗時、略過原因。沒有任何一張表能存放錯誤訊息、堆疊，或瀏覽器端發生的事件。
+> Edge Function 完全沒有 `console.log`，例外只變成一個沒人保存的 HTTP 回應；前端 service 一律
+> catch 之後 `return null`，失敗渲染成空狀態。使用者回報「畫面一片空白」時，系統裡沒有留下
+> 任何紀錄。本版補上缺少的**捕捉層**，而不是又一個讀既有資料的檢視器。
+
+- ✨ **新增 `app_log` 資料表**（`schema.sql` §6d-2）— 欄位 `level` / `source` / `action` /
+  `message` / `detail` / `user_id` / `app_version` / `request_id`。`request_id` 讓同一次操作的
+  前端與 Edge 紀錄串成一條鏈。RLS 開啟且**只有一條 INSERT policy**（登入者寫自己的 web 列），
+  刻意不設 SELECT policy；後台改走 `admin_recent_app_logs()`（`SECURITY DEFINER`，只授權
+  `service_role`）。新增 pg_cron 工作 `app-log-prune` 保留 30 天，**DEV cron 工作數由 6 變 7**。
+- ✨ **Edge 端捕捉**（`_shared/log.ts`、`stock-report`、`stock-price`、`backup-transactions`）—
+  三支 function 的最外層 catch 呼叫 `logEvent()` 後才送出回應。`logEvent` 永不拋出：記錄失敗
+  絕不能變成第二個失敗。
+- ✨ **前端記錄 API**（`services/appLog.ts`）— `logClient()` 射後不理、永不拋出；無 session 時
+  不寫入；同一組 `action + message` 在 60 秒內只寫一次，避免 render 迴圈灌爆資料表。
+- ✨ **後台「執行記錄」面板**（`Admin/LogsSection.tsx`）— 等級與來源篩選、逐列展開看 `detail`、
+  以 `before` 游標載入更多。位於「抓取狀況」之後。
+- 🔒 **`detail` 採 key 白名單，不是黑名單**（`redactDetail`）— 只保留 11 個欄位，其餘在任何深度
+  都消失，含陣列內部；`stack` 截 2000 字、其餘字串截 500 字、陣列最多 20 筆。黑名單會 fail open，
+  而且本專案已有一次前例：一段遮蔽用的正規表達式反而把 DEV `CRON_SECRET` 印進了對話紀錄。
+- 🐛 **`try { return promise }` 攔不到 rejection** — 新加的最外層 catch 原本只涵蓋 20 條分派路徑
+  中的 3 條，其餘直接回傳未 await 的 promise，rejection 從 `try` 逃逸。型別檢查與建置全綠，
+  測不出來。24 條全部改為 `return await`。
+- 🐛 **body 為字面量 `null` 時完全沒有回應**（`stock-report`、`stock-price`）— `null` 是合法 JSON，
+  解析成功，`body.action` 拋 TypeError，catch 內再讀同一個 `body.action` 又拋一次，逃出
+  `Deno.serve`。無需任何憑證即可觸發，且新增 catch 之前只會回空 500，之後變成毫無回應。
+  已在解析後加型別閘門。
+- 🐛 **`fetchAppLogs` 漏帶 `timeout`** — 違反本專案「每個 `functions.invoke` 都要有 `timeout`」的
+  結構性契約（`supabase-js` 沒有預設值，Edge 掛住時前端永遠轉圈）。已補 20 秒。
+
+> **未完成**：Phase 2（前端 ErrorBoundary 與各 service 改為先記錄再 `return null`）與
+> Phase 3（帳務寫入路徑埋點）尚未實作。Edge Function 尚未部署到 DEV，因此 Edge 端捕捉
+> 目前只存在於原始碼。規格見 `docs/agent/specs/146-app-log-capture-and-viewer.md`。
+
 ### 0.9.34（2026-09-05）— 融券帳務三項 P0、PostgREST 分頁七處，與深度稽核九項修正
 
 > 2026-09-04 深度稽核列出的九項發現先前只被歸檔、未經查證。本版逐條核對程式碼後全部修正：

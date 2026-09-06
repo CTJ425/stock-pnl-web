@@ -39,6 +39,7 @@
  *       dayLow — read from the OHLC arrays, not meta — for the panel in 總體經濟 > 台股, 0.9.19.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { logEvent } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
 import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
 import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
@@ -618,24 +619,41 @@ Deno.serve(async (req) => {
     return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  if (body.action === 'prices' && Array.isArray(body.symbols)) {
-    return handlePrices(body.symbols)
-  }
-  if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
-    return handleSearch(body.query.trim())
-  }
-  // Real-time exchange rate quotation: The history of the trend chart is still written into Storage by the daily schedule of stock-report, and only "how much is now" is returned here.
-  if (body.action === 'fx') {
-    return handleFx(body.codes)
+  // A body of the literal JSON value `null` parses cleanly, so the catch above never sees it.
+  // Without this gate `body.action` throws, and the outermost catch below throws a second time
+  // reading the same `body.action` — that throw escapes Deno.serve and no response is sent at all.
+  if (typeof body !== 'object' || body === null) {
+    return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  if (body.action === 'twlist') {
-    return handleTwList()
+  try {
+    if (body.action === 'prices' && Array.isArray(body.symbols)) {
+      return await handlePrices(body.symbols)
+    }
+    if (body.action === 'search' && typeof body.query === 'string' && body.query.trim()) {
+      return await handleSearch(body.query.trim())
+    }
+    // Real-time exchange rate quotation: The history of the trend chart is still written into Storage by the daily schedule of stock-report, and only "how much is now" is returned here.
+    if (body.action === 'fx') {
+      return await handleFx(body.codes)
+    }
+
+    if (body.action === 'twlist') {
+      return await handleTwList()
+    }
+    if (body.action === 'intraday' && body.symbol && typeof body.symbol === 'object') {
+      const range = body.range ?? '1d'
+      if (range !== '1d' && range !== '5d') return json({ error: 'range 需為 1d 或 5d' }, 400)
+      return await handleIntraday(body.symbol, range)
+    }
+    return json({ error: 'Unknown action' }, 400)
+  } catch (err) {
+    await logEvent(db, {
+      level: 'error',
+      action: typeof body.action === 'string' ? body.action : 'stock-price',
+      message: err instanceof Error ? err.message : String(err),
+      detail: { stack: err instanceof Error ? err.stack : undefined },
+    })
+    return json({ error: 'Internal error' }, 500)
   }
-  if (body.action === 'intraday' && body.symbol && typeof body.symbol === 'object') {
-    const range = body.range ?? '1d'
-    if (range !== '1d' && range !== '5d') return json({ error: 'range 需為 1d 或 5d' }, 400)
-    return handleIntraday(body.symbol, range)
-  }
-  return json({ error: 'Unknown action' }, 400)
 })
