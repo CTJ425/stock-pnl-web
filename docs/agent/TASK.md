@@ -26,6 +26,23 @@
 
 ## 📋 Active Tasks
 
+### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
+- **Status**: 🔄 **IN PROGRESS — Phase 1 done, Phases 2–3 open**
+- **Agent**: Claude
+- **Timestamp**: 2026-09-06 15:46:21 Asia/Taipei
+- **Spec**: `docs/agent/specs/146-app-log-capture-and-viewer.md`
+- **What is this**: The project could not show what went wrong at run time. Edge Functions emit no `console.log`; the web app has no ErrorBoundary and its services `catch` then `return null`; the four existing log tables record scheduled-job outcomes, never causes. This task adds the missing capture layer — one `app_log` table written by all three layers — plus the admin panel that reads it.
+- **Phase 1 — DONE (0.9.35-dev.1)**:
+  1. `app_log` table, RLS with a single INSERT policy and deliberately no SELECT policy, three indexes, `admin_recent_app_logs()` (`SECURITY DEFINER`, `service_role` only), and the `app-log-prune` pg_cron job. Applied to DEV and written into `sources/supabase/schema.sql` §6d-2.
+  2. `sources/supabase/functions/_shared/log.ts` — `redactDetail()` key allowlist and `logEvent()`.
+  3. Outermost-catch capture in `stock-report`, `stock-price` and `backup-transactions`, plus the new `app-logs` action gated by `assertAdmin`.
+  4. `sources/src/services/appLog.ts` — `logClient()`, `fetchAppLogs()`, 25 unit tests.
+  5. `sources/src/components/Admin/LogsSection.tsx` and the `logs` panel entry in `AdminConsolePage.tsx`.
+- **Phase 2 — OPEN**: front-end ErrorBoundary, and changing the services that currently `catch` then `return null` to record before they return.
+- **Phase 3 — OPEN**: capture on the transaction write path in `dataProvider.ts`.
+- **Not deployed**: the three Edge Functions are changed in source only. DEV Edge deploy is not done, so edge-side capture does not run yet.
+- **Relationship to Task 144**: Spec 144 Feature 2 specifies a viewer over data that already exists (`cron.job_run_details`, `source_probe_tick`, `batch_run_log`, `admin_run_log`). It shares the `logs` panel built here and must add tabs to `LogsSection.tsx` rather than a second panel.
+
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
 - **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
 - **Agent**: Antigravity

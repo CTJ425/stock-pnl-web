@@ -40,6 +40,7 @@
  * --no-verify-jwt; see 0.3.9 for what happens with no gate at all.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { logEvent } from '../_shared/log.ts'
 import {
   UA,
   fetchJson,
@@ -618,6 +619,11 @@ interface GenerateReportRequestBody {
   path?: string
   /** admin-backup-restore: false/omitted = preview only, true = actually write the missing rows */
   apply?: boolean
+  /** app-logs: paging/filter passed through to admin_recent_app_logs() */
+  limit?: number
+  level?: string
+  source?: string
+  before?: string
 }
 
 /**
@@ -4015,6 +4021,22 @@ async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promis
   return json({ ok: true, applied: apply, backupDate: doc.backup_date, tables })
 }
 
+/**
+ * Admin console reader over `public.app_log` (Spec 146). The table has no SELECT policy —
+ * only `admin_recent_app_logs()` (SECURITY DEFINER, service_role only) can read it, so this
+ * goes through the same `db` service-role client every other admin action already uses.
+ */
+async function handleAppLogs(body: GenerateReportRequestBody): Promise<Response> {
+  const { data, error } = await db.rpc('admin_recent_app_logs', {
+    p_limit: body.limit ?? undefined,
+    p_level: body.level ?? undefined,
+    p_source: body.source ?? undefined,
+    p_before: body.before ?? undefined,
+  })
+  if (error) return json({ error: error.message }, 500)
+  return json({ ok: true, logs: data ?? [] })
+}
+
 /** Trigger exchange rate synchronization manually or on a schedule. The reason for dismantling the schedule is the same as handleSyncMacro (see above), which is triggered by `fx-daily`*/
 async function handleSyncFx(): Promise<Response> {
   const startedAt = Date.now()
@@ -4226,126 +4248,151 @@ Deno.serve(async (req) => {
     return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  if (body.action === 'generate') {
-    return handleGenerate(req, body)
+  // A body of the literal JSON value `null` parses cleanly, so the catch above never sees it.
+  // Without this gate `body.action` throws, and the outermost catch below throws a second time
+  // reading the same `body.action` — that throw escapes Deno.serve and no response is sent at all.
+  if (typeof body !== 'object' || body === null) {
+    return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  if (body.action === 'warm') {
-    return handleWarm(req, body)
-  }
+  try {
+    if (body.action === 'generate') {
+      return await handleGenerate(req, body)
+    }
 
-  if (body.action === 'generate-all') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleGenerateAll()
-  }
+    if (body.action === 'warm') {
+      return await handleWarm(req, body)
+    }
 
-  // Single nightly phase (cron secret). Prefer admin-run from the console.
-  if (
-    body.action === 'generate-chips' ||
-    body.action === 'generate-market-data' ||
-    body.action === 'generate-history'
-  ) {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    const phase: GeneratePhaseId =
-      body.action === 'generate-chips'
-        ? 'chips'
-        : body.action === 'generate-market-data'
-          ? 'market-data'
-          : 'history'
-    return handleGeneratePhase(phase)
-  }
+    if (body.action === 'generate-all') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleGenerateAll()
+    }
 
-  // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.
-  // The night batch will run smoothly. This entrance is for those who "don't want to wait for the schedule and need to fill it up now."
-  if (body.action === 'backfill-revenue') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleBackfillRevenue()
-  }
+    // Single nightly phase (cron secret). Prefer admin-run from the console.
+    if (
+      body.action === 'generate-chips' ||
+      body.action === 'generate-market-data' ||
+      body.action === 'generate-history'
+    ) {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      const phase: GeneratePhaseId =
+        body.action === 'generate-chips'
+          ? 'chips'
+          : body.action === 'generate-market-data'
+            ? 'market-data'
+            : 'history'
+      return await handleGeneratePhase(phase)
+    }
 
-  if (body.action === 'backfill-profit') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleBackfillProfit()
-  }
+    // Monthly revenue history replenishment: can write Storage and send requests to MOPS, and the control is the same as generate-all.
+    // The night batch will run smoothly. This entrance is for those who "don't want to wait for the schedule and need to fill it up now."
+    if (body.action === 'backfill-revenue') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleBackfillRevenue()
+    }
 
-  // General synchronization: it can write Storage and send requests to FRED, and the control is the same as generate-all.
-  // Triggered by independent cron job `macro-daily` (two shifts per day, see schema.sql)
-  if (body.action === 'sync-macro') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleSyncMacro()
-  }
+    if (body.action === 'backfill-profit') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleBackfillProfit()
+    }
 
-  // Total market volume and legal person transaction amount (0.6.28): Can write Storage and make requests to TWSE, and check the same as generate-all.
-  // Triggered by standalone cron job `market-daily` (see schema.sql §11)
-  if (body.action === 'sync-market') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleSyncMarket()
-  }
+    // General synchronization: it can write Storage and send requests to FRED, and the control is the same as generate-all.
+    // Triggered by independent cron job `macro-daily` (two shifts per day, see schema.sql)
+    if (body.action === 'sync-macro') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleSyncMacro()
+    }
 
-  // Exchange rate synchronization: can write Storage and make requests to Yahoo, and the control is the same as generate-all.
-  // Triggered by independent cron job `fx-daily` (two shifts per day, see schema.sql §10)
-  if (body.action === 'sync-fx') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleSyncFx()
-  }
+    // Total market volume and legal person transaction amount (0.6.28): Can write Storage and make requests to TWSE, and check the same as generate-all.
+    // Triggered by standalone cron job `market-daily` (see schema.sql §11)
+    if (body.action === 'sync-market') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleSyncMarket()
+    }
 
-  // Data source probe: only read and not write (except for its own observation table), but still go CRON_SECRET ——
-  // It will send a request to TWSE. Exposing the endpoint undefended is equivalent to giving away a proxy tool.
-  if (body.action === 'probe') {
-    const denied = assertCronSecret(req)
-    if (denied) return denied
-    return handleProbe()
-  }
+    // Exchange rate synchronization: can write Storage and make requests to Yahoo, and the control is the same as generate-all.
+    // Triggered by independent cron job `fx-daily` (two shifts per day, see schema.sql §10)
+    if (body.action === 'sync-fx') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleSyncFx()
+    }
 
-  // Administrator backend: read-only summary. Gatekeeping uses user JWT + app_metadata.role, not CRON_SECRET
-  // (That key cannot enter the front end, see the description of assertAdmin)
-  if (body.action === 'admin-status') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminStatus()
-  }
+    // Data source probe: only read and not write (except for its own observation table), but still go CRON_SECRET ——
+    // It will send a request to TWSE. Exposing the endpoint undefended is equivalent to giving away a proxy tool.
+    if (body.action === 'probe') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleProbe()
+    }
 
-  if (body.action === 'admin-users') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminUsers()
-  }
+    // Administrator backend: read-only summary. Gatekeeping uses user JWT + app_metadata.role, not CRON_SECRET
+    // (That key cannot enter the front end, see the description of assertAdmin)
+    if (body.action === 'admin-status') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminStatus()
+    }
 
-  if (body.action === 'admin-set-role') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminSetRole(req, body)
-  }
+    if (body.action === 'admin-users') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminUsers()
+    }
 
-  if (body.action === 'admin-backups') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminBackups()
-  }
+    if (body.action === 'admin-set-role') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminSetRole(req, body)
+    }
 
-  if (body.action === 'admin-backup-url') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminBackupUrl(body)
-  }
+    if (body.action === 'admin-backups') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminBackups()
+    }
 
-  if (body.action === 'admin-backup-restore') {
-    const denied = await assertAdmin(req)
-    if (denied) return denied
-    return handleAdminBackupRestore(body)
-  }
+    if (body.action === 'admin-backup-url') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminBackupUrl(body)
+    }
 
-  // Manual batch trigger from the admin console (0.6.44-dev.2).
-  // Same work as the cron jobs, but auth is assertAdmin — never expose CRON_SECRET to the browser.
-  if (body.action === 'admin-run') {
-    return handleAdminRun(req, body)
-  }
+    if (body.action === 'admin-backup-restore') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAdminBackupRestore(body)
+    }
 
-  return json({ error: 'Unknown action' }, 400)
+    // Admin console log viewer (Spec 146): reads public.app_log through the RPC, same gate as
+    // every other admin-* action.
+    if (body.action === 'app-logs') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleAppLogs(body)
+    }
+
+    // Manual batch trigger from the admin console (0.6.44-dev.2).
+    // Same work as the cron jobs, but auth is assertAdmin — never expose CRON_SECRET to the browser.
+    if (body.action === 'admin-run') {
+      return await handleAdminRun(req, body)
+    }
+
+    return json({ error: 'Unknown action' }, 400)
+  } catch (err) {
+    await logEvent(db, {
+      level: 'error',
+      action: typeof body.action === 'string' ? body.action : 'stock-report',
+      message: err instanceof Error ? err.message : String(err),
+      detail: { stack: err instanceof Error ? err.stack : undefined },
+    })
+    return json({ error: 'Internal error' }, 500)
+  }
 })

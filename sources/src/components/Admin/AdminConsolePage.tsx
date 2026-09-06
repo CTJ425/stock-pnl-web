@@ -12,19 +12,21 @@
  * Anyone who changes a line of JS can call this page out, but calling it out will only get 403 and empty data.
  */
 import { useState } from 'react'
-import { Activity, ChevronLeft, Database, FileText, KeyRound, Play, Users } from 'lucide-react'
+import { Activity, ChevronLeft, Database, FileText, KeyRound, Play, ScrollText, Users } from 'lucide-react'
 import { AccountsSection } from './AccountsSection'
 import { AdminStatusPage } from './AdminStatusPage'
 import { AiConnectionSection } from './AiConnectionSection'
 import { BackupsSection } from './BackupsSection'
+import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
 import { PromptsSection } from './PromptsSection'
 
-type Panel = 'accounts' | 'status' | 'run' | 'ai' | 'prompts' | 'backups'
+type Panel = 'accounts' | 'status' | 'logs' | 'run' | 'ai' | 'prompts' | 'backups'
 
 const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = [
   { id: 'accounts', label: '帳號', icon: Users },
   { id: 'status', label: '抓取狀況', icon: Activity },
+  { id: 'logs', label: '執行記錄', icon: ScrollText },
   { id: 'run', label: '手動更新', icon: Play },
   { id: 'ai', label: 'AI 連線', icon: KeyRound },
   { id: 'prompts', label: '提示詞', icon: FileText },
@@ -61,6 +63,7 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
       <div className="adm-main">
         {panel === 'accounts' && <AccountsSection />}
         {panel === 'status' && <AdminStatusPage />}
+        {panel === 'logs' && <LogsSection />}
         {panel === 'run' && <ManualRunSection />}
         {panel === 'ai' && <AiConnectionSection />}
         {panel === 'prompts' && <PromptsSection />}

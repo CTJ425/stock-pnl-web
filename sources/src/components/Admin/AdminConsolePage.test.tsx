@@ -31,11 +31,19 @@ describe('AdminConsolePage', () => {
   })
   afterEach(cleanup)
 
-  it('六個項目都在側欄，預設停在抓取狀況', async () => {
+  it('七個項目都在側欄，預設停在抓取狀況', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
     const nav = screen.getByRole('navigation', { name: '管理後台頁面' })
     const items = [...nav.querySelectorAll('button')].map((b) => b.textContent)
-    expect(items).toEqual(['帳號', '抓取狀況', '手動更新', 'AI 連線', '提示詞', '備份'])
+    expect(items).toEqual([
+      '帳號',
+      '抓取狀況',
+      '執行記錄',
+      '手動更新',
+      'AI 連線',
+      '提示詞',
+      '備份',
+    ])
     expect(await screen.findByText(/讀不到資料抓取狀況/)).toBeTruthy()
   })
 

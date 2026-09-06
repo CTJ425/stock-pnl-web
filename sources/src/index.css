@@ -4249,6 +4249,55 @@ a.hmenu-item {
 .apr-hit-row td { color: var(--notice-ok-ink); }
 
 /* ─────────────────────────────────────────────────────────────
+   執行記錄（管理員後台 LogsSection，Spec 146）。前綴 adm-log-。
+   ───────────────────────────────────────────────────────────── */
+.adm-log-filters { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; }
+
+.adm-log-list { list-style: none; margin: 12px 0 0; padding: 0; }
+
+.adm-log-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+.adm-log-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+
+.adm-log-head {
+  display: grid;
+  grid-template-columns: 9.5rem 3.5rem 5.5rem 11rem 1fr auto;
+  align-items: center; gap: 10px; width: 100%;
+  padding: 8px 4px; border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit; font-size: 12.5px;
+}
+.adm-log-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+
+.adm-log-time { white-space: nowrap; }
+
+.adm-log-level {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--border-strong); white-space: nowrap;
+}
+.adm-log-level-error { color: var(--notice-err-ink); border-color: color-mix(in srgb, var(--notice-err-ink) 40%, transparent); }
+.adm-log-level-warn  { color: var(--notice-warn-ink); border-color: color-mix(in srgb, var(--notice-warn-ink) 40%, transparent); }
+.adm-log-level-info  { color: var(--ink-secondary); }
+
+.adm-log-action {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.adm-log-message {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-secondary);
+}
+
+.adm-log-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
+.adm-log-open .adm-log-caret { transform: rotate(180deg); }
+
+.adm-log-detail { padding: 4px 4px 14px; border-top: 1px dashed var(--border-strong); }
+.adm-log-detail pre {
+  margin: 8px 0; white-space: pre-wrap; word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; line-height: 1.6; color: var(--ink-muted);
+  background: var(--row-band); border-radius: 2px; padding: 10px 12px;
+}
+
+/* ─────────────────────────────────────────────────────────────
    機制運作總覽對照（管理員後台 MechanismGuide）。前綴 adm-guide-。
    ───────────────────────────────────────────────────────────── */
 .adm-guide-toggle {

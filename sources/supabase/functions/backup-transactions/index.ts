@@ -10,6 +10,7 @@
  * `backup_run_log` row per account. Admin UI / download endpoint are phase 2, out of scope here.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { logEvent } from '../_shared/log.ts'
 import {
   backupObjectPath,
   buildBackupPayload,
@@ -232,5 +233,15 @@ Deno.serve(async (req) => {
   }
   const denied = assertCronSecret(req)
   if (denied) return denied
-  return handleBackup()
+  try {
+    return await handleBackup()
+  } catch (err) {
+    await logEvent(db, {
+      level: 'error',
+      action: 'backup-transactions',
+      message: describeError(err),
+      detail: { stack: err instanceof Error ? err.stack : undefined },
+    })
+    return json({ error: 'Internal error' }, 500)
+  }
 })

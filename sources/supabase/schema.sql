@@ -1117,6 +1117,90 @@ SELECT cron.schedule(
 
 
 -- =========================================================
+-- 6d-2. app_log — application error capture (Spec 146)
+-- =========================================================
+--
+--   Why a new table when batch_run_log / source_probe_log / source_probe_tick /
+--   admin_run_log already exist: those four record the OUTCOME of a scheduled job —
+--   flags, durations, skip reasons. None of them can hold an error message, a stack
+--   trace, or an event that happened in the browser. A blank page left no record.
+--
+--   Security. RLS is on and there is exactly ONE policy: an INSERT policy for the
+--   signed-in user's own web rows. There is deliberately NO SELECT policy. The admin
+--   console reads through stock-report's `app-logs` action behind assertAdmin(), the
+--   same path fetchAdminStatus() already uses.
+--
+--   `detail` is filtered by an allowlist in the application layer (Spec 146 §3.4), and
+--   the application truncates every value. Never widen that allowlist to whole headers
+--   or a whole request body: this repo is public, and a redaction regex already printed
+--   the DEV CRON_SECRET into a transcript once.
+
+CREATE TABLE IF NOT EXISTS app_log (
+  id          bigserial PRIMARY KEY,
+  at          timestamptz NOT NULL DEFAULT now(),
+  level       text        NOT NULL CHECK (level IN ('error', 'warn', 'info')),
+  source      text        NOT NULL CHECK (source IN ('edge', 'web', 'db')),
+  action      text        NOT NULL CHECK (char_length(action) <= 64),
+  message     text        NOT NULL CHECK (char_length(message) <= 500),
+  detail      jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  user_id     uuid        REFERENCES auth.users (id) ON DELETE SET NULL,
+  app_version text,
+  request_id  text
+);
+
+ALTER TABLE app_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS app_log_insert_own ON app_log;
+CREATE POLICY app_log_insert_own ON app_log
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id AND source = 'web');
+
+CREATE INDEX IF NOT EXISTS app_log_at_idx       ON app_log (at DESC);
+CREATE INDEX IF NOT EXISTS app_log_level_at_idx ON app_log (level, at DESC);
+CREATE INDEX IF NOT EXISTS app_log_request_idx  ON app_log (request_id)
+  WHERE request_id IS NOT NULL;
+
+-- Reader for the admin console. SECURITY DEFINER, because app_log has no SELECT policy.
+CREATE OR REPLACE FUNCTION public.admin_recent_app_logs(
+  p_limit  int         DEFAULT 100,
+  p_level  text        DEFAULT NULL,
+  p_source text        DEFAULT NULL,
+  p_before timestamptz DEFAULT NULL
+)
+RETURNS TABLE (
+  id bigint, at timestamptz, level text, source text, action text,
+  message text, detail jsonb, user_id uuid, app_version text, request_id text
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+  SELECT l.id, l.at, l.level, l.source, l.action,
+         l.message, l.detail, l.user_id, l.app_version, l.request_id
+  FROM public.app_log l
+  WHERE (p_level  IS NULL OR l.level  = p_level)
+    AND (p_source IS NULL OR l.source = p_source)
+    AND (p_before IS NULL OR l.at     < p_before)
+  ORDER BY l.at DESC
+  LIMIT least(greatest(coalesce(p_limit, 100), 1), 500);
+$fn$;
+
+REVOKE ALL ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_recent_app_logs(int, text, text, timestamptz)
+  TO service_role;
+
+-- 30-day retention. This job is pure SQL: it carries no URL and no secret, so the §6e
+-- hard gate (which filters on '%https://%' and '%x-cron-secret%') does not see it.
+SELECT cron.unschedule('app-log-prune')
+  WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'app-log-prune');
+SELECT cron.schedule(
+  'app-log-prune', '20 3 * * *',
+  $job$DELETE FROM public.app_log WHERE at < now() - interval '30 days'$job$
+);
+
+
+-- =========================================================
 -- 6e. HARD GATE — this script FAILS if a placeholder survived
 -- =========================================================
 --
