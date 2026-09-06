@@ -2,6 +2,34 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.35-dev.2（2026-09-06）— Phase 2／3：ErrorBoundary、14 個靜默 catch 與帳務寫入埋點
+
+> 0.9.35-dev.1 蓋好了捕捉層，但沒有東西在餵它。本版把三處實際會發生問題的地方接上去。
+
+- ✨ **全站第一個 ErrorBoundary**（`components/ErrorBoundary.tsx`、`main.tsx`）— 在此之前，
+  render 期間的例外會卸載整棵樹，留下一片空白且毫無紀錄。現在顯示「頁面發生錯誤」與重新載入按鈕，
+  並記錄訊息與堆疊。
+- ✨ **14 個靜默 catch 全部接上記錄**（`aiChatStore` 4、`feeSettings` 2、`priceProxy` 4、
+  `reportsBucket` 1、`twMarketData` 3）— 原本一律 catch 後回傳 `null` / `[]` / `{}`，
+  回傳值與控制流完全不變，只是不再無聲。`appLog.ts` 自己的 catch 刻意不記錄：那是遞迴進它
+  存在要撐過的失敗。以結構性測試 `catchLogging.test.ts` 強制。
+- ✨ **帳務寫入埋點**（`dataProvider.ts`）— `addTransactions` / `updateTransaction` /
+  `deleteTransactions` 記錄 PostgREST 錯誤碼後**照原樣拋出**：訊息、型別、觸發條件都不變，
+  呼叫端全部依賴它。成功路徑不記錄。`detail` 只放 `code`，不放交易列內容。
+- 🐛 **ErrorBoundary 讀 `error.message` 未做型別收斂** — React 原封不動傳遞被拋出的值，
+  `throw null` 完全合法。最外層邊界沒有上層可接，第二次拋出會重現它本要防止的空白頁。
+  已改為 `error instanceof Error` 收斂。由 reviewer 找到。
+- 🐛 **去重視窗與輪詢週期同為 60 秒，等於沒有去重** — 本專案有兩個 60 秒的報價輪詢迴圈會打到
+  記錄點，連續兩次輪詢恰好相隔一個視窗，斷線期間每分鐘寫一列。視窗改為 5 分鐘，並在規格中
+  訂為「必須長於任何輪詢週期」。由 reviewer 找到。
+- 🐛 **測試檔的兩個型別錯誤只有 `npm run build` 看得到** — `JSX.Element` 在 `@types/react@19`
+  已移入 `React` 命名空間；`Boom` 永遠拋出使其推斷為 `never`，不再是合法 JSX 元件（TS2786）。
+  `vitest` 全綠，因為 esbuild 不做型別檢查。
+
+> **接受但未修**：RISK-006（7 個 `action` 名稱指向模組私有函式）與 RISK-007
+> （`syncWorkspaceFees` 的 catch 位於迴圈內，每次登入每個 workspace 記一次）。理由見
+> `BUG_FIX.md`。
+
 ### 0.9.35-dev.1（2026-09-06）— 全域錯誤記錄 `app_log`：捕捉層與後台檢視頁
 
 > 既有的 `batch_run_log` / `source_probe_log` / `source_probe_tick` / `admin_run_log` 只記錄排程的

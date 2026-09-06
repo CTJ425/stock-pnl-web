@@ -14,6 +14,7 @@ import { positionKey } from '../types/models'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { getTwStockList } from './twMarketData'
 import { twIsAfterClose, twQuoteTtlMs } from '../../supabase/functions/stock-price/quoteWindow'
+import { logClient } from './appLog'
 
 export interface PriceQuote {
   price: number
@@ -107,7 +108,8 @@ export function readPriceCache(): PriceMap {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return {}
     return JSON.parse(raw) as PriceMap
-  } catch {
+  } catch (err) {
+    logClient('warn', 'readPriceCache', err instanceof Error ? err.message : String(err), {})
     return {}
   }
 }
@@ -115,7 +117,8 @@ export function readPriceCache(): PriceMap {
 function writePriceCache(map: PriceMap): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(map))
-  } catch {
+  } catch (err) {
+    logClient('warn', 'writePriceCache', err instanceof Error ? err.message : String(err), {})
     // Cache write failure does not affect functionality
   }
 }
@@ -181,7 +184,8 @@ async function fetchFromEdge(items: PriceRequestItem[]): Promise<Map<string, Res
         })
       }
     }
-  } catch {
+  } catch (err) {
+    logClient('error', 'fetchFromEdge', err instanceof Error ? err.message : String(err), {})
     // When the Edge Function is unavailable, it will be handled by the backup path.
   }
   return resolved
@@ -198,7 +202,8 @@ async function fetchTwFallback(items: PriceRequestItem[]): Promise<Map<string, n
       const row = bySymbol.get(item.ticker)
       if (row?.close) resolved.set(positionKey(item.market, item.ticker), row.close)
     }
-  } catch {
+  } catch (err) {
+    logClient('error', 'fetchTwFallback', err instanceof Error ? err.message : String(err), {})
     // When direct backup also fails, it will be downgraded to the cache.
   }
   return resolved

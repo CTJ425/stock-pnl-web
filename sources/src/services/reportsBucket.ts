@@ -10,6 +10,7 @@
  * It will also cause the stock-price to stop together. If possible, the Edge Function will not be implemented.
  */
 import { isSupabaseConfigured, supabase } from './supabase'
+import { logClient } from './appLog'
 
 export const REPORTS_BUCKET = 'reports'
 
@@ -43,7 +44,8 @@ export async function downloadReportsJson<T>(path: string): Promise<T | null> {
     const res = await fetch(data.publicUrl, { cache: 'no-store' })
     if (!res.ok) return null
     return (await res.json()) as T
-  } catch {
+  } catch (err) {
+    logClient('error', 'downloadReportsJson', err instanceof Error ? err.message : String(err), {})
     return null
   }
 }
