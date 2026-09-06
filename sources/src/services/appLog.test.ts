@@ -9,8 +9,9 @@
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-const { insert, getSession, functionsInvoke } = vi.hoisted(() => ({
+const { insert, select, getSession, functionsInvoke } = vi.hoisted(() => ({
   insert: vi.fn(),
+  select: vi.fn(),
   getSession: vi.fn(),
   functionsInvoke: vi.fn(),
 }))
@@ -95,6 +96,20 @@ describe('logClient', () => {
     expect(row.user_id).toBe('u1')
     expect(row.detail).toEqual({ ticker: '2330' })
     expect(typeof row.app_version).toBe('string')
+  })
+
+  /**
+   * Verified against DEV on 2026-09-06: `app_log` has an INSERT policy and deliberately no SELECT
+   * policy, and PostgreSQL requires a SELECT policy for `INSERT ... RETURNING`. supabase-js only
+   * adds RETURNING when `.select()` is chained, so chaining it here would make every client-side
+   * log fail — silently, because logClient swallows its own errors.
+   */
+  it('never chains .select() onto the insert — RETURNING needs a SELECT policy', async () => {
+    // Hand the code a chainable result, so a `.select()` call would be recorded rather than throw.
+    insert.mockReturnValue({ select })
+    logClient('error', 'saveTx', 'no returning')
+    await vi.waitFor(() => expect(insert).toHaveBeenCalledTimes(1))
+    expect(select).not.toHaveBeenCalled()
   })
 
   it('redacts detail before it writes', async () => {

@@ -62,6 +62,22 @@ CREATE POLICY app_log_insert_own ON app_log
 No `SELECT` policy exists. Only `service_role` reads. The admin panel therefore reads through the
 Edge Function, the same as `fetchAdminStatus`.
 
+**Consequence, verified live on DEV 2026-09-06: the client insert must never use `RETURNING`.**
+PostgreSQL requires a `SELECT` policy for `INSERT ... RETURNING`, and this table has none, so an
+insert that returns a row is denied. supabase-js adds `RETURNING` only when `.select()` is chained
+— so `.from('app_log').insert(row)` works and `.insert(row).select()` fails. It would fail
+silently, because `logClient` swallows its own errors. `appLog.test.ts` pins this.
+
+Live RLS results on DEV, as the `authenticated` role with a real user's claims:
+
+| Attempt | Result |
+| --- | --- |
+| own row, `source='web'` | ALLOWED |
+| own row, `source='web'`, with `RETURNING` | DENIED |
+| own row, `source='edge'` | DENIED |
+| row attributed to another `user_id` | DENIED |
+| `SELECT` from the table | returns nothing |
+
 Retention: one new pg_cron job `app-log-prune`, daily, pure SQL, no secret in the command:
 
 ```sql

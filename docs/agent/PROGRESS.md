@@ -7,6 +7,29 @@
 
 ---
 
+## 📅 Log: 2026-09-06 16:40:00 Asia/Taipei (Task 146, 0.9.35 released)
+
+**Live DEV verification of Spec 146, then the release.**
+
+Six checks against the deployed DEV project, not against mocks:
+
+1. **A real Edge exception is captured.** `POST /functions/v1/stock-price` with `{"action":"prices","symbols":[null]}` threw `Cannot read properties of null (reading 'market')` and returned 500. The row landed in `app_log`: `level=error`, `source=edge`, `action=prices`, message intact, a 479-character stack, and `detail` minus `stack` was `{}` — nothing extra leaked through the allowlist.
+2. **`app-logs` is closed.** 401 with no credential, 401 with the anon key alone.
+3. **The `null`-body defect stays fixed on the deployed bundle.** A POST body of literal `null` returns 400, not a dropped connection.
+4. **The RPC reads and filters.** `admin_recent_app_logs` returned the rows and honoured the `level` filter.
+5. **The RLS policy behaves as designed**, tested as the `authenticated` role carrying a real user's claims: own `web` row ALLOWED; own `web` row with `RETURNING` DENIED; own `edge` row DENIED; a row attributed to another `user_id` DENIED; `SELECT` returns nothing.
+6. **The app boots against DEV.** Version badge `0.9.35-dev.2` at the time of the check, no console errors, no page errors, the ErrorBoundary fallback not triggered.
+
+**Check 5 found a trap worth keeping.** The first run reported the user's own `web` insert as DENIED, which would have meant every client-side log failing silently in production. The cause was the test itself using `INSERT ... RETURNING`: PostgreSQL requires a `SELECT` policy for `RETURNING`, and this table deliberately has none. `supabase-js` adds `RETURNING` only when `.select()` is chained, and `appLog.ts` does not chain it — so the production path is correct. A regression test now pins it, because chaining `.select()` later would break every client log with no symptom: `logClient` swallows its own errors by design.
+
+**Not verified, and stated plainly**: the admin panel's own UI, and a log written from a real browser session. Both need an admin login, which this session did not have. The panel's data layer is covered by unit tests and by check 4 above; its rendering is not covered by anything but `AdminConsolePage.test.tsx`'s panel-list assertion.
+
+**Release**: `0.9.35-dev.1` and `-dev.2` are consolidated into one `0.9.35` section in `CHANGELOG.md`. Version synchronized across `version.ts`, `package.json`, `package-lock.json` and the README badge.
+
+**Verification**: `npx vitest run` 103 files / **1732** tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors.
+
+---
+
 ## 📅 Log: 2026-09-06 16:21:13 Asia/Taipei (Task 146, 0.9.35-dev.2)
 
 **Spec 146 Phases 2 and 3 — the capture layer now has something feeding it.**
@@ -26,24 +49,3 @@ Phase 1 built the table, the Edge capture and the admin panel. Nothing in the br
 
 **Verification**: `npx vitest run` 103 files / **1731** tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict PASS with four RISKs; two fixed, two accepted and recorded.
 
----
-
-## 📅 Log: 2026-09-06 15:46:21 Asia/Taipei (Task 146, 0.9.35-dev.1)
-
-**Spec 146 Phase 1 — the `app_log` capture layer and the admin "執行記錄" panel.**
-
-The starting fact, from a codebase scout: nothing recorded causes. `stock-report/index.ts` had no `console.log` at all — an exception became an HTTP status and a response body nobody kept. The web services `catch` and `return null`, so a failure rendered an empty state. The four existing log tables (`batch_run_log`, `source_probe_log`, `source_probe_tick`, `admin_run_log`) store flags, durations and skip reasons. Spec 144 Feature 2 was already specified over exactly those four tables, which is why it could never have shown a front-end error: the data did not exist. Spec 146 adds the capture, and shares one panel with Spec 144.
-
-**Applied to DEV** through `supabase db query --linked` with the `EXISTS (... command LIKE '%zyebvayngwrqzoaicbwd%')` identity guard inside the write. Verified on DEV: `is_dev=true`, table present, RLS on, `policies=1`, `select_policies=0`, `idx=4`, RPC present, `service_role` EXECUTE true, `authenticated` EXECUTE false, `cron_jobs=7`, `prune_job=1`. **DEV cron job count is now 7, not 6** — `CLAUDE.md` and older PROGRESS entries name 6. The count was never a valid identity check; the `EXISTS` predicate on the project ref is.
-
-**Three defects found during the build, none of which any green gate could see:**
-
-1. **`try { return promise }` does not catch a rejection.** The first version of the outermost catch covered 3 of 20 dispatch branches in `stock-report` and 0 of 5 in `stock-price`; the rest returned an unawaited promise whose rejection escaped the `try`. `npm run build` and `npm run typecheck:edge` were both green. All 24 handler returns are now `return await`.
-2. **A POST body of the literal JSON value `null` produced no response at all.** `null` is valid JSON, so the parse `catch` never fires; `body.action` then throws a `TypeError`, and the new outermost catch threw a second time reading the same `body.action`, escaping `Deno.serve`. Reachable with no credential. Before this task's catch existed the same input produced an empty 500 — the new error handling made it strictly worse until the guard was added after the parse in both functions. Found by `reviewer`.
-3. **`fetchAppLogs` omitted `timeout` on `functions.invoke`**, breaking the project's structural contract in `src/services/invokeTimeout.test.ts`. `supabase-js` has no default, so a hung Edge Function leaves the spinner turning forever. Now 20 s.
-
-**Redaction is a key allowlist, not a denylist**, at every depth including inside arrays, with `stack` truncated to 2000 characters, other strings to 500, and arrays capped at 20 elements. The array cap exists because `app_log.detail` has no size CHECK in the database: `pg_column_size` is not immutable and does not belong in a CHECK constraint. A denylist fails open, and this project already has a precedent — a redaction regex once printed the DEV `CRON_SECRET` into a transcript.
-
-**Verification**: `npx vitest run` 100 files / 1710 tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict FAIL on the first pass (two BLOCKERs, both real), PASS after the fix.
-
-**Not done**: Phase 2 (ErrorBoundary and service-level capture), Phase 3 (transaction write path), and the DEV Edge deploy. Edge-side capture exists in source only.
