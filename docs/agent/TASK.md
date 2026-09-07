@@ -27,7 +27,8 @@
 ## 📋 Active Tasks
 
 ### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
-- **Status**: ✅ **DONE — released as 0.9.35, verified live on DEV**
+- **Status**: ✅ **DONE — released as 0.9.35, live on DEV and PROD**
+- **PROD rollout (2026-09-07)**: `app_log`, its single INSERT policy, three indexes, `admin_recent_app_logs()` and the `app-log-prune` cron applied to `hrilemueiqyaoiwnkeuu`; PROD cron count is now 7. Edge Functions deployed: `stock-report` v8, `stock-price` v5, `backup-transactions` v4 — all three `ezbr_sha256` identical to DEV, all three `verify_jwt` preserved. PROD checks: objects match DEV exactly, RLS five cases match DEV exactly, `null` body returns 400, `app-logs` returns 401 without a credential.
 - **Live DEV verification (2026-09-06)**: a real Edge exception landed in `app_log` with its stack and nothing else in `detail`; `app-logs` returned 401 with no credential and 401 with the anon key alone; a POST body of literal `null` returned 400; the RLS policy allowed the user's own `web` row and denied a `RETURNING` insert, an `edge` row, another user's row, and any `SELECT`; the app booted against DEV with no console or page errors. **Not verified**: the admin panel UI and a browser-originated log write — both need an admin login this session did not have.
 - **Agent**: Claude
 - **Timestamp**: 2026-09-06 16:21:13 Asia/Taipei

@@ -7,6 +7,24 @@
 
 ---
 
+## 📅 Log: 2026-09-07 10:08:52 Asia/Taipei (Task 146, 0.9.35 on PROD)
+
+**Spec 146 rolled out to PROD.** DEV and PROD now run the same bundle and the same schema.
+
+**Database** (`hrilemueiqyaoiwnkeuu`): `app_log`, RLS on with exactly one INSERT policy and no SELECT policy, three indexes plus the primary key, `admin_recent_app_logs()` granted to `service_role` only, and the `app-log-prune` cron. The DDL was copied verbatim out of the committed `sources/supabase/schema.sql` §6d-2 at commit `3f7b423`, with a PROD identity guard in the same request, so a wrong target would have aborted the transaction instead of writing into DEV.
+
+Verified on PROD: `is_prod=true`, `is_dev=false`, `policies=1`, `select_policies=0`, `idx=4`, `rpc=1`, `service_role` EXECUTE true, `authenticated` EXECUTE false, `cron_jobs=7`, `prune_job=1`. **PROD cron count is now 7, not 6.** RLS five cases match DEV exactly: own `web` row ALLOWED; own `web` row with `RETURNING` DENIED; own `edge` row DENIED; another user's row DENIED; `SELECT` returns nothing. The probe rows were deleted; the table is empty.
+
+**Edge Functions**: `stock-report` v8, `stock-price` v5, `backup-transactions` v4. All three `ezbr_sha256` are byte-identical to the DEV deployment (`11fd4dcd…`, `30240a50…`, `1fd264b0…`), and every `verify_jwt` kept its previous value — `false`, `true`, `false`. Live on PROD: a POST body of literal `null` returns 400 `Invalid JSON body`, and `app-logs` returns 401 with no credential.
+
+**One check was deliberately not run on PROD.** Forcing a real exception to prove end-to-end capture means sending a malformed request to a production endpoint on purpose. The evidence used instead is stronger and free: the deployed bundles are byte-identical to DEV, where that exact path was proven — a real `TypeError` reached `app_log` with its stack and nothing else in `detail`.
+
+**Three access tokens expired mid-session, and the CLI hid it.** An expired token does not report as an auth failure: the Management API call fails, the CLI falls back to a direct database connection, and that surfaces as `IPv6 is not supported on your current network` with a suggestion to run `supabase link` — which would have cleared the DEV link and made things worse. `npx supabase projects list` answering `Unauthorized` is the one-command test.
+
+**Also learned**: `--project-ref` is accepted only together with `--linked`. That pair names the project explicitly and removes the cwd trap that `db query --linked` alone carries, which is how every PROD write in this session was addressed.
+
+---
+
 ## 📅 Log: 2026-09-06 16:40:00 Asia/Taipei (Task 146, 0.9.35 released)
 
 **Live DEV verification of Spec 146, then the release.**
@@ -27,25 +45,3 @@ Six checks against the deployed DEV project, not against mocks:
 **Release**: `0.9.35-dev.1` and `-dev.2` are consolidated into one `0.9.35` section in `CHANGELOG.md`. Version synchronized across `version.ts`, `package.json`, `package-lock.json` and the README badge.
 
 **Verification**: `npx vitest run` 103 files / **1732** tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors.
-
----
-
-## 📅 Log: 2026-09-06 16:21:13 Asia/Taipei (Task 146, 0.9.35-dev.2)
-
-**Spec 146 Phases 2 and 3 — the capture layer now has something feeding it.**
-
-Phase 1 built the table, the Edge capture and the admin panel. Nothing in the browser wrote to it yet. This entry closes that: the app's first ErrorBoundary, the 14 silent `catch` blocks in five service files, and the three transaction write methods.
-
-**The transaction write path does not swallow — it throws.** `addTransactions`, `updateTransaction` and `deleteTransactions` already threw on failure, and every caller depends on that throw. The change records the PostgREST code and leaves the throw byte-for-byte identical: same message, same type, same condition. `detail` carries `code` only, never the row. The main session read that diff itself rather than delegating it, because a silent change there is a money bug.
-
-**Two defects the reviewer caught, both in the new error handling itself:**
-
-1. **`ErrorBoundary` read `error.message` with no type narrowing.** React passes the thrown value through unchanged, and `throw null` is legal. Reading `.message` off `null` throws a second time inside the outermost boundary, where no ancestor can catch it — reproducing the exact blank, unrecorded page the component exists to prevent. Now narrowed with `error instanceof Error`, with a test that throws `null`.
-2. **The dedupe window matched the poll interval, so it deduped nothing.** `DEDUPE_MS` was 60 s; the app has two 60 s price-poll loops (`useStockPrices.ts`, `WatchSection.tsx`) that reach these log sites. Consecutive polls land exactly one window apart, so a sustained outage wrote one row per minute per open tab. The window is now 5 minutes, and the spec states the rule: it must stay longer than any poll interval that reaches a log site.
-
-**Two accepted risks, recorded as RISK-006 and RISK-007 in `BUG_FIX.md`**: seven `action` values name module-private functions rather than public entry points, and `syncWorkspaceFees`'s catch sits inside a loop over workspaces.
-
-**A third defect was in the failing tests this session wrote, and only `npm run build` could see it.** `JSX.Element` used bare no longer resolves under `@types/react@19` (the namespace moved under `React`), and a test component that always throws infers `never`, which stops being a valid JSX component (TS2786). Both builders correctly reported the red build and refused to edit the test files; the main session fixed them. `npx vitest run` was green throughout, because esbuild does not type-check.
-
-**Verification**: `npx vitest run` 103 files / **1731** tests passed, exit 0. `npm run build` exit 0. `npm run typecheck:edge` exit 0. `npx oxlint src` 0 errors. `reviewer` verdict PASS with four RISKs; two fixed, two accepted and recorded.
-
