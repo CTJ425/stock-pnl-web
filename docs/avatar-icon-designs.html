@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock P&L Web — 帳號頭像 6 款「人像主題」現代扁平 Icon 設計提案</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --bg-alt: #0e1424;
+      --panel: #131b2e;
+      --panel-hover: #18233c;
+      --surface: rgba(255, 255, 255, 0.05);
+      --surface-strong: rgba(255, 255, 255, 0.1);
+      --border: rgba(255, 255, 255, 0.1);
+      --border-strong: #334155;
+      --ink: #e6edf8;
+      --ink-secondary: #94a3b8;
+      --ink-muted: #64748b;
+      --accent: #38bdf8;
+      --accent-strong: #5b8fa8;
+      --steel-on: #0c1418;
+      --up: #ff4a5a;
+      --down: #10b981;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-body: 'Inter', 'Noto Sans TC', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+
+    [data-theme="light"] {
+      --bg: #f4f6f9;
+      --bg-alt: #ffffff;
+      --panel: #ffffff;
+      --panel-hover: #f8fafc;
+      --surface: rgba(15, 23, 42, 0.035);
+      --surface-strong: rgba(15, 23, 42, 0.08);
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --ink: #0f172a;
+      --ink-secondary: #475569;
+      --ink-muted: #94a3b8;
+      --accent: #0284c7;
+      --accent-strong: #245065;
+      --steel-on: #ffffff;
+      --shadow: 0 10px 25px -10px rgba(0,0,0,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-body);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    /* Top Banner & Theme Switcher */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-badge {
+      background: var(--surface-strong);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+    .brand-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .theme-toggle:hover {
+      background: var(--surface-strong);
+      border-color: var(--border-strong);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* Hero header */
+    .hero {
+      margin-bottom: 32px;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      color: var(--ink-secondary);
+      font-size: 15px;
+      max-width: 820px;
+      line-height: 1.6;
+    }
+
+    /* Before / After Contrast */
+    .contrast-box {
+      background: var(--surface);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 40px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .contrast-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .contrast-badge-old {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--accent-strong);
+      color: var(--steel-on);
+      border: 1px solid var(--border-strong);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .contrast-arrow {
+      font-size: 20px;
+      color: var(--accent);
+    }
+
+    /* Interactive Live Header Simulation */
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title h2 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title .hint {
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+
+    .mockup-header-box {
+      background: var(--bg-alt);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 48px;
+    }
+    .mockup-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .mockup-tabs {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .mockup-tab {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+    .mockup-tab.active {
+      color: var(--ink);
+      background: var(--surface-strong);
+      font-weight: 600;
+    }
+    .mockup-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Real Avatar Button styling identical to sources/src/index.css:1720 */
+    .hmenu-avatar {
+      appearance: none;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--accent-strong);
+      color: var(--steel-on);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      position: relative;
+    }
+    .hmenu-avatar:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 12px rgba(91, 143, 168, 0.4);
+    }
+
+    /* Header Popup Simulation */
+    .mockup-pop {
+      position: absolute;
+      top: 50px;
+      right: 0;
+      width: 230px;
+      background: var(--panel);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+      padding: 8px;
+      z-index: 50;
+      display: none;
+    }
+    .mockup-pop.open {
+      display: block;
+      animation: popFade 0.15s ease-out;
+    }
+    @keyframes popFade {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .mockup-pop-head {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+    .mockup-pop-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: var(--ink-secondary);
+      border-radius: 4px;
+    }
+    .mockup-live-status {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--ink-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mockup-live-status span.highlight {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Comparison Cards Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .card:hover {
+      background: var(--panel-hover);
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    .card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), var(--shadow);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .card-number {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--surface);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .card-displays {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .scale-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .scale-label {
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-family: var(--font-mono);
+    }
+    .large-preview {
+      width: 60px;
+      height: 60px;
+      border-radius: 12px;
+      background: var(--accent-strong);
+      color: var(--steel-on);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .actual-preview {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--accent-strong);
+      color: var(--steel-on);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card .subtitle {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+    }
+    .card .desc {
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+      flex-grow: 1;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+    }
+    .btn {
+      flex: 1;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: var(--surface-strong);
+      border-color: var(--border-strong);
+    }
+    .btn-primary {
+      background: var(--accent-strong);
+      color: var(--steel-on);
+      border-color: transparent;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    /* Embedded Image Board */
+    .image-board-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 48px;
+    }
+    .image-board-wrap h2 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .board-img {
+      width: 100%;
+      height: auto;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow);
+      display: block;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #10b981;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      display: none;
+      z-index: 1000;
+      animation: toastIn 0.2s ease-out;
+    }
+    @keyframes toastIn {
+      from { transform: translateY(12px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-badge">EDITION 2</span>
+      <div class="brand-title">Stock P&L Web — 帳號頭像「人像主題」6 款現代扁平設計</div>
+    </div>
+    <button class="theme-toggle" id="themeToggleBtn" type="button" onclick="toggleTheme()">
+      <span id="themeIcon">☀️</span>
+      <span id="themeLabel">淺色模式</span>
+    </button>
+  </header>
+
+  <main class="container">
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1>以「人像」為基本圖案的 6 款現代扁平 Icon 設計</h1>
+      <p>
+        保留個人帳戶直覺的人形辨識度，徹底汰換原先以電話/帳號號碼（如 <code>09</code>）做為縮寫造成的突兀感。從「極簡實心、商務俐落、同心軌跡、量化刻面、洞察星芒、當代建築雙弧」六種切角，為個人投資管理工具注入頂級科技與金融質感。
+      </p>
+    </section>
+
+    <!-- Before / After Contrast -->
+    <div class="contrast-box">
+      <div class="contrast-item">
+        <div class="contrast-badge-old">09</div>
+        <div>
+          <div style="font-size: 13px; font-weight: 600; color: var(--ink);">原本：帳號數字前綴</div>
+          <div style="font-size: 11.5px; color: var(--ink-muted);">數字縮寫造成視覺破碎，缺乏個人頭像識別感</div>
+        </div>
+      </div>
+      <div class="contrast-arrow">➔</div>
+      <div class="contrast-item">
+        <div class="actual-preview" id="contrastPreview">
+          <!-- Default persona -->
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7" r="4"/><path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21z"/></svg>
+        </div>
+        <div>
+          <div style="font-size: 13px; font-weight: 600; color: var(--accent);">升級後：人像主題現代扁平幾何圖標</div>
+          <div style="font-size: 11.5px; color: var(--ink-muted);">清晰人形結構、負空間俐落、完美契合 30px 圓徽</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Header Interactive Simulation -->
+    <section>
+      <div class="section-title">
+        <h2>
+          <span>🖥️ 實機 Header 頂欄互動模擬</span>
+        </h2>
+        <span class="hint">點選下方任一人像款式，即時觀察上方真實選單按鈕的視覺呈現</span>
+      </div>
+
+      <div class="mockup-header-box">
+        <div class="mockup-header-bar">
+          <div class="mockup-tabs">
+            <span style="font-size:14px; font-weight:700; margin-right:12px; font-family:var(--font-display);">Stock P&L</span>
+            <button class="mockup-tab active">儀表板</button>
+            <button class="mockup-tab">庫存總覽</button>
+            <button class="mockup-tab">個股分析</button>
+            <button class="mockup-tab">交易紀錄</button>
+          </div>
+          <div class="mockup-right">
+            <button class="mockup-tab" style="font-size: 12px; border: 1px solid var(--border);">工作區：主要帳戶 ▾</button>
+            <!-- Real Avatar Button -->
+            <button class="hmenu-avatar" id="liveHeaderAvatar" title="點擊切換選單" onclick="toggleMenuPop()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" id="liveHeaderIcon">
+                <circle cx="12" cy="7" r="4"/>
+                <path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21z"/>
+              </svg>
+            </button>
+            <!-- Dropdown Simulation -->
+            <div class="mockup-pop" id="mockupPop">
+              <div class="mockup-pop-head">0912345678@user.tw</div>
+              <div class="mockup-pop-item">⚙️ 外觀：跟隨系統</div>
+              <div class="mockup-pop-item">🔑 變更密碼</div>
+              <div class="mockup-pop-item" style="color: var(--up);">🚪 登出</div>
+            </div>
+          </div>
+        </div>
+        <div class="mockup-live-status">
+          <span>目前套用中：</span>
+          <span class="highlight" id="currentStyleLabel">01 極簡實心幾何人像 (Minimalist Solid Geometric)</span>
+          <span style="margin-left: auto;">點擊圓形頭像可展開/收合模擬選單</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 Human Persona Cards Grid -->
+    <section>
+      <div class="section-title">
+        <h2>
+          <span>👤 6 款人像主題現代扁平設計方案</span>
+        </h2>
+        <span class="hint">提供 60px 放大細節與 30px 原尺寸實機檢驗</span>
+      </div>
+
+      <div class="grid">
+
+        <!-- 01 Minimalist Solid -->
+        <div class="card selected" id="card-01">
+          <div class="card-top">
+            <span class="card-number">STYLE 01</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="7" r="4.2"/>
+                  <path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21z"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="7" r="4.2"/>
+                  <path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21z"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>極簡實心幾何人像</h3>
+          <div class="subtitle">Minimalist Solid Geometric</div>
+          <p class="desc">
+            瑞士國際主義經典扁平風格。正圓頭部搭配微帶圓角的實心梯形軀幹，頸部留有精確負空間切線，極致耐看、乾淨、不落俗套。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('01', '01 極簡實心幾何人像 (Minimalist Solid Geometric)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('01')">複製 SVG</button>
+          </div>
+        </div>
+
+        <!-- 02 Executive V-Lapel -->
+        <div class="card" id="card-02">
+          <div class="card-top">
+            <span class="card-number">STYLE 02</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="7" r="4.2"/>
+                  <path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21h-3.8l-4.2-5.5-4.2 5.5z"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="7" r="4.2"/>
+                  <path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21h-3.8l-4.2-5.5-4.2 5.5z"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>商務 V 領俐落人像</h3>
+          <div class="subtitle">Executive V-Lapel</div>
+          <p class="desc">
+            胸口融入俐落的 V 領西裝領口負空間切角。塑造專業基金經理人、資深投資操盤者的商務菁英氣息，洗練且富有層次感。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('02', '02 商務 V 領俐落人像 (Executive V-Lapel)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('02')">複製 SVG</button>
+          </div>
+        </div>
+
+        <!-- 03 Orbit Ringed -->
+        <div class="card" id="card-03">
+          <div class="card-top">
+            <span class="card-number">STYLE 03</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="3.6" fill="currentColor"/>
+                  <path d="M6.2 20.5c.4-2.8 2.8-4.8 5.8-4.8s5.4 2 5.8 4.8" fill="currentColor"/>
+                  <ellipse cx="12" cy="12" rx="9.8" ry="5.6" transform="rotate(-28 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="3.6" fill="currentColor"/>
+                  <path d="M6.2 20.5c.4-2.8 2.8-4.8 5.8-4.8s5.4 2 5.8 4.8" fill="currentColor"/>
+                  <ellipse cx="12" cy="12" rx="9.8" ry="5.6" transform="rotate(-28 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>軌跡同心環人像</h3>
+          <div class="subtitle">Orbit Ringed Persona</div>
+          <p class="desc">
+            扁平人像周圍環繞斜向動態衛星軌道環。象徵以使用者個人為中心、涵蓋全球總經、外匯與多市場股票的全球資產環繞體系。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('03', '03 軌跡同心環人像 (Orbit Ringed Persona)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('03')">複製 SVG</button>
+          </div>
+        </div>
+
+        <!-- 04 Hex Tech -->
+        <div class="card" id="card-04">
+          <div class="card-top">
+            <span class="card-number">STYLE 04</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l8 4.6v9.2l-8 4.6-8-4.6V6.6z" stroke="currentColor" stroke-width="2"/>
+                  <circle cx="12" cy="8.2" r="2.8" fill="currentColor"/>
+                  <path d="M7.6 18c.5-2.6 2.3-4.2 4.4-4.2s3.9 1.6 4.4 4.2" fill="currentColor"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l8 4.6v9.2l-8 4.6-8-4.6V6.6z" stroke="currentColor" stroke-width="2"/>
+                  <circle cx="12" cy="8.2" r="2.8" fill="currentColor"/>
+                  <path d="M7.6 18c.5-2.6 2.3-4.2 4.4-4.2s3.9 1.6 4.4 4.2" fill="currentColor"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>量化六角刻面人像</h3>
+          <div class="subtitle">Hex Tech Persona</div>
+          <p class="desc">
+            高科技量化幾何六角盾徽包覆扁平人像。代表系統化、數據化與演算法輔助投資，給人精準、高度理智的技術派專家風貌。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('04', '04 量化六角刻面人像 (Hex Tech Persona)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('04')">複製 SVG</button>
+          </div>
+        </div>
+
+        <!-- 05 Visionary Star -->
+        <div class="card" id="card-05">
+          <div class="card-top">
+            <span class="card-number">STYLE 05</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="10.5" cy="7.5" r="3.8"/>
+                  <path d="M3.5 21v-1.2C3.5 16.5 6.6 13.8 10.5 13.8c3.2 0 5.8 1.6 6.8 4V21z"/>
+                  <path d="M19.5 7.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="10.5" cy="7.5" r="3.8"/>
+                  <path d="M3.5 21v-1.2C3.5 16.5 6.6 13.8 10.5 13.8c3.2 0 5.8 1.6 6.8 4V21z"/>
+                  <path d="M19.5 7.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>洞察星芒人像</h3>
+          <div class="subtitle">Visionary Star Persona</div>
+          <p class="desc">
+            極簡人像身旁點綴一枚閃爍的現代四芒星（North Star）。象徵具備市場遠見的領航者與敏銳的價值發掘力，意境深遠。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('05', '05 洞察星芒人像 (Visionary Star Persona)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('05')">複製 SVG</button>
+          </div>
+        </div>
+
+        <!-- 06 Contemporary Architect -->
+        <div class="card" id="card-06">
+          <div class="card-top">
+            <span class="card-number">STYLE 06</span>
+          </div>
+          <div class="card-displays">
+            <div class="scale-box">
+              <div class="large-preview">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round">
+                  <circle cx="12" cy="7" r="4.2" fill="currentColor"/>
+                  <path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" stroke-width="2.2"/>
+                  <path d="M7 21c.5-2.8 2.5-4.8 5-4.8s4.5 2 5 4.8" stroke-width="1.8"/>
+                </svg>
+              </div>
+              <span class="scale-label">60px 視圖</span>
+            </div>
+            <div class="scale-box">
+              <div class="actual-preview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round">
+                  <circle cx="12" cy="7" r="4.2" fill="currentColor"/>
+                  <path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" stroke-width="2.2"/>
+                  <path d="M7 21c.5-2.8 2.5-4.8 5-4.8s4.5 2 5 4.8" stroke-width="1.8"/>
+                </svg>
+              </div>
+              <span class="scale-label">30px 原比例</span>
+            </div>
+          </div>
+          <h3>當代雙弧線條人像</h3>
+          <div class="subtitle">Contemporary Architect Arc</div>
+          <p class="desc">
+            實心小圓頭部搭配極具通透感的雙層圓弧肩線。具備北歐建築與現代工業設計的留白呼吸感，線條輕盈高雅，極耐細看。
+          </p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="selectIcon('06', '06 當代雙弧線條人像 (Contemporary Architect Arc)')">選定預覽</button>
+            <button class="btn" onclick="copySvg('06')">複製 SVG</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Visual Board Image Embed -->
+    <section class="image-board-wrap">
+      <h2>「人像主題」視覺設計總覽圖板</h2>
+      <img src="picture/human-avatar-icons.jpg" alt="6 款人像主題現代扁平帳號頭像設計提案" class="board-img" />
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast">已複製 SVG 向量代碼！</div>
+
+  <script>
+    // Theme toggle
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeIcon').textContent = next === 'dark' ? '☀️' : '🌙';
+      document.getElementById('themeLabel').textContent = next === 'dark' ? '淺色模式' : '深色模式';
+    }
+
+    // SVG definitions map
+    const SVG_MAP = {
+      '01': '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7" r="4.2"/><path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21z"/></svg>',
+      '02': '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7" r="4.2"/><path d="M4 21v-1.2C4 16.5 7.5 13.5 12 13.5s8 3 8 6.3V21h-3.8l-4.2-5.5-4.2 5.5z"/></svg>',
+      '03': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6" fill="currentColor"/><path d="M6.2 20.5c.4-2.8 2.8-4.8 5.8-4.8s5.4 2 5.8 4.8" fill="currentColor"/><ellipse cx="12" cy="12" rx="9.8" ry="5.6" transform="rotate(-28 12 12)" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+      '04': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4.6v9.2l-8 4.6-8-4.6V6.6z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="8.2" r="2.8" fill="currentColor"/><path d="M7.6 18c.5-2.6 2.3-4.2 4.4-4.2s3.9 1.6 4.4 4.2" fill="currentColor"/></svg>',
+      '05': '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="10.5" cy="7.5" r="3.8"/><path d="M3.5 21v-1.2C3.5 16.5 6.6 13.8 10.5 13.8c3.2 0 5.8 1.6 6.8 4V21z"/><path d="M19.5 7.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>',
+      '06': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="12" cy="7" r="4.2" fill="currentColor"/><path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" stroke-width="2.2"/><path d="M7 21c.5-2.8 2.5-4.8 5-4.8s4.5 2 5 4.8" stroke-width="1.8"/></svg>'
+    };
+
+    function selectIcon(id, name) {
+      // Update header preview
+      document.getElementById('liveHeaderAvatar').innerHTML = SVG_MAP[id];
+      document.getElementById('contrastPreview').innerHTML = SVG_MAP[id];
+      document.getElementById('currentStyleLabel').textContent = name;
+
+      // Update card states
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      const activeCard = document.getElementById('card-' + id);
+      if (activeCard) activeCard.classList.add('selected');
+    }
+
+    function toggleMenuPop() {
+      const pop = document.getElementById('mockupPop');
+      pop.classList.toggle('open');
+    }
+
+    function copySvg(id) {
+      const svg = SVG_MAP[id];
+      navigator.clipboard.writeText(svg).then(() => {
+        showToast('已複製 ' + id + ' 號向量 SVG 代碼！');
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(() => {
+        t.style.display = 'none';
+      }, 2200);
+    }
+  </script>
+</body>
+</html>

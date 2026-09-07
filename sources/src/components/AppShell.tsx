@@ -200,6 +200,31 @@ function GithubMark({ size = 14 }: { size?: number }) {
   )
 }
 
+/**
+ * Modern flat user avatar icon (Contemporary Architect Arc).
+ * Solid circular head + elegant dual-arc minimalist shoulder contours.
+ * Replaces the old account number / email initials with a clean modern flat persona.
+ */
+function AvatarIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ flex: '0 0 auto' }}
+    >
+      <circle cx="12" cy="7" r="4.2" fill="currentColor" stroke="none" />
+      <path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" strokeWidth="2.2" />
+      <path d="M7 21c.5-2.8 2.5-4.8 5-4.8s4.5 2 5 4.8" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
 const THEME_ORDER: ThemePref[] = ['system', 'dark', 'light']
 const THEME_LABEL: Record<ThemePref, string> = {
   system: '跟隨系統',
@@ -403,7 +428,6 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
 
   const ThemeIcon = pref === 'system' ? Monitor : pref === 'dark' ? Moon : Sun
   const email = user?.email ?? ''
-  const initials = email.slice(0, 2).toUpperCase() || 'ME'
   const isLocal = mode === 'local'
 
   return (
@@ -418,7 +442,7 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
               本機模式
             </>
           ) : (
-            initials
+            <AvatarIcon size={16} />
           )
         }
         menuLabel="帳號與外觀"
