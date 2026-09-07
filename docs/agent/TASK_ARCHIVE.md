@@ -11,6 +11,37 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
+- **Status**: ✅ **DONE — released as 0.9.35, live on DEV and PROD**
+- **PROD rollout (2026-09-07)**: `app_log`, its single INSERT policy, three indexes, `admin_recent_app_logs()` and the `app-log-prune` cron applied to `hrilemueiqyaoiwnkeuu`; PROD cron count is now 7. Edge Functions deployed: `stock-report` v8, `stock-price` v5, `backup-transactions` v4 — all three `ezbr_sha256` identical to DEV, all three `verify_jwt` preserved. PROD checks: objects match DEV exactly, RLS five cases match DEV exactly, `null` body returns 400, `app-logs` returns 401 without a credential.
+- **Live DEV verification (2026-09-06)**: a real Edge exception landed in `app_log` with its stack and nothing else in `detail`; `app-logs` returned 401 with no credential and 401 with the anon key alone; a POST body of literal `null` returned 400; the RLS policy allowed the user's own `web` row and denied a `RETURNING` insert, an `edge` row, another user's row, and any `SELECT`; the app booted against DEV with no console or page errors.
+- **Agent**: Claude
+- **Timestamp**: 2026-09-06 16:21:13 Asia/Taipei
+- **Spec**: `docs/agent/specs/146-app-log-capture-and-viewer.md`
+- **What was done**: Added `app_log` table, Edge `logEvent()` with strict allowlist, `services/appLog.ts` (`logClient`), `ErrorBoundary.tsx`, silent-catch logging across 14 sites, PostgREST failure capture in `dataProvider.ts`, and Admin Console Logs viewer panel (`LogsSection.tsx`).
+
+### Task 140: Review two anomalous transactions found in real broker exports
+- **Status**: ⏳ **DEFERRED / CLOSED AS NOTE — awaiting user verification against broker statements**
+- **What is this**: Batch recalculation on committed exports proposed corrections for exactly two rows (`2026-06-05 2891` excess 3,210, `2026-06-23 00685L` full fee rate vs 3折). Both appear to be genuine broker record anomalies rather than tool errors.
+- **Timestamp**: 2026-09-01 09:39:42 Asia/Taipei
+
+### Task 129: ETF constituents in 個股分析 (deferred after investigation)
+- **Status**: ⏳ **DEFERRED — Investigated, deferred; research documented**
+- **Agent**: Scribe
+- **Timestamp**: 2026-08-24 13:33:13 Asia/Taipei
+- **Investigation outcome**: TWSE has no official ETF constituent API (PCF published by issuers). Documented candidate sources (MoneyDJ, issuer PCF pages, TEJ). Deferred until official API or stable source is decided.
+
+### Task 125: Watchlist card design variants (Sparkline / Chips & PE / Range Bar)
+- **Status**: ⏳ **DEFERRED — Design documented, implementation deferred by scope**
+- **Timestamp**: 2026-08-24 11:37:39 Asia/Taipei
+- **Documentation**: Fully specified in `docs/architecture/watchlist_6_design_variants.md` + `.html`. Scope decision to keep core watchlist UX simple first.
+
+### Task 128: CI workflow must gate deployments on test/lint/typecheck
+- **Status**: ⏳ **DEFERRED — User explicitly chose not to add CI gate this round**
+- **Timestamp**: 2026-08-23 18:52:37 Asia/Taipei
+
+---
+
 ### Task 143: 觀察股票產業分類全面自動化（MIS 即時資料流）與收盤無成交價格修復 (BUG-045, BUG-046)
 - **Status**: ✅ **DONE** — closed 2026-09-03 17:50:00 Asia/Taipei in 0.9.29-dev.2
 - **Agent**: Antigravity
