@@ -6,6 +6,25 @@
 
 ---
 
+### 📦 Operational Notes Archive: Transcript Secret Exposures & Mitigations
+- **Status**: ✅ ARCHIVED — 2026-09-07
+- **Historical Exposures**:
+  - DEV `CRON_SECRET` exposed in session transcript on 2026-08-25.
+  - Supabase personal access tokens exposed in transcripts on 2026-08-26, 2026-09-01, 2026-09-04, 2026-09-05 (two times).
+  - **2026-09-04 Token**: Verified revoked on 2026-09-05 (`supabase functions list` returned `401 Unauthorized`).
+- **Standing Mitigation**: Prefer interactive terminal login (`! supabase login`) so secrets never enter chat transcript.
+
+### 📦 Historical Notes Archive (0.6.x - 0.7.x)
+- **Status**: ✅ ARCHIVED — 2026-09-07
+- **BUG-026** (borrow flip dead on arrival) & **BUG-027** (unordered 20-ticker sample decided landing): fixed in **0.7.13**.
+- **BUG-024**: fixed in **0.7.11**.
+- **BUG-023** (manual 「全部執行」 opaque non-2xx): fixed in **0.6.47**.
+- **BUG-011** (after-close lock froze an intraday snapshot): fixed in **0.6.37**, deployed to both environments at 20:57 / 20:58.
+- **BUG-004**: obsolete after 0.6.32 scheduler rework to read `batch_run_log` directly.
+- **Project-identity heuristic in `supabase-ops`**: count-based heuristic replaced with explicit project refs / compose paths on 2026-08-26.
+
+---
+
 ### BUG-063 — CSV 匯出後再匯入導致融券借券費永久遺失
 - **Status**: ✅ FIXED (0.9.34) — 2026-09-05
 - **Where**: `sources/src/utils/csv.ts`
