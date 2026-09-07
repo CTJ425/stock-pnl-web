@@ -1,225 +1,93 @@
-# Active Bug Fixes (BUG_FIX.md)
+# Active Bug Fixes & Accepted Risks (BUG_FIX.md)
 
-- Agent: Claude
+- Agent: Antigravity
 - Status: ACTIVE
-- Timestamp: 2026-09-05（深度稽核九項已全部修正並發布於 0.9.34）
+- Timestamp: 2026-09-07 11:35:00 Asia/Taipei
 
 ---
 
-## 🐛 Currently Active / Open Bugs
+## 🐛 Open / Active Issues & Accepted Risks
 
 ### AUDIT-10 — CSV 匯入把「以點為千分位」的數字少算 1000 倍且不報錯
-
-- **Where**: `sources/src/utils/csv.ts`（`parseNumber`）
-- **Proven by reading**: 清理正規式只移除 `NT$ US$ $ , 空白 ( )`，不處理點號千分位，之後直接 `Number(cleaned)`。
-- **Failure scenario**: 交易單價欄位為 `"2.500"`（某些地區匯出代表 2500）解析為 `2.5`，是有限正數，通過 `price > 0` 驗證，不產生 `CsvRowError`。該筆交易金額少算 1000 倍，靜默污染移動平均成本。
-- **Severity**: MEDIUM（台灣券商匯出用逗號千分位，觸發需特定來源檔）
-- **Decision**: 使用者於 2026-09-04 決定**不改程式**，記為可接受風險。「2.500」在台股與美股都可能是合法的 2.5 元，加規則拒絕它會擋掉正常匯入；多組點號如「1.234.567」目前已是 `NaN` 會報錯，真正的破口只有「單組三位數」這種本質上無法區分小數與千分位的形式。
+- **Where**: `sources/src/utils/csv.ts` (`parseNumber`)
+- **Failure scenario**: 交易單價為 `"2.500"`（特定來源可能代表 2500）解析為 `2.5`，通過 `price > 0` 驗證，少算 1000 倍。
+- **Decision**: 使用者於 2026-09-04 決定**不改程式**，記為可接受風險。「2.500」在台股與美股都可能是合法的 2.5 元，加規則拒絕它會擋掉正常匯入；多組點號（如「1.234.567」）已是 `NaN` 會報錯。
 - **Status**: OPEN（已接受，不修）
-- **Discovered**: 2026-09-04 全庫稽核。同批的其餘六項（AUDIT-09、11、12、13、14、15）已於 0.9.32 修正，紀錄見 `FIXED_BUG.md` BUG-051 … BUG-056，稽核全文已歸檔至 `FIXED_BUG.md` 末段。
 
 ---
 
 ### RISK-006 — 7 個 `action` 名稱指向模組私有函式，而非公開進入點
-
 - **Where**: `sources/src/services/aiChatStore.ts:48`、`priceProxy.ts:121,188,206`、`twMarketData.ts:49,58,135`
-- **What**: Spec 146 要求 `logClient` 的 `action` 使用「所在的 exported 函式名稱」。實際落在 `safeSession`、`writePriceCache`、`fetchFromEdge`、`fetchTwFallback`、`readCache`、`writeCache`、`fetchViaEdge` 這 7 個模組私有函式上，它們在模組公開介面上看不到。
-- **Confirmed by Review**: `route:reviewer`，2026-09-06，Spec 146 Phase 2／3 審查。
-- **Impact Today**: 低。這些名稱在專案內唯一且可 grep，對排查而言比公開包裝函式更精確——它直接指出失敗發生在快取讀取、快取寫入，還是 Edge 取數。
-- **Decision**: 本次不改。若日後 `app_log` 要依公開操作聚合統計，再引入一個獨立的 `operation` 欄位，不要改動 `action` 的語意。
+- **What**: Spec 146 要求 `logClient` 的 `action` 使用「所在的 exported 函式名稱」。實際落在 `safeSession`、`writePriceCache`、`fetchFromEdge`、`fetchTwFallback`、`readCache`、`writeCache`、`fetchViaEdge` 這 7 個模組私有函式。
+- **Decision**: 本次不改。這些名稱在專案內唯一且可 grep，直接指出快取讀取/寫入或 Edge 失敗點。日後若需按公開操作統計，再引入獨立 `operation` 欄位。
 - **Status**: OPEN（低嚴重度，已確認）
-- **Discovered**: 2026-09-06
 
 ---
 
-### RISK-007 — `syncWorkspaceFees` 的 catch 位於迴圈內，每次登入每個 workspace 各記一列
-
+### RISK-007 — `syncWorkspaceFees` 的 catch 位於迴圈內
 - **Where**: `sources/src/services/feeSettings.ts:19-24`，呼叫端 `sources/src/context/WorkspaceContext.tsx:97`
-- **What**: 該 catch 在 workspace 清單的 `for` 迴圈內。使用者若有多個 workspace 同時失敗，每次登入每個 workspace 各寫一列 `app_log`。
-- **Confirmed by Review**: `route:reviewer`，2026-09-06，Spec 146 Phase 2／3 審查。
-- **Impact Today**: 低。筆數受 workspace 數量限制，且每次登入才觸發一輪，與輪詢迴圈不同，不會持續累積。`logClient` 的 5 分鐘去重亦會吸收同一次登入內的重複訊息。
-- **Decision**: 本次不改。要改成「整輪失敗記一列」必須改動 `syncWorkspaceFees` 的迴圈結構，代價高於這個筆數問題。
+- **What**: catch 在 workspace 清單的 `for` 迴圈內。若多個 workspace 同時失敗，每次登入各寫一列 `app_log`。受 workspace 數量限制，且每次登入才觸發一輪，5 分鐘去重機制會吸收同次登入內的重複訊息。
+- **Decision**: 本次不改。改動迴圈結構代價高於筆數影響。
 - **Status**: OPEN（低嚴重度，已確認）
-- **Discovered**: 2026-09-06
 
 ---
 
 ### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
-
-- **Where**: `sources/supabase/functions/stock-report/index.ts`（chips phase 的逐檔迴圈，`if (okUp) generated++`）
-- **What**: `uploadJson` 內建自己的 `try/catch`，失敗時不拋例外而是回傳 `false`。因此 Storage 上傳失敗的標的不會進入 BUG-053 新增的 `catch`，既不計入 `generated` 也不計入 `failed`，`generated + failed` 可能小於 `tickers.length`。
-- **Confirmed by Review**: `route:reviewer`，2026-09-04，BUG-050 與 AUDIT 修正的審查。
-- **Impact Today**: 低。運維者看到的是偏低的 `generated`，不是錯誤的數字；隔 5 分鐘的下一次 cron 會重跑並自我修復。
-- **Scope**: 此缺口在 BUG-053 之前就存在，不是本次修正造成的。BUG-053 只處理 `assembleOne` 拋例外的路徑。
-- **Decision**: 本次不修。要正確計數必須改動 `uploadJson` 的回傳約定，影響面遠大於這個顯示問題。
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（chips 逐檔迴圈）
+- **What**: `uploadJson` 內建 `try/catch`，失敗回傳 `false` 不拋例外。Storage 上傳失敗的標的未計入 `generated` 也不計入 `failed`。
+- **Decision**: 隔 5 分鐘下一次 cron 會自我修復；改動回傳約定影響面大，維持現狀。
 - **Status**: OPEN（低嚴重度，已確認）
-- **Discovered**: 2026-09-04
 
 ---
 
 ### RISK-004 — `addTransactions` silently drops `tx_nature` on pre-migration database
-
-- **Where**: `sources/src/services/dataProvider.ts:174-188` (retry path in `SupabaseProvider.addTransactions`)
-- **What**: When the `tx_nature` column is missing, `addTransactions` retries with a schema that omits the field. The retry succeeds and returns success, so the caller believes the label was persisted. User sees "save" succeed, then finds the label gone on reopen.
-- **Confirmed by Review**: Task 139 code review before landing.
-- **Impact Today**: None. Both cloud projects have carried the column since 2026-09-03 — see BUG-041 and BUG-044-P in `FIXED_BUG.md`, closed with the 0.9.28 release.
-- **User Experience**: User picks 當沖, sees save succeed, reopens and finds label lost. But ledger inference (fee/tax split via `splitFeeTax`) still produces correct tax numbers because `DAY_TRADE` → halved tax is both the explicit inference and the fallback when label absent.
-- **Mitigation**: Same property that `workspaces.fee_rate` shipped with in Task 135: explicit label lost until PROD migration runs, but numbers stay correct.
-- **Decision**: Accepted, not fixed. No code change.
+- **Where**: `sources/src/services/dataProvider.ts`
+- **What**: 當資料庫缺少 `tx_nature` 欄位時，重試會省略該欄並回傳成功。目前兩環境皆已於 0.9.28 補齊欄位（無現行衝擊）。
+- **Decision**: Accepted risk。若日後重新建立專案，需留心檢查 DDL 是否含此欄位。
 - **Status**: OPEN (low severity, accepted)
-- **Introduced**: Task 139 (2026-09-01)
-- **Scope**: Dormant while a project carries `tx_nature` — but **this risk is not one-time**. It re-arms every time a project is created or recreated from un-migrated schema, which is exactly what happened on 2026-08-31: both cloud projects were recreated and silently lost the column, and nothing surfaced it until 2026-09-03. Treat it as a standing post-recreation check, not a closed question.
 
 ---
 
 ### RISK-003 — Historical chip report files keep permanent "回補中" note
-
-- **Where**: `sources/supabase/functions/stock-report/index.ts:2135` (note text from `assembleOne` at `index.ts:698-701`)
-- **What**: For the 6 non-latest days the chips backfill writes (Task 130 new `phase: 'chips'`), `daySeries.incomplete` is true by construction. Each past-date `reports/{ymd}/{ticker}.json` embeds the note "歷史資料回補中…走勢圖會逐日補齊". The nightly `generate-chips` only ever rewrites `{series.dataYmd}/{ticker}.json`, so the note never clears.
-- **Confirmed by Observation**: DEV manual test on 2026-08-31, Task 130 manual DEV verification item 7. The generated `20260828/2454.json` carries the note; only the newest file (manifest.ymd) has the full 7-day history and no note.
-- **Impact Today**: None. `reportProxy.ts:178-180` only ever fetches `manifest.ymd`, so no consumer reads a past-date report.
-- **Future Risk**: Becomes a real defect if any future feature reads a report by a specific past `ymd`.
-- **Decision**: Accepted, not fixed. The note is semantically defensible — a report for 7 days ago genuinely has a thin history window.
-- **Status**: OPEN (low severity, confirmed)
-- **Introduced**: Task 130 (2026-08-30)
+- **Where**: `sources/supabase/functions/stock-report/index.ts`
+- **What**: 過去 6 天的回補檔案內嵌「歷史資料回補中…」備註且不再重寫。目前前端僅讀取最新 manifest.ymd，無現行衝擊。
+- **Status**: OPEN (low severity, accepted)
 
 ---
 
 ### RISK-002 — Night batch cost scaling with watched stock count
-
-- **Condition**: 0.8.0 expands `batchTwTickers()` from held-only to held ∪ watched; each stock ~6 external requests; cost per day ≈ (users × avg watched stocks) × 6.
-- **Limit**: `tw_watchlist` max 30 stocks/user is the only brake.
-- **Status**: OPEN — observation week completed, scaling hypothesis not exercise; revised trigger applied.
-- **Observation week (2026-08-18..2026-08-26)**:
-  - Daily batch total runtime peaked at 283.7 s on 2026-08-20, fell to 162.1 s on 2026-08-25 after the 0.9.15 borrow fix cut redundant rounds.
-  - Mean per-run duration rose from ~4.3 s (2026-08-12) to 10.1 s (2026-08-25), roughly double.
-  - Scaling hypothesis NOT exercised: PROD user base unchanged (2 users, 1 with a watchlist), 8 watched rows, 58 stock_names.
-  - Per-run growth (4.3s → 10.1s) is therefore NOT attributable to users × watched count.
-- **Revised trigger**: Revisit RISK-002 if user growth or watchlist growth occurs, not on calendar. Current per-run baseline (10.1 s post-borrow-fix) is the new reference point.
-- **Action on growth**: If user count or avg watched per user rises, monitor subsequent week of batch runtime and compare against 10.1 s baseline.
+- **Condition**: 觀察名單擴增時 batch 執行時間可能上升。目前監控 baseline 為 ~10.1 秒/次。
+- **Trigger**: 使用者數或觀察名單顯著成長時再行評估。
+- **Status**: OPEN (monitored)
 
 ---
 
-## 📝 Operational Notes
-
-### DEV CRON_SECRET rotation (exposed in earlier session)
-
-- **Status**: OPEN — deferred, user decided to record instead of rotate immediately.
-- **Exposure**: DEV `CRON_SECRET` exposed in plaintext in session transcript on 2026-08-25. `/root/container/supabase/stock-pnl-web-dev/.env` still has mtime 2026-08-07 15:37 (unchanged since before exposure).
-- **Rotation requirements** (when user authorizes):
-  1. Generate new `CRON_SECRET` value.
-  2. Update DEV `.env` at `/root/container/supabase/stock-pnl-web-dev/.env`.
-  3. Recreate the functions container: `docker compose up -d --force-recreate functions` (from compose directory).
-  4. Update the `x-cron-secret` header in all 6 DEV cron jobs using `alter_job(jobid, ...)` — update the `command` text to embed the new secret.
-  5. Verify by re-hashing the updated commands, not by "no error" message.
-- **Discovered**: Task 134, carried to BUG_FIX.md 2026-08-26.
-
-### Supabase personal access token exposed in transcript (2026-08-26)
-
-- **Status**: OPEN — requires revocation in Supabase console.
-- **Exposure**: A Supabase personal access token was pasted into a session transcript on 2026-08-26 and was used again on 2026-08-26 to deploy the 0.9.19 PROD Edge Function (`stock-price`). Revocation is required.
-- **Risk**: Supabase personal access tokens grant full management access to every project in the account (Management API, CLI for functions, database, secrets, project settings). Token has been actively used for privileged operations (function deployment). Revocation is the required action.
-- **Action required**: Revoke the token in the Supabase console (Settings → Access Tokens). This action is the user's responsibility.
-- **Discovered**: 2026-08-26.
-- **Used for deployment**: 2026-08-26 (`supabase functions deploy stock-price --project-ref kxnxadaghidwumqsqneu`).
-
-### Supabase personal access token exposed in transcript (2026-09-01)
-
-- **What**: The user pasted a Supabase personal access token into the conversation to authorise the cron diagnosis. It is now in the session transcript.
-- **Action required**: rotate it in the Supabase dashboard. This is the **third** such exposure recorded in this file, after the DEV `CRON_SECRET` (2026-08-25) and an earlier personal access token (2026-08-26).
-- **Handling during this session**: used only as an environment variable, never echoed, never written to any file in the repo.
-- **Status**: OPEN — user action
-- **Recorded**: 2026-09-01 13:37:25 Asia/Taipei
+### RISK — `breakEvenPrice` returns 0 for zero-cost holdings when `minFee` is undefined
+- **Where**: `sources/src/utils/fees.ts:89-92`
+- **Condition**: `cost === 0` AND `minFee === undefined`（非 TWD 持股可能觸發）。回傳 0 作為 sentinel。
+- **Severity**: Low. Row 依然正常渲染。
+- **Status**: OPEN (low severity)
 
 ---
 
-### Supabase personal access token exposed in transcript (2026-09-04)
-
-- **What**: The user pasted a Supabase personal access token into the `/goal` message to authorise the DEV and PROD Edge deployment. It is now in the session transcript.
-- **Action required**: rotate it in the Supabase dashboard (Account → Access Tokens). This is the **fourth** such exposure recorded in this file, after the DEV `CRON_SECRET` (2026-08-25) and two earlier personal access tokens (2026-08-26, 2026-09-01). Four in eleven days is a pattern, not an accident: the working method that keeps producing it is pasting the secret into the conversation instead of running `supabase login` in the terminal. Prefer `! supabase login` in the Claude Code prompt — the CLI reads the token from its own interactive input and it never enters the transcript.
-- **Handling during this session**: passed once to `supabase login --token`, which stores it under the CLI's own config outside the repository. Never echoed, never written to any file in the repository, never used in a query or a log line. Rotation is still required — the transcript is the exposure, not the storage.
-- **Status**: ✅ REVOKED — verified 2026-09-05. `supabase functions list` returned `401 Unauthorized` on both project refs with this token still in the CLI config, which is positive proof it no longer works.
-- **Recorded**: 2026-09-04 19:45:00 Asia/Taipei
-
----
-
-### Project-identity heuristic in `supabase-ops` skill is stale
-
-- **Finding**: The `supabase-ops` skill's project-identity distinguishing heuristic states "batch_run_log: official area 2 / test area 0", used to infer which environment is live. As of 2026-08-26, DEV self-hosted has 242 rows in batch_run_log, and PROD has 565 rows. The count no longer reliably distinguishes DEV (test) from PROD (official) — both are growing with daily probe activity.
-- **Cron.job row counts**: Both DEV and PROD have 6 jobs as of 2026-08-26 (after PROD cron cleanup), so this count also no longer distinguishes them.
-- **Impact**: Agents relying on count-based heuristics would give false confidence about the target environment. Not a bug in the skill itself, but the distinguishing criteria have eroded.
-- **Mitigation**: When operating on Supabase environments, use explicit paths for disambiguation. DEV operations on self-hosted should reference the compose file path directly (`/root/container/supabase/stock-pnl-web-dev/`); PROD operations on cloud should reference the explicit project ID (`kxnxadaghidwumqsqneu`). Do not rely on count-based heuristics that can drift over time.
-- **Updated**: 2026-08-26; original finding 2026-08-24.
-
-### Supabase personal access token exposed in transcript (2026-09-05)
-
-- **What**: A fifth Supabase personal access token was pasted into the conversation, in the same message that said 「supabase的不授權給你」. The instruction and the paste contradict each other.
-- **Handling during this session**: **the token was not used at all.** No `supabase login`, no query, no deploy. The instruction was read as "do not use this one", and the read-only checks in that turn ran against the CLI's existing (by then already revoked) login, which returned 401.
-- **Action required**: revoke it. It is exposed by the paste itself, whether or not anything used it.
-- **The pattern is now five in twelve days** (DEV `CRON_SECRET` 2026-08-25; personal access tokens 2026-08-26, 2026-09-01, 2026-09-04, 2026-09-05). Recording each one has not changed the outcome, because the cause is the working method, not forgetfulness: the secret is typed into the chat instead of into the CLI. The one change that ends it is `! supabase login` typed at the Claude Code prompt —— the CLI reads the token from its own input and it never enters the transcript. Nothing else on this list needs to change.
-- **Status**: OPEN — user action
-- **Recorded**: 2026-09-05 Asia/Taipei
-
----
-
-### Supabase personal access token exposed in transcript (2026-09-05, 第六次)
-
-- **What**: 第六個 Supabase personal access token 被貼進對話。使用者同時說明「TOKEN 都有設定 EXPIRES」，並明確授權本次使用。
-- **Handling**: 已用於 0.9.34 的 DEV 與 PROD Edge 部署（`supabase login --token`，CLI 自行保存於 repo 之外）。從未回顯、未寫入任何檔案、未出現在查詢或 log 中。
-- **Action required**: 仍建議部署完成後撤銷 —— 有效期限縮短了暴露窗口，但沒有消除暴露本身；token 一旦進入對話記錄就是外洩。
-- **前一次的教訓仍然成立**: 這是十二天內第六次。唯一能終結這個模式的作法是在提示字元輸入 `! supabase login`，由 CLI 自行讀取，token 完全不進入對話記錄。設定有效期限是好的補償控制，但不是替代品。
-- **Status**: OPEN — user action（建議撤銷）
-- **Recorded**: 2026-09-05
+### BUG-042 & BUG-043 — `dataProvider.ts` 重試與未知 id 處理
+- **BUG-042**: `listWorkspaces` 退回重試吞掉第一次錯誤訊息（Accepted risk：專案生產代碼不留 console.error）。
+- **BUG-043**: `LocalProvider.setWorkspaceFeeRate` 對未知 id 靜默成功（Accepted risk：與現有 renameWorkspace 一致）。
+- **Status**: ACCEPTED RISK
 
 ---
 
 ### Supabase Redirect URLs allow-list does not contain app origin
-
-- **Status**: OPEN — requires Supabase console configuration.
-- **Finding**: Signup confirmation link flow calls `signUp` with `emailRedirectTo`, so Supabase verifies the account and redirects back with `#access_token=...&type=signup`. The Supabase project's Redirect URLs configuration does not include the app's origin, so GoTrue rejects the `redirect_to` and falls back to `SITE_URL`. Evidence: DEV self-hosted compose `.env` has empty `ADDITIONAL_REDIRECT_URLS` and `SITE_URL` pointing at the Supabase API (`http://kong:8000`) rather than at the app; Supabase CLI has no access token available in this environment; PROD front-end deploy target currently unconfigured.
-- **Consequence**: The signup confirmation flow works (account is verified), but the redirect lands at Supabase instead of the app, breaking the user's perception that anything happened. App catches the hash with `authRedirect.ts` on render, but only if the browser is at the correct origin.
-- **Action required**: Add the app's origin to the Supabase project's Redirect URLs allow-list (Supabase dashboard → Project Settings → Auth → Authorized redirect URLs). Separate the URLs configured by app environment (DEV, PROD).
-- **Discovered**: 2026-08-31, during signup confirmation link fix (Item 5).
+- **Where**: Supabase Dashboard → Auth Settings → Redirect URLs
+- **What**: 註冊驗證信連結轉導若未包含前端正式網址，會落回 API root。
+- **Action**: 當前端部署站點確定後，至 Supabase Console 加入允許清單。
+- **Status**: OPEN (configuration required)
 
 ---
 
-**Historical notes**: BUG-026 (borrow flip dead on arrival) and BUG-027 (unordered 20-ticker sample
-decided landing) fixed in **0.7.13** — see `FIXED_BUG.md`. BUG-024 fixed in **0.7.11** — see `FIXED_BUG.md`.
+## 🔒 Operational Security Notes
 
-BUG-023 (manual 「全部執行」 opaque non-2xx) fixed in **0.6.47** — see `FIXED_BUG.md`.
-
-BUG-011 (the after-close lock froze an intraday snapshot) was fixed as 0.6.37, deployed to both environments at
-20:57 / 20:58, and moved to `FIXED_BUG.md`.
-
-The 2026-07-28 look-back on BUG-004 (32-round day, 16:00–17:00 rounds, short-circuit ratio) is obsolete:
-the scheduler has been reworked several times since, most recently in 0.6.32, and the timeline now reads from
-`batch_run_log` directly. Nothing is pending from it.
-
----
-
-## ⚠️ RISK — `breakEvenPrice` returns 0 for zero-cost holdings when `minFee` is undefined
-
-- **Where**: `sources/src/utils/fees.ts:89-92` (after BUG-038 fix)
-- **Condition**: `cost === 0` AND `minFee === undefined`
-- **Consequence**: Return value is 0, which is also the documented "no answer" sentinel for the function. Cannot distinguish a real zero break-even from a failure.
-- **Reachability**: Possible for non-TWD holdings through `sources/src/utils/holdingRows.ts` (minFee is undefined for non-TWD); rendered by `DashboardPage.tsx`.
-- **Severity**: Low. No marker error. Row still renders; formula is just 0.
-- **Status**: Pre-existing, not introduced by this session. BUG-038 fix did not change this case.
-- **Discovered**: 2026-09-01, after BUG-038 fix
-
----
-
-### BUG-042 — `listWorkspaces` 的退回重試會吞掉第一次的錯誤訊息
-- **Where**: `sources/src/services/dataProvider.ts:183-191`
-- **What**: When the retry succeeds (or a second error occurs), the first query's error is discarded. A real cause like missing column-level grant on `fee_rate` leaves no trace; `fee_rate` reads fail silently every time without diagnostic output.
-- **Status**: ACCEPTED RISK — the project's production source contains no `console.warn` / `console.error` at all, so adding one would break existing style. Reviewer verdict: PASS.
-- **Discovered**: 2026-08-31
-
-### BUG-043 — `LocalProvider.setWorkspaceFeeRate` 對未知 id 靜默成功
-- **Where**: `sources/src/services/dataProvider.ts:148-155`
-- **What**: `setWorkspaceFeeRate(id, rate)` resolves without writing when `id` matches no workspace, so caller believes the rate was persisted.
-- **Status**: ACCEPTED RISK — identical to existing `LocalProvider.renameWorkspace` pattern at the same file, so it is project style and not a regression. Reviewer verdict: PASS.
-- **Discovered**: 2026-08-31
-
-
-
+### Supabase Tokens & Secrets Rotation Checklist
+- **Notice**: 歷史對話中曾數次出現貼入之 Personal Access Token 或 DEV `CRON_SECRET`（詳細歷程見 `FIXED_BUG.md`）。
+- **Action for User**: 建議定期於 Supabase 控制台（Settings → Access Tokens）撤銷過期或已使用之 Token。
+- **Standard Working Method**: 終端機登入請使用 `! supabase login` 互動提示字元輸入，避免 Token 進入對話紀錄。
