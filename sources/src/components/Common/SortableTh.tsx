@@ -44,7 +44,7 @@ export function SortableTh<K extends string>({
     </button>
   )
   return (
-    <th
+    <th scope="col"
       className={numeric ? 'num th-sort' : 'th-sort'}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >

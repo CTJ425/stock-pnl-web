@@ -147,12 +147,12 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
     <tr className="detail-row">
       {/* Indicator column + latest + vs previous + trend + streak */}
       <td colSpan={5} style={{ padding: '4px 14px 10px 34px' }}>
-        <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
+        <table className="data-table" style={{ minWidth: 0, fontSize: 12 }}>
           <thead>
             <tr>
-              <th>{ind.label} 明細</th>
-              <th className="num">數值</th>
-              <th className="num">較上期</th>
+              <th scope="col">{ind.label} 明細</th>
+              <th scope="col" className="num">數值</th>
+              <th scope="col" className="num">較上期</th>
             </tr>
           </thead>
           <tbody>
@@ -254,13 +254,20 @@ function IndicatorRow({
 function UsMacroPanel() {
   const [macro, setMacro] = useState<MacroData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
-    const m = await fetchMacro()
-    setMacro(m)
-    setLoading(false)
+    setError(false)
+    try {
+      const m = await fetchMacro()
+      setMacro(m)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -272,6 +279,14 @@ function UsMacroPanel() {
       <div className="glass empty-state section">
         <RefreshCw size={28} className="spin" />
         <div style={{ marginTop: 10 }}>正在讀取總體經濟資料…</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="section glass" style={{ padding: '18px 20px' }}>
+        <div className="notice notice-error">讀取總體經濟資料失敗，請稍後重新整理。</div>
       </div>
     )
   }
@@ -369,11 +384,11 @@ function UsMacroPanel() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>指標</th>
-              <th className="num">最新</th>
-              <th className="num">較上期</th>
-              <th className="num">趨勢</th>
-              <th className="num">連續</th>
+              <th scope="col">指標</th>
+              <th scope="col" className="num">最新</th>
+              <th scope="col" className="num">較上期</th>
+              <th scope="col" className="num">趨勢</th>
+              <th scope="col" className="num">連續</th>
             </tr>
           </thead>
           <tbody>

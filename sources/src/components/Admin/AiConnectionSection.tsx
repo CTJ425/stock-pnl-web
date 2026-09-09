@@ -20,8 +20,12 @@ import {
   type AiProviderKind,
   type AiSettings,
 } from '../../services/aiSettings'
+import { useToast } from '../Common/Toast'
+import { useConfirm } from '../Common/useConfirm'
 
 export function AiConnectionSection() {
+  const { show } = useToast()
+  const confirm = useConfirm()
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState<AiSettings | null>(null)
 
@@ -82,10 +86,17 @@ export function AiConnectionSection() {
     }
     setSaved(candidate)
     setOkMsg('AI 設定已儲存')
+    show('AI 連線設定已儲存')
   }
 
   async function handleClear() {
-    if (!confirm('確定要清除 AI 設定嗎？清除後所有使用者都無法產生 AI 分析。')) return
+    const ok = await confirm({
+      title: '清除 AI 設定',
+      message: '確定要清除 AI 設定嗎？清除後所有使用者都無法產生 AI 分析。',
+      confirmLabel: '清除',
+      danger: true,
+    })
+    if (!ok) return
     setBusy(true)
     const res = await clearAiSettings()
     setBusy(false)
@@ -95,6 +106,7 @@ export function AiConnectionSection() {
     }
     setSaved(null)
     setOkMsg('AI 設定已清除')
+    show('AI 設定已清除')
   }
 
   return (
@@ -136,7 +148,7 @@ export function AiConnectionSection() {
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
               />
-              <span className="hint" style={{ fontSize: 11 }}>
+              <span className="hint" style={{ fontSize: 12 }}>
                 將自動補上 /v1，Ollama 本機請填 http://localhost:11434，並確認設定 OLLAMA_ORIGINS。
               </span>
             </div>
@@ -166,19 +178,19 @@ export function AiConnectionSection() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
-            <span className="hint" style={{ fontSize: 11 }}>
+            <span className="hint" style={{ fontSize: 12 }}>
               金鑰會下發到每個登入者的瀏覽器 —— 前端直接發請求給供應商，這是必然的。
             </span>
           </div>
 
           {err && (
-            <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13 }}>
+            <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
               <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
               {err}
             </div>
           )}
           {okMsg && (
-            <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 13 }}>
+            <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 14 }}>
               <CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
               {okMsg}
             </div>

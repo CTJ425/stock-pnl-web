@@ -1,0 +1,10 @@
+{
+  "name": "股票小幫手",
+  "short_name": "股票小幫手",
+  "description": "股票交易與庫存損益管理，含台股盤後報告。",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#161616",
+  "theme_color": "#161616",
+  "icons": [{ "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

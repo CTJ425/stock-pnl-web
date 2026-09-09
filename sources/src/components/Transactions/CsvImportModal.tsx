@@ -46,7 +46,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
 
   return (
     <Modal title="匯入 CSV（舊資料搬遷）" onClose={onClose} wide>
-      <p style={{ marginTop: 0, color: 'var(--ink-secondary)', fontSize: 13 }}>
+      <p style={{ marginTop: 0, color: 'var(--ink-secondary)', fontSize: 14 }}>
         支援舊 Google 試算表「個股交易紀錄」匯出的 CSV（台股代號 <code>TPE:2330</code> 會自動拆解、
         「買入 / 賣出」自動轉換），也支援本應用匯出的備份檔。
       </p>
@@ -74,7 +74,8 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
           value={text}
           placeholder={'交易日期,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金\n2024/01/10,TPE:2330,台積電,買入,500,1000,712'}
           onChange={(e) => setText(e.target.value)}
-          style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+          aria-label="貼上 CSV 內容"
         />
       </div>
 
@@ -96,22 +97,22 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
 
           {parsed.rows.length > 0 && (
             <>
-              <div style={{ margin: '10px 0 8px', fontSize: 13, color: 'var(--ink-secondary)' }}>
+              <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
                 預覽（共 {parsed.rows.length} 筆有效交易
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>
-              <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 10 }}>
-                <table className="data-table" style={{ minWidth: 560 }}>
+              <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 0 }}>
+                <table className="data-table" style={{ minWidth: 420 }}>
                   <thead>
                     <tr>
-                      <th>日期</th>
-                      <th>市場</th>
-                      <th>代號</th>
-                      <th>名稱</th>
-                      <th>類型</th>
-                      <th className="num">單價</th>
-                      <th className="num">股數</th>
-                      <th className="num">手續費 / 稅金</th>
+                      <th scope="col">日期</th>
+                      <th scope="col">市場</th>
+                      <th scope="col">代號</th>
+                      <th scope="col">名稱</th>
+                      <th scope="col">類型</th>
+                      <th scope="col" className="num">單價</th>
+                      <th scope="col" className="num">股數</th>
+                      <th scope="col" className="num">手續費 / 稅金</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -499,7 +499,7 @@ describe('StockDetailPage', () => {
     const user = userEvent.setup()
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
-    await user.click(screen.getByRole('button', { name: 'AI 分析' }))
+    await user.click(screen.getByRole('tab', { name: 'AI 分析' }))
     expect(screen.queryByText('三大法人買賣超')).toBeNull()
     expect(screen.queryByText('持股概況')).toBeNull()
     // There is no report to retrieve for AI paging, and the PDF download does not appear.
@@ -539,7 +539,7 @@ describe('StockDetailPage', () => {
     render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
     await screen.findByText('三大法人買賣超')
 
-    const aiTabButton = screen.getByRole('button', { name: 'AI 分析' })
+    const aiTabButton = screen.getByRole('tab', { name: 'AI 分析' })
     expect(aiTabButton).toBeTruthy()
 
     await user.click(aiTabButton)

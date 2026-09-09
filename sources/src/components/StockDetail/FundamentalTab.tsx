@@ -7,7 +7,7 @@
  * You can't just know it in the program (follow the principle of "stock/ticket" in chip tab).
  */
 import { useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 import {
   isFundamentalIncomplete,
@@ -68,6 +68,8 @@ function avgOf(arr: Array<number | null | undefined>): number | null {
 interface FundamentalTabProps {
   fundamental: FundamentalData | null
   loading: boolean
+  /** The fetch/backfill that would have produced `fundamental` failed — distinct from "not generated yet". */
+  error?: boolean
 }
 
 /**
@@ -199,7 +201,7 @@ function MarginTrendChart({
   )
 }
 
-export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
+export function FundamentalTab({ fundamental, loading, error = false }: FundamentalTabProps) {
   if (loading) {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
@@ -209,10 +211,19 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
     )
   }
 
+  if (error) {
+    return (
+      <div className="notice notice-error" role="alert">
+        <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+        讀取基本面失敗，請稍後再試。
+      </div>
+    )
+  }
+
   if (!fundamental) {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>基本面資料尚未產生</div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>基本面資料尚未產生</div>
         <div className="hint" style={{ marginTop: 6 }}>
           盤後批次完成後會自動補上，稍後再回來看看。
         </div>
@@ -471,14 +482,14 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                 <table className="data-table inst-matrix" aria-label="季報獲利能力矩陣">
                   <thead>
                     <tr>
-                      <th>季別</th>
-                      <th className="num">單季營收（百萬元）</th>
-                      <th className="num">營收年增 (YoY)</th>
-                      <th className="num">每股盈餘 (EPS)</th>
-                      <th className="num">毛利率</th>
-                      <th className="num">營益率</th>
-                      <th className="num">稅前純益率</th>
-                      <th className="num">稅後純益率</th>
+                      <th scope="col">季別</th>
+                      <th scope="col" className="num">單季營收（百萬元）</th>
+                      <th scope="col" className="num">營收年增 (YoY)</th>
+                      <th scope="col" className="num">每股盈餘 (EPS)</th>
+                      <th scope="col" className="num">毛利率</th>
+                      <th scope="col" className="num">營益率</th>
+                      <th scope="col" className="num">稅前純益率</th>
+                      <th scope="col" className="num">稅後純益率</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -539,7 +550,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <td className="num inst-matrix-cum">
                         <div>{ttmRevenue !== null ? `近4季 ${fmtInt(ttmRevenue)}` : '—'}</div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>營收走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>營收走勢</span>
                           <SparkCell
                             points={revenueQuarterSeries}
                             color={CHART_COLORS.up}
@@ -555,7 +566,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                           <span
                             className={quarterRevYoYStreak ? chipClass(quarterRevYoYStreak) : 'hint'}
                             style={{
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: quarterRevYoYStreak ? 600 : undefined,
                             }}
                           >
@@ -579,7 +590,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                               : '—'}
                         </div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>EPS 走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>EPS 走勢</span>
                           <SparkCell
                             points={epsSeries}
                             color={sparkTrendColor(epsSeries)}
@@ -592,7 +603,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <td className="num inst-matrix-cum">
                         <div>{avgGross !== null ? `近4季均 ${avgGross.toFixed(2)}%` : '—'}</div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>毛利走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>毛利走勢</span>
                           <SparkCell
                             points={grossSeries}
                             color={CATEGORICAL_COLORS[0]}
@@ -605,7 +616,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <td className="num inst-matrix-cum">
                         <div>{avgOperating !== null ? `近4季均 ${avgOperating.toFixed(2)}%` : '—'}</div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>營益走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>營益走勢</span>
                           <SparkCell
                             points={operatingSeries}
                             color={CATEGORICAL_COLORS[1]}
@@ -618,7 +629,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <td className="num inst-matrix-cum">
                         <div>{avgPretax !== null ? `近4季均 ${avgPretax.toFixed(2)}%` : '—'}</div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>稅前走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>稅前走勢</span>
                           <SparkCell
                             points={pretaxSeries}
                             color={CATEGORICAL_COLORS[2]}
@@ -631,7 +642,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                       <td className="num inst-matrix-cum">
                         <div>{avgNet !== null ? `近4季均 ${avgNet.toFixed(2)}%` : '—'}</div>
                         <div className="tfoot-cum-trend">
-                          <span className="hint" style={{ fontSize: 11 }}>稅後走勢</span>
+                          <span className="hint" style={{ fontSize: 12 }}>稅後走勢</span>
                           <SparkCell
                             points={netSeries}
                             color={CATEGORICAL_COLORS[3]}
@@ -710,11 +721,11 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
             <table className="data-table inst-matrix" aria-label="月營收矩陣">
               <thead>
                 <tr>
-                  <th>月份</th>
-                  <th className="num">當月營收（千元）</th>
-                  <th className="num">月增 (MoM)</th>
-                  <th className="num">年增 (YoY)</th>
-                  <th className="num">累計年增</th>
+                  <th scope="col">月份</th>
+                  <th scope="col" className="num">當月營收（千元）</th>
+                  <th scope="col" className="num">月增 (MoM)</th>
+                  <th scope="col" className="num">年增 (YoY)</th>
+                  <th scope="col" className="num">累計年增</th>
                 </tr>
               </thead>
               <tbody>
@@ -749,7 +760,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                   <td className="num inst-matrix-cum">
                     <div>{fmtRevenueTotal(sumRevenue)}</div>
                     <div className="tfoot-cum-trend">
-                      <span className="hint" style={{ fontSize: 11 }}>營收走勢</span>
+                      <span className="hint" style={{ fontSize: 12 }}>營收走勢</span>
                       <SparkCell
                         points={revenueSeries}
                         color={CHART_COLORS.up}
@@ -764,7 +775,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                     <div className="tfoot-cum-trend">
                       <span
                         className={momStreakVal ? chipClass(momStreakVal) : 'hint'}
-                        style={{ fontSize: 11, fontWeight: momStreakVal ? 600 : undefined }}
+                        style={{ fontSize: 12, fontWeight: momStreakVal ? 600 : undefined }}
                       >
                         {fmtMonthStreak(momStreakVal)}
                       </span>
@@ -782,7 +793,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                     <div className="tfoot-cum-trend">
                       <span
                         className={yoyStreakVal ? chipClass(yoyStreakVal) : 'hint'}
-                        style={{ fontSize: 11, fontWeight: yoyStreakVal ? 600 : undefined }}
+                        style={{ fontSize: 12, fontWeight: yoyStreakVal ? 600 : undefined }}
                       >
                         {fmtYearStreak(yoyStreakVal)}
                       </span>
@@ -798,7 +809,7 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                   <td className={`num inst-matrix-cum ${chipClass(latestCumYoy)}`}>
                     <div>{fmtPercent(latestCumYoy)}</div>
                     <div className="tfoot-cum-trend">
-                      <span className="hint" style={{ fontSize: 11 }}>累計走勢</span>
+                      <span className="hint" style={{ fontSize: 12 }}>累計走勢</span>
                       <SparkCell
                         points={cumYoySeries}
                         color={sparkTrendColor(cumYoySeries)}

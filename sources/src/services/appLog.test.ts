@@ -219,19 +219,21 @@ describe('fetchAppLogs', () => {
     expect(rows[0].id).toBe(7)
   })
 
-  it('returns an empty array when ok is not true', async () => {
+  // Audit finding B2 — `[]` used to mean both "no logs" and "the request failed", so the admin
+  // log screen showed an empty table when the Edge Function was down. `[]` now means no logs.
+  it('throws when the response is not ok', async () => {
     functionsInvoke.mockResolvedValue({ data: { ok: false }, error: null })
-    await expect(fetchAppLogs()).resolves.toEqual([])
+    await expect(fetchAppLogs()).rejects.toThrow()
   })
 
-  it('returns an empty array when the invoke errors', async () => {
+  it('throws when the invoke errors', async () => {
     functionsInvoke.mockResolvedValue({ data: null, error: new Error('403') })
-    await expect(fetchAppLogs()).resolves.toEqual([])
+    await expect(fetchAppLogs()).rejects.toThrow()
   })
 
-  it('returns an empty array when the invoke rejects', async () => {
+  it('throws when the invoke rejects', async () => {
     functionsInvoke.mockRejectedValue(new Error('network'))
-    await expect(fetchAppLogs()).resolves.toEqual([])
+    await expect(fetchAppLogs()).rejects.toThrow()
   })
 })
 

@@ -1,110 +1,220 @@
 /* =========================================================
- * Design system: Glassmorphism
- * Default is dark theme; apply light variable when <html data-theme="light">
- * The profit and loss color matching is based on Taiwan’s market reading habits: red up / green down
+ * Design system: IBM Carbon Design System
+ * Default theme is Carbon Gray 100 (dark). Carbon White applies when <html data-theme="light">.
+ * Carbon tokens use the --cds-* prefix. The historic token names stay as aliases,
+ * so every downstream rule in this file keeps its meaning.
+ * The profit and loss color follows the Taiwan market habit: red up / green down.
  * ========================================================= */
 :root {
-  --bg: #090b0f;
+  /* ---------- Carbon Gray 100 (dark) ---------- */
+  --cds-background: #161616;
+  --cds-background-hover: #353535;
+  --cds-background-active: #525252;
+  --cds-background-selected: #393939;
+  --cds-layer-01: #262626;
+  --cds-layer-02: #393939;
+  --cds-layer-03: #525252;
+  --cds-layer-hover-01: #333333;
+  --cds-layer-accent-01: #393939;
+  --cds-layer-accent-02: #525252;
+  --cds-field-01: #262626;
+  --cds-field-02: #393939;
+  --cds-field-hover-01: #333333;
+  --cds-border-subtle: #393939;
+  --cds-border-strong: #6f6f6f;
+  --cds-border-inverse: #f4f4f4;
+  --cds-border-interactive: #4589ff;
+  --cds-text-primary: #f4f4f4;
+  --cds-text-secondary: #c6c6c6;
+  --cds-text-helper: #8d8d8d;
+  --cds-text-placeholder: #6f6f6f;
+  --cds-text-on-color: #ffffff;
+  --cds-text-disabled: rgba(244, 244, 244, 0.25);
+  --cds-link-primary: #78a9ff;
+  --cds-link-hover: #a6c8ff;
+  --cds-focus: #ffffff;
+  --cds-interactive: #4589ff;
+  --cds-button-primary: #0f62fe;
+  --cds-button-primary-hover: #0353e9;
+  --cds-button-primary-active: #002d9c;
+  --cds-button-danger: #da1e28;
+  --cds-button-danger-hover: #ba1b23;
+  --cds-support-error: #fa4d56;
+  --cds-support-success: #42be65;
+  --cds-support-warning: #f1c21b;
+  --cds-support-info: #4589ff;
+  --cds-support-error-inverse: #da1e28;
+  --cds-overlay: rgba(22, 22, 22, 0.7);
+  --cds-highlight: #002d9c;
+  --cds-toggle-off: #6f6f6f;
+
+  /* ---------- Carbon spacing scale ---------- */
+  --sp-01: 2px;
+  --sp-02: 4px;
+  --sp-03: 8px;
+  --sp-04: 12px;
+  --sp-05: 16px;
+  --sp-06: 24px;
+  --sp-07: 32px;
+  --sp-08: 40px;
+  --sp-09: 48px;
+  --sp-10: 64px;
+
+  /* ---------- Carbon type scale ---------- */
+  --type-label-01: 0.75rem;      /* 12px */
+  --type-body-01: 0.875rem;      /* 14px */
+  --type-body-02: 1rem;          /* 16px */
+  --type-heading-03: 1.25rem;    /* 20px */
+  --type-heading-04: 1.75rem;    /* 28px */
+  --type-heading-05: 2rem;       /* 32px */
+
+  /* ---------- Carbon motion ---------- */
+  --cds-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
+  --cds-ease-entrance: cubic-bezier(0, 0, 0.38, 0.9);
+  --cds-ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
+  --cds-dur-fast: 70ms;
+  --cds-dur-moderate: 110ms;
+  --cds-dur-slow: 240ms;
+
+  /* ---------- Carbon elevation ---------- */
+  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  /* ---------- Carbon control sizes ---------- */
+  --cds-size-sm: 32px;
+  --cds-size-md: 40px;
+  --cds-size-lg: 48px;
+  --cds-header-h: 48px;
+
+  /* ---------- Legacy aliases ---------- */
+  --bg: var(--cds-background);
   --bg-glow-a: transparent;
   --bg-glow-b: transparent;
-  --surface: #0e1116;
-  --surface-strong: #141922;
-  --border: rgba(255, 255, 255, 0.15);
-  --border-strong: rgba(255, 255, 255, 0.24);
-  --ink: #dfe4ea;
-  --ink-secondary: #96a0ad;
-  --ink-muted: #6b7684;
-  --accent: #74a6c0;
-  --accent-strong: #5b8fa8;
-  --accent-2: #74a6c0;
-  --up: #ff5364; /* up (red) */
-  --down: #21c88a; /* down (green) */
-  --danger: #f87171;
-  --svg-main-1: var(--accent-strong);
-  --svg-accent: var(--accent-2);
+  --surface: var(--cds-layer-01);
+  --surface-strong: var(--cds-layer-02);
+  /* StockSplitModal reads this token inline; without it the inner panels stay transparent. */
+  --surface-subtle: var(--cds-layer-02);
+  --border: var(--cds-border-subtle);
+  --border-strong: var(--cds-border-strong);
+  --ink: var(--cds-text-primary);
+  --ink-secondary: var(--cds-text-secondary);
+  --ink-muted: var(--cds-text-helper);
+  --accent: var(--cds-link-primary);
+  --accent-strong: var(--cds-button-primary);
+  --accent-2: var(--cds-interactive);
+  --up: #fa4d56; /* up (red) */
+  --down: #42be65; /* down (green) */
+  --danger: var(--cds-support-error);
+  --svg-main-1: var(--cds-interactive);
+  --svg-accent: var(--cds-link-primary);
   --stock-up-bright: var(--up);
-  --svg-bg-glow: var(--bg-glow-a);
-  --radius: 2px;
-  --radius-sm: 2px;
-  /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
-  --bottom-nav-h: 54px;
-  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
-  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --svg-bg-glow: transparent;
+  /* Carbon has no rounded corners on productive components. */
+  --radius: 0px;
+  --radius-sm: 0px;
+  /* The height of the mobile bottom navigation (safe area excluded). Floating buttons,
+     version badges and the page footer all derive their space from this value. */
+  --bottom-nav-h: 48px;
+  --font-display: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Noto Sans TC', monospace;
   --shadow-card: none;
-  --panel: #0e1116;
-  --modal-bg: #0e1116;
-  --header-bg: #090b0f;
-  --overlay: rgba(4, 7, 14, 0.66);
-  --input-bg: rgba(255, 255, 255, 0.05);
-  /* 表頭比卡片亮一階。往下壓會撞到 --bg #090b0f（實測只差 0.27 L*），卡片上緣會溶進
-     頁面，所以分層往上做。--row-band 保留舊的 0.03，給分組列等借用表頭色的元件沿用。 */
-  --thead-bg: rgba(255, 255, 255, 0.09);
-  --thead-solid: #24262b;
-  --row-band: rgba(255, 255, 255, 0.03);
-  --row-hover: rgba(255, 255, 255, 0.04);
+  --panel: var(--cds-layer-01);
+  --modal-bg: var(--cds-layer-01);
+  --header-bg: var(--cds-background);
+  --overlay: var(--cds-overlay);
+  --input-bg: var(--cds-field-01);
+  /* ---------- Carbon data table surfaces ----------
+   * A long table needs four separable tones, or every row reads the same.
+   * Dark: base #262626 < zebra #333333 < hover #393939 < header #525252.
+   * The light theme reaches the same four steps in the other direction; only the
+   * three roles below are re-pointed there, never the rules that consume them. */
+  --table-head: var(--cds-layer-accent-02);
+  --table-zebra: var(--cds-layer-hover-01);
+  --table-row-hover: var(--cds-layer-accent-01);
+  /* A neutral chip sits inside a row, so it has to clear the hover band too. */
+  --chip-neutral: var(--cds-layer-accent-02);
+  --thead-bg: var(--table-head);
+  --thead-solid: var(--table-head);
+  --row-band: var(--cds-layer-hover-01);
+  --row-hover: var(--table-row-hover);
   --row-alt: transparent;
-  --rule-hair: rgba(255, 255, 255, 0.045);
-  --btn-hover-bg: rgba(255, 255, 255, 0.12);
-  --btn-hover-border: rgba(255, 255, 255, 0.28);
-  --scroll-thumb: rgba(255, 255, 255, 0.14);
-  --skeleton-a: rgba(255, 255, 255, 0.06);
-  --skeleton-b: rgba(255, 255, 255, 0.14);
-  --notice-ok-ink: #6ee7b7;
-  --notice-err-ink: #fca5a5;
-  --notice-warn-ink: #fcd34d;
-  --badge-warn-ink: #fbbf24;
-  --date-invert: 0.7;
-  --steel: #74a6c0;
-  --steel-tint: rgba(116, 166, 192, 0.2);
-  --steel-on: #0b0e13;
-  --ochre: #d6a742;
-  --ochre-tint: rgba(214, 167, 66, 0.2);
+  --rule-hair: var(--cds-border-subtle);
+  --btn-hover-bg: var(--cds-background-hover);
+  --btn-hover-border: var(--cds-border-strong);
+  --scroll-thumb: var(--cds-border-strong);
+  --skeleton-a: #333333;
+  --skeleton-b: #525252;
+  --notice-ok-ink: var(--cds-support-success);
+  --notice-err-ink: var(--cds-support-error);
+  --notice-warn-ink: var(--cds-support-warning);
+  --badge-warn-ink: var(--cds-support-warning);
+  --date-invert: 1;
+  --steel: var(--cds-link-primary);
+  --steel-tint: rgba(69, 137, 255, 0.2);
+  --steel-on: var(--cds-text-on-color);
+  --ochre: var(--cds-support-warning);
+  --ochre-tint: rgba(241, 194, 27, 0.2);
 }
 
 :root[data-theme='light'] {
-  --bg: #eff0f3;
-  --bg-glow-a: transparent;
-  --bg-glow-b: transparent;
-  --surface: #fafbfc;
-  --surface-strong: #ffffff;
-  --border: rgba(15, 19, 25, 0.14);
-  --border-strong: rgba(15, 19, 25, 0.22);
-  --ink: #0f1319;
-  --ink-secondary: #48525f;
-  --ink-muted: #838d9a;
-  --accent: #2f6484;
-  --accent-strong: #245065;
-  --accent-2: #2f6484;
-  --up: #bf2233;
-  --down: #0c6f4b;
-  --danger: #dc2626;
-  --shadow-card: none;
-  --panel: #ffffff;
-  --modal-bg: #ffffff;
-  --header-bg: #eff0f3;
-  --overlay: rgba(15, 23, 42, 0.35);
-  --input-bg: rgba(255, 255, 255, 0.85);
-  --thead-bg: rgba(15, 19, 25, 0.08);
-  --thead-solid: #e7e8ea;
-  --row-band: rgba(15, 19, 25, 0.035);
-  --row-hover: rgba(15, 19, 25, 0.035);
-  --row-alt: transparent;
-  --rule-hair: rgba(15, 19, 25, 0.045);
-  --btn-hover-bg: rgba(15, 23, 42, 0.06);
-  --btn-hover-border: rgba(15, 23, 42, 0.28);
-  --scroll-thumb: rgba(15, 23, 42, 0.22);
-  --skeleton-a: rgba(15, 23, 42, 0.06);
-  --skeleton-b: rgba(15, 23, 42, 0.13);
-  --notice-ok-ink: #047857;
-  --notice-err-ink: #b91c1c;
-  --notice-warn-ink: #a16207;
-  --badge-warn-ink: #92400e;
-  --date-invert: 0.35;
-  --steel: #2f6484;
-  --steel-tint: rgba(47, 100, 132, 0.14);
-  --steel-on: #fafbfc;
-  --ochre: #8a5e12;
+  /* ---------- Carbon White (light) ---------- */
+  --cds-background: #ffffff;
+  --cds-background-hover: #e8e8e8;
+  --cds-background-active: #c6c6c6;
+  --cds-background-selected: #e0e0e0;
+  --cds-layer-01: #f4f4f4;
+  --cds-layer-02: #ffffff;
+  --cds-layer-03: #f4f4f4;
+  --cds-layer-hover-01: #e8e8e8;
+  --cds-layer-accent-01: #e0e0e0;
+  --cds-layer-accent-02: #e0e0e0;
+  --cds-field-01: #f4f4f4;
+  --cds-field-02: #ffffff;
+  --cds-field-hover-01: #e8e8e8;
+  --cds-border-subtle: #e0e0e0;
+  --cds-border-strong: #8d8d8d;
+  --cds-border-inverse: #161616;
+  --cds-border-interactive: #0f62fe;
+  --cds-text-primary: #161616;
+  --cds-text-secondary: #525252;
+  --cds-text-helper: #6f6f6f;
+  --cds-text-placeholder: #a8a8a8;
+  --cds-text-on-color: #ffffff;
+  --cds-text-disabled: rgba(22, 22, 22, 0.25);
+  --cds-link-primary: #0f62fe;
+  --cds-link-hover: #0043ce;
+  --cds-focus: #0f62fe;
+  --cds-interactive: #0f62fe;
+  --cds-button-primary: #0f62fe;
+  --cds-button-primary-hover: #0353e9;
+  --cds-button-primary-active: #002d9c;
+  --cds-button-danger: #da1e28;
+  --cds-button-danger-hover: #ba1b23;
+  --cds-support-error: #da1e28;
+  --cds-support-success: #24a148;
+  --cds-support-warning: #f1c21b;
+  --cds-support-info: #0043ce;
+  --cds-support-error-inverse: #fa4d56;
+  --cds-overlay: rgba(22, 22, 22, 0.5);
+  --cds-highlight: #d0e2ff;
+  --cds-toggle-off: #8d8d8d;
+
+  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.25);
+
+  --up: #da1e28;
+  --down: #198038;
+  --skeleton-a: #e8e8e8;
+  --skeleton-b: #c6c6c6;
+  --table-head: var(--cds-layer-accent-01);
+  --table-zebra: var(--cds-layer-02);
+  --table-row-hover: var(--cds-layer-hover-01);
+  --chip-neutral: var(--cds-layer-accent-01);
+  --steel-tint: rgba(15, 98, 254, 0.12);
+  --ochre: #8e6a00; /* Carbon yellow 60 */
   --ochre-tint: rgba(138, 94, 18, 0.15);
+  --date-invert: 0;
 }
 
 * {
@@ -117,19 +227,25 @@ body {
   padding: 0;
 }
 
+/* Carbon body-compact-01: 14px / 18px, letter-spacing 0.16px. */
 body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
-    radial-gradient(900px 480px at -10% 30%, var(--bg-glow-b), transparent 55%);
-  background-attachment: fixed;
-  color: var(--ink);
+  background-color: var(--cds-background);
+  color: var(--cds-text-primary);
   font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  line-height: 1.42857;
+  letter-spacing: 0.16px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Carbon focus: one 2px solid ring in $focus, drawn inside the control. */
+:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+
 
 #root {
   min-height: 100vh;
@@ -137,50 +253,71 @@ body {
   flex-direction: column;
 }
 
+/* Carbon productive headings: weight 600, no extra letter-spacing. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
   font-weight: 600;
+  letter-spacing: 0;
   margin: 0;
+}
+
+h1 {
+  font-size: var(--type-heading-03);
+  line-height: 1.4;
+}
+
+h2 {
+  font-size: var(--type-body-02);
+  line-height: 1.375;
+}
+
+h3 {
+  font-size: var(--type-body-01);
+  line-height: 1.28572;
 }
 
 /* ---------- Layout ----------*/
 .container {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1312px;
   margin: 0 auto;
   /* Use full height to allow the footer of the page to stick to the bottom; leave space for floating buttons at the bottom*/
   flex: 1;
-  padding: 0 20px 96px;
+  padding: 0 24px 96px;
 }
 
+/* Carbon UI shell header: 48px tall, $background, one hairline rule below. */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: var(--header-bg);
-  border-bottom: 1px solid var(--border);
+  background: var(--cds-background);
+  border-bottom: 1px solid var(--cds-border-subtle);
 }
 
 .app-header-inner {
-  max-width: 1180px;
+  max-width: 1312px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 0 var(--sp-05);
+  min-height: var(--cds-header-h);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--sp-05);
   flex-wrap: wrap;
 }
 
+/* Carbon header name: 14px, weight 600, the product name at the left edge. */
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-03);
   font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  font-size: var(--type-body-01);
+  font-weight: 600;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
 }
 
 .header-spacer {
@@ -190,46 +327,58 @@ h3 {
 .header-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
 }
 
 /* ----------Paging (Tabs) ----------*/
+/* Carbon tabs: no container, a 1px rule under the row, a 3px $border-interactive
+   bar under the selected tab. Each tab is 40px tall. */
 .tabs {
   display: flex;
-  gap: 6px;
-  padding: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 2px;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
 }
 
 .tab {
   appearance: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-weight: 500;
-  padding: 7px 16px;
-  border-radius: 2px;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: color 0.18s ease, background 0.18s ease;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .tab:hover {
-  color: var(--ink);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .tab.active {
-  color: var(--ink);
+  color: var(--cds-text-primary);
   background: transparent;
-  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+  border-bottom: 3px solid var(--cds-border-interactive);
 }
 
 /*
@@ -241,7 +390,7 @@ h3 {
 .tab-div {
   width: 1px;
   align-self: stretch;
-  margin: 3px 4px;
+  margin: 4px 4px;
   background: var(--border-strong);
   flex: 0 0 auto;
 }
@@ -250,7 +399,7 @@ h3 {
 .bottom-nav .tab-div {
   align-self: center;
   height: 26px;
-  margin: 0 1px;
+  margin: 0 2px;
 }
 
 /* ---------- Mobile phone bottom navigation (≤720px) ----------
@@ -281,10 +430,13 @@ h3 {
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  padding: 4px 2px;
-  font-size: 11px;
+  height: auto;
+  margin-bottom: 0;
+  padding: var(--sp-02) var(--sp-01);
+  font-size: var(--type-label-01);
   line-height: 1.25;
-  border-radius: 2px;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -302,22 +454,25 @@ h3 {
  * And the bottom column is always on the screen. Change to accent color + bold, which is a common writing method for mobile devices.
  */
 .bottom-nav .tab.active {
-  color: var(--accent);
-  background: transparent;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
   box-shadow: none;
   font-weight: 600;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 3px 0 0 var(--cds-border-interactive);
 }
 
 /* ---------- Glass Card ----------*/
+/* Carbon tile: a flat $layer surface with square corners and no shadow. */
 .glass {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .section {
-  margin-top: 22px;
+  margin-top: var(--sp-06);
 }
 
 .section-title {
@@ -328,12 +483,13 @@ h3 {
   margin-bottom: 12px;
 }
 
+/* Carbon heading-compact-02. Carbon does not set uppercase on section headings. */
 .section-title h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cds-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -341,7 +497,7 @@ h3 {
 
 .section-title .hint {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
 }
 
@@ -349,27 +505,27 @@ h3 {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .kpi {
-  padding: 16px 18px;
+  padding: 16px 16px;
   position: relative;
   overflow: hidden;
 }
 
 .kpi .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .kpi .kpi-value {
-  margin-top: 6px;
+  margin-top: 8px;
   font-family: var(--font-body);
-  font-size: 26px;
+  font-size: var(--type-heading-04);
   font-weight: 700;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
@@ -378,7 +534,7 @@ h3 {
 .kpi .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -386,12 +542,12 @@ h3 {
 /* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
 .market-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
 }
 
 .market-panel {
-  padding: 15px 20px 0;
+  padding: 16px 24px 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -401,7 +557,7 @@ h3 {
 .market-panel .panel-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
 }
 
 /* The hero label sits at the right end of the head row, not above the number. */
@@ -410,12 +566,12 @@ h3 {
 }
 
 .market-panel .panel-head h3 {
-  font-size: 15px;
+  font-size: var(--type-body-01);
 }
 
 .market-panel .panel-head .ccy {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .market-panel .metric {
@@ -428,23 +584,23 @@ h3 {
 
 .market-panel .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .market-panel .kpi-value {
   margin-top: 4px;
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 600;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 .market-panel .metric-hero .kpi-value {
-  font-size: 22px;
+  font-size: var(--type-heading-03);
   letter-spacing: -0.02em;
   line-height: 1.18;
 }
@@ -454,18 +610,18 @@ h3 {
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 .market-panel .metric-row .metric + .metric {
   border-left: 1px solid var(--border);
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .market-panel .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -492,14 +648,14 @@ h3 {
   flex-wrap: wrap;
   gap: 16px;
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
 }
 
 /* One legend entry: swatch, label and value read as a single group. */
 .exposure-legend {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--ink-secondary);
 }
 
@@ -518,14 +674,14 @@ h3 {
 }
 
 .market-note {
-  margin-top: 13px;
-  font-size: 11.5px;
+  margin-top: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
 .market-panel .market-foot {
-  margin: auto -20px 0;
-  padding-top: 14px;
+  margin: auto -24px 0;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -533,7 +689,7 @@ h3 {
 }
 
 .market-panel .market-foot .metric {
-  padding: 0 20px 14px;
+  padding: 0 24px 16px;
 }
 
 .market-panel .market-foot .metric + .metric {
@@ -560,9 +716,9 @@ h3 {
   align-items: center;
   justify-content: center;
   min-width: 20px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   font-weight: 600;
 }
 
@@ -580,45 +736,73 @@ h3 {
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: var(--radius);
+  border-radius: 0;
 }
 
 table.data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  border-spacing: 0;
+  font-size: var(--type-body-01);
   min-width: 0;
+  background: var(--cds-layer-01);
 }
 
+/* ---------- Carbon data table (compact) ----------
+ * The header row sits on $layer-accent-01 and uses sentence case, weight 600.
+ * Carbon does not set uppercase on column headers.
+ */
 .data-table th {
   text-align: left;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--ink-secondary);
-  padding: 9px 7px;
-  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  text-transform: none;
+  color: var(--cds-text-primary);
+  padding: var(--sp-03);
+  border-bottom: none;
   white-space: nowrap;
-  background: var(--thead-bg);
+  background: var(--cds-layer-accent-01);
 }
 
+/* Carbon data table, md size: every row is 40px. A stacked cell grows past it. */
 .data-table td {
-  font-size: 13px;
-  padding: 9px 7px;
-  border-bottom: 1px solid var(--rule-hair);
+  font-size: var(--type-body-01);
+  height: var(--cds-size-md);
+  padding: var(--sp-03);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-top: none;
   white-space: nowrap;
+  color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* Carbon row header: the first column anchors the row, so it keeps $text-primary
+   while the data cells stay one step back at $text-secondary. */
+.data-table td:first-child {
+  color: var(--cds-text-primary);
+}
+
+/* When the first cell is a selection checkbox it carries no text, so the anchor
+   moves to the next cell. */
+.data-table td:first-child:has(input[type='checkbox']) + td {
+  color: var(--cds-text-primary);
+}
+
+/* The headline number in a cell is the reading target; the lines under it are notes. */
+.data-table td.num > div:first-child {
+  color: var(--cds-text-primary);
 }
 
 .data-table .num {
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: var(--type-body-01);
   font-variant-numeric: tabular-nums;
 }
 
 .data-table .num > div:first-child {
-  font-size: 13px;
+  font-size: var(--type-body-01);
 }
 
 /*
@@ -629,17 +813,18 @@ table.data-table {
 .data-table .num > div:not(:first-child):not(.row-actions),
 .data-table .cell-sub {
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
 }
 
 .data-table th:first-child,
 .data-table td:first-child {
-  padding-left: 10px;
+  padding-left: 12px;
 }
 
 .data-table th:last-child,
 .data-table td:last-child {
-  padding-right: 10px;
+  padding-right: 12px;
 }
 
 /* Text that is too long (such as stock names) is truncated. See the title prompt for the complete content.*/
@@ -649,34 +834,40 @@ table.data-table {
   text-overflow: ellipsis;
 }
 
+/* Breakpoint convention: this file has five sanctioned breakpoints — 560px,
+   720px, 900px, 1020px and 1120px — and every media block below is
+   `max-width`. New layouts are written narrow-first (base styles target the
+   smallest screen; these blocks layer on wider-screen overrides), so do not
+   introduce a `min-width` block or a sixth breakpoint value. */
+
 /* When the window is narrow, further compress it to prevent horizontal scrolling in the same-width table of transaction records.*/
 @media (max-width: 1120px) {
   table.data-table {
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .data-table th,
   .data-table td {
-    padding: 8px 5px;
-    font-size: 12px;
+    padding: 8px 4px;
+    font-size: var(--type-label-01);
   }
 
   .data-table .num,
   .data-table .num > div:first-child {
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .data-table .num > div:not(:first-child):not(.row-actions),
   .data-table .cell-sub {
-    font-size: 10px;
+    font-size: var(--type-label-01);
   }
 
   .th-head .th-plain {
-    padding: 8px 0 8px 5px;
+    padding: 8px 0 8px 4px;
   }
 
   .th-head {
-    padding-right: 5px;
+    padding-right: 4px;
   }
 
   .cell-ellipsis {
@@ -685,24 +876,40 @@ table.data-table {
 }
 
 .data-table tbody tr {
-  transition: background 0.15s ease;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+/* Carbon zebra striping. The band sits on the row, not the cell, so a grouping,
+   total or detail row that paints its own cells still overrides it. */
+.data-table tbody tr:nth-child(even) {
+  background: var(--table-zebra);
+}
+
+/* The sticky first column of the institutional matrix paints its own background,
+   so it needs the band explicitly or the stripe stops at the frozen column. */
+.inst-matrix tbody tr:nth-child(even) td:first-child {
+  background: var(--table-zebra);
 }
 
 .data-table tbody tr:hover {
   background: var(--row-hover);
 }
 
+.data-table tbody tr:hover td {
+  color: var(--cds-text-primary);
+}
+
 .data-table input[type='checkbox'] {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
-  accent-color: var(--accent-strong);
+  accent-color: var(--cds-interactive);
   vertical-align: middle;
 }
 
 .row-actions {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .data-table tbody tr:last-child td {
@@ -717,11 +924,11 @@ table.data-table {
 /* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
 .holding-group td {
   background: var(--row-band);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 
 .holding-group-short .holding-group-label {
@@ -738,14 +945,14 @@ table.data-table {
 
 .tx-chip {
   display: inline-block;
-  font-size: 11px;
+  font-size: var(--type-label-01);
   padding: 2px 8px;
   border: none;
 }
 
 .tx-chip-spot {
-  color: var(--ink-secondary);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
 }
 
 .tx-chip-day {
@@ -791,15 +998,15 @@ table.data-table {
   padding: 4px 8px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   background: var(--row-hover);
 }
 
 .whatif-ladder-tag {
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: 8px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--accent-strong);
   border: 1px solid var(--accent-strong);
@@ -820,8 +1027,8 @@ table.data-table {
   gap: 2px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 2px;
-  background: var(--surface);
+  border-radius: 0;
+  background: var(--cds-layer-02);
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -835,19 +1042,19 @@ table.data-table {
 }
 
 .whatif-mark-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .whatif-mark-price {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .whatif-mark-relative,
 .whatif-mark-pnl {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-variant-numeric: tabular-nums;
   color: var(--ink-secondary);
 }
@@ -855,7 +1062,7 @@ table.data-table {
 @media (max-width: 560px) {
   .whatif-mark {
     flex-basis: 100%;
-    padding: 6px 10px;
+    padding: 8px 12px;
   }
 }
 
@@ -868,7 +1075,7 @@ table.data-table {
 }
 
 .whatif-ledger-cell {
-  padding: 10px 12px;
+  padding: 12px 12px;
   min-height: 44px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
@@ -899,7 +1106,7 @@ table.data-table {
 
 /* Sub-label naming the number below it (成交均價（未含費）／實付手續費／現價 …) */
 .whatif-ledger-sublabel {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-bottom: 2px;
 }
@@ -909,7 +1116,7 @@ table.data-table {
 }
 
 .whatif-ledger-heading {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   color: var(--ink-secondary);
   text-align: right;
@@ -925,13 +1132,13 @@ table.data-table {
 }
 
 .whatif-headline-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-bottom: 2px;
 }
 
 .whatif-headline-value {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -944,9 +1151,9 @@ table.data-table {
   }
 
   .whatif-ledger-cell {
-    padding: 7px 6px;
+    padding: 8px 8px;
     min-height: 36px;
-    font-size: 13px;
+    font-size: var(--type-body-01);
   }
 }
 
@@ -965,7 +1172,7 @@ table.data-table {
   color: inherit;
   cursor: pointer;
   width: 100%;
-  padding: 11px 9px;
+  padding: 12px 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -980,8 +1187,8 @@ table.data-table {
 .th-head {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding-right: 7px;
+  gap: 4px;
+  padding-right: 8px;
 }
 
 .th-head .th-sort-btn {
@@ -991,7 +1198,7 @@ table.data-table {
 
 /* Unsortable header text (aligned with the padding of the sort button)*/
 .th-head .th-plain {
-  padding: 9px 0 9px 7px;
+  padding: 8px 0 8px 8px;
   white-space: nowrap;
 }
 
@@ -1010,7 +1217,7 @@ table.data-table {
   border-radius: 50%;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: var(--type-label-01);
   font-weight: 700;
   line-height: 1;
   cursor: help;
@@ -1026,13 +1233,13 @@ table.data-table {
 .help-bubble {
   position: fixed;
   z-index: 120;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface-strong);
   box-shadow: var(--shadow-card);
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   line-height: 1.65;
   letter-spacing: 0;
@@ -1042,7 +1249,7 @@ table.data-table {
 }
 
 .help-bubble-title {
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   color: var(--ink);
   font-weight: 600;
 }
@@ -1069,7 +1276,7 @@ table.data-table {
 .detail-row td {
   background: var(--row-alt);
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   font-weight: 400;
 }
 
@@ -1092,7 +1299,7 @@ table.data-table {
 .toggle-slot {
   flex: none;
   width: 22px;
-  margin-right: 10px;
+  margin-right: 12px;
 }
 
 .year-toggle {
@@ -1103,11 +1310,11 @@ table.data-table {
   color: var(--ink-secondary);
   width: 22px;
   height: 22px;
-  border-radius: 2px;
+  border-radius: 0;
   cursor: pointer;
   display: inline-grid;
   place-items: center;
-  margin-right: 10px;
+  margin-right: 12px;
   transition: color 0.15s ease, border-color 0.15s ease;
   vertical-align: middle;
 }
@@ -1118,66 +1325,104 @@ table.data-table {
 }
 
 /* ---------- Button ----------*/
+/* ---------- Carbon button ----------
+ * Carbon buttons are square, 40px tall (md), and use asymmetric padding:
+ * the label sits at the left edge, and the right side keeps room for an icon.
+ * The default .btn is the Carbon tertiary/secondary style; .btn-primary is $button-primary.
+ */
 .btn {
   appearance: none;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-strong);
-  color: var(--ink);
+  border: 1px solid var(--cds-border-strong);
+  background: transparent;
+  color: var(--cds-text-primary);
   font: inherit;
-  font-weight: 500;
-  padding: 8px 14px;
-  border-radius: 2px;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  min-height: var(--cds-size-md);
+  padding: 0 var(--sp-06) 0 var(--sp-04);
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,
-    border-color 0.18s ease;
+  justify-content: flex-start;
+  gap: var(--sp-03);
+  text-align: left;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .btn:hover {
-  border-color: var(--btn-hover-border);
-  background: var(--btn-hover-bg);
+  border-color: var(--cds-border-strong);
+  background: var(--cds-background-hover);
 }
 
 .btn:active {
-  transform: translateY(1px);
+  background: var(--cds-background-active);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  border-color: transparent;
+  background: var(--cds-background-selected);
+  color: var(--cds-text-disabled);
   cursor: not-allowed;
 }
 
 .btn-primary {
-  border: none;
-  background: var(--accent-strong);
-  color: var(--steel-on);
+  border: 1px solid transparent;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
   box-shadow: none;
 }
 
 .btn-primary:hover {
-  background: var(--accent);
+  background: var(--cds-button-primary-hover);
   box-shadow: none;
 }
 
+.btn-primary:active {
+  background: var(--cds-button-primary-active);
+}
+
+/* Carbon danger--tertiary: a red outline that fills on hover. */
 .btn-danger {
-  color: var(--danger);
+  border-color: var(--cds-button-danger);
+  color: var(--cds-support-error);
+  background: transparent;
 }
 
 .btn-danger:hover {
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(248, 113, 113, 0.12);
+  border-color: var(--cds-button-danger-hover);
+  background: var(--cds-button-danger);
+  color: var(--cds-text-on-color);
 }
 
+.btn-danger:active {
+  background: var(--cds-button-danger-hover);
+  color: var(--cds-text-on-color);
+}
+
+/* Carbon icon-only button: square, and the label padding goes away. */
 .btn-icon {
-  padding: 8px;
+  padding: 0;
+  width: var(--cds-size-md);
+  min-height: var(--cds-size-md);
+  justify-content: center;
+  gap: 0;
 }
 
+/* Carbon small button: 32px tall. */
 .btn-sm {
-  padding: 5px 10px;
-  font-size: 12.5px;
-  border-radius: 2px;
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-04);
+  font-size: var(--type-body-01);
+  border-radius: 0;
+}
+
+.btn-sm.btn-icon {
+  width: var(--cds-size-sm);
+  padding: 0;
 }
 
 /* Global "Add Transaction" floating button*/
@@ -1186,10 +1431,11 @@ table.data-table {
   right: 22px;
   bottom: 24px;
   z-index: 90;
-  border-radius: 999px;
-  padding: 13px 22px;
-  font-size: 14.5px;
-  box-shadow: none;
+  border-radius: 0;
+  min-height: var(--cds-size-lg);
+  padding: 0 var(--sp-06) 0 var(--sp-05);
+  font-size: var(--type-body-01);
+  box-shadow: var(--cds-shadow-menu);
 }
 
 /* Fixed version mark in lower left corner*/
@@ -1198,54 +1444,125 @@ table.data-table {
   left: 14px;
   bottom: 12px;
   z-index: 90;
-  font-size: 11px;
-  color: var(--ink-muted);
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  font-size: var(--type-label-01);
+  color: var(--cds-text-helper);
+  padding: var(--sp-01) var(--sp-03);
+  border-radius: 0;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
   pointer-events: none;
   user-select: none;
 }
 
 /* ---------- Form ----------*/
+/* ---------- Carbon text input ----------
+ * Carbon fields carry one $border-strong rule on the bottom edge only, sit on
+ * $field-01, and are 40px tall. Focus draws a 2px $focus outline inside the box.
+ */
 .field {
-  margin-bottom: 13px;
+  margin-bottom: var(--sp-05);
   position: relative;
 }
 
+/* Carbon label-01: 12px / 16px, $text-secondary. */
 .field label {
   display: block;
-  margin-bottom: 5px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink-secondary);
+  margin-bottom: var(--sp-03);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  font-weight: 400;
+  color: var(--cds-text-secondary);
 }
 
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  padding: 9px 12px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
   font: inherit;
-  color: var(--ink);
-  background: var(--input-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    outline var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.field textarea {
+  height: auto;
+  min-height: 80px;
+  padding: var(--sp-04) var(--sp-05);
+  line-height: 1.42857;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--cds-text-placeholder);
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 140, 248, 0.18);
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+/* ---------- Carbon layer contexts ----------
+ * Carbon builds depth by stepping the surface token one level per nesting, not by
+ * adding borders. A control that sits directly on the page uses $field-01; the same
+ * control inside a card or a modal — both of which are themselves $layer-01 — must
+ * step up to $field-02, or the control and its container read as one flat plane.
+ */
+.modal .field input,
+.modal .field select,
+.modal .field textarea,
+.glass .field input,
+.glass .field select,
+.glass .field textarea,
+.detail-card .field input,
+.detail-card .field select,
+.detail-card .field textarea {
+  background: var(--cds-field-02);
+}
+
+.glass .search-box .search-input,
+.modal .search-box .search-input,
+.modal .stock-search input,
+.glass .stock-search input {
+  background: var(--cds-field-02);
+}
+
+/* A menu opened from inside a card or a modal floats above both. */
+.modal .suggestions,
+.glass .suggestions {
+  background: var(--cds-layer-03);
+}
+
+/* Carbon checkbox and radio: a 16px box that must not stretch to the field width. */
+.field input[type='checkbox'],
+.field input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cds-interactive);
+  cursor: pointer;
 }
 
 .field input:disabled,
-.field select:disabled {
-  opacity: 0.55;
+.field select:disabled,
+.field textarea:disabled {
+  background: var(--cds-field-01);
+  border-bottom-color: transparent;
+  color: var(--cds-text-disabled);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -1254,28 +1571,36 @@ table.data-table {
   color: var(--ink);
 }
 
+/* Carbon helper-text-01: 12px, $text-helper, 4px under the control. */
 .field .field-hint {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--ink-muted);
+  margin-top: var(--sp-02);
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  color: var(--cds-text-helper);
 }
 
 /* Linked buttons within the tooltip (e.g. "Restore original record")*/
+/* Carbon link: $link-primary with a permanent underline. */
 .link-btn {
   appearance: none;
   border: none;
   background: transparent;
   padding: 0;
   font: inherit;
-  color: var(--accent);
+  color: var(--cds-link-primary);
   cursor: pointer;
   text-decoration: underline;
+}
+
+.link-btn:hover {
+  color: var(--cds-link-hover);
 }
 
 .field-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .field-row > * {
@@ -1306,29 +1631,35 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Fuzzy search drop-down ----------*/
+/* ---------- Carbon dropdown list ----------
+ * A square $layer-02 sheet directly under the field, with 40px list items.
+ */
 .suggestions {
   position: absolute;
   z-index: 60;
-  top: calc(100% + 4px);
+  top: 100%;
   left: 0;
   right: 0;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  max-height: 220px;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  max-height: 240px;
   overflow-y: auto;
-  box-shadow: 0 12px 32px rgba(2, 6, 18, 0.6);
+  box-shadow: var(--cds-shadow-menu);
 }
 
 .suggestion-item {
-  padding: 9px 12px;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-05);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--sp-03);
+  font-size: var(--type-body-01);
+  color: var(--cds-text-secondary);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .suggestion-item:last-child {
@@ -1336,23 +1667,25 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .suggestion-item:hover {
-  background: rgba(124, 140, 248, 0.14);
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .suggestion-item .market-tag {
   flex-shrink: 0;
-  font-size: 11px;
-  color: var(--ink-secondary);
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 1px 7px;
+  font-size: var(--type-label-01);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 12px;
+  padding: 0 var(--sp-03);
+  line-height: 20px;
 }
 
 .suggestion-empty {
-  padding: 10px 12px;
+  padding: 12px 12px;
   color: var(--ink-muted);
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
 }
 
 .modal-body .search-box {
@@ -1378,7 +1711,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   max-height: 280px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .watch-results li + li {
@@ -1392,11 +1725,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -1427,77 +1760,92 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .watch-results-more {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
 /* ---------- Modal ---------- */
+/* ---------- Carbon modal ----------
+ * A square $layer-01 panel over a $overlay scrim. The close control is a 48px
+ * square ghost button pinned to the top right corner.
+ */
 .modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: var(--overlay);
+  background: var(--cds-overlay);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 6vh 16px 16px;
+  padding: 6vh var(--sp-05) var(--sp-05);
   overflow-y: auto;
-  animation: fade-in 0.18s ease;
+  animation: fade-in var(--cds-dur-slow) var(--cds-ease-entrance);
 }
 
 .modal {
   width: 100%;
-  max-width: 460px;
-  background: var(--modal-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  /* Layered elevation (Material-style) instead of a flat border reading as the modal's only depth cue.*/
-  box-shadow: var(--shadow-card), 0 24px 64px rgba(2, 6, 18, 0.7);
-  animation: pop-in 0.2s ease;
+  max-width: 480px;
+  background: var(--cds-layer-01);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-modal);
+  animation: pop-in var(--cds-dur-slow) var(--cds-ease-entrance);
 }
 
 .modal.wide {
-  max-width: 760px;
+  max-width: 768px;
 }
 
 .modal-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px 0;
+  gap: var(--sp-05);
+  padding: var(--sp-05) var(--sp-05) 0;
 }
 
+/* Carbon heading-03: 20px / 28px. */
 .modal-head h3 {
-  font-size: 16px;
+  font-size: var(--type-heading-03);
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--cds-text-primary);
 }
 
 .modal-body {
-  padding: 16px 20px 20px;
+  padding: var(--sp-05) var(--sp-05) var(--sp-09);
+  color: var(--cds-text-secondary);
 }
 
 .modal-close {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--cds-text-primary);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 2px;
+  width: var(--cds-size-lg);
+  height: var(--cds-size-lg);
+  flex: 0 0 auto;
+  margin: calc(var(--sp-05) * -1) calc(var(--sp-05) * -1) 0 0;
+  padding: 0;
+  border-radius: 0;
   display: grid;
   place-items: center;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .modal-close:hover {
-  color: var(--ink);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
 }
 
 /* ---------- Skeleton screen ----------*/
+/* Carbon skeleton: a square $skeleton-background block with a slow pulse. */
 .skeleton {
   display: inline-block;
   width: 72px;
   height: 14px;
-  border-radius: 2px;
+  border-radius: 0;
   background: linear-gradient(
     90deg,
     var(--skeleton-a) 25%,
@@ -1509,53 +1857,90 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Tips and Badges ----------*/
+/* ---------- Carbon tag ----------
+ * Carbon tags stay pill-shaped: 24px tall, 12px label, a filled tint, no border.
+ */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-strong);
-  color: var(--ink-secondary);
+  gap: var(--sp-02);
+  height: 24px;
+  font-size: var(--type-label-01);
+  line-height: 1.33333;
+  padding: 0 var(--sp-03);
+  border-radius: 12px;
+  border: none;
+  background: var(--cds-layer-02);
+  color: var(--cds-text-primary);
   white-space: nowrap;
 }
 
 .badge.badge-warn {
-  color: var(--badge-warn-ink);
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.09);
+  color: var(--cds-text-primary);
+  border: none;
+  background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent);
 }
 
+/* ---------- Carbon inline notification ----------
+ * A $layer-01 bar with a 3px status rule on the left edge. The text stays
+ * $text-primary; the status color carries the meaning, not the type color.
+ */
 .notice {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  border: 1px solid;
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-05);
+  min-height: var(--cds-size-lg);
+  padding: var(--sp-04) var(--sp-05);
+  border-radius: 0;
+  font-size: var(--type-body-01);
+  line-height: 1.42857;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
+  border: none;
+  border-left: 3px solid var(--cds-border-subtle);
+  margin-bottom: var(--sp-04);
 }
 
 .notice-error {
-  color: var(--notice-err-ink);
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-error);
+  background: var(--cds-layer-01);
 }
 
 .notice-ok {
-  color: var(--notice-ok-ink);
-  border-color: rgba(52, 211, 153, 0.4);
-  background: rgba(52, 211, 153, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-success);
+  background: var(--cds-layer-01);
 }
 
 .notice-warn {
-  color: var(--notice-warn-ink);
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-warning);
+  background: var(--cds-layer-01);
+}
+
+/* The dismiss control inside a notification is a Carbon ghost button. */
+.notice > button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-primary);
+  font: inherit;
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.notice > button:hover {
+  background: var(--cds-layer-hover-01);
 }
 
 .empty-state {
-  padding: 42px 20px;
+  padding: 40px 24px;
   text-align: center;
   color: var(--ink-muted);
 }
@@ -1576,27 +1961,27 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .auth-card {
   width: 100%;
   max-width: 400px;
-  padding: 32px 30px 28px;
+  padding: 32px 32px 32px;
 }
 
 .auth-card .brand {
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   margin-bottom: 4px;
 }
 
 .auth-card .auth-sub {
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 13px;
-  margin: 4px 0 22px;
+  font-size: var(--type-body-01);
+  margin: 4px 0 24px;
 }
 
 .auth-switch {
   margin-top: 16px;
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 13px;
+  font-size: var(--type-body-01);
 }
 
 .auth-switch button {
@@ -1656,17 +2041,27 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .stock-search input {
   width: 100%;
   min-width: 0;
-  padding: 6px 10px 6px 27px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-07);
   font: inherit;
-  font-size: 12.5px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  outline: none;
+}
+
+.stock-search input:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
 }
 
 .stock-search input::placeholder {
-  color: var(--ink-muted);
+  color: var(--cds-text-placeholder);
 }
 
 .stock-search-clear {
@@ -1683,16 +2078,17 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-ws {
   appearance: none;
   font: inherit;
-  font-size: 13.5px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  padding: 7px 10px 7px 12px;
+  font-size: var(--type-body-01);
+  color: var(--cds-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  height: var(--cds-header-h);
+  padding: 0 var(--sp-04);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   max-width: 200px;
 }
@@ -1712,24 +2108,24 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink-secondary);
 }
 
+/* Carbon header action: no border at rest, $background-hover on hover. */
 .hmenu-ws:hover {
-  border-color: var(--btn-hover-border);
-  background: var(--btn-hover-bg);
+  background: var(--cds-background-hover);
 }
 
 .hmenu-avatar {
   appearance: none;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--accent-strong);
-  color: var(--steel-on);
+  border: none;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  letter-spacing: 0.32px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1744,18 +2140,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* Carbon overflow menu: a square $layer-02 sheet flush under the trigger. */
 .hmenu-pop {
   position: absolute;
-  top: calc(100% + 6px);
+  top: 100%;
   right: 0;
   z-index: 60;
-  min-width: 190px;
-  max-width: min(280px, calc(100vw - 28px));
-  padding: 5px;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  box-shadow: var(--shadow-card);
+  min-width: 200px;
+  max-width: min(288px, calc(100vw - 28px));
+  padding: 0;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-menu);
 }
 
 /*
@@ -1775,8 +2172,8 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .hmenu-head {
-  padding: 7px 11px 8px;
-  font-size: 12px;
+  padding: 8px 12px 8px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
   letter-spacing: 0.02em;
@@ -1786,24 +2183,28 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-sep {
   height: 1px;
   background: var(--border);
-  margin: 5px 4px;
+  margin: 4px 4px;
 }
 
+/* Carbon menu item: 40px tall, 16px side padding, square. */
 .hmenu-item {
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--ink-secondary);
+  color: var(--cds-text-primary);
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
   width: 100%;
+  min-height: var(--cds-size-md);
   text-align: left;
-  padding: 8px 11px;
-  border-radius: 2px;
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-03);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .hmenu-item:hover {
@@ -1840,7 +2241,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .hmenu-item.is-danger:hover {
-  background: rgba(248, 113, 113, 0.12);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
 }
 
@@ -1851,7 +2252,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .hmenu-item-admin:hover {
   color: var(--accent);
-  background: rgba(124, 140, 248, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* The outward-facing icon of "Source Code" is pushed to the far right, away from the text of the menu item.*/
@@ -1868,7 +2269,7 @@ a.hmenu-item {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -1885,24 +2286,31 @@ a.hmenu-item {
   pointer-events: none;
 }
 
+/* Carbon search: 40px tall, $field-01, one bottom rule, icon at the left edge. */
 .search-box .search-input {
   appearance: none;
   font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  padding: 7px 28px 7px 32px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-08) 0 var(--sp-08);
   outline: none;
-  width: 190px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, width 0.18s ease;
+  width: 200px;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    width var(--cds-dur-moderate) var(--cds-ease-productive);
 }
 
 .search-box .search-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 140, 248, 0.18);
-  width: 230px;
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+  width: 240px;
 }
 
 .search-box .search-clear-btn {
@@ -1913,8 +2321,8 @@ a.hmenu-item {
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
-  padding: 3px;
-  border-radius: 2px;
+  padding: 4px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1931,13 +2339,13 @@ a.hmenu-item {
 /* ---------- footer ----------*/
 .app-footer {
   margin-top: auto;
-  max-width: 1180px;
+  max-width: 1312px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding: 18px 20px 26px;
+  padding: 16px 24px 24px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   text-align: center;
   line-height: 1.7;
 }
@@ -1946,7 +2354,7 @@ a.hmenu-item {
 .footer-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-top: 8px;
   color: var(--ink-muted);
   text-decoration: none;
@@ -2021,7 +2429,7 @@ a.hmenu-item {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb);
-  border-radius: 2px;
+  border-radius: 0;
   border: 2px solid transparent;
   background-clip: content-box;
 }
@@ -2049,11 +2457,11 @@ a.hmenu-item {
  * Always verify in Supabase mode when adjusting breakpoints.
  */
 .app-header-inner {
-  gap: 10px 12px;
+  gap: 12px 12px;
 }
 
 .tab {
-  padding: 7px 12px;
+  padding: 8px 12px;
 }
 
 @media (max-width: 1120px) {
@@ -2068,7 +2476,7 @@ a.hmenu-item {
   }
 
   .tab {
-    padding: 7px 10px;
+    padding: 0 var(--sp-04);
   }
 }
 
@@ -2077,12 +2485,12 @@ a.hmenu-item {
   /* Pagination is changed to a fixed bottom column (see .bottom-nav), and the top of the page is therefore condensed into a single column:
      品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
   .container {
-    padding: 0 14px 24px;
+    padding: 0 16px 24px;
   }
 
   .app-header-inner {
-    padding: 10px 14px;
-    gap: 8px 10px;
+    padding: 0 var(--sp-04);
+    gap: var(--sp-03) var(--sp-04);
   }
 
   .header-spacer {
@@ -2158,8 +2566,8 @@ a.hmenu-item {
   /* Enter the font size ≥16px to prevent iOS Safari from automatically enlarging the page when focusing*/
   .field input,
   .field select {
-    font-size: 16px;
-    padding: 10px 12px;
+    font-size: var(--type-body-02);
+    padding: 12px 12px;
   }
 
   .field-row > * {
@@ -2175,37 +2583,37 @@ a.hmenu-item {
   }
 
   .modal-overlay {
-    padding: 3vh 10px 12px;
+    padding: 3vh 12px 12px;
   }
 
   .modal-body {
-    padding: 14px 16px 18px;
+    padding: 16px 16px 16px;
   }
 
   .kpi-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 10px;
+    gap: 12px;
   }
 
   .kpi .kpi-value {
-    font-size: 21px;
+    font-size: var(--type-heading-03);
   }
 
   .market-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
   }
 
   .market-panel .metric-hero .kpi-value {
-    font-size: 20px;
+    font-size: var(--type-heading-03);
   }
 
   /* The floating button gives way to the bottom navigation bar - this land is not empty to begin with*/
   .fab {
     right: 14px;
     bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
-    padding: 11px 18px;
-    font-size: 14px;
+    padding: 12px 16px;
+    font-size: var(--type-body-01);
   }
 
   /*
@@ -2217,6 +2625,16 @@ a.hmenu-item {
     position: static;
     align-self: center;
     margin-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Touch target: 32px is below the 44px guideline, raise small buttons on touch-sized screens. */
+  .btn-sm {
+    min-height: var(--cds-size-md);
+  }
+
+  .btn-sm.btn-icon {
+    min-height: var(--cds-size-md);
+    min-width: var(--cds-size-md);
   }
 }
 
@@ -2275,13 +2693,13 @@ a.hmenu-item {
 .detail-head-analysis .analysis-watch-error {
   order: 5;
   flex: 1 0 100%;
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .detail-head-empty {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .detail-head-empty .analysis-select-secondary {
@@ -2292,7 +2710,7 @@ a.hmenu-item {
 }
 
 .detail-head-empty .analysis-watch-error {
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .detail-title {
@@ -2301,15 +2719,15 @@ a.hmenu-item {
 }
 
 .detail-title h2 {
-  font-size: 17px;
+  font-size: var(--type-body-02);
   color: var(--ink);
 }
 
 .detail-title .badge {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   line-height: 1.35;
-  padding: 2.5px 9px;
+  padding: 2px 8px;
   color: var(--ink);
   border-color: var(--border-strong);
   background: var(--surface-strong);
@@ -2318,13 +2736,13 @@ a.hmenu-item {
 
 .detail-title .hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
 .detail-note {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--notice-warn-ink);
   margin-bottom: 8px;
 }
@@ -2334,34 +2752,44 @@ a.hmenu-item {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
+/* Carbon tab, secondary level: same 3px selection bar as the primary tabs. */
 .subtab {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--ink-secondary);
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-weight: 500;
-  padding: 8px 14px;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.18s ease, border-color 0.18s ease;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
+  border-radius: 0;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .subtab:hover {
-  color: var(--ink);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .subtab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
 }
 
 .detail-body {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /* ---------- Individual stock analysis single page (0.6.8, version D: card grouping) ----------
@@ -2377,16 +2805,16 @@ a.hmenu-item {
 .detail-stack {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* Nested .detail-stack (the layer of the PDF capture range) does not overlap the margins again.*/
 .detail-stack .detail-stack {
-  gap: 20px;
+  gap: 24px;
 }
 
 .detail-card {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /* Group title: deliberately one level higher than the .rpt-section h3 (14px + 1px bottom line) within the paragraph,
@@ -2394,12 +2822,12 @@ a.hmenu-item {
 .card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .card-head h3 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   letter-spacing: 0.2px;
 }
 
@@ -2413,30 +2841,30 @@ a.hmenu-item {
 
 .card-meta {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 /* Report header: Within the PDF capture range, indicate the code number, data date and generation time*/
 .rpt-head {
   padding-bottom: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   border-bottom: 2px solid var(--border);
 }
 
 .rpt-head h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   color: var(--ink);
 }
 
 .rpt-meta {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .rpt-meta-sep {
-  margin: 0 6px;
+  margin: 0 8px;
   opacity: 0.6;
 }
 
@@ -2449,11 +2877,11 @@ a.hmenu-item {
 }
 
 .rpt-section h3 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .rpt-section-head {
@@ -2480,7 +2908,7 @@ a.hmenu-item {
 }
 
 .detail-body .hint {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   line-height: 1.6;
   margin-top: 8px;
@@ -2491,35 +2919,47 @@ a.hmenu-item {
 }
 
 /* Legal person switch button*/
+/* ---------- Carbon content switcher ----------
+ * The buttons join into one square bar. The selected item inverts to $layer-selected.
+ */
 .chip-toggle {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding-bottom: 6px;
+  gap: 0;
+  padding-bottom: var(--sp-03);
 }
 
 .chip-btn {
   appearance: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--ink-secondary);
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.chip-btn:last-child {
+  border-right-width: 1px;
 }
 
 .chip-btn:hover {
-  color: var(--ink);
-  border-color: var(--border-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
 }
 
 .chip-btn.active {
-  color: #fff;
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  color: var(--cds-background);
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  font-weight: 400;
 }
 
 /* ---------- Self-drawn SVG chart ----------*/
@@ -2561,9 +3001,9 @@ a.hmenu-item {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   white-space: nowrap;
-  padding: 5px 9px;
+  padding: 4px 8px;
   pointer-events: none;
   z-index: 2;
 }
@@ -2571,7 +3011,7 @@ a.hmenu-item {
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 /* Chart + legend on the right: There is a blank space on the right after the upper limit of the chart is 760px, so the legend is placed here.*/
@@ -2579,7 +3019,7 @@ a.hmenu-item {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 18px;
+  gap: 16px;
 }
 
 .chart-with-legend .chart-wrap {
@@ -2594,21 +3034,21 @@ a.hmenu-item {
 .chart-legend {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .chart-legend li {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .chart-legend-swatch {
   flex: 0 0 auto;
   width: 11px;
   height: 11px;
-  border-radius: 3px;
+  border-radius: 0;
   transform: translateY(1px);
 }
 
@@ -2664,14 +3104,14 @@ a.hmenu-item {
 }
 
 .chart-legend-foot {
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.6;
   color: var(--ink-muted);
 }
 
 .chart-title {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   margin-bottom: 2px;
 }
@@ -2693,27 +3133,27 @@ a.hmenu-item {
  * And that trick will paint the entire vacant area with a border color, making it look like a broken empty panel.
  */
 .tech-cell {
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 
 .tech-cell dt {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .tech-cell dd {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--type-body-01);
   font-variant-numeric: tabular-nums;
 }
 
 .tech-sub {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -2731,24 +3171,24 @@ a.hmenu-item {
 .rpt-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .rpt-card {
   flex: 1 1 140px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: var(--surface);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
 }
 
 .rpt-card .k {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .rpt-card .v {
-  font-size: 17px;
+  font-size: var(--type-body-02);
   font-weight: 600;
   margin-top: 2px;
 }
@@ -2759,24 +3199,24 @@ a.hmenu-item {
  * for the grid lines, --ink* for text.
  */
 .m-quote-head {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .m-sym {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .m-sym h2 {
-  font-size: 19px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .m-sym .code {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -2785,7 +3225,7 @@ a.hmenu-item {
 .quote-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   line-height: 1.35;
   padding: 2px 8px;
@@ -2811,7 +3251,7 @@ a.hmenu-item {
 }
 
 .m-price .big {
-  font-size: 32px;
+  font-size: var(--type-heading-05);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -2819,7 +3259,7 @@ a.hmenu-item {
 }
 
 .m-price .delta {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding-bottom: 4px;
@@ -2827,16 +3267,16 @@ a.hmenu-item {
 
 /* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */
 .trial-marker {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-muted);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 .m-price .stamp {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 /* Bordered Yahoo-style stats grid: unlike .rpt-cards (gapped floating cards), the cells here
@@ -2848,7 +3288,7 @@ a.hmenu-item {
   border-left: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .m-stats .rpt-card {
@@ -2857,7 +3297,7 @@ a.hmenu-item {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 11px;
+  padding: 8px 12px;
   border: none;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -2866,11 +3306,11 @@ a.hmenu-item {
 }
 
 .m-stats .rpt-card .k {
-  font-size: 11px;
+  font-size: var(--type-label-01);
 }
 
 .m-stats .rpt-card .v {
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   margin-top: 0;
 }
 
@@ -2886,12 +3326,12 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .m-card-h h4 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   margin: 0;
 }
@@ -2902,28 +3342,37 @@ a.hmenu-item {
   flex-wrap: wrap;
 }
 
+/* Carbon content switcher: one joined square bar for the chart range. */
 .m-range button {
   font: inherit;
-  font-size: 12px;
-  padding: 4px 11px;
-  border-radius: 999px;
+  font-size: var(--type-body-01);
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  border-radius: 0;
   cursor: pointer;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-secondary);
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.m-range button:last-child {
+  border-right-width: 1px;
 }
 
 .m-range button:hover {
-  background: var(--surface-strong);
-  color: var(--ink);
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .m-range button[aria-pressed='true'] {
-  background: var(--surface-strong);
-  border-color: var(--border-strong);
-  color: var(--ink);
-  font-weight: 600;
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
+  font-weight: 400;
 }
 
 /* ---------- Card-level layout: quote header + chart left, sidebar right (revision 4) ----------
@@ -2934,7 +3383,7 @@ a.hmenu-item {
  */
 .quote-top-banner {
   border-bottom: 1px solid var(--border);
-  padding-bottom: 14px;
+  padding-bottom: 16px;
   margin-bottom: 16px;
 }
 
@@ -2964,12 +3413,12 @@ a.hmenu-item {
 .quote-aside-private {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: var(--surface);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
 }
 
 .quote-aside-private h4 {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   margin: 0 0 8px;
 }
@@ -2977,18 +3426,18 @@ a.hmenu-item {
 .holding-pnl {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .holding-pnl-big {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .holding-roi {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3000,38 +3449,38 @@ a.hmenu-item {
 }
 
 .holding-cell .k {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .holding-cell .v {
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   margin-top: 2px;
 }
 
 .m-chart-title-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .chart-time-badge {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-weight: 500;
 }
 
 /* ---------- Institutional Investors (三大法人買賣超) 2-day cards ---------- */
 .institutional-block {
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
@@ -3040,7 +3489,7 @@ a.hmenu-item {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
@@ -3051,37 +3500,37 @@ a.hmenu-item {
 }
 
 .inst-header-title {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-header-badge {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 0;
   font-weight: 500;
 }
 
 .inst-header-note {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .inst-days-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .inst-day-card {
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3094,15 +3543,15 @@ a.hmenu-item {
 }
 
 .inst-day-title {
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-day-tag {
-  font-size: 10.5px;
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: var(--type-label-01);
+  padding: 2px 8px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border);
   color: var(--ink-muted);
@@ -3111,25 +3560,25 @@ a.hmenu-item {
 
 .inst-day-tag.is-latest {
   color: var(--accent);
-  border-color: rgba(99, 102, 241, 0.3);
-  background: rgba(99, 102, 241, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .inst-day-total {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px dashed var(--border);
 }
 
 .inst-total-label {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .inst-total-val {
-  font-size: 13.5px;
+  font-size: var(--type-body-01);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3137,7 +3586,7 @@ a.hmenu-item {
 .inst-legs-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .inst-leg-cell {
@@ -3147,12 +3596,12 @@ a.hmenu-item {
 }
 
 .inst-leg-k {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .inst-leg-v {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3175,7 +3624,7 @@ a.hmenu-item {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   padding: 4px;
   border-radius: var(--radius);
@@ -3185,27 +3634,35 @@ a.hmenu-item {
 .sec-tab-btn {
   background: transparent;
   border: none;
-  color: var(--ink-secondary);
-  font-size: 14px;
-  font-weight: 600;
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
+  border-bottom: 3px solid transparent;
+  color: var(--cds-text-secondary);
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.15s ease;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .sec-tab-btn:hover {
-  color: var(--ink);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .sec-tab-btn.active {
-  background: var(--accent-strong);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  background: transparent;
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
+  box-shadow: none;
 }
 
 .intraday-block {
@@ -3216,7 +3673,7 @@ a.hmenu-item {
   padding: 32px 12px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: var(--type-body-01);
 }
 
 .intraday-skeleton {
@@ -3230,7 +3687,7 @@ a.hmenu-item {
    .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
    value, .m-stats/.rpt-card for the six stat cells, IntradayChart's own range toggle for 一日/五日. */
 .tw-index-today {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 .tw-index-stats {
@@ -3249,20 +3706,20 @@ a.hmenu-item {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .tw-index-band-row {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .tw-index-band-caption {
   flex: 0 0 auto;
   width: 56px;
   padding-top: 8px;
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   line-height: 1.4;
 }
@@ -3273,7 +3730,7 @@ a.hmenu-item {
 }
 
 .tw-index-close-stats .kpi {
-  padding: 7px 11px;
+  padding: 8px 12px;
   border: none;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -3286,17 +3743,17 @@ a.hmenu-item {
 }
 
 .tw-index-close-stats .kpi-label {
-  font-size: 11px;
+  font-size: var(--type-label-01);
 }
 
 .tw-index-close-stats .kpi-value {
-  font-size: 15px;
+  font-size: var(--type-body-01);
   margin-top: 0;
 }
 
 .tw-index-close-stats .kpi-sub {
-  font-size: 11px;
-  margin-top: 1px;
+  font-size: var(--type-label-01);
+  margin-top: 2px;
 }
 
 /* Layout next to intraday chart in TwIndexToday */
@@ -3345,9 +3802,9 @@ a.hmenu-item {
 }
 
 .rpt-notes {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
-  padding-left: 18px;
+  padding-left: 16px;
   margin-bottom: 12px;
 }
 
@@ -3356,12 +3813,12 @@ a.hmenu-item {
 }
 
 .rpt-disclaimer {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   line-height: 1.6;
   color: var(--ink-muted);
   background: var(--row-alt);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 12px;
 }
 
 /**
@@ -3372,45 +3829,45 @@ a.hmenu-item {
   --surface: #ffffff;
   --surface-strong: #ffffff;
   --panel: #ffffff;
-  --border: #e3e7ee;
-  --border-strong: #ccd3df;
-  --ink: #1a1d24;
-  --ink-secondary: #5b6472;
-  --ink-muted: #8a94a3;
-  --up: #d21f3c;
-  --down: #12864e;
-  --thead-bg: #f6f7f9;
-  --thead-solid: #f6f7f9;
-  --row-band: #f6f7f9;
+  --border: #e0e0e0;
+  --border-strong: #8d8d8d;
+  --ink: #161616;
+  --ink-secondary: #525252;
+  --ink-muted: #6f6f6f;
+  --up: #da1e28;
+  --down: #198038;
+  --thead-bg: #e0e0e0;
+  --thead-solid: #e0e0e0;
+  --row-band: #f4f4f4;
   --row-hover: transparent;
-  --row-alt: #f6f7f9;
-  --accent: #4f46e5;
+  --row-alt: #f4f4f4;
+  --accent: #0f62fe;
   background: #ffffff;
-  color: #1a1d24;
+  color: #161616;
   box-shadow: none;
 }
 
 @media (max-width: 720px) {
   .detail-body {
-    padding: 14px;
+    padding: 16px;
   }
 
   .detail-card {
-    padding: 14px;
+    padding: 16px;
   }
 
   /* The spacing between cards on mobile phones should be smaller, otherwise the whole page will be longer.*/
   .detail-stack {
-    gap: 14px;
+    gap: 16px;
   }
 
   .card-head h3 {
-    font-size: 15px;
+    font-size: var(--type-body-01);
   }
 
   .subtab {
-    padding: 8px 10px;
-    font-size: 13px;
+    padding: 0 var(--sp-04);
+    font-size: var(--type-body-01);
   }
 
   .chart-grid {
@@ -3420,8 +3877,8 @@ a.hmenu-item {
 
 /* Data time stamp at the block level: Each data source publishes data at different times, so it is marked block by block rather than as a whole time.*/
 .source-tag {
-  margin-left: 10px;
-  font-size: 11px;
+  margin-left: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   color: var(--ink-muted);
   white-space: nowrap;
@@ -3435,8 +3892,8 @@ a.hmenu-item {
 }
 
 .ai-card {
-  padding: 20px;
-  border-radius: 2px;
+  padding: 24px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
@@ -3445,17 +3902,17 @@ a.hmenu-item {
 .ai-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ai-form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ai-form-group label {
-  font-size: 13px;
+  font-size: var(--type-body-01);
   font-weight: 500;
   color: var(--ink-muted);
 }
@@ -3464,11 +3921,11 @@ a.hmenu-item {
 .ai-select {
   appearance: none;
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 8px 12px;
   outline: none;
   width: 100%;
@@ -3480,12 +3937,12 @@ a.hmenu-item {
 .ai-input:focus,
 .ai-select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .ai-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -3494,10 +3951,10 @@ a.hmenu-item {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.65;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   padding: 16px;
-  border-radius: 2px;
+  border-radius: 0;
   /* Use tokens instead of hard-written dark overlays - hard-written rgba(0,0,0,.12) in light themes will become a turbid gray block*/
   background: var(--surface);
   border: 1px solid var(--border);
@@ -3509,14 +3966,14 @@ a.hmenu-item {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .ai-chat-log {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin: 10px 0;
+  gap: 12px;
+  margin: 12px 0;
   /* If the conversation is long, don’t stretch the entire page, let it roll by itself.*/
   max-height: 420px;
   overflow-y: auto;
@@ -3531,7 +3988,7 @@ a.hmenu-item {
 .ai-chat-role {
   flex: 0 0 auto;
   min-width: 28px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-muted);
   padding-top: 2px;
@@ -3542,9 +3999,9 @@ a.hmenu-item {
   /* Same as .ai-result: pure text relies on pre-wrap to retain line breaks, without markdown rendering.*/
   white-space: pre-wrap;
   line-height: 1.7;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   padding: 8px 12px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface-2);
   /* Long URLs or long strings without whitespace must not fill the page*/
   overflow-wrap: anywhere;
@@ -3557,29 +4014,29 @@ a.hmenu-item {
 .ai-chat-form {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .ai-chat-form input {
   flex: 1 1 auto;
   min-width: 0;
   /* 16px avoids automatic scaling when iOS focuses (follow the existing guidelines of the project)*/
-  font-size: 16px;
+  font-size: var(--type-body-02);
 }
 
 .ai-disclaimer {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
-  margin-top: 14px;
+  margin-top: 16px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
 }
 
 .ai-error {
   padding: 16px;
-  border-radius: 2px;
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
   color: var(--down);
   display: flex;
   flex-direction: column;
@@ -3593,7 +4050,7 @@ a.hmenu-item {
  * The mobile version is not within the scope of 0.6.7 (wait until the desktop function is verified), so only the desktop version will be written here.
  * ========================================================= */
 .fx-panel {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /*
@@ -3621,7 +4078,7 @@ a.hmenu-item {
   border-color: var(--accent);
   border-width: 2px;
   /* .kpi is 16px 18px; thickening the border by 1px will make the cards grow taller and make the whole row jump, so each subtract 1px to make up for it.*/
-  padding: 15px 17px;
+  padding: 16px 16px;
 }
 
 .fx-card:focus-visible {
@@ -3634,8 +4091,8 @@ a.hmenu-item {
 .adm-console {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
-  gap: 18px;
-  margin-top: 22px;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 /*
@@ -3645,7 +4102,7 @@ a.hmenu-item {
 .adm-side {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   align-self: start;
   position: sticky;
   top: 14px;
@@ -3654,27 +4111,27 @@ a.hmenu-item {
 .adm-side nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .adm-side-label {
-  font-size: 9.5px;
+  font-size: var(--type-label-01);
   letter-spacing: 1.4px;
   color: var(--ink-muted);
   text-transform: uppercase;
   font-weight: 600;
-  padding: 0 10px 6px;
+  padding: 0 12px 8px;
 }
 
 .adm-side-item {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
-  border-radius: 2px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 0;
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--type-body-01);
   color: var(--ink-secondary);
   cursor: pointer;
   border: 1px solid transparent;
@@ -3703,12 +4160,12 @@ a.hmenu-item {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 0;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   cursor: pointer;
   text-align: left;
@@ -3728,7 +4185,7 @@ a.hmenu-item {
 }
 
 .adm-panel {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /*
@@ -3738,7 +4195,7 @@ a.hmenu-item {
 @media (max-width: 900px) {
   .adm-console {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    gap: 16px;
   }
 
   .adm-side {
@@ -3748,7 +4205,7 @@ a.hmenu-item {
   .adm-side nav {
     flex-direction: row;
     overflow-x: auto;
-    gap: 6px;
+    gap: 8px;
     padding-bottom: 2px;
   }
 
@@ -3795,13 +4252,13 @@ a.hmenu-item {
 }
 
 .adm-toggle.on {
-  background: var(--accent-strong);
+  background: var(--cds-support-success);
   border-color: transparent;
 }
 
 .adm-toggle.on::after {
   left: 19px;
-  background: #fff;
+  background: var(--cds-text-on-color);
 }
 
 .adm-toggle:disabled {
@@ -3815,22 +4272,22 @@ a.hmenu-item {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   gap: 16px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .adm-prompt-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   align-content: start;
 }
 
 .adm-prompt-item {
   appearance: none;
   border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 2px;
-  padding: 10px 11px;
+  background: var(--cds-layer-02);
+  border-radius: 0;
+  padding: 12px 12px;
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -3847,20 +4304,20 @@ a.hmenu-item {
 
 .adm-prompt-item.active {
   border-color: var(--accent);
-  background: rgba(124, 140, 248, 0.1);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--ink);
 }
 
 .adm-prompt-item b {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: var(--type-body-01);
   font-family: var(--font-display);
 }
 
 .adm-prompt-item > span {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
@@ -3872,10 +4329,10 @@ a.hmenu-item {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   color: var(--ink-secondary);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .adm-prompt-label span {
@@ -3894,10 +4351,10 @@ a.hmenu-item {
   background: var(--input-bg);
   border: 1px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
-  padding: 10px 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  border-radius: 0;
+  padding: 12px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
   line-height: 1.75;
 }
 
@@ -3910,16 +4367,16 @@ a.hmenu-item {
 .adm-prompt-locked {
   margin-top: 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: 2px;
-  padding: 11px 13px;
+  border-radius: 0;
+  padding: 12px 12px;
   background: var(--row-band);
 }
 
 .adm-prompt-locked b {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
@@ -3927,8 +4384,8 @@ a.hmenu-item {
   margin: 8px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
   line-height: 1.75;
   color: var(--ink-muted);
 }
@@ -3960,12 +4417,7 @@ a.hmenu-item {
   display: block;
   width: 100%;
   height: 30px;
-  margin-top: 10px;
-}
-
-/* The backward badge is pushed to the right end of the label column. .kpi-label is originally ​​flex, here only the alignment is supplemented*/
-.mac-behind {
-  margin-left: auto;
+  margin-top: 12px;
 }
 
 /* ── Institutional matrix: 單位 × 日期 (0.7.6) ──────────────────────
@@ -4000,8 +4452,8 @@ a.hmenu-item {
   position: sticky;
   left: 0;
   z-index: 1;
-  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列，
-     不能共用 --panel —— 亮色的 --panel 是 #ffffff，資料列卻是 --surface #fafbfc。 */
+  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列：
+     資料列走 --surface（Carbon $layer-01），表頭走 --thead-solid（Carbon $layer-accent-01）。 */
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
@@ -4024,7 +4476,7 @@ a.hmenu-item {
 .inst-matrix tfoot td {
   border-top: 1px solid var(--border-strong);
   font-weight: 650;
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--cds-text-on-color) 3.5%, transparent);
   vertical-align: top;
 }
 
@@ -4051,15 +4503,6 @@ a.hmenu-item {
   margin-top: 0;
 }
 
-/* Rightmost trend column with rowspan in single-table layout */
-.inst-matrix .col-trend-rowspan {
-  border-left: 1px solid var(--border-strong);
-  vertical-align: top;
-  background: rgba(255, 255, 255, 0.015);
-  padding: 10px 14px;
-  min-width: 220px;
-}
-
 .inst-matrix .trend-stack {
   display: flex;
   flex-direction: column;
@@ -4070,9 +4513,9 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.07);
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cds-border-subtle);
 }
 
 .inst-matrix .trend-item:last-child {
@@ -4087,7 +4530,7 @@ a.hmenu-item {
 }
 
 .inst-matrix .trend-label {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -4104,14 +4547,14 @@ a.hmenu-item {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .mac-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--surface-strong);
@@ -4119,13 +4562,13 @@ a.hmenu-item {
 }
 
 .mac-chip-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
 /* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
 .mac-chip-value {
-  font-size: 14.5px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -4134,19 +4577,19 @@ a.hmenu-item {
 .mac-row-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Indicator description (originally at the bottom of the card). After the word cards were slimmed down, they were hung in columns and can still be seen.*/
 .mac-row-note {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
 /* Period and "as of this period": they are notes and do not conflict with the main figures.*/
 .mac-row-period {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   font-weight: 400;
   margin-top: 2px;
@@ -4159,7 +4602,7 @@ a.hmenu-item {
 .fx-chart-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 @media (max-width: 900px) {
@@ -4173,14 +4616,14 @@ a.hmenu-item {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
 .fx-chart-head h4 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
 }
 
@@ -4199,16 +4642,15 @@ a.hmenu-item {
 .ast-verdict-icon { color: var(--accent); flex: none; }
 .ast-verdict .section-stamp { margin-left: auto; }
 
-.ast-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; }
-.ast-sub { display: block; font-size: 11.5px; color: var(--ink-muted); }
+.ast-note { margin: 6px 0 0; font-size: var(--type-label-01); color: var(--ink-muted); line-height: 1.6; }
+.ast-sub { display: block; font-size: var(--type-label-01); color: var(--ink-muted); }
 /* The fetch range of the schedule: connected below jobname, allowing line breaks (the remaining fields in the table are nowrap)*/
 .ast-scope {
   display: block; margin-top: 3px; max-width: 34ch;
-  font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); white-space: normal;
+  font-size: var(--type-label-01); line-height: 1.5; color: var(--ink-muted); white-space: normal;
 }
-.ast-mono { font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
-.ast-unit { font-size: 13px; font-weight: 400; color: var(--ink-secondary); }
-.ast-fail { color: var(--notice-err-ink); font-size: 12px; }
+.ast-mono { font-variant-numeric: tabular-nums; font-size: var(--type-label-01); white-space: nowrap; }
+.ast-unit { font-size: var(--type-body-01); font-weight: 400; color: var(--ink-secondary); }
 
 /* ─────────────────────────────────────────────────────────────
    探針同步狀態的一源一列。前綴 apr-（admin probe row）。
@@ -4219,41 +4661,46 @@ a.hmenu-item {
 .apr-days { display: flex; flex-direction: column; gap: 18px; }
 .apr-day {
   display: flex; align-items: baseline; gap: 8px;
-  margin-bottom: 6px; font-size: 13px; font-weight: 600;
+  margin-bottom: 8px; font-size: var(--type-body-01); font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .apr-day .ast-sub { display: inline; }
 
-.apr-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
-.apr-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+/* The probe list is a table built from divs, so it carries the same four bands
+   as .data-table. `--hairline` was never defined, so every row was drawing the
+   legacy slate fallback instead of a Carbon border. */
+.apr-row { border-top: 1px solid var(--cds-border-subtle); }
+.apr-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.apr-row:nth-child(even) { background: var(--table-zebra); }
 
 .apr-head {
   display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto auto;
   align-items: center; gap: 12px; width: 100%;
-  padding: 9px 4px; border: 0; background: none; cursor: pointer;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
   color: inherit; text-align: left; font: inherit;
 }
-.apr-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.apr-head:hover { background: var(--table-row-hover); }
 .apr-head:disabled { cursor: default; opacity: .62; }
 .apr-head:disabled:hover { background: none; }
 
-.apr-name { font-size: 13px; font-weight: 600; }
+.apr-name { font-size: var(--type-body-01); font-weight: 600; }
 
 /* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
 .apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
-.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 1px; }
+.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 0; }
 .apr-seg-hit { background: var(--notice-ok-ink); }
-.apr-seg-miss { background: color-mix(in srgb, var(--ink-muted) 26%, transparent); }
-.apr-seg-empty { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
+.apr-seg-miss { background: var(--cds-border-strong); }
+.apr-seg-empty { background: var(--cds-border-subtle); }
 
-.apr-sum { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.apr-sum { text-align: right; font-size: var(--type-label-01); font-variant-numeric: tabular-nums; }
 .apr-sum b { font-weight: 600; }
 
 .apr-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
 .apr-open .apr-caret { transform: rotate(180deg); }
 
 .apr-log { margin: 0 0 12px; }
-.apr-log .data-table { font-size: 12px; }
+.apr-log .data-table { font-size: var(--type-label-01); }
 .apr-hit-row td { color: var(--notice-ok-ink); }
 
 /* ─────────────────────────────────────────────────────────────
@@ -4263,28 +4710,35 @@ a.hmenu-item {
 
 .adm-log-list { list-style: none; margin: 12px 0 0; padding: 0; }
 
-.adm-log-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
-.adm-log-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+/* The execution log is the second div-built table in the console; it takes the
+   same bands, borders and row height as the probe list above. */
+.adm-log-row { border-top: 1px solid var(--cds-border-subtle); }
+.adm-log-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.adm-log-row:nth-child(even) { background: var(--table-zebra); }
 
 .adm-log-head {
   display: grid;
   grid-template-columns: 9.5rem 3.5rem 5.5rem 11rem 1fr auto;
-  align-items: center; gap: 10px; width: 100%;
-  padding: 8px 4px; border: 0; background: none; cursor: pointer;
-  color: inherit; text-align: left; font: inherit; font-size: 12.5px;
+  align-items: center; gap: 12px; width: 100%;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
+  color: inherit; text-align: left; font: inherit; font-size: var(--type-label-01);
 }
-.adm-log-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.adm-log-head:hover { background: var(--table-row-hover); }
 
 .adm-log-time { white-space: nowrap; }
 
+/* Carbon tag: a filled tint with no border, so the chip stays readable on the
+   base, zebra and hover bands alike — the same collision that hid .tx-chip-spot. */
 .adm-log-level {
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--border-strong); white-space: nowrap;
+  height: 24px; font-size: var(--type-label-01); font-weight: 400; padding: 0 var(--sp-03);
+  border-radius: 12px; border: none; white-space: nowrap;
+  color: var(--cds-text-primary); background: var(--chip-neutral);
 }
-.adm-log-level-error { color: var(--notice-err-ink); border-color: color-mix(in srgb, var(--notice-err-ink) 40%, transparent); }
-.adm-log-level-warn  { color: var(--notice-warn-ink); border-color: color-mix(in srgb, var(--notice-warn-ink) 40%, transparent); }
-.adm-log-level-info  { color: var(--ink-secondary); }
+.adm-log-level-error { background: color-mix(in srgb, var(--danger) 28%, transparent); }
+.adm-log-level-warn  { background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent); }
+.adm-log-level-info  { background: var(--chip-neutral); }
 
 .adm-log-action {
   font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -4297,12 +4751,12 @@ a.hmenu-item {
 .adm-log-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
 .adm-log-open .adm-log-caret { transform: rotate(180deg); }
 
-.adm-log-detail { padding: 4px 4px 14px; border-top: 1px dashed var(--border-strong); }
+.adm-log-detail { padding: var(--sp-02) var(--sp-02) var(--sp-04); border-top: 1px solid var(--cds-border-subtle); }
 .adm-log-detail pre {
   margin: 8px 0; white-space: pre-wrap; word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px; line-height: 1.6; color: var(--ink-muted);
-  background: var(--row-band); border-radius: 2px; padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01); line-height: 1.6; color: var(--ink-muted);
+  background: var(--row-band); border-radius: 0; padding: 10px 12px;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -4317,7 +4771,7 @@ a.hmenu-item {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 .adm-guide-toggle-action {
-  display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-label-01);
   color: var(--ink-muted); flex: none;
 }
 .adm-guide-toggle-action .apr-caret-open { transform: rotate(180deg); }
@@ -4327,19 +4781,19 @@ a.hmenu-item {
   gap: 12px; margin-bottom: 14px;
 }
 .adm-guide-card {
-  padding: 12px 14px; border-radius: var(--radius-md, 8px);
+  padding: 12px 16px; border-radius: 0;
 }
 .adm-guide-card-head {
-  display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-body-01); margin-bottom: 6px;
 }
 .adm-guide-subhead {
   display: flex; align-items: center; gap: 6px; margin: 12px 0 8px;
-  font-size: 13.5px; font-weight: 600; color: var(--ink-base, inherit);
+  font-size: var(--type-body-01); font-weight: 600; color: var(--ink-base, inherit);
 }
-.adm-guide-subhead h4 { margin: 0; font-size: 13.5px; font-weight: 600; }
-.adm-guide-table { font-size: 12px; }
+.adm-guide-subhead h4 { margin: 0; font-size: var(--type-body-01); font-weight: 600; }
+.adm-guide-table { font-size: var(--type-label-01); }
 .ast-note-cell {
-  font-size: 11.5px; color: var(--ink-secondary); line-height: 1.5;
+  font-size: var(--type-label-01); color: var(--ink-secondary); line-height: 1.5;
   max-width: 38ch; white-space: normal;
 }
 
@@ -4349,21 +4803,29 @@ a.hmenu-item {
 .pwr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
+/* ---------- Probe war room cards ----------
+ * The two gradient bars that used to live here were dead CSS: no base rule ever
+ * gave `.pwr-kpi-card::before` content or a box, so all three states drew the
+ * same card. State now uses the device Carbon already uses for a status block —
+ * a 3px rule on the leading edge in the $support colour — plus a Carbon tag.
+ * Two hues only: $support-success for retired, $support-info for probing.
+ */
 .pwr-kpi-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
+  border-left: 3px solid var(--cds-border-subtle);
 }
-.pwr-kpi-card.pwr-retired::before {
-  background: linear-gradient(90deg, #10b981, #34d399, transparent);
-  opacity: 0.85;
+
+.pwr-kpi-card.pwr-retired {
+  border-left-color: var(--cds-support-success);
 }
-.pwr-kpi-card.pwr-probing::before {
-  background: linear-gradient(90deg, #22d3ee, #38bdf8, transparent);
-  opacity: 0.9;
+
+.pwr-kpi-card.pwr-probing {
+  border-left-color: var(--cds-support-info);
 }
 .pwr-kpi-label {
   display: flex;
@@ -4373,41 +4835,54 @@ a.hmenu-item {
 }
 .pwr-kpi-name {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--type-body-01);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--cds-text-primary);
 }
-.pwr-kpi-name code {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-}
-.pwr-status-tag {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 999px;
+
+/* In a 250px grid cell the name and the source id compete for one line. The
+   human-readable name wins and stays whole; the id truncates. */
+.pwr-kpi-name b {
   white-space: nowrap;
 }
+.pwr-kpi-name code {
+  /* The source id is a technical value, so it is mono text at $text-helper —
+     not a filled chip. As a chip it competed with the card name and forced the
+     name to wrap in a 250px grid cell. */
+  color: var(--cds-text-helper);
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Carbon tag: the tint carries the state, the label stays $text-primary. */
+.pwr-status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
+  white-space: nowrap;
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
+}
 .pwr-status-tag.retired {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--accent-emerald, #10b981);
-  border-color: rgba(16, 185, 129, 0.35);
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
 }
 .pwr-status-tag.probing {
-  background: rgba(34, 211, 238, 0.15);
-  color: var(--accent-cyan, #22d3ee);
-  border-color: rgba(34, 211, 238, 0.35);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .pwr-status-tag.waiting {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--ink-secondary);
-  border-color: var(--border);
+  background: var(--chip-neutral);
 }
 .pwr-kpi-value {
   display: flex;
@@ -4416,10 +4891,10 @@ a.hmenu-item {
   margin-top: 4px;
 }
 .pwr-probing-val {
-  color: var(--accent-cyan, #22d3ee);
+  color: var(--cds-support-info);
 }
 .pwr-retired-val {
-  color: var(--accent-emerald, #10b981);
+  color: var(--cds-support-success);
 }
 .pwr-hits-dots {
   display: flex;
@@ -4427,27 +4902,27 @@ a.hmenu-item {
   align-items: center;
 }
 .pwr-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--cds-border-subtle);
 }
 .pwr-dot.hit {
-  background: var(--accent-emerald, #10b981);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+  background: var(--cds-support-success);
+  box-shadow: none;
 }
 .pwr-kpi-sub {
   margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 11.5px;
+  gap: 4px;
+  font-size: var(--type-label-01);
   line-height: 1.45;
 }
 .pwr-sub-window {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--type-label-01);
 }
 .pwr-sub-times {
   display: flex;
@@ -4461,7 +4936,7 @@ a.hmenu-item {
 }
 .pwr-times-prefix {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--type-label-01);
 }
 .pwr-times-chips {
   display: flex;
@@ -4469,77 +4944,30 @@ a.hmenu-item {
   gap: 4px;
   align-items: center;
 }
+/* A plain hit time is not a status, so it takes the neutral tag. Only the two
+   moments that matter — the latest probe and the retire — get a status tint. */
 .pwr-time-chip {
-  font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 1.5px 6px;
-  border-radius: 4px;
-  background: rgba(16, 185, 129, 0.18);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.38);
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label-01);
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
+  background: var(--chip-neutral);
+  color: var(--cds-text-primary);
 }
 .pwr-time-chip.is-retire {
-  background: rgba(99, 102, 241, 0.22);
-  color: #a5b4fc;
-  border-color: rgba(99, 102, 241, 0.45);
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
 }
 .pwr-time-chip.is-latest {
-  background: rgba(34, 211, 238, 0.22);
-  color: #38bdf8;
-  border-color: rgba(34, 211, 238, 0.45);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .pwr-times-empty {
   color: var(--ink-muted);
-  font-size: 11px;
-}
-
-/* Light theme high-contrast overrides for crisp visibility */
-:root[data-theme='light'] .pwr-time-chip {
-  background: rgba(16, 185, 129, 0.14);
-  color: #065f46;
-  border-color: rgba(5, 150, 105, 0.45);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-time-chip.is-retire {
-  background: rgba(79, 70, 229, 0.12);
-  color: #3730a3;
-  border-color: rgba(79, 70, 229, 0.4);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-time-chip.is-latest {
-  background: rgba(2, 132, 199, 0.14);
-  color: #0369a1;
-  border-color: rgba(2, 132, 199, 0.45);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-status-tag.retired {
-  background: rgba(16, 185, 129, 0.16);
-  color: #065f46;
-  border-color: rgba(5, 150, 105, 0.45);
-}
-:root[data-theme='light'] .pwr-status-tag.probing {
-  background: rgba(2, 132, 199, 0.14);
-  color: #075985;
-  border-color: rgba(2, 132, 199, 0.45);
-}
-:root[data-theme='light'] .pwr-status-tag.waiting {
-  background: rgba(15, 23, 42, 0.06);
-  color: #334155;
-  border-color: rgba(15, 23, 42, 0.2);
-}
-:root[data-theme='light'] .pwr-probing-val {
-  color: #0284c7;
-}
-:root[data-theme='light'] .pwr-retired-val {
-  color: #047857;
-}
-:root[data-theme='light'] .pwr-dot {
-  background: rgba(15, 23, 42, 0.18);
-}
-:root[data-theme='light'] .pwr-dot.hit {
-  background: #059669;
-  box-shadow: 0 0 5px rgba(5, 150, 105, 0.45);
+  font-size: var(--type-label-01);
 }
 
 @media (max-width: 720px) {
@@ -4558,7 +4986,7 @@ a.hmenu-item {
   .ast-track { display: none; }
   .ast-row { grid-template-columns: 1fr auto; min-height: 0; padding: 9px 0; }
   .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .ast-when { display: inline; font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .ast-when { display: inline; font-size: var(--type-label-01); color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
   .ast-date { display: inline; margin-top: 0; }
 
   /* 探針列：手機把「名稱／摘要」疊成兩行，進度條獨占一行才看得出翻綠的位置 */
@@ -4570,6 +4998,10 @@ a.hmenu-item {
   /* The legend will squeeze the "judgment criterion is" into a straight row on a narrow screen, so the mobile phone changes it to a single column stack.*/
   .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
   .ast-rule { line-height: 1.6; }
+
+  /* 472px of fixed columns plus five gaps cannot fit a 390px phone; collapse to
+     two tracks and let the remaining cells wrap. */
+  .adm-log-head { grid-template-columns: 1fr auto; }
 }
 
 /* ---------- Watchlist Block (Dashboard Minimalist Cards & View Switcher) ---------- */
@@ -4580,10 +5012,10 @@ a.hmenu-item {
 }
 
 .watchlist-card {
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 6px);
-  padding: 7px 8px;
+  padding: 8px 8px;
   cursor: pointer;
   transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   display: flex;
@@ -4596,7 +5028,7 @@ a.hmenu-item {
   transform: translateY(-2px);
   background: var(--surface-strong);
   border-color: var(--border-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--cds-shadow-modal);
 }
 
 .watchlist-card-head {
@@ -4610,7 +5042,7 @@ a.hmenu-item {
 .watchlist-card-meta {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
   flex: 1;
@@ -4618,14 +5050,14 @@ a.hmenu-item {
 
 .watchlist-card-ticker {
   font-family: var(--font-mono, monospace);
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   font-weight: 700;
   color: var(--ink-secondary);
   flex-shrink: 0;
 }
 
 .watchlist-card-name {
-  font-size: 11.5px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink);
   overflow: hidden;
@@ -4638,10 +5070,10 @@ a.hmenu-item {
 .watchlist-card-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9.5px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
   color: var(--ink-secondary);
@@ -4664,7 +5096,7 @@ a.hmenu-item {
 
 .watchlist-card-price {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: var(--type-body-01);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
@@ -4672,7 +5104,7 @@ a.hmenu-item {
 }
 
 .watchlist-card-change {
-  font-size: 11px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
@@ -4685,65 +5117,80 @@ a.hmenu-item {
   color: var(--ink-muted);
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--type-body-01);
   line-height: 1;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
 }
 
 .watchlist-card-del:hover {
-  background: rgba(248, 113, 113, 0.15);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
   color: var(--danger);
 }
 
 .watchlist-table-name-cell {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .watchlist-table-name-cell .watchlist-card-badge {
   max-width: none;
   flex-shrink: 0;
-  font-size: 10.5px;
-  padding: 1px 6px;
+  font-size: var(--type-label-01);
+  padding: 2px 8px;
   color: var(--ink-secondary);
   border-color: var(--border-strong);
 }
 
+/* Carbon content switcher: one joined square bar, no padding around the buttons. */
 .view-toggle-group {
   display: inline-flex;
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  gap: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  gap: 0;
 }
 
 .view-toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--ink-muted);
-  padding: 3px 8px;
-  border-radius: 2px;
-  font-size: 12px;
-  font-weight: 500;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  color: var(--cds-text-secondary);
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  border-radius: 0;
+  font-size: var(--type-body-01);
+  font-weight: 400;
+  letter-spacing: 0.16px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.12s ease;
+  gap: var(--sp-02);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.view-toggle-btn:last-child {
+  border-right-width: 1px;
+}
+
+.view-toggle-btn:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .view-toggle-btn.active {
-  background: var(--accent-strong);
-  color: #fff;
-  font-weight: 600;
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
+  font-weight: 400;
 }
 
 .view-toggle-btn:hover:not(.active) {
@@ -4770,19 +5217,19 @@ a.hmenu-item {
 .watchlist-group-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
 }
 
 .watchlist-group-row {
-  background: var(--surface-subtle, rgba(255, 255, 255, 0.02));
+  background: var(--surface-subtle);
 }
 
 .watchlist-group-cell {
-  padding: 6px 10px !important;
-  font-size: 12px;
+  padding: 8px 12px !important;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
   border-top: 1px solid var(--border);
@@ -4790,6 +5237,62 @@ a.hmenu-item {
 }
 
 .watchlist-group-cell .badge-count {
-  margin-left: 6px;
+  margin-left: 8px;
 }
 
+/* ---------- Toast ---------- */
+.toast-region {
+  position: fixed;
+  right: var(--sp-05);
+  bottom: var(--sp-05);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-03);
+  z-index: 110;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  min-width: 240px;
+  max-width: 360px;
+  padding: var(--sp-04);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+  border: 1px solid var(--cds-border-subtle);
+  border-left: 3px solid var(--cds-support-success);
+  font-size: var(--type-body-01);
+  box-shadow: var(--cds-shadow-menu);
+}
+
+.toast-error {
+  border-left-color: var(--cds-support-error);
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-01);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

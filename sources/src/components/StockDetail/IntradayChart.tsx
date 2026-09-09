@@ -5,6 +5,7 @@
  * cannot be a second region of the price frame; it is its own frame with its own Y domain.
  */
 import { useId, useMemo, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { ChartFrame } from '../Charts/chartFrame'
 import type { PlotGeometry } from '../Charts/chartFrame'
 import { lineSegments } from '../Charts/chartPath'
@@ -17,11 +18,11 @@ import type {
 } from '../../../supabase/functions/stock-price/intradayParse'
 
 /**
- * 均價 line colour: mirrors --accent-2 (index.css) as a literal. Inline SVG here feeds
- * html2canvas → PDF, which cannot resolve CSS variables from ancestor stylesheets — the same
- * reason chartColors.ts keeps CHART_COLORS as literals instead of `var(...)`.
+ * 均價 line colour: mirrors --accent-2 (index.css). Inline SVG here feeds html2canvas → PDF,
+ * which cannot resolve CSS variables from ancestor stylesheets — the same reason chartColors.ts
+ * keeps this as a literal (CHART_COLORS.vwap) instead of `var(...)`.
  */
-const VWAP_COLOR = '#22d3ee'
+const VWAP_COLOR = CHART_COLORS.vwap
 
 const TZ = 'Asia/Taipei'
 const timeFmt = new Intl.DateTimeFormat('en-US', {
@@ -112,6 +113,8 @@ function areaToBaseline(points: IntradayPoint[], geo: PlotGeometry, baselineY: n
 export interface IntradayChartProps {
   series: IntradaySeries | null
   loading: boolean
+  /** The fetch that produced `series` failed — distinct from a fetch that succeeded with no bars. */
+  error?: boolean
   range: IntradayRange
   onRangeChange: (range: IntradayRange) => void
   tradeDate?: string | null
@@ -122,6 +125,7 @@ export interface IntradayChartProps {
 export function IntradayChart({
   series,
   loading,
+  error = false,
   range,
   onRangeChange,
   tradeDate = null,
@@ -218,6 +222,11 @@ export function IntradayChart({
             className="skeleton"
             style={{ width: '100%', height: 70, display: 'block', marginTop: 8 }}
           />
+        </div>
+      ) : error ? (
+        <div className="notice notice-error" role="alert">
+          <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+          讀取走勢圖失敗，請稍後再試。
         </div>
       ) : series === null || points.length === 0 ? (
         <div className="intraday-empty">無走勢資料</div>

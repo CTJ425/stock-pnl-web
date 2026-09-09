@@ -167,8 +167,12 @@ describe('TransactionsPage 搜尋過濾 UI 整合測試 (I1-I7)', () => {
 
     // Delete selection(1)
     const deleteBtn = screen.getByRole('button', { name: /刪除選取（1）/ })
-    window.confirm = () => true
     await user.click(deleteBtn)
+
+    // Audit finding B4 replaced window.confirm with the app's own Modal, so the deletion now
+    // waits on a real dialog instead of a stubbed global.
+    const confirmDialog = await screen.findByRole('dialog')
+    await user.click(within(confirmDialog).getByRole('button', { name: '刪除' }))
 
     // After deleting "TSMC", there is no hit, click the first clear search button
     const clearBtns = screen.getAllByRole('button', { name: '清除搜尋' })

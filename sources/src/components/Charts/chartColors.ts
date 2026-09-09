@@ -5,12 +5,16 @@
  * The CSS variables in the ancestor layer cannot be parsed, and the graphics in the PDF will turn black. The color scheme therefore does not change with the theme.
  */
 export const CHART_COLORS = {
-  up: '#e0455b',
-  down: '#10a05c',
-  line: '#5b6cf0',
-  axis: '#8a94a3',
-  grid: 'rgba(138, 148, 163, 0.3)',
-  zero: 'rgba(138, 148, 163, 0.7)',
+  up: '#fa4d56', // Carbon red 50
+  down: '#24a148', // Carbon green 50
+  line: '#4589ff', // Carbon blue 50
+  axis: '#8d8d8d', // Carbon gray 50
+  grid: 'rgba(141, 141, 141, 0.3)',
+  zero: 'rgba(141, 141, 141, 0.7)',
+  guide: 'rgba(138, 148, 163, 0.45)', // MultiLineChart's dashed reference lines (e.g. KD's 20/80)
+  bbUpper: '#a8a8a8', // Bollinger upper band (TechnicalTab), Carbon gray 30
+  bbLower: '#6f6f6f', // Bollinger lower band (TechnicalTab), Carbon gray 60
+  vwap: '#08bdba', // Intraday 均價 line (IntradayChart); mirrors --accent-2 (index.css) as a literal
 } as const
 
 /**
@@ -30,8 +34,15 @@ export const CHART_COLORS = {
  * The legend text and the complete numerical table above are therefore established.
  */
 export const CATEGORICAL_COLORS = [
-  '#3987e5', // slot 1 blue
-  '#d95926', // slot 2 orange
-  '#199e70', // slot 3 aqua
-  '#c98500', // slot 4 yellow
+  '#8a3ffc', // Carbon purple 60
+  '#1192e8', // Carbon cyan 50
+  '#009d9a', // Carbon teal 50
+  '#ee5396', // Carbon magenta 50
 ] as const
+
+/**
+ * Carbon publishes two categorical orders: a dark set for light grounds and a light set for
+ * dark grounds. This app needs one literal set for both (html2canvas limitation, see above),
+ * so the four mid steps above are used. Every step keeps enough luminance separation from
+ * both #161616 and the white PDF page, and the legend plus the value table carry the labels.
+ */

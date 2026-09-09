@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
+import { useRowActivate } from '../../hooks/useRowActivate'
 import { buildHoldingRows, type HoldingRow } from '../../utils/holdingRows'
 import type { Currency } from '../../types/models'
 import {
@@ -89,12 +90,16 @@ function HoldingsTable({
     const isShort = direction === 'SHORT'
     const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
     const stockName = displayStockName(h.market, h.ticker, h.name)
+    const activateRow = useRowActivate(
+      () => onSelectTicker?.(h.ticker, stockName),
+      `開啟 ${h.ticker} ${stockName}`,
+    )
     return (
             <tr
               key={row.rowKey}
               data-testid={isShort ? `holding-row-${h.ticker}-SHORT` : `holding-row-${h.ticker}`}
               className={isShort ? 'row-short' : undefined}
-              onClick={isClickable ? () => onSelectTicker(h.ticker, stockName) : undefined}
+              {...(isClickable ? activateRow : {})}
               style={isClickable ? { cursor: 'pointer' } : undefined}
               title={isClickable ? '點擊查看個股分析' : undefined}
             >
@@ -359,7 +364,7 @@ function MarketPanel({
           {rows.length === 0 ? (
             fmtMoney(0, currency)
           ) : netMkt === null ? (
-            <span className="skeleton" style={{ width: 120, height: 22 }} />
+            <span className="skeleton" style={{ width: '13ch', height: 22 }} />
           ) : hasShort ? (
             // 淨額是多空相減，可能為負，所以帶正負號；沒有空單時是單純的持倉市值，不帶號。
             fmtSignedMoney(netMkt, currency)
@@ -403,7 +408,7 @@ function MarketPanel({
             {rows.length === 0 ? (
               fmtMoney(0, currency)
             ) : cost === null ? (
-              <span className="skeleton" style={{ width: 90, height: 22 }} />
+              <span className="skeleton" style={{ width: '12ch', height: 22 }} />
             ) : (
               fmtMoney(cost, currency)
             )}
@@ -423,7 +428,7 @@ function MarketPanel({
             {rows.length === 0 ? (
               fmtMoney(0, currency)
             ) : unreal === null ? (
-              <span className="skeleton" style={{ width: 90, height: 22 }} />
+              <span className="skeleton" style={{ width: '13ch', height: 22 }} />
             ) : (
               fmtSignedMoney(unreal, currency)
             )}

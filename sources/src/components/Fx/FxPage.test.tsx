@@ -297,3 +297,50 @@ describe('FxPage', () => {
     expect(fetchFxQuotes).toHaveBeenCalledWith(['USD', 'JPY'], true)
   })
 })
+
+/**
+ * Audit finding B2 — fetchFx used to swallow a network failure into the same `null` it returns
+ * when the report has not been generated yet, so an outage read as "匯率資料尚未產生". It now
+ * throws. Without a catch in FxPage.load the rejection is unhandled AND setLoading(false) never
+ * runs, so the page spins forever — a regression no existing test could see, because none of
+ * them ever rejected.
+ */
+describe('FxPage 讀取失敗', () => {
+  beforeEach(() => {
+    fetchFx.mockReset()
+    fetchFxQuotes.mockReset()
+    fetchFxQuotes.mockResolvedValue({})
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('抓取失敗要顯示錯誤，不能卡在載入中', async () => {
+    fetchFx.mockRejectedValue(new Error('network down'))
+    render(<FxPage />)
+
+    await screen.findByText(/匯率資料讀取失敗/)
+    expect(screen.queryByText('正在讀取匯率資料…')).toBeNull()
+  })
+
+  it('抓取失敗與「尚未產生」是兩個不同畫面', async () => {
+    fetchFx.mockResolvedValue(null)
+    render(<FxPage />)
+
+    await screen.findByText('匯率資料尚未產生。')
+    expect(screen.queryByText(/匯率資料讀取失敗/)).toBeNull()
+  })
+
+  it('按重新載入會再抓一次', async () => {
+    fetchFx.mockRejectedValue(new Error('network down'))
+    render(<FxPage />)
+    await screen.findByText(/匯率資料讀取失敗/)
+
+    fetchFx.mockResolvedValue(fx)
+    fireEvent.click(screen.getByRole('button', { name: '重新載入' }))
+
+    await screen.findByText('外幣匯率')
+  })
+})
