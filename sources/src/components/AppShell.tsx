@@ -40,6 +40,8 @@ import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
 import { Modal } from './Common/Modal'
 import { HeaderMenu } from './Common/HeaderMenu'
+import { ToastProvider, useToast } from './Common/Toast'
+import { ConfirmProvider, useConfirm } from './Common/useConfirm'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
 import { MacroPage } from './Macro/MacroPage'
 import { FxPage } from './Fx/FxPage'
@@ -539,6 +541,8 @@ function WorkspaceControls() {
     deleteWorkspace,
     setWorkspaceFeeRate,
   } = useWorkspace()
+  const { show } = useToast()
+  const confirm = useConfirm()
   const [modal, setModal] = useState<'create' | 'rename' | 'fee' | null>(null)
   const [nameInput, setNameInput] = useState('')
   const [feeInput, setFeeInput] = useState('')
@@ -584,13 +588,19 @@ function WorkspaceControls() {
   const handleDelete = async () => {
     if (!current) return
     if (workspaces.length <= 1) {
-      window.alert('至少需保留一個工作區。')
+      show('至少需保留一個工作區。', 'error')
       return
     }
-    const ok = window.confirm(
-      `確定刪除工作區「${current.name}」嗎？\n\n其中所有交易紀錄將一併刪除，此動作無法復原。`,
-    )
-    if (ok) await deleteWorkspace(current.id)
+    const ok = await confirm({
+      title: '刪除工作區',
+      message: `確定刪除工作區「${current.name}」嗎？\n\n其中所有交易紀錄將一併刪除，此動作無法復原。`,
+      confirmLabel: '刪除',
+      danger: true,
+    })
+    if (ok) {
+      await deleteWorkspace(current.id)
+      show('工作區已刪除')
+    }
   }
 
   return (
@@ -768,81 +778,85 @@ export function AppShell() {
 
   return (
     <>
-      <header className="app-header">
-        <div className="app-header-inner">
-          <div className="brand">
-            <BrandMark />
-            <span className="brand-text">股票小幫手</span>
-          </div>
+      <ToastProvider>
+        <ConfirmProvider>
+          <header className="app-header">
+            <div className="app-header-inner">
+              <div className="brand">
+                <BrandMark />
+                <span className="brand-text">股票小幫手</span>
+              </div>
 
-          {!narrow && <TabNav variant="header" current={view} onSelect={setView} tabs={TABS} />}
+              {!narrow && <TabNav variant="header" current={view} onSelect={setView} tabs={TABS} />}
 
-          <div className="header-spacer" />
+              <div className="header-spacer" />
 
-          <WorkspaceControls />
+              <WorkspaceControls />
 
-          <div className="header-meta">
-            <UserMenu admin={admin} onOpenAdmin={() => setView('admin')} />
-          </div>
-        </div>
-      </header>
+              <div className="header-meta">
+                <UserMenu admin={admin} onOpenAdmin={() => setView('admin')} />
+              </div>
+            </div>
+          </header>
 
-      <main className="container">
-        {error && (
-          <div className="notice notice-error section" role="alert">
-            {error}
-          </div>
-        )}
-        {loading ? (
-          <div className="glass empty-state section">載入中…</div>
-        ) : (
-          <>
-            {view === 'dashboard' && (
-              <DashboardPage
-                onSelectTicker={
-                  isReportConfigured
-                    ? (ticker) => {
-                        setAnalysisTicker(ticker)
-                        setView('analysis')
-                      }
-                    : undefined
-                }
-              />
+          <main className="container">
+            {error && (
+              <div className="notice notice-error section" role="alert">
+                {error}
+              </div>
             )}
-            {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
-            {view === 'macro' && <MacroPage />}
-            {view === 'fx' && <FxPage />}
-            {view === 'yearly' && <YearlyPage />}
-            {view === 'transactions' && <TransactionsPage />}
-            {view === 'admin' && <AdminConsolePage onExit={() => setView('dashboard')} />}
-          </>
-        )}
-      </main>
+            {loading ? (
+              <div className="glass empty-state section">載入中…</div>
+            ) : (
+              <>
+                {view === 'dashboard' && (
+                  <DashboardPage
+                    onSelectTicker={
+                      isReportConfigured
+                        ? (ticker) => {
+                            setAnalysisTicker(ticker)
+                            setView('analysis')
+                          }
+                        : undefined
+                    }
+                  />
+                )}
+                {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
+                {view === 'macro' && <MacroPage />}
+                {view === 'fx' && <FxPage />}
+                {view === 'yearly' && <YearlyPage />}
+                {view === 'transactions' && <TransactionsPage />}
+                {view === 'admin' && <AdminConsolePage onExit={() => setView('dashboard')} />}
+              </>
+            )}
+          </main>
 
-      <footer className="app-footer">
-        <p>
-          提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
-        </p>
-        {/* The GitHub link moved into the user menu (0.6.19): the footer is left to the disclaimer */}
-      </footer>
+          <footer className="app-footer">
+            <p>
+              提供的報價並非來自所有市場的即時報價 (最長可能延遲 20 分鐘)。所提供資訊均以現狀提供，僅供參考，不宜做為買賣依據或諮詢之用
+            </p>
+            {/* The GitHub link moved into the user menu (0.6.19): the footer is left to the disclaimer */}
+          </footer>
 
-      {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
-      {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
+          {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
+          {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
 
-      {/* Global "add transaction": available from any tab; the modal is mounted at the shell level so a content reload cannot drop it */}
-      {!loading && (
-        <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
-          <ListPlus size={17} />
-          新增交易
-        </button>
-      )}
-      {showAddTx && (
-        <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)} disableBackdropClose>
-          <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
-        </Modal>
-      )}
+          {/* Global "add transaction": available from any tab; the modal is mounted at the shell level so a content reload cannot drop it */}
+          {!loading && (
+            <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
+              <ListPlus size={17} />
+              新增交易
+            </button>
+          )}
+          {showAddTx && (
+            <Modal title="新增交易紀錄" onClose={() => setShowAddTx(false)} disableBackdropClose>
+              <TransactionForm onSubmit={(tx) => addTransactions([tx])} />
+            </Modal>
+          )}
 
-      {recovery && <RecoveryPasswordModal />}
+          {recovery && <RecoveryPasswordModal />}
+        </ConfirmProvider>
+      </ToastProvider>
     </>
   )
 }

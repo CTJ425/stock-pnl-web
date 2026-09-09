@@ -20,11 +20,26 @@ function fmtLots(shares: number): string {
 
 export function ForeignTopSection() {
   const [data, setData] = useState<ForeignTopData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [tab, setTab] = useState<Tab>('buy')
   const [limit, setLimit] = useState(10)
 
   useEffect(() => {
-    void fetchForeignTop().then(setData)
+    let alive = true
+    fetchForeignTop()
+      .then((d) => {
+        if (alive) setData(d)
+      })
+      .catch(() => {
+        if (alive) setError(true)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
   }, [])
 
   const allRows: ForeignTopItem[] = data ? (tab === 'buy' ? data.buyTop : data.sellTop) : []
@@ -72,7 +87,15 @@ export function ForeignTopSection() {
         </label>
       </div>
 
-      {rows.length === 0 ? (
+      {loading ? (
+        <p className="hint" style={{ marginTop: 8 }}>
+          正在讀取外資買賣超資料…
+        </p>
+      ) : error ? (
+        <div className="notice notice-error" style={{ marginTop: 8 }}>
+          讀取外資買賣超資料失敗，請稍後重新整理。
+        </div>
+      ) : rows.length === 0 ? (
         <p className="hint" style={{ marginTop: 8 }}>
           尚無外資買賣超資料
         </p>
@@ -85,12 +108,12 @@ export function ForeignTopSection() {
             <table className="data-table" aria-label="外資買賣超 TOP 50">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>代號</th>
-                  <th>名稱</th>
-                  <th className="num">買賣超(張)</th>
-                  <th className="num">買進</th>
-                  <th className="num">賣出</th>
+                  <th scope="col">#</th>
+                  <th scope="col">代號</th>
+                  <th scope="col">名稱</th>
+                  <th scope="col" className="num">買賣超(張)</th>
+                  <th scope="col" className="num">買進</th>
+                  <th scope="col" className="num">賣出</th>
                 </tr>
               </thead>
               <tbody>

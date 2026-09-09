@@ -87,13 +87,13 @@ function ProbeRow({
           <table className="data-table">
             <thead>
               <tr>
-                <th>時分</th>
-                <th>命中</th>
-                <th>資料日期</th>
-                <th className="num">列數</th>
-                <th className="num">耗時</th>
-                <th>指紋</th>
-                <th>說明</th>
+                <th scope="col">時分</th>
+                <th scope="col">命中</th>
+                <th scope="col">資料日期</th>
+                <th scope="col" className="num">列數</th>
+                <th scope="col" className="num">耗時</th>
+                <th scope="col">指紋</th>
+                <th scope="col">說明</th>
               </tr>
             </thead>
             <tbody>
@@ -247,11 +247,13 @@ export function AdminStatusPage() {
   if (failed || !data) {
     return (
       <div className="section glass" style={SECTION_PAD}>
-        <h3 className="head-tight">讀不到資料抓取狀況</h3>
-        <p className="ast-note">
-          這一頁只有管理員帳號看得到。若你確定帳號有管理員權限，可能是後端尚未部署最新版本。
-        </p>
-        <button className="btn btn-sm" onClick={() => void load()}>
+        <div className="notice notice-error">
+          <h3 className="head-tight">讀不到資料抓取狀況</h3>
+          <p className="ast-note">
+            這一頁只有管理員帳號看得到。若你確定帳號有管理員權限，可能是後端尚未部署最新版本。
+          </p>
+        </div>
+        <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => void load()}>
           重新整理
         </button>
       </div>

@@ -135,15 +135,24 @@ export function QuoteTab({
   const [range, setRange] = useState<IntradayRange>('1d')
   const [series, setSeries] = useState<IntradaySeries | null>(null)
   const [intradayLoading, setIntradayLoading] = useState(false)
+  const [intradayError, setIntradayError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setIntradayLoading(true)
-    fetchIntraday({ market: 'TPE', ticker }, range).then((s) => {
-      if (cancelled) return
-      setSeries(s)
-      setIntradayLoading(false)
-    })
+    setIntradayError(false)
+    fetchIntraday({ market: 'TPE', ticker }, range)
+      .then((s) => {
+        if (cancelled) return
+        setSeries(s)
+        setIntradayLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSeries(null)
+        setIntradayError(true)
+        setIntradayLoading(false)
+      })
     return () => {
       cancelled = true
     }
@@ -246,6 +255,7 @@ export function QuoteTab({
           <IntradayChart
             series={series}
             loading={intradayLoading}
+            error={intradayError}
             range={range}
             onRangeChange={setRange}
             tradeDate={quote.tradeDate}

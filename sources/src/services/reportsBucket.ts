@@ -39,13 +39,15 @@ export const REPORTS_BUCKET = 'reports'
  */
 export async function downloadReportsJson<T>(path: string): Promise<T | null> {
   if (!isSupabaseConfigured || !supabase) return null
+  const { data } = supabase.storage.from(REPORTS_BUCKET).getPublicUrl(path)
   try {
-    const { data } = supabase.storage.from(REPORTS_BUCKET).getPublicUrl(path)
     const res = await fetch(data.publicUrl, { cache: 'no-store' })
-    if (!res.ok) return null
+    if (res.status === 404) return null
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as T
   } catch (err) {
-    logClient('error', 'downloadReportsJson', err instanceof Error ? err.message : String(err), {})
-    return null
+    const message = err instanceof Error ? err.message : String(err)
+    logClient('error', 'downloadReportsJson', message, { path })
+    throw new Error(`downloadReportsJson(${path}): ${message}`)
   }
 }

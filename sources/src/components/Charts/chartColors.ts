@@ -11,6 +11,10 @@ export const CHART_COLORS = {
   axis: '#8d8d8d', // Carbon gray 50
   grid: 'rgba(141, 141, 141, 0.3)',
   zero: 'rgba(141, 141, 141, 0.7)',
+  guide: 'rgba(138, 148, 163, 0.45)', // MultiLineChart's dashed reference lines (e.g. KD's 20/80)
+  bbUpper: '#a8a8a8', // Bollinger upper band (TechnicalTab), Carbon gray 30
+  bbLower: '#6f6f6f', // Bollinger lower band (TechnicalTab), Carbon gray 60
+  vwap: '#08bdba', // Intraday 均價 line (IntradayChart); mirrors --accent-2 (index.css) as a literal
 } as const
 
 /**

@@ -26,13 +26,20 @@ export function LogsSection() {
   const [source, setSource] = useState<LogSource | ''>('')
   const [hasMore, setHasMore] = useState(false)
   const [openId, setOpenId] = useState<number | null>(null)
+  const [error, setError] = useState(false)
 
   const load = useCallback(async (lv: LogLevel | '', src: LogSource | '') => {
     setLoading(true)
-    const data = await fetchAppLogs({ limit: LIMIT, level: lv || undefined, source: src || undefined })
-    setRows(data)
-    setHasMore(data.length === LIMIT)
-    setLoading(false)
+    setError(false)
+    try {
+      const data = await fetchAppLogs({ limit: LIMIT, level: lv || undefined, source: src || undefined })
+      setRows(data)
+      setHasMore(data.length === LIMIT)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   // Changing a filter refetches from the start.
@@ -44,15 +51,20 @@ export function LogsSection() {
     const last = rows[rows.length - 1]
     if (!last) return
     setLoadingMore(true)
-    const more = await fetchAppLogs({
-      limit: LIMIT,
-      level: level || undefined,
-      source: source || undefined,
-      before: last.at,
-    })
-    setRows((prev) => [...prev, ...more])
-    setHasMore(more.length === LIMIT)
-    setLoadingMore(false)
+    try {
+      const more = await fetchAppLogs({
+        limit: LIMIT,
+        level: level || undefined,
+        source: source || undefined,
+        before: last.at,
+      })
+      setRows((prev) => [...prev, ...more])
+      setHasMore(more.length === LIMIT)
+    } catch {
+      setError(true)
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   return (
@@ -101,6 +113,10 @@ export function LogsSection() {
         <p className="hint" style={{ marginTop: 12 }}>
           正在讀取執行記錄…
         </p>
+      ) : error ? (
+        <div className="notice notice-error" style={{ marginTop: 12 }}>
+          讀取執行記錄失敗，請稍後重新整理。
+        </div>
       ) : rows.length === 0 ? (
         <p className="hint" style={{ marginTop: 12 }}>
           目前沒有記錄

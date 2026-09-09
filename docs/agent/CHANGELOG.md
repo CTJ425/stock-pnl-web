@@ -2,6 +2,22 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.37（2026-09-09）— 全站轉為 IBM Carbon Design，並完成 21 項 UI/UX 稽核修正
+
+- 🎨 **全站 UI/UX 轉為 IBM Carbon Design**：圖層階層、字級 ramp、間距節奏與 UI Shell 頁首全面重整；資料表補足四階對比解決長表視覺疲勞，後台兩個 div 表格一併納入；探針戰情室卡片改用 Carbon 狀態線，色相從四種收斂為兩種。Carbon profile 存入 repo。
+- ♿ **字級全面 token 化**：新增六個 `--type-*` rem token，取代 `index.css` 內全部 194 處寫死的 `font-size: Npx`。此前瀏覽器字級設定對本站完全無效（WCAG 1.4.4）；因無根字級覆寫，換算在預設 16px 下完全等價，畫面尺寸不變。
+- ♿ **表格語義補齊**：19 個檔案、139 個欄位標頭 `<th>` 補上 `scope`，此前一個都沒有。螢幕閱讀器現在能把儲存格對回欄位名（WCAG 1.3.1）。
+- ♿ **對話框焦點管理**：共用 `Modal` 補上 `aria-modal`、開啟時焦點移入、Tab／Shift+Tab 焦點鎖、關閉時焦點歸還觸發元素（WCAG 2.4.3）。
+- ♿ **可點列的鍵盤路徑**：新增 `useRowActivate` hook，儀表板持股列與自選股卡片／表格列此前只有 `onClick`，鍵盤使用者無法從儀表板進入個股頁。損益試算階梯列一併採用。
+- ♿ **動態偏好與分頁語義**：新增 `prefers-reduced-motion` 區塊，停掉 `shimmer` 與 `spin` 兩個無限動畫（WCAG 2.3.3）；個股頁兩層分頁統一為 `role="tablist"`，支援方向鍵與 Home／End，分頁狀態改存 URL query，重整與分享連結不再掉回預設頁。
+- 🔔 **統一回饋與確認**：新增 `Toast`（`aria-live` 播報、5 秒自動消失）與 `useConfirm`（走自有 Modal），取代全部 5 處原生 `window.alert` / `window.confirm`。此前單筆刪除、編輯交易、手續費重算成功後完全沒有回饋。自選股移除改為刪除後可復原。
+- 🐛 **修正資料層把網路失敗當成「沒有資料」**：`downloadReportsJson` 過去 catch 全部錯誤並回傳 `null`，與「報告尚未產生」同值，導致總經與後台五個畫面的錯誤狀態永遠觸發不到。現在僅 HTTP 404 回 `null`，網路失敗、5xx、JSON 解析失敗一律拋出；`fetchAppLogs` 同理，`[]` 只代表真的沒有紀錄。`logClient` 維持吞掉自身錯誤，因為會拋例外的 logger 會拖垮呼叫它的 catch 區塊。
+- 🐛 **修正匯率頁在網路失敗時永遠轉圈**：`FxPage.load` 沒有 catch，且 `setLoading(false)` 在 await 之後，資料層改為拋出後會讓頁面卡在載入中。已補 catch、錯誤畫面與重新載入按鈕，並新增 3 條回歸測試。`LogsSection.loadMore` 同樣補上 catch。
+- 📱 **行動版溢出修正**：`.adm-log-head` 固定欄寬合計 472px 加間距，390px 手機必定橫向溢出，窄螢幕改為兩欄；`.market-grid` 最小欄寬從 340px 降到 280px；`.btn-sm` 與圖示按鈕在 720px 以下從 32px 提高到 40px。
+- 🧹 **樣式清理**：移除 `:root` 以外的原始色值與 `var(--danger, #c44)` 硬編 fallback；`StockSplitModal` 的 11 處非 Carbon 色值（含 `#78a9ff`）改用 token；刪除 `.mac-behind`、`.ast-fail`、`.col-trend-rowspan` 三個未使用 class；skeleton 改用 `ch` 寬度避免載入完成時欄位跳動。`.report-surface` 的字面值刻意保留，html2canvas 無法解析 CSS 變數，改掉會讓 PDF 全黑。
+- 📄 **文件中繼資料**：`index.html` 補上 `description`、`theme-color` 與 web manifest，`applyTheme()` 同步更新 `theme-color`。
+- ✅ **測試**：新增 25 條測試，總數 1732 → 1757，全部通過；`npm run build` 與 `npm run typecheck:edge` 皆 exit 0。
+
 ### 0.9.36（2026-09-07）— 帳號頭像現代扁平化重構：採用當代雙弧線條人像圖標
 
 - 🎨 **汰換帳號數字前綴縮寫頭像**：原系統在登入狀態下以信箱/帳號前兩碼（如 `09` 或 `ME`）作為 30px 圓徽縮寫，造成視覺割裂感與不必要的號碼辨識問題。全面重構為專屬的現代扁平化（Modern Flat）人像圖標（Style 06：當代雙弧線條人像 `Contemporary Architect Arc`）。

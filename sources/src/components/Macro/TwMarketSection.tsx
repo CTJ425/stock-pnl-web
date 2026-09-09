@@ -194,6 +194,7 @@ function taiexTrendStreak(days: MarketDay[]): { label: string | null; color: str
 export function TwMarketSection() {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   /** Which amount the institutional matrix shows (0.7.6). */
   const [instMetric, setInstMetric] = useState<InstMetric>('net')
   /*
@@ -206,9 +207,15 @@ export function TwMarketSection() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const data = await fetchMarketDaily()
-    setMarket(data)
-    setLoading(false)
+    setError(false)
+    try {
+      const data = await fetchMarketDaily()
+      setMarket(data)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -222,6 +229,14 @@ export function TwMarketSection() {
           <RefreshCw size={24} className="spin" />
           <div style={{ marginTop: 10 }}>正在讀取台股市場資料…</div>
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="section glass" style={{ padding: '18px 20px' }}>
+        <div className="notice notice-error">讀取台股市場資料失敗，請稍後重新整理。</div>
       </div>
     )
   }
@@ -491,12 +506,12 @@ export function TwMarketSection() {
           <table className="data-table inst-matrix" aria-label="每日成交量">
             <thead>
               <tr>
-                <th>日期</th>
-                <th className="num">成交金額（億元）</th>
-                <th className="num">成交股數（億股）</th>
-                <th className="num">成交筆數（萬筆）</th>
-                <th className="num">加權指數</th>
-                <th className="num">指數漲跌</th>
+                <th scope="col">日期</th>
+                <th scope="col" className="num">成交金額（億元）</th>
+                <th scope="col" className="num">成交股數（億股）</th>
+                <th scope="col" className="num">成交筆數（萬筆）</th>
+                <th scope="col" className="num">加權指數</th>
+                <th scope="col" className="num">指數漲跌</th>
               </tr>
             </thead>
             <tbody>
@@ -711,9 +726,9 @@ export function TwMarketSection() {
           <table className="data-table inst-matrix" aria-label="三大法人買賣超">
             <thead>
               <tr>
-                <th>日期</th>
+                <th scope="col">日期</th>
                 {UNITS.map((u) => (
-                  <th
+                  <th scope="col"
                     key={u.key}
                     className={`num ${u.key === 'totalTwd' ? 'col-total' : ''}`}
                   >

@@ -19,6 +19,7 @@ import {
 } from '../../utils/formatters'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useRowActivate } from '../../hooks/useRowActivate'
 
 type Unit = '張' | '股'
 
@@ -164,12 +165,6 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
 
   const pick = (row: LadderRow) => setSellPrice(String(row.price))
   const pickPrice = (price: number) => setSellPrice(String(price))
-  const onRowKeyDown = (row: LadderRow) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      pick(row)
-    }
-  }
 
   return (
     <div className="rpt-section">
@@ -204,16 +199,20 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
             <table className="data-table whatif-ladder" data-testid="whatif-ladder">
               <thead>
                 <tr>
-                  <th>賣出價</th>
-                  <th className="num">{anchorsOnAvgCost ? '相對均價' : '相對現價'}</th>
-                  <th className="num">損益</th>
-                  <th className="num">報酬率</th>
-                  <th className="num">實收</th>
+                  <th scope="col">賣出價</th>
+                  <th scope="col" className="num">{anchorsOnAvgCost ? '相對均價' : '相對現價'}</th>
+                  <th scope="col" className="num">損益</th>
+                  <th scope="col" className="num">報酬率</th>
+                  <th scope="col" className="num">實收</th>
                 </tr>
               </thead>
               <tbody>
                 {ladder.map((row, i) => {
                   const showGap = i > 0 && ladder[i - 1].group !== row.group
+                  const rowLabel = `賣出價 ${fmtMoney(row.price, 'TWD', 2)}${
+                    LADDER_TAG[row.kind] ? `（${LADDER_TAG[row.kind]}）` : ''
+                  }`
+                  const activateRow = useRowActivate(() => pick(row), rowLabel)
                   return (
                     <Fragment key={row.price}>
                       {showGap && (
@@ -225,9 +224,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
                         className={`whatif-ladder-row whatif-ladder-row--${row.kind}`}
                         data-testid="whatif-ladder-row"
                         data-kind={row.kind}
-                        tabIndex={0}
-                        onClick={() => pick(row)}
-                        onKeyDown={onRowKeyDown(row)}
+                        {...activateRow}
                       >
                         <td>
                           {fmtMoney(row.price, 'TWD', 2)}

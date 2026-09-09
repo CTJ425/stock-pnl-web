@@ -70,8 +70,8 @@ const MA_COLORS = {
 /** Bollinger: mid aligns with MA20 orange; upper/lower use slate (literal for PDF) */
 const BB_COLORS = {
   mid: CATEGORICAL_COLORS[1],
-  upper: '#a8a8a8',
-  lower: '#6f6f6f',
+  upper: CHART_COLORS.bbUpper,
+  lower: CHART_COLORS.bbLower,
 } as const
 
 const KD_COLORS = { k: CATEGORICAL_COLORS[0], d: CATEGORICAL_COLORS[3] } as const
@@ -313,11 +313,11 @@ export function TechnicalTab({
           <table className="data-table inst-matrix" aria-label="每日成交量矩陣">
             <thead>
               <tr>
-                <th>日期</th>
-                <th className="num">成交量</th>
-                <th className="num">量比</th>
-                <th className="num">收盤價</th>
-                <th className="num">漲跌幅</th>
+                <th scope="col">日期</th>
+                <th scope="col" className="num">成交量</th>
+                <th scope="col" className="num">量比</th>
+                <th scope="col" className="num">收盤價</th>
+                <th scope="col" className="num">漲跌幅</th>
               </tr>
             </thead>
             <tbody>

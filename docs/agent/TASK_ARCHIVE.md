@@ -11,6 +11,50 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 149: UI/UX audit remediation on feat/carbon-design (21 findings)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 15:15:32 Asia/Taipei
+- **Gates**: `npm run build` exit 0 · `npm run typecheck:edge` exit 0 · full suite 107 files / 1757 tests / exit 0 (baseline was 103 / 1732)
+- **Scope**: 42 files changed, 8 new files, +1150 / -579 lines.
+
+Accessibility
+1. Type ramp: added six `--type-*` rem tokens and replaced all 194 raw `font-size: Npx` declarations in `index.css`. Zero px font sizes remain, so browser font scaling now works. No root font-size override exists, so the rem values are exactly equivalent at the default 16px.
+2. `scope` added to all 139 column-header `<th>` across 19 files. Zero `<th>` without `scope` remain.
+3. `Modal.tsx` gained `aria-modal`, focus move on open, a Tab/Shift+Tab trap, and focus restore on close. Covered by 5 new tests.
+4. Three click-only rows (`DashboardPage`, `WatchSection` card and table row) now spread the new `useRowActivate` hook, so Enter and Space activate them. `WhatIfTab` ladder rows adopted the same hook.
+5. `@media (prefers-reduced-motion: reduce)` block added; it stops the two infinite animations (`shimmer 1.4s`, `spin 1s`).
+6. Stock detail tabs: both levels now use `role="tablist"`/`role="tab"`/`aria-selected` and support ArrowLeft/ArrowRight/Home/End.
+
+Feedback and error handling
+7. New shared infrastructure: `Common/Toast.tsx` (aria-live region, 5s auto-dismiss), `Common/useConfirm.tsx` (renders through the existing Modal, resolves a Promise), `hooks/useRowActivate.ts`. 20 new tests.
+8. All 5 native `window.alert` / `window.confirm` calls replaced. Zero remain in `sources/src`.
+9. Swallowed errors surfaced in `WatchSection` (load and price fetch) and `TransactionsPage` (single and batch delete).
+10. Success feedback added where writes were silent: single delete, batch delete, edit, fee recalculation, AI config save and clear, admin toggle, watchlist removal (with an undo path).
+11. Missing loading/error branches added to `QuoteTab`, `ChipsTab`, `FundamentalTab`, `IntradayChart`, `TwMarketSection`, `MacroPage`, `ForeignTopSection`, `AdminStatusPage`, `LogsSection`.
+
+Root cause behind item 11
+12. `downloadReportsJson` in `reportsBucket.ts` used to catch every failure and return `null` — the same value it returns for "the report is not generated yet". Every error state above it was therefore unreachable. It now returns `null` only for a genuinely absent object (HTTP 404) and throws on a network failure, an HTTP 5xx, or unparseable JSON. `fetchAppLogs` likewise now throws on an invoke error and keeps `[]` only for a genuinely empty result. `logClient` still swallows its own errors deliberately, because a logger that throws would take down its caller.
+13. Seven services reach `downloadReportsJson` and none catches, so the throw propagates to the UI. Two call sites lacked a catch and were fixed: `LogsSection.loadMore` and `FxPage.load`. The second was found by review, not by the first scout pass, and was the more serious of the two: `setLoading(false)` sat after the await, so a network failure left the FX page spinning forever. Three regression tests were added for it.
+
+Layout, tokens and cleanup
+14. `.adm-log-head` had 472px of fixed grid columns plus gaps and could not fit a 390px phone; it collapses to `1fr auto` under 720px. `.market-grid` minimum column dropped from 340px to 280px.
+15. `.btn-sm` and `.btn-sm.btn-icon` raised from 32px to 40px under 720px.
+16. Raw colour literals removed from `index.css` outside `:root` and from `StockSplitModal.tsx` (11 of them, including the non-Carbon `#78a9ff`). All `var(--danger, #c44)` hardcoded fallbacks deleted. `.report-surface` literals were left alone on purpose — html2canvas cannot resolve CSS variables and would render the PDF black.
+17. Three unused classes deleted: `.mac-behind`, `.ast-fail`, `.col-trend-rowspan`.
+18. Skeleton placeholders switched from fixed px widths to `ch` widths so columns stop jumping on load.
+19. `index.html` gained `description`, `theme-color` and a web manifest; `applyTheme()` now keeps `theme-color` in step with the active theme.
+20. CSV import textarea gained an accessible name; its preview table minimum width dropped from 560px to 420px.
+
+Two audit findings were withdrawn after checking the code
+21. A3 "focus is invisible" was WRONG. `index.css` already had a bare universal `:focus-visible` rule covering every element, including buttons, links and `[role="tab"]`. The audit scout searched only for element-level `button {}` selectors and missed it. The rule added on the strength of that finding also changed `outline-offset` from the deliberate `-2px` (drawn inside the control, per the file's own Carbon comment) to `2px`, so it was removed. All four `outline: none` sites were separately confirmed to already have replacement focus styles.
+22. B5's confirmation gate for `RecalcFeesModal` and `StockSplitModal` was withdrawn. Both apply buttons already name the affected row count ("更新勾選的 N 筆手續費", "確認套用分割換算（更新 N 筆紀錄）") inside a modal the user opened deliberately, so a second dialog asked the same question twice and turned 10 existing tests red. The success toast, which was genuinely missing, was kept.
+
+One finding could not be implemented as written
+23. B6 asked for the five breakpoints (560, 720, 900, 1020, 1120px) to become tokens. CSS custom properties do not work inside media query conditions, so this is not possible in plain CSS. A comment block naming the five sanctioned breakpoints and the narrow-first convention was added instead. The concrete overflow this finding pointed at is fixed by item 14.
+
+---
+
 ### Task 148: Carbon refinement pass — layer contexts, type ramp, spacing, UI Shell
 - **Status**: ✅ DONE
 - **Agent**: Claude

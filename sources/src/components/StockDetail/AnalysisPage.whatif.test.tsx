@@ -94,7 +94,7 @@ beforeEach(() => {
 describe('個股分析 → 損益試算：持股成本要真的走到試算頁', () => {
   it('買進價帶持股均價 104.23，不是現價 103.80', async () => {
     render(<AnalysisPage />)
-    fireEvent.click(await screen.findByRole('button', { name: '損益試算' }))
+    fireEvent.click(await screen.findByRole('tab', { name: '損益試算' }))
 
     await waitFor(() =>
       expect((screen.getByLabelText('買進價格') as HTMLInputElement).value).toBe('104.23'),
@@ -104,7 +104,7 @@ describe('個股分析 → 損益試算：持股成本要真的走到試算頁',
 
   it('投入成本與損益與庫存總覽同一口徑', async () => {
     render(<AnalysisPage />)
-    fireEvent.click(await screen.findByRole('button', { name: '損益試算' }))
+    fireEvent.click(await screen.findByRole('tab', { name: '損益試算' }))
 
     const num = (t: string) => Number((screen.getByTestId(t).textContent || '').replace(/[^\d.-]/g, ''))
     await waitFor(() => expect(num('whatif-cost')).toBe(417492))

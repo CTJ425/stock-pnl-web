@@ -5,6 +5,17 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-09 09:36:25 Asia/Taipei (Task 147, 0.9.36, branch `feat/carbon-design`)
+
+**The whole UI moves from the glassmorphism design system to IBM Carbon Design.**
+
+- **Approach**: The stylesheet already routed every color through a token layer, so the conversion is a token rewrite plus a component-geometry rewrite in `sources/src/index.css`. No component file needed a class change. Carbon tokens are added under a `--cds-*` prefix, and every historic token name stays as an alias on top of them.
+- **Changed**: Carbon Gray 100 (dark) and Carbon White (light) palettes; IBM Plex Sans and IBM Plex Mono; square corners; the Carbon spacing scale; Carbon tabs, buttons, text inputs, data tables, modals, inline notifications, overflow menus, content switchers and tags; a 2px `$focus` ring inside every control; Carbon motion curves; and the Carbon data-visualization palette in `chartColors.ts`.
+- **Verified**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots on both themes show the dashboard, the transactions table, the transaction modal and the yearly report.
+- **Not done on purpose**: no version bump, no merge. The work sits on `feat/carbon-design`; `dev` and `main` are untouched.
+
+---
+
 ## 📅 Log: 2026-09-07 11:35:00 Asia/Taipei (Session Memory Housekeeping & Archiving)
 
 **Major memory cleanup across session hot files to reduce startup token burn.**

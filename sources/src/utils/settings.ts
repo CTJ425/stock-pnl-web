@@ -40,6 +40,9 @@ export function applyTheme(pref: ThemePref): void {
   const resolved = pref === 'system' ? (systemDark ? 'dark' : 'light') : pref
   document.documentElement.dataset.theme = resolved
   document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', resolved)
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', resolved === 'dark' ? '#161616' : '#ffffff')
 }
 
 function readRate(key: string): number | null {

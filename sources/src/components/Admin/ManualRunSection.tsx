@@ -199,7 +199,7 @@ export function ManualRunSection() {
         <table className="data-table">
           <thead>
             <tr>
-              <th style={{ width: 40 }}>
+              <th scope="col" style={{ width: 40 }}>
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -211,10 +211,10 @@ export function ManualRunSection() {
                   disabled={busy}
                 />
               </th>
-              <th>項目</th>
-              <th>對應排程</th>
-              <th>說明</th>
-              <th style={{ width: 100 }} />
+              <th scope="col">項目</th>
+              <th scope="col">對應排程</th>
+              <th scope="col">說明</th>
+              <th scope="col" style={{ width: 100 }} />
             </tr>
           </thead>
           <tbody>
@@ -352,12 +352,12 @@ export function ManualRunSection() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 36 }}>#</th>
-                  <th>項目</th>
-                  <th style={{ width: 88 }}>狀態</th>
-                  <th style={{ width: 72 }}>HTTP</th>
-                  <th style={{ width: 88 }}>耗時</th>
-                  <th>摘要</th>
+                  <th scope="col" style={{ width: 36 }}>#</th>
+                  <th scope="col">項目</th>
+                  <th scope="col" style={{ width: 88 }}>狀態</th>
+                  <th scope="col" style={{ width: 72 }}>HTTP</th>
+                  <th scope="col" style={{ width: 88 }}>耗時</th>
+                  <th scope="col">摘要</th>
                 </tr>
               </thead>
               <tbody>

@@ -248,6 +248,7 @@ export function FxPage() {
   const [fx, setFx] = useState<FxData | null>(null)
   const [quotes, setQuotes] = useState<FxQuoteMap>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<string | null>(readSelected)
 
   /**
@@ -257,10 +258,27 @@ export function FxPage() {
    */
   const load = useCallback(async (force = false) => {
     setLoading(true)
-    const d = await fetchFx()
+    let d: FxData | null = null
+    try {
+      d = await fetchFx()
+      setLoadError(false)
+    } catch {
+      // fetchFx now throws on a real network/5xx/bad-JSON failure and returns null only when the
+      // file is genuinely absent. Without this catch the rejection is unhandled and the `finally`
+      // below never runs, so the page spins forever instead of saying what went wrong.
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
     setFx(d)
-    setLoading(false)
-    if (d) setQuotes(await fetchFxQuotes(d.currencies.map((c) => c.code), force))
+    if (d) {
+      // A failed quote is a bonus that is missing, not a broken page (see the note above).
+      try {
+        setQuotes(await fetchFxQuotes(d.currencies.map((c) => c.code), force))
+      } catch {
+        // Keep whatever quotes we already have; cardView falls back to the traded price.
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -280,6 +298,19 @@ export function FxPage() {
       <div className="glass empty-state section">
         <RefreshCw size={28} className="spin" />
         <div style={{ marginTop: 10 }}>正在讀取匯率資料…</div>
+      </div>
+    )
+  }
+
+  // A failed fetch and a report that has not been generated yet are different situations and must
+  // not share a screen: one is worth retrying now, the other is worth coming back for later.
+  if (loadError && !fx) {
+    return (
+      <div className="notice notice-error section">
+        <div>匯率資料讀取失敗，可能是網路或伺服器問題。</div>
+        <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => void load(true)}>
+          重新載入
+        </button>
       </div>
     )
   }
