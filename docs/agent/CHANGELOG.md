@@ -2,6 +2,12 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.38（2026-09-09）— 修復資料表漲跌紅綠與未實現損益顏色覆蓋問題
+
+- 🐛 **修復資料表漲跌紅綠與損益數值顏色覆蓋**：0.9.37 引入 Carbon 資料表四階對比時，`.data-table td`、`.data-table td.num > div:first-child` 與 `.data-table tbody tr:hover td` 樣式因 CSS 權重問題，覆蓋了原本 `.pnl-up`（紅）、`.pnl-down`（綠）與 `.pnl-flat`（次要文字）設定，導致庫存總覽與年度收益等頁面的現價漲跌、保本賣出價、未實現淨損益與未實現報酬率失去紅綠色彩，並在滑鼠懸停時被強制轉為文字主色。
+- 🎨 **完整補齊 `.data-table` 損益語義樣式權重**：於 `sources/src/index.css` 補齊 `.data-table` 專屬之 `.pnl-up`、`.pnl-down`、`.pnl-flat` 規則，涵蓋 `td.pnl-*`、`td.num.pnl-*`、主數值 `> div:first-child` 以及滑鼠懸停 `tbody tr:hover` 狀態，同時保留數值單元格副標籤（如未含費、券商口徑）的階層式輔助文字對比。
+- ✅ **測試與防回歸保護**：於 `DashboardPage.test.tsx` 新增獲利與虧損情境下之類別斷言，並新增 `tablePnlStyles.test.ts` 驗證 CSS 規則與串接順序，108 個測試檔 / 1759 項測試全數通過；`npm run build` 與 `npm run typecheck:edge` 皆 exit 0。
+
 ### 0.9.37（2026-09-09）— 全站轉為 IBM Carbon Design，並完成 21 項 UI/UX 稽核修正
 
 - 🎨 **全站 UI/UX 轉為 IBM Carbon Design**：圖層階層、字級 ramp、間距節奏與 UI Shell 頁首全面重整；資料表補足四階對比解決長表視覺疲勞，後台兩個 div 表格一併納入；探針戰情室卡片改用 Carbon 狀態線，色相從四種收斂為兩種。Carbon profile 存入 repo。

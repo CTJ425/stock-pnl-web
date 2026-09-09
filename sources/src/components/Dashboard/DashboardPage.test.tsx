@@ -448,5 +448,54 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
       expect(div.style.fontSize).toBe('')
     }
   })
+
+  it('持股列表數值單元格正確帶上 pnl-up 與 pnl-down 類別（漲跌、保本價、未實現淨損益、報酬率）', () => {
+    // 獲利情境：2330 買進 950，現價 1000（昨收 980，漲）
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const rowWin = screen.getByTestId('holding-row-2330')
+    const cellsWin = rowWin.querySelectorAll('td.num')
+    // 欄位依序：現價(0)、股數(1)、投入成本(2)、平均買入成本(3)、保本賣出價(4)、目前市值(5)、未實現淨損益(6)、未實現報酬率(7)
+    expect(cellsWin[0].className).toContain('pnl-up') // 現價（日漲跌 > 0）
+    expect(cellsWin[4].className).toContain('pnl-up') // 保本賣出價（現價 > 保本價）
+    expect(cellsWin[6].className).toContain('pnl-up') // 未實現淨損益 > 0
+    expect(cellsWin[7].className).toContain('pnl-up') // 未實現報酬率 > 0
+
+    // 虧損情境：2330 買進 1050，現價 1000（昨收 1020，跌）
+    const lossTx: Transaction = {
+      id: 'tx-loss',
+      workspace_id: 'ws-1',
+      tx_date: '2026-08-01',
+      market: 'TPE',
+      ticker: '2330',
+      name: '台積電',
+      tx_type: 'BUY',
+      price: 1050,
+      qty: 1000,
+      fee_tax: 1496,
+      created_at: '2026-08-01T00:00:00Z',
+    }
+    useWorkspace.mockReturnValue({
+      ledger: computeLedger([lossTx]),
+      current: { id: 'ws-1', name: '主要工作區' },
+      loading: false,
+      error: null,
+    })
+    useStockPrices.mockReturnValue({
+      prices: {
+        'TPE:2330': { price: 1000, prevClose: 1020, asOf: '', source: 'twse', stale: false, trial: false },
+      },
+      loading: false,
+      refreshedAt: new Date('2026-08-25T10:00:00Z'),
+      refresh: vi.fn(),
+    })
+    cleanup()
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    const rowLoss = screen.getByTestId('holding-row-2330')
+    const cellsLoss = rowLoss.querySelectorAll('td.num')
+    expect(cellsLoss[0].className).toContain('pnl-down') // 現價（日跌）
+    expect(cellsLoss[4].className).toContain('pnl-down') // 保本賣出價（現價 < 保本價）
+    expect(cellsLoss[6].className).toContain('pnl-down') // 未實現淨損益 < 0
+    expect(cellsLoss[7].className).toContain('pnl-down') // 未實現報酬率 < 0
+  })
 })
 
