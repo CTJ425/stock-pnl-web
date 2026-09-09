@@ -17,8 +17,8 @@
   2. 數值儲存格副標籤（如「未含費 …」、「券商 …」）因匹配 `:not(:first-child)` 與 inline 樣式，精準維持次要／輔助文字階層，不受紅綠主色干擾。
 - **驗證**:
   - `DashboardPage.test.tsx` 新增持股列表獲利／虧損之數值儲存格 class 斷言（現價、保本價、未實現淨損益、報酬率）。
-  - 新增 `sources/src/styles/tablePnlStyles.test.ts` 驗證 CSS 規則包含狀態與串接順序。
-  - `npm test` exit 0（108 測試檔 / 1759 測試全數通過）。
+  - `sources/src/styles/tablePnlStyles.test.ts` 新增 JSDOM 實體 DOM 計算樣式（`getComputedStyle`）深度驗證，嚴格確認各種單元格類型、階層標籤及 hover 規則在 CSS 級聯下之色彩表現。
+  - `npm test` exit 0（108 測試檔 / 1760 測試全數通過）。
   - `npm run build` exit 0。
   - `npm run typecheck:edge` exit 0。
 - **版本更新**: 同步 5 檔案升版至 0.9.38，依使用者指示合併至 main。

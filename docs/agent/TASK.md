@@ -13,7 +13,7 @@
 
 - **Version 0.9.38 — released and live on PROD.** `main` and `dev` are synchronized at `0.9.38`.
   - Implemented: 修復資料表漲跌紅綠與未實現損益顏色覆蓋（0.9.38）、全站 IBM Carbon Design 轉換與 21 項 UI/UX 稽核修正（0.9.37）、帳號頭像重構為現代扁平人像圖標（0.9.36）、全域錯誤捕捉 `app_log` 與後台檢視頁（0.9.35）、融券借券費精準計算與 PostgREST 1000 筆截斷修復（0.9.34）。
-  - Verification: 108 test files / **1,759** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint` 0 errors on changed files.
+  - Verification: 108 test files / **1,760** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint` 0 errors on changed files.
   - Edge Functions: `stock-price` is **v5**, `stock-report` is **v8**, `backup-transactions` is **v4** on both cloud environments (`zyebvayngwrqzoaicbwd` DEV, `hrilemueiqyaoiwnkeuu` PROD).
   - Database: DEV and PROD schemas synchronized (including `app_log` table, indexes, RPCs, and 7 pg_cron jobs on each).
   - Known and not done: end-to-end Playwright run for the 融券 flow; `.inst-matrix tfoot td` hardcoded white overlay inverted under light theme.
