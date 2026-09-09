@@ -242,7 +242,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               gap: 12,
               background: 'var(--surface-subtle, rgba(255, 255, 255, 0.03))',
               padding: 14,
-              borderRadius: 8,
+              borderRadius: 0,
               border: '1px solid var(--border)',
             }}
           >
@@ -335,11 +335,11 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                   background: 'rgba(56, 189, 248, 0.08)',
                   border: '1px solid rgba(56, 189, 248, 0.25)',
                   padding: '8px 12px',
-                  borderRadius: 6,
+                  borderRadius: 0,
                   fontSize: 12,
                 }}
               >
-                <Sparkles size={14} style={{ color: 'var(--accent, #38bdf8)', flexShrink: 0 }} />
+                <Sparkles size={14} style={{ color: 'var(--accent, #78a9ff)', flexShrink: 0 }} />
                 <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                   <input
                     type="checkbox"
@@ -382,7 +382,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                 style={{
                   background: 'var(--surface-card, rgba(255, 255, 255, 0.05))',
                   border: '1px solid var(--border)',
-                  borderRadius: 8,
+                  borderRadius: 0,
                   padding: 14,
                 }}
               >
@@ -403,7 +403,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                     <div className="kpi-label">總買入股數</div>
                     <div className="kpi-value" style={{ fontSize: 16 }}>
                       {fmtQty(totalQtyBefore)} →{' '}
-                      <span style={{ color: 'var(--accent, #38bdf8)', fontWeight: 700 }}>
+                      <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
                         {fmtQty(totalQtyAfter)}
                       </span>{' '}
                       股
@@ -414,7 +414,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                     <div className="kpi-label">平均買進單價</div>
                     <div className="kpi-value" style={{ fontSize: 16 }}>
                       {fmtPrice(avgPriceBefore, currency)} →{' '}
-                      <span style={{ color: 'var(--accent, #38bdf8)', fontWeight: 700 }}>
+                      <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
                         {fmtPrice(avgPriceAfter, currency)}
                       </span>
                     </div>
@@ -426,7 +426,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                       {totalCostBefore !== totalCostAfter ? (
                         <>
                           {fmtMoney(totalCostBefore, currency)} →{' '}
-                          <span style={{ color: 'var(--accent, #38bdf8)', fontWeight: 700 }}>
+                          <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
                             {fmtMoney(totalCostAfter, currency)}
                           </span>
                         </>
@@ -464,11 +464,11 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                           </td>
                           <td className="num">
                             {fmtQty(item.oldQty)} →{' '}
-                            <strong style={{ color: 'var(--accent, #38bdf8)' }}>{fmtQty(item.newQty)}</strong>
+                            <strong style={{ color: 'var(--accent, #78a9ff)' }}>{fmtQty(item.newQty)}</strong>
                           </td>
                           <td className="num">
                             {fmtPrice(item.oldPrice, currency)} →{' '}
-                            <strong style={{ color: 'var(--accent, #38bdf8)' }}>
+                            <strong style={{ color: 'var(--accent, #78a9ff)' }}>
                               {fmtPrice(item.newPrice, currency)}
                             </strong>
                           </td>
@@ -479,7 +479,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                                   {fmtMoney(item.oldFeeTax, currency)}
                                 </span>
                                 →{' '}
-                                <strong style={{ color: 'var(--accent, #38bdf8)' }}>
+                                <strong style={{ color: 'var(--accent, #78a9ff)' }}>
                                   {fmtMoney(item.feeTax, currency)}
                                 </strong>
                               </span>

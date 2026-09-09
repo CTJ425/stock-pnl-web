@@ -5,6 +5,21 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-07 10:40:00 Asia/Taipei (0.9.36 released: 帳號頭像現代扁平化重構)
+
+**User Avatar Redesign: Style 06 (Contemporary Architect Arc) released as 0.9.36.**
+
+- **Problem**: Previously, `AppShell.tsx:406` extracted the first two characters of the user's email/account (`email.slice(0, 2).toUpperCase() || 'ME'`) to render inside the circular 30px avatar badge (`.hmenu-avatar`). For phone/number-based accounts, this rendered disjointed digits like `09` or `88`, causing visual discord and lacking modern financial identity.
+- **Solution**: Designed 6 modern flat icon concepts and a dedicated set of 6 human persona variants with interactive HTML demo in `docs/avatar-icon-designs.html`. Per user selection, implemented **Style 06: 當代雙弧線條人像 (`Contemporary Architect Arc`)** in `sources/src/components/AppShell.tsx`.
+- **Implementation**:
+  1. Embedded clean vector `AvatarIcon` (solid circle head + dual-arc minimalist shoulder contours) with `size={16}`.
+  2. Inherits `--steel-on` foreground color on `--accent-strong` circle badge with zero layout shifts.
+  3. Removed obsolete `initials` extraction while preserving `email` in accessible `triggerLabel` and dropdown menu header.
+- **5-File Synchronization**: Bumper to `0.9.36-dev.1` across `version.ts`, `package.json`, `package-lock.json`, `README.md`, and `docs/agent/CHANGELOG.md`.
+- **Verification**: `npm test` passed (103 files / 1,732 tests, exit 0); `npm run build` passed (`tsc -b && vite build`, exit 0); `npm run typecheck:edge` passed (exit 0); `npx oxlint src` passed (0 errors).
+
+---
+
 ## 📅 Log: 2026-09-07 10:08:52 Asia/Taipei (Task 146, 0.9.35 on PROD)
 
 **Spec 146 rolled out to PROD.** DEV and PROD now run the same bundle and the same schema.

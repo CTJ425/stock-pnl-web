@@ -70,8 +70,8 @@ const MA_COLORS = {
 /** Bollinger: mid aligns with MA20 orange; upper/lower use slate (literal for PDF) */
 const BB_COLORS = {
   mid: CATEGORICAL_COLORS[1],
-  upper: '#94a3b8',
-  lower: '#64748b',
+  upper: '#a8a8a8',
+  lower: '#6f6f6f',
 } as const
 
 const KD_COLORS = { k: CATEGORICAL_COLORS[0], d: CATEGORICAL_COLORS[3] } as const
