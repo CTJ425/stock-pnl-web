@@ -899,6 +899,50 @@ table.data-table {
   color: var(--cds-text-primary);
 }
 
+/* ---------- Data table PnL colors (Task 150) ----------
+ * .data-table td, td.num > div:first-child and tr:hover td set Carbon text hierarchy
+ * ($text-secondary, $text-primary). PnL cells carry semantic colors (red up / green down / secondary flat)
+ * and must override both cell text-primary/secondary and row hover states.
+ */
+.data-table .pnl-up,
+.data-table td.pnl-up,
+.data-table td.num.pnl-up,
+.data-table td.pnl-up > div:first-child,
+.data-table td.num.pnl-up > div:first-child,
+.data-table tbody tr:hover .pnl-up,
+.data-table tbody tr:hover td.pnl-up,
+.data-table tbody tr:hover td.num.pnl-up,
+.data-table tbody tr:hover td.pnl-up > div:first-child,
+.data-table tbody tr:hover td.num.pnl-up > div:first-child {
+  color: var(--up);
+}
+
+.data-table .pnl-down,
+.data-table td.pnl-down,
+.data-table td.num.pnl-down,
+.data-table td.pnl-down > div:first-child,
+.data-table td.num.pnl-down > div:first-child,
+.data-table tbody tr:hover .pnl-down,
+.data-table tbody tr:hover td.pnl-down,
+.data-table tbody tr:hover td.num.pnl-down,
+.data-table tbody tr:hover td.pnl-down > div:first-child,
+.data-table tbody tr:hover td.num.pnl-down > div:first-child {
+  color: var(--down);
+}
+
+.data-table .pnl-flat,
+.data-table td.pnl-flat,
+.data-table td.num.pnl-flat,
+.data-table td.pnl-flat > div:first-child,
+.data-table td.num.pnl-flat > div:first-child,
+.data-table tbody tr:hover .pnl-flat,
+.data-table tbody tr:hover td.pnl-flat,
+.data-table tbody tr:hover td.num.pnl-flat,
+.data-table tbody tr:hover td.pnl-flat > div:first-child,
+.data-table tbody tr:hover td.num.pnl-flat > div:first-child {
+  color: var(--cds-text-secondary);
+}
+
 .data-table input[type='checkbox'] {
   width: 16px;
   height: 16px;
