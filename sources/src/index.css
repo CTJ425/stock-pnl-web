@@ -4504,7 +4504,7 @@ a.hmenu-item {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--cds-border-subtle);
 }
 
 .inst-matrix .trend-item:last-child {
@@ -4656,16 +4656,21 @@ a.hmenu-item {
 }
 .apr-day .ast-sub { display: inline; }
 
-.apr-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
-.apr-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+/* The probe list is a table built from divs, so it carries the same four bands
+   as .data-table. `--hairline` was never defined, so every row was drawing the
+   legacy slate fallback instead of a Carbon border. */
+.apr-row { border-top: 1px solid var(--cds-border-subtle); }
+.apr-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.apr-row:nth-child(even) { background: var(--table-zebra); }
 
 .apr-head {
   display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto auto;
   align-items: center; gap: 12px; width: 100%;
-  padding: 8px 4px; border: 0; background: none; cursor: pointer;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
   color: inherit; text-align: left; font: inherit;
 }
-.apr-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.apr-head:hover { background: var(--table-row-hover); }
 .apr-head:disabled { cursor: default; opacity: .62; }
 .apr-head:disabled:hover { background: none; }
 
@@ -4675,8 +4680,8 @@ a.hmenu-item {
 .apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
 .apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 0; }
 .apr-seg-hit { background: var(--notice-ok-ink); }
-.apr-seg-miss { background: color-mix(in srgb, var(--ink-muted) 26%, transparent); }
-.apr-seg-empty { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
+.apr-seg-miss { background: var(--cds-border-strong); }
+.apr-seg-empty { background: var(--cds-border-subtle); }
 
 .apr-sum { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
 .apr-sum b { font-weight: 600; }
@@ -4695,28 +4700,35 @@ a.hmenu-item {
 
 .adm-log-list { list-style: none; margin: 12px 0 0; padding: 0; }
 
-.adm-log-row { border-top: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
-.adm-log-row:last-child { border-bottom: 1px solid var(--hairline, rgba(127, 138, 155, .18)); }
+/* The execution log is the second div-built table in the console; it takes the
+   same bands, borders and row height as the probe list above. */
+.adm-log-row { border-top: 1px solid var(--cds-border-subtle); }
+.adm-log-row:last-child { border-bottom: 1px solid var(--cds-border-subtle); }
+.adm-log-row:nth-child(even) { background: var(--table-zebra); }
 
 .adm-log-head {
   display: grid;
   grid-template-columns: 9.5rem 3.5rem 5.5rem 11rem 1fr auto;
-  align-items: center; gap: 10px; width: 100%;
-  padding: 8px 4px; border: 0; background: none; cursor: pointer;
+  align-items: center; gap: 12px; width: 100%;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
   color: inherit; text-align: left; font: inherit; font-size: 12px;
 }
-.adm-log-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.adm-log-head:hover { background: var(--table-row-hover); }
 
 .adm-log-time { white-space: nowrap; }
 
+/* Carbon tag: a filled tint with no border, so the chip stays readable on the
+   base, zebra and hover bands alike — the same collision that hid .tx-chip-spot. */
 .adm-log-level {
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--border-strong); white-space: nowrap;
+  height: 24px; font-size: 12px; font-weight: 400; padding: 0 var(--sp-03);
+  border-radius: 12px; border: none; white-space: nowrap;
+  color: var(--cds-text-primary); background: var(--chip-neutral);
 }
-.adm-log-level-error { color: var(--notice-err-ink); border-color: color-mix(in srgb, var(--notice-err-ink) 40%, transparent); }
-.adm-log-level-warn  { color: var(--notice-warn-ink); border-color: color-mix(in srgb, var(--notice-warn-ink) 40%, transparent); }
-.adm-log-level-info  { color: var(--ink-secondary); }
+.adm-log-level-error { background: rgba(250, 77, 86, 0.28); }
+.adm-log-level-warn  { background: rgba(241, 194, 27, 0.28); }
+.adm-log-level-info  { background: var(--chip-neutral); }
 
 .adm-log-action {
   font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -4729,7 +4741,7 @@ a.hmenu-item {
 .adm-log-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
 .adm-log-open .adm-log-caret { transform: rotate(180deg); }
 
-.adm-log-detail { padding: 4px 4px 14px; border-top: 1px dashed var(--border-strong); }
+.adm-log-detail { padding: var(--sp-02) var(--sp-02) var(--sp-04); border-top: 1px solid var(--cds-border-subtle); }
 .adm-log-detail pre {
   margin: 8px 0; white-space: pre-wrap; word-break: break-word;
   font-family: var(--font-mono);
