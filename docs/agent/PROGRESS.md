@@ -1,15 +1,33 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: UI/UX 稽核 21 項全數處理（Task 149）
+- Agent: Antigravity
+- Action: 修復資料表漲跌紅綠與未實現損益顏色覆蓋問題（Task 150, 0.9.38）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-09 15:15:32 Asia/Taipei
+- Timestamp: 2026-09-09 18:00:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-09 15:15:32 Asia/Taipei (Task 149, 0.9.36)
+## 📅 Log: 2026-09-09 18:00:00 Asia/Taipei (Task 150, 0.9.38)
 
-針對 feat/carbon-design 分支做完整 UI/UX 稽核，21 項發現全數處理完畢。版本未動（0.9.36），尚未 commit。
+**修復 0.9.37 引入之 Carbon 資料表四階對比造成 .pnl-up / .pnl-down 顏色覆蓋問題**
+
+- **根因**: 0.9.37 於 `sources/src/index.css` 引入之 `.data-table td`（指定 `$text-secondary`）、`.data-table td.num > div:first-child`（指定 `$text-primary`）以及 `.data-table tbody tr:hover td`（指定 `$text-primary`）因 CSS 權重高於全域 `.pnl-up` / `.pnl-down`，導致資料表儲存格的現價漲跌、保本賣出價、未實現損益與未實現報酬率失去紅綠顏色，並在 hover 時被強制覆蓋為文字主色。
+- **修復方案**:
+  1. 於 `sources/src/index.css` 在 `tr:hover` 規則後補齊 `.data-table` 專屬之損益樣式規則：涵蓋 `.data-table .pnl-up/down/flat`、`td.pnl-*`、`td.num.pnl-*`、主數值 `> div:first-child` 以及滑鼠懸停 `tbody tr:hover` 狀態。
+  2. 數值儲存格副標籤（如「未含費 …」、「券商 …」）因匹配 `:not(:first-child)` 與 inline 樣式，精準維持次要／輔助文字階層，不受紅綠主色干擾。
+- **驗證**:
+  - `DashboardPage.test.tsx` 新增持股列表獲利／虧損之數值儲存格 class 斷言（現價、保本價、未實現淨損益、報酬率）。
+  - 新增 `sources/src/styles/tablePnlStyles.test.ts` 驗證 CSS 規則包含狀態與串接順序。
+  - `npm test` exit 0（108 測試檔 / 1759 測試全數通過）。
+  - `npm run build` exit 0。
+  - `npm run typecheck:edge` exit 0。
+- **版本更新**: 同步 5 檔案升版至 0.9.38，依使用者指示合併至 main。
+
+---
+
+## 📅 Log: 2026-09-09 15:15:32 Asia/Taipei (Task 149, 0.9.37)
+
+針對 feat/carbon-design 分支做完整 UI/UX 稽核，21 項發現全數處理完畢。發布 0.9.37。
 
 Gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、完整測試 107 檔 / 1757 測試 / exit 0（基準 103 / 1732）。42 個檔案異動，8 個新檔。
 
@@ -18,17 +36,3 @@ Gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、完整測試 1
 有兩項稽核發現在實作時查證為錯誤並撤回：A3「焦點不可見」是錯的，`index.css` 本來就有通用 `:focus-visible` 規則；B5 要求在兩個批次改寫 Modal 加確認閘門，但它們的按鈕本來就標明筆數，等於重複詢問。B6 的斷點 token 化在純 CSS 無法實作，改為慣例註解。
 
 詳細條列見 `docs/agent/TASK_ARCHIVE.md` 的 Task 149。
-
----
-
-## 📅 Log: 2026-09-09 10:07:59 Asia/Taipei (Task 148, 0.9.36, branch `feat/carbon-design`)
-
-**Four refinement levers applied on top of the Carbon conversion, from a Diagram Design proposal.**
-
-- **Approach**: A layer-stack diagram (`docs/design/carbon-layer-stack.html`) named the one thing that needed a picture — Carbon's surface hierarchy was collapsed into a single layer — and three levers that only needed a table. All four were then implemented.
-- **Changed**: layer contexts so a field steps above its card or modal and a card inside a card steps up too; 20 font sizes collapsed to the 6 on the Carbon ramp; 216 spacing values snapped to the Carbon scale; page width 1180 → 1312; data-table rows at the Carbon md height of 40px; the workspace header action rebuilt as a 48px borderless UI Shell action.
-- **Verified**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. The transactions table was measured at 1440 and 1024 and overflows at neither width, which was the standing risk of raising every 11px and 13px value onto the ramp.
-- **Follow-up, same branch**: the refinement pass left every table row on one tone. The data table now carries four separable surfaces (header, hover, zebra, base) and three text levels inside the cell, all from Carbon tokens. One collision was found and fixed by screenshot: the neutral 類型 chip shared its value with the new hover band and disappeared on the hovered row.
-- **Follow-up, admin console**: the console's `.data-table` instances were already covered, but its execution log and probe round list are tables built from divs and never matched a table rule. Both now carry the same bands, row height and tag treatment. The search also turned up `var(--hairline, …)`, a fallback to a legacy slate literal that both earlier colour sweeps missed because the literal sits inside a `var()` fallback. The Diagram Design profile is now stored in the repo at `docs/design/diagram-design-carbon-profile.md`.
-- **Follow-up, probe war room**: the eight state cards were identical because the two `::before` gradients that were supposed to mark state were dead CSS — no base rule ever gave the pseudo-element content or a box. State now rides on a 3px Carbon status rule on the leading edge, and the hue count went from four to two: green for retired, blue for probing. Tags, chips and dots follow the same two hues, the glow is gone, and the light-theme patch block for `.pwr-*` was deleted because every value is now a token.
-- **Not done on purpose**: no version bump, no merge. `dev` and `main` are untouched.
