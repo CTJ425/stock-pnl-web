@@ -4795,19 +4795,27 @@ a.hmenu-item {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
 }
+/* ---------- Probe war room cards ----------
+ * The two gradient bars that used to live here were dead CSS: no base rule ever
+ * gave `.pwr-kpi-card::before` content or a box, so all three states drew the
+ * same card. State now uses the device Carbon already uses for a status block —
+ * a 3px rule on the leading edge in the $support colour — plus a Carbon tag.
+ * Two hues only: $support-success for retired, $support-info for probing.
+ */
 .pwr-kpi-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
+  border-left: 3px solid var(--cds-border-subtle);
 }
-.pwr-kpi-card.pwr-retired::before {
-  background: linear-gradient(90deg, #42be65, #42be65, transparent);
-  opacity: 0.85;
+
+.pwr-kpi-card.pwr-retired {
+  border-left-color: var(--cds-support-success);
 }
-.pwr-kpi-card.pwr-probing::before {
-  background: linear-gradient(90deg, #33b1ff, #33b1ff, transparent);
-  opacity: 0.9;
+
+.pwr-kpi-card.pwr-probing {
+  border-left-color: var(--cds-support-info);
 }
 .pwr-kpi-label {
   display: flex;
@@ -4817,41 +4825,54 @@ a.hmenu-item {
 }
 .pwr-kpi-name {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--cds-text-primary);
+}
+
+/* In a 250px grid cell the name and the source id compete for one line. The
+   human-readable name wins and stays whole; the id truncates. */
+.pwr-kpi-name b {
+  white-space: nowrap;
 }
 .pwr-kpi-name code {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 2px 4px;
+  /* The source id is a technical value, so it is mono text at $text-helper —
+     not a filled chip. As a chip it competed with the card name and forced the
+     name to wrap in a 250px grid cell. */
+  color: var(--cds-text-helper);
+  background: none;
+  padding: 0;
   border-radius: 0;
   font-family: var(--font-mono);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* Carbon tag: the tint carries the state, the label stays $text-primary. */
 .pwr-status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
   font-size: 12px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
   white-space: nowrap;
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
 }
 .pwr-status-tag.retired {
-  background: rgba(66, 190, 101, 0.15);
-  color: var(--accent-emerald, #42be65);
-  border-color: rgba(66, 190, 101, 0.35);
+  background: rgba(36, 161, 72, 0.28);
 }
 .pwr-status-tag.probing {
-  background: rgba(51, 177, 255, 0.15);
-  color: var(--accent-cyan, #33b1ff);
-  border-color: rgba(51, 177, 255, 0.35);
+  background: rgba(69, 137, 255, 0.28);
 }
 .pwr-status-tag.waiting {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--ink-secondary);
-  border-color: var(--border);
+  background: var(--chip-neutral);
 }
 .pwr-kpi-value {
   display: flex;
@@ -4860,10 +4881,10 @@ a.hmenu-item {
   margin-top: 4px;
 }
 .pwr-probing-val {
-  color: var(--accent-cyan, #33b1ff);
+  color: var(--cds-support-info);
 }
 .pwr-retired-val {
-  color: var(--accent-emerald, #42be65);
+  color: var(--cds-support-success);
 }
 .pwr-hits-dots {
   display: flex;
@@ -4871,14 +4892,14 @@ a.hmenu-item {
   align-items: center;
 }
 .pwr-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--cds-border-subtle);
 }
 .pwr-dot.hit {
-  background: var(--accent-emerald, #42be65);
-  box-shadow: 0 0 6px rgba(66, 190, 101, 0.5);
+  background: var(--cds-support-success);
+  box-shadow: none;
 }
 .pwr-kpi-sub {
   margin-top: 4px;
@@ -4913,77 +4934,30 @@ a.hmenu-item {
   gap: 4px;
   align-items: center;
 }
+/* A plain hit time is not a status, so it takes the neutral tag. Only the two
+   moments that matter — the latest probe and the retire — get a status tint. */
 .pwr-time-chip {
-  font-family: var(--font-mono, monospace);
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 0;
-  background: rgba(66, 190, 101, 0.18);
-  color: #42be65;
-  border: 1px solid rgba(66, 190, 101, 0.38);
+  font-weight: 400;
+  padding: 0 var(--sp-03);
+  border: none;
+  border-radius: 12px;
+  background: var(--chip-neutral);
+  color: var(--cds-text-primary);
 }
 .pwr-time-chip.is-retire {
-  background: rgba(69, 137, 255, 0.22);
-  color: #78a9ff;
-  border-color: rgba(69, 137, 255, 0.45);
+  background: rgba(36, 161, 72, 0.28);
 }
 .pwr-time-chip.is-latest {
-  background: rgba(51, 177, 255, 0.22);
-  color: #33b1ff;
-  border-color: rgba(51, 177, 255, 0.45);
+  background: rgba(69, 137, 255, 0.28);
 }
 .pwr-times-empty {
   color: var(--ink-muted);
   font-size: 12px;
-}
-
-/* Light theme high-contrast overrides for crisp visibility */
-:root[data-theme='light'] .pwr-time-chip {
-  background: rgba(66, 190, 101, 0.14);
-  color: #0e6027;
-  border-color: rgba(36, 161, 72, 0.45);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-time-chip.is-retire {
-  background: rgba(15, 98, 254, 0.12);
-  color: #0043ce;
-  border-color: rgba(15, 98, 254, 0.4);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-time-chip.is-latest {
-  background: rgba(0, 114, 195, 0.14);
-  color: #00539a;
-  border-color: rgba(0, 114, 195, 0.45);
-  font-weight: 700;
-}
-:root[data-theme='light'] .pwr-status-tag.retired {
-  background: rgba(66, 190, 101, 0.16);
-  color: #0e6027;
-  border-color: rgba(36, 161, 72, 0.45);
-}
-:root[data-theme='light'] .pwr-status-tag.probing {
-  background: rgba(0, 114, 195, 0.14);
-  color: #00539a;
-  border-color: rgba(0, 114, 195, 0.45);
-}
-:root[data-theme='light'] .pwr-status-tag.waiting {
-  background: rgba(22, 22, 22, 0.06);
-  color: #525252;
-  border-color: rgba(22, 22, 22, 0.2);
-}
-:root[data-theme='light'] .pwr-probing-val {
-  color: #0072c3;
-}
-:root[data-theme='light'] .pwr-retired-val {
-  color: #0e6027;
-}
-:root[data-theme='light'] .pwr-dot {
-  background: rgba(22, 22, 22, 0.18);
-}
-:root[data-theme='light'] .pwr-dot.hit {
-  background: #24a148;
-  box-shadow: 0 0 5px rgba(36, 161, 72, 0.45);
 }
 
 @media (max-width: 720px) {
