@@ -6,6 +6,7 @@
  * 法人 on every day at once, the chart was drawing the same numbers a second time.
  */
 import { useState } from 'react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type {
   ChipLeg,
   InstitutionalChip,
@@ -99,7 +100,39 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
  */
 
 
-export function ChipsTab({ report }: { report: ReportData }) {
+interface ChipsTabProps {
+  report: ReportData | null
+  status: 'loading' | 'ready' | 'error'
+  errMsg?: string
+}
+
+export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
+  if (status === 'loading') {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <RefreshCw size={28} className="spin" />
+        <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="notice notice-error" role="alert">
+        <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+        {errMsg || '讀取籌碼資料失敗，請稍後再試。'}
+      </div>
+    )
+  }
+
+  if (!report) {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <div>尚無籌碼資料。</div>
+      </div>
+    )
+  }
+
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
   const [metric, setMetric] = useState<ChipMetric>('net')
@@ -250,9 +283,9 @@ export function ChipsTab({ report }: { report: ReportData }) {
               <table className="data-table inst-matrix" aria-label="三大法人買賣超矩陣">
                 <thead>
                   <tr>
-                    <th>日期</th>
+                    <th scope="col">日期</th>
                     {matrixRows.map((r) => (
-                      <th
+                      <th scope="col"
                         key={r.key}
                         className={`num ${r.key === 'total' ? 'col-total' : ''}`}
                       >
@@ -383,32 +416,32 @@ export function ChipsTab({ report }: { report: ReportData }) {
                 <thead>
                   {marginMetric === 'summary' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資餘額（張）</th>
-                      <th className="num">融資增減</th>
-                      <th className="num">融券餘額（張）</th>
-                      <th className="num">融券增減</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資餘額（張）</th>
+                      <th scope="col" className="num">融資增減</th>
+                      <th scope="col" className="num">融券餘額（張）</th>
+                      <th scope="col" className="num">融券增減</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                   {marginMetric === 'trading' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資買進</th>
-                      <th className="num">融資賣出</th>
-                      <th className="num">融券買進（回補）</th>
-                      <th className="num">融券賣出（放空）</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資買進</th>
+                      <th scope="col" className="num">融資賣出</th>
+                      <th scope="col" className="num">融券買進（回補）</th>
+                      <th scope="col" className="num">融券賣出（放空）</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                   {marginMetric === 'redeem' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資現償</th>
-                      <th className="num">融券券償</th>
-                      <th className="num">融資限額</th>
-                      <th className="num">融券限額</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資現償</th>
+                      <th scope="col" className="num">融券券償</th>
+                      <th scope="col" className="num">融資限額</th>
+                      <th scope="col" className="num">融券限額</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                 </thead>

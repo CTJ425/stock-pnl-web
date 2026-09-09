@@ -141,11 +141,11 @@ export function BackupsSection() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>帳號</th>
-                  <th>備份份數</th>
-                  <th>最新備份</th>
-                  <th>總大小</th>
-                  <th>最近狀態</th>
+                  <th scope="col">帳號</th>
+                  <th scope="col">備份份數</th>
+                  <th scope="col">最新備份</th>
+                  <th scope="col">總大小</th>
+                  <th scope="col">最近狀態</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,10 +186,10 @@ export function BackupsSection() {
                               <table className="data-table">
                                 <thead>
                                   <tr>
-                                    <th>檔名</th>
-                                    <th>大小</th>
-                                    <th>建立於</th>
-                                    <th />
+                                    <th scope="col">檔名</th>
+                                    <th scope="col">大小</th>
+                                    <th scope="col">建立於</th>
+                                    <th scope="col" />
                                   </tr>
                                 </thead>
                                 <tbody>

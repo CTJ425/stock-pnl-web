@@ -7,7 +7,7 @@
  * You can't just know it in the program (follow the principle of "stock/ticket" in chip tab).
  */
 import { useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { FundamentalData, ProfitQuarter } from '../../services/fundamentalProxy'
 import {
   isFundamentalIncomplete,
@@ -68,6 +68,8 @@ function avgOf(arr: Array<number | null | undefined>): number | null {
 interface FundamentalTabProps {
   fundamental: FundamentalData | null
   loading: boolean
+  /** The fetch/backfill that would have produced `fundamental` failed — distinct from "not generated yet". */
+  error?: boolean
 }
 
 /**
@@ -199,12 +201,21 @@ function MarginTrendChart({
   )
 }
 
-export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
+export function FundamentalTab({ fundamental, loading, error = false }: FundamentalTabProps) {
   if (loading) {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
         <RefreshCw size={28} className="spin" />
         <div style={{ marginTop: 10 }}>正在讀取基本面…</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="notice notice-error" role="alert">
+        <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+        讀取基本面失敗，請稍後再試。
       </div>
     )
   }
@@ -471,14 +482,14 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
                 <table className="data-table inst-matrix" aria-label="季報獲利能力矩陣">
                   <thead>
                     <tr>
-                      <th>季別</th>
-                      <th className="num">單季營收（百萬元）</th>
-                      <th className="num">營收年增 (YoY)</th>
-                      <th className="num">每股盈餘 (EPS)</th>
-                      <th className="num">毛利率</th>
-                      <th className="num">營益率</th>
-                      <th className="num">稅前純益率</th>
-                      <th className="num">稅後純益率</th>
+                      <th scope="col">季別</th>
+                      <th scope="col" className="num">單季營收（百萬元）</th>
+                      <th scope="col" className="num">營收年增 (YoY)</th>
+                      <th scope="col" className="num">每股盈餘 (EPS)</th>
+                      <th scope="col" className="num">毛利率</th>
+                      <th scope="col" className="num">營益率</th>
+                      <th scope="col" className="num">稅前純益率</th>
+                      <th scope="col" className="num">稅後純益率</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -710,11 +721,11 @@ export function FundamentalTab({ fundamental, loading }: FundamentalTabProps) {
             <table className="data-table inst-matrix" aria-label="月營收矩陣">
               <thead>
                 <tr>
-                  <th>月份</th>
-                  <th className="num">當月營收（千元）</th>
-                  <th className="num">月增 (MoM)</th>
-                  <th className="num">年增 (YoY)</th>
-                  <th className="num">累計年增</th>
+                  <th scope="col">月份</th>
+                  <th scope="col" className="num">當月營收（千元）</th>
+                  <th scope="col" className="num">月增 (MoM)</th>
+                  <th scope="col" className="num">年增 (YoY)</th>
+                  <th scope="col" className="num">累計年增</th>
                 </tr>
               </thead>
               <tbody>

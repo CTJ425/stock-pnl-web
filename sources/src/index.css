@@ -60,6 +60,14 @@
   --sp-09: 48px;
   --sp-10: 64px;
 
+  /* ---------- Carbon type scale ---------- */
+  --type-label-01: 0.75rem;      /* 12px */
+  --type-body-01: 0.875rem;      /* 14px */
+  --type-body-02: 1rem;          /* 16px */
+  --type-heading-03: 1.25rem;    /* 20px */
+  --type-heading-04: 1.75rem;    /* 28px */
+  --type-heading-05: 2rem;       /* 32px */
+
   /* ---------- Carbon motion ---------- */
   --cds-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
   --cds-ease-entrance: cubic-bezier(0, 0, 0.38, 0.9);
@@ -224,7 +232,7 @@ body {
   background-color: var(--cds-background);
   color: var(--cds-text-primary);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   line-height: 1.42857;
   letter-spacing: 0.16px;
@@ -237,6 +245,7 @@ body {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
 }
+
 
 #root {
   min-height: 100vh;
@@ -255,17 +264,17 @@ h3 {
 }
 
 h1 {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   line-height: 1.4;
 }
 
 h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   line-height: 1.375;
 }
 
 h3 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   line-height: 1.28572;
 }
 
@@ -305,7 +314,7 @@ h3 {
   align-items: center;
   gap: var(--sp-03);
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   letter-spacing: 0.16px;
   color: var(--cds-text-primary);
@@ -320,7 +329,7 @@ h3 {
   align-items: center;
   gap: 12px;
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 /* ----------Paging (Tabs) ----------*/
@@ -343,7 +352,7 @@ h3 {
   background: transparent;
   color: var(--cds-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   letter-spacing: 0.16px;
   height: var(--cds-size-md);
@@ -424,7 +433,7 @@ h3 {
   height: auto;
   margin-bottom: 0;
   padding: var(--sp-02) var(--sp-01);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.25;
   border-radius: 0;
   border-bottom: 3px solid transparent;
@@ -476,7 +485,7 @@ h3 {
 
 /* Carbon heading-compact-02. Carbon does not set uppercase on section headings. */
 .section-title h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -488,7 +497,7 @@ h3 {
 
 .section-title .hint {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
 }
 
@@ -507,7 +516,7 @@ h3 {
 
 .kpi .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -516,7 +525,7 @@ h3 {
 .kpi .kpi-value {
   margin-top: 8px;
   font-family: var(--font-body);
-  font-size: 28px;
+  font-size: var(--type-heading-04);
   font-weight: 700;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
@@ -525,7 +534,7 @@ h3 {
 .kpi .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -533,7 +542,7 @@ h3 {
 /* ---------- Market Panel (Inventory Overview: Taiwan Stocks/U.S. Stocks) ----------*/
 .market-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
 }
 
@@ -557,12 +566,12 @@ h3 {
 }
 
 .market-panel .panel-head h3 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
 }
 
 .market-panel .panel-head .ccy {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .market-panel .metric {
@@ -575,7 +584,7 @@ h3 {
 
 .market-panel .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -584,14 +593,14 @@ h3 {
 .market-panel .kpi-value {
   margin-top: 4px;
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 600;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 .market-panel .metric-hero .kpi-value {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   letter-spacing: -0.02em;
   line-height: 1.18;
 }
@@ -612,7 +621,7 @@ h3 {
 .market-panel .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -639,7 +648,7 @@ h3 {
   flex-wrap: wrap;
   gap: 16px;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 /* One legend entry: swatch, label and value read as a single group. */
@@ -666,7 +675,7 @@ h3 {
 
 .market-note {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
@@ -709,7 +718,7 @@ h3 {
   min-width: 20px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
 }
 
@@ -734,7 +743,7 @@ table.data-table {
   width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   min-width: 0;
   background: var(--cds-layer-01);
 }
@@ -746,7 +755,7 @@ table.data-table {
 .data-table th {
   text-align: left;
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.33333;
   letter-spacing: 0.32px;
   text-transform: none;
@@ -759,7 +768,7 @@ table.data-table {
 
 /* Carbon data table, md size: every row is 40px. A stacked cell grows past it. */
 .data-table td {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   height: var(--cds-size-md);
   padding: var(--sp-03);
   border-bottom: 1px solid var(--cds-border-subtle);
@@ -788,12 +797,12 @@ table.data-table {
 
 .data-table .num {
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-variant-numeric: tabular-nums;
 }
 
 .data-table .num > div:first-child {
-  font-size: 14px;
+  font-size: var(--type-body-01);
 }
 
 /*
@@ -804,7 +813,7 @@ table.data-table {
 .data-table .num > div:not(:first-child):not(.row-actions),
 .data-table .cell-sub {
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--cds-text-helper);
 }
 
@@ -825,26 +834,32 @@ table.data-table {
   text-overflow: ellipsis;
 }
 
+/* Breakpoint convention: this file has five sanctioned breakpoints — 560px,
+   720px, 900px, 1020px and 1120px — and every media block below is
+   `max-width`. New layouts are written narrow-first (base styles target the
+   smallest screen; these blocks layer on wider-screen overrides), so do not
+   introduce a `min-width` block or a sixth breakpoint value. */
+
 /* When the window is narrow, further compress it to prevent horizontal scrolling in the same-width table of transaction records.*/
 @media (max-width: 1120px) {
   table.data-table {
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .data-table th,
   .data-table td {
     padding: 8px 4px;
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .data-table .num,
   .data-table .num > div:first-child {
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .data-table .num > div:not(:first-child):not(.row-actions),
   .data-table .cell-sub {
-    font-size: 12px;
+    font-size: var(--type-label-01);
   }
 
   .th-head .th-plain {
@@ -909,7 +924,7 @@ table.data-table {
 /* ---------- Holdings table grouping / nature chips (Task 142) ----------*/
 .holding-group td {
   background: var(--row-band);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -930,7 +945,7 @@ table.data-table {
 
 .tx-chip {
   display: inline-block;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   padding: 2px 8px;
   border: none;
 }
@@ -983,7 +998,7 @@ table.data-table {
   padding: 4px 8px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   background: var(--row-hover);
 }
 
@@ -991,7 +1006,7 @@ table.data-table {
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--accent-strong);
   border: 1px solid var(--accent-strong);
@@ -1027,19 +1042,19 @@ table.data-table {
 }
 
 .whatif-mark-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .whatif-mark-price {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .whatif-mark-relative,
 .whatif-mark-pnl {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-variant-numeric: tabular-nums;
   color: var(--ink-secondary);
 }
@@ -1091,7 +1106,7 @@ table.data-table {
 
 /* Sub-label naming the number below it (成交均價（未含費）／實付手續費／現價 …) */
 .whatif-ledger-sublabel {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-bottom: 2px;
 }
@@ -1101,7 +1116,7 @@ table.data-table {
 }
 
 .whatif-ledger-heading {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   color: var(--ink-secondary);
   text-align: right;
@@ -1117,13 +1132,13 @@ table.data-table {
 }
 
 .whatif-headline-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-bottom: 2px;
 }
 
 .whatif-headline-value {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1138,7 +1153,7 @@ table.data-table {
   .whatif-ledger-cell {
     padding: 8px 8px;
     min-height: 36px;
-    font-size: 14px;
+    font-size: var(--type-body-01);
   }
 }
 
@@ -1202,7 +1217,7 @@ table.data-table {
   border-radius: 50%;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 700;
   line-height: 1;
   cursor: help;
@@ -1224,7 +1239,7 @@ table.data-table {
   background: var(--surface-strong);
   box-shadow: var(--shadow-card);
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   line-height: 1.65;
   letter-spacing: 0;
@@ -1261,7 +1276,7 @@ table.data-table {
 .detail-row td {
   background: var(--row-alt);
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
 }
 
@@ -1321,7 +1336,7 @@ table.data-table {
   background: transparent;
   color: var(--cds-text-primary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   letter-spacing: 0.16px;
   min-height: var(--cds-size-md);
@@ -1401,7 +1416,7 @@ table.data-table {
 .btn-sm {
   min-height: var(--cds-size-sm);
   padding: 0 var(--sp-05) 0 var(--sp-04);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   border-radius: 0;
 }
 
@@ -1419,7 +1434,7 @@ table.data-table {
   border-radius: 0;
   min-height: var(--cds-size-lg);
   padding: 0 var(--sp-06) 0 var(--sp-05);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   box-shadow: var(--cds-shadow-menu);
 }
 
@@ -1429,7 +1444,7 @@ table.data-table {
   left: 14px;
   bottom: 12px;
   z-index: 90;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--cds-text-helper);
   padding: var(--sp-01) var(--sp-03);
   border-radius: 0;
@@ -1453,7 +1468,7 @@ table.data-table {
 .field label {
   display: block;
   margin-bottom: var(--sp-03);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.33333;
   letter-spacing: 0.32px;
   font-weight: 400;
@@ -1467,7 +1482,7 @@ table.data-table {
   height: var(--cds-size-md);
   padding: 0 var(--sp-05);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   color: var(--cds-text-primary);
   background: var(--cds-field-01);
@@ -1559,7 +1574,7 @@ table.data-table {
 /* Carbon helper-text-01: 12px, $text-helper, 4px under the control. */
 .field .field-hint {
   margin-top: var(--sp-02);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.33333;
   letter-spacing: 0.32px;
   color: var(--cds-text-helper);
@@ -1641,7 +1656,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-03);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--cds-text-secondary);
   border-bottom: 1px solid var(--cds-border-subtle);
   transition: background var(--cds-dur-fast) var(--cds-ease-productive);
@@ -1658,7 +1673,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .suggestion-item .market-tag {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--cds-text-primary);
   background: var(--cds-layer-02);
   border: none;
@@ -1670,7 +1685,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .suggestion-empty {
   padding: 12px 12px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .modal-body .search-box {
@@ -1714,7 +1729,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -1745,7 +1760,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .watch-results-more {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
@@ -1791,7 +1806,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 /* Carbon heading-03: 20px / 28px. */
 .modal-head h3 {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   line-height: 1.4;
   font-weight: 400;
   color: var(--cds-text-primary);
@@ -1850,7 +1865,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   align-items: center;
   gap: var(--sp-02);
   height: 24px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.33333;
   padding: 0 var(--sp-03);
   border-radius: 12px;
@@ -1863,7 +1878,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .badge.badge-warn {
   color: var(--cds-text-primary);
   border: none;
-  background: rgba(241, 194, 27, 0.28);
+  background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent);
 }
 
 /* ---------- Carbon inline notification ----------
@@ -1878,7 +1893,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   min-height: var(--cds-size-lg);
   padding: var(--sp-04) var(--sp-05);
   border-radius: 0;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   line-height: 1.42857;
   letter-spacing: 0.16px;
   color: var(--cds-text-primary);
@@ -1951,14 +1966,14 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .auth-card .brand {
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   margin-bottom: 4px;
 }
 
 .auth-card .auth-sub {
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   margin: 4px 0 24px;
 }
 
@@ -1966,7 +1981,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin-top: 16px;
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--type-body-01);
 }
 
 .auth-switch button {
@@ -2029,7 +2044,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   height: var(--cds-size-sm);
   padding: 0 var(--sp-05) 0 var(--sp-07);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   color: var(--cds-text-primary);
   background: var(--cds-field-01);
@@ -2063,7 +2078,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-ws {
   appearance: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--cds-text-primary);
   background: transparent;
   border: none;
@@ -2108,7 +2123,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: var(--cds-button-primary);
   color: var(--cds-text-on-color);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   letter-spacing: 0.32px;
   cursor: pointer;
@@ -2158,7 +2173,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .hmenu-head {
   padding: 8px 12px 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
   letter-spacing: 0.02em;
@@ -2178,7 +2193,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: transparent;
   color: var(--cds-text-primary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   width: 100%;
   min-height: var(--cds-size-md);
@@ -2226,7 +2241,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .hmenu-item.is-danger:hover {
-  background: rgba(250, 77, 86, 0.12);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
 }
 
@@ -2237,7 +2252,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .hmenu-item-admin:hover {
   color: var(--accent);
-  background: rgba(69, 137, 255, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* The outward-facing icon of "Source Code" is pushed to the far right, away from the text of the menu item.*/
@@ -2275,7 +2290,7 @@ a.hmenu-item {
 .search-box .search-input {
   appearance: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   color: var(--cds-text-primary);
   background: var(--cds-field-01);
@@ -2330,7 +2345,7 @@ a.hmenu-item {
   margin-right: auto;
   padding: 16px 24px 24px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   text-align: center;
   line-height: 1.7;
 }
@@ -2551,7 +2566,7 @@ a.hmenu-item {
   /* Enter the font size ≥16px to prevent iOS Safari from automatically enlarging the page when focusing*/
   .field input,
   .field select {
-    font-size: 16px;
+    font-size: var(--type-body-02);
     padding: 12px 12px;
   }
 
@@ -2581,7 +2596,7 @@ a.hmenu-item {
   }
 
   .kpi .kpi-value {
-    font-size: 20px;
+    font-size: var(--type-heading-03);
   }
 
   .market-grid {
@@ -2590,7 +2605,7 @@ a.hmenu-item {
   }
 
   .market-panel .metric-hero .kpi-value {
-    font-size: 20px;
+    font-size: var(--type-heading-03);
   }
 
   /* The floating button gives way to the bottom navigation bar - this land is not empty to begin with*/
@@ -2598,7 +2613,7 @@ a.hmenu-item {
     right: 14px;
     bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
     padding: 12px 16px;
-    font-size: 14px;
+    font-size: var(--type-body-01);
   }
 
   /*
@@ -2610,6 +2625,16 @@ a.hmenu-item {
     position: static;
     align-self: center;
     margin-bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Touch target: 32px is below the 44px guideline, raise small buttons on touch-sized screens. */
+  .btn-sm {
+    min-height: var(--cds-size-md);
+  }
+
+  .btn-sm.btn-icon {
+    min-height: var(--cds-size-md);
+    min-width: var(--cds-size-md);
   }
 }
 
@@ -2668,7 +2693,7 @@ a.hmenu-item {
 .detail-head-analysis .analysis-watch-error {
   order: 5;
   flex: 1 0 100%;
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .detail-head-empty {
@@ -2685,7 +2710,7 @@ a.hmenu-item {
 }
 
 .detail-head-empty .analysis-watch-error {
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .detail-title {
@@ -2694,12 +2719,12 @@ a.hmenu-item {
 }
 
 .detail-title h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   color: var(--ink);
 }
 
 .detail-title .badge {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   line-height: 1.35;
   padding: 2px 8px;
@@ -2711,13 +2736,13 @@ a.hmenu-item {
 
 .detail-title .hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
 .detail-note {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--notice-warn-ink);
   margin-bottom: 8px;
 }
@@ -2737,7 +2762,7 @@ a.hmenu-item {
   background: transparent;
   color: var(--cds-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   letter-spacing: 0.16px;
   height: var(--cds-size-md);
@@ -2802,7 +2827,7 @@ a.hmenu-item {
 }
 
 .card-head h3 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   letter-spacing: 0.2px;
 }
 
@@ -2816,7 +2841,7 @@ a.hmenu-item {
 
 .card-meta {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
@@ -2828,12 +2853,12 @@ a.hmenu-item {
 }
 
 .rpt-head h2 {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   color: var(--ink);
 }
 
 .rpt-meta {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 4px;
 }
@@ -2852,7 +2877,7 @@ a.hmenu-item {
 }
 
 .rpt-section h3 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
@@ -2883,7 +2908,7 @@ a.hmenu-item {
 }
 
 .detail-body .hint {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   line-height: 1.6;
   margin-top: 8px;
@@ -2911,7 +2936,7 @@ a.hmenu-item {
   border-right-width: 0;
   color: var(--cds-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   height: var(--cds-size-sm);
   padding: 0 var(--sp-05);
@@ -2976,7 +3001,7 @@ a.hmenu-item {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   white-space: nowrap;
   padding: 4px 8px;
   pointer-events: none;
@@ -3016,7 +3041,7 @@ a.hmenu-item {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .chart-legend-swatch {
@@ -3080,13 +3105,13 @@ a.hmenu-item {
 
 .chart-legend-foot {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.6;
   color: var(--ink-muted);
 }
 
 .chart-title {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   margin-bottom: 2px;
 }
@@ -3114,21 +3139,21 @@ a.hmenu-item {
 }
 
 .tech-cell dt {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   margin-bottom: 4px;
 }
 
 .tech-cell dd {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-variant-numeric: tabular-nums;
 }
 
 .tech-sub {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -3158,12 +3183,12 @@ a.hmenu-item {
 }
 
 .rpt-card .k {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .rpt-card .v {
-  font-size: 16px;
+  font-size: var(--type-body-02);
   font-weight: 600;
   margin-top: 2px;
 }
@@ -3185,13 +3210,13 @@ a.hmenu-item {
 }
 
 .m-sym h2 {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .m-sym .code {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -3200,7 +3225,7 @@ a.hmenu-item {
 .quote-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   line-height: 1.35;
   padding: 2px 8px;
@@ -3226,7 +3251,7 @@ a.hmenu-item {
 }
 
 .m-price .big {
-  font-size: 32px;
+  font-size: var(--type-heading-05);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -3234,7 +3259,7 @@ a.hmenu-item {
 }
 
 .m-price .delta {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding-bottom: 4px;
@@ -3242,14 +3267,14 @@ a.hmenu-item {
 
 /* 試撮 (08:30–09:00, 13:25–13:30): MIS's price is a simulated match, not a trade. */
 .trial-marker {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-muted);
   padding-bottom: 8px;
 }
 
 .m-price .stamp {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   padding-bottom: 8px;
 }
@@ -3281,11 +3306,11 @@ a.hmenu-item {
 }
 
 .m-stats .rpt-card .k {
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .m-stats .rpt-card .v {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   margin-top: 0;
 }
 
@@ -3306,7 +3331,7 @@ a.hmenu-item {
 }
 
 .m-card-h h4 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   margin: 0;
 }
@@ -3320,7 +3345,7 @@ a.hmenu-item {
 /* Carbon content switcher: one joined square bar for the chart range. */
 .m-range button {
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   letter-spacing: 0.16px;
   height: var(--cds-size-sm);
   padding: 0 var(--sp-04);
@@ -3393,7 +3418,7 @@ a.hmenu-item {
 }
 
 .quote-aside-private h4 {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   margin: 0 0 8px;
 }
@@ -3406,13 +3431,13 @@ a.hmenu-item {
 }
 
 .holding-pnl-big {
-  font-size: 20px;
+  font-size: var(--type-heading-03);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .holding-roi {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3424,12 +3449,12 @@ a.hmenu-item {
 }
 
 .holding-cell .k {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .holding-cell .v {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   margin-top: 2px;
 }
 
@@ -3440,7 +3465,7 @@ a.hmenu-item {
 }
 
 .chart-time-badge {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -3475,13 +3500,13 @@ a.hmenu-item {
 }
 
 .inst-header-title {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-header-badge {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -3491,7 +3516,7 @@ a.hmenu-item {
 }
 
 .inst-header-note {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
@@ -3518,13 +3543,13 @@ a.hmenu-item {
 }
 
 .inst-day-title {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-day-tag {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   padding: 2px 8px;
   border-radius: 0;
   background: var(--surface-strong);
@@ -3535,8 +3560,8 @@ a.hmenu-item {
 
 .inst-day-tag.is-latest {
   color: var(--accent);
-  border-color: rgba(69, 137, 255, 0.3);
-  background: rgba(69, 137, 255, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .inst-day-total {
@@ -3548,12 +3573,12 @@ a.hmenu-item {
 }
 
 .inst-total-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .inst-total-val {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3571,12 +3596,12 @@ a.hmenu-item {
 }
 
 .inst-leg-k {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
 .inst-leg-v {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3611,7 +3636,7 @@ a.hmenu-item {
   border: none;
   border-bottom: 3px solid transparent;
   color: var(--cds-text-secondary);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   letter-spacing: 0.16px;
   height: var(--cds-size-md);
@@ -3648,7 +3673,7 @@ a.hmenu-item {
   padding: 32px 12px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 14px;
+  font-size: var(--type-body-01);
 }
 
 .intraday-skeleton {
@@ -3694,7 +3719,7 @@ a.hmenu-item {
   flex: 0 0 auto;
   width: 56px;
   padding-top: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   line-height: 1.4;
 }
@@ -3718,16 +3743,16 @@ a.hmenu-item {
 }
 
 .tw-index-close-stats .kpi-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 .tw-index-close-stats .kpi-value {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   margin-top: 0;
 }
 
 .tw-index-close-stats .kpi-sub {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   margin-top: 2px;
 }
 
@@ -3777,7 +3802,7 @@ a.hmenu-item {
 }
 
 .rpt-notes {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   padding-left: 16px;
   margin-bottom: 12px;
@@ -3788,7 +3813,7 @@ a.hmenu-item {
 }
 
 .rpt-disclaimer {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.6;
   color: var(--ink-muted);
   background: var(--row-alt);
@@ -3837,12 +3862,12 @@ a.hmenu-item {
   }
 
   .card-head h3 {
-    font-size: 14px;
+    font-size: var(--type-body-01);
   }
 
   .subtab {
     padding: 0 var(--sp-04);
-    font-size: 14px;
+    font-size: var(--type-body-01);
   }
 
   .chart-grid {
@@ -3853,7 +3878,7 @@ a.hmenu-item {
 /* Data time stamp at the block level: Each data source publishes data at different times, so it is marked block by block rather than as a whole time.*/
 .source-tag {
   margin-left: 12px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   color: var(--ink-muted);
   white-space: nowrap;
@@ -3887,7 +3912,7 @@ a.hmenu-item {
 }
 
 .ai-form-group label {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 500;
   color: var(--ink-muted);
 }
@@ -3896,7 +3921,7 @@ a.hmenu-item {
 .ai-select {
   appearance: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border-strong);
@@ -3912,7 +3937,7 @@ a.hmenu-item {
 .ai-input:focus,
 .ai-select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(69, 137, 255, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .ai-actions {
@@ -3926,7 +3951,7 @@ a.hmenu-item {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.65;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink);
   padding: 16px;
   border-radius: 0;
@@ -3963,7 +3988,7 @@ a.hmenu-item {
 .ai-chat-role {
   flex: 0 0 auto;
   min-width: 28px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-muted);
   padding-top: 2px;
@@ -3974,7 +3999,7 @@ a.hmenu-item {
   /* Same as .ai-result: pure text relies on pre-wrap to retain line breaks, without markdown rendering.*/
   white-space: pre-wrap;
   line-height: 1.7;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   padding: 8px 12px;
   border-radius: 0;
   background: var(--surface-2);
@@ -3996,11 +4021,11 @@ a.hmenu-item {
   flex: 1 1 auto;
   min-width: 0;
   /* 16px avoids automatic scaling when iOS focuses (follow the existing guidelines of the project)*/
-  font-size: 16px;
+  font-size: var(--type-body-02);
 }
 
 .ai-disclaimer {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 16px;
   padding-top: 12px;
@@ -4010,8 +4035,8 @@ a.hmenu-item {
 .ai-error {
   padding: 16px;
   border-radius: 0;
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
   color: var(--down);
   display: flex;
   flex-direction: column;
@@ -4090,7 +4115,7 @@ a.hmenu-item {
 }
 
 .adm-side-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   letter-spacing: 1.4px;
   color: var(--ink-muted);
   text-transform: uppercase;
@@ -4106,7 +4131,7 @@ a.hmenu-item {
   padding: 8px 12px;
   border-radius: 0;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   color: var(--ink-secondary);
   cursor: pointer;
   border: 1px solid transparent;
@@ -4140,7 +4165,7 @@ a.hmenu-item {
   border: 0;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   cursor: pointer;
   text-align: left;
@@ -4233,7 +4258,7 @@ a.hmenu-item {
 
 .adm-toggle.on::after {
   left: 19px;
-  background: #fff;
+  background: var(--cds-text-on-color);
 }
 
 .adm-toggle:disabled {
@@ -4279,7 +4304,7 @@ a.hmenu-item {
 
 .adm-prompt-item.active {
   border-color: var(--accent);
-  background: rgba(69, 137, 255, 0.1);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--ink);
 }
 
@@ -4287,12 +4312,12 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-family: var(--font-display);
 }
 
 .adm-prompt-item > span {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
 }
 
@@ -4304,7 +4329,7 @@ a.hmenu-item {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   color: var(--ink-secondary);
   margin-bottom: 4px;
@@ -4329,7 +4354,7 @@ a.hmenu-item {
   border-radius: 0;
   padding: 12px 12px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.75;
 }
 
@@ -4351,7 +4376,7 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
@@ -4360,7 +4385,7 @@ a.hmenu-item {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.75;
   color: var(--ink-muted);
 }
@@ -4393,11 +4418,6 @@ a.hmenu-item {
   width: 100%;
   height: 30px;
   margin-top: 12px;
-}
-
-/* The backward badge is pushed to the right end of the label column. .kpi-label is originally ​​flex, here only the alignment is supplemented*/
-.mac-behind {
-  margin-left: auto;
 }
 
 /* ── Institutional matrix: 單位 × 日期 (0.7.6) ──────────────────────
@@ -4456,7 +4476,7 @@ a.hmenu-item {
 .inst-matrix tfoot td {
   border-top: 1px solid var(--border-strong);
   font-weight: 650;
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--cds-text-on-color) 3.5%, transparent);
   vertical-align: top;
 }
 
@@ -4481,15 +4501,6 @@ a.hmenu-item {
 /* The row spark sits in a cell, not a card: kill the standalone margin/width of .mac-spark. */
 .inst-matrix .mac-spark {
   margin-top: 0;
-}
-
-/* Rightmost trend column with rowspan in single-table layout */
-.inst-matrix .col-trend-rowspan {
-  border-left: 1px solid var(--border-strong);
-  vertical-align: top;
-  background: rgba(255, 255, 255, 0.015);
-  padding: 12px 16px;
-  min-width: 220px;
 }
 
 .inst-matrix .trend-stack {
@@ -4519,7 +4530,7 @@ a.hmenu-item {
 }
 
 .inst-matrix .trend-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -4551,13 +4562,13 @@ a.hmenu-item {
 }
 
 .mac-chip-label {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-secondary);
 }
 
 /* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
 .mac-chip-value {
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -4571,14 +4582,14 @@ a.hmenu-item {
 
 /* Indicator description (originally at the bottom of the card). After the word cards were slimmed down, they were hung in columns and can still be seen.*/
 .mac-row-note {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
 /* Period and "as of this period": they are notes and do not conflict with the main figures.*/
 .mac-row-period {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   color: var(--ink-muted);
   font-weight: 400;
   margin-top: 2px;
@@ -4612,7 +4623,7 @@ a.hmenu-item {
 .fx-chart-head h4 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
 }
 
@@ -4631,16 +4642,15 @@ a.hmenu-item {
 .ast-verdict-icon { color: var(--accent); flex: none; }
 .ast-verdict .section-stamp { margin-left: auto; }
 
-.ast-note { margin: 6px 0 0; font-size: 12px; color: var(--ink-muted); line-height: 1.6; }
-.ast-sub { display: block; font-size: 12px; color: var(--ink-muted); }
+.ast-note { margin: 6px 0 0; font-size: var(--type-label-01); color: var(--ink-muted); line-height: 1.6; }
+.ast-sub { display: block; font-size: var(--type-label-01); color: var(--ink-muted); }
 /* The fetch range of the schedule: connected below jobname, allowing line breaks (the remaining fields in the table are nowrap)*/
 .ast-scope {
   display: block; margin-top: 3px; max-width: 34ch;
-  font-size: 12px; line-height: 1.5; color: var(--ink-muted); white-space: normal;
+  font-size: var(--type-label-01); line-height: 1.5; color: var(--ink-muted); white-space: normal;
 }
-.ast-mono { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
-.ast-unit { font-size: 14px; font-weight: 400; color: var(--ink-secondary); }
-.ast-fail { color: var(--notice-err-ink); font-size: 12px; }
+.ast-mono { font-variant-numeric: tabular-nums; font-size: var(--type-label-01); white-space: nowrap; }
+.ast-unit { font-size: var(--type-body-01); font-weight: 400; color: var(--ink-secondary); }
 
 /* ─────────────────────────────────────────────────────────────
    探針同步狀態的一源一列。前綴 apr-（admin probe row）。
@@ -4651,7 +4661,7 @@ a.hmenu-item {
 .apr-days { display: flex; flex-direction: column; gap: 18px; }
 .apr-day {
   display: flex; align-items: baseline; gap: 8px;
-  margin-bottom: 8px; font-size: 14px; font-weight: 600;
+  margin-bottom: 8px; font-size: var(--type-body-01); font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .apr-day .ast-sub { display: inline; }
@@ -4674,7 +4684,7 @@ a.hmenu-item {
 .apr-head:disabled { cursor: default; opacity: .62; }
 .apr-head:disabled:hover { background: none; }
 
-.apr-name { font-size: 14px; font-weight: 600; }
+.apr-name { font-size: var(--type-body-01); font-weight: 600; }
 
 /* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
 .apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
@@ -4683,14 +4693,14 @@ a.hmenu-item {
 .apr-seg-miss { background: var(--cds-border-strong); }
 .apr-seg-empty { background: var(--cds-border-subtle); }
 
-.apr-sum { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.apr-sum { text-align: right; font-size: var(--type-label-01); font-variant-numeric: tabular-nums; }
 .apr-sum b { font-weight: 600; }
 
 .apr-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
 .apr-open .apr-caret { transform: rotate(180deg); }
 
 .apr-log { margin: 0 0 12px; }
-.apr-log .data-table { font-size: 12px; }
+.apr-log .data-table { font-size: var(--type-label-01); }
 .apr-hit-row td { color: var(--notice-ok-ink); }
 
 /* ─────────────────────────────────────────────────────────────
@@ -4712,7 +4722,7 @@ a.hmenu-item {
   align-items: center; gap: 12px; width: 100%;
   min-height: var(--cds-size-md);
   padding: var(--sp-03) var(--sp-02); border: 0; background: none; cursor: pointer;
-  color: inherit; text-align: left; font: inherit; font-size: 12px;
+  color: inherit; text-align: left; font: inherit; font-size: var(--type-label-01);
 }
 .adm-log-head:hover { background: var(--table-row-hover); }
 
@@ -4722,12 +4732,12 @@ a.hmenu-item {
    base, zebra and hover bands alike — the same collision that hid .tx-chip-spot. */
 .adm-log-level {
   display: inline-flex; align-items: center; justify-content: center;
-  height: 24px; font-size: 12px; font-weight: 400; padding: 0 var(--sp-03);
+  height: 24px; font-size: var(--type-label-01); font-weight: 400; padding: 0 var(--sp-03);
   border-radius: 12px; border: none; white-space: nowrap;
   color: var(--cds-text-primary); background: var(--chip-neutral);
 }
-.adm-log-level-error { background: rgba(250, 77, 86, 0.28); }
-.adm-log-level-warn  { background: rgba(241, 194, 27, 0.28); }
+.adm-log-level-error { background: color-mix(in srgb, var(--danger) 28%, transparent); }
+.adm-log-level-warn  { background: color-mix(in srgb, var(--cds-support-warning) 28%, transparent); }
 .adm-log-level-info  { background: var(--chip-neutral); }
 
 .adm-log-action {
@@ -4745,7 +4755,7 @@ a.hmenu-item {
 .adm-log-detail pre {
   margin: 8px 0; white-space: pre-wrap; word-break: break-word;
   font-family: var(--font-mono);
-  font-size: 12px; line-height: 1.6; color: var(--ink-muted);
+  font-size: var(--type-label-01); line-height: 1.6; color: var(--ink-muted);
   background: var(--row-band); border-radius: 0; padding: 10px 12px;
 }
 
@@ -4761,7 +4771,7 @@ a.hmenu-item {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 .adm-guide-toggle-action {
-  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-label-01);
   color: var(--ink-muted); flex: none;
 }
 .adm-guide-toggle-action .apr-caret-open { transform: rotate(180deg); }
@@ -4774,16 +4784,16 @@ a.hmenu-item {
   padding: 12px 16px; border-radius: 0;
 }
 .adm-guide-card-head {
-  display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px; font-size: var(--type-body-01); margin-bottom: 6px;
 }
 .adm-guide-subhead {
   display: flex; align-items: center; gap: 6px; margin: 12px 0 8px;
-  font-size: 14px; font-weight: 600; color: var(--ink-base, inherit);
+  font-size: var(--type-body-01); font-weight: 600; color: var(--ink-base, inherit);
 }
-.adm-guide-subhead h4 { margin: 0; font-size: 14px; font-weight: 600; }
-.adm-guide-table { font-size: 12px; }
+.adm-guide-subhead h4 { margin: 0; font-size: var(--type-body-01); font-weight: 600; }
+.adm-guide-table { font-size: var(--type-label-01); }
 .ast-note-cell {
-  font-size: 12px; color: var(--ink-secondary); line-height: 1.5;
+  font-size: var(--type-label-01); color: var(--ink-secondary); line-height: 1.5;
   max-width: 38ch; white-space: normal;
 }
 
@@ -4828,7 +4838,7 @@ a.hmenu-item {
   align-items: baseline;
   gap: 8px;
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 600;
   color: var(--cds-text-primary);
 }
@@ -4847,7 +4857,7 @@ a.hmenu-item {
   padding: 0;
   border-radius: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -4856,7 +4866,7 @@ a.hmenu-item {
   display: inline-flex;
   align-items: center;
   height: 24px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   padding: 0 var(--sp-03);
   border: none;
@@ -4866,10 +4876,10 @@ a.hmenu-item {
   background: var(--chip-neutral);
 }
 .pwr-status-tag.retired {
-  background: rgba(36, 161, 72, 0.28);
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
 }
 .pwr-status-tag.probing {
-  background: rgba(69, 137, 255, 0.28);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .pwr-status-tag.waiting {
   background: var(--chip-neutral);
@@ -4906,13 +4916,13 @@ a.hmenu-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   line-height: 1.45;
 }
 .pwr-sub-window {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 .pwr-sub-times {
   display: flex;
@@ -4926,7 +4936,7 @@ a.hmenu-item {
 }
 .pwr-times-prefix {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 .pwr-times-chips {
   display: flex;
@@ -4941,7 +4951,7 @@ a.hmenu-item {
   align-items: center;
   height: 20px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 400;
   padding: 0 var(--sp-03);
   border: none;
@@ -4950,14 +4960,14 @@ a.hmenu-item {
   color: var(--cds-text-primary);
 }
 .pwr-time-chip.is-retire {
-  background: rgba(36, 161, 72, 0.28);
+  background: color-mix(in srgb, var(--cds-support-success) 28%, transparent);
 }
 .pwr-time-chip.is-latest {
-  background: rgba(69, 137, 255, 0.28);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .pwr-times-empty {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-label-01);
 }
 
 @media (max-width: 720px) {
@@ -4976,7 +4986,7 @@ a.hmenu-item {
   .ast-track { display: none; }
   .ast-row { grid-template-columns: 1fr auto; min-height: 0; padding: 9px 0; }
   .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .ast-when { display: inline; font-size: 12px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .ast-when { display: inline; font-size: var(--type-label-01); color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
   .ast-date { display: inline; margin-top: 0; }
 
   /* 探針列：手機把「名稱／摘要」疊成兩行，進度條獨占一行才看得出翻綠的位置 */
@@ -4988,6 +4998,10 @@ a.hmenu-item {
   /* The legend will squeeze the "judgment criterion is" into a straight row on a narrow screen, so the mobile phone changes it to a single column stack.*/
   .ast-legend { flex-direction: column; align-items: flex-start; gap: 7px; }
   .ast-rule { line-height: 1.6; }
+
+  /* 472px of fixed columns plus five gaps cannot fit a 390px phone; collapse to
+     two tracks and let the remaining cells wrap. */
+  .adm-log-head { grid-template-columns: 1fr auto; }
 }
 
 /* ---------- Watchlist Block (Dashboard Minimalist Cards & View Switcher) ---------- */
@@ -5014,7 +5028,7 @@ a.hmenu-item {
   transform: translateY(-2px);
   background: var(--surface-strong);
   border-color: var(--border-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--cds-shadow-modal);
 }
 
 .watchlist-card-head {
@@ -5036,14 +5050,14 @@ a.hmenu-item {
 
 .watchlist-card-ticker {
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 700;
   color: var(--ink-secondary);
   flex-shrink: 0;
 }
 
 .watchlist-card-name {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink);
   overflow: hidden;
@@ -5056,7 +5070,7 @@ a.hmenu-item {
 .watchlist-card-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 500;
   padding: 0 4px;
   border-radius: 0;
@@ -5082,7 +5096,7 @@ a.hmenu-item {
 
 .watchlist-card-price {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
@@ -5090,7 +5104,7 @@ a.hmenu-item {
 }
 
 .watchlist-card-change {
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
@@ -5108,14 +5122,14 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   line-height: 1;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
 }
 
 .watchlist-card-del:hover {
-  background: rgba(250, 77, 86, 0.15);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
   color: var(--danger);
 }
 
@@ -5128,7 +5142,7 @@ a.hmenu-item {
 .watchlist-table-name-cell .watchlist-card-badge {
   max-width: none;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   padding: 2px 8px;
   color: var(--ink-secondary);
   border-color: var(--border-strong);
@@ -5152,7 +5166,7 @@ a.hmenu-item {
   height: var(--cds-size-sm);
   padding: 0 var(--sp-04);
   border-radius: 0;
-  font-size: 14px;
+  font-size: var(--type-body-01);
   font-weight: 400;
   letter-spacing: 0.16px;
   cursor: pointer;
@@ -5204,18 +5218,18 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
 }
 
 .watchlist-group-row {
-  background: var(--surface-subtle, rgba(255, 255, 255, 0.02));
+  background: var(--surface-subtle);
 }
 
 .watchlist-group-cell {
   padding: 8px 12px !important;
-  font-size: 12px;
+  font-size: var(--type-label-01);
   font-weight: 600;
   color: var(--ink-secondary);
   border-top: 1px solid var(--border);
@@ -5226,3 +5240,59 @@ a.hmenu-item {
   margin-left: 8px;
 }
 
+/* ---------- Toast ---------- */
+.toast-region {
+  position: fixed;
+  right: var(--sp-05);
+  bottom: var(--sp-05);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-03);
+  z-index: 110;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  min-width: 240px;
+  max-width: 360px;
+  padding: var(--sp-04);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+  border: 1px solid var(--cds-border-subtle);
+  border-left: 3px solid var(--cds-support-success);
+  font-size: var(--type-body-01);
+  box-shadow: var(--cds-shadow-menu);
+}
+
+.toast-error {
+  border-left-color: var(--cds-support-error);
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-01);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

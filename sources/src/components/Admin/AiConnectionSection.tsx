@@ -20,8 +20,12 @@ import {
   type AiProviderKind,
   type AiSettings,
 } from '../../services/aiSettings'
+import { useToast } from '../Common/Toast'
+import { useConfirm } from '../Common/useConfirm'
 
 export function AiConnectionSection() {
+  const { show } = useToast()
+  const confirm = useConfirm()
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState<AiSettings | null>(null)
 
@@ -82,10 +86,17 @@ export function AiConnectionSection() {
     }
     setSaved(candidate)
     setOkMsg('AI 設定已儲存')
+    show('AI 連線設定已儲存')
   }
 
   async function handleClear() {
-    if (!confirm('確定要清除 AI 設定嗎？清除後所有使用者都無法產生 AI 分析。')) return
+    const ok = await confirm({
+      title: '清除 AI 設定',
+      message: '確定要清除 AI 設定嗎？清除後所有使用者都無法產生 AI 分析。',
+      confirmLabel: '清除',
+      danger: true,
+    })
+    if (!ok) return
     setBusy(true)
     const res = await clearAiSettings()
     setBusy(false)
@@ -95,6 +106,7 @@ export function AiConnectionSection() {
     }
     setSaved(null)
     setOkMsg('AI 設定已清除')
+    show('AI 設定已清除')
   }
 
   return (

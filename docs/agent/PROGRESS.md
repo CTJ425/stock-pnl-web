@@ -1,9 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Carbon 精修四項（圖層階層、字級 ramp、間距節奏、UI Shell 頁首）
+- Action: UI/UX 稽核 21 項全數處理（Task 149）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-09 10:07:59 Asia/Taipei
+- Timestamp: 2026-09-09 15:15:32 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-09 15:15:32 Asia/Taipei (Task 149, 0.9.36)
+
+針對 feat/carbon-design 分支做完整 UI/UX 稽核，21 項發現全數處理完畢。版本未動（0.9.36），尚未 commit。
+
+Gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、完整測試 107 檔 / 1757 測試 / exit 0（基準 103 / 1732）。42 個檔案異動，8 個新檔。
+
+最重要的一項是根因修正：`downloadReportsJson` 過去把所有失敗吞成 `null`，與「報告還沒產生」同值，所以總經與後台五個畫面的錯誤狀態永遠觸發不到。現在 404 才回 `null`，網路失敗、5xx、JSON 解析失敗一律拋出。連帶補上兩個沒有 catch 的呼叫端，其中 `FxPage.load` 的 `setLoading(false)` 在 await 之後，網路失敗會讓頁面永遠轉圈——這個是 review 抓到的，第一次 scout 的範圍沒涵蓋到。
+
+有兩項稽核發現在實作時查證為錯誤並撤回：A3「焦點不可見」是錯的，`index.css` 本來就有通用 `:focus-visible` 規則；B5 要求在兩個批次改寫 Modal 加確認閘門，但它們的按鈕本來就標明筆數，等於重複詢問。B6 的斷點 token 化在純 CSS 無法實作，改為慣例註解。
+
+詳細條列見 `docs/agent/TASK_ARCHIVE.md` 的 Task 149。
 
 ---
 
@@ -18,14 +32,3 @@
 - **Follow-up, admin console**: the console's `.data-table` instances were already covered, but its execution log and probe round list are tables built from divs and never matched a table rule. Both now carry the same bands, row height and tag treatment. The search also turned up `var(--hairline, …)`, a fallback to a legacy slate literal that both earlier colour sweeps missed because the literal sits inside a `var()` fallback. The Diagram Design profile is now stored in the repo at `docs/design/diagram-design-carbon-profile.md`.
 - **Follow-up, probe war room**: the eight state cards were identical because the two `::before` gradients that were supposed to mark state were dead CSS — no base rule ever gave the pseudo-element content or a box. State now rides on a 3px Carbon status rule on the leading edge, and the hue count went from four to two: green for retired, blue for probing. Tags, chips and dots follow the same two hues, the glow is gone, and the light-theme patch block for `.pwr-*` was deleted because every value is now a token.
 - **Not done on purpose**: no version bump, no merge. `dev` and `main` are untouched.
-
----
-
-## 📅 Log: 2026-09-09 09:36:25 Asia/Taipei (Task 147, 0.9.36, branch `feat/carbon-design`)
-
-**The whole UI moves from the glassmorphism design system to IBM Carbon Design.**
-
-- **Approach**: The stylesheet already routed every color through a token layer, so the conversion is a token rewrite plus a component-geometry rewrite in `sources/src/index.css`. No component file needed a class change. Carbon tokens are added under a `--cds-*` prefix, and every historic token name stays as an alias on top of them.
-- **Changed**: Carbon Gray 100 (dark) and Carbon White (light) palettes; IBM Plex Sans and IBM Plex Mono; square corners; the Carbon spacing scale; Carbon tabs, buttons, text inputs, data tables, modals, inline notifications, overflow menus, content switchers and tags; a 2px `$focus` ring inside every control; Carbon motion curves; and the Carbon data-visualization palette in `chartColors.ts`.
-- **Verified**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots on both themes show the dashboard, the transactions table, the transaction modal and the yearly report.
-- **Not done on purpose**: no version bump, no merge. The work sits on `feat/carbon-design`; `dev` and `main` are untouched.

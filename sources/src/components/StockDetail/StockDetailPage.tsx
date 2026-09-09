@@ -20,8 +20,8 @@
  * Independent from chip reporting, failure of either does not affect the other.
  */
 import { useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import type { KeyboardEvent, ReactNode } from 'react'
+import { RefreshCw } from 'lucide-react'
 import {
   fetchStoredReport,
   generateReport,
@@ -78,6 +78,67 @@ const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string 
   { id: 'technical', label: '技術面', meta: '日 K · 均線 · 布林 · 成交量 · KD' },
 ]
 
+const TAB_IDS = TABS.map((t) => t.id)
+const SECTION_IDS = SECTION_TABS.map((t) => t.id)
+
+function isDetailTab(v: string | null): v is DetailTab {
+  return v === 'analysis' || v === 'whatif' || v === 'ai'
+}
+
+function isSectionTab(v: string | null): v is AnalysisSectionTab {
+  return v === 'chips' || v === 'fundamental' || v === 'technical'
+}
+
+/** Initial tab level 1, read once from `?tab=`; falls back to the default when the value is unknown. */
+function readTabFromUrl(): DetailTab {
+  const v = new URLSearchParams(window.location.search).get('tab')
+  return isDetailTab(v) ? v : 'analysis'
+}
+
+/** Initial tab level 2, read once from `?sub=`; falls back to the default when the value is unknown. */
+function readSectionFromUrl(): AnalysisSectionTab {
+  const v = new URLSearchParams(window.location.search).get('sub')
+  return isSectionTab(v) ? v : 'chips'
+}
+
+/**
+ * Writes query params via `history.replaceState`, preserving every other param. Building the
+ * next URL from the full current href (never reading or writing the hash fragment directly)
+ * carries it through untouched — Supabase auth redirects use that fragment, and rewriting it
+ * would break sign-in.
+ */
+function setUrlParams(updates: Record<string, string>) {
+  const url = new URL(window.location.href)
+  for (const [key, value] of Object.entries(updates)) url.searchParams.set(key, value)
+  window.history.replaceState(null, '', url.toString())
+}
+
+/**
+ * Arrow-key navigation shared by both tab levels: ArrowLeft/ArrowRight move to the
+ * previous/next tab and focus it, Home/End jump to the first/last. Other keys pass through.
+ */
+function handleTabListKeyDown<T extends string>(
+  e: KeyboardEvent<HTMLButtonElement>,
+  ids: readonly T[],
+  currentId: T,
+  onSelect: (id: T) => void,
+) {
+  let nextIndex: number
+  const currentIndex = ids.indexOf(currentId)
+  if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + ids.length) % ids.length
+  else if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % ids.length
+  else if (e.key === 'Home') nextIndex = 0
+  else if (e.key === 'End') nextIndex = ids.length - 1
+  else return
+
+  e.preventDefault()
+  const nextId = ids[nextIndex]
+  onSelect(nextId)
+  const list = e.currentTarget.closest('[role="tablist"]')
+  const buttons = list?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  buttons?.[nextIndex]?.focus()
+}
+
 /** Group headers for long pages. Four sections are shared, making the level obviously higher than the `.rpt-section h3` inside each section.*/
 function CardHead({ title, meta }: { title: string; meta?: string }) {
   return (
@@ -98,15 +159,27 @@ export function StockDetailPage({
   avgCost = null,
   selector,
 }: StockDetailPageProps) {
-  const [tab, setTab] = useState<DetailTab>('analysis')
-  const [activeSection, setActiveSection] = useState<AnalysisSectionTab>('chips')
+  const [tab, setTab] = useState<DetailTab>(() => readTabFromUrl())
+  const [activeSection, setActiveSection] = useState<AnalysisSectionTab>(() => readSectionFromUrl())
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
   const [fundamental, setFundamental] = useState<FundamentalData | null>(null)
   const [fundLoading, setFundLoading] = useState(true)
+  const [fundError, setFundError] = useState(false)
   // +1 when the user clicks "Refresh" to string in the dependencies of each loaded effect to force a refetch.
   const [reloadKey, setReloadKey] = useState(0)
+
+  // `tab`/`sub` describe this page's own tabs; once this page is gone, leaving them in the
+  // address bar is stale clutter for whatever renders next, so drop them (and only them) on unmount.
+  useEffect(() => {
+    return () => {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('tab')
+      url.searchParams.delete('sub')
+      window.history.replaceState(null, '', url.toString())
+    }
+  }, [])
 
   /*
     The daily series is loaded here rather than inside the technical section (0.6.38): since the indicator
@@ -180,6 +253,7 @@ export function StockDetailPage({
     let alive = true
     setFundLoading(true)
     setFundamental(null)
+    setFundError(false)
     ;(async () => {
       try {
         let f = await fetchFundamental(ticker)
@@ -225,7 +299,10 @@ export function StockDetailPage({
         }
         if (alive) setFundLoading(false)
       } catch {
-        if (alive) setFundLoading(false)
+        if (alive) {
+          setFundError(true)
+          setFundLoading(false)
+        }
       }
     })()
     return () => {
@@ -258,13 +335,24 @@ export function StockDetailPage({
         </button>
       </div>
 
-      <nav className="subtabs" aria-label="個股分析分頁">
+      <nav className="subtabs" role="tablist" aria-label="個股分析分頁">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
             className={tab === id ? 'subtab active' : 'subtab'}
-            onClick={() => setTab(id)}
-            aria-current={tab === id}
+            onClick={() => {
+              setTab(id)
+              setUrlParams({ tab: id })
+            }}
+            onKeyDown={(e) =>
+              handleTabListKeyDown(e, TAB_IDS, tab, (nextId) => {
+                setTab(nextId)
+                setUrlParams({ tab: nextId })
+              })
+            }
           >
             {label}
           </button>
@@ -296,7 +384,16 @@ export function StockDetailPage({
                   role="tab"
                   aria-selected={activeSection === st.id}
                   className={`sec-tab-btn ${activeSection === st.id ? 'active' : ''}`}
-                  onClick={() => setActiveSection(st.id)}
+                  onClick={() => {
+                    setActiveSection(st.id)
+                    setUrlParams({ sub: st.id })
+                  }}
+                  onKeyDown={(e) =>
+                    handleTabListKeyDown(e, SECTION_IDS, activeSection, (nextId) => {
+                      setActiveSection(nextId)
+                      setUrlParams({ sub: nextId })
+                    })
+                  }
                 >
                   <span>{st.label}</span>
                 </button>
@@ -307,19 +404,7 @@ export function StockDetailPage({
               <section className="glass detail-card" aria-labelledby="sec-chips">
                 <CardHead title="籌碼" meta="三大法人 · 融資融券" />
                 <div id="sec-chips">
-                  {status === 'loading' && (
-                    <div className="empty-state" style={{ padding: 32 }}>
-                      <RefreshCw size={28} className="spin" />
-                      <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
-                    </div>
-                  )}
-                  {status === 'error' && (
-                    <div className="notice notice-warn" role="alert">
-                      <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-                      {errMsg}
-                    </div>
-                  )}
-                  {status === 'ready' && report && <ChipsTab report={report} />}
+                  <ChipsTab report={report} status={status} errMsg={errMsg} />
                 </div>
               </section>
             )}
@@ -328,7 +413,7 @@ export function StockDetailPage({
               <section className="glass detail-card" aria-labelledby="sec-fundamental">
                 <CardHead title="基本面" meta="估值 · 獲利能力 · 月營收" />
                 <div id="sec-fundamental">
-                  <FundamentalTab fundamental={fundamental} loading={fundLoading} />
+                  <FundamentalTab fundamental={fundamental} loading={fundLoading} error={fundError} />
                 </div>
               </section>
             )}

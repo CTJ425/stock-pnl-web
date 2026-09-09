@@ -176,6 +176,9 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
   const handleConfirm = async () => {
     if (busy || previewItems.length === 0 || !isValidRatio || zeroQtyCount > 0) return
+    // No extra confirm dialog here: the button that reaches this point already reads
+    // "確認套用分割換算（更新 N 筆紀錄）" inside a modal the user opened on purpose, so a
+    // second dialog would be the same question twice.
     setBusy(true)
     setError(null)
     let done = 0
@@ -240,7 +243,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: 12,
-              background: 'var(--surface-subtle, rgba(255, 255, 255, 0.03))',
+              background: 'var(--surface-subtle)',
               padding: 14,
               borderRadius: 0,
               border: '1px solid var(--border)',
@@ -332,14 +335,14 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  background: 'rgba(56, 189, 248, 0.08)',
-                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  background: 'var(--steel-tint)',
+                  border: '1px solid var(--steel)',
                   padding: '8px 12px',
                   borderRadius: 0,
                   fontSize: 12,
                 }}
               >
-                <Sparkles size={14} style={{ color: 'var(--accent, #78a9ff)', flexShrink: 0 }} />
+                <Sparkles size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                 <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                   <input
                     type="checkbox"
@@ -380,7 +383,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
               <div
                 className="split-preview-card"
                 style={{
-                  background: 'var(--surface-card, rgba(255, 255, 255, 0.05))',
+                  background: 'var(--surface)',
                   border: '1px solid var(--border)',
                   borderRadius: 0,
                   padding: 14,
@@ -403,7 +406,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                     <div className="kpi-label">總買入股數</div>
                     <div className="kpi-value" style={{ fontSize: 16 }}>
                       {fmtQty(totalQtyBefore)} →{' '}
-                      <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
                         {fmtQty(totalQtyAfter)}
                       </span>{' '}
                       股
@@ -414,7 +417,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                     <div className="kpi-label">平均買進單價</div>
                     <div className="kpi-value" style={{ fontSize: 16 }}>
                       {fmtPrice(avgPriceBefore, currency)} →{' '}
-                      <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
                         {fmtPrice(avgPriceAfter, currency)}
                       </span>
                     </div>
@@ -426,7 +429,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                       {totalCostBefore !== totalCostAfter ? (
                         <>
                           {fmtMoney(totalCostBefore, currency)} →{' '}
-                          <span style={{ color: 'var(--accent, #78a9ff)', fontWeight: 700 }}>
+                          <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
                             {fmtMoney(totalCostAfter, currency)}
                           </span>
                         </>
@@ -445,11 +448,11 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>交易日期</th>
-                        <th>代號 / 名稱</th>
-                        <th className="num">原股數 → 換算後股數</th>
-                        <th className="num">原單價 → 換算後單價</th>
-                        <th className="num">買進手續費</th>
+                        <th scope="col">交易日期</th>
+                        <th scope="col">代號 / 名稱</th>
+                        <th scope="col" className="num">原股數 → 換算後股數</th>
+                        <th scope="col" className="num">原單價 → 換算後單價</th>
+                        <th scope="col" className="num">買進手續費</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -464,11 +467,11 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                           </td>
                           <td className="num">
                             {fmtQty(item.oldQty)} →{' '}
-                            <strong style={{ color: 'var(--accent, #78a9ff)' }}>{fmtQty(item.newQty)}</strong>
+                            <strong style={{ color: 'var(--accent)' }}>{fmtQty(item.newQty)}</strong>
                           </td>
                           <td className="num">
                             {fmtPrice(item.oldPrice, currency)} →{' '}
-                            <strong style={{ color: 'var(--accent, #78a9ff)' }}>
+                            <strong style={{ color: 'var(--accent)' }}>
                               {fmtPrice(item.newPrice, currency)}
                             </strong>
                           </td>
@@ -479,7 +482,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                                   {fmtMoney(item.oldFeeTax, currency)}
                                 </span>
                                 →{' '}
-                                <strong style={{ color: 'var(--accent, #78a9ff)' }}>
+                                <strong style={{ color: 'var(--accent)' }}>
                                   {fmtMoney(item.feeTax, currency)}
                                 </strong>
                               </span>

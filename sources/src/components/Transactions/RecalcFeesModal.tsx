@@ -8,12 +8,14 @@ import { useMemo, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Modal } from '../Common/Modal'
+import { useToast } from '../Common/Toast'
 import { proposeFeeCorrections } from '../../utils/fees'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { TX_TYPE_LABEL } from '../../types/models'
 
 export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
   const { current, transactions, updateTransaction } = useWorkspace()
+  const { show } = useToast()
   const workspaceId = current?.id
   const feeRate = getFeeRate(workspaceId)
   const minFeeWhole = getMinFee('whole', workspaceId)
@@ -45,9 +47,12 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
 
   const apply = async () => {
     if (busy) return
+    // No extra confirm dialog here: the button that reaches this point already reads
+    // "更新勾選的 N 筆手續費" inside a modal the user opened on purpose, so a second dialog
+    // would be the same question twice. The success toast below is what was actually missing.
+    const total = checked.size
     setBusy(true)
     setError(null)
-    const total = checked.size
     let done = 0
     try {
       for (const { tx, newFee } of proposals) {
@@ -65,6 +70,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
         })
         done += 1
       }
+      show(`已更新 ${done} 筆手續費`)
       onClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : '更新失敗，請稍後再試'
@@ -101,7 +107,7 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>
+                  <th scope="col">
                     <input
                       type="checkbox"
                       aria-label="全選"
@@ -109,13 +115,13 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
                       onChange={toggleAll}
                     />
                   </th>
-                  <th>日期</th>
-                  <th>代號</th>
-                  <th>類型</th>
-                  <th className="num">單價</th>
-                  <th className="num">股數</th>
-                  <th className="num">原手續費</th>
-                  <th className="num">重算後</th>
+                  <th scope="col">日期</th>
+                  <th scope="col">代號</th>
+                  <th scope="col">類型</th>
+                  <th scope="col" className="num">單價</th>
+                  <th scope="col" className="num">股數</th>
+                  <th scope="col" className="num">原手續費</th>
+                  <th scope="col" className="num">重算後</th>
                 </tr>
               </thead>
               <tbody>
