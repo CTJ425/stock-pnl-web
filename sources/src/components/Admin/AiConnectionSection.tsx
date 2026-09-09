@@ -136,7 +136,7 @@ export function AiConnectionSection() {
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
               />
-              <span className="hint" style={{ fontSize: 11 }}>
+              <span className="hint" style={{ fontSize: 12 }}>
                 將自動補上 /v1，Ollama 本機請填 http://localhost:11434，並確認設定 OLLAMA_ORIGINS。
               </span>
             </div>
@@ -166,19 +166,19 @@ export function AiConnectionSection() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
-            <span className="hint" style={{ fontSize: 11 }}>
+            <span className="hint" style={{ fontSize: 12 }}>
               金鑰會下發到每個登入者的瀏覽器 —— 前端直接發請求給供應商，這是必然的。
             </span>
           </div>
 
           {err && (
-            <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13 }}>
+            <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
               <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
               {err}
             </div>
           )}
           {okMsg && (
-            <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 13 }}>
+            <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 14 }}>
               <CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
               {okMsg}
             </div>

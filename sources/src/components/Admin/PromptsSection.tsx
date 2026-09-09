@@ -159,13 +159,13 @@ export function PromptsSection() {
             </div>
 
             {err && (
-              <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13, marginTop: 12 }}>
+              <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14, marginTop: 12 }}>
                 <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
                 {err}
               </div>
             )}
             {okMsg && (
-              <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 13, marginTop: 12 }}>
+              <div className="notice notice-info" style={{ padding: '8px 12px', fontSize: 14, marginTop: 12 }}>
                 <CheckCircle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
                 {okMsg}
               </div>

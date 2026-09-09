@@ -551,7 +551,7 @@ export function TwMarketSection() {
                           : 'hint'
                       }
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: turnoverAmountTrend.label ? 600 : undefined,
                       }}
                     >
@@ -578,7 +578,7 @@ export function TwMarketSection() {
                           : 'hint'
                       }
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: turnoverSharesTrend.label ? 600 : undefined,
                       }}
                     >
@@ -605,7 +605,7 @@ export function TwMarketSection() {
                           : 'hint'
                       }
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: turnoverTxnTrend.label ? 600 : undefined,
                       }}
                     >
@@ -629,7 +629,7 @@ export function TwMarketSection() {
                           ? chipClass(taiexTrend.color === CHART_COLORS.up ? 1 : -1)
                           : 'hint'
                       }
-                      style={{ fontSize: 11, fontWeight: taiexTrend.label ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: taiexTrend.label ? 600 : undefined }}
                     >
                       {taiexTrend.label ?? '—'}
                     </span>
@@ -649,7 +649,7 @@ export function TwMarketSection() {
                   <div className="tfoot-cum-trend">
                     <span
                       className={chipClass(changeSum)}
-                      style={{ fontSize: 11, fontWeight: changeSum !== null ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: changeSum !== null ? 600 : undefined }}
                     >
                       {changeSum !== null
                         ? `7日累計${changeSum > 0 ? '漲 ' : changeSum < 0 ? '跌 ' : ''}${Math.abs(changeSum).toFixed(2)}`
@@ -774,7 +774,7 @@ export function TwMarketSection() {
                       <div className="tfoot-cum-trend">
                         <span
                           className={label ? chipClass(s) : 'hint'}
-                          style={{ fontSize: 11, fontWeight: label ? 600 : undefined }}
+                          style={{ fontSize: 12, fontWeight: label ? 600 : undefined }}
                         >
                           {label ?? '—'}
                         </span>

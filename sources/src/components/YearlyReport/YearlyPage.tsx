@@ -127,7 +127,7 @@ function AmountCell({
       <div style={{ fontWeight: signed ? 600 : undefined }}>
         {signed ? fmtSignedMoney(value, currency) : fmtMoney(value, currency)}
       </div>
-      <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+      <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
         {rawLabel} {signed ? fmtSignedMoney(raw, currency) : fmtMoney(raw, currency)}
       </div>
     </td>
@@ -159,7 +159,7 @@ function RoiCell({
   return (
     <td className={`num ${pnlClass(roi)}`}>
       <div style={{ fontWeight: 600 }}>{roi === null ? '—' : fmtSignedPercent(roi)}</div>
-      <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+      <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
         未含費 {rawRoi === null ? '—' : fmtSignedPercent(rawRoi)}
       </div>
     </td>
@@ -172,7 +172,7 @@ function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; c
     <td className="num">
       <div>{fmtMoney(fees, currency, 2)}</div>
       {feesTax > 0 && (
-        <div style={{ fontSize: 11, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
+        <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}>
           手續費 {fmtMoney(fees - feesTax, currency, 2)} ｜ 交易稅 {fmtMoney(feesTax, currency, 2)}
         </div>
       )}
