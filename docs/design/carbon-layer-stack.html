@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carbon 圖層階層 — stock-pnl-web</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens — Carbon profile (White theme) ──────────────────── */
+    :root {
+      --color-paper:       #f4f4f4;
+      --color-paper-2:     #e0e0e0;
+      --color-ink:         #161616;
+      --color-muted:       #525252;
+      --color-soft:        #8d8d8d;
+      --color-rule:        rgba(22,22,22,0.12);
+      --color-rule-solid:  #e0e0e0;
+      --color-accent:      #0f62fe;
+      --color-accent-tint: rgba(15,98,254,0.08);
+      --color-link:        #005d5d;
+      --font-sans:   'IBM Plex Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-serif:  'IBM Plex Serif', 'Noto Serif TC', 'Times New Roman', serif;
+      --font-mono:   'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      color: var(--color-ink);
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    .header { margin-bottom: 2.5rem; }
+
+    .header-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.75rem, 3vw + 1rem, 2.5rem);
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--color-muted);
+      max-width: 56ch;
+    }
+
+    .status {
+      margin-top: 0.875rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 3px solid var(--color-accent);
+      background: #ffffff;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      color: var(--color-muted);
+      max-width: 56ch;
+    }
+
+    .status code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--color-ink);
+    }
+
+    /* ── Diagram container — clean, borderless ──────────────────── */
+    .diagram-container {
+      background: transparent;
+      border: none;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    svg { width: 100%; min-width: 900px; display: block; }
+
+    /* ── Info cards — varied widths ─────────────────────────────── */
+    .cards {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .cards { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 0;
+      border: 1px solid var(--color-rule);
+      padding: 1.25rem;
+    }
+
+    .card-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-soft);
+      margin-bottom: 0.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.875rem;
+      padding-bottom: 0.875rem;
+      border-bottom: 1px solid rgba(22,22,22,0.08);
+    }
+
+    .card-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .card-dot.ink    { background: var(--color-ink); }
+    .card-dot.muted  { background: var(--color-muted); }
+    .card-dot.coral  { background: var(--color-accent); }
+
+    .card h3 {
+      font-family: var(--font-sans);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--color-ink);
+      letter-spacing: 0;
+    }
+
+    .card ul {
+      list-style: none;
+      color: var(--color-muted);
+      font-size: 0.8125rem;
+      line-height: 1.7;
+    }
+
+    .card li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.875rem;
+      position: relative;
+    }
+
+    .card li::before {
+      content: '—';
+      position: absolute;
+      left: 0;
+      color: rgba(22,22,22,0.25);
+      font-size: 0.75rem;
+    }
+
+    .card code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--color-ink);
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────── */
+    .footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(22,22,22,0.10);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      color: var(--color-soft);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <p class="header-eyebrow">Layer stack · 2026-09-09</p>
+      <h1>Carbon 圖層階層：被壓平的兩階</h1>
+      <p class="subtitle">配色與幾何已經合規，剩下的質感差距不在顏色，在深度。Carbon 靠 surface 一階一階疊出層次，不靠邊框；四個巢狀情境裡有兩個停在同一階。</p>
+      <p class="status">已實作 · 2026-09-09 · 分支 <code>feat/carbon-design</code> — 本頁四項全部落地。以下所有數據是實作前的量測值，保留為變更依據。</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1000 456" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="carbon-layers-title carbon-layers-desc">
+        <title id="carbon-layers-title">Carbon 圖層階層：被壓平的兩階</title>
+        <desc id="carbon-layers-desc">四層堆疊圖，由下而上為頁面底、卡片與表格、卡片內元素、彈窗內欄位。最上面兩層目前都停在卡片的同一個 surface 色，應各自上升一階。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#525252"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#0f62fe"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#005d5d"/>
+          </marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f4f4f4"/>
+
+        <!-- ── Direction indicator — left margin, outside the stack ── -->
+        <text x="88" y="40" fill="#8d8d8d" font-size="8" font-family="'IBM Plex Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">SURFACE</text>
+        <line x1="88" y1="320" x2="88" y2="56" stroke="#8d8d8d" stroke-width="1" marker-end="url(#arrow)"/>
+
+        <!-- ── Column headings ─────────────────────────────────── -->
+        <text x="176" y="40" fill="#525252" font-size="8" font-family="'IBM Plex Mono', monospace"
+              letter-spacing="0.14em">CARBON SURFACE TOKEN</text>
+        <text x="904" y="40" fill="#525252" font-size="12" font-weight="500"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif" text-anchor="end">現況 → 應然</text>
+
+        <!-- ── Layer 4 (top): $layer-03 — flattened, focal ───────── -->
+        <rect x="120" y="72" width="800" height="64" fill="rgba(15,98,254,0.08)" stroke="#0f62fe" stroke-width="1"/>
+        <rect x="136" y="92" width="24" height="24" fill="#525252" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="176" y="108" fill="#161616" font-size="9" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" letter-spacing="0.08em">$LAYER-03</text>
+        <text x="360" y="109" fill="#161616" font-size="14" font-weight="600"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">彈窗內的欄位 · 卡片內的卡片</text>
+        <text x="904" y="108" fill="#0f62fe" font-size="10" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" text-anchor="end">#262626 → #525252</text>
+
+        <!-- ── Layer 3: $layer-02 — flattened, focal ─────────────── -->
+        <rect x="120" y="136" width="800" height="64" fill="rgba(15,98,254,0.08)" stroke="#0f62fe" stroke-width="1"/>
+        <rect x="136" y="156" width="24" height="24" fill="#393939" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="176" y="172" fill="#161616" font-size="9" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" letter-spacing="0.08em">$LAYER-02</text>
+        <text x="360" y="173" fill="#161616" font-size="14" font-weight="600"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">卡片內的輸入框 · 表頭 · 內嵌面板</text>
+        <text x="904" y="172" fill="#0f62fe" font-size="10" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" text-anchor="end">#262626 → #393939</text>
+
+        <!-- ── Layer 2: $layer-01 — correct today ────────────────── -->
+        <rect x="120" y="200" width="800" height="64" fill="#ffffff" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <rect x="136" y="220" width="24" height="24" fill="#262626" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="176" y="236" fill="#161616" font-size="9" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" letter-spacing="0.08em">$LAYER-01</text>
+        <text x="360" y="237" fill="#161616" font-size="14" font-weight="600"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">卡片 · 資料表 · 彈窗</text>
+        <text x="904" y="236" fill="#525252" font-size="10"
+              font-family="'IBM Plex Mono', monospace" text-anchor="end">#262626</text>
+
+        <!-- ── Layer 1 (bottom): $background — correct today ──────── -->
+        <rect x="120" y="264" width="800" height="64" fill="#ffffff" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <rect x="136" y="284" width="24" height="24" fill="#161616" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="176" y="300" fill="#161616" font-size="9" font-weight="500"
+              font-family="'IBM Plex Mono', monospace" letter-spacing="0.08em">$BACKGROUND</text>
+        <text x="360" y="301" fill="#161616" font-size="14" font-weight="600"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">頁面底 · 頁首</text>
+        <text x="904" y="300" fill="#525252" font-size="10"
+              font-family="'IBM Plex Mono', monospace" text-anchor="end">#161616</text>
+
+        <!-- ── Outer silhouette ──────────────────────────────────── -->
+        <rect x="120" y="72" width="800" height="256" fill="none" stroke="#161616" stroke-width="1"/>
+
+        <!-- ── Editorial aside ───────────────────────────────────── -->
+        <text x="120" y="376" fill="#525252" font-size="14" font-style="italic"
+              font-family="'IBM Plex Serif', 'Noto Serif TC', serif">同一階就是沒有階層。彈窗開在卡片上、輸入框開在彈窗裡，深色主題下三者現在是同一塊 #262626。</text>
+
+        <!-- ── Legend — horizontal bottom strip ──────────────────── -->
+        <line x1="120" y1="416" x2="920" y2="416" stroke="rgba(22,22,22,0.12)" stroke-width="0.8"/>
+        <text x="120" y="440" fill="#525252" font-size="8" font-family="'IBM Plex Mono', monospace"
+              letter-spacing="0.14em">LEGEND</text>
+
+        <rect x="200" y="428" width="12" height="12" fill="#ffffff" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="220" y="440" fill="#525252" font-size="12" font-weight="500"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">階層正確</text>
+
+        <rect x="360" y="428" width="12" height="12" fill="rgba(15,98,254,0.08)" stroke="#0f62fe" stroke-width="1"/>
+        <text x="380" y="440" fill="#525252" font-size="12" font-weight="500"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">被壓平的階層</text>
+
+        <rect x="560" y="428" width="12" height="12" fill="#393939" stroke="rgba(22,22,22,0.12)" stroke-width="1"/>
+        <text x="580" y="440" fill="#525252" font-size="12" font-weight="500"
+              font-family="'IBM Plex Sans', 'Noto Sans TC', sans-serif">Carbon Gray 100 實際 surface 色</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <p class="card-eyebrow">Lever 02</p>
+        <div class="card-header">
+          <span class="card-dot coral"></span>
+          <h3>字級收斂到 Carbon ramp</h3>
+        </div>
+        <ul>
+          <li>樣式表現在用了 <strong>20 種字級</strong>，其中六種是半像素：<code>9.5 / 10.5 / 11.5 / 12.5 / 13.5 / 14.5px</code>，合計 50 處。</li>
+          <li>Carbon 的 ramp 只有五檔：<code>label-01 12</code>、<code>body-compact-01 14</code>、<code>heading-compact-01 14</code>、<code>heading-03 20</code>、<code>heading-04 28</code>。</li>
+          <li>做法：<code>11.5</code>（20 處）與 <code>12.5</code>（15 處）併入 12，<code>13.5</code>（6 處）與 <code>15</code>（5 處）併入 14，標題只留 14 / 20 / 28。</li>
+          <li>收益最大的是資料表：內文 13px、次要行 11px，改成 14 與 12 之後行距才對得起來。</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="card-eyebrow">Lever 03</p>
+        <div class="card-header">
+          <span class="card-dot ink"></span>
+          <h3>一套間距節奏</h3>
+        </div>
+        <ul>
+          <li>容器左右 padding 是 <code>20px</code>，不在 Carbon 刻度上；改 <code>16</code> 或 <code>24</code>。</li>
+          <li>gap 目前有八種值，其中 <code>6 / 10 / 14px</code> 不在 Carbon 刻度上，合計 <strong>35 處</strong>。刻度只有 2 / 4 / 8 / 12 / 16 / 24 / 32。</li>
+          <li>KPI 網格 gap 是 <code>14px</code>，區塊間距是 <code>24px</code>；兩者收斂成 16（卡內）與 24（卡間）。</li>
+          <li>表格列高目前約 35px（8px padding ＋ 13px/1.43 行高）；改用 Carbon 的 <code>32 / 40 / 48</code> 三檔。</li>
+          <li>頁寬上限 <code>1180px</code> 不是 Carbon 的 2x 網格數；<code>1312</code> 或 <code>1584</code> 才對得上 16 欄。</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="card-eyebrow">Lever 04</p>
+        <div class="card-header">
+          <span class="card-dot muted"></span>
+          <h3>頁首還不是 UI Shell</h3>
+        </div>
+        <ul>
+          <li>頁首外框已經是 48px ＋ 一條 <code>$border-subtle</code>，但裡面的控制項還沒跟上。</li>
+          <li>工作區按鈕 <code>.hmenu-ws</code> 是 35px 高、帶 1px <code>$border-strong</code> 外框；Carbon 的頁首動作是 <code>48×48</code>、無外框、hover 才上 <code>$background-hover</code>。</li>
+          <li>頁首字級 13.5px 也不在 ramp 上；Carbon 頁首一律 14px。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>stock-pnl-web · feat/carbon-design · 0.9.36</span>
+      <span>Diagram Design · Carbon profile</span>
+    </div>
+
+  </div>
+</body>
+</html>

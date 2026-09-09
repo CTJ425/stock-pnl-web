@@ -241,7 +241,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       {!settings && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <Bot size={36} style={{ opacity: 0.5, marginBottom: 12 }} />
-          <div style={{ fontSize: 15, fontWeight: 600 }}>尚未設定 AI 服務供應商</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>尚未設定 AI 服務供應商</div>
           {/*
             Since 0.6.19 the settings form lives in the admin console, so this can only point the way rather
             than let you fill it in here. Admins and ordinary users see two phrasings of the same fact.
@@ -269,7 +269,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       {status === 'generating' && (
         <div className="ai-card" style={{ textAlign: 'center', padding: 32 }}>
           <RefreshCw size={28} className="spin" style={{ marginBottom: 12, color: 'var(--primary)' }} />
-          <div style={{ fontSize: 15, fontWeight: 500 }}>AI 正在解讀技術面與籌碼數據…</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>AI 正在解讀技術面與籌碼數據…</div>
           <div className="hint" style={{ marginTop: 6 }}>最長可能需要 {AI_TIMEOUT_SECONDS} 秒，請稍候。</div>
         </div>
       )}
@@ -281,7 +281,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
               <div style={{ fontWeight: 600 }}>分析失敗</div>
-              <div style={{ fontSize: 13, marginTop: 4 }}>{errMsg}</div>
+              <div style={{ fontSize: 14, marginTop: 4 }}>{errMsg}</div>
             </div>
           </div>
           <div style={{ marginTop: 8 }}>
@@ -296,7 +296,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       {/* Analysis output + disclaimer */}
       {status === 'success' && aiText && (
         <div className="ai-card">
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Bot size={16} />
             {ticker} {name} AI 數據綜合分析
           </div>
@@ -314,7 +314,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       {status === 'success' && aiText && (
         <div className="ai-card">
           <div className="ai-chat-head">
-            <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
               <MessageSquare size={16} />
               繼續討論
             </div>

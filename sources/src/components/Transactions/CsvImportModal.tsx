@@ -46,7 +46,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
 
   return (
     <Modal title="匯入 CSV（舊資料搬遷）" onClose={onClose} wide>
-      <p style={{ marginTop: 0, color: 'var(--ink-secondary)', fontSize: 13 }}>
+      <p style={{ marginTop: 0, color: 'var(--ink-secondary)', fontSize: 14 }}>
         支援舊 Google 試算表「個股交易紀錄」匯出的 CSV（台股代號 <code>TPE:2330</code> 會自動拆解、
         「買入 / 賣出」自動轉換），也支援本應用匯出的備份檔。
       </p>
@@ -96,7 +96,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
 
           {parsed.rows.length > 0 && (
             <>
-              <div style={{ margin: '10px 0 8px', fontSize: 13, color: 'var(--ink-secondary)' }}>
+              <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
                 預覽（共 {parsed.rows.length} 筆有效交易
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>

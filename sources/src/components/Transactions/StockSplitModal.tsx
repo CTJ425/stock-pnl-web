@@ -434,7 +434,7 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                         fmtMoney(totalCostBefore, currency)
                       )}
                     </div>
-                    <div className="kpi-sub" style={{ color: 'var(--ink-muted)', fontSize: 11 }}>
+                    <div className="kpi-sub" style={{ color: 'var(--ink-muted)', fontSize: 12 }}>
                       {totalCostBefore !== totalCostAfter ? '含智慧補算之手續費' : '成本保持恆定不變'}
                     </div>
                   </div>

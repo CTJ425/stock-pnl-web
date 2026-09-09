@@ -354,7 +354,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={volumeStreak ? (volumeStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
-                      style={{ fontSize: 11, fontWeight: volumeStreak ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: volumeStreak ? 600 : undefined }}
                     >
                       {fmtVolumeStreak(volumeStreak)}
                     </span>
@@ -372,7 +372,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={heavy(latestVolRatio) ? 'pnl-up' : 'hint'}
-                      style={{ fontSize: 11, fontWeight: heavy(latestVolRatio) ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: heavy(latestVolRatio) ? 600 : undefined }}
                     >
                       {heavy(latestVolRatio) ? '量能放大' : '量能常態'}
                     </span>
@@ -388,7 +388,7 @@ export function TechnicalTab({
                 <td className="num inst-matrix-cum">
                   <div>最新 {fmtPrice(latestClose)}</div>
                   <div className="tfoot-cum-trend">
-                    <span className="hint" style={{ fontSize: 11 }}>
+                    <span className="hint" style={{ fontSize: 12 }}>
                       高 {fmtPrice(maxClose)} / 低 {fmtPrice(minClose)}
                     </span>
                     <SparkCell
@@ -405,7 +405,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={priceStreak ? (priceStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
-                      style={{ fontSize: 11, fontWeight: priceStreak ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: priceStreak ? 600 : undefined }}
                     >
                       {fmtPriceStreak(priceStreak)}
                     </span>

@@ -147,7 +147,7 @@ function IndicatorDetail({ ind }: { ind: MacroIndicator }) {
     <tr className="detail-row">
       {/* Indicator column + latest + vs previous + trend + streak */}
       <td colSpan={5} style={{ padding: '4px 14px 10px 34px' }}>
-        <table className="data-table" style={{ minWidth: 0, fontSize: 12.5 }}>
+        <table className="data-table" style={{ minWidth: 0, fontSize: 12 }}>
           <thead>
             <tr>
               <th>{ind.label} 明細</th>

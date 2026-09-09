@@ -258,11 +258,11 @@ h3 {
 /* ---------- Layout ----------*/
 .container {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1312px;
   margin: 0 auto;
   /* Use full height to allow the footer of the page to stick to the bottom; leave space for floating buttons at the bottom*/
   flex: 1;
-  padding: 0 20px 96px;
+  padding: 0 24px 96px;
 }
 
 /* Carbon UI shell header: 48px tall, $background, one hairline rule below. */
@@ -275,7 +275,7 @@ h3 {
 }
 
 .app-header-inner {
-  max-width: 1180px;
+  max-width: 1312px;
   margin: 0 auto;
   padding: 0 var(--sp-05);
   min-height: var(--cds-header-h);
@@ -304,9 +304,9 @@ h3 {
 .header-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 /* ----------Paging (Tabs) ----------*/
@@ -334,7 +334,7 @@ h3 {
   letter-spacing: 0.16px;
   height: var(--cds-size-md);
   padding: 0 var(--sp-05);
-  margin-bottom: -1px;
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
   border-radius: 0;
   cursor: pointer;
   display: inline-flex;
@@ -367,7 +367,7 @@ h3 {
 .tab-div {
   width: 1px;
   align-self: stretch;
-  margin: 3px 4px;
+  margin: 4px 4px;
   background: var(--border-strong);
   flex: 0 0 auto;
 }
@@ -376,7 +376,7 @@ h3 {
 .bottom-nav .tab-div {
   align-self: center;
   height: 26px;
-  margin: 0 1px;
+  margin: 0 2px;
 }
 
 /* ---------- Mobile phone bottom navigation (≤720px) ----------
@@ -410,7 +410,7 @@ h3 {
   height: auto;
   margin-bottom: 0;
   padding: var(--sp-02) var(--sp-01);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
   border-radius: 0;
   border-bottom: 3px solid transparent;
@@ -482,27 +482,27 @@ h3 {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .kpi {
-  padding: 16px 18px;
+  padding: 16px 16px;
   position: relative;
   overflow: hidden;
 }
 
 .kpi .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .kpi .kpi-value {
-  margin-top: 6px;
+  margin-top: 8px;
   font-family: var(--font-body);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: 0.3px;
   font-variant-numeric: tabular-nums;
@@ -511,7 +511,7 @@ h3 {
 .kpi .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -520,11 +520,11 @@ h3 {
 .market-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .market-panel {
-  padding: 15px 20px 0;
+  padding: 16px 24px 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -534,7 +534,7 @@ h3 {
 .market-panel .panel-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
 }
 
 /* The hero label sits at the right end of the head row, not above the number. */
@@ -543,7 +543,7 @@ h3 {
 }
 
 .market-panel .panel-head h3 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .market-panel .panel-head .ccy {
@@ -561,10 +561,10 @@ h3 {
 
 .market-panel .kpi-label {
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .market-panel .kpi-value {
@@ -577,7 +577,7 @@ h3 {
 }
 
 .market-panel .metric-hero .kpi-value {
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -0.02em;
   line-height: 1.18;
 }
@@ -587,18 +587,18 @@ h3 {
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 .market-panel .metric-row .metric + .metric {
   border-left: 1px solid var(--border);
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .market-panel .kpi-sub {
   margin-top: 2px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
 }
@@ -625,14 +625,14 @@ h3 {
   flex-wrap: wrap;
   gap: 16px;
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* One legend entry: swatch, label and value read as a single group. */
 .exposure-legend {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--ink-secondary);
 }
 
@@ -651,14 +651,14 @@ h3 {
 }
 
 .market-note {
-  margin-top: 13px;
-  font-size: 11.5px;
+  margin-top: 12px;
+  font-size: 12px;
   color: var(--ink-secondary);
 }
 
 .market-panel .market-foot {
-  margin: auto -20px 0;
-  padding-top: 14px;
+  margin: auto -24px 0;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -666,7 +666,7 @@ h3 {
 }
 
 .market-panel .market-foot .metric {
-  padding: 0 20px 14px;
+  padding: 0 24px 16px;
 }
 
 .market-panel .market-foot .metric + .metric {
@@ -693,9 +693,9 @@ h3 {
   align-items: center;
   justify-content: center;
   min-width: 20px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -720,7 +720,7 @@ table.data-table {
   width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: 14px;
   min-width: 0;
   background: var(--cds-layer-01);
 }
@@ -743,8 +743,10 @@ table.data-table {
   background: var(--cds-layer-accent-01);
 }
 
+/* Carbon data table, md size: every row is 40px. A stacked cell grows past it. */
 .data-table td {
-  font-size: 13px;
+  font-size: 14px;
+  height: var(--cds-size-md);
   padding: var(--sp-03);
   border-bottom: 1px solid var(--cds-border-subtle);
   border-top: none;
@@ -755,12 +757,12 @@ table.data-table {
 
 .data-table .num {
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
 .data-table .num > div:first-child {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /*
@@ -771,17 +773,17 @@ table.data-table {
 .data-table .num > div:not(:first-child):not(.row-actions),
 .data-table .cell-sub {
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .data-table th:first-child,
 .data-table td:first-child {
-  padding-left: 10px;
+  padding-left: 12px;
 }
 
 .data-table th:last-child,
 .data-table td:last-child {
-  padding-right: 10px;
+  padding-right: 12px;
 }
 
 /* Text that is too long (such as stock names) is truncated. See the title prompt for the complete content.*/
@@ -799,7 +801,7 @@ table.data-table {
 
   .data-table th,
   .data-table td {
-    padding: 8px 5px;
+    padding: 8px 4px;
     font-size: 12px;
   }
 
@@ -810,15 +812,15 @@ table.data-table {
 
   .data-table .num > div:not(:first-child):not(.row-actions),
   .data-table .cell-sub {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .th-head .th-plain {
-    padding: 8px 0 8px 5px;
+    padding: 8px 0 8px 4px;
   }
 
   .th-head {
-    padding-right: 5px;
+    padding-right: 4px;
   }
 
   .cell-ellipsis {
@@ -848,7 +850,7 @@ table.data-table {
 
 .row-actions {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .data-table tbody tr:last-child td {
@@ -867,7 +869,7 @@ table.data-table {
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 
 .holding-group-short .holding-group-label {
@@ -884,7 +886,7 @@ table.data-table {
 
 .tx-chip {
   display: inline-block;
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 8px;
   border: none;
 }
@@ -942,10 +944,10 @@ table.data-table {
 }
 
 .whatif-ladder-tag {
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: 8px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--accent-strong);
   border: 1px solid var(--accent-strong);
@@ -967,7 +969,7 @@ table.data-table {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 0;
-  background: var(--surface);
+  background: var(--cds-layer-02);
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -1001,7 +1003,7 @@ table.data-table {
 @media (max-width: 560px) {
   .whatif-mark {
     flex-basis: 100%;
-    padding: 6px 10px;
+    padding: 8px 12px;
   }
 }
 
@@ -1014,7 +1016,7 @@ table.data-table {
 }
 
 .whatif-ledger-cell {
-  padding: 10px 12px;
+  padding: 12px 12px;
   min-height: 44px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border);
@@ -1045,7 +1047,7 @@ table.data-table {
 
 /* Sub-label naming the number below it (成交均價（未含費）／實付手續費／現價 …) */
 .whatif-ledger-sublabel {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   margin-bottom: 2px;
 }
@@ -1055,7 +1057,7 @@ table.data-table {
 }
 
 .whatif-ledger-heading {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-secondary);
   text-align: right;
@@ -1090,9 +1092,9 @@ table.data-table {
   }
 
   .whatif-ledger-cell {
-    padding: 7px 6px;
+    padding: 8px 8px;
     min-height: 36px;
-    font-size: 13px;
+    font-size: 14px;
   }
 }
 
@@ -1111,7 +1113,7 @@ table.data-table {
   color: inherit;
   cursor: pointer;
   width: 100%;
-  padding: 11px 9px;
+  padding: 12px 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1126,8 +1128,8 @@ table.data-table {
 .th-head {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding-right: 7px;
+  gap: 4px;
+  padding-right: 8px;
 }
 
 .th-head .th-sort-btn {
@@ -1137,7 +1139,7 @@ table.data-table {
 
 /* Unsortable header text (aligned with the padding of the sort button)*/
 .th-head .th-plain {
-  padding: 9px 0 9px 7px;
+  padding: 8px 0 8px 8px;
   white-space: nowrap;
 }
 
@@ -1156,7 +1158,7 @@ table.data-table {
   border-radius: 50%;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   cursor: help;
@@ -1172,7 +1174,7 @@ table.data-table {
 .help-bubble {
   position: fixed;
   z-index: 120;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 0;
   background: var(--surface-strong);
@@ -1188,7 +1190,7 @@ table.data-table {
 }
 
 .help-bubble-title {
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   color: var(--ink);
   font-weight: 600;
 }
@@ -1215,7 +1217,7 @@ table.data-table {
 .detail-row td {
   background: var(--row-alt);
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 400;
 }
 
@@ -1238,7 +1240,7 @@ table.data-table {
 .toggle-slot {
   flex: none;
   width: 22px;
-  margin-right: 10px;
+  margin-right: 12px;
 }
 
 .year-toggle {
@@ -1253,7 +1255,7 @@ table.data-table {
   cursor: pointer;
   display: inline-grid;
   place-items: center;
-  margin-right: 10px;
+  margin-right: 12px;
   transition: color 0.15s ease, border-color 0.15s ease;
   vertical-align: middle;
 }
@@ -1383,7 +1385,7 @@ table.data-table {
   left: 14px;
   bottom: 12px;
   z-index: 90;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--cds-text-helper);
   padding: var(--sp-01) var(--sp-03);
   border-radius: 0;
@@ -1455,6 +1457,37 @@ table.data-table {
   box-shadow: none;
 }
 
+/* ---------- Carbon layer contexts ----------
+ * Carbon builds depth by stepping the surface token one level per nesting, not by
+ * adding borders. A control that sits directly on the page uses $field-01; the same
+ * control inside a card or a modal — both of which are themselves $layer-01 — must
+ * step up to $field-02, or the control and its container read as one flat plane.
+ */
+.modal .field input,
+.modal .field select,
+.modal .field textarea,
+.glass .field input,
+.glass .field select,
+.glass .field textarea,
+.detail-card .field input,
+.detail-card .field select,
+.detail-card .field textarea {
+  background: var(--cds-field-02);
+}
+
+.glass .search-box .search-input,
+.modal .search-box .search-input,
+.modal .stock-search input,
+.glass .stock-search input {
+  background: var(--cds-field-02);
+}
+
+/* A menu opened from inside a card or a modal floats above both. */
+.modal .suggestions,
+.glass .suggestions {
+  background: var(--cds-layer-03);
+}
+
 /* Carbon checkbox and radio: a 16px box that must not stretch to the field width. */
 .field input[type='checkbox'],
 .field input[type='radio'] {
@@ -1508,7 +1541,7 @@ table.data-table {
 .field-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .field-row > * {
@@ -1591,9 +1624,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .suggestion-empty {
-  padding: 10px 12px;
+  padding: 12px 12px;
   color: var(--ink-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .modal-body .search-box {
@@ -1633,11 +1666,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -1848,7 +1881,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .empty-state {
-  padding: 42px 20px;
+  padding: 40px 24px;
   text-align: center;
   color: var(--ink-muted);
 }
@@ -1869,7 +1902,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .auth-card {
   width: 100%;
   max-width: 400px;
-  padding: 32px 30px 28px;
+  padding: 32px 32px 32px;
 }
 
 .auth-card .brand {
@@ -1881,15 +1914,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .auth-card .auth-sub {
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 13px;
-  margin: 4px 0 22px;
+  font-size: 14px;
+  margin: 4px 0 24px;
 }
 
 .auth-switch {
   margin-top: 16px;
   text-align: center;
   color: var(--ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .auth-switch button {
@@ -1986,16 +2019,17 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-ws {
   appearance: none;
   font: inherit;
-  font-size: 13.5px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
+  font-size: 14px;
+  color: var(--cds-text-primary);
+  background: transparent;
+  border: none;
   border-radius: 0;
-  padding: 7px 10px 7px 12px;
+  height: var(--cds-header-h);
+  padding: 0 var(--sp-04);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   max-width: 200px;
 }
@@ -2015,9 +2049,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink-secondary);
 }
 
+/* Carbon header action: no border at rest, $background-hover on hover. */
 .hmenu-ws:hover {
-  border-color: var(--btn-hover-border);
-  background: var(--btn-hover-bg);
+  background: var(--cds-background-hover);
 }
 
 .hmenu-avatar {
@@ -2079,7 +2113,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .hmenu-head {
-  padding: 7px 11px 8px;
+  padding: 8px 12px 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-secondary);
@@ -2090,7 +2124,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hmenu-sep {
   height: 1px;
   background: var(--border);
-  margin: 5px 4px;
+  margin: 4px 4px;
 }
 
 /* Carbon menu item: 40px tall, 16px side padding, square. */
@@ -2176,7 +2210,7 @@ a.hmenu-item {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -2228,7 +2262,7 @@ a.hmenu-item {
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
-  padding: 3px;
+  padding: 4px;
   border-radius: 0;
   display: inline-flex;
   align-items: center;
@@ -2246,13 +2280,13 @@ a.hmenu-item {
 /* ---------- footer ----------*/
 .app-footer {
   margin-top: auto;
-  max-width: 1180px;
+  max-width: 1312px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding: 18px 20px 26px;
+  padding: 16px 24px 24px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: center;
   line-height: 1.7;
 }
@@ -2261,7 +2295,7 @@ a.hmenu-item {
 .footer-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-top: 8px;
   color: var(--ink-muted);
   text-decoration: none;
@@ -2364,11 +2398,11 @@ a.hmenu-item {
  * Always verify in Supabase mode when adjusting breakpoints.
  */
 .app-header-inner {
-  gap: 10px 12px;
+  gap: 12px 12px;
 }
 
 .tab {
-  padding: 7px 12px;
+  padding: 8px 12px;
 }
 
 @media (max-width: 1120px) {
@@ -2392,7 +2426,7 @@ a.hmenu-item {
   /* Pagination is changed to a fixed bottom column (see .bottom-nav), and the top of the page is therefore condensed into a single column:
      品牌 ＋ 工作區 ＋ 帳號。頁首高度由 106px 降到約 54px。 */
   .container {
-    padding: 0 14px 24px;
+    padding: 0 16px 24px;
   }
 
   .app-header-inner {
@@ -2474,7 +2508,7 @@ a.hmenu-item {
   .field input,
   .field select {
     font-size: 16px;
-    padding: 10px 12px;
+    padding: 12px 12px;
   }
 
   .field-row > * {
@@ -2490,25 +2524,25 @@ a.hmenu-item {
   }
 
   .modal-overlay {
-    padding: 3vh 10px 12px;
+    padding: 3vh 12px 12px;
   }
 
   .modal-body {
-    padding: 14px 16px 18px;
+    padding: 16px 16px 16px;
   }
 
   .kpi-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 10px;
+    gap: 12px;
   }
 
   .kpi .kpi-value {
-    font-size: 21px;
+    font-size: 20px;
   }
 
   .market-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
   }
 
   .market-panel .metric-hero .kpi-value {
@@ -2519,7 +2553,7 @@ a.hmenu-item {
   .fab {
     right: 14px;
     bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
-    padding: 11px 18px;
+    padding: 12px 16px;
     font-size: 14px;
   }
 
@@ -2596,7 +2630,7 @@ a.hmenu-item {
 .detail-head-empty {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .detail-head-empty .analysis-select-secondary {
@@ -2616,7 +2650,7 @@ a.hmenu-item {
 }
 
 .detail-title h2 {
-  font-size: 17px;
+  font-size: 16px;
   color: var(--ink);
 }
 
@@ -2624,7 +2658,7 @@ a.hmenu-item {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
-  padding: 2.5px 9px;
+  padding: 2px 8px;
   color: var(--ink);
   border-color: var(--border-strong);
   background: var(--surface-strong);
@@ -2649,7 +2683,7 @@ a.hmenu-item {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 /* Carbon tab, secondary level: same 3px selection bar as the primary tabs. */
@@ -2666,7 +2700,7 @@ a.hmenu-item {
   padding: 0 var(--sp-05);
   cursor: pointer;
   border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: -1px; /* tracks the 1px rule under the tab row, not the spacing scale */
   border-radius: 0;
   transition: color var(--cds-dur-fast) var(--cds-ease-productive),
     background var(--cds-dur-fast) var(--cds-ease-productive),
@@ -2686,7 +2720,7 @@ a.hmenu-item {
 }
 
 .detail-body {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /* ---------- Individual stock analysis single page (0.6.8, version D: card grouping) ----------
@@ -2702,16 +2736,16 @@ a.hmenu-item {
 .detail-stack {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* Nested .detail-stack (the layer of the PDF capture range) does not overlap the margins again.*/
 .detail-stack .detail-stack {
-  gap: 20px;
+  gap: 24px;
 }
 
 .detail-card {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /* Group title: deliberately one level higher than the .rpt-section h3 (14px + 1px bottom line) within the paragraph,
@@ -2719,8 +2753,8 @@ a.hmenu-item {
 .card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .card-head h3 {
@@ -2738,14 +2772,14 @@ a.hmenu-item {
 
 .card-meta {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
 /* Report header: Within the PDF capture range, indicate the code number, data date and generation time*/
 .rpt-head {
   padding-bottom: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   border-bottom: 2px solid var(--border);
 }
 
@@ -2757,11 +2791,11 @@ a.hmenu-item {
 .rpt-meta {
   font-size: 12px;
   color: var(--ink-muted);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .rpt-meta-sep {
-  margin: 0 6px;
+  margin: 0 8px;
   opacity: 0.6;
 }
 
@@ -2776,9 +2810,9 @@ a.hmenu-item {
 .rpt-section h3 {
   font-size: 14px;
   color: var(--ink);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .rpt-section-head {
@@ -2900,7 +2934,7 @@ a.hmenu-item {
   color: var(--ink);
   font-size: 12px;
   white-space: nowrap;
-  padding: 5px 9px;
+  padding: 4px 8px;
   pointer-events: none;
   z-index: 2;
 }
@@ -2908,7 +2942,7 @@ a.hmenu-item {
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 /* Chart + legend on the right: There is a blank space on the right after the upper limit of the chart is 760px, so the legend is placed here.*/
@@ -2916,7 +2950,7 @@ a.hmenu-item {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 18px;
+  gap: 16px;
 }
 
 .chart-with-legend .chart-wrap {
@@ -2931,7 +2965,7 @@ a.hmenu-item {
 .chart-legend {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .chart-legend li {
@@ -3001,8 +3035,8 @@ a.hmenu-item {
 }
 
 .chart-legend-foot {
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: 12px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--ink-muted);
 }
@@ -3030,27 +3064,27 @@ a.hmenu-item {
  * And that trick will paint the entire vacant area with a border color, making it look like a broken empty panel.
  */
 .tech-cell {
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 
 .tech-cell dt {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-secondary);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .tech-cell dd {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
 .tech-sub {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -3068,24 +3102,24 @@ a.hmenu-item {
 .rpt-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .rpt-card {
   flex: 1 1 140px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: var(--surface);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
 }
 
 .rpt-card .k {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
 .rpt-card .v {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   margin-top: 2px;
 }
@@ -3096,24 +3130,24 @@ a.hmenu-item {
  * for the grid lines, --ink* for text.
  */
 .m-quote-head {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .m-sym {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .m-sym h2 {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .m-sym .code {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -3122,7 +3156,7 @@ a.hmenu-item {
 .quote-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
   padding: 2px 8px;
@@ -3167,13 +3201,13 @@ a.hmenu-item {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-muted);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 .m-price .stamp {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 /* Bordered Yahoo-style stats grid: unlike .rpt-cards (gapped floating cards), the cells here
@@ -3185,7 +3219,7 @@ a.hmenu-item {
   border-left: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .m-stats .rpt-card {
@@ -3194,7 +3228,7 @@ a.hmenu-item {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 11px;
+  padding: 8px 12px;
   border: none;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -3203,11 +3237,11 @@ a.hmenu-item {
 }
 
 .m-stats .rpt-card .k {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .m-stats .rpt-card .v {
-  font-size: 12.5px;
+  font-size: 12px;
   margin-top: 0;
 }
 
@@ -3223,8 +3257,8 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .m-card-h h4 {
@@ -3280,7 +3314,7 @@ a.hmenu-item {
  */
 .quote-top-banner {
   border-bottom: 1px solid var(--border);
-  padding-bottom: 14px;
+  padding-bottom: 16px;
   margin-bottom: 16px;
 }
 
@@ -3310,12 +3344,12 @@ a.hmenu-item {
 .quote-aside-private {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: var(--surface);
+  padding: 12px 12px;
+  background: var(--cds-layer-02);
 }
 
 .quote-aside-private h4 {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
   margin: 0 0 8px;
 }
@@ -3323,8 +3357,8 @@ a.hmenu-item {
 .holding-pnl {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .holding-pnl-big {
@@ -3334,7 +3368,7 @@ a.hmenu-item {
 }
 
 .holding-roi {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3346,19 +3380,19 @@ a.hmenu-item {
 }
 
 .holding-cell .k {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
 .holding-cell .v {
-  font-size: 12.5px;
+  font-size: 12px;
   margin-top: 2px;
 }
 
 .m-chart-title-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .chart-time-badge {
@@ -3370,14 +3404,14 @@ a.hmenu-item {
   border-radius: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-weight: 500;
 }
 
 /* ---------- Institutional Investors (三大法人買賣超) 2-day cards ---------- */
 .institutional-block {
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
@@ -3386,7 +3420,7 @@ a.hmenu-item {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
@@ -3397,37 +3431,37 @@ a.hmenu-item {
 }
 
 .inst-header-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-header-badge {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-secondary);
   background: var(--surface-strong);
   border: 1px solid var(--border);
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 0;
   font-weight: 500;
 }
 
 .inst-header-note {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
 .inst-days-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .inst-day-card {
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3440,14 +3474,14 @@ a.hmenu-item {
 }
 
 .inst-day-title {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
 }
 
 .inst-day-tag {
-  font-size: 10.5px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 8px;
   border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -3465,17 +3499,17 @@ a.hmenu-item {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px dashed var(--border);
 }
 
 .inst-total-label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
 .inst-total-val {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3483,7 +3517,7 @@ a.hmenu-item {
 .inst-legs-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .inst-leg-cell {
@@ -3493,7 +3527,7 @@ a.hmenu-item {
 }
 
 .inst-leg-k {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
@@ -3521,7 +3555,7 @@ a.hmenu-item {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   padding: 4px;
   border-radius: var(--radius);
@@ -3570,7 +3604,7 @@ a.hmenu-item {
   padding: 32px 12px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .intraday-skeleton {
@@ -3584,7 +3618,7 @@ a.hmenu-item {
    .section/.glass for the card shell, .m-card-h/.badge for the header, .m-price for the hero
    value, .m-stats/.rpt-card for the six stat cells, IntradayChart's own range toggle for 一日/五日. */
 .tw-index-today {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 .tw-index-stats {
@@ -3603,20 +3637,20 @@ a.hmenu-item {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .tw-index-band-row {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .tw-index-band-caption {
   flex: 0 0 auto;
   width: 56px;
   padding-top: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   line-height: 1.4;
 }
@@ -3627,7 +3661,7 @@ a.hmenu-item {
 }
 
 .tw-index-close-stats .kpi {
-  padding: 7px 11px;
+  padding: 8px 12px;
   border: none;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -3640,17 +3674,17 @@ a.hmenu-item {
 }
 
 .tw-index-close-stats .kpi-label {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .tw-index-close-stats .kpi-value {
-  font-size: 15px;
+  font-size: 14px;
   margin-top: 0;
 }
 
 .tw-index-close-stats .kpi-sub {
-  font-size: 11px;
-  margin-top: 1px;
+  font-size: 12px;
+  margin-top: 2px;
 }
 
 /* Layout next to intraday chart in TwIndexToday */
@@ -3701,7 +3735,7 @@ a.hmenu-item {
 .rpt-notes {
   font-size: 12px;
   color: var(--ink-muted);
-  padding-left: 18px;
+  padding-left: 16px;
   margin-bottom: 12px;
 }
 
@@ -3710,12 +3744,12 @@ a.hmenu-item {
 }
 
 .rpt-disclaimer {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--ink-muted);
   background: var(--row-alt);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 12px;
 }
 
 /**
@@ -3746,20 +3780,20 @@ a.hmenu-item {
 
 @media (max-width: 720px) {
   .detail-body {
-    padding: 14px;
+    padding: 16px;
   }
 
   .detail-card {
-    padding: 14px;
+    padding: 16px;
   }
 
   /* The spacing between cards on mobile phones should be smaller, otherwise the whole page will be longer.*/
   .detail-stack {
-    gap: 14px;
+    gap: 16px;
   }
 
   .card-head h3 {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .subtab {
@@ -3774,8 +3808,8 @@ a.hmenu-item {
 
 /* Data time stamp at the block level: Each data source publishes data at different times, so it is marked block by block rather than as a whole time.*/
 .source-tag {
-  margin-left: 10px;
-  font-size: 11px;
+  margin-left: 12px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--ink-muted);
   white-space: nowrap;
@@ -3789,7 +3823,7 @@ a.hmenu-item {
 }
 
 .ai-card {
-  padding: 20px;
+  padding: 24px;
   border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
@@ -3799,17 +3833,17 @@ a.hmenu-item {
 .ai-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ai-form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ai-form-group label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink-muted);
 }
@@ -3818,7 +3852,7 @@ a.hmenu-item {
 .ai-select {
   appearance: none;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border-strong);
@@ -3839,7 +3873,7 @@ a.hmenu-item {
 
 .ai-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -3863,14 +3897,14 @@ a.hmenu-item {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .ai-chat-log {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin: 10px 0;
+  gap: 12px;
+  margin: 12px 0;
   /* If the conversation is long, don’t stretch the entire page, let it roll by itself.*/
   max-height: 420px;
   overflow-y: auto;
@@ -3911,7 +3945,7 @@ a.hmenu-item {
 .ai-chat-form {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .ai-chat-form input {
@@ -3924,7 +3958,7 @@ a.hmenu-item {
 .ai-disclaimer {
   font-size: 12px;
   color: var(--ink-muted);
-  margin-top: 14px;
+  margin-top: 16px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
 }
@@ -3947,7 +3981,7 @@ a.hmenu-item {
  * The mobile version is not within the scope of 0.6.7 (wait until the desktop function is verified), so only the desktop version will be written here.
  * ========================================================= */
 .fx-panel {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /*
@@ -3975,7 +4009,7 @@ a.hmenu-item {
   border-color: var(--accent);
   border-width: 2px;
   /* .kpi is 16px 18px; thickening the border by 1px will make the cards grow taller and make the whole row jump, so each subtract 1px to make up for it.*/
-  padding: 15px 17px;
+  padding: 16px 16px;
 }
 
 .fx-card:focus-visible {
@@ -3988,8 +4022,8 @@ a.hmenu-item {
 .adm-console {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
-  gap: 18px;
-  margin-top: 22px;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 /*
@@ -3999,7 +4033,7 @@ a.hmenu-item {
 .adm-side {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   align-self: start;
   position: sticky;
   top: 14px;
@@ -4008,27 +4042,27 @@ a.hmenu-item {
 .adm-side nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .adm-side-label {
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 1.4px;
   color: var(--ink-muted);
   text-transform: uppercase;
   font-weight: 600;
-  padding: 0 10px 6px;
+  padding: 0 12px 8px;
 }
 
 .adm-side-item {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: 0;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--ink-secondary);
   cursor: pointer;
   border: 1px solid transparent;
@@ -4057,12 +4091,12 @@ a.hmenu-item {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 0;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--ink-muted);
   cursor: pointer;
   text-align: left;
@@ -4082,7 +4116,7 @@ a.hmenu-item {
 }
 
 .adm-panel {
-  padding: 18px 20px;
+  padding: 16px 24px;
 }
 
 /*
@@ -4092,7 +4126,7 @@ a.hmenu-item {
 @media (max-width: 900px) {
   .adm-console {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    gap: 16px;
   }
 
   .adm-side {
@@ -4102,7 +4136,7 @@ a.hmenu-item {
   .adm-side nav {
     flex-direction: row;
     overflow-x: auto;
-    gap: 6px;
+    gap: 8px;
     padding-bottom: 2px;
   }
 
@@ -4169,22 +4203,22 @@ a.hmenu-item {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   gap: 16px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .adm-prompt-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   align-content: start;
 }
 
 .adm-prompt-item {
   appearance: none;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border-radius: 0;
-  padding: 10px 11px;
+  padding: 12px 12px;
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -4208,13 +4242,13 @@ a.hmenu-item {
 .adm-prompt-item b {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
   font-family: var(--font-display);
 }
 
 .adm-prompt-item > span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
@@ -4229,7 +4263,7 @@ a.hmenu-item {
   font-size: 12px;
   font-weight: 500;
   color: var(--ink-secondary);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .adm-prompt-label span {
@@ -4249,7 +4283,7 @@ a.hmenu-item {
   border: 1px solid var(--border-strong);
   color: var(--ink);
   border-radius: 0;
-  padding: 10px 12px;
+  padding: 12px 12px;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.75;
@@ -4265,14 +4299,14 @@ a.hmenu-item {
   margin-top: 12px;
   border: 1px dashed var(--border-strong);
   border-radius: 0;
-  padding: 11px 13px;
+  padding: 12px 12px;
   background: var(--row-band);
 }
 
 .adm-prompt-locked b {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--ink-secondary);
 }
@@ -4282,7 +4316,7 @@ a.hmenu-item {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.75;
   color: var(--ink-muted);
 }
@@ -4314,7 +4348,7 @@ a.hmenu-item {
   display: block;
   width: 100%;
   height: 30px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 /* The backward badge is pushed to the right end of the label column. .kpi-label is originally ​​flex, here only the alignment is supplemented*/
@@ -4410,7 +4444,7 @@ a.hmenu-item {
   border-left: 1px solid var(--border-strong);
   vertical-align: top;
   background: rgba(255, 255, 255, 0.015);
-  padding: 10px 14px;
+  padding: 12px 16px;
   min-width: 220px;
 }
 
@@ -4424,8 +4458,8 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 6px;
+  gap: 12px;
+  padding-bottom: 8px;
   border-bottom: 1px dashed rgba(255, 255, 255, 0.07);
 }
 
@@ -4441,7 +4475,7 @@ a.hmenu-item {
 }
 
 .inst-matrix .trend-label {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -4458,14 +4492,14 @@ a.hmenu-item {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .mac-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--surface-strong);
@@ -4479,7 +4513,7 @@ a.hmenu-item {
 
 /* Use equal-width numbers for values: When five chips are placed side by side, the proportional numbers will cause the decimal points to be misaligned.*/
 .mac-chip-value {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -4488,19 +4522,19 @@ a.hmenu-item {
 .mac-row-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Indicator description (originally at the bottom of the card). After the word cards were slimmed down, they were hung in columns and can still be seen.*/
 .mac-row-note {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
   margin-top: 2px;
 }
 
 /* Period and "as of this period": they are notes and do not conflict with the main figures.*/
 .mac-row-period {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   font-weight: 400;
   margin-top: 2px;
@@ -4513,7 +4547,7 @@ a.hmenu-item {
 .fx-chart-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 @media (max-width: 900px) {
@@ -4527,7 +4561,7 @@ a.hmenu-item {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
@@ -4553,15 +4587,15 @@ a.hmenu-item {
 .ast-verdict-icon { color: var(--accent); flex: none; }
 .ast-verdict .section-stamp { margin-left: auto; }
 
-.ast-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; }
-.ast-sub { display: block; font-size: 11.5px; color: var(--ink-muted); }
+.ast-note { margin: 6px 0 0; font-size: 12px; color: var(--ink-muted); line-height: 1.6; }
+.ast-sub { display: block; font-size: 12px; color: var(--ink-muted); }
 /* The fetch range of the schedule: connected below jobname, allowing line breaks (the remaining fields in the table are nowrap)*/
 .ast-scope {
   display: block; margin-top: 3px; max-width: 34ch;
-  font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); white-space: normal;
+  font-size: 12px; line-height: 1.5; color: var(--ink-muted); white-space: normal;
 }
-.ast-mono { font-variant-numeric: tabular-nums; font-size: 12.5px; white-space: nowrap; }
-.ast-unit { font-size: 13px; font-weight: 400; color: var(--ink-secondary); }
+.ast-mono { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.ast-unit { font-size: 14px; font-weight: 400; color: var(--ink-secondary); }
 .ast-fail { color: var(--notice-err-ink); font-size: 12px; }
 
 /* ─────────────────────────────────────────────────────────────
@@ -4573,7 +4607,7 @@ a.hmenu-item {
 .apr-days { display: flex; flex-direction: column; gap: 18px; }
 .apr-day {
   display: flex; align-items: baseline; gap: 8px;
-  margin-bottom: 6px; font-size: 13px; font-weight: 600;
+  margin-bottom: 8px; font-size: 14px; font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .apr-day .ast-sub { display: inline; }
@@ -4584,14 +4618,14 @@ a.hmenu-item {
 .apr-head {
   display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto auto;
   align-items: center; gap: 12px; width: 100%;
-  padding: 9px 4px; border: 0; background: none; cursor: pointer;
+  padding: 8px 4px; border: 0; background: none; cursor: pointer;
   color: inherit; text-align: left; font: inherit;
 }
 .apr-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .apr-head:disabled { cursor: default; opacity: .62; }
 .apr-head:disabled:hover { background: none; }
 
-.apr-name { font-size: 13px; font-weight: 600; }
+.apr-name { font-size: 14px; font-weight: 600; }
 
 /* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
 .apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
@@ -4600,7 +4634,7 @@ a.hmenu-item {
 .apr-seg-miss { background: color-mix(in srgb, var(--ink-muted) 26%, transparent); }
 .apr-seg-empty { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
 
-.apr-sum { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.apr-sum { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
 .apr-sum b { font-weight: 600; }
 
 .apr-caret { color: var(--ink-muted); transition: transform .15s ease; flex: none; }
@@ -4625,7 +4659,7 @@ a.hmenu-item {
   grid-template-columns: 9.5rem 3.5rem 5.5rem 11rem 1fr auto;
   align-items: center; gap: 10px; width: 100%;
   padding: 8px 4px; border: 0; background: none; cursor: pointer;
-  color: inherit; text-align: left; font: inherit; font-size: 12.5px;
+  color: inherit; text-align: left; font: inherit; font-size: 12px;
 }
 .adm-log-head:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
@@ -4633,7 +4667,7 @@ a.hmenu-item {
 
 .adm-log-level {
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
   border: 1px solid var(--border-strong); white-space: nowrap;
 }
 .adm-log-level-error { color: var(--notice-err-ink); border-color: color-mix(in srgb, var(--notice-err-ink) 40%, transparent); }
@@ -4655,7 +4689,7 @@ a.hmenu-item {
 .adm-log-detail pre {
   margin: 8px 0; white-space: pre-wrap; word-break: break-word;
   font-family: var(--font-mono);
-  font-size: 11.5px; line-height: 1.6; color: var(--ink-muted);
+  font-size: 12px; line-height: 1.6; color: var(--ink-muted);
   background: var(--row-band); border-radius: 0; padding: 10px 12px;
 }
 
@@ -4671,7 +4705,7 @@ a.hmenu-item {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 .adm-guide-toggle-action {
-  display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
   color: var(--ink-muted); flex: none;
 }
 .adm-guide-toggle-action .apr-caret-open { transform: rotate(180deg); }
@@ -4681,19 +4715,19 @@ a.hmenu-item {
   gap: 12px; margin-bottom: 14px;
 }
 .adm-guide-card {
-  padding: 12px 14px; border-radius: 0;
+  padding: 12px 16px; border-radius: 0;
 }
 .adm-guide-card-head {
-  display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 6px;
 }
 .adm-guide-subhead {
   display: flex; align-items: center; gap: 6px; margin: 12px 0 8px;
-  font-size: 13.5px; font-weight: 600; color: var(--ink-base, inherit);
+  font-size: 14px; font-weight: 600; color: var(--ink-base, inherit);
 }
-.adm-guide-subhead h4 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.adm-guide-subhead h4 { margin: 0; font-size: 14px; font-weight: 600; }
 .adm-guide-table { font-size: 12px; }
 .ast-note-cell {
-  font-size: 11.5px; color: var(--ink-secondary); line-height: 1.5;
+  font-size: 12px; color: var(--ink-secondary); line-height: 1.5;
   max-width: 38ch; white-space: normal;
 }
 
@@ -4703,7 +4737,7 @@ a.hmenu-item {
 .pwr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 .pwr-kpi-card {
   display: flex;
@@ -4728,23 +4762,23 @@ a.hmenu-item {
 .pwr-kpi-name {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink);
 }
 .pwr-kpi-name code {
   color: var(--accent);
   background: rgba(255, 255, 255, 0.04);
-  padding: 1px 4px;
+  padding: 2px 4px;
   border-radius: 0;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 .pwr-status-tag {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -4794,14 +4828,14 @@ a.hmenu-item {
   margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 11.5px;
+  gap: 4px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .pwr-sub-window {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .pwr-sub-times {
   display: flex;
@@ -4815,7 +4849,7 @@ a.hmenu-item {
 }
 .pwr-times-prefix {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .pwr-times-chips {
   display: flex;
@@ -4825,9 +4859,9 @@ a.hmenu-item {
 }
 .pwr-time-chip {
   font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 1.5px 6px;
+  padding: 2px 8px;
   border-radius: 0;
   background: rgba(66, 190, 101, 0.18);
   color: #42be65;
@@ -4845,7 +4879,7 @@ a.hmenu-item {
 }
 .pwr-times-empty {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Light theme high-contrast overrides for crisp visibility */
@@ -4912,7 +4946,7 @@ a.hmenu-item {
   .ast-track { display: none; }
   .ast-row { grid-template-columns: 1fr auto; min-height: 0; padding: 9px 0; }
   .ast-end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .ast-when { display: inline; font-size: 11.5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+  .ast-when { display: inline; font-size: 12px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
   .ast-date { display: inline; margin-top: 0; }
 
   /* 探針列：手機把「名稱／摘要」疊成兩行，進度條獨占一行才看得出翻綠的位置 */
@@ -4934,10 +4968,10 @@ a.hmenu-item {
 }
 
 .watchlist-card {
-  background: var(--surface);
+  background: var(--cds-layer-02);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 6px);
-  padding: 7px 8px;
+  padding: 8px 8px;
   cursor: pointer;
   transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   display: flex;
@@ -4964,7 +4998,7 @@ a.hmenu-item {
 .watchlist-card-meta {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
   flex: 1;
@@ -4972,14 +5006,14 @@ a.hmenu-item {
 
 .watchlist-card-ticker {
   font-family: var(--font-mono, monospace);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-secondary);
   flex-shrink: 0;
 }
 
 .watchlist-card-name {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
   overflow: hidden;
@@ -4992,7 +5026,7 @@ a.hmenu-item {
 .watchlist-card-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 500;
   padding: 0 4px;
   border-radius: 0;
@@ -5018,7 +5052,7 @@ a.hmenu-item {
 
 .watchlist-card-price {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
@@ -5026,7 +5060,7 @@ a.hmenu-item {
 }
 
 .watchlist-card-change {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
@@ -5044,7 +5078,7 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
@@ -5058,14 +5092,14 @@ a.hmenu-item {
 .watchlist-table-name-cell {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .watchlist-table-name-cell .watchlist-card-badge {
   max-width: none;
   flex-shrink: 0;
-  font-size: 10.5px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 8px;
   color: var(--ink-secondary);
   border-color: var(--border-strong);
 }
@@ -5139,7 +5173,7 @@ a.hmenu-item {
 .watchlist-group-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-secondary);
@@ -5150,7 +5184,7 @@ a.hmenu-item {
 }
 
 .watchlist-group-cell {
-  padding: 6px 10px !important;
+  padding: 8px 12px !important;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-secondary);
@@ -5159,6 +5193,6 @@ a.hmenu-item {
 }
 
 .watchlist-group-cell .badge-count {
-  margin-left: 6px;
+  margin-left: 8px;
 }
 

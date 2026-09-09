@@ -11,6 +11,22 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 148: Carbon refinement pass — layer contexts, type ramp, spacing, UI Shell
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 10:07:59 Asia/Taipei
+- **Branch**: `feat/carbon-design` (not merged; `dev` and `main` untouched)
+- **Follows**: Task 147 (the Carbon Design conversion)
+- **Proposal**: `docs/design/carbon-layer-stack.html` — a Diagram Design layer-stack that names the four levers. The page carries an "已實作" banner, and its figures are the pre-change measurements.
+- **What changed**:
+  1. **Layer contexts.** Carbon builds depth by stepping the surface token one level per nesting, not by adding borders. Fields inside `.modal`, `.glass` and `.detail-card` now use `$field-02`; a card inside a card (`.rpt-card`, `.whatif-mark`, `.quote-aside-private`, `.inst-day-card`, `.adm-prompt-item`, `.watchlist-card`) uses `$layer-02`; a menu opened from inside a card or a modal uses `$layer-03`.
+  2. **Type ramp.** 20 font sizes collapsed to 6, all on the Carbon ramp — 12, 14, 16, 20, 28, 32. Six half-pixel sizes (9.5, 10.5, 11.5, 12.5, 13.5, 14.5) are gone, 50 uses in the stylesheet plus 67 inline `fontSize` uses in TSX.
+  3. **Spacing.** Every `gap`, `padding` and `margin` value snapped to the Carbon scale (2, 4, 8, 12, 16, 24, 32, 40, 48, 64); 216 values changed. Page width raised from 1180 to 1312 (the Carbon 2x grid). Data-table rows set to the Carbon md height of 40px.
+  4. **UI Shell header.** The workspace action `.hmenu-ws` is now a 48px-tall borderless header action that fills with `$background-hover`, matching the Carbon UI Shell instead of a bordered 35px button.
+- **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots on both themes at 1440 and 1024: the transactions table has no horizontal overflow at either width (`scrollWidth === clientWidth`), and modal fields now read one surface step above the modal.
+- **Deliberately not changed**: two `margin-bottom: -1px` offsets on `.tab` and `.subtab` track the 1px rule under the tab row, not the spacing scale, so the snap was reverted there. `.hmenu-avatar` keeps its round 32px form from 0.9.36 rather than becoming a 48px square action.
+- **Tooling side effect**: the Diagram Design skill's first-run brand gate produced `~/.diagram-design/profiles/default.md` (a pristine snapshot, required before customizing) and `~/.diagram-design/profiles/carbon-stock-pnl.md` (Carbon White/Gray 100 tokens, IBM Plex type, zero radius). The repo carries only the marker `.diagram-design`, whose single line is `profile: carbon-stock-pnl`; the profile itself lives outside the repo, so another machine must recreate it.
+
 ### Task 147: Convert the whole UI to IBM Carbon Design
 - **Status**: ✅ DONE
 - **Agent**: Claude

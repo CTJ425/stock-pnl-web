@@ -121,7 +121,7 @@ export function BackupsSection() {
       </div>
 
       {err && (
-        <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13, marginTop: 12 }}>
+        <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14, marginTop: 12 }}>
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
           {err}
         </div>
@@ -225,7 +225,7 @@ export function BackupsSection() {
                                               {restore.error ? (
                                                 <div
                                                   className="notice notice-warn"
-                                                  style={{ padding: '8px 12px', fontSize: 13 }}
+                                                  style={{ padding: '8px 12px', fontSize: 14 }}
                                                 >
                                                   <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
                                                   {restore.error}
