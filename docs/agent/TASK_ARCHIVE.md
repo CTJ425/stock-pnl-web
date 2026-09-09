@@ -11,6 +11,22 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 147: Convert the whole UI to IBM Carbon Design
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 09:36:25 Asia/Taipei
+- **Branch**: `feat/carbon-design` (not merged; `dev` and `main` untouched)
+- **Scope**: `sources/index.html`, `sources/src/index.css`, `sources/src/components/Charts/chartColors.ts`, `sources/src/components/StockDetail/IntradayChart.tsx`, `sources/src/components/StockDetail/TechnicalTab.tsx`, `sources/src/components/Transactions/CsvImportModal.tsx`, `sources/src/components/Transactions/StockSplitModal.tsx`
+- **What changed**:
+  1. Token layer rewritten to Carbon Gray 100 (dark, default) and Carbon White (light). Carbon tokens carry a `--cds-*` prefix. Every historic token name stays as an alias, so the 4,800-line stylesheet keeps working without touching the 200 component files.
+  2. Type changed to IBM Plex Sans and IBM Plex Mono. The Google Fonts link in `index.html` now loads both, plus Noto Sans TC for Chinese.
+  3. Geometry changed to Carbon: square corners everywhere (27 rounded rules set to 0), the Carbon spacing scale (`--sp-01`…`--sp-10`), 48px header, 40px buttons and fields, 32px small controls.
+  4. Components rebuilt to Carbon patterns: tabs with a 3px selection bar, buttons with asymmetric padding, text inputs with a bottom rule only, data tables on `$layer-accent-01` headers, inline notifications with a 3px status rule, overflow menus, content switchers, tags.
+  5. Interaction changed to Carbon: a 2px `$focus` outline drawn inside every control, and Carbon motion curves and durations.
+  6. Chart palette changed to Carbon: red 50 / green 50 for up and down, and purple 60 / cyan 50 / teal 50 / magenta 50 for the categorical series. The literal-value constraint from html2canvas still holds.
+- **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots taken on both themes: dashboard, transactions table, transaction modal, yearly report.
+- **Known limits**: The Taiwan and US flag emoji in the dashboard headings show as tofu boxes in the headless browser on this host. The cause is a missing emoji font on the host, not the stylesheet. No version bump was made, because the branch is not `dev`.
+
 ### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
 - **Status**: ✅ **DONE — released as 0.9.35, live on DEV and PROD**
 - **PROD rollout (2026-09-07)**: `app_log`, its single INSERT policy, three indexes, `admin_recent_app_logs()` and the `app-log-prune` cron applied to `hrilemueiqyaoiwnkeuu`; PROD cron count is now 7. Edge Functions deployed: `stock-report` v8, `stock-price` v5, `backup-transactions` v4 — all three `ezbr_sha256` identical to DEV, all three `verify_jwt` preserved. PROD checks: objects match DEV exactly, RLS five cases match DEV exactly, `null` body returns 400, `app-logs` returns 401 without a credential.

@@ -21,7 +21,7 @@ import type {
  * html2canvas → PDF, which cannot resolve CSS variables from ancestor stylesheets — the same
  * reason chartColors.ts keeps CHART_COLORS as literals instead of `var(...)`.
  */
-const VWAP_COLOR = '#22d3ee'
+const VWAP_COLOR = '#08bdba'
 
 const TZ = 'Asia/Taipei'
 const timeFmt = new Intl.DateTimeFormat('en-US', {

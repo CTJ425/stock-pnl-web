@@ -1,110 +1,198 @@
 /* =========================================================
- * Design system: Glassmorphism
- * Default is dark theme; apply light variable when <html data-theme="light">
- * The profit and loss color matching is based on Taiwan’s market reading habits: red up / green down
+ * Design system: IBM Carbon Design System
+ * Default theme is Carbon Gray 100 (dark). Carbon White applies when <html data-theme="light">.
+ * Carbon tokens use the --cds-* prefix. The historic token names stay as aliases,
+ * so every downstream rule in this file keeps its meaning.
+ * The profit and loss color follows the Taiwan market habit: red up / green down.
  * ========================================================= */
 :root {
-  --bg: #090b0f;
+  /* ---------- Carbon Gray 100 (dark) ---------- */
+  --cds-background: #161616;
+  --cds-background-hover: #353535;
+  --cds-background-active: #525252;
+  --cds-background-selected: #393939;
+  --cds-layer-01: #262626;
+  --cds-layer-02: #393939;
+  --cds-layer-03: #525252;
+  --cds-layer-hover-01: #333333;
+  --cds-layer-accent-01: #393939;
+  --cds-field-01: #262626;
+  --cds-field-02: #393939;
+  --cds-field-hover-01: #333333;
+  --cds-border-subtle: #393939;
+  --cds-border-strong: #6f6f6f;
+  --cds-border-inverse: #f4f4f4;
+  --cds-border-interactive: #4589ff;
+  --cds-text-primary: #f4f4f4;
+  --cds-text-secondary: #c6c6c6;
+  --cds-text-helper: #8d8d8d;
+  --cds-text-placeholder: #6f6f6f;
+  --cds-text-on-color: #ffffff;
+  --cds-text-disabled: rgba(244, 244, 244, 0.25);
+  --cds-link-primary: #78a9ff;
+  --cds-link-hover: #a6c8ff;
+  --cds-focus: #ffffff;
+  --cds-interactive: #4589ff;
+  --cds-button-primary: #0f62fe;
+  --cds-button-primary-hover: #0353e9;
+  --cds-button-primary-active: #002d9c;
+  --cds-button-danger: #da1e28;
+  --cds-button-danger-hover: #ba1b23;
+  --cds-support-error: #fa4d56;
+  --cds-support-success: #42be65;
+  --cds-support-warning: #f1c21b;
+  --cds-support-info: #4589ff;
+  --cds-support-error-inverse: #da1e28;
+  --cds-overlay: rgba(22, 22, 22, 0.7);
+  --cds-highlight: #002d9c;
+  --cds-toggle-off: #6f6f6f;
+
+  /* ---------- Carbon spacing scale ---------- */
+  --sp-01: 2px;
+  --sp-02: 4px;
+  --sp-03: 8px;
+  --sp-04: 12px;
+  --sp-05: 16px;
+  --sp-06: 24px;
+  --sp-07: 32px;
+  --sp-08: 40px;
+  --sp-09: 48px;
+  --sp-10: 64px;
+
+  /* ---------- Carbon motion ---------- */
+  --cds-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
+  --cds-ease-entrance: cubic-bezier(0, 0, 0.38, 0.9);
+  --cds-ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
+  --cds-dur-fast: 70ms;
+  --cds-dur-moderate: 110ms;
+  --cds-dur-slow: 240ms;
+
+  /* ---------- Carbon elevation ---------- */
+  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  /* ---------- Carbon control sizes ---------- */
+  --cds-size-sm: 32px;
+  --cds-size-md: 40px;
+  --cds-size-lg: 48px;
+  --cds-header-h: 48px;
+
+  /* ---------- Legacy aliases ---------- */
+  --bg: var(--cds-background);
   --bg-glow-a: transparent;
   --bg-glow-b: transparent;
-  --surface: #0e1116;
-  --surface-strong: #141922;
-  --border: rgba(255, 255, 255, 0.15);
-  --border-strong: rgba(255, 255, 255, 0.24);
-  --ink: #dfe4ea;
-  --ink-secondary: #96a0ad;
-  --ink-muted: #6b7684;
-  --accent: #74a6c0;
-  --accent-strong: #5b8fa8;
-  --accent-2: #74a6c0;
-  --up: #ff5364; /* up (red) */
-  --down: #21c88a; /* down (green) */
-  --danger: #f87171;
-  --svg-main-1: var(--accent-strong);
-  --svg-accent: var(--accent-2);
+  --surface: var(--cds-layer-01);
+  --surface-strong: var(--cds-layer-02);
+  /* StockSplitModal reads this token inline; without it the inner panels stay transparent. */
+  --surface-subtle: var(--cds-layer-02);
+  --border: var(--cds-border-subtle);
+  --border-strong: var(--cds-border-strong);
+  --ink: var(--cds-text-primary);
+  --ink-secondary: var(--cds-text-secondary);
+  --ink-muted: var(--cds-text-helper);
+  --accent: var(--cds-link-primary);
+  --accent-strong: var(--cds-button-primary);
+  --accent-2: var(--cds-interactive);
+  --up: #fa4d56; /* up (red) */
+  --down: #42be65; /* down (green) */
+  --danger: var(--cds-support-error);
+  --svg-main-1: var(--cds-interactive);
+  --svg-accent: var(--cds-link-primary);
   --stock-up-bright: var(--up);
-  --svg-bg-glow: var(--bg-glow-a);
-  --radius: 2px;
-  --radius-sm: 2px;
-  /* The height of the navigation bar at the bottom of the mobile phone (excluding the safe area); floating buttons, version badges, and page footer blanks are all calculated by it*/
-  --bottom-nav-h: 54px;
-  --font-display: 'Outfit', 'Noto Sans TC', sans-serif;
-  --font-body: 'Inter', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --svg-bg-glow: transparent;
+  /* Carbon has no rounded corners on productive components. */
+  --radius: 0px;
+  --radius-sm: 0px;
+  /* The height of the mobile bottom navigation (safe area excluded). Floating buttons,
+     version badges and the page footer all derive their space from this value. */
+  --bottom-nav-h: 48px;
+  --font-display: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Noto Sans TC', monospace;
   --shadow-card: none;
-  --panel: #0e1116;
-  --modal-bg: #0e1116;
-  --header-bg: #090b0f;
-  --overlay: rgba(4, 7, 14, 0.66);
-  --input-bg: rgba(255, 255, 255, 0.05);
-  /* 表頭比卡片亮一階。往下壓會撞到 --bg #090b0f（實測只差 0.27 L*），卡片上緣會溶進
-     頁面，所以分層往上做。--row-band 保留舊的 0.03，給分組列等借用表頭色的元件沿用。 */
-  --thead-bg: rgba(255, 255, 255, 0.09);
-  --thead-solid: #24262b;
-  --row-band: rgba(255, 255, 255, 0.03);
-  --row-hover: rgba(255, 255, 255, 0.04);
+  --panel: var(--cds-layer-01);
+  --modal-bg: var(--cds-layer-01);
+  --header-bg: var(--cds-background);
+  --overlay: var(--cds-overlay);
+  --input-bg: var(--cds-field-01);
+  /* Carbon data table: the header row uses $layer-accent-01, one step above the table body. */
+  --thead-bg: var(--cds-layer-accent-01);
+  --thead-solid: #393939;
+  --row-band: var(--cds-layer-hover-01);
+  --row-hover: var(--cds-layer-hover-01);
   --row-alt: transparent;
-  --rule-hair: rgba(255, 255, 255, 0.045);
-  --btn-hover-bg: rgba(255, 255, 255, 0.12);
-  --btn-hover-border: rgba(255, 255, 255, 0.28);
-  --scroll-thumb: rgba(255, 255, 255, 0.14);
-  --skeleton-a: rgba(255, 255, 255, 0.06);
-  --skeleton-b: rgba(255, 255, 255, 0.14);
-  --notice-ok-ink: #6ee7b7;
-  --notice-err-ink: #fca5a5;
-  --notice-warn-ink: #fcd34d;
-  --badge-warn-ink: #fbbf24;
-  --date-invert: 0.7;
-  --steel: #74a6c0;
-  --steel-tint: rgba(116, 166, 192, 0.2);
-  --steel-on: #0b0e13;
-  --ochre: #d6a742;
-  --ochre-tint: rgba(214, 167, 66, 0.2);
+  --rule-hair: var(--cds-border-subtle);
+  --btn-hover-bg: var(--cds-background-hover);
+  --btn-hover-border: var(--cds-border-strong);
+  --scroll-thumb: var(--cds-border-strong);
+  --skeleton-a: #333333;
+  --skeleton-b: #525252;
+  --notice-ok-ink: var(--cds-support-success);
+  --notice-err-ink: var(--cds-support-error);
+  --notice-warn-ink: var(--cds-support-warning);
+  --badge-warn-ink: var(--cds-support-warning);
+  --date-invert: 1;
+  --steel: var(--cds-link-primary);
+  --steel-tint: rgba(69, 137, 255, 0.2);
+  --steel-on: var(--cds-text-on-color);
+  --ochre: var(--cds-support-warning);
+  --ochre-tint: rgba(241, 194, 27, 0.2);
 }
 
 :root[data-theme='light'] {
-  --bg: #eff0f3;
-  --bg-glow-a: transparent;
-  --bg-glow-b: transparent;
-  --surface: #fafbfc;
-  --surface-strong: #ffffff;
-  --border: rgba(15, 19, 25, 0.14);
-  --border-strong: rgba(15, 19, 25, 0.22);
-  --ink: #0f1319;
-  --ink-secondary: #48525f;
-  --ink-muted: #838d9a;
-  --accent: #2f6484;
-  --accent-strong: #245065;
-  --accent-2: #2f6484;
-  --up: #bf2233;
-  --down: #0c6f4b;
-  --danger: #dc2626;
-  --shadow-card: none;
-  --panel: #ffffff;
-  --modal-bg: #ffffff;
-  --header-bg: #eff0f3;
-  --overlay: rgba(15, 23, 42, 0.35);
-  --input-bg: rgba(255, 255, 255, 0.85);
-  --thead-bg: rgba(15, 19, 25, 0.08);
-  --thead-solid: #e7e8ea;
-  --row-band: rgba(15, 19, 25, 0.035);
-  --row-hover: rgba(15, 19, 25, 0.035);
-  --row-alt: transparent;
-  --rule-hair: rgba(15, 19, 25, 0.045);
-  --btn-hover-bg: rgba(15, 23, 42, 0.06);
-  --btn-hover-border: rgba(15, 23, 42, 0.28);
-  --scroll-thumb: rgba(15, 23, 42, 0.22);
-  --skeleton-a: rgba(15, 23, 42, 0.06);
-  --skeleton-b: rgba(15, 23, 42, 0.13);
-  --notice-ok-ink: #047857;
-  --notice-err-ink: #b91c1c;
-  --notice-warn-ink: #a16207;
-  --badge-warn-ink: #92400e;
-  --date-invert: 0.35;
-  --steel: #2f6484;
-  --steel-tint: rgba(47, 100, 132, 0.14);
-  --steel-on: #fafbfc;
-  --ochre: #8a5e12;
+  /* ---------- Carbon White (light) ---------- */
+  --cds-background: #ffffff;
+  --cds-background-hover: #e8e8e8;
+  --cds-background-active: #c6c6c6;
+  --cds-background-selected: #e0e0e0;
+  --cds-layer-01: #f4f4f4;
+  --cds-layer-02: #ffffff;
+  --cds-layer-03: #f4f4f4;
+  --cds-layer-hover-01: #e8e8e8;
+  --cds-layer-accent-01: #e0e0e0;
+  --cds-field-01: #f4f4f4;
+  --cds-field-02: #ffffff;
+  --cds-field-hover-01: #e8e8e8;
+  --cds-border-subtle: #e0e0e0;
+  --cds-border-strong: #8d8d8d;
+  --cds-border-inverse: #161616;
+  --cds-border-interactive: #0f62fe;
+  --cds-text-primary: #161616;
+  --cds-text-secondary: #525252;
+  --cds-text-helper: #6f6f6f;
+  --cds-text-placeholder: #a8a8a8;
+  --cds-text-on-color: #ffffff;
+  --cds-text-disabled: rgba(22, 22, 22, 0.25);
+  --cds-link-primary: #0f62fe;
+  --cds-link-hover: #0043ce;
+  --cds-focus: #0f62fe;
+  --cds-interactive: #0f62fe;
+  --cds-button-primary: #0f62fe;
+  --cds-button-primary-hover: #0353e9;
+  --cds-button-primary-active: #002d9c;
+  --cds-button-danger: #da1e28;
+  --cds-button-danger-hover: #ba1b23;
+  --cds-support-error: #da1e28;
+  --cds-support-success: #24a148;
+  --cds-support-warning: #f1c21b;
+  --cds-support-info: #0043ce;
+  --cds-support-error-inverse: #fa4d56;
+  --cds-overlay: rgba(22, 22, 22, 0.5);
+  --cds-highlight: #d0e2ff;
+  --cds-toggle-off: #8d8d8d;
+
+  --cds-shadow-menu: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --cds-shadow-modal: 0 4px 16px rgba(0, 0, 0, 0.25);
+
+  --up: #da1e28;
+  --down: #198038;
+  --skeleton-a: #e8e8e8;
+  --skeleton-b: #c6c6c6;
+  --thead-solid: #e0e0e0;
+  --steel-tint: rgba(15, 98, 254, 0.12);
+  --ochre: #8e6a00; /* Carbon yellow 60 */
   --ochre-tint: rgba(138, 94, 18, 0.15);
+  --date-invert: 0;
 }
 
 * {
@@ -117,18 +205,23 @@ body {
   padding: 0;
 }
 
+/* Carbon body-compact-01: 14px / 18px, letter-spacing 0.16px. */
 body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(1000px 520px at 85% -10%, var(--bg-glow-a), transparent 60%),
-    radial-gradient(900px 480px at -10% 30%, var(--bg-glow-b), transparent 55%);
-  background-attachment: fixed;
-  color: var(--ink);
+  background-color: var(--cds-background);
+  color: var(--cds-text-primary);
   font-family: var(--font-body);
   font-size: 14px;
-  line-height: 1.55;
+  font-weight: 400;
+  line-height: 1.42857;
+  letter-spacing: 0.16px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Carbon focus: one 2px solid ring in $focus, drawn inside the control. */
+:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
 }
 
 #root {
@@ -137,12 +230,29 @@ body {
   flex-direction: column;
 }
 
+/* Carbon productive headings: weight 600, no extra letter-spacing. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
   font-weight: 600;
+  letter-spacing: 0;
   margin: 0;
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+h2 {
+  font-size: 16px;
+  line-height: 1.375;
+}
+
+h3 {
+  font-size: 14px;
+  line-height: 1.28572;
 }
 
 /* ---------- Layout ----------*/
@@ -155,32 +265,36 @@ h3 {
   padding: 0 20px 96px;
 }
 
+/* Carbon UI shell header: 48px tall, $background, one hairline rule below. */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: var(--header-bg);
-  border-bottom: 1px solid var(--border);
+  background: var(--cds-background);
+  border-bottom: 1px solid var(--cds-border-subtle);
 }
 
 .app-header-inner {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 0 var(--sp-05);
+  min-height: var(--cds-header-h);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--sp-05);
   flex-wrap: wrap;
 }
 
+/* Carbon header name: 14px, weight 600, the product name at the left edge. */
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-03);
   font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
 }
 
 .header-spacer {
@@ -196,40 +310,52 @@ h3 {
 }
 
 /* ----------Paging (Tabs) ----------*/
+/* Carbon tabs: no container, a 1px rule under the row, a 3px $border-interactive
+   bar under the selected tab. Each tab is 40px tall. */
 .tabs {
   display: flex;
-  gap: 6px;
-  padding: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 2px;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
 }
 
 .tab {
   appearance: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-weight: 500;
-  padding: 7px 16px;
-  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  margin-bottom: -1px;
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: color 0.18s ease, background 0.18s ease;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .tab:hover {
-  color: var(--ink);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .tab.active {
-  color: var(--ink);
+  color: var(--cds-text-primary);
   background: transparent;
-  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+  border-bottom: 3px solid var(--cds-border-interactive);
 }
 
 /*
@@ -281,10 +407,13 @@ h3 {
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  padding: 4px 2px;
+  height: auto;
+  margin-bottom: 0;
+  padding: var(--sp-02) var(--sp-01);
   font-size: 11px;
   line-height: 1.25;
-  border-radius: 2px;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -302,22 +431,25 @@ h3 {
  * And the bottom column is always on the screen. Change to accent color + bold, which is a common writing method for mobile devices.
  */
 .bottom-nav .tab.active {
-  color: var(--accent);
-  background: transparent;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
   box-shadow: none;
   font-weight: 600;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 3px 0 0 var(--cds-border-interactive);
 }
 
 /* ---------- Glass Card ----------*/
+/* Carbon tile: a flat $layer surface with square corners and no shadow. */
 .glass {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .section {
-  margin-top: 22px;
+  margin-top: var(--sp-06);
 }
 
 .section-title {
@@ -328,12 +460,13 @@ h3 {
   margin-bottom: 12px;
 }
 
+/* Carbon heading-compact-02. Carbon does not set uppercase on section headings. */
 .section-title h2 {
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cds-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -580,34 +713,43 @@ h3 {
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: var(--radius);
+  border-radius: 0;
 }
 
 table.data-table {
   width: 100%;
   border-collapse: collapse;
+  border-spacing: 0;
   font-size: 13px;
   min-width: 0;
+  background: var(--cds-layer-01);
 }
 
+/* ---------- Carbon data table (compact) ----------
+ * The header row sits on $layer-accent-01 and uses sentence case, weight 600.
+ * Carbon does not set uppercase on column headers.
+ */
 .data-table th {
   text-align: left;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 12px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--ink-secondary);
-  padding: 9px 7px;
-  border-bottom: 1px solid var(--border);
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  text-transform: none;
+  color: var(--cds-text-primary);
+  padding: var(--sp-03);
+  border-bottom: none;
   white-space: nowrap;
-  background: var(--thead-bg);
+  background: var(--cds-layer-accent-01);
 }
 
 .data-table td {
   font-size: 13px;
-  padding: 9px 7px;
-  border-bottom: 1px solid var(--rule-hair);
+  padding: var(--sp-03);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  border-top: none;
   white-space: nowrap;
+  color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -685,18 +827,22 @@ table.data-table {
 }
 
 .data-table tbody tr {
-  transition: background 0.15s ease;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .data-table tbody tr:hover {
-  background: var(--row-hover);
+  background: var(--cds-layer-hover-01);
+}
+
+.data-table tbody tr:hover td {
+  color: var(--cds-text-primary);
 }
 
 .data-table input[type='checkbox'] {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
-  accent-color: var(--accent-strong);
+  accent-color: var(--cds-interactive);
   vertical-align: middle;
 }
 
@@ -820,7 +966,7 @@ table.data-table {
   gap: 2px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface);
   text-align: left;
   cursor: pointer;
@@ -1028,7 +1174,7 @@ table.data-table {
   z-index: 120;
   padding: 9px 12px;
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface-strong);
   box-shadow: var(--shadow-card);
   color: var(--ink-secondary);
@@ -1103,7 +1249,7 @@ table.data-table {
   color: var(--ink-secondary);
   width: 22px;
   height: 22px;
-  border-radius: 2px;
+  border-radius: 0;
   cursor: pointer;
   display: inline-grid;
   place-items: center;
@@ -1118,66 +1264,104 @@ table.data-table {
 }
 
 /* ---------- Button ----------*/
+/* ---------- Carbon button ----------
+ * Carbon buttons are square, 40px tall (md), and use asymmetric padding:
+ * the label sits at the left edge, and the right side keeps room for an icon.
+ * The default .btn is the Carbon tertiary/secondary style; .btn-primary is $button-primary.
+ */
 .btn {
   appearance: none;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-strong);
-  color: var(--ink);
+  border: 1px solid var(--cds-border-strong);
+  background: transparent;
+  color: var(--cds-text-primary);
   font: inherit;
-  font-weight: 500;
-  padding: 8px 14px;
-  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  min-height: var(--cds-size-md);
+  padding: 0 var(--sp-06) 0 var(--sp-04);
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,
-    border-color 0.18s ease;
+  justify-content: flex-start;
+  gap: var(--sp-03);
+  text-align: left;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .btn:hover {
-  border-color: var(--btn-hover-border);
-  background: var(--btn-hover-bg);
+  border-color: var(--cds-border-strong);
+  background: var(--cds-background-hover);
 }
 
 .btn:active {
-  transform: translateY(1px);
+  background: var(--cds-background-active);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  border-color: transparent;
+  background: var(--cds-background-selected);
+  color: var(--cds-text-disabled);
   cursor: not-allowed;
 }
 
 .btn-primary {
-  border: none;
-  background: var(--accent-strong);
-  color: var(--steel-on);
+  border: 1px solid transparent;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
   box-shadow: none;
 }
 
 .btn-primary:hover {
-  background: var(--accent);
+  background: var(--cds-button-primary-hover);
   box-shadow: none;
 }
 
+.btn-primary:active {
+  background: var(--cds-button-primary-active);
+}
+
+/* Carbon danger--tertiary: a red outline that fills on hover. */
 .btn-danger {
-  color: var(--danger);
+  border-color: var(--cds-button-danger);
+  color: var(--cds-support-error);
+  background: transparent;
 }
 
 .btn-danger:hover {
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(248, 113, 113, 0.12);
+  border-color: var(--cds-button-danger-hover);
+  background: var(--cds-button-danger);
+  color: var(--cds-text-on-color);
 }
 
+.btn-danger:active {
+  background: var(--cds-button-danger-hover);
+  color: var(--cds-text-on-color);
+}
+
+/* Carbon icon-only button: square, and the label padding goes away. */
 .btn-icon {
-  padding: 8px;
+  padding: 0;
+  width: var(--cds-size-md);
+  min-height: var(--cds-size-md);
+  justify-content: center;
+  gap: 0;
 }
 
+/* Carbon small button: 32px tall. */
 .btn-sm {
-  padding: 5px 10px;
-  font-size: 12.5px;
-  border-radius: 2px;
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-04);
+  font-size: 14px;
+  border-radius: 0;
+}
+
+.btn-sm.btn-icon {
+  width: var(--cds-size-sm);
+  padding: 0;
 }
 
 /* Global "Add Transaction" floating button*/
@@ -1186,10 +1370,11 @@ table.data-table {
   right: 22px;
   bottom: 24px;
   z-index: 90;
-  border-radius: 999px;
-  padding: 13px 22px;
-  font-size: 14.5px;
-  box-shadow: none;
+  border-radius: 0;
+  min-height: var(--cds-size-lg);
+  padding: 0 var(--sp-06) 0 var(--sp-05);
+  font-size: 14px;
+  box-shadow: var(--cds-shadow-menu);
 }
 
 /* Fixed version mark in lower left corner*/
@@ -1199,53 +1384,93 @@ table.data-table {
   bottom: 12px;
   z-index: 90;
   font-size: 11px;
-  color: var(--ink-muted);
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  color: var(--cds-text-helper);
+  padding: var(--sp-01) var(--sp-03);
+  border-radius: 0;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
   pointer-events: none;
   user-select: none;
 }
 
 /* ---------- Form ----------*/
+/* ---------- Carbon text input ----------
+ * Carbon fields carry one $border-strong rule on the bottom edge only, sit on
+ * $field-01, and are 40px tall. Focus draws a 2px $focus outline inside the box.
+ */
 .field {
-  margin-bottom: 13px;
+  margin-bottom: var(--sp-05);
   position: relative;
 }
 
+/* Carbon label-01: 12px / 16px, $text-secondary. */
 .field label {
   display: block;
-  margin-bottom: 5px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink-secondary);
+  margin-bottom: var(--sp-03);
+  font-size: 12px;
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  font-weight: 400;
+  color: var(--cds-text-secondary);
 }
 
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  padding: 9px 12px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
   font: inherit;
-  color: var(--ink);
-  background: var(--input-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    outline var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.field textarea {
+  height: auto;
+  min-height: 80px;
+  padding: var(--sp-04) var(--sp-05);
+  line-height: 1.42857;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--cds-text-placeholder);
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 140, 248, 0.18);
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+/* Carbon checkbox and radio: a 16px box that must not stretch to the field width. */
+.field input[type='checkbox'],
+.field input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cds-interactive);
+  cursor: pointer;
 }
 
 .field input:disabled,
-.field select:disabled {
-  opacity: 0.55;
+.field select:disabled,
+.field textarea:disabled {
+  background: var(--cds-field-01);
+  border-bottom-color: transparent;
+  color: var(--cds-text-disabled);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -1254,22 +1479,30 @@ table.data-table {
   color: var(--ink);
 }
 
+/* Carbon helper-text-01: 12px, $text-helper, 4px under the control. */
 .field .field-hint {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--ink-muted);
+  margin-top: var(--sp-02);
+  font-size: 12px;
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+  color: var(--cds-text-helper);
 }
 
 /* Linked buttons within the tooltip (e.g. "Restore original record")*/
+/* Carbon link: $link-primary with a permanent underline. */
 .link-btn {
   appearance: none;
   border: none;
   background: transparent;
   padding: 0;
   font: inherit;
-  color: var(--accent);
+  color: var(--cds-link-primary);
   cursor: pointer;
   text-decoration: underline;
+}
+
+.link-btn:hover {
+  color: var(--cds-link-hover);
 }
 
 .field-row {
@@ -1306,29 +1539,35 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Fuzzy search drop-down ----------*/
+/* ---------- Carbon dropdown list ----------
+ * A square $layer-02 sheet directly under the field, with 40px list items.
+ */
 .suggestions {
   position: absolute;
   z-index: 60;
-  top: calc(100% + 4px);
+  top: 100%;
   left: 0;
   right: 0;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  max-height: 220px;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  max-height: 240px;
   overflow-y: auto;
-  box-shadow: 0 12px 32px rgba(2, 6, 18, 0.6);
+  box-shadow: var(--cds-shadow-menu);
 }
 
 .suggestion-item {
-  padding: 9px 12px;
+  min-height: var(--cds-size-md);
+  padding: var(--sp-03) var(--sp-05);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--sp-03);
+  font-size: 14px;
+  color: var(--cds-text-secondary);
+  border-bottom: 1px solid var(--cds-border-subtle);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .suggestion-item:last-child {
@@ -1336,17 +1575,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .suggestion-item:hover {
-  background: rgba(124, 140, 248, 0.14);
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .suggestion-item .market-tag {
   flex-shrink: 0;
-  font-size: 11px;
-  color: var(--ink-secondary);
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 1px 7px;
+  font-size: 12px;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 12px;
+  padding: 0 var(--sp-03);
+  line-height: 20px;
 }
 
 .suggestion-empty {
@@ -1378,7 +1619,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   max-height: 280px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .watch-results li + li {
@@ -1432,72 +1673,87 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Modal ---------- */
+/* ---------- Carbon modal ----------
+ * A square $layer-01 panel over a $overlay scrim. The close control is a 48px
+ * square ghost button pinned to the top right corner.
+ */
 .modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: var(--overlay);
+  background: var(--cds-overlay);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 6vh 16px 16px;
+  padding: 6vh var(--sp-05) var(--sp-05);
   overflow-y: auto;
-  animation: fade-in 0.18s ease;
+  animation: fade-in var(--cds-dur-slow) var(--cds-ease-entrance);
 }
 
 .modal {
   width: 100%;
-  max-width: 460px;
-  background: var(--modal-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  /* Layered elevation (Material-style) instead of a flat border reading as the modal's only depth cue.*/
-  box-shadow: var(--shadow-card), 0 24px 64px rgba(2, 6, 18, 0.7);
-  animation: pop-in 0.2s ease;
+  max-width: 480px;
+  background: var(--cds-layer-01);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-modal);
+  animation: pop-in var(--cds-dur-slow) var(--cds-ease-entrance);
 }
 
 .modal.wide {
-  max-width: 760px;
+  max-width: 768px;
 }
 
 .modal-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px 0;
+  gap: var(--sp-05);
+  padding: var(--sp-05) var(--sp-05) 0;
 }
 
+/* Carbon heading-03: 20px / 28px. */
 .modal-head h3 {
-  font-size: 16px;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--cds-text-primary);
 }
 
 .modal-body {
-  padding: 16px 20px 20px;
+  padding: var(--sp-05) var(--sp-05) var(--sp-09);
+  color: var(--cds-text-secondary);
 }
 
 .modal-close {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--cds-text-primary);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 2px;
+  width: var(--cds-size-lg);
+  height: var(--cds-size-lg);
+  flex: 0 0 auto;
+  margin: calc(var(--sp-05) * -1) calc(var(--sp-05) * -1) 0 0;
+  padding: 0;
+  border-radius: 0;
   display: grid;
   place-items: center;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .modal-close:hover {
-  color: var(--ink);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
 }
 
 /* ---------- Skeleton screen ----------*/
+/* Carbon skeleton: a square $skeleton-background block with a slow pulse. */
 .skeleton {
   display: inline-block;
   width: 72px;
   height: 14px;
-  border-radius: 2px;
+  border-radius: 0;
   background: linear-gradient(
     90deg,
     var(--skeleton-a) 25%,
@@ -1509,49 +1765,86 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ---------- Tips and Badges ----------*/
+/* ---------- Carbon tag ----------
+ * Carbon tags stay pill-shaped: 24px tall, 12px label, a filled tint, no border.
+ */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-strong);
-  color: var(--ink-secondary);
+  gap: var(--sp-02);
+  height: 24px;
+  font-size: 12px;
+  line-height: 1.33333;
+  padding: 0 var(--sp-03);
+  border-radius: 12px;
+  border: none;
+  background: var(--cds-layer-02);
+  color: var(--cds-text-primary);
   white-space: nowrap;
 }
 
 .badge.badge-warn {
-  color: var(--badge-warn-ink);
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.09);
+  color: var(--cds-text-primary);
+  border: none;
+  background: rgba(241, 194, 27, 0.28);
 }
 
+/* ---------- Carbon inline notification ----------
+ * A $layer-01 bar with a 3px status rule on the left edge. The text stays
+ * $text-primary; the status color carries the meaning, not the type color.
+ */
 .notice {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  border: 1px solid;
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-05);
+  min-height: var(--cds-size-lg);
+  padding: var(--sp-04) var(--sp-05);
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1.42857;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-01);
+  border: none;
+  border-left: 3px solid var(--cds-border-subtle);
+  margin-bottom: var(--sp-04);
 }
 
 .notice-error {
-  color: var(--notice-err-ink);
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-error);
+  background: var(--cds-layer-01);
 }
 
 .notice-ok {
-  color: var(--notice-ok-ink);
-  border-color: rgba(52, 211, 153, 0.4);
-  background: rgba(52, 211, 153, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-success);
+  background: var(--cds-layer-01);
 }
 
 .notice-warn {
-  color: var(--notice-warn-ink);
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.08);
+  color: var(--cds-text-primary);
+  border-left-color: var(--cds-support-warning);
+  background: var(--cds-layer-01);
+}
+
+/* The dismiss control inside a notification is a Carbon ghost button. */
+.notice > button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-primary);
+  font: inherit;
+  min-height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.notice > button:hover {
+  background: var(--cds-layer-hover-01);
 }
 
 .empty-state {
@@ -1656,17 +1949,27 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .stock-search input {
   width: 100%;
   min-width: 0;
-  padding: 6px 10px 6px 27px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05) 0 var(--sp-07);
   font: inherit;
-  font-size: 12.5px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  outline: none;
+}
+
+.stock-search input:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
 }
 
 .stock-search input::placeholder {
-  color: var(--ink-muted);
+  color: var(--cds-text-placeholder);
 }
 
 .stock-search-clear {
@@ -1687,7 +1990,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   color: var(--ink);
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 7px 10px 7px 12px;
   cursor: pointer;
   display: inline-flex;
@@ -1719,17 +2022,17 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .hmenu-avatar {
   appearance: none;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--accent-strong);
-  color: var(--steel-on);
+  border: none;
+  background: var(--cds-button-primary);
+  color: var(--cds-text-on-color);
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.32px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1744,18 +2047,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* Carbon overflow menu: a square $layer-02 sheet flush under the trigger. */
 .hmenu-pop {
   position: absolute;
-  top: calc(100% + 6px);
+  top: 100%;
   right: 0;
   z-index: 60;
-  min-width: 190px;
-  max-width: min(280px, calc(100vw - 28px));
-  padding: 5px;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  box-shadow: var(--shadow-card);
+  min-width: 200px;
+  max-width: min(288px, calc(100vw - 28px));
+  padding: 0;
+  background: var(--cds-layer-02);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--cds-shadow-menu);
 }
 
 /*
@@ -1789,21 +2093,25 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin: 5px 4px;
 }
 
+/* Carbon menu item: 40px tall, 16px side padding, square. */
 .hmenu-item {
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--ink-secondary);
+  color: var(--cds-text-primary);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
   width: 100%;
+  min-height: var(--cds-size-md);
   text-align: left;
-  padding: 8px 11px;
-  border-radius: 2px;
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-03);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .hmenu-item:hover {
@@ -1840,7 +2148,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 .hmenu-item.is-danger:hover {
-  background: rgba(248, 113, 113, 0.12);
+  background: rgba(250, 77, 86, 0.12);
   color: var(--danger);
 }
 
@@ -1851,7 +2159,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .hmenu-item-admin:hover {
   color: var(--accent);
-  background: rgba(124, 140, 248, 0.12);
+  background: rgba(69, 137, 255, 0.12);
 }
 
 /* The outward-facing icon of "Source Code" is pushed to the far right, away from the text of the menu item.*/
@@ -1885,24 +2193,31 @@ a.hmenu-item {
   pointer-events: none;
 }
 
+/* Carbon search: 40px tall, $field-01, one bottom rule, icon at the left edge. */
 .search-box .search-input {
   appearance: none;
   font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  padding: 7px 28px 7px 32px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  color: var(--cds-text-primary);
+  background: var(--cds-field-01);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong);
+  border-radius: 0;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-08) 0 var(--sp-08);
   outline: none;
-  width: 190px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, width 0.18s ease;
+  width: 200px;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    width var(--cds-dur-moderate) var(--cds-ease-productive);
 }
 
 .search-box .search-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 140, 248, 0.18);
-  width: 230px;
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+  border-bottom-color: transparent;
+  box-shadow: none;
+  width: 240px;
 }
 
 .search-box .search-clear-btn {
@@ -1914,7 +2229,7 @@ a.hmenu-item {
   color: var(--ink-muted);
   cursor: pointer;
   padding: 3px;
-  border-radius: 2px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2021,7 +2336,7 @@ a.hmenu-item {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb);
-  border-radius: 2px;
+  border-radius: 0;
   border: 2px solid transparent;
   background-clip: content-box;
 }
@@ -2068,7 +2383,7 @@ a.hmenu-item {
   }
 
   .tab {
-    padding: 7px 10px;
+    padding: 0 var(--sp-04);
   }
 }
 
@@ -2081,8 +2396,8 @@ a.hmenu-item {
   }
 
   .app-header-inner {
-    padding: 10px 14px;
-    gap: 8px 10px;
+    padding: 0 var(--sp-04);
+    gap: var(--sp-03) var(--sp-04);
   }
 
   .header-spacer {
@@ -2337,27 +2652,37 @@ a.hmenu-item {
   margin-bottom: 14px;
 }
 
+/* Carbon tab, secondary level: same 3px selection bar as the primary tabs. */
 .subtab {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--ink-secondary);
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-weight: 500;
-  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   margin-bottom: -1px;
-  transition: color 0.18s ease, border-color 0.18s ease;
+  border-radius: 0;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .subtab:hover {
-  color: var(--ink);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .subtab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
 }
 
 .detail-body {
@@ -2491,35 +2816,47 @@ a.hmenu-item {
 }
 
 /* Legal person switch button*/
+/* ---------- Carbon content switcher ----------
+ * The buttons join into one square bar. The selected item inverts to $layer-selected.
+ */
 .chip-toggle {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding-bottom: 6px;
+  gap: 0;
+  padding-bottom: var(--sp-03);
 }
 
 .chip-btn {
   appearance: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--ink-secondary);
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  color: var(--cds-text-secondary);
   font: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.chip-btn:last-child {
+  border-right-width: 1px;
 }
 
 .chip-btn:hover {
-  color: var(--ink);
-  border-color: var(--border-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
 }
 
 .chip-btn.active {
-  color: #fff;
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  color: var(--cds-background);
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  font-weight: 400;
 }
 
 /* ---------- Self-drawn SVG chart ----------*/
@@ -2608,7 +2945,7 @@ a.hmenu-item {
   flex: 0 0 auto;
   width: 11px;
   height: 11px;
-  border-radius: 3px;
+  border-radius: 0;
   transform: translateY(1px);
 }
 
@@ -2902,28 +3239,37 @@ a.hmenu-item {
   flex-wrap: wrap;
 }
 
+/* Carbon content switcher: one joined square bar for the chart range. */
 .m-range button {
   font: inherit;
-  font-size: 12px;
-  padding: 4px 11px;
-  border-radius: 999px;
+  font-size: 14px;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  border-radius: 0;
   cursor: pointer;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-secondary);
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.m-range button:last-child {
+  border-right-width: 1px;
 }
 
 .m-range button:hover {
-  background: var(--surface-strong);
-  color: var(--ink);
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .m-range button[aria-pressed='true'] {
-  background: var(--surface-strong);
-  border-color: var(--border-strong);
-  color: var(--ink);
-  font-weight: 600;
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
+  font-weight: 400;
 }
 
 /* ---------- Card-level layout: quote header + chart left, sidebar right (revision 4) ----------
@@ -3021,7 +3367,7 @@ a.hmenu-item {
   background: var(--surface-strong);
   border: 1px solid var(--border);
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3062,7 +3408,7 @@ a.hmenu-item {
   background: var(--surface-strong);
   border: 1px solid var(--border);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   font-weight: 500;
 }
 
@@ -3102,7 +3448,7 @@ a.hmenu-item {
 .inst-day-tag {
   font-size: 10.5px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border);
   color: var(--ink-muted);
@@ -3111,8 +3457,8 @@ a.hmenu-item {
 
 .inst-day-tag.is-latest {
   color: var(--accent);
-  border-color: rgba(99, 102, 241, 0.3);
-  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(69, 137, 255, 0.3);
+  background: rgba(69, 137, 255, 0.08);
 }
 
 .inst-day-total {
@@ -3185,27 +3531,35 @@ a.hmenu-item {
 .sec-tab-btn {
   background: transparent;
   border: none;
-  color: var(--ink-secondary);
+  border-bottom: 3px solid transparent;
+  color: var(--cds-text-secondary);
   font-size: 14px;
-  font-weight: 600;
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  height: var(--cds-size-md);
+  padding: 0 var(--sp-05);
+  border-radius: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.15s ease;
+  gap: var(--sp-03);
+  transition: color var(--cds-dur-fast) var(--cds-ease-productive),
+    background var(--cds-dur-fast) var(--cds-ease-productive),
+    border-color var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
 .sec-tab-btn:hover {
-  color: var(--ink);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--cds-background-hover);
+  border-bottom-color: var(--cds-border-strong);
 }
 
 .sec-tab-btn.active {
-  background: var(--accent-strong);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  background: transparent;
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--cds-border-interactive);
+  box-shadow: none;
 }
 
 .intraday-block {
@@ -3372,21 +3726,21 @@ a.hmenu-item {
   --surface: #ffffff;
   --surface-strong: #ffffff;
   --panel: #ffffff;
-  --border: #e3e7ee;
-  --border-strong: #ccd3df;
-  --ink: #1a1d24;
-  --ink-secondary: #5b6472;
-  --ink-muted: #8a94a3;
-  --up: #d21f3c;
-  --down: #12864e;
-  --thead-bg: #f6f7f9;
-  --thead-solid: #f6f7f9;
-  --row-band: #f6f7f9;
+  --border: #e0e0e0;
+  --border-strong: #8d8d8d;
+  --ink: #161616;
+  --ink-secondary: #525252;
+  --ink-muted: #6f6f6f;
+  --up: #da1e28;
+  --down: #198038;
+  --thead-bg: #e0e0e0;
+  --thead-solid: #e0e0e0;
+  --row-band: #f4f4f4;
   --row-hover: transparent;
-  --row-alt: #f6f7f9;
-  --accent: #4f46e5;
+  --row-alt: #f4f4f4;
+  --accent: #0f62fe;
   background: #ffffff;
-  color: #1a1d24;
+  color: #161616;
   box-shadow: none;
 }
 
@@ -3409,8 +3763,8 @@ a.hmenu-item {
   }
 
   .subtab {
-    padding: 8px 10px;
-    font-size: 13px;
+    padding: 0 var(--sp-04);
+    font-size: 14px;
   }
 
   .chart-grid {
@@ -3436,7 +3790,7 @@ a.hmenu-item {
 
 .ai-card {
   padding: 20px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
@@ -3468,7 +3822,7 @@ a.hmenu-item {
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 8px 12px;
   outline: none;
   width: 100%;
@@ -3480,7 +3834,7 @@ a.hmenu-item {
 .ai-input:focus,
 .ai-select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px rgba(69, 137, 255, 0.2);
 }
 
 .ai-actions {
@@ -3497,7 +3851,7 @@ a.hmenu-item {
   font-size: 14px;
   color: var(--ink);
   padding: 16px;
-  border-radius: 2px;
+  border-radius: 0;
   /* Use tokens instead of hard-written dark overlays - hard-written rgba(0,0,0,.12) in light themes will become a turbid gray block*/
   background: var(--surface);
   border: 1px solid var(--border);
@@ -3544,7 +3898,7 @@ a.hmenu-item {
   line-height: 1.7;
   font-size: 14px;
   padding: 8px 12px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--surface-2);
   /* Long URLs or long strings without whitespace must not fill the page*/
   overflow-wrap: anywhere;
@@ -3577,7 +3931,7 @@ a.hmenu-item {
 
 .ai-error {
   padding: 16px;
-  border-radius: 2px;
+  border-radius: 0;
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(220, 38, 38, 0.3);
   color: var(--down);
@@ -3672,7 +4026,7 @@ a.hmenu-item {
   align-items: center;
   gap: 9px;
   padding: 9px 11px;
-  border-radius: 2px;
+  border-radius: 0;
   font: inherit;
   font-size: 13.5px;
   color: var(--ink-secondary);
@@ -3795,7 +4149,7 @@ a.hmenu-item {
 }
 
 .adm-toggle.on {
-  background: var(--accent-strong);
+  background: var(--cds-support-success);
   border-color: transparent;
 }
 
@@ -3829,7 +4183,7 @@ a.hmenu-item {
   appearance: none;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 10px 11px;
   cursor: pointer;
   text-align: left;
@@ -3847,7 +4201,7 @@ a.hmenu-item {
 
 .adm-prompt-item.active {
   border-color: var(--accent);
-  background: rgba(124, 140, 248, 0.1);
+  background: rgba(69, 137, 255, 0.1);
   color: var(--ink);
 }
 
@@ -3894,9 +4248,9 @@ a.hmenu-item {
   background: var(--input-bg);
   border: 1px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 10px 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.75;
 }
@@ -3910,7 +4264,7 @@ a.hmenu-item {
 .adm-prompt-locked {
   margin-top: 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: 2px;
+  border-radius: 0;
   padding: 11px 13px;
   background: var(--row-band);
 }
@@ -3927,7 +4281,7 @@ a.hmenu-item {
   margin: 8px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.75;
   color: var(--ink-muted);
@@ -4000,8 +4354,8 @@ a.hmenu-item {
   position: sticky;
   left: 0;
   z-index: 1;
-  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列，
-     不能共用 --panel —— 亮色的 --panel 是 #ffffff，資料列卻是 --surface #fafbfc。 */
+  /* sticky 欄底下會有內容捲過，必須不透明。分別對齊表頭與資料列：
+     資料列走 --surface（Carbon $layer-01），表頭走 --thead-solid（Carbon $layer-accent-01）。 */
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
@@ -4241,7 +4595,7 @@ a.hmenu-item {
 
 /* 每格 flex:1，格數即窗內探測次數；不換行，窄螢幕自然壓縮格寬 */
 .apr-bar { display: flex; gap: 1px; height: 13px; min-width: 60px; }
-.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 1px; }
+.apr-seg { flex: 1 1 0; min-width: 2px; border-radius: 0; }
 .apr-seg-hit { background: var(--notice-ok-ink); }
 .apr-seg-miss { background: color-mix(in srgb, var(--ink-muted) 26%, transparent); }
 .apr-seg-empty { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
@@ -4300,9 +4654,9 @@ a.hmenu-item {
 .adm-log-detail { padding: 4px 4px 14px; border-top: 1px dashed var(--border-strong); }
 .adm-log-detail pre {
   margin: 8px 0; white-space: pre-wrap; word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px; line-height: 1.6; color: var(--ink-muted);
-  background: var(--row-band); border-radius: 2px; padding: 10px 12px;
+  background: var(--row-band); border-radius: 0; padding: 10px 12px;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -4327,7 +4681,7 @@ a.hmenu-item {
   gap: 12px; margin-bottom: 14px;
 }
 .adm-guide-card {
-  padding: 12px 14px; border-radius: var(--radius-md, 8px);
+  padding: 12px 14px; border-radius: 0;
 }
 .adm-guide-card-head {
   display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px;
@@ -4358,11 +4712,11 @@ a.hmenu-item {
   gap: 8px;
 }
 .pwr-kpi-card.pwr-retired::before {
-  background: linear-gradient(90deg, #10b981, #34d399, transparent);
+  background: linear-gradient(90deg, #42be65, #42be65, transparent);
   opacity: 0.85;
 }
 .pwr-kpi-card.pwr-probing::before {
-  background: linear-gradient(90deg, #22d3ee, #38bdf8, transparent);
+  background: linear-gradient(90deg, #33b1ff, #33b1ff, transparent);
   opacity: 0.9;
 }
 .pwr-kpi-label {
@@ -4383,7 +4737,7 @@ a.hmenu-item {
   color: var(--accent);
   background: rgba(255, 255, 255, 0.04);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 0;
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
@@ -4395,14 +4749,14 @@ a.hmenu-item {
   white-space: nowrap;
 }
 .pwr-status-tag.retired {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--accent-emerald, #10b981);
-  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(66, 190, 101, 0.15);
+  color: var(--accent-emerald, #42be65);
+  border-color: rgba(66, 190, 101, 0.35);
 }
 .pwr-status-tag.probing {
-  background: rgba(34, 211, 238, 0.15);
-  color: var(--accent-cyan, #22d3ee);
-  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(51, 177, 255, 0.15);
+  color: var(--accent-cyan, #33b1ff);
+  border-color: rgba(51, 177, 255, 0.35);
 }
 .pwr-status-tag.waiting {
   background: rgba(255, 255, 255, 0.06);
@@ -4416,10 +4770,10 @@ a.hmenu-item {
   margin-top: 4px;
 }
 .pwr-probing-val {
-  color: var(--accent-cyan, #22d3ee);
+  color: var(--accent-cyan, #33b1ff);
 }
 .pwr-retired-val {
-  color: var(--accent-emerald, #10b981);
+  color: var(--accent-emerald, #42be65);
 }
 .pwr-hits-dots {
   display: flex;
@@ -4433,8 +4787,8 @@ a.hmenu-item {
   background: rgba(255, 255, 255, 0.14);
 }
 .pwr-dot.hit {
-  background: var(--accent-emerald, #10b981);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+  background: var(--accent-emerald, #42be65);
+  box-shadow: 0 0 6px rgba(66, 190, 101, 0.5);
 }
 .pwr-kpi-sub {
   margin-top: 4px;
@@ -4474,20 +4828,20 @@ a.hmenu-item {
   font-size: 10.5px;
   font-weight: 600;
   padding: 1.5px 6px;
-  border-radius: 4px;
-  background: rgba(16, 185, 129, 0.18);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.38);
+  border-radius: 0;
+  background: rgba(66, 190, 101, 0.18);
+  color: #42be65;
+  border: 1px solid rgba(66, 190, 101, 0.38);
 }
 .pwr-time-chip.is-retire {
-  background: rgba(99, 102, 241, 0.22);
-  color: #a5b4fc;
-  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(69, 137, 255, 0.22);
+  color: #78a9ff;
+  border-color: rgba(69, 137, 255, 0.45);
 }
 .pwr-time-chip.is-latest {
-  background: rgba(34, 211, 238, 0.22);
-  color: #38bdf8;
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(51, 177, 255, 0.22);
+  color: #33b1ff;
+  border-color: rgba(51, 177, 255, 0.45);
 }
 .pwr-times-empty {
   color: var(--ink-muted);
@@ -4496,50 +4850,50 @@ a.hmenu-item {
 
 /* Light theme high-contrast overrides for crisp visibility */
 :root[data-theme='light'] .pwr-time-chip {
-  background: rgba(16, 185, 129, 0.14);
-  color: #065f46;
-  border-color: rgba(5, 150, 105, 0.45);
+  background: rgba(66, 190, 101, 0.14);
+  color: #0e6027;
+  border-color: rgba(36, 161, 72, 0.45);
   font-weight: 700;
 }
 :root[data-theme='light'] .pwr-time-chip.is-retire {
-  background: rgba(79, 70, 229, 0.12);
-  color: #3730a3;
-  border-color: rgba(79, 70, 229, 0.4);
+  background: rgba(15, 98, 254, 0.12);
+  color: #0043ce;
+  border-color: rgba(15, 98, 254, 0.4);
   font-weight: 700;
 }
 :root[data-theme='light'] .pwr-time-chip.is-latest {
-  background: rgba(2, 132, 199, 0.14);
-  color: #0369a1;
-  border-color: rgba(2, 132, 199, 0.45);
+  background: rgba(0, 114, 195, 0.14);
+  color: #00539a;
+  border-color: rgba(0, 114, 195, 0.45);
   font-weight: 700;
 }
 :root[data-theme='light'] .pwr-status-tag.retired {
-  background: rgba(16, 185, 129, 0.16);
-  color: #065f46;
-  border-color: rgba(5, 150, 105, 0.45);
+  background: rgba(66, 190, 101, 0.16);
+  color: #0e6027;
+  border-color: rgba(36, 161, 72, 0.45);
 }
 :root[data-theme='light'] .pwr-status-tag.probing {
-  background: rgba(2, 132, 199, 0.14);
-  color: #075985;
-  border-color: rgba(2, 132, 199, 0.45);
+  background: rgba(0, 114, 195, 0.14);
+  color: #00539a;
+  border-color: rgba(0, 114, 195, 0.45);
 }
 :root[data-theme='light'] .pwr-status-tag.waiting {
-  background: rgba(15, 23, 42, 0.06);
-  color: #334155;
-  border-color: rgba(15, 23, 42, 0.2);
+  background: rgba(22, 22, 22, 0.06);
+  color: #525252;
+  border-color: rgba(22, 22, 22, 0.2);
 }
 :root[data-theme='light'] .pwr-probing-val {
-  color: #0284c7;
+  color: #0072c3;
 }
 :root[data-theme='light'] .pwr-retired-val {
-  color: #047857;
+  color: #0e6027;
 }
 :root[data-theme='light'] .pwr-dot {
-  background: rgba(15, 23, 42, 0.18);
+  background: rgba(22, 22, 22, 0.18);
 }
 :root[data-theme='light'] .pwr-dot.hit {
-  background: #059669;
-  box-shadow: 0 0 5px rgba(5, 150, 105, 0.45);
+  background: #24a148;
+  box-shadow: 0 0 5px rgba(36, 161, 72, 0.45);
 }
 
 @media (max-width: 720px) {
@@ -4641,7 +4995,7 @@ a.hmenu-item {
   font-size: 9.5px;
   font-weight: 500;
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--surface-strong);
   border: 1px solid var(--border-strong);
   color: var(--ink-secondary);
@@ -4685,7 +5039,7 @@ a.hmenu-item {
   color: var(--ink-muted);
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4697,7 +5051,7 @@ a.hmenu-item {
 }
 
 .watchlist-card-del:hover {
-  background: rgba(248, 113, 113, 0.15);
+  background: rgba(250, 77, 86, 0.15);
   color: var(--danger);
 }
 
@@ -4716,34 +5070,49 @@ a.hmenu-item {
   border-color: var(--border-strong);
 }
 
+/* Carbon content switcher: one joined square bar, no padding around the buttons. */
 .view-toggle-group {
   display: inline-flex;
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  gap: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  gap: 0;
 }
 
 .view-toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--ink-muted);
-  padding: 3px 8px;
-  border-radius: 2px;
-  font-size: 12px;
-  font-weight: 500;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-right-width: 0;
+  color: var(--cds-text-secondary);
+  height: var(--cds-size-sm);
+  padding: 0 var(--sp-04);
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.12s ease;
+  gap: var(--sp-02);
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+    color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+.view-toggle-btn:last-child {
+  border-right-width: 1px;
+}
+
+.view-toggle-btn:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
 }
 
 .view-toggle-btn.active {
-  background: var(--accent-strong);
-  color: #fff;
-  font-weight: 600;
+  background: var(--cds-text-primary);
+  border-color: var(--cds-text-primary);
+  color: var(--cds-background);
+  font-weight: 400;
 }
 
 .view-toggle-btn:hover:not(.active) {

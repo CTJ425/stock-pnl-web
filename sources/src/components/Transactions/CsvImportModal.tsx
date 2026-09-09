@@ -74,7 +74,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
           value={text}
           placeholder={'交易日期,股票代號,股票名稱,交易類型,交易單價,交易股數,手續費 / 稅金\n2024/01/10,TPE:2330,台積電,買入,500,1000,712'}
           onChange={(e) => setText(e.target.value)}
-          style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
         />
       </div>
 
@@ -100,7 +100,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
                 預覽（共 {parsed.rows.length} 筆有效交易
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>
-              <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 10 }}>
+              <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 0 }}>
                 <table className="data-table" style={{ minWidth: 560 }}>
                   <thead>
                     <tr>
