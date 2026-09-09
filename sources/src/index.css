@@ -16,6 +16,7 @@
   --cds-layer-03: #525252;
   --cds-layer-hover-01: #333333;
   --cds-layer-accent-01: #393939;
+  --cds-layer-accent-02: #525252;
   --cds-field-01: #262626;
   --cds-field-02: #393939;
   --cds-field-hover-01: #333333;
@@ -115,11 +116,20 @@
   --header-bg: var(--cds-background);
   --overlay: var(--cds-overlay);
   --input-bg: var(--cds-field-01);
-  /* Carbon data table: the header row uses $layer-accent-01, one step above the table body. */
-  --thead-bg: var(--cds-layer-accent-01);
-  --thead-solid: #393939;
+  /* ---------- Carbon data table surfaces ----------
+   * A long table needs four separable tones, or every row reads the same.
+   * Dark: base #262626 < zebra #333333 < hover #393939 < header #525252.
+   * The light theme reaches the same four steps in the other direction; only the
+   * three roles below are re-pointed there, never the rules that consume them. */
+  --table-head: var(--cds-layer-accent-02);
+  --table-zebra: var(--cds-layer-hover-01);
+  --table-row-hover: var(--cds-layer-accent-01);
+  /* A neutral chip sits inside a row, so it has to clear the hover band too. */
+  --chip-neutral: var(--cds-layer-accent-02);
+  --thead-bg: var(--table-head);
+  --thead-solid: var(--table-head);
   --row-band: var(--cds-layer-hover-01);
-  --row-hover: var(--cds-layer-hover-01);
+  --row-hover: var(--table-row-hover);
   --row-alt: transparent;
   --rule-hair: var(--cds-border-subtle);
   --btn-hover-bg: var(--cds-background-hover);
@@ -150,6 +160,7 @@
   --cds-layer-03: #f4f4f4;
   --cds-layer-hover-01: #e8e8e8;
   --cds-layer-accent-01: #e0e0e0;
+  --cds-layer-accent-02: #e0e0e0;
   --cds-field-01: #f4f4f4;
   --cds-field-02: #ffffff;
   --cds-field-hover-01: #e8e8e8;
@@ -188,7 +199,10 @@
   --down: #198038;
   --skeleton-a: #e8e8e8;
   --skeleton-b: #c6c6c6;
-  --thead-solid: #e0e0e0;
+  --table-head: var(--cds-layer-accent-01);
+  --table-zebra: var(--cds-layer-02);
+  --table-row-hover: var(--cds-layer-hover-01);
+  --chip-neutral: var(--cds-layer-accent-01);
   --steel-tint: rgba(15, 98, 254, 0.12);
   --ochre: #8e6a00; /* Carbon yellow 60 */
   --ochre-tint: rgba(138, 94, 18, 0.15);
@@ -755,6 +769,23 @@ table.data-table {
   font-variant-numeric: tabular-nums;
 }
 
+/* Carbon row header: the first column anchors the row, so it keeps $text-primary
+   while the data cells stay one step back at $text-secondary. */
+.data-table td:first-child {
+  color: var(--cds-text-primary);
+}
+
+/* When the first cell is a selection checkbox it carries no text, so the anchor
+   moves to the next cell. */
+.data-table td:first-child:has(input[type='checkbox']) + td {
+  color: var(--cds-text-primary);
+}
+
+/* The headline number in a cell is the reading target; the lines under it are notes. */
+.data-table td.num > div:first-child {
+  color: var(--cds-text-primary);
+}
+
 .data-table .num {
   font-family: var(--font-body);
   font-size: 14px;
@@ -774,6 +805,7 @@ table.data-table {
 .data-table .cell-sub {
   font-family: var(--font-body);
   font-size: 12px;
+  color: var(--cds-text-helper);
 }
 
 .data-table th:first-child,
@@ -832,8 +864,20 @@ table.data-table {
   transition: background var(--cds-dur-fast) var(--cds-ease-productive);
 }
 
+/* Carbon zebra striping. The band sits on the row, not the cell, so a grouping,
+   total or detail row that paints its own cells still overrides it. */
+.data-table tbody tr:nth-child(even) {
+  background: var(--table-zebra);
+}
+
+/* The sticky first column of the institutional matrix paints its own background,
+   so it needs the band explicitly or the stripe stops at the frozen column. */
+.inst-matrix tbody tr:nth-child(even) td:first-child {
+  background: var(--table-zebra);
+}
+
 .data-table tbody tr:hover {
-  background: var(--cds-layer-hover-01);
+  background: var(--row-hover);
 }
 
 .data-table tbody tr:hover td {
@@ -892,8 +936,8 @@ table.data-table {
 }
 
 .tx-chip-spot {
-  color: var(--ink-secondary);
-  background: var(--surface-strong);
+  color: var(--cds-text-primary);
+  background: var(--chip-neutral);
 }
 
 .tx-chip-day {

@@ -14,6 +14,7 @@
 - **Approach**: A layer-stack diagram (`docs/design/carbon-layer-stack.html`) named the one thing that needed a picture — Carbon's surface hierarchy was collapsed into a single layer — and three levers that only needed a table. All four were then implemented.
 - **Changed**: layer contexts so a field steps above its card or modal and a card inside a card steps up too; 20 font sizes collapsed to the 6 on the Carbon ramp; 216 spacing values snapped to the Carbon scale; page width 1180 → 1312; data-table rows at the Carbon md height of 40px; the workspace header action rebuilt as a 48px borderless UI Shell action.
 - **Verified**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. The transactions table was measured at 1440 and 1024 and overflows at neither width, which was the standing risk of raising every 11px and 13px value onto the ramp.
+- **Follow-up, same branch**: the refinement pass left every table row on one tone. The data table now carries four separable surfaces (header, hover, zebra, base) and three text levels inside the cell, all from Carbon tokens. One collision was found and fixed by screenshot: the neutral 類型 chip shared its value with the new hover band and disappeared on the hovered row.
 - **Not done on purpose**: no version bump, no merge. `dev` and `main` are untouched.
 
 ---
