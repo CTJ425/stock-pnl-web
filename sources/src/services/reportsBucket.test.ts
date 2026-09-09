@@ -38,13 +38,23 @@ describe('downloadReportsJson', () => {
     expect(await downloadReportsJson('x.json')).toBeNull()
   })
 
-  it('網路錯誤與壞 JSON 都回 null', async () => {
+  // Audit finding B2 — this function used to answer `null` for BOTH "the report does not exist
+  // yet" and "the network is down", so every screen above it rendered a network outage as
+  // "今天沒有資料". `null` now means absent, and only absent; everything else throws.
+  it('網路錯誤要拋出，不能和「沒有資料」共用回傳值', async () => {
     vi.stubGlobal('fetch', async () => {
       throw new Error('network down')
     })
-    expect(await downloadReportsJson('x.json')).toBeNull()
+    await expect(downloadReportsJson('x.json')).rejects.toThrow(/x\.json/)
+  })
 
+  it('壞 JSON 要拋出，不能和「沒有資料」共用回傳值', async () => {
     vi.stubGlobal('fetch', async () => new Response('不是 JSON', { status: 200 }))
+    await expect(downloadReportsJson('x.json')).rejects.toThrow(/x\.json/)
+  })
+
+  it('404 仍回 null：報告還沒產生不是失敗', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }))
     expect(await downloadReportsJson('x.json')).toBeNull()
   })
 })

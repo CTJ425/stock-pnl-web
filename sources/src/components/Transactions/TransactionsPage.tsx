@@ -15,6 +15,8 @@ import { fmtPrice, fmtQty, fmtSignedMoney } from '../../utils/formatters'
 import type { SortState } from '../Common/SortableTh'
 import { SortableTh, nextSort } from '../Common/SortableTh'
 import { Modal } from '../Common/Modal'
+import { useToast } from '../Common/Toast'
+import { useConfirm } from '../Common/useConfirm'
 import { CsvImportModal } from './CsvImportModal'
 import { RecalcFeesModal } from './RecalcFeesModal'
 import { StockSplitModal } from './StockSplitModal'
@@ -119,6 +121,8 @@ export function TransactionsPage() {
     deleteTransactions,
     current,
   } = useWorkspace()
+  const { show } = useToast()
+  const confirm = useConfirm()
   const [showImport, setShowImport] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
   const [showSplit, setShowSplit] = useState(false)
@@ -188,14 +192,18 @@ export function TransactionsPage() {
   }
 
   const handleDelete = async (tx: Transaction) => {
-    const ok = window.confirm(
-      `確定刪除這筆交易嗎？\n\n${tx.tx_date}　${tx.ticker} ${displayStockName(tx.market, tx.ticker, tx.name)}　${TX_TYPE_LABEL[tx.tx_type]} ${fmtQty(tx.qty)} 股\n\n刪除後 Dashboard 與年度收益會立即重算。`,
-    )
+    const ok = await confirm({
+      title: '刪除交易',
+      message: `確定刪除這筆交易嗎？\n\n${tx.tx_date}　${tx.ticker} ${displayStockName(tx.market, tx.ticker, tx.name)}　${TX_TYPE_LABEL[tx.tx_type]} ${fmtQty(tx.qty)} 股\n\n刪除後 Dashboard 與年度收益會立即重算。`,
+      confirmLabel: '刪除',
+      danger: true,
+    })
     if (!ok) return
     try {
       await deleteTransactions([tx.id])
     } catch {
-      return // 錯誤已顯示於全域錯誤列
+      show('刪除失敗，請稍後再試', 'error')
+      return
     }
     setSelected((prev) => {
       if (!prev.has(tx.id)) return prev
@@ -203,20 +211,25 @@ export function TransactionsPage() {
       next.delete(tx.id)
       return next
     })
+    show('已刪除 1 筆交易')
   }
 
   const handleDeleteSelected = async () => {
     const visibleSelected = sorted.filter((tx) => selected.has(tx.id))
     const ids = visibleSelected.map((tx) => tx.id)
     if (ids.length === 0) return
-    const ok = window.confirm(
-      `確定刪除選取的 ${ids.length} 筆交易嗎？\n\n刪除後 Dashboard 與年度收益會立即重算，此動作無法復原。`,
-    )
+    const ok = await confirm({
+      title: '刪除交易',
+      message: `確定刪除選取的 ${ids.length} 筆交易嗎？\n\n刪除後 Dashboard 與年度收益會立即重算，此動作無法復原。`,
+      confirmLabel: '刪除',
+      danger: true,
+    })
     if (!ok) return
     try {
       await deleteTransactions(ids)
     } catch {
-      return // 錯誤已顯示於全域錯誤列
+      show('刪除失敗，請稍後再試', 'error')
+      return
     }
     setSelected((prev) => {
       const next = new Set(prev)
@@ -225,7 +238,7 @@ export function TransactionsPage() {
       }
       return next
     })
-    setNotice(`🗑️ 已刪除 ${ids.length} 筆交易。`)
+    show(`已刪除 ${ids.length} 筆交易`)
   }
 
   const isFiltering = searchQuery.trim() !== ''
@@ -325,7 +338,7 @@ export function TransactionsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>
+                  <th scope="col">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -342,7 +355,7 @@ export function TransactionsPage() {
                   <SortableTh label="股數" sortKey="qty" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="手續費 / 稅金" sortKey="fee_tax" sort={sort} onSort={handleSort} numeric />
                   <SortableTh label="現金收支" sortKey="flow" sort={sort} onSort={handleSort} numeric />
-                  <th aria-label="操作" />
+                  <th scope="col" aria-label="操作" />
                 </tr>
               </thead>
               <tbody>
@@ -427,7 +440,10 @@ export function TransactionsPage() {
             key={editTx.id}
             initial={editTx}
             onSubmit={(tx) => updateTransaction(editTx.id, tx)}
-            onDone={() => setEditTx(null)}
+            onDone={() => {
+              setEditTx(null)
+              show('交易已更新')
+            }}
           />
         </Modal>
       )}

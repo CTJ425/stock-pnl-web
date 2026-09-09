@@ -94,7 +94,14 @@ function isSupported(d: unknown): d is StoredFx {
   return typeof f.schema === 'number' && f.schema >= MIN_FX_SCHEMA
 }
 
-/** Read the exchange rate; find none / return null if the format does not match (if an error occurs, do not throw it away, and the lack of information must not drag down the entire page)*/
+/**
+ * Read the exchange rate. Returns null when the file is absent or its schema does not match —
+ * that is "not generated yet", and the caller shows an empty state.
+ *
+ * A real failure (network, HTTP 5xx, unparseable JSON) THROWS, propagated from
+ * downloadReportsJson. It used to be swallowed into the same null, which made a network outage
+ * read as "no data yet". Every caller must catch: see FxPage.load.
+ */
 export async function fetchFx(): Promise<FxData | null> {
   const stored = await downloadReportsJson<StoredFx>('fx/twd.json')
   if (!isSupported(stored)) return null

@@ -135,15 +135,24 @@ export function QuoteTab({
   const [range, setRange] = useState<IntradayRange>('1d')
   const [series, setSeries] = useState<IntradaySeries | null>(null)
   const [intradayLoading, setIntradayLoading] = useState(false)
+  const [intradayError, setIntradayError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setIntradayLoading(true)
-    fetchIntraday({ market: 'TPE', ticker }, range).then((s) => {
-      if (cancelled) return
-      setSeries(s)
-      setIntradayLoading(false)
-    })
+    setIntradayError(false)
+    fetchIntraday({ market: 'TPE', ticker }, range)
+      .then((s) => {
+        if (cancelled) return
+        setSeries(s)
+        setIntradayLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSeries(null)
+        setIntradayError(true)
+        setIntradayLoading(false)
+      })
     return () => {
       cancelled = true
     }
@@ -246,6 +255,7 @@ export function QuoteTab({
           <IntradayChart
             series={series}
             loading={intradayLoading}
+            error={intradayError}
             range={range}
             onRangeChange={setRange}
             tradeDate={quote.tradeDate}
@@ -325,7 +335,7 @@ export function QuoteTab({
                     holding.brokerUnrealized !== null &&
                     holding.brokerUnrealized !== holding.unrealized && (
                       <span
-                        style={{ fontSize: 13, opacity: 0.75, fontWeight: 500, marginLeft: 6 }}
+                        style={{ fontSize: 14, opacity: 0.75, fontWeight: 500, marginLeft: 6 }}
                         title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
                       >
                         (券商 {fmtSignedMoney(holding.brokerUnrealized, 'TWD')})
@@ -338,7 +348,7 @@ export function QuoteTab({
                     holding.brokerRoi !== null &&
                     fmtSignedPercent(holding.brokerRoi) !== fmtSignedPercent(holding.roi) && (
                       <span
-                        style={{ fontSize: 11, opacity: 0.75, fontWeight: 400, marginLeft: 6 }}
+                        style={{ fontSize: 12, opacity: 0.75, fontWeight: 400, marginLeft: 6 }}
                         title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
                       >
                         (券商 {fmtSignedPercent(holding.brokerRoi)})

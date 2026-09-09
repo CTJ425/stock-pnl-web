@@ -215,13 +215,13 @@ export function MechanismGuide() {
             <table className="data-table adm-guide-table">
               <thead>
                 <tr>
-                  <th>資料源</th>
-                  <th>代碼</th>
-                  <th>台北時間時窗</th>
-                  <th>週期</th>
-                  <th>退休 / 收工條件</th>
-                  <th>聯動動作 (Action)</th>
-                  <th>機制說明</th>
+                  <th scope="col">資料源</th>
+                  <th scope="col">代碼</th>
+                  <th scope="col">台北時間時窗</th>
+                  <th scope="col">週期</th>
+                  <th scope="col">退休 / 收工條件</th>
+                  <th scope="col">聯動動作 (Action)</th>
+                  <th scope="col">機制說明</th>
                 </tr>
               </thead>
               <tbody>
@@ -257,12 +257,12 @@ export function MechanismGuide() {
             <table className="data-table adm-guide-table">
               <thead>
                 <tr>
-                  <th>排程名稱</th>
-                  <th>Cron 表達式</th>
-                  <th>台北時間 (Asia/Taipei)</th>
-                  <th>執行動作 (Action)</th>
-                  <th>機制角色</th>
-                  <th>任務說明</th>
+                  <th scope="col">排程名稱</th>
+                  <th scope="col">Cron 表達式</th>
+                  <th scope="col">台北時間 (Asia/Taipei)</th>
+                  <th scope="col">執行動作 (Action)</th>
+                  <th scope="col">機制角色</th>
+                  <th scope="col">任務說明</th>
                 </tr>
               </thead>
               <tbody>

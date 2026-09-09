@@ -11,6 +11,106 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 149: UI/UX audit remediation on feat/carbon-design (21 findings)
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 15:15:32 Asia/Taipei
+- **Gates**: `npm run build` exit 0 · `npm run typecheck:edge` exit 0 · full suite 107 files / 1757 tests / exit 0 (baseline was 103 / 1732)
+- **Scope**: 42 files changed, 8 new files, +1150 / -579 lines.
+
+Accessibility
+1. Type ramp: added six `--type-*` rem tokens and replaced all 194 raw `font-size: Npx` declarations in `index.css`. Zero px font sizes remain, so browser font scaling now works. No root font-size override exists, so the rem values are exactly equivalent at the default 16px.
+2. `scope` added to all 139 column-header `<th>` across 19 files. Zero `<th>` without `scope` remain.
+3. `Modal.tsx` gained `aria-modal`, focus move on open, a Tab/Shift+Tab trap, and focus restore on close. Covered by 5 new tests.
+4. Three click-only rows (`DashboardPage`, `WatchSection` card and table row) now spread the new `useRowActivate` hook, so Enter and Space activate them. `WhatIfTab` ladder rows adopted the same hook.
+5. `@media (prefers-reduced-motion: reduce)` block added; it stops the two infinite animations (`shimmer 1.4s`, `spin 1s`).
+6. Stock detail tabs: both levels now use `role="tablist"`/`role="tab"`/`aria-selected` and support ArrowLeft/ArrowRight/Home/End.
+
+Feedback and error handling
+7. New shared infrastructure: `Common/Toast.tsx` (aria-live region, 5s auto-dismiss), `Common/useConfirm.tsx` (renders through the existing Modal, resolves a Promise), `hooks/useRowActivate.ts`. 20 new tests.
+8. All 5 native `window.alert` / `window.confirm` calls replaced. Zero remain in `sources/src`.
+9. Swallowed errors surfaced in `WatchSection` (load and price fetch) and `TransactionsPage` (single and batch delete).
+10. Success feedback added where writes were silent: single delete, batch delete, edit, fee recalculation, AI config save and clear, admin toggle, watchlist removal (with an undo path).
+11. Missing loading/error branches added to `QuoteTab`, `ChipsTab`, `FundamentalTab`, `IntradayChart`, `TwMarketSection`, `MacroPage`, `ForeignTopSection`, `AdminStatusPage`, `LogsSection`.
+
+Root cause behind item 11
+12. `downloadReportsJson` in `reportsBucket.ts` used to catch every failure and return `null` — the same value it returns for "the report is not generated yet". Every error state above it was therefore unreachable. It now returns `null` only for a genuinely absent object (HTTP 404) and throws on a network failure, an HTTP 5xx, or unparseable JSON. `fetchAppLogs` likewise now throws on an invoke error and keeps `[]` only for a genuinely empty result. `logClient` still swallows its own errors deliberately, because a logger that throws would take down its caller.
+13. Seven services reach `downloadReportsJson` and none catches, so the throw propagates to the UI. Two call sites lacked a catch and were fixed: `LogsSection.loadMore` and `FxPage.load`. The second was found by review, not by the first scout pass, and was the more serious of the two: `setLoading(false)` sat after the await, so a network failure left the FX page spinning forever. Three regression tests were added for it.
+
+Layout, tokens and cleanup
+14. `.adm-log-head` had 472px of fixed grid columns plus gaps and could not fit a 390px phone; it collapses to `1fr auto` under 720px. `.market-grid` minimum column dropped from 340px to 280px.
+15. `.btn-sm` and `.btn-sm.btn-icon` raised from 32px to 40px under 720px.
+16. Raw colour literals removed from `index.css` outside `:root` and from `StockSplitModal.tsx` (11 of them, including the non-Carbon `#78a9ff`). All `var(--danger, #c44)` hardcoded fallbacks deleted. `.report-surface` literals were left alone on purpose — html2canvas cannot resolve CSS variables and would render the PDF black.
+17. Three unused classes deleted: `.mac-behind`, `.ast-fail`, `.col-trend-rowspan`.
+18. Skeleton placeholders switched from fixed px widths to `ch` widths so columns stop jumping on load.
+19. `index.html` gained `description`, `theme-color` and a web manifest; `applyTheme()` now keeps `theme-color` in step with the active theme.
+20. CSV import textarea gained an accessible name; its preview table minimum width dropped from 560px to 420px.
+
+Two audit findings were withdrawn after checking the code
+21. A3 "focus is invisible" was WRONG. `index.css` already had a bare universal `:focus-visible` rule covering every element, including buttons, links and `[role="tab"]`. The audit scout searched only for element-level `button {}` selectors and missed it. The rule added on the strength of that finding also changed `outline-offset` from the deliberate `-2px` (drawn inside the control, per the file's own Carbon comment) to `2px`, so it was removed. All four `outline: none` sites were separately confirmed to already have replacement focus styles.
+22. B5's confirmation gate for `RecalcFeesModal` and `StockSplitModal` was withdrawn. Both apply buttons already name the affected row count ("更新勾選的 N 筆手續費", "確認套用分割換算（更新 N 筆紀錄）") inside a modal the user opened deliberately, so a second dialog asked the same question twice and turned 10 existing tests red. The success toast, which was genuinely missing, was kept.
+
+One finding could not be implemented as written
+23. B6 asked for the five breakpoints (560, 720, 900, 1020, 1120px) to become tokens. CSS custom properties do not work inside media query conditions, so this is not possible in plain CSS. A comment block naming the five sanctioned breakpoints and the narrow-first convention was added instead. The concrete overflow this finding pointed at is fixed by item 14.
+
+---
+
+### Task 148: Carbon refinement pass — layer contexts, type ramp, spacing, UI Shell
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 10:07:59 Asia/Taipei
+- **Branch**: `feat/carbon-design` (not merged; `dev` and `main` untouched)
+- **Follows**: Task 147 (the Carbon Design conversion)
+- **Proposal**: `docs/design/carbon-layer-stack.html` — a Diagram Design layer-stack that names the four levers. The page carries an "已實作" banner, and its figures are the pre-change measurements.
+- **What changed**:
+  1. **Layer contexts.** Carbon builds depth by stepping the surface token one level per nesting, not by adding borders. Fields inside `.modal`, `.glass` and `.detail-card` now use `$field-02`; a card inside a card (`.rpt-card`, `.whatif-mark`, `.quote-aside-private`, `.inst-day-card`, `.adm-prompt-item`, `.watchlist-card`) uses `$layer-02`; a menu opened from inside a card or a modal uses `$layer-03`.
+  2. **Type ramp.** 20 font sizes collapsed to 6, all on the Carbon ramp — 12, 14, 16, 20, 28, 32. Six half-pixel sizes (9.5, 10.5, 11.5, 12.5, 13.5, 14.5) are gone, 50 uses in the stylesheet plus 67 inline `fontSize` uses in TSX.
+  3. **Spacing.** Every `gap`, `padding` and `margin` value snapped to the Carbon scale (2, 4, 8, 12, 16, 24, 32, 40, 48, 64); 216 values changed. Page width raised from 1180 to 1312 (the Carbon 2x grid). Data-table rows set to the Carbon md height of 40px.
+  4. **UI Shell header.** The workspace action `.hmenu-ws` is now a 48px-tall borderless header action that fills with `$background-hover`, matching the Carbon UI Shell instead of a bordered 35px button.
+- **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots on both themes at 1440 and 1024: the transactions table has no horizontal overflow at either width (`scrollWidth === clientWidth`), and modal fields now read one surface step above the modal.
+- **Deliberately not changed**: two `margin-bottom: -1px` offsets on `.tab` and `.subtab` track the 1px rule under the tab row, not the spacing scale, so the snap was reverted there. `.hmenu-avatar` keeps its round 32px form from 0.9.36 rather than becoming a 48px square action.
+- **Tooling side effect**: the Diagram Design skill's first-run brand gate produced `~/.diagram-design/profiles/default.md` (a pristine snapshot, required before customizing) and `~/.diagram-design/profiles/carbon-stock-pnl.md` (Carbon White/Gray 100 tokens, IBM Plex type, zero radius). The repo carries only the marker `.diagram-design`, whose single line is `profile: carbon-stock-pnl`; the profile itself lives outside the repo, so another machine must recreate it.
+- **Follow-up (2026-09-09 10:29:57 Asia/Taipei) — data-table contrast**: the four levers left every table row on one tone, so a long table read as a single block. Fixed inside Carbon by giving the table four separable surfaces instead of one, plus a text hierarchy inside the cell.
+  - New role tokens `--table-head`, `--table-zebra`, `--table-row-hover` and `--chip-neutral`, re-pointed per theme so both themes reach four steps. Dark: base `#262626` < zebra `#333333` < hover `#393939` < header `#525252`. Light: base `#f4f4f4`, zebra `#ffffff`, hover `#e8e8e8`, header `#e0e0e0`.
+  - The header moved up to `$layer-accent-02`, which frees `$layer-accent-01` for the hover band and lets zebra use `$layer-hover-01` without colliding with either.
+  - Carbon zebra striping on `tbody tr:nth-child(even)`. The band sits on the row, not the cell, so a grouping, total or detail row that paints its own cells still overrides it. The sticky first column of `.inst-matrix` gets the band explicitly, or the stripe would stop at the frozen column.
+  - Cell text is now three levels instead of one: the row-anchor column is `$text-primary`, data cells stay `$text-secondary`, and the sub-lines under a number drop to `$text-helper`. When the first cell holds a selection checkbox, a `:has()` rule moves the anchor to the next cell.
+  - `.tx-chip-spot` was `$layer-02`, the same value as the new hover band, so the chip vanished on the hovered row. It now uses `--chip-neutral`, which clears every band in both themes.
+  - **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots in both themes with a hovered row confirm four distinct bands and a legible chip on all of them.
+- **Follow-up (2026-09-09 10:38:02 Asia/Taipei) — admin console tables**: the contrast pass reached every `<table class="data-table">`, and the admin console uses that class in six places, so those were already covered. Two admin surfaces were not: the execution log and the probe round list are tables built from `div` and `button` grids, so no table rule ever applied to them.
+  - Both now take the same bands as `.data-table`: `--table-zebra` on even rows, `--table-row-hover` on hover, `$border-subtle` row rules, and the Carbon md row height of 40px.
+  - `.apr-row` and `.adm-log-row` were drawing `var(--hairline, rgba(127, 138, 155, .18))`. **`--hairline` is defined nowhere in the stylesheet**, so every row rule in the console had been falling back to that legacy slate literal — it survived both earlier Carbon passes because the literal sits inside a `var()` fallback, which a colour sweep does not match.
+  - Row hover was `color-mix(in srgb, var(--accent) 5%, transparent)`, a 5% blue wash rather than a surface band. It now uses the same hover band as every other table.
+  - `.adm-log-level` was a bordered pill in the status colour. It is now a Carbon tag — filled tint, no border, `$text-primary` label — which is the same fix `.tx-chip-spot` needed, for the same reason: a chip inside a banded row must clear every band.
+  - The probe bar segments used `color-mix` on `--ink-muted`; they now use `$border-strong` for a miss and `$border-subtle` for an empty slot, which keeps three separable levels in both themes.
+  - Two dashed rules were replaced with solid `$border-subtle`. Carbon draws no dashed borders. One of them, in `.inst-matrix .trend-item`, was a hardcoded `rgba(255, 255, 255, 0.07)` that only worked on the dark theme.
+  - **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. The admin console needs a login, so it was verified through a static harness page that loads the built stylesheet and renders the real log-row and probe-row markup; screenshots in both themes with a hovered row confirm the bands, the tags and the three-level bars.
+- **Profile stored in the repo (2026-09-09 10:38:02 Asia/Taipei)**: `docs/design/diagram-design-carbon-profile.md` is a byte-for-byte copy of the Diagram Design profile the `.diagram-design` marker points at. To use it on another machine: `mkdir -p ~/.diagram-design/profiles && cp docs/design/diagram-design-carbon-profile.md ~/.diagram-design/profiles/carbon-stock-pnl.md`.
+- **Follow-up (2026-09-09 10:58:59 Asia/Taipei) — probe war room cards**: the eight state cards under 盤後探針命中戰情室 all drew identically. The cause was dead CSS, not a token choice: `.pwr-kpi-card.pwr-retired::before` and `.pwr-kpi-card.pwr-probing::before` set a gradient background, but **no base rule ever gave `.pwr-kpi-card::before` `content` or a box**, so neither pseudo-element rendered and every state fell back to the same plain card.
+  - State now uses the device Carbon already uses for a status block, and the one this app already uses on `.notice`: a 3px rule on the leading edge. `$support-success` for retired, `$support-info` for probing, `$border-subtle` for waiting.
+  - The hue count dropped from four to two. Retired was green, probing was cyan, the retire time chip was blue and the latest chip was cyan — four hues for three states. It is now green for retired and blue for probing, everywhere: the edge rule, the status tag, the headline count and the time chips.
+  - `.pwr-status-tag` and `.pwr-time-chip` became Carbon tags — filled tint, no border, `$text-primary` label. A plain hit time is not a status, so it takes the neutral tag; only the latest probe and the retire moment carry a tint.
+  - `.pwr-dot.hit` had a `box-shadow` glow. Carbon uses no glows, so it is gone, and the empty dot moved from `rgba(255,255,255,0.14)` — a dark-theme-only literal — to `$border-subtle`.
+  - The source id in `.pwr-kpi-name code` was a filled chip. In a 250px grid cell it competed with the card name and forced the name to wrap onto three lines. It is now plain mono text at `$text-helper` that truncates, and the name is `white-space: nowrap`, so the human-readable name stays whole and the id gives way.
+  - The whole `:root[data-theme='light'] .pwr-*` override block was deleted. It existed to patch light-theme contrast on hardcoded values; every value above is now a token that already resolves per theme.
+  - **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. `oxlint` reports the same 34 pre-existing warnings. The war room needs a login, so it was verified through a static harness that loads the built stylesheet and renders four real cards covering retired, probing and waiting; screenshots in both themes confirm three distinguishable states.
+
+### Task 147: Convert the whole UI to IBM Carbon Design
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-09 09:36:25 Asia/Taipei
+- **Branch**: `feat/carbon-design` (not merged; `dev` and `main` untouched)
+- **Scope**: `sources/index.html`, `sources/src/index.css`, `sources/src/components/Charts/chartColors.ts`, `sources/src/components/StockDetail/IntradayChart.tsx`, `sources/src/components/StockDetail/TechnicalTab.tsx`, `sources/src/components/Transactions/CsvImportModal.tsx`, `sources/src/components/Transactions/StockSplitModal.tsx`
+- **What changed**:
+  1. Token layer rewritten to Carbon Gray 100 (dark, default) and Carbon White (light). Carbon tokens carry a `--cds-*` prefix. Every historic token name stays as an alias, so the 4,800-line stylesheet keeps working without touching the 200 component files.
+  2. Type changed to IBM Plex Sans and IBM Plex Mono. The Google Fonts link in `index.html` now loads both, plus Noto Sans TC for Chinese.
+  3. Geometry changed to Carbon: square corners everywhere (27 rounded rules set to 0), the Carbon spacing scale (`--sp-01`…`--sp-10`), 48px header, 40px buttons and fields, 32px small controls.
+  4. Components rebuilt to Carbon patterns: tabs with a 3px selection bar, buttons with asymmetric padding, text inputs with a bottom rule only, data tables on `$layer-accent-01` headers, inline notifications with a 3px status rule, overflow menus, content switchers, tags.
+  5. Interaction changed to Carbon: a 2px `$focus` outline drawn inside every control, and Carbon motion curves and durations.
+  6. Chart palette changed to Carbon: red 50 / green 50 for up and down, and purple 60 / cyan 50 / teal 50 / magenta 50 for the categorical series. The literal-value constraint from html2canvas still holds.
+- **Verify**: `npm run build` exit 0. `npm test` exit 0 — 103 files, 1732 tests passed. Playwright screenshots taken on both themes: dashboard, transactions table, transaction modal, yearly report.
+- **Known limits**: The Taiwan and US flag emoji in the dashboard headings show as tofu boxes in the headless browser on this host. The cause is a missing emoji font on the host, not the stylesheet. No version bump was made, because the branch is not `dev`.
+
 ### Task 146: Application Log Capture (`app_log`) & Admin Log Viewer
 - **Status**: ✅ **DONE — released as 0.9.35, live on DEV and PROD**
 - **PROD rollout (2026-09-07)**: `app_log`, its single INSERT policy, three indexes, `admin_recent_app_logs()` and the `app-log-prune` cron applied to `hrilemueiqyaoiwnkeuu`; PROD cron count is now 7. Edge Functions deployed: `stock-report` v8, `stock-price` v5, `backup-transactions` v4 — all three `ezbr_sha256` identical to DEV, all three `verify_jwt` preserved. PROD checks: objects match DEV exactly, RLS five cases match DEV exactly, `null` body returns 400, `app-logs` returns 401 without a credential.

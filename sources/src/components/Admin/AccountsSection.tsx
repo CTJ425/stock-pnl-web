@@ -13,8 +13,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw } from 'lucide-react'
 import { fetchAdminUsers, setUserAdmin, type AdminUser } from '../../services/adminUsers'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
+import { useToast } from '../Common/Toast'
 
 export function AccountsSection() {
+  const { show } = useToast()
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
@@ -33,13 +35,15 @@ export function AccountsSection() {
   async function toggle(u: AdminUser) {
     setErr('')
     setBusyId(u.id)
-    const failure = await setUserAdmin(u.id, !u.admin)
+    const nextAdmin = !u.admin
+    const failure = await setUserAdmin(u.id, nextAdmin)
     setBusyId('')
     if (failure) {
       setErr(failure)
       return
     }
-    setUsers((prev) => prev?.map((x) => (x.id === u.id ? { ...x, admin: !u.admin } : x)) ?? prev)
+    setUsers((prev) => prev?.map((x) => (x.id === u.id ? { ...x, admin: nextAdmin } : x)) ?? prev)
+    show(`${u.email || '（沒有 email）'} 已${nextAdmin ? '設為管理員' : '取消管理員'}`)
   }
 
   const adminCount = users?.filter((u) => u.admin).length ?? 0
@@ -58,7 +62,7 @@ export function AccountsSection() {
       </div>
 
       {err && (
-        <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 13, marginTop: 12 }}>
+        <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14, marginTop: 12 }}>
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
           {err}
         </div>
@@ -78,10 +82,10 @@ export function AccountsSection() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>帳號</th>
-                  <th>建立於</th>
-                  <th>最近活動</th>
-                  <th>管理員</th>
+                  <th scope="col">帳號</th>
+                  <th scope="col">建立於</th>
+                  <th scope="col">最近活動</th>
+                  <th scope="col">管理員</th>
                 </tr>
               </thead>
               <tbody>

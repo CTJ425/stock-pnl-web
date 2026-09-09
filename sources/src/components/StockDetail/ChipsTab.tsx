@@ -6,6 +6,7 @@
  * 法人 on every day at once, the chart was drawing the same numbers a second time.
  */
 import { useState } from 'react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type {
   ChipLeg,
   InstitutionalChip,
@@ -99,7 +100,39 @@ function SourceTag({ stamp }: { stamp: SourceStamp | null | undefined }) {
  */
 
 
-export function ChipsTab({ report }: { report: ReportData }) {
+interface ChipsTabProps {
+  report: ReportData | null
+  status: 'loading' | 'ready' | 'error'
+  errMsg?: string
+}
+
+export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
+  if (status === 'loading') {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <RefreshCw size={28} className="spin" />
+        <div style={{ marginTop: 10 }}>正在讀取盤後籌碼…</div>
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="notice notice-error" role="alert">
+        <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+        {errMsg || '讀取籌碼資料失敗，請稍後再試。'}
+      </div>
+    )
+  }
+
+  if (!report) {
+    return (
+      <div className="empty-state" style={{ padding: 32 }}>
+        <div>尚無籌碼資料。</div>
+      </div>
+    )
+  }
+
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
   const [metric, setMetric] = useState<ChipMetric>('net')
@@ -250,9 +283,9 @@ export function ChipsTab({ report }: { report: ReportData }) {
               <table className="data-table inst-matrix" aria-label="三大法人買賣超矩陣">
                 <thead>
                   <tr>
-                    <th>日期</th>
+                    <th scope="col">日期</th>
                     {matrixRows.map((r) => (
-                      <th
+                      <th scope="col"
                         key={r.key}
                         className={`num ${r.key === 'total' ? 'col-total' : ''}`}
                       >
@@ -323,7 +356,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                           <div className="tfoot-cum-trend">
                             <span
                               className={label ? chipClass(s) : 'hint'}
-                              style={{ fontSize: 11, fontWeight: label ? 600 : undefined }}
+                              style={{ fontSize: 12, fontWeight: label ? 600 : undefined }}
                             >
                               {label ?? '—'}
                             </span>
@@ -383,32 +416,32 @@ export function ChipsTab({ report }: { report: ReportData }) {
                 <thead>
                   {marginMetric === 'summary' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資餘額（張）</th>
-                      <th className="num">融資增減</th>
-                      <th className="num">融券餘額（張）</th>
-                      <th className="num">融券增減</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資餘額（張）</th>
+                      <th scope="col" className="num">融資增減</th>
+                      <th scope="col" className="num">融券餘額（張）</th>
+                      <th scope="col" className="num">融券增減</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                   {marginMetric === 'trading' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資買進</th>
-                      <th className="num">融資賣出</th>
-                      <th className="num">融券買進（回補）</th>
-                      <th className="num">融券賣出（放空）</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資買進</th>
+                      <th scope="col" className="num">融資賣出</th>
+                      <th scope="col" className="num">融券買進（回補）</th>
+                      <th scope="col" className="num">融券賣出（放空）</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                   {marginMetric === 'redeem' && (
                     <tr>
-                      <th>日期</th>
-                      <th className="num">融資現償</th>
-                      <th className="num">融券券償</th>
-                      <th className="num">融資限額</th>
-                      <th className="num">融券限額</th>
-                      <th className="num">資券互抵</th>
+                      <th scope="col">日期</th>
+                      <th scope="col" className="num">融資現償</th>
+                      <th scope="col" className="num">融券券償</th>
+                      <th scope="col" className="num">融資限額</th>
+                      <th scope="col" className="num">融券限額</th>
+                      <th scope="col" className="num">資券互抵</th>
                     </tr>
                   )}
                 </thead>
@@ -467,7 +500,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(latestOf(marginTodays))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>餘額走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>餘額走勢</span>
                             <SparkCell
                               points={marginTodays}
                               color={CHART_COLORS.up}
@@ -482,7 +515,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                           <div className="tfoot-cum-trend">
                             <span
                               className={mStreak ? chipClass(mStreak) : 'hint'}
-                              style={{ fontSize: 11, fontWeight: mStreak ? 600 : undefined }}
+                              style={{ fontSize: 12, fontWeight: mStreak ? 600 : undefined }}
                             >
                               {fmtBalanceStreak(mStreak)}
                             </span>
@@ -498,7 +531,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(latestOf(shortTodays))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>餘額走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>餘額走勢</span>
                             <SparkCell
                               points={shortTodays}
                               color={CHART_COLORS.line}
@@ -513,7 +546,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                           <div className="tfoot-cum-trend">
                             <span
                               className={sStreak ? chipClass(sStreak) : 'hint'}
-                              style={{ fontSize: 11, fontWeight: sStreak ? 600 : undefined }}
+                              style={{ fontSize: 12, fontWeight: sStreak ? 600 : undefined }}
                             >
                               {fmtBalanceStreak(sStreak)}
                             </span>
@@ -529,7 +562,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(offsets))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>互抵走勢</span>
                             <SparkCell
                               points={offsets}
                               color={CHART_COLORS.line}
@@ -546,7 +579,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(marginBuys))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>買進走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>買進走勢</span>
                             <SparkCell
                               points={marginBuys}
                               color={CHART_COLORS.up}
@@ -559,7 +592,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(marginSells))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>賣出走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>賣出走勢</span>
                             <SparkCell
                               points={marginSells}
                               color={CHART_COLORS.down}
@@ -572,7 +605,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(shortBuys))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>回補走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>回補走勢</span>
                             <SparkCell
                               points={shortBuys}
                               color={CHART_COLORS.up}
@@ -585,7 +618,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(shortSells))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>放空走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>放空走勢</span>
                             <SparkCell
                               points={shortSells}
                               color={CHART_COLORS.down}
@@ -598,7 +631,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(offsets))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>互抵走勢</span>
                             <SparkCell
                               points={offsets}
                               color={CHART_COLORS.line}
@@ -615,7 +648,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(marginRedeems))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>現償走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>現償走勢</span>
                             <SparkCell
                               points={marginRedeems}
                               color={CHART_COLORS.line}
@@ -628,7 +661,7 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(shortRedeems))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>券償走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>券償走勢</span>
                             <SparkCell
                               points={shortRedeems}
                               color={CHART_COLORS.line}
@@ -641,19 +674,19 @@ export function ChipsTab({ report }: { report: ReportData }) {
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(latestOf(marginLimits))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>最新限額</span>
+                            <span className="hint" style={{ fontSize: 12 }}>最新限額</span>
                           </div>
                         </td>
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(latestOf(shortLimits))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>最新限額</span>
+                            <span className="hint" style={{ fontSize: 12 }}>最新限額</span>
                           </div>
                         </td>
                         <td className="num inst-matrix-cum">
                           <div>{fmtInt(sumOf(offsets))}</div>
                           <div className="tfoot-cum-trend">
-                            <span className="hint" style={{ fontSize: 11 }}>互抵走勢</span>
+                            <span className="hint" style={{ fontSize: 12 }}>互抵走勢</span>
                             <SparkCell
                               points={offsets}
                               color={CHART_COLORS.line}

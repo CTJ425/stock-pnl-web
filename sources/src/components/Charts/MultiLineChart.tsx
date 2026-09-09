@@ -10,6 +10,7 @@
 import { ChartFrame } from './chartFrame'
 import { lineSegments } from './chartPath'
 import { niceDomain, type Domain } from './chartScale'
+import { CHART_COLORS } from './chartColors'
 
 export interface LineSeries {
   name: string
@@ -67,7 +68,7 @@ export function MultiLineChart({
               x2={geo.innerW}
               y1={geo.y(g)}
               y2={geo.y(g)}
-              stroke="rgba(138, 148, 163, 0.45)"
+              stroke={CHART_COLORS.guide}
               strokeWidth={1}
               strokeDasharray="3 3"
             />

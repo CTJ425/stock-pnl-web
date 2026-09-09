@@ -7,12 +7,14 @@
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Inbox, LayoutGrid, List, Plus } from 'lucide-react'
-import { WATCHLIST_MAX, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
+import { WATCHLIST_MAX, addWatch, listWatchlist, removeWatch, type WatchItem } from '../../services/watchlistService'
 import { fetchPrices, type PriceMap } from '../../services/priceProxy'
 import { fmtPrice, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getStockCategory } from '../../utils/stockCategory'
 import { groupWatchItems } from '../../utils/stockGrouping'
 import { AddWatchModal } from '../StockDetail/AddWatchModal'
+import { useToast } from '../Common/Toast'
+import { useRowActivate } from '../../hooks/useRowActivate'
 
 const STORAGE_VIEW_KEY = 'stock_watchlist_view_mode'
 const POLL_INTERVAL_MS = 60 * 1000
@@ -32,9 +34,12 @@ export function WatchSection({
   const [prices, setPrices] = useState<PriceMap>({})
   const [initialLoading, setInitialLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  // B1: a failed list/price fetch must look different from a genuinely empty watchlist.
+  const [loadError, setLoadError] = useState(false)
   const requestSeq = useRef(0)
   const itemsRef = useRef<WatchItem[]>([])
   itemsRef.current = items
+  const { show } = useToast()
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
@@ -66,8 +71,11 @@ export function WatchSection({
       const map = await (options?.force ? fetchPrices(items, { force: true }) : fetchPrices(items))
       if (seq !== requestSeq.current) return // Discard outdated response
       setPrices(map)
+      setLoadError(false)
     } catch {
-      // Retain existing prices on network hiccup; never clear out loaded prices
+      // Retain existing prices on network hiccup; never clear out loaded prices, but
+      // surface the failure so it does not read as "nothing to show".
+      if (seq === requestSeq.current) setLoadError(true)
     } finally {
       if (seq === requestSeq.current) {
         setInitialLoading(false)
@@ -83,6 +91,7 @@ export function WatchSection({
       setItems([])
       setPrices({})
       setInitialLoading(false)
+      setLoadError(true)
       return
     }
     setItems(list)
@@ -114,17 +123,35 @@ export function WatchSection({
   }, [loadPrices])
 
   const [removing, setRemoving] = useState<string | null>(null)
+  // B5: the removed item stays here for a few seconds so the user can put it back.
+  const [undoItem, setUndoItem] = useState<WatchItem | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleRemove = async (ticker: string) => {
+  const handleRemove = async (ticker: string, name: string) => {
     if (removing) return
     setRemoving(ticker)
     try {
       await removeWatch(ticker)
       await load()
       onChanged?.()
+      show(`已移除 ${ticker} ${name}`)
+      if (undoTimer.current) clearTimeout(undoTimer.current)
+      setUndoItem({ ticker, name, sortOrder: 0 })
+      undoTimer.current = setTimeout(() => setUndoItem(null), 5000)
     } finally {
       setRemoving(null)
     }
+  }
+
+  const handleUndo = async () => {
+    if (!undoItem) return
+    const restored = undoItem
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    setUndoItem(null)
+    await addWatch(restored.ticker, restored.name)
+    await load()
+    onChanged?.()
+    show(`已復原 ${restored.ticker} ${restored.name}`)
   }
 
   const [filter, setFilter] = useState<string>('all')
@@ -210,6 +237,21 @@ export function WatchSection({
         </div>
       </div>
 
+      {loadError && (
+        <div className="notice notice-error" role="alert">
+          觀察清單或現價載入失敗，請稍後重試。
+        </div>
+      )}
+
+      {undoItem && (
+        <div className="notice notice-ok" role="status">
+          已移除 {undoItem.ticker} {undoItem.name}
+          <button type="button" className="btn btn-sm" style={{ marginLeft: 8 }} onClick={() => void handleUndo()}>
+            復原
+          </button>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="glass empty-state">
           <div className="empty-icon">
@@ -274,12 +316,16 @@ export function WatchSection({
                           ? (quote.price - quote.prevClose) / quote.prevClose
                           : null
                       const category = getStockCategory(item.ticker, item.name, quote?.industry)
+                      const activateCard = useRowActivate(
+                        () => onSelectTicker(item.ticker, item.name),
+                        `開啟 ${item.ticker} ${item.name}`,
+                      )
                       return (
                         <div
                           key={item.ticker}
                           className="watchlist-card"
                           data-testid={`watch-card-${item.ticker}`}
-                          onClick={() => onSelectTicker(item.ticker, item.name)}
+                          {...activateCard}
                         >
                           <div className="watchlist-card-head">
                             <div className="watchlist-card-meta">
@@ -296,7 +342,7 @@ export function WatchSection({
                               disabled={removing !== null}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                void handleRemove(item.ticker)
+                                void handleRemove(item.ticker, item.name)
                               }}
                             >
                               ×
@@ -305,7 +351,7 @@ export function WatchSection({
                           <div className="watchlist-card-body">
                             <div className={`watchlist-card-price ${pnlClass(pct)}`}>
                               {initialLoading && !quote ? (
-                                <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
+                                <span className="skeleton" style={{ width: '9ch', height: 18, display: 'inline-block' }} />
                               ) : quote ? (
                                 fmtPrice(quote.price, 'TWD')
                               ) : (
@@ -335,11 +381,11 @@ export function WatchSection({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>代號</th>
-                    <th>名稱</th>
-                    <th className="num">現價</th>
-                    <th className="num">漲跌</th>
-                    <th></th>
+                    <th scope="col">代號</th>
+                    <th scope="col">名稱</th>
+                    <th scope="col" className="num">現價</th>
+                    <th scope="col" className="num">漲跌</th>
+                    <th scope="col"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -360,11 +406,15 @@ export function WatchSection({
                             ? (quote.price - quote.prevClose) / quote.prevClose
                             : null
                         const category = getStockCategory(item.ticker, item.name, quote?.industry)
+                        const activateRow = useRowActivate(
+                          () => onSelectTicker(item.ticker, item.name),
+                          `開啟 ${item.ticker} ${item.name}`,
+                        )
                         return (
                           <tr
                             key={item.ticker}
                             data-testid={`watch-row-${item.ticker}`}
-                            onClick={() => onSelectTicker(item.ticker, item.name)}
+                            {...activateRow}
                             style={{ cursor: 'pointer' }}
                           >
                             <td>{item.ticker}</td>
@@ -376,7 +426,7 @@ export function WatchSection({
                             </td>
                             <td className="num">
                               {initialLoading && !quote ? (
-                                <span className="skeleton" style={{ width: 60, height: 18, display: 'inline-block' }} />
+                                <span className="skeleton" style={{ width: '9ch', height: 18, display: 'inline-block' }} />
                               ) : quote ? (
                                 fmtPrice(quote.price, 'TWD')
                               ) : (
@@ -392,7 +442,7 @@ export function WatchSection({
                                 disabled={removing !== null}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  void handleRemove(item.ticker)
+                                  void handleRemove(item.ticker, item.name)
                                 }}
                               >
                                 ×

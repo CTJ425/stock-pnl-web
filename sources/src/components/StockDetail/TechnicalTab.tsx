@@ -70,8 +70,8 @@ const MA_COLORS = {
 /** Bollinger: mid aligns with MA20 orange; upper/lower use slate (literal for PDF) */
 const BB_COLORS = {
   mid: CATEGORICAL_COLORS[1],
-  upper: '#94a3b8',
-  lower: '#64748b',
+  upper: CHART_COLORS.bbUpper,
+  lower: CHART_COLORS.bbLower,
 } as const
 
 const KD_COLORS = { k: CATEGORICAL_COLORS[0], d: CATEGORICAL_COLORS[3] } as const
@@ -313,11 +313,11 @@ export function TechnicalTab({
           <table className="data-table inst-matrix" aria-label="每日成交量矩陣">
             <thead>
               <tr>
-                <th>日期</th>
-                <th className="num">成交量</th>
-                <th className="num">量比</th>
-                <th className="num">收盤價</th>
-                <th className="num">漲跌幅</th>
+                <th scope="col">日期</th>
+                <th scope="col" className="num">成交量</th>
+                <th scope="col" className="num">量比</th>
+                <th scope="col" className="num">收盤價</th>
+                <th scope="col" className="num">漲跌幅</th>
               </tr>
             </thead>
             <tbody>
@@ -354,7 +354,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={volumeStreak ? (volumeStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
-                      style={{ fontSize: 11, fontWeight: volumeStreak ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: volumeStreak ? 600 : undefined }}
                     >
                       {fmtVolumeStreak(volumeStreak)}
                     </span>
@@ -372,7 +372,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={heavy(latestVolRatio) ? 'pnl-up' : 'hint'}
-                      style={{ fontSize: 11, fontWeight: heavy(latestVolRatio) ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: heavy(latestVolRatio) ? 600 : undefined }}
                     >
                       {heavy(latestVolRatio) ? '量能放大' : '量能常態'}
                     </span>
@@ -388,7 +388,7 @@ export function TechnicalTab({
                 <td className="num inst-matrix-cum">
                   <div>最新 {fmtPrice(latestClose)}</div>
                   <div className="tfoot-cum-trend">
-                    <span className="hint" style={{ fontSize: 11 }}>
+                    <span className="hint" style={{ fontSize: 12 }}>
                       高 {fmtPrice(maxClose)} / 低 {fmtPrice(minClose)}
                     </span>
                     <SparkCell
@@ -405,7 +405,7 @@ export function TechnicalTab({
                   <div className="tfoot-cum-trend">
                     <span
                       className={priceStreak ? (priceStreak > 0 ? 'pnl-up' : 'pnl-down') : 'hint'}
-                      style={{ fontSize: 11, fontWeight: priceStreak ? 600 : undefined }}
+                      style={{ fontSize: 12, fontWeight: priceStreak ? 600 : undefined }}
                     >
                       {fmtPriceStreak(priceStreak)}
                     </span>
