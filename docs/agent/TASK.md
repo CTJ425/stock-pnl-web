@@ -9,16 +9,56 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-09 18:05)
+## 📍 Where the project stands (2026-09-10 15:14)
 
-- **Version 0.9.38 — released and live on PROD.** `main` and `dev` are synchronized at `0.9.38`.
-  - Implemented: 修復資料表漲跌紅綠與未實現損益顏色覆蓋（0.9.38）、全站 IBM Carbon Design 轉換與 21 項 UI/UX 稽核修正（0.9.37）、帳號頭像重構為現代扁平人像圖標（0.9.36）、全域錯誤捕捉 `app_log` 與後台檢視頁（0.9.35）、融券借券費精準計算與 PostgREST 1000 筆截斷修復（0.9.34）。
-  - Verification: 108 test files / **1,760** vitest tests, exit 0; `npm run typecheck:edge` exit 0; `npm run build` exit 0; `npx oxlint` 0 errors on changed files.
-  - Edge Functions: `stock-price` is **v6** (deployed 2026-09-10 from commit `290f9d3`, ezbr_sha256 `90e9dc2c28836a3a…`), `stock-report` is **v8**, `backup-transactions` is **v4** on both cloud environments (`zyebvayngwrqzoaicbwd` DEV, `hrilemueiqyaoiwnkeuu` PROD).
-  - Database: DEV and PROD schemas synchronized (including `app_log` table, indexes, RPCs, and 7 pg_cron jobs on each).
-  - Known and not done: end-to-end Playwright run for the 融券 flow; `.inst-matrix tfoot td` hardcoded white overlay inverted under light theme.
+- **Version 0.9.44 — released and live.** `main` and `dev` are synchronized at `0.9.44`.
+  - Shipped 2026-09-10: 查無檔案被當成錯誤、即時產生因此永遠不會執行（0.9.44, BUG-078）、非持股股票日線區間讀不到（0.9.43, BUG-077）、行情走勢圖擴充為八個區間（0.9.42）、技術面 K 線圖擴充為六個區間與 Edge `daily` action（0.9.41）、Edge 台股清單完整性檢查（0.9.40）。
+  - Verification: 114 test files / **1,845** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0.
+  - Edge Functions: `stock-price` is **v7** on both environments (deployed 2026-09-10 from commit `c4a8b9e`, `ezbr_sha256` `253e6c3d25d6e7ac…` — **identical sha on DEV and PROD**), `stock-report` is **v8**, `backup-transactions` is **v4**.
+  - **前端沒有自動部署。** 手動 `npm run build` 後上傳 `sources/dist/` 到 Cloudflare Pages（PROD `site_url` = `https://stock-pnl-web.pages.dev/`）。流程寫在 `README.md` 步驟 9-1。合併 `main` 不等於上線，驗收看畫面左下角版本徽章。
+  - Known and not done: Task 144 的資源用量監控與 R2 多目標備份（皆未動工）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
 ## 📋 Active Tasks
+
+### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 15:14:01 Asia/Taipei
+- **What is this**: 使用者要求「從 log 與過去 bug_fix / task 文件查出還有什麼沒修，或報告了結果卻根本沒做的部分」。以**程式碼與線上實測**為準對帳，不採信文件自述。
+
+**對帳結論：文件說待辦、程式碼其實已完成（紀錄過期，已更正）**
+
+| 項目 | 文件說法 | 實際 | 證據 |
+| ---- | ---- | ---- | ---- |
+| Task 144-2 執行日誌檢視器 | 未實作 | **已完成** | `sources/src/components/Admin/LogsSection.tsx`，讀 `app_log`；`schema.sql:1138` |
+| Task 145 P0-1 CSV 借券費 | OPEN | **已完成** | `utils/csv.ts:264-274, 334, 352` |
+| Task 145 P0-2 融券借券費修正 | OPEN | **已完成** | `utils/fees.ts:121, 163-171` |
+| Task 145 P0-3 拆併股融券處理 | OPEN | **已完成** | `StockSplitModal.tsx:52, 94` 排除融券並警告；`StockSplitModal.test.tsx:497, 551` 兩條測試守著。規格本就允許「排除並警示」這個解法 |
+| Task 145 P1-1 PostgREST 1000 筆截斷 | OPEN | **已完成** | `dataProvider.ts:307-335`、`backup-transactions` 與 `stock-report` 各有 `pagedSelect`、`heldTwTickers:1007`、`watchedTwTickers:1023` |
+| Task 145 P1-2 rowKey 碰撞 | OPEN | **已完成** | `AnalysisPage.tsx:84-86` |
+| Task 76 item 4 試撮 UI | OPEN | **已完成** | `QuoteTab.tsx:60`（試撮中）、`:285`（預估標記） |
+| quote-yahoo-a 均價 | 缺資料來源 | **已完成** | `QuoteTab.tsx:305` |
+
+**對帳結論：確實沒做（維持待辦）**
+
+| 項目 | 狀態 | 說明 |
+| ---- | ---- | ---- |
+| Task 144-3 資源用量監控 | ABSENT | `components/Admin/` 沒有任何呈現配額或用量的元件 |
+| Task 144-4 R2 多目標備份 | ABSENT | `backup-transactions/` 只有 `BACKUPS_BUCKET = 'backups'`，註解寫明 phase 1 |
+| Task 85 探針視窗重調 | 1/7 | 只有 `borrow`（`sourceProbePlan.ts:127`）有 2026-08-11 的實測註解，其餘六個未見重調證據 |
+| quote-yahoo-a 成交金額 / 昨量 | ABSENT | `PriceQuote` 型別沒有這兩個欄位，需先決定資料來源 |
+| Task 145 OPT-1 / OPT-2 / item 10 | 未驗證 | 效能優化項，本次未查 |
+
+**實測澄清（原本被列為風險，實際不成立）**
+
+- `readDoneSourcesToday`（`stock-report/index.ts:2636`）沒有分頁，理論上受 PostgREST 1000 筆上限影響。實測 PROD：`source_probe_tick` 每日僅 **74 筆**，符合該查詢條件者 **24 筆**，不會截斷。
+- `handleAdminUsers`（`:3760`）單次 `listUsers({perPage:1000})` 未分頁，但程式碼註解已寫明是刻意決定（本專案帳號數為個位數）。
+- `daily/` 檔案時間停在 9/9 17:10 **不是過期**：當日批次尚未到執行時間。更舊的 `3714`／`009816`／`2303`／`00981A` 已不在批次清單中，是舊持股的凍結檔案。
+
+**設定面實測（Task 132/133）**
+
+- PROD `site_url` = `https://stock-pnl-web.pages.dev/`，`uri_allow_list` **為空**。目前登入可用，但任何非 `site_url` 的重導目標都會被拒。若之後要加自訂網域或 preview 網址，必須先補進允許清單。
+- DEV 的 auth 設定無法以本次的 access token 讀取（權限不足），未驗證。
 
 ### Task 156: 修復非持股股票的日線區間讀不到（BUG-077）
 - **Status**: ✅ DONE
@@ -35,7 +75,7 @@
 - **What is this**: 反轉 0.9.41「只擴充 K 線圖」的決定。行情分頁的走勢圖改為八個區間，維持折線；技術面的六個區間不變。定版 0.9.42，已併入 `main`。
 
 ### Task 154: 個股走勢圖區間擴充為八個
-- **Status**: 🔄 IN PROGRESS
+- **Status**: ✅ DONE
 - **Agent**: Claude
 - **Timestamp**: 2026-09-10 12:26:19 Asia/Taipei
 - **Spec**: `docs/agent/specs/chart-range-eight.md`
