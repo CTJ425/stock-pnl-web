@@ -195,7 +195,7 @@ export function StockDetailPage({
   )
   const technicalLatest = useMemo(() => {
     if (!dailySeries || dailySeries.rows.length === 0) return null
-    return buildTechnicalView(dailySeries.rows, '3m')?.latest ?? null
+    return buildTechnicalView(dailySeries.rows, '1m')?.latest ?? null
   }, [dailySeries])
 
   useEffect(() => {

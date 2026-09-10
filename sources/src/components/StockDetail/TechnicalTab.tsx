@@ -5,10 +5,10 @@
  * Data: daily/{ticker}.json (after-hours batch / warm). Front-end downloads Storage
  * directly. Terminology: weekly line = MA5, monthly = MA20, quarterly = MA60.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronsDownUp, ChevronsUpDown, LineChart, RefreshCw } from 'lucide-react'
 import { fmtSignedPercent, pnlClass } from '../../utils/formatters'
-import type { DailySeries } from '../../services/dailyProxy'
+import { fetchRemoteDaily, type DailySeries, type RemoteDaily } from '../../services/dailyProxy'
 import type { DailyStatus } from './useDailySeries'
 import { CandleChart } from '../Charts/CandleChart'
 import { MultiLineChart } from '../Charts/MultiLineChart'
@@ -20,7 +20,9 @@ import { fmtUpdatedAt, heatStyle } from './chipFormat'
 import { streakAt } from './chipStreak'
 import {
   buildTechnicalView,
+  isRemoteRange,
   RANGE_LABELS,
+  remoteRangeOf,
   type RangeKey,
 } from './technicalView'
 
@@ -44,7 +46,7 @@ function fmtPriceStreak(s: number): string {
   return s > 0 ? `連 ${s} 日上漲` : `連 ${-s} 日下跌`
 }
 
-const RANGES: RangeKey[] = ['3m', '6m', '1y']
+const RANGES: RangeKey[] = ['1m', '6m', 'ytd', '1y', '5y', 'all']
 
 /**
  * How many rows the volume table shows before "顯示全部".
@@ -100,12 +102,41 @@ export function TechnicalTab({
   status: DailyStatus
   series: DailySeries | null
 }) {
-  const [range, setRange] = useState<RangeKey>('3m')
+  const [range, setRange] = useState<RangeKey>('1m')
   const [showAllVolume, setShowAllVolume] = useState(false)
+  const [remote, setRemote] = useState<RemoteDaily | null>(null)
+  const [remoteBusy, setRemoteBusy] = useState(false)
 
+  // 近 5 年 / 全部 are not in daily/{ticker}.json — fetch them from the Edge Function
+  // on demand (Route A). `alive` stops a fast range switch from writing a stale answer.
+  useEffect(() => {
+    const remoteRange = remoteRangeOf(range)
+    // Clear on **every** run, not only when leaving a remote range. Clearing only in the
+    // branch below leaves 近 5 年's rows in `remote` while 全部 is still loading, and both
+    // guards further down test `remote === null` — so the old rows render under the new
+    // range's label with no loading indicator.
+    setRemote(null)
+    if (remoteRange === null) {
+      setRemoteBusy(false)
+      return
+    }
+    let alive = true
+    setRemoteBusy(true)
+    ;(async () => {
+      const daily = await fetchRemoteDaily(ticker, remoteRange)
+      if (!alive) return
+      setRemote(daily)
+      setRemoteBusy(false)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [ticker, range])
+
+  const sourceRows = isRemoteRange(range) ? (remote?.rows ?? null) : (series?.rows ?? null)
   const view = useMemo(
-    () => (series ? buildTechnicalView(series.rows, range) : null),
-    [series, range],
+    () => (sourceRows ? buildTechnicalView(sourceRows, range) : null),
+    [sourceRows, range],
   )
 
   if (status === 'loading') {
@@ -125,6 +156,28 @@ export function TechnicalTab({
         <div className="notice notice-warn" role="alert">
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
           讀取歷史股價失敗，請稍後再試。
+        </div>
+      </section>
+    )
+  }
+
+  if (remoteBusy && remote === null) {
+    return (
+      <section className="rpt-section">
+        <div className="empty-state" style={{ padding: 32 }}>
+          <RefreshCw size={28} className="spin" />
+          <div style={{ marginTop: 10 }}>正在讀取歷史股價…</div>
+        </div>
+      </section>
+    )
+  }
+
+  if (isRemoteRange(range) && remote === null) {
+    return (
+      <section className="rpt-section">
+        <div className="notice notice-warn" role="alert">
+          <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+          讀取長區間股價失敗，請稍後再試。
         </div>
       </section>
     )
@@ -300,12 +353,12 @@ export function TechnicalTab({
 
         <div className="rpt-section-head" style={{ marginTop: 14 }}>
           <div className="chart-title">
-            每日成交量・{RANGE_LABELS[range]}（{view.volumeRows.length} 個交易日）
+            每日成交量・{RANGE_LABELS[range]}（{view.volumeRows.length} 筆）
           </div>
           {view.volumeRows.length > VOLUME_ROWS_COLLAPSED && (
             <button className="btn btn-sm" onClick={() => setShowAllVolume((v) => !v)}>
               {showAllVolume ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-              {showAllVolume ? `只顯示近 ${VOLUME_ROWS_COLLAPSED} 日` : `顯示全部 ${view.volumeRows.length} 日`}
+              {showAllVolume ? `只顯示近 ${VOLUME_ROWS_COLLAPSED} 筆` : `顯示全部 ${view.volumeRows.length} 筆`}
             </button>
           )}
         </div>

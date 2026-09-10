@@ -9,6 +9,7 @@
  * DailyFile alignment.
  */
 import { downloadReportsJson } from './reportsBucket'
+import { isSupabaseConfigured, supabase } from './supabase'
 
 /** A daily line: [Trading day, opening, high, low, closing, volume]*/
 export type DailyRow = [string, number, number, number, number, number]
@@ -68,5 +69,66 @@ export async function fetchDailySeries(ticker: string): Promise<DailySeries | nu
     asOf: typeof stored.asOf === 'string' ? stored.asOf : '',
     lastDate: typeof stored.lastDate === 'string' ? stored.lastDate : rows[rows.length - 1][0],
     rows,
+  }
+}
+
+/**
+ * Long-range daily/monthly bars for `近 5 年` / `全部` on the 技術 tab (Route A, 0.9.41).
+ * These two ranges are not in daily/{ticker}.json and are fetched from the stock-price
+ * Edge Function's `daily` action on demand. Cached in memory only (module-level, TTL
+ * 5 minutes — this data changes once per trading day, unlike intraday's 60s).
+ *
+ * Assumption: the daily K chart serves Taiwan stocks only, because daily/{ticker}.json
+ * is written by the Taiwan nightly batch.
+ */
+export type RemoteDailyRange = '5y' | 'max'
+
+export interface RemoteDaily {
+  rows: DailyRow[]
+  granularity: '1d' | '1mo'
+}
+
+interface RemoteCacheEntry {
+  daily: RemoteDaily
+  at: number
+}
+
+const REMOTE_CACHE_TTL_MS = 300_000
+
+const remoteCache = new Map<string, RemoteCacheEntry>()
+
+interface EdgeDailyResponse {
+  rows?: unknown
+  granularity?: '1d' | '1mo'
+}
+
+export async function fetchRemoteDaily(
+  ticker: string,
+  range: RemoteDailyRange,
+): Promise<RemoteDaily | null> {
+  const key = `${ticker}:${range}`
+  const now = Date.now()
+  const cached = remoteCache.get(key)
+  if (cached && now - cached.at < REMOTE_CACHE_TTL_MS) return cached.daily
+
+  if (!isSupabaseConfigured || !supabase) return null
+  try {
+    const { data, error } = await supabase.functions.invoke<EdgeDailyResponse>('stock-price', {
+      body: { action: 'daily', symbol: { market: 'TPE', ticker }, range },
+      timeout: 15_000,
+    })
+    if (error || !data) return null
+
+    const rows = Array.isArray(data.rows) ? data.rows.filter(isValidRow) : []
+    if (rows.length === 0) return null
+
+    // Only a success is cached. Caching the failure would lock the ticker out for the whole
+    // TTL: a network blip would make every re-click of 近 5 年 replay the cached null for
+    // five minutes without ever trying again, while the user is actively retrying.
+    const daily: RemoteDaily = { rows, granularity: data.granularity ?? '1d' }
+    remoteCache.set(key, { daily, at: now })
+    return daily
+  } catch {
+    return null
   }
 }

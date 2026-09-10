@@ -1,5 +1,14 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 154 — completed sub-items (rolled from TASK.md 2026-09-10 12:26:19 Asia/Taipei)
+
+1. ~~實測 Yahoo 長區間回應並定案線路 A~~ ✅
+2. ~~寫規格 `docs/agent/specs/chart-range-eight.md`~~ ✅
+3. ~~實作 Edge `daily` action、`dailyRange.ts`、`fetchRemoteDaily`、六區間選擇器~~ ✅
+4. ~~reviewer 審查並修掉切換遠端區間沿用舊資料的 BLOCKER~~ ✅
+5. ~~三道 gate 全綠（build / typecheck:edge / vitest 1814 passed）~~ ✅
+
+
 - Agent: Claude
 - Status: ARCHIVE — Read only history, no longer update existing entries
 - Timestamp: 2026-08-05 16:55:00 Asia/Taipei
