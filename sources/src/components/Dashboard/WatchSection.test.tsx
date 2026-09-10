@@ -259,6 +259,44 @@ describe('WatchSection (Dashboard)', () => {
     expect(within(card5701).getByText('觀光餐旅')).toBeTruthy()
   })
 
+  it('分組標題已標示同一產業時，字卡不再重複顯示產業別', async () => {
+    // 產業別徽章與上方群組標題文字相同時，只是把代號、名稱、產業別擠在同一行，
+    // 讓名稱與產業別同時被截斷成省略號。
+    const items = [
+      { ticker: '2330', name: '台積電', sortOrder: 0 },
+      { ticker: '2454', name: '聯發科', sortOrder: 1 },
+    ]
+    listWatchlist.mockResolvedValue(items)
+    fetchPrices.mockResolvedValue({
+      'TPE:2330': { ...quote(1100, 1000), industry: '半導體業' },
+      'TPE:2454': { ...quote(1400, 1380), industry: '半導體業' },
+    })
+    render(<WatchSection onSelectTicker={() => {}} />)
+
+    const card = await screen.findByTestId('watch-card-2330')
+    expect(within(card).queryByText('半導體業')).toBeNull()
+    expect(screen.getByText('半導體業')).toBeTruthy()
+  })
+
+  it('未分組時仍顯示產業別，且獨立成行不與名稱同列', async () => {
+    const items = [
+      { ticker: '2603', name: '長榮', sortOrder: 0 },
+      { ticker: '2330', name: '台積電', sortOrder: 1 },
+    ]
+    listWatchlist.mockResolvedValue(items)
+    fetchPrices.mockResolvedValue({
+      'TPE:2603': { ...quote(200, 198), industry: '航運業' },
+      'TPE:2330': { ...quote(1100, 1000), industry: '半導體業' },
+    })
+    render(<WatchSection onSelectTicker={() => {}} />)
+
+    const card = await screen.findByTestId('watch-card-2330')
+    const industry = within(card).getByText('半導體業')
+    expect(industry.className).toContain('watchlist-card-industry')
+    // 產業別必須離開名稱那一列，否則兩者仍然搶同一段寬度。
+    expect(card.querySelector('.watchlist-card-meta')?.contains(industry)).toBe(false)
+  })
+
   describe('產業自動分組與膠囊篩選 (Auto-Grouping & Filter Chips)', () => {
     it('單一股票或各檔不同產業不觸發 >= 2 分組與膠囊', async () => {
       const items = [

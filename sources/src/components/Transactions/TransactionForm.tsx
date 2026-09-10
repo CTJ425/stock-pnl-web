@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Spinner } from '../Common/Spinner'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
@@ -90,6 +91,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
+  const [searching, setSearching] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
   const taxRateManual = useRef(false)
 
@@ -141,7 +143,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     updateTaxRateAuto(item.ticker)
     setShowTickerHoldings(false)
     setShowNameHoldings(false)
-    setSuggestions(null)
+    closeSuggestions()
   }
 
   // In edit mode the saved fee/tax stands until the user changes a core input.
@@ -160,6 +162,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const lastSearchedTicker = useRef(initial?.ticker ?? '')
   const searchSeq = useRef(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Every path that hides the suggestion drop-down must also stop the spinner and
+  // invalidate the in-flight search, or the spinner can be left turning forever.
+  const closeSuggestions = useCallback(() => {
+    if (searchTimer.current) {
+      clearTimeout(searchTimer.current)
+      searchTimer.current = null
+    }
+    searchSeq.current++
+    setSuggestions(null)
+    setSearching(false)
+  }, [])
 
   const getActualShares = useCallback((): number => {
     const val = parseFloat(qty) || 0
@@ -210,7 +224,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     setMarket(next)
     setShowTickerHoldings(false)
     setShowNameHoldings(false)
-    setSuggestions(null)
+    closeSuggestions()
     if (next === 'US' && unit === '張') {
       convertUnit('零股')
     }
@@ -255,15 +269,33 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (!query) {
       searchSeq.current++
       setSuggestions(null)
+      setSearching(false)
       return
     }
+    setSearching(true)
     searchTimer.current = setTimeout(async () => {
       const mySeq = ++searchSeq.current
-      const results = await searchStocks(query)
-      if (mySeq !== searchSeq.current) return
-      setSuggestions(results)
+      try {
+        const results = await searchStocks(query)
+        if (mySeq !== searchSeq.current) return
+        setSuggestions(results)
+      } catch {
+        // A rejected search must not leave the spinner turning, and must not escape
+        // the timer callback as an unhandled rejection.
+        if (mySeq === searchSeq.current) setSuggestions([])
+      } finally {
+        if (mySeq === searchSeq.current) setSearching(false)
+      }
     }, 300)
   }
+
+  // The debounce timer outlives the component; clear it so a closed form runs no search.
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current)
+    },
+    [],
+  )
 
   const pickSuggestion = (item: StockSearchResult) => {
     setName(item.name)
@@ -271,7 +303,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (item.market !== market) handleMarketChange(item.market)
     lastSearchedTicker.current = item.symbol
     updateTaxRateAuto(item.symbol)
-    setSuggestions(null)
+    closeSuggestions()
   }
 
   // Collapse drop-downs when clicking elsewhere in the form
@@ -283,12 +315,12 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       }
       if (nameFieldRef.current && !nameFieldRef.current.contains(target)) {
         setShowNameHoldings(false)
-        setSuggestions(null)
+        closeSuggestions()
       }
     }
     document.addEventListener('click', onClick)
     return () => document.removeEventListener('click', onClick)
-  }, [])
+  }, [closeSuggestions])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -385,7 +417,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               setTxType(next)
               setShowTickerHoldings(false)
               setShowNameHoldings(false)
-              setSuggestions(null)
+              closeSuggestions()
             }}
           >
             <option value="BUY">買入</option>
@@ -403,6 +435,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
                 setNature(next)
                 setShowTickerHoldings(false)
                 setShowNameHoldings(false)
+                // nature feeds isSpotSell, so switching it hides the search drop-down.
+                // Without this the spinner keeps turning and stale results come back.
+                closeSuggestions()
                 // 當沖 is what a user sets the tax rate preset to by hand today; keep it in sync.
                 if (next === 'DAY_TRADE') {
                   taxRateManual.current = true
@@ -560,15 +595,25 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             )}
           </div>
         )}
-        {!isSpotSell && suggestions !== null && (
+        {!isSpotSell && (searching || suggestions !== null) && (
           <div className="suggestions">
-            {suggestions.length === 0 ? (
+            {searching ? (
+              <div
+                className="suggestion-loading"
+                role="status"
+                aria-live="polite"
+                data-testid="name-search-loading"
+              >
+                <Spinner size={12} />
+                搜尋中…
+              </div>
+            ) : suggestions!.length === 0 ? (
               <div className="suggestion-empty">
                 無匹配結果
                 {!isSupabaseConfigured && '（本機模式僅支援台股搜尋；美股請直接輸入代號）'}
               </div>
             ) : (
-              suggestions.map((item) => (
+              suggestions!.map((item) => (
                 <div
                   key={`${item.market}:${item.symbol}`}
                   className="suggestion-item"

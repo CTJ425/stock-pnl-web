@@ -30,7 +30,7 @@ export interface TwStockRow {
   close: number | null
 }
 
-const CACHE_KEY = 'stock-pnl-web/tw-list-v1'
+const CACHE_KEY = 'stock-pnl-web/tw-list-v2'
 const CACHE_TTL_MS = 30 * 60 * 1000
 
 interface CacheShape {
@@ -98,6 +98,15 @@ async function fetchTpex(): Promise<TwStockRow[]> {
 /** Direct connection (development mode via dev proxy; formal environment mostly fails due to CORS)*/
 async function fetchDirect(): Promise<TwStockRow[]> {
   const results = await Promise.allSettled([fetchTwse(), fetchTpex()])
+  // A half list is worse than none: it caches for 30 minutes, and every stock from the dead
+  // source then reads as "no such stock". Fail the attempt so the fallback chain runs instead.
+  // An HTTP 200 carrying an empty array is the same failure wearing a success code.
+  const failure = results.find((r) => r.status === 'rejected' || r.value.length === 0)
+  if (failure) {
+    const reason = failure.status === 'rejected' ? String(failure.reason) : 'source returned an empty list'
+    logClient('error', 'fetchDirect', reason, {})
+    return []
+  }
   const rows: TwStockRow[] = []
   const seen = new Set<string>()
   for (const r of results) {
