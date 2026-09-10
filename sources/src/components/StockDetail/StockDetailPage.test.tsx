@@ -20,7 +20,11 @@ vi.mock('../../services/reportProxy', () => ({
   fetchStoredReport,
   generateReport,
 }))
-vi.mock('../../services/dailyProxy', () => ({ fetchDailySeries }))
+vi.mock('../../services/dailyProxy', () => ({
+  fetchDailySeries,
+  // useDailySeries 的第三層後援（0.9.43）；這些測試不走遠端路徑，回 null 即可。
+  fetchRemoteDaily: async () => null,
+}))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
 
