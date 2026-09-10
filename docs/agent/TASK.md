@@ -38,7 +38,7 @@
 
 6. ~~部署 `stock-price` 到 DEV 並實打驗證 `近 5 年` 與 `全部`（v7, sha `253e6c3d…`）~~ ✅
 7. ~~定版 0.9.41、合併 `main`~~ ✅
-8. **部署 `stock-price` 到 PROD** —— ⏳ 需使用者另行授權
+8. ~~部署 `stock-price` 到 PROD（v7, sha `253e6c3d…`，與 DEV 相同）~~ ✅
 
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
 - **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
