@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Edge Function twlist 補上完整性檢查，結案 RISK-008（Task 153, 0.9.40-dev.1）
+- Action: 定版 0.9.40 並合併 dev 至 main（Task 153）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 11:17:55 Asia/Taipei
+- Timestamp: 2026-09-10 11:24:07 Asia/Taipei
 
 ---
 
