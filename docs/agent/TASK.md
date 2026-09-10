@@ -20,6 +20,14 @@
 
 ## 📋 Active Tasks
 
+### Task 155: 行情走勢圖也擴充為八個區間
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 14:14:51 Asia/Taipei
+- **Spec**: `docs/agent/specs/quote-tab-trend-ranges.md`
+- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
+- **What is this**: 反轉 0.9.41「只擴充 K 線圖」的決定。行情分頁的走勢圖改為八個區間，維持折線；技術面的六個區間不變。定版 0.9.42，已併入 `main`。
+
 ### Task 154: 個股走勢圖區間擴充為八個
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

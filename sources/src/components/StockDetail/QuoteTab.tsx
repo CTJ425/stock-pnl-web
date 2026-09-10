@@ -29,12 +29,21 @@ import { Inbox } from 'lucide-react'
 import { isClosed, tradeDateLabel, type PriceQuote } from '../../services/priceProxy'
 import type { Market } from '../../types/models'
 import { fetchIntraday } from '../../services/intradayProxy'
+import { fetchRemoteDaily, type DailySeries } from '../../services/dailyProxy'
 import { fmtPercent, fmtPrice, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { fmtInt, fmtLotsFromShares, shortDate } from './chipFormat'
-import { IntradayChart, finalVwap } from './IntradayChart'
+import { IntradayChart, finalVwap, type TrendSeries } from './IntradayChart'
 import { getStockCategory } from '../../utils/stockCategory'
 import type { TechnicalView } from './technicalView'
-import type { IntradayRange, IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
+import { remoteRangeOf } from './technicalView'
+import {
+  TREND_RANGES,
+  dailyKeyOf,
+  isIntradayRange,
+  seriesFromDailyRows,
+  type TrendRange,
+} from './trendRange'
+import type { DailyStatus } from './useDailySeries'
 import type { ChipDay, ReportHolding } from '../../services/reportProxy'
 
 type TechnicalLatest = TechnicalView['latest']
@@ -124,6 +133,8 @@ export function QuoteTab({
   name,
   holding = null,
   history = null,
+  dailySeries = null,
+  dailyStatus = 'ready',
 }: {
   quote: PriceQuote | null
   latest?: TechnicalLatest | null
@@ -131,32 +142,80 @@ export function QuoteTab({
   name: string
   holding?: ReportHolding | null
   history?: ChipDay[] | null
+  dailySeries?: DailySeries | null
+  dailyStatus?: DailyStatus
 }) {
-  const [range, setRange] = useState<IntradayRange>('1d')
-  const [series, setSeries] = useState<IntradaySeries | null>(null)
+  const [range, setRange] = useState<TrendRange>('1d')
+  const [series, setSeries] = useState<TrendSeries | null>(null)
   const [intradayLoading, setIntradayLoading] = useState(false)
   const [intradayError, setIntradayError] = useState(false)
 
+  const rangeKey = dailyKeyOf(range)
+  /**
+   * Only the local-daily branch below reads `dailyStatus`, so only that branch may put it in the
+   * dependency array. Freezing it to a constant elsewhere matters in both directions:
+   *
+   * - Omitting it entirely is a bug. `useDailySeries` reports a failed fetch with
+   *   `setStatus('error')` alone — `series` stays the same `null` — so the effect would never
+   *   re-run and the skeleton would spin forever.
+   * - Depending on it unconditionally is also wrong. On the default 一日 range the daily fetch
+   *   still resolves in the background, and that transition would clear `series` and re-fetch,
+   *   flashing the skeleton on every page load for no reason.
+   */
+  const localDailyStatus: DailyStatus =
+    rangeKey !== null && rangeKey !== '5y' && rangeKey !== 'all' ? dailyStatus : 'ready'
+
+  // Three cases: 盤中 (network), 已有的日線 (no network), 遠端日線 (network). `alive` guards
+  // both async branches — 0.9.41 shipped exactly this bug on 技術面 when state was cleared
+  // in only one branch, leaving the previous range's rows on screen under the new label.
   useEffect(() => {
-    let cancelled = false
-    setIntradayLoading(true)
-    setIntradayError(false)
-    fetchIntraday({ market: 'TPE', ticker }, range)
-      .then((s) => {
-        if (cancelled) return
-        setSeries(s)
-        setIntradayLoading(false)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setSeries(null)
-        setIntradayError(true)
-        setIntradayLoading(false)
-      })
-    return () => {
-      cancelled = true
+    let alive = true
+    setSeries(null)
+
+    if (isIntradayRange(range)) {
+      setIntradayLoading(true)
+      setIntradayError(false)
+      fetchIntraday({ market: 'TPE', ticker }, range)
+        .then((s) => {
+          if (!alive) return
+          setSeries(s)
+          setIntradayLoading(false)
+        })
+        .catch(() => {
+          if (!alive) return
+          setIntradayError(true)
+          setIntradayLoading(false)
+        })
+      return () => {
+        alive = false
+      }
     }
-  }, [ticker, range])
+
+    const key = rangeKey
+    if (key === '5y' || key === 'all') {
+      setIntradayLoading(true)
+      setIntradayError(false)
+      const remoteRange = remoteRangeOf(key)!
+      fetchRemoteDaily(ticker, remoteRange).then((remote) => {
+        if (!alive) return
+        if (remote === null) {
+          setIntradayError(true)
+          setIntradayLoading(false)
+          return
+        }
+        setSeries(seriesFromDailyRows(ticker, remote.rows, range))
+        setIntradayLoading(false)
+      })
+      return () => {
+        alive = false
+      }
+    }
+
+    // key is '1m' | '6m' | 'ytd' | '1y': already-loaded daily series, no network.
+    setIntradayLoading(localDailyStatus === 'loading')
+    setIntradayError(localDailyStatus === 'error')
+    setSeries(seriesFromDailyRows(ticker, dailySeries?.rows ?? [], range))
+  }, [ticker, range, rangeKey, dailySeries, localDailyStatus])
 
   if (!quote) {
     return (
@@ -183,7 +242,8 @@ export function QuoteTab({
       : (quote.high - quote.low) / quote.prevClose
 
   // Same number the chart's 均價 line ends at — computed once in IntradayChart.tsx and reused here.
-  const vwap = finalVwap(series?.points ?? [])
+  // A cumulative VWAP over a daily range is not a meaningful number, so it only shows for 一日/五日.
+  const vwap = isIntradayRange(range) ? finalVwap(series?.points ?? []) : null
 
   // Same three states, same order of precedence as `quoteMeta` above — the card head one level up
   // renders that one for this very quote, and two different words for one number reads as a bug.
@@ -258,6 +318,7 @@ export function QuoteTab({
             error={intradayError}
             range={range}
             onRangeChange={setRange}
+            ranges={TREND_RANGES}
             tradeDate={quote.tradeDate}
           />
 
