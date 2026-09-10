@@ -6,6 +6,15 @@
 
 ---
 
+### Bug ID: BUG-076 — Edge Function 的 twlist 回傳截斷清單卻用 HTTP 200（結案 RISK-008）
+- **Date**: 2026-09-10, fixed in 0.9.40-dev.1
+- **Root Cause**: `sources/supabase/functions/stock-price/index.ts` 的 `handleTwList` 與客戶端犯同一個錯：`Promise.allSettled` 合併任何成功的來源，只有合併後長度為 0 才回 502。上市（TWSE）或上櫃（TPEx）其中之一掛掉時，呼叫端會拿到帶成功狀態的半份清單並快取 30 分鐘。BUG-075 只修了客戶端直連路徑，這條補上 Edge 端。
+- **Fix**: 抽出純邏輯模組 `sources/supabase/functions/stock-price/twList.ts`（不含 Supabase／Deno 匯入，比照 `backup-transactions/backupPlan.ts` 的既有模式），由 `buildTwList` 判定完整性；`handleTwList` 只保留 fetch 與委派，不完整時回 502。`listNumber` 一併移入該模組。
+- **Reviewer blocker（已修）**: 第一版的完整性檢查只看 `value.length === 0`，擋不住「陣列非空但每一列都缺代號或缺名稱」——全部被 `push` 丟棄後，結果仍是 `ok: true` 的半份清單。改為逐來源計算「結構有效列數」，且刻意在去重之前計算：僅與另一交易所重複的列仍證明此來源有回應，因此計入；整批無效則判定該來源失效。
+- **Tests**: `sources/supabase/functions/stock-price/twList.test.ts` 新增 8 條（E1–E8）。E8 正是上述 blocker 的回歸測試，修正前確認轉紅（`expected true to be false`）。
+- **Deployment**: ⚠️ 本次僅修改程式碼，**未部署**。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效。
+- **Status**: ✅ FIXED (0.9.40-dev.1)，待部署
+
 ### Bug ID: BUG-074 — 加入觀察搜尋把已加入的股票靜默隱藏，看起來像「查無此股」
 - **Date**: 2026-09-10, fixed in 0.9.39-dev.2
 - **Root Cause**: `sources/src/components/StockDetail/AddWatchModal.tsx:51` 以 `!watched.includes(row.symbol)` 把已在觀察清單中的代號整筆從搜尋結果移除，且不給任何說明。使用者輸入代號後看到空白清單，得到的訊息是「這檔股票不存在」，事實是「已經加過了」。

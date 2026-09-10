@@ -43,6 +43,7 @@ import { logEvent } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
 import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
 import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
+import { buildTwList } from './twList.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US' | 'IDX'
@@ -392,11 +393,6 @@ async function handleSearch(query: string): Promise<Response> {
   }
 }
 
-function listNumber(value: unknown): number | null {
-  const n = Number(String(value ?? '').replace(/,/g, ''))
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
 /** Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response */
 async function handleTwList(): Promise<Response> {
   const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
@@ -413,24 +409,9 @@ async function handleTwList(): Promise<Response> {
     fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'),
   ])
 
-  const rows: Array<{ symbol: string; name: string; close: number | null }> = []
-  const seen = new Set<string>()
-  const push = (symbol: unknown, name: unknown, close: unknown) => {
-    const s = String(symbol ?? '').trim()
-    const n = String(name ?? '').trim()
-    if (!s || !n || seen.has(s)) return
-    seen.add(s)
-    rows.push({ symbol: s, name: n, close: listNumber(close) })
-  }
-  if (twse.status === 'fulfilled') {
-    for (const r of twse.value) push(r.Code, r.Name, r.ClosingPrice)
-  }
-  if (tpex.status === 'fulfilled') {
-    for (const r of tpex.value) push(r.SecuritiesCompanyCode ?? r.Code, r.CompanyName ?? r.Name, r.Close ?? r.ClosingPrice ?? r.LatestPrice)
-  }
-
-  if (rows.length === 0) return json({ error: '台股清單來源皆無回應' }, 502)
-  return json({ rows })
+  const result = buildTwList(twse, tpex)
+  if (!result.ok) return json({ error: result.error }, 502)
+  return json({ rows: result.rows })
 }
 
 
