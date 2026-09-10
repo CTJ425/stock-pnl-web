@@ -12,6 +12,7 @@
 - [使用方式](#-使用方式)
 - [測試](#-測試)
 - [初始化與部署](#-初始化與部署)
+  - [改版後的發布流程（手動上傳）](#步驟-9-1改版後的發布流程手動上傳)
 - [版本紀錄](#-版本紀錄)
 - [注意事項](#-注意事項)
 
@@ -493,9 +494,53 @@ npm run build    # 產出靜態檔於 sources/dist/
 ```
 
 `vite.config.ts` 已設 `base: './'`，`dist/` 可放在任何靜態主機的任何子路徑下。
-**PROD 部署目標目前尚未設定** — 本專案不再使用自動部署 workflow。
 
 > `.env.local` 已列入 `.gitignore`，不會進版控。
+
+---
+
+### 步驟 9-1：改版後的發布流程（手動上傳）
+
+> **這一步最容易被跳過，而且跳過時沒有任何錯誤訊息。**
+> 合併 `main` 之後正式站仍是舊版，畫面看起來就像「改動沒生效」。
+
+**本專案沒有前端自動部署。** `.github/workflows/` 只有 `release.yml`，它只把
+`docs/agent/CHANGELOG.md` 的版本同步成 GitHub Release，**不建置、也不上傳前端**。
+所以 `git push` 和合併 `main` 都只更新倉庫，不會更新使用者看到的網站。
+
+每次要讓改動生效，手動走完這四步：
+
+**1. 切到要發布的版本**
+
+```bash
+git checkout main && git pull --ff-only
+grep APP_VERSION sources/src/version.ts    # 確認是預期的版號
+```
+
+**2. 用正式站的環境變數建置**
+
+```bash
+cd sources
+# .env.local 必須指向 PROD 的 project-ref 與 anon key，不是 DEV 的
+npm run build                              # 產出於 sources/dist/
+```
+
+**3. 上傳**
+
+把 `sources/dist/` 的**全部內容**上傳到靜態主機，覆蓋舊檔。
+`index.html` 之外的 `assets/*.js` 檔名帶雜湊，舊檔不覆蓋會殘留但不會被引用。
+
+**4. 驗收**
+
+開啟正式站並硬重新整理（`Ctrl+Shift+R`），確認**畫面左下角的版本徽章**是新版號。
+
+徽章讀的是 `sources/src/version.ts`，隨建置產物一起走，**是唯一可靠的驗收依據**。
+徽章沒變就代表使用者拿到的還是舊程式碼，不論倉庫或 GitHub Release 上顯示什麼。
+
+> **Edge Function 是另一條路，兩者互不代表。**
+> 改到 `sources/supabase/functions/` 的內容不會隨前端上傳生效，必須另外
+> `supabase functions deploy`（見步驟 5）；反過來，部署了 Edge 也不代表前端更新了。
+> 一次改動可能同時需要「上傳 `dist/`」與「部署 Edge」兩件事，請分別確認。
 
 ---
 
