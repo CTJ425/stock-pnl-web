@@ -1,11 +1,28 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.9.40 已部署至 DEV 與 PROD（Task 153, stock-price v6）
-- Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 11:37:23 Asia/Taipei
+- Action: 個股走勢圖區間擴充為八個，尚未部署（Task 154, 0.9.41-dev.1）
+- Status: **🔄 IN PROGRESS**
+- Timestamp: 2026-09-10 12:26:19 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-10 12:26:19 Asia/Taipei (Task 154, 0.9.41-dev.1)
+
+**個股走勢圖區間擴充為八個，`近 5 年` 與 `全部` 走 Edge Function 即時代理**
+
+個股技術面日 K 圖的區間選擇器從 `近 3 月 / 近 6 月 / 近 1 年` 改為 `近 1 月 / 近 6 月 / 本年迄今 / 近 1 年 / 近 5 年 / 全部`，與盤中圖的 `一日 / 五日` 合計八個區間。
+
+`近 5 年` 與 `全部` 走線路 A：不進 Storage，由 `stock-price` 新增的 `daily` action 即時代理 Yahoo。夜間批次與 `daily/{ticker}.json` 未動，Supabase 用量不變。`全部` 是月線 —— 實測 `range=max` 帶 `interval=1d` 時 Yahoo 仍回月線，全歷史日線需 `period1=0` 且達 566 KB，過重。
+
+- **實測依據（2026-09-10, 2330.TW）**: `range=5y&interval=1d` 回 1215 根日線、77 KB，其中 2025-08-01 一根五欄皆 null；`range=max` 回 321 根月線、28 KB，且在當月月線後附加一根 timestamp 等於 `meta.regularMarketTime` 的即時列；月線時間戳必須先加 `meta.gmtoffset` 才會落在月初，不加會整條位移一格。
+- **reviewer 找到一個 BLOCKER**: `近 5 年` 切到 `全部` 時舊資料會掛在新標籤下顯示且無載入指示，因為清除舊資料只寫在切回本地區間的分支。已修，並補上四條遠端區間測試 —— 原本這一段零覆蓋，所以全綠的測試沒抓到它。
+- **一併修掉的風險**: 遠端讀取失敗原本會被快取 5 分鐘，網路瞬斷後使用者連點五分鐘都只重播那個失敗。現在只快取成功結果。
+- **測試**: 新增 21 條，總數 1793 → 1814，全部通過。`npm run build`、`npm run typecheck:edge`、`npx vitest run` 三道 gate 皆 exit 0。
+- **版本更新**: 同步 4 檔案升版至 0.9.41-dev.1。
+- **✅ DEV 部署（2026-09-10 12:47 Asia/Taipei）**: 使用者授權後部署 `stock-price` 至 DEV（`zyebvayngwrqzoaicbwd`），來源 commit `8381e37`，工作區乾淨。版本 v6 → v7，`ezbr_sha256` 由 `90e9dc2c28836a3a…` 變為 `253e6c3d25d6e7ac…`；判定依據是 sha 前後比對而非版號。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`。以 `--project-ref` 指定專案，未動 `supabase link`。`dailyRange.ts` 跨目錄匯入 `../stock-report/twDaily.ts` 打包無誤，該風險結案。
+- **✅ 實機煙霧測試（DEV）**: `range=5y` 回 HTTP 200、granularity `1d`、1213 根（Yahoo 原始 1215，丟掉 2025-08-01 空格與當日未收盤那根，末根為 2026-09-09）；`range=max` 回 granularity `1mo`、320 根（原始 321，丟掉即時列），末根 `2026-09-01` 證明 `gmtoffset` 有生效、月線落在月初；`range=10y` 回 HTTP 400；既有 `intraday` action 仍回 248 點，未受影響。
+- **⚠️ PROD 尚未部署**: 需使用者另行授權。
 
 ## 📅 Log: 2026-09-10 11:17:55 Asia/Taipei (Task 153, 0.9.40-dev.1)
 
@@ -27,24 +44,3 @@
 - **⚠️ 未部署**: 本次僅修改程式碼。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效，DEV 與 PROD 皆尚未部署。使用者尚未授權部署。
 - **✅ 後續部署（2026-09-10 11:37:23 Asia/Taipei）**: 使用者授權後部署至 DEV 與 PROD，來源 commit `290f9d3`。`stock-price` 兩邊皆由 v5 進到 v6，`ezbr_sha256` 由 `30240a50864fb60f…` 變為 `90e9dc2c28836a3a…`；兩邊 sha 相同，證明跑的是同一份新 bundle。判定依據是 sha 前後比對而非 version 號——版號跳動只證明有東西上傳，曾發生過版號較新卻是舊程式碼的情況。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`（該旗標只有 `stock-report` 需要）。以 `--project-ref` 指定專案，未動 `supabase link`。PROD 部署在 `main` 分支執行。
 - **✅ 實機煙霧測試**: DEV 與 PROD 各打一次 `{"action":"twlist"}`，皆回 HTTP 200、27819 筆，且同時含上市 3037 與上櫃 6488，證明完整性檢查沒有誤擋健康路徑。
-
-## 📅 Log: 2026-09-10 10:46:33 Asia/Taipei (Task 152, 0.9.39-dev.2)
-
-**修復觀察清單搜尋的兩個缺陷，並重整字卡的名稱與產業別版面**
-
-- **起因**: 使用者回報 DEV 上「加入觀察」搜不到 3037 欣興，並推測是不同工作區或不同使用者加過就不能再新增。
-- **查證**: 以 `supabase db query --linked` 實測 DEV（`is_dev=true`）：`tw_watchlist` 的 `rls_on=true`、`policies=1`、`rows_total=10`、`users_total=1`、`rows_3037=1`。推測不成立——`schema.sql:190` 的主鍵是 `(user_id, ticker)`，沒有 workspace 欄位，觀察清單是使用者層級；跨使用者由 RLS 隔離，且 DEV 上只有一個使用者有資料。真正原因是 3037 早已在清單中，被搜尋結果靜默隱藏。
-- **BUG-074 加入觀察搜尋把已加入的股票靜默隱藏**: `AddWatchModal.tsx:51` 的 `!watched.includes(row.symbol)` 把已加入的代號整筆移除且不給說明。改為列出但停用、標示「已在觀察清單」，並排序到可加入項目之後，`aria-label` 同步改寫。
-- **BUG-075 部分來源失敗的殘缺清單被當成完整清單快取**: `twMarketData.ts` 的 `fetchDirect` 用 `Promise.allSettled` 合併任何成功的來源，TWSE 失敗而 TPEx 成功時回傳「只有上櫃」的清單，而 `getTwStockList` 只擋 `length === 0`，於是殘缺清單被快取 30 分鐘，期間每一檔上市股票都顯示為「查無此股」。改為任一來源 reject 或回空陣列即回傳 `[]`，交給既有後援鏈；`CACHE_KEY` 一併換版為 `tw-list-v2`，避免沿用修正前寫入的殘缺快取。
-- **字卡版面重整**: `.watchlist-card-meta` 原本把代號、名稱、產業別擠在同一行，三者同為 `--type-label-01`（12px），而欄寬 `minmax(136px, 1fr)` 扣掉 padding 與刪除鈕僅餘約 100px，名稱與產業別都設 `flex-shrink: 1`，會同時被截斷成省略號。改動兩項：(1) 產業別經 `getGroupCategoryName` 正規化後若與群組標題相同就不重複顯示；(2) 其餘情況產業別移出名稱列，獨立成行、去框去底、改用 `--ink-muted`，名稱改為 `flex: 1 1 auto; min-width: 0` 獨佔整行寬度。層級來自顏色與位置而非字級，因為 `--type-label-01` 已是此專案字級尺標的最小值，且 0.9.37 已刻意移除全部寫死的 px 字級。
-- **Reviewer**: PASS，5 項 RISK。其中 2 項當場修掉（來源回 HTTP 200 加空陣列、修正前的快取仍被沿用），3 項記錄不修（`fetchViaEdge` 無完整性檢查列為 RISK-008；「還有 N 筆」計數含不可點項目列為 RISK-009；雙重故障時從半份清單變成明確報錯屬設計取捨，記於 BUG-075）。
-- **驗證**:
-  - 新增 11 條測試：`twMarketData.test.ts` 6 條（L1–L6）、`AddWatchModal.test.tsx` 3 條、`WatchSection.test.tsx` 2 條。
-  - 反向驗證：移除空陣列檢查後 L5 轉紅（`promise resolved "[ { symbol: '6488', …(2) } ]" instead of rejecting`），確認測試為真證據。
-  - `npx vitest run` exit 0（110 測試檔 / 1782 測試全數通過，無 `Errors` 行）。
-  - `npm run build` exit 0。
-  - `npm run typecheck:edge` 未執行：本次未改動 `sources/supabase/functions/`。
-- **版本更新**: 同步 4 檔案升版至 0.9.39-dev.2。
-- **安全提醒**: 本次查證 DEV 使用了使用者於對話中貼上的 Supabase personal access token。`FIXED_BUG.md` 既有紀錄顯示此情況已重複發生多次，標準處置是改用 `! supabase login`。該 token 應盡快撤銷。
-
-
