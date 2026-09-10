@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 修復觀察清單搜尋兩個缺陷並重整字卡版面（Task 152, 0.9.39-dev.2）
+- Action: 定版 0.9.39 並合併 dev 至 main（Task 151 + Task 152）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 10:46:33 Asia/Taipei
+- Timestamp: 2026-09-10 10:54:40 Asia/Taipei
 
 ---
 
