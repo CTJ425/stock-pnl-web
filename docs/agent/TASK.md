@@ -20,6 +20,17 @@
 
 ## 📋 Active Tasks
 
+### Task 154: 個股走勢圖區間擴充為八個
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 12:26:19 Asia/Taipei
+- **Spec**: `docs/agent/specs/chart-range-eight.md`
+- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
+- **What is this**: 技術面日 K 圖的區間選擇器改為 `近 1 月 / 近 6 月 / 本年迄今 / 近 1 年 / 近 5 年 / 全部`，盤中圖的 `一日 / 五日` 不動，合計八個區間。`近 5 年` 與 `全部` 走線路 A：不落地 Storage，由 `stock-price` 新增的 `daily` action 即時代理 Yahoo。
+
+6. **部署 `stock-price` 到 DEV 並在瀏覽器驗證 `近 5 年` 與 `全部`** —— ⏳ 需使用者同意
+7. **定版 0.9.41、合併 `main`、發 GitHub Release** —— ⏳
+
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
 - **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
 - **Agent**: Antigravity

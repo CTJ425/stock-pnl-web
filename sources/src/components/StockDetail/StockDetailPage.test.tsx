@@ -413,11 +413,16 @@ describe('StockDetailPage', () => {
     const ratio = [...tableRows()[0].querySelectorAll('td.num')][1].textContent!
     expect(Number(ratio.replace(' 倍', ''))).toBeGreaterThan(1)
 
-    await user.click(t.getByRole('button', { name: /顯示全部 60 日/ }))
-    expect(tableRows()).toHaveLength(60)
+    // 預設區間是「近 1 月」＝ 20 根，剛好等於收合上限，展開鈕不會出現。
+    // 先切到「近 1 年」拿到全部 60 根，才有東西可以展開。
+    await user.click(t.getByRole('button', { name: '近 1 年' }))
+    expect(tableRows()).toHaveLength(20)
+
+    await user.click(t.getByRole('button', { name: /顯示全部 80 筆/ }))
+    expect(tableRows()).toHaveLength(80)
   })
 
-  it('技術面：切到近 3 月時均線與布林仍畫得出來', async () => {
+  it('技術面：切到近 6 月時均線與布林仍畫得出來', async () => {
     const rows = Array.from({ length: 200 }, (_, i) => {
       const date = new Date(Date.UTC(2025, 9, 1) + i * 86400000).toISOString().slice(0, 10)
       const close = 100 + i
@@ -445,7 +450,7 @@ describe('StockDetailPage', () => {
     await user.click(screen.getByRole('tab', { name: '技術面' }))
     await screen.findByText(/日 K · 均線 · 布林通道/)
 
-    await user.click(screen.getByRole('button', { name: '近 3 月' }))
+    await user.click(screen.getByRole('button', { name: '近 6 月' }))
     const kChart = charts(container, 'technical')[0]
     // MA5/20/60 + BB upper/mid/lower = 6 polylines minimum
     expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(6)
