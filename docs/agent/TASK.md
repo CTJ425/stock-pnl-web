@@ -20,6 +20,12 @@
 
 ## 📋 Active Tasks
 
+### Task 156: 修復非持股股票的日線區間讀不到（BUG-077）
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 14:42:14 Asia/Taipei
+- **What is this**: 0.9.42 讓行情分頁多了四個讀 `daily/{ticker}.json` 的區間，而該檔案只有持股才有（PROD 實測僅 9 檔）。在 `useDailySeries` 加第三層後援改打 Edge `daily` action 取 5 年日線，行情與技術面一起修好。定版 0.9.43，已併入 `main`。不需部署 Edge。
+
 ### Task 155: 行情走勢圖也擴充為八個區間
 - **Status**: ✅ DONE
 - **Agent**: Claude

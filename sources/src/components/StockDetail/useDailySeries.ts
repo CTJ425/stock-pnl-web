@@ -16,7 +16,7 @@
  * no indication that it is old, which is worse than drawing nothing.
  */
 import { useEffect, useState } from 'react'
-import { fetchDailySeries, type DailySeries } from '../../services/dailyProxy'
+import { fetchDailySeries, fetchRemoteDaily, type DailySeries } from '../../services/dailyProxy'
 import { warmStockCore } from '../../services/warmStock'
 
 export type DailyStatus = 'loading' | 'ready' | 'empty' | 'error'
@@ -44,18 +44,51 @@ export function useDailySeries(
     setStatus('loading')
     setSeries(null)
     ;(async () => {
+      let s: DailySeries | null = null
+      let hadError = false
       try {
-        let s = await fetchDailySeries(ticker)
+        s = await fetchDailySeries(ticker)
         if (!s) {
           const warmed = await warmStockCore(ticker, name)
           if (warmed.dailySynced > 0) s = await fetchDailySeries(ticker)
         }
-        if (!alive) return
-        setSeries(s)
-        setStatus(s ? 'ready' : 'empty')
       } catch {
-        if (alive) setStatus('error')
+        // Storage or warm failed. No longer fatal on its own —— the Edge fallback below answers
+        // for any ticker, so the failure only decides which message a total miss ends up showing.
+        hadError = true
+        s = null
       }
+
+      /*
+       * Third fallback, added in 0.9.43: ask the Edge Function for five years of daily bars.
+       *
+       * Measured on PROD 2026-09-10: `daily/` held **9** files —— exactly the tickers somebody
+       * holds. Every other stock, `2330` included, has no file at all, because the nightly batch
+       * only refreshes holdings and `warmStockCore` does not always produce one either. That was
+       * survivable while only 技術面 read this series. It stopped being survivable in 0.9.42, when
+       * 行情 gained four ranges (近 1 月 / 近 6 月 / 本年迄今 / 近 1 年) that read the same file:
+       * opening any non-holding stock made all four fail while 一日/五日 and 近 5 年/全部 —— both
+       * of which go to Yahoo through the Edge —— kept working.
+       *
+       * `5y` is deliberately a superset: one request serves all four local ranges and makes a later
+       * click on 近 5 年 free, since `fetchRemoteDaily` caches per ticker and range. It needs no
+       * Edge change, because the `daily` action shipped in 0.9.41 already accepts it.
+       */
+      if (!s) {
+        const remote = await fetchRemoteDaily(ticker, '5y')
+        if (remote && remote.rows.length > 0) {
+          s = {
+            ticker,
+            asOf: new Date().toISOString(),
+            lastDate: remote.rows[remote.rows.length - 1][0],
+            rows: remote.rows,
+          }
+        }
+      }
+
+      if (!alive) return
+      setSeries(s)
+      setStatus(s ? 'ready' : hadError ? 'error' : 'empty')
     })()
     return () => {
       alive = false

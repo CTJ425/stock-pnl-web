@@ -6,6 +6,15 @@
 
 ---
 
+### Bug ID: BUG-077 — 行情分頁的四個日線區間對非持股股票全部讀不到
+
+- **Date**: 2026-09-10, fixed in 0.9.43
+- **Symptom**: 在 PROD 開啟非持股的個股（回報者實測 `2382`），行情分頁點 `近 1 月` / `近 6 月` / `本年迄今` / `近 1 年` 會讀不到資料。`一日` / `五日` 與 `近 5 年` / `全部` 正常。`app_log` 留下 `level=error, source=web, action=downloadReportsJson, message=HTTP 400, detail={"path":"daily/2382.json"}`，`app_version=0.9.42`。
+- **Root Cause**: `daily/{ticker}.json` 只有持股才有。2026-09-10 實測 PROD 的 `daily/` 只有 9 個檔案（`0050, 00685L, 009816, 00981A, 2303, 2455, 3037, 3714, 8033`），連 `2330` 都沒有——夜間批次只更新持股，`warmStockCore` 也不保證產得出來。這在只有 技術面 讀這份序列時還撐得住；0.9.42 讓 行情 分頁多了四個讀同一份檔案的區間，於是任何非持股股票一開就有四個區間壞掉。**這是覆蓋範圍的回歸，不是程式邏輯錯誤**：那四個區間的計算本身正確，只是依賴一份通常不存在的檔案。
+- **Fix**: 在 `useDailySeries` 加第三層後援——檔案讀不到、`warmStockCore` 也產不出來時，改打 0.9.41 就已上線的 Edge `daily` action 取 `range=5y`，再合成 `DailySeries`。修在 hook 這一層，行情與技術面兩個分頁一起修好，兩個元件都不必改。`5y` 刻意取超集：一次請求供應四個本地區間，之後點 `近 5 年` 也免費，因為 `fetchRemoteDaily` 依 ticker 與 range 快取。不需要改 Edge，也不需要重新部署。
+- **Verification**: 新增 `useDailySeries.test.ts`（5 條，先紅後綠）。PROD 實打確認後援有資料：`2382` 與 `2330` 的 `range=5y` 皆回 HTTP 200、1214 根、末根 `2026-09-10`。
+- **Status**: ✅ FIXED (0.9.43)
+
 ### Bug ID: BUG-076 — Edge Function 的 twlist 回傳截斷清單卻用 HTTP 200（結案 RISK-008）
 - **Date**: 2026-09-10, fixed in 0.9.40-dev.1
 - **Root Cause**: `sources/supabase/functions/stock-price/index.ts` 的 `handleTwList` 與客戶端犯同一個錯：`Promise.allSettled` 合併任何成功的來源，只有合併後長度為 0 才回 502。上市（TWSE）或上櫃（TPEx）其中之一掛掉時，呼叫端會拿到帶成功狀態的半份清單並快取 30 分鐘。BUG-075 只修了客戶端直連路徑，這條補上 Edge 端。
