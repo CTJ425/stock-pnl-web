@@ -20,7 +20,9 @@
 - **一併修掉的風險**: 遠端讀取失敗原本會被快取 5 分鐘，網路瞬斷後使用者連點五分鐘都只重播那個失敗。現在只快取成功結果。
 - **測試**: 新增 21 條，總數 1793 → 1814，全部通過。`npm run build`、`npm run typecheck:edge`、`npx vitest run` 三道 gate 皆 exit 0。
 - **版本更新**: 同步 4 檔案升版至 0.9.41-dev.1。
-- **⚠️ 未部署**: `近 5 年` 與 `全部` 要等 `supabase functions deploy stock-price` 才會有資料，未部署時該兩個區間顯示「讀取長區間股價失敗，請稍後再試。」
+- **✅ DEV 部署（2026-09-10 12:47 Asia/Taipei）**: 使用者授權後部署 `stock-price` 至 DEV（`zyebvayngwrqzoaicbwd`），來源 commit `8381e37`，工作區乾淨。版本 v6 → v7，`ezbr_sha256` 由 `90e9dc2c28836a3a…` 變為 `253e6c3d25d6e7ac…`；判定依據是 sha 前後比對而非版號。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`。以 `--project-ref` 指定專案，未動 `supabase link`。`dailyRange.ts` 跨目錄匯入 `../stock-report/twDaily.ts` 打包無誤，該風險結案。
+- **✅ 實機煙霧測試（DEV）**: `range=5y` 回 HTTP 200、granularity `1d`、1213 根（Yahoo 原始 1215，丟掉 2025-08-01 空格與當日未收盤那根，末根為 2026-09-09）；`range=max` 回 granularity `1mo`、320 根（原始 321，丟掉即時列），末根 `2026-09-01` 證明 `gmtoffset` 有生效、月線落在月初；`range=10y` 回 HTTP 400；既有 `intraday` action 仍回 248 點，未受影響。
+- **⚠️ PROD 尚未部署**: 需使用者另行授權。
 
 ## 📅 Log: 2026-09-10 11:17:55 Asia/Taipei (Task 153, 0.9.40-dev.1)
 
