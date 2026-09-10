@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const { addWatch, getTwStockList } = vi.hoisted(() => ({
@@ -151,5 +151,33 @@ describe('AddWatchModal', () => {
     expect(hits).toHaveLength(50)
     expect(hits[0]?.textContent).toBe('2454 聯發科')
     expect(screen.getByText(/還有 11 筆/)).toBeTruthy()
+  })
+
+  it('清單載入期間顯示轉圈與說明文字', async () => {
+    let resolveList!: (rows: typeof LIST) => void
+    getTwStockList.mockReturnValue(new Promise((res) => { resolveList = res }))
+    mount()
+
+    const row = await screen.findByTestId('watch-list-loading')
+    expect(row.textContent).toContain('載入台股清單')
+    expect(row.getAttribute('role')).toBe('status')
+    expect(row.querySelector('svg.cds-spinner')).not.toBeNull()
+
+    resolveList(LIST)
+    await waitFor(() => expect(screen.queryByTestId('watch-list-loading')).toBeNull())
+  })
+
+  it('清單載入完成後不再顯示轉圈', async () => {
+    mount()
+    await screen.findByLabelText('搜尋股票')
+    await waitFor(() => expect(screen.queryByTestId('watch-list-loading')).toBeNull())
+  })
+
+  it('清單載入失敗時轉圈停止，只留錯誤訊息', async () => {
+    getTwStockList.mockRejectedValue(new Error('台股清單載入失敗'))
+    mount()
+
+    expect(await screen.findByText('台股清單載入失敗')).toBeTruthy()
+    expect(screen.queryByTestId('watch-list-loading')).toBeNull()
   })
 })

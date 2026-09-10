@@ -11,6 +11,16 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 151: 股票搜尋補上 Carbon 載入轉圈動畫
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 10:09:24 Asia/Taipei
+- **Version**: 0.9.39-dev.1
+- **Files**: `sources/src/components/Common/Spinner.tsx`（新增）、`sources/src/index.css`、`sources/src/components/Transactions/TransactionForm.tsx`、`sources/src/components/StockDetail/AddWatchModal.tsx`
+- **Tests**: `sources/src/components/Transactions/TransactionForm.spinner.test.tsx`（新增 9 條）、`sources/src/components/StockDetail/AddWatchModal.test.tsx`（新增 3 條）
+- **Verify**: `npm run build` exit 0；`npx vitest run` exit 0（109 測試檔 / 1772 測試）
+- **Detail**: 見 `PROGRESS.md` 的 `## 📅 Log: 2026-09-10 10:09:24 Asia/Taipei (Task 151, 0.9.39-dev.1)`
+
 ### Task 149: UI/UX audit remediation on feat/carbon-design (21 findings)
 - **Status**: ✅ DONE
 - **Agent**: Claude

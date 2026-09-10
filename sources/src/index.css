@@ -2477,6 +2477,49 @@ a.hmenu-item {
   }
 }
 
+.cds-spinner {
+  flex: none;
+  animation: cds-spin 690ms linear infinite;
+}
+
+.cds-spinner circle {
+  fill: none;
+  stroke-width: 10;
+}
+
+.cds-spinner__track {
+  stroke: var(--cds-layer-accent-01);
+}
+
+.cds-spinner__stroke {
+  stroke: var(--cds-interactive);
+  stroke-linecap: butt;
+  stroke-dasharray: 264;
+  stroke-dashoffset: 66;
+}
+
+@keyframes cds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cds-spinner {
+    animation: none;
+  }
+}
+
+.suggestion-loading,
+.watch-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px;
+  color: var(--ink-muted);
+  font-size: var(--type-label-01);
+}
+
 /* ---------- Scroll ----------*/
 ::-webkit-scrollbar {
   width: 10px;

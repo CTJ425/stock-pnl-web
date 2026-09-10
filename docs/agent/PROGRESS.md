@@ -1,9 +1,33 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Antigravity
-- Action: 修復資料表漲跌紅綠與未實現損益顏色覆蓋問題（Task 150, 0.9.38）
+- Agent: Claude
+- Action: 股票搜尋補上 Carbon 載入轉圈動畫（Task 151, 0.9.39-dev.1）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-09 18:00:00 Asia/Taipei
+- Timestamp: 2026-09-10 10:09:24 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-10 10:09:24 Asia/Taipei (Task 151, 0.9.39-dev.1)
+
+**買入股票與加入觀察的搜尋補上 Carbon 載入指示，並修掉兩條會讓轉圈停不下來的路徑**
+
+- **問題**: 交易表單的股票名稱欄位會在去抖動 300ms 後打遠端搜尋（`searchStocks`），加入觀察對話框則在開啟時抓台股清單（`getTwStockList`）。兩者過去都沒有任何載入指示，使用者無法分辨「搜尋很慢」與「根本沒在搜尋」。
+- **實作方案**:
+  1. 新增 `sources/src/components/Common/Spinner.tsx`：Carbon Design 載入指示器，灰色軌道圓 + 3/4 藍色弧線，690ms 一圈，取色自 `--cds-layer-accent-01` 與 `--cds-interactive`，`prefers-reduced-motion: reduce` 時停止動畫。
+  2. `sources/src/index.css` 新增 `.cds-spinner`、`@keyframes cds-spin`、`.suggestion-loading`、`.watch-loading` 規則。既有 `.spin` 與 `@keyframes spin` 完全未動，其餘 18 個元件仍沿用。
+  3. `sources/src/components/Transactions/TransactionForm.tsx` 新增 `searching` 狀態，於第一個按鍵即為 true（不等去抖動），並新增 `closeSuggestions()` 統一處理「清計時器 + 遞增 `searchSeq` + 清結果 + 停轉圈」，取代原本 5 處分散的 `setSuggestions(null)`。搜尋中只顯示轉圈列，不顯示過期結果。
+  4. `sources/src/components/StockDetail/AddWatchModal.tsx` 新增 `listLoading` 狀態，於 `.finally()` 清除，成功與失敗都會停止轉圈。關鍵字過濾本身是同步的本地比對，不加轉圈。
+- **Reviewer findings（2 項，皆已修）**:
+  - BLOCKER — `tx-nature` 下拉的 `onChange` 從未清除搜尋結果。`nature` 是 `isSpotSell` 的一部分，切換它會隱藏搜尋下拉，但轉圈與計時器不受影響；切回來會看到上一個關鍵字的過期結果。此為 brief 漏列的既有缺陷，已補 `closeSuggestions()`。
+  - RISK — `searchTimer` 沒有 unmount 清理，表單在 300ms 內關閉時計時器仍會觸發搜尋。已補 `useEffect` cleanup。
+- **另補一項**: builder 依 brief 只寫了 `try/finally`，搜尋被 reject 時雖會停止轉圈，但 rejection 會逸出成 unhandled rejection，使 vitest 摘要顯示 7 passed 卻以 exit 1 收場。已補 `catch`，失敗時顯示「無匹配結果」。
+- **驗證**:
+  - 新增 12 條測試：`sources/src/components/Transactions/TransactionForm.spinner.test.tsx` 9 條（S1 第一個按鍵即轉圈、S2 結果回來停止、S3 不留過期結果、S4 清空停止、S5 點表單外停止、S6 選定停止、S7 例外時停止、S8 切換交易性質停止、S9 卸載後不再搜尋），`AddWatchModal.test.tsx` 3 條（載入中／載入完成／載入失敗）。
+  - S8 與 S9 各自移除對應修正後皆轉紅（`expected "vi.fn()" to not be called at all, but actually been called 1 times`），確認測試為真證據而非空轉。S8 必須用 `fireEvent.change` 而非 `userEvent.selectOptions`：後者會產生 document click，表單外點擊的 effect 會先收合下拉，蓋掉要驗的缺陷。
+  - `npx vitest run` exit 0（109 測試檔 / 1772 測試全數通過，無 `Errors` 行）。
+  - `npm run build` exit 0。
+  - `npm run typecheck:edge` 未執行：本次未改動 `sources/supabase/functions/`。
+- **版本更新**: 同步 4 檔案升版至 0.9.39-dev.1（`sources/package.json`、`sources/package-lock.json`、`sources/src/version.ts`、`README.md`）。
 
 ---
 
@@ -23,16 +47,3 @@
   - `npm run typecheck:edge` exit 0。
 - **版本更新**: 同步 5 檔案升版至 0.9.38，依使用者指示合併至 main。
 
----
-
-## 📅 Log: 2026-09-09 15:15:32 Asia/Taipei (Task 149, 0.9.37)
-
-針對 feat/carbon-design 分支做完整 UI/UX 稽核，21 項發現全數處理完畢。發布 0.9.37。
-
-Gate：`npm run build` exit 0、`npm run typecheck:edge` exit 0、完整測試 107 檔 / 1757 測試 / exit 0（基準 103 / 1732）。42 個檔案異動，8 個新檔。
-
-最重要的一項是根因修正：`downloadReportsJson` 過去把所有失敗吞成 `null`，與「報告還沒產生」同值，所以總經與後台五個畫面的錯誤狀態永遠觸發不到。現在 404 才回 `null`，網路失敗、5xx、JSON 解析失敗一律拋出。連帶補上兩個沒有 catch 的呼叫端，其中 `FxPage.load` 的 `setLoading(false)` 在 await 之後，網路失敗會讓頁面永遠轉圈——這個是 review 抓到的，第一次 scout 的範圍沒涵蓋到。
-
-有兩項稽核發現在實作時查證為錯誤並撤回：A3「焦點不可見」是錯的，`index.css` 本來就有通用 `:focus-visible` 規則；B5 要求在兩個批次改寫 Modal 加確認閘門，但它們的按鈕本來就標明筆數，等於重複詢問。B6 的斷點 token 化在純 CSS 無法實作，改為慣例註解。
-
-詳細條列見 `docs/agent/TASK_ARCHIVE.md` 的 Task 149。
