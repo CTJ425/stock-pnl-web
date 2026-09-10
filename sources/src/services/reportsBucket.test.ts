@@ -8,6 +8,9 @@ vi.mock('./supabase', () => ({
   supabase: { storage: { from: () => ({ getPublicUrl }) } },
 }))
 
+const { logClient } = vi.hoisted(() => ({ logClient: vi.fn() }))
+vi.mock('./appLog', () => ({ logClient }))
+
 import { downloadReportsJson } from './reportsBucket'
 
 describe('downloadReportsJson', () => {
@@ -56,5 +59,35 @@ describe('downloadReportsJson', () => {
   it('404 仍回 null：報告還沒產生不是失敗', async () => {
     vi.stubGlobal('fetch', async () => new Response('', { status: 404 }))
     expect(await downloadReportsJson('x.json')).toBeNull()
+  })
+
+  /*
+   * 2026-09-10 實測 PROD：Storage 對**不存在的物件回 HTTP 400**，不是 404，
+   * 真正的狀態寫在 body 裡。只認 404 的話，一個「還沒產生」的檔案會變成拋錯，
+   * 而每一個呼叫端的 warmStockCore 都排在讀檔之後、同一個 try 裡面——
+   * 拋錯直接跳過即時產生，檔案於是永遠不會被建立（BUG-078）。
+   */
+  const NO_SUCH_KEY =
+    '{"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}'
+
+  it('Storage 用 400 表示查無物件時要回 null，不能拋錯', async () => {
+    vi.stubGlobal('fetch', async () => new Response(NO_SUCH_KEY, { status: 400 }))
+    expect(await downloadReportsJson('daily/2382.json')).toBeNull()
+  })
+
+  it('查無物件不可寫進 app_log —— 那是正常狀態，不是錯誤', async () => {
+    vi.stubGlobal('fetch', async () => new Response(NO_SUCH_KEY, { status: 400 }))
+    await downloadReportsJson('fundamental/2382.json')
+    expect(logClient).not.toHaveBeenCalled()
+  })
+
+  it('body 不是查無物件的 400 仍要拋錯，真錯誤不能被吞掉', async () => {
+    vi.stubGlobal('fetch', async () => new Response('{"error":"InvalidRequest"}', { status: 400 }))
+    await expect(downloadReportsJson('x.json')).rejects.toThrow(/x\.json/)
+  })
+
+  it('500 仍要拋錯', async () => {
+    vi.stubGlobal('fetch', async () => new Response('boom', { status: 500 }))
+    await expect(downloadReportsJson('x.json')).rejects.toThrow(/x\.json/)
   })
 })
