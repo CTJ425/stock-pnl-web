@@ -37,12 +37,22 @@
  *       'IDX' (e.g. ^TWII) needs no special handling: yahooSymbols() returns the ticker
  *       verbatim for any market other than 'TPE', and IntradaySeries carries dayOpen/dayHigh/
  *       dayLow — read from the OHLC arrays, not meta — for the panel in 總體經濟 > 台股, 0.9.19.)
+ *   POST { action: 'daily', symbol: { market, ticker }, range: '5y'|'max' }
+ *     → { rows: DailyRow[], granularity: '1d'|'1mo' } (long-range daily K bars for the
+ *       `近 5 年` / `全部` ranges on the individual stock analysis page's 技術 tab, Route A:
+ *       these two ranges are not in the nightly daily/{ticker}.json batch and are fetched
+ *       from Yahoo on demand. `5y` reuses extractDaily(); `max` returns monthly bars via
+ *       extractMonthly(). Tries each yahooSymbols() candidate in turn and returns the first
+ *       that yields a non-empty row array; empty rows on every candidate failing is a normal
+ *       "no data" answer, not an error, 0.9.41.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { logEvent } from '../_shared/log.ts'
 import { buildMisChannels, parseMisResponse } from './misParse.ts'
 import { intradayInterval, parseYahooChart, type IntradayRange } from './intradayParse.ts'
 import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
+import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
+import { extractDaily } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
 
 interface SymbolItem {
@@ -578,6 +588,31 @@ async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise
   return json({ series: null })
 }
 
+/**
+ * Long-range daily/monthly bars for `近 5 年` / `全部` on the 技術 tab (Route A, 0.9.41).
+ * No price_cache write, same reasoning as handleIntraday: the series is per-range and
+ * caching is the client's job (see dailyProxy.ts).
+ */
+async function handleDailyRange(symbol: SymbolItem, range: DailyRangeKey): Promise<Response> {
+  const interval = dailyRangeInterval(range)
+  const granularity = interval
+  for (const yahooSymbol of yahooSymbols(symbol)) {
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
+        { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const rows = range === '5y' ? extractDaily(data) : extractMonthly(data)
+      if (rows.length > 0) return json({ rows, granularity })
+    } catch {
+      // Falls through to the next symbol candidate; every candidate failing is a normal "no data" answer.
+    }
+  }
+  return json({ rows: [], granularity })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
@@ -626,6 +661,11 @@ Deno.serve(async (req) => {
       const range = body.range ?? '1d'
       if (range !== '1d' && range !== '5d') return json({ error: 'range 需為 1d 或 5d' }, 400)
       return await handleIntraday(body.symbol, range)
+    }
+    if (body.action === 'daily' && body.symbol && typeof body.symbol === 'object') {
+      const range = body.range
+      if (range !== '5y' && range !== 'max') return json({ error: 'range 需為 5y 或 max' }, 400)
+      return await handleDailyRange(body.symbol, range)
     }
     return json({ error: 'Unknown action' }, 400)
   } catch (err) {

@@ -17,19 +17,53 @@ import {
   type Bar,
 } from '../../utils/indicators'
 
-export type RangeKey = '3m' | '6m' | '1y'
-
-/** How many K bars are displayed in each interval (**Trading day**, non-calendar day; Taiwan stocks have approximately 20 trading days per month)*/
-export const RANGE_BARS: Record<RangeKey, number> = {
-  '3m': 60,
-  '6m': 120,
-  '1y': Number.MAX_SAFE_INTEGER,
-}
+export type RangeKey = '1m' | '6m' | 'ytd' | '1y' | '5y' | 'all'
 
 export const RANGE_LABELS: Record<RangeKey, string> = {
-  '3m': '近 3 月',
+  '1m': '近 1 月',
   '6m': '近 6 月',
+  ytd: '本年迄今',
   '1y': '近 1 年',
+  '5y': '近 5 年',
+  all: '全部',
+}
+
+/** Ranges whose rows come from the Edge Function, not from daily/{ticker}.json. */
+export function isRemoteRange(range: RangeKey): boolean {
+  return range === '5y' || range === 'all'
+}
+
+/** Maps a display range to the stock-price Edge Function's `daily` action range, or null when the range is read locally from daily/{ticker}.json. */
+export function remoteRangeOf(range: RangeKey): '5y' | 'max' | null {
+  if (range === '5y') return '5y'
+  if (range === 'all') return 'max'
+  return null
+}
+
+/**
+ * How many trailing K bars are displayed in each interval (**Trading day**, non-calendar
+ * day; Taiwan stocks have approximately 20 trading days per month).
+ *
+ * `ytd` reads the year off the **last row's date**, not the wall clock: that keeps this
+ * function pure and removes every time zone question.
+ */
+export function rangeBars(rows: DailyRow[], range: RangeKey): number {
+  switch (range) {
+    case '1m':
+      return 20
+    case '6m':
+      return 120
+    case '1y':
+    case '5y':
+    case 'all':
+      return rows.length
+    case 'ytd': {
+      if (rows.length === 0) return 0
+      const year = rows[rows.length - 1][0].slice(0, 4)
+      const count = rows.filter((r) => r[0] >= `${year}-01-01`).length
+      return Math.max(1, count)
+    }
+  }
 }
 
 type Series = Array<number | null>
@@ -124,7 +158,7 @@ export function buildTechnicalView(rows: DailyRow[], range: RangeKey): Technical
   const volMa20 = sma(volumes, 20)
 
   // ---- 2. Crop it into the display area ----
-  const take = Math.min(RANGE_BARS[range], rows.length)
+  const take = Math.min(rangeBars(rows, range), rows.length)
   const from = rows.length - take
   const slice = <T,>(arr: T[]): T[] => arr.slice(from)
 
