@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Modal } from '../Common/Modal'
+import { Spinner } from '../Common/Spinner'
 import { WATCHLIST_MAX, addWatch } from '../../services/watchlistService'
 import { getTwStockList, type TwStockRow } from '../../services/twMarketData'
 
@@ -33,11 +34,13 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
   const [list, setList] = useState<TwStockRow[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  const [listLoading, setListLoading] = useState(true)
 
   useEffect(() => {
     getTwStockList()
       .then(setList)
       .catch(() => setLoadError('台股清單載入失敗'))
+      .finally(() => setListLoading(false))
   }, [])
 
   const q = query.trim().toLowerCase()
@@ -86,6 +89,17 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
           autoFocus
         />
       </div>
+      {listLoading && (
+        <div
+          className="watch-loading"
+          role="status"
+          aria-live="polite"
+          data-testid="watch-list-loading"
+        >
+          <Spinner size={16} />
+          載入台股清單…
+        </div>
+      )}
       {addError && <p>{addError}</p>}
       {loadError && <p>{loadError}</p>}
       <ul className="watch-results">
