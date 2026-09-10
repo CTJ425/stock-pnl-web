@@ -6,6 +6,23 @@
 
 ---
 
+### Bug ID: BUG-074 — 加入觀察搜尋把已加入的股票靜默隱藏，看起來像「查無此股」
+- **Date**: 2026-09-10, fixed in 0.9.39-dev.2
+- **Root Cause**: `sources/src/components/StockDetail/AddWatchModal.tsx:51` 以 `!watched.includes(row.symbol)` 把已在觀察清單中的代號整筆從搜尋結果移除，且不給任何說明。使用者輸入代號後看到空白清單，得到的訊息是「這檔股票不存在」，事實是「已經加過了」。
+- **Evidence**: 使用者回報 DEV 上搜不到 3037 欣興。以 `supabase db query --linked` 查證 DEV（`is_dev=true`）：`tw_watchlist` 的 `rls_on=true`、`policies=1`、`rows_total=10`、`users_total=1`、`rows_3037=1`。3037 早已在該使用者的觀察清單中，排在第 8 位。
+- **Also disproved**: 觀察清單並非工作區層級。`sources/supabase/schema.sql:190` 的主鍵是 `(user_id, ticker)`，沒有 workspace 欄位，同一使用者跨工作區共用同一份清單。跨使用者則由 `schema.sql:200-204` 的 `auth.uid() = user_id` RLS 隔離，DEV 上實測只有一個使用者有資料。
+- **Fix**: 改為列出但停用並標示「已在觀察清單」，並在排序時排到可加入項目之後。`aria-label` 同步改為「已在觀察清單：<代號> <名稱>」。
+- **Status**: ✅ FIXED (0.9.39-dev.2)
+
+### Bug ID: BUG-075 — 台股清單部分來源失敗時，殘缺清單被當成完整清單快取 30 分鐘
+- **Date**: 2026-09-10, fixed in 0.9.39-dev.2
+- **Root Cause**: `sources/src/services/twMarketData.ts` 的 `fetchDirect` 用 `Promise.allSettled([fetchTwse(), fetchTpex()])` 並合併任何成功的來源。當 TWSE（上市）失敗而 TPEx（上櫃）成功時，回傳的是「只有上櫃」的清單；`getTwStockList` 只擋 `rows.length === 0`，擋不住部分結果，於是 `writeCache(rows)` 把殘缺清單快取 30 分鐘。該期間內每一檔上市股票都會顯示為「查無此股」。
+- **Fix**: `fetchDirect` 改為只要任一來源 reject **或**回傳空陣列，就記錄 `logClient` 並回傳 `[]`，讓既有的後援鏈接手，殘缺結果永遠不進快取。空陣列一併視為失敗，是因為維護時段或假日可能回 HTTP 200 加空陣列——那是穿著成功外衣的同一個缺陷。
+- **Cache key**: 一併把 `CACHE_KEY` 由 `stock-pnl-web/tw-list-v1` 改為 `tw-list-v2`。修正前寫入的殘缺清單使用同一個鍵與同一個結構，不換鍵的話部署後仍會被沿用最多 30 分鐘。
+- **Accepted trade-off**: Edge 與 TWSE／TPEx 其中之一同時失效時，使用者從「拿到半份清單」變成「完全沒有清單並看到明確錯誤」。這是刻意的取捨：半份清單會讓使用者相信股票不存在，比明確報錯更糟。
+- **Tests**: `sources/src/services/twMarketData.test.ts` 新增 6 條（L1–L6），涵蓋雙來源成功、任一來源失敗、空陣列來源、殘缺結果不入快取、快取換版。
+- **Status**: ✅ FIXED (0.9.39-dev.2)
+
 ### 📦 Operational Notes Archive: Transcript Secret Exposures & Mitigations
 - **Status**: ✅ ARCHIVED — 2026-09-07
 - **Historical Exposures**:

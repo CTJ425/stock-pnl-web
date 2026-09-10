@@ -43,15 +43,16 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
       .finally(() => setListLoading(false))
   }, [])
 
+  const watchedSet = new Set(watched)
   const q = query.trim().toLowerCase()
   const matches = q
     ? [...list]
         .filter(
-          (row) =>
-            !watched.includes(row.symbol) &&
-            (row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q)),
+          (row) => row.symbol.toLowerCase().startsWith(q) || row.name.toLowerCase().includes(q),
         )
         .sort((a, b) => {
+          const watchedRank = Number(watchedSet.has(a.symbol)) - Number(watchedSet.has(b.symbol))
+          if (watchedRank !== 0) return watchedRank
           const kind = kindRank(a.symbol) - kindRank(b.symbol)
           if (kind !== 0) return kind
           const match = matchRank(a, q) - matchRank(b, q)
@@ -103,18 +104,24 @@ export function AddWatchModal({ watched, onClose, onAdded }: AddWatchModalProps)
       {addError && <p>{addError}</p>}
       {loadError && <p>{loadError}</p>}
       <ul className="watch-results">
-        {results.map((row) => (
-          <li key={row.symbol}>
-            <button
-              type="button"
-              className="watch-result-item"
-              aria-label={`加入 ${row.symbol} ${row.name}`}
-              onClick={() => handleAdd(row)}
-            >
-              <span className="watch-result-symbol">{row.symbol}</span> <span className="watch-result-name">{row.name}</span>
-            </button>
-          </li>
-        ))}
+        {results.map((row) => {
+          const already = watchedSet.has(row.symbol)
+          return (
+            <li key={row.symbol}>
+              <button
+                type="button"
+                className="watch-result-item"
+                aria-label={already ? `已在觀察清單：${row.symbol} ${row.name}` : `加入 ${row.symbol} ${row.name}`}
+                disabled={already}
+                onClick={() => handleAdd(row)}
+              >
+                <span className="watch-result-symbol">{row.symbol}</span>{' '}
+                <span className="watch-result-name">{row.name}</span>
+                {already && <span className="watch-result-added">已在觀察清單</span>}
+              </button>
+            </li>
+          )
+        })}
       </ul>
       {matches.length > RESULT_CAP && (
         <p className="watch-results-more">還有 {matches.length - RESULT_CAP} 筆，請輸入更完整的關鍵字</p>

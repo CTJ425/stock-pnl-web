@@ -11,6 +11,18 @@ The newly written agent file is changed to English according to CLAUDE.md §4.1,
 
 ---
 
+### Task 152: 修復觀察清單搜尋兩個缺陷並重整字卡版面
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 10:46:33 Asia/Taipei
+- **Version**: 0.9.39-dev.2
+- **Bugs**: BUG-074（已加入的股票被靜默隱藏）、BUG-075（殘缺清單被當成完整清單快取）
+- **Risks**: RISK-008、RISK-009（記錄不修，見 `BUG_FIX.md`）
+- **Files**: `sources/src/components/StockDetail/AddWatchModal.tsx`、`sources/src/services/twMarketData.ts`、`sources/src/components/Dashboard/WatchSection.tsx`、`sources/src/index.css`
+- **Tests**: `sources/src/services/twMarketData.test.ts`（新增 6 條）、`sources/src/components/StockDetail/AddWatchModal.test.tsx`（新增 3 條）、`sources/src/components/Dashboard/WatchSection.test.tsx`（新增 2 條）
+- **Verify**: `npm run build` exit 0；`npx vitest run` exit 0（110 測試檔 / 1782 測試）
+- **Detail**: 見 `PROGRESS.md` 的 `## 📅 Log: 2026-09-10 10:46:33 Asia/Taipei (Task 152, 0.9.39-dev.2)`
+
 ### Task 151: 股票搜尋補上 Carbon 載入轉圈動畫
 - **Status**: ✅ DONE
 - **Agent**: Claude

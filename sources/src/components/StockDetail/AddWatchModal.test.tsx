@@ -84,11 +84,36 @@ describe('AddWatchModal', () => {
     expect(hits.map((b) => b.textContent)).toEqual(['2330 台積電', '6770 力積電'])
   })
 
-  it('已在觀察清單中的不再出現於結果', async () => {
+  it('已在觀察清單中的仍會列出，但停用並標示原因', async () => {
     const user = userEvent.setup()
     mount({ watched: ['2059'] })
     await user.type(await screen.findByLabelText('搜尋股票'), '川湖')
-    expect(screen.queryByRole('button', { name: /加入 2059/ })).toBeNull()
+
+    // 靜默隱藏會讓使用者以為「查無此股」，實際是「已經加過了」。
+    const btn = screen.getByRole('button', { name: /已在觀察清單/ }) as HTMLButtonElement
+    expect(btn.textContent).toContain('2059')
+    expect(btn.textContent).toContain('已在觀察清單')
+    expect(btn.disabled).toBe(true)
+  })
+
+  it('已在觀察清單中的排在可加入項目之後', async () => {
+    const user = userEvent.setup()
+    mount({ watched: ['2059'] })
+    await user.type(await screen.findByLabelText('搜尋股票'), '2')
+
+    const rows = Array.from(document.querySelectorAll('.watch-result-item'))
+    const symbols = rows.map((el) => el.querySelector('.watch-result-symbol')?.textContent)
+    expect(symbols).toEqual(['2330', '2454', '2891A', '2059'])
+  })
+
+  it('已在觀察清單中的點下去不會呼叫加入', async () => {
+    const user = userEvent.setup()
+    mount({ watched: ['2059'] })
+    await user.type(await screen.findByLabelText('搜尋股票'), '川湖')
+
+    await user.click(screen.getByRole('button', { name: /已在觀察清單/ }))
+
+    expect(addWatch).not.toHaveBeenCalled()
   })
 
   it('點結果會加入並關閉對話框', async () => {
