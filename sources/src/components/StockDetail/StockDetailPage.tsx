@@ -371,6 +371,8 @@ export function StockDetailPage({
                 name={name}
                 holding={holding}
                 history={report?.history ?? null}
+                dailySeries={dailySeries}
+                dailyStatus={dailyStatus}
               />
             </div>
           </section>

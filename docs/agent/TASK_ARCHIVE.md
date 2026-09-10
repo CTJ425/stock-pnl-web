@@ -1,5 +1,14 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 155 — completed sub-items (rolled from TASK.md 2026-09-10 14:14:51 Asia/Taipei)
+
+1. ~~盤點 QuoteTab / IntradayChart 結構，確認可縮小的 series 型別與泛型 props~~ ✅
+2. ~~寫規格 `docs/agent/specs/quote-tab-trend-ranges.md`，並在 `chart-range-eight.md` §7 加註修訂~~ ✅
+3. ~~實作 `trendRange.ts`、泛型化 `IntradayChart`、QuoteTab 三分支 effect~~ ✅
+4. ~~reviewer 審查並修掉 `dailyStatus` 未列入相依導致轉圈停不下來的 BLOCKER~~ ✅
+5. ~~三道 gate 全綠（build / typecheck:edge / vitest 1836 passed），定版 0.9.42 併入 `main`~~ ✅
+
+
 ### Task 154 — completed sub-items (rolled from TASK.md 2026-09-10 12:26:19 Asia/Taipei)
 
 1. ~~實測 Yahoo 長區間回應並定案線路 A~~ ✅
