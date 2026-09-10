@@ -1,11 +1,30 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 定版 0.9.39 並合併 dev 至 main（Task 151 + Task 152）
+- Action: 定版 0.9.40 並合併 dev 至 main（Task 153）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 10:54:40 Asia/Taipei
+- Timestamp: 2026-09-10 11:24:07 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-10 11:17:55 Asia/Taipei (Task 153, 0.9.40-dev.1)
+
+**Edge Function 的 twlist 補上完整性檢查，結案 RISK-008**
+
+- **起因**: 0.9.39 的 BUG-075 只修了客戶端直連路徑。Edge Function `stock-price` 的 `twlist` action 仍犯同一個錯，記為 RISK-008，使用者指示直接修掉。
+- **根因**: `handleTwList` 用 `Promise.allSettled` 合併任何成功的來源，只有合併後長度為 0 才回 502。上市（TWSE）或上櫃（TPEx）其中之一掛掉時，呼叫端會拿到帶 HTTP 200 的半份清單並快取 30 分鐘。
+- **實作方案**: 抽出純邏輯模組 `sources/supabase/functions/stock-price/twList.ts`，不含 Supabase／Deno 匯入，比照 `backup-transactions/backupPlan.ts` 的既有模式以純 vitest 測試。`handleTwList` 只保留 `fetchJson`、兩個 URL、`UA` 標頭與 10 秒逾時，其餘委派給 `buildTwList`；不完整時回 502。`listNumber` 一併移入該模組，`index.ts` 內已無其他呼叫者。
+- **Reviewer**: FAIL，1 BLOCKER + 2 RISK。BLOCKER 屬實並已修：第一版的完整性檢查只看 `value.length === 0`，擋不住「陣列非空但每一列都缺代號或缺名稱」的來源——全部被 `push` 丟棄後結果仍是 `ok: true` 的半份清單。改為逐來源計算「結構有效列數」，且刻意在去重之前計算：僅與另一交易所重複的列仍證明此來源有回應，因此計入；整批無效才判定該來源失效。這個順序讓 E5（重複代號）與 E8（整批無效）兩個測試同時成立。
+- **主 session 另一處收斂**: builder 依 brief 在兩處 `for...of` 用了 `as` 斷言。改為四段式明確窄化後 TypeScript 能自行證明兩個讀取都在 fulfilled 分支，斷言全部移除，`typecheck:edge` 仍 exit 0。
+- **不修的兩項**: RISK-010（來源被上游截斷但非空時兩端都視為完整，理論性，兩個 OpenAPI 目前不分頁）記入 `BUG_FIX.md`；`fetchViaEdge` 未讀取回應內的 `error` 字串，屬既有的觀測性落差，未擴大本次範圍。
+- **驗證**:
+  - 新增 8 條測試（E1–E8）於 `sources/supabase/functions/stock-price/twList.test.ts`。
+  - 反向驗證：E8 在修正 BLOCKER 之前確認轉紅（`expected true to be false`）。
+  - `npx vitest run` exit 0（111 測試檔 / 1790 測試全數通過，無 `Errors` 行）。
+  - `npm run build` exit 0。
+  - `npm run typecheck:edge` exit 0——本次改動在 `supabase/functions/`，此為獨立 gate，`npm run build` 不會檢查該目錄。
+- **版本更新**: 同步 4 檔案升版至 0.9.40-dev.1。
+- **⚠️ 未部署**: 本次僅修改程式碼。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效，DEV 與 PROD 皆尚未部署。使用者尚未授權部署。
 
 ## 📅 Log: 2026-09-10 10:46:33 Asia/Taipei (Task 152, 0.9.39-dev.2)
 
@@ -26,25 +45,4 @@
 - **版本更新**: 同步 4 檔案升版至 0.9.39-dev.2。
 - **安全提醒**: 本次查證 DEV 使用了使用者於對話中貼上的 Supabase personal access token。`FIXED_BUG.md` 既有紀錄顯示此情況已重複發生多次，標準處置是改用 `! supabase login`。該 token 應盡快撤銷。
 
-## 📅 Log: 2026-09-10 10:09:24 Asia/Taipei (Task 151, 0.9.39-dev.1)
-
-**買入股票與加入觀察的搜尋補上 Carbon 載入指示，並修掉兩條會讓轉圈停不下來的路徑**
-
-- **問題**: 交易表單的股票名稱欄位會在去抖動 300ms 後打遠端搜尋（`searchStocks`），加入觀察對話框則在開啟時抓台股清單（`getTwStockList`）。兩者過去都沒有任何載入指示，使用者無法分辨「搜尋很慢」與「根本沒在搜尋」。
-- **實作方案**:
-  1. 新增 `sources/src/components/Common/Spinner.tsx`：Carbon Design 載入指示器，灰色軌道圓 + 3/4 藍色弧線，690ms 一圈，取色自 `--cds-layer-accent-01` 與 `--cds-interactive`，`prefers-reduced-motion: reduce` 時停止動畫。
-  2. `sources/src/index.css` 新增 `.cds-spinner`、`@keyframes cds-spin`、`.suggestion-loading`、`.watch-loading` 規則。既有 `.spin` 與 `@keyframes spin` 完全未動，其餘 18 個元件仍沿用。
-  3. `sources/src/components/Transactions/TransactionForm.tsx` 新增 `searching` 狀態，於第一個按鍵即為 true（不等去抖動），並新增 `closeSuggestions()` 統一處理「清計時器 + 遞增 `searchSeq` + 清結果 + 停轉圈」，取代原本 5 處分散的 `setSuggestions(null)`。搜尋中只顯示轉圈列，不顯示過期結果。
-  4. `sources/src/components/StockDetail/AddWatchModal.tsx` 新增 `listLoading` 狀態，於 `.finally()` 清除，成功與失敗都會停止轉圈。關鍵字過濾本身是同步的本地比對，不加轉圈。
-- **Reviewer findings（2 項，皆已修）**:
-  - BLOCKER — `tx-nature` 下拉的 `onChange` 從未清除搜尋結果。`nature` 是 `isSpotSell` 的一部分，切換它會隱藏搜尋下拉，但轉圈與計時器不受影響；切回來會看到上一個關鍵字的過期結果。此為 brief 漏列的既有缺陷，已補 `closeSuggestions()`。
-  - RISK — `searchTimer` 沒有 unmount 清理，表單在 300ms 內關閉時計時器仍會觸發搜尋。已補 `useEffect` cleanup。
-- **另補一項**: builder 依 brief 只寫了 `try/finally`，搜尋被 reject 時雖會停止轉圈，但 rejection 會逸出成 unhandled rejection，使 vitest 摘要顯示 7 passed 卻以 exit 1 收場。已補 `catch`，失敗時顯示「無匹配結果」。
-- **驗證**:
-  - 新增 12 條測試：`sources/src/components/Transactions/TransactionForm.spinner.test.tsx` 9 條（S1 第一個按鍵即轉圈、S2 結果回來停止、S3 不留過期結果、S4 清空停止、S5 點表單外停止、S6 選定停止、S7 例外時停止、S8 切換交易性質停止、S9 卸載後不再搜尋），`AddWatchModal.test.tsx` 3 條（載入中／載入完成／載入失敗）。
-  - S8 與 S9 各自移除對應修正後皆轉紅（`expected "vi.fn()" to not be called at all, but actually been called 1 times`），確認測試為真證據而非空轉。S8 必須用 `fireEvent.change` 而非 `userEvent.selectOptions`：後者會產生 document click，表單外點擊的 effect 會先收合下拉，蓋掉要驗的缺陷。
-  - `npx vitest run` exit 0（109 測試檔 / 1772 測試全數通過，無 `Errors` 行）。
-  - `npm run build` exit 0。
-  - `npm run typecheck:edge` 未執行：本次未改動 `sources/supabase/functions/`。
-- **版本更新**: 同步 4 檔案升版至 0.9.39-dev.1（`sources/package.json`、`sources/package-lock.json`、`sources/src/version.ts`、`README.md`）。
 
