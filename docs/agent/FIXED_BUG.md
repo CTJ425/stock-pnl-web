@@ -6,6 +6,17 @@
 
 ---
 
+### Bug ID: BUG-078 — Storage 用 400 表示「查無物件」，讀檔因此拋錯並跳過即時產生
+
+- **Date**: 2026-09-10, fixed in 0.9.44
+- **Symptom**: 不在盤後批次清單裡的股票，個股頁的基本面分頁永遠空白，`app_log` 反覆出現 `action=downloadReportsJson, message=HTTP 400, detail={"path":"fundamental/2382.json"}`。最早可追到 0.9.38。日線也是同一個病灶（BUG-077 當時只處理了症狀）。
+- **Root Cause**: `downloadReportsJson` 只把 **404** 當成「檔案不存在」而回 `null`。2026-09-10 實測 PROD，Supabase Storage 對不存在的物件回的是 **HTTP 400**，真正的狀態寫在 body 裡：`{"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}`。於是一個「還沒產生」的檔案會走進 `throw`。**真正的傷害不是那筆錯誤紀錄，是那個 throw**：每一個呼叫端都是「先讀檔，讀不到才呼叫 `warmStockCore` 即時產生」，而且兩行在同一個 `try` 裡（`useDailySeries.ts`、`StockDetailPage.tsx:259` 與 `:274`）。拋錯直接跳過即時產生，檔案永遠不會被建立，下次再訪重複同樣的拋錯。這是一個自我維持的迴圈，`2382` 因此從 0.9.38 起一直是空的。
+- **Blast radius**: 七個 proxy 共用這個函式——`reportProxy`（籌碼與 manifest）、`dailyProxy`、`fundamentalProxy`、`marketProxy`、`foreignTopProxy`、`macroProxy`、`fxProxy`。全部都把「檔案還沒產生」當成失敗。
+- **Fix**: 400 且 body 指出查無物件（`NoSuchKey` / `not_found` / `"statusCode":"404"`）時回 `null`，不記錄也不拋錯。**body 不是查無物件的 400 仍然拋錯**——`null` 只代表「不存在」，不代表「壞掉」（沿用稽核項 B2 的既有契約）。修在 `reportsBucket.ts` 一處，七個 proxy 一起受惠。
+- **Verification**: `reportsBucket.test.ts` 新增 4 條（先紅後綠），含「查無物件不可寫進 app_log」與「非查無物件的 400 仍要拋錯」。PROD 實測佐證：不存在的 `daily/2382.json` 與 `fundamental/2382.json` 皆回 400 且 body 為 `NoSuchKey`，存在的 `daily/0050.json` 回 200。
+- **Note**: 0.9.43 的 Edge 5 年後援仍然保留且仍然有用——它涵蓋「即時產生本身失敗」的情況。本次修的是更上游的那一段：讓即時產生**有機會被執行**。
+- **Status**: ✅ FIXED (0.9.44)
+
 ### Bug ID: BUG-077 — 行情分頁的四個日線區間對非持股股票全部讀不到
 
 - **Date**: 2026-09-10, fixed in 0.9.43

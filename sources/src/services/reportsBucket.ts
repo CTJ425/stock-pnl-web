@@ -43,7 +43,28 @@ export async function downloadReportsJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(data.publicUrl, { cache: 'no-store' })
     if (res.status === 404) return null
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      /*
+       * Storage answers a **missing object with HTTP 400**, not 404, and puts the real status in
+       * the body (measured on PROD 2026-09-10):
+       *
+       *   {"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}
+       *
+       * Treating that as a failure was BUG-078, and the damage was not the error row —— it was the
+       * throw. Every caller reads the file first and calls `warmStockCore` **after** it, inside the
+       * same `try`, so the throw jumped straight over the on-demand generation. The file was never
+       * created, the next visit repeated the same throw, and a stock outside the nightly batch
+       * stayed permanently empty. `2382` had been in that state since at least 0.9.38.
+       *
+       * A 400 that does not say "not found" is still a real failure and still throws: `null` means
+       * absent, and only absent (audit finding B2, see the network-error test).
+       */
+      const body = await res.text()
+      if (res.status === 400 && /NoSuchKey|not_found|"statusCode"\s*:\s*"404"/.test(body)) {
+        return null
+      }
+      throw new Error(`HTTP ${res.status}`)
+    }
     return (await res.json()) as T
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
