@@ -144,8 +144,30 @@
 - **Why manual**: BLS schedule page returns 403, so it cannot be synced automatically. `sources/scripts/find-release-dates.py` cross-checks dates against ALFRED vintages.
 
 ### Task 132 & Task 133: Supabase Redirect URLs allow-list & DEV auth URLs
-- **Status**: ⏳ **OPEN — configuration required**
-- **Timestamp**: 2026-08-31 16:45:40 CST
+- **Status**: 🔄 **PROD 已設定；DEV 未驗證**
+- **Timestamp**: 2026-09-10 15:41:33 Asia/Taipei（原開立 2026-08-31 16:45:40）
 - **What is this**:
-  - Add app origin to Supabase Redirect URLs allow-list (`authRedirect.ts`).
-  - In DEV compose `.env`, update `ADDITIONAL_REDIRECT_URLS` and `SITE_URL` once frontend deploy target is determined.
+  - ~~Add app origin to Supabase Redirect URLs allow-list (`authRedirect.ts`).~~ ✅
+  - In DEV compose `.env`, update `ADDITIONAL_REDIRECT_URLS` and `SITE_URL` —— ⏳ 本次的 access token 讀不到 DEV 的 auth 設定（權限不足），未驗證。
+
+**PROD 設定內容（2026-09-10 經 Management API 寫入，並以獨立查詢回讀確認）**
+
+`site_url` 維持 `https://stock-pnl-web.pages.dev/`，`uri_allow_list` 由**空值**改為：
+
+```
+https://stock-pnl-web.pages.dev/**
+https://*.stock-pnl-web.pages.dev/**
+http://localhost:5173/**
+http://localhost:5174/**
+http://localhost:5175/**
+```
+
+**為什麼原本是空的卻還能登入**：`site_url` 本身永遠允許，而正式站的 `origin + pathname` 剛好等於它。第一條是把這件事寫明，不再依賴那個隱含規則。
+
+**實際受影響的只有重設密碼**。`mailer_autoconfirm = true`，註冊確認信根本不寄，所以 `AuthContext.tsx:86` 的 `emailRedirectTo` 目前不會觸發；`AuthContext.tsx:101` 的 `resetPasswordForEmail` 一定寄信，過去從 localhost 或 preview 網址觸發時，重導目標會被悄悄換成 `site_url`，人被送回正式站。
+
+**localhost 列了三個 port**：vite 預設 5173，但被占用時會自動遞增 —— 本次 session 實際跑到 5175。
+
+**未動到的設定**（寫入後確認）：`disable_signup=false`、`mailer_autoconfirm=true`、`password_min_length=6`、`jwt_exp=3600`。
+
+**日後綁自訂網域時**：新增 `https://<網域>/**`，並把 `site_url` 一併改過去。若之後開啟 email 確認（`mailer_autoconfirm` 改 false），註冊回跳會開始使用同一份清單，`authRedirect.ts:19` 已能處理 `type=signup`。
