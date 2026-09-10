@@ -8,11 +8,11 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
-### RISK-008 — `fetchViaEdge` 沒有完整性檢查，Edge 回傳截斷清單一樣會被快取
-- **Where**: `sources/src/services/twMarketData.ts`（`fetchViaEdge`）
-- **Failure scenario**: BUG-075 只修了直連路徑。Edge Function `stock-price` 的 `twlist` action 若回傳非空但截斷的清單，`getTwStockList` 仍以 `rows.length > 0` 判定成功並快取 30 分鐘，重現同一個失效模式。
-- **Decision**: 不修。客戶端無法分辨「截斷」與「完整」，必須在 Edge 端加檢查，而那是獨立部署，不在本次範圍。
-- **Status**: OPEN（已知風險）
+### RISK-010 — 台股清單來源被上游截斷但仍非空時，兩端都會視為完整
+- **Where**: `sources/supabase/functions/stock-price/twList.ts`、`sources/src/services/twMarketData.ts`
+- **Failure scenario**: BUG-075 與 BUG-076 的完整性檢查判斷的是「此來源有沒有給出結構有效的列」，不是「給的列數對不對」。若 TWSE 或 TPEx 上游改動導致回傳 20 筆而非約 2000 筆，兩端都會判定完整並快取 30 分鐘。
+- **Decision**: 不修。目前兩個 OpenAPI 端點都不分頁，沒有證據顯示會發生截斷；要防這種情況必須設一個筆數下限門檻，而該門檻會在上市櫃家數變動時誤判，代價高於效益。
+- **Status**: OPEN（已知風險，理論性）
 
 ---
 
