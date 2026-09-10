@@ -1,9 +1,9 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 定版 0.9.40 並合併 dev 至 main（Task 153）
+- Action: 0.9.40 已部署至 DEV 與 PROD（Task 153, stock-price v6）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 11:24:07 Asia/Taipei
+- Timestamp: 2026-09-10 11:37:23 Asia/Taipei
 
 ---
 
@@ -25,6 +25,8 @@
   - `npm run typecheck:edge` exit 0——本次改動在 `supabase/functions/`，此為獨立 gate，`npm run build` 不會檢查該目錄。
 - **版本更新**: 同步 4 檔案升版至 0.9.40-dev.1。
 - **⚠️ 未部署**: 本次僅修改程式碼。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效，DEV 與 PROD 皆尚未部署。使用者尚未授權部署。
+- **✅ 後續部署（2026-09-10 11:37:23 Asia/Taipei）**: 使用者授權後部署至 DEV 與 PROD，來源 commit `290f9d3`。`stock-price` 兩邊皆由 v5 進到 v6，`ezbr_sha256` 由 `30240a50864fb60f…` 變為 `90e9dc2c28836a3a…`；兩邊 sha 相同，證明跑的是同一份新 bundle。判定依據是 sha 前後比對而非 version 號——版號跳動只證明有東西上傳，曾發生過版號較新卻是舊程式碼的情況。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`（該旗標只有 `stock-report` 需要）。以 `--project-ref` 指定專案，未動 `supabase link`。PROD 部署在 `main` 分支執行。
+- **✅ 實機煙霧測試**: DEV 與 PROD 各打一次 `{"action":"twlist"}`，皆回 HTTP 200、27819 筆，且同時含上市 3037 與上櫃 6488，證明完整性檢查沒有誤擋健康路徑。
 
 ## 📅 Log: 2026-09-10 10:46:33 Asia/Taipei (Task 152, 0.9.39-dev.2)
 

@@ -12,8 +12,9 @@
 - **Fix**: 抽出純邏輯模組 `sources/supabase/functions/stock-price/twList.ts`（不含 Supabase／Deno 匯入，比照 `backup-transactions/backupPlan.ts` 的既有模式），由 `buildTwList` 判定完整性；`handleTwList` 只保留 fetch 與委派，不完整時回 502。`listNumber` 一併移入該模組。
 - **Reviewer blocker（已修）**: 第一版的完整性檢查只看 `value.length === 0`，擋不住「陣列非空但每一列都缺代號或缺名稱」——全部被 `push` 丟棄後，結果仍是 `ok: true` 的半份清單。改為逐來源計算「結構有效列數」，且刻意在去重之前計算：僅與另一交易所重複的列仍證明此來源有回應，因此計入；整批無效則判定該來源失效。
 - **Tests**: `sources/supabase/functions/stock-price/twList.test.ts` 新增 8 條（E1–E8）。E8 正是上述 blocker 的回歸測試，修正前確認轉紅（`expected true to be false`）。
-- **Deployment**: ⚠️ 本次僅修改程式碼，**未部署**。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效。
-- **Status**: ✅ FIXED (0.9.40-dev.1)，待部署
+- **Deployment**: ✅ 已於 2026-09-10 11:37 Asia/Taipei 部署至 DEV 與 PROD，來源 commit `290f9d3`（`main` 與 `dev` 同步於此）。`stock-price` 兩邊皆由 v5 進到 v6，`ezbr_sha256` 由 `30240a50864fb60f…` 變為 `90e9dc2c28836a3a…`，兩邊 sha 相同即證明跑的是同一份新 bundle。`verify_jwt` 維持 `true`（`--no-verify-jwt` 只有 `stock-report` 需要）。
+- **Smoke test**: DEV 與 PROD 各打一次 `{"action":"twlist"}`，皆回 HTTP 200、27819 筆，且同時含上市 3037 與上櫃 6488，證明完整性檢查沒有擋掉健康路徑。
+- **Status**: ✅ FIXED (0.9.40)，已部署
 
 ### Bug ID: BUG-074 — 加入觀察搜尋把已加入的股票靜默隱藏，看起來像「查無此股」
 - **Date**: 2026-09-10, fixed in 0.9.39-dev.2
