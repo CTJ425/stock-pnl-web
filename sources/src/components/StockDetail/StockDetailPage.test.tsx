@@ -450,7 +450,9 @@ describe('StockDetailPage', () => {
     await user.click(screen.getByRole('tab', { name: '技術面' }))
     await screen.findByText(/日 K · 均線 · 布林通道/)
 
-    await user.click(screen.getByRole('button', { name: '近 6 月' }))
+    // 行情的走勢圖與技術面的 K 線圖同時在頁面上，兩邊都有「近 6 月」，
+    // 所以這裡必須指定技術面區塊，不能用全頁查詢。
+    await user.click(within(sec(container, 'technical')).getByRole('button', { name: '近 6 月' }))
     const kChart = charts(container, 'technical')[0]
     // MA5/20/60 + BB upper/mid/lower = 6 polylines minimum
     expect(kChart.querySelectorAll('polyline').length).toBeGreaterThanOrEqual(6)

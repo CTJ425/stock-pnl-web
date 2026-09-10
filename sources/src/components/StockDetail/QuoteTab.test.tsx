@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QuoteTab, quoteMeta } from './QuoteTab'
 import type { PriceQuote } from '../../services/priceProxy'
 import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
 import type { ChipDay, ReportHolding } from '../../services/reportProxy'
+import type { DailyRow, DailySeries, RemoteDaily } from '../../services/dailyProxy'
+import type { DailyStatus } from './useDailySeries'
 import type { TechnicalView } from './technicalView'
 
 /**
@@ -26,6 +29,14 @@ const fetchIntradayMock = vi.hoisted(() =>
   vi.fn<() => Promise<IntradaySeries | null>>(async () => null),
 )
 vi.mock('../../services/intradayProxy', () => ({ fetchIntraday: fetchIntradayMock }))
+
+const fetchRemoteDailyMock = vi.hoisted(() =>
+  vi.fn<(ticker: string, range: '5y' | 'max') => Promise<RemoteDaily | null>>(async () => null),
+)
+vi.mock('../../services/dailyProxy', async (importActual) => ({
+  ...(await importActual<typeof import('../../services/dailyProxy')>()),
+  fetchRemoteDaily: fetchRemoteDailyMock,
+}))
 
 /** 2026-08-05 2330 measured response after closing */
 const closedQuote: PriceQuote = {
@@ -120,6 +131,8 @@ const show = (
     holding?: ReportHolding | null
     latest?: TechnicalView['latest'] | null
     history?: ChipDay[] | null
+    dailySeries?: DailySeries | null
+    dailyStatus?: DailyStatus
   } = {},
 ) =>
   render(
@@ -130,6 +143,8 @@ const show = (
       holding={opts.holding ?? null}
       latest={opts.latest ?? null}
       history={opts.history ?? null}
+      dailySeries={opts.dailySeries ?? null}
+      dailyStatus={opts.dailyStatus ?? 'ready'}
     />,
   )
 
@@ -400,5 +415,126 @@ describe('quoteMeta', () => {
 
   it('美股 / 備援路徑沒有交易日時不硬湊', () => {
     expect(quoteMeta({ ...closedQuote, tradeDate: null, tradeTime: null })).toBe('盤中')
+  })
+})
+
+describe('QuoteTab 走勢區間', () => {
+  /** n 根日線，收盤價 base + i */
+  function makeDaily(n: number, base: number, startUtc = Date.UTC(2026, 0, 1)): DailySeries {
+    const rows: DailyRow[] = []
+    for (let i = 0; i < n; i++) {
+      const d = new Date(startUtc + i * 86400000).toISOString().slice(0, 10)
+      const close = base + i
+      rows.push([d, close - 1, close + 1, close - 2, close, 1_000_000])
+    }
+    return { ticker: '2330', asOf: '2026-09-10T05:00:00.000Z', lastDate: rows[n - 1][0], rows }
+  }
+
+  beforeEach(() => {
+    // 這個檔案的 cleanup 寫在別的 describe 裡，作用不到這裡；不清會留下上一個測試的 DOM。
+    cleanup()
+    fetchRemoteDailyMock.mockReset()
+    fetchRemoteDailyMock.mockResolvedValue(null)
+    fetchIntradayMock.mockReset()
+    fetchIntradayMock.mockResolvedValue(series)
+  })
+
+  it('提供八個區間按鈕', () => {
+    show(closedQuote, { dailySeries: makeDaily(60, 100) })
+    const group = screen.getByRole('group', { name: '走勢區間' })
+    const labels = [...group.querySelectorAll('button')].map((b) => b.textContent)
+    expect(labels).toEqual(['一日', '五日', '近 1 月', '近 6 月', '本年迄今', '近 1 年', '近 5 年', '全部'])
+  })
+
+  it('切到近 1 月改用日線，不再打盤中 API', async () => {
+    const user = userEvent.setup()
+    show(closedQuote, { dailySeries: makeDaily(60, 100) })
+    const callsBefore = fetchIntradayMock.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: '近 1 月' }))
+
+    // 收盤價 100..159，近 1 月取最後 20 根 → 最新 159
+    const chart = await screen.findByRole('group', { name: /近 1 月走勢/ })
+    expect(chart.getAttribute('aria-label')).toContain('159')
+    expect(fetchIntradayMock.mock.calls.length).toBe(callsBefore)
+  })
+
+  it('日線區間不顯示均價 —— 一年的累積均價沒有意義', async () => {
+    const user = userEvent.setup()
+    show(closedQuote, { dailySeries: makeDaily(60, 100) })
+    // 盤中區間有均價（fixture 的 VWAP = 2406.25）
+    await waitFor(() => expect(cellMap()['均價']).not.toBe('—'))
+
+    await user.click(screen.getByRole('button', { name: '近 1 年' }))
+    await screen.findByRole('group', { name: /近 1 年走勢/ })
+    expect(cellMap()['均價']).toBe('—')
+  })
+
+  it('近 5 年切到全部時不可沿用前一個區間的資料', async () => {
+    // 0.9.41 在技術面分頁踩過這個坑：清除舊資料只寫在其中一個分支，
+    // 切換時舊資料會掛在新標籤下顯示，而且不出現載入指示。
+    const user = userEvent.setup()
+    let resolveMax: ((v: RemoteDaily) => void) | null = null
+    fetchRemoteDailyMock.mockImplementation((_t, range) =>
+      range === '5y'
+        ? Promise.resolve({ rows: makeDaily(300, 500).rows, granularity: '1d' as const })
+        : new Promise<RemoteDaily>((res) => {
+            resolveMax = res
+          }),
+    )
+
+    show(closedQuote, { dailySeries: makeDaily(60, 100) })
+
+    await user.click(screen.getByRole('button', { name: '近 5 年' }))
+    await screen.findByRole('group', { name: /近 5 年走勢/ })
+
+    // 「全部」的回應還沒回來
+    await user.click(screen.getByRole('button', { name: '全部' }))
+    expect(screen.queryByRole('group', { name: /近 5 年走勢/ })).toBeNull()
+    expect(document.querySelector('.intraday-skeleton')).toBeTruthy()
+
+    resolveMax!({ rows: makeDaily(120, 300).rows, granularity: '1mo' })
+    const chart = await screen.findByRole('group', { name: /全部走勢/ })
+    // 300..419 → 最新 419，絕不能是 5y 那批的 799。
+    // 刻意讓兩批都低於 1000：fmt2 走 en-US 千分位，1019 會印成 "1,019.00"。
+    expect(chart.getAttribute('aria-label')).toContain('419')
+    expect(chart.getAttribute('aria-label')).not.toContain('799')
+  })
+
+  it('日線本身讀取失敗時要停止轉圈並報錯 —— dailyStatus 變化不帶動 dailySeries', async () => {
+    // useDailySeries 失敗時只呼叫 setStatus('error')，series 仍是同一個 null。
+    // 若 effect 的相依只看 dailySeries，這個轉換不會重跑，骨架就永遠停在載入中。
+    const user = userEvent.setup()
+    const props = (dailyStatus: DailyStatus) => (
+      <QuoteTab
+        quote={closedQuote}
+        ticker="2330"
+        name="台積電"
+        holding={null}
+        latest={null}
+        history={null}
+        dailySeries={null}
+        dailyStatus={dailyStatus}
+      />
+    )
+    const { rerender } = render(props('loading'))
+
+    await user.click(screen.getByRole('button', { name: '近 1 月' }))
+    expect(document.querySelector('.intraday-skeleton')).toBeTruthy()
+
+    rerender(props('error'))
+
+    expect(await screen.findByText('讀取走勢圖失敗，請稍後再試。')).toBeTruthy()
+    expect(document.querySelector('.intraday-skeleton')).toBeNull()
+  })
+
+  it('遠端區間讀取失敗時顯示走勢圖失敗訊息', async () => {
+    const user = userEvent.setup()
+    fetchRemoteDailyMock.mockResolvedValue(null)
+    show(closedQuote, { dailySeries: makeDaily(60, 100) })
+
+    await user.click(screen.getByRole('button', { name: '全部' }))
+
+    expect(await screen.findByText('讀取走勢圖失敗，請稍後再試。')).toBeTruthy()
   })
 })

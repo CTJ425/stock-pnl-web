@@ -11,11 +11,9 @@ import type { PlotGeometry } from '../Charts/chartFrame'
 import { lineSegments } from '../Charts/chartPath'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { niceDomain, type Domain } from '../Charts/chartScale'
-import type {
-  IntradayPoint,
-  IntradayRange,
-  IntradaySeries,
-} from '../../../supabase/functions/stock-price/intradayParse'
+import type { IntradayPoint } from '../../../supabase/functions/stock-price/intradayParse'
+import { pickLabelIndices } from './technicalView'
+import { isIntradayRange, TREND_LABELS, type TrendRange } from './trendRange'
 
 /**
  * 均價 line colour: mirrors --accent-2 (index.css). Inline SVG here feeds html2canvas → PDF,
@@ -42,6 +40,19 @@ function hourMinute(epochSeconds: number): { hour: string; label: string } {
 
 function dayKey(epochSeconds: number): string {
   return dayFmt.format(new Date(epochSeconds * 1000))
+}
+
+/**
+ * `seriesFromDailyRows` builds `points[].t` from `epochOfTradingDate`, which is a UTC
+ * midnight. Reading it back with UTC getters is what makes that round trip exact.
+ */
+function utcParts(epochSeconds: number): { y: string; m: string; d: string } {
+  const dt = new Date(epochSeconds * 1000)
+  return {
+    y: String(dt.getUTCFullYear()),
+    m: String(dt.getUTCMonth() + 1).padStart(2, '0'),
+    d: String(dt.getUTCDate()).padStart(2, '0'),
+  }
 }
 
 function fmt2(v: number): string {
@@ -110,42 +121,72 @@ function areaToBaseline(points: IntradayPoint[], geo: PlotGeometry, baselineY: n
   return [pt([first, baselineY]), ...mid, pt([last, baselineY])].join(' ')
 }
 
-export interface IntradayChartProps {
-  series: IntradaySeries | null
+/**
+ * The subset of `IntradaySeries` this chart actually reads (`points`, `prevClose`, `symbol`).
+ * `IntradaySeries` stays structurally assignable to it, and a daily-derived series does not
+ * have to invent an `interval` it does not have.
+ */
+export interface TrendSeries {
+  symbol: string
+  prevClose: number | null
+  points: IntradayPoint[]
+}
+
+export interface IntradayChartProps<R extends TrendRange = TrendRange> {
+  series: TrendSeries | null
   loading: boolean
   /** The fetch that produced `series` failed — distinct from a fetch that succeeded with no bars. */
   error?: boolean
-  range: IntradayRange
-  onRangeChange: (range: IntradayRange) => void
+  range: R
+  onRangeChange: (range: R) => void
+  /** Which buttons to draw. Defaults to the two intraday ranges. */
+  ranges?: readonly R[]
   tradeDate?: string | null
   /** Render the volume sub-chart. Default true. */
   showVolume?: boolean
 }
 
-export function IntradayChart({
+export function IntradayChart<R extends TrendRange>({
   series,
   loading,
   error = false,
   range,
   onRangeChange,
+  ranges,
   tradeDate = null,
   showVolume = true,
-}: IntradayChartProps) {
+}: IntradayChartProps<R>) {
   const [hover, setHover] = useState<number | null>(null)
   const clipId = useId().replace(/:/g, '')
 
   const points = series?.points ?? []
   const prevClose = series?.prevClose ?? null
-  const vwap = useMemo(() => vwapSeries(points), [points])
+  const intraday = isIntradayRange(range)
+  /**
+   * A cumulative VWAP across a year is not a meaningful number, so non-intraday ranges get
+   * an all-`null` series — `lineSegments` then emits nothing and the 均價 line just disappears.
+   */
+  const vwap = useMemo(
+    () => (intraday ? vwapSeries(points) : points.map(() => null)),
+    [points, intraday],
+  )
   const domain = useMemo(() => priceDomain(points, prevClose), [points, prevClose])
   const volumeDomain = useMemo(
     () => niceDomain(points.map((p) => p.v / 1000), { includeZero: true }),
     [points],
   )
 
-  const labels = useMemo(() => points.map((p) => hourMinute(p.t).label), [points])
+  const labels = useMemo(() => {
+    if (intraday) return points.map((p) => hourMinute(p.t).label)
+    return points.map((p) => {
+      const { y, m, d } = utcParts(p.t)
+      return range === 'all' ? `${y}/${m}` : `${m}/${d}`
+    })
+  }, [points, intraday, range])
+
   const labelIndices = useMemo(() => {
     if (points.length === 0) return []
+    if (!intraday) return pickLabelIndices(points.length, 6)
     if (range === '5d') {
       return points.reduce<number[]>((acc, p, i) => {
         if (i === 0 || dayKey(p.t) !== dayKey(points[i - 1].t)) acc.push(i)
@@ -156,15 +197,16 @@ export function IntradayChart({
       if (i === 0 || hourMinute(p.t).hour !== hourMinute(points[i - 1].t).hour) acc.push(i)
       return acc
     }, [])
-  }, [points, range])
+  }, [points, range, intraday])
 
   const lastPoint = points.length > 0 ? points[points.length - 1] : null
   const lastChange = lastPoint && prevClose !== null ? lastPoint.c - prevClose : null
   const lineColor =
     lastChange === null ? CHART_COLORS.line : lastChange >= 0 ? CHART_COLORS.up : CHART_COLORS.down
 
-  const rangeLabel = range === '1d' ? '一日' : '五日'
+  const rangeLabel = TREND_LABELS[range]
   const dateRemark = useMemo(() => {
+    if (!intraday) return `${TREND_LABELS[range]}走勢`
     if (range === '1d') {
       const formattedDate =
         tradeDate && /^\d{8}$/.test(tradeDate)
@@ -175,7 +217,7 @@ export function IntradayChart({
       return '當日走勢'
     }
     return '近 5 日走勢'
-  }, [range, tradeDate, lastPoint])
+  }, [range, tradeDate, lastPoint, intraday])
 
   const ariaLabel = !series || !lastPoint
     ? `${rangeLabel}走勢，無資料`
@@ -187,13 +229,16 @@ export function IntradayChart({
     const p = points[i]
     if (!p) return null
     const v = vwap[i]
-    return [
-      `時間 ${hourMinute(p.t).label}`,
-      `成交 ${fmt2(p.c)}`,
-      changeLabel(p.c, prevClose),
-      v === null ? null : `均價 ${fmt2(v)}`,
-      `單量 ${Math.round(p.v / 1000).toLocaleString('en-US')}`,
-    ]
+    const dateField = intraday
+      ? `時間 ${hourMinute(p.t).label}`
+      : (() => {
+          const { y, m, d } = utcParts(p.t)
+          return `日期 ${y}-${m}-${d}`
+        })()
+    const volumeField = intraday
+      ? `單量 ${Math.round(p.v / 1000).toLocaleString('en-US')}`
+      : `成交量 ${Math.round(p.v / 1000).toLocaleString('en-US')} 張`
+    return [dateField, `成交 ${fmt2(p.c)}`, changeLabel(p.c, prevClose), v === null ? null : `均價 ${fmt2(v)}`, volumeField]
       .filter((s): s is string => s !== null)
       .join('　')
   }
@@ -206,12 +251,11 @@ export function IntradayChart({
           <span className="chart-time-badge">{dateRemark}</span>
         </div>
         <div className="m-range" role="group" aria-label="走勢區間">
-          <button type="button" aria-pressed={range === '1d'} onClick={() => onRangeChange('1d')}>
-            一日
-          </button>
-          <button type="button" aria-pressed={range === '5d'} onClick={() => onRangeChange('5d')}>
-            五日
-          </button>
+          {(ranges ?? (['1d', '5d'] as unknown as readonly R[])).map((r) => (
+            <button key={r} type="button" aria-pressed={r === range} onClick={() => onRangeChange(r)}>
+              {TREND_LABELS[r]}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -231,13 +275,20 @@ export function IntradayChart({
       ) : series === null || points.length === 0 ? (
         <div className="intraday-empty">無走勢資料</div>
       ) : (
-        <>
+        /*
+         * Daily ranges carry the meaningful, price-bearing label on this wrapper instead of on
+         * each ChartFrame's own SVG `<title>`: the price and volume frames would otherwise share
+         * the same range-label substring (`${ariaLabel}` vs `${ariaLabel}，成交量`) and collide
+         * under `getByRole('group', { name: /…走勢/ })`. Intraday ranges are unaffected — this is
+         * a plain fragment for them, exactly as before.
+         */
+        <div role={intraday ? undefined : 'group'} aria-label={intraday ? undefined : ariaLabel}>
           <ChartFrame
             height={showVolume ? 220 : 290}
             domain={domain}
             labels={labels}
             labelIndices={labelIndices}
-            ariaLabel={ariaLabel}
+            ariaLabel={intraday ? ariaLabel : '走勢圖'}
             crosshair
             hoverIndex={hover}
             onHover={setHover}
@@ -333,7 +384,7 @@ export function IntradayChart({
               domain={volumeDomain}
               labels={labels}
               labelIndices={labelIndices}
-              ariaLabel={`${ariaLabel}，成交量`}
+              ariaLabel={intraday ? `${ariaLabel}，成交量` : '走勢圖，成交量'}
               hoverIndex={hover}
               onHover={setHover}
             >
@@ -365,7 +416,7 @@ export function IntradayChart({
               }}
             </ChartFrame>
           )}
-        </>
+        </div>
       )}
     </div>
   )

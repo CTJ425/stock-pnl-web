@@ -1,11 +1,28 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 個股走勢圖區間擴充為八個，尚未部署（Task 154, 0.9.41-dev.1）
-- Status: **🔄 IN PROGRESS**
-- Timestamp: 2026-09-10 12:26:19 Asia/Taipei
+- Action: 行情走勢圖也擴充為八個區間（Task 155, 0.9.42）
+- Status: **✅ COMPLETED**
+- Timestamp: 2026-09-10 14:14:51 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-10 14:14:51 Asia/Taipei (Task 155, 0.9.42)
+
+**行情分頁的走勢圖也擴充為八個區間**
+
+0.9.41 只改了技術面的 K 線圖，使用者看到成果後反轉了「只擴充 K 線圖」的決定，要求行情分頁的走勢圖也要八個區間。行情圖維持折線，八個區間都是折線；K 棒與指標仍然只在技術面。
+
+`docs/agent/specs/chart-range-eight.md` §7 原本把 `IntradayChart.tsx` 列在「不需改動」，該行已加註修訂並指向新規格 `docs/agent/specs/quote-tab-trend-ranges.md`。
+
+- **改動維持在四個檔案**，關鍵是三個既有事實：`IntradayChart` 實際只讀 `series.points` / `prevClose` / `symbol`，所以 `series` 的型別可以**縮**成 `TrendSeries`，日線組出來的序列不必假造 `interval`；props 改成泛型 `<R extends TrendRange>`，`TwIndexToday.tsx` 推導成 `IntradayRange` 因而完全不用改（直接放寬型別會因參數逆變而編譯失敗）；切片沿用 0.9.41 已測過的 `rangeBars`，x 軸標記沿用 `pickLabelIndices`，沒有第二套規則。
+- **日線區間不畫均價線**：一年的累積 VWAP 沒有意義。做法是讓該序列全為 `null`，線段函式自然不產生線，`均價` 欄位顯示 `—`，其餘程式碼不動。
+- **reviewer 找到一個 BLOCKER**：effect 讀 `dailyStatus` 卻沒把它放進相依陣列。`useDailySeries` 失敗時只呼叫 `setStatus('error')`，`series` 仍是同一個 `null`，所以 effect 不會重跑，骨架永遠停在載入中。修法是精準相依——只有本地日線分支消費 `dailyStatus`，其餘分支凍結成常數；無條件放進相依會讓預設的一日區間在日線背景載入完成時清空並重抓，每次開頁都閃一次骨架。
+- **兩處既定偏離已記入規格**：`ranges` 的雙重轉型（`R` 在泛型內未受約束，單次轉型過不了），以及日線區間外層多包一個帶 `role="group"` 的 `div`（`ChartFrame` 用 `aria-labelledby`，價格圖與成交量圖的名稱只差一個後綴，角色查詢無法區分）。
+- **版面事實**：行情與技術面同時顯示在同一頁（技術面是分析分頁裡的附加區塊，不是切換），所以頁面上同時有兩排區間按鈕，五個標籤重複。`StockDetailPage.test.tsx` 的技術面查詢因此必須指定區塊。
+- **測試**：新增 22 條，總數 1814 → 1836，全部通過。`npm run build`、`npm run typecheck:edge`、`npx vitest run` 三道 gate 皆 exit 0。
+- **不需部署 Edge**：本版為純前端改動。`daily` action 於 0.9.41 上線，DEV 為 v7。
+- **⚠️ PROD 仍未部署 `stock-price`**：`近 5 年` 與 `全部` 在正式站兩個分頁都還不會有資料，需使用者另行授權。
 
 ## 📅 Log: 2026-09-10 12:26:19 Asia/Taipei (Task 154, 0.9.41-dev.1)
 
@@ -23,24 +40,3 @@
 - **✅ DEV 部署（2026-09-10 12:47 Asia/Taipei）**: 使用者授權後部署 `stock-price` 至 DEV（`zyebvayngwrqzoaicbwd`），來源 commit `8381e37`，工作區乾淨。版本 v6 → v7，`ezbr_sha256` 由 `90e9dc2c28836a3a…` 變為 `253e6c3d25d6e7ac…`；判定依據是 sha 前後比對而非版號。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`。以 `--project-ref` 指定專案，未動 `supabase link`。`dailyRange.ts` 跨目錄匯入 `../stock-report/twDaily.ts` 打包無誤，該風險結案。
 - **✅ 實機煙霧測試（DEV）**: `range=5y` 回 HTTP 200、granularity `1d`、1213 根（Yahoo 原始 1215，丟掉 2025-08-01 空格與當日未收盤那根，末根為 2026-09-09）；`range=max` 回 granularity `1mo`、320 根（原始 321，丟掉即時列），末根 `2026-09-01` 證明 `gmtoffset` 有生效、月線落在月初；`range=10y` 回 HTTP 400；既有 `intraday` action 仍回 248 點，未受影響。
 - **⚠️ PROD 尚未部署**: 需使用者另行授權。
-
-## 📅 Log: 2026-09-10 11:17:55 Asia/Taipei (Task 153, 0.9.40-dev.1)
-
-**Edge Function 的 twlist 補上完整性檢查，結案 RISK-008**
-
-- **起因**: 0.9.39 的 BUG-075 只修了客戶端直連路徑。Edge Function `stock-price` 的 `twlist` action 仍犯同一個錯，記為 RISK-008，使用者指示直接修掉。
-- **根因**: `handleTwList` 用 `Promise.allSettled` 合併任何成功的來源，只有合併後長度為 0 才回 502。上市（TWSE）或上櫃（TPEx）其中之一掛掉時，呼叫端會拿到帶 HTTP 200 的半份清單並快取 30 分鐘。
-- **實作方案**: 抽出純邏輯模組 `sources/supabase/functions/stock-price/twList.ts`，不含 Supabase／Deno 匯入，比照 `backup-transactions/backupPlan.ts` 的既有模式以純 vitest 測試。`handleTwList` 只保留 `fetchJson`、兩個 URL、`UA` 標頭與 10 秒逾時，其餘委派給 `buildTwList`；不完整時回 502。`listNumber` 一併移入該模組，`index.ts` 內已無其他呼叫者。
-- **Reviewer**: FAIL，1 BLOCKER + 2 RISK。BLOCKER 屬實並已修：第一版的完整性檢查只看 `value.length === 0`，擋不住「陣列非空但每一列都缺代號或缺名稱」的來源——全部被 `push` 丟棄後結果仍是 `ok: true` 的半份清單。改為逐來源計算「結構有效列數」，且刻意在去重之前計算：僅與另一交易所重複的列仍證明此來源有回應，因此計入；整批無效才判定該來源失效。這個順序讓 E5（重複代號）與 E8（整批無效）兩個測試同時成立。
-- **主 session 另一處收斂**: builder 依 brief 在兩處 `for...of` 用了 `as` 斷言。改為四段式明確窄化後 TypeScript 能自行證明兩個讀取都在 fulfilled 分支，斷言全部移除，`typecheck:edge` 仍 exit 0。
-- **不修的兩項**: RISK-010（來源被上游截斷但非空時兩端都視為完整，理論性，兩個 OpenAPI 目前不分頁）記入 `BUG_FIX.md`；`fetchViaEdge` 未讀取回應內的 `error` 字串，屬既有的觀測性落差，未擴大本次範圍。
-- **驗證**:
-  - 新增 8 條測試（E1–E8）於 `sources/supabase/functions/stock-price/twList.test.ts`。
-  - 反向驗證：E8 在修正 BLOCKER 之前確認轉紅（`expected true to be false`）。
-  - `npx vitest run` exit 0（111 測試檔 / 1790 測試全數通過，無 `Errors` 行）。
-  - `npm run build` exit 0。
-  - `npm run typecheck:edge` exit 0——本次改動在 `supabase/functions/`，此為獨立 gate，`npm run build` 不會檢查該目錄。
-- **版本更新**: 同步 4 檔案升版至 0.9.40-dev.1。
-- **⚠️ 未部署**: 本次僅修改程式碼。`stock-price` Edge Function 需另行 `supabase functions deploy` 後才會生效，DEV 與 PROD 皆尚未部署。使用者尚未授權部署。
-- **✅ 後續部署（2026-09-10 11:37:23 Asia/Taipei）**: 使用者授權後部署至 DEV 與 PROD，來源 commit `290f9d3`。`stock-price` 兩邊皆由 v5 進到 v6，`ezbr_sha256` 由 `30240a50864fb60f…` 變為 `90e9dc2c28836a3a…`；兩邊 sha 相同，證明跑的是同一份新 bundle。判定依據是 sha 前後比對而非 version 號——版號跳動只證明有東西上傳，曾發生過版號較新卻是舊程式碼的情況。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`（該旗標只有 `stock-report` 需要）。以 `--project-ref` 指定專案，未動 `supabase link`。PROD 部署在 `main` 分支執行。
-- **✅ 實機煙霧測試**: DEV 與 PROD 各打一次 `{"action":"twlist"}`，皆回 HTTP 200、27819 筆，且同時含上市 3037 與上櫃 6488，證明完整性檢查沒有誤擋健康路徑。

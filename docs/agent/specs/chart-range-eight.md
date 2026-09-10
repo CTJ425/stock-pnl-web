@@ -191,6 +191,12 @@ The call only reads `.latest`, which is range independent, so the value does not
 
 ### 7. Files that need no change
 
+> **Revision 2026-09-10 (0.9.42).** The `IntradayChart.tsx` line below is **obsolete**.
+> The user reversed the "只擴充 K 線圖的選擇器" decision after seeing 0.9.41 and asked for the
+> same eight ranges on the 行情 trend chart. That work is specified in
+> `docs/agent/specs/quote-tab-trend-ranges.md`. Everything else in this spec still holds:
+> the 技術面 tab keeps the six ranges described here, and the Edge `daily` action is unchanged.
+
 - `AiTab.tsx:115` already uses `'1y'`, which survives.
 - `aiPayload.ts` reads `RANGE_LABELS[range]` generically.
 - `components/Fx/fxConvert.ts` has its own unrelated `FxRange = '3m'|'6m'|'1y'`.
