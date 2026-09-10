@@ -22,7 +22,10 @@
 - **版面事實**：行情與技術面同時顯示在同一頁（技術面是分析分頁裡的附加區塊，不是切換），所以頁面上同時有兩排區間按鈕，五個標籤重複。`StockDetailPage.test.tsx` 的技術面查詢因此必須指定區塊。
 - **測試**：新增 22 條，總數 1814 → 1836，全部通過。`npm run build`、`npm run typecheck:edge`、`npx vitest run` 三道 gate 皆 exit 0。
 - **不需部署 Edge**：本版為純前端改動。`daily` action 於 0.9.41 上線，DEV 為 v7。
-- **⚠️ PROD 仍未部署 `stock-price`**：`近 5 年` 與 `全部` 在正式站兩個分頁都還不會有資料，需使用者另行授權。
+- **✅ PROD 部署（2026-09-10 14:32 Asia/Taipei）**: 使用者授權後部署 `stock-price` 至 PROD（`hrilemueiqyaoiwnkeuu`），在 `main` 分支執行，工作區乾淨，來源 commit `c4a8b9e`。版本 v6 → v7，`ezbr_sha256` 由 `90e9dc2c28836a3a…` 變為 `253e6c3d25d6e7ac…`，**與 DEV 相同**，證明兩邊跑同一份 bundle。`verify_jwt` 維持 `true`，未加 `--no-verify-jwt`。以 `--project-ref` 指定專案，未動 `supabase link`。
+- **✅ 實機煙霧測試（PROD）**: `range=5y` 回 HTTP 200、granularity `1d`、1214 根，末根 `2026-09-10`；`range=max` 回 granularity `1mo`、320 根，末根 `2026-09-01`；`range=10y` 回 HTTP 400。回歸：`intraday` 回 271 點，`twlist` 回 27819 筆且同時含上市 3037 與上櫃 6488。
+- **📌 DEV 與 PROD 的 5y 根數差一根，是正確行為**: DEV 於 12:47 測得 1213 根、末根 `2026-09-09`；PROD 於 14:32 測得 1214 根、末根 `2026-09-10`。差別在台北時間 13:30 收盤與否——`extractDaily` 的盤中過濾會剔除當日未結算的滾動 Bar，收盤後才保留。
+- **🔑 Token 權限差異**: 本次使用的 access token 可列出 PROD，但對 DEV 的 `functions list` 回 401。DEV 稍早已用前一個 token 部署並驗證完畢，不影響結果。兩個 token 都應撤銷。
 
 ## 📅 Log: 2026-09-10 12:26:19 Asia/Taipei (Task 154, 0.9.41-dev.1)
 
