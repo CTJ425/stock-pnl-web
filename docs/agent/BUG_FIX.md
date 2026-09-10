@@ -8,6 +8,22 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### RISK-008 — `fetchViaEdge` 沒有完整性檢查，Edge 回傳截斷清單一樣會被快取
+- **Where**: `sources/src/services/twMarketData.ts`（`fetchViaEdge`）
+- **Failure scenario**: BUG-075 只修了直連路徑。Edge Function `stock-price` 的 `twlist` action 若回傳非空但截斷的清單，`getTwStockList` 仍以 `rows.length > 0` 判定成功並快取 30 分鐘，重現同一個失效模式。
+- **Decision**: 不修。客戶端無法分辨「截斷」與「完整」，必須在 Edge 端加檢查，而那是獨立部署，不在本次範圍。
+- **Status**: OPEN（已知風險）
+
+---
+
+### RISK-009 — 加入觀察的「還有 N 筆」計數包含已加入、不可點的項目
+- **Where**: `sources/src/components/StockDetail/AddWatchModal.tsx`
+- **Failure scenario**: BUG-074 之後已加入的項目不再被濾掉，因此 `matches.length` 會把它們算進去。查詢範圍很廣且總筆數超過 `RESULT_CAP`（50）時，「還有 N 筆，請輸入更完整的關鍵字」的 N 會包含使用者本來就不能加入的列。
+- **Decision**: 不修。那些確實是符合條件的列，計數本身沒有錯，只是其中部分不可點；影響輕微，不值得為此增加程式碼。
+- **Status**: OPEN（已接受，不修）
+
+---
+
 ### AUDIT-10 — CSV 匯入把「以點為千分位」的數字少算 1000 倍且不報錯
 - **Where**: `sources/src/utils/csv.ts` (`parseNumber`)
 - **Failure scenario**: 交易單價為 `"2.500"`（特定來源可能代表 2500）解析為 `2.5`，通過 `price > 0` 驗證，少算 1000 倍。

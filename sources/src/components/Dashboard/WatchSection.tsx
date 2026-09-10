@@ -11,7 +11,7 @@ import { WATCHLIST_MAX, addWatch, listWatchlist, removeWatch, type WatchItem } f
 import { fetchPrices, type PriceMap } from '../../services/priceProxy'
 import { fmtPrice, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { getStockCategory } from '../../utils/stockCategory'
-import { groupWatchItems } from '../../utils/stockGrouping'
+import { getGroupCategoryName, groupWatchItems } from '../../utils/stockGrouping'
 import { AddWatchModal } from '../StockDetail/AddWatchModal'
 import { useToast } from '../Common/Toast'
 import { useRowActivate } from '../../hooks/useRowActivate'
@@ -316,6 +316,10 @@ export function WatchSection({
                           ? (quote.price - quote.prevClose) / quote.prevClose
                           : null
                       const category = getStockCategory(item.ticker, item.name, quote?.industry)
+                      // The group header above already names this bucket; repeating it inside the card only
+                      // steals width from the stock name. `getGroupCategoryName` is the same normaliser the
+                      // grouping uses, so a raw industry and its group name compare equal here.
+                      const showIndustry = Boolean(category) && getGroupCategoryName(category ?? '') !== group.name
                       const activateCard = useRowActivate(
                         () => onSelectTicker(item.ticker, item.name),
                         `開啟 ${item.ticker} ${item.name}`,
@@ -333,7 +337,6 @@ export function WatchSection({
                               <span className="watchlist-card-name" title={item.name}>
                                 {item.name}
                               </span>
-                              {category && <span className="watchlist-card-badge">{category}</span>}
                             </div>
                             <button
                               type="button"
@@ -348,6 +351,11 @@ export function WatchSection({
                               ×
                             </button>
                           </div>
+                          {showIndustry && (
+                            <div className="watchlist-card-industry" title={category ?? undefined}>
+                              {category}
+                            </div>
+                          )}
                           <div className="watchlist-card-body">
                             <div className={`watchlist-card-price ${pnlClass(pct)}`}>
                               {initialLoading && !quote ? (
