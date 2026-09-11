@@ -6,6 +6,12 @@
 
 ---
 
+### Bug ID: BUG-080 — iPhone: select text clipped, date input overflow, chart title and admin button squeezed to one character per line
+- **Date**: 2026-09-11, fixed in 0.9.46
+- **Root Cause**: (1) 0.9.45 added `.field select` to the ≤720 px rule `font-size: 16px; padding: 12px 12px` while the base height stayed 40 px, leaving 16 px for 16 px text; iOS clipped it. (2) iOS gives date inputs an intrinsic min-width, extra height and centred text. (3) `.m-card-h` and the ProbeWarRoom stamp row were non-wrapping flex rows; the CJK title and the button shrank to min-content (one character). (4) The add-transaction FAB rendered on the admin view.
+- **Fix**: see CHANGELOG 0.9.46. Files: `sources/src/index.css`, `sources/src/components/Admin/ProbeWarRoom.tsx`, `sources/src/components/AppShell.tsx`.
+- **Status**: ✅ FIXED (0.9.46) — iOS rendering of the select and date controls to be confirmed on the device after upload.
+
 ### Bug ID: BUG-078 — Storage 用 400 表示「查無物件」，讀檔因此拋錯並跳過即時產生
 
 - **Date**: 2026-09-10, fixed in 0.9.44
