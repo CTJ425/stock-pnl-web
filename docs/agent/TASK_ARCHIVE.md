@@ -1,5 +1,22 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 159 — completed sub-items (rolled from TASK.md 2026-09-11 13:03:30 Asia/Taipei)
+- D2. ~~Fee rate takes a decimal; 0.6 is accepted with no warning.~~ ✅ 0.9.45 — 「＝ N 折」 hint and out-of-range warning (`utils/feeRateHint.ts`) in the form and the workspace dialog; stored value unchanged.
+- D4. ~~Error toasts auto-dismiss after 5 s.~~ ✅ 0.9.45 — errors stay until closed. Correction: the close button already existed; the audit report was fixed.
+- D6. ~~Transaction form validates on submit only with one combined message.~~ ✅ 0.9.45 — per-field errors, `aria-invalid`, focus on the first invalid field.
+- D8. ~~Dark theme contrast below WCAG AA.~~ ✅ 0.9.45 — `--up` #ff8389 (5.33:1), `--cds-text-helper` #a8a8a8 (5.31:1), `.help-tip` secondary token (6.76:1).
+- D9. ~~Desktop FAB covers the 未實現報酬率 column.~~ ✅ 0.9.45 — `.header-add` in the header above 720 px; exactly one 新增交易 button.
+- D11. ~~Empty account shows all-zero summary cards.~~ ✅ 0.9.45 — cards hidden; 「新增第一筆交易」 / 「匯入 CSV」 buttons.
+- D12. ~~No `<h1>`; heading order broken.~~ ✅ 0.9.45 — sr-only h1 per view; h1 → h2 → h3 on the dashboard.
+
+### Task 158 — completed sub-items (rolled from TASK.md 2026-09-11 13:03:30 Asia/Taipei)
+2. ~~「新增交易」 FAB covers content (116×48 px, no bottom space reserved).~~ ✅ 0.9.45 — 56×56 icon-only FAB at ≤720 px; `main` bottom padding 128 px.
+5. ~~Search inputs are 14 px, so iOS Safari zooms on focus.~~ ✅ 0.9.45 — all inputs 16 px at ≤720 px.
+6. ~~Number inputs have no `inputmode`; the qty field is squeezed to ~49 px by the 張/股 select.~~ ✅ 0.9.45 — `inputmode="decimal"` on 4 fields; qty field takes a full row at ≤560 px (50 → 215 px).
+9. ~~`min-height: 100vh` (`index.css:239, 251, 2029`); use `100dvh`.~~ ✅ 0.9.45
+15. ~~The manifest has one SVG icon and there is no `apple-touch-icon`.~~ ✅ 0.9.45 — 180 / 192 / 512 px PNG icons.
+16. ~~A US quote failure leaves skeletons with no error text.~~ ✅ 0.9.45 — 「—」 after loading plus 「目前取不到美股報價」 and 重試.
+
 ### Task 155 — completed sub-items (rolled from TASK.md 2026-09-10 14:14:51 Asia/Taipei)
 
 1. ~~盤點 QuoteTab / IntradayChart 結構，確認可縮小的 series 型別與泛型 props~~ ✅

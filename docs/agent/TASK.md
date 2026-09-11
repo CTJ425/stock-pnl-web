@@ -9,11 +9,12 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-10 15:14)
+## 📍 Where the project stands (2026-09-11 13:03)
 
-- **Version 0.9.44 — released and live.** `main` and `dev` are synchronized at `0.9.44`.
+- **Version 0.9.45 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.45`; Cloudflare Pages still serves 0.9.44 until the manual upload (README step 9-1).
+  - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
   - Shipped 2026-09-10: 查無檔案被當成錯誤、即時產生因此永遠不會執行（0.9.44, BUG-078）、非持股股票日線區間讀不到（0.9.43, BUG-077）、行情走勢圖擴充為八個區間（0.9.42）、技術面 K 線圖擴充為六個區間與 Edge `daily` action（0.9.41）、Edge 台股清單完整性檢查（0.9.40）。
-  - Verification: 114 test files / **1,845** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0.
+  - Verification: 117 test files / **1,864** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0.
   - Edge Functions: `stock-price` is **v7** on both environments (deployed 2026-09-10 from commit `c4a8b9e`, `ezbr_sha256` `253e6c3d25d6e7ac…` — **identical sha on DEV and PROD**), `stock-report` is **v8**, `backup-transactions` is **v4**.
   - **前端沒有自動部署。** 手動 `npm run build` 後上傳 `sources/dist/` 到 Cloudflare Pages（PROD `site_url` = `https://stock-pnl-web.pages.dev/`）。流程寫在 `README.md` 步驟 9-1。合併 `main` 不等於上線，驗收看畫面左下角版本徽章。
   - Known and not done: Task 144 的資源用量監控與 R2 多目標備份（皆未動工）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
@@ -24,22 +25,16 @@
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
+- **Done**: items D2, D4, D6, D8, D9, D11, D12 (0.9.45) — full text in `TASK_ARCHIVE.md`.
 - **Spec**: `docs/design/desktop-ux-audit.html` (item numbers D1–D15 match the report)
-- **What is this**: Audit measured at 1440×900 and 1024×768, light + dark theme, local mode, 0.9.44. Batch 1 (target 0.9.45) = D2 (hint + range warning only), D4, D6, D8, D9, D11, D12, D13 (「Active 持股」 only). Side finding recorded as BUG-079.
+- **What is this**: Audit measured at 1440×900 and 1024×768, light + dark theme, local mode, 0.9.44. Batch 1 shipped in 0.9.45 = D2, D4, D6, D8, D9, D11, D12, plus the title half of D1 and the 「Active 持股」 half of D13. Side finding recorded as BUG-079.
 
-- D1. Page switch does not change the URL (stays `/`); `document.title` is static. — ⏳ batch 2
-- D2. Fee rate takes a decimal (0.001425); 0.6 is accepted with no warning. Batch 1: show a 「＝ N 折」 hint and an out-of-range warning; do not change the stored value's meaning. — ⏳ batch 1
+- D1. Page switch does not change the URL (stays `/`). The `document.title` half shipped in 0.9.45 (「<頁名> · 股票小幫手」). — ⏳ batch 2
 - D3. 5 native `confirm()` calls; no undo after delete. — ⏳ batch 2
-- D4. All toasts auto-dismiss after 5 s (`Toast.tsx:38`), errors included; no close button. — ⏳ batch 1
 - D5. 7 error messages append raw Supabase `error.message` (`dataProvider.ts:281–360`). — ⏳ batch 2
-- D6. Transaction form validates on submit only and shows one message for three fields. — ⏳ batch 1
 - D7. Holdings rows carry ~20 numbers (未含費 / 淨收 / 券商 sub-lines). — ⏳ batch 3
-- D8. Dark theme: 43 text runs below WCAG AA (`#fa4d56` on `#333333` = 3.77:1; `#8d8d8d` = 3.81:1); light-theme help icons 3.81:1. — ⏳ batch 1
-- D9. Desktop 「新增交易」 FAB covers the 未實現報酬率 column. — ⏳ batch 1
 - D10. At 1024 px the holdings table is 1,023 px wide in a 974 px box. — ⏳ batch 3
-- D11. An empty account shows all-zero summary cards; the empty state has no action buttons. — ⏳ batch 1
-- D12. No `<h1>`; h3 before h2 on the dashboard; the transactions page has no heading. — ⏳ batch 1
-- D13. Terminology: 工作區 (16) / 帳戶 (5) / 投資組合; 「Active 持股」. Batch 1 fixes 「Active 持股」 only; the account noun needs a user decision. — ⏳ batch 1 (partial), user decision
+- D13. Terminology: 工作區 (16) / 帳戶 (5) / 投資組合. 「Active 持股」→「目前持股」 shipped in 0.9.45; the account noun needs a user decision. — ⏳ user decision
 - D14. 20 help buttons sit in the Tab order before table content. — ⏳ batch 3
 - D15. 11 components format numbers with `toFixed()` instead of `utils/formatters.ts`. — ⏳ batch 3
 
@@ -47,25 +42,20 @@
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
+- **Done**: items 2, 5, 6, 9, 15, 16 (0.9.45) — full text in `TASK_ARCHIVE.md`.
 - **Spec**: `docs/design/mobile-ux-audit-iphone13mini.html` (item numbers 1–17 match the report)
-- **What is this**: Audit measured at 375×629 (Playwright `iPhone 13 Mini`, local mode, 0.9.44). Batch 1 (target 0.9.45) = items 2, 5, 6, 8, 9, 11, 15, 16. Batches 2–3 = the rest.
+- **What is this**: Audit measured at 375×629 (Playwright `iPhone 13 Mini`, local mode, 0.9.44). Batch 1 shipped in 0.9.45 = items 2, 5, 6, 9, 15, 16. Item 8 deferred (needs a real iPhone); item 11 re-scoped (see item). Batches 2–3 = the rest.
 
 1. Holdings / transactions / yearly tables show 33–40% of their width at 375 px; P&L is columns 9–10. Card list at ≤560 px. — ⏳ batch 2
-2. 「新增交易」 FAB covers content (116×48 px, no bottom space reserved). — ⏳ batch 1
 3. Tap targets under 44 px (28 of 30 on the dashboard; 14×14 help icons, 16×16 checkboxes, 39 px nav tabs). — ⏳ batch 2
 4. 92% of dashboard text is 12 px; the ≤1120 px shrink rule also applies on phones. — ⏳ batch 2
-5. Search inputs are 14 px, so iOS Safari zooms on focus. — ⏳ batch 1
-6. Number inputs have no `inputmode`; the qty field is squeezed to ~49 px by the 張/股 select. — ⏳ batch 1
 7. The first screen shows only summary cards; 「Active 持股」 wraps. — ⏳ batch 2
-8. No `viewport-fit=cover`, so `env(safe-area-inset-*)` resolves to 0. — ⏳ batch 1
-9. `min-height: 100vh` (`index.css:239, 251, 2029`); use `100dvh`. — ⏳ batch 1
+8. No `viewport-fit=cover`, so `env(safe-area-inset-*)` resolves to 0. Deferred from batch 1: verify on a real iPhone in standalone mode before changing. — ⏳ batch 2
 10. Charts handle mouse events only (`chartFrame.tsx`); no pointer/touch. — ⏳ batch 3
-11. `theme-color` is fixed at `#161616`; the light theme gets a dark status bar. — ⏳ batch 1
+11. The manifest `theme_color` / `background_color` are fixed at `#161616` (dark splash for light-theme users). Correction: `applyTheme()` already updates the `theme-color` meta at runtime (`utils/settings.ts:43–45`). — ⏳ batch 3 (low)
 12. Four low-use tool buttons take 20% of the transactions first screen. — ⏳ batch 3
 13. The add-transaction modal is not full-screen on phones; the save button is below the fold. — ⏳ batch 3
 14. Cloud-mode bottom nav has 6 tabs; proposal is 5 with 「更多」. — ⏳ batch 3, user decision
-15. The manifest has one SVG icon and there is no `apple-touch-icon`. — ⏳ batch 1
-16. A US quote failure leaves skeletons with no error text. — ⏳ batch 1
 17. Flag emoji render as empty boxes without a colour emoji font. — ⏳ batch 3
 
 ### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
