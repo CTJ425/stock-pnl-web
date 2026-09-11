@@ -69,6 +69,25 @@ describe('ToastProvider', () => {
     expect(screen.queryByText('已刪除')).toBeNull()
   })
 
+  // Task 159 D4: an error that vanishes while the user looks elsewhere leaves no way to know a retry is needed.
+  it('keeps an error toast until the user closes it', () => {
+    vi.useFakeTimers()
+    render(
+      <ToastProvider>
+        <Trigger message="寫入失敗" kind="error" />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByText('觸發'))
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+    expect(screen.queryByText('寫入失敗')).not.toBeNull()
+
+    fireEvent.click(screen.getByLabelText('關閉通知'))
+    expect(screen.queryByText('寫入失敗')).toBeNull()
+  })
+
   it('marks an error toast differently from a success toast', () => {
     render(
       <ToastProvider>

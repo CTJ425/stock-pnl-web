@@ -18,6 +18,7 @@ import { calculateFee, inferFeeRate } from '../../utils/fees'
 import type { Holding } from '../../utils/pnlEngine'
 import { sellTaxRate } from '../../utils/pnlEngine'
 import { getFeeRate, getMinFee } from '../../utils/settings'
+import { describeTwFeeRate } from '../../utils/feeRateHint'
 import type { StockSearchResult } from '../../services/stockSearch'
 import { lookupTicker, searchStocks } from '../../services/stockSearch'
 import { isSupabaseConfigured } from '../../services/supabase'
@@ -89,6 +90,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [fee, setFee] = useState(initial ? String(initial.fee_tax) : '0')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ ticker?: string; price?: string; qty?: string }>({})
+  const tickerInputRef = useRef<HTMLInputElement | null>(null)
+  const priceInputRef = useRef<HTMLInputElement | null>(null)
+  const qtyInputRef = useRef<HTMLInputElement | null>(null)
 
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [searching, setSearching] = useState(false)
@@ -332,10 +337,21 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     const feeVal = parseFloat(fee) || 0
     const cleanTicker = ticker.trim().toUpperCase().replace(/^TPE:/, '')
 
-    if (!cleanTicker || !(p > 0) || !(shares > 0)) {
-      setMessage({ kind: 'error', text: '請填寫代號、單價與股數（皆須為正數）' })
+    const nextFieldErrors: { ticker?: string; price?: string; qty?: string } = {}
+    if (!cleanTicker) nextFieldErrors.ticker = '請輸入股票代號'
+    if (!(p > 0)) nextFieldErrors.price = '單價要大於 0'
+    if (!(shares > 0)) nextFieldErrors.qty = '股數要大於 0'
+    if (nextFieldErrors.ticker || nextFieldErrors.price || nextFieldErrors.qty) {
+      setFieldErrors(nextFieldErrors)
+      const firstInvalid = nextFieldErrors.ticker
+        ? tickerInputRef.current
+        : nextFieldErrors.price
+          ? priceInputRef.current
+          : qtyInputRef.current
+      firstInvalid?.focus()
       return
     }
+    setFieldErrors({})
     if (feeVal < 0) {
       setMessage({ kind: 'error', text: '手續費 / 稅金不可為負數' })
       return
@@ -386,6 +402,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   }
 
   const showTax = market === 'TPE' && txType === 'SELL'
+  const feeRateHint = useMemo(
+    () => (market === 'TPE' ? describeTwFeeRate(parseFloat(feeRate)) : { discount: null, warning: null }),
+    [market, feeRate],
+  )
 
   return (
     <form onSubmit={submit}>
@@ -462,9 +482,12 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         <label htmlFor="tx-ticker">股票代號（台股 2330 / 美股 AAPL）</label>
         <input
           id="tx-ticker"
+          ref={tickerInputRef}
           value={ticker}
           autoComplete="off"
           placeholder={isSpotSell ? '點選或輸入代號（將列出庫存持股）' : '輸入代號會自動帶出名稱'}
+          aria-invalid={fieldErrors.ticker ? 'true' : undefined}
+          aria-describedby={fieldErrors.ticker ? 'tx-ticker-error' : undefined}
           onFocus={() => {
             if (isSpotSell || isShortCover) setShowTickerHoldings(true)
           }}
@@ -475,12 +498,18 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             setTicker(e.target.value)
             updateTaxRateAuto(e.target.value)
             if (isSpotSell || isShortCover) setShowTickerHoldings(true)
+            if (fieldErrors.ticker) setFieldErrors((prev) => ({ ...prev, ticker: undefined }))
           }}
           onBlur={() => {
             setShowTickerHoldings(false)
             handleTickerBlur()
           }}
         />
+        {fieldErrors.ticker && (
+          <p id="tx-ticker-error" className="field-error">
+            {fieldErrors.ticker}
+          </p>
+        )}
         {isSpotSell && showTickerHoldings && (
           <div className="suggestions" data-testid="ticker-holdings-dropdown">
             {filteredTickerHoldings.length === 0 ? (
@@ -638,25 +667,44 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           <label htmlFor="tx-price">交易單價</label>
           <input
             id="tx-price"
+            ref={priceInputRef}
             type="number"
+            inputMode="decimal"
             step="0.01"
             min="0"
             value={price}
             placeholder="單股價格"
-            onChange={(e) => setPrice(e.target.value)}
+            aria-invalid={fieldErrors.price ? 'true' : undefined}
+            aria-describedby={fieldErrors.price ? 'tx-price-error' : undefined}
+            onChange={(e) => {
+              setPrice(e.target.value)
+              if (fieldErrors.price) setFieldErrors((prev) => ({ ...prev, price: undefined }))
+            }}
           />
+          {fieldErrors.price && (
+            <p id="tx-price-error" className="field-error">
+              {fieldErrors.price}
+            </p>
+          )}
         </div>
-        <div className="field">
+        <div className="field tx-qty-field">
           <label htmlFor="tx-qty">交易股數</label>
           <div className="field-row">
             <input
               id="tx-qty"
+              ref={qtyInputRef}
               type="number"
+              inputMode="decimal"
               step="0.001"
               min="0"
               value={qty}
               placeholder="數量"
-              onChange={(e) => setQty(e.target.value)}
+              aria-invalid={fieldErrors.qty ? 'true' : undefined}
+              aria-describedby={fieldErrors.qty ? 'tx-qty-error' : undefined}
+              onChange={(e) => {
+                setQty(e.target.value)
+                if (fieldErrors.qty) setFieldErrors((prev) => ({ ...prev, qty: undefined }))
+              }}
             />
             <select
               className="narrow"
@@ -670,6 +718,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             </select>
           </div>
           {market === 'US' && <div className="field-hint">美股以「股」為單位</div>}
+          {fieldErrors.qty && (
+            <p id="tx-qty-error" className="field-error">
+              {fieldErrors.qty}
+            </p>
+          )}
         </div>
       </div>
 
@@ -679,6 +732,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           <input
             id="tx-fee-rate"
             type="number"
+            inputMode="decimal"
             step="any"
             min="0"
             value={feeRate}
@@ -686,6 +740,12 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
               setFeeRate(e.target.value)
             }}
           />
+          {market === 'TPE' && feeRateHint.discount && (
+            <span className="fee-rate-hint">{feeRateHint.discount}</span>
+          )}
+          {market === 'TPE' && feeRateHint.warning && (
+            <span className="fee-rate-warning">{feeRateHint.warning}</span>
+          )}
           <div className="field-hint" data-testid="fee-rate-hint">
             原價 0.001425、6.5 折 0.00092625、3 折 0.0004275；只套用在這筆交易，不會更動工作區的預設值
           </div>
@@ -696,6 +756,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             <input
               id="tx-min-fee"
               type="number"
+              inputMode="decimal"
               step="any"
               min="0"
               value={minFee}

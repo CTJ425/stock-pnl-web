@@ -76,10 +76,12 @@ function HoldingsTable({
   rows,
   currency,
   onSelectTicker,
+  loading,
 }: {
   rows: HoldingRow[]
   currency: Currency
   onSelectTicker?: (ticker: string, name: string) => void
+  loading: boolean
 }) {
   const longRows = rows.filter((r) => r.direction === 'LONG')
   const shortRows = rows.filter((r) => r.direction === 'SHORT')
@@ -107,7 +109,11 @@ function HoldingsTable({
               <td>{stockName}</td>
               <td className={`num ${pnlClass(dayChange)}`}>
                 {price === null ? (
-                  <span className="skeleton" aria-label="現價載入中" />
+                  loading ? (
+                    <span className="skeleton" aria-label="現價載入中" />
+                  ) : (
+                    '—'
+                  )
                 ) : (
                   <>
                     {/*
@@ -324,6 +330,8 @@ function MarketPanel({
   rawCost,
   unreal,
   unrealRaw,
+  loading,
+  onRetry,
 }: {
   flag: string
   title: string
@@ -337,8 +345,13 @@ function MarketPanel({
   rawCost: number | null
   unreal: number | null
   unrealRaw: number | null
+  loading: boolean
+  onRetry: () => void
 }) {
   const hasShort = shortRows.length > 0
+  // Quotes settle asynchronously; once loading is done a still-missing price means "unavailable",
+  // not "not loaded yet" — the two need different messaging, not the same skeleton forever.
+  const quoteMissing = !loading && rows.length > 0 && rows.some((r) => r.price === null)
   // 兩條腿都要有值，淨額才成立。把未載入的一腿當成 0 會印出一個看起來合理但錯誤的淨額，
   // 而且會讓曝險條變成 100/0 的單段條 — spec C2 的負向條件明文禁止。任一腿未知就整組不顯示。
   const legsKnown = longMkt !== null && shortMkt !== null
@@ -353,9 +366,9 @@ function MarketPanel({
   return (
     <div className="glass market-panel">
       <div className="panel-head">
-        <h3>
+        <h2>
           {flag} {title}
-        </h3>
+        </h2>
         <span className="ccy">{currency}</span>
         <span className="kpi-label">{heroLabel}</span>
       </div>
@@ -364,7 +377,11 @@ function MarketPanel({
           {rows.length === 0 ? (
             fmtMoney(0, currency)
           ) : netMkt === null ? (
-            <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+            loading ? (
+              <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+            ) : (
+              '—'
+            )
           ) : hasShort ? (
             // 淨額是多空相減，可能為負，所以帶正負號；沒有空單時是單純的持倉市值，不帶號。
             fmtSignedMoney(netMkt, currency)
@@ -373,31 +390,42 @@ function MarketPanel({
           )}
         </div>
       </div>
-      {showExposure && (
+      {quoteMissing ? (
+        <div className="quote-unavailable">
+          目前取不到{currency === 'TWD' ? '台股' : '美股'}報價
+          <button className="btn btn-sm" onClick={onRetry}>
+            重試
+          </button>
+        </div>
+      ) : (
         <>
-          <div className="exposure-bar" data-testid={`${testPrefix}-exposure`}>
-            <div className="exposure-seg-long" style={{ flexGrow: longMkt ?? 0, flexBasis: 0 }} />
-            <div className="exposure-seg-short" style={{ flexGrow: shortMkt ?? 0, flexBasis: 0 }} />
-          </div>
-          <div className="exposure-key">
-            {/* 色塊、標籤與數字必須成組，否則色塊在視覺上不屬於它的標籤。 */}
-            <span className="exposure-legend">
-              <span className="exposure-sw exposure-sw-long" />
-              多單
-              <span data-testid={`${testPrefix}-long-mktval`}>{fmtMoney(longMkt, currency)}</span>
-            </span>
-            <span className="exposure-legend">
-              <span className="exposure-sw exposure-sw-short" />
-              空單
-              <span data-testid={`${testPrefix}-short-mktval`}>
-                {fmtMoney(hasShort ? shortMkt : 0, currency)}
-              </span>
-            </span>
-          </div>
+          {showExposure && (
+            <>
+              <div className="exposure-bar" data-testid={`${testPrefix}-exposure`}>
+                <div className="exposure-seg-long" style={{ flexGrow: longMkt ?? 0, flexBasis: 0 }} />
+                <div className="exposure-seg-short" style={{ flexGrow: shortMkt ?? 0, flexBasis: 0 }} />
+              </div>
+              <div className="exposure-key">
+                {/* 色塊、標籤與數字必須成組，否則色塊在視覺上不屬於它的標籤。 */}
+                <span className="exposure-legend">
+                  <span className="exposure-sw exposure-sw-long" />
+                  多單
+                  <span data-testid={`${testPrefix}-long-mktval`}>{fmtMoney(longMkt, currency)}</span>
+                </span>
+                <span className="exposure-legend">
+                  <span className="exposure-sw exposure-sw-short" />
+                  空單
+                  <span data-testid={`${testPrefix}-short-mktval`}>
+                    {fmtMoney(hasShort ? shortMkt : 0, currency)}
+                  </span>
+                </span>
+              </div>
+            </>
+          )}
+          {!hasShort && rows.length > 0 && !showExposure && (
+            <div className="market-note">{rows.length} 檔 · 全部多單</div>
+          )}
         </>
-      )}
-      {!hasShort && rows.length > 0 && !showExposure && (
-        <div className="market-note">{rows.length} 檔 · 全部多單</div>
       )}
       <div className="metric-row market-foot">
         <div className="metric">
@@ -428,7 +456,11 @@ function MarketPanel({
             {rows.length === 0 ? (
               fmtMoney(0, currency)
             ) : unreal === null ? (
-              <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+              loading ? (
+                <span className="skeleton" style={{ width: '13ch', height: 22 }} />
+              ) : (
+                '—'
+              )
             ) : (
               fmtSignedMoney(unreal, currency)
             )}
@@ -444,8 +476,12 @@ function MarketPanel({
 
 export function DashboardPage({
   onSelectTicker,
+  onAddTransaction,
+  onGoToTransactions,
 }: {
   onSelectTicker?: (ticker: string, name: string) => void
+  onAddTransaction?: () => void
+  onGoToTransactions?: () => void
 } = {}) {
   const { ledger, current } = useWorkspace()
   const holdings = ledger.holdings
@@ -503,40 +539,46 @@ export function DashboardPage({
         </div>
       )}
 
-      <div className="section market-grid">
-        <MarketPanel
-          flag="🇹🇼"
-          title="台股"
-          currency="TWD"
-          testPrefix="tw"
-          rows={twRows}
-          shortRows={twShortRows}
-          longMkt={twMkt}
-          shortMkt={twShortMkt}
-          cost={twCost}
-          rawCost={twRawCost}
-          unreal={twUnreal}
-          unrealRaw={twUnrealRaw}
-        />
-        <MarketPanel
-          flag="🇺🇸"
-          title="美股"
-          currency="USD"
-          testPrefix="us"
-          rows={usRows}
-          shortRows={usShortRows}
-          longMkt={usMkt}
-          shortMkt={usShortMkt}
-          cost={usCost}
-          rawCost={usRawCost}
-          unreal={usUnreal}
-          unrealRaw={usUnrealRaw}
-        />
-      </div>
+      {holdings.length > 0 && (
+        <div className="section market-grid">
+          <MarketPanel
+            flag="🇹🇼"
+            title="台股"
+            currency="TWD"
+            testPrefix="tw"
+            rows={twRows}
+            shortRows={twShortRows}
+            longMkt={twMkt}
+            shortMkt={twShortMkt}
+            cost={twCost}
+            rawCost={twRawCost}
+            unreal={twUnreal}
+            unrealRaw={twUnrealRaw}
+            loading={loading}
+            onRetry={handleRefresh}
+          />
+          <MarketPanel
+            flag="🇺🇸"
+            title="美股"
+            currency="USD"
+            testPrefix="us"
+            rows={usRows}
+            shortRows={usShortRows}
+            longMkt={usMkt}
+            shortMkt={usShortMkt}
+            cost={usCost}
+            rawCost={usRawCost}
+            unreal={usUnreal}
+            unrealRaw={usUnrealRaw}
+            loading={loading}
+            onRetry={handleRefresh}
+          />
+        </div>
+      )}
 
       <div className="section">
         <div className="section-title">
-          <h2>Active 持股</h2>
+          <h2>目前持股</h2>
           <div className="toolbar">
             {refreshedAt && (
               <span className="hint">
@@ -555,24 +597,36 @@ export function DashboardPage({
             <div className="empty-icon">
               <Inbox size={36} />
             </div>
-            <div>目前沒有持股。到「交易紀錄」新增第一筆買入，或用 CSV 匯入舊資料。</div>
+            <div>目前沒有持股。新增第一筆買入，或匯入舊的 CSV 資料。</div>
+            <div className="empty-actions">
+              {onAddTransaction && (
+                <button className="btn btn-primary" onClick={onAddTransaction}>
+                  新增第一筆交易
+                </button>
+              )}
+              {onGoToTransactions && (
+                <button className="btn" onClick={onGoToTransactions}>
+                  匯入 CSV
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <>
             {twRows.length > 0 && (
               <div className="section" style={{ marginTop: 12 }}>
                 <div className="section-title">
-                  <h2 style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h2>
+                  <h3 className="market-table-title" style={{ fontSize: 14 }}>🇹🇼 台股 (TWD)</h3>
                 </div>
-                <HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} />
+                <HoldingsTable rows={twRows} currency="TWD" onSelectTicker={onSelectTicker} loading={loading} />
               </div>
             )}
             {usRows.length > 0 && (
               <div className="section" style={{ marginTop: 12 }}>
                 <div className="section-title">
-                  <h2 style={{ fontSize: 14 }}>🇺🇸 美股 (USD)</h2>
+                  <h3 className="market-table-title" style={{ fontSize: 14 }}>🇺🇸 美股 (USD)</h3>
                 </div>
-                <HoldingsTable rows={usRows} currency="USD" />
+                <HoldingsTable rows={usRows} currency="USD" loading={loading} />
               </div>
             )}
           </>

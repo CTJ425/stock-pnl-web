@@ -157,13 +157,28 @@ describe('App（本機模式煙霧測試）', () => {
   })
 
   it('未實現損益一律以「淨」命名，台股卡片不重複列出預扣說明', async () => {
+    // Task 159 D11: an empty account no longer shows the market cards, so seed one TW and one US holding.
+    window.localStorage.setItem(
+      'stock-pnl-web/local-store-v1',
+      JSON.stringify({
+        workspaces: [{ id: 'ws-smoke', name: '我的投資組合', created_at: '2026-01-01T00:00:00Z' }],
+        transactions: [
+          { id: 't1', workspace_id: 'ws-smoke', tx_date: '2026-01-02', market: 'TPE', ticker: '2330', name: '台積電', tx_type: 'BUY', price: 1000, qty: 1000, fee_tax: 1425, created_at: '2026-01-02T00:00:00Z' },
+          { id: 't2', workspace_id: 'ws-smoke', tx_date: '2026-01-02', market: 'US', ticker: 'AAPL', name: 'Apple', tx_type: 'BUY', price: 200, qty: 10, fee_tax: 0, created_at: '2026-01-02T00:00:00Z' },
+        ],
+      }),
+    )
+    window.localStorage.setItem('stock-pnl-web/current-workspace', 'ws-smoke')
     const user = userEvent.setup()
-    render(<App />)
+    const { container } = render(<App />)
     await screen.findByText('本機模式')
 
     await user.click(screen.getByRole('button', { name: /庫存總覽/ }))
     // The unrealized gains and losses of both Taiwan stocks and US stocks cards are named "net" (card titles no longer have the market prefix starting from v0.3)
-    const netLabels = await screen.findAllByText('未實現淨損益')
+    await waitFor(() => expect(container.querySelectorAll('.market-panel').length).toBe(2))
+    const netLabels = Array.from(container.querySelectorAll<HTMLElement>('.market-panel')).map((panel) =>
+      within(panel).getByText('未實現淨損益'),
+    )
     expect(netLabels.length).toBe(2)
     // The description is changed to the tooltip of the card title, which no longer occupies a line.
     expect(screen.queryByText('主數字已預扣賣出手續費與證交稅')).toBeNull()
