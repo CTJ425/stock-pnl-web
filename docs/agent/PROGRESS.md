@@ -7,6 +7,16 @@
 
 ---
 
+## 📅 Log: 2026-09-11 13:03:40 Asia/Taipei (Task 158/159 batch 1, 0.9.45)
+
+- **What**: Mobile (iPhone 13 mini, 375×629) and desktop (1440×900, 1024×768) UI/UX audits, published as `docs/design/mobile-ux-audit-iphone13mini.html` and `docs/design/desktop-ux-audit.html`; 32 findings recorded as Task 158 (1–17) and Task 159 (D1–D15). Batch 1 (13 items) shipped.
+- **Changed**: `AppShell.tsx`, `DashboardPage.tsx`, `TransactionForm.tsx`, `Toast.tsx`, `index.css`, `index.html`, `manifest.webmanifest`, new `utils/feeRateHint.ts`, 3 PNG icons.
+- **Verification**: 117 test files / 1,864 tests, exit 0 (+19 new tests; 1 stale smoke assertion updated to seed holdings); `npm run build` and `npm run typecheck:edge` exit 0. Playwright re-measure at 375×629: FAB 56×56, inputs 16 px, qty input 50 → 215 px, h1 → h2 → h3, no skeleton after load. At 1440 dark: `.pnl-up` 5.33:1, sub-lines 5.31:1, help icon 6.76:1.
+- **Review**: reviewer FAIL overruled — the add button is hidden while the workspace loads by design (unchanged `!loading` gate); the Toast unmount-timer note is pre-existing code.
+- **Audit corrections**: mobile #11 (`applyTheme()` already updates `theme-color` at runtime) and desktop D4 (the close button existed). Both reports were republished.
+- **Deferred**: mobile #8 `viewport-fit=cover` needs a real iPhone. BUG-079 (保本賣出價 vs 淨收 fee interpretation) is open and not investigated.
+- **Release**: 0.9.45 merged to `main` and synced to `dev`. Frontend not uploaded to Cloudflare Pages. No Edge change.
+
 ## 📅 Log: 2026-09-10 15:14:01 Asia/Taipei (Task 156 & 157, 0.9.44)
 
 **BUG-078：查無檔案被當成錯誤，即時產生因此永遠不會執行**
@@ -33,18 +43,3 @@
 **PROD `app_log` 全量盤點**：總共只有 5 筆，全是同一個病灶（4 筆 `fundamental/2382.json`、1 筆 `daily/2382.json`）。修掉 BUG-078 後這一類紀錄應該歸零——那是驗證這次修正是否生效的可觀測指標。
 
 **⚠️ 前端需重新建置上傳才會生效**：手動流程見 `README.md` 步驟 9-1。
-
-## 📅 Log: 2026-09-10 14:42:14 Asia/Taipei (Task 156, 0.9.43)
-
-**修復非持股股票的四個日線區間讀不到（BUG-077）**
-
-使用者回報 PROD 點 `近 1 年` 或 `本年迄今` 讀不到，附上 `app_log`。該筆記錄是 `action=downloadReportsJson, message=HTTP 400, detail={"path":"daily/2382.json"}`，`app_version=0.9.42`。
-
-- **根因不是計算錯，是覆蓋範圍回歸**。`daily/{ticker}.json` 只有持股才有：2026-09-10 實測 PROD 的 `daily/` 只有 9 個檔案（`0050, 00685L, 009816, 00981A, 2303, 2455, 3037, 3714, 8033`），連 `2330` 都不在。0.9.42 讓行情分頁多了四個讀這份檔案的區間，任何非持股股票一開就壞四個。`一日`／`五日` 與 `近 5 年`／`全部` 都走 Edge 到 Yahoo，所以正常——這個對比正是使用者只在那四個區間看到失敗的原因。
-- **修在 `useDailySeries`，不在元件**。加第三層後援：檔案讀不到、`warmStockCore` 也產不出來時，改打 Edge `daily` action 取 `range=5y` 再合成 `DailySeries`。行情與技術面共用同一個 hook，所以一次修好兩邊，`QuoteTab.tsx` 與 `TechnicalTab.tsx` 都沒有改動。
-- **取 5y 超集是刻意的**：一次請求供應四個本地區間，之後點 `近 5 年` 免費（`fetchRemoteDaily` 依 ticker 與 range 快取）。也因此**不需要改 Edge，不需要重新部署**——`daily` action 於 0.9.41 就已上線，DEV 與 PROD 都是 v7。
-- **`error` 與 `empty` 的區別保留**：Storage 讀取拋錯且後援也拿不到資料時才回 `error`，單純查無資料回 `empty`。
-- **一個會騙人的測試結果**：改完後 `vitest` 回 **exit 1**，摘要行卻寫「1841 passed」。原因是四個測試檔用完整替換式 `vi.mock` 蓋掉 `dailyProxy` 而沒有 `fetchRemoteDaily`，產生 32 個 unhandled error。判定依據永遠是 exit code 與 `Errors` 行，不是 passed 數字。四個 mock 已補齊。
-- **PROD 實打確認後援可用**：`2382` 與 `2330` 的 `range=5y` 皆回 HTTP 200、1214 根、末根 `2026-09-10`。
-- **測試**：新增 5 條（`useDailySeries.test.ts`，先紅後綠），總數 1836 → 1841，三道 gate 皆 exit 0 且無 unhandled error。
-- **⚠️ 前端需重新部署才會生效**：本 repo 沒有前端部署 workflow（`.github/workflows/` 只有 `release.yml`，只同步 Release）。`git push` 不會讓正式站拿到這份修正。
