@@ -5,6 +5,16 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-11 13:03:40 Asia/Taipei (Task 158/159 batch 1, 0.9.45)
+
+- **What**: Mobile (iPhone 13 mini, 375×629) and desktop (1440×900, 1024×768) UI/UX audits, published as `docs/design/mobile-ux-audit-iphone13mini.html` and `docs/design/desktop-ux-audit.html`; 32 findings recorded as Task 158 (1–17) and Task 159 (D1–D15). Batch 1 (13 items) shipped.
+- **Changed**: `AppShell.tsx`, `DashboardPage.tsx`, `TransactionForm.tsx`, `Toast.tsx`, `index.css`, `index.html`, `manifest.webmanifest`, new `utils/feeRateHint.ts`, 3 PNG icons.
+- **Verification**: 117 test files / 1,864 tests, exit 0 (+19 new tests; 1 stale smoke assertion updated to seed holdings); `npm run build` and `npm run typecheck:edge` exit 0. Playwright re-measure at 375×629: FAB 56×56, inputs 16 px, qty input 50 → 215 px, h1 → h2 → h3, no skeleton after load. At 1440 dark: `.pnl-up` 5.33:1, sub-lines 5.31:1, help icon 6.76:1.
+- **Review**: reviewer FAIL overruled — the add button is hidden while the workspace loads by design (unchanged `!loading` gate); the Toast unmount-timer note is pre-existing code.
+- **Audit corrections**: mobile #11 (`applyTheme()` already updates `theme-color` at runtime) and desktop D4 (the close button existed). Both reports were republished.
+- **Deferred**: mobile #8 `viewport-fit=cover` needs a real iPhone. BUG-079 (保本賣出價 vs 淨收 fee interpretation) is open and not investigated.
+- **Release**: 0.9.45 merged to `main` and synced to `dev`. Frontend not uploaded to Cloudflare Pages. No Edge change.
+
 ## 📅 Log: 2026-09-10 15:14:01 Asia/Taipei (Task 156 & 157, 0.9.44)
 
 **BUG-078：查無檔案被當成錯誤，即時產生因此永遠不會執行**

@@ -355,13 +355,6 @@ h3.market-table-title {
   font-size: var(--type-label-01);
 }
 
-/* "新增交易" button placed next to the header's right-side controls (wide screens). */
-.header-add {
-  margin-left: var(--sp-03);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ----------Paging (Tabs) ----------*/
 /* Carbon tabs: no container, a 1px rule under the row, a 3px $border-interactive
    bar under the selected tab. Each tab is 40px tall. */

@@ -29,10 +29,14 @@ describe('AppShell page identity', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  it('offers exactly one add-transaction button', async () => {
-    render(<App />)
+  // 0.9.47: the user chose the floating button on desktop too (Task 159 D9 reverted); no header button.
+  it('offers exactly one add-transaction button, floating even on desktop', async () => {
+    const { container } = render(<App />)
     await screen.findByText('本機模式')
 
-    expect(screen.getAllByRole('button', { name: '新增交易' })).toHaveLength(1)
+    const buttons = screen.getAllByRole('button', { name: '新增交易' })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].className).toContain('fab')
+    expect(container.querySelector('.header-add')).toBeNull()
   })
 })
