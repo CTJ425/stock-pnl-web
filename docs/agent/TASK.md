@@ -20,6 +20,54 @@
 
 ## 📋 Active Tasks
 
+### Task 159: Desktop and general UI/UX fixes
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
+- **Spec**: `docs/design/desktop-ux-audit.html` (item numbers D1–D15 match the report)
+- **What is this**: Audit measured at 1440×900 and 1024×768, light + dark theme, local mode, 0.9.44. Batch 1 (target 0.9.45) = D2 (hint + range warning only), D4, D6, D8, D9, D11, D12, D13 (「Active 持股」 only). Side finding recorded as BUG-079.
+
+- D1. Page switch does not change the URL (stays `/`); `document.title` is static. — ⏳ batch 2
+- D2. Fee rate takes a decimal (0.001425); 0.6 is accepted with no warning. Batch 1: show a 「＝ N 折」 hint and an out-of-range warning; do not change the stored value's meaning. — ⏳ batch 1
+- D3. 5 native `confirm()` calls; no undo after delete. — ⏳ batch 2
+- D4. All toasts auto-dismiss after 5 s (`Toast.tsx:38`), errors included; no close button. — ⏳ batch 1
+- D5. 7 error messages append raw Supabase `error.message` (`dataProvider.ts:281–360`). — ⏳ batch 2
+- D6. Transaction form validates on submit only and shows one message for three fields. — ⏳ batch 1
+- D7. Holdings rows carry ~20 numbers (未含費 / 淨收 / 券商 sub-lines). — ⏳ batch 3
+- D8. Dark theme: 43 text runs below WCAG AA (`#fa4d56` on `#333333` = 3.77:1; `#8d8d8d` = 3.81:1); light-theme help icons 3.81:1. — ⏳ batch 1
+- D9. Desktop 「新增交易」 FAB covers the 未實現報酬率 column. — ⏳ batch 1
+- D10. At 1024 px the holdings table is 1,023 px wide in a 974 px box. — ⏳ batch 3
+- D11. An empty account shows all-zero summary cards; the empty state has no action buttons. — ⏳ batch 1
+- D12. No `<h1>`; h3 before h2 on the dashboard; the transactions page has no heading. — ⏳ batch 1
+- D13. Terminology: 工作區 (16) / 帳戶 (5) / 投資組合; 「Active 持股」. Batch 1 fixes 「Active 持股」 only; the account noun needs a user decision. — ⏳ batch 1 (partial), user decision
+- D14. 20 help buttons sit in the Tab order before table content. — ⏳ batch 3
+- D15. 11 components format numbers with `toFixed()` instead of `utils/formatters.ts`. — ⏳ batch 3
+
+### Task 158: Mobile UI/UX fixes from the iPhone 13 mini audit
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
+- **Spec**: `docs/design/mobile-ux-audit-iphone13mini.html` (item numbers 1–17 match the report)
+- **What is this**: Audit measured at 375×629 (Playwright `iPhone 13 Mini`, local mode, 0.9.44). Batch 1 (target 0.9.45) = items 2, 5, 6, 8, 9, 11, 15, 16. Batches 2–3 = the rest.
+
+1. Holdings / transactions / yearly tables show 33–40% of their width at 375 px; P&L is columns 9–10. Card list at ≤560 px. — ⏳ batch 2
+2. 「新增交易」 FAB covers content (116×48 px, no bottom space reserved). — ⏳ batch 1
+3. Tap targets under 44 px (28 of 30 on the dashboard; 14×14 help icons, 16×16 checkboxes, 39 px nav tabs). — ⏳ batch 2
+4. 92% of dashboard text is 12 px; the ≤1120 px shrink rule also applies on phones. — ⏳ batch 2
+5. Search inputs are 14 px, so iOS Safari zooms on focus. — ⏳ batch 1
+6. Number inputs have no `inputmode`; the qty field is squeezed to ~49 px by the 張/股 select. — ⏳ batch 1
+7. The first screen shows only summary cards; 「Active 持股」 wraps. — ⏳ batch 2
+8. No `viewport-fit=cover`, so `env(safe-area-inset-*)` resolves to 0. — ⏳ batch 1
+9. `min-height: 100vh` (`index.css:239, 251, 2029`); use `100dvh`. — ⏳ batch 1
+10. Charts handle mouse events only (`chartFrame.tsx`); no pointer/touch. — ⏳ batch 3
+11. `theme-color` is fixed at `#161616`; the light theme gets a dark status bar. — ⏳ batch 1
+12. Four low-use tool buttons take 20% of the transactions first screen. — ⏳ batch 3
+13. The add-transaction modal is not full-screen on phones; the save button is below the fold. — ⏳ batch 3
+14. Cloud-mode bottom nav has 6 tabs; proposal is 5 with 「更多」. — ⏳ batch 3, user decision
+15. The manifest has one SVG icon and there is no `apple-touch-icon`. — ⏳ batch 1
+16. A US quote failure leaves skeletons with no error text. — ⏳ batch 1
+17. Flag emoji render as empty boxes without a colour emoji font. — ⏳ batch 3
+
 ### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
 - **Status**: ✅ DONE
 - **Agent**: Claude

@@ -35,7 +35,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, kind: ToastKind = 'success') => {
       const id = nextId.current++
       setToasts((prev) => [...prev, { id, message, kind }])
-      window.setTimeout(() => remove(id), 5000)
+      if (kind !== 'error') {
+        window.setTimeout(() => remove(id), 5000)
+      }
     },
     [remove],
   )

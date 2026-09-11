@@ -33,6 +33,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { ThemePref } from '../utils/settings'
 import { applyTheme, getFeeRate, getThemePref, setThemePref } from '../utils/settings'
+import { describeTwFeeRate } from '../utils/feeRateHint'
 import { DashboardPage } from './Dashboard/DashboardPage'
 import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
@@ -104,6 +105,15 @@ const SUPABASE_ONLY_TABS: Tab[] = ['analysis', 'macro', 'fx']
 const TABS = isReportConfigured
   ? ALL_TABS
   : ALL_TABS.filter((t) => !SUPABASE_ONLY_TABS.includes(t.id))
+
+/** Label for the page identity heading (h1) and the browser tab title. `admin` is not on any tab, so it needs its own entry. */
+const ALL_TAB_LABELS: Record<Tab, string> = Object.fromEntries(
+  ALL_TABS.map((t) => [t.id, t.label]),
+) as Record<Tab, string>
+
+function viewLabel(view: View): string {
+  return view === 'admin' ? '管理後台' : ALL_TAB_LABELS[view]
+}
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
 
@@ -720,6 +730,15 @@ function WorkspaceControls() {
                   placeholder="例如 0.001425"
                   onChange={(e) => setFeeInput(e.target.value)}
                 />
+                {(() => {
+                  const hint = describeTwFeeRate(parseFloat(feeInput))
+                  return (
+                    <>
+                      {hint.discount && <span className="fee-rate-hint">{hint.discount}</span>}
+                      {hint.warning && <span className="fee-rate-warning">{hint.warning}</span>}
+                    </>
+                  )
+                })()}
                 <div className="field-hint">
                   台股標準是 0.001425。券商有折扣就填折扣後的數字（例如 0.0004275）。
                   只套用在「{current?.name ?? '目前'}」工作區，新增交易時會自動帶入；
@@ -776,6 +795,11 @@ export function AppShell() {
     if (view === 'admin' && !admin) setView('dashboard')
   }, [admin, view])
 
+  // Each page names itself in the browser tab, matching the single h1 rendered in <main>.
+  useEffect(() => {
+    document.title = `${viewLabel(view)} · 股票小幫手`
+  }, [view])
+
   return (
     <>
       <ToastProvider>
@@ -791,6 +815,18 @@ export function AppShell() {
 
               <div className="header-spacer" />
 
+              {/* Narrow screens get the floating 新增交易 button instead (below, outside .app-header); never both. */}
+              {!narrow && !loading && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm header-add"
+                  onClick={() => setShowAddTx(true)}
+                >
+                  <ListPlus size={17} />
+                  新增交易
+                </button>
+              )}
+
               <WorkspaceControls />
 
               <div className="header-meta">
@@ -800,6 +836,7 @@ export function AppShell() {
           </header>
 
           <main className="container">
+            <h1 className="sr-only">{viewLabel(view)}</h1>
             {error && (
               <div className="notice notice-error section" role="alert">
                 {error}
@@ -819,6 +856,8 @@ export function AppShell() {
                           }
                         : undefined
                     }
+                    onAddTransaction={() => setShowAddTx(true)}
+                    onGoToTransactions={() => setView('transactions')}
                   />
                 )}
                 {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
@@ -841,11 +880,15 @@ export function AppShell() {
           {/* Mobile bottom navigation: must live outside .app-header —— see the comment on useNarrowScreen */}
           {narrow && <TabNav variant="bottom" current={view} onSelect={setView} tabs={TABS} />}
 
-          {/* Global "add transaction": available from any tab; the modal is mounted at the shell level so a content reload cannot drop it */}
-          {!loading && (
-            <button className="btn btn-primary fab" onClick={() => setShowAddTx(true)}>
+          {/*
+            Global "add transaction": available from any tab; the modal is mounted at the shell level so a
+            content reload cannot drop it. Narrow screens get this floating button; wide screens get the
+            header-add button rendered above instead — never both (see AppShell.a11y.test.tsx).
+          */}
+          {narrow && !loading && (
+            <button className="btn btn-primary fab" aria-label="新增交易" onClick={() => setShowAddTx(true)}>
               <ListPlus size={17} />
-              新增交易
+              <span className="fab-label">新增交易</span>
             </button>
           )}
           {showAddTx && (

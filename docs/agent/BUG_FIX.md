@@ -8,6 +8,15 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### BUG-079 — 保本賣出價 and 淨收 read the same fee rate differently (suspected)
+- **Where**: `sources/src/utils/holdingRows.ts`, `sources/src/utils/fees.ts`
+- **Failure scenario**: With a workspace fee rate of 0.6 (a user typing 6 折 as a decimal, see Task 159 D2), 保本賣出價 becomes 2.52 × the average cost (鴻海 avg NT$182.16 → NT$458.83, i.e. cost / (1 − 0.6 − 0.003)), while 淨收 deducts only ~0.39% (台積電 market value NT$3,675,000 → 淨收 NT$3,660,834, i.e. 0.001425 × 0.6 + 0.003). The two paths use a different fee source or interpretation. With a normal rate the gap may be small. Not yet read in code.
+- **Found**: 2026-09-11, desktop UX audit (local mode, seeded data, 0.9.44).
+- **Decision**: Investigate as Lane 2 (money code) before any fix. Not part of the Task 158/159 UI batches.
+- **Status**: OPEN (suspected, needs code reading)
+
+---
+
 ### RISK-010 — 台股清單來源被上游截斷但仍非空時，兩端都會視為完整
 - **Where**: `sources/supabase/functions/stock-price/twList.ts`、`sources/src/services/twMarketData.ts`
 - **Failure scenario**: BUG-075 與 BUG-076 的完整性檢查判斷的是「此來源有沒有給出結構有效的列」，不是「給的列數對不對」。若 TWSE 或 TPEx 上游改動導致回傳 20 筆而非約 2000 筆，兩端都會判定完整並快取 30 分鐘。

@@ -499,3 +499,64 @@ describe('DashboardPage — 多空並存時的 KPI 加總（Task 141）', () => 
   })
 })
 
+
+// Task 158 #16 / Task 159 D11, D12, D13: page structure, first-run actions, and quotes that never arrive.
+describe('DashboardPage — structure, empty account, missing quotes', () => {
+  beforeEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    mockWorkspace()
+  })
+
+  it('titles the holdings section 目前持股 and nests the per-market tables one level below', () => {
+    render(<DashboardPage onSelectTicker={vi.fn()} />)
+    expect(screen.queryByText('Active 持股')).toBeNull()
+    expect(screen.getByRole('heading', { level: 2, name: '目前持股' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: /台股/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: /台股 \(TWD\)/ })).toBeTruthy()
+  })
+
+  it('replaces the all-zero summary with two actions when there are no holdings', async () => {
+    mockWorkspace([])
+    const onAddTransaction = vi.fn()
+    const onGoToTransactions = vi.fn()
+    const user = userEvent.setup()
+    render(<DashboardPage onAddTransaction={onAddTransaction} onGoToTransactions={onGoToTransactions} />)
+
+    expect(screen.queryByTestId('tw-mktval')).toBeNull()
+    expect(screen.queryByTestId('tw-exposure')).toBeNull()
+    expect(screen.getByText(/目前沒有持股/)).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '新增第一筆交易' }))
+    expect(onAddTransaction).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: '匯入 CSV' }))
+    expect(onGoToTransactions).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a dash and a retry instead of a skeleton when a US quote is still missing after loading', async () => {
+    const refresh = vi.fn()
+    useStockPrices.mockReturnValue({
+      prices: {
+        'TPE:2330': { price: 1000, prevClose: 980, asOf: '', source: 'twse', stale: false, trial: false },
+      },
+      loading: false,
+      refreshedAt: new Date('2026-08-25T10:00:00Z'),
+      refresh,
+    })
+    const user = userEvent.setup()
+    const { container } = render(<DashboardPage onSelectTicker={vi.fn()} />)
+
+    expect(container.querySelector('.skeleton')).toBeNull()
+    expect(screen.getByText('目前取不到美股報價')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '重試' }))
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('keeps the skeleton while quotes are still loading', () => {
+    useStockPrices.mockReturnValue({ prices: {}, loading: true, refreshedAt: null, refresh: vi.fn() })
+    const { container } = render(<DashboardPage onSelectTicker={vi.fn()} />)
+
+    expect(container.querySelector('.skeleton')).not.toBeNull()
+    expect(screen.queryByText('目前取不到美股報價')).toBeNull()
+  })
+})
