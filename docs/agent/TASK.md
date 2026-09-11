@@ -9,9 +9,10 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-11 15:38)
+## 📍 Where the project stands (2026-09-11 16:13)
 
-- **Version 0.9.46 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.46`; Cloudflare Pages serves 0.9.45 (uploaded 2026-09-11) until the next manual upload (README step 9-1).
+- **Version 0.9.47 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.47`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
+  - Shipped 2026-09-11: 桌機版「新增交易」改回右下角浮動按鈕（0.9.47，使用者決定撤回 Task 159 D9）。
   - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
   - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
   - Shipped 2026-09-10: 查無檔案被當成錯誤、即時產生因此永遠不會執行（0.9.44, BUG-078）、非持股股票日線區間讀不到（0.9.43, BUG-077）、行情走勢圖擴充為八個區間（0.9.42）、技術面 K 線圖擴充為六個區間與 Edge `daily` action（0.9.41）、Edge 台股清單完整性檢查（0.9.40）。
@@ -27,6 +28,7 @@
 - **Agent**: Claude
 - **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
 - **Done**: items D2, D4, D6, D8, D9, D11, D12 (0.9.45) — full text in `TASK_ARCHIVE.md`.
+- **Decision (0.9.47)**: D9 reverted by user decision — desktop uses the floating 「新增交易」 button again and the header button was removed. `main.container` already reserves 96 px at the bottom above 720 px, so only mid-scroll overlap remains.
 - **Spec**: `docs/design/desktop-ux-audit.html` (item numbers D1–D15 match the report)
 - **What is this**: Audit measured at 1440×900 and 1024×768, light + dark theme, local mode, 0.9.44. Batch 1 shipped in 0.9.45 = D2, D4, D6, D8, D9, D11, D12, plus the title half of D1 and the 「Active 持股」 half of D13. Side finding recorded as BUG-079.
 
