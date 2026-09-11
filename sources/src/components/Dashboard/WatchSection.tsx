@@ -196,7 +196,7 @@ export function WatchSection({
 
   return (
     <div className="section" data-testid="watchlist-section">
-      <div className="section-title">
+      <div className="section-title watch-head">
         <h2>
           <span>觀察股票</span>
           <span className="badge badge-count">{`${items.length}/${WATCHLIST_MAX}`}</span>
@@ -212,7 +212,7 @@ export function WatchSection({
               title="圖卡模式"
             >
               <LayoutGrid size={13} />
-              <span>圖卡</span>
+              <span className="view-toggle-text">圖卡</span>
             </button>
             <button
               type="button"
@@ -222,7 +222,7 @@ export function WatchSection({
               title="條列模式"
             >
               <List size={13} />
-              <span>條列</span>
+              <span className="view-toggle-text">條列</span>
             </button>
           </div>
           <button
@@ -230,9 +230,11 @@ export function WatchSection({
             onClick={() => setShowAdd(true)}
             disabled={atMax}
             title={atMax ? `觀察清單最多只能有 ${WATCHLIST_MAX} 檔股票` : undefined}
+            aria-label="加入觀察"
           >
             <Plus size={14} />
-            加入觀察
+            <span className="watch-add-full">加入觀察</span>
+            <span className="watch-add-short">加入</span>
           </button>
         </div>
       </div>

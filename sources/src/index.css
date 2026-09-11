@@ -2474,6 +2474,11 @@ a.hmenu-item {
   flex: 1;
 }
 
+/* Task 158 #12: the 「工具」 trigger only exists for the ≤720px collapsed toolbar. */
+.tx-tools-trigger {
+  display: none;
+}
+
 /* ---------- footer ----------*/
 .app-footer {
   margin-top: auto;
@@ -2783,6 +2788,57 @@ a.hmenu-item {
   .stock-search input,
   .search-box .search-input {
     font-size: var(--type-body-02);
+  }
+
+  /* Task 158 #12: collapse the four low-use tools into the 「工具」 trigger so
+     search + 工具 share one row instead of wrapping into a second/third line. */
+  .toolbar .tx-tool {
+    display: none;
+  }
+
+  .tx-tools-trigger {
+    display: inline-flex;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .toolbar .search-box {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .toolbar .search-input {
+    width: 100%;
+    height: 44px;
+  }
+
+  .toolbar .search-input:focus {
+    width: 100%;
+  }
+
+  /* 交易工具 sheet: bottom sheet instead of a centred dialog. Modal has no
+     className prop, so the sheet is picked out via the .tx-tools-sheet body. */
+  .modal-overlay:has(.tx-tools-sheet) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal:has(.tx-tools-sheet) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .tx-tools-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .tx-tools-item {
+    width: 100%;
+    height: 48px;
+    justify-content: flex-start;
   }
 
   .field-row > * {
@@ -5453,6 +5509,46 @@ a.hmenu-item {
 
 .view-toggle-btn:hover:not(.active) {
   color: var(--ink);
+}
+
+.watch-add-short {
+  display: none;
+}
+
+/* Task 158 #12: 觀察股票 header keeps to one row on narrow screens instead of
+   wrapping 「觀察股票」 into two lines. */
+@media (max-width: 720px) {
+  .watch-head {
+    flex-wrap: nowrap;
+  }
+
+  .watch-head h2 {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .watch-head .view-toggle-text {
+    display: none;
+  }
+
+  .watch-head .watch-add-full {
+    display: none;
+  }
+
+  .watch-head .watch-add-short {
+    display: inline;
+  }
+
+  .watch-head .view-toggle-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .watch-head .btn-primary {
+    height: 44px;
+  }
 }
 
 /* ---------- Watchlist Grouping & Filter Chips ---------- */

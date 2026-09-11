@@ -9,9 +9,10 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-11 16:13)
+## 📍 Where the project stands (2026-09-11 16:40)
 
-- **Version 0.9.47 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.47`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
+- **Version 0.9.48 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.48`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
+  - Shipped 2026-09-11: 手機版交易紀錄工具列與觀察股票標題列排整齊（0.9.48, Task 158 #12）。
   - Shipped 2026-09-11: 桌機版「新增交易」改回右下角浮動按鈕（0.9.47，使用者決定撤回 Task 159 D9）。
   - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
   - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
@@ -45,7 +46,7 @@
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
 - **Timestamp**: 2026-09-11 12:37:31 Asia/Taipei
-- **Done**: items 2, 5, 6, 9, 15, 16 (0.9.45) — full text in `TASK_ARCHIVE.md`.
+- **Done**: items 2, 5, 6, 9, 15, 16 (0.9.45), 12 and 18 (0.9.48) — full text in `TASK_ARCHIVE.md`.
 - **Spec**: `docs/design/mobile-ux-audit-iphone13mini.html` (item numbers 1–17 match the report)
 - **What is this**: Audit measured at 375×629 (Playwright `iPhone 13 Mini`, local mode, 0.9.44). Batch 1 shipped in 0.9.45 = items 2, 5, 6, 9, 15, 16. Item 8 deferred (needs a real iPhone); item 11 re-scoped (see item). Batches 2–3 = the rest.
 
@@ -56,10 +57,10 @@
 8. No `viewport-fit=cover`, so `env(safe-area-inset-*)` resolves to 0. Deferred from batch 1: verify on a real iPhone in standalone mode before changing. — ⏳ batch 2
 10. Charts handle mouse events only (`chartFrame.tsx`); no pointer/touch. — ⏳ batch 3
 11. The manifest `theme_color` / `background_color` are fixed at `#161616` (dark splash for light-theme users). Correction: `applyTheme()` already updates the `theme-color` meta at runtime (`utils/settings.ts:43–45`). — ⏳ batch 3 (low)
-12. Four low-use tool buttons take 20% of the transactions first screen. — ⏳ batch 3
 13. The add-transaction modal is not full-screen on phones; the save button is below the fold. — ⏳ batch 3
 14. Cloud-mode bottom nav has 6 tabs; proposal is 5 with 「更多」. — ⏳ batch 3, user decision
 17. Flag emoji render as empty boxes without a colour emoji font. — ⏳ batch 3
+19. The 交易紀錄 empty-state copy says 「點右下角『新增交易』…或用『匯入 CSV』」, but at ≤720 px the add button is icon-only and 匯入 CSV sits in the 「工具」 sheet. — ⏳ batch 3
 
 ### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
 - **Status**: ✅ DONE
