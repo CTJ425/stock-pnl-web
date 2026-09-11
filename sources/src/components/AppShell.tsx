@@ -815,8 +815,9 @@ export function AppShell() {
 
               <div className="header-spacer" />
 
-              {/* Narrow screens get the floating 新增交易 button instead (below, outside .app-header); never both. */}
-              {!narrow && !loading && (
+              {/* Narrow screens get the floating 新增交易 button instead (below, outside .app-header); never both.
+                  Hidden on admin: the button has no use there and covers admin status text. */}
+              {!narrow && !loading && view !== 'admin' && (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm header-add"
@@ -884,8 +885,9 @@ export function AppShell() {
             Global "add transaction": available from any tab; the modal is mounted at the shell level so a
             content reload cannot drop it. Narrow screens get this floating button; wide screens get the
             header-add button rendered above instead — never both (see AppShell.a11y.test.tsx).
+            Hidden on admin: the button has no use there and covers admin status text.
           */}
-          {narrow && !loading && (
+          {narrow && !loading && view !== 'admin' && (
             <button className="btn btn-primary fab" aria-label="新增交易" onClick={() => setShowAddTx(true)}>
               <ListPlus size={17} />
               <span className="fab-label">新增交易</span>

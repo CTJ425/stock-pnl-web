@@ -151,11 +151,16 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
             收工 {retiredCount} 源・探測中 {probingCount} 源・待機中 {waitingCount} 源
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span className="source-tag section-stamp">
             資料日 {dataDate}・更新於 {fmtUpdatedAt(data.asOf)}
           </span>
-          <button className="btn btn-sm" onClick={onRefresh} disabled={loading}>
+          <button
+            className="btn btn-sm"
+            onClick={onRefresh}
+            disabled={loading}
+            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+          >
             <RefreshCw size={14} className={loading ? 'spin' : undefined} />
             重新整理
           </button>

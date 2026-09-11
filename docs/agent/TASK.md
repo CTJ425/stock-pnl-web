@@ -9,9 +9,10 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-11 13:03)
+## 📍 Where the project stands (2026-09-11 15:38)
 
-- **Version 0.9.45 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.45`; Cloudflare Pages still serves 0.9.44 until the manual upload (README step 9-1).
+- **Version 0.9.46 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.46`; Cloudflare Pages serves 0.9.45 (uploaded 2026-09-11) until the next manual upload (README step 9-1).
+  - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
   - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
   - Shipped 2026-09-10: 查無檔案被當成錯誤、即時產生因此永遠不會執行（0.9.44, BUG-078）、非持股股票日線區間讀不到（0.9.43, BUG-077）、行情走勢圖擴充為八個區間（0.9.42）、技術面 K 線圖擴充為六個區間與 Edge `daily` action（0.9.41）、Edge 台股清單完整性檢查（0.9.40）。
   - Verification: 117 test files / **1,864** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0.

@@ -2759,7 +2759,32 @@ a.hmenu-item {
   .field select,
   .field textarea {
     font-size: var(--type-body-02);
-    padding: 12px 12px;
+  }
+
+  /* iOS clips the 16px text at height:40px + 12px vertical padding (16px left for the glyph);
+     44px with horizontal-only padding gives the text room without vertically centring it via padding. */
+  .field input:not([type='checkbox']):not([type='radio']),
+  .field select {
+    height: 44px;
+    padding: 0 12px;
+    line-height: normal;
+  }
+
+  .field textarea {
+    padding: 12px;
+  }
+
+  /* iOS gives date inputs an intrinsic min-width, extra height, and centres the value;
+     without this the date input overflows into the next .field-row column. */
+  .field input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  .field input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
   }
 
   .stock-search input,
@@ -3540,12 +3565,14 @@ a.hmenu-item {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .m-card-h h4 {
   font-size: var(--type-body-01);
   color: var(--ink);
   margin: 0;
+  white-space: nowrap;
 }
 
 .m-range {
@@ -3585,6 +3612,21 @@ a.hmenu-item {
   border-color: var(--cds-text-primary);
   color: var(--cds-background);
   font-weight: 400;
+}
+
+@media (max-width: 560px) {
+  .m-range {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .m-range button {
+    height: 40px;
+    padding: 0 4px;
+    border-right-width: 1px;
+  }
 }
 
 /* ---------- Card-level layout: quote header + chart left, sidebar right (revision 4) ----------
@@ -3674,6 +3716,7 @@ a.hmenu-item {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .chart-time-badge {
@@ -3687,6 +3730,7 @@ a.hmenu-item {
   align-items: center;
   gap: 8px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* ---------- Institutional Investors (三大法人買賣超) 2-day cards ---------- */
