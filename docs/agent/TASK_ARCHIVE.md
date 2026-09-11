@@ -1,5 +1,9 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 158 — completed sub-items (rolled from TASK.md 2026-09-11 16:40:47 Asia/Taipei)
+12. ~~Four low-use tool buttons take 20% of the transactions first screen.~~ ✅ 0.9.48 — at ≤720 px they sit in a 「工具」 bottom sheet (「交易工具」); search and 工具 share one 44 px row. Desktop unchanged (verified at 1440 px).
+18. ~~「觀察股票」 header wraps onto two lines at 375 px; the 圖卡/條列 buttons are 32 px high.~~ ✅ 0.9.48 — one row at ≤720 px: icon-only 44×44 toggle (aria-labels kept) and 「＋ 加入」 (aria-label 加入觀察). Desktop unchanged.
+
 ### Task 159 — completed sub-items (rolled from TASK.md 2026-09-11 13:03:30 Asia/Taipei)
 - D2. ~~Fee rate takes a decimal; 0.6 is accepted with no warning.~~ ✅ 0.9.45 — 「＝ N 折」 hint and out-of-range warning (`utils/feeRateHint.ts`) in the form and the workspace dialog; stored value unchanged.
 - D4. ~~Error toasts auto-dismiss after 5 s.~~ ✅ 0.9.45 — errors stay until closed. Correction: the close button already existed; the audit report was fixed.

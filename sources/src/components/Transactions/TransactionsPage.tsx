@@ -4,7 +4,7 @@
  * The "Profit and Loss/Income and Expenses" column is the same as column H in the GAS version: buy = -(unit price × number of shares + expenses), sell = unit price × number of shares - expenses.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Download, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
+import { Calculator, Download, MoreHorizontal, NotebookPen, Pencil, Scissors, Search, Trash2, Upload, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { NewTransaction, Transaction, TxNature } from '../../types/models'
 import { MARKET_LABEL, TX_NATURE_LABEL, TX_TYPE_LABEL, marketCurrency } from '../../types/models'
@@ -126,6 +126,7 @@ export function TransactionsPage() {
   const [showImport, setShowImport] = useState(false)
   const [showRecalc, setShowRecalc] = useState(false)
   const [showSplit, setShowSplit] = useState(false)
+  const [showTools, setShowTools] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
@@ -273,6 +274,15 @@ export function TransactionsPage() {
             </button>
           )}
         </div>
+        <button
+          type="button"
+          className="btn tx-tools-trigger"
+          aria-haspopup="dialog"
+          onClick={() => setShowTools(true)}
+        >
+          <MoreHorizontal size={15} />
+          工具
+        </button>
         {isFiltering && (
           <span className="badge">
             顯示 {sorted.length} / {transactions.length} 筆
@@ -280,7 +290,7 @@ export function TransactionsPage() {
         )}
         <div className="spacer" />
         <button
-          className="btn"
+          className="btn tx-tool"
           title="股票分割或反向分割（併股）換算"
           onClick={() => setShowSplit(true)}
           disabled={transactions.every((tx) => tx.tx_type !== 'BUY')}
@@ -289,7 +299,7 @@ export function TransactionsPage() {
           股票分割換算
         </button>
         <button
-          className="btn"
+          className="btn tx-tool"
           title="依目前費率重算所有台股交易的手續費"
           onClick={() => setShowRecalc(true)}
           disabled={transactions.length === 0}
@@ -297,11 +307,11 @@ export function TransactionsPage() {
           <Calculator size={15} />
           重算手續費
         </button>
-        <button className="btn" onClick={() => setShowImport(true)}>
+        <button className="btn tx-tool" onClick={() => setShowImport(true)}>
           <Upload size={15} />
           匯入 CSV
         </button>
-        <button className="btn" onClick={handleExport} disabled={transactions.length === 0}>
+        <button className="btn tx-tool" onClick={handleExport} disabled={transactions.length === 0}>
           <Download size={15} />
           匯出 CSV
         </button>
@@ -432,6 +442,60 @@ export function TransactionsPage() {
           onClose={() => setShowSplit(false)}
           onSuccess={(msg) => setNotice(msg)}
         />
+      )}
+
+      {showTools && (
+        <Modal title="交易工具" onClose={() => setShowTools(false)}>
+          <div className="tx-tools-sheet">
+            <button
+              type="button"
+              className="btn tx-tools-item"
+              disabled={transactions.every((tx) => tx.tx_type !== 'BUY')}
+              onClick={() => {
+                setShowTools(false)
+                setShowSplit(true)
+              }}
+            >
+              <Scissors size={15} />
+              股票分割換算
+            </button>
+            <button
+              type="button"
+              className="btn tx-tools-item"
+              disabled={transactions.length === 0}
+              onClick={() => {
+                setShowTools(false)
+                setShowRecalc(true)
+              }}
+            >
+              <Calculator size={15} />
+              重算手續費
+            </button>
+            <button
+              type="button"
+              className="btn tx-tools-item"
+              onClick={() => {
+                setShowTools(false)
+                setShowImport(true)
+              }}
+            >
+              <Upload size={15} />
+              匯入 CSV
+            </button>
+            <button
+              type="button"
+              className="btn tx-tools-item"
+              disabled={transactions.length === 0}
+              onClick={() => {
+                setShowTools(false)
+                handleExport()
+              }}
+            >
+              <Download size={15} />
+              匯出 CSV
+            </button>
+          </div>
+        </Modal>
       )}
 
       {editTx && (
