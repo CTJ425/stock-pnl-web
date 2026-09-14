@@ -2,6 +2,22 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.51（2026-09-14）— AI 金鑰不再進入瀏覽器，以及三項稽核修補（Task 161）
+
+- 🔐 **Google AI 金鑰移出瀏覽器（稽核項 A1）**
+  - **問題**：`app_settings` 的 RLS SELECT policy 是 `TO authenticated USING (true)`，前端直接 `select('ai_api_key')`，再以 `x-goog-api-key` 由瀏覽器直連 Google。任何登入帳號都能讀走全站共用的 Google 金鑰並在站外使用。`mailer_autoconfirm = true` 且 `disable_signup = false`，所以任何人自行註冊後立即就能讀到。
+  - **新增 `ai-proxy` Edge Function**：瀏覽器仍負責組請求與解析回覆，代理只在伺服器端注入**金鑰與模型名稱**，並原樣轉送 Google 的狀態碼與 JSON。因此「400 去掉 `thinkingConfig` 重送一次」、401/429/5xx 的錯誤對應、以及必須包住讀 body 的 180 秒逾時，這些既有行為完全沒變。模型名稱也改由伺服器端決定，呼叫端無法改指到別的模型。
+  - **權限寫法有一個會靜默失效的陷阱**：欄位層級的 `REVOKE` 對「已持有資料表層級授權」的角色**無效，而且不報錯**。Supabase 預設給 `authenticated` 整張表的 SELECT，Postgres 先檢查資料表層級權限，欄位層級 REVOKE 減不掉它。本次在 supabase/postgres 17.6 實測確認：只下 `REVOKE SELECT (ai_api_key) ... FROM authenticated`，金鑰照樣讀得到 —— 那會是一個所有測試都綠、卻什麼都沒修好的修補。正確順序是先 `REVOKE SELECT ON app_settings`，再把 `ai_api_key` 以外的欄位逐欄 `GRANT` 回去。**日後在這張表加欄位，沒補進那行 GRANT 就會讀不到。**
+  - **前端改走 `get_ai_settings()`**（`SECURITY DEFINER`）讀設定。該函數對 `google` 一律回傳空字串，並附帶 `ai_has_key` 布林值。後台因此不再回填金鑰欄位，改顯示「已設定（留空則不更動）」；留空儲存不會洗掉既有金鑰，只改模型也不會被驗證擋下。
+  - ⚠️ **範圍限於 `google`**（使用者 2026-09-14 決定）：`openai-compatible` 維持瀏覽器直連，因為 Supabase Edge Function 連不到本機 Ollama。該路徑的金鑰仍會下發到每一個登入者的瀏覽器 —— 本機 Ollama 通常免金鑰，但若改指向需要金鑰的雲端端點就會外洩，已記為 **RISK-013**。後台警語改為依供應商如實顯示，不再一律寫「金鑰會下發」。
+  - **審查後補正兩處**：`readSettings` 原本吞掉 PostgREST 的 `error`，暫時性讀取失敗會退化成 `provider === ''`，對外報成「供應商不是 google」的 400，把 500 級故障藏在錯誤的原因後面；現在改為丟出並回報 500 帶原因。另外 256 KB 的請求上限原本用 `rawBody.length`（UTF-16 碼元）計算，而本專案的提示詞是中文，一個字是 3 個 UTF-8 位元組 —— 約 3 倍大的請求會通過；改為以位元組計算。
+- 🧪 **新增 CI 測試閘門（稽核項 A2）**：`.github/workflows/ci.yml`，對 `main` / `dev` 的 push 與 PR 依序執行 `lint` → `build` → `typecheck:edge` → `test`。此前 repo 只有一支「push main 時同步 GitHub Release」的 workflow，1,900 多條測試從來沒有自動跑過。
+- 🐛 **修正一個會讓籌碼分頁崩潰的條件式 hook（稽核項 A3）**：`ChipsTab.tsx` 的兩個 `useState` 位在三個 early return 之後。在籌碼分頁上切換股票時 `status` 由 `ready` 變回 `loading`，React 會看到 hook 數量由 2 變成 0 並拋出錯誤。兩行移到所有 early return 之前，行為不變。
+  - 同時將 `useRowActivate` 更名為 `rowActivateProps`：它內部沒有任何 hook，只是產生 props 的工廠函式，`use` 前綴讓 oxlint 對 4 個呼叫點誤報 rules-of-hooks。改名後 `npm run lint` 的 error 由 4 降為 0 —— 有這一步，A2 的閘門才擋得住東西。
+- 🧹 **移除會被部署到正式站的樣板檔（稽核項 A4）**：`sources/public/mockup-table-redesign.html`（15.6 KB）無任何程式引用，卻會隨 `dist/` 一起上傳，正式網址可直接開啟。
+- ✅ **測試與驗證**：122 檔 / **1,952** 條測試全數通過（本版新增 23 條）；`npm run lint`、`npm run build`、`npm run typecheck:edge`、`npm test` 四道皆 exit 0。SQL 權限模型在 supabase/postgres 17.6 以真實欄位組成實測五項：直接讀金鑰被拒（`permission denied`）、應用欄位仍可讀、`get_ai_settings()` 對 google 回空字串、管理員寫入正常、openai-compatible 仍取得金鑰。
+- ⚠️ **上線順序不可顛倒**：① 套用 `docs/agent/161-ai-key-proxy-migration.sql` → ② `supabase functions deploy ai-proxy`（維持 `verify_jwt=true`，不加旗標）→ ③ 上傳前端 `dist/`。**Edge Function 還沒部署就先上傳前端，AI 分析會失效**；本版尚未部署任何環境。
+
 ### 0.9.50（2026-09-14）— 全專案快照與還原腳本（Task 160）
 
 - 🗄️ **新增三支維運腳本**：現有的 `backup-transactions` 每日備份只涵蓋單一帳號的三張 `public` 表，不含帳號密碼、結構、Storage 檔案與排程。本版補上整個專案層級的快照與還原。

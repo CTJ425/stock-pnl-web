@@ -284,6 +284,38 @@ TO authenticated
 USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
 WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
+-- 4.1b Keep the google key out of the browser (Task 161)
+--
+--     The RLS policy above is still `USING (true)` — every authenticated account can SELECT
+--     the row — so the column privileges below are the only thing stopping a direct
+--     `select('*')` from returning `ai_api_key`.
+--
+--     ⚠️ A bare `REVOKE SELECT (ai_api_key) ... FROM authenticated` DOES NOT WORK here, and
+--     fails silently. Supabase grants `authenticated` table-level SELECT on every table in
+--     `public`, and Postgres checks the table-level privilege first: a column-level REVOKE
+--     cannot subtract from it. Measured 2026-09-14 on supabase/postgres 17.6 — after that
+--     REVOKE, `SET ROLE authenticated; SELECT secret FROM t;` still returned the value.
+--     The table-level SELECT must be revoked first, then the safe columns granted back.
+--     Keep this order if you ever add a column: a new column is NOT readable until it is
+--     added to the GRANT below.
+REVOKE SELECT ON public.app_settings FROM authenticated, anon;
+GRANT SELECT (id, ai_provider, ai_base_url, ai_model, ai_updated_at, ai_prompt_analysis, ai_prompt_chat)
+  ON public.app_settings TO authenticated;
+
+-- `SECURITY DEFINER` so it can still read the key server-side to decide `ai_has_key`,
+-- but it never returns the key itself for the google provider (openai-compatible keeps
+-- returning its key — that path stays browser-direct, see spec 161 §2).
+CREATE OR REPLACE FUNCTION public.get_ai_settings()
+RETURNS TABLE (ai_provider TEXT, ai_base_url TEXT, ai_model TEXT, ai_api_key TEXT, ai_has_key BOOLEAN)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT ai_provider, ai_base_url, ai_model,
+         CASE WHEN ai_provider = 'google' THEN '' ELSE COALESCE(ai_api_key, '') END,
+         (ai_api_key IS NOT NULL AND ai_api_key <> '')
+  FROM app_settings WHERE id = 1;
+$$;
+REVOKE ALL ON FUNCTION public.get_ai_settings() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_ai_settings() TO authenticated;
+
 
 -- 5. After-hours chip raw file cache data table (chip_raw_cache)
 --     Shared cache of Edge Function stock-report: cache TWSE files based on transaction date and data set,

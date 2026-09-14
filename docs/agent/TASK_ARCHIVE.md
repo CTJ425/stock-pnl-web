@@ -1,5 +1,23 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 161: 把 Google AI 金鑰移出瀏覽器（ai-proxy Edge Function）
+- **Status**: ✅ DONE (0.9.51)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-14 19:29:33 Asia/Taipei
+- **Spec**: `docs/agent/specs/161-ai-key-proxy.md`
+- **What it fixed**: `app_settings` 的 RLS SELECT policy 是 `TO authenticated USING (true)`，前端直接 `select('ai_api_key')` 後以 `x-goog-api-key` 由瀏覽器直連 Google。任何登入帳號都能讀走全站共用的 Google 金鑰並在站外使用；`mailer_autoconfirm = true` 且 `disable_signup = false`，任何人自行註冊後立即就能讀到。
+- **Design**: `ai-proxy` 是只注入憑證的轉送層。前端仍組請求與解析回覆，代理在伺服器端加上金鑰與模型名稱，原樣轉送 Google 的狀態碼與 JSON，因此 400 重送、錯誤對應與 180 秒逾時都不變。
+- **The trap worth remembering**: 欄位層級的 `REVOKE` 對已持有資料表層級授權的角色**無效且不報錯**。Supabase 預設給 `authenticated` 整張表的 SELECT。實測（supabase/postgres 17.6）確認 `REVOKE SELECT (ai_api_key) ... FROM authenticated` 之後金鑰照樣讀得到。正確順序是先 `REVOKE SELECT ON app_settings`，再逐欄 `GRANT` 回去；日後加欄位沒補進那行 GRANT 就會讀不到。
+- **Scope decision**: 只保護 `google`（使用者 2026-09-14 決定）。`openai-compatible` 維持瀏覽器直連，因為 Edge 連不到本機 Ollama。殘留風險記為 RISK-013。
+- **Files**: `sources/supabase/functions/ai-proxy/{index,handler,handler.test}.ts`、`sources/src/services/{aiClient,aiSettings}.ts`、`sources/src/components/Admin/AiConnectionSection.tsx`、`sources/supabase/schema.sql`、`docs/agent/161-ai-key-proxy-migration.sql`
+- **Verification**: 四道閘門皆 exit 0，122 檔 / 1,952 條測試全過（新增 23 條）。SQL 權限模型以真實欄位組成實測五項全數符合預期。
+- **Not done**: 尚未部署。順序為 ① 套 SQL → ② `supabase functions deploy ai-proxy` → ③ 上傳 `dist/`。
+
+### Task 161 附帶的三項稽核修補（0.9.51）
+- **A2 — CI 測試閘門**: 新增 `.github/workflows/ci.yml`，對 `main` / `dev` 的 push 與 PR 依序跑 `lint` → `build` → `typecheck:edge` → `test`。此前 repo 只有一支在 push `main` 時同步 GitHub Release 的 workflow，1,900 多條測試從未自動執行。
+- **A3 — 條件式 hook 與 lint**: `ChipsTab.tsx` 的兩個 `useState` 位在三個 early return 之後，在籌碼分頁切換股票時 `status` 由 `ready` 變回 `loading`，React 會因 hook 數量由 2 變 0 而拋錯；已移到所有 early return 之前。另把 `useRowActivate` 更名為 `rowActivateProps`（內部無 hook，`use` 前綴讓 oxlint 對 4 個呼叫點誤報 rules-of-hooks），lint error 由 4 降為 0。
+- **A4 — 正式站死檔案**: 刪除 `sources/public/mockup-table-redesign.html`（15.6 KB），無程式引用但會隨 `dist/` 上傳，正式網址可直接開啟。
+
 ### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
 - **Status**: ✅ DONE
 - **Agent**: Claude

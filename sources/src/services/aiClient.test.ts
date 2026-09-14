@@ -1,4 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }))
+vi.mock('./supabase', () => ({
+  supabase: { auth: { getSession } },
+  supabaseUrl: 'https://supabase.example',
+  isSupabaseConfigured: true,
+}))
+
+beforeEach(() => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } }, error: null })
+})
+
 import {
   AiError,
   createAiProvider,
@@ -349,7 +361,7 @@ describe('aiClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2)
     })
 
-    it('Google Provider 應帶上 x-goog-api-key 並正確傳送及解析', async () => {
+    it('Google Provider 改走 ai-proxy：帶使用者 JWT，且不外洩任何金鑰', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -376,15 +388,44 @@ describe('aiClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1)
 
       const [url, opts] = mockFetch.mock.calls[0]
-      expect(url).toContain('generativelanguage.googleapis.com')
-      expect(url).toContain('gemini-2.5-flash')
-      expect(opts.headers['x-goog-api-key']).toBe('test-google-key')
-      const body = JSON.parse(opts.body)
-      expect(body.systemInstruction.parts[0].text).toBe('sys')
-      expect(body.contents[0].parts[0].text).toBe('usr')
+      // The browser must not reach Google, and must not carry the key in any form.
+      expect(url).toBe('https://supabase.example/functions/v1/ai-proxy')
+      expect(url).not.toContain('generativelanguage.googleapis.com')
+      expect(opts.headers['x-goog-api-key']).toBeUndefined()
+      expect(opts.headers['Authorization']).toBe('Bearer test-token')
+      expect(opts.body).not.toContain('test-google-key')
+
+      // The model stays server-side too: the proxy reads it from app_settings.
+      expect(opts.body).not.toContain('gemini-2.5-flash')
+
+      const { googleBody } = JSON.parse(opts.body)
+      expect(googleBody.systemInstruction.parts[0].text).toBe('sys')
+      expect(googleBody.contents[0].parts[0].text).toBe('usr')
       // The quota must be enough to write the entire article (thinking tokens are also included in this limit), and thinking is turned off by default.
-      expect(body.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
-      expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+      expect(googleBody.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
+      expect(googleBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+    })
+
+    it('沒有登入 session 時一個請求都不發，直接丟 AiError(auth)', async () => {
+      const mockFetch = vi.fn()
+      vi.stubGlobal('fetch', mockFetch)
+      getSession.mockResolvedValue({ data: { session: null }, error: null })
+
+      const provider = createAiProvider({
+        provider: 'google',
+        baseUrl: '',
+        model: 'gemini-2.5-flash',
+        apiKey: '',
+      })
+
+      try {
+        await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })
+        expect.fail('應丟出錯誤')
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(AiError)
+        expect(e.kind).toBe('auth')
+      }
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
     it('模型不接受 thinkingConfig（400）時，去掉該欄位重送一次並成功', async () => {
@@ -407,8 +448,8 @@ describe('aiClient', () => {
       expect(await provider.complete({ system: 's', messages: [{ role: 'user', content: 'u' }] })).toBe('退回後的結果')
       expect(mockFetch).toHaveBeenCalledTimes(2)
 
-      const first = JSON.parse(mockFetch.mock.calls[0][1].body)
-      const second = JSON.parse(mockFetch.mock.calls[1][1].body)
+      const first = JSON.parse(mockFetch.mock.calls[0][1].body).googleBody
+      const second = JSON.parse(mockFetch.mock.calls[1][1].body).googleBody
       expect(first.generationConfig.thinkingConfig).toBeDefined()
       expect(second.generationConfig.thinkingConfig).toBeUndefined()
       expect(second.generationConfig.maxOutputTokens).toBe(GOOGLE_MAX_OUTPUT_TOKENS)
@@ -642,7 +683,7 @@ describe('多輪對話的角色映射（0.6.5）', () => {
     })
     await provider.complete({ system: '規則', messages: convo })
 
-    const body = JSON.parse((mockFetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    const body = JSON.parse((mockFetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).googleBody
     expect(body.systemInstruction.parts[0].text).toBe('規則')
     expect(body.contents.map((c: { role: string }) => c.role)).toEqual(['user', 'model', 'user'])
   })

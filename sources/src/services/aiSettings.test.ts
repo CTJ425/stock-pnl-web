@@ -1,5 +1,22 @@
-import { describe, expect, it } from 'vitest'
-import { normalizeAiSettings, validateAiSettings } from './aiSettings'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { rpc, upsert, from } = vi.hoisted(() => {
+  const upsert = vi.fn(async (_payload: Record<string, unknown>) => ({ error: null }))
+  const from = vi.fn(() => ({ upsert }))
+  return { rpc: vi.fn(), upsert, from }
+})
+vi.mock('./supabase', () => ({
+  supabase: { rpc, from, auth: { getUser: vi.fn() } },
+  isSupabaseConfigured: true,
+}))
+
+import {
+  loadAiSettings,
+  loadAiSettingsView,
+  normalizeAiSettings,
+  saveAiSettings,
+  validateAiSettings,
+} from './aiSettings'
 
 describe('aiSettings', () => {
   describe('normalizeAiSettings', () => {
@@ -100,5 +117,85 @@ describe('aiSettings', () => {
       })
       expect(err).toBeNull()
     })
+  })
+})
+
+/**
+ * 161: the google key never leaves the server. The browser reads settings through the
+ * `get_ai_settings` RPC, which blanks the key for google, and an edit that leaves the key
+ * field empty must not wipe the stored one.
+ */
+describe('aiSettings 161 — google key stays server-side', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    upsert.mockResolvedValue({ error: null })
+  })
+
+  const googleRow = {
+    ai_provider: 'google',
+    ai_base_url: '',
+    ai_model: 'gemini-2.5-flash',
+    ai_api_key: '',
+    ai_has_key: true,
+  }
+
+  it('loadAiSettings 透過 rpc(get_ai_settings) 讀取，不再直接 select 欄位', async () => {
+    rpc.mockResolvedValue({ data: [googleRow], error: null })
+
+    const got = await loadAiSettings()
+
+    expect(rpc).toHaveBeenCalledWith('get_ai_settings')
+    expect(from).not.toHaveBeenCalled()
+    expect(got).toEqual({
+      provider: 'google',
+      baseUrl: '',
+      model: 'gemini-2.5-flash',
+      apiKey: '',
+    })
+  })
+
+  it('rpc 回錯誤或空結果時回傳 null', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
+    expect(await loadAiSettings()).toBeNull()
+
+    rpc.mockResolvedValue({ data: [], error: null })
+    expect(await loadAiSettings()).toBeNull()
+  })
+
+  it('loadAiSettingsView 帶出 hasKey，讓後台能顯示「已設定」', async () => {
+    rpc.mockResolvedValue({ data: [googleRow], error: null })
+
+    const view = await loadAiSettingsView()
+
+    expect(view.hasKey).toBe(true)
+    expect(view.settings?.model).toBe('gemini-2.5-flash')
+  })
+
+  it('google 已有金鑰時，留空儲存不得覆寫既有金鑰', async () => {
+    const res = await saveAiSettings(
+      { provider: 'google', baseUrl: '', model: 'gemini-3-pro', apiKey: '' },
+      true,
+    )
+
+    expect(res.error).toBeNull()
+    const payload = upsert.mock.calls[0][0]
+    expect(payload.ai_model).toBe('gemini-3-pro')
+    expect(Object.hasOwn(payload, 'ai_api_key')).toBe(false)
+  })
+
+  it('google 填了新金鑰時仍然寫入', async () => {
+    const res = await saveAiSettings(
+      { provider: 'google', baseUrl: '', model: 'gemini-3-pro', apiKey: 'new-key' },
+      true,
+    )
+
+    expect(res.error).toBeNull()
+    expect(upsert.mock.calls[0][0].ai_api_key).toBe('new-key')
+  })
+
+  it('validateAiSettings 在已存金鑰時放行空白 apiKey，未存時照舊擋下', async () => {
+    const s = { provider: 'google' as const, baseUrl: '', model: 'gemini-2.5-flash', apiKey: '' }
+    expect(validateAiSettings(s, true)).toBeNull()
+    expect(validateAiSettings(s)).toContain('API Key')
   })
 })

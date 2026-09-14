@@ -107,6 +107,11 @@ interface ChipsTabProps {
 }
 
 export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
+  // Hooks must run before every early return below: `status` moves loading -> ready and back on a
+  // ticker change, and a conditional hook makes React see a different hook count between renders.
+  const [metric, setMetric] = useState<ChipMetric>('net')
+  const [marginMetric, setMarginMetric] = useState<MarginMetric>('summary')
+
   if (status === 'loading') {
     return (
       <div className="empty-state" style={{ padding: 32 }}>
@@ -135,8 +140,6 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
 
   const { institutional, margin, borrow, history } = report
   const lastIndex = history.length - 1
-  const [metric, setMetric] = useState<ChipMetric>('net')
-  const [marginMetric, setMarginMetric] = useState<MarginMetric>('summary')
 
   /*
     Columns of the matrix (0.7.6). Normally the 7-day history; when a report carries no history at all it
