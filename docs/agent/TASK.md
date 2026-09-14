@@ -24,6 +24,22 @@
 
 ## 📋 Active Tasks
 
+### Task 160: 全專案快照與還原腳本（snapshot / restore / wipe-dev）
+- **Status**: 🔄 **Phase A + A-2 程式完成並實測；破壞性演練待使用者決定 CRON_SECRET 方案**
+- **Spec**: `docs/agent/specs/160-snapshot-restore.md`（含 §3a、§3b 兩項設計修正）
+- **Done**:
+  - `sources/scripts/lib/snapshotPlan.cjs` — 純邏輯核心，21 條測試（`snapshotPlan.test.mjs`）
+  - `sources/scripts/snapshot.cjs` — 產生快照包，目的地 local / storage / r2
+  - `sources/scripts/restore.cjs` — 從快照包還原，支援 `--dry-run`
+  - `sources/scripts/wipe-dev.cjs` — 破壞性演練，五道守衛
+  - `sources/package.json` — 新增 `snapshot` / `restore` / `wipe:dev` 三個指令
+  - `.gitignore` — 擋下 `.snapshots/` 與 `*.sql.gpg`
+  - DEV `backup_run_log` 補上 `r2_status` / `r2_error` 兩欄
+- **Deferred (使用者決定 2026-09-14)**: 破壞性演練暫不執行。DEV 維持現狀，未做任何 wipe / restore 往返。
+- **Resume 時要先決定**: 還原會重建 7 個 cron job，需要真正的 CRON_SECRET，但 Supabase 只回得出 SHA256 摘要、讀不回原值。方案 A 是產新密鑰並 `supabase secrets set` 寫進目標專案（能驗證 placeholder 窄替換，但會換掉現有密鑰）；方案 B 是跳過 cron（不動設定，但 placeholder 替換就驗不到，而那正是 2026-08-31 的失敗點）。
+- **Out of scope (使用者決定 2026-09-14)**: Cloudflare R2。`snapshot.cjs` 的 `r2` 目的地與 SigV4 簽章已全部移除，`--to` 只接受 `local` 與 `storage`。詳見 spec §9。
+- **Not done**: 實際的 wipe → restore 往返。所有其他環節都已對 DEV 實測：snapshot 產包 1.6 MB / 137 檔 sha256 吻合、restore `--dry-run` 六步全過（6 URL + 6 secret header 窄替換）、wipe-dev 對 PROD ref 與未知 ref 皆以離開碼 1 拒絕。
+
 ### Task 159: Desktop and general UI/UX fixes
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude

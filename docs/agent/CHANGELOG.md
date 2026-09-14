@@ -2,6 +2,22 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.50（2026-09-14）— 全專案快照與還原腳本（Task 160）
+
+- 🗄️ **新增三支維運腳本**：現有的 `backup-transactions` 每日備份只涵蓋單一帳號的三張 `public` 表，不含帳號密碼、結構、Storage 檔案與排程。本版補上整個專案層級的快照與還原。
+  - **`npm run snapshot`**（`snapshot.cjs`）：產生一份自帶內容的快照包 —— `setup.sql`、`schema.sql`、`data-public.sql`、`data-auth.sql`、`cron.json`、`storage/`、`manifest.json`。目的地為 `local` 與 `storage`。設了 `SNAPSHOT_PASSPHRASE` 就用 gpg AES256 加密 `data-auth.sql`，沒設則印出明顯警告。
+  - **`npm run restore`**（`restore.cjs`）：從快照包還原。先驗 sha256，任何一個檔案不符就拒絕寫入。套用順序固定為 `setup.sql` → `data-auth.sql` → `data-public.sql` → Storage，因為 `public` 各表的 `user_id` 外鍵指向 `auth.users`。支援 `--dry-run`。
+  - **`npm run wipe:dev`**（`wipe-dev.cjs`）：破壞性演練用。五道守衛依序為 DEV ref 檢查、與 `supabase link` 一致、快照 manifest 的 ref 相符、**sha256 全檔驗證通過**（不提供跳過旗標）、還原所需檔案齊備。全部通過後還要 `--yes-destroy-dev` 才會動手，且 `--dry-run` 永遠勝出。
+- 🔍 **三項設計修正**（皆有回歸測試）：
+  - **窄替換**：`sources/supabase/schema.sql` 裡的 placeholder 有兩種用途 —— cron 指令內的值（必須替換），以及第 1230 行 `WHERE command LIKE '%<PROJECT_REF>%'` 這個對 `cron.job` 的搜尋樣式（必須保留）。整檔替換會讓守衛誤判所有 job「仍含 placeholder」而中止還原。改為只替換 `https://<PROJECT_REF>.supabase.co` 與 `'x-cron-secret', '<CRON_SECRET>'` 兩種確切形式，替換次數為 0 時丟例外。
+  - **空字串比殘留更危險**：空的替換值會把 placeholder 整個刪掉，留下 `https://.supabase.co`，而殘留掃描反而看不到。現在每個參數都必須是非空白字串。
+  - **排除可重抓的快取**：`chip_raw_cache` 一張表就超過 20 MB（單列最大 846 KB），是能從來源 API 重新取得的市場快取。預設排除 7 張快取／日誌表後，`data-public.sql` 從 32,030,658 降到 34,935 bytes，快照包從 33 MB 降到 1.6 MB，使用者資料一張未少。要完整版加 `--with-cache`。
+- 🔒 **安全**：`.gitignore` 擋下 `.snapshots/` 與 `*.sql.gpg`。`data-auth.sql` 含專案內每一個密碼 hash，而本 repo 為公開，推送保護不認得 bcrypt hash，這道 gitignore 是唯一的閘門。`cron.json` 只記錄 jobname、schedule 與 Edge Function slug，永不選取 `cron.job.command`。
+- ✅ **測試與驗證**：新增 21 條測試（`snapshotPlan.test.mjs`）。單元測試總數 1,929 條 / 121 檔全部通過；`npm run build` 與 `npm run typecheck:edge` 皆 exit 0。對 DEV 實測：快照包 1.6 MB / 137 檔 sha256 全數吻合，`restore --dry-run` 六個步驟全過（6 個 URL 與 6 個 secret header 完成替換），`wipe-dev` 對 PROD ref 與未知 ref 皆以離開碼 1 拒絕。
+- ⚠️ **尚未驗證**：實際的 wipe → restore 往返尚未執行（使用者決定暫緩）。另外，在同一個專案上砍掉重灌**測不到 GoTrue schema 漂移**，那是真實災難中最大的風險；要驗證它需要一個全新的 Supabase 專案。
+- 📦 **Cloudflare R2 不在本版範圍**：`snapshot.cjs` 的 R2 目的地與 SigV4 簽章已全部移除。`backup-transactions/r2.ts`（0.9.49 進 repo、從未部署）維持原狀不動。DEV `backup_run_log` 的 `r2_status` / `r2_error` 兩欄保留 —— `stock-report/index.ts:3867` 的 SELECT 指名了它們，刪除會在該函式部署時讓後台備份頁整頁失敗。
+- ℹ️ **不需部署**：純維運腳本，未更動前端、Edge Function 或資料庫結構（DEV 的兩個欄位為 0.9.49 既有程式碼所需，已於本次補上）。
+
 ### 0.9.49（2026-09-14）— 修復台股代號與中文搜尋失敗、多目標備份與本機匯出
 
 - 🐛 **修復台股代號與中文搜尋失敗**（BUG-081）：上櫃官方端點（TPEx OpenAPI）伺服器傳輸斷線，觸發 Edge Function `twlist` 上市櫃完整性檢查回傳 HTTP 502，前端直接連線又受瀏覽器 CORS 阻擋，導致「加入觀察」與「新增交易」無法搜尋或反查台股。
