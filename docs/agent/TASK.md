@@ -12,7 +12,7 @@
 ## 📍 Where the project stands (2026-09-14 19:29)
 
 - **Version 0.9.51 — merged to `main`, not yet uploaded, and Edge/SQL not yet deployed.** `main` and `dev` are synchronized at `0.9.51`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
-  - **0.9.51 的上線順序不可顛倒**：① 套用 `docs/agent/161-ai-key-proxy-migration.sql` → ② `supabase functions deploy ai-proxy`（維持 `verify_jwt=true`，不加旗標）→ ③ 上傳前端 `dist/`。Edge Function 還沒部署就先上傳前端，AI 分析會失效。
+  - **0.9.51 的 PROD 上線順序（四步，不可顛倒）**：`PART A` → `supabase functions deploy ai-proxy`（維持 `verify_jwt=true`，不加旗標）→ 上傳前端 `dist/` → `PART B`。`PART B`（撤銷 `ai_api_key` 讀取權）必須放最後，否則線上那份舊前端的 AI 分析分頁會壞掉。兩段 SQL 分開寫在 `docs/agent/161-ai-key-proxy-migration.sql`。DEV 已全部完成，PROD 四步都還沒做。
   - Shipped 2026-09-14: AI 金鑰移出瀏覽器 + CI 閘門 + 條件式 hook 修補（0.9.51, Task 161）。
   - Shipped 2026-09-14: 全專案快照與還原腳本（0.9.50, Task 160）。
   - Shipped 2026-09-14: 修復台股代號與中文搜尋失敗（0.9.49, BUG-081）、多目標備份與本機匯出（Task 144 #4）、docs 過時文件清理。
@@ -21,7 +21,7 @@
   - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
   - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
   - Verification: 122 test files / **1,952** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0。
-  - Edge Functions: `stock-price` deployed to DEV and PROD, `stock-report` is **v8**, `backup-transactions` is **v4**, **`ai-proxy` 尚未部署到任何環境**。
+  - Edge Functions: `stock-price` deployed to DEV and PROD, `stock-report` is **v8**, `backup-transactions` is **v4**, `ai-proxy` 為 **DEV v1（ACTIVE, verify_jwt=true）；PROD 尚未部署**。
   - **前端沒有自動部署。** 手動 `npm run build` 後上傳 `sources/dist/` 到 Cloudflare Pages（PROD `site_url` = `https://stock-pnl-web.pages.dev/`）。流程寫在 `README.md` 步驟 9-1。合併 `main` 不等於上線，驗收看畫面左下角版本徽章。
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
