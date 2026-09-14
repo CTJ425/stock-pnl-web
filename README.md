@@ -353,6 +353,11 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 `ai-proxy` 是 0.9.51 新增的 AI 金鑰代理。前端不再持有 Google API Key，改由這支函數在伺服器端注入。
 **它沒部署，AI 分析就不能用**（後台的「AI 連線」仍可設定）。
 
+⚠️ **它有一組固定的上線順序**，寫在 `docs/agent/161-ai-key-proxy-migration.sql` 開頭：
+`PART A` → 部署 `ai-proxy` → 上傳新前端 → `PART B`。
+`PART B`（撤銷 `ai_api_key` 的讀取權）是唯一會弄壞「目前線上那份前端」的一步 ——
+0.9.51 以前的版本直接讀該欄位，先跑 PART B 會讓 AI 分析分頁在新前端上傳前一直顯示未設定。
+
 #### 做法 A：WebUI
 
 Dashboard → Edge Functions → **Create a function**。名稱必須與資料夾**完全相同**（前端以函數名呼叫，改名就對不上），然後把該資料夾下的 `.ts` 檔逐一貼上。
