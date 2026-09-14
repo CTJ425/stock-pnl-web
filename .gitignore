@@ -49,3 +49,9 @@ sources/stock-search-e2e.png
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# Full-project snapshot packages (Spec 160).
+# data-auth.sql holds every bcrypt password hash in the project. This repo is PUBLIC and
+# push protection does not recognise a password hash, so this rule is the only gate.
+.snapshots/
+*.sql.gpg
