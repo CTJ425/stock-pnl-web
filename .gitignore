@@ -41,3 +41,11 @@ raw/
 
 # routing telemetry (local audit state, not source)
 .claude/routing/
+
+# Playwright generated report (regenerate with npm run test:e2e)
+docs/e2e-report.html
+sources/stock-search-e2e.png
+
+# Python bytecode
+__pycache__/
+*.py[cod]

@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark" data-style="proposed">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>股票小幫手 — UI/UX 全面重構設計提案與即時預覽</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================
+     * UI/UX Pro Max Refactor Design System
+     * Modes:
+     *   1. [data-style="current"]  : IBM Carbon Design (0.9.38 現行風格: 0px 銳角、深灰底)
+     *   2. [data-style="proposed"] : Modern Neo-Fintech (建議重構風格: 8px 圓角、OLED深岩、發光微漸層、精準數字排版)
+     * ========================================================= */
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --tw-up: #fa4d56;
+      --tw-up-bg: rgba(250, 77, 86, 0.12);
+      --tw-down: #24a148;
+      --tw-down-bg: rgba(36, 161, 72, 0.12);
+      --tw-flat: #8d8d8d;
+      --font-sans: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    /* Current Style (IBM Carbon) */
+    [data-style="current"][data-theme="dark"] {
+      --bg: #161616;
+      --surface: #262626;
+      --surface-hover: #333333;
+      --surface-accent: #393939;
+      --surface-header: #525252;
+      --border: #393939;
+      --border-strong: #6f6f6f;
+      --ink: #f4f4f4;
+      --ink-secondary: #c6c6c6;
+      --ink-muted: #8d8d8d;
+      --primary: #0f62fe;
+      --primary-hover: #0353e9;
+      --radius: 0px;
+      --radius-sm: 0px;
+      --radius-pill: 0px;
+      --shadow-card: none;
+      --glow-active: transparent;
+      --zebra: #2a2a2a;
+    }
+
+    [data-style="current"][data-theme="light"] {
+      --bg: #ffffff;
+      --surface: #f4f4f4;
+      --surface-hover: #e8e8e8;
+      --surface-accent: #e0e0e0;
+      --surface-header: #e0e0e0;
+      --border: #e0e0e0;
+      --border-strong: #8d8d8d;
+      --ink: #161616;
+      --ink-secondary: #525252;
+      --ink-muted: #6f6f6f;
+      --primary: #0f62fe;
+      --primary-hover: #0353e9;
+      --radius: 0px;
+      --radius-sm: 0px;
+      --radius-pill: 0px;
+      --shadow-card: none;
+      --glow-active: transparent;
+      --zebra: #ffffff;
+    }
+
+    /* Proposed Style (Neo-Fintech) */
+    [data-style="proposed"][data-theme="dark"] {
+      --bg: #0b0f19;
+      --surface: #141c2e;
+      --surface-hover: #1b263e;
+      --surface-accent: #22304e;
+      --surface-header: #101726;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: #f8fafc;
+      --ink-secondary: #94a3b8;
+      --ink-muted: #64748b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-pill: 9999px;
+      --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      --glow-active: 0 0 16px rgba(59, 130, 246, 0.25);
+      --zebra: rgba(255, 255, 255, 0.015);
+      --tw-up: #ff4d5e;
+      --tw-up-bg: rgba(255, 77, 94, 0.14);
+      --tw-down: #10b981;
+      --tw-down-bg: rgba(16, 185, 129, 0.14);
+    }
+
+    [data-style="proposed"][data-theme="light"] {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-hover: #f1f5f9;
+      --surface-accent: #e2e8f0;
+      --surface-header: #f8fafc;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --ink: #0f172a;
+      --ink-secondary: #475569;
+      --ink-muted: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-pill: 9999px;
+      --shadow-card: 0 4px 16px -2px rgba(15, 23, 42, 0.06), inset 0 1px 0 #ffffff;
+      --glow-active: 0 0 12px rgba(37, 99, 235, 0.2);
+      --zebra: #fcfdfe;
+      --tw-up: #e11d48;
+      --tw-up-bg: #ffe4e6;
+      --tw-down: #059669;
+      --tw-down-bg: #d1fae5;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      font-size: 14px;
+      transition: background-color 0.2s ease, color 0.2s ease;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 60px;
+    }
+
+    /* Fixed Proposal Control Header */
+    .proposal-banner {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #ffffff;
+      gap: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .proposal-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .proposal-badge {
+      background: #3b82f6;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .proposal-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .control-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .control-btn.active {
+      background: #3b82f6;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 24px;
+    }
+
+    /* App Shell Header */
+    .app-header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 24px;
+      padding: 0 20px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--ink);
+    }
+
+    .nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      list-style: none;
+    }
+
+    .nav-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-tab:hover {
+      background: var(--surface-hover);
+      color: var(--ink);
+    }
+
+    .nav-tab.active {
+      background: var(--surface-accent);
+      color: var(--ink);
+      font-weight: 600;
+      border-color: var(--border);
+      box-shadow: var(--glow-active);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ws-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .avatar-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-pill);
+      background: var(--surface-accent);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    /* Section Headers & Filter Pills */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink-secondary);
+      padding: 5px 12px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-pill.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+
+    /* Market KPI Summary Cards */
+    .market-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .kpi-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .kpi-market-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .kpi-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--surface-hover);
+      color: var(--ink-muted);
+      font-weight: 600;
+    }
+
+    .hero-metric-wrap {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .hero-number {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--ink);
+    }
+
+    .hero-sub {
+      font-size: 12px;
+      color: var(--ink-muted);
+      font-weight: 500;
+    }
+
+    .exposure-container {
+      margin: 14px 0;
+      background: var(--surface-header);
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    .exposure-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .exposure-bar-wrap {
+      height: 8px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius-pill);
+      overflow: hidden;
+      display: flex;
+      gap: 2px;
+    }
+
+    .exp-seg-long {
+      background: var(--tw-up);
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .exp-seg-short {
+      background: var(--tw-down);
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .metric-col {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-sub {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-muted);
+    }
+
+    .pnl-up {
+      color: var(--tw-up) !important;
+    }
+    .pnl-down {
+      color: var(--tw-down) !important;
+    }
+    .pnl-flat {
+      color: var(--tw-flat) !important;
+    }
+
+    .pill-up {
+      background: var(--tw-up-bg);
+      color: var(--tw-up);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .pill-down {
+      background: var(--tw-down-bg);
+      color: var(--tw-down);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    /* Table Component */
+    .table-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      overflow-x: auto;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .data-table th {
+      background: var(--surface-header);
+      color: var(--ink-secondary);
+      font-weight: 600;
+      font-size: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .data-table th.num, .data-table td.num {
+      text-align: right;
+    }
+
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--ink);
+      transition: background 0.15s ease;
+    }
+
+    .data-table tbody tr:nth-child(even) {
+      background: var(--zebra);
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--surface-hover);
+      cursor: pointer;
+    }
+
+    [data-style="proposed"] .sticky-col-1 {
+      position: sticky;
+      left: 0;
+      background: inherit;
+      z-index: 2;
+      box-shadow: 2px 0 6px rgba(0,0,0,0.1);
+    }
+    [data-style="proposed"] .sticky-col-2 {
+      position: sticky;
+      left: 78px;
+      background: inherit;
+      z-index: 2;
+      box-shadow: 3px 0 8px rgba(0,0,0,0.1);
+    }
+
+    .stock-ticker-badge {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--primary);
+    }
+
+    .stock-name-cell {
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .num-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .num-sub {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .group-header-row td {
+      background: var(--surface-accent) !important;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 8px 14px;
+      color: var(--ink-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    /* Cards View Simulation */
+    .mobile-cards-grid {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .stock-mobile-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .stock-mobile-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .smc-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .smc-ticker {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--primary);
+    }
+
+    .smc-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-left: 6px;
+      color: var(--ink);
+    }
+
+    .smc-body-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      font-size: 12px;
+    }
+
+    .smc-metric-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .smc-label {
+      color: var(--ink-muted);
+      font-size: 11px;
+    }
+
+    .smc-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* FAB */
+    .fab-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 50;
+      transition: all 0.2s ease;
+    }
+
+    .fab-btn:hover {
+      background: var(--primary-hover);
+      transform: scale(1.04);
+      box-shadow: 0 6px 22px rgba(59, 130, 246, 0.45);
+    }
+
+    /* Architectural Audit Box */
+    .design-audit-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      padding: 24px;
+      margin-top: 36px;
+    }
+
+    .audit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    .audit-item {
+      background: var(--surface-header);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .audit-item h4 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .audit-item p {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      line-height: 1.6;
+    }
+
+    /* Mobile Bottom Navigation */
+    .mobile-bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: none;
+      align-items: center;
+      justify-content: space-around;
+      z-index: 90;
+    }
+
+    .mb-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      color: var(--ink-muted);
+      cursor: pointer;
+    }
+
+    .mb-item.active {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    @media (max-width: 860px) {
+      .nav-tabs {
+        display: none;
+      }
+      .mobile-bottom-nav {
+        display: flex;
+      }
+      body {
+        padding-bottom: 70px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Proposal Control Bar -->
+  <aside class="proposal-banner" aria-label="提案控制面板">
+    <div class="proposal-title-wrap">
+      <span class="proposal-badge">UI/UX Pro Max 提案</span>
+      <strong>股票小幫手 全站重構即時切換預覽</strong>
+    </div>
+
+    <div class="proposal-controls">
+      <div class="control-group">
+        <button type="button" class="control-btn" onclick="setStyle('current')" id="btn-style-current">
+          🏢 現行版 (IBM Carbon 0px)
+        </button>
+        <button type="button" class="control-btn active" onclick="setStyle('proposed')" id="btn-style-proposed">
+          ✨ 建議重構版 (Neo-Fintech 8px)
+        </button>
+      </div>
+
+      <div class="control-group">
+        <button type="button" class="control-btn active" onclick="setTheme('dark')" id="btn-theme-dark">
+          🌙 深色 (Dark)
+        </button>
+        <button type="button" class="control-btn" onclick="setTheme('light')" id="btn-theme-light">
+          ☀️ 淺色 (Light)
+        </button>
+      </div>
+
+      <div class="control-group">
+        <button type="button" class="control-btn active" onclick="setViewMode('table')" id="btn-view-table">
+          📑 表格
+        </button>
+        <button type="button" class="control-btn" onclick="setViewMode('cards')" id="btn-view-cards">
+          📱 圖卡
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="container">
+
+    <!-- Top Application Shell -->
+    <header class="app-header">
+      <div class="brand">
+        <svg width="28" height="28" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+          <rect x="14" y="44" width="16" height="38" rx="4" fill="#3b82f6" />
+          <rect x="38" y="30" width="18" height="52" rx="4" fill="#60a5fa" />
+          <rect x="64" y="16" width="18" height="66" rx="4" fill="#ff4d5e" />
+          <path d="M54 26L73 14L82 32" stroke="#ff4d5e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span>股票小幫手</span>
+      </div>
+
+      <nav aria-label="導覽列" class="nav-tabs">
+        <a class="nav-tab active">
+          <span>庫存總覽</span>
+        </a>
+        <a class="nav-tab">
+          <span>個股分析</span>
+        </a>
+        <a class="nav-tab">
+          <span>年度收益</span>
+        </a>
+        <a class="nav-tab">
+          <span>交易紀錄</span>
+        </a>
+        <a class="nav-tab">
+          <span>總體經濟</span>
+        </a>
+        <a class="nav-tab">
+          <span>外幣匯率</span>
+        </a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="ws-pill" title="切換工作區">
+          <span>長期投資</span>
+          <span style="font-size: 10px; opacity: 0.6;">▼</span>
+        </div>
+        <div class="avatar-badge" title="帳號選單 (user@stock.tw)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round">
+            <circle cx="12" cy="7" r="4" fill="currentColor" stroke="none" />
+            <path d="M4 21c.6-4.5 4-7.8 8-7.8s7.4 3.3 8 7.8" stroke-width="2" />
+          </svg>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Title & Quick Filter Bar -->
+    <div class="section-header">
+      <div class="section-title">
+        <span>資產與持倉總覽</span>
+        <span class="kpi-badge" id="live-time-badge">現價每 60 秒更新</span>
+      </div>
+
+      <div class="filter-pills">
+        <button class="filter-pill active" onclick="filterHoldings('ALL', this)">全部持股 (5)</button>
+        <button class="filter-pill" onclick="filterHoldings('LONG', this)">多單 (4)</button>
+        <button class="filter-pill" onclick="filterHoldings('SHORT', this)">空單 (1)</button>
+        <button class="filter-pill" onclick="filterHoldings('PROFIT', this)">獲利中 (4)</button>
+        <button class="filter-pill" onclick="filterHoldings('LOSS', this)">虧損中 (1)</button>
+      </div>
+    </div>
+
+    <!-- KPI Summary Grid (Market Panels) -->
+    <div class="market-grid">
+      <!-- Taiwan Stock Panel -->
+      <div class="kpi-card">
+        <div class="kpi-card-head">
+          <div class="kpi-market-tag">
+            <span style="font-size: 20px;">🇹🇼</span>
+            <span>台股市場 (TWD)</span>
+          </div>
+          <span class="kpi-badge">淨額市值</span>
+        </div>
+
+        <div class="hero-metric-wrap">
+          <div class="hero-number" id="tw-net-mkt">$3,842,500</div>
+          <div class="hero-sub">共 4 檔標的</div>
+        </div>
+
+        <div class="exposure-container">
+          <div class="exposure-meta">
+            <span style="color: var(--tw-up);">多單市值: $4,212,500 (91.8%)</span>
+            <span style="color: var(--tw-down);">空單市值: $370,000 (8.2%)</span>
+          </div>
+          <div class="exposure-bar-wrap" title="多空市場曝險比例">
+            <div class="exp-seg-long" style="width: 91.8%;"></div>
+            <div class="exp-seg-short" style="width: 8.2%;"></div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="metric-col">
+            <span class="metric-label">投入總成本</span>
+            <span class="metric-value">$3,180,450</span>
+            <span class="metric-sub">未含費 $3,175,920</span>
+          </div>
+          <div class="metric-col">
+            <span class="metric-label">未實現淨損益</span>
+            <span class="metric-value pnl-up">+$662,050</span>
+            <span class="metric-sub">報酬率 <strong class="pnl-up">+20.82%</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- US Stock Panel -->
+      <div class="kpi-card">
+        <div class="kpi-card-head">
+          <div class="kpi-market-tag">
+            <span style="font-size: 20px;">🇺🇸</span>
+            <span>美股市場 (USD)</span>
+          </div>
+          <span class="kpi-badge">持倉市值</span>
+        </div>
+
+        <div class="hero-metric-wrap">
+          <div class="hero-number">$42,860.00</div>
+          <div class="hero-sub">共 2 檔標的 · 全部多單</div>
+        </div>
+
+        <div class="exposure-container">
+          <div class="exposure-meta">
+            <span style="color: var(--tw-up);">多頭持股: 100%</span>
+            <span style="color: var(--ink-muted);">無空單避險</span>
+          </div>
+          <div class="exposure-bar-wrap">
+            <div class="exp-seg-long" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="metric-col">
+            <span class="metric-label">投入總成本</span>
+            <span class="metric-value">$34,200.00</span>
+            <span class="metric-sub">未含費 $34,180.00</span>
+          </div>
+          <div class="metric-col">
+            <span class="metric-label">未實現淨損益</span>
+            <span class="metric-value pnl-up">+$8,660.00</span>
+            <span class="metric-sub">報酬率 <strong class="pnl-up">+25.32%</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Holdings Table View -->
+    <div id="table-view-container" class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="sticky-col-1">代號</th>
+            <th class="sticky-col-2">名稱</th>
+            <th class="num">現價</th>
+            <th class="num">持股數</th>
+            <th class="num">投入成本</th>
+            <th class="num">平均成本</th>
+            <th class="num">保本賣出價</th>
+            <th class="num">目前市值</th>
+            <th class="num">未實現損益</th>
+            <th class="num">報酬率</th>
+          </tr>
+        </thead>
+        <tbody id="holdings-tbody">
+          <tr class="group-header-row">
+            <td colspan="10">多單持股・3 檔</td>
+          </tr>
+          <tr data-type="LONG" data-status="PROFIT" onclick="alert('點擊導航至：2330 台積電 個股詳細分析頁')">
+            <td class="sticky-col-1"><span class="stock-ticker-badge">2330</span></td>
+            <td class="sticky-col-2"><span class="stock-name-cell">台積電</span></td>
+            <td class="num">
+              <span class="num-val pnl-up">985.00</span>
+              <div class="num-sub pnl-up">+15.00 (+1.55%)</div>
+            </td>
+            <td class="num"><span class="num-val">3,000</span></td>
+            <td class="num">
+              <span class="num-val">$2,412,000</span>
+              <div class="num-sub">未含費 $2,408,550</div>
+            </td>
+            <td class="num">
+              <span class="num-val">$804.00</span>
+              <div class="num-sub">未含費 $802.85</div>
+            </td>
+            <td class="num"><span class="num-val">$808.20</span></td>
+            <td class="num">
+              <span class="num-val">$2,955,000</span>
+              <div class="num-sub">淨收 $2,942,600</div>
+            </td>
+            <td class="num">
+              <span class="num-val pnl-up">+$530,600</span>
+              <div class="num-sub">券商 +$528,400</div>
+            </td>
+            <td class="num">
+              <span class="pill-up">+22.00%</span>
+            </td>
+          </tr>
+
+          <tr data-type="LONG" data-status="PROFIT" onclick="alert('點擊導航至：2454 聯發科 個股詳細分析頁')">
+            <td class="sticky-col-1"><span class="stock-ticker-badge">2454</span></td>
+            <td class="sticky-col-2"><span class="stock-name-cell">聯發科</span></td>
+            <td class="num">
+              <span class="num-val pnl-up">1,310.00</span>
+              <div class="num-sub pnl-up">+25.00 (+1.95%)</div>
+            </td>
+            <td class="num"><span class="num-val">1,000</span></td>
+            <td class="num">
+              <span class="num-val">$1,152,000</span>
+              <div class="num-sub">未含費 $1,150,350</div>
+            </td>
+            <td class="num">
+              <span class="num-val">$1,152.00</span>
+              <div class="num-sub">未含費 $1,150.35</div>
+            </td>
+            <td class="num"><span class="num-val">$1,158.50</span></td>
+            <td class="num">
+              <span class="num-val">$1,310,000</span>
+              <div class="num-sub">淨收 $1,304,500</div>
+            </td>
+            <td class="num">
+              <span class="num-val pnl-up">+$152,500</span>
+              <div class="num-sub">券商 +$151,800</div>
+            </td>
+            <td class="num">
+              <span class="pill-up">+13.24%</span>
+            </td>
+          </tr>
+
+          <tr data-type="LONG" data-status="LOSS" onclick="alert('點擊導航至：2603 長榮 個股詳細分析頁')">
+            <td class="sticky-col-1"><span class="stock-ticker-badge">2603</span></td>
+            <td class="sticky-col-2"><span class="stock-name-cell">長榮</span></td>
+            <td class="num">
+              <span class="num-val pnl-down">182.50</span>
+              <div class="num-sub pnl-down">-3.50 (-1.88%)</div>
+            </td>
+            <td class="num"><span class="num-val">2,000</span></td>
+            <td class="num">
+              <span class="num-val">$390,450</span>
+              <div class="num-sub">未含費 $389,900</div>
+            </td>
+            <td class="num">
+              <span class="num-val">$195.22</span>
+              <div class="num-sub">未含費 $194.95</div>
+            </td>
+            <td class="num"><span class="num-val">$196.15</span></td>
+            <td class="num">
+              <span class="num-val">$365,000</span>
+              <div class="num-sub">淨收 $363,500</div>
+            </td>
+            <td class="num">
+              <span class="num-val pnl-down">-$26,950</span>
+              <div class="num-sub">券商 -$27,100</div>
+            </td>
+            <td class="num">
+              <span class="pill-down">-6.90%</span>
+            </td>
+          </tr>
+
+          <tr class="group-header-row">
+            <td colspan="10">融券空單・1 檔</td>
+          </tr>
+          <tr data-type="SHORT" data-status="PROFIT" onclick="alert('點擊導航至：2317 鴻海 (空單) 個股詳細分析頁')">
+            <td class="sticky-col-1"><span class="stock-ticker-badge">2317</span></td>
+            <td class="sticky-col-2"><span class="stock-name-cell">鴻海 (空)</span></td>
+            <td class="num">
+              <span class="num-val pnl-down">185.00</span>
+              <div class="num-sub pnl-down">-2.00 (跌有賺)</div>
+            </td>
+            <td class="num"><span class="num-val pnl-up">-2,000</span></td>
+            <td class="num">
+              <span class="num-val">$375,900</span>
+              <div class="num-sub">建倉均價 $188.00</div>
+            </td>
+            <td class="num">
+              <span class="num-val">$187.95</span>
+              <div class="num-sub">已扣借券費</div>
+            </td>
+            <td class="num"><span class="num-val">$186.20</span></td>
+            <td class="num">
+              <span class="num-val">$370,000</span>
+              <div class="num-sub">回補市值</div>
+            </td>
+            <td class="num">
+              <span class="num-val pnl-up">+$5,900</span>
+              <div class="num-sub">空方實質淨利</div>
+            </td>
+            <td class="num">
+              <span class="pill-up">+1.57%</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile Card View Alternative -->
+    <div id="cards-view-container" class="mobile-cards-grid">
+      <div class="stock-mobile-card" onclick="alert('開啟 2330 台積電')">
+        <div class="smc-head">
+          <div>
+            <span class="smc-ticker">2330</span>
+            <span class="smc-name">台積電</span>
+          </div>
+          <span class="pill-up">+22.00%</span>
+        </div>
+        <div class="smc-body-grid">
+          <div class="smc-metric-item">
+            <span class="smc-label">現價</span>
+            <span class="smc-val pnl-up">985.00 (+1.55%)</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">持有股數</span>
+            <span class="smc-val">3,000 股</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">目前市值</span>
+            <span class="smc-val">$2,955,000</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">未實現損益</span>
+            <span class="smc-val pnl-up">+$530,600</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stock-mobile-card" onclick="alert('開啟 2454 聯發科')">
+        <div class="smc-head">
+          <div>
+            <span class="smc-ticker">2454</span>
+            <span class="smc-name">聯發科</span>
+          </div>
+          <span class="pill-up">+13.24%</span>
+        </div>
+        <div class="smc-body-grid">
+          <div class="smc-metric-item">
+            <span class="smc-label">現價</span>
+            <span class="smc-val pnl-up">1,310.00 (+1.95%)</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">持有股數</span>
+            <span class="smc-val">1,000 股</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">目前市值</span>
+            <span class="smc-val">$1,310,000</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">未實現損益</span>
+            <span class="smc-val pnl-up">+$152,500</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stock-mobile-card" onclick="alert('開啟 2603 長榮')">
+        <div class="smc-head">
+          <div>
+            <span class="smc-ticker">2603</span>
+            <span class="smc-name">長榮</span>
+          </div>
+          <span class="pill-down">-6.90%</span>
+        </div>
+        <div class="smc-body-grid">
+          <div class="smc-metric-item">
+            <span class="smc-label">現價</span>
+            <span class="smc-val pnl-down">182.50 (-1.88%)</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">持有股數</span>
+            <span class="smc-val">2,000 股</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">目前市值</span>
+            <span class="smc-val">$365,000</span>
+          </div>
+          <div class="smc-metric-item">
+            <span class="smc-label">未實現損益</span>
+            <span class="smc-val pnl-down">-$26,950</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI/UX Pro Max Refactor Architectural Summary -->
+    <section class="design-audit-box">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--ink);">
+        🎯 UI/UX Pro Max 全面重構技術分析與建議架構 (Executive Summary)
+      </h3>
+      <div class="audit-grid">
+        <div class="audit-item">
+          <h4>1. 視覺語意與圓角階層 (Geometric Harmony)</h4>
+          <p>
+            現行版本全面採用 IBM Carbon 的 <strong>0px 嚴格銳角</strong>，在企業工具雖嚴謹但對一般投資人過於冰冷且生硬。建議升級為 <strong>Neo-Fintech 幾何階層</strong>：卡片 10px、按鈕/輸入框 6px、標籤 4px，保留高密度專業感的同時提升現代美學。
+          </p>
+        </div>
+
+        <div class="audit-item">
+          <h4>2. 凍結欄位與行動端圖卡切換 (Data Table UX)</h4>
+          <p>
+            台股長表超過 10 個欄位，在平板與小螢幕滑動時容易遺忘標的。重構加入 <strong>Sticky Frozen Columns (代號與名稱固定於左側)</strong>，並支援與自選股一致的 <strong>「表格 ↔ 圖卡」模式無縫切換</strong>，徹底解決行動端破版或橫向滑動負擔。
+          </p>
+        </div>
+
+        <div class="audit-item">
+          <h4>3. 數字排版與台股紅綠色彩校正 (Color & Monospace)</h4>
+          <p>
+            數字統一強制啟用 <code>font-variant-numeric: tabular-nums</code> 與 Fira Code 等寬對齊，避免跳動。針對深色模式升級高辨識度熒光珊瑚紅 (<code>#ff4d5e</code>) 與祖母綠 (<code>#10b981</code>)，解決 0.9.38 曾發生的 CSS 權重覆蓋問題。
+          </p>
+        </div>
+
+        <div class="audit-item">
+          <h4>4. 5,300+ 行單一 CSS 模組化解耦 (Architecture)</h4>
+          <p>
+            現行 <code>sources/src/index.css</code> 達 5,355 行且殘留已非 glass 的 <code>.glass</code> 命名。建議將 CSS 解耦為 <code>tokens.css</code>、<code>components/table.css</code>、<code>components/card.css</code>，或評估引進 <strong>Tailwind CSS v4</strong> 徹底根治樣式專一性衝突。
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Global Floating Action Button -->
+  <button class="fab-btn" onclick="alert('開啟「新增交易」對話框 (快捷鍵 Alt+N)')">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+    <span>新增交易</span>
+  </button>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-bottom-nav" aria-label="行動底部導覽">
+    <div class="mb-item active">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span>總覽</span>
+    </div>
+    <div class="mb-item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      <span>分析</span>
+    </div>
+    <div class="mb-item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+      <span>年度</span>
+    </div>
+    <div class="mb-item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      <span>紀錄</span>
+    </div>
+    <div class="mb-item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+      <span>總經</span>
+    </div>
+    <div class="mb-item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+      <span>匯率</span>
+    </div>
+  </nav>
+
+  <script>
+    function setStyle(styleName) {
+      document.documentElement.setAttribute('data-style', styleName);
+      document.getElementById('btn-style-current').classList.toggle('active', styleName === 'current');
+      document.getElementById('btn-style-proposed').classList.toggle('active', styleName === 'proposed');
+    }
+
+    function setTheme(themeName) {
+      document.documentElement.setAttribute('data-theme', themeName);
+      document.getElementById('btn-theme-dark').classList.toggle('active', themeName === 'dark');
+      document.getElementById('btn-theme-light').classList.toggle('active', themeName === 'light');
+    }
+
+    function setViewMode(mode) {
+      const isTable = mode === 'table';
+      document.getElementById('table-view-container').style.display = isTable ? 'block' : 'none';
+      document.getElementById('cards-view-container').style.display = isTable ? 'none' : 'grid';
+      document.getElementById('btn-view-table').classList.toggle('active', isTable);
+      document.getElementById('btn-view-cards').classList.toggle('active', !isTable);
+    }
+
+    function filterHoldings(filterType, btn) {
+      document.querySelectorAll('.filter-pill').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+
+      const rows = document.querySelectorAll('#holdings-tbody tr:not(.group-header-row)');
+      rows.forEach(row => {
+        const type = row.getAttribute('data-type');
+        const status = row.getAttribute('data-status');
+
+        if (filterType === 'ALL') {
+          row.style.display = '';
+        } else if (filterType === 'LONG' || filterType === 'SHORT') {
+          row.style.display = (type === filterType) ? '' : 'none';
+        } else if (filterType === 'PROFIT' || filterType === 'LOSS') {
+          row.style.display = (status === filterType) ? '' : 'none';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

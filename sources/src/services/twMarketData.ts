@@ -128,11 +128,23 @@ interface EdgeTwListResponse {
 async function fetchViaEdge(): Promise<TwStockRow[]> {
   if (!isSupabaseConfigured || !supabase) return []
   try {
-    const { data, error } = await supabase.functions.invoke<EdgeTwListResponse>('stock-price', {
-      body: { action: 'twlist' },
-      timeout: 20_000,
-    })
-    if (error || !Array.isArray(data?.rows)) return []
+    const { data, error, response } = await supabase.functions.invoke<EdgeTwListResponse>(
+      'stock-price',
+      {
+        body: { action: 'twlist' },
+        timeout: 20_000,
+      },
+    )
+    if (error || !Array.isArray(data?.rows)) {
+      // Read the body only while it is still there. functions-js already consumed it on a 2xx,
+      // and a second read throws. No inner try/catch: a throw falls to the catch below, which
+      // logs too, and this file's every catch must record (see catchLogging.test.ts).
+      const body = response && !response.bodyUsed ? (await response.text()).slice(0, 300) : ''
+      const head = error ? (error instanceof Error ? error.message : String(error)) : 'rows 非陣列'
+      const parts = [head, response ? `HTTP ${response.status}` : '', body]
+      logClient('error', 'fetchViaEdge', parts.filter((p) => p).join(' · '), {})
+      return []
+    }
     return data.rows
       .map((r) => ({
         symbol: String(r.symbol ?? '').trim(),

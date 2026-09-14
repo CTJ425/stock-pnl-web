@@ -9,18 +9,18 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-11 16:40)
+## 📍 Where the project stands (2026-09-14 12:30)
 
-- **Version 0.9.48 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.48`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
+- **Version 0.9.49 — merged to `main`, not yet uploaded.** `main` and `dev` are synchronized at `0.9.49`; the live site shows whatever was last uploaded by hand — check its version badge (README step 9-1).
+  - Shipped 2026-09-14: 修復台股代號與中文搜尋失敗（0.9.49, BUG-081）、多目標備份與本機匯出（Task 144 #4）、docs 過時文件清理。
   - Shipped 2026-09-11: 手機版交易紀錄工具列與觀察股票標題列排整齊（0.9.48, Task 158 #12）。
   - Shipped 2026-09-11: 桌機版「新增交易」改回右下角浮動按鈕（0.9.47，使用者決定撤回 Task 159 D9）。
   - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
   - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
-  - Shipped 2026-09-10: 查無檔案被當成錯誤、即時產生因此永遠不會執行（0.9.44, BUG-078）、非持股股票日線區間讀不到（0.9.43, BUG-077）、行情走勢圖擴充為八個區間（0.9.42）、技術面 K 線圖擴充為六個區間與 Edge `daily` action（0.9.41）、Edge 台股清單完整性檢查（0.9.40）。
-  - Verification: 117 test files / **1,864** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0.
-  - Edge Functions: `stock-price` is **v7** on both environments (deployed 2026-09-10 from commit `c4a8b9e`, `ezbr_sha256` `253e6c3d25d6e7ac…` — **identical sha on DEV and PROD**), `stock-report` is **v8**, `backup-transactions` is **v4**.
+  - Verification: 120 test files / **1,908** vitest tests, exit 0 **且無 unhandled error**; `npm run build` exit 0; `npm run typecheck:edge` exit 0; Playwright E2E 12/12 通過。
+  - Edge Functions: `stock-price` deployed to DEV and PROD, `stock-report` is **v8**, `backup-transactions` is **v4**.
   - **前端沒有自動部署。** 手動 `npm run build` 後上傳 `sources/dist/` 到 Cloudflare Pages（PROD `site_url` = `https://stock-pnl-web.pages.dev/`）。流程寫在 `README.md` 步驟 9-1。合併 `main` 不等於上線，驗收看畫面左下角版本徽章。
-  - Known and not done: Task 144 的資源用量監控與 R2 多目標備份（皆未動工）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
+  - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
 ## 📋 Active Tasks
 
@@ -62,72 +62,6 @@
 17. Flag emoji render as empty boxes without a colour emoji font. — ⏳ batch 3
 19. The 交易紀錄 empty-state copy says 「點右下角『新增交易』…或用『匯入 CSV』」, but at ≤720 px the add button is icon-only and 匯入 CSV sits in the 「工具」 sheet. — ⏳ batch 3
 
-### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
-- **Status**: ✅ DONE
-- **Agent**: Claude
-- **Timestamp**: 2026-09-10 15:14:01 Asia/Taipei
-- **What is this**: 使用者要求「從 log 與過去 bug_fix / task 文件查出還有什麼沒修，或報告了結果卻根本沒做的部分」。以**程式碼與線上實測**為準對帳，不採信文件自述。
-
-**對帳結論：文件說待辦、程式碼其實已完成（紀錄過期，已更正）**
-
-| 項目 | 文件說法 | 實際 | 證據 |
-| ---- | ---- | ---- | ---- |
-| Task 144-2 執行日誌檢視器 | 未實作 | **已完成** | `sources/src/components/Admin/LogsSection.tsx`，讀 `app_log`；`schema.sql:1138` |
-| Task 145 P0-1 CSV 借券費 | OPEN | **已完成** | `utils/csv.ts:264-274, 334, 352` |
-| Task 145 P0-2 融券借券費修正 | OPEN | **已完成** | `utils/fees.ts:121, 163-171` |
-| Task 145 P0-3 拆併股融券處理 | OPEN | **已完成** | `StockSplitModal.tsx:52, 94` 排除融券並警告；`StockSplitModal.test.tsx:497, 551` 兩條測試守著。規格本就允許「排除並警示」這個解法 |
-| Task 145 P1-1 PostgREST 1000 筆截斷 | OPEN | **已完成** | `dataProvider.ts:307-335`、`backup-transactions` 與 `stock-report` 各有 `pagedSelect`、`heldTwTickers:1007`、`watchedTwTickers:1023` |
-| Task 145 P1-2 rowKey 碰撞 | OPEN | **已完成** | `AnalysisPage.tsx:84-86` |
-| Task 76 item 4 試撮 UI | OPEN | **已完成** | `QuoteTab.tsx:60`（試撮中）、`:285`（預估標記） |
-| quote-yahoo-a 均價 | 缺資料來源 | **已完成** | `QuoteTab.tsx:305` |
-
-**對帳結論：確實沒做（維持待辦）**
-
-| 項目 | 狀態 | 說明 |
-| ---- | ---- | ---- |
-| Task 144-3 資源用量監控 | ABSENT | `components/Admin/` 沒有任何呈現配額或用量的元件 |
-| Task 144-4 R2 多目標備份 | ABSENT | `backup-transactions/` 只有 `BACKUPS_BUCKET = 'backups'`，註解寫明 phase 1 |
-| Task 85 探針視窗重調 | 1/7 | 只有 `borrow`（`sourceProbePlan.ts:127`）有 2026-08-11 的實測註解，其餘六個未見重調證據 |
-| quote-yahoo-a 成交金額 / 昨量 | ABSENT | `PriceQuote` 型別沒有這兩個欄位，需先決定資料來源 |
-| Task 145 OPT-1 / OPT-2 / item 10 | 未驗證 | 效能優化項，本次未查 |
-
-**實測澄清（原本被列為風險，實際不成立）**
-
-- `readDoneSourcesToday`（`stock-report/index.ts:2636`）沒有分頁，理論上受 PostgREST 1000 筆上限影響。實測 PROD：`source_probe_tick` 每日僅 **74 筆**，符合該查詢條件者 **24 筆**，不會截斷。
-- `handleAdminUsers`（`:3760`）單次 `listUsers({perPage:1000})` 未分頁，但程式碼註解已寫明是刻意決定（本專案帳號數為個位數）。
-- `daily/` 檔案時間停在 9/9 17:10 **不是過期**：當日批次尚未到執行時間。更舊的 `3714`／`009816`／`2303`／`00981A` 已不在批次清單中，是舊持股的凍結檔案。
-
-**設定面實測（Task 132/133）**
-
-- PROD `site_url` = `https://stock-pnl-web.pages.dev/`，`uri_allow_list` **為空**。目前登入可用，但任何非 `site_url` 的重導目標都會被拒。若之後要加自訂網域或 preview 網址，必須先補進允許清單。
-- DEV 的 auth 設定無法以本次的 access token 讀取（權限不足），未驗證。
-
-### Task 156: 修復非持股股票的日線區間讀不到（BUG-077）
-- **Status**: ✅ DONE
-- **Agent**: Claude
-- **Timestamp**: 2026-09-10 14:42:14 Asia/Taipei
-- **What is this**: 0.9.42 讓行情分頁多了四個讀 `daily/{ticker}.json` 的區間，而該檔案只有持股才有（PROD 實測僅 9 檔）。在 `useDailySeries` 加第三層後援改打 Edge `daily` action 取 5 年日線，行情與技術面一起修好。定版 0.9.43，已併入 `main`。不需部署 Edge。
-
-### Task 155: 行情走勢圖也擴充為八個區間
-- **Status**: ✅ DONE
-- **Agent**: Claude
-- **Timestamp**: 2026-09-10 14:14:51 Asia/Taipei
-- **Spec**: `docs/agent/specs/quote-tab-trend-ranges.md`
-- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
-- **What is this**: 反轉 0.9.41「只擴充 K 線圖」的決定。行情分頁的走勢圖改為八個區間，維持折線；技術面的六個區間不變。定版 0.9.42，已併入 `main`。
-
-### Task 154: 個股走勢圖區間擴充為八個
-- **Status**: ✅ DONE
-- **Agent**: Claude
-- **Timestamp**: 2026-09-10 12:26:19 Asia/Taipei
-- **Spec**: `docs/agent/specs/chart-range-eight.md`
-- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
-- **What is this**: 技術面日 K 圖的區間選擇器改為 `近 1 月 / 近 6 月 / 本年迄今 / 近 1 年 / 近 5 年 / 全部`，盤中圖的 `一日 / 五日` 不動，合計八個區間。`近 5 年` 與 `全部` 走線路 A：不落地 Storage，由 `stock-price` 新增的 `daily` action 即時代理 Yahoo。
-
-6. ~~部署 `stock-price` 到 DEV 並實打驗證 `近 5 年` 與 `全部`（v7, sha `253e6c3d…`）~~ ✅
-7. ~~定版 0.9.41、合併 `main`~~ ✅
-8. ~~部署 `stock-price` 到 PROD（v7, sha `253e6c3d…`，與 DEV 相同）~~ ✅
-
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
 - **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
 - **Agent**: Antigravity
@@ -140,16 +74,16 @@
 - **Roadmap**: Ready for implementation of remaining phases per `Spec 145`.
 
 ### Task 144: Admin Enhancements, Execution Logs, Resource Usage & Multi-Target Backups
-- **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 144)**
+- **Status**: 🔄 **IN PROGRESS — Features 1 & 4 shipped (0.9.49)**
 - **Agent**: Antigravity
-- **Timestamp**: 2026-09-04 16:30:00 Asia/Taipei
+- **Timestamp**: 2026-09-14 12:30:00 Asia/Taipei
 - **Spec**: `docs/agent/specs/144-admin-enhancements-and-backups.md`
 - **What is this**: 4 interrelated system feature additions requested by user:
   1. ~~**Uniform Account Icon**~~: ✅ Completed in 0.9.36 (Modern Flat Persona Style 06 in `AppShell.tsx`).
   2. **Admin Cron & Probe Execution Logs**: Add detailed execution log viewer in Admin Console for `cron.job_run_details`, `source_probe_tick` anomalies, and batch run errors (shares `logs` panel in `LogsSection.tsx` added in Spec 146).
   3. **Supabase Cloud Usage & Limit Monitor**: Expose database size, storage usage, and plan thresholds (Free 500MB DB / 1GB Storage) directly in the Admin Console.
-  4. **Multi-Target Backups**: Add Cloudflare R2 (S3-compatible, zero egress) offsite backup target in `backup-transactions` and provide local backup download/export options (bulk admin download, user self-service JSON export, and local backup script).
-- **Remaining**: Implementation of Features 2, 3, 4 across frontend and backend RPCs.
+  4. ~~**Multi-Target Backups**~~: ✅ Completed in 0.9.49 (Cloudflare R2 S3 offsite target via `r2.ts`, admin bulk download in `BackupsSection.tsx`, user self-service export in `selfExport.ts`, local CLI script `backup-download.cjs`).
+- **Remaining**: Implementation of Features 2, 3 across frontend and backend RPCs.
 
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
 - **Status**: 🔄 **shipped everywhere and proven live; landing windows measured, retune needed**

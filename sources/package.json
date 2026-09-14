@@ -1,7 +1,7 @@
 {
   "name": "sources",
   "private": true,
-  "version": "0.9.48",
+  "version": "0.9.49",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck:edge": "tsc -p tsconfig.edge.json",
     "release:sync": "node scripts/sync-github-releases.cjs",
-    "release:sync:all": "node scripts/sync-github-releases.cjs --all"
+    "release:sync:all": "node scripts/sync-github-releases.cjs --all",
+    "backup:download": "node scripts/backup-download.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

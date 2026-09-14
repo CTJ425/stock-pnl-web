@@ -7,8 +7,27 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase', () => ({ isSupabaseConfigured: false, supabase: null }))
-vi.mock('./appLog', () => ({ logClient: vi.fn() }))
+/**
+ * `vi.resetModules()` does not re-run a `vi.mock` factory in Vitest 4: the mocked module is
+ * cached under a `mock:` id that the reset skips. The factory therefore runs once per file, so
+ * the exported values must be getters that read `edgeState` at access time. `fetchViaEdge`
+ * reads both bindings inside its body, so a getter is enough to switch the Edge on and off.
+ */
+const edgeState = vi.hoisted(() => ({
+  configured: false,
+  invoke: null as null | ((...args: unknown[]) => Promise<unknown>),
+}))
+const logClientSpy = vi.hoisted(() => vi.fn())
+
+vi.mock('./supabase', () => ({
+  get isSupabaseConfigured() {
+    return edgeState.configured
+  },
+  get supabase() {
+    return edgeState.configured ? { functions: { invoke: edgeState.invoke } } : null
+  },
+}))
+vi.mock('./appLog', () => ({ logClient: logClientSpy }))
 
 const CACHE_KEY = 'stock-pnl-web/tw-list-v2'
 const TWSE_ROWS = [{ Code: '3037', Name: '欣興', ClosingPrice: '993.00' }]
@@ -37,7 +56,15 @@ async function freshModule() {
 beforeEach(() => {
   window.localStorage.clear()
   vi.unstubAllGlobals()
+  edgeState.configured = false
+  edgeState.invoke = null
+  logClientSpy.mockClear()
 })
+
+/** The one `logClient` call the Edge path made, or undefined when it made none. */
+function edgeLogCall(): unknown[] | undefined {
+  return logClientSpy.mock.calls.find((c) => c[1] === 'fetchViaEdge')
+}
 
 describe('getTwStockList 部分來源失敗', () => {
   it('L1: 兩個來源都成功時回傳合併清單並寫入快取', async () => {
@@ -97,5 +124,46 @@ describe('getTwStockList 部分來源失敗', () => {
     const rows = await getTwStockList()
 
     expect(rows.some((r) => r.symbol === '3037')).toBe(true)
+  })
+
+  it('L7: Edge 回 502 時，要把狀態碼與 Edge 的錯誤內容寫進 log', async () => {
+    // 這是 BUG-081 的核心：舊碼在這裡直接 `return []`，什麼都不記，
+    // 於是記錄上只剩下第二層 fetchDirect 的 CORS 錯誤，指向錯的地方。
+    edgeState.configured = true
+    edgeState.invoke = vi.fn(async () => ({
+      data: null,
+      error: new Error('Edge Function returned a non-2xx status code'),
+      response: {
+        status: 502,
+        text: async () => '{"error":"台股清單來源不完整：TPEx HTTP 403"}',
+      },
+    }))
+    vi.stubGlobal('fetch', mockFetch({ twse: 'fail', tpex: 'fail' }))
+    const { getTwStockList } = await freshModule()
+
+    await expect(getTwStockList()).rejects.toThrow()
+
+    const call = edgeLogCall()
+    expect(call).toBeTruthy()
+    expect(call?.[0]).toBe('error')
+    expect(String(call?.[2])).toContain('HTTP 502')
+    expect(String(call?.[2])).toContain('TPEx HTTP 403')
+  })
+
+  it('L8: Edge 回 200 但 rows 不是陣列時，同樣要留下紀錄', async () => {
+    edgeState.configured = true
+    edgeState.invoke = vi.fn(async () => ({
+      data: { error: 'Unknown action' },
+      error: null,
+      response: { status: 200, text: async () => '{"error":"Unknown action"}' },
+    }))
+    vi.stubGlobal('fetch', mockFetch({ twse: 'fail', tpex: 'fail' }))
+    const { getTwStockList } = await freshModule()
+
+    await expect(getTwStockList()).rejects.toThrow()
+
+    const call = edgeLogCall()
+    expect(call).toBeTruthy()
+    expect(String(call?.[2])).toContain('HTTP 200')
   })
 })

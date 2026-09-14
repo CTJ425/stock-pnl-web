@@ -20,6 +20,8 @@ export interface BackupRunInfo {
   status: string
   error: string | null
   transactionCount: number
+  r2Status: string | null
+  r2Error: string | null
 }
 
 export interface AccountBackups {
@@ -51,6 +53,8 @@ function parseLastRun(raw: unknown): BackupRunInfo | null {
     status: typeof r.status === 'string' ? r.status : '',
     error: typeof r.error === 'string' ? r.error : null,
     transactionCount: typeof r.transactionCount === 'number' ? r.transactionCount : 0,
+    r2Status: typeof r.r2Status === 'string' ? r.r2Status : null,
+    r2Error: typeof r.r2Error === 'string' ? r.r2Error : null,
   }
 }
 

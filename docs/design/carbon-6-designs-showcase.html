@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-carbon-variant="v1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IBM Carbon 六大設計方案展示 — 股票小幫手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================
+     * IBM Carbon Design System: 6 Unified Design Variants
+     * Strictly 0px radius, IBM Plex typography, Carbon Layering
+     * ========================================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --font-display: 'IBM Plex Sans', 'Noto Sans TC', sans-serif;
+      --font-body: 'IBM Plex Sans', 'Noto Sans TC', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+      --radius: 0px;
+      --radius-sm: 0px;
+      --sp-01: 2px;
+      --sp-02: 4px;
+      --sp-03: 8px;
+      --sp-04: 12px;
+      --sp-05: 16px;
+      --sp-06: 24px;
+      --sp-07: 32px;
+      --sp-08: 40px;
+      --sp-09: 48px;
+      --tabular: tabular-nums;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 1: Carbon Professional Trader (高密度操盤終端)
+     * Dark G100, 30px compact rows, sticky columns, blue active line
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v1"] {
+      --bg: #161616;
+      --layer-01: #262626;
+      --layer-02: #333333;
+      --layer-03: #393939;
+      --layer-header: #525252;
+      --border-subtle: #393939;
+      --border-strong: #6f6f6f;
+      --interactive: #0f62fe;
+      --interactive-hover: #0353e9;
+      --text-primary: #f4f4f4;
+      --text-secondary: #c6c6c6;
+      --text-muted: #8d8d8d;
+      --up: #fa4d56;
+      --up-bg: rgba(250, 77, 86, 0.15);
+      --down: #42be65;
+      --down-bg: rgba(66, 190, 101, 0.15);
+      --accent: #0f62fe;
+      --table-row-h: 32px;
+      --table-font-size: 13px;
+      --active-accent-bar: 3px solid #0f62fe;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 2: Carbon High-Contrast White (日間高對比明亮終端)
+     * Pure white, 4-tier light layers, WCAG AAA 7:1+ contrast
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v2"] {
+      --bg: #ffffff;
+      --layer-01: #f4f4f4;
+      --layer-02: #e8e8e8;
+      --layer-03: #e0e0e0;
+      --layer-header: #d1d1d1;
+      --border-subtle: #e0e0e0;
+      --border-strong: #8d8d8d;
+      --interactive: #0f62fe;
+      --interactive-hover: #0043ce;
+      --text-primary: #161616;
+      --text-secondary: #525252;
+      --text-muted: #6f6f6f;
+      --up: #da1e28;
+      --up-bg: rgba(218, 30, 40, 0.12);
+      --down: #198038;
+      --down-bg: rgba(25, 128, 56, 0.12);
+      --accent: #0f62fe;
+      --table-row-h: 36px;
+      --table-font-size: 13px;
+      --active-accent-bar: 3px solid #0f62fe;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 3: Carbon Executive Bento (高階資產配置 Bento 儀表板)
+     * Expressive type, bold big KPIs, asymmetric grid, deep charcoal
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v3"] {
+      --bg: #121619;
+      --layer-01: #1e2429;
+      --layer-02: #283138;
+      --layer-03: #34414a;
+      --layer-header: #3f4e5a;
+      --border-subtle: #2d3840;
+      --border-strong: #546575;
+      --interactive: #4589ff;
+      --interactive-hover: #0f62fe;
+      --text-primary: #ffffff;
+      --text-secondary: #c1c7cd;
+      --text-muted: #878d96;
+      --up: #ff8389;
+      --up-bg: rgba(255, 131, 137, 0.16);
+      --down: #6fdc8c;
+      --down-bg: rgba(111, 220, 140, 0.16);
+      --accent: #4589ff;
+      --table-row-h: 40px;
+      --table-font-size: 14px;
+      --active-accent-bar: 4px solid #4589ff;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 4: Carbon Structured Mobile-First (行動結構化清單導向)
+     * Sharp list tiles, status tag line on left, 44px+ tap targets
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v4"] {
+      --bg: #161616;
+      --layer-01: #262626;
+      --layer-02: #333333;
+      --layer-03: #393939;
+      --layer-header: #393939;
+      --border-subtle: #393939;
+      --border-strong: #6f6f6f;
+      --interactive: #0f62fe;
+      --interactive-hover: #0353e9;
+      --text-primary: #f4f4f4;
+      --text-secondary: #c6c6c6;
+      --text-muted: #8d8d8d;
+      --up: #fa4d56;
+      --up-bg: rgba(250, 77, 86, 0.18);
+      --down: #42be65;
+      --down-bg: rgba(66, 190, 101, 0.18);
+      --accent: #0f62fe;
+      --table-row-h: 48px;
+      --table-font-size: 14px;
+      --active-accent-bar: 4px solid #0f62fe;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 5: Carbon Monochrome Financial Ledger (純黑白會計帳冊式)
+     * Pure minimal Swiss style, 0 decorative colors, pure tabular precision
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v5"] {
+      --bg: #000000;
+      --layer-01: #121212;
+      --layer-02: #1c1c1c;
+      --layer-03: #262626;
+      --layer-header: #262626;
+      --border-subtle: #2c2c2c;
+      --border-strong: #525252;
+      --interactive: #f4f4f4;
+      --interactive-hover: #ffffff;
+      --text-primary: #ffffff;
+      --text-secondary: #a8a8a8;
+      --text-muted: #6f6f6f;
+      --up: #ff6b72;
+      --up-bg: transparent;
+      --down: #52d273;
+      --down-bg: transparent;
+      --accent: #ffffff;
+      --table-row-h: 32px;
+      --table-font-size: 12px;
+      --active-accent-bar: 2px solid #ffffff;
+    }
+
+    /* ---------------------------------------------------------
+     * Variant 6: Carbon Cyber-Quant Analytics (寬客量化與多指標終端)
+     * Carbon G100 + Teal 40 (#009d9a), Purple 60 (#8a3ffc), Cyan 50
+     * --------------------------------------------------------- */
+    [data-carbon-variant="v6"] {
+      --bg: #0f1416;
+      --layer-01: #182226;
+      --layer-02: #202d33;
+      --layer-03: #2b3b42;
+      --layer-header: #354750;
+      --border-subtle: #26353c;
+      --border-strong: #455d69;
+      --interactive: #009d9a;
+      --interactive-hover: #08bdba;
+      --text-primary: #e5f6f8;
+      --text-secondary: #a4c9d3;
+      --text-muted: #688a95;
+      --up: #ff5263;
+      --up-bg: rgba(255, 82, 99, 0.16);
+      --down: #25c974;
+      --down-bg: rgba(37, 201, 116, 0.16);
+      --accent: #009d9a;
+      --table-row-h: 34px;
+      --table-font-size: 13px;
+      --active-accent-bar: 3px solid #009d9a;
+    }
+
+    /* Base Elements */
+    body {
+      background-color: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      padding-bottom: 80px;
+    }
+
+    /* Top Variant Switcher Bar (Fixed) */
+    .variant-selector-bar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      background: #161616;
+      border-bottom: 2px solid #393939;
+      padding: 8px 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    }
+
+    .vsb-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .vsb-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: #f4f4f4;
+    }
+
+    .vsb-badge {
+      background: #0f62fe;
+      color: #fff;
+      font-size: 11px;
+      padding: 1px 6px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .vsb-tabs {
+      display: flex;
+      gap: 2px;
+      background: #262626;
+      border: 1px solid #393939;
+      padding: 2px;
+      overflow-x: auto;
+    }
+
+    .vsb-tab-btn {
+      background: transparent;
+      border: none;
+      color: #8d8d8d;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.12s ease;
+      border-left: 2px solid transparent;
+    }
+
+    .vsb-tab-btn:hover {
+      color: #f4f4f4;
+      background: #333333;
+    }
+
+    .vsb-tab-btn.active {
+      background: #393939;
+      color: #ffffff;
+      font-weight: 600;
+      border-left: 3px solid #0f62fe;
+    }
+
+    /* Content Area */
+    .app-viewport {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    /* Variant Rationale Header */
+    .variant-rationale-box {
+      background: var(--layer-01);
+      border: 1px solid var(--border-subtle);
+      border-left: var(--active-accent-bar);
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .vr-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .vr-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      background: var(--layer-02);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+
+    .vr-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 860px;
+      line-height: 1.6;
+    }
+
+    .vr-features {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .vr-feat-chip {
+      font-size: 11px;
+      background: var(--layer-02);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      padding: 2px 8px;
+      font-family: var(--font-mono);
+    }
+
+    /* Global Typography & Numeric Utilities */
+    .num {
+      font-family: var(--font-mono);
+      font-variant-numeric: var(--tabular);
+      text-align: right;
+    }
+
+    .pnl-up {
+      color: var(--up) !important;
+    }
+    .pnl-down {
+      color: var(--down) !important;
+    }
+    .pnl-flat {
+      color: var(--text-muted) !important;
+    }
+
+    /* Carbon Table Toolbar */
+    .cds-table-toolbar {
+      background: var(--layer-01);
+      border: 1px solid var(--border-subtle);
+      border-bottom: none;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .cds-toolbar-title {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .cds-toolbar-title h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .cds-toolbar-title span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .cds-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cds-search-input {
+      background: var(--layer-02);
+      border: 1px solid var(--border-subtle);
+      border-bottom: 2px solid var(--border-strong);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 13px;
+      padding: 6px 12px;
+      width: 220px;
+      outline: none;
+      border-radius: 0;
+    }
+
+    .cds-search-input:focus {
+      border-bottom-color: var(--interactive);
+    }
+
+    .cds-btn {
+      background: var(--layer-02);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 7px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 0;
+      transition: background 0.1s ease;
+    }
+
+    .cds-btn:hover {
+      background: var(--layer-03);
+    }
+
+    .cds-btn-primary {
+      background: var(--interactive);
+      border-color: var(--interactive);
+      color: #ffffff;
+    }
+
+    .cds-btn-primary:hover {
+      background: var(--interactive-hover);
+    }
+
+    .filter-group {
+      display: flex;
+      border: 1px solid var(--border-subtle);
+      background: var(--layer-02);
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+
+    .filter-btn:last-child {
+      border-right: none;
+    }
+
+    .filter-btn:hover {
+      color: var(--text-primary);
+      background: var(--layer-03);
+    }
+
+    .filter-btn.active {
+      background: var(--interactive);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    /* Carbon Data Table */
+    .cds-table-wrapper {
+      background: var(--layer-01);
+      border: 1px solid var(--border-subtle);
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .cds-data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--table-font-size);
+      white-space: nowrap;
+    }
+
+    .cds-data-table th {
+      background: var(--layer-header);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-strong);
+      user-select: none;
+      height: 38px;
+    }
+
+    .cds-data-table th.num {
+      text-align: right;
+    }
+
+    .cds-data-table td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      height: var(--table-row-h);
+      transition: background-color 0.08s ease;
+    }
+
+    .cds-data-table tbody tr {
+      background: var(--layer-01);
+    }
+
+    .cds-data-table tbody tr:nth-child(even) {
+      background: var(--layer-02);
+    }
+
+    .cds-data-table tbody tr:hover {
+      background: var(--layer-03);
+    }
+
+    /* Sticky columns */
+    .cds-data-table th.sticky-col,
+    .cds-data-table td.sticky-col {
+      position: sticky;
+      z-index: 2;
+    }
+
+    .cds-data-table th.sticky-col-1,
+    .cds-data-table td.sticky-col-1 {
+      left: 0;
+      background: inherit;
+    }
+
+    .cds-data-table th.sticky-col-2,
+    .cds-data-table td.sticky-col-2 {
+      left: 70px;
+      background: inherit;
+      border-right: 1px solid var(--border-strong);
+      box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Active Left Border Accent on Hover */
+    .cds-data-table tbody tr:hover td.sticky-col-1 {
+      border-left: var(--active-accent-bar);
+    }
+
+    /* Carbon Badges & Tags */
+    .cds-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 0;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .cds-tag-long {
+      background: var(--up-bg);
+      color: var(--up);
+      border: 1px solid var(--up);
+    }
+
+    .cds-tag-short {
+      background: var(--down-bg);
+      color: var(--down);
+      border: 1px solid var(--down);
+    }
+
+    .cds-tag-neutral {
+      background: var(--layer-03);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* Market Summary Exposure Panel */
+    .cds-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .cds-summary-card {
+      background: var(--layer-01);
+      border: 1px solid var(--border-subtle);
+      padding: 16px 20px;
+      border-radius: 0;
+      position: relative;
+    }
+
+    .cds-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .cds-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cds-hero-metric {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .cds-hero-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .cds-exposure-meter {
+      background: var(--layer-02);
+      border: 1px solid var(--border-subtle);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .cds-meter-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .cds-meter-bar {
+      height: 6px;
+      width: 100%;
+      background: var(--layer-03);
+      display: flex;
+      overflow: hidden;
+    }
+
+    .cds-meter-seg-long {
+      background: var(--up);
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .cds-meter-seg-short {
+      background: var(--down);
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .cds-mini-kpi-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .cds-mini-kpi {
+      flex: 1;
+    }
+
+    .cds-mini-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .cds-mini-val {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Variant 4: Mobile Structured List */
+    .structured-list-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .structured-item-card {
+      background: var(--layer-01);
+      border: 1px solid var(--border-subtle);
+      border-left: 4px solid var(--border-strong);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .structured-item-card.is-long {
+      border-left-color: var(--up);
+    }
+
+    .structured-item-card.is-short {
+      border-left-color: var(--down);
+    }
+
+    .structured-item-card:hover {
+      background: var(--layer-02);
+    }
+
+    .sic-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .sic-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .sic-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .sic-meta-label {
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .sic-meta-val {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Variant 6: Quant Sparkline Chart */
+    .quant-chart-strip {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 24px;
+      padding: 2px 0;
+    }
+
+    .quant-bar {
+      width: 4px;
+      background: var(--text-muted);
+      min-height: 2px;
+      border-radius: 0;
+    }
+
+    .quant-bar.pos {
+      background: var(--up);
+    }
+
+    .quant-bar.neg {
+      background: var(--down);
+    }
+
+    @media (max-width: 900px) {
+      .sic-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Fixed Variant Switcher -->
+  <div class="variant-selector-bar">
+    <div class="vsb-container">
+      <div class="vsb-brand">
+        <span>IBM CARBON</span>
+        <span class="vsb-badge">6 DESIGNS</span>
+      </div>
+      <div class="vsb-tabs" id="variant-tabs">
+        <button class="vsb-tab-btn active" onclick="switchVariant('v1')">
+          <span>01.</span> 操盤終端 (Compact Dark)
+        </button>
+        <button class="vsb-tab-btn" onclick="switchVariant('v2')">
+          <span>02.</span> 日間高對比 (White AAA)
+        </button>
+        <button class="vsb-tab-btn" onclick="switchVariant('v3')">
+          <span>03.</span> 宏觀 Bento (Expressive)
+        </button>
+        <button class="vsb-tab-btn" onclick="switchVariant('v4')">
+          <span>04.</span> 行動結構化 (Mobile Flow)
+        </button>
+        <button class="vsb-tab-btn" onclick="switchVariant('v5')">
+          <span>05.</span> 會計帳冊 (Swiss Ledger)
+        </button>
+        <button class="vsb-tab-btn" onclick="switchVariant('v6')">
+          <span>06.</span> 寬客量化 (Cyber-Quant)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Viewport -->
+  <main class="app-viewport">
+
+    <!-- Active Variant Rationale Box -->
+    <section class="variant-rationale-box" id="rationale-box">
+      <div>
+        <div class="vr-title" id="vr-title">
+          <span>方案 1：Carbon Professional Trader（高密度操盤終端）</span>
+          <span class="vr-tag" id="vr-tag">CARBON G100 DARK</span>
+        </div>
+        <p class="vr-desc" id="vr-desc">
+          專為大量持股與高頻看盤設計的極致緊湊介面。採用 32px 緊密行高、凍結前兩欄（代號與名稱固定）、整合式貼齊 Toolbar 與左側 3px Carbon 藍色活動焦點線。在深色環境下極具科技效率。
+        </p>
+        <div class="vr-features" id="vr-features">
+          <span class="vr-feat-chip">32px 緊湊行高</span>
+          <span class="vr-feat-chip">代號/名稱雙欄凍結</span>
+          <span class="vr-feat-chip">3px 左側高亮指示線</span>
+          <span class="vr-feat-chip">IBM Plex Mono 等寬數值</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Top Exposure & Market Summary -->
+    <section class="cds-summary-grid">
+      <!-- TW Stock Exposure -->
+      <div class="cds-summary-card">
+        <div class="cds-card-header">
+          <span class="cds-card-title">台股持倉總覽 · TWD</span>
+          <span class="cds-tag cds-tag-neutral">4 檔持股</span>
+        </div>
+        <div class="cds-hero-metric num">$7,485,000</div>
+        <div class="cds-hero-sub">淨額市值 · 融資券綜合口徑</div>
+        <div class="cds-exposure-meter">
+          <div class="cds-meter-label-row">
+            <span style="color: var(--up)">多單 87.2% ($6,525,000)</span>
+            <span style="color: var(--down)">空單 12.8% ($960,000)</span>
+          </div>
+          <div class="cds-meter-bar">
+            <div class="cds-meter-seg-long" style="width: 87.2%"></div>
+            <div class="cds-meter-seg-short" style="width: 12.8%"></div>
+          </div>
+        </div>
+        <div class="cds-mini-kpi-row">
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">投入總成本 (含費)</div>
+            <div class="cds-mini-val num">$6,120,400</div>
+          </div>
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">未實現損益</div>
+            <div class="cds-mini-val num pnl-up">+$1,364,600</div>
+          </div>
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">總報酬率</div>
+            <div class="cds-mini-val num pnl-up">+22.30%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- US Stock Summary -->
+      <div class="cds-summary-card">
+        <div class="cds-card-header">
+          <span class="cds-card-title">美股持倉總覽 · USD</span>
+          <span class="cds-tag cds-tag-neutral">全部多單</span>
+        </div>
+        <div class="cds-hero-metric num">$48,250.00</div>
+        <div class="cds-hero-sub">美股市值 (折合 NT$1,544,000)</div>
+        <div class="cds-exposure-meter">
+          <div class="cds-meter-label-row">
+            <span style="color: var(--up)">多單 100% ($48,250)</span>
+            <span style="color: var(--text-muted)">空單 0%</span>
+          </div>
+          <div class="cds-meter-bar">
+            <div class="cds-meter-seg-long" style="width: 100%"></div>
+          </div>
+        </div>
+        <div class="cds-mini-kpi-row">
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">投入成本</div>
+            <div class="cds-mini-val num">$39,120.00</div>
+          </div>
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">未實現損益</div>
+            <div class="cds-mini-val num pnl-up">+$9,130.00</div>
+          </div>
+          <div class="cds-mini-kpi">
+            <div class="cds-mini-label">未實現報酬率</div>
+            <div class="cds-mini-val num pnl-up">+23.34%</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table Section with Carbon Toolbar -->
+    <div id="table-view-section">
+      <!-- Integrated Toolbar -->
+      <div class="cds-table-toolbar">
+        <div class="cds-toolbar-title">
+          <h2>庫存標的明細 (Holdings)</h2>
+          <span>4 檔 · 支援左右凍結滑動</span>
+        </div>
+        <div class="cds-toolbar-actions">
+          <div class="filter-group">
+            <button class="filter-btn active" onclick="filterData('ALL', this)">全部</button>
+            <button class="filter-btn" onclick="filterData('LONG', this)">多單</button>
+            <button class="filter-btn" onclick="filterData('SHORT', this)">空單</button>
+            <button class="filter-btn" onclick="filterData('PROFIT', this)">獲利中</button>
+          </div>
+          <input type="text" class="cds-search-input" placeholder="搜尋代號 / 標的名稱..." oninput="searchData(this.value)">
+          <button class="cds-btn cds-btn-primary">+ 新增交易</button>
+        </div>
+      </div>
+
+      <!-- Main Data Table with Sticky Columns -->
+      <div class="cds-table-wrapper">
+        <table class="cds-data-table">
+          <thead>
+            <tr>
+              <th class="sticky-col sticky-col-1" style="width: 70px;">代號</th>
+              <th class="sticky-col sticky-col-2" style="width: 130px;">名稱</th>
+              <th>方向</th>
+              <th class="num">現價</th>
+              <th class="num">持有股數</th>
+              <th class="num">投入成本 (含費)</th>
+              <th class="num">平均成本</th>
+              <th class="num">保本賣出價</th>
+              <th class="num">目前市值</th>
+              <th class="num">未實現損益</th>
+              <th class="num">未實現報酬率</th>
+              <th style="text-align: center;">趨勢動能</th>
+            </tr>
+          </thead>
+          <tbody id="holdings-tbody">
+            <!-- Row 1: 2330 台積電 -->
+            <tr data-type="LONG" data-status="PROFIT">
+              <td class="sticky-col sticky-col-1 num" style="font-weight: 600;">2330</td>
+              <td class="sticky-col sticky-col-2" style="font-weight: 600;">台積電</td>
+              <td><span class="cds-tag cds-tag-long">現股多單</span></td>
+              <td class="num pnl-up" style="font-weight: 600;">985.00</td>
+              <td class="num">3,000</td>
+              <td class="num">$2,424,400</td>
+              <td class="num">808.13</td>
+              <td class="num">812.50</td>
+              <td class="num" style="font-weight: 600;">$2,955,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+$530,600</td>
+              <td class="num pnl-up" style="font-weight: 700;">+21.88%</td>
+              <td style="text-align: center;">
+                <div class="quant-chart-strip" style="justify-content: center;">
+                  <div class="quant-bar pos" style="height: 8px;"></div>
+                  <div class="quant-bar pos" style="height: 12px;"></div>
+                  <div class="quant-bar pos" style="height: 16px;"></div>
+                  <div class="quant-bar pos" style="height: 20px;"></div>
+                  <div class="quant-bar pos" style="height: 22px;"></div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 2: 2454 聯發科 -->
+            <tr data-type="LONG" data-status="PROFIT">
+              <td class="sticky-col sticky-col-1 num" style="font-weight: 600;">2454</td>
+              <td class="sticky-col sticky-col-2" style="font-weight: 600;">聯發科</td>
+              <td><span class="cds-tag cds-tag-long">現股多單</span></td>
+              <td class="num pnl-up" style="font-weight: 600;">1,310.00</td>
+              <td class="num">1,000</td>
+              <td class="num">$1,157,500</td>
+              <td class="num">1,157.50</td>
+              <td class="num">1,164.00</td>
+              <td class="num" style="font-weight: 600;">$1,310,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+$152,500</td>
+              <td class="num pnl-up" style="font-weight: 700;">+13.17%</td>
+              <td style="text-align: center;">
+                <div class="quant-chart-strip" style="justify-content: center;">
+                  <div class="quant-bar neg" style="height: 10px;"></div>
+                  <div class="quant-bar pos" style="height: 6px;"></div>
+                  <div class="quant-bar pos" style="height: 14px;"></div>
+                  <div class="quant-bar pos" style="height: 18px;"></div>
+                  <div class="quant-bar pos" style="height: 16px;"></div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 3: 2603 長榮 -->
+            <tr data-type="LONG" data-status="PROFIT">
+              <td class="sticky-col sticky-col-1 num" style="font-weight: 600;">2603</td>
+              <td class="sticky-col sticky-col-2" style="font-weight: 600;">長榮</td>
+              <td><span class="cds-tag cds-tag-long">融資多單</span></td>
+              <td class="num pnl-up" style="font-weight: 600;">190.50</td>
+              <td class="num">10,000</td>
+              <td class="num">$1,720,000</td>
+              <td class="num">172.00</td>
+              <td class="num">173.20</td>
+              <td class="num" style="font-weight: 600;">$1,905,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+$185,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+10.76%</td>
+              <td style="text-align: center;">
+                <div class="quant-chart-strip" style="justify-content: center;">
+                  <div class="quant-bar pos" style="height: 14px;"></div>
+                  <div class="quant-bar neg" style="height: 8px;"></div>
+                  <div class="quant-bar pos" style="height: 10px;"></div>
+                  <div class="quant-bar pos" style="height: 15px;"></div>
+                  <div class="quant-bar pos" style="height: 20px;"></div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 4: 2317 鴻海 (SHORT) -->
+            <tr data-type="SHORT" data-status="PROFIT">
+              <td class="sticky-col sticky-col-1 num" style="font-weight: 600;">2317</td>
+              <td class="sticky-col sticky-col-2" style="font-weight: 600;">鴻海</td>
+              <td><span class="cds-tag cds-tag-short">融券空單</span></td>
+              <td class="num pnl-down" style="font-weight: 600;">160.00</td>
+              <td class="num">-6,000</td>
+              <td class="num">$1,020,000</td>
+              <td class="num">170.00</td>
+              <td class="num">168.80</td>
+              <td class="num" style="font-weight: 600;">$960,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+$60,000</td>
+              <td class="num pnl-up" style="font-weight: 700;">+5.88%</td>
+              <td style="text-align: center;">
+                <div class="quant-chart-strip" style="justify-content: center;">
+                  <div class="quant-bar neg" style="height: 18px;"></div>
+                  <div class="quant-bar neg" style="height: 14px;"></div>
+                  <div class="quant-bar pos" style="height: 6px;"></div>
+                  <div class="quant-bar neg" style="height: 12px;"></div>
+                  <div class="quant-bar neg" style="height: 20px;"></div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Structured Mobile-first List Container (shown in v4 or small screen) -->
+    <div id="mobile-cards-section" style="display: none; margin-top: 16px;">
+      <div class="structured-list-container">
+        <!-- Card 1 -->
+        <div class="structured-item-card is-long">
+          <div class="sic-head">
+            <div class="sic-title">
+              <span>2330 台積電</span>
+              <span class="cds-tag cds-tag-long">現股多單 · 3張</span>
+            </div>
+            <div class="num pnl-up" style="font-size: 16px; font-weight: 700;">+21.88%</div>
+          </div>
+          <div class="sic-grid">
+            <div>
+              <div class="sic-meta-label">現價</div>
+              <div class="sic-meta-val num pnl-up">985.00</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">目前市值</div>
+              <div class="sic-meta-val num">$2,955,000</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">平均成本</div>
+              <div class="sic-meta-val num">808.13</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">未實現損益</div>
+              <div class="sic-meta-val num pnl-up">+$530,600</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="structured-item-card is-long">
+          <div class="sic-head">
+            <div class="sic-title">
+              <span>2454 聯發科</span>
+              <span class="cds-tag cds-tag-long">現股多單 · 1張</span>
+            </div>
+            <div class="num pnl-up" style="font-size: 16px; font-weight: 700;">+13.17%</div>
+          </div>
+          <div class="sic-grid">
+            <div>
+              <div class="sic-meta-label">現價</div>
+              <div class="sic-meta-val num pnl-up">1,310.00</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">目前市值</div>
+              <div class="sic-meta-val num">$1,310,000</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">平均成本</div>
+              <div class="sic-meta-val num">1,157.50</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">未實現損益</div>
+              <div class="sic-meta-val num pnl-up">+$152,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="structured-item-card is-short">
+          <div class="sic-head">
+            <div class="sic-title">
+              <span>2317 鴻海</span>
+              <span class="cds-tag cds-tag-short">融券空單 · 6張</span>
+            </div>
+            <div class="num pnl-up" style="font-size: 16px; font-weight: 700;">+5.88%</div>
+          </div>
+          <div class="sic-grid">
+            <div>
+              <div class="sic-meta-label">放空賣出價</div>
+              <div class="sic-meta-val num">170.00</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">現價 (回補價)</div>
+              <div class="sic-meta-val num pnl-down">160.00</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">目前市值</div>
+              <div class="sic-meta-val num">$960,000</div>
+            </div>
+            <div>
+              <div class="sic-meta-label">未實現獲利</div>
+              <div class="sic-meta-val num pnl-up">+$60,000</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const VARIANTS = {
+      v1: {
+        title: "方案 1：Carbon Professional Trader（高密度操盤終端）",
+        tag: "CARBON G100 DARK",
+        desc: "專為大量持股與高頻看盤設計的極致緊湊介面。採用 32px 緊密行高、凍結前兩欄（代號與名稱固定）、整合式貼齊 Toolbar 與左側 3px Carbon 藍色活動焦點線。在深色環境下極具科技效率。",
+        features: ["32px 緊湊行高", "代號/名稱雙欄凍結", "3px 左側高亮指示線", "IBM Plex Mono 等寬數值"]
+      },
+      v2: {
+        title: "方案 2：Carbon High-Contrast White（日間高對比明亮終端）",
+        tag: "CARBON WHITE AAA",
+        desc: "符合 WCAG AAA 頂級 7:1 對比度標準。採用四階明亮圖層階梯（底色 #ffffff、斑馬紋 #f4f4f4、表頭 #e0e0e0），搭配深邃 Carbon 藍（#0f62fe）與專業印表級紅綠配色，適合辦公室日間環境。",
+        features: ["WCAG AAA 7:1+ 對比", "四階明亮對比圖層", "適合日間與辦公室", "護眼清晰數據"]
+      },
+      v3: {
+        title: "方案 3：Carbon Executive Bento（高階資產配置 Bento 儀表板）",
+        tag: "CARBON V11 EXPRESSIVE",
+        desc: "結合 IBM Carbon v11 Expressive 規格與現代 Bento 格網。以大字號等寬數值、多空視覺化比例尺與分塊數據卡，凸顯資產配置與淨值曝險全貌，兼具工業極簡與宏觀視覺張力。",
+        features: ["Carbon Expressive 排版", "大字號資產 KPI", "多空曝險可視化", "Bento 直角分塊"]
+      },
+      v4: {
+        title: "方案 4：Carbon Structured Mobile-First（行動結構化清單導向）",
+        tag: "CARBON STRUCTURED TILES",
+        desc: "針對手機端寬度不足徹底重構。以 Carbon 官方結構化清單（Structured List）卡片取代難以橫向滑動的表格，左側鑲嵌 4px 多空狀態邊條，提供 48px 大按鈕與手指友善之直覺排版。",
+        features: ["行動端卡片流", "左側狀態彩色指示邊", "48px 觸控友善熱區", "無橫向溢出負擔"]
+      },
+      v5: {
+        title: "方案 5：Carbon Monochrome Financial Ledger（純黑白會計帳冊式）",
+        tag: "SWISS MINIMALIST LEDGER",
+        desc: "極度純粹的瑞士排版與金融會計傳票（Ledger）風格。全站零裝飾色、零陰影，僅保留純黑底與純白灰字，紅綠兩色嚴格限制於損益數值。帶來極度沉靜、專注於數字本質的審計級體驗。",
+        features: ["純粹黑白冷冽配色", "金融會計傳票排版", "零裝飾干擾", "紅綠僅限損益"]
+      },
+      v6: {
+        title: "方案 6：Carbon Cyber-Quant Analytics（寬客量化與多指標終端）",
+        tag: "CARBON QUANT DATAVIZ",
+        desc: "以 Carbon 官方 Data Visualization 色彩體系為基底，整合電氣青（Teal 40 #009d9a）、洋紅與霓虹紫。強化個股走勢微圖形（Micro Sparklines）與多維動能指標，極具現代量化交易員風格。",
+        features: ["Carbon Teal 40 電氣青", "走勢微長條圖 (Sparkline)", "多指標量化對齊", "科技冷灰深岩背景"]
+      }
+    };
+
+    function switchVariant(variantId) {
+      document.documentElement.setAttribute('data-carbon-variant', variantId);
+      
+      // Update Tab active state
+      document.querySelectorAll('.vsb-tab-btn').forEach(btn => btn.classList.remove('active'));
+      const activeIdx = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'].indexOf(variantId);
+      document.querySelectorAll('.vsb-tab-btn')[activeIdx].classList.add('active');
+
+      // Update Rationale Box
+      const data = VARIANTS[variantId];
+      document.getElementById('vr-title').children[0].innerText = data.title;
+      document.getElementById('vr-tag').innerText = data.tag;
+      document.getElementById('vr-desc').innerText = data.desc;
+      
+      const featContainer = document.getElementById('vr-features');
+      featContainer.innerHTML = '';
+      data.features.forEach(f => {
+        const span = document.createElement('span');
+        span.className = 'vr-feat-chip';
+        span.innerText = f;
+        featContainer.appendChild(span);
+      });
+
+      // Special toggle for mobile cards view in Variant 4
+      const isMobileFlow = variantId === 'v4';
+      document.getElementById('table-view-section').style.display = isMobileFlow ? 'none' : 'block';
+      document.getElementById('mobile-cards-section').style.display = isMobileFlow ? 'block' : 'none';
+    }
+
+    function filterData(filterType, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const rows = document.querySelectorAll('#holdings-tbody tr');
+      rows.forEach(row => {
+        const type = row.getAttribute('data-type');
+        const status = row.getAttribute('data-status');
+
+        if (filterType === 'ALL') {
+          row.style.display = '';
+        } else if (filterType === 'LONG' || filterType === 'SHORT') {
+          row.style.display = (type === filterType) ? '' : 'none';
+        } else if (filterType === 'PROFIT') {
+          row.style.display = (status === 'PROFIT') ? '' : 'none';
+        }
+      });
+    }
+
+    function searchData(query) {
+      const q = query.trim().toLowerCase();
+      const rows = document.querySelectorAll('#holdings-tbody tr');
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

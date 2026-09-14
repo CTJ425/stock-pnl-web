@@ -8,6 +8,24 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### RISK-011 — `backup-transactions` 的 R2 整合點只靠人工閱讀，沒有自動化測試
+- **Where**: `sources/supabase/functions/backup-transactions/index.ts:130-148`、`:173-187`
+- **Failure scenario**: `syncToR2` 本身有單元測試涵蓋五種結果，但「把結果寫進 `r2_status` / `r2_error` 兩欄」這四行沒有任何測試。若有人改動 `backupAccount` 並漏掉指派，R2 的狀態會永遠是 `null`，而所有測試仍然全綠——異地備份失敗會變成看不見。
+- **Found**: 2026-09-14, Task 144-4 reviewer 第一輪。
+- **Decision**: 不修。`backupAccount` 未匯出，且相依於模組層的 Deno client；要測就得重構這段金流鄰近的程式碼，代價高於效益。Reviewer 已逐行閱讀確認接線正確。
+- **Status**: OPEN（已接受；日後變更 `backupAccount` 時必須人工複查這兩欄的指派）
+
+---
+
+### RISK-012 — `scripts/backup-download.cjs` 的 `--dest` 不設路徑邊界
+- **Where**: `sources/scripts/backup-download.cjs`
+- **Failure scenario**: `--dest=../../..` 之類的值會把備份檔寫到預期以外的目錄。
+- **Found**: 2026-09-14, Task 144-4 reviewer 第二輪。
+- **Decision**: 不加沙箱。執行這支腳本的人本來就持有 service role key，對他設權限邊界是假安全。改為以 `path.resolve()` 正規化，並在寫入任何檔案前印出絕對路徑，以可見性取代邊界。
+- **Status**: OPEN（已接受，設計如此）
+
+---
+
 ### BUG-079 — 保本賣出價 and 淨收 read the same fee rate differently (suspected)
 - **Where**: `sources/src/utils/holdingRows.ts`, `sources/src/utils/fees.ts`
 - **Failure scenario**: With a workspace fee rate of 0.6 (a user typing 6 折 as a decimal, see Task 159 D2), 保本賣出價 becomes 2.52 × the average cost (鴻海 avg NT$182.16 → NT$458.83, i.e. cost / (1 − 0.6 − 0.003)), while 淨收 deducts only ~0.39% (台積電 market value NT$3,675,000 → 淨收 NT$3,660,834, i.e. 0.001425 × 0.6 + 0.003). The two paths use a different fee source or interpretation. With a normal rate the gap may be small. Not yet read in code.

@@ -3864,7 +3864,7 @@ async function handleAdminBackups(): Promise<Response> {
   const { data: runRows, error: runError } = await pagedSelect<Record<string, unknown>>((from, to) =>
     db
       .from('backup_run_log')
-      .select('user_id, run_date, status, error, transaction_count')
+      .select('user_id, run_date, status, error, transaction_count, r2_status, r2_error')
       .order('run_date', { ascending: false })
       .order('id', { ascending: false })
       .range(from, to),
@@ -3875,7 +3875,17 @@ async function handleAdminBackups(): Promise<Response> {
   // failed scheduled run plus a successful manual re-run can land two rows on the same date —
   // `id` (BIGSERIAL PRIMARY KEY) is the tiebreak that makes the ordering a total order, so the
   // first row seen per user_id is unambiguously that account's newest run.
-  const lastRunByUser = new Map<string, { runDate: string; status: string; error: string | null; transactionCount: number }>()
+  const lastRunByUser = new Map<
+    string,
+    {
+      runDate: string
+      status: string
+      error: string | null
+      transactionCount: number
+      r2Status: string | null
+      r2Error: string | null
+    }
+  >()
   for (const r of runRows ?? []) {
     const uid = r.user_id as string
     if (lastRunByUser.has(uid)) continue
@@ -3884,6 +3894,8 @@ async function handleAdminBackups(): Promise<Response> {
       status: r.status as string,
       error: (r.error as string | null) ?? null,
       transactionCount: (r.transaction_count as number | null) ?? 0,
+      r2Status: (r.r2_status as string | null) ?? null,
+      r2Error: (r.r2_error as string | null) ?? null,
     })
   }
 

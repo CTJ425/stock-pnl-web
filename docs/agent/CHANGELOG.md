@@ -2,6 +2,23 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.49（2026-09-14）— 修復台股代號與中文搜尋失敗、多目標備份與本機匯出
+
+- 🐛 **修復台股代號與中文搜尋失敗**（BUG-081）：上櫃官方端點（TPEx OpenAPI）伺服器傳輸斷線，觸發 Edge Function `twlist` 上市櫃完整性檢查回傳 HTTP 502，前端直接連線又受瀏覽器 CORS 阻擋，導致「加入觀察」與「新增交易」無法搜尋或反查台股。
+  - **靜態備援清單**：新增 `tpexFallback.ts`（收錄 1,012 檔上櫃股票快照）。Edge Function `handleTwList` 優先進行即時抓取，連線失敗時自動退回使用快照，並記錄 `warn` 層級至 `app_log`，502 回應補齊 `failures` 細節。
+  - **防禦性解析**：`twList.ts` 增加執行階段 `Array.isArray` 防護，防止非陣列回應引發崩潰；新增單元測試 `E13`。
+  - **前端日誌加強**：`twMarketData.ts` 於 Edge 回傳異常時完整記錄 HTTP 狀態碼與回應內文。
+- 💾 **多目標備份與本機匯出功能**（Task 144 #4）：
+  - **Cloudflare R2 異地備份**：新增純 Web Crypto 實作之 SigV4 簽署函式庫 `r2.ts`，零外部相依，支援自動保留 7 天與部分失敗容錯語意。
+  - **管理員批次下載**：後台 `BackupsSection.tsx` 新增「下載所有帳號最新備份」按鈕，打包各帳號最新備份 JSON。
+  - **個人自助手動匯出**：帳號選單（`AppShell.tsx`）新增「匯出我的紀錄」（`selfExport.ts`），自動分頁下載個人工作區、交易與設定。
+  - **維運排程下載腳本**：新增 `backup-download.cjs`（`npm run backup:download`），供 NAS/本地端批次拉取。
+- 🧹 **過時架構與設計文件清理**：清理 `docs/` 下 90 個過時探索文件與大型靜態圖檔，縮減 repo 體積。
+- ✅ **測試與驗證**：
+  - 新增 Playwright E2E 實體瀏覽器測試腳本 `verify-stock-search-e2e.cjs`，12 項雙向查詢與自動帶入斷言全數 PASS。
+  - 單元測試總數達 1,908 條（新增 `twList.test.ts`、`r2.test.ts`、`selfExport.test.ts` 等），100% 通過；`npm run build` 與 `npm run typecheck:edge` 皆 exit 0。
+- 🚀 **Edge Function 部署**：`stock-price` 更新部署至 DEV 與 PROD 雲端環境。
+
 ### 0.9.48（2026-09-11）— 手機版交易紀錄工具列與觀察股票標題列排整齊
 
 - 🧰 **手機版交易紀錄的四個工具收進「工具」選單**（Task 158 #12）：寬度 ≤ 720 px 時，「股票分割換算」「重算手續費」「匯入 CSV」「匯出 CSV」收進搜尋欄右邊的「工具」按鈕，點開後從畫面底部出現「交易工具」選單（每項 48 px 高）。搜尋欄與「工具」排成一行、皆 44 px 高，交易列表往上移。工具本身的功能沒有改變。

@@ -1,25 +1,23 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: 修好查無檔案被當成錯誤的根因，並完成追蹤文件對帳（Task 156/157, 0.9.44, BUG-078）
+- Agent: Antigravity
+- Action: 修復台股代號與中文搜尋失敗（BUG-081）、多目標備份與本機匯出（Task 144 #4）、發布 0.9.49
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-10 15:14:01 Asia/Taipei
+- Timestamp: 2026-09-14 12:30:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-11 16:40:36 Asia/Taipei (Task 158 #12 + watch header, 0.9.48)
+## 📅 Log: 2026-09-14 12:30:00 Asia/Taipei (0.9.49, Task 144 #4 + BUG-081)
 
-- **What**: The user asked to tidy the mobile buttons with desktop untouched. 交易紀錄: at ≤720 px the four tools (分割換算 / 重算手續費 / 匯入 CSV / 匯出 CSV) moved into a 「工具」 button that opens a bottom sheet 「交易工具」; search and 工具 share one row. 觀察股票 header: one row, icon-only 圖卡/條列 toggle, 「＋ 加入」.
-- **How**: CSS decides visibility (`.tx-tool` hidden and `.tx-tools-trigger` shown at ≤720 px); the sheet reuses `Modal` and is pinned to the bottom with `:has(.tx-tools-sheet)`; the add button renders two spans (`.watch-add-full` / `.watch-add-short`).
-- **Caught in measurement**: the first build widened the desktop 「加入觀察」 by 8 px (an extra flex gap) and wrapped 工具 below the search box at 375 px (search basis 100%). Both fixed; desktop now matches the before-measurement exactly at 1440 px.
-- **Verification**: `TransactionsPage.tools` (2 tests) red first, then green. 118 test files / 1,866 tests, exit 0; `npm run build` and `npm run typecheck:edge` exit 0. At 375 px: search 211×44 and 工具 89×44 on one row; watch header on one row (toggles 44×44, add 80×44); the sheet is full width at the bottom with 48 px items. A first full-suite run from the repo root reported 48 errors because npm could not find package.json; the rerun from `sources/` is the valid one.
-- **Open**: the 交易紀錄 empty-state copy still refers to 「右下角『新增交易』」 and 「匯入 CSV」 (Task 158 item 19).
-- **Release**: 0.9.48 merged to `main` and synced to `dev`. Frontend not uploaded.
+- **What**: 修復台股代號與中文搜尋失敗（BUG-081）、實作 Task 144 第四階段多目標備份與本機匯出功能、清理 docs 90 個過時探索文件。
+- **BUG-081 Fix**: TPEx OpenAPI 上櫃行情伺服器於單一 TCP 傳輸 > 192KB 斷線導致 Edge twlist 502。新增 `tpexFallback.ts` 靜態快照，Edge `handleTwList` 即時請求失敗時自動退回快照並記錄 `warn` 至 `app_log`；`twList.ts` 增強執行階段非陣列防禦；前端 `twMarketData.ts` 加強錯誤日誌露出。
+- **Task 144 #4**: Cloudflare R2 異地備份純 Web Crypto SigV4 簽署函式庫 `r2.ts`（部分失敗語意不中斷主流程）；後台 `BackupsSection.tsx` 新增「下載所有帳號最新備份」打包功能；帳號選單新增「匯出我的紀錄」（`selfExport.ts`）；新增維運排程腳本 `backup-download.cjs`。
+- **Verification**: Playwright 實體瀏覽器 E2E 測試 12/12 項斷言全數 PASS；單元測試 120 檔 / 1,908 條測試 100% PASS；`npm run build` 與 `npm run typecheck:edge` 皆 exit 0；DEV 雲端端點回傳 HTTP 200 與 28,798 筆證券資料。
+- **Release**: 0.9.49 合併發布至 `main`，DEV 與 PROD 雲端 Edge Function `stock-price` 部署一致。
 
-## 📅 Log: 2026-09-11 16:12:57 Asia/Taipei (Task 159 D9 reverted, 0.9.47)
+## 📅 Log: 2026-09-14 09:56:14 Asia/Taipei (docs cleanup + Task 144-4 design decisions)
 
-- **What**: User decision: desktop returns to the bottom-right floating 「新增交易」 button (icon + text); mobile keeps the 56×56 icon button; the admin view shows none. The 0.9.45 header button (`.header-add`) was removed.
-- **Finding**: `main.container` already had `padding-bottom: 96px` above 720 px, so the page end was never covered on desktop. The remaining cost of the floating button is mid-scroll overlap of the rightmost column, which the user accepted.
-- **Verification**: `AppShell.a11y` test updated first (red while the header button existed), then green. 117 test files / 1,864 tests, exit 0; `npm run build` and `npm run typecheck:edge` exit 0. Playwright: at 1440 and 1024 the button is 124×48 with its label, exactly one add button, 109 px clearance at the page end; at 375 it is 56×56 with the label hidden.
-- **Release**: 0.9.47 merged to `main` and synced to `dev`. Frontend not uploaded.
+**Documentation cleanup.** Removed 90 superseded design and artifact files from `docs/`. `docs/architecture/` dropped from 85 files to 3 — only `system_design.md` (cited by `SPEC.md`), `system-architecture.svg` (cited by `README.md`), and `architecture_workflow_0.6.9.html` remain. The removed sets were abandoned UI explorations: `admin_status_*` (12), `macro_*` (32), `mui_ux_*` (14 — `package.json` has no MUI dependency), `fin_ui_*` (8), `inst_ui_*` (7), `watchlist_*` (4), and 9 single files. Also removed `docs/e2e-report.html` (2.0 MB Playwright artifact, now listed in `.gitignore`), `docs/picture/Gemini_Generated_Image_mfrb2fmfrb2fmfrb.png` (4.7 MB), the duplicate `docs/avatar-icon-designs.html`, four unreferenced `docs/design/*13px*.png` mockups, `docs/design/quote-tabs-redesign-mockup.html`, and the untracked `docs/design/carbon-three-plans.html`. `docs/` shrank from 12.2 MB to 4.0 MB. Every deleted file stays in git history. A per-filename check proved that no surviving document links to a deleted file. `docs/picture/account-avatar-icons.jpg` (448 KB) is now unreferenced and is a candidate for the next cleanup.
+
+**Task 144-4 (Cloudflare R2 offsite backup) design approved.** Four decisions are now recorded in `docs/agent/specs/144-admin-enhancements-and-backups.md`: R2 retention stays at 7 days to match Supabase Storage; the upload uses a hand-written SigV4 REST call instead of `@aws-sdk/client-s3`; an R2 error is partial and never fatal; and the local download sub-item ships in the same phase. The spec now names the new `r2.ts` module surface, the `backup_run_log` DDL that must land before the Edge deploy, and the five Phase 4 tests. No code changed.
 
