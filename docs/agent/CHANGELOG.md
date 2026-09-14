@@ -17,7 +17,8 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - 🧹 **移除會被部署到正式站的樣板檔（稽核項 A4）**：`sources/public/mockup-table-redesign.html`（15.6 KB）無任何程式引用，卻會隨 `dist/` 一起上傳，正式網址可直接開啟。
 - ✅ **測試與驗證**：122 檔 / **1,952** 條測試全數通過（本版新增 23 條）；`npm run lint`、`npm run build`、`npm run typecheck:edge`、`npm test` 四道皆 exit 0。SQL 權限模型在 supabase/postgres 17.6 以真實欄位組成實測五項：直接讀金鑰被拒（`permission denied`）、應用欄位仍可讀、`get_ai_settings()` 對 google 回空字串、管理員寫入正常、openai-compatible 仍取得金鑰。
 - 🔁 **CI 第一次執行就抓到一個既有問題**：`src/utils/realExports.test.ts` 靜態 `import ... ?raw` 兩份位於 `docs/` 的真實券商匯出 CSV，而 `.gitignore` 第 29 行的 `*.csv` 刻意把它們擋在這個公開 repo 之外（內含個人交易資料）。該測試因此只能在有本機檔案的機器上通過，CI 一跑就整個套件失敗。改用 `import.meta.glob`（找不到時回傳 `{}` 而非拋錯）加 `describe.skipIf`：本機照常以真實資料跑 7 條，CI 則跳過且 exit 0。兩種情境都已實測。**這不是本版造成的缺陷，是新閘門的第一個收穫。**
-- ⚠️ **上線順序不可顛倒**：① 套用 `docs/agent/161-ai-key-proxy-migration.sql` → ② `supabase functions deploy ai-proxy`（維持 `verify_jwt=true`，不加旗標）→ ③ 上傳前端 `dist/`。**Edge Function 還沒部署就先上傳前端，AI 分析會失效**；本版尚未部署任何環境。
+- ⚠️ **上線順序有四步，且不可顛倒**：`PART A`（建 `get_ai_settings()`）→ `supabase functions deploy ai-proxy`（維持 `verify_jwt=true`，不加旗標）→ 上傳前端 `dist/` → `PART B`（撤銷 `ai_api_key` 讀取權）。**`PART B` 必須放最後**：0.9.51 以前的前端直接讀該欄位，先跑 `PART B` 會讓線上站的 AI 分析分頁一直顯示未設定，直到新前端上傳為止。兩段 SQL 已分開寫在 `docs/agent/161-ai-key-proxy-migration.sql`。
+- 🚀 **部署狀態**：DEV（`zyebvayngwrqzoaicbwd`）已完成兩段 SQL 與 Edge 部署並實測 —— `ai-proxy` ACTIVE v1 / `verify_jwt=true`、sha `0e9155260cf390ce…`，端點對無憑證與假 JWT 皆回 401、preflight 回 200；權限檢查確認 `authenticated` 已讀不到 `ai_api_key`，其餘欄位與管理員寫入不受影響。**PROD 尚未部署。**
 
 ### 0.9.50（2026-09-14）— 全專案快照與還原腳本（Task 160）
 
