@@ -5,9 +5,31 @@ import { proposeFeeCorrections } from './fees'
 import { transactionsToCsv } from './csv'
 import type { Transaction } from '../types/models'
 
-// ?raw keeps this inside Vite's transform, so the app tsconfig needs no node types
-import ronlinCsv from '../../../docs/交易紀錄-Ronlin股票紀錄-2026-08-24.csv?raw'
-import esunCsv from '../../../docs/交易紀錄-玉山證卷-2026-08-25.csv?raw'
+/*
+  These two fixtures are REAL broker exports. `.gitignore` line 29 (`*.csv`) keeps them out of
+  this public repo on purpose, so they exist only on a machine that already has them locally.
+
+  A static `import ... ?raw` therefore fails the entire suite wherever they are absent — which is
+  exactly how CI went red the first time it ran (2026-09-14, 0.9.51). `import.meta.glob` returns
+  `{}` instead of throwing when nothing matches, so the suite skips itself there and still runs
+  against the real data locally. It stays inside Vite's transform, so the app tsconfig still
+  needs no node types.
+
+  If this suite ever needs to run in CI, the fixtures have to be replaced by anonymised committed
+  ones — the assertions below depend on their exact contents (53 rows each, tickers 2344 / 2303).
+*/
+const csvFixtures = import.meta.glob('../../../docs/*.csv', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
+
+const pickFixture = (needle: string): string | undefined =>
+  Object.entries(csvFixtures).find(([path]) => path.includes(needle))?.[1]
+
+const ronlinCsv = pickFixture('Ronlin')
+const esunCsv = pickFixture('玉山證卷')
+const haveFixtures = Boolean(ronlinCsv && esunCsv)
 
 function load(text: string, ws: string): Transaction[] {
   const r = parseTransactionsCsv(text)
@@ -18,9 +40,9 @@ function load(text: string, ws: string): Transaction[] {
   }))
 }
 
-describe('真實匯出檔端到端', () => {
-  const ronlin = load(ronlinCsv, 'ronlin')
-  const esun = load(esunCsv, 'esun')
+describe.skipIf(!haveFixtures)('真實匯出檔端到端', () => {
+  const ronlin = haveFixtures ? load(ronlinCsv as string, 'ronlin') : []
+  const esun = haveFixtures ? load(esunCsv as string, 'esun') : []
 
   it('兩檔都完整匯入', () => {
     expect(ronlin).toHaveLength(53)
