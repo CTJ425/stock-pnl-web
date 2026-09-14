@@ -112,37 +112,206 @@ Administrators currently have no visibility into how close the project is to Sup
   1. Offsite cloud backup to Cloudflare R2 (S3-compatible, zero egress fees).
   2. Local export/backup capability to save data to a local drive.
 
+#### Decisions (2026-09-14 09:56:14 Asia/Taipei, user-approved)
+
+| Question | Decision | Consequence |
+| :--- | :--- | :--- |
+| R2 retention | **7 days, same as Supabase Storage** | R2 protects against loss of the Supabase project, not against late discovery of a bad write. Reuse `prunablePaths(names, KEEP_DAYS)` unchanged. |
+| Upload client | **Hand-written SigV4 REST** | No `@aws-sdk/client-s3`. The Edge bundle and the cold start stay unchanged. The signature becomes unit-testable. |
+| Scope | **R2 and local download together** | Phase 4 delivers both sub-items in one pass. |
+| Failure semantics | **Partial, never fatal** | The Supabase copy is the primary target. An R2 error must not turn a good run red. |
+
 #### Technical Design: Cloudflare R2 Offsite Backup
-- **Why Cloudflare R2**:
-  - Fully compatible with S3 API (`PutObject`, `ListObjectsV2`, `DeleteObject`).
-  - Zero egress bandwidth charges, making daily sync extremely cost-effective.
-- **Edge Function Integration**:
-  - In `backup-transactions/index.ts`:
-  - Read optional R2 credentials from environment:
-    - `R2_ACCOUNT_ID`: Cloudflare account hash.
-    - `R2_ACCESS_KEY_ID`: R2 API token key.
-    - `R2_SECRET_ACCESS_KEY`: R2 API token secret.
-    - `R2_BUCKET_NAME`: R2 bucket name (e.g. `stock-pnl-backups`).
-  - When credentials exist:
-    - After saving to Supabase Storage, instantiate an S3 client (using `@aws-sdk/client-s3` or lightweight SigV4 REST call targeted to `https://<account_id>.r2.cloudflarestorage.com/<bucket>/<key>`).
-    - Upload `${userId}/${backupDate}.json` to R2.
-    - Apply the same 7-day retention prune on R2.
-  - If R2 credentials are missing: log "R2 backup skipped (not configured)" and proceed normally.
+
+- **Why Cloudflare R2**: S3-compatible (`PutObject`, `ListObjectsV2`, `DeleteObject`), and zero egress charge.
+- **Why offsite matters here**: today the backup and the data live in the same Supabase project.
+  Both cloud projects were recreated on 2026-08-31 and every older ref now returns
+  `404 Resource has been removed`. The current design survives a bad delete. It does not
+  survive loss of the project.
+
+**New file: `sources/supabase/functions/backup-transactions/r2.ts`** — no dependency. Use Web
+Crypto (`crypto.subtle`) for SHA-256 and HMAC-SHA256. This is the exact surface the tests import:
+
+```ts
+export interface R2Config {
+  accountId: string
+  accessKeyId: string
+  secretAccessKey: string
+  bucket: string
+}
+
+export interface SignedRequest {
+  url: string
+  headers: Record<string, string>   // authorization, x-amz-content-sha256, x-amz-date
+}
+
+export interface R2SyncResult {
+  status: 'ok' | 'skipped' | 'failed'
+  error: string | null
+  pruned: number
+}
+
+export interface R2Deps {
+  fetch?: typeof fetch
+  now?: () => Date
+}
+
+/** Returns null if any one of the four variables is absent OR an empty string. */
+export function readR2Config(getEnv: (name: string) => string | undefined): R2Config | null
+
+/** AWS SigV4, service `s3`, region `auto`. Signed headers: host;x-amz-content-sha256;x-amz-date. */
+export function signR2Request(input: {
+  method: 'PUT' | 'GET' | 'DELETE'
+  config: R2Config
+  key?: string
+  query?: Array<[string, string]>
+  body?: Uint8Array
+  now: Date
+}): Promise<SignedRequest>
+
+/** ListObjectsV2 XML -> keys plus the continuation token (null when the listing is complete). */
+export function parseListKeys(xml: string): { keys: string[]; nextToken: string | null }
+
+export function syncToR2(
+  config: R2Config | null,
+  input: { userId: string; backupDate: string; body: Uint8Array; keepDays: number },
+  deps?: R2Deps,
+): Promise<R2SyncResult>
+```
+
+**Signing rules that the vectors pin** (a mismatch changes the signature):
+
+- Host is `<accountId>.r2.cloudflarestorage.com`; path style, so the canonical URI starts `/<bucket>`.
+- A key appends `/<key>`; no key leaves the canonical URI as `/<bucket>` with no trailing slash.
+- Percent-encode the path with `/` and `~` unreserved; percent-encode query keys and values with
+  only `~` unreserved, then sort the pairs.
+- Canonical headers are the three signed headers, lower-case, each ending in `\n`.
+- `x-amz-content-sha256` is the hex SHA-256 of the body, and of the empty string for GET and DELETE.
+
+**`syncToR2` behaviour** — the five cases the tests fix:
+
+| Case | Result |
+| :--- | :--- |
+| `config` is `null` | `{ status: 'skipped', error: null, pruned: 0 }`, and **zero** fetch calls |
+| Upload and prune succeed | `{ status: 'ok', error: null, pruned: <count> }` |
+| Upload rejected | `{ status: 'failed', error: 'R2 PUT 403 <key>', pruned: 0 }` — never throws |
+| Only the prune fails | `{ status: 'ok', error: 'R2 GET 500 <prefix>', pruned: 0 }` — the offsite copy already landed |
+| `fetch` throws | `{ status: 'failed', error: <describeError(err)>, pruned: 0 }` |
+
+Non-ok HTTP responses throw internally with the message `R2 <METHOD> <status> <key or prefix>`.
+
+Prune reuses the existing pure function: list with prefix `${userId}/`, strip that prefix to get
+object names, call `prunablePaths(names, keepDays)`, then delete `${userId}/${name}` for each
+returned name. Do not write a second retention rule.
+
+**Integration in `index.ts`** (inside `backupAccount`, after the Storage upload succeeds):
+
+1. Call `syncToR2(readR2Config((n) => Deno.env.get(n)), { userId, backupDate, body, keepDays: KEEP_DAYS })`.
+2. Set `row.r2_status = result.status` and `row.r2_error = result.error`.
+3. Add `r2_status: 'ok' | 'skipped' | 'failed'` and `r2_error: string | null` to the
+   `BackupLogRow` interface at `index.ts:58`.
+
+Leave the existing Supabase Storage upload, prune, and `status` / `error` fields unchanged. R2 must
+never change the value of `row.status`.
+
+**Make the R2 status visible — the producer is useless without the consumer**
+
+Writing `r2_status` and `r2_error` is only half the job. `stock-report/index.ts:3867` selects
+`user_id, run_date, status, error, transaction_count` from `backup_run_log` and nothing else, so
+an R2 failure is recorded and never seen. An operator would believe two copies exist while only one
+does, which is worse than having no offsite copy at all. Therefore:
+
+1. `sources/supabase/functions/stock-report/index.ts:3867` — add `r2_status, r2_error` to the select,
+   and add `r2Status` and `r2Error` to the `lastRunByUser` entry built at lines 3878-3886.
+2. `sources/src/services/adminBackups.ts` — add `r2Status: string | null` and `r2Error: string | null`
+   to `BackupRunInfo`.
+3. `sources/src/components/Admin/BackupsSection.tsx` — show the R2 state per account next to the
+   existing last-run status. `skipped` must read as "not configured", not as a failure.
+
+CAUTION — deploy order for `stock-report` is stricter than for `backup-transactions`. A PostgREST
+select that names a column the table does not have **fails the whole request**, so deploying this
+`stock-report` change before the DDL lands takes the admin backups page down completely. Apply the
+DDL first on each environment, then deploy.
+
+**Schema change (must land before the Edge deploy)**
+
+```sql
+ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_status text;
+ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_error  text;
+```
+
+CAUTION: an Edge insert that carries a column the table does not have makes **every** row of
+that insert fail silently. Apply the DDL on DEV, verify, then deploy. Repeat for PROD.
+
+**Secrets** — four Edge secrets, DEV first, then PROD:
+`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
+Set them with `supabase secrets set`. The bucket must be private. Never write a value into
+git, a log, an Issue, or a spec. Write placeholders only.
 
 #### Technical Design: Local Machine Backup & Download
-1. **Admin Bulk Export in Web UI (`BackupsSection.tsx`)**:
-   - Currently, admins can download one file at a time per account.
-   - Add a "下載所有帳號最新備份 (ZIP / Bundle)" button:
-     - Downloads all active accounts' latest backup JSONs bundled into a single JSON or zip archive directly in the browser.
-2. **User Self-Service Export**:
-   - In user workspace settings / menu, add a "匯出我的所有紀錄 (JSON 備份)" button.
-   - Directly downloads the user's `workspaces`, `transactions`, and `user_settings` as a timestamped local `.json` file (`stock-pnl-backup-<userId>-<date>.json`).
-3. **Automated CLI / Shell Script (`scripts/backup-to-local.ts` / `.sh`)**:
-   - Provide a standalone script that administrators can run via cron on a local server/NAS:
-     ```bash
-     npm run backup:download -- --dest=/var/backups/stock-pnl/
-     ```
-   - Calls the `backup-transactions` or queries Supabase directly with service role key, downloading backups to the local filesystem.
+
+CORRECTION 2026-09-14: an earlier draft of this section named `UserSettingsModal.tsx`. **That
+component does not exist.** The account menu lives in `AppShell.tsx:450-541`. A `downloadBlob(blob,
+filename)` helper already exists at `src/services/reportPdf.ts:76`. Reuse it. Do not write a second one.
+
+**1. Admin bulk export — `src/components/Admin/BackupsSection.tsx`**
+
+- Add one button above the account list, labelled `下載所有帳號最新備份`.
+- For each account that has at least one file, take the newest file by `date`, call
+  ``requestBackupUrl(`${userId}/${file.name}`)``, then `fetch` that URL and parse the JSON.
+- Assemble one object:
+  `{ generatedAt: <ISO string>, accounts: [{ userId, email, backupDate, payload }] }`.
+- Hand it to ``downloadBlob(blob, `stock-pnl-backups-${YYYY-MM-DD}.json`)``. Add no zip dependency.
+- An account with **no files is skipped, and is not an error**.
+- A per-account failure does not stop the run: collect the failed emails, show them in the existing
+  `err` area, and still download the accounts that succeeded.
+- Disable the button while the export runs, so a double click cannot start two runs.
+
+**2. User self-service export — new `src/services/selfExport.ts`**
+
+```ts
+export interface SelfExport {
+  exportedAt: string
+  workspaces: unknown[]
+  transactions: unknown[]
+  user_settings: unknown[]
+}
+
+/** Reads through the signed-in client, so RLS limits every row to the caller. */
+export function buildSelfExport(): Promise<SelfExport | { error: string }>
+```
+
+- Import `supabase` from `./supabase`. It can be `null` — return `{ error: 'Supabase 未設定' }`.
+- `workspaces` and `user_settings` use a plain `.select('*')`.
+- `transactions` pages with `.select('*').order('id', { ascending: true }).range(from, to)` at 1000
+  rows per page, and stops when a page returns fewer than 1000 rows. PostgREST caps a single
+  response at 1000 and reports no error when it truncates, so an unpaged select silently loses rows.
+- Any query error returns `{ error: <message> }`. Never throw.
+- **Never use the service role key.** That key must not appear in client code.
+- In `AppShell.tsx`, add one `role="menuitem"` button labelled `匯出我的紀錄` next to `變更密碼`.
+  On click it calls `buildSelfExport()` and, on success, ``downloadBlob(blob,
+  `stock-pnl-backup-${YYYY-MM-DD}.json`)``.
+
+**3. Operator script — new `sources/scripts/backup-download.cjs`**
+
+- Read `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from the environment. Exit 1 with a clear
+  message when either one is absent.
+- List the `backups` bucket and write every object under the `--dest` directory.
+- Register `"backup:download": "node scripts/backup-download.cjs"` in `sources/package.json`.
+- CAUTION: this script holds the service role key. It never runs in a browser, and its output
+  directory must never be committed.
+
+#### Tests for Phase 4
+
+| Test | File | Proves |
+| :--- | :--- | :--- |
+| SigV4 vector | `r2.test.ts` | A fixed key, fixed date, and fixed payload produce the expected `Authorization` header. This is the only proof available without a live bucket. |
+| Config gate | `r2.test.ts` | `readR2Config` returns `null` when one variable is absent. |
+| Prune reuse | `backupPlan.test.ts` | `prunablePaths` returns the same set for an R2 key list. |
+| Partial failure | `backupPlan.test.ts` | An R2 error produces `r2_status = 'failed'` and keeps the run result green. |
+| Bulk export | `BackupsSection.test.tsx` | The button assembles one file from many accounts. |
+
+Verify command: `npm test`, then `npm run typecheck:edge`, then `npm run build`.
 
 ---
 

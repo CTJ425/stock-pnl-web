@@ -22,6 +22,7 @@ import {
   type BackupTables,
 } from './backupPlan.ts'
 import { secretsMatch } from './cronSecret.ts'
+import { readR2Config, syncToR2 } from './r2.ts'
 
 const BACKUPS_BUCKET = 'backups'
 const KEEP_DAYS = 7
@@ -66,6 +67,8 @@ interface BackupLogRow {
   pruned: number
   status: 'ok' | 'error'
   error: string | null
+  r2_status: 'ok' | 'skipped' | 'failed'
+  r2_error: string | null
 }
 
 /**
@@ -113,7 +116,8 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
     }
     const payload = buildBackupPayload({ userId, backupDate, exportedAt, tables })
     const body = JSON.stringify(payload)
-    const bodyBytes = new TextEncoder().encode(body).length
+    const bodyU8 = new TextEncoder().encode(body)
+    const bodyBytes = bodyU8.length
     const path = backupObjectPath(userId, backupDate)
 
     const { error: uploadError } = await db.storage.from(BACKUPS_BUCKET).upload(path, body, {
@@ -121,6 +125,12 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
       upsert: true,
     })
     if (uploadError) throw uploadError
+
+    // Offsite copy — best-effort, never affects `status` / `error` above (see r2.ts).
+    const r2Result = await syncToR2(
+      readR2Config((n) => Deno.env.get(n)),
+      { userId, backupDate, body: bodyU8, keepDays: KEEP_DAYS },
+    )
 
     const counts = rowCounts(tables)
     const row: BackupLogRow = {
@@ -134,6 +144,8 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
       pruned: 0,
       status: 'ok',
       error: null,
+      r2_status: r2Result.status,
+      r2_error: r2Result.error,
     }
 
     // Prune failure does not fail the account — the backup itself already succeeded.
@@ -170,6 +182,8 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
       pruned: 0,
       status: 'error',
       error: describeError(err),
+      r2_status: 'skipped',
+      r2_error: null,
     }
   }
 }

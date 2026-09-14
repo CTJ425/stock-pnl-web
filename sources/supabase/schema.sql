@@ -1091,6 +1091,9 @@ USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 CREATE INDEX IF NOT EXISTS backup_run_log_run_date_idx
   ON backup_run_log (run_date DESC);
 
+ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_status text;
+ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_error  text;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'backup-daily') THEN

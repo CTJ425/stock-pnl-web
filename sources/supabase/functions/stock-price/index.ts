@@ -54,6 +54,7 @@ import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
 import { extractDaily } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
+import { TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US' | 'IDX'
@@ -414,13 +415,47 @@ async function handleTwList(): Promise<Response> {
     return (await res.json()) as Array<Record<string, unknown>>
   }
 
+  let usedFallback = false
+  let fallbackReason: string | null = null
+
+  const fetchTpex = async (): Promise<Array<Record<string, unknown>>> => {
+    try {
+      const rows = await fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes')
+      if (Array.isArray(rows) && rows.length > 0) return rows
+      usedFallback = true
+      fallbackReason = `TPEx 傳回空陣列 (${rows ? rows.length : 0} 筆)`
+    } catch (err) {
+      usedFallback = true
+      fallbackReason = err instanceof Error ? err.message : String(err)
+      console.warn('TPEx live fetch failed, using fallback:', fallbackReason)
+    }
+    return TPEX_FALLBACK_ROWS
+  }
+
   const [twse, tpex] = await Promise.allSettled([
     fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'),
-    fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'),
+    fetchTpex(),
   ])
 
+  if (usedFallback) {
+    await logEvent(db, {
+      level: 'warn',
+      action: 'twlist',
+      message: 'TPEx 即時端點無法連線，使用靜態備援清單',
+      detail: { reason: fallbackReason },
+    })
+  }
+
   const result = buildTwList(twse, tpex)
-  if (!result.ok) return json({ error: result.error }, 502)
+  if (!result.ok) {
+    await logEvent(db, {
+      level: 'error',
+      action: 'twlist',
+      message: result.error,
+      detail: { failures: result.failures },
+    })
+    return json({ error: result.error, failures: result.failures }, 502)
+  }
   return json({ rows: result.rows })
 }
 

@@ -17,18 +17,26 @@ export interface TwListRow {
   close: number | null
 }
 
-export type TwListResult = { ok: true; rows: TwListRow[] } | { ok: false; error: string }
+export interface TwListFailure {
+  source: 'TWSE' | 'TPEx'
+  reason: string
+}
+
+export type TwListResult =
+  | { ok: true; rows: TwListRow[] }
+  | { ok: false; error: string; failures: TwListFailure[] }
 
 function listNumber(value: unknown): number | null {
   const n = Number(String(value ?? '').replace(/,/g, ''))
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-export function buildTwList(twse: TwListSource, tpex: TwListSource): TwListResult {
-  if (twse.status === 'rejected' || tpex.status === 'rejected') {
-    return { ok: false, error: '台股清單來源不完整（上市或上櫃來源無回應）' }
-  }
+function rejectionReason(reason: unknown): string {
+  const text = reason instanceof Error ? reason.message : String(reason)
+  return text.slice(0, 200)
+}
 
+export function buildTwList(twse: TwListSource, tpex: TwListSource): TwListResult {
   const rows: TwListRow[] = []
   const seen = new Set<string>()
 
@@ -41,12 +49,14 @@ export function buildTwList(twse: TwListSource, tpex: TwListSource): TwListResul
    * exchange already supplied still proves this source answered, so it counts.
    */
   const collect = (
-    raw: Array<Record<string, unknown>>,
+    raw: unknown,
     read: (row: Record<string, unknown>) => [unknown, unknown, unknown],
   ): number => {
+    if (!Array.isArray(raw)) return 0
     let usable = 0
     for (const row of raw) {
-      const [symbol, name, close] = read(row)
+      if (!row || typeof row !== 'object') continue
+      const [symbol, name, close] = read(row as Record<string, unknown>)
       const s = String(symbol ?? '').trim()
       const n = String(name ?? '').trim()
       if (!s || !n) continue
@@ -58,15 +68,37 @@ export function buildTwList(twse: TwListSource, tpex: TwListSource): TwListResul
     return usable
   }
 
-  const twseUsable = collect(twse.value, (r) => [r.Code, r.Name, r.ClosingPrice])
-  const tpexUsable = collect(tpex.value, (r) => [
-    r.SecuritiesCompanyCode ?? r.Code,
-    r.CompanyName ?? r.Name,
-    r.Close ?? r.ClosingPrice ?? r.LatestPrice,
-  ])
+  const failures: TwListFailure[] = []
 
-  if (twseUsable === 0 || tpexUsable === 0) {
-    return { ok: false, error: '台股清單來源不完整（上市或上櫃來源無有效資料）' }
+  if (twse.status === 'rejected') {
+    failures.push({ source: 'TWSE', reason: rejectionReason(twse.reason) })
+  } else if (!Array.isArray(twse.value)) {
+    failures.push({ source: 'TWSE', reason: 'response is not an array' })
+  } else {
+    const usable = collect(twse.value, (r) => [r.Code, r.Name, r.ClosingPrice])
+    if (usable === 0) {
+      failures.push({ source: 'TWSE', reason: `0 usable rows of ${twse.value.length} returned` })
+    }
+  }
+
+  if (tpex.status === 'rejected') {
+    failures.push({ source: 'TPEx', reason: rejectionReason(tpex.reason) })
+  } else if (!Array.isArray(tpex.value)) {
+    failures.push({ source: 'TPEx', reason: 'response is not an array' })
+  } else {
+    const usable = collect(tpex.value, (r) => [
+      r.SecuritiesCompanyCode ?? r.Code,
+      r.CompanyName ?? r.Name,
+      r.Close ?? r.ClosingPrice ?? r.LatestPrice,
+    ])
+    if (usable === 0) {
+      failures.push({ source: 'TPEx', reason: `0 usable rows of ${tpex.value.length} returned` })
+    }
+  }
+
+  if (failures.length > 0) {
+    const error = `台股清單來源不完整：${failures.map((f) => `${f.source} ${f.reason}`).join('；')}`
+    return { ok: false, error, failures }
   }
   return { ok: true, rows }
 }

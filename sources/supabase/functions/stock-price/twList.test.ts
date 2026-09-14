@@ -81,4 +81,51 @@ describe('buildTwList', () => {
     expect(buildTwList(ok(TWSE), ok(junk)).ok).toBe(false)
     expect(buildTwList(ok(junk), ok(TPEX)).ok).toBe(false)
   })
+
+  it('E9: 上市來源被拒時，失敗明細要指名 TWSE 並帶上原因', () => {
+    const result = buildTwList(failed(), ok(TPEX))
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures).toEqual([{ source: 'TWSE', reason: 'HTTP 503' }])
+    expect(result.error).toContain('TWSE')
+    expect(result.error).toContain('HTTP 503')
+  })
+
+  it('E10: 兩個來源都被拒時要各列一筆，順序為 TWSE、TPEx', () => {
+    const result = buildTwList(failed(), failed())
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures.map((f) => f.source)).toEqual(['TWSE', 'TPEx'])
+  })
+
+  it('E11: 來源有回應但無有效列時，原因要寫出原始筆數，而非「無回應」', () => {
+    const junk = [{ Code: '', Name: '無代號' }, { Code: '2330', Name: '' }]
+
+    const result = buildTwList(ok(TWSE), ok(junk))
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures).toEqual([{ source: 'TPEx', reason: '0 usable rows of 2 returned' }])
+  })
+
+  it('E12: 一邊被拒、一邊空陣列時，錯誤訊息要同時含兩個來源名稱', () => {
+    const result = buildTwList(failed(), ok([]))
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures.map((f) => f.source)).toEqual(['TWSE', 'TPEx'])
+    expect(result.error).toContain('TWSE')
+    expect(result.error).toContain('TPEx')
+  })
+
+  it('E13: 來源回傳非陣列物件（如錯誤 JSON）時，正確回報而非崩潰', () => {
+    const notArray = { status: 'fulfilled', value: { error: 'Rate limit' } } as unknown as TwListSource
+    const result = buildTwList(notArray, ok(TPEX))
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures).toEqual([{ source: 'TWSE', reason: 'response is not an array' }])
+  })
 })

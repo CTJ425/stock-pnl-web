@@ -6,12 +6,13 @@
  * fetch errors into a screen message" shape. The download call is the one place that must
  * surface the backend's real error message: the user just pressed a button.
  *
- * ⚠️ There is no self-service download path anywhere else. This is the only screen that can
- * reach the `backups` bucket, and only because `admin-backup-url` gates on `assertAdmin` +
- * `isValidBackupPath` before minting a signed URL.
+ * ⚠️ This is the only screen that can reach the `backups` bucket, and only because
+ * `admin-backup-url` gates on `assertAdmin` + `isValidBackupPath` before minting a signed URL.
+ * Regular users have their own self-service export (`AppShell.tsx`, `匯出我的紀錄`), but that
+ * one reads the live tables — it never touches this bucket.
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ChevronRight, Info, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Download, Info, RefreshCw } from 'lucide-react'
 import {
   applyBackupRestore,
   fetchAdminBackups,
@@ -21,6 +22,7 @@ import {
   type BackupFile,
   type RestoreResult,
 } from '../../services/adminBackups'
+import { downloadBlob } from '../../services/reportPdf'
 
 const RESTORE_TABLE_LABELS: Record<keyof RestoreResult['tables'], string> = {
   workspaces: '投資組合',
@@ -44,6 +46,16 @@ function statusLabel(run: AccountBackups['lastRun']): string {
   return `${run.runDate}・失敗：${run.error ?? '未知錯誤'}`
 }
 
+// `r2_status` is only recorded once `backup-transactions` has R2 secrets to try syncing with —
+// 'skipped' means "not configured", which is a normal state, not a failure. Showing only the
+// Storage status would leave an R2 failure invisible: two copies believed, one actually made.
+function r2Label(run: NonNullable<AccountBackups['lastRun']>): string | null {
+  if (run.r2Status === 'ok') return '異地備份已同步'
+  if (run.r2Status === 'skipped') return '異地備份未設定'
+  if (run.r2Status === 'failed') return `異地備份失敗：${run.r2Error ?? '未知錯誤'}`
+  return null
+}
+
 interface RestoreState {
   path: string
   result: RestoreResult | null
@@ -57,6 +69,7 @@ export function BackupsSection() {
   const [expanded, setExpanded] = useState<string>('')
   const [err, setErr] = useState('')
   const [restore, setRestore] = useState<RestoreState | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -76,6 +89,46 @@ export function BackupsSection() {
       return
     }
     window.open(res.url, '_blank', 'noopener')
+  }
+
+  async function exportAll() {
+    if (exporting || !accounts) return
+    setExporting(true)
+    setErr('')
+    try {
+      const failedEmails: string[] = []
+      const bundled: Array<{ userId: string; email: string; backupDate: string; payload: unknown }> = []
+
+      for (const a of accounts) {
+        if (a.files.length === 0) continue
+        const newest = a.files.reduce((best, f) => (f.date > best.date ? f : best))
+        try {
+          const res = await requestBackupUrl(`${a.userId}/${newest.name}`)
+          if ('error' in res) throw new Error(res.error)
+          const resp = await fetch(res.url)
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+          const payload = await resp.json()
+          bundled.push({ userId: a.userId, email: a.email, backupDate: newest.date, payload })
+        } catch {
+          failedEmails.push(a.email)
+        }
+      }
+
+      if (failedEmails.length > 0) {
+        const shown = failedEmails.slice(0, 5).join('、')
+        const suffix = failedEmails.length > 5 ? `…等 ${failedEmails.length} 個帳號` : ''
+        setErr(`以下帳號匯出失敗：${shown}${suffix}`)
+      }
+
+      const bundle = { generatedAt: new Date().toISOString(), accounts: bundled }
+      const blob = new Blob([JSON.stringify(bundle)], { type: 'application/json' })
+      const today = new Date().toISOString().slice(0, 10)
+      downloadBlob(blob, `stock-pnl-backups-${today}.json`)
+    } catch (e) {
+      setErr(`匯出失敗：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function startRestore(userId: string, file: BackupFile) {
@@ -120,6 +173,13 @@ export function BackupsSection() {
         </button>
       </div>
 
+      <div style={{ marginTop: 12 }}>
+        <button className="btn btn-sm" onClick={() => void exportAll()} disabled={exporting || !accounts}>
+          <Download size={14} />
+          下載所有帳號最新備份
+        </button>
+      </div>
+
       {err && (
         <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14, marginTop: 12 }}>
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
@@ -151,6 +211,7 @@ export function BackupsSection() {
               <tbody>
                 {accounts.map((a) => {
                   const isOpen = expanded === a.userId
+                  const r2 = a.lastRun ? r2Label(a.lastRun) : null
                   return (
                     <Fragment key={a.userId}>
                       <tr>
@@ -175,7 +236,15 @@ export function BackupsSection() {
                         <td>{a.fileCount}</td>
                         <td className="ast-mono">{a.newestDate ?? '—'}</td>
                         <td className="ast-mono">{formatBytes(a.totalBytes)}</td>
-                        <td>{statusLabel(a.lastRun)}</td>
+                        <td>
+                          {statusLabel(a.lastRun)}
+                          {r2 && (
+                            <>
+                              <br />
+                              {r2}
+                            </>
+                          )}
+                        </td>
                       </tr>
                       {isOpen && (
                         <tr>
@@ -293,7 +362,7 @@ export function BackupsSection() {
 
           <p className="ast-note" style={{ marginTop: 12 }}>
             <Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
-            下載連結是<b>短效連結</b>，60 秒後失效；只有管理員能取得，一般使用者沒有任何自助下載備份的入口。
+            下載連結是<b>短效連結</b>，60 秒後失效，只有管理員能取得。一般使用者可透過「匯出我的紀錄」自助匯出自己的資料，但那份匯出讀的是即時資料表，不會經過這個備份儲存桶。
           </p>
         </>
       )}

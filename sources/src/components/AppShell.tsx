@@ -10,6 +10,7 @@ import {
   CalendarRange,
   Check,
   ChevronDown,
+  Download,
   ExternalLink,
   Globe,
   HardDrive,
@@ -49,6 +50,8 @@ import { FxPage } from './Fx/FxPage'
 import { AdminConsolePage } from './Admin/AdminConsolePage'
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
+import { buildSelfExport } from '../services/selfExport'
+import { downloadBlob } from '../services/reportPdf'
 import { BrandMark } from './BrandMark'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
@@ -416,8 +419,20 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
  */
 function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => void }) {
   const { mode, user, signOut } = useAuth()
+  const { show } = useToast()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
   const [showChangePassword, setShowChangePassword] = useState(false)
+
+  async function exportMyRecords() {
+    const result = await buildSelfExport()
+    if ('error' in result) {
+      show(result.error, 'error')
+      return
+    }
+    const blob = new Blob([JSON.stringify(result)], { type: 'application/json' })
+    const today = new Date().toISOString().slice(0, 10)
+    downloadBlob(blob, `stock-pnl-backup-${today}.json`)
+  }
 
   useEffect(() => {
     applyTheme(pref)
@@ -516,6 +531,18 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
                 >
                   <KeyRound size={14} />
                   <span>變更密碼</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="hmenu-item"
+                  onClick={() => {
+                    close()
+                    void exportMyRecords()
+                  }}
+                >
+                  <Download size={14} />
+                  <span>匯出我的紀錄</span>
                 </button>
                 <button
                   type="button"

@@ -1,5 +1,71 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
 
+### Task 157: 追蹤文件與程式碼對帳（2026-09-10）
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 15:14:01 Asia/Taipei
+- **What is this**: 使用者要求「從 log 與過去 bug_fix / task 文件查出還有什麼沒修，或報告了結果卻根本沒做的部分」。以**程式碼與線上實測**為準對帳，不採信文件自述。
+
+**對帳結論：文件說待辦、程式碼其實已完成（紀錄過期，已更正）**
+
+| 項目 | 文件說法 | 實際 | 證據 |
+| ---- | ---- | ---- | ---- |
+| Task 144-2 執行日誌檢視器 | 未實作 | **已完成** | `sources/src/components/Admin/LogsSection.tsx`，讀 `app_log`；`schema.sql:1138` |
+| Task 145 P0-1 CSV 借券費 | OPEN | **已完成** | `utils/csv.ts:264-274, 334, 352` |
+| Task 145 P0-2 融券借券費修正 | OPEN | **已完成** | `utils/fees.ts:121, 163-171` |
+| Task 145 P0-3 拆併股融券處理 | OPEN | **已完成** | `StockSplitModal.tsx:52, 94` 排除融券並警告；`StockSplitModal.test.tsx:497, 551` 兩條測試守著。規格本就允許「排除並警示」這個解法 |
+| Task 145 P1-1 PostgREST 1000 筆截斷 | OPEN | **已完成** | `dataProvider.ts:307-335`、`backup-transactions` 與 `stock-report` 各有 `pagedSelect`、`heldTwTickers:1007`、`watchedTwTickers:1023` |
+| Task 145 P1-2 rowKey 碰撞 | OPEN | **已完成** | `AnalysisPage.tsx:84-86` |
+| Task 76 item 4 試撮 UI | OPEN | **已完成** | `QuoteTab.tsx:60`（試撮中）、`:285`（預估標記） |
+| quote-yahoo-a 均價 | 缺資料來源 | **已完成** | `QuoteTab.tsx:305` |
+
+**對帳結論：確實沒做（維持待辦）**
+
+| 項目 | 狀態 | 說明 |
+| ---- | ---- | ---- |
+| Task 144-3 資源用量監控 | ABSENT | `components/Admin/` 沒有任何呈現配額或用量的元件 |
+| Task 144-4 R2 多目標備份 | ABSENT | `backup-transactions/` 只有 `BACKUPS_BUCKET = 'backups'`，註解寫明 phase 1 |
+| Task 85 探針視窗重調 | 1/7 | 只有 `borrow`（`sourceProbePlan.ts:127`）有 2026-08-11 的實測註解，其餘六個未見重調證據 |
+| quote-yahoo-a 成交金額 / 昨量 | ABSENT | `PriceQuote` 型別沒有這兩個欄位，需先決定資料來源 |
+| Task 145 OPT-1 / OPT-2 / item 10 | 未驗證 | 效能優化項，本次未查 |
+
+**實測澄清（原本被列為風險，實際不成立）**
+
+- `readDoneSourcesToday`（`stock-report/index.ts:2636`）沒有分頁，理論上受 PostgREST 1000 筆上限影響。實測 PROD：`source_probe_tick` 每日僅 **74 筆**，符合該查詢條件者 **24 筆**，不會截斷。
+- `handleAdminUsers`（`:3760`）單次 `listUsers({perPage:1000})` 未分頁，但程式碼註解已寫明是刻意決定（本專案帳號數為個位數）。
+- `daily/` 檔案時間停在 9/9 17:10 **不是過期**：當日批次尚未到執行時間。更舊的 `3714`／`009816`／`2303`／`00981A` 已不在批次清單中，是舊持股的凍結檔案。
+
+**設定面實測（Task 132/133）**
+
+- PROD `site_url` = `https://stock-pnl-web.pages.dev/`，`uri_allow_list` **為空**。目前登入可用，但任何非 `site_url` 的重導目標都會被拒。若之後要加自訂網域或 preview 網址，必須先補進允許清單。
+- DEV 的 auth 設定無法以本次的 access token 讀取（權限不足），未驗證。
+
+### Task 156: 修復非持股股票的日線區間讀不到（BUG-077）
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 14:42:14 Asia/Taipei
+- **What is this**: 0.9.42 讓行情分頁多了四個讀 `daily/{ticker}.json` 的區間，而該檔案只有持股才有（PROD 實測僅 9 檔）。在 `useDailySeries` 加第三層後援改打 Edge `daily` action 取 5 年日線，行情與技術面一起修好。定版 0.9.43，已併入 `main`。不需部署 Edge。
+
+### Task 155: 行情走勢圖也擴充為八個區間
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 14:14:51 Asia/Taipei
+- **Spec**: `docs/agent/specs/quote-tab-trend-ranges.md`
+- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
+- **What is this**: 反轉 0.9.41「只擴充 K 線圖」的決定。行情分頁的走勢圖改為八個區間，維持折線；技術面的六個區間不變。定版 0.9.42，已併入 `main`。
+
+### Task 154: 個股走勢圖區間擴充為八個
+- **Status**: ✅ DONE
+- **Agent**: Claude
+- **Timestamp**: 2026-09-10 12:26:19 Asia/Taipei
+- **Spec**: `docs/agent/specs/chart-range-eight.md`
+- **Done**: items 1-5 — full text in `TASK_ARCHIVE.md`.
+- **What is this**: 技術面日 K 圖的區間選擇器改為 `近 1 月 / 近 6 月 / 本年迄今 / 近 1 年 / 近 5 年 / 全部`，盤中圖的 `一日 / 五日` 不動，合計八個區間。`近 5 年` 與 `全部` 走線路 A：不落地 Storage，由 `stock-price` 新增的 `daily` action 即時代理 Yahoo。
+
+6. ~~部署 `stock-price` 到 DEV 並實打驗證 `近 5 年` 與 `全部`（v7, sha `253e6c3d…`）~~ ✅
+7. ~~定版 0.9.41、合併 `main`~~ ✅
+8. ~~部署 `stock-price` 到 PROD（v7, sha `253e6c3d…`，與 DEV 相同）~~ ✅
+
 ### Task 158 — completed sub-items (rolled from TASK.md 2026-09-11 16:40:47 Asia/Taipei)
 12. ~~Four low-use tool buttons take 20% of the transactions first screen.~~ ✅ 0.9.48 — at ≤720 px they sit in a 「工具」 bottom sheet (「交易工具」); search and 工具 share one 44 px row. Desktop unchanged (verified at 1440 px).
 18. ~~「觀察股票」 header wraps onto two lines at 375 px; the 圖卡/條列 buttons are 32 px high.~~ ✅ 0.9.48 — one row at ≤720 px: icon-only 44×44 toggle (aria-labels kept) and 「＋ 加入」 (aria-label 加入觀察). Desktop unchanged.

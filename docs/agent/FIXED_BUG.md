@@ -6,6 +6,14 @@
 
 ---
 
+### Bug ID: BUG-081 — TPEx 上櫃端點連線中斷導致台股代號與中文查詢全面失敗
+- **Date**: 2026-09-14, fixed in 0.9.49
+- **Symptom**: 使用者在「加入觀察」或「新增交易」輸入台股代號（如 2330、6488）或中文（如「台積電」、「環球晶」）無法搜尋或反查，提示紅字「台股清單載入失敗」。
+- **Root Cause**: 上櫃官方端點 TPEx OpenAPI（`tpex_mainboard_quotes`，約 348KB）伺服器 Nginx 在單一連線傳輸累計達 ~192KB 時會異常主動關閉連線（Close Socket），Edge Function 拋出 `error reading a body from connection`。專案完整性保護機制判定上市櫃來源不完整而回傳 HTTP 502，前端直接連線又受瀏覽器 CORS 阻擋，最終整份清單載入失敗。
+- **Fix**: (1) 新增上櫃股票靜態快照備援 `tpexFallback.ts`（1,012 檔證券）。(2) Edge Function `handleTwList` 優先即時請求，連線中斷時退回備援並記錄警告至 `app_log`。(3) `twList.ts` 增強執行階段非陣列防禦。(4) 前端 `fetchViaEdge` 記錄詳細 HTTP status 與 body。
+- **Verification**: Playwright E2E 實體瀏覽器測試 12/12 項斷言全數通過；單元測試 21/21 通過；DEV 雲端端點回傳 HTTP 200 與 28,798 筆證券資料。
+- **Status**: ✅ FIXED (0.9.49)
+
 ### Bug ID: BUG-080 — iPhone: select text clipped, date input overflow, chart title and admin button squeezed to one character per line
 - **Date**: 2026-09-11, fixed in 0.9.46
 - **Root Cause**: (1) 0.9.45 added `.field select` to the ≤720 px rule `font-size: 16px; padding: 12px 12px` while the base height stayed 40 px, leaving 16 px for 16 px text; iOS clipped it. (2) iOS gives date inputs an intrinsic min-width, extra height and centred text. (3) `.m-card-h` and the ProbeWarRoom stamp row were non-wrapping flex rows; the CJK title and the button shrank to min-content (one character). (4) The add-transaction FAB rendered on the admin view.

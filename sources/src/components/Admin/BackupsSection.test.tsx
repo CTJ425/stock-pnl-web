@@ -15,6 +15,16 @@ vi.mock('../../services/adminBackups', () => ({
   applyBackupRestore,
 }))
 
+// The bulk export hands the assembled file to the existing helper. Mocking the module also keeps
+// jspdf out of this suite.
+const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }))
+vi.mock('../../services/reportPdf', () => ({ downloadBlob }))
+
+/** jsdom has no fetch; the export only reads `ok` and `json()`. */
+function jsonResponse(body: unknown, ok = true): Response {
+  return { ok, status: ok ? 200 : 500, json: async () => body } as unknown as Response
+}
+
 import { BackupsSection } from './BackupsSection'
 import type { AccountBackups } from '../../services/adminBackups'
 
@@ -32,7 +42,14 @@ const rows: AccountBackups[] = [
       { name: '2026-08-24.json', date: '2026-08-24', size: 1024 * 1024, createdAt: '2026-08-24T18:00:00.000Z' },
       { name: '2026-08-23.json', date: '2026-08-23', size: 1024 * 1024, createdAt: null },
     ],
-    lastRun: { runDate: '2026-08-24', status: 'ok', error: null, transactionCount: 62 },
+    lastRun: {
+      runDate: '2026-08-24',
+      status: 'ok',
+      error: null,
+      transactionCount: 62,
+      r2Status: 'ok',
+      r2Error: null,
+    },
   },
   {
     userId: UID2,
@@ -90,7 +107,7 @@ describe('BackupsSection', () => {
   it('展開帳號後才列出檔案，且每個檔案都有下載按鈕', async () => {
     render(<BackupsSection />)
     await screen.findByText('a@example.com')
-    expect(screen.queryByRole('button', { name: /下載/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: '下載' })).toBeNull()
 
     const toggle = screen.getByRole('button', { name: /a@example\.com/ })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -99,7 +116,7 @@ describe('BackupsSection', () => {
 
     expect(await screen.findByText('2026-08-24.json')).toBeTruthy()
     expect(screen.getByText('2026-08-23.json')).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: /下載/ })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: '下載' })).toHaveLength(2)
   })
 
   it('下載會帶「帳號/檔名」的完整路徑，並開新分頁', async () => {
@@ -110,7 +127,7 @@ describe('BackupsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /a@example\.com/ }))
     await screen.findByText('2026-08-24.json')
 
-    fireEvent.click(screen.getAllByRole('button', { name: /下載/ })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: '下載' })[0])
     await waitFor(() => expect(requestBackupUrl).toHaveBeenCalledWith(`${UID}/2026-08-24.json`))
     await waitFor(() => expect(open).toHaveBeenCalledWith('https://signed.example/x', '_blank', 'noopener'))
     vi.unstubAllGlobals()
@@ -125,7 +142,7 @@ describe('BackupsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /a@example\.com/ }))
     await screen.findByText('2026-08-24.json')
 
-    fireEvent.click(screen.getAllByRole('button', { name: /下載/ })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: '下載' })[0])
     expect(await screen.findByText('找不到備份檔')).toBeTruthy()
     expect(open).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
@@ -168,6 +185,158 @@ describe('BackupsSection', () => {
     const row = (await screen.findByText('a@example.com')).closest('tr')!
     expect(within(row).getByText(/prune blew up/)).toBeTruthy()
     expect(within(row).getByText(/成功/)).toBeTruthy()
+  })
+
+  it('帳號列顯示異地備份已同步', async () => {
+    render(<BackupsSection />)
+    const row = (await screen.findByText('a@example.com')).closest('tr')!
+    expect(within(row).getByText(/異地備份已同步/)).toBeTruthy()
+  })
+
+  it('R2 未設定時讀作「未設定」，不是失敗', async () => {
+    fetchAdminBackups.mockResolvedValue([
+      { ...rows[0], lastRun: { ...rows[0].lastRun!, r2Status: 'skipped', r2Error: null } },
+    ])
+    render(<BackupsSection />)
+    const row = (await screen.findByText('a@example.com')).closest('tr')!
+    expect(within(row).getByText(/異地備份未設定/)).toBeTruthy()
+  })
+
+  it('R2 失敗時列出失敗與原因，否則管理員會以為有兩份副本', async () => {
+    fetchAdminBackups.mockResolvedValue([
+      {
+        ...rows[0],
+        lastRun: {
+          ...rows[0].lastRun!,
+          r2Status: 'failed',
+          r2Error: 'R2 PUT 403 u-1/2026-08-24.json',
+        },
+      },
+    ])
+    render(<BackupsSection />)
+    const row = (await screen.findByText('a@example.com')).closest('tr')!
+    expect(within(row).getByText(/異地備份失敗/)).toBeTruthy()
+    expect(row.textContent).toContain('R2 PUT 403 u-1/2026-08-24.json')
+  })
+
+  it('整批匯出把每個有備份的帳號收進同一個 JSON，並略過沒有檔案的帳號', async () => {
+    const payload = { workspaces: [], transactions: [{ id: 1 }], user_settings: [] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)))
+    render(<BackupsSection />)
+    await screen.findByText('a@example.com')
+
+    fireEvent.click(screen.getByRole('button', { name: /下載所有帳號最新備份/ }))
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+
+    // b@example.com has no files, so it is skipped rather than requested.
+    expect(requestBackupUrl).toHaveBeenCalledTimes(1)
+    expect(requestBackupUrl).toHaveBeenCalledWith(`${UID}/2026-08-24.json`)
+
+    const [blob, filename] = downloadBlob.mock.calls[0] as [Blob, string]
+    expect(filename).toMatch(/^stock-pnl-backups-\d{4}-\d{2}-\d{2}\.json$/)
+    const bundle = JSON.parse(await blob.text())
+    expect(new Date(bundle.generatedAt).toISOString()).toBe(bundle.generatedAt)
+    expect(bundle.accounts).toHaveLength(1)
+    expect(bundle.accounts[0]).toMatchObject({
+      userId: UID,
+      email: 'a@example.com',
+      backupDate: '2026-08-24',
+      payload,
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('單一帳號失敗不中斷整批，檔案照樣下載且畫面點名失敗的帳號', async () => {
+    fetchAdminBackups.mockResolvedValue([
+      rows[0],
+      {
+        ...rows[1],
+        fileCount: 1,
+        newestDate: '2026-08-24',
+        files: [{ name: '2026-08-24.json', date: '2026-08-24', size: 10, createdAt: null }],
+      },
+    ])
+    requestBackupUrl.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith(UID2) ? { error: '找不到備份檔' } : { url: 'https://signed.example/x' },
+      ),
+    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ transactions: [] })))
+    render(<BackupsSection />)
+    await screen.findByText('a@example.com')
+
+    fireEvent.click(screen.getByRole('button', { name: /下載所有帳號最新備份/ }))
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+
+    const [blob] = downloadBlob.mock.calls[0] as [Blob, string]
+    expect(JSON.parse(await blob.text()).accounts).toHaveLength(1)
+    const banner = await screen.findByText(/以下帳號匯出失敗/)
+    expect(banner.textContent).toContain('b@example.com')
+    vi.unstubAllGlobals()
+  })
+
+  it('組裝階段丟錯不會把按鈕永久鎖住', async () => {
+    // setExporting(false) must run in a finally. Without it the button stays disabled until a
+    // full page reload, and the admin has no way to retry.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ transactions: [] })))
+    downloadBlob.mockImplementation(() => {
+      throw new Error('boom')
+    })
+    render(<BackupsSection />)
+    await screen.findByText('a@example.com')
+
+    const button = screen.getByRole('button', {
+      name: /下載所有帳號最新備份/,
+    }) as HTMLButtonElement
+    fireEvent.click(button)
+
+    await waitFor(() => expect(button.disabled).toBe(false))
+    expect((await screen.findByText(/匯出失敗/)).textContent).toContain('boom')
+    downloadBlob.mockReset()
+    vi.unstubAllGlobals()
+  })
+
+  it('失敗帳號很多時橫幅只列前 5 個並附總數', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      ...rows[0],
+      userId: `u-${i}`,
+      email: `f${i}@example.com`,
+    }))
+    fetchAdminBackups.mockResolvedValue(many)
+    requestBackupUrl.mockResolvedValue({ error: '找不到備份檔' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ transactions: [] })))
+    render(<BackupsSection />)
+    await screen.findByText('f0@example.com')
+
+    fireEvent.click(screen.getByRole('button', { name: /下載所有帳號最新備份/ }))
+    const banner = await screen.findByText(/以下帳號匯出失敗/)
+
+    expect(banner.textContent).toContain('f4@example.com')
+    expect(banner.textContent).not.toContain('f5@example.com')
+    expect(banner.textContent).toContain('等 8 個帳號')
+    vi.unstubAllGlobals()
+  })
+
+  it('匯出進行中按鈕停用，所以連點兩次只跑一輪', async () => {
+    let release: (v: { url: string }) => void = () => {}
+    requestBackupUrl.mockReturnValue(
+      new Promise<{ url: string }>((resolve) => {
+        release = resolve
+      }),
+    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ transactions: [] })))
+    render(<BackupsSection />)
+    await screen.findByText('a@example.com')
+
+    const button = screen.getByRole('button', { name: /下載所有帳號最新備份/ }) as HTMLButtonElement
+    fireEvent.click(button)
+    await waitFor(() => expect(button.disabled).toBe(true))
+    fireEvent.click(button)
+
+    release({ url: 'https://signed.example/x' })
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+    expect(requestBackupUrl).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 })
 
