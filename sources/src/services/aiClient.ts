@@ -3,6 +3,7 @@
  * Provides pure functions and Provider objects without relying on any external SDK.
  */
 import type { AiProviderKind, AiSettings } from './aiSettings'
+import { supabase, supabaseUrl } from './supabase'
 
 export type AiErrorKind = 'auth' | 'rate-limit' | 'server' | 'timeout' | 'network' | 'bad-response'
 
@@ -344,14 +345,13 @@ async function requestJson(
 
 class GoogleProviderImpl implements AiProvider {
   readonly kind = 'google' as const
-  private settings: AiSettings
 
-  constructor(settings: AiSettings) {
-    this.settings = settings
-  }
+  // Kept only to match createAiProvider's uniform `new XImpl(s)` call — the google path (161)
+  // no longer reads the model or key from settings; the proxy owns both server-side.
+  constructor(_settings: AiSettings) {}
 
-  private buildBody(req: AiRequest, withThinkingConfig: boolean): string {
-    return JSON.stringify({
+  private buildBody(req: AiRequest, withThinkingConfig: boolean): object {
+    return {
       systemInstruction: { parts: [{ text: req.system }] },
       contents: toGoogleContents(req.messages),
       generationConfig: {
@@ -361,18 +361,26 @@ class GoogleProviderImpl implements AiProvider {
         // Thinking token will be included in maxOutputTokens, and turning it on will only compress the text quota.
         ...(withThinkingConfig ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
-    })
+    }
   }
 
   async complete(req: AiRequest): Promise<string> {
-    const model = encodeURIComponent(this.settings.model)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+    // The key and model both stay server-side (spec 161): the proxy reads them from
+    // app_settings, so this class must not send `this.settings.apiKey` or `this.settings.model`
+    // anywhere. Only the user's own session proves the caller is allowed to use the quota.
+    const { data, error } = (await supabase?.auth.getSession()) ?? { data: { session: null }, error: null }
+    const accessToken = !error ? data.session?.access_token : undefined
+    if (!accessToken) {
+      throw new AiError('auth', '請先登入後再使用 AI 功能')
+    }
+
+    const url = `${supabaseUrl}/functions/v1/ai-proxy`
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-goog-api-key': this.settings.apiKey,
+      Authorization: `Bearer ${accessToken}`,
     }
-    const post = (body: string) =>
-      requestJson(url, { method: 'POST', headers, body }, req.timeoutMs)
+    const post = (googleBody: object) =>
+      requestJson(url, { method: 'POST', headers, body: JSON.stringify({ googleBody }) }, req.timeoutMs)
 
     let res = await post(this.buildBody(req, true))
 

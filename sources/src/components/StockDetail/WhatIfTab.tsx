@@ -19,7 +19,7 @@ import {
 } from '../../utils/formatters'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { useWorkspace } from '../../context/WorkspaceContext'
-import { useRowActivate } from '../../hooks/useRowActivate'
+import { rowActivateProps } from '../../hooks/rowActivateProps'
 
 type Unit = '張' | '股'
 
@@ -212,7 +212,7 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
                   const rowLabel = `賣出價 ${fmtMoney(row.price, 'TWD', 2)}${
                     LADDER_TAG[row.kind] ? `（${LADDER_TAG[row.kind]}）` : ''
                   }`
-                  const activateRow = useRowActivate(() => pick(row), rowLabel)
+                  const activateRow = rowActivateProps(() => pick(row), rowLabel)
                   return (
                     <Fragment key={row.price}>
                       {showGap && (

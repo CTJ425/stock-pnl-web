@@ -1,12 +1,21 @@
 # Active Bug Fixes & Accepted Risks (BUG_FIX.md)
 
-- Agent: Antigravity
+- Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-07 11:35:00 Asia/Taipei
+- Timestamp: 2026-09-14 19:29:33 Asia/Taipei
 
 ---
 
 ## 🐛 Open / Active Issues & Accepted Risks
+
+### RISK-013 — `openai-compatible` 的金鑰仍會下發到每個登入者的瀏覽器
+- **Where**: `sources/supabase/schema.sql`（`get_ai_settings()`）、`sources/src/services/aiClient.ts`（`OpenAiCompatibleProviderImpl`）
+- **Failure scenario**: 0.9.51 把 `google` 的金鑰移到 `ai-proxy` 伺服器端，但 `openai-compatible` 維持瀏覽器直連，因此 `get_ai_settings()` 對該供應商照常回傳 `ai_api_key`。本機 Ollama 通常免金鑰，目前無實際影響；一旦管理員把 Base URL 改指向需要金鑰的雲端端點，該金鑰就會被每一個登入帳號讀到。
+- **Found**: 2026-09-14, Task 161 範圍決策。
+- **Decision**: 使用者 2026-09-14 決定只保護 google。Supabase Edge Function 連不到本機 localhost，全部代理化會讓本機 Ollama 無法使用。後台警語已改為依供應商如實顯示，不再一律寫「金鑰會下發」。
+- **Status**: OPEN（已接受；改用需要金鑰的雲端 openai-compatible 端點前必須重新評估）
+
+---
 
 ### RISK-011 — `backup-transactions` 的 R2 整合點只靠人工閱讀，沒有自動化測試
 - **Where**: `sources/supabase/functions/backup-transactions/index.ts:130-148`、`:173-187`

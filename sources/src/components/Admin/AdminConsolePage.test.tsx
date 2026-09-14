@@ -2,12 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
-const { fetchAdminStatus, loadAiSettings, saveAiSettings, clearAiSettings } = vi.hoisted(() => ({
-  fetchAdminStatus: vi.fn(),
-  loadAiSettings: vi.fn(),
-  saveAiSettings: vi.fn(),
-  clearAiSettings: vi.fn(),
-}))
+const { fetchAdminStatus, loadAiSettings, loadAiSettingsView, saveAiSettings, clearAiSettings } =
+  vi.hoisted(() => ({
+    fetchAdminStatus: vi.fn(),
+    loadAiSettings: vi.fn(),
+    loadAiSettingsView: vi.fn(),
+    saveAiSettings: vi.fn(),
+    clearAiSettings: vi.fn(),
+  }))
 vi.mock('../../services/adminStatus', () => ({ fetchAdminStatus, isAdmin: vi.fn() }))
 vi.mock('../../services/adminBackups', () => ({
   fetchAdminBackups: vi.fn().mockResolvedValue(null),
@@ -15,6 +17,7 @@ vi.mock('../../services/adminBackups', () => ({
 }))
 vi.mock('../../services/aiSettings', () => ({
   loadAiSettings,
+  loadAiSettingsView,
   saveAiSettings,
   clearAiSettings,
   validateAiSettings: () => null,
@@ -28,6 +31,7 @@ describe('AdminConsolePage', () => {
     // Both sub-panels will load their own data, and they will all be "checked" to make them empty.
     fetchAdminStatus.mockResolvedValue(null)
     loadAiSettings.mockResolvedValue(null)
+    loadAiSettingsView.mockResolvedValue({ settings: null, hasKey: false })
   })
   afterEach(cleanup)
 
@@ -77,10 +81,23 @@ describe('AdminConsolePage', () => {
     expect(screen.queryByText(/讀不到資料抓取狀況/)).toBeNull()
   })
 
-  it('金鑰會下發到瀏覽器這件事要寫在畫面上，不能只寫在註解裡', async () => {
+  /**
+   * 161: google 的金鑰改由 ai-proxy 在伺服器端注入，openai-compatible 仍是瀏覽器直連。
+   * 金鑰到底會不會下發，必須照供應商如實寫在畫面上，不能只寫在註解裡。
+   */
+  it('google 要寫明金鑰留在伺服器端', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
     await screen.findByLabelText(/AI 服務供應商/)
+    expect(screen.getByText(/金鑰只存在伺服器端/)).toBeTruthy()
+    expect(screen.queryByText(/金鑰會下發到每個登入者的瀏覽器/)).toBeNull()
+  })
+
+  it('openai-compatible 要照實寫明金鑰會下發到瀏覽器', async () => {
+    render(<AdminConsolePage onExit={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
+    const select = await screen.findByLabelText(/AI 服務供應商/)
+    fireEvent.change(select, { target: { value: 'openai-compatible' } })
     expect(screen.getByText(/金鑰會下發到每個登入者的瀏覽器/)).toBeTruthy()
   })
 

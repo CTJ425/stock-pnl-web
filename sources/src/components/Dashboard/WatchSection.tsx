@@ -14,7 +14,7 @@ import { getStockCategory } from '../../utils/stockCategory'
 import { getGroupCategoryName, groupWatchItems } from '../../utils/stockGrouping'
 import { AddWatchModal } from '../StockDetail/AddWatchModal'
 import { useToast } from '../Common/Toast'
-import { useRowActivate } from '../../hooks/useRowActivate'
+import { rowActivateProps } from '../../hooks/rowActivateProps'
 
 const STORAGE_VIEW_KEY = 'stock_watchlist_view_mode'
 const POLL_INTERVAL_MS = 60 * 1000
@@ -322,7 +322,7 @@ export function WatchSection({
                       // steals width from the stock name. `getGroupCategoryName` is the same normaliser the
                       // grouping uses, so a raw industry and its group name compare equal here.
                       const showIndustry = Boolean(category) && getGroupCategoryName(category ?? '') !== group.name
-                      const activateCard = useRowActivate(
+                      const activateCard = rowActivateProps(
                         () => onSelectTicker(item.ticker, item.name),
                         `開啟 ${item.ticker} ${item.name}`,
                       )
@@ -416,7 +416,7 @@ export function WatchSection({
                             ? (quote.price - quote.prevClose) / quote.prevClose
                             : null
                         const category = getStockCategory(item.ticker, item.name, quote?.industry)
-                        const activateRow = useRowActivate(
+                        const activateRow = rowActivateProps(
                           () => onSelectTicker(item.ticker, item.name),
                           `開啟 ${item.ticker} ${item.name}`,
                         )

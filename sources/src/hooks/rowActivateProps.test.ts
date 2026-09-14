@@ -8,16 +8,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { KeyboardEvent } from 'react'
 
-import { useRowActivate } from './useRowActivate'
+import { rowActivateProps } from './rowActivateProps'
 
 function keyEvent(key: string) {
   const preventDefault = vi.fn()
   return { event: { key, preventDefault } as unknown as KeyboardEvent, preventDefault }
 }
 
-describe('useRowActivate', () => {
+describe('rowActivateProps', () => {
   it('exposes button semantics and a tab stop', () => {
-    const props = useRowActivate(vi.fn(), '開啟 2330 台積電')
+    const props = rowActivateProps(vi.fn(), '開啟 2330 台積電')
 
     expect(props.role).toBe('button')
     expect(props.tabIndex).toBe(0)
@@ -28,7 +28,7 @@ describe('useRowActivate', () => {
     const onActivate = vi.fn()
     const { event, preventDefault } = keyEvent('Enter')
 
-    useRowActivate(onActivate, '列').onKeyDown(event)
+    rowActivateProps(onActivate, '列').onKeyDown(event)
 
     expect(onActivate).toHaveBeenCalledTimes(1)
     expect(preventDefault).toHaveBeenCalledTimes(1)
@@ -38,7 +38,7 @@ describe('useRowActivate', () => {
     const onActivate = vi.fn()
     const { event, preventDefault } = keyEvent(' ')
 
-    useRowActivate(onActivate, '列').onKeyDown(event)
+    rowActivateProps(onActivate, '列').onKeyDown(event)
 
     expect(onActivate).toHaveBeenCalledTimes(1)
     expect(preventDefault).toHaveBeenCalledTimes(1)
@@ -46,7 +46,7 @@ describe('useRowActivate', () => {
 
   it('ignores every other key without swallowing it', () => {
     const onActivate = vi.fn()
-    const props = useRowActivate(onActivate, '列')
+    const props = rowActivateProps(onActivate, '列')
 
     for (const key of ['Tab', 'Escape', 'a', 'ArrowDown']) {
       const { event, preventDefault } = keyEvent(key)

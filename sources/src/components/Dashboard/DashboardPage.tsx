@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react'
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useStockPrices } from '../../hooks/useStockPrices'
-import { useRowActivate } from '../../hooks/useRowActivate'
+import { rowActivateProps } from '../../hooks/rowActivateProps'
 import { buildHoldingRows, type HoldingRow } from '../../utils/holdingRows'
 import type { Currency } from '../../types/models'
 import {
@@ -92,7 +92,7 @@ function HoldingsTable({
     const isShort = direction === 'SHORT'
     const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
     const stockName = displayStockName(h.market, h.ticker, h.name)
-    const activateRow = useRowActivate(
+    const activateRow = rowActivateProps(
       () => onSelectTicker?.(h.ticker, stockName),
       `開啟 ${h.ticker} ${stockName}`,
     )

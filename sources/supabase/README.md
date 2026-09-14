@@ -158,12 +158,20 @@ supabase functions deploy backup-transactions --no-verify-jwt
 | `ai_provider` | `'google'` 或 `'openai-compatible'` |
 | `ai_base_url` | OpenAI 相容端點（Ollama / vLLM）；`google` 留空 |
 | `ai_model` | 模型名稱，例如 `gemini-2.5-flash` / `llama3` |
-| `ai_api_key` | 明文 |
+| `ai_api_key` | 明文；**`authenticated` 已被 REVOKE SELECT**，見下方權限說明 |
 | `ai_updated_at` | 最後更新時間 |
 
-**權限**：所有登入帳號可 SELECT；只有 `app_metadata.role = 'admin'` 可 INSERT / UPDATE。
-金鑰仍會回到瀏覽器（前端直連供應商），存 DB 換到的是**全站共用一組設定**，
-不是「金鑰不進瀏覽器」—— 後者要等 Edge Function 代理。
+**權限（0.9.51 起）**：只有 `app_metadata.role = 'admin'` 可 INSERT / UPDATE。
+`ai_api_key` 這個**欄位**已對 `authenticated` 與 `anon` 撤銷 SELECT，任何帳號都讀不到，
+管理員也不例外（後台只顯示「已設定」，不回填原值）。
+
+前端改走 `get_ai_settings()` 這支 `SECURITY DEFINER` 函數讀設定，它對 `google` 一律回傳空字串，
+並附帶 `ai_has_key` 布林值。**`google` 的金鑰因此不再進入瀏覽器**，改由 `ai-proxy` Edge Function
+在伺服器端注入。
+
+⚠️ `openai-compatible` 不在此保護範圍內（使用者 2026-09-14 決定）：那條路徑仍由瀏覽器直連端點，
+所以 `get_ai_settings()` 會照常回傳它的金鑰。本機 Ollama 通常免金鑰；若改指向需要金鑰的雲端端點，
+該金鑰會回到每一個登入者的瀏覽器（見 `BUG_FIX.md` RISK-013）。
 
 **要在既有環境套用**：只執行 §4.1 那幾行 `ALTER TABLE` / `CREATE TABLE`。
 ⚠️ **不要整份重跑 `schema.sql`**（見本檔開頭的警告）。

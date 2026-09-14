@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.50**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.51**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -337,17 +337,21 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 
 ---
 
-### 步驟 5：部署三支 Edge Functions
+### 步驟 5：部署四支 Edge Functions
 
-⚠️ **三支的 JWT 設定各不相同，設錯會出事：**
+⚠️ **四支的 JWT 設定各不相同，設錯會出事：**
 
 | 函數 | JWT 驗證 | CLI 旗標 | 設錯的後果 |
 |---|---|---|---|
 | `stock-price` | **開啟**（預設） | 不加旗標 | 關掉 → 變成任何人都能呼叫的公開端點，Edge 額度遭濫用 |
+| `ai-proxy` | **開啟**（預設） | 不加旗標 | 關掉 → 未登入者也能用你的 Google AI 額度 |
 | `stock-report` | **關閉** | `--no-verify-jwt` | 沒關 → 盤後排程全數 401 |
 | `backup-transactions` | **關閉** | `--no-verify-jwt` | 沒關 → 每日備份全數 401 |
 
 `stock-report` 與 `backup-transactions` 不靠 JWT，它們驗的是 `x-cron-secret` 標頭。
+
+`ai-proxy` 是 0.9.51 新增的 AI 金鑰代理。前端不再持有 Google API Key，改由這支函數在伺服器端注入。
+**它沒部署，AI 分析就不能用**（後台的「AI 連線」仍可設定）。
 
 #### 做法 A：WebUI
 
@@ -361,6 +365,7 @@ Dashboard → Edge Functions → **Create a function**。名稱必須與資料�
 ```bash
 cd sources
 supabase functions deploy stock-price                          # 維持 verify_jwt=true
+supabase functions deploy ai-proxy                             # 維持 verify_jwt=true
 supabase functions deploy stock-report --no-verify-jwt
 supabase functions deploy backup-transactions --no-verify-jwt
 ```
