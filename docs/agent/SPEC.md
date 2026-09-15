@@ -300,7 +300,7 @@ This is the only factual basis for any future "whether to adjust the polling win
 
 ### Entry point and premise
 
-The fifth tab of the individual stock analysis page is labeled "**AI Interpretation**". Three premises:
+The AI tab (`ai`, the third top-level tab) of the individual stock analysis page is labeled "**AI Interpretation**" (historically the fifth tab in 0.6.0). Three premises:
 
 1. **Only appears in Supabase mode** (the entire stock analysis page is originally) - the settings exist in `app_settings`, and there is nowhere to save them in native mode.
 2. **You need to apply the `app_settings` global single list of `sources/supabase/schema.sql` §4.1** first (from 0.6.0-dev.2;

@@ -396,7 +396,7 @@ FROM cron.job ORDER BY jobname;
 
 ⚠️ **不要 SELECT `command` 欄位本身** — 它含有明文 `x-cron-secret`，印出來等於外洩。
 
-應出現的 6 個排程：
+應出現的 7 個排程：
 
 | jobname | schedule | 用途 |
 |---|---|---|
@@ -406,6 +406,7 @@ FROM cron.job ORDER BY jobname;
 | `macro-daily` | `*/30 12-18 * * *` | 美國總經 |
 | `fx-daily` | `0 3,9 * * *` | 匯率 |
 | `backup-daily` | `0 18 * * *` | 每日備份（台北 02:00） |
+| `app-log-prune` | `20 3 * * *` | 日誌定期清理（保留 30 天） |
 
 再手動觸發一次，確認密鑰與 JWT 設定正確：
 

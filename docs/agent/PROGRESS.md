@@ -14,13 +14,13 @@
    - `docs/CLAUDE-tw.md`：更正 Edge Functions 部署指令，明確區分 `stock-price` 與 `ai-proxy` 維持 `verify_jwt=true`，而 `stock-report` 與 `backup-transactions` 帶 `--no-verify-jwt`；移除已廢除之 `architect` 角色與不存在之 `.claude/hooks/` 參照。
    - `sources/supabase/README.md`：新增 `ai-proxy` 部署說明（共 4 支 Edge Functions），更新 `backup-transactions`（含 `r2.ts`、`cronSecret.ts` 共 4 檔）與 `stock-report`（18 檔）、`stock-price`（7 檔）檔數；移除已廢棄之 PDF 下載與 Google News RSS 描述。
 2. **P2 (專案總覽現狀同步)**：
-   - `README.md`：移除 PDF 下載說明與死依賴（`jsPDF` / `html2canvas`）、目錄樹清除 `newsProxy` 與 `reportPdf`；更新測試規模至 121 檔 / 1,947 tests (100% PASS)；更正 pg_cron 排程數至 7 個；更新 AI proxy 架構與 Edge 4 支函數說明。
+   - `README.md`：移除 PDF 下載說明與死依賴（`jsPDF` / `html2canvas`）、目錄樹清除 `newsProxy` 與 `reportPdf`；更新測試規模至 121 檔 / 1,947 tests (100% PASS)；更正 pg_cron 排程數至 7 個（含覆驗清單補入 `app-log-prune`）；更新 AI proxy 架構與 Edge 4 支函數說明。
 3. **P3 (追蹤檔案 Size Discipline 與缺陷分析)**：
    - `docs/agent/TASK.md`：將 Task 145 已完成項目 (BUG-063..071) 收攏為 `- **Done**: `，保留待處理的 OPT-1 / OPT-2；清除 Task 132/133 過時之 Docker Compose 敘述。
    - `docs/agent/BUG_FIX.md` / `FIXED_BUG.md`：將已於 PROD 配置之 Supabase Redirect URLs 移至 `FIXED_BUG.md` (BUG-082)；完成 BUG-079 程式碼深入分析，釐清 `estimateUnrealized`（取自 lot.feeRate）與 `breakEvenPrice`（取自 workspace feeRate 導致 0.6 解讀歧異）之根本原因。
 4. **P4 (測試指南與架構歷程註記)**：
    - `docs/UnitTests/`：移除過時之 Docker 網域 `korq9tvdz0jd7yblr72p.ivan.lab` 並替換為 Supabase Cloud DEV ref `zyebvayngwrqzoaicbwd`；將 `backup-transactions`、`ai-proxy`、`stock-price` 之單元測試補入 `README.md` 與 `UNIT.md`；於 `E2E.md` 完整列出 10 支 E2E 與驗證腳本。
-   - `docs/agent/SPEC.md` / `PLAN.md`：同步個股分析頁三層分頁結構（`analysis` 含籌碼/基本面/技術面、`whatif` 損益試算、`ai` AI分析）；註記已移除之 PDF / html2canvas；更新 0.9.51 AI proxy 金鑰隔離架構；釐清 `PLAN.md` 中 Cloudflare Worker 廢除與 R2 異地備份採用之邊界。
+   - `docs/agent/SPEC.md` / `PLAN.md`：同步個股分析頁三層分頁結構（`analysis` 含籌碼/基本面/技術面、`whatif` 損益試算、`ai` AI分析分頁標註校正）；註記已移除之 PDF / html2canvas；更新 0.9.51 AI proxy 金鑰隔離架構；釐清 `PLAN.md` 中 Cloudflare Worker 廢除與 R2 異地備份採用之邊界。
 
 全套驗證：`npm test` 121 檔 / 1,947 測試 100% 通過；`npm run typecheck:edge`、`npm run build`、`npm run lint` 全數 exit 0。
 
