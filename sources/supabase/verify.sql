@@ -39,7 +39,8 @@ BEGIN
     VALUES ('workspaces'),('transactions'),('price_cache'),('stock_names'),
            ('user_settings'),('tw_watchlist'),('chip_raw_cache'),('warm_quota'),
            ('batch_run_log'),('backup_run_log'),('admin_run_log'),
-           ('source_probe_log'),('source_probe_tick'),('app_settings')
+           ('source_probe_log'),('source_probe_tick'),('app_settings'),
+           ('app_log')
   ), missing AS (
     SELECT string_agg(t, ', ' ORDER BY t) AS m FROM want
      WHERE t NOT IN (SELECT table_name FROM information_schema.tables
@@ -47,7 +48,7 @@ BEGIN
   )
   SELECT 'tables',
          CASE WHEN m IS NULL THEN 'PASS' ELSE 'FAIL' END,
-         COALESCE('missing: ' || m, 'all 14 present')
+         COALESCE('missing: ' || m, 'all 15 present')
     FROM missing;
 
   -- ---- columns added by later migrations ----------------------------------

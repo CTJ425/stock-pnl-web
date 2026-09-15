@@ -3,11 +3,11 @@
 - Agent: Claude
 - Action: 交接文件全面稽核校正，並補上 `ai-proxy` 的 PROD 部署
 - Status: ✅ **COMPLETED**（8 處文件錯誤已修；四支 Edge Function 兩邊齊備）
-- Timestamp: 2026-09-15 13:22:19 Asia/Taipei
+- Timestamp: 2026-09-15 13:35:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-15 13:22:19 Asia/Taipei (交接文件稽核校正 + ai-proxy 上 PROD)
+## 📅 Log: 2026-09-15 13:35:00 Asia/Taipei (交接文件稽核校正 + ai-proxy 上 PROD + 驗證器補洞)
 
 以現行程式碼為依據稽核 11 份宣稱現況的文件，逐條要求「文件出處 + 程式碼反證」兩邊引用。確認 13 條錯誤，修掉其中低風險的 8 條。
 
@@ -22,6 +22,10 @@
 **一條自己撤回的誤判**：稽核過程中一度報出「`schema.sql` 有兩個 `cron.schedule`（`stock-report-nightly:449`、`market-daily:949`）在線上不存在」，並判定重建 cron 會多出兩個排程。**該結論錯誤，已撤回。** 那兩行都在 `--` 註解裡，是「這個已退役的排程要怎麼還原」的說明範例，不會執行；抽取用的正規表示式沒有排除註解行才誤判。排除註解後重新抽取：`schema.sql` 有 **7 個**會執行的 `cron.schedule`（`market-data-daily`、`history-daily`、`source-probe`、`macro-daily`、`fx-daily`、`backup-daily`、`app-log-prune`），每一個都配一組 `cron.unschedule`，與線上 `cron.job` 的 7 筆逐一相同。**`schema.sql` 沒有排程漂移，不需要修改。** 教訓：對 SQL 檔做結構性抽取時，先濾掉註解行再比對，否則註解裡的範例 SQL 會被當成程式碼。
 
 **`ai-proxy` 補上 PROD**：稽核發現 0.9.51 把 Google 金鑰移到伺服器端後，該函式從未部署到 PROD，正式站的金鑰仍走瀏覽器直連。前置條件實測後比預期小：PROD 的 `app_settings` 已有 `ai_provider` / `ai_model` 欄位（PostgREST 回 200 + 空陣列），`ai-proxy` 只需要環境自動注入的 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`，兩者都在。部署後 PROD 四支函式齊全，`ai-proxy` v1、`verify_jwt=true`、bundle 雜湊 `0e9155260cf390ce` 與 DEV 相同；四支的雜湊兩邊逐一相同。冒煙測試：不帶 JWT 回 401（閘道層），帶 anon JWT 回函式自己的「登入憑證無效或已過期」401，證明程式碼確實在跑。
+
+**驗證器自己有個洞，已補**：`sources/supabase/verify.sql` 的表清單只列 14 張，而 `schema.sql` 定義 15 張 —— 漏掉的是 `app_log`（app log capture 功能後來才加，沒人同步進驗證器）。後果正是這支驗證器存在的目的：專案重建或還原後若 `app_log` 沒建起來，`assert_setup_ok()` 仍會通過，失敗會是靜默的。已把 `app_log` 加進清單、訊息改為 `all 15 present`，並對 DEV 重新安裝驗證器。重跑結果：10 項全 PASS、`tables` 顯示 `all 15 present`、`assert_setup_ok()` 回 ok。另以 PostgREST 逐張探測，15 張表在 PROD 全部存在（HTTP 200）。
+
+**一個沒有解的缺口**：代理人目前無法對 PROD 跑 `verify_setup()`。這個 CLI 版本（2.111.0）的 `supabase db query` **不接受 `--project-ref`**（會回 `UnrecognizedOption`），所以 `--linked` 只到得了 DEV；改走 PostgREST 的 `rpc/verify_setup` 則被 `permission denied for schema cron` 擋下，因為 anon 角色沒有 `cron` schema 權限。PROD 的 `SUPABASE_DB_URL` 是 secret，讀不到值。結論：`supabase-ops` 要求「重建／還原／遷移後必須跑驗證器」這件事，在 PROD 上目前沒有可執行的路徑。
 
 ## 📅 Log: 2026-09-15 11:47:54 Asia/Taipei (Task 162, 0.9.54 國際指數分頁上線與 Edge 部署)
 
