@@ -1,4 +1,21 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
+### Shipped history (rolled from TASK.md 2026-09-15 13:50:00 Asia/Taipei)
+
+  - Shipped 2026-09-15: 清除 PDF 時代的死註解、以實測更正 README 的部署敘述（0.9.53）。
+  - Shipped 2026-09-15: 移除未使用的 PDF 產生器與 jspdf / html2canvas 相依、修補開發相依漏洞（0.9.52）。
+  - Shipped 2026-09-14: AI 金鑰移出瀏覽器 + CI 閘門 + 條件式 hook 修補（0.9.51, Task 161）。
+  - Shipped 2026-09-14: 全專案快照與還原腳本（0.9.50, Task 160）。
+  - Shipped 2026-09-14: 修復台股代號與中文搜尋失敗（0.9.49, BUG-081）、多目標備份與本機匯出（Task 144 #4）、docs 過時文件清理。
+  - Shipped 2026-09-11: 手機版交易紀錄工具列與觀察股票標題列排整齊（0.9.48, Task 158 #12）。
+  - Shipped 2026-09-11: 桌機版「新增交易」改回右下角浮動按鈕（0.9.47，使用者決定撤回 Task 159 D9）。
+  - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
+  - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
+
+### Task 144 — completed sub-items (rolled from TASK.md 2026-09-15 13:50:00 Asia/Taipei)
+
+  1. ~~**Uniform Account Icon**~~: ✅ Completed in 0.9.36 (Modern Flat Persona Style 06 in `AppShell.tsx`).
+  4. ~~**Multi-Target Backups**~~: ✅ Completed in 0.9.49 (Cloudflare R2 S3 offsite target via `r2.ts`, admin bulk download in `BackupsSection.tsx`, user self-service export in `selfExport.ts`, local CLI script `backup-download.cjs`).
+
 ### Task 162: 總體經濟頁新增國際指數分頁（日／韓／美）與盤中輪詢
 - **Status**: ✅ DONE (0.9.54)
 - **Agent**: Claude

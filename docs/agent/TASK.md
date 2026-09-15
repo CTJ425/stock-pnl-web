@@ -1,8 +1,8 @@
 # Task Backlog & Tracking (TASK.md)
 
-- Agent: Antigravity
+- Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-09 18:05:00 Asia/Taipei
+- Timestamp: 2026-09-15 13:50:00 Asia/Taipei
 
 ---
 
@@ -12,18 +12,9 @@
 ## 📍 Where the project stands (2026-09-15 09:16:32)
 
 - **Version 0.9.54 — on `dev` and `main`，正式站已在跑 0.9.54。前端由 Cloudflare Pages 從 `main` 自動部署；四支 Edge Function（`stock-price`、`stock-report`、`backup-transactions`、`ai-proxy`）已於 2026-09-15 全數部署至 DEV 與 PROD，四支的 bundle 雜湊兩邊逐一相同。** 驗收看畫面左下角的版本徽章。
-  - **0.9.51 的 PROD 剩餘三步**：`PART A`（建 `get_ai_settings()`）→ `supabase functions deploy ai-proxy --project-ref hrilemueiqyaoiwnkeuu`（維持 `verify_jwt=true`，不加旗標）→ `PART B`（撤銷 `ai_api_key` 讀取權）。**上傳前端那一步已不需要** —— Cloudflare Pages 自動部署，0.9.52 以後的前端早已在線上。兩段 SQL 在 `docs/agent/161-ai-key-proxy-migration.sql`。DEV 已全部完成。PROD 端已確認的事實只有一項：`functions list` 顯示 PROD 沒有 `ai-proxy`。`PART A` 是否已套用**無法確認** —— 查 PROD 資料庫需要先 `supabase link` 到該專案，而該指令被權限層擋下。由此推論（非實測）：0.9.51 以後的前端只走代理路徑，線上的 AI 分析功能目前應為故障。
-  - Shipped 2026-09-15: 清除 PDF 時代的死註解、以實測更正 README 的部署敘述（0.9.53）。
-  - Shipped 2026-09-15: 移除未使用的 PDF 產生器與 jspdf / html2canvas 相依、修補開發相依漏洞（0.9.52）。
-  - Shipped 2026-09-14: AI 金鑰移出瀏覽器 + CI 閘門 + 條件式 hook 修補（0.9.51, Task 161）。
-  - Shipped 2026-09-14: 全專案快照與還原腳本（0.9.50, Task 160）。
-  - Shipped 2026-09-14: 修復台股代號與中文搜尋失敗（0.9.49, BUG-081）、多目標備份與本機匯出（Task 144 #4）、docs 過時文件清理。
-  - Shipped 2026-09-11: 手機版交易紀錄工具列與觀察股票標題列排整齊（0.9.48, Task 158 #12）。
-  - Shipped 2026-09-11: 桌機版「新增交易」改回右下角浮動按鈕（0.9.47，使用者決定撤回 Task 159 D9）。
-  - Shipped 2026-09-11: 修正 iPhone 實機版面問題（0.9.46, BUG-080）。
-  - Shipped 2026-09-11: 手機與桌機介面第一批改善（0.9.45, Task 158/159 batch 1）。
+  - Shipped 0.9.45 ~ 0.9.54 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
   - Verification: 123 test files / **1,976** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0；`npm audit` 0 vulnerabilities。
-  - Edge Functions: `stock-price` deployed to DEV and PROD, `stock-report` is **v8**, `backup-transactions` is **v4**, `ai-proxy` 為 **DEV v1（ACTIVE, verify_jwt=true）；PROD 尚未部署**。
+  - Edge Functions（2026-09-15 實測）: `stock-price` DEV **v18** / PROD **v9**、`stock-report` **v8**、`backup-transactions` **v4**、`ai-proxy` **v1**，四支在 DEV 與 PROD 皆為 ACTIVE 且 bundle 雜湊逐一相同。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
   - **前端由 Cloudflare Pages 自動部署。** 推上 GitHub 後數分鐘內生效，不需要手動上傳 `dist/`（0.9.53 以 bundle 位元組比對實測確認，流程寫在 `README.md` 步驟 9-1）。驗收看畫面左下角版本徽章。
   - **只有 `main` 會上正式站**（0.9.53 實測：09:21 推 `dev` 後七分鐘線上不變；09:27 推 `main` 後 1 分 40 秒線上換版）。Edge Function 不隨前端走，必須另外 `supabase functions deploy`。
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
@@ -113,12 +104,11 @@
 - **Status**: 🔄 **IN PROGRESS — Features 1 & 4 shipped (0.9.49)**
 - **Agent**: Antigravity
 - **Timestamp**: 2026-09-14 12:30:00 Asia/Taipei
+- **Done**: items 1, 4 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: `docs/agent/specs/144-admin-enhancements-and-backups.md`
 - **What is this**: 4 interrelated system feature additions requested by user:
-  1. ~~**Uniform Account Icon**~~: ✅ Completed in 0.9.36 (Modern Flat Persona Style 06 in `AppShell.tsx`).
   2. **Admin Cron & Probe Execution Logs**: Add detailed execution log viewer in Admin Console for `cron.job_run_details`, `source_probe_tick` anomalies, and batch run errors (shares `logs` panel in `LogsSection.tsx` added in Spec 146).
   3. **Supabase Cloud Usage & Limit Monitor**: Expose database size, storage usage, and plan thresholds (Free 500MB DB / 1GB Storage) directly in the Admin Console.
-  4. ~~**Multi-Target Backups**~~: ✅ Completed in 0.9.49 (Cloudflare R2 S3 offsite target via `r2.ts`, admin bulk download in `BackupsSection.tsx`, user self-service export in `selfExport.ts`, local CLI script `backup-download.cjs`).
 - **Remaining**: Implementation of Features 2, 3 across frontend and backend RPCs.
 
 ### Task 85: 0.7.8 / 0.7.9 探針命中直接觸發抓取，且要確認資料到位
