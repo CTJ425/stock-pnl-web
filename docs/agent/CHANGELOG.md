@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.54（2026-09-15）— 總體經濟新增「國際指數」分頁，日／韓／美 8 檔盤中 60 秒更新
+
+- 🌏 **總體經濟頁新增第三個子分頁「國際指數」**：日經 225（`^N225`）、KOSPI（`^KS11`）、KOSDAQ（`^KQ11`）、道瓊（`^DJI`）、S&P 500（`^GSPC`）、那斯達克（`^IXIC`）、費城半導體（`^SOX`）、羅素 2000（`^RUT`），依日本／韓國／美國三區分組，每組標示當下時段（盤中／午休／已收盤）。
+  - **`^TOPX`（TOPIX）刻意排除**：Yahoo 回 HTTP 200 但 `meta.regularMarketPrice` 是 `null`，放進去只會是一張永遠顯示「—」的卡片。
+- 🔁 **盤中每 60 秒更新，且只問有開盤的市場**：`sessionHours.ts` 以各市場所在時區判斷時段 —— 日本 09:00–15:30（含 11:30–12:30 午休）、韓國 09:00–15:30、美國 09:30–16:00。**美股不寫死時差**，日光節約由 `Intl.DateTimeFormat` 的 `America/New_York` 決定，21 條測試中有兩條專門釘住 EDT 與 EST 兩種情形。全部收盤時不發任何請求，分頁切走即卸載停表，分頁隱藏時暫停、回來立刻補抓。
+  - 實測（2026-09-15 11:27 台北）：載入送出 8 檔，整整 60 秒後只送出 `^KS11` 與 `^KQ11` —— 當下僅韓股在盤中，日股午休、美股收盤。
+- ♻️ **沒有新增任何 API、排程或資料表**：Edge Function `stock-price` 的 `prices` action 本來就不檢查 market 白名單，`yahooSymbols()` 對非 `TPE` 的 market 原樣回傳 ticker，8 檔指數一次 POST 取回。
+- 🧱 **刻意不共用 `priceProxy.fetchPrices`**：`PriceRequestItem.market` 綁在 `Market = 'TPE' | 'US'`，而 `Market` 是持股與損益的型別，放寬它等於讓顯示需求碰到金額計算；`fetchPrices` 的 localStorage 快取對非台股又是 10 分鐘，會讓 60 秒輪詢拿到舊值。改為新增 `indexQuotes.ts`，只做顯示、不持有快取、不匯入 `Market`。
+- ⏱️ **Edge 端只改一行**：`cacheTtlMsFor` 新增 `IDX:` 分支回 60 秒，`TPE:` 與 `US:` 分支未動。粗篩用的 `freshAfter` 不需跟著改 —— 它只放寬 DB 撈列的時間窗，逐列 TTL 仍由 `cacheTtlMsFor` 把超過 60 秒的 `IDX:` 列剔除。
+  - ⚠️ **推 `main` 不會部署 Edge Function。** 這一行在 `stock-price` 另行部署之前不會生效；未部署時畫面仍每 60 秒問一次，但拿到的報價最舊可能是 10 分鐘前的。
+- 🎨 **`.gix-groups .rpt-card` 加上 `max-width: 320px`**：`.rpt-card` 本身是 `flex: 1 1 140px`，只有一檔的日本組會把卡片拉成整列寬，與 5 檔的美國組寬度不一致。約束只加在新網格內，不動共用類別。
+- ✅ **驗證**：123 檔 / **1,976** 條測試全過；`npm run build`、`npm run typecheck:edge` 皆 exit 0。E2E 全套在本機模式跑過前後兩次，失敗清單與未套用本版變更的基準線**完全相同**（同樣 10 passed / 6 failed），其中 4 條是本機模式不顯示「總體經濟」「外幣匯率」等雲端限定頁所致，與本版無關。另以真瀏覽器對 DEV 專案實測 8 檔指數報價與 60 秒輪詢。
+
 ### 0.9.53（2026-09-15）— 清除 PDF 時代的死註解，並更正 README 的部署敘述
 
 - 🧹 **清掉 12 個檔案裡指向 PDF / html2canvas 的死註解**：0.9.52 移除 PDF 產生器後，`Charts/` 與 `StockDetail/` 底下仍有多處註解以「html2canvas 無法解析祖先層的 CSS 變數，PDF 會整片變黑」解釋為何圖表顏色必須寫死。該限制已不存在。註解改為陳述現況：**一組字面值配色同時服務深淺兩個主題**，並以 `validate_palette.js` 對兩種底色驗證。顏色值本身一律未動，行為零變更。

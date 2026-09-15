@@ -30,6 +30,22 @@
 
 ## 📋 Active Tasks
 
+### Task 162: 總體經濟頁新增國際指數分頁（日／韓／美）與盤中輪詢
+- **Status**: 🔄 程式與測試完成；DEV 部署與 commit 待使用者決定
+- **Agent**: Claude
+- **Timestamp**: 2026-09-15 10:50:13 Asia/Taipei
+- **Spec**: `docs/agent/specs/162-global-indices.md`
+- **Done**:
+  - `sources/src/components/Macro/sessionHours.ts` — 日／韓／美交易時段純函式，21 條測試（`sessionHours.test.ts`），含 EDT／EST 兩組美股開盤時間，DST 不寫死偏移量
+  - `sources/src/services/indexQuotes.ts` — 指數報價取得，只做顯示、不持有快取、不匯入 `Market`，7 條測試（`indexQuotes.test.ts`）
+  - `sources/src/components/Macro/GlobalIndices.tsx` — 三區塊卡片與 60 秒輪詢；休市時不發請求、分頁切走即卸載停表
+  - `sources/src/components/Macro/MacroPage.tsx` — 新增 `world` 子分頁「國際指數」
+  - `sources/supabase/functions/stock-price/index.ts` — `cacheTtlMsFor` 新增 `IDX:` 分支回 60 秒
+  - `sources/src/index.css` — 新增 `.gix-*` 樣式
+- **指數清單**: `^N225`、`^KS11`、`^KQ11`、`^DJI`、`^GSPC`、`^IXIC`、`^SOX`、`^RUT`。`^TOPX` 排除，Yahoo 回 200 但無報價。
+- **Not done**: 尚未 commit，尚未部署 `stock-price` 到 DEV。Edge 的 60 秒 TTL 在部署前不會生效，前端仍會拿到最多 10 分鐘前的報價。
+- **部署後要驗**: 間隔 90 秒呼叫兩次 `prices` action，比對 `asOf` 必須不同。
+
 ### Task 160: 全專案快照與還原腳本（snapshot / restore / wipe-dev）
 - **Status**: 🔄 **Phase A + A-2 程式完成並實測；破壞性演練待使用者決定 CRON_SECRET 方案**
 - **Spec**: `docs/agent/specs/160-snapshot-restore.md`（含 §3a、§3b 兩項設計修正）

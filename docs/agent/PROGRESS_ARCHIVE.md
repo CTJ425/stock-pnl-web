@@ -5,6 +5,24 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-15 09:16:32 Asia/Taipei (0.9.53, 死註解清理與部署敘述更正)
+
+0.9.52 拔掉 PDF 產生器後，12 個檔案的註解仍在以「html2canvas 無法解析祖先層 CSS 變數」解釋圖表顏色為何寫死。該限制已不存在，註解改為陳述現況：一組字面值配色同時服務深淺兩個主題。顏色值一律未動。`StockDetailPage.tsx` 提到的 `surfaceRef` 早已不在程式中，只剩那句話。兩處刻意保留並標明為歷史記述 —— 刪掉會讓一個已做過的決定失去理由。
+
+**更重要的是 README 被實測推翻。** 使用者問「CF page 不是會自己抓？」，查證結果是**會**。`0.9.52` 推上 GitHub 後數分鐘內，正式站就已經是該版本的建置產物：線上 bundle 含 `0.9.52` 版本字串、不含已刪的 `report-surface`，與本機建置的 JS 只差 50 個位元組 —— 差在 Supabase URL 與 publishable key，線上那份用 PROD 專案，本機用 DEV。CSS 檔 sha256 完全相同。沒有人手動上傳過。
+
+README 步驟 9-1 原本明寫「本專案沒有前端自動部署」，已更正為 Cloudflare Pages 自動部署，手動上傳降為備援路徑。**這個錯誤有實際代價**：0.9.51 的上線順序因此被寫成「PART B 必須等人工上傳新前端之後」，但前端其實在推上 `main` 的當下就自動上線了。順帶一提，`.github/workflows/` 也不只有 `release.yml`，`ci.yml` 自 0.9.51 起就在。
+
+**尚待確認**：Cloudflare Pages 綁的是 `main` 還是 `dev`。0.9.53 推 `dev` 之後、合併 `main` 之前查一次線上版號就能分辨。
+
+**PROD 仍未部署（0.9.51 的 Edge 與 SQL）。** `supabase link --project-ref hrilemueiqyaoiwnkeuu` 被 Claude Code 自動模式的權限層以 `[Production Deploy]` 擋下，與 0.9.51 當時同一個攔截。PROD `functions list` 已確認沒有 `ai-proxy`，DEV 有。PROD 的 `get_ai_settings()` 是否存在則無法確認，查資料庫同樣需要先 link 到 PROD。
+
+**分支歸屬已實測結清（2026-09-15 09:30:27 補記）。** 09:21:49 推 `dev`、不合併 `main`，正式站的 bundle 檔名七分鐘內完全沒變；09:27:34 推 `main`，1 分 40 秒後檔名換成 `index-DSrGpRJ9.js`，版本字串 `0.9.53`。**Cloudflare Pages 的正式站只建置 `main`**，推 `dev` 不會動到線上。README 步驟 9-1 已補上這一段。
+
+**PROD 的 SQL 無法由 CLI 執行。** `supabase link --project-ref hrilemueiqyaoiwnkeuu` 回 `LegacyLinkAuthTokenError`，而且**對 DEV 執行同一條指令也回一樣的錯**，所以不是 PROD 權限不足，是 `link` 走的舊端點目前的憑證存取不到；現有的 DEV 連結是先前留下的殘存狀態，失敗的 link 沒有把它清掉。`db query --linked` 因此只能打到 DEV。剩下的路是 Supabase 後台的 SQL Editor（`--db-url` 需要資料庫密碼，會把密碼寫進指令列與對話記錄，本 repo 公開，不採用）。`functions deploy --project-ref` 是另一條驗證路徑，不受此問題影響。
+
+**守衛已驗證有效**：帶身分守衛的 `prod-verify.sql` 對 DEV 執行時回 `is_dev=true` / `is_prod=false`，同時確認 DEV 的 0.9.51 遷移七項全部正確（`auth_reads_key=false`、`auth_execs_rpc=true`、`rpc_key_len=0` 等）。若誤把 `prod-partA.sql` / `prod-partB.sql` 打到 DEV，守衛會在同一個交易內 RAISE 並整批 rollback。
+
 ## 📅 Log: 2026-09-15 08:58:24 Asia/Taipei (0.9.52, 相依漏洞清理)
 
 例行檢查 GitHub 與本機狀態時，`npm audit` 報出 `jspdf@3.0.4` 一個 critical 與連帶的 `dompurify` moderate。使用者問了關鍵的一句：PDF 功能不是已經拿掉了嗎。查證結果是**只拔了一半** —— UI 按鈕在 0.9.17（`11516cd`）移除並有測試鎖住，但 `generatePdfBlob()`、它的兩個動態 `import()`、以及 `package.json` 的兩個相依都還在，沒有任何正式程式呼叫它。
