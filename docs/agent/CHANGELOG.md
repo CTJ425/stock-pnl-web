@@ -2,6 +2,20 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.52（2026-09-15）— 移除未使用的 PDF 產生器與兩個相依套件，並修補開發相依漏洞
+
+- 🔐 **`jspdf` 的 critical 漏洞來自死碼**：`npm audit` 報 `jspdf@3.0.4` 一個 critical（AcroForm 任意 JavaScript 執行、FreeText 物件注入、新視窗路徑的 HTML 注入、惡意 GIF 尺寸造成 DoS）與連帶的 `dompurify` moderate。追查後確認 **`generatePdfBlob()` 沒有任何正式程式呼叫**：PDF 下載按鈕早在 0.9.17（`11516cd`）隨個股分析頁改版移除，`StockDetailPage.test.tsx` 另有一條測試斷言「PDF 功能已完全拔除，畫面上沒有下載 PDF 按鈕」，但產生器本體、兩個動態 `import()` 與 `package.json` 的相依全都留了下來。因為是動態 `import()`，它甚至不在主 bundle 裡，但 `npm ci` 照裝，稽核照報。
+  - **選擇移除而非升級**：修補版 `jspdf@4.2.1` 是 major 升級。為一個沒有呼叫者的函式承擔破壞性變更並不划算。
+  - 刪除 `generatePdfBlob()` 與 `pdfScaleFor()`（`sources/src/services/reportPdf.ts` 由 85 行降為 19 行）。**保留 `downloadBlob()`** —— `AppShell.tsx` 與 `Admin/BackupsSection.tsx` 仍用它下載備份檔。
+  - 刪除 `sources/src/services/reportPdf.test.ts`：其中 5 條測試全部針對 `pdfScaleFor`。
+  - 刪除 `index.css` 的 `.report-surface` 區塊（26 行 token 覆寫）—— 只有 `generatePdfBlob` 會把這個 class 掛上去。
+  - `QuoteTab.tsx` 的註解引用 `.report-surface .quote-aside-private { display: none }`，但該規則其實早已不在 `index.css` 裡；改寫為只保留 `quote-aside-private` 的資料性質說明。
+  - 清掉三個測試檔的 stale mock 與註解（`generatePdfBlob: vi.fn()`、「keeps jspdf out of this suite」）。
+  - **正式相依由 6 個降為 4 個**，`npm audit --omit=dev` 由 1 critical + 1 moderate 變成 **0 vulnerabilities**。build 產出不再有這兩個套件的 lazy chunk，只剩單一 JS chunk（827 kB / gzip 239 kB）。
+- 🧪 **修補開發相依的 5 個漏洞**：`undici`、`nanoid`（2 high）與 `postcss`、`@vitest/mocker`、`vitest`（3 moderate），全部來自 `vitest` 與 `vite` 的相依鏈。這些不會進入瀏覽器，但會跑在 CI runner 上。`npm audit fix` 在現有 semver 範圍內即可修完，不需要 major 升級：`vitest` 4.1.10 → 4.1.11，`package.json` 未變，只動 `package-lock.json`。全專案 `npm audit` 現為 **0 vulnerabilities**。
+- ✅ **驗證**：121 檔 / **1,947** 條測試全數通過；`npm run lint`、`npm run build`、`npm run typecheck:edge`、`npm test` 四道皆 exit 0。測試數由 1,952 降 5 條，差額正好是刪除的 `reportPdf.test.ts`，沒有任何既有測試被破壞。
+- 📌 **本版未處理**：`Charts/` 底下 6 個檔案的註解仍以「html2canvas 無法解析 CSS 變數」解釋為何顏色必須寫死。該限制已隨 PDF 擷取一起消失，但那些顏色本身仍在使用，改動會擴散到配色決策，因此保留待決。
+
 ### 0.9.51（2026-09-14）— AI 金鑰不再進入瀏覽器，以及三項稽核修補（Task 161）
 
 - 🔐 **Google AI 金鑰移出瀏覽器（稽核項 A1）**

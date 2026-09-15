@@ -54,7 +54,7 @@ vi.mock('../../services/dailyProxy', () => ({
 }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
-vi.mock('../../services/reportPdf', () => ({ generatePdfBlob: vi.fn(), downloadBlob: vi.fn() }))
+vi.mock('../../services/reportPdf', () => ({ downloadBlob: vi.fn() }))
 vi.mock('../../utils/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../utils/settings')>()),
   getFeeRate, getMinFee,

@@ -16,13 +16,11 @@
  * This is also the reason why the TWSE OpenAPI daily closing endpoint is not used: it still stops at the previous trading day two hours after the actual closing.
  * Taking it as "today's closing" will regard yesterday's closing as today's closing (actual measured difference on 2026-08-05 is 3.6%).
  *
- * This card is public market data and does not contain personal information, so it is included in the PDF extraction range;
- * The shareholding card it replaced was originally outside the scope precisely because it was a capital.
+ * This card is public market data and does not contain personal information. The shareholding card it
+ * replaced held capital data instead.
  *
  * 0.9.17 (revision 4) added an optional 我的持股 block to the right-hand `.quote-aside`, which reverses that
- * "public data only" premise for one block — so it carries its own class, `quote-aside-private`, and
- * `.report-surface .quote-aside-private { display: none }` (index.css) hides it for the duration of the PDF
- * capture. The rest of this card, including the moved-in 指標摘要, is unaffected and still exports as before.
+ * "public data only" premise for one block — so it carries its own class, `quote-aside-private`.
  */
 import { useEffect, useState } from 'react'
 import { Inbox } from 'lucide-react'

@@ -4126,32 +4126,6 @@ a.hmenu-item {
   padding: 12px 12px;
 }
 
-/**
- * PDF capture container: This class is dynamically mounted by reportPdf.ts during capture, and the design token is overwritten to light color.
- * The dark theme can also output a PDF like a document. html2canvas does not handle backdrop-filter and turns it off altogether.
- */
-.report-surface {
-  --surface: #ffffff;
-  --surface-strong: #ffffff;
-  --panel: #ffffff;
-  --border: #e0e0e0;
-  --border-strong: #8d8d8d;
-  --ink: #161616;
-  --ink-secondary: #525252;
-  --ink-muted: #6f6f6f;
-  --up: #da1e28;
-  --down: #198038;
-  --thead-bg: #e0e0e0;
-  --thead-solid: #e0e0e0;
-  --row-band: #f4f4f4;
-  --row-hover: transparent;
-  --row-alt: #f4f4f4;
-  --accent: #0f62fe;
-  background: #ffffff;
-  color: #161616;
-  box-shadow: none;
-}
-
 @media (max-width: 720px) {
   .detail-body {
     padding: 16px;

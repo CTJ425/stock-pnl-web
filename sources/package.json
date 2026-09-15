@@ -1,7 +1,7 @@
 {
   "name": "sources",
   "private": true,
-  "version": "0.9.51",
+  "version": "0.9.52",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,8 +19,6 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.4",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

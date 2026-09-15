@@ -15,8 +15,7 @@ vi.mock('../../services/adminBackups', () => ({
   applyBackupRestore,
 }))
 
-// The bulk export hands the assembled file to the existing helper. Mocking the module also keeps
-// jspdf out of this suite.
+// The bulk export hands the assembled file to the existing helper.
 const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }))
 vi.mock('../../services/reportPdf', () => ({ downloadBlob }))
 
