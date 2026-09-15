@@ -2,12 +2,12 @@
 
 - Agent: Claude
 - Action: Task 162 國際指數分頁（日／韓／美 8 檔）與盤中 60 秒輪詢
-- Status: ✅ **RELEASED 0.9.54**（已合併 `main` 上線；Edge Function 部署待授權）
-- Timestamp: 2026-09-15 11:36:00 Asia/Taipei
+- Status: ✅ **COMPLETED 0.9.54**（已上線，Edge Function 已部署 DEV + PROD 並實測生效）
+- Timestamp: 2026-09-15 11:47:54 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-15 11:36:00 Asia/Taipei (Task 162, 0.9.54 國際指數分頁上線)
+## 📅 Log: 2026-09-15 11:47:54 Asia/Taipei (Task 162, 0.9.54 國際指數分頁上線與 Edge 部署)
 
 總體經濟頁新增第三個子分頁「國際指數」，顯示日經 225、KOSPI、KOSDAQ、道瓊、S&P 500、那斯達克、費城半導體、羅素 2000 共 8 檔，盤中每 60 秒更新。
 
@@ -29,7 +29,11 @@ E2E 全套在本機模式跑前後兩次，失敗清單與未套用本版變更�
 
 視覺覆驗抓到一個瑕疵並修掉：`.rpt-card` 是 `flex: 1 1 140px`，只有一檔的日本組會把卡片拉成整列寬。`.gix-groups .rpt-card` 加上 `max-width: 320px`，約束只落在新網格內，不動共用類別。
 
-未完成：`stock-price` Edge Function 尚未部署。推 `main` 不會部署 Edge，`cacheTtlMsFor` 的 `IDX:` 60 秒分支在部署前不會生效。
+使用者授權後部署 `stock-price` 到 DEV 與 PROD。DEV v17→v18、PROD v8→v9，兩邊 bundle 雜湊由 `11056263f7a843fc` 變為 `1067c30dfcbee8b6`（兩邊相同），`verify_jwt=true` 未變 —— `stock-price` 不帶 `--no-verify-jwt`，那是 `stock-report` 才需要的。
+
+生效證明不看版號、只看行為：間隔 92 秒呼叫兩次 `prices` action，DEV `asOf` 由 `03:46:01` 變 `03:47:33`、PROD 由 `03:46:02` 變 `03:47:35`，兩邊都重新抓取。舊的 10 分鐘 TTL 下第二次會回同一個 `asOf`。
+
+部署過程踩到一次已記錄的陷阱：這個 shell 的 `SUPABASE_ACCESS_TOKEN` 屬於另一個帳號的組織，`functions list` 回 403 privileges。每一道 supabase 指令都要用 `env -u SUPABASE_ACCESS_TOKEN` 執行，不要因為 403 就去重新登入或換 token。
 
 ## 📅 Log: 2026-09-15 10:05:00 Asia/Taipei (P1~P4 系統架構、部署與測試文檔同步)
 
