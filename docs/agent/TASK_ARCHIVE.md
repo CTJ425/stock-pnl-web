@@ -1,4 +1,22 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
+### Task 163: 交接文件的總體經濟頁描述缺口，與未查完的 SPEC / PLAN 段落
+- **Status**: ✅ DONE (0.9.55)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-15 14:44:45 Asia/Taipei
+- **A 完成**: `README.md` 與 `SPEC.md` 都補上總體經濟的三個子分頁（台股 / 美國經濟 / 國際指數）；`PLAN.md` 新增 §T，涵蓋 Macro 與 Fx 兩頁的架構、為何不共用 `priceProxy.fetchPrices`（`Market` 是持股與損益的型別，且其 L1 快取對非台股是 10 分鐘）、以及美股時段判斷為何不能寫死時差。
+- **B 完成**: `SPEC.md` 與 `PLAN.md` 先前未涵蓋的段落補查完畢，只再找到 2 條並已修：`timeline.ts` 的測試數 29 → **23**（實測），以及 0.9.54 引入的錯誤行號 `schema.sql:710`（那行在註解裡）→ **728**。`PLAN.md` §M3 標註為 0.6.0-dev.1 的歷史決策 —— schema 早已把 `ai_*` 從 `user_settings` 移到 `app_settings`。
+- **附帶撤回**: 稽核一度報出 `schema.sql` 有兩個 `cron.schedule` 在線上不存在。那兩行在 `--` 註解裡，是已退役排程的還原範例。排除註解後 7 個排程與線上逐一相同，不需修改。
+
+### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
+- **Status**: ✅ DONE (0.9.55)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-15 14:44:45 Asia/Taipei
+- **Spec**: `docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`
+- **Done**: BUG-063..BUG-071（0.9.34 / 0.9.35）；`OPT-1` 路由層 `React.lazy` 分割（0.9.55）；`OPT-2` `IntradayChart` memo 穩定化（0.9.55）。
+- **OPT-1 結果**: `MacroPage`、`FxPage`、`AdminConsolePage` 都不在首屏路徑上。改為 `React.lazy` 後 bundle 由單檔拆成四塊 —— `FxPage` 9.85 kB、`MacroPage` 37.21 kB、`AdminConsolePage` 70.04 kB，`index` 從超過 500 kB 降到 **496.62 kB**，Vite 的 chunk 警告消失。具名匯出要用 `.then((m) => ({ default: m.X }))` 轉成 `default`。
+- **OPT-2 結果**: `series?.points ?? []` 每次 render 都產生新陣列，讓下游三個 `useMemo`（VWAP、價格區間、成交量區間）全部失效並串連重繪。改為模組層 `EMPTY_POINTS` 常數後，三條 `react-hooks(exhaustive-deps)` 警告消失。
+- **驗證**: 123 檔 / 1,976 條測試、`npm run build`、`npm run typecheck:edge`、`npm run lint` 皆 exit 0；`npm audit` 0 vulnerabilities；**E2E 全套 16/16 exit 0**（Supabase 模式真瀏覽器 —— 延遲載入最可能壞在分頁切換，這是本次的關鍵驗證）。
+
 ### Shipped history (rolled from TASK.md 2026-09-15 13:50:00 Asia/Taipei)
 
   - Shipped 2026-09-15: 清除 PDF 時代的死註解、以實測更正 README 的部署敘述（0.9.53）。
