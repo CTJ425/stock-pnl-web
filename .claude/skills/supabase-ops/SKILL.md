@@ -116,3 +116,22 @@ changes the Edge side only; the cron commands still carry the old value and star
 answering 401. Change both in the same session, then re-hash to prove they match:
 `encode(sha256(convert_to(<the value in the command>,'UTF8')),'hex')` must equal the hash
 `supabase secrets list` prints. Never print either value.
+
+## DEV and PROD identity, and where DDL lands
+
+Both cloud projects were recreated on 2026-08-31, from setup SQL whose placeholders were
+never substituted. Any older ref returns `404 Resource has been removed`, and `sources/.env`
+may still point at a dead one. Do not check this by eye — run `verify_setup()`.
+
+- PROD is cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web"), on branch `main`.
+- DEV is cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev"), on branch `dev`. It is what
+  `supabase link` points at. `sources/.env` points at `https://zyebvayngwrqzoaicbwd.supabase.co`,
+  and DEV Edge runs there (`functions list` shows 3 ACTIVE). Verified 2026-09-01.
+- DEV DDL goes through `supabase db query --linked` from `sources/`, always with an identity
+  value in the same query.
+- To tell DEV from PROD, use
+  `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%')`, **not** a job
+  count: the count is identical on both projects, and it changed from 6 to 7 on 2026-09-06
+  when `app-log-prune` was added.
+- A local docker stack (`stock-pnl-web-dev-db-1`) still runs on this host and answers every
+  check plausibly, but the app never talks to it — a DDL applied there has no effect on DEV.
