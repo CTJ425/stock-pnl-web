@@ -1,11 +1,28 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Claude
-- Action: 清除 PDF 時代的死註解，並以實測更正 README 的部署敘述（0.9.53）
+- Agent: Antigravity
+- Action: 依稽核發現完成 P1~P4 架構、部署、測試與規格文檔全面校正同步
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-15 09:30:27 Asia/Taipei
+- Timestamp: 2026-09-15 10:05:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-15 10:05:00 Asia/Taipei (P1~P4 系統架構、部署與測試文檔同步)
+
+依據稽核發現全面完成 P1~P4 文檔校正與現況同步：
+1. **P1 (部署安全與 Edge 規範)**：
+   - `docs/CLAUDE-tw.md`：更正 Edge Functions 部署指令，明確區分 `stock-price` 與 `ai-proxy` 維持 `verify_jwt=true`，而 `stock-report` 與 `backup-transactions` 帶 `--no-verify-jwt`；移除已廢除之 `architect` 角色與不存在之 `.claude/hooks/` 參照。
+   - `sources/supabase/README.md`：新增 `ai-proxy` 部署說明（共 4 支 Edge Functions），更新 `backup-transactions`（含 `r2.ts`、`cronSecret.ts` 共 4 檔）與 `stock-report`（18 檔）、`stock-price`（7 檔）檔數；移除已廢棄之 PDF 下載與 Google News RSS 描述。
+2. **P2 (專案總覽現狀同步)**：
+   - `README.md`：移除 PDF 下載說明與死依賴（`jsPDF` / `html2canvas`）、目錄樹清除 `newsProxy` 與 `reportPdf`；更新測試規模至 121 檔 / 1,947 tests (100% PASS)；更正 pg_cron 排程數至 7 個；更新 AI proxy 架構與 Edge 4 支函數說明。
+3. **P3 (追蹤檔案 Size Discipline 與缺陷分析)**：
+   - `docs/agent/TASK.md`：將 Task 145 已完成項目 (BUG-063..071) 收攏為 `- **Done**: `，保留待處理的 OPT-1 / OPT-2；清除 Task 132/133 過時之 Docker Compose 敘述。
+   - `docs/agent/BUG_FIX.md` / `FIXED_BUG.md`：將已於 PROD 配置之 Supabase Redirect URLs 移至 `FIXED_BUG.md` (BUG-082)；完成 BUG-079 程式碼深入分析，釐清 `estimateUnrealized`（取自 lot.feeRate）與 `breakEvenPrice`（取自 workspace feeRate 導致 0.6 解讀歧異）之根本原因。
+4. **P4 (測試指南與架構歷程註記)**：
+   - `docs/UnitTests/`：移除過時之 Docker 網域 `korq9tvdz0jd7yblr72p.ivan.lab` 並替換為 Supabase Cloud DEV ref `zyebvayngwrqzoaicbwd`；將 `backup-transactions`、`ai-proxy`、`stock-price` 之單元測試補入 `README.md` 與 `UNIT.md`；於 `E2E.md` 完整列出 10 支 E2E 與驗證腳本。
+   - `docs/agent/SPEC.md` / `PLAN.md`：同步個股分析頁三層分頁結構（`analysis` 含籌碼/基本面/技術面、`whatif` 損益試算、`ai` AI分析）；註記已移除之 PDF / html2canvas；更新 0.9.51 AI proxy 金鑰隔離架構；釐清 `PLAN.md` 中 Cloudflare Worker 廢除與 R2 異地備份採用之邊界。
+
+全套驗證：`npm test` 121 檔 / 1,947 測試 100% 通過；`npm run typecheck:edge`、`npm run build`、`npm run lint` 全數 exit 0。
 
 ## 📅 Log: 2026-09-15 09:16:32 Asia/Taipei (0.9.53, 死註解清理與部署敘述更正)
 
@@ -24,16 +41,4 @@ README 步驟 9-1 原本明寫「本專案沒有前端自動部署」，已更�
 **PROD 的 SQL 無法由 CLI 執行。** `supabase link --project-ref hrilemueiqyaoiwnkeuu` 回 `LegacyLinkAuthTokenError`，而且**對 DEV 執行同一條指令也回一樣的錯**，所以不是 PROD 權限不足，是 `link` 走的舊端點目前的憑證存取不到；現有的 DEV 連結是先前留下的殘存狀態，失敗的 link 沒有把它清掉。`db query --linked` 因此只能打到 DEV。剩下的路是 Supabase 後台的 SQL Editor（`--db-url` 需要資料庫密碼，會把密碼寫進指令列與對話記錄，本 repo 公開，不採用）。`functions deploy --project-ref` 是另一條驗證路徑，不受此問題影響。
 
 **守衛已驗證有效**：帶身分守衛的 `prod-verify.sql` 對 DEV 執行時回 `is_dev=true` / `is_prod=false`，同時確認 DEV 的 0.9.51 遷移七項全部正確（`auth_reads_key=false`、`auth_execs_rpc=true`、`rpc_key_len=0` 等）。若誤把 `prod-partA.sql` / `prod-partB.sql` 打到 DEV，守衛會在同一個交易內 RAISE 並整批 rollback。
-
-## 📅 Log: 2026-09-15 08:58:24 Asia/Taipei (0.9.52, 相依漏洞清理)
-
-例行檢查 GitHub 與本機狀態時，`npm audit` 報出 `jspdf@3.0.4` 一個 critical 與連帶的 `dompurify` moderate。使用者問了關鍵的一句：PDF 功能不是已經拿掉了嗎。查證結果是**只拔了一半** —— UI 按鈕在 0.9.17（`11516cd`）移除並有測試鎖住，但 `generatePdfBlob()`、它的兩個動態 `import()`、以及 `package.json` 的兩個相依都還在，沒有任何正式程式呼叫它。
-
-**因此選擇移除而不是升級。** `jspdf@4.2.1` 是 major 升級，為一個沒有呼叫者的函式承擔破壞性變更不划算。刪除 `generatePdfBlob()` 與 `pdfScaleFor()`、`reportPdf.test.ts`、以及 `index.css` 的 `.report-surface` 區塊；**`downloadBlob()` 必須保留**，`AppShell.tsx` 與 `Admin/BackupsSection.tsx` 用它下載備份檔。順手清掉 `QuoteTab.tsx` 一段引用早已不存在的 CSS 規則的註解，以及三個測試檔的 stale mock。正式相依 6 → 4，`npm audit --omit=dev` 由 1 critical + 1 moderate 歸零。
-
-開發相依另有 5 個漏洞（`undici`、`nanoid` 為 high，`postcss`、`@vitest/mocker`、`vitest` 為 moderate），全在 `vitest` / `vite` 相依鏈上。`npm audit fix` 在現有 semver 範圍內修完，`vitest` 只從 4.1.10 走到 4.1.11，`package.json` 沒變。
-
-驗證：`npm run lint` / `npm run build` / `npm run typecheck:edge` / `npm test` 四道皆 exit 0，121 檔 **1,947** 條測試全過。測試數比 0.9.51 少 5 條，差額正好是刪掉的 `reportPdf.test.ts`。全專案 `npm audit` 為 0 vulnerabilities。
-
-**留待決定**：`Charts/` 底下 6 個檔案的註解仍在解釋「顏色寫死是因為 html2canvas 無法解析 CSS 變數」。該限制已不存在，但顏色仍在使用，清理會擴散到配色決策。
 

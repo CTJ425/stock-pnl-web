@@ -6,6 +6,14 @@
 
 ---
 
+### Bug ID: BUG-082 — Supabase Redirect URLs allow-list 未包含前端正式站與預覽網址
+- **Date**: 2026-09-10 (configured on PROD)
+- **Where**: Supabase Dashboard → Auth Settings → Redirect URLs (`authRedirect.ts`)
+- **Symptom**: 註冊或重設密碼驗證信連結轉導若未包含前端網址，重導目標會被替換或落回預設 site_url。
+- **Root Cause**: 專案初期未設定 `uri_allow_list`，過去從 localhost 或 preview 網址觸發密碼重設時，重導目標會被替換為 site_url，使用者被送回正式站首頁。
+- **Fix**: 2026-09-10 經 Management API 將 `https://stock-pnl-web.pages.dev/**`、`https://*.stock-pnl-web.pages.dev/**` 以及 localhost 多個 port (5173..5175) 加入 PROD `uri_allow_list` 並回讀確認。
+- **Status**: ✅ CONFIGURED ON PROD (2026-09-10)
+
 ### Bug ID: BUG-081 — TPEx 上櫃端點連線中斷導致台股代號與中文查詢全面失敗
 - **Date**: 2026-09-14, fixed in 0.9.49
 - **Symptom**: 使用者在「加入觀察」或「新增交易」輸入台股代號（如 2330、6488）或中文（如「台積電」、「環球晶」）無法搜尋或反查，提示紅字「台股清單載入失敗」。

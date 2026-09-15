@@ -42,20 +42,17 @@
 
 ## 任務分派 (Task routing)
 
-**委派給下列 role 屬於常設授權**，不需要每次先問使用者。主 session 跑在全系統最貴的模型上，凡是便宜 role 能正確完成的工作，就不該留在主 session 做。各 role 的模型與 effort 定義在 `.claude/agents/*.md` frontmatter，切勿在此重複記載。
+**委派給下列 role 屬於常設授權**，不需要每次先問使用者。主 session 跑在全系統最貴的模型上，凡是便宜 role 能正確完成的工作，就不該留在主 session 做。除了架構規劃、規格與裁決外，主 session 也親自處理**失敗的測試**。下列四個角色為委派目標：
 
 | Role | 負責 | 主 session 不該做 |
 | ---- | ---- | ---- |
 | `scout` | 探勘檔案／呼叫者／測試，壓縮日誌與 stack trace | 超過約十餘次的探索性 Read/Grep |
-| `architect` | Spec、失敗測試、修 bug 計畫、裁決（主 session 在 Opus 上時可自行處理） | — |
 | `builder` | 依既有 spec 實作 | 修改 `sources/` 中大於單檔機械性變更的內容 |
 | `reviewer` | 依 spec 審查變更檔案 | 自己審自己的實作 |
 | `scribe` | `docs/agent/` 記錄維護、commit message | 手改 `TASK.md` / `PROGRESS.md` / bug 檔 |
 
 - **流程本體是 `route` skill**：功能開發、修 bug、處理 `TASK.md` 項目時載入它，由它決定 lane 分級、派工順序、handoff 格式與升級規則。
-- 兩條成本紅線讓這件事誠實：一次派工固定成本 5–15k tokens；實測完整 loop 跑瑣碎任務要 3.5 倍 token。人類 20 分鐘內能做完的，留在主 session（Lane 0）——那也是一種 routing 決策。
-- Role 邊界由 `.claude/hooks/routing_guard.py` 強制，不是靠自律。被擋下代表你越界了：重新分派，不要繞過。逃生門：`ROUTING_MAIN=off`、`ROUTING_GUARD=off`。
-- routing 有沒有真的發生是可量測的，計畫不算證據：`python3 .claude/hooks/routing_audit.py`。
+- **依 context 足跡而非任務規模分派**：已在 context 內的內容做修改維持 inline；需讀取大量檔案或超過 32KB 檔案時務必委派給 subagent，避免膨脹主 session 的每輪重播成本。
 - 這裡分派的**只有委派工作**。主 session 的模型由 `/model` 決定，不是由本檔案決定。
 
 ## 版本控制 (Versioning)
@@ -73,6 +70,9 @@
 
 - **務必先 commit 至 `dev`**；在 DEV 環境驗證無誤後才合併至 `main`。`main` 的 push 會自動部署前端。
 - PROD 與 DEV 皆為 Supabase 雲端專案（無 Docker 環境）。
-- Edge Functions 部署：`supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`。
+- Edge Functions 部署：
+  - `stock-price` 與 `ai-proxy` 需開啟 JWT 驗證（`verify_jwt=true`，不加 `--no-verify-jwt` 旗標）：`supabase functions deploy <name> --project-ref <ref>`（前端以使用者 JWT 呼叫）。
+  - 背景排程觸發的函數（`stock-report`、`backup-transactions`）需關閉 JWT 驗證：`supabase functions deploy <name> --project-ref <ref> --no-verify-jwt`（pg_cron 帶 `x-cron-secret` 呼叫、不帶 JWT）。
 - 唯讀查詢可自由執行。操作坑洞（含 `stock-report` 於雲端需加 `--no-verify-jwt`）參見：**`supabase-ops`** skill。
+
 

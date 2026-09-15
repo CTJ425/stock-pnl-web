@@ -5,7 +5,7 @@
 Real browser against:
 
 1. **Native/local mode** — Vite, no Supabase env (default for agents)  
-2. **Supabase mode** — DEV (`korq9tvdz0jd7yblr72p.ivan.lab`) or PROD front end + real session  
+2. **Supabase mode** — DEV (Supabase Cloud ref `zyebvayngwrqzoaicbwd`) or PROD front end + real session  
 
 **No** `npm run e2e` and **no** Playwright CI suite today. E2E is opt-in:
 
@@ -13,7 +13,15 @@ Real browser against:
 | ---- | ---- |
 | `.claude/skills/verify/SKILL.md` | Agent Playwright / native checklist |
 | `.claude/skills/testing/SKILL.md` | Layer choice + `npm test` gate |
+| `sources/scripts/run-all-e2e.cjs` | Master runner for full verification suite |
 | `sources/scripts/verify-admin-status.cjs` | Admin 「抓取狀況」 multi-viewport layout scan |
+| `sources/scripts/verify-watchlist-e2e.cjs` | Watchlist panel layout & modal portal verification |
+| `sources/scripts/verify-whatif-e2e.cjs` | What-If calculation & cross-screen balance agreement |
+| `sources/scripts/verify-stock-search-e2e.cjs` | TW stock search & fallback lookup verification |
+| `sources/scripts/verify-daytrade-short-e2e.cjs` | Day-trade & short sale P&L verification |
+| `sources/scripts/verify-fee-rate-e2e.cjs` | Brokerage fee discount rate UI verification |
+| `sources/scripts/verify-quote-intraday-e2e.cjs` | Intraday quote chart verification |
+| `sources/scripts/verify-macro-turnover.cjs` | US macro series & turnover verification |
 
 ```bash
 cd sources && npx playwright install chromium   # first time

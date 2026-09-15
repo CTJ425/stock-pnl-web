@@ -85,15 +85,14 @@
 19. The 交易紀錄 empty-state copy says 「點右下角『新增交易』…或用『匯入 CSV』」, but at ≤720 px the add button is icon-only and 匯入 CSV sits in the 「工具」 sheet. — ⏳ batch 3
 
 ### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
-- **Status**: ⏳ **OPEN — Specified & Handover Ready (Spec 145)**
+- **Status**: 🔄 **IN PROGRESS — BUG-063..071 shipped; OPT-1 & OPT-2 remaining**
 - **Agent**: Antigravity
 - **Timestamp**: 2026-09-04 23:05:00 Asia/Taipei
 - **Spec**: `docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`
-- **What is this**: Comprehensive audit across calculation engines, Edge Functions, data parsers, and UI components:
-  1. **P0 Data & Calculation Integrity**: Fix CSV export/import losing borrow fee (`csv.ts:262, 325`), `proposeFeeCorrections` omitting borrow fee on short sales and leaving `fee_rate` desynced (`fees.ts:163`, `RecalcFeesModal.tsx:55`), and `StockSplitModal` miscalculating short-cover buys and ignoring short sells (`StockSplitModal.tsx:50`). (Fixed in 0.9.34 BUG-063..065).
-  2. **P1 Capacity & Availability**: Address PostgREST 1000-row silent query truncation across 7 locations (`dataProvider.ts:312`, `backup-transactions`, `stock-report`); fix `AnalysisPage.tsx:84` rowKey collision preventing selection of short positions; fix pure short position passing `qty: 0` to What-If tab; guard `stock-report` manifest publication on complete batch failure (`index.ts:3111`).
-  3. **P2 & Optimizations**: Timing-safe comparison in `backup-transactions`; duplicate key & sell label fix in `YearlyPage.tsx`; route-level `React.lazy()` code splitting for `AdminConsolePage`, `MacroPage`, and `FxPage` in `AppShell.tsx`; memo stabilization in `IntradayChart.tsx`.
-- **Roadmap**: Ready for implementation of remaining phases per `Spec 145`.
+- **Done**: BUG-063..BUG-071 (shipped in 0.9.34 and 0.9.35, details in Spec 145 and `FIXED_BUG.md`)
+- **Remaining**:
+  - `OPT-1`: Route-level `React.lazy()` code splitting for `AdminConsolePage`, `MacroPage`, and `FxPage` in `AppShell.tsx`.
+  - `OPT-2`: Memo stabilization in `IntradayChart.tsx` (module-level `EMPTY_POINTS` constant to avoid cascading re-renders).
 
 ### Task 144: Admin Enhancements, Execution Logs, Resource Usage & Multi-Target Backups
 - **Status**: 🔄 **IN PROGRESS — Features 1 & 4 shipped (0.9.49)**
@@ -146,7 +145,7 @@
 - **Timestamp**: 2026-09-10 15:41:33 Asia/Taipei（原開立 2026-08-31 16:45:40）
 - **What is this**:
   - ~~Add app origin to Supabase Redirect URLs allow-list (`authRedirect.ts`).~~ ✅
-  - In DEV compose `.env`, update `ADDITIONAL_REDIRECT_URLS` and `SITE_URL` —— ⏳ 本次的 access token 讀不到 DEV 的 auth 設定（權限不足），未驗證。
+  - In DEV (Supabase Cloud `zyebvayngwrqzoaicbwd`), update `ADDITIONAL_REDIRECT_URLS` and `SITE_URL` in Auth Settings —— ⏳ 本次的 access token 讀不到 DEV 的 auth 設定（權限不足），待有管理員權限時於 Supabase 控制台或 API 驗證。
 
 **PROD 設定內容（2026-09-10 經 Management API 寫入，並以獨立查詢回讀確認）**
 
