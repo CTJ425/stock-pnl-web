@@ -74,6 +74,13 @@ export function changeLabel(close: number, prevClose: number | null): string | n
 }
 
 /** Cumulative VWAP (均價): running sum(c·v) / running sum(v); null until the first traded bar. */
+/**
+ * OPT-2 (Task 145): a fresh `[]` on every render made `points` a new reference whenever
+ * `series` was absent, which invalidated every `useMemo` below it and cascaded re-renders.
+ * One module-level constant keeps the identity stable.
+ */
+const EMPTY_POINTS: IntradayPoint[] = []
+
 function vwapSeries(points: IntradayPoint[]): Array<number | null> {
   let pv = 0
   let vol = 0
@@ -158,7 +165,7 @@ export function IntradayChart<R extends TrendRange>({
   const [hover, setHover] = useState<number | null>(null)
   const clipId = useId().replace(/:/g, '')
 
-  const points = series?.points ?? []
+  const points = series?.points ?? EMPTY_POINTS
   const prevClose = series?.prevClose ?? null
   const intraday = isIntradayRange(range)
   /**

@@ -3,7 +3,7 @@
  *
  * The right side of the top page is reduced from 8 control items to 2 menus in 0.6.5-dev.3. For the reason, see docs/agent/PLAN.md §R.
  */
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, Suspense, lazy, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   ArrowRightLeft,
@@ -45,9 +45,20 @@ import { HeaderMenu } from './Common/HeaderMenu'
 import { ToastProvider, useToast } from './Common/Toast'
 import { ConfirmProvider, useConfirm } from './Common/useConfirm'
 import { AnalysisPage } from './StockDetail/AnalysisPage'
-import { MacroPage } from './Macro/MacroPage'
-import { FxPage } from './Fx/FxPage'
-import { AdminConsolePage } from './Admin/AdminConsolePage'
+/**
+ * OPT-1 (Task 145): these three pages are route-level split points. None of them is on the
+ * first paint path — 總體經濟, 外幣匯率 and the admin console are all reached by a tab click —
+ * so keeping them in the entry chunk only grew the bundle every user downloads.
+ * `.then` maps the named export onto `default`, which is what `lazy` expects.
+ */
+const MacroPage = lazy(() => import('./Macro/MacroPage').then((m) => ({ default: m.MacroPage })))
+const FxPage = lazy(() => import('./Fx/FxPage').then((m) => ({ default: m.FxPage })))
+const AdminConsolePage = lazy(() =>
+  import('./Admin/AdminConsolePage').then((m) => ({ default: m.AdminConsolePage })),
+)
+
+/** Same markup as the workspace-loading placeholder above, so a split page does not flash a different shape. */
+const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</div>
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
 import { buildSelfExport } from '../services/selfExport'
@@ -876,11 +887,15 @@ export function AppShell() {
                   />
                 )}
                 {view === 'analysis' && <AnalysisPage initialTicker={analysisTicker} />}
-                {view === 'macro' && <MacroPage />}
-                {view === 'fx' && <FxPage />}
+                {view === 'macro' && <Suspense fallback={PAGE_FALLBACK}><MacroPage /></Suspense>}
+                {view === 'fx' && <Suspense fallback={PAGE_FALLBACK}><FxPage /></Suspense>}
                 {view === 'yearly' && <YearlyPage />}
                 {view === 'transactions' && <TransactionsPage />}
-                {view === 'admin' && <AdminConsolePage onExit={() => setView('dashboard')} />}
+                {view === 'admin' && (
+                  <Suspense fallback={PAGE_FALLBACK}>
+                    <AdminConsolePage onExit={() => setView('dashboard')} />
+                  </Suspense>
+                )}
               </>
             )}
           </main>

@@ -355,6 +355,14 @@ Or `http://localhost:11434/v1` must be available.
 
 ### M3. The collateral impact of key storage (the cost of selecting `user_settings` has been confirmed with the user)
 
+> ⚠️ **Superseded — this section records the 0.6.0-dev.1 decision, not current behaviour.**
+> `user_settings` held the `ai_*` columns for one dev revision only. From 0.6.0-dev.2 the
+> settings moved to the app-wide `app_settings` table, and `schema.sql:173-177` now DROPs all
+> five `ai_*` columns from `user_settings`. Since 0.9.51 the Google key does not reach the
+> browser at all — `ai-proxy` reads it server-side with the service role (see §T and Task 161).
+> The reasoning below is kept because it explains a decision that was actually made; do not
+> read it as a description of the schema.
+
 - schema demand `user_settings` (`ai_provider` / `ai_base_url` / `ai_model` / `ai_api_key` /
   `ai_updated_at`), see `sources/supabase/schema.sql` for writing method §4.1 —— Use
   `ALTER ... ADD COLUMN IF NOT EXISTS`, because `CREATE TABLE IF NOT EXISTS` does not fill in the fields for the existing environment.
@@ -854,3 +862,56 @@ Keeping the cause of "375px collapsed into 39px" will only mislead the next pers
   71px / 59px, both are single columns without wrapping; 414px is 79px / 65px.
 - When scrolled to the bottom, the GitHub link is clickable, the badge is above the navigation bar and does not overlap with the floating button (320px does not overlap either).
 - When zooming the window 1280 → 375 → 1280, the navigation bar is correctly transposed and **the current tab will not be reset**.
+
+---
+
+## 📐 §T. Macro page and Fx page (added 2026-09-15, Task 163)
+
+These two top-level pages shipped long before this section existed. §Q covers the FRED
+trade-off only, so the page structure went undocumented until the 2026-09-15 documentation
+audit found it missing.
+
+### T1. `MacroPage.tsx` — three subtabs, three different data paths
+
+`MacroSubTab = 'tw' | 'us' | 'world'`. One panel renders at a time, so switching away unmounts
+the previous panel and stops whatever timer it owned.
+
+| Subtab | Component | Path to data |
+| --- | --- | --- |
+| `tw` | `TwIndexToday` + `TwMarketSection` | `stock-price` Edge, action `intraday`, symbol `{ market: 'IDX', ticker: '^TWII' }`; plus `market/daily.json` in the `reports` bucket, written by the `market-data-daily` cron |
+| `us` | `UsMacroPanel` | `macro/us.json` in the `reports` bucket, written by the `macro-daily` cron from FRED |
+| `world` | `GlobalIndices` | `stock-price` Edge, action `prices`, 8 symbols with `market: 'IDX'` |
+
+Only `world` talks to the network from the browser on a timer. `tw` and `us` read a file the
+nightly batch already wrote.
+
+### T2. Why `world` does not share `priceProxy.fetchPrices`
+
+Two reasons, both structural:
+
+- `PriceRequestItem.market` is typed `Market = 'TPE' | 'US'` (`sources/src/types/models.ts`).
+  `Market` is the holdings and P&L type. Widening it for a display-only feature would let a
+  display requirement reach money code.
+- `fetchPrices` holds an L1 `localStorage` cache whose non-`TPE:` TTL is 10 minutes. A 60 s poll
+  would read a stale value for up to 10 of those minutes.
+
+`sources/src/services/indexQuotes.ts` exists instead: display only, no cache, no `Market` import.
+The Edge side needed one line — `cacheTtlMsFor` returns 60 s for an `IDX:` key, leaving the `TPE:`
+and `US:` branches untouched.
+
+### T3. `sessionHours.ts` — the session rule, and the one trap in it
+
+Each market is judged on its own clock: 日本 09:00–15:30 with an 11:30–12:30 break, 韓國
+09:00–15:30, 美國 09:30–16:00. The open bound is inclusive, the close bound exclusive.
+
+**The US offset is never hardcoded.** `Intl.DateTimeFormat` with `timeZone: 'America/New_York'`
+and `hourCycle: 'h23'` supplies both the local time and the local weekday, so DST needs no
+calendar of its own. Use `hourCycle: 'h23'`, not `hour12: false` — the latter can return hour `24`.
+
+Public holidays are out of scope. A holiday reads as `open` and simply returns the last close.
+
+### T4. `FxPage.tsx`
+
+Eight currencies quoted against TWD, mid-market rates, written by the `fx-daily` cron and read
+through `fxProxy.ts`. Charts cover 3 months / 6 months / 1 year and draw both directions. These
+are market mid rates, not a bank's board rate — the UI says so, and that wording is deliberate.

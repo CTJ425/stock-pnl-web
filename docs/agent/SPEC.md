@@ -196,7 +196,7 @@ A complete description of the sources and batch behavior can be found in `source
 Market-wide volume and the institutional **amounts** (BFI82U) are not part of `generate-all` —— they have nothing to do
 with the holdings list and must not be short-circuited by it. Since 0.6.38 the schedule is
 **`0 10,14 * * 1-5` (UTC) = Taipei 18:00 / 22:00**, the live `market-data-daily` job
-(`sources/supabase/schema.sql:710`). Verified against `cron.job` on DEV 2026-09-15.
+(`sources/supabase/schema.sql:728`). Verified against `cron.job` on DEV 2026-09-15.
 
 - **Why it can start at 15:00**: TWSE announces BFI82U around 15:00–15:30. The old fear was that an early round
   would be "a wasted trip", but `syncMarket` compares a content signature and, when nothing changed, returns
@@ -476,17 +476,39 @@ You will only get a yellow light that is always on, and an alarm that is always 
 
 - Didn’t get it and **not arrived** `dueBy` → `idle` (waiting), not late. There is a regular gap every evening.
 - The monthly frequency indicator's lagging determination is compared with other indicators in the same group, without checking the release calendar (which is a constant table that will inevitably expire).
-- Determination and coordinate calculation are all in `src/components/Admin/timeline.ts` (pure function, 29 tests).
+- Determination and coordinate calculation are all in `src/components/Admin/timeline.ts` (pure function, 23 tests).
 
 ### Layout
 
 Timeline (15:00 on the current day → 10:00 on the next day) → Schedule → Total menstrual period → Exchange rate and file coverage.
 The total period of the monthly frequency is not placed on the daily axis: its rhythm is "which period arrives" rather than "what time it arrives".
 
-## General Economy Page (0.6.5)
+## General Economy Page (0.6.5, three subtabs since 0.9.54)
 
-**Top-level page** "General Economy" (from 0.6.5-dev.2; dev.1 was once a page for individual stock analysis),
-The data comes from `macro/us.json` (**global single file, not per-ticker**).
+**Top-level page** "General Economy" (from 0.6.5-dev.2; dev.1 was once a page for individual stock analysis).
+
+`MacroPage.tsx` holds three subtabs, `MacroSubTab = 'tw' | 'us' | 'world'`:
+
+| Subtab | Label | Source |
+| --- | --- | --- |
+| `tw` | 台股 | `^TWII` intraday bars from the `stock-price` Edge `intraday` action; market turnover and institutional amounts from `market/daily.json` |
+| `us` | 美國經濟 | `macro/us.json` (**global single file, not per-ticker**), five FRED series |
+| `world` | 國際指數 | 8 foreign indices from the `stock-price` Edge `prices` action with `market: 'IDX'` |
+
+The sections below describe the `us` subtab unless they say otherwise.
+
+### `world` — global indices (0.9.54)
+
+`^N225`, `^KS11`, `^KQ11`, `^DJI`, `^GSPC`, `^IXIC`, `^SOX`, `^RUT`, grouped 日本 / 韓國 / 美國 with a
+session badge per group. `^TOPX` is excluded on purpose: Yahoo answers HTTP 200 but
+`meta.regularMarketPrice` is `null`.
+
+`sessionHours.ts` decides the session from the market's own timezone — 日本 09:00–15:30 with an
+11:30–12:30 break, 韓國 09:00–15:30, 美國 09:30–16:00. **The US offset is never hardcoded**; DST comes
+from `Intl.DateTimeFormat` with `America/New_York`.
+
+Polling: every 60 s, and only for the regions `openRegions()` reports as open. No request goes out when
+every market is closed. The panel unmounts when the subtab changes, which stops the timer.
 
 | Indicators | Source Series (FRED) | Presentation |
 | ---- | ---- | ---- |
@@ -761,7 +783,7 @@ by year", which is the question a search box is asked.
 - An empty result says 找不到符合「x」的股票, which is a different sentence from（尚無交易紀錄）—— an empty
   ledger and a search miss are not the same thing.
 
-## Macro page: one card per region (0.6.38)
+## Macro page, `us` subtab: one card per region (0.6.38)
 
 The US chip row and the 近期走勢 table live in the same `.section.glass`. Split into two cards, the
 資料更新於 stamp and the 重新整理 button appeared to govern only the upper one, though they cover both.
