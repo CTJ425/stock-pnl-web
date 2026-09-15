@@ -5,6 +5,14 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-14 15:29:05 Asia/Taipei (Task 160 R2 removed from scope)
+
+使用者決定把 Cloudflare R2 移出 Task 160 範圍。`sources/scripts/snapshot.cjs` 已刪除 `readR2Config`、`signR2Put`、`copyToR2` 與相關 SigV4 helper，`--to` 現在只接受 `local` 與 `storage`，未知目的地以離開碼 1 拒絕（先前是靜默記錄失敗）。四支腳本 `grep -ci r2` 皆為 0。刪除後重跑快照仍為 1.6 MB、EXIT 0。
+
+刻意保留、未動的三處：`supabase/functions/backup-transactions/r2.ts`（0.9.49 已進 repo，從未部署，無 `R2_*` secrets 時回報 skipped）、`stock-report/index.ts` 對 `r2_status` / `r2_error` 的讀取、以及 DEV `backup_run_log` 的那兩個欄位。**那兩個欄位不可以刪** —— `stock-report/index.ts:3867` 的 SELECT 指名了它們，PostgREST 遇到不存在的欄位會讓整個請求失敗，一旦該函式被部署，後台備份頁會整頁掛掉。
+
+代價要說清楚：快照包現在沒有任何存在於 Supabase 帳號之外的副本。`local` 是爆炸半徑圖裡唯一在專案被刪除後還活著的目的地。這是覆蓋率的實質下降，不是中性的簡化。
+
 ## 📅 Log: 2026-09-14 15:10:00 Asia/Taipei (Task 160 Phase A complete)
 
 Task 160 第一階段完成。三支維運腳本寫好並對 DEV 實測（除破壞性步驟外）。

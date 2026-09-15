@@ -1,11 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: AI 金鑰移出瀏覽器（Task 161）、CI 測試閘門、條件式 hook 與 lint 修補、刪除正式站樣板檔
+- Action: 移除未使用的 PDF 產生器與 jspdf / html2canvas 相依，並修補開發相依的 5 個漏洞（0.9.52）
 - Status: **✅ COMPLETED**
-- Timestamp: 2026-09-14 19:29:33 Asia/Taipei
+- Timestamp: 2026-09-15 08:58:24 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-15 08:58:24 Asia/Taipei (0.9.52, 相依漏洞清理)
+
+例行檢查 GitHub 與本機狀態時，`npm audit` 報出 `jspdf@3.0.4` 一個 critical 與連帶的 `dompurify` moderate。使用者問了關鍵的一句：PDF 功能不是已經拿掉了嗎。查證結果是**只拔了一半** —— UI 按鈕在 0.9.17（`11516cd`）移除並有測試鎖住，但 `generatePdfBlob()`、它的兩個動態 `import()`、以及 `package.json` 的兩個相依都還在，沒有任何正式程式呼叫它。
+
+**因此選擇移除而不是升級。** `jspdf@4.2.1` 是 major 升級，為一個沒有呼叫者的函式承擔破壞性變更不划算。刪除 `generatePdfBlob()` 與 `pdfScaleFor()`、`reportPdf.test.ts`、以及 `index.css` 的 `.report-surface` 區塊；**`downloadBlob()` 必須保留**，`AppShell.tsx` 與 `Admin/BackupsSection.tsx` 用它下載備份檔。順手清掉 `QuoteTab.tsx` 一段引用早已不存在的 CSS 規則的註解，以及三個測試檔的 stale mock。正式相依 6 → 4，`npm audit --omit=dev` 由 1 critical + 1 moderate 歸零。
+
+開發相依另有 5 個漏洞（`undici`、`nanoid` 為 high，`postcss`、`@vitest/mocker`、`vitest` 為 moderate），全在 `vitest` / `vite` 相依鏈上。`npm audit fix` 在現有 semver 範圍內修完，`vitest` 只從 4.1.10 走到 4.1.11，`package.json` 沒變。
+
+驗證：`npm run lint` / `npm run build` / `npm run typecheck:edge` / `npm test` 四道皆 exit 0，121 檔 **1,947** 條測試全過。測試數比 0.9.51 少 5 條，差額正好是刪掉的 `reportPdf.test.ts`。全專案 `npm audit` 為 0 vulnerabilities。
+
+**留待決定**：`Charts/` 底下 6 個檔案的註解仍在解釋「顏色寫死是因為 html2canvas 無法解析 CSS 變數」。該限制已不存在，但顏色仍在使用，清理會擴散到配色決策。
 
 ## 📅 Log: 2026-09-14 19:29:33 Asia/Taipei (0.9.51, Task 161 + 稽核 A2/A3/A4)
 
@@ -26,12 +38,4 @@ Google AI 金鑰不再進入瀏覽器。新增 `ai-proxy` Edge Function：前端
 **DEV（`zyebvayngwrqzoaicbwd`）已完成並實測。** DDL 以 `db query --linked` 套用，同一個查詢內含 `EXISTS (... cron.job ... LIKE '%zyebvayngwrqzoaicbwd%')` 守衛，不是 DEV 就 RAISE。驗證用 `has_column_privilege` 而非肉眼：`auth_reads_key=false`、`auth_reads_model=true`、`auth_reads_prompt=true`、`auth_can_update=true`、`auth_execs_rpc=true`、`anon_execs_rpc=false`、`security_definer=true`。Edge 部署後 `functions list` 顯示 `ai-proxy` ACTIVE v1、`verify_jwt=true`、sha `0e9155260cf390ce…`。實際打端點：無 Authorization 回 401、假 JWT 回 401、OPTIONS 回 200。附帶查到 DEV 的 `ai_provider` 是 `openai-compatible` 且沒有金鑰，所以 DEV 上跑不到 google 代理路徑。
 
 **PROD（`hrilemueiqyaoiwnkeuu`）尚未部署。** 部署指令被 Claude Code 的自動模式權限層以 `[Production Deploy]` 擋下，需要使用者另行授權或自行執行。另有一個環境陷阱要記住：`SUPABASE_ACCESS_TOKEN` 環境變數會蓋掉 `~/.supabase/access-token`，而這台機器上的那個變數屬於不相關的 `vuln-beacon` 專案 —— 帶著它時 `projects list` 看不到本專案、所有呼叫回 403。加 `env -u SUPABASE_ACCESS_TOKEN` 才會用到正確憑證。
-
-## 📅 Log: 2026-09-14 15:29:05 Asia/Taipei (Task 160 R2 removed from scope)
-
-使用者決定把 Cloudflare R2 移出 Task 160 範圍。`sources/scripts/snapshot.cjs` 已刪除 `readR2Config`、`signR2Put`、`copyToR2` 與相關 SigV4 helper，`--to` 現在只接受 `local` 與 `storage`，未知目的地以離開碼 1 拒絕（先前是靜默記錄失敗）。四支腳本 `grep -ci r2` 皆為 0。刪除後重跑快照仍為 1.6 MB、EXIT 0。
-
-刻意保留、未動的三處：`supabase/functions/backup-transactions/r2.ts`（0.9.49 已進 repo，從未部署，無 `R2_*` secrets 時回報 skipped）、`stock-report/index.ts` 對 `r2_status` / `r2_error` 的讀取、以及 DEV `backup_run_log` 的那兩個欄位。**那兩個欄位不可以刪** —— `stock-report/index.ts:3867` 的 SELECT 指名了它們，PostgREST 遇到不存在的欄位會讓整個請求失敗，一旦該函式被部署，後台備份頁會整頁掛掉。
-
-代價要說清楚：快照包現在沒有任何存在於 Supabase 帳號之外的副本。`local` 是爆炸半徑圖裡唯一在專案被刪除後還活著的目的地。這是覆蓋率的實質下降，不是中性的簡化。
 
