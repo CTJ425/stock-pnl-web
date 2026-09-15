@@ -11,9 +11,9 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
 - ♻️ **沒有新增任何 API、排程或資料表**：Edge Function `stock-price` 的 `prices` action 本來就不檢查 market 白名單，`yahooSymbols()` 對非 `TPE` 的 market 原樣回傳 ticker，8 檔指數一次 POST 取回。
 - 🧱 **刻意不共用 `priceProxy.fetchPrices`**：`PriceRequestItem.market` 綁在 `Market = 'TPE' | 'US'`，而 `Market` 是持股與損益的型別，放寬它等於讓顯示需求碰到金額計算；`fetchPrices` 的 localStorage 快取對非台股又是 10 分鐘，會讓 60 秒輪詢拿到舊值。改為新增 `indexQuotes.ts`，只做顯示、不持有快取、不匯入 `Market`。
 - ⏱️ **Edge 端只改一行**：`cacheTtlMsFor` 新增 `IDX:` 分支回 60 秒，`TPE:` 與 `US:` 分支未動。粗篩用的 `freshAfter` 不需跟著改 —— 它只放寬 DB 撈列的時間窗，逐列 TTL 仍由 `cacheTtlMsFor` 把超過 60 秒的 `IDX:` 列剔除。
-  - ⚠️ **推 `main` 不會部署 Edge Function。** 這一行在 `stock-price` 另行部署之前不會生效；未部署時畫面仍每 60 秒問一次，但拿到的報價最舊可能是 10 分鐘前的。
+  - **`stock-price` 已於同日部署 DEV（v17→v18）與 PROD（v8→v9）**，兩邊 bundle 雜湊同為 `1067c30dfcbee8b6`，`verify_jwt=true` 未變。推 `main` 不會部署 Edge Function，那是另外執行的一步。生效證明以行為為準，不看版號：間隔 92 秒呼叫兩次 `prices` action，DEV 的 `asOf` 由 `03:46:01` 變 `03:47:33`、PROD 由 `03:46:02` 變 `03:47:35`，兩邊都重新抓取；舊的 10 分鐘 TTL 下第二次會回同一個 `asOf`。
 - 🎨 **`.gix-groups .rpt-card` 加上 `max-width: 320px`**：`.rpt-card` 本身是 `flex: 1 1 140px`，只有一檔的日本組會把卡片拉成整列寬，與 5 檔的美國組寬度不一致。約束只加在新網格內，不動共用類別。
-- ✅ **驗證**：123 檔 / **1,976** 條測試全過；`npm run build`、`npm run typecheck:edge` 皆 exit 0。E2E 全套在本機模式跑過前後兩次，失敗清單與未套用本版變更的基準線**完全相同**（同樣 10 passed / 6 failed），其中 4 條是本機模式不顯示「總體經濟」「外幣匯率」等雲端限定頁所致，與本版無關。另以真瀏覽器對 DEV 專案實測 8 檔指數報價與 60 秒輪詢。
+- ✅ **驗證**：123 檔 / **1,976** 條測試全過；`npm run build`、`npm run typecheck:edge` 皆 exit 0。E2E 全套在本機模式跑過前後兩次，失敗清單與未套用本版變更的基準線**完全相同**（同樣 10 passed / 6 failed），所以本版沒有造成迴歸。後續查明那 6 條裡有 5 條是執行模式錯誤而非缺陷：該腳本要在 Supabase 模式下跑，改對模式後為 15/16，補上刪除確認 Modal 的點擊後 16/16（見 BUG-083）。另以真瀏覽器對 DEV 專案實測 8 檔指數報價與 60 秒輪詢。
 
 ### 0.9.53（2026-09-15）— 清除 PDF 時代的死註解，並更正 README 的部署敘述
 
