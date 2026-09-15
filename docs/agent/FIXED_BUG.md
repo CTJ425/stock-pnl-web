@@ -6,6 +6,22 @@
 
 ---
 
+### Bug ID: BUG-083 — `run-all-e2e.cjs` 在本機模式下 6 條假紅燈，且刪除交易的確認 Modal 從未被按下
+- **Date**: 2026-09-15，修復於 0.9.54 之後（只動腳本與文件，未動 `sources/src`，故不另外進版）
+- **Where**: `sources/scripts/run-all-e2e.cjs`、`docs/UnitTests/E2E.md`
+- **Symptom**: 全套 16 條在本機模式下只有 10 條通過。失敗的 6 條是：交易清單已無 0050、未實現損益雙行直顯、航運業自動成組、點擊聯電持股列、切換「外幣匯率」、切換「總體經濟」。
+- **Root Cause**: 兩個各自獨立的原因。
+  - **其中 5 條是跑錯模式，不是缺陷。** 這支腳本會塞 Supabase auth token 並用 `page.route` 接管所有後端呼叫，本來就要在 Supabase 模式下跑。本機模式下 `AppShell.tsx:106` 的 `SUPABASE_ONLY_TABS` 會把 個股分析／總體經濟／外幣匯率 整個從導覽列移除，報價來源也不會回應，所以那 5 條等的是永遠不會出現的元素。腳本沒有任何模式偵測，`docs/UnitTests/E2E.md` 又把本機模式寫成「代理人的預設」，兩者相加就會讀出 6 條假紅燈。
+  - **第 6 條「交易清單已無 0050」是腳本真的漏了一步。** 刪除交易走的是 App 自己的非同步確認 Modal（`sources/src/components/Common/useConfirm.tsx`，`confirmLabel: '刪除'`），不是原生 `window.confirm`。腳本第 97 行註冊的 `page.on('dialog')` 因此永遠不會觸發：它按下列上的刪除鍵之後就直接等該列消失，從沒按過 Modal 裡的「刪除」。這一條在 Supabase 模式下同樣會失敗。
+- **Fix**:
+  - `run-all-e2e.cjs` 刪除流程補上 `page.locator('[role="dialog"]').getByRole('button', { name: '刪除', exact: true }).click()`。
+  - `run-all-e2e.cjs` 在所有測項開始前加入 preflight：偵測到「本機模式」按鈕就印出原因並 `process.exit(2)`。此檢查**刻意放在 `runStep` 之外** —— `runStep` 會吃掉例外，放在裡面只會多紅一條、其餘 15 條照跑，再次產生同樣難懂的失敗清單。
+  - `docs/UnitTests/E2E.md` 標明這支腳本是「本機模式預設」的例外，補上正確的啟動指令與預期結果。
+- **Evidence**: 本機模式 10 passed / 6 failed → Supabase 模式 15 passed / 1 failed（證明 5 條是模式問題）→ 補上 Modal 點擊後 **16 passed / 0 failed，exit 0**。preflight 實測：本機模式下 2 秒內整批中止，exit 2。
+- **Status**: ✅ FIXED
+
+---
+
 ### Bug ID: BUG-082 — Supabase Redirect URLs allow-list 未包含前端正式站與預覽網址
 - **Date**: 2026-09-10 (configured on PROD)
 - **Where**: Supabase Dashboard → Auth Settings → Redirect URLs (`authRedirect.ts`)

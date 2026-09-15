@@ -672,6 +672,25 @@ async function captureCaseScreenshot(page, testCase) {
     await page.waitForTimeout(500)
   }
 
+  // -------------------------------------------------------------------------
+  // Preflight: the app under test must run in Supabase mode.
+  // This suite seeds Supabase auth tokens and serves every backend call from the
+  // page.route mocks above. Started with empty VITE_SUPABASE_* vars, AppShell drops
+  // 個股分析 / 總體經濟 / 外幣匯率 from the nav (SUPABASE_ONLY_TABS) and the price feed
+  // never answers, so 6 cases fail for the environment rather than for a defect.
+  // The check runs outside runStep on purpose: runStep catches, and a caught guard
+  // reddens one case while the other 15 run on and report the same confusing failures.
+  // -------------------------------------------------------------------------
+  await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 15000 })
+  await page.waitForSelector('.brand', { state: 'visible' })
+  if (await page.getByRole('button', { name: '本機模式' }).count()) {
+    console.error('\n❌ 受測站台是本機模式，這支腳本需要 Supabase 模式。')
+    console.error('   啟動 vite 時要帶 VITE_SUPABASE_URL 與 VITE_SUPABASE_ANON_KEY，再重跑。')
+    console.error(`   受測網址：${TARGET_URL}\n`)
+    await browser.close()
+    process.exit(2)
+  }
+
   // =========================================================================
   // SUITE 1: 模擬買賣交易核心流程
   // =========================================================================
@@ -906,8 +925,14 @@ async function captureCaseScreenshot(page, testCase) {
         const row = page.locator('tr:has(input[aria-label*="0050"])').first()
         const delBtn = row.locator('button[aria-label="刪除這筆交易"]')
         await delBtn.click()
+        // 刪除走的是 App 自己的確認 Modal（Common/useConfirm.tsx），不是原生 confirm，
+        // 所以上面註冊的 page.on('dialog') 永遠不會觸發，必須真的按下 Modal 裡的「刪除」。
+        await page
+          .locator('[role="dialog"]')
+          .getByRole('button', { name: '刪除', exact: true })
+          .click()
         await page.waitForTimeout(600)
-        return '觸發刪除確認'
+        return '按下確認 Modal 的「刪除」'
       })
 
       await runStep(tc, '驗證交易清單已無 0050', async () => {

@@ -7,13 +7,28 @@ Real browser against:
 1. **Native/local mode** — Vite, no Supabase env (default for agents)  
 2. **Supabase mode** — DEV (Supabase Cloud ref `zyebvayngwrqzoaicbwd`) or PROD front end + real session  
 
+> **`run-all-e2e.cjs` is the exception to "native mode by default" (BUG-083).** It seeds Supabase
+> auth tokens and answers every backend call from its own `page.route` mocks, so the app under test
+> must be built in Supabase mode. Run it against a vite started **with** `VITE_SUPABASE_URL` and
+> `VITE_SUPABASE_ANON_KEY`; no real project is contacted, the mocks intercept first.
+>
+> ```bash
+> cd sources && npx vite --port 5317 --host 127.0.0.1 &      # env from .env — Supabase mode
+> TEST_URL=http://127.0.0.1:5317/ node scripts/run-all-e2e.cjs   # expect 16/16, exit 0
+> ```
+>
+> In native mode `AppShell` drops 個股分析 / 總體經濟 / 外幣匯率 from the nav
+> (`SUPABASE_ONLY_TABS`) and the price feed never answers, so 6 cases fail for the environment
+> rather than for a defect. The script now refuses to run there: it exits 2 within two seconds
+> and names the cause.
+
 **No** `npm run e2e` and **no** Playwright CI suite today. E2E is opt-in:
 
 | Asset | Role |
 | ---- | ---- |
 | `.claude/skills/verify/SKILL.md` | Agent Playwright / native checklist |
 | `.claude/skills/testing/SKILL.md` | Layer choice + `npm test` gate |
-| `sources/scripts/run-all-e2e.cjs` | Master runner for full verification suite |
+| `sources/scripts/run-all-e2e.cjs` | Master runner for full verification suite — **Supabase mode only**, see below |
 | `sources/scripts/verify-admin-status.cjs` | Admin 「抓取狀況」 multi-viewport layout scan |
 | `sources/scripts/verify-watchlist-e2e.cjs` | Watchlist panel layout & modal portal verification |
 | `sources/scripts/verify-whatif-e2e.cjs` | What-If calculation & cross-screen balance agreement |
