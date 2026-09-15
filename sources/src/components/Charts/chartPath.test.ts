@@ -17,7 +17,7 @@ describe('lineSegments', () => {
   /*
     0.6.8 extracted the segmentation logic into an internal segments(), shared by the line and the area.
     This group is a **guard rail for unchanged behaviour** —— three call sites (chips, FX, technical moving
-    averages) and the PDF export depend on this output; changing one character of the format counts as breaking it.
+    averages) depend on this output; changing one character of the format counts as breaking it.
   */
   it('連續有值時輸出一段，座標為 x,y 空白分隔、各取兩位小數', () => {
     expect(lineSegments([1, 2, 3], geo)).toEqual(['5.00,1.00 15.00,2.00 25.00,3.00'])

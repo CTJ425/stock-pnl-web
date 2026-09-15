@@ -69,7 +69,7 @@ const MA_COLORS = {
   ma60: CATEGORICAL_COLORS[2],
 } as const
 
-/** Bollinger: mid aligns with MA20 orange; upper/lower use slate (literal for PDF) */
+/** Bollinger: mid aligns with MA20 orange; upper/lower use slate (literal, like every chart colour) */
 const BB_COLORS = {
   mid: CATEGORICAL_COLORS[1],
   upper: CHART_COLORS.bbUpper,

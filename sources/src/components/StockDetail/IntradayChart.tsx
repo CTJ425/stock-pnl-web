@@ -16,9 +16,8 @@ import { pickLabelIndices } from './technicalView'
 import { isIntradayRange, TREND_LABELS, type TrendRange } from './trendRange'
 
 /**
- * 均價 line colour: mirrors --accent-2 (index.css). Inline SVG here feeds html2canvas → PDF,
- * which cannot resolve CSS variables from ancestor stylesheets — the same reason chartColors.ts
- * keeps this as a literal (CHART_COLORS.vwap) instead of `var(...)`.
+ * 均價 line colour: mirrors --accent-2 (index.css). It stays a literal (CHART_COLORS.vwap) instead
+ * of `var(...)`, the same as every other chart colour — see chartColors.ts.
  */
 const VWAP_COLOR = CHART_COLORS.vwap
 

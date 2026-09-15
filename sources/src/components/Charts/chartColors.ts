@@ -1,8 +1,9 @@
 /**
- * Chart coloring. Taiwan stocks are conventionally marked with positive red and negative green, and both dark and light themes are readable with the light background of the PDF.
+ * Chart coloring. Taiwan stocks mark a rise in red and a fall in green. The palette stays readable
+ * on both the dark and the light theme ground.
  *
- * Literal values ​​are deliberately used here instead of CSS variables: when html2canvas retrieves inline SVG, it will serialize the SVG into images.
- * The CSS variables in the ancestor layer cannot be parsed, and the graphics in the PDF will turn black. The color scheme therefore does not change with the theme.
+ * The values are literals, not CSS variables: one palette serves both themes, so a chart colour
+ * never changes with the theme.
  */
 export const CHART_COLORS = {
   up: '#fa4d56', // Carbon red 50
@@ -25,8 +26,8 @@ export const CHART_COLORS = {
  * Two codes cannot be overlapped on the same set of tags.
  *
  * Taken from the fixed order of dataviz reference color matching (dark steps of slots 1–4), **assigned in sequence, no loop**.
- * The reason for choosing dark steps instead of light steps: The chart color of this project must be a single set of literal values
- * (html2canvas limitation, see above), and dark steps are the only group that passes both the shallow and dark bottom checks.
+ * The reason for choosing dark steps instead of light steps: this project uses one literal palette for
+ * both themes, and dark steps are the only group that passes both ground checks.
  * (light steps will FAIL the brightness band on dark backgrounds). Validation results (validate_palette.js):
  *   Light bottom #fcfcfb: brightness/chroma/CVD/normal vision full PASS, contrast 2.99 is WARN
  *   Deep Bottom #131a2b: All PASS
@@ -42,7 +43,7 @@ export const CATEGORICAL_COLORS = [
 
 /**
  * Carbon publishes two categorical orders: a dark set for light grounds and a light set for
- * dark grounds. This app needs one literal set for both (html2canvas limitation, see above),
+ * dark grounds. This app needs one literal set for both themes,
  * so the four mid steps above are used. Every step keeps enough luminance separation from
- * both #161616 and the white PDF page, and the legend plus the value table carry the labels.
+ * both #161616 and the light ground #fcfcfb, and the legend plus the value table carry the labels.
  */

@@ -9,8 +9,8 @@
  * I chose this version because it has zero interaction and no problem of "things being put away and cannot be found".
  *
  * 0.6.36 Replace "My holdings" in the first paragraph with "Quotation" (today's open high and low volume/yesterday's close/today's close).
- * The reason why stock holdings were initially excluded from the PDF capture is because they are private capital; the quotations are public market data.
- * There is no such concern, so `surfaceRef` is changed to wrap all four segments.
+ * Holdings were initially excluded because they are private capital; the quotation is public market data.
+ * There is no such concern, so all four segments are shown together.
  *
  * This is a pure presentation component: which level to look at and where the quote comes from are all determined by the caller (AnalysisPage).
  * The selector on the left side of the page is also passed in from the caller (currently it is a drop-down menu for switching individual stocks).

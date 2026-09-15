@@ -84,9 +84,8 @@ export function LineSeriesChart({
         <>
           <defs>
             {/*
-              The stop colours must be literals, never CSS variables —— when html2canvas serialises the SVG it
-              cannot resolve variables from ancestor scopes, and the chip report's PDF comes out solid black
-              (see chartColors.ts).
+              The stop colours are literals, never CSS variables — the chart palette is one literal
+              set shared by both themes (see chartColors.ts).
             */}
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.28} />

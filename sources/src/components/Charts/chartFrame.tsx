@@ -2,11 +2,12 @@
  * Chart outline: Y-axis grid and scale, X-axis label, hover hit area and tooltip.
  * Each chart is only responsible for drawing "marks" (bars/polylines), and the coordinates are provided by geo.
  *
- * Two design decisions dictated by the limitations of PDF capture:
+ * Two design decisions:
  * 1. viewBox width = measured container width (1:1, no scaling). Although using a fixed viewBox to scale proportionally eliminates the need for measurement,
  *    However, the font size will expand and shrink according to the container - the scale becomes twice as large on a wide screen, but too small to be seen clearly on a mobile phone.
- * 2. Font level and color should be written as SVG attributes without relying on CSS. html2canvas will serialize inline SVG into images.
- *    CSS variables in external style sheets and ancestor layers cannot be parsed, and the PDF will turn into a giant black text.
+ * 2. Font size and colour are written as SVG attributes instead of CSS. This came from the PDF export
+ *    (removed in 0.9.52) and is no longer a constraint; the values stay inline because nothing gains
+ *    from moving them.
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'

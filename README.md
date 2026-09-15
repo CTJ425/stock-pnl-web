@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.52**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.53**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -12,7 +12,7 @@
 - [使用方式](#-使用方式)
 - [測試](#-測試)
 - [初始化與部署](#-初始化與部署)
-  - [改版後的發布流程（手動上傳）](#步驟-9-1改版後的發布流程手動上傳)
+  - [改版後的發布流程（Cloudflare Pages 自動部署）](#步驟-9-1改版後的發布流程cloudflare-pages-自動部署)
 - [版本紀錄](#-版本紀錄)
 - [注意事項](#-注意事項)
 
@@ -509,48 +509,46 @@ npm run build    # 產出靜態檔於 sources/dist/
 
 ---
 
-### 步驟 9-1：改版後的發布流程（手動上傳）
+### 步驟 9-1：改版後的發布流程（Cloudflare Pages 自動部署）
 
-> **這一步最容易被跳過，而且跳過時沒有任何錯誤訊息。**
-> 合併 `main` 之後正式站仍是舊版，畫面看起來就像「改動沒生效」。
+> **推上 GitHub 之後正式站會自動更新，但 Edge Function 不會。**
+> 這兩件事互不代表，請分別確認。
 
-**本專案沒有前端自動部署。** `.github/workflows/` 只有 `release.yml`，它只把
-`docs/agent/CHANGELOG.md` 的版本同步成 GitHub Release，**不建置、也不上傳前端**。
-所以 `git push` 和合併 `main` 都只更新倉庫，不會更新使用者看到的網站。
+**Cloudflare Pages 綁定了這個 repo，會自己建置並部署，不需要手動上傳 `dist/`。**
 
-每次要讓改動生效，手動走完這四步：
+2026-09-15 實測：`0.9.52` 推上 GitHub 後數分鐘內，正式站
+`https://stock-pnl-web.pages.dev/` 已經是該版本的建置產物 —— 線上 bundle 內含
+`0.9.52` 版本字串，且與本機建置的檔案只差 50 個位元組，差在 Supabase 的 URL 與
+publishable key：線上那份用的是 **PROD** 專案，本機用的是 `.env` 裡的 DEV 專案。
+過程中沒有任何人手動上傳。（此節在 0.9.53 以前寫的是「本專案沒有前端自動部署」，
+與實測不符，已更正。）
 
-**1. 切到要發布的版本**
+**驗收：** 開啟正式站並硬重新整理（`Ctrl+Shift+R`），確認**畫面左下角的版本徽章**
+是新版號。徽章讀的是 `sources/src/version.ts`，隨建置產物一起走，**是唯一可靠的
+驗收依據**。建置需要幾分鐘，徽章沒變請先等一下再查；若始終沒變，才到 Cloudflare
+Pages 後台看該次 build 是否失敗。
+
+**環境變數在 Cloudflare Pages 後台設定**，不是用本機的 `.env`。新增 `VITE_` 開頭的
+變數時要同時補進後台，否則線上建置會拿到空值。
+
+#### 手動上傳（備援路徑）
+
+改用其他靜態主機，或 Cloudflare 建置失敗要先救急時：
 
 ```bash
 git checkout main && git pull --ff-only
 grep APP_VERSION sources/src/version.ts    # 確認是預期的版號
-```
-
-**2. 用正式站的環境變數建置**
-
-```bash
 cd sources
 # .env.local 必須指向 PROD 的 project-ref 與 anon key，不是 DEV 的
 npm run build                              # 產出於 sources/dist/
 ```
 
-**3. 上傳**
+把 `sources/dist/` 的**全部內容**上傳並覆蓋舊檔。`index.html` 之外的 `assets/*.js`
+檔名帶雜湊，舊檔不覆蓋會殘留但不會被引用。
 
-把 `sources/dist/` 的**全部內容**上傳到靜態主機，覆蓋舊檔。
-`index.html` 之外的 `assets/*.js` 檔名帶雜湊，舊檔不覆蓋會殘留但不會被引用。
-
-**4. 驗收**
-
-開啟正式站並硬重新整理（`Ctrl+Shift+R`），確認**畫面左下角的版本徽章**是新版號。
-
-徽章讀的是 `sources/src/version.ts`，隨建置產物一起走，**是唯一可靠的驗收依據**。
-徽章沒變就代表使用者拿到的還是舊程式碼，不論倉庫或 GitHub Release 上顯示什麼。
-
-> **Edge Function 是另一條路，兩者互不代表。**
-> 改到 `sources/supabase/functions/` 的內容不會隨前端上傳生效，必須另外
-> `supabase functions deploy`（見步驟 5）；反過來，部署了 Edge 也不代表前端更新了。
-> 一次改動可能同時需要「上傳 `dist/`」與「部署 Edge」兩件事，請分別確認。
+> **Edge Function 不隨前端走。**
+> 改到 `sources/supabase/functions/` 的內容必須另外 `supabase functions deploy`
+> （見步驟 5）。反過來，部署了 Edge 也不代表前端更新了。
 
 ---
 
