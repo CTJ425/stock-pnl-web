@@ -21,21 +21,6 @@
 
 ## 📋 Active Tasks
 
-### Task 163: 交接文件的總體經濟頁描述缺口，與未查完的 SPEC / PLAN 段落
-- **Status**: 🔄 未開始
-- **Agent**: Claude
-- **Timestamp**: 2026-09-15 13:28:39 Asia/Taipei
-- **背景**: 2026-09-15 以現行程式碼稽核 11 份宣稱現況的文件，修掉 8 條低風險錯誤（數字、死連結、cron 排程敘述）。剩下兩類需要重寫而不是改字，所以另開此任務。
-- **A. 總體經濟頁的描述缺口**（三份文件都停在舊樣貌）
-  - `README.md:65` —— 只描述 FRED 指標，沒提既有的「台股」子分頁，也沒有 0.9.54 的「國際指數」。
-  - `SPEC.md:485` 與 `SPEC.md:762` —— 同樣把總體經濟寫成單一美國指標頁。
-  - `PLAN.md` —— **完全沒有**總體經濟頁、國際指數、外幣匯率頁的任何段落。
-  - **驗收**: 三份文件都描述 `MacroPage.tsx` 實際的三個子分頁（台股 / 美國經濟 / 國際指數），且 `FxPage` 至少在 `PLAN.md` 有一段。
-- **B. 稽核本身沒查完**
-  - `SPEC.md` 只查了 4 段（全檔 10+ 段），`PLAN.md` 查了 7 段（全檔約 12 段）。實際錯誤數會多於已確認的 13 條。
-  - **驗收**: 兩份全段查完，每條發現附「文件出處 + 程式碼反證」兩邊引用。
-- **不是問題（2026-09-15 查證後撤回）**: 稽核一度報出 `schema.sql` 有兩個 `cron.schedule` 在線上不存在。那兩行在 `--` 註解裡，是已退役排程的還原範例。排除註解後，`schema.sql` 的 7 個排程與線上 `cron.job` 逐一相同，不需要修改。
-
 ### Task 160: 全專案快照與還原腳本（snapshot / restore / wipe-dev）
 - **Status**: 🔄 **Phase A + A-2 程式完成並實測；破壞性演練待使用者決定 CRON_SECRET 方案**
 - **Spec**: `docs/agent/specs/160-snapshot-restore.md`（含 §3a、§3b 兩項設計修正）
@@ -89,16 +74,6 @@
 14. Cloud-mode bottom nav has 6 tabs; proposal is 5 with 「更多」. — ⏳ batch 3, user decision
 17. Flag emoji render as empty boxes without a colour emoji font. — ⏳ batch 3
 19. The 交易紀錄 empty-state copy says 「點右下角『新增交易』…或用『匯入 CSV』」, but at ≤720 px the add button is icon-only and 匯入 CSV sits in the 「工具」 sheet. — ⏳ batch 3
-
-### Task 145: Codebase Deep Audit Remediation (P0 Calculation Bugs, PostgREST Truncations & Optimizations)
-- **Status**: 🔄 **IN PROGRESS — BUG-063..071 shipped; OPT-1 & OPT-2 remaining**
-- **Agent**: Antigravity
-- **Timestamp**: 2026-09-04 23:05:00 Asia/Taipei
-- **Spec**: `docs/agent/specs/145-codebase-bugs-and-optimizations-audit.md`
-- **Done**: BUG-063..BUG-071 (shipped in 0.9.34 and 0.9.35, details in Spec 145 and `FIXED_BUG.md`)
-- **Remaining**:
-  - `OPT-1`: Route-level `React.lazy()` code splitting for `AdminConsolePage`, `MacroPage`, and `FxPage` in `AppShell.tsx`.
-  - `OPT-2`: Memo stabilization in `IntradayChart.tsx` (module-level `EMPTY_POINTS` constant to avoid cascading re-renders).
 
 ### Task 144: Admin Enhancements, Execution Logs, Resource Usage & Multi-Target Backups
 - **Status**: 🔄 **IN PROGRESS — Features 1 & 4 shipped (0.9.49)**

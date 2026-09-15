@@ -1,11 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 交接文件全面稽核校正，並補上 `ai-proxy` 的 PROD 部署
-- Status: ✅ **COMPLETED**（8 處文件錯誤已修；四支 Edge Function 兩邊齊備）
-- Timestamp: 2026-09-15 13:35:00 Asia/Taipei
+- Action: 0.9.55 —— Task 145 收尾（路由層分割、memo 穩定化）與 Task 163 文件補完
+- Status: ✅ **RELEASED 0.9.55**（已合併 `main`；Task 145 與 163 均已結案歸檔）
+- Timestamp: 2026-09-15 14:44:45 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-15 14:44:45 Asia/Taipei (0.9.55, Task 145 與 163 收尾)
+
+**OPT-1 路由層分割**：`MacroPage`、`FxPage`、`AdminConsolePage` 改為 `React.lazy`。三者都不在首屏路徑上 —— 都要點分頁才會到 —— 留在進入點只是讓每個使用者都下載它們。bundle 由單檔拆成四塊（`FxPage` 9.85 kB、`MacroPage` 37.21 kB、`AdminConsolePage` 70.04 kB），`index` 從超過 500 kB 降到 496.62 kB，Vite 的 chunk 警告消失。具名匯出要用 `.then((m) => ({ default: m.X }))` 轉成 `default`，`lazy` 只吃這個形狀。
+
+**OPT-2 memo 穩定化**：`IntradayChart` 的 `series?.points ?? []` 每次 render 都產生新陣列，讓下游三個 `useMemo` 全部失效並串連重繪。改為模組層 `EMPTY_POINTS` 常數後，三條 `react-hooks(exhaustive-deps)` 警告消失。
+
+**Task 163 文件補完**：`README.md` 與 `SPEC.md` 都補上總體經濟的三個子分頁；`PLAN.md` 新增 §T 涵蓋 Macro 與 Fx 兩頁架構。補查 `SPEC.md` 與 `PLAN.md` 剩餘段落後只再找到 2 條並已修：`timeline.ts` 測試數 29 → 23，以及 0.9.54 引入的錯誤行號 `schema.sql:710`（那行在註解裡）→ 728。**同一個坑踩了兩次** —— 註解裡的 SQL 被當成程式碼，第一次造成 cron 漂移的誤判，第二次造成錯誤行號。
+
+**交接熱檔清理**：`PROGRESS.md` 8,584 → 2,169 bytes（回到 4096 上限內），`TASK.md` 17,269 → 15,447 bytes。移出的是已完成與已被推翻的內容，全部進 `*_ARCHIVE.md`，無損檢查 PASS（移出 8,237、移入 9,848）。清出的最有價值一項是 `TASK.md` 內部的自相矛盾：一行寫「`ai-proxy` PROD 尚未部署」，與同檔第 14 行直接打架。`BUG_FIX.md` 未動 —— 14 條全部仍然成立。
+
+**驗證**：1,976 測試、`build`、`typecheck:edge`、`lint` 皆 exit 0，`npm audit` 0 vulnerabilities，**E2E 全套 16/16 exit 0**（Supabase 模式真瀏覽器）。E2E 是本版的關鍵驗證：延遲載入最可能壞在真實瀏覽器的分頁切換上，單元測試看不到。
 
 ## 📅 Log: 2026-09-15 13:35:00 Asia/Taipei (0.9.54 上線、文件稽核、ai-proxy 補 PROD)
 
