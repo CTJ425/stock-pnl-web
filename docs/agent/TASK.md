@@ -11,7 +11,7 @@
 
 ## 📍 Where the project stands (2026-09-15 09:16:32)
 
-- **Version 0.9.54 — on `dev` and `main`，正式站已在跑 0.9.54。前端由 Cloudflare Pages 從 `main` 自動部署；`stock-price` 已於 2026-09-15 部署 DEV + PROD，但 0.9.51 的 `ai-proxy` 仍只在 DEV，PROD 沒有這支函式。** 驗收看畫面左下角的版本徽章。
+- **Version 0.9.54 — on `dev` and `main`，正式站已在跑 0.9.54。前端由 Cloudflare Pages 從 `main` 自動部署；四支 Edge Function（`stock-price`、`stock-report`、`backup-transactions`、`ai-proxy`）已於 2026-09-15 全數部署至 DEV 與 PROD，四支的 bundle 雜湊兩邊逐一相同。** 驗收看畫面左下角的版本徽章。
   - **0.9.51 的 PROD 剩餘三步**：`PART A`（建 `get_ai_settings()`）→ `supabase functions deploy ai-proxy --project-ref hrilemueiqyaoiwnkeuu`（維持 `verify_jwt=true`，不加旗標）→ `PART B`（撤銷 `ai_api_key` 讀取權）。**上傳前端那一步已不需要** —— Cloudflare Pages 自動部署，0.9.52 以後的前端早已在線上。兩段 SQL 在 `docs/agent/161-ai-key-proxy-migration.sql`。DEV 已全部完成。PROD 端已確認的事實只有一項：`functions list` 顯示 PROD 沒有 `ai-proxy`。`PART A` 是否已套用**無法確認** —— 查 PROD 資料庫需要先 `supabase link` 到該專案，而該指令被權限層擋下。由此推論（非實測）：0.9.51 以後的前端只走代理路徑，線上的 AI 分析功能目前應為故障。
   - Shipped 2026-09-15: 清除 PDF 時代的死註解、以實測更正 README 的部署敘述（0.9.53）。
   - Shipped 2026-09-15: 移除未使用的 PDF 產生器與 jspdf / html2canvas 相依、修補開發相依漏洞（0.9.52）。

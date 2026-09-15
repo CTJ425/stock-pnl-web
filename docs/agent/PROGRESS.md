@@ -1,11 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 162 國際指數分頁（日／韓／美 8 檔）與盤中 60 秒輪詢
-- Status: ✅ **COMPLETED 0.9.54**（已上線，Edge Function 已部署 DEV + PROD 並實測生效）
-- Timestamp: 2026-09-15 11:47:54 Asia/Taipei
+- Action: 交接文件全面稽核校正，並補上 `ai-proxy` 的 PROD 部署
+- Status: ✅ **COMPLETED**（8 處文件錯誤已修；四支 Edge Function 兩邊齊備）
+- Timestamp: 2026-09-15 13:22:19 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-15 13:22:19 Asia/Taipei (交接文件稽核校正 + ai-proxy 上 PROD)
+
+以現行程式碼為依據稽核 11 份宣稱現況的文件，逐條要求「文件出處 + 程式碼反證」兩邊引用。確認 13 條錯誤，修掉其中低風險的 8 條。
+
+**已修**：測試數字 121 檔 / 1,947 條 → 123 / 1,976（`README.md` 兩處、`TASK.md` 一處）；`TASK.md` 現行版本 0.9.53 → 0.9.54；`README.md` 目錄樹補上 `ci.yml`；`SPEC.md:46` 的 `file:///home/ivan/...` 死連結改為相對路徑並標明 `system_design.md` 是 2026-07 起始設計書而非現行架構；`SPEC.md` 兩處 cron 排程敘述與 `schema.sql` 不符，改為實際值並附行號；`TASK.md` 的 mobile audit 條目說明補上「報告只有 17 個 finding，第 18、19 項是後來追加」。
+
+**未修，需另開任務**：`README.md:65`、`SPEC.md:485`／`:762` 把「總體經濟」描述成單一 FRED 指標頁，`PLAN.md` 則完全沒有總體經濟頁、國際指數與外幣匯率頁的段落。那是重寫不是改字。
+
+**駁回三類誤報**：`PROGRESS.md` 日誌條目裡的舊測試數字是當時的量測記錄，不是現況宣稱；`system_design.md` 的內容停在原始三張表是歷史，該檔開宗明義是起始設計規劃書；「`PLAN.md` 停在 0.6.6-dev.1」實際 grep 得到 0.9.52。
+
+**稽核本身的限制**：`SPEC.md` 只查了 4/10+ 段、`PLAN.md` 7/12 段，實際錯誤數會多於 13 條。`CHANGELOG.md` 與三個 `*_ARCHIVE.md` 依範圍定義未查。
+
+**另外撈到一條程式碼漂移**：`schema.sql` 有兩個 `cron.schedule`（`stock-report-nightly:449`、`market-daily:949`）在線上不存在，也沒有對應的 `unschedule`。線上實際 7 個排程。拿這份 schema 重建會多出兩個 —— Task 160 的 restore 正是靠它重建 cron。未處理。
+
+**`ai-proxy` 補上 PROD**：稽核發現 0.9.51 把 Google 金鑰移到伺服器端後，該函式從未部署到 PROD，正式站的金鑰仍走瀏覽器直連。前置條件實測後比預期小：PROD 的 `app_settings` 已有 `ai_provider` / `ai_model` 欄位（PostgREST 回 200 + 空陣列），`ai-proxy` 只需要環境自動注入的 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`，兩者都在。部署後 PROD 四支函式齊全，`ai-proxy` v1、`verify_jwt=true`、bundle 雜湊 `0e9155260cf390ce` 與 DEV 相同；四支的雜湊兩邊逐一相同。冒煙測試：不帶 JWT 回 401（閘道層），帶 anon JWT 回函式自己的「登入憑證無效或已過期」401，證明程式碼確實在跑。
 
 ## 📅 Log: 2026-09-15 11:47:54 Asia/Taipei (Task 162, 0.9.54 國際指數分頁上線與 Edge 部署)
 
@@ -34,20 +50,3 @@ E2E 全套在本機模式跑前後兩次，失敗清單與未套用本版變更�
 生效證明不看版號、只看行為：間隔 92 秒呼叫兩次 `prices` action，DEV `asOf` 由 `03:46:01` 變 `03:47:33`、PROD 由 `03:46:02` 變 `03:47:35`，兩邊都重新抓取。舊的 10 分鐘 TTL 下第二次會回同一個 `asOf`。
 
 部署過程踩到一次已記錄的陷阱：這個 shell 的 `SUPABASE_ACCESS_TOKEN` 屬於另一個帳號的組織，`functions list` 回 403 privileges。每一道 supabase 指令都要用 `env -u SUPABASE_ACCESS_TOKEN` 執行，不要因為 403 就去重新登入或換 token。
-
-## 📅 Log: 2026-09-15 10:05:00 Asia/Taipei (P1~P4 系統架構、部署與測試文檔同步)
-
-依據稽核發現全面完成 P1~P4 文檔校正與現況同步：
-1. **P1 (部署安全與 Edge 規範)**：
-   - `docs/CLAUDE-tw.md`：更正 Edge Functions 部署指令，明確區分 `stock-price` 與 `ai-proxy` 維持 `verify_jwt=true`，而 `stock-report` 與 `backup-transactions` 帶 `--no-verify-jwt`；移除已廢除之 `architect` 角色與不存在之 `.claude/hooks/` 參照。
-   - `sources/supabase/README.md`：新增 `ai-proxy` 部署說明（共 4 支 Edge Functions），更新 `backup-transactions`（含 `r2.ts`、`cronSecret.ts` 共 4 檔）與 `stock-report`（18 檔）、`stock-price`（7 檔）檔數；移除已廢棄之 PDF 下載與 Google News RSS 描述。
-2. **P2 (專案總覽現狀同步)**：
-   - `README.md`：移除 PDF 下載說明與死依賴（`jsPDF` / `html2canvas`）、目錄樹清除 `newsProxy` 與 `reportPdf`；更新測試規模至 121 檔 / 1,947 tests (100% PASS)；更正 pg_cron 排程數至 7 個（含覆驗清單補入 `app-log-prune`）；更新 AI proxy 架構與 Edge 4 支函數說明。
-3. **P3 (追蹤檔案 Size Discipline 與缺陷分析)**：
-   - `docs/agent/TASK.md`：將 Task 145 已完成項目 (BUG-063..071) 收攏為 `- **Done**: `，保留待處理的 OPT-1 / OPT-2；清除 Task 132/133 過時之 Docker Compose 敘述。
-   - `docs/agent/BUG_FIX.md` / `FIXED_BUG.md`：將已於 PROD 配置之 Supabase Redirect URLs 移至 `FIXED_BUG.md` (BUG-082)；完成 BUG-079 程式碼深入分析，釐清 `estimateUnrealized`（取自 lot.feeRate）與 `breakEvenPrice`（取自 workspace feeRate 導致 0.6 解讀歧異）之根本原因。
-4. **P4 (測試指南與架構歷程註記)**：
-   - `docs/UnitTests/`：移除過時之 Docker 網域 `korq9tvdz0jd7yblr72p.ivan.lab` 並替換為 Supabase Cloud DEV ref `zyebvayngwrqzoaicbwd`；將 `backup-transactions`、`ai-proxy`、`stock-price` 之單元測試補入 `README.md` 與 `UNIT.md`；於 `E2E.md` 完整列出 10 支 E2E 與驗證腳本。
-   - `docs/agent/SPEC.md` / `PLAN.md`：同步個股分析頁三層分頁結構（`analysis` 含籌碼/基本面/技術面、`whatif` 損益試算、`ai` AI分析分頁標註校正）；註記已移除之 PDF / html2canvas；更新 0.9.51 AI proxy 金鑰隔離架構；釐清 `PLAN.md` 中 Cloudflare Worker 廢除與 R2 異地備份採用之邊界。
-
-全套驗證：`npm test` 121 檔 / 1,947 測試 100% 通過；`npm run typecheck:edge`、`npm run build`、`npm run lint` 全數 exit 0。
