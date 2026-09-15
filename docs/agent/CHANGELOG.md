@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.55（2026-09-15）— 路由層分割與 memo 穩定化（Task 145 收尾），交接文件稽核補完
+
+- ⚡ **OPT-1：三個頁面改為路由層 `React.lazy` 分割**。`MacroPage`、`FxPage`、`AdminConsolePage` 都不在首屏路徑上 —— 三者都要點分頁才會到 —— 留在進入點只是讓每一個使用者都下載它們。
+  - bundle 由單檔拆成四塊：`FxPage` 9.85 kB、`MacroPage` 37.21 kB、`AdminConsolePage` 70.04 kB，`index` 從**超過 500 kB 降到 496.62 kB**，Vite 的 chunk 警告消失。
+  - `Suspense` 的 fallback 沿用 `AppShell` 既有的「載入中…」佔位，切換分頁不會閃出另一種形狀。
+  - 具名匯出要用 `.then((m) => ({ default: m.X }))` 轉成 `default`，`lazy` 只吃這個形狀。
+- ⚡ **OPT-2：`IntradayChart` 的 memo 穩定化**。`series?.points ?? []` 每次 render 都產生一個新陣列，讓下游三個 `useMemo`（VWAP、價格區間、成交量區間）全部失效並串連重繪。改為模組層的 `EMPTY_POINTS` 常數後，`react-hooks(exhaustive-deps)` 的三條警告消失。
+- 🛡️ **`verify.sql` 補上漏檢的 `app_log`**。表清單只列 14 張，而 `schema.sql` 定義 15 張。後果正是這支驗證器存在的目的：專案重建或還原後若 `app_log` 沒建起來，`assert_setup_ok()` 仍會通過，失敗是靜默的。已補並對 DEV 重新安裝，10 項全 PASS。
+- 📄 **交接文件稽核補完（Task 163）**。`README.md`、`SPEC.md` 現在都描述總體經濟的三個子分頁（台股 / 美國經濟 / 國際指數）；`PLAN.md` 新增 §T，涵蓋 Macro 與 Fx 兩頁的架構、為何不共用 `priceProxy.fetchPrices`、以及美股時段判斷為何不能寫死時差。`PLAN.md` §M3 標註為 0.6.0-dev.1 的歷史決策 —— schema 早已把 `ai_*` 從 `user_settings` 移到 `app_settings`。
+  - 補查 `SPEC.md` 與 `PLAN.md` 先前未涵蓋的段落，再修兩條：`timeline.ts` 的測試數 29 → **23**（實測），以及 0.9.54 引入的錯誤行號 `schema.sql:710`（那行在註解裡）→ **728**。
+- 🧹 **交接熱檔清理**。`PROGRESS.md` 8,584 → 2,169 bytes（回到上限內），`TASK.md` 17,269 → 15,447 bytes。移出的是已完成與已被推翻的內容，全部進 `*_ARCHIVE.md`，無損檢查 PASS（移出 8,237、移入 9,848）。`BUG_FIX.md` 未動 —— 14 條全部仍然成立。
+- ✅ **驗證**：123 檔 / **1,976** 條測試全過；`npm run build`、`npm run typecheck:edge`、`npm run lint` 皆 exit 0；`npm audit` 0 vulnerabilities。**E2E 全套 16/16 exit 0**（Supabase 模式，真瀏覽器）—— 這一項是本版的關鍵驗證，延遲載入最可能壞在分頁切換上。
+
 ### 0.9.54（2026-09-15）— 總體經濟新增「國際指數」分頁，日／韓／美 8 檔盤中 60 秒更新
 
 - 🌏 **總體經濟頁新增第三個子分頁「國際指數」**：日經 225（`^N225`）、KOSPI（`^KS11`）、KOSDAQ（`^KQ11`）、道瓊（`^DJI`）、S&P 500（`^GSPC`）、那斯達克（`^IXIC`）、費城半導體（`^SOX`）、羅素 2000（`^RUT`），依日本／韓國／美國三區分組，每組標示當下時段（盤中／午休／已收盤）。
