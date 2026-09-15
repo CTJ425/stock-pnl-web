@@ -5,7 +5,6 @@ Agent rules for **stock-pnl-web** (stock P&L + after-hours TW reports). Keep thi
 ## Layout
 
 - App root: **`sources/`** — all `npm` / vitest / playwright from here.
-- Repo root: `CLAUDE.md`, `README.md`, `docs/`, `.claude/`.
 - Feature code near the feature; `utils`/`lib` only for truly shared code. No template-only dirs.
 
 ## Memory (`docs/agent/`)
@@ -45,14 +44,8 @@ Then inspect code you will touch. Do not assume chat has full state.
 
 ## Task routing
 
-**Delegation to the roles below is standing user authorization.** Dispatch them without
-asking first — this overrides any default reluctance to spawn agents. The main session runs
-on the most expensive model in the system, so work that a cheaper role can do correctly
-must not be done here. Model and effort per role live in `.claude/route.config.json`;
-do not restate them here.
-
-The main session owns **architecture, specs, failing tests, and adjudication** — that is
-what it runs on the expensive model for. The four roles below are delegation targets.
+Beyond the planning, specs and adjudication named in the session-start routing note, the
+main session also owns **failing tests**. The four roles below are delegation targets.
 
 | Role | Owns | Do not do this in the main session |
 | ---- | ---- | ---- |
@@ -63,17 +56,11 @@ what it runs on the expensive model for. The four roles below are delegation tar
 
 - **The loop is the `route` skill.** Load it for any feature, bug, or `TASK.md` item; it
   owns lane classification, dispatch order, handoff formats, and escalation.
-- **Cost is context replay, not output.** Measured over 30 sessions: cache read is 69.6%
-  of spend, output only 16%. One main-session turn costs ~$0.13 at the measured 185k
-  average context, against $0.12 for a `scout` dispatch and $0.27 for a `scribe` one — so
-  they break even at 2 and 4 replaced turns respectively. **Route by context footprint,
-  not by task size**: bulk content goes to a subagent even when the task is trivial, and a
-  surgical edit on content already in context stays inline even when the task looks big.
-  A large file read into the main session is re-billed on every later turn of that
-  session, which is why the guard asks before unbounded reads (`guard.readKB` in `.claude/route.config.json`).
-- Role boundaries are enforced by the `route` plugin's guard hook, not by good manners.
-  A blocked write means you are out of role: re-route it, do not work around it.
-  Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
+- **Route by context footprint, not by task size**: a surgical edit on content already in
+  context stays inline even when the task looks big. A large file read into the main
+  session is re-billed on every later turn, which is why the guard asks before unbounded
+  reads (`guard.readKB` in `.claude/route.config.json`). Measured economics: **`route`** skill.
+- Escape hatches, for when the guard is wrong: `ROUTING_MAIN=off`, `ROUTING_GUARD=off`.
 - Whether routing actually happened is measurable, and the plan does not count as
   evidence: the `/route:audit` skill.
 - This routes **delegation only**. The main session's model comes from `/model`, not from
@@ -103,22 +90,14 @@ Which files to sync and how to pick the next number: **`versioning`** skill.
 | PROD | `main` | cloud **`hrilemueiqyaoiwnkeuu`** (project "Stock-Pnl-Web") |
 | DEV | `dev` | cloud **`zyebvayngwrqzoaicbwd`** ("Stock-Pnl-Web-Dev") — what `supabase link` points at |
 
-Both cloud projects were recreated on 2026-08-31, from setup SQL whose placeholders were
-never substituted. Any older ref returns `404 Resource has been removed`, and `sources/.env`
-may still point at a dead one. Do not check this by eye — run `verify_setup()`.
-The full failure story, the verifier, and the two checks that still need a human eye:
-**`supabase-ops`** skill.
+Any older ref returns `404 Resource has been removed`, and `sources/.env` may still point at
+a dead one. Do not check this by eye — run `verify_setup()`. The recreation story, the
+verifier, the DEV/PROD identity predicate, and the DDL rules: **`supabase-ops`** skill.
 
 - **Always commit to `dev` first**; merge `main` only after DEV verify.
 - Do **not** deploy / change Supabase unless the user asks. PROD Edge only on `main` + explicit OK.
-- **DEV is cloud, not local docker** (verified 2026-09-01). `sources/.env` points at
-  `https://zyebvayngwrqzoaicbwd.supabase.co`; DEV Edge runs there (`functions list` shows 3 ACTIVE).
-  DEV DDL goes through `supabase db query --linked` from `sources/`, always with an identity value
-  in the same query. Use `EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%zyebvayngwrqzoaicbwd%')`,
-  **not** a job count: the count is identical on both projects, and it changed from 6 to 7 on
-  2026-09-06 when `app-log-prune` was added. A local docker stack
-  (`stock-pnl-web-dev-db-1`) still runs on this host and answers every check plausibly, but the app
-  never talks to it — a DDL applied there has no effect on DEV.
+- **DEV is cloud, not local docker.** A local docker stack runs on this host and answers every
+  check plausibly, but the app never talks to it. DDL rules: **`supabase-ops`** skill.
 - Read-only queries OK. Ops pitfalls (incl. `stock-report` `--no-verify-jwt` on cloud): **`supabase-ops`** skill.
 
 ## This repo is public — where raw logs may go
