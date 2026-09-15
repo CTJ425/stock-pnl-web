@@ -31,7 +31,7 @@
 ## 📋 Active Tasks
 
 ### Task 162: 總體經濟頁新增國際指數分頁（日／韓／美）與盤中輪詢
-- **Status**: 🔄 程式與測試完成；DEV 部署與 commit 待使用者決定
+- **Status**: 🔄 已於 0.9.54 合併 `main` 並上線；只剩 Edge Function 部署待使用者授權
 - **Agent**: Claude
 - **Timestamp**: 2026-09-15 10:50:13 Asia/Taipei
 - **Spec**: `docs/agent/specs/162-global-indices.md`
@@ -43,7 +43,8 @@
   - `sources/supabase/functions/stock-price/index.ts` — `cacheTtlMsFor` 新增 `IDX:` 分支回 60 秒
   - `sources/src/index.css` — 新增 `.gix-*` 樣式
 - **指數清單**: `^N225`、`^KS11`、`^KQ11`、`^DJI`、`^GSPC`、`^IXIC`、`^SOX`、`^RUT`。`^TOPX` 排除，Yahoo 回 200 但無報價。
-- **Not done**: 尚未 commit，尚未部署 `stock-price` 到 DEV。Edge 的 60 秒 TTL 在部署前不會生效，前端仍會拿到最多 10 分鐘前的報價。
+- **Released**: 0.9.54，commit `859feca`，`dev` 與 `main` 同版（2026-09-15 11:35 Asia/Taipei）。
+- **Not done**: `stock-price` Edge Function 尚未部署到 DEV 或 PROD。推 `main` 不會部署 Edge。未部署前 `cacheTtlMsFor` 仍用舊的 10 分鐘 TTL —— 前端照樣每 60 秒問一次，但拿到的報價最舊可能是 10 分鐘前的。PROD Edge 部署需使用者明確授權。
 - **部署後要驗**: 間隔 90 秒呼叫兩次 `prices` action，比對 `asOf` 必須不同。
 
 ### Task 160: 全專案快照與還原腳本（snapshot / restore / wipe-dev）
