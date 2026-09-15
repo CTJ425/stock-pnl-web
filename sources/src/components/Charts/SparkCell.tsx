@@ -6,8 +6,8 @@
  * What legal persons look at is the sign of the amount, and what the general manager looks at is the increase or decrease from the previous period. Those are two different things.
  * Hardly synthesizing a "universal streak" will only add one parameter and a condition.
  *
- * The color is determined by the caller and passed in as a literal value. CSS variables are not used: when exporting PDF with html2canvas
- * If the variables of the ancestor layer cannot be resolved, the entire image will turn black (`chartColors.ts` has the same note).
+ * The colour comes from the caller as a literal value, matching `chartColors.ts`: the chart palette
+ * is one literal set shared by both themes.
  *
  * When there are less than two points, `sparkline` returns null, and "—" is printed here instead of leaving blank ——
  * If a dot cannot be connected to a line, the hard drawing will become a small dot and look like a broken picture;

@@ -2,6 +2,19 @@
 
 _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保持原樣，不做任何改寫。_
 
+### 0.9.53（2026-09-15）— 清除 PDF 時代的死註解，並更正 README 的部署敘述
+
+- 🧹 **清掉 12 個檔案裡指向 PDF / html2canvas 的死註解**：0.9.52 移除 PDF 產生器後，`Charts/` 與 `StockDetail/` 底下仍有多處註解以「html2canvas 無法解析祖先層的 CSS 變數，PDF 會整片變黑」解釋為何圖表顏色必須寫死。該限制已不存在。註解改為陳述現況：**一組字面值配色同時服務深淺兩個主題**，並以 `validate_palette.js` 對兩種底色驗證。顏色值本身一律未動，行為零變更。
+  - 涉及檔案：`chartColors.ts`、`chartScale.ts`、`chartFrame.tsx`、`SparkCell.tsx`、`LineSeriesChart.tsx`、`IntradayChart.tsx`、`TechnicalTab.tsx`、`chipFormat.ts`、`ChipsTab.tsx`、`StockDetailPage.tsx`、`chartPath.test.ts`、`index.css`。
+  - `StockDetailPage.tsx` 的註解提到 `surfaceRef` 包住四個段落 —— 該 ref 已不在程式中，只剩這句話，一併更正。
+  - 兩處刻意保留並標明為歷史記述：`chartFrame.tsx` 說明 SVG 屬性寫法的由來，`index.css` 說明 0.6.24 為何拿掉表格收合開關。刪掉會讓一個已做過的決定失去理由。
+- 📄 **更正 README 步驟 9-1 的部署敘述（實測推翻舊文）**：舊文寫「**本專案沒有前端自動部署**」，並要求每次改版手動 `npm run build` 後上傳 `dist/`。實測不成立 —— `0.9.52` 推上 GitHub 後數分鐘內，正式站已經是該版本的建置產物。
+  - **證據**：線上 bundle 內含 `0.9.52` 版本字串、不含已刪除的 `report-surface`，且與本機建置的 JS 只差 **50 個位元組**，差異位置是 Supabase 的 URL 與 publishable key —— 線上那份用 **PROD** 專案（`hrilemueiqyaoiwnkeuu`），本機用 `.env` 裡的 DEV 專案。CSS 檔更是 sha256 完全相同。過程中沒有任何人手動上傳。
+  - **Cloudflare Pages 綁定了這個 repo，會自己建置並部署。** 章節標題改為「Cloudflare Pages 自動部署」，手動上傳降為備援路徑（換靜態主機或 Cloudflare 建置失敗時用）。並補上一句：`VITE_` 開頭的環境變數要在 Cloudflare Pages 後台設定，不是用本機 `.env`。
+  - 舊文另一處也已過期：「`.github/workflows/` 只有 `release.yml`」—— `ci.yml` 自 0.9.51 起就存在。
+  - **這段錯誤敘述有實際代價**：它讓 0.9.51 的上線順序被寫成「PART B 必須等人工上傳新前端之後」，而真實情況是前端在推上 `main` 後就自動上線了。
+- ✅ **驗證**：121 檔 / **1,947** 條測試全過；`npm run lint`、`npm run build`、`npm run typecheck:edge`、`npm test` 四道皆 exit 0。本版只動註解、README 與版號，不動任何程式邏輯。
+
 ### 0.9.52（2026-09-15）— 移除未使用的 PDF 產生器與兩個相依套件，並修補開發相依漏洞
 
 - 🔐 **`jspdf` 的 critical 漏洞來自死碼**：`npm audit` 報 `jspdf@3.0.4` 一個 critical（AcroForm 任意 JavaScript 執行、FreeText 物件注入、新視窗路徑的 HTML 注入、惡意 GIF 尺寸造成 DoS）與連帶的 `dompurify` moderate。追查後確認 **`generatePdfBlob()` 沒有任何正式程式呼叫**：PDF 下載按鈕早在 0.9.17（`11516cd`）隨個股分析頁改版移除，`StockDetailPage.test.tsx` 另有一條測試斷言「PDF 功能已完全拔除，畫面上沒有下載 PDF 按鈕」，但產生器本體、兩個動態 `import()` 與 `package.json` 的相依全都留了下來。因為是動態 `import()`，它甚至不在主 bundle 裡，但 `npm ci` 照裝，稽核照報。

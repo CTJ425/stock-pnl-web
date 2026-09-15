@@ -79,7 +79,7 @@ export function shortDate(date: string): string {
 
 /**
  * Report generation time (ISO UTC) → `YYYY-MM-DD HH:mm` in the viewer's time zone.
- * The reason for not using toLocaleString is to fix the format and avoid different output looks in different locales (PDF should also be viewed).
+ * The reason for not using toLocaleString is to fix the format and avoid different output in different locales.
  */
 export function fmtUpdatedAt(iso: string | null | undefined): string {
   if (!iso) return '—'

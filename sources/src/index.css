@@ -3077,8 +3077,9 @@ a.hmenu-item {
  * The boundaries are defined by the blank space between cards - no interaction is required, and there will be no "things being put away that can't be found".
  *
  * In 0.6.23, each table title was made into a collapse switch. In 0.6.24, the entire table title was removed: the collapsed block is not in the DOM.
- * To export a PDF, you must first expand it all and then restore it. This creates an additional failure path that no one can see, and only reduces the volume in return.
- * This road has been walked before and there is no need to walk it again.
+ * The PDF export of that time had to expand every block and restore it: an invisible failure path in
+ * exchange for less scrolling. That export is gone since 0.9.52; this note stays as the record of why
+ * the switch went away.
  */
 .detail-stack {
   display: flex;
@@ -3086,7 +3087,7 @@ a.hmenu-item {
   gap: 24px;
 }
 
-/* Nested .detail-stack (the layer of the PDF capture range) does not overlap the margins again.*/
+/* Nested .detail-stack does not overlap the margins again.*/
 .detail-stack .detail-stack {
   gap: 24px;
 }
@@ -3123,7 +3124,7 @@ a.hmenu-item {
   color: var(--ink-muted);
 }
 
-/* Report header: Within the PDF capture range, indicate the code number, data date and generation time*/
+/* Report header: shows the code number, data date and generation time */
 .rpt-head {
   padding-bottom: 12px;
   margin-bottom: 16px;

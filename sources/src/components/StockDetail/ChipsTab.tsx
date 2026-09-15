@@ -237,7 +237,7 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
 
   return (
     <>
-      {/* The report header is inside the capture range so the downloaded PDF says which stock, which day and when it was produced */}
+      {/* The report header says which stock, which day and when the report was produced */}
       <header className="rpt-head">
         <h2>
           {report.ticker} {report.name}｜盤後籌碼

@@ -1,6 +1,6 @@
 /**
  * Axis calculation for self-drawn SVG charts. Pure function, no DOM dependencies, easy for unit testing.
- * The reason for not introducing the chart function library can be found in docs/agent/PLAN.md §B (html2canvas can capture inline SVG, and PDF can maintain fidelity).
+ * The reason for not introducing a chart library is in docs/agent/PLAN.md §B.
  */
 
 export interface Domain {
