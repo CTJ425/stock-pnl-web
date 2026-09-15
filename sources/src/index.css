@@ -4875,6 +4875,34 @@ a.hmenu-item {
   margin-top: 2px;
 }
 
+/* ---------- 國際指數 (task 162) ---------- */
+.gix-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.gix-group-head {
+  margin-top: 0;
+}
+
+/* `.rpt-card` is `flex: 1 1 140px`, so a group holding one index (日本) stretched the card
+ * across the whole row while the 5-card US group sat at ~270px. Cap the basis here only —
+ * changing `.rpt-card` itself would move every other report card on the site. */
+.gix-groups .rpt-card {
+  flex: 1 1 160px;
+  max-width: 320px;
+}
+
+/* No color here (unlike .mac-row-note/.mac-row-period): pnlClass supplies it. */
+.gix-change {
+  font-size: var(--type-label-01);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
 /*
  * Trend chart: Both directions side by side (0.6.7).
  * Two columns for desktop; ≤900px stacked into one column - if two pictures are squeezed into half the width of a mobile phone, no trend can be seen at all.

@@ -18,8 +18,9 @@ import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
 // Peer lag badges live on Admin only — on this page they read as "stale data" to end users.
 import { TwMarketSection } from './TwMarketSection'
+import { GlobalIndices } from './GlobalIndices'
 
-type MacroSubTab = 'tw' | 'us'
+type MacroSubTab = 'tw' | 'us' | 'world'
 
 /** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
 function isSameDay(a: string, b: string): boolean {
@@ -442,9 +443,18 @@ export function MacroPage() {
           >
             美國經濟
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'world'}
+            className={`subtab${tab === 'world' ? ' active' : ''}`}
+            onClick={() => setTab('world')}
+          >
+            國際指數
+          </button>
         </div>
       </div>
-      {tab === 'tw' ? <TwMarketSection /> : <UsMacroPanel />}
+      {tab === 'tw' ? <TwMarketSection /> : tab === 'us' ? <UsMacroPanel /> : <GlobalIndices />}
     </>
   )
 }

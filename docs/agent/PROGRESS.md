@@ -1,11 +1,25 @@
 # Progress Log (PROGRESS.md)
 
-- Agent: Antigravity
-- Action: 依稽核發現完成 P1~P4 架構、部署、測試與規格文檔全面校正同步
-- Status: **✅ COMPLETED**
-- Timestamp: 2026-09-15 10:05:00 Asia/Taipei
+- Agent: Claude
+- Action: Task 162 國際指數分頁（日／韓／美 8 檔）與盤中 60 秒輪詢
+- Status: 🔄 **IN PROGRESS**（程式與測試完成，DEV 部署待使用者決定）
+- Timestamp: 2026-09-15 10:50:13 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-15 10:50:13 Asia/Taipei (Task 162, 國際指數分頁)
+
+總體經濟頁新增第三個子分頁「國際指數」，顯示日經 225、KOSPI、KOSDAQ、道瓊、S&P 500、那斯達克、費城半導體、羅素 2000 共 8 檔，盤中每 60 秒更新。
+
+資料路徑沒有新增任何 API。Edge Function `stock-price` 的 `prices` action 本來就不檢查 market 白名單，`yahooSymbols()` 對非 `TPE` 的 market 原樣回傳 ticker，8 檔指數一次 POST 取回。`^TOPX`（TOPIX）已排除 —— Yahoo 回 HTTP 200 但 `regularMarketPrice` 是 null。
+
+刻意不走 `priceProxy.fetchPrices`：`PriceRequestItem.market` 綁在 `Market = 'TPE' | 'US'`，而 `Market` 是持股與損益的型別，放寬它會碰到金額計算；`fetchPrices` 的 localStorage L1 快取對非台股又是 10 分鐘，會讓 60 秒輪詢拿到舊值。改為新增 `indexQuotes.ts`，只做顯示、不持有快取、不匯入 `Market`。
+
+伺服器端只改一行：`cacheTtlMsFor` 新增 `IDX:` 分支回 60 秒，`TPE:` 與 `US:` 分支未動。覆核確認 `freshAfter` 的粗篩不需要跟著改 —— 它只放寬 DB 撈列的時間窗，逐列 TTL 仍由 `cacheTtlMsFor` 把超過 60 秒的 IDX 列剔除。
+
+收尾跑全套測試時抓到一個規格疏漏：專案有一條全域守則測試 `invokeTimeout.test.ts`，要求每個 `functions.invoke` 都必須帶 `timeout`，而規格把呼叫形狀寫死成只有 `body`。`indexQuotes.ts` 與其測試同步補上 `timeout: 15_000`。
+
+驗證：`npm test` 123 檔 / 1,976 測試全過 exit 0；`npm run build` exit 0；`npm run typecheck:edge` exit 0。reviewer 八項逐點覆核 PASS，無 finding。
 
 ## 📅 Log: 2026-09-15 10:05:00 Asia/Taipei (P1~P4 系統架構、部署與測試文檔同步)
 
@@ -23,22 +37,3 @@
    - `docs/agent/SPEC.md` / `PLAN.md`：同步個股分析頁三層分頁結構（`analysis` 含籌碼/基本面/技術面、`whatif` 損益試算、`ai` AI分析分頁標註校正）；註記已移除之 PDF / html2canvas；更新 0.9.51 AI proxy 金鑰隔離架構；釐清 `PLAN.md` 中 Cloudflare Worker 廢除與 R2 異地備份採用之邊界。
 
 全套驗證：`npm test` 121 檔 / 1,947 測試 100% 通過；`npm run typecheck:edge`、`npm run build`、`npm run lint` 全數 exit 0。
-
-## 📅 Log: 2026-09-15 09:16:32 Asia/Taipei (0.9.53, 死註解清理與部署敘述更正)
-
-0.9.52 拔掉 PDF 產生器後，12 個檔案的註解仍在以「html2canvas 無法解析祖先層 CSS 變數」解釋圖表顏色為何寫死。該限制已不存在，註解改為陳述現況：一組字面值配色同時服務深淺兩個主題。顏色值一律未動。`StockDetailPage.tsx` 提到的 `surfaceRef` 早已不在程式中，只剩那句話。兩處刻意保留並標明為歷史記述 —— 刪掉會讓一個已做過的決定失去理由。
-
-**更重要的是 README 被實測推翻。** 使用者問「CF page 不是會自己抓？」，查證結果是**會**。`0.9.52` 推上 GitHub 後數分鐘內，正式站就已經是該版本的建置產物：線上 bundle 含 `0.9.52` 版本字串、不含已刪的 `report-surface`，與本機建置的 JS 只差 50 個位元組 —— 差在 Supabase URL 與 publishable key，線上那份用 PROD 專案，本機用 DEV。CSS 檔 sha256 完全相同。沒有人手動上傳過。
-
-README 步驟 9-1 原本明寫「本專案沒有前端自動部署」，已更正為 Cloudflare Pages 自動部署，手動上傳降為備援路徑。**這個錯誤有實際代價**：0.9.51 的上線順序因此被寫成「PART B 必須等人工上傳新前端之後」，但前端其實在推上 `main` 的當下就自動上線了。順帶一提，`.github/workflows/` 也不只有 `release.yml`，`ci.yml` 自 0.9.51 起就在。
-
-**尚待確認**：Cloudflare Pages 綁的是 `main` 還是 `dev`。0.9.53 推 `dev` 之後、合併 `main` 之前查一次線上版號就能分辨。
-
-**PROD 仍未部署（0.9.51 的 Edge 與 SQL）。** `supabase link --project-ref hrilemueiqyaoiwnkeuu` 被 Claude Code 自動模式的權限層以 `[Production Deploy]` 擋下，與 0.9.51 當時同一個攔截。PROD `functions list` 已確認沒有 `ai-proxy`，DEV 有。PROD 的 `get_ai_settings()` 是否存在則無法確認，查資料庫同樣需要先 link 到 PROD。
-
-**分支歸屬已實測結清（2026-09-15 09:30:27 補記）。** 09:21:49 推 `dev`、不合併 `main`，正式站的 bundle 檔名七分鐘內完全沒變；09:27:34 推 `main`，1 分 40 秒後檔名換成 `index-DSrGpRJ9.js`，版本字串 `0.9.53`。**Cloudflare Pages 的正式站只建置 `main`**，推 `dev` 不會動到線上。README 步驟 9-1 已補上這一段。
-
-**PROD 的 SQL 無法由 CLI 執行。** `supabase link --project-ref hrilemueiqyaoiwnkeuu` 回 `LegacyLinkAuthTokenError`，而且**對 DEV 執行同一條指令也回一樣的錯**，所以不是 PROD 權限不足，是 `link` 走的舊端點目前的憑證存取不到；現有的 DEV 連結是先前留下的殘存狀態，失敗的 link 沒有把它清掉。`db query --linked` 因此只能打到 DEV。剩下的路是 Supabase 後台的 SQL Editor（`--db-url` 需要資料庫密碼，會把密碼寫進指令列與對話記錄，本 repo 公開，不採用）。`functions deploy --project-ref` 是另一條驗證路徑，不受此問題影響。
-
-**守衛已驗證有效**：帶身分守衛的 `prod-verify.sql` 對 DEV 執行時回 `is_dev=true` / `is_prod=false`，同時確認 DEV 的 0.9.51 遷移七項全部正確（`auth_reads_key=false`、`auth_execs_rpc=true`、`rpc_key_len=0` 等）。若誤把 `prod-partA.sql` / `prod-partB.sql` 打到 DEV，守衛會在同一個交易內 RAISE 並整批 rollback。
-

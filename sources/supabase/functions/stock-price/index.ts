@@ -91,9 +91,14 @@ interface Quote {
 /** US stock DB cache validity period; Taiwan stock change is determined by quoteWindow.ts based on time period (locked to 08:25 the next day after closing) */
 const CACHE_TTL_US_MS = 10 * 60 * 1000
 
+/** Foreign index DB cache validity period (task 162): a 60 s poll must not read a value up to 10 minutes old. */
+const CACHE_TTL_IDX_MS = 60 * 1000
+
 /** The cache validity period of this key at this moment. Taiwan stocks will last for more than ten hours after the market closes, and the lower bound for coarse screening must follow it. */
 function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null, fetchedAt: Date | null): number {
-  return key.startsWith('TPE:') ? twQuoteTtlMs(now, tradeTime, fetchedAt) : CACHE_TTL_US_MS
+  if (key.startsWith('TPE:')) return twQuoteTtlMs(now, tradeTime, fetchedAt)
+  if (key.startsWith('IDX:')) return CACHE_TTL_IDX_MS
+  return CACHE_TTL_US_MS
 }
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
