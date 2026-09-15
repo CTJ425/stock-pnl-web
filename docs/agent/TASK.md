@@ -11,7 +11,7 @@
 
 ## 📍 Where the project stands (2026-09-15 09:16:32)
 
-- **Version 0.9.53 — on `dev` and `main`. 前端由 Cloudflare Pages 自動部署（0.9.53 實測確認），但 0.9.51 的 Edge/SQL 仍未部署到 PROD。** 驗收看畫面左下角的版本徽章。
+- **Version 0.9.53 — on `dev` and `main`，正式站已在跑 0.9.53。前端由 Cloudflare Pages 從 `main` 自動部署；0.9.51 的 Edge/SQL 仍未部署到 PROD。** 驗收看畫面左下角的版本徽章。
   - **0.9.51 的 PROD 剩餘三步**：`PART A`（建 `get_ai_settings()`）→ `supabase functions deploy ai-proxy --project-ref hrilemueiqyaoiwnkeuu`（維持 `verify_jwt=true`，不加旗標）→ `PART B`（撤銷 `ai_api_key` 讀取權）。**上傳前端那一步已不需要** —— Cloudflare Pages 自動部署，0.9.52 以後的前端早已在線上。兩段 SQL 在 `docs/agent/161-ai-key-proxy-migration.sql`。DEV 已全部完成。PROD 端已確認的事實只有一項：`functions list` 顯示 PROD 沒有 `ai-proxy`。`PART A` 是否已套用**無法確認** —— 查 PROD 資料庫需要先 `supabase link` 到該專案，而該指令被權限層擋下。由此推論（非實測）：0.9.51 以後的前端只走代理路徑，線上的 AI 分析功能目前應為故障。
   - Shipped 2026-09-15: 清除 PDF 時代的死註解、以實測更正 README 的部署敘述（0.9.53）。
   - Shipped 2026-09-15: 移除未使用的 PDF 產生器與 jspdf / html2canvas 相依、修補開發相依漏洞（0.9.52）。
@@ -25,7 +25,7 @@
   - Verification: 121 test files / **1,947** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0；`npm audit` 0 vulnerabilities。
   - Edge Functions: `stock-price` deployed to DEV and PROD, `stock-report` is **v8**, `backup-transactions` is **v4**, `ai-proxy` 為 **DEV v1（ACTIVE, verify_jwt=true）；PROD 尚未部署**。
   - **前端由 Cloudflare Pages 自動部署。** 推上 GitHub 後數分鐘內生效，不需要手動上傳 `dist/`（0.9.53 以 bundle 位元組比對實測確認，流程寫在 `README.md` 步驟 9-1）。驗收看畫面左下角版本徽章。
-  - **待確認**：Cloudflare Pages 綁的是 `main` 還是 `dev`。Edge Function 不隨前端走，必須另外 `supabase functions deploy`。
+  - **只有 `main` 會上正式站**（0.9.53 實測：09:21 推 `dev` 後七分鐘線上不變；09:27 推 `main` 後 1 分 40 秒線上換版）。Edge Function 不隨前端走，必須另外 `supabase functions deploy`。
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
 ## 📋 Active Tasks

@@ -516,6 +516,10 @@ npm run build    # 產出靜態檔於 sources/dist/
 
 **Cloudflare Pages 綁定了這個 repo，會自己建置並部署，不需要手動上傳 `dist/`。**
 
+**只有 `main` 會上正式站。** 2026-09-15 以 0.9.53 實測：09:21 推 `dev`，正式站七分鐘
+內完全沒變；09:27 合併並推 `main`，**1 分 40 秒後**正式站就換成新的 bundle。所以推
+`dev` 不會動到線上，合併 `main` 才會。
+
 2026-09-15 實測：`0.9.52` 推上 GitHub 後數分鐘內，正式站
 `https://stock-pnl-web.pages.dev/` 已經是該版本的建置產物 —— 線上 bundle 內含
 `0.9.52` 版本字串，且與本機建置的檔案只差 50 個位元組，差在 Supabase 的 URL 與
