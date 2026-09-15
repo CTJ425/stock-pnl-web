@@ -113,7 +113,7 @@
 ```
 stock-pnl-web/
 ├── GEMINI.md / CLAUDE.md # Agent 操作規則（角色、流程、版本與部署規範）
-├── .github/workflows/    # release.yml（CHANGELOG 同步至 GitHub Releases）
+├── .github/workflows/    # release.yml（CHANGELOG 同步至 Releases）、ci.yml（0.9.51 起）
 ├── .gemini/ / .claude/   # 專案技能（testing, verify, supabase-ops, versioning 等）
 ├── docs/
 │   ├── agent/            # Agent 持久化狀態：PROGRESS / TASK / BUG_FIX / FIXED_BUG
@@ -199,7 +199,7 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-目前測試套件規模：**121 個測試檔案、1,947 項單元與整合測試（100% PASS）**。
+目前測試套件規模：**123 個測試檔案、1,976 項單元與整合測試（100% PASS）**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
@@ -209,7 +209,7 @@ stock-pnl-web/
 
 ```bash
 cd sources
-npm test                              # 完整單元測試閘門（121 檔 / 1947 tests，必跑）
+npm test                              # 完整單元測試閘門（123 檔 / 1,976 tests，必跑）
 npm run typecheck:edge                # Edge Functions 型別檢查
 npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
 npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
