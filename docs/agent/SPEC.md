@@ -43,7 +43,7 @@
 
 ## 📑References
 
-- Architecture and system design document: [system_design.md](file:///home/ivan/stock-pnl-web/docs/architecture/system_design.md)
+- Original design document (2026-07 planning record, **not** current architecture): [system_design.md](../architecture/system_design.md)
 - Database Schema: `sources/supabase/schema.sql` (moved here from `docs/database/` since v0.3.7-dev.1)
 - Backend deployment and reporting JSON structure: `sources/supabase/README.md`
 
@@ -195,7 +195,8 @@ A complete description of the sources and batch behavior can be found in `source
 
 Market-wide volume and the institutional **amounts** (BFI82U) are not part of `generate-all` —— they have nothing to do
 with the holdings list and must not be short-circuited by it. Since 0.6.38 the schedule is
-**`0,30 7-10 * * 1-5` (UTC) = Taipei 15:00–18:30 every half hour**, previously 16:00 / 17:00 / 18:00.
+**`0 10,14 * * 1-5` (UTC) = Taipei 18:00 / 22:00**, the live `market-data-daily` job
+(`sources/supabase/schema.sql:710`). Verified against `cron.job` on DEV 2026-09-15.
 
 - **Why it can start at 15:00**: TWSE announces BFI82U around 15:00–15:30. The old fear was that an early round
   would be "a wasted trip", but `syncMarket` compares a content signature and, when nothing changed, returns
@@ -502,7 +503,8 @@ The data comes from `macro/us.json` (**global single file, not per-ticker**).
 - **This page has nothing to do with individual stocks**, so it is a top-level page rather than a pagination for individual stock analysis (`PLAN.md §Q5`).
 - "Core" only has standard definitions for CPI / PPI / PCE; the monthly increase in the number of non-agricultural buyers,
   Consumer confidence is combined with the CCI into the UM Index (see `PLAN.md §Q4` for the rationale).
-- **Triggered by an independent `macro-daily` cron job** (two shifts per day 13:00 / 15:00 UTC, non-Taiwan stock schedules),
+- **Triggered by an independent `macro-daily` cron job** (`*/30 12-18 * * *`, every 30 minutes UTC 12:00–18:00,
+  non-Taiwan stock schedules; `sources/supabase/schema.sql:857`),
   Trends in the last 12 periods.
 - **The idempotent key is the content fingerprint, not the date** (from 0.6.11, fixes BUG-008). Really ask FRED every class,
   Compare `macroFingerprint` (covering the entire points, because FRED will go back and correct the historical values),
