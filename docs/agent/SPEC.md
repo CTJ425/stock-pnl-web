@@ -71,9 +71,11 @@ This guideline does not apply to code comments - those are written for developer
 - When Supabase (native mode) is not set, **the entire page is hidden** (the data source is Edge Function and cannot be read by this machine).
 - The holding figures and the inventory overview share the same `buildHoldingRows` of `utils/holdingRows.ts`, and the two pages do not count as one copy each.
 - `StockDetailPage` is a pure presentation component (which stock to look at and where the stock holdings come from are determined by the caller);
-  The `selector` prop on the left side of the page is passed in from `AnalysisPage` to switch the drop-down menu of individual stocks.
-- Five tabs: **Chips** (post-market information), **Technical** (substantial content starting from 0.5.0),
-  **Fundamentals** (0.6.0-dev.4), **Quotes** (0.6.36, replacing the original "My Holdings"), **AI Interpretation** (0.6.0).
+- **Page Structure & Tabs (Updated in 0.9.x)**:
+  - Top-level tabs:
+    1. **Analysis Content (`analysis`)**: Contains sub-section switcher for **Chips** (`chips`, post-market institutional & margin/borrow), **Fundamentals** (`fundamental`, valuation, profitability & monthly revenue), and **Technical** (`technical`, daily candlestick, moving averages, volume & KD). Real-time quotes are integrated into the header quote card.
+    2. **What-If Calculation (`whatif`)**: Interactive position profit & loss simulation (calculates breakeven ladder, gross/net proceeds, fee overrides, and target price scenarios for held or watched stocks).
+    3. **AI Interpretation (`ai`)**: On-demand AI analysis based on structured indicators and market data.
 - The **Industry Badge** is displayed next to the title (0.6.0-dev.4, the data comes from the fundamental file, and is not displayed when there is none).
 
 ### Data responsibility boundaries
@@ -100,31 +102,30 @@ This guideline does not apply to code comments - those are written for developer
   The behavior of this function must be consistent with the `computeStreak` of Edge Function, and both sides must be tested.
 
 ### chart
-- **Self-drawn inline SVG, without introducing chart library** (`components/Charts/`). Reason: html2canvas can capture inline SVG, but PDF can retain its fidelity.
-- **Color and font size are written as literal values ​​to SVG properties** (no CSS variables, no external style sheets) -
-  html2canvas will serialize SVG into images, and the CSS variables and style sheet rules of the ancestor layer cannot be parsed.
+- **Self-drawn inline SVG, without introducing chart library** (`components/Charts/`).
+  > [!NOTE] PDF Export Deprecation (0.9.52)
+  > PDF export (`html2canvas` + `jsPDF`) was removed in v0.9.52. SVG charts continue using self-drawn inline SVG for zero-dependency performance and responsiveness, but are no longer serialized into PDF documents.
+- **Color and font size are written as literal values ​​to SVG properties** (no CSS variables, no external style sheets).
 - viewBox width = measured container width (1:1 drawing), the font level is fixed in any view window width.
 - There is a big gap in the magnitude of the balance between financing and securities lending, **each has an independent vertical axis** and is drawn into two graphs; on days when data is lacking, the line is disconnected and no interpolation is performed**.
 - **Color only does one thing at a time**:
   - Single sequence → Color expresses **polarity** (Taiwan stocks convention is red, green, and negative).
   - Multiple sequences side by side → Color expresses **identity** (one category color for each legal person), and positive and negative are expressed by the direction of the bar above and below the zero axis.
   - The two cannot be stacked on the same set of marks. Category colors are taken from the fixed order of `chartColors.ts`, **assigned in order without looping**,
-    And it must be a group that passes both the shallow and deep checks (a single group of literal values ​​must serve both themes and PDF at the same time).
+    And it must be a group that passes both the shallow and deep checks (a single group of literal values ​​must serve both themes).
 - **Two or more sequences must be accompanied by a legend** (identification cannot be based solely on color). The legend text uses normal text color and does not use sequence color. The color is borne by the color block.
 - **The total is not side by side with its components**: The total of the three legal persons = the sum of the four legal persons. Drawing them together equals the same amount being counted twice.
 
 ### Information source indication
-- The header (`.rpt-head`) of the chip report must indicate **code/name, data date, report update time**,
-  And **put it within the PDF extraction range** - the downloaded PDF must be able to tell which stock, which trading day and when it was produced.
+- The header (`.rpt-head`) of the chip report must indicate **code/name, data date, report update time**.
 - The "data date" is after the closing of the latest trading day (to which day the data is covered), and the "report update time" is the time when this report was actually generated.
   (After-hours schedule or immediate production). The difference is that the report may not be generated until the day after the data date. Times are displayed in the viewer's time zone.
 - The header (`.detail-head`) does not repeat this information - they are properties of the chip report, not the entire analysis page.
 
-### PDF
-- The front-end `html2canvas` + `jsPDF` is dynamically loaded (without entering the main bundle), and the server does not store PDF.
-- Dynamically mount/remove `.report-surface` before and after capturing (overwrite the design token to light color), **dark themes also output light-colored files**.
-- "Download PDF" only appears in the chip tab. **Note: There is substantial technical content starting from 0.5.0.
-  But PDF still only covers chip paging** - it has not been decided whether to expand it to technical aspects, it is not an oversight.
+### PDF (Deprecated / Removed in 0.9.52)
+> [!NOTE] Feature Removed (0.9.52)
+> The frontend PDF export feature and its dependencies (`jsPDF`, `html2canvas`) were decommissioned in v0.9.52. All report and chart views are rendered directly in the responsive web UI.
+- (Historical reference: The front-end previously used `html2canvas` + `jsPDF` dynamically loaded, with `.report-surface` container to force light styling).
 
 ---
 
@@ -306,13 +307,12 @@ The fifth tab of the individual stock analysis page is labeled "**AI Interpretat
    dev.1 was once placed in the fifth column of `user_settings.ai_*`, and it will be cleared easily by re-running the schema).
 3. **User brings his or her own AI provider**: The project does not have any built-in keys and does not pay any fees.
 
-### Set scope and permissions (0.6.0-dev.2)
+### Set scope and permissions (Updated in 0.9.51 / Task 161)
 
-AI is set to **shared by the whole site**: regardless of account or workspace, all login accounts read the same copy (the front-end is directly connected to the supplier,
-The key has to be entered into the browser, so it is an architectural necessity that everyone can read it). **Write to Admins Only** - RLS checks for JWT's
-`app_metadata.role = 'admin'`; tag is set by Dashboard/SQL (see schema.sql §4.1 comment for syntax),
-After posting the tag, the account will not take effect until you log in again. The UI for non-administrators does not have a configuration form and only sees a read-only summary.
-(provider/model, key is not displayed) and "Only administrators can modify" prompt; when not set, "Please contact administrator" is displayed.
+AI configuration in `app_settings` is **shared site-wide**, writeable only by administrators (`app_metadata.role = 'admin'`).
+- **Google Gemini**: The API key is **no longer sent to the browser**. The frontend invokes the `ai-proxy` Edge Function with user JWT (`verify_jwt=true`), and the Edge Function securely injects the API key. `get_ai_settings()` returns an empty string for Google's API key with `ai_has_key: true`.
+- **OpenAI-compatible**: Directly accessed from the browser (e.g. localhost Ollama / vLLM). If pointed to an external provider requiring a key, `get_ai_settings()` returns the key to authenticated users (see RISK-013).
+- Non-administrators see a read-only configuration summary with keys hidden.
 
 ### product red line
 
@@ -577,7 +577,7 @@ There are 14 titles on the same page, all at the same level, which means there i
 
 **AI analysis is not integrated: it has an API Key input box and dialog state, and the content is triggered by buttons and is not always there.
 
-### PDF retrieval scope and personal information (modified in 0.6.36)
+### PDF retrieval scope and personal information (Historical archive; PDF decommissioned in 0.9.52)
 
 `surfaceRef` **encloses all four segments**, the exported file = the content seen on the screen.
 0.6.35 In the past, the first section was for shareholding, which relied on "ranking outside `surfaceRef`" to block the inflow and outflow of individual capital;
@@ -785,7 +785,7 @@ K-line, trading volume bar, and KD are **not applicable**.
 2. **There can only be one copy of segmentation logic**: `lineSegments` and `areaSegments` share the internal `segments()`.
    If each is divided into segments, as long as the breakpoints of the filling and the lines differ by one frame, a color block without lines will appear on the screen.
 
-### html2canvas / PDF compatibility (tested, 2026-07-29)
+### html2canvas / PDF compatibility (Historical archive, 2026-07-29; removed in 0.9.52)
 
 The two line charts on the chip page will be imported into PDF, and SVG `<defs>` has never been used in this project before.
 Measured conclusion: **html2canvas correctly renders `<linearGradient>` and `url(#id)` for coloring**,

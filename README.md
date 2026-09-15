@@ -59,7 +59,6 @@
     - **季報獲利矩陣**：單季營收、YoY、EPS、四率（毛利率、營益率、稅前純益率、稅後純益率），表尾提供 TTM 近 4 季滾動 EPS、各項利潤率均值與 7 條對齊多線圖色彩之 SVG 走勢線。
   - **技術面**：日 K 線 + MA5 / MA20 / MA60、**每日成交量矩陣**（成交量、量比、收盤價、漲跌幅，表尾 N 日均量、連 N 日增量/縮量徽章與 4 條 SVG 走勢線）、KD(9,3,3)、RSI(14)、MACD 指標摘要。
 - **AI 分析**：需按下按鈕才會呼叫模型；資料為程式算好的指標與籌碼摘要（不含持股、成本與損益），產生後可繼續追問，對話嚴格框在該檔股票的數據內。
-- **下載 PDF**：匯出籌碼＋基本面＋技術面，不含持股數字。
 
 ### 外幣匯率與總體經濟
 - **外幣匯率**：以台幣為本位的 8 種外幣即時中價（最多延遲 10 分鐘），走勢圖可切 3 個月 / 6 個月 / 1 年並同時顯示兩個方向。⚠️ 為市場中價，非銀行牌告匯率。
@@ -90,14 +89,18 @@
      - **PostgreSQL Database**：儲存 Workspaces、Transactions、User Settings 與全站共用的 AI 設定 `app_settings`；共用快取 `price_cache`（現價）、`stock_names`（代號↔名稱）、`chip_raw_cache`（盤後原始檔）；批次可觀測性 `batch_run_log`、`source_probe_log`。
      - **GoTrue Auth**：處理帳號註冊與登入驗證。
      - **Row Level Security (RLS)**：透過 SQL Policy 確保使用者只能讀寫自己的資料；共用快取表唯讀（僅 service role 可寫），`app_settings` 僅 `app_metadata.role = 'admin'` 的帳號可寫。
-     - **Edge Functions (Deno)**：`stock-price` 批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價；`stock-report` 產出盤後籌碼、技術面、基本面、新聞、匯率與總經資料。兩者皆繞過瀏覽器 CORS 限制。
+     - **Edge Functions (Deno)**：
+       - `stock-price`：批次查詢台美股現價（台股走證交所 MIS 即時行情、失敗退 Yahoo；美股走 Yahoo）、模糊搜尋與外幣即時中價，繞開瀏覽器 CORS。
+       - `stock-report`：代抓 TWSE 盤後籌碼、日線、基本面、匯率與總經資料，產生結構化報告。
+       - `backup-transactions`：由 `backup-daily` 排程觸發，每日備份使用者資料至 Storage 與 Cloudflare R2（若有設定）。
+       - `ai-proxy`：轉發 Google Gemini AI 請求並於伺服器端注入 API 金鑰，強制驗證使用者 JWT，避免金鑰洩漏至瀏覽器。
      - **Storage（`reports` bucket）**：盤後批次預產的 JSON（籌碼 / 日線 / 基本面 / `fx/twd.json` / `macro/us.json`），前端直接下載。
-     - **精簡 6 大 pg_cron 排程與主動探針巡邏**：
+     - **精簡 7 大 pg_cron 排程與主動探針巡邏**：
        - `source-probe`：每 5 分鐘主動巡邏 8 大資料源，命中即抓，3 次穩定到位自動退休收工（MOPS 1 次到位收工）。
        - 精準時窗優化：`BWIBBU` 估值探針縮窄至 `17:00–18:30`；`BFI82U` 支援雙時窗（`15:00–16:30` 與 `19:30–20:15` 盤後鉅額與綜合帳戶結算）；`BORROW` 借券探針調至 `21:00–23:30`。
        - `macro-daily`、`fx-daily`、`market-data-daily`、`history-daily` 定時維護非日頻數據與歷程。
        - `backup-daily`：每日凌晨 02:00 (Asia/Taipei) 自動備份全站使用者交易紀錄至 Storage。
-     - **AI 端點（使用者自備）**：AI 分析由瀏覽器直連 Google Gemini 或 OpenAI 相容端點（Ollama / vLLM 等），專案不內建金鑰、不代付費用。
+     - **AI 端點（使用者自備）**：Google Gemini 走 `ai-proxy` Edge Function 代理並於伺服器端注入金鑰（強制驗證使用者 JWT），避免金鑰下發至瀏覽器；OpenAI 相容端點（Ollama / vLLM）維持瀏覽器直連。專案不內建金鑰、不代付費用。
 
 ### 系統架構圖 (System Architecture)
 
@@ -128,14 +131,14 @@ stock-pnl-web/
 │   │   │                 # priceProxy（現價＋TTL 快取）, stockSearch, twMarketData,
 │   │   │                 # usStockNames（美股 zh-TW 譯名對照）,
 │   │   │                 # reportProxy / reportsBucket / warmStock（盤後報告）,
-│   │   │                 # dailyProxy, fundamentalProxy, newsProxy, macroProxy,
+│   │   │                 # dailyProxy, fundamentalProxy, macroProxy,
 │   │   │                 # fxProxy / fxQuoteProxy（匯率）, adminStatus,
-│   │   │                 # aiClient / aiSettings / aiChatStore（AI 分析）, reportPdf
+│   │   │                 # aiClient / aiSettings / aiChatStore（AI 分析）
 │   │   ├── types/        # models.ts
 │   │   └── utils/        # pnlEngine.ts, holdingRows.ts, indicators.ts,
 │   │                     # csv.ts, fees.ts, formatters.ts, settings.ts
 │   ├── supabase/         # Supabase 後端：schema.sql（資料庫綱要、RLS、pg_cron 排程）
-│   │                     # + functions/（stock-price, stock-report）
+│   │                     # + functions/（stock-price, stock-report, backup-transactions, ai-proxy）
 │   └── package.json      # 版本號來源
 └── README.md             # 本說明文件 (專案根目錄)
 ```
@@ -149,7 +152,6 @@ stock-pnl-web/
 - **TypeScript**: `~6.0.2`
 - **Supabase JS Client**: `^2.110.7`
 - **lucide-react** (圖示): `^1.24.0`
-- **jsPDF** / **html2canvas** (報告匯出 PDF): `^3.0.4` / `^1.4.1`
 - **Vitest** (測試框架): `^4.1.10`
 - **oxlint** (Lint): `^1.71.0`
 - **Deno** (Edge Functions 執行環境): 最新 Supabase Edge Runtime
@@ -197,7 +199,7 @@ stock-pnl-web/
 ## 🧪 測試
 
 完整策略與慣例（Unit / Integration / E2E）：**[`docs/UnitTests/README.md`](docs/UnitTests/README.md)**  
-目前測試套件規模：**85 個測試檔案、1345 項單元與整合測試（100% PASS）**。
+目前測試套件規模：**121 個測試檔案、1,947 項單元與整合測試（100% PASS）**。
 
 | 層級 | 內容 | 怎麼跑 |
 | ---- | ---- | ---- |
@@ -207,7 +209,7 @@ stock-pnl-web/
 
 ```bash
 cd sources
-npm test                              # 完整單元測試閘門（85 檔 / 1345 tests，必跑）
+npm test                              # 完整單元測試閘門（121 檔 / 1947 tests，必跑）
 npm run typecheck:edge                # Edge Functions 型別檢查
 npx vitest run src/utils/pnlEngine.test.ts   # 執行單一測試檔
 npm run dev                           # 本機模式 UI，供手動或 Playwright 驗證
@@ -282,7 +284,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### 步驟 3：套用資料庫綱要
 
-`sources/supabase/schema.sql` 會建立全部資料表、RLS 政策、兩個 Storage bucket、`pg_cron` 與 `pg_net` 擴充，以及 6 個排程。
+`sources/supabase/schema.sql` 會建立全部資料表、RLS 政策、兩個 Storage bucket、`pg_cron` 與 `pg_net` 擴充，以及 7 個排程。
 
 ⚠️ **執行前必須替換兩個佔位符，共 18 處：**
 
@@ -363,7 +365,7 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 Dashboard → Edge Functions → **Create a function**。名稱必須與資料夾**完全相同**（前端以函數名呼叫，改名就對不上），然後把該資料夾下的 `.ts` 檔逐一貼上。
 
 - `*.test.ts` 是單元測試，**不要上傳**。
-- `stock-report` 有 10 個 `.ts` 檔，逐檔貼很容易漏。**多檔函數建議改用 CLI。**
+- `stock-report` 有 18 個 `.ts` 檔，逐檔貼很容易漏。**多檔函數建議改用 CLI。**
 
 #### 做法 B：CLI（推薦）
 
@@ -565,7 +567,7 @@ npm run build                              # 產出於 sources/dist/
 | 3 | 新增一筆台股交易 | 庫存出現該筆，且抓得到現價 → `stock-price` 正常 |
 | 4 | 個股「分析」→ 籌碼分頁 | 有內容 → `stock-report` 正常 |
 | 5 | 管理員後台 | 使用者選單看得到入口 → `admin` 角色生效 |
-| 6 | `cron.job` 覆驗查詢 | 6 個排程，兩個布林欄位皆 `false` |
+| 6 | `cron.job` 覆驗查詢 | 7 個排程，兩個布林欄位皆 `false` |
 | 7 | Storage | 出現 `reports`（公開）與 `backups`（私有）兩個 bucket |
 
 ---

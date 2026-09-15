@@ -35,12 +35,13 @@
 
 ---
 
-### BUG-079 — 保本賣出價 and 淨收 read the same fee rate differently (suspected)
-- **Where**: `sources/src/utils/holdingRows.ts`, `sources/src/utils/fees.ts`
-- **Failure scenario**: With a workspace fee rate of 0.6 (a user typing 6 折 as a decimal, see Task 159 D2), 保本賣出價 becomes 2.52 × the average cost (鴻海 avg NT$182.16 → NT$458.83, i.e. cost / (1 − 0.6 − 0.003)), while 淨收 deducts only ~0.39% (台積電 market value NT$3,675,000 → 淨收 NT$3,660,834, i.e. 0.001425 × 0.6 + 0.003). The two paths use a different fee source or interpretation. With a normal rate the gap may be small. Not yet read in code.
-- **Found**: 2026-09-11, desktop UX audit (local mode, seeded data, 0.9.44).
-- **Decision**: Investigate as Lane 2 (money code) before any fix. Not part of the Task 158/159 UI batches.
-- **Status**: OPEN (suspected, needs code reading)
+### BUG-079 — 保本賣出價 and 淨收 read the same fee rate differently
+- **Where**: `sources/src/utils/holdingRows.ts`, `sources/src/utils/fees.ts`, `sources/src/utils/pnlEngine.ts`
+- **Root Cause Analysis**:
+  1. `estimateUnrealized` (`pnlEngine.ts:861-865`) calculates unrealized P&L (and therefore `netMktVal = cost + unrealized`) using the fee rate recorded on individual lots (`lot.feeRate` from `holding.openLots`, which defaults to historical statutory rate ~0.001425 or inferred discount).
+  2. In contrast, `breakEvenPrice` (`fees.ts:184-194`) receives the current workspace-level `feeRate` and does not consult `openLots`. It computes candidate breakeven via `cost / (qty * (1 - feeRate - taxRate))` and checks `isBreakEven(p)` using `feeRate`.
+  3. When a user mistakenly enters `0.6` as a workspace fee rate (intended as 6 折 / 60% of statutory fee, see Task 159 D2), `breakEvenPrice` interprets it as a literal 60% fee rate (denominator `1 - 0.6 - 0.003 = 0.397`), making breakeven price ~2.52× cost basis. Meanwhile, `estimateUnrealized` for existing positions continues evaluating against `lot.feeRate` (~0.000855 or 0.001425), deducting only ~0.39% for fees+tax.
+- **Status**: OPEN (Root cause identified; UI input formatting addressed in Task 159 D2, calculation alignment tracked for future remediation)
 
 ---
 
@@ -126,14 +127,6 @@
 - **BUG-042**: `listWorkspaces` 退回重試吞掉第一次錯誤訊息（Accepted risk：專案生產代碼不留 console.error）。
 - **BUG-043**: `LocalProvider.setWorkspaceFeeRate` 對未知 id 靜默成功（Accepted risk：與現有 renameWorkspace 一致）。
 - **Status**: ACCEPTED RISK
-
----
-
-### Supabase Redirect URLs allow-list does not contain app origin
-- **Where**: Supabase Dashboard → Auth Settings → Redirect URLs
-- **What**: 註冊驗證信連結轉導若未包含前端正式網址，會落回 API root。
-- **Action**: 當前端部署站點確定後，至 Supabase Console 加入允許清單。
-- **Status**: OPEN (configuration required)
 
 ---
 

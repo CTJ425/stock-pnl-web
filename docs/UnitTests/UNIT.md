@@ -3,8 +3,8 @@
 ## Definition
 
 Pure (or nearly pure) modules: no real network, no Supabase/Storage/cron, no React `render`.  
-Edge pure files under `supabase/functions/stock-report/` are tested with **Vitest on Node** (not Deno).  
-`index.ts` calls `Deno.serve` at load — **never import it** in Vitest; logic lives in extractable modules (`pollPlan`, `twChips`, …).
+Edge pure files under `supabase/functions/` (`stock-report`, `backup-transactions`, `ai-proxy`, `stock-price`) are tested with **Vitest on Node** (not Deno).  
+`index.ts` calls `Deno.serve` at load — **never import it** in Vitest; logic lives in extractable modules (`pollPlan`, `twChips`, `r2`, `handler`, …).
 
 ## Run
 
@@ -13,6 +13,8 @@ cd sources
 npm test
 npx vitest run src/utils/pnlEngine.test.ts
 npx vitest run supabase/functions/stock-report/pollPlan.test.ts
+npx vitest run supabase/functions/backup-transactions/r2.test.ts
+npx vitest run supabase/functions/ai-proxy/handler.test.ts
 ```
 
 `testTimeout` is 20s for UI tests; unit cases should finish in ms — do not raise timeout to hide hangs.
@@ -40,7 +42,7 @@ import { decideSkip } from './pollPlan.ts'  // Edge often uses .ts suffix
 | Utils | `src/utils/*.test.ts` — `pnlEngine`, `fees`, `csv`, `holdingRows`, `indicators` |
 | Services | `src/services/*.test.ts` — proxies, `misParse`, `quoteWindow`, AI, warm/prefetch |
 | Feature pure | e.g. `Charts/*`, `fxConvert`, `macroPeriod`, `chipStreak`, `txSearch`, `timeline` |
-| Edge pure | `supabase/functions/stock-report/*.test.ts` — `pollPlan`, `twChips`, `twMarket`, daily/fundamental/history, FX, US macro, `batchTickers` |
+| Edge pure | `supabase/functions/*/*.test.ts` — `stock-report` (pollPlan, twChips, twMarket, daily/fundamental/history, FX, US macro, batchTickers), `backup-transactions` (r2, backupPlan), `ai-proxy` (handler), `stock-price` (dailyRange, twList) |
 
 List files with: `find sources/src sources/supabase/functions -name '*.test.ts'`.
 

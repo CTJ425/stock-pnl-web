@@ -37,19 +37,16 @@
 
 These two items originally only existed in the Agent's memory. The memory belongs to the local machine and will disappear when the machine is changed, so they are placed here.
 
-### Abandoned: Cloudflare Worker + R2
+### Abandoned: Cloudflare Worker for Report Hosting (Clarified: R2 Backups Adopted)
 
-The after-hours report was initially planned to be stored using **Cloudflare Worker + R2** (there used to be a repo root directory `worker/`
-with the `VITE_REPORT_WORKER_URL` environment variable). Finally switched to the existing Supabase Edge Function + Storage**,
-The reason is that there is no need to maintain an extra set of cloud accounts and deployment pipelines for one function.
+The after-hours report was initially planned to be served using **Cloudflare Worker + R2** (there used to be a repo root directory `worker/` with the `VITE_REPORT_WORKER_URL` environment variable). This was abandoned in favor of Supabase Edge Functions + Storage for reports to avoid maintaining redundant cloud hosting pipelines.
 
-The `worker/` directory no longer exists. **If you see the words Worker / R2 in old notes or old project files, that is expired information, do not follow it. **
+> [!NOTE] R2 Offsite Backup Adoption (0.9.49 / Task 144)
+> While Cloudflare Worker for report serving remains abandoned, **Cloudflare R2 was later adopted in v0.9.49 as an offsite S3-compatible backup target** for database dumps in `backup-transactions` (`r2.ts`). The prohibition strictly applies to using Cloudflare Worker to host report generation/storage.
 
-### Product red line: Don’t take the initiative to add AI interpretation
+### Product boundaries: AI Interpretation (Updated in 0.6.0 & 0.9.51)
 
-Report v1 / v2 **Deliberately not connected to AI** - users should look at the pure data first and make their own judgments.
-There are seams left in the architecture (see 0.6.0 AI Assistant in Short-Term Goals §6), but **until the user explicitly requests it,
-Don’t proactively add AI-generated interpretive text** to reports or analysis pages.
+Reports initially avoided AI to let users evaluate raw market data directly. In 0.6.0, an optional **AI Analysis** tab was introduced in the stock detail view, requiring explicit user activation and bringing their own API keys. In 0.9.51 (Task 161), Google Gemini requests were routed through the `ai-proxy` Edge Function to secure API keys on the server side. Unsolicited AI generation in raw report batches remains prohibited.
 
 ---
 
@@ -98,9 +95,8 @@ Baseline version: `v0.3.7-dev.2` (feature v1 implemented in 038cdd8 / 9d62546); 
 
 **Side benefit**: Eliminate existing duplication risks - `renderHoldingSection` of `sources/src/services/reportProxy.ts:120-130` is a handwritten copy of `reportHtml.ts:83-95` `holdingSection`, including `fmtInt / fmtPrice / fmtSignedMoney / fmtPct / sc` Each of the five formatting functions has one copy on each side. Storage file size will also be reduced by half (originally `data` and `html` are two equivalent contents).
 
-**Side effects to be dealt with**: `reportPdf.ts` uses `html2canvas` to capture the DOM. Originally, the `.rpt` block with its own light-colored scoped style was captured, so that the PDF will look like a document; after it is rendered by the app, the dark theme will output a dark PDF.
-→ Countermeasure: Add `.report-surface` class, overwrite tokens such as `--surface / --ink / --border` to light colors in this container, and the PDF capture range is this container.
-(html2canvas 1.4 can handle inline `<svg>`, which is one of the reasons to choose self-drawn SVG instead of canvas / WebGL chart library.)
+**Side effects to be dealt with (Historical — PDF decommissioned in 0.9.52)**: Originally, `reportPdf.ts` used `html2canvas` to capture the DOM with a `.report-surface` class. In version 0.9.52, PDF generation and `html2canvas`/`jsPDF` were completely removed, so this styling container is no longer needed.
+
 
 ### C. Architectural Decision 2 - Switch to using rwd endpoint with date for margin trading
 
@@ -234,12 +230,9 @@ All decisions in §A–§J are followed, with the following additions and deviat
 
 **Differences from plan**
 
-1. **`.report-surface` is changed to "Apply on retrieval"** instead of a non-resident container.
-   The way the plan is written will cause a whole white background panel to appear on the analysis page under the dark theme; change it to `reportPdf.ts` before and after `html2canvas`
-   Dynamically mount/remove, the UI maintains the theme color, and the PDF remains a light-colored document, getting the best of both worlds.
+1. **`.report-surface` is changed to "Apply on retrieval"** instead of a non-resident container (Historical: PDF decommissioned in 0.9.52).
 2. **Chart colors and font levels are always written as SVG attributes, without CSS variables. **
-   html2canvas will serialize inline SVG into images, and CSS variables and external style sheet rules in the ancestor layer cannot be parsed.
-   (It will turn into huge black text). Therefore, a separate `chartColors.ts` is created to store literal color matching, maintaining positive red, green and negative but not changing with the theme.
+   (Historical: originally to support html2canvas serialization; retained for zero-dependency consistency).
 3. **The chart is drawn using the "actual container width" 1:1** (`ResizeObserver`) instead of fixed viewBox scaling.
    Actual measurement shows that proportional scaling will make the axis label twice as big on a wide screen and shrink to about 6px on a 390px mobile phone; the font level will be constant after 1:1 drawing.
 4. **`fmtAxisNumber` requires step parameter**. Financing balance 31,100–31,928 This kind of sequence with “class interval is much smaller than the unit”,
@@ -250,13 +243,13 @@ All decisions in §A–§J are followed, with the following additions and deviat
    payload, memory pressure is high. Load one day instead → extract all the chips of the target code → discard the raw, and the peak number is only (3) concurrent copies.
 7. **`extractInstitutional` maintains comparison by 'field name'** (plan unspecified). The 19 field names of T86 are not repeated.
    Using names is more resistant to column order changes than position indexes; only rwd margin trading must use position indexes due to repeated column names.
-8. **"Download PDF" is only displayed in the chip tab**. There is no report content to be retrieved from other tabs, and the permanent button is misleading.
+8. **"Download PDF" is only displayed in the chip tab** (Historical: PDF decommissioned in 0.9.52).
 9. **§A's "pending confirmation" has been finalized: the summary popup will not be retained. ** The analysis page reads the same Storage JSON, and the opening speed is the same.
    One more layer of summary is just one more markup to be maintained simultaneously.
 
 **Verification results**: `npm run test` 148 passed (baseline 113), `npm run build` passed, `npm run lint` has no new warning.
 Browser actual test (Playwright + temporary preview harness, delete after verification): 1280px / 390px, no horizontal overflow, tooltip normal,
-`.report-surface` is correct, `generatePdfBlob` actually produces 388KB PDF, and the native mode returns correctly.
+`.report-surface` is correct, and the native mode returns correctly (PDF generation historical note: removed in 0.9.52).
 
 **§J File Debt**: Complete all (TASK.md adds v1 summary + Task 11, PROGRESS.md adds dev.1/dev.2/dev.3,
 SPEC.md adds a new chapter "Individual Stock Analysis Page and After-Hour Chips" and corrects the schema path, `sources/supabase/README.md` updates schema 2

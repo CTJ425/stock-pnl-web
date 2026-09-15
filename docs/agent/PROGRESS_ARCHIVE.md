@@ -5,6 +5,18 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-15 08:58:24 Asia/Taipei (0.9.52, 相依漏洞清理)
+
+例行檢查 GitHub 與本機狀態時，`npm audit` 報出 `jspdf@3.0.4` 一個 critical 與連帶的 `dompurify` moderate。使用者問了關鍵的一句：PDF 功能不是已經拿掉了嗎。查證結果是**只拔了一半** —— UI 按鈕在 0.9.17（`11516cd`）移除並有測試鎖住，但 `generatePdfBlob()`、它的兩個動態 `import()`、以及 `package.json` 的兩個相依都還在，沒有任何正式程式呼叫它。
+
+**因此選擇移除而不是升級。** `jspdf@4.2.1` 是 major 升級，為一個沒有呼叫者的函式承擔破壞性變更不划算。刪除 `generatePdfBlob()` 與 `pdfScaleFor()`、`reportPdf.test.ts`、以及 `index.css` 的 `.report-surface` 區塊；**`downloadBlob()` 必須保留**，`AppShell.tsx` 與 `Admin/BackupsSection.tsx` 用它下載備份檔。順手清掉 `QuoteTab.tsx` 一段引用早已不存在的 CSS 規則的註解，以及三個測試檔的 stale mock。正式相依 6 → 4，`npm audit --omit=dev` 由 1 critical + 1 moderate 歸零。
+
+開發相依另有 5 個漏洞（`undici`、`nanoid` 為 high，`postcss`、`@vitest/mocker`、`vitest` 為 moderate），全在 `vitest` / `vite` 相依鏈上。`npm audit fix` 在現有 semver 範圍內修完，`vitest` 只從 4.1.10 走到 4.1.11，`package.json` 沒變。
+
+驗證：`npm run lint` / `npm run build` / `npm run typecheck:edge` / `npm test` 四道皆 exit 0，121 檔 **1,947** 條測試全過。測試數比 0.9.51 少 5 條，差額正好是刪掉的 `reportPdf.test.ts`。全專案 `npm audit` 為 0 vulnerabilities。
+
+**留待決定**：`Charts/` 底下 6 個檔案的註解仍在解釋「顏色寫死是因為 html2canvas 無法解析 CSS 變數」。該限制已不存在，但顏色仍在使用，清理會擴散到配色決策。
+
 ## 📅 Log: 2026-09-14 19:29:33 Asia/Taipei (0.9.51, Task 161 + 稽核 A2/A3/A4)
 
 Google AI 金鑰不再進入瀏覽器。新增 `ai-proxy` Edge Function：前端仍負責組請求與解析回覆，代理只在伺服器端注入金鑰與模型名稱，並原樣轉送 Google 的狀態碼與 JSON —— 因此「400 去掉 `thinkingConfig` 重送一次」、401/429/5xx 對應、180 秒逾時全部不變。模型名稱改由伺服器端決定，呼叫端無法改指到別的模型。
