@@ -2,12 +2,12 @@
 
 - Agent: Claude
 - Action: Task 162 國際指數分頁（日／韓／美 8 檔）與盤中 60 秒輪詢
-- Status: 🔄 **IN PROGRESS**（程式與測試完成，DEV 部署待使用者決定）
-- Timestamp: 2026-09-15 10:50:13 Asia/Taipei
+- Status: ✅ **RELEASED 0.9.54**（已合併 `main` 上線；Edge Function 部署待授權）
+- Timestamp: 2026-09-15 11:36:00 Asia/Taipei
 
 ---
 
-## 📅 Log: 2026-09-15 10:50:13 Asia/Taipei (Task 162, 國際指數分頁)
+## 📅 Log: 2026-09-15 11:36:00 Asia/Taipei (Task 162, 0.9.54 國際指數分頁上線)
 
 總體經濟頁新增第三個子分頁「國際指數」，顯示日經 225、KOSPI、KOSDAQ、道瓊、S&P 500、那斯達克、費城半導體、羅素 2000 共 8 檔，盤中每 60 秒更新。
 
@@ -20,6 +20,16 @@
 收尾跑全套測試時抓到一個規格疏漏：專案有一條全域守則測試 `invokeTimeout.test.ts`，要求每個 `functions.invoke` 都必須帶 `timeout`，而規格把呼叫形狀寫死成只有 `body`。`indexQuotes.ts` 與其測試同步補上 `timeout: 15_000`。
 
 驗證：`npm test` 123 檔 / 1,976 測試全過 exit 0；`npm run build` exit 0；`npm run typecheck:edge` exit 0。reviewer 八項逐點覆核 PASS，無 finding。
+
+E2E 與真瀏覽器覆驗後合併 `main`，版號 0.9.54，commit `859feca`，`dev` 與 `main` 同版。GitHub Release 由 workflow 自動建立，CI 綠燈。
+
+E2E 全套在本機模式跑前後兩次，失敗清單與未套用本版變更的基準線**完全相同**（同樣 10 passed / 6 failed），所以本版沒有造成迴歸。那 6 條是既有紅燈：其中「總體經濟」「外幣匯率」兩條的成因已查明 —— `AppShell.tsx` 的 `SUPABASE_ONLY_TABS` 在本機模式把這兩個分頁整個拿掉，導覽列上根本沒有那顆按鈕，測試等的是一個不會出現的元素。
+
+登入牆讓瀏覽器看不到雲端分頁，改以一個暫時的獨立進入點把 `GlobalIndices` 單獨掛起來，用 `.env` 的 DEV 專案跑真瀏覽器，看完即刪。實測（11:27 台北）：8 檔指數全部取得真實報價，日本標「午休」（東京 12:26，正好落在 11:30–12:30）、韓國標「盤中」、美國標「已收盤」；整整 60 秒後只重送 `^KS11` 與 `^KQ11` 兩檔，與「只問有開盤的市場」的規格一致。手機 375px 兩欄、無水平溢出。
+
+視覺覆驗抓到一個瑕疵並修掉：`.rpt-card` 是 `flex: 1 1 140px`，只有一檔的日本組會把卡片拉成整列寬。`.gix-groups .rpt-card` 加上 `max-width: 320px`，約束只落在新網格內，不動共用類別。
+
+未完成：`stock-price` Edge Function 尚未部署。推 `main` 不會部署 Edge，`cacheTtlMsFor` 的 `IDX:` 60 秒分支在部署前不會生效。
 
 ## 📅 Log: 2026-09-15 10:05:00 Asia/Taipei (P1~P4 系統架構、部署與測試文檔同步)
 
