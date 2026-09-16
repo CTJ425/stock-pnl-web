@@ -626,3 +626,77 @@ describe('TwMarketSection — 側欄自營商合計', () => {
     expect(dealerCell(container)).toBe('—')
   })
 })
+
+describe('TwMarketSection — onBack 返回按鈕', () => {
+  afterEach(() => {
+    cleanup()
+    fetchMarketDaily.mockReset()
+  })
+
+  it('正常狀態下透傳 onBack，點擊返回按鈕觸發回呼', async () => {
+    fetchMarketDaily.mockResolvedValue({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000))],
+    })
+    const onBack = vi.fn()
+    render(<TwMarketSection onBack={onBack} />)
+
+    await screen.findByRole('table', { name: '每日成交量' })
+    const backBtn = screen.getByTestId('index-back')
+    fireEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('載入中狀態下若提供 onBack，顯示返回按鈕且點擊觸發回呼', async () => {
+    fetchMarketDaily.mockReturnValue(new Promise(() => {}))
+    const onBack = vi.fn()
+    render(<TwMarketSection onBack={onBack} />)
+
+    expect(screen.getByText('正在讀取台股市場資料…')).toBeTruthy()
+    const backBtn = screen.getByTestId('index-back')
+    fireEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('載入失敗狀態下若提供 onBack，仍顯示返回按鈕可退回，且具備重新整理按鈕可重試', async () => {
+    fetchMarketDaily.mockRejectedValueOnce(new Error('fail'))
+    const onBack = vi.fn()
+    render(<TwMarketSection onBack={onBack} />)
+
+    await screen.findByText('讀取台股市場資料失敗，請稍後重新整理。')
+    const backBtn = screen.getByTestId('index-back')
+    fireEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalledTimes(1)
+
+    // Retry via 重新整理 button
+    fetchMarketDaily.mockResolvedValueOnce({
+      asOf: '2026-08-04T08:30:00.000Z',
+      days: [day('2026-08-04', 1_087_045_875_836, inst(23_000_000_000, 12_000_000_000))],
+    })
+    const refreshBtn = screen.getByRole('button', { name: /重新整理/ })
+    fireEvent.click(refreshBtn)
+    await screen.findByRole('table', { name: '每日成交量' })
+  })
+
+  it('查無資料狀態下若提供 onBack，顯示返回按鈕且具備重新整理按鈕', async () => {
+    fetchMarketDaily.mockResolvedValueOnce(null)
+    const onBack = vi.fn()
+    render(<TwMarketSection onBack={onBack} />)
+
+    await screen.findByText(/市場資料尚未產生/)
+    const backBtn = screen.getByTestId('index-back')
+    fireEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalledTimes(1)
+
+    const refreshBtn = screen.getByRole('button', { name: /重新整理/ })
+    expect(refreshBtn).toBeTruthy()
+  })
+
+  it('market 為 null（無盤後歷史檔案）時，頂部 TwIndexToday 依然正常渲染', async () => {
+    fetchMarketDaily.mockResolvedValue(null)
+    render(<TwMarketSection />)
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-today')).toBeTruthy())
+    expect(screen.getByText(/市場資料尚未產生/)).toBeTruthy()
+  })
+})

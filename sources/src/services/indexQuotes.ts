@@ -12,15 +12,24 @@ export interface IndexQuote {
   ticker: string
   price: number
   prevClose: number | null
+  /** ISO string the Edge reports as the fetch time of this quote. Null when absent. */
+  asOf: string | null
 }
 
 interface EdgeIndexQuote {
   price?: unknown
   prevClose?: unknown
+  asOf?: unknown
 }
 
 interface EdgePricesResponse {
   prices?: Record<string, EdgeIndexQuote>
+}
+
+function parseAsOf(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null
+  const ms = Date.parse(raw)
+  return Number.isNaN(ms) ? null : raw
 }
 
 function isPositiveFinite(v: unknown): v is number {
@@ -54,6 +63,7 @@ export async function fetchIndexQuotes(tickers: string[]): Promise<Record<string
         ticker,
         price: quote.price,
         prevClose: isPositiveFinite(quote.prevClose) ? quote.prevClose : null,
+        asOf: parseAsOf(quote?.asOf),
       }
     }
     return out

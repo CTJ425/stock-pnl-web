@@ -44,8 +44,8 @@ describe('fetchIndexQuotes', () => {
       error: null,
     })
     const out = await fetchIndexQuotes(['^N225', '^DJI'])
-    expect(out['^N225']).toEqual({ ticker: '^N225', price: 63992.25, prevClose: 63500 })
-    expect(out['^DJI']).toEqual({ ticker: '^DJI', price: 52421.2, prevClose: null })
+    expect(out['^N225']).toEqual({ ticker: '^N225', price: 63992.25, prevClose: 63500, asOf: null })
+    expect(out['^DJI']).toEqual({ ticker: '^DJI', price: 52421.2, prevClose: null, asOf: null })
   })
 
   it('Edge 回錯誤時回空物件，讓呼叫端保留上一輪數值', async () => {

@@ -5,6 +5,72 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-15 21:50:00 Asia/Taipei (0.9.56-dev.3, 總體經濟次分頁與台股下鑽整合)
+
+**總體經濟次分頁導航調整**：
+- 取消頂部 subtabs 中的獨立「台股」頁籤，由「國際指數」與「美國經濟」兩分頁構成。
+- 順序調整為：1.「國際指數」、2.「美國經濟」，並將預設子分頁設為「國際指數」（`tab = 'world'`）。
+
+**台股市場入口整合與下鑽／返回**：
+- 點擊「國際指數」中的「加權指數（`^TWII`）」卡片時，下鑽渲染完整台股市場盤後與當日資料（`TwMarketSection` / `TwIndexToday`）。
+- `TwMarketSection` 與 `TwIndexToday` 新增 `onBack` 支援，頂部提供「返回」按鈕（`data-testid="index-back"`），點擊後退回國際指數清單。
+- 在例外狀況（載入中、載入失敗、無資料）下，維持一致性標題列並呈現「返回」按鈕，且提供「重新整理」重試按鈕。
+- 在下鑽狀態下，點擊頂部次分頁「國際指數」或切換次分頁時亦會重設 `selectedDef` 返回列表。
+
+**驗證**：
+- 129 檔測試檔 / 2,025 條測試全數通過（0 失敗）；`npm run build` 與 `npm run lint` 皆 exit 0。
+
+## 📅 Log: 2026-09-15 17:20:00 Asia/Taipei (0.9.56-dev.2, Task 164 選項 A 與 IndexDetail 排版調整)
+
+**選項 A 實作（加權指數分頁切換）**：
+- 在「國際指數」分頁點擊「加權指數（`^TWII`）」卡片時，由 `MacroPage` 攔截並切換至「台股」分頁（`tab = 'tw'`），直接呈現完整台股市場盤後分析、三大法人與大盤盤中資訊。
+- `MacroPage.test.tsx` 新增選項 A 與下鑽返回單元測試。
+
+**外盤指數下鑽格式對齊台股（IndexDetail）**：
+- 沿用 `TwIndexToday` 排版架構套用至 `IndexDetail.tsx`（頂部返回與重新整理標題列、Hero 價格區塊、開盤時段標籤、當日 6 格統計帶、7 走勢區間切換按鈕與無成交量線走勢圖）。
+- 嚴格遵守負向規範：外盤指數無三大法人、成交金額與收盤統計等數據，不渲染該表格或區塊。
+- 新增 `RefreshCw` 重新整理按鈕，支援強制刷新 intraday 報價與 daily 歷史線。
+
+**邊框過度貼邊修正**：
+- `IndexDetail.tsx` 外層容器與 `index.css` 同步配置 `padding: 18px 20px`，對齊 `GlobalIndices` 與 `TwIndexToday` 之視覺間距，徹底修復貼邊問題。
+
+**驗證**：
+- 129 檔測試檔 / 2,017 條測試全數通過（0 失敗）；`npm run build` 與 `npm run lint` 皆 exit 0。
+
+## 📅 Log: 2026-09-15 16:25:00 Asia/Taipei (0.9.56-dev.1, Task 164 Phase A & B 完成)
+
+**Phase A 國際指數卡片強化**：
+- `GlobalIndices` 新增台灣加權指數（`^TWII`）群組，置於最前列。
+- 每個市場群組標題顯示開收盤時間文字（`SESSION_HOURS`：台灣、日本、韓國、美國冬夏令時間）。
+- 每張指數卡片顯示報價時間戳記（`asOf`，格式 `MM/DD HH:mm`）及盤中狀態標籤，無效或空值時安全回退為 `null` 且不渲染時間標籤。
+- 卡片全面支援點擊進入下鑽詳情頁（`IndexDetail`）。
+
+**Phase B 指數下鑽詳情頁與 7 走勢區間**：
+- 新增 `IndexDetail` 組件：包含返回按鈕、市場開盤時段條、當日 6 格統計帶（開盤、最高、最低、昨收、漲跌點數、漲跌幅）與無成交量線的 `IntradayChart`。
+- 新增 `indexTrend.ts`：提供 7 個走勢區間（`1d`、`5d`、`6m`、`ytd`、`1y`、`5y`、`all`，依規範排除 `1m`），並依區間分流 intraday 與 daily 遠端資料。
+- `TwIndexToday` 同步升級支援 7 走勢區間切換。
+- `dailyProxy.ts` 之 `fetchRemoteDaily` 新增 `market` 參數（預設 `'TPE'`），並將快取鍵隔離為 `${market}:${ticker}:${range}`。
+- 嚴格遵守負向規範：外盤指數不顯示三大法人、收盤統計或成交量。
+- 圖表讀取失敗或無資料時主動清空殘留資料，切換 ticker 時重設狀態。
+
+**CSS 與主題修復**：
+- `index.css` 全面替換為 Carbon Design System 標準 token（`--cds-layer-02`、`--border`、`--border-strong`、`--ink-secondary` 等），修復淺色主題下卡片邊框與文字對比度問題。
+
+**驗證**：
+- 129 檔測試檔 / 2,013 條測試全數通過（原失敗的 21 條測試全轉綠）；`npm run build`、`npm run typecheck:edge`、`npm run lint` 皆 exit 0。
+
+## 📅 Log: 2026-09-15 14:44:45 Asia/Taipei (0.9.55, Task 145 與 163 收尾)
+
+**OPT-1 路由層分割**：`MacroPage`、`FxPage`、`AdminConsolePage` 改為 `React.lazy`。三者都不在首屏路徑上 —— 都要點分頁才會到 —— 留在進入點只是讓每個使用者都下載它們。bundle 由單檔拆成四塊（`FxPage` 9.85 kB、`MacroPage` 37.21 kB、`AdminConsolePage` 70.04 kB），`index` 從超過 500 kB 降到 496.62 kB，Vite 的 chunk 警告消失。具名匯出要用 `.then((m) => ({ default: m.X }))` 轉成 `default`，`lazy` 只吃這個形狀。
+
+**OPT-2 memo 穩定化**：`IntradayChart` 的 `series?.points ?? []` 每次 render 都產生新陣列，讓下游三個 `useMemo` 全部失效並串連重繪。改為模組層 `EMPTY_POINTS` 常數後，三條 `react-hooks(exhaustive-deps)` 警告消失。
+
+**Task 163 文件補完**：`README.md` 與 `SPEC.md` 都補上總體經濟的三個子分頁；`PLAN.md` 新增 §T 涵蓋 Macro 與 Fx 兩頁架構。補查 `SPEC.md` 與 `PLAN.md` 剩餘段落後只再找到 2 條並已修：`timeline.ts` 測試數 29 → 23，以及 0.9.54 引入的錯誤行號 `schema.sql:710`（那行在註解裡）→ 728。**同一個坑踩了兩次** —— 註解裡的 SQL 被當成程式碼，第一次造成 cron 漂移的誤判，第二次造成錯誤行號。
+
+**交接熱檔清理**：`PROGRESS.md` 8,584 → 2,169 bytes（回到 4096 上限內），`TASK.md` 17,269 → 15,447 bytes。移出的是已完成與已被推翻的內容，全部進 `*_ARCHIVE.md`，無損檢查 PASS（移出 8,237、移入 9,848）。清出的最有價值一項是 `TASK.md` 內部的自相矛盾：一行寫「`ai-proxy` PROD 尚未部署」，與同檔第 14 行直接打架。`BUG_FIX.md` 未動 —— 14 條全部仍然成立。
+
+**驗證**：1,976 測試、`build`、`typecheck:edge`、`lint` 皆 exit 0，`npm audit` 0 vulnerabilities，**E2E 全套 16/16 exit 0**（Supabase 模式真瀏覽器）。E2E 是本版的關鍵驗證：延遲載入最可能壞在真實瀏覽器的分頁切換上，單元測試看不到。
+
 ## 📅 Log: 2026-09-15 13:35:00 Asia/Taipei (交接文件稽核校正 + ai-proxy 上 PROD + 驗證器補洞)
 
 以現行程式碼為依據稽核 11 份宣稱現況的文件，逐條要求「文件出處 + 程式碼反證」兩邊引用。確認 13 條錯誤，修掉其中低風險的 8 條。

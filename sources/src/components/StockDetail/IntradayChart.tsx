@@ -150,6 +150,7 @@ export interface IntradayChartProps<R extends TrendRange = TrendRange> {
   tradeDate?: string | null
   /** Render the volume sub-chart. Default true. */
   showVolume?: boolean
+  rangeTestId?: string
 }
 
 export function IntradayChart<R extends TrendRange>({
@@ -161,6 +162,7 @@ export function IntradayChart<R extends TrendRange>({
   ranges,
   tradeDate = null,
   showVolume = true,
+  rangeTestId,
 }: IntradayChartProps<R>) {
   const [hover, setHover] = useState<number | null>(null)
   const clipId = useId().replace(/:/g, '')
@@ -256,7 +258,7 @@ export function IntradayChart<R extends TrendRange>({
           <h4>走勢圖</h4>
           <span className="chart-time-badge">{dateRemark}</span>
         </div>
-        <div className="m-range" role="group" aria-label="走勢區間">
+        <div className="m-range" role="group" aria-label="走勢區間" data-testid={rangeTestId}>
           {(ranges ?? (['1d', '5d'] as unknown as readonly R[])).map((r) => (
             <button key={r} type="button" aria-pressed={r === range} onClick={() => onRangeChange(r)}>
               {TREND_LABELS[r]}

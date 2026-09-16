@@ -1,11 +1,10 @@
 /**
- * Top-level 「總體經濟」 page (0.7.1-dev.1): two sub-tabs under one nav item.
+ * Top-level 「總體經濟」 page: two sub-tabs under one nav item.
  *
- * - 台股: market volume / TAIEX / 三大法人 (TwMarketSection)
+ * - 國際指數: 9 indices across 4 regions (GlobalIndices), entry point to TAIEX (TwMarketSection) and foreign index details (IndexDetail)
  * - 美國經濟: FRED indicators from macro/us.json
  *
- * Both blocks used to stack on one scroll. Splitting keeps each question in its own pane
- * (market vs US macro) without promoting either to a top-level route.
+ * Splitting keeps each question in its own pane without promoting either to a top-level route.
  *
  * US unit trap: price series are **%** (YoY), non-farm is **thousands** (MoM), consumer
  * confidence is an **index**. Always use each indicator's `unit`.
@@ -16,11 +15,12 @@ import { fetchMacro, type MacroData, type MacroIndicator, type MacroPoint } from
 import { chipClass, fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { SPARK_W, SparkCell } from '../Charts/SparkCell'
-// Peer lag badges live on Admin only — on this page they read as "stale data" to end users.
 import { TwMarketSection } from './TwMarketSection'
-import { GlobalIndices } from './GlobalIndices'
+import { GlobalIndices, type IndexDef } from './GlobalIndices'
+import { IndexDetail } from './IndexDetail'
+import type { IndexQuote } from '../../services/indexQuotes'
 
-type MacroSubTab = 'tw' | 'us' | 'world'
+type MacroSubTab = 'world' | 'us'
 
 /** Whether the two ISO times fall on the same local calendar day. Bad values ​​are always considered to be on different days (prefer to display one more row)*/
 function isSameDay(a: string, b: string): boolean {
@@ -419,7 +419,25 @@ function UsMacroPanel() {
 }
 
 export function MacroPage() {
-  const [tab, setTab] = useState<MacroSubTab>('tw')
+  const [tab, setTab] = useState<MacroSubTab>('world')
+  const [selectedDef, setSelectedDef] = useState<IndexDef | null>(null)
+  const [selectedQuote, setSelectedQuote] = useState<IndexQuote | null>(null)
+
+  const handleTabChange = (nextTab: MacroSubTab) => {
+    setTab(nextTab)
+    setSelectedDef(null)
+    setSelectedQuote(null)
+  }
+
+  const handleSelectIndex = (def: IndexDef, quote?: IndexQuote) => {
+    setSelectedDef(def)
+    setSelectedQuote(quote ?? null)
+  }
+
+  const handleBack = () => {
+    setSelectedDef(null)
+    setSelectedQuote(null)
+  }
 
   return (
     <>
@@ -428,33 +446,32 @@ export function MacroPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'tw'}
-            className={`subtab${tab === 'tw' ? ' active' : ''}`}
-            onClick={() => setTab('tw')}
+            aria-selected={tab === 'world'}
+            className={`subtab${tab === 'world' ? ' active' : ''}`}
+            onClick={() => handleTabChange('world')}
           >
-            台股
+            國際指數
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={tab === 'us'}
             className={`subtab${tab === 'us' ? ' active' : ''}`}
-            onClick={() => setTab('us')}
+            onClick={() => handleTabChange('us')}
           >
             美國經濟
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'world'}
-            className={`subtab${tab === 'world' ? ' active' : ''}`}
-            onClick={() => setTab('world')}
-          >
-            國際指數
-          </button>
         </div>
       </div>
-      {tab === 'tw' ? <TwMarketSection /> : tab === 'us' ? <UsMacroPanel /> : <GlobalIndices />}
+      {tab === 'us' ? (
+        <UsMacroPanel />
+      ) : selectedDef?.ticker === '^TWII' ? (
+        <TwMarketSection onBack={handleBack} quote={selectedQuote} />
+      ) : selectedDef ? (
+        <IndexDetail def={selectedDef} onBack={handleBack} />
+      ) : (
+        <GlobalIndices onSelect={handleSelectIndex} />
+      )}
     </>
   )
 }

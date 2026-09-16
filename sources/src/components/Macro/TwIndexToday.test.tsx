@@ -6,6 +6,9 @@ import userEvent from '@testing-library/user-event'
 const { fetchIntraday } = vi.hoisted(() => ({ fetchIntraday: vi.fn() }))
 vi.mock('../../services/intradayProxy', () => ({ fetchIntraday }))
 
+const { fetchIndexQuotes } = vi.hoisted(() => ({ fetchIndexQuotes: vi.fn() }))
+vi.mock('../../services/indexQuotes', () => ({ fetchIndexQuotes }))
+
 import { TwIndexToday, type TwIndexCloseStats } from './TwIndexToday'
 import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
 
@@ -60,6 +63,8 @@ describe('TwIndexToday', () => {
   beforeEach(() => {
     cleanup()
     fetchIntraday.mockReset()
+    fetchIndexQuotes.mockReset()
+    fetchIndexQuotes.mockResolvedValue({})
   })
   afterEach(cleanup)
 
@@ -168,6 +173,8 @@ describe('TwIndexToday — 版面與收盤統計整併', () => {
   beforeEach(() => {
     cleanup()
     fetchIntraday.mockReset()
+    fetchIndexQuotes.mockReset()
+    fetchIndexQuotes.mockResolvedValue({})
   })
 
   it('統計帶排在走勢圖之前，而且不包住走勢圖', async () => {
@@ -399,5 +406,75 @@ describe('TwIndexToday — 版面與收盤統計整併', () => {
     // Assert the VALUE, not the cell: `tw-index-open` renders unconditionally and shows '—'
     // when `series` is null, so a presence check would pass even if .catch cleared the series.
     expect(statNum('tw-index-open')).toBeCloseTo(45157.64, 2)
+  })
+
+  it('傳入 onBack 時渲染返回按鈕，點擊觸發回呼；未傳入時不渲染返回按鈕', async () => {
+    fetchIntraday.mockResolvedValueOnce(series())
+    const onBack = vi.fn()
+    const { unmount } = render(<TwIndexToday closeStats={closeStats()} onBack={onBack} />)
+
+    const backBtn = screen.getByTestId('index-back')
+    expect(backBtn).toBeTruthy()
+    await userEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalledTimes(1)
+
+    unmount()
+    fetchIntraday.mockResolvedValueOnce(series())
+    render(<TwIndexToday closeStats={closeStats()} />)
+    expect(screen.queryByTestId('index-back')).toBeNull()
+  })
+
+  it('當 chartSeries 為 null 時，走勢圖框架與區間切換按鈕依然渲染（不消失）', async () => {
+    fetchIntraday.mockResolvedValue(null)
+    show()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '五日' })).toBeTruthy())
+    expect(screen.getByRole('button', { name: '一日' })).toBeTruthy()
+    expect(screen.getByText('無走勢資料')).toBeTruthy()
+  })
+
+  it('當 todaySeries 為 null 但提供 quote 時，填補最新價格與統計帶數值', async () => {
+    fetchIntraday.mockResolvedValue(null)
+    render(
+      <TwIndexToday
+        closeStats={null}
+        quote={{
+          price: 23456.78,
+          prevClose: 23400.0,
+          open: 23380.0,
+          high: 23500.0,
+          low: 23350.0,
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-value')).toBeTruthy())
+    expect(statNum('tw-index-value')).toBeCloseTo(23456.78, 2)
+    expect(statNum('tw-index-prev-close')).toBeCloseTo(23400.0, 2)
+    expect(statNum('tw-index-open')).toBeCloseTo(23380.0, 2)
+    expect(statNum('tw-index-high')).toBeCloseTo(23500.0, 2)
+    expect(statNum('tw-index-low')).toBeCloseTo(23350.0, 2)
+    expect(statNum('tw-index-change')).toBeCloseTo(56.78, 2)
+    expect(statNum('tw-index-change-pct')).toBeCloseTo(0.24, 2)
+    expect(screen.queryByTestId('tw-index-empty')).toBeNull()
+  })
+
+  it('當 todaySeries 為 null 時，支援透過 fetchIndexQuotes 補齊即時報價', async () => {
+    fetchIntraday.mockResolvedValue(null)
+    fetchIndexQuotes.mockResolvedValue({
+      '^TWII': {
+        ticker: '^TWII',
+        price: 24123.45,
+        prevClose: 24000.0,
+        asOf: '2026-09-16T09:05:00.000Z',
+      },
+    })
+    render(<TwIndexToday closeStats={null} />)
+
+    await waitFor(() => expect(screen.getByTestId('tw-index-value')).toBeTruthy())
+    expect(statNum('tw-index-value')).toBeCloseTo(24123.45, 2)
+    expect(statNum('tw-index-prev-close')).toBeCloseTo(24000.0, 2)
+    expect(statNum('tw-index-change')).toBeCloseTo(123.45, 2)
+    expect(screen.queryByTestId('tw-index-empty')).toBeNull()
   })
 })

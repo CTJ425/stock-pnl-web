@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-15 13:50:00 Asia/Taipei
+- Timestamp: 2026-09-15 15:29:00 Asia/Taipei
 
 ---
 
@@ -11,15 +11,25 @@
 
 ## 📍 Where the project stands (2026-09-15 09:16:32)
 
-- **Version 0.9.54 — on `dev` and `main`，正式站已在跑 0.9.54。前端由 Cloudflare Pages 從 `main` 自動部署；四支 Edge Function（`stock-price`、`stock-report`、`backup-transactions`、`ai-proxy`）已於 2026-09-15 全數部署至 DEV 與 PROD，四支的 bundle 雜湊兩邊逐一相同。** 驗收看畫面左下角的版本徽章。
-  - Shipped 0.9.45 ~ 0.9.54 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
-  - Verification: 123 test files / **1,976** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0；`npm audit` 0 vulnerabilities。
+- **Version 0.9.56 — on `dev` and `main`，正式站已在跑 0.9.56。前端由 Cloudflare Pages 從 `main` 自動部署；四支 Edge Function（`stock-price`、`stock-report`、`backup-transactions`、`ai-proxy`）已全數部署至 DEV 與 PROD，四支的 bundle 雜湊兩邊逐一相同。** 驗收看畫面左下角的版本徽章。
+  - Shipped 0.9.45 ~ 0.9.56 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
+  - Verification: 129 test files / **2,030** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0；`npm audit` 0 vulnerabilities。
   - Edge Functions（2026-09-15 實測）: `stock-price` DEV **v18** / PROD **v9**、`stock-report` **v8**、`backup-transactions` **v4**、`ai-proxy` **v1**，四支在 DEV 與 PROD 皆為 ACTIVE 且 bundle 雜湊逐一相同。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
   - **前端由 Cloudflare Pages 自動部署。** 推上 GitHub 後數分鐘內生效，不需要手動上傳 `dist/`（0.9.53 以 bundle 位元組比對實測確認，流程寫在 `README.md` 步驟 9-1）。驗收看畫面左下角版本徽章。
   - **只有 `main` 會上正式站**（0.9.53 實測：09:21 推 `dev` 後七分鐘線上不變；09:27 推 `main` 後 1 分 40 秒線上換版）。Edge Function 不隨前端走，必須另外 `supabase functions deploy`。
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
 ## 📋 Active Tasks
+
+### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
+- **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**
+- **Agent**: Antigravity
+- **Timestamp**: 2026-09-16 09:50:00 Asia/Taipei
+- **Spec**: `docs/agent/specs/164-macro-index-drilldown.md`
+- **Phases**: A 卡片列表 ✅／B 指數詳情頁 ✅／C 台指期夜盤（TAIFEX 自建 tick 儲存）⏸️
+- **Verification**: `npm run build && npm test` 於 `sources/` 執行全綠：`tsc -b && vite build` exit 0，全套 129 個測試檔、2,029 條測試全數通過，`npm run lint` 0 errors。
+- **Done**: Phase A（TW 加權指數群組、各區開盤時間標籤、asOf 報價時間戳、卡片點擊下鑽）與 Phase B（IndexDetail 詳情頁、7 走勢區間切換、dailyProxy 支援 market 參數隔離快取、次分頁重構整合加權指數下鑽台股、大盤看板解耦常態渲染、開盤前即時報價 fallback）已於 0.9.56 正式發布。
+- **Phase C (待後續獨立排程實作)**: 台指期夜盤自建 tick 儲存（需規劃資料表、輪詢 cron 與保留策略，待獨立開案排程實作）。
 
 ### Task 160: 全專案快照與還原腳本（snapshot / restore / wipe-dev）
 - **Status**: 🔄 **Phase A + A-2 程式完成並實測；破壞性演練待使用者決定 CRON_SECRET 方案**

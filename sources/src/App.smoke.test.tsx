@@ -39,6 +39,7 @@ describe('App（本機模式煙霧測試）', () => {
   })
 
   afterEach(() => {
+    cleanup()
     // If you don’t restore it, the test that simulates the mobile phone will cause all subsequent tests to run on the mobile version.
     Reflect.deleteProperty(window, 'matchMedia')
   })
