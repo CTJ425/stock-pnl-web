@@ -468,7 +468,7 @@ export function MacroPage() {
       ) : selectedDef?.ticker === '^TWII' ? (
         <TwMarketSection onBack={handleBack} quote={selectedQuote} />
       ) : selectedDef ? (
-        <IndexDetail def={selectedDef} onBack={handleBack} />
+        <IndexDetail def={selectedDef} onBack={handleBack} quote={selectedQuote} />
       ) : (
         <GlobalIndices onSelect={handleSelectIndex} />
       )}

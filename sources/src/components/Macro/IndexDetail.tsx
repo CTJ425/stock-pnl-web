@@ -16,6 +16,7 @@ import {
   type SessionState,
 } from './sessionHours'
 import { pnlClass } from '../../utils/formatters'
+import type { IndexQuote } from '../../services/indexQuotes'
 import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
 
 const SESSION_LABELS: Record<SessionState, string> = {
@@ -59,13 +60,13 @@ function Cell({
   )
 }
 
-export function IndexDetail({
-  def,
-  onBack,
-}: {
+export interface IndexDetailProps {
   def: { region: MarketRegion; label: string; ticker: string }
   onBack: () => void
-}) {
+  quote?: IndexQuote | null
+}
+
+export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
   const [range, setRange] = useState<TrendRange>('1d')
   const [todaySeries, setTodaySeries] = useState<IntradaySeries | null>(null)
   const [chartSeries, setChartSeries] = useState<TrendSeries | null>(null)
@@ -157,15 +158,18 @@ export function IndexDetail({
   }, [load])
 
   const points = todaySeries?.points ?? []
-  const last = points.length > 0 ? points[points.length - 1].c : null
-  const prevClose = todaySeries?.prevClose ?? null
+  const hasSeries = points.length > 0
+  const last = hasSeries ? points[points.length - 1].c : (quote?.price ?? null)
+  const prevClose = todaySeries?.prevClose ?? quote?.prevClose ?? null
   const change = last !== null && prevClose !== null ? last - prevClose : null
   const changePct =
     change !== null && prevClose !== null && prevClose !== 0 ? (change / prevClose) * 100 : null
   const sessionDate =
     todaySeries?.points && todaySeries.points.length > 0
       ? dayFmt.format(new Date(todaySeries.points[todaySeries.points.length - 1].t * 1000))
-      : null
+      : quote?.asOf && !Number.isNaN(Date.parse(quote.asOf))
+        ? dayFmt.format(new Date(quote.asOf))
+        : null
 
   const hours = SESSION_HOURS[def.region]
   const session = marketSession(def.region, new Date())
@@ -203,16 +207,16 @@ export function IndexDetail({
         </button>
       </div>
 
-      {todaySeries === null && !loading && (
+      {last === null && !loading && (
         <div className="intraday-empty" data-testid="index-empty">
           當日指數資料暫不可用
         </div>
       )}
 
-      {todaySeries !== null && (
+      {last !== null && (
         <div className="m-price">
           <span className={`big ${pnlClass(change)}`} data-testid="index-value">
-            {last === null ? '—' : fmtIndexNum(last)}
+            {fmtIndexNum(last)}
           </span>
           <span className={`delta ${pnlClass(change)}`}>
             {change === null

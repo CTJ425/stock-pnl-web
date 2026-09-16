@@ -21,7 +21,7 @@ export interface IndexDef {
   ticker: string
 }
 
-export const INDICES: IndexDef[] = [
+const INDICES: IndexDef[] = [
   { region: 'TW', label: '加權指數', ticker: '^TWII' },
   { region: 'JP', label: '日經 225', ticker: '^N225' },
   { region: 'KR', label: 'KOSPI', ticker: '^KS11' },
@@ -121,6 +121,7 @@ function IndexCard({
 export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?: IndexQuote) => void }) {
   const [quotes, setQuotes] = useState<Record<string, IndexQuote>>({})
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [now, setNow] = useState(() => new Date())
 
   // Merge, never replace: a symbol the poll could not answer (per-symbol drop, or a whole
   // failed request that resolves to `{}`) keeps whatever card value was already on screen.
@@ -138,7 +139,9 @@ export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?:
 
   useEffect(() => {
     const tick = () => {
-      const regions = openRegions(new Date())
+      const current = new Date()
+      setNow(current)
+      const regions = openRegions(current)
       if (regions.length === 0) return // no market open: skip the network call, keep the timer
       const tickers = INDICES.filter((i) => regions.includes(i.region)).map((i) => i.ticker)
       void load(tickers)
@@ -153,8 +156,6 @@ export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?:
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [load])
-
-  const now = new Date()
 
   return (
     <div className="section glass" style={{ padding: '18px 20px' }}>
