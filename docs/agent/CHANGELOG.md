@@ -25,12 +25,13 @@ _此檔案為 README.md 版本紀錄區塊的完整搬移，內容與格式保�
   - 移除原本因盤後歷史資料檔未產生（`market === null`）或本地模式導致 `TwIndexToday` 整體被早退阻擋的問題。將 `<TwIndexToday>` 提到 `if (!market)` 判斷前獨立常態渲染；下方歷史成交量與日 K 走勢區塊保留無資料提示。
   - 移除 `TwIndexToday` 中 `{chartSeries !== null && <IntradayChart ... />}` 條件限制，改為比照 `IndexDetail` 永遠渲染 `<IntradayChart>`，使開盤前或分時線未產生時，框架與 7 個區間切換按鈕依然可見且可自由切換瀏覽。
 - ⚡ **即時報價 Fallback 機制**：
-  - 當 `todaySeries === null`（例如開盤前分時 K 線尚未產出）時，支援透過傳入之 `quote` 報價物件或 `fetchIndexQuotes(['^TWII'])` 補齊最新價格（`last`）、`prevClose`、`change`、`changePct` 與開高低數值，避免開盤前大盤看板呈現全橫線（`—`）。
+  - 當 `todaySeries === null`（例如開盤前分時 K 線尚未產出或分時端點延遲）時，`TwIndexToday` 與 `IndexDetail` 同步支援透過傳入之 `quote` 即時報價物件（或 `fetchIndexQuotes(['^TWII'])`）補齊最新價格（`last`）、`prevClose`、`change`、`changePct` 與開高低數值，避免開盤前或分時線延遲時看板與詳情頁呈現空狀態或全橫線（`—`）。
+  - `GlobalIndices` 將內部常數 `INDICES` 解除匯出以消除 React Fast Refresh 警告，並以 `now` 狀態驅動 60 秒定時刷新，確保全市場閉盤時盤中/收盤狀態標籤依然即時動態更新。
 - 🎨 **樣式與視覺邊距優化**：
   - `index.css` 全面替換為 Carbon Design System 標準 token（`--cds-layer-02`、`--border`、`--border-strong`、`--ink-secondary` 等），修復淺色主題下卡片邊框與文字對比度問題。
   - `IndexDetail` 與 `index.css` 同步配置 `padding: 18px 20px`，內部元素邊界與間距與 `TwIndexToday`、`GlobalIndices` 保持一致視覺平衡。
 - ✅ **驗證**：
-  - 129 檔測試檔 / 2,030 條測試全數通過（0 失敗）；`npm run build`、`npm test`、`npm run lint` 皆 exit 0。
+  - 129 檔測試檔 / 2,033 條測試全數通過（0 失敗）；`npm run build`、`npm run test`、`npm run lint` 皆 exit 0。
 
 ### 0.9.55（2026-09-15）— 路由層分割與 memo 穩定化（Task 145 收尾），交接文件稽核補完
 

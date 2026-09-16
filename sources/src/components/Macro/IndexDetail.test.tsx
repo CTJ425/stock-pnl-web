@@ -155,3 +155,39 @@ describe('IndexDetail — 開閉盤說明', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('IndexDetail — 即時報價 fallback', () => {
+  it('當 todaySeries 為 null 但提供 quote 時，填補最新價格與昨收、漲跌', async () => {
+    fetchIntraday.mockResolvedValue(null)
+    render(
+      <IndexDetail
+        def={def}
+        onBack={() => {}}
+        quote={{
+          ticker: '^N225',
+          price: 63500.0,
+          prevClose: 63000.0,
+          asOf: '2026-09-16T05:00:00.000Z',
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('index-value')).toBeTruthy())
+    const num = (id: string) => Number((screen.getByTestId(id).textContent ?? '').replace(/[,\s+▲▼%]/g, ''))
+    expect(num('index-value')).toBeCloseTo(63500.0, 2)
+    expect(num('index-prev-close')).toBeCloseTo(63000.0, 2)
+    expect(num('index-change')).toBeCloseTo(500.0, 2)
+    expect(num('index-change-pct')).toBeCloseTo(0.79, 2)
+    expect(screen.queryByTestId('index-empty')).toBeNull()
+  })
+
+  it('當 todaySeries 與 quote 皆為空且非讀取中時，顯示空狀態且不渲染價格', async () => {
+    fetchIntraday.mockResolvedValue(null)
+    render(<IndexDetail def={def} onBack={() => {}} />)
+
+    await waitFor(() => expect(screen.getByTestId('index-empty')).toBeTruthy())
+    expect(screen.getByText('當日指數資料暫不可用')).toBeTruthy()
+    expect(screen.queryByTestId('index-value')).toBeNull()
+  })
+})
+

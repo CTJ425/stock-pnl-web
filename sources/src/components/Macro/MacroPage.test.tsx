@@ -472,4 +472,26 @@ describe('MacroPage', () => {
     expect(await screen.findByTestId('tw-index-value')).toBeTruthy()
     expect(screen.getByTestId('tw-index-value').textContent).toContain('24,500.50')
   })
+
+  it('國際指數已有外盤指數報價時，點擊下鑽將即時報價傳遞至 IndexDetail 詳情頁', async () => {
+    const user = userEvent.setup()
+    fetchIndexQuotes.mockResolvedValue({
+      '^N225': {
+        ticker: '^N225',
+        price: 63888.88,
+        prevClose: 63000.0,
+        asOf: '2026-09-16T05:00:00.000Z',
+      },
+    })
+    render(<MacroPage />)
+
+    const n225Card = await screen.findByTestId('gix-card-^N225')
+    expect(within(n225Card).getByText('63,888.88')).toBeTruthy()
+
+    await user.click(n225Card)
+    expect(await screen.findByTestId('index-detail')).toBeTruthy()
+    expect(await screen.findByTestId('index-value')).toBeTruthy()
+    expect(screen.getByTestId('index-value').textContent).toContain('63,888.88')
+  })
 })
+
