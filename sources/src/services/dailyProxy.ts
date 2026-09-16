@@ -105,8 +105,9 @@ interface EdgeDailyResponse {
 export async function fetchRemoteDaily(
   ticker: string,
   range: RemoteDailyRange,
+  market: 'TPE' | 'US' | 'IDX' = 'TPE',
 ): Promise<RemoteDaily | null> {
-  const key = `${ticker}:${range}`
+  const key = `${market}:${ticker}:${range}`
   const now = Date.now()
   const cached = remoteCache.get(key)
   if (cached && now - cached.at < REMOTE_CACHE_TTL_MS) return cached.daily
@@ -114,7 +115,7 @@ export async function fetchRemoteDaily(
   if (!isSupabaseConfigured || !supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke<EdgeDailyResponse>('stock-price', {
-      body: { action: 'daily', symbol: { market: 'TPE', ticker }, range },
+      body: { action: 'daily', symbol: { market, ticker }, range },
       timeout: 15_000,
     })
     if (error || !data) return null

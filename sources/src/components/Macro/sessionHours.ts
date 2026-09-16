@@ -10,8 +10,40 @@
  * offset is needed — America/New_York flips between EST and EDT on its own.
  */
 
-export type MarketRegion = 'JP' | 'KR' | 'US'
+export type MarketRegion = 'TW' | 'JP' | 'KR' | 'US'
 export type SessionState = 'open' | 'break' | 'closed'
+
+export interface SessionHours {
+  /** Local trading hours, e.g. '09:00–15:30'. */
+  local: string
+  /** Same window in Taipei time, e.g. '08:00–14:30'. */
+  taipei: string
+  /** Lunch break in local time, or null. */
+  breakLocal: string | null
+}
+
+export const SESSION_HOURS: Record<MarketRegion, SessionHours> = {
+  TW: {
+    local: '09:00–13:30',
+    taipei: '09:00–13:30',
+    breakLocal: null,
+  },
+  JP: {
+    local: '09:00–15:30',
+    taipei: '08:00–14:30',
+    breakLocal: '11:30–12:30',
+  },
+  KR: {
+    local: '09:00–15:30',
+    taipei: '08:00–14:30',
+    breakLocal: null,
+  },
+  US: {
+    local: '09:30–16:00',
+    taipei: '21:30–04:00（夏令）/ 22:30–05:00（冬令）',
+    breakLocal: null,
+  },
+}
 
 interface SessionRule {
   timeZone: string
@@ -24,6 +56,13 @@ interface SessionRule {
 }
 
 const RULES: Record<MarketRegion, SessionRule> = {
+  TW: {
+    timeZone: 'Asia/Taipei',
+    openMin: 9 * 60,
+    closeMin: 13 * 60 + 30,
+    breakStartMin: null,
+    breakEndMin: null,
+  },
   JP: {
     timeZone: 'Asia/Tokyo',
     openMin: 9 * 60,
@@ -90,7 +129,7 @@ export function isMarketOpen(region: MarketRegion, now: Date): boolean {
 
 /** Regions currently open, in a fixed display order. */
 export function openRegions(now: Date): MarketRegion[] {
-  return (['JP', 'KR', 'US'] as const).filter((region) => isMarketOpen(region, now))
+  return (['TW', 'JP', 'KR', 'US'] as const).filter((region) => isMarketOpen(region, now))
 }
 
 /** True when at least one region is open. */

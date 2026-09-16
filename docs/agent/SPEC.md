@@ -483,24 +483,23 @@ You will only get a yellow light that is always on, and an alarm that is always 
 Timeline (15:00 on the current day → 10:00 on the next day) → Schedule → Total menstrual period → Exchange rate and file coverage.
 The total period of the monthly frequency is not placed on the daily axis: its rhythm is "which period arrives" rather than "what time it arrives".
 
-## General Economy Page (0.6.5, three subtabs since 0.9.54)
+## General Economy Page (0.6.5, two subtabs since 0.9.56)
 
 **Top-level page** "General Economy" (from 0.6.5-dev.2; dev.1 was once a page for individual stock analysis).
 
-`MacroPage.tsx` holds three subtabs, `MacroSubTab = 'tw' | 'us' | 'world'`:
+`MacroPage.tsx` holds two subtabs, `MacroSubTab = 'world' | 'us'` (default `world`):
 
 | Subtab | Label | Source |
 | --- | --- | --- |
-| `tw` | 台股 | `^TWII` intraday bars from the `stock-price` Edge `intraday` action; market turnover and institutional amounts from `market/daily.json` |
+| `world` (default) | 國際指數 | 9 indices across 4 regions (`TW`, `JP`, `KR`, `US`) from the `stock-price` Edge `prices` action with `market: 'IDX'`. Clicking `^TWII` drills down into full Taiwan market analysis (`TwMarketSection`), foreign indices drill down to `IndexDetail`. |
 | `us` | 美國經濟 | `macro/us.json` (**global single file, not per-ticker**), five FRED series |
-| `world` | 國際指數 | 8 foreign indices from the `stock-price` Edge `prices` action with `market: 'IDX'` |
 
 The sections below describe the `us` subtab unless they say otherwise.
 
-### `world` — global indices (0.9.54)
+### `world` — global indices (0.9.54, drill-down added 0.9.56)
 
-`^N225`, `^KS11`, `^KQ11`, `^DJI`, `^GSPC`, `^IXIC`, `^SOX`, `^RUT`, grouped 日本 / 韓國 / 美國 with a
-session badge per group. `^TOPX` is excluded on purpose: Yahoo answers HTTP 200 but
+`^TWII`, `^N225`, `^KS11`, `^KQ11`, `^DJI`, `^GSPC`, `^IXIC`, `^SOX`, `^RUT`, grouped 台灣 / 日本 / 韓國 / 美國 with a
+session badge and hours per group. `^TOPX` is excluded on purpose: Yahoo answers HTTP 200 but
 `meta.regularMarketPrice` is `null`.
 
 `sessionHours.ts` decides the session from the market's own timezone — 日本 09:00–15:30 with an

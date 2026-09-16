@@ -9,12 +9,28 @@
  * real `^TWII` response, the close series alone is off by tens of points (see intradayParse.ts).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { IntradayChart } from '../StockDetail/IntradayChart'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { IntradayChart, type TrendSeries } from '../StockDetail/IntradayChart'
 import { fetchIntraday } from '../../services/intradayProxy'
+import { fetchRemoteDaily } from '../../services/dailyProxy'
+import { fetchIndexQuotes, type IndexQuote } from '../../services/indexQuotes'
 import { fmtBillion, fmtBillionSigned, pnlClass, toBillion } from '../../utils/formatters'
 import { chipClass } from '../StockDetail/chipFormat'
-import type { IntradayRange, IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
+import { seriesFromDailyRows, type TrendRange } from '../StockDetail/trendRange'
+import { INDEX_TREND_RANGES, indexTrendSource } from './indexTrend'
+import type { IntradaySeries } from '../../../supabase/functions/stock-price/intradayParse'
+
+export interface TwIndexFallbackQuote {
+  price?: number | null
+  last?: number | null
+  prevClose?: number | null
+  open?: number | null
+  high?: number | null
+  low?: number | null
+  change?: number | null
+  changePct?: number | null
+  asOf?: string | null
+}
 
 /** Latest *complete* trading day's turnover and institutional net-buy, as TwMarketSection derives
  *  it from market/daily.json. `date` and `instDate` can differ — institutional money is backfilled
@@ -81,59 +97,153 @@ function Cell({
 export function TwIndexToday({
   closeStats,
   recentInstDays,
+  quote,
+  fallbackQuote,
   onRefresh,
+  onBack,
 }: {
   closeStats: TwIndexCloseStats | null
   recentInstDays?: TwMarketInstDay[] | null
+  quote?: TwIndexFallbackQuote | IndexQuote | null
+  fallbackQuote?: TwIndexFallbackQuote | IndexQuote | null
   onRefresh?: () => void
+  onBack?: () => void
 }) {
-  const [range, setRange] = useState<IntradayRange>('1d')
-  const [series, setSeries] = useState<IntradaySeries | null>(null)
+  const [range, setRange] = useState<TrendRange>('1d')
+  const [todaySeries, setTodaySeries] = useState<IntradaySeries | null>(null)
+  const [chartSeries, setChartSeries] = useState<TrendSeries | null>(null)
+  const [fetchedQuote, setFetchedQuote] = useState<IndexQuote | null>(null)
   const [loading, setLoading] = useState(true)
   const reqId = useRef(0)
+  const todaySeriesRef = useRef<IntradaySeries | null>(null)
+  todaySeriesRef.current = todaySeries
 
-  const load = useCallback(() => {
-    const id = ++reqId.current
-    setLoading(true)
-    fetchIntraday({ market: 'IDX', ticker: '^TWII' }, range)
-      .then((s) => {
-        if (reqId.current !== id) return
-        setSeries(s)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (reqId.current !== id) return
-        setLoading(false)
-      })
-  }, [range])
+  const load = useCallback(
+    (force = false) => {
+      const id = ++reqId.current
+      setLoading(true)
+      fetchIndexQuotes(['^TWII'])
+        .then((quotes) => {
+          if (reqId.current !== id) return
+          const q = quotes['^TWII'] ?? null
+          if (q) setFetchedQuote(q)
+        })
+        .catch(() => {})
+
+      const source = indexTrendSource(range)
+      if (source.kind === 'intraday') {
+        if (source.range !== '1d' && (force || todaySeriesRef.current === null)) {
+          fetchIntraday({ market: 'IDX', ticker: '^TWII' }, '1d', { force })
+            .then((s) => {
+              if (reqId.current !== id) return
+              setTodaySeries(s)
+            })
+            .catch(() => {})
+        }
+        fetchIntraday({ market: 'IDX', ticker: '^TWII' }, source.range, { force })
+          .then((s) => {
+            if (reqId.current !== id) return
+            if (source.range === '1d') {
+              setTodaySeries(s)
+            }
+            setChartSeries(s)
+            setLoading(false)
+          })
+          .catch(() => {
+            if (reqId.current !== id) return
+            setChartSeries(null)
+            setLoading(false)
+          })
+      } else {
+        if (force || todaySeriesRef.current === null) {
+          fetchIntraday({ market: 'IDX', ticker: '^TWII' }, '1d', { force })
+            .then((s) => {
+              if (reqId.current !== id) return
+              setTodaySeries(s)
+            })
+            .catch(() => {})
+        }
+        fetchRemoteDaily('^TWII', source.remoteRange, 'IDX')
+          .then((remote) => {
+            if (reqId.current !== id) return
+            if (!remote) {
+              setChartSeries(null)
+              setLoading(false)
+              return
+            }
+            setChartSeries(seriesFromDailyRows('^TWII', remote.rows, range))
+            setLoading(false)
+          })
+          .catch(() => {
+            if (reqId.current !== id) return
+            setChartSeries(null)
+            setLoading(false)
+          })
+      }
+    },
+    [range],
+  )
 
   useEffect(() => {
     load()
   }, [load])
 
-  const points = series?.points ?? []
-  const last = points.length > 0 ? points[points.length - 1].c : null
-  const prevClose = series?.prevClose ?? null
-  const change = last !== null && prevClose !== null ? last - prevClose : null
+  const propQuote = quote ?? fallbackQuote ?? null
+  const activeQuote = propQuote ?? fetchedQuote
+
+  const points = todaySeries?.points ?? []
+  const hasSeries = points.length > 0
+  const last = hasSeries
+    ? points[points.length - 1].c
+    : (activeQuote?.price ?? (activeQuote as TwIndexFallbackQuote)?.last ?? null)
+  const prevClose = todaySeries?.prevClose ?? activeQuote?.prevClose ?? null
+  const change =
+    last !== null && prevClose !== null
+      ? last - prevClose
+      : ((activeQuote as TwIndexFallbackQuote)?.change ?? null)
   const changePct =
-    change !== null && prevClose !== null && prevClose !== 0 ? (change / prevClose) * 100 : null
+    change !== null && prevClose !== null && prevClose !== 0
+      ? (change / prevClose) * 100
+      : ((activeQuote as TwIndexFallbackQuote)?.changePct ?? null)
+
+  const dayOpen = todaySeries?.dayOpen ?? (activeQuote as TwIndexFallbackQuote)?.open ?? null
+  const dayHigh = todaySeries?.dayHigh ?? (activeQuote as TwIndexFallbackQuote)?.high ?? null
+  const dayLow = todaySeries?.dayLow ?? (activeQuote as TwIndexFallbackQuote)?.low ?? null
+
   const sessionDate =
-    series?.points && series.points.length > 0
-      ? dayFmt.format(new Date(series.points[series.points.length - 1].t * 1000))
-      : null
+    todaySeries?.points && todaySeries.points.length > 0
+      ? dayFmt.format(new Date(todaySeries.points[todaySeries.points.length - 1].t * 1000))
+      : activeQuote?.asOf && !Number.isNaN(Date.parse(activeQuote.asOf))
+        ? dayFmt.format(new Date(activeQuote.asOf))
+        : null
   const hasAside = Boolean(recentInstDays && recentInstDays.length > 0)
 
   return (
     <div className="section glass tw-index-today" data-testid="tw-index-today">
       <div className="m-card-h">
-        <div className="m-chart-title-group">
-          <h3>加權指數</h3>
+        <div
+          className="m-chart-title-group"
+          style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+        >
+          {onBack && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-testid="index-back"
+              onClick={onBack}
+              aria-label="返回"
+            >
+              <ArrowLeft size={14} /> 返回
+            </button>
+          )}
+          <h3 style={{ margin: 0 }}>加權指數</h3>
           <span className="badge">{sessionDate === null ? '當日' : `${sessionDate} 當日`}</span>
         </div>
         <button
+          type="button"
           className="btn btn-sm"
           onClick={() => {
-            load()
+            load(true)
             onRefresh?.()
           }}
           disabled={loading}
@@ -144,16 +254,16 @@ export function TwIndexToday({
         </button>
       </div>
 
-      {series === null && (
+      {last === null && (
         <div className="intraday-empty" data-testid="tw-index-empty">
           當日大盤資料暫不可用
         </div>
       )}
 
-      {series !== null && (
+      {last !== null && (
         <div className="m-price">
           <span className={`big ${pnlClass(change)}`} data-testid="tw-index-value">
-            {last === null ? '—' : fmt2(last)}
+            {fmt2(last)}
           </span>
           <span className={`delta ${pnlClass(change)}`}>
             {change === null
@@ -166,7 +276,7 @@ export function TwIndexToday({
       )}
 
       {/*
-        The band renders even when the intraday fetch failed (series === null, above): row 1 then
+        The band renders even when the intraday fetch failed (todaySeries === null, above): row 1 then
         shows '—' for every cell (rawCell/change already fall back to it), and row 2 —closeStats,
         the latest *complete* trading day— is a wholly separate data source that has no reason to
         disappear just because today's session failed to load.
@@ -175,9 +285,9 @@ export function TwIndexToday({
         <div className="tw-index-band-row">
           <span className="tw-index-band-caption">當日</span>
           <div className="m-stats tw-index-stats">
-            <Cell label="開盤" value={rawCell(series?.dayOpen ?? null)} testId="tw-index-open" />
-            <Cell label="最高" value={rawCell(series?.dayHigh ?? null)} testId="tw-index-high" />
-            <Cell label="最低" value={rawCell(series?.dayLow ?? null)} testId="tw-index-low" />
+            <Cell label="開盤" value={rawCell(dayOpen)} testId="tw-index-open" />
+            <Cell label="最高" value={rawCell(dayHigh)} testId="tw-index-high" />
+            <Cell label="最低" value={rawCell(dayLow)} testId="tw-index-low" />
             <Cell
               label="昨收"
               value={rawCell(prevClose)}
@@ -249,16 +359,15 @@ export function TwIndexToday({
 
       <div className={`tw-index-chart-layout${hasAside ? ' has-aside' : ''}`}>
         <div className="tw-index-chart-main">
-          {series !== null && (
-            <IntradayChart
-              series={series}
-              loading={loading}
-              range={range}
-              onRangeChange={setRange}
-              showVolume={false}
-              tradeDate={sessionDate}
-            />
-          )}
+          <IntradayChart
+            series={chartSeries}
+            loading={loading}
+            range={range}
+            onRangeChange={setRange}
+            ranges={INDEX_TREND_RANGES}
+            showVolume={false}
+            tradeDate={sessionDate}
+          />
         </div>
 
         {recentInstDays && recentInstDays.length > 0 && (

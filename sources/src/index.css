@@ -4903,6 +4903,45 @@ a.hmenu-item {
   margin-top: 2px;
 }
 
+button.rpt-card {
+  text-align: left;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  transition: background var(--cds-dur-fast) var(--cds-ease-productive),
+              border-color var(--cds-dur-fast) var(--cds-ease-productive);
+}
+
+button.rpt-card:hover {
+  background: var(--cds-layer-hover-01);
+  border-color: var(--border-strong);
+}
+
+.gix-hours {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+}
+
+.gix-stamp {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.index-session-hours {
+  font-size: var(--type-label-01);
+  color: var(--ink-secondary);
+  margin: 8px 0 12px;
+}
+
+.index-detail {
+  padding: 18px 20px;
+}
+
 /*
  * Trend chart: Both directions side by side (0.6.7).
  * Two columns for desktop; ≤900px stacked into one column - if two pictures are squeezed into half the width of a mobile phone, no trend can be seen at all.

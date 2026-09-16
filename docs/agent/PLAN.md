@@ -871,16 +871,14 @@ These two top-level pages shipped long before this section existed. §Q covers t
 trade-off only, so the page structure went undocumented until the 2026-09-15 documentation
 audit found it missing.
 
-### T1. `MacroPage.tsx` — three subtabs, three different data paths
-
-`MacroSubTab = 'tw' | 'us' | 'world'`. One panel renders at a time, so switching away unmounts
-the previous panel and stops whatever timer it owned.
-
+### T1. `MacroPage.tsx` — two subtabs, entry point via 國際指數
+ 
+`MacroSubTab = 'world' | 'us'` (default `world`, restructured in 0.9.56). The previous `tw` subtab was merged into `world` as a drill-down from the `^TWII` card. One panel renders at a time, so switching away unmounts the previous panel and stops whatever timer it owned.
+ 
 | Subtab | Component | Path to data |
 | --- | --- | --- |
-| `tw` | `TwIndexToday` + `TwMarketSection` | `stock-price` Edge, action `intraday`, symbol `{ market: 'IDX', ticker: '^TWII' }`; plus `market/daily.json` in the `reports` bucket, written by the `market-data-daily` cron |
+| `world` (default) | `GlobalIndices` → `TwMarketSection` (for `^TWII`) or `IndexDetail` | `stock-price` Edge `prices` action (9 symbols across 4 regions with `market: 'IDX'`). Clicking `^TWII` drills down into `TwIndexToday` + `TwMarketSection` with back button |
 | `us` | `UsMacroPanel` | `macro/us.json` in the `reports` bucket, written by the `macro-daily` cron from FRED |
-| `world` | `GlobalIndices` | `stock-price` Edge, action `prices`, 8 symbols with `market: 'IDX'` |
 
 Only `world` talks to the network from the browser on a timer. `tw` and `us` read a file the
 nightly batch already wrote.

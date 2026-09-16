@@ -3,17 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-const { fetchMacro, fetchMarketDaily } = vi.hoisted(() => ({
+const { fetchMacro, fetchMarketDaily, fetchIndexQuotes } = vi.hoisted(() => ({
   fetchMacro: vi.fn(),
   fetchMarketDaily: vi.fn(),
+  fetchIndexQuotes: vi.fn(),
 }))
 vi.mock('../../services/macroProxy', () => ({ fetchMacro }))
 vi.mock('../../services/marketProxy', () => ({ fetchMarketDaily }))
+vi.mock('../../services/indexQuotes', () => ({ fetchIndexQuotes }))
 
 import { MacroPage } from './MacroPage'
 import type { MacroData } from '../../services/macroProxy'
 
-/** Open the US tab (default is 台股 since 0.7.1-dev.1). */
+/** Open the US tab (default is 國際指數 since 0.9.56-dev.3). */
 async function openUsTab(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('tab', { name: '美國經濟' }))
 }
@@ -81,17 +83,19 @@ describe('MacroPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fetchMarketDaily.mockResolvedValue({ asOf: '2026-08-04T08:30:00.000Z', days: [] })
+    fetchIndexQuotes.mockResolvedValue({})
   })
   afterEach(() => cleanup())
 
-  it('總經有二次分頁：台股 / 美國經濟（預設台股）', async () => {
+  it('總經有二次分頁：國際指數 / 美國經濟（預設國際指數）', async () => {
     fetchMacro.mockResolvedValue(macro)
     render(<MacroPage />)
-    expect(screen.getByRole('tab', { name: '台股' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: '國際指數' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: '美國經濟' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByRole('tab', { name: '台股' })).toBeNull()
     expect(screen.queryByText('美國總體經濟')).toBeNull()
-    // TW section loads its own empty/market card
-    expect(await screen.findByText(/台股市場|正在讀取台股市場/)).toBeTruthy()
+    // 預設呈現國際指數列表（含加權指數卡片）
+    expect(await screen.findByTestId('gix-card-^TWII')).toBeTruthy()
   })
 
   it('載入中顯示佔位', async () => {
@@ -353,5 +357,119 @@ describe('MacroPage', () => {
     await openUsTab(user)
     await screen.findByText('美國總體經濟')
     expect(screen.queryByText(/正在查看的個股/)).toBeNull()
+  })
+
+  it('國際指數點擊加權指數（^TWII）下鑽顯示完整台股市場內容，點返回回到國際指數', async () => {
+    const user = userEvent.setup()
+    render(<MacroPage />)
+    expect(screen.getByRole('tab', { name: '國際指數' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByRole('tab', { name: '台股' })).toBeNull()
+
+    const twiiCard = await screen.findByTestId('gix-card-^TWII')
+    await user.click(twiiCard)
+
+    // 下鑽顯示完整的台股市場內容（含 TwMarketSection 及 index-back 按鈕）
+    expect(await screen.findByText(/台股市場|正在讀取台股市場/)).toBeTruthy()
+    expect(screen.getByTestId('index-back')).toBeTruthy()
+
+    // 點擊返回回到國際指數清單
+    await user.click(screen.getByTestId('index-back'))
+    expect(await screen.findByTestId('gix-card-^TWII')).toBeTruthy()
+  })
+
+  it('在加權指數下鑽狀態下點擊「國際指數」分頁按鈕返回列表', async () => {
+    const user = userEvent.setup()
+    render(<MacroPage />)
+
+    const twiiCard = await screen.findByTestId('gix-card-^TWII')
+    await user.click(twiiCard)
+
+    expect(await screen.findByText(/台股市場|正在讀取台股市場/)).toBeTruthy()
+    expect(screen.getByTestId('index-back')).toBeTruthy()
+
+    await user.click(screen.getByRole('tab', { name: '國際指數' }))
+    expect(await screen.findByTestId('gix-card-^TWII')).toBeTruthy()
+  })
+
+  it('國際指數點擊外盤指數（如日經 225）下鑽至 IndexDetail，點返回回到國際指數', async () => {
+    const user = userEvent.setup()
+    render(<MacroPage />)
+
+    const n225Card = await screen.findByTestId('gix-card-^N225')
+    await user.click(n225Card)
+
+    expect(await screen.findByTestId('index-detail')).toBeTruthy()
+    expect(screen.getByText('日經 225')).toBeTruthy()
+
+    await user.click(screen.getByTestId('index-back'))
+    expect(await screen.findByTestId('gix-card-^N225')).toBeTruthy()
+  })
+
+  it('在 IndexDetail 下點擊「國際指數」分頁按鈕返回列表', async () => {
+    const user = userEvent.setup()
+    render(<MacroPage />)
+
+    const n225Card = await screen.findByTestId('gix-card-^N225')
+    await user.click(n225Card)
+
+    expect(await screen.findByTestId('index-detail')).toBeTruthy()
+
+    await user.click(screen.getByRole('tab', { name: '國際指數' }))
+    expect(await screen.findByTestId('gix-card-^N225')).toBeTruthy()
+  })
+
+  it('在加權指數下鑽狀態下切換至「美國經濟」，再切回「國際指數」時，重設為國際指數清單', async () => {
+    const user = userEvent.setup()
+    fetchMacro.mockResolvedValue(macro)
+    render(<MacroPage />)
+
+    const twiiCard = await screen.findByTestId('gix-card-^TWII')
+    await user.click(twiiCard)
+    expect(await screen.findByText(/台股市場|正在讀取台股市場/)).toBeTruthy()
+
+    // 切換至美國經濟
+    await user.click(screen.getByRole('tab', { name: '美國經濟' }))
+    expect(await screen.findByText('美國總體經濟')).toBeTruthy()
+
+    // 切回國際指數
+    await user.click(screen.getByRole('tab', { name: '國際指數' }))
+    expect(await screen.findByTestId('gix-card-^TWII')).toBeTruthy()
+    expect(screen.queryByText(/正在讀取台股市場/)).toBeNull()
+  })
+
+  it('在加權指數讀取中狀態下點擊返回按鈕，正確退回國際指數清單', async () => {
+    const user = userEvent.setup()
+    fetchMarketDaily.mockReturnValue(new Promise(() => {}))
+    render(<MacroPage />)
+
+    const twiiCard = await screen.findByTestId('gix-card-^TWII')
+    await user.click(twiiCard)
+
+    expect(await screen.findByText('正在讀取台股市場資料…')).toBeTruthy()
+    const backBtn = screen.getByTestId('index-back')
+    await user.click(backBtn)
+
+    expect(await screen.findByTestId('gix-card-^TWII')).toBeTruthy()
+    expect(screen.queryByText('正在讀取台股市場資料…')).toBeNull()
+  })
+
+  it('國際指數已有加權指數報價時，點擊下鑽將即時報價傳遞至 TwMarketSection 頂部看板', async () => {
+    const user = userEvent.setup()
+    fetchIndexQuotes.mockResolvedValue({
+      '^TWII': {
+        ticker: '^TWII',
+        price: 24500.5,
+        prevClose: 24300.0,
+        asOf: '2026-09-16T09:05:00.000Z',
+      },
+    })
+    render(<MacroPage />)
+
+    const twiiCard = await screen.findByTestId('gix-card-^TWII')
+    expect(within(twiiCard).getByText('24,500.50')).toBeTruthy()
+
+    await user.click(twiiCard)
+    expect(await screen.findByTestId('tw-index-value')).toBeTruthy()
+    expect(screen.getByTestId('tw-index-value').textContent).toContain('24,500.50')
   })
 })

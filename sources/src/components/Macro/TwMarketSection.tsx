@@ -23,7 +23,8 @@ import { SparkCell } from '../Charts/SparkCell'
 import { chipClass, fmtUpdatedAt, heatStyle } from '../StockDetail/chipFormat'
 import { fmtBillion, fmtBillionSigned, toBillion } from '../../utils/formatters'
 import { ForeignTopSection } from './ForeignTopSection'
-import { TwIndexToday } from './TwIndexToday'
+import { TwIndexToday, type TwIndexFallbackQuote } from './TwIndexToday'
+import type { IndexQuote } from '../../services/indexQuotes'
 
 /** Spark for the institutional and turnover 走勢 column (0.7.6: one per unit row, was one per day). */
 const TFOOT_SPARK_W = 76
@@ -191,7 +192,13 @@ function taiexTrendStreak(days: MarketDay[]): { label: string | null; color: str
 
 
 
-export function TwMarketSection() {
+export function TwMarketSection({
+  onBack,
+  quote,
+}: {
+  onBack?: () => void
+  quote?: TwIndexFallbackQuote | IndexQuote | null
+} = {}) {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -222,35 +229,97 @@ export function TwMarketSection() {
     void load()
   }, [load])
 
+  const latest = market ? market.days[market.days.length - 1] ?? null : null
+  const latestInst = market ? [...market.days].reverse().find((d) => d.institutional) ?? null : null
+  const recentInstDays = market
+    ? (market.days ?? [])
+        .filter((d) => d.institutional !== null && d.institutional !== undefined)
+        .slice(-2)
+        .reverse()
+        .map((d) => {
+          const self = d.institutional?.dealerSelfTwd ?? null
+          const hedge = d.institutional?.dealerHedgeTwd ?? null
+          return {
+            date: d.date,
+            totalTwd: d.institutional?.totalTwd ?? null,
+            foreignTwd: d.institutional?.foreignTwd ?? null,
+            trustTwd: d.institutional?.trustTwd ?? null,
+            dealerTwd: self !== null && hedge !== null ? self + hedge : null,
+          }
+        })
+    : null
+
+  const topPanel = (
+    <TwIndexToday
+      closeStats={
+        latest === null
+          ? null
+          : {
+              date: latest.date,
+              tradeValueTwd: latest.tradeValueTwd,
+              instDate: latestInst?.date ?? null,
+              instTotalTwd: latestInst?.institutional?.totalTwd ?? null,
+              instForeignTwd: latestInst?.institutional?.foreignTwd ?? null,
+              instTrustTwd: latestInst?.institutional?.trustTwd ?? null,
+            }
+      }
+      recentInstDays={recentInstDays}
+      quote={quote}
+      onRefresh={() => void load()}
+      onBack={onBack}
+    />
+  )
+
   if (loading && !market) {
     return (
-      <div className="section glass" style={{ padding: '18px 20px' }}>
-        <div className="empty-state" style={{ padding: 24 }}>
-          <RefreshCw size={24} className="spin" />
-          <div style={{ marginTop: 10 }}>正在讀取台股市場資料…</div>
+      <>
+        {topPanel}
+        <div className="section glass" style={{ padding: '18px 20px' }}>
+          <div className="rpt-section-head" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 className="head-tight">台股市場歷史走勢與成交量</h3>
+            </div>
+          </div>
+          <div className="empty-state" style={{ padding: 24 }}>
+            <RefreshCw size={24} className="spin" />
+            <div style={{ marginTop: 10 }}>正在讀取台股市場資料…</div>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
-  if (error) {
+  if (error && !market) {
     return (
-      <div className="section glass" style={{ padding: '18px 20px' }}>
-        <div className="notice notice-error">讀取台股市場資料失敗，請稍後重新整理。</div>
-      </div>
+      <>
+        {topPanel}
+        <div className="section glass" style={{ padding: '18px 20px' }}>
+          <div className="rpt-section-head" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 className="head-tight">台股市場歷史走勢與成交量</h3>
+            </div>
+          </div>
+          <div className="notice notice-error">讀取台股市場資料失敗，請稍後重新整理。</div>
+        </div>
+      </>
     )
   }
 
   if (!market) {
     return (
-      <div className="section glass" style={{ padding: '18px 20px' }}>
-        <div className="rpt-section-head">
-          <h3 className="head-tight">台股市場</h3>
+      <>
+        {topPanel}
+        <div className="section glass" style={{ padding: '18px 20px' }}>
+          <div className="rpt-section-head">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 className="head-tight">台股市場歷史走勢與成交量</h3>
+            </div>
+          </div>
+          <p className="hint" style={{ marginTop: 10 }}>
+            市場資料尚未產生，盤後排程完成後會自動補上。
+          </p>
         </div>
-        <p className="hint" style={{ marginTop: 10 }}>
-          市場資料尚未產生，盤後排程完成後會自動補上。
-        </p>
-      </div>
+      </>
     )
   }
 
@@ -274,13 +343,7 @@ export function TwMarketSection() {
   const drawableCandles = candles.filter(
     (c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null,
   ).length
-  const latest = days[days.length - 1] ?? null
-  /*
-    Institutional amounts are backfilled day by day and the most recent days are often not filled yet (see the
-    notes in marketProxy). The KPI takes "the latest day that has institutional amounts" rather than reading
-    `latest` directly —— otherwise the whole row shows "—" for the hours right after the close and looks broken.
-  */
-  const latestInst = [...days].reverse().find((d) => d.institutional) ?? null
+  // latest and latestInst are already derived above for topPanel
 
   /*
     One row per unit (0.7.6). Everything a row needs is computed once here rather than inside the JSX:
@@ -385,40 +448,9 @@ export function TwMarketSection() {
   // The three pictures have the same set of indexes and the same set of labels, so the X-axis can really match up.
   const labelIndices = days.map((_, i) => i).filter((i) => i % 10 === 0)
 
-  const recentInstDays = (market?.days ?? [])
-    .filter((d) => d.institutional !== null && d.institutional !== undefined)
-    .slice(-2)
-    .reverse()
-    .map((d) => {
-      const self = d.institutional?.dealerSelfTwd ?? null
-      const hedge = d.institutional?.dealerHedgeTwd ?? null
-      return {
-        date: d.date,
-        totalTwd: d.institutional?.totalTwd ?? null,
-        foreignTwd: d.institutional?.foreignTwd ?? null,
-        trustTwd: d.institutional?.trustTwd ?? null,
-        dealerTwd: self !== null && hedge !== null ? self + hedge : null,
-      }
-    })
-
   return (
     <>
-      <TwIndexToday
-        closeStats={
-          latest === null
-            ? null
-            : {
-                date: latest.date,
-                tradeValueTwd: latest.tradeValueTwd,
-                instDate: latestInst?.date ?? null,
-                instTotalTwd: latestInst?.institutional?.totalTwd ?? null,
-                instForeignTwd: latestInst?.institutional?.foreignTwd ?? null,
-                instTrustTwd: latestInst?.institutional?.trustTwd ?? null,
-              }
-        }
-        recentInstDays={recentInstDays}
-        onRefresh={() => void load()}
-      />
+      {topPanel}
 
       <div className="section glass" style={{ padding: '18px 20px' }}>
         <div className="rpt-section-head">

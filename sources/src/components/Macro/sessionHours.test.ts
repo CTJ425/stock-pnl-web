@@ -89,8 +89,9 @@ describe('isMarketOpen / openRegions / anyMarketOpen', () => {
     expect(isMarketOpen('JP', new Date('2026-09-15T02:30:00Z'))).toBe(false)
   })
 
-  it('10:00 台北時段：日韓開盤、美股休市', () => {
-    expect(openRegions(new Date('2026-09-15T01:00:00Z'))).toEqual(['JP', 'KR'])
+  // Task 164 added TW; 01:00Z is 09:00 Taipei, so the TW session is open too.
+  it('10:00 台北時段：台日韓開盤、美股休市', () => {
+    expect(openRegions(new Date('2026-09-15T01:00:00Z'))).toEqual(['TW', 'JP', 'KR'])
   })
 
   it('21:30 台北時段：只有美股開盤', () => {
