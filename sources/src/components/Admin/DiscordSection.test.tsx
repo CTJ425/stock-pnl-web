@@ -186,6 +186,22 @@ describe('DiscordSection', () => {
     expect(test.disabled).toBe(false)
   })
 
+  it('explains how to create a Discord webhook, and that no API key is needed', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(EMPTY)
+    render(<DiscordSection />)
+    await screen.findByText('尚未設定')
+    const guide = screen.getByText('如何取得 Discord Webhook 網址').closest('details')
+    expect(guide).not.toBeNull()
+    expect(guide!.querySelectorAll('ol > li')).toHaveLength(7)
+    const text = guide!.textContent ?? ''
+    expect(text).toContain('不需要建立 Bot，也不需要 API 金鑰或 Bot Token')
+    expect(text).toContain('編輯頻道')
+    expect(text).toContain('整合')
+    expect(text).toContain('複製 Webhook 網址')
+    expect(text).toContain('Webhook 網址等同密碼')
+    expect(text).toContain('刪除該 Webhook，重新建立一個')
+  })
+
   it('clears only after confirmation', async () => {
     svc.getDiscordWebhookStatus.mockResolvedValue(SET)
     svc.clearDiscordWebhook.mockResolvedValue(EMPTY)
