@@ -37,16 +37,16 @@ function indices(): IndexLine[] {
   }))
 }
 
-const INDEX_DESC = [
-  '日經225　63,923.00　🔴 +0.69%　09/16',
-  'KOSPI　暫無資料',
-  'KOSDAQ　暫無資料',
-  '道瓊　暫無資料',
-  'S&P 500　7,551.81　🟢 -0.45%　09/16',
-  '那斯達克　暫無資料',
-  '費半　暫無資料',
-  '羅素2000　暫無資料',
-].join('\n')
+const INDEX_DESC = fence([
+  '日經225   63,923.00 +0.69% 🔴 09/16',
+  'KOSPI     暫無資料',
+  'KOSDAQ    暫無資料',
+  '道瓊      暫無資料',
+  'S&P 500    7,551.81 -0.45% 🟢 09/16',
+  '那斯達克  暫無資料',
+  '費半      暫無資料',
+  '羅素2000  暫無資料',
+])
 
 function input(over: Partial<SummaryInput> = {}): SummaryInput {
   return {
@@ -62,6 +62,11 @@ function input(over: Partial<SummaryInput> = {}): SummaryInput {
     macro: MACRO_LINES,
     ...over,
   }
+}
+
+/** A fenced monospace table, spec §2.9. */
+function fence(lines: string[]): string {
+  return '```\n' + lines.join('\n') + '\n```'
 }
 
 function day(over: Partial<MarketDay>): MarketDay {
@@ -97,7 +102,7 @@ describe('buildSummaryPayload — brief cards (real 2026-09-16 data)', () => {
   it('has one card per brief block, in order', () => {
     expect(p.embeds.map((e) => e.title)).toEqual([
       '🇹🇼 台股大盤',
-      '🏦 三大法人・盤後初步',
+      '🏦 三大法人・盤後初步（億元）',
       '🌏 國際指數・最近收盤',
       '💱 匯率',
     ])
@@ -105,14 +110,28 @@ describe('buildSummaryPayload — brief cards (real 2026-09-16 data)', () => {
 
   it('formats the TAIEX card, red on an up day, stamped with the update time', () => {
     const c = card(p, '台股大盤')!
-    expect(c.description).toBe('加權指數　**45,848.90**\n漲跌　　　🔴 +337.41（+0.74%）\n成交金額　6,759.7 億')
+    expect(c.description).toBe(
+    fence([
+      '加權指數  45,848.90',
+      '漲跌點數    +337.41 🔴',
+      '漲跌幅度     +0.74% 🔴',
+      '成交金額  6,759.7億',
+    ]),
+    )
     expect(c.color).toBe(RED)
     expect(c.footer).toEqual({ text: '09/16 15:05 更新' })
   })
 
   it('formats the institutional card, green on a net sell', () => {
     const c = card(p, '三大法人')!
-    expect(c.description).toBe('外資 -179.8 億｜投信 +95.7 億\n自營 -129.7 億｜**合計 -213.8 億**')
+    expect(c.description).toBe(
+    fence([
+      '外資  -179.8 🟢',
+      '投信   +95.7 🔴',
+      '自營  -129.7 🟢',
+      '合計  -213.8 🟢',
+    ]),
+    )
     expect(c.color).toBe(GREEN)
     expect(c.footer).toEqual({ text: '09/16 15:05 更新' })
   })
@@ -126,7 +145,7 @@ describe('buildSummaryPayload — brief cards (real 2026-09-16 data)', () => {
 
   it('formats the fx card with the quote date and file update time', () => {
     const c = card(p, '匯率')!
-    expect(c.description).toBe('USD/TWD　**31.773**（+0.056）')
+    expect(c.description).toBe(fence([ 'USD/TWD  31.773 +0.056']))
     expect(c.color).toBe(GREY)
     expect(c.footer).toEqual({ text: '09/16 17:00 更新' })
   })
@@ -150,7 +169,7 @@ describe('buildSummaryPayload — full cards (real 2026-09-16 data)', () => {
   it('has one card per full block, in order, and labels complete institutional data', () => {
     expect(p.embeds.map((e) => e.title)).toEqual([
       '🇹🇼 台股大盤',
-      '🏦 三大法人・盤後完整',
+      '🏦 三大法人・盤後完整（億元）',
       '🧾 融資融券',
       '🌏 國際指數・最近收盤',
       '🇺🇸 美國總經',
@@ -162,7 +181,12 @@ describe('buildSummaryPayload — full cards (real 2026-09-16 data)', () => {
   it('formats the margin card', () => {
     const c = card(p, '融資融券')!
     expect(c.description).toBe(
-      '融資餘額　9,248,877 張（+58,366）\n融資金額　5,861.7 億（+39.3 億）\n融券餘額　197,048 張（-1,004）',
+    fence([
+      '               餘額    增減',
+      '融資(張)  9,248,877 +58,366',
+      '融資(億)    5,861.7   +39.3',
+      '融券(張)    197,048  -1,004',
+    ]),
     )
     expect(c.color).toBe(GREY)
     expect(c.footer).toEqual({ text: '09/16 資料' })
@@ -171,14 +195,14 @@ describe('buildSummaryPayload — full cards (real 2026-09-16 data)', () => {
   it('formats the macro card', () => {
     const c = card(p, '美國總經')!
     expect(c.description).toBe(
-      [
-        '核心 CPI　2.47% → **2.45%**（2026-08）',
-        '核心 PPI　4.26% → **4.62%**（2026-08）',
-        '核心 PCE　3.34% → **3.34%**（2026-07）',
-        'FOMC 目標利率　3.5–3.75% → **3.5–3.75%**（2026-09-16）',
-        '非農就業 NFP　21 千人 → **162 千人**（2026-08）',
-        '消費者信心 UMCSENT　49.5 指數 → **55.2 指數**（2026-07）',
-      ].join('\n'),
+    fence([
+      '核心CPI       2.47% →     2.45% 08月',
+      '核心PPI       4.26% →     4.62% 08月',
+      '核心PCE       3.34% →     3.34% 07月',
+      '聯邦利率  3.5-3.75% → 3.5-3.75% 09/16',
+      '非農就業     21千人 →   162千人 08月',
+      '消費信心   49.5指數 →  55.2指數 07月',
+    ]),
     )
     expect(c.footer).toEqual({ text: '括號內為資料期別' })
   })
@@ -209,28 +233,28 @@ describe('buildSummaryPayload — data dates and staleness', () => {
   it('shows both dates when the update happened on a later day', () => {
     const p = buildSummaryPayload(input({ marketAsOf: '2026-09-17T01:00:00.000Z' }))
     expect(card(p, '台股大盤')!.footer).toEqual({ text: '09/16 資料・09/17 09:00 更新' })
-    expect(card(p, '三大法人')!.title).toBe('🏦 三大法人・盤後完整')
+    expect(card(p, '三大法人')!.title).toBe('🏦 三大法人・盤後完整（億元）')
   })
 
   it('falls back to the data date when the update time is unknown', () => {
     const p = buildSummaryPayload(input({ marketAsOf: null, usdTwd: { ...USD_TWD, asOf: null } }))
     expect(card(p, '台股大盤')!.footer).toEqual({ text: '09/16 資料' })
-    expect(card(p, '三大法人')!.title).toBe('🏦 三大法人')
+    expect(card(p, '三大法人')!.title).toBe('🏦 三大法人（億元）')
     expect(card(p, '三大法人')!.footer).toEqual({ text: '09/16 資料' })
     expect(card(p, '匯率')!.footer).toEqual({ text: '09/16 資料' })
   })
 
   it('splits 盤後初步／完整 exactly at 19:30 Taipei', () => {
     const title = (asOf: string) => card(buildSummaryPayload(input({ marketAsOf: asOf })), '三大法人')!.title
-    expect(title('2026-09-16T11:29:59.000Z')).toBe('🏦 三大法人・盤後初步')
-    expect(title('2026-09-16T11:30:00.000Z')).toBe('🏦 三大法人・盤後完整')
+    expect(title('2026-09-16T11:29:59.000Z')).toBe('🏦 三大法人・盤後初步（億元）')
+    expect(title('2026-09-16T11:30:00.000Z')).toBe('🏦 三大法人・盤後完整（億元）')
   })
 
   it('treats an unparseable update time as unknown, never printing NaN', () => {
     for (const bad of ['garbage', '']) {
       const p = buildSummaryPayload(input({ marketAsOf: bad, usdTwd: { ...USD_TWD, asOf: bad } }))
       expect(card(p, '台股大盤')!.footer).toEqual({ text: '09/16 資料' })
-      expect(card(p, '三大法人')!.title).toBe('🏦 三大法人')
+      expect(card(p, '三大法人')!.title).toBe('🏦 三大法人（億元）')
       expect(card(p, '匯率')!.footer).toEqual({ text: '09/16 資料' })
       expect(JSON.stringify(p)).not.toContain('NaN')
     }
@@ -263,19 +287,40 @@ describe('buildSummaryPayload — missing and edge values', () => {
 
   it('shows an unknown change', () => {
     const c = card(buildSummaryPayload(input({ market: day({ changePoints: null }) })), '台股大盤')!
-    expect(c.description).toBe('加權指數　**45,848.90**\n漲跌　　　—\n成交金額　6,759.7 億')
+    expect(c.description).toBe(
+    fence([
+      '加權指數  45,848.90',
+      '漲跌點數         --',
+      '漲跌幅度         --',
+      '成交金額  6,759.7億',
+    ]),
+    )
     expect(c.color).toBe(GREY)
   })
 
   it('shows a flat day', () => {
     const c = card(buildSummaryPayload(input({ market: day({ changePoints: 0, tradeValueTwd: null }) })), '台股大盤')!
-    expect(c.description).toBe('加權指數　**45,848.90**\n漲跌　　　⚪ 平盤（0.00%）\n成交金額　—')
+    expect(c.description).toBe(
+    fence([
+      '加權指數  45,848.90',
+      '漲跌點數       0.00 ⚪',
+      '漲跌幅度      0.00% ⚪',
+      '成交金額         --',
+    ]),
+    )
     expect(c.color).toBe(GREY)
   })
 
   it('shows a down day in green', () => {
     const c = card(buildSummaryPayload(input({ market: day({ taiex: 45511.49, changePoints: -337.41 }) })), '台股大盤')!
-    expect(c.description).toBe('加權指數　**45,511.49**\n漲跌　　　🟢 -337.41（-0.74%）\n成交金額　6,759.7 億')
+    expect(c.description).toBe(
+    fence([
+      '加權指數  45,511.49',
+      '漲跌點數    -337.41 🟢',
+      '漲跌幅度     -0.74% 🟢',
+      '成交金額  6,759.7億',
+    ]),
+    )
     expect(c.color).toBe(GREEN)
   })
 
@@ -284,7 +329,14 @@ describe('buildSummaryPayload — missing and edge values', () => {
     const p = buildSummaryPayload(
       input({ market: day({ institutional: { ...inst, dealerHedgeTwd: null, trustTwd: null, foreignTwd: -1_000_000 } }) }),
     )
-    expect(card(p, '三大法人')!.description).toBe('外資 0.0 億｜投信 —\n自營 -36.3 億｜**合計 -213.8 億**')
+    expect(card(p, '三大法人')!.description).toBe(
+    fence([
+      '外資     0.0 ⚪',
+      '投信      --',
+      '自營   -36.3 🟢',
+      '合計  -213.8 🟢',
+    ]),
+    )
   })
 
   it('prints — when both dealer amounts are unknown, and turns red on a net buy', () => {
@@ -295,8 +347,14 @@ describe('buildSummaryPayload — missing and edge values', () => {
       ),
       '三大法人',
     )!
-    expect(c.description).toContain('自營 —')
-    expect(c.description).toContain('**合計 +40.0 億**')
+    expect(c.description).toBe(
+    fence([
+      '外資  -179.8 🟢',
+      '投信   +95.7 🔴',
+      '自營      --',
+      '合計   +40.0 🔴',
+    ]),
+    )
     expect(c.color).toBe(RED)
   })
 
@@ -305,7 +363,7 @@ describe('buildSummaryPayload — missing and edge values', () => {
     expect(fx({ usdTwd: null }).description).toBe('暫無資料')
     expect(fx({ usdTwd: null }).footer).toBeUndefined()
     expect(fx({ usdTwd: { ...USD_TWD, latest: null } }).description).toBe('暫無資料')
-    expect(fx({ usdTwd: { ...USD_TWD, prevClose: null } }).description).toBe('USD/TWD　**31.773**')
+    expect(fx({ usdTwd: { ...USD_TWD, prevClose: null } }).description).toBe(fence(['USD/TWD  31.773']))
   })
 
   it('handles missing macro pieces, including a null value', () => {
@@ -321,12 +379,12 @@ describe('buildSummaryPayload — missing and edge values', () => {
         { ...MACRO_LINES[3], latest: { period: '2026-09-16', value: null, valueLow: 3.5 } },
       ]).description,
     ).toBe(
-      [
-        '核心 CPI　— → **2.45%**（2026-08）',
-        '核心 PPI　暫無資料',
-        '核心 CPI　— → **2.45%**（2026-08）',
-        'FOMC 目標利率　暫無資料',
-      ].join('\n'),
+    fence([
+      '核心CPI   -- → 2.45% 08月',
+      '核心PPI   暫無資料',
+      '核心CPI   -- → 2.45% 08月',
+      '聯邦利率  暫無資料',
+    ]),
     )
   })
 
@@ -334,9 +392,18 @@ describe('buildSummaryPayload — missing and edge values', () => {
     const list = indices()
     list[0] = { ...list[0], quote: { date: '09/16', close: 63923, changePct: null } }
     list[4] = { ...list[4], quote: { date: '09/16', close: 7551.81, changePct: 0.001 } }
-    const lines = card(buildSummaryPayload(input({ indices: list })), '國際指數')!.description!.split('\n')
-    expect(lines[0]).toBe('日經225　63,923.00　09/16')
-    expect(lines[4]).toBe('S&P 500　7,551.81　⚪ 0.00%　09/16')
+    expect(card(buildSummaryPayload(input({ indices: list })), '國際指數')!.description).toBe(
+    fence([
+      '日經225   63,923.00    --    09/16',
+      'KOSPI     暫無資料',
+      'KOSDAQ    暫無資料',
+      '道瓊      暫無資料',
+      'S&P 500    7,551.81 0.00% ⚪ 09/16',
+      '那斯達克  暫無資料',
+      '費半      暫無資料',
+      '羅素2000  暫無資料',
+    ]),
+    )
     const empty = card(buildSummaryPayload(input({ indices: [] })), '國際指數')!
     expect(empty.description).toBe('暫無資料')
     expect(empty.footer).toBeUndefined()
@@ -347,7 +414,14 @@ describe('buildSummaryPayload — missing and edge values', () => {
       buildSummaryPayload(input({ edition: 'full', margin: { ...MARGIN, shortLots: { prev: null, today: 197048, change: null } } })),
       '融資融券',
     )!
-    expect(c.description!.split('\n')[2]).toBe('融券餘額　197,048 張（—）')
+    expect(c.description).toBe(
+    fence([
+      '               餘額    增減',
+      '融資(張)  9,248,877 +58,366',
+      '融資(億)    5,861.7   +39.3',
+      '融券(張)    197,048      --',
+    ]),
+    )
   })
 
   it('never allows mentions, whatever the content', () => {

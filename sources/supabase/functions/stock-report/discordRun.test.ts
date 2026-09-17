@@ -109,8 +109,8 @@ describe('runDiscordSummary', () => {
     const p = posted(deps)
     expect(heading(p)).toBe('## 📊 台股盤後快報 09/16(三)')
     expect(footerOf(p, '台股大盤')).toBe('09/16 15:05 更新')
-    expect(p.embeds.find((e) => e.title.includes('三大法人'))?.title).toBe('🏦 三大法人・盤後初步')
-    expect(fieldOf(p, '匯率')).toBe('USD/TWD　**31.773**（+0.056）')
+    expect(p.embeds.find((e) => e.title.includes('三大法人'))?.title).toBe('🏦 三大法人・盤後初步（億元）')
+    expect(fieldOf(p, '匯率')).toBe('```\nUSD/TWD  31.773 +0.056\n```')
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'brief', out)
     expect(deps.log).not.toHaveBeenCalled()
   })
@@ -119,9 +119,9 @@ describe('runDiscordSummary', () => {
     const deps = summaryDeps()
     await runDiscordSummary(deps, 'brief')
     const lines = fieldOf(posted(deps), '國際指數')!.split('\n')
-    expect(lines[0]).toBe('日經225　63,923.00　🔴 +0.69%　09/16')
-    expect(lines[1]).toBe('KOSPI　暫無資料')
-    expect(lines[4]).toBe('S&P 500　7,551.81　🟢 -0.45%　09/16')
+    expect(lines[1]).toBe('日經225   63,923.00 +0.69% 🔴 09/16')
+    expect(lines[2]).toBe('KOSPI     暫無資料')
+    expect(lines[5]).toBe('S&P 500    7,551.81 -0.45% 🟢 09/16')
   })
 
   it('treats a failed fx load as missing', async () => {
@@ -139,9 +139,9 @@ describe('runDiscordSummary', () => {
     expect(heading(p)).toBe('## 📋 台股盤後完整版 09/16(三)')
     expect(footerOf(p, '融資融券')).toBe('09/16 資料')
     expect(fieldOf(p, '融資融券')).toBe(
-      '融資餘額　9,248,877 張（+58,366）\n融資金額　5,861.7 億（+39.3 億）\n融券餘額　197,048 張（-1,004）',
+      '```\n               餘額    增減\n融資(張)  9,248,877 +58,366\n融資(億)    5,861.7   +39.3\n融券(張)    197,048  -1,004\n```',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI　2.47% → **2.45%**（2026-08）')
+    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI       2.47% →     2.45% 08月')
   })
 
   it('refuses margin totals dated another day', async () => {
@@ -354,9 +354,9 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
     expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
     expect(heading(p)).toBe('## 【預覽】📊 台股盤後快報 09/16(三)')
     expect(p.allowed_mentions).toEqual({ parse: [] })
-    expect(fieldOf(p, '台股大盤')).toBe('加權指數　**45,848.90**\n漲跌　　　🔴 +337.41（+0.74%）\n成交金額　6,759.7 億')
+    expect(fieldOf(p, '台股大盤')).toBe('```\n加權指數  45,848.90\n漲跌點數    +337.41 🔴\n漲跌幅度     +0.74% 🔴\n成交金額  6,759.7億\n```')
     expect(footerOf(p, '台股大盤')).toBe('09/16 15:05 更新')
-    expect(fieldOf(p, '匯率')).toBe('USD/TWD　**31.773**（+0.056）')
+    expect(fieldOf(p, '匯率')).toBe('```\nUSD/TWD  31.773 +0.056\n```')
     expect(deps.loadIndex).toHaveBeenCalledTimes(8)
     expect(deps.loadMacro).not.toHaveBeenCalled()
     expect(deps.loadMargin).not.toHaveBeenCalled()
@@ -382,9 +382,9 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
     expect(footerOf(p, '融資融券')).toBe('⚠️ 09/16 資料・非今日')
     expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
     expect(fieldOf(p, '融資融券')).toBe(
-      '融資餘額　9,248,877 張（+58,366）\n融資金額　5,861.7 億（+39.3 億）\n融券餘額　197,048 張（-1,004）',
+      '```\n               餘額    增減\n融資(張)  9,248,877 +58,366\n融資(億)    5,861.7   +39.3\n融券(張)    197,048  -1,004\n```',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI　2.47% → **2.45%**（2026-08）')
+    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI       2.47% →     2.45% 08月')
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-19', 'test', { kind: 'sent', httpStatus: 204 })
     expect(out).toMatchObject({ ok: true, preview: { edition: 'full', marketDate: '2026-09-16' } })
   })
