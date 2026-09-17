@@ -8,6 +8,32 @@
 
 ## 🐛 Open / Active Issues & Accepted Risks
 
+### RISK-017 — Discord holdings settings ops are check-then-act, not atomic
+- **Where**: `sources/supabase/functions/stock-report/holdingsRun.ts` (`runHoldingsSettingsOp`: quota check before `finish`; `enable` reads the webhook before `setEnabled`)
+- **Risk**: two concurrent `test`/`preview` calls from one user (two tabs) can both pass the 10-per-day check; an `enable` racing a `clear` can leave `enabled = true` with `webhook_url = null`, so the panel shows 已開啟 while 未設定.
+- **Why accepted**: the quota overrun is a few extra messages to the user's own webhook; the daily run filters `webhook_url is not null`, so the inconsistent row never sends. Found by the step-2c review, 2026-09-17.
+- **Status**: ACCEPTED (Task 165 Phase 2)
+
+---
+
+### RISK-016 — Discord holdings run fetches every held ticker at once
+- **Where**: `sources/supabase/functions/stock-report/holdingsRun.ts` (`Promise.all` over a user's keys), `holdingQuotes.ts` (`createQuoteCache`, `makeChartFetch`)
+- **Risk**: a user with many distinct tickers sends a burst of simultaneous Yahoo chart requests (TW tickers up to two symbols each); Yahoo may rate-limit the burst.
+- **Mitigation in place**: 429 and 5xx get one retry after 500 ms; a failed ticker shows `--` and is left out of the totals, and the footer counts it.
+- **Why accepted**: holdings per user are small today. Revisit with a concurrency cap if the send log shows rows with many missing quotes. Found by the step-2c review, 2026-09-17.
+- **Status**: ACCEPTED (Task 165 Phase 2)
+
+---
+
+### RISK-015 — A Discord holdings run killed mid-user leaves that user `claimed` for the day
+- **Where**: `sources/supabase/functions/stock-report/holdingsRun.ts` (`runHoldingsDaily`), `sources/supabase/schema.sql` §14 (`user_discord_send_log_once`)
+- **Risk**: the budget is checked only before a user starts. If the Edge invocation is killed while a user is in flight, their `daily` row stays `claimed`, the partial unique index blocks any rerun that day, and they miss the card. Users not started before the budget ran out (`leftOver`) are not retried either.
+- **Mitigation in place**: `HOLDINGS_RUN_BUDGET_MS` lowered from 110 s to 80 s, so one worst-case user (≈33 s quotes + ≈30 s `postDiscordWebhook`) still ends before the 150 s limit.
+- **Why accepted**: few enabled users today; a stale-claim reclaim or a second cron pass is future work if `leftOver` or stuck `claimed` rows appear. Found by the step-2c review, 2026-09-17.
+- **Status**: ACCEPTED (Task 165 Phase 2)
+
+---
+
 ### RISK-014 — Discord summary: a delivered message can leave its log row stuck in `claimed`
 - **Where**: `sources/supabase/functions/stock-report/discordRun.ts` (`runDiscordSummary`: post → `finishSend`), `sources/supabase/functions/stock-report/index.ts` (`finishDiscordSend`), `sources/supabase/schema.sql` (index `discord_send_log_once`)
 - **Failure scenario**: if the Discord post succeeds and the following `finishSend` update fails (transient DB error), the row stays `claimed`. The partial unique index then blocks any retry for that day and edition, and the admin console shows 處理中 for a message that was actually delivered. Separately, `runDiscordSummary` awaits `deps.log` without a catch; the real `logEvent` never rejects (`_shared/log.ts`), so this only matters if that contract changes.

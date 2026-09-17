@@ -101,6 +101,21 @@ export function createQuoteCache(fetchJson: ChartFetch, nowSec: number):
 - Imports allowed: `indexChartUrl`, `IndexChartResponse` from `globalIndexClose.ts`;
   `tradingDateOf` from `twDaily.ts`; `Market`, `positionKey` from `../_shared/engine/models.ts`.
 
+**HTTP for `fetchChart`** (added after the step-2b review: no timeout and no retry was a risk):
+
+```ts
+export function makeChartFetch(deps: { fetchImpl: typeof fetch; sleep: (ms: number) => Promise<void>; timeoutMs?: number }): ChartFetch
+```
+
+- Every attempt calls `fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs ?? 8_000) })`.
+- 2xx → `res.json()`; a parse failure rejects without a retry.
+- HTTP 429 or ≥ 500, or a rejected fetch (network, timeout) → `sleep(500)` and exactly one more
+  attempt; a second failure rejects.
+- Any other non-2xx (e.g. 404 for an OTC ticker asked as `.TW`) rejects `HTTP <status>` at once.
+- Worst case per key: 2 symbols × 2 attempts × 8 s + 1 s = 33 s, so the 80 s run budget plus one
+  user's worst case (33 s quotes + 30 s `postDiscordWebhook`) stays under the cron's 150 s.
+- `index.ts` uses `makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) })`.
+
 Not `price_cache` (only refreshed when someone views a ticker) and not the `stock-price` HTTP
 endpoint (`verify_jwt=true`, meant for browsers).
 
@@ -300,7 +315,7 @@ export interface HoldingsRunResult {
   skipped?: 'no-market-day'
   sent: number; failed: number; noHoldings: number; alreadySent: number; leftOver: number
 }
-export const HOLDINGS_RUN_BUDGET_MS = 110_000
+export const HOLDINGS_RUN_BUDGET_MS = 80_000   // step-2c review: one user can take ~63 s (33 s quotes + 30 s post), 80 + 63 < 150
 export async function runHoldingsDaily(deps: HoldingsRunDeps): Promise<HoldingsRunResult>
 
 export interface HoldingsSettingsDeps extends HoldingsDataDeps {
@@ -420,11 +435,17 @@ export function previewHoldings(): Promise<{ status: HoldingsPushStatus; send: H
 - This warning, always visible:
   > 卡片會顯示完整的股數、成本與損益金額。請使用只有你看得到的私人頻道 Webhook；貼到共用頻道，頻道裡所有人都會看到。
 - `<ol aria-label="設定步驟">` with three steps (Discord 頻道設定 → 整合 → Webhook；建立並複製網址；貼上儲存後按測試發送).
-- `<input type="password" autoComplete="off" aria-label="Discord Webhook 網址">`; `儲存` disabled while the
+- `<input type="password" className="ai-input" autoComplete="off" aria-label="Discord Webhook 網址">` inside a `<label>`; `儲存` disabled while the
   trimmed input is empty or a request is running; `清除` disabled when not configured or busy.
   `儲存` calls `saveHoldingsWebhook(input.trim())`; after a successful save the input is emptied.
-- `<input type="checkbox" role="switch" aria-label="每個交易日 17:15 推送持股日報">`, checked =
-  `enabled`, disabled when not configured or busy.
+- The switch is the admin console's toggle: `<button type="button" role="switch" aria-checked={enabled}
+  aria-label="每個交易日 17:15 推送持股日報" className={enabled ? 'adm-toggle on' : 'adm-toggle'}>`
+  with the same text visible beside it; disabled when not configured or busy.
+- Styling uses only existing global classes, as `DiscordSection.tsx` does: warning
+  `notice notice-warn`; error (`role="alert"`) `notice notice-error`; result (`role="status"`)
+  `notice notice-ok` on success and `notice notice-warn` on a failed send; steps, status and last-send
+  lines `hint`; form `ai-form` / `ai-form-group` / `ai-input`; button rows `ai-actions`; buttons
+  `btn btn-sm`, `儲存` adds `btn-primary`, `清除` adds `btn-danger`. No new CSS.
 - `測試發送` and `預覽今日持股` disabled when not configured or busy.
 - The `role="status"` element exists only while there is a result message and the `role="alert"`
   element only while there is an error; starting a new action clears both. Result texts:
@@ -488,7 +509,7 @@ webhook; one real 17:15 round lands `sent` in `user_discord_send_log`; unauthent
 | Run gate | no market day → no claim, no fetch, no post | `holdingsRun.test.ts` |
 | Run dedupe | second run same day → claim fails, no post | `holdingsRun.test.ts` |
 | Run isolation | user 1 throws → `failed`; user 2 still `sent` | `holdingsRun.test.ts` |
-| Run budget | clock past 110 s → remaining users untouched and counted | `holdingsRun.test.ts` |
+| Run budget | clock past 80 s → remaining users untouched and counted | `holdingsRun.test.ts` |
 | No holdings | `skipped / no-holdings`, no post | `holdingsRun.test.ts` |
 | Reason hygiene | every `reason` written is from the known code set (`/^[a-z0-9-]+$/`); never contains a URL or a formatted amount | `holdingsRun.test.ts` |
 | Ops | `set` bad URL → 400, no write; `enable` w/o webhook → 400; `get` never includes the URL; body `user_id` ignored | `holdingsRun.test.ts` |

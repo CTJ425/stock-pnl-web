@@ -37,6 +37,7 @@ Real browser against:
 | `sources/scripts/verify-fee-rate-e2e.cjs` | Brokerage fee discount rate UI verification |
 | `sources/scripts/verify-quote-intraday-e2e.cjs` | Intraday quote chart verification |
 | `sources/scripts/verify-macro-turnover.cjs` | US macro series & turnover verification |
+| `sources/scripts/verify-discord-push-e2e.cjs` | Per-user「Discord 推播」dialog: set → enable → test → preview → quota → clear, desktop + 390px — **Supabase mode only**, same launch as `run-all-e2e.cjs` |
 
 ```bash
 cd sources && npx playwright install chromium   # first time

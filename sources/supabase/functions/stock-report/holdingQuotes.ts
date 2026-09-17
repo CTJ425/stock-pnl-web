@@ -53,6 +53,44 @@ export function quoteSymbols(market: Market, ticker: string): string[] {
 export type ChartFetch = (url: string) => Promise<unknown>
 
 /**
+ * `ChartFetch` with a timeout and one retry (added after the step-2b review: no timeout
+ * and no retry was a risk). 429/5xx/network/timeout get one retry after a 500ms sleep,
+ * whichever of the two failure kinds happens first; any other non-2xx rejects at once;
+ * a JSON parse failure rejects without a retry.
+ */
+export function makeChartFetch(deps: {
+  fetchImpl: typeof fetch
+  sleep: (ms: number) => Promise<void>
+  timeoutMs?: number
+}): ChartFetch {
+  const timeoutMs = deps.timeoutMs ?? 8_000
+
+  const once = (url: string): Promise<Response> => deps.fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
+
+  async function finish(res: Response, url: string, alreadyRetried: boolean): Promise<unknown> {
+    if (res.ok) return res.json()
+    if (!alreadyRetried && (res.status === 429 || res.status >= 500)) {
+      await deps.sleep(500)
+      const retried = await once(url)
+      return finish(retried, url, true)
+    }
+    throw new Error(`HTTP ${res.status}`)
+  }
+
+  return async (url: string): Promise<unknown> => {
+    let res: Response
+    try {
+      res = await once(url)
+    } catch {
+      await deps.sleep(500)
+      res = await once(url) // second attempt; a rejection here propagates as the final failure
+      return finish(res, url, true)
+    }
+    return finish(res, url, false)
+  }
+}
+
+/**
  * One fetch sequence per position key per run: quotes are memoized across every user's
  * ledgers so two users holding the same ticker do not double the Yahoo calls.
  */

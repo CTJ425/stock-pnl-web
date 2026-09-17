@@ -238,6 +238,19 @@ import {
   type SummaryDeps,
   type WebhookAdminDeps,
 } from './discordRun.ts'
+import type { WorkspaceInput } from './holdingsCard.ts'
+import { makeChartFetch } from './holdingQuotes.ts'
+import type { Transaction } from '../_shared/engine/models.ts'
+import {
+  runHoldingsDaily,
+  runHoldingsSettingsOp,
+  type HoldingsDataDeps,
+  type HoldingsKind,
+  type HoldingsOutcome,
+  type HoldingsRunDeps,
+  type HoldingsSettingsDeps,
+  type LastSend,
+} from './holdingsRun.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -4242,6 +4255,194 @@ async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Re
 }
 
 /**
+ * Real dependencies for the per-user Discord holdings card (Task 165 Phase 2). Shared by
+ * `discord-holdings` (cron, `x-cron-secret`) and `discord-holdings-settings` (per-user, JWT):
+ * both read/write `user_discord_settings` and `user_discord_send_log`. The webhook URL itself
+ * never leaves this module as a return value — see spec §2.6.
+ */
+const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
+
+/** Every workspace of the user, each with all of its transactions. BUG-066: page transactions
+ * 1,000 rows at a time until a short page — PostgREST caps a single response at `max_rows`. */
+async function loadHoldingsWorkspaces(userId: string): Promise<WorkspaceInput[]> {
+  const { data: workspaces, error } = await db
+    .from('workspaces')
+    .select('id, fee_rate')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) throw new Error(error.message)
+
+  const out: WorkspaceInput[] = []
+  for (const ws of workspaces ?? []) {
+    const transactions: Transaction[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error: txError } = await db
+        .from('transactions')
+        .select(HOLDINGS_TX_COLUMNS)
+        .eq('workspace_id', ws.id)
+        .order('tx_date', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + 999)
+      if (txError) throw new Error(txError.message)
+      const page = (data ?? []) as unknown as Transaction[]
+      transactions.push(...page)
+      if (page.length < 1000) break
+    }
+    out.push({ id: ws.id, fee_rate: ws.fee_rate, transactions })
+  }
+  return out
+}
+
+async function listEnabledHoldingsUsers(): Promise<Array<{ userId: string; webhookUrl: string }>> {
+  const { data, error } = await db
+    .from('user_discord_settings')
+    .select('user_id, webhook_url')
+    .eq('enabled', true)
+    .not('webhook_url', 'is', null)
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((row) => ({ userId: row.user_id, webhookUrl: row.webhook_url as string }))
+}
+
+/** `23505` means another call already claimed this user+day first — the unique index is the actual guard. */
+async function claimHoldingsDaily(userId: string, ymd: string): Promise<boolean> {
+  const { error } = await db.from('user_discord_send_log').insert({ user_id: userId, taipei_ymd: ymd, kind: 'daily', status: 'claimed' })
+  if (!error) return true
+  if (error.code === '23505') return false
+  throw new Error(error.message)
+}
+
+/** `daily` terminal outcomes (`sent`/`failed`/`skipped`) update the row `claimDaily` inserted
+ * earlier; `preview`/`test` have no claimed row, so they insert their own. */
+async function finishHoldingsSend(userId: string, ymd: string, kind: HoldingsKind, outcome: HoldingsOutcome): Promise<void> {
+  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
+  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
+  if (kind === 'daily') {
+    const { error } = await db
+      .from('user_discord_send_log')
+      .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('taipei_ymd', ymd)
+      .eq('status', 'claimed')
+    if (error) throw new Error(error.message)
+    return
+  }
+  const { error } = await db
+    .from('user_discord_send_log')
+    .insert({ user_id: userId, taipei_ymd: ymd, kind, status: outcome.kind, http_status: httpStatus, reason })
+  if (error) throw new Error(error.message)
+}
+
+async function readHoldingsSettings(userId: string): Promise<{ enabled: boolean; webhookUrl: string | null } | null> {
+  const { data, error } = await db
+    .from('user_discord_settings')
+    .select('enabled, webhook_url')
+    .eq('user_id', userId)
+    .maybeSingle()
+  // A read failure must not look like "not configured" — throw so the caller answers 500.
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return { enabled: data.enabled, webhookUrl: data.webhook_url }
+}
+
+async function saveHoldingsWebhookUrl(userId: string, url: string): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .upsert({ user_id: userId, webhook_url: url, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw new Error(error.message)
+}
+
+async function clearHoldingsWebhookUrl(userId: string): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .update({ webhook_url: null, enabled: false, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) throw new Error(error.message)
+}
+
+async function setHoldingsEnabled(userId: string, enabled: boolean): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .upsert({ user_id: userId, enabled, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw new Error(error.message)
+}
+
+async function readHoldingsLastSend(userId: string): Promise<LastSend | null> {
+  const { data, error } = await db
+    .from('user_discord_send_log')
+    .select('kind, taipei_ymd, status, reason, updated_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  return { kind: data.kind, ymd: data.taipei_ymd, status: data.status, reason: data.reason, at: data.updated_at }
+}
+
+async function countHoldingsManualToday(userId: string, ymd: string): Promise<number> {
+  const { count, error } = await db
+    .from('user_discord_send_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('taipei_ymd', ymd)
+    .in('kind', ['test', 'preview'])
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
+/** The data loaders shared by the scheduled run and the per-user settings ops (get/set/.../preview). */
+function holdingsDataDeps(): HoldingsDataDeps {
+  return {
+    now: () => new Date(),
+    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
+    loadWorkspaces: loadHoldingsWorkspaces,
+    fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
+    post: postDiscordWebhook,
+    finish: finishHoldingsSend,
+  }
+}
+
+/** Cron entry point: weekday 17:15 (`discord-holdings-daily` in schema.sql), after the 17:05 brief. */
+async function handleDiscordHoldings(): Promise<Response> {
+  const startedAt = Date.now()
+  const deps: HoldingsRunDeps = {
+    ...holdingsDataDeps(),
+    elapsedMs: () => Date.now() - startedAt,
+    listEnabledUsers: listEnabledHoldingsUsers,
+    claimDaily: claimHoldingsDaily,
+    log: (e) => logEvent(db, { level: e.level, action: 'discord-holdings', message: e.message, detail: e.detail }),
+  }
+  const result = await runHoldingsDaily(deps)
+  return json(result)
+}
+
+/** Per-user settings panel entry point: get / set / clear / enable / test / preview. Never returns the URL — see `runHoldingsSettingsOp`. */
+async function handleDiscordHoldingsSettings(userId: string, body: GenerateReportRequestBody): Promise<Response> {
+  const { action: _action, ...input } = body
+  const deps: HoldingsSettingsDeps = {
+    ...holdingsDataDeps(),
+    readSettings: readHoldingsSettings,
+    saveWebhook: saveHoldingsWebhookUrl,
+    clearWebhook: clearHoldingsWebhookUrl,
+    setEnabled: setHoldingsEnabled,
+    lastSend: readHoldingsLastSend,
+    countManualToday: countHoldingsManualToday,
+  }
+  const result = await runHoldingsSettingsOp(deps, userId, input)
+  if (!result.ok) {
+    const status =
+      result.error === 'bad-request' || result.error === 'invalid-url' || result.error === 'not-configured'
+        ? 400
+        : result.error === 'quota'
+          ? 429
+          : 409
+    return json(result, status)
+  }
+  return json(result)
+}
+
+/**
  * Admin-run job ids (0.6.49): nightly split into three phases so each HTTP call
  * gets its own cloud compute budget; plus the other cron-backed actions.
  */
@@ -4590,6 +4791,23 @@ Deno.serve(async (req) => {
       const denied = await assertAdmin(req)
       if (denied) return denied
       return await handleDiscordWebhook(body)
+    }
+
+    // Per-user Discord holdings card (Task 165 Phase 2): triggered by the `discord-holdings-daily`
+    // cron job (schema.sql §14), same x-cron-secret gate as the other pg_cron actions.
+    if (body.action === 'discord-holdings') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleDiscordHoldings()
+    }
+
+    // Per-user Discord holdings settings panel (Task 165 Phase 2): get / set / clear / enable /
+    // test / preview, gated by the caller's own JWT rather than assertAdmin — every user manages
+    // their own webhook.
+    if (body.action === 'discord-holdings-settings') {
+      const auth = await assertUser(req)
+      if (auth instanceof Response) return auth
+      return await handleDiscordHoldingsSettings(auth.userId, body)
     }
 
     return json({ error: 'Unknown action' }, 400)
