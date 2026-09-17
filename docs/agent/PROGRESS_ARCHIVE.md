@@ -5,6 +5,26 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-17 13:51:06 Asia/Taipei (Task 165 Phase 1, unversioned — `dev` working tree)
+
+**What**: Market-wide after-hours summary posted to one admin-configured Discord webhook, weekdays 17:05 (brief) and 21:30 (full). Design decided with the user step by step; spec `docs/agent/specs/discord-daily-summary.md`. No per-user data (holdings summary is Phase 2).
+
+**Changed**
+- Edge (`stock-report`): new pure modules `discordUrl.ts`, `discordWebhook.ts`, `marketMargin.ts`, `globalIndexClose.ts`, `discordSummary.ts`, `discordRun.ts`; `index.ts` wires `discord-summary` (x-cron-secret) and `discord-webhook` (admin JWT). Neither is in `ADMIN_RUN_JOBS`.
+- DDL (`schema.sql` §13): `app_secrets` (RLS on, no policies, revoked from anon/authenticated), `discord_send_log` + partial unique index `discord_send_log_once`, cron `discord-summary-brief` `5 9 * * 1-5` and `discord-summary-full` `30 13 * * 1-5`. `verify.sql` now expects 17 tables and checks RLS on both new ones.
+- Snapshots: `SECRET_TABLES = ['public.app_secrets']` is always excluded, also under `--with-cache`; `discord_send_log` joins `CACHE_TABLES`.
+- Admin console: new `Discord` panel (`DiscordSection.tsx`, `services/discordWebhook.ts`) — shows only the last 4 token characters; set / clear / test send; recent sends table.
+
+**Data sources** (checked against real responses on 2026-09-17): `market/daily.json` (TAIEX + 三大法人); TWSE `MI_MARGN?selectType=MS` fetched at send time (market 融資融券 totals); Yahoo chart 1d/5d for 8 indices fetched at send time (last completed session only); `macro/us.json`; `fx/twd.json`.
+
+**Review**: Edge modules PASS with 4 RISKs — 2 fixed (a null macro value rendered as 0; unsorted Yahoo bars), 2 accepted as RISK-014. Admin section FAIL, then fixed (rejections shown verbatim, one in-flight flag, 45 s invoke timeout, admin-console markup). Main session read the `index.ts` / `schema.sql` / `verify.sql` diffs and fixed a DB read error being reported as "not configured".
+
+**Verification** (from `sources/`): `npm test` 136 files, 2174 passed / 7 skipped, exit 0; `npm run build` exit 0; `npm run typecheck:edge` exit 0. `node_modules` was missing and was restored with `npm ci`.
+
+**Not done**: commit + version bump; apply §13 on DEV (clone an existing job's command so `CRON_SECRET` is never read); deploy `stock-report` to DEV with `--no-verify-jwt`; set the webhook in the DEV admin console and run 測試發送; PROD only after explicit OK.
+
+---
+
 ## 📅 Log: 2026-09-16 10:10:00 Asia/Taipei (0.9.56, 總體經濟國際指數下鑽與走勢區間正式定版)
 
 **Phase A 國際指數卡片強化**：

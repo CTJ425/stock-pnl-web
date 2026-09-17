@@ -9,12 +9,12 @@
 > **This file only contains ongoing and recurring tasks.** Completed tasks are moved to `TASK_ARCHIVE.md` (see CLAUDE.md § Memory).
 > For detailed implementation history, always refer to `PROGRESS.md`.
 
-## 📍 Where the project stands (2026-09-15 09:16:32)
+## 📍 Where the project stands (2026-09-17 16:33:21)
 
-- **Version 0.9.56 — on `dev` and `main`，正式站已在跑 0.9.56。前端由 Cloudflare Pages 從 `main` 自動部署；四支 Edge Function（`stock-price`、`stock-report`、`backup-transactions`、`ai-proxy`）已全數部署至 DEV 與 PROD，四支的 bundle 雜湊兩邊逐一相同。** 驗收看畫面左下角的版本徽章。
+- **Version 0.9.57 — on `dev` and `main`（2026-09-17 合併）。前端由 Cloudflare Pages 從 `main` 自動部署。Task 165（Discord 每日總結）的 schema §13 與新版 `stock-report` 目前只在 DEV；PROD 尚未套用 §13、也未重新部署 `stock-report`，所以 PROD 主控台的 Discord 頁在部署前會回錯誤。** 驗收看畫面左下角的版本徽章。
   - Shipped 0.9.45 ~ 0.9.56 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
-  - Verification: 129 test files / **2,033** vitest tests, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0；`npm audit` 0 vulnerabilities。
-  - Edge Functions（2026-09-15 實測）: `stock-price` DEV **v18** / PROD **v9**、`stock-report` **v8**、`backup-transactions` **v4**、`ai-proxy` **v1**，四支在 DEV 與 PROD 皆為 ACTIVE 且 bundle 雜湊逐一相同。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
+  - Verification (2026-09-17): 137 test files / **2,201** vitest tests passed, 7 skipped, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0。
+  - Edge Functions（2026-09-17）: DEV `stock-report` **v12**（Task 165）；PROD `stock-report` 未變動（2026-09-15 記錄為 v8）。其餘三支同 2026-09-15 紀錄：`stock-price` DEV v18 / PROD v9、`backup-transactions` v4、`ai-proxy` v1。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
   - **前端由 Cloudflare Pages 自動部署。** 推上 GitHub 後數分鐘內生效，不需要手動上傳 `dist/`（0.9.53 以 bundle 位元組比對實測確認，流程寫在 `README.md` 步驟 9-1）。驗收看畫面左下角版本徽章。
   - **只有 `main` 會上正式站**（0.9.53 實測：09:21 推 `dev` 後七分鐘線上不變；09:27 推 `main` 後 1 分 40 秒線上換版）。Edge Function 不隨前端走，必須另外 `supabase functions deploy`。
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
@@ -22,14 +22,14 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — 0.9.57-dev.1 pushed to `dev` (`c74d371`); DEV schema, cron and Edge deployed and verified; waiting for the webhook to be set
+- **Status**: 🔄 IN PROGRESS — 0.9.57 merged to `main` (2026-09-17); DEV fully deployed (`stock-report` v12, schema §13); PROD Supabase awaits explicit OK
 - **Agent**: Claude
-- **Timestamp**: 2026-09-17 14:54:00 Asia/Taipei
+- **Timestamp**: 2026-09-17 16:33:21 Asia/Taipei
 - **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
 - **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 holdings summary capped at percent + ticker, per-user opt-in, off by default.
-4. Set the webhook in the DEV admin console (DEV has no hosted frontend — run `npm run dev` locally), run 測試發送, watch one real 17:05 and 21:30 round. Until a webhook is set, each scheduled run records a `no-webhook` skip in `discord_send_log` —— ⏳ user
-5. PROD (merge `main`, DDL, deploy) after explicit OK —— ⏳
+4. ~~Set the webhook in the DEV admin console and run 測試發送~~ ✅ (2026-09-17: test 15:11, previews from 15:25, all HTTP 200) · watch one real 17:05 and 21:30 round; check phone alignment of the 國際指數 / 美國總經 tables —— ⏳
+5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · apply schema §13 on PROD (clone an existing job's command behind the identity guard, `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook —— ⏳ awaiting explicit OK
 6. Phase 2: per-user holdings summary (opt-in, percent + ticker at most, own webhook) —— ⏳ not started; needs its own design round
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
