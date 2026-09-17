@@ -1328,6 +1328,85 @@ SELECT cron.schedule(
 
 
 -- =========================================================
+-- 14. Per-user Discord holdings card (Task 165 Phase 2)
+-- =========================================================
+--
+--   Each opted-in user gets their own webhook and their own once-daily card (17:15, after the
+--   17:05 brief) with the same numbers the Dashboard shows across all their workspaces, per
+--   currency (D1/D2/D3/D4 in the spec). Nothing here is posted to the site-wide webhook of §13.
+--
+--   `user_discord_settings` is server-only, same shape as `app_secrets`: RLS is on with NO
+--   policies, so only the service-role client (stock-report's Edge Function) can read or write
+--   it, and the browser never receives `webhook_url` back — see
+--   src/services/discordHoldings.ts / DiscordPushSection.tsx.
+--
+--   `user_discord_send_log` records every send attempt (claimed → sent/failed, or skipped) and
+--   backs `runHoldingsDaily`'s exactly-once claim per user+day. `failed` / `skipped` rows do not
+--   block a retry — only `claimed` / `sent` do, via the partial unique index. `preview` / `test`
+--   sends (the settings panel's "測試發送" / "預覽今日持股") are excluded from that index so they
+--   can repeat, up to `MANUAL_SENDS_PER_DAY` (holdingsRun.ts).
+--
+--   `reason` holds a code only (a DiscordFailReason, `exception`, or `no-holdings`) — never an
+--   amount, a message or a URL.
+
+CREATE TABLE IF NOT EXISTS user_discord_settings (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    webhook_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE user_discord_settings ENABLE ROW LEVEL SECURITY;
+-- No policies on purpose: only service_role (which bypasses RLS) may read or write.
+REVOKE ALL ON public.user_discord_settings FROM anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS user_discord_send_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    taipei_ymd TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('daily', 'preview', 'test')),
+    status TEXT NOT NULL CHECK (status IN ('claimed', 'sent', 'skipped', 'failed')),
+    http_status INT,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE user_discord_send_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.user_discord_send_log FROM anon, authenticated;
+-- One real send per user and day. `failed` / `skipped` rows do not block a retry.
+CREATE UNIQUE INDEX IF NOT EXISTS user_discord_send_log_once
+    ON user_discord_send_log (user_id, taipei_ymd)
+    WHERE kind = 'daily' AND status IN ('claimed', 'sent');
+
+-- ⚠️ Same placeholder mines as §6c/§9/§10/§13. Live: clone an existing job's command (see §6c)
+-- so the embedded CRON_SECRET is never read back out — this is a brand-new job, so a fresh
+-- `cron.schedule` (not unschedule+schedule of an existing one) is correct here.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'discord-holdings-daily') THEN
+    PERFORM cron.unschedule('discord-holdings-daily');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'discord-holdings-daily',
+  -- Taipei 17:15 (UTC 09:15), weekdays.
+  '15 9 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"discord-holdings"}'::jsonb,
+    timeout_milliseconds := 150000
+  );
+  $$
+);
+
+
+-- =========================================================
 -- 6e. HARD GATE — this script FAILS if a placeholder survived
 -- =========================================================
 --

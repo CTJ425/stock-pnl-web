@@ -1,7 +1,7 @@
 // Task 165 Phase 2 step 2b — spec docs/agent/specs/discord-holdings.md §2.2.
 import { describe, expect, it } from 'vitest'
 import { indexChartUrl, type IndexChartResponse } from './globalIndexClose.ts'
-import { createQuoteCache, lastCompletedBar, quoteSymbols } from './holdingQuotes.ts'
+import { createQuoteCache, lastCompletedBar, makeChartFetch, quoteSymbols } from './holdingQuotes.ts'
 
 const sec = (iso: string) => Date.parse(iso) / 1000
 const TW_OFFSET = 8 * 3600
@@ -215,5 +215,68 @@ describe('createQuoteCache', () => {
     const f = fakeFetch({ [indexChartUrl('2330.TW')]: chart(TW_BARS, { gmtoffset: TW_OFFSET, regular: TW_SESSION_0917 }) })
     const cache = createQuoteCache(f.fetchJson, sec('2026-09-17T03:00:00Z'))
     await expect(cache.get('TPE', '2330')).resolves.toEqual({ ymd: '2026-09-16', close: 101, prevClose: 100 })
+  })
+})
+
+describe('makeChartFetch', () => {
+  const URL_ = indexChartUrl('2330.TW')
+  const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
+
+  function harness(answers: Array<Response | Error>) {
+    const calls: Array<{ url: string; signal: AbortSignal | undefined }> = []
+    const sleeps: number[] = []
+    const fetchImpl = ((url: string, init?: RequestInit) => {
+      calls.push({ url, signal: init?.signal ?? undefined })
+      const a = answers.shift()
+      if (!a) throw new Error('no more answers')
+      return a instanceof Error ? Promise.reject(a) : Promise.resolve(a)
+    }) as typeof fetch
+    const get = makeChartFetch({ fetchImpl, sleep: async (ms) => void sleeps.push(ms) })
+    return { calls, sleeps, get }
+  }
+
+  it('returns parsed JSON on the first success, with a timeout signal', async () => {
+    const h = harness([ok({ chart: { result: [] } })])
+    await expect(h.get(URL_)).resolves.toEqual({ chart: { result: [] } })
+    expect(h.calls).toHaveLength(1)
+    expect(h.calls[0].url).toBe(URL_)
+    expect(h.calls[0].signal).toBeInstanceOf(AbortSignal)
+    expect(h.sleeps).toEqual([])
+  })
+
+  it('does not retry a 404 (an OTC ticker asked as .TW)', async () => {
+    const h = harness([new Response('nope', { status: 404 })])
+    await expect(h.get(URL_)).rejects.toThrow('HTTP 404')
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it.each([
+    ['a network error', new TypeError('fetch failed')],
+    ['a timeout', new DOMException('timed out', 'TimeoutError')],
+    ['HTTP 500', new Response('', { status: 500 })],
+    ['HTTP 429', new Response('', { status: 429 })],
+  ])('retries once after %s', async (_label, first) => {
+    const h = harness([first, ok({ ok: 1 })])
+    await expect(h.get(URL_)).resolves.toEqual({ ok: 1 })
+    expect(h.calls).toHaveLength(2)
+    expect(h.sleeps).toEqual([500])
+  })
+
+  it('gives up after the second failure', async () => {
+    const h = harness([new Response('', { status: 503 }), new TypeError('fetch failed')])
+    await expect(h.get(URL_)).rejects.toThrow()
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('rejects when the body is not JSON, without retrying', async () => {
+    const h = harness([new Response('<html>', { status: 200 })])
+    await expect(h.get(URL_)).rejects.toThrow()
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('never rejects the quote cache built on it', async () => {
+    const h = harness([new TypeError('x'), new TypeError('y'), new Response('', { status: 404 })])
+    const cache = createQuoteCache(h.get, Date.parse('2026-09-17T09:15:00Z') / 1000)
+    await expect(cache.get('TPE', '2330')).resolves.toBeNull()
   })
 })

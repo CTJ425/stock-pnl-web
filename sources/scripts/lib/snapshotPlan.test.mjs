@@ -208,14 +208,14 @@ describe('substituteCronPlaceholders — empty and blank options (S13–S14)', (
 })
 
 describe('substituteCronPlaceholders — reports what it did (S15)', () => {
-  it('S15 — the real schema.sql yields 8 URL and 8 header substitutions (Task 165 added two jobs)', () => {
+  it('S15 — the real schema.sql yields 9 URL and 9 header substitutions (Task 165 added three jobs)', () => {
     const sql = readFileSync(SCHEMA_SQL, 'utf8')
     const { sql: out, urls, secrets } = substituteCronPlaceholders(sql, {
       ref: 'abc',
       cronSecret: 'def',
     })
-    expect(urls).toBe(8)
-    expect(secrets).toBe(8)
+    expect(urls).toBe(9)
+    expect(secrets).toBe(9)
     expect(out).toContain('https://abc.supabase.co')
   })
 })
@@ -255,6 +255,7 @@ describe('CACHE_TABLES (S17–S18)', () => {
       'public.price_cache',
       'public.source_probe_log',
       'public.source_probe_tick',
+      'public.user_discord_send_log',
     ])
   })
 
@@ -282,11 +283,17 @@ describe('dataExcludeTables (Task 165)', () => {
   const { SECRET_TABLES, CACHE_TABLES: cache, dataExcludeTables } = plan
 
   it('lists app_secrets as a secret table', () => {
-    expect(SECRET_TABLES).toEqual(['public.app_secrets'])
+    expect(SECRET_TABLES).toContain('public.app_secrets')
   })
 
-  it('treats the Discord send log as a regenerable log table', () => {
+  // Task 165 Phase 2 — every user's own webhook URL lives in user_discord_settings.
+  it('lists user_discord_settings as a secret table, and nothing else new', () => {
+    expect(SECRET_TABLES).toEqual(['public.app_secrets', 'public.user_discord_settings'])
+  })
+
+  it('treats the Discord send logs as regenerable log tables', () => {
     expect(cache).toContain('public.discord_send_log')
+    expect(cache).toContain('public.user_discord_send_log')
   })
 
   it('excludes cache and secret tables by default', () => {
@@ -296,7 +303,7 @@ describe('dataExcludeTables (Task 165)', () => {
   })
 
   it('still excludes secret tables with --with-cache', () => {
-    expect(dataExcludeTables(true)).toEqual(['public.app_secrets'])
+    expect(dataExcludeTables(true)).toEqual(['public.app_secrets', 'public.user_discord_settings'])
   })
 
   it('is what snapshot.cjs uses for the public data dump', () => {
