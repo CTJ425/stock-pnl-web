@@ -225,6 +225,19 @@ import {
   rowsToInsert,
   summarizeAccountBackups,
 } from './backupAdmin.ts'
+import { postDiscordWebhook } from './discordWebhook.ts'
+import { indexChartUrl, type IndexChartResponse } from './globalIndexClose.ts'
+import { marginSummaryUrl, type MarginSummaryResponse } from './marketMargin.ts'
+import type { FxLine, MacroLine, SummaryEdition } from './discordSummary.ts'
+import {
+  runDiscordSummary,
+  runWebhookOp,
+  type RunOutcome,
+  type SendEdition,
+  type SendLogRow,
+  type SummaryDeps,
+  type WebhookAdminDeps,
+} from './discordRun.ts'
 
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are automatically injected by the Supabase execution environment;
 // The service role is not restricted by RLS and is the only way to read and write chip_raw_cache.
@@ -624,6 +637,8 @@ interface GenerateReportRequestBody {
   level?: string
   source?: string
   before?: string
+  /** discord-summary (x-cron-secret): which edition to send, see schema.sql's two `discord-summary-*` cron jobs */
+  edition?: string
 }
 
 /**
@@ -4063,6 +4078,148 @@ async function handleSyncFx(): Promise<Response> {
 }
 
 /**
+ * Real dependencies for the Discord daily summary (Task 165). Shared by `discord-summary` (cron,
+ * `x-cron-secret`) and `discord-webhook` (admin console): both read/write `app_secrets` and
+ * `discord_send_log`. The webhook URL itself never leaves this module as a return value — see
+ * spec §2.2/§2.3.
+ */
+async function readDiscordWebhookRow(): Promise<{ url: string; updatedAt: string } | null> {
+  const { data, error } = await db
+    .from('app_secrets')
+    .select('value, updated_at')
+    .eq('name', 'discord_webhook_url')
+    .maybeSingle()
+  // A read failure must not look like "not configured": the admin console would show 尚未設定 and
+  // the cron run would record a misleading `no-webhook` skip. Throw so the caller answers 500.
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return { url: data.value, updatedAt: data.updated_at }
+}
+
+async function loadDiscordWebhookUrl(): Promise<string | null> {
+  const row = await readDiscordWebhookRow()
+  return row?.url ?? null
+}
+
+async function writeDiscordWebhookUrl(url: string): Promise<void> {
+  const { error } = await db
+    .from('app_secrets')
+    .upsert({ name: 'discord_webhook_url', value: url, updated_at: new Date().toISOString() }, { onConflict: 'name' })
+  if (error) throw new Error(error.message)
+}
+
+async function deleteDiscordWebhookUrl(): Promise<void> {
+  const { error } = await db.from('app_secrets').delete().eq('name', 'discord_webhook_url')
+  if (error) throw new Error(error.message)
+}
+
+async function recentDiscordSends(limit: number): Promise<SendLogRow[]> {
+  const { data, error } = await db
+    .from('discord_send_log')
+    .select('taipei_ymd, edition, status, http_status, reason, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data.map((row) => ({
+    taipeiYmd: row.taipei_ymd,
+    edition: row.edition,
+    status: row.status,
+    httpStatus: row.http_status,
+    reason: row.reason,
+    at: row.created_at,
+  }))
+}
+
+/**
+ * The unique index `discord_send_log_once` (schema.sql) is the actual guard against a double
+ * post; `23505` means another call already claimed this day+edition first.
+ */
+async function claimDiscordSend(ymd: string, edition: SummaryEdition): Promise<boolean> {
+  const { error } = await db.from('discord_send_log').insert({ taipei_ymd: ymd, edition, status: 'claimed' })
+  if (!error) return true
+  if (error.code === '23505') return false
+  throw new Error(error.message)
+}
+
+/**
+ * `brief`/`full` terminal outcomes (`sent`/`failed`) update the row `claimSend` inserted earlier;
+ * everything else — the two pre-claim skip reasons, and every `test` send — has no claimed row to
+ * update, so it inserts its own.
+ */
+async function finishDiscordSend(ymd: string, edition: SendEdition, outcome: RunOutcome): Promise<void> {
+  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
+  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
+  if ((edition === 'brief' || edition === 'full') && (outcome.kind === 'sent' || outcome.kind === 'failed')) {
+    const { error } = await db
+      .from('discord_send_log')
+      .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
+      .eq('taipei_ymd', ymd)
+      .eq('edition', edition)
+      .eq('status', 'claimed')
+    if (error) throw new Error(error.message)
+    return
+  }
+  const { error } = await db
+    .from('discord_send_log')
+    .insert({ taipei_ymd: ymd, edition, status: outcome.kind, http_status: httpStatus, reason })
+  if (error) throw new Error(error.message)
+}
+
+async function loadDiscordUsdTwd(): Promise<FxLine | null> {
+  const file = await downloadJson<FxFile>('fx/twd.json')
+  const usd = file?.currencies.find((c) => c.code === 'USD')
+  if (!usd) return null
+  return { code: usd.code, latest: usd.latest, prevClose: usd.prevClose, decimals: usd.decimals }
+}
+
+async function loadDiscordMacro(): Promise<MacroLine[] | null> {
+  const file = await downloadJson<MacroFile>('macro/us.json')
+  return file?.indicators ?? null
+}
+
+/** Cron entry point: weekday 17:05 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs in schema.sql. */
+async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Response> {
+  if (body.edition !== 'brief' && body.edition !== 'full') {
+    return json({ error: 'edition 必須是 brief 或 full' }, 400)
+  }
+  const edition = body.edition
+  const deps: SummaryDeps = {
+    now: () => new Date(),
+    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
+    loadWebhookUrl: loadDiscordWebhookUrl,
+    claimSend: claimDiscordSend,
+    finishSend: finishDiscordSend,
+    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
+    loadUsdTwd: loadDiscordUsdTwd,
+    loadMacro: loadDiscordMacro,
+    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
+    post: postDiscordWebhook,
+    log: (e) => logEvent(db, { level: e.level, action: 'discord-summary', message: e.message, detail: e.detail }),
+  }
+  const outcome = await runDiscordSummary(deps, edition)
+  return json(outcome)
+}
+
+/** Admin console entry point (Discord settings panel): get / set / clear / test. Never returns the URL — see `runWebhookOp`. */
+async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Response> {
+  const { action: _action, ...input } = body
+  const deps: WebhookAdminDeps = {
+    now: () => new Date(),
+    readWebhook: readDiscordWebhookRow,
+    writeWebhook: writeDiscordWebhookUrl,
+    deleteWebhook: deleteDiscordWebhookUrl,
+    recentSends: recentDiscordSends,
+    finishSend: finishDiscordSend,
+    post: postDiscordWebhook,
+  }
+  const result = await runWebhookOp(deps, input)
+  if (!result.ok) {
+    return json(result, result.error === 'not-configured' ? 409 : 400)
+  }
+  return json(result)
+}
+
+/**
  * Admin-run job ids (0.6.49): nightly split into three phases so each HTTP call
  * gets its own cloud compute budget; plus the other cron-backed actions.
  */
@@ -4395,6 +4552,22 @@ Deno.serve(async (req) => {
     // Same work as the cron jobs, but auth is assertAdmin — never expose CRON_SECRET to the browser.
     if (body.action === 'admin-run') {
       return await handleAdminRun(req, body)
+    }
+
+    // Discord daily market summary (Task 165): triggered by the `discord-summary-brief` /
+    // `discord-summary-full` cron jobs (schema.sql), same x-cron-secret gate as the other
+    // pg_cron actions. Deliberately not in ADMIN_RUN_JOBS — a "run all" must never post to Discord.
+    if (body.action === 'discord-summary') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleDiscordSummary(body)
+    }
+
+    // Discord webhook admin settings (Task 165): get / set / clear / test, from the admin console.
+    if (body.action === 'discord-webhook') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleDiscordWebhook(body)
     }
 
     return json({ error: 'Unknown action' }, 400)

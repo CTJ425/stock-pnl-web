@@ -2,11 +2,20 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-14 19:29:33 Asia/Taipei
+- Timestamp: 2026-09-17 13:51:06 Asia/Taipei
 
 ---
 
 ## 🐛 Open / Active Issues & Accepted Risks
+
+### RISK-014 — Discord summary: a delivered message can leave its log row stuck in `claimed`
+- **Where**: `sources/supabase/functions/stock-report/discordRun.ts` (`runDiscordSummary`: post → `finishSend`), `sources/supabase/functions/stock-report/index.ts` (`finishDiscordSend`), `sources/supabase/schema.sql` (index `discord_send_log_once`)
+- **Failure scenario**: if the Discord post succeeds and the following `finishSend` update fails (transient DB error), the row stays `claimed`. The partial unique index then blocks any retry for that day and edition, and the admin console shows 處理中 for a message that was actually delivered. Separately, `runDiscordSummary` awaits `deps.log` without a catch; the real `logEvent` never rejects (`_shared/log.ts`), so this only matters if that contract changes.
+- **Found**: 2026-09-17, Task 165 review.
+- **Decision**: accepted — a stuck claim prevents a duplicate post, which is the worse failure in a shared channel. If it ever happens, fix the one row by hand (set `status` to `sent`).
+- **Status**: OPEN (accepted)
+
+---
 
 ### RISK-013 — `openai-compatible` 的金鑰仍會下發到每個登入者的瀏覽器
 - **Where**: `sources/supabase/schema.sql`（`get_ai_settings()`）、`sources/src/services/aiClient.ts`（`OpenAiCompatibleProviderImpl`）
