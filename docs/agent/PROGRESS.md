@@ -1,9 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 Phase 2 — spec approved; step 2a (Edge copy of the ledger engine) committed on `dev`
-- Status: 🔄 **0.9.58-dev.1 on `dev`** (not pushed) — `main` stays 0.9.57; PROD Supabase for Phase 1 still awaits explicit OK
-- Timestamp: 2026-09-17 17:19:33 Asia/Taipei
+- Action: Task 165 Phase 2 — steps 2b and 2c (per-user Discord holdings card) committed on `dev`
+- Status: 🔄 **0.9.58-dev.3 on `dev`** (not pushed) — Supabase DEV not deployed yet (§14 DDL, cron, `stock-report`); awaiting explicit OK
+- Timestamp: 2026-09-17 18:34:45 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-17 18:34:45 Asia/Taipei (Task 165 Phase 2 steps 2b + 2c, 0.9.58-dev.2 / dev.3)
+
+**Commits on `dev`** (not pushed): `fe6845f` 0.9.58-dev.2 (2b), `66f2a8f` 0.9.58-dev.3 (2c). Spec `docs/agent/specs/discord-holdings.md` now carries the exact contracts for §2.2–2.7.
+
+**2b — pure modules** (`stock-report/holdingQuotes.ts`, `holdingsCard.ts`): last completed Yahoo daily bar per ticker (.TW then .TWO, memoized per run); one ledger per workspace, merged by key + direction with each workspace's `fee_rate` and per-leg minimum fee; SHORT basis = short proceeds and inverted day P&L; totals from quoted rows only, market value and cost from LONG rows; TWD/USD separate; two-line rows ≤ 36 columns, stale ⚠️ marks, 2,800-character budget with `…另 N 檔`. The width table, colours and fee constants are re-stated (D6) and guarded by `scripts/lib/edgeConstants.test.mjs`. Reviewer PASS; its no-drift-test RISK fixed.
+
+**2c — wiring** (`holdingsRun.ts`, `index.ts` additive, schema §14, `snapshotPlan.cjs`, `src/services/discordHoldings.ts`, `src/components/Settings/DiscordPushSection.tsx`, `AppShell.tsx` menu item): daily run at 17:15 (`discord-holdings`, x-cron-secret) with market-day gate, claim-then-send per user, 80 s start budget; settings ops (`discord-holdings-settings`, user JWT) get/set/clear/enable/test/preview, URL never returned, 10 manual sends per day; `makeChartFetch` adds an 8 s timeout and one retry on network/429/5xx. Dialog uses existing global classes and the admin `adm-toggle`. S15 in `snapshotPlan.test.mjs` updated 8 → 9 placeholder substitutions (the new cron job). Reviewer PASS with 4 RISKs: run budget lowered 110 → 80 s; RISK-015/016/017 recorded in `BUG_FIX.md`.
+
+**Process note**: the step-2c test files were written while the 2b builder was still running, which reddened its full gate; they were parked, 2b verified alone, then restored. `pkill -f "vite --port 5317"` kills the calling shell too (its own command line matches) — stop the server by its listening PID instead.
+
+**Verification** (from `sources/`): `npm test` 144 files, 2386 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0; `TZ=UTC` rerun of the dialog test passed; D6 frozen files unchanged; existing files only gained lines (`snapshotPlan.cjs` one list line changed). E2E against Supabase-mode vite on 127.0.0.1:5317: new `scripts/verify-discord-push-e2e.cjs` 13/13 (desktop + 390 px, token never in the DOM, bearer on every call), `run-all-e2e.cjs` 16/16.
+
+**Also this session**: the 5173 dev server (started 14:40) was serving a pre-Discord `AdminConsolePage.tsx` because Vite missed the 16:37 rewrite; `touch` on the three Discord files fixed it without content changes.
+
+**Next**: DEV deploy on explicit OK — apply §14 DDL, create `discord-holdings-daily` by cloning an existing job's command behind the identity guard, deploy `stock-report` (`--no-verify-jwt --use-api`), then a real test/preview from a private webhook and the next 17:15 round.
 
 ---
 
@@ -20,22 +38,4 @@
 **Verification** (from `sources/`): `npm test` 138 files, 2220 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0; `git diff` of every D6 file empty (only `src/version.ts` changed under `src/`). Deno 2.9.6 (`npx deno@2`): `deno check` on both generated files exit 0, and a script importing the generated engine ran all three functions. E2E: `run-all-e2e.cjs` against Supabase-mode vite on 127.0.0.1:5317 — 16/16 suites, 49 steps, 0 failed (Playwright Chromium installed on this host first).
 
 **Next**: step 2b — `holdingQuotes.ts` + `holdingsCard.ts` (spec §2.2–2.4), tests first. Supabase untouched in 2a; nothing deployed.
-
----
-
-## 📅 Log: 2026-09-17 16:33:21 Asia/Taipei (Task 165, 0.9.57 — merged to `main`)
-
-**Released 0.9.57** at the user's request: `dev` fast-forwarded into `main`, both branches synced. The frontend goes live through Cloudflare Pages from `main`. PROD Supabase was not touched: schema §13 is not applied and `stock-report` is not redeployed, so the PROD admin console's Discord panel answers an error until both are done (awaiting explicit OK).
-
-**Changes since 0.9.57-dev.1** (all verified on DEV; `stock-report` v9 → v12):
-- dev.2 `e179a32`: the admin Discord panel gains a collapsible webhook setup guide (no Bot or API key needed; 7 steps; security note).
-- dev.3 `6dc6f52`: 預覽快報 / 預覽完整版 send the real content immediately (`【預覽】` prefix, logged as `test`, never take the daily slot, fall back to the latest market day, skip rows with a malformed `date`). Error messages add known codes, e.g. `HTTP 409：找不到任何台股大盤資料`. Review round 1 FAIL (a malformed date could be chosen as latest) was fixed.
-- dev.4 `cda426c`: one card per block, 🔴 / 🟢 / ⚪, a per-card data stamp (`09/17 15:05 更新`, `⚠️ 09/16 資料・非今日`), 盤後初步／完整 from the `market/daily.json` `asOf` (19:30 Taipei). Found while designing it: the newest USD/TWD point was 09/16 while the earlier brief presented it as today's. Review PASS; an unparseable `asOf` is now treated as unknown.
-- dev.5 `963bfa3`: card bodies became monospace tables padded by display width (CJK and emoji count 2); Chinese names kept per the user; macro labels shortened by FRED id. The admin send log shows Asia/Taipei `YYYY-MM-DD HH:mm:ss`.
-
-**DEV evidence**: the user set the webhook; the test send at 15:11 and the previews from 15:25 are HTTP 200 in `discord_send_log`. Every deploy was re-checked with 401 on unauthenticated calls and a 200 from the next `source-probe` call.
-
-**Verification** (from `sources/`): `npm test` 137 files, 2201 passed / 7 skipped; a `TZ=UTC` rerun of the layout and log-time tests passed; `npm run build`, `npm run typecheck:edge`, `npm run lint` exit 0.
-
-**Next**: PROD — apply §13 (clone an existing job's command behind the identity guard, then `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook. Watch the first real DEV 17:05 / 21:30 rounds and check phone alignment of the 國際指數 / 美國總經 tables.
 
