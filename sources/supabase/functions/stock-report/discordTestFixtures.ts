@@ -127,4 +127,15 @@ export const MACRO_LINES: MacroLine[] = [
 ]
 
 /** `reports/fx/twd.json` → USD entry on DEV. */
-export const USD_TWD = { code: 'USD', latest: 31.773399, prevClose: 31.7176, decimals: 3 }
+export const USD_TWD = {
+  code: 'USD',
+  latest: 31.773399,
+  prevClose: 31.7176,
+  decimals: 3,
+  date: '2026-09-16',
+  /** 17:00 Taipei */
+  asOf: '2026-09-16T09:00:01.000Z',
+}
+
+/** `market/daily.json` → `asOf` after the 15:05 Taipei preliminary BFI82U sync. */
+export const MARKET_ASOF_0916 = '2026-09-16T07:05:04.902Z'

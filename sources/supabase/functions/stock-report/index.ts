@@ -4169,7 +4169,15 @@ async function loadDiscordUsdTwd(): Promise<FxLine | null> {
   const file = await downloadJson<FxFile>('fx/twd.json')
   const usd = file?.currencies.find((c) => c.code === 'USD')
   if (!usd) return null
-  return { code: usd.code, latest: usd.latest, prevClose: usd.prevClose, decimals: usd.decimals }
+  const lastPoint = usd.points[usd.points.length - 1]
+  return {
+    code: usd.code,
+    latest: usd.latest,
+    prevClose: usd.prevClose,
+    decimals: usd.decimals,
+    date: lastPoint ? lastPoint[0] : null,
+    asOf: file?.asOf ?? null,
+  }
 }
 
 async function loadDiscordMacro(): Promise<MacroLine[] | null> {

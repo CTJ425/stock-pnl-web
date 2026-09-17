@@ -13,7 +13,7 @@ export interface DiscordEmbed {
   title: string
   description?: string
   color?: number
-  fields: DiscordEmbedField[]
+  fields?: DiscordEmbedField[]
   footer?: { text: string }
   timestamp?: string
 }

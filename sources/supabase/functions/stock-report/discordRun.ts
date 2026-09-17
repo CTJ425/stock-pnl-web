@@ -23,7 +23,7 @@ export type RunOutcome =
 
 export interface SummaryDeps {
   now: () => Date
-  loadMarketFile: () => Promise<{ days?: MarketDay[] } | null>
+  loadMarketFile: () => Promise<{ days?: MarketDay[]; asOf?: string | null } | null>
   loadWebhookUrl: () => Promise<string | null>
   /** false = this day + edition is already claimed or sent */
   claimSend: (ymd: string, edition: SummaryEdition) => Promise<boolean>
@@ -112,7 +112,18 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
   const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, ymd, nowSec)
 
   const generatedAt = deps.now().toISOString()
-  const payload = buildSummaryPayload({ edition, ymd, generatedAt, market, indices, usdTwd, margin, macro })
+  const payload = buildSummaryPayload({
+    edition,
+    ymd,
+    generatedAt,
+    market,
+    indices,
+    usdTwd,
+    margin,
+    macro,
+    today: ymd,
+    marketAsOf: file?.asOf ?? null,
+  })
   const result = await deps.post(url, payload)
 
   const outcome: RunOutcome = result.ok
@@ -209,8 +220,19 @@ export async function runWebhookOp(deps: WebhookAdminDeps, input: unknown): Prom
     const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, market.date, nowSec)
 
     const generatedAt = deps.now().toISOString()
-    const payload = buildSummaryPayload({ edition, ymd: market.date, generatedAt, market, indices, usdTwd, margin, macro })
-    payload.embeds[0].title = `【預覽】${payload.embeds[0].title}`
+    const payload = buildSummaryPayload({
+      edition,
+      ymd: market.date,
+      generatedAt,
+      market,
+      indices,
+      usdTwd,
+      margin,
+      macro,
+      today: todayYmd,
+      marketAsOf: file?.asOf ?? null,
+    })
+    if (payload.content) payload.content = payload.content.replace(/^## /, '## 【預覽】')
 
     const result = await deps.post(stored.url, payload)
     const outcome: RunOutcome = result.ok
