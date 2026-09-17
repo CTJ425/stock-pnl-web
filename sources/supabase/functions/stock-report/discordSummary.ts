@@ -1,7 +1,9 @@
 /**
- * Pure formatter for the Discord daily market summary (Task 165). Exact strings: spec §2.2.
+ * Pure formatter for the Discord daily market summary (Task 165). Card layout: spec §2.8
+ * (supersedes the single-embed/fields layout of §2.2). `buildTestPayload` is unchanged.
+ * Exact strings are pinned by discordSummary.test.ts.
  */
-import type { DiscordEmbedField, DiscordPayload } from './discordWebhook.ts'
+import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
 import type { CompletedClose } from './globalIndexClose.ts'
 import type { MarketMarginTotals } from './marketMargin.ts'
 import type { MarketDay, MarketInstitutional } from './twMarket.ts'
@@ -19,6 +21,10 @@ export interface FxLine {
   latest: number | null
   prevClose: number | null
   decimals: number
+  /** 'YYYY-MM-DD' of the quote `latest` belongs to (last point of `fx/twd.json`) */
+  date: string | null
+  /** ISO time `fx/twd.json` was produced */
+  asOf: string | null
 }
 
 export interface MacroPointLike {
@@ -39,7 +45,7 @@ export interface SummaryInput {
   edition: SummaryEdition
   /** 'YYYY-MM-DD', the Taipei trading date (equals `market.date`) */
   ymd: string
-  /** ISO timestamp for `embed.timestamp` */
+  /** ISO send time. Unused by the §2.8 card layout (no per-card timestamp); kept for callers and a future footer. */
   generatedAt: string
   market: MarketDay
   indices: IndexLine[]
@@ -48,10 +54,23 @@ export interface SummaryInput {
   margin: MarketMarginTotals | null
   /** Ignored for `brief`. */
   macro: MacroLine[] | null
+  /** 'YYYY-MM-DD', the actual Taipei date the message is sent on — a block dated otherwise is flagged ⚠️ 非今日 */
+  today: string
+  /** ISO `asOf` of `market/daily.json` (last write), drives 盤後初步／完整 and the update stamp */
+  marketAsOf: string | null
 }
 
+/** Used verbatim by `buildTestPayload`'s embed footer. */
 const FOOTER = '資料來源：證交所、Yahoo Finance、FRED｜僅供參考，非投資建議'
+/** Discord "small text" line under the heading, spec §2.8 envelope. */
+const SOURCE_LINE = `-# ${FOOTER}`
 const WEEKDAY_CHARS = '日一二三四五六'
+/** Ideographic space used to align card columns. */
+const SP = '　'
+
+const RED = 0xe5484d
+const GREEN = 0x30a46c
+const GREY = 0x8b8d98
 
 export function findMarketDay(file: { days?: MarketDay[] } | null, ymd: string): MarketDay | null {
   if (!file || !file.days) return null
@@ -94,68 +113,148 @@ function weekdayChar(ymd: string): string {
   return WEEKDAY_CHARS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
 }
 
+/** 'YYYY-MM-DD' → 'MM/DD'. */
 function titleDate(ymd: string): string {
   const [, m, d] = ymd.split('-')
   return `${m}/${d}`
 }
 
-function taiexBlock(market: MarketDay): string {
-  if (market.taiex == null) return '尚未公布'
+/** A timestamp we can actually read — an unparseable `asOf` is treated as unknown, never printed as NaN. */
+function isReadableTime(iso: string | null): iso is string {
+  return typeof iso === 'string' && iso !== '' && !Number.isNaN(new Date(iso).getTime())
+}
+
+/** ISO timestamp → Taipei calendar date 'YYYY-MM-DD'. */
+function taipeiDate(iso: string): string {
+  const t = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000)
+  const y = t.getUTCFullYear()
+  const m = String(t.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(t.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** ISO timestamp → Taipei clock time 'HH:mm'. */
+function taipeiTime(iso: string): string {
+  const t = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000)
+  const hh = String(t.getUTCHours()).padStart(2, '0')
+  const mm = String(t.getUTCMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+/**
+ * Data-freshness footer, spec §2.8 "Stamp". `dataDate` null (fx with no quote date) means no
+ * footer at all — the caller relies on this rather than checking null itself.
+ */
+function stamp(dataDate: string | null, updatedAt: string | null, today: string): string | undefined {
+  if (dataDate == null) return undefined
+  if (dataDate !== today) return `⚠️ ${titleDate(dataDate)} 資料・非今日`
+  if (!isReadableTime(updatedAt)) return `${titleDate(dataDate)} 資料`
+  const updDate = taipeiDate(updatedAt)
+  const updTime = taipeiTime(updatedAt)
+  if (updDate === dataDate) return `${titleDate(dataDate)} ${updTime} 更新`
+  return `${titleDate(dataDate)} 資料・${titleDate(updDate)} ${updTime} 更新`
+}
+
+function footerOf(text: string | undefined): { text: string } | undefined {
+  return text == null ? undefined : { text }
+}
+
+interface CardBits {
+  description: string
+  color: number
+  footerText?: string
+}
+
+function taiexCard(market: MarketDay, marketAsOf: string | null, today: string): CardBits {
+  if (market.taiex == null) return { description: '尚未公布', color: GREY }
   const cp = market.changePoints
-  let line1: string
+  let changeLine: string
+  let sign: '' | '+' | '-'
   if (cp == null) {
-    line1 = `加權 ${fmtAbs(market.taiex, 2)}`
+    sign = ''
+    changeLine = '—'
   } else {
+    sign = signOf(cp, 2)
     const prevClose = market.taiex - cp
     const pct = prevClose === 0 ? 0 : (cp / prevClose) * 100
     const pctStr = `${signOf(pct, 2)}${fmtAbs(pct, 2)}%`
-    if (cp === 0) {
-      line1 = `加權 ${fmtAbs(market.taiex, 2)} 平盤 (${pctStr})`
+    if (sign === '') {
+      changeLine = `⚪ 平盤（${pctStr}）`
     } else {
-      const arrow = cp > 0 ? '▲' : '▼'
-      line1 = `加權 ${fmtAbs(market.taiex, 2)} ${arrow}${fmtAbs(cp, 2)} (${pctStr})`
+      const emoji = sign === '+' ? '🔴' : '🟢'
+      changeLine = `${emoji} ${sign}${fmtAbs(cp, 2)}（${pctStr}）`
     }
   }
-  const line2 = market.tradeValueTwd == null ? '成交 —' : `成交 ${fmtAbs(market.tradeValueTwd / 1e8, 1)} 億`
-  return `${line1}\n${line2}`
+  const tradeLine = market.tradeValueTwd == null ? `成交金額${SP}—` : `成交金額${SP}${fmtAbs(market.tradeValueTwd / 1e8, 1)} 億`
+  const description = `加權指數${SP}**${fmtAbs(market.taiex, 2)}**\n漲跌${SP}${SP}${SP}${changeLine}\n${tradeLine}`
+  const color = sign === '+' ? RED : sign === '-' ? GREEN : GREY
+  return { description, color, footerText: stamp(market.date, marketAsOf, today) }
 }
 
-function instAmount(v: number | null): string {
-  return v == null ? '—' : `${fmtSigned(v / 1e8, 1)}億`
+function instAmt(v: number | null): string {
+  return v == null ? '—' : `${fmtSigned(v / 1e8, 1)} 億`
 }
 
-function institutionalBlock(inst: MarketInstitutional | null): string {
-  if (!inst) return '尚未公布'
+/** '' (unknown), '19:30 or later, or a later date' (完整), else 初步 — spec §2.8. */
+function institutionalSuffix(marketDate: string, marketAsOf: string | null): string {
+  if (!isReadableTime(marketAsOf)) return ''
+  const asOfDate = taipeiDate(marketAsOf)
+  if (asOfDate !== marketDate) return '・盤後完整'
+  return taipeiTime(marketAsOf) >= '19:30' ? '・盤後完整' : '・盤後初步'
+}
+
+function institutionalCard(
+  inst: MarketInstitutional | null,
+  marketDate: string,
+  marketAsOf: string | null,
+  today: string,
+): CardBits & { title: string } {
+  const baseTitle = '🏦 三大法人'
+  if (!inst) return { title: baseTitle, description: '尚未公布', color: GREY }
   const dealerSelf = inst.dealerSelfTwd
   const dealerHedge = inst.dealerHedgeTwd
   const dealer = dealerSelf == null && dealerHedge == null ? null : (dealerSelf ?? 0) + (dealerHedge ?? 0)
-  return [
-    `外資 ${instAmount(inst.foreignTwd)}`,
-    `投信 ${instAmount(inst.trustTwd)}`,
-    `自營 ${instAmount(dealer)}`,
-    `合計 ${instAmount(inst.totalTwd)}`,
+  const description = [
+    `外資 ${instAmt(inst.foreignTwd)}｜投信 ${instAmt(inst.trustTwd)}`,
+    `自營 ${instAmt(dealer)}｜**合計 ${instAmt(inst.totalTwd)}**`,
   ].join('\n')
+  const roundedSign = inst.totalTwd == null ? '' : signOf(inst.totalTwd / 1e8, 1)
+  const color = roundedSign === '+' ? RED : roundedSign === '-' ? GREEN : GREY
+  return {
+    title: `${baseTitle}${institutionalSuffix(marketDate, marketAsOf)}`,
+    description,
+    color,
+    footerText: stamp(marketDate, marketAsOf, today),
+  }
 }
 
-function marginBlock(m: MarketMarginTotals | null): string {
-  if (!m) return '尚未公布'
+function marginCard(m: MarketMarginTotals | null, today: string): Omit<CardBits, 'color'> {
+  if (!m) return { description: '尚未公布' }
   const amtTodayB = m.marginAmountThousandTwd.today == null ? null : m.marginAmountThousandTwd.today / 100_000
   const amtChangeB = m.marginAmountThousandTwd.change == null ? null : m.marginAmountThousandTwd.change / 100_000
-  return [
-    `融資 ${fmtOrDash(m.marginLots.today, 0)} 張 (${changeStr(m.marginLots.change, 0)})`,
-    `融資金額 ${fmtOrDash(amtTodayB, 1)} 億 (${amtChangeB == null ? '—' : fmtSigned(amtChangeB, 1)}億)`,
-    `融券 ${fmtOrDash(m.shortLots.today, 0)} 張 (${changeStr(m.shortLots.change, 0)})`,
+  const description = [
+    `融資餘額${SP}${fmtOrDash(m.marginLots.today, 0)} 張（${changeStr(m.marginLots.change, 0)}）`,
+    `融資金額${SP}${fmtOrDash(amtTodayB, 1)} 億（${amtChangeB == null ? '—' : `${fmtSigned(amtChangeB, 1)} 億`}）`,
+    `融券餘額${SP}${fmtOrDash(m.shortLots.today, 0)} 張（${changeStr(m.shortLots.change, 0)}）`,
   ].join('\n')
+  return { description, footerText: stamp(m.date, null, today) }
 }
 
-function indexBlock(indices: IndexLine[]): string {
-  return indices
+function indexBlock(indices: IndexLine[]): { description: string; hasData: boolean } {
+  if (indices.length === 0) return { description: '暫無資料', hasData: false }
+  const description = indices
     .map((i) => {
-      if (!i.quote) return `${i.label} 暫無資料`
-      const pct = i.quote.changePct == null ? '' : ` ${signOf(i.quote.changePct, 2)}${fmtAbs(i.quote.changePct, 2)}%`
-      return `${i.label} ${fmtAbs(i.quote.close, 2)}${pct} ${i.quote.date}`
+      if (!i.quote) return `${i.label}${SP}暫無資料`
+      let pctToken = ''
+      if (i.quote.changePct != null) {
+        const s = signOf(i.quote.changePct, 2)
+        const emoji = s === '+' ? '🔴' : s === '-' ? '🟢' : '⚪'
+        pctToken = `${SP}${emoji} ${s}${fmtAbs(i.quote.changePct, 2)}%`
+      }
+      return `${i.label}${SP}${fmtAbs(i.quote.close, 2)}${pctToken}${SP}${i.quote.date}`
     })
     .join('\n')
+  return { description, hasData: true }
 }
 
 function macroNumPart(v: MacroPointLike, kind: string): string {
@@ -175,50 +274,70 @@ function macroMissing(v: MacroPointLike | null | undefined): boolean {
   return !v || v.value == null
 }
 
-function macroBlock(macro: MacroLine[] | null): string {
-  if (!macro || macro.length === 0) return '暫無資料'
-  return macro
+function macroBlock(macro: MacroLine[] | null): { description: string; hasData: boolean } {
+  if (!macro || macro.length === 0) return { description: '暫無資料', hasData: false }
+  const description = macro
     .map((m) => {
-      if (macroMissing(m.latest)) return `${m.label} 暫無資料`
+      if (macroMissing(m.latest)) return `${m.label}${SP}暫無資料`
       const latestStr = macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)
       const prevStr = macroMissing(m.previous) ? '—' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
-      return `${m.label} ${prevStr} → ${latestStr}（${(m.latest as MacroPointLike).period}）`
+      return `${m.label}${SP}${prevStr} → **${latestStr}**（${(m.latest as MacroPointLike).period}）`
     })
     .join('\n')
+  return { description, hasData: true }
 }
 
-function fxBlock(fx: FxLine | null): string {
-  if (!fx || fx.latest == null) return '暫無資料'
-  const base = `USD/TWD ${fmtAbs(fx.latest, fx.decimals)}`
-  if (fx.prevClose == null) return base
-  return `${base} (${fmtSigned(fx.latest - fx.prevClose, fx.decimals)})`
+function fxCard(fx: FxLine | null, today: string): Omit<CardBits, 'color'> {
+  if (!fx || fx.latest == null) return { description: '暫無資料' }
+  const base = `USD/TWD${SP}**${fmtAbs(fx.latest, fx.decimals)}**`
+  const description = fx.prevClose == null ? base : `${base}（${fmtSigned(fx.latest - fx.prevClose, fx.decimals)}）`
+  return { description, footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
 }
 
 export function buildSummaryPayload(input: SummaryInput): DiscordPayload {
-  const { edition, ymd, generatedAt, market, indices, usdTwd, margin, macro } = input
+  const { edition, ymd, market, indices, usdTwd, margin, macro, today, marketAsOf } = input
 
-  const fields: DiscordEmbedField[] = [{ name: '台股大盤', value: taiexBlock(market), inline: false }]
-  fields.push({
-    name: edition === 'brief' ? '三大法人（初步）' : '三大法人',
-    value: institutionalBlock(market.institutional),
-    inline: false,
+  const headingText = edition === 'brief' ? '📊 台股盤後快報' : '📋 台股盤後完整版'
+  const content = `## ${headingText} ${titleDate(ymd)}(${weekdayChar(ymd)})\n${SOURCE_LINE}`
+
+  const embeds: DiscordEmbed[] = []
+
+  const taiex = taiexCard(market, marketAsOf, today)
+  embeds.push({ title: '🇹🇼 台股大盤', description: taiex.description, color: taiex.color, footer: footerOf(taiex.footerText) })
+
+  const inst = institutionalCard(market.institutional, market.date, marketAsOf, today)
+  embeds.push({ title: inst.title, description: inst.description, color: inst.color, footer: footerOf(inst.footerText) })
+
+  if (edition === 'full') {
+    const mg = marginCard(margin, today)
+    embeds.push({ title: '🧾 融資融券', description: mg.description, color: GREY, footer: footerOf(mg.footerText) })
+  }
+
+  const idx = indexBlock(indices)
+  embeds.push({
+    title: '🌏 國際指數・最近收盤',
+    description: idx.description,
+    color: GREY,
+    footer: idx.hasData ? { text: '各市場最近一個已收盤交易日' } : undefined,
   })
-  if (edition === 'full') fields.push({ name: '融資融券', value: marginBlock(margin), inline: false })
-  fields.push({ name: '國際指數（最近收盤）', value: indexBlock(indices), inline: false })
-  if (edition === 'full') fields.push({ name: '美國總經', value: macroBlock(macro), inline: false })
-  fields.push({ name: '匯率', value: fxBlock(usdTwd), inline: false })
 
-  const title =
-    edition === 'brief'
-      ? `📊 台股盤後快報 ${titleDate(ymd)}(${weekdayChar(ymd)})`
-      : `📋 台股盤後完整版 ${titleDate(ymd)}(${weekdayChar(ymd)})`
+  if (edition === 'full') {
+    const mc = macroBlock(macro)
+    embeds.push({
+      title: '🇺🇸 美國總經',
+      description: mc.description,
+      color: GREY,
+      footer: mc.hasData ? { text: '括號內為資料期別' } : undefined,
+    })
+  }
 
-  const cp = market.changePoints
-  const color = cp == null ? 0x8b8d98 : cp > 0 ? 0xe5484d : cp < 0 ? 0x30a46c : 0x8b8d98
+  const fx = fxCard(usdTwd, today)
+  embeds.push({ title: '💱 匯率', description: fx.description, color: GREY, footer: footerOf(fx.footerText) })
 
   return {
     username: '盤後總結',
-    embeds: [{ title, color, fields, footer: { text: FOOTER }, timestamp: generatedAt }],
+    content,
+    embeds,
     allowed_mentions: { parse: [] },
   }
 }

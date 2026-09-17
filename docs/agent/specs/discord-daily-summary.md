@@ -285,6 +285,45 @@ disabled by the same in-flight flag. Each asks `window.confirm('要把<快報|�
 first. Success → `預覽已送出（<快報|完整版>，資料日期 YYYY-MM-DD）`; a failed send → the existing
 `發送失敗（<reason text>）`; a rejection → the message verbatim. Results use the test-message slot.
 
+### 2.8 Card layout and data stamps (0.9.57-dev.4, user decision 2026-09-17)
+
+**Supersedes the `discordSummary.ts` formatting bullets of §2.2** (single embed with fields). The
+connection-test payload (`buildTestPayload`) is unchanged. `discordSummary.test.ts` pins every string.
+
+Decisions: one card (embed) per block; 🔴 up / 🟢 down / ⚪ flat (TW convention); a TW-dated block
+whose data is not from today still shows its numbers but is stamped `⚠️ MM/DD 資料・非今日`; stamps
+carry the update time where one exists.
+
+**Envelope**: `username: '盤後總結'`, `allowed_mentions: { parse: [] }`,
+`content = '## 📊 台股盤後快報 MM/DD(X)\n-# 資料來源：證交所、Yahoo Finance、FRED｜僅供參考，非投資建議'`
+(full: `## 📋 台股盤後完整版 …`; date = `ymd`, the market day). Preview inserts `【預覽】` right after `## `.
+No `fields`, no `timestamp` on summary cards.
+
+**Cards in order** — brief: `🇹🇼 台股大盤`, `🏦 三大法人…`, `🌏 國際指數・最近收盤`, `💱 匯率`;
+full adds `🧾 融資融券` after 三大法人 and `🇺🇸 美國總經` after 國際指數.
+Colors: RED `0xE5484D`, GREEN `0x30A46C`, GREY `0x8B8D98`. Labels are padded with U+3000 `　`.
+
+**Stamp** `(dataDate, updatedAt, today)` in Asia/Taipei: `dataDate ≠ today` → `⚠️ MM/DD 資料・非今日`;
+else `updatedAt` on the same Taipei date → `MM/DD HH:mm 更新`; on another date → `MM/DD 資料・MM/DD HH:mm 更新`;
+no `updatedAt` → `MM/DD 資料`. A card showing `尚未公布` / `暫無資料` has no footer.
+
+| Card | Description | Color | Footer |
+| --- | --- | --- | --- |
+| 台股大盤 | `加權指數　**45,848.90**` / `漲跌　　　🔴 +337.41（+0.74%）` (`🟢 -…`, `⚪ 平盤（0.00%）`, unknown `—`) / `成交金額　6,759.7 億` (unknown `—`); `taiex` null → `尚未公布` | by `changePoints` | stamp(market.date, marketAsOf, today) |
+| 三大法人 | `外資 -179.8 億｜投信 +95.7 億` / `自營 -129.7 億｜**合計 -213.8 億**`; null → `尚未公布` | by rounded `totalTwd` sign | same stamp |
+| 融資融券 | `融資餘額　9,248,877 張（+58,366）` / `融資金額　5,861.7 億（+39.3 億）` / `融券餘額　197,048 張（-1,004）`; null change `（—）`; null → `尚未公布` | GREY | stamp(margin.date, null, today) |
+| 國際指數 | `日經225　63,923.00　🔴 +0.69%　09/16`; pct rounding to 0 → `⚪ 0.00%`; pct null → no pct token; quote null → `KOSPI　暫無資料`; empty list → `暫無資料` | GREY | `各市場最近一個已收盤交易日` |
+| 美國總經 | `核心 CPI　2.47% → **2.45%**（2026-08）` (rules of §2.2 for values/units/rate; latest in bold); null value = missing | GREY | `括號內為資料期別` |
+| 匯率 | `USD/TWD　**31.773**（+0.056）`; null → `暫無資料` | GREY | stamp(usdTwd.date, usdTwd.asOf, today); none when `date` null |
+
+三大法人 title suffix from `marketAsOf` (Taipei): same date as `market.date` and before 19:30 → `・盤後初步`;
+19:30 or later, or a later date → `・盤後完整`; unknown → none. Omitted when the card is `尚未公布`.
+
+**Inputs**: `SummaryInput` gains `today` and `marketAsOf`; `FxLine` gains `date` and `asOf`;
+`loadMarketFile` may return `asOf`. Scheduled run: `today = ymd`, `marketAsOf = file.asOf ?? null`.
+Preview: `today` = actual Taipei date, `ymd` = the chosen market day, same `marketAsOf`.
+`index.ts` `loadUsdTwd` fills `date` from the last `points` entry and `asOf` from the file.
+
 ## 3. Files
 
 Exhaustive. Stubs marked (stub) already exist with the fixed signatures; replace their bodies.

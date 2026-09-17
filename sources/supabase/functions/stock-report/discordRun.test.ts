@@ -17,6 +17,7 @@ import {
   MARKET_DAY_0916,
   N225_MIDSESSION,
   USD_TWD,
+  MARKET_ASOF_0916,
 } from './discordTestFixtures.ts'
 
 /** 17:05 and 21:30 Taipei on 2026-09-16. */
@@ -26,7 +27,7 @@ const FULL_AT = new Date('2026-09-16T13:30:00Z')
 function summaryDeps(over: Partial<SummaryDeps> = {}) {
   const deps = {
     now: vi.fn(() => BRIEF_AT),
-    loadMarketFile: vi.fn(async () => ({ days: [MARKET_DAY_0916] })),
+    loadMarketFile: vi.fn(async () => ({ asOf: MARKET_ASOF_0916, days: [MARKET_DAY_0916] })),
     loadWebhookUrl: vi.fn(async () => FAKE_WEBHOOK),
     claimSend: vi.fn(async () => true),
     finishSend: vi.fn(async () => {}),
@@ -49,8 +50,17 @@ function posted(deps: ReturnType<typeof summaryDeps>): DiscordPayload {
   return vi.mocked(deps.post).mock.calls[0][1]
 }
 
+/** Description of the card whose title contains `name`. */
 function fieldOf(p: DiscordPayload, name: string): string | undefined {
-  return p.embeds[0].fields.find((f) => f.name === name)?.value
+  return p.embeds.find((e) => e.title.includes(name))?.description
+}
+
+function footerOf(p: DiscordPayload, name: string): string | undefined {
+  return p.embeds.find((e) => e.title.includes(name))?.footer?.text
+}
+
+function heading(p: DiscordPayload): string | undefined {
+  return p.content?.split('\n')[0]
 }
 
 describe('runDiscordSummary', () => {
@@ -97,9 +107,10 @@ describe('runDiscordSummary', () => {
     expect(deps.loadIndex).toHaveBeenCalledTimes(8)
     expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
     const p = posted(deps)
-    expect(p.embeds[0].title).toBe('📊 台股盤後快報 09/16(三)')
-    expect(p.embeds[0].timestamp).toBe(BRIEF_AT.toISOString())
-    expect(fieldOf(p, '匯率')).toBe('USD/TWD 31.773 (+0.056)')
+    expect(heading(p)).toBe('## 📊 台股盤後快報 09/16(三)')
+    expect(footerOf(p, '台股大盤')).toBe('09/16 15:05 更新')
+    expect(p.embeds.find((e) => e.title.includes('三大法人'))?.title).toBe('🏦 三大法人・盤後初步')
+    expect(fieldOf(p, '匯率')).toBe('USD/TWD　**31.773**（+0.056）')
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'brief', out)
     expect(deps.log).not.toHaveBeenCalled()
   })
@@ -107,10 +118,10 @@ describe('runDiscordSummary', () => {
   it('uses completed closes and marks a failed index as missing', async () => {
     const deps = summaryDeps()
     await runDiscordSummary(deps, 'brief')
-    const lines = fieldOf(posted(deps), '國際指數（最近收盤）')!.split('\n')
-    expect(lines[0]).toBe('日經225 63,923.00 +0.69% 09/16')
-    expect(lines[1]).toBe('KOSPI 暫無資料')
-    expect(lines[4]).toBe('S&P 500 7,551.81 -0.45% 09/16')
+    const lines = fieldOf(posted(deps), '國際指數')!.split('\n')
+    expect(lines[0]).toBe('日經225　63,923.00　🔴 +0.69%　09/16')
+    expect(lines[1]).toBe('KOSPI　暫無資料')
+    expect(lines[4]).toBe('S&P 500　7,551.81　🟢 -0.45%　09/16')
   })
 
   it('treats a failed fx load as missing', async () => {
@@ -125,11 +136,12 @@ describe('runDiscordSummary', () => {
     expect(out).toEqual({ kind: 'sent', httpStatus: 204 })
     expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
     const p = posted(deps)
-    expect(p.embeds[0].title).toBe('📋 台股盤後完整版 09/16(三)')
+    expect(heading(p)).toBe('## 📋 台股盤後完整版 09/16(三)')
+    expect(footerOf(p, '融資融券')).toBe('09/16 資料')
     expect(fieldOf(p, '融資融券')).toBe(
-      '融資 9,248,877 張 (+58,366)\n融資金額 5,861.7 億 (+39.3億)\n融券 197,048 張 (-1,004)',
+      '融資餘額　9,248,877 張（+58,366）\n融資金額　5,861.7 億（+39.3 億）\n融券餘額　197,048 張（-1,004）',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI 2.47% → 2.45%（2026-08）')
+    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI　2.47% → **2.45%**（2026-08）')
   })
 
   it('refuses margin totals dated another day', async () => {
@@ -188,7 +200,10 @@ const RECENT: SendLogRow[] = [
   { taipeiYmd: '2026-09-16', edition: 'brief', status: 'sent', httpStatus: 204, reason: null, at: '2026-09-16T09:05:02Z' },
 ]
 
-function adminDeps(initial: string | null = null, market: { days?: typeof MARKET_DAY_0916[] } | null = { days: [MARKET_DAY_0916] }) {
+function adminDeps(
+  initial: string | null = null,
+  market: { days?: typeof MARKET_DAY_0916[]; asOf?: string | null } | null = { asOf: MARKET_ASOF_0916, days: [MARKET_DAY_0916] },
+) {
   let stored: { url: string; updatedAt: string } | null = initial
     ? { url: initial, updatedAt: '2026-09-15T01:00:00.000Z' }
     : null
@@ -337,10 +352,11 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
     const out = await runWebhookOp(deps, { op: 'preview', edition: 'brief' })
     const p = previewPayload(deps)
     expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
-    expect(p.embeds[0].title).toBe('【預覽】📊 台股盤後快報 09/16(三)')
+    expect(heading(p)).toBe('## 【預覽】📊 台股盤後快報 09/16(三)')
     expect(p.allowed_mentions).toEqual({ parse: [] })
-    expect(fieldOf(p, '台股大盤')).toBe('加權 45,848.90 ▲337.41 (+0.74%)\n成交 6,759.7 億')
-    expect(fieldOf(p, '匯率')).toBe('USD/TWD 31.773 (+0.056)')
+    expect(fieldOf(p, '台股大盤')).toBe('加權指數　**45,848.90**\n漲跌　　　🔴 +337.41（+0.74%）\n成交金額　6,759.7 億')
+    expect(footerOf(p, '台股大盤')).toBe('09/16 15:05 更新')
+    expect(fieldOf(p, '匯率')).toBe('USD/TWD　**31.773**（+0.056）')
     expect(deps.loadIndex).toHaveBeenCalledTimes(8)
     expect(deps.loadMacro).not.toHaveBeenCalled()
     expect(deps.loadMargin).not.toHaveBeenCalled()
@@ -361,12 +377,14 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
     deps.now.mockReturnValue(new Date('2026-09-19T02:00:00Z')) // Saturday 10:00 Taipei
     const out = await runWebhookOp(deps, { op: 'preview', edition: 'full' })
     const p = previewPayload(deps)
-    expect(p.embeds[0].title).toBe('【預覽】📋 台股盤後完整版 09/16(三)')
+    expect(heading(p)).toBe('## 【預覽】📋 台股盤後完整版 09/16(三)')
+    expect(footerOf(p, '台股大盤')).toBe('⚠️ 09/16 資料・非今日')
+    expect(footerOf(p, '融資融券')).toBe('⚠️ 09/16 資料・非今日')
     expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
     expect(fieldOf(p, '融資融券')).toBe(
-      '融資 9,248,877 張 (+58,366)\n融資金額 5,861.7 億 (+39.3億)\n融券 197,048 張 (-1,004)',
+      '融資餘額　9,248,877 張（+58,366）\n融資金額　5,861.7 億（+39.3 億）\n融券餘額　197,048 張（-1,004）',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI 2.47% → 2.45%（2026-08）')
+    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI　2.47% → **2.45%**（2026-08）')
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-19', 'test', { kind: 'sent', httpStatus: 204 })
     expect(out).toMatchObject({ ok: true, preview: { edition: 'full', marketDate: '2026-09-16' } })
   })
