@@ -1,7 +1,7 @@
 {
   "name": "sources",
   "private": true,
-  "version": "0.9.57",
+  "version": "0.9.58-dev.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "test": "vitest run",
     "preview": "vite preview",
     "typecheck:edge": "tsc -p tsconfig.edge.json",
+    "sync:edge-engine": "node scripts/sync-edge-engine.cjs",
     "release:sync": "node scripts/sync-github-releases.cjs",
     "release:sync:all": "node scripts/sync-github-releases.cjs --all",
     "backup:download": "node scripts/backup-download.cjs",
