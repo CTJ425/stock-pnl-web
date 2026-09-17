@@ -11,6 +11,7 @@ vi.mock('./supabase', () => ({
 
 import {
   clearDiscordWebhook,
+  previewDiscordSummary,
   getDiscordWebhookStatus,
   saveDiscordWebhook,
   testDiscordWebhook,
@@ -59,6 +60,48 @@ describe('discordWebhook service', () => {
     invoke().mockResolvedValue({ data: { ok: true, status: STATUS, test }, error: null })
     expect(await testDiscordWebhook()).toEqual({ status: STATUS, test })
     expect(invoke()).toHaveBeenCalledWith('stock-report', { body: { action: 'discord-webhook', op: 'test' }, timeout: 45_000 })
+  })
+
+  it('sends a preview with a longer timeout', async () => {
+    const test = { ok: true, httpStatus: 204 }
+    const preview = { edition: 'full', marketDate: '2026-09-16' }
+    invoke().mockResolvedValue({ data: { ok: true, status: STATUS, test, preview }, error: null })
+    expect(await previewDiscordSummary('full')).toEqual({ status: STATUS, test, preview })
+    expect(invoke()).toHaveBeenCalledWith('stock-report', {
+      body: { action: 'discord-webhook', op: 'preview', edition: 'full' },
+      timeout: 60_000,
+    })
+  })
+
+  it('explains a known error code from the response body', async () => {
+    const error = Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+      context: new Response(JSON.stringify({ ok: false, error: 'no-market-data' }), { status: 409 }),
+    })
+    invoke().mockResolvedValue({ data: null, error })
+    const err = (await previewDiscordSummary('brief').catch((e: unknown) => e)) as Error
+    expect(err.message).toBe('Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）')
+  })
+
+  it.each([
+    ['not-configured', '尚未設定 Webhook'],
+    ['invalid-url', '網址格式不正確'],
+    ['bad-request', '請求格式錯誤'],
+  ])('maps %s', async (code, text) => {
+    const error = Object.assign(new Error('x'), {
+      context: new Response(JSON.stringify({ ok: false, error: code }), { status: 400 }),
+    })
+    invoke().mockResolvedValue({ data: null, error })
+    const err = (await getDiscordWebhookStatus().catch((e: unknown) => e)) as Error
+    expect(err.message).toBe(`Discord 設定失敗（HTTP 400：${text}）`)
+  })
+
+  it('never echoes an unknown error body', async () => {
+    const error = Object.assign(new Error('x'), {
+      context: new Response(JSON.stringify({ error: URL_ }), { status: 500 }),
+    })
+    invoke().mockResolvedValue({ data: null, error })
+    const err = (await getDiscordWebhookStatus().catch((e: unknown) => e)) as Error
+    expect(err.message).toBe('Discord 設定失敗（HTTP 500）')
   })
 
   it('refuses in local mode', async () => {

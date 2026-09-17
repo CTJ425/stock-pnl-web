@@ -250,6 +250,41 @@ excludes secrets. Restoring a snapshot leaves the webhook unset; that is intende
     channel webhook, and a security note (the URL is a password; use a dedicated channel; only the last
     4 characters are shown; on a leak, delete and recreate the webhook, then save the new URL).
 
+### 2.7 Manual preview (added 0.9.57-dev.3 at the user's request)
+
+Purpose: let the admin send the **real** brief / full content to the channel right now, to evaluate
+the format, without touching the schedule.
+
+**`runWebhookOp` — `{ op: 'preview', edition }`** (`WebhookAdminDeps` gains the five loaders of `SummaryDeps`):
+1. `edition` must be `brief` or `full`, else `bad-request` (nothing loaded or posted).
+2. No stored webhook → `not-configured`; no loader is called.
+3. `todayYmd` = Taipei date of `now()`. Market day = `findMarketDay(file, todayYmd)`, else the entry
+   with the greatest `date` in `file.days` (array order is not trusted). A rejected load, a null file or
+   no days → `no-market-data`; nothing posted, nothing recorded.
+4. Gather exactly as `runDiscordSummary` step 5, but keyed on the **market day's** date (margin is
+   fetched for that date and must match it). Brief never calls `loadMacro` / `loadMargin`.
+   Factor the gathering into one shared helper so the scheduled and preview paths cannot drift.
+5. Payload = `buildSummaryPayload(...)` with the title prefixed by `【預覽】` (no space).
+6. `post`, then `finishSend(todayYmd, 'test', outcome)` — recorded as a `test` row, so it never takes
+   the once-per-day slot and never blocks the 17:05 / 21:30 runs.
+7. Return `{ ok: true, status, test: <DiscordSendResult>, preview: { edition, marketDate } }`.
+   Never the URL.
+
+**`index.ts`**: `discord-webhook` deps get the same real loaders as `discord-summary` (share one
+factory); `no-market-data` → HTTP 409.
+
+**Service** `previewDiscordSummary(edition)` → body `{ action: 'discord-webhook', op: 'preview', edition }`,
+`timeout: 60_000` (eight index fetches plus a post). Every invoke error now reads the JSON body of
+`error.context`; only a known `error` code adds text after the status:
+`not-configured` 尚未設定 Webhook, `invalid-url` 網址格式不正確, `no-market-data` 找不到任何台股大盤資料,
+`bad-request` 請求格式錯誤 → `Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）`. Anything else in the
+body is ignored (`Discord 設定失敗（HTTP 500）`), so no server text is ever echoed.
+
+**`DiscordSection`**: buttons `預覽快報` and `預覽完整版` next to `測試發送`, shown only when configured,
+disabled by the same in-flight flag. Each asks `window.confirm('要把<快報|完整版>的正式內容傳送到 Discord 頻道嗎？頻道成員都會看到。')`
+first. Success → `預覽已送出（<快報|完整版>，資料日期 YYYY-MM-DD）`; a failed send → the existing
+`發送失敗（<reason text>）`; a rejection → the message verbatim. Results use the test-message slot.
+
 ## 3. Files
 
 Exhaustive. Stubs marked (stub) already exist with the fixed signatures; replace their bodies.

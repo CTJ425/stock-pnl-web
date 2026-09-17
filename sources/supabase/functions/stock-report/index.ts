@@ -4177,6 +4177,23 @@ async function loadDiscordMacro(): Promise<MacroLine[] | null> {
   return file?.indicators ?? null
 }
 
+/**
+ * The five real data loaders behind both the scheduled summary and the admin preview
+ * (`op: 'preview'`, spec §2.7) — one factory so the two entry points cannot drift.
+ */
+function discordSummaryLoaders(): Pick<
+  SummaryDeps,
+  'loadMarketFile' | 'loadIndex' | 'loadUsdTwd' | 'loadMacro' | 'loadMargin'
+> {
+  return {
+    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
+    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
+    loadUsdTwd: loadDiscordUsdTwd,
+    loadMacro: loadDiscordMacro,
+    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
+  }
+}
+
 /** Cron entry point: weekday 17:05 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs in schema.sql. */
 async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Response> {
   if (body.edition !== 'brief' && body.edition !== 'full') {
@@ -4185,14 +4202,10 @@ async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Re
   const edition = body.edition
   const deps: SummaryDeps = {
     now: () => new Date(),
-    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
+    ...discordSummaryLoaders(),
     loadWebhookUrl: loadDiscordWebhookUrl,
     claimSend: claimDiscordSend,
     finishSend: finishDiscordSend,
-    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
-    loadUsdTwd: loadDiscordUsdTwd,
-    loadMacro: loadDiscordMacro,
-    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
     post: postDiscordWebhook,
     log: (e) => logEvent(db, { level: e.level, action: 'discord-summary', message: e.message, detail: e.detail }),
   }
@@ -4200,7 +4213,7 @@ async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Re
   return json(outcome)
 }
 
-/** Admin console entry point (Discord settings panel): get / set / clear / test. Never returns the URL — see `runWebhookOp`. */
+/** Admin console entry point (Discord settings panel): get / set / clear / test / preview. Never returns the URL — see `runWebhookOp`. */
 async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Response> {
   const { action: _action, ...input } = body
   const deps: WebhookAdminDeps = {
@@ -4211,10 +4224,11 @@ async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Re
     recentSends: recentDiscordSends,
     finishSend: finishDiscordSend,
     post: postDiscordWebhook,
+    ...discordSummaryLoaders(),
   }
   const result = await runWebhookOp(deps, input)
   if (!result.ok) {
-    return json(result, result.error === 'not-configured' ? 409 : 400)
+    return json(result, result.error === 'not-configured' || result.error === 'no-market-data' ? 409 : 400)
   }
   return json(result)
 }

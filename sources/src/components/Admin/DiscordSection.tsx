@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   clearDiscordWebhook,
   getDiscordWebhookStatus,
+  previewDiscordSummary,
   saveDiscordWebhook,
   testDiscordWebhook,
   type DiscordSendEdition,
@@ -135,6 +136,23 @@ export function DiscordSection() {
     }
   }
 
+  const handlePreview = async (edition: 'brief' | 'full') => {
+    if (busy) return
+    const label = EDITION_LABELS[edition]
+    if (!window.confirm(`要把${label}的正式內容傳送到 Discord 頻道嗎？頻道成員都會看到。`)) return
+    setTestMessage(null)
+    setBusy(true)
+    try {
+      const { status: next, test, preview } = await previewDiscordSummary(edition)
+      setStatus(next)
+      setTestMessage(test.ok ? `預覽已送出（${label}，資料日期 ${preview.marketDate}）` : testResultText(test))
+    } catch (err) {
+      setTestMessage(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <section className="section glass adm-panel">
       <div className="rpt-section-head">
@@ -203,6 +221,16 @@ export function DiscordSection() {
           {status?.configured && (
             <button type="button" className="btn btn-sm" onClick={() => void handleTest()} disabled={busy}>
               測試發送
+            </button>
+          )}
+          {status?.configured && (
+            <button type="button" className="btn btn-sm" onClick={() => void handlePreview('brief')} disabled={busy}>
+              預覽快報
+            </button>
+          )}
+          {status?.configured && (
+            <button type="button" className="btn btn-sm" onClick={() => void handlePreview('full')} disabled={busy}>
+              預覽完整版
             </button>
           )}
           {status?.configured && (

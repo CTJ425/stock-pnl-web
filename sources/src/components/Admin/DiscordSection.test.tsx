@@ -8,6 +8,7 @@ const svc = vi.hoisted(() => ({
   saveDiscordWebhook: vi.fn(),
   clearDiscordWebhook: vi.fn(),
   testDiscordWebhook: vi.fn(),
+  previewDiscordSummary: vi.fn(),
 }))
 vi.mock('../../services/discordWebhook', () => svc)
 
@@ -200,6 +201,63 @@ describe('DiscordSection', () => {
     expect(text).toContain('複製 Webhook 網址')
     expect(text).toContain('Webhook 網址等同密碼')
     expect(text).toContain('刪除該 Webhook，重新建立一個')
+  })
+
+  it('offers previews only when configured', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(EMPTY)
+    render(<DiscordSection />)
+    await screen.findByText('尚未設定')
+    expect(screen.queryByRole('button', { name: '預覽快報' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '預覽完整版' })).toBeNull()
+  })
+
+  it('sends a brief preview only after confirmation and reports the data date', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(SET)
+    svc.previewDiscordSummary.mockResolvedValue({
+      status: SET,
+      test: { ok: true, httpStatus: 204 },
+      preview: { edition: 'brief', marketDate: '2026-09-16' },
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    render(<DiscordSection />)
+    const button = await screen.findByRole('button', { name: '預覽快報' })
+    fireEvent.click(button)
+    expect(confirm).toHaveBeenCalledWith('要把快報的正式內容傳送到 Discord 頻道嗎？頻道成員都會看到。')
+    expect(svc.previewDiscordSummary).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    await waitFor(() => expect(svc.previewDiscordSummary).toHaveBeenCalledWith('brief'))
+    expect(await screen.findByText('預覽已送出（快報，資料日期 2026-09-16）')).toBeTruthy()
+  })
+
+  it('sends a full preview and explains a failed send', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(SET)
+    svc.previewDiscordSummary.mockResolvedValue({
+      status: SET,
+      test: { ok: false, httpStatus: 404, reason: 'webhook-gone' },
+      preview: { edition: 'full', marketDate: '2026-09-16' },
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<DiscordSection />)
+    fireEvent.click(await screen.findByRole('button', { name: '預覽完整版' }))
+    expect(confirm).toHaveBeenCalledWith('要把完整版的正式內容傳送到 Discord 頻道嗎？頻道成員都會看到。')
+    await waitFor(() => expect(svc.previewDiscordSummary).toHaveBeenCalledWith('full'))
+    expect(await screen.findByText('發送失敗（網址已失效）')).toBeTruthy()
+  })
+
+  it('shows a rejected preview and disables every action while it runs', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(SET)
+    let fail!: (e: Error) => void
+    svc.previewDiscordSummary.mockReturnValue(new Promise((_r, j) => (fail = j)))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<DiscordSection />)
+    const brief = (await screen.findByRole('button', { name: '預覽快報' })) as HTMLButtonElement
+    fireEvent.click(brief)
+    for (const name of ['預覽快報', '預覽完整版', '測試發送', '清除']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
+    fail(new Error('Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）'))
+    expect(await screen.findByText('Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）')).toBeTruthy()
+    expect(brief.disabled).toBe(false)
   })
 
   it('clears only after confirmation', async () => {

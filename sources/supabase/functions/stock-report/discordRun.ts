@@ -37,29 +37,18 @@ export interface SummaryDeps {
   log: (e: { level: 'warn' | 'info'; message: string; detail: Record<string, unknown> }) => Promise<void>
 }
 
-export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEdition): Promise<RunOutcome> {
-  const ymd = dashDate(taipeiYmd(deps.now()))
+/** The four data sources shared by the scheduled send and the manual preview (spec §2.7 step 4). */
+type GatherDeps = Pick<SummaryDeps, 'loadIndex' | 'loadUsdTwd' | 'loadMacro' | 'loadMargin'>
 
-  const file = await deps.loadMarketFile().catch(() => null)
-  const market = findMarketDay(file, ymd)
-  if (!market) {
-    const outcome: RunOutcome = { kind: 'skipped', reason: 'no-market-day' }
-    await deps.finishSend(ymd, edition, outcome)
-    return outcome
-  }
+interface GatheredData {
+  indices: IndexLine[]
+  usdTwd: FxLine | null
+  macro: MacroLine[] | null
+  margin: import('./marketMargin.ts').MarketMarginTotals | null
+}
 
-  const url = await deps.loadWebhookUrl()
-  if (!url) {
-    const outcome: RunOutcome = { kind: 'skipped', reason: 'no-webhook' }
-    await deps.finishSend(ymd, edition, outcome)
-    return outcome
-  }
-
-  const claimed = await deps.claimSend(ymd, edition)
-  if (!claimed) return { kind: 'skipped', reason: 'already-sent' }
-
-  const nowSec = Math.floor(deps.now().getTime() / 1000)
-
+/** Fetches indices / fx / (full only) macro / margin for `ymd`, never throwing. */
+async function gatherSummaryData(deps: GatherDeps, edition: SummaryEdition, ymd: string, nowSec: number): Promise<GatheredData> {
   const indexPromise: Promise<IndexLine[]> = Promise.all(
     SUMMARY_INDICES.map(async ({ symbol, label }) => {
       try {
@@ -84,6 +73,43 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
     : Promise.resolve(null)
 
   const [indices, usdTwd, macro, margin] = await Promise.all([indexPromise, usdTwdPromise, macroPromise, marginPromise])
+  return { indices, usdTwd, macro, margin }
+}
+
+/** The entry with the greatest `date` in `file.days` (array order is not trusted). Spec §2.7 step 3. */
+function latestMarketDay(file: { days?: MarketDay[] } | null): MarketDay | null {
+  // Only well-formed 'YYYY-MM-DD' dates compete: a malformed entry would otherwise win every
+  // comparison it starts (NaN > NaN is false) and then break the date math downstream.
+  const days = (Array.isArray(file?.days) ? file.days : []).filter(
+    (d) => typeof d?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date),
+  )
+  if (days.length === 0) return null
+  return days.reduce((max, d) => (d.date > max.date ? d : max))
+}
+
+export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEdition): Promise<RunOutcome> {
+  const ymd = dashDate(taipeiYmd(deps.now()))
+
+  const file = await deps.loadMarketFile().catch(() => null)
+  const market = findMarketDay(file, ymd)
+  if (!market) {
+    const outcome: RunOutcome = { kind: 'skipped', reason: 'no-market-day' }
+    await deps.finishSend(ymd, edition, outcome)
+    return outcome
+  }
+
+  const url = await deps.loadWebhookUrl()
+  if (!url) {
+    const outcome: RunOutcome = { kind: 'skipped', reason: 'no-webhook' }
+    await deps.finishSend(ymd, edition, outcome)
+    return outcome
+  }
+
+  const claimed = await deps.claimSend(ymd, edition)
+  if (!claimed) return { kind: 'skipped', reason: 'already-sent' }
+
+  const nowSec = Math.floor(deps.now().getTime() / 1000)
+  const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, ymd, nowSec)
 
   const generatedAt = deps.now().toISOString()
   const payload = buildSummaryPayload({ edition, ymd, generatedAt, market, indices, usdTwd, margin, macro })
@@ -131,11 +157,24 @@ export interface WebhookAdminDeps {
   recentSends: (limit: number) => Promise<SendLogRow[]>
   finishSend: SummaryDeps['finishSend']
   post: SummaryDeps['post']
+  /** Loaders for `op: 'preview'` — the same real data sources as the scheduled summary. */
+  loadMarketFile: SummaryDeps['loadMarketFile']
+  loadIndex: SummaryDeps['loadIndex']
+  loadUsdTwd: SummaryDeps['loadUsdTwd']
+  loadMacro: SummaryDeps['loadMacro']
+  loadMargin: SummaryDeps['loadMargin']
+}
+
+/** What a manual preview actually sent: which edition, built from which trading day. */
+export interface PreviewInfo {
+  edition: SummaryEdition
+  /** 'YYYY-MM-DD' of the market day the content was built from */
+  marketDate: string
 }
 
 export type WebhookOpResult =
-  | { ok: true; status: WebhookStatus; test?: DiscordSendResult }
-  | { ok: false; error: 'bad-request' | 'invalid-url' | 'not-configured' }
+  | { ok: true; status: WebhookStatus; test?: DiscordSendResult; preview?: PreviewInfo }
+  | { ok: false; error: 'bad-request' | 'invalid-url' | 'not-configured' | 'no-market-data' }
 
 function toStatus(stored: { url: string; updatedAt: string } | null, recent: SendLogRow[]): WebhookStatus {
   return {
@@ -150,7 +189,42 @@ function toStatus(stored: { url: string; updatedAt: string } | null, recent: Sen
 export async function runWebhookOp(deps: WebhookAdminDeps, input: unknown): Promise<WebhookOpResult> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'bad-request' }
   const op = (input as { op?: unknown }).op
-  if (op !== 'get' && op !== 'set' && op !== 'clear' && op !== 'test') return { ok: false, error: 'bad-request' }
+  if (op !== 'get' && op !== 'set' && op !== 'clear' && op !== 'test' && op !== 'preview') {
+    return { ok: false, error: 'bad-request' }
+  }
+
+  if (op === 'preview') {
+    const edition = (input as { edition?: unknown }).edition
+    if (edition !== 'brief' && edition !== 'full') return { ok: false, error: 'bad-request' }
+
+    const stored = await deps.readWebhook()
+    if (!stored) return { ok: false, error: 'not-configured' }
+
+    const todayYmd = dashDate(taipeiYmd(deps.now()))
+    const file = await deps.loadMarketFile().catch(() => null)
+    const market = findMarketDay(file, todayYmd) ?? latestMarketDay(file)
+    if (!market) return { ok: false, error: 'no-market-data' }
+
+    const nowSec = Math.floor(deps.now().getTime() / 1000)
+    const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, market.date, nowSec)
+
+    const generatedAt = deps.now().toISOString()
+    const payload = buildSummaryPayload({ edition, ymd: market.date, generatedAt, market, indices, usdTwd, margin, macro })
+    payload.embeds[0].title = `【預覽】${payload.embeds[0].title}`
+
+    const result = await deps.post(stored.url, payload)
+    const outcome: RunOutcome = result.ok
+      ? { kind: 'sent', httpStatus: result.httpStatus }
+      : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
+    await deps.finishSend(todayYmd, 'test', outcome)
+    const recent = await deps.recentSends(10)
+    return {
+      ok: true,
+      status: toStatus(stored, recent),
+      test: result,
+      preview: { edition, marketDate: market.date },
+    }
+  }
 
   if (op === 'set') {
     const url = (input as { url?: unknown }).url

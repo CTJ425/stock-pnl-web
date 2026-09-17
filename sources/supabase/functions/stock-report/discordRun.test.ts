@@ -188,7 +188,7 @@ const RECENT: SendLogRow[] = [
   { taipeiYmd: '2026-09-16', edition: 'brief', status: 'sent', httpStatus: 204, reason: null, at: '2026-09-16T09:05:02Z' },
 ]
 
-function adminDeps(initial: string | null = null) {
+function adminDeps(initial: string | null = null, market: { days?: typeof MARKET_DAY_0916[] } | null = { days: [MARKET_DAY_0916] }) {
   let stored: { url: string; updatedAt: string } | null = initial
     ? { url: initial, updatedAt: '2026-09-15T01:00:00.000Z' }
     : null
@@ -203,7 +203,12 @@ function adminDeps(initial: string | null = null) {
     }),
     recentSends: vi.fn(async () => RECENT),
     finishSend: vi.fn(async (_ymd: string, _edition: string, _outcome: RunOutcome) => {}),
-    post: vi.fn(async (): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
+    post: vi.fn(async (_url: string, _payload: DiscordPayload): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
+    loadMarketFile: vi.fn(async () => market),
+    loadIndex: vi.fn(async (symbol: string) => (symbol === '^GSPC' ? GSPC_PREOPEN : N225_MIDSESSION)),
+    loadUsdTwd: vi.fn(async () => USD_TWD),
+    loadMacro: vi.fn(async () => MACRO_LINES),
+    loadMargin: vi.fn(async () => MARGIN_MS_0916),
   } satisfies WebhookAdminDeps
   return deps
 }
@@ -293,6 +298,131 @@ describe('runWebhookOp', () => {
     const deps = adminDeps(FAKE_WEBHOOK)
     deps.post.mockResolvedValueOnce({ ok: false, httpStatus: 404, reason: 'webhook-gone' })
     const out = await runWebhookOp(deps, { op: 'test' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', {
+      kind: 'failed',
+      httpStatus: 404,
+      reason: 'webhook-gone',
+    })
+    expect(out).toMatchObject({ ok: true, test: { ok: false, httpStatus: 404, reason: 'webhook-gone' } })
+  })
+})
+
+describe('runWebhookOp — preview (real content, sent now)', () => {
+  function previewPayload(deps: ReturnType<typeof adminDeps>): DiscordPayload {
+    expect(deps.post).toHaveBeenCalledTimes(1)
+    return vi.mocked(deps.post).mock.calls[0][1]
+  }
+
+  it.each([
+    ['missing edition', { op: 'preview' }],
+    ['test edition', { op: 'preview', edition: 'test' }],
+    ['unknown edition', { op: 'preview', edition: 'weekly' }],
+  ])('rejects a %s', async (_name, body) => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    expect(await runWebhookOp(deps, body)).toEqual({ ok: false, error: 'bad-request' })
+    expect(deps.post).not.toHaveBeenCalled()
+    expect(deps.loadMarketFile).not.toHaveBeenCalled()
+  })
+
+  it('refuses without a webhook and loads nothing', async () => {
+    const deps = adminDeps()
+    expect(await runWebhookOp(deps, { op: 'preview', edition: 'brief' })).toEqual({ ok: false, error: 'not-configured' })
+    expect(deps.loadMarketFile).not.toHaveBeenCalled()
+    expect(deps.loadIndex).not.toHaveBeenCalled()
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it("sends today's brief content labelled as a preview, without macro or margin", async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    const out = await runWebhookOp(deps, { op: 'preview', edition: 'brief' })
+    const p = previewPayload(deps)
+    expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
+    expect(p.embeds[0].title).toBe('【預覽】📊 台股盤後快報 09/16(三)')
+    expect(p.allowed_mentions).toEqual({ parse: [] })
+    expect(fieldOf(p, '台股大盤')).toBe('加權 45,848.90 ▲337.41 (+0.74%)\n成交 6,759.7 億')
+    expect(fieldOf(p, '匯率')).toBe('USD/TWD 31.773 (+0.056)')
+    expect(deps.loadIndex).toHaveBeenCalledTimes(8)
+    expect(deps.loadMacro).not.toHaveBeenCalled()
+    expect(deps.loadMargin).not.toHaveBeenCalled()
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', { kind: 'sent', httpStatus: 204 })
+    expect(out).toMatchObject({
+      ok: true,
+      test: { ok: true, httpStatus: 204 },
+      preview: { edition: 'brief', marketDate: '2026-09-16' },
+      status: { configured: true, last4: 'Wxyz' },
+    })
+    expect(JSON.stringify(out)).not.toContain(FAKE_TOKEN)
+  })
+
+  it('falls back to the latest market day when today has none, whatever the array order', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK, {
+      days: [MARKET_DAY_0916, { ...MARKET_DAY_0916, date: '2026-09-15', taiex: 45511.49, changePoints: -12.5 }],
+    })
+    deps.now.mockReturnValue(new Date('2026-09-19T02:00:00Z')) // Saturday 10:00 Taipei
+    const out = await runWebhookOp(deps, { op: 'preview', edition: 'full' })
+    const p = previewPayload(deps)
+    expect(p.embeds[0].title).toBe('【預覽】📋 台股盤後完整版 09/16(三)')
+    expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
+    expect(fieldOf(p, '融資融券')).toBe(
+      '融資 9,248,877 張 (+58,366)\n融資金額 5,861.7 億 (+39.3億)\n融券 197,048 張 (-1,004)',
+    )
+    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI 2.47% → 2.45%（2026-08）')
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-19', 'test', { kind: 'sent', httpStatus: 204 })
+    expect(out).toMatchObject({ ok: true, preview: { edition: 'full', marketDate: '2026-09-16' } })
+  })
+
+  it('never picks a day with a missing or malformed date as the latest', async () => {
+    const bad = [
+      { ...MARKET_DAY_0916, date: undefined },
+      { ...MARKET_DAY_0916, date: 20260918 },
+      { ...MARKET_DAY_0916, date: '2026-9-18' },
+    ] as unknown as typeof MARKET_DAY_0916[]
+    const deps = adminDeps(FAKE_WEBHOOK, { days: [...bad, { ...MARKET_DAY_0916, date: '2026-09-15' }] })
+    deps.now.mockReturnValue(new Date('2026-09-19T02:00:00Z'))
+    for (const edition of ['brief', 'full'] as const) {
+      const out = await runWebhookOp(deps, { op: 'preview', edition })
+      expect(out).toMatchObject({ ok: true, preview: { edition, marketDate: '2026-09-15' } })
+    }
+  })
+
+  it('reports no market data when every day is malformed', async () => {
+    const bad = [{ ...MARKET_DAY_0916, date: undefined }, { ...MARKET_DAY_0916, date: null }] as unknown as typeof MARKET_DAY_0916[]
+    const deps = adminDeps(FAKE_WEBHOOK, { days: bad })
+    deps.now.mockReturnValue(new Date('2026-09-19T02:00:00Z'))
+    for (const edition of ['brief', 'full'] as const) {
+      expect(await runWebhookOp(deps, { op: 'preview', edition })).toEqual({ ok: false, error: 'no-market-data' })
+    }
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it("marks margin totals from another day as unpublished", async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    deps.loadMargin.mockResolvedValueOnce({ ...MARGIN_MS_0916, date: '20260915' })
+    await runWebhookOp(deps, { op: 'preview', edition: 'full' })
+    expect(fieldOf(previewPayload(deps), '融資融券')).toBe('尚未公布')
+  })
+
+  it.each([
+    ['an empty file', { days: [] }],
+    ['a null file', null],
+  ])('reports no market data for %s and sends nothing', async (_name, market) => {
+    const deps = adminDeps(FAKE_WEBHOOK, market)
+    expect(await runWebhookOp(deps, { op: 'preview', edition: 'brief' })).toEqual({ ok: false, error: 'no-market-data' })
+    expect(deps.post).not.toHaveBeenCalled()
+    expect(deps.finishSend).not.toHaveBeenCalled()
+  })
+
+  it('treats an unreadable market file as no market data', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    deps.loadMarketFile.mockRejectedValueOnce(new Error('storage down'))
+    expect(await runWebhookOp(deps, { op: 'preview', edition: 'brief' })).toEqual({ ok: false, error: 'no-market-data' })
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('records a failed preview send', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    deps.post.mockResolvedValueOnce({ ok: false, httpStatus: 404, reason: 'webhook-gone' })
+    const out = await runWebhookOp(deps, { op: 'preview', edition: 'brief' })
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', {
       kind: 'failed',
       httpStatus: 404,
