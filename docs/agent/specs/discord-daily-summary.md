@@ -245,6 +245,10 @@ excludes secrets. Restoring a snapshot leaves the webhook unset; that is intende
   - While any save / clear / test request is in flight, `儲存`, `清除` and `測試發送` are all disabled,
     so a double click sends one request; they re-enable when it settles.
   - Markup follows the class conventions of `AiConnectionSection.tsx` (same admin-console look).
+  - A closed `<details>` titled `如何取得 Discord Webhook 網址` (added 0.9.57-dev.2 at the user's
+    request) explains that no Bot, API key, or Bot Token is needed, gives 7 steps to create and copy a
+    channel webhook, and a security note (the URL is a password; use a dedicated channel; only the last
+    4 characters are shown; on a leak, delete and recreate the webhook, then save the new URL).
 
 ## 3. Files
 
