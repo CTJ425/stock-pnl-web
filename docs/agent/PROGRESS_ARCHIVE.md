@@ -5,6 +5,20 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-17 14:54:00 Asia/Taipei (Task 165 Phase 1, 0.9.57-dev.1 — DEV deployed)
+
+**Pushed to `dev`** (not `main`, per user): commit `c74d371` `feat: 0.9.57-dev.1 — Discord 每日盤後總結第一階段（Task 165）`. Version synced in `version.ts`, `package.json` / lock and the README badge; the CHANGELOG section is written at release time, as with earlier dev versions.
+
+**DEV database** (`zyebvayngwrqzoaicbwd`): §13 applied as one DO block behind the DEV/PROD identity predicate. `discord-summary-brief` (`5 9 * * 1-5`) and `discord-summary-full` (`30 13 * * 1-5`) were cloned from `market-data-daily` with `replace()` on the action, so `CRON_SECRET` was never read. Verified structurally: RLS on and 0 policies on both tables; `anon` / `authenticated` have no privileges; `service_role` can read and insert; `discord_send_log_once` exists; both jobs target the DEV host with the real secret header, no placeholder, 60 s timeout; `market-data-daily` untouched. Updated `verify.sql` installed; `verify_setup()` 10/10 PASS (17 tables, 9 jobs, cron http 200).
+
+**DEV Edge**: `stock-report` v8 → v9, `ezbr_sha256` `11fd4dcd…` → `b8e470f0…`, `verify_jwt=false`, deployed from `c74d371` with `--use-api`. Smoke: `discord-summary` with no / wrong `x-cron-secret` → 401; `discord-webhook` without an admin session → 401; the next `source-probe` call at 06:50 UTC → 200, so existing actions are unaffected.
+
+**Tooling on this host**: the Supabase CLI was not installed — added with `npm i -g supabase` (2.117.0). `supabase functions deploy` needs `--use-api` here (the container bundler reports `entrypoint path does not exist`). `db query --linked --project-ref <ref>` works without `supabase link`.
+
+**Next**: the webhook is set in the DEV admin console (local `npm run dev`) and 測試發送 is run; until then each scheduled run records a `no-webhook` skip. PROD waits for an explicit OK.
+
+---
+
 ## 📅 Log: 2026-09-17 13:51:06 Asia/Taipei (Task 165 Phase 1, unversioned — `dev` working tree)
 
 **What**: Market-wide after-hours summary posted to one admin-configured Discord webhook, weekdays 17:05 (brief) and 21:30 (full). Design decided with the user step by step; spec `docs/agent/specs/discord-daily-summary.md`. No per-user data (holdings summary is Phase 2).

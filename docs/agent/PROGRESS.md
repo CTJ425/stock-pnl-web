@@ -1,9 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 — 0.9.57 released to `main`; DEV fully deployed
-- Status: ✅ **0.9.57 ON `main`** — PROD Supabase (schema §13 + `stock-report`) not deployed, awaiting explicit OK
-- Timestamp: 2026-09-17 16:33:21 Asia/Taipei
+- Action: Task 165 Phase 2 — spec approved; step 2a (Edge copy of the ledger engine) committed on `dev`
+- Status: 🔄 **0.9.58-dev.1 on `dev`** (not pushed) — `main` stays 0.9.57; PROD Supabase for Phase 1 still awaits explicit OK
+- Timestamp: 2026-09-17 17:19:33 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-17 17:19:33 Asia/Taipei (Task 165 Phase 2 step 2a, 0.9.58-dev.1)
+
+**Phase 2 planned and approved** (per-user Discord holdings card): spec `docs/agent/specs/discord-holdings.md`. User decisions D1–D6: each user's own webhook; full amounts; all workspaces merged into one card (TWD/USD separate, no FX); daily 17:15 after the brief; `workspaces.fee_rate` is already in the DB; **D6 — existing core code is not modified** (frozen file list in spec §0). BUG-084 (stale per-workspace 最低手續費 in localStorage) opened and accepted as a known difference.
+
+**Step 2a — Edge copy of the ledger engine, core untouched**:
+- `scripts/lib/edgeEngine.cjs` + `scripts/sync-edge-engine.cjs` (`npm run sync:edge-engine`, `--check`) generate `supabase/functions/_shared/engine/pnlEngine.ts` and `models.ts`. The only textual change is the two `'../types/models'` imports → `'./models.ts'`. The renderer throws on any other import (relative, bare, side-effect, dynamic, or a source already spelling `./models.ts`); every target is rendered before any is written.
+- `scripts/lib/edgeEngine.test.mjs` (19 cases): drift (committed copy equals a fresh render), parity (same exports; identical `computeLedger` / `estimateUnrealized` / `estimateUnrealizedShort` on a fixture with long, short, US fractional shares and an oversell warning), renderer guards.
+- Reviewer PASS with 4 RISKs: two fixed (source spelling `./models.ts`; partial write), two accepted (the literal rewrite could also touch a comment; a mid-line side-effect import is not detected).
+- Note: builder's direct `node scripts/sync-edge-engine.cjs` was refused by the write-scope guard (`_shared/engine` is not in `paths.prod`); it ran the same script via `npm run sync:edge-engine`.
+
+**Verification** (from `sources/`): `npm test` 138 files, 2220 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0; `git diff` of every D6 file empty (only `src/version.ts` changed under `src/`). Deno 2.9.6 (`npx deno@2`): `deno check` on both generated files exit 0, and a script importing the generated engine ran all three functions. E2E: `run-all-e2e.cjs` against Supabase-mode vite on 127.0.0.1:5317 — 16/16 suites, 49 steps, 0 failed (Playwright Chromium installed on this host first).
+
+**Next**: step 2b — `holdingQuotes.ts` + `holdingsCard.ts` (spec §2.2–2.4), tests first. Supabase untouched in 2a; nothing deployed.
 
 ---
 
@@ -22,18 +38,4 @@
 **Verification** (from `sources/`): `npm test` 137 files, 2201 passed / 7 skipped; a `TZ=UTC` rerun of the layout and log-time tests passed; `npm run build`, `npm run typecheck:edge`, `npm run lint` exit 0.
 
 **Next**: PROD — apply §13 (clone an existing job's command behind the identity guard, then `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook. Watch the first real DEV 17:05 / 21:30 rounds and check phone alignment of the 國際指數 / 美國總經 tables.
-
----
-
-## 📅 Log: 2026-09-17 14:54:00 Asia/Taipei (Task 165 Phase 1, 0.9.57-dev.1 — DEV deployed)
-
-**Pushed to `dev`** (not `main`, per user): commit `c74d371` `feat: 0.9.57-dev.1 — Discord 每日盤後總結第一階段（Task 165）`. Version synced in `version.ts`, `package.json` / lock and the README badge; the CHANGELOG section is written at release time, as with earlier dev versions.
-
-**DEV database** (`zyebvayngwrqzoaicbwd`): §13 applied as one DO block behind the DEV/PROD identity predicate. `discord-summary-brief` (`5 9 * * 1-5`) and `discord-summary-full` (`30 13 * * 1-5`) were cloned from `market-data-daily` with `replace()` on the action, so `CRON_SECRET` was never read. Verified structurally: RLS on and 0 policies on both tables; `anon` / `authenticated` have no privileges; `service_role` can read and insert; `discord_send_log_once` exists; both jobs target the DEV host with the real secret header, no placeholder, 60 s timeout; `market-data-daily` untouched. Updated `verify.sql` installed; `verify_setup()` 10/10 PASS (17 tables, 9 jobs, cron http 200).
-
-**DEV Edge**: `stock-report` v8 → v9, `ezbr_sha256` `11fd4dcd…` → `b8e470f0…`, `verify_jwt=false`, deployed from `c74d371` with `--use-api`. Smoke: `discord-summary` with no / wrong `x-cron-secret` → 401; `discord-webhook` without an admin session → 401; the next `source-probe` call at 06:50 UTC → 200, so existing actions are unaffected.
-
-**Tooling on this host**: the Supabase CLI was not installed — added with `npm i -g supabase` (2.117.0). `supabase functions deploy` needs `--use-api` here (the container bundler reports `entrypoint path does not exist`). `db query --linked --project-ref <ref>` works without `supabase link`.
-
-**Next**: the webhook is set in the DEV admin console (local `npm run dev`) and 測試發送 is run; until then each scheduled run records a `no-webhook` skip. PROD waits for an explicit OK.
 

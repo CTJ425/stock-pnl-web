@@ -11,7 +11,7 @@
 
 ## 📍 Where the project stands (2026-09-17 16:33:21)
 
-- **Version 0.9.57 — on `dev` and `main`（2026-09-17 合併）。前端由 Cloudflare Pages 從 `main` 自動部署。Task 165（Discord 每日總結）的 schema §13 與新版 `stock-report` 目前只在 DEV；PROD 尚未套用 §13、也未重新部署 `stock-report`，所以 PROD 主控台的 Discord 頁在部署前會回錯誤。** 驗收看畫面左下角的版本徽章。
+- **Version 0.9.57 on `main`（2026-09-17 合併）；`dev` 為 0.9.58-dev.1（Task 165 第二階段 2a，未推送）。前端由 Cloudflare Pages 從 `main` 自動部署。Task 165（Discord 每日總結）的 schema §13 與新版 `stock-report` 目前只在 DEV；PROD 尚未套用 §13、也未重新部署 `stock-report`，所以 PROD 主控台的 Discord 頁在部署前會回錯誤。** 驗收看畫面左下角的版本徽章。
   - Shipped 0.9.45 ~ 0.9.56 的逐版記述已移入 `TASK_ARCHIVE.md`（見該檔 `Shipped history` 區塊）與 `docs/agent/CHANGELOG.md`。
   - Verification (2026-09-17): 137 test files / **2,201** vitest tests passed, 7 skipped, exit 0；`npm run lint`、`npm run build`、`npm run typecheck:edge` 皆 exit 0。
   - Edge Functions（2026-09-17）: DEV `stock-report` **v12**（Task 165）；PROD `stock-report` 未變動（2026-09-15 記錄為 v8）。其餘三支同 2026-09-15 紀錄：`stock-price` DEV v18 / PROD v9、`backup-transactions` v4、`ai-proxy` v1。`verify_jwt`：`stock-price` 與 `ai-proxy` 為 true，`stock-report` 與 `backup-transactions` 為 false。
@@ -22,15 +22,16 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — 0.9.57 merged to `main` (2026-09-17); DEV fully deployed (`stock-report` v12, schema §13); PROD Supabase awaits explicit OK
+- **Status**: 🔄 IN PROGRESS — Phase 1: 0.9.57 on `main`, PROD Supabase awaits explicit OK · Phase 2: step 2a done in 0.9.58-dev.1 (`dev`)
 - **Agent**: Claude
-- **Timestamp**: 2026-09-17 16:33:21 Asia/Taipei
+- **Timestamp**: 2026-09-17 17:19:33 Asia/Taipei
 - **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
-- **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 holdings summary capped at percent + ticker, per-user opt-in, off by default.
+- **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 decisions superseded — see the next line.
+- **Phase 2 decisions (user, 2026-09-17 16:57 Asia/Taipei)**: each user sets their own webhook (nothing per-user goes to the site-wide webhook); the card always shows full amounts (shares, cost, market value, unrealized/realized P&L) — supersedes the earlier "percent + ticker" cap; all workspaces merged into one card, TWD and USD kept separate (no FX); once a day at 17:15 after the brief; server uses `workspaces.fee_rate` (already in DB) and the default minimum fees. Spec: docs/agent/specs/discord-holdings.md (approved 2026-09-17 17:20, adding D6: existing core code is not modified; BUG-084 difference accepted).
 4. ~~Set the webhook in the DEV admin console and run 測試發送~~ ✅ (2026-09-17: test 15:11, previews from 15:25, all HTTP 200) · watch one real 17:05 and 21:30 round; check phone alignment of the 國際指數 / 美國總經 tables —— ⏳
 5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · apply schema §13 on PROD (clone an existing job's command behind the identity guard, `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook —— ⏳ awaiting explicit OK
-6. Phase 2: per-user holdings summary (opt-in, percent + ticker at most, own webhook) —— ⏳ not started; needs its own design round
+6. Phase 2: per-user holdings card (own webhook, full amounts, merged workspaces, daily 17:15; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · 2b card modules · 2c schema §14 / Edge / settings UI · DEV deploy on explicit OK —— ⏳ spec docs/agent/specs/discord-holdings.md
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
 - **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**
