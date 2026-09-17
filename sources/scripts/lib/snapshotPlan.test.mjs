@@ -208,14 +208,14 @@ describe('substituteCronPlaceholders — empty and blank options (S13–S14)', (
 })
 
 describe('substituteCronPlaceholders — reports what it did (S15)', () => {
-  it('S15 — the real schema.sql yields 6 URL and 6 header substitutions', () => {
+  it('S15 — the real schema.sql yields 8 URL and 8 header substitutions (Task 165 added two jobs)', () => {
     const sql = readFileSync(SCHEMA_SQL, 'utf8')
     const { sql: out, urls, secrets } = substituteCronPlaceholders(sql, {
       ref: 'abc',
       cronSecret: 'def',
     })
-    expect(urls).toBe(6)
-    expect(secrets).toBe(6)
+    expect(urls).toBe(8)
+    expect(secrets).toBe(8)
     expect(out).toContain('https://abc.supabase.co')
   })
 })
@@ -251,6 +251,7 @@ describe('CACHE_TABLES (S17–S18)', () => {
       'public.app_log',
       'public.batch_run_log',
       'public.chip_raw_cache',
+      'public.discord_send_log',
       'public.price_cache',
       'public.source_probe_log',
       'public.source_probe_tick',
@@ -271,5 +272,36 @@ describe('CACHE_TABLES (S17–S18)', () => {
     for (const table of irreplaceable) {
       expect(plan.CACHE_TABLES).not.toContain(table)
     }
+  })
+})
+
+// Task 165 — `app_secrets` holds the Discord webhook URL. `snapshot.cjs` dumps every public table
+// except the excluded ones, so without this the credential would ride along into every snapshot
+// and its offsite copy, including under `--with-cache`.
+describe('dataExcludeTables (Task 165)', () => {
+  const { SECRET_TABLES, CACHE_TABLES: cache, dataExcludeTables } = plan
+
+  it('lists app_secrets as a secret table', () => {
+    expect(SECRET_TABLES).toEqual(['public.app_secrets'])
+  })
+
+  it('treats the Discord send log as a regenerable log table', () => {
+    expect(cache).toContain('public.discord_send_log')
+  })
+
+  it('excludes cache and secret tables by default', () => {
+    const out = dataExcludeTables(false)
+    expect(out).toEqual([...cache, ...SECRET_TABLES])
+    expect(out).toContain('public.app_secrets')
+  })
+
+  it('still excludes secret tables with --with-cache', () => {
+    expect(dataExcludeTables(true)).toEqual(['public.app_secrets'])
+  })
+
+  it('is what snapshot.cjs uses for the public data dump', () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'snapshot.cjs'), 'utf8')
+    expect(src).toMatch(/dataExcludeTables\(/)
+    expect(src).not.toMatch(/CACHE_TABLES\.flatMap/)
   })
 })

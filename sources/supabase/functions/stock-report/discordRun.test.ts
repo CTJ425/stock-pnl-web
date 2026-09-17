@@ -1,0 +1,303 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  runDiscordSummary,
+  runWebhookOp,
+  type RunOutcome,
+  type SendLogRow,
+  type SummaryDeps,
+  type WebhookAdminDeps,
+} from './discordRun.ts'
+import type { DiscordPayload, DiscordSendResult } from './discordWebhook.ts'
+import {
+  FAKE_TOKEN,
+  FAKE_WEBHOOK,
+  GSPC_PREOPEN,
+  MACRO_LINES,
+  MARGIN_MS_0916,
+  MARKET_DAY_0916,
+  N225_MIDSESSION,
+  USD_TWD,
+} from './discordTestFixtures.ts'
+
+/** 17:05 and 21:30 Taipei on 2026-09-16. */
+const BRIEF_AT = new Date('2026-09-16T09:05:00Z')
+const FULL_AT = new Date('2026-09-16T13:30:00Z')
+
+function summaryDeps(over: Partial<SummaryDeps> = {}) {
+  const deps = {
+    now: vi.fn(() => BRIEF_AT),
+    loadMarketFile: vi.fn(async () => ({ days: [MARKET_DAY_0916] })),
+    loadWebhookUrl: vi.fn(async () => FAKE_WEBHOOK),
+    claimSend: vi.fn(async () => true),
+    finishSend: vi.fn(async () => {}),
+    loadIndex: vi.fn(async (symbol: string) => {
+      if (symbol === '^KS11') throw new Error('yahoo down')
+      return symbol === '^GSPC' ? GSPC_PREOPEN : N225_MIDSESSION
+    }),
+    loadUsdTwd: vi.fn(async () => USD_TWD),
+    loadMacro: vi.fn(async () => MACRO_LINES),
+    loadMargin: vi.fn(async () => MARGIN_MS_0916),
+    post: vi.fn(async (): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
+    log: vi.fn(async () => {}),
+    ...over,
+  }
+  return deps
+}
+
+function posted(deps: ReturnType<typeof summaryDeps>): DiscordPayload {
+  expect(deps.post).toHaveBeenCalledTimes(1)
+  return vi.mocked(deps.post).mock.calls[0][1]
+}
+
+function fieldOf(p: DiscordPayload, name: string): string | undefined {
+  return p.embeds[0].fields.find((f) => f.name === name)?.value
+}
+
+describe('runDiscordSummary', () => {
+  it('skips a day with no TAIEX row without touching the webhook', async () => {
+    const deps = summaryDeps({ loadMarketFile: vi.fn(async () => ({ days: [{ ...MARKET_DAY_0916, date: '2026-09-15' }] })) })
+    const out = await runDiscordSummary(deps, 'brief')
+    expect(out).toEqual({ kind: 'skipped', reason: 'no-market-day' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'brief', out)
+    expect(deps.loadWebhookUrl).not.toHaveBeenCalled()
+    expect(deps.claimSend).not.toHaveBeenCalled()
+    expect(deps.loadIndex).not.toHaveBeenCalled()
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('treats an unreadable market file as no market day', async () => {
+    const deps = summaryDeps({ loadMarketFile: vi.fn(async () => { throw new Error('storage down') }) })
+    expect(await runDiscordSummary(deps, 'brief')).toEqual({ kind: 'skipped', reason: 'no-market-day' })
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('skips when no webhook is configured', async () => {
+    const deps = summaryDeps({ loadWebhookUrl: vi.fn(async () => null) })
+    const out = await runDiscordSummary(deps, 'full')
+    expect(out).toEqual({ kind: 'skipped', reason: 'no-webhook' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'full', out)
+    expect(deps.claimSend).not.toHaveBeenCalled()
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when the day and edition are already claimed', async () => {
+    const deps = summaryDeps({ claimSend: vi.fn(async () => false) })
+    expect(await runDiscordSummary(deps, 'brief')).toEqual({ kind: 'skipped', reason: 'already-sent' })
+    expect(deps.claimSend).toHaveBeenCalledWith('2026-09-16', 'brief')
+    expect(deps.post).not.toHaveBeenCalled()
+    expect(deps.finishSend).not.toHaveBeenCalled()
+  })
+
+  it('sends the brief edition without loading macro or margin', async () => {
+    const deps = summaryDeps()
+    const out = await runDiscordSummary(deps, 'brief')
+    expect(out).toEqual({ kind: 'sent', httpStatus: 204 })
+    expect(deps.loadMacro).not.toHaveBeenCalled()
+    expect(deps.loadMargin).not.toHaveBeenCalled()
+    expect(deps.loadIndex).toHaveBeenCalledTimes(8)
+    expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
+    const p = posted(deps)
+    expect(p.embeds[0].title).toBe('📊 台股盤後快報 09/16(三)')
+    expect(p.embeds[0].timestamp).toBe(BRIEF_AT.toISOString())
+    expect(fieldOf(p, '匯率')).toBe('USD/TWD 31.773 (+0.056)')
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'brief', out)
+    expect(deps.log).not.toHaveBeenCalled()
+  })
+
+  it('uses completed closes and marks a failed index as missing', async () => {
+    const deps = summaryDeps()
+    await runDiscordSummary(deps, 'brief')
+    const lines = fieldOf(posted(deps), '國際指數（最近收盤）')!.split('\n')
+    expect(lines[0]).toBe('日經225 63,923.00 +0.69% 09/16')
+    expect(lines[1]).toBe('KOSPI 暫無資料')
+    expect(lines[4]).toBe('S&P 500 7,551.81 -0.45% 09/16')
+  })
+
+  it('treats a failed fx load as missing', async () => {
+    const deps = summaryDeps({ loadUsdTwd: vi.fn(async () => { throw new Error('x') }) })
+    await runDiscordSummary(deps, 'brief')
+    expect(fieldOf(posted(deps), '匯率')).toBe('暫無資料')
+  })
+
+  it('sends the full edition with margin and macro', async () => {
+    const deps = summaryDeps({ now: vi.fn(() => FULL_AT) })
+    const out = await runDiscordSummary(deps, 'full')
+    expect(out).toEqual({ kind: 'sent', httpStatus: 204 })
+    expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
+    const p = posted(deps)
+    expect(p.embeds[0].title).toBe('📋 台股盤後完整版 09/16(三)')
+    expect(fieldOf(p, '融資融券')).toBe(
+      '融資 9,248,877 張 (+58,366)\n融資金額 5,861.7 億 (+39.3億)\n融券 197,048 張 (-1,004)',
+    )
+    expect(fieldOf(p, '美國總經')?.split('\n')[0]).toBe('核心 CPI 2.47% → 2.45%（2026-08）')
+  })
+
+  it('refuses margin totals dated another day', async () => {
+    const deps = summaryDeps({
+      now: vi.fn(() => FULL_AT),
+      loadMargin: vi.fn(async () => ({ ...MARGIN_MS_0916, date: '20260915' })),
+    })
+    await runDiscordSummary(deps, 'full')
+    expect(fieldOf(posted(deps), '融資融券')).toBe('尚未公布')
+  })
+
+  it('treats unpublished or failed margin and macro as missing', async () => {
+    const deps = summaryDeps({
+      now: vi.fn(() => FULL_AT),
+      loadMargin: vi.fn(async () => { throw new Error('twse down') }),
+      loadMacro: vi.fn(async () => { throw new Error('storage down') }),
+    })
+    expect((await runDiscordSummary(deps, 'full')).kind).toBe('sent')
+    const p = posted(deps)
+    expect(fieldOf(p, '融資融券')).toBe('尚未公布')
+    expect(fieldOf(p, '美國總經')).toBe('暫無資料')
+  })
+
+  it('records a failed post and logs it without the URL', async () => {
+    const deps = summaryDeps({
+      post: vi.fn(async (): Promise<DiscordSendResult> => ({ ok: false, httpStatus: 404, reason: 'webhook-gone' })),
+    })
+    const out = await runDiscordSummary(deps, 'brief')
+    expect(out).toEqual({ kind: 'failed', httpStatus: 404, reason: 'webhook-gone' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'brief', out)
+    expect(deps.log).toHaveBeenCalledWith({
+      level: 'warn',
+      message: 'discord summary send failed',
+      detail: { status: 404, code: 'webhook-gone', name: 'brief' },
+    })
+    expect(JSON.stringify(vi.mocked(deps.log).mock.calls)).not.toContain(FAKE_TOKEN)
+    expect(JSON.stringify(vi.mocked(deps.finishSend).mock.calls)).not.toContain(FAKE_TOKEN)
+  })
+
+  it('propagates a claim failure', async () => {
+    const deps = summaryDeps({ claimSend: vi.fn(async () => { throw new Error('db down') }) })
+    await expect(runDiscordSummary(deps, 'brief')).rejects.toThrow('db down')
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('uses the Taipei date, not the UTC date', async () => {
+    const deps = summaryDeps({
+      now: vi.fn(() => new Date('2026-09-16T16:30:00Z')), // 2026-09-17 00:30 Taipei
+    })
+    expect(await runDiscordSummary(deps, 'brief')).toEqual({ kind: 'skipped', reason: 'no-market-day' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-17', 'brief', expect.anything())
+  })
+})
+
+const RECENT: SendLogRow[] = [
+  { taipeiYmd: '2026-09-16', edition: 'brief', status: 'sent', httpStatus: 204, reason: null, at: '2026-09-16T09:05:02Z' },
+]
+
+function adminDeps(initial: string | null = null) {
+  let stored: { url: string; updatedAt: string } | null = initial
+    ? { url: initial, updatedAt: '2026-09-15T01:00:00.000Z' }
+    : null
+  const deps = {
+    now: vi.fn(() => BRIEF_AT),
+    readWebhook: vi.fn(async () => stored),
+    writeWebhook: vi.fn(async (url: string) => {
+      stored = { url, updatedAt: BRIEF_AT.toISOString() }
+    }),
+    deleteWebhook: vi.fn(async () => {
+      stored = null
+    }),
+    recentSends: vi.fn(async () => RECENT),
+    finishSend: vi.fn(async (_ymd: string, _edition: string, _outcome: RunOutcome) => {}),
+    post: vi.fn(async (): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
+  } satisfies WebhookAdminDeps
+  return deps
+}
+
+describe('runWebhookOp', () => {
+  it.each([
+    ['null', null],
+    ['string', 'get'],
+    ['array', ['get']],
+    ['no op', {}],
+    ['unknown op', { op: 'delete' }],
+  ])('rejects %s input', async (_name, body) => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    expect(await runWebhookOp(deps, body)).toEqual({ ok: false, error: 'bad-request' })
+    expect(deps.writeWebhook).not.toHaveBeenCalled()
+    expect(deps.deleteWebhook).not.toHaveBeenCalled()
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
+  it('reports an unconfigured webhook', async () => {
+    const deps = adminDeps()
+    expect(await runWebhookOp(deps, { op: 'get' })).toEqual({
+      ok: true,
+      status: { configured: false, last4: null, updatedAt: null, recent: RECENT },
+    })
+    expect(deps.recentSends).toHaveBeenCalledWith(10)
+  })
+
+  it('reports a configured webhook by its last four characters only', async () => {
+    const out = await runWebhookOp(adminDeps(FAKE_WEBHOOK), { op: 'get' })
+    expect(out).toEqual({
+      ok: true,
+      status: { configured: true, last4: 'Wxyz', updatedAt: '2026-09-15T01:00:00.000Z', recent: RECENT },
+    })
+    expect(JSON.stringify(out)).not.toContain(FAKE_TOKEN)
+  })
+
+  it.each([
+    ['missing url', { op: 'set' }],
+    ['non-string url', { op: 'set', url: 42 }],
+    ['foreign url', { op: 'set', url: 'https://example.com/hook' }],
+  ])('refuses to store a %s', async (_name, body) => {
+    const deps = adminDeps()
+    expect(await runWebhookOp(deps, body)).toEqual({ ok: false, error: 'invalid-url' })
+    expect(deps.writeWebhook).not.toHaveBeenCalled()
+  })
+
+  it('stores a trimmed valid URL and returns only its status', async () => {
+    const deps = adminDeps()
+    const out = await runWebhookOp(deps, { op: 'set', url: `  ${FAKE_WEBHOOK}\n` })
+    expect(deps.writeWebhook).toHaveBeenCalledWith(FAKE_WEBHOOK)
+    expect(out).toEqual({
+      ok: true,
+      status: { configured: true, last4: 'Wxyz', updatedAt: BRIEF_AT.toISOString(), recent: RECENT },
+    })
+    expect(JSON.stringify(out)).not.toContain(FAKE_TOKEN)
+  })
+
+  it('clears the webhook', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    const out = await runWebhookOp(deps, { op: 'clear' })
+    expect(deps.deleteWebhook).toHaveBeenCalledTimes(1)
+    expect(out).toMatchObject({ ok: true, status: { configured: false, last4: null } })
+  })
+
+  it('refuses a test send without a webhook', async () => {
+    const deps = adminDeps()
+    expect(await runWebhookOp(deps, { op: 'test' })).toEqual({ ok: false, error: 'not-configured' })
+    expect(deps.post).not.toHaveBeenCalled()
+    expect(deps.finishSend).not.toHaveBeenCalled()
+  })
+
+  it('sends a test message and records it', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    const out = await runWebhookOp(deps, { op: 'test' })
+    expect(deps.post).toHaveBeenCalledTimes(1)
+    const [url, payload] = deps.post.mock.calls[0] as unknown as [string, DiscordPayload]
+    expect(url).toBe(FAKE_WEBHOOK)
+    expect(payload.embeds[0].title).toBe('🔔 Discord 連線測試')
+    expect(payload.embeds[0].timestamp).toBe(BRIEF_AT.toISOString())
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', { kind: 'sent', httpStatus: 204 })
+    expect(out).toMatchObject({ ok: true, test: { ok: true, httpStatus: 204 }, status: { configured: true } })
+    expect(JSON.stringify(out)).not.toContain(FAKE_TOKEN)
+  })
+
+  it('records a failed test send', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    deps.post.mockResolvedValueOnce({ ok: false, httpStatus: 404, reason: 'webhook-gone' })
+    const out = await runWebhookOp(deps, { op: 'test' })
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', {
+      kind: 'failed',
+      httpStatus: 404,
+      reason: 'webhook-gone',
+    })
+    expect(out).toMatchObject({ ok: true, test: { ok: false, httpStatus: 404, reason: 'webhook-gone' } })
+  })
+})

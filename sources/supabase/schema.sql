@@ -1236,6 +1236,98 @@ SELECT cron.schedule(
 
 
 -- =========================================================
+-- 13. Discord daily market summary (Task 165 Phase 1)
+-- =========================================================
+--
+--   Market-wide after-hours summary posted to one admin-configured webhook, twice per TW
+--   trading day (17:05 brief, 21:30 full). No per-user data of any kind (a per-user holdings
+--   summary is Phase 2, out of scope here).
+--
+--   `app_secrets` is server-only: RLS is on with NO policies, so only the service-role
+--   client (used by stock-report's Edge Function) can read or write it. The browser never
+--   receives the webhook URL back — see src/services/discordWebhook.ts / DiscordSection.tsx.
+--
+--   `discord_send_log` records every send attempt (claimed → sent/failed, or skipped) and
+--   backs `runDiscordSummary`'s exactly-once claim per day+edition. `failed` / `skipped`
+--   rows do not block a retry — only `claimed` / `sent` do, via the partial unique index.
+--   `test` sends (admin console "測試發送") are excluded from that index so they can repeat
+--   freely.
+
+CREATE TABLE IF NOT EXISTS app_secrets (
+    name TEXT PRIMARY KEY CHECK (name IN ('discord_webhook_url')),
+    value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE app_secrets ENABLE ROW LEVEL SECURITY;
+-- No policies on purpose: only service_role (which bypasses RLS) may read or write.
+REVOKE ALL ON public.app_secrets FROM anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS discord_send_log (
+    id BIGSERIAL PRIMARY KEY,
+    taipei_ymd TEXT NOT NULL,
+    edition TEXT NOT NULL CHECK (edition IN ('brief', 'full', 'test')),
+    status TEXT NOT NULL CHECK (status IN ('claimed', 'sent', 'skipped', 'failed')),
+    http_status INT,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE discord_send_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.discord_send_log FROM anon, authenticated;
+-- One real send per day and edition. `failed` / `skipped` rows do not block a retry.
+CREATE UNIQUE INDEX IF NOT EXISTS discord_send_log_once
+    ON discord_send_log (taipei_ymd, edition)
+    WHERE edition <> 'test' AND status IN ('claimed', 'sent');
+
+-- ⚠️ Same placeholder mines as §6c/§9/§10. Live: clone an existing job's command (see §6c) so
+-- the embedded CRON_SECRET is never read back out — these are brand-new jobs, so a fresh
+-- `cron.schedule` (not unschedule+schedule of an existing one) is correct here.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'discord-summary-brief') THEN
+    PERFORM cron.unschedule('discord-summary-brief');
+  END IF;
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'discord-summary-full') THEN
+    PERFORM cron.unschedule('discord-summary-full');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'discord-summary-brief',
+  -- Taipei 17:05 (UTC 09:05), weekdays.
+  '5 9 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"discord-summary","edition":"brief"}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'discord-summary-full',
+  -- Taipei 21:30 (UTC 13:30), weekdays.
+  '30 13 * * 1-5',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-cron-secret', '<CRON_SECRET>'
+               ),
+    body    := '{"action":"discord-summary","edition":"full"}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+
+-- =========================================================
 -- 6e. HARD GATE — this script FAILS if a placeholder survived
 -- =========================================================
 --

@@ -2,7 +2,7 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-15 15:29:00 Asia/Taipei
+- Timestamp: 2026-09-17 13:51:06 Asia/Taipei
 
 ---
 
@@ -20,6 +20,19 @@
   - Known and not done: Task 144 的資源用量監控與日誌檢視（Features 2, 3）；Task 85 只有 `borrow` 一個視窗完成重調；`成交金額` / `昨量` 仍缺資料來源；end-to-end Playwright run for the 融券 flow；`.inst-matrix tfoot td` hardcoded white overlay inverted under light theme。
 
 ## 📋 Active Tasks
+
+### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
+- **Status**: 🔄 IN PROGRESS — Phase 1 code complete on the `dev` working tree (uncommitted, not deployed)
+- **Agent**: Claude
+- **Timestamp**: 2026-09-17 13:51:06 Asia/Taipei
+- **Spec**: docs/agent/specs/discord-daily-summary.md
+- **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 holdings summary capped at percent + ticker, per-user opt-in, off by default.
+1. Commit on `dev` + version bump (`versioning` skill) —— ⏳ awaiting user
+2. Apply `schema.sql` §13 on DEV (2 tables + 2 cron jobs; clone an existing job's command so `CRON_SECRET` is never read), then `verify_setup()` —— ⏳ awaiting user OK
+3. Deploy `stock-report` to DEV with `--no-verify-jwt`; confirm `ezbr_sha256` changed —— ⏳ awaiting user OK
+4. Set the webhook in the DEV admin console, run 測試發送, watch one real 17:05 and 21:30 round —— ⏳
+5. PROD (merge `main`, DDL, deploy) after explicit OK —— ⏳
+6. Phase 2: per-user holdings summary (opt-in, percent + ticker at most, own webhook) —— ⏳ not started; needs its own design round
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
 - **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**

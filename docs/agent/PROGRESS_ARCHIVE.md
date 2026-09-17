@@ -5,6 +5,22 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-16 09:26:00 Asia/Taipei (0.9.56-dev.4, 加權指數看板解耦與走勢圖恆常渲染)
+
+**TwMarketSection 架構解耦**：
+- 移除原本無盤後歷史檔案時的早退判斷，將 `<TwIndexToday>` 提到判斷前獨立常態渲染；下方歷史區塊保留無資料提示。
+
+**TwIndexToday 走勢圖恆常渲染**：
+- 移除條件限制，改為永遠渲染 `<IntradayChart>`（比照 `IndexDetail`），保持 7 區間按鈕隨時可點選。
+
+**即時報價 Fallback**：
+- 當 `todaySeries === null` 時，支援透過外部傳入之 `quote` 或 `fetchIndexQuotes(['^TWII'])` 補齊最新價格與開高低數值。
+
+**驗證**：
+- `TwIndexToday.test.tsx` 新增走勢圖恆常渲染、quote prop 填補以及 `fetchIndexQuotes` fallback 測試。
+- `TwMarketSection.test.tsx` 新增無盤後檔案時頂部 `TwIndexToday` 依然獨立渲染之測試。
+- 129 檔測試檔 / 2,029 條測試全數通過；`npm run build` 與 `npm run lint` 皆 exit 0。
+
 ## 📅 Log: 2026-09-15 21:50:00 Asia/Taipei (0.9.56-dev.3, 總體經濟次分頁與台股下鑽整合)
 
 **總體經濟次分頁導航調整**：

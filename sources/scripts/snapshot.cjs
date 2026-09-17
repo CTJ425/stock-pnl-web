@@ -15,7 +15,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
-const { AUTH_EXCLUDE_TABLES, CACHE_TABLES, snapshotDirName, buildManifest, cronRowsToPlan } = require('./lib/snapshotPlan.cjs')
+const { AUTH_EXCLUDE_TABLES, dataExcludeTables, snapshotDirName, buildManifest, cronRowsToPlan } = require('./lib/snapshotPlan.cjs')
 
 // `supabase db query --linked` recognizes cwd, not "the linked project you think" (supabase-ops
 // skill). Every supabase invocation below runs with this fixed cwd so it never inherits a stale
@@ -97,19 +97,19 @@ function copySetupSql(dir) {
 }
 
 function dumpDataPublic(dir, withCache) {
+  const excludeTables = dataExcludeTables(withCache)
   if (withCache) {
     console.log('Dumping data (public)... [cache tables INCLUDED, --with-cache]')
-    runSupabase(['db', 'dump', '--linked', '--data-only', '--schema', 'public', '-f', path.join(dir, 'data-public.sql')])
   } else {
     console.log('Dumping data (public)... [cache tables EXCLUDED]')
-    console.log(`  skipping: ${CACHE_TABLES.join(', ')}`)
-    const excludeArgs = CACHE_TABLES.flatMap((table) => ['-x', table])
-    runSupabase([
-      'db', 'dump', '--linked', '--data-only', '--schema', 'public',
-      ...excludeArgs,
-      '-f', path.join(dir, 'data-public.sql'),
-    ])
   }
+  console.log(`  skipping: ${excludeTables.join(', ')}`)
+  const excludeArgs = excludeTables.flatMap((table) => ['-x', table])
+  runSupabase([
+    'db', 'dump', '--linked', '--data-only', '--schema', 'public',
+    ...excludeArgs,
+    '-f', path.join(dir, 'data-public.sql'),
+  ])
 }
 
 function dumpDataAuth(dir) {
