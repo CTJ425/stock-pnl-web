@@ -1,4 +1,10 @@
 # Completed Task Archive (TASK_ARCHIVE.md)
+
+### Task 165 — completed sub-items (rolled from TASK.md 2026-09-17 14:54:00)
+1. ~~Commit on `dev` + version bump~~ ✅ `0.9.57-dev.1`, commit `c74d371`, pushed to `origin/dev` 2026-09-17 (secret-scanning push protection passed).
+2. ~~Apply `schema.sql` §13 on DEV~~ ✅ one atomic DO block behind the DEV/PROD identity guard; both cron jobs cloned from `market-data-daily` with `replace()`, so `CRON_SECRET` was never read. Structural check: RLS on, 0 policies, no `anon`/`authenticated` privileges, `service_role` read+insert, `discord_send_log_once` present, both jobs on the DEV host with the real secret header, no placeholder, 60 s timeout. `verify_setup()` 10/10 PASS (17 tables, 9 jobs).
+3. ~~Deploy `stock-report` to DEV~~ ✅ v8 → v9, `ezbr_sha256` `11fd4dcd…` → `b8e470f0…`, `verify_jwt=false`, from `c74d371` with `--use-api`. Smoke: `discord-summary` with no / wrong secret → 401; `discord-webhook` without an admin session → 401; next `source-probe` call (06:50 UTC) → 200.
+
 ### Task 163: 交接文件的總體經濟頁描述缺口，與未查完的 SPEC / PLAN 段落
 - **Status**: ✅ DONE (0.9.55)
 - **Agent**: Claude
