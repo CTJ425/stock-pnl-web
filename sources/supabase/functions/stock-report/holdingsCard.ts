@@ -1,0 +1,495 @@
+/**
+ * Per-user holdings aggregation and Discord card payload (Task 165 Phase 2).
+ * Spec: docs/agent/specs/discord-holdings.md §2.3 / §2.4.
+ */
+import { computeLedger, estimateUnrealized, estimateUnrealizedShort, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
+import type { Currency, Market, Transaction } from '../_shared/engine/models.ts'
+import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
+import type { HoldingQuote } from './holdingQuotes.ts'
+
+// Re-stated from src/utils/fees.ts / src/utils/settings.ts (D6 keeps those files untouched;
+// a drift test in edgeConstants.test.mjs asserts these stay equal to the web's exports).
+export const DEFAULT_FEE_RATE = 0.001425
+export const DEFAULT_MIN_FEE_WHOLE = 20
+export const DEFAULT_MIN_FEE_ODD = 1
+
+export interface WorkspaceInput {
+  id: string
+  fee_rate: number | null
+  transactions: Transaction[]
+}
+
+export interface WorkspaceLedger {
+  id: string
+  feeRate: number
+  ledger: Ledger
+}
+
+/** Same rule as `isValidFeeRate` in src/utils/feeSync.ts, re-stated because Edge cannot import src/. */
+function isValidFeeRate(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1
+}
+
+/**
+ * One ledger per workspace — never over the concatenated transactions, or a sell in one
+ * workspace would consume a buy in another.
+ */
+export function buildLedgers(workspaces: WorkspaceInput[]): WorkspaceLedger[] {
+  return workspaces.map((w) => ({
+    id: w.id,
+    feeRate: isValidFeeRate(w.fee_rate) ? w.fee_rate : DEFAULT_FEE_RATE,
+    ledger: computeLedger(w.transactions),
+  }))
+}
+
+/** Every long or short key across every workspace, deduplicated. `ledger.holdings` is
+ * already filtered to `qty > 0 || shortQty > 0`, so no further filtering is needed here. */
+export function heldKeys(ledgers: WorkspaceLedger[]): Array<{ market: Market; ticker: string }> {
+  const seen = new Map<string, { market: Market; ticker: string }>()
+  for (const l of ledgers) {
+    for (const h of l.ledger.holdings) {
+      if (!seen.has(h.key)) seen.set(h.key, { market: h.market, ticker: h.ticker })
+    }
+  }
+  return [...seen.values()]
+}
+
+export interface HoldingRowOut {
+  key: string
+  market: Market
+  ticker: string
+  name: string
+  direction: 'LONG' | 'SHORT'
+  shares: number
+  basis: number
+  close: number | null
+  prevClose: number | null
+  quoteYmd: string | null
+  mktVal: number | null
+  unrealized: number | null
+  returnPct: number | null
+  dayPnl: number | null
+  dayPct: number | null
+}
+
+export interface CurrencySummary {
+  currency: Currency
+  rows: HoldingRowOut[]
+  marketValue: number | null
+  cost: number
+  unrealized: number | null
+  unrealizedPct: number | null
+  shortMarketValue: number | null
+  dayPnl: number | null
+  dayPct: number | null
+  realizedYtd: number
+  missingCount: number
+  newestQuoteYmd: string | null
+}
+
+export interface HoldingsSummary {
+  ymd: string
+  twd: CurrencySummary
+  usd: CurrencySummary
+}
+
+// ── aggregation ──────────────────────────────────────────────────────────────────────
+
+/** Mutable accumulator for one (position key, direction) merged across workspaces. */
+interface RowAcc {
+  key: string
+  market: Market
+  ticker: string
+  name: string
+  direction: 'LONG' | 'SHORT'
+  shares: number
+  basis: number
+  // Same key ⇒ same quote for every workspace holding it, so these are set once, from the
+  // first leg seen, and never re-derived on merge.
+  close: number | null
+  prevClose: number | null
+  quoteYmd: string | null
+  mktVal: number | null
+  unrealized: number | null
+  dayPnl: number | null
+}
+
+function mergeRow(
+  map: Map<string, RowAcc>,
+  h: Holding,
+  direction: 'LONG' | 'SHORT',
+  shares: number,
+  basis: number,
+  close: number | null,
+  prevClose: number | null,
+  quoteYmd: string | null,
+  mktVal: number | null,
+  unrealized: number | null,
+  dayPnl: number | null,
+): void {
+  const mapKey = `${h.key}:${direction}`
+  const existing = map.get(mapKey)
+  if (!existing) {
+    map.set(mapKey, { key: h.key, market: h.market, ticker: h.ticker, name: h.name, direction, shares, basis, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl })
+    return
+  }
+  existing.shares += shares
+  existing.basis += basis
+  existing.mktVal = existing.mktVal != null && mktVal != null ? existing.mktVal + mktVal : null
+  existing.unrealized = existing.unrealized != null && unrealized != null ? existing.unrealized + unrealized : null
+  existing.dayPnl = existing.dayPnl != null && dayPnl != null ? existing.dayPnl + dayPnl : null
+}
+
+/** TWD whole-lot vs odd-lot minimum fee; USD has none. Applied per workspace leg, before merging. */
+function minFeeFor(currency: Currency, legShares: number): number | undefined {
+  if (currency !== 'TWD') return undefined
+  return legShares >= 1000 ? DEFAULT_MIN_FEE_WHOLE : DEFAULT_MIN_FEE_ODD
+}
+
+function sum(nums: number[]): number {
+  return nums.reduce((a, b) => a + b, 0)
+}
+
+/** Quoted LONG rows by mktVal desc, then unquoted LONG, then SHORT (quoted by mktVal desc,
+ * then unquoted); ties by key ascending. */
+function sortRows(rows: HoldingRowOut[]): HoldingRowOut[] {
+  const bucket = (r: HoldingRowOut): 0 | 1 | 2 | 3 => {
+    if (r.direction === 'LONG') return r.mktVal != null ? 0 : 1
+    return r.mktVal != null ? 2 : 3
+  }
+  return [...rows].sort((a, b) => {
+    const diff = bucket(a) - bucket(b)
+    if (diff !== 0) return diff
+    if ((bucket(a) === 0 || bucket(a) === 2) && a.mktVal != null && b.mktVal != null) {
+      const mvDiff = b.mktVal - a.mktVal
+      if (mvDiff !== 0) return mvDiff
+    }
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+  })
+}
+
+function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: number): CurrencySummary {
+  const rows = sortRows(
+    accs.map((a) => ({
+      key: a.key,
+      market: a.market,
+      ticker: a.ticker,
+      name: a.name,
+      direction: a.direction,
+      shares: a.shares,
+      basis: a.basis,
+      close: a.close,
+      prevClose: a.prevClose,
+      quoteYmd: a.quoteYmd,
+      mktVal: a.mktVal,
+      unrealized: a.unrealized,
+      returnPct: a.basis !== 0 && a.unrealized != null ? (a.unrealized / a.basis) * 100 : null,
+      dayPnl: a.dayPnl,
+      dayPct: a.close != null && a.prevClose != null && a.prevClose !== 0 ? ((a.close - a.prevClose) / a.prevClose) * 100 : null,
+    })),
+  )
+
+  const longRows = rows.filter((r) => r.direction === 'LONG')
+  const quotedLong = longRows.filter((r) => r.mktVal != null)
+  const quotedShort = rows.filter((r) => r.direction === 'SHORT' && r.mktVal != null)
+  const quotedAll = rows.filter((r) => r.mktVal != null)
+
+  const marketValue = longRows.length === 0 ? 0 : quotedLong.length === 0 ? null : sum(quotedLong.map((r) => r.mktVal as number))
+  const cost = sum(quotedLong.map((r) => r.basis))
+  const unrealized = quotedAll.length === 0 ? null : sum(quotedAll.map((r) => r.unrealized as number))
+  const unrealizedPct = cost === 0 || unrealized == null ? null : (unrealized / cost) * 100
+  const shortMarketValue = quotedShort.length === 0 ? null : sum(quotedShort.map((r) => r.mktVal as number))
+
+  const dayPnlRows = rows.filter((r) => r.dayPnl != null)
+  const dayPnl = dayPnlRows.length === 0 ? null : sum(dayPnlRows.map((r) => r.dayPnl as number))
+  const dayDenom = sum(longRows.filter((r) => r.prevClose != null).map((r) => (r.prevClose as number) * r.shares))
+  const dayPct = dayDenom === 0 || dayPnl == null ? null : (dayPnl / dayDenom) * 100
+
+  const missingCount = rows.filter((r) => r.close == null).length
+  const quoteYmds = rows.filter((r): r is HoldingRowOut & { quoteYmd: string } => r.quoteYmd != null).map((r) => r.quoteYmd)
+  const newestQuoteYmd = quoteYmds.length === 0 ? null : quoteYmds.reduce((a, b) => (a > b ? a : b))
+
+  return { currency, rows, marketValue, cost, unrealized, unrealizedPct, shortMarketValue, dayPnl, dayPct, realizedYtd, missingCount, newestQuoteYmd }
+}
+
+/**
+ * Merges every workspace's holdings by position key + direction, quotes and all. No
+ * currency conversion: TWD and USD are separate summaries.
+ */
+export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string, HoldingQuote | null>, ymd: string): HoldingsSummary {
+  const twdAcc = new Map<string, RowAcc>()
+  const usdAcc = new Map<string, RowAcc>()
+
+  for (const l of ledgers) {
+    for (const h of l.ledger.holdings) {
+      const quote = quotes.get(h.key) ?? null
+      const close = quote?.close ?? null
+      const prevClose = quote?.prevClose ?? null
+      const quoteYmd = quote?.ymd ?? null
+      const map = h.currency === 'TWD' ? twdAcc : usdAcc
+
+      if (h.qty > 0) {
+        const minFee = minFeeFor(h.currency, h.qty)
+        const mktVal = close != null ? close * h.qty : null
+        const unrealized = close != null ? estimateUnrealized(h, close, l.feeRate, minFee) : null
+        const dayPnl = close != null && prevClose != null ? h.qty * (close - prevClose) : null
+        mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl)
+      }
+      if (h.shortQty > 0) {
+        const minFee = minFeeFor(h.currency, h.shortQty)
+        const mktVal = close != null ? close * h.shortQty : null
+        const unrealized = close != null ? estimateUnrealizedShort(h, close, l.feeRate, minFee) : null
+        const dayPnl = close != null && prevClose != null ? -h.shortQty * (close - prevClose) : null
+        mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl)
+      }
+    }
+  }
+
+  const year = Number(ymd.slice(0, 4))
+  let realizedTwd = 0
+  let realizedUsd = 0
+  for (const l of ledgers) {
+    const y = l.ledger.yearly[year]
+    realizedTwd += y?.realizedTw ?? 0
+    realizedUsd += y?.realizedUs ?? 0
+  }
+
+  return {
+    ymd,
+    twd: buildCurrencySummary([...twdAcc.values()], 'TWD', realizedTwd),
+    usd: buildCurrencySummary([...usdAcc.values()], 'USD', realizedUsd),
+  }
+}
+
+// ── payload ──────────────────────────────────────────────────────────────────────────
+
+const RED = 0xe5484d
+const GREEN = 0x30a46c
+const GREY = 0x8b8d98
+const WEEKDAY_CHARS = '日一二三四五六'
+const BUDGET = 2800
+
+/**
+ * `discordSummary.ts`'s width helpers are module-private and D6 freezes that file, so this
+ * carries its own copy — same WIDE_RANGES and rules (VS16/ZWJ 0, wide/emoji 2, else 1).
+ */
+const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f],
+  [0x2e80, 0x303e],
+  [0x3041, 0x33ff],
+  [0x3400, 0x4dbf],
+  [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe30, 0xfe4f],
+  [0xff00, 0xff60],
+  [0xffe0, 0xffe6],
+  [0x1f300, 0x1faff],
+  [0x2600, 0x27bf],
+]
+
+function dispWidth(s: string): number {
+  let total = 0
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!
+    if (cp === 0xfe0f || cp === 0x200d) continue
+    total += WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
+  }
+  return total
+}
+
+function padEndW(s: string, width: number): string {
+  return s + ' '.repeat(Math.max(0, width - dispWidth(s)))
+}
+
+function padStartW(s: string, width: number): string {
+  return ' '.repeat(Math.max(0, width - dispWidth(s))) + s
+}
+
+function fence(lines: string[]): string {
+  return '```\n' + lines.join('\n') + '\n```'
+}
+
+function signOf(n: number, decimals: number): '' | '+' | '-' {
+  const rounded = Number(n.toFixed(decimals))
+  if (rounded > 0) return '+'
+  if (rounded < 0) return '-'
+  return ''
+}
+
+function fmtAbs(n: number, decimals: number): string {
+  return Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+
+function fmtSigned(n: number, decimals: number): string {
+  return signOf(n, decimals) + fmtAbs(n, decimals)
+}
+
+function fmtOrDash(n: number | null, decimals: number): string {
+  return n == null ? '--' : fmtAbs(n, decimals)
+}
+
+function fmtSignedOrDash(n: number | null, decimals: number): string {
+  return n == null ? '--' : fmtSigned(n, decimals)
+}
+
+function pctSigned(n: number | null): string {
+  return n == null ? '--' : `${fmtSigned(n, 2)}%`
+}
+
+/** Up to two decimals, trailing zeros trimmed, thousands separators — `toLocaleString` with a
+ * `minimumFractionDigits` of 0 trims for us. */
+function priceTwd(n: number | null): string {
+  return n == null ? '--' : n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function priceUsd(n: number | null): string {
+  return n == null ? '--' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** Up to four decimals, trailing zeros trimmed, thousands separators. */
+function sharesStr(n: number): string {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
+}
+
+function dayPctText(pct: number | null): string {
+  if (pct == null) return '--'
+  const rounded = Number(pct.toFixed(2))
+  const arrow = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '─'
+  return `${arrow}${Math.abs(rounded).toFixed(2)}%`
+}
+
+function titleDate(ymd: string): string {
+  const [, m, d] = ymd.split('-')
+  return `${m}/${d}`
+}
+
+function weekdayChar(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return WEEKDAY_CHARS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+}
+
+function colorFor(unrealized: number | null, decimals: number): number {
+  if (unrealized == null) return GREY
+  const sign = signOf(unrealized, decimals)
+  return sign === '+' ? RED : sign === '-' ? GREEN : GREY
+}
+
+function twdTitle(cur: CurrencySummary, ymd: string): string {
+  if (cur.newestQuoteYmd == null) return '台股持股・無報價'
+  if (cur.newestQuoteYmd < ymd) return `台股持股・⚠️ ${titleDate(cur.newestQuoteYmd)} 收盤・非今日`
+  return `台股持股・${titleDate(cur.newestQuoteYmd)} 收盤`
+}
+
+function usdTitle(cur: CurrencySummary): string {
+  if (cur.newestQuoteYmd == null) return '美股持股・無報價'
+  return `美股持股・美東 ${titleDate(cur.newestQuoteYmd)} 收盤`
+}
+
+/** Cuts a label to display width ≤ 26 and appends `…` when it would otherwise exceed 27. */
+function truncateLabel(label: string): string {
+  if (dispWidth(label) <= 27) return label
+  let width = 0
+  let result = ''
+  for (const ch of label) {
+    const cp = ch.codePointAt(0)!
+    const w = cp === 0xfe0f || cp === 0x200d ? 0 : WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
+    if (width + w > 26) break
+    result += ch
+    width += w
+  }
+  return `${result}…`
+}
+
+function kpiLines(cur: CurrencySummary, decimals: number): string[] {
+  const hasShort = cur.rows.some((r) => r.direction === 'SHORT')
+  const rows: Array<{ label: string; amount: string; pct?: string }> = [
+    { label: '市值', amount: fmtOrDash(cur.marketValue, decimals) },
+    { label: '成本', amount: fmtOrDash(cur.cost, decimals) },
+    { label: '未實現', amount: fmtSignedOrDash(cur.unrealized, decimals), pct: pctSigned(cur.unrealizedPct) },
+    { label: '今日', amount: fmtSignedOrDash(cur.dayPnl, decimals), pct: pctSigned(cur.dayPct) },
+    { label: '今年已實現', amount: fmtSigned(cur.realizedYtd, decimals) },
+  ]
+  if (hasShort) rows.push({ label: '空單市值', amount: fmtOrDash(cur.shortMarketValue, decimals) })
+  return rows.map((r) => padEndW(r.label, 10) + padStartW(r.amount, 12) + (r.pct === undefined ? '' : ` ${padStartW(r.pct, 8)}`))
+}
+
+function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): [string, string] {
+  const stale = r.quoteYmd != null && newestQuoteYmd != null && r.quoteYmd < newestQuoteYmd
+  const rawLabel = `${stale ? '⚠️' : ''}${r.direction === 'SHORT' ? '空 ' : ''}${r.ticker} ${r.name}`
+  const label = truncateLabel(rawLabel)
+  const line1 = padEndW(label, 28) + padStartW(dayPctText(r.dayPct), 8)
+
+  const priceStr = currency === 'TWD' ? priceTwd(r.close) : priceUsd(r.close)
+  const sharesPrice = `${sharesStr(r.shares)}股 ${priceStr}`
+  const line2 = `  ${padEndW(sharesPrice, 15)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 10)} ${padStartW(pctSigned(r.returnPct), 8)}`
+  return [line1, line2]
+}
+
+/** Rows fence, dropping rows from the end until the whole description fits the 2,800-char budget. */
+function buildDescription(kpi: string[], allRowLines: string[][]): string {
+  const kpiFence = fence(kpi)
+  let kept = allRowLines.length
+  while (kept > 0) {
+    const shown = allRowLines.slice(0, kept).flat()
+    const dropped = allRowLines.length - kept
+    const lines = dropped > 0 ? [...shown, `…另 ${dropped} 檔，完整明細請見網站`] : shown
+    const desc = `${kpiFence}\n${fence(lines)}`
+    if (desc.length <= BUDGET || kept === 1) return desc
+    kept--
+  }
+  return `${kpiFence}\n${fence([])}`
+}
+
+function footerText(missingCount: number): string {
+  const base = '資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本'
+  return missingCount > 0 ? `${base}｜${missingCount} 檔無報價，未計入合計` : base
+}
+
+function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, generatedAt: string): DiscordEmbed {
+  const decimals = currency === 'TWD' ? 0 : 2
+  const title = currency === 'TWD' ? twdTitle(cur, ymd) : usdTitle(cur)
+  const kpi = kpiLines(cur, decimals)
+  const rows = cur.rows.map((r) => rowLines(r, cur.newestQuoteYmd, currency, decimals))
+  return {
+    title,
+    description: buildDescription(kpi, rows),
+    color: colorFor(cur.unrealized, decimals),
+    footer: { text: footerText(cur.missingCount) },
+    timestamp: generatedAt,
+  }
+}
+
+/** `null` when neither currency has a row to show — the caller logs `skipped / no-holdings`. */
+export function buildHoldingsPayload(summary: HoldingsSummary, opts: { generatedAt: string; preview: boolean }): DiscordPayload | null {
+  const embeds: DiscordEmbed[] = []
+  if (summary.twd.rows.length > 0) embeds.push(buildEmbed(summary.twd, 'TWD', summary.ymd, opts.generatedAt))
+  if (summary.usd.rows.length > 0) embeds.push(buildEmbed(summary.usd, 'USD', summary.ymd, opts.generatedAt))
+  if (embeds.length === 0) return null
+
+  const base = `📒 持股日報 ${titleDate(summary.ymd)}（${weekdayChar(summary.ymd)}）`
+  return {
+    username: '持股日報',
+    content: opts.preview ? `【預覽】${base}` : base,
+    allowed_mentions: { parse: [] },
+    embeds,
+  }
+}
+
+/** Its own connection test — not `discordSummary.ts`'s `buildTestPayload`, whose text and
+ * username describe the site-wide summary. */
+export function buildHoldingsTestPayload(generatedAt: string): DiscordPayload {
+  return {
+    username: '持股日報',
+    allowed_mentions: { parse: [] },
+    embeds: [
+      {
+        title: '🔔 Discord 連線測試',
+        fields: [{ name: '狀態', value: '連線正常，持股日報會發送到這個頻道。', inline: false }],
+        footer: { text: '資料來源：Yahoo Finance' },
+        timestamp: generatedAt,
+      },
+    ],
+  }
+}
