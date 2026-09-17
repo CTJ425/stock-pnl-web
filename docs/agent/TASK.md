@@ -22,15 +22,13 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — Phase 1 code complete on the `dev` working tree (uncommitted, not deployed)
+- **Status**: 🔄 IN PROGRESS — 0.9.57-dev.1 pushed to `dev` (`c74d371`); DEV schema, cron and Edge deployed and verified; waiting for the webhook to be set
 - **Agent**: Claude
-- **Timestamp**: 2026-09-17 13:51:06 Asia/Taipei
+- **Timestamp**: 2026-09-17 14:54:00 Asia/Taipei
+- **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
 - **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 holdings summary capped at percent + ticker, per-user opt-in, off by default.
-1. Commit on `dev` + version bump (`versioning` skill) —— ⏳ awaiting user
-2. Apply `schema.sql` §13 on DEV (2 tables + 2 cron jobs; clone an existing job's command so `CRON_SECRET` is never read), then `verify_setup()` —— ⏳ awaiting user OK
-3. Deploy `stock-report` to DEV with `--no-verify-jwt`; confirm `ezbr_sha256` changed —— ⏳ awaiting user OK
-4. Set the webhook in the DEV admin console, run 測試發送, watch one real 17:05 and 21:30 round —— ⏳
+4. Set the webhook in the DEV admin console (DEV has no hosted frontend — run `npm run dev` locally), run 測試發送, watch one real 17:05 and 21:30 round. Until a webhook is set, each scheduled run records a `no-webhook` skip in `discord_send_log` —— ⏳ user
 5. PROD (merge `main`, DDL, deploy) after explicit OK —— ⏳
 6. Phase 2: per-user holdings summary (opt-in, percent + ticker at most, own webhook) —— ⏳ not started; needs its own design round
 
