@@ -2,8 +2,8 @@
 
 - Status: **APPROVED 2026-09-17** (with D6). Step 2a done in 0.9.58-dev.1; 2b next.
 - Written: 2026-09-17 16:57:02 Asia/Taipei
-- Parent: `docs/agent/specs/discord-daily-summary.md` (Phase 1). Every Phase 1 building block named
-  below is reused, not copied.
+- Parent: `docs/agent/specs/discord-daily-summary.md` (Phase 1). Exported Phase 1 building blocks are
+  imported; module-private ones that D6 freezes are re-stated (§2.2, §2.4).
 
 ## 0. Decisions (user, 2026-09-17)
 
@@ -79,15 +79,27 @@ editing it, so Edge gets a **generated copy** under `_shared/` (bundling of `_sh
 
 Yahoo chart, one request per unique position key per run, memoized across users.
 
-- `lastCompletedBar(resp, nowSec): { ymd: string; close: number; prevClose: number | null } | null`
-  lives in `holdingQuotes.ts`. It applies the same completed-session rule as `lastCompletedClose`
-  (`globalIndexClose.ts:47-78`), which D6 leaves untouched — the logic is re-stated, not shared.
-  `ymd` is `YYYY-MM-DD` in the exchange timezone (`meta.gmtoffset`, as `twDaily.ts:95`). Types and
-  `indexChartUrl` may be imported from `globalIndexClose.ts`.
-- TPE: try `${ticker}.TW`, then `${ticker}.TWO` (as `twDaily.ts:69`). US: `${ticker}`.
-- URL: `indexChartUrl(symbol)` (`range=5d`).
-- `createQuoteCache(fetchFn, nowSec)` → `get(market, ticker): Promise<HoldingQuote | null>`; a
-  second `get` for the same key returns the same promise. Network or parse failure → `null`, never throws.
+```ts
+export interface HoldingQuote { ymd: string; close: number; prevClose: number | null }
+export function lastCompletedBar(resp: IndexChartResponse, nowSec: number): HoldingQuote | null
+export function quoteSymbols(market: Market, ticker: string): string[]
+export type ChartFetch = (url: string) => Promise<unknown>   // parsed JSON; rejects on network / non-2xx
+export function createQuoteCache(fetchJson: ChartFetch, nowSec: number):
+  { get(market: Market, ticker: string): Promise<HoldingQuote | null> }
+```
+
+- `lastCompletedBar`: bars = timestamps whose close is a finite number, sorted by time. When
+  `meta.currentTradingPeriod.regular` has numeric `start`/`end`, `nowSec < end` and the last bar's
+  time `>= start`, that last bar is dropped (session still open) — the rule of `lastCompletedClose`
+  (`globalIndexClose.ts:47-78`), re-stated because D6 leaves that file untouched. `ymd =
+  tradingDateOf(t, meta.gmtoffset ?? 0)` (`twDaily.ts`). `prevClose` = the previous bar's close,
+  `null` when there is none. No bars → `null`.
+- `quoteSymbols`: TPE → `[`${ticker}.TW`, `${ticker}.TWO`]`; US → `[ticker]`.
+- `get`: tries each symbol in order with `fetchJson(indexChartUrl(symbol))`; a rejection or a
+  `null` bar moves to the next symbol; all fail → `null`. Never throws. A second `get` for the same
+  `positionKey` returns the same promise (one fetch sequence per key per run).
+- Imports allowed: `indexChartUrl`, `IndexChartResponse` from `globalIndexClose.ts`;
+  `tradingDateOf` from `twDaily.ts`; `Market`, `positionKey` from `../_shared/engine/models.ts`.
 
 Not `price_cache` (only refreshed when someone views a ticker) and not the `stock-price` HTTP
 endpoint (`verify_jwt=true`, meant for browsers).
@@ -107,6 +119,34 @@ export function aggregateHoldings(
   quotes: Map<string, HoldingQuote | null>,   // key = positionKey
   ymd: string,                                // Taipei YYYY-MM-DD
 ): HoldingsSummary
+
+export interface HoldingRowOut {
+  key: string; market: Market; ticker: string; name: string   // name from the first workspace holding it
+  direction: 'LONG' | 'SHORT'
+  shares: number            // LONG Σqty, SHORT ΣshortQty
+  basis: number             // LONG Σcost, SHORT ΣshortProceeds
+  close: number | null; prevClose: number | null; quoteYmd: string | null
+  mktVal: number | null     // close × shares
+  unrealized: number | null
+  returnPct: number | null  // Σunrealized / basis × 100; null when basis is 0 or no quote
+  dayPnl: number | null     // LONG shares × (close − prevClose); SHORT −shares × (close − prevClose)
+  dayPct: number | null     // (close − prevClose) / prevClose × 100
+}
+export interface CurrencySummary {
+  currency: Currency
+  rows: HoldingRowOut[]            // sorted, see §2.4
+  marketValue: number | null       // Σ mktVal of quoted LONG rows; 0 when there are no LONG rows; null when LONG rows exist but none is quoted
+  cost: number                     // Σ basis of quoted LONG rows
+  unrealized: number | null        // Σ unrealized of quoted rows (LONG + SHORT); null when none is quoted
+  unrealizedPct: number | null     // unrealized / cost × 100; null when cost is 0
+  shortMarketValue: number | null  // Σ mktVal of quoted SHORT rows; null when no SHORT row is quoted
+  dayPnl: number | null            // Σ non-null dayPnl; null when none
+  dayPct: number | null            // dayPnl / Σ(prevClose × shares) over LONG rows with prevClose; null when that is 0
+  realizedYtd: number
+  missingCount: number             // rows with no quote
+  newestQuoteYmd: string | null    // max quoteYmd over the rows
+}
+export interface HoldingsSummary { ymd: string; twd: CurrencySummary; usd: CurrencySummary }
 ```
 
 1. `buildLedgers` calls `computeLedger` **once per workspace**. Never over the concatenated
@@ -114,7 +154,10 @@ export function aggregateHoldings(
 2. `feeRate` per workspace: `fee_rate` when it is a finite number `>= 0` and `< 1`, else
    `DEFAULT_FEE_RATE`. `0` is a valid setting. (Same rule as `isValidFeeRate` in
    `src/utils/feeSync.ts`, re-stated here because Edge cannot import `src/`.)
-3. `heldKeys`: every key with `qty > 0` or `shortQty > 0` in any ledger, deduplicated.
+3. `heldKeys`: every key with `qty > 0` or `shortQty > 0` in any `ledger.holdings`, deduplicated.
+   Rows (step 4) are also built from `ledger.holdings` only.
+   Note: `estimateUnrealized` prefers each open lot's own `feeRate` (from `tx.fee_rate` or inferred
+   from `fee_tax`) and falls back to the workspace rate passed in — the same inputs the web passes.
 4. Per holding, mirroring `buildHoldingRows` (`src/utils/holdingRows.ts:59-157`), per workspace
    **before** merging:
    - LONG row when `qty > 0`: `mktVal = close × qty`,
@@ -134,46 +177,62 @@ export function aggregateHoldings(
    exists. Day P&L total = Σ day P&L of all rows; day % = that ÷ Σ(prevClose × qty) over LONG
    rows, `null` when that sum is 0.
 7. Missing quote — **deliberately different from the Dashboard**, which shows no total at all
-   until every quote arrives (`sumOrNull`): the card lists the row with `—`, excludes it from
+   until every quote arrives (`sumOrNull`): the card lists the row with `--`, excludes it from
    every total, and counts it in `missingCount`.
 8. YTD realized per currency: sum of `ledger.yearly[year]?.realizedTw` / `.realizedUs` (0 when
    absent), `year = Number(ymd.slice(0, 4))`.
 9. **No currency conversion.** TWD and USD are separate summaries.
 
-The constants `DEFAULT_FEE_RATE`, `DEFAULT_MIN_FEE_WHOLE`, `DEFAULT_MIN_FEE_ODD` are declared in
-the Edge module; a vitest drift test asserts they equal the exports of `src/utils/fees.ts` and
+The constants `DEFAULT_FEE_RATE`, `DEFAULT_MIN_FEE_WHOLE`, `DEFAULT_MIN_FEE_ODD` are **exported** from
+`holdingsCard.ts`; a vitest drift test asserts they equal the exports of `src/utils/fees.ts` and
 `src/utils/settings.ts`.
 
-### 2.4 Payload (`holdingsCard.ts`, `buildHoldingsPayload(summary, opts)`)
+### 2.4 Payload (`holdingsCard.ts`)
 
-- `username: '持股日報'`, `allowed_mentions: { parse: [] }` (as Phase 1).
-- `content`: `📒 持股日報 09/17（四）`; preview prefixes `【預覽】`.
-- One embed per currency that has at least one row (TWD first). Colour 🔴 gain / 🟢 loss / ⚪ zero,
-  as Phase 1.
-- Stamp in the embed title: TWD `台股持股・09/17 收盤`, or `⚠️ 09/16 收盤・非今日` when the newest
-  row quote is older than `ymd`; US `美股持股・美東 09/16 收盤`, no stale warning (a US close is
-  always the previous Taipei day). A row whose quote date is older than its embed's stamp gets `⚠️`.
-- Description, in code blocks padded with `padEndW` / `padStartW` (`discordSummary.ts`):
-  - KPI block: 市值, 成本, 未實現 (amount + %), 今日 (amount + %), 今年已實現; plus 空單市值 when
-    any SHORT row exists.
-  - Rows sorted LONG by market value desc, no-quote rows last, then SHORT rows. Two lines per row,
-    each ≤ 36 display width as `dispWidth` counts it:
-    `2330 台積電              ▲1.23%`  (line 1: ticker, name, today's price change %)
-    `1,000股 1,085.5 +215,000 +24.70%`  (line 2: shares, close, unrealized, return %)
-    SHORT rows start line 2 with `空`. A name too long for line 1 is cut with `…`.
-- Formats: TWD **amounts** rounded to integers with separators; USD amounts 2 decimals. **Prices
-  are not rounded to integers**: TWD close up to 2 decimals, USD 2 decimals, trailing zeros
-  trimmed on TWD. Shares with separators (US fractional shares up to 4 decimals, trailing zeros
-  trimmed). Amount and return percents 2 decimals with `+` / `-`; today's price change with
-  `▲` / `▼` / `─`. `▲▼` are East-Asian-ambiguous width: check them in the first real preview on a
-  phone, as Phase 1 item 4 does for its tables.
-- Footer: `以各工作區手續費率估算賣出成本`; plus `N 檔無報價，未計入合計` when `missingCount > 0`.
-- Budget: each embed description ≤ 2,800 characters. Overflow drops rows from the bottom and
-  appends `…另 N 檔，完整明細請見網站`. Whole message stays under Discord's 6,000.
-- Empty summary (no LONG or SHORT rows): no payload; the run logs `skipped / no-holdings`.
-- `buildHoldingsTestPayload(generatedAt)`: own test card (`🔔 Discord 連線測試`, `連線正常，持股日報會發送到這個頻道。`,
-  username `持股日報`). Phase 1's `buildTestPayload` is not reused: its text and username
-  (`盤後總結`, "每日總結會發送到這個頻道") describe the site-wide summary.
+```ts
+export function buildHoldingsPayload(summary: HoldingsSummary, opts: { generatedAt: string; preview: boolean }): DiscordPayload | null
+export function buildHoldingsTestPayload(generatedAt: string): DiscordPayload
+```
+
+The width helpers of `discordSummary.ts` are module-private and D6 freezes that file, so
+`holdingsCard.ts` carries its own `dispWidth` / `padEndW` / `padStartW` with the **same**
+`WIDE_RANGES` and rules (VS16/ZWJ 0, wide/emoji 2, else 1), and the same colours
+(`RED 0xe5484d` gain, `GREEN 0x30a46c` loss, `GREY 0x8b8d98`). `▲ ▼ ─ …` count 1.
+
+- Returns `null` when both currencies have no rows (the run logs `skipped / no-holdings`).
+- `username: '持股日報'`, `allowed_mentions: { parse: [] }`.
+- `content`: `📒 持股日報 MM/DD（週字）` from `summary.ymd`, e.g. `📒 持股日報 09/17（四）`;
+  preview prefixes `【預覽】`.
+- One embed per currency with at least one row, TWD first; `timestamp: generatedAt`.
+- **Title**: TWD `台股持股・MM/DD 收盤` from `newestQuoteYmd`; when that is older than `ymd`:
+  `台股持股・⚠️ MM/DD 收盤・非今日`; no quote at all: `台股持股・無報價`.
+  USD `美股持股・美東 MM/DD 收盤` (never a stale warning); no quote: `美股持股・無報價`.
+- **Colour** by `unrealized` rounded to the currency's decimals: `> 0` RED, `< 0` GREEN, else GREY.
+- **Amounts**: TWD 0 decimals, USD 2 decimals, thousands separators; signed amounts carry `+` / `-`
+  from the rounded value (`-0` has no sign). Percents: 2 decimals, signed, `%`. Unknown → `--`.
+- **Prices**: TWD up to 2 decimals with trailing zeros trimmed (`1,085.5`, `12.35`, `600`); USD
+  exactly 2 decimals. Unknown → `--`.
+- **Shares**: separators, up to 4 decimals, trailing zeros trimmed (`1,000`, `2.25`).
+- **Description** = KPI fence + `\n` + rows fence (each a ```` ``` ```` block, as Phase 1's `fence`).
+  - KPI line: `padEndW(label, 10) + padStartW(amount, 12)` plus, when the line has a percent,
+    `' ' + padStartW(percent, 8)`. Lines in order: `市值` (unsigned), `成本` (unsigned), `未實現`
+    (signed + `unrealizedPct`), `今日` (signed + `dayPct`), `今年已實現` (signed), and `空單市值`
+    (unsigned, `--` when null) only when any SHORT row exists.
+  - Row line 1: `padEndW(label, 28) + padStartW(dayPctText, 8)`. `label = (row quoted on a date older
+    than the currency's `newestQuoteYmd` ? '⚠️' : '') + (SHORT ? '空 ' : '') + ticker + ' ' + name`; when
+    `dispWidth(label) > 27` it is cut to width ≤ 26 and `…` appended. `dayPctText`: `▲1.23%`,
+    `▼0.50%`, `─0.00%` (absolute value, 2 decimals, direction from the rounded value), `--` when unknown.
+  - Row line 2: `'  ' + padEndW(`${shares}股 ${price}`, 15) + padStartW(unrealized, 10) + ' ' +
+    padStartW(returnPct, 8)`. Numbers are never cut; a wider value makes the line longer.
+  - Rows are rendered in `summary` order; `aggregateHoldings` sorts them: quoted LONG rows by `mktVal` desc, then unquoted LONG rows, then SHORT rows (quoted
+    by `mktVal` desc, then unquoted); ties by `key` ascending.
+  - Budget: when the description is longer than 2,800 characters (`String.length`), rows are
+    dropped from the end, and the rows fence gets a last line `…另 N 檔，完整明細請見網站`, until it fits.
+- **Footer**: `資料來源：Yahoo Finance｜以各工作區手續費率估算賣出成本`, plus
+  `｜N 檔無報價，未計入合計` when `missingCount > 0`.
+- `buildHoldingsTestPayload`: `username: '持股日報'`, one embed `🔔 Discord 連線測試` with field
+  `狀態` = `連線正常，持股日報會發送到這個頻道。`, footer `資料來源：Yahoo Finance`, `timestamp`.
+  Phase 1's `buildTestPayload` is not reused: its text and username describe the site-wide summary.
 
 ### 2.5 Schema §14 (`sources/supabase/schema.sql`)
 
@@ -200,51 +259,189 @@ unique index user_discord_send_log_once on (user_id, taipei_ymd)
 
 - RLS enabled on both; all privileges revoked from `anon` and `authenticated`, as §13 does for
   `app_secrets` / `discord_send_log`. Service role only.
-- `reason` holds a code (`http-404`, `no-holdings`, `time-budget` …), **never an amount or a URL**.
-- Cron `discord-holdings-daily`, `'15 9 * * 1-5'` (17:15 Taipei), action `discord-holdings`, command
-  cloned from an existing job behind the identity guard (`supabase-ops`).
+- `reason` holds a code only — a `DiscordFailReason` (`invalid-url`, `webhook-gone`, `rate-limited`,
+  `http-error`, `network`), `exception` or `no-holdings` — **never an amount, a message or a URL**.
+- Cron `discord-holdings-daily`, `'15 9 * * 1-5'` (17:15 Taipei), body
+  `{"action":"discord-holdings"}`, `timeout_milliseconds := 150000`, written in `schema.sql` in the §13
+  shape (unschedule-if-exists `DO` block, then `cron.schedule` with `<PROJECT_REF>` / `<CRON_SECRET>`
+  placeholders). On a live project the job is created by cloning an existing job's command behind the
+  identity guard (`supabase-ops`), never from the placeholder text.
 - Snapshots: `user_discord_settings` joins `SECRET_TABLES` (`snapshotPlan.cjs:40`);
   `user_discord_send_log` joins the regenerated list beside `discord_send_log` (`:35`).
 
-### 2.6 Edge wiring (`stock-report/index.ts`) and run (`holdingsRun.ts`, new)
+### 2.6 Run and settings ops (`stock-report/holdingsRun.ts`, new) and Edge wiring (`index.ts`)
 
-**Cron** `action: 'discord-holdings'` → `assertCronSecret` → `runHoldingsDaily(deps)`:
+`holdingsRun.ts` mirrors `discordRun.ts`: every side effect is an injected dependency.
 
-1. Gate: no row for today in `market/daily.json` (`findMarketDay`, same loader as the brief) → return
-   `skipped: no-market-day`, write nothing.
-2. Select users with `enabled = true and webhook_url is not null`.
-3. For each user sequentially: claim a `daily` row (unique violation → skip silently); load
-   `workspaces (id, fee_rate)` for the user; load each workspace's transactions with the web's
-   columns, order and 1,000-row pagination (`dataProvider.ts:306-342`, BUG-066); `buildLedgers` →
-   `heldKeys` → quotes from the run-wide cache → `aggregateHoldings` → build →
-   `postDiscordWebhook`; finish the row as `sent` / `failed` / `skipped`.
-4. One user's exception finishes that user's row as `failed` and moves on.
-5. Budget: after 110 s elapsed, start no new user; return the count left.
+```ts
+export type HoldingsKind = 'daily' | 'preview' | 'test'
+export type HoldingsOutcome =
+  | { kind: 'sent'; httpStatus: number }
+  | { kind: 'skipped'; reason: 'no-holdings' }
+  | { kind: 'failed'; httpStatus: number | null; reason: DiscordFailReason | 'exception' }
+export interface LastSend { kind: HoldingsKind; ymd: string; status: 'claimed' | 'sent' | 'skipped' | 'failed'; reason: string | null; at: string }
 
-**User** `action: 'discord-holdings-settings'` → `assertUser` → `runHoldingsSettingsOp(deps, userId, body)`.
-`userId` comes from the JWT only; any `user_id` in the body is ignored.
+export interface HoldingsDataDeps {
+  now: () => Date
+  loadMarketFile: () => Promise<{ days?: MarketDay[] } | null>
+  loadWorkspaces: (userId: string) => Promise<WorkspaceInput[]>   // every workspace of the user, with all its transactions
+  fetchChart: ChartFetch
+  post: (url: string, payload: DiscordPayload) => Promise<DiscordSendResult>
+  finish: (userId: string, ymd: string, kind: HoldingsKind, outcome: HoldingsOutcome) => Promise<void>
+}
+export interface HoldingsRunDeps extends HoldingsDataDeps {
+  elapsedMs: () => number                                         // ms since the run started
+  listEnabledUsers: () => Promise<Array<{ userId: string; webhookUrl: string }>>
+  claimDaily: (userId: string, ymd: string) => Promise<boolean>   // false = already claimed/sent today
+  log: (e: { level: 'warn' | 'info'; message: string; detail: Record<string, unknown> }) => Promise<void>
+}
+export interface HoldingsRunResult {
+  ymd: string
+  skipped?: 'no-market-day'
+  sent: number; failed: number; noHoldings: number; alreadySent: number; leftOver: number
+}
+export const HOLDINGS_RUN_BUDGET_MS = 110_000
+export async function runHoldingsDaily(deps: HoldingsRunDeps): Promise<HoldingsRunResult>
 
-| op | Effect | Errors |
-| -- | ------ | ------ |
-| `get` | `{ configured, last4 (webhookLast4), enabled, lastSend: { kind, ymd, status, reason, at } \| null }` | — |
-| `set` `{url}` | upsert webhook; `enabled` unchanged | 400 when `!isDiscordWebhookUrl(url)` |
-| `clear` | `webhook_url = null`, `enabled = false` | — |
-| `enable` `{enabled}` | set flag | 400 enabling without a webhook |
-| `test` | `buildHoldingsTestPayload`, logged `kind='test'` | 429 over quota; 400 no webhook |
-| `preview` | today's card (latest market day if none), `【預覽】`, logged `kind='preview'`, never takes the daily slot | 429 over quota; 400 no webhook |
+export interface HoldingsSettingsDeps extends HoldingsDataDeps {
+  readSettings: (userId: string) => Promise<{ enabled: boolean; webhookUrl: string | null } | null>
+  saveWebhook: (userId: string, url: string) => Promise<void>     // upsert; `enabled` unchanged (false on insert)
+  clearWebhook: (userId: string) => Promise<void>                 // webhook_url = null, enabled = false
+  setEnabled: (userId: string, enabled: boolean) => Promise<void>
+  lastSend: (userId: string) => Promise<LastSend | null>
+  countManualToday: (userId: string, ymd: string) => Promise<number>   // rows of kind test/preview for that day
+}
+export interface HoldingsSettingsStatus { configured: boolean; last4: string | null; enabled: boolean; lastSend: LastSend | null }
+export type HoldingsSettingsResult =
+  | { ok: true; status: HoldingsSettingsStatus; send?: DiscordSendResult; previewYmd?: string }
+  | { ok: false; error: 'bad-request' | 'invalid-url' | 'not-configured' | 'quota' | 'no-market-data' | 'no-holdings' }
+export const MANUAL_SENDS_PER_DAY = 10
+export async function runHoldingsSettingsOp(deps: HoldingsSettingsDeps, userId: string, input: unknown): Promise<HoldingsSettingsResult>
+```
 
-Quota: at most 10 `test` + `preview` rows per user per Taipei day → 429 `今日測試／預覽次數已達上限`.
+**`runHoldingsDaily`**
+
+1. `ymd = dashDate(taipeiYmd(now()))`. `loadMarketFile()` (a rejection counts as `null`);
+   `findMarketDay(file, ymd)` null → return `{ ymd, skipped: 'no-market-day', …zeros }` having called
+   nothing else.
+2. `listEnabledUsers()`; one `createQuoteCache(fetchChart, floor(now/1000))` for the whole run.
+3. For each user in order: if `elapsedMs() > HOLDINGS_RUN_BUDGET_MS`, stop — `leftOver` = users not
+   started. Else `claimDaily`; `false` → `alreadySent++`, next. Then, inside `try`:
+   `loadWorkspaces` → `buildLedgers` → `heldKeys` → `Promise.all` quotes → `aggregateHoldings` →
+   `buildHoldingsPayload(summary, { generatedAt: now().toISOString(), preview: false })`.
+   `null` → `finish(…, 'daily', { kind: 'skipped', reason: 'no-holdings' })`, `noHoldings++`.
+   Else `post(webhookUrl, payload)` → `finish` `sent` (`sent++`) or `failed` with the result's
+   `httpStatus` / `reason` (`failed++`).
+4. Any throw inside that `try` → `finish(…, 'daily', { kind: 'failed', httpStatus: null, reason:
+   'exception' })`, `failed++`, and `log({ level: 'warn', message: 'holdings user failed', detail:
+   { userId, error: <error name only> } })`. A throw from that `finish` is logged the same way and
+   swallowed. The loop always continues.
+5. Never pass amounts, payload text or the webhook URL to `log`.
+
+**`runHoldingsSettingsOp`** — `input` is the untrusted body minus `action`; `userId` comes only
+from the verified JWT. Non-object input or an unknown `op` → `bad-request`.
+
+| op | Steps | Errors |
+| -- | ----- | ------ |
+| `get` | — | — |
+| `set` `{url}` | `url` must be a string passing `isDiscordWebhookUrl`; `saveWebhook(userId, url.trim())` | `invalid-url` (nothing written) |
+| `clear` | `clearWebhook` | — |
+| `enable` `{enabled}` | `enabled` must be a boolean; enabling needs a stored webhook; `setEnabled` | `bad-request`; `not-configured` |
+| `test` | needs a webhook; `countManualToday < 10`; `post(buildHoldingsTestPayload(now))`; `finish(…, ymd, 'test', …)`; `send` = result | `not-configured`; `quota` |
+| `preview` | needs a webhook; quota; day = today's market day, else the latest `days[].date` that is a valid `YYYY-MM-DD` (re-stated from `discordRun.ts`, whose helper is private) — none → `no-market-data`; build as the run does with `preview: true` and that day as `ymd`; `null` payload → `finish(…, 'preview', skipped/no-holdings)` and `no-holdings`; else post, `finish(…, 'preview', …)`, `send` = result, `previewYmd` = day | `not-configured`; `quota`; `no-market-data`; `no-holdings` |
+
+`test` and `preview` always `finish` with **today's** Taipei `ymd` (so the quota counts them),
+even when the preview content is built from an earlier market day.
+
+Every `ok: true` result carries a fresh `status` read after the op: `configured = webhookUrl !== null`,
+`last4 = webhookLast4(url)` or `null`, `enabled` (false when no row), `lastSend`. **The URL itself is
+never in any result.** `test` / `preview` never call `claimDaily`, so the daily slot stays free.
+
+**`index.ts` wiring (additive only)**
+
+- `action: 'discord-holdings'` → `assertCronSecret` → `handleDiscordHoldings()` →
+  `json(await runHoldingsDaily(deps))`.
+- `action: 'discord-holdings-settings'` → `assertUser` (401 on failure) → `handleDiscordHoldingsSettings(userId, body)`;
+  HTTP status: `bad-request` / `invalid-url` / `not-configured` → 400, `quota` → 429,
+  `no-market-data` / `no-holdings` → 409, `ok` → 200.
+- Real deps, all on the service-role `db`:
+  - `loadMarketFile`: `downloadJson('market/daily.json')`, as the Phase 1 handler does.
+  - `loadWorkspaces`: `workspaces (id, fee_rate)` where `user_id = userId`, ordered by `created_at`,
+    then `id`. For each workspace, `transactions` with the web's columns
+    (`id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature,
+    fee_rate, created_at`), `eq('workspace_id', id)`, ordered `tx_date`, `created_at`, `id`, paged
+    1,000 rows at a time until a short page (`dataProvider.ts:306-342`, BUG-066).
+  - `fetchChart`: `fetch(url)` → non-2xx rejects → `res.json()`.
+  - `post`: `postDiscordWebhook`. `elapsedMs`: from a `Date.now()` taken when the handler starts.
+  - `listEnabledUsers`: `enabled = true` and `webhook_url is not null`.
+  - `claimDaily`: insert `{ user_id, taipei_ymd, kind: 'daily', status: 'claimed' }`; `23505` → `false`.
+  - `finish`: `daily` + `sent`/`failed`/`skipped` → update the `claimed` row for that user/day;
+    `preview`/`test` → insert a row.
+  - `saveWebhook`: upsert on `user_id` setting `webhook_url`, `updated_at`; `clearWebhook`,
+    `setEnabled`: update (`setEnabled` upserts when no row exists).
+  - `lastSend`: newest row by `created_at` for the user; `at` = `updated_at`.
+  - `countManualToday`: count of rows with that user, `taipei_ymd`, `kind in ('test','preview')`.
+  - `log`: `logEvent(db, { level, action: 'discord-holdings', message, detail })`.
 
 ### 2.7 Frontend
 
-- New `src/components/Settings/DiscordPushSection.tsx`, opened from the user menu in
-  `src/components/AppShell.tsx` (431-579) as a dialog.
-- New `src/services/discordHoldings.ts`, same shape as `src/services/discordWebhook.ts`
-  (`functions.invoke('stock-report', { body: { action: 'discord-holdings-settings', … } })`).
-- UI: status `已設定（…abcd）` / `未設定`; URL input + 儲存 / 清除 (input cleared after save); toggle
-  disabled until configured; 測試發送; 預覽今日持股; last send in Taipei `YYYY-MM-DD HH:mm:ss`; three
-  setup steps; and this warning, always visible:
+**Service `src/services/discordHoldings.ts` (new)** — same safety rules as
+`src/services/discordWebhook.ts`: never surface `error.message` from supabase-js; only the HTTP
+status from `error.context` plus a known code's text; the URL never comes back.
+
+```ts
+export type HoldingsSendKind = 'daily' | 'preview' | 'test'
+export interface HoldingsLastSend { kind: HoldingsSendKind; ymd: string; status: 'claimed' | 'sent' | 'skipped' | 'failed'; reason: string | null; at: string }
+export interface HoldingsPushStatus { configured: boolean; last4: string | null; enabled: boolean; lastSend: HoldingsLastSend | null }
+export interface HoldingsSendResult { ok: boolean; httpStatus: number | null; reason?: string }
+export function getHoldingsPush(): Promise<HoldingsPushStatus>                                  // { op: 'get' }
+export function saveHoldingsWebhook(url: string): Promise<HoldingsPushStatus>                    // { op: 'set', url }
+export function clearHoldingsWebhook(): Promise<HoldingsPushStatus>                              // { op: 'clear' }
+export function setHoldingsPushEnabled(enabled: boolean): Promise<HoldingsPushStatus>            // { op: 'enable', enabled }
+export function testHoldingsWebhook(): Promise<{ status: HoldingsPushStatus; send: HoldingsSendResult }>                     // { op: 'test' }
+export function previewHoldings(): Promise<{ status: HoldingsPushStatus; send: HoldingsSendResult; previewYmd: string }>   // { op: 'preview' }
+```
+
+- Each call: `supabase.functions.invoke('stock-report', { body: { action: 'discord-holdings-settings', ...op }, timeout })`
+  with a **literal** timeout (`src/services/invokeTimeout.test.ts` scans for it): `45_000`, and
+  `90_000` for `preview`.
+- No client (local mode) → throws `本機模式無法設定 Discord 推播`.
+- Error → throws `Discord 推播設定失敗（HTTP <status>：<text>）` when the body's `error` is a known
+  code (own-property lookup), else `Discord 推播設定失敗（HTTP <status>）`; no `Response` in
+  `error.context` → `Discord 推播設定失敗`. Codes: `not-configured` 尚未設定 Webhook, `invalid-url`
+  網址格式不正確, `quota` 今日測試／預覽次數已達上限, `no-market-data` 找不到任何台股大盤資料,
+  `no-holdings` 目前沒有持股, `bad-request` 請求格式錯誤.
+
+**Component `src/components/Settings/DiscordPushSection.tsx` (new)** — `export function DiscordPushSection()`, no props.
+
+- While the first `getHoldingsPush()` is pending: `載入中…`. A thrown error at any point is shown in
+  a `role="alert"` element with the error's message.
+- `狀態：已設定（…Wxyz）` / `狀態：未設定`.
+- This warning, always visible:
   > 卡片會顯示完整的股數、成本與損益金額。請使用只有你看得到的私人頻道 Webhook；貼到共用頻道，頻道裡所有人都會看到。
+- `<ol aria-label="設定步驟">` with three steps (Discord 頻道設定 → 整合 → Webhook；建立並複製網址；貼上儲存後按測試發送).
+- `<input type="password" autoComplete="off" aria-label="Discord Webhook 網址">`; `儲存` disabled while the
+  trimmed input is empty or a request is running; `清除` disabled when not configured or busy.
+  `儲存` calls `saveHoldingsWebhook(input.trim())`; after a successful save the input is emptied.
+- `<input type="checkbox" role="switch" aria-label="每個交易日 17:15 推送持股日報">`, checked =
+  `enabled`, disabled when not configured or busy.
+- `測試發送` and `預覽今日持股` disabled when not configured or busy.
+- The `role="status"` element exists only while there is a result message and the `role="alert"`
+  element only while there is an error; starting a new action clears both. Result texts:
+  save `已儲存 Webhook`; clear `已清除 Webhook，推播已關閉`; enable `已開啟每日推播` / `已關閉每日推播`;
+  test `測試發送成功（HTTP 204）` / `測試發送失敗（HTTP 404：網址已失效）`;
+  preview `已送出 09/17 的持股預覽（HTTP 204）` / `預覽發送失敗（HTTP 429：Discord 限流）`.
+  Failure reason labels: Phase 1's (`webhook-gone` 網址已失效, `rate-limited` Discord 限流,
+  `http-error` Discord 回應錯誤, `network` 連線失敗, `invalid-url` 網址格式不正確), unknown → `未知錯誤`;
+  `HTTP --` when `httpStatus` is null.
+- Last send: `上次發送：YYYY-MM-DD HH:mm:ss・<kind>・<status>` in Asia/Taipei regardless of the host
+  timezone, kinds 每日 / 預覽 / 測試, statuses 已送出 / 失敗 / 略過 / 處理中, plus `（<reason>）`
+  when `reason` is set (the failure labels above, `no-holdings` 無持股, `exception` 系統錯誤, else
+  the code); `上次發送：尚無紀錄` when null.
+
+**`AppShell.tsx` (additive)** — in `UserMenu`, inside the non-local block, a `role="menuitem"`
+button `Discord 推播` (icon `MessageSquare`) after `變更密碼`; it opens
+`<Modal title="Discord 持股推播" onClose=… wide>` wrapping `<DiscordPushSection />`.
 
 ## 3. Files
 
@@ -253,6 +450,7 @@ Quota: at most 10 `test` + `preview` rows per user per Taipei day → 429 `今�
 | 2a engine copy | `scripts/lib/edgeEngine.cjs` (new), `scripts/sync-edge-engine.cjs` (new), `package.json`, `supabase/functions/_shared/engine/pnlEngine.ts` (generated), `supabase/functions/_shared/engine/models.ts` (generated) |
 | 2b card | `supabase/functions/stock-report/holdingQuotes.ts` (new), `supabase/functions/stock-report/holdingsCard.ts` (new) |
 | 2c wiring | `supabase/schema.sql`, `scripts/lib/snapshotPlan.cjs`, `supabase/functions/stock-report/holdingsRun.ts` (new), `supabase/functions/stock-report/index.ts`, `src/services/discordHoldings.ts` (new), `src/components/Settings/DiscordPushSection.tsx` (new), `src/components/AppShell.tsx` |
+| 2c tests | `supabase/functions/stock-report/holdingsRun.test.ts`, `src/services/discordHoldings.test.ts`, `src/components/Settings/DiscordPushSection.test.tsx`, `scripts/lib/snapshotPlan.test.mjs` (two table assertions) |
 
 All paths relative to `sources/`. Tests are written by the main session before each dispatch.
 
@@ -279,7 +477,7 @@ webhook; one real 17:15 round lands `sent` in `user_discord_send_log`; unauthent
 | Merge | same ticker in two ws → one row, sums equal the per-ws values | `holdingsCard.test.ts` |
 | Short leg | SHORT row uses `estimateUnrealizedShort`; return % over `shortProceeds`; excluded from market value and cost; short market value shown | `holdingsCard.test.ts` |
 | Day P&L | LONG 1,000 sh, close 101, prev 100 → +1,000; SHORT same → −1,000; prev null → row excluded from the day total; day % over LONG prev value | `holdingsCard.test.ts` |
-| Missing quote | row shows `—`, excluded from totals, `missingCount = 1`, footer line present | `holdingsCard.test.ts` |
+| Missing quote | row shows `--`, excluded from totals, `missingCount = 1`, footer line present | `holdingsCard.test.ts` |
 | Price format | TWD close 12.35 stays `12.35`, 1085.50 → `1,085.5`; amounts rounded | `holdingsCard.test.ts` |
 | Test payload | username `持股日報`, text names 持股日報, no `盤後總結` | `holdingsCard.test.ts` |
 | Currencies | TWD + USD → two embeds, no conversion; USD-only → one embed | `holdingsCard.test.ts` |
