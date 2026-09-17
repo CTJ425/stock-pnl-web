@@ -55,6 +55,24 @@ function fmtAt(iso: string): string {
   return new Date(iso).toLocaleString('zh-TW')
 }
 
+// Taipei wall-clock time for the recent-sends table, independent of the host's timezone.
+function formatRecentAt(at: string, taipeiYmd: string): string {
+  const d = new Date(at)
+  if (Number.isNaN(d.getTime())) return taipeiYmd
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`
+}
+
 function reasonCellText(reason: string | null): string {
   if (reason === null) return '—'
   if (reason === 'no-market-day') return '非交易日或資料未到'
@@ -274,7 +292,7 @@ export function DiscordSection() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>日期</th>
+                <th>時間</th>
                 <th>類型</th>
                 <th>狀態</th>
                 <th>HTTP</th>
@@ -284,7 +302,7 @@ export function DiscordSection() {
             <tbody>
               {status.recent.map((row, i) => (
                 <tr key={`${row.taipeiYmd}-${row.edition}-${i}`}>
-                  <td className="ast-mono">{row.taipeiYmd}</td>
+                  <td className="ast-mono">{formatRecentAt(row.at, row.taipeiYmd)}</td>
                   <td>{EDITION_LABELS[row.edition]}</td>
                   <td>{STATUS_LABELS[row.status]}</td>
                   <td>{row.httpStatus ?? '—'}</td>

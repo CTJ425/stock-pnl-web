@@ -69,12 +69,15 @@ describe('DiscordSection', () => {
     expect(await screen.findByText(/已設定（…Wxyz）/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '清除' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '測試發送' })).toBeTruthy()
-    for (const h of ['日期', '類型', '狀態', 'HTTP', '原因']) {
+    for (const h of ['時間', '類型', '狀態', 'HTTP', '原因']) {
       expect(screen.getByRole('columnheader', { name: h })).toBeTruthy()
     }
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows).toHaveLength(3)
-    expect(rows[0].textContent).toContain('2026-09-16')
+    // Taipei wall-clock time of `at`, independent of the test host's timezone.
+    expect(rows[0].textContent).toContain('2026-09-16 17:05:02')
+    expect(rows[1].textContent).toContain('2026-09-15 21:30:01')
+    expect(rows[2].textContent).toContain('2026-09-15 09:00:00')
     expect(rows[0].textContent).toContain('快報')
     expect(rows[0].textContent).toContain('已送出')
     expect(rows[0].textContent).toContain('204')
@@ -84,6 +87,19 @@ describe('DiscordSection', () => {
     expect(rows[2].textContent).toContain('測試')
     expect(rows[2].textContent).toContain('略過')
     assertNoUrlInDom()
+  })
+
+  it('falls back to the Taipei date when a log time is unreadable', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue({
+      ...SET,
+      recent: [{ ...SET.recent[0], at: 'not-a-time' }],
+    })
+    render(<DiscordSection />)
+    await screen.findByText(/已設定（…Wxyz）/)
+    const row = screen.getAllByRole('row')[1]
+    expect(row.textContent).toContain('2026-09-16')
+    expect(row.textContent).not.toContain('Invalid')
+    expect(row.textContent).not.toContain('NaN')
   })
 
   it('rejects an invalid URL without saving', async () => {

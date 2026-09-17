@@ -235,7 +235,8 @@ excludes secrets. Restoring a snapshot leaves the webhook unset; that is intende
   - test result: `測試訊息已送出` or `發送失敗（<reason text>）`, reason text map:
     `webhook-gone` 網址已失效, `rate-limited` Discord 限流, `http-error` Discord 回應錯誤,
     `network` 連線失敗, `invalid-url` 網址格式不正確, otherwise 未知錯誤.
-  - recent sends table, columns `日期 / 類型 / 狀態 / HTTP / 原因`; 類型 `brief` 快報,
+  - recent sends table, columns `時間 / 類型 / 狀態 / HTTP / 原因` (0.9.57-dev.5: `時間` is `at` shown as Asia/Taipei
+    `YYYY-MM-DD HH:mm:ss`, independent of the browser's timezone; an unreadable `at` falls back to `taipeiYmd`); 類型 `brief` 快報,
     `full` 完整版, `test` 測試; 狀態 `sent` 已送出, `skipped` 略過, `failed` 失敗, `claimed` 處理中.
   - the full webhook URL never appears in the DOM text.
   - **Every rejected service call shows the thrown message verbatim** (e.g. `Discord 設定失敗（HTTP 409）`)
@@ -323,6 +324,32 @@ no `updatedAt` → `MM/DD 資料`. A card showing `尚未公布` / `暫無資料
 `loadMarketFile` may return `asOf`. Scheduled run: `today = ymd`, `marketAsOf = file.asOf ?? null`.
 Preview: `today` = actual Taipei date, `ymd` = the chosen market day, same `marketAsOf`.
 `index.ts` `loadUsdTwd` fills `date` from the last `points` entry and `asOf` from the file.
+
+### 2.9 Tables inside the cards (0.9.57-dev.5, user decision 2026-09-17)
+
+**Supersedes the "Description" column of the §2.8 table.** Everything else in §2.8 stays: envelope,
+card order, colors, footers/stamps, staleness, 初步／完整 suffix. Discord has no Markdown tables, so each
+card's description is a fenced code block (monospace) — `"```\n" + lines.join("\n") + "\n```"` — whenever
+it has data; `尚未公布` / `暫無資料` stay plain text without a fence. The user kept Chinese names.
+
+**Display width** `w(s)`: U+FE0F and U+200D count 0; East Asian Wide/Fullwidth (U+1100–115F, U+2E80–303E,
+U+3041–33FF, U+3400–4DBF, U+4E00–9FFF, U+A000–A4CF, U+AC00–D7A3, U+F900–FAFF, U+FE30–FE4F, U+FF00–FF60,
+U+FFE0–FFE6) and emoji (U+1F300–1FAFF, U+2600–27BF) count 2; everything else 1. `padEnd`/`padStart` pad
+with ASCII spaces to a target `w`. Column widths are computed per card from the rows present.
+Separator: two spaces after the label column, one space between other columns, no trailing spaces.
+Unknown numbers print `--`. A direction mark is 🔴 / 🟢 / ⚪ from the **rounded** value.
+
+| Card | Rows (label column left-aligned, numbers right-aligned) |
+| --- | --- |
+| 台股大盤 | `加權指數` value; `漲跌點數` signed 2dp + mark; `漲跌幅度` signed pct + mark; `成交金額` `6,759.7億`. Unknown change → `--` on both change rows, no mark |
+| 三大法人 | title gains `（億元）`; rows `外資` `投信` `自營` `合計`, signed 1dp + mark; unknown → `--`, no mark |
+| 融資融券 | header row (blank label, `餘額`, `增減`), then `融資(張)`, `融資(億)`, `融券(張)` |
+| 國際指數 | `label  close pct mark date`; missing mark (pct unknown) is two spaces; pct unknown `--`; no quote → `label  暫無資料` |
+| 美國總經 | short label by `id`: CPILFESL `核心CPI`, PPIFES `核心PPI`, PCEPILFE `核心PCE`, DFEDTARU `聯邦利率`, PAYEMS `非農就業`, UMCSENT `消費信心` (else the original label); `label  prev → latest period`; units appended with no space (`2.47%`, `21千人`, `49.5指數`), rate `3.5-3.75%` (ASCII hyphen); period `YYYY-MM` → `08月`, `YYYY-MM-DD` → `09/16`; missing prev `--`; missing latest (or null value) → `label  暫無資料` |
+| 匯率 | `USD/TWD  31.773 +0.056` (no change column when `prevClose` is null) |
+
+The label column width counts every row, including `暫無資料` rows; number columns count only rows that
+have numbers.
 
 ## 3. Files
 

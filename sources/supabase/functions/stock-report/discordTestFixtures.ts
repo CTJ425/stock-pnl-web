@@ -112,18 +112,18 @@ export const GSPC_PREOPEN: IndexChartResponse = {
 
 /** `reports/macro/us.json` → `indicators[]` on DEV, mapped to `MacroLine`. */
 export const MACRO_LINES: MacroLine[] = [
-  { label: '核心 CPI', kind: 'yoy', unit: '%', latest: { period: '2026-08', value: 2.45 }, previous: { period: '2026-07', value: 2.47 } },
-  { label: '核心 PPI', kind: 'yoy', unit: '%', latest: { period: '2026-08', value: 4.62 }, previous: { period: '2026-07', value: 4.26 } },
-  { label: '核心 PCE', kind: 'yoy', unit: '%', latest: { period: '2026-07', value: 3.34 }, previous: { period: '2026-06', value: 3.34 } },
+  { id: 'CPILFESL', label: '核心 CPI', kind: 'yoy', unit: '%', latest: { period: '2026-08', value: 2.45 }, previous: { period: '2026-07', value: 2.47 } },
+  { id: 'PPIFES', label: '核心 PPI', kind: 'yoy', unit: '%', latest: { period: '2026-08', value: 4.62 }, previous: { period: '2026-07', value: 4.26 } },
+  { id: 'PCEPILFE', label: '核心 PCE', kind: 'yoy', unit: '%', latest: { period: '2026-07', value: 3.34 }, previous: { period: '2026-06', value: 3.34 } },
   {
-    label: 'FOMC 目標利率',
+    id: 'DFEDTARU', label: 'FOMC 目標利率',
     kind: 'rate',
     unit: '%',
     latest: { period: '2026-09-16', value: 3.75, valueLow: 3.5 },
     previous: { period: '2026-07-29', value: 3.75, valueLow: 3.5 },
   },
-  { label: '非農就業 NFP', kind: 'momThousands', unit: '千人', latest: { period: '2026-08', value: 162 }, previous: { period: '2026-07', value: 21 } },
-  { label: '消費者信心 UMCSENT', kind: 'index', unit: '指數', latest: { period: '2026-07', value: 55.2 }, previous: { period: '2026-06', value: 49.5 } },
+  { id: 'PAYEMS', label: '非農就業 NFP', kind: 'momThousands', unit: '千人', latest: { period: '2026-08', value: 162 }, previous: { period: '2026-07', value: 21 } },
+  { id: 'UMCSENT', label: '消費者信心 UMCSENT', kind: 'index', unit: '指數', latest: { period: '2026-07', value: 55.2 }, previous: { period: '2026-06', value: 49.5 } },
 ]
 
 /** `reports/fx/twd.json` → USD entry on DEV. */

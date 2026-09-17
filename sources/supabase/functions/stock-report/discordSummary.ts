@@ -1,6 +1,7 @@
 /**
  * Pure formatter for the Discord daily market summary (Task 165). Card layout: spec §2.8
- * (supersedes the single-embed/fields layout of §2.2). `buildTestPayload` is unchanged.
+ * (supersedes the single-embed/fields layout of §2.2); tables inside the cards: spec §2.9
+ * (supersedes the §2.8 "Description" column only). `buildTestPayload` is unchanged.
  * Exact strings are pinned by discordSummary.test.ts.
  */
 import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
@@ -34,6 +35,8 @@ export interface MacroPointLike {
 }
 
 export interface MacroLine {
+  /** FRED series id (e.g. 'CPILFESL'); selects the short table label, spec §2.9 */
+  id?: string
   label: string
   kind: string
   unit: string
@@ -65,12 +68,51 @@ const FOOTER = '資料來源：證交所、Yahoo Finance、FRED｜僅供參考�
 /** Discord "small text" line under the heading, spec §2.8 envelope. */
 const SOURCE_LINE = `-# ${FOOTER}`
 const WEEKDAY_CHARS = '日一二三四五六'
-/** Ideographic space used to align card columns. */
-const SP = '　'
 
 const RED = 0xe5484d
 const GREEN = 0x30a46c
 const GREY = 0x8b8d98
+
+/** East Asian Wide/Fullwidth + emoji ranges that count as display-width 2, spec §2.9. */
+const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f],
+  [0x2e80, 0x303e],
+  [0x3041, 0x33ff],
+  [0x3400, 0x4dbf],
+  [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe30, 0xfe4f],
+  [0xff00, 0xff60],
+  [0xffe0, 0xffe6],
+  [0x1f300, 0x1faff],
+  [0x2600, 0x27bf],
+]
+
+/** Display width, spec §2.9: VS16/ZWJ count 0, wide/emoji ranges count 2, everything else 1. */
+function dispWidth(s: string): number {
+  let total = 0
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!
+    if (cp === 0xfe0f || cp === 0x200d) continue
+    total += WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
+  }
+  return total
+}
+
+function padEndW(s: string, width: number): string {
+  return s + ' '.repeat(Math.max(0, width - dispWidth(s)))
+}
+
+function padStartW(s: string, width: number): string {
+  return ' '.repeat(Math.max(0, width - dispWidth(s))) + s
+}
+
+/** Wraps a card's table rows in a fenced (monospace) code block, spec §2.9. */
+function fence(lines: string[]): string {
+  return '```\n' + lines.join('\n') + '\n```'
+}
 
 export function findMarketDay(file: { days?: MarketDay[] } | null, ymd: string): MarketDay | null {
   if (!file || !file.days) return null
@@ -94,12 +136,13 @@ function fmtSigned(n: number, decimals: number): string {
   return signOf(n, decimals) + fmtAbs(n, decimals)
 }
 
+/** Unknown numbers print `--`, spec §2.9. */
 function fmtOrDash(n: number | null, decimals: number): string {
-  return n == null ? '—' : fmtAbs(n, decimals)
+  return n == null ? '--' : fmtAbs(n, decimals)
 }
 
 function changeStr(n: number | null, decimals: number): string {
-  return n == null ? '—' : fmtSigned(n, decimals)
+  return n == null ? '--' : fmtSigned(n, decimals)
 }
 
 /** At most two decimals, no trailing zeros. */
@@ -165,34 +208,49 @@ interface CardBits {
   footerText?: string
 }
 
+const TAIEX_LABELS = ['加權指數', '漲跌點數', '漲跌幅度', '成交金額'] as const
+
 function taiexCard(market: MarketDay, marketAsOf: string | null, today: string): CardBits {
   if (market.taiex == null) return { description: '尚未公布', color: GREY }
   const cp = market.changePoints
-  let changeLine: string
-  let sign: '' | '+' | '-'
+  const valueStr = fmtAbs(market.taiex, 2)
+  let changeStr2: string
+  let pctStr: string
+  let mark = ''
+  let sign: '' | '+' | '-' = ''
   if (cp == null) {
-    sign = ''
-    changeLine = '—'
+    changeStr2 = '--'
+    pctStr = '--'
   } else {
     sign = signOf(cp, 2)
     const prevClose = market.taiex - cp
     const pct = prevClose === 0 ? 0 : (cp / prevClose) * 100
-    const pctStr = `${signOf(pct, 2)}${fmtAbs(pct, 2)}%`
-    if (sign === '') {
-      changeLine = `⚪ 平盤（${pctStr}）`
-    } else {
-      const emoji = sign === '+' ? '🔴' : '🟢'
-      changeLine = `${emoji} ${sign}${fmtAbs(cp, 2)}（${pctStr}）`
-    }
+    changeStr2 = fmtSigned(cp, 2)
+    pctStr = `${fmtSigned(pct, 2)}%`
+    mark = sign === '+' ? '🔴' : sign === '-' ? '🟢' : '⚪'
   }
-  const tradeLine = market.tradeValueTwd == null ? `成交金額${SP}—` : `成交金額${SP}${fmtAbs(market.tradeValueTwd / 1e8, 1)} 億`
-  const description = `加權指數${SP}**${fmtAbs(market.taiex, 2)}**\n漲跌${SP}${SP}${SP}${changeLine}\n${tradeLine}`
+  const tradeStr = market.tradeValueTwd == null ? '--' : `${fmtAbs(market.tradeValueTwd / 1e8, 1)}億`
+  const labelW = Math.max(...TAIEX_LABELS.map(dispWidth))
+  const numW = Math.max(dispWidth(valueStr), dispWidth(changeStr2), dispWidth(pctStr), dispWidth(tradeStr))
+  const markSuffix = mark ? ` ${mark}` : ''
+  const lines = [
+    `${padEndW(TAIEX_LABELS[0], labelW)}  ${padStartW(valueStr, numW)}`,
+    `${padEndW(TAIEX_LABELS[1], labelW)}  ${padStartW(changeStr2, numW)}${markSuffix}`,
+    `${padEndW(TAIEX_LABELS[2], labelW)}  ${padStartW(pctStr, numW)}${markSuffix}`,
+    `${padEndW(TAIEX_LABELS[3], labelW)}  ${padStartW(tradeStr, numW)}`,
+  ]
   const color = sign === '+' ? RED : sign === '-' ? GREEN : GREY
-  return { description, color, footerText: stamp(market.date, marketAsOf, today) }
+  return { description: fence(lines), color, footerText: stamp(market.date, marketAsOf, today) }
 }
 
 function instAmt(v: number | null): string {
-  return v == null ? '—' : `${fmtSigned(v / 1e8, 1)} 億`
+  return v == null ? '--' : fmtSigned(v / 1e8, 1)
+}
+
+function instMark(v: number | null): string {
+  if (v == null) return ''
+  const s = signOf(v / 1e8, 1)
+  return s === '+' ? '🔴' : s === '-' ? '🟢' : '⚪'
 }
 
 /** '' (unknown), '19:30 or later, or a later date' (完整), else 初步 — spec §2.8. */
@@ -202,6 +260,8 @@ function institutionalSuffix(marketDate: string, marketAsOf: string | null): str
   if (asOfDate !== marketDate) return '・盤後完整'
   return taipeiTime(marketAsOf) >= '19:30' ? '・盤後完整' : '・盤後初步'
 }
+
+const INST_LABELS = ['外資', '投信', '自營', '合計'] as const
 
 function institutionalCard(
   inst: MarketInstitutional | null,
@@ -214,15 +274,20 @@ function institutionalCard(
   const dealerSelf = inst.dealerSelfTwd
   const dealerHedge = inst.dealerHedgeTwd
   const dealer = dealerSelf == null && dealerHedge == null ? null : (dealerSelf ?? 0) + (dealerHedge ?? 0)
-  const description = [
-    `外資 ${instAmt(inst.foreignTwd)}｜投信 ${instAmt(inst.trustTwd)}`,
-    `自營 ${instAmt(dealer)}｜**合計 ${instAmt(inst.totalTwd)}**`,
-  ].join('\n')
+  const values = [inst.foreignTwd, inst.trustTwd, dealer, inst.totalTwd]
+  const amtStrs = values.map(instAmt)
+  const marks = values.map(instMark)
+  const labelW = Math.max(...INST_LABELS.map(dispWidth))
+  const numW = Math.max(...amtStrs.map(dispWidth))
+  const lines = INST_LABELS.map((label, i) => {
+    const markSuffix = marks[i] ? ` ${marks[i]}` : ''
+    return `${padEndW(label, labelW)}  ${padStartW(amtStrs[i], numW)}${markSuffix}`
+  })
   const roundedSign = inst.totalTwd == null ? '' : signOf(inst.totalTwd / 1e8, 1)
   const color = roundedSign === '+' ? RED : roundedSign === '-' ? GREEN : GREY
   return {
-    title: `${baseTitle}${institutionalSuffix(marketDate, marketAsOf)}`,
-    description,
+    title: `${baseTitle}${institutionalSuffix(marketDate, marketAsOf)}（億元）`,
+    description: fence(lines),
     color,
     footerText: stamp(marketDate, marketAsOf, today),
   }
@@ -232,41 +297,75 @@ function marginCard(m: MarketMarginTotals | null, today: string): Omit<CardBits,
   if (!m) return { description: '尚未公布' }
   const amtTodayB = m.marginAmountThousandTwd.today == null ? null : m.marginAmountThousandTwd.today / 100_000
   const amtChangeB = m.marginAmountThousandTwd.change == null ? null : m.marginAmountThousandTwd.change / 100_000
-  const description = [
-    `融資餘額${SP}${fmtOrDash(m.marginLots.today, 0)} 張（${changeStr(m.marginLots.change, 0)}）`,
-    `融資金額${SP}${fmtOrDash(amtTodayB, 1)} 億（${amtChangeB == null ? '—' : `${fmtSigned(amtChangeB, 1)} 億`}）`,
-    `融券餘額${SP}${fmtOrDash(m.shortLots.today, 0)} 張（${changeStr(m.shortLots.change, 0)}）`,
-  ].join('\n')
-  return { description, footerText: stamp(m.date, null, today) }
+  const rows: Array<[string, string, string]> = [
+    ['融資(張)', fmtOrDash(m.marginLots.today, 0), changeStr(m.marginLots.change, 0)],
+    ['融資(億)', fmtOrDash(amtTodayB, 1), changeStr(amtChangeB, 1)],
+    ['融券(張)', fmtOrDash(m.shortLots.today, 0), changeStr(m.shortLots.change, 0)],
+  ]
+  const labelW = Math.max(0, ...rows.map(([label]) => dispWidth(label)))
+  const col1W = Math.max(dispWidth('餘額'), ...rows.map(([, v1]) => dispWidth(v1)))
+  const col2W = Math.max(dispWidth('增減'), ...rows.map(([, , v2]) => dispWidth(v2)))
+  const lines = [
+    `${padEndW('', labelW)}  ${padStartW('餘額', col1W)} ${padStartW('增減', col2W)}`,
+    ...rows.map(([label, v1, v2]) => `${padEndW(label, labelW)}  ${padStartW(v1, col1W)} ${padStartW(v2, col2W)}`),
+  ]
+  return { description: fence(lines), footerText: stamp(m.date, null, today) }
 }
 
 function indexBlock(indices: IndexLine[]): { description: string; hasData: boolean } {
   if (indices.length === 0) return { description: '暫無資料', hasData: false }
-  const description = indices
-    .map((i) => {
-      if (!i.quote) return `${i.label}${SP}暫無資料`
-      let pctToken = ''
-      if (i.quote.changePct != null) {
-        const s = signOf(i.quote.changePct, 2)
-        const emoji = s === '+' ? '🔴' : s === '-' ? '🟢' : '⚪'
-        pctToken = `${SP}${emoji} ${s}${fmtAbs(i.quote.changePct, 2)}%`
-      }
-      return `${i.label}${SP}${fmtAbs(i.quote.close, 2)}${pctToken}${SP}${i.quote.date}`
-    })
-    .join('\n')
-  return { description, hasData: true }
+  const labelW = Math.max(...indices.map((i) => dispWidth(i.label)))
+  const withQuote = indices.filter((i): i is IndexLine & { quote: NonNullable<IndexLine['quote']> } => i.quote != null)
+  const closeW = withQuote.length ? Math.max(...withQuote.map((i) => dispWidth(fmtAbs(i.quote.close, 2)))) : 0
+  const knownPct = withQuote.filter((i) => i.quote.changePct != null)
+  const pctW = knownPct.length ? Math.max(...knownPct.map((i) => dispWidth(`${fmtSigned(i.quote.changePct as number, 2)}%`))) : 0
+  const lines = indices.map((i) => {
+    if (!i.quote) return `${padEndW(i.label, labelW)}  暫無資料`
+    const closeStr = fmtAbs(i.quote.close, 2)
+    let pctStr = '--'
+    let mark = '  '
+    if (i.quote.changePct != null) {
+      const s = signOf(i.quote.changePct, 2)
+      pctStr = `${fmtSigned(i.quote.changePct, 2)}%`
+      mark = s === '+' ? '🔴' : s === '-' ? '🟢' : '⚪'
+    }
+    return `${padEndW(i.label, labelW)}  ${padStartW(closeStr, closeW)} ${padStartW(pctStr, pctW)} ${mark} ${i.quote.date}`
+  })
+  return { description: fence(lines), hasData: true }
+}
+
+/** FRED series id → short table label, spec §2.9; falls back to the original label. */
+const MACRO_SHORT_LABELS: Record<string, string> = {
+  CPILFESL: '核心CPI',
+  PPIFES: '核心PPI',
+  PCEPILFE: '核心PCE',
+  DFEDTARU: '聯邦利率',
+  PAYEMS: '非農就業',
+  UMCSENT: '消費信心',
+}
+
+function macroLabel(m: MacroLine): string {
+  return (m.id != null && MACRO_SHORT_LABELS[m.id]) || m.label
+}
+
+/** 'YYYY-MM' → 'MM月'; 'YYYY-MM-DD' → 'MM/DD'; anything else is returned as-is. */
+function macroPeriodStr(period: string): string {
+  const parts = period.split('-')
+  if (parts.length === 2) return `${parts[1]}月`
+  if (parts.length === 3) return `${parts[1]}/${parts[2]}`
+  return period
 }
 
 function macroNumPart(v: MacroPointLike, kind: string): string {
   if (kind === 'rate' && v.valueLow != null && v.value != null) {
-    return `${trimmedNum(v.valueLow)}–${trimmedNum(v.value)}`
+    return `${trimmedNum(v.valueLow)}-${trimmedNum(v.value)}`
   }
   return trimmedNum(v.value ?? 0)
 }
 
+/** Units are appended directly with no space, spec §2.9 (`2.47%`, `21千人`, `49.5指數`). */
 function macroValueStr(v: MacroPointLike, unit: string, kind: string): string {
-  const num = macroNumPart(v, kind)
-  return unit === '%' ? `${num}${unit}` : `${num} ${unit}`
+  return `${macroNumPart(v, kind)}${unit}`
 }
 
 /** A point whose `value` is null counts as missing, never as 0 — even for kind `rate`. */
@@ -276,22 +375,28 @@ function macroMissing(v: MacroPointLike | null | undefined): boolean {
 
 function macroBlock(macro: MacroLine[] | null): { description: string; hasData: boolean } {
   if (!macro || macro.length === 0) return { description: '暫無資料', hasData: false }
-  const description = macro
-    .map((m) => {
-      if (macroMissing(m.latest)) return `${m.label}${SP}暫無資料`
-      const latestStr = macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)
-      const prevStr = macroMissing(m.previous) ? '—' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
-      return `${m.label}${SP}${prevStr} → **${latestStr}**（${(m.latest as MacroPointLike).period}）`
-    })
-    .join('\n')
-  return { description, hasData: true }
+  const labelW = Math.max(...macro.map((m) => dispWidth(macroLabel(m))))
+  const withData = macro.filter((m) => !macroMissing(m.latest))
+  const prevW = withData.length
+    ? Math.max(...withData.map((m) => dispWidth(macroMissing(m.previous) ? '--' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind))))
+    : 0
+  const latestW = withData.length ? Math.max(...withData.map((m) => dispWidth(macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)))) : 0
+  const lines = macro.map((m) => {
+    const label = macroLabel(m)
+    if (macroMissing(m.latest)) return `${padEndW(label, labelW)}  暫無資料`
+    const latestStr = macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)
+    const prevStr = macroMissing(m.previous) ? '--' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
+    const period = macroPeriodStr((m.latest as MacroPointLike).period)
+    return `${padEndW(label, labelW)}  ${padStartW(prevStr, prevW)} → ${padStartW(latestStr, latestW)} ${period}`
+  })
+  return { description: fence(lines), hasData: true }
 }
 
 function fxCard(fx: FxLine | null, today: string): Omit<CardBits, 'color'> {
   if (!fx || fx.latest == null) return { description: '暫無資料' }
-  const base = `USD/TWD${SP}**${fmtAbs(fx.latest, fx.decimals)}**`
-  const description = fx.prevClose == null ? base : `${base}（${fmtSigned(fx.latest - fx.prevClose, fx.decimals)}）`
-  return { description, footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
+  const base = `USD/TWD  ${fmtAbs(fx.latest, fx.decimals)}`
+  const line = fx.prevClose == null ? base : `${base} ${fmtSigned(fx.latest - fx.prevClose, fx.decimals)}`
+  return { description: fence([line]), footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
 }
 
 export function buildSummaryPayload(input: SummaryInput): DiscordPayload {
