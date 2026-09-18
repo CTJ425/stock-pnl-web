@@ -40,7 +40,8 @@ BEGIN
            ('user_settings'),('tw_watchlist'),('chip_raw_cache'),('warm_quota'),
            ('batch_run_log'),('backup_run_log'),('admin_run_log'),
            ('source_probe_log'),('source_probe_tick'),('app_settings'),
-           ('app_log'),('app_secrets'),('discord_send_log')
+           ('app_log'),('app_secrets'),('discord_send_log'),
+           ('user_discord_settings'),('user_discord_send_log')
   ), missing AS (
     SELECT string_agg(t, ', ' ORDER BY t) AS m FROM want
      WHERE t NOT IN (SELECT table_name FROM information_schema.tables
@@ -48,7 +49,7 @@ BEGIN
   )
   SELECT 'tables',
          CASE WHEN m IS NULL THEN 'PASS' ELSE 'FAIL' END,
-         COALESCE('missing: ' || m, 'all 17 present')
+         COALESCE('missing: ' || m, 'all 19 present')
     FROM missing;
 
   -- ---- columns added by later migrations ----------------------------------
@@ -143,7 +144,8 @@ BEGIN
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public'
      AND c.relname IN ('workspaces','transactions','user_settings','tw_watchlist',
-                        'app_secrets','discord_send_log');
+                        'app_secrets','discord_send_log',
+                        'user_discord_settings','user_discord_send_log');
 END
 $fn$;
 
