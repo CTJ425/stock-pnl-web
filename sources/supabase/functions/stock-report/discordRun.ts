@@ -7,6 +7,8 @@ import { isDiscordWebhookUrl, webhookLast4 } from './discordUrl.ts'
 import type { DiscordFailReason, DiscordPayload, DiscordSendResult } from './discordWebhook.ts'
 import { buildSummaryPayload, buildTestPayload, findMarketDay } from './discordSummary.ts'
 import type { FxLine, IndexLine, MacroLine, SummaryEdition } from './discordSummary.ts'
+import { groupMarketTargets } from './discordTargets.ts'
+import type { MarketOverride } from './discordTargets.ts'
 import { lastCompletedClose, SUMMARY_INDICES } from './globalIndexClose.ts'
 import type { IndexChartResponse } from './globalIndexClose.ts'
 import { extractMarketMarginTotals } from './marketMargin.ts'
@@ -35,6 +37,9 @@ export interface SummaryDeps {
   loadMargin: (ymd: string) => Promise<MarginSummaryResponse>
   post: (url: string, payload: DiscordPayload) => Promise<DiscordSendResult>
   log: (e: { level: 'warn' | 'info'; message: string; detail: Record<string, unknown> }) => Promise<void>
+  /** Per-account 經濟快報 overrides (full edition only, spec §3.3/D5). Absent → no per-account copies. */
+  loadMarketOverrides?: () => Promise<MarketOverride[]>
+  finishMarketOverride?: (userId: string, ymd: string, outcome: RunOutcome) => Promise<void>
 }
 
 /** The four data sources shared by the scheduled send and the manual preview (spec §2.7 step 4). */
@@ -87,6 +92,49 @@ function latestMarketDay(file: { days?: MarketDay[] } | null): MarketDay | null 
   return days.reduce((max, d) => (d.date > max.date ? d : max))
 }
 
+/** Per-account copies of the full edition, sent after the global post (spec §3.3). Never throws:
+ * a failure to load, post, or record is logged (without the URL) and the loop carries on. */
+async function sendMarketOverrides(deps: SummaryDeps, url: string, payload: DiscordPayload, ymd: string): Promise<void> {
+  if (!deps.loadMarketOverrides || !deps.finishMarketOverride) return
+  const { loadMarketOverrides, finishMarketOverride } = deps
+
+  let overrides: MarketOverride[]
+  try {
+    overrides = await loadMarketOverrides()
+  } catch {
+    await deps.log({ level: 'warn', message: 'discord market overrides failed', detail: {} })
+    return
+  }
+
+  for (const target of groupMarketTargets(url, overrides)) {
+    let outcome: RunOutcome
+    try {
+      const result = await deps.post(target.url, payload)
+      outcome = result.ok
+        ? { kind: 'sent', httpStatus: result.httpStatus }
+        : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
+    } catch {
+      outcome = { kind: 'failed', httpStatus: null, reason: 'network' }
+    }
+
+    if (outcome.kind === 'failed') {
+      await deps.log({
+        level: 'warn',
+        message: 'discord market override send failed',
+        detail: { status: outcome.httpStatus, code: outcome.reason, users: target.userIds.length },
+      })
+    }
+
+    for (const userId of target.userIds) {
+      try {
+        await finishMarketOverride(userId, ymd, outcome)
+      } catch {
+        await deps.log({ level: 'warn', message: 'discord market override record failed', detail: { userId } })
+      }
+    }
+  }
+}
+
 export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEdition): Promise<RunOutcome> {
   const ymd = dashDate(taipeiYmd(deps.now()))
 
@@ -137,6 +185,9 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
       message: 'discord summary send failed',
       detail: { status: outcome.httpStatus, code: outcome.reason, name: edition },
     })
+  }
+  if (edition === 'full') {
+    await sendMarketOverrides(deps, url, payload, ymd)
   }
   return outcome
 }
