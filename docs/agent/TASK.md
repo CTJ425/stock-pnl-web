@@ -22,9 +22,9 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — Phase 1: 0.9.57 on `main`, PROD Supabase awaits explicit OK · Phase 2: 2a–2c done in 0.9.58-dev.3 (`dev`); 2d (admin-managed webhooks + adjustable schedule) committed in 0.9.58-dev.4 (`247b37f`, not pushed); DEV deploy awaits explicit OK
+- **Status**: 🔄 IN PROGRESS — Phase 1: 0.9.57 on `main`, PROD Supabase awaits explicit OK · Phase 2: 2a–2c done in 0.9.58-dev.3 (`dev`); 2d (admin-managed webhooks + adjustable schedule) committed in 0.9.58-dev.4 (`247b37f`) and deployed to DEV 2026-09-18; 0.9.58-dev.5 (`2eedfb6`) load-state polish; not pushed
 - **Agent**: Claude
-- **Timestamp**: 2026-09-18 10:36:45 Asia/Taipei
+- **Timestamp**: 2026-09-18 11:47:04 Asia/Taipei
 - **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
 - **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 decisions superseded — see the next line.
@@ -32,7 +32,7 @@
 - **Step 2d decisions (user, 2026-09-18)**: the admin console manages every Discord webhook; the per-user settings dialog is removed; per account: 經濟快報 (= the full edition) inherits the global webhook by default (inherit sends nothing extra; only a custom URL gets a second copy) and 個人持股報告 (no inherit); the brief and every holdings card go out together (default 17:05); two drop-downs set the brief+holdings time (17:05–20:55) and the full time (21:00–23:55). Supersedes "each user sets their own webhook" and "daily 17:15" above. Spec: docs/agent/specs/discord-admin-accounts.md.
 4. ~~Set the webhook in the DEV admin console and run 測試發送~~ ✅ (2026-09-17: test 15:11, previews from 15:25, all HTTP 200) · watch one real 17:05 and 21:30 round; check phone alignment of the 國際指數 / 美國總經 tables —— ⏳
 5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · apply schema §13 on PROD (clone an existing job's command behind the identity guard, `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook —— ⏳ awaiting explicit OK
-6. Phase 2: per-user holdings card (full amounts, merged workspaces, sent with the brief; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · ~~2b card modules~~ ✅ 0.9.58-dev.2 · ~~2c schema §14 / Edge / settings UI~~ ✅ 0.9.58-dev.3 · ~~2d admin-managed webhooks + adjustable schedule (spec discord-admin-accounts.md)~~ ✅ 0.9.58-dev.4 (`247b37f`) · **push `dev`** (user) —— ⏳ · **DEV deploy** (§14 + §15 DDL, clone cron `discord-holdings-daily`, deploy `stock-report`), real test sends from the admin console, one schedule save round-trip, watch one 17:05 and 21:30 round —— ⏳ awaiting explicit OK · accepted risks RISK-015/016/017, BUG-084
+6. Phase 2: per-user holdings card (full amounts, merged workspaces, sent with the brief; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · ~~2b card modules~~ ✅ 0.9.58-dev.2 · ~~2c schema §14 / Edge / settings UI~~ ✅ 0.9.58-dev.3 · ~~2d admin-managed webhooks + adjustable schedule (spec discord-admin-accounts.md)~~ ✅ 0.9.58-dev.4 (`247b37f`) · **push `dev`** (user) —— ⏳ · ~~DEV deploy (§14 + §15 DDL, clone cron `discord-holdings-daily` at 17:05, deploy `stock-report` v13)~~ ✅ 2026-09-18 · ~~admin-op end-to-end check with a temporary admin~~ ✅ · real test sends to a private webhook from the admin console, watch one 17:05 and 21:30 round —— ⏳ · PROD (merge `main`, §14 + §15, clone cron, deploy) —— ⏳ awaiting explicit OK · accepted risks RISK-015/016/017, BUG-084
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
 - **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**
