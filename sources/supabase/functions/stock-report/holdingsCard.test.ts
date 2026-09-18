@@ -331,6 +331,9 @@ function row(p: Partial<HoldingRowOut> & Pick<HoldingRowOut, 'ticker' | 'name'>)
     returnPct: null,
     dayPnl: null,
     dayPct: null,
+    avgCost: 0,
+    breakEven: null,
+    realized: 0,
     ...p,
   }
 }
@@ -347,6 +350,7 @@ function cur(currency: 'TWD' | 'USD', p: Partial<CurrencySummary> = {}): Currenc
     dayPnl: null,
     dayPct: null,
     realizedYtd: 0,
+    realizedToday: 0,
     missingCount: 0,
     newestQuoteYmd: null,
     ...p,
@@ -354,10 +358,10 @@ function cur(currency: 'TWD' | 'USD', p: Partial<CurrencySummary> = {}): Currenc
 }
 
 const TWD_ROWS: HoldingRowOut[] = [
-  row({ ticker: '2330', name: '台積電', shares: 1200, basis: 624_510, close: 1085.5, prevClose: 1072.3, quoteYmd: YMD, mktVal: 1_302_600, unrealized: 676_123.4, returnPct: 108.2645, dayPnl: 15_840, dayPct: 1.2313 }),
-  row({ ticker: '0050', name: '元大台灣50', shares: 37, basis: 5_564, close: 150.35, prevClose: 151.1, quoteYmd: YMD, mktVal: 5_562.95, unrealized: -18.6, returnPct: -0.3343, dayPnl: -27.75, dayPct: -0.4963 }),
-  row({ ticker: '6488', name: '環球晶', shares: 1000, basis: 480_000 }),
-  row({ ticker: '2603', name: '長榮', direction: 'SHORT', shares: 1000, basis: 99_478, close: 95, prevClose: 95, quoteYmd: YMD, mktVal: 95_000, unrealized: 4_343, returnPct: 4.3657, dayPnl: 0, dayPct: 0 }),
+  row({ ticker: '2330', name: '台積電', shares: 1200, basis: 624_510, close: 1085.5, prevClose: 1072.3, quoteYmd: YMD, mktVal: 1_302_600, unrealized: 676_123.4, returnPct: 108.2645, dayPnl: 15_840, dayPct: 1.2313, avgCost: 520.43, breakEven: 522.7, realized: 12_345 }),
+  row({ ticker: '0050', name: '元大台灣50', shares: 37, basis: 5_564, close: 150.35, prevClose: 151.1, quoteYmd: YMD, mktVal: 5_562.95, unrealized: -18.6, returnPct: -0.3343, dayPnl: -27.75, dayPct: -0.4963, avgCost: 150.38, breakEven: 151.2 }),
+  row({ ticker: '6488', name: '環球晶', shares: 1000, basis: 480_000, avgCost: 480, breakEven: 482.1 }),
+  row({ ticker: '2603', name: '長榮', direction: 'SHORT', shares: 1000, basis: 99_478, close: 95, prevClose: 95, quoteYmd: YMD, mktVal: 95_000, unrealized: 4_343, returnPct: 4.3657, dayPnl: 0, dayPct: 0, avgCost: 99.478, realized: -1_500 }),
 ]
 
 const TWD_FULL = cur('TWD', {
@@ -370,13 +374,14 @@ const TWD_FULL = cur('TWD', {
   dayPnl: 15_812.25,
   dayPct: 1.2345,
   realizedYtd: 78_415.2,
+  realizedToday: 3_210,
   missingCount: 1,
   newestQuoteYmd: YMD,
 })
 
 const USD_FULL = cur('USD', {
   rows: [
-    row({ market: 'US', ticker: 'AAPL', name: 'Apple', shares: 2.25, basis: 300, close: 229.87, prevClose: 227.87, quoteYmd: '2026-09-16', mktVal: 517.2075, unrealized: 217.21, returnPct: 72.4, dayPnl: 4.5, dayPct: 0.8777 }),
+    row({ market: 'US', ticker: 'AAPL', name: 'Apple', shares: 2.25, basis: 300, close: 229.87, prevClose: 227.87, quoteYmd: '2026-09-16', mktVal: 517.2075, unrealized: 217.21, returnPct: 72.4, dayPnl: 4.5, dayPct: 0.8777, avgCost: 133.33, breakEven: 133.33 }),
   ],
   marketValue: 517.2075,
   cost: 300,
@@ -395,27 +400,39 @@ const TWD_KPI = [
   '成本           630,074',
   '未實現        +680,448 +107.99%',
   '今日           +15,812   +1.23%',
+  '今日已實現      +3,210',
   '今年已實現     +78,415',
   '空單市值        95,000',
 ]
 const TWD_TABLE = [
   '2330 台積電                   ▲1.23%',
   '  1,200股 1,085.5  +676,123 +108.26%',
+  '  均價 520.43  保本 522.7',
+  '  已實現 +12,345',
   '0050 元大台灣50               ▼0.50%',
   '  37股 150.35           -19   -0.33%',
+  '  均價 150.38  保本 151.2',
   '6488 環球晶                       --',
   '  1,000股 --             --       --',
+  '  均價 480  保本 482.1',
   '空 2603 長榮                  ─0.00%',
   '  1,000股 95         +4,343   +4.37%',
+  '  均價 99.48',
+  '  已實現 -1,500',
 ]
 const USD_KPI = [
   '市值            517.21',
   '成本            300.00',
   '未實現         +217.21  +72.40%',
   '今日             +4.50   +0.88%',
+  '今日已實現        0.00',
   '今年已實現        0.00',
 ]
-const USD_TABLE = ['AAPL Apple                    ▲0.88%', '  2.25股 229.87     +217.21  +72.40%']
+const USD_TABLE = [
+  'AAPL Apple                    ▲0.88%',
+  '  2.25股 229.87     +217.21  +72.40%',
+  '  均價 133.33  保本 133.33',
+]
 
 describe('buildHoldingsPayload', () => {
   const both: HoldingsSummary = { ymd: YMD, twd: TWD_FULL, usd: USD_FULL }
@@ -588,5 +605,99 @@ describe('buildHoldingsTestPayload', () => {
         },
       ],
     })
+  })
+})
+
+// ── revision 3: more P&L on the card (spec discord-holdings.md Revision 3) ───
+const WS_C: WorkspaceInput = {
+  id: 'ws-c',
+  fee_rate: 0.001425,
+  transactions: [
+    tx({ ws: 'ws-c', date: '2025-05-01', market: 'TPE', ticker: '2454', name: '聯發科', type: 'BUY', price: 900, qty: 2000, fee: 0 }),
+    tx({ ws: 'ws-c', date: '2026-04-01', market: 'TPE', ticker: '2454', name: '聯發科', type: 'SELL', price: 950, qty: 500, fee: 2000 }),
+    tx({ ws: 'ws-c', date: YMD, market: 'TPE', ticker: '2454', name: '聯發科', type: 'SELL', price: 1000, qty: 500, fee: 2100 }),
+    tx({ ws: 'ws-c', date: '2025-06-01', market: 'US', ticker: 'AAPL', name: 'Apple', type: 'BUY', price: 100, qty: 4, fee: 1 }),
+  ],
+}
+
+const QUOTES_C = new Map<string, HoldingQuote | null>([
+  ['TPE:2454', { ymd: YMD, close: 1010, prevClose: 1000 }],
+  ['US:AAPL', { ymd: YMD, close: 200, prevClose: 198 }],
+])
+
+function rowOfSummary(s: CurrencySummary, key: string, dir: 'LONG' | 'SHORT' = 'LONG'): HoldingRowOut {
+  const r = s.rows.find((x) => x.key === key && x.direction === dir)
+  if (!r) throw new Error(`no row ${key} ${dir}`)
+  return r
+}
+
+describe('aggregateHoldings — average cost, break-even and realized', () => {
+  const ledgers = buildLedgers([WS_C])
+  const summary = aggregateHoldings(ledgers, QUOTES_C, YMD)
+
+  it('reports the merged average cost per share', () => {
+    const twd = rowOfSummary(summary.twd, 'TPE:2454')
+    expect(twd.avgCost).toBeCloseTo(twd.basis / twd.shares, 9)
+    expect(twd.avgCost).toBeCloseTo(holdingOf(ledgers[0], 'TPE:2454').avgCost, 6)
+    const usd = rowOfSummary(summary.usd, 'US:AAPL')
+    expect(usd.avgCost).toBeCloseTo(usd.basis / usd.shares, 9)
+  })
+
+  it('averages the cost of one ticker held in two workspaces', () => {
+    const both = aggregateHoldings(buildLedgers([WS_A, WS_B]), QUOTES, YMD)
+    const r = rowOfSummary(both.twd, 'TPE:2330')
+    expect(r.avgCost).toBeCloseTo(r.basis / 1200, 9)
+  })
+
+  it('reports the cumulative realized P&L of that position, across all years', () => {
+    const h = holdingOf(ledgers[0], 'TPE:2454')
+    expect(h.realized).not.toBe(0)
+    expect(rowOfSummary(summary.twd, 'TPE:2454').realized).toBeCloseTo(h.realized, 6)
+  })
+
+  it('reports no realized P&L for a position that was never sold', () => {
+    expect(rowOfSummary(summary.usd, 'US:AAPL').realized).toBe(0)
+  })
+
+  it("sums today's realized P&L per currency, counting only sells dated as the card", () => {
+    const sells = ledgers[0].ledger.yearly[2026].tickers['TPE:2454'].sells
+    const today = sells.filter((x) => x.date === YMD)
+    const earlier = sells.filter((x) => x.date !== YMD)
+    expect(today).toHaveLength(1)
+    expect(earlier).toHaveLength(1)
+    expect(summary.twd.realizedToday).toBeCloseTo(today[0].realized, 6)
+    expect(summary.twd.realizedToday).not.toBeCloseTo(summary.twd.realizedYtd, 6)
+    expect(summary.twd.realizedYtd).toBeCloseTo(today[0].realized + earlier[0].realized, 6)
+    expect(summary.usd.realizedToday).toBe(0)
+  })
+
+  it('reports no realized P&L today when the card is built for another day', () => {
+    const other = aggregateHoldings(ledgers, QUOTES_C, '2026-09-16')
+    expect(other.twd.realizedToday).toBe(0)
+  })
+
+  it('breaks even above the average cost in TWD, and exactly there in USD', () => {
+    const twd = rowOfSummary(summary.twd, 'TPE:2454')
+    expect(twd.breakEven).not.toBeNull()
+    expect(twd.breakEven as number).toBeGreaterThan(twd.avgCost)
+    const usd = rowOfSummary(summary.usd, 'US:AAPL')
+    expect(usd.breakEven as number).toBeCloseTo(usd.avgCost, 2)
+  })
+
+  it('is the lowest cent at which this position stops losing money', () => {
+    const be = rowOfSummary(summary.twd, 'TPE:2454').breakEven as number
+    const at = (price: number) =>
+      rowOfSummary(aggregateHoldings(ledgers, new Map([['TPE:2454', { ymd: YMD, close: price, prevClose: price }]]), YMD).twd, 'TPE:2454')
+        .unrealized as number
+    expect(be).toBeCloseTo(Math.round(be * 100) / 100, 9)
+    expect(at(be)).toBeGreaterThanOrEqual(0)
+    expect(at(Math.round((be - 0.01) * 100) / 100)).toBeLessThan(0)
+  })
+
+  it('gives a short leg no break-even price', () => {
+    const short = aggregateHoldings(buildLedgers([WS_B]), QUOTES, YMD)
+    const r = rowOfSummary(short.twd, 'TPE:2603', 'SHORT')
+    expect(r.breakEven).toBeNull()
+    expect(r.avgCost).toBeCloseTo(r.basis / r.shares, 9)
   })
 })
