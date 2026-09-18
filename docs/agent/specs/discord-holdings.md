@@ -722,3 +722,62 @@ Scope: a probe, not a renderer. Nothing about the live cards changes.
 - No browser change: the probe is triggered once from the admin Edge action by the maintainer.
   If the user likes the layout, Revision 8 will write the real renderer; if not, this file and the op
   are deleted.
+
+## Revision 8 — both cards in Discord markdown (user 2026-09-18, target 0.9.58-dev.12)
+
+After the Revision 7 probe the user chose markdown for **both** cards and cut the holdings card
+down to four fields per position plus one total line. Markdown reflows to any width, so the
+24-column rules of Revision 6 no longer apply. This revision replaces Revision 6's layout; the
+Revision 7 probe (`markdownSample.ts`, op `markdown-sample`, its tests) is deleted.
+
+Every description is plain markdown lines joined with `\n` — **no** ``` fence. Embed titles,
+colours, footers, `allowed_mentions` and the 2,800-character budget are unchanged. Text that comes
+from data (stock names, index labels) has the markdown characters `\ * _ ~ | ` `` ` `` escaped with a
+backslash.
+
+### 8.1 Holdings card (`holdingsCard.ts`)
+
+```
+未實現合計 **+680,448**（+107.99%）｜今日 +15,812
+
+**2330 台積電**｜1,200 股｜均價 520.43｜未實現 **+676,123**
+**6488 環球晶**｜1 張｜均價 480｜未實現 --
+**空 2603 長榮**｜1 張｜均價 99.48｜未實現 **+4,343**
+```
+
+- Total line: `未實現合計 **<signed unrealized>**（<unrealizedPct>）｜今日 <signed dayPnl>`; the
+  parenthesis is omitted when the percentage is unknown; an unknown amount prints as `--` without
+  bold. Then one empty line.
+- One line per position: `**<label>**｜<qty>｜均價 <price(avgCost)>｜未實現 **<signed unrealized>**`;
+  an unknown unrealized prints `未實現 --` (no bold). `<label>` = `⚠️` when the quote is older than the
+  newest one, `空 ` for a SHORT row, then `<ticker> <name>` — **not truncated** any more.
+- `<qty>`: TWD whole lots (`shares % 1000 === 0`) → `<shares / 1000 with separators> 張`; otherwise
+  `<shares with separators> 股`; USD → `<shares> 股` with the existing share formatter.
+- Removed from the card: 市值, 成本, 今日已實現, 今年已實現, 空單市值, the per-position 現價, 市值,
+  成本／價金, 報酬率, 保本 and 已實現 lines. `aggregateHoldings` keeps computing them (no data change).
+- Budget: whole position lines are dropped from the end, followed by the existing
+  `…另 N 檔，完整明細請見網站` line.
+
+### 8.2 Market summary card (`discordSummary.ts`)
+
+One markdown line per current table row; the value is bold, an unknown value prints `--` without
+bold and without a circle:
+
+| Block | Line |
+|---|---|
+| 台股大盤 | `加權指數 **45,848.90**`, `漲跌點數 **+337.41** 🔴`, `漲跌幅度 **+0.74%** 🔴`, `成交金額 **6,759.7億**` |
+| 三大法人 | `外資 **-179.8** 🟢` … `合計 **-213.8** 🟢` (same four rows) |
+| 國際指數 | `日經225 **63,923.00** +0.69% 🔴`; no quote → `KOSPI 暫無資料`; unknown percentage → `日經225 **63,923.00** --`; a market whose date is older than the newest listed one gets `（MM/DD）` appended |
+| 匯率 | `USD/TWD **31.773** +0.056`; no previous close → `USD/TWD **31.773**` |
+| 融資融券 | `融資 **9,248,877** 張（+58,366）`, `融資金額 **5,861.7** 億（+39.3）`, `融券 **197,048** 張（-1,004）`; unknown change → `（--）` |
+| 美國總經 | `核心CPI **2.45%**（前值 2.47%，08月）`; equal values → `聯邦利率 **3.5-3.75%**（持平，09/16）`; no previous → `核心CPI **2.45%**（08月）`; no latest → `核心PPI 暫無資料` |
+
+Values keep their current precision (indices two decimals again — the whole-point rounding of
+Revision 6 existed only for width). The circles 🔴 🟢 ⚪ and every existing rule for choosing them,
+the "尚未公布" / "暫無資料" whole-card texts, footers and colours are unchanged.
+
+### 8.3 Guards
+
+The ≤ 24-column tests are replaced by: no description contains ``` , and every description is at
+most 4,096 characters. The exact lines are fixed by the golden tests in `holdingsCard.test.ts`,
+`discordSummary.test.ts`, `discordRun.test.ts` and `holdingsRun.test.ts`.

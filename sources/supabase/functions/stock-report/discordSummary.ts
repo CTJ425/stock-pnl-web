@@ -73,50 +73,9 @@ const RED = 0xe5484d
 const GREEN = 0x30a46c
 const GREY = 0x8b8d98
 
-/** East Asian Wide/Fullwidth + emoji ranges that count as display-width 2, spec §2.9. */
-const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
-  [0x1100, 0x115f],
-  [0x2e80, 0x303e],
-  [0x3041, 0x33ff],
-  [0x3400, 0x4dbf],
-  [0x4e00, 0x9fff],
-  [0xa000, 0xa4cf],
-  [0xac00, 0xd7a3],
-  [0xf900, 0xfaff],
-  [0xfe30, 0xfe4f],
-  [0xff00, 0xff60],
-  [0xffe0, 0xffe6],
-  // Ambiguous-width marks the cards actually print (▲ ▼ ─ ⚠): a CJK font renders them two
-  // columns wide, so counting them as one made every title line land one column over the cap.
-  [0x2500, 0x257f],
-  [0x25a0, 0x25ff],
-  [0x2600, 0x27bf],
-  [0x1f300, 0x1faff],
-  [0x2600, 0x27bf],
-]
-
-/** Display width, spec §2.9: VS16/ZWJ count 0, wide/emoji ranges count 2, everything else 1. */
-function dispWidth(s: string): number {
-  let total = 0
-  for (const ch of s) {
-    const cp = ch.codePointAt(0)!
-    if (cp === 0xfe0f || cp === 0x200d) continue
-    total += WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
-  }
-  return total
-}
-
-function padEndW(s: string, width: number): string {
-  return s + ' '.repeat(Math.max(0, width - dispWidth(s)))
-}
-
-function padStartW(s: string, width: number): string {
-  return ' '.repeat(Math.max(0, width - dispWidth(s))) + s
-}
-
-/** Wraps a card's table rows in a fenced (monospace) code block, spec §2.9. */
-function fence(lines: string[]): string {
-  return '```\n' + lines.join('\n') + '\n```'
+/** Markdown special characters escaped in data-derived text (index labels), spec Revision 8. */
+function escapeMd(s: string): string {
+  return s.replace(/[\\*_~|`]/g, '\\$&')
 }
 
 export function findMarketDay(file: { days?: MarketDay[] } | null, ymd: string): MarketDay | null {
@@ -139,11 +98,6 @@ function fmtAbs(n: number, decimals: number): string {
 
 function fmtSigned(n: number, decimals: number): string {
   return signOf(n, decimals) + fmtAbs(n, decimals)
-}
-
-/** Unknown numbers print `--`, spec §2.9. */
-function fmtOrDash(n: number | null, decimals: number): string {
-  return n == null ? '--' : fmtAbs(n, decimals)
 }
 
 function changeStr(n: number | null, decimals: number): string {
@@ -213,12 +167,9 @@ interface CardBits {
   footerText?: string
 }
 
-const TAIEX_LABELS = ['加權指數', '漲跌點數', '漲跌幅度', '成交金額'] as const
-
 function taiexCard(market: MarketDay, marketAsOf: string | null, today: string): CardBits {
   if (market.taiex == null) return { description: '尚未公布', color: GREY }
   const cp = market.changePoints
-  const valueStr = fmtAbs(market.taiex, 2)
   let changeStr2: string
   let pctStr: string
   let mark = ''
@@ -230,26 +181,24 @@ function taiexCard(market: MarketDay, marketAsOf: string | null, today: string):
     sign = signOf(cp, 2)
     const prevClose = market.taiex - cp
     const pct = prevClose === 0 ? 0 : (cp / prevClose) * 100
-    changeStr2 = fmtSigned(cp, 2)
-    pctStr = `${fmtSigned(pct, 2)}%`
+    changeStr2 = `**${fmtSigned(cp, 2)}**`
+    pctStr = `**${fmtSigned(pct, 2)}%**`
     mark = sign === '+' ? '🔴' : sign === '-' ? '🟢' : '⚪'
   }
-  const tradeStr = market.tradeValueTwd == null ? '--' : `${fmtAbs(market.tradeValueTwd / 1e8, 1)}億`
-  const labelW = Math.max(...TAIEX_LABELS.map(dispWidth))
-  const numW = Math.max(dispWidth(valueStr), dispWidth(changeStr2), dispWidth(pctStr), dispWidth(tradeStr))
+  const tradeStr = market.tradeValueTwd == null ? '--' : `**${fmtAbs(market.tradeValueTwd / 1e8, 1)}億**`
   const markSuffix = mark ? ` ${mark}` : ''
   const lines = [
-    `${padEndW(TAIEX_LABELS[0], labelW)}  ${padStartW(valueStr, numW)}`,
-    `${padEndW(TAIEX_LABELS[1], labelW)}  ${padStartW(changeStr2, numW)}${markSuffix}`,
-    `${padEndW(TAIEX_LABELS[2], labelW)}  ${padStartW(pctStr, numW)}${markSuffix}`,
-    `${padEndW(TAIEX_LABELS[3], labelW)}  ${padStartW(tradeStr, numW)}`,
+    `加權指數 **${fmtAbs(market.taiex, 2)}**`,
+    `漲跌點數 ${changeStr2}${markSuffix}`,
+    `漲跌幅度 ${pctStr}${markSuffix}`,
+    `成交金額 ${tradeStr}`,
   ]
   const color = sign === '+' ? RED : sign === '-' ? GREEN : GREY
-  return { description: fence(lines), color, footerText: stamp(market.date, marketAsOf, today) }
+  return { description: lines.join('\n'), color, footerText: stamp(market.date, marketAsOf, today) }
 }
 
 function instAmt(v: number | null): string {
-  return v == null ? '--' : fmtSigned(v / 1e8, 1)
+  return v == null ? '--' : `**${fmtSigned(v / 1e8, 1)}**`
 }
 
 function instMark(v: number | null): string {
@@ -282,17 +231,15 @@ function institutionalCard(
   const values = [inst.foreignTwd, inst.trustTwd, dealer, inst.totalTwd]
   const amtStrs = values.map(instAmt)
   const marks = values.map(instMark)
-  const labelW = Math.max(...INST_LABELS.map(dispWidth))
-  const numW = Math.max(...amtStrs.map(dispWidth))
   const lines = INST_LABELS.map((label, i) => {
     const markSuffix = marks[i] ? ` ${marks[i]}` : ''
-    return `${padEndW(label, labelW)}  ${padStartW(amtStrs[i], numW)}${markSuffix}`
+    return `${label} ${amtStrs[i]}${markSuffix}`
   })
   const roundedSign = inst.totalTwd == null ? '' : signOf(inst.totalTwd / 1e8, 1)
   const color = roundedSign === '+' ? RED : roundedSign === '-' ? GREEN : GREY
   return {
     title: `${baseTitle}${institutionalSuffix(marketDate, marketAsOf)}（億元）`,
-    description: fence(lines),
+    description: lines.join('\n'),
     color,
     footerText: stamp(marketDate, marketAsOf, today),
   }
@@ -302,40 +249,42 @@ function marginCard(m: MarketMarginTotals | null, today: string): Omit<CardBits,
   if (!m) return { description: '尚未公布' }
   const amtTodayB = m.marginAmountThousandTwd.today == null ? null : m.marginAmountThousandTwd.today / 100_000
   const amtChangeB = m.marginAmountThousandTwd.change == null ? null : m.marginAmountThousandTwd.change / 100_000
-  const rows: Array<[string, string, string]> = [
-    ['融資張', fmtOrDash(m.marginLots.today, 0), changeStr(m.marginLots.change, 0)],
-    ['融資億', fmtOrDash(amtTodayB, 1), changeStr(amtChangeB, 1)],
-    ['融券張', fmtOrDash(m.shortLots.today, 0), changeStr(m.shortLots.change, 0)],
+  const lots = (v: number | null) => (v == null ? '--' : `**${fmtAbs(v, 0)}**`)
+  const amt = (v: number | null) => (v == null ? '--' : `**${fmtAbs(v, 1)}**`)
+  const lines = [
+    `融資 ${lots(m.marginLots.today)} 張（${changeStr(m.marginLots.change, 0)}）`,
+    `融資金額 ${amt(amtTodayB)} 億（${changeStr(amtChangeB, 1)}）`,
+    `融券 ${lots(m.shortLots.today)} 張（${changeStr(m.shortLots.change, 0)}）`,
   ]
-  const lines = rows.map(([label, v1, v2]) => `${padEndW(label, 7)}${padStartW(v1, 9)} ${padStartW(v2, 7)}`)
-  return { description: fence(lines), footerText: stamp(m.date, null, today) }
-}
-
-/** Arrow carries the direction, spec §6.2 — unsigned percentage, `--` when unknown. */
-function arrowPct(pct: number | null): string {
-  if (pct == null) return '--'
-  const rounded = Number(pct.toFixed(2))
-  const arrow = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '─'
-  return `${arrow}${Math.abs(rounded).toFixed(2)}%`
+  return { description: lines.join('\n'), footerText: stamp(m.date, null, today) }
 }
 
 function indexBlock(indices: IndexLine[]): { description: string; hasData: boolean } {
   if (indices.length === 0) return { description: '暫無資料', hasData: false }
   const withQuote = indices.filter((i): i is IndexLine & { quote: NonNullable<IndexLine['quote']> } => i.quote != null)
   // The footer already says each market's date is its own latest close; only a market whose
-  // close date lags behind the newest one among the listed indices gets a second line.
+  // close date lags behind the newest one among the listed indices gets `（MM/DD）` appended.
   const newestDate = withQuote.length === 0 ? null : withQuote.map((i) => i.quote.date).reduce((a, b) => (a > b ? a : b))
   const lines: string[] = []
   for (const i of indices) {
+    const label = escapeMd(i.label)
     if (!i.quote) {
-      lines.push(`${padEndW(i.label, 9)}暫無資料`)
+      lines.push(`${label} 暫無資料`)
       continue
     }
-    const closeStr = fmtAbs(Math.round(i.quote.close), 0)
-    lines.push(`${padEndW(i.label, 9)}${padStartW(closeStr, 7)} ${padStartW(arrowPct(i.quote.changePct), 7)}`)
-    if (newestDate != null && i.quote.date !== newestDate) lines.push(`  ·${i.quote.date} 收盤`)
+    const closeStr = fmtAbs(i.quote.close, 2)
+    let pctPart: string
+    if (i.quote.changePct == null) {
+      pctPart = '--'
+    } else {
+      const rounded = Number(i.quote.changePct.toFixed(2))
+      const mark = rounded > 0 ? '🔴' : rounded < 0 ? '🟢' : '⚪'
+      pctPart = `${fmtSigned(i.quote.changePct, 2)}% ${mark}`
+    }
+    const datePart = newestDate != null && i.quote.date !== newestDate ? `（${i.quote.date}）` : ''
+    lines.push(`${label} **${closeStr}** ${pctPart}${datePart}`)
   }
-  return { description: fence(lines), hasData: true }
+  return { description: lines.join('\n'), hasData: true }
 }
 
 /** FRED series id → short table label, spec §2.9; falls back to the original label. */
@@ -383,25 +332,29 @@ function macroBlock(macro: MacroLine[] | null): { description: string; hasData: 
   for (const m of macro) {
     const label = macroLabel(m)
     if (macroMissing(m.latest)) {
-      lines.push(`${padEndW(label, 9)}暫無資料`)
+      lines.push(`${label} 暫無資料`)
       continue
     }
     const latestStr = macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)
-    const prevStr = macroMissing(m.previous) ? '--' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
     const period = macroPeriodStr((m.latest as MacroPointLike).period)
-    // Same value both periods ⇒ no point repeating it with an arrow between two identical strings.
-    const body = prevStr === latestStr ? latestStr : `${prevStr} → ${latestStr}`
-    lines.push(`${label} ${period}`)
-    lines.push(`  ${padStartW(body, 20)}`)
+    let prevPart: string
+    if (macroMissing(m.previous)) {
+      prevPart = ''
+    } else {
+      const prevStr = macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
+      // Same value both periods ⇒ 持平 rather than repeating it with a redundant 前值.
+      prevPart = prevStr === latestStr ? '持平，' : `前值 ${prevStr}，`
+    }
+    lines.push(`${label} **${latestStr}**（${prevPart}${period}）`)
   }
-  return { description: fence(lines), hasData: true }
+  return { description: lines.join('\n'), hasData: true }
 }
 
 function fxCard(fx: FxLine | null, today: string): Omit<CardBits, 'color'> {
   if (!fx || fx.latest == null) return { description: '暫無資料' }
-  const base = `USD/TWD  ${fmtAbs(fx.latest, fx.decimals)}`
+  const base = `USD/TWD **${fmtAbs(fx.latest, fx.decimals)}**`
   const line = fx.prevClose == null ? base : `${base} ${fmtSigned(fx.latest - fx.prevClose, fx.decimals)}`
-  return { description: fence([line]), footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
+  return { description: line, footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
 }
 
 export function buildSummaryPayload(input: SummaryInput): DiscordPayload {

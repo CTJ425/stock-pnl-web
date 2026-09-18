@@ -381,51 +381,9 @@ const GREY = 0x8b8d98
 const WEEKDAY_CHARS = '日一二三四五六'
 const BUDGET = 2800
 
-/**
- * `discordSummary.ts`'s width helpers are module-private and D6 freezes that file, so this
- * carries its own copy — same WIDE_RANGES and rules (VS16/ZWJ 0, wide/emoji 2, else 1).
- */
-const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
-  [0x1100, 0x115f],
-  [0x2e80, 0x303e],
-  [0x3041, 0x33ff],
-  [0x3400, 0x4dbf],
-  [0x4e00, 0x9fff],
-  [0xa000, 0xa4cf],
-  [0xac00, 0xd7a3],
-  [0xf900, 0xfaff],
-  [0xfe30, 0xfe4f],
-  [0xff00, 0xff60],
-  [0xffe0, 0xffe6],
-  // Ambiguous-width marks the cards actually print (▲ ▼ ─ ⚠): a CJK font renders them two
-  // columns wide, so counting them as one made every title line land one column over the cap.
-  [0x2500, 0x257f],
-  [0x25a0, 0x25ff],
-  [0x2600, 0x27bf],
-  [0x1f300, 0x1faff],
-  [0x2600, 0x27bf],
-]
-
-function dispWidth(s: string): number {
-  let total = 0
-  for (const ch of s) {
-    const cp = ch.codePointAt(0)!
-    if (cp === 0xfe0f || cp === 0x200d) continue
-    total += WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
-  }
-  return total
-}
-
-function padEndW(s: string, width: number): string {
-  return s + ' '.repeat(Math.max(0, width - dispWidth(s)))
-}
-
-function padStartW(s: string, width: number): string {
-  return ' '.repeat(Math.max(0, width - dispWidth(s))) + s
-}
-
-function fence(lines: string[]): string {
-  return '```\n' + lines.join('\n') + '\n```'
+/** Markdown special characters escaped in data-derived text (stock names), spec Revision 8. */
+function escapeMd(s: string): string {
+  return s.replace(/[\\*_~|`]/g, '\\$&')
 }
 
 function signOf(n: number, decimals: number): '' | '+' | '-' {
@@ -441,10 +399,6 @@ function fmtAbs(n: number, decimals: number): string {
 
 function fmtSigned(n: number, decimals: number): string {
   return signOf(n, decimals) + fmtAbs(n, decimals)
-}
-
-function fmtOrDash(n: number | null, decimals: number): string {
-  return n == null ? '--' : fmtAbs(n, decimals)
 }
 
 function fmtSignedOrDash(n: number | null, decimals: number): string {
@@ -468,13 +422,6 @@ function priceUsd(n: number | null): string {
 /** Up to four decimals, trailing zeros trimmed, thousands separators. */
 function sharesStr(n: number): string {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-}
-
-function dayPctText(pct: number | null): string {
-  if (pct == null) return '--'
-  const rounded = Number(pct.toFixed(2))
-  const arrow = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '─'
-  return `${arrow}${Math.abs(rounded).toFixed(2)}%`
 }
 
 function titleDate(ymd: string): string {
@@ -504,78 +451,44 @@ function usdTitle(cur: CurrencySummary): string {
   return `美股持股・美東 ${titleDate(cur.newestQuoteYmd)} 收盤`
 }
 
-/** Cuts a label to display width ≤ 14 and appends `…` when it would otherwise exceed 15. */
-function truncateLabel(label: string): string {
-  if (dispWidth(label) <= 15) return label
-  let width = 0
-  let result = ''
-  for (const ch of label) {
-    const cp = ch.codePointAt(0)!
-    const w = cp === 0xfe0f || cp === 0x200d ? 0 : WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
-    if (width + w > 14) break
-    result += ch
-    width += w
-  }
-  return `${result}…`
+/** `未實現合計 **<signed>**（<pct>）｜今日 <signed>` — spec Revision 8 §8.1. The percentage
+ * parenthesis is omitted when unknown; an unknown amount prints `--` without bold. */
+function totalLine(cur: CurrencySummary, decimals: number): string {
+  const amt = cur.unrealized == null ? '--' : `**${fmtSigned(cur.unrealized, decimals)}**`
+  const pct = cur.unrealizedPct == null ? '' : `（${pctSigned(cur.unrealizedPct)}）`
+  const day = fmtSignedOrDash(cur.dayPnl, decimals)
+  return `未實現合計 ${amt}${pct}｜今日 ${day}`
 }
 
-function kpiLines(cur: CurrencySummary, decimals: number): string[] {
-  const hasShort = cur.rows.some((r) => r.direction === 'SHORT')
-  const rows: Array<{ label: string; amount: string; pctLabel?: string; pct?: string }> = [
-    { label: '市值', amount: fmtOrDash(cur.marketValue, decimals) },
-    { label: '成本', amount: fmtOrDash(cur.cost, decimals) },
-    { label: '未實現', amount: fmtSignedOrDash(cur.unrealized, decimals), pctLabel: '報酬率', pct: pctSigned(cur.unrealizedPct) },
-    { label: '今日', amount: fmtSignedOrDash(cur.dayPnl, decimals), pctLabel: '漲跌幅', pct: pctSigned(cur.dayPct) },
-    { label: '今日已實現', amount: fmtSigned(cur.realizedToday, decimals) },
-    { label: '今年已實現', amount: fmtSigned(cur.realizedYtd, decimals) },
-  ]
-  if (hasShort) rows.push({ label: '空單市值', amount: fmtOrDash(cur.shortMarketValue, decimals) })
-  const lines: string[] = []
-  for (const r of rows) {
-    lines.push(padEndW(r.label, 10) + padStartW(r.amount, 12))
-    if (r.pctLabel !== undefined) lines.push(`  ${padEndW(r.pctLabel, 8)}${padStartW(r.pct as string, 12)}`)
-  }
-  return lines
+/** TWD whole lots (`shares % 1000 === 0`) show as 張; everything else, and every USD row, as 股. */
+function qtyText(currency: Currency, shares: number): string {
+  if (currency === 'TWD' && shares % 1000 === 0) return `${sharesStr(shares / 1000)} 張`
+  return `${sharesStr(shares)} 股`
 }
 
-function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): string[] {
+/** One markdown line per position — spec Revision 8 §8.1, not truncated. */
+function rowLine(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): string {
   const stale = r.quoteYmd != null && newestQuoteYmd != null && r.quoteYmd < newestQuoteYmd
   const rawLabel = `${stale ? '⚠️' : ''}${r.direction === 'SHORT' ? '空 ' : ''}${r.ticker} ${r.name}`
-  const label = truncateLabel(rawLabel)
-  const line1 = padEndW(label, 16) + padStartW(dayPctText(r.dayPct), 8)
-
+  const label = escapeMd(rawLabel)
   const priceFmt = currency === 'TWD' ? priceTwd : priceUsd
-  const line2 = `  ${sharesStr(r.shares)}股 @ ${priceFmt(r.close)}`
-
-  // A short row's basis is proceeds received, not a cost, so it is labelled 價金 rather than 成本.
-  const basisLabel = r.direction === 'SHORT' ? '價金' : '成本'
-  const lines = [
-    line1,
-    line2,
-    `  ${padEndW('市值', 6)}${padStartW(fmtOrDash(r.mktVal, decimals), 14)}`,
-    `  ${padEndW(basisLabel, 6)}${padStartW(fmtOrDash(r.basis, decimals), 14)}`,
-    `  ${padEndW('未實現', 6)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 14)}`,
-    `  ${padEndW('報酬率', 6)}${padStartW(pctSigned(r.returnPct), 14)}`,
-    `  ${padEndW('均價', 6)}${padStartW(priceFmt(r.avgCost), 14)}`,
-  ]
-  if (r.direction === 'LONG' && r.breakEven != null) lines.push(`  ${padEndW('保本', 6)}${padStartW(priceFmt(r.breakEven), 14)}`)
-  if (r.realized !== 0) lines.push(`  ${padEndW('已實現', 6)}${padStartW(fmtSigned(r.realized, decimals), 14)}`)
-  return lines
+  const unrealizedText = r.unrealized == null ? '--' : `**${fmtSigned(r.unrealized, decimals)}**`
+  return `**${label}**｜${qtyText(currency, r.shares)}｜均價 ${priceFmt(r.avgCost)}｜未實現 ${unrealizedText}`
 }
 
-/** Rows fence, dropping rows from the end until the whole description fits the 2,800-char budget. */
-function buildDescription(kpi: string[], allRowLines: string[][]): string {
-  const kpiFence = fence(kpi)
-  let kept = allRowLines.length
+/** Total line + blank line + one line per position, dropping whole positions from the end until
+ * the description fits the 2,800-char budget (unchanged from earlier revisions). */
+function buildDescription(total: string, rowText: string[]): string {
+  let kept = rowText.length
   while (kept > 0) {
-    const shown = allRowLines.slice(0, kept).flat()
-    const dropped = allRowLines.length - kept
-    const lines = dropped > 0 ? [...shown, `…另 ${dropped} 檔，完整明細請見網站`] : shown
-    const desc = `${kpiFence}\n${fence(lines)}`
+    const shown = rowText.slice(0, kept)
+    const dropped = rowText.length - kept
+    const body = dropped > 0 ? [...shown, `…另 ${dropped} 檔，完整明細請見網站`] : shown
+    const desc = `${total}\n\n${body.join('\n')}`
     if (desc.length <= BUDGET || kept === 1) return desc
     kept--
   }
-  return `${kpiFence}\n${fence([])}`
+  return `${total}\n\n`
 }
 
 function footerText(missingCount: number): string {
@@ -586,11 +499,11 @@ function footerText(missingCount: number): string {
 function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, generatedAt: string): DiscordEmbed {
   const decimals = currency === 'TWD' ? 0 : 2
   const title = currency === 'TWD' ? twdTitle(cur, ymd) : usdTitle(cur)
-  const kpi = kpiLines(cur, decimals)
-  const rows = cur.rows.map((r) => rowLines(r, cur.newestQuoteYmd, currency, decimals))
+  const total = totalLine(cur, decimals)
+  const rows = cur.rows.map((r) => rowLine(r, cur.newestQuoteYmd, currency, decimals))
   return {
     title,
-    description: buildDescription(kpi, rows),
+    description: buildDescription(total, rows),
     color: colorFor(cur.unrealized, decimals),
     footer: { text: footerText(cur.missingCount) },
     timestamp: generatedAt,

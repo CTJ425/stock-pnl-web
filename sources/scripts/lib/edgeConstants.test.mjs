@@ -31,13 +31,11 @@ describe('holdingsCard display-width table and colours match discordSummary', ()
   const summarySrc = read('discordSummary.ts')
   const cardSrc = read('holdingsCard.ts')
 
-  it('WIDE_RANGES', () => {
-    const re = /const WIDE_RANGES[^=]*=\s*\[[\s\S]*?\n\]/
-    expect(block(cardSrc, re)).toBe(block(summarySrc, re))
-  })
-
-  it('zero-width code points in dispWidth', () => {
-    const re = /if \(cp === 0xfe0f \|\| cp === 0x200d\) continue/
+  // Revision 8 (markdown cards) removed the display-width tables; the one piece both renderers
+  // still share is how they escape data-derived text.
+  it('escapeMd', () => {
+    const re = /function escapeMd\(s: string\): string \{[\s\S]*?\n\}/
+    expect(block(cardSrc, re)).not.toBeNull()
     expect(block(cardSrc, re)).toBe(block(summarySrc, re))
   })
 
