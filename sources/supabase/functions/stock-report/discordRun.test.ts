@@ -309,6 +309,28 @@ describe('runWebhookOp', () => {
     expect(JSON.stringify(out)).not.toContain(FAKE_TOKEN)
   })
 
+  it('sends the markdown layout sample and records it as a test', async () => {
+    const deps = adminDeps(FAKE_WEBHOOK)
+    const out = await runWebhookOp(deps, { op: 'markdown-sample' })
+    expect(deps.post).toHaveBeenCalledTimes(1)
+    const [url, payload] = deps.post.mock.calls[0] as unknown as [string, DiscordPayload]
+    expect(url).toBe(FAKE_WEBHOOK)
+    expect(payload.embeds.map((e) => e.title)).toEqual([
+      '【版面測試】經濟快報 Markdown 版',
+      '【版面測試】持股日報 Markdown 版',
+    ])
+    expect(payload.embeds[0].description).not.toContain('```')
+    expect(deps.finishSend).toHaveBeenCalledWith('2026-09-16', 'test', { kind: 'sent', httpStatus: 204 })
+    expect(out).toMatchObject({ ok: true, test: { ok: true, httpStatus: 204 } })
+    expect(deps.loadMarketFile).not.toHaveBeenCalled()
+  })
+
+  it('refuses the markdown sample without a webhook', async () => {
+    const deps = adminDeps(null)
+    expect(await runWebhookOp(deps, { op: 'markdown-sample' })).toEqual({ ok: false, error: 'not-configured' })
+    expect(deps.post).not.toHaveBeenCalled()
+  })
+
   it('records a failed test send', async () => {
     const deps = adminDeps(FAKE_WEBHOOK)
     deps.post.mockResolvedValueOnce({ ok: false, httpStatus: 404, reason: 'webhook-gone' })

@@ -11,6 +11,7 @@ import { groupMarketTargets } from './discordTargets.ts'
 import type { MarketOverride } from './discordTargets.ts'
 import { lastCompletedClose, SUMMARY_INDICES } from './globalIndexClose.ts'
 import type { IndexChartResponse } from './globalIndexClose.ts'
+import { buildMarkdownSamplePayload } from './markdownSample.ts'
 import { extractMarketMarginTotals } from './marketMargin.ts'
 import type { MarginSummaryResponse } from './marketMargin.ts'
 import { dashDate, taipeiYmd } from './report.ts'
@@ -251,8 +252,21 @@ function toStatus(stored: { url: string; updatedAt: string } | null, recent: Sen
 export async function runWebhookOp(deps: WebhookAdminDeps, input: unknown): Promise<WebhookOpResult> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'bad-request' }
   const op = (input as { op?: unknown }).op
-  if (op !== 'get' && op !== 'set' && op !== 'clear' && op !== 'test' && op !== 'preview') {
+  if (op !== 'get' && op !== 'set' && op !== 'clear' && op !== 'test' && op !== 'preview' && op !== 'markdown-sample') {
     return { ok: false, error: 'bad-request' }
+  }
+
+  if (op === 'markdown-sample') {
+    const stored = await deps.readWebhook()
+    if (!stored) return { ok: false, error: 'not-configured' }
+    const ymd = dashDate(taipeiYmd(deps.now()))
+    const result = await deps.post(stored.url, buildMarkdownSamplePayload(deps.now().toISOString()))
+    const outcome: RunOutcome = result.ok
+      ? { kind: 'sent', httpStatus: result.httpStatus }
+      : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
+    await deps.finishSend(ymd, 'test', outcome)
+    const recent = await deps.recentSends(10)
+    return { ok: true, status: toStatus(stored, recent), test: result }
   }
 
   if (op === 'preview') {
