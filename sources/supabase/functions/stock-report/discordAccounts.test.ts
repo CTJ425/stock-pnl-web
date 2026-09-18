@@ -8,11 +8,13 @@ import {
   type DiscordAccountsDeps,
   type DiscordAccountsResult,
 } from './discordAccounts.ts'
-import { FAKE_TOKEN, FAKE_WEBHOOK } from './discordTestFixtures.ts'
+import { FAKE_TOKEN, FAKE_WEBHOOK, MARKET_DAY_0916 } from './discordTestFixtures.ts'
 import { buildTestPayload } from './discordSummary.ts'
 import type { DiscordPayload, DiscordSendResult } from './discordWebhook.ts'
 import { buildHoldingsTestPayload } from './holdingsCard.ts'
 import type { HoldingsKind, HoldingsOutcome, LastSend } from './holdingsRun.ts'
+import type { IndexChartResponse } from './globalIndexClose.ts'
+import type { Transaction } from '../_shared/engine/models.ts'
 
 /** 17:05 Taipei on 2026-09-18. */
 const NOW = new Date('2026-09-18T09:05:00Z')
@@ -107,7 +109,7 @@ function account(result: DiscordAccountsResult, userId: string) {
 }
 
 describe('runDiscordAccountsOp — input', () => {
-  it.each([null, undefined, 'list', 42, [], {}, { op: 'nope' }, { op: 'LIST' }, { op: 'holdings-preview', userId: U1 }])(
+  it.each([null, undefined, 'list', 42, [], {}, { op: 'nope' }, { op: 'LIST' }, { op: 'holdings-previews', userId: U1 }])(
     'rejects %j as bad-request',
     async (input) => {
       const { deps, writes } = fake()
@@ -137,6 +139,7 @@ describe('runDiscordAccountsOp — input', () => {
     { op: 'holdings-enable', userId: UNKNOWN, enabled: false },
     { op: 'holdings-clear', userId: UNKNOWN },
     { op: 'holdings-test', userId: UNKNOWN },
+    { op: 'holdings-preview', userId: UNKNOWN },
   ])('refuses an account that does not exist: %j', async (input) => {
     const { deps, writes, posts } = fake()
     expect(await runDiscordAccountsOp(deps, input)).toEqual({ ok: false, error: 'unknown-user' })
@@ -192,6 +195,8 @@ describe('runDiscordAccountsOp — schedule', () => {
     { brief: '17:05' },
     { full: '21:30' },
     { brief: 1705, full: 2130 },
+    { brief: '17:05', full: '21:30' },
+    { brief: '18:30', full: '21:15' },
   ])('refuses %j and writes nothing', async (times) => {
     const { deps, writes } = fake()
     expect(await runDiscordAccountsOp(deps, { op: 'set-schedule', ...times })).toEqual({ ok: false, error: 'invalid-time' })
@@ -320,6 +325,74 @@ describe('runDiscordAccountsOp — 個人持股報告 per account', () => {
   it('passes the holdings quota error through', async () => {
     const { deps, posts } = fake({ countManualToday: async () => 10 })
     expect(await runDiscordAccountsOp(deps, { op: 'holdings-test', userId: U1 })).toEqual({ ok: false, error: 'quota' })
+    expect(posts).toEqual([])
+  })
+})
+
+const BUY_2330: Transaction = {
+  id: 't1',
+  workspace_id: 'w1',
+  tx_date: '2026-01-05',
+  market: 'TPE',
+  ticker: '2330',
+  name: '2330',
+  tx_type: 'BUY',
+  price: 900,
+  qty: 1000,
+  fee_tax: 0,
+  created_at: '2026-01-05T00:00:00.001Z',
+}
+
+const CHART_2330: IndexChartResponse = {
+  chart: {
+    result: [
+      {
+        meta: { gmtoffset: 8 * 3600 },
+        timestamp: [Date.parse('2026-09-15T01:00:00Z') / 1000, Date.parse('2026-09-16T01:00:00Z') / 1000],
+        indicators: { quote: [{ close: [990, 1000] }] },
+      },
+    ],
+  },
+}
+
+describe('runDiscordAccountsOp — 完整推送測試 (holdings-preview)', () => {
+  it('sends the real holdings card to that account, labelled as a preview, and reports the data date', async () => {
+    const { deps, posts, finishes } = fake({
+      loadMarketFile: async () => ({ days: [MARKET_DAY_0916] }),
+      loadWorkspaces: async (userId) => (userId === U1 ? [{ id: 'w1', fee_rate: null, transactions: [BUY_2330] }] : []),
+      fetchChart: async () => CHART_2330,
+    })
+    const result = ok(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U1 }))
+    expect(posts).toHaveLength(1)
+    expect(posts[0].url).toBe(HOOK_H)
+    expect(JSON.stringify(posts[0].payload)).toContain('2330')
+    expect(result.send).toEqual({ ok: true, httpStatus: 204 })
+    // today (2026-09-18) has no market row, so the preview uses the latest one
+    expect(result.previewYmd).toBe('2026-09-16')
+    expect(finishes).toEqual([{ userId: U1, ymd: '2026-09-18', kind: 'preview', outcome: { kind: 'sent', httpStatus: 204 } }])
+  })
+
+  it('refuses an account without a holdings webhook', async () => {
+    const { deps, posts } = fake({ loadMarketFile: async () => ({ days: [MARKET_DAY_0916] }) })
+    expect(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U2 })).toEqual({ ok: false, error: 'not-configured' })
+    expect(posts).toEqual([])
+  })
+
+  it('reports no market data', async () => {
+    const { deps, posts } = fake()
+    expect(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U1 })).toEqual({ ok: false, error: 'no-market-data' })
+    expect(posts).toEqual([])
+  })
+
+  it('reports an account with no holdings', async () => {
+    const { deps, posts } = fake({ loadMarketFile: async () => ({ days: [MARKET_DAY_0916] }) })
+    expect(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U1 })).toEqual({ ok: false, error: 'no-holdings' })
+    expect(posts).toEqual([])
+  })
+
+  it('shares the daily manual-send quota', async () => {
+    const { deps, posts } = fake({ countManualToday: async () => 10 })
+    expect(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U1 })).toEqual({ ok: false, error: 'quota' })
     expect(posts).toEqual([])
   })
 })

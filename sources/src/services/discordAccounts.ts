@@ -37,6 +37,7 @@ export interface DiscordAccountsSnapshot {
   schedule: ScheduleView
   accounts: DiscordAccountRow[]
   send?: DiscordAccountsSendResult
+  previewYmd?: string
 }
 
 interface DiscordAccountsOpResponse extends DiscordAccountsSnapshot {
@@ -44,13 +45,15 @@ interface DiscordAccountsOpResponse extends DiscordAccountsSnapshot {
   error?: string
 }
 
-/** Known error codes from the Edge function body that earn extra Chinese text. Spec §3.7. */
+/** Known error codes from the Edge function body that earn extra Chinese text. Spec §3.7/§9.1. */
 const ERROR_TEXT: Record<string, string> = {
   'invalid-time': '時間不在可選範圍',
   'unknown-user': '找不到這個帳號',
   quota: '今天的手動發送次數已用完',
   'invalid-url': '網址格式不正確',
   'not-configured': '尚未設定 Webhook',
+  'no-holdings': '這個帳號目前沒有持股',
+  'no-market-data': '找不到任何台股大盤資料',
   // The Edge Function answers this when it predates the `discord-accounts` action (not deployed yet).
   'Unknown action': '後端尚未部署這個功能',
 }
@@ -79,8 +82,11 @@ async function discordAccountsOpFailed(error: unknown): Promise<never> {
 }
 
 function stripOk(res: DiscordAccountsOpResponse): DiscordAccountsSnapshot {
-  const { schedule, accounts, send } = res
-  return send !== undefined ? { schedule, accounts, send } : { schedule, accounts }
+  const { schedule, accounts, send, previewYmd } = res
+  const out: DiscordAccountsSnapshot = { schedule, accounts }
+  if (send !== undefined) out.send = send
+  if (previewYmd !== undefined) out.previewYmd = previewYmd
+  return out
 }
 
 /**
@@ -133,4 +139,18 @@ export function setHoldingsEnabled(userId: string, enabled: boolean): Promise<Di
 
 export function testHoldingsWebhook(userId: string): Promise<DiscordAccountsSnapshot> {
   return invokeDiscordAccountsOp({ op: 'holdings-test', userId })
+}
+
+/**
+ * Sends the real holdings card (labelled as a preview in the UI). Longer timeout than every
+ * other op: it renders the actual report, not just a fixed test payload. Spec §9.1/§9.2.
+ */
+export async function previewHoldingsReport(userId: string): Promise<DiscordAccountsSnapshot> {
+  if (!supabase) throw new Error('本機模式無法設定 Discord')
+  const { data, error } = await supabase.functions.invoke('stock-report', {
+    body: { action: 'discord-accounts', op: 'holdings-preview', userId },
+    timeout: 90_000,
+  })
+  if (error) await discordAccountsOpFailed(error)
+  return stripOk(data as DiscordAccountsOpResponse)
 }

@@ -18,6 +18,7 @@ import { AdminStatusPage } from './AdminStatusPage'
 import { AiConnectionSection } from './AiConnectionSection'
 import { BackupsSection } from './BackupsSection'
 import { DiscordAccountsSection } from './DiscordAccountsSection'
+import { DiscordHelpSection } from './DiscordHelpSection'
 import { DiscordSection } from './DiscordSection'
 import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
@@ -74,6 +75,7 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
           <>
             <DiscordSection />
             <DiscordAccountsSection />
+            <DiscordHelpSection />
           </>
         )}
         {panel === 'backups' && <BackupsSection />}

@@ -1,7 +1,7 @@
 /**
- * Discord send schedule (Task 165 Phase 2 step 2d, spec discord-admin-accounts.md §3.1).
- * Pure, dependency-free: imported by the Edge Function (`discordAccounts.ts`) and by the
- * browser (the admin console's schedule dropdowns).
+ * Discord send schedule (Task 165 Phase 2 step 2d, spec discord-admin-accounts.md §9.1,
+ * overriding §3.1). Pure, dependency-free: imported by the Edge Function
+ * (`discordAccounts.ts`) and by the browser (the admin console's schedule dropdowns).
  */
 
 export type ScheduleSlot = 'brief' | 'full'
@@ -13,21 +13,28 @@ export const DISCORD_SCHEDULE_JOBS = {
   full: 'discord-summary-full',
 } as const
 
-export const DEFAULT_DISCORD_SCHEDULE = { brief: '17:05', full: '21:30' } as const
+export const DEFAULT_DISCORD_SCHEDULE = { brief: '17:30', full: '21:30' } as const
 
-/** D2: brief 17:05–20:55 (17:00 refused, `fx/twd.json` is not ready yet), full 21:00–23:55. */
-export const SCHEDULE_HOURS: Record<ScheduleSlot, readonly number[]> = {
-  brief: [17, 18, 19, 20],
-  full: [21, 22, 23],
+/** §9.1: every half hour. Brief 17:30–20:30 (17:05/17:00 no longer offered), full 21:00–23:30. */
+function halfHourRange(startHour: number, startMinute: 0 | 30, endHour: number, endMinute: 0 | 30): readonly string[] {
+  const options: string[] = []
+  let hour = startHour
+  let minute: 0 | 30 = startMinute
+  while (hour < endHour || (hour === endHour && minute <= endMinute)) {
+    options.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
+    if (minute === 0) {
+      minute = 30
+    } else {
+      minute = 0
+      hour += 1
+    }
+  }
+  return options
 }
 
-/** Five-minute steps within an allowed hour; brief's first hour starts at :05, not :00. */
-export function scheduleMinuteOptions(slot: ScheduleSlot, hour: number): number[] {
-  if (!SCHEDULE_HOURS[slot].includes(hour)) return []
-  const start = slot === 'brief' && hour === 17 ? 5 : 0
-  const options: number[] = []
-  for (let m = start; m <= 55; m += 5) options.push(m)
-  return options
+export const SCHEDULE_OPTIONS: Record<ScheduleSlot, readonly string[]> = {
+  brief: halfHourRange(17, 30, 20, 30),
+  full: halfHourRange(21, 0, 23, 30),
 }
 
 export function scheduleTimeParts(hhmm: string): { hour: number; minute: number } {
@@ -36,9 +43,8 @@ export function scheduleTimeParts(hhmm: string): { hour: number; minute: number 
 }
 
 export function isValidScheduleTime(slot: ScheduleSlot, hhmm: unknown): hhmm is string {
-  if (typeof hhmm !== 'string' || !/^\d{2}:\d{2}$/.test(hhmm)) return false
-  const { hour, minute } = scheduleTimeParts(hhmm)
-  return scheduleMinuteOptions(slot, hour).includes(minute)
+  if (typeof hhmm !== 'string') return false
+  return (SCHEDULE_OPTIONS[slot] as readonly string[]).includes(hhmm)
 }
 
 const CRON_RE = /^(\d{1,2}) (\d{1,2}) \* \* 1-5$/

@@ -13,6 +13,7 @@ import {
   clearHoldingsWebhook,
   clearMarketWebhook,
   getDiscordAccounts,
+  previewHoldingsReport,
   saveDiscordSchedule,
   saveHoldingsWebhook,
   saveMarketWebhook,
@@ -90,6 +91,18 @@ describe('discordAccounts service', () => {
     expectBody({ op: 'holdings-test', userId: U1 })
   })
 
+  it('sends the full holdings report with a longer timeout and returns its data date', async () => {
+    invoke().mockResolvedValue({
+      data: { ok: true, ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17' },
+      error: null,
+    })
+    expect(await previewHoldingsReport(U1)).toEqual({ ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17' })
+    expect(invoke()).toHaveBeenCalledWith('stock-report', {
+      body: { action: 'discord-accounts', op: 'holdings-preview', userId: U1 },
+      timeout: 90_000,
+    })
+  })
+
   it('strips the ok flag from the snapshot', async () => {
     const res = await getDiscordAccounts()
     expect('ok' in res).toBe(false)
@@ -104,6 +117,8 @@ describe('discordAccounts service', () => {
     [403, 'Forbidden', 'Discord 設定失敗（HTTP 403）'],
     [400, 'constructor', 'Discord 設定失敗（HTTP 400）'],
     [400, 'Unknown action', 'Discord 設定失敗（HTTP 400：後端尚未部署這個功能）'],
+    [409, 'no-holdings', 'Discord 設定失敗（HTTP 409：這個帳號目前沒有持股）'],
+    [409, 'no-market-data', 'Discord 設定失敗（HTTP 409：找不到任何台股大盤資料）'],
   ])('reports HTTP %i %s without server text or the URL', async (status, code, text) => {
     invoke().mockResolvedValue(httpError(status, { error: code }))
     const err = await saveMarketWebhook(U1, URL_).catch((e: Error) => e)
