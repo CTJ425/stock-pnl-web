@@ -7,7 +7,7 @@
 
 ---
 
-## 📅 Log: 2026-09-18 16:42:13 Asia/Taipei (Admin console nav consolidation — uncommitted, no version bump)
+## 📅 Log: 2026-09-18 16:42:13 Asia/Taipei (Admin console nav consolidation — 0.9.59 on main)
 
 - **What**: Admin console left nav reduced from 8 panels to 5: 帳號 / 資料更新 / AI 設定 / Discord / 備份.
   - `資料更新` = old 抓取狀況 + 手動更新 + 執行記錄, switched by in-panel `.subtabs` (role=tablist, aria-label `資料更新分頁`); default sub-tab 抓取狀況. Sub-tabs, not stacking, because the three views total ~1000 lines.
@@ -17,7 +17,7 @@
 - **Lane**: 0 (inline) — one production component already in context, UI-only, no money/auth/schema.
 - **Verify**: `npm run build` ✅; `npx vitest run` → 148 files passed / 1 skipped, 2530 tests passed / 7 skipped.
 - **Note**: 執行記錄 (`app_log`) also carries 前端/資料庫 sources, not only data-update jobs; it now lives under 資料更新 by user choice.
-- **Next**: commit to `dev` + versioning (`0.9.59-dev.1`) when the user asks; no deploy.
+- **Release**: `053f02c` feat `0.9.59-dev.1` on `dev` (CI green) → finalized `0.9.59` and merged to `main` on user request. Frontend-only: Cloudflare Pages deploys from `main`; no Edge deploy needed.
 
 ---
 
