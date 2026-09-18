@@ -538,8 +538,10 @@ function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Cur
   const sharesPrice = `${sharesStr(r.shares)}股 ${priceFmt(r.close)}`
   const line2 = `  ${padEndW(sharesPrice, 15)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 10)} ${padStartW(pctSigned(r.returnPct), 8)}`
 
-  const line3 = r.direction === 'SHORT' ? `  均價 ${priceFmt(r.avgCost)}` : `  均價 ${priceFmt(r.avgCost)}  保本 ${priceFmt(r.breakEven)}`
-  const lines = [line1, line2, line3]
+  // A short row's basis is proceeds received, not a cost, so it is labelled 價金 rather than 成本.
+  const line3 = `  市值 ${fmtOrDash(r.mktVal, decimals)}  ${r.direction === 'SHORT' ? '價金' : '成本'} ${fmtOrDash(r.basis, decimals)}`
+  const line4 = r.direction === 'SHORT' ? `  均價 ${priceFmt(r.avgCost)}` : `  均價 ${priceFmt(r.avgCost)}  保本 ${priceFmt(r.breakEven)}`
+  const lines = [line1, line2, line3, line4]
   if (r.realized !== 0) lines.push(`  已實現 ${fmtSigned(r.realized, decimals)}`)
   return lines
 }

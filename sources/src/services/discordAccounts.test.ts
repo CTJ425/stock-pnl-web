@@ -93,10 +93,15 @@ describe('discordAccounts service', () => {
 
   it('sends the full holdings report with a longer timeout and returns its data date', async () => {
     invoke().mockResolvedValue({
-      data: { ok: true, ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17' },
+      data: { ok: true, ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17', missingQuotes: 2 },
       error: null,
     })
-    expect(await previewHoldingsReport(U1)).toEqual({ ...SNAPSHOT, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17' })
+    expect(await previewHoldingsReport(U1)).toEqual({
+      ...SNAPSHOT,
+      send: { ok: true, httpStatus: 204 },
+      previewYmd: '2026-09-17',
+      missingQuotes: 2,
+    })
     expect(invoke()).toHaveBeenCalledWith('stock-report', {
       body: { action: 'discord-accounts', op: 'holdings-preview', userId: U1 },
       timeout: 90_000,

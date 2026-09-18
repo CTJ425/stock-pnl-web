@@ -38,6 +38,7 @@ export interface DiscordAccountsSnapshot {
   accounts: DiscordAccountRow[]
   send?: DiscordAccountsSendResult
   previewYmd?: string
+  missingQuotes?: number
 }
 
 interface DiscordAccountsOpResponse extends DiscordAccountsSnapshot {
@@ -82,10 +83,11 @@ async function discordAccountsOpFailed(error: unknown): Promise<never> {
 }
 
 function stripOk(res: DiscordAccountsOpResponse): DiscordAccountsSnapshot {
-  const { schedule, accounts, send, previewYmd } = res
+  const { schedule, accounts, send, previewYmd, missingQuotes } = res
   const out: DiscordAccountsSnapshot = { schedule, accounts }
   if (send !== undefined) out.send = send
   if (previewYmd !== undefined) out.previewYmd = previewYmd
+  if (missingQuotes !== undefined) out.missingQuotes = missingQuotes
   return out
 }
 

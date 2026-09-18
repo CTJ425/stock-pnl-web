@@ -118,6 +118,11 @@ async function runOneUser(
     const keys = heldKeys(ledgers)
     const quotes = await quotesFor(quoteCache, keys)
     const summary = aggregateHoldings(ledgers, quotes, ymd)
+    const missing = summary.twd.missingCount + summary.usd.missingCount
+    if (missing > 0) {
+      const rows = summary.twd.rows.length + summary.usd.rows.length
+      await deps.log({ level: 'warn', message: 'holdings quotes missing', detail: { userId, missing, rows } })
+    }
     const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: false })
 
     if (!payload) {
@@ -197,7 +202,7 @@ export interface HoldingsSettingsStatus {
 }
 
 export type HoldingsSettingsResult =
-  | { ok: true; status: HoldingsSettingsStatus; send?: DiscordSendResult; previewYmd?: string }
+  | { ok: true; status: HoldingsSettingsStatus; send?: DiscordSendResult; previewYmd?: string; missingQuotes?: number }
   | { ok: false; error: 'bad-request' | 'invalid-url' | 'not-configured' | 'quota' | 'no-market-data' | 'no-holdings' }
 
 export const MANUAL_SENDS_PER_DAY = 10
@@ -270,6 +275,7 @@ export async function runHoldingsSettingsOp(
     const quoteCache = createQuoteCache(deps.fetchChart, Math.floor(deps.now().getTime() / 1000))
     const quotes = await quotesFor(quoteCache, keys)
     const summary = aggregateHoldings(ledgers, quotes, market.date)
+    const missingQuotes = summary.twd.missingCount + summary.usd.missingCount
     const payload = buildHoldingsPayload(summary, { generatedAt: deps.now().toISOString(), preview: true })
 
     if (!payload) {
@@ -283,7 +289,7 @@ export async function runHoldingsSettingsOp(
       : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
     await deps.finish(userId, ymd, 'preview', outcome)
     const status = await currentStatus(deps, userId)
-    return { ok: true, status, send: result, previewYmd: market.date }
+    return { ok: true, status, send: result, previewYmd: market.date, missingQuotes }
   }
 
   const status = await currentStatus(deps, userId)

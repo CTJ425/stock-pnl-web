@@ -90,33 +90,63 @@ export function makeChartFetch(deps: {
   }
 }
 
+// Spec Revision 4 R2: a user with many positions must not open unbounded parallel Yahoo
+// requests, so at most this many key fetch sequences run at once; the rest queue.
+const QUOTE_CONCURRENCY = 2
+
 /**
  * One fetch sequence per position key per run: quotes are memoized across every user's
- * ledgers so two users holding the same ticker do not double the Yahoo calls.
+ * ledgers so two users holding the same ticker do not double the Yahoo calls. At most
+ * `QUOTE_CONCURRENCY` keys fetch at a time; the rest queue and start as slots free.
  */
 export function createQuoteCache(
   fetchJson: ChartFetch,
   nowSec: number,
 ): { get(market: Market, ticker: string): Promise<HoldingQuote | null> } {
   const cache = new Map<string, Promise<HoldingQuote | null>>()
+  let running = 0
+  const queue: Array<() => void> = []
+
+  function runNext(): void {
+    if (running >= QUOTE_CONCURRENCY) return
+    const next = queue.shift()
+    if (!next) return
+    running++
+    next()
+  }
+
+  function fetchOne(market: Market, ticker: string): Promise<HoldingQuote | null> {
+    return new Promise<HoldingQuote | null>((resolve) => {
+      queue.push(() => {
+        void (async () => {
+          for (const symbol of quoteSymbols(market, ticker)) {
+            try {
+              const json = await fetchJson(indexChartUrl(symbol))
+              const bar = lastCompletedBar(json as IndexChartResponse, nowSec)
+              if (bar) {
+                resolve(bar)
+                return
+              }
+            } catch {
+              // this symbol failed (network, non-2xx, or a synchronous throw) — try the next one
+            }
+          }
+          resolve(null)
+        })().finally(() => {
+          running--
+          runNext()
+        })
+      })
+      runNext()
+    })
+  }
 
   return {
     get(market: Market, ticker: string): Promise<HoldingQuote | null> {
       const key = positionKey(market, ticker)
       let pending = cache.get(key)
       if (!pending) {
-        pending = (async () => {
-          for (const symbol of quoteSymbols(market, ticker)) {
-            try {
-              const json = await fetchJson(indexChartUrl(symbol))
-              const bar = lastCompletedBar(json as IndexChartResponse, nowSec)
-              if (bar) return bar
-            } catch {
-              // this symbol failed (network, non-2xx, or a synchronous throw) — try the next one
-            }
-          }
-          return null
-        })()
+        pending = fetchOne(market, ticker)
         cache.set(key, pending)
       }
       return pending

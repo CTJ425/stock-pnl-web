@@ -152,6 +152,38 @@ describe('createQuoteCache', () => {
     return { calls, fetchJson }
   }
 
+  it('runs at most two key fetches at a time (spec Revision 4 R2)', async () => {
+    let inFlight = 0
+    let peak = 0
+    const release: Array<() => void> = []
+    const fetchJson = (): Promise<unknown> => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      return new Promise((resolve) => {
+        release.push(() => {
+          inFlight--
+          resolve(good)
+        })
+      })
+    }
+    const cache = createQuoteCache(fetchJson, NOW)
+    const pending = ['2330', '0050', '2303', '1229', '8033', '2454'].map((t) => cache.get('TPE', t))
+    // let the queue start what it may
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(peak).toBeLessThanOrEqual(2)
+    while (release.length > 0) {
+      release.shift()!()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    const quotes = await Promise.all(pending)
+    expect(quotes).toHaveLength(6)
+    for (const q of quotes) expect(q).toEqual({ ymd: '2026-09-17', close: 102, prevClose: 101 })
+    expect(peak).toBeLessThanOrEqual(2)
+  })
+
   it('falls back to .TWO when .TW has no bars', async () => {
     const f = fakeFetch({ [indexChartUrl('6488.TW')]: empty, [indexChartUrl('6488.TWO')]: good })
     const cache = createQuoteCache(f.fetchJson, NOW)

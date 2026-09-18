@@ -515,3 +515,36 @@ describe('runHoldingsSettingsOp', () => {
     expect(rec.finishes[0].outcome).toEqual({ kind: 'failed', httpStatus: 429, reason: 'rate-limited' })
   })
 })
+
+// ── missing quotes (spec discord-holdings.md Revision 4 R3) ──────────────────
+const NO_QUOTE_WS: WorkspaceInput[] = [{ id: 'w9', fee_rate: null, transactions: [buy('w9', 'TPE', '1101', 30, 1000)] }]
+
+describe('missing quotes', () => {
+  it('reports how many rows had no quote in a preview', async () => {
+    const { deps } = settingsDeps(newRec(), CONFIGURED, { loadWorkspaces: async () => NO_QUOTE_WS })
+    const result = await runHoldingsSettingsOp(deps, 'u1', { op: 'preview' })
+    expect(result).toMatchObject({ ok: true, missingQuotes: 1 })
+  })
+
+  it('reports zero when every row is quoted', async () => {
+    const { deps } = settingsDeps(newRec(), CONFIGURED)
+    const result = await runHoldingsSettingsOp(deps, 'u1', { op: 'preview' })
+    expect(result).toMatchObject({ ok: true, missingQuotes: 0 })
+  })
+
+  it('logs the count for a daily send, without any price', async () => {
+    const rec = newRec()
+    const deps = runDeps(rec, {
+      listEnabledUsers: async () => [{ userId: 'u9', webhookUrl: HOOK_1 }],
+      loadWorkspaces: async () => NO_QUOTE_WS,
+    })
+    await runHoldingsDaily(deps)
+    expect(rec.logs).toEqual([{ level: 'warn', message: 'holdings quotes missing', detail: { userId: 'u9', missing: 1, rows: 1 } }])
+  })
+
+  it('logs nothing when every row is quoted', async () => {
+    const rec = newRec()
+    await runHoldingsDaily(runDeps(rec, { listEnabledUsers: async () => [{ userId: 'u1', webhookUrl: HOOK_1 }] }))
+    expect(rec.logs.filter((l) => l.message === 'holdings quotes missing')).toEqual([])
+  })
+})
