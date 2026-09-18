@@ -398,45 +398,68 @@ const fence = (lines: string[]) => '```\n' + lines.join('\n') + '\n```'
 const TWD_KPI = [
   '市值         1,308,163',
   '成本           630,074',
-  '未實現        +680,448 +107.99%',
-  '今日           +15,812   +1.23%',
+  '未實現        +680,448',
+  '  報酬率      +107.99%',
+  '今日           +15,812',
+  '  漲跌幅        +1.23%',
   '今日已實現      +3,210',
   '今年已實現     +78,415',
   '空單市值        95,000',
 ]
 const TWD_TABLE = [
-  '2330 台積電                   ▲1.23%',
-  '  1,200股 1,085.5  +676,123 +108.26%',
-  '  市值 1,302,600  成本 624,510',
-  '  均價 520.43  保本 522.7',
-  '  已實現 +12,345',
-  '0050 元大台灣50               ▼0.50%',
-  '  37股 150.35           -19   -0.33%',
-  '  市值 5,563  成本 5,564',
-  '  均價 150.38  保本 151.2',
-  '6488 環球晶                       --',
-  '  1,000股 --             --       --',
-  '  市值 --  成本 480,000',
-  '  均價 480  保本 482.1',
-  '空 2603 長榮                  ─0.00%',
-  '  1,000股 95         +4,343   +4.37%',
-  '  市值 95,000  價金 99,478',
-  '  均價 99.48',
-  '  已實現 -1,500',
+  '2330 台積電      ▲1.23%',
+  '  1,200股 @ 1,085.5',
+  '  市值       1,302,600',
+  '  成本         624,510',
+  '  未實現      +676,123',
+  '  報酬率      +108.26%',
+  '  均價          520.43',
+  '  保本           522.7',
+  '  已實現       +12,345',
+  '0050 元大台灣50  ▼0.50%',
+  '  37股 @ 150.35',
+  '  市值           5,563',
+  '  成本           5,564',
+  '  未實現           -19',
+  '  報酬率        -0.33%',
+  '  均價          150.38',
+  '  保本           151.2',
+  '6488 環球晶           --',
+  '  1,000股 @ --',
+  '  市值              --',
+  '  成本         480,000',
+  '  未實現            --',
+  '  報酬率            --',
+  '  均價             480',
+  '  保本           482.1',
+  '空 2603 長榮     ─0.00%',
+  '  1,000股 @ 95',
+  '  市值          95,000',
+  '  價金          99,478',
+  '  未實現        +4,343',
+  '  報酬率        +4.37%',
+  '  均價           99.48',
+  '  已實現        -1,500',
 ]
 const USD_KPI = [
   '市值            517.21',
   '成本            300.00',
-  '未實現         +217.21  +72.40%',
-  '今日             +4.50   +0.88%',
+  '未實現         +217.21',
+  '  報酬率       +72.40%',
+  '今日             +4.50',
+  '  漲跌幅        +0.88%',
   '今日已實現        0.00',
   '今年已實現        0.00',
 ]
 const USD_TABLE = [
-  'AAPL Apple                    ▲0.88%',
-  '  2.25股 229.87     +217.21  +72.40%',
-  '  市值 517.21  成本 300.00',
-  '  均價 133.33  保本 133.33',
+  'AAPL Apple       ▲0.88%',
+  '  2.25股 @ 229.87',
+  '  市值          517.21',
+  '  成本          300.00',
+  '  未實現       +217.21',
+  '  報酬率       +72.40%',
+  '  均價          133.33',
+  '  保本          133.33',
 ]
 
 describe('buildHoldingsPayload', () => {
@@ -466,7 +489,7 @@ describe('buildHoldingsPayload', () => {
     })
   })
 
-  it('keeps every generated line within 36 display columns for this fixture', () => {
+  it('keeps every generated line within 24 display columns for this fixture (spec Revision 6)', () => {
     const p = buildHoldingsPayload(both, { generatedAt: GEN, preview: false })!
     const lines = p.embeds.flatMap((e) => (e.description ?? '').split('\n')).filter((l) => l !== '```')
     const width = (s: string) =>
@@ -475,7 +498,7 @@ describe('buildHoldingsPayload', () => {
         if (cp === 0xfe0f || cp === 0x200d) return n
         return n + (/[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿＀-｠]/.test(ch) ? 2 : 1)
       }, 0)
-    for (const l of lines) expect(width(l)).toBeLessThanOrEqual(36)
+    for (const l of lines) expect(width(l)).toBeLessThanOrEqual(24)
   })
 
   it('prefixes a preview', () => {
@@ -498,8 +521,8 @@ describe('buildHoldingsPayload', () => {
     ]
     const today = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, unrealized: 2, newestQuoteYmd: YMD }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!
     const table = today.embeds[0].description!.split('\n')
-    expect(table).toContain('2330 台積電                   ▲1.23%')
-    expect(table).toContain('⚠️1101 台泥                   ─0.00%')
+    expect(table).toContain('2330 台積電      ▲1.23%')
+    expect(table).toContain('⚠️1101 台泥      ─0.00%')
 
     const stale = buildHoldingsPayload(
       { ymd: YMD, twd: cur('TWD', { rows: rows.slice(1), unrealized: 1, newestQuoteYmd: '2026-09-16' }), usd: cur('USD') },
@@ -544,9 +567,9 @@ describe('buildHoldingsPayload', () => {
       row({ ticker: '3333', name: 'c', shares: 1, close: 1085.5, quoteYmd: YMD, mktVal: 1085.5 }),
     ]
     const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows, newestQuoteYmd: YMD }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
-    expect(d).toContain('  1股 600 ')
-    expect(d).toContain('  1股 12.35 ')
-    expect(d).toContain('  1股 1,085.5 ')
+    expect(d).toContain('  1股 @ 600')
+    expect(d).toContain('  1股 @ 12.35')
+    expect(d).toContain('  1股 @ 1,085.5')
   })
 
   it('shows 空單市值 as -- when shorts exist but none is quoted, and hides it without shorts', () => {
@@ -560,13 +583,13 @@ describe('buildHoldingsPayload', () => {
   it('cuts a long name with an ellipsis', () => {
     const r = row({ ticker: '1234', name: '非常非常非常非常長的公司名稱股份有限公司', dayPct: 0.1 })
     const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows: [r], missingCount: 1 }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
-    expect(d.split('\n')).toContain('1234 非常非常非常非常長的…    ▲0.10%')
+    expect(d.split('\n')).toContain('1234 非常非常…   ▲0.10%')
   })
 
   it('never cuts a number that is wider than its column', () => {
     const r = row({ ticker: '2330', name: '台積電', shares: 1_234_000, close: 1085.5, quoteYmd: YMD, mktVal: 1, unrealized: -123_456_789, returnPct: -12.5 })
     const d = buildHoldingsPayload({ ymd: YMD, twd: cur('TWD', { rows: [r], unrealized: -123_456_789, newestQuoteYmd: YMD }), usd: cur('USD') }, { generatedAt: GEN, preview: false })!.embeds[0].description!
-    expect(d).toContain('1,234,000股 1,085.5')
+    expect(d).toContain('1,234,000股 @ 1,085.5')
     expect(d).toContain('-123,456,789')
   })
 

@@ -431,3 +431,9 @@ Nothing is deployed and no Supabase DDL is applied as part of this task (see §6
   user-approved step (`supabase-ops`: clone the command of an existing job with
   `replace(command, '"action":"probe"', …)` so the secret is never read).
 - No change to `app_settings` or to RISK-013.
+
+## Revision — 24-column layout (0.9.58-dev.10)
+
+The 國際指數, 融資融券 and 美國總經 blocks were re-laid out so no line exceeds 24 display columns;
+台股大盤, 三大法人 and 匯率 were already inside it. Rules and the reasoning:
+`docs/agent/specs/discord-holdings.md`, "Revision 6 — 24-column layout for both cards".
