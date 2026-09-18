@@ -184,6 +184,14 @@ describe('DiscordAccountsSection', () => {
       svc.getDiscordAccounts.mockRejectedValue(new Error('Discord 設定失敗（HTTP 403）'))
       render(<DiscordAccountsSection />)
       await screen.findByText('Discord 設定失敗（HTTP 403）')
+      expect(screen.getByRole('heading', { name: 'Discord 排程與各帳號設定' })).toBeTruthy()
+    })
+
+    it('keeps the heading while loading', () => {
+      svc.getDiscordAccounts.mockReturnValue(new Promise(() => {}))
+      render(<DiscordAccountsSection />)
+      expect(screen.getByRole('heading', { name: 'Discord 排程與各帳號設定' })).toBeTruthy()
+      expect(screen.getByText('載入中…')).toBeTruthy()
     })
 
     it('opens one editor at a time', async () => {

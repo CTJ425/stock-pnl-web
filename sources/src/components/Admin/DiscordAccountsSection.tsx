@@ -517,10 +517,15 @@ export function DiscordAccountsSection() {
   if (!data) {
     return (
       <section className="section glass adm-panel">
-        {loadError && (
+        <div className="rpt-section-head">
+          <h3 className="head-tight">Discord 排程與各帳號設定</h3>
+        </div>
+        {loadError ? (
           <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
             {loadError}
           </div>
+        ) : (
+          <p className="hint">載入中…</p>
         )}
       </section>
     )

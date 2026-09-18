@@ -103,6 +103,7 @@ describe('discordAccounts service', () => {
     [400, 'not-configured', 'Discord 設定失敗（HTTP 400：尚未設定 Webhook）'],
     [403, 'Forbidden', 'Discord 設定失敗（HTTP 403）'],
     [400, 'constructor', 'Discord 設定失敗（HTTP 400）'],
+    [400, 'Unknown action', 'Discord 設定失敗（HTTP 400：後端尚未部署這個功能）'],
   ])('reports HTTP %i %s without server text or the URL', async (status, code, text) => {
     invoke().mockResolvedValue(httpError(status, { error: code }))
     const err = await saveMarketWebhook(U1, URL_).catch((e: Error) => e)

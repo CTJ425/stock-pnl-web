@@ -51,6 +51,8 @@ const ERROR_TEXT: Record<string, string> = {
   quota: '今天的手動發送次數已用完',
   'invalid-url': '網址格式不正確',
   'not-configured': '尚未設定 Webhook',
+  // The Edge Function answers this when it predates the `discord-accounts` action (not deployed yet).
+  'Unknown action': '後端尚未部署這個功能',
 }
 
 /**
