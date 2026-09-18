@@ -86,6 +86,11 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0xfe30, 0xfe4f],
   [0xff00, 0xff60],
   [0xffe0, 0xffe6],
+  // Ambiguous-width marks the cards actually print (▲ ▼ ─ ⚠): a CJK font renders them two
+  // columns wide, so counting them as one made every title line land one column over the cap.
+  [0x2500, 0x257f],
+  [0x25a0, 0x25ff],
+  [0x2600, 0x27bf],
   [0x1f300, 0x1faff],
   [0x2600, 0x27bf],
 ]
@@ -298,39 +303,38 @@ function marginCard(m: MarketMarginTotals | null, today: string): Omit<CardBits,
   const amtTodayB = m.marginAmountThousandTwd.today == null ? null : m.marginAmountThousandTwd.today / 100_000
   const amtChangeB = m.marginAmountThousandTwd.change == null ? null : m.marginAmountThousandTwd.change / 100_000
   const rows: Array<[string, string, string]> = [
-    ['融資(張)', fmtOrDash(m.marginLots.today, 0), changeStr(m.marginLots.change, 0)],
-    ['融資(億)', fmtOrDash(amtTodayB, 1), changeStr(amtChangeB, 1)],
-    ['融券(張)', fmtOrDash(m.shortLots.today, 0), changeStr(m.shortLots.change, 0)],
+    ['融資張', fmtOrDash(m.marginLots.today, 0), changeStr(m.marginLots.change, 0)],
+    ['融資億', fmtOrDash(amtTodayB, 1), changeStr(amtChangeB, 1)],
+    ['融券張', fmtOrDash(m.shortLots.today, 0), changeStr(m.shortLots.change, 0)],
   ]
-  const labelW = Math.max(0, ...rows.map(([label]) => dispWidth(label)))
-  const col1W = Math.max(dispWidth('餘額'), ...rows.map(([, v1]) => dispWidth(v1)))
-  const col2W = Math.max(dispWidth('增減'), ...rows.map(([, , v2]) => dispWidth(v2)))
-  const lines = [
-    `${padEndW('', labelW)}  ${padStartW('餘額', col1W)} ${padStartW('增減', col2W)}`,
-    ...rows.map(([label, v1, v2]) => `${padEndW(label, labelW)}  ${padStartW(v1, col1W)} ${padStartW(v2, col2W)}`),
-  ]
+  const lines = rows.map(([label, v1, v2]) => `${padEndW(label, 7)}${padStartW(v1, 9)} ${padStartW(v2, 7)}`)
   return { description: fence(lines), footerText: stamp(m.date, null, today) }
+}
+
+/** Arrow carries the direction, spec §6.2 — unsigned percentage, `--` when unknown. */
+function arrowPct(pct: number | null): string {
+  if (pct == null) return '--'
+  const rounded = Number(pct.toFixed(2))
+  const arrow = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '─'
+  return `${arrow}${Math.abs(rounded).toFixed(2)}%`
 }
 
 function indexBlock(indices: IndexLine[]): { description: string; hasData: boolean } {
   if (indices.length === 0) return { description: '暫無資料', hasData: false }
-  const labelW = Math.max(...indices.map((i) => dispWidth(i.label)))
   const withQuote = indices.filter((i): i is IndexLine & { quote: NonNullable<IndexLine['quote']> } => i.quote != null)
-  const closeW = withQuote.length ? Math.max(...withQuote.map((i) => dispWidth(fmtAbs(i.quote.close, 2)))) : 0
-  const knownPct = withQuote.filter((i) => i.quote.changePct != null)
-  const pctW = knownPct.length ? Math.max(...knownPct.map((i) => dispWidth(`${fmtSigned(i.quote.changePct as number, 2)}%`))) : 0
-  const lines = indices.map((i) => {
-    if (!i.quote) return `${padEndW(i.label, labelW)}  暫無資料`
-    const closeStr = fmtAbs(i.quote.close, 2)
-    let pctStr = '--'
-    let mark = '  '
-    if (i.quote.changePct != null) {
-      const s = signOf(i.quote.changePct, 2)
-      pctStr = `${fmtSigned(i.quote.changePct, 2)}%`
-      mark = s === '+' ? '🔴' : s === '-' ? '🟢' : '⚪'
+  // The footer already says each market's date is its own latest close; only a market whose
+  // close date lags behind the newest one among the listed indices gets a second line.
+  const newestDate = withQuote.length === 0 ? null : withQuote.map((i) => i.quote.date).reduce((a, b) => (a > b ? a : b))
+  const lines: string[] = []
+  for (const i of indices) {
+    if (!i.quote) {
+      lines.push(`${padEndW(i.label, 9)}暫無資料`)
+      continue
     }
-    return `${padEndW(i.label, labelW)}  ${padStartW(closeStr, closeW)} ${padStartW(pctStr, pctW)} ${mark} ${i.quote.date}`
-  })
+    const closeStr = fmtAbs(Math.round(i.quote.close), 0)
+    lines.push(`${padEndW(i.label, 9)}${padStartW(closeStr, 7)} ${padStartW(arrowPct(i.quote.changePct), 7)}`)
+    if (newestDate != null && i.quote.date !== newestDate) lines.push(`  ·${i.quote.date} 收盤`)
+  }
   return { description: fence(lines), hasData: true }
 }
 
@@ -375,20 +379,21 @@ function macroMissing(v: MacroPointLike | null | undefined): boolean {
 
 function macroBlock(macro: MacroLine[] | null): { description: string; hasData: boolean } {
   if (!macro || macro.length === 0) return { description: '暫無資料', hasData: false }
-  const labelW = Math.max(...macro.map((m) => dispWidth(macroLabel(m))))
-  const withData = macro.filter((m) => !macroMissing(m.latest))
-  const prevW = withData.length
-    ? Math.max(...withData.map((m) => dispWidth(macroMissing(m.previous) ? '--' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind))))
-    : 0
-  const latestW = withData.length ? Math.max(...withData.map((m) => dispWidth(macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)))) : 0
-  const lines = macro.map((m) => {
+  const lines: string[] = []
+  for (const m of macro) {
     const label = macroLabel(m)
-    if (macroMissing(m.latest)) return `${padEndW(label, labelW)}  暫無資料`
+    if (macroMissing(m.latest)) {
+      lines.push(`${padEndW(label, 9)}暫無資料`)
+      continue
+    }
     const latestStr = macroValueStr(m.latest as MacroPointLike, m.unit, m.kind)
     const prevStr = macroMissing(m.previous) ? '--' : macroValueStr(m.previous as MacroPointLike, m.unit, m.kind)
     const period = macroPeriodStr((m.latest as MacroPointLike).period)
-    return `${padEndW(label, labelW)}  ${padStartW(prevStr, prevW)} → ${padStartW(latestStr, latestW)} ${period}`
-  })
+    // Same value both periods ⇒ no point repeating it with an arrow between two identical strings.
+    const body = prevStr === latestStr ? latestStr : `${prevStr} → ${latestStr}`
+    lines.push(`${label} ${period}`)
+    lines.push(`  ${padStartW(body, 20)}`)
+  }
   return { description: fence(lines), hasData: true }
 }
 

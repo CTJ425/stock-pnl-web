@@ -119,9 +119,9 @@ describe('runDiscordSummary', () => {
     const deps = summaryDeps()
     await runDiscordSummary(deps, 'brief')
     const lines = fieldOf(posted(deps), '國際指數')!.split('\n')
-    expect(lines[1]).toBe('日經225   63,923.00 +0.69% 🔴 09/16')
-    expect(lines[2]).toBe('KOSPI     暫無資料')
-    expect(lines[5]).toBe('S&P 500    7,551.81 -0.45% 🟢 09/16')
+    expect(lines[1]).toBe('日經225   63,923 ▲0.69%')
+    expect(lines[2]).toBe('KOSPI    暫無資料')
+    expect(lines[5]).toBe('S&P 500    7,552 ▼0.45%')
   })
 
   it('treats a failed fx load as missing', async () => {
@@ -139,9 +139,9 @@ describe('runDiscordSummary', () => {
     expect(heading(p)).toBe('## 📋 台股盤後完整版 09/16(三)')
     expect(footerOf(p, '融資融券')).toBe('09/16 資料')
     expect(fieldOf(p, '融資融券')).toBe(
-      '```\n               餘額    增減\n融資(張)  9,248,877 +58,366\n融資(億)    5,861.7   +39.3\n融券(張)    197,048  -1,004\n```',
+      '```\n融資張 9,248,877 +58,366\n融資億   5,861.7   +39.3\n融券張   197,048  -1,004\n```',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI       2.47% →     2.45% 08月')
+    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI 08月')
   })
 
   it('refuses margin totals dated another day', async () => {
@@ -382,9 +382,9 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
     expect(footerOf(p, '融資融券')).toBe('⚠️ 09/16 資料・非今日')
     expect(deps.loadMargin).toHaveBeenCalledWith('20260916')
     expect(fieldOf(p, '融資融券')).toBe(
-      '```\n               餘額    增減\n融資(張)  9,248,877 +58,366\n融資(億)    5,861.7   +39.3\n融券(張)    197,048  -1,004\n```',
+      '```\n融資張 9,248,877 +58,366\n融資億   5,861.7   +39.3\n融券張   197,048  -1,004\n```',
     )
-    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI       2.47% →     2.45% 08月')
+    expect(fieldOf(p, '美國總經')?.split('\n')[1]).toBe('核心CPI 08月')
     expect(deps.finishSend).toHaveBeenCalledWith('2026-09-19', 'test', { kind: 'sent', httpStatus: 204 })
     expect(out).toMatchObject({ ok: true, preview: { edition: 'full', marketDate: '2026-09-16' } })
   })

@@ -38,14 +38,14 @@ function indices(): IndexLine[] {
 }
 
 const INDEX_DESC = fence([
-  '日經225   63,923.00 +0.69% 🔴 09/16',
-  'KOSPI     暫無資料',
-  'KOSDAQ    暫無資料',
-  '道瓊      暫無資料',
-  'S&P 500    7,551.81 -0.45% 🟢 09/16',
-  '那斯達克  暫無資料',
-  '費半      暫無資料',
-  '羅素2000  暫無資料',
+  '日經225   63,923 ▲0.69%',
+  'KOSPI    暫無資料',
+  'KOSDAQ   暫無資料',
+  '道瓊     暫無資料',
+  'S&P 500    7,552 ▼0.45%',
+  '那斯達克 暫無資料',
+  '費半     暫無資料',
+  '羅素2000 暫無資料',
 ])
 
 function input(over: Partial<SummaryInput> = {}): SummaryInput {
@@ -182,10 +182,9 @@ describe('buildSummaryPayload — full cards (real 2026-09-16 data)', () => {
     const c = card(p, '融資融券')!
     expect(c.description).toBe(
     fence([
-      '               餘額    增減',
-      '融資(張)  9,248,877 +58,366',
-      '融資(億)    5,861.7   +39.3',
-      '融券(張)    197,048  -1,004',
+      '融資張 9,248,877 +58,366',
+      '融資億   5,861.7   +39.3',
+      '融券張   197,048  -1,004',
     ]),
     )
     expect(c.color).toBe(GREY)
@@ -196,12 +195,18 @@ describe('buildSummaryPayload — full cards (real 2026-09-16 data)', () => {
     const c = card(p, '美國總經')!
     expect(c.description).toBe(
     fence([
-      '核心CPI       2.47% →     2.45% 08月',
-      '核心PPI       4.26% →     4.62% 08月',
-      '核心PCE       3.34% →     3.34% 07月',
-      '聯邦利率  3.5-3.75% → 3.5-3.75% 09/16',
-      '非農就業     21千人 →   162千人 08月',
-      '消費信心   49.5指數 →  55.2指數 07月',
+      '核心CPI 08月',
+      '         2.47% → 2.45%',
+      '核心PPI 08月',
+      '         4.26% → 4.62%',
+      '核心PCE 07月',
+      '                 3.34%',
+      '聯邦利率 09/16',
+      '             3.5-3.75%',
+      '非農就業 08月',
+      '      21千人 → 162千人',
+      '消費信心 07月',
+      '   49.5指數 → 55.2指數',
     ]),
     )
     expect(c.footer).toEqual({ text: '括號內為資料期別' })
@@ -380,10 +385,12 @@ describe('buildSummaryPayload — missing and edge values', () => {
       ]).description,
     ).toBe(
     fence([
-      '核心CPI   -- → 2.45% 08月',
-      '核心PPI   暫無資料',
-      '核心CPI   -- → 2.45% 08月',
-      '聯邦利率  暫無資料',
+      '核心CPI 08月',
+      '            -- → 2.45%',
+      '核心PPI  暫無資料',
+      '核心CPI 08月',
+      '            -- → 2.45%',
+      '聯邦利率 暫無資料',
     ]),
     )
   })
@@ -394,14 +401,14 @@ describe('buildSummaryPayload — missing and edge values', () => {
     list[4] = { ...list[4], quote: { date: '09/16', close: 7551.81, changePct: 0.001 } }
     expect(card(buildSummaryPayload(input({ indices: list })), '國際指數')!.description).toBe(
     fence([
-      '日經225   63,923.00    --    09/16',
-      'KOSPI     暫無資料',
-      'KOSDAQ    暫無資料',
-      '道瓊      暫無資料',
-      'S&P 500    7,551.81 0.00% ⚪ 09/16',
-      '那斯達克  暫無資料',
-      '費半      暫無資料',
-      '羅素2000  暫無資料',
+      '日經225   63,923      --',
+      'KOSPI    暫無資料',
+      'KOSDAQ   暫無資料',
+      '道瓊     暫無資料',
+      'S&P 500    7,552 ─0.00%',
+      '那斯達克 暫無資料',
+      '費半     暫無資料',
+      '羅素2000 暫無資料',
     ]),
     )
     const empty = card(buildSummaryPayload(input({ indices: [] })), '國際指數')!
@@ -416,12 +423,24 @@ describe('buildSummaryPayload — missing and edge values', () => {
     )!
     expect(c.description).toBe(
     fence([
-      '               餘額    增減',
-      '融資(張)  9,248,877 +58,366',
-      '融資(億)    5,861.7   +39.3',
-      '融券(張)    197,048      --',
+      '融資張 9,248,877 +58,366',
+      '融資億   5,861.7   +39.3',
+      '融券張   197,048      --',
     ]),
     )
+  })
+
+  it('keeps every card line within 24 display columns (spec Revision 6)', () => {
+    const p = buildSummaryPayload(input({ edition: 'full' }))
+    const width = (str: string) =>
+      [...str].reduce((n, ch) => {
+        const cp = ch.codePointAt(0)!
+        if (cp === 0xfe0f || cp === 0x200d) return n
+        return n + (/[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿＀-｠]/.test(ch) ? 2 : 1)
+      }, 0)
+    const lines = p.embeds.flatMap((e) => (e.description ?? '').split('\n')).filter((l) => l !== '```')
+    expect(lines.length).toBeGreaterThan(10)
+    for (const l of lines) expect(width(l)).toBeLessThanOrEqual(24)
   })
 
   it('never allows mentions, whatever the content', () => {

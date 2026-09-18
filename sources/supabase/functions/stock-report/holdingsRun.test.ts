@@ -162,7 +162,7 @@ describe('runHoldingsDaily', () => {
     expect(rec.posts[0].payload.embeds.map((e) => e.title)).toEqual(['台股持股・09/17 收盤'])
     expect(rec.posts[1].payload.embeds.map((e) => e.title)).toEqual(['台股持股・09/17 收盤', '美股持股・美東 09/17 收盤'])
     expect(rec.posts[0].payload.embeds[0].description).toContain('2330 2330')
-    expect(rec.posts[0].payload.embeds[0].description).toContain('1,000股 1,000')
+    expect(rec.posts[0].payload.embeds[0].description).toContain('1,000股 @ 1,000')
     expect(rec.finishes).toEqual([
       { userId: 'u1', ymd: TODAY, kind: 'daily', outcome: { kind: 'sent', httpStatus: 204 } },
       { userId: 'u2', ymd: TODAY, kind: 'daily', outcome: { kind: 'sent', httpStatus: 204 } },

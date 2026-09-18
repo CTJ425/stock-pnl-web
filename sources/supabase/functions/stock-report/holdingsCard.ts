@@ -397,6 +397,11 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0xfe30, 0xfe4f],
   [0xff00, 0xff60],
   [0xffe0, 0xffe6],
+  // Ambiguous-width marks the cards actually print (▲ ▼ ─ ⚠): a CJK font renders them two
+  // columns wide, so counting them as one made every title line land one column over the cap.
+  [0x2500, 0x257f],
+  [0x25a0, 0x25ff],
+  [0x2600, 0x27bf],
   [0x1f300, 0x1faff],
   [0x2600, 0x27bf],
 ]
@@ -499,15 +504,15 @@ function usdTitle(cur: CurrencySummary): string {
   return `美股持股・美東 ${titleDate(cur.newestQuoteYmd)} 收盤`
 }
 
-/** Cuts a label to display width ≤ 26 and appends `…` when it would otherwise exceed 27. */
+/** Cuts a label to display width ≤ 14 and appends `…` when it would otherwise exceed 15. */
 function truncateLabel(label: string): string {
-  if (dispWidth(label) <= 27) return label
+  if (dispWidth(label) <= 15) return label
   let width = 0
   let result = ''
   for (const ch of label) {
     const cp = ch.codePointAt(0)!
     const w = cp === 0xfe0f || cp === 0x200d ? 0 : WIDE_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
-    if (width + w > 26) break
+    if (width + w > 14) break
     result += ch
     width += w
   }
@@ -516,33 +521,45 @@ function truncateLabel(label: string): string {
 
 function kpiLines(cur: CurrencySummary, decimals: number): string[] {
   const hasShort = cur.rows.some((r) => r.direction === 'SHORT')
-  const rows: Array<{ label: string; amount: string; pct?: string }> = [
+  const rows: Array<{ label: string; amount: string; pctLabel?: string; pct?: string }> = [
     { label: '市值', amount: fmtOrDash(cur.marketValue, decimals) },
     { label: '成本', amount: fmtOrDash(cur.cost, decimals) },
-    { label: '未實現', amount: fmtSignedOrDash(cur.unrealized, decimals), pct: pctSigned(cur.unrealizedPct) },
-    { label: '今日', amount: fmtSignedOrDash(cur.dayPnl, decimals), pct: pctSigned(cur.dayPct) },
+    { label: '未實現', amount: fmtSignedOrDash(cur.unrealized, decimals), pctLabel: '報酬率', pct: pctSigned(cur.unrealizedPct) },
+    { label: '今日', amount: fmtSignedOrDash(cur.dayPnl, decimals), pctLabel: '漲跌幅', pct: pctSigned(cur.dayPct) },
     { label: '今日已實現', amount: fmtSigned(cur.realizedToday, decimals) },
     { label: '今年已實現', amount: fmtSigned(cur.realizedYtd, decimals) },
   ]
   if (hasShort) rows.push({ label: '空單市值', amount: fmtOrDash(cur.shortMarketValue, decimals) })
-  return rows.map((r) => padEndW(r.label, 10) + padStartW(r.amount, 12) + (r.pct === undefined ? '' : ` ${padStartW(r.pct, 8)}`))
+  const lines: string[] = []
+  for (const r of rows) {
+    lines.push(padEndW(r.label, 10) + padStartW(r.amount, 12))
+    if (r.pctLabel !== undefined) lines.push(`  ${padEndW(r.pctLabel, 8)}${padStartW(r.pct as string, 12)}`)
+  }
+  return lines
 }
 
 function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): string[] {
   const stale = r.quoteYmd != null && newestQuoteYmd != null && r.quoteYmd < newestQuoteYmd
   const rawLabel = `${stale ? '⚠️' : ''}${r.direction === 'SHORT' ? '空 ' : ''}${r.ticker} ${r.name}`
   const label = truncateLabel(rawLabel)
-  const line1 = padEndW(label, 28) + padStartW(dayPctText(r.dayPct), 8)
+  const line1 = padEndW(label, 16) + padStartW(dayPctText(r.dayPct), 8)
 
   const priceFmt = currency === 'TWD' ? priceTwd : priceUsd
-  const sharesPrice = `${sharesStr(r.shares)}股 ${priceFmt(r.close)}`
-  const line2 = `  ${padEndW(sharesPrice, 15)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 10)} ${padStartW(pctSigned(r.returnPct), 8)}`
+  const line2 = `  ${sharesStr(r.shares)}股 @ ${priceFmt(r.close)}`
 
   // A short row's basis is proceeds received, not a cost, so it is labelled 價金 rather than 成本.
-  const line3 = `  市值 ${fmtOrDash(r.mktVal, decimals)}  ${r.direction === 'SHORT' ? '價金' : '成本'} ${fmtOrDash(r.basis, decimals)}`
-  const line4 = r.direction === 'SHORT' ? `  均價 ${priceFmt(r.avgCost)}` : `  均價 ${priceFmt(r.avgCost)}  保本 ${priceFmt(r.breakEven)}`
-  const lines = [line1, line2, line3, line4]
-  if (r.realized !== 0) lines.push(`  已實現 ${fmtSigned(r.realized, decimals)}`)
+  const basisLabel = r.direction === 'SHORT' ? '價金' : '成本'
+  const lines = [
+    line1,
+    line2,
+    `  ${padEndW('市值', 6)}${padStartW(fmtOrDash(r.mktVal, decimals), 14)}`,
+    `  ${padEndW(basisLabel, 6)}${padStartW(fmtOrDash(r.basis, decimals), 14)}`,
+    `  ${padEndW('未實現', 6)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 14)}`,
+    `  ${padEndW('報酬率', 6)}${padStartW(pctSigned(r.returnPct), 14)}`,
+    `  ${padEndW('均價', 6)}${padStartW(priceFmt(r.avgCost), 14)}`,
+  ]
+  if (r.direction === 'LONG' && r.breakEven != null) lines.push(`  ${padEndW('保本', 6)}${padStartW(priceFmt(r.breakEven), 14)}`)
+  if (r.realized !== 0) lines.push(`  ${padEndW('已實現', 6)}${padStartW(fmtSigned(r.realized, decimals), 14)}`)
   return lines
 }
 

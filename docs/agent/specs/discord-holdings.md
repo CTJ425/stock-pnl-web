@@ -628,3 +628,74 @@ function that fetches Yahoo already asks like a browser — `twChips.ts`'s `fetc
 
 **Fix**: `makeChartFetch` sends the same two headers, importing `UA` from `twChips.ts` so there is one
 user-agent string in the function. Verified on DEV after deploying: `missingQuotes` 7 → **0**.
+
+## Revision 6 — 24-column layout for both cards (user picked option B, 2026-09-18, target 0.9.58-dev.10)
+
+The user saw the cards squeezed on a phone: the widest lines are 36 display columns, a phone's message
+column fits about 33, so those lines wrapped and the columns stopped lining up. Of the three options
+presented (native embed fields / narrow monospace / hybrid), the user picked the **narrow monospace**
+one: keep the fenced tables and the right-aligned numbers, but let **no line exceed 24 display
+columns**. Both cards change; the numbers themselves do not.
+
+The updated golden arrays in `holdingsCard.test.ts` and `discordSummary.test.ts` are the contract;
+these are the rules behind them. Existing helpers (`padEndW`, `padStartW`, `dispWidth`, the amount /
+price / percentage formatters) stay as they are. Every line is `trimEnd()`ed, so no line ends in a
+space.
+
+### 6.1 Holdings card (`holdingsCard.ts`)
+
+KPI block, one metric per line, a percentage on its own following line:
+
+```
+市值         1,308,163      padEndW(label, 10) + padStartW(amount, 12)
+未實現        +680,448
+  報酬率      +107.99%      '  ' + padEndW('報酬率', 8) + padStartW(pct, 12)
+今日           +15,812
+  漲跌幅        +1.23%      the 今日 percentage is labelled 漲跌幅
+今日已實現      +3,210
+```
+
+Labels and order are unchanged (市值, 成本, 未實現, 今日, 今日已實現, 今年已實現, 空單市值); only
+未實現 and 今日 have a percentage line, and an unknown percentage prints as `--` there, exactly as it
+does today.
+
+Each position becomes 7–9 lines:
+
+```
+2330 台積電       ▲1.23%    padEndW(label, 16) + padStartW(dayPct, 8)
+  1,200股 @ 1,085.5         '  ' + shares + '股 @ ' + price
+  市值       1,302,600      '  ' + padEndW(field, 6) + padStartW(amount, 14)
+  成本         624,510      SHORT rows read 價金
+  未實現      +676,123
+  報酬率      +108.26%
+  均價          520.43
+  保本           522.7      LONG only, omitted when breakEven is null
+  已實現       +12,345      only when realized ≠ 0
+```
+
+`truncateLabel` now caps the first line's label at **14** display columns (it was 26), so the ⚠️ and
+空 markers still fit inside the 16-column field.
+
+### 6.2 Market summary card (`discordSummary.ts`)
+
+- 台股大盤, 三大法人, 匯率: unchanged — they already fit in 24 columns.
+- 國際指數: `padEndW(label, 9) + padStartW(close, 7) + ' ' + padStartW(arrowPct, 7)`, where `close` is
+  **rounded to whole points** with thousands separators and `arrowPct` is `▲`/`▼`/`─` plus the
+  unsigned percentage (`▲0.69%`); no quote → `padEndW(label, 9) + '暫無資料'`; no percentage → `--`
+  in that field. The per-market date and the 🔴/🟢 circles are dropped — the arrow carries the
+  direction and the footer already says the dates are each market's latest close. A market whose
+  close date differs from the newest date among the listed indices gets a second line
+  `'  ·MM/DD 收盤'`.
+- 融資融券: the header row is gone; three lines
+  `padEndW(label, 7) + padStartW(value, 9) + ' ' + padStartW(change, 7)` with labels 融資張, 融資億,
+  融券張. Values keep full precision.
+- 美國總經: two lines per indicator — `'<label> <period>'`, then
+  `'  ' + padStartW(body, 20)` where `body` is the latest value alone when it equals the previous one,
+  else `'<previous> → <latest>'`. An indicator with no latest value stays one line:
+  `padEndW(label, 9) + '暫無資料'`.
+
+### 6.3 Guards
+
+Both test files assert that every rendered line is ≤ 24 display columns. The holdings card's
+2,800-character budget is unchanged; with 7–9 lines per position about 11 positions still fit, and
+whole positions (never half of one) are dropped from the end.
