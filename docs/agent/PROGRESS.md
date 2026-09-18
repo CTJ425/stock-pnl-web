@@ -1,9 +1,21 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 — both Discord cards rewritten in markdown; holdings card cut to four fields per position
-- Status: 🔄 **0.9.58-dev.12 on `dev`** (`6f9fed0`, not pushed) — DEV `stock-report` v19; both cards sent to the user's channel with real 09/18 data; PROD untouched
-- Timestamp: 2026-09-18 15:20:00 Asia/Taipei
+- Action: Task 165 — released 0.9.58 (Phase 1 + Phase 2) and fast-forwarded `main` to `dev`
+- Status: ✅ **0.9.58 on `dev` and `main`** (same commit, not pushed) — DEV Supabase deployed and verified; PROD Supabase untouched, awaits explicit OK
+- Timestamp: 2026-09-18 15:33:33 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-18 15:33:33 Asia/Taipei (Task 165 — release 0.9.58)
+
+**Release**: the user approved the markdown cards and asked to deploy, commit and merge to `main`. Versions set to `0.9.58` (`version.ts`, `package.json`, lock, README badge); `docs/agent/CHANGELOG.md` gained a finalized 0.9.58 section (no pending wording, so the Release body published on the `main` push is correct). `main` was fast-forwarded to the release commit, so `main` and `dev` point at the same commit.
+
+**Gap closed before release**: `sources/supabase/verify.sql` did not know Phase 2's tables. Added `user_discord_settings` and `user_discord_send_log` to the table list and the RLS list, and the table message now reads `all 19 present`. Installed on DEV and run: all 10 checks PASS. Pitfall recorded: `supabase db query "$(cat verify.sql)"` fails because the file's first line starts with `--`, which the CLI parses as a flag — use `supabase db query --linked --project-ref <ref> -f supabase/verify.sql`.
+
+**Gate** (from `sources/`): `npm test` 149 files (148 passed, 1 skipped), 2,537 tests: 2,530 passed / 7 skipped; `npx tsc --noEmit`, `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0. DEV probes: `discord-accounts` and `discord-webhook` answer 401 without a token, the retired `discord-holdings-settings` answers 400.
+
+**Not done — needs the user**: `git push origin dev main` (no credentials on this host). PROD Supabase has **none** of Task 165 applied yet — not even Phase 1's §13 — so a `main` push alone changes nothing on PROD's Edge or database. PROD rollout: §13 + §14 + §15 with the DEV identity predicate swapped for PROD's, cron jobs created by cloning an existing command, `stock-report` deployed with `--no-verify-jwt --use-api`, `verify.sql` installed with `-f`, `verify_setup()` run, the global webhook set in the PROD admin console. Awaiting explicit OK.
 
 ---
 
@@ -22,20 +34,4 @@
 **Verification**: `npm test` 2530 passed / 7 skipped; `npm run build`, `typecheck:edge`, `lint`, `sync-edge-engine --check` exit 0. DEV deploys v17 (24 columns), v18 (probe), v19 (markdown). After v19 a holdings preview (missing quotes 0) and a full-edition summary preview were sent to the user's channel with the real 09/18 data. Builder blockers on dev.10 and dev.12 were all stale assertions the main session had not updated in `discordRun.test.ts`, `holdingsRun.test.ts` and `edgeConstants.test.mjs` — fixed there, no production change needed.
 
 **Next**: the user reviews the two real markdown cards on their phone; watch one real 17:30 / 21:30 round on DEV; PROD untouched and needs explicit OK.
-
----
-
-## 📅 Log: 2026-09-18 13:45:00 Asia/Taipei (Task 165 — card parity and the quote-header bug, 0.9.58-dev.8 / dev.9)
-
-**The bug worth remembering**: every position on a real holdings card showed `--` for 現價/未實現/報酬率. `makeChartFetch` in `holdingQuotes.ts` fetched Yahoo with `{ signal }` and **no headers**, so the request went out with Deno's default `User-Agent` and Yahoo refused it. Everything else in `stock-report` that fetches Yahoo already sends `Accept: application/json` + `User-Agent: UA` (`twChips.ts`'s `fetchJson`), which is why the market summary's index block was fine and only the holdings card was broken; `stock-price`'s `fetchYahooPrice` sends the same headers, which is why the app's own quotes work from the Edge. Fixed by sending those two headers, importing `UA` from `twChips.ts`. Measured on DEV: `holdings-preview` reported 7 of 7 positions without a quote before (v15) and 0 of 7 after (v16).
-
-**How it was found**: the user reported trailing `--` columns and asked for 庫存總覽 parity. Revision 4 added a `missingQuotes` counter to the preview result — that counter is what turned "maybe the quotes are stale" into "every quote fails in the Edge runtime, and only here". A laptop run of the same code against the same account fetched 6 of 6, which is what pointed at the request itself rather than the data.
-
-**0.9.58-dev.8 (Revision 4)**: each position gained a `市值 … 成本 …` line (SHORT rows read 價金, since a short's basis is proceeds), so the card now carries every column 庫存總覽 shows, plus 當日%, 已實現 and the per-currency KPI block. `createQuoteCache` now runs at most 2 key fetches at a time instead of opening one per position at once. The preview result carries `missingQuotes`, the admin console shows 「已送出完整持股報告（資料日 …，N 檔無報價）」, and a daily send logs `holdings quotes missing` with counts only. Layout is the compact one the user picked: four lines per position, five when 已實現 is not 0.
-
-**0.9.58-dev.9 (Revision 5)**: the header fix above.
-
-**Verification**: `npm test` 2529 passed / 7 skipped; `npm run build`, `typecheck:edge`, `lint`, `sync-edge-engine --check` exit 0. DEV deploys v15 then v16 (ezbr `02e08077…` then `8b6ba626…`), each followed by a real `holdings-preview` for the account with 114 transactions, which is also how the fix was proven. A local render of that account's card was read line by line: 7 positions, 996 characters of 2,800, 已實現 only on the two tickers with sells, the 2303 long/short pair carrying it once, 保本 just above 均價.
-
-**Next**: watch one real 17:30 round on DEV; PROD still untouched and needs explicit OK (merge `main`, §14 + §15, clone cron, deploy).
 
