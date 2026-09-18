@@ -22,9 +22,9 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — Phase 1 + Phase 2 released as **0.9.58** (`main` = `dev`, not pushed); DEV Supabase fully deployed and verified; **PROD Supabase untouched** (neither §13 nor §14/§15 applied, `stock-report` not redeployed) — awaits explicit OK
+- **Status**: 🔄 IN PROGRESS — **0.9.58 released and deployed to DEV and PROD** (2026-09-18); remaining: watch one real 17:30 / 21:30 round on PROD
 - **Agent**: Claude
-- **Timestamp**: 2026-09-18 15:33:33 Asia/Taipei
+- **Timestamp**: 2026-09-18 15:46:22 Asia/Taipei
 - **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
 - **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 decisions superseded — see the next line.
@@ -35,8 +35,8 @@
 - **Card parity + quote bug (2026-09-18 13:40)**: each position also shows 市值 and 成本 (SHORT: 價金), so the card covers every 庫存總覽 column; quote fetches are limited to 2 at a time and the missing-quote count is reported; and the reason every real card showed `--` is fixed — the quote request carried no `User-Agent`, so Yahoo refused it. Spec: docs/agent/specs/discord-holdings.md, "Revision 4" and "Revision 5".
 - **Card layout (user, 2026-09-18 14:00–15:15)**: after seeing four layouts on a canvas (現況 / A 原生欄位 / B 24 欄等寬 / C 混合 / D Markdown) the user shipped B (dev.10), then asked for a markdown probe (dev.11) and chose markdown for both cards (dev.12). The holdings card is now one total line (未實現合計, 今日) plus one line per position: 代號名稱｜張數（整張 N 張、零股 N 股）｜均價｜未實現. Spec: docs/agent/specs/discord-holdings.md, "Revision 6", "Revision 7", "Revision 8".
 4. ~~Set the webhook in the DEV admin console and run 測試發送~~ ✅ (2026-09-17: test 15:11, previews from 15:25, all HTTP 200) · watch one real 17:05 and 21:30 round; check phone alignment of the 國際指數 / 美國總經 tables —— ⏳
-5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · apply schema §13 on PROD (clone an existing job's command behind the identity guard, `verify_setup()`), deploy `stock-report` with `--no-verify-jwt --use-api`, set the PROD webhook —— ⏳ awaiting explicit OK
-6. Phase 2: per-user holdings card (full amounts, merged workspaces, sent with the brief; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · ~~2b card modules~~ ✅ 0.9.58-dev.2 · ~~2c schema §14 / Edge / settings UI~~ ✅ 0.9.58-dev.3 · ~~2d admin-managed webhooks + adjustable schedule (spec discord-admin-accounts.md)~~ ✅ 0.9.58-dev.4 (`247b37f`) · ~~merge `main` as 0.9.58~~ ✅ 2026-09-18 · **push `dev` and `main`** (user) —— ⏳ · ~~DEV deploy (§14 + §15 DDL, clone cron `discord-holdings-daily` at 17:05, deploy `stock-report` v13)~~ ✅ 2026-09-18 · ~~admin-op end-to-end check with a temporary admin~~ ✅ · real test sends to a private webhook from the admin console, watch one 17:05 and 21:30 round —— ⏳ · PROD: apply §13 + §14 + §15 (clone cron commands, identity predicate), deploy `stock-report --no-verify-jwt --use-api`, install `verify.sql` with `-f`, `verify_setup()`, set the global webhook —— ⏳ awaiting explicit OK · accepted risks RISK-015/016/017, BUG-084
+5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · ~~apply schema §13 on PROD, deploy `stock-report`, set the PROD webhook~~ ✅ (found already applied on 2026-09-18: `app_secrets`, `discord_send_log`, both summary jobs and the global webhook were present, with 3 send-log rows)
+6. Phase 2: per-user holdings card (full amounts, merged workspaces, sent with the brief; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · ~~2b card modules~~ ✅ 0.9.58-dev.2 · ~~2c schema §14 / Edge / settings UI~~ ✅ 0.9.58-dev.3 · ~~2d admin-managed webhooks + adjustable schedule (spec discord-admin-accounts.md)~~ ✅ 0.9.58-dev.4 (`247b37f`) · ~~merge `main` as 0.9.58~~ ✅ 2026-09-18 · ~~push `dev` and `main`~~ ✅ · ~~PROD: §14 + §15, clone cron `discord-holdings-daily`, schedule 17:30 / 21:30, deploy `stock-report` v10, `verify_setup()` 10/10 PASS~~ ✅ 2026-09-18 · watch one real 17:30 and 21:30 round on PROD —— ⏳ · accepted risks RISK-015/016/017, BUG-084
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
 - **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**
