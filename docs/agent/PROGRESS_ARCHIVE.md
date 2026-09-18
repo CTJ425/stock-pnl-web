@@ -5,6 +5,18 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-18 15:33:33 Asia/Taipei (Task 165 — release 0.9.58)
+
+**Release**: the user approved the markdown cards and asked to deploy, commit and merge to `main`. Versions set to `0.9.58` (`version.ts`, `package.json`, lock, README badge); `docs/agent/CHANGELOG.md` gained a finalized 0.9.58 section (no pending wording, so the Release body published on the `main` push is correct). `main` was fast-forwarded to the release commit, so `main` and `dev` point at the same commit.
+
+**Gap closed before release**: `sources/supabase/verify.sql` did not know Phase 2's tables. Added `user_discord_settings` and `user_discord_send_log` to the table list and the RLS list, and the table message now reads `all 19 present`. Installed on DEV and run: all 10 checks PASS. Pitfall recorded: `supabase db query "$(cat verify.sql)"` fails because the file's first line starts with `--`, which the CLI parses as a flag — use `supabase db query --linked --project-ref <ref> -f supabase/verify.sql`.
+
+**Gate** (from `sources/`): `npm test` 149 files (148 passed, 1 skipped), 2,537 tests: 2,530 passed / 7 skipped; `npx tsc --noEmit`, `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0. DEV probes: `discord-accounts` and `discord-webhook` answer 401 without a token, the retired `discord-holdings-settings` answers 400.
+
+**Not done — needs the user**: `git push origin dev main` (no credentials on this host). PROD Supabase has **none** of Task 165 applied yet — not even Phase 1's §13 — so a `main` push alone changes nothing on PROD's Edge or database. PROD rollout: §13 + §14 + §15 with the DEV identity predicate swapped for PROD's, cron jobs created by cloning an existing command, `stock-report` deployed with `--no-verify-jwt --use-api`, `verify.sql` installed with `-f`, `verify_setup()` run, the global webhook set in the PROD admin console. Awaiting explicit OK.
+
+---
+
 ## 📅 Log: 2026-09-18 15:20:00 Asia/Taipei (Task 165 — card layout: 24 columns, markdown probe, markdown, 0.9.58-dev.10 → dev.12)
 
 **Problem**: on a phone the fenced tables wrapped — the widest lines were 36 display columns and a phone message column fits about 33 — so the columns stopped lining up.

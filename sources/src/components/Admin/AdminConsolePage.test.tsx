@@ -22,6 +22,11 @@ vi.mock('../../services/aiSettings', () => ({
   clearAiSettings,
   validateAiSettings: () => null,
 }))
+const { loadAiPrompts } = vi.hoisted(() => ({ loadAiPrompts: vi.fn() }))
+vi.mock('../../services/aiPrompts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/aiPrompts')>()
+  return { ...actual, loadAiPrompts, saveAiPrompts: vi.fn() }
+})
 
 import { AdminConsolePage } from './AdminConsolePage'
 
@@ -32,31 +37,26 @@ describe('AdminConsolePage', () => {
     fetchAdminStatus.mockResolvedValue(null)
     loadAiSettings.mockResolvedValue(null)
     loadAiSettingsView.mockResolvedValue({ settings: null, hasKey: false })
+    loadAiPrompts.mockResolvedValue({ analysis: '', chat: '' })
   })
   afterEach(cleanup)
 
-  it('八個項目都在側欄，預設停在抓取狀況', async () => {
+  it('五個項目都在側欄，預設停在資料更新的抓取狀況', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
     const nav = screen.getByRole('navigation', { name: '管理後台頁面' })
     const items = [...nav.querySelectorAll('button')].map((b) => b.textContent)
-    expect(items).toEqual([
-      '帳號',
-      '抓取狀況',
-      '執行記錄',
-      '手動更新',
-      'AI 連線',
-      '提示詞',
-      'Discord',
-      '備份',
-    ])
+    expect(items).toEqual(['帳號', '資料更新', 'AI 設定', 'Discord', '備份'])
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
+    expect(tabs).toEqual(['抓取狀況', '手動更新', '執行記錄'])
+    expect(screen.getByRole('tab', { name: '抓取狀況' }).getAttribute('aria-selected')).toBe('true')
     expect(await screen.findByText(/讀不到資料抓取狀況/)).toBeTruthy()
   })
 
-  it('手動更新面板列出五個可觸發的排程 job', async () => {
+  it('手動更新分頁列出五個可觸發的排程 job', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
-    const nav = screen.getByRole('navigation', { name: '管理後台頁面' })
-    fireEvent.click([...nav.querySelectorAll('button')].find((b) => b.textContent === '手動更新')!)
+    fireEvent.click(screen.getByRole('tab', { name: '手動更新' }))
     expect(await screen.findByRole('heading', { name: '手動更新' })).toBeTruthy()
+    expect(screen.queryByText(/讀不到資料抓取狀況/)).toBeNull()
     // Labels appear both as row titles and checkbox aria-labels — just assert each job id is present.
     for (const job of [
       'generate-chips',
@@ -74,12 +74,14 @@ describe('AdminConsolePage', () => {
     expect(screen.getByRole('button', { name: /執行勾選項目/ })).toBeTruthy()
   })
 
-  it('點側欄切換面板，AI 連線顯示設定表單', async () => {
+  it('AI 設定同一頁顯示連線表單與提示詞', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AI 設定' }))
     expect(await screen.findByLabelText(/AI 服務供應商/)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '提示詞' })).toBeTruthy()
     // The capture status should not remain on the screen after cutting away.
     expect(screen.queryByText(/讀不到資料抓取狀況/)).toBeNull()
+    expect(screen.queryByRole('tab')).toBeNull()
   })
 
   /**
@@ -88,7 +90,7 @@ describe('AdminConsolePage', () => {
    */
   it('google 要寫明金鑰留在伺服器端', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AI 設定' }))
     await screen.findByLabelText(/AI 服務供應商/)
     expect(screen.getByText(/金鑰只存在伺服器端/)).toBeTruthy()
     expect(screen.queryByText(/金鑰會下發到每個登入者的瀏覽器/)).toBeNull()
@@ -96,7 +98,7 @@ describe('AdminConsolePage', () => {
 
   it('openai-compatible 要照實寫明金鑰會下發到瀏覽器', async () => {
     render(<AdminConsolePage onExit={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'AI 連線' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AI 設定' }))
     const select = await screen.findByLabelText(/AI 服務供應商/)
     fireEvent.change(select, { target: { value: 'openai-compatible' } })
     expect(screen.getByText(/金鑰會下發到每個登入者的瀏覽器/)).toBeTruthy()

@@ -12,7 +12,7 @@
  * Anyone who changes a line of JS can call this page out, but calling it out will only get 403 and empty data.
  */
 import { useState } from 'react'
-import { Activity, ChevronLeft, Database, FileText, KeyRound, MessageSquare, Play, ScrollText, Users } from 'lucide-react'
+import { Activity, Bot, ChevronLeft, Database, MessageSquare, Users } from 'lucide-react'
 import { AccountsSection } from './AccountsSection'
 import { AdminStatusPage } from './AdminStatusPage'
 import { AiConnectionSection } from './AiConnectionSection'
@@ -24,21 +24,27 @@ import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
 import { PromptsSection } from './PromptsSection'
 
-type Panel = 'accounts' | 'status' | 'logs' | 'run' | 'ai' | 'prompts' | 'discord' | 'backups'
+type Panel = 'accounts' | 'data' | 'ai' | 'discord' | 'backups'
+type DataTab = 'status' | 'run' | 'logs'
 
 const PANELS: Array<{ id: Panel; label: string; icon: typeof Users }> = [
   { id: 'accounts', label: '帳號', icon: Users },
-  { id: 'status', label: '抓取狀況', icon: Activity },
-  { id: 'logs', label: '執行記錄', icon: ScrollText },
-  { id: 'run', label: '手動更新', icon: Play },
-  { id: 'ai', label: 'AI 連線', icon: KeyRound },
-  { id: 'prompts', label: '提示詞', icon: FileText },
+  { id: 'data', label: '資料更新', icon: Activity },
+  { id: 'ai', label: 'AI 設定', icon: Bot },
   { id: 'discord', label: 'Discord', icon: MessageSquare },
   { id: 'backups', label: '備份', icon: Database },
 ]
 
+// 資料更新 holds three large views (~1000 lines together), so it switches them instead of stacking.
+const DATA_TABS: Array<{ id: DataTab; label: string }> = [
+  { id: 'status', label: '抓取狀況' },
+  { id: 'run', label: '手動更新' },
+  { id: 'logs', label: '執行記錄' },
+]
+
 export function AdminConsolePage({ onExit }: { onExit: () => void }) {
-  const [panel, setPanel] = useState<Panel>('status')
+  const [panel, setPanel] = useState<Panel>('data')
+  const [dataTab, setDataTab] = useState<DataTab>('status')
 
   return (
     <div className="adm-console">
@@ -66,11 +72,33 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
 
       <div className="adm-main">
         {panel === 'accounts' && <AccountsSection />}
-        {panel === 'status' && <AdminStatusPage />}
-        {panel === 'logs' && <LogsSection />}
-        {panel === 'run' && <ManualRunSection />}
-        {panel === 'ai' && <AiConnectionSection />}
-        {panel === 'prompts' && <PromptsSection />}
+        {panel === 'data' && (
+          <>
+            <div className="subtabs" role="tablist" aria-label="資料更新分頁">
+              {DATA_TABS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={dataTab === id}
+                  className={dataTab === id ? 'subtab active' : 'subtab'}
+                  onClick={() => setDataTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {dataTab === 'status' && <AdminStatusPage />}
+            {dataTab === 'run' && <ManualRunSection />}
+            {dataTab === 'logs' && <LogsSection />}
+          </>
+        )}
+        {panel === 'ai' && (
+          <>
+            <AiConnectionSection />
+            <PromptsSection />
+          </>
+        )}
         {panel === 'discord' && (
           <>
             <DiscordSection />
