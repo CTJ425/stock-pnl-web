@@ -3,6 +3,7 @@
  * Spec: docs/agent/specs/discord-holdings.md §2.2.
  */
 import { indexChartUrl, type IndexChartResponse } from './globalIndexClose.ts'
+import { UA } from './twChips.ts'
 import { tradingDateOf } from './twDaily.ts'
 import { positionKey, type Market } from '../_shared/engine/models.ts'
 
@@ -65,7 +66,11 @@ export function makeChartFetch(deps: {
 }): ChartFetch {
   const timeoutMs = deps.timeoutMs ?? 8_000
 
-  const once = (url: string): Promise<Response> => deps.fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
+  // Yahoo refuses a request with Deno's default User-Agent (every one of a real run's quotes came
+  // back empty in the Edge runtime while the same code worked from a laptop), so ask like the
+  // browser the rest of this function already imitates — same headers as `twChips.ts`'s fetchJson.
+  const once = (url: string): Promise<Response> =>
+    deps.fetchImpl(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(timeoutMs) })
 
   async function finish(res: Response, url: string, alreadyRetried: boolean): Promise<unknown> {
     if (res.ok) return res.json()
