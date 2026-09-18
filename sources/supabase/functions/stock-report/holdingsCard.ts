@@ -2,7 +2,7 @@
  * Per-user holdings aggregation and Discord card payload (Task 165 Phase 2).
  * Spec: docs/agent/specs/discord-holdings.md §2.3 / §2.4.
  */
-import { computeLedger, estimateUnrealized, estimateUnrealizedShort, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
+import { computeLedger, estimateUnrealized, estimateUnrealizedShort, sellTaxRate, type Holding, type Ledger } from '../_shared/engine/pnlEngine.ts'
 import type { Currency, Market, Transaction } from '../_shared/engine/models.ts'
 import type { DiscordEmbed, DiscordPayload } from './discordWebhook.ts'
 import type { HoldingQuote } from './holdingQuotes.ts'
@@ -70,6 +70,9 @@ export interface HoldingRowOut {
   returnPct: number | null
   dayPnl: number | null
   dayPct: number | null
+  avgCost: number
+  breakEven: number | null
+  realized: number
 }
 
 export interface CurrencySummary {
@@ -83,6 +86,7 @@ export interface CurrencySummary {
   dayPnl: number | null
   dayPct: number | null
   realizedYtd: number
+  realizedToday: number
   missingCount: number
   newestQuoteYmd: string | null
 }
@@ -104,6 +108,12 @@ interface RowAcc {
   direction: 'LONG' | 'SHORT'
   shares: number
   basis: number
+  // Σ(leg shares × that leg's workspace fee rate); divided by `shares` to get the
+  // share-weighted average fee rate a LONG row's break-even price is seeded from.
+  feeWeightSum: number
+  // Position.realized (cumulative, all years), attached once per key after the merge loop —
+  // never accumulated leg by leg here.
+  realized: number
   // Same key ⇒ same quote for every workspace holding it, so these are set once, from the
   // first leg seen, and never re-derived on merge.
   close: number | null
@@ -126,15 +136,33 @@ function mergeRow(
   mktVal: number | null,
   unrealized: number | null,
   dayPnl: number | null,
+  legFeeRate: number,
 ): void {
   const mapKey = `${h.key}:${direction}`
   const existing = map.get(mapKey)
   if (!existing) {
-    map.set(mapKey, { key: h.key, market: h.market, ticker: h.ticker, name: h.name, direction, shares, basis, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl })
+    map.set(mapKey, {
+      key: h.key,
+      market: h.market,
+      ticker: h.ticker,
+      name: h.name,
+      direction,
+      shares,
+      basis,
+      feeWeightSum: shares * legFeeRate,
+      realized: 0,
+      close,
+      prevClose,
+      quoteYmd,
+      mktVal,
+      unrealized,
+      dayPnl,
+    })
     return
   }
   existing.shares += shares
   existing.basis += basis
+  existing.feeWeightSum += shares * legFeeRate
   existing.mktVal = existing.mktVal != null && mktVal != null ? existing.mktVal + mktVal : null
   existing.unrealized = existing.unrealized != null && unrealized != null ? existing.unrealized + unrealized : null
   existing.dayPnl = existing.dayPnl != null && dayPnl != null ? existing.dayPnl + dayPnl : null
@@ -148,6 +176,57 @@ function minFeeFor(currency: Currency, legShares: number): number | undefined {
 
 function sum(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0)
+}
+
+/**
+ * Lowest cent at which `estimateUnrealized` of a synthetic single-lot holding is ≥ 0 (spec
+ * Revision 3: cannot drift from the 未實現 column since it reuses the same engine call). Seeds
+ * from the closed form that inverts the linear fee/tax model, then walks up to the first cent
+ * that passes and down while the cent below still passes, so floorSafe/minFee rounding can only
+ * move the answer by a few cents either way.
+ */
+function computeBreakEven(ticker: string, market: Market, currency: Currency, shares: number, basis: number, feeRate: number): number | null {
+  const avgCost = basis / shares
+  const synthetic: Holding = {
+    key: `${market}:${ticker}`,
+    ticker,
+    name: '',
+    market,
+    currency,
+    qty: shares,
+    cost: basis,
+    rawCost: basis,
+    buyCostTotal: basis,
+    realized: 0,
+    openLots: [],
+    shortQty: 0,
+    shortProceeds: 0,
+    shortRawProceeds: 0,
+    shortLots: [],
+    avgCost,
+    rawAvgCost: avgCost,
+  }
+  const minFee = minFeeFor(currency, shares)
+  const passes = (cents: number): boolean => estimateUnrealized(synthetic, cents / 100, feeRate, minFee) >= 0
+
+  const denom = 1 - feeRate - sellTaxRate(ticker)
+  const seed = denom > 0 ? basis / (shares * denom) : avgCost
+  let cents = Math.floor(seed * 100)
+  let steps = 0
+  // Cap: if 2,000 cents up never finds a passing price, refuse to return the last
+  // (still non-breaking-even) cent as if it were the answer.
+  while (!passes(cents) && steps < 2000) {
+    cents++
+    steps++
+  }
+  if (!passes(cents)) return null
+  let downSteps = 0
+  // Cap: mirrors the upward walk so a pathological fee/tax model can't loop forever.
+  while (downSteps < 2000 && passes(cents - 1)) {
+    cents--
+    downSteps++
+  }
+  return cents / 100
 }
 
 /** Quoted LONG rows by mktVal desc, then unquoted LONG, then SHORT (quoted by mktVal desc,
@@ -168,7 +247,7 @@ function sortRows(rows: HoldingRowOut[]): HoldingRowOut[] {
   })
 }
 
-function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: number): CurrencySummary {
+function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: number, realizedToday: number): CurrencySummary {
   const rows = sortRows(
     accs.map((a) => ({
       key: a.key,
@@ -186,6 +265,9 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
       returnPct: a.basis !== 0 && a.unrealized != null ? (a.unrealized / a.basis) * 100 : null,
       dayPnl: a.dayPnl,
       dayPct: a.close != null && a.prevClose != null && a.prevClose !== 0 ? ((a.close - a.prevClose) / a.prevClose) * 100 : null,
+      avgCost: a.shares !== 0 ? a.basis / a.shares : 0,
+      breakEven: a.direction === 'LONG' && a.shares > 0 ? computeBreakEven(a.ticker, a.market, currency, a.shares, a.basis, a.feeWeightSum / a.shares) : null,
+      realized: a.realized,
     })),
   )
 
@@ -209,7 +291,7 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
   const quoteYmds = rows.filter((r): r is HoldingRowOut & { quoteYmd: string } => r.quoteYmd != null).map((r) => r.quoteYmd)
   const newestQuoteYmd = quoteYmds.length === 0 ? null : quoteYmds.reduce((a, b) => (a > b ? a : b))
 
-  return { currency, rows, marketValue, cost, unrealized, unrealizedPct, shortMarketValue, dayPnl, dayPct, realizedYtd, missingCount, newestQuoteYmd }
+  return { currency, rows, marketValue, cost, unrealized, unrealizedPct, shortMarketValue, dayPnl, dayPct, realizedYtd, realizedToday, missingCount, newestQuoteYmd }
 }
 
 /**
@@ -219,9 +301,14 @@ function buildCurrencySummary(accs: RowAcc[], currency: Currency, realizedYtd: n
 export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string, HoldingQuote | null>, ymd: string): HoldingsSummary {
   const twdAcc = new Map<string, RowAcc>()
   const usdAcc = new Map<string, RowAcc>()
+  // Position.realized is cumulative per key, not per leg, so it is summed here and attached
+  // to the key's LONG row (or its SHORT row when there is no LONG row) after the merge loop.
+  const realizedByKey = new Map<string, number>()
 
   for (const l of ledgers) {
     for (const h of l.ledger.holdings) {
+      realizedByKey.set(h.key, (realizedByKey.get(h.key) ?? 0) + h.realized)
+
       const quote = quotes.get(h.key) ?? null
       const close = quote?.close ?? null
       const prevClose = quote?.prevClose ?? null
@@ -233,14 +320,29 @@ export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string
         const mktVal = close != null ? close * h.qty : null
         const unrealized = close != null ? estimateUnrealized(h, close, l.feeRate, minFee) : null
         const dayPnl = close != null && prevClose != null ? h.qty * (close - prevClose) : null
-        mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl)
+        mergeRow(map, h, 'LONG', h.qty, h.cost, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl, l.feeRate)
       }
       if (h.shortQty > 0) {
         const minFee = minFeeFor(h.currency, h.shortQty)
         const mktVal = close != null ? close * h.shortQty : null
         const unrealized = close != null ? estimateUnrealizedShort(h, close, l.feeRate, minFee) : null
         const dayPnl = close != null && prevClose != null ? -h.shortQty * (close - prevClose) : null
-        mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl)
+        mergeRow(map, h, 'SHORT', h.shortQty, h.shortProceeds, close, prevClose, quoteYmd, mktVal, unrealized, dayPnl, l.feeRate)
+      }
+    }
+  }
+
+  for (const [key, total] of realizedByKey) {
+    for (const map of [twdAcc, usdAcc]) {
+      const long = map.get(`${key}:LONG`)
+      if (long) {
+        long.realized = total
+        break
+      }
+      const short = map.get(`${key}:SHORT`)
+      if (short) {
+        short.realized = total
+        break
       }
     }
   }
@@ -248,16 +350,26 @@ export function aggregateHoldings(ledgers: WorkspaceLedger[], quotes: Map<string
   const year = Number(ymd.slice(0, 4))
   let realizedTwd = 0
   let realizedUsd = 0
+  let realizedTodayTwd = 0
+  let realizedTodayUsd = 0
   for (const l of ledgers) {
     const y = l.ledger.yearly[year]
     realizedTwd += y?.realizedTw ?? 0
     realizedUsd += y?.realizedUs ?? 0
+    if (!y) continue
+    for (const yt of Object.values(y.tickers)) {
+      for (const s of yt.sells) {
+        if (s.date !== ymd) continue
+        if (yt.currency === 'TWD') realizedTodayTwd += s.realized
+        else realizedTodayUsd += s.realized
+      }
+    }
   }
 
   return {
     ymd,
-    twd: buildCurrencySummary([...twdAcc.values()], 'TWD', realizedTwd),
-    usd: buildCurrencySummary([...usdAcc.values()], 'USD', realizedUsd),
+    twd: buildCurrencySummary([...twdAcc.values()], 'TWD', realizedTwd, realizedTodayTwd),
+    usd: buildCurrencySummary([...usdAcc.values()], 'USD', realizedUsd, realizedTodayUsd),
   }
 }
 
@@ -409,22 +521,27 @@ function kpiLines(cur: CurrencySummary, decimals: number): string[] {
     { label: '成本', amount: fmtOrDash(cur.cost, decimals) },
     { label: '未實現', amount: fmtSignedOrDash(cur.unrealized, decimals), pct: pctSigned(cur.unrealizedPct) },
     { label: '今日', amount: fmtSignedOrDash(cur.dayPnl, decimals), pct: pctSigned(cur.dayPct) },
+    { label: '今日已實現', amount: fmtSigned(cur.realizedToday, decimals) },
     { label: '今年已實現', amount: fmtSigned(cur.realizedYtd, decimals) },
   ]
   if (hasShort) rows.push({ label: '空單市值', amount: fmtOrDash(cur.shortMarketValue, decimals) })
   return rows.map((r) => padEndW(r.label, 10) + padStartW(r.amount, 12) + (r.pct === undefined ? '' : ` ${padStartW(r.pct, 8)}`))
 }
 
-function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): [string, string] {
+function rowLines(r: HoldingRowOut, newestQuoteYmd: string | null, currency: Currency, decimals: number): string[] {
   const stale = r.quoteYmd != null && newestQuoteYmd != null && r.quoteYmd < newestQuoteYmd
   const rawLabel = `${stale ? '⚠️' : ''}${r.direction === 'SHORT' ? '空 ' : ''}${r.ticker} ${r.name}`
   const label = truncateLabel(rawLabel)
   const line1 = padEndW(label, 28) + padStartW(dayPctText(r.dayPct), 8)
 
-  const priceStr = currency === 'TWD' ? priceTwd(r.close) : priceUsd(r.close)
-  const sharesPrice = `${sharesStr(r.shares)}股 ${priceStr}`
+  const priceFmt = currency === 'TWD' ? priceTwd : priceUsd
+  const sharesPrice = `${sharesStr(r.shares)}股 ${priceFmt(r.close)}`
   const line2 = `  ${padEndW(sharesPrice, 15)}${padStartW(fmtSignedOrDash(r.unrealized, decimals), 10)} ${padStartW(pctSigned(r.returnPct), 8)}`
-  return [line1, line2]
+
+  const line3 = r.direction === 'SHORT' ? `  均價 ${priceFmt(r.avgCost)}` : `  均價 ${priceFmt(r.avgCost)}  保本 ${priceFmt(r.breakEven)}`
+  const lines = [line1, line2, line3]
+  if (r.realized !== 0) lines.push(`  已實現 ${fmtSigned(r.realized, decimals)}`)
+  return lines
 }
 
 /** Rows fence, dropping rows from the end until the whole description fits the 2,800-char budget. */

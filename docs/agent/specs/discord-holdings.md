@@ -532,3 +532,47 @@ webhook; one real 17:15 round lands `sent` in `user_discord_send_log`; unauthent
 explicit OK → watch one real 17:15 round → merge `main` → PROD on explicit OK.
 Reviewer is required at 2a (money module copied), 2b (money maths) and 2c (auth, RLS, cron); the
 main session reads the 2a and 2b diffs itself.
+
+## Revision 3 — more P&L on the card (user 2026-09-18, target 0.9.58-dev.7)
+
+The card already carried 未實現 (with %), 今日 (with %), 今年已實現 per currency and 未實現 / 報酬率 /
+當日% per position. The user asked for three more numbers; everything else about the card stays.
+
+| # | Addition | Where |
+|---|---|---|
+| R1 | **今日已實現** per currency | KPI block, between 今日 and 今年已實現 |
+| R2 | **每檔累計已實現** | a row line, only when it is not 0 |
+| R3 | **每檔平均成本與保本賣出價** | a row line, always |
+
+### Data (`holdingsCard.ts`, no engine change — D6 still holds)
+
+- `HoldingRowOut` gains `avgCost: number` (merged `basis / shares`; for a SHORT row this is the
+  average short proceeds per share), `breakEven: number | null` (LONG only; `null` for SHORT and
+  when `shares` is 0) and `realized: number`.
+- `realized` is `Position.realized` (cumulative, all years) summed across workspaces for that
+  position key. It is a per-key number, so it is attached to the key's LONG row; a key with only a
+  SHORT row carries it there. Never to both.
+- `breakEven` is the lowest price at which the card's own 未實現 is ≥ 0, so it cannot drift from the
+  未實現 column: the predicate is `estimateUnrealized(synthetic, price, feeRate, minFee) >= 0` with
+  `synthetic = { ...the merged row as a Holding, qty: shares, cost: basis, avgCost: basis / shares,
+  openLots: [] }`, `feeRate` = the share-weighted average of the contributing workspaces' rates and
+  `minFee = minFeeFor(currency, shares)`. Seed from the closed form
+  `basis / (shares * (1 - feeRate - sellTaxRate(ticker)))`, round down to the cent, then step up by
+  0.01 at most 2,000 times; step down while the price one cent lower still breaks even. USD has no
+  fee or tax in `estimateUnrealized`, so the result is `avgCost` rounded up to the cent.
+- `CurrencySummary` gains `realizedToday: number` — the sum of `realized` over every
+  `ledger.yearly[year(ymd)].tickers[*].sells` entry whose `date === summary.ymd`, per currency
+  (`YearTickerDetail.currency`), across workspaces. A non-trading preview day therefore reports the
+  realized P&L of the market day the card is built from, which is the same day its quotes come from.
+
+### Rendering
+
+- KPI: a new line `今日已實現` with the same `padEndW(label, 10) + padStartW(amount, 12)` shape as
+  今年已實現, always shown (0 included), no percentage.
+- Each position gains, after its existing two lines:
+  - `'  均價 ' + price(avgCost) + '  保本 ' + price(breakEven)` — LONG;
+    `'  均價 ' + price(avgCost)` — SHORT (no break-even for a short leg).
+  - `'  已實現 ' + signed(realized)` — only when `realized !== 0`.
+  Prices use the existing per-currency price formatter; every line stays ≤ 36 display columns.
+- The 2,800-character budget is unchanged, so fewer positions fit before `…另 N 檔，完整明細請見網站`.
+  That is accepted.
