@@ -249,7 +249,7 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
           <div className="hint" style={{ marginTop: 6 }}>
             {isAdmin ? (
               <>
-                請從右上角帳號選單進入<b>管理後台 → AI 連線</b>，填入 Google API Key
+                請從右上角帳號選單進入<b>管理後台 → AI 設定</b>，填入 Google API Key
                 或本機 Ollama / OpenAI 相容端點。
               </>
             ) : (

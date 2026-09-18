@@ -1,6 +1,6 @@
 # 📈 股票交易與庫存管理系統 (Stock PnL Web)
 
-> **目前版本：0.9.58**（版本號顯示於畫面左下角徽章）
+> **目前版本：0.9.59-dev.1**（版本號顯示於畫面左下角徽章）
 
 本專案是一個現代化、獨立的網頁應用程式 (Standalone Web App)，旨在幫助使用者管理個人股票交易紀錄、計算移動平均成本，並提供即時庫存總覽、年度收益報表、籌碼與基本面分析以及盤後資料自動化排程。本專案由原 Google Apps Script (GAS) 「試算表股票小幫手」移植並深度升級而來。
 
@@ -355,7 +355,7 @@ supabase secrets set CRON_SECRET=<步驟 2 的密鑰>
 `stock-report` 與 `backup-transactions` 不靠 JWT，它們驗的是 `x-cron-secret` 標頭。
 
 `ai-proxy` 是 0.9.51 新增的 AI 金鑰代理。前端不再持有 Google API Key，改由這支函數在伺服器端注入。
-**它沒部署，AI 分析就不能用**（後台的「AI 連線」仍可設定）。
+**它沒部署，AI 分析就不能用**（後台的「AI 設定」仍可設定）。
 
 ⚠️ **它有一組固定的上線順序**，寫在 `docs/agent/161-ai-key-proxy-migration.sql` 開頭：
 `PART A` → 部署 `ai-proxy` → 上傳新前端 → `PART B`。
