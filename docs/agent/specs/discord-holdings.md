@@ -699,3 +699,26 @@ Each position becomes 7–9 lines:
 Both test files assert that every rendered line is ≤ 24 display columns. The holdings card's
 2,800-character budget is unchanged; with 7–9 lines per position about 11 positions still fit, and
 whole positions (never half of one) are dropped from the end.
+
+## Revision 7 — a one-off markdown layout probe (user 2026-09-18, target 0.9.58-dev.11)
+
+The user asked what the cards would look like written in Discord markdown instead of a monospace
+fence. Markdown reflows, so it can never be squeezed, and the important numbers can be bold — but it
+loses column alignment, and Discord's headings (`###`) and subtext (`-#`) are newer syntax that an old
+mobile client may print literally. That last point cannot be settled by reading documentation, so
+**before** changing any real card, one sample message goes to the user's own channel.
+
+Scope: a probe, not a renderer. Nothing about the live cards changes.
+
+- New `stock-report/markdownSample.ts`: `buildMarkdownSamplePayload(generatedAt: string):
+  DiscordPayload` returns **fixed sample text** — the real 09/18 numbers, hand-written in markdown —
+  as two embeds, `【版面測試】經濟快報 Markdown 版` and `【版面測試】持股日報 Markdown 版`, each with
+  footer `這是排版測試訊息，不是今天的正式推播`, `username: '版面測試'`, `allowed_mentions: { parse: [] }`
+  and the passed timestamp. Each description uses `**bold**`, `### heading` and `-# subtext`, never a
+  fence, and stays under 4,096 characters. The exact assertions are in `markdownSample.test.ts`.
+- `runWebhookOp` gains op `markdown-sample`: like `test`, it needs the global webhook
+  (`not-configured` without it), posts the sample to it, records `finishSend(ymd, 'test', outcome)`
+  and returns the status plus the send result. It loads no market data.
+- No browser change: the probe is triggered once from the admin Edge action by the maintainer.
+  If the user likes the layout, Revision 8 will write the real renderer; if not, this file and the op
+  are deleted.
