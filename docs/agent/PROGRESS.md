@@ -1,9 +1,27 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 — holdings card matches 庫存總覽, and the quote request that made every card show `--` is fixed
-- Status: 🔄 **0.9.58-dev.9 on `dev`** (`b10746f`, not pushed) — DEV `stock-report` v16 deployed and verified (missing quotes 7 → 0); PROD untouched
-- Timestamp: 2026-09-18 13:45:00 Asia/Taipei
+- Action: Task 165 — both Discord cards rewritten in markdown; holdings card cut to four fields per position
+- Status: 🔄 **0.9.58-dev.12 on `dev`** (`6f9fed0`, not pushed) — DEV `stock-report` v19; both cards sent to the user's channel with real 09/18 data; PROD untouched
+- Timestamp: 2026-09-18 15:20:00 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-18 15:20:00 Asia/Taipei (Task 165 — card layout: 24 columns, markdown probe, markdown, 0.9.58-dev.10 → dev.12)
+
+**Problem**: on a phone the fenced tables wrapped — the widest lines were 36 display columns and a phone message column fits about 33 — so the columns stopped lining up.
+
+**Options shown**: a design canvas (artifact "Discord 卡片排版方案", private to the user) drew the current cards and four alternatives with the real 09/18 data at phone width: A native embed fields, B 24-column monospace, C fields + narrow table, D markdown, plus a comparison board.
+
+**dev.10 (`c34e37e`, Revision 6)**: the user picked B. Every line ≤ 24 columns; indices rounded to whole points, margin without its header row, macro two lines per indicator, holdings seven to nine lines per position. Found on the way: `dispWidth` counted `▲ ▼ ─ ⚠` as one column although a CJK font draws them two wide, so title lines were really 25 — fixed by adding the box-drawing, geometric-shape and misc-symbol ranges to both `WIDE_RANGES` copies.
+
+**dev.11 (`795eb85`, Revision 7)**: the user asked how markdown would look. Because Discord's `###` and `-#` are newer syntax that an old mobile client may print literally, a one-off sample (`markdownSample.ts`, op `markdown-sample`) was posted to the channel first instead of changing the cards. The user reported the US indices missing from it — the sample's numbers had been copied from the 09/16 test fixture, which deliberately leaves them empty; all eight index symbols return data in reality (checked).
+
+**dev.12 (`6f9fed0`, Revision 8)**: markdown for both cards. Holdings: `未實現合計 **+X**（+P%）｜今日 +Y`, blank line, then `**代號 名稱**｜N 張|N 股｜均價 A｜未實現 **U**` per position — 市值, 成本, 今日已實現, 今年已實現, 空單市值 and the per-position price/return/break-even/realized lines are no longer rendered (still computed). Summary: every table row became `標籤 **數值** 圓點`; indices back to two decimals with a date only when stale; margin `融資 **N** 張（±Δ）`; macro `核心CPI **最新**（前值 X，期別）` or `（持平，期別）`. Data-derived text is markdown-escaped; the probe and the width machinery were removed, and the width drift guard in `scripts/lib/edgeConstants.test.mjs` now guards the two `escapeMd` copies instead.
+
+**Verification**: `npm test` 2530 passed / 7 skipped; `npm run build`, `typecheck:edge`, `lint`, `sync-edge-engine --check` exit 0. DEV deploys v17 (24 columns), v18 (probe), v19 (markdown). After v19 a holdings preview (missing quotes 0) and a full-edition summary preview were sent to the user's channel with the real 09/18 data. Builder blockers on dev.10 and dev.12 were all stale assertions the main session had not updated in `discordRun.test.ts`, `holdingsRun.test.ts` and `edgeConstants.test.mjs` — fixed there, no production change needed.
+
+**Next**: the user reviews the two real markdown cards on their phone; watch one real 17:30 / 21:30 round on DEV; PROD untouched and needs explicit OK.
 
 ---
 
@@ -21,16 +39,3 @@
 
 **Next**: watch one real 17:30 round on DEV; PROD still untouched and needs explicit OK (merge `main`, §14 + §15, clone cron, deploy).
 
----
-
-## 📅 Log: 2026-09-18 13:13:38 Asia/Taipei (Task 165 — holdings card P&L, 0.9.58-dev.7)
-
-**Asked first**: the card already showed 未實現 / 今日 / 今年已實現 per currency and 未實現 / 報酬率 / 當日% per position, so the user picked what was missing: 今日已實現, per-position 累計已實現, per-position 均價與保本價. 全幣別合計 was offered and not chosen, so TWD and USD stay separate.
-
-**Code** (`holdingsCard.ts` only; the engine stays frozen, D6): `HoldingRowOut` gains `avgCost`, `breakEven`, `realized`; `CurrencySummary` gains `realizedToday`. `realized` is `Position.realized` summed across workspaces per key and attached once — LONG row, else SHORT row — so a key with both legs is never counted twice. `realizedToday` sums `ledger.yearly[year(ymd)].tickers[*].sells` whose `date === ymd` (SHORT_COVER legs included), split by `YearTickerDetail.currency`. `breakEven` is the lowest cent where `estimateUnrealized` of a synthetic single-lot holding is ≥ 0, seeded from the closed form, with the share-weighted fee rate of the contributing workspaces — it therefore cannot drift from the 未實現 column, and SHORT rows get `null`. Rendering: a KPI line 今日已實現 (always, even 0) and per position `均價 … 保本 …` plus `已實現 …` only when non-zero.
-
-**Review**: main session read the diff (money code); `route:reviewer` PASS with one RISK — the break-even step-down loop had no cap. Fixed together with a second defect the main session found: a non-converged search used to return the last tried price as if it were the break-even price. Both searches are now bounded at 2,000 steps and a non-converged search returns `null`, which renders as `--`.
-
-**Verification**: `npm test` 2521 passed / 7 skipped; `npm run build`, `typecheck:edge`, `lint`, `sync-edge-engine --check` exit 0. The golden "builds the full two-card message exactly" test carries the new lines. Also rendered a card from the real DEV data of the account with 114 transactions (local, nothing sent to Discord): 已實現 appeared only on the two tickers with sells, the 2303 long/short pair showed it once, 保本 sat just above 均價, 今日已實現 was 0 (no sells today), and the title correctly flagged the 09/17 quotes as not today.
-
-**Next**: DEV deploy of `stock-report` is needed before the card changes reach a real send — awaiting explicit OK; then a 完整推送測試 from the admin console; PROD still untouched.
