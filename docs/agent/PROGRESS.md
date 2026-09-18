@@ -1,9 +1,29 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 Phase 2 — steps 2b and 2c (per-user Discord holdings card) committed on `dev`
-- Status: 🔄 **0.9.58-dev.3 on `dev`** (not pushed) — Supabase DEV not deployed yet (§14 DDL, cron, `stock-report`); awaiting explicit OK
-- Timestamp: 2026-09-17 18:34:45 Asia/Taipei
+- Action: Task 165 Phase 2 step 2d — admin-managed Discord webhooks + adjustable schedule committed on `dev`
+- Status: 🔄 **0.9.58-dev.4 on `dev`** (`247b37f`, not pushed) — Supabase DEV not deployed (§14 + §15 DDL, cron, `stock-report`); awaiting explicit OK
+- Timestamp: 2026-09-18 10:36:45 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-18 10:36:45 Asia/Taipei (Task 165 Phase 2 step 2d, 0.9.58-dev.4)
+
+**Commit on `dev`** (not pushed): `247b37f` 0.9.58-dev.4.
+
+**User decisions** (sketch approved in chat): every Discord webhook is managed from the admin console; the per-user "Discord 推播" dialog and the `discord-holdings-settings` action are removed; per account, 經濟快報 (= full edition) inherits the global webhook by default and inherit sends nothing extra, while a custom URL gets a second copy; 個人持股報告 has no inherit; brief + holdings go out together (default 17:05); drop-downs set the brief+holdings time and the full time. Spec: `docs/agent/specs/discord-admin-accounts.md`.
+
+**Design**: the schedule lives in pg_cron — `discord_schedule_set()` (§15, SECURITY DEFINER, service_role only) runs `cron.alter_job` on the three existing jobs; no tick job, no schedule table. Verified on DEV (read-only query): pg_cron 1.6.4, `cron.alter_job` exists, every job owner is `postgres`. Ranges: brief 17:05–20:55, full 21:00–23:55, 5-minute steps (re-checked in SQL; NULL refused). No automatic re-send. No global webhook → the full edition is skipped, including every per-account copy. Copies are grouped by URL; a URL equal to the global one is not posted again; copies are logged in `user_discord_send_log` as `kind = 'market'`.
+
+**Code**: new Edge modules `discordSchedule.ts`, `discordTargets.ts`, `discordAccounts.ts` (action `discord-accounts`, assertAdmin); `runDiscordSummary` gains optional `loadMarketOverrides` / `finishMarketOverride`; schema §14 adds `market_webhook_url`, `kind 'market'` and moves the holdings job to 17:05; new §15 adds `discord_schedule_get` / `discord_schedule_set`. Browser: `src/services/discordAccounts.ts` and `Admin/DiscordAccountsSection.tsx` (schedule drop-downs + account table and editor), mounted after `DiscordSection`; deleted `Settings/DiscordPushSection.tsx`, `services/discordHoldings.ts`, `scripts/verify-discord-push-e2e.cjs` (its row removed from `docs/UnitTests/E2E.md`).
+
+**Review**: Edge + schema reviewer PASS with 2 RISKs (no paging on the two `user_discord_settings` reads, BUG-066 convention) — both fixed, plus a NULL-argument check in `discord_schedule_set`. The browser part was not separately reviewed (no client-side auth decision; "no URL in the DOM" is covered by tests).
+
+**Verification** (from `sources/`): `npm test` 147 files, 2492 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0. The SQL functions have not run on any database yet.
+
+**Browser check** (2026-09-18, Supabase-mode vite on 127.0.0.1:5317, every backend call mocked with `page.route`, ad-hoc script not committed): header menu has no 「Discord 推播」; schedule save, hour-17 minute rule, account table, 經濟快報 custom → test → back to inherit, holdings set → toggle → test → clear; no token in the DOM, bearer on every call, no page overflow, no page errors — 1280 px and 390 px, all passed. It found one real bug, now fixed: the toggle's label text sat inside the 38 px `adm-toggle` pill and overflowed onto 「測試持股報告」, so clicking 「測試」 turned the daily push off. Also fixed: editor moved out of the scrolling table (clipped at 390 px), label above each URL input, compact `HH : MM` schedule rows, 「編輯」 button text.
+
+**Deploy notes**: re-applying schema §13/§14 resets the schedule to 17:05 / 21:30. DEV deploy needs explicit OK.
 
 ---
 
@@ -22,20 +42,3 @@
 **Also this session**: the 5173 dev server (started 14:40) was serving a pre-Discord `AdminConsolePage.tsx` because Vite missed the 16:37 rewrite; `touch` on the three Discord files fixed it without content changes.
 
 **Next**: DEV deploy on explicit OK — apply §14 DDL, create `discord-holdings-daily` by cloning an existing job's command behind the identity guard, deploy `stock-report` (`--no-verify-jwt --use-api`), then a real test/preview from a private webhook and the next 17:15 round.
-
----
-
-## 📅 Log: 2026-09-17 17:19:33 Asia/Taipei (Task 165 Phase 2 step 2a, 0.9.58-dev.1)
-
-**Phase 2 planned and approved** (per-user Discord holdings card): spec `docs/agent/specs/discord-holdings.md`. User decisions D1–D6: each user's own webhook; full amounts; all workspaces merged into one card (TWD/USD separate, no FX); daily 17:15 after the brief; `workspaces.fee_rate` is already in the DB; **D6 — existing core code is not modified** (frozen file list in spec §0). BUG-084 (stale per-workspace 最低手續費 in localStorage) opened and accepted as a known difference.
-
-**Step 2a — Edge copy of the ledger engine, core untouched**:
-- `scripts/lib/edgeEngine.cjs` + `scripts/sync-edge-engine.cjs` (`npm run sync:edge-engine`, `--check`) generate `supabase/functions/_shared/engine/pnlEngine.ts` and `models.ts`. The only textual change is the two `'../types/models'` imports → `'./models.ts'`. The renderer throws on any other import (relative, bare, side-effect, dynamic, or a source already spelling `./models.ts`); every target is rendered before any is written.
-- `scripts/lib/edgeEngine.test.mjs` (19 cases): drift (committed copy equals a fresh render), parity (same exports; identical `computeLedger` / `estimateUnrealized` / `estimateUnrealizedShort` on a fixture with long, short, US fractional shares and an oversell warning), renderer guards.
-- Reviewer PASS with 4 RISKs: two fixed (source spelling `./models.ts`; partial write), two accepted (the literal rewrite could also touch a comment; a mid-line side-effect import is not detected).
-- Note: builder's direct `node scripts/sync-edge-engine.cjs` was refused by the write-scope guard (`_shared/engine` is not in `paths.prod`); it ran the same script via `npm run sync:edge-engine`.
-
-**Verification** (from `sources/`): `npm test` 138 files, 2220 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0; `git diff` of every D6 file empty (only `src/version.ts` changed under `src/`). Deno 2.9.6 (`npx deno@2`): `deno check` on both generated files exit 0, and a script importing the generated engine ran all three functions. E2E: `run-all-e2e.cjs` against Supabase-mode vite on 127.0.0.1:5317 — 16/16 suites, 49 steps, 0 failed (Playwright Chromium installed on this host first).
-
-**Next**: step 2b — `holdingQuotes.ts` + `holdingsCard.ts` (spec §2.2–2.4), tests first. Supabase untouched in 2a; nothing deployed.
-
