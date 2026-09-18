@@ -1,9 +1,23 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 Phase 2 step 2d — admin-managed Discord webhooks + adjustable schedule committed on `dev`
-- Status: 🔄 **0.9.58-dev.4 on `dev`** (`247b37f`, not pushed) — Supabase DEV not deployed (§14 + §15 DDL, cron, `stock-report`); awaiting explicit OK
-- Timestamp: 2026-09-18 10:36:45 Asia/Taipei
+- Action: Task 165 Phase 2 step 2d — deployed to DEV and verified end to end; load-state polish committed
+- Status: 🔄 **0.9.58-dev.5 on `dev`** (`2eedfb6`, not pushed) — DEV Supabase has §14 + §15 and `stock-report` v13; PROD untouched, awaits explicit OK
+- Timestamp: 2026-09-18 11:47:04 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-18 11:47:04 Asia/Taipei (Task 165 Phase 2 step 2d — DEV deploy, 0.9.58-dev.5)
+
+**Why**: the user saw no schedule or account fields in the admin Discord panel. Cause: the new UI called `discord-accounts`, which DEV Edge did not have yet (unauthenticated probe: `discord-accounts` → 400 `Unknown action`, `discord-webhook` → 401), so the panel showed only an error box. The user then authorized the DEV deploy and testing.
+
+**DEV deploy** (explicit OK, all writes with the DEV identity predicate in the same transaction): precheck (read-only, structural `LIKE` only) → §14 tables, `market_webhook_url`, kind CHECK with `market`; `discord-holdings-daily` created at `5 9 * * 1-5` by cloning `discord-summary-brief`'s command (body and timeout replaced, then checked by `LIKE` inside the transaction; the command text was never selected); §15 `discord_schedule_get` / `discord_schedule_set` (ACL: postgres + service_role only). `stock-report` deployed with `--no-verify-jwt --use-api`: v12 → v13, ezbr `068be7e5…` → `c439abab…`, from commit `9345400`.
+
+**Tests on DEV**: SQL inside a rolled-back transaction — 18:30/22:00 moves all three jobs (`30 10`, `30 10`, `0 14`); 17:00, 18:03, full 20:55 and NULL refused; role `authenticated` denied. End to end with a temporary admin user (created and deleted through the Auth admin API; keys kept in env, never printed): list, set-schedule (+ 17:00 → 400 `invalid-time`, restored to 17:05/21:30), set/test/clear 經濟快報, set/enable/test/clear 個人持股報告 (test sends to a fake-token webhook reach Discord and come back `webhook-gone`), invalid URL → 400, unknown account → 400, demoted user → 403 — all passed. One transient 500 on the very first run: `JWT issued at future` from PostgREST in `listDiscordAccountSettings` (clock skew); not reproduced on a second full run, only occurrence in `app_log`. Cleanup verified: 0 temp users, 0 settings/log rows, schedule `5 9` / `5 9` / `30 13`.
+
+**0.9.58-dev.5** (`2eedfb6`): while loading or after a load failure the panel keeps a heading (「Discord 排程與各帳號設定」, 「載入中…」 or the error); `Unknown action` maps to 「後端尚未部署這個功能」. `npm test` 2494 passed / 7 skipped; build, typecheck:edge, lint, sync --check exit 0; browser check at 1280 / 390 px passed.
+
+**Next**: a real test send to a private webhook from the admin console; watch one 17:05 and 21:30 round; PROD needs explicit OK.
 
 ---
 
@@ -24,21 +38,3 @@
 **Browser check** (2026-09-18, Supabase-mode vite on 127.0.0.1:5317, every backend call mocked with `page.route`, ad-hoc script not committed): header menu has no 「Discord 推播」; schedule save, hour-17 minute rule, account table, 經濟快報 custom → test → back to inherit, holdings set → toggle → test → clear; no token in the DOM, bearer on every call, no page overflow, no page errors — 1280 px and 390 px, all passed. It found one real bug, now fixed: the toggle's label text sat inside the 38 px `adm-toggle` pill and overflowed onto 「測試持股報告」, so clicking 「測試」 turned the daily push off. Also fixed: editor moved out of the scrolling table (clipped at 390 px), label above each URL input, compact `HH : MM` schedule rows, 「編輯」 button text.
 
 **Deploy notes**: re-applying schema §13/§14 resets the schedule to 17:05 / 21:30. DEV deploy needs explicit OK.
-
----
-
-## 📅 Log: 2026-09-17 18:34:45 Asia/Taipei (Task 165 Phase 2 steps 2b + 2c, 0.9.58-dev.2 / dev.3)
-
-**Commits on `dev`** (not pushed): `fe6845f` 0.9.58-dev.2 (2b), `66f2a8f` 0.9.58-dev.3 (2c). Spec `docs/agent/specs/discord-holdings.md` now carries the exact contracts for §2.2–2.7.
-
-**2b — pure modules** (`stock-report/holdingQuotes.ts`, `holdingsCard.ts`): last completed Yahoo daily bar per ticker (.TW then .TWO, memoized per run); one ledger per workspace, merged by key + direction with each workspace's `fee_rate` and per-leg minimum fee; SHORT basis = short proceeds and inverted day P&L; totals from quoted rows only, market value and cost from LONG rows; TWD/USD separate; two-line rows ≤ 36 columns, stale ⚠️ marks, 2,800-character budget with `…另 N 檔`. The width table, colours and fee constants are re-stated (D6) and guarded by `scripts/lib/edgeConstants.test.mjs`. Reviewer PASS; its no-drift-test RISK fixed.
-
-**2c — wiring** (`holdingsRun.ts`, `index.ts` additive, schema §14, `snapshotPlan.cjs`, `src/services/discordHoldings.ts`, `src/components/Settings/DiscordPushSection.tsx`, `AppShell.tsx` menu item): daily run at 17:15 (`discord-holdings`, x-cron-secret) with market-day gate, claim-then-send per user, 80 s start budget; settings ops (`discord-holdings-settings`, user JWT) get/set/clear/enable/test/preview, URL never returned, 10 manual sends per day; `makeChartFetch` adds an 8 s timeout and one retry on network/429/5xx. Dialog uses existing global classes and the admin `adm-toggle`. S15 in `snapshotPlan.test.mjs` updated 8 → 9 placeholder substitutions (the new cron job). Reviewer PASS with 4 RISKs: run budget lowered 110 → 80 s; RISK-015/016/017 recorded in `BUG_FIX.md`.
-
-**Process note**: the step-2c test files were written while the 2b builder was still running, which reddened its full gate; they were parked, 2b verified alone, then restored. `pkill -f "vite --port 5317"` kills the calling shell too (its own command line matches) — stop the server by its listening PID instead.
-
-**Verification** (from `sources/`): `npm test` 144 files, 2386 passed / 7 skipped; `npm run build`, `npm run typecheck:edge`, `npm run lint`, `node scripts/sync-edge-engine.cjs --check` exit 0; `TZ=UTC` rerun of the dialog test passed; D6 frozen files unchanged; existing files only gained lines (`snapshotPlan.cjs` one list line changed). E2E against Supabase-mode vite on 127.0.0.1:5317: new `scripts/verify-discord-push-e2e.cjs` 13/13 (desktop + 390 px, token never in the DOM, bearer on every call), `run-all-e2e.cjs` 16/16.
-
-**Also this session**: the 5173 dev server (started 14:40) was serving a pre-Discord `AdminConsolePage.tsx` because Vite missed the 16:37 rewrite; `touch` on the three Discord files fixed it without content changes.
-
-**Next**: DEV deploy on explicit OK — apply §14 DDL, create `discord-holdings-daily` by cloning an existing job's command behind the identity guard, deploy `stock-report` (`--no-verify-jwt --use-api`), then a real test/preview from a private webhook and the next 17:15 round.
