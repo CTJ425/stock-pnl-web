@@ -1,0 +1,123 @@
+import { describe, expect, it } from 'vitest'
+import {
+  DEFAULT_DISCORD_SCHEDULE,
+  DISCORD_SCHEDULE_JOBS,
+  SCHEDULE_HOURS,
+  cronToTaipeiTime,
+  isValidScheduleTime,
+  scheduleFromJobs,
+  scheduleMinuteOptions,
+  scheduleTimeParts,
+} from './discordSchedule.ts'
+
+const EVERY_5 = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+
+describe('schedule options', () => {
+  it('names the three cron jobs and the defaults', () => {
+    expect(DISCORD_SCHEDULE_JOBS).toEqual({
+      brief: 'discord-summary-brief',
+      holdings: 'discord-holdings-daily',
+      full: 'discord-summary-full',
+    })
+    expect(DEFAULT_DISCORD_SCHEDULE).toEqual({ brief: '17:05', full: '21:30' })
+  })
+
+  it('offers brief 17–20 and full 21–23', () => {
+    expect(SCHEDULE_HOURS.brief).toEqual([17, 18, 19, 20])
+    expect(SCHEDULE_HOURS.full).toEqual([21, 22, 23])
+  })
+
+  it('offers five-minute steps, and no 17:00 for the brief', () => {
+    expect(scheduleMinuteOptions('brief', 17)).toEqual(EVERY_5.slice(1))
+    expect(scheduleMinuteOptions('brief', 18)).toEqual(EVERY_5)
+    expect(scheduleMinuteOptions('brief', 20)).toEqual(EVERY_5)
+    expect(scheduleMinuteOptions('full', 21)).toEqual(EVERY_5)
+    expect(scheduleMinuteOptions('full', 23)).toEqual(EVERY_5)
+  })
+
+  it('offers nothing for an hour outside the slot', () => {
+    expect(scheduleMinuteOptions('brief', 21)).toEqual([])
+    expect(scheduleMinuteOptions('brief', 16)).toEqual([])
+    expect(scheduleMinuteOptions('full', 20)).toEqual([])
+    expect(scheduleMinuteOptions('full', 24)).toEqual([])
+  })
+})
+
+describe('isValidScheduleTime', () => {
+  it.each(['17:05', '17:55', '18:00', '20:55'])('accepts brief %s', (t) => {
+    expect(isValidScheduleTime('brief', t)).toBe(true)
+  })
+
+  it.each(['21:00', '21:30', '23:55'])('accepts full %s', (t) => {
+    expect(isValidScheduleTime('full', t)).toBe(true)
+  })
+
+  it.each(['17:00', '16:55', '21:00', '18:03', '20:60'])('refuses brief %s', (t) => {
+    expect(isValidScheduleTime('brief', t)).toBe(false)
+  })
+
+  it.each(['20:55', '24:00', '21:07', '00:00'])('refuses full %s', (t) => {
+    expect(isValidScheduleTime('full', t)).toBe(false)
+  })
+
+  it.each([null, undefined, 1705, '', '7:05', '17:5', '17:05 ', ' 17:05', '17-05', '17:05:00', '１７:０５'])(
+    'refuses malformed %j',
+    (t) => {
+      expect(isValidScheduleTime('brief', t)).toBe(false)
+    },
+  )
+})
+
+describe('scheduleTimeParts', () => {
+  it('splits HH:MM into numbers', () => {
+    expect(scheduleTimeParts('17:05')).toEqual({ hour: 17, minute: 5 })
+    expect(scheduleTimeParts('21:30')).toEqual({ hour: 21, minute: 30 })
+  })
+})
+
+describe('cronToTaipeiTime', () => {
+  it('reads the deployed weekday jobs as Taipei time', () => {
+    expect(cronToTaipeiTime('5 9 * * 1-5')).toBe('17:05')
+    expect(cronToTaipeiTime('30 13 * * 1-5')).toBe('21:30')
+    expect(cronToTaipeiTime('15 9 * * 1-5')).toBe('17:15')
+    expect(cronToTaipeiTime('55 15 * * 1-5')).toBe('23:55')
+    expect(cronToTaipeiTime('0 1 * * 1-5')).toBe('09:00')
+  })
+
+  it.each(['*/15 8-15 * * 1-5', '5 9 * * *', '5 9 * * 1-6', '60 9 * * 1-5', '5 24 * * 1-5', '5 16 * * 1-5', '', 'x 9 * * 1-5'])(
+    'returns null for %j',
+    (expr) => {
+      expect(cronToTaipeiTime(expr)).toBeNull()
+    },
+  )
+})
+
+describe('scheduleFromJobs', () => {
+  const BRIEF = { jobname: 'discord-summary-brief', schedule: '5 9 * * 1-5' }
+  const FULL = { jobname: 'discord-summary-full', schedule: '30 13 * * 1-5' }
+
+  it('reads brief and full, and holdings aligned with the brief', () => {
+    const rows = [FULL, { jobname: 'discord-holdings-daily', schedule: '5 9 * * 1-5' }, BRIEF]
+    expect(scheduleFromJobs(rows)).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: true })
+  })
+
+  it('flags a holdings job at another time', () => {
+    const rows = [BRIEF, FULL, { jobname: 'discord-holdings-daily', schedule: '15 9 * * 1-5' }]
+    expect(scheduleFromJobs(rows)).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: false })
+  })
+
+  it('flags a missing holdings job', () => {
+    expect(scheduleFromJobs([BRIEF, FULL])).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: false })
+  })
+
+  it('reports a missing or unreadable job as null', () => {
+    expect(scheduleFromJobs([])).toEqual({ brief: null, full: null, holdingsAligned: false })
+    const rows = [{ jobname: 'discord-summary-brief', schedule: '*/5 * * * *' }, FULL, { jobname: 'discord-holdings-daily', schedule: '*/5 * * * *' }]
+    expect(scheduleFromJobs(rows)).toEqual({ brief: null, full: '21:30', holdingsAligned: false })
+  })
+
+  it('ignores unrelated jobs', () => {
+    const rows = [BRIEF, FULL, { jobname: 'app-log-prune', schedule: '20 3 * * *' }]
+    expect(scheduleFromJobs(rows).brief).toBe('17:05')
+  })
+})

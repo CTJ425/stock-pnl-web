@@ -20,7 +20,6 @@ import {
   LineChart,
   ListPlus,
   LogOut,
-  MessageSquare,
   Monitor,
   Moon,
   NotebookPen,
@@ -41,7 +40,6 @@ import { YearlyPage } from './YearlyReport/YearlyPage'
 import { TransactionsPage } from './Transactions/TransactionsPage'
 import { TransactionForm } from './Transactions/TransactionForm'
 import { RecalcFeesModal } from './Transactions/RecalcFeesModal'
-import { DiscordPushSection } from './Settings/DiscordPushSection'
 import { Modal } from './Common/Modal'
 import { HeaderMenu } from './Common/HeaderMenu'
 import { ToastProvider, useToast } from './Common/Toast'
@@ -435,7 +433,6 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
   const { show } = useToast()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
   const [showChangePassword, setShowChangePassword] = useState(false)
-  const [showDiscordHoldings, setShowDiscordHoldings] = useState(false)
 
   async function exportMyRecords() {
     const result = await buildSelfExport()
@@ -552,18 +549,6 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
                   className="hmenu-item"
                   onClick={() => {
                     close()
-                    setShowDiscordHoldings(true)
-                  }}
-                >
-                  <MessageSquare size={14} />
-                  <span>Discord 推播</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
                     void exportMyRecords()
                   }}
                 >
@@ -589,11 +574,6 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
       </HeaderMenu>
       {showChangePassword && (
         <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
-      )}
-      {showDiscordHoldings && (
-        <Modal title="Discord 持股推播" onClose={() => setShowDiscordHoldings(false)} wide>
-          <DiscordPushSection />
-        </Modal>
       )}
     </>
   )

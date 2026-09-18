@@ -238,17 +238,17 @@ import {
   type SummaryDeps,
   type WebhookAdminDeps,
 } from './discordRun.ts'
+import type { MarketOverride } from './discordTargets.ts'
+import { runDiscordAccountsOp, type AccountSettingsRow, type DiscordAccountsDeps } from './discordAccounts.ts'
 import type { WorkspaceInput } from './holdingsCard.ts'
 import { makeChartFetch } from './holdingQuotes.ts'
 import type { Transaction } from '../_shared/engine/models.ts'
 import {
   runHoldingsDaily,
-  runHoldingsSettingsOp,
   type HoldingsDataDeps,
   type HoldingsKind,
   type HoldingsOutcome,
   type HoldingsRunDeps,
-  type HoldingsSettingsDeps,
   type LastSend,
 } from './holdingsRun.ts'
 
@@ -4198,6 +4198,33 @@ async function loadDiscordMacro(): Promise<MacroLine[] | null> {
   return file?.indicators ?? null
 }
 
+/** Per-account 經濟快報 overrides (Task 165 step 2d, spec §3.5): every account with its own URL. */
+async function loadDiscordMarketOverrides(): Promise<MarketOverride[]> {
+  const out: MarketOverride[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from('user_discord_settings')
+      .select('user_id, market_webhook_url')
+      .not('market_webhook_url', 'is', null)
+      .order('user_id', { ascending: true })
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    const page = data ?? []
+    out.push(...page.map((row) => ({ userId: row.user_id, url: row.market_webhook_url as string })))
+    if (page.length < 1000) break
+  }
+  return out
+}
+
+async function finishDiscordMarketOverride(userId: string, ymd: string, outcome: RunOutcome): Promise<void> {
+  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
+  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
+  const { error } = await db
+    .from('user_discord_send_log')
+    .insert({ user_id: userId, taipei_ymd: ymd, kind: 'market', status: outcome.kind, http_status: httpStatus, reason })
+  if (error) throw new Error(error.message)
+}
+
 /**
  * The five real data loaders behind both the scheduled summary and the admin preview
  * (`op: 'preview'`, spec §2.7) — one factory so the two entry points cannot drift.
@@ -4229,6 +4256,8 @@ async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Re
     finishSend: finishDiscordSend,
     post: postDiscordWebhook,
     log: (e) => logEvent(db, { level: e.level, action: 'discord-summary', message: e.message, detail: e.detail }),
+    loadMarketOverrides: loadDiscordMarketOverrides,
+    finishMarketOverride: finishDiscordMarketOverride,
   }
   const outcome = await runDiscordSummary(deps, edition)
   return json(outcome)
@@ -4256,9 +4285,10 @@ async function handleDiscordWebhook(body: GenerateReportRequestBody): Promise<Re
 
 /**
  * Real dependencies for the per-user Discord holdings card (Task 165 Phase 2). Shared by
- * `discord-holdings` (cron, `x-cron-secret`) and `discord-holdings-settings` (per-user, JWT):
- * both read/write `user_discord_settings` and `user_discord_send_log`. The webhook URL itself
- * never leaves this module as a return value — see spec §2.6.
+ * `discord-holdings` (cron, `x-cron-secret`) and `discord-accounts` (admin console, Task 165
+ * Phase 2 step 2d, replacing the retired per-user `discord-holdings-settings`): both read/write
+ * `user_discord_settings` and `user_discord_send_log`. The webhook URL itself never leaves this
+ * module as a return value — see spec §2.6.
  */
 const HOLDINGS_TX_COLUMNS = 'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, tx_nature, fee_rate, created_at'
 
@@ -4403,7 +4433,8 @@ function holdingsDataDeps(): HoldingsDataDeps {
   }
 }
 
-/** Cron entry point: weekday 17:15 (`discord-holdings-daily` in schema.sql), after the 17:05 brief. */
+/** Cron entry point: weekday, together with the brief (17:05 default; admin-adjustable, see
+ * schema.sql §15) — `discord-holdings-daily` in schema.sql. */
 async function handleDiscordHoldings(): Promise<Response> {
   const startedAt = Date.now()
   const deps: HoldingsRunDeps = {
@@ -4417,10 +4448,85 @@ async function handleDiscordHoldings(): Promise<Response> {
   return json(result)
 }
 
-/** Per-user settings panel entry point: get / set / clear / enable / test / preview. Never returns the URL — see `runHoldingsSettingsOp`. */
-async function handleDiscordHoldingsSettings(userId: string, body: GenerateReportRequestBody): Promise<Response> {
+/**
+ * Real dependencies for the admin console's per-account Discord ops (Task 165 Phase 2 step 2d,
+ * spec discord-admin-accounts.md §3.5). Every account, every webhook — global (§13, unchanged),
+ * per-account 經濟快報 override, per-account 個人持股報告 — plus the send schedule, all gated by
+ * `assertAdmin`; the per-user `discord-holdings-settings` action is retired with it (U1).
+ */
+async function listDiscordAccounts(): Promise<Array<{ userId: string; email: string | null }>> {
+  // Same BUG-066 paging shape as `handleAdminBackups` / `handleAdminUsers`: `listUsers` has its
+  // own page/perPage, independent of PostgREST's max_rows.
+  const perPage = 1000
+  const users: Array<{ userId: string; email: string | null }> = []
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
+    if (error) throw new Error(error.message)
+    const batch = data?.users ?? []
+    users.push(...batch.map((u) => ({ userId: u.id, email: u.email ?? null })))
+    if (batch.length < perPage) break
+  }
+  return users
+}
+
+async function listDiscordAccountSettings(): Promise<AccountSettingsRow[]> {
+  const out: AccountSettingsRow[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from('user_discord_settings')
+      .select('user_id, enabled, webhook_url, market_webhook_url')
+      .order('user_id', { ascending: true })
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    const page = data ?? []
+    out.push(
+      ...page.map((row) => ({
+        userId: row.user_id,
+        enabled: row.enabled,
+        webhookUrl: row.webhook_url,
+        marketWebhookUrl: row.market_webhook_url,
+      })),
+    )
+    if (page.length < 1000) break
+  }
+  return out
+}
+
+async function saveDiscordMarketWebhook(userId: string, url: string | null): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .upsert({ user_id: userId, market_webhook_url: url, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw new Error(error.message)
+}
+
+/** schema.sql §15's `discord_schedule_get()` — jobname/schedule only, never `command`. */
+async function readDiscordScheduleJobs(): Promise<Array<{ jobname: string; schedule: string }>> {
+  const { data, error } = await db.rpc('discord_schedule_get')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Array<{ jobname: string; schedule: string }>
+}
+
+async function writeDiscordSchedule(s: {
+  briefHour: number
+  briefMinute: number
+  fullHour: number
+  fullMinute: number
+}): Promise<void> {
+  const { error } = await db.rpc('discord_schedule_set', {
+    brief_hour: s.briefHour,
+    brief_minute: s.briefMinute,
+    full_hour: s.fullHour,
+    full_minute: s.fullMinute,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Admin console entry point: list / set-schedule / set-market / clear-market / test-market /
+ * holdings-set / holdings-clear / holdings-enable / holdings-test. Never returns a webhook URL —
+ * see `runDiscordAccountsOp`. */
+async function handleDiscordAccounts(body: GenerateReportRequestBody): Promise<Response> {
   const { action: _action, ...input } = body
-  const deps: HoldingsSettingsDeps = {
+  const deps: DiscordAccountsDeps = {
     ...holdingsDataDeps(),
     readSettings: readHoldingsSettings,
     saveWebhook: saveHoldingsWebhookUrl,
@@ -4428,11 +4534,20 @@ async function handleDiscordHoldingsSettings(userId: string, body: GenerateRepor
     setEnabled: setHoldingsEnabled,
     lastSend: readHoldingsLastSend,
     countManualToday: countHoldingsManualToday,
+    listAccounts: listDiscordAccounts,
+    listSettings: listDiscordAccountSettings,
+    saveMarketWebhook: saveDiscordMarketWebhook,
+    readScheduleJobs: readDiscordScheduleJobs,
+    writeSchedule: writeDiscordSchedule,
   }
-  const result = await runHoldingsSettingsOp(deps, userId, input)
+  const result = await runDiscordAccountsOp(deps, input)
   if (!result.ok) {
     const status =
-      result.error === 'bad-request' || result.error === 'invalid-url' || result.error === 'not-configured'
+      result.error === 'bad-request' ||
+      result.error === 'invalid-url' ||
+      result.error === 'invalid-time' ||
+      result.error === 'not-configured' ||
+      result.error === 'unknown-user'
         ? 400
         : result.error === 'quota'
           ? 429
@@ -4801,13 +4916,13 @@ Deno.serve(async (req) => {
       return await handleDiscordHoldings()
     }
 
-    // Per-user Discord holdings settings panel (Task 165 Phase 2): get / set / clear / enable /
-    // test / preview, gated by the caller's own JWT rather than assertAdmin — every user manages
-    // their own webhook.
-    if (body.action === 'discord-holdings-settings') {
-      const auth = await assertUser(req)
-      if (auth instanceof Response) return auth
-      return await handleDiscordHoldingsSettings(auth.userId, body)
+    // Admin console: every account's Discord settings and the send schedule (Task 165 Phase 2
+    // step 2d). Replaces the retired per-user `discord-holdings-settings` action (U1) — every
+    // webhook is now managed here, gated by assertAdmin like `discord-webhook`.
+    if (body.action === 'discord-accounts') {
+      const denied = await assertAdmin(req)
+      if (denied) return denied
+      return await handleDiscordAccounts(body)
     }
 
     return json({ error: 'Unknown action' }, 400)

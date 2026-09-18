@@ -177,7 +177,7 @@ export function DiscordSection() {
         <h3 className="head-tight">Discord 每日總結</h3>
       </div>
 
-      <p className="hint">平日 17:05 快報、21:30 完整版；當天沒有台股大盤資料時不送。</p>
+      <p className="hint">平日發送快報與完整版，時間在下方「Discord 排程」調整；當天沒有台股大盤資料時不送。</p>
 
       {loadError ? (
         <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>

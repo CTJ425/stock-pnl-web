@@ -53,7 +53,7 @@ describe('DiscordSection', () => {
     render(<DiscordSection />)
     expect(await screen.findByText('尚未設定')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Discord 每日總結' })).toBeTruthy()
-    expect(screen.getByText('平日 17:05 快報、21:30 完整版；當天沒有台股大盤資料時不送。')).toBeTruthy()
+    expect(screen.getByText('平日發送快報與完整版，時間在下方「Discord 排程」調整；當天沒有台股大盤資料時不送。')).toBeTruthy()
     const input = urlInput()
     expect(input.type).toBe('password')
     expect(input.getAttribute('autocomplete')).toBe('off')

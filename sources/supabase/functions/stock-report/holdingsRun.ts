@@ -27,7 +27,9 @@ export type HoldingsOutcome =
   | { kind: 'failed'; httpStatus: number | null; reason: DiscordFailReason | 'exception' }
 
 export interface LastSend {
-  kind: HoldingsKind
+  /** 'market' (Task 165 step 2d): a per-account copy of the full edition, recorded here too so
+   * the admin account table shows one "last send" per account regardless of kind. */
+  kind: HoldingsKind | 'market'
   ymd: string
   status: 'claimed' | 'sent' | 'skipped' | 'failed'
   reason: string | null

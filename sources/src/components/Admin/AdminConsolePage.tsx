@@ -17,6 +17,7 @@ import { AccountsSection } from './AccountsSection'
 import { AdminStatusPage } from './AdminStatusPage'
 import { AiConnectionSection } from './AiConnectionSection'
 import { BackupsSection } from './BackupsSection'
+import { DiscordAccountsSection } from './DiscordAccountsSection'
 import { DiscordSection } from './DiscordSection'
 import { LogsSection } from './LogsSection'
 import { ManualRunSection } from './ManualRunSection'
@@ -69,7 +70,12 @@ export function AdminConsolePage({ onExit }: { onExit: () => void }) {
         {panel === 'run' && <ManualRunSection />}
         {panel === 'ai' && <AiConnectionSection />}
         {panel === 'prompts' && <PromptsSection />}
-        {panel === 'discord' && <DiscordSection />}
+        {panel === 'discord' && (
+          <>
+            <DiscordSection />
+            <DiscordAccountsSection />
+          </>
+        )}
         {panel === 'backups' && <BackupsSection />}
       </div>
     </div>

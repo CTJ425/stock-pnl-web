@@ -1331,20 +1331,29 @@ SELECT cron.schedule(
 -- 14. Per-user Discord holdings card (Task 165 Phase 2)
 -- =========================================================
 --
---   Each opted-in user gets their own webhook and their own once-daily card (17:15, after the
---   17:05 brief) with the same numbers the Dashboard shows across all their workspaces, per
---   currency (D1/D2/D3/D4 in the spec). Nothing here is posted to the site-wide webhook of §13.
+--   Each opted-in user gets their own webhook and their own once-daily card, sent together with
+--   the brief at 17:05 by default (admin-adjustable, see §15) with the same numbers the Dashboard
+--   shows across all their workspaces, per currency (D1/D2/D3/D4 in the spec). Nothing here is
+--   posted to the site-wide webhook of §13 unless `market_webhook_url` is set (below).
 --
 --   `user_discord_settings` is server-only, same shape as `app_secrets`: RLS is on with NO
 --   policies, so only the service-role client (stock-report's Edge Function) can read or write
---   it, and the browser never receives `webhook_url` back — see
---   src/services/discordHoldings.ts / DiscordPushSection.tsx.
+--   it, and the browser never receives a webhook URL back. Every account's Discord settings are
+--   managed from the admin console (Task 165 Phase 2 step 2d) — see
+--   src/components/Admin/DiscordAccountsSection.tsx / src/services/discordAccounts.ts.
+--
+--   `market_webhook_url` (0.9.58-dev.4): an optional per-account override of the global 經濟快報
+--   (full edition) webhook of §13. NULL (the default) means "inherit the global channel", which
+--   sends nothing extra there — the shared channel already carries it. A non-null URL gets its
+--   own copy of the same full-edition payload, posted at the same run (`runDiscordSummary` in
+--   discordRun.ts, grouped by `discordTargets.ts`'s `groupMarketTargets`).
 --
 --   `user_discord_send_log` records every send attempt (claimed → sent/failed, or skipped) and
 --   backs `runHoldingsDaily`'s exactly-once claim per user+day. `failed` / `skipped` rows do not
 --   block a retry — only `claimed` / `sent` do, via the partial unique index. `preview` / `test`
---   sends (the settings panel's "測試發送" / "預覽今日持股") are excluded from that index so they
---   can repeat, up to `MANUAL_SENDS_PER_DAY` (holdingsRun.ts).
+--   sends (the admin console's "測試發送") are excluded from that index so they can repeat, up to
+--   `MANUAL_SENDS_PER_DAY` (holdingsRun.ts). `kind = 'market'` (0.9.58-dev.4) is a per-account copy
+--   of the full edition, recorded by `finishMarketOverride` in discordRun.ts.
 --
 --   `reason` holds a code only (a DiscordFailReason, `exception`, or `no-holdings`) — never an
 --   amount, a message or a URL.
@@ -1359,6 +1368,9 @@ CREATE TABLE IF NOT EXISTS user_discord_settings (
 ALTER TABLE user_discord_settings ENABLE ROW LEVEL SECURITY;
 -- No policies on purpose: only service_role (which bypasses RLS) may read or write.
 REVOKE ALL ON public.user_discord_settings FROM anon, authenticated;
+
+-- 0.9.58-dev.4: per-account override of the global 經濟快報 (full edition) webhook. NULL = inherit.
+ALTER TABLE user_discord_settings ADD COLUMN IF NOT EXISTS market_webhook_url TEXT;
 
 CREATE TABLE IF NOT EXISTS user_discord_send_log (
     id BIGSERIAL PRIMARY KEY,
@@ -1378,6 +1390,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_discord_send_log_once
     ON user_discord_send_log (user_id, taipei_ymd)
     WHERE kind = 'daily' AND status IN ('claimed', 'sent');
 
+-- 0.9.58-dev.4: 'market' rows are per-account copies of the full edition (discordRun.ts's
+-- `sendMarketOverrides`). Drop and re-add the CHECK by its (default-generated) name so this
+-- block is idempotent whether or not the wider CHECK already exists.
+ALTER TABLE user_discord_send_log DROP CONSTRAINT IF EXISTS user_discord_send_log_kind_check;
+ALTER TABLE user_discord_send_log ADD CONSTRAINT user_discord_send_log_kind_check
+    CHECK (kind IN ('daily', 'preview', 'test', 'market'));
+
 -- ⚠️ Same placeholder mines as §6c/§9/§10/§13. Live: clone an existing job's command (see §6c)
 -- so the embedded CRON_SECRET is never read back out — this is a brand-new job, so a fresh
 -- `cron.schedule` (not unschedule+schedule of an existing one) is correct here.
@@ -1390,8 +1409,9 @@ END $$;
 
 SELECT cron.schedule(
   'discord-holdings-daily',
-  -- Taipei 17:15 (UTC 09:15), weekdays.
-  '15 9 * * 1-5',
+  -- Taipei 17:05 (UTC 09:05), weekdays — same time as the brief by default; admin-adjustable,
+  -- moving together with it (see §15).
+  '5 9 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -1404,6 +1424,89 @@ SELECT cron.schedule(
   );
   $$
 );
+
+
+-- =========================================================
+-- 15. Discord send schedule — admin-managed (0.9.58-dev.4, Task 165 Phase 2 step 2d)
+-- =========================================================
+--
+--   The admin console picks the brief+holdings time and the full time from two dropdowns
+--   (discordSchedule.ts's SCHEDULE_HOURS / scheduleMinuteOptions: brief 17:05–20:55, full
+--   21:00–23:55, 5-minute steps — D2 in the spec) instead of an operator editing `cron.job` by
+--   hand. The schedule lives in pg_cron itself — no new tick job, no schedule table (D1).
+--
+--   `discord_schedule_get()` reads the three existing jobs' `schedule` column only — **never**
+--   `command`, which carries `x-cron-secret` in clear text (same warning as §11 above).
+--   `discord_schedule_set()` re-validates the same ranges and the 5-minute step server-side (the
+--   browser's choices are not trusted), then moves `discord-summary-brief` and
+--   `discord-holdings-daily` together to the brief time, and `discord-summary-full` to the full
+--   time, via `cron.alter_job` — the jobid stays the same, so the embedded CRON_SECRET is never
+--   read back out (unlike unschedule+schedule).
+--
+--   Both are SECURITY DEFINER (the `cron` schema is not in PostgREST's exposed schemas) and
+--   callable by service_role only — the Edge Function's `discord-accounts` action (assertAdmin)
+--   is the only caller.
+
+CREATE OR REPLACE FUNCTION public.discord_schedule_get()
+RETURNS TABLE(jobname text, schedule text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT j.jobname, j.schedule
+  FROM cron.job j
+  WHERE j.jobname IN ('discord-summary-brief', 'discord-holdings-daily', 'discord-summary-full');
+$$;
+
+REVOKE ALL ON FUNCTION public.discord_schedule_get() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.discord_schedule_get() FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.discord_schedule_get() TO service_role;
+
+CREATE OR REPLACE FUNCTION public.discord_schedule_set(
+  brief_hour int, brief_minute int, full_hour int, full_minute int
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+DECLARE
+  brief_job    cron.job%ROWTYPE;
+  holdings_job cron.job%ROWTYPE;
+  full_job     cron.job%ROWTYPE;
+BEGIN
+  -- D2: brief 17:05–20:55, full 21:00–23:55, both in 5-minute steps. Re-checked here because the
+  -- browser's choices are not trusted.
+  IF brief_hour IS NULL OR brief_minute IS NULL
+     OR brief_hour NOT IN (17, 18, 19, 20)
+     OR brief_minute % 5 <> 0 OR brief_minute < 0 OR brief_minute > 55
+     OR (brief_hour = 17 AND brief_minute < 5) THEN
+    RAISE EXCEPTION 'discord_schedule_set: brief time %:% out of range', brief_hour, brief_minute;
+  END IF;
+  IF full_hour IS NULL OR full_minute IS NULL
+     OR full_hour NOT IN (21, 22, 23)
+     OR full_minute % 5 <> 0 OR full_minute < 0 OR full_minute > 55 THEN
+    RAISE EXCEPTION 'discord_schedule_set: full time %:% out of range', full_hour, full_minute;
+  END IF;
+
+  SELECT * INTO brief_job    FROM cron.job WHERE jobname = 'discord-summary-brief';
+  SELECT * INTO holdings_job FROM cron.job WHERE jobname = 'discord-holdings-daily';
+  SELECT * INTO full_job     FROM cron.job WHERE jobname = 'discord-summary-full';
+  IF brief_job.jobid IS NULL OR holdings_job.jobid IS NULL OR full_job.jobid IS NULL THEN
+    RAISE EXCEPTION 'discord_schedule_set: one or more Discord cron jobs do not exist';
+  END IF;
+
+  -- Taipei → UTC is `hour - 8`; every allowed Taipei hour (17–23) stays >= 0 in UTC.
+  PERFORM cron.alter_job(brief_job.jobid,    schedule := format('%s %s * * 1-5', brief_minute, brief_hour - 8));
+  PERFORM cron.alter_job(holdings_job.jobid, schedule := format('%s %s * * 1-5', brief_minute, brief_hour - 8));
+  PERFORM cron.alter_job(full_job.jobid,     schedule := format('%s %s * * 1-5', full_minute, full_hour - 8));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.discord_schedule_set(int, int, int, int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.discord_schedule_set(int, int, int, int) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.discord_schedule_set(int, int, int, int) TO service_role;
 
 
 -- =========================================================
