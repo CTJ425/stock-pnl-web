@@ -613,3 +613,18 @@ later quotes while a local run gets all of them.
   `已送出完整持股報告（資料日 <ymd>）` or `已送出完整持股報告（資料日 <ymd>，N 檔無報價）` when N > 0.
 - The daily run logs one warn per user with a missing quote: message `holdings quotes missing`,
   detail `{ userId, missing, rows }` — counts only, no prices.
+
+## Revision 5 — the holdings card's quotes were all failing in the Edge runtime (2026-09-18, 0.9.58-dev.9)
+
+**Symptom**: every position on a real card showed `--` for 現價/未實現/報酬率. Measured on DEV with the
+`missingQuotes` counter added in Revision 4: `holdings-preview` reported **7 of 7** positions without a
+quote, while the same code run from a laptop against the same account fetched 6 of 6.
+
+**Root cause**: `makeChartFetch` (`holdingQuotes.ts`) called `fetch(url, { signal })` with **no headers**,
+so the request went out with Deno's default `User-Agent`, which Yahoo refuses. Everything else in this
+function that fetches Yahoo already asks like a browser — `twChips.ts`'s `fetchJson` sends
+`Accept: application/json` + `User-Agent: UA`, which is why the market summary's index block works — and
+`stock-price`'s `fetchYahooPrice` does the same, which is why the app's quotes work from the Edge too.
+
+**Fix**: `makeChartFetch` sends the same two headers, importing `UA` from `twChips.ts` so there is one
+user-agent string in the function. Verified on DEV after deploying: `missingQuotes` 7 → **0**.

@@ -255,10 +255,10 @@ describe('makeChartFetch', () => {
   const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
 
   function harness(answers: Array<Response | Error>) {
-    const calls: Array<{ url: string; signal: AbortSignal | undefined }> = []
+    const calls: Array<{ url: string; signal: AbortSignal | undefined; headers: Record<string, string> | undefined }> = []
     const sleeps: number[] = []
     const fetchImpl = ((url: string, init?: RequestInit) => {
-      calls.push({ url, signal: init?.signal ?? undefined })
+      calls.push({ url, signal: init?.signal ?? undefined, headers: init?.headers as Record<string, string> | undefined })
       const a = answers.shift()
       if (!a) throw new Error('no more answers')
       return a instanceof Error ? Promise.reject(a) : Promise.resolve(a)
@@ -266,6 +266,13 @@ describe('makeChartFetch', () => {
     const get = makeChartFetch({ fetchImpl, sleep: async (ms) => void sleeps.push(ms) })
     return { calls, sleeps, get }
   }
+
+  it('asks like a browser: Yahoo answers 429 to a request with no User-Agent (spec Revision 5)', async () => {
+    const h = harness([ok({ chart: { result: [] } })])
+    await h.get(URL_)
+    expect(h.calls[0].headers?.['User-Agent']).toMatch(/^Mozilla\/5\.0 /)
+    expect(h.calls[0].headers?.Accept).toBe('application/json')
+  })
 
   it('returns parsed JSON on the first success, with a timeout signal', async () => {
     const h = harness([ok({ chart: { result: [] } })])
