@@ -576,3 +576,40 @@ The card already carried 未實現 (with %), 今日 (with %), 今年已實現 pe
   Prices use the existing per-currency price formatter; every line stays ≤ 36 display columns.
 - The 2,800-character budget is unchanged, so fewer positions fit before `…另 N 檔，完整明細請見網站`.
   That is accepted.
+
+## Revision 4 — card rows match 庫存總覽, and say when a quote is missing (user 2026-09-18, target 0.9.58-dev.8)
+
+The user compared the card with the Dashboard's 庫存總覽 and asked for the same information per
+position; they also saw trailing `--` columns and could not tell why. Layout chosen by the user:
+the compact one, four lines per position (five when 已實現 is not 0).
+
+### R1 — 市值 / 成本 per position (`holdingsCard.ts`)
+
+A new row line between the existing second line and the 均價／保本 line:
+
+- LONG: `'  市值 ' + amount(mktVal) + '  成本 ' + amount(basis)`
+- SHORT: `'  市值 ' + amount(mktVal) + '  價金 ' + amount(basis)` — a short row's basis is the
+  proceeds received, not a cost, so it is labelled 價金.
+
+`amount` is the existing per-currency amount formatter (`fmtOrDash`, so a missing quote prints `--`).
+With this line the card carries every column 庫存總覽 shows: 代號・名稱, 現價, 持有股數, 目前市值,
+投入成本, 平均買入成本, 保本賣出價, 未實現淨損益, 未實現報酬率 — plus 當日%, 已實現 and the per-currency
+KPI block, which the Dashboard does not show per position.
+
+### R2 — bounded quote concurrency (`holdingQuotes.ts`)
+
+`createQuoteCache` currently starts one fetch sequence per key as soon as the caller asks, and
+`runOneUser` asks for every key at once, so a user with many positions opens that many parallel
+Yahoo requests (each up to two symbols). Add a concurrency limit of **2** inside the cache: keys
+queue and run two at a time, memoisation per key unchanged, and the returned promises still resolve
+independently. This is defensive: the current burst is the most plausible reason the Edge run loses
+later quotes while a local run gets all of them.
+
+### R3 — surface the missing-quote count
+
+- `HoldingsSettingsResult`'s success arm gains `missingQuotes?: number` (TWD + USD
+  `missingCount`), set by the `preview` op; `runDiscordAccountsOp` forwards it, the browser service
+  passes it through, and 「完整推送測試」's message becomes
+  `已送出完整持股報告（資料日 <ymd>）` or `已送出完整持股報告（資料日 <ymd>，N 檔無報價）` when N > 0.
+- The daily run logs one warn per user with a missing quote: message `holdings quotes missing`,
+  detail `{ userId, missing, rows }` — counts only, no prices.

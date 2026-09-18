@@ -346,7 +346,8 @@ function AccountEditor({
       const next = await previewHoldingsReport(account.userId)
       onChange({ schedule: next.schedule, accounts: next.accounts })
       if (next.send?.ok && next.previewYmd) {
-        setHoldingsMessage(`已送出完整持股報告（資料日 ${next.previewYmd}）`)
+        const suffix = next.missingQuotes && next.missingQuotes > 0 ? `，${next.missingQuotes} 檔無報價` : ''
+        setHoldingsMessage(`已送出完整持股報告（資料日 ${next.previewYmd}${suffix}）`)
       } else if (next.send) {
         setHoldingsMessage(sendResultText(next.send))
       }

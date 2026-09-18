@@ -43,7 +43,7 @@ export interface DiscordAccountRow {
 }
 
 export type DiscordAccountsResult =
-  | { ok: true; schedule: ScheduleView; accounts: DiscordAccountRow[]; send?: DiscordSendResult; previewYmd?: string }
+  | { ok: true; schedule: ScheduleView; accounts: DiscordAccountRow[]; send?: DiscordSendResult; previewYmd?: string; missingQuotes?: number }
   | { ok: false; error: Extract<HoldingsSettingsResult, { ok: false }>['error'] | 'invalid-time' | 'unknown-user' }
 
 const OPS = new Set([
@@ -182,5 +182,5 @@ export async function runDiscordAccountsOp(deps: DiscordAccountsDeps, input: unk
 
   const result = await runHoldingsSettingsOp(deps, userId, innerInput)
   if (!result.ok) return { ok: false, error: result.error }
-  return { ok: true, ...(await snapshot(deps)), send: result.send, previewYmd: result.previewYmd }
+  return { ok: true, ...(await snapshot(deps)), send: result.send, previewYmd: result.previewYmd, missingQuotes: result.missingQuotes }
 }

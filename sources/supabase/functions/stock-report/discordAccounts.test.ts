@@ -369,7 +369,21 @@ describe('runDiscordAccountsOp — 完整推送測試 (holdings-preview)', () =>
     expect(result.send).toEqual({ ok: true, httpStatus: 204 })
     // today (2026-09-18) has no market row, so the preview uses the latest one
     expect(result.previewYmd).toBe('2026-09-16')
+    expect(result.missingQuotes).toBe(0)
     expect(finishes).toEqual([{ userId: U1, ymd: '2026-09-18', kind: 'preview', outcome: { kind: 'sent', httpStatus: 204 } }])
+  })
+
+  it('reports how many positions had no quote', async () => {
+    const { deps, posts } = fake({
+      loadMarketFile: async () => ({ days: [MARKET_DAY_0916] }),
+      loadWorkspaces: async (userId) => (userId === U1 ? [{ id: 'w1', fee_rate: null, transactions: [BUY_2330] }] : []),
+      fetchChart: async () => {
+        throw new Error('HTTP 429')
+      },
+    })
+    const result = ok(await runDiscordAccountsOp(deps, { op: 'holdings-preview', userId: U1 }))
+    expect(result.missingQuotes).toBe(1)
+    expect(posts).toHaveLength(1)
   })
 
   it('refuses an account without a holdings webhook', async () => {

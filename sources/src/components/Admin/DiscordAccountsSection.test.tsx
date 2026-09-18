@@ -287,12 +287,20 @@ describe('DiscordAccountsSection', () => {
     })
 
     it('sends the full holdings report and names its data date', async () => {
-      svc.previewHoldingsReport.mockResolvedValue({ ...BASE, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17' })
+      svc.previewHoldingsReport.mockResolvedValue({ ...BASE, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17', missingQuotes: 0 })
       await renderLoaded()
       const d = detail('alice@example.com')
       fireEvent.click(within(d).getByRole('button', { name: '完整推送測試' }))
       await within(d).findByText('已送出完整持股報告（資料日 2026-09-17）')
       expect(svc.previewHoldingsReport).toHaveBeenCalledWith(U1)
+    })
+
+    it('says how many positions had no quote', async () => {
+      svc.previewHoldingsReport.mockResolvedValue({ ...BASE, send: { ok: true, httpStatus: 204 }, previewYmd: '2026-09-17', missingQuotes: 2 })
+      await renderLoaded()
+      const d = detail('alice@example.com')
+      fireEvent.click(within(d).getByRole('button', { name: '完整推送測試' }))
+      await within(d).findByText('已送出完整持股報告（資料日 2026-09-17，2 檔無報價）')
     })
 
     it('shows why a full report could not be sent', async () => {
