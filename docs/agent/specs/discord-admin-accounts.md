@@ -223,3 +223,67 @@ account editor, no per-account time, no retry, no change to `runWebhookOp` or `a
 
 DEV: apply §14 + §15; the holdings job needs the §6c clone procedure (new job). Then check
 `discord_schedule_get()` returns three rows and one save round-trips. PROD after DEV verify.
+
+## 9. Revision 2 (user feedback 2026-09-18, target 0.9.58-dev.6)
+
+Decisions (user): R1 layout order 全域 → 帳號 → 排程 → 說明, explanations at the bottom. R2 the account
+editor switches with one click and always shows whose settings it is. R3 a per-account 「完整推送測試」
+(the real holdings card, labelled as a preview). R4 schedule is a drop-down every half hour — brief
+17:30–20:30, full 21:00–23:30; 17:05 is no longer offered and the default becomes 17:30. R5 UI polish.
+Deploy to DEV, test end to end, then commit (authorized).
+
+This section overrides D2, D7 and the §3.1 / §3.7 details it names.
+
+### 9.1 Edge
+
+- `discordSchedule.ts`: `DEFAULT_DISCORD_SCHEDULE = { brief: '17:30', full: '21:30' }`;
+  `SCHEDULE_OPTIONS: Record<ScheduleSlot, readonly string[]>` = brief `17:30 … 20:30`, full
+  `21:00 … 23:30` (every 30 minutes); `isValidScheduleTime(slot, v)` = `v` is one of them.
+  `SCHEDULE_HOURS` and `scheduleMinuteOptions` are removed.
+- `discordAccounts.ts`: new op `holdings-preview` (`userId`) → `runHoldingsSettingsOp(deps, userId,
+  { op: 'preview' })`; its error is returned as is (`not-configured`, `quota`, `no-market-data`,
+  `no-holdings`); success → snapshot + `send` + `previewYmd`. The success type gains `previewYmd?: string`.
+- `schema.sql`: §13 `discord-summary-brief` and §14 `discord-holdings-daily` default to
+  `'30 9 * * 1-5'` (17:30); §15 `discord_schedule_set` accepts only minute 0 or 30, brief 17:30–20:30,
+  full 21:00–23:30 (NULL refused). Comments updated.
+- No `index.ts` change is required (`no-holdings` / `no-market-data` already map to 409).
+
+### 9.2 Browser
+
+Page order on the `discord` panel (`AdminConsolePage.tsx`): `DiscordSection` → `DiscordAccountsSection`
+(accounts, then schedule) → new `DiscordHelpSection`.
+
+- `DiscordSection` (global card): heading 「全域 Webhook」; the hint paragraph and the
+  「如何取得 Discord Webhook 網址」 `<details>` move out (to the help card, content unchanged); the
+  recent-sends table is collapsed behind a button 「最近發送紀錄（N 筆）」 (`aria-expanded`), hidden when
+  there are no rows.
+- `DiscordAccountsSection`:
+  - Loading / load failure: one panel with heading 「各帳號設定與發送排程」 and 「載入中…」 or the error.
+  - 「各帳號設定」: master–detail. Left: `<nav aria-label="帳號清單">` of buttons (email or
+    「（無 Email）」 plus a status line `繼承|自訂・推送中|已暫停|未設定`), the current one has
+    `aria-current="true"`; the first account is selected on load; one click switches. Right: `role="region"`
+    `aria-label="<label> 的 Discord 設定"` with an `<h4>` of the label, 「上次發送：<ymd> <kind> <status>」
+    or 「上次發送：—」, then two blocks:
+    - 經濟快報: radios 繼承全域 / 自訂 Webhook; 「目前：繼承全域（不另外發送）」 or 「目前：自訂 …last4」;
+      in custom mode the URL input + 「儲存經濟快報網址」 + (when saved) 「測試經濟快報連線」.
+    - 個人持股報告: 「目前：…last4」 or 「目前：未設定」; URL input + 「儲存持股報告網址」; when
+      configured: a toggle row (childless `adm-toggle`, `aria-label="每個交易日推送個人持股報告"`, visible
+      「每日推送」), then 「測試持股報告連線」 「完整推送測試」 「清除持股報告網址」.
+      「完整推送測試」 success text: 「已送出完整持股報告（資料日 <previewYmd>）」.
+    Switching accounts resets inputs and messages. At ≤ 720 px the list stacks above the detail.
+  - 「發送排程（平日・台北時間）」: rows 「快報＋個人持股報告」 and 「經濟快報（完整版）」, each one
+    `<select>` (`aria-label` 「快報與個人持股報告發送時間」 / 「經濟快報發送時間」) with the
+    `SCHEDULE_OPTIONS`; a current value that is not an option is shown as an extra first option
+    「<time>（目前設定，請改選）」 and blocks 「儲存排程」 until changed. Existing save / drift / lock rules stay.
+- `DiscordHelpSection` (new, static): heading 「說明」; rules 「繼承全域不另外發送；自訂網址才多送一份」,
+  「個人持股報告只送到該帳號自己的網址」, 「全域未設定時經濟快報不送」, 「當天沒有台股大盤資料時不送」
+  (plus the weekday / Taipei time note); then the moved how-to `<details>`.
+- Service: `previewHoldingsReport(userId)` → op `holdings-preview`, literal `timeout: 90_000`; extra
+  error texts `no-holdings` 「這個帳號目前沒有持股」, `no-market-data` 「找不到任何台股大盤資料」.
+- Styling: selects must look like drop-downs (reuse `.field select` styling); scoped `dsc-*` rules may be
+  added to `src/index.css`; reuse existing tokens (`--cds-*`, `--sp-*`), `badge`, `adm-side-item` look.
+
+### 9.3 Tests (written first)
+
+`discordSchedule.test.ts`, `discordAccounts.test.ts` (Edge), `src/services/discordAccounts.test.ts`,
+`DiscordAccountsSection.test.tsx`, `DiscordSection.test.tsx`, new `DiscordHelpSection.test.tsx`.

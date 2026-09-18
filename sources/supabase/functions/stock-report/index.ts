@@ -4242,7 +4242,7 @@ function discordSummaryLoaders(): Pick<
   }
 }
 
-/** Cron entry point: weekday 17:05 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs in schema.sql. */
+/** Cron entry point: weekday 17:30 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs in schema.sql. */
 async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Response> {
   if (body.edition !== 'brief' && body.edition !== 'full') {
     return json({ error: 'edition 必須是 brief 或 full' }, 400)
@@ -4433,7 +4433,7 @@ function holdingsDataDeps(): HoldingsDataDeps {
   }
 }
 
-/** Cron entry point: weekday, together with the brief (17:05 default; admin-adjustable, see
+/** Cron entry point: weekday, together with the brief (17:30 default; admin-adjustable, see
  * schema.sql §15) — `discord-holdings-daily` in schema.sql. */
 async function handleDiscordHoldings(): Promise<Response> {
   const startedAt = Date.now()

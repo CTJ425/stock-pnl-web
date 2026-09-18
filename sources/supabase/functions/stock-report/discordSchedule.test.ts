@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_DISCORD_SCHEDULE,
   DISCORD_SCHEDULE_JOBS,
-  SCHEDULE_HOURS,
+  SCHEDULE_OPTIONS,
   cronToTaipeiTime,
   isValidScheduleTime,
   scheduleFromJobs,
-  scheduleMinuteOptions,
   scheduleTimeParts,
 } from './discordSchedule.ts'
-
-const EVERY_5 = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
 
 describe('schedule options', () => {
   it('names the three cron jobs and the defaults', () => {
@@ -19,48 +16,38 @@ describe('schedule options', () => {
       holdings: 'discord-holdings-daily',
       full: 'discord-summary-full',
     })
-    expect(DEFAULT_DISCORD_SCHEDULE).toEqual({ brief: '17:05', full: '21:30' })
+    expect(DEFAULT_DISCORD_SCHEDULE).toEqual({ brief: '17:30', full: '21:30' })
   })
 
-  it('offers brief 17–20 and full 21–23', () => {
-    expect(SCHEDULE_HOURS.brief).toEqual([17, 18, 19, 20])
-    expect(SCHEDULE_HOURS.full).toEqual([21, 22, 23])
+  it('offers every half hour: brief 17:30–20:30, full 21:00–23:30', () => {
+    expect(SCHEDULE_OPTIONS.brief).toEqual(['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'])
+    expect(SCHEDULE_OPTIONS.full).toEqual(['21:00', '21:30', '22:00', '22:30', '23:00', '23:30'])
   })
 
-  it('offers five-minute steps, and no 17:00 for the brief', () => {
-    expect(scheduleMinuteOptions('brief', 17)).toEqual(EVERY_5.slice(1))
-    expect(scheduleMinuteOptions('brief', 18)).toEqual(EVERY_5)
-    expect(scheduleMinuteOptions('brief', 20)).toEqual(EVERY_5)
-    expect(scheduleMinuteOptions('full', 21)).toEqual(EVERY_5)
-    expect(scheduleMinuteOptions('full', 23)).toEqual(EVERY_5)
-  })
-
-  it('offers nothing for an hour outside the slot', () => {
-    expect(scheduleMinuteOptions('brief', 21)).toEqual([])
-    expect(scheduleMinuteOptions('brief', 16)).toEqual([])
-    expect(scheduleMinuteOptions('full', 20)).toEqual([])
-    expect(scheduleMinuteOptions('full', 24)).toEqual([])
+  it('offers both defaults', () => {
+    expect(SCHEDULE_OPTIONS.brief).toContain(DEFAULT_DISCORD_SCHEDULE.brief)
+    expect(SCHEDULE_OPTIONS.full).toContain(DEFAULT_DISCORD_SCHEDULE.full)
   })
 })
 
 describe('isValidScheduleTime', () => {
-  it.each(['17:05', '17:55', '18:00', '20:55'])('accepts brief %s', (t) => {
+  it.each(['17:30', '18:00', '20:30'])('accepts brief %s', (t) => {
     expect(isValidScheduleTime('brief', t)).toBe(true)
   })
 
-  it.each(['21:00', '21:30', '23:55'])('accepts full %s', (t) => {
+  it.each(['21:00', '21:30', '23:30'])('accepts full %s', (t) => {
     expect(isValidScheduleTime('full', t)).toBe(true)
   })
 
-  it.each(['17:00', '16:55', '21:00', '18:03', '20:60'])('refuses brief %s', (t) => {
+  it.each(['17:00', '17:05', '16:30', '21:00', '18:05', '18:15', '20:55'])('refuses brief %s', (t) => {
     expect(isValidScheduleTime('brief', t)).toBe(false)
   })
 
-  it.each(['20:55', '24:00', '21:07', '00:00'])('refuses full %s', (t) => {
+  it.each(['20:30', '21:05', '21:15', '23:55', '24:00', '00:00'])('refuses full %s', (t) => {
     expect(isValidScheduleTime('full', t)).toBe(false)
   })
 
-  it.each([null, undefined, 1705, '', '7:05', '17:5', '17:05 ', ' 17:05', '17-05', '17:05:00', '１７:０５'])(
+  it.each([null, undefined, 1730, '', '7:30', '17:3', '17:30 ', ' 17:30', '17-30', '17:30:00', '１７:３０'])(
     'refuses malformed %j',
     (t) => {
       expect(isValidScheduleTime('brief', t)).toBe(false)

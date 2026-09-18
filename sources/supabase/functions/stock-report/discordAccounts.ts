@@ -43,7 +43,7 @@ export interface DiscordAccountRow {
 }
 
 export type DiscordAccountsResult =
-  | { ok: true; schedule: ScheduleView; accounts: DiscordAccountRow[]; send?: DiscordSendResult }
+  | { ok: true; schedule: ScheduleView; accounts: DiscordAccountRow[]; send?: DiscordSendResult; previewYmd?: string }
   | { ok: false; error: Extract<HoldingsSettingsResult, { ok: false }>['error'] | 'invalid-time' | 'unknown-user' }
 
 const OPS = new Set([
@@ -56,6 +56,7 @@ const OPS = new Set([
   'holdings-clear',
   'holdings-enable',
   'holdings-test',
+  'holdings-preview',
 ])
 
 const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -102,11 +103,12 @@ async function snapshot(deps: DiscordAccountsDeps): Promise<{ schedule: Schedule
   return { schedule, accounts }
 }
 
-const HOLDINGS_OP: Record<string, 'set' | 'clear' | 'enable' | 'test'> = {
+const HOLDINGS_OP: Record<string, 'set' | 'clear' | 'enable' | 'test' | 'preview'> = {
   'holdings-set': 'set',
   'holdings-clear': 'clear',
   'holdings-enable': 'enable',
   'holdings-test': 'test',
+  'holdings-preview': 'preview',
 }
 
 /** `input` is the untrusted request body (minus `action`). Never returns a webhook URL. */
@@ -172,7 +174,7 @@ export async function runDiscordAccountsOp(deps: DiscordAccountsDeps, input: unk
     return { ok: true, ...(await snapshot(deps)), send: result }
   }
 
-  // holdings-set / holdings-clear / holdings-enable / holdings-test delegate to the existing op.
+  // holdings-set / holdings-clear / holdings-enable / holdings-test / holdings-preview delegate to the existing op.
   const innerOp = HOLDINGS_OP[op]
   const innerInput: Record<string, unknown> = { op: innerOp }
   if (op === 'holdings-set') innerInput.url = (input as { url?: unknown }).url
@@ -180,5 +182,5 @@ export async function runDiscordAccountsOp(deps: DiscordAccountsDeps, input: unk
 
   const result = await runHoldingsSettingsOp(deps, userId, innerInput)
   if (!result.ok) return { ok: false, error: result.error }
-  return { ok: true, ...(await snapshot(deps)), send: result.send }
+  return { ok: true, ...(await snapshot(deps)), send: result.send, previewYmd: result.previewYmd }
 }

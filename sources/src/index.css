@@ -5692,3 +5692,130 @@ button.rpt-card:hover {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Admin console: Discord accounts master–detail (Task 165 §9.2)───────────────────── */
+
+.dsc-master-detail {
+  display: flex;
+  gap: var(--sp-05);
+  align-items: flex-start;
+  margin-top: var(--sp-04);
+}
+
+.dsc-account-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-02);
+  flex: 0 0 220px;
+  min-width: 0;
+}
+
+.dsc-account-nav .adm-side-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+}
+
+.dsc-account-email {
+  font-size: var(--type-body-01);
+}
+
+.dsc-account-status {
+  font-size: var(--type-label-01);
+}
+
+.dsc-detail-card {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  padding: var(--sp-05);
+}
+
+.dsc-detail-card h4 {
+  margin: 0 0 var(--sp-02);
+}
+
+.dsc-block {
+  margin-top: var(--sp-05);
+  padding-top: var(--sp-05);
+  border-top: 1px solid var(--border);
+}
+
+.dsc-block:first-of-type {
+  margin-top: var(--sp-04);
+  padding-top: 0;
+  border-top: none;
+}
+
+.dsc-block-title {
+  margin: 0 0 var(--sp-02);
+  font-size: var(--type-body-01);
+  font-weight: 600;
+}
+
+.dsc-radio-row {
+  display: flex;
+  gap: var(--sp-05);
+  flex-wrap: wrap;
+}
+
+.dsc-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-03);
+  margin-top: var(--sp-04);
+}
+
+.dsc-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-04);
+  flex-wrap: wrap;
+}
+
+.dsc-schedule-field {
+  margin-bottom: 0;
+}
+
+.dsc-schedule-field select {
+  width: auto;
+  min-width: 120px;
+}
+
+.dsc-help-list {
+  margin: 0;
+  padding-left: var(--sp-05);
+}
+
+/* ── Revision 2 polish (§9.2 step 2d rev 2)──────────────────────────────────────────── */
+
+/* Pin the list column to ~240px so the detail card gets the rest of the width. */
+.dsc-account-nav {
+  flex: 0 0 240px;
+}
+
+/* Unselected rows had no border, so they read as plain text instead of clickable rows. */
+.dsc-account-nav .adm-side-item:not(.active) {
+  border-color: var(--border);
+}
+
+.dsc-account-nav .dsc-account-status {
+  color: var(--ink-muted);
+}
+
+/* Separates the test/preview/clear row from the toggle row above it. */
+.dsc-holdings-actions {
+  margin-top: var(--sp-04);
+}
+
+@media (max-width: 720px) {
+  .dsc-master-detail {
+    flex-direction: column;
+  }
+
+  .dsc-account-nav {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

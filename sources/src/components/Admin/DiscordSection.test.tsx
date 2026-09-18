@@ -52,8 +52,9 @@ describe('DiscordSection', () => {
     svc.getDiscordWebhookStatus.mockResolvedValue(EMPTY)
     render(<DiscordSection />)
     expect(await screen.findByText('尚未設定')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Discord 每日總結' })).toBeTruthy()
-    expect(screen.getByText('平日發送快報與完整版，時間在下方「Discord 排程」調整；當天沒有台股大盤資料時不送。')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '全域 Webhook' })).toBeTruthy()
+    // no recent sends → no toggle for them
+    expect(screen.queryByRole('button', { name: /最近發送紀錄/ })).toBeNull()
     const input = urlInput()
     expect(input.type).toBe('password')
     expect(input.getAttribute('autocomplete')).toBe('off')
@@ -69,6 +70,12 @@ describe('DiscordSection', () => {
     expect(await screen.findByText(/已設定（…Wxyz）/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '清除' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '測試發送' })).toBeTruthy()
+    // collapsed by default
+    const toggle = screen.getByRole('button', { name: '最近發送紀錄（3 筆）' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryAllByRole('row')).toHaveLength(0)
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
     for (const h of ['時間', '類型', '狀態', 'HTTP', '原因']) {
       expect(screen.getByRole('columnheader', { name: h })).toBeTruthy()
     }
@@ -96,6 +103,7 @@ describe('DiscordSection', () => {
     })
     render(<DiscordSection />)
     await screen.findByText(/已設定（…Wxyz）/)
+    fireEvent.click(screen.getByRole('button', { name: '最近發送紀錄（1 筆）' }))
     const row = screen.getAllByRole('row')[1]
     expect(row.textContent).toContain('2026-09-16')
     expect(row.textContent).not.toContain('Invalid')
@@ -201,22 +209,6 @@ describe('DiscordSection', () => {
     release({ status: SET, test: { ok: true, httpStatus: 204 } })
     expect(await screen.findByText('測試訊息已送出')).toBeTruthy()
     expect(test.disabled).toBe(false)
-  })
-
-  it('explains how to create a Discord webhook, and that no API key is needed', async () => {
-    svc.getDiscordWebhookStatus.mockResolvedValue(EMPTY)
-    render(<DiscordSection />)
-    await screen.findByText('尚未設定')
-    const guide = screen.getByText('如何取得 Discord Webhook 網址').closest('details')
-    expect(guide).not.toBeNull()
-    expect(guide!.querySelectorAll('ol > li')).toHaveLength(7)
-    const text = guide!.textContent ?? ''
-    expect(text).toContain('不需要建立 Bot，也不需要 API 金鑰或 Bot Token')
-    expect(text).toContain('編輯頻道')
-    expect(text).toContain('整合')
-    expect(text).toContain('複製 Webhook 網址')
-    expect(text).toContain('Webhook 網址等同密碼')
-    expect(text).toContain('刪除該 Webhook，重新建立一個')
   })
 
   it('offers previews only when configured', async () => {

@@ -1240,7 +1240,7 @@ SELECT cron.schedule(
 -- =========================================================
 --
 --   Market-wide after-hours summary posted to one admin-configured webhook, twice per TW
---   trading day (17:05 brief, 21:30 full). No per-user data of any kind (a per-user holdings
+--   trading day (17:30 brief, 21:30 full). No per-user data of any kind (a per-user holdings
 --   summary is Phase 2, out of scope here).
 --
 --   `app_secrets` is server-only: RLS is on with NO policies, so only the service-role
@@ -1294,8 +1294,8 @@ END $$;
 
 SELECT cron.schedule(
   'discord-summary-brief',
-  -- Taipei 17:05 (UTC 09:05), weekdays.
-  '5 9 * * 1-5',
+  -- Taipei 17:30 (UTC 09:30), weekdays.
+  '30 9 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -1332,7 +1332,7 @@ SELECT cron.schedule(
 -- =========================================================
 --
 --   Each opted-in user gets their own webhook and their own once-daily card, sent together with
---   the brief at 17:05 by default (admin-adjustable, see §15) with the same numbers the Dashboard
+--   the brief at 17:30 by default (admin-adjustable, see §15) with the same numbers the Dashboard
 --   shows across all their workspaces, per currency (D1/D2/D3/D4 in the spec). Nothing here is
 --   posted to the site-wide webhook of §13 unless `market_webhook_url` is set (below).
 --
@@ -1409,9 +1409,9 @@ END $$;
 
 SELECT cron.schedule(
   'discord-holdings-daily',
-  -- Taipei 17:05 (UTC 09:05), weekdays — same time as the brief by default; admin-adjustable,
+  -- Taipei 17:30 (UTC 09:30), weekdays — same time as the brief by default; admin-adjustable,
   -- moving together with it (see §15).
-  '5 9 * * 1-5',
+  '30 9 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/stock-report',
@@ -1431,9 +1431,9 @@ SELECT cron.schedule(
 -- =========================================================
 --
 --   The admin console picks the brief+holdings time and the full time from two dropdowns
---   (discordSchedule.ts's SCHEDULE_HOURS / scheduleMinuteOptions: brief 17:05–20:55, full
---   21:00–23:55, 5-minute steps — D2 in the spec) instead of an operator editing `cron.job` by
---   hand. The schedule lives in pg_cron itself — no new tick job, no schedule table (D1).
+--   (discordSchedule.ts's SCHEDULE_OPTIONS: brief 17:30–20:30, full 21:00–23:30, every half
+--   hour — §9.1 in the spec, overriding D2) instead of an operator editing `cron.job` by hand.
+--   The schedule lives in pg_cron itself — no new tick job, no schedule table (D1).
 --
 --   `discord_schedule_get()` reads the three existing jobs' `schedule` column only — **never**
 --   `command`, which carries `x-cron-secret` in clear text (same warning as §11 above).
@@ -1476,17 +1476,17 @@ DECLARE
   holdings_job cron.job%ROWTYPE;
   full_job     cron.job%ROWTYPE;
 BEGIN
-  -- D2: brief 17:05–20:55, full 21:00–23:55, both in 5-minute steps. Re-checked here because the
-  -- browser's choices are not trusted.
+  -- §9.1 (overriding D2): brief 17:30–20:30, full 21:00–23:30, both in half-hour steps; 17:00 and
+  -- 17:05 are no longer offered. Re-checked here because the browser's choices are not trusted.
   IF brief_hour IS NULL OR brief_minute IS NULL
      OR brief_hour NOT IN (17, 18, 19, 20)
-     OR brief_minute % 5 <> 0 OR brief_minute < 0 OR brief_minute > 55
-     OR (brief_hour = 17 AND brief_minute < 5) THEN
+     OR brief_minute NOT IN (0, 30)
+     OR (brief_hour = 17 AND brief_minute <> 30) THEN
     RAISE EXCEPTION 'discord_schedule_set: brief time %:% out of range', brief_hour, brief_minute;
   END IF;
   IF full_hour IS NULL OR full_minute IS NULL
      OR full_hour NOT IN (21, 22, 23)
-     OR full_minute % 5 <> 0 OR full_minute < 0 OR full_minute > 55 THEN
+     OR full_minute NOT IN (0, 30) THEN
     RAISE EXCEPTION 'discord_schedule_set: full time %:% out of range', full_hour, full_minute;
   END IF;
 

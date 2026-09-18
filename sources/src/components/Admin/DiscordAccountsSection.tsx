@@ -1,7 +1,7 @@
 /**
  * Admin console: per-account Discord settings and the send schedule (Task 165 Phase 2 step
- * 2d, spec discord-admin-accounts.md §3.7). Mounted directly after `<DiscordSection />` on
- * the `discord` panel.
+ * 2d revision 2, spec discord-admin-accounts.md §9.2, overriding §3.7 where they differ).
+ * Mounted between `<DiscordSection />` and `<DiscordHelpSection />` on the `discord` panel.
  *
  * The webhook URL never round-trips back from the server (only `last4` does), so every URL
  * input is write-only: it starts empty and is cleared again after a successful save.
@@ -11,6 +11,7 @@ import {
   clearHoldingsWebhook,
   clearMarketWebhook,
   getDiscordAccounts,
+  previewHoldingsReport,
   saveDiscordSchedule,
   saveHoldingsWebhook,
   saveMarketWebhook,
@@ -24,19 +25,10 @@ import {
   type ScheduleView,
 } from '../../services/discordAccounts'
 import { isDiscordWebhookUrl } from '../../../supabase/functions/stock-report/discordUrl'
-import {
-  DEFAULT_DISCORD_SCHEDULE,
-  SCHEDULE_HOURS,
-  scheduleMinuteOptions,
-  scheduleTimeParts,
-} from '../../../supabase/functions/stock-report/discordSchedule'
+import { DEFAULT_DISCORD_SCHEDULE, SCHEDULE_OPTIONS } from '../../../supabase/functions/stock-report/discordSchedule'
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
 }
 
 const KIND_LABELS: Record<DiscordAccountLastSend['kind'], string> = {
@@ -61,15 +53,44 @@ const FAIL_REASON_LABELS: Record<string, string> = {
   'invalid-url': '網址格式不正確',
 }
 
-function lastSendText(last: DiscordAccountLastSend | null): string {
-  if (!last) return '—'
-  return `${last.ymd} ${KIND_LABELS[last.kind]} ${STATUS_LABELS[last.status]}`
+function lastSendLine(last: DiscordAccountLastSend | null): string {
+  if (!last) return '上次發送：—'
+  return `上次發送：${last.ymd} ${KIND_LABELS[last.kind]} ${STATUS_LABELS[last.status]}`
 }
 
 function sendResultText(send: DiscordAccountsSendResult): string {
   if (send.ok) return '測試訊息已送出'
   const reason = FAIL_REASON_LABELS[send.reason ?? ''] ?? '未知錯誤'
   return `發送失敗（${reason}）`
+}
+
+/** Left-hand nav status: `繼承|自訂・推送中|已暫停|未設定`. Spec §9.2. */
+function statusLine(acc: DiscordAccountRow): string {
+  const market = acc.market.custom ? '自訂' : '繼承'
+  const holdings = !acc.holdings.configured ? '未設定' : acc.holdings.enabled ? '推送中' : '已暫停'
+  return `${market}・${holdings}`
+}
+
+function marketStatusText(market: DiscordAccountRow['market']): string {
+  return market.custom ? `目前：自訂 …${market.last4}` : '目前：繼承全域（不另外發送）'
+}
+
+function holdingsStatusText(holdings: DiscordAccountRow['holdings']): string {
+  return holdings.configured ? `目前：…${holdings.last4}` : '目前：未設定'
+}
+
+interface ScheduleOption {
+  value: string
+  label: string
+}
+
+/** SCHEDULE_OPTIONS for the slot, with the current server value prepended as an extra,
+ * clearly-marked option when it no longer falls on the grid (spec §9.2). */
+function scheduleOptions(slot: 'brief' | 'full', base: string): ScheduleOption[] {
+  const opts = SCHEDULE_OPTIONS[slot] as readonly string[]
+  const plain = opts.map((v) => ({ value: v, label: v }))
+  if (opts.includes(base)) return plain
+  return [{ value: base, label: `${base}（目前設定，請改選）` }, ...plain]
 }
 
 function ScheduleSection({
@@ -83,46 +104,31 @@ function ScheduleSection({
   const baseBrief = schedule.brief ?? DEFAULT_DISCORD_SCHEDULE.brief
   const baseFull = schedule.full ?? DEFAULT_DISCORD_SCHEDULE.full
 
-  const [briefHour, setBriefHour] = useState(() => scheduleTimeParts(baseBrief).hour)
-  const [briefMinute, setBriefMinute] = useState(() => scheduleTimeParts(baseBrief).minute)
-  const [fullHour, setFullHour] = useState(() => scheduleTimeParts(baseFull).hour)
-  const [fullMinute, setFullMinute] = useState(() => scheduleTimeParts(baseFull).minute)
+  const [briefValue, setBriefValue] = useState(baseBrief)
+  const [fullValue, setFullValue] = useState(baseFull)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   // Resync the drafts whenever the server's schedule changes (initial load, or after a save).
   useEffect(() => {
-    const brief = scheduleTimeParts(baseBrief)
-    const full = scheduleTimeParts(baseFull)
-    setBriefHour(brief.hour)
-    setBriefMinute(brief.minute)
-    setFullHour(full.hour)
-    setFullMinute(full.minute)
+    setBriefValue(baseBrief)
+    setFullValue(baseFull)
   }, [baseBrief, baseFull])
 
-  function changeBriefHour(hour: number) {
-    const opts = scheduleMinuteOptions('brief', hour)
-    setBriefHour(hour)
-    setBriefMinute(opts.includes(briefMinute) ? briefMinute : opts[0])
-  }
-
-  function changeFullHour(hour: number) {
-    const opts = scheduleMinuteOptions('full', hour)
-    setFullHour(hour)
-    setFullMinute(opts.includes(fullMinute) ? fullMinute : opts[0])
-  }
-
-  const briefHHMM = `${pad(briefHour)}:${pad(briefMinute)}`
-  const fullHHMM = `${pad(fullHour)}:${pad(fullMinute)}`
-  const changed = briefHHMM !== baseBrief || fullHHMM !== baseFull
-  const saveDisabled = locked || saving || (!changed && schedule.holdingsAligned)
+  const briefOnGrid = (SCHEDULE_OPTIONS.brief as readonly string[]).includes(baseBrief)
+  const fullOnGrid = (SCHEDULE_OPTIONS.full as readonly string[]).includes(baseFull)
+  // An off-grid current value blocks saving until that particular slot is changed away from it.
+  const briefStale = !briefOnGrid && briefValue === baseBrief
+  const fullStale = !fullOnGrid && fullValue === baseFull
+  const changed = briefValue !== baseBrief || fullValue !== baseFull
+  const saveDisabled = locked || saving || briefStale || fullStale || (!changed && schedule.holdingsAligned)
 
   async function handleSave() {
     if (saveDisabled) return
     setMessage(null)
     setSaving(true)
     try {
-      const next = await saveDiscordSchedule(briefHHMM, fullHHMM)
+      const next = await saveDiscordSchedule(briefValue, fullValue)
       onChange(next)
       setMessage('排程已儲存')
     } catch (err) {
@@ -132,13 +138,13 @@ function ScheduleSection({
     }
   }
 
-  const briefMinuteOptions = scheduleMinuteOptions('brief', briefHour)
-  const fullMinuteOptions = scheduleMinuteOptions('full', fullHour)
+  const briefOptions = scheduleOptions('brief', baseBrief)
+  const fullOptions = scheduleOptions('full', baseFull)
 
   return (
     <section className="section glass adm-panel">
       <div className="rpt-section-head">
-        <h3 className="head-tight">Discord 排程</h3>
+        <h3 className="head-tight">發送排程（平日・台北時間）</h3>
       </div>
 
       {locked && (
@@ -151,70 +157,38 @@ function ScheduleSection({
           個人持股報告的時間和快報不一致；再儲存一次排程即可對齊。
         </div>
       )}
-      <p className="hint">平日（週一至週五）台北時間；快報與個人持股報告同時發送。</p>
 
       <div className="ai-form">
-        <div className="ai-form-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>快報與個人持股報告</span>
+        <div className="dsc-schedule-row">
+          <span>快報＋個人持股報告</span>
+          <div className="field dsc-schedule-field">
             <select
-              aria-label="快報與個人持股報告（時）"
-              className="ai-input"
-              style={{ width: 'auto', minWidth: 72 }}
-              value={pad(briefHour)}
+              aria-label="快報與個人持股報告發送時間"
+              value={briefValue}
               disabled={locked}
-              onChange={(e) => changeBriefHour(Number(e.target.value))}
+              onChange={(e) => setBriefValue(e.target.value)}
             >
-              {SCHEDULE_HOURS.brief.map((h) => (
-                <option key={h} value={pad(h)}>
-                  {pad(h)}
-                </option>
-              ))}
-            </select>
-            <span>:</span>
-            <select
-              aria-label="快報與個人持股報告（分）"
-              className="ai-input"
-              style={{ width: 'auto', minWidth: 72 }}
-              value={pad(briefMinute)}
-              disabled={locked}
-              onChange={(e) => setBriefMinute(Number(e.target.value))}
-            >
-              {briefMinuteOptions.map((m) => (
-                <option key={m} value={pad(m)}>
-                  {pad(m)}
+              {briefOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>經濟快報</span>
+        </div>
+
+        <div className="dsc-schedule-row">
+          <span>經濟快報（完整版）</span>
+          <div className="field dsc-schedule-field">
             <select
-              aria-label="經濟快報（時）"
-              className="ai-input"
-              style={{ width: 'auto', minWidth: 72 }}
-              value={pad(fullHour)}
+              aria-label="經濟快報發送時間"
+              value={fullValue}
               disabled={locked}
-              onChange={(e) => changeFullHour(Number(e.target.value))}
+              onChange={(e) => setFullValue(e.target.value)}
             >
-              {SCHEDULE_HOURS.full.map((h) => (
-                <option key={h} value={pad(h)}>
-                  {pad(h)}
-                </option>
-              ))}
-            </select>
-            <span>:</span>
-            <select
-              aria-label="經濟快報（分）"
-              className="ai-input"
-              style={{ width: 'auto', minWidth: 72 }}
-              value={pad(fullMinute)}
-              disabled={locked}
-              onChange={(e) => setFullMinute(Number(e.target.value))}
-            >
-              {fullMinuteOptions.map((m) => (
-                <option key={m} value={pad(m)}>
-                  {pad(m)}
+              {fullOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>
@@ -364,6 +338,25 @@ function AccountEditor({
     }
   }
 
+  async function handleHoldingsPreview() {
+    if (holdingsBusy) return
+    setHoldingsMessage(null)
+    setHoldingsBusy(true)
+    try {
+      const next = await previewHoldingsReport(account.userId)
+      onChange({ schedule: next.schedule, accounts: next.accounts })
+      if (next.send?.ok && next.previewYmd) {
+        setHoldingsMessage(`已送出完整持股報告（資料日 ${next.previewYmd}）`)
+      } else if (next.send) {
+        setHoldingsMessage(sendResultText(next.send))
+      }
+    } catch (err) {
+      setHoldingsMessage(errorMessage(err))
+    } finally {
+      setHoldingsBusy(false)
+    }
+  }
+
   async function handleHoldingsClear() {
     if (holdingsBusy) return
     if (!window.confirm('清除這個帳號的個人持股報告網址？')) return
@@ -380,54 +373,61 @@ function AccountEditor({
   }
 
   return (
-    <div role="region" aria-label={`${label} 的 Discord 設定`} className="ai-form">
-      <div>
-        <h4>經濟快報</h4>
-        <label>
-          <input
-            type="radio"
-            name={`market-${account.userId}`}
-            checked={marketMode === 'inherit'}
-            disabled={marketBusy}
-            onChange={() => void handleMarketSwitchToInherit()}
-          />
-          繼承全域
-        </label>
-        <label>
-          <input
-            type="radio"
-            name={`market-${account.userId}`}
-            checked={marketMode === 'custom'}
-            disabled={marketBusy}
-            onChange={handleMarketSwitchToCustom}
-          />
-          自訂 Webhook
-        </label>
+    <div role="region" aria-label={`${label} 的 Discord 設定`} className="dsc-detail-card">
+      <h4>{label}</h4>
+      <p className="hint">{lastSendLine(account.lastSend)}</p>
 
-        {marketMode === 'inherit' && <p className="hint">會送到全域頻道，不另外發送。</p>}
+      <div className="dsc-block">
+        <h5 className="dsc-block-title">經濟快報</h5>
+        <p className="hint">{marketStatusText(account.market)}</p>
+
+        <div className="dsc-radio-row">
+          <label>
+            <input
+              type="radio"
+              name={`market-${account.userId}`}
+              checked={marketMode === 'inherit'}
+              disabled={marketBusy}
+              onChange={() => void handleMarketSwitchToInherit()}
+            />
+            繼承全域
+          </label>
+          <label>
+            <input
+              type="radio"
+              name={`market-${account.userId}`}
+              checked={marketMode === 'custom'}
+              disabled={marketBusy}
+              onChange={handleMarketSwitchToCustom}
+            />
+            自訂 Webhook
+          </label>
+        </div>
 
         {marketMode === 'custom' && (
-          <div className="ai-form-group">
-            <label>經濟快報 Webhook 網址</label>
-            <input
-              type="password"
-              className="ai-input"
-              aria-label="經濟快報 Webhook 網址"
-              autoComplete="off"
-              value={marketUrl}
-              onChange={(e) => setMarketUrl(e.target.value)}
-            />
+          <>
+            <div className="ai-form-group">
+              <label>經濟快報 Webhook 網址</label>
+              <input
+                type="password"
+                className="ai-input"
+                aria-label="經濟快報 Webhook 網址"
+                autoComplete="off"
+                value={marketUrl}
+                onChange={(e) => setMarketUrl(e.target.value)}
+              />
+            </div>
             <div className="ai-actions">
               <button type="button" className="btn btn-sm" onClick={() => void handleMarketSave()} disabled={marketBusy}>
                 儲存經濟快報網址
               </button>
               {account.market.custom && (
                 <button type="button" className="btn btn-sm" onClick={() => void handleMarketTest()} disabled={marketBusy}>
-                  測試經濟快報
+                  測試經濟快報連線
                 </button>
               )}
             </div>
-          </div>
+          </>
         )}
 
         {marketMessage && (
@@ -437,9 +437,9 @@ function AccountEditor({
         )}
       </div>
 
-      <div>
-        <h4>個人持股報告</h4>
-        <p className="hint">不提供繼承全域：持股屬個人資料，不會送到共用頻道。</p>
+      <div className="dsc-block">
+        <h5 className="dsc-block-title">個人持股報告</h5>
+        <p className="hint">{holdingsStatusText(account.holdings)}</p>
 
         <div className="ai-form-group">
           <label>個人持股報告 Webhook 網址</label>
@@ -451,35 +451,40 @@ function AccountEditor({
             value={holdingsUrl}
             onChange={(e) => setHoldingsUrl(e.target.value)}
           />
-          <div className="ai-actions">
-            <button type="button" className="btn btn-sm" onClick={() => void handleHoldingsSave()} disabled={holdingsBusy}>
-              儲存持股報告網址
-            </button>
-          </div>
+        </div>
+
+        <div className="ai-actions">
+          <button type="button" className="btn btn-sm" onClick={() => void handleHoldingsSave()} disabled={holdingsBusy}>
+            儲存持股報告網址
+          </button>
         </div>
 
         {account.holdings.configured && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                type="button"
-                aria-label="每個交易日推送個人持股報告"
-                aria-pressed={account.holdings.enabled}
-                className={account.holdings.enabled ? 'adm-toggle on' : 'adm-toggle'}
-                onClick={() => void handleHoldingsToggle()}
-                disabled={holdingsBusy}
-              />
-              <span>每個交易日推送</span>
-            </div>
-            <div className="ai-actions">
-              <button type="button" className="btn btn-sm" onClick={() => void handleHoldingsTest()} disabled={holdingsBusy}>
-                測試持股報告
-              </button>
-              <button type="button" className="btn btn-sm btn-danger" onClick={() => void handleHoldingsClear()} disabled={holdingsBusy}>
-                清除持股報告網址
-              </button>
-            </div>
-          </>
+          <div className="dsc-toggle-row">
+            <button
+              type="button"
+              aria-label="每個交易日推送個人持股報告"
+              aria-pressed={account.holdings.enabled}
+              className={account.holdings.enabled ? 'adm-toggle on' : 'adm-toggle'}
+              onClick={() => void handleHoldingsToggle()}
+              disabled={holdingsBusy}
+            />
+            <span>每日推送</span>
+          </div>
+        )}
+
+        {account.holdings.configured && (
+          <div className="ai-actions dsc-holdings-actions">
+            <button type="button" className="btn btn-sm" onClick={() => void handleHoldingsTest()} disabled={holdingsBusy}>
+              測試持股報告連線
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => void handleHoldingsPreview()} disabled={holdingsBusy}>
+              完整推送測試
+            </button>
+            <button type="button" className="btn btn-sm btn-danger" onClick={() => void handleHoldingsClear()} disabled={holdingsBusy}>
+              清除持股報告網址
+            </button>
+          </div>
         )}
 
         {holdingsMessage && (
@@ -495,7 +500,7 @@ function AccountEditor({
 export function DiscordAccountsSection() {
   const [data, setData] = useState<DiscordAccountsSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [openUserId, setOpenUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -504,6 +509,7 @@ export function DiscordAccountsSection() {
         if (cancelled) return
         setLoadError(null)
         setData(next)
+        setSelectedUserId(next.accounts[0]?.userId ?? null)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -518,7 +524,7 @@ export function DiscordAccountsSection() {
     return (
       <section className="section glass adm-panel">
         <div className="rpt-section-head">
-          <h3 className="head-tight">Discord 排程與各帳號設定</h3>
+          <h3 className="head-tight">各帳號設定與發送排程</h3>
         </div>
         {loadError ? (
           <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
@@ -531,59 +537,38 @@ export function DiscordAccountsSection() {
     )
   }
 
-  const openAccount = data.accounts.find((acc) => acc.userId === openUserId) ?? null
+  const selected = data.accounts.find((acc) => acc.userId === selectedUserId) ?? data.accounts[0] ?? null
 
   return (
     <>
-      <ScheduleSection schedule={data.schedule} onChange={setData} />
-
       <section className="section glass adm-panel">
         <div className="rpt-section-head">
-          <h3 className="head-tight">各帳號 Discord 設定</h3>
+          <h3 className="head-tight">各帳號設定</h3>
         </div>
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>經濟快報</th>
-                <th>個人持股報告</th>
-                <th>上次發送</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {data.accounts.map((acc) => {
-                const label = acc.email ?? '（無 Email）'
-                return (
-                  <tr key={acc.userId}>
-                    <td>{label}</td>
-                    <td>{acc.market.custom ? `自訂 …${acc.market.last4}` : '繼承全域'}</td>
-                    <td>
-                      {acc.holdings.configured
-                        ? `…${acc.holdings.last4} ${acc.holdings.enabled ? '推送中' : '已暫停'}`
-                        : '未設定'}
-                    </td>
-                    <td>{lastSendText(acc.lastSend)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        aria-label={`編輯 ${label}`}
-                        aria-expanded={openUserId === acc.userId}
-                        onClick={() => setOpenUserId(acc.userId)}
-                      >
-                        編輯
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="dsc-master-detail">
+          <nav aria-label="帳號清單" className="dsc-account-nav">
+            {data.accounts.map((acc) => {
+              const accLabel = acc.email ?? '（無 Email）'
+              const isCurrent = selected?.userId === acc.userId
+              return (
+                <button
+                  key={acc.userId}
+                  type="button"
+                  className={isCurrent ? 'adm-side-item active' : 'adm-side-item'}
+                  aria-current={isCurrent ? 'true' : undefined}
+                  onClick={() => setSelectedUserId(acc.userId)}
+                >
+                  <span className="dsc-account-email">{accLabel}</span>
+                  <span className="dsc-account-status hint">{statusLine(acc)}</span>
+                </button>
+              )
+            })}
+          </nav>
+          {selected && <AccountEditor key={selected.userId} account={selected} onChange={setData} />}
         </div>
-        {openAccount && <AccountEditor key={openAccount.userId} account={openAccount} onChange={setData} />}
       </section>
+
+      <ScheduleSection schedule={data.schedule} onChange={setData} />
     </>
   )
 }
