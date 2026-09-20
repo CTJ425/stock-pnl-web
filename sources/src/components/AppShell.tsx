@@ -20,6 +20,7 @@ import {
   LineChart,
   ListPlus,
   LogOut,
+  MessageCircle,
   Monitor,
   Moon,
   NotebookPen,
@@ -56,6 +57,9 @@ const FxPage = lazy(() => import('./Fx/FxPage').then((m) => ({ default: m.FxPage
 const AdminConsolePage = lazy(() =>
   import('./Admin/AdminConsolePage').then((m) => ({ default: m.AdminConsolePage })),
 )
+const DiscordMySettings = lazy(() =>
+  import('./Settings/DiscordMySettings').then((m) => ({ default: m.DiscordMySettings })),
+)
 
 /** Same markup as the workspace-loading placeholder above, so a split page does not flash a different shape. */
 const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</div>
@@ -68,7 +72,7 @@ import { BrandMark } from './BrandMark'
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
 
 /** Pages other than pagination. The management background is not on the paging bar and is entered through the user menu (see `UserMenu`)*/
-type View = Tab | 'admin'
+type View = Tab | 'admin' | 'discord'
 
 /**
  * Paginated functional grouping. The order is the order of the pictures, and a dividing line is drawn when changing groups.
@@ -126,7 +130,9 @@ const ALL_TAB_LABELS: Record<Tab, string> = Object.fromEntries(
 ) as Record<Tab, string>
 
 function viewLabel(view: View): string {
-  return view === 'admin' ? '管理後台' : ALL_TAB_LABELS[view]
+  if (view === 'admin') return '管理後台'
+  if (view === 'discord') return 'Discord 通知設定'
+  return ALL_TAB_LABELS[view]
 }
 
 const GITHUB_URL = 'https://github.com/CTJ425/stock-pnl-web'
@@ -428,7 +434,15 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
  * - **Source Code** (for everyone). Originally a line of text link at the end of the page; a disclaimer at the end of the page,
  *   The link is included here, and there is no need to make room for it at the top or bottom of the page.
  */
-function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => void }) {
+function UserMenu({
+  admin,
+  onOpenAdmin,
+  onOpenDiscord,
+}: {
+  admin: boolean
+  onOpenAdmin: () => void
+  onOpenDiscord: () => void
+}) {
   const { mode, user, signOut } = useAuth()
   const { show } = useToast()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
@@ -531,6 +545,18 @@ function UserMenu({ admin, onOpenAdmin }: { admin: boolean; onOpenAdmin: () => v
             {!isLocal && (
               <>
                 <div className="hmenu-sep" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="hmenu-item"
+                  onClick={() => {
+                    close()
+                    onOpenDiscord()
+                  }}
+                >
+                  <MessageCircle size={14} />
+                  <span>Discord 通知設定</span>
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -856,7 +882,11 @@ export function AppShell() {
               <WorkspaceControls />
 
               <div className="header-meta">
-                <UserMenu admin={admin} onOpenAdmin={() => setView('admin')} />
+                <UserMenu
+                  admin={admin}
+                  onOpenAdmin={() => setView('admin')}
+                  onOpenDiscord={() => setView('discord')}
+                />
               </div>
             </div>
           </header>
@@ -894,6 +924,11 @@ export function AppShell() {
                 {view === 'admin' && (
                   <Suspense fallback={PAGE_FALLBACK}>
                     <AdminConsolePage onExit={() => setView('dashboard')} />
+                  </Suspense>
+                )}
+                {view === 'discord' && (
+                  <Suspense fallback={PAGE_FALLBACK}>
+                    <DiscordMySettings />
                   </Suspense>
                 )}
               </>

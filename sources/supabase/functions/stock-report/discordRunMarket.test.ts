@@ -38,10 +38,10 @@ function deps(over: Partial<SummaryDeps> = {}) {
     post: vi.fn(async (_url: string, _p: DiscordPayload): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
     log: vi.fn(async () => {}),
     loadMarketOverrides: vi.fn(async () => [
-      { userId: 'u1', url: HOOK_A },
-      { userId: 'u2', url: HOOK_B },
-      { userId: 'u3', url: HOOK_A },
-      { userId: 'u4', url: FAKE_WEBHOOK },
+      { userId: 'u1', url: HOOK_A, enabled: true },
+      { userId: 'u2', url: HOOK_B, enabled: true },
+      { userId: 'u3', url: HOOK_A, enabled: true },
+      { userId: 'u4', url: FAKE_WEBHOOK, enabled: true },
     ]),
     finishMarketOverride: vi.fn(async (_userId: string, _ymd: string, _o: RunOutcome) => {}),
     ...over,
@@ -52,7 +52,7 @@ function postedUrls(d: ReturnType<typeof deps>): string[] {
   return vi.mocked(d.post).mock.calls.map((c) => c[0])
 }
 
-describe('runDiscordSummary — per-account copies of the full edition', () => {
+describe('runDiscordSummary — per-account copies', () => {
   it('posts the global message first, then one copy per distinct account URL', async () => {
     const d = deps()
     const out = await runDiscordSummary(d, 'full')
@@ -148,13 +148,6 @@ describe('runDiscordSummary — per-account copies of the full edition', () => {
     expect(d.log).toHaveBeenCalledWith({ level: 'warn', message: 'discord market overrides failed', detail: {} })
   })
 
-  it('never sends copies of the brief edition', async () => {
-    const d = deps({ now: vi.fn(() => new Date('2026-09-16T09:05:00Z')) })
-    expect(await runDiscordSummary(d, 'brief')).toEqual(SENT)
-    expect(d.loadMarketOverrides).not.toHaveBeenCalled()
-    expect(postedUrls(d)).toEqual([FAKE_WEBHOOK])
-  })
-
   it('sends no copies without a global webhook', async () => {
     const d = deps({ loadWebhookUrl: vi.fn(async () => null) })
     expect(await runDiscordSummary(d, 'full')).toEqual({ kind: 'skipped', reason: 'no-webhook' })
@@ -181,5 +174,38 @@ describe('runDiscordSummary — per-account copies of the full edition', () => {
     const d = rest as SummaryDeps & { post: ReturnType<typeof vi.fn> }
     expect(await runDiscordSummary(d, 'full')).toEqual(SENT)
     expect(d.post).toHaveBeenCalledTimes(1)
+  })
+})
+
+/** Task 165 step 2e (spec discord-user-self-service.md §4, D4/D5). */
+describe('runDiscordSummary — both editions, and the market_enabled switch', () => {
+  it('sends the per-account copies for the brief edition too', async () => {
+    const d = deps()
+    expect(await runDiscordSummary(d, 'brief')).toEqual(SENT)
+    expect(postedUrls(d)).toEqual([FAKE_WEBHOOK, HOOK_A, HOOK_B])
+  })
+
+  it('skips an account whose 經濟快報 is switched off, keeping its URL', async () => {
+    const d = deps({
+      loadMarketOverrides: vi.fn(async () => [
+        { userId: 'u1', url: HOOK_A, enabled: false },
+        { userId: 'u2', url: HOOK_B, enabled: true },
+      ]),
+    })
+    expect(await runDiscordSummary(d, 'full')).toEqual(SENT)
+    expect(postedUrls(d)).toEqual([FAKE_WEBHOOK, HOOK_B])
+    expect(vi.mocked(d.finishMarketOverride!).mock.calls.map((c) => c[0])).toEqual(['u2'])
+  })
+
+  it('posts only the global message when every override is switched off', async () => {
+    const d = deps({
+      loadMarketOverrides: vi.fn(async () => [
+        { userId: 'u1', url: HOOK_A, enabled: false },
+        { userId: 'u2', url: HOOK_B, enabled: false },
+      ]),
+    })
+    expect(await runDiscordSummary(d, 'full')).toEqual(SENT)
+    expect(postedUrls(d)).toEqual([FAKE_WEBHOOK])
+    expect(d.finishMarketOverride).not.toHaveBeenCalled()
   })
 })

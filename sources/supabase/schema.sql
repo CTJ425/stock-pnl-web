@@ -1372,6 +1372,21 @@ REVOKE ALL ON public.user_discord_settings FROM anon, authenticated;
 -- 0.9.58-dev.4: per-account override of the global 經濟快報 (full edition) webhook. NULL = inherit.
 ALTER TABLE user_discord_settings ADD COLUMN IF NOT EXISTS market_webhook_url TEXT;
 
+-- Task 165 step 2e: lets an account pause 經濟快報 without erasing its URL (spec
+-- discord-user-self-service.md §3/D5). Backfill keeps every existing per-account copy alive.
+-- The column add and backfill run together, guarded by IF NOT EXISTS (spec §5b.8): re-applying
+-- this file months later must not re-enable an account that has since switched itself off.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_discord_settings' AND column_name = 'market_enabled'
+    ) THEN
+        ALTER TABLE user_discord_settings ADD COLUMN market_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+        UPDATE user_discord_settings SET market_enabled = TRUE WHERE market_webhook_url IS NOT NULL;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS user_discord_send_log (
     id BIGSERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

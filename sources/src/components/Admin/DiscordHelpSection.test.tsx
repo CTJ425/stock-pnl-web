@@ -10,7 +10,7 @@ describe('DiscordHelpSection', () => {
     render(<DiscordHelpSection />)
     expect(screen.getByRole('heading', { name: '說明' })).toBeTruthy()
     const text = document.body.textContent ?? ''
-    expect(text).toContain('繼承全域不另外發送；自訂網址才多送一份')
+    expect(text).toContain('繼承全域不另外發送；自訂網址會同時多送快報與完整版一份')
     expect(text).toContain('個人持股報告只送到該帳號自己的網址')
     expect(text).toContain('全域未設定時經濟快報不送')
     expect(text).toContain('當天沒有台股大盤資料時不送')
