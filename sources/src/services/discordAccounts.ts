@@ -22,7 +22,7 @@ export interface DiscordAccountLastSend {
 export interface DiscordAccountRow {
   userId: string
   email: string | null
-  market: { custom: boolean; last4: string | null }
+  market: { custom: boolean; last4: string | null; enabled: boolean }
   holdings: { configured: boolean; last4: string | null; enabled: boolean }
   lastSend: DiscordAccountLastSend | null
 }
@@ -125,6 +125,10 @@ export function clearMarketWebhook(userId: string): Promise<DiscordAccountsSnaps
 
 export function testMarketWebhook(userId: string): Promise<DiscordAccountsSnapshot> {
   return invokeDiscordAccountsOp({ op: 'test-market', userId })
+}
+
+export function toggleMarketEnabled(userId: string, enabled: boolean): Promise<DiscordAccountsSnapshot> {
+  return invokeDiscordAccountsOp({ op: 'toggle-market', userId, enabled })
 }
 
 export function saveHoldingsWebhook(userId: string, url: string): Promise<DiscordAccountsSnapshot> {

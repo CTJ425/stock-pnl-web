@@ -34,7 +34,7 @@ const SNAPSHOT: DiscordAccountsSnapshot = {
     {
       userId: U1,
       email: 'alice@example.com',
-      market: { custom: false, last4: null },
+      market: { custom: false, last4: null, enabled: false },
       holdings: { configured: true, last4: 'Wxyz', enabled: true },
       lastSend: null,
     },

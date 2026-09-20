@@ -238,8 +238,9 @@ import {
   type SummaryDeps,
   type WebhookAdminDeps,
 } from './discordRun.ts'
-import type { MarketOverride } from './discordTargets.ts'
+import { toMarketOverride, type MarketOverride } from './discordTargets.ts'
 import { runDiscordAccountsOp, type AccountSettingsRow, type DiscordAccountsDeps } from './discordAccounts.ts'
+import { runMySettingsOp, type MySettingsDeps } from './discordMySettings.ts'
 import type { WorkspaceInput } from './holdingsCard.ts'
 import { makeChartFetch } from './holdingQuotes.ts'
 import type { Transaction } from '../_shared/engine/models.ts'
@@ -4204,13 +4205,13 @@ async function loadDiscordMarketOverrides(): Promise<MarketOverride[]> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db
       .from('user_discord_settings')
-      .select('user_id, market_webhook_url')
+      .select('user_id, market_webhook_url, market_enabled')
       .not('market_webhook_url', 'is', null)
       .order('user_id', { ascending: true })
       .range(from, from + 999)
     if (error) throw new Error(error.message)
     const page = data ?? []
-    out.push(...page.map((row) => ({ userId: row.user_id, url: row.market_webhook_url as string })))
+    out.push(...page.map(toMarketOverride))
     if (page.length < 1000) break
   }
   return out
@@ -4474,7 +4475,7 @@ async function listDiscordAccountSettings(): Promise<AccountSettingsRow[]> {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db
       .from('user_discord_settings')
-      .select('user_id, enabled, webhook_url, market_webhook_url')
+      .select('user_id, enabled, webhook_url, market_webhook_url, market_enabled')
       .order('user_id', { ascending: true })
       .range(from, from + 999)
     if (error) throw new Error(error.message)
@@ -4485,6 +4486,7 @@ async function listDiscordAccountSettings(): Promise<AccountSettingsRow[]> {
         enabled: row.enabled,
         webhookUrl: row.webhook_url,
         marketWebhookUrl: row.market_webhook_url,
+        marketEnabled: row.market_enabled,
       })),
     )
     if (page.length < 1000) break
@@ -4496,6 +4498,39 @@ async function saveDiscordMarketWebhook(userId: string, url: string | null): Pro
   const { error } = await db
     .from('user_discord_settings')
     .upsert({ user_id: userId, market_webhook_url: url, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw new Error(error.message)
+}
+
+/** Task 165 step 2e: the per-account 經濟快報 switch, shared by the admin console and the
+ * self-service `discord-my-settings` action. */
+async function setDiscordMarketEnabled(userId: string, enabled: boolean): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .upsert({ user_id: userId, market_enabled: enabled, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw new Error(error.message)
+}
+
+/** Self-service read of the caller's own 經濟快報 override — `discord-my-settings` only. */
+async function readDiscordMarketSettings(userId: string): Promise<{ enabled: boolean; webhookUrl: string | null }> {
+  const { data, error } = await db
+    .from('user_discord_settings')
+    .select('market_enabled, market_webhook_url')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return { enabled: false, webhookUrl: null }
+  return { enabled: data.market_enabled, webhookUrl: data.market_webhook_url }
+}
+
+/** Same `kind = 'market'` row as `finishDiscordMarketOverride`, but typed for
+ * `discordMySettings.ts`'s `HoldingsOutcome` (the self-service test-market send never produces
+ * `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the full type). */
+async function finishDiscordMyMarket(userId: string, ymd: string, outcome: HoldingsOutcome): Promise<void> {
+  const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
+  const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
+  const { error } = await db
+    .from('user_discord_send_log')
+    .insert({ user_id: userId, taipei_ymd: ymd, kind: 'market', status: outcome.kind, http_status: httpStatus, reason })
   if (error) throw new Error(error.message)
 }
 
@@ -4537,6 +4572,7 @@ async function handleDiscordAccounts(body: GenerateReportRequestBody): Promise<R
     listAccounts: listDiscordAccounts,
     listSettings: listDiscordAccountSettings,
     saveMarketWebhook: saveDiscordMarketWebhook,
+    setMarketEnabled: setDiscordMarketEnabled,
     readScheduleJobs: readDiscordScheduleJobs,
     writeSchedule: writeDiscordSchedule,
   }
@@ -4548,6 +4584,41 @@ async function handleDiscordAccounts(body: GenerateReportRequestBody): Promise<R
       result.error === 'invalid-time' ||
       result.error === 'not-configured' ||
       result.error === 'unknown-user'
+        ? 400
+        : result.error === 'quota'
+          ? 429
+          : 409
+    return json(result, status)
+  }
+  return json(result)
+}
+
+/** Self-service entry point (Task 165 step 2e, spec discord-user-self-service.md §5.3/§7): the
+ * signed-in account managing its own 經濟快報 and 個人持股 webhooks. `assertUser` must run first —
+ * `userId` never comes from the request body (§7). Never returns a webhook URL — see `runMySettingsOp`. */
+async function handleDiscordMySettings(req: Request, body: GenerateReportRequestBody): Promise<Response> {
+  const auth = await assertUser(req)
+  if (auth instanceof Response) return auth
+
+  const { action: _action, ...input } = body
+  const deps: MySettingsDeps = {
+    ...holdingsDataDeps(),
+    readSettings: readHoldingsSettings,
+    saveWebhook: saveHoldingsWebhookUrl,
+    clearWebhook: clearHoldingsWebhookUrl,
+    setEnabled: setHoldingsEnabled,
+    lastSend: readHoldingsLastSend,
+    countManualToday: countHoldingsManualToday,
+    readMarket: readDiscordMarketSettings,
+    saveMarketWebhook: saveDiscordMarketWebhook,
+    setMarketEnabled: setDiscordMarketEnabled,
+    finishMarket: finishDiscordMyMarket,
+    readWebhook: readDiscordWebhookRow,
+  }
+  const result = await runMySettingsOp(deps, auth.userId, input)
+  if (!result.ok) {
+    const status =
+      result.error === 'bad-request' || result.error === 'invalid-url' || result.error === 'not-configured'
         ? 400
         : result.error === 'quota'
           ? 429
@@ -4923,6 +4994,12 @@ Deno.serve(async (req) => {
       const denied = await assertAdmin(req)
       if (denied) return denied
       return await handleDiscordAccounts(body)
+    }
+
+    // Self-service Discord settings (Task 165 step 2e): every signed-in account managing its own
+    // 經濟快報 and 個人持股 webhooks. Gated by assertUser inside the handler itself (spec §7.4).
+    if (body.action === 'discord-my-settings') {
+      return await handleDiscordMySettings(req, body)
     }
 
     return json({ error: 'Unknown action' }, 400)

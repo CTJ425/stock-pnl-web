@@ -23,6 +23,9 @@ export interface AccountSettingsRow {
   enabled: boolean
   webhookUrl: string | null
   marketWebhookUrl: string | null
+  /** Optional so existing fakes/fixtures built before this field existed still type-check;
+   * missing = the row predates the switch, treated as off. */
+  marketEnabled: boolean
 }
 
 export interface DiscordAccountsDeps extends HoldingsSettingsDeps {
@@ -30,6 +33,8 @@ export interface DiscordAccountsDeps extends HoldingsSettingsDeps {
   listSettings: () => Promise<AccountSettingsRow[]>
   /** upsert; `null` = go back to inheriting the global webhook. */
   saveMarketWebhook: (userId: string, url: string | null) => Promise<void>
+  /** Task 165 step 2e: the per-account 經濟快報 switch (spec discord-user-self-service.md §5.4). */
+  setMarketEnabled: (userId: string, enabled: boolean) => Promise<void>
   readScheduleJobs: () => Promise<Array<{ jobname: string; schedule: string }>>
   writeSchedule: (s: { briefHour: number; briefMinute: number; fullHour: number; fullMinute: number }) => Promise<void>
 }
@@ -37,7 +42,7 @@ export interface DiscordAccountsDeps extends HoldingsSettingsDeps {
 export interface DiscordAccountRow {
   userId: string
   email: string | null
-  market: { custom: boolean; last4: string | null }
+  market: { custom: boolean; last4: string | null; enabled: boolean }
   holdings: { configured: boolean; last4: string | null; enabled: boolean }
   lastSend: LastSend | null
 }
@@ -51,6 +56,7 @@ const OPS = new Set([
   'set-schedule',
   'set-market',
   'clear-market',
+  'toggle-market',
   'test-market',
   'holdings-set',
   'holdings-clear',
@@ -89,6 +95,7 @@ async function snapshot(deps: DiscordAccountsDeps): Promise<{ schedule: Schedule
         market: {
           custom: row?.marketWebhookUrl != null,
           last4: row?.marketWebhookUrl != null ? webhookLast4(row.marketWebhookUrl) : null,
+          enabled: row?.marketEnabled ?? false,
         },
         holdings: {
           configured: row?.webhookUrl != null,
@@ -149,11 +156,28 @@ export async function runDiscordAccountsOp(deps: DiscordAccountsDeps, input: unk
     const url = (input as { url?: unknown }).url
     if (typeof url !== 'string' || !isDiscordWebhookUrl(url)) return { ok: false, error: 'invalid-url' }
     await deps.saveMarketWebhook(userId, url.trim())
+    // Storing a URL is the affirmative act: it switches 經濟快報 on, so saving is never a dead end.
+    await deps.setMarketEnabled(userId, true)
     return { ok: true, ...(await snapshot(deps)) }
   }
 
   if (op === 'clear-market') {
+    // Safe order (spec §5b.7): disable first, so a crash mid-write leaves (enabled false, URL
+    // set) — paused, harmless — never (enabled true, URL null).
+    await deps.setMarketEnabled(userId, false)
     await deps.saveMarketWebhook(userId, null)
+    return { ok: true, ...(await snapshot(deps)) }
+  }
+
+  if (op === 'toggle-market') {
+    const enabled = (input as { enabled?: unknown }).enabled
+    if (typeof enabled !== 'boolean') return { ok: false, error: 'bad-request' }
+    if (enabled) {
+      const settingsList = await deps.listSettings()
+      const row = settingsList.find((r) => r.userId === userId)
+      if (!row || row.marketWebhookUrl == null) return { ok: false, error: 'not-configured' }
+    }
+    await deps.setMarketEnabled(userId, enabled)
     return { ok: true, ...(await snapshot(deps)) }
   }
 

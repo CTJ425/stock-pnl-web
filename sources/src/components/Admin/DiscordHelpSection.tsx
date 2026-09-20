@@ -12,7 +12,7 @@ export function DiscordHelpSection() {
       </div>
 
       <ul className="hint dsc-help-list">
-        <li>繼承全域不另外發送；自訂網址才多送一份。</li>
+        <li>繼承全域不另外發送；自訂網址會同時多送快報與完整版一份。</li>
         <li>個人持股報告只送到該帳號自己的網址。</li>
         <li>全域未設定時經濟快報不送。</li>
         <li>平日（週一至週五）台北時間發送；當天沒有台股大盤資料時不送。</li>

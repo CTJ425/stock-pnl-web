@@ -37,7 +37,8 @@ export interface SummaryDeps {
   loadMargin: (ymd: string) => Promise<MarginSummaryResponse>
   post: (url: string, payload: DiscordPayload) => Promise<DiscordSendResult>
   log: (e: { level: 'warn' | 'info'; message: string; detail: Record<string, unknown> }) => Promise<void>
-  /** Per-account 經濟快報 overrides (full edition only, spec §3.3/D5). Absent → no per-account copies. */
+  /** Per-account 經濟快報 overrides, both editions (spec discord-user-self-service.md §4/D4/D5).
+   * Absent → no per-account copies. */
   loadMarketOverrides?: () => Promise<MarketOverride[]>
   finishMarketOverride?: (userId: string, ymd: string, outcome: RunOutcome) => Promise<void>
 }
@@ -92,7 +93,8 @@ function latestMarketDay(file: { days?: MarketDay[] } | null): MarketDay | null 
   return days.reduce((max, d) => (d.date > max.date ? d : max))
 }
 
-/** Per-account copies of the full edition, sent after the global post (spec §3.3). Never throws:
+/** Per-account copies, both editions (spec discord-user-self-service.md §4/D4), sent after the
+ * global post. Never throws:
  * a failure to load, post, or record is logged (without the URL) and the loop carries on. */
 async function sendMarketOverrides(deps: SummaryDeps, url: string, payload: DiscordPayload, ymd: string): Promise<void> {
   if (!deps.loadMarketOverrides || !deps.finishMarketOverride) return
@@ -186,9 +188,7 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
       detail: { status: outcome.httpStatus, code: outcome.reason, name: edition },
     })
   }
-  if (edition === 'full') {
-    await sendMarketOverrides(deps, url, payload, ymd)
-  }
+  await sendMarketOverrides(deps, url, payload, ymd)
   return outcome
 }
 

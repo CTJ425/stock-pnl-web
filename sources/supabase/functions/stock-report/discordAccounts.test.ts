@@ -29,8 +29,8 @@ const LAST: LastSend = { kind: 'daily', ymd: '2026-09-17', status: 'sent', reaso
 
 function fake(over: Partial<DiscordAccountsDeps> = {}) {
   const settings = new Map<string, AccountSettingsRow>([
-    [U1, { userId: U1, enabled: true, webhookUrl: HOOK_H, marketWebhookUrl: null }],
-    [U2, { userId: U2, enabled: false, webhookUrl: null, marketWebhookUrl: HOOK_M }],
+    [U1, { userId: U1, enabled: true, webhookUrl: HOOK_H, marketWebhookUrl: null, marketEnabled: false }],
+    [U2, { userId: U2, enabled: false, webhookUrl: null, marketWebhookUrl: HOOK_M, marketEnabled: true }],
   ])
   const jobs = [
     { jobname: 'discord-summary-brief', schedule: '5 9 * * 1-5' },
@@ -41,7 +41,7 @@ function fake(over: Partial<DiscordAccountsDeps> = {}) {
   const posts: Array<{ url: string; payload: DiscordPayload }> = []
   const finishes: Array<{ userId: string; ymd: string; kind: HoldingsKind; outcome: HoldingsOutcome }> = []
   const row = (userId: string): AccountSettingsRow =>
-    settings.get(userId) ?? { userId, enabled: false, webhookUrl: null, marketWebhookUrl: null }
+    settings.get(userId) ?? { userId, enabled: false, webhookUrl: null, marketWebhookUrl: null, marketEnabled: false }
 
   const deps: DiscordAccountsDeps = {
     now: () => NOW,
@@ -83,7 +83,12 @@ function fake(over: Partial<DiscordAccountsDeps> = {}) {
     listSettings: async () => [...settings.values()].map((r) => ({ ...r })),
     saveMarketWebhook: async (userId, url) => {
       writes.push(`market:${userId}:${url === null ? 'null' : 'url'}`)
-      settings.set(userId, { ...row(userId), marketWebhookUrl: url })
+      // Task 165 step 2e: storing a URL switches 經濟快報 on, clearing it switches it off.
+      settings.set(userId, { ...row(userId), marketWebhookUrl: url, marketEnabled: url !== null })
+    },
+    setMarketEnabled: async (userId, enabled) => {
+      writes.push(`market-enabled:${userId}:${enabled}`)
+      settings.set(userId, { ...row(userId), marketEnabled: enabled })
     },
     readScheduleJobs: async () => jobs.map((j) => ({ ...j })),
     writeSchedule: async (s) => {
@@ -157,21 +162,21 @@ describe('runDiscordAccountsOp — list', () => {
       {
         userId: U1,
         email: 'alice@example.com',
-        market: { custom: false, last4: null },
+        market: { custom: false, last4: null, enabled: false },
         holdings: { configured: true, last4: 'Hhhh', enabled: true },
         lastSend: LAST,
       },
       {
         userId: U2,
         email: 'bob@example.com',
-        market: { custom: true, last4: 'Mmmm' },
+        market: { custom: true, last4: 'Mmmm', enabled: true },
         holdings: { configured: false, last4: null, enabled: false },
         lastSend: null,
       },
       {
         userId: U3,
         email: null,
-        market: { custom: false, last4: null },
+        market: { custom: false, last4: null, enabled: false },
         holdings: { configured: false, last4: null, enabled: false },
         lastSend: null,
       },
@@ -208,16 +213,16 @@ describe('runDiscordAccountsOp — 經濟快報 per account', () => {
   it('stores a trimmed custom URL and reports only its last four characters', async () => {
     const { deps, writes, settings } = fake()
     const result = await runDiscordAccountsOp(deps, { op: 'set-market', userId: U1, url: `  ${HOOK_NEW}\n` })
-    expect(writes).toEqual([`market:${U1}:url`])
+    expect(writes).toEqual([`market:${U1}:url`, `market-enabled:${U1}:true`])
     expect(settings.get(U1)!.marketWebhookUrl).toBe(HOOK_NEW)
-    expect(account(result, U1).market).toEqual({ custom: true, last4: 'Nnnn' })
+    expect(account(result, U1).market).toEqual({ custom: true, last4: 'Nnnn', enabled: true })
   })
 
   it('creates the settings row for an account that has none', async () => {
     const { deps, settings } = fake()
     const result = await runDiscordAccountsOp(deps, { op: 'set-market', userId: U3, url: HOOK_NEW })
     expect(settings.get(U3)!.marketWebhookUrl).toBe(HOOK_NEW)
-    expect(account(result, U3).market).toEqual({ custom: true, last4: 'Nnnn' })
+    expect(account(result, U3).market).toEqual({ custom: true, last4: 'Nnnn', enabled: true })
   })
 
   it.each([undefined, '', 'https://example.com/api/webhooks/1/2', 42])('refuses url %j', async (url) => {
@@ -229,8 +234,8 @@ describe('runDiscordAccountsOp — 經濟快報 per account', () => {
   it('goes back to inheriting the global webhook', async () => {
     const { deps, writes } = fake()
     const result = await runDiscordAccountsOp(deps, { op: 'clear-market', userId: U2 })
-    expect(writes).toEqual([`market:${U2}:null`])
-    expect(account(result, U2).market).toEqual({ custom: false, last4: null })
+    expect(writes).toEqual([`market-enabled:${U2}:false`, `market:${U2}:null`])
+    expect(account(result, U2).market).toEqual({ custom: false, last4: null, enabled: false })
   })
 
   it('refuses a test send for an account that inherits', async () => {
@@ -272,7 +277,7 @@ describe('runDiscordAccountsOp — 個人持股報告 per account', () => {
     expect(writes).toEqual([`holdings-save:${U2}`])
     expect(account(result, U2).holdings).toEqual({ configured: true, last4: 'Nnnn', enabled: false })
     // the market setting of that account is untouched
-    expect(account(result, U2).market).toEqual({ custom: true, last4: 'Mmmm' })
+    expect(account(result, U2).market).toEqual({ custom: true, last4: 'Mmmm', enabled: true })
   })
 
   it('refuses an invalid holdings URL', async () => {
