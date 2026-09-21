@@ -17,6 +17,7 @@ import {
   previewMyHoldingsReport,
   saveMyHoldingsWebhook,
   saveMyMarketWebhook,
+  saveMyTimes,
   testMyHoldingsWebhook,
   testMyMarketWebhook,
   toggleMyHoldingsEnabled,
@@ -26,6 +27,7 @@ import {
   type DiscordMySettingsStatus,
 } from '../../services/discordMySettings'
 import { isDiscordWebhookUrl } from '../../../supabase/functions/stock-report/discordUrl'
+import { SCHEDULE_OPTIONS, type ScheduleSlot } from '../../../supabase/functions/stock-report/discordSchedule'
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -59,6 +61,14 @@ function myMarketStatusText(market: DiscordMySettingsStatus['market']): string {
 
 function holdingsStatusText(last4: string | null): string {
   return last4 !== null ? `目前：…${last4}` : '目前：未設定'
+}
+
+/** Task 165 step 2f (spec §5.4/§7): the first option is always "inherit", labelled with the
+ * actual admin time so it never reads as silence. `value === ''` means inherit (`null`). */
+function timeOptions(slot: ScheduleSlot, globalTime: string | null): Array<{ value: string; label: string }> {
+  const inherit = { value: '', label: globalTime !== null ? `跟隨全域（${globalTime}）` : '跟隨全域（尚未設定）' }
+  const opts = (SCHEDULE_OPTIONS[slot] as readonly string[]).map((v) => ({ value: v, label: v }))
+  return [inherit, ...opts]
 }
 
 export function DiscordMySettings() {
@@ -152,6 +162,44 @@ export function DiscordMySettings() {
       setMarketMessage(errorMessage(err))
     } finally {
       setMarketBusy(false)
+    }
+  }
+
+  /** Writes all three times at once (spec §5.4) — `value === ''` is "inherit" (`null`); the
+   * other two keep whatever the last status reported. */
+  async function handleMarketTimeChange(slot: 'brief' | 'full', value: string) {
+    if (marketBusy || !data) return
+    setMarketMessage(null)
+    setMarketBusy(true)
+    try {
+      const next = await saveMyTimes({
+        marketBriefTime: slot === 'brief' ? value || null : data.status.market.briefTime ?? null,
+        marketFullTime: slot === 'full' ? value || null : data.status.market.fullTime ?? null,
+        holdingsTime: data.status.holdings.time ?? null,
+      })
+      setData(next)
+    } catch (err) {
+      setMarketMessage(errorMessage(err))
+    } finally {
+      setMarketBusy(false)
+    }
+  }
+
+  async function handleHoldingsTimeChange(value: string) {
+    if (holdingsBusy || !data) return
+    setHoldingsMessage(null)
+    setHoldingsBusy(true)
+    try {
+      const next = await saveMyTimes({
+        marketBriefTime: data.status.market.briefTime ?? null,
+        marketFullTime: data.status.market.fullTime ?? null,
+        holdingsTime: value || null,
+      })
+      setData(next)
+    } catch (err) {
+      setHoldingsMessage(errorMessage(err))
+    } finally {
+      setHoldingsBusy(false)
     }
   }
 
@@ -338,6 +386,46 @@ export function DiscordMySettings() {
           <p className="hint">要在自己的頻道也收到一份，請在上方設定 Webhook 網址。</p>
         )}
 
+        {/* Task 165 step 2f: with no channel of its own, there is nothing to time either. */}
+        {marketUrlStored && (
+          <div className="dsc-schedule-row">
+            <span>快報發送時間</span>
+            <div className="field dsc-schedule-field">
+              <select
+                aria-label="快報發送時間"
+                value={data.status.market.briefTime ?? ''}
+                disabled={marketBusy}
+                onChange={(e) => void handleMarketTimeChange('brief', e.target.value)}
+              >
+                {timeOptions('brief', data.status.globalSchedule?.brief ?? null).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+        {marketUrlStored && (
+          <div className="dsc-schedule-row">
+            <span>完整版發送時間</span>
+            <div className="field dsc-schedule-field">
+              <select
+                aria-label="完整版發送時間"
+                value={data.status.market.fullTime ?? ''}
+                disabled={marketBusy}
+                onChange={(e) => void handleMarketTimeChange('full', e.target.value)}
+              >
+                {timeOptions('full', data.status.globalSchedule?.full ?? null).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {marketMessage && (
           <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
             {marketMessage}
@@ -413,6 +501,28 @@ export function DiscordMySettings() {
           />
           <span>啟用</span>
         </div>
+
+        {/* Task 165 step 2f: 個人持股 inherits the admin's BRIEF time, never the full one
+            (accountTick.ts's `dueAt`) — with no channel of its own, there is nothing to time. */}
+        {holdingsUrlStored && (
+          <div className="dsc-schedule-row">
+            <span>發送時間</span>
+            <div className="field dsc-schedule-field">
+              <select
+                aria-label="發送時間"
+                value={data.status.holdings.time ?? ''}
+                disabled={holdingsBusy}
+                onChange={(e) => void handleHoldingsTimeChange(e.target.value)}
+              >
+                {timeOptions('brief', data.status.globalSchedule?.brief ?? null).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {holdingsMessage && (
           <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>

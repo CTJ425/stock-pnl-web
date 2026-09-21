@@ -6,10 +6,10 @@
 
 export type ScheduleSlot = 'brief' | 'full'
 
-/** cron.job names in schema.sql §14/§13; `holdings` always moves together with `brief`. */
+/** cron.job names in schema.sql §13. `discord-holdings-daily` is retired (Task 165 step 2f,
+ * D5) — its work moved to the per-account tick, which is not on this schedule. */
 export const DISCORD_SCHEDULE_JOBS = {
   brief: 'discord-summary-brief',
-  holdings: 'discord-holdings-daily',
   full: 'discord-summary-full',
 } as const
 
@@ -64,10 +64,9 @@ export function cronToTaipeiTime(expr: string): string | null {
 export interface ScheduleView {
   brief: string | null
   full: string | null
-  holdingsAligned: boolean
 }
 
-/** `rows` is `discord_schedule_get()`'s result: `{ jobname, schedule }` for the three jobs
+/** `rows` is `discord_schedule_get()`'s result: `{ jobname, schedule }` for the two jobs
  * (and possibly unrelated jobs, which are ignored). A missing or unparsable job reads as `null`. */
 export function scheduleFromJobs(rows: Array<{ jobname: string; schedule: string }>): ScheduleView {
   const byName = new Map(rows.map((r) => [r.jobname, r.schedule]))
@@ -77,6 +76,5 @@ export function scheduleFromJobs(rows: Array<{ jobname: string; schedule: string
   }
   const brief = read(DISCORD_SCHEDULE_JOBS.brief)
   const full = read(DISCORD_SCHEDULE_JOBS.full)
-  const holdings = read(DISCORD_SCHEDULE_JOBS.holdings)
-  return { brief, full, holdingsAligned: holdings != null && holdings === brief }
+  return { brief, full }
 }

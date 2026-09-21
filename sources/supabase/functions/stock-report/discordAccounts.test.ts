@@ -157,7 +157,7 @@ describe('runDiscordAccountsOp — list', () => {
   it('returns the schedule and every account sorted by email, without any URL', async () => {
     const { deps } = fake()
     const result = ok(await runDiscordAccountsOp(deps, { op: 'list' }))
-    expect(result.schedule).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: true })
+    expect(result.schedule).toEqual({ brief: '17:05', full: '21:30' })
     expect(result.accounts).toEqual([
       {
         userId: U1,
@@ -190,7 +190,7 @@ describe('runDiscordAccountsOp — schedule', () => {
     const { deps, writes } = fake()
     const result = ok(await runDiscordAccountsOp(deps, { op: 'set-schedule', brief: '18:30', full: '22:00' }))
     expect(writes).toEqual(['schedule:18:30:22:0'])
-    expect(result.schedule).toEqual({ brief: '18:30', full: '22:00', holdingsAligned: true })
+    expect(result.schedule).toEqual({ brief: '18:30', full: '22:00' })
   })
 
   it.each([

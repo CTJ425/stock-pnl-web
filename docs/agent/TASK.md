@@ -22,9 +22,9 @@
 ## 📋 Active Tasks
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
-- **Status**: 🔄 IN PROGRESS — **0.9.58 released and deployed to DEV and PROD** (2026-09-18); 0.9.60-dev.1 step 2e 自助 webhook 已實作並通過 review，尚未 commit/部署; remaining: watch one real 17:30 / 21:30 round on PROD
+- **Status**: 🔄 IN PROGRESS — **0.9.58 released and deployed to DEV and PROD** (2026-09-18); 0.9.60-dev.3 step 2e + 2f 已實作、已 commit、DEV 已部署; remaining: watch one real 17:30 / 21:30 round on PROD, 以及 tick 的首次實跑觀察
 - **Agent**: Claude
-- **Timestamp**: 2026-09-19 23:10:08 Asia/Taipei
+- **Timestamp**: 2026-09-21 14:50:47 Asia/Taipei
 - **Done**: items 1, 2, 3 — full text in `TASK_ARCHIVE.md`.
 - **Spec**: docs/agent/specs/discord-daily-summary.md
 - **Decisions (user, 2026-09-17)**: multi-user app; shared Discord server; the admin sets one site-wide webhook in the admin console (server-only storage); weekdays 17:05 brief + 21:30 full, normal pushes; no TAIEX row for today → skip; all four blocks; 8 indices; Phase 2 decisions superseded — see the next line.
@@ -35,10 +35,12 @@
 - **Card parity + quote bug (2026-09-18 13:40)**: each position also shows 市值 and 成本 (SHORT: 價金), so the card covers every 庫存總覽 column; quote fetches are limited to 2 at a time and the missing-quote count is reported; and the reason every real card showed `--` is fixed — the quote request carried no `User-Agent`, so Yahoo refused it. Spec: docs/agent/specs/discord-holdings.md, "Revision 4" and "Revision 5".
 - **Card layout (user, 2026-09-18 14:00–15:15)**: after seeing four layouts on a canvas (現況 / A 原生欄位 / B 24 欄等寬 / C 混合 / D Markdown) the user shipped B (dev.10), then asked for a markdown probe (dev.11) and chose markdown for both cards (dev.12). The holdings card is now one total line (未實現合計, 今日) plus one line per position: 代號名稱｜張數（整張 N 張、零股 N 股）｜均價｜未實現. Spec: docs/agent/specs/discord-holdings.md, "Revision 6", "Revision 7", "Revision 8".
 - **Step 2e decisions (user, 2026-09-19)**: Discord webhook 下放到各帳號自助設定。「沿用全域」= 沿用**內容**不是沿用頻道（全域快報的同一份 payload 發到使用者自己的頻道）；經濟快報與個人持股各一支 webhook；管理員保留全域 webhook 與代編各帳號的權限；自訂 webhook 快報與完整版**兩版都發**（原本只有完整版）；新增 `market_enabled` 讓使用者暫停而不必清掉網址；測試按鈕一律以 DB 已存網址為準，Edge 不接受 request body 傳來的 URL。Supersedes step 2d 的「the per-user settings dialog is removed」。Spec: docs/agent/specs/discord-user-self-service.md.
+- **Step 2e Revision 1 + step 2f decisions (user, 2026-09-20/21)**: 所有帳號（含 admin）共用同一個自助頁面，後台只保留全站設定（全域經濟快報 webhook＋發送排程），各帳號區塊改為唯讀清單；經濟快報狀態改為兩行（全域頻道／我的頻道），繼承全域時不渲染無法作用的啟用開關與測試按鈕；各帳號可自訂三個發送時間（`market_brief_time` / `market_full_time` / `holdings_time`，NULL＝跟隨全域），以一個 30 分鐘 `discord-account-tick` 取代三個固定 cron job，`discord-holdings-daily` 退役。Specs: docs/agent/specs/discord-user-self-service.md（§Revision 1、§R8）、docs/agent/specs/discord-account-schedule.md.
 4. ~~Set the webhook in the DEV admin console and run 測試發送~~ ✅ (2026-09-17: test 15:11, previews from 15:25, all HTTP 200) · watch one real 17:05 and 21:30 round; check phone alignment of the 國際指數 / 美國總經 tables —— ⏳
 5. PROD: ~~merge `main`~~ ✅ 0.9.57 (2026-09-17) · ~~apply schema §13 on PROD, deploy `stock-report`, set the PROD webhook~~ ✅ (found already applied on 2026-09-18: `app_secrets`, `discord_send_log`, both summary jobs and the global webhook were present, with 3 send-log rows)
 6. Phase 2: per-user holdings card (full amounts, merged workspaces, sent with the brief; D6 core untouched) —— ~~2a Edge engine copy~~ ✅ 0.9.58-dev.1 · ~~2b card modules~~ ✅ 0.9.58-dev.2 · ~~2c schema §14 / Edge / settings UI~~ ✅ 0.9.58-dev.3 · ~~2d admin-managed webhooks + adjustable schedule (spec discord-admin-accounts.md)~~ ✅ 0.9.58-dev.4 (`247b37f`) · ~~merge `main` as 0.9.58~~ ✅ 2026-09-18 · ~~push `dev` and `main`~~ ✅ · ~~PROD: §14 + §15, clone cron `discord-holdings-daily`, schedule 17:30 / 21:30, deploy `stock-report` v10, `verify_setup()` 10/10 PASS~~ ✅ 2026-09-18 · watch one real 17:30 and 21:30 round on PROD —— ⏳ · accepted risks RISK-015/016/017, BUG-084
 7. Step 2e: 自助 webhook 設定（spec discord-user-self-service.md）—— ~~schema `market_enabled` + 一次性 backfill~~ ✅ · ~~Edge `discord-my-settings` action、`toMarketOverride`、兩版都發~~ ✅ · ~~前端自助頁 `Settings/DiscordMySettings.tsx` + AppShell 入口~~ ✅ · ~~review（兩輪，抓到部署後推播全停與前後端形狀不符兩個 blocker）~~ ✅ PASS · commit 0.9.60-dev.1 —— ⏳ · DEV 套用 schema §14 + 部署 `stock-report` —— ⏳ · PROD 同步 —— ⏳
+8. Step 2f: 各帳號自訂發送時間（spec discord-account-schedule.md）—— ~~schema 三個時間欄位 + kind CHECK + 兩個 partial unique index~~ ✅ · ~~`accountTick.ts`（`dueAt` 純函式 + `runAccountTick`），claim→post→finish~~ ✅ · ~~退役 `discord-holdings-daily`、新增 `discord-account-tick`~~ ✅ · ~~前端三個時間下拉與後台排程改標示~~ ✅ · ~~測試修復 28 項~~ ✅ · commit 0.9.60-dev.3 —— ⏳ · DEV 套用 schema + 部署 —— ⏳ · PROD 同步 —— ⏳
 
 ### Task 164: 總體經濟 — 國際指數下鑽、報價時間與走勢區間（Phase C 待辦）
 - **Status**: ⏸️ **Phase A & B 已於 0.9.56 完成結案；Phase C（台指期夜盤）待後續獨立排程實作**

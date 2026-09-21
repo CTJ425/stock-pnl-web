@@ -29,7 +29,7 @@ const URL_ = 'https://discord.com' + '/api/' + 'webhooks/' + '1'.repeat(18) + '/
 const U1 = '11111111-1111-4111-8111-111111111111'
 
 const SNAPSHOT: DiscordAccountsSnapshot = {
-  schedule: { brief: '17:05', full: '21:30', holdingsAligned: true },
+  schedule: { brief: '17:05', full: '21:30' },
   accounts: [
     {
       userId: U1,

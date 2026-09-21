@@ -133,7 +133,7 @@ function ScheduleSection({
   const briefStale = !briefOnGrid && briefValue === baseBrief
   const fullStale = !fullOnGrid && fullValue === baseFull
   const changed = briefValue !== baseBrief || fullValue !== baseFull
-  const saveDisabled = locked || saving || briefStale || fullStale || (!changed && schedule.holdingsAligned)
+  const saveDisabled = locked || saving || briefStale || fullStale || !changed
 
   async function handleSave() {
     if (saveDisabled) return
@@ -164,11 +164,6 @@ function ScheduleSection({
           找不到 Discord 排程工作，無法調整。
         </div>
       )}
-      {!locked && !schedule.holdingsAligned && (
-        <div className="notice notice-warn" style={{ padding: '8px 12px', fontSize: 14 }}>
-          個人持股報告的時間和快報不一致；再儲存一次排程即可對齊。
-        </div>
-      )}
 
       <div className="ai-form">
         <div className="dsc-schedule-row">
@@ -188,6 +183,9 @@ function ScheduleSection({
             </select>
           </div>
         </div>
+        {/* Task 165 step 2f: each account now picks its own send time and this is only the
+            fallback for one that never did — `dueAt` in accountTick.ts. */}
+        <p className="hint">未自訂發送時間的帳號，經濟快報快報版與個人持股報告都會沿用這個時間。</p>
 
         <div className="dsc-schedule-row">
           <span>經濟快報（完整版）</span>
@@ -206,6 +204,7 @@ function ScheduleSection({
             </select>
           </div>
         </div>
+        <p className="hint">未自訂完整版發送時間的帳號，也會沿用這個時間。</p>
 
         {message && (
           <div

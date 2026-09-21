@@ -131,6 +131,19 @@ export function testMyHoldingsWebhook(): Promise<DiscordMySettingsResult> {
 }
 
 /**
+ * Task 165 step 2f: the three per-account send times, one op, all three at once — `null` =
+ * inherit the admin's schedule (spec §5.4). The server re-validates every non-null value against
+ * the same `SCHEDULE_OPTIONS` window the admin path uses; the browser's choice is never trusted.
+ */
+export function saveMyTimes(times: {
+  marketBriefTime: string | null
+  marketFullTime: string | null
+  holdingsTime: string | null
+}): Promise<DiscordMySettingsResult> {
+  return invokeDiscordMySettingsOp({ op: 'set-times', ...times })
+}
+
+/**
  * Sends the real holdings card (labelled as a preview in the UI). Longer timeout than every
  * other op: it renders the actual report, not just a fixed test payload. Mirrors
  * `discordAccounts.ts`'s `previewHoldingsReport`.

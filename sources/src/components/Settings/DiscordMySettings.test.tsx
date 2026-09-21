@@ -34,16 +34,18 @@ const HOOK = 'https://discord.com' + '/api/' + 'webhooks/' + '1'.repeat(18) + '/
 const NOTHING: DiscordMySettingsResult = {
   status: {
     global: { configured: true, last4: 'Gggg' },
-    market: { enabled: false, configured: false, last4: null },
-    holdings: { enabled: false, configured: false, last4: null, lastSend: null },
+    globalSchedule: { brief: '17:30', full: '21:30' },
+    market: { enabled: false, configured: false, last4: null, briefTime: null, fullTime: null },
+    holdings: { enabled: false, configured: false, last4: null, lastSend: null, time: null },
   },
 }
 
 const BOTH_STORED: DiscordMySettingsResult = {
   status: {
     global: { configured: true, last4: 'Gggg' },
-    market: { enabled: true, configured: true, last4: 'Mmmm' },
-    holdings: { enabled: false, configured: true, last4: 'Hhhh', lastSend: null },
+    globalSchedule: { brief: '17:30', full: '21:30' },
+    market: { enabled: true, configured: true, last4: 'Mmmm', briefTime: null, fullTime: null },
+    holdings: { enabled: false, configured: true, last4: 'Hhhh', lastSend: null, time: null },
   },
 }
 
@@ -86,8 +88,9 @@ describe('DiscordMySettings — before a URL is stored', () => {
     await renderWith({
       status: {
         global: { configured: false, last4: null },
-        market: { enabled: false, configured: false, last4: null },
-        holdings: { enabled: false, configured: false, last4: null, lastSend: null },
+        globalSchedule: { brief: '17:30', full: '21:30' },
+        market: { enabled: false, configured: false, last4: null, briefTime: null, fullTime: null },
+        holdings: { enabled: false, configured: false, last4: null, lastSend: null, time: null },
       },
     })
     expect(screen.getByText('全域頻道：管理員尚未設定，目前沒有人收得到')).toBeTruthy()
@@ -116,8 +119,9 @@ describe('DiscordMySettings — once a URL is stored', () => {
     await renderWith({
       status: {
         global: { configured: true, last4: 'Gggg' },
-        market: { enabled: false, configured: true, last4: 'Mmmm' },
-        holdings: { enabled: false, configured: false, last4: null, lastSend: null },
+        globalSchedule: { brief: '17:30', full: '21:30' },
+        market: { enabled: false, configured: true, last4: 'Mmmm', briefTime: null, fullTime: null },
+        holdings: { enabled: false, configured: false, last4: null, lastSend: null, time: null },
       },
     })
     expect(screen.getByText('我的頻道：…Mmmm（已暫停）')).toBeTruthy()

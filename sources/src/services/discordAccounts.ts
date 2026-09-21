@@ -8,7 +8,8 @@ import { supabase } from './supabase'
 export interface ScheduleView {
   brief: string | null
   full: string | null
-  holdingsAligned: boolean
+  /** Retired (Task 165 step 2f, D5): the server never sends this any more. Optional only so
+   * fixtures built before that step still type-check. */
 }
 
 export interface DiscordAccountLastSend {

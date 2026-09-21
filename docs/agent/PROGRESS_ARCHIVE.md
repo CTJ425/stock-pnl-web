@@ -5,6 +5,20 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-19 23:10:08 Asia/Taipei (Task 165 step 2e, 0.9.60-dev.1)
+
+**Discord webhook 下放到各帳號自助設定。** 使用者現在可以自己設定經濟快報與個人持股兩支 webhook、各自開關、各自推播測試，不必經過管理員。管理員保留全域經濟快報 webhook 與代編各帳號的能力。
+
+- **決策（user, 2026-09-19）**：「沿用全域」= 沿用**內容**不是沿用頻道（全域快報的同一份 payload 發到使用者自己的頻道）；兩類推播各一支 webhook；管理員保留全域；快報與完整版**兩版都發**給自訂 webhook（原本只有完整版）；新增 `market_enabled` 讓使用者暫停而不必清掉網址；測試按鈕一律以 DB 已存網址為準。Spec: `docs/agent/specs/discord-user-self-service.md`。
+- **Schema §14**：新增 `market_enabled BOOLEAN NOT NULL DEFAULT FALSE`，與 backfill `UPDATE ... SET market_enabled = TRUE WHERE market_webhook_url IS NOT NULL` 一起包在 `DO $$ ... IF NOT EXISTS (information_schema.columns ...) $$` 區塊內，確保只跑一次——否則日後重新套用 `schema.sql` 會把使用者自己關掉的推播重新打開。RLS 維持零 policy、`REVOKE ALL FROM anon, authenticated`。
+- **Edge**：新增 `discord-my-settings` action（`assertUser` 為該 branch 第一行，`userId` 只從 JWT 取）與 `discordMySettings.ts`；`discordRun.ts` 拿掉 `if (edition === 'full')` 閘門；`discordTargets.ts` 新增會 throw 的 `toMarketOverride`，`MarketOverride.enabled` 為必填。
+- **前端**：新增 `src/components/Settings/DiscordMySettings.tsx` 自助頁，掛在 `AppShell` 的 `UserMenu`（每個登入帳號可見，非管理員限定）；`src/services/discordMySettings.ts` 以 `import type` 取用 Edge 的 `MySettingsStatus`，讓前後端形狀不符變成編譯錯誤。
+- **Review 抓到兩個上線前會出事的缺陷**：(1) `loadDiscordMarketOverrides` 漏 select `market_enabled`，`groupMarketTargets` 收到 `undefined` 會丟掉**每一筆** override——部署後所有帳號的經濟快報副本會全停；`db.select()` 型別是 `any`，編譯器看不見，2552 個綠燈測試也沒覆蓋這條路徑。(2) 前端讀的是扁平欄位、Edge 回的是巢狀，每個欄位都是 `undefined`，`undefined !== null` 使得「未設定前必須 disabled」的測試鈕與 toggle 全部是開的。根因是 spec §5.3 與 §5b.2 自相矛盾，兩個 builder 各信一邊。兩者皆已修，並各自補上測試。
+- **Verify**：`npx vitest run` 2,564 passed / 7 skipped / 0 failed（150 檔）；`npm run build`、`npm run lint`、`npm run typecheck:edge` 皆 exit 0。
+- **未做**：尚未 commit、未推送、DEV 與 PROD 都還沒套用 schema `market_enabled`，也還沒重新部署 `stock-report`。
+
+---
+
 ## 📅 Log: 2026-09-18 16:42:13 Asia/Taipei (Admin console nav consolidation — 0.9.59 on main)
 
 - **What**: Admin console left nav reduced from 8 panels to 5: 帳號 / 資料更新 / AI 設定 / Discord / 備份.

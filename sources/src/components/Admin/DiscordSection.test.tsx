@@ -51,7 +51,7 @@ const BRIEF = '快報與個人持股報告發送時間'
 const FULL = '經濟快報發送時間'
 
 const SCHEDULE_BASE = {
-  schedule: { brief: '17:30', full: '21:30', holdingsAligned: true },
+  schedule: { brief: '17:30', full: '21:30' },
   accounts: [],
 }
 
@@ -336,7 +336,7 @@ describe('DiscordSection — 發送排程', () => {
   it('saves only after a change', async () => {
     acc.saveDiscordSchedule.mockResolvedValue({
       ...SCHEDULE_BASE,
-      schedule: { brief: '18:30', full: '22:00', holdingsAligned: true },
+      schedule: { brief: '18:30', full: '22:00' },
     })
     await renderSchedule()
     const save = screen.getByRole('button', { name: '儲存排程' }) as HTMLButtonElement
@@ -353,7 +353,7 @@ describe('DiscordSection — 發送排程', () => {
 
   it('shows an off-grid current time and asks for a new choice before saving', async () => {
     acc.saveDiscordSchedule.mockResolvedValue(SCHEDULE_BASE)
-    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: '17:05', full: '21:30', holdingsAligned: true } })
+    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: '17:05', full: '21:30' } })
     expect(select(BRIEF).value).toBe('17:05')
     expect(optionValues(BRIEF)[0]).toBe('17:05')
     expect(screen.getByRole('option', { name: '17:05（目前設定，請改選）' })).toBeTruthy()
@@ -367,18 +367,8 @@ describe('DiscordSection — 發送排程', () => {
     await waitFor(() => expect(acc.saveDiscordSchedule).toHaveBeenCalledWith('17:30', '22:00'))
   })
 
-  it('warns when the holdings job drifted from the brief, and allows saving as is', async () => {
-    acc.saveDiscordSchedule.mockResolvedValue(SCHEDULE_BASE)
-    await renderSchedule({ ...SCHEDULE_BASE, schedule: { ...SCHEDULE_BASE.schedule, holdingsAligned: false } })
-    expect(screen.getByText('個人持股報告的時間和快報不一致；再儲存一次排程即可對齊。')).toBeTruthy()
-    const save = screen.getByRole('button', { name: '儲存排程' }) as HTMLButtonElement
-    expect(save.disabled).toBe(false)
-    fireEvent.click(save)
-    await waitFor(() => expect(acc.saveDiscordSchedule).toHaveBeenCalledWith('17:30', '21:30'))
-  })
-
   it('locks the drop-downs when the cron jobs are missing', async () => {
-    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: null, full: null, holdingsAligned: false } })
+    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: null, full: null } })
     expect(screen.getByText('找不到 Discord 排程工作，無法調整。')).toBeTruthy()
     expect(select(BRIEF).disabled).toBe(true)
     expect(select(FULL).disabled).toBe(true)

@@ -7,8 +7,6 @@ import { isDiscordWebhookUrl, webhookLast4 } from './discordUrl.ts'
 import type { DiscordFailReason, DiscordPayload, DiscordSendResult } from './discordWebhook.ts'
 import { buildSummaryPayload, buildTestPayload, findMarketDay } from './discordSummary.ts'
 import type { FxLine, IndexLine, MacroLine, SummaryEdition } from './discordSummary.ts'
-import { groupMarketTargets } from './discordTargets.ts'
-import type { MarketOverride } from './discordTargets.ts'
 import { lastCompletedClose, SUMMARY_INDICES } from './globalIndexClose.ts'
 import type { IndexChartResponse } from './globalIndexClose.ts'
 import { extractMarketMarginTotals } from './marketMargin.ts'
@@ -37,14 +35,11 @@ export interface SummaryDeps {
   loadMargin: (ymd: string) => Promise<MarginSummaryResponse>
   post: (url: string, payload: DiscordPayload) => Promise<DiscordSendResult>
   log: (e: { level: 'warn' | 'info'; message: string; detail: Record<string, unknown> }) => Promise<void>
-  /** Per-account 經濟快報 overrides, both editions (spec discord-user-self-service.md §4/D4/D5).
-   * Absent → no per-account copies. */
-  loadMarketOverrides?: () => Promise<MarketOverride[]>
-  finishMarketOverride?: (userId: string, ymd: string, outcome: RunOutcome) => Promise<void>
 }
 
-/** The four data sources shared by the scheduled send and the manual preview (spec §2.7 step 4). */
-type GatherDeps = Pick<SummaryDeps, 'loadIndex' | 'loadUsdTwd' | 'loadMacro' | 'loadMargin'>
+/** The four data sources shared by the scheduled send, the manual preview, and (Task 165 step 2f)
+ * the per-account tick (spec §2.7 step 4 / discord-account-schedule.md §5.2). */
+export type GatherDeps = Pick<SummaryDeps, 'loadIndex' | 'loadUsdTwd' | 'loadMacro' | 'loadMargin'>
 
 interface GatheredData {
   indices: IndexLine[]
@@ -93,50 +88,24 @@ function latestMarketDay(file: { days?: MarketDay[] } | null): MarketDay | null 
   return days.reduce((max, d) => (d.date > max.date ? d : max))
 }
 
-/** Per-account copies, both editions (spec discord-user-self-service.md §4/D4), sent after the
- * global post. Never throws:
- * a failure to load, post, or record is logged (without the URL) and the loop carries on. */
-async function sendMarketOverrides(deps: SummaryDeps, url: string, payload: DiscordPayload, ymd: string): Promise<void> {
-  if (!deps.loadMarketOverrides || !deps.finishMarketOverride) return
-  const { loadMarketOverrides, finishMarketOverride } = deps
-
-  let overrides: MarketOverride[]
-  try {
-    overrides = await loadMarketOverrides()
-  } catch {
-    await deps.log({ level: 'warn', message: 'discord market overrides failed', detail: {} })
-    return
-  }
-
-  for (const target of groupMarketTargets(url, overrides)) {
-    let outcome: RunOutcome
-    try {
-      const result = await deps.post(target.url, payload)
-      outcome = result.ok
-        ? { kind: 'sent', httpStatus: result.httpStatus }
-        : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
-    } catch {
-      outcome = { kind: 'failed', httpStatus: null, reason: 'network' }
-    }
-
-    if (outcome.kind === 'failed') {
-      await deps.log({
-        level: 'warn',
-        message: 'discord market override send failed',
-        detail: { status: outcome.httpStatus, code: outcome.reason, users: target.userIds.length },
-      })
-    }
-
-    for (const userId of target.userIds) {
-      try {
-        await finishMarketOverride(userId, ymd, outcome)
-      } catch {
-        await deps.log({ level: 'warn', message: 'discord market override record failed', detail: { userId } })
-      }
-    }
-  }
+/** Gathers data and builds the edition payload for a market day already known to exist. Shared
+ * by the scheduled summary, the admin preview, and (Task 165 step 2f) the per-account tick, so
+ * there is one implementation of "gather + build" — spec discord-account-schedule.md §5.2. */
+export async function buildMarketEdition(
+  deps: GatherDeps & Pick<SummaryDeps, 'now'>,
+  edition: SummaryEdition,
+  ymd: string,
+  market: MarketDay,
+  marketAsOf: string | null,
+): Promise<DiscordPayload> {
+  const nowSec = Math.floor(deps.now().getTime() / 1000)
+  const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, ymd, nowSec)
+  const generatedAt = deps.now().toISOString()
+  return buildSummaryPayload({ edition, ymd, generatedAt, market, indices, usdTwd, margin, macro, today: ymd, marketAsOf })
 }
 
+/** Posts to the global webhook only (Task 165 step 2f, spec D4) — the per-account copies of
+ * either edition are the tick's job now (accountTick.ts), not this run's. */
 export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEdition): Promise<RunOutcome> {
   const ymd = dashDate(taipeiYmd(deps.now()))
 
@@ -158,22 +127,7 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
   const claimed = await deps.claimSend(ymd, edition)
   if (!claimed) return { kind: 'skipped', reason: 'already-sent' }
 
-  const nowSec = Math.floor(deps.now().getTime() / 1000)
-  const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, ymd, nowSec)
-
-  const generatedAt = deps.now().toISOString()
-  const payload = buildSummaryPayload({
-    edition,
-    ymd,
-    generatedAt,
-    market,
-    indices,
-    usdTwd,
-    margin,
-    macro,
-    today: ymd,
-    marketAsOf: file?.asOf ?? null,
-  })
+  const payload = await buildMarketEdition(deps, edition, ymd, market, file?.asOf ?? null)
   const result = await deps.post(url, payload)
 
   const outcome: RunOutcome = result.ok
@@ -188,7 +142,6 @@ export async function runDiscordSummary(deps: SummaryDeps, edition: SummaryEditi
       detail: { status: outcome.httpStatus, code: outcome.reason, name: edition },
     })
   }
-  await sendMarketOverrides(deps, url, payload, ymd)
   return outcome
 }
 
