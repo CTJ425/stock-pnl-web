@@ -157,3 +157,19 @@ export async function previewMyHoldingsReport(): Promise<DiscordMySettingsResult
   if (error) await discordMySettingsOpFailed(error)
   return stripOk(data as DiscordMySettingsOpResponse)
 }
+
+/**
+ * Sends the real 經濟快報 edition (labelled as a preview in the UI) to this account's own
+ * channel (Task 165 step 2h, spec discord-market-preview.md §7). Longer timeout than every
+ * other op, mirroring `previewMyHoldingsReport`: it renders the actual report, not just a
+ * fixed test payload.
+ */
+export async function previewMyMarketSummary(edition: 'brief' | 'full'): Promise<DiscordMySettingsResult> {
+  if (!supabase) throw new Error('本機模式無法設定 Discord')
+  const { data, error } = await supabase.functions.invoke('stock-report', {
+    body: { action: 'discord-my-settings', op: 'preview-market', edition },
+    timeout: 90_000,
+  })
+  if (error) await discordMySettingsOpFailed(error)
+  return stripOk(data as DiscordMySettingsOpResponse)
+}

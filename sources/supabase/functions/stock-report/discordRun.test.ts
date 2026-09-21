@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildMarketPreview,
   runDiscordSummary,
   runWebhookOp,
   type RunOutcome,
@@ -467,5 +468,53 @@ describe('runWebhookOp — preview (real content, sent now)', () => {
       reason: 'webhook-gone',
     })
     expect(out).toMatchObject({ ok: true, test: { ok: false, httpStatus: 404, reason: 'webhook-gone' } })
+  })
+})
+
+/**
+ * Task 165 step 2h — spec `discord-market-preview.md` §4/D2. `buildMarketPreview` is the
+ * gather+build step extracted from `runWebhookOp`'s preview branch, so the per-account
+ * `preview-market` op (discordMySettings.ts) reuses it instead of copying it.
+ *
+ * `runWebhookOp`'s own preview tests above must keep passing unchanged — this extraction is a
+ * move, not a behaviour change.
+ */
+describe('buildMarketPreview', () => {
+  const OTHER_DAY = { ...MARKET_DAY_0916, date: '2026-09-11' }
+
+  function previewDeps(over: Record<string, unknown> = {}) {
+    return {
+      now: vi.fn(() => BRIEF_AT),
+      loadMarketFile: vi.fn(async () => ({ asOf: MARKET_ASOF_0916, days: [MARKET_DAY_0916] })),
+      loadIndex: vi.fn(async (symbol: string) => (symbol === '^GSPC' ? GSPC_PREOPEN : N225_MIDSESSION)),
+      loadUsdTwd: vi.fn(async () => USD_TWD),
+      loadMacro: vi.fn(async () => MACRO_LINES),
+      loadMargin: vi.fn(async () => MARGIN_MS_0916),
+      ...over,
+    } as unknown as Parameters<typeof buildMarketPreview>[0]
+  }
+
+  it('builds today’s market day and marks it as a preview', async () => {
+    const r = await buildMarketPreview(previewDeps(), 'brief')
+    expect(r).not.toBeNull()
+    expect(r!.ymd).toBe(MARKET_DAY_0916.date)
+    expect(r!.todayYmd).toBe('2026-09-16')
+    expect(r!.payload.content?.startsWith('## 【預覽】')).toBe(true)
+  })
+
+  it('falls back to the latest day in the file when today is not a market day (D7)', async () => {
+    // A manual test button has to work at the weekend; only an empty file is a real failure.
+    const r = await buildMarketPreview(
+      previewDeps({ loadMarketFile: vi.fn(async () => ({ asOf: MARKET_ASOF_0916, days: [OTHER_DAY] })) }),
+      'brief',
+    )
+    expect(r).not.toBeNull()
+    expect(r!.ymd).toBe('2026-09-11')
+    expect(r!.todayYmd).toBe('2026-09-16')
+  })
+
+  it('returns null when the file holds no usable day', async () => {
+    expect(await buildMarketPreview(previewDeps({ loadMarketFile: vi.fn(async () => ({ days: [] })) }), 'brief')).toBeNull()
+    expect(await buildMarketPreview(previewDeps({ loadMarketFile: vi.fn(async () => null) }), 'brief')).toBeNull()
   })
 })

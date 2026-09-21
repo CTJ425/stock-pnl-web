@@ -11,6 +11,7 @@
  */
 import { isDiscordWebhookUrl, webhookLast4 } from './discordUrl.ts'
 import { buildTestPayload } from './discordSummary.ts'
+import { buildMarketPreview, type GatherDeps } from './discordRun.ts'
 import { isValidScheduleTime, scheduleFromJobs, type ScheduleView } from './discordSchedule.ts'
 import {
   MANUAL_SENDS_PER_DAY,
@@ -22,7 +23,7 @@ import {
 } from './holdingsRun.ts'
 import { dashDate, taipeiYmd } from './report.ts'
 
-export interface MySettingsDeps extends HoldingsSettingsDeps {
+export interface MySettingsDeps extends HoldingsSettingsDeps, GatherDeps {
   readMarket: (userId: string) => Promise<{
     enabled: boolean
     webhookUrl: string | null
@@ -32,7 +33,7 @@ export interface MySettingsDeps extends HoldingsSettingsDeps {
   }>
   saveMarketWebhook: (userId: string, url: string | null) => Promise<void>
   setMarketEnabled: (userId: string, enabled: boolean) => Promise<void>
-  finishMarket: (userId: string, ymd: string, outcome: HoldingsOutcome) => Promise<void>
+  finishMarket: (userId: string, ymd: string, kind: 'test' | 'preview', outcome: HoldingsOutcome) => Promise<void>
   // Same reader the admin webhook path uses (`WebhookAdminDeps.readWebhook`) — spec Revision 1 R5.
   readWebhook: () => Promise<{ url: string; updatedAt: string } | null>
   /** Task 165 step 2f: writes all three per-account send times at once; `null` = inherit. */
@@ -161,8 +162,30 @@ export async function runMySettingsOp(deps: MySettingsDeps, userId: string, inpu
     const outcome: HoldingsOutcome = result.ok
       ? { kind: 'sent', httpStatus: result.httpStatus }
       : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
-    await deps.finishMarket(userId, ymd, outcome)
+    await deps.finishMarket(userId, ymd, 'test', outcome)
     return { ok: true, status: await fullStatus(deps, userId), send: result }
+  }
+
+  if (op === 'preview-market') {
+    const edition = (input as { edition?: unknown }).edition
+    if (edition !== 'brief' && edition !== 'full') return { ok: false, error: 'bad-request' }
+
+    const row = await deps.readMarket(userId)
+    if (!row.webhookUrl) return { ok: false, error: 'not-configured' }
+
+    const todayYmd = dashDate(taipeiYmd(deps.now()))
+    const count = await deps.countManualToday(userId, todayYmd)
+    if (count >= MANUAL_SENDS_PER_DAY) return { ok: false, error: 'quota' }
+
+    const preview = await buildMarketPreview(deps, edition)
+    if (!preview) return { ok: false, error: 'no-market-data' }
+
+    const result = await deps.post(row.webhookUrl, preview.payload)
+    const outcome: HoldingsOutcome = result.ok
+      ? { kind: 'sent', httpStatus: result.httpStatus }
+      : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
+    await deps.finishMarket(userId, preview.todayYmd, 'preview', outcome)
+    return { ok: true, status: await fullStatus(deps, userId), send: result, previewYmd: preview.ymd }
   }
 
   if (op === 'set-times') {
