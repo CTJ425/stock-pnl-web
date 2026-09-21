@@ -2,9 +2,10 @@
  * Admin console: per-account Discord status (Task 165 step 2e Revision 1, spec
  * discord-user-self-service.md §Revision 1 R3). Every account now manages its own webhooks
  * through `Settings/DiscordMySettings.tsx` — this block is read-only: who has configured what,
- * and each account's last send. No inputs, no toggles, no test buttons. The send schedule moved
- * to `DiscordSection.tsx` (R4), since it is a site-wide setting and this block no longer edits
- * anything.
+ * and each account's last send. No inputs, no toggles, no test buttons. The send schedule is not
+ * here either, and is no longer anywhere in the admin console: each account owns its own times
+ * (Task 165 step 2g, spec discord-admin-slim.md D1). The two global cron times survive as the
+ * inherited default and are changed at the database, not from a screen (D2).
  */
 import { useEffect, useState } from 'react'
 import {
