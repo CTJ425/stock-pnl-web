@@ -1,9 +1,26 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: Task 165 step 2g — admin schedule removed, send times fully per-account; one spacing rhythm
-- Status: ✅ **0.9.60-dev.4 on `dev` (not yet committed/pushed); DEV Supabase unchanged — no schema, Edge or cron change in this step**
-- Timestamp: 2026-09-21 15:24:09 Asia/Taipei
+- Action: 0.9.60 released to `main` and deployed to PROD (Task 165 steps 2e–2g)
+- Status: ✅ **0.9.60 on `dev` and `main`, deployed to DEV and PROD** — next: watch one real PROD round (18:00 brief + tick, 21:00 full) and the first real `discord-account-tick` run
+- Timestamp: 2026-09-21 16:10:08 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-21 16:10:08 Asia/Taipei (Task 165 steps 2e–2g, 0.9.60 → PROD)
+
+**0.9.60 定版、合併 `main`、PROD 完整部署。** 一次帶上三個步驟（2e 自助 webhook、2f 各帳號發送時間、2g 後台瘦身＋間距），PROD 從 step 2d 的狀態一路補齊。
+
+- **部署順序刻意是「後端先、前端最後」**：schema → Edge → cron → `git push origin main`。原因是合併會讓 Cloudflare Pages 在數分鐘內把新前端推上正式站，而新前端會呼叫 `discord-my-settings`；PROD 當時的 Edge 是 v10（step 2d），沒有這個 action。先補後端，正式站的中斷窗口是零。
+- **合併前查出的阻斷**：PROD `stock-report` v10、`user_discord_settings` 缺 `market_enabled` 與三個時間欄、cron 仍是 `discord-holdings-daily` + 兩個固定 job、沒有 `discord-account-tick`。若只合併不部署，正式站每個帳號打開「Discord 通知設定」都會拿到「後端尚未部署這個功能」，而且後台的排程編輯器同時被 2g 移除，等於任何畫面都改不了發送時間。
+- **PROD schema**：以單一 `DO $prod$` 區塊套用，第一件事是 identity guard（`EXISTS (SELECT 1 FROM cron.job WHERE command LIKE '%hrilemueiqyaoiwnkeuu%')`，不成立就 `RAISE EXCEPTION`）。內容為 `market_enabled`（含 backfill，2 列中 1 列設為 TRUE）、三個時間欄、`user_discord_settings_times_check`、放寬的 `user_discord_send_log_kind_check`、兩個 partial unique index。覆驗：10 個欄位到齊、2 個索引存在。
+- **PROD Edge**：`supabase functions deploy stock-report --project-ref hrilemueiqyaoiwnkeuu --no-verify-jwt --use-api`，自 `main` 的 `50721c6` 部署。v10 → **v11**，`ezbr_sha256` 由 `1c93c3fc…` 變為 `057927aa…`（證明新 bundle 真的落地，版本號本身不算證據），`verify_jwt` 維持 false。
+- **PROD cron**：新增 `discord-account-tick`（`0,30 9-15 * * 1-5`），**command 以複製 `discord-holdings-daily` 的內容再替換 action 字串的方式產生**，全程在 `DO` 區塊內，CRON_SECRET 沒有被讀出來過；接著 `unschedule('discord-holdings-daily')`。覆驗用結構述詞（`command LIKE '%x-cron-secret%'`、`regexp_match` 取 action），確認 action 為 `discord-account-tick`、指向 PROD url、帶 secret。
+- **PROD 的兩個全域時間刻意不動**：brief `0 10`（台北 18:00）、full `0 13`（21:00）。兩者都落在 `SCHEDULE_OPTIONS` 的合法格點上，DEV 是 17:30／21:30 只是各自的設定值，不是不同步。PROD 帳號的「預設」標籤因此會顯示 18:00。
+- **`verify_setup()` on PROD：10/10 PASS**，其中 `cron target host` = `hrilemueiqyaoiwnkeuu.supabase.co`、`cron http (recent)` = 200、`cron placeholders` = none。
+- **前端**：`git push origin main` 後由 Cloudflare Pages 自動部署；以 `assets/chipFormat-MEp8ar_g.js` 實測線上 `APP_VERSION` = `0.9.60`。`git push origin main:dev` 同步，兩個分支版本字串一致。GitHub Release `0.9.60` 已由 workflow 自動建立。
+- **CHANGELOG**：`0.9.60-dev.1` ~ `dev.4` 四個區段收攏為一個正式版區段。
+- **未做**：尚未觀察任何一輪真實的 PROD 發送，`discord-account-tick` 在 PROD 也還沒有實跑紀錄。
 
 ---
 
@@ -21,19 +38,3 @@
 - **測試由主 session 先寫成紅的再派工**：`DiscordSection.test.tsx` 刪掉整個「發送排程」describe（5 條）與其 fixture，新增一條反向斷言（無排程標題、無「儲存排程」、無兩個時間 label、`<select>` 數量為 0）；`DiscordMySettings.test.tsx` 新增 2 條（繼承選項須為「預設（17:30）」／「預設（21:30）」，且任何選項文字不得含「全域」；全域時間為 null 時須為「預設（尚未設定）」）。派工前 3 failed / 31 passed。
 - **Verify**：`npx vitest run` 2,569 passed / 7 skipped / 0 failed（150 檔通過、1 檔 skipped）；`npm run build`、`npm run lint` 皆 exit 0。
 - **未做**：尚未 commit、未推送；DEV 與 PROD 的 Supabase 完全未動（本步驟沒有 schema、Edge 或 cron 變更）。
-
----
-
-## 📅 Log: 2026-09-21 14:50:47 Asia/Taipei (Task 165 step 2f, 0.9.60-dev.3)
-
-**各帳號可自訂 Discord 發送時間。** 原本三個固定 pg_cron job 代表全站只有兩個時間；改成一個每 30 分鐘的 tick，每次醒來問「這個半點有哪些帳號該發」。Spec: `docs/agent/specs/discord-account-schedule.md`。
-
-- **資料模型**：`user_discord_settings` 新增 `market_brief_time` / `market_full_time` / `holdings_time`，皆可為 NULL＝跟隨全域。三個欄位而非兩個，是為了讓每個下拉選單待在所屬區塊（經濟快報有兩版，持股一版）。個人持股繼承的是**快報**時間，不是完整版。CHECK 只驗 `'HH:MM'` 形狀，允許窗格由 Edge 以 `SCHEDULE_OPTIONS` 再驗一次，維持單一定義來源。
-- **cron**：新增 `discord-account-tick`（`0,30 9-15 * * 1-5` UTC＝台北 17:00–23:30），退役 `discord-holdings-daily`；`discord_schedule_set` 改為只調整兩個 job，`holdingsAligned` 概念消失。全域 brief/full job 不再夾帶各帳號副本。
-- **exactly-once 是新增的保護，不是改名**：`finishDiscordMarketOverride` 原本直接 INSERT 一筆完成狀態、沒有先 claim，這在一天跑一次的 job 下安全，但 tick 每 30 分鐘會醒來、有機會和自己競爭。改成 `claimMarketCopy` → post → `finishMarketCopy`（UPDATE 已 claim 的那筆），並新增 `market-brief` / `market-full` 兩個 partial unique index。
-- **`dueAt` 是純函式**，整條繼承規則集中在這裡。其中一條規則單獨寫了測試：全域時間為 NULL（cron job 不存在）時，繼承的帳號必須是「不發」而非「每個 tick 都發」。
-- **行為變化（D6）**：各帳號副本在該帳號選定的時間才建構內容，不再是全域那份的副本。選 22:30 的人拿到 22:30 當下的數據，與全域 21:30 那份會有些微差異。
-- **測試修復（28 個失敗全部是我方 fixture）**：`discordRunMarket.test.ts` 整檔刪除（它測的是 D4 已移除的行為），覆蓋範圍改寫進 `accountTick.test.ts`（20 條：16 條 `dueAt`、4 條 tick 行為，含「claim 必須早於 post」的呼叫順序斷言與「payload 物件同一性」）；`discordRun.test.ts` 新增「只發全域」；`discordSchedule.test.ts` / `discordAccounts.test.ts` / `DiscordSection.test.tsx` 移除 `holdingsAligned`；`discordMySettings.test.ts` 補 deps 並新增 7 條 `set-times` 測試。
-- **四度出現的同一模式**：builder 再次把新欄位設成 optional（`market.briefTime?`、`holdings.time?`、`globalSchedule?`、`ScheduleView.holdingsAligned?`）以讓舊 fixture 編得過，已全部改回必填。在此 spec 下「欄位缺席」與「值為 null」語意不同（後者＝跟隨全域，前者＝序列化漏掉），執行期卻長得一樣。
-- **Verify**：`npx vitest run` 2,571 passed / 7 skipped / 0 failed；`npm run build`、`npm run lint`、`npm run typecheck:edge` 皆 exit 0。
-- 同批併入：管理後台各帳號表格改為固定欄寬（原本帳號欄吃掉所有剩餘寬度，其餘三欄擠成一團），列高 40→44px，並刪除 7 個失去使用者的 dead CSS 類別。
