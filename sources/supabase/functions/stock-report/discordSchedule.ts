@@ -1,7 +1,9 @@
 /**
  * Discord send schedule (Task 165 Phase 2 step 2d, spec discord-admin-accounts.md §9.1,
  * overriding §3.1). Pure, dependency-free: imported by the Edge Function
- * (`discordAccounts.ts`) and by the browser (the admin console's schedule dropdowns).
+ * (`discordAccounts.ts`, `discordMySettings.ts`) and by the browser — since Task 165 step 2g
+ * (spec discord-admin-slim.md D1) the only browser importer is the per-account self-service
+ * page `Settings/DiscordMySettings.tsx`; the admin console has no schedule dropdowns.
  */
 
 export type ScheduleSlot = 'brief' | 'full'
@@ -13,6 +15,8 @@ export const DISCORD_SCHEDULE_JOBS = {
   full: 'discord-summary-full',
 } as const
 
+/** No runtime caller since step 2g removed the admin console's drop-downs; kept as the written
+ * definition of the two global times, and asserted against `SCHEDULE_OPTIONS` in the tests. */
 export const DEFAULT_DISCORD_SCHEDULE = { brief: '17:30', full: '21:30' } as const
 
 /** §9.1: every half hour. Brief 17:30–20:30 (17:05/17:00 no longer offered), full 21:00–23:30. */
