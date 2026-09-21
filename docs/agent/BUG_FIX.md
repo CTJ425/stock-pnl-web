@@ -2,11 +2,35 @@
 
 - Agent: Claude
 - Status: ACTIVE
-- Timestamp: 2026-09-17 13:51:06 Asia/Taipei
+- Timestamp: 2026-09-21 15:52:00 Asia/Taipei
 
 ---
 
 ## 🐛 Open / Active Issues & Accepted Risks
+
+### RISK-020 — Nothing in the admin console reports a missing Discord cron schedule
+- **Where**: `sources/src/components/Admin/DiscordSection.tsx` (the deleted `ScheduleSection`), `sources/src/components/Settings/DiscordMySettings.tsx:69`
+- **Risk**: when `discord-summary-brief` / `discord-summary-full` are absent from `cron.job`, `scheduleFromJobs` yields `{brief: null, full: null}` and every inheriting account silently stops receiving (`dueAt` treats a null global time as not-due, by design). The deleted `ScheduleSection` was the only surface that said so, with 「找不到 Discord 排程工作，無法調整。」. What remains is `預設（尚未設定）` on each account's own drop-down — per-account, per-slot, and visible only to a signed-in user looking at their own settings. No admin-facing surface reports it.
+- **Why accepted**: the schedule editor was removed on purpose (spec `discord-admin-slim.md` D1, user decision 2026-09-21); re-adding an alert would re-add a schedule surface to the console. The failure mode requires the cron jobs to be deleted, which now only happens by hand at the database. Found by the step-2g review, 2026-09-21.
+- **Status**: ACCEPTED (Task 165 step 2g)
+
+---
+
+### RISK-019 — `DiscordAccountsSnapshot.schedule` is computed and sent but never read
+- **Where**: `sources/src/services/discordAccounts.ts:38`, produced at `sources/supabase/functions/stock-report/discordAccounts.ts:72-78` (`snapshot()`), returned on every `discord-accounts` op
+- **Risk**: a field written but never read. `DiscordAccountsSection.tsx` is the only remaining caller of `getDiscordAccounts()` and destructures `data.accounts` only. A future change to the schedule shape would compile clean while silently breaking nothing — and would equally hide a real break.
+- **Why accepted**: spec `discord-admin-slim.md` D2 deliberately keeps the whole `set-schedule` path (Edge op, `discord_schedule_set`, `saveDiscordSchedule()`) so the global times stay changeable from the database side; `snapshot()` is shared by every op of that path and pruning the field means editing the ops and their tests for no user-visible gain. Found by the step-2g review, 2026-09-21.
+- **Status**: ACCEPTED (Task 165 step 2g)
+
+---
+
+### RISK-018 — `DEFAULT_DISCORD_SCHEDULE` has no runtime caller
+- **Where**: `sources/supabase/functions/stock-report/discordSchedule.ts:16`
+- **Risk**: its only production reader was `DiscordSection.tsx`'s deleted `GlobalScheduleBlock`. Only `discordSchedule.test.ts` references it now, so the constant can drift away from the times the cron jobs actually carry without anything failing.
+- **Why accepted**: it is the written definition of the two global defaults, and the tests assert it stays inside `SCHEDULE_OPTIONS`, which is the invariant worth keeping. Annotated as such in the source (commit `0418d70`). Found by the step-2g review, 2026-09-21.
+- **Status**: ACCEPTED (Task 165 step 2g)
+
+---
 
 ### RISK-017 — Discord holdings settings ops are check-then-act, not atomic
 - **Where**: `sources/supabase/functions/stock-report/holdingsRun.ts` (`runHoldingsSettingsOp`: quota check before `finish`; `enable` reads the webhook before `setEnabled`)
