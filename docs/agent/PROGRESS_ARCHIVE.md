@@ -5,6 +5,22 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-21 14:50:47 Asia/Taipei (Task 165 step 2f, 0.9.60-dev.3)
+
+**各帳號可自訂 Discord 發送時間。** 原本三個固定 pg_cron job 代表全站只有兩個時間；改成一個每 30 分鐘的 tick，每次醒來問「這個半點有哪些帳號該發」。Spec: `docs/agent/specs/discord-account-schedule.md`。
+
+- **資料模型**：`user_discord_settings` 新增 `market_brief_time` / `market_full_time` / `holdings_time`，皆可為 NULL＝跟隨全域。三個欄位而非兩個，是為了讓每個下拉選單待在所屬區塊（經濟快報有兩版，持股一版）。個人持股繼承的是**快報**時間，不是完整版。CHECK 只驗 `'HH:MM'` 形狀，允許窗格由 Edge 以 `SCHEDULE_OPTIONS` 再驗一次，維持單一定義來源。
+- **cron**：新增 `discord-account-tick`（`0,30 9-15 * * 1-5` UTC＝台北 17:00–23:30），退役 `discord-holdings-daily`；`discord_schedule_set` 改為只調整兩個 job，`holdingsAligned` 概念消失。全域 brief/full job 不再夾帶各帳號副本。
+- **exactly-once 是新增的保護，不是改名**：`finishDiscordMarketOverride` 原本直接 INSERT 一筆完成狀態、沒有先 claim，這在一天跑一次的 job 下安全，但 tick 每 30 分鐘會醒來、有機會和自己競爭。改成 `claimMarketCopy` → post → `finishMarketCopy`（UPDATE 已 claim 的那筆），並新增 `market-brief` / `market-full` 兩個 partial unique index。
+- **`dueAt` 是純函式**，整條繼承規則集中在這裡。其中一條規則單獨寫了測試：全域時間為 NULL（cron job 不存在）時，繼承的帳號必須是「不發」而非「每個 tick 都發」。
+- **行為變化（D6）**：各帳號副本在該帳號選定的時間才建構內容，不再是全域那份的副本。選 22:30 的人拿到 22:30 當下的數據，與全域 21:30 那份會有些微差異。
+- **測試修復（28 個失敗全部是我方 fixture）**：`discordRunMarket.test.ts` 整檔刪除（它測的是 D4 已移除的行為），覆蓋範圍改寫進 `accountTick.test.ts`（20 條：16 條 `dueAt`、4 條 tick 行為，含「claim 必須早於 post」的呼叫順序斷言與「payload 物件同一性」）；`discordRun.test.ts` 新增「只發全域」；`discordSchedule.test.ts` / `discordAccounts.test.ts` / `DiscordSection.test.tsx` 移除 `holdingsAligned`；`discordMySettings.test.ts` 補 deps 並新增 7 條 `set-times` 測試。
+- **四度出現的同一模式**：builder 再次把新欄位設成 optional（`market.briefTime?`、`holdings.time?`、`globalSchedule?`、`ScheduleView.holdingsAligned?`）以讓舊 fixture 編得過，已全部改回必填。在此 spec 下「欄位缺席」與「值為 null」語意不同（後者＝跟隨全域，前者＝序列化漏掉），執行期卻長得一樣。
+- **Verify**：`npx vitest run` 2,571 passed / 7 skipped / 0 failed；`npm run build`、`npm run lint`、`npm run typecheck:edge` 皆 exit 0。
+- 同批併入：管理後台各帳號表格改為固定欄寬（原本帳號欄吃掉所有剩餘寬度，其餘三欄擠成一團），列高 40→44px，並刪除 7 個失去使用者的 dead CSS 類別。
+
+---
+
 ## 📅 Log: 2026-09-20 Asia/Taipei (Task 165 step 2e Revision 1, 0.9.60-dev.2)
 
 **Discord 設定介面統一成一個頁面，並讓「繼承全域」變得看得懂。** 使用者反映兩件事：管理員後台有一套特權版的同樣介面，導致 admin 設定自己的 Discord 時看到的畫面和別人不一樣；以及全域已設定時，個別帳號仍顯示「目前：未設定（使用全域頻道）」，無法判斷自己到底收不收得到。
