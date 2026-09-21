@@ -15,6 +15,7 @@ import {
   clearMyMarketWebhook,
   getDiscordMySettings,
   previewMyHoldingsReport,
+  previewMyMarketSummary,
   saveMyHoldingsWebhook,
   saveMyMarketWebhook,
   saveMyTimes,
@@ -158,6 +159,28 @@ export function DiscordMySettings() {
       const next = await testMyMarketWebhook()
       setData(next)
       if (next.send) setMarketMessage(sendResultText(next.send))
+    } catch (err) {
+      setMarketMessage(errorMessage(err))
+    } finally {
+      setMarketBusy(false)
+    }
+  }
+
+  /** Sends the real edition to this account's own channel (Task 165 step 2h, spec D5) — no
+   * confirmation dialog, since the message never leaves the account's own channel. */
+  async function handleMarketPreview(edition: 'brief' | 'full') {
+    if (marketBusy) return
+    setMarketMessage(null)
+    setMarketBusy(true)
+    try {
+      const next = await previewMyMarketSummary(edition)
+      setData(next)
+      if (next.send?.ok && next.previewYmd) {
+        const editionLabel = edition === 'brief' ? '快報' : '完整版'
+        setMarketMessage(`已送出經濟快報預覽（${editionLabel}，資料日 ${next.previewYmd}）`)
+      } else if (next.send) {
+        setMarketMessage(sendResultText(next.send))
+      }
     } catch (err) {
       setMarketMessage(errorMessage(err))
     } finally {
@@ -362,6 +385,26 @@ export function DiscordMySettings() {
               disabled={marketBusy}
             >
               測試經濟快報連線
+            </button>
+          )}
+          {marketUrlStored && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => void handleMarketPreview('brief')}
+              disabled={marketBusy}
+            >
+              預覽快報
+            </button>
+          )}
+          {marketUrlStored && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => void handleMarketPreview('full')}
+              disabled={marketBusy}
+            >
+              預覽完整版
             </button>
           )}
         </div>

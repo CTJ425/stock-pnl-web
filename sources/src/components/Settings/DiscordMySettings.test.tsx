@@ -8,7 +8,7 @@
  * rendered state, not against the service's field names, so the same seam break cannot pass again.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { DiscordMySettingsResult } from '../../services/discordMySettings'
 
 const svc = vi.hoisted(() => ({
@@ -22,6 +22,7 @@ const svc = vi.hoisted(() => ({
   toggleMyHoldingsEnabled: vi.fn(),
   testMyHoldingsWebhook: vi.fn(),
   previewMyHoldingsReport: vi.fn(),
+  previewMyMarketSummary: vi.fn(),
 }))
 vi.mock('../../services/discordMySettings', () => svc)
 
@@ -170,5 +171,49 @@ describe('DiscordMySettings — the inherit option', () => {
     })
     expect(optionLabels('快報發送時間')[0]).toBe('預設（尚未設定）')
     expect(optionLabels('完整版發送時間')[0]).toBe('預設（尚未設定）')
+  })
+})
+
+/**
+ * Task 165 step 2h — spec `discord-market-preview.md` §7/§8. 經濟快報 gets the second button
+ * 個人持股 already had: send the real edition to this account's own channel.
+ */
+describe('DiscordMySettings — 經濟快報 preview', () => {
+  it('offers no preview button until this account has its own channel', async () => {
+    await renderWith(NOTHING)
+    expect(screen.queryByRole('button', { name: '預覽快報' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '預覽完整版' })).toBeNull()
+  })
+
+  it('offers one button per edition once a URL is stored', async () => {
+    await renderWith(BOTH_STORED)
+    expect(screen.getByRole('button', { name: '預覽快報' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '預覽完整版' })).toBeTruthy()
+  })
+
+  it('sends the chosen edition and reports the data date, with no confirmation dialog', async () => {
+    await renderWith(BOTH_STORED)
+    const confirm = vi.spyOn(window, 'confirm')
+    svc.previewMyMarketSummary.mockResolvedValue({
+      status: BOTH_STORED.status,
+      send: { ok: true, httpStatus: 204 },
+      previewYmd: '2026-09-16',
+    })
+    fireEvent.click(screen.getByRole('button', { name: '預覽完整版' }))
+    await waitFor(() => expect(svc.previewMyMarketSummary).toHaveBeenCalledWith('full'))
+    // The message goes to the account's own channel, so it is never gated behind a dialog (D5).
+    expect(confirm).not.toHaveBeenCalled()
+    expect(await screen.findByText('已送出經濟快報預覽（完整版，資料日 2026-09-16）')).toBeTruthy()
+  })
+
+  it('reports a failed send instead of claiming success', async () => {
+    await renderWith(BOTH_STORED)
+    svc.previewMyMarketSummary.mockResolvedValue({
+      status: BOTH_STORED.status,
+      send: { ok: false, httpStatus: 404, reason: 'webhook-gone' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '預覽快報' }))
+    await waitFor(() => expect(svc.previewMyMarketSummary).toHaveBeenCalledWith('brief'))
+    expect(await screen.findByText('發送失敗（網址已失效）')).toBeTruthy()
   })
 })

@@ -4601,16 +4601,17 @@ async function readDiscordMarketSettings(
   }
 }
 
-/** Same `kind = 'market'` row the retired `finishDiscordMarketOverride` used to write, but typed
- * for `discordMySettings.ts`'s `HoldingsOutcome` (the self-service test-market send never
- * produces `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the
- * full type). Manual "測試發送" only — the tick's own sends go through `finishMarketCopy`. */
-async function finishDiscordMyMarket(userId: string, ymd: string, outcome: HoldingsOutcome): Promise<void> {
+/** Typed for `discordMySettings.ts`'s `HoldingsOutcome` (the self-service market sends never
+ * produce `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the full
+ * type). `kind` distinguishes 「測試經濟快報連線」 (`'test'`) from the real-edition preview
+ * (`'preview'`, Task 165 step 2h) — both are manual sends; the tick's own sends go through
+ * `finishMarketCopy`. Nothing writes `kind: 'market'` any more (spec discord-market-preview.md §2). */
+async function finishDiscordMyMarket(userId: string, ymd: string, kind: 'test' | 'preview', outcome: HoldingsOutcome): Promise<void> {
   const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
   const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
   const { error } = await db
     .from('user_discord_send_log')
-    .insert({ user_id: userId, taipei_ymd: ymd, kind: 'market', status: outcome.kind, http_status: httpStatus, reason })
+    .insert({ user_id: userId, taipei_ymd: ymd, kind, status: outcome.kind, http_status: httpStatus, reason })
   if (error) throw new Error(error.message)
 }
 
@@ -4716,6 +4717,10 @@ async function handleDiscordMySettings(req: Request, body: GenerateReportRequest
     readWebhook: readDiscordWebhookRow,
     saveTimes: saveDiscordTimes,
     readScheduleJobs: readDiscordScheduleJobs,
+    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
+    loadUsdTwd: loadDiscordUsdTwd,
+    loadMacro: loadDiscordMacro,
+    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
   }
   const result = await runMySettingsOp(deps, auth.userId, input)
   if (!result.ok) {

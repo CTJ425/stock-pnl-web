@@ -187,6 +187,47 @@ export interface PreviewInfo {
   marketDate: string
 }
 
+export interface MarketPreview {
+  payload: DiscordPayload
+  /** The market day the payload describes (may be older than today — D7). */
+  ymd: string
+  /** Today in Taipei, which is what the send log is keyed by. */
+  todayYmd: string
+}
+
+/** `null` when the market file holds no usable day at all. Extracted from `runWebhookOp`'s
+ * `preview` branch (Task 165 step 2h, spec §4/D2) so the per-account `preview-market` op
+ * (discordMySettings.ts) reuses the same gather+build instead of copying it. */
+export async function buildMarketPreview(
+  deps: GatherDeps & Pick<SummaryDeps, 'now' | 'loadMarketFile'>,
+  edition: SummaryEdition,
+): Promise<MarketPreview | null> {
+  const todayYmd = dashDate(taipeiYmd(deps.now()))
+  const file = await deps.loadMarketFile().catch(() => null)
+  const market = findMarketDay(file, todayYmd) ?? latestMarketDay(file)
+  if (!market) return null
+
+  const nowSec = Math.floor(deps.now().getTime() / 1000)
+  const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, market.date, nowSec)
+
+  const generatedAt = deps.now().toISOString()
+  const payload = buildSummaryPayload({
+    edition,
+    ymd: market.date,
+    generatedAt,
+    market,
+    indices,
+    usdTwd,
+    margin,
+    macro,
+    today: todayYmd,
+    marketAsOf: file?.asOf ?? null,
+  })
+  if (payload.content) payload.content = payload.content.replace(/^## /, '## 【預覽】')
+
+  return { payload, ymd: market.date, todayYmd }
+}
+
 export type WebhookOpResult =
   | { ok: true; status: WebhookStatus; test?: DiscordSendResult; preview?: PreviewInfo }
   | { ok: false; error: 'bad-request' | 'invalid-url' | 'not-configured' | 'no-market-data' }
@@ -215,40 +256,20 @@ export async function runWebhookOp(deps: WebhookAdminDeps, input: unknown): Prom
     const stored = await deps.readWebhook()
     if (!stored) return { ok: false, error: 'not-configured' }
 
-    const todayYmd = dashDate(taipeiYmd(deps.now()))
-    const file = await deps.loadMarketFile().catch(() => null)
-    const market = findMarketDay(file, todayYmd) ?? latestMarketDay(file)
-    if (!market) return { ok: false, error: 'no-market-data' }
+    const preview = await buildMarketPreview(deps, edition)
+    if (!preview) return { ok: false, error: 'no-market-data' }
 
-    const nowSec = Math.floor(deps.now().getTime() / 1000)
-    const { indices, usdTwd, macro, margin } = await gatherSummaryData(deps, edition, market.date, nowSec)
-
-    const generatedAt = deps.now().toISOString()
-    const payload = buildSummaryPayload({
-      edition,
-      ymd: market.date,
-      generatedAt,
-      market,
-      indices,
-      usdTwd,
-      margin,
-      macro,
-      today: todayYmd,
-      marketAsOf: file?.asOf ?? null,
-    })
-    if (payload.content) payload.content = payload.content.replace(/^## /, '## 【預覽】')
-
-    const result = await deps.post(stored.url, payload)
+    const result = await deps.post(stored.url, preview.payload)
     const outcome: RunOutcome = result.ok
       ? { kind: 'sent', httpStatus: result.httpStatus }
       : { kind: 'failed', httpStatus: result.httpStatus, reason: result.reason }
-    await deps.finishSend(todayYmd, 'test', outcome)
+    await deps.finishSend(preview.todayYmd, 'test', outcome)
     const recent = await deps.recentSends(10)
     return {
       ok: true,
       status: toStatus(stored, recent),
       test: result,
-      preview: { edition, marketDate: market.date },
+      preview: { edition, marketDate: preview.ymd },
     }
   }
 

@@ -7,7 +7,15 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { runMySettingsOp, type MySettingsDeps, type MySettingsResult } from './discordMySettings.ts'
-import { FAKE_WEBHOOK, MARKET_DAY_0916 } from './discordTestFixtures.ts'
+import {
+  FAKE_WEBHOOK,
+  GSPC_PREOPEN,
+  MACRO_LINES,
+  MARGIN_MS_0916,
+  MARKET_DAY_0916,
+  N225_MIDSESSION,
+  USD_TWD,
+} from './discordTestFixtures.ts'
 import type { DiscordPayload, DiscordSendResult } from './discordWebhook.ts'
 
 const ME = '11111111-1111-4111-8111-111111111111'
@@ -21,6 +29,12 @@ function fake(over: Record<string, unknown> = {}) {
   const d = {
     now: vi.fn(() => AT),
     loadMarketFile: vi.fn(async () => ({ days: [MARKET_DAY_0916] })),
+    // Task 165 step 2h: `preview-market` builds a real edition, so this module now needs the
+    // same four gather loaders `handleDiscordAccountTick` wires.
+    loadIndex: vi.fn(async (symbol: string) => (symbol === '^GSPC' ? GSPC_PREOPEN : N225_MIDSESSION)),
+    loadUsdTwd: vi.fn(async () => USD_TWD),
+    loadMacro: vi.fn(async () => MACRO_LINES),
+    loadMargin: vi.fn(async () => MARGIN_MS_0916),
     loadWorkspaces: vi.fn(async () => []),
     fetchChart: vi.fn(async () => null),
     post: vi.fn(async (_u: string, _p: DiscordPayload): Promise<DiscordSendResult> => ({ ok: true, httpStatus: 204 })),
@@ -147,7 +161,7 @@ describe('runMySettingsOp — test sends', () => {
     ok(await runMySettingsOp(d, ME, { op: 'test-market', url: evil }))
     expect(d.post).toHaveBeenCalledTimes(1)
     expect(d.post.mock.calls[0][0]).toBe(MARKET_HOOK)
-    expect(d.finishMarket).toHaveBeenCalledWith(ME, expect.any(String), { kind: 'sent', httpStatus: 204 })
+    expect(d.finishMarket).toHaveBeenCalledWith(ME, expect.any(String), 'test', { kind: 'sent', httpStatus: 204 })
   })
 
   it('sends nothing when 經濟快報 has no stored URL', async () => {
@@ -275,5 +289,114 @@ describe('runMySettingsOp — send times', () => {
       userId: OTHER,
     }))
     expect(vi.mocked(d.saveTimes).mock.calls[0][0]).toBe(ME)
+  })
+})
+
+/**
+ * Task 165 step 2h — spec `discord-market-preview.md` §8. 經濟快報 gains the second button
+ * 個人持股 already had: send the *real* edition to this account's own channel.
+ *
+ * Every rejection below also asserts `post` was never called. The order of the checks is the
+ * contract (§5): a quota rejection that has already sent the message is not a quota.
+ */
+describe('runMySettingsOp — preview-market', () => {
+  const withHook = () =>
+    fake({ readMarket: vi.fn(async () => ({ enabled: true, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })) })
+
+  it('rejects a missing or unknown edition before sending anything', async () => {
+    for (const input of [{ op: 'preview-market' }, { op: 'preview-market', edition: 'weekly' }]) {
+      const d = withHook()
+      expect(await runMySettingsOp(d, ME, input)).toEqual({ ok: false, error: 'bad-request' })
+      expect(d.post).not.toHaveBeenCalled()
+    }
+  })
+
+  it('sends nothing when 經濟快報 has no stored URL', async () => {
+    const d = fake()
+    expect(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' })).toEqual({
+      ok: false,
+      error: 'not-configured',
+    })
+    expect(d.post).not.toHaveBeenCalled()
+  })
+
+  it('refuses once the daily manual quota is used up', async () => {
+    const d = fake({
+      readMarket: vi.fn(async () => ({ enabled: true, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })),
+      countManualToday: vi.fn(async () => 10),
+    })
+    expect(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' })).toEqual({ ok: false, error: 'quota' })
+    expect(d.post).not.toHaveBeenCalled()
+  })
+
+  it('reports no-market-data when the file holds no usable day', async () => {
+    const d = fake({
+      readMarket: vi.fn(async () => ({ enabled: true, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })),
+      loadMarketFile: vi.fn(async () => ({ days: [] })),
+    })
+    expect(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' })).toEqual({
+      ok: false,
+      error: 'no-market-data',
+    })
+    expect(d.post).not.toHaveBeenCalled()
+  })
+
+  it('posts the real 快報 to this account’s own URL and logs it as a preview', async () => {
+    const d = fake({
+      readMarket: vi.fn(async () => ({ enabled: true, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })),
+      readWebhook: vi.fn(async () => ({ url: GLOBAL_HOOK, updatedAt: AT.toISOString() })),
+    })
+    const r = ok(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' }))
+    expect(d.post).toHaveBeenCalledTimes(1)
+    // The account's channel, never the admin's shared one.
+    expect(d.post.mock.calls[0][0]).toBe(MARKET_HOOK)
+    expect(d.finishMarket).toHaveBeenCalledWith(ME, expect.any(String), 'preview', { kind: 'sent', httpStatus: 204 })
+    expect(r.previewYmd).toBe(MARKET_DAY_0916.date)
+    expect(r.send?.ok).toBe(true)
+  })
+
+  it('marks the payload as a preview, so it cannot be mistaken for the scheduled post', async () => {
+    const d = withHook()
+    ok(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' }))
+    const payload = d.post.mock.calls[0][1] as DiscordPayload
+    expect(payload.content?.startsWith('## 【預覽】')).toBe(true)
+  })
+
+  it('builds the 完整版 when that edition is asked for', async () => {
+    const brief = withHook()
+    ok(await runMySettingsOp(brief, ME, { op: 'preview-market', edition: 'brief' }))
+    const full = withHook()
+    ok(await runMySettingsOp(full, ME, { op: 'preview-market', edition: 'full' }))
+    const briefBody = JSON.stringify(brief.post.mock.calls[0][1])
+    const fullBody = JSON.stringify(full.post.mock.calls[0][1])
+    expect(fullBody).not.toBe(briefBody)
+  })
+
+  it('still sends while 經濟快報 is paused — the switch is what you are testing (D4)', async () => {
+    const d = fake({
+      readMarket: vi.fn(async () => ({ enabled: false, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })),
+    })
+    ok(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' }))
+    expect(d.post).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a failed send without throwing, and logs the failure', async () => {
+    const d = fake({
+      readMarket: vi.fn(async () => ({ enabled: true, webhookUrl: MARKET_HOOK, briefTime: null, fullTime: null })),
+      post: vi.fn(async (): Promise<DiscordSendResult> => ({ ok: false, httpStatus: 404, reason: 'webhook-gone' })),
+    })
+    const r = ok(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' }))
+    expect(r.send?.ok).toBe(false)
+    expect(d.finishMarket).toHaveBeenCalledWith(ME, expect.any(String), 'preview', {
+      kind: 'failed',
+      httpStatus: 404,
+      reason: 'webhook-gone',
+    })
+  })
+
+  it('never returns a whole webhook URL', async () => {
+    const d = withHook()
+    const r = ok(await runMySettingsOp(d, ME, { op: 'preview-market', edition: 'brief' }))
+    expect(JSON.stringify(r.status)).not.toContain(MARKET_HOOK)
   })
 })
