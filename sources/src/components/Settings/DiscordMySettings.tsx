@@ -66,7 +66,7 @@ function holdingsStatusText(last4: string | null): string {
 /** Task 165 step 2f (spec §5.4/§7): the first option is always "inherit", labelled with the
  * actual admin time so it never reads as silence. `value === ''` means inherit (`null`). */
 function timeOptions(slot: ScheduleSlot, globalTime: string | null): Array<{ value: string; label: string }> {
-  const inherit = { value: '', label: globalTime !== null ? `跟隨全域（${globalTime}）` : '跟隨全域（尚未設定）' }
+  const inherit = { value: '', label: globalTime !== null ? `預設（${globalTime}）` : '預設（尚未設定）' }
   const opts = (SCHEDULE_OPTIONS[slot] as readonly string[]).map((v) => ({ value: v, label: v }))
   return [inherit, ...opts]
 }

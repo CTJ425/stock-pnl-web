@@ -12,14 +12,6 @@ const svc = vi.hoisted(() => ({
 }))
 vi.mock('../../services/discordWebhook', () => svc)
 
-// Task 165 step 2e Revision 1 (spec R4): the send schedule moved into this section, so its
-// service is now a dependency of DiscordSection too. These tests moved here with the UI.
-const acc = vi.hoisted(() => ({
-  getDiscordAccounts: vi.fn(),
-  saveDiscordSchedule: vi.fn(),
-}))
-vi.mock('../../services/discordAccounts', () => acc)
-
 import { DiscordSection } from './DiscordSection'
 
 // Assembled from pieces with a fake token: this repo is public and runs secret scanning.
@@ -47,26 +39,9 @@ function assertNoUrlInDom() {
   for (const el of Array.from(document.querySelectorAll('input'))) expect(el.value).not.toContain(TOKEN)
 }
 
-const BRIEF = '快報與個人持股報告發送時間'
-const FULL = '經濟快報發送時間'
-
-const SCHEDULE_BASE = {
-  schedule: { brief: '17:30', full: '21:30' },
-  accounts: [],
-}
-
-function select(label: string): HTMLSelectElement {
-  return screen.getByLabelText(label) as HTMLSelectElement
-}
-
-function optionValues(label: string): string[] {
-  return Array.from(select(label).options).map((o) => o.value)
-}
-
 describe('DiscordSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    acc.getDiscordAccounts.mockResolvedValue(SCHEDULE_BASE)
   })
   afterEach(() => {
     cleanup()
@@ -306,80 +281,18 @@ describe('DiscordSection', () => {
     await waitFor(() => expect(svc.clearDiscordWebhook).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('尚未設定')).toBeTruthy()
   })
-})
 
-async function renderSchedule(snapshot: unknown = SCHEDULE_BASE) {
-  svc.getDiscordWebhookStatus.mockResolvedValue(SET)
-  acc.getDiscordAccounts.mockResolvedValue(snapshot)
-  render(<DiscordSection />)
-  await waitFor(() => expect(screen.getByLabelText(BRIEF)).toBeTruthy())
-}
-
-describe('DiscordSection — 發送排程', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    acc.getDiscordAccounts.mockResolvedValue(SCHEDULE_BASE)
-  })
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
-  })
-
-  it('offers one drop-down per slot, every half hour', async () => {
-    await renderSchedule()
-    expect(select(BRIEF).value).toBe('17:30')
-    expect(select(FULL).value).toBe('21:30')
-    expect(optionValues(BRIEF)).toEqual(['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'])
-    expect(optionValues(FULL)).toEqual(['21:00', '21:30', '22:00', '22:30', '23:00', '23:30'])
-  })
-
-  it('saves only after a change', async () => {
-    acc.saveDiscordSchedule.mockResolvedValue({
-      ...SCHEDULE_BASE,
-      schedule: { brief: '18:30', full: '22:00' },
-    })
-    await renderSchedule()
-    const save = screen.getByRole('button', { name: '儲存排程' }) as HTMLButtonElement
-    expect(save.disabled).toBe(true)
-    fireEvent.change(select(BRIEF), { target: { value: '18:30' } })
-    fireEvent.change(select(FULL), { target: { value: '22:00' } })
-    expect(save.disabled).toBe(false)
-    fireEvent.click(save)
-    await screen.findByText('排程已儲存')
-    expect(acc.saveDiscordSchedule).toHaveBeenCalledWith('18:30', '22:00')
-    expect(select(BRIEF).value).toBe('18:30')
-    expect(save.disabled).toBe(true)
-  })
-
-  it('shows an off-grid current time and asks for a new choice before saving', async () => {
-    acc.saveDiscordSchedule.mockResolvedValue(SCHEDULE_BASE)
-    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: '17:05', full: '21:30' } })
-    expect(select(BRIEF).value).toBe('17:05')
-    expect(optionValues(BRIEF)[0]).toBe('17:05')
-    expect(screen.getByRole('option', { name: '17:05（目前設定，請改選）' })).toBeTruthy()
-    const save = screen.getByRole('button', { name: '儲存排程' }) as HTMLButtonElement
-    expect(save.disabled).toBe(true)
-    fireEvent.change(select(FULL), { target: { value: '22:00' } })
-    expect(save.disabled).toBe(true)
-    fireEvent.change(select(BRIEF), { target: { value: '17:30' } })
-    expect(save.disabled).toBe(false)
-    fireEvent.click(save)
-    await waitFor(() => expect(acc.saveDiscordSchedule).toHaveBeenCalledWith('17:30', '22:00'))
-  })
-
-  it('locks the drop-downs when the cron jobs are missing', async () => {
-    await renderSchedule({ ...SCHEDULE_BASE, schedule: { brief: null, full: null } })
-    expect(screen.getByText('找不到 Discord 排程工作，無法調整。')).toBeTruthy()
-    expect(select(BRIEF).disabled).toBe(true)
-    expect(select(FULL).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: '儲存排程' }) as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('shows a save error', async () => {
-    acc.saveDiscordSchedule.mockRejectedValue(new Error('Discord 設定失敗（HTTP 400：時間不在可選範圍）'))
-    await renderSchedule()
-    fireEvent.change(select(FULL), { target: { value: '23:00' } })
-    fireEvent.click(screen.getByRole('button', { name: '儲存排程' }))
-    expect(await screen.findByText('Discord 設定失敗（HTTP 400：時間不在可選範圍）', {}, { timeout: 3000 })).toBeTruthy()
+  // Task 165 step 2g: the send schedule left the admin console — times are set per account now.
+  // Asserted as absence rather than by deleting the old tests silently: a drop-down that comes
+  // back here would be a second source of truth for a time the account already owns.
+  it('renders no send-schedule control at all', async () => {
+    svc.getDiscordWebhookStatus.mockResolvedValue(SET)
+    render(<DiscordSection />)
+    await screen.findByText(/已設定/)
+    expect(screen.queryByText('發送排程（平日・台北時間）')).toBeNull()
+    expect(screen.queryByRole('button', { name: '儲存排程' })).toBeNull()
+    expect(screen.queryByLabelText('快報與個人持股報告發送時間')).toBeNull()
+    expect(screen.queryByLabelText('經濟快報發送時間')).toBeNull()
+    expect(document.querySelectorAll('select').length).toBe(0)
   })
 })
