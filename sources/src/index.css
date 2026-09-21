@@ -5727,8 +5727,14 @@ button.rpt-card:hover {
 }
 
 .dsc-block {
-  margin-top: var(--sp-05);
-  padding-top: var(--sp-05);
+  display: flex;
+  flex-direction: column;
+  /* One rhythm for every child. The children carry no vertical margin of their own:
+     `.ai-form-group` and `.ai-actions` never had one (they rely on `.ai-form`'s gap, and
+     this panel is not an `.ai-form`), which is why the URL box and the button row touched. */
+  gap: var(--sp-04);
+  margin-top: var(--sp-06);
+  padding-top: var(--sp-06);
   border-top: 1px solid var(--border);
 }
 
@@ -5738,8 +5744,14 @@ button.rpt-card:hover {
   border-top: none;
 }
 
+/* Scoped on purpose: `.hint` has no base rule in this file and is used app-wide, so it renders
+   as a default <p> with 14px collapsed margins. Only the margin is removed, only in here. */
+.dsc-block .hint {
+  margin: 0;
+}
+
 .dsc-block-title {
-  margin: 0 0 var(--sp-02);
+  margin: 0;
   font-size: var(--type-body-01);
   font-weight: 600;
 }
@@ -5748,7 +5760,6 @@ button.rpt-card:hover {
   display: flex;
   align-items: center;
   gap: var(--sp-03);
-  margin-top: var(--sp-04);
 }
 
 .dsc-schedule-row {
@@ -5756,9 +5767,12 @@ button.rpt-card:hover {
   align-items: center;
   gap: var(--sp-04);
   flex-wrap: wrap;
-  /* Task 165 step 2f: DiscordMySettings.tsx places these directly in a `.dsc-block`, not inside
-     `.ai-form` (which already supplies its own gap) — without this, consecutive rows collide. */
-  margin-top: var(--sp-04);
+}
+
+/* The three labels (快報發送時間 / 完整版發送時間 / 發送時間) have three widths, so without a
+   fixed column the selects start at three different x positions. */
+.dsc-schedule-row > span {
+  flex: 0 0 112px;
 }
 
 .dsc-schedule-field {

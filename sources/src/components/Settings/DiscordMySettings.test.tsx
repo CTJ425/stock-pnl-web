@@ -139,3 +139,36 @@ describe('DiscordMySettings — once a URL is stored', () => {
     expect((screen.getByLabelText('個人持股報告 Webhook 網址') as HTMLInputElement).value).toBe('')
   })
 })
+
+/**
+ * Task 165 step 2g: the admin console no longer shows a schedule, so 「全域」 names a screen the
+ * user cannot reach. The inherit option keeps carrying the resolved time — that part was never
+ * the problem — but calls itself 預設.
+ */
+describe('DiscordMySettings — the inherit option', () => {
+  function optionLabels(label: string): string[] {
+    const el = screen.getByLabelText(label) as HTMLSelectElement
+    return Array.from(el.options).map((o) => o.textContent ?? '')
+  }
+
+  it('labels inherit as 預設 with the resolved time, never as 全域', async () => {
+    await renderWith(BOTH_STORED)
+    expect(optionLabels('快報發送時間')[0]).toBe('預設（17:30）')
+    expect(optionLabels('完整版發送時間')[0]).toBe('預設（21:30）')
+    expect(optionLabels('發送時間')[0]).toBe('預設（17:30）')
+    for (const l of [...optionLabels('快報發送時間'), ...optionLabels('完整版發送時間'), ...optionLabels('發送時間')]) {
+      expect(l).not.toContain('全域')
+    }
+  })
+
+  it('still says so when no default time exists', async () => {
+    await renderWith({
+      status: {
+        ...BOTH_STORED.status,
+        globalSchedule: { brief: null, full: null },
+      },
+    })
+    expect(optionLabels('快報發送時間')[0]).toBe('預設（尚未設定）')
+    expect(optionLabels('完整版發送時間')[0]).toBe('預設（尚未設定）')
+  })
+})
