@@ -10,10 +10,9 @@ import {
 } from './discordSchedule.ts'
 
 describe('schedule options', () => {
-  it('names the three cron jobs and the defaults', () => {
+  it('names the two cron jobs and the defaults', () => {
     expect(DISCORD_SCHEDULE_JOBS).toEqual({
       brief: 'discord-summary-brief',
-      holdings: 'discord-holdings-daily',
       full: 'discord-summary-full',
     })
     expect(DEFAULT_DISCORD_SCHEDULE).toEqual({ brief: '17:30', full: '21:30' })
@@ -83,24 +82,18 @@ describe('scheduleFromJobs', () => {
   const BRIEF = { jobname: 'discord-summary-brief', schedule: '5 9 * * 1-5' }
   const FULL = { jobname: 'discord-summary-full', schedule: '30 13 * * 1-5' }
 
-  it('reads brief and full, and holdings aligned with the brief', () => {
+  it('reads brief and full in any row order', () => {
+    // Task 165 step 2f (D5): `discord-holdings-daily` is retired, and a row for it must simply be
+    // ignored rather than contribute a third field.
     const rows = [FULL, { jobname: 'discord-holdings-daily', schedule: '5 9 * * 1-5' }, BRIEF]
-    expect(scheduleFromJobs(rows)).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: true })
+    expect(scheduleFromJobs(rows)).toEqual({ brief: '17:05', full: '21:30' })
   })
 
-  it('flags a holdings job at another time', () => {
-    const rows = [BRIEF, FULL, { jobname: 'discord-holdings-daily', schedule: '15 9 * * 1-5' }]
-    expect(scheduleFromJobs(rows)).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: false })
-  })
-
-  it('flags a missing holdings job', () => {
-    expect(scheduleFromJobs([BRIEF, FULL])).toEqual({ brief: '17:05', full: '21:30', holdingsAligned: false })
-  })
 
   it('reports a missing or unreadable job as null', () => {
-    expect(scheduleFromJobs([])).toEqual({ brief: null, full: null, holdingsAligned: false })
-    const rows = [{ jobname: 'discord-summary-brief', schedule: '*/5 * * * *' }, FULL, { jobname: 'discord-holdings-daily', schedule: '*/5 * * * *' }]
-    expect(scheduleFromJobs(rows)).toEqual({ brief: null, full: '21:30', holdingsAligned: false })
+    expect(scheduleFromJobs([])).toEqual({ brief: null, full: null })
+    const rows = [{ jobname: 'discord-summary-brief', schedule: '*/5 * * * *' }, FULL]
+    expect(scheduleFromJobs(rows)).toEqual({ brief: null, full: '21:30' })
   })
 
   it('ignores unrelated jobs', () => {

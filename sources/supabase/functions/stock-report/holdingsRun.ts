@@ -27,9 +27,11 @@ export type HoldingsOutcome =
   | { kind: 'failed'; httpStatus: number | null; reason: DiscordFailReason | 'exception' }
 
 export interface LastSend {
-  /** 'market' (Task 165 step 2d): a per-account copy of the full edition, recorded here too so
-   * the admin account table shows one "last send" per account regardless of kind. */
-  kind: HoldingsKind | 'market'
+  /** 'market' (Task 165 step 2d, retired): a per-account copy of the full edition. 'market-brief'
+   * / 'market-full' (Task 165 step 2f) are its replacements, one per edition, sent by the tick.
+   * Recorded here too so the admin account table shows one "last send" per account regardless
+   * of kind. */
+  kind: HoldingsKind | 'market' | 'market-brief' | 'market-full'
   ymd: string
   status: 'claimed' | 'sent' | 'skipped' | 'failed'
   reason: string | null
@@ -84,7 +86,7 @@ function errorName(e: unknown): string {
 /** Runs `finish`, logging (and swallowing) a throw from `finish` itself so one bad write
  * never breaks the run loop. */
 async function finishSafe(
-  deps: HoldingsDataDeps & { log: HoldingsRunDeps['log'] },
+  deps: Pick<HoldingsDataDeps, 'finish'> & Pick<HoldingsRunDeps, 'log'>,
   userId: string,
   ymd: string,
   kind: HoldingsKind,
@@ -105,8 +107,15 @@ async function quotesFor(quoteCache: ReturnType<typeof createQuoteCache>, keys: 
   return new Map(pairs)
 }
 
-async function runOneUser(
-  deps: HoldingsRunDeps,
+/** The subset `runOneUser` actually needs — narrower than `HoldingsRunDeps` so the per-account
+ * tick (accountTick.ts, Task 165 step 2f) can reuse this step without also carrying
+ * `elapsedMs`/`listEnabledUsers`/`claimDaily`, which belong to the whole-run loop, not one user. */
+export type RunOneUserDeps = Pick<HoldingsDataDeps, 'now' | 'loadWorkspaces' | 'post' | 'finish'> & Pick<HoldingsRunDeps, 'log'>
+
+/** One user's holdings card: gather → build → post → record. Shared by `runHoldingsDaily` (spec
+ * §2.6) and the per-account tick (spec §5.2), so there is one implementation of it. */
+export async function runOneUser(
+  deps: RunOneUserDeps,
   quoteCache: ReturnType<typeof createQuoteCache>,
   userId: string,
   webhookUrl: string,
@@ -183,7 +192,9 @@ export async function runHoldingsDaily(deps: HoldingsRunDeps): Promise<HoldingsR
 // ── settings ops ─────────────────────────────────────────────────────────────
 
 export interface HoldingsSettingsDeps extends HoldingsDataDeps {
-  readSettings: (userId: string) => Promise<{ enabled: boolean; webhookUrl: string | null } | null>
+  /** `holdingsTime` (Task 165 step 2f) is optional so fixtures built before that step still
+   * type-check; missing reads as "inherit the global brief time" (`accountTick.ts`'s `dueAt`). */
+  readSettings: (userId: string) => Promise<{ enabled: boolean; webhookUrl: string | null; holdingsTime?: string | null } | null>
   /** upsert; `enabled` unchanged (false on insert) */
   saveWebhook: (userId: string, url: string) => Promise<void>
   /** webhook_url = null, enabled = false */

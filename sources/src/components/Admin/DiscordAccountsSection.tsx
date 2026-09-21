@@ -83,7 +83,7 @@ export function DiscordAccountsSection() {
 
       {data && (
         <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table dsc-account-table">
             <thead>
               <tr>
                 <th>帳號</th>

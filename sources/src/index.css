@@ -5693,47 +5693,37 @@ button.rpt-card:hover {
   }
 }
 
-/* ── Admin console: Discord accounts master–detail (Task 165 §9.2)───────────────────── */
+/* ── Discord settings blocks (Task 165 step 2e Revision 1) ──────────────────────────── */
 
-.dsc-master-detail {
-  display: flex;
-  gap: var(--sp-05);
-  align-items: flex-start;
-  margin-top: var(--sp-04);
+/* The read-only account table: without fixed widths the e-mail column eats the slack and the
+   three status columns bunch up against the right edge. */
+.dsc-account-table {
+  table-layout: fixed;
 }
 
-.dsc-account-nav {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-02);
-  flex: 0 0 220px;
-  min-width: 0;
+.dsc-account-table th,
+.dsc-account-table td {
+  padding-top: var(--sp-04);
+  padding-bottom: var(--sp-04);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.dsc-account-nav .adm-side-item {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  width: 100%;
+.dsc-account-table th:nth-child(1),
+.dsc-account-table td:nth-child(1) {
+  width: 34%;
 }
 
-.dsc-account-email {
-  font-size: var(--type-body-01);
+.dsc-account-table th:nth-child(2),
+.dsc-account-table td:nth-child(2),
+.dsc-account-table th:nth-child(3),
+.dsc-account-table td:nth-child(3) {
+  width: 18%;
 }
 
-.dsc-account-status {
-  font-size: var(--type-label-01);
-}
-
-.dsc-detail-card {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 1px solid var(--border-strong);
-  padding: var(--sp-05);
-}
-
-.dsc-detail-card h4 {
-  margin: 0 0 var(--sp-02);
+.dsc-account-table th:nth-child(4),
+.dsc-account-table td:nth-child(4) {
+  width: 30%;
 }
 
 .dsc-block {
@@ -5754,12 +5744,6 @@ button.rpt-card:hover {
   font-weight: 600;
 }
 
-.dsc-radio-row {
-  display: flex;
-  gap: var(--sp-05);
-  flex-wrap: wrap;
-}
-
 .dsc-toggle-row {
   display: flex;
   align-items: center;
@@ -5772,6 +5756,9 @@ button.rpt-card:hover {
   align-items: center;
   gap: var(--sp-04);
   flex-wrap: wrap;
+  /* Task 165 step 2f: DiscordMySettings.tsx places these directly in a `.dsc-block`, not inside
+     `.ai-form` (which already supplies its own gap) — without this, consecutive rows collide. */
+  margin-top: var(--sp-04);
 }
 
 .dsc-schedule-field {
@@ -5805,10 +5792,6 @@ button.rpt-card:hover {
 }
 
 /* Separates the test/preview/clear row from the toggle row above it. */
-.dsc-holdings-actions {
-  margin-top: var(--sp-04);
-}
-
 @media (max-width: 720px) {
   .dsc-master-detail {
     flex-direction: column;

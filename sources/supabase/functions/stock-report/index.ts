@@ -238,9 +238,17 @@ import {
   type SummaryDeps,
   type WebhookAdminDeps,
 } from './discordRun.ts'
-import { toMarketOverride, type MarketOverride } from './discordTargets.ts'
 import { runDiscordAccountsOp, type AccountSettingsRow, type DiscordAccountsDeps } from './discordAccounts.ts'
 import { runMySettingsOp, type MySettingsDeps } from './discordMySettings.ts'
+import { scheduleFromJobs } from './discordSchedule.ts'
+import {
+  runAccountTick,
+  type AccountRow,
+  type CopyOutcome,
+  type GlobalSchedule,
+  type MarketCopyKind,
+  type TickDeps,
+} from './accountTick.ts'
 import type { WorkspaceInput } from './holdingsCard.ts'
 import { makeChartFetch } from './holdingQuotes.ts'
 import type { Transaction } from '../_shared/engine/models.ts'
@@ -4199,31 +4207,92 @@ async function loadDiscordMacro(): Promise<MacroLine[] | null> {
   return file?.indicators ?? null
 }
 
-/** Per-account 經濟快報 overrides (Task 165 step 2d, spec §3.5): every account with its own URL. */
-async function loadDiscordMarketOverrides(): Promise<MarketOverride[]> {
-  const out: MarketOverride[] = []
+/** Task 165 step 2f: every account's row, exactly as `accountTick.ts`'s `dueAt` needs it. Unlike
+ * the retired `loadDiscordMarketOverrides`, this is not filtered to accounts with a 經濟快報 URL —
+ * an account with only a 個人持股 webhook (or neither) still needs its row for `dueAt` to say no. */
+async function listDiscordTickAccounts(): Promise<AccountRow[]> {
+  const out: AccountRow[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db
       .from('user_discord_settings')
-      .select('user_id, market_webhook_url, market_enabled')
-      .not('market_webhook_url', 'is', null)
+      .select('user_id, market_webhook_url, market_enabled, market_brief_time, market_full_time, webhook_url, enabled, holdings_time')
       .order('user_id', { ascending: true })
       .range(from, from + 999)
     if (error) throw new Error(error.message)
     const page = data ?? []
-    out.push(...page.map(toMarketOverride))
+    out.push(
+      ...page.map((row) => ({
+        userId: row.user_id,
+        marketWebhookUrl: row.market_webhook_url,
+        marketEnabled: row.market_enabled,
+        marketBriefTime: row.market_brief_time,
+        marketFullTime: row.market_full_time,
+        holdingsWebhookUrl: row.webhook_url,
+        holdingsEnabled: row.enabled,
+        holdingsTime: row.holdings_time,
+      })),
+    )
     if (page.length < 1000) break
   }
   return out
 }
 
-async function finishDiscordMarketOverride(userId: string, ymd: string, outcome: RunOutcome): Promise<void> {
+/** schema.sql §15's two-job schedule, in the shape `accountTick.ts`'s `dueAt` inherits from. */
+async function loadDiscordGlobalSchedule(): Promise<GlobalSchedule> {
+  return scheduleFromJobs(await readDiscordScheduleJobs())
+}
+
+/** `23505` means another tick already claimed this user+day+kind first — same shape as
+ * `claimHoldingsDaily`. Task 165 step 2f (spec §4): this is new; the retired
+ * `finishDiscordMarketOverride` inserted a finished row with no prior claim, safe only because
+ * the job ran once a day. */
+async function claimMarketCopy(userId: string, ymd: string, kind: MarketCopyKind): Promise<boolean> {
+  const { error } = await db.from('user_discord_send_log').insert({ user_id: userId, taipei_ymd: ymd, kind, status: 'claimed' })
+  if (!error) return true
+  if (error.code === '23505') return false
+  throw new Error(error.message)
+}
+
+/** Updates the row `claimMarketCopy` inserted — never a second insert. */
+async function finishMarketCopy(userId: string, ymd: string, kind: MarketCopyKind, outcome: CopyOutcome): Promise<void> {
   const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
   const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
   const { error } = await db
     .from('user_discord_send_log')
-    .insert({ user_id: userId, taipei_ymd: ymd, kind: 'market', status: outcome.kind, http_status: httpStatus, reason })
+    .update({ status: outcome.kind, http_status: httpStatus, reason, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('taipei_ymd', ymd)
+    .eq('kind', kind)
+    .eq('status', 'claimed')
   if (error) throw new Error(error.message)
+}
+
+/** Cron entry point: every half hour, Taipei 17:00–23:30 weekdays (`discord-account-tick` in
+ * schema.sql). Reuses the same data loaders / holdings step as the retired `discord-holdings`. */
+async function handleDiscordAccountTick(): Promise<Response> {
+  const startedAt = Date.now()
+  const deps: TickDeps = {
+    now: () => new Date(),
+    elapsedMs: () => Date.now() - startedAt,
+    loadMarketFile: () => downloadJson<MarketFile>('market/daily.json'),
+    loadGlobalSchedule: loadDiscordGlobalSchedule,
+    loadGlobalWebhookUrl: loadDiscordWebhookUrl,
+    listAccounts: listDiscordTickAccounts,
+    loadIndex: (symbol) => fetchJson<IndexChartResponse>(indexChartUrl(symbol)),
+    loadUsdTwd: loadDiscordUsdTwd,
+    loadMacro: loadDiscordMacro,
+    loadMargin: (ymd) => fetchJson<MarginSummaryResponse>(marginSummaryUrl(ymd)),
+    post: postDiscordWebhook,
+    claimMarketCopy,
+    finishMarketCopy,
+    loadWorkspaces: loadHoldingsWorkspaces,
+    fetchChart: makeChartFetch({ fetchImpl: fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }),
+    claimHoldings: claimHoldingsDaily,
+    finish: finishHoldingsSend,
+    log: (e) => logEvent(db, { level: e.level, action: 'discord-account-tick', message: e.message, detail: e.detail }),
+  }
+  const result = await runAccountTick(deps)
+  return json(result)
 }
 
 /**
@@ -4243,7 +4312,9 @@ function discordSummaryLoaders(): Pick<
   }
 }
 
-/** Cron entry point: weekday 17:30 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs in schema.sql. */
+/** Cron entry point: weekday 17:30 (`brief`) / 21:30 (`full`) — the two `discord-summary-*` jobs
+ * in schema.sql. Posts to the global webhook only (Task 165 step 2f, spec D4) — the per-account
+ * copies of either edition are `discord-account-tick`'s job now. */
 async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Response> {
   if (body.edition !== 'brief' && body.edition !== 'full') {
     return json({ error: 'edition 必須是 brief 或 full' }, 400)
@@ -4257,8 +4328,6 @@ async function handleDiscordSummary(body: GenerateReportRequestBody): Promise<Re
     finishSend: finishDiscordSend,
     post: postDiscordWebhook,
     log: (e) => logEvent(db, { level: e.level, action: 'discord-summary', message: e.message, detail: e.detail }),
-    loadMarketOverrides: loadDiscordMarketOverrides,
-    finishMarketOverride: finishDiscordMarketOverride,
   }
   const outcome = await runDiscordSummary(deps, edition)
   return json(outcome)
@@ -4365,16 +4434,18 @@ async function finishHoldingsSend(userId: string, ymd: string, kind: HoldingsKin
   if (error) throw new Error(error.message)
 }
 
-async function readHoldingsSettings(userId: string): Promise<{ enabled: boolean; webhookUrl: string | null } | null> {
+async function readHoldingsSettings(
+  userId: string,
+): Promise<{ enabled: boolean; webhookUrl: string | null; holdingsTime: string | null } | null> {
   const { data, error } = await db
     .from('user_discord_settings')
-    .select('enabled, webhook_url')
+    .select('enabled, webhook_url, holdings_time')
     .eq('user_id', userId)
     .maybeSingle()
   // A read failure must not look like "not configured" — throw so the caller answers 500.
   if (error) throw new Error(error.message)
   if (!data) return null
-  return { enabled: data.enabled, webhookUrl: data.webhook_url }
+  return { enabled: data.enabled, webhookUrl: data.webhook_url, holdingsTime: data.holdings_time }
 }
 
 async function saveHoldingsWebhookUrl(userId: string, url: string): Promise<void> {
@@ -4510,27 +4581,56 @@ async function setDiscordMarketEnabled(userId: string, enabled: boolean): Promis
   if (error) throw new Error(error.message)
 }
 
-/** Self-service read of the caller's own 經濟快報 override — `discord-my-settings` only. */
-async function readDiscordMarketSettings(userId: string): Promise<{ enabled: boolean; webhookUrl: string | null }> {
+/** Self-service read of the caller's own 經濟快報 override, plus (Task 165 step 2f) its two send
+ * times — `discord-my-settings` only. */
+async function readDiscordMarketSettings(
+  userId: string,
+): Promise<{ enabled: boolean; webhookUrl: string | null; marketBriefTime: string | null; marketFullTime: string | null }> {
   const { data, error } = await db
     .from('user_discord_settings')
-    .select('market_enabled, market_webhook_url')
+    .select('market_enabled, market_webhook_url, market_brief_time, market_full_time')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  if (!data) return { enabled: false, webhookUrl: null }
-  return { enabled: data.market_enabled, webhookUrl: data.market_webhook_url }
+  if (!data) return { enabled: false, webhookUrl: null, marketBriefTime: null, marketFullTime: null }
+  return {
+    enabled: data.market_enabled,
+    webhookUrl: data.market_webhook_url,
+    marketBriefTime: data.market_brief_time,
+    marketFullTime: data.market_full_time,
+  }
 }
 
-/** Same `kind = 'market'` row as `finishDiscordMarketOverride`, but typed for
- * `discordMySettings.ts`'s `HoldingsOutcome` (the self-service test-market send never produces
- * `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the full type). */
+/** Same `kind = 'market'` row the retired `finishDiscordMarketOverride` used to write, but typed
+ * for `discordMySettings.ts`'s `HoldingsOutcome` (the self-service test-market send never
+ * produces `no-holdings`, but the shared `MySettingsDeps.finishMarket` signature carries the
+ * full type). Manual "測試發送" only — the tick's own sends go through `finishMarketCopy`. */
 async function finishDiscordMyMarket(userId: string, ymd: string, outcome: HoldingsOutcome): Promise<void> {
   const httpStatus = outcome.kind === 'sent' || outcome.kind === 'failed' ? outcome.httpStatus : null
   const reason = outcome.kind === 'skipped' || outcome.kind === 'failed' ? outcome.reason : null
   const { error } = await db
     .from('user_discord_send_log')
     .insert({ user_id: userId, taipei_ymd: ymd, kind: 'market', status: outcome.kind, http_status: httpStatus, reason })
+  if (error) throw new Error(error.message)
+}
+
+/** Task 165 step 2f: writes all three per-account send times at once; `null` = inherit. */
+async function saveDiscordTimes(
+  userId: string,
+  times: { marketBriefTime: string | null; marketFullTime: string | null; holdingsTime: string | null },
+): Promise<void> {
+  const { error } = await db
+    .from('user_discord_settings')
+    .upsert(
+      {
+        user_id: userId,
+        market_brief_time: times.marketBriefTime,
+        market_full_time: times.marketFullTime,
+        holdings_time: times.holdingsTime,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    )
   if (error) throw new Error(error.message)
 }
 
@@ -4614,11 +4714,16 @@ async function handleDiscordMySettings(req: Request, body: GenerateReportRequest
     setMarketEnabled: setDiscordMarketEnabled,
     finishMarket: finishDiscordMyMarket,
     readWebhook: readDiscordWebhookRow,
+    saveTimes: saveDiscordTimes,
+    readScheduleJobs: readDiscordScheduleJobs,
   }
   const result = await runMySettingsOp(deps, auth.userId, input)
   if (!result.ok) {
     const status =
-      result.error === 'bad-request' || result.error === 'invalid-url' || result.error === 'not-configured'
+      result.error === 'bad-request' ||
+      result.error === 'invalid-url' ||
+      result.error === 'invalid-time' ||
+      result.error === 'not-configured'
         ? 400
         : result.error === 'quota'
           ? 429
@@ -4979,12 +5084,23 @@ Deno.serve(async (req) => {
       return await handleDiscordWebhook(body)
     }
 
-    // Per-user Discord holdings card (Task 165 Phase 2): triggered by the `discord-holdings-daily`
-    // cron job (schema.sql §14), same x-cron-secret gate as the other pg_cron actions.
+    // Per-user Discord holdings card (Task 165 Phase 2). The `discord-holdings-daily` cron job
+    // that used to trigger this is retired (Task 165 step 2f, D5) — `discord-account-tick` below
+    // does its work now — but the action itself stays, same x-cron-secret gate, in case it is
+    // ever needed again.
     if (body.action === 'discord-holdings') {
       const denied = assertCronSecret(req)
       if (denied) return denied
       return await handleDiscordHoldings()
+    }
+
+    // Task 165 step 2f: the per-account send tick (schema.sql's `discord-account-tick`), every
+    // 30 minutes, Taipei 17:00–23:30 weekdays. Same x-cron-secret gate as the other pg_cron
+    // actions.
+    if (body.action === 'discord-account-tick') {
+      const denied = assertCronSecret(req)
+      if (denied) return denied
+      return await handleDiscordAccountTick()
     }
 
     // Admin console: every account's Discord settings and the send schedule (Task 165 Phase 2

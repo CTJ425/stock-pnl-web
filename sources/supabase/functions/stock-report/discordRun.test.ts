@@ -228,6 +228,26 @@ function adminDeps(
   return deps
 }
 
+/** Task 165 step 2f (spec discord-account-schedule.md D4): per-account copies moved to
+ * `accountTick.ts`, so the summary run must touch the global webhook and nothing else. */
+describe('runDiscordSummary — the global channel only', () => {
+  for (const edition of ['brief', 'full'] as const) {
+    it(`posts the ${edition} edition exactly once, to the global URL`, async () => {
+      const deps = summaryDeps()
+      const out = await runDiscordSummary(deps, edition)
+      expect(out).toEqual({ kind: 'sent', httpStatus: 204 })
+      expect(deps.post).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(deps.post).mock.calls[0][0]).toBe(FAKE_WEBHOOK)
+    })
+  }
+
+  it('has no per-account hook left on its deps', () => {
+    const deps = summaryDeps() as Record<string, unknown>
+    expect(deps.loadMarketOverrides).toBeUndefined()
+    expect(deps.finishMarketOverride).toBeUndefined()
+  })
+})
+
 describe('runWebhookOp', () => {
   it.each([
     ['null', null],
