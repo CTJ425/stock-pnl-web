@@ -10,7 +10,6 @@ import {
   CalendarRange,
   Check,
   ChevronDown,
-  Download,
   ExternalLink,
   Globe,
   HardDrive,
@@ -65,8 +64,6 @@ const DiscordMySettings = lazy(() =>
 const PAGE_FALLBACK = <div className="glass empty-state section">載入中…</div>
 import { isReportConfigured } from '../services/reportProxy'
 import { isAdmin } from '../services/adminStatus'
-import { buildSelfExport } from '../services/selfExport'
-import { downloadBlob } from '../services/reportPdf'
 import { BrandMark } from './BrandMark'
 
 type Tab = 'dashboard' | 'analysis' | 'macro' | 'fx' | 'yearly' | 'transactions'
@@ -444,20 +441,8 @@ function UserMenu({
   onOpenDiscord: () => void
 }) {
   const { mode, user, signOut } = useAuth()
-  const { show } = useToast()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
   const [showChangePassword, setShowChangePassword] = useState(false)
-
-  async function exportMyRecords() {
-    const result = await buildSelfExport()
-    if ('error' in result) {
-      show(result.error, 'error')
-      return
-    }
-    const blob = new Blob([JSON.stringify(result)], { type: 'application/json' })
-    const today = new Date().toISOString().slice(0, 10)
-    downloadBlob(blob, `stock-pnl-backup-${today}.json`)
-  }
 
   useEffect(() => {
     applyTheme(pref)
@@ -568,18 +553,6 @@ function UserMenu({
                 >
                   <KeyRound size={14} />
                   <span>變更密碼</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="hmenu-item"
-                  onClick={() => {
-                    close()
-                    void exportMyRecords()
-                  }}
-                >
-                  <Download size={14} />
-                  <span>匯出我的紀錄</span>
                 </button>
                 <button
                   type="button"
