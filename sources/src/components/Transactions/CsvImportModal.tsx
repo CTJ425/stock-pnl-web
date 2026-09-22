@@ -3,27 +3,48 @@
  * Select files or paste content → Verify and preview column by column → Write in batches after confirmation.
  * Supports old Google spreadsheet formats (TPE: prefix, Chinese transaction type) and this application export format.
  */
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileUp, Upload } from 'lucide-react'
-import type { NewTransaction } from '../../types/models'
+import type { NewTransaction, Transaction } from '../../types/models'
 import { MARKET_LABEL, TX_TYPE_LABEL } from '../../types/models'
-import { parseTransactionsCsv } from '../../utils/csv'
+import { markDuplicateRows, parseTransactionsCsv } from '../../utils/csv'
 import { Modal } from '../Common/Modal'
 
 interface CsvImportModalProps {
   onClose: () => void
   onImport: (rows: NewTransaction[]) => Promise<void>
+  /** Current workspace transactions, used to detect and flag duplicate rows (TX-01)*/
+  existing: Transaction[]
 }
 
 const PREVIEW_LIMIT = 8
+/** Debounce for the paste textarea: parsing a large paste on every keystroke is wasted work*/
+const PARSE_DEBOUNCE_MS = 250
 
-export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
+export function CsvImportModal({ onClose, onImport, existing }: CsvImportModalProps) {
   const [text, setText] = useState('')
+  const [debouncedText, setDebouncedText] = useState('')
+  const [includeDups, setIncludeDups] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
-  const parsed = useMemo(() => (text.trim() ? parseTransactionsCsv(text) : null), [text])
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedText(text), PARSE_DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [text])
+
+  const parsed = useMemo(() => (debouncedText.trim() ? parseTransactionsCsv(debouncedText) : null), [debouncedText])
+
+  const duplicateFlags = useMemo(
+    () => (parsed ? markDuplicateRows(parsed.rows, existing) : []),
+    [parsed, existing],
+  )
+  const dupCount = duplicateFlags.filter(Boolean).length
+  const importRows = useMemo(
+    () => (parsed ? parsed.rows.filter((_, i) => includeDups || !duplicateFlags[i]) : []),
+    [parsed, duplicateFlags, includeDups],
+  )
 
   const pickFile = async (file: File | undefined) => {
     if (!file) return
@@ -31,11 +52,11 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
   }
 
   const confirm = async () => {
-    if (!parsed || parsed.rows.length === 0 || busy) return
+    if (importRows.length === 0 || busy) return
     setBusy(true)
     setError(null)
     try {
-      await onImport(parsed.rows)
+      await onImport(importRows)
       onClose()
     } catch (e) {
       setError(`匯入失敗：${e instanceof Error ? e.message : '請稍後再試'}`)
@@ -99,6 +120,7 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
             <>
               <div style={{ margin: '10px 0 8px', fontSize: 14, color: 'var(--ink-secondary)' }}>
                 預覽（共 {parsed.rows.length} 筆有效交易
+                {dupCount > 0 && `，其中 ${dupCount} 筆與現有交易相同`}
                 {parsed.rows.length > PREVIEW_LIMIT && `，僅顯示前 ${PREVIEW_LIMIT} 筆`}）：
               </div>
               <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: 0 }}>
@@ -113,11 +135,12 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
                       <th scope="col" className="num">單價</th>
                       <th scope="col" className="num">股數</th>
                       <th scope="col" className="num">手續費 / 稅金</th>
+                      <th scope="col">狀態</th>
                     </tr>
                   </thead>
                   <tbody>
                     {parsed.rows.slice(0, PREVIEW_LIMIT).map((row, i) => (
-                      <tr key={i}>
+                      <tr key={i} style={duplicateFlags[i] ? { color: 'var(--ink-muted)' } : undefined}>
                         <td>{row.tx_date}</td>
                         <td>{MARKET_LABEL[row.market]}</td>
                         <td>{row.ticker}</td>
@@ -126,11 +149,26 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
                         <td className="num">{row.price}</td>
                         <td className="num">{row.qty}</td>
                         <td className="num">{row.fee_tax}</td>
+                        <td>{duplicateFlags[i] ? '重複' : ''}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {dupCount > 0 && (
+                <label
+                  htmlFor="csv-include-dups"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 13, cursor: 'pointer' }}
+                >
+                  <input
+                    id="csv-include-dups"
+                    type="checkbox"
+                    checked={includeDups}
+                    onChange={(e) => setIncludeDups(e.target.checked)}
+                  />
+                  仍要匯入與現有交易相同的 {dupCount} 筆
+                </label>
+              )}
             </>
           )}
 
@@ -141,11 +179,11 @@ export function CsvImportModal({ onClose, onImport }: CsvImportModalProps) {
             </button>
             <button
               className="btn btn-primary"
-              disabled={busy || parsed.rows.length === 0}
+              disabled={busy || importRows.length === 0}
               onClick={() => void confirm()}
             >
               <Upload size={15} />
-              {busy ? '匯入中…' : `確認匯入 ${parsed.rows.length} 筆`}
+              {busy ? '匯入中…' : `確認匯入 ${importRows.length} 筆`}
             </button>
           </div>
         </>

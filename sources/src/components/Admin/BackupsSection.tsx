@@ -44,16 +44,6 @@ function statusLabel(run: AccountBackups['lastRun']): string {
   return `${run.runDate}・失敗：${run.error ?? '未知錯誤'}`
 }
 
-// `r2_status` is only recorded once `backup-transactions` has R2 secrets to try syncing with —
-// 'skipped' means "not configured", which is a normal state, not a failure. Showing only the
-// Storage status would leave an R2 failure invisible: two copies believed, one actually made.
-function r2Label(run: NonNullable<AccountBackups['lastRun']>): string | null {
-  if (run.r2Status === 'ok') return '異地備份已同步'
-  if (run.r2Status === 'skipped') return '異地備份未設定'
-  if (run.r2Status === 'failed') return `異地備份失敗：${run.r2Error ?? '未知錯誤'}`
-  return null
-}
-
 interface RestoreState {
   path: string
   result: RestoreResult | null
@@ -209,7 +199,6 @@ export function BackupsSection() {
               <tbody>
                 {accounts.map((a) => {
                   const isOpen = expanded === a.userId
-                  const r2 = a.lastRun ? r2Label(a.lastRun) : null
                   return (
                     <Fragment key={a.userId}>
                       <tr>
@@ -234,15 +223,7 @@ export function BackupsSection() {
                         <td>{a.fileCount}</td>
                         <td className="ast-mono">{a.newestDate ?? '—'}</td>
                         <td className="ast-mono">{formatBytes(a.totalBytes)}</td>
-                        <td>
-                          {statusLabel(a.lastRun)}
-                          {r2 && (
-                            <>
-                              <br />
-                              {r2}
-                            </>
-                          )}
-                        </td>
+                        <td>{statusLabel(a.lastRun)}</td>
                       </tr>
                       {isOpen && (
                         <tr>

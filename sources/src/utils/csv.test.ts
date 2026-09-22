@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Transaction } from '../types/models'
-import { parseCsv, parseTransactionsCsv, parseTxDate, transactionsToCsv } from './csv'
+import { markDuplicateRows, parseCsv, parseTransactionsCsv, parseTxDate, transactionsToCsv } from './csv'
 
 describe('parseTxDate', () => {
   it('支援斜線與連字號並補零', () => {
@@ -403,5 +403,102 @@ describe('CSV 往返保留融券借券費 (BUG-063)', () => {
     const parsed = parseTransactionsCsv(csv)
     expect(parsed.errors).toEqual([])
     expect(parsed.rows[0].fee_tax).toBe(4425)
+  })
+})
+
+// Task 166 batch 1 — audit findings TX-01 / TX-02 / TX-06
+const base: Transaction = {
+  id: 'b1',
+  workspace_id: 'w',
+  tx_date: '2024-01-10',
+  market: 'TPE',
+  ticker: '2330',
+  name: '台積電',
+  tx_type: 'BUY',
+  price: 500,
+  qty: 1000,
+  fee_tax: 712,
+  created_at: '2026-01-01T00:00:00Z',
+}
+
+describe('transactionsToCsv 防公式注入（TX-02）', () => {
+  it('以 = 開頭的文字欄位加上單引號', () => {
+    const csv = transactionsToCsv([{ ...base, name: '=HYPERLINK("x")' }])
+    const line = csv.replace('\uFEFF', '').split('\r\n')[1]
+    expect(line).toContain("'=HYPERLINK")
+  })
+
+  it('+、-、@ 開頭的非數字文字同樣加上單引號', () => {
+    for (const name of ['+cmd', '-cmd', '@SUM(A1)']) {
+      const line = transactionsToCsv([{ ...base, name }]).replace('\uFEFF', '').split('\r\n')[1]
+      expect(line).toContain(`'${name[0]}`)
+    }
+  })
+
+  it('匯出再匯入後名稱還原（去掉加上的單引號）', () => {
+    const parsed = parseTransactionsCsv(transactionsToCsv([{ ...base, name: '=abc' }]))
+    expect(parsed.errors).toEqual([])
+    expect(parsed.rows[0].name).toBe('=abc')
+  })
+
+  it('一般名稱與數字欄位不受影響', () => {
+    const parsed = parseTransactionsCsv(transactionsToCsv([base]))
+    expect(parsed.rows[0].name).toBe('台積電')
+    expect(parsed.rows[0].price).toBe(500)
+    expect(parsed.rows[0].fee_tax).toBe(712)
+  })
+})
+
+describe('parseTxDate 民國年（TX-06）', () => {
+  it('2 或 3 位數年份視為民國年', () => {
+    expect(parseTxDate('113/01/10')).toBe('2024-01-10')
+    expect(parseTxDate('99/12/31')).toBe('2010-12-31')
+    expect(parseTxDate('113-1-5')).toBe('2024-01-05')
+  })
+
+  it('民國年日期同樣檢查有效性', () => {
+    expect(parseTxDate('113/02/30')).toBeNull()
+  })
+
+  it('西元年行為不變', () => {
+    expect(parseTxDate('2024/01/10')).toBe('2024-01-10')
+  })
+
+  it('小於民國 60 年的 2 位數年份視為無效（避免把西元 2 位年讀成 1930 年代）', () => {
+    expect(parseTxDate('24/01/10')).toBeNull()
+    expect(parseTxDate('60/01/10')).toBe('1971-01-10')
+  })
+})
+
+describe('markDuplicateRows（TX-01）', () => {
+  const row = {
+    tx_date: base.tx_date,
+    market: base.market,
+    ticker: base.ticker,
+    name: base.name,
+    tx_type: base.tx_type,
+    price: base.price,
+    qty: base.qty,
+    fee_tax: base.fee_tax,
+  }
+
+  it('檔案有 2 筆、帳上已有 1 筆相同交易：只標記第一筆', () => {
+    expect(markDuplicateRows([row, row], [base])).toEqual([true, false])
+  })
+
+  it('帳上沒有相同交易時，檔案內兩筆相同成交都不算重複', () => {
+    expect(markDuplicateRows([row, row], [])).toEqual([false, false])
+  })
+
+  it('費稅不同就不是重複', () => {
+    expect(markDuplicateRows([{ ...row, fee_tax: 713 }], [base])).toEqual([false])
+  })
+
+  it('交易性質不同就不是重複', () => {
+    expect(markDuplicateRows([{ ...row, tx_nature: 'DAY_TRADE' }], [base])).toEqual([false])
+  })
+
+  it('名稱不同但其餘相同仍視為重複', () => {
+    expect(markDuplicateRows([{ ...row, name: 'TSMC' }], [base])).toEqual([true])
   })
 })

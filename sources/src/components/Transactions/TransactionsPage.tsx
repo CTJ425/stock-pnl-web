@@ -432,7 +432,7 @@ export function TransactionsPage() {
       </div>
 
       {showImport && (
-        <CsvImportModal onClose={() => setShowImport(false)} onImport={handleImport} />
+        <CsvImportModal onClose={() => setShowImport(false)} onImport={handleImport} existing={transactions} />
       )}
 
       {showRecalc && <RecalcFeesModal onClose={() => setShowRecalc(false)} />}

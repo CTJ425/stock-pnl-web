@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { MIN_PASSWORD_LENGTH } from './Auth/AuthPage'
 import type { ThemePref } from '../utils/settings'
 import { applyTheme, getFeeRate, getThemePref, setThemePref } from '../utils/settings'
 import { describeTwFeeRate } from '../utils/feeRateHint'
@@ -273,8 +274,8 @@ function RecoveryPasswordModal() {
     e.preventDefault()
     if (busy) return
     setError(null)
-    if (password.length < 6) {
-      setError('新密碼至少需要 6 個字元')
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`新密碼至少需要 ${MIN_PASSWORD_LENGTH} 個字元`)
       return
     }
     if (password !== confirm) {
@@ -292,7 +293,7 @@ function RecoveryPasswordModal() {
   }
 
   return (
-    <Modal title="設定新密碼" onClose={dismissRecovery}>
+    <Modal title="設定新密碼" onClose={dismissRecovery} disableBackdropClose>
       <div className="notice notice-warn">
         你剛透過「重設密碼」信件連結登入，請立即設定新密碼。
         （關閉此視窗則維持原密碼不變）
@@ -307,7 +308,7 @@ function RecoveryPasswordModal() {
             autoComplete="new-password"
             autoFocus
             value={password}
-            placeholder="至少 6 個字元"
+            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
@@ -348,8 +349,8 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       setError('請輸入目前密碼')
       return
     }
-    if (password.length < 6) {
-      setError('新密碼至少需要 6 個字元')
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`新密碼至少需要 ${MIN_PASSWORD_LENGTH} 個字元`)
       return
     }
     if (password !== confirm) {
@@ -396,7 +397,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             type="password"
             autoComplete="new-password"
             value={password}
-            placeholder="至少 6 個字元"
+            placeholder={`至少 ${MIN_PASSWORD_LENGTH} 個字元`}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
