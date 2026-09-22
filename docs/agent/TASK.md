@@ -21,6 +21,19 @@
 
 ## 📋 Active Tasks
 
+### Task 166: 全專案稽核修補（139 項發現，分 5 批）
+- **Status**: 🔄 IN PROGRESS
+- **Agent**: Claude
+- **Timestamp**: 2026-09-22 21:44:30 Asia/Taipei
+- **Spec**: docs/agent/specs/166-audit-remediation.md
+- 來源：2026-09-22 全專案稽核報告（2 項 P1、25 項 P2、112 項 P3；另排除 12 項誤報）。
+- 使用者決策：保留公開註冊但要求信箱驗證與 8 碼密碼；AI 只開放管理員；R2 完全移除；每批 DEV 驗證後直接上 PROD。
+1. ~~第 1 批 0.9.63：AI-01、OP-02、TX-01/02/06/08、ER-01/02/03/06/07、SH-01、移除 R2~~ ✅
+2. 第 2 批 0.9.64：金額引擎與資料功能 — EN-01（股利）、EN-02～EN-10、TX-03/04/09（分割與重算原子化）、DA-07、BUG-079、BUG-084 —— ⏳
+3. 第 3 批 0.9.65：Edge 穩定性與維運 — ER-04、ER-08～ER-17、EP-01～EP-07、ES-01～ES-08、ED-01～ED-09、AD-02、DB-01～DB-05、OP-01 —— ⏳
+4. 第 4 批 0.9.66：前端體驗與無障礙 — SH-02～05、TX-05/07、DA-*、PR-*、DT-*、FU-*、AI-02～07、MA-*、AD-01、AD-03～11、OP-03～07 —— ⏳
+5. 第 5 批 0.9.67：結構性 — ER-05（可測試路由）、TX-10、TX-11 —— ⏳
+
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
 - **Status**: 🔄 IN PROGRESS — **0.9.61 released and deployed to DEV and PROD** (2026-09-21, steps 2e–2h); remaining: watch one real PROD round (18:00 快報＋tick, 21:00 完整版) and the first real `discord-account-tick` run
 - **Agent**: Claude

@@ -6,6 +6,24 @@
 
 ---
 
+### RISK-011 — `backup-transactions` 的 R2 整合點只靠人工閱讀，沒有自動化測試
+- **Date**: 2026-09-22, fixed in 0.9.63
+- **Where**: `sources/supabase/functions/backup-transactions/index.ts:130-148`、`:173-187`
+- **Root Cause**: `syncToR2` 本身有單元測試涵蓋五種結果，但「把結果寫進 `r2_status` / `r2_error` 兩欄」這四行沒有任何測試。若有人改動 `backupAccount` 並漏掉指派，R2 的狀態會永遠是 `null`，而所有測試仍然全綠——異地備份失敗會變成看不見。
+- **Fix**: Cloudflare R2 異地備份整組移除（兩個專案都沒有 R2 secret，同步永遠是 skipped）：刪除 `r2.ts` 與同步呼叫、後台顯示，並移除 `backup_run_log` 的 `r2_status` / `r2_error` 欄位。
+- **Status**: ✅ FIXED (0.9.63)
+
+---
+
+### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
+- **Date**: 2026-09-22, fixed in 0.9.63
+- **Where**: `sources/supabase/functions/stock-report/index.ts`（chips 逐檔迴圈）
+- **Root Cause**: `uploadJson` 內建 `try/catch`，失敗回傳 `false` 不拋例外。Storage 上傳失敗的標的未計入 `generated` 也不計入 `failed`。
+- **Fix**: `runGeneratePhaseChips` 的 `uploadJson` 回傳 false 時計入 `failed` 與 `failedTickers`（與 catch 分支一致），manifest 也只在「失敗＋預算略過 ≤ 20%」時才前進。
+- **Status**: ✅ FIXED (0.9.63)
+
+---
+
 ### Bug ID: BUG-083 — `run-all-e2e.cjs` 在本機模式下 6 條假紅燈，且刪除交易的確認 Modal 從未被按下
 - **Date**: 2026-09-15，修復於 0.9.54 之後（只動腳本與文件，未動 `sources/src`，故不另外進版）
 - **Where**: `sources/scripts/run-all-e2e.cjs`、`docs/UnitTests/E2E.md`
