@@ -1,9 +1,22 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.9.61 — 經濟快報 per-account preview send, released to `main` and deployed (Task 165 step 2h)
-- Status: ✅ **0.9.61 on `dev` and `main`, Edge deployed to DEV (v23) and PROD (v12)** — next: watch one real PROD round (18:00 快報＋tick, 21:00 完整版)
-- Timestamp: 2026-09-21 16:37:49 Asia/Taipei
+- Action: 0.9.62 — removed「匯出我的紀錄」from the account menu, released to `main`
+- Status: ✅ **0.9.62 on `dev` and `main`**, frontend-only (no Edge / schema / cron change)
+- Timestamp: 2026-09-22 14:04:13 Asia/Taipei
+
+---
+
+## 📅 Log: 2026-09-22 14:04:13 Asia/Taipei (0.9.62 → `main`, remove self-export)
+
+**User request: remove the「匯出我的紀錄」item from every account's menu without changing anything else.** Lane 0 (surgical, content already in context).
+
+- `sources/src/components/AppShell.tsx`: removed the menu button, the `exportMyRecords` function, and the now-unused `Download` icon import, `buildSelfExport` / `downloadBlob` imports, and the `show` binding in that component. Other menu items unchanged.
+- Deleted `sources/src/services/selfExport.ts` and `selfExport.test.ts` (no remaining callers; 6 tests removed).
+- `sources/src/components/Admin/BackupsSection.tsx`: removed the header comment lines and the admin UI sentence that pointed users to the removed self-export.
+- Version 0.9.61 → 0.9.62 (`version.ts`, `package.json`, lock, README badge, CHANGELOG).
+- **Verify**: `npx vitest run` 150 files (149 passed, 1 skipped) / 2,587 tests: 2,580 passed, 7 skipped, 0 failed; `npm run build`, `npm run lint` exit 0.
+- **Deploy**: frontend only, via Cloudflare Pages on push to `main`. No Edge Function, schema, or cron change.
 
 ---
 

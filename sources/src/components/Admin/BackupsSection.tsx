@@ -8,8 +8,6 @@
  *
  * ⚠️ This is the only screen that can reach the `backups` bucket, and only because
  * `admin-backup-url` gates on `assertAdmin` + `isValidBackupPath` before minting a signed URL.
- * Regular users have their own self-service export (`AppShell.tsx`, `匯出我的紀錄`), but that
- * one reads the live tables — it never touches this bucket.
  */
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ChevronRight, Download, Info, RefreshCw } from 'lucide-react'
@@ -362,7 +360,7 @@ export function BackupsSection() {
 
           <p className="ast-note" style={{ marginTop: 12 }}>
             <Info size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
-            下載連結是<b>短效連結</b>，60 秒後失效，只有管理員能取得。一般使用者可透過「匯出我的紀錄」自助匯出自己的資料，但那份匯出讀的是即時資料表，不會經過這個備份儲存桶。
+            下載連結是<b>短效連結</b>，60 秒後失效，只有管理員能取得。
           </p>
         </>
       )}
