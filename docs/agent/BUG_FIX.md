@@ -73,17 +73,10 @@
 - **Found**: 2026-09-14, Task 161 範圍決策。
 - **Decision**: 使用者 2026-09-14 決定只保護 google。Supabase Edge Function 連不到本機 localhost，全部代理化會讓本機 Ollama 無法使用。後台警語已改為依供應商如實顯示，不再一律寫「金鑰會下發」。
 - **Status**: OPEN（已接受；改用需要金鑰的雲端 openai-compatible 端點前必須重新評估）
+- **2026-09-22 (0.9.63)**: AI 分析改為只限管理員，`get_ai_settings()` 也只對管理員回傳金鑰，暴露面縮小到管理員瀏覽器；條目維持 open。
 
 ---
 
-### RISK-011 — `backup-transactions` 的 R2 整合點只靠人工閱讀，沒有自動化測試
-- **Where**: `sources/supabase/functions/backup-transactions/index.ts:130-148`、`:173-187`
-- **Failure scenario**: `syncToR2` 本身有單元測試涵蓋五種結果，但「把結果寫進 `r2_status` / `r2_error` 兩欄」這四行沒有任何測試。若有人改動 `backupAccount` 並漏掉指派，R2 的狀態會永遠是 `null`，而所有測試仍然全綠——異地備份失敗會變成看不見。
-- **Found**: 2026-09-14, Task 144-4 reviewer 第一輪。
-- **Decision**: 不修。`backupAccount` 未匯出，且相依於模組層的 Deno client；要測就得重構這段金流鄰近的程式碼，代價高於效益。Reviewer 已逐行閱讀確認接線正確。
-- **Status**: OPEN（已接受；日後變更 `backupAccount` 時必須人工複查這兩欄的指派）
-
----
 
 ### RISK-012 — `scripts/backup-download.cjs` 的 `--dest` 不設路徑邊界
 - **Where**: `sources/scripts/backup-download.cjs`
@@ -155,13 +148,6 @@
 
 ---
 
-### RISK-005 — chips 逐檔上傳失敗既不計入 `generated` 也不計入 `failed`
-- **Where**: `sources/supabase/functions/stock-report/index.ts`（chips 逐檔迴圈）
-- **What**: `uploadJson` 內建 `try/catch`，失敗回傳 `false` 不拋例外。Storage 上傳失敗的標的未計入 `generated` 也不計入 `failed`。
-- **Decision**: 隔 5 分鐘下一次 cron 會自我修復；改動回傳約定影響面大，維持現狀。
-- **Status**: OPEN（低嚴重度，已確認）
-
----
 
 ### RISK-004 — `addTransactions` silently drops `tx_nature` on pre-migration database
 - **Where**: `sources/src/services/dataProvider.ts`
