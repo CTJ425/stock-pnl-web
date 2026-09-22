@@ -4,10 +4,33 @@
  * - LocalProvider: local mode (when the Supabase environment variable is not set), the data is stored in localStorage,
  *   You can use it without logging in; after setting the environment variables, you can seamlessly switch to Supabase mode.
  */
-import type { NewTransaction, Transaction, Workspace } from '../types/models'
+import type { Market, NewTransaction, Transaction, Workspace } from '../types/models'
 import { compareTxOrder } from '../utils/pnlEngine'
 import { supabase } from './supabase'
 import { logClient } from './appLog'
+
+/** One row of a batch update (TX-03): price/qty/fee_tax/fee_rate only, by id. */
+export interface TxUpdate {
+  id: string
+  price: number
+  qty: number
+  fee_tax: number
+  fee_rate: number | null
+}
+
+/** A previously-applied stock split, logged so the wizard can warn before it is reapplied (TX-04). */
+export interface SplitLogEntry {
+  id: string
+  workspace_id: string
+  market: Market
+  ticker: string
+  cutoff_date: string | null
+  ratio_from: number
+  ratio_to: number
+  applied_at: string
+}
+
+export type NewSplitLogEntry = Omit<SplitLogEntry, 'id' | 'applied_at'>
 
 export interface DataProvider {
   listWorkspaces(): Promise<Workspace[]>
@@ -20,6 +43,12 @@ export interface DataProvider {
   addTransactions(workspaceId: string, txs: NewTransaction[]): Promise<Transaction[]>
   /** Update the contents of a single transaction*/
   updateTransaction(id: string, patch: NewTransaction): Promise<void>
+  /** Atomically update several transactions' price/qty/fee_tax/fee_rate (TX-03). */
+  updateTransactionsBatch(updates: TxUpdate[]): Promise<void>
+  /** List the stock splits already recorded for a workspace (TX-04 duplicate-apply warning). */
+  listSplitLog(workspaceId: string): Promise<SplitLogEntry[]>
+  /** Record a successfully-applied stock split (TX-04). */
+  recordSplit(entry: NewSplitLogEntry): Promise<SplitLogEntry>
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions(ids: string[]): Promise<void>
   /** Persist the workspace's fee rate (source of truth; localStorage is the cache)*/
@@ -35,6 +64,7 @@ const LOCAL_KEY = 'stock-pnl-web/local-store-v1'
 interface LocalStore {
   workspaces: Workspace[]
   transactions: Transaction[]
+  splitLog: SplitLogEntry[]
 }
 
 function newId(): string {
@@ -47,12 +77,15 @@ function readStore(): LocalStore {
     const raw = localStorage.getItem(LOCAL_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as LocalStore
-      if (Array.isArray(parsed.workspaces) && Array.isArray(parsed.transactions)) return parsed
+      if (Array.isArray(parsed.workspaces) && Array.isArray(parsed.transactions)) {
+        // splitLog is new (TX-04): a store written before it existed has no such array.
+        return { ...parsed, splitLog: Array.isArray(parsed.splitLog) ? parsed.splitLog : [] }
+      }
     }
   } catch {
     // Rebuild empty store when data is damaged
   }
-  return { workspaces: [], transactions: [] }
+  return { workspaces: [], transactions: [], splitLog: [] }
 }
 
 /**
@@ -139,6 +172,43 @@ export class LocalProvider implements DataProvider {
     writeStore(store)
   }
 
+  /**
+   * Atomic by construction: every id is resolved against the same in-memory `store` before
+   * anything is mutated, so a missing id throws before `writeStore` ever runs and no row is
+   * half-applied (TX-03, same guarantee the Supabase RPC gives via one SQL statement).
+   */
+  async updateTransactionsBatch(updates: TxUpdate[]): Promise<void> {
+    const store = readStore()
+    const indices = updates.map((u) => {
+      const idx = store.transactions.findIndex((t) => t.id === u.id)
+      if (idx < 0) throw new Error('找不到要更新的交易')
+      return idx
+    })
+    updates.forEach((u, i) => {
+      const idx = indices[i]
+      store.transactions[idx] = {
+        ...store.transactions[idx],
+        price: u.price,
+        qty: u.qty,
+        fee_tax: u.fee_tax,
+        fee_rate: u.fee_rate,
+      }
+    })
+    writeStore(store)
+  }
+
+  async listSplitLog(workspaceId: string): Promise<SplitLogEntry[]> {
+    return readStore().splitLog.filter((s) => s.workspace_id === workspaceId)
+  }
+
+  async recordSplit(entry: NewSplitLogEntry): Promise<SplitLogEntry> {
+    const store = readStore()
+    const row: SplitLogEntry = { ...entry, id: newId(), applied_at: new Date().toISOString() }
+    store.splitLog.push(row)
+    writeStore(store)
+    return row
+  }
+
   async deleteTransactions(ids: string[]): Promise<void> {
     const removed = new Set(ids)
     const store = readStore()
@@ -180,6 +250,8 @@ const TX_COLUMNS_WITHOUT_TX_NATURE =
 /** Without tx_nature and fee_rate, for a database that has not run that part of schema.sql. */
 const TX_COLUMNS_LEGACY =
   'id, workspace_id, tx_date, market, ticker, name, tx_type, price, qty, fee_tax, created_at'
+
+const SPLIT_LOG_COLUMNS = 'id, workspace_id, market, ticker, cutoff_date, ratio_from, ratio_to, applied_at'
 
 type NewTxColumn = 'tx_nature' | 'fee_rate'
 /** null: nothing dropped (full column set). 'both': neither new column present. */
@@ -375,6 +447,46 @@ export class SupabaseProvider implements DataProvider {
       logClient('error', 'updateTransaction', result.error.message, { code: result.error.code })
       throw new Error(`更新交易失敗：${result.error.message}`)
     }
+  }
+
+  /**
+   * One RPC call updates every row inside one SQL statement (TX-03) — no per-row round trip
+   * that could leave a split or a fee recalculation half-applied. `apply_transaction_updates`
+   * returns the number of rows it actually updated (RLS still applies inside it); fewer than
+   * requested means some ids were not this user's rows, so the whole call is reported as failed
+   * rather than silently accepted.
+   */
+  async updateTransactionsBatch(updates: TxUpdate[]): Promise<void> {
+    if (updates.length === 0) return
+    const { data, error } = await client().rpc('apply_transaction_updates', { p_updates: updates })
+    if (error) {
+      logClient('error', 'updateTransactionsBatch', error.message, { code: error.code })
+      throw new Error(`批次更新交易失敗：${error.message}`)
+    }
+    const updated = typeof data === 'number' ? data : Number(data ?? 0)
+    if (updated < updates.length) {
+      throw new Error(`批次更新交易失敗：預期更新 ${updates.length} 筆，實際更新 ${updated} 筆`)
+    }
+  }
+
+  async listSplitLog(workspaceId: string): Promise<SplitLogEntry[]> {
+    const { data, error } = await client()
+      .from('tx_split_log')
+      .select(SPLIT_LOG_COLUMNS)
+      .eq('workspace_id', workspaceId)
+    if (error) throw new Error(`載入分割紀錄失敗：${error.message}`)
+    return (data ?? []) as SplitLogEntry[]
+  }
+
+  async recordSplit(entry: NewSplitLogEntry): Promise<SplitLogEntry> {
+    const userId = await currentUserId()
+    const { data, error } = await client()
+      .from('tx_split_log')
+      .insert({ ...entry, user_id: userId })
+      .select(SPLIT_LOG_COLUMNS)
+      .single()
+    if (error) throw new Error(`記錄分割紀錄失敗：${error.message}`)
+    return data as SplitLogEntry
   }
 
   async deleteTransactions(ids: string[]): Promise<void> {

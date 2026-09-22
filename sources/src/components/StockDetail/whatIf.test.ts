@@ -69,6 +69,7 @@ describe('whatIf', () => {
           rawCost: 100_000,
           buyCostTotal: got.cost,
           realized: 0,
+          dividends: 0,
           avgCost: got.cost / 1_000,
           rawAvgCost: 100,
           // breakEvenPrice 不看未沖銷批次；比照 whatIf.ts 的合成部位給空陣列

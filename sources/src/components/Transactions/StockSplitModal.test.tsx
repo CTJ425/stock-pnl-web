@@ -68,6 +68,13 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 
 describe('StockSplitModal (股票分割換算精靈)', () => {
   const updateTransaction = vi.fn()
+  // Task 166 (TX-03/TX-04): atomic batch apply plus the split audit trail.
+  const updateTransactionsBatch = vi.fn(async (_updates: Array<Record<string, unknown>>) => {})
+  const listSplitLog = vi.fn(async () => [])
+  const recordSplit = vi.fn(async () => {})
+  /** Task 166 (TX-04): one atomic batch call replaced the per-row updates. */
+  const batchUpdates = () =>
+    (updateTransactionsBatch.mock.calls[0]?.[0] ?? []) as Array<Record<string, unknown>>
   const onClose = vi.fn()
   const onSuccess = vi.fn()
 
@@ -77,6 +84,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: MOCK_TRANSACTIONS,
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
   })
@@ -111,31 +121,22 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 2 筆紀錄）/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(2)
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(2)
     // tx1 update: qty 10 -> 100, price 1200 -> 120, fee_tax 5 unchanged
-    expect(updateTransaction).toHaveBeenNthCalledWith(
-      1,
-      'tx1',
-      expect.objectContaining({
-        ticker: 'NVDA',
+    expect(batchUpdates()[0]).toMatchObject({
+      id: 'tx1',
         qty: 100,
         price: 120,
         fee_tax: 5,
-        tx_type: 'BUY',
-      }),
-    )
+    })
     // tx2 update: qty 5 -> 50, price 1300 -> 130, fee_tax 3 unchanged
-    expect(updateTransaction).toHaveBeenNthCalledWith(
-      2,
-      'tx2',
-      expect.objectContaining({
-        ticker: 'NVDA',
+    expect(batchUpdates()[1]).toMatchObject({
+      id: 'tx2',
         qty: 50,
         price: 130,
         fee_tax: 3,
-        tx_type: 'BUY',
-      }),
-    )
+    })
 
     expect(onSuccess).toHaveBeenCalledTimes(1)
     expect(onSuccess).toHaveBeenCalledWith(expect.stringContaining('NVDA'))
@@ -165,11 +166,11 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 1 筆紀錄）/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(1)
-    expect(updateTransaction).toHaveBeenCalledWith(
-      'tx4',
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(1)
+    expect(batchUpdates()).toContainEqual(
       expect.objectContaining({
-        ticker: '2330',
+        id: 'tx4',
         qty: 1000,
         price: 2000,
         fee_tax: 2850,
@@ -199,11 +200,11 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 1 筆紀錄）/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(1)
-    expect(updateTransaction).toHaveBeenCalledWith(
-      'tx1',
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(1)
+    expect(batchUpdates()).toContainEqual(
       expect.objectContaining({
-        ticker: 'NVDA',
+        id: 'tx1',
         qty: 100,
         price: 120,
       }),
@@ -229,6 +230,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [txZeroFee],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區', fee_rate: 0.0004275 }, // 3.0 折
     })
 
@@ -247,12 +251,12 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(1)
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(1)
     // 24,000 shares @ 13.44 with fee_tax = 137 (3.0 折 of 322,560)
-    expect(updateTransaction).toHaveBeenCalledWith(
-      'tx-00685L',
+    expect(batchUpdates()).toContainEqual(
       expect.objectContaining({
-        ticker: '00685L',
+        id: 'tx-00685L',
         qty: 24000,
         price: 13.44,
         fee_tax: 137,
@@ -279,6 +283,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [txZeroFee],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區', fee_rate: 0.0004275 },
     })
 
@@ -297,10 +304,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledWith(
-      'tx-00685L',
+    expect(batchUpdates()).toContainEqual(
       expect.objectContaining({
-        ticker: '00685L',
+        id: 'tx-00685L',
         qty: 24000,
         price: 13.44,
         fee_tax: 0,
@@ -328,6 +334,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [txOriginalFee],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區', fee_rate: 0.0004275 }, // Workspace 預設為 3 折
     })
 
@@ -341,10 +350,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledWith(
-      'tx-00685L-orig',
+    expect(batchUpdates()).toContainEqual(
       expect.objectContaining({
-        ticker: '00685L',
+        id: 'tx-00685L-orig',
         qty: 24000,
         price: 13.44,
         fee_tax: 459, // 保留 459 元
@@ -357,6 +365,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
 
@@ -400,6 +411,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [oddLot],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
 
@@ -417,18 +431,18 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(confirmBtn.disabled).toBe(true)
 
     await user.click(confirmBtn)
-    expect(updateTransaction).not.toHaveBeenCalled()
+    expect(updateTransactionsBatch).not.toHaveBeenCalled()
     expect(onSuccess).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
   })
 
   /**
-   * AUDIT-11: the loop awaits one `updateTransaction` per row inside a single `try`. A failure part
-   * way through leaves the earlier rows converted and the rest untouched, so one ticker holds two
-   * share bases at once. The message said only 「更新失敗」. There is no transaction API to roll back
-   * with, so the requirement is that the message states exactly how far the batch got.
+   * AUDIT-11 asked the failure message to say how far the per-row loop got. Task 166 (TX-04)
+   * removed the partial state instead: one RPC applies every row inside a single statement, so a
+   * failure leaves the ledger exactly as it was. The requirement is now that nothing is recorded
+   * as applied and the window stays open with an error.
    */
-  it('中途失敗時回報已完成筆數與未變更筆數 (AUDIT-11)', async () => {
+  it('批次失敗時整批不生效、不記錄分割、不關閉視窗 (AUDIT-11 / TX-04)', async () => {
     const user = userEvent.setup()
     const txs: Transaction[] = [
       {
@@ -459,13 +473,14 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
       },
     ]
 
-    updateTransaction
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('network down'))
+    updateTransactionsBatch.mockRejectedValueOnce(new Error('network down'))
 
     useWorkspace.mockReturnValue({
       transactions: txs,
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
 
@@ -477,9 +492,10 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(2)
-    expect(await screen.findByText(/已完成 1 筆，第 2 筆更新失敗/)).toBeTruthy()
-    expect(screen.getByText(/其餘 1 筆未變更/)).toBeTruthy()
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(2)
+    expect(await screen.findByText(/未變更|失敗/)).toBeTruthy()
+    expect(recordSplit).not.toHaveBeenCalled()
     expect(onSuccess).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -531,6 +547,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [spotBuy, shortCover, shortSell],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
 
@@ -544,8 +563,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算（更新 1 筆紀錄）/ })
     await user.click(confirmBtn)
 
-    expect(updateTransaction).toHaveBeenCalledTimes(1)
-    expect(updateTransaction).toHaveBeenCalledWith('tx-spot', expect.objectContaining({ qty: 2000, price: 500 }))
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(batchUpdates()).toHaveLength(1)
+    expect(batchUpdates()).toContainEqual(expect.objectContaining({ id: 'tx-spot', qty: 2000, price: 500 }))
   })
 
   it('只有融券交易的標的完全不出現在換算清單中 (BUG-065)', () => {
@@ -566,6 +586,9 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     useWorkspace.mockReturnValue({
       transactions: [shortOnly],
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       current: { id: 'ws-1', name: '預設工作區' },
     })
 
@@ -573,4 +596,66 @@ describe('StockSplitModal (股票分割換算精靈)', () => {
     expect(screen.queryByRole('combobox', { name: '選擇換算標的' })).toBeNull()
   })
 
+  /**
+   * Task 166 (TX-03). The duplicate warning is the only thing standing between a second run of the
+   * same split and a share count converted twice, so it needs its own test.
+   */
+  describe('重複套用同一次分割的防護（Task 166 TX-03）', () => {
+    beforeEach(() => {
+      cleanup()
+      vi.clearAllMocks()
+      listSplitLog.mockResolvedValue([
+        {
+          id: 'log-1',
+          workspace_id: 'ws-1',
+          market: 'TPE',
+          ticker: '2330',
+          cutoff_date: null,
+          ratio_from: 1,
+          ratio_to: 2,
+          applied_at: '2026-09-20T10:00:00Z',
+        },
+      ] as never)
+      useWorkspace.mockReturnValue({
+        transactions: MOCK_TRANSACTIONS,
+        updateTransaction,
+        updateTransactionsBatch,
+        listSplitLog,
+        recordSplit,
+        current: { id: 'ws-1', name: '預設工作區' },
+      })
+    })
+
+    it('偵測到相同分割時先警告，且未勾選確認前不能送出', async () => {
+      const user = userEvent.setup()
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+
+      const select = screen.getByRole('combobox', { name: '選擇換算標的' })
+      await user.selectOptions(select, 'TPE:2330')
+      const ratioInput = screen.getByRole('spinbutton', { name: '分割比例' })
+      fireEvent.change(ratioInput, { target: { value: '2' } })
+
+      expect(await screen.findByText(/套用過相同的分割換算/)).toBeTruthy()
+      const confirmBtn = screen.getByRole('button', { name: /確認套用分割換算/ }) as HTMLButtonElement
+      expect(confirmBtn.disabled).toBe(true)
+
+      await user.click(screen.getByRole('checkbox', { name: '確認要再次套用相同的分割換算' }))
+      expect((screen.getByRole('button', { name: /確認套用分割換算/ }) as HTMLButtonElement).disabled).toBe(false)
+      await user.click(screen.getByRole('button', { name: /確認套用分割換算/ }))
+      expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    })
+
+    it('比例不同時不跳警告', async () => {
+      const user = userEvent.setup()
+      render(<StockSplitModal onClose={onClose} onSuccess={onSuccess} />)
+
+      const select = screen.getByRole('combobox', { name: '選擇換算標的' })
+      await user.selectOptions(select, 'TPE:2330')
+      const ratioInput = screen.getByRole('spinbutton', { name: '分割比例' })
+      fireEvent.change(ratioInput, { target: { value: '3' } })
+
+      await screen.findByRole('button', { name: /確認套用分割換算/ })
+      expect(screen.queryByText(/套用過相同的分割換算/)).toBeNull()
+    })
+  })
 })

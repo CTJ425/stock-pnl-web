@@ -485,7 +485,7 @@ describe('estimateUnrealized 逐批計算賣出成本（Task 136）', () => {
     // 整筆手續費 floor(637500*0.001425)=908、整筆證交稅 floor(637500*0.001)=637
     const h: Holding = {
       key: 'TPE:0050', ticker: '0050', name: '元大台灣50', market: 'TPE', currency: 'TWD',
-      qty: 6000, cost: 625188, rawCost: 623300, buyCostTotal: 625188, realized: 0,
+      qty: 6000, cost: 625188, rawCost: 623300, buyCostTotal: 625188, realized: 0, dividends: 0,
       avgCost: 625188 / 6000, rawAvgCost: 623300 / 6000, openLots: [],
       shortQty: 0, shortProceeds: 0, shortRawProceeds: 0, shortLots: [],
     }
@@ -967,5 +967,139 @@ describe('BUG-049 compareTxOrder：列表與匯出共用引擎的排序規則', 
   it('同側時以 id 收尾，結果穩定', () => {
     const b2 = { ...buy, id: 'bbb' }
     expect([b2, buy].slice().sort(compareTxOrder).map((t) => t.id)).toEqual(['aaa', 'bbb'])
+  })
+})
+
+/**
+ * Task 166 (EN-01). 現金股利只進收入、不動成本；股票股利只增股數、成本只加費用。
+ * 這是引擎的契約，年度報表與持股卡都從這裡讀數字。
+ */
+describe('股利（Task 166 EN-01）', () => {
+  it('現金股利：淨收入進帳，不動股數與成本', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 712 }),
+      tx({ date: '2024-07-15', market: 'TPE', ticker: '2330', type: 'DIVIDEND', price: 3.5, qty: 1000, fee: 100 }),
+    ])
+    const pos = ledger.positions['TPE:2330']
+    expect(pos.qty).toBe(1000)
+    expect(pos.cost).toBe(500712)
+    expect(pos.realized).toBe(0)
+    // 3.5 * 1000 - 100
+    expect(pos.dividends).toBe(3400)
+    expect(ledger.yearly[2024].dividendsTw).toBe(3400)
+    expect(ledger.yearly[2024].tickers['TPE:2330'].dividends).toBe(3400)
+    expect(ledger.summary.dividendsTw).toBe(3400)
+    expect(ledger.summary.dividendCount).toBe(1)
+  })
+
+  it('現金股利在賣光之後仍記得到該年度', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 712 }),
+      tx({ date: '2024-06-01', market: 'TPE', ticker: '2330', type: 'SELL', price: 600, qty: 1000, fee: 2655 }),
+      tx({ date: '2024-07-15', market: 'TPE', ticker: '2330', type: 'DIVIDEND', price: 2, qty: 1000, fee: 0 }),
+    ])
+    expect(ledger.positions['TPE:2330'].qty).toBe(0)
+    expect(ledger.positions['TPE:2330'].dividends).toBe(2000)
+    expect(ledger.yearly[2024].dividendsTw).toBe(2000)
+  })
+
+  it('美股現金股利進美元桶，不與台股相加', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'US', ticker: 'AAPL', type: 'BUY', price: 150, qty: 10, fee: 0 }),
+      tx({ date: '2024-05-10', market: 'US', ticker: 'AAPL', type: 'DIVIDEND', price: 0.24, qty: 10, fee: 0.3 }),
+    ])
+    expect(ledger.yearly[2024].dividendsUs).toBeCloseTo(2.1, 10)
+    expect(ledger.yearly[2024].dividendsTw).toBe(0)
+    expect(ledger.summary.dividendsUs).toBeCloseTo(2.1, 10)
+  })
+
+  it('股票股利：股數增加、成本只加費用、均價下降', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'TPE', ticker: '2881', type: 'BUY', price: 60, qty: 1000, fee: 85 }),
+      tx({ date: '2024-08-01', market: 'TPE', ticker: '2881', type: 'STOCK_DIVIDEND', price: 0, qty: 100, fee: 0 }),
+    ])
+    const pos = ledger.positions['TPE:2881']
+    expect(pos.qty).toBe(1100)
+    expect(pos.cost).toBe(60085)
+    expect(pos.dividends).toBe(0)
+    const holding = ledger.holdings.find((h) => h.key === 'TPE:2881')!
+    expect(holding.avgCost).toBeCloseTo(60085 / 1100, 10)
+  })
+
+  it('股票股利之後賣出：成本基礎用攤薄後的均價', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'TPE', ticker: '2881', type: 'BUY', price: 60, qty: 1000, fee: 85 }),
+      tx({ date: '2024-08-01', market: 'TPE', ticker: '2881', type: 'STOCK_DIVIDEND', price: 0, qty: 100, fee: 0 }),
+      tx({ date: '2024-09-01', market: 'TPE', ticker: '2881', type: 'SELL', price: 70, qty: 1100, fee: 320 }),
+    ])
+    const pos = ledger.positions['TPE:2881']
+    expect(pos.qty).toBe(0)
+    // 賣出實收 70*1100-320 = 76,680，成本 60,085
+    expect(pos.realized).toBeCloseTo(76680 - 60085, 6)
+  })
+
+  it('股利不計入買賣筆數，但計入總筆數', () => {
+    const ledger = computeLedger([
+      tx({ date: '2024-01-10', market: 'TPE', ticker: '2330', type: 'BUY', price: 500, qty: 1000, fee: 712 }),
+      tx({ date: '2024-07-15', market: 'TPE', ticker: '2330', type: 'DIVIDEND', price: 3.5, qty: 1000, fee: 0 }),
+      tx({ date: '2024-08-15', market: 'TPE', ticker: '2330', type: 'STOCK_DIVIDEND', price: 0, qty: 50, fee: 0 }),
+    ])
+    expect(ledger.summary.buyCount).toBe(1)
+    expect(ledger.summary.sellCount).toBe(0)
+    expect(ledger.summary.count).toBe(3)
+  })
+})
+
+describe('未實現損益的費用口徑（Task 166 EN-02）', () => {
+  const usHolding: Holding = {
+    key: 'US:AAPL', ticker: 'AAPL', name: 'AAPL', market: 'US', currency: 'USD',
+    qty: 10, cost: 1500, rawCost: 1500, buyCostTotal: 1500, realized: 0, dividends: 0,
+    openLots: [{ txId: 'tx-us', date: '2024-01-10', qty: 10, price: 150, cost: 1500, rawCost: 1500, feeRate: 0 }],
+    shortQty: 0, shortProceeds: 0, shortRawProceeds: 0, shortLots: [],
+    avgCost: 150, rawAvgCost: 150,
+  }
+
+  it('美股維持毛額（與 GAS 版一致，本應用沒有美股費率設定）', () => {
+    expect(estimateUnrealized(usHolding, 160, 0.001425, 20)).toBe(100)
+  })
+})
+
+/**
+ * Task 166 review finding: `isOpenLeg` only counted BUY, but 股票股利 also opens shares.
+ * A bulk CSV import writes one `created_at` for every row, so a same-day 股票股利 and 賣出
+ * tie on both keys and the sell could be processed first — a false 超賣 and a wrong cost basis.
+ */
+describe('股票股利是開倉腿（Task 166 排序）', () => {
+  const sameStamp = '2026-01-01T00:00:00.000Z'
+  const row = (id: string, type: TxType, price: number, qty: number, fee = 0): Transaction => ({
+    id,
+    workspace_id: 'ws-1',
+    tx_date: '2024-08-01',
+    market: 'TPE',
+    ticker: '2881',
+    name: '富邦金',
+    tx_type: type,
+    price,
+    qty,
+    fee_tax: fee,
+    created_at: sameStamp,
+  })
+
+  it('同日同時間匯入時，配股排在賣出之前，不會誤判超賣', () => {
+    // id 'b' 的賣出排在 id 'a' 之前才會出錯：以 id 為次序時 'a' < 'b'，所以用 'z' 當配股 id
+    const ledger = computeLedger([
+      { ...row('a-sell', 'SELL', 70, 1100, 320) },
+      { ...row('z-stock-dividend', 'STOCK_DIVIDEND', 0, 100, 0) },
+      { ...row('0-buy', 'BUY', 60, 1000, 85), tx_date: '2024-01-10', created_at: '2020-01-01T00:00:00.000Z' },
+    ])
+    expect(ledger.warnings).toHaveLength(0)
+    expect(ledger.positions['TPE:2881'].qty).toBe(0)
+    expect(ledger.positions['TPE:2881'].realized).toBeCloseTo(70 * 1100 - 320 - 60085, 6)
+  })
+
+  it('compareTxOrder 也把配股排在同時間的賣出之前', () => {
+    const sell = row('a-sell', 'SELL', 70, 1100, 320)
+    const stock = row('z-stock-dividend', 'STOCK_DIVIDEND', 0, 100, 0)
+    expect(compareTxOrder(stock, sell)).toBeLessThan(0)
   })
 })

@@ -45,6 +45,8 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 
 describe('RecalcFeesModal (批次重算手續費)', () => {
   const updateTransaction = vi.fn()
+  // Task 166 (TX-04): the apply path is one atomic RPC, not a per-row loop.
+  const updateTransactionsBatch = vi.fn()
   const onClose = vi.fn()
 
   beforeEach(() => {
@@ -53,41 +55,40 @@ describe('RecalcFeesModal (批次重算手續費)', () => {
     useWorkspace.mockReturnValue({
       transactions: MOCK_TRANSACTIONS,
       updateTransaction,
+      updateTransactionsBatch,
       current: { id: 'ws-1', name: '預設工作區' },
     })
   })
 
-  it('全部成功時逐筆更新並關閉視窗', async () => {
+  it('全部成功時以單一批次更新並關閉視窗', async () => {
     const user = userEvent.setup()
-    updateTransaction.mockResolvedValue(undefined)
+    updateTransactionsBatch.mockResolvedValue(undefined)
 
     render(<RecalcFeesModal onClose={onClose} />)
 
     await user.click(screen.getByRole('button', { name: /更新勾選的 2 筆手續費/ }))
 
-    expect(updateTransaction).toHaveBeenCalledTimes(2)
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(updateTransactionsBatch.mock.calls[0][0]).toHaveLength(2)
+    expect(updateTransaction).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   /**
-   * AUDIT-11: the loop awaits one `updateTransaction` per checked row inside a single `try`, so a
-   * failure part way through leaves earlier rows already rewritten. The message said only
-   * 「更新失敗」, which does not tell the user which rows to redo. There is no transaction API to
-   * roll back with, so the requirement is that the message states exactly how far the batch got.
+   * AUDIT-11 was「中途失敗時回報已完成幾筆」. Task 166 (TX-04) removed the partial-apply state
+   * itself: the batch is one statement, so a failure changes nothing. The requirement is now that
+   * the user is told the update did not happen and the window stays open.
    */
-  it('中途失敗時回報已完成筆數與未變更筆數，且不關閉視窗 (AUDIT-11)', async () => {
+  it('批次失敗時不關閉視窗，並說明沒有任何一筆被更新', async () => {
     const user = userEvent.setup()
-    updateTransaction
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('network down'))
+    updateTransactionsBatch.mockRejectedValue(new Error('network down'))
 
     render(<RecalcFeesModal onClose={onClose} />)
 
     await user.click(screen.getByRole('button', { name: /更新勾選的 2 筆手續費/ }))
 
-    expect(updateTransaction).toHaveBeenCalledTimes(2)
-    expect(await screen.findByText(/已完成 1 筆，第 2 筆更新失敗/)).toBeTruthy()
-    expect(screen.getByText(/其餘 1 筆未變更/)).toBeTruthy()
+    expect(updateTransactionsBatch).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/未變更|失敗/)).toBeTruthy()
     expect(onClose).not.toHaveBeenCalled()
   })
 })

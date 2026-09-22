@@ -3,9 +3,10 @@
  * - Select an existing ticker with BUY transactions
  * - Configure split type (Forward 1拆N or Reverse N併1), ratio, and optional cutoff date
  * - Live preview before & after total quantity, average cost, invariant total cost, and affected transactions
- * - Batch update transactions via updateTransaction
+ * - Applies the conversion in one atomic batch (TX-03/TX-09) and warns before reapplying a split
+ *   already recorded in tx_split_log (TX-04)
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Scissors, Sparkles } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Modal } from '../Common/Modal'
@@ -15,6 +16,8 @@ import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtPrice, fmtQty } from '../../utils/formatters'
 import { calculateFee, inferFeeRate } from '../../utils/fees'
 import { getFeeRate, getMinFee } from '../../utils/settings'
+import type { SplitLogEntry, TxUpdate } from '../../services/dataProvider'
+import { runBatchApply } from './batchUpdate'
 
 export interface StockSplitModalProps {
   onClose: () => void
@@ -36,7 +39,7 @@ interface PreviewItem {
 }
 
 export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
-  const { transactions, updateTransaction, current } = useWorkspace()
+  const { transactions, updateTransactionsBatch, listSplitLog, recordSplit, current } = useWorkspace()
 
   // Effective fee rate and min fee for the workspace
   const workspaceFeeRate = current?.fee_rate ?? getFeeRate(current?.id)
@@ -73,6 +76,10 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const [autoFillZeroFee, setAutoFillZeroFee] = useState<boolean>(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // TX-04: the split already logged for this exact (workspace, market, ticker, cutoff, ratio),
+  // if any, and whether the user has ticked the second confirmation required to reapply it.
+  const [duplicateSplit, setDuplicateSplit] = useState<SplitLogEntry | null>(null)
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false)
 
   const selectedTickerInfo = useMemo(() => {
     if (!selectedKey) return null
@@ -81,6 +88,40 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
 
   const ratio = parseFloat(ratioStr)
   const isValidRatio = !Number.isNaN(ratio) && ratio > 0
+  // ratio_from/ratio_to encode both the number and the direction: forward 1 拆 N is (1, N),
+  // reverse N 併 1 is (N, 1) — matches the tx_split_log columns (TX-04).
+  const ratioFrom = splitType === 'forward' ? 1 : ratio
+  const ratioTo = splitType === 'forward' ? ratio : 1
+  const cutoffKey = cutoffDate || null
+
+  useEffect(() => {
+    setConfirmDuplicate(false)
+    if (!current?.id || !selectedTickerInfo || !isValidRatio) {
+      setDuplicateSplit(null)
+      return
+    }
+    let cancelled = false
+    listSplitLog(current.id)
+      .then((entries) => {
+        if (cancelled) return
+        const match = entries.find(
+          (e) =>
+            e.market === selectedTickerInfo.market &&
+            e.ticker === selectedTickerInfo.ticker &&
+            (e.cutoff_date ?? null) === cutoffKey &&
+            e.ratio_from === ratioFrom &&
+            e.ratio_to === ratioTo,
+        )
+        setDuplicateSplit(match ?? null)
+      })
+      .catch(() => {
+        // Advisory only: a failed lookup should not block the wizard, just skip the warning.
+        if (!cancelled) setDuplicateSplit(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [current?.id, selectedTickerInfo, isValidRatio, ratioFrom, ratioTo, cutoffKey, listSplitLog])
 
   // Filter matching BUY transactions
   const matchingTxs = useMemo(() => {
@@ -175,46 +216,56 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
   const avgPriceAfter = totalQtyAfter > 0 ? totalGrossAfter / totalQtyAfter : 0
 
   const handleConfirm = async () => {
-    if (busy || previewItems.length === 0 || !isValidRatio || zeroQtyCount > 0) return
+    if (
+      busy ||
+      previewItems.length === 0 ||
+      !isValidRatio ||
+      zeroQtyCount > 0 ||
+      (duplicateSplit !== null && !confirmDuplicate)
+    )
+      return
     // No extra confirm dialog here: the button that reaches this point already reads
     // "確認套用分割換算（更新 N 筆紀錄）" inside a modal the user opened on purpose, so a
-    // second dialog would be the same question twice.
-    setBusy(true)
-    setError(null)
-    let done = 0
-    try {
-      for (const item of previewItems) {
-        await updateTransaction(item.tx.id, {
-          tx_date: item.tx.tx_date,
-          market: item.tx.market,
-          ticker: item.tx.ticker,
-          name: item.tx.name,
-          tx_type: item.tx.tx_type,
-          price: item.newPrice,
-          qty: item.newQty,
-          fee_tax: item.feeTax,
-          tx_nature: item.tx.tx_nature,
-          fee_rate: item.feeRate,
+    // second dialog would be the same question twice. The duplicate-split checkbox above is
+    // the one extra confirmation TX-04 asks for, and only when a matching split was logged.
+    const updates: TxUpdate[] = previewItems.map((item) => ({
+      id: item.tx.id,
+      price: item.newPrice,
+      qty: item.newQty,
+      fee_tax: item.feeTax,
+      fee_rate: item.feeRate,
+    }))
+    const ok = await runBatchApply(updateTransactionsBatch, updates, setBusy, setError)
+    if (!ok) return
+
+    // The split itself already applied above (transactions updated atomically); this log write is
+    // best-effort on top of that, so its failure must not roll back or re-run the split. But it
+    // must not be silent either: without the log, a later repeat of the same split will not be
+    // flagged by the duplicateSplit check, so the user is told now instead of finding out never.
+    let splitLogFailed = false
+    if (current?.id && selectedTickerInfo) {
+      try {
+        await recordSplit({
+          workspace_id: current.id,
+          market: selectedTickerInfo.market,
+          ticker: selectedTickerInfo.ticker,
+          cutoff_date: cutoffKey,
+          ratio_from: ratioFrom,
+          ratio_to: ratioTo,
         })
-        done += 1
+      } catch {
+        splitLogFailed = true
       }
-      const stockDisplayName = selectedTickerInfo
-        ? `${selectedTickerInfo.ticker} ${displayStockName(selectedTickerInfo.market, selectedTickerInfo.ticker, selectedTickerInfo.name)}`
-        : ''
-      const msg = `✂️ 已成功完成 ${stockDisplayName} 的股票分割換算，共更新 ${previewItems.length} 筆買入紀錄。`
-      if (onSuccess) {
-        onSuccess(msg)
-      }
-      onClose()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '分割換算更新失敗，請稍後再試'
-      const total = previewItems.length
-      setError(
-        `已完成 ${done} 筆，第 ${done + 1} 筆更新失敗：${message}。其餘 ${total - done} 筆未變更，請重新開啟精靈續做。`,
-      )
-    } finally {
-      setBusy(false)
     }
+
+    const stockDisplayName = selectedTickerInfo
+      ? `${selectedTickerInfo.ticker} ${displayStockName(selectedTickerInfo.market, selectedTickerInfo.ticker, selectedTickerInfo.name)}`
+      : ''
+    const msg = `✂️ 已成功完成 ${stockDisplayName} 的股票分割換算，共更新 ${previewItems.length} 筆買入紀錄。${splitLogFailed ? '（分割紀錄儲存失敗，之後重複執行同一筆分割將不會被偵測。）' : ''}`
+    if (onSuccess) {
+      onSuccess(msg)
+    }
+    onClose()
   }
 
   return (
@@ -380,6 +431,23 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                   股，但原手續費仍會保留，永久墊高該標的的平均成本。請改用較小的併股比例，或先個別調整這幾筆紀錄。
                 </div>
               )}
+              {duplicateSplit && (
+                <div className="notice notice-warn" role="alert">
+                  <div>
+                    ⚠️ 這個標的已於 {duplicateSplit.applied_at.slice(0, 10)}{' '}
+                    套用過相同的分割換算（{duplicateSplit.ratio_from}:{duplicateSplit.ratio_to}），重複套用會讓股數與成本被換算兩次。
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmDuplicate}
+                      onChange={(e) => setConfirmDuplicate(e.target.checked)}
+                      aria-label="確認要再次套用相同的分割換算"
+                    />
+                    <span>我確認要再次套用這個分割換算</span>
+                  </label>
+                </div>
+              )}
               <div
                 className="split-preview-card"
                 style={{
@@ -502,7 +570,13 @@ export function StockSplitModal({ onClose, onSuccess }: StockSplitModalProps) {
                 type="button"
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
-                disabled={busy || previewItems.length === 0 || !isValidRatio || zeroQtyCount > 0}
+                disabled={
+                  busy ||
+                  previewItems.length === 0 ||
+                  !isValidRatio ||
+                  zeroQtyCount > 0 ||
+                  (duplicateSplit !== null && !confirmDuplicate)
+                }
                 onClick={() => void handleConfirm()}
               >
                 <CheckCircle2 size={16} />

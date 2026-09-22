@@ -193,6 +193,8 @@ function computeBreakEven(ticker: string, market: Market, currency: Currency, sh
     name: '',
     market,
     currency,
+    // Task 166: dividends never enter a break-even price; the synthetic holding carries none.
+    dividends: 0,
     qty: shares,
     cost: basis,
     rawCost: basis,

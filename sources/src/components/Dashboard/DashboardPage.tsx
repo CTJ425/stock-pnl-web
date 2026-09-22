@@ -36,8 +36,11 @@ const HELP = {
   avgCost:
     '每股平均買進的價格，含買進手續費，也就是每股實際付出的錢。下方「未含費」是不含手續費的價格。',
   cost: '你現在還投在這檔股票上的錢，含買進手續費。已經賣掉的部分不算在內。',
-  breakEven:
+  // BUG-079 review: `breakEvenPrice`'s USD path applies no securities tax (see fees.ts), so the
+  // TWD/USD wording must differ; `breakEvenHelp` below picks the right one per table.
+  breakEvenTWD:
     '賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）。賣得比它高才真的有賺。',
+  breakEvenUSD: '賣在這個價格剛好不賺不賠（含手續費）。賣得比它高才真的有賺。',
   mktVal: '這些股票現在值多少錢。抓不到股價時顯示「—」。',
   unrealized:
     '如果現在全部賣掉，大概會賺或賠多少。「淨」代表手續費和稅都已經算進去（美股不含賣出費用）。下方「未含費」是不扣任何費用的價差，會比實際好看一點。',
@@ -86,9 +89,17 @@ function HoldingsTable({
   const longRows = rows.filter((r) => r.direction === 'LONG')
   const shortRows = rows.filter((r) => r.direction === 'SHORT')
   const hasShort = shortRows.length > 0
+  // Same table component renders both currencies; pick the matching break-even wording once here
+  // instead of duplicating the table per currency. `breakEvenPrice`'s USD path applies no
+  // securities tax (see fees.ts), so the per-row title must not claim one either.
+  const breakEvenHeaderHelp = currency === 'TWD' ? HELP.breakEvenTWD : HELP.breakEvenUSD
+  const breakEvenTitle =
+    currency === 'TWD'
+      ? '賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）'
+      : '賣在這個價格剛好不賺不賠（含手續費）'
 
   const renderRow = (row: HoldingRow) => {
-    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, brokerUnrealized, rawUnrealized, roi, brokerRoi, breakEven } = row
+    const { holding: h, direction, rowQty, price, priceStale, dayChange, mktVal, unrealized, brokerUnrealized, brokerNotApplicable, rawUnrealized, roi, brokerRoi, breakEven } = row
     const isShort = direction === 'SHORT'
     const isClickable = currency === 'TWD' && typeof onSelectTicker === 'function'
     const stockName = displayStockName(h.market, h.ticker, h.name)
@@ -194,12 +205,8 @@ function HoldingsTable({
                 )}
               </td>
               <td
-                className={`num ${price !== null ? pnlClass(price - breakEven) : ''}`}
-                title={
-                  isShort
-                    ? '低於此價才獲利'
-                    : '賣在這個價格剛好不賺不賠（含手續費與法定證交稅：個股 0.3%、ETF 0.1%）'
-                }
+                className={`num ${price !== null && breakEven !== null ? pnlClass(price - breakEven) : ''}`}
+                title={isShort ? '低於此價才獲利' : breakEvenTitle}
               >
                 {fmtPrice(breakEven, currency)}
               </td>
@@ -226,7 +233,14 @@ function HoldingsTable({
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtSignedMoney(unrealized, currency)}</div>
-                    {brokerUnrealized !== null && brokerUnrealized !== unrealized ? (
+                    {brokerNotApplicable ? (
+                      <div
+                        style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                        title="美股沒有券商未折讓費率設定，此欄不適用"
+                      >
+                        券商不適用
+                      </div>
+                    ) : brokerUnrealized !== null && brokerUnrealized !== unrealized ? (
                       <div
                         style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
                         title="依券商牌告未折讓費率（0.1425%）預扣之損益，對齊券商 APP 月退制口徑"
@@ -252,13 +266,22 @@ function HoldingsTable({
                 ) : (
                   <>
                     <div style={{ fontWeight: 600 }}>{fmtSignedPercent(roi)}</div>
-                    {brokerRoi !== null && fmtSignedPercent(brokerRoi) !== fmtSignedPercent(roi) && (
+                    {brokerNotApplicable ? (
                       <div
                         style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
-                        title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
+                        title="美股沒有券商未折讓費率設定，此欄不適用"
                       >
-                        券商 {fmtSignedPercent(brokerRoi)}
+                        券商不適用
                       </div>
+                    ) : (
+                      brokerRoi !== null && fmtSignedPercent(brokerRoi) !== fmtSignedPercent(roi) && (
+                        <div
+                          style={{ opacity: 0.65, fontWeight: 400, color: 'var(--ink-muted)' }}
+                          title="依券商牌告未折讓費率（0.1425%）預扣之報酬率，對齊券商 APP 月退制口徑"
+                        >
+                          券商 {fmtSignedPercent(brokerRoi)}
+                        </div>
+                      )
                     )}
                   </>
                 )}
@@ -278,7 +301,7 @@ function HoldingsTable({
             <HelpTh label="持有股數" help={HELP.qty} numeric />
             <HelpTh label="投入成本" help={HELP.cost} numeric />
             <HelpTh label="平均買入成本" help={HELP.avgCost} numeric />
-            <HelpTh label="保本賣出價" help={HELP.breakEven} numeric />
+            <HelpTh label="保本賣出價" help={breakEvenHeaderHelp} numeric />
             <HelpTh label="目前市值" help={HELP.mktVal} numeric />
             <HelpTh label="未實現淨損益" help={HELP.unrealized} numeric />
             <HelpTh label="未實現報酬率" help={HELP.roi} numeric />

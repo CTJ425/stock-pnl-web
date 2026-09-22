@@ -54,6 +54,12 @@ export interface Position {
   buyCostTotal: number
   /** Cumulative realized gains and losses*/
   realized: number
+  /**
+   * Cumulative net cash dividends received (Σ price*qty − fee_tax over DIVIDEND rows).
+   * Required for the same reason as `shortQty` below: an optional money field reads as 0
+   * when a caller forgets it, and a forgotten dividend is silent. Let the compiler catch it.
+   */
+  dividends: number
   /** FIFO lots not yet fully sold, oldest first */
   openLots: OpenLot[]
   /**
@@ -122,6 +128,8 @@ export interface YearTickerDetail {
   /** Same as above, but using the average transaction price without handling fees.*/
   rawCostBasis: number
   realized: number
+  /** Net cash dividends received for this ticker this year (DIVIDEND rows only)*/
+  dividends: number
   fees: number
   /** Securities tax estimate, same as summary caliber*/
   feesTax: number
@@ -133,6 +141,10 @@ export interface YearSummary {
   year: number
   realizedTw: number
   realizedUs: number
+  /** Net cash dividends received this year, TWD-market tickers (DIVIDEND rows only)*/
+  dividendsTw: number
+  /** Net cash dividends received this year, US-market tickers (DIVIDEND rows only)*/
+  dividendsUs: number
   buyAmt: number
   buyGross: number
   sellAmt: number
@@ -159,12 +171,18 @@ export interface LedgerSummary {
   feesTax: number
   /** Estimation of historical accumulated borrow fee (借券費), charged on a SHORT sell only*/
   feesBorrow: number
+  /** Historical cumulative net cash dividends (TWD), DIVIDEND rows only*/
+  dividendsTw: number
+  /** Historical cumulative net cash dividends (USD), DIVIDEND rows only*/
+  dividendsUs: number
   /** Historical cumulative number of transactions*/
   count: number
   /** Historical cumulative number of purchases*/
   buyCount: number
   /** Historical cumulative number of sales*/
   sellCount: number
+  /** Historical cumulative number of DIVIDEND rows*/
+  dividendCount: number
 }
 
 export interface Ledger {
@@ -206,9 +224,12 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 // BUG-049: when `tx_date` and `created_at` both tie (a single bulk import writes one
 // created_at for every row), the opening leg must sort before the closing leg so the
-// engine never sees a sell/cover before the position exists.
+// engine never sees a sell/cover before the position exists. STOCK_DIVIDEND also raises
+// `qty` and pushes an OpenLot (Task 166), so it must count as an opening leg too, or a
+// same-day 股票股利 + 賣出 pair from a bulk import can process the sell first and produce
+// a false 超賣 warning and a wrong cost basis.
 const isOpenLeg = (tx: Transaction) =>
-  tx.tx_nature === 'SHORT' ? tx.tx_type === 'SELL' : tx.tx_type === 'BUY'
+  tx.tx_nature === 'SHORT' ? tx.tx_type === 'SELL' : tx.tx_type === 'BUY' || tx.tx_type === 'STOCK_DIVIDEND'
 
 /**
  * BUG-049 follow-up: the canonical transaction order, shared by `computeLedger` and any UI
@@ -326,13 +347,20 @@ export function computeLedger(transactions: Transaction[]): Ledger {
     holdings: [],
     yearly: {},
     years: [],
-    summary: { realizedTw: 0, realizedUs: 0, fees: 0, feesBrokerage: 0, feesTax: 0, feesBorrow: 0, count: 0, buyCount: 0, sellCount: 0 },
+    summary: {
+      realizedTw: 0, realizedUs: 0, fees: 0, feesBrokerage: 0, feesTax: 0, feesBorrow: 0,
+      dividendsTw: 0, dividendsUs: 0,
+      count: 0, buyCount: 0, sellCount: 0, dividendCount: 0,
+    },
     warnings: [],
   }
 
   // Sort by date; same day by creation time (equivalent to the input column order of the GAS version)
   const txs = transactions
-    .filter((tx) => tx.qty > 0 && (tx.tx_type === 'BUY' || tx.tx_type === 'SELL'))
+    .filter((tx) =>
+      tx.qty > 0 &&
+      (tx.tx_type === 'BUY' || tx.tx_type === 'SELL' || tx.tx_type === 'DIVIDEND' || tx.tx_type === 'STOCK_DIVIDEND'),
+    )
     .slice()
     .sort(compareTxOrder)
 
@@ -358,6 +386,8 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         year,
         realizedTw: 0,
         realizedUs: 0,
+        dividendsTw: 0,
+        dividendsUs: 0,
         buyAmt: 0,
         buyGross: 0,
         sellAmt: 0,
@@ -400,6 +430,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           rawCost: 0,
           buyCostTotal: 0,
           realized: 0,
+          dividends: 0,
           openLots: [],
           shortQty: 0,
           shortProceeds: 0,
@@ -424,6 +455,7 @@ export function computeLedger(transactions: Transaction[]): Ledger {
           costBasis: 0,
           rawCostBasis: 0,
           realized: 0,
+          dividends: 0,
           fees: 0,
           feesTax: 0,
           count: 0,
@@ -570,6 +602,47 @@ export function computeLedger(transactions: Transaction[]): Ledger {
         }
 
         if (effQty <= 0) continue
+
+        // Task 166 EN-01: cash dividend. Pure income — it never touches qty, cost, rawCost,
+        // openLots, realized or sells, so it bypasses the BUY/SELL/SHORT branches entirely.
+        if (tx.tx_type === 'DIVIDEND') {
+          const net = tx.price * effQty - effFeeTax
+          pos.dividends += net
+          yt.dividends += net
+          if (currency === 'TWD') {
+            y.dividendsTw += net
+            ledger.summary.dividendsTw += net
+          } else {
+            y.dividendsUs += net
+            ledger.summary.dividendsUs += net
+          }
+          y.count++
+          yt.count++
+          ledger.summary.dividendCount++
+          continue
+        }
+
+        // Task 166 EN-01: stock dividend, a zero-price BUY — new shares at price 0, cost only
+        // grows by fee_tax (rawCost stays put), counted in `count` but never `buyCount`.
+        if (tx.tx_type === 'STOCK_DIVIDEND') {
+          const totalCost = effFeeTax
+          y.buyAmt += totalCost
+          yt.buyAmt += totalCost
+          pos.cost += totalCost
+          pos.qty += effQty
+          pos.openLots.push({
+            txId: tx.id,
+            date: tx.tx_date,
+            qty: effQty,
+            price: 0,
+            cost: totalCost,
+            rawCost: 0,
+            feeRate: inferTxFeeRate(tx),
+          })
+          y.count++
+          yt.count++
+          continue
+        }
 
         countTx(tx)
         y.fees += effFeeTax

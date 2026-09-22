@@ -12,9 +12,11 @@ import { useToast } from '../Common/Toast'
 import { proposeFeeCorrections } from '../../utils/fees'
 import { getFeeRate, getMinFee } from '../../utils/settings'
 import { TX_TYPE_LABEL } from '../../types/models'
+import type { TxUpdate } from '../../services/dataProvider'
+import { runBatchApply } from './batchUpdate'
 
 export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
-  const { current, transactions, updateTransaction } = useWorkspace()
+  const { current, transactions, updateTransactionsBatch } = useWorkspace()
   const { show } = useToast()
   const workspaceId = current?.id
   const feeRate = getFeeRate(workspaceId)
@@ -50,34 +52,13 @@ export function RecalcFeesModal({ onClose }: { onClose: () => void }) {
     // No extra confirm dialog here: the button that reaches this point already reads
     // "更新勾選的 N 筆手續費" inside a modal the user opened on purpose, so a second dialog
     // would be the same question twice. The success toast below is what was actually missing.
-    const total = checked.size
-    setBusy(true)
-    setError(null)
-    let done = 0
-    try {
-      for (const { tx, newFee } of proposals) {
-        if (!checked.has(tx.id)) continue
-        await updateTransaction(tx.id, {
-          tx_date: tx.tx_date,
-          market: tx.market,
-          ticker: tx.ticker,
-          name: tx.name,
-          tx_type: tx.tx_type,
-          price: tx.price,
-          qty: tx.qty,
-          fee_tax: newFee,
-          fee_rate: feeRate,
-        })
-        done += 1
-      }
-      show(`已更新 ${done} 筆手續費`)
-      onClose()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '更新失敗，請稍後再試'
-      setError(`已完成 ${done} 筆，第 ${done + 1} 筆更新失敗：${message}。其餘 ${total - done} 筆未變更，請重新開啟精靈續做。`)
-    } finally {
-      setBusy(false)
-    }
+    const updates: TxUpdate[] = proposals
+      .filter(({ tx }) => checked.has(tx.id))
+      .map(({ tx, newFee }) => ({ id: tx.id, price: tx.price, qty: tx.qty, fee_tax: newFee, fee_rate: feeRate }))
+    const ok = await runBatchApply(updateTransactionsBatch, updates, setBusy, setError)
+    if (!ok) return
+    show(`已更新 ${updates.length} 筆手續費`)
+    onClose()
   }
 
   return (

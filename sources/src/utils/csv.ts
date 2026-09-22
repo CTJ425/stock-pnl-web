@@ -109,9 +109,14 @@ function parseNumber(value: string): number {
 }
 
 function parseTxType(value: string): TxType | null {
-  const v = value.trim().toUpperCase()
+  const trimmed = value.trim()
+  if (trimmed === '現金股利') return 'DIVIDEND'
+  if (trimmed === '股票股利') return 'STOCK_DIVIDEND'
+  const v = trimmed.toUpperCase()
   if (v === 'BUY' || v === '買入') return 'BUY'
   if (v === 'SELL' || v === '賣出') return 'SELL'
+  if (v === 'DIVIDEND') return 'DIVIDEND'
+  if (v === 'STOCK_DIVIDEND') return 'STOCK_DIVIDEND'
   return null
 }
 

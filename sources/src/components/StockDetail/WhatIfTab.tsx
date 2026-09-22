@@ -153,13 +153,19 @@ export function WhatIfTab({ ticker, currentPrice, rawAvgCost, avgCost = null, he
               },
             ]
           : []),
-        {
-          kind: 'breakEven' as const,
-          label: '回本',
-          price: result!.breakEven,
-          relative: result!.breakEven / anchor - 1,
-          pnl: markPnl(result!.breakEven),
-        },
+        // Task 166 (EN-07): breakEven is null when the solver does not converge — show no mark
+        // rather than a price that is not actually break-even.
+        ...(result!.breakEven !== null
+          ? [
+              {
+                kind: 'breakEven' as const,
+                label: '回本',
+                price: result!.breakEven,
+                relative: result!.breakEven / anchor - 1,
+                pnl: markPnl(result!.breakEven),
+              },
+            ]
+          : []),
       ]
     : []
 

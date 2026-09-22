@@ -17,7 +17,7 @@ import type { ReactNode } from 'react'
 import type { NewTransaction, Transaction, Workspace } from '../types/models'
 import type { Ledger } from '../utils/pnlEngine'
 import { computeLedger } from '../utils/pnlEngine'
-import type { DataProvider } from '../services/dataProvider'
+import type { DataProvider, NewSplitLogEntry, SplitLogEntry, TxUpdate } from '../services/dataProvider'
 import { LocalProvider, SupabaseProvider } from '../services/dataProvider'
 import { isSupabaseConfigured } from '../services/supabase'
 import { prefetchStockData } from '../services/prefetchStockData'
@@ -42,6 +42,12 @@ export interface WorkspaceState {
   addTransactions: (txs: NewTransaction[]) => Promise<void>
   /** Update the contents of a single transaction*/
   updateTransaction: (id: string, patch: NewTransaction) => Promise<void>
+  /** Atomically update several transactions' price/qty/fee_tax/fee_rate (TX-03). */
+  updateTransactionsBatch: (updates: TxUpdate[]) => Promise<void>
+  /** List the stock splits already recorded for a workspace (TX-04 duplicate-apply warning). */
+  listSplitLog: (workspaceId: string) => Promise<SplitLogEntry[]>
+  /** Record a successfully-applied stock split (TX-04). */
+  recordSplit: (entry: NewSplitLogEntry) => Promise<SplitLogEntry>
   /** Batch deletion (single deletion passes in a single element array)*/
   deleteTransactions: (ids: string[]) => Promise<void>
   setWorkspaceFeeRate: (id: string, rate: number) => Promise<void>
@@ -189,6 +195,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [provider],
   )
 
+  const updateTransactionsBatch = useCallback(
+    async (updates: TxUpdate[]) => {
+      // Without runSafely, same as updateTransaction: the caller (split wizard / fee recalc)
+      // reports its own failure message. Local state is patched once, after the provider call
+      // succeeds, so a rejected batch never leaves the UI showing changes that were not saved.
+      await provider.updateTransactionsBatch(updates)
+      const byId = new Map(updates.map((u) => [u.id, u]))
+      setTransactions((prev) =>
+        prev.map((t) => {
+          const u = byId.get(t.id)
+          return u ? { ...t, price: u.price, qty: u.qty, fee_tax: u.fee_tax, fee_rate: u.fee_rate } : t
+        }),
+      )
+    },
+    [provider],
+  )
+
+  const listSplitLog = useCallback(
+    (workspaceId: string) => provider.listSplitLog(workspaceId),
+    [provider],
+  )
+
+  const recordSplit = useCallback(
+    (entry: NewSplitLogEntry) => provider.recordSplit(entry),
+    [provider],
+  )
+
   const deleteTransactions = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return
@@ -208,7 +241,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setWorkspaceFeeRate = useCallback(
     async (id: string, rate: number) => {
-      await saveWorkspaceFeeRate(provider, id, rate)
+      // Task 166 (EN-08): the cloud write used to fail silently, so this device kept a rate the
+      // other devices and the server-side holdings card never saw. Surface it through the same
+      // `error` channel the rest of this context uses; the local cache still keeps the new value.
+      await saveWorkspaceFeeRate(provider, id, rate, (message) => setError(message))
       setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, fee_rate: rate } : w)))
     },
     [provider],
@@ -228,6 +264,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteWorkspace,
       addTransactions,
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
     }),
@@ -244,6 +283,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteWorkspace,
       addTransactions,
       updateTransaction,
+      updateTransactionsBatch,
+      listSplitLog,
+      recordSplit,
       deleteTransactions,
       setWorkspaceFeeRate,
     ],

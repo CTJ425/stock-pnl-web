@@ -106,6 +106,10 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   )
   const isSpotSell = txType === 'SELL' && (market !== 'TPE' || nature === 'SPOT')
   const isShortCover = txType === 'BUY' && market === 'TPE' && nature === 'SHORT'
+  // Task 166 EN-01: dividends carry no 交易性質 (tx_nature is submitted as null for both) and a
+  // stock dividend's price is locked to 0, so neither field is shown for these two types.
+  const isCashDividend = txType === 'DIVIDEND'
+  const isStockDividend = txType === 'STOCK_DIVIDEND'
   const activeShorts = useMemo(
     () => ledger.holdings.filter((h) => h.shortQty > 0 && h.market === market),
     [ledger.holdings, market],
@@ -206,6 +210,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       if (untouchedFeeSig.current === sig) return
       untouchedFeeSig.current = null
     }
+    // A dividend's fee/tax is a real-world figure (代扣費用、相關費用) typed by hand, not a
+    // brokerage commission calculateFee() knows how to estimate — leave it to the user.
+    if (isCashDividend || isStockDividend) return
     const p = parseFloat(price) || 0
     const shares = getActualShares()
     const rate = parseFloat(feeRate) || 0
@@ -332,15 +339,20 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (busy) return
     setMessage(null)
 
-    const p = parseFloat(price)
+    // STOCK_DIVIDEND's price is locked to 0 regardless of whatever the (hidden) field holds.
+    const p = isStockDividend ? 0 : parseFloat(price)
     const shares = getActualShares()
     const feeVal = parseFloat(fee) || 0
     const cleanTicker = ticker.trim().toUpperCase().replace(/^TPE:/, '')
 
     const nextFieldErrors: { ticker?: string; price?: string; qty?: string } = {}
     if (!cleanTicker) nextFieldErrors.ticker = '請輸入股票代號'
-    if (!(p > 0)) nextFieldErrors.price = '單價要大於 0'
-    if (!(shares > 0)) nextFieldErrors.qty = '股數要大於 0'
+    if (!isStockDividend && !(p > 0)) {
+      nextFieldErrors.price = isCashDividend ? '每股股利要大於 0' : '單價要大於 0'
+    }
+    if (!(shares > 0)) {
+      nextFieldErrors.qty = isCashDividend || isStockDividend ? '配發股數要大於 0' : '股數要大於 0'
+    }
     if (nextFieldErrors.ticker || nextFieldErrors.price || nextFieldErrors.qty) {
       setFieldErrors(nextFieldErrors)
       const firstInvalid = nextFieldErrors.ticker
@@ -365,7 +377,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         ticker: cleanTicker,
         name: name.trim() || cleanTicker,
         tx_type: txType,
-        tx_nature: market === 'TPE' ? nature : undefined,
+        tx_nature: isCashDividend || isStockDividend ? null : market === 'TPE' ? nature : undefined,
         fee_rate: feeRate !== '' && !Number.isNaN(parseFloat(feeRate)) ? parseFloat(feeRate) : undefined,
         price: p,
         qty: shares,
@@ -442,9 +454,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
           >
             <option value="BUY">買入</option>
             <option value="SELL">賣出</option>
+            <option value="DIVIDEND">現金股利</option>
+            <option value="STOCK_DIVIDEND">股票股利</option>
           </select>
         </div>
-        {market === 'TPE' && (
+        {market === 'TPE' && !isCashDividend && !isStockDividend && (
           <div className="field">
             <label htmlFor="tx-nature">交易性質</label>
             <select
@@ -663,32 +677,34 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       </div>
 
       <div className="field-row">
-        <div className="field">
-          <label htmlFor="tx-price">交易單價</label>
-          <input
-            id="tx-price"
-            ref={priceInputRef}
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={price}
-            placeholder="單股價格"
-            aria-invalid={fieldErrors.price ? 'true' : undefined}
-            aria-describedby={fieldErrors.price ? 'tx-price-error' : undefined}
-            onChange={(e) => {
-              setPrice(e.target.value)
-              if (fieldErrors.price) setFieldErrors((prev) => ({ ...prev, price: undefined }))
-            }}
-          />
-          {fieldErrors.price && (
-            <p id="tx-price-error" className="field-error">
-              {fieldErrors.price}
-            </p>
-          )}
-        </div>
+        {!isStockDividend && (
+          <div className="field">
+            <label htmlFor="tx-price">{isCashDividend ? '每股股利' : '交易單價'}</label>
+            <input
+              id="tx-price"
+              ref={priceInputRef}
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={price}
+              placeholder="單股價格"
+              aria-invalid={fieldErrors.price ? 'true' : undefined}
+              aria-describedby={fieldErrors.price ? 'tx-price-error' : undefined}
+              onChange={(e) => {
+                setPrice(e.target.value)
+                if (fieldErrors.price) setFieldErrors((prev) => ({ ...prev, price: undefined }))
+              }}
+            />
+            {fieldErrors.price && (
+              <p id="tx-price-error" className="field-error">
+                {fieldErrors.price}
+              </p>
+            )}
+          </div>
+        )}
         <div className="field tx-qty-field">
-          <label htmlFor="tx-qty">交易股數</label>
+          <label htmlFor="tx-qty">{isCashDividend || isStockDividend ? '配發股數' : '交易股數'}</label>
           <div className="field-row">
             <input
               id="tx-qty"
@@ -813,7 +829,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
       )}
 
       <div className="field">
-        <label htmlFor="tx-fee">手續費 / 稅金{showTax && '（賣出自動含證交稅）'}</label>
+        <label htmlFor="tx-fee">
+          {isCashDividend
+            ? '代扣費用（二代健保、匯費）'
+            : isStockDividend
+              ? '相關費用'
+              : `手續費 / 稅金${showTax ? '（賣出自動含證交稅）' : ''}`}
+        </label>
         <input
           id="tx-fee"
           type="number"
