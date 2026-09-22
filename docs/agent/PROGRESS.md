@@ -1,11 +1,25 @@
 # Progress Log (PROGRESS.md)
 
 - Agent: Claude
-- Action: 0.9.64 — Task 166 稽核修補第 2 批（股利、費用口徑、分割與重算原子化）
-- Status: ✅ **0.9.64 on `dev` and `main`**；DEV／PROD 皆已套用 DDL 並重新部署 `stock-report`
-- Timestamp: 2026-09-23 02:45:00 Asia/Taipei
+- Action: 0.9.65 — Task 166 稽核修補第 3 批（Edge 穩定性與維運）
+- Status: ✅ **0.9.65 on `dev` and `main`**；DEV／PROD 皆已套用 DDL 並重新部署三個 Edge Function
+- Timestamp: 2026-09-23 03:30:00 Asia/Taipei
 
 ---
+
+## 📅 Log: 2026-09-23 03:30:00 Asia/Taipei (Task 166 batch 3, 0.9.65)
+
+**稽核修補第 3 批：Edge 穩定性與維運。** 四個 builder 平行處理資料來源、Discord 與備份、stock-price、stock-report 路由，再依 reviewer 結果修正。
+
+- 新檔：`supabase/functions/_shared/fetchRetry.ts`（重試、退避、429 上限、整體時間預算）。
+- `stock-report/index.ts`：六個上游抓取改用重試、MOPS 迴圈加間隔、探針記錄失敗種類、代號範圍評估 4 併行、Storage 清理分頁、請求本文上限、堆疊遮蔽、暖機日期後援、admin-run 單一 job、最後一位管理員保護與角色稽核、使用者清單分頁、日誌筆數上限。
+- `stock-price`：401 防線、截斷回報、Yahoo 後援期限、候選邏輯共用、錯誤分類、TPEx 後援年齡。
+- 資料來源：`misParse`（交易時間無法解析時不用買一價）、`twChips`（欄名檢查、OpenAPI 後援註記）、`usMacro`（抓取失敗分流）、`fxRates`（單日漲跌幅合理性）、`twProfitHistory`／`twRevenueHistory`（巢狀表格視為失敗）。
+- Discord 與備份：`accountTick` 漏跑可補送、`discordSummary` 長度上限與「日期不明」標記、`discordWebhook` 錯誤分為 5xx／4xx、`holdingsCard` 預算與總長上限連動、備份分頁讀取、備份紀錄寫入失敗改記 `app_log`。
+- 資料庫：四張紀錄表 180 天保留排程、`backup_run_log` 外鍵（先把孤兒列設為 NULL）、`config.toml` 宣告 verify_jwt。
+- Reviewer：FAIL —— 1 個 BLOCKER（重試讓 MOPS 呼叫超過 cron 60 秒上限）與 5 個風險（Retry-After 無上限、總經／匯率迴圈無預算、Storage 分頁吞錯誤、chunked 請求繞過本文上限、最後管理員檢查有競態）全部修正後重驗通過。
+- 測試更新：`accountTick`、`discordSummary`、`discordWebhook` 的舊斷言改寫為新語意；新增民國年、重複匯入、分割重複偵測等案例。
+- **Verify**：`npm test` 2,598 通過／7 略過／0 失敗；`npm run build`、`npm run typecheck:edge` exit 0；DEV／PROD 端點未授權呼叫皆回 401。
 
 ## 📅 Log: 2026-09-23 02:45:00 Asia/Taipei (Task 166 batch 2, 0.9.64)
 
@@ -22,15 +36,3 @@
 - **Deploy**：DEV 與 PROD 皆套用 `tx_type` CHECK、`tx_split_log`、`apply_transaction_updates`，並重新部署 `stock-report`（Edge 引擎副本隨股利改動更新）。
 
 ---
-
-## 📅 Log: 2026-09-22 21:44:30 Asia/Taipei (Task 166 batch 1, 0.9.63)
-
-**使用者要求：對整個專案做最詳細的元件／流程／項目拆解稽核，再依建議全部改善。** 稽核報告列出 139 項發現（2 項 P1、25 項 P2、112 項 P3），分 5 批修補，本次為第 1 批（Lane 2：spec + 先寫失敗測試 + builder + reviewer）。
-
-- 使用者決策：保留公開註冊但要求信箱驗證與 8 碼密碼；AI 只開放管理員；R2 完全移除；每批 DEV 驗證後直接上 PROD。
-- 規格：`docs/agent/specs/166-audit-remediation.md`（含 5 批的範圍與第 1、2 批的完整契約）。
-- 程式：`ai-proxy/handler.ts`／`index.ts`、`StockDetail/StockDetailPage.tsx`、`utils/csv.ts`、`Transactions/CsvImportModal.tsx`／`TransactionsPage.tsx`、`AppShell.tsx`、`Auth/AuthPage.tsx`、`stock-report/index.ts`、`backup-transactions/index.ts`（刪 `r2.ts`）、`services/adminBackups.ts`、`Admin/BackupsSection.tsx`、`Admin/ManualRunSection.tsx`、`supabase/schema.sql`、`supabase/config.toml`。
-- 測試：新增 `CsvImportModal.test.tsx`（重複列不匯入的接線）、csv 防注入與民國年案例、`ai-proxy` 非管理員 403 案例、`StockDetailPage` 非管理員看不到 AI 分頁；移除 3 個 R2 斷言。
-- Reviewer：R2 移除 PASS；CSV PASS（RISK：缺元件測試 → 已補）；夜間批次 FAIL（manifest 條件未計入預算略過、chips 早期拋錯不留紀錄）→ 已修正並重驗。
-- **Verify**：`npm test` 2,574 通過／7 略過／0 失敗；`npm run build`、`npm run typecheck:edge` exit 0。
-- **Deploy**：DEV 與 PROD 皆套用 `batch_run_log.skipped_for_budget`、`get_ai_settings()` 管理員判斷、移除 `backup_run_log` r2 欄位；部署 `ai-proxy`、`stock-report`（`--no-verify-jwt`）、`backup-transactions`（`--no-verify-jwt`）；Auth 設定 `mailer_autoconfirm=false`、`password_min_length=8`。
