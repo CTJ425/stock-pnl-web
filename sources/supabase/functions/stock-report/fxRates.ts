@@ -172,9 +172,25 @@ export function extractFxPoints(resp: ChartResponse, invert: boolean): FxPoint[]
     byDate.set(tradingDateOf(ts[i], offset), round6(invert ? 1 / close : close))
   }
 
-  return [...byDate.entries()]
+  const sorted = [...byDate.entries()]
     .map(([date, rate]): FxPoint => [date, rate])
     .sort((a, b) => a[0].localeCompare(b[0]))
+
+  /*
+   * Task 166 ES-06: the live-row exclusion above only catches an *exact* timestamp match
+   * against meta.regularMarketTime. A surviving live/odd row (stale regularMarketTime, or a
+   * bad quote that slips through some other way) still stands out as an implausible one-day
+   * jump — drop any point that moves more than 5% from the previous *kept* point in a single
+   * day (5% is far beyond any TWD pair's plausible daily move; see the 4.47% real-bug note
+   * above for scale). The first point is always kept — there is no prior point to compare.
+   */
+  const guarded: FxPoint[] = []
+  for (const point of sorted) {
+    const prev = guarded[guarded.length - 1]
+    if (prev && Math.abs(point[1] - prev[1]) / prev[1] > 0.05) continue
+    guarded.push(point)
+  }
+  return guarded
 }
 
 export interface FxCurrency {

@@ -16,7 +16,12 @@
  * interface:
  *   POST { action: 'prices', symbols: [{ market: 'TPE'|'US', ticker: string }] }
  *     → { prices: { 'TPE:2330': { price, prevClose, open, high, low, volume,
- *                                 tradeDate, tradeTime, trial, asOf }, ... } }
+ *                                 tradeDate, tradeTime, trial, asOf }, ... },
+ *         truncated: string[] }
+ *       truncated (EP-03/EP-04) lists the `${market}:${ticker}` keys that did not make it
+ *       into `prices`: symbols past the 50-symbol cap, plus any still in flight when the
+ *       Yahoo-fallback batch deadline fired. The front end does not read this field yet
+ *       (see priceProxy.ts) — it is dropped silently today.
  *       asOf is the actual acquisition time (ISO) of the quotation, which is used for front-end TTL judgment to avoid overlapping with DB cache TTL.
  *       prevClose is yesterday's closing price, and the front-end will mark the current price as rising red or green accordingly (0.6.34; null if not available)
  *       open/high/low/volume/tradeDate/tradeTime/trial quotation card for individual stock analysis (0.6.36),
@@ -27,8 +32,11 @@
  *       → { quotes: { USD: { price, asOf }, … } } The real-time median price of Taiwan dollars against foreign currencies (1 foreign currency = N Taiwan dollars)
  *         The history of the trend chart is written into Storage every day by sync-fx of stock-report, and only "how much is now" is returned here.
  *   POST { action: 'twlist' }
- *     → { rows: [{ symbol, name, close }] } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
- *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup)
+ *     → { rows: [{ symbol, name, close }], tpexFallbackAgeDays?: number } (Full list of Taiwan stocks; TWSE/TPEx is not open to CORS,
+ *       The official environment is provided by this agent for front-end Chinese search/code reverse check/current price backup.
+ *       tpexFallbackAgeDays (EP-05) is present only when the TPEx leg used the static
+ *       tpexFallback.ts snapshot instead of the live endpoint; it is that snapshot's age in
+ *       days as of this response, and gets one extra `logEvent` warning when it exceeds 90.)
  *   POST { action: 'intraday', symbol: { market: 'TPE'|'US'|'IDX', ticker: string }, range?: '1d'|'5d' }
  *     → { series: IntradaySeries | null } (Yahoo chart v8 intraday bars; range defaults to '1d'.
  *       Tries each yahooSymbols() candidate in turn and returns the first that parses;
@@ -54,7 +62,7 @@ import { twMaxTtlMs, twQuoteTtlMs } from './quoteWindow.ts'
 import { dailyRangeInterval, extractMonthly, type DailyRangeKey } from './dailyRange.ts'
 import { extractDaily } from '../stock-report/twDaily.ts'
 import { buildTwList } from './twList.ts'
-import { TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
+import { TPEX_FALLBACK_GENERATED_AT, TPEX_FALLBACK_ROWS } from './tpexFallback.ts'
 
 interface SymbolItem {
   market: 'TPE' | 'US' | 'IDX'
@@ -94,6 +102,14 @@ const CACHE_TTL_US_MS = 10 * 60 * 1000
 /** Foreign index DB cache validity period (task 162): a 60 s poll must not read a value up to 10 minutes old. */
 const CACHE_TTL_IDX_MS = 60 * 1000
 
+/**
+ * Hard wall-clock cap on the Yahoo-fallback step of `handlePrices` (EP-04). Each candidate
+ * fetch already has its own 10 s timeout, but a large batch with no overall deadline can
+ * still walk the function up to the platform's own timeout during a MIS/Yahoo outage.
+ * Symbols still unresolved when this fires are skipped and reported back in `truncated`.
+ */
+const PRICES_YAHOO_DEADLINE_MS = 20_000
+
 /** The cache validity period of this key at this moment. Taiwan stocks will last for more than ten hours after the market closes, and the lower bound for coarse screening must follow it. */
 function cacheTtlMsFor(key: string, now: Date, tradeTime: string | null, fetchedAt: Date | null): number {
   if (key.startsWith('TPE:')) return twQuoteTtlMs(now, tradeTime, fetchedAt)
@@ -131,6 +147,39 @@ function yahooSymbols(item: SymbolItem): string[] {
 }
 
 /**
+ * Tries each Yahoo symbol candidate in turn and returns the first one whose `fetchOne`
+ * resolves to a non-null result (EP-06: this ".TW then .TWO" loop was hand-written three
+ * times — the price fallback below, `handleIntraday`, and `handleDailyRange`).
+ *
+ * `fetchOne` resolving to `null` is a normal "try the next candidate" step — an unknown
+ * ticker on that exchange is not an error, and every candidate failing this way is a
+ * plain "no data" answer. `fetchOne` *throwing* is different: a network failure (including
+ * the per-request `AbortSignal.timeout`) or a response body that failed to parse as JSON.
+ * That case was previously swallowed silently (EP-07); here it gets one `logEvent` call
+ * before moving on to the next candidate.
+ */
+async function tryYahooCandidates<T>(
+  action: string,
+  candidates: string[],
+  fetchOne: (symbol: string) => Promise<T | null>,
+): Promise<T | null> {
+  for (const symbol of candidates) {
+    try {
+      const result = await fetchOne(symbol)
+      if (result !== null) return result
+    } catch (err) {
+      await logEvent(db, {
+        level: 'warn',
+        action,
+        message: err instanceof Error ? err.message : String(err),
+        detail: { ticker: symbol, name: err instanceof Error ? err.name : undefined },
+      })
+    }
+  }
+  return null
+}
+
+/**
  * Yesterday's collection: Prioritize `chartPreviousClose` (must exist when `range=1d`), and return `previousClose`.
  * If it cannot be obtained, null will be returned - the front end will display the current price of the file in a neutral color without guessing a benchmark.
  */
@@ -147,38 +196,40 @@ function yahooNum(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/**
+ * Fetches one Yahoo symbol candidate. A network failure or malformed JSON body is left to
+ * throw — the caller is `tryYahooCandidates`, which logs it (EP-07) and tries the next
+ * candidate. Returning `null` here is reserved for a well-formed response with no usable
+ * price (unknown ticker on this exchange), which is not an error.
+ */
 async function fetchYahooPrice(symbol: string): Promise<Quote | null> {
-  try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
-      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
-    )
-    if (!res.ok) return null
-    const data = await res.json()
-    const result = data?.chart?.result?.[0]
-    const meta = result?.meta
-    const price = Number(meta?.regularMarketPrice)
-    if (!Number.isFinite(price) || price <= 0) return null
-    // The opening price is not in meta (the measured regularMarketOpen / open are both undefined),
-    // To be taken from a single daily line of indicators; when range=1d, the sequence has only one element
-    const series = result?.indicators?.quote?.[0]
-    const volumeShares = yahooNum(meta?.regularMarketVolume)
-    return {
-      price,
-      prevClose: yahooPrevClose(meta),
-      open: yahooNum(series?.open?.[0]),
-      high: yahooNum(meta?.regularMarketDayHigh),
-      low: yahooNum(meta?.regularMarketDayLow),
-      // The number of shares given by Yahoo and the number of sheets given by MIS are unified into sheets. The two paths feed the quotation card with the same caliber.
-      volume: volumeShares === null ? null : Math.round(volumeShares / 1000),
-      // The trading day/matching time/trial matching flags are only available in MIS; this path in Yahoo should always be left blank.
-      tradeDate: null,
-      tradeTime: null,
-      trial: false,
-      industry: null,
-    }
-  } catch {
-    return null
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
+    { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+  )
+  if (!res.ok) return null
+  const data = await res.json()
+  const result = data?.chart?.result?.[0]
+  const meta = result?.meta
+  const price = Number(meta?.regularMarketPrice)
+  if (!Number.isFinite(price) || price <= 0) return null
+  // The opening price is not in meta (the measured regularMarketOpen / open are both undefined),
+  // To be taken from a single daily line of indicators; when range=1d, the sequence has only one element
+  const series = result?.indicators?.quote?.[0]
+  const volumeShares = yahooNum(meta?.regularMarketVolume)
+  return {
+    price,
+    prevClose: yahooPrevClose(meta),
+    open: yahooNum(series?.open?.[0]),
+    high: yahooNum(meta?.regularMarketDayHigh),
+    low: yahooNum(meta?.regularMarketDayLow),
+    // The number of shares given by Yahoo and the number of sheets given by MIS are unified into sheets. The two paths feed the quotation card with the same caliber.
+    volume: volumeShares === null ? null : Math.round(volumeShares / 1000),
+    // The trading day/matching time/trial matching flags are only available in MIS; this path in Yahoo should always be left blank.
+    tradeDate: null,
+    tradeTime: null,
+    trial: false,
+    industry: null,
   }
 }
 
@@ -227,6 +278,10 @@ function cachedText(value: unknown): string | null {
 
 async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
   const items = symbols.slice(0, 50)
+  // EP-03: symbols dropped by the 50-symbol cap are reported here so the caller can tell a
+  // truncated batch from a batch that simply had no prices. Step 3 below appends any symbol
+  // still unresolved when the batch deadline (EP-04) fires.
+  const truncated = symbols.slice(50).map((s) => `${s.market}:${s.ticker}`)
   const prices: Record<string, Quote & { asOf: string }> = {}
   const now = new Date()
   const nowMs = now.getTime()
@@ -279,28 +334,39 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     prices[`TPE:${ticker}`] = { ...quote, asOf: new Date().toISOString() }
   }
 
-  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed MIS) go to Yahoo
+  // 3) Those who are still missing (including all US stocks and Taiwanese stocks that failed MIS) go to Yahoo,
+  //    bounded by an overall batch deadline (EP-04) — each item already races its own candidates
+  //    through tryYahooCandidates (EP-06), but a big batch with no outer bound could still walk
+  //    the function up to the platform's own timeout during an upstream outage.
   const unresolved = missing.filter((i) => !prices[`${i.market}:${i.ticker}`])
-  const entries = await Promise.all(
+  const yahooResults = new Map<string, Quote & { asOf: string }>()
+  const settled = new Set<string>()
+  const fetchAll = Promise.all(
     unresolved.map(async (item) => {
       const key = `${item.market}:${item.ticker}`
-      for (const symbol of yahooSymbols(item)) {
-        const quote = await fetchYahooPrice(symbol)
-        if (quote !== null) {
-          return [key, { ...quote, asOf: new Date().toISOString() }] as const
-        }
-      }
-      return null
+      const quote = await tryYahooCandidates('prices', yahooSymbols(item), fetchYahooPrice)
+      settled.add(key)
+      if (quote !== null) yahooResults.set(key, { ...quote, asOf: new Date().toISOString() })
     }),
   )
-  for (const entry of entries) {
-    if (entry) prices[entry[0]] = entry[1]
+  await Promise.race([
+    fetchAll,
+    new Promise<void>((resolve) => setTimeout(resolve, PRICES_YAHOO_DEADLINE_MS)),
+  ])
+  for (const item of unresolved) {
+    const key = `${item.market}:${item.ticker}`
+    // Not yet settled when the deadline fired: skipped, not "tried and failed" — report it
+    // instead of silently answering as if the ticker had no price.
+    if (!settled.has(key)) truncated.push(key)
+  }
+  for (const [key, quote] of yahooResults) {
+    prices[key] = quote
   }
 
   // 4) The newly captured price is written back to the cache for sharing by the entire site (updated_at records the actual quotation time, and TTL is calculated from this point)
   const fetchedKeys = [
     ...[...fromMis.keys()].map((t) => `TPE:${t}`),
-    ...entries.flatMap((e) => (e ? [e[0]] : [])),
+    ...yahooResults.keys(),
   ]
   if (fetchedKeys.length > 0) {
     try {
@@ -324,7 +390,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     }
   }
 
-  return json({ prices })
+  return json({ prices, truncated })
 }
 
 interface SearchResult {
@@ -409,6 +475,12 @@ async function handleSearch(query: string): Promise<Response> {
   }
 }
 
+/** Days between `TPEX_FALLBACK_GENERATED_AT` and `now` (EP-05): the static snapshot's age. */
+function tpexFallbackAgeDays(now: Date): number {
+  const generated = Date.parse(`${TPEX_FALLBACK_GENERATED_AT}T00:00:00Z`)
+  return Math.floor((now.getTime() - generated) / (24 * 60 * 60 * 1000))
+}
+
 /** Full list of Taiwan stocks (listed on TWSE + listed on TPEx), the fields are simplified to symbol/name/close to shorten the response */
 async function handleTwList(): Promise<Response> {
   const fetchJson = async (url: string): Promise<Array<Record<string, unknown>>> => {
@@ -442,13 +514,25 @@ async function handleTwList(): Promise<Response> {
     fetchTpex(),
   ])
 
+  let fallbackAgeDays: number | null = null
   if (usedFallback) {
+    fallbackAgeDays = tpexFallbackAgeDays(new Date())
     await logEvent(db, {
       level: 'warn',
       action: 'twlist',
       message: 'TPEx 即時端點無法連線，使用靜態備援清單',
       detail: { reason: fallbackReason },
     })
+    // EP-05: the snapshot has no expiry of its own, so a stale one would otherwise go
+    // unnoticed indefinitely. One extra warning, only past the 90-day mark, not every call.
+    if (fallbackAgeDays > 90) {
+      await logEvent(db, {
+        level: 'warn',
+        action: 'twlist',
+        message: `TPEx 備援清單已逾 90 天未更新（產生於 ${TPEX_FALLBACK_GENERATED_AT}）`,
+        detail: { count: fallbackAgeDays },
+      })
+    }
   }
 
   const result = buildTwList(twse, tpex)
@@ -461,7 +545,10 @@ async function handleTwList(): Promise<Response> {
     })
     return json({ error: result.error, failures: result.failures }, 502)
   }
-  return json({ rows: result.rows })
+  return json({
+    rows: result.rows,
+    ...(usedFallback ? { tpexFallbackAgeDays: fallbackAgeDays } : {}),
+  })
 }
 
 
@@ -611,21 +698,16 @@ async function handleFx(codes: unknown): Promise<Response> {
  */
 async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise<Response> {
   const interval = intradayInterval(range)
-  for (const yahooSymbol of yahooSymbols(symbol)) {
-    try {
-      const res = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
-        { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
-      )
-      if (!res.ok) continue
-      const data = await res.json()
-      const series = parseYahooChart(data, range)
-      if (series !== null) return json({ series })
-    } catch {
-      // Falls through to the next symbol candidate; every candidate failing is a normal "no data" answer.
-    }
-  }
-  return json({ series: null })
+  const series = await tryYahooCandidates('intraday', yahooSymbols(symbol), async (yahooSymbol) => {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return parseYahooChart(data, range)
+  })
+  return json({ series })
 }
 
 /**
@@ -636,21 +718,17 @@ async function handleIntraday(symbol: SymbolItem, range: IntradayRange): Promise
 async function handleDailyRange(symbol: SymbolItem, range: DailyRangeKey): Promise<Response> {
   const interval = dailyRangeInterval(range)
   const granularity = interval
-  for (const yahooSymbol of yahooSymbols(symbol)) {
-    try {
-      const res = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
-        { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
-      )
-      if (!res.ok) continue
-      const data = await res.json()
-      const rows = range === '5y' ? extractDaily(data) : extractMonthly(data)
-      if (rows.length > 0) return json({ rows, granularity })
-    } catch {
-      // Falls through to the next symbol candidate; every candidate failing is a normal "no data" answer.
-    }
-  }
-  return json({ rows: [], granularity })
+  const rows = await tryYahooCandidates('daily', yahooSymbols(symbol), async (yahooSymbol) => {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const parsed = range === '5y' ? extractDaily(data) : extractMonthly(data)
+    return parsed.length > 0 ? parsed : null
+  })
+  return json({ rows: rows ?? [], granularity })
 }
 
 Deno.serve(async (req) => {
@@ -659,6 +737,16 @@ Deno.serve(async (req) => {
   }
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405)
+  }
+
+  // EP-02: defence in depth, not the primary gate. The platform's verify_jwt=true deploy
+  // flag (see header comment) is what normally rejects an unauthenticated caller before this
+  // code ever runs; this check only matters if the function is ever redeployed with
+  // --no-verify-jwt by mistake. Token *contents* are the platform's job — only presence of a
+  // bearer token is checked here, before any upstream fetch.
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader || !/^Bearer\s+\S+/i.test(authHeader)) {
+    return json({ error: 'Missing bearer token' }, 401)
   }
 
   let body: {

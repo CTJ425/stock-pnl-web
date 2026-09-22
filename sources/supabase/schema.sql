@@ -1247,6 +1247,33 @@ SELECT cron.schedule(
   $job$DELETE FROM public.app_log WHERE at < now() - interval '30 days'$job$
 );
 
+-- Task 166 (DB-01): the other four log tables had no retention at all and grew without bound.
+-- 180 days keeps a full season of batch/backup/Discord history, which is what the admin console
+-- ever looks back over, and still bounds the tables.
+SELECT cron.unschedule('run-log-prune')
+  WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'run-log-prune');
+SELECT cron.schedule(
+  'run-log-prune', '40 3 * * *',
+  $job$
+    DELETE FROM public.admin_run_log        WHERE COALESCE(finished_at, started_at) < now() - interval '180 days';
+    DELETE FROM public.backup_run_log       WHERE run_date    < (now() - interval '180 days')::date;
+    DELETE FROM public.discord_send_log     WHERE created_at  < now() - interval '180 days';
+    DELETE FROM public.user_discord_send_log WHERE created_at < now() - interval '180 days';
+  $job$
+);
+
+-- Task 166 (DB-02): backup_run_log.user_id had no foreign key, so a deleted account left orphan
+-- rows behind while every other per-user log table cascaded.
+ALTER TABLE backup_run_log ALTER COLUMN user_id DROP NOT NULL;
+-- Rows written before the key existed can already point at a deleted account; null them first,
+-- otherwise the constraint below cannot be added at all.
+UPDATE backup_run_log SET user_id = NULL
+ WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM auth.users);
+ALTER TABLE backup_run_log DROP CONSTRAINT IF EXISTS backup_run_log_user_id_fkey;
+ALTER TABLE backup_run_log
+  ADD CONSTRAINT backup_run_log_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
 
 -- =========================================================
 -- 13. Discord daily market summary (Task 165 Phase 1)

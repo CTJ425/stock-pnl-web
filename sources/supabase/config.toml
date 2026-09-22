@@ -412,3 +412,20 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Task 166 (OP-01): per-function JWT verification used to live only in the deploy command
+# (`supabase functions deploy <slug> --no-verify-jwt`). Forgetting the flag broke cron auth;
+# adding it by mistake would have made a proxy public. Declared here so it is diffable.
+# stock-report and backup-transactions are called by pg_cron with an `x-cron-secret` header and
+# verify the secret themselves; the other two are called by the browser with a user JWT.
+[functions.stock-report]
+verify_jwt = false
+
+[functions.backup-transactions]
+verify_jwt = false
+
+[functions.stock-price]
+verify_jwt = true
+
+[functions.ai-proxy]
+verify_jwt = true

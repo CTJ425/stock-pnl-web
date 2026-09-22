@@ -82,6 +82,14 @@ function cellsOf(row: string, tag: 'td' | 'th'): string[] {
   const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'gi')
   let m: RegExpExecArray | null
   while ((m = re.exec(row)) !== null) {
+    /*
+     * Task 166 ES-07: the lazy <table>...</table> match in parseMopsProfit stops at the
+     * *first* </table> it sees, so a nested <table> inside a cell can make it swallow the
+     * whole nested table into what should be a single cell. That silently misaligns every
+     * column after it and produces wrong numbers instead of a visible failure — reject the
+     * whole row/header set instead so the caller sees "no data".
+     */
+    if (/<table\b/i.test(m[1])) return []
     out.push(
       m[1]
         .replace(/<[^>]*>/g, '')

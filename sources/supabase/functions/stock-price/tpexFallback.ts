@@ -3,6 +3,10 @@
  * Used when TPEx OpenAPI endpoint is unreachable (e.g. upstream CDN SSL certificate issues).
  * Generated on 2026-09-14 with 1,012 active OTC securities.
  */
+
+/** Generation date of the snapshot below (EP-05). Keep in sync with the comment above. */
+export const TPEX_FALLBACK_GENERATED_AT = '2026-09-14'
+
 export const TPEX_FALLBACK_ROWS: Array<Record<string, unknown>> = [
   {
     "Code": "00411A",

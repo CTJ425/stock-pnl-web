@@ -100,12 +100,19 @@ describe('postDiscordWebhook', () => {
     expect(sleep).not.toHaveBeenCalled()
   })
 
-  it.each([400, 403, 500, 502])('reports %i as http-error without retrying', async (status) => {
-    const { fetchImpl, deps } = setup(res(status, { message: 'nope' }))
+  // Task 166 (ED-05): 5xx (Discord is down) and 4xx (our payload is wrong) need different
+  // reasons — the old single 'http-error' made the two indistinguishable in the logs.
+  it.each([
+    [400, 'bad-request'],
+    [403, 'bad-request'],
+    [500, 'server-error'],
+    [502, 'server-error'],
+  ])('reports %i as %s without retrying', async (status, reason) => {
+    const { fetchImpl, deps } = setup(res(status as number, { message: 'nope' }))
     expect(await postDiscordWebhook(FAKE_WEBHOOK, PAYLOAD, deps)).toEqual({
       ok: false,
       httpStatus: status,
-      reason: 'http-error',
+      reason,
     })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })

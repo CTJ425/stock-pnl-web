@@ -96,11 +96,17 @@ async function backupAccount(userId: string, backupDate: string, exportedAt: Dat
     // without an ORDER BY, so order by `id` before paging — otherwise a page boundary can repeat
     // or skip a row.
     const [workspaces, transactions, userSettings] = await Promise.all([
-      db.from('workspaces').select('*').eq('user_id', userId),
+      // Task 166 (ED-07): paged like `transactions` below, so a >1000-row account (workspaces)
+      // cannot be silently truncated by PostgREST's max_rows — see `pagedSelect`'s own comment.
+      pagedSelect<BackupRow>((from, to) =>
+        db.from('workspaces').select('*').eq('user_id', userId).order('id', { ascending: true }).range(from, to),
+      ),
       pagedSelect<BackupRow>((from, to) =>
         db.from('transactions').select('*').eq('user_id', userId).order('id', { ascending: true }).range(from, to),
       ),
-      db.from('user_settings').select('*').eq('user_id', userId),
+      pagedSelect<BackupRow>((from, to) =>
+        db.from('user_settings').select('*').eq('user_id', userId).order('user_id', { ascending: true }).range(from, to),
+      ),
     ])
     if (workspaces.error) throw workspaces.error
     if (transactions.error) throw transactions.error
@@ -222,7 +228,17 @@ async function handleBackup(): Promise<Response> {
     // scheduling problem rather than a backup problem. Nothing can be written about it but the
     // function log, so at least put it there.
     const { error: logError } = await db.from('backup_run_log').insert(row)
-    if (logError) console.error('backup_run_log insert failed', user.id, describeError(logError))
+    if (logError) {
+      console.error('backup_run_log insert failed', user.id, describeError(logError))
+      // Task 166 (ED-08): console.error alone vanishes into an HTTP response nobody keeps —
+      // put it where the other Edge functions' failures land, so it is actually visible.
+      await logEvent(db, {
+        level: 'error',
+        action: 'backup-transactions',
+        message: `backup_run_log insert failed: ${describeError(logError)}`,
+        userId: user.id,
+      })
+    }
   }
 
   return json({ backup_date: backupDate, accounts: users.length, ok, failed })

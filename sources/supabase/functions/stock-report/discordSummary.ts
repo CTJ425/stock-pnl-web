@@ -354,7 +354,79 @@ function fxCard(fx: FxLine | null, today: string): Omit<CardBits, 'color'> {
   if (!fx || fx.latest == null) return { description: '暫無資料' }
   const base = `USD/TWD **${fmtAbs(fx.latest, fx.decimals)}**`
   const line = fx.prevClose == null ? base : `${base} ${fmtSigned(fx.latest - fx.prevClose, fx.decimals)}`
-  return { description: line, footerText: fx.date == null ? undefined : stamp(fx.date, fx.asOf, today) }
+  // Task 166 (ED-04): an unknown quote date used to omit the stamp entirely, which reads the same
+  // as "no stamp needed because it's today" — say plainly that freshness is unknown instead.
+  return { description: line, footerText: fx.date == null ? '日期不明' : stamp(fx.date, fx.asOf, today) }
+}
+
+// Task 166 (ED-03): Discord's own hard limits — nothing here built the cards with these in mind,
+// so a large-enough day (many international indices, a long macro list) could be rejected
+// outright by Discord instead of merely looking a bit rough. Counted in UTF-16 code units, same
+// as Discord and the same as `.length` already does in this file (`fmtAbs` etc. are ASCII/latin
+// digits, and CJK text is within the BMP, so no surrogate pairs to worry about here).
+const DISCORD_CONTENT_LIMIT = 2000
+const DISCORD_EMBED_DESCRIPTION_LIMIT = 4096
+const DISCORD_EMBED_FIELDS_LIMIT = 25
+const DISCORD_EMBEDS_LIMIT = 10
+const DISCORD_TOTAL_LIMIT = 6000
+const TRUNCATED_MARK = '…（已截斷）'
+
+/** Cuts `s` to at most `max` code units, appending the truncation mark inside that budget. */
+function trimWithMark(s: string, max: number): string {
+  if (s.length <= max) return s
+  if (max <= TRUNCATED_MARK.length) return TRUNCATED_MARK.slice(0, Math.max(0, max))
+  return s.slice(0, max - TRUNCATED_MARK.length) + TRUNCATED_MARK
+}
+
+function embedTotalLength(e: DiscordEmbed): number {
+  const fields = (e.fields ?? []).reduce((n, f) => n + f.name.length + f.value.length, 0)
+  return e.title.length + (e.description?.length ?? 0) + fields
+}
+
+/**
+ * The 6,000-char budget is shared across every embed's title + description + field name/values
+ * in the payload (Discord counts the whole message, not each embed on its own). Trims from the
+ * end — last embed first, its fields before its description, description before its title —
+ * until the sum fits.
+ */
+function clampEmbedsTotal(embeds: DiscordEmbed[]): DiscordEmbed[] {
+  const out = embeds.map((e) => ({ ...e, fields: e.fields ? [...e.fields] : e.fields }))
+  let total = out.reduce((n, e) => n + embedTotalLength(e), 0)
+  for (let i = out.length - 1; i >= 0 && total > DISCORD_TOTAL_LIMIT; i--) {
+    const e = out[i]
+    while (total > DISCORD_TOTAL_LIMIT && e.fields && e.fields.length > 0) {
+      const f = e.fields[e.fields.length - 1]
+      total -= f.name.length + f.value.length
+      e.fields = e.fields.slice(0, -1)
+    }
+    if (total > DISCORD_TOTAL_LIMIT && e.description) {
+      const keep = Math.max(0, e.description.length - (total - DISCORD_TOTAL_LIMIT))
+      const trimmed = trimWithMark(e.description, keep)
+      total -= e.description.length - trimmed.length
+      e.description = trimmed
+    }
+    if (total > DISCORD_TOTAL_LIMIT && e.title) {
+      const keep = Math.max(0, e.title.length - (total - DISCORD_TOTAL_LIMIT))
+      const trimmed = trimWithMark(e.title, keep)
+      total -= e.title.length - trimmed.length
+      e.title = trimmed
+    }
+  }
+  return out
+}
+
+/**
+ * Enforces every hard limit Discord applies to one webhook payload. Applied to every payload
+ * this module returns (`buildSummaryPayload`, `buildTestPayload`) — see the constants above.
+ */
+export function clampToDiscordLimits(payload: DiscordPayload): DiscordPayload {
+  const content = payload.content == null ? payload.content : trimWithMark(payload.content, DISCORD_CONTENT_LIMIT)
+  const capped = payload.embeds.slice(0, DISCORD_EMBEDS_LIMIT).map((e) => ({
+    ...e,
+    description: e.description == null ? e.description : trimWithMark(e.description, DISCORD_EMBED_DESCRIPTION_LIMIT),
+    fields: e.fields == null ? e.fields : e.fields.slice(0, DISCORD_EMBED_FIELDS_LIMIT),
+  }))
+  return { ...payload, content, embeds: clampEmbedsTotal(capped) }
 }
 
 export function buildSummaryPayload(input: SummaryInput): DiscordPayload {
@@ -397,16 +469,16 @@ export function buildSummaryPayload(input: SummaryInput): DiscordPayload {
   const fx = fxCard(usdTwd, today)
   embeds.push({ title: '💱 匯率', description: fx.description, color: GREY, footer: footerOf(fx.footerText) })
 
-  return {
+  return clampToDiscordLimits({
     username: '盤後總結',
     content,
     embeds,
     allowed_mentions: { parse: [] },
-  }
+  })
 }
 
 export function buildTestPayload(generatedAt: string): DiscordPayload {
-  return {
+  return clampToDiscordLimits({
     username: '盤後總結',
     allowed_mentions: { parse: [] },
     embeds: [
@@ -417,5 +489,5 @@ export function buildTestPayload(generatedAt: string): DiscordPayload {
         timestamp: generatedAt,
       },
     ],
-  }
+  })
 }

@@ -25,7 +25,17 @@ export interface DiscordPayload {
   allowed_mentions: { parse: never[] }
 }
 
-export type DiscordFailReason = 'invalid-url' | 'webhook-gone' | 'rate-limited' | 'http-error' | 'network'
+// Task 166 (ED-05): 'http-error' is kept in the union (rather than removed) purely for type
+// compatibility with existing callers that still name it — `classify` below no longer produces
+// it, having split it into 'server-error' / 'bad-request'.
+export type DiscordFailReason =
+  | 'invalid-url'
+  | 'webhook-gone'
+  | 'rate-limited'
+  | 'http-error'
+  | 'server-error'
+  | 'bad-request'
+  | 'network'
 
 export type DiscordSendResult =
   | { ok: true; httpStatus: number }
@@ -61,7 +71,10 @@ async function retryAfterMs(res: Response): Promise<number> {
 function classify(res: Response): DiscordSendResult {
   if (res.ok) return { ok: true, httpStatus: res.status }
   if (res.status === 401 || res.status === 404) return { ok: false, httpStatus: res.status, reason: 'webhook-gone' }
-  return { ok: false, httpStatus: res.status, reason: 'http-error' }
+  // Task 166 (ED-05): split the old catch-all 'http-error' so callers can tell "Discord is down"
+  // (5xx, worth retrying later) from "we sent something Discord rejected" (4xx, retrying won't help).
+  if (res.status >= 500) return { ok: false, httpStatus: res.status, reason: 'server-error' }
+  return { ok: false, httpStatus: res.status, reason: 'bad-request' }
 }
 
 export async function postDiscordWebhook(

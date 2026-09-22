@@ -259,9 +259,11 @@ describe('buildSummaryPayload — data dates and staleness', () => {
     }
   })
 
-  it('omits the fx stamp when the quote date is unknown', () => {
+  // Task 166 (ED-04): an unknown quote date used to drop the stamp entirely, so a stale rate
+  // looked exactly like today's. It now says so.
+  it('marks the fx card 日期不明 when the quote date is unknown', () => {
     const p = buildSummaryPayload(input({ usdTwd: { ...USD_TWD, date: null } }))
-    expect(card(p, '匯率')!.footer).toBeUndefined()
+    expect(card(p, '匯率')!.footer?.text).toContain('日期不明')
   })
 })
 

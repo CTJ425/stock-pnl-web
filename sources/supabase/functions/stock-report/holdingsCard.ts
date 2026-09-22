@@ -381,7 +381,15 @@ const RED = 0xe5484d
 const GREEN = 0x30a46c
 const GREY = 0x8b8d98
 const WEEKDAY_CHARS = '日一二三四五六'
-const BUDGET = 2800
+
+// Task 166 (ED-06): Discord's hard cap on one payload's title + description + field name/values,
+// summed across every embed — `discordSummary.ts` names the same number for the same reason.
+const TOTAL_EMBED_LIMIT = 6000
+// Headroom left per currency card for its title + footer text, outside the two body budgets
+// below — both are short, fixed-shape strings (a date and a missing-quote count), so 200 chars
+// each is generous. The remainder splits evenly between the (at most two) currency cards.
+const CARD_OVERHEAD = 200
+const BUDGET = (TOTAL_EMBED_LIMIT - CARD_OVERHEAD * 2) / 2
 
 /** Markdown special characters escaped in data-derived text (stock names), spec Revision 8. */
 function escapeMd(s: string): string {
@@ -512,6 +520,21 @@ function buildEmbed(cur: CurrencySummary, currency: Currency, ymd: string, gener
   }
 }
 
+/**
+ * Task 166 (ED-06) safety net: `buildDescription` already keeps each currency block within
+ * `BUDGET`, and `BUDGET * 2 <= TOTAL_EMBED_LIMIT` by construction, so this should never fire in
+ * practice — but a future change to either constant must not be able to silently push the two
+ * currency cards' combined title + description + footer past what Discord accepts.
+ */
+function clampCurrencyBlocksTotal(embeds: DiscordEmbed[]): DiscordEmbed[] {
+  const total = embeds.reduce((n, e) => n + e.title.length + (e.description?.length ?? 0) + (e.footer?.text.length ?? 0), 0)
+  const over = total - TOTAL_EMBED_LIMIT
+  const last = embeds[embeds.length - 1]
+  if (over <= 0 || !last?.description) return embeds
+  const keep = Math.max(0, last.description.length - over)
+  return embeds.map((e, i) => (i === embeds.length - 1 ? { ...e, description: e.description!.slice(0, keep) } : e))
+}
+
 /** `null` when neither currency has a row to show — the caller logs `skipped / no-holdings`. */
 export function buildHoldingsPayload(summary: HoldingsSummary, opts: { generatedAt: string; preview: boolean }): DiscordPayload | null {
   const embeds: DiscordEmbed[] = []
@@ -524,7 +547,7 @@ export function buildHoldingsPayload(summary: HoldingsSummary, opts: { generated
     username: '持股日報',
     content: opts.preview ? `【預覽】${base}` : base,
     allowed_mentions: { parse: [] },
-    embeds,
+    embeds: clampCurrencyBlocksTotal(embeds),
   }
 }
 

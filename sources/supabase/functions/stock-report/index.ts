@@ -41,6 +41,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { logEvent } from '../_shared/log.ts'
+import { classifyFetchError, fetchWithRetry } from '../_shared/fetchRetry.ts'
 import {
   UA,
   fetchJson,
@@ -274,11 +275,44 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+/** ER-14: documented request body cap, checked against `Content-Length` before `req.json()` runs. */
+const MAX_REQUEST_BODY_BYTES = 1_000_000
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
   })
+}
+
+/**
+ * Same contract as twChips.ts's `fetchJson` (throws on failure) but goes through the shared
+ * `fetchWithRetry` (Task 166 ER-04). twChips.ts is owned by another builder in this batch, so its
+ * `fetchJson` cannot gain retries at its own definition — this wraps the two call sites in this
+ * file that used it (syncDaily, syncFx) instead.
+ */
+async function fetchJsonRetry<T>(url: string, timeoutMs = 15_000): Promise<T> {
+  const result = await fetchWithRetry(url, { headers: { Accept: 'application/json', 'User-Agent': UA } }, { timeoutMs })
+  if (!result.ok) throw new Error(result.message)
+  return (await result.res.json()) as T
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * ER-15: `err.stack` is unbounded and can echo an upstream response verbatim — a stack that runs
+ * through a URL carrying a signed query string would leak it straight into app_log. Keep only the
+ * message line plus the first 3 call frames, and mask anything shaped like a long token (20+ chars
+ * of base64/hex/JWT alphabet) before it ever reaches `logEvent`. This is a mask, not the allowlist
+ * redaction _shared/log.ts already does on every field — see that file's header comment on why a
+ * denylist is never enough on its own.
+ */
+function safeStack(err: unknown): string | undefined {
+  if (!(err instanceof Error) || !err.stack) return undefined
+  const [head, ...frames] = err.stack.split('\n')
+  return [head, ...frames.slice(0, 3)].join('\n').replace(/[A-Za-z0-9+/_=-]{20,}/g, '[redacted]')
 }
 
 const TICKER_RE = /^[0-9A-Za-z]{2,8}$/
@@ -310,6 +344,17 @@ const MAX_BACKFILL_MONTHS = 4
  * The after-hours batch runs 32 rounds in one night and can be completed in one night.
  */
 const MAX_BACKFILL_QUARTERS = 2
+
+/**
+ * Wall-clock budget for `fetchWithRetry`'s `totalBudgetMs` at the three MOPS/rwd call sites
+ * (`fetchBig5Text`, `fetchMopsProfitHtml`, `fetchRwdJson`) — Task 166 batch 3 BLOCKER review
+ * finding. Without it, `fetchMopsProfitHtml`'s 20s `timeoutMs` alone could cost up to
+ * 3 * 20_000 + 1_600 = 61.6s, longer than the 60s `timeout_milliseconds` these phases (e.g.
+ * `history-daily`, which also runs `backfillRevenue` first) run under in schema.sql. 25s leaves
+ * the rest of a 60s phase room for the sibling calls and the surrounding work; see fetchRetry.ts's
+ * header for how the budget itself is enforced.
+ */
+const MOPS_RWD_CALL_BUDGET_MS = 25_000
 
 /**
  * Replenishment of instant production (`warm`): **Replenish one round until there is nothing left to replenish, or until the time budget is used up** (0.6.29).
@@ -351,6 +396,10 @@ const GENERATE_ALL_PHASE_RESERVE_MS = 12_000
 const WARM_DAILY_LIMIT = 30
 /** The maximum number of simultaneous external crawls (T86 single file is about 1–2MB)*/
 const FETCH_CONCURRENCY = 3
+/** ER-04: pause between iterations of the MOPS revenue/profit backfill loops (per month/quarter). */
+const MOPS_BACKFILL_PAUSE_MS = 300
+/** ER-12: bounded concurrency for evaluateTickerScope's per-ticker Storage reads. */
+const EVALUATE_SCOPE_CONCURRENCY = 4
 
 function t86Ok(r: T86ResponseShape): boolean {
   const data = r.data ?? r.tables?.[0]?.data
@@ -1134,11 +1183,25 @@ async function evaluateTickerScope(
   const missingFund: string[] = []
   let chipsReady = 0
   let fundReady = 0
-  for (const { ticker } of tickers) {
-    if (dataYmd && (await chipReportReady(dataYmd, ticker))) chipsReady++
-    const f = await downloadJson<FundamentalFile>(`fundamental/${ticker}.json`)
-    if (fundamentalSoftReady(f)) fundReady++
-    else missingFund.push(ticker)
+  // ER-12: the two Storage reads per ticker used to run one ticker at a time. Batch them with
+  // bounded concurrency (same chunk-and-Promise.all shape loadSeries already uses for FETCH_CONCURRENCY),
+  // keeping the original ticker order for `missingFund`.
+  for (let i = 0; i < tickers.length; i += EVALUATE_SCOPE_CONCURRENCY) {
+    const batch = tickers.slice(i, i + EVALUATE_SCOPE_CONCURRENCY)
+    const results = await Promise.all(
+      batch.map(async ({ ticker }) => {
+        const [chipReady, f] = await Promise.all([
+          dataYmd ? chipReportReady(dataYmd, ticker) : Promise.resolve(false),
+          downloadJson<FundamentalFile>(`fundamental/${ticker}.json`),
+        ])
+        return { ticker, chipReady, f }
+      }),
+    )
+    for (const { ticker, chipReady, f } of results) {
+      if (chipReady) chipsReady++
+      if (fundamentalSoftReady(f)) fundReady++
+      else missingFund.push(ticker)
+    }
   }
   const total = tickers.length
   return {
@@ -1229,7 +1292,7 @@ async function syncDaily(
 
       let rows: ReturnType<typeof extractDaily> = []
       for (const symbol of yahooDailySymbols(ticker)) {
-        const resp = await fetchJson<ChartResponse>(dailyUrl(symbol))
+        const resp = await fetchJsonRetry<ChartResponse>(dailyUrl(symbol))
         rows = extractDaily(resp)
         if (rows.length > 0) break
       }
@@ -1387,12 +1450,13 @@ async function syncFundamental(
  */
 async function fetchBig5Text(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'text/html' },
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!res.ok) return null
-    return new TextDecoder('big5').decode(await res.arrayBuffer())
+    const result = await fetchWithRetry(
+      url,
+      { headers: { 'User-Agent': UA, Accept: 'text/html' } },
+      { timeoutMs: 10_000, totalBudgetMs: MOPS_RWD_CALL_BUDGET_MS },
+    )
+    if (!result.ok) return null
+    return new TextDecoder('big5').decode(await result.res.arrayBuffer())
   } catch {
     return null
   }
@@ -1458,6 +1522,9 @@ async function backfillRevenue(
     }
     if (ok) attempted.push(ym)
     if (merged.size > 0) fetched.set(ym, merged)
+    // ER-04: a short pause between MOPS months, so a backfill round does not hammer the same
+    // upstream endpoint back-to-back across every retry-eligible month.
+    await delay(MOPS_BACKFILL_PAUSE_MS)
   }
   // If you haven't succeeded in catching it for a month (the other party is down/the network is unavailable), don't change anything and try again in the next round.
   if (attempted.length === 0) return { filled: 0, months: [] }
@@ -1507,19 +1574,22 @@ async function fetchMopsProfitHtml(market: 'sii' | 'otc', yearQuarter: string): 
   const body = mopsProfitBody(market, yearQuarter)
   if (!body) return null
   try {
-    const res = await fetch(`${MOPS_T163_HOST}${MOPS_T163_PATH}`, {
-      method: 'POST',
-      headers: {
-        'User-Agent': UA,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'text/html',
+    const result = await fetchWithRetry(
+      `${MOPS_T163_HOST}${MOPS_T163_PATH}`,
+      {
+        method: 'POST',
+        headers: {
+          'User-Agent': UA,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'text/html',
+        },
+        body,
       },
-      body,
       // A single copy is about 1.6MB, four times larger than the monthly revenue of 400KB, and the timeout is relaxed to 20 seconds.
-      signal: AbortSignal.timeout(20_000),
-    })
-    if (!res.ok) return null
-    return await res.text()
+      { timeoutMs: 20_000, totalBudgetMs: MOPS_RWD_CALL_BUDGET_MS },
+    )
+    if (!result.ok) return null
+    return await result.res.text()
   } catch {
     return null
   }
@@ -1586,6 +1656,8 @@ async function backfillProfit(
     }
     if (ok) attempted.push(yq)
     if (merged.size > 0) fetched.set(yq, merged)
+    // ER-04: same pause as the revenue backfill loop above — don't hammer MOPS back-to-back.
+    await delay(MOPS_BACKFILL_PAUSE_MS)
   }
   // If you haven’t succeeded in catching in one season (the opponent is down/the network is unavailable), don’t change anything and try again in the next round.
   if (attempted.length === 0) return { filled: 0, quarters: [] }
@@ -1647,12 +1719,13 @@ const MAX_MARKET_INST_DAYS = 15
 /** Grab the JSON of rwd. On failure (including timeout), null will be returned without throwing, refer to the fault tolerance principle of fetchBig5Text*/
 async function fetchRwdJson(url: string): Promise<unknown | null> {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!res.ok) return null
-    return await res.json()
+    const result = await fetchWithRetry(
+      url,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' } },
+      { timeoutMs: 10_000, totalBudgetMs: MOPS_RWD_CALL_BUDGET_MS },
+    )
+    if (!result.ok) return null
+    return await result.res.json()
   } catch {
     return null
   }
@@ -1865,6 +1938,17 @@ async function syncForeignTop(
  *    `macro/us.json` itself is cached.
  * 5. **Do not overwrite existing files if all fails**: Keeping old data is better than empty files.
  */
+
+/**
+ * Wall budget for *starting* another FRED series in `syncMacro`'s loop (Task 166 batch 3 RISK
+ * review finding), same `PROBE_BUDGET_MS` pattern as the source-probe loop above. Without it,
+ * five series each retried through `fetchWithRetry` multiply worst-case time by the series count;
+ * `macro-daily` (schema.sql) runs `syncMacro` as its whole 60s cron phase, so 45s leaves ~15s for
+ * the surrounding decide/merge/upload work. A series already in flight is never interrupted — this
+ * only gates the *next* one.
+ */
+const MACRO_SYNC_BUDGET_MS = 45_000
+
 async function syncMacro(now: Date): Promise<{
   /** Did you actually write the file this time (= the content has changed and the upload was successful)*/
   synced: boolean
@@ -1879,6 +1963,8 @@ async function syncMacro(now: Date): Promise<{
   reason: 'updated' | 'unchanged' | 'empty' | 'skipped'
   /** skipped / Scan the details of the decision for background display and subsequent interpretation*/
   scan?: { reason: ScanReason; dueIds: string[]; scansToday: number }
+  /** Series not even attempted this round because `MACRO_SYNC_BUDGET_MS` ran out first. */
+  skippedForBudget?: number
 }> {
   const existing = await downloadJson<MacroFile>('macro/us.json')
 
@@ -1936,34 +2022,36 @@ async function syncMacro(now: Date): Promise<{
   }
 
   const indicators: MacroIndicator[] = []
-  for (const spec of FRED_SERIES) {
+  const macroDeadline = Date.now() + MACRO_SYNC_BUDGET_MS
+  let macroSkippedForBudget = 0
+  for (let i = 0; i < FRED_SERIES.length; i++) {
+    // Checked *before* starting a series — once a fetch is in flight it runs to completion.
+    if (Date.now() >= macroDeadline) {
+      macroSkippedForBudget = FRED_SERIES.length - i
+      break
+    }
+    const spec = FRED_SERIES[i]
     try {
       const since = fredSinceDate(now, spec.lookbackMonths ?? MACRO_LOOKBACK_MONTHS)
       const headers = { 'User-Agent': MACRO_UA, Accept: 'text/csv' }
-      const res = await fetch(fredCsvUrl(spec.id, since), {
-        // ⚠️ Not a UA by twChips. Sending a browser string will cause FRED to directly reset the connection, see MACRO_UA
-        headers,
-        signal: AbortSignal.timeout(15_000),
-      })
-      if (!res.ok) continue
+      // ⚠️ Not a UA by twChips. Sending a browser string will cause FRED to directly reset the connection, see MACRO_UA
+      const result = await fetchWithRetry(fredCsvUrl(spec.id, since), { headers }, { timeoutMs: 15_000 })
+      if (!result.ok) continue
 
       let raw
       if (spec.kind === 'rate' && spec.idLow) {
         // Target range: two daily series × official FOMC meeting calendar (holds included).
-        const resLow = await fetch(fredCsvUrl(spec.idLow, since), {
-          headers,
-          signal: AbortSignal.timeout(15_000),
-        })
-        if (!resLow.ok) continue
+        const resultLow = await fetchWithRetry(fredCsvUrl(spec.idLow, since), { headers }, { timeoutMs: 15_000 })
+        if (!resultLow.ok) continue
         const meetingDates = (RELEASE_CALENDAR[spec.id] ?? []).map((e) => e.period)
         raw = meetingRatePoints(
-          parseFredCsvDaily(await res.text()),
-          parseFredCsvDaily(await resLow.text()),
+          parseFredCsvDaily(await result.res.text()),
+          parseFredCsvDaily(await resultLow.res.text()),
           meetingDates,
           now,
         )
       } else {
-        raw = parseFredCsv(await res.text())
+        raw = parseFredCsv(await result.res.text())
       }
 
       const ind = deriveIndicator(spec, raw)
@@ -1977,7 +2065,7 @@ async function syncMacro(now: Date): Promise<{
   // Return count = 0 and mark reason - here once the entire batch failed and there was only one boolean false
   // However, I can’t tell whether it’s “skip” or “can’t catch”.
   if (indicators.length === 0) {
-    return { synced: false, count: 0, asOf: existing?.asOf ?? null, reason: 'empty' }
+    return { synced: false, count: 0, asOf: existing?.asOf ?? null, reason: 'empty', skippedForBudget: macroSkippedForBudget }
   }
 
   // If the content does not change, it will not change asOf, so that it keeps the time of "the last real change of the data" rather than "the last time it ran".
@@ -2007,6 +2095,7 @@ async function syncMacro(now: Date): Promise<{
       asOf: existing.asOf,
       reason: 'unchanged',
       scan: { reason: decision.reason, dueIds: decision.dueIds, scansToday: prevScans + 1 },
+      skippedForBudget: macroSkippedForBudget,
     }
   }
 
@@ -2025,6 +2114,7 @@ async function syncMacro(now: Date): Promise<{
     asOf: ok ? file.asOf : (existing?.asOf ?? null),
     reason: 'updated',
     scan: { reason: decision.reason, dueIds: decision.dueIds, scansToday: prevScans + 1 },
+    skippedForBudget: macroSkippedForBudget,
   }
 }
 
@@ -2044,7 +2134,20 @@ async function syncMacro(now: Date): Promise<{
  *    What you get must be the complete daily line of the previous trading day, and the second shift cannot make up anything.
  *    For data that changes every day, content fingerprinting will only determine "changed" every time, which will only add one unnecessary crawl.
  */
-async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf: string | null }> {
+
+/**
+ * Wall budget for *starting* another currency in `syncFx`'s loop (Task 166 batch 3 RISK review
+ * finding), same `PROBE_BUDGET_MS` pattern as the source-probe loop above. Without it, eight
+ * currencies each retried (and each tried against up to two candidate symbols) through
+ * `fetchJsonRetry` multiply worst-case time by the currency count; `fx-daily` (schema.sql) runs
+ * `syncFx` as its whole 60s cron phase, so 45s leaves ~15s for the surrounding build/upload work.
+ * A currency already in flight is never interrupted — this only gates the *next* one.
+ */
+const FX_SYNC_BUDGET_MS = 45_000
+
+async function syncFx(
+  now: Date,
+): Promise<{ synced: boolean; count: number; asOf: string | null; skippedForBudget?: number }> {
   const today = taipeiYmdOf(now)
   const existing = await downloadJson<FxFile>('fx/twd.json')
   if (existing && existing.schema === FX_SCHEMA && taipeiYmdOf(new Date(existing.asOf)) === today) {
@@ -2053,12 +2156,20 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
   }
 
   const currencies: FxCurrency[] = []
-  for (const spec of FX_CURRENCIES) {
+  const fxDeadline = Date.now() + FX_SYNC_BUDGET_MS
+  let fxSkippedForBudget = 0
+  for (let i = 0; i < FX_CURRENCIES.length; i++) {
+    // Checked *before* starting a currency — once a fetch is in flight it runs to completion.
+    if (Date.now() >= fxDeadline) {
+      fxSkippedForBudget = FX_CURRENCIES.length - i
+      break
+    }
+    const spec = FX_CURRENCIES[i]
     for (const cand of spec.symbols) {
       try {
         // Use the same helper used to catch the Yahoo daily line (with UA, non-200 throw error)——
         // Yahoo eats browser UA, which is the opposite of FRED's "cannot claim to be a browser", don't be confused
-        const resp = await fetchJson<ChartResponse>(fxUrl(cand.symbol))
+        const resp = await fetchJsonRetry<ChartResponse>(fxUrl(cand.symbol))
         const points = extractFxPoints(resp, cand.invert)
         // Insufficient points means this side is dead (only the current quote will be returned), change to the next candidate currency pair
         if (points.length < FX_MIN_POINTS) continue
@@ -2072,7 +2183,9 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
 
   // Existing files will not be overwritten when completely destroyed (follow the principle of syncMacro: leaving old data is better than empty files).
   // Return count = 0 to let batch_run_log distinguish between "skip" and "catch"
-  if (currencies.length === 0) return { synced: false, count: 0, asOf: existing?.asOf ?? null }
+  if (currencies.length === 0) {
+    return { synced: false, count: 0, asOf: existing?.asOf ?? null, skippedForBudget: fxSkippedForBudget }
+  }
 
   const file: FxFile = {
     schema: FX_SCHEMA,
@@ -2085,21 +2198,56 @@ async function syncFx(now: Date): Promise<{ synced: boolean; count: number; asOf
     synced: ok,
     count: currencies.length,
     asOf: ok ? file.asOf : (existing?.asOf ?? null),
+    skippedForBudget: fxSkippedForBudget,
   }
 }
 
 /** Delete the entire {ymd}/ directory in the reports bucket whose data date is earlier than cutoff*/
+/**
+ * ER-13: `.list()` caps a single page at `limit` entries. Page with `offset` until a short page
+ * comes back, same idiom `handleAdminBackups` already uses for `listUsers` — otherwise a bucket
+ * that grew past 1000 date folders (or a single day past 1000 tickers) silently drops the tail
+ * from pruning, and it never gets cleaned up.
+ */
+/**
+ * ER-13 continued (Task 166 batch 3 RISK review finding): a page failure used to be silently
+ * dropped — `data` came back `null`, `page` fell back to `[]`, and `page.length < pageSize` then
+ * read exactly like "reached the last page". `pruneStorage` would prune whatever partial listing
+ * that produced instead of the real one. Throw here so a failed page aborts the whole listing
+ * instead of masquerading as its end.
+ */
+async function listAllReportsStorage(path: string): Promise<{ name: string }[]> {
+  const pageSize = 1000
+  const out: { name: string }[] = []
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await db.storage.from(REPORTS_BUCKET).list(path, { limit: pageSize, offset })
+    if (error) throw new Error(`listAllReportsStorage(${path}): ${error.message}`)
+    const page = data ?? []
+    out.push(...page)
+    if (page.length < pageSize) break
+  }
+  return out
+}
+
 async function pruneStorage(cutoffYmd: string): Promise<void> {
   try {
-    const { data: entries } = await db.storage.from(REPORTS_BUCKET).list('', { limit: 1000 })
-    for (const e of entries ?? []) {
+    const entries = await listAllReportsStorage('')
+    for (const e of entries) {
       if (!/^\d{8}$/.test(e.name) || e.name >= cutoffYmd) continue
-      const { data: files } = await db.storage.from(REPORTS_BUCKET).list(e.name, { limit: 1000 })
-      const paths = (files ?? []).map((f) => `${e.name}/${f.name}`)
+      const files = await listAllReportsStorage(e.name)
+      const paths = files.map((f) => `${e.name}/${f.name}`)
       if (paths.length > 0) await db.storage.from(REPORTS_BUCKET).remove(paths)
     }
-  } catch {
-    // Failure to clean up does not affect the main process
+  } catch (err) {
+    // A failed page above aborts here — skip pruning entirely for this run rather than act on a
+    // partial listing. logEvent never throws, so this stays inside the same fault-tolerance
+    // contract the empty catch used to give the caller (a cleanup failure never fails the batch).
+    await logEvent(db, {
+      level: 'warn',
+      action: 'prune-storage',
+      message: '清理報表儲存桶時列表失敗，本輪跳過清理',
+      detail: { code: err instanceof Error ? err.message : String(err) },
+    })
   }
 }
 
@@ -2121,8 +2269,13 @@ async function pruneChipCache(cutoffYmd: string): Promise<void> {
 async function warmDataYmd(): Promise<string> {
   const m = await downloadJson<{ ymd?: unknown }>('manifest.json')
   if (m && typeof m.ymd === 'string' && /^\d{8}$/.test(m.ymd)) return m.ymd
-  const candidates = tradingDateCandidates(new Date())
-  return candidates.find((y) => !isWeekendYmd(y)) ?? candidates[0] ?? ''
+  const candidates = tradingDateCandidates(new Date()).filter((y) => !isWeekendYmd(y))
+  // ER-16: a weekday is not necessarily a trading day (national holiday). Reuse the same
+  // chip_raw_cache probe `loadSeries` already uses to tell a real trading day from a weekday with
+  // no landed data, instead of trusting the weekend filter alone.
+  const cached = await cachedDayDatasets(candidates)
+  const traded = candidates.find((y) => cached.has(`${y}:T86`))
+  return traded ?? candidates[0] ?? ''
 }
 
 /**
@@ -2448,6 +2601,8 @@ async function probeOne<T>(
   rows: number | null
   /** The rows themselves —— MOPS needs to read the published period off them (0.7.12). */
   raw: unknown
+  /** ER-09: set on failure so the caller's note can say *why* — timeout/network/http. */
+  kind?: 'timeout' | 'network' | 'http'
 }> {
   try {
     const resp = await fetchJson<T>(url)
@@ -2460,8 +2615,8 @@ async function probeOne<T>(
       rows: Array.isArray(rows) ? rows.length : null,
       raw: rows,
     }
-  } catch {
-    return { ok: false, date: null, fp: null, rows: null, raw: null }
+  } catch (e) {
+    return { ok: false, date: null, fp: null, rows: null, raw: null, kind: classifyFetchError(e).kind }
   }
 }
 
@@ -2557,7 +2712,7 @@ async function probeSource(
         fingerprint: r.fp,
         rows: r.rows,
         note: !r.ok
-          ? '借券端點無資料'
+          ? `借券端點無資料（${r.kind ?? 'unknown'}）`
           : hit
             ? `借券日=${r.date}（已翻次一交易日）`
             : `借券日=${r.date ?? '?'}＝當日額度，尚未翻日`,
@@ -2580,7 +2735,7 @@ async function probeSource(
             (v) => (v?.date ? String(v.date) : null),
             (v) => (Array.isArray(v?.data) ? v.data : []),
           )
-        : { ok: false, date: null, fp: null, rows: null, raw: null }
+        : { ok: false, date: null, fp: null, rows: null, raw: null, kind: undefined }
       const hit = r.ok && r.date === todayYmd
       return {
         hit,
@@ -2592,7 +2747,7 @@ async function probeSource(
           ? `估值日=今日（${r.rows ?? '?'} 筆）`
           : r.ok
             ? `估值日=${r.date ?? '?'}≠今日`
-            : '當日估值尚未出表',
+            : `當日估值尚未出表（${r.kind ?? 'unknown'}）`,
         duration_ms: Date.now() - t0,
       }
     }
@@ -2635,7 +2790,7 @@ async function probeSource(
         fingerprint: r.fp,
         rows: r.rows,
         note: !r.ok
-          ? `${what}彙整失敗`
+          ? `${what}彙整失敗（${r.kind ?? 'unknown'}）`
           : hit
             ? `${what}出表日=今日（${r.rows ?? '?'} 筆）`
             : `${what}出表日=${r.date ?? '?'}≠今日`,
@@ -2645,7 +2800,10 @@ async function probeSource(
     }
     return fail('unknown source')
   } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e))
+    // ER-09: carry the failure kind (timeout/network/http) in the same note field, since
+    // `source_probe_tick.note` is a free-text column already and adding a DB column is out of scope.
+    const c = classifyFetchError(e)
+    return fail(`${c.message}（${c.kind}）`)
   }
 }
 
@@ -3560,6 +3718,7 @@ async function handleSyncMacro(): Promise<Response> {
     scan: macro.scan ?? null,
     count: macro.count,
     asOf: macro.asOf,
+    skippedForBudget: macro.skippedForBudget ?? 0,
     durationMs: Date.now() - startedAt,
   })
 }
@@ -3824,10 +3983,25 @@ async function storageCoverage(): Promise<Record<string, number | null>> {
  */
 async function handleAdminUsers(): Promise<Response> {
   const startedAt = Date.now()
-  // perPage upper limit 1000. The number of accounts in this project is single digits, and paging has no meaning for it.
-  const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) return json({ error: error.message }, 500)
-  const users = (data?.users ?? []).map((u) => ({
+  // DB-03: `listUsers` pages independently of PostgREST's max_rows — hardcoding page: 1 silently
+  // drops every account past perPage once the project grows past one page, same bug
+  // handleAdminBackups already guards against (BUG-066). Loop upward until a page comes back short.
+  const perPage = 1000
+  const rawUsers: Array<{
+    id: string
+    email?: string | null
+    created_at?: string | null
+    updated_at?: string | null
+    app_metadata?: unknown
+  }> = []
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
+    if (error) return json({ error: error.message }, 500)
+    const batch = data?.users ?? []
+    rawUsers.push(...batch)
+    if (batch.length < perPage) break
+  }
+  const users = rawUsers.map((u) => ({
     id: u.id,
     email: u.email ?? '',
     createdAt: u.created_at ?? null,
@@ -3853,6 +4027,27 @@ async function handleAdminUsers(): Promise<Response> {
  * ⚠️ **You are not allowed to cancel your own administrator privileges**: This is the only operation that will lock people out——
  * You may be the only administrator left in the entire site. After the recovery, you will not even be able to enter the backend, so you can only go back to the SQL Editor and make manual changes.
  */
+/**
+ * AD-02: how many of `listUsers`'s pages are administrators right now. `listUsers` pages
+ * independently of PostgREST's max_rows, same as handleAdminBackups already guards for. Used both
+ * to gate a revoke before it runs and, after it runs, to catch a lost-update race between two
+ * concurrent revokes of two *different* admins that could each individually pass the pre-check.
+ */
+async function countAdmins(): Promise<{ ok: true; count: number } | { ok: false; message: string }> {
+  const perPage = 1000
+  let adminCount = 0
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage })
+    if (error) return { ok: false, message: error.message }
+    const batch: Array<{ app_metadata?: unknown }> = data?.users ?? []
+    adminCount += batch.filter(
+      (u) => (u.app_metadata as Record<string, unknown> | undefined)?.role === 'admin',
+    ).length
+    if (batch.length < perPage) break
+  }
+  return { ok: true, count: adminCount }
+}
+
 async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody): Promise<Response> {
   const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
   if (!userId) return json({ error: 'userId is required' }, 400)
@@ -3868,6 +4063,21 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
   const { data: target, error: readErr } = await db.auth.admin.getUserById(userId)
   if (readErr || !target?.user) return json({ error: 'User not found' }, 404)
 
+  const targetIsAdmin =
+    (target.user.app_metadata as Record<string, unknown> | undefined)?.role === 'admin'
+
+  // AD-02: never let the admin count fall to zero — that locks everyone out of the console with
+  // no way back short of a manual SQL Editor edit (see the header comment above). This is a
+  // best-effort guard, not a lock: two concurrent revokes of two *different* admins can each pass
+  // it before either write lands. The re-count after the write below catches that race.
+  if (!makeAdmin && targetIsAdmin) {
+    const count = await countAdmins()
+    if (!count.ok) return json({ error: count.message }, 500)
+    if (count.count <= 1) {
+      return json({ error: '無法取消最後一位管理員的權限（目前僅剩一位管理員）' }, 409)
+    }
+  }
+
   // Integrate the existing app_metadata, do not overwrite the entire package - there are also Supabase's own fields such as provider.
   const meta = { ...(target.user.app_metadata as Record<string, unknown>) }
   if (makeAdmin) meta.role = 'admin'
@@ -3875,6 +4085,45 @@ async function handleAdminSetRole(req: Request, body: GenerateReportRequestBody)
 
   const { error } = await db.auth.admin.updateUserById(userId, { app_metadata: meta })
   if (error) return json({ error: error.message }, 500)
+
+  // AD-02: the pre-revoke count above already passed by the time this write landed — re-count now
+  // to catch the race it cannot: a second concurrent revoke of a different admin that also passed
+  // its own pre-check. If this revoke is what tipped the count to zero, undo it and fail instead
+  // of leaving the site with no administrator.
+  if (!makeAdmin && targetIsAdmin) {
+    const recount = await countAdmins()
+    if (recount.ok && recount.count === 0) {
+      await db.auth.admin.updateUserById(userId, { app_metadata: { ...meta, role: 'admin' } })
+      await logEvent(db, {
+        level: 'warn',
+        action: 'admin-set-role',
+        message: '偵測到管理員人數歸零，已還原此帳號的管理員權限',
+        userId: caller.data.user?.id ?? null,
+        detail: {
+          code: caller.data.user?.id ?? 'unknown',
+          hint: userId,
+          name: 'restore',
+        },
+      })
+      return json({ error: '無法取消最後一位管理員的權限（目前僅剩一位管理員）' }, 409)
+    }
+  }
+
+  // AD-02: every role change is security-relevant — log actor/target/new-role using only
+  // _shared/log.ts's allowlisted keys (it has no dedicated "actor"/"target" key, so this reuses
+  // `code` / `hint` / `name` the same way discordRun.ts already reuses them for other labels).
+  await logEvent(db, {
+    level: 'info',
+    action: 'admin-set-role',
+    message: makeAdmin ? '授予管理員權限' : '取消管理員權限',
+    userId: caller.data.user?.id ?? null,
+    detail: {
+      code: caller.data.user?.id ?? 'unknown',
+      hint: userId,
+      name: makeAdmin ? 'admin' : 'user',
+    },
+  })
+
   return json({ ok: true, userId, admin: makeAdmin })
 }
 
@@ -4102,9 +4351,13 @@ async function handleAdminBackupRestore(body: GenerateReportRequestBody): Promis
  * only `admin_recent_app_logs()` (SECURITY DEFINER, service_role only) can read it, so this
  * goes through the same `db` service-role client every other admin action already uses.
  */
+/** DB-04: `admin_recent_app_logs` defaults to 100 rows but takes whatever `p_limit` the caller sends. */
+const APP_LOGS_MAX_LIMIT = 200
+
 async function handleAppLogs(body: GenerateReportRequestBody): Promise<Response> {
+  const p_limit = typeof body.limit === 'number' ? Math.min(body.limit, APP_LOGS_MAX_LIMIT) : undefined
   const { data, error } = await db.rpc('admin_recent_app_logs', {
-    p_limit: body.limit ?? undefined,
+    p_limit,
     p_level: body.level ?? undefined,
     p_source: body.source ?? undefined,
     p_before: body.before ?? undefined,
@@ -4122,6 +4375,7 @@ async function handleSyncFx(): Promise<Response> {
     synced: fx.synced,
     count: fx.count,
     asOf: fx.asOf,
+    skippedForBudget: fx.skippedForBudget ?? 0,
     durationMs: Date.now() - startedAt,
   })
 }
@@ -4833,33 +5087,35 @@ async function handleAdminRun(
   const denied = await assertAdmin(req)
   if (denied) return denied
 
-  let jobs: AdminRunJob[]
+  // ER-17: the front end already calls admin-run once per job. A multi-job payload (`all` or a
+  // list) runs every handler in-process inside this one HTTP call, which is exactly the budget
+  // problem separate admin-run jobs exist to avoid — reject it instead of accepting it silently.
   if (body.jobs === 'all' || body.job === 'all') {
-    jobs = [...ADMIN_RUN_JOBS]
-  } else {
-    const raw: unknown[] = Array.isArray(body.jobs)
-      ? body.jobs
-      : typeof body.job === 'string'
-        ? [body.job]
-        : []
-    jobs = []
-    for (const item of raw) {
-      if (typeof item !== 'string' || !isAdminRunJob(item)) {
-        return json(
-          {
-            error: `未知的 job：${String(item)}。可用：${ADMIN_RUN_JOBS.join(', ')} 或 all`,
-          },
-          400,
-        )
-      }
-      if (!jobs.includes(item)) jobs.push(item)
+    return json(
+      { error: `一次只能執行一個 job（不支援 all）。請每個 job 各自呼叫一次：${ADMIN_RUN_JOBS.join(', ')}` },
+      400,
+    )
+  }
+  const raw: unknown[] = Array.isArray(body.jobs)
+    ? body.jobs
+    : typeof body.job === 'string'
+      ? [body.job]
+      : []
+  if (raw.length > 1) {
+    return json(
+      { error: `一次只能執行一個 job。請每個 job 各自呼叫一次：${ADMIN_RUN_JOBS.join(', ')}` },
+      400,
+    )
+  }
+  const jobs: AdminRunJob[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string' || !isAdminRunJob(item)) {
+      return json({ error: `未知的 job：${String(item)}。可用：${ADMIN_RUN_JOBS.join(', ')}` }, 400)
     }
-    if (jobs.length === 0) {
-      return json(
-        { error: `jobs 必填。可用：${ADMIN_RUN_JOBS.join(', ')} 或 all` },
-        400,
-      )
-    }
+    jobs.push(item)
+  }
+  if (jobs.length === 0) {
+    return json({ error: `jobs 必填。可用：${ADMIN_RUN_JOBS.join(', ')}` }, 400)
   }
 
   // Who pressed the button — for admin_run_log.triggered_by (observation only).
@@ -4956,9 +5212,29 @@ Deno.serve(async (req) => {
     return json({ error: 'Method not allowed' }, 405)
   }
 
+  // ER-14: reject an oversized body by its declared length before `req.json()` parses the whole
+  // thing. Every action here is a small control payload — 1 MB is generous headroom over the
+  // largest legitimate body (an admin-backup-restore preview echoes a path, not a document).
+  const contentLengthHeader = req.headers.get('Content-Length')
+  const contentLength = Number(contentLengthHeader ?? '')
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {
+    return json({ error: 'Request body too large' }, 413)
+  }
+
   let body: GenerateReportRequestBody
   try {
-    body = await req.json()
+    if (contentLengthHeader === null) {
+      // Task 166 batch 3 RISK review finding: a chunked request carries no Content-Length, so the
+      // check above never runs for it. Read the body once as text, gate on its byte length, then
+      // parse from that same text — calling req.json() here too would try to read the body twice.
+      const text = await req.text()
+      if (new TextEncoder().encode(text).length > MAX_REQUEST_BODY_BYTES) {
+        return json({ error: 'Request body too large' }, 413)
+      }
+      body = JSON.parse(text)
+    } else {
+      body = await req.json()
+    }
   } catch {
     return json({ error: 'Invalid JSON body' }, 400)
   }
@@ -5156,7 +5432,7 @@ Deno.serve(async (req) => {
       level: 'error',
       action: typeof body.action === 'string' ? body.action : 'stock-report',
       message: err instanceof Error ? err.message : String(err),
-      detail: { stack: err instanceof Error ? err.stack : undefined },
+      detail: { stack: safeStack(err) },
     })
     return json({ error: 'Internal error' }, 500)
   }
