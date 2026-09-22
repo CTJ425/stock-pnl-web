@@ -21,6 +21,8 @@
 - **Verify**：`npm test` 2,592 通過／7 略過／0 失敗；`npm run build`、`npm run typecheck:edge` exit 0。
 - **Deploy**：DEV 與 PROD 皆套用 `tx_type` CHECK、`tx_split_log`、`apply_transaction_updates`，並重新部署 `stock-report`（Edge 引擎副本隨股利改動更新）。
 
+---
+
 ## 📅 Log: 2026-09-22 21:44:30 Asia/Taipei (Task 166 batch 1, 0.9.63)
 
 **使用者要求：對整個專案做最詳細的元件／流程／項目拆解稽核，再依建議全部改善。** 稽核報告列出 139 項發現（2 項 P1、25 項 P2、112 項 P3），分 5 批修補，本次為第 1 批（Lane 2：spec + 先寫失敗測試 + builder + reviewer）。
@@ -32,16 +34,3 @@
 - Reviewer：R2 移除 PASS；CSV PASS（RISK：缺元件測試 → 已補）；夜間批次 FAIL（manifest 條件未計入預算略過、chips 早期拋錯不留紀錄）→ 已修正並重驗。
 - **Verify**：`npm test` 2,574 通過／7 略過／0 失敗；`npm run build`、`npm run typecheck:edge` exit 0。
 - **Deploy**：DEV 與 PROD 皆套用 `batch_run_log.skipped_for_budget`、`get_ai_settings()` 管理員判斷、移除 `backup_run_log` r2 欄位；部署 `ai-proxy`、`stock-report`（`--no-verify-jwt`）、`backup-transactions`（`--no-verify-jwt`）；Auth 設定 `mailer_autoconfirm=false`、`password_min_length=8`。
-
----
-
-## 📅 Log: 2026-09-22 14:04:13 Asia/Taipei (0.9.62 → `main`, remove self-export)
-
-**User request: remove the「匯出我的紀錄」item from every account's menu without changing anything else.** Lane 0 (surgical, content already in context).
-
-- `sources/src/components/AppShell.tsx`: removed the menu button, the `exportMyRecords` function, and the now-unused `Download` icon import, `buildSelfExport` / `downloadBlob` imports, and the `show` binding in that component. Other menu items unchanged.
-- Deleted `sources/src/services/selfExport.ts` and `selfExport.test.ts` (no remaining callers; 6 tests removed).
-- `sources/src/components/Admin/BackupsSection.tsx`: removed the header comment lines and the admin UI sentence that pointed users to the removed self-export.
-- Version 0.9.61 → 0.9.62 (`version.ts`, `package.json`, lock, README badge, CHANGELOG).
-- **Verify**: `npx vitest run` 150 files (149 passed, 1 skipped) / 2,587 tests: 2,580 passed, 7 skipped, 0 failed; `npm run build`, `npm run lint` exit 0.
-- **Deploy**: frontend only, via Cloudflare Pages on push to `main`. No Edge Function, schema, or cron change.

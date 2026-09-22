@@ -227,6 +227,29 @@ export function parseFredCsv(csv: string): MacroPoint[] {
 }
 
 /**
+ * Task 166 ES-05: a rejected User-Agent (non-2xx, or FRED resetting the connection — see the
+ * ⚠️ note on `MACRO_UA`) and a genuinely empty CSV body currently collapse into the exact same
+ * silent skip in index.ts's per-series loop, which is why its `reason: 'empty'` comment says
+ * "I can't tell whether it's 'skip' or 'can't catch'". This classifies one series' fetch
+ * outcome so the caller can log *why*, without changing the success path's shape — `points` is
+ * exactly what `parseFredCsv` already returns. Stays network-free like the rest of this file;
+ * the caller still does its own `fetch` and passes the settled `res.ok` / `res.status` / body
+ * text in. For a fetch that throws before a `Response` exists (e.g. a connection reset), the
+ * caller can build the same `{ kind: 'fetch-error', message }` shape directly from the caught
+ * error — no `Response` is needed to construct it.
+ */
+export type FredFetchOutcome =
+  | { kind: 'ok'; points: MacroPoint[] }
+  | { kind: 'fetch-error'; message: string }
+  | { kind: 'no-update' }
+
+export function classifyFredFetch(ok: boolean, status: number, csv: string): FredFetchOutcome {
+  if (!ok) return { kind: 'fetch-error', message: `HTTP ${status}` }
+  const points = parseFredCsv(csv)
+  return points.length > 0 ? { kind: 'ok', points } : { kind: 'no-update' }
+}
+
+/**
  * Daily FRED series → points with full `YYYY-MM-DD` period (for FOMC target range).
  * Monthly series must keep using `parseFredCsv` (period = month).
  */

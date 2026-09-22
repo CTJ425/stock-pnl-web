@@ -151,8 +151,17 @@ function pickPrice(row: Record<string, unknown>): number | null {
   const last = toPrice(row.z)
   if (last !== null) return last
   const tradeTime = toTradeTime(row.t) ?? toTradeTime(row.ot)
-  if (tradeTime !== null && tradeTime >= '13:30:00') {
-    return null
+  if (tradeTime !== null) {
+    if (tradeTime >= '13:30:00') return null
+  } else if (row.t !== undefined || row.ot !== undefined) {
+    /*
+     * Task 166 EP-01: t/ot were present but neither parsed into a usable time. That is a
+     * response we cannot trust to tell us we're not at/after close — the BUG-045 guard above
+     * silently doesn't apply in that case, so don't let it fall through to the bid either.
+     * (When t/ot are absent entirely — older/minimal snapshots — there is no trade yet today,
+     * i.e. we're intraday before the first match, so the bid fallback below is still safe.)
+     */
+    return toPrice(row.y)
   }
   const firstBid = toPrice(String(row.b ?? '').split('_')[0])
   if (firstBid !== null) return firstBid

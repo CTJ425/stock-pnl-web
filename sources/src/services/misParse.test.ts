@@ -319,3 +319,22 @@ describe('parseMisResponse', () => {
     })
   })
 })
+
+/**
+ * Task 166 (EP-01). The BUG-045 guard ("after 13:30 never fall back to the bid") depends on the
+ * trade-time fields parsing. When both `t` and `ot` are missing or unusable the guard silently
+ * did not apply and the bid could be published as a trade price.
+ */
+describe('交易時間無法解析時不得用買一價（Task 166 EP-01）', () => {
+  it('z 是 -，且 t / ot 都無法解析時回傳昨收而不是買一價', () => {
+    const data = { msgArray: [{ c: '2330', z: '-', b: '604.00_603.00', y: '600.00', t: '-', ot: '-' }] }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(600)
+  })
+
+  it('交易時間正常時，盤中仍可用買一價', () => {
+    const data = { msgArray: [{ c: '2330', z: '-', b: '604.00_603.00', y: '600.00', t: '10:15:00' }] }
+    const [quote] = parseMisResponse(data)
+    expect(quote.price).toBe(604)
+  })
+})

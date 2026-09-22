@@ -31,18 +31,21 @@ describe('dueAt — inheriting the admin schedule', () => {
     expect(dueAt('17:30', GLOBAL, row())).toEqual({ marketBrief: true, marketFull: false, holdings: true })
   })
 
-  it('sends the full copy at the global full time', () => {
-    expect(dueAt('21:30', GLOBAL, row())).toEqual({ marketBrief: false, marketFull: true, holdings: false })
+  // Task 166 (ED-01): 「到期」= 排定時間已過，不再要求剛好相等；重複由當日 claim 擋下，
+  // 所以漏跑一次 tick 之後仍補得回來。以下斷言都改成「時間未到」與「時間已過」兩側。
+  it('sends the full copy once the global full time has passed', () => {
+    expect(dueAt('21:30', GLOBAL, row())).toEqual({ marketBrief: true, marketFull: true, holdings: true })
+    expect(dueAt('21:00', GLOBAL, row()).marketFull).toBe(false)
   })
 
-  it('sends nothing at a minute nobody chose', () => {
-    expect(dueAt('19:00', GLOBAL, row())).toEqual({ marketBrief: false, marketFull: false, holdings: false })
+  it('sends nothing before the first scheduled time', () => {
+    expect(dueAt('17:00', GLOBAL, row())).toEqual({ marketBrief: false, marketFull: false, holdings: false })
   })
 
   it('inherits the BRIEF time for 個人持股, never the full one', () => {
     const r = row({ marketBriefTime: '20:00' })
     expect(dueAt('17:30', GLOBAL, r).holdings).toBe(true)
-    expect(dueAt('21:30', GLOBAL, r).holdings).toBe(false)
+    expect(dueAt('17:00', GLOBAL, r).holdings).toBe(false)
   })
 
   it('is not due at any tick when the global time is unknown', () => {
@@ -57,22 +60,23 @@ describe('dueAt — inheriting the admin schedule', () => {
 describe('dueAt — a time of the account’s own', () => {
   it('uses the account time and ignores the global one', () => {
     const r = row({ marketBriefTime: '19:30', marketFullTime: '23:00', holdingsTime: '18:00' })
-    expect(dueAt('19:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: false, holdings: false })
-    expect(dueAt('23:00', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: true, holdings: false })
+    expect(dueAt('19:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: false, holdings: true })
+    expect(dueAt('23:00', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: true, holdings: true })
     expect(dueAt('18:00', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: false, holdings: true })
   })
 
   it('does not fall back to the global time once a custom one is set', () => {
     const r = row({ marketBriefTime: '19:30', marketFullTime: '23:00', holdingsTime: '18:00' })
+    // 全站時間 17:30／21:30 都已過，但這個帳號自訂 19:30／23:00／18:00，所以 17:30 一個都不到期
     expect(dueAt('17:30', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: false, holdings: false })
-    expect(dueAt('21:30', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: false, holdings: false })
+    expect(dueAt('21:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: false, holdings: true })
   })
 
   it('lets one stream be custom while the others inherit', () => {
     const r = row({ marketFullTime: '22:30' })
     expect(dueAt('17:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: false, holdings: true })
-    expect(dueAt('21:30', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: false, holdings: false })
-    expect(dueAt('22:30', GLOBAL, r)).toEqual({ marketBrief: false, marketFull: true, holdings: false })
+    expect(dueAt('21:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: false, holdings: true })
+    expect(dueAt('22:30', GLOBAL, r)).toEqual({ marketBrief: true, marketFull: true, holdings: true })
   })
 })
 
@@ -231,14 +235,51 @@ describe('runAccountTick', () => {
     expect(out.leftOver).toBeGreaterThan(0)
   })
 
-  it('does not touch an account that is not due this half hour', async () => {
+  it('does not touch an account whose scheduled time has not arrived yet', async () => {
+    // Task 166 (ED-01): 19:00 已過 17:30，所以那是「補送」而不是「不到期」；真正不到期的是更早的時間。
     const d = tickDeps({
-      now: vi.fn(() => new Date('2026-09-16T11:00:00Z')), // Taipei 19:00
+      now: vi.fn(() => new Date('2026-09-16T09:00:00Z')), // Taipei 17:00
       listAccounts: vi.fn(async () => [marketOnly({ marketWebhookUrl: HOOK_A })]),
     })
     const out = await runAccountTick(d)
-    expect(out.hhmm).toBe('19:00')
+    expect(out.hhmm).toBe('17:00')
     expect(d.claimMarketCopy).not.toHaveBeenCalled()
     expect(d.post).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Task 166 (ED-01). A single missed 30-minute tick used to drop that day's card entirely:
+ * `dueAt` required the scheduled time to equal the current slot exactly. Sends are already
+ * idempotent through the per-day claim, so "due" must mean "scheduled time has passed today".
+ */
+describe('漏跑一次 tick 之後仍會補送（Task 166 ED-01）', () => {
+  const row: AccountRow = {
+    userId: 'u-1',
+    marketEnabled: true,
+    marketWebhookUrl: FAKE_WEBHOOK,
+    marketBriefTime: '17:30',
+    marketFullTime: '21:30',
+    holdingsEnabled: true,
+    holdingsWebhookUrl: FAKE_WEBHOOK,
+    holdingsTime: null,
+  }
+
+  const global: GlobalSchedule = { brief: '17:30', full: '21:30' }
+  const noGlobal: GlobalSchedule = { brief: null, full: null }
+
+  it('排定時間已過、當天尚未送出時仍算到期', () => {
+    expect(dueAt('18:00', global, row).marketBrief).toBe(true)
+    expect(dueAt('18:00', global, row).holdings).toBe(true)
+  })
+
+  it('排定時間還沒到就不算到期', () => {
+    expect(dueAt('17:00', global, row).marketBrief).toBe(false)
+    expect(dueAt('21:00', global, row).marketFull).toBe(false)
+  })
+
+  it('全站時間未知時，繼承設定的帳號永遠不算到期', () => {
+    expect(dueAt('23:00', noGlobal, row).marketBrief).toBe(true)
+    expect(dueAt('23:00', noGlobal, { ...row, marketBriefTime: null }).marketBrief).toBe(false)
   })
 })

@@ -257,3 +257,27 @@ describe('foreignTopFingerprint', () => {
     expect(fp.length).toBeLessThan(32)
   })
 })
+
+/**
+ * Task 166 (ES-04). `num()` used raw `Number(...)`, so an empty cell or a footnote marker from
+ * TWSE turned into NaN and propagated into the sort and the fingerprint.
+ */
+describe('非數字欄位不得變成 NaN（Task 166 ES-04）', () => {
+  it('空字串或註記的列會被丟掉，不會排進榜單', () => {
+    const resp: Twt38uResponse = {
+      stat: 'OK',
+      date: '20260922',
+      fields: FIELDS,
+      data: [
+        [' ', '2330  ', '台積電  ', '10,000', '1,000', '9,000', '0', '0', '0', '10,000', '1,000', '9,000'],
+        [' ', '2317  ', '鴻海  ', '', '—', '註記', '0', '0', '0', '', '—', '註記'],
+      ],
+    }
+    const parsed = parseForeignTop(resp)
+    expect(parsed).not.toBeNull()
+    const all = [...parsed!.buyTop, ...parsed!.sellTop]
+    expect(all.some((r) => r.ticker === '2330')).toBe(true)
+    expect(all.every((r) => Number.isFinite(r.net))).toBe(true)
+    expect(all.some((r) => r.ticker === '2317')).toBe(false)
+  })
+})

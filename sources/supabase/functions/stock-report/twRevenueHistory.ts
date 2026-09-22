@@ -61,6 +61,12 @@ function cellsOf(row: string): string[] {
   const re = /<t([dh])\b[^>]*>([\s\S]*?)<\/t\1>/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(row)) !== null) {
+    /*
+     * Task 166 ES-07: guard against a nested <table> landing inside a captured cell (the row
+     * regex above can otherwise mis-align columns and produce wrong numbers) — reject the
+     * whole row so the caller sees "no data" instead.
+     */
+    if (/<table\b/i.test(m[2])) return []
     out.push(
       m[2]
         .replace(/<[^>]*>/g, '')

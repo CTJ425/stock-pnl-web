@@ -5,6 +5,19 @@ Older progress entries moved from `PROGRESS.md` to keep the hot file small for a
 
 ---
 
+## 📅 Log: 2026-09-22 14:04:13 Asia/Taipei (0.9.62 → `main`, remove self-export)
+
+**User request: remove the「匯出我的紀錄」item from every account's menu without changing anything else.** Lane 0 (surgical, content already in context).
+
+- `sources/src/components/AppShell.tsx`: removed the menu button, the `exportMyRecords` function, and the now-unused `Download` icon import, `buildSelfExport` / `downloadBlob` imports, and the `show` binding in that component. Other menu items unchanged.
+- Deleted `sources/src/services/selfExport.ts` and `selfExport.test.ts` (no remaining callers; 6 tests removed).
+- `sources/src/components/Admin/BackupsSection.tsx`: removed the header comment lines and the admin UI sentence that pointed users to the removed self-export.
+- Version 0.9.61 → 0.9.62 (`version.ts`, `package.json`, lock, README badge, CHANGELOG).
+- **Verify**: `npx vitest run` 150 files (149 passed, 1 skipped) / 2,587 tests: 2,580 passed, 7 skipped, 0 failed; `npm run build`, `npm run lint` exit 0.
+- **Deploy**: frontend only, via Cloudflare Pages on push to `main`. No Edge Function, schema, or cron change.
+
+---
+
 ## 📅 Log: 2026-09-21 16:10:08 Asia/Taipei (Task 165 steps 2e–2g, 0.9.60 → PROD)
 
 **0.9.60 定版、合併 `main`、PROD 完整部署。** 一次帶上三個步驟（2e 自助 webhook、2f 各帳號發送時間、2g 後台瘦身＋間距），PROD 從 step 2d 的狀態一路補齊。

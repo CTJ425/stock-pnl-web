@@ -41,16 +41,27 @@ export interface DueStreams { marketBrief: boolean; marketFull: boolean; holding
  * Pure. `hhmm` is Taipei wall-clock, already rounded to the half hour by the caller.
  *
  * This is the whole inherit rule in one testable function: each stream needs its switch on, its
- * own webhook, and either a custom time equal to `hhmm` or (custom time absent) the relevant
- * global time equal to `hhmm`. A `null` on both sides must never count as due — if the global
- * time is unknown (the cron job is missing) an inheriting account is *not* due, rather than due
- * at every tick.
+ * own webhook, and either a custom time or (custom time absent) the relevant global time, that
+ * has already passed today. A `null` on both sides must never count as due — if the global time
+ * is unknown (the cron job is missing) an inheriting account is *not* due, rather than due at
+ * every tick.
+ *
+ * Task 166 (ED-01): "due" means the scheduled time has passed in today's Taipei day, not that it
+ * equals the current slot exactly — a single missed 30-minute tick used to drop that day's card
+ * outright. Sends are already idempotent through the per-day claim, so re-checking "has it passed
+ * yet" on every later tick only recovers a miss; it never causes a duplicate send.
  */
+function due(hhmm: string, scheduled: string | null): boolean {
+  // Both are zero-padded 'HH:MM' strings, so lexicographic string comparison sorts the same as
+  // the wall-clock time it represents — safe to use for ">=" here.
+  return scheduled !== null && hhmm >= scheduled
+}
+
 export function dueAt(hhmm: string, global: GlobalSchedule, row: AccountRow): DueStreams {
-  const marketBrief = row.marketEnabled && row.marketWebhookUrl !== null && (row.marketBriefTime ?? global.brief) === hhmm
-  const marketFull = row.marketEnabled && row.marketWebhookUrl !== null && (row.marketFullTime ?? global.full) === hhmm
+  const marketBrief = row.marketEnabled && row.marketWebhookUrl !== null && due(hhmm, row.marketBriefTime ?? global.brief)
+  const marketFull = row.marketEnabled && row.marketWebhookUrl !== null && due(hhmm, row.marketFullTime ?? global.full)
   // 個人持股 inherits the BRIEF time, never the full one (spec §5.1) — there is only one control.
-  const holdings = row.holdingsEnabled && row.holdingsWebhookUrl !== null && (row.holdingsTime ?? global.brief) === hhmm
+  const holdings = row.holdingsEnabled && row.holdingsWebhookUrl !== null && due(hhmm, row.holdingsTime ?? global.brief)
   return { marketBrief, marketFull, holdings }
 }
 

@@ -209,6 +209,9 @@ export function extractMargin(rows: MarginRow[], ticker: string): MarginChip | n
   const shortToday = normNum(row['融券今日餘額'])
   const shortPrev = normNum(row['融券前日餘額'])
   return {
+    // Task 166 ES-08: the OpenAPI response never carries flow columns, only balances.
+    // These three stay null on purpose — consumers must treat null as "unknown", never
+    // coerce to 0, or a day with real financing activity would render as "no trading".
     marginBuy: null,
     marginSell: null,
     marginRedeem: null,
@@ -256,6 +259,27 @@ const MARGIN_IDX = {
   offset: 14,
 } as const
 
+/**
+ * Task 166 ES-01: MARGIN_IDX reads by position, not by name, so a silent column reorder on
+ * the endpoint would otherwise land in the wrong field instead of failing loudly. Check the
+ * header names actually sitting at the positions we read before trusting them.
+ */
+const MARGIN_HEADER_AT: Readonly<Record<number, string>> = {
+  [MARGIN_IDX.code]: '代號',
+  [MARGIN_IDX.marginBuy]: '買進',
+  [MARGIN_IDX.marginSell]: '賣出',
+  [MARGIN_IDX.marginToday]: '今日餘額',
+  [MARGIN_IDX.shortBuy]: '買進',
+  [MARGIN_IDX.shortSell]: '賣出',
+  [MARGIN_IDX.shortToday]: '今日餘額',
+} as const
+
+function marginHeaderMatches(fields: string[]): boolean {
+  return Object.entries(MARGIN_HEADER_AT).every(
+    ([i, name]) => cleanHeader(fields[Number(i)] ?? '') === name,
+  )
+}
+
 /** The rwd response may contain multiple tables (large market total / stock-by-stock summary); the first column of the stock-by-stock table is "code"*/
 export function marginTable(resp: MarginDatedResponse): { fields: string[]; data: string[][] } | null {
   for (const t of resp.tables ?? []) {
@@ -272,6 +296,8 @@ export function marginTable(resp: MarginDatedResponse): { fields: string[]; data
 export function extractMarginDated(resp: MarginDatedResponse, ticker: string): MarginChip | null {
   const table = marginTable(resp)
   if (!table) return null
+  // Task 166 ES-01: column order protection for the position-indexed reads below.
+  if (!marginHeaderMatches(table.fields)) return null
   const row = table.data.find((r) => String(r[MARGIN_IDX.code]).trim() === ticker)
   if (!row) return null
   const at = (i: number): number | null => normNum(row[i])
