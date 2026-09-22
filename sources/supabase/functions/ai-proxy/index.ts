@@ -22,12 +22,17 @@ const db = createClient(
 )
 
 const deps: AiProxyDeps = {
-  async verifyJwt(token: string): Promise<boolean> {
+  // Task 166 AI-01: AI analysis is admin-only. Same predicate as `assertAdmin` in
+  // stock-report/index.ts — `app_metadata.role === 'admin'` (service role / Dashboard only,
+  // so a user cannot grant this to themselves).
+  async authorize(token: string): Promise<'admin' | 'user' | null> {
     try {
       const { data, error } = await db.auth.getUser(token)
-      return !error && !!data.user
+      if (error || !data.user) return null
+      const meta = data.user.app_metadata as Record<string, unknown> | undefined
+      return meta?.role === 'admin' ? 'admin' : 'user'
     } catch {
-      return false
+      return null
     }
   },
 

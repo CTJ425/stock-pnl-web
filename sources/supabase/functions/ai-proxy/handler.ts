@@ -24,8 +24,12 @@ export interface AiProxySettings {
 }
 
 export interface AiProxyDeps {
-  /** Validates the bearer token against Supabase auth. Returns false for missing/invalid JWTs. */
-  verifyJwt: (token: string) => Promise<boolean>
+  /**
+   * Resolves the caller's role from the bearer token. `null` for a missing/invalid JWT
+   * (401); `'user'` for a valid but non-admin caller (403, Task 166 AI-01 — AI analysis is
+   * admin-only); `'admin'` proceeds.
+   */
+  authorize: (token: string) => Promise<'admin' | 'user' | null>
   /** Reads provider/model/key for the single shared row (service-role, bypasses RLS). */
   readSettings: () => Promise<AiProxySettings>
   /** Performs the upstream Google request. Swappable so tests never hit the network. */
@@ -52,9 +56,12 @@ export async function handleAiProxy(req: Request, deps: AiProxyDeps): Promise<Re
   if (!token) {
     return json({ error: '未登入或憑證缺失' }, 401)
   }
-  const validJwt = await deps.verifyJwt(token)
-  if (!validJwt) {
+  const role = await deps.authorize(token)
+  if (role === null) {
     return json({ error: '登入憑證無效或已過期' }, 401)
+  }
+  if (role === 'user') {
+    return json({ error: 'AI 分析僅限管理員使用' }, 403)
   }
 
   const rawBody = await req.text()

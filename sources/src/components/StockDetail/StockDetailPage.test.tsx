@@ -27,6 +27,10 @@ vi.mock('../../services/dailyProxy', () => ({
 }))
 vi.mock('../../services/fundamentalProxy', () => ({ fetchFundamental }))
 vi.mock('../../services/warmStock', () => ({ warmStockCore, warmStockHistory }))
+// Task 166 (AI-01): the AI tab is admin-only. These tests exercise the tab layout, so they run
+// as an admin; the non-admin case has its own test at the end of this file.
+const isAdmin = vi.fn(async () => true)
+vi.mock('../../services/adminStatus', () => ({ isAdmin: () => isAdmin() }))
 
 import { StockDetailPage } from './StockDetailPage'
 import type { PriceQuote } from '../../services/priceProxy'
@@ -898,6 +902,21 @@ describe('StockDetailPage', () => {
 
       expect(screen.getByText('三大法人買賣超')).toBeTruthy()
       expect(screen.getByText(/資料日期 2026-07-23/)).toBeTruthy()
+    })
+  })
+})
+
+describe('AI 分頁的管理員限制（Task 166 AI-01）', () => {
+  beforeEach(() => {
+    cleanup()
+  })
+
+  it('非管理員看不到 AI 分析分頁', async () => {
+    isAdmin.mockResolvedValueOnce(false)
+    render(<StockDetailPage ticker="2330" name="台積電" holding={holding} quote={quote} />)
+    await screen.findByRole('tab', { name: '損益試算' })
+    await waitFor(() => {
+      expect(screen.queryByRole('tab', { name: 'AI 分析' })).toBeNull()
     })
   })
 })

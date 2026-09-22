@@ -29,6 +29,7 @@ import {
   type ReportHolding,
 } from '../../services/reportProxy'
 import { fetchFundamental, type FundamentalData } from '../../services/fundamentalProxy'
+import { isAdmin } from '../../services/adminStatus'
 import { needsCoreWarm, needsHistoryWarm } from '../../services/needsFundamentalBackfill'
 import { warmStockCore, warmStockHistory } from '../../services/warmStock'
 import { AiTab } from './AiTab'
@@ -78,7 +79,6 @@ const SECTION_TABS: Array<{ id: AnalysisSectionTab; label: string; meta: string 
   { id: 'technical', label: '技術面', meta: '日 K · 均線 · 布林 · 成交量 · KD' },
 ]
 
-const TAB_IDS = TABS.map((t) => t.id)
 const SECTION_IDS = SECTION_TABS.map((t) => t.id)
 
 function isDetailTab(v: string | null): v is DetailTab {
@@ -169,6 +169,28 @@ export function StockDetailPage({
   const [fundError, setFundError] = useState(false)
   // +1 when the user clicks "Refresh" to string in the dependencies of each loaded effect to force a refetch.
   const [reloadKey, setReloadKey] = useState(0)
+  // Task 166 AI-01: AI analysis is admin-only. `null` = not yet resolved; the AI tab stays
+  // hidden until it resolves `true`, same as a confirmed non-admin, so there is no flash of
+  // admin-only content while the check is in flight.
+  const [isAiAdmin, setIsAiAdmin] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    isAdmin().then((v) => {
+      if (alive) setIsAiAdmin(v)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // A `?tab=ai` URL for a non-admin falls back to 分析內容 once the check resolves.
+  useEffect(() => {
+    if (isAiAdmin === false && tab === 'ai') {
+      setTab('analysis')
+      setUrlParams({ tab: 'analysis' })
+    }
+  }, [isAiAdmin, tab])
 
   // `tab`/`sub` describe this page's own tabs; once this page is gone, leaving them in the
   // address bar is stale clutter for whatever renders next, so drop them (and only them) on unmount.
@@ -310,6 +332,9 @@ export function StockDetailPage({
     }
   }, [ticker, name, reloadKey])
 
+  const visibleTabs = isAiAdmin ? TABS : TABS.filter((t) => t.id !== 'ai')
+  const visibleTabIds = visibleTabs.map((t) => t.id)
+
   return (
     <div className="section">
       <div className={selector ? 'detail-head detail-head-analysis' : 'detail-head'}>
@@ -336,7 +361,7 @@ export function StockDetailPage({
       </div>
 
       <nav className="subtabs" role="tablist" aria-label="個股分析分頁">
-        {TABS.map(({ id, label }) => (
+        {visibleTabs.map(({ id, label }) => (
           <button
             key={id}
             type="button"
@@ -348,7 +373,7 @@ export function StockDetailPage({
               setUrlParams({ tab: id })
             }}
             onKeyDown={(e) =>
-              handleTabListKeyDown(e, TAB_IDS, tab, (nextId) => {
+              handleTabListKeyDown(e, visibleTabIds, tab, (nextId) => {
                 setTab(nextId)
                 setUrlParams({ tab: nextId })
               })
@@ -440,11 +465,11 @@ export function StockDetailPage({
             heldQty={holding?.qty ?? null}
           />
         </div>
-      ) : (
+      ) : tab === 'ai' && isAiAdmin ? (
         <div className="glass detail-body">
           <AiTab ticker={ticker} name={name} report={report} fundamental={fundamental} />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

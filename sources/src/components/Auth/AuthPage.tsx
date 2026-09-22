@@ -6,6 +6,9 @@ import { BrandMark } from '../BrandMark'
 
 type Mode = 'signin' | 'signup' | 'reset'
 
+/** OP-02: minimum new-password length, enforced on sign-up (and mirrored by AppShell for the recovery/change-password modals). */
+export const MIN_PASSWORD_LENGTH = 8
+
 const SUBMIT_LABEL: Record<Mode, string> = {
   signin: '登入',
   signup: '建立帳號',
@@ -32,6 +35,10 @@ export function AuthPage() {
     const cleanEmail = email.trim()
     if (!cleanEmail || (mode !== 'reset' && !password)) {
       setMessage({ kind: 'error', text: mode === 'reset' ? '請填寫電子信箱' : '請填寫電子信箱與密碼' })
+      return
+    }
+    if (mode === 'signup' && password.length < MIN_PASSWORD_LENGTH) {
+      setMessage({ kind: 'error', text: `密碼至少需要 ${MIN_PASSWORD_LENGTH} 個字元` })
       return
     }
     setBusy(true)
@@ -107,7 +114,7 @@ export function AuthPage() {
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? '至少 6 個字元' : '請輸入密碼'}
+                placeholder={mode === 'signup' ? `至少 ${MIN_PASSWORD_LENGTH} 個字元` : '請輸入密碼'}
               />
             </div>
           )}

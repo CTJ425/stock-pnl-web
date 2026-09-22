@@ -12,7 +12,7 @@ const GOOGLE_OK = {
 
 function deps(over: Partial<AiProxyDeps> = {}): AiProxyDeps {
   return {
-    verifyJwt: vi.fn(async () => true),
+    authorize: vi.fn(async () => 'admin' as const),
     readSettings: vi.fn(async () => ({
       provider: 'google',
       model: 'gemini-2.5-flash',
@@ -58,9 +58,18 @@ describe('ai-proxy handler', () => {
   })
 
   it('JWT 驗證失敗回 401', async () => {
-    const d = deps({ verifyJwt: vi.fn(async () => false) })
+    const d = deps({ authorize: vi.fn(async () => null) })
     const res = await handleAiProxy(post(okBody), d)
     expect(res.status).toBe(401)
+    expect(d.fetchUpstream).not.toHaveBeenCalled()
+  })
+
+  it('非管理員回 403，且不讀設定、不打上游（Task 166 AI-01）', async () => {
+    const d = deps({ authorize: vi.fn(async () => 'user' as const) })
+    const res = await handleAiProxy(post(okBody), d)
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'AI 分析僅限管理員使用' })
+    expect(d.readSettings).not.toHaveBeenCalled()
     expect(d.fetchUpstream).not.toHaveBeenCalled()
   })
 

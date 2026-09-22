@@ -907,7 +907,7 @@ async function handleGenerate(
   const borrow = await loadBorrow()
   const data = assembleOne({ ticker, name, holding, series, marginFallbackRows, borrow })
 
-  if (series.dataYmd) {
+  if (series.dataYmd && series.days.length > 0) {
     const sharedData = holding
       ? assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
       : data
@@ -3112,6 +3112,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
   let chipsSkipped = false
   let skipReason: string | null = null
   let manifestSkipped = false
+  let skippedForBudget = 0
 
   if (skip.skip) {
     chipsSkipped = true
@@ -3154,7 +3155,15 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     regenerate = sig !== last?.runSig
 
     if (regenerate) {
+      // ER-03: chips has no per-phase budget of its own, so it reuses the wall-clock budget
+      // `handleGenerateAll` orchestrates the whole run under, anchored to this phase's own
+      // `startedAt` (already used below for `duration_ms` / `durationMs`).
+      const chipsDeadline = startedAt + GENERATE_ALL_BUDGET_MS
       for (const { ticker, name } of tickers) {
+        if (Date.now() >= chipsDeadline) {
+          skippedForBudget = tickers.length - generated - failed
+          break
+        }
         try {
           const data = assembleOne({ ticker, name, holding: null, series, marginFallbackRows, borrow })
           const okUp = await uploadJson(`${series.dataYmd}/${ticker}.json`, {
@@ -3163,7 +3172,12 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
             generatedAt: data.generatedAt,
             data,
           })
-          if (okUp) generated++
+          if (okUp) {
+            generated++
+          } else {
+            failed++
+            if (failedTickers.length < 10) failedTickers.push(ticker)
+          }
         } catch {
           failed++
           if (failedTickers.length < 10) failedTickers.push(ticker)
@@ -3176,8 +3190,12 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
       // was never reached at all. That made it reachable for every ticker to fail while
       // `regenerate` stays true: `generated` is then 0, but the manifest still advanced to a
       // `ymd` whose directory holds no report files, and the front end (which only ever fetches
-      // `manifest.ymd`) 404s across the board. Only advance the manifest when something landed.
-      if (generated > 0) {
+      // `manifest.ymd`) 404s across the board. Only advance the manifest when something landed
+      // and the failure rate stayed under 20% (ER-06) — past that, too many tickers in the new
+      // `ymd` directory would 404 for the same reason as `generated === 0`. `skippedForBudget`
+      // counts toward that rate too: an ER-03 budget break leaves those tickers' report files
+      // missing exactly like a failed upload, so they 404 the same way if left out.
+      if (generated > 0 && failed + skippedForBudget <= 0.2 * tickers.length) {
         await uploadJson('manifest.json', {
           ymd: series.dataYmd,
           dataDate: dashDate(series.dataYmd),
@@ -3220,6 +3238,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     regenerated: regenerate,
     history_days: historyDays,
     generated,
+    skipped_for_budget: skippedForBudget,
     // `failed` / `failedTickers` are deliberately NOT written here. `batch_run_log` has no such
     // columns (see `schema.sql`), PostgREST rejects the whole row for an unknown column, and
     // `logBatchRun` ignores the result — so adding them silently destroyed every nightly
@@ -3239,6 +3258,7 @@ async function runGeneratePhaseChips(): Promise<Record<string, unknown>> {
     generated,
     failed,
     failedTickers,
+    skippedForBudget,
     manifestSkipped,
     logError,
     regenerated: regenerate,
@@ -3405,10 +3425,21 @@ async function handleGenerateAll(): Promise<Response> {
       phaseResults[phase] = result
       phasesDone.push(phase)
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      // ER-07: a throw inside `runGeneratePhaseChips` before `logBatchRun` runs (loadSeries,
+      // loadBorrow, syncForeignTop, pruneStorage, …) leaves no row anywhere — `logBatchRun`
+      // itself never got a chance to write chips' own `batch_run_log` observation row. Every
+      // phase, chips included, is logged here so a throw at any point still leaves a trace.
+      await logEvent(db, {
+        level: 'error',
+        action: 'generate-all',
+        message,
+        detail: { name: phase },
+      })
       return json(
         {
           ok: false,
-          error: e instanceof Error ? e.message : String(e),
+          error: message,
           failedPhase: phase,
           phasesDone,
           phasesSkipped: GENERATE_PHASE_IDS.filter((p) => !phasesDone.includes(p) && p !== phase),
@@ -3901,7 +3932,7 @@ async function handleAdminBackups(): Promise<Response> {
   const { data: runRows, error: runError } = await pagedSelect<Record<string, unknown>>((from, to) =>
     db
       .from('backup_run_log')
-      .select('user_id, run_date, status, error, transaction_count, r2_status, r2_error')
+      .select('user_id, run_date, status, error, transaction_count')
       .order('run_date', { ascending: false })
       .order('id', { ascending: false })
       .range(from, to),
@@ -3919,8 +3950,6 @@ async function handleAdminBackups(): Promise<Response> {
       status: string
       error: string | null
       transactionCount: number
-      r2Status: string | null
-      r2Error: string | null
     }
   >()
   for (const r of runRows ?? []) {
@@ -3931,8 +3960,6 @@ async function handleAdminBackups(): Promise<Response> {
       status: r.status as string,
       error: (r.error as string | null) ?? null,
       transactionCount: (r.transaction_count as number | null) ?? 0,
-      r2Status: (r.r2_status as string | null) ?? null,
-      r2Error: (r.r2_error as string | null) ?? null,
     })
   }
 

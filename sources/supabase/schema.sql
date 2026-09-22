@@ -305,11 +305,14 @@ GRANT SELECT (id, ai_provider, ai_base_url, ai_model, ai_updated_at, ai_prompt_a
 -- `SECURITY DEFINER` so it can still read the key server-side to decide `ai_has_key`,
 -- but it never returns the key itself for the google provider (openai-compatible keeps
 -- returning its key — that path stays browser-direct, see spec 161 §2).
+-- Task 166 (AI-01): AI is admin-only, so the openai-compatible key is returned to admins only.
 CREATE OR REPLACE FUNCTION public.get_ai_settings()
 RETURNS TABLE (ai_provider TEXT, ai_base_url TEXT, ai_model TEXT, ai_api_key TEXT, ai_has_key BOOLEAN)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT ai_provider, ai_base_url, ai_model,
-         CASE WHEN ai_provider = 'google' THEN '' ELSE COALESCE(ai_api_key, '') END,
+         CASE WHEN ai_provider = 'google'
+                OR COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin'
+              THEN '' ELSE COALESCE(ai_api_key, '') END,
          (ai_api_key IS NOT NULL AND ai_api_key <> '')
   FROM app_settings WHERE id = 1;
 $$;
@@ -567,6 +570,8 @@ ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS profit_backfilled  INT;  -- �
 --    The general observation is changed to two places: macro/us.json comes with asOf (that is, "when was it written"),
 --    And net._http_response (retained for 6 hours to see if cron is successful).
 ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS macro_synced INT;        -- 已廢棄，見上
+-- Task 166 (ER-03): how many tickers the chips phase skipped when the wall-clock budget ran out.
+ALTER TABLE batch_run_log ADD COLUMN IF NOT EXISTS skipped_for_budget integer;
 
 ALTER TABLE batch_run_log ENABLE ROW LEVEL SECURITY;
 
@@ -1123,8 +1128,9 @@ USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 CREATE INDEX IF NOT EXISTS backup_run_log_run_date_idx
   ON backup_run_log (run_date DESC);
 
-ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_status text;
-ALTER TABLE backup_run_log ADD COLUMN IF NOT EXISTS r2_error  text;
+-- Task 166: Cloudflare R2 offsite sync removed (R2 was never configured on either project).
+ALTER TABLE backup_run_log DROP COLUMN IF EXISTS r2_status;
+ALTER TABLE backup_run_log DROP COLUMN IF EXISTS r2_error;
 
 DO $$
 BEGIN

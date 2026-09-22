@@ -68,12 +68,21 @@ export function parseCsv(text: string): string[][] {
   return rows
 }
 
-/** Supports 2026/07/15, 2026-07-15 (including zero padding and date validity check), returns YYYY-MM-DD*/
+/**
+ * Supports 2026/07/15, 2026-07-15 (including zero padding and date validity check), returns YYYY-MM-DD.
+ * Also accepts ROC (民國) dates with a 2–3 digit year, e.g. 113/01/10 → 2024-01-10 (TX-06): a 4-digit
+ * year is treated as AD, anything shorter is ROC and gets +1911 before the same validity check.
+ */
 export function parseTxDate(value: string): string | null {
-  const m = value.trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[\sT].*)?$/)
+  const m = value.trim().match(/^(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})(?:[\sT].*)?$/)
   if (!m) return null
   const [, y, mo, d] = m
-  const year = Number(y)
+  // A 2-digit year is ambiguous: 民國 113 is unmistakable, but "24/01/10" could be either 民國 24
+  // (1935) or a 2-digit AD 2024. Accept ROC years from 60 (1971) upwards only, so an AD-style
+  // 2-digit year is rejected as a visible row error instead of silently landing in the 1930s.
+  const MIN_ROC_YEAR = 60
+  if (y.length < 4 && Number(y) < MIN_ROC_YEAR) return null
+  const year = y.length === 4 ? Number(y) : Number(y) + 1911
   const month = Number(mo)
   const day = Number(d)
   const date = new Date(year, month - 1, day)
@@ -84,7 +93,7 @@ export function parseTxDate(value: string): string | null {
   ) {
     return null
   }
-  return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 function parseNumber(value: string): number {
@@ -140,6 +149,53 @@ function parseMarket(rawTicker: string, marketCell: string): { market: Market; t
 /** Header normalization: remove blanks and slashes ("Fees/Taxes" and "Fees/Taxes" are considered the same)*/
 function normalizeHeader(cell: string): string {
   return cell.replace(/[\s/]/g, '')
+}
+
+/**
+ * Undoes `escapeFormulaPrefix` on import: a raw cell that starts with a single `'` immediately
+ * followed by one of `= + - @` had that quote added on export, so it is stripped here (TX-02).
+ * Anything else — including a user's own leading `'` not followed by a trigger char — is untouched.
+ */
+function stripCsvInjectionPrefix(value: string): string {
+  if (value.charAt(0) === "'" && /^[=+\-@]/.test(value.slice(1))) return value.slice(1)
+  return value
+}
+
+/**
+ * Spreadsheet formula-injection guard (TX-02): a cell that starts with `= + - @` and is not itself
+ * a finite number (so `-12.5` is left alone) gets a leading `'` so Excel/Sheets treat it as text
+ * instead of evaluating it as a formula.
+ */
+function escapeFormulaPrefix(value: string): string {
+  if (/^[=+\-@]/.test(value) && !Number.isFinite(Number(value))) return `'${value}`
+  return value
+}
+
+/**
+ * Duplicate detection for CSV import (TX-01): key excludes `name` so a renamed re-import of the
+ * same fill still counts as a duplicate. Matching is a multiset — when the file has k copies of a
+ * key and the ledger already has m, only the first min(k, m) file rows are marked, so two identical
+ * fills inside one file are never duplicates of each other.
+ */
+export function markDuplicateRows(rows: NewTransaction[], existing: Transaction[]): boolean[] {
+  const keyOf = (r: { tx_date: string; market: Market; ticker: string; tx_type: TxType; price: number; qty: number; fee_tax: number; tx_nature?: TxNature | null }) =>
+    `${r.tx_date}|${r.market}|${r.ticker}|${r.tx_type}|${r.price}|${r.qty}|${r.fee_tax}|${r.tx_nature ?? ''}`
+
+  const remaining = new Map<string, number>()
+  for (const e of existing) {
+    const k = keyOf(e)
+    remaining.set(k, (remaining.get(k) ?? 0) + 1)
+  }
+
+  return rows.map((r) => {
+    const k = keyOf(r)
+    const count = remaining.get(k) ?? 0
+    if (count > 0) {
+      remaining.set(k, count - 1)
+      return true
+    }
+    return false
+  })
 }
 
 export function parseTransactionsCsv(text: string): CsvImportResult {
@@ -209,7 +265,7 @@ export function parseTransactionsCsv(text: string): CsvImportResult {
     if (cells.every((c) => c.trim() === '')) continue // 跳過空白列
     result.total++
 
-    const at = (idx: number) => (idx >= 0 && idx < cells.length ? cells[idx] : '')
+    const at = (idx: number) => stripCsvInjectionPrefix(idx >= 0 && idx < cells.length ? cells[idx] : '')
 
     const txDate = parseTxDate(at(col.date))
     if (!txDate) {
@@ -337,22 +393,21 @@ export function transactionsToCsv(txs: Transaction[]): string {
   const lines = [header.join(',')]
   for (const tx of txs) {
     const { fee, tax, borrow } = splitFeeTax(tx)
-    lines.push(
-      [
-        tx.tx_date,
-        tx.market,
-        tx.ticker,
-        csvField(tx.name),
-        TX_TYPE_LABEL[tx.tx_type],
-        tx.tx_nature ? TX_NATURE_LABEL[tx.tx_nature] : '',
-        String(tx.price),
-        String(tx.qty),
-        String(fee),
-        String(tax),
-        String(borrow),
-        String(tx.fee_tax),
-      ].join(','),
-    )
+    const cells = [
+      tx.tx_date,
+      tx.market,
+      tx.ticker,
+      tx.name,
+      TX_TYPE_LABEL[tx.tx_type],
+      tx.tx_nature ? TX_NATURE_LABEL[tx.tx_nature] : '',
+      String(tx.price),
+      String(tx.qty),
+      String(fee),
+      String(tax),
+      String(borrow),
+      String(tx.fee_tax),
+    ]
+    lines.push(cells.map((c) => csvField(escapeFormulaPrefix(c))).join(','))
   }
   return `\uFEFF${lines.join('\r\n')}\r\n`
 }

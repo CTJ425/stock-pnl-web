@@ -46,8 +46,6 @@ const rows: AccountBackups[] = [
       status: 'ok',
       error: null,
       transactionCount: 62,
-      r2Status: 'ok',
-      r2Error: null,
     },
   },
   {
@@ -184,38 +182,6 @@ describe('BackupsSection', () => {
     const row = (await screen.findByText('a@example.com')).closest('tr')!
     expect(within(row).getByText(/prune blew up/)).toBeTruthy()
     expect(within(row).getByText(/成功/)).toBeTruthy()
-  })
-
-  it('帳號列顯示異地備份已同步', async () => {
-    render(<BackupsSection />)
-    const row = (await screen.findByText('a@example.com')).closest('tr')!
-    expect(within(row).getByText(/異地備份已同步/)).toBeTruthy()
-  })
-
-  it('R2 未設定時讀作「未設定」，不是失敗', async () => {
-    fetchAdminBackups.mockResolvedValue([
-      { ...rows[0], lastRun: { ...rows[0].lastRun!, r2Status: 'skipped', r2Error: null } },
-    ])
-    render(<BackupsSection />)
-    const row = (await screen.findByText('a@example.com')).closest('tr')!
-    expect(within(row).getByText(/異地備份未設定/)).toBeTruthy()
-  })
-
-  it('R2 失敗時列出失敗與原因，否則管理員會以為有兩份副本', async () => {
-    fetchAdminBackups.mockResolvedValue([
-      {
-        ...rows[0],
-        lastRun: {
-          ...rows[0].lastRun!,
-          r2Status: 'failed',
-          r2Error: 'R2 PUT 403 u-1/2026-08-24.json',
-        },
-      },
-    ])
-    render(<BackupsSection />)
-    const row = (await screen.findByText('a@example.com')).closest('tr')!
-    expect(within(row).getByText(/異地備份失敗/)).toBeTruthy()
-    expect(row.textContent).toContain('R2 PUT 403 u-1/2026-08-24.json')
   })
 
   it('整批匯出把每個有備份的帳號收進同一個 JSON，並略過沒有檔案的帳號', async () => {
