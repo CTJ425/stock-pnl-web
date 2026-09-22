@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     market TEXT NOT NULL,         -- 'TPE' 或 'US'，TEXT 保留擴充彈性
     ticker TEXT NOT NULL,         -- 例如 '2330', 'AAPL'，不含 'TPE:' 前綴
     name TEXT NOT NULL,           -- 股票名稱
-    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL')), -- 顯示層轉「買入/賣出」
+    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL', 'DIVIDEND', 'STOCK_DIVIDEND')), -- 顯示層轉「買入/賣出/現金股利/股票股利」
     price NUMERIC NOT NULL CHECK (price >= 0),
     qty NUMERIC NOT NULL CHECK (qty > 0),
     fee_tax NUMERIC NOT NULL DEFAULT 0 CHECK (fee_tax >= 0),
@@ -62,6 +62,13 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_nature TEXT;
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_nature_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_tx_nature_check
     CHECK (tx_nature IS NULL OR tx_nature IN ('SPOT', 'DAY_TRADE', 'MARGIN', 'SHORT'));
+
+-- Task 166 (EN-01): cash and stock dividends are transaction types of their own.
+-- DIVIDEND: price = 每股股利, qty = 配發股數, fee_tax = 代扣費用; income only, cost untouched.
+-- STOCK_DIVIDEND: qty = 配發股數 at price 0; raises the share count, only fee_tax joins the cost.
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_tx_type_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_tx_type_check
+    CHECK (tx_type IN ('BUY', 'SELL', 'DIVIDEND', 'STOCK_DIVIDEND'));
 
 -- Per-transaction handling fee rate (0.9.27). NULL means the transaction was recorded before
 -- the column existed (legacy data); when editing legacy data, the app will infer or preserve the rate.
@@ -1577,6 +1584,75 @@ REVOKE ALL ON FUNCTION public.discord_schedule_set(int, int, int, int) FROM PUBL
 REVOKE ALL ON FUNCTION public.discord_schedule_set(int, int, int, int) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.discord_schedule_set(int, int, int, int) TO service_role;
 
+
+-- =========================================================
+-- §16 Task 166: atomic transaction batch updates and the split audit trail
+-- =========================================================
+-- The split wizard and the fee recalculation used to loop one UPDATE per row from the browser:
+-- a network failure half way through left the ledger half converted (audit TX-04). One RPC now
+-- applies the whole list inside a single statement, and `tx_split_log` records what was applied
+-- so running the same split twice is detectable instead of silently doubling the share count (TX-03).
+
+CREATE TABLE IF NOT EXISTS tx_split_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL,
+    market TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    cutoff_date DATE,
+    ratio_from NUMERIC NOT NULL CHECK (ratio_from > 0),
+    ratio_to NUMERIC NOT NULL CHECK (ratio_to > 0),
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE tx_split_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own split log" ON tx_split_log;
+CREATE POLICY "Users manage own split log"
+ON tx_split_log FOR ALL
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS tx_split_log_lookup_idx
+    ON tx_split_log (workspace_id, market, ticker);
+
+-- SECURITY INVOKER on purpose: the caller's RLS decides which rows may change, exactly as the
+-- per-row UPDATE it replaces did. The return value is the number of rows actually updated, so the
+-- client can tell a partially matched batch (someone else's id in the list) from a full apply.
+CREATE OR REPLACE FUNCTION public.apply_transaction_updates(p_updates JSONB)
+RETURNS INTEGER
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
+DECLARE
+    updated INTEGER;
+BEGIN
+    WITH u AS (
+        SELECT (e->>'id')::UUID       AS id,
+               (e->>'price')::NUMERIC  AS price,
+               (e->>'qty')::NUMERIC    AS qty,
+               (e->>'fee_tax')::NUMERIC AS fee_tax,
+               NULLIF(e->>'fee_rate', '')::NUMERIC AS fee_rate,
+               (e ? 'fee_rate') AS has_fee_rate
+        FROM jsonb_array_elements(COALESCE(p_updates, '[]'::JSONB)) AS e
+    ), upd AS (
+        UPDATE transactions t
+           SET price    = u.price,
+               qty      = u.qty,
+               fee_tax  = u.fee_tax,
+               -- Task 166 review: an element that carries the `fee_rate` key writes it, even when
+               -- it is null (clearing the override). An element without the key leaves it alone.
+               fee_rate = CASE WHEN u.has_fee_rate THEN u.fee_rate ELSE t.fee_rate END
+          FROM u
+         WHERE t.id = u.id
+        RETURNING 1
+    )
+    SELECT count(*) INTO updated FROM upd;
+    RETURN updated;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.apply_transaction_updates(JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.apply_transaction_updates(JSONB) TO authenticated;
 
 -- =========================================================
 -- 6e. HARD GATE — this script FAILS if a placeholder survived

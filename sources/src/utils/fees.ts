@@ -6,7 +6,13 @@
  */
 import type { Market, Transaction, TxNature, TxType } from '../types/models'
 import type { Holding } from './pnlEngine'
-import { BORROW_FEE_RATE, floorSafe, sellTaxRate, splitFeeTax } from './pnlEngine'
+import {
+  BORROW_FEE_RATE,
+  estimateUnrealizedShort,
+  floorSafe,
+  sellTaxRate,
+  splitFeeTax,
+} from './pnlEngine'
 
 /** The legal standard handling fee for Taiwan stocks is 0.1425%*/
 export const DEFAULT_FEE_RATE = 0.001425
@@ -31,13 +37,21 @@ export const COMMON_FEE_RATES = [
 /**
  * Infers the historical brokerage fee rate from an existing transaction record when fee_rate was not explicitly stored.
  * Returns defaultRate if the fee rate cannot be reliably deduced (e.g. zero gross amount or minimum-fee clamp).
+ *
+ * EN-05: when the recorded fee implies a ratio above the statutory rate (impossible for a real
+ * discount), the function still falls back to defaultRate rather than reporting the impossible
+ * ratio — but that fallback is silent unless the caller opts in. Pass `outOfRange` to have its
+ * `.value` set to true in that one case, so a caller can flag the row instead of treating the
+ * fallback as a confirmed rate.
  */
 export function inferFeeRate(
   tx: Pick<Transaction, 'price' | 'qty' | 'fee_tax' | 'tx_type' | 'market' | 'ticker'> &
     Pick<Partial<Transaction>, 'tx_nature'>,
   defaultRate: number,
   minFees: { whole: number; odd: number },
+  outOfRange?: { value: boolean },
 ): number {
+  if (outOfRange) outOfRange.value = false
   if (tx.market === 'US') {
     const gross = tx.price * tx.qty
     if (gross <= 0) return defaultRate
@@ -80,6 +94,7 @@ export function inferFeeRate(
     // against the minimum-fee values here instead would be wrong — an unclamped fee can equal
     // a minimum fee by coincidence (`calculateFee` clamps only when `minFee > fee`), and
     // discarding that recoverable rate overestimates it by up to an order of magnitude.
+    if (outOfRange) outOfRange.value = true
     return defaultRate
   }
 
@@ -144,6 +159,9 @@ export function proposeFeeCorrections(
   const out: FeeCorrection[] = []
   for (const tx of transactions) {
     if (tx.market !== 'TPE' || !(tx.price > 0) || !(tx.qty > 0)) continue
+    // Task 166 (EN-01): a 現金股利 row carries a price and a qty too, but its fee_tax is a
+    // withholding, not a brokerage commission — recalculating it would overwrite real data.
+    if (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL') continue
     // Day-trade detection (Task 137, revised 2026-09-01): same-date buy/sell matching was
     // measured against two real broker exports and gives 12 false positives out of 14
     // same-day round trips (only 2 are actual day trades), so it is not used. Instead a
@@ -158,7 +176,10 @@ export function proposeFeeCorrections(
       const halfTax = floorSafe((gross * rate) / 2)
       const minFee = tx.qty >= 1000 ? opts.minFeeWhole : opts.minFeeOdd
       const expFee = Math.max(minFee, floorSafe(gross * opts.feeRate))
-      if (tx.fee_tax < stdTax && tx.fee_tax - halfTax === expFee) continue
+      // EN-06: `tx.fee_tax` is user-entered/imported and not guaranteed to be a clean integer
+      // (e.g. 361.9999999999999 from prior float arithmetic); round both sides before comparing
+      // so that near-miss floats don't defeat the day-trade exclusion.
+      if (tx.fee_tax < stdTax && Math.round(tx.fee_tax - halfTax) === Math.round(expFee)) continue
     }
     const newFee = calculateFee({
       market: tx.market,
@@ -180,28 +201,78 @@ export function proposeFeeCorrections(
  * First use the closed form to solve the candidate price (whichever is higher between the proportional rate and the lowest handling fee),
  * Then use calculateFee to actually calculate the two-way convergence - the floor to yuan and the minimum handling fee will cause a closed boundary error.
  * When there is a shortage, make up for it; when there is a surplus, go down to find the lowest price, and ensure that the "lowest price at which you can sell without losing money" is sent back.
+ *
+ * BUG-079: the fee model for TWD holdings matches `estimateUnrealized` exactly — same per-lot
+ * `feeRate` (e.g. a historical discount recorded on the lot), workspace `feeRate` fallback, same
+ * `sellTaxRate`, same single minFee clamp, same `overrideFeeRate` override — computed inline
+ * (`netAt` below) rather than through `estimateUnrealized` itself, because that function's
+ * outer `Math.round` is a display rounding: it can round an actually-negative net (e.g. -0.5)
+ * to a "break-even" 0, which is too coarse for this search's cent-level boundary. US holdings
+ * keep the pre-existing fee-inclusive calculation here: EN-02's gross-unrealized rule is a
+ * display choice for the P&L card, not a claim that a US broker charges no commission, and this
+ * function answers "what price actually recovers the cost after the real trade fee".
  */
-export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: number): number {
-  const { qty, cost, market, ticker } = holding
+export function breakEvenPrice(
+  holding: Holding,
+  feeRate: number,
+  minFee?: number,
+  overrideFeeRate?: boolean,
+): number | null {
+  const { qty, cost, market, ticker, currency } = holding
   // A zero-cost holding (e.g. all-stock-dividend position) is still valid; only reject a
   // missing position or a non-numeric/negative cost (NaN >= 0 is false, so NaN still returns 0).
   if (!(qty > 0) || !(cost >= 0)) return 0
   const taxRate = market === 'TPE' ? sellTaxRate(ticker) : 0
 
-  const isBreakEven = (p: number) =>
-    p * qty - calculateFee({ market, txType: 'SELL', price: p, qty, feeRate, taxRate, minFee }) >= cost
+  const lots = Array.isArray(holding.openLots) && holding.openLots.length > 0
+    ? holding.openLots
+    : [{ qty, feeRate }]
 
-  const byRate = cost / (qty * (1 - feeRate - taxRate))
+  // Net proceeds minus cost at price `p`, same per-lot fee/tax model as `estimateUnrealized`
+  // (see the function comment above), without its outer rounding.
+  const netAt = (p: number): number => {
+    if (currency !== 'TWD') {
+      return p * qty - calculateFee({ market, txType: 'SELL', price: p, qty, feeRate, taxRate }) - cost
+    }
+    let fee = 0
+    let tax = 0
+    for (const lot of lots) {
+      const lotVal = p * lot.qty
+      const effectiveFeeRate = overrideFeeRate ? feeRate : lot.feeRate ?? feeRate
+      fee += floorSafe(lotVal * effectiveFeeRate)
+      tax += floorSafe(lotVal * taxRate)
+    }
+    if (feeRate > 0 && minFee !== undefined && minFee > fee) fee = minFee
+    return p * qty - cost - fee - tax
+  }
+  const isBreakEven = (p: number) => netAt(p) >= 0
+
+  // Closed-form seed: the quantity-weighted average of each lot's effective fee rate (its own
+  // rate, or the workspace rate when the lot has none / `overrideFeeRate` forces it), so the
+  // seed lands close to the `isBreakEven` predicate above even when lots carry different
+  // historical rates. A seed built from the raw workspace `feeRate` alone can land far enough
+  // away that the bounded refinement loop below cannot walk it back to the true minimum.
+  const lotQty = lots.reduce((sum, lot) => sum + lot.qty, 0) || qty
+  const effRate = lots.reduce((sum, lot) => {
+    const r = overrideFeeRate ? feeRate : lot.feeRate ?? feeRate
+    return sum + lot.qty * r
+  }, 0) / lotQty
+
+  const byRate = cost / (qty * (1 - effRate - taxRate))
   // When feeRate is 0 (no commission), calculateFee does not include the minimum handling fee, and closed synchronization is skipped.
+  // Gate on the workspace `feeRate`, not the lot-weighted `effRate`: that is what `netAt` (above)
+  // actually checks, so seed and predicate must agree — otherwise a holding whose lots carry
+  // `feeRate: 0` under a workspace rate > 0 seeds below the true root, and the bounded ±$10
+  // refinement can run out of steps for a small odd lot with a large custom minimum fee.
   const byMinFee = (cost + (feeRate > 0 ? minFee ?? 0 : 0)) / (qty * (1 - taxRate))
   let price = Math.floor(Math.max(byRate, byMinFee) * 100) / 100
 
   for (let i = 0; i < 1000 && !isBreakEven(price); i++) {
     price = Math.round(price * 100 + 1) / 100
   }
-  // Non-convergence returns the same "no answer" sentinel as an empty position, rather than a price
-  // that is not actually break-even (would lose money).
-  if (!isBreakEven(price)) return 0
+  // Non-convergence (search exhausted without reaching a break-even price) is reported as
+  // "no answer" (null), distinct from the 0-qty "no position" sentinel above and from any real price.
+  if (!isBreakEven(price)) return null
   for (let i = 0; i < 1000; i++) {
     const lower = Math.round(price * 100 - 1) / 100
     if (!(lower > 0) || !isBreakEven(lower)) break
@@ -214,19 +285,26 @@ export function breakEvenPrice(holding: Holding, feeRate: number, minFee?: numbe
  * Cover price at which an open short breaks even. Below it the short is profitable.
  * Mirrors `breakEvenPrice`'s structure, but the predicate is decreasing in price (a higher
  * cover price costs more), so the closed-form seed starts high and steps down to convergence.
+ *
+ * BUG-079: the TWD predicate reuses `estimateUnrealizedShort` (same floor/minFee clamp the
+ * displayed unrealized P&L uses). `ShortLot` carries no per-lot fee rate, so there is no
+ * lot-weighted seed to build here, unlike `breakEvenPrice`. US holdings keep the pre-existing
+ * fee-inclusive calculation for the same reason `breakEvenPrice` does.
  */
 export function breakEvenPriceShort(
   holding: Holding, feeRate: number, minFee?: number,
-): number {
-  const { market } = holding
+): number | null {
+  const { market, currency } = holding
   const shortQty = holding.shortQty ?? 0
   const shortProceeds = holding.shortProceeds ?? 0
   if (!(shortQty > 0)) return 0
 
   const isProfitable = (p: number) =>
-    shortProceeds -
-      (p * shortQty + calculateFee({ market, txType: 'BUY', price: p, qty: shortQty, feeRate, minFee })) >=
-    0
+    currency === 'TWD'
+      ? estimateUnrealizedShort(holding, p, feeRate, minFee) >= 0
+      : shortProceeds -
+          (p * shortQty + calculateFee({ market, txType: 'BUY', price: p, qty: shortQty, feeRate })) >=
+        0
 
   const byRate = shortProceeds / (shortQty * (1 + feeRate))
   const byMinFee = feeRate > 0 && minFee !== undefined ? (shortProceeds - minFee) / shortQty : byRate
@@ -235,8 +313,9 @@ export function breakEvenPriceShort(
   for (let i = 0; i < 1000 && price > 0 && !isProfitable(price); i++) {
     price = Math.round(price * 100 - 1) / 100
   }
-  // Non-convergence returns the same "no answer" sentinel a breakeven price cannot reach.
-  if (!(price > 0) || !isProfitable(price)) return 0
+  // Non-convergence (search exhausted without reaching a profitable cover price) is reported as
+  // "no answer" (null), distinct from the 0-qty "no short position" sentinel above.
+  if (!(price > 0) || !isProfitable(price)) return null
   for (let i = 0; i < 1000; i++) {
     const higher = Math.round(price * 100 + 1) / 100
     if (!isProfitable(higher)) break

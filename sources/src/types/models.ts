@@ -1,7 +1,7 @@
 /** Shared data model: aligned with Supabase schema (sources/supabase/schema.sql)*/
 
 export type Market = 'TPE' | 'US'
-export type TxType = 'BUY' | 'SELL'
+export type TxType = 'BUY' | 'SELL' | 'DIVIDEND' | 'STOCK_DIVIDEND'
 /**
  * Trading nature of a Taiwan-market transaction (task 137 §C).
  * `DAY_TRADE` (現股當沖) halves the securities transaction tax; `SHORT` (融券) changes
@@ -60,6 +60,8 @@ export function positionKey(market: Market, ticker: string): string {
 export const TX_TYPE_LABEL: Record<TxType, string> = {
   BUY: '買入',
   SELL: '賣出',
+  DIVIDEND: '現金股利',
+  STOCK_DIVIDEND: '股票股利',
 }
 
 export const TX_NATURE_LABEL: Record<TxNature, string> = {

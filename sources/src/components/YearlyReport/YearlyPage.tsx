@@ -14,11 +14,16 @@ import { useMemo, useState, Fragment } from 'react'
 import { CalendarRange, ChevronsDownUp, ChevronsUpDown, Minus, Plus, Search, X } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Currency } from '../../types/models'
-import type { YearTickerDetail } from '../../utils/pnlEngine'
+import type { SellDetail, YearTickerDetail } from '../../utils/pnlEngine'
 import { displayStockName } from '../../services/usStockNames'
 import { fmtMoney, fmtQty, fmtSignedMoney, fmtSignedPercent, pnlClass } from '../../utils/formatters'
 import { HelpTh } from '../Common/HelpTh'
 import { YEAR_HELP } from './columnHelp'
+
+// Task 166 EN-01: kept local rather than added to columnHelp.ts — that file is column-help text
+// for the pre-dividend report and isn't part of this task's file list.
+const DIVIDEND_HELP = '這一年（或這檔股票）收到的股利淨額，已經扣掉二代健保、匯費等代扣費用。股票股利只影響股數和成本，不會出現在這裡。'
+const TOTAL_RETURN_HELP = '已實現損益加上股利，這一年真正到手的總報酬（僅在年度小計顯示，個股與逐筆明細顯示「—」）。'
 
 interface YearRow {
   year: number
@@ -30,12 +35,38 @@ interface YearRow {
   fees: number
   feesTax: number
   count: number
+  /** Net cash dividends for this currency section this year (DA/EN-01) */
+  dividends: number
+  /** Every sell leg aggregated into this row, kept only to feed `roiBasis` (DA-07) */
+  sells: SellDetail[]
   details: YearTickerDetail[]
 }
 
 /** Price difference without any fees: Transaction price − Cost without fees, for comparison by the deputy bank*/
 function rawRealized(d: { sellGross: number; rawCostBasis: number }): number {
   return d.sellGross - d.rawCostBasis
+}
+
+/**
+ * DA-07: a year's (or a ticker's) ROI must skip oversold sell legs (`SellDetail.oversold`)
+ * entirely, in both the numerator and the denominator — an oversold leg's cost basis is already
+ * 0 (nothing was actually held for the excess shares), so folding its full sale proceeds into
+ * `realized` without a matching `costBasis` would inflate the percentage. When every leg is
+ * oversold this sums to 0 realized / 0 cost, which `RoiCell` already renders as "—".
+ */
+function roiBasis(sells: SellDetail[]): { realized: number; costBasis: number; raw: number; rawCostBasis: number } {
+  let realized = 0
+  let costBasis = 0
+  let raw = 0
+  let rawCostBasis = 0
+  for (const s of sells) {
+    if (s.oversold) continue
+    realized += s.realized
+    costBasis += s.costBasis
+    raw += rawRealized(s)
+    rawCostBasis += s.rawCostBasis
+  }
+  return { realized, costBasis, raw, rawCostBasis }
 }
 
 /**
@@ -74,6 +105,8 @@ function useSectionRows(currency: Currency, query: string): YearRow[] {
         fees: 0,
         feesTax: 0,
         count: 0,
+        dividends: 0,
+        sells: [],
         details: [],
       }
       for (const yt of Object.values(y.tickers)) {
@@ -87,6 +120,8 @@ function useSectionRows(currency: Currency, query: string): YearRow[] {
         agg.fees += yt.fees
         agg.feesTax += yt.feesTax
         agg.count += yt.count
+        agg.dividends += yt.dividends
+        agg.sells.push(...yt.sells)
         agg.details.push(yt)
       }
       if (agg.count === 0) continue
@@ -180,6 +215,32 @@ function FeeCell({ fees, feesTax, currency }: { fees: number; feesTax: number; c
   )
 }
 
+/** Muted "—" placeholder, isomorphic to the empty-activity cells above (Task 166 EN-01 / DA-07). */
+function MutedDashCell() {
+  return <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
+}
+
+/** Net dividend cell: a plain amount, already net of the withholding fee (price*qty − fee_tax); "—" when this row received none. */
+function DividendCell({ value, currency }: { value: number; currency: Currency }) {
+  if (value === 0) return <MutedDashCell />
+  return <td className="num">{fmtMoney(value, currency)}</td>
+}
+
+/**
+ * Total return cell: 已實現損益 + 股利, year-row only (EN-01). Ticker and sell-leg rows render "—" —
+ * dividends are booked per ticker per year, not per sell leg, so summing them onto a leg row would
+ * either double-count across every leg of the same ticker or attribute them to the wrong sale.
+ */
+function TotalReturnCell({ realized, dividends, currency }: { realized: number; dividends: number; currency: Currency }) {
+  if (realized === 0 && dividends === 0) return <MutedDashCell />
+  const total = realized + dividends
+  return (
+    <td className={`num ${pnlClass(total)}`} style={{ fontWeight: 600 }}>
+      {fmtSignedMoney(total, currency)}
+    </td>
+  )
+}
+
 function YearlySection({ title, currency, query }: { title: string; currency: Currency; query: string }) {
   const rows = useSectionRows(currency, query)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
@@ -247,6 +308,8 @@ function YearlySection({ title, currency, query }: { title: string; currency: Cu
                 <HelpTh label="賣出收入" help={YEAR_HELP.sellAmt} numeric />
                 <HelpTh label="已實現損益" help={YEAR_HELP.realized} numeric />
                 <HelpTh label="報酬率" help={YEAR_HELP.roi} numeric />
+                <HelpTh label="股利" help={DIVIDEND_HELP} numeric />
+                <HelpTh label="總報酬" help={TOTAL_RETURN_HELP} numeric />
                 <HelpTh label="手續費 / 稅金" help={YEAR_HELP.fees} numeric />
                 <HelpTh label="交易筆數" help={YEAR_HELP.count} numeric />
               </tr>
@@ -289,6 +352,7 @@ function YearRows({
   expandedTickers: Set<string>
   onToggleTicker: (key: string) => void
 }) {
+  const yearRoi = roiBasis(row.sells)
   return (
     <>
       <tr style={{ fontWeight: 600 }}>
@@ -313,11 +377,13 @@ function YearRows({
         <AmountCell value={row.sellAmt} raw={row.sellGross} currency={currency} />
         <AmountCell value={row.realized} raw={rawRealized(row)} currency={currency} signed />
         <RoiCell
-          realized={row.realized}
-          costBasis={row.costBasis}
-          raw={rawRealized(row)}
-          rawCostBasis={row.rawCostBasis}
+          realized={yearRoi.realized}
+          costBasis={yearRoi.costBasis}
+          raw={yearRoi.raw}
+          rawCostBasis={yearRoi.rawCostBasis}
         />
+        <DividendCell value={row.dividends} currency={currency} />
+        <TotalReturnCell realized={row.realized} dividends={row.dividends} currency={currency} />
         <FeeCell fees={row.fees} feesTax={row.feesTax} currency={currency} />
         <td className="num">{fmtQty(row.count)}</td>
       </tr>
@@ -326,6 +392,7 @@ function YearRows({
         row.details.map((yt) => {
           const tickerKey = `${row.year}|${yt.key}`
           const isTickerOpen = expandedTickers.has(tickerKey)
+          const tickerRoi = roiBasis(yt.sells)
           return (
             <Fragment key={yt.key}>
               <tr className="detail-row">
@@ -345,7 +412,9 @@ function YearRows({
                       <span className="toggle-slot" />
                     )}
                     {yt.ticker}（{displayStockName(yt.market, yt.ticker, yt.name)}）
-                    {yt.sellAmt === 0 && (
+                    {/* buyAmt !== 0 excludes a dividend-only ticker-year (Task 166 EN-01): a
+                        DIVIDEND row never touches buyAmt, so "僅買進" would otherwise mislabel it. */}
+                    {yt.sellAmt === 0 && yt.buyAmt !== 0 && (
                       <span
                         className="badge"
                         style={{ marginLeft: 6 }}
@@ -360,11 +429,13 @@ function YearRows({
                 <AmountCell value={yt.sellAmt} raw={yt.sellGross} currency={currency} />
                 <AmountCell value={yt.realized} raw={rawRealized(yt)} currency={currency} signed />
                 <RoiCell
-                  realized={yt.realized}
-                  costBasis={yt.costBasis}
-                  raw={rawRealized(yt)}
-                  rawCostBasis={yt.rawCostBasis}
+                  realized={tickerRoi.realized}
+                  costBasis={tickerRoi.costBasis}
+                  raw={tickerRoi.raw}
+                  rawCostBasis={tickerRoi.rawCostBasis}
                 />
+                <DividendCell value={yt.dividends} currency={currency} />
+                <MutedDashCell />
                 <FeeCell fees={yt.fees} feesTax={yt.feesTax} currency={currency} />
                 <td className="num">{fmtQty(yt.count)}</td>
               </tr>
@@ -391,8 +462,10 @@ function YearRows({
                       raw={rawRealized(sell)}
                       rawCostBasis={sell.rawCostBasis}
                     />
+                    <MutedDashCell />
+                    <MutedDashCell />
                     <FeeCell fees={sell.fees} feesTax={sell.feesTax} currency={currency} />
-                    <td className="num" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>—</td>
+                    <MutedDashCell />
                   </tr>
                 ))}
             </Fragment>
@@ -434,6 +507,16 @@ export function YearlyPage() {
           </div>
         </div>
         <div className="glass kpi">
+          <div className="kpi-label">歷史累計股利 (台美股合計)</div>
+          <div className="kpi-value">
+            {(summary.dividendsTw + summary.dividendsUs).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          </div>
+          <div className="kpi-sub">
+            台股 {summary.dividendsTw.toLocaleString('en-US', { maximumFractionDigits: 2 })} ｜ 美股{' '}
+            {summary.dividendsUs.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          </div>
+        </div>
+        <div className="glass kpi">
           <div className="kpi-label">歷史累計手續費 (台美股合計)</div>
           <div className="kpi-value">{summary.fees.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
           <div className="kpi-sub" title="交易稅是依稅率（一般 0.3%、ETF 0.1%、債券 ETF 0%）回推的估計值">
@@ -443,7 +526,10 @@ export function YearlyPage() {
         <div className="glass kpi">
           <div className="kpi-label">歷史累計交易筆數 (台美股合計)</div>
           <div className="kpi-value">{fmtQty(summary.count)}</div>
-          <div className="kpi-sub">買入 {fmtQty(summary.buyCount)} ｜ 賣出 {fmtQty(summary.sellCount)}</div>
+          <div className="kpi-sub">
+            買入 {fmtQty(summary.buyCount)} ｜ 賣出 {fmtQty(summary.sellCount)}
+            {summary.dividendCount > 0 && <> ｜ 股利 {fmtQty(summary.dividendCount)}</>}
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Holding } from './pnlEngine'
+import { estimateUnrealized } from './pnlEngine'
 import type { Transaction, TxNature, TxType } from '../types/models'
 import { breakEvenPrice, breakEvenPriceShort, calculateFee, DEFAULT_FEE_RATE, inferFeeRate, proposeFeeCorrections } from './fees'
 
@@ -83,6 +84,7 @@ function holdingOf(input: Partial<Holding> & Pick<Holding, 'ticker' | 'market' |
     rawCost: input.cost,
     buyCostTotal: input.cost,
     realized: 0,
+    dividends: 0,
     avgCost: input.cost / input.qty,
     rawAvgCost: input.cost / input.qty,
     // breakEvenPrice 不看未沖銷批次；合成部位給空陣列即可
@@ -98,7 +100,7 @@ function holdingOf(input: Partial<Holding> & Pick<Holding, 'ticker' | 'market' |
 describe('breakEvenPrice（保本賣出價）', () => {
   it('台股 ETF：對照 bug_fix 0050 案例（成本 102,440 → 102.69）', () => {
     const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 1000, cost: 102440 })
-    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)
+    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)!
     // 102.69 Sell: 102,690 - fee 146 - tax 102 = 102,442 ≥ 102,440; 102.68, leaving only 102,432, no capital guarantee
     expect(p).toBe(102.69)
     const fee = calculateFee({ market: 'TPE', txType: 'SELL', price: p, qty: 1000, feeRate: DEFAULT_FEE_RATE, ticker: '0050' })
@@ -115,8 +117,8 @@ describe('breakEvenPrice（保本賣出價）', () => {
 
   it('最低手續費會墊高小額部位的保本價', () => {
     const h = holdingOf({ market: 'TPE', ticker: '2330', qty: 10, cost: 5000 })
-    const noMin = breakEvenPrice(h, DEFAULT_FEE_RATE)
-    const withMin = breakEvenPrice(h, DEFAULT_FEE_RATE, 20)
+    const noMin = breakEvenPrice(h, DEFAULT_FEE_RATE)!
+    const withMin = breakEvenPrice(h, DEFAULT_FEE_RATE, 20)!
     expect(withMin).toBeGreaterThan(noMin)
     const fee = calculateFee({ market: 'TPE', txType: 'SELL', price: withMin, qty: 10, feeRate: DEFAULT_FEE_RATE, ticker: '2330', minFee: 20 })
     expect(withMin * 10 - fee).toBeGreaterThanOrEqual(5000)
@@ -125,12 +127,12 @@ describe('breakEvenPrice（保本賣出價）', () => {
   it('債券 ETF（B 結尾）免證交稅，保本價低於一般 ETF', () => {
     const bond = holdingOf({ market: 'TPE', ticker: '00679B', qty: 1000, cost: 30000 })
     const etf = holdingOf({ market: 'TPE', ticker: '0050', qty: 1000, cost: 30000 })
-    expect(breakEvenPrice(bond, DEFAULT_FEE_RATE)).toBeLessThan(breakEvenPrice(etf, DEFAULT_FEE_RATE))
+    expect(breakEvenPrice(bond, DEFAULT_FEE_RATE)!).toBeLessThan(breakEvenPrice(etf, DEFAULT_FEE_RATE)!)
   })
 
   it('美股：無證交稅、費率兩位小數', () => {
     const h = holdingOf({ market: 'US', ticker: 'AAPL', qty: 10, cost: 1000 })
-    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)
+    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)!
     const fee = calculateFee({ market: 'US', txType: 'SELL', price: p, qty: 10, feeRate: DEFAULT_FEE_RATE })
     expect(p * 10 - fee).toBeGreaterThanOrEqual(1000)
   })
@@ -274,7 +276,7 @@ describe('proposeFeeCorrections 不覆蓋當沖賣出（Task 137）', () => {
 describe('breakEvenPrice 零成本持股（BUG-038）', () => {
   it('成本 0（全數來自股票股利）仍算得出覆蓋手續費與證交稅的最低價', () => {
     const h = holdingOf({ market: 'TPE', ticker: '0050', qty: 1000, cost: 0 })
-    const p = breakEvenPrice(h, DEFAULT_FEE_RATE, 20)
+    const p = breakEvenPrice(h, DEFAULT_FEE_RATE, 20)!
     expect(p).toBe(0.02)
     const fee = calculateFee({
       market: 'TPE', txType: 'SELL', price: p, qty: 1000,
@@ -414,7 +416,7 @@ describe('inferFeeRate 歷史交易手續費率反推', () => {
 describe('融券費用（Task 141 Stage A）', () => {
   const shortHolding = {
     key: 'TPE:2603', ticker: '2603', name: '長榮', market: 'TPE', currency: 'TWD',
-    qty: 0, cost: 0, rawCost: 0, buyCostTotal: 0, realized: 0, openLots: [],
+    qty: 0, cost: 0, rawCost: 0, buyCostTotal: 0, realized: 0, dividends: 0, openLots: [],
     shortQty: 1000, shortProceeds: 99_478, shortRawProceeds: 100_000, shortLots: [],
     avgCost: 0, rawAvgCost: 0,
   } as Holding
@@ -457,7 +459,7 @@ describe('融券費用（Task 141 Stage A）', () => {
           feeRate: DEFAULT_FEE_RATE, minFee: 20,
         }))
 
-    const p = breakEvenPriceShort(shortHolding, DEFAULT_FEE_RATE, 20)
+    const p = breakEvenPriceShort(shortHolding, DEFAULT_FEE_RATE, 20)!
     expect(p).toBeGreaterThan(0)
     expect(pnlAt(p)).toBeGreaterThanOrEqual(0)
     expect(pnlAt(Math.round((p + 0.01) * 100) / 100)).toBeLessThan(0)
@@ -465,5 +467,59 @@ describe('融券費用（Task 141 Stage A）', () => {
 
   it('沒有空單時 breakEvenPriceShort 回傳 0', () => {
     expect(breakEvenPriceShort({ ...shortHolding, shortQty: 0 }, DEFAULT_FEE_RATE, 20)).toBe(0)
+  })
+})
+
+/**
+ * Task 166 (BUG-079). 保本價與未實現損益必須用同一套費用口徑：未沖銷批次上的實際費率，
+ * 而不是工作區設定值。0.6 這種被誤填成「6 折」的設定值曾讓保本價膨脹到成本的 2.5 倍。
+ */
+describe('breakEvenPrice 與 estimateUnrealized 的費用口徑一致（BUG-079）', () => {
+  const h = holdingOf({
+    market: 'TPE',
+    ticker: '2330',
+    qty: 1000,
+    cost: 500712,
+    openLots: [{ txId: 'tx-1', date: '2024-01-10', qty: 1000, price: 500, cost: 500712, rawCost: 500000, feeRate: DEFAULT_FEE_RATE }],
+  })
+
+  it('用批次上的費率算保本價，忽略被誤填的工作區費率', () => {
+    const p = breakEvenPrice(h, 0.6)!
+    expect(p).not.toBeNull()
+    // 500712 / (1000 * (1 - 0.001425 - 0.003)) ≈ 502.94
+    expect(p!).toBeGreaterThan(502.8)
+    expect(p!).toBeLessThan(503.1)
+  })
+
+  it('保本價賣出時未實現損益不為負（兩者同口徑）', () => {
+    const p = breakEvenPrice(h, DEFAULT_FEE_RATE)!
+    expect(estimateUnrealized(h, p, DEFAULT_FEE_RATE)).toBeGreaterThanOrEqual(0)
+  })
+
+  it('overrideFeeRate 時兩邊都改用傳入的費率', () => {
+    const p = breakEvenPrice(h, 0.001, undefined, true)!
+    expect(estimateUnrealized(h, p, 0.001, undefined, true)).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('費用重算不碰股利（Task 166 EN-01）', () => {
+  it('現金股利與股票股利都不會被列入校正清單', () => {
+    const base = {
+      id: 'd1',
+      workspace_id: 'w',
+      tx_date: '2024-07-15',
+      market: 'TPE' as const,
+      ticker: '2330',
+      name: '台積電',
+      price: 3.5,
+      qty: 1000,
+      fee_tax: 100,
+      created_at: '2026-01-01T00:00:00Z',
+    }
+    const rows = [
+      { ...base, tx_type: 'DIVIDEND' as const },
+      { ...base, id: 'd2', tx_type: 'STOCK_DIVIDEND' as const, price: 0, fee_tax: 0 },
+    ]
+    expect(proposeFeeCorrections(rows, { feeRate: DEFAULT_FEE_RATE, minFeeWhole: 20, minFeeOdd: 1 })).toEqual([])
   })
 })

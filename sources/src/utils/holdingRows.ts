@@ -46,14 +46,23 @@ export interface HoldingRow {
   unrealized: number | null
   /** Standard broker app unrealized P&L using official undiscounted fee rate (0.001425 for TWD), aligning with monthly rebate mode (月退制) */
   brokerUnrealized: number | null
+  /**
+   * EN-09: true for a USD row — the app has no US fee-rate setting, so 券商口徑 is not merely
+   * "no quote yet" (which is what `brokerUnrealized === null` alone would otherwise mean), it is
+   * "not applicable". The UI renders 不適用 instead of the missing-quote placeholder.
+   */
+  brokerNotApplicable: boolean
   /** Pure price difference before any fees: market value − cost before fees, isomorphic to rawRealized annual return*/
   rawUnrealized: number | null
   /** Unrealized rate of return (unrealized ÷ current position cost); null if there is no current price*/
   roi: number | null
   /** Standard broker app ROI using official undiscounted fee rate (0.001425 for TWD), aligning with monthly rebate mode (月退制) */
   brokerRoi: number | null
-  /** Capital-guaranteed selling price: Sell the entire amount at this price (minus handling fees/certificate tax) without losing money*/
-  breakEven: number
+  /**
+   * Capital-guaranteed selling price: Sell the entire amount at this price (minus handling
+   * fees/certificate tax) without losing money. Null when the search does not converge (EN-07).
+   */
+  breakEven: number | null
 }
 
 export function buildHoldingRows(
@@ -83,7 +92,9 @@ export function buildHoldingRows(
       const netMktVal = mktVal !== null && unrealized !== null ? h.cost + unrealized : null
       const rawUnrealized = mktVal !== null ? mktVal - h.rawCost : null
       // Current position only (same caliber as brokerage APP): The denominator is the moving average cost of existing holdings
-      const roi = unrealized !== null && h.cost !== 0 ? unrealized / h.cost : null
+      // EN-10: a non-positive cost is not a valid ROI denominator; dividing by it (or by a
+      // negative cost) would silently flip the sign of the reported percentage.
+      const roi = unrealized !== null && h.cost > 0 ? unrealized / h.cost : null
       // Standard broker fee rate (0.001425 for TWD) to align with broker app monthly rebate pre-deduction
       const standardFeeRate = h.currency === 'TWD' ? DEFAULT_FEE_RATE : feeRate
       const standardUnrealized =
@@ -91,7 +102,7 @@ export function buildHoldingRows(
           ? estimateUnrealized(h, price, standardFeeRate, minFee, true)
           : null
       const brokerRoi =
-        standardUnrealized !== null && h.cost !== 0 ? standardUnrealized / h.cost : null
+        standardUnrealized !== null && h.cost > 0 ? standardUnrealized / h.cost : null
       const breakEven = breakEvenPrice(h, feeRate, minFee)
       rows.push({
         rowKey: `${h.key}:LONG`,
@@ -108,6 +119,7 @@ export function buildHoldingRows(
         netMktVal,
         unrealized,
         brokerUnrealized: standardUnrealized,
+        brokerNotApplicable: h.currency !== 'TWD',
         rawUnrealized,
         roi,
         brokerRoi,
@@ -149,6 +161,7 @@ export function buildHoldingRows(
         netMktVal: null,
         unrealized,
         brokerUnrealized: standardUnrealized,
+        brokerNotApplicable: h.currency !== 'TWD',
         rawUnrealized,
         roi,
         brokerRoi,

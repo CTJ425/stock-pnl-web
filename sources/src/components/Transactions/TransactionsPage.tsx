@@ -23,9 +23,16 @@ import { StockSplitModal } from './StockSplitModal'
 import { TransactionForm } from './TransactionForm'
 import { filterTransactions } from './txSearch'
 
+/**
+ * STOCK_DIVIDEND is a zero-price BUY (engine: `pnlEngine.ts`), so it shares the BUY outflow
+ * formula — gross is always 0, only `fee_tax` leaves the account. DIVIDEND (現金股利) is money
+ * coming in net of the withholding fee, same shape as a SELL: `price * qty - fee_tax`.
+ */
 function cashFlow(tx: Transaction): number {
   const gross = tx.price * tx.qty
-  return tx.tx_type === 'BUY' ? -(gross + tx.fee_tax) : gross - tx.fee_tax
+  return tx.tx_type === 'BUY' || tx.tx_type === 'STOCK_DIVIDEND'
+    ? -(gross + tx.fee_tax)
+    : gross - tx.fee_tax
 }
 
 /** Chip colour for the 類型 cell (Task 142 C4): direction/nature hues only, never the price up/down ones. */
@@ -45,9 +52,12 @@ export function txChipClass(nature?: TxNature | null): string {
 /**
  * `tx_nature` is optional and nullable; absent means *unknown*, not 現股 (models.ts). When it is
  * null the chip falls back to the plain BUY/SELL label instead of claiming a nature it does not know.
+ * DIVIDEND/STOCK_DIVIDEND rows always write a null nature (TransactionForm), but a `${nature}買/賣`
+ * label only makes sense for an actual buy or sell — a dividend row falls back to its own
+ * TX_TYPE_LABEL even if a nature value somehow made it through CSV import.
  */
 export function txChipLabel(tx: Transaction): string {
-  if (!tx.tx_nature) return TX_TYPE_LABEL[tx.tx_type]
+  if (!tx.tx_nature || (tx.tx_type !== 'BUY' && tx.tx_type !== 'SELL')) return TX_TYPE_LABEL[tx.tx_type]
   return `${TX_NATURE_LABEL[tx.tx_nature]}${tx.tx_type === 'BUY' ? '買' : '賣'}`
 }
 
@@ -392,7 +402,13 @@ export function TransactionsPage() {
                         {displayStockName(tx.market, tx.ticker, tx.name)}
                       </td>
                       <td>
-                        <span className={`tx-chip ${txChipClass(tx.tx_nature)}`}>{txChipLabel(tx)}</span>
+                        <span
+                          className={`tx-chip ${txChipClass(
+                            tx.tx_type === 'BUY' || tx.tx_type === 'SELL' ? tx.tx_nature : null,
+                          )}`}
+                        >
+                          {txChipLabel(tx)}
+                        </span>
                       </td>
                       <td className="num">{fmtPrice(tx.price, currency)}</td>
                       <td className="num">{fmtQty(tx.qty)}</td>

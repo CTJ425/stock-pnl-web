@@ -97,13 +97,25 @@ function readMinFee(key: string): number | null {
   return null
 }
 
-/** The minimum handling fee for a single transaction of Taiwan stocks (yuan), memory based on the workspace; unit distinguishes whole shares/odd shares*/
+/**
+ * The minimum handling fee for a single transaction of Taiwan stocks (yuan); unit distinguishes
+ * whole shares/odd shares. Global only (BUG-084): the per-workspace keys
+ * (`min-fee-whole|odd/<workspaceId>`) were written by the transaction form from 046abd9
+ * (2026-07-18) until 39a20e2 / 0.9.24-dev.1 (2026-08-31), which removed the write-back but left
+ * `getMinFee` still reading them. No UI has written one since, and the server-side holdings card
+ * uses the defaults, so a browser that still has a stale value from that window must agree with
+ * every other client instead of quietly overriding it. Any such key found is deleted here as a
+ * one-off cleanup; its value is never used.
+ */
 export function getMinFee(unit: 'whole' | 'odd', workspaceId?: string): number {
   const baseKey = unit === 'whole' ? MIN_FEE_WHOLE_KEY : MIN_FEE_ODD_KEY
   const fallback = unit === 'whole' ? DEFAULT_MIN_FEE_WHOLE : DEFAULT_MIN_FEE_ODD
   if (workspaceId) {
-    const wsFee = readMinFee(`${baseKey}/${workspaceId}`)
-    if (wsFee !== null) return wsFee
+    try {
+      localStorage.removeItem(`${baseKey}/${workspaceId}`)
+    } catch {
+      // Failure to clean up does not affect functionality
+    }
   }
   return readMinFee(baseKey) ?? fallback
 }

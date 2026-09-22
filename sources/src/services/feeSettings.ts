@@ -26,17 +26,25 @@ export async function syncWorkspaceFees(list: Workspace[], provider: DataProvide
   }
 }
 
-/** Writes the cache first, then the row. A provider failure keeps the cache write. */
+/**
+ * Writes the cache first, then the row. A provider failure keeps the cache write — the rate is
+ * still usable locally — but EN-08: it must not be invisible to the user, since the cloud row is
+ * now stale. `onError` is called with the failure message so the caller (the workspace fee-rate
+ * dialog) can surface it through its existing toast/notice mechanism; the promise still resolves
+ * on failure so a caller that does not pass `onError` keeps its current behaviour.
+ */
 export async function saveWorkspaceFeeRate(
   provider: DataProvider,
   workspaceId: string,
   rate: number,
+  onError?: (message: string) => void,
 ): Promise<void> {
   setFeeRate(rate, workspaceId)
   try {
     await provider.setWorkspaceFeeRate(workspaceId, rate)
   } catch (err) {
-    logClient('error', 'saveWorkspaceFeeRate', err instanceof Error ? err.message : String(err), {})
-    // Swallow: the cache already has the new rate.
+    const message = err instanceof Error ? err.message : String(err)
+    logClient('error', 'saveWorkspaceFeeRate', message, {})
+    onError?.(message)
   }
 }

@@ -27,7 +27,8 @@ export interface WhatIfResult {
   proceeds: number
   pnl: number
   roi: number
-  breakEven: number
+  /** Null when breakEvenPrice's search does not converge (EN-07); the ladder then omits the mark. */
+  breakEven: number | null
 }
 
 export function whatIf(input: WhatIfInput): WhatIfResult | null {
@@ -60,6 +61,7 @@ export function whatIf(input: WhatIfInput): WhatIfResult | null {
     rawCost: buyPrice * qty,
     buyCostTotal: cost,
     realized: 0,
+    dividends: 0, // synthetic what-if position, no dividend history
     openLots: [], // breakEvenPrice never reads lots, only avgCost
     shortQty: 0, // long-only what-if; breakEvenPrice never reads the short leg
     shortProceeds: 0,
@@ -146,8 +148,10 @@ export function sellLadder(input: WhatIfInput, marks?: LadderMarks): LadderRow[]
   const inWindow = (price: number) =>
     Number.isFinite(price) && price > 0 && price >= minStepPrice && price <= maxStepPrice
 
-  const breakEvenSnapped = snap(base.breakEven)
-  if (inWindow(breakEvenSnapped)) rows.push(rowFor(breakEvenSnapped, 'breakEven', 'anchor'))
+  const breakEvenSnapped = base.breakEven != null ? snap(base.breakEven) : null
+  if (breakEvenSnapped != null && inWindow(breakEvenSnapped)) {
+    rows.push(rowFor(breakEvenSnapped, 'breakEven', 'anchor'))
+  }
   const avgCostMark = marks?.avgCost != null ? snap(marks.avgCost) : null
   if (avgCostMark != null && inWindow(avgCostMark)) rows.push(rowFor(avgCostMark, 'avgCost', 'anchor'))
   const currentMark = marks?.currentPrice != null ? snap(marks.currentPrice) : null
