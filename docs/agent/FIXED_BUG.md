@@ -24,6 +24,16 @@
 
 ---
 
+### Bug ID: BUG-085 — Watchlist card for 8150 (南茂) flips between 半導體業 and 其他
+- **Date**: 2026-09-23, fixed in 0.9.67
+- **Root Cause**: `price_cache` had no `industry` column. Edge `stock-price` returned `industry` only on a fresh MIS fetch; the DB cache-hit path returned `null`. The watchlist polls every 60 s, so the group flipped whenever a poll hit the cache. 8150 was also missing from `COMMON_STOCK_INDUSTRIES`, so `null` resolved to `其他`.
+- **Fix**: Added `price_cache.industry TEXT` (`schema.sql`, `verify.sql` migration check). `stock-price` writes `industry` on upsert and returns it on a cache hit (`index.ts`). Added `'8150': '半導體'` to `stockCategory.ts`. Spec: `docs/agent/specs/BUG-085.md`.
+- **Known limit**: when MIS fails and Yahoo fills a TW price, the row stores `industry = null` until the next MIS fetch.
+- **Verification**: 2,613 passed / 7 skipped / 0 failed; `npm run build` exit 0. DDL applied on DEV and PROD; `stock-price` deployed to both (bundle sha `222259662e65…` in both, from clean tree d53496e). Two consecutive calls for 8150 returned `半導體業` on both envs (second call a cache hit). `verify_setup()` all PASS on both.
+- **Status**: ✅ FIXED (0.9.67)
+
+---
+
 ### Bug ID: BUG-083 — `run-all-e2e.cjs` 在本機模式下 6 條假紅燈，且刪除交易的確認 Modal 從未被按下
 - **Date**: 2026-09-15，修復於 0.9.54 之後（只動腳本與文件，未動 `sources/src`，故不另外進版）
 - **Where**: `sources/scripts/run-all-e2e.cjs`、`docs/UnitTests/E2E.md`
