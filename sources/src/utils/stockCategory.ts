@@ -478,6 +478,7 @@ export const COMMON_STOCK_INDUSTRIES: Record<string, string> = {
   '8016': '半導體',
   '8054': '半導體',
   '8081': '半導體',
+  '8150': '半導體',
   '8299': '半導體',
 
   // 電腦週邊

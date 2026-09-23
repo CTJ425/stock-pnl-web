@@ -70,6 +70,7 @@ describe('stockCategory', () => {
       expect(getStockCategory('3680')).toBe('半導體') // 家登
       expect(getStockCategory('6187')).toBe('半導體') // 萬潤
       expect(getStockCategory('6515')).toBe('半導體') // 穎崴
+      expect(getStockCategory('8150', '南茂')).toBe('半導體') // BUG-085: 南茂 must not depend on the live quote
     })
 
     it('maps TPEx cultural creative and living sector stocks', () => {
