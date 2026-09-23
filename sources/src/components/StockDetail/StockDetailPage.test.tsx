@@ -154,12 +154,8 @@ describe('StockDetailPage', () => {
     expect(head).toBeTruthy()
     expect(head!.textContent).toContain('2330 台積電｜盤後籌碼')
     expect(head!.textContent).toContain('資料日期 2026-07-23（最近交易日盤後）')
-    // generatedAt = 2026-07-23T12:30:00Z, displayed as YYYY-MM-DD HH:mm in the viewer's time zone
-    const expected = new Date('2026-07-23T12:30:00.000Z')
-    const p = (n: number) => String(n).padStart(2, '0')
-    expect(head!.textContent).toContain(
-      `報告更新時間 ${expected.getFullYear()}-${p(expected.getMonth() + 1)}-${p(expected.getDate())} ${p(expected.getHours())}:${p(expected.getMinutes())}`,
-    )
+    // generatedAt = 2026-07-23T12:30:00Z, displayed in Asia/Taipei whatever the viewer's zone (FU-05)
+    expect(head!.textContent).toContain('報告更新時間 2026-07-23 20:30')
   })
 
   it('資料日期不在頁首重複（那是籌碼報告的屬性，非整頁的）', async () => {
