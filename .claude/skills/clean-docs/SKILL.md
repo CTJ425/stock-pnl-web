@@ -5,17 +5,8 @@ description: Audit the three session-start hot files of stock-pnl-web (docs/agen
 
 # clean-docs — shrink the session-start hot files
 
-## Which variant to use
-
-This variant runs every step in the main session. It needs no subagent, so it works in any
+This skill runs every step in the main session. It needs no subagent, so it works in any
 agent runtime.
-
-In Claude Code, prefer **`clean-docs-cc`**. That variant sends the bulky read to
-`route:scout` and the edits to `route:scribe`, which keeps the hot file content out of the
-main context.
-
-The two variants share one budget, one workflow and one lossless test. Only the executor
-differs. Keep them in step when you change either file.
 
 ## What this skill owns
 
