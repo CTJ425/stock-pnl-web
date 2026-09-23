@@ -294,7 +294,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
     const { data } = await db
       .from('price_cache')
       .select(
-        'key, price, prev_close, open, high, low, volume, trade_date, trade_time, trial, updated_at',
+        'key, price, prev_close, open, high, low, volume, trade_date, trade_time, trial, industry, updated_at',
       )
       .in('key', items.map((i) => `${i.market}:${i.ticker}`))
       .gte('updated_at', freshAfter)
@@ -316,7 +316,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
         tradeDate: cachedText(row.trade_date),
         tradeTime,
         trial: row.trial === true,
-        industry: null,
+        industry: cachedText(row.industry),
         asOf: new Date(at).toISOString(),
       }
     }
@@ -382,6 +382,7 @@ async function handlePrices(symbols: SymbolItem[]): Promise<Response> {
           trade_date: prices[key].tradeDate,
           trade_time: prices[key].tradeTime,
           trial: prices[key].trial,
+          industry: prices[key].industry,
           updated_at: prices[key].asOf,
         })),
       )

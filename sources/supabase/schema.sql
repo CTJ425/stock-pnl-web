@@ -102,6 +102,8 @@ WITH CHECK (auth.uid() = user_id);
 --     open / high / low / volume / trade_date / trade_time / trial are quotation card fields (0.6.36):
 --     The quotation card for individual stock analysis should display today's opening high and low volume and trial price, and these fields are originally in the same source response.
 --     If they are not saved together, the quotation card will be unavailable as soon as the cache hits it - the same reason for prev_close in the first place.
+--     industry is the TWSE/TPEx sector name (BUG-085): a cache hit must return the same industry as the
+--     MIS fetch that filled the row, or watchlist grouping flickers between the real sector and 其他. Can be NULL.
 CREATE TABLE IF NOT EXISTS price_cache (
     key TEXT PRIMARY KEY,                         -- 'TPE:2330'、'US:AAPL'
     price NUMERIC NOT NULL CHECK (price > 0),
@@ -113,6 +115,7 @@ CREATE TABLE IF NOT EXISTS price_cache (
     trade_date TEXT,                              -- 交易日 YYYYMMDD（僅 MIS 提供）
     trade_time TEXT,                              -- 最後撮合時間 HH:mm:ss（僅 MIS 提供）
     trial BOOLEAN NOT NULL DEFAULT FALSE,         -- 抓價當下是否為試撮階段
+    industry TEXT,                                -- 產業別；僅 MIS 提供，快取命中時回填
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -125,6 +128,7 @@ ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS volume NUMERIC CHECK (volume >=
 ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trade_date TEXT;
 ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trade_time TEXT;
 ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS trial BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS industry TEXT;
 
 ALTER TABLE price_cache ENABLE ROW LEVEL SECURITY;
 

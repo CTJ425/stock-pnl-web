@@ -59,7 +59,8 @@ BEGIN
   WITH want(tbl, col) AS (
     VALUES ('workspaces','fee_rate'),      -- 0.9.24, task 135
            ('transactions','tx_nature'),   -- 0.9.25, task 137 §C
-           ('transactions','fee_rate')     -- 0.9.27, fee_rate persistence
+           ('transactions','fee_rate'),    -- 0.9.27, fee_rate persistence
+           ('price_cache','industry')      -- BUG-085
   ), missing AS (
     SELECT string_agg(tbl || '.' || col, ', ' ORDER BY tbl, col) AS m FROM want w
      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns c
@@ -68,7 +69,7 @@ BEGIN
   )
   SELECT 'migration columns',
          CASE WHEN m IS NULL THEN 'PASS' ELSE 'FAIL' END,
-         COALESCE('missing: ' || m, 'fee_rate, tx_nature present')
+         COALESCE('missing: ' || m, 'fee_rate, tx_nature, industry present')
     FROM missing;
 
   -- ---- extensions ---------------------------------------------------------
