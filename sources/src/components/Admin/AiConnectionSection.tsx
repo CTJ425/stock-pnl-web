@@ -25,6 +25,16 @@ import {
 import { useToast } from '../Common/Toast'
 import { useConfirm } from '../Common/useConfirm'
 
+/**
+ * AI-07: each provider's example/default model name used to be a literal repeated at both the
+ * "switch provider" prefill and the input's placeholder — the two could silently drift apart.
+ * One constant, keyed by provider, is now the only place either reads it from.
+ */
+export const DEFAULT_MODEL_BY_PROVIDER: Record<AiProviderKind, string> = {
+  google: 'gemini-2.5-flash',
+  'openai-compatible': 'llama3',
+}
+
 export function AiConnectionSection() {
   const { show } = useToast()
   const confirm = useConfirm()
@@ -66,10 +76,10 @@ export function AiConnectionSection() {
     setProvider(kind)
     setErr('')
     if (kind === 'google') {
-      if (!model || model === 'llama3' || model === 'qwen2.5') setModel('gemini-2.5-flash')
+      if (!model || model === 'llama3' || model === 'qwen2.5') setModel(DEFAULT_MODEL_BY_PROVIDER.google)
     } else {
       if (!baseUrl) setBaseUrl('http://localhost:11434/v1')
-      if (!model || model.startsWith('gemini')) setModel('llama3')
+      if (!model || model.startsWith('gemini')) setModel(DEFAULT_MODEL_BY_PROVIDER['openai-compatible'])
     }
   }
 
@@ -169,7 +179,7 @@ export function AiConnectionSection() {
               id="adm-ai-model"
               type="text"
               className="ai-input"
-              placeholder={provider === 'google' ? 'e.g. gemini-2.5-flash' : 'e.g. llama3'}
+              placeholder={`e.g. ${DEFAULT_MODEL_BY_PROVIDER[provider]}`}
               value={model}
               onChange={(e) => setModel(e.target.value)}
             />

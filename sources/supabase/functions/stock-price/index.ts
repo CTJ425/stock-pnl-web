@@ -407,7 +407,7 @@ async function lookupCachedNames(query: string): Promise<SearchResult[]> {
       .from('stock_names')
       .select('key, name')
       .in('key', [`US:${query}`, `TPE:${query}`])
-    return (data ?? []).flatMap((row) => {
+    return (data ?? []).flatMap((row: { key: unknown; name: unknown }) => {
       const sep = String(row.key).indexOf(':')
       if (sep < 0 || !row.name) return []
       return [

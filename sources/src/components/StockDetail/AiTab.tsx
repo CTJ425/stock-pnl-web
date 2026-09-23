@@ -3,7 +3,7 @@
  * Carry out daily series loading and technical calculation independently without mentioning the status to the parent component or modifying the TechnicalTab.
  * There will be no automatic retry, and no AI-generated text should appear on the screen when not set.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Bot, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react'
 import { fetchDailySeries } from '../../services/dailyProxy'
 import type { FundamentalData } from '../../services/fundamentalProxy'
@@ -60,6 +60,15 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [chatErr, setChatErr] = useState('')
+
+  // AI-03: aborts whatever request is in flight when this component unmounts (tab switch away
+  // from "AI 分析") instead of letting it run to completion, or to `AI_TIMEOUT_MS`, unheard.
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   // Restore the last analysis and conversation from sessionStorage.
   // This also fixes the pain point of "the AI ​​result of splitting pages disappears and you have to press it again (re-billing)".
@@ -124,10 +133,13 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
       const built = buildAiPayload({ ticker, name, view, report, range, fundamental, macro })
       const { system, user } = renderAiPrompt(built, prompts.analysis)
 
+      const controller = new AbortController()
+      abortRef.current = controller
       const provider = createAiProvider(settings)
       const result = await provider.complete({
         system,
         messages: [{ role: 'user', content: user }],
+        signal: controller.signal,
       })
 
       // Regenerate analysis = start a new conversation. The old questioning is asked against the old analysis, and then it becomes inconsistent.
@@ -169,11 +181,14 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     setChatBusy(true)
     setChatErr('')
     try {
+      const controller = new AbortController()
+      abortRef.current = controller
       const provider = createAiProvider(settings)
       // system resends every round, and the frame limit will not be diluted as the conversation becomes longer (see aiChat.ts)
       const reply = await provider.complete({
         system: buildChatSystem(payload, aiText, prompts.chat),
         messages: next,
+        signal: controller.signal,
       })
       const withReply: AiMessage[] = [...next, { role: 'assistant', content: reply }]
       setChat(withReply)
@@ -181,6 +196,9 @@ export function AiTab({ ticker, name, report, fundamental }: AiTabProps) {
     } catch (e: unknown) {
       // When it fails, leave the sentence you just sent on the screen so that the user can know which sentence failed to be sent successfully.
       setChatErr(e instanceof Error ? e.message : '追問時發生未知錯誤')
+      // AI-02: persist the failed question too (no fake answer attached) — otherwise switching
+      // tabs and back restores from sessionStorage without it, and it looks like it was never sent.
+      saveChat(ticker, aiText, next)
     } finally {
       setChatBusy(false)
     }

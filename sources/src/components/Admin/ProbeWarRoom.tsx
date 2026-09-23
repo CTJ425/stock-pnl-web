@@ -55,6 +55,60 @@ function fmtUpdatedAt(iso: string | undefined): string {
   return d.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
+/**
+ * AD-05: the age must come from the server's `data.asOf`, not from a client-side "when did I
+ * last poll" bookkeeping value — the latter can look fresh while the underlying data is stale
+ * (e.g. a poll that succeeded but the backend served a cached/old summary).
+ */
+function minutesAgoLabel(iso: string | undefined): string {
+  if (!iso) return '—'
+  const ms = Date.now() - Date.parse(iso)
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const mins = Math.floor(ms / 60_000)
+  return mins < 1 ? '剛剛更新' : `${mins} 分鐘前更新`
+}
+
+/** Extract every "HH:MM–HH:MM" range out of a `WarRoomSourceConfig.window` string, oldest first. */
+function parseWindowRanges(window: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = []
+  const re = /(\d{1,2}):(\d{2})\s*[–-]\s*(\d{1,2}):(\d{2})/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(window))) {
+    ranges.push({
+      start: Number(m[1]) * 60 + Number(m[2]),
+      end: Number(m[3]) * 60 + Number(m[4]),
+    })
+  }
+  return ranges
+}
+
+function taipeiMinutesNow(): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Taipei',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0')
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
+  return hour * 60 + minute
+}
+
+/**
+ * AD-10: an empty card used to always say "尚未進入時窗", even after its window had already
+ * closed for the day — indistinguishable from "still probing, just no hit yet". Distinguish the
+ * three cases against the window the card already knows; a window this cannot parse (e.g. the
+ * MOPS point-in-time slots) keeps the original, always-safe phrasing.
+ */
+function emptyStateLabel(window: string): string {
+  const ranges = parseWindowRanges(window)
+  if (ranges.length === 0) return '尚未進入時窗 (今日未命中)'
+  const now = taipeiMinutesNow()
+  if (now < ranges[0]!.start) return '尚未進入時窗 (今日未命中)'
+  if (now > ranges[ranges.length - 1]!.end) return '今日已結束，未命中'
+  return '時窗內尚未命中'
+}
+
 interface ProbeWarRoomProps {
   data: AdminStatus
   loading: boolean
@@ -153,7 +207,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span className="source-tag section-stamp">
-            資料日 {dataDate}・更新於 {fmtUpdatedAt(data.asOf)}
+            資料日 {dataDate}・更新於 {fmtUpdatedAt(data.asOf)}・{minutesAgoLabel(data.asOf)}
           </span>
           <button
             className="btn btn-sm"
@@ -237,7 +291,7 @@ export function ProbeWarRoom({ data, loading, onRefresh }: ProbeWarRoomProps) {
                       </span>
                     </div>
                   ) : (
-                    <span className="pwr-times-empty">尚未進入時窗 (今日未命中)</span>
+                    <span className="pwr-times-empty">{emptyStateLabel(config.window)}</span>
                   )}
                 </div>
               </div>

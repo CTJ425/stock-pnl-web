@@ -16,6 +16,7 @@ import {
   type AdminRunProgress,
   type AdminRunResult,
 } from '../../services/adminRun'
+import { useConfirm } from '../Common/useConfirm'
 
 type JobUiStatus = 'pending' | 'running' | 'ok' | 'fail'
 
@@ -79,6 +80,7 @@ function jobStatusLabel(s: JobUiStatus): string {
 }
 
 export function ManualRunSection() {
+  const confirm = useConfirm()
   const [selected, setSelected] = useState<Set<AdminRunJob>>(
     () => new Set(ADMIN_RUN_JOBS),
   )
@@ -169,6 +171,23 @@ export function ManualRunSection() {
           : '執行完成但有錯誤',
       )
     }
+  }
+
+  /**
+   * AD-03: 「全部執行」與「執行勾選項目」一次觸發多項排程等同的抓取工作，誤按代價不小
+   * （逐一呼叫、各有獨立時間預算），所以先問過再送出；單一項目的「執行」按鈕維持原樣。
+   */
+  async function runBulk(jobs: AdminRunJob[] | 'all') {
+    const list = jobs === 'all' ? ADMIN_RUN_JOBS : jobs
+    const ok = await confirm({
+      title: jobs === 'all' ? '全部執行' : '執行勾選項目',
+      message: `確定要手動觸發以下 ${list.length} 項排程等同的抓取工作嗎？\n${list
+        .map((j) => ADMIN_RUN_LABELS[j].title)
+        .join('、')}`,
+      confirmLabel: '執行',
+    })
+    if (!ok) return
+    await run(jobs)
   }
 
   const pct =
@@ -268,7 +287,7 @@ export function ManualRunSection() {
           type="button"
           className="btn"
           disabled={busy || noneChecked}
-          onClick={() => void run(selectedList)}
+          onClick={() => void runBulk(selectedList)}
         >
           {busy ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
           執行勾選項目
@@ -278,7 +297,7 @@ export function ManualRunSection() {
           type="button"
           className="btn"
           disabled={busy}
-          onClick={() => void run('all')}
+          onClick={() => void runBulk('all')}
         >
           {busy ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
           全部執行

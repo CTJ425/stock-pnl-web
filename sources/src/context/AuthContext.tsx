@@ -31,7 +31,18 @@ export interface AuthState {
   dismissRecovery: () => void
   /** Change password from inside the account: re-authenticates with the current password first. Returns an error message, null on success.*/
   changePassword: (currentPassword: string, newPassword: string) => Promise<string | null>
-  signOut: () => Promise<void>
+  /**
+   * Returns an error message, like the other auth actions above; null on success. On failure the
+   * local session is cleared anyway (`{ scope: 'local' }`) so the user is not stuck signed in
+   * after a network hiccup — the caller only needs the message to display.
+   */
+  signOut: () => Promise<string | null>
+  /**
+   * Bumps on TOKEN_REFRESHED / USER_UPDATED (not just on a user id change), so a consumer that
+   * needs to re-check something server-side (e.g. isAdmin()) can depend on it without opening a
+   * second `onAuthStateChange` subscription of its own.
+   */
+  authVersion: number
 }
 
 const LOCAL_USER: AuthUser = { id: 'local-user', email: '本機模式（資料存於此瀏覽器）' }
@@ -42,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(isSupabaseConfigured ? null : LOCAL_USER)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [recovery, setRecovery] = useState(false)
+  const [authVersion, setAuthVersion] = useState(0)
 
   // Use the same object when the content does not change: token refresh (such as switching back to paging) should not trigger downstream effect reloading
   const applyUser = useCallback((u: { id: string; email?: string | null } | null | undefined) => {
@@ -66,6 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Entering the site from the reset password email link: prompting the user to set a new password
       if (event === 'PASSWORD_RECOVERY') setRecovery(true)
       applyUser(session?.user)
+      // A token refresh or profile update does not change `user` (same id/email), so anything
+      // that needs to re-check server-side state (e.g. isAdmin()) needs a separate signal.
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        setAuthVersion((v) => v + 1)
+      }
     })
     return () => {
       cancelled = true
@@ -129,7 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut()
+    if (!supabase) return null
+    const { error } = await supabase.auth.signOut()
+    if (!error) return null
+    // The remote sign-out failed (e.g. offline) — clear the local session anyway so the
+    // user is not stuck looking signed-in on this device, then report why.
+    await supabase.auth.signOut({ scope: 'local' })
+    return `登出時發生錯誤，已在本機清除登入狀態：${error.message}`
   }, [])
 
   const value = useMemo<AuthState>(
@@ -145,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dismissRecovery,
       changePassword,
       signOut,
+      authVersion,
     }),
     [
       user,
@@ -157,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dismissRecovery,
       changePassword,
       signOut,
+      authVersion,
     ],
   )
 

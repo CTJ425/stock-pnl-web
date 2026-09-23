@@ -442,6 +442,7 @@ function UserMenu({
   onOpenDiscord: () => void
 }) {
   const { mode, user, signOut } = useAuth()
+  const { show } = useToast()
   const [pref, setPref] = useState<ThemePref>(() => getThemePref())
   const [showChangePassword, setShowChangePassword] = useState(false)
 
@@ -561,7 +562,9 @@ function UserMenu({
                   className="hmenu-item"
                   onClick={() => {
                     close()
-                    void signOut()
+                    void signOut().then((err) => {
+                      if (err) show(err, 'error')
+                    })
                   }}
                 >
                   <LogOut size={14} />
@@ -808,7 +811,7 @@ function WorkspaceControls() {
 }
 
 export function AppShell() {
-  const { recovery } = useAuth()
+  const { recovery, user, authVersion } = useAuth()
   const { loading, error, addTransactions } = useWorkspace()
   const [view, setView] = useState<View>('dashboard')
   const [analysisTicker, setAnalysisTicker] = useState<string | undefined>(undefined)
@@ -818,6 +821,8 @@ export function AppShell() {
 
   // Administrator entrance: It is determined that auth needs to be made once, so it is added asynchronously. If you make a mistake, there will only be one less menu item.
   // Does not affect any existing functions (the real control is on the Edge Function side)
+  // Re-runs on a user change or a token refresh/profile update (authVersion, from AuthContext's
+  // own onAuthStateChange subscription) — no second subscription is opened here.
   useEffect(() => {
     let alive = true
     void isAdmin().then((ok) => {
@@ -826,7 +831,7 @@ export function AppShell() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [user?.id, authVersion])
 
   // When permissions are revoked (such as logging out to change accounts), do not leave the user in the background
   useEffect(() => {

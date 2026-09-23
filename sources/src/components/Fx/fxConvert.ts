@@ -140,13 +140,39 @@ export function labelIndicesFor(n: number, want = 6): number[] {
  * Why is this judgment necessary: ​​the old files on Storage look exactly the same as the new files on the screen?
  * The numbers on this page will be used to make money decisions. The lesson learned in 0.6.4-dev.5 is exactly this
  * "The data displayed is wrong and cannot be seen by the user" (see description of services/reportsBucket.ts).
+ *
+ * MA-10: calendar days over-counted a weekend as staleness (a Friday file still looks 2 calendar
+ * days old on Monday morning, but the market never opened in between). Trading days —
+ * Asia/Taipei Mon–Fri calendar dates strictly after `asOf`'s date, up to and including `now`'s —
+ * count only the days the schedule could actually have run on.
  */
-export const FX_STALE_DAYS = 3
+export const FX_STALE_TRADING_DAYS = 2
 
-export function isStale(asOf: string, now: Date, days = FX_STALE_DAYS): boolean {
+/** 'YYYY-MM-DD' in Asia/Taipei for the instant `t` (ms since epoch). */
+function taipeiDateKey(t: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(t))
+}
+
+/** Mon–Fri for a 'YYYY-MM-DD' calendar date; weekday-of-date does not depend on time zone. */
+function isWeekdayKey(dateKey: string): boolean {
+  const day = new Date(`${dateKey}T00:00:00Z`).getUTCDay()
+  return day >= 1 && day <= 5
+}
+
+export function isStale(asOf: string, now: Date, tradingDays = FX_STALE_TRADING_DAYS): boolean {
   const t = Date.parse(asOf)
   if (!Number.isFinite(t)) return false
-  return now.getTime() - t > days * 86_400_000
+  const asOfDate = taipeiDateKey(t)
+  const nowDate = taipeiDateKey(now.getTime())
+  if (nowDate <= asOfDate) return false
+  let count = 0
+  let cursor = new Date(`${asOfDate}T00:00:00Z`)
+  const end = new Date(`${nowDate}T00:00:00Z`)
+  while (cursor.getTime() < end.getTime()) {
+    cursor = new Date(cursor.getTime() + 86_400_000)
+    if (isWeekdayKey(cursor.toISOString().slice(0, 10))) count++
+  }
+  return count > tradingDays
 }
 
 /** 'YYYY-MM-DD' → 'MM/DD'; the year must be seen in the sequence across years, so the 1-year interval contains the year*/

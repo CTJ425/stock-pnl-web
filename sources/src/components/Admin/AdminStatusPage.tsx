@@ -233,6 +233,14 @@ export function AdminStatusPage() {
     void load()
   }, [load])
 
+  // AD-04: 每 60 秒重新拉一次狀態，卸載時清掉計時器——這頁常常整天開著沒人手動按重新整理。
+  useEffect(() => {
+    const id = setInterval(() => {
+      void load()
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [load])
+
   // 抓取全市場排程
   const marketCron = (data?.schedules ?? []).find((s) => s.jobname === 'market-daily') ?? null
 

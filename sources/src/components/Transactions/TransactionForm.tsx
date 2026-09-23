@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Spinner } from '../Common/Spinner'
+import { useConfirm } from '../Common/useConfirm'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import type { Market, NewTransaction, Transaction, TxNature, TxType } from '../../types/models'
 import { TX_NATURE_LABEL } from '../../types/models'
@@ -42,6 +43,7 @@ interface TransactionFormProps {
 
 export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormProps) {
   const { current, ledger } = useWorkspace()
+  const confirm = useConfirm()
   const workspaceId = current?.id
   const isEdit = Boolean(initial)
   const [date, setDate] = useState(initial?.tx_date ?? todayStr)
@@ -98,6 +100,9 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
   const [suggestions, setSuggestions] = useState<StockSearchResult[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  // TX-07: a lookup that comes back empty (查無代號) must read differently from one that
+  // never reached the server (查詢失敗（網路）) — otherwise a network hiccup looks like a typo.
+  const [tickerLookupMsg, setTickerLookupMsg] = useState<string | null>(null)
   const taxRateManual = useRef(false)
 
   const activeHoldings = useMemo(
@@ -257,6 +262,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     const clean = ticker.trim().toUpperCase()
     if (!clean || clean === lastSearchedTicker.current) return
     setLookingUp(true)
+    setTickerLookupMsg(null)
     try {
       const result = await lookupTicker(clean, market)
       if (result) {
@@ -267,7 +273,11 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
         updateTaxRateAuto(result.symbol)
       } else {
         lastSearchedTicker.current = ''
+        setTickerLookupMsg('查無代號')
       }
+    } catch {
+      lastSearchedTicker.current = ''
+      setTickerLookupMsg('查詢失敗（網路）')
     } finally {
       setLookingUp(false)
     }
@@ -367,6 +377,17 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
     if (feeVal < 0) {
       setMessage({ kind: 'error', text: '手續費 / 稅金不可為負數' })
       return
+    }
+
+    // TX-05: a future-dated transaction is usually a typo (wrong year/month), not intent —
+    // ask instead of silently accepting it.
+    if (date > todayStr()) {
+      const ok = await confirm({
+        title: '交易日期在未來',
+        message: `交易日期「${date}」晚於今天，確定要新增這筆交易嗎？`,
+        confirmLabel: '確定新增',
+      })
+      if (!ok) return
     }
 
     setBusy(true)
@@ -513,6 +534,7 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             updateTaxRateAuto(e.target.value)
             if (isSpotSell || isShortCover) setShowTickerHoldings(true)
             if (fieldErrors.ticker) setFieldErrors((prev) => ({ ...prev, ticker: undefined }))
+            if (tickerLookupMsg) setTickerLookupMsg(null)
           }}
           onBlur={() => {
             setShowTickerHoldings(false)
@@ -578,11 +600,13 @@ export function TransactionForm({ onSubmit, onDone, initial }: TransactionFormPr
             )}
           </div>
         )}
-        {lookingUp && (
+        {lookingUp ? (
           <div className="field-hint">
             <Loader2 size={11} className="spin" style={{ verticalAlign: -1, marginRight: 4 }} />
             正在反查名稱…
           </div>
+        ) : (
+          tickerLookupMsg && <div className="field-hint">{tickerLookupMsg}</div>
         )}
       </div>
 

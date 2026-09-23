@@ -233,15 +233,27 @@ describe('labelIndicesFor', () => {
 })
 
 describe('isStale', () => {
-  const now = new Date('2026-07-29T12:00:00Z')
+  // MA-10: staleness counts Taipei weekdays (Mon–Fri) after asOf's date, so a weekend never
+  // pushes a Friday file over the line. Stale when more than FX_STALE_TRADING_DAYS (2) passed.
+  const now = new Date('2026-07-29T12:00:00Z') // Wed 20:00 Taipei
 
-  it('3 天內不算過期', () => {
-    expect(isStale('2026-07-29T03:00:00Z', now)).toBe(false)
-    expect(isStale('2026-07-26T13:00:00Z', now)).toBe(false)
+  it('2 個交易日內不算過期', () => {
+    expect(isStale('2026-07-29T03:00:00Z', now)).toBe(false) // same day
+    expect(isStale('2026-07-27T03:00:00Z', now)).toBe(false) // Mon → Tue, Wed = 2
   })
 
-  it('超過 3 天算過期', () => {
-    expect(isStale('2026-07-25T03:00:00Z', now)).toBe(true)
+  it('超過 2 個交易日算過期', () => {
+    expect(isStale('2026-07-24T09:00:00Z', now)).toBe(true) // Fri → Mon, Tue, Wed = 3
+    expect(isStale('2026-07-26T13:00:00Z', now)).toBe(true) // Sun 21:00 Taipei → Mon, Tue, Wed = 3
+  })
+
+  it('週末不計入：週五的檔到下週二仍不算過期（日曆天已超過 4 天）', () => {
+    expect(isStale('2026-07-24T09:00:00Z', new Date('2026-07-28T12:00:00Z'))).toBe(false)
+  })
+
+  it('以台北日期切日：UTC 前一天但台北已是隔天的時間點照台北算', () => {
+    // 2026-07-23T17:00Z = Fri 01:00 Taipei → Mon, Tue = 2 by Tue 20:00 Taipei
+    expect(isStale('2026-07-23T17:00:00Z', new Date('2026-07-28T12:00:00Z'))).toBe(false)
   })
 
   it('asOf 壞掉或空時不誤報過期', () => {

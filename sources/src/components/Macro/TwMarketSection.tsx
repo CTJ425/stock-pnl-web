@@ -195,13 +195,23 @@ function taiexTrendStreak(days: MarketDay[]): { label: string | null; color: str
 export function TwMarketSection({
   onBack,
   quote,
+  initialMarket,
 }: {
   onBack?: () => void
   quote?: TwIndexFallbackQuote | IndexQuote | null
+  /**
+   * Market data the parent (MacroPage) already fetched, if any (MA-05). Seeding state from it
+   * skips the redundant fetch — and the loading flash that comes with it — when the user leaves
+   * this view and drills back into it later in the same session. `undefined`/`null` (parent has
+   * nothing yet, or was never given this prop at all) falls back to fetching here, unchanged.
+   */
+  initialMarket?: MarketData | null
 } = {}) {
-  const [market, setMarket] = useState<MarketData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [market, setMarket] = useState<MarketData | null>(initialMarket ?? null)
+  const [loading, setLoading] = useState(initialMarket == null)
   const [error, setError] = useState(false)
+  /** MA-06: a file that came back but failed the format checks, distinct from "no file yet". */
+  const [invalid, setInvalid] = useState(false)
   /** Which amount the institutional matrix shows (0.7.6). */
   const [instMetric, setInstMetric] = useState<InstMetric>('net')
   /*
@@ -215,9 +225,11 @@ export function TwMarketSection({
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
+    setInvalid(false)
     try {
-      const data = await fetchMarketDaily()
-      setMarket(data)
+      const result = await fetchMarketDaily()
+      setMarket(result.kind === 'ok' ? result.data : null)
+      setInvalid(result.kind === 'invalid')
     } catch {
       setError(true)
     } finally {
@@ -226,8 +238,9 @@ export function TwMarketSection({
   }, [])
 
   useEffect(() => {
+    if (initialMarket != null) return // parent already has it (MA-05); nothing to fetch yet
     void load()
-  }, [load])
+  }, [load, initialMarket])
 
   const latest = market ? market.days[market.days.length - 1] ?? null : null
   const latestInst = market ? [...market.days].reverse().find((d) => d.institutional) ?? null : null
@@ -316,7 +329,7 @@ export function TwMarketSection({
             </div>
           </div>
           <p className="hint" style={{ marginTop: 10 }}>
-            市場資料尚未產生，盤後排程完成後會自動補上。
+            {invalid ? '資料格式不符，無法顯示' : '市場資料尚未產生，盤後排程完成後會自動補上。'}
           </p>
         </div>
       </>
@@ -566,7 +579,7 @@ export function TwMarketSection({
                     className={`num ${chipClass(d.txnsDiff)}`}
                     style={heatStyle(d.txnsDiff, maxAbsTxnDiff)}
                   >
-                    {d.txns === null ? '—' : `${d.txns.toFixed(1)} 萬`}
+                    {d.txns === null ? '—' : `${d.txns.toFixed(1)} 萬筆`}
                   </td>
                   <td
                     className={`num ${chipClass(d.taiexDiff)}`}
@@ -642,7 +655,7 @@ export function TwMarketSection({
                 </td>
                 <td className="num inst-matrix-cum">
                   <div>
-                    {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬`}
+                    {turnoverTxnAvg === null ? '—' : `${turnoverTxnAvg.toFixed(1)} 萬筆`}
                   </div>
                   <div className="tfoot-cum-trend">
                     <span

@@ -24,6 +24,10 @@ import { CHAT_LOCKED } from '../StockDetail/aiChat'
 
 type Kind = keyof AiPrompts
 
+/** AI-06: an unbounded prompt inflates every request built from it. 8000 chars is generous
+ * headroom over the shipped defaults (each well under 1000) while still catching a paste gone wrong. */
+const PROMPT_MAX_LENGTH = 8000
+
 const KINDS: Array<{
   id: Kind
   label: string
@@ -81,6 +85,7 @@ export function PromptsSection() {
   const text = draft[kind]
   const dirty = draft.analysis !== saved.analysis || draft.chat !== saved.chat
   const customized = text.trim() !== spec.fallback.trim()
+  const overLimit = text.length > PROMPT_MAX_LENGTH
 
   async function handleSave() {
     setErr('')
@@ -103,7 +108,11 @@ export function PromptsSection() {
         <span className="source-tag section-stamp">
           全站共用・僅管理員可修改・儲存後立刻對所有使用者生效
         </span>
-        <button className="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty}>
+        <button
+          className="btn btn-sm btn-primary"
+          onClick={() => void handleSave()}
+          disabled={busy || !dirty || overLimit}
+        >
           {busy ? '儲存中…' : '儲存變更'}
         </button>
       </div>
@@ -138,8 +147,10 @@ export function PromptsSection() {
           <div className="adm-prompt-editor">
             <label className="adm-prompt-label" htmlFor="adm-prompt-text">
               {spec.label}準則
-              <span>
-                可編輯・{text.length} 字{customized ? '・已與預設不同' : ''}
+              <span className={overLimit ? 'badge badge-warn' : undefined}>
+                可編輯・{text.length} / {PROMPT_MAX_LENGTH} 字
+                {overLimit ? '・超過上限，無法儲存' : ''}
+                {customized ? '・已與預設不同' : ''}
               </span>
             </label>
             <textarea
@@ -147,6 +158,7 @@ export function PromptsSection() {
               className="adm-prompt-text"
               value={text}
               spellCheck={false}
+              maxLength={PROMPT_MAX_LENGTH}
               onChange={(e) => setDraft({ ...draft, [kind]: e.target.value })}
             />
 

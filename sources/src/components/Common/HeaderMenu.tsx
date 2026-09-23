@@ -10,7 +10,7 @@
  * And its style was deleted as dead CSS in 0.6.6.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { FocusEvent, ReactNode } from 'react'
 
 export function HeaderMenu({
   triggerLabel,
@@ -58,8 +58,16 @@ export function HeaderMenu({
     }
   }, [open])
 
+  // Closes when focus leaves the menu (e.g. tabbing past the last item), on top of the
+  // existing outside-click and Esc handling above — a keyboard user does not always click.
+  const handleFocusOut = (e: FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null
+    if (next && wrapRef.current?.contains(next)) return
+    setOpen(false)
+  }
+
   return (
-    <div className="hmenu" ref={wrapRef}>
+    <div className="hmenu" ref={wrapRef} onBlur={handleFocusOut}>
       <button
         ref={triggerRef}
         type="button"

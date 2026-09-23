@@ -152,6 +152,15 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
         ? [{ date: report.dataDate, institutional }]
         : []
   const hasInst = instDays.some((d) => d.institutional)
+  /*
+    Empty-state wording (Task 166 FU-03): a fetch failure already gets its own screen above
+    (`status === 'error'`), so once we are here the report itself came back fine — the only two
+    things a missing 三大法人 block can mean are "not published yet" (15:00–15:30 release) or
+    "this ticker structurally carries none" (上櫃 / 興櫃, not supported). The backend already says
+    which one in `notes`; without that note, default to "not yet published" per FU-03 rather than
+    guessing from anything else.
+  */
+  const noInstDataNote = report.notes.some((n) => n.includes('查無上市籌碼資料'))
 
   const marginDays =
     history.length > 0
@@ -235,6 +244,28 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
     }
   })
 
+  /*
+    三大法人合計 cross-check (Task 166 FU-04): T86 defines the total as exactly the sum of the four
+    legs, so a mismatch means one leg's number is stale or partial, not a real market signal.
+    Compares whichever metric (net/buy/sell) is currently on screen, in shares — the unit the data
+    is actually stored in, before the lots (÷1000) conversion the cells display.
+  */
+  const totalRow = matrixRows.find((r) => r.key === 'total')
+  const legRows = matrixRows.filter((r) => r.key !== 'total')
+  const dayTotalMismatch =
+    totalRow?.values.map((totalVal, i) => {
+      if (totalVal === null) return false
+      const legVals = legRows.map((r) => r.values[i]).filter((v): v is number => v !== null)
+      if (legVals.length === 0) return false
+      return Math.abs(totalVal - legVals.reduce((a, b) => a + b, 0)) > 1
+    }) ?? []
+  const cumTotalMismatch = (() => {
+    if (!totalRow || totalRow.cum === null) return false
+    const legCums = legRows.map((r) => r.cum).filter((v): v is number => v !== null)
+    if (legCums.length === 0) return false
+    return Math.abs(totalRow.cum - legCums.reduce((a, b) => a + b, 0)) > 1
+  })()
+
   return (
     <>
       {/* The report header says which stock, which day and when the report was produced */}
@@ -271,7 +302,11 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
         </div>
 
         {!hasInst ? (
-          <p className="hint">查無此股當日資料。</p>
+          <p className="hint">
+            {noInstDataNote
+              ? '無資料：此代號查無上市三大法人籌碼資料（可能為上櫃 / 興櫃，暫不支援上櫃）。'
+              : '三大法人買賣超尚未公布（約 15:00–15:30 才會有），稍晚的排程會自動補上。'}
+          </p>
         ) : (
           <>
             {/*
@@ -306,6 +341,7 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
                         {matrixRows.map((r) => {
                           const v = r.lots[originalIdx]
                           const shareVal = r.values[originalIdx]
+                          const mismatch = r.key === 'total' && dayTotalMismatch[originalIdx]
                           return (
                             <td
                               key={r.key}
@@ -323,6 +359,13 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
                               {metric === 'net'
                                 ? fmtLotsFromShares(shareVal)
                                 : fmtLotsPlain(shareVal)}
+                              {mismatch && (
+                                <AlertTriangle
+                                  size={11}
+                                  className="chip-total-mismatch"
+                                  aria-label="合計與分項不符"
+                                />
+                              )}
                             </td>
                           )
                         })}
@@ -355,7 +398,16 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
                           }`}
                           title={r.cum === null ? undefined : `${fmtSigned(r.cum)} 股`}
                         >
-                          <div>{metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}</div>
+                          <div>
+                            {metric === 'net' ? fmtLotsFromShares(r.cum) : fmtLotsPlain(r.cum)}
+                            {r.key === 'total' && cumTotalMismatch && (
+                              <AlertTriangle
+                                size={11}
+                                className="chip-total-mismatch"
+                                aria-label="合計與分項不符"
+                              />
+                            )}
+                          </div>
                           <div className="tfoot-cum-trend">
                             <span
                               className={label ? chipClass(s) : 'hint'}
@@ -409,8 +461,14 @@ export function ChipsTab({ report, status, errMsg = '' }: ChipsTabProps) {
         </div>
         {!hasMargin ? (
           <p className="hint">
-            今日融資融券尚未公布（約 21:00–22:00 才會有），稍晚的排程會自動補上。
-            上方的三大法人不受影響 —— 它約 15:00–15:30 就公布了。
+            {noInstDataNote ? (
+              '無資料：此代號查無上市籌碼資料（可能為上櫃 / 興櫃，暫不支援上櫃），融資融券也不會有。'
+            ) : (
+              <>
+                今日融資融券尚未公布（約 21:00–22:00 才會有），稍晚的排程會自動補上。
+                上方的三大法人不受影響 —— 它約 15:00–15:30 就公布了。
+              </>
+            )}
           </p>
         ) : (
           <>

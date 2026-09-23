@@ -33,7 +33,7 @@ const PROBE_SOURCES_CONFIG: ProbeSourceConfig[] = [
     interval: '每 5 分鐘',
     retirement: '各時段 3 次到位',
     action: 'sync-market',
-    description: '三大法人全市場買賣超金額，寫入 market/daily.json。雙時段分別抓取盤後初版與 19:40 綜合帳戶／鉅額交易結算。',
+    description: '三大法人全市場買賣超金額，寫入 market/daily.json。雙時段分別抓取盤後初版與 19:30–20:15 盤後完整（含鉅額與綜合帳戶）結算。',
   },
   {
     id: 't86',

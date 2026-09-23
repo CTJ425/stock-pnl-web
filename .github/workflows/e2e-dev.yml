@@ -1,0 +1,83 @@
+# Task 166 (OP-07). The e2e scripts under sources/scripts talk to a running frontend that is
+# itself pointed at a real Supabase project, so they never ran in CI. This workflow runs them
+# against DEV only, on a schedule and on demand, and skips cleanly when the DEV secrets are not
+# configured — a missing secret must never look like a passing run.
+#
+# Required repository secrets (DEV only, never PROD):
+#   DEV_SUPABASE_URL       https://zyebvayngwrqzoaicbwd.supabase.co
+#   DEV_SUPABASE_ANON_KEY  the anon (publishable) key — the e2e path never needs the service role
+#
+# `run-all-e2e.cjs` drives the browser against TEST_URL and exits non-zero on any failed case;
+# it aborts with exit code 2 when the app is in 本機模式 (no Supabase env), which is why the
+# preview below is started with the two VITE_ variables set.
+name: E2E (DEV)
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Asia/Taipei
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "e2e-dev"
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: sources
+
+jobs:
+  e2e:
+    name: Run e2e against DEV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DEV secrets
+        id: gate
+        working-directory: .
+        env:
+          DEV_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          DEV_SUPABASE_ANON_KEY: ${{ secrets.DEV_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$DEV_SUPABASE_URL" ] || [ -z "$DEV_SUPABASE_ANON_KEY" ]; then
+            echo "::notice::DEV_SUPABASE_URL / DEV_SUPABASE_ANON_KEY are not configured — skipping the e2e run."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sources/package-lock.json
+
+      - name: Install dependencies
+        if: steps.gate.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Build against DEV
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.DEV_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Serve the build
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          npx vite preview --port 5317 --strictPort &
+          npx wait-on http://127.0.0.1:5317 --timeout 60000
+
+      - name: Run the e2e suite
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          TEST_URL: http://127.0.0.1:5317/
+        run: node scripts/run-all-e2e.cjs

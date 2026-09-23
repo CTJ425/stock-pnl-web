@@ -1,0 +1,19 @@
+# Cloudflare Pages reads this file to attach HTTP response headers per path.
+# Syntax: a path pattern on its own line, followed by indented `Header-Name: value`
+# lines that apply to every response matching it. Docs:
+# https://developers.cloudflare.com/pages/configuration/headers/
+#
+# This file is NOT covered by `npm run build` or any test in this repo. A wrong
+# value here does not fail CI — it fails silently in the browser: the disallowed
+# script/style/font/request is just dropped, and the only trace is a
+# Content-Security-Policy violation line in the DevTools console. Verify any
+# change here against a real deployed preview and check the console, not just
+# by re-running the test suite.
+#
+# connect-src includes `https:` and `http://localhost:*` because the AI
+# provider base URL (Admin > AI settings, openai-compatible path) is a
+# user-supplied runtime value — it can be any cloud endpoint or a local
+# Ollama/vLLM instance — so it cannot be pinned to a fixed origin list here.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co https://openapi.twse.com.tw https://www.tpex.org.tw https: http://localhost:*; frame-ancestors 'none'; base-uri 'self'; object-src 'none'

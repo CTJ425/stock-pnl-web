@@ -199,17 +199,17 @@ describe('FxPage', () => {
     expect(dateOf(invText, '低')).toBe(dateOf(fwdText, '高'))
   })
 
-  it('資料在 3 天內不顯示過期警示', async () => {
+  it('資料在 2 個交易日內不顯示過期警示', async () => {
     fetchFx.mockResolvedValue(fx)
     render(<FxPage />)
     await screen.findByText('外幣匯率')
-    expect(screen.queryByText(/已超過 3 天未更新/)).toBeNull()
+    expect(screen.queryByText(/已超過 2 個交易日未更新/)).toBeNull()
   })
 
-  it('資料超過 3 天顯示過期警示（舊檔與新檔在畫面上長得一樣）', async () => {
+  it('資料超過 2 個交易日顯示過期警示（舊檔與新檔在畫面上長得一樣）', async () => {
     fetchFx.mockResolvedValue({ ...fx, asOf: daysAgo(5) })
     render(<FxPage />)
-    expect(await screen.findByText(/已超過 3 天未更新/)).toBeTruthy()
+    expect(await screen.findByText(/已超過 2 個交易日未更新/)).toBeTruthy()
     // Expired does not mean that you cannot view it, the numbers must still be displayed
     expect(screen.getByText('32.387')).toBeTruthy()
   })

@@ -20,7 +20,7 @@ import {
   type BackupFile,
   type RestoreResult,
 } from '../../services/adminBackups'
-import { downloadBlob } from '../../services/reportPdf'
+import { downloadBlob } from '../../services/downloadBlob'
 
 const RESTORE_TABLE_LABELS: Record<keyof RestoreResult['tables'], string> = {
   workspaces: '投資組合',

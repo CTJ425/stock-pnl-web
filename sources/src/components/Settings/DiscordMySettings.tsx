@@ -29,6 +29,7 @@ import {
 } from '../../services/discordMySettings'
 import { isDiscordWebhookUrl } from '../../../supabase/functions/stock-report/discordUrl'
 import { SCHEDULE_OPTIONS, type ScheduleSlot } from '../../../supabase/functions/stock-report/discordSchedule'
+import { useConfirm } from '../Common/useConfirm'
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -73,6 +74,7 @@ function timeOptions(slot: ScheduleSlot, globalTime: string | null): Array<{ val
 }
 
 export function DiscordMySettings() {
+  const confirm = useConfirm()
   const [data, setData] = useState<DiscordMySettingsResult | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -123,7 +125,13 @@ export function DiscordMySettings() {
 
   async function handleMarketClear() {
     if (marketBusy) return
-    if (!window.confirm('清除經濟快報網址？這個帳號將改回接收全域頻道內容。')) return
+    const ok = await confirm({
+      title: '清除經濟快報網址',
+      message: '確定要清除經濟快報網址嗎？這個帳號將改回接收全域頻道內容。',
+      confirmLabel: '清除',
+      danger: true,
+    })
+    if (!ok) return
     setMarketMessage(null)
     setMarketBusy(true)
     try {
@@ -248,7 +256,13 @@ export function DiscordMySettings() {
 
   async function handleHoldingsClear() {
     if (holdingsBusy) return
-    if (!window.confirm('清除個人持股報告網址？')) return
+    const ok = await confirm({
+      title: '清除個人持股報告網址',
+      message: '確定要清除個人持股報告網址嗎？',
+      confirmLabel: '清除',
+      danger: true,
+    })
+    if (!ok) return
     setHoldingsMessage(null)
     setHoldingsBusy(true)
     try {

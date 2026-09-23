@@ -7,6 +7,13 @@ const { fetchAdminUsers, setUserAdmin } = vi.hoisted(() => ({
   setUserAdmin: vi.fn(),
 }))
 vi.mock('../../services/adminUsers', () => ({ fetchAdminUsers, setUserAdmin }))
+// Task 166 (AD-01): granting or revoking admin now asks for confirmation first. These tests
+// exercise the outcome, so the dialog answers yes; the cancel path has its own test below.
+const { confirmResult } = vi.hoisted(() => ({ confirmResult: { value: true } }))
+vi.mock('../Common/useConfirm', () => ({
+  useConfirm: () => async () => confirmResult.value,
+  ConfirmProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
 
 import { AccountsSection } from './AccountsSection'
 
@@ -83,5 +90,14 @@ describe('AccountsSection', () => {
     fetchAdminUsers.mockResolvedValue(null)
     render(<AccountsSection />)
     expect(await screen.findByText(/讀不到帳號清單/)).toBeTruthy()
+  })
+
+  it('取消確認時不會送出權限變更（Task 166 AD-01）', async () => {
+    confirmResult.value = false
+    render(<AccountsSection />)
+    await screen.findByText('alice.wu@example.com')
+    fireEvent.click(screen.getAllByRole('switch')[1])
+    await waitFor(() => expect(setUserAdmin).not.toHaveBeenCalled())
+    confirmResult.value = true
   })
 })

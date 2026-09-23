@@ -9,11 +9,11 @@
  *    (removed in 0.9.52) and is no longer a constraint; the values stay inline because nothing gains
  *    from moving them.
  */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CHART_COLORS } from './chartColors'
 import { clampTipCenter } from './chartPath'
-import { domainTicks, fmtAxisNumber, scaleY, tickStep, type Domain } from './chartScale'
+import { domainTicks, fmtAxisNumber, scaleY, thinLabelStep, tickStep, type Domain } from './chartScale'
 
 const PAD = { left: 58, right: 12, top: 10, bottom: 24 }
 /** The default value when the width has not been measured yet (first render / test environment without ResizeObserver)*/
@@ -35,6 +35,25 @@ function useMeasuredWidth() {
     return () => ro.disconnect()
   }, [])
   return { ref, width }
+}
+
+/**
+ * Indices to label when the caller does not pin down `labelIndices` itself: every `step`-th
+ * index starting at 0, always including the last one — unless it would land close enough to
+ * the previous shown label to overlap it, in which case it replaces that label instead of
+ * adding a second one next to it.
+ */
+function thinnedIndices(count: number, step: number): number[] {
+  if (count <= 0) return []
+  const out: number[] = []
+  for (let i = 0; i < count; i += step) out.push(i)
+  const last = count - 1
+  const prevShown = out[out.length - 1]
+  if (prevShown !== last) {
+    if (last - prevShown >= step / 2) out.push(last)
+    else out[out.length - 1] = last
+  }
+  return out
 }
 
 export interface PlotGeometry {
@@ -115,19 +134,34 @@ export function ChartFrame({
   const innerH = height - PAD.top - PAD.bottom
   const count = Math.max(labels.length, 1)
   const bandWidth = innerW / count
-  const geo: PlotGeometry = {
-    innerW,
-    innerH,
-    count,
-    bandWidth,
-    bandCenter: (i) => bandWidth * (i + 0.5),
-    y: (v) => scaleY(v, domain, innerH),
-    hover,
-  }
+  /**
+   * Everything below is independent of `hover` — memoised so a hover-only re-render (the
+   * common case: uncontrolled hover lives in `ownHover`, above, and touches nothing else)
+   * keeps the same `bandCenter`/`y` closures and grid/label arrays. Series-path computation
+   * in the chart components keys its own `useMemo` off these, so it skips work too.
+   */
+  const staticGeo = useMemo(
+    () => ({
+      innerW,
+      innerH,
+      count,
+      bandWidth,
+      bandCenter: (i: number) => bandWidth * (i + 0.5),
+      y: (v: number) => scaleY(v, domain, innerH),
+    }),
+    [innerW, innerH, count, bandWidth, domain.min, domain.max],
+  )
+  const geo: PlotGeometry = { ...staticGeo, hover }
 
-  const ticks = domainTicks(domain)
-  const step = tickStep(domain)
-  const shownLabels = labelIndices ?? labels.map((_, i) => i)
+  const ticks = useMemo(() => domainTicks(domain), [domain.min, domain.max])
+  const step = useMemo(() => tickStep(domain), [domain.min, domain.max])
+  // Fixed-count / fixed-Nth-index thinning overlaps on narrow charts; derive the step from
+  // the measured plot width instead (DT-*) when the caller does not pin labelIndices itself.
+  const labelStep = useMemo(() => thinLabelStep(labels.length, innerW), [labels.length, innerW])
+  const shownLabels = useMemo(
+    () => labelIndices ?? thinnedIndices(labels.length, labelStep),
+    [labelIndices, labels.length, labelStep],
+  )
   const tipText = hover === null ? null : (tooltipFor?.(hover) ?? null)
   // Position the tooltip in percentage, eliminating the need to store another pixel coordinate in React state.
   // The width is estimated by the number of characters: about 8px/word mixed with Chinese and English numbers, plus left and right padding - only used for clamp, no accuracy is required

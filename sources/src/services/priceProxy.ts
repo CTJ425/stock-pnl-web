@@ -39,8 +39,14 @@ export interface PriceQuote {
   trial: boolean
   /** Official TWSE/TPEx industry name (e.g. '半導體業', '航運業') */
   industry?: string | null
-  /** Get time (ISO)*/
+  /** Get time (ISO); empty when the capture time is unknown (see `asOfUnknown`) */
   asOf: string
+  /**
+   * True when the Edge response omitted `asOf` (old Edge deployment). The client must not
+   * fabricate a capture time by substituting its own clock — the UI should render 「時間未知」
+   * instead of formatting `asOf` (PR-01).
+   */
+  asOfUnknown?: boolean
   source: 'edge' | 'twse' | 'cache'
   /** Whether it is an expired cache price*/
   stale: boolean
@@ -243,7 +249,16 @@ export async function fetchPrices(
   const fromTw = await fetchTwFallback(unresolved)
 
   for (const [key, quote] of fromEdge) {
-    result[key] = { ...quote, asOf: quote.asOf ?? now, source: 'edge', stale: false }
+    // PR-01: no `asOf` from Edge means the real capture time is unknown — the client clock is
+    // not a substitute for it, so it is left blank and flagged instead of defaulting to `now`.
+    const known = quote.asOf !== null
+    result[key] = {
+      ...quote,
+      asOf: quote.asOf ?? '',
+      asOfUnknown: known ? undefined : true,
+      source: 'edge',
+      stale: false,
+    }
   }
   for (const [key, price] of fromTw) {
     // The daily closing list only has the closing price, and does not include yesterday’s closing price nor the opening of high and low volumes——

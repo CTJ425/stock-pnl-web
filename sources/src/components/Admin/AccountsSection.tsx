@@ -14,17 +14,28 @@ import { AlertTriangle, Info, RefreshCw } from 'lucide-react'
 import { fetchAdminUsers, setUserAdmin, type AdminUser } from '../../services/adminUsers'
 import { fmtUpdatedAt } from '../StockDetail/chipFormat'
 import { useToast } from '../Common/Toast'
+import { useConfirm } from '../Common/useConfirm'
 
 export function AccountsSection() {
   const { show } = useToast()
+  const confirm = useConfirm()
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
   const [err, setErr] = useState('')
+  // AD-06: distinguishes 403/network/other load failures from the generic "maybe not deployed"
+  // hint below — empty string means fetchAdminUsers() resolved null with no thrown reason.
+  const [loadFailReason, setLoadFailReason] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    setUsers(await fetchAdminUsers())
+    setLoadFailReason('')
+    try {
+      setUsers(await fetchAdminUsers())
+    } catch (e) {
+      setUsers(null)
+      setLoadFailReason(e instanceof Error ? e.message : '讀取失敗，原因不明')
+    }
     setLoading(false)
   }, [])
 
@@ -33,9 +44,16 @@ export function AccountsSection() {
   }, [load])
 
   async function toggle(u: AdminUser) {
+    const nextAdmin = !u.admin
+    const ok = await confirm({
+      title: nextAdmin ? '設為管理員' : '取消管理員',
+      message: `確定要將 ${u.email || '（沒有 email）'} ${nextAdmin ? '設為管理員' : '取消管理員權限'}？`,
+      confirmLabel: nextAdmin ? '設為管理員' : '取消管理員',
+      danger: !nextAdmin,
+    })
+    if (!ok) return
     setErr('')
     setBusyId(u.id)
-    const nextAdmin = !u.admin
     const failure = await setUserAdmin(u.id, nextAdmin)
     setBusyId('')
     if (failure) {
@@ -74,7 +92,8 @@ export function AccountsSection() {
         </p>
       ) : !users ? (
         <p className="hint" style={{ marginTop: 12 }}>
-          讀不到帳號清單。這一頁只有管理員看得到，若你確定帳號有權限，可能是後端尚未部署最新版本。
+          {loadFailReason ||
+            '讀不到帳號清單。這一頁只有管理員看得到，若你確定帳號有權限，可能是後端尚未部署最新版本。'}
         </p>
       ) : (
         <>

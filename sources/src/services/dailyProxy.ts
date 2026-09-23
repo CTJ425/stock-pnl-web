@@ -86,6 +86,15 @@ export type RemoteDailyRange = '5y' | 'max'
 export interface RemoteDaily {
   rows: DailyRow[]
   granularity: '1d' | '1mo'
+  /**
+   * The ticker this batch belongs to and when it was actually captured (DT-01, optional so
+   * the existing `{ rows, granularity }` fixtures elsewhere keep type-checking). Lets a
+   * caller that re-uses this series across ticker switches (QuoteTab) verify it still
+   * matches what is on screen, and show a 「快取於」badge for a hit served from
+   * `remoteCache` instead of a fresh Edge call.
+   */
+  ticker?: string
+  fetchedAt?: string
 }
 
 interface RemoteCacheEntry {
@@ -95,7 +104,19 @@ interface RemoteCacheEntry {
 
 const REMOTE_CACHE_TTL_MS = 300_000
 
+/** PR-03: bound the in-memory cache so a long session paging many tickers/ranges cannot grow it without limit. */
+const REMOTE_CACHE_MAX_ENTRIES = 200
+
 const remoteCache = new Map<string, RemoteCacheEntry>()
+
+/** Evict the oldest entry once the cache exceeds its bound (simple LRU, PR-03). */
+function capRemoteCache(): void {
+  while (remoteCache.size > REMOTE_CACHE_MAX_ENTRIES) {
+    const oldest = remoteCache.keys().next().value
+    if (oldest === undefined) break
+    remoteCache.delete(oldest)
+  }
+}
 
 interface EdgeDailyResponse {
   rows?: unknown
@@ -110,7 +131,9 @@ export async function fetchRemoteDaily(
   const key = `${market}:${ticker}:${range}`
   const now = Date.now()
   const cached = remoteCache.get(key)
-  if (cached && now - cached.at < REMOTE_CACHE_TTL_MS) return cached.daily
+  if (cached && now - cached.at < REMOTE_CACHE_TTL_MS) {
+    return { ...cached.daily, ticker, fetchedAt: new Date(cached.at).toISOString() }
+  }
 
   if (!isSupabaseConfigured || !supabase) return null
   try {
@@ -128,7 +151,8 @@ export async function fetchRemoteDaily(
     // five minutes without ever trying again, while the user is actively retrying.
     const daily: RemoteDaily = { rows, granularity: data.granularity ?? '1d' }
     remoteCache.set(key, { daily, at: now })
-    return daily
+    capRemoteCache()
+    return { ...daily, ticker, fetchedAt: new Date(now).toISOString() }
   } catch {
     return null
   }

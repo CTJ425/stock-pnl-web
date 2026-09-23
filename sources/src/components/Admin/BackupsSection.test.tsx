@@ -17,7 +17,7 @@ vi.mock('../../services/adminBackups', () => ({
 
 // The bulk export hands the assembled file to the existing helper.
 const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }))
-vi.mock('../../services/reportPdf', () => ({ downloadBlob }))
+vi.mock('../../services/downloadBlob', () => ({ downloadBlob }))
 
 /** jsdom has no fetch; the export only reads `ok` and `json()`. */
 function jsonResponse(body: unknown, ok = true): Response {

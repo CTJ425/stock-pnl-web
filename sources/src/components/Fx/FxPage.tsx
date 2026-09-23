@@ -22,7 +22,7 @@
  *
  * The mobile version is not in the 0.6.7 range (the user decided to wait for the desktop function to be verified).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ArrowRightLeft, RefreshCw } from 'lucide-react'
 import { fetchFx, type FxCurrency, type FxData, type FxPoint } from '../../services/fxProxy'
 import { fetchFxQuotes, type FxQuote, type FxQuoteMap } from '../../services/fxQuoteProxy'
@@ -187,6 +187,7 @@ function DirectionChart({
  */
 function TrendChart({ cur }: { cur: FxCurrency }) {
   const [range, setRange] = useState<FxRange>('3m')
+  const panelId = useId()
 
   const points = useMemo(() => sliceByRange(cur.points, range), [cur.points, range])
   const inverted = useMemo(() => invertPoints(points), [points])
@@ -209,7 +210,9 @@ function TrendChart({ cur }: { cur: FxCurrency }) {
             key={r.id}
             type="button"
             role="tab"
+            id={`fx-range-tab-${panelId}-${r.id}`}
             aria-selected={range === r.id}
+            aria-controls={panelId}
             className={`subtab${range === r.id ? ' active' : ''}`}
             onClick={() => setRange(r.id)}
           >
@@ -218,28 +221,30 @@ function TrendChart({ cur }: { cur: FxCurrency }) {
         ))}
       </div>
 
-      {points.length === 0 ? (
-        <p className="hint">這個區間沒有資料。</p>
-      ) : (
-        <div className="fx-chart-pair">
-          <DirectionChart
-            title={`新臺幣 / ${cur.name}`}
-            caption={`1 TWD 可換的${cur.name}`}
-            points={inverted}
-            decimals={invDecimals}
-            withYear={range === '1y'}
-            ariaLabel={`新臺幣對${cur.name}匯率走勢，數值為 1 新臺幣可換得的${cur.name}`}
-          />
-          <DirectionChart
-            title={`${cur.name} / 新臺幣`}
-            caption={`1 ${cur.code} 可換的台幣`}
-            points={points}
-            decimals={cur.decimals}
-            withYear={range === '1y'}
-            ariaLabel={`${cur.name}對新臺幣匯率走勢，數值為 1 ${cur.code} 可換得的新臺幣`}
-          />
-        </div>
-      )}
+      <div role="tabpanel" id={panelId} aria-label={`${cur.name}走勢圖`}>
+        {points.length === 0 ? (
+          <p className="hint">這個區間沒有資料。</p>
+        ) : (
+          <div className="fx-chart-pair">
+            <DirectionChart
+              title={`新臺幣 / ${cur.name}`}
+              caption={`1 TWD 可換的${cur.name}`}
+              points={inverted}
+              decimals={invDecimals}
+              withYear={range === '1y'}
+              ariaLabel={`新臺幣對${cur.name}匯率走勢，數值為 1 新臺幣可換得的${cur.name}`}
+            />
+            <DirectionChart
+              title={`${cur.name} / 新臺幣`}
+              caption={`1 ${cur.code} 可換的台幣`}
+              points={points}
+              decimals={cur.decimals}
+              withYear={range === '1y'}
+              ariaLabel={`${cur.name}對新臺幣匯率走勢，數值為 1 ${cur.code} 可換得的新臺幣`}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -250,6 +255,16 @@ export function FxPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<string | null>(readSelected)
+  // MA-11: neither request has an AbortController (fetchFx/fetchFxQuotes take no signal), so
+  // "abort on unmount" here means not applying a state update after the component is gone —
+  // same intent as ForeignTopSection's `alive` flag.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   /**
    * The two data are loaded together, but the historical file determines whether the screen can be displayed and the quotation is just a bonus**:
@@ -261,20 +276,24 @@ export function FxPage() {
     let d: FxData | null = null
     try {
       d = await fetchFx()
-      setLoadError(false)
+      if (mountedRef.current) setLoadError(false)
     } catch {
       // fetchFx now throws on a real network/5xx/bad-JSON failure and returns null only when the
       // file is genuinely absent. Without this catch the rejection is unhandled and the `finally`
       // below never runs, so the page spins forever instead of saying what went wrong.
-      setLoadError(true)
+      if (mountedRef.current) setLoadError(true)
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
+    if (!mountedRef.current) return
     setFx(d)
     if (d) {
       // A failed quote is a bonus that is missing, not a broken page (see the note above).
+      // Refreshing (force=true) re-fetches both the history file above and the quotes here, so
+      // 重新整理 never leaves the trend chart on an old snapshot while only the cards update.
       try {
-        setQuotes(await fetchFxQuotes(d.currencies.map((c) => c.code), force))
+        const q = await fetchFxQuotes(d.currencies.map((c) => c.code), force)
+        if (mountedRef.current) setQuotes(q)
       } catch {
         // Keep whatever quotes we already have; cardView falls back to the traded price.
       }
@@ -337,7 +356,7 @@ export function FxPage() {
     <>
       {stale && (
         <div className="notice notice-warn section">
-          匯率資料停留在 {fmtUpdatedAt(fx.asOf)}，已超過 3 天未更新。
+          匯率資料停留在 {fmtUpdatedAt(fx.asOf)}，已超過 2 個交易日未更新。
           下方數字可能不是最新的，換匯前請再確認。
         </div>
       )}

@@ -126,5 +126,12 @@ export function useDailySeries(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- name is warm payload only
   }, [ticker, series, freshThrough])
 
-  return { status, series }
+  /*
+   * DT-01: `setSeries(null)` at the top of the fetch effect runs one render *after* `ticker`
+   * itself changes (effects fire post-commit), so there is one frame where this hook has
+   * already re-rendered under the new ticker but `series` still holds the previous one's rows.
+   * Guarding the return value catches that frame without waiting for the effect — a caller
+   * that reads `series.ticker` against its own `ticker` never sees the mismatch at all.
+   */
+  return { status, series: series && series.ticker === ticker ? series : null }
 }

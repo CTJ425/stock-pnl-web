@@ -4,12 +4,13 @@
  *
  * Each card is a drill-down entry point to IndexDetail (task 164).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchIndexQuotes, type IndexQuote } from '../../services/indexQuotes'
 import {
   openRegions,
   marketSession,
   SESSION_HOURS,
+  type ClosedDates,
   type MarketRegion,
   type SessionState,
 } from './sessionHours'
@@ -118,16 +119,28 @@ function IndexCard({
   )
 }
 
-export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?: IndexQuote) => void }) {
+export function GlobalIndices({
+  onSelect,
+  closedDates,
+}: {
+  onSelect?: (def: IndexDef, quote?: IndexQuote) => void
+  closedDates?: ClosedDates
+}) {
   const [quotes, setQuotes] = useState<Record<string, IndexQuote>>({})
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [now, setNow] = useState(() => new Date())
+  // Request-sequence guard (same pattern as TwIndexToday.tsx's reqId): a poll tick can still be
+  // in flight when the next one fires (or the tab regains visibility), and without this an older
+  // response resolving last would overwrite newer quotes already on screen.
+  const reqId = useRef(0)
 
   // Merge, never replace: a symbol the poll could not answer (per-symbol drop, or a whole
   // failed request that resolves to `{}`) keeps whatever card value was already on screen.
   const load = useCallback(async (tickers: string[]) => {
     if (tickers.length === 0) return
+    const id = ++reqId.current
     const result = await fetchIndexQuotes(tickers)
+    if (reqId.current !== id) return
     if (Object.keys(result).length === 0) return
     setQuotes((prev) => ({ ...prev, ...result }))
     setLastUpdated(new Date())
@@ -141,7 +154,7 @@ export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?:
     const tick = () => {
       const current = new Date()
       setNow(current)
-      const regions = openRegions(current)
+      const regions = openRegions(current, closedDates)
       if (regions.length === 0) return // no market open: skip the network call, keep the timer
       const tickers = INDICES.filter((i) => regions.includes(i.region)).map((i) => i.ticker)
       void load(tickers)
@@ -155,7 +168,9 @@ export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?:
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [load])
+  }, [load, closedDates])
+
+  const anyOpen = openRegions(now, closedDates).length > 0
 
   return (
     <div className="section glass" style={{ padding: '18px 20px' }}>
@@ -163,14 +178,14 @@ export function GlobalIndices({ onSelect }: { onSelect?: (def: IndexDef, quote?:
         <h3 className="head-tight">國際指數</h3>
         {lastUpdated && (
           <span className="source-tag section-stamp">
-            更新於 {taipeiClock.format(lastUpdated)}
+            {anyOpen ? '' : '已收盤・'}更新於 {taipeiClock.format(lastUpdated)}
           </span>
         )}
       </div>
 
       <div className="gix-groups">
         {REGION_ORDER.map((region) => {
-          const session = marketSession(region, now)
+          const session = marketSession(region, now, closedDates)
           const hours = SESSION_HOURS[region]
           return (
             <div key={region}>

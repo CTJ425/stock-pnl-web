@@ -10,7 +10,9 @@
  * - When there are 244 candles in a year, each candle is less than 2px, and the candle entity will degenerate into a line; at this time, it is still guaranteed to be at least 1px wide,
  *   Let it be seen that "there is this root".
  */
+import { useMemo } from 'react'
 import { ChartFrame } from './chartFrame'
+import type { PlotGeometry } from './chartFrame'
 import { lineSegments } from './chartPath'
 import { CHART_COLORS } from './chartColors'
 import { niceDomain } from './chartScale'
@@ -43,6 +45,86 @@ export interface OverlayLine {
   name: string
   color: string
   values: Array<number | null>
+}
+
+interface CandleBody {
+  key: string
+  center: number
+  yHigh: number
+  yLow: number
+  top: number
+  bodyH: number
+  color: string
+  /** Data index, kept alongside the geometry so the dim-on-hover opacity can be applied outside the memo.*/
+  index: number
+}
+
+/**
+ * Candle body/wick positions depend only on `candles` and geometry, never on `hover` (only the
+ * dim-on-hover opacity does) — memoised in its own component so `useMemo` attaches to a real
+ * render rather than to `ChartFrame`'s (a hook called inside the render-prop callback below
+ * would do exactly that).
+ */
+function CandleBodies({ candles, geo }: { candles: Candle[]; geo: PlotGeometry }) {
+  const { bodyW, bars } = useMemo(() => {
+    // The candle body occupies 60% of the width of the column, leaving a gap; no matter how narrow it is, the minimum is 1px
+    const bodyW = Math.max(geo.bandWidth * 0.6, 1)
+    const out: CandleBody[] = []
+    candles.forEach((raw, i) => {
+      const c = full(raw)
+      if (!c) return
+      const color = c.close >= c.open ? CHART_COLORS.up : CHART_COLORS.down
+      const center = geo.bandCenter(i)
+      const yHigh = geo.y(c.high)
+      const yLow = geo.y(c.low)
+      const yOpen = geo.y(c.open)
+      const yClose = geo.y(c.close)
+      const top = Math.min(yOpen, yClose)
+      // When the opening is equal to the closing (crosshair), still draw 1px, otherwise the whole bar will disappear that day
+      const bodyH = Math.max(Math.abs(yClose - yOpen), 1)
+      out.push({ key: `${c.label}-${i}`, center, yHigh, yLow, top, bodyH, color, index: i })
+    })
+    return { bodyW, bars: out }
+  }, [candles, geo.bandCenter, geo.y, geo.bandWidth])
+
+  return (
+    <>
+      {bars.map((b) => (
+        <g key={b.key} opacity={geo.hover !== null && geo.hover !== b.index ? 0.45 : 1}>
+          <line x1={b.center} x2={b.center} y1={b.yHigh} y2={b.yLow} stroke={b.color} strokeWidth={1} />
+          <rect x={b.center - bodyW / 2} y={b.top} width={bodyW} height={b.bodyH} fill={b.color} />
+        </g>
+      ))}
+    </>
+  )
+}
+
+/**
+ * Moving-average overlay path strings depend only on `overlays` and geometry, never on
+ * `hover` — same reasoning and same memoisation split as `CandleBodies` above.
+ */
+function CandleOverlays({ overlays, geo }: { overlays: OverlayLine[]; geo: PlotGeometry }) {
+  const paths = useMemo(
+    () => overlays.map((o) => ({ name: o.name, color: o.color, segs: lineSegments(o.values, geo) })),
+    [overlays, geo.bandCenter, geo.y],
+  )
+  return (
+    <>
+      {paths.map(({ name, color, segs }) =>
+        segs.map((d, si) => (
+          <polyline
+            key={`${name}-${si}`}
+            points={d}
+            fill="none"
+            stroke={color}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )),
+      )}
+    </>
+  )
 }
 
 interface CandleChartProps {
@@ -104,57 +186,12 @@ export function CandleChart({
         return [c.label, ohlc, ma.join('　'), extra].filter(Boolean).join('｜')
       }}
     >
-      {(geo) => {
-        // The candle body occupies 60% of the width of the column, leaving a gap; no matter how narrow it is, the minimum is 1px
-        const bodyW = Math.max(geo.bandWidth * 0.6, 1)
-
-        return (
-          <>
-            {candles.map((raw, i) => {
-              const c = full(raw)
-              if (!c) return null
-              const color = c.close >= c.open ? CHART_COLORS.up : CHART_COLORS.down
-              const center = geo.bandCenter(i)
-              const yHigh = geo.y(c.high)
-              const yLow = geo.y(c.low)
-              const yOpen = geo.y(c.open)
-              const yClose = geo.y(c.close)
-              const top = Math.min(yOpen, yClose)
-              // When the opening is equal to the closing (crosshair), still draw 1px, otherwise the whole bar will disappear that day
-              const bodyH = Math.max(Math.abs(yClose - yOpen), 1)
-              const dim = geo.hover !== null && geo.hover !== i
-
-              return (
-                <g key={`${c.label}-${i}`} opacity={dim ? 0.45 : 1}>
-                  <line
-                    x1={center}
-                    x2={center}
-                    y1={yHigh}
-                    y2={yLow}
-                    stroke={color}
-                    strokeWidth={1}
-                  />
-                  <rect x={center - bodyW / 2} y={top} width={bodyW} height={bodyH} fill={color} />
-                </g>
-              )
-            })}
-
-            {overlays.map((o) =>
-              lineSegments(o.values, geo).map((d, si) => (
-                <polyline
-                  key={`${o.name}-${si}`}
-                  points={d}
-                  fill="none"
-                  stroke={o.color}
-                  strokeWidth={1.5}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-              )),
-            )}
-          </>
-        )
-      }}
+      {(geo) => (
+        <>
+          <CandleBodies candles={candles} geo={geo} />
+          <CandleOverlays overlays={overlays} geo={geo} />
+        </>
+      )}
     </ChartFrame>
   )
 }

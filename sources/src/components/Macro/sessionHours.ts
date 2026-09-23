@@ -13,6 +13,17 @@
 export type MarketRegion = 'TW' | 'JP' | 'KR' | 'US'
 export type SessionState = 'open' | 'break' | 'closed'
 
+/**
+ * Known non-trading dates per region, keyed by the region's own local calendar date
+ * ('YYYY-MM-DD'). Optional and additive: when a region has no entry (or the caller passes
+ * nothing at all), the weekday+clock rule below is the only source of truth for that region.
+ *
+ * TW is the only region a caller can populate today (from `market/daily.json`, see
+ * `MacroPage.tsx`) — we hold no holiday calendar for JP/KR/US, so those always fall back to
+ * the plain weekday+clock rule.
+ */
+export type ClosedDates = Partial<Record<MarketRegion, ReadonlySet<string>>>
+
 export interface SessionHours {
   /** Local trading hours, e.g. '09:00–15:30'. */
   local: string
@@ -105,9 +116,15 @@ function localParts(timeZone: string, now: Date): { weekday: string; minutes: nu
   return { weekday, minutes: hour * 60 + minute }
 }
 
+/** 'YYYY-MM-DD' of `now` in `timeZone`, for matching against `ClosedDates`. */
+function localDateKey(timeZone: string, now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(now)
+}
+
 /** Session state of `region` at instant `now` (local time of that market, DST-aware). */
-export function marketSession(region: MarketRegion, now: Date): SessionState {
+export function marketSession(region: MarketRegion, now: Date, closedDates?: ClosedDates): SessionState {
   const rule = RULES[region]
+  if (closedDates?.[region]?.has(localDateKey(rule.timeZone, now))) return 'closed'
   const { weekday, minutes } = localParts(rule.timeZone, now)
   if (!WEEKDAYS.has(weekday)) return 'closed'
   if (minutes < rule.openMin || minutes >= rule.closeMin) return 'closed'
@@ -123,16 +140,16 @@ export function marketSession(region: MarketRegion, now: Date): SessionState {
 }
 
 /** True only for `'open'` — a lunch break is not "open" even though the market is not closed either. */
-export function isMarketOpen(region: MarketRegion, now: Date): boolean {
-  return marketSession(region, now) === 'open'
+export function isMarketOpen(region: MarketRegion, now: Date, closedDates?: ClosedDates): boolean {
+  return marketSession(region, now, closedDates) === 'open'
 }
 
 /** Regions currently open, in a fixed display order. */
-export function openRegions(now: Date): MarketRegion[] {
-  return (['TW', 'JP', 'KR', 'US'] as const).filter((region) => isMarketOpen(region, now))
+export function openRegions(now: Date, closedDates?: ClosedDates): MarketRegion[] {
+  return (['TW', 'JP', 'KR', 'US'] as const).filter((region) => isMarketOpen(region, now, closedDates))
 }
 
 /** True when at least one region is open. */
-export function anyMarketOpen(now: Date): boolean {
-  return openRegions(now).length > 0
+export function anyMarketOpen(now: Date, closedDates?: ClosedDates): boolean {
+  return openRegions(now, closedDates).length > 0
 }

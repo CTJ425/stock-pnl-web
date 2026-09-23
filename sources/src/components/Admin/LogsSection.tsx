@@ -56,7 +56,7 @@ export function LogsSection() {
         limit: LIMIT,
         level: level || undefined,
         source: source || undefined,
-        before: last.at,
+        before: { at: last.at, id: last.id },
       })
       setRows((prev) => [...prev, ...more])
       setHasMore(more.length === LIMIT)

@@ -8,12 +8,14 @@ import { useId, useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { ChartFrame } from '../Charts/chartFrame'
 import type { PlotGeometry } from '../Charts/chartFrame'
-import { lineSegments } from '../Charts/chartPath'
+import { lineSegments, soloPoints } from '../Charts/chartPath'
 import { CHART_COLORS } from '../Charts/chartColors'
 import { niceDomain, type Domain } from '../Charts/chartScale'
 import type { IntradayPoint } from '../../../supabase/functions/stock-price/intradayParse'
+import type { Market } from '../../types/models'
 import { pickLabelIndices } from './technicalView'
 import { isIntradayRange, TREND_LABELS, type TrendRange } from './trendRange'
+import { priceLimits } from './whatIf'
 
 /**
  * 均價 line colour: mirrors --accent-2 (index.css). It stays a literal (CHART_COLORS.vwap) instead
@@ -136,6 +138,10 @@ export interface TrendSeries {
   symbol: string
   prevClose: number | null
   points: IntradayPoint[]
+  /** DT-01: which ticker this series belongs to. Absent series (Macro's index charts) are never checked. */
+  ticker?: string
+  /** DT-01: when this series was actually captured (ISO); renders as 「快取於 HH:MM」 beside `dateRemark`. */
+  fetchedAt?: string
 }
 
 export interface IntradayChartProps<R extends TrendRange = TrendRange> {
@@ -151,6 +157,16 @@ export interface IntradayChartProps<R extends TrendRange = TrendRange> {
   /** Render the volume sub-chart. Default true. */
   showVolume?: boolean
   rangeTestId?: string
+  /**
+   * DT-01: the ticker currently on screen. When set and `series.ticker` disagrees with it, the
+   * series is treated as not loaded (rendered as if `series` were null) instead of showing
+   * another stock's bars for the one render frame before the caller's own effect catches up.
+   * Absent for Macro's index charts, which never set `series.ticker` either — the check is
+   * then always a no-op.
+   */
+  ticker?: string
+  /** DT-03: TW-only ±10% reference lines from 昨收. Absent/non-'TPE' draws neither line. */
+  market?: Market
 }
 
 export function IntradayChart<R extends TrendRange>({
@@ -163,12 +179,29 @@ export function IntradayChart<R extends TrendRange>({
   tradeDate = null,
   showVolume = true,
   rangeTestId,
+  ticker,
+  market,
 }: IntradayChartProps<R>) {
   const [hover, setHover] = useState<number | null>(null)
   const clipId = useId().replace(/:/g, '')
 
-  const points = series?.points ?? EMPTY_POINTS
-  const prevClose = series?.prevClose ?? null
+  // DT-01: a series tagged for a different ticker than the one on screen is not loaded, full
+  // stop — never rendered as if it were this ticker's data.
+  const seriesMatches = !ticker || !series?.ticker || series.ticker === ticker
+  const effectiveSeries = seriesMatches ? series : null
+
+  const points = effectiveSeries?.points ?? EMPTY_POINTS
+  const prevClose = effectiveSeries?.prevClose ?? null
+  const cachedAtLabel = useMemo(() => {
+    if (!effectiveSeries?.fetchedAt) return null
+    const d = new Date(effectiveSeries.fetchedAt)
+    if (Number.isNaN(d.getTime())) return null
+    return `快取於 ${timeFmt.format(d)}`
+  }, [effectiveSeries])
+  const limits = useMemo(
+    () => (market === 'TPE' ? priceLimits(prevClose) : null),
+    [market, prevClose],
+  )
   const intraday = isIntradayRange(range)
   /**
    * A cumulative VWAP across a year is not a meaningful number, so non-intraday ranges get
@@ -227,9 +260,9 @@ export function IntradayChart<R extends TrendRange>({
     return '近 5 日走勢'
   }, [range, tradeDate, lastPoint, intraday])
 
-  const ariaLabel = !series || !lastPoint
+  const ariaLabel = !effectiveSeries || !lastPoint
     ? `${rangeLabel}走勢，無資料`
-    : `${series.symbol || '個股'} ${rangeLabel}走勢，最新 ${fmt2(lastPoint.c)}${
+    : `${effectiveSeries.symbol || '個股'} ${rangeLabel}走勢，最新 ${fmt2(lastPoint.c)}${
         lastChange === null ? '' : `，${lastChange >= 0 ? '上漲' : '下跌'} ${fmt2(Math.abs(lastChange))}`
       }`
 
@@ -243,9 +276,13 @@ export function IntradayChart<R extends TrendRange>({
           const { y, m, d } = utcParts(p.t)
           return `日期 ${y}-${m}-${d}`
         })()
+    // DT-05: per-bar volume arrives as raw shares (intradayParse.ts); TW groups it into
+    // 張 (1,000-share lots), US reads the share count directly.
     const volumeField = intraday
       ? `單量 ${Math.round(p.v / 1000).toLocaleString('en-US')}`
-      : `成交量 ${Math.round(p.v / 1000).toLocaleString('en-US')} 張`
+      : market === 'US'
+        ? `成交量 ${Math.round(p.v).toLocaleString('en-US')} 股`
+        : `成交量 ${Math.round(p.v / 1000).toLocaleString('en-US')} 張`
     return [dateField, `成交 ${fmt2(p.c)}`, changeLabel(p.c, prevClose), v === null ? null : `均價 ${fmt2(v)}`, volumeField]
       .filter((s): s is string => s !== null)
       .join('　')
@@ -257,6 +294,7 @@ export function IntradayChart<R extends TrendRange>({
         <div className="m-chart-title-group">
           <h4>走勢圖</h4>
           <span className="chart-time-badge">{dateRemark}</span>
+          {cachedAtLabel && <span className="chart-time-badge">{cachedAtLabel}</span>}
         </div>
         <div className="m-range" role="group" aria-label="走勢區間" data-testid={rangeTestId}>
           {(ranges ?? (['1d', '5d'] as unknown as readonly R[])).map((r) => (
@@ -280,7 +318,7 @@ export function IntradayChart<R extends TrendRange>({
           <AlertTriangle size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
           讀取走勢圖失敗，請稍後再試。
         </div>
-      ) : series === null || points.length === 0 ? (
+      ) : effectiveSeries === null || points.length === 0 ? (
         <div className="intraday-empty">無走勢資料</div>
       ) : (
         /*
@@ -305,10 +343,12 @@ export function IntradayChart<R extends TrendRange>({
           >
             {(geo) => {
               const baselineY = prevClose === null ? null : geo.y(prevClose)
-              const closeLine = lineSegments(
-                points.map((p) => p.c),
-                geo,
-              )
+              const closeValues = points.map((p) => p.c)
+              const closeLine = lineSegments(closeValues, geo)
+              // DT-09: a lone non-null point (e.g. the session's first minute) forms no 2-point
+              // segment, so `lineSegments` draws nothing for it — `soloPoints` is the dot that
+              // keeps it visible.
+              const closeSolo = soloPoints(closeValues, geo)
               const vwapLine = lineSegments(vwap, geo)
               const lastX = points.length > 0 ? geo.bandCenter(points.length - 1) : 0
               const lastY = points.length > 0 ? geo.y(points[points.length - 1].c) : 0
@@ -324,6 +364,34 @@ export function IntradayChart<R extends TrendRange>({
                       stroke={CHART_COLORS.axis}
                       strokeWidth={1}
                       strokeDasharray="4 4"
+                    />
+                  )}
+
+                  {/* DT-03: TW-only ±10% limit-up/down from 昨收, only when they land inside the
+                      plotted domain — a stock that has not moved far enough never grows the domain
+                      just to show them. */}
+                  {limits && limits.limitUp >= domain.min && limits.limitUp <= domain.max && (
+                    <line
+                      x1={0}
+                      x2={geo.innerW}
+                      y1={geo.y(limits.limitUp)}
+                      y2={geo.y(limits.limitUp)}
+                      stroke={CHART_COLORS.up}
+                      strokeWidth={1}
+                      strokeDasharray="4 4"
+                      opacity={0.6}
+                    />
+                  )}
+                  {limits && limits.limitDown >= domain.min && limits.limitDown <= domain.max && (
+                    <line
+                      x1={0}
+                      x2={geo.innerW}
+                      y1={geo.y(limits.limitDown)}
+                      y2={geo.y(limits.limitDown)}
+                      stroke={CHART_COLORS.down}
+                      strokeWidth={1}
+                      strokeDasharray="4 4"
+                      opacity={0.6}
                     />
                   )}
 
@@ -364,6 +432,18 @@ export function IntradayChart<R extends TrendRange>({
                       strokeWidth={1.5}
                       strokeLinejoin="round"
                       strokeLinecap="round"
+                    />
+                  ))}
+
+                  {closeSolo.map(([x, y], i) => (
+                    <circle
+                      key={`close-solo-${i}`}
+                      cx={x}
+                      cy={y}
+                      r={2}
+                      fill="none"
+                      stroke={lineColor}
+                      strokeWidth={1.5}
                     />
                   ))}
 

@@ -63,6 +63,19 @@ export function niceDomain(
   }
 }
 
+/** Rough pixel width of one x-axis label (digits/CJK mixed, plus spacing) — used only to decide how many labels to skip. */
+export const APPROX_LABEL_PX = 44
+
+/**
+ * How many indices to skip between shown x-axis labels so `count` labels do not crowd a
+ * `plotWidth`-px axis. Pure so it is testable without mounting a chart (DT-*: charts thin
+ * their x-axis labels by available width instead of a fixed count / fixed Nth index).
+ */
+export function thinLabelStep(count: number, plotWidth: number, labelPx: number = APPROX_LABEL_PX): number {
+  if (count <= 0 || plotWidth <= 0) return 1
+  return Math.max(1, Math.ceil((count * labelPx) / plotWidth))
+}
+
 /** Scale interval; returns to 0 when the value range degrades*/
 export function tickStep(domain: Domain, count = 4): number {
   const span = domain.max - domain.min

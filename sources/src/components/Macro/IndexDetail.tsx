@@ -71,6 +71,9 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
   const [todaySeries, setTodaySeries] = useState<IntradaySeries | null>(null)
   const [chartSeries, setChartSeries] = useState<TrendSeries | null>(null)
   const [loading, setLoading] = useState(true)
+  // MA-08: a failed 當日 (1d) fetch used to be swallowed silently, leaving the price/date label
+  // to fall back to a possibly stale quote as if nothing had gone wrong.
+  const [todayError, setTodayError] = useState(false)
   const reqId = useRef(0)
   const prevTicker = useRef(def.ticker)
   const todaySeriesRef = useRef<IntradaySeries | null>(null)
@@ -90,6 +93,7 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
     (force = false) => {
       const id = ++reqId.current
       setLoading(true)
+      setTodayError(false)
       const source = indexTrendSource(range)
       if (source.kind === 'intraday') {
         if (source.range !== '1d' && (force || todaySeriesRef.current === null)) {
@@ -101,7 +105,10 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
               if (reqId.current !== id) return
               setTodaySeries(s)
             })
-            .catch(() => {})
+            .catch(() => {
+              if (reqId.current !== id) return
+              setTodayError(true)
+            })
         }
         const req = force
           ? fetchIntraday({ market: 'IDX', ticker: def.ticker }, source.range, { force })
@@ -130,7 +137,10 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
               if (reqId.current !== id) return
               setTodaySeries(s)
             })
-            .catch(() => {})
+            .catch(() => {
+              if (reqId.current !== id) return
+              setTodayError(true)
+            })
         }
         fetchRemoteDaily(def.ticker, source.remoteRange, 'IDX')
           .then((remote) => {
@@ -164,12 +174,17 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
   const change = last !== null && prevClose !== null ? last - prevClose : null
   const changePct =
     change !== null && prevClose !== null && prevClose !== 0 ? (change / prevClose) * 100 : null
+  // Honesty check: a fallback to the quote's `asOf` claims that date is "today's" session, but
+  // when the 當日 fetch actually failed (rather than being merely not-yet-loaded) that quote may
+  // be stale — better to say we don't know than to print a wrong date with confidence.
   const sessionDate =
     todaySeries?.points && todaySeries.points.length > 0
       ? dayFmt.format(new Date(todaySeries.points[todaySeries.points.length - 1].t * 1000))
-      : quote?.asOf && !Number.isNaN(Date.parse(quote.asOf))
-        ? dayFmt.format(new Date(quote.asOf))
-        : null
+      : todayError
+        ? null
+        : quote?.asOf && !Number.isNaN(Date.parse(quote.asOf))
+          ? dayFmt.format(new Date(quote.asOf))
+          : null
 
   const hours = SESSION_HOURS[def.region]
   const session = marketSession(def.region, new Date())
@@ -206,6 +221,12 @@ export function IndexDetail({ def, onBack, quote }: IndexDetailProps) {
           重新整理
         </button>
       </div>
+
+      {todayError && (
+        <div className="notice notice-error" data-testid="index-today-error" style={{ marginTop: 10 }}>
+          當日指數資料讀取失敗，請稍後重新整理。
+        </div>
+      )}
 
       {last === null && !loading && (
         <div className="intraday-empty" data-testid="index-empty">

@@ -51,16 +51,25 @@ export async function listWatchlist(): Promise<WatchItem[]> {
   }))
 }
 
-export async function addWatch(ticker: string, name: string): Promise<void> {
+/**
+ * @param sortOrder Restore an item to its original position (undo of a removal) instead of
+ *   appending it after the current list — omit to append normally.
+ */
+export async function addWatch(ticker: string, name: string, sortOrder?: number): Promise<void> {
   if (!/^[0-9A-Za-z]{2,8}$/.test(ticker)) throw new Error('股票代號格式不正確')
 
   const userId = await currentUserId()
   const existing = await listWatchlist()
   if (existing.length >= WATCHLIST_MAX) throw new Error(`觀察清單最多只能有 ${WATCHLIST_MAX} 檔股票`)
 
+  // DA-05: derive the next slot from the highest sort_order actually in use, not from the row
+  // count — deletions can leave gaps, and a count would then hand out a value already taken.
+  const nextSortOrder =
+    sortOrder ?? existing.reduce((max, w) => Math.max(max, w.sortOrder), -1) + 1
+
   const { error } = await client()
     .from('tw_watchlist')
-    .insert({ user_id: userId, ticker, name, sort_order: existing.length })
+    .insert({ user_id: userId, ticker, name, sort_order: nextSortOrder })
   if (error) {
     // TOCTOU: two tabs can both pass the client-side cap check above; the loser hits the
     // `tw_watchlist_enforce_max` trigger and gets its raw Postgres text back. Translate it so
@@ -68,6 +77,9 @@ export async function addWatch(ticker: string, name: string): Promise<void> {
     if (error.message.includes('tw_watchlist limit')) {
       throw new Error(`觀察清單最多只能有 ${WATCHLIST_MAX} 檔股票`)
     }
+    // DA-06: unique-violation on the (user_id, ticker) primary key — the ticker is already
+    // watched (double-submit, or a race with another tab/undo).
+    if (error.code === '23505') throw new Error('已在自選股中')
     throw new Error(`加入觀察清單失敗：${error.message}`)
   }
 
