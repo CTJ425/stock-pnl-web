@@ -24,7 +24,7 @@
 ### Task 166: 全專案稽核修補（139 項發現，分 5 批）
 - **Status**: 🔄 IN PROGRESS
 - **Agent**: Claude
-- **Timestamp**: 2026-09-22 21:44:30 Asia/Taipei
+- **Timestamp**: 2026-09-23 09:49:00 Asia/Taipei
 - **Spec**: docs/agent/specs/166-audit-remediation.md
 - **Note**: ES-04（外資 TOP50 的 NaN 防護）查證後為誤報，已有防護；其餘項目照原範圍執行。
 - 來源：2026-09-22 全專案稽核報告（2 項 P1、25 項 P2、112 項 P3；另排除 12 項誤報）。
@@ -32,7 +32,7 @@
 1. ~~第 1 批 0.9.63：AI-01、OP-02、TX-01/02/06/08、ER-01/02/03/06/07、SH-01、移除 R2~~ ✅
 2. ~~第 2 批 0.9.64：金額引擎與資料功能 — EN-01（股利）、EN-02～EN-10、TX-03/04/09（分割與重算原子化）、DA-07、BUG-079、BUG-084~~ ✅
 3. ~~第 3 批 0.9.65：Edge 穩定性與維運 — ER-04、ER-08～ER-17、EP-01～EP-07、ES-01～ES-08、ED-01～ED-09、AD-02、DB-01～DB-05、OP-01~~ ✅
-4. 第 4 批 0.9.66：前端體驗與無障礙 — SH-02～05、TX-05/07、DA-*、PR-*、DT-*、FU-*、AI-02～07、MA-*、AD-01、AD-03～11、OP-03～07 —— ⏳
+4. ~~第 4 批 0.9.66：前端體驗與無障礙 — SH-02～05、TX-05/07、DA-*、PR-*、DT-*、FU-*、AI-02～07、MA-*、AD-01、AD-03～11、OP-03～07~~ ✅
 5. 第 5 批 0.9.67：結構性 — ER-05（可測試路由）、TX-10、TX-11 —— ⏳
 
 ### Task 165: Discord daily market summary (Phase 1 market-wide; Phase 2 per-user holdings)
